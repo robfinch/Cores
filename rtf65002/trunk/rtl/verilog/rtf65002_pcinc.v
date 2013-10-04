@@ -41,9 +41,6 @@ if (suppress_pcinc==4'hF)
 	`TRS,`TSR: inc <= 4'd2;
 	`INY,`DEY,`INX,`DEX,`INA,`DEA: inc <= 4'd1;
 	`EMM: inc <= 4'd1;
-	`PHA,`PHX,`PHY,`PHP: inc <= 4'd1;
-	`PLA,`PLX,`PLY,`PLP: inc <= 4'd1;
-	`PUSH,`POP: inc <= 4'd2;
 	`STP,`WAI: inc <= 4'd1;
 	`JMP,`JML,`JMP_IND,`JMP_INDX,`JMP_RIND,
 	`JSR,`JSR_RIND,`JSL,`BSR,`JSR_INDX,`RTS,`RTL,`RTI: inc <= 4'd0;
@@ -90,8 +87,10 @@ if (suppress_pcinc==4'hF)
 	`MVN,`MVP,`STS: inc <= 4'd0;
 	`PG2:	inc <= 4'd1;
 	`TON,`TOFF:	inc <= 4'd1;
+	`PUSHA,`POPA: inc <= 4'd1;
 	default:	inc <= 4'd0;	// unimplemented instruction
 	endcase
 else
 	inc <= 4'd0;
 endmodule
+

@@ -128,6 +128,7 @@ namespace RTFClasses
 		int warnings;           // number of warnings logged
 		int NumInsn;			// number of instructions processed
 		__int64 ByteCount;			// count of number of instruction bytes
+		__int64 CycleCount;		// count of number of clock cycles
 
 		// processing
 		int InComment;         // True if processing within comment

@@ -360,6 +360,27 @@ namespace RTFClasses
 			}
 			return false;
 
+		case 'H':	// HIST
+			c2 = toupper(*str);
+			str++;
+			if(c2 == 'I') {
+				c3 = toupper(*str);
+				str++;
+				if (c3=='S') {
+					c4 = toupper(*str);
+					str++;
+					if (c4=='T') {
+						c5 = toupper(*str);
+						str++;
+						if (!IsIdentChar(c5)) {
+							*reg = 10;
+							return true;
+						}
+					}
+				}
+			}
+			return false;
+
 		default:
 			return false;
 	}

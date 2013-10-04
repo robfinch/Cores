@@ -53,7 +53,7 @@ DECODE:
 		`WAI:	wai <= 1'b1;
 		`TON:	tf <= 1'b1;
 		`TOFF:	tf <= 1'b0;
-		`EMM:	em <= 1'b1;
+		`EMM:	begin em <= 1'b1; state <= BYTE_IFETCH; end
 		`DEX:	begin 
 					res <= x - 32'd1;
 					// DEX/BNE accelerator
@@ -100,9 +100,10 @@ DECODE:
 						4'h3:	res <= prod[63:32];
 						4'h4:	res <= tick;
 						4'h5:	begin res <= lfsr; lfsr <= {lfsr[30:0],lfsr_fb}; end
-						4'h7:	begin res <= history_buf[history_ndx];	history_ndx <= history_ndx + 6'd1; end// was abs8
+						4'd7:	res <= abs8;
 						4'h8:	res <= {vbr[31:1],nmoi};
 						4'h9:	res <= derr_address;
+						4'hA:	begin res <= history_buf[history_ndx];	history_ndx <= history_ndx + 6'd1; end
 						4'hE:	res <= {spage[31:8],sp};
 						4'hF:	res <= isp;
 						default:	res <= 32'd0;
@@ -315,11 +316,19 @@ DECODE:
 				store_what <= `STW_Y;
 				state <= STORE1;
 			end
-		`ADD_ZPX,`SUB_ZPX,`OR_ZPX,`AND_ZPX,`EOR_ZPX:
+		`ADD_ZPX,`SUB_ZPX,`AND_ZPX:
 			begin
 				Rt <= ir[19:16];
 				radr <= zpx32_address;
 				load_what <= `WORD_310;
+				state <= LOAD_MAC1;
+			end
+		// Trim a clock cycle off of loads by testing for Ra = 0.
+		`OR_ZPX,`EOR_ZPX:
+			begin
+				Rt <= ir[19:16];
+				radr <= zpx32_address;
+				load_what <= (Ra==4'd0) ? `WORD_311: `WORD_310;
 				state <= LOAD_MAC1;
 			end
 		`ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX:
@@ -367,7 +376,14 @@ DECODE:
 				store_what <= `STW_A;
 				state <= LOAD_MAC1;	
 			end
-		`ADD_ABS,`SUB_ABS,`OR_ABS,`AND_ABS,`EOR_ABS:
+		`OR_ABS,`EOR_ABS:
+			begin
+				radr <= ir[47:16];
+				Rt <= ir[15:12];
+				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
+				state <= LOAD_MAC1;
+			end
+		`ADD_ABS,`SUB_ABS,`AND_ABS:
 			begin
 				radr <= ir[47:16];
 				Rt <= ir[15:12];
@@ -380,11 +396,18 @@ DECODE:
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`ADD_ABSX,`SUB_ABSX,`OR_ABSX,`AND_ABSX,`EOR_ABSX:
+		`ADD_ABSX,`SUB_ABSX,`AND_ABSX:
 			begin
 				radr <= absx32_address;
 				Rt <= ir[19:16];
 				load_what <= `WORD_310;
+				state <= LOAD_MAC1;
+			end
+		`OR_ABSX,`EOR_ABSX:
+			begin
+				radr <= absx32_address;
+				Rt <= ir[19:16];
+				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
 				state <= LOAD_MAC1;
 			end
 		`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX:
@@ -421,6 +444,7 @@ DECODE:
 		`BRK:
 			begin
 				bf <= !hwi;
+				km <= `TRUE;
 				hist_capture <= `FALSE;
 				radr <= isp_dec;
 				wadr <= isp_dec;
@@ -484,7 +508,7 @@ DECODE:
 				pc <= rfoa;
 				state <= STORE1;
 			end
-		`JSL,`JSR_INDX:
+		`JSL,`JSR_INDX,`JSR_IND:
 			begin
 				radr <= isp_dec;
 				wadr <= isp_dec;
@@ -602,6 +626,15 @@ DECODE:
 				state <= STORE1;
 				isp <= isp_dec;
 			end
+		`PUSHA:
+			begin
+				radr <= isp_dec;
+				wadr <= isp_dec;
+				ir[11:8] <= 4'd1;
+				store_what <= `STW_RFA;
+				state <= STORE1;
+				isp <= isp_dec;
+			end
 		`PLP:
 			begin
 				radr <= isp;
@@ -618,6 +651,14 @@ DECODE:
 		`POP:
 			begin
 				Rt <= ir[15:12];
+				radr <= isp;
+				isp <= isp_inc;
+				load_what <= `WORD_311;
+				state <= LOAD_MAC1;
+			end
+		`POPA:
+			begin
+				Rt <= 4'd15;
 				radr <= isp;
 				isp <= isp_inc;
 				load_what <= `WORD_311;

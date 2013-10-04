@@ -187,6 +187,7 @@ namespace RTFClasses
 		ForceErr = 0;
 		NumInsn = 0;
 		ByteCount = 0;
+		CycleCount = 0;
 		fprintf(fpErr, "\r\nPass %d\r\n",pass);
 	}
 
@@ -366,6 +367,8 @@ namespace RTFClasses
 					fprintf(fpErr, "\r\n");
 				bOutOfPhase = 0;
 				processFile(sfname);
+				//if (bOutOfPhase==0)
+				//	break;
 			}
 			// Output generation pass
 			bOutOfPhase = 0;
@@ -382,6 +385,12 @@ namespace RTFClasses
 			fprintf(fpList, "\r\nNumber of instructions processed: %d\r\n", NumInsn);
 			fprintf(fpList, "Number of opcode bytes: %I64d\r\n", ByteCount);
 			fprintf(fpList, "Bytes per instruction: %lf\r\n", (double)((double)ByteCount/(double)NumInsn));
+			fprintf(fpList, "Clock cycle count: %I64d\r\n", CycleCount);
+			fprintf(fpList, "Clocks per instruction: %lf\r\n", (double)((double)CycleCount/(double)NumInsn));
+			fprintf(fpList, "\r\nThe above statistics are only estimates.\r\n");
+			fprintf(fpList, "\r\n\tThe CPI assumes data memory access requires two clock cycles and instruction\r\n");
+			fprintf(fpList, "\taccess is single cycle. The actual CPI may be higher if there are memory wait \r\n");
+			fprintf(fpList, "\tstates, or lower if data is found in the cache.\r\n");
 			// Close streams
 			if (fBinOut)
 				fclose(fpBin);
@@ -840,6 +849,7 @@ namespace RTFClasses
 	int Assembler::processLine()
 	{
 		char idbuf[NAME_MAX+1];
+		char lidbuf[NAME_MAX+1];
 		int oldline = -1, lbl = FALSE;
 		Mne *optr;
 		int idlen, sz;
@@ -907,16 +917,18 @@ namespace RTFClasses
 				continue;
 
 			// Check for first type of block comment
-			if (isBlockComment1())
+			if (isBlockComment1()) {
 				continue;
-
+			}
 			// Check for second type of block comment
-			if (isBlockComment2())
+			if (isBlockComment2()) {
 				continue;
-
+			}
 			// Could already be in a comment
-			if (inBlockComment())
+			if (inBlockComment()) {
+				ibuf->nextCh();
 				continue;
+			}
 
 			// skip over macro indicator
 			if (ibuf->peekCh()=='+') {
@@ -992,8 +1004,9 @@ namespace RTFClasses
 							ibuf->scanToEOL();
 							break;
 						}
-						else
+						else {
 							label(idbuf, PRI);
+						}
 					}
 				}
 			}

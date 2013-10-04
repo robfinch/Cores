@@ -1,0 +1,185 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-ca">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>System Memory Map</title>
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
+<meta name="Microsoft Theme" content="water 1011, default">
+</head>
+
+<body>
+
+<h1>System Memory Map</h1>
+<table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" width="74%">
+  <tr>
+    <td width="18%">Word Address</td>
+    <td width="9%" align="center">Present in Bitfile</td>
+    <td width="122%">&nbsp;</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">
+    <p style="margin-top: 0; margin-bottom: 0">$0000_0000 to</p>
+    <p style="margin-top: 0; margin-bottom: 0">$0000_0FFF</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Scratchpad RAM (16kB)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">
+    <p style="margin-top: 0; margin-bottom: 0">$0000_2800 to</p>
+    <p style="margin-top: 0; margin-bottom: 0">$0000_2FFF</td>
+    <td width="9%" align="center">No</td>
+    <td width="122%">Reserved: Forth ROM</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$0000_3000 to $0000_3FFF</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Reserved: EhBASIC</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">
+    <p style="margin-top: 0; margin-bottom: 0">$0400_0000 to</p>
+    <p style="margin-top: 0; margin-bottom: 0">$05FF_FFFF</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">System RAM (128MB)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">
+    <blockquote>
+      <p><font size="2">$041x_xxxx</font></p>
+    </blockquote>
+    </td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Bitmap display memory</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%"><font SIZE="2">
+    <blockquote>
+      <p>$05C0_0000 to $05DF_FFFF</p>
+    </blockquote>
+    </font></td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Virtual screen memory for tasks (2MB)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFD0_xxxx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Text screen memory (4kB - 9 bits wide)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFD1_xxxx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Text attribute memory (color codes - 4kB - 9 bits wide)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFD2_xxxx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Text mode character bitmaps (4kB - 9 bits wide)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFD5_xxxx</td>
+    <td width="9%" align="center">No</td>
+    <td width="122%">reserved: Programmable Sound Generator</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFD6_xxxx</td>
+    <td width="9%" align="center">No</td>
+    <td width="122%">reserved: Wavetable memory for the PSG ( only 12 bits wide - 16kB)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFD8_xxxx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Sprite memory (16kB)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDA_00xx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Text Controller register set</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDA_D0xx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Sprite Controller register set</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDA_E0xx</td>
+    <td width="9%" align="center">No</td>
+    <td width="122%">reserved: Linedraw accelerator register set</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDB_xxxx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Semaphore memory (2048 semaphores)</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_00xx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">Keyboard controller</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_04xx</td>
+    <td width="9%" align="center">No</td>
+    <td width="122%">reserved: Date/time circuit</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_05xx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">SDCard controller</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_06xx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">LED port</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_0FFx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">PIC programmable interrupt controller</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_2xxx</td>
+    <td width="9%" align="center">No</td>
+    <td width="122%">reserved: Ethmac ethernet controller</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFDC_FFFx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">System configuration record</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="18%">$FFFF_xxxx</td>
+    <td width="9%" align="center">Yes</td>
+    <td width="122%">BIOS ROM</td>
+    <td width="28%">&nbsp;</td>
+  </tr>
+</table>
+
+</body>
+
+</html>

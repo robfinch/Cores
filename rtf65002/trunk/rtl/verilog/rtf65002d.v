@@ -26,7 +26,7 @@
 //
 `include "rtf65002_defines.v"
 
-module rtf65002d(rst_md, rst_i, clk_i, nmi_i, irq_i, irq_vect, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module rtf65002d(rst_md, rst_i, clk_i, nmi_i, irq_i, irq_vect, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, km_o);
 parameter IDLE = 3'd0;
 parameter LOAD_DCACHE = 3'd1;
 parameter LOAD_ICACHE = 3'd2;
@@ -38,55 +38,33 @@ parameter IFETCH = 6'd1;
 parameter DECODE = 6'd2;
 parameter STORE1 = 6'd3;
 parameter STORE2 = 6'd4;
-parameter IRQ0 = 6'd5;
-parameter IRQ1 = 6'd6;
-parameter IRQ2 = 6'd7;
-parameter IRQ3 = 6'd8;
-parameter CALC = 6'd9;
-parameter JSR161 = 6'd10;
-parameter RTS1 = 6'd11;
-parameter IY3 = 6'd12;
-parameter BSR1 = 6'd13;
-parameter BYTE_IX5 = 6'd14;
-parameter BYTE_IY5 = 6'd15;
-parameter BYTE_JSR1 = 6'd16;
-parameter BYTE_JSR2 = 6'd17;
-parameter BYTE_JSR3 = 6'd18;
-parameter BYTE_IRQ1 = 6'd19;
-parameter BYTE_IRQ2 = 6'd20;
-parameter BYTE_IRQ3 = 6'd21;
-parameter BYTE_IRQ4 = 6'd22;
-parameter BYTE_IRQ5 = 6'd23;
-parameter BYTE_IRQ6 = 6'd24;
-parameter BYTE_IRQ7 = 6'd25;
-parameter BYTE_IRQ8 = 6'd26;
-parameter BYTE_IRQ9 = 6'd27;
-parameter BYTE_JSR_INDX1 = 6'd28;
-parameter BYTE_JSR_INDX2 = 6'd29;
-parameter BYTE_JSR_INDX3 = 6'd30;
-parameter BYTE_JSL1 = 6'd31;
-parameter BYTE_JSL2 = 6'd32;
-parameter BYTE_JSL3 = 6'd33;
-parameter BYTE_JSL4 = 6'd34;
-parameter BYTE_JSL5 = 6'd35;
-parameter BYTE_JSL6 = 6'd36;
-parameter BYTE_JSL7 = 6'd37;
-parameter WAIT_DHIT = 6'd38;
-parameter RESET2 = 6'd39;
-parameter MULDIV1 = 6'd40;
-parameter MULDIV2 = 6'd41;
-parameter BYTE_DECODE = 6'd42;
-parameter BYTE_CALC = 6'd43;
-parameter BUS_ERROR = 6'd44;
-parameter INSN_BUS_ERROR = 6'd45;
-parameter LOAD_MAC1 = 6'd46;
-parameter LOAD_MAC2 = 6'd47;
-parameter MVN1 = 6'd48;
-parameter MVN2 = 6'd49;
-parameter MVN3 = 6'd50;
-parameter MVP1 = 6'd51;
-parameter MVP2 = 6'd52;
-parameter STS1 = 6'd53;
+parameter CALC = 6'd5;
+parameter JSR161 = 6'd6;
+parameter RTS1 = 6'd7;
+parameter IY3 = 6'd8;
+parameter BSR1 = 6'd9;
+parameter BYTE_IX5 = 6'd10;
+parameter BYTE_IY5 = 6'd11;
+parameter WAIT_DHIT = 6'd12;
+parameter RESET2 = 6'd13;
+parameter MULDIV1 = 6'd14;
+parameter MULDIV2 = 6'd15;
+parameter BYTE_DECODE = 6'd16;
+parameter BYTE_CALC = 6'd17;
+parameter BUS_ERROR = 6'd18;
+parameter INSN_BUS_ERROR = 6'd19;
+parameter LOAD_MAC1 = 6'd20;
+parameter LOAD_MAC2 = 6'd21;
+parameter LOAD_MAC3 = 6'd22;
+parameter MVN1 = 6'd23;
+parameter MVN2 = 6'd24;
+parameter MVN3 = 6'd25;
+parameter MVP1 = 6'd26;
+parameter MVP2 = 6'd27;
+parameter STS1 = 6'd28;
+parameter PUSHA1 = 6'd29;
+parameter POPA1 = 6'd30;
+parameter BYTE_IFETCH = 6'd31;
 
 input rst_md;		// reset mode, 1=emulation mode, 0=native mode
 input rst_i;
@@ -107,6 +85,8 @@ output reg [3:0] sel_o;
 output reg [33:0] adr_o;
 input [31:0] dat_i;
 output reg [31:0] dat_o;
+
+output km_o;
 
 reg [5:0] state;
 reg [5:0] retstate;
@@ -146,7 +126,7 @@ wire [31:0] isp_inc = isp + 32'd1;
 reg [3:0] suppress_pcinc;
 reg [31:0] pc;
 reg [31:0] opc;
-wire [3:0] pc_inc;
+wire [3:0] pc_inc,pc_inc8;
 wire [31:0] pcp2 = pc + (32'd2 & suppress_pcinc);	// for branches
 wire [31:0] pcp4 = pc + (32'd4 & suppress_pcinc);	// for branches
 wire [31:0] pcp8 = pc + 32'd8;						// cache controller needs this
@@ -204,7 +184,6 @@ wire resn32 = res[31];
 
 reg [31:0] vect;
 reg [31:0] ia;			// temporary reg to hold indirect address
-wire [31:0] iapy8 = abs8 + ia + y[7:0];
 reg isInsnCacheLoad;
 reg isDataCacheLoad;
 reg isCacheReset;
@@ -215,7 +194,7 @@ wire dhit;
 wire dhit = 1'b0;
 `endif
 reg write_allocate;
-reg wr;
+wire wr;
 reg [3:0] wrsel;
 reg [31:0] radr;
 reg [1:0] radr2LSB;
@@ -241,6 +220,8 @@ wire unCachedInsn = pc[31:13]==19'h0 || !icacheOn;		// The lowest 8kB is uncache
 `else
 wire unCachedInsn = 1'b1;
 `endif
+reg km;			// kernel mode indicator
+assign km_o = km;
 
 reg [31:0] history_buf [63:0];
 reg [5:0] history_ndx;
@@ -252,8 +233,9 @@ reg isRTI,isRTL,isRTS;
 reg isOrb,isStb;
 reg isRMW;
 reg isSub,isSub8;
-reg isJsrIndx;
+reg isJsrIndx,isJsrInd;
 reg ldMuldiv;
+reg isPusha,isPopa;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS || ir9==`CPX_IMM32 ||
 			 ir9==`CPY_ZPX || ir9==`CPY_ABS || ir9==`CPY_IMM32;
@@ -291,8 +273,11 @@ always @(posedge clk)
 		isMove <= ir9==`MVP || ir9==`MVN;
 		isSts <= ir9==`STS;
 		isJsrIndx <= ir9==`JSR_INDX;
+		isJsrInd <= ir9==`JSR_IND;
 		ldMuldiv <= ir9==`MUL_IMM8 || ir9==`DIV_IMM8 || ir9==`MOD_IMM8 || (ir9==`RR && (
 			ir[23:20]==`MUL_RR || ir[23:20]==`MULS_RR || ir[23:20]==`DIV_RR || ir[23:20]==`DIVS_RR || ir[23:20]==`MOD_RR || ir[23:20]==`MODS_RR)); 
+		isPusha <= ir9==`PUSHA;
+		isPopa <= ir9==`POPA;
 	end
 	else
 		ldMuldiv <= 1'b0;
@@ -313,6 +298,13 @@ rtf65002_pcinc upci1
 	.opcode(ir9),
 	.suppress_pcinc(suppress_pcinc),
 	.inc(pc_inc)
+);
+
+rtf65002_pcinc8 upci2
+(
+	.opcode(ir[7:0]),
+	.suppress_pcinc(suppress_pcinc),
+	.inc(pc_inc8)
 );
 
 mult_div umd1
@@ -357,12 +349,14 @@ wire ihit = 1'b0;
 `endif
 
 `ifdef SUPPORT_DCACHE
+assign wr = state==STORE2 && dhit && ack_i;
+
 rtf65002_dcachemem dcm0 (
 	.wclk(clk),
 	.wr(wr | (ack_i & isDataCacheLoad)),
-	.sel(wr ? wrsel : sel_o),
-	.wadr(wr ? wadr : adr_o[33:2]),
-	.wdat(wr ? wdat : dat_i),
+	.sel(sel_o),
+	.wadr(adr_o[33:2]),
+	.wdat(wr ? dat_o : dat_i),
 	.rclk(~clk),
 	.radr(radr),
 	.rdat(rdat)
@@ -370,8 +364,9 @@ rtf65002_dcachemem dcm0 (
 
 rtf65002_dtagmem dtm0 (
 	.wclk(clk),
-	.wr(wr | (ack_i & isDataCacheLoad)),
-	.wadr(wr ? wadr : adr_o[33:2]),
+	.wr(wr | (ack_i & isDataCacheLoad) | isCacheReset),
+	.wadr(adr_o[33:2]),
+	.cr(!isCacheReset),
 	.rclk(~clk),
 	.radr(radr),
 	.hit(dhit)
@@ -424,6 +419,8 @@ case(radr2LSB)
 2'd3:	rdat8 <= rdat[31:24];
 endcase
 
+// Evaluate branches
+// 
 reg takb;
 always @(ir or cf or vf or nf or zf)
 case(ir9)
@@ -443,17 +440,16 @@ case(ir9)
 `BLT:	takb <= (nf & !vf)|(!nf & vf);
 `BGT:	takb <= (nf & vf & !zf) + (!nf & !vf & !zf);
 `BLE:	takb <= zf | (nf & !vf)|(!nf & vf);
-//`BAZ:	takb <= acc8==8'h00;
-//`BXZ:	takb <= x8==8'h00;
 default:	takb <= 1'b0;
 endcase
 
-wire [31:0] zp_address 		= {abs8[31:12],4'h0,ir[15:8]};
-wire [31:0] zpx_address 	= {abs8[31:12],4'h0,ir[15:8]} + x8;
-wire [31:0] zpy_address	 	= {abs8[31:12],4'h0,ir[15:8]} + y8;
-wire [31:0] abs_address 	= {abs8[31:12],12'h00} + {16'h0,ir[23:8]};
-wire [31:0] absx_address 	= {abs8[31:12],12'h00} + {16'h0,ir[23:8] + {8'h0,x8}};	// simulates 64k bank wrap-around
-wire [31:0] absy_address 	= {abs8[31:12],12'h00} + {16'h0,ir[23:8] + {8'h0,y8}};
+wire [31:0] iapy8 			= ia + y8;	// Don't add in abs8, already included with ia
+wire [31:0] zp_address 		= {abs8[31:16],8'h00,ir[15:8]};
+wire [31:0] zpx_address 	= {abs8[31:16],8'h00,ir[15:8]} + x8;
+wire [31:0] zpy_address	 	= {abs8[31:16],8'h00,ir[15:8]} + y8;
+wire [31:0] abs_address 	= {abs8[31:16],ir[23:8]};
+wire [31:0] absx_address 	= {abs8[31:16],ir[23:8] + {8'h0,x8}};	// simulates 64k bank wrap-around
+wire [31:0] absy_address 	= {abs8[31:16],ir[23:8] + {8'h0,y8}};
 wire [31:0] zpx32xy_address 	= ir[23:12] + rfoa;
 wire [31:0] absx32xy_address 	= ir[47:16] + rfob;
 wire [31:0] zpx32_address 		= ir[31:20] + rfob;
@@ -529,7 +525,6 @@ if (rst_i) begin
 	nmi_edge <= 1'b0;
 	wai <= 1'b0;
 	first_ifetch <= `TRUE;
-	wr <= 1'b0;
 	cf <= 1'b0;
 	ir <= 64'hEAEAEAEAEAEAEAEA;
 	imiss <= `FALSE;
@@ -565,10 +560,10 @@ if (rst_i) begin
 	history_ndx <= 6'd0;
 	pg2 <= `FALSE;
 	tf <= `FALSE;
+	km <= `TRUE;
 end
 else begin
 tick <= tick + 32'd1;
-wr <= 1'b0;
 if (nmi_i & !nmi1)
 	nmi_edge <= 1'b1;
 if (nmi_i|nmi1)
@@ -596,13 +591,9 @@ RESET2:
 `include "ifetch.v"
 `include "decode.v"
 `ifdef SUPPORT_EM8
+`include "byte_ifetch.v"
 `include "byte_decode.v"
 `include "byte_calc.v"
-`include "byte_jsr.v"
-`include "byte_jsl.v"
-`ifdef SUPPORT_BYTE_IRQ
-`include "byte_irq.v"
-`endif
 `endif
 
 `include "load_mac.v"

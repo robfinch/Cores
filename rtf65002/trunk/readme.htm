@@ -1,0 +1,58 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-ca">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>RTF65002 System</title>
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
+<meta name="Microsoft Theme" content="water 1011, default">
+</head>
+
+<body>
+
+<h1>RTF65002 System</h1>
+<p><font color="#FFCC99">Use at your own risk.</font></p>
+<p>The bit file is for an Atlys FPGA board from Digilent.</p>
+<p>The video output is setup for a 1366x768 HDMI display, your display device 
+must be able to support this mode.</p>
+<p>Emulation of the 65C02 is currently broken so EhBASIC doesn't work yet. Even though it's a 
+menu option at the BIOS prompt.</p>
+<p>&nbsp;</p>
+<p>Press ALT-tab to switch between running tasks.</p>
+<p>Pressing 'B' (uppercase B) at the prompt will start TinyBasic as a task. You 
+can then ALT-tab over to it.</p>
+<p>Pressing '?' at the prompt will display a list of commands.</p>
+<p>Pressing CTRL-ALT-DEL will reset the system.</p>
+<p>&nbsp;</p>
+<h2>On the Atlys board:</h2>
+<p>Switch #7 globally disables/enables interrupts. The switch should be set to 
+on, or the keyboard won't work.</p>
+<p>Switches #0 and #1 switch the video display between bitmapped and text mode. 
+For text mode both switches should be on.</p>
+<p>A Pmod SD can be attached to Port JB pins 1-6.</p>
+<h2>&nbsp;</h2>
+<h2>Credits:</h2>
+<h3>ETHMAC controller</h3>
+<p>The ethermac ethernet controller is from OpenCores.org and was developed by:</p>
+<p>&nbsp;Thanks to Author(s):<br>
+&nbsp;- Igor Mohor <a href="mailto:(igorM@opencores.org">(igorM&lt;remove&gt;..@opencores.org</a>)</p>
+<h3>SPI_MASTER controller</h3>
+<p>The spi_master controller is a <font color="#FFD7DB">modified</font> version 
+of the core from OpenCores.org that was originally developed by:</p>
+<p>Author: Steve Fielding (sfielding&lt;remove&gt;..@base2designs.com)<br>
+&nbsp;</p>
+<h3>EhBASIC:</h3>
+<p>&nbsp;<font face="Arial">Lee Davison <a href="http://mycorner.no-ip.org/6502/ehbasic/index.html">&nbsp;http://mycorner.no-ip.org/6502/ehbasic/index.html</a></font></p>
+<h3>AC97 Controller</h3>
+<p>One module of this controller was supplied by Digilent.</p>
+<h3>DVI controller</h3>
+<p>This controller is the DVI_out_native sample controller supplied by Xilinx</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+<p>&nbsp;</p>
+
+</body>
+
+</html>

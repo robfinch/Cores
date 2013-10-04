@@ -20,10 +20,11 @@
 //                                                                          
 // ============================================================================
 //
-module rtf65002_dtagmem(wclk, wr, wadr, rclk, radr, hit);
+module rtf65002_dtagmem(wclk, wr, wadr, cr, rclk, radr, hit);
 input wclk;
 input wr;
 input [31:0] wadr;
+input cr;
 input rclk;
 input [31:0] radr;
 output hit;
@@ -38,7 +39,7 @@ syncRam512x32_1rw1r u1
 		.wce(wadr[1:0]==2'b11),
 		.we(wr),
 		.wadr(wadr[10:2]),
-		.i(wadr),
+		.i({wadr[31:1],cr}),
 		.wo(),
 		.rrst(1'b0),
 		.rclk(rclk),
@@ -51,6 +52,6 @@ syncRam512x32_1rw1r u1
 always @(posedge rclk)
 	rradr <= radr;
 	
-assign hit = tag[31:11]==rradr[31:11];
+assign hit = tag[31:11]==rradr[31:11] && tag[0];
 
 endmodule

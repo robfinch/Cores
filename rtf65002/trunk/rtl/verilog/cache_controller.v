@@ -94,7 +94,7 @@ LOAD_DCACHE:
 			adr_o <= 34'h0;
 			cstate <= IDLE;
 		end
-		adr_o <= adr_o + 34'd4;
+		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 	end
 	// What to do here
 `ifdef SUPPORT_BERR
@@ -113,7 +113,7 @@ LOAD_DCACHE:
 			// Override the next state and send the processor to the bus error state.
 			state <= BUS_ERROR;
 		end
-		adr_o <= adr_o + 34'd4;
+		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 	end
 `endif
 `endif
@@ -131,7 +131,7 @@ LOAD_ICACHE:
 			adr_o <= 34'd0;
 			cstate <= IDLE;
 		end
-		adr_o <= adr_o + 34'd4;
+		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
@@ -147,7 +147,7 @@ LOAD_ICACHE:
 			state <= INSN_BUS_ERROR;
 			cstate <= IDLE;
 		end
-		adr_o <= adr_o + 34'd4;
+		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 	end
 `endif
 `endif

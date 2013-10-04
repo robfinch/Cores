@@ -45,7 +45,7 @@ LOAD_MAC1:
 		`WORD_311:	// For pla/plx/ply/pop
 					begin
 						res <= rdat;
-						state <= IFETCH;
+						state <= isPopa ? LOAD_MAC3 : IFETCH;
 					end
 		`WORD_312:
 				begin
@@ -61,7 +61,7 @@ LOAD_MAC1:
 		`BYTE_71:
 				begin
 					res8 <= rdat8;
-					state <= IFETCH;
+					state <= BYTE_IFETCH;
 				end
 `endif
 		`SR_310:
@@ -99,7 +99,7 @@ LOAD_MAC1:
 						sp <= sp_inc;
 					end
 					else	// PLP
-						state <= IFETCH;
+						state <= BYTE_IFETCH;
 				end
 		`PC_70:
 				begin
@@ -127,7 +127,7 @@ LOAD_MAC1:
 					else if (isRTS)	// rts instruction
 						state <= RTS1;
 					else			// jmp (abs)
-						state <= IFETCH;
+						state <= BYTE_IFETCH;
 				end
 		`PC_2316:
 				begin
@@ -146,7 +146,7 @@ LOAD_MAC1:
 					if (isRTL)
 						state <= RTS1;
 					else
-						state <= IFETCH;
+						state <= BYTE_IFETCH;
 				end
 `endif
 		`PC_310:
@@ -155,7 +155,11 @@ LOAD_MAC1:
 					if (isRTI|isRTS|isRTL)
 						isp <= isp_inc;
 					load_what <= `NOTHING;
-					state <= IFETCH;
+					// For the RTI instruction switch back to byte mode if flag is set.
+					// Normally em will not be set.
+					state <= em ? BYTE_IFETCH : IFETCH;
+					if (isRTI)
+						km <= `FALSE;
 				end
 		`IA_310:
 				begin
@@ -206,7 +210,7 @@ LOAD_MAC2:
 		`WORD_311:	// For pla/plx/ply/pop/ldx/ldy
 					begin
 						res <= dat_i;
-						state <= IFETCH;
+						state <= isPopa ? LOAD_MAC3 : IFETCH;
 					end
 		`WORD_312:
 				begin
@@ -222,7 +226,7 @@ LOAD_MAC2:
 		`BYTE_71:
 				begin
 					res8 <= dati;
-					state <= IFETCH;
+					state <= BYTE_IFETCH;
 				end
 `endif
 		`SR_310:	begin
@@ -261,7 +265,7 @@ LOAD_MAC2:
 							state <= LOAD_MAC1;
 						end		
 						else	// PLP
-							state <= IFETCH;
+							state <= BYTE_IFETCH;
 					end
 		`PC_70:		begin
 						pc[7:0] <= dati;
@@ -289,7 +293,7 @@ LOAD_MAC2:
 						else if (isRTS)	// rts instruction
 							state <= RTS1;
 						else			// jmp (abs)
-							state <= IFETCH;
+							state <= BYTE_IFETCH;
 					end
 		`PC_2316:	begin
 						pc[23:16] <= dati;
@@ -307,7 +311,7 @@ LOAD_MAC2:
 						if (isRTL)
 							state <= RTS1;
 						else
-							state <= IFETCH;
+							state <= BYTE_IFETCH;
 					end
 `endif
 		`PC_310:	begin
@@ -315,7 +319,9 @@ LOAD_MAC2:
 						load_what <= `NOTHING;
 						if (isRTI | isRTL | isRTS)
 							isp <= isp_inc;
-						state <= IFETCH;
+						if (isRTI)
+							km <= `FALSE;
+						state <= em ? BYTE_IFETCH : IFETCH;
 					end
 		`IA_310:
 				begin
@@ -343,7 +349,7 @@ LOAD_MAC2:
 		`IA_158:
 				begin
 					ia[15:8] <= dati;
-					ia[31:16] <= 16'h0000;
+					ia[31:16] <= abs8[31:16];
 					state <= isIY ? BYTE_IY5 : BYTE_IX5;
 				end
 `endif
@@ -360,10 +366,31 @@ LOAD_MAC2:
 		state <= BUS_ERROR;
 	end
 `endif
+LOAD_MAC3:
+	begin
+		regfile[Rt] <= res;
+		case(Rt)
+		4'h1:	acc <= res;
+		4'h2:	x <= res;
+		4'h3:	y <= res;
+		default:	;
+		endcase
+		// Rt will be zero by the time the IFETCH stage is entered because of
+		// the decrement below.
+		if (Rt==4'd1)
+			state <= IFETCH;
+		else begin
+			radr <= isp;
+			isp <= isp_inc;
+			state <= LOAD_MAC1;
+		end
+		Rt <= Rt - 4'd1;
+	end
+
 RTS1:
 	begin
 		pc <= pc + 32'd1;
-		state <= IFETCH;
+		state <= BYTE_IFETCH;
 	end
 IY3:
 	begin

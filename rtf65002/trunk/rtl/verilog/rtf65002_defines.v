@@ -28,12 +28,11 @@
 `define FALSE		1'b0
 
 `define SUPPORT_ICACHE	1'b1
-//`define SUPPORT_DCACHE	1'b1
-//`define SUPPORT_BCD		1'b1
+`define SUPPORT_DCACHE	1'b1
+`define SUPPORT_BCD		1'b1
 `define SUPPORT_DIVMOD		1'b1
-//`define SUPPORT_EM8		1'b1
-//`define SUPPORT_BYTE_IRQ	1'b1
-//`define SUPPORT_EXEC	1'b1
+`define SUPPORT_EM8		1'b1
+`define SUPPORT_EXEC	1'b1
 `define SUPPORT_BERR	1'b1
 `define SUPPORT_STRING	1'b1
 `define SUPPORT_SHIFT	1'b1
@@ -328,6 +327,7 @@
 `define JMP_RIND	9'hD2
 `define JSR			9'h20
 `define JSL			9'h22
+`define JSR_IND		8'h2C
 `define JSR_INDX	9'hFC
 `define JSR_RIND	9'hC2
 `define RTS			9'h60
@@ -422,6 +422,8 @@
 `define MOD_IMM8	9'h185
 `define MOD_IMM16	9'h199
 `define MOD_IMM32	9'h189
+`define PUSHA		9'h10B
+`define POPA		9'h12B
 
 `define NOTHING		4'd0
 `define SR_70		4'd1
@@ -464,4 +466,4 @@
 `define STW_PC158	6'd21
 `define STW_PC70	6'd22
 `define STW_SR70	6'd23
-
+`define STW_Z8		6'd24

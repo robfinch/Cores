@@ -18,6 +18,8 @@
 #include "Assembler.h"
 #include "err.h"
 #include "macro.h"
+#include "Mne.h"
+#include "Opa.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -61,14 +63,18 @@ namespace RTFClasses
 			if (optr->asms[ii].nops<0)
 			{
 				(*(optr->asms[ii].fn))(&optr->asms[ii]);
+				CycleCount += optr->asms[ii].cycles;
+//				printf("%s  %d\r\n", optr->mne, optr->asms[ii].cycles);
 				break;
 			}
 			if (optr->asms[ii].nops==nops)
 			{
+//				printf("%s  %d  %d\r\n", optr->mne, optr->asms[ii].cycles, optr->asms[ii].sig);
 				// signature of zero means don't care
-				if (optr->asms[ii].sig == getCpu()->getOp()->getSignature() || optr->asms[ii].sig==0)
+				if ((optr->asms[ii].sig == getCpu()->getOp()->getSignature()) || (optr->asms[ii].sig==0))
 				{
 					(*(optr->asms[ii].fn))(&optr->asms[ii]);
+					CycleCount += optr->asms[ii].cycles;
 					break;
 				}
 			}

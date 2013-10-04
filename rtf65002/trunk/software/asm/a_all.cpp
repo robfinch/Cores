@@ -110,6 +110,7 @@ namespace RTFClasses
 
 		ch = ibuf->nextNonSpace();
 		CommentChar = ch;
+		printf("comment char=%c\r\n", CommentChar);
 		InComment++;
 	}
 
