@@ -1,0 +1,110 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-ca">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>RTF65002 System</title>
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
+<meta name="Microsoft Theme" content="water 1011, default">
+</head>
+
+<body>
+
+<h1>SPI_MASTER modifications</h1>
+<p><font color="#FFCC99">Use at your own risk.</font></p>
+<p>Please find the original core at OpenCores.org which includes better 
+documentation and test suites.</p>
+<p>The original author is:&nbsp; Steve Fielding (sfielding&lt;remove&gt;..@base2designs.com)</p>
+<p>The spi_master core modifications different from the original are:</p>
+<blockquote>
+<p>1) The SDCard address registers are altered to specify a sector number rather 
+than an address.</p>
+<p>2) Four additional registers (#30-33) are added to include the spi command 
+response bytes.</p>
+<p>3) The controller now detects whether the card is (SDHC) a high density card 
+or a regular density card and internally converts the sector numbers to memory 
+addresses as needed. It reports the card type in the master control register.</p>
+</blockquote>
+<p>&nbsp;</p>
+<table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" bordercolor="#111111" width="30%">
+  <tr>
+    <td width="9%" align="center">Reg Number</td>
+    <td width="26%">Name</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">1</td>
+    <td width="26%">
+    <p style="margin-top: 0; margin-bottom: 0">SPI_MASTER_CONTROL_REG</p>
+    <p style="margin-top: 0; margin-bottom: 0">bit 1 = SDHC indicator</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">&nbsp;</td>
+    <td width="26%">&nbsp;</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">7</td>
+    <td width="26%">SD_SECTOR_7_0</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">8</td>
+    <td width="26%">SD_SECTOR_15_8</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">9</td>
+    <td width="26%">SD_SECTOR_23_16</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">A</td>
+    <td width="26%">SD_SECTOR_31_24</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">&nbsp;</td>
+    <td width="26%">&nbsp;</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">30</td>
+    <td width="26%">SPI_RESP_BYTE0</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">31</td>
+    <td width="26%">SPI_RESP_BYTE1</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">32</td>
+    <td width="26%">SPI_RESP_BYTE2</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" align="center">33</td>
+    <td width="26%">SPI_RESP_BYTE3</td>
+    <td width="10%">&nbsp;</td>
+    <td width="55%">&nbsp;</td>
+  </tr>
+</table>
+
+</body>
+
+</html>
