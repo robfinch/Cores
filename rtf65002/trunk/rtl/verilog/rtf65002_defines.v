@@ -28,11 +28,11 @@
 `define FALSE		1'b0
 
 `define SUPPORT_ICACHE	1'b1
-`define SUPPORT_DCACHE	1'b1
-`define SUPPORT_BCD		1'b1
+//`define SUPPORT_DCACHE	1'b1
+//`define SUPPORT_BCD		1'b1
 `define SUPPORT_DIVMOD		1'b1
 `define SUPPORT_EM8		1'b1
-`define SUPPORT_EXEC	1'b1
+//`define SUPPORT_EXEC	1'b1
 `define SUPPORT_BERR	1'b1
 `define SUPPORT_STRING	1'b1
 `define SUPPORT_SHIFT	1'b1

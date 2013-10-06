@@ -269,6 +269,14 @@ MMU_AKEY	EQU		0xFFDC4812
 MMU_OKEY	EQU		0xFFDC4813
 MMU_MAPEN	EQU		0xFFDC4814
 
+DATETIME	EQU		0xFFDC0400
+DATETIME_TIME		EQU		0xFFDC0400
+DATETIME_DATE		EQU		0xFFDC0401
+DATETIME_ALMTIME	EQU		0xFFDC0402
+DATETIME_ALMDATE	EQU		0xFFDC0403
+DATETIME_CTRL		EQU		0xFFDC0404
+DATETIME_SNAPSHOT	EQU		0xFFDC0405
+
 SPRITEREGS	EQU		0xFFDAD000
 SPRRAM		EQU		0xFFD80000
 
@@ -679,7 +687,7 @@ st8:
 	bit		#4
 	beq		st6
 	jsr		SetupAC97
-	lda		#2
+	lda		#4
 	ldx		#0
 	ldy		#Beep
 ;	jsr		StartTask
@@ -972,7 +980,7 @@ msgRunningTCB:
 ; is nothing else to run.
 ;------------------------------------------------------------------------------
 IdleTask:
-	inc		TEXTSCR+167		; increment IDLE active flag
+	inc		TEXTSCR+111		; increment IDLE active flag
 	cli						; enable interrupts
 	wai						; wait for one to happen
 	bra		IdleTask
@@ -3401,16 +3409,12 @@ Prompt1:
 	tay
 	lda		#82
 	sta		LEDS
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'$'
 	bne		Prompt2			; skip over '$' prompt character
 	lda		#83
 	sta		LEDS
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 
 ; Dispatch based on command character
 ;
@@ -3419,9 +3423,7 @@ Prompt2:
 	beq		EditMem
 	cmp		#'D'
 	bne		Prompt8
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'R'
 	beq		DumpReg
 	cmp		#'I'
@@ -3431,9 +3433,7 @@ Prompt2:
 Prompt8:
 	cmp		#'F'
 	bne		Prompt7
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'L'
 	bne		Prompt8a
 	jsr		DumpIOFocusList
@@ -3504,14 +3504,17 @@ Prompt13:
 Prompt14:
 	cmp		#'T'
 	bne		Prompt15
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'O'
 	bne		Prompt14a
 	jsr		DumpTimeoutList
 	jmp		Monitor
 Prompt14a:
+	cmp		#'I'
+	bne		Prompt14b
+	jsr		DisplayDatetime
+	jmp		Monitor
+Prompt14b:
 	dey
 	jsr		DumpTaskList
 	jmp		Monitor
@@ -3519,9 +3522,7 @@ Prompt14a:
 Prompt15:
 	cmp		#'S'
 	bne		Prompt16
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'P'
 	bne		Prompt18
 	jsr		ignBlanks
@@ -3553,9 +3554,7 @@ Prompt16:
 Prompt17:
 	cmp		#'R'
 	bne		Prompt19
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'S'
 	beq		LoadSector
 	dey
@@ -3565,9 +3564,7 @@ Prompt19:
 	cmp		#'K'
 	bne		Monitor
 Prompt19a:
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#' '
 	bne		Prompt19a
 	jsr		ignBlanks
@@ -3579,6 +3576,12 @@ message "Prompt16"
 RandomLinesCall:
 ;	jsr		RandomLines
 	jmp		Monitor
+
+MonGetch:
+	lda		(y)
+	iny
+	jsr		ScreenToAscii
+	rts
 
 DoDir:
 	jsr		do_dir
@@ -3594,14 +3597,10 @@ DoFig:
 	bra		Monitor
 	
 TestCLS:
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'L'
 	bne		Monitor
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#'S'
 	bne		Monitor
 	jsr 	ClearScreen
@@ -3632,6 +3631,7 @@ HelpMsg:
 	db	"e = ethernet test",CR,LF
 	db	"T = Dump task list",CR,LF
 	db	"TO = Dump timeout list",CR,LF
+	db	"TI = display date/time",CR,LF
 	db	"P = Piano",CR,LF,0
 
 ;------------------------------------------------------------------------------
@@ -3642,9 +3642,7 @@ HelpMsg:
 ;
 ignBlanks:
 ignBlanks1:
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	cmp		#' '
 	beq		ignBlanks1
 	dey
@@ -3852,9 +3850,7 @@ GetHexNumber:
 	ldx		#0
 	ld		r4,#8
 gthxn2:
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	jsr		AsciiToHexNybble
 	cmp		#-1
 	beq		gthxn1
@@ -3877,9 +3873,7 @@ GetDecNumber:
 	ld		r4,#10
 	ld		r5,#10
 gtdcn2:
-	lda		(y)
-	iny
-	jsr		ScreenToAscii
+	jsr		MonGetch
 	jsr		AsciiToDecNybble
 	cmp		#-1
 	beq		gtdcn1
@@ -4031,7 +4025,7 @@ msgAC97bad:
 Beep:
 	pha
 	lda		#15				; master volume to max
-	sta		PSG+128
+	sta		PSG+64
 	lda		#13422			; 800Hz
 	sta		PSGFREQ0
 	; decay  (16.384 ms)2
@@ -4051,6 +4045,7 @@ Beep:
 	lda		#0x0000			; gate off, output enable off, no waveform
 	sta		PSGCTRL0
 	pla
+	jmp		ExitTask
 	rts
 
 ;--------------------------------------------------------------------------
@@ -4059,7 +4054,7 @@ Beep:
 Piano:
 	jsr		RequestIOFocus
 	lda		#15				; master volume to max
-	sta		PSG+128
+	sta		PSG+64
 playnt:
 	jsr		KeybdGetChar
 	cmp		#CTRLC
@@ -5567,7 +5562,55 @@ dln300:
 
 ;include "float.asm"
 
-
+DisplayDatetime
+	pha
+	phx
+	lda		#' '
+	jsr		DisplayChar
+	stz		DATETIME_SNAPSHOT
+	lda		DATETIME_DATE
+	tax
+	lsr		r1,r1,#16
+	jsr		DisplayHalf		; display the year
+	lda		#'/'
+	jsr		DisplayChar
+	txa
+	lsr		r1,r1,#8
+	and		#$FF
+	jsr		DisplayByte		; display the month
+	lda		#'/'
+	jsr		DisplayChar
+	txa
+	and		#$FF
+	jsr		DisplayByte		; display the day
+	lda		#' '
+	jsr		DisplayChar
+	lda		#' '
+	jsr		DisplayChar
+	lda		DATETIME_TIME
+	tax
+	lsr		r1,r1,#24
+	jsr		DisplayByte		; display hours
+	lda		#':'
+	jsr		DisplayChar
+	txa
+	lsr		r1,r1,#16
+	jsr		DisplayByte		; display minutes
+	lda		#':'
+	jsr		DisplayChar
+	txa
+	lsr		r1,r1,#8
+	jsr		DisplayByte		; display seconds
+	lda		#'.'
+	jsr		DisplayChar
+	txa
+	jsr		DisplayByte		; display 100ths seconds
+	jsr		CRLF
+	plx
+	pla
+	rts
+	
+	
 ;==============================================================================
 ; Memory Management routines follow.
 ;==============================================================================
@@ -5763,7 +5806,6 @@ p100Hz:
 	pha
 	lda		#3				; reset the edge sense circuit
 	sta		PIC_RSTE
-;	inc		TEXTSCR+83		; update IRQ live indicator on screen
 	lda		IRQFlag
 	ina
 	sta		IRQFlag
@@ -5801,7 +5843,7 @@ p100Hz4:
 	and		#$E0
 	sb		r1,IrqBase
 
-	inc		TEXTSCR+83		; update IRQ live indicator on screen
+	inc		TEXTSCR+55		; update IRQ live indicator on screen
 	
 	; flash the cursor
 	cpx		IOFocusNdx		; only flash the cursor for the task with the IO focus.
