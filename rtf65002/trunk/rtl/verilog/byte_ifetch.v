@@ -30,13 +30,15 @@ BYTE_IFETCH:
 		pg2 <= `FALSE;
 		store_what <= `STW_DEF;
 		if (nmi_edge & !imiss & gie) begin	// imiss indicates cache controller is active and this state is in a waiting loop
-			if (nmoi)
-				state <= IFETCH;
+			ir[7:0] <= `BRK;
+			nmi_edge <= 1'b0;
+			wai <= 1'b0;
+			hwi <= `TRUE;
+			if (nmoi) begin
+				vect <= `NMI_VECT;
+				state <= DECODE;
+			end
 			else begin
-				ir <= 64'd0;
-				nmi_edge <= 1'b0;
-				wai <= 1'b0;
-				hwi <= `TRUE;
 				vect <= `BYTE_NMI_VECT;
 				state <= BYTE_DECODE;
 			end
@@ -62,11 +64,13 @@ BYTE_IFETCH:
 				end
 			end
 			else begin
-				if (nmoi)
-					state <= IFETCH;
+				ir[7:0] <= `BRK;
+				hwi <= `TRUE;
+				if (nmoi) begin
+					vect <= {vbr[31:9],irq_vect,2'b00};
+					state <= DECODE;
+				end
 				else begin
-					ir <= 64'd0;
-					hwi <= `TRUE;
 					state <= BYTE_DECODE;
 				end
 			end
@@ -89,8 +93,8 @@ BYTE_IFETCH:
 					imiss <= `TRUE;
 			end
 		end
-		if (first_ifetch) begin
-			first_ifetch <= `FALSE;
+//		if (first_ifetch) begin
+//			first_ifetch <= `FALSE;
 			case(ir[7:0])
 			`TAY,`TXY,`DEY,`INY:	begin y[7:0] <= res8; nf <= resn8; zf <= resz8; end
 			`TAX,`TYX,`TSX,`DEX,`INX:	begin x[7:0] <= res8; nf <= resn8; zf <= resz8; end
@@ -158,5 +162,5 @@ BYTE_IFETCH:
 			`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	begin x[7:0] <= res8; nf <= resn8; zf <= resz8; end
 			`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	begin y[7:0] <= res8; nf <= resn8; zf <= resz8; end
 			endcase
-		end
+//		end
 	end

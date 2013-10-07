@@ -28,8 +28,9 @@
 `define FALSE		1'b0
 
 `define SUPPORT_ICACHE	1'b1
+//`define ICACHE_2WAY		1'b1
 //`define SUPPORT_DCACHE	1'b1
-//`define SUPPORT_BCD		1'b1
+`define SUPPORT_BCD		1'b1
 `define SUPPORT_DIVMOD		1'b1
 `define SUPPORT_EM8		1'b1
 //`define SUPPORT_EXEC	1'b1
@@ -327,7 +328,7 @@
 `define JMP_RIND	9'hD2
 `define JSR			9'h20
 `define JSL			9'h22
-`define JSR_IND		8'h2C
+`define JSR_IND		9'h2C
 `define JSR_INDX	9'hFC
 `define JSR_RIND	9'hC2
 `define RTS			9'h60
@@ -424,6 +425,18 @@
 `define MOD_IMM32	9'h189
 `define PUSHA		9'h10B
 `define POPA		9'h12B
+`define BMS_ZPX		9'h106
+`define BMS_ABS		9'h10E
+`define BMS_ABSX	9'h11E
+`define BMC_ZPX		9'h126
+`define BMC_ABS		9'h12E
+`define BMC_ABSX	9'h13E
+`define BMF_ZPX		9'h146
+`define BMF_ABS		9'h14E
+`define BMF_ABSX	9'h15E
+`define BMT_ZPX		9'h166
+`define BMT_ABS		9'h16E
+`define BMT_ABSX	9'h17E
 
 `define NOTHING		4'd0
 `define SR_70		4'd1

@@ -220,6 +220,13 @@ wire unCachedInsn = pc[31:13]==19'h0 || !icacheOn;		// The lowest 8kB is uncache
 `else
 wire unCachedInsn = 1'b1;
 `endif
+`ifdef ICACHE_2WAY
+reg [31:0] clfsr;
+wire clfsr_fb; 
+xnor(clfsr_fb,clfsr[0],clfsr[1],clfsr[21],clfsr[31]);
+wire [1:0] whichrd;
+wire whichwr=clfsr[0];
+`endif
 reg km;			// kernel mode indicator
 assign km_o = km;
 
@@ -323,6 +330,31 @@ mult_div umd1
 );
 
 `ifdef SUPPORT_ICACHE
+`ifdef ICACHE_2WAY
+rtf65002_icachemem2way icm0 (
+	.whichrd(whichrd),
+	.whichwr(whichwr),
+	.wclk(clk),
+	.wr(ack_i & isInsnCacheLoad),
+	.adr(adr_o),
+	.dat(dat_i),
+	.rclk(~clk),
+	.pc(pc),
+	.insn(insn)
+);
+
+rtf65002_itagmem2way tgm0 (
+	.whichrd(whichrd),
+	.whichwr(isCacheReset ? adr_o[13]: whichwr),
+	.wclk(clk),
+	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
+	.adr({adr_o[31:1],!isCacheReset}),
+	.rclk(~clk),
+	.pc(pc),
+	.hit0(hit0),
+	.hit1(hit1)
+);
+`else
 rtf65002_icachemem icm0 (
 	.wclk(clk),
 	.wr(ack_i & isInsnCacheLoad),
@@ -342,6 +374,7 @@ rtf65002_itagmem tgm0 (
 	.hit0(hit0),
 	.hit1(hit1)
 );
+`endif
 
 wire ihit = (hit0 & hit1);//(pc[2:0] > 3'd1 ? hit1 : 1'b1));
 `else
@@ -483,6 +516,10 @@ begin
 	`INC_ZPX,`INC_ABS,`INC_ABSX:	calc_res <= b + 32'd1;
 	`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	calc_res <= b - 32'd1;
 	`ORB_ZPX,`ORB_ABS,`ORB_ABSX:	calc_res <= a | {24'h0,b8};
+	`BMS_ZPX,`BMS_ABS,`BMS_ABSX:	calc_res <= b | (32'b1 << acc[4:0]);
+	`BMC_ZPX,`BMC_ABS,`BMC_ABSX:	calc_res <= b & (~(32'b1 << acc[4:0]));
+	`BMF_ZPX,`BMF_ABS,`BMF_ABSX:	calc_res <= b ^ (32'b1 << acc[4:0]);
+	`BMT_ZPX,`BMT_ABS,`BMT_ABSX:	calc_res <= b & (32'b1 << acc[4:0]);
 	default:	calc_res <= 33'd0;
 	endcase
 end
@@ -658,6 +695,7 @@ INSN_BUS_ERROR:
 		wadr <= isp_dec;
 		isp <= isp_dec;
 		store_what <= `STW_OPC;
+		derr_address <= 34'd0;
 		vect <= {vbr[31:9],9'd509,2'b00};
 		hwi <= `TRUE;
 		isBusErr <= `TRUE;

@@ -20,8 +20,8 @@
 //
 `define SPRITE_CTRL	1
 `define NSPRITES	8
-//`define ETHMAC	2
-//`define PSG		4
+`define ETHMAC	2
+`define PSG		4
 //`define EPPCTRL	8
 //`define TMPDEVICE	16
 //`define UART	32
@@ -29,8 +29,8 @@
 `define GACCEL	128
 `define BMPCTRL		256
 `define LEDS	512
-//`define RASTIRQ	1024
-//`define DATETIME	2048
+`define RASTIRQ	1024
+`define DATETIME	2048
 //`define MMU			4096
 //`define SUPPORT_FORTH	8192
 
@@ -112,7 +112,7 @@ output spiCS_n;
 output mdc;
 inout mdio;
 tri mdio;
-output eth_rst;
+output reg eth_rst;
 input eth_col;
 input eth_rs;
 output eth_gtxclk;
@@ -265,57 +265,127 @@ wire mmu_ack;
 wire [15:0] mmu_dato;
 wire [33:0] mem_adr;
 
+wire iob1_ack;
+wire [31:0] iob1_dato;
+wire io1_cyc;
+wire io1_stb;
+wire io1_we;
+wire io1_ack;
+wire [3:0] io1_sel;
+wire [33:0] io1_adr;
+wire [31:0] io1_dati;
+wire [31:0] io1_dato;
+
+wire iob2_ack;
+wire [31:0] iob2_dato;
+wire io2_cyc;
+wire io2_stb;
+wire io2_we;
+wire io2_ack;
+wire [3:0] io2_sel;
+wire [33:0] io2_adr;
+wire [31:0] io2_dati;
+wire [31:0] io2_dato;
+
+wire iob3_ack;
+wire [31:0] iob3_dato;
+wire io3_cyc;
+wire io3_stb;
+wire io3_we;
+wire io3_ack;
+wire [3:0] io3_sel;
+wire [33:0] io3_adr;
+wire [31:0] io3_dati;
+wire [31:0] io3_dato;
+
+wire iob4_ack;
+wire [31:0] iob4_dato;
+wire io4_cyc;
+wire io4_stb;
+wire io4_we;
+wire io4_ack;
+wire [3:0] io4_sel;
+wire [33:0] io4_adr;
+wire [31:0] io4_dati;
+wire [31:0] io4_dato;
+
 wire cpu_ack =
-	config_rec_ack |
-	em_ack |
-	sema_ack |
-	thr_ack |
 	bridge_ack |
-	pic_ack |
+	sema_ack |
 	scrm_ack |
 	btrm_ack |
 	bas_ack |
 	for_ack |
-	kbd_ack |
-	tc_ack |
-	spr_ack |
-	ga_ack |
-	uart_ack |
-	psg_ack |
-	ac97_ack |
-	cwt_ack |
-	spi_ack |
-	dt_ack |
-	mmu_ack |
-	rast_ack |
-	Leds_ack
+	iob1_ack |
+	iob2_ack |
+	iob3_ack |
+	iob4_ack
 	;
 wire [31:0] cpu_dati =
-	config_reco |
-	em_s_dato |
 	sema_dato |
-	thr_dato |
 	bridge_dato |
-	pic_dato |
 	scrm_dato |
 	btrm_dato |
 	bas_dato |
 	for_dato |
-	kbd_dato |
+	iob1_dato |
+	iob2_dato |
+	iob3_dato |
+	iob4_dato
+	;
+
+assign io1_ack =
+	em_ack |
+	spi_ack |
+	uart_ack |
+	mmu_ack
+	;
+assign io1_dati =
+	em_s_dato |
+	spi_dato |
+	uart_do |
+	mmu_dato
+	;
+// Audio bridge
+assign io2_ack =
+	psg_ack |
+	ac97_ack |
+	cwt_ack
+	;
+assign io2_dati =
+	psg_dato |
+	ac97_dato |
+	cwt_dato
+	;
+// Video bridge
+assign io3_ack =
+	tc_ack |
+	spr_ack |
+	ga_ack |
+	rast_ack
+	;
+assign io3_dati =
 	tc_dato |
 	spr_dato |
 	ga_s_dato |
-	uart_do |
-	psg_dato |
-	ac97_dato |
-	cwt_dato |
-	dt_dato |
-	mmu_dato |
-	rast_dato |
-	spi_dato
+	rast_dato
+	;
+// Low frequency bridge
+assign io4_ack =
+	config_rec_ack |
+	pic_ack |
+	kbd_ack |
+	dt_ack |
+	Leds_ack
+	;
+assign io4_dati =
+	config_reco |
+	pic_dato |
+	kbd_dato |
+	dt_dato
 	;
 
-clkgen1366x768 u1
+clkgen1366x768 #(.pClkFreq(`CLK_FREQ)) u1
 (
 	.xreset(xreset),
 	.xclk(clk),
@@ -335,7 +405,7 @@ clkgen1366x768 u1
 );
 
 `ifdef LEDS
-wire csLeds = cpu_cyc && cpu_stb && (cpu_adr[33:10]==24'hFFDC_06);
+wire csLeds = io4_cyc && io4_stb && (io4_adr[33:10]==24'hFFDC_06);
 assign Leds_ack = csLeds;
 reg [7:0] cnt;
 reg [7:0] Led1;	// help out the router by prociding extra reg
@@ -346,8 +416,8 @@ if (rst) begin
 end
 else
 begin
-	if (csLeds & cpu_we) begin
-		Led1 <= cpu_dato[7:0];
+	if (csLeds & io4_we) begin
+		Led1 <= io4_dato[7:0];
 	end
 	Led <= Led1;
 end
@@ -359,12 +429,12 @@ PS2KbdToAscii #(.pClkFreq(`CLK_FREQ)) ukbd1
 (
 	.rst_i(rst),
 	.clk_i(sys_clk),
-	.cyc_i(cpu_cyc),
-	.stb_i(cpu_stb),
+	.cyc_i(io4_cyc),
+	.stb_i(io4_stb),
 	.ack_o(kbd_ack),
-	.we_i(cpu_we),
-	.adr_i(cpu_adr),
-	.dat_i(cpu_dato[7:0]),
+	.we_i(io4_we),
+	.adr_i(io4_adr),
+	.dat_i(io4_dato[7:0]),
 	.dat_o(kbd_dato),
 	.kclk(kclk),
 	.kd(kd),
@@ -404,12 +474,12 @@ WXGASyncGen1366x768_60Hz u3
 rtfTextController tc1 (
 	.rst_i(rst),
 	.clk_i(sys_clk),
-	.cyc_i(cpu_cyc),
-	.stb_i(cpu_stb),
+	.cyc_i(io3_cyc),
+	.stb_i(io3_stb),
 	.ack_o(tc_ack),
-	.we_i(cpu_we),
-	.adr_i(cpu_adr),
-	.dat_i(cpu_dato),
+	.we_i(io3_we),
+	.adr_i(io3_adr),
+	.dat_i(io3_dato),
 	.dat_o(tc_dato),
 	.lp(),
 	.curpos(),
@@ -683,10 +753,13 @@ u_mig_39 (
 
 wire mden,mdi;
 assign eth_txd[7:4] = 4'h0;		// not used
-assign eth_rst = rst|btn[1];
-assign mdio = mden ? mdo : mdi;
+always @(posedge sys_clk)
+	eth_rst <= ~(rst|btn[1]);
+//assign eth_rst = ~(rst|btn[1]);
+assign mdio = mden ? mdo : 1'bz;
+assign mdi = mdio;
 wire [31:0] em_s_dato1;
-wire cs_ethmac = cpu_cyc && cpu_stb && cpu_adr[33:14]==20'hFFDC2;
+wire cs_ethmac = io1_cyc && io1_stb && io1_adr[33:14]==20'hFFDC2;
 assign em_s_dato = cs_ethmac ? em_s_dato1 : 32'd0;
 assign em_bl = 6'd3;	// defined in ethmac_defines
 
@@ -737,14 +810,14 @@ ethmac uemac1
   .wb_rst_i(rst),
 
   // WISHBONE slave
-  .wb_adr_i(cpu_adr[11:2]),
-  .wb_sel_i(cpu_sel),
-  .wb_we_i(cpu_we),
-  .wb_cyc_i(cpu_cyc),
+  .wb_adr_i(io1_adr[11:2]),
+  .wb_sel_i(io1_sel),
+  .wb_we_i(io1_we),
+  .wb_cyc_i(io1_cyc),
   .wb_stb_i(cs_ethmac),
   .wb_ack_o(em_ack),
   .wb_err_o(em_erro),
-  .wb_dat_i(cpu_dato),
+  .wb_dat_i(io1_dato),
   .wb_dat_o(em_s_dato1),
 
   // WISHBONE master
@@ -925,13 +998,13 @@ rtfSpriteController #(.pnSpr(`NSPRITES)) u_sc1
 	// Slave signals
 	.rst_i(rst),			// reset
 	.clk_i(sys_clk),			// clock
-	.s_cyc_i(cpu_cyc),	// cycle valid
-	.s_stb_i(cpu_stb),	// data transfer
+	.s_cyc_i(io3_cyc),	// cycle valid
+	.s_stb_i(io3_stb),	// data transfer
 	.s_ack_o(spr_ack),	// transfer acknowledge
-	.s_we_i(cpu_we),	// write
-	.s_sel_i(cpu_sel),	// byte select
-	.s_adr_i(cpu_adr),	// address
-	.s_dat_i(cpu_dato),	// data input
+	.s_we_i(io3_we),	// write
+	.s_sel_i(io3_sel),	// byte select
+	.s_adr_i(io3_adr),	// address
+	.s_dat_i(io3_dato),	// data input
 	.s_dat_o(spr_dato),	// data output
 	.vol_o(),			// volatile register
 	//------------------------------
@@ -1001,13 +1074,13 @@ rtfGraphicsAccelerator u_ga1
 	.rst_i(rst),
 	.clk_i(sys_clk),
 
-	.s_cyc_i(cpu_cyc),
-	.s_stb_i(cpu_stb),
-	.s_we_i(cpu_we),
+	.s_cyc_i(io3_cyc),
+	.s_stb_i(io3_stb),
+	.s_we_i(io3_we),
 	.s_ack_o(ga_ack),
-	.s_sel_i(cpu_sel),
-	.s_adr_i(cpu_adr),
-	.s_dat_i(cpu_dato),
+	.s_sel_i(io3_sel),
+	.s_adr_i(io3_adr),
+	.s_dat_i(io3_dato),
 	.s_dat_o(ga_s_dato),
 
 	.m_cyc_o(ga_cyc),
@@ -1030,12 +1103,12 @@ RasterIRQ urasti
 	.rst_i(rst),
 	.clk_i(sys_clk),
 	.irq_o(rast_irq),
-	.cyc_i(cpu_cyc),
-	.stb_i(cpu_stb),
+	.cyc_i(io3_cyc),
+	.stb_i(io3_stb),
 	.ack_o(rast_ack),
-	.we_i(cpu_we),
-	.adr_i(cpu_adr),
-	.dat_i(cpu_dato[15:0]),
+	.we_i(io3_we),
+	.adr_i(io3_adr),
+	.dat_i(io3_dato[15:0]),
 	.dat_o(rast_dato),
 	.vclk(pixel_clk),
 	.hsync(hsync),
@@ -1047,17 +1120,39 @@ assign rast_ack = 1'b0;
 assign rast_dato = 16'h0000;
 `endif
 
+IOBridge uio3 
+(
+	.rst_i(rst),
+	.clk_i(sys_clk),
+	.s_cyc_i(cpu_cyc),
+	.s_stb_i(cpu_stb),
+	.s_ack_o(iob3_ack),
+	.s_sel_i(cpu_sel),
+	.s_we_i(cpu_we),
+	.s_adr_i(cpu_adr),
+	.s_dat_i(cpu_dato),
+	.s_dat_o(iob3_dato),
+	.m_cyc_o(io3_cyc),
+	.m_stb_o(io3_stb),
+	.m_ack_i(io3_ack),
+	.m_we_o(io3_we),
+	.m_sel_o(io3_sel),
+	.m_adr_o(io3_adr),
+	.m_dat_i(io3_dati),
+	.m_dat_o(io3_dato)
+);
+
 `ifdef UART
 rtfSimpleUart #(.pClkFreq(`CLK_FREQ)) uuart
 (
 	// WISHBONE Slave interface
 	.rst_i(rst),		// reset
 	.clk_i(sys_clk),	// eg 100.7MHz
-	.cyc_i(cpu_cyc),	// cycle valid
-	.stb_i(cpu_stb),	// strobe
-	.we_i(cpu_we),			// 1 = write
-	.adr_i(cpu_adr[33:2]),		// register address
-	.dat_i(cpu_dato[7:0]),	// data input bus
+	.cyc_i(io1_cyc),	// cycle valid
+	.stb_i(io1_stb),	// strobe
+	.we_i(io1_we),			// 1 = write
+	.adr_i(io1_adr[33:2]),		// register address
+	.dat_i(io1_dato[7:0]),	// data input bus
 	.dat_o(uart_dato),	// data output bus
 	.ack_o(uart_ack),		// transfer acknowledge
 	.vol_o(),		// volatile register selected
@@ -1079,6 +1174,28 @@ assign UartRx = 1'bz;
 assign UartTx = 1'b0;
 `endif
 
+IOBridge uio2 
+(
+	.rst_i(rst),
+	.clk_i(sys_clk),
+	.s_cyc_i(cpu_cyc),
+	.s_stb_i(cpu_stb),
+	.s_ack_o(iob2_ack),
+	.s_sel_i(cpu_sel),
+	.s_we_i(cpu_we),
+	.s_adr_i(cpu_adr),
+	.s_dat_i(cpu_dato),
+	.s_dat_o(iob2_dato),
+	.m_cyc_o(io2_cyc),
+	.m_stb_o(io2_stb),
+	.m_ack_i(io2_ack),
+	.m_we_o(io2_we),
+	.m_sel_o(io2_sel),
+	.m_adr_o(io2_adr),
+	.m_dat_i(io2_dati),
+	.m_dat_o(io2_dato)
+);
+
 `ifdef PSG
 wire psg_cyc;
 wire psg_stb;
@@ -1091,12 +1208,12 @@ PSG16 #(.pClkDivide(`CLK_FREQ/1000000)) u_psg
 (
 	.rst_i(rst),
 	.clk_i(sys_clk),
-	.cyc_i(cpu_cyc),
-	.stb_i(cpu_stb),
+	.cyc_i(io2_cyc),
+	.stb_i(io2_stb),
 	.ack_o(psg_ack),
-	.we_i(cpu_we),
-	.adr_i(cpu_adr),
-	.dat_i(cpu_dato[15:0]),
+	.we_i(io2_we),
+	.adr_i(io2_adr),
+	.dat_i(io2_dato[15:0]),
 	.dat_o(psg_dato),
 	.vol_o(),
 	.bg(), 
@@ -1113,12 +1230,12 @@ WaveTblMem u_wt1
 (
 	.rst_i(rst),
 	.clk_i(sys_clk),
-	.cpu_cyc_i(cpu_cyc),
-	.cpu_stb_i(cpu_stb),
+	.cpu_cyc_i(io2_cyc),
+	.cpu_stb_i(io2_stb),
 	.cpu_ack_o(cwt_ack),
-	.cpu_we_i(cpu_we),
-	.cpu_adr_i(cpu_adr),
-	.cpu_dat_i(cpu_dato[15:0]),
+	.cpu_we_i(io2_we),
+	.cpu_adr_i(io2_adr),
+	.cpu_dat_i(io2_dato[15:0]),
 	.cpu_dat_o(cwt_dato),
 	.psg_cyc_i(psg_cyc),
 	.psg_stb_i(psg_stb),
@@ -1129,14 +1246,14 @@ WaveTblMem u_wt1
 
 AC97 u_ac97
 (
-	.rst_i(rst),
-	.clk_i(sys_clk),
-	.cyc_i(cpu_cyc),
-	.stb_i(cpu_stb),
+	.rst_i(rst),			// The clock here must be fast enough not to miss BITCLKs
+	.clk_i(pixel_clk),		// 85.7 MHz clock
+	.cyc_i(io2_cyc),
+	.stb_i(io2_stb),
 	.ack_o(ac97_ack),
-	.we_i(cpu_we),
-	.adr_i(cpu_adr),
-	.dat_i(cpu_dato[15:0]),
+	.we_i(io2_we),
+	.adr_i(io2_adr),
+	.dat_i(io2_dato[15:0]),
 	.dat_o(ac97_dato),
 	.PSGout(psg_out),
 	.BIT_CLK(BITCLK),
@@ -1153,20 +1270,42 @@ assign AUDRST = 1'b0;
 assign AUDSDO = 1'b0;
 `endif
 
+IOBridge uio1 
+(
+	.rst_i(rst),
+	.clk_i(sys_clk),
+	.s_cyc_i(cpu_cyc),
+	.s_stb_i(cpu_stb),
+	.s_ack_o(iob1_ack),
+	.s_sel_i(cpu_sel),
+	.s_we_i(cpu_we),
+	.s_adr_i(cpu_adr),
+	.s_dat_i(cpu_dato),
+	.s_dat_o(iob1_dato),
+	.m_cyc_o(io1_cyc),
+	.m_stb_o(io1_stb),
+	.m_ack_i(io1_ack),
+	.m_we_o(io1_we),
+	.m_sel_o(io1_sel),
+	.m_adr_o(io1_adr),
+	.m_dat_i(io1_dati),
+	.m_dat_o(io1_dato)
+);
+
 `ifdef SDCARD
 wire [7:0] spi_dato1;
-wire spi_cs = cpu_cyc && cpu_stb && cpu_adr[33:10]==26'hFFDC05;
+wire spi_cs = io1_cyc && io1_stb && io1_adr[33:10]==26'hFFDC05;
 assign spi_dato = spi_cs ? spi_dato1 : 32'h00;
 
 spiMaster uspi1
 (
 	.clk_i(sys_clk),
 	.rst_i(rst),
-	.address_i(cpu_adr[7:2]),
-	.data_i(cpu_dato[7:0]),
+	.address_i(io1_adr[7:2]),
+	.data_i(io1_dato[7:0]),
 	.data_o(spi_dato1),
 	.strobe_i(spi_cs),
-	.we_i(cpu_we),
+	.we_i(io1_we),
 	.ack_o(spi_ack),
 
 	// SPI logic clock
@@ -1238,12 +1377,12 @@ SimpleMMU smmu1
 	.dma_i(1'b0),
 	.kernel_mode(km),
 	.me(1'b1),
-	.cyc_i(cpu_cyc),
-	.stb_i(cpu_stb),
+	.cyc_i(io1_cyc),
+	.stb_i(io1_stb),
 	.ack_o(mmu_ack),
-	.we_i(cpu_we),
-	.adr_i(cpu_adr),
-	.dat_i(cpu_dato[15:0]),
+	.we_i(io1_we),
+	.adr_i(io1_adr),
+	.dat_i(io1_dato[15:0]),
 	.dat_o(mmu_dato),
 	.ea_i(cpu_adr),
 	.ea_o(mem_adr)
@@ -1262,13 +1401,13 @@ rtfDatetime udt1
 	.clk_i(sys_clk),	// system clock
 
 	// System bus
-	.cyc_i(cpu_cyc),	// valid bus cycle
-	.stb_i(cpu_stb),	// data transfer strobe
+	.cyc_i(io4_cyc),	// valid bus cycle
+	.stb_i(io4_stb),	// data transfer strobe
 	.ack_o(dt_ack),		// transfer acknowledge
-	.we_i(cpu_we),		// 1=write
-	.sel_i(cpu_sel),	// byte select
-	.adr_i(cpu_adr),	// address
-	.dat_i(cpu_dato),	// data input
+	.we_i(io4_we),		// 1=write
+	.sel_i(io4_sel),	// byte select
+	.adr_i(io4_adr),	// address
+	.dat_i(io4_dato),	// data input
 	.dat_o(dt_dato),	// data output
 
 	.tod(pulse100Hz),	// tod pulse (eg 60 Hz)
@@ -1278,6 +1417,28 @@ rtfDatetime udt1
 assign dt_ack = 1'b0;
 assign dt_dato = 32'h0;
 `endif
+
+IOBridge uio4 
+(
+	.rst_i(rst),
+	.clk_i(sys_clk),
+	.s_cyc_i(cpu_cyc),
+	.s_stb_i(cpu_stb),
+	.s_ack_o(iob4_ack),
+	.s_sel_i(cpu_sel),
+	.s_we_i(cpu_we),
+	.s_adr_i(cpu_adr),
+	.s_dat_i(cpu_dato),
+	.s_dat_o(iob4_dato),
+	.m_cyc_o(io4_cyc),
+	.m_stb_o(io4_stb),
+	.m_ack_i(io4_ack),
+	.m_we_o(io4_we),
+	.m_sel_o(io4_sel),
+	.m_adr_o(io4_adr),
+	.m_dat_i(io4_dati),
+	.m_dat_o(io4_dato)
+);
 
 wire berr;
 BusError ube1
@@ -1363,16 +1524,17 @@ sema_mem usm1
 	.dat_o(sema_dato)
 );
 
-assign thr_ack = cpu_cyc && cpu_stb && cpu_adr[33:2]==32'hFFDD0008;
-always @(posedge sys_clk)
-if (rst)
-	thread_index <= 8'h00;
-else begin
-	if (thr_ack & cpu_we)
-		thread_index <= cpu_dato[7:0];
-end
-assign thr_dato = thr_ack ? thread_index : 32'd0;
-assign thread_area_cs = cpu_adr[33:14]==20'h00000;
+
+//assign thr_ack = cpu_cyc && cpu_stb && cpu_adr[33:2]==32'hFFDD0008;
+//always @(posedge sys_clk)
+//if (rst)
+//	thread_index <= 8'h00;
+//else begin
+//	if (thr_ack & cpu_we)
+//		thread_index <= cpu_dato[7:0];
+//end
+//assign thr_dato = thr_ack ? thread_index : 32'd0;
+//assign thread_area_cs = cpu_adr[33:14]==20'h00000;
 
 //assign sys_adr = thread_area_cs ? {cpu_adr[33:22],thread_index,cpu_adr[13:0]} : cpu_adr;
 assign sys_adr = cpu_adr;
@@ -1383,12 +1545,12 @@ RTF65002PIC u_pic
 (
 	.rst_i(rst),		// reset
 	.clk_i(sys_clk),	// system clock
-	.cyc_i(cpu_cyc),	// cycle valid
-	.stb_i(cpu_stb),	// strobe
+	.cyc_i(io4_cyc),	// cycle valid
+	.stb_i(io4_stb),	// strobe
 	.ack_o(pic_ack),	// transfer acknowledge
-	.we_i(cpu_we),		// write
-	.adr_i(cpu_adr),	// address
-	.dat_i(cpu_dato),
+	.we_i(io4_we),		// write
+	.adr_i(io4_adr),	// address
+	.dat_i(io4_dato),
 	.dat_o(pic_dato),
 	.vol_o(),			// volatile register selected
 	.i1(kbd_rst),
@@ -1497,13 +1659,19 @@ assign config_rec[11] = 1'b1;
 assign config_rec[11] = 1'b0;
 `endif
 
-assign config_rec[31:12] = 20'd0;
+`ifdef MMU
+assign config_rec[12] = 1'b1;
+`else
+assign config_rec[12] = 1'b0;
+`endif
+
+assign config_rec[31:13] = 19'd0;
 assign config_rec[63:32] = `CLK_FREQ;
 
-assign config_rec_ack = cpu_cyc && cpu_stb && cpu_adr[33:4]==30'b1111_1111_1101_1100_1111_1111_1111_00;	// $FFDCFFF0-$FFDCFFF3
-always @(config_rec_ack,config_rec,cpu_adr)
+assign config_rec_ack = io4_cyc && io4_stb && io4_adr[33:4]==30'b1111_1111_1101_1100_1111_1111_1111_00;	// $FFDCFFF0-$FFDCFFF3
+always @(config_rec_ack,config_rec,io4_adr)
 if (config_rec_ack)
-	case(cpu_adr[3:2])
+	case(io4_adr[3:2])
 	2'd00:	config_reco <= config_rec[31:0];
 	2'd01:	config_reco <= config_rec[63:32];
 	default:	config_reco <= 32'd0;

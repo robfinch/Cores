@@ -129,6 +129,9 @@ LOAD_ICACHE:
 			stb_o <= 1'b0;
 			sel_o <= 4'h0;
 			adr_o <= 34'd0;
+`ifdef ICACHE_2WAY
+			clfsr <= {clfsr,clfsr_fb};
+`endif
 			cstate <= IDLE;
 		end
 		adr_o[3:2] <= adr_o[3:2] + 2'd1;
@@ -145,6 +148,9 @@ LOAD_ICACHE:
 			sel_o <= 4'h0;
 			adr_o <= 34'd0;
 			state <= INSN_BUS_ERROR;
+`ifdef ICACHE_2WAY
+			clfsr <= {clfsr,clfsr_fb};
+`endif
 			cstate <= IDLE;
 		end
 		adr_o[3:2] <= adr_o[3:2] + 2'd1;

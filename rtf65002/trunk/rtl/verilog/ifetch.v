@@ -30,7 +30,7 @@ IFETCH:
 		pg2 <= `FALSE;
 		store_what <= `STW_DEF;
 		if (nmi_edge & !imiss & gie & !isExec & !isAtni) begin	// imiss indicates cache controller is active and this state is in a waiting loop
-			ir <= 64'd0;
+			ir[7:0] <= `BRK;
 			nmi_edge <= 1'b0;
 			wai <= 1'b0;
 			hwi <= `TRUE;
@@ -41,7 +41,7 @@ IFETCH:
 			wai <= 1'b0;
 			if (im) begin
 				if (ttrig) begin
-					ir <= {8{`BRK}};
+					ir[7:0] <= `BRK;
 					vect <= {vbr[31:9],9'd490,2'b00};
 					state <= DECODE;
 				end
@@ -71,7 +71,7 @@ IFETCH:
 				end
 			end
 			else begin
-				ir <= 64'd0;
+				ir[7:0] <= `BRK;
 				hwi <= `TRUE;
 				vect <= {vbr[31:9],irq_vect,2'b00};
 				state <= DECODE;
@@ -79,7 +79,7 @@ IFETCH:
 		end
 		else if (!wai) begin
 			if (ttrig) begin
-				ir <= {8{`BRK}};
+				ir[7:0] <= `BRK;
 				vect <= {vbr[31:9],9'd490,2'b00};
 				state <= DECODE;
 			end
@@ -108,8 +108,11 @@ IFETCH:
 					imiss <= `TRUE;
 			end
 		end
-		if (first_ifetch) begin
-			first_ifetch <= `FALSE;
+		// During a cache miss all these assignments will repeat. It's not a
+		// problem. The history buffer will be stuffed with the same pc address
+		// for several cycles until the cache load is complete.
+//		if (first_ifetch) begin
+//			first_ifetch <= `FALSE;
 			if (hist_capture) begin
 				history_buf[history_ndx] <= pc;
 				history_ndx <= history_ndx+6'd1;
@@ -209,5 +212,5 @@ IFETCH:
 			`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`PLA:	begin acc <= res; nf <= resn32; zf <= resz32; end
 			`POP:	begin nf <= resn32; zf <= resz32; end
 			endcase
-		end
+//		end
 	end

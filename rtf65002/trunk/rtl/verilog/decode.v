@@ -53,7 +53,11 @@ DECODE:
 		`WAI:	wai <= 1'b1;
 		`TON:	tf <= 1'b1;
 		`TOFF:	tf <= 1'b0;
-		`EMM:	begin em <= 1'b1; state <= BYTE_IFETCH; end
+		`EMM:	begin em <= 1'b1;
+`ifdef SUPPORT_EM8
+				state <= BYTE_IFETCH;
+`endif
+				end
 		`DEX:	begin 
 					res <= x - 32'd1;
 					// DEX/BNE accelerator

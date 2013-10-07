@@ -35,8 +35,8 @@ module rtfBitmapController1364x768(
 	rst_i, clk_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o,
 	vclk, hSync, vSync, blank, rgbo, page, onoff
 );
-parameter BM_BASE_ADDR1 = 32'h0010_0000;
-parameter BM_BASE_ADDR2 = 32'h0014_0000;
+parameter BM_BASE_ADDR1 = 32'h0410_0000;
+parameter BM_BASE_ADDR2 = 32'h0414_0000;
 
 // SYSCON
 input rst_i;				// system reset

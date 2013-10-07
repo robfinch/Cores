@@ -26,6 +26,7 @@
 //=============================================================================
 
 module clkgen1366x768(xreset, xclk, rst, clk100, clk50, clk200, clk125, vclk, vclk2, vclk10, sys_clk, dram_clk, locked, pulse1000Hz, pulse100Hz);
+parameter pClkFreq=20000000;
 input xreset;		// external reset
 input xclk;			// external clock source (100 MHz)
 output rst;
@@ -104,8 +105,8 @@ always @(posedge xclk)
 
 // 1000Hz pulse generator
 reg [19:0] cnt;
-wire pulse1000 = cnt==20'd25000;
-assign pulse1000Hz = cnt>=20'd24990;
+wire pulse1000 = cnt==pClkFreq/1000;
+assign pulse1000Hz = cnt>=pClkFreq/1000-10;
 
 always @(posedge clk50)
 if (rst)
@@ -118,8 +119,8 @@ else begin
 end
 
 reg [19:0] cnt2;
-wire pulse100 = cnt2==20'd250000;
-assign pulse100Hz = cnt2>=20'd249990;
+wire pulse100 = cnt2==pClkFreq/100;
+assign pulse100Hz = cnt2>=pClkFreq/100-10;
 
 always @(posedge clk50)
 if (rst)
