@@ -53,7 +53,7 @@ STORE1:
 		`STW_RFA8:	dat_o <= {4{rfoa[7:0]}};
 		`STW_A:		dat_o <= a;
 		`STW_B:		dat_o <= b;
-		`STW_CALC:	dat_o <= calc_res;
+		`STW_CALC:	dat_o <= res;
 `ifdef SUPPORT_EM8
 		`STW_ACC8:	dat_o <= {4{acc8}};
 		`STW_X8:	dat_o <= {4{x8}};
@@ -117,8 +117,7 @@ STORE2:
 				radr <= vect[31:2];
 				ttrig <= 1'b0;
 				tf <= 1'b0;			// turn off trace mode
-				if (hwi)
-					im <= 1'b1;
+				im <= 1'b1;
 				em <= 1'b0;			// make sure we process in native mode; we might have been called up during emulation mode
 			end
 		`STW_RFA:
@@ -169,7 +168,7 @@ STORE2:
 			end
 		`STW_PC70:
 			begin
-				case(ir[7:0])
+				case({1'b0,ir[7:0]})
 				`BRK: 	begin
 						radr <= {spage[31:8],sp[7:2]};
 						wadr <= {spage[31:8],sp[7:2]};
@@ -181,6 +180,7 @@ STORE2:
 						end
 				`JSR: 	begin
 						pc <= ir[23:8];
+						$display("setting pc=%h", ir[23:8]);
 						end
 				`JSL: 	begin
 						pc <= ir[39:8];
@@ -224,8 +224,7 @@ STORE2:
 		endcase
 `ifdef SUPPORT_DCACHE
 		if (!dhit && write_allocate) begin
-			dmiss <= `TRUE;
-			state <= WAIT_DHIT;
+			state <= DCACHE1;
 		end
 `endif
 	end

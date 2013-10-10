@@ -29,7 +29,7 @@ IFETCH:
 		isBusErr <= `FALSE;
 		pg2 <= `FALSE;
 		store_what <= `STW_DEF;
-		if (nmi_edge & !imiss & gie & !isExec & !isAtni) begin	// imiss indicates cache controller is active and this state is in a waiting loop
+		if (nmi_edge & gie & !isExec & !isAtni) begin	// imiss indicates cache controller is active and this state is in a waiting loop
 			ir[7:0] <= `BRK;
 			nmi_edge <= 1'b0;
 			wai <= 1'b0;
@@ -37,7 +37,7 @@ IFETCH:
 			state <= DECODE;
 			vect <= `NMI_VECT;
 		end
-		else if (irq_i && !imiss & gie & !isExec & !isAtni) begin
+		else if (irq_i & gie & !isExec & !isAtni) begin
 			wai <= 1'b0;
 			if (im) begin
 				if (ttrig) begin
@@ -58,7 +58,7 @@ IFETCH:
 						state <= DECODE;
 					end
 					else
-						imiss <= `TRUE;
+						state <= LOAD_IBUF1;
 				end
 				else begin
 					if (ihit) begin
@@ -67,7 +67,7 @@ IFETCH:
 						state <= DECODE;
 					end
 					else
-						imiss <= `TRUE;
+						state <= ICACHE1;
 				end
 			end
 			else begin
@@ -96,7 +96,7 @@ IFETCH:
 					state <= DECODE;
 				end
 				else
-					imiss <= `TRUE;
+					state <= LOAD_IBUF1;
 			end
 			else begin
 				if (ihit) begin
@@ -105,112 +105,110 @@ IFETCH:
 					state <= DECODE;
 				end
 				else
-					imiss <= `TRUE;
+					state <= ICACHE1;
 			end
 		end
 		// During a cache miss all these assignments will repeat. It's not a
 		// problem. The history buffer will be stuffed with the same pc address
 		// for several cycles until the cache load is complete.
-//		if (first_ifetch) begin
-//			first_ifetch <= `FALSE;
-			if (hist_capture) begin
-				history_buf[history_ndx] <= pc;
-				history_ndx <= history_ndx+6'd1;
-			end
-			regfile[Rt] <= res;
-			case(Rt)
-			4'h1:	acc <= res;
-			4'h2:	x <= res;
-			4'h3:	y <= res;
-			default:	;
-			endcase
-			case(ir9)
-			`TAS,`TXS:	begin isp <= res; gie <= 1'b1; end
-			`SUB_SP8,`SUB_SP16,`SUB_SP32:	isp <= res;
-			`TRS:
-				begin
-					case(ir[15:12])
-					4'h0:	begin
-							$display("res=%h",res);
+		if (hist_capture) begin
+			history_buf[history_ndx] <= pc;
+			history_ndx <= history_ndx+7'd1;
+		end
+		regfile[Rt] <= res;
+		case(Rt)
+		4'h1:	acc <= res;
+		4'h2:	x <= res;
+		4'h3:	y <= res;
+		default:	;
+		endcase
+		case(ir9)
+		`TAS,`TXS:	begin isp <= res; gie <= 1'b1; end
+		`SUB_SP8,`SUB_SP16,`SUB_SP32:	isp <= res;
+		`TRS:
+			begin
+				case(ir[15:12])
+				4'h0:	begin
+						$display("res=%h",res);
 `ifdef SUPPORT_ICACHE
-							icacheOn <= res[0];
+						icacheOn <= res[0];
 `endif
 `ifdef SUPPORT_DCACHE
-							dcacheOn <= res[1];
-							write_allocate <= res[2];
+						dcacheOn <= res[1];
+						write_allocate <= res[2];
 `endif
-							end
-					4'h5:	lfsr <= res;
-					4'h7:	abs8 <= res;
-					4'h8:	begin vbr <= {res[31:9],9'h000}; nmoi <= res[0]; end
-					4'hE:	begin sp <= res[7:0]; spage[31:8] <= res[31:8]; end
-					4'hF:	begin isp <= res; gie <= 1'b1; end
-					endcase
-				end
-			`RR:
-				case(ir[23:20])
-				`ADD_RR:	begin vf <= resv32; cf <= resc32; nf <= resn32; zf <= resz32; end
-				`SUB_RR:	
-						if (Rt==4'h0)	// CMP doesn't set overflow
-							begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-						else
-							begin vf <= resv32; cf <= ~resc32; nf <= resn32; zf <= resz32; end
-				`AND_RR:
-					if (Rt==4'h0)	// BIT sets overflow
-						begin nf <= b[31]; vf <= b[30]; zf <= resz32; end
-					else
-						begin nf <= resn32; zf <= resz32; end
-				default:
-						begin nf <= resn32; zf <= resz32; end
+						end
+				4'h5:	lfsr <= res;
+				4'h7:	abs8 <= res;
+				4'h8:	begin vbr <= {res[31:9],9'h000}; nmoi <= res[0]; end
+				4'hE:	begin sp <= res[7:0]; spage[31:8] <= res[31:8]; end
+				4'hF:	begin isp <= res; gie <= 1'b1; end
 				endcase
-			`LD_RR:	begin zf <= resz32; nf <= resn32; end
-			`DEC_RR,`INC_RR: begin zf <= resz32; nf <= resn32; end
-			`ADD_IMM8,`ADD_IMM16,`ADD_IMM32,`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND:
-				begin vf <= resv32; cf <= resc32; nf <= resn32; zf <= resz32; end
-			`SUB_IMM8,`SUB_IMM16,`SUB_IMM32,`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND:
-				if (Rt==4'h0)	// CMP doesn't set overflow
-					begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-				else
-					begin vf <= resv32; cf <= ~resc32; nf <= resn32; zf <= resz32; end
-`ifdef SUPPORT_DIVMOD
-			`DIV_IMM8,`DIV_IMM16,`DIV_IMM32,
-			`MOD_IMM8,`MOD_IMM16,`MOD_IMM32,
-`endif
-			`MUL_IMM8,`MUL_IMM16,`MUL_IMM32:
-				begin nf <= resn32; zf <= resz32; end
-			`AND_IMM8,`AND_IMM16,`AND_IMM32,`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_RIND:
+			end
+		`RR:
+			case(ir[23:20])
+			`ADD_RR:	begin vf <= resv32; cf <= resc32; nf <= resn32; zf <= resz32; end
+			`SUB_RR:	
+					if (Rt==4'h0)	// CMP doesn't set overflow
+						begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+					else
+						begin vf <= resv32; cf <= ~resc32; nf <= resn32; zf <= resz32; end
+			`AND_RR:
 				if (Rt==4'h0)	// BIT sets overflow
 					begin nf <= b[31]; vf <= b[30]; zf <= resz32; end
 				else
 					begin nf <= resn32; zf <= resz32; end
-			`ORB_ZPX,`ORB_ABS,`ORB_ABSX,
-			`OR_IMM8,`OR_IMM16,`OR_IMM32,`OR_ZPX,`OR_IX,`OR_IY,`OR_ABS,`OR_ABSX,`OR_RIND,
-			`EOR_IMM8,`EOR_IMM16,`EOR_IMM32,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_RIND:
-				begin nf <= resn32; zf <= resz32; end
-			`ASL_ACC,`ROL_ACC,`LSR_ACC,`ROR_ACC:
-				begin acc <= res; cf <= resc32; nf <= resn32; zf <= resz32; end
-			`ASL_RR,`ROL_RR,`LSR_RR,`ROR_RR,
-			`ASL_ZPX,`ASL_ABS,`ASL_ABSX,
-			`ROL_ZPX,`ROL_ABS,`ROL_ABSX,
-			`LSR_ZPX,`LSR_ABS,`LSR_ABSX,
-			`ROR_ZPX,`ROR_ABS,`ROR_ABSX:
-				begin cf <= resc32; nf <= resn32; zf <= resz32; end
-			`ASL_IMM8: begin nf <= resn32; zf <= resz32; end
-			`LSR_IMM8: begin nf <= resn32; zf <= resz32; end
-			`INC_ZPX,`INC_ABS,`INC_ABSX: begin nf <= resn32; zf <= resz32; end
-			`DEC_ZPX,`DEC_ABS,`DEC_ABSX: begin nf <= resn32; zf <= resz32; end
-			`TAX,`TYX,`TSX,`DEX,`INX,
-			`LDX_IMM32,`LDX_IMM16,`LDX_IMM8,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`PLX:
-				begin x <= res; nf <= resn32; zf <= resz32; end
-			`TAY,`TXY,`DEY,`INY,
-			`LDY_IMM32,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`PLY:
-				begin y <= res; nf <= resn32; zf <= resz32; end
-			`CPX_IMM32,`CPX_ZPX,`CPX_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-			`CPY_IMM32,`CPY_ZPX,`CPY_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-			`CMP_IMM8: begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-			`TSA,`TYA,`TXA,`INA,`DEA,
-			`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`PLA:	begin acc <= res; nf <= resn32; zf <= resz32; end
-			`POP:	begin nf <= resn32; zf <= resz32; end
+			default:
+					begin nf <= resn32; zf <= resz32; end
 			endcase
-//		end
+		`LD_RR:	begin zf <= resz32; nf <= resn32; end
+		`DEC_RR,`INC_RR: begin zf <= resz32; nf <= resn32; end
+		`ADD_IMM8,`ADD_IMM16,`ADD_IMM32,`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND:
+			begin vf <= resv32; cf <= resc32; nf <= resn32; zf <= resz32; end
+		`SUB_IMM8,`SUB_IMM16,`SUB_IMM32,`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND:
+			if (Rt==4'h0)	// CMP doesn't set overflow
+				begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+			else
+				begin vf <= resv32; cf <= ~resc32; nf <= resn32; zf <= resz32; end
+`ifdef SUPPORT_DIVMOD
+		`DIV_IMM8,`DIV_IMM16,`DIV_IMM32,
+		`MOD_IMM8,`MOD_IMM16,`MOD_IMM32,
+`endif
+		`MUL_IMM8,`MUL_IMM16,`MUL_IMM32:
+			begin nf <= resn32; zf <= resz32; end
+		`AND_IMM8,`AND_IMM16,`AND_IMM32,`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_RIND:
+			if (Rt==4'h0)	// BIT sets overflow
+				begin nf <= b[31]; vf <= b[30]; zf <= resz32; end
+			else
+				begin nf <= resn32; zf <= resz32; end
+		`ORB_ZPX,`ORB_ABS,`ORB_ABSX,
+		`OR_IMM8,`OR_IMM16,`OR_IMM32,`OR_ZPX,`OR_IX,`OR_IY,`OR_ABS,`OR_ABSX,`OR_RIND,
+		`EOR_IMM8,`EOR_IMM16,`EOR_IMM32,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_RIND:
+			begin nf <= resn32; zf <= resz32; end
+		`ASL_ACC,`ROL_ACC,`LSR_ACC,`ROR_ACC:
+			begin cf <= resc32; nf <= resn32; zf <= resz32; end
+		`ASL_RR,`ROL_RR,`LSR_RR,`ROR_RR,
+		`ASL_ZPX,`ASL_ABS,`ASL_ABSX,
+		`ROL_ZPX,`ROL_ABS,`ROL_ABSX,
+		`LSR_ZPX,`LSR_ABS,`LSR_ABSX,
+		`ROR_ZPX,`ROR_ABS,`ROR_ABSX:
+			begin cf <= resc32; nf <= resn32; zf <= resz32; end
+		`ASL_IMM8: begin nf <= resn32; zf <= resz32; end
+		`LSR_IMM8: begin nf <= resn32; zf <= resz32; end
+		`BMT_ZPX,`BMT_ABS,`BMT_ABSX: begin nf <= resn32; zf <= resz32; end
+		`INC_ZPX,`INC_ABS,`INC_ABSX: begin nf <= resn32; zf <= resz32; end
+		`DEC_ZPX,`DEC_ABS,`DEC_ABSX: begin nf <= resn32; zf <= resz32; end
+		`TAX,`TYX,`TSX,`DEX,`INX,
+		`LDX_IMM32,`LDX_IMM16,`LDX_IMM8,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`PLX:
+			begin nf <= resn32; zf <= resz32; end
+		`TAY,`TXY,`DEY,`INY,
+		`LDY_IMM32,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`PLY:
+			begin nf <= resn32; zf <= resz32; end
+		`CPX_IMM32,`CPX_ZPX,`CPX_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`CPY_IMM32,`CPY_ZPX,`CPY_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`CMP_IMM8: begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`TSA,`TYA,`TXA,`INA,`DEA,
+		`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`PLA:	begin nf <= resn32; zf <= resz32; end
+		`POP:	begin nf <= resn32; zf <= resz32; end
+		endcase
 	end

@@ -39,14 +39,17 @@ if (suppress_pcinc==4'hF)
 	`NAT: inc <= 4'd1;
 	`STP,`WAI: inc <= 4'd1;
 	`JMP,`JML,`JMP_IND,`JMP_INDX,
-	`JSR,`JSL,`JSR_INDX,`RTS,`RTL,`RTI: inc <= 4'd0;
+	`RTS,`RTL,`RTI: inc <= 4'd0;
+	`JSR,`JSR_INDX:	inc <= 4'd2;
+	`JSL:	inc <= 4'd4;
 	`NOP: inc <= 4'd1;
 
 	`ADC_IMM,`SBC_IMM,`CMP_IMM,`AND_IMM,`ORA_IMM,`EOR_IMM,`LDA_IMM:	inc <= 4'd2;
 	`LDX_IMM,`LDY_IMM,`CPX_IMM,`CPY_IMM,`BIT_IMM: inc <= 4'd2;
 
+	`TRB_ZP,`TSB_ZP,
 	`ADC_ZP,`SBC_ZP,`CMP_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`LDA_ZP,`STA_ZP: inc <= 4'd2;
-	`LDY_ZP,`LDX_ZP,`STY_ZP,`STZ_ZP,`CPX_ZP,`CPY_ZP,`BIT_ZP,`STZ_ZP: inc <= 4'd2;
+	`LDY_ZP,`LDX_ZP,`STY_ZP,`STX_ZP,`CPX_ZP,`CPY_ZP,`BIT_ZP,`STZ_ZP: inc <= 4'd2;
 	`ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`INC_ZP,`DEC_ZP: inc <= 4'd2;
 
 	`ADC_ZPX,`SBC_ZPX,`CMP_ZPX,`AND_ZPX,`ORA_ZPX,`EOR_ZPX,`LDA_ZPX,`STA_ZPX: inc <= 4'd2;
@@ -59,6 +62,7 @@ if (suppress_pcinc==4'hF)
 
 	`ADC_IY,`SBC_IY,`CMP_IY,`AND_IY,`OR_IY,`EOR_IY,`LDA_IY,`STA_IY: inc <= 4'd2;
 
+	`TRB_ABS,`TSB_ABS,
 	`ADC_ABS,`SBC_ABS,`CMP_ABS,`AND_ABS,`OR_ABS,`EOR_ABS,`LDA_ABS,`STA_ABS: inc <= 4'd3;
 	`LDX_ABS,`LDY_ABS,`STX_ABS,`STY_ABS,`CPX_ABS,`CPY_ABS,`BIT_ABS,`STZ_ABS: inc <= 4'd3;
 	`ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS: inc <= 4'd3;

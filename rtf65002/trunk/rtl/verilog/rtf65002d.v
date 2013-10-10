@@ -27,12 +27,6 @@
 `include "rtf65002_defines.v"
 
 module rtf65002d(rst_md, rst_i, clk_i, nmi_i, irq_i, irq_vect, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, km_o);
-parameter IDLE = 3'd0;
-parameter LOAD_DCACHE = 3'd1;
-parameter LOAD_ICACHE = 3'd2;
-parameter LOAD_IBUF1 = 3'd3;
-parameter LOAD_IBUF2 = 3'd4;
-parameter LOAD_IBUF3 = 3'd5;
 parameter RESET1 = 6'd0;
 parameter IFETCH = 6'd1;
 parameter DECODE = 6'd2;
@@ -56,15 +50,19 @@ parameter INSN_BUS_ERROR = 6'd19;
 parameter LOAD_MAC1 = 6'd20;
 parameter LOAD_MAC2 = 6'd21;
 parameter LOAD_MAC3 = 6'd22;
-parameter MVN1 = 6'd23;
-parameter MVN2 = 6'd24;
-parameter MVN3 = 6'd25;
-parameter MVP1 = 6'd26;
-parameter MVP2 = 6'd27;
-parameter STS1 = 6'd28;
-parameter PUSHA1 = 6'd29;
-parameter POPA1 = 6'd30;
-parameter BYTE_IFETCH = 6'd31;
+parameter MVN3 = 6'd23;
+parameter PUSHA1 = 6'd24;
+parameter POPA1 = 6'd25;
+parameter BYTE_IFETCH = 6'd26;
+parameter LOAD_DCACHE = 6'd27;
+parameter LOAD_ICACHE = 6'd28;
+parameter LOAD_IBUF1 = 6'd29;
+parameter LOAD_IBUF2 = 6'd30;
+parameter LOAD_IBUF3 = 6'd31;
+parameter ICACHE1 = 6'd32;
+parameter IBUF1 = 6'd33;
+parameter DCACHE1 = 6'd34;
+parameter CMPS1 = 6'd35;
 
 input rst_md;		// reset mode, 1=emulation mode, 0=native mode
 input rst_i;
@@ -90,7 +88,6 @@ output km_o;
 
 reg [5:0] state;
 reg [5:0] retstate;
-reg [2:0] cstate;
 wire [63:0] insn;
 reg [63:0] ibuf;
 reg [31:0] bufadr;
@@ -164,14 +161,14 @@ reg [31:0] lfsr;
 wire lfsr_fb; 
 xnor(lfsr_fb,lfsr[0],lfsr[1],lfsr[21],lfsr[31]);
 reg [31:0] a, b;
-`ifdef SUPPORT_SHIFT
-wire [31:0] shlo = a << b[4:0];
-wire [31:0] shro = a >> b[4:0];
-`else
-wire [31:0] shlo = 32'd0;
-wire [31:0] shro = 32'd0;
-`endif
+wire signed [31:0] as = a;
+wire signed [31:0] bs = b;
+wire lt = as < bs;
+wire eq = a==b;
+wire ltu = a < b;
+
 reg [7:0] b8;
+wire [32:0] alu_out;
 reg [32:0] res;
 reg [8:0] res8;
 wire resv8,resv32;
@@ -204,8 +201,8 @@ reg [31:0] wadr;
 reg [1:0] wadr2LSB;
 reg [31:0] wdat;
 wire [31:0] rdat;
-reg [3:0] load_what;
-reg [3:0] store_what;
+reg [4:0] load_what;
+reg [5:0] store_what;
 reg [31:0] derr_address;
 reg imiss;
 reg dmiss;
@@ -230,8 +227,8 @@ wire whichwr=clfsr[0];
 reg km;			// kernel mode indicator
 assign km_o = km;
 
-reg [31:0] history_buf [63:0];
-reg [5:0] history_ndx;
+reg [31:0] history_buf [127:0];
+reg [6:0] history_ndx;
 reg hist_capture;
 
 reg isBusErr;
@@ -250,7 +247,10 @@ wire isRMW32 =
 			 ir9==`ASL_ZPX || ir9==`ROL_ZPX || ir9==`LSR_ZPX || ir9==`ROR_ZPX || ir9==`INC_ZPX || ir9==`DEC_ZPX ||
 			 ir9==`ASL_ABS || ir9==`ROL_ABS || ir9==`LSR_ABS || ir9==`ROR_ABS || ir9==`INC_ABS || ir9==`DEC_ABS ||
 			 ir9==`ASL_ABSX || ir9==`ROL_ABSX || ir9==`LSR_ABSX || ir9==`ROR_ABSX || ir9==`INC_ABSX || ir9==`DEC_ABSX ||
-			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS;
+			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS ||
+			 ir9==`BMS_ZPX || ir9==`BMS_ABS || ir9==`BMS_ABSX ||
+			 ir9==`BMC_ZPX || ir9==`BMC_ABS || ir9==`BMC_ABSX ||
+			 ir9==`BMF_ZPX || ir9==`BMF_ABS || ir9==`BMF_ABSX
 			 ;
 wire isRMW8 =
 			 ir9==`ASL_ZP || ir9==`ROL_ZP || ir9==`LSR_ZP || ir9==`ROR_ZP || ir9==`INC_ZP || ir9==`DEC_ZP ||
@@ -265,7 +265,7 @@ wire isRMW8 =
 // the DECODE stage.
 
 always @(posedge clk)
-	if (state==DECODE) begin
+	if (state==DECODE||state==BYTE_DECODE) begin
 		isSub <= ir9==`SUB_ZPX || ir9==`SUB_IX || ir9==`SUB_IY ||
 			 ir9==`SUB_ABS || ir9==`SUB_ABSX || ir9==`SUB_IMM8 || ir9==`SUB_IMM16 || ir9==`SUB_IMM32;
 		isSub8 <= ir9==`SBC_ZP || ir9==`SBC_ZPX || ir9==`SBC_IX || ir9==`SBC_IY || ir9==`SBC_I ||
@@ -355,6 +355,49 @@ rtf65002_itagmem2way tgm0 (
 	.hit1(hit1)
 );
 `else
+`ifdef ICACHE_4K
+rtf65002_icachemem4k icm0 (
+	.wclk(clk),
+	.wr(ack_i & isInsnCacheLoad),
+	.adr(adr_o),
+	.dat(dat_i),
+	.rclk(~clk),
+	.pc(pc),
+	.insn(insn)
+);
+
+rtf65002_itagmem4k tgm0 (
+	.wclk(clk),
+	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
+	.adr({adr_o[31:1],!isCacheReset}),
+	.rclk(~clk),
+	.pc(pc),
+	.hit0(hit0),
+	.hit1(hit1)
+);
+`endif
+`ifdef ICACHE_8K
+rtf65002_icachemem8k icm0 (
+	.wclk(clk),
+	.wr(ack_i & isInsnCacheLoad),
+	.adr(adr_o),
+	.dat(dat_i),
+	.rclk(~clk),
+	.pc(pc),
+	.insn(insn)
+);
+
+rtf65002_itagmem8k tgm0 (
+	.wclk(clk),
+	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
+	.adr({adr_o[31:1],!isCacheReset}),
+	.rclk(~clk),
+	.pc(pc),
+	.hit0(hit0),
+	.hit1(hit1)
+);
+`endif
+`ifdef ICACHE_16K
 rtf65002_icachemem icm0 (
 	.wclk(clk),
 	.wr(ack_i & isInsnCacheLoad),
@@ -375,6 +418,7 @@ rtf65002_itagmem tgm0 (
 	.hit1(hit1)
 );
 `endif
+`endif	// ICACHE_2WAY
 
 wire ihit = (hit0 & hit1);//(pc[2:0] > 3'd1 ? hit1 : 1'b1));
 `else
@@ -455,7 +499,7 @@ endcase
 // Evaluate branches
 // 
 reg takb;
-always @(ir or cf or vf or nf or zf)
+always @(ir9 or cf or vf or nf or zf)
 case(ir9)
 `BEQ:	takb <= zf;
 `BNE:	takb <= !zf;
@@ -488,41 +532,40 @@ wire [31:0] absx32xy_address 	= ir[47:16] + rfob;
 wire [31:0] zpx32_address 		= ir[31:20] + rfob;
 wire [31:0] absx32_address 		= ir[55:24] + rfob;
 
-reg [32:0] calc_res;
-always @(ir9 or ir or a or b or b8 or x or y or df or cf or Rt or shlo or shro)
-begin
-	case(ir9)
-	`RR:
-		case(ir[23:20])
-		`ASL_RRR:	calc_res <= shlo;
-		`LSR_RRR:	calc_res <= shro;
-		default:	calc_res <= 33'd0;
-		endcase
-	`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND:	calc_res <= a + b + {31'b0,df&cf};
-	`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND:	calc_res <= a - b - {31'b0,df&~cf&|Rt}; // Also CMP
-	`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_RIND:	calc_res <= a & b;	// Also BIT
-	`OR_ZPX,`OR_IX,`OR_IY,`OR_ABS,`OR_ABSX,`OR_RIND:		calc_res <= a | b;	// Also LD
-	`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_RIND:	calc_res <= a ^ b;
-	`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	calc_res <= b;
-	`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	calc_res <= b;
-	`CPX_ZPX,`CPX_ABS:	calc_res <= x - b;
-	`CPY_ZPX,`CPY_ABS:	calc_res <= y - b;
-	`ASL_IMM8:	calc_res <= shlo;
-	`LSR_IMM8:	calc_res <= shro;
-	`ASL_ZPX,`ASL_ABS,`ASL_ABSX:	calc_res <= {b,1'b0};
-	`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	calc_res <= {b,cf};
-	`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	calc_res <= {b[0],1'b0,b[31:1]};
-	`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	calc_res <= {b[0],cf,b[31:1]};
-	`INC_ZPX,`INC_ABS,`INC_ABSX:	calc_res <= b + 32'd1;
-	`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	calc_res <= b - 32'd1;
-	`ORB_ZPX,`ORB_ABS,`ORB_ABSX:	calc_res <= a | {24'h0,b8};
-	`BMS_ZPX,`BMS_ABS,`BMS_ABSX:	calc_res <= b | (32'b1 << acc[4:0]);
-	`BMC_ZPX,`BMC_ABS,`BMC_ABSX:	calc_res <= b & (~(32'b1 << acc[4:0]));
-	`BMF_ZPX,`BMF_ABS,`BMF_ABSX:	calc_res <= b ^ (32'b1 << acc[4:0]);
-	`BMT_ZPX,`BMT_ABS,`BMT_ABSX:	calc_res <= b & (32'b1 << acc[4:0]);
-	default:	calc_res <= 33'd0;
-	endcase
-end
+rtf65002_alu ualu1
+(
+	.clk(clk),
+	.state(state),
+	.resin(res),
+	.pg2(pg2),
+	.ir(ir),
+	.acc(acc),
+	.x(x),
+	.y(y),
+	.isp(isp),
+	.rfoa(rfoa),
+	.rfob(rfob),
+	.a(a),
+	.b(b),
+	.b8(b8),
+	.Rt(Rt),
+	.icacheOn(icacheOn),
+	.dcacheOn(dcacheOn),
+	.write_allocate(write_allocate),
+	.prod(prod),
+	.tick(tick),
+	.lfsr(lfsr),
+	.abs8(abs8),
+	.vbr(vbr),
+	.nmoi(nmoi),
+	.derr_address(derr_address),
+	.history_buf(history_buf[history_ndx]),
+	.spage(spage),
+	.sp(sp),
+	.df(df),
+	.cf(cf),
+	.res(alu_out)
+);
 
 
 //-----------------------------------------------------------------------------
@@ -571,7 +614,6 @@ if (rst_i) begin
 	write_allocate <= 1'b0;
 	nmoi <= 1'b1;
 	state <= RESET1;
-	cstate <= IDLE;
 	if (rst_md) begin
 		pc <= 32'h0000FFF0;		// set high-order pc to zero
 		vect <= `BYTE_RST_VECT;
@@ -626,7 +668,6 @@ RESET2:
 	end
 
 `include "ifetch.v"
-`include "decode.v"
 `ifdef SUPPORT_EM8
 `include "byte_ifetch.v"
 `include "byte_decode.v"
@@ -642,7 +683,9 @@ WAIT_DHIT:
 	if (dhit)
 		state <= retstate;
 
-`include "calc.v"
+DECODE:	decode_tsk();
+CALC:	calc_tsk();
+
 MULDIV1:	state <= MULDIV2;
 MULDIV2:
 	if (md_done) begin
@@ -704,10 +747,12 @@ INSN_BUS_ERROR:
 `endif
 
 `include "rtf65002_string.v"
-
-endcase
-
 `include "cache_controller.v"
 
+endcase
 end
+`include "decode.v"
+`include "calc.v"
+`include "load_tsk.v"
+
 endmodule

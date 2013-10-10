@@ -20,13 +20,14 @@
 //                                                                          
 // ============================================================================
 //
-DECODE:
+task decode_tsk;
 	begin
 		first_ifetch <= `TRUE;
 		Rt <= 4'h0;		// Default
 		state <= IFETCH;
 		pc <= pc + pc_inc;
 		a <= rfoa;
+		res <= alu_out;
 		ttrig <= tf;
 		// This case statement should include all opcodes or the opcode
 		// will end up being treated as an undefined operation.
@@ -53,13 +54,13 @@ DECODE:
 		`WAI:	wai <= 1'b1;
 		`TON:	tf <= 1'b1;
 		`TOFF:	tf <= 1'b0;
+		`HOFF:	hist_capture <= 1'b0;
 		`EMM:	begin em <= 1'b1;
 `ifdef SUPPORT_EM8
 				state <= BYTE_IFETCH;
 `endif
 				end
-		`DEX:	begin 
-					res <= x - 32'd1;
+		`DEX:	Rt <= 4'd2;
 					// DEX/BNE accelerator
 //					if (ir[15:8]==`BNE) begin
 //						if (x!=32'd1) begin
@@ -75,66 +76,60 @@ DECODE:
 //								pc <= pcp3;
 //						end
 //					end
-				end
-		`INX:	res <= x + 32'd1;
-		`DEY:	res <= y - 32'd1;
-		`INY:	res <= y + 32'd1;
-		`DEA:	res <= acc - 32'd1;
-		`INA:	res <= acc + 32'd1;
-		`TSX,`TSA:	res <= isp;
-		`TXS,`TXA,`TXY:	res <= x;
-		`TAX,`TAY,`TAS:	res <= acc;
-		`TYA,`TYX:	res <= y;
-		`TRS:		res <= rfoa;
+		`INX:	Rt <= 4'd2;
+		`DEY:	Rt <= 4'd3;
+		`INY:	Rt <= 4'd3;
+		`DEA:	Rt <= 4'd1;
+		`INA:	Rt <= 4'd1;
+		`TSX:	Rt <= 4'd2;
+		`TSA:	Rt <= 4'd1;
+		`TXS:	;
+		`TXA:	Rt <= 4'd1;
+		`TXY:	Rt <= 4'd3;
+		`TAX:	Rt <= 4'd2;
+		`TAY:	Rt <= 4'd3;
+		`TAS:	;
+		`TYA:	Rt <= 4'd1;
+		`TYX:	Rt <= 4'd2;
+		`TRS:		;
 		`TSR:		begin
 						Rt <= ir[15:12];
 						case(ir[11:8])
-						4'h0:	
-							begin
-`ifdef SUPPORT_ICACHE
-								res[0] <= icacheOn;
-`endif
-`ifdef SUPPORT_DCACHE
-								res[1] <= dcacheOn;
-								res[2] <= write_allocate;
-`endif
-								res[31:3] <= 29'd0;
-							end
-						4'h2:	res <= prod[31:0];
-						4'h3:	res <= prod[63:32];
-						4'h4:	res <= tick;
-						4'h5:	begin res <= lfsr; lfsr <= {lfsr[30:0],lfsr_fb}; end
-						4'd7:	res <= abs8;
-						4'h8:	res <= {vbr[31:1],nmoi};
-						4'h9:	res <= derr_address;
-						4'hA:	begin res <= history_buf[history_ndx];	history_ndx <= history_ndx + 6'd1; end
-						4'hE:	res <= {spage[31:8],sp};
-						4'hF:	res <= isp;
-						default:	res <= 32'd0;
+						4'h0:	;
+						4'h2:	;
+						4'h3:	;
+						4'h4:	;
+						4'h5:	lfsr <= {lfsr[30:0],lfsr_fb};
+						4'd7:	;
+						4'h8:	;
+						4'h9:	;
+						4'hA:	history_ndx <= history_ndx + 6'd1;
+						4'hE:	;
+						4'hF:	;
+						default:	;
 						endcase
 					end
-		`ASL_ACC:	begin res <= {acc,1'b0}; end
-		`ROL_ACC:	begin res <= {acc,cf};end
-		`LSR_ACC:	begin res <= {acc[0],1'b0,acc[31:1]}; end
-		`ROR_ACC:	begin res <= {acc[0],cf,acc[31:1]}; end
+		`ASL_ACC:	Rt <= 4'd1;
+		`ROL_ACC:	Rt <= 4'd1;
+		`LSR_ACC:	Rt <= 4'd1;
+		`ROR_ACC:	Rt <= 4'd1;
 
 		`RR:
 			begin
-				state <= IFETCH;
 				Rt <= ir[19:16];
 				case(ir[23:20])
-				`ADD_RR:	begin res <= rfoa + rfob + {31'b0,df&cf}; b <= rfob; end
-				`SUB_RR:	begin res <= rfoa - rfob - {31'b0,df&~cf&|ir[19:16]}; b <= rfob; end
-				`AND_RR:	begin res <= rfoa & rfob; b <= rfob; end	// for bit flags
-				`OR_RR:		begin res <= rfoa | rfob; b <= rfob; end
-				`EOR_RR:	begin res <= rfoa ^ rfob; b <= rfob; end
-				`MUL_RR:	begin a <= rfoa; b <= rfob; state <= MULDIV1; end
-				`MULS_RR:	begin a <= rfoa; b <= rfob; state <= MULDIV1; end
+				`ADD_RR:	b <= rfob;
+				`SUB_RR:	b <= rfob;
+				`AND_RR:	b <= rfob;	// for bit flags
+				`OR_RR:		b <= rfob;
+				`EOR_RR:	b <= rfob;
+				`MUL_RR:	begin b <= rfob; state <= MULDIV1; end
+				`MULS_RR:	begin b <= rfob; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
-				`DIV_RR:	begin a <= rfoa; b <= rfob; state <= MULDIV1; end
-				`DIVS_RR:	begin a <= rfoa; b <= rfob; state <= MULDIV1; end
-				`MOD_RR:	begin a <= rfoa; b <= rfob; state <= MULDIV1; end
-				`MODS_RR:	begin a <= rfoa; b <= rfob; state <= MULDIV1; end
+				`DIV_RR:	begin b <= rfob; state <= MULDIV1; end
+				`DIVS_RR:	begin b <= rfob; state <= MULDIV1; end
+				`MOD_RR:	begin b <= rfob; state <= MULDIV1; end
+				`MODS_RR:	begin b <= rfob; state <= MULDIV1; end
 `endif
 `ifdef SUPPORT_SHIFT
 				`ASL_RRR:	begin b <= rfob; state <= CALC; end
@@ -152,65 +147,77 @@ DECODE:
 					end
 				endcase
 			end
-		`LD_RR:		begin res <= rfoa; Rt <= ir[15:12]; end
-		`ASL_RR:	begin res <= {rfoa,1'b0}; Rt <= ir[15:12]; end
-		`ROL_RR:	begin res <= {rfoa,cf}; Rt <= ir[15:12]; end
-		`LSR_RR:	begin res <= {rfoa[0],1'b0,rfoa[31:1]}; Rt <= ir[15:12]; end
-		`ROR_RR:	begin res <= {rfoa[0],cf,rfoa[31:1]}; Rt <= ir[15:12]; end
-		`DEC_RR:	begin res <= rfoa - 32'd1; Rt <= ir[15:12]; end
-		`INC_RR:	begin res <= rfoa + 32'd1; Rt <= ir[15:12]; end
+		`LD_RR:		Rt <= ir[15:12];
+		`ASL_RR:	Rt <= ir[15:12];
+		`ROL_RR:	Rt <= ir[15:12];
+		`LSR_RR:	Rt <= ir[15:12];
+		`ROR_RR:	Rt <= ir[15:12];
+		`DEC_RR:	Rt <= ir[15:12];
+		`INC_RR:	Rt <= ir[15:12];
 
-		`ADD_IMM8:	begin res <= rfoa + {{24{ir[23]}},ir[23:16]} + {31'b0,df&cf}; Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
-		`SUB_IMM8:	begin res <= rfoa - {{24{ir[23]}},ir[23:16]} - {31'b0,df&~cf&|ir[15:12]}; Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
-		`MUL_IMM8:	begin a <= rfoa; b <= {{24{ir[23]}},ir[23:16]}; Rt <= ir[15:12]; state <= MULDIV1; end
+		`ADD_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
+		`SUB_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
+		`MUL_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
-		`DIV_IMM8:	begin a <= rfoa; b <= {{24{ir[23]}},ir[23:16]}; Rt <= ir[15:12]; state <= MULDIV1; end
-		`MOD_IMM8:	begin a <= rfoa; b <= {{24{ir[23]}},ir[23:16]}; Rt <= ir[15:12]; state <= MULDIV1; end
+		`DIV_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
+		`MOD_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
 `endif
-		`OR_IMM8:	begin res <= rfoa | {{24{ir[23]}},ir[23:16]}; Rt <= ir[15:12]; end
-		`AND_IMM8: 	begin res <= rfoa & {{24{ir[23]}},ir[23:16]}; Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
-		`EOR_IMM8:	begin res <= rfoa ^ {{24{ir[23]}},ir[23:16]}; Rt <= ir[15:12]; end
-		`CMP_IMM8:	begin res <= acc - {{24{ir[15]}},ir[15:8]}; end
+		`OR_IMM8:	begin Rt <= ir[15:12]; end
+		`AND_IMM8: 	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
+		`EOR_IMM8:	begin Rt <= ir[15:12]; end
+		`CMP_IMM8:	;
 `ifdef SUPPORT_SHIFT
-		`ASL_IMM8:	begin b <= ir[20:16]; Rt <= ir[15:12]; state <= CALC; end
-		`LSR_IMM8:	begin b <= ir[20:16]; Rt <= ir[15:12]; state <= CALC; end
+		`ASL_IMM8:	begin Rt <= ir[15:12]; b <= ir[20:16]; state <= CALC; end
+		`LSR_IMM8:	begin Rt <= ir[15:12]; b <= ir[20:16]; state <= CALC; end
 `endif
 
-		`ADD_IMM16:	begin res <= rfoa + {{16{ir[31]}},ir[31:16]} + {31'b0,df&cf}; Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; end
-		`SUB_IMM16:	begin res <= rfoa - {{16{ir[31]}},ir[31:16]} - {31'b0,df&~cf&|ir[15:12]}; Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; end
-		`MUL_IMM16:	begin a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; Rt <= ir[15:12]; state <= MULDIV1; end
+		`ADD_IMM16:	begin Rt <= ir[15:12]; a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; end
+		`SUB_IMM16:	begin Rt <= ir[15:12]; a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; end
+		`MUL_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
-		`DIV_IMM16:	begin a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; Rt <= ir[15:12]; state <= MULDIV1; end
-		`MOD_IMM16:	begin a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; Rt <= ir[15:12]; state <= MULDIV1; end
+		`DIV_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
+		`MOD_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
 `endif
-		`OR_IMM16:	begin res <= rfoa | {{16{ir[31]}},ir[31:16]}; Rt <= ir[15:12]; end
-		`AND_IMM16:	begin res <= rfoa & {{16{ir[31]}},ir[31:16]}; Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; end
-		`EOR_IMM16:	begin res <= rfoa ^ {{16{ir[31]}},ir[31:16]}; Rt <= ir[15:12]; end
+		`OR_IMM16:	begin Rt <= ir[15:12]; end
+		`AND_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; end
+		`EOR_IMM16:	begin Rt <= ir[15:12]; end
 	
-		`ADD_IMM32:	begin res <= rfoa + ir[47:16] + {31'b0,df&cf}; Rt <= ir[15:12]; b <= ir[47:16]; end
-		`SUB_IMM32:	begin res <= rfoa - ir[47:16] - {31'b0,df&~cf&|ir[15:12]}; Rt <= ir[15:12]; b <= ir[47:16]; end
-		`MUL_IMM16:	begin a <= rfoa; b <= ir[47:16]; Rt <= ir[15:12]; state <= MULDIV1; end
+		`ADD_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; end
+		`SUB_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; end
+		`MUL_IMM16:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
-		`DIV_IMM32:	begin a <= rfoa; b <= ir[47:16]; Rt <= ir[15:12]; state <= MULDIV1; end
-		`MOD_IMM32:	begin a <= rfoa; b <= ir[47:16]; Rt <= ir[15:12]; state <= MULDIV1; end
+		`DIV_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
+		`MOD_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
 `endif
-		`OR_IMM32:	begin res <= rfoa | ir[47:16]; Rt <= ir[15:12]; end
-		`AND_IMM32:	begin res <= rfoa & ir[47:16]; Rt <= ir[15:12]; b <= ir[47:16]; end
-		`EOR_IMM32:	begin res <= rfoa ^ ir[47:16]; Rt <= ir[15:12]; end
+		`OR_IMM32:	begin Rt <= ir[15:12]; end
+		`AND_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; end
+		`EOR_IMM32:	begin Rt <= ir[15:12]; end
 
-		`LDX_IMM32,`LDY_IMM32,`LDA_IMM32:	res <= ir[39:8];
-		`LDX_IMM16,`LDA_IMM16:	res <= {{16{ir[23]}},ir[23:8]};
-		`LDX_IMM8,`LDA_IMM8: res <= {{24{ir[15]}},ir[15:8]};
+		`LDA_IMM32:	Rt <= 4'd1;
+		`LDX_IMM32:	Rt <= 4'd2;
+		`LDY_IMM32: Rt <= 4'd3;
+		`LDA_IMM16:	Rt <= 4'd1;
+		`LDX_IMM16: Rt <= 4'd2;
+		`LDA_IMM8: Rt <= 4'd1;
+		`LDX_IMM8: Rt <= 4'd2;
 
-		`SUB_SP8:	res <= isp - {{24{ir[15]}},ir[15:8]};
-		`SUB_SP16:	res <= isp - {{16{ir[23]}},ir[23:8]};
-		`SUB_SP32:	res <= isp - ir[39:8];
+		`SUB_SP8:	;
+		`SUB_SP16:	;
+		`SUB_SP32:	;
 
-		`CPX_IMM32:	res <= x - ir[39:8];
-		`CPY_IMM32:	res <= y - ir[39:8];
+		`CPX_IMM32:	;
+		`CPY_IMM32:	;
 
-		`LDX_ZPX,`LDY_ZPX:
+		`LDX_ZPX:
 			begin
+				Rt <= 4'd2;
+				radr <= zpx32xy_address;
+				load_what <= `WORD_311;
+				state <= LOAD_MAC1;
+			end
+		`LDY_ZPX:
+			begin
+				Rt <= 4'd3;
 				radr <= zpx32xy_address;
 				load_what <= `WORD_311;
 				state <= LOAD_MAC1;
@@ -223,8 +230,16 @@ DECODE:
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`LDX_ABS,`LDY_ABS:
+		`LDX_ABS:
 			begin
+				Rt <= 4'd2;
+				radr <= ir[39:8];
+				load_what <= `WORD_311;
+				state <= LOAD_MAC1;
+			end
+		`LDY_ABS:
+			begin
+				Rt <= 4'd3;
 				radr <= ir[39:8];
 				load_what <= `WORD_311;
 				state <= LOAD_MAC1;
@@ -237,8 +252,16 @@ DECODE:
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`LDX_ABSY,`LDY_ABSX:
+		`LDX_ABSY:
 			begin
+				Rt <= 4'd2;
+				radr <= absx32xy_address;
+				load_what <= `WORD_311;
+				state <= LOAD_MAC1;
+			end
+		`LDY_ABSX:
+			begin
+				Rt <= 4'd3;
 				radr <= absx32xy_address;
 				load_what <= `WORD_311;
 				state <= LOAD_MAC1;
@@ -341,6 +364,12 @@ DECODE:
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
+		`BMS_ZPX,`BMC_ZPX,`BMF_ZPX,`BMT_ZPX:
+			begin
+				radr <= zpx32xy_address + acc[31:5];
+				load_what <= `WORD_310;
+				state <= LOAD_MAC1;
+			end
 		`ADD_DSP,`SUB_DSP,`OR_DSP,`AND_DSP,`EOR_DSP:
 			begin
 				Rt <= ir[15:12];
@@ -400,6 +429,12 @@ DECODE:
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
+		`BMS_ABS,`BMC_ABS,`BMF_ABS,`BMT_ABS:
+			begin
+				radr <= ir[39:8] + acc[31:5];
+				load_what <= `WORD_310;
+				state <= LOAD_MAC1;
+			end
 		`ADD_ABSX,`SUB_ABSX,`AND_ABSX:
 			begin
 				radr <= absx32_address;
@@ -417,6 +452,12 @@ DECODE:
 		`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX:
 			begin
 				radr <= absx32xy_address;
+				load_what <= `WORD_310;
+				state <= LOAD_MAC1;
+			end
+		`BMS_ABSX,`BMC_ABSX,`BMF_ABSX,`BMT_ABSX:
+			begin
+				radr <= absx32xy_address + acc[31:5];
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
@@ -535,19 +576,20 @@ DECODE:
 		`RTS,`RTL:
 				begin
 				radr <= isp;
+				isp <= isp_inc;
 				load_what <= `PC_310;
 				state <= LOAD_MAC1;
 				end
 		`RTI:	begin
 				hist_capture <= `TRUE;
 				radr <= isp;
+				isp <= isp_inc;
 				load_what <= `SR_310;
 				state <= LOAD_MAC1;
 				end
 		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA,
 		`BGT,`BGE,`BLT,`BLE,`BHI,`BLS:
 			begin
-				state <= IFETCH;
 				if (ir[15:8]==8'h00) begin
 					pg2 <= `FALSE;
 					ir <= {8{`BRK}};
@@ -587,7 +629,6 @@ DECODE:
 			begin
 				exbuf[31:0] <= rfoa;
 				exbuf[63:32] <= rfob;
-				state <= IFETCH;
 			end
 `endif
 		`PHP:
@@ -626,7 +667,7 @@ DECODE:
 			begin
 				radr <= isp_dec;
 				wadr <= isp_dec;
-				store_what <= `STW_RFA;
+				store_what <= `STW_A;
 				state <= STORE1;
 				isp <= isp_dec;
 			end
@@ -642,11 +683,29 @@ DECODE:
 		`PLP:
 			begin
 				radr <= isp;
+				isp <= isp_inc;
 				load_what <= `SR_310;
 				state <= LOAD_MAC1;
 			end
-		`PLA,`PLX,`PLY:
+		`PLA:
 			begin
+				Rt <= 4'd1;
+				radr <= isp;
+				isp <= isp_inc;
+				load_what <= `WORD_311;
+				state <= LOAD_MAC1;
+			end
+		`PLX:
+			begin
+				Rt <= 4'd2;
+				radr <= isp;
+				isp <= isp_inc;
+				load_what <= `WORD_311;
+				state <= LOAD_MAC1;
+			end
+		`PLY:
+			begin
+				Rt <= 4'd3;
 				radr <= isp;
 				isp <= isp_inc;
 				load_what <= `WORD_311;
@@ -669,9 +728,39 @@ DECODE:
 				state <= LOAD_MAC1;
 			end
 `ifdef SUPPORT_STRING
-		`MVN:	state <= MVN1;
-		`MVP:	state <= MVP1;
-		`STS:	state <= STS1;
+		`MVN:
+			begin
+				Rt <= 4'd3;
+				radr <= x;
+				res <= x + 32'd1;
+				load_what <= `WORD_312;
+				state <= LOAD_MAC1;
+			end
+		`MVP:
+			begin
+				Rt <= 4'd3;
+				radr <= x;
+				res <= x - 32'd1;
+				load_what <= `WORD_312;
+				state <= LOAD_MAC1;
+			end
+		`STS:
+			begin
+				Rt <= 4'd3;
+				radr <= y;
+				wadr <= y;
+				store_what <= `STW_X;
+				acc <= acc - 32'd1;
+				state <= STORE1;
+			end
+		`CMPS:
+			begin
+				Rt <= 4'd3;
+				radr <= x;
+				res <= x + 32'd1;
+				load_what <= `WORD_313;
+				state <= LOAD_MAC1;
+			end
 `endif
 		`PG2:	begin
 					pg2 <= `TRUE;
@@ -690,3 +779,4 @@ DECODE:
 			end
 		endcase
 	end
+endtask

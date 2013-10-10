@@ -35,25 +35,25 @@ input [33:0] adr_i;
 output err_o;
 reg err_o;
 
-reg [23:0] tocnt;
+reg [27:0] tocnt;
 
 always @(posedge clk_i)
 if (rst_i) begin
 	err_o <= 1'b0;
-	tocnt <= 24'd1;
+	tocnt <= 28'd1;
 end
 else begin
 	err_o <= 1'b0;
 	// If there is no bus cycle active, or if the bus cycle
 	// has been acknowledged, reset the timeout count.
 	if (ack_i || !cyc_i) begin
-		tocnt <= 24'd1;
+		tocnt <= 28'd1;
 		err_o <= 1'b0;
 	end
-	else if (tocnt < 24'd10000000)
-		tocnt <= tocnt + 24'd1;
+	else if (tocnt < 28'd25000000)
+		tocnt <= tocnt + 28'd1;
 	else if (cyc_i && stb_i && (adr_i[33:2]==32'hFFDCFFFB)) begin
-		tocnt <= 24'd1;
+		tocnt <= 28'd1;
 		err_o <= 1'b0;
 	end
 	else

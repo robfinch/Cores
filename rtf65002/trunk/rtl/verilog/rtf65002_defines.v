@@ -28,6 +28,8 @@
 `define FALSE		1'b0
 
 `define SUPPORT_ICACHE	1'b1
+`define ICACHE_4K		1'b1
+//`define ICACHE_16K		1'b1
 //`define ICACHE_2WAY		1'b1
 //`define SUPPORT_DCACHE	1'b1
 `define SUPPORT_BCD		1'b1
@@ -437,23 +439,27 @@
 `define BMT_ZPX		9'h166
 `define BMT_ABS		9'h16E
 `define BMT_ABSX	9'h17E
+`define HOFF		9'h158
+`define CMPS		9'h144
 
-`define NOTHING		4'd0
-`define SR_70		4'd1
-`define SR_310		4'd2
-`define BYTE_70		4'd3
-`define WORD_310	4'd4
-`define PC_70		4'd5
-`define PC_158		4'd6
-`define PC_2316		4'd7
-`define PC_3124		4'd8
-`define PC_310		4'd9
-`define WORD_311	4'd10
-`define IA_310		4'd11
-`define IA_70		4'd12
-`define IA_158		4'd13
-`define BYTE_71		4'd14
-`define WORD_312	4'd15
+`define NOTHING		5'd0
+`define SR_70		5'd1
+`define SR_310		5'd2
+`define BYTE_70		5'd3
+`define WORD_310	5'd4
+`define PC_70		5'd5
+`define PC_158		5'd6
+`define PC_2316		5'd7
+`define PC_3124		5'd8
+`define PC_310		5'd9
+`define WORD_311	5'd10
+`define IA_310		5'd11
+`define IA_70		5'd12
+`define IA_158		5'd13
+`define BYTE_71		5'd14
+`define WORD_312	5'd15
+`define WORD_313	5'd16
+`define WORD_314	5'd17
 
 `define STW_DEF		6'h0
 `define STW_ACC		6'd1

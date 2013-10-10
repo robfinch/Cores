@@ -333,7 +333,6 @@ BYTE_DECODE:
 				wadr2LSB <= sp[1:0];
 				store_what <= `STW_PC158;
 				sp <= sp_dec;
-				pc <= pc + 32'd2;
 				state <= STORE1;
 			end
 		`JSL:
@@ -344,7 +343,6 @@ BYTE_DECODE:
 				wadr2LSB <= sp[1:0];
 				store_what <= `STW_PC3124;
 				sp <= sp_dec;
-				pc <= pc + 32'd4;
 				state <= STORE1;
 			end
 		`JSR_INDX:
@@ -354,7 +352,7 @@ BYTE_DECODE:
 				radr2LSB <= sp[1:0];
 				wadr2LSB <= sp[1:0];
 				sp <= sp_dec;
-				pc <= pc + 32'd2;
+				store_what <= `STW_PC158;
 				state <= STORE1;
 			end
 		`RTS,`RTL:
@@ -380,7 +378,8 @@ BYTE_DECODE:
 					else
 						pc <= pc + 32'd4;
 				end
-				else begin
+				else
+				begin
 					if (takb)
 						pc <= pc + {{24{ir[15]}},ir[15:8]} + 32'd2;
 					else

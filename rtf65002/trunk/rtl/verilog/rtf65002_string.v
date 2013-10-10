@@ -21,56 +21,23 @@
 // ============================================================================
 //
 `ifdef SUPPORT_STRING
-MVN1:
-	begin
-		radr <= x;
-		res <= x + 32'd1;
-		retstate <= MVN2;
-		load_what <= `WORD_312;
-		state <= LOAD_MAC1;
-	end
-MVN2:
-	begin
-		radr <= y;
-		wadr <= y;
-		store_what <= `STW_B;
-		x <= res;
-		res <= y + 32'd1;
-		acc <= acc - 32'd1;
-		state <= STORE1;
-	end
 MVN3:
 	begin
 		state <= IFETCH;
-		y <= res;
+		res <= alu_out;
 		if (acc==32'hFFFFFFFF)
 			pc <= pc + 32'd1;
 	end
-MVP1:
+CMPS1:
 	begin
-		radr <= x;
-		res <= x - 32'd1;
-		retstate <= MVP2;
-		load_what <= `WORD_312;
-		state <= LOAD_MAC1;
-	end
-MVP2:
-	begin
-		radr <= y;
-		wadr <= y;
-		store_what <= `STW_B;
-		x <= res;
-		res <= y - 32'd1;
-		acc <= acc - 32'd1;
-		state <= STORE1;
-	end
-STS1:
-	begin
-		radr <= y;
-		wadr <= y;
-		store_what <= `STW_X;
-		res <= y + 32'd1;
-		acc <= acc - 32'd1;
-		state <= STORE1;
+		state <= IFETCH;
+		res <= alu_out;
+		if (a!=b || acc==32'hFFFFFFFF) begin
+			cf <= !(ltu|eq);
+			nf <= lt;
+			vf <= 1'b0;
+			zf <= eq;
+			pc <= pc + 32'd1;
+		end
 	end
 `endif
