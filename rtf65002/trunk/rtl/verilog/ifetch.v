@@ -29,12 +29,12 @@ IFETCH:
 		isBusErr <= `FALSE;
 		pg2 <= `FALSE;
 		store_what <= `STW_DEF;
-		if (nmi_edge & gie & !isExec & !isAtni) begin	// imiss indicates cache controller is active and this state is in a waiting loop
+		if (nmi_edge & gie & !isExec & !isAtni) begin
 			ir[7:0] <= `BRK;
 			nmi_edge <= 1'b0;
 			wai <= 1'b0;
 			hwi <= `TRUE;
-			state <= DECODE;
+			next_state(DECODE);
 			vect <= `NMI_VECT;
 		end
 		else if (irq_i & gie & !isExec & !isAtni) begin
@@ -43,19 +43,19 @@ IFETCH:
 				if (ttrig) begin
 					ir[7:0] <= `BRK;
 					vect <= {vbr[31:9],9'd490,2'b00};
-					state <= DECODE;
+					next_state(DECODE);
 				end
 				else if (isExec) begin
 					ir <= exbuf;
 					exbuf <= 64'd0;
 					suppress_pcinc <= 4'h0;
-					state <= DECODE;
+					next_state(DECODE);
 				end
 				else if (unCachedInsn) begin
 					if (bhit) begin
 						ir <= ibuf + exbuf;
 						exbuf <= 64'd0;
-						state <= DECODE;
+						next_state(DECODE);
 					end
 					else
 						state <= LOAD_IBUF1;
@@ -64,7 +64,7 @@ IFETCH:
 					if (ihit) begin
 						ir <= insn + exbuf;
 						exbuf <= 64'd0;
-						state <= DECODE;
+						next_state(DECODE);
 					end
 					else
 						state <= ICACHE1;
@@ -74,26 +74,26 @@ IFETCH:
 				ir[7:0] <= `BRK;
 				hwi <= `TRUE;
 				vect <= {vbr[31:9],irq_vect,2'b00};
-				state <= DECODE;
+				next_state(DECODE);
 			end
 		end
 		else if (!wai) begin
 			if (ttrig) begin
 				ir[7:0] <= `BRK;
 				vect <= {vbr[31:9],9'd490,2'b00};
-				state <= DECODE;
+				next_state(DECODE);
 			end
 			else if (isExec) begin
 				ir <= exbuf;
 				exbuf <= 64'd0;
 				suppress_pcinc <= 4'h0;
-				state <= DECODE;
+				next_state(DECODE);
 			end
 			else if (unCachedInsn) begin
 				if (bhit) begin
 					ir <= ibuf + exbuf;
 					exbuf <= 64'd0;
-					state <= DECODE;
+					next_state(DECODE);
 				end
 				else
 					state <= LOAD_IBUF1;
@@ -102,7 +102,7 @@ IFETCH:
 				if (ihit) begin
 					ir <= insn + exbuf;
 					exbuf <= 64'd0;
-					state <= DECODE;
+					next_state(DECODE);
 				end
 				else
 					state <= ICACHE1;
@@ -115,16 +115,16 @@ IFETCH:
 			history_buf[history_ndx] <= pc;
 			history_ndx <= history_ndx+7'd1;
 		end
-		regfile[Rt] <= res;
+		regfile[Rt] <= res[31:0];
 		case(Rt)
-		4'h1:	acc <= res;
-		4'h2:	x <= res;
-		4'h3:	y <= res;
+		4'h1:	acc <= res[31:0];
+		4'h2:	x <= res[31:0];
+		4'h3:	y <= res[31:0];
 		default:	;
 		endcase
 		case(ir9)
-		`TAS,`TXS:	begin isp <= res; gie <= 1'b1; end
-		`SUB_SP8,`SUB_SP16,`SUB_SP32:	isp <= res;
+		`TAS,`TXS:	begin isp <= res[31:0]; gie <= 1'b1; end
+		`SUB_SP8,`SUB_SP16,`SUB_SP32:	isp <= res[31:0];
 		`TRS:
 			begin
 				case(ir[15:12])
@@ -138,11 +138,11 @@ IFETCH:
 						write_allocate <= res[2];
 `endif
 						end
-				4'h5:	lfsr <= res;
-				4'h7:	abs8 <= res;
+				4'h5:	lfsr <= res[31:0];
+				4'h7:	abs8 <= res[31:0];
 				4'h8:	begin vbr <= {res[31:9],9'h000}; nmoi <= res[0]; end
 				4'hE:	begin sp <= res[7:0]; spage[31:8] <= res[31:8]; end
-				4'hF:	begin isp <= res; gie <= 1'b1; end
+				4'hF:	begin isp <= res[31:0]; gie <= 1'b1; end
 				endcase
 			end
 		`RR:

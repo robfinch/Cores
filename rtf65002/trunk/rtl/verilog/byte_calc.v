@@ -26,7 +26,7 @@ BYTE_CALC:
 		state <= BYTE_IFETCH;
 		wadr <= radr;
 		wadr2LSB <= radr2LSB;
-		store_what <= `STW_DEF;
+		store_what <= `STW_DEF8;
 		case(ir[7:0])
 		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I:	begin res8 <= acc8 + b8 + {7'b0,cf}; end
 		`SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_I:	begin res8 <= acc8 - b8 - {7'b0,~cf}; end

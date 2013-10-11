@@ -28,7 +28,7 @@ input [8:0] opcode;
 input [3:0] suppress_pcinc;
 output reg [3:0] inc;
 
-always @(opcode)
+always @(opcode,suppress_pcinc)
 if (suppress_pcinc==4'hF)
 	case(opcode)
 	`BRK:	inc <= 4'd0;

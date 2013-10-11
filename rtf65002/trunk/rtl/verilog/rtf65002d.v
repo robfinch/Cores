@@ -46,23 +46,22 @@ parameter MULDIV2 = 6'd15;
 parameter BYTE_DECODE = 6'd16;
 parameter BYTE_CALC = 6'd17;
 parameter BUS_ERROR = 6'd18;
-parameter INSN_BUS_ERROR = 6'd19;
-parameter LOAD_MAC1 = 6'd20;
-parameter LOAD_MAC2 = 6'd21;
-parameter LOAD_MAC3 = 6'd22;
-parameter MVN3 = 6'd23;
-parameter PUSHA1 = 6'd24;
-parameter POPA1 = 6'd25;
-parameter BYTE_IFETCH = 6'd26;
-parameter LOAD_DCACHE = 6'd27;
-parameter LOAD_ICACHE = 6'd28;
-parameter LOAD_IBUF1 = 6'd29;
-parameter LOAD_IBUF2 = 6'd30;
-parameter LOAD_IBUF3 = 6'd31;
-parameter ICACHE1 = 6'd32;
-parameter IBUF1 = 6'd33;
-parameter DCACHE1 = 6'd34;
-parameter CMPS1 = 6'd35;
+parameter LOAD_MAC1 = 6'd19;
+parameter LOAD_MAC2 = 6'd20;
+parameter LOAD_MAC3 = 6'd21;
+parameter MVN3 = 6'd22;
+parameter PUSHA1 = 6'd23;
+parameter POPA1 = 6'd24;
+parameter BYTE_IFETCH = 6'd25;
+parameter LOAD_DCACHE = 6'd26;
+parameter LOAD_ICACHE = 6'd27;
+parameter LOAD_IBUF1 = 6'd28;
+parameter LOAD_IBUF2 = 6'd29;
+parameter LOAD_IBUF3 = 6'd30;
+parameter ICACHE1 = 6'd31;
+parameter IBUF1 = 6'd32;
+parameter DCACHE1 = 6'd33;
+parameter CMPS1 = 6'd34;
 
 input rst_md;		// reset mode, 1=emulation mode, 0=native mode
 input rst_i;
@@ -93,6 +92,7 @@ reg [63:0] ibuf;
 reg [31:0] bufadr;
 reg [63:0] exbuf;
 
+integer n;
 reg cf,nf,zf,vf,bf,im,df,em;
 reg tf;		// trace mode flag
 reg ttrig;	// trace trigger
@@ -123,7 +123,8 @@ wire [31:0] isp_inc = isp + 32'd1;
 reg [3:0] suppress_pcinc;
 reg [31:0] pc;
 reg [31:0] opc;
-wire [3:0] pc_inc,pc_inc8;
+wire [3:0] pc_inc;
+wire [3:0] pc_inc8;
 wire [31:0] pcp2 = pc + (32'd2 & suppress_pcinc);	// for branches
 wire [31:0] pcp4 = pc + (32'd4 & suppress_pcinc);	// for branches
 wire [31:0] pcp8 = pc + 32'd8;						// cache controller needs this
@@ -179,7 +180,7 @@ wire resz32 = res[31:0]==32'd0;
 wire resn8 = res8[7];
 wire resn32 = res[31];
 
-reg [31:0] vect;
+reg [33:0] vect;
 reg [31:0] ia;			// temporary reg to hold indirect address
 reg isInsnCacheLoad;
 reg isDataCacheLoad;
@@ -203,6 +204,7 @@ reg [31:0] wdat;
 wire [31:0] rdat;
 reg [4:0] load_what;
 reg [5:0] store_what;
+reg [8:0] intno;			// interrupt number to take
 reg [31:0] derr_address;
 reg imiss;
 reg dmiss;
@@ -224,6 +226,9 @@ xnor(clfsr_fb,clfsr[0],clfsr[1],clfsr[21],clfsr[31]);
 wire [1:0] whichrd;
 wire whichwr=clfsr[0];
 `endif
+reg [31:0] ilfsr;
+wire ilfsr_fb;
+xnor(ilfsr_fb,ilfsr[0],ilfsr[1],ilfsr[21],ilfsr[31]);
 reg km;			// kernel mode indicator
 assign km_o = km;
 
@@ -313,7 +318,7 @@ rtf65002_pcinc8 upci2
 	.suppress_pcinc(suppress_pcinc),
 	.inc(pc_inc8)
 );
-
+	
 mult_div umd1
 (
 	.rst(rst_i),
@@ -369,7 +374,7 @@ rtf65002_icachemem4k icm0 (
 rtf65002_itagmem4k tgm0 (
 	.wclk(clk),
 	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
-	.adr({adr_o[31:1],!isCacheReset}),
+	.adr({adr_o[33:1],!isCacheReset}),
 	.rclk(~clk),
 	.pc(pc),
 	.hit0(hit0),
@@ -487,6 +492,7 @@ case(radr2LSB)
 2'd2:	dati <= dat_i[23:16];
 2'd3:	dati <= dat_i[31:24];
 endcase
+`ifdef SUPPORT_DCACHE
 reg [7:0] rdat8;
 always @(radr2LSB or rdat)
 case(radr2LSB)
@@ -495,6 +501,7 @@ case(radr2LSB)
 2'd2:	rdat8 <= rdat[23:16];
 2'd3:	rdat8 <= rdat[31:24];
 endcase
+`endif
 
 // Evaluate branches
 // 
@@ -604,7 +611,6 @@ if (rst_i) begin
 	dat_o <= 32'd0;
 	nmi_edge <= 1'b0;
 	wai <= 1'b0;
-	first_ifetch <= `TRUE;
 	cf <= 1'b0;
 	ir <= 64'hEAEAEAEAEAEAEAEA;
 	imiss <= `FALSE;
@@ -643,6 +649,7 @@ if (rst_i) begin
 end
 else begin
 tick <= tick + 32'd1;
+ilfsr <= {ilfsr,ilfsr_fb};
 if (nmi_i & !nmi1)
 	nmi_edge <= 1'b1;
 if (nmi_i|nmi1)
@@ -720,26 +727,7 @@ BUS_ERROR:
 		wadr <= isp_dec;
 		isp <= isp_dec;
 		store_what <= `STW_OPC;
-		if (em | isOrb | isStb)
-			derr_address <= adr_o[31:0];
-		else
-			derr_address <= adr_o[33:2];
-		vect <= {vbr[31:9],9'd508,2'b00};
-		hwi <= `TRUE;
-		isBusErr <= `TRUE;
-		state <= STORE1;
-	end
-INSN_BUS_ERROR:
-	begin
-		pg2 <= `FALSE;
-		ir <= {8{`BRK}};
-		hist_capture <= `FALSE;
-		radr <= isp_dec;
-		wadr <= isp_dec;
-		isp <= isp_dec;
-		store_what <= `STW_OPC;
-		derr_address <= 34'd0;
-		vect <= {vbr[31:9],9'd509,2'b00};
+		vect <= {vbr[31:9],intno,2'b00};
 		hwi <= `TRUE;
 		isBusErr <= `TRUE;
 		state <= STORE1;
@@ -754,5 +742,13 @@ end
 `include "decode.v"
 `include "calc.v"
 `include "load_tsk.v"
+`include "wb_task.v"
+
+task next_state;
+input [5:0] nxt;
+begin
+	state <= nxt;
+end
+endtask
 
 endmodule

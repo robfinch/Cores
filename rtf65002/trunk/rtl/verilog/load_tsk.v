@@ -42,7 +42,7 @@ begin
 				radr <= y;
 				wadr <= y;
 				store_what <= `STW_B;
-				x <= res;
+				x <= res[31:0];
 				acc <= acc - 32'd1;
 				state <= STORE1;
 			end
@@ -51,7 +51,7 @@ begin
 				a <= dat;
 				radr <= y;
 				load_what <= `WORD_314;
-				x <= res;
+				x <= res[31:0];
 				state <= LOAD_MAC1;
 			end
 	`WORD_314:

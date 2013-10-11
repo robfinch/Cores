@@ -24,6 +24,9 @@
 //                                                                          
 // ============================================================================
 //
+`ifndef RTF65002_DEFINES
+`define RTF65002_DEFINES	1'b1
+
 `define TRUE		1'b1
 `define FALSE		1'b0
 
@@ -410,8 +413,9 @@
 `define STS			9'h64
 `define EXEC		9'hEB
 `define ATNI		9'h4B
+`define MDR			9'h3C
 
-// Page Two Oproces
+// Page Two Opcodes
 `define PG2			9'h42
 
 `define TOFF		9'h118
@@ -471,12 +475,11 @@
 `define STW_SR		6'd7
 `define STW_RFA		6'd8
 `define STW_RFA8	6'd9
-`define STW_RFA		6'd10
-`define STW_RFA8	6'd11
-`define STW_A		6'd12
-`define STW_B		6'd13
-`define STW_CALC	6'd14
-`define STW_OPC		6'd15
+`define STW_A		6'd10
+`define STW_B		6'd11
+`define STW_CALC	6'd12
+`define STW_OPC		6'd13
+
 `define STW_ACC8	6'd16
 `define STW_X8		6'd17
 `define STW_Y8		6'd18
@@ -486,3 +489,6 @@
 `define STW_PC70	6'd22
 `define STW_SR70	6'd23
 `define STW_Z8		6'd24
+`define STW_DEF8	6'd25
+
+`endif

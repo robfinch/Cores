@@ -23,90 +23,22 @@
 // Cache controller
 // Also takes care of loading the instruction buffer for non-cached access
 //
-
-//IDLE:
-//	begin
-//		if (!cyc_o) begin
-//`ifdef SUPPORT_DCACHE
-//			// A write to a cacheable address does not cause a cache load
-//			if (dmiss) begin
-//				isDataCacheLoad <= `TRUE;
-//				if (isRMW)
-//					lock_o <= 1'b1;
-//				cti_o <= 3'b001;
-//				bl_o <= 6'd3;
-//				cyc_o <= 1'b1;
-//				stb_o <= 1'b1;
-//				sel_o <= 4'hF;
-//				adr_o <= {radr[31:2],4'h0};
-//				cstate <= LOAD_DCACHE;
-//			end
-//			else
-//`endif
-//`ifdef SUPPORT_ICACHE
-//			if (!unCachedInsn && imiss && !hit0) begin
-//				isInsnCacheLoad <= `TRUE;
-//				bte_o <= 2'b00;
-//				cti_o <= 3'd001;
-//				bl_o <= 6'd3;
-//				cyc_o <= 1'b1;
-//				stb_o <= 1'b1;
-//				sel_o <= 4'hF;
-//				adr_o <= {pc[31:4],4'h0};
-//				cstate <= LOAD_ICACHE;
-//			end
-//			else if (!unCachedInsn && imiss && !hit1) begin
-//				isInsnCacheLoad <= `TRUE;
-//				bte_o <= 2'b00;
-//				cti_o <= 3'd001;
-//				bl_o <= 6'd3;
-//				cyc_o <= 1'b1;
-//				stb_o <= 1'b1;
-//				sel_o <= 4'hF;
-//				adr_o <= {pcp8[31:4],4'h0};
-//				cstate <= LOAD_ICACHE;
-//			end
-//			else 
-//`endif
-//			if (unCachedInsn && imiss) begin
-//				bte_o <= 2'b00;
-//				cti_o <= 3'b001;
-//				bl_o <= 6'd2;
-//				cyc_o <= 1'b1;
-//				stb_o <= 1'b1;
-//				sel_o <= 4'hf;
-//				adr_o <= {pc[31:2],2'b00};
-//				cstate <= LOAD_IBUF1;
-//			end
-//		end
-//	end
-
-
 `ifdef SUPPORT_DCACHE
 DCACHE1:
 	begin
 		isDataCacheLoad <= `TRUE;
 		if (isRMW)
 			lock_o <= 1'b1;
-		cti_o <= 3'b001;
-		bl_o <= 6'd3;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 4'hF;
-		adr_o <= {radr[31:2],4'h0};
+		wb_burst(6'd3,{radr[31:2],4'h0});
 		state <= LOAD_DCACHE;
+		derr_address <= radr[33:2];
 	end
 LOAD_DCACHE:
 	if (ack_i) begin
 		if (adr_o[3:2]==2'b11) begin
 			dmiss <= `FALSE;
 			isDataCacheLoad <= `FALSE;
-			cti_o <= 3'b000;
-			bl_o <= 6'd0;
-			cyc_o <= 1'b0;
-			stb_o <= 1'b0;
-			sel_o <= 4'h0;
-			adr_o <= 34'h0;
+			wb_nack();
 			state <= retstate;
 		end
 		adr_o[3:2] <= adr_o[3:2] + 2'd1;
@@ -116,14 +48,11 @@ LOAD_DCACHE:
 		if (adr_o[3:2]==2'b11) begin
 			dmiss <= `FALSE;
 			isDataCacheLoad <= `FALSE;
-			cti_o <= 3'b000;
-			bl_o <= 6'd0;
-			cyc_o <= 1'b0;
-			stb_o <= 1'b0;
-			sel_o <= 4'h0;
-			adr_o <= 34'h0;
+			derr_address <= adr_o[33:2];
+			wb_nack();
 			// The state machine will be waiting for a dhit.
 			// Override the next state and send the processor to the bus error state.
+			intno <= 9'd508;
 			state <= BUS_ERROR;
 		end
 		adr_o[3:2] <= adr_o[3:2] + 2'd1;
@@ -134,24 +63,12 @@ LOAD_DCACHE:
 ICACHE1:
 	if (!hit0) begin
 		isInsnCacheLoad <= `TRUE;
-		bte_o <= 2'b00;
-		cti_o <= 3'b001;
-		bl_o <= 6'd3;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 4'hF;
-		adr_o <= {pc[31:4],4'h0};
+		wb_burst(6'd3,{pc[31:4],4'h0});
 		state <= LOAD_ICACHE;
 	end
 	else if (!hit1) begin
 		isInsnCacheLoad <= `TRUE;
-		bte_o <= 2'b00;
-		cti_o <= 3'b001;
-		bl_o <= 6'd3;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 4'hF;
-		adr_o <= {pcp8[31:4],4'h0};
+		wb_burst(6'd3,{pcp8[31:4],4'h0});
 		state <= LOAD_ICACHE;
 	end
 	else
@@ -160,12 +77,7 @@ LOAD_ICACHE:
 	if (ack_i) begin
 		if (adr_o[3:2]==2'b11) begin
 			isInsnCacheLoad <= `FALSE;
-			cti_o <= 3'b000;
-			bl_o <= 6'd0;
-			cyc_o <= 1'b0;
-			stb_o <= 1'b0;
-			sel_o <= 4'h0;
-			adr_o <= 34'd0;
+			wb_nack();
 `ifdef ICACHE_2WAY
 			clfsr <= {clfsr,clfsr_fb};
 `endif
@@ -177,13 +89,10 @@ LOAD_ICACHE:
 	else if (err_i) begin
 		if (adr_o[3:2]==2'b11) begin
 			isInsnCacheLoad <= `FALSE;
-			cti_o <= 3'b000;
-			bl_o <= 6'd0;
-			cyc_o <= 1'b0;
-			stb_o <= 1'b0;
-			sel_o <= 4'h0;
-			adr_o <= 34'd0;
-			state <= INSN_BUS_ERROR;
+			wb_nack();
+			derr_address <= 32'd0;
+			intno <= 9'd509;
+			state <= BUS_ERROR;
 `ifdef ICACHE_2WAY
 			clfsr <= {clfsr,clfsr_fb};
 `endif
@@ -192,26 +101,10 @@ LOAD_ICACHE:
 	end
 `endif
 `endif
-//IBUF1:
-//	begin
-//		bte_o <= 2'b00;
-//		cti_o <= 3'b001;
-//		bl_o <= 6'd2;
-//		cyc_o <= 1'b1;
-//		stb_o <= 1'b1;
-//		sel_o <= 4'hf;
-//		adr_o <= {pc[31:2],2'b00};
-//		state <= LOAD_IBUF1;
-//	end
+
 LOAD_IBUF1:
 	if (!cyc_o) begin
-		bte_o <= 2'b00;
-		cti_o <= 3'b001;
-		bl_o <= 6'd2;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 4'hF;
-		adr_o <= {pc[31:2],2'b00};
+		wb_burst(6'd2,{pc[31:2],2'b00});
 	end
 	else if (ack_i|err_i) begin
 		case(pc[1:0])
@@ -225,9 +118,6 @@ LOAD_IBUF1:
 	end
 LOAD_IBUF2:
 	if (ack_i|err_i) begin
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		sel_o <= 4'h0;
 		case(pc[1:0])
 		2'd0:	ibuf[55:32] <= dat_i[23:0];
 		2'd1:	ibuf[55:24] <= dat_i;
@@ -239,10 +129,7 @@ LOAD_IBUF2:
 	end
 LOAD_IBUF3:
 	if (ack_i) begin
-		cti_o <= 3'b000;
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		sel_o <= 4'h0;
+		wb_nack();
 		case(pc[1:0])
 		2'd0:	;
 		2'd1:	;
@@ -250,23 +137,20 @@ LOAD_IBUF3:
 		2'd3:	ibuf[55:40] <= dat_i[15:0];
 		endcase
 		adr_o <= 34'd0;
-		state <= IFETCH;
+		state <= em ? BYTE_IFETCH : IFETCH;
 		bufadr <= pc;	// clears the miss
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
+		wb_nack();
 		case(pc[1:0])
 		2'd0:	;
 		2'd1:	;
 		2'd2:	ibuf[55:48] <= dat_i[7:0];
 		2'd3:	ibuf[55:40] <= dat_i[15:0];
 		endcase
-		cti_o <= 3'b000;
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		sel_o <= 4'h0;
-		adr_o <= 34'd0;
-		state <= INSN_BUS_ERROR;
+		intno <= 9'd509;
+		state <= BUS_ERROR;
 		bufadr <= pc;	// clears the miss
 	end
 `endif

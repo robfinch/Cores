@@ -27,10 +27,7 @@ LOAD_MAC1:
 	begin
 		if (isRMW)
 			lock_o <= 1'b1;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 4'hF;
-		adr_o <= {radr,2'b00};
+		wb_read({radr,2'b00});
 		state <= LOAD_MAC2;
 	end
 `ifdef SUPPORT_DCACHE
@@ -43,30 +40,28 @@ LOAD_MAC1:
 `endif
 LOAD_MAC2:
 	if (ack_i) begin
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		sel_o <= 4'h0;
-		adr_o <= 34'h0;
+		wb_nack();
 		load_tsk(dat_i,dati);
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
 		lock_o <= 1'b0;
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		we_o <= 1'b0;
-		sel_o <= 4'h0;
-		dat_o <= 32'h0;
+		wb_nack();
+		if (em | isOrb)
+			derr_address <= adr_o[31:0];
+		else
+			derr_address <= adr_o[33:2];
+		intno <= 9'd508;
 		state <= BUS_ERROR;
 	end
 `endif
 LOAD_MAC3:
 	begin
-		regfile[Rt] <= res;
+		regfile[Rt] <= res[31:0];
 		case(Rt)
-		4'h1:	acc <= res;
-		4'h2:	x <= res;
-		4'h3:	y <= res;
+		4'h1:	acc <= res[31:0];
+		4'h2:	x <= res[31:0];
+		4'h3:	y <= res[31:0];
 		default:	;
 		endcase
 		// Rt will be zero by the time the IFETCH stage is entered because of

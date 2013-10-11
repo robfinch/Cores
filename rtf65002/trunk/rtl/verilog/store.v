@@ -26,46 +26,33 @@
 // there was a write hit.
 STORE1:
 	begin
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= 1'b1;
-		if (em || isStb) begin
-			case(wadr2LSB)
-			2'd0:	sel_o <= 4'b0001;
-			2'd1:	sel_o <= 4'b0010;
-			2'd2:	sel_o <= 4'b0100;
-			2'd3:	sel_o <= 4'b1000;
-			endcase
-		end
-		else
-			sel_o <= 4'hf;
-		adr_o <= {wadr,2'b00};
 		case(store_what)
-		`STW_ACC:	dat_o <= acc;
-		`STW_X:		dat_o <= x;
-		`STW_Y:		dat_o <= y;
-		`STW_PC:	dat_o <= pc;
-		`STW_PC2:	dat_o <= pc + 32'd2;
-		`STW_PCHWI:	dat_o <= pc+{30'b0,~hwi,1'b0};
-		`STW_OPC:	dat_o <= opc;
-		`STW_SR:	dat_o <= sr;
-		`STW_RFA:	dat_o <= rfoa;
-		`STW_RFA8:	dat_o <= {4{rfoa[7:0]}};
-		`STW_A:		dat_o <= a;
-		`STW_B:		dat_o <= b;
-		`STW_CALC:	dat_o <= res;
+		`STW_ACC:	wb_write(0,acc);
+		`STW_X:		wb_write(0,x);
+		`STW_Y:		wb_write(0,y);
+		`STW_PC:	wb_write(0,pc);
+		`STW_PC2:	wb_write(0,pc + 32'd2);
+		`STW_PCHWI:	wb_write(0,pc+{30'b0,~hwi,1'b0});
+		`STW_OPC:	wb_write(0,opc);
+		`STW_SR:	wb_write(0,sr);
+		`STW_RFA:	wb_write(0,rfoa);
+		`STW_RFA8:	wb_write(1,{4{rfoa[7:0]}});
+		`STW_A:		wb_write(0,a);
+		`STW_B:		wb_write(0,b);
+		`STW_CALC:	wb_write(0,res[31:0]);
 `ifdef SUPPORT_EM8
-		`STW_ACC8:	dat_o <= {4{acc8}};
-		`STW_X8:	dat_o <= {4{x8}};
-		`STW_Y8:	dat_o <= {4{y8}};
-		`STW_Z8:	dat_o <= {4{8'h00}};
-		`STW_PC3124:	dat_o <= {4{pc[31:24]}};
-		`STW_PC2316:	dat_o <= {4{pc[23:16]}};
-		`STW_PC158:		dat_o <= {4{pc[15:8]}};
-		`STW_PC70:		dat_o <= {4{pc[7:0]}};
-		`STW_SR70:		dat_o <= {4{sr8}};
+		`STW_ACC8:	wb_write(1,{4{acc8}});
+		`STW_X8:	wb_write(1,{4{x8}});
+		`STW_Y8:	wb_write(1,{4{y8}});
+		`STW_Z8:	wb_write(1,{4{8'h00}});
+		`STW_PC3124:	wb_write(1,{4{pc[31:24]}});
+		`STW_PC2316:	wb_write(1,{4{pc[23:16]}});
+		`STW_PC158:		wb_write(1,{4{pc[15:8]}});
+		`STW_PC70:		wb_write(1,{4{pc[7:0]}});
+		`STW_SR70:		wb_write(1,{4{sr8}});
+		`STW_DEF8:		wb_write(1,wdat);
 `endif
-		default:	dat_o <= wdat;
+		default:	wb_write(0,wdat);
 		endcase
 `ifdef SUPPORT_DCACHE
 		radr <= wadr;		// Do a cache read to test the hit
@@ -93,12 +80,7 @@ STORE2:
 			end
 		end
 		lock_o <= 1'b0;
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		we_o <= 1'b0;
-		sel_o <= 4'h0;
-		adr_o <= 34'h0;
-		dat_o <= 32'h0;
+		wb_nack();
 		case(store_what)
 		`STW_PC,`STW_PC2,`STW_PCHWI,`STW_OPC:
 			if (isBrk|isBusErr) begin
@@ -114,7 +96,7 @@ STORE2:
 				load_what <= `PC_310;
 				state <= LOAD_MAC1;
 				retstate <= LOAD_MAC1;
-				radr <= vect[31:2];
+				radr <= vect[33:2];
 				ttrig <= 1'b0;
 				tf <= 1'b0;			// turn off trace mode
 				im <= 1'b1;
@@ -202,7 +184,7 @@ STORE2:
 					state <= LOAD_MAC1;
 					retstate <= LOAD_MAC1;
 					pc[31:16] <= abs8[31:16];
-					radr <= vect[31:2];
+					radr <= vect[33:2];
 					radr2LSB <= vect[1:0];
 					im <= hwi;
 				end
@@ -231,13 +213,12 @@ STORE2:
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
 		lock_o <= 1'b0;
-		cyc_o <= 1'b0;
-		stb_o <= 1'b0;
-		we_o <= 1'b0;
-		sel_o <= 4'h0;
-		dat_o <= 32'h0;
+		wb_nack();
+		if (em | isStb)
+			derr_address <= adr_o[31:0];
+		else
+			derr_address <= adr_o[33:2];
+		intno <= 9'd508;
 		state <= BUS_ERROR;
 	end
 `endif
-
-	
