@@ -6,7 +6,7 @@
 <meta name="ProgId" content="FrontPage.Editor.Document">
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
 <title>RTF65002 System</title>
-<!--mstheme--><link rel="stylesheet" href="../../spi_master%20(modified)/trunk/docs/wate1011.css">
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
 <meta name="Microsoft Theme" content="water 1011, default">
 </head>
 
@@ -17,11 +17,12 @@
 <p>The bit file is for an Atlys FPGA board from Digilent.</p>
 <p>The video output is setup for a 1366x768 HDMI display, your display device 
 must be able to support this mode.</p>
-<p>Emulation of the 65C02 is currently broken so EhBASIC doesn't work yet. Even though it's a 
-menu option at the BIOS prompt.</p>
 <p>&nbsp;</p>
+<p>You may have to press the reset button to get the core started.</p>
 <p>Press ALT-tab to switch between running tasks.</p>
 <p>Pressing 'B' (uppercase B) at the prompt will start TinyBasic as a task. You 
+can then ALT-tab over to it.</p>
+<p>Pressing 'b' (lowercase b) at the prompt will start EhBASIC as a task. You 
 can then ALT-tab over to it.</p>
 <p>Pressing '?' at the prompt will display a list of commands.</p>
 <p>Pressing CTRL-ALT-DEL will reset the system.</p>
@@ -31,9 +32,11 @@ delete it.</p>
 <h2>On the Atlys board:</h2>
 <p>Switch #7 globally disables/enables interrupts. The switch should be set to 
 on, or the keyboard won't work.</p>
+<p>Swithc #6 globally disables/enables the bitmap display device.</p>
 <p>Switches #0 and #1 switch the video display between bitmapped and text mode. 
 For text mode both switches should be on.</p>
 <p>A Pmod SD can be attached to Port JB pins 1-6.</p>
+<p>A PmodTMP can be attached to Port JB pins 7 to 12.</p>
 <h2>&nbsp;</h2>
 <h2>Credits:</h2>
 <h3>ETHMAC controller</h3>
