@@ -30,6 +30,8 @@
 `define TRUE		1'b1
 `define FALSE		1'b0
 
+`define DEBUG		1'b1
+
 `define SUPPORT_ICACHE	1'b1
 `define ICACHE_4K		1'b1
 //`define ICACHE_16K		1'b1

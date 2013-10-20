@@ -436,6 +436,16 @@ namespace RTFClasses
 		theAssembler.emit16(((d<<4)&0xfff0)|Ra);
 	}
 
+	void AsmRTF65002::bms_zp(Opa *op)
+	{
+		Operand o;
+		__int32 d;
+		int Ra = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
+		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
+		theAssembler.emit16(op->oc);
+		theAssembler.emit16(((d<<4)&0xfff0)|Ra);
+	}
+
 	void AsmRTF65002::zpld(Opa *op)
 	{
 		Operand o;
@@ -615,6 +625,21 @@ namespace RTFClasses
 		theAssembler.emit32(d);
 	}
 
+	void AsmRTF65002::bit_acc_absx(Opa *o)
+	{
+		unsigned __int64 d;
+		int Ra = 1;
+		int Rb;
+		int Rt = 0;
+
+		Rb = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
+		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
+		theAssembler.emit8(o->oc);
+		theAssembler.emit8((Rb<<4)|Ra);
+		theAssembler.emit8(Rt);
+		theAssembler.emit32(d);
+	}
+
 	void AsmRTF65002::absbit(Opa *o)
 	{
 		unsigned __int64 d;
@@ -692,6 +717,14 @@ namespace RTFClasses
 		U64 d;
 		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
 		theAssembler.emit8(o->oc);
+		theAssembler.emit32(d);
+	}
+
+	void AsmRTF65002::bms_abs(Opa *o)
+	{
+		U64 d;
+		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
+		theAssembler.emit16(o->oc);
 		theAssembler.emit32(d);
 	}
 
@@ -854,6 +887,17 @@ namespace RTFClasses
 
 		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
 		theAssembler.emit8(o->oc);
+		theAssembler.emit8((Ra<<4)|Ra);
+		theAssembler.emit32(d);
+	}
+
+	void AsmRTF65002::bms_absx(Opa *o)
+	{
+		U64 d;
+		int Ra = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
+
+		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
+		theAssembler.emit16(o->oc);
 		theAssembler.emit8((Ra<<4)|Ra);
 		theAssembler.emit32(d);
 	}

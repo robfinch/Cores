@@ -26,7 +26,7 @@
 //
 `include "rtf65002_defines.v"
 
-module rtf65002d(rst_md, rst_i, clk_i, nmi_i, irq_i, irq_vect, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, km_o);
+module rtf65002d(rst_md, rst_i, clk_i, nmi_i, irq_i, irq_vect, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, rty_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, km_o);
 parameter RESET1 = 6'd0;
 parameter IFETCH = 6'd1;
 parameter DECODE = 6'd2;
@@ -76,6 +76,7 @@ output reg lock_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
+input rty_i;
 input err_i;
 output reg we_o;
 output reg [3:0] sel_o;
@@ -113,6 +114,7 @@ wire [7:0] acc8 = acc[7:0];
 wire [7:0] x8 = x[7:0];
 wire [7:0] y8 = y[7:0];
 reg [31:0] isp;		// interrupt stack pointer
+reg [31:0] oisp;	// original isp for bus retry
 wire [63:0] prod;
 wire [31:0] q,r;
 reg [31:0] tick;
@@ -131,6 +133,7 @@ wire [31:0] pcp8 = pc + 32'd8;						// cache controller needs this
 reg [31:0] abs8;	// 8 bit mode absolute address register
 reg [31:0] vbr;		// vector table base register
 wire bhit=pc==bufadr;
+reg [2:0] bcnt;		// burst count for cache controller
 reg [31:0] regfile [15:0];
 reg [63:0] ir;
 reg pg2;
@@ -232,9 +235,11 @@ xnor(ilfsr_fb,ilfsr[0],ilfsr[1],ilfsr[21],ilfsr[31]);
 reg km;			// kernel mode indicator
 assign km_o = km;
 
+`ifdef DEBUG
 reg [31:0] history_buf [127:0];
 reg [6:0] history_ndx;
 reg hist_capture;
+`endif
 
 reg isBusErr;
 reg isBrk,isMove,isSts;
@@ -395,7 +400,7 @@ rtf65002_icachemem8k icm0 (
 rtf65002_itagmem8k tgm0 (
 	.wclk(clk),
 	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
-	.adr({adr_o[31:1],!isCacheReset}),
+	.adr({adr_o[33:1],!isCacheReset}),
 	.rclk(~clk),
 	.pc(pc),
 	.hit0(hit0),
@@ -641,8 +646,10 @@ if (rst_i) begin
 	tick <= 32'd0;
 	isIY <= 1'b0;
 	load_what <= `NOTHING;
+`ifdef DEBUG
 	hist_capture <= `TRUE;
 	history_ndx <= 6'd0;
+`endif
 	pg2 <= `FALSE;
 	tf <= `FALSE;
 	km <= `TRUE;
@@ -722,7 +729,9 @@ BUS_ERROR:
 	begin
 		pg2 <= `FALSE;
 		ir <= {8{`BRK}};
+`ifdef DEBUG
 		hist_capture <= `FALSE;
+`endif
 		radr <= isp_dec;
 		wadr <= isp_dec;
 		isp <= isp_dec;

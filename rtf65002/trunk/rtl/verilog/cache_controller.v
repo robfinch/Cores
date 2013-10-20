@@ -2,7 +2,7 @@
 //        __
 //   \\__/ o\    (C) 2013  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -31,10 +31,11 @@ DCACHE1:
 			lock_o <= 1'b1;
 		wb_burst(6'd3,{radr[31:2],4'h0});
 		state <= LOAD_DCACHE;
-		derr_address <= radr[33:2];
 	end
 LOAD_DCACHE:
 	if (ack_i) begin
+		if (adr_o[3:2]==2'b10)
+			cti_o <= 3'b111;
 		if (adr_o[3:2]==2'b11) begin
 			dmiss <= `FALSE;
 			isDataCacheLoad <= `FALSE;
@@ -45,16 +46,18 @@ LOAD_DCACHE:
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
+		if (adr_o[3:2]==2'b10)
+			cti_o <= 3'b111;
 		if (adr_o[3:2]==2'b11) begin
 			dmiss <= `FALSE;
 			isDataCacheLoad <= `FALSE;
-			derr_address <= adr_o[33:2];
 			wb_nack();
 			// The state machine will be waiting for a dhit.
 			// Override the next state and send the processor to the bus error state.
 			intno <= 9'd508;
 			state <= BUS_ERROR;
 		end
+		derr_address <= adr_o[33:2];
 		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 	end
 `endif
@@ -75,6 +78,8 @@ ICACHE1:
 		state <= em ? BYTE_IFETCH : IFETCH;
 LOAD_ICACHE:
 	if (ack_i) begin
+		if (adr_o[3:2]==2'b10)
+			cti_o <= 3'b111;
 		if (adr_o[3:2]==2'b11) begin
 			isInsnCacheLoad <= `FALSE;
 			wb_nack();
@@ -87,6 +92,8 @@ LOAD_ICACHE:
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
+		if (adr_o[3:2]==2'b10)
+			cti_o <= 3'b111;
 		if (adr_o[3:2]==2'b11) begin
 			isInsnCacheLoad <= `FALSE;
 			wb_nack();
@@ -104,9 +111,13 @@ LOAD_ICACHE:
 
 LOAD_IBUF1:
 	if (!cyc_o) begin
-		wb_burst(6'd2,{pc[31:2],2'b00});
+		// Emulation mode never needs to read more than two words.
+		// Native mode might need up to three words.
+		wb_burst((em ? 6'd1: 6'd2),{pc[31:2],2'b00});
 	end
 	else if (ack_i|err_i) begin
+		if (em)
+			cti_o <= 3'b111;
 		case(pc[1:0])
 		2'd0:	ibuf <= dat_i;
 		2'd1:	ibuf <= dat_i[31:8];
@@ -114,18 +125,27 @@ LOAD_IBUF1:
 		2'd3:	ibuf <= dat_i[31:24];
 		endcase
 		state <= LOAD_IBUF2;
-		adr_o <= adr_o + 34'd4;
 	end
 LOAD_IBUF2:
 	if (ack_i|err_i) begin
+		state <= em ? BYTE_IFETCH : LOAD_IBUF3;
 		case(pc[1:0])
 		2'd0:	ibuf[55:32] <= dat_i[23:0];
 		2'd1:	ibuf[55:24] <= dat_i;
 		2'd2:	ibuf[47:16] <= dat_i;
 		2'd3:	ibuf[39:8] <= dat_i;
 		endcase
-		state <= LOAD_IBUF3;
-		adr_o <= adr_o + 34'd4;
+		if (em) begin
+			wb_nack();
+			if (err_i) begin
+				derr_address <= 32'd0;
+				intno <= 9'd509;
+				state <= BUS_ERROR;
+			end
+			bufadr <= pc;	// clears the miss
+		end
+		else
+			cti_o <= 3'b111;
 	end
 LOAD_IBUF3:
 	if (ack_i) begin
@@ -136,8 +156,7 @@ LOAD_IBUF3:
 		2'd2:	ibuf[55:48] <= dat_i[7:0];
 		2'd3:	ibuf[55:40] <= dat_i[15:0];
 		endcase
-		adr_o <= 34'd0;
-		state <= em ? BYTE_IFETCH : IFETCH;
+		state <= IFETCH;
 		bufadr <= pc;	// clears the miss
 	end
 `ifdef SUPPORT_BERR
@@ -149,6 +168,7 @@ LOAD_IBUF3:
 		2'd2:	ibuf[55:48] <= dat_i[7:0];
 		2'd3:	ibuf[55:40] <= dat_i[15:0];
 		endcase
+		derr_address <= 32'd0;
 		intno <= 9'd509;
 		state <= BUS_ERROR;
 		bufadr <= pc;	// clears the miss

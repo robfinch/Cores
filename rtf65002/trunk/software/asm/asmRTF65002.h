@@ -38,6 +38,7 @@ namespace RTFClasses
 		static void bit_acc_imm32(Opa *);
 		static void bit_acc_zpx(Opa *);
 		static void bit_acc_abs(Opa *);
+		static void bit_acc_absx(Opa *);
 		static void bit_absx(Opa *);
 		static void stz_zp(Opa *);
 		static void stz_abs(Opa *);
@@ -110,6 +111,8 @@ namespace RTFClasses
 		static void sub_sp_imm8(Opa *);
 		static void sub_sp_imm16(Opa *);
 		static void sub_sp_imm32(Opa *);
-
+		static void bms_zp(Opa *);
+		static void bms_abs(Opa *);
+		static void bms_absx(Opa *);
 	};
 }

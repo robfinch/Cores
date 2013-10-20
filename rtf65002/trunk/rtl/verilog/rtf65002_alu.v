@@ -100,7 +100,9 @@ always @*
 					4'd7:	res <= abs8;
 					4'h8:	res <= {vbr[31:1],nmoi};
 					4'h9:	res <= derr_address;
+`ifdef DEBUG
 					4'hA:	res <= history_buf;
+`endif
 					4'hE:	res <= {spage[31:8],sp};
 					4'hF:	res <= isp;
 					default:	res <= 33'd0;

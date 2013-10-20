@@ -119,6 +119,7 @@ namespace RTFClasses
 			buf[memcnt %4] = byte & 0xff;
 			if (memcnt %4 == 3) {
 				word = (buf[3] << 24) + (buf[2] << 16) + (buf[1] << 8) + buf[0];
+				checksum = checksum + word;
 				//printf("word=%08.8x\r\n", word);
 				fprintf(fpVer, "rommem[%d] = 33'h%01.1X%08.8X;\r\n", memcnt/4,par32(word)&0x0f,word);
 			}

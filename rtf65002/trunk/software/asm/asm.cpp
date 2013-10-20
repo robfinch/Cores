@@ -188,6 +188,7 @@ namespace RTFClasses
 		NumInsn = 0;
 		ByteCount = 0;
 		CycleCount = 0;
+		checksum = 0;
 		fprintf(fpErr, "\r\nPass %d\r\n",pass);
 	}
 
@@ -359,7 +360,7 @@ namespace RTFClasses
 			errorsDuringPass = 0;
 
 //			for(pass = 1; (pass <= 20 || bOutOfPhase) && errorsDuringPass==0; pass++) {
-			for(pass = 1; pass <= 20; pass++) {
+			for(pass = 1; pass <= 20 && (bOutOfPhase||pass<5); pass++) {
 				initializeForPass();
 				if (pass > 1)
 					fprintf(fpErr, " - Out of Phase Symbols: %d\r\n", bOutOfPhase);
@@ -367,8 +368,8 @@ namespace RTFClasses
 					fprintf(fpErr, "\r\n");
 				bOutOfPhase = 0;
 				processFile(sfname);
-				//if (bOutOfPhase==0)
-				//	break;
+	//			if (bOutOfPhase==0)
+	//				break;
 			}
 			// Output generation pass
 			bOutOfPhase = 0;
@@ -381,7 +382,7 @@ namespace RTFClasses
 				ObjFile.flush();
 				ObjFile.close();
 			}
-
+			fprintf(fpList, "\r\nChecksum=%08.8X\r\n", checksum);
 			fprintf(fpList, "\r\nNumber of instructions processed: %d\r\n", NumInsn);
 			fprintf(fpList, "Number of opcode bytes: %I64d\r\n", ByteCount);
 			fprintf(fpList, "Bytes per instruction: %lf\r\n", (double)((double)ByteCount/(double)NumInsn));

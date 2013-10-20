@@ -27,9 +27,11 @@
 
 module mult_div(rst, clk, ld, op, fn, a, b, p, q, r, done);
 parameter IDLE=3'd0;
-parameter MULT=3'd1;
-parameter FIX_SIGN=3'd2;
-parameter DIV=3'd3;
+parameter MULT1=3'd1;
+parameter MULT2=3'd2;
+parameter MULT3=3'd3;
+parameter FIX_SIGN=3'd4;
+parameter DIV=3'd5;
 input rst;
 input clk;
 input ld;
@@ -50,6 +52,7 @@ reg [2:0] state;
 assign done = state==IDLE;
 wire [31:0] diff = r - bb;
 wire [31:0] pa = a[31] ? -a : a;
+wire [63:0] p1 = aa * bb;
 reg [5:0] cnt;
 
 always @(posedge clk)
@@ -66,7 +69,7 @@ IDLE:
 				aa <= a;
 				bb <= b;
 				res_sgn <= 1'b0;
-				state <= MULT;
+				state <= MULT1;
 			end
 `ifdef SUPPORT_DIVMOD
 		`DIV_IMM8,`DIV_IMM16,`DIV_IMM32,
@@ -87,14 +90,14 @@ IDLE:
 					aa <= a;
 					bb <= b;
 					res_sgn <= 1'b0;
-					state <= MULT;
+					state <= MULT1;
 				end
 			`MULS_RR:
 				begin
 					aa <= a[31] ? -a : a;
 					bb <= b[31] ? -b : b;
 					res_sgn <= a[31] ^ b[31];
-					state <= MULT;
+					state <= MULT1;
 				end
 `ifdef SUPPORT_DIVMOD
 			`DIV_RR,`MOD_RR:
@@ -121,11 +124,16 @@ IDLE:
 			endcase
 		endcase
 	end
-MULT:
-	begin
-		state <= res_sgn ? FIX_SIGN : IDLE;
-		p <= aa * bb;
-	end
+// Three waut states for the multiply to take effect. These are needed at
+// higher clock frequencies. The multipler is a multi-cycle path that
+// requires a timing constraint.
+MULT1:	state <= MULT2;
+MULT2:	state <= MULT3;
+MULT3:	begin
+			p <= p1;
+			state <= res_sgn ? FIX_SIGN : IDLE;
+		end
+
 `ifdef SUPPORT_DIVMOD
 DIV:
 	begin

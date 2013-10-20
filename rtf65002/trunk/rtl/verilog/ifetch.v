@@ -57,8 +57,10 @@ IFETCH:
 						exbuf <= 64'd0;
 						next_state(DECODE);
 					end
-					else
+					else begin
+						pg2 <= pg2;
 						state <= LOAD_IBUF1;
+					end
 				end
 				else begin
 					if (ihit) begin
@@ -66,8 +68,10 @@ IFETCH:
 						exbuf <= 64'd0;
 						next_state(DECODE);
 					end
-					else
+					else begin
+						pg2 <= pg2;
 						state <= ICACHE1;
+					end
 				end
 			end
 			else begin
@@ -95,8 +99,10 @@ IFETCH:
 					exbuf <= 64'd0;
 					next_state(DECODE);
 				end
-				else
+				else begin
+					pg2 <= pg2;
 					state <= LOAD_IBUF1;
+				end
 			end
 			else begin
 				if (ihit) begin
@@ -104,17 +110,21 @@ IFETCH:
 					exbuf <= 64'd0;
 					next_state(DECODE);
 				end
-				else
-					state <= ICACHE1;
+				else begin
+					pg2 <= pg2;
+					next_state(ICACHE1);
+				end
 			end
 		end
 		// During a cache miss all these assignments will repeat. It's not a
 		// problem. The history buffer will be stuffed with the same pc address
 		// for several cycles until the cache load is complete.
+`ifdef DEBUG
 		if (hist_capture) begin
 			history_buf[history_ndx] <= pc;
 			history_ndx <= history_ndx+7'd1;
 		end
+`endif
 		regfile[Rt] <= res[31:0];
 		case(Rt)
 		4'h1:	acc <= res[31:0];

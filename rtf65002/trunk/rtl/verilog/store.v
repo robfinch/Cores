@@ -63,7 +63,15 @@ STORE1:
 // Terminal state for stores. Update the data cache if there was a cache hit.
 // Clear any previously set lock status
 STORE2:
-	if (ack_i) begin
+	// On a retry operation, restore the stack pointer which may have been
+	// modified, then go back to the decode state to pick up original 
+	// addresses and data. This doesn't work for block move/store
+	if (rty_i) begin
+		wb_nack();
+		isp <= oisp;
+		state <= DECODE;
+	end
+	else if (ack_i) begin
 		wdat <= dat_o;
 		if (isMove|isSts) begin
 			state <= MVN3;
@@ -126,6 +134,7 @@ STORE2:
 				wadr2LSB <= sp[1:0];
 				store_what <= `STW_PC2316;
 				sp <= sp_dec;
+				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_PC2316:
@@ -136,6 +145,7 @@ STORE2:
 				wadr2LSB <= sp[1:0];
 				sp <= sp_dec;
 				store_what <= `STW_PC158;
+				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_PC158:
@@ -146,6 +156,7 @@ STORE2:
 				wadr2LSB <= sp[1:0];
 				sp <= sp_dec;
 				store_what <= `STW_PC70;
+				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_PC70:
@@ -158,11 +169,11 @@ STORE2:
 						wadr2LSB <= sp[1:0];
 						sp <= sp_dec;
 						store_what <= `STW_SR70;
+						retstate <= STORE1;
 						state <= STORE1;
 						end
 				`JSR: 	begin
-						pc <= ir[23:8];
-						$display("setting pc=%h", ir[23:8]);
+						pc[15:0] <= ir[23:8];
 						end
 				`JSL: 	begin
 						pc <= ir[39:8];

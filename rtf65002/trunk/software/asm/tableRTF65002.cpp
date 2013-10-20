@@ -271,6 +271,7 @@ static Opa cliAsm[] = { {Asm6502::out8, 0x58, 0, 0, 2}, NULL };
 static Opa clvAsm[] = { {Asm6502::out8, 0xB8, 0, 0, 2}, NULL };
 static Opa toffAsm[] = { {AsmRTF65002::out16, 0x1842, 0, 0, 2}, NULL };
 static Opa tonAsm[] = { {AsmRTF65002::out16, 0x3842, 0, 0, 2}, NULL };
+static Opa hoffAsm[] = { {AsmRTF65002::out16, 0x5842, 0, 0, 2}, NULL };
 static Opa pushaAsm[] = { {AsmRTF65002::out16, 0x0B42, 0, 0, 32}, NULL };
 static Opa popaAsm[] = { {AsmRTF65002::out16, 0x2B42, 0, 0, 32}, NULL };
 
@@ -312,11 +313,10 @@ static Opa waiAsm[] = { {Asm6502::out8, 0xCB, 0, 0, 2}, NULL };
 static Opa stpAsm[] = { {Asm6502::out8, 0xDB, 0, 0, 2}, NULL };
 static Opa xbaAsm[] = { {Asm6502::out8, 0xEB, 0, 0, 2}, NULL };
 static Opa xceAsm[] = { {Asm6502::out8, 0xFB, 0, 0, 2}, NULL };
-static Opa mvnAsm[] = { {Asm6502::out8, 0x54, 0, 0, 8}, NULL };
-static Opa mvpAsm[] = { {Asm6502::out8, 0x44, 0, 0, 8}, NULL };
-static Opa stosAsm[] = { {Asm6502::out8, 0x64, 0, 0, 8}, NULL };
-
-
+static Opa mvnAsm[] = { {Asm6502::out8, 0x54, 0, 0, 6}, NULL };
+static Opa mvpAsm[] = { {Asm6502::out8, 0x44, 0, 0, 6}, NULL };
+static Opa stosAsm[] = { {Asm6502::out8, 0x64, 0, 0, 5}, NULL };
+static Opa cmpsAsm[] = { {AsmRTF65002::out16, 0x4442, 0, 0, 6}, NULL };
 
 
 static Opa nopAsm[] = { {Asm6502::out8, 0xEA, 0, 0 ,2}, NULL };
@@ -344,6 +344,8 @@ static Opa cmpAsm[] =
 	{AsmRTF65002::Ximm8, 0xC5, 1, AM_IMM8, 2},
 //	{AsmRTF65002::bit_acc_imm8, 0xE5, 1, AM_IMM8},
 	{AsmRTF65002::bit_acc_abs, 0xED, 1, AM_A, 5},
+	{AsmRTF65002::bit_acc_absx, 0xFD, 1, AM_AX,5},
+	{AsmRTF65002::bit_acc_absx, 0xFD, 1, AM_AY,5},
 	{AsmRTF65002::st_dsp, 0xE3, 3, (AM_RN<<16)|(AM_RN<<8)|AM_SR, 5},
 	{AsmRTF65002::st_acc_dsp, 0xE3, 1, AM_SR, 5},
 	NULL
@@ -381,7 +383,7 @@ static Opa decAsm[] =
     {AsmRTF65002::zp2, 0xD6, 1, AM_ZX, 5},
     {AsmRTF65002::zp2, 0xD6, 1, AM_ZY, 5},
 	{AsmRTF65002::abs2, 0xCE, 1, AM_A, 5},
-	{AsmRTF65002::abs2, 0xDE, 1, AM_AX, 5},
+	{AsmRTF65002::absx2, 0xDE, 1, AM_AX, 5},
 	NULL
 };
 
@@ -393,7 +395,51 @@ static Opa incAsm[] =
     {AsmRTF65002::zp2, 0xF6, 1, AM_ZX, 5},
     {AsmRTF65002::zp2, 0xF6, 1, AM_ZY, 5},
 	{AsmRTF65002::abs2, 0xEE, 1, AM_A, 5},
-	{AsmRTF65002::abs2, 0xFE, 1, AM_AX, 5},
+	{AsmRTF65002::absx2, 0xFE, 1, AM_AX, 5},
+	NULL
+};
+
+static Opa bmsAsm[] =
+{
+    {AsmRTF65002::bms_zp, 0x0642, 1, AM_Z, 5},
+    {AsmRTF65002::bms_zp, 0x0642, 1, AM_ZX, 5},
+    {AsmRTF65002::bms_zp, 0x0642, 1, AM_ZY, 5},
+	{AsmRTF65002::bms_abs, 0x0E42, 1, AM_A, 5},
+	{AsmRTF65002::bms_absx, 0x1E42, 1, AM_AX, 5},
+	{AsmRTF65002::bms_absx, 0x1E42, 1, AM_AY, 5},
+	NULL
+};
+
+static Opa bmcAsm[] =
+{
+    {AsmRTF65002::bms_zp, 0x2642, 1, AM_Z, 5},
+    {AsmRTF65002::bms_zp, 0x2642, 1, AM_ZX, 5},
+    {AsmRTF65002::bms_zp, 0x2642, 1, AM_ZY, 5},
+	{AsmRTF65002::bms_abs, 0x2E42, 1, AM_A, 5},
+	{AsmRTF65002::bms_absx, 0x3E42, 1, AM_AX, 5},
+	{AsmRTF65002::bms_absx, 0x3E42, 1, AM_AY, 5},
+	NULL
+};
+
+static Opa bmfAsm[] =
+{
+    {AsmRTF65002::bms_zp, 0x4642, 1, AM_Z, 5},
+    {AsmRTF65002::bms_zp, 0x4642, 1, AM_ZX, 5},
+    {AsmRTF65002::bms_zp, 0x4642, 1, AM_ZY, 5},
+	{AsmRTF65002::bms_abs, 0x4E42, 1, AM_A, 5},
+	{AsmRTF65002::bms_absx, 0x5E42, 1, AM_AX, 5},
+	{AsmRTF65002::bms_absx, 0x5E42, 1, AM_AY, 5},
+	NULL
+};
+
+static Opa bmtAsm[] =
+{
+    {AsmRTF65002::bms_zp, 0x6642, 1, AM_Z, 5},
+    {AsmRTF65002::bms_zp, 0x6642, 1, AM_ZX, 5},
+    {AsmRTF65002::bms_zp, 0x6642, 1, AM_ZY, 5},
+	{AsmRTF65002::bms_abs, 0x6E42, 1, AM_A, 5},
+	{AsmRTF65002::bms_absx, 0x7E42, 1, AM_AX, 5},
+	{AsmRTF65002::bms_absx, 0x7E42, 1, AM_AY, 5},
 	NULL
 };
 
@@ -773,7 +819,11 @@ static Mne opsRTF65002[] =
 	{"bls", blsAsm, 1 },
 	{"blt", bltAsm, 1 },
 	{"bltu", bcsAsm, 1 },
+	{"bmc", bmcAsm, 1 },
+	{"bmf", bmfAsm, 1 },
 	{"bmi", bmiAsm, 1 },
+	{"bms", bmsAsm, 1 },
+	{"bmt", bmtAsm, 1 },
 	{"bne", bneAsm, 1 },
 	{"bpl", bplAsm, 1 },
 	{"bra", braAsm, 1 },
@@ -788,6 +838,7 @@ static Mne opsRTF65002[] =
 	{"cli", cliAsm, 0 },
 	{"clv", clvAsm, 0 },
 	{"cmp", cmpAsm, 3 },
+	{"cmps", cmpsAsm, 0 },
 
 	{"cpx", cpxAsm, 1 },
 	{"cpy", cpyAsm, 1 },
@@ -801,6 +852,8 @@ static Mne opsRTF65002[] =
 	
 	{"emm", emmAsm, 0 },
 	{"eor", eorAsm, 3 },
+
+	{"hoff", hoffAsm, 0 },
 
 	{"ina", inaAsm, 0 },
 	{"inc", incAsm, 1 },

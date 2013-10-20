@@ -47,7 +47,7 @@ always @(posedge rclk)
 syncRam512x32_1rw1r ram0 (
 	.wrst(1'b0),
 	.wclk(wclk),
-	.wce(adr[3:2]==2'b11 && !whichwr),
+	.wce(!whichwr),
 	.we(wr),
 	.wadr(adr[12:4]),
 	.i(adr[31:0]),
@@ -63,7 +63,7 @@ syncRam512x32_1rw1r ram0 (
 syncRam512x32_1rw1r ram1 (
 	.wrst(1'b0),
 	.wclk(wclk),
-	.wce(adr[3:2]==2'b11 && !whichwr),
+	.wce(!whichwr),
 	.we(wr),
 	.wadr(adr[12:4]),
 	.i(adr[31:0]),
@@ -79,7 +79,7 @@ syncRam512x32_1rw1r ram1 (
 syncRam512x32_1rw1r ram2 (
 	.wrst(1'b0),
 	.wclk(wclk),
-	.wce(adr[3:2]==2'b11 && whichwr),
+	.wce(whichwr),
 	.we(wr),
 	.wadr(adr[12:4]),
 	.i(adr[31:0]),
@@ -95,7 +95,7 @@ syncRam512x32_1rw1r ram2 (
 syncRam512x32_1rw1r ram3 (
 	.wrst(1'b0),
 	.wclk(wclk),
-	.wce(adr[3:2]==2'b11 && whichwr),
+	.wce(whichwr),
 	.we(wr),
 	.wadr(adr[12:4]),
 	.i(adr[31:0]),

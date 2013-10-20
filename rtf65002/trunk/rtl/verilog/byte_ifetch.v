@@ -23,6 +23,7 @@
 BYTE_IFETCH:
 	begin
 		vect <= `BYTE_IRQ_VECT;
+		vect[31:16] <= abs8[31:16];
 		suppress_pcinc <= 4'hF;				// default: no suppression of increment
 		opc <= pc;
 		hwi <= `FALSE;
@@ -40,6 +41,7 @@ BYTE_IFETCH:
 			end
 			else begin
 				vect <= `BYTE_NMI_VECT;
+				vect[31:16] <= abs8[31:16];
 				next_state(BYTE_DECODE);
 			end
 		end
@@ -93,10 +95,12 @@ BYTE_IFETCH:
 					state <= ICACHE1;
 			end
 		end
+`ifdef DEBUG
 		if (hist_capture) begin
 			history_buf[history_ndx] <= pc;
 			history_ndx <= history_ndx+7'd1;
 		end
+`endif
 		case(ir[7:0])
 		`TAY,`TXY,`DEY,`INY:	begin y[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`TAX,`TYX,`TSX,`DEX,`INX:	begin x[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end

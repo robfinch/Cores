@@ -162,7 +162,9 @@ begin
 					load_what <= `NOTHING;
 					if (isRTI) begin
 						km <= `FALSE;
+`ifdef DEBUG
 						hist_capture <= `TRUE;
+`endif
 					end
 					state <= em ? BYTE_IFETCH : IFETCH;
 				end

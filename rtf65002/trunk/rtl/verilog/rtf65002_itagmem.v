@@ -43,7 +43,7 @@ always @(posedge rclk)
 syncRam1kx32_1rw1r ram0 (
 	.wrst(1'b0),
 	.wclk(wclk),
-	.wce(adr[3:2]==2'b11),
+	.wce(1'b1),
 	.we(wr),
 	.wsel(4'hF),
 	.wadr(adr[13:4]),
@@ -60,7 +60,7 @@ syncRam1kx32_1rw1r ram0 (
 syncRam1kx32_1rw1r ram1 (
 	.wrst(1'b0),
 	.wclk(wclk),
-	.wce(adr[3:2]==2'b11),
+	.wce(1'b1),
 	.we(wr),
 	.wsel(4'hF),
 	.wadr(adr[13:4]),

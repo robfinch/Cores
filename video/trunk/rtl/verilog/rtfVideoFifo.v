@@ -1,7 +1,10 @@
 `timescale 1ns / 1ps
 // ============================================================================
-//	(C) 2008-2013  Robert Finch
-//	robfinch<remove>@opencores.org
+//        __
+//   \\__/ o\    (C) 2008-2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 //
 // This source file is free software: you can redistribute it and/or modify 

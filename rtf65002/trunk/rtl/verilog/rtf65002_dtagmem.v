@@ -36,7 +36,7 @@ syncRam512x32_1rw1r u1
 	(
 		.wrst(1'b0),
 		.wclk(wclk),
-		.wce(wadr[1:0]==2'b11),
+		.wce(1'b1),
 		.we(wr),
 		.wadr(wadr[10:2]),
 		.i({wadr[31:1],cr}),

@@ -84,8 +84,8 @@
 //			offset of the sprite image within the sprite image cache
 //			typically zero
 //
-//	08: ADR	21 bits sprite image address bits [31:11]
-//			This registers contain the low order address bits of the
+//	08: ADR	23 bits sprite image address bits [33:11]
+//			This registers contain the high order address bits of the
 //          location of the sprite image in system memory.
 //			The DMA controller will assign the low order 11 bits
 //			during DMA.
@@ -111,6 +111,10 @@
 //	1635 LUTs/ 1112 slices/ 82MHz - Spartan3e-4 (8 sprites)
 //	3 8x8 multipliers (for alpha blending)
 //	14 block rams
+//  1933 LUTs / 114 MHz	- xc6slx45-3 (14 sprites)
+//  28 BRAMs / 1048 FF's
+//  495 LUTs / 162 MHz		(2 sprites)
+//  4 BRAMs / 337 FF's
 //=============================================================== */
 
 `define VENDOR_XILINX	// block ram vendor (only one defined for now)
@@ -132,6 +136,7 @@ output reg [31:0] s_dat_o,	// data output
 output vol_o,			// volatile register
 //------------------------------
 // Bus Master Signals
+input m_clk_i,				// clock
 output reg [1:0] m_bte_o,	// burst type
 output reg [2:0] m_cti_o,	// cycle type
 output reg [5:0] m_bl_o,	// burst length
@@ -227,9 +232,7 @@ reg [10:0] sprAddrB [pnSprm:0];	// backup address cache for rescan
 wire [pColorBits-1:0] sprOut [pnSprm:0];	// sprite image data output
 
 // DMA access
-reg [33:32] sprSysAddrHx;	// high order 32 bits of sprite memory address
-reg [26:11] sprSysAddrL [pnSprm:0];	// system memory address of sprite image (low bits)
-reg [31:27] sprSysAddrH [pnSprm:0];	// system memory address of sprite image (high bits)
+reg [33:11] sprSysAddr [pnSprm:0];	// system memory address of sprite image (low bits)
 reg [3:0] dmaOwner;			// which sprite has the DMA channel
 reg [15:0] sprDt;		// DMA trigger register
 reg dmaActive;				// this flag indicates that a block DMA transfer is active
@@ -261,37 +264,28 @@ wire sbi_rdy1 = m_ack_i|btout;
 busTimeoutCtr #(20) br0(
 	.rst(rst_i),
 	.crst(1'b0),
-	.clk(clk_i),
+	.clk(m_clk_i),
 	.ce(1'b1),
 	.req(m_soc_o),
 	.rdy(m_ack_i),
 	.timeout(btout)
 );
 
-reg [4:0] cob;	// count of burst cycles
+reg [6:0] cob;	// count of burst cycles
 
-always @(posedge clk_i)
+always @(posedge m_clk_i)
 if (rst_i) begin
 	dmaStart <= 1'b0;
 	dmaActive <= 1'b0;
 	dmaOwner <= 4'd0;
-	m_bte_o <= 2'b00;
-	m_cti_o <= 3'b000;
-	m_bl_o <= 6'd63;
-	m_soc_o <= 1'b0;
-	m_cyc_o <= 1'b0;
-	m_stb_o <= 1'b0;
-	m_we_o <= 1'b0;
-	m_sel_o <= 4'h0;
-	m_adr_o <= 34'd0;
-	m_dat_o <= 32'd0;
-	cob <= 5'd0;
+	wb_m_nack();
+	cob <= 7'd0;
 end
 else begin
 	dmaStart <= 1'b0;
 	m_soc_o <= 1'b0;
 	if (!dmaActive) begin
-		cob <= 5'd0;
+		cob <= 7'd0;
 		dmaStart <= |sprDt;
 		dmaActive <= |sprDt;
 		dmaOwner  <= 0;
@@ -301,34 +295,44 @@ else begin
 	else begin
 		if (!m_cyc_o) begin
 			m_bte_o <= 2'b00;
-			m_cti_o <= 3'b010;
+			m_cti_o <= 3'b001;
 			m_cyc_o <= 1'b1;
 			m_stb_o <= 1'b1;
 			m_sel_o <= 4'b1111;
-			m_bl_o <= 6'd63;
-			m_adr_o <= {sprSysAddrHx[33:32],sprSysAddrH[dmaOwner],sprSysAddrL[dmaOwner],cob[2:0],8'h00};
+			m_bl_o <= 6'd7;
+			m_adr_o <= {sprSysAddr[dmaOwner],cob[5:0],5'h00};
 			m_soc_o <= 1'b1;
-			cob <= cob + 5'd1;
+			cob <= cob + 7'd1;
 		end
 		else if (m_ack_i|btout) begin
 			m_soc_o <= 1'b1;
-			m_adr_o[7:0] <= m_adr_o[7:0] + 8'd4;
+			m_adr_o[4:0] <= m_adr_o[4:0] + 8'd4;
 			// Flag last cycle of burst
-			if (m_adr_o[7:0]==8'hF8)
+			if (m_adr_o[4:0]==5'h18)
 				m_cti_o <= 3'b111;
-			if (m_adr_o[7:0]==8'hFC) begin
-				m_soc_o <= 1'b0;
-				m_cyc_o <= 1'b0;
-				m_stb_o <= 1'b0;
-				m_sel_o <= 4'b0000;
-				m_cti_o <= 3'b000;
-				m_adr_o <= 44'd0;
-				if (cob==5'd8)
+			if (m_adr_o[4:0]==5'h1C) begin
+				wb_m_nack();
+				if (cob==7'd64)
 					dmaActive <= 1'b0;
 			end
 		end
 	end
 end
+
+task wb_m_nack;
+begin
+	m_bte_o <= 2'b00;
+	m_cti_o <= 3'b000;
+	m_bl_o <= 6'd0;
+	m_soc_o <= 1'b0;
+	m_cyc_o <= 1'b0;
+	m_stb_o <= 1'b0;
+	m_we_o <= 1'b0;
+	m_sel_o <= 4'h0;
+	m_adr_o <= 34'd0;
+	m_dat_o <= 32'd0;
+end
+endtask
 
 // generate a write enable strobe for the sprite image memory
 always @(dmaOwner, dmaActive, s_adr_i, cs_ram, s_we_i, m_ack_i)
@@ -397,8 +401,7 @@ if (rst_i) begin
 	sprEn <= {pnSpr{1'b0}};
 	sprDt <= 0;
     for (n = 0; n < pnSpr; n = n + 1) begin
-		sprSysAddrL[n] <= 5'b0100_0 + n;	//xxxx_4000
-		sprSysAddrH[n] <= 16'h1000;			//1000_xxxx
+		sprSysAddr[n] <= 23'b00_0001_0000_0000_0100_0 + n;	//1000_4000
 	end
 	sprSprIe <= 0;
 	sprBkIe  <= 0;
@@ -451,7 +454,6 @@ else begin
 				if (s_sel_i[2]) sprDt[7:0] <= sprDt[7:0] & ~s_dat_i[23:16];
 				if (s_sel_i[3])	sprDt[13:8] <= sprDt[13:8] & ~s_dat_i[29:24];
 			end
-		7'd126,7'd127:	sprSysAddrHx[33:32] <= s_dat_i[ 1: 0];
 		7'bxxxx00x:
 			 begin
 	    		if (s_sel_i[0]) hSprPos[sprN][ 7:0] <= s_dat_i[ 7: 0];
@@ -474,9 +476,9 @@ else begin
 			end
 		7'bxxxx10x:
 			begin	// DMA address set on clk_i domain
-				if (s_sel_i[0]) sprSysAddrL[sprN][18:11] <= s_dat_i[ 7: 0];
-				if (s_sel_i[1]) sprSysAddrL[sprN][26:19] <= s_dat_i[15: 8];
-				if (s_sel_i[2]) sprSysAddrH[sprN][31:27] <= s_dat_i[23:16];
+				if (s_sel_i[0]) sprSysAddr[sprN][18:11] <= s_dat_i[ 7: 0];
+				if (s_sel_i[1]) sprSysAddr[sprN][26:19] <= s_dat_i[15: 8];
+				if (s_sel_i[2]) sprSysAddr[sprN][33:27] <= s_dat_i[22:16];
 			end
 		7'bxxxx11x:
 			begin

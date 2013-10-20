@@ -31,6 +31,9 @@
 //
 //	Verilog 1995
 //
+// ref: XC6SLX45-3
+// 600 LUTs / 2 BRAMs / 410 FF's
+// 150 MHz
 // ============================================================================
 
 module rtfBitmapController(
@@ -121,9 +124,11 @@ reg [33:0] bm_base_addr1,bm_base_addr2;
 reg [1:0] color_depth;
 wire [8:0] fifo_cnt;
 reg onoff;
-reg [5:0] Bpp;			// bits per pixel, 8,16, or 32
+reg [1:0] vbl;			// video burst length
 reg [1:0] hres,vres;
+reg greyscale;
 reg page;
+reg pals;				// palette select
 reg [11:0] hrefdelay;
 reg [11:0] vrefdelay;
 reg [11:0] hctr;		// horizontal reference counter
@@ -140,6 +145,7 @@ wire [31:0] pal_o;
 always @(page or bm_base_addr1 or bm_base_addr2)
 	baseAddr = page ? bm_base_addr2 : bm_base_addr1;
 
+// Color palette RAM for 8bpp modes
 syncRam512x32_1rw1r upal1
 (
 	.wrst(1'b0),
@@ -152,7 +158,7 @@ syncRam512x32_1rw1r upal1
 	.rrst(1'b0),
 	.rclk(vclk),
 	.rce(1'b1),
-	.radr({1'b0,rgbo4[7:0]}),
+	.radr({pals,rgbo4[7:0]}),
 	.o(pal_o)
 );
 
@@ -161,12 +167,15 @@ syncRam512x32_1rw1r upal1
 always @(posedge s_clk_i)
 if (rst_i) begin
 	page <= 1'b0;
-	hres <= 2'b11;
-	vres <= 2'b11;
-	hDisplayed <= 12'd340;
-	vDisplayed <= 12'd192;
+	pals <= 1'b0;
+	hres <= 2'b01;
+	vres <= 2'b01;
+	hDisplayed <= 12'd680;
+	vDisplayed <= 12'd384;
 	onoff <= 1'b1;
+	vbl <= 2'b11;
 	color_depth <= 2'b00;
+	greyscale <= 1'b0;
 	bm_base_addr1 <= {BM_BASE_ADDR1,2'b00};
 	bm_base_addr2 <= {BM_BASE_ADDR2,2'b00};
 	hrefdelay <= 12'd218;
@@ -179,13 +188,16 @@ else begin
 			REG_CTRL:
 				begin
 					onoff <= s_dat_i[0];
+					vbl <= s_dat_i[8:7];
 					color_depth <= s_dat_i[10:9];
+					greyscale <= s_dat_i[11];
 					hres <= s_dat_i[17:16];
 					vres <= s_dat_i[19:18];
 				end
 			REG_CTRL2:
 				begin
 					page <= s_dat_i[16];
+					pals <= s_dat_i[17];
 				end
 			REG_HDISPLAYED:	hDisplayed <= s_dat_i[11:0];
 			REG_VDISPLAYED:	vDisplayed <= s_dat_i[11:0];
@@ -202,13 +214,16 @@ else begin
 		REG_CTRL:
 			begin
 				s_dat_o[0] <= onoff;
+				s_dat_o[8:7] <= vbl;
 				s_dat_o[10:9] <= color_depth;
+				s_dat_o[11] <= greyscale;
 				s_dat_o[17:16] <= hres;
 				s_dat_o[19:18] <= vres;
 			end
 		REG_CTRL2:	
 			begin
 				s_dat_o[16] <= page;
+				s_dat_o[17] <= pals;
 			end
 		REG_HDISPLAYED:	s_dat_o <= hDisplayed;
 		REG_VDISPLAYED:	s_dat_o <= vDisplayed;
@@ -245,7 +260,7 @@ else if (hSyncEdge) vctr <= vctr + 1;
 
 // Pixel row and column are derived from the horizontal and vertical counts.
 
-always @(vctr1)
+always @(posedge vclk)
 	case(vres)
 	2'b00:		pixelRow <= vctr1[11:0];
 	2'b01:		pixelRow <= vctr1[11:1];
@@ -260,15 +275,33 @@ always @(hctr1)
 	default:	pixelCol = hctr1[11:2];
 	endcase
 	
-wire vFetch = vctr1 < vDisplayed;
+wire vFetch = pixelRow < vDisplayed;
 wire fifo_rst = hctr[11:4]==8'h00;
 
 wire[23:0] rowOffset = pixelRow * hDisplayed;
 reg [11:0] fetchCol;
 
+// The following bypasses loading the fifo when all the pixels from a scanline
+// are buffered in the fifo and the pixel row doesn't change. Since the fifo
+// pointers are reset at the beginning of a scanline, the fifo can be used like
+// a cache.
+wire blankEdge;
+edge_det ed2(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(blank), .pe(blankEdge), .ne(), .ee() );
+reg do_loads;
+reg [11:0] opixelRow;
+reg load_fifo;
+always @(posedge clk_i)
+	load_fifo <= fifo_cnt < 9'd500 && vFetch && onoff && xonoff && fetchCol < hDisplayed && !cyc_o && do_loads;
+always @(posedge clk_i)
+	if (!(hDisplayed < (12'd2048 >> color_depth)))
+		do_loads <= 1'b1;
+	else if (pixelRow != opixelRow)
+		do_loads <= 1'b1;
+	else if (blankEdge)
+		do_loads <= 1'b0;
+
 // - read from assigned video memory address, using burst mode reads
-// - 64 pixels at a time are read
-// - video data is fetched one pixel row in advance
+// - 32 bytes (8 words) at a time are read
 //
 reg [5:0] bcnt;
 wire [5:0] bcnt_inc = bcnt + 6'd1;
@@ -278,19 +311,26 @@ if (rst_i) begin
 	wb_nack();
 	fetchCol <= 12'd0;
 	bcnt <= 6'd0;
+	opixelRow <= 12'hFFF;
 end
 else begin
 	if (fifo_rst) begin
 		fetchCol <= 12'd0;
 		adr <= baseAddr + rowOffset;
+		opixelRow <= pixelRow;
 	end
-	else if (fifo_cnt < 9'd500 && vFetch && onoff && xonoff && fetchCol < hDisplayed && !cyc_o) begin
-		cti_o <= 3'b001;	// constant address burst
+	else if (load_fifo) begin
+		cti_o <= vbl==2'b00 ? 3'b000 : 3'b001;	// constant address burst
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		sel_o <= 4'b1111;
 		bcnt <= 6'd0;
-		bl_o <= 6'd7;
+		case(vbl)
+		2'b00:	bl_o <= 6'd0;
+		2'b01:	bl_o <= 6'd1;
+		2'b10:	bl_o <= 6'd3;
+		2'b11:	bl_o <= 6'd7;
+		endcase
 		adr_o <= adr;
 	end
 	if (cyc_o & ack_i) begin
@@ -302,7 +342,7 @@ else begin
 		endcase
 		bcnt <= bcnt_inc;
 		if (bl_o==bcnt_inc)
-			cti_o <= 3'b111;	// end of burst
+			cti_o <= 3'b111;		// end of burst
 		else if (bl_o==bcnt) begin
 			wb_nack();
 			adr <= adr + 34'd32;
@@ -328,7 +368,7 @@ reg [11:0] pixelColD1;
 reg [31:0] rgbo2,rgbo3,rgbo4;
 always @(posedge vclk)
 	if (color_depth==2'b00)
-		rgbo4 <= rgbo2;
+		rgbo4 <= greyscale ? {3{rgbo2[7:0]}} : rgbo2;
 	else if (color_depth==2'b01)
 		rgbo4 <= {rgbo3[14:10],3'b0,rgbo3[9:5],3'b0,rgbo3[4:0],3'b0};
 	else
@@ -343,7 +383,7 @@ always @(posedge vclk)
 
 always @(posedge vclk)
 	if (onoff & xonoff & de) begin
-		if (color_depth==2'b00)
+		if (color_depth==2'b00 && !greyscale)
 			rgbo <= pal_o;
 		else
 			rgbo <= rgbo4;

@@ -29,6 +29,7 @@ task decode_tsk;
 		a <= rfoa;
 		res <= alu_out;
 		ttrig <= tf;
+		oisp <= isp;	// for bus retry
 		// This case statement should include all opcodes or the opcode
 		// will end up being treated as an undefined operation.
 		case(ir9)
@@ -103,7 +104,9 @@ task decode_tsk;
 						4'd7:	;
 						4'h8:	;
 						4'h9:	;
+`ifdef DEBUG
 						4'hA:	history_ndx <= history_ndx + 6'd1;
+`endif
 						4'hE:	;
 						4'hF:	;
 						default:	;
@@ -490,7 +493,9 @@ task decode_tsk;
 			begin
 				bf <= !hwi;
 				km <= `TRUE;
+`ifdef DEBUG
 				hist_capture <= `FALSE;
+`endif
 				radr <= isp_dec;
 				wadr <= isp_dec;
 				isp <= isp_dec;
