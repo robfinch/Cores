@@ -7,7 +7,7 @@
 //        __
 //   \\__/ o\    (C) 2008-2013  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 //
@@ -343,10 +343,9 @@ else begin
 		bcnt <= bcnt_inc;
 		if (bl_o==bcnt_inc)
 			cti_o <= 3'b111;		// end of burst
-		else if (bl_o==bcnt) begin
+		else if (bl_o==bcnt)
 			wb_nack();
-			adr <= adr + 34'd32;
-		end
+		adr <= adr + 34'd4;
 	end
 end
 
@@ -413,6 +412,8 @@ if (pixelCol < hDisplayed + 12'd8)
 	4'b1110:	rd_fifo1 <= hctr[1:0]==2'b00;
 	4'b1111:	rd_fifo1 <= hctr[1:0]==2'b00;
 	endcase
+else
+	rd_fifo1 <= 1'b0;
 reg shift,shift1,shift2;
 always @(posedge vclk)
 if (pixelCol < hDisplayed + 12'd8)

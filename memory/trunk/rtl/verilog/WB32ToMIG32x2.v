@@ -3,7 +3,7 @@
 //        __
 //   \\__/ o\    (C) 2011-2013  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 // WB32ToMIG32x2.v
@@ -175,6 +175,7 @@ NACK:
 		nack(c2_cyc_i);
 	else
 		nack(c1_cyc_i);
+
 endcase
 end
 
@@ -340,12 +341,20 @@ begin
 		ack1 <= 1'b0;
 		rd_en <= 1'b0;
 	end
-	if (rd_en & !rd_empty) begin
-		ack1 <= 1'b1;
-		dato <= rd_data;
-		ctr <= ctr + 6'd1;
-		if (ctr >= bl || !cyc || cti==3'b000 || cti==3'b111)
-			state <= NACK;
+	if (rd_en) begin
+		if (rd_empty)
+			ack1 <= 1'b0;
+		else begin
+			ack1 <= 1'b1;
+			dato <= rd_data;
+			ctr <= ctr + 6'd1;
+			if (ctr >= bl || cti==3'b000 || cti==3'b111)
+				state <= NACK;
+		end
+	end
+	if (!cyc) begin
+		ack1 <= 1'b0;
+		state <= NACK;
 	end
 end
 endtask
@@ -388,6 +397,8 @@ endtask
 task nack;
 input cyc;
 begin
+	if (!cyc)
+		ack1 <= 1'b0;
 	if (!rd_empty)
 		rd_en <= 1'b1;
 	else if (!cyc || ack1==1'b0) begin

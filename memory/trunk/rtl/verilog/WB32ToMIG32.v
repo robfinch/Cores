@@ -3,7 +3,7 @@
 //        __
 //   \\__/ o\    (C) 2011-2013  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 // WB32ToMIG32.v
@@ -39,6 +39,7 @@ input [2:0] cti_i,					// cycle type indicator
 input cyc_i,						// cycle in progress
 input stb_i,						// data strobe
 output ack_o,						// acknowledge
+output rty_o,
 input we_i,							// write cycle
 input [3:0] sel_i,					// byte lane selects
 input [31:0] adr_i,					// address
@@ -57,12 +58,17 @@ output reg [29:0] cmd_byte_addr,
 output reg rd_en,
 input [31:0] rd_data,
 input rd_empty,
+input rd_overflow,
+input rd_error,
 
 output reg wr_en,
 output reg [3:0] wr_mask,
 output reg [31:0] wr_data,
 input wr_empty,
-input wr_full
+input wr_full,
+input [6:0] wr_count,
+input wr_underrun,
+input wr_error
 );
 parameter IDLE = 4'd1;
 parameter BWRITE_001 = 4'd2;
@@ -121,34 +127,34 @@ IDLE:
 			// opening.
 			3'b000,3'b111:
 				if (!wr_full) begin
-				ack1 <= 1'b1;
-				wr_en <= 1'b1;
-				wr_data <= dat_i;
-				wr_mask <= ~sel_i;
-				state <= BWRITE_CMD;
+					ack1 <= 1'b1;
+					wr_en <= 1'b1;
+					wr_data <= dat_i;
+					wr_mask <= ~sel_i;
+					state <= BWRITE_CMD;
 				end
 			// Since we want to write a burst of numerous data, we wait until the
 			// write FIFO is empty. We could wait until the FIFO count is greater
 			// than the burst length.
 			3'b001:
 				if (wr_empty) begin
-				ack1 <= 1'b1;
-				wr_en <= 1'b1;
-				wr_data <= dat_i;
-				wr_mask <= ~sel_i;
-				ctr <= 6'd1;
-				state <= BWRITE_001;
+					ack1 <= 1'b1;
+					wr_en <= 1'b1;
+					wr_data <= dat_i;
+					wr_mask <= ~sel_i;
+					ctr <= 6'd1;
+					state <= BWRITE_001;
 				end
 `ifdef SUPPORT_INCADR
 			3'b010:
 				if (wr_empty) begin
-				prev_adr <= adr_i;
-				ack1 <= 1'b1;
-				wr_en <= 1'b1;
-				wr_data <= dat_i;
-				wr_mask <= ~sel_i;
-				ctr <= 6'd1;
-				state <= BWRITE_010;
+					prev_adr <= adr_i;
+					ack1 <= 1'b1;
+					wr_en <= 1'b1;
+					wr_data <= dat_i;
+					wr_mask <= ~sel_i;
+					ctr <= 6'd1;
+					state <= BWRITE_010;
 				end
 `endif
 			// Could assert err_o
@@ -215,13 +221,9 @@ BWRITE_010:
 `endif
 
 BWRITE_CMD:
-	begin
-		if (cyc_i==1'b0)
-			ack1 <= 1'b0;
-		if (!cmd_full) begin
-			cmd_en <= 1'b1;
-			state <= NACK;
-		end
+	if (!cmd_full) begin
+		cmd_en <= 1'b1;
+		state <= NACK;
 	end
 
 // single read
@@ -234,12 +236,21 @@ BREAD_001:
 			ack1 <= 1'b0;
 			rd_en <= 1'b0;
 		end
-		if (rd_en & !rd_empty) begin
-			ack1 <= 1'b1;
-			dato <= rd_data;
-			ctr <= ctr + 6'd1;
-			if (ctr >= bl_i || !cyc_i || cti_i==3'b000 || cti_i==3'b111)
-				state <= NACK;
+		if (rd_en) begin
+			if (rd_empty)
+				ack1 <= 1'b0;
+			else begin
+				ack1 <= 1'b1;
+				dato <= rd_data;
+				ctr <= ctr + 6'd1;
+				if (ctr >= bl_i || cti_i==3'b000 || cti_i==3'b111)
+					state <= NACK;
+			end
+		end
+		// abort cycle if ternminated early
+		if (!cyc_i) begin
+			ack1 <= 1'b0;
+			state <= NACK;
 		end
 	end
 
@@ -274,6 +285,8 @@ BREAD_010:
 //
 NACK:
 	begin
+		if (!cyc_i)
+			ack1 <= 1'b0;
 		if (!rd_empty)
 			rd_en <= 1'b1;
 		else if (!cyc_i || ack1==1'b0) begin
@@ -282,6 +295,7 @@ NACK:
 			state <= IDLE;
 		end
 	end
+
 endcase
 end
 endmodule

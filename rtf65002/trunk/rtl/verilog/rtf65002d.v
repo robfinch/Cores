@@ -291,7 +291,9 @@ always @(posedge clk)
 		isSts <= ir9==`STS;
 		isJsrIndx <= ir9==`JSR_INDX;
 		isJsrInd <= ir9==`JSR_IND;
-		ldMuldiv <= ir9==`MUL_IMM8 || ir9==`DIV_IMM8 || ir9==`MOD_IMM8 || (ir9==`RR && (
+		ldMuldiv <= ir9==`MUL_IMM8 || ir9==`MUL_IMM16 || ir9==`MUL_IMM32 ||
+			ir9==`DIV_IMM8 || ir9==`MOD_IMM8 || ir9==`DIV_IMM16 || ir9==`DIV_IMM32 || ir9==`MOD_IMM16 || ir9==`MOD_IMM32 ||
+			(ir9==`RR && (
 			ir[23:20]==`MUL_RR || ir[23:20]==`MULS_RR || ir[23:20]==`DIV_RR || ir[23:20]==`DIVS_RR || ir[23:20]==`MOD_RR || ir[23:20]==`MODS_RR)); 
 		isPusha <= ir9==`PUSHA;
 		isPopa <= ir9==`POPA;
