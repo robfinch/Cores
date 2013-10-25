@@ -31,6 +31,7 @@
 `define PG3			10'h011
 `define NOP			10'h012
 `define SYNC		10'h013
+`define FAR			10'h015
 `define LBRA		10'h016
 `define LBSR		10'h017
 `define DAA			10'h019
@@ -65,6 +66,7 @@
 `define PULS		10'h035
 `define PSHU		10'h036
 `define PULU		10'h037
+`define RTF			10'h038
 `define RTS			10'h039
 `define ABX			10'h03A
 `define RTI			10'h03B
@@ -136,6 +138,7 @@
 `define CMPX_IMM	10'h08C
 `define BSR			10'h08D
 `define LDX_IMM		10'h08E
+`define JMP_FAR		10'h08F
 
 `define SUBA_DP		10'h090
 `define CMPA_DP		10'h091
@@ -201,6 +204,7 @@
 `define ADDB_IMM	10'h0CB
 `define LDD_IMM		10'h0CC
 `define LDU_IMM		10'h0CE
+`define JSR_FAR		10'h0CF
 
 `define SUBB_DP		10'h0D0
 `define CMPB_DP		10'h0D1
@@ -303,7 +307,7 @@
 `define CMPS_EXT	10'h2BC
 
 // Unused opcode
-`define INT			10'h03E
+`define INT			10'h33E
 
 `define LW_CCR		6'd0
 `define LW_ACCA		6'd1
@@ -319,6 +323,35 @@
 `define LW_SSPL		6'd11
 `define LW_PCH		6'd12
 `define LW_PCL		6'd13
+`define LW_BL		6'd14
+`define LW_BH		6'd15
+`define LW_IAL		6'd16
+`define LW_IAH		6'd17
+`define LW_PC3124	6'd18
+`define LW_PC2316	6'd19
 
+`define SW_ACCDH	6'd0
+`define SW_ACCDL	6'd1
+`define SW_ACCA		6'd2
+`define SW_ACCB		6'd3
+`define SW_DPR		6'd4
+`define SW_XL		6'd5
+`define SW_XH		6'd6
+`define SW_YL		6'd7
+`define SW_YH		6'd8
+`define SW_USPL		6'd9
+`define SW_USPH		6'd10
+`define SW_SSPL		6'd11
+`define SW_SSPH		6'd12
+`define SW_PCH		6'd13
+`define SW_PCL		6'd14
+`define SW_CCR		6'd15
+`define SW_RES8		6'd16
+`define SW_RES16L	6'd17
+`define SW_RES16H	6'd18
+`define SW_DEF8		6'd19
+`define SW_PC3124	6'd20
+`define SW_PC2316	6'd21
+	
 `endif
 
