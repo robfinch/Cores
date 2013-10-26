@@ -329,6 +329,8 @@
 `define LW_IAH		6'd17
 `define LW_PC3124	6'd18
 `define LW_PC2316	6'd19
+`define LW_IA3124	6'd20
+`define LW_IA2316	6'd21
 
 `define SW_ACCDH	6'd0
 `define SW_ACCDL	6'd1
