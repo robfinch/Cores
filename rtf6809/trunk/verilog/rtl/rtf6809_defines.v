@@ -36,6 +36,7 @@
 `define LBSR		10'h017
 `define DAA			10'h019
 `define ORCC		10'h01A
+`define POST		10'h01B
 `define ANDCC		10'h01C
 `define SEX			10'h01D
 `define EXG			10'h01E
@@ -203,6 +204,7 @@
 `define ORB_IMM		10'h0CA
 `define ADDB_IMM	10'h0CB
 `define LDD_IMM		10'h0CC
+`define LDQ_IMM		10'h0CD
 `define LDU_IMM		10'h0CE
 `define JSR_FAR		10'h0CF
 
@@ -274,28 +276,44 @@
 `define LBLE		10'h12F
 
 `define SWI2		10'h13F
+`define ASLD		10'h148
+`define SBCD_IMM	10'h182
 `define CMPD_IMM	10'h183
+`define ADCD_IMM	10'h189
 `define CMPY_IMM	10'h18C
 `define LDY_IMM		10'h18E
+`define SBCD_DP		10'h192
 `define CMPD_DP		10'h193
+`define ADCD_DP		10'h199
 `define CMPY_DP		10'h19C
 `define LDY_DP		10'h19E
 `define STY_DP		10'h19F
+`define SBCD_NDX	10'h1A2
 `define CMPD_NDX	10'h1A3
+`define ADCD_NDX	10'h1A9
 `define CMPY_NDX	10'h1AC
 `define LDY_NDX		10'h1AE
 `define STY_NDX		10'h1AF
+`define SBCD_EXT	10'h1B2
 `define CMPD_EXT	10'h1B3
+`define ADCD_EXT	10'h1B9
 `define CMPY_EXT	10'h1BC
 `define LDY_EXT		10'h1BE
 `define STY_EXT		10'h1BF
 `define LDS_IMM		10'h1CE
+`define LDQ_DP		10'h1DC
+`define STQ_DP		10'h1DD
 `define LDS_DP		10'h1DE
 `define STS_DP		10'h1DF
+`define LDQ_NDX		10'h1EC
+`define STQ_NDX		10'h1ED
 `define LDS_NDX		10'h1EE
 `define STS_NDX		10'h1EF
+`define LDQ_EXT		10'h1FC
+`define STQ_EXT		10'h1FD
 `define LDS_EXT		10'h1FE
 `define STS_EXT		10'h1FF
+`define LDMD		10'h23D
 `define SWI3		10'h23F
 `define CMPU_IMM	10'h283
 `define CMPS_IMM	10'h28C
@@ -331,6 +349,16 @@
 `define LW_PC2316	6'd19
 `define LW_IA3124	6'd20
 `define LW_IA2316	6'd21
+`define LW_B3124	6'd22
+`define LW_B2316	6'd23
+`define LW_X3124	6'd24
+`define LW_X2316	6'd25
+`define LW_Y3124	6'd26
+`define LW_Y2316	6'd27
+`define LW_USP3124	6'd28
+`define LW_USP2316	6'd29
+`define LW_SSP3124	6'd30
+`define LW_SSP2316	6'd31
 
 `define SW_ACCDH	6'd0
 `define SW_ACCDL	6'd1
@@ -354,6 +382,18 @@
 `define SW_DEF8		6'd19
 `define SW_PC3124	6'd20
 `define SW_PC2316	6'd21
-	
+`define SW_ACCQ3124	6'd22
+`define SW_ACCQ2316	6'd23
+`define SW_ACCQ158	6'd24
+`define SW_ACCQ70	6'd25
+`define SW_X3124	6'd26
+`define SW_X2316	6'd27
+`define SW_Y3124	6'd28
+`define SW_Y2316	6'd29
+`define SW_USP3124	6'd30
+`define SW_USP2316	6'd31
+`define SW_SSP3124	6'd32
+`define SW_SSP2316	6'd33
+
 `endif
 

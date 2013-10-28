@@ -1,0 +1,45 @@
+ 
+                              org             $0000F000
+ 
+ 0000F000 328F3FFF                leas    $3FFF
+ 0000F004 8E0000                  ldx             #>msgHello
+ 0000F007 9F10                    stx             $10
+ 0000F009 8EF013                  ldx             #<MsgHello
+ 0000F00C 9F12                    stx             $12
+ 0000F00E CF0000F020              jsr             far putstr
+ 
+                      msgHello
+ 0000F013 48656C6C6F2057          fcc     'Hello World!'
+ F01A 6F726C6421
+ 0000F01F 00                      fcb     0
+ 
+                      putstr
+ 0000F020 8E0000                  ldx             #0
+ 0000F023 200E                    bra             ps4
+                      ps2:
+ 0000F025 0C13                    inc             $13
+ 0000F027 260A                    bne             ps4
+ 0000F029 0C12                    inc             $12
+ 0000F02B 2606                    bne             ps4
+ 0000F02D 0C11                    inc             $11
+ 0000F02F 2602                    bne             ps4
+ 0000F031 0C10                    inc             $10
+                      ps4:
+ 0000F033 15A69F0010              lda             far [$10]
+ 0000F038 270A                    beq             ps1
+ 0000F03A A78AFFD00000            sta             $FFD00000,x
+ 0000F040 3004                    leax    4,x
+ 0000F042 26E1                    bne             ps2
+                      ps1:
+ 0000F044 38                      rtf
+ 
+                              org             $FFFC
+ 0000FFFC F000                    fcw             $F000
+ 0000FFFE F000                    fcw             $F000
+
+SYMBOL TABLE
+  MSGHELLO 02 F013       PS1 02 F044       PS2 02 F025       PS4 02 F033
+    PUTSTR 02 F020
+5 SYMBOLS
+
+0 error(s), 0 warning(s)
