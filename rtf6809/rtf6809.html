@@ -1,0 +1,81 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-ca">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>RTF6809</title>
+
+<!--mstheme--><link rel="stylesheet" type="text/css" href="../../_themes/water/wate1011.css"><meta name="Microsoft Theme" content="water 1011, default">
+</head>
+
+<body>
+
+<h1>RTF6809</h1>
+<p><a href="http://www.finitron.ca/">Home</a>&nbsp;&nbsp;&nbsp; Up</p>
+<p>This is a Verilog implementation of the 6809 processor. This implementation 
+adds extra features to the 6809 in order to support 32 bit addressing. Many of 
+the peripheral softcores I've created depend on 32 bit addressing. The extra 
+features include a 32 bit program counter and 32 bit indirect addressing.</p>
+<p>A couple of new instructions have been added to support the 32 bit program 
+counter addressing.</p>
+<p>&nbsp;&nbsp;&nbsp; RTF is a far return from subroutine.</p>
+<p>&nbsp;&nbsp;&nbsp; JSR FAR jumps to a subroutine with a far address, and</p>
+<p>&nbsp;&nbsp;&nbsp; JMP FAR jumps to a far address.</p>
+<p>Interrupts store a full 32 bit program counter. The RTI instruction restores 
+a 32 bit program counter from the stack.</p>
+<h3>&nbsp;</h3>
+<h3>FAR prefix</h3>
+<p>The FAR prefix has been added as an indicator to use far addresses instead of 
+extended addresses. The assembler will automatically output this prefix where 
+needed if the indicated address is more than 16 bits. The FAR prefix can be 
+applied to extended address mode instructions and also applied for indirect 
+addresses.</p>
+<p>The following loads a 16 bit value from a text controller located at the 32 
+bit address $FFFA0000.</p>
+<p>&nbsp;&nbsp;&nbsp; LDD&nbsp;&nbsp;&nbsp; FAR $FFFA0000&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+; load from text controller register</p>
+<p>or</p>
+<p>&nbsp;&nbsp;&nbsp; LDD&nbsp;&nbsp;&nbsp; $FFFA0000&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+; the assembler will automatically output a FAR prefix</p>
+<p>When applied to indirect addresses, the indirect address fetched from memory 
+is used as a far address. So a four byte address is fetched from memory in the 
+following case:</p>
+<p>&nbsp;&nbsp;&nbsp; LDD&nbsp;&nbsp;&nbsp; far [$1000]</p>
+<p>ORG $1000</p>
+<p>&nbsp;&nbsp;&nbsp; fcd&nbsp;&nbsp;&nbsp; $FFDC0600&nbsp;&nbsp;&nbsp; ; 
+address of LEDs</p>
+<p>Note that indirect addresses must be within the first 64k bank of memory. The 
+far prefix does not apply to the address $1000 above, but to the address fetched 
+from address $1000 above.</p>
+<p>Note also that the assembler can't tell whether or not the address is a far 
+address, so the FAR prefix has to be inserted manually in the code where 
+required.</p>
+<p>&nbsp;</p>
+<h3>Outer indexed indirect addressing.</h3>
+<p>As further support for 32 bit addressing a new outer indexed indirect 
+addressing mode has been added to the processor. Outer indexing of a indirect 
+address is typically more useful than inner indexing because it allows an 
+indexing operation similar to regular indexed addresses.</p>
+<p>In outer indexed indirect addressing the index register is applied to the 
+address fetched from memory after the indirect address is fetched. Contrasted 
+with regular(inner) indexed indirect addressing where the index is applied 
+before the indirect address is fetched from memory.</p>
+<p>Outer Indexing:&nbsp;&nbsp;&nbsp; ldd&nbsp;&nbsp;&nbsp; [AnAddress],y</p>
+<p>An address is fetched from address AnAddress, then Y is added to the fetched 
+address to form the final address from which the data is fetched.</p>
+<p>Inner Indexing:&nbsp;&nbsp;&nbsp; ldd&nbsp;&nbsp;&nbsp; [AnAddress,y]</p>
+<p>An address is fetched from address AnAddress+y which is then used to fetch 
+the data.</p>
+<p>&nbsp;</p>
+<h2>Links</h2>
+<p>A09 Assembler for the 6809/6800. A hacked version of this assembler is being 
+used to develop code for the RTF6809.</p>
+<p><a href="http://www.hermannseib.com/english/default.htm">
+http://www.hermannseib.com/english/default.htm</a></p>
+<p>&nbsp;</p>
+
+</body>
+
+</html>
