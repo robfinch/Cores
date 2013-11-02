@@ -1,0 +1,737 @@
+32 error(s), 35 warning(s) unlisted in pass 1
+                      ; ============================================================================
+                      ;        __
+                      ;   \\__/ o\    (C) 2013  Robert Finch, Stratford
+                      ;    \  __ /    All rights reserved.
+                      ;     \/_//     robfinch<remove>@opencores.org
+                      ;       ||
+                      ;  
+                      ;
+                      ; This source file is free software: you can redistribute it and/or modify 
+                      ; it under the terms of the GNU Lesser General Public License as published 
+                      ; by the Free Software Foundation, either version 3 of the License, or     
+                      ; (at your option) any later version.                                      
+                      ;                                                                          
+                      ; This source file is distributed in the hope that it will be useful,      
+                      ; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+                      ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+                      ; GNU General Public License for more details.                             
+                      ;                                                                          
+                      ; You should have received a copy of the GNU General Public License        
+                      ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+                      ;                                                                          
+                      ; ============================================================================
+                      ;
+                      CR      EQU     $0D             ;ASCII equates
+                      LF      EQU     $0A
+                      TAB     EQU     $09
+                      CTRLC   EQU     $03
+                      CTRLH   EQU     $08
+                      CTRLI   EQU     $09
+                      CTRLJ   EQU     $0A
+                      CTRLK   EQU     $0B
+                      CTRLM   EQU $0D
+                      CTRLS   EQU     $13
+                      CTRLX   EQU     $18
+                      XON             EQU     $11
+                      XOFF    EQU     $13
+ 
+                      ScreenLocation          EQU             $10
+                      ColorCodeLocation       EQU             $14
+                      ScreenLocation2         EQU             $18
+                      BlkcpySrc                       EQU             $1C
+                      BlkcpyDst                       EQU             $20
+                      Strptr                          EQU             $24
+ 
+                      ; Task control blocks, room for 256 tasks
+                      TCB_NxtRdy              EQU             $17EF8400       ; next task on ready / timeout list
+                      TCB_PrvRdy              EQU             $17EF8500       ; previous task on ready / timeout list
+                      TCB_NxtTCB              EQU             $17EF8600
+                      TCB_Timeout             EQU             $17EF8700
+                      TCB_Priority    EQU             $17EF8800
+                      TCB_MSGPTR_D1   EQU             $17EF8900
+                      TCB_MSGPTR_D2   EQU             $17EF8A00
+                      TCB_hJCB                EQU             $17EF8B00
+                      TCB_Status              EQU             $17EF8C00
+                      TCB_CursorRow   EQU             $17EF4400
+                      TCB_CursorCol   EQU             $17EF4500
+                      TCB_hWaitMbx    EQU             $17EF4600       ; handle of mailbox task is waiting at
+                      TCB_mbq_next    EQU             $17EF4700       ; mailbox queue next
+                      TCB_mbq_prev    EQU             $17EF4800       ; mailbox queue previous
+                      TCB_iof_next    EQU             $17EF4900
+                      TCB_iof_prev    EQU             $17EF4A00
+                      TCB_SP8Save             EQU             $17EF4B00       ; TCB_SP8Save area 
+                      TCB_SPSave              EQU             $17EF4C00       ; TCB_SPSave area
+                      TCB_ABS8Save    EQU             $17EF4D00
+                      TCB_mmu_map             EQU             $17EF4E00
+ 
+                      KeybdHead               EQU             $17EFA800
+                      KeybdTail               EQU             $17EFA900
+                      KeybdEcho               EQU             $17EFAA00
+                      KeybdBad                EQU             $17EFAB00
+                      KeybdAck                EQU             $17EFAC00
+                      KeybdLocks              EQU             $17EFAD00
+                      KeybdBuffer             EQU             $17EFB000       ; buffer is 16 chars
+ 
+                      LEDS            EQU             $FFDC0600
+                      TEXTSCR         EQU             $FFD00000
+                      TEXTREG         EQU             $FFDA0000
+                      TEXT_COLS       EQU             1
+                      TEXT_ROWS       EQU             3
+                      TEXT_CURPOS     EQU             22
+                      BIOS_SCREENS    EQU     $17000000       ; $17000000 to $171FFFFF
+ 
+                      QNdx0           EQU             $780
+                      QNdx1           EQU             QNdx0+2
+                      QNdx2           EQU             QNdx1+2
+                      QNdx3           EQU             QNdx2+2
+                      QNdx4           EQU             QNdx3+2
+                      FreeTCB         EQU             QNdx4+2
+                      TimeoutList     EQU             FreeTCB+2
+                      RunningTCB              EQU             TimeoutList+2
+                      FreeMbx         EQU             RunningTCB + 2
+                      nMailbox        EQU             FreeMbx + 2
+                      FreeMsg         EQU             nMailbox + 2
+                      nMsgBlk         EQU             FreeMsg + 2
+ 
+                      ; The IO focus list is a doubly linked list formed into a ring.
+                      ;
+                      IOFocusNdx      EQU             nMsgBlk + 2
+ 
+                      CharColor       EQU             $7C0
+                      ScreenColor     EQU             $7C2
+ 
+                              org             $0000F000
+ 
+                      start:
+ 0000F000 8601                    lda             #1
+ 0000F002 15B7FFDC0600            sta             LEDS
+ 0000F008 328F3FFF                leas    $3FFF
+ 0000F00C CC00CE                  ldd             #$CE
+ 0000F00F FD07C2                  std             ScreenColor
+ 0000F012 FD07C0                  std             CharColor
+ 0000F015 CF0000F132              jsr             ClearScreen
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Convert ASCII character to screen display character.
+                      ; Parameter
+                      ;       acca = ascii character
+                      ;------------------------------------------------------------------------------
+                      ;
+                      AsciiToScreen:
+ 0000F01A 5F                      clrb
+ 0000F01B 8141                    cmpa    #'A'
+ 0000F01D 250E                    blo             atoscr1
+ 0000F01F 815A                    cmpa    #'Z'
+ 0000F021 230A                    bls             atoscr1
+ 0000F023 817A                    cmpa    #'z'
+ 0000F025 2206                    bhi             atoscr1
+ 0000F027 8161                    cmpa    #'a'
+ 0000F029 2502                    blo             atoscr1
+ 0000F02B 8060                    suba    #$60
+                      atoscr1:
+ 0000F02D CA00                    orb             #$100
+ 0000F02F 1E89                    exg             a,b
+ 0000F031 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ;------------------------------------------------------------------------------
+                      ShiftLeft5:
+ 0000F032 58                      aslb
+ 0000F033 49                      rola
+ 0000F034 58                      aslb
+ 0000F035 49                      rola
+ 0000F036 58                      aslb
+ 0000F037 49                      rola
+ 0000F038 58                      aslb
+ 0000F039 49                      rola
+ 0000F03A 58                      aslb
+ 0000F03B 49                      rola
+ 0000F03C 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ;------------------------------------------------------------------------------
+                      ;
+                      BlockCopyWords:
+ 0000F03D 108E0000                ldy             #0
+                      bcw1:
+ 0000F041 151BECB9001C            ldd             far [BlkcpySrc],y
+ 0000F047 151BEDB90020            std             far [BlkcpyDst],y
+ 0000F04D 3122                    leay    2,y
+ 0000F04F 301F                    leax    -1,x
+ 0000F051 26EE                    bne             bcw1
+ 0000F053 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ;------------------------------------------------------------------------------
+                      ;
+                      CopyVirtualScreenToScreen
+ 0000F054 3436                    pshs    d,x,y
+ 0000F056 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+ 0000F059 2B55                    bmi             cvss3
+                              ; 8192 bytes per screen
+ 0000F05B 0F1F                    clr             BlkcpySrc+3
+ 0000F05D 0F1C                    clr             BlkcpySrc
+ 0000F05F BDF032                  jsr             ShiftLeft5
+*** warning 1: Long branch within short branch range could be optimized
+ 0000F062 DD1D                    std             BlkcpySrc+1
+ 
+                              ; add in screens array base address
+ 0000F064 DC1E                    ldd             BlkcpySrc+2
+ 0000F066 C30000                  addd    #<BIOS_SCREENS
+                              stdd    BlkcpySrc+2
+*** Error 16: Illegal mnemonic
+ 0000F069 DC1C                    ldd             BlkcpySrc
+ 0000F06B C900                    adcb    #0
+ 0000F06D 8900                    adca    #0
+ 0000F06F C31700                  addd    #>BIOS_SCREENS
+ 0000F072 DD1C                    std             BlkcpySrc
+ 
+                              ; set destination pointer
+ 0000F074 CC0000                  ldd             #<TEXTSCR
+ 0000F077 DD22                    std             BlkcpyDst+2
+ 0000F079 CCFFD0                  ldd             #>TEXTSCR
+ 0000F07C DD20                    std             BlkcpyDst
+ 
+ 0000F07E 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F081 BDF03D                  jsr             BlockCopyWords
+*** warning 1: Long branch within short branch range could be optimized
+ 
+                              ; now copy the color codes
+ 0000F084 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+                              ; 8192 bytes per screen
+ 0000F087 0F1F                    clr             BlkcpySrc+3
+ 0000F089 0F1C                    clr             BlkcpySrc
+ 0000F08B BDF032                  jsr             ShiftLeft5
+*** warning 1: Long branch within short branch range could be optimized
+ 0000F08E DD1D                    std             BlkcpySrc+1
+ 
+                              ; add in screens array base address
+ 0000F090 DC1E                    ldd             BlkcpySrc+2
+ 0000F092 C31000                  addd    #<BIOS_SCREENS+4096
+                              stdd    BlkcpySrc+2
+*** Error 16: Illegal mnemonic
+ 0000F095 DC1C                    ldd             BlkcpySrc
+ 0000F097 C900                    adcb    #0
+ 0000F099 8900                    adca    #0
+ 0000F09B C31700                  addd    #>BIOS_SCREENS+4096
+ 0000F09E DD1C                    std             BlkcpySrc
+ 
+                              ; set destination pointer
+ 0000F0A0 CC0000                  ldd             #<TEXTSCR+$10000
+ 0000F0A3 DD22                    std             BlkcpyDst+2
+ 0000F0A5 CCFFD1                  ldd             #>TEXTSCR+$10000
+ 0000F0A8 DD20                    std             BlkcpyDst
+ 
+ 0000F0AA 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F0AD BDF03D                  jsr             BlockCopyWords
+*** warning 1: Long branch within short branch range could be optimized
+ 
+                      cvss3:
+                              ; reset the cursor position in the text controller
+ 0000F0B0 10BE0798                ldy             IOFocusNdx
+ 0000F0B4 E6AA17EF4400            ldb             TCB_CursorRow,y
+ 0000F0BA 15B6FFDA0001            lda             TEXTREG+TEXT_COLS
+ 0000F0C0 3D                      mul
+ 0000F0C1 1F01                    tfr             d,x
+ 0000F0C3 E6AA17EF4500            ldb             TCB_CursorCol,y
+ 0000F0C9 3A                      abx
+ 0000F0CA 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
+ 0000F0D0 3536                    puls    d,x,y
+ 0000F0D2 39                      rts
+ 
+                      CopyScreenToVirtualScreen
+ 0000F0D3 3436                    pshs    d,x,y
+ 0000F0D5 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+ 0000F0D8 2B57                    bmi             csvs3
+                              ; 8192 bytes per screen
+ 0000F0DA 0F23                    clr             BlkcpyDst+3
+ 0000F0DC 0F20                    clr             BlkcpyDst
+ 0000F0DE BDF032                  jsr             ShiftLeft5
+ 0000F0E1 DD21                    std             BlkcpyDst+1
+ 
+                              ; add in screens array base address
+ 0000F0E3 DC22                    ldd             BlkcpyDst+2
+ 0000F0E5 C30000                  addd    #<BIOS_SCREENS
+                              stdd    BlkcpyDst+2
+*** Error 16: Illegal mnemonic
+ 0000F0E8 DC20                    ldd             BlkcpyDst
+ 0000F0EA C900                    adcb    #0
+ 0000F0EC 8900                    adca    #0
+ 0000F0EE C31700                  addd    #>BIOS_SCREENS
+ 0000F0F1 DD20                    std             BlkcpyDst
+ 
+                              ; set destination pointer
+ 0000F0F3 CC0000                  ldd             #<TEXTSCR
+ 0000F0F6 DD1E                    std             BlkcpySrc+2
+ 0000F0F8 CCFFD0                  ldd             #>TEXTSCR
+ 0000F0FB DD1C                    std             BlkcpySrc
+ 
+ 0000F0FD 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F100 BDF03D                  jsr             BlockCopyWords
+ 
+                              ; now copy the color codes
+ 0000F103 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+                              ; 8192 bytes per screen
+ 0000F106 0F23                    clr             BlkcpyDst+3
+ 0000F108 0F20                    clr             BlkcpyDst
+ 0000F10A BDF032                  jsr             ShiftLeft5
+ 0000F10D DD21                    std             BlkcpyDst+1
+ 
+                              ; add in screens array base address
+ 0000F10F DC22                    ldd             BlkcpyDst+2
+ 0000F111 C31000                  addd    #<BIOS_SCREENS+4096
+                              stdd    BlkcpyDst+2
+*** Error 16: Illegal mnemonic
+ 0000F114 DC20                    ldd             BlkcpyDst
+ 0000F116 C900                    adcb    #0
+ 0000F118 8900                    adca    #0
+ 0000F11A C31700                  addd    #>BIOS_SCREENS+4096
+ 0000F11D DD20                    std             BlkcpyDst
+ 
+                              ; set destination pointer
+ 0000F11F CC0000                  ldd             #<TEXTSCR+$10000
+ 0000F122 DD1E                    std             BlkcpySrc+2
+ 0000F124 CCFFD1                  ldd             #>TEXTSCR+$10000
+ 0000F127 DD1C                    std             BlkcpySrc
+ 
+ 0000F129 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F12C BDF03D                  jsr             BlockCopyWords
+ 
+ 0000F12F 3536                    puls    d,x,y
+                      csvs3:
+ 0000F131 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Clear the screen and the screen color memory
+                      ; We clear the screen to give a visual indication that the system
+                      ; is working at all.
+                      ;------------------------------------------------------------------------------
+                      ;
+                      far ClearScreen:
+ 0000F132 3476                    pshs    d,x,y,u
+ 0000F134 15B6FFDA0001            lda             TEXTREG+TEXT_COLS       ; calc number to clear
+ 0000F13A 15F6FFDA0003            ldb             TEXTREG+TEXT_ROWS
+ 0000F140 3D                      mul                                                     ; d = # chars to clear
+ 0000F141 1F01                    tfr             d,x
+ 0000F143 1F03                    tfr             d,u
+ 0000F145 BDF1F5                  jsr             GetScreenLocation
+ 0000F148 8620                    lda             #' '                            ; space char
+ 0000F14A BDF01A                  jsr             AsciiToScreen
+ 0000F14D 108E0000                ldy             #0
+                      cs1
+ 0000F151 151BEDB90010            std             far [ScreenLocation],y  ; clear the memory
+ 0000F157 3122                    leay    2,y                                     ; increment y
+ 0000F159 301F                    leax    -1,x                            ; decrement x
+ 0000F15B 26F4                    bne             cs1
+ 0000F15D BDF22C                  jsr             GetColorCodeLocation
+ 0000F160 FC07C2                  ldd             ScreenColor                     ; x = value to use
+ 0000F163 108E0000                ldy             #0
+ 0000F167 1F31                    tfr             u,x
+                      cs2
+ 0000F169 151BEDB90014            std             far [ColorCodeLocation],y       ; clear the memory
+ 0000F16F 3122                    leay    2,y                                     ; increment y
+ 0000F171 301F                    leax    -1,x                            ; decrement x
+ 0000F173 26F4                    bne             cs2
+ 0000F175 3576                    puls    d,x,y,u
+ 0000F177 38                      rtf
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Scroll text on the screen upwards
+                      ;------------------------------------------------------------------------------
+                      ;
+                      far ScrollUp:
+ 0000F178 3476                    pshs    d,x,y,u
+ 0000F17A 15B6FFDA0001            lda             TEXTREG+TEXT_COLS       ; acc = # text columns
+ 0000F180 15F6FFDA0003            ldb             TEXTREG+TEXT_ROWS
+ 0000F186 5A                      decb                                            ; one less row
+ 0000F187 3D                      mul                                                     ; calc number of chars to scroll
+ 0000F188 1F02                    tfr             d,y                                     ; y = count of chars to move
+ 0000F18A BDF1F5                  jsr             GetScreenLocation
+ 0000F18D BDF22C                  jsr             GetColorCodeLocation
+ 0000F190 CE0000                  ldu             #0                                      ; u = index to target row
+ 0000F193 8E0000                  ldx             #0
+ 0000F196 15F6FFDA0001            ldb             TEXTREG+TEXT_COLS
+ 0000F19C 3A                      abx                                                     ; x = index to source row
+                      scrup1:
+ 0000F19D 151BEC990010            ldd             far [ScreenLocation],x          ; move character
+ 0000F1A3 151BEDD90010            std             far [ScreenLocation],u
+ 0000F1A9 151BEC990014            ldd             far [ColorCodeLocation],x       ; and move color code
+ 0000F1AF 151BEDD90014            std             far [ColorCodeLocation],u
+ 0000F1B5 3002                    leax    2,x
+ 0000F1B7 3342                    leau    2,u
+ 0000F1B9 313F                    leay    -1,y
+ 0000F1BB 26E0                    bne             scrup1
+ 0000F1BD 15B6FFDA0003            lda             TEXTREG+TEXT_ROWS
+ 0000F1C3 4A                      deca
+ 0000F1C4 CF0000F1CC              jsr             BlankLine
+ 0000F1C9 3576                    puls    d,x,y,u
+ 0000F1CB 38                      rtf
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Blank out a line on the display
+                      ; line number to blank is in acca
+                      ;------------------------------------------------------------------------------
+                      ;
+                      far BlankLine:
+ 0000F1CC 3436                    pshs    d,x,y
+ 0000F1CE 15F6FFDA0001            ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
+ 0000F1D4 3D                      mul                                                     ; d = screen index (row# * #cols)
+ 0000F1D5 BDF1F5                  jsr             GetScreenLocation
+ 0000F1D8 1F02                    tfr             d,y
+ 0000F1DA 8620                    lda             #' '
+ 0000F1DC BDF01A                  jsr             AsciiToScreen
+ 0000F1DF 1F01                    tfr             d,x
+ 0000F1E1 15F6FFDA0001            ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
+                      blnkln1:
+ 0000F1E7 151BAFB90010            stx             far [ScreenLocation],y
+ 0000F1ED 3122                    leay    2,y
+ 0000F1EF 5A                      decb
+ 0000F1F0 26F5                    bne             blnkln1
+ 0000F1F2 3536                    puls    d,x,y
+ 0000F1F4 38                      rtf
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Get the location of the screen and screen attribute memory. The location
+                      ; depends on whether or not the task has the output focus.
+                      ;------------------------------------------------------------------------------
+                      ; private
+                      GetScreenLocation:
+ 0000F1F5 3406                    pshs    d
+ 0000F1F7 FC078E                  ldd             RunningTCB
+ 0000F1FA 10B30798                cmpd    IOFocusNdx
+ 0000F1FE 271F                    beq             gsl1
+                              ; 8192 words per screen
+ 0000F200 4F                      clra
+ 0000F201 BDF032                  jsr             ShiftLeft5
+ 0000F204 0F13                    clr             ScreenLocation+3        ; low 8 bits=0
+ 0000F206 DD11                    std             ScreenLocation+1        ; bits 23:8
+ 0000F208 0F10                    clr             ScreenLocation
+ 0000F20A DC12                    ldd             ScreenLocation+2
+ 0000F20C C30000                  addd    #<BIOS_SCREENS
+ 0000F20F DD12                    std             ScreenLocation+2
+ 0000F211 DC10                    ldd             ScreenLocation
+ 0000F213 C900                    adcb    #0
+ 0000F215 8900                    adca    #0
+ 0000F217 C31700                  addd    #>BIOS_SCREENS
+ 0000F21A DD10                    std             ScreenLocation
+ 0000F21C 3506                    puls    d
+ 0000F21E 39                      rts
+                      gsl1:
+ 0000F21F CCFFD0                  ldd             #>TEXTSCR
+ 0000F222 DD10                    std             ScreenLocation
+ 0000F224 CC0000                  ldd             #<TEXTSCR
+ 0000F227 DD12                    std             ScreenLocation+2
+ 0000F229 3506                    puls    d
+ 0000F22B 39                      rts
+ 
+                      GetColorCodeLocation:
+ 0000F22C 3406                    pshs    d
+ 0000F22E FC078E                  ldd             RunningTCB
+ 0000F231 10B30798                cmpd    IOFocusNdx
+ 0000F235 2721                    beq             gccl1
+                              ; 8192 words per screen
+ 0000F237 4F                      clra
+ 0000F238 BDF032                  jsr             ShiftLeft5
+ 0000F23B 0F17                    clr             ColorCodeLocation+3     ; low 8 bits=0
+ 0000F23D D716                    stb             ColorCodeLocation+2     ; bits 15:8
+ 0000F23F 9715                    sta             ColorCodeLocation+1     ; bits 23:16
+ 0000F241 0F14                    clr             ColorCodeLocation
+ 0000F243 DC16                    ldd             ColorCodeLocation+2
+ 0000F245 C31000                  addd    #<BIOS_SCREENS+4096
+ 0000F248 DD16                    std             ColorCodeLocation+2
+ 0000F24A DC14                    ldd             ColorCodeLocation
+ 0000F24C C900                    adcb    #0
+ 0000F24E 8900                    adca    #0
+ 0000F250 C31700                  addd    #>BIOS_SCREENS+4096
+ 0000F253 DD14                    std             ColorCodeLocation
+ 0000F255 3506                    puls    d
+ 0000F257 39                      rts
+                      gccl1:
+ 0000F258 CC0000                  ldd             #<TEXTSCR+$10000
+ 0000F25B DD16                    std             ColorCodeLocation+2
+ 0000F25D CCFFD1                  ldd             #>TEXTSCR+$10000
+ 0000F260 DD14                    std             ColorCodeLocation
+ 0000F262 3506                    puls    d
+ 0000F264 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ; HomeCursor
+                      ; Set the cursor location to the top left of the screen.
+                      ;------------------------------------------------------------------------------
+                      HomeCursor:
+ 0000F265 3410                    pshs    x
+ 0000F267 BE078E                  ldx             RunningTCB
+ 0000F26A 6F8A17EF4400            clr             TCB_CursorRow,x
+ 0000F270 6F8A17EF4500            clr             TCB_CursorCol,x
+ 0000F276 BC0798                  cmpx    IOFocusNdx
+ 0000F279 260C                    bne             hc1
+ 0000F27B 157FFFDA0016            clr             TEXTREG+TEXT_CURPOS
+ 0000F281 157FFFDA0017            clr             TEXTREG+TEXT_CURPOS+1
+                      hc1:
+ 0000F287 3510                    puls    x
+ 0000F289 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Update the cursor position in the text controller based on the
+                      ;  CursorRow,CursorCol.
+                      ;------------------------------------------------------------------------------
+                      ;
+                      UpdateCursorPos:
+ 0000F28A 3436                    pshs    d,x,y
+ 0000F28C BE078E                  ldx             RunningTCB
+ 0000F28F BC0798                  cmpx    IOFocusNdx                              ; update cursor position in text controller
+ 0000F292 2620                    bne             ucp1                                    ; only for the task with the output focus
+ 0000F294 A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F29A 843F                    anda    #$3F                                    ; limit of 63 rows
+ 0000F29C 15F6FFDA0001            ldb             TEXTREG+TEXT_COLS
+ 0000F2A2 3D                      mul
+ 0000F2A3 1F02                    tfr             d,y
+ 0000F2A5 E68A17EF4500            ldb             TCB_CursorCol,x
+ 0000F2AB 1F21                    tfr             y,x
+ 0000F2AD 3A                      abx
+ 0000F2AE 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
+                      ucp1:
+ 0000F2B4 3536                    puls    d,x,y
+ 0000F2B6 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Calculate screen memory location from CursorRow,CursorCol.
+                      ; Also refreshes the cursor location.
+                      ; Returns:
+                      ; r1 = screen location
+                      ;------------------------------------------------------------------------------
+                      ;
+                      CalcScreenLoc:
+ 0000F2B7 3436                    pshs    d,x,y
+ 0000F2B9 10BE078E                ldy             RunningTCB
+ 0000F2BD A6AA17EF4400            lda             TCB_CursorRow,y
+ 0000F2C3 843F                    anda    #$3F                                    ; limit to 63 rows
+ 0000F2C5 15F6FFDA0001            ldb             TEXTREG+TEXT_COLS
+ 0000F2CB 3D                      mul
+ 0000F2CC 1F01                    tfr             d,x
+ 0000F2CE E6AA17EF4500            ldb             TCB_CursorCol,y
+ 0000F2D4 C47F                    andb    #$7F                                    ; limit to 127 cols
+ 0000F2D6 3A                      abx
+ 0000F2D7 10BC0798                cmpy    IOFocusNdx                              ; update cursor position in text controller
+ 0000F2DB 2606                    bne             csl1                                    ; only for the task with the output focus
+ 0000F2DD 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
+                      csl1:
+ 0000F2E3 1F10                    tfr             x,d
+ 0000F2E5 BDF1F5                  jsr             GetScreenLocation
+ 0000F2E8 D312                    addd    ScreenLocation+2
+ 0000F2EA DD12                    std             ScreenLocation+2
+ 0000F2EC 2407                    bcc             csl3
+ 0000F2EE DC10                    ldd             ScreenLocation
+ 0000F2F0 C30001                  addd    #1
+ 0000F2F3 DD10                    std             ScreenLocation
+                      csl3:
+ 0000F2F5 3536                    puls    d,x,y
+ 0000F2F7 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Display a character on the screen.
+                      ; If the task doesn't have the I/O focus then the character is written to
+                      ; the virtual screen.
+                      ; a = char to display
+                      ;------------------------------------------------------------------------------
+                      ;
+                      far DisplayChar:
+ 0000F2F8 3412                    pshs    a,x
+ 0000F2FA BE078E                  ldx             RunningTCB
+ 0000F2FD 810D                    cmpa    #CR                                     ; carriage return ?
+ 0000F2FF 260C                    bne             dccr
+ 0000F301 6F8A17EF4500            clr             TCB_CursorCol,x         ; just set cursor column to zero on a CR
+ 0000F307 BDF28A                  jsr             UpdateCursorPos
+*** warning 1: Long branch within short branch range could be optimized
+                      dcx14:
+ 0000F30A 3512                    puls    a,x
+ 0000F30C 38                      rtf
+                      dccr:
+ 0000F30D 8191                    cmpa    #$91                            ; cursor right ?
+ 0000F30F 2617                    bne             dcx6
+ 0000F311 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F317 8137                    cmpa    #55
+ 0000F319 2407                    bhs             dcx7
+ 0000F31B 4C                      inca
+ 0000F31C A78A17EF4500            sta             TCB_CursorCol,x
+                      dcx7:
+ 0000F322 BDF28A                  jsr             UpdateCursorPos
+ 0000F325 3512                    puls    a,x
+ 0000F327 38                      rtf
+                      dcx6:
+ 0000F328 8190                    cmpa    #$90                            ; cursor up ?
+ 0000F32A 2611                    bne             dcx8            
+ 0000F32C A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F332 27EE                    beq             dcx7
+ 0000F334 4A                      deca
+ 0000F335 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F33B 20E5                    bra             dcx7
+                      dcx8:
+ 0000F33D 8193                    cmpa    #$93                            ; cursor left ?
+ 0000F33F 2611                    bne             dcx9
+ 0000F341 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F347 27D9                    beq             dcx7
+ 0000F349 4A                      deca
+ 0000F34A A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F350 20D0                    bra             dcx7
+                      dcx9:
+ 0000F352 8192                    cmpa    #$92                            ; cursor down ?
+ 0000F354 2613                    bne             dcx10
+ 0000F356 A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F35C 812E                    cmpa    #46
+ 0000F35E 27C2                    beq             dcx7
+ 0000F360 4C                      inca
+ 0000F361 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F367 20B9                    bra             dcx7
+                      dcx10:
+ 0000F369 8194                    cmpa    #$94                            ; cursor home ?
+ 0000F36B 2618                    bne             dcx11
+ 0000F36D A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F373 2708                    beq             dcx12
+ 0000F375 6F8A17EF4500            clr             TCB_CursorCol,x
+ 0000F37B 20A5                    bra             dcx7
+                      dcx12:
+ 0000F37D 6F8A17EF4400            clr             TCB_CursorRow,x
+ 0000F383 209D                    bra             dcx7
+                      dcx11:
+ 0000F385 3460                    pshs    y,u
+ 0000F387 8199                    cmpa    #$99                            ; delete ?
+ 0000F389 260B                    bne             dcx13
+ 0000F38B BDF2B7                  jsr             CalcScreenLoc
+ 0000F38E A68A17EF4500            lda             TCB_CursorCol,x         ; acc = cursor column
+ 0000F394 201D                    bra             dcx5
+                      dcx13
+ 0000F396 8108                    cmpa    #CTRLH                          ; backspace ?
+ 0000F398 263D                    bne             dcx3
+ 0000F39A A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F3A0 275A                    beq             dcx4
+ 0000F3A2 4A                      deca
+ 0000F3A3 A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F3A9 BDF2B7                  jsr             CalcScreenLoc
+ 0000F3AC 108E0002                ldy             #2
+ 0000F3B0 CE0000                  ldu             #0
+                      dcx5:
+ 0000F3B3 151BAEB90010            ldx             far [ScreenLocation],y
+ 0000F3B9 151BAFD90010            stx             far [ScreenLocation],u
+ 0000F3BF 3122                    leay    2,y
+ 0000F3C1 3342                    leau    2,u
+ 0000F3C3 4C                      inca
+ 0000F3C4 8137                    cmpa    #55
+ 0000F3C6 25EB                    blo             dcx5
+ 0000F3C8 8620                    lda             #' '
+ 0000F3CA BDF01A                  jsr             AsciiToScreen
+ 0000F3CD 313E                    leay    -2,y
+ 0000F3CF 151BEDB90010            std             far [ScreenLocation],y
+ 0000F3D5 2025                    bra             dcx4
+                      dcx3:
+ 0000F3D7 810A                    cmpa    #LF                             ; linefeed ?
+ 0000F3D9 271E                    beq             dclf
+ 0000F3DB BDF2B7                  jsr     CalcScreenLoc
+ 0000F3DE BDF01A                  jsr             AsciiToScreen   ; convert ascii char to screen char
+ 0000F3E1 15ED9F0010              std             far [ScreenLocation]
+ 0000F3E6 BDF1F5                  jsr             GetScreenLocation
+ 0000F3E9 BDF22C                  jsr             GetColorCodeLocation
+ 0000F3EC FC07C0                  ldd             CharColor
+ 0000F3EF 15ED9F0014              std             far [ColorCodeLocation]
+ 0000F3F4 BDF401                  jsr             IncCursorPos
+ 0000F3F7 2003                    bra             dcx4
+                      dclf:
+ 0000F3F9 BDF41F                  jsr             IncCursorRow
+                      dcx4:
+ 0000F3FC 3560                    puls    y,u
+ 0000F3FE 3512                    puls    a,x
+ 0000F400 38                      rtf
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Increment the cursor position, scroll the screen if needed.
+                      ;------------------------------------------------------------------------------
+                      ;
+                      IncCursorPos:
+ 0000F401 3412                    pshs    a,x
+ 0000F403 BE078E                  ldx             RunningTCB
+ 0000F406 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F40C 4C                      inca
+ 0000F40D A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F413 8137                    cmpa    #55
+ 0000F415 252A                    blo             icc1
+ 0000F417 6F8A17EF4500            clr             TCB_CursorCol,x         ; column = 0
+ 0000F41D 2005                    bra             icr1
+                      IncCursorRow:
+ 0000F41F 3412                    pshs    a,x
+ 0000F421 BE078E                  ldx             RunningTCB
+                      icr1:
+ 0000F424 A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F42A 4C                      inca
+ 0000F42B A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F431 811F                    cmpa    #31
+ 0000F433 250C                    blo             icc1
+ 0000F435 4A                      deca                                                    ; backup the cursor row, we are scrolling up
+ 0000F436 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F43C CF0000F178              jsr             ScrollUp
+                      icc1:
+ 0000F441 BDF28A                  jsr             UpdateCursorPos
+                      icc2:
+ 0000F444 3512                    puls    a,x
+ 0000F446 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ; Display a string on the screen.
+                      ; Parameters:
+                      ;       Strptr = pointer to string
+                      ;------------------------------------------------------------------------------
+                      ;
+                      far DisplayString:
+ 0000F447 3412                    pshs    a,x
+ 0000F449 8E0000                  ldx             #0
+                      dspj1B:
+ 0000F44C 151BA6990024            lda             far [Strptr],x  ; move string char into acc
+ 0000F452 2709                    beq             dsretB                  ; is it end of string ?
+ 0000F454 CF0000F2F8              jsr             DisplayChar             ; display character
+ 0000F459 3001                    leax    1,x
+ 0000F45B 20EF                    bra             dspj1B
+                      dsretB:
+ 0000F45D 3512                    puls    a,x
+ 0000F45F 38                      rtf
+ 
+                              org             $FFFC
+ 0000FFFC F000                    fcw             start
+ 0000FFFE F000                    fcw             start
+
+4 error(s) in pass 2.
+5 warning(s) in pass 2.
+
+SYMBOL TABLE
+ ASCIITOSCREEN 02 F01A   ATOSCR1 02 F02D      BCW1 02 F041 BIOS_SCREENS 00 17000000
+ BLANKLINE 02 F1CC BLKCPYDST 00 0020 BLKCPYSRC 00 001C   BLNKLN1 02 F1E7
+ BLOCKCOPYWORDS 02 F03D CALCSCREENLOC 02 F2B7 CHARCOLOR 00 07C0 CLEARSCREEN 02 F132
+ COLORCODELOCATION 00 0014 COPYSCREENTOVIRTUALSCREEN 02 F0D3 COPYVIRTUALSCREENTOSCREEN 02 F054        CR 00 000D
+       CS1 02 F151       CS2 02 F169      CSL1 02 F2E3      CSL3 02 F2F5
+     CSVS3 02 F131     CTRLC 00 0003     CTRLH 00 0008     CTRLI 00 0009
+     CTRLJ 00 000A     CTRLK 00 000B     CTRLM 00 000D     CTRLS 00 0013
+     CTRLX 00 0018     CVSS3 02 F0B0      DCCR 02 F30D      DCLF 02 F3F9
+     DCX10 02 F369     DCX11 02 F385     DCX12 02 F37D     DCX13 02 F396
+     DCX14 02 F30A      DCX3 02 F3D7      DCX4 02 F3FC      DCX5 02 F3B3
+      DCX6 02 F328      DCX7 02 F322      DCX8 02 F33D      DCX9 02 F352
+ DISPLAYCHAR 02 F2F8 DISPLAYSTRING 02 F447    DSPJ1B 02 F44C    DSRETB 02 F45D
+   FREEMBX 00 0790   FREEMSG 00 0794   FREETCB 00 078A     GCCL1 02 F258
+ GETCOLORCODELOCATION 02 F22C GETSCREENLOCATION 02 F1F5      GSL1 02 F21F       HC1 02 F287
+ HOMECURSOR 02 F265      ICC1 02 F441      ICC2 02 F444      ICR1 02 F424
+ INCCURSORPOS 02 F401 INCCURSORROW 02 F41F IOFOCUSNDX 00 0798  KEYBDACK 00 17EFAC00
+  KEYBDBAD 00 17EFAB00 KEYBDBUFFER 00 17EFB000 KEYBDECHO 00 17EFAA00 KEYBDHEAD 00 17EFA800
+ KEYBDLOCKS 00 17EFAD00 KEYBDTAIL 00 17EFA900      LEDS 00 FFDC0600        LF 00 000A
+  NMAILBOX 00 0792   NMSGBLK 00 0796     QNDX0 00 0780     QNDX1 00 0782
+     QNDX2 00 0784     QNDX3 00 0786     QNDX4 00 0788 RUNNINGTCB 00 078E
+ SCREENCOLOR 00 07C2 SCREENLOCATION 00 0010 SCREENLOCATION2 00 0018  SCROLLUP 02 F178
+    SCRUP1 02 F19D SHIFTLEFT5 02 F032     START 02 F000    STRPTR 00 0024
+       TAB 00 0009 TCB_ABS8SAVE 00 17EF4D00 TCB_CURSORCOL 00 17EF4500 TCB_CURSORROW 00 17EF4400
+  TCB_HJCB 00 17EF8B00 TCB_HWAITMBX 00 17EF4600 TCB_IOF_NEXT 00 17EF4900 TCB_IOF_PREV 00 17EF4A00
+ TCB_MBQ_NEXT 00 17EF4700 TCB_MBQ_PREV 00 17EF4800 TCB_MMU_MAP 00 17EF4E00 TCB_MSGPTR_D1 00 17EF8900
+ TCB_MSGPTR_D2 00 17EF8A00 TCB_NXTRDY 00 17EF8400 TCB_NXTTCB 00 17EF8600 TCB_PRIORITY 00 17EF8800
+ TCB_PRVRDY 00 17EF8500 TCB_SP8SAVE 00 17EF4B00 TCB_SPSAVE 00 17EF4C00 TCB_STATUS 00 17EF8C00
+ TCB_TIMEOUT 00 17EF8700   TEXTREG 00 FFDA0000   TEXTSCR 00 FFD00000 TEXT_COLS 00 0001
+ TEXT_CURPOS 00 0016 TEXT_ROWS 00 0003 TIMEOUTLIST 00 078C      UCP1 02 F2B4
+ UPDATECURSORPOS 02 F28A      XOFF 00 0013       XON 00 0011
+119 SYMBOLS
+
+36 error(s), 40 warning(s)

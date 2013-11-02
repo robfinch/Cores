@@ -237,6 +237,7 @@
 
 #define UNIX 0                          /* set to != 0 for UNIX specials     */
 
+#define MAX_PASSNO	9
 #define MAXLABELS    8192
 #define MAXMACROS    1024
 #define MAXTEXTS     1024
@@ -1039,6 +1040,7 @@ struct symrecord
   {
   char name[MAXIDLEN + 1];              /* symbol name                       */
   char cat;                             /* symbol category                   */
+  char isFar;
   unsigned value;                 /* symbol value                      */
   union
     {
@@ -1203,6 +1205,8 @@ long relhdrfoff;                        /* FLEX Relocatable Global Hdr Offset*/
 #define OPTION_LIS    0x00200000L       /* print assembler output listing    */
 #define OPTION_LPA    0x00400000L       /* listing in f9dasm patch format    */
 #define OPTION_RTF	  0x00800000L
+#define OPTION_X32	  0x01000000L		/* 32 bit index registers            */
+#define OPTION_X16	  0x02000000L		/* 32 bit index registers            */
 
 struct
   {
@@ -1255,6 +1259,8 @@ struct
   { "NOL",           0, OPTION_LIS },
   { "LPA",  OPTION_LPA, OPTION_NUM | OPTION_CLL }, // LPA inhibits NUM / CLL!
   { "NLP",           0, OPTION_LPA },
+  { "X32",  OPTION_X32, OPTION_X16 },
+  { "X16",  OPTION_X16, OPTION_X32 }
   };
 
 unsigned long dwOptions =               /* options flags, init to default    */
@@ -1398,7 +1404,11 @@ char unamebuf[MAXIDLEN + 1];            /* name buffer in uppercase          */
 
 char isFar;
 int vercount;
-char mode;                              /* adressing mode:                   */
+char mode;   
+char isX32;
+char isPostIndexed;
+
+/* adressing mode:                   */
 #define ADRMODE_IMM  0                  /* 0 = immediate                     */
 #define ADRMODE_DIR  1                  /* 1 = direct                        */
 #define ADRMODE_EXT  2                  /* 2 = extended                      */
@@ -1450,7 +1460,7 @@ int nCurLine = 0;                       /* current output line on page       */
 int nCurCol = 0;                        /* current output column on line     */
 int nCurPage = 0;                       /* current page #                    */
 int nLinesPerPage = 66;                 /* # lines on a page                 */
-int nColsPerLine = 80;                  /* # columns per line                */
+int nColsPerLine = 200;                  /* # columns per line                */
 char szTitle[128] = "";                 /* title for listings                */
 char szSubtitle[128] = "";              /* subtitle for listings             */
 
@@ -1702,7 +1712,7 @@ if (insert)                             /* if inserting,                     */
     {
     printf("%s(%ld): error 25: out of local symbol storage\n",
            expandfn(curline->fn), curline->ln);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass ==  MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** Error 25: out of local symbol storage\n");
     exit(4);
     }
@@ -1806,7 +1816,7 @@ if (s)                                  /* if symbol not found               */
     {
     printf("%s(%ld): error 23: out of symbol storage\n",
            expandfn(curline->fn), curline->ln);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** Error 23: out of symbol storage\n");
     exit(4);
     }
@@ -2385,6 +2395,8 @@ if (pp)
   pp->exprcat = exprcat;
   pp->sym = p;
   }
+  if (p->isFar)
+	  isFar = 1;
 return p->value;
 }
  
@@ -2901,6 +2913,7 @@ char c, *oldsrcptr;
 unsigned char accpost, h63 = 0;
 
 isFar = 0;
+isPostIndexed = 0;
 unknown = 0;
 opsize = 0;
 certain = 1;
@@ -2975,10 +2988,14 @@ switch (toupper(c))
 	if (*srcptr=='>') {
 		srcptr++;
 	    operand = (scanexpr(0, pp) >> 16) & 0xffff;
+		isFar = 0;
+		opsize = 3;
 	}
 	else if (*srcptr=='<') {
 		srcptr++;
 	    operand = scanexpr(0, pp) & 0xffff;
+		isFar = 0;
+		opsize = 3;
 	}
 	else
 		operand = scanexpr(0, pp);
@@ -3020,11 +3037,11 @@ switch (toupper(c))
       {
       if (opsize == 0)
         {
-		if (operand >= 65536)
-			opsize = 4;
+		if ((unsigned)operand >= 65536)
+			opsize = 5;
 		else
         if (unknown || !certain || dpsetting == -1 ||
-          (unsigned short)(operand - dpsetting * 256) >= 256)
+          (unsigned)(operand - dpsetting * 256) >= 256)
           opsize = 3;
         else
           opsize = 2;
@@ -3036,8 +3053,15 @@ switch (toupper(c))
         postbyte = 0x8f;
         opsize = 3;
         }
-      else
-        mode = opsize - 1;
+	  else {
+		  switch(opsize) {
+		case 2: mode = ADRMODE_DIR; break;
+		case 3: mode = ADRMODE_EXT; break;
+		case 4:
+		case 5: mode = ADRMODE_EXT; isFar = 1; break;
+		default: mode = opsize - 1;
+		  }
+	  }
       }
   }
 
@@ -3051,7 +3075,13 @@ if (mode >= ADRMODE_IND)
   else
     srcptr++;    
   }
-if (pass == 2 && unknown)
+  if (*srcptr==',') {
+	  srcptr++;
+	  isPostIndexed = 1;
+      scanindexed();	// scanindexed will reset the postbyte
+	  postbyte |= 0x10;
+  }
+if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF; 
 }
 
@@ -3132,7 +3162,7 @@ switch (toupper(c))
       }
   }
 
-if (pass == 2 && unknown)
+if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF; 
 }
 
@@ -3422,7 +3452,7 @@ if (hexcount)
 		 (hexbuffer[1] << 8) +
 		 hexbuffer[0]
 		 ;
-    fprintf(objfile, "mem[%4d] <= 33'h%d%08X;\r\n", (hexaddr & 0xfff) / 4, calcParity(wd), wd);
+    fprintf(objfile, "mem[%4d] <= 33'h%d%08X;\r\n", (hexaddr & 0x3fff) / 4, calcParity(wd), wd);
   hexaddr += hexcount;
   hexcount = 0;
   chksum = 0;
@@ -3619,7 +3649,7 @@ for (i = 0; i < 16; i++)
     printf("%s(%ld) : error %d: %s in \"%s\"\n", 
            expandfn(curline->fn), curline->ln, i + 1,
            errormsg[i], curline->txt);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** Error %d: %s\n", i + 1, errormsg[i]);
     errors++;
     }
@@ -3638,7 +3668,7 @@ for (i = 0; i < 16; i++)
     {
     printf("%s(%ld) : warning %d: %s in \"%s\"\n", 
            expandfn(curline->fn), curline->ln, i + 1, warningmsg[i], curline->txt);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** warning %d: %s\n", i + 1, warningmsg[i]);
     warnings++;
     }
@@ -3813,6 +3843,7 @@ void setlabel(struct symrecord * lp)
 {
 if (lp)
   {
+	  lp->isFar = isFar;
   if (lp->cat == SYMCAT_PUBLICUNDEF)
     {
     lp->cat = SYMCAT_PUBLIC;
@@ -3827,8 +3858,11 @@ if (lp)
   else if (lp->cat != SYMCAT_EMPTY && lp->cat != SYMCAT_UNRESOLVED)
     {
     if ((lp->cat != SYMCAT_LABEL && lp->cat != SYMCAT_PUBLIC) ||
-        lp->value != loccounter)
-      error |= ERR_LABEL_MULT;
+		lp->value != loccounter) {
+		lp->value = loccounter;
+		if (pass==MAX_PASSNO)
+			error |= ERR_LABEL_MULT;
+		}
     }
   else
     {
@@ -3939,6 +3973,12 @@ switch (mode)
         putword((unsigned short)(operand>>16)); 
         putword((unsigned short)operand); 
         addrelocation = 1;
+		break;
+      case 5:
+        putword((unsigned short)(operand>>16)); 
+        putword((unsigned short)operand); 
+        addrelocation = 1;
+		break;
       }
     break;
   case ADRMODE_PCR :
@@ -4033,13 +4073,18 @@ void lea(int co)
 {
 struct relocrecord p = {0};
 
-onebyte((unsigned char)co);
 scanoperands(&p);
+if (isFar)
+	onebyte(0x15);
+onebyte((unsigned char)co);
 if (mode == ADRMODE_IMM)
   error |= ERR_ILLEGAL_ADDR;
 if (mode < ADRMODE_POST)
   {
-  opsize = 3;
+	  if (isFar)
+		  opsize = 5;
+	  else
+		opsize = 3;
   postbyte = 0x8f;
   mode = ADRMODE_POST;
   }
@@ -4061,7 +4106,7 @@ if (mode != ADRMODE_DIR && mode != ADRMODE_EXT)
 offs = operand - loccounter - 2;
 if (!unknown && (offs < -128 || offs >= 128))
   error |= ERR_RANGE;
-if (pass == 2 && unknown)
+if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF;
 putbyte((unsigned char)co);
 putbyte((unsigned char)offs);
@@ -4136,6 +4181,8 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x15);
+		if (isPostIndexed)
+			putbyte(0x1B);
     putbyte((unsigned char)(co + 0x020));
   }
 doaddress(&p);
@@ -4205,6 +4252,10 @@ switch (mode)
     putbyte((unsigned char)(co + 0x030));
     break;
   default:
+	if (isFar)
+		putbyte(0x15);
+	if (isPostIndexed)
+		putbyte(0x1B);
     putbyte((unsigned char)(co + 0x020));
     break;
  }
@@ -4225,7 +4276,10 @@ switch (mode)
   case ADRMODE_IMM :
     if (noimm)
       error |= ERR_ILLEGAL_ADDR;
-    opsize = 3;
+	if (isX32)
+		opsize = 5;
+	else
+		opsize = 3;
     putbyte((unsigned char)co);
     break;
   case ADRMODE_DIR :
@@ -4239,6 +4293,8 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x15);
+	  if (isPostIndexed)
+		  putbyte(0x1B);
     putbyte((unsigned char)(co + 0x020));
     break;
  }
@@ -4259,7 +4315,10 @@ switch (mode)
   case ADRMODE_IMM :
     if (noimm)
       error |= ERR_ILLEGAL_ADDR;
-    opsize = 3;
+	if (isX32)
+		opsize = 5;
+	else
+		opsize = 3;
     putword((unsigned short)co);
     break;
   case ADRMODE_DIR :
@@ -4274,6 +4333,8 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x15);
+	  if (isPostIndexed)
+		  putbyte(0x1B);
     putword((unsigned short)(co + 0x020));
  }
 doaddress(&p);
@@ -4356,6 +4417,8 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x15);
+	  if (isPostIndexed)
+		  putbyte(0x1B);
     putbyte((unsigned char)(co + 0x60));
     break;
   }
@@ -4404,6 +4467,8 @@ switch (mode)
   default:
 	  if (isFar)
 		  putbyte(0x15);
+		if (isPostIndexed)
+			putbyte(0x1B);
     putbyte((unsigned char)(co + 0x60));
     break;
   }
@@ -4752,7 +4817,7 @@ if (nfnidx < 0)
   if (nfnms >= (sizeof(fnms) / sizeof(fnms[0])))
     {
     printf("%s(0) : error 21: nesting level too deep\n", name);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** Error 21: nesting level too deep\n");
     exit(4);
     }
@@ -4762,7 +4827,7 @@ if (nfnidx < 0)
 if ((srcfile = fopen(name, "r")) == 0)
   {
   printf("%s(0) : error 17: cannot open source file\n", name);
-  if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+  if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
     putlist( "*** Error 17: cannot open source file\n");
   exit(4);
   }
@@ -4775,7 +4840,7 @@ while (fgets(inpline, LINELEN, srcfile))
   if (!pNew)
     {
     printf("%s(%d) : error 22: memory allocation error\n", name, lineno);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** Error 22: memory allocation error\n");
     exit(4);
     }
@@ -4819,7 +4884,7 @@ if (nfnidx < 0)
   if (nfnms >= (sizeof(fnms) / sizeof(fnms[0])))
     {
     printf("%s(0) : error 21: nesting level too deep\n", name);
-    if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+    if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
       putlist( "*** Error 21: nesting level too deep\n");
     exit(4);
     }
@@ -4829,7 +4894,7 @@ if (nfnidx < 0)
 if ((srcfile = fopen(name, "rb")) == 0)
   {
   printf("%s(0) : error 17: cannot open source file\n", name);
-  if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+  if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
     putlist( "*** Error 17: cannot open source file\n");
   exit(4);
   }
@@ -4850,7 +4915,7 @@ while ((binlen = (int)fread(binlin, 1, sizeof(binlin), srcfile)) > 0)
     if (!pNew)
       {
       printf("%s(%d) : error 22: memory allocation error\n", name, lineno);
-      if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+      if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
         putlist( "*** Error 22: memory allocation error\n");
       exit(4);
       }
@@ -4872,7 +4937,7 @@ while ((binlen = (int)fread(binlin, 1, sizeof(binlin), srcfile)) > 0)
     if (!pNew)
       {
       printf("%s(%d) : error 22: memory allocation error\n", name, lineno);
-      if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+      if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
         putlist( "*** Error 22: memory allocation error\n");
       exit(4);
       }
@@ -5029,7 +5094,7 @@ switch (co)
       }
 
     setlabel(lp);
-    if (generating && pass == 2)
+    if (generating && pass == MAX_PASSNO)
       {
       if (co != 0 || outmode == OUT_BIN)
         for (i = 0; i < operand; i++)
@@ -5059,14 +5124,14 @@ switch (co)
       {
       if (lp->cat == SYMCAT_EMPTY ||
           lp->cat == SYMCAT_UNRESOLVED ||
-          (lp->value == (unsigned short)operand &&
-           pass == 2))
+          (lp->value == (unsigned)operand &&
+           pass > 1))
         {
         if (exprcat == EXPRCAT_INTADDR)
           lp->cat = SYMCAT_LABEL;
         else
           lp->cat = SYMCAT_CONSTANT;
-        lp->value = (unsigned short)operand;
+        lp->value = (unsigned)operand;
         }
       else
         error |= ERR_LABEL_MULT;
@@ -5131,7 +5196,7 @@ switch (co)
       else
         {
         putbyte((unsigned char)scanexpr(0, &p));
-        if (unknown && pass == 2)
+        if (unknown && pass == MAX_PASSNO)
           error |= ERR_LABEL_UNDEF;
         }
       if (!(dwOptions & OPTION_TSC))
@@ -5162,7 +5227,7 @@ switch (co)
         if ((c == '$') || isalnum(c))
           {
           putbyte((unsigned char)scanexpr(0, &p));
-          if (unknown && pass == 2)
+          if (unknown && pass == MAX_PASSNO)
             error |= ERR_LABEL_UNDEF;
           }
         else
@@ -5188,7 +5253,7 @@ switch (co)
       if (!(dwOptions & OPTION_TSC))
         skipspace();
       putword((unsigned short)scanexpr(0, &p));
-      if (unknown && pass == 2)
+      if (unknown && pass == MAX_PASSNO)
         error |= ERR_LABEL_UNDEF; 
       if (!(dwOptions & OPTION_TSC))
         skipspace();     
@@ -5309,7 +5374,7 @@ switch (co)
       error |= ERR_RELOCATING;          /* set error                         */
       break;                            /* and ignore                        */
       }
-    if (generating && pass == 2)
+    if (generating && pass == MAX_PASSNO)
       {
       switch (outmode)
         {
@@ -6061,6 +6126,7 @@ certain = 1;
 lp = 0;
 codeptr = 0;
 condline = 0;
+isFar = 0;
 
 if (inMacro)
   curline->lvl |= LINCAT_MACDEF;
@@ -6068,6 +6134,11 @@ if (inMacro)
 if (isalnum(*srcptr))                   /* look for label on line start      */
   {
   scanname();
+  if (stricmp(namebuf, "far")==0) {
+	  isFar = 1;
+	  while(*srcptr==' ' || *srcptr=='\t') srcptr++;
+	  scanname();
+  }
   lp = findsym(namebuf, 1);
   if (*srcptr == ':')
     srcptr++;
@@ -6109,6 +6180,10 @@ if ((isalnum(*srcptr)) ||
 
     noimm = cat & OPCAT_NOIMM;          /* isolate "no immediate possible"   */
     cat &= ~OPCAT_NOIMM;
+	if (dwOptions & OPTION_X32)
+		isX32 = 1;
+	else
+		isX32 = 0;
     if (dwOptions & OPTION_H63)         /* if in HD6309 mode,                */
       cat &= ~OPCAT_6309;               /* mask out the 6309 flag (=allow)   */
     switch (cat)
@@ -6230,7 +6305,7 @@ if (inMacro)                            /* if in macro definition            */
   warning &= WRN_SYM;                   /* ignore most warnings              */
   }
 
-if (pass == 2)
+if (pass == MAX_PASSNO)
   {
   outbuffer();
   if ((listing & LIST_ON) &&
@@ -6309,7 +6384,7 @@ else
     }  
   }
 
-if (((pass == 2) || (dwOptions & OPTION_LP1)) &&
+if (((pass == MAX_PASSNO) || (dwOptions & OPTION_LP1)) &&
     (listing & LIST_ON) &&
     (dwOptions & OPTION_LIS))
   outlist(op);
@@ -6540,7 +6615,7 @@ if (suppress)
   {
   printf("%s(%ld) : error 18: improperly nested IF statements\n",
          expandfn(plast->fn), plast->ln);
-  if (((dwOptions & OPTION_LP1) || pass == 2) &&
+  if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) &&
       (listing & LIST_ON))
     putlist( "*** Error 18: improperly nested IF statements\n");
   errors++;
@@ -6551,12 +6626,78 @@ if (common)
   {
   printf("%s(%ld) : error 24: improperly nested COMMON statements\n",
          expandfn(plast->fn), plast->ln);
-  if (((dwOptions & OPTION_LP1) || pass == 2) &&
+  if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) &&
       (listing & LIST_ON))
     putlist( "*** Error 24: improperly nested COMMON statements\n");
   errors++;
   common = 0;
   }
+}
+
+void dopass(int passno, int lastpass)
+{
+	int i;
+	char buf[4];
+	sprintf(buf, "%d", passno);
+pass = passno;
+settext("PASS", buf);
+loccounter = 0;
+errors = 0;
+warnings = 0;
+generating = 0;
+terminate = 0;
+
+for (i = 0; i < symcounter; i++)        /* reset all PASSED flags            */
+  if (symtable[i].cat != SYMCAT_COMMONDATA)
+    symtable[i].u.flags &= ~SYMFLAG_PASSED;
+
+if (lastpass) {
+	if (listing & LIST_ON)
+	{
+	if ((dwOptions & OPTION_LP1))
+		{
+		if (dwOptions & OPTION_PAG)
+		PageFeed();
+		else
+		putlist("\n");
+		putlist( "*** Pass 2 ***\n\n");
+		}
+	else if (nTotErrors || nTotWarnings)
+		putlist( "%ld error(s), %ld warning(s) unlisted in pass 1\n",
+				nTotErrors, nTotWarnings);
+	}
+
+	if ((outmode >= OUT_BIN) &&
+		((objfile = fopen(objname,
+						((outmode != OUT_SREC) && (outmode != OUT_IHEX)) ? "wb" : "w"))
+						== 0))
+	{
+	printf("%s(0) : error 20: cannot write object file %s\n", srcname, objname);
+	if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) && (listing & LIST_ON))
+		putlist( "*** Error 20: cannot write object file %s\n", objname);
+	exit(4);
+	}
+
+	if (outmode == OUT_REL)                 /* if writing FLEX Relocatable       */
+	{
+	writerelcommon();                     /* write out common blocks           */
+	relhdrfoff = ftell(objfile);
+	writerelhdr(0);                       /* write out initial header          */
+	}
+	}
+	processfile(rootline);
+
+	if (errors)
+	{
+	printf("%ld error(s) in pass %d\n", errors, passno);
+	nTotErrors += errors;
+	}
+	if (warnings)
+	{
+	printf("%ld warning(s) in pass %d\n", warnings, passno);
+	nTotWarnings += warnings;
+	}
+
 }
 
 /*****************************************************************************/
@@ -6600,7 +6741,7 @@ for (i = 1; argv[i]; i++)               /* read in all source files          */
 if (!rootline)                          /* if no lines in there              */
   {
   printf("%s(0) : error 23: no source lines in file\n", srcname);
-  if (((dwOptions & OPTION_LP1) || pass == 2) &&
+  if (((dwOptions & OPTION_LP1) || pass == MAX_PASSNO) &&
       (listing & LIST_ON))
     putlist( "*** Error 23: no source lines in file\n");
   exit(4);
@@ -6627,64 +6768,72 @@ if (warnings)
   nTotWarnings = warnings;
   }
 
-                                        /* Pass 2 - generate output          */
-pass = 2;
-settext("PASS", "2");
-loccounter = 0;
-errors = 0;
-warnings = 0;
-generating = 0;
-terminate = 0;
-//memset(bUsedBytes, 0, sizeof(bUsedBytes));
-for (i = 0; i < symcounter; i++)        /* reset all PASSED flags            */
-  if (symtable[i].cat != SYMCAT_COMMONDATA)
-    symtable[i].u.flags &= ~SYMFLAG_PASSED;
-
-if (listing & LIST_ON)
-  {
-  if ((dwOptions & OPTION_LP1))
-    {
-    if (dwOptions & OPTION_PAG)
-      PageFeed();
-    else
-      putlist("\n");
-    putlist( "*** Pass 2 ***\n\n");
-    }
-  else if (nTotErrors || nTotWarnings)
-    putlist( "%ld error(s), %ld warning(s) unlisted in pass 1\n",
-            nTotErrors, nTotWarnings);
-  }
-
-if ((outmode >= OUT_BIN) &&
-    ((objfile = fopen(objname,
-                     ((outmode != OUT_SREC) && (outmode != OUT_IHEX)) ? "wb" : "w"))
-                     == 0))
-  {
-  printf("%s(0) : error 20: cannot write object file %s\n", srcname, objname);
-  if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
-    putlist( "*** Error 20: cannot write object file %s\n", objname);
-  exit(4);
-  }
-
-if (outmode == OUT_REL)                 /* if writing FLEX Relocatable       */
-  {
-  writerelcommon();                     /* write out common blocks           */
-  relhdrfoff = ftell(objfile);
-  writerelhdr(0);                       /* write out initial header          */
-  }
-
-processfile(rootline);
-
-if (errors)
-  {
-  printf("%ld error(s) in pass 2\n", errors);
-  nTotErrors += errors;
-  }
-if (warnings)
-  {
-  printf("%ld warning(s) in pass 2\n", warnings);
-  nTotWarnings += warnings;
-  }
+// Resolve potential phasing errors by performing multiple passes.
+dopass(2,0);
+dopass(3,0);
+dopass(4,0);
+dopass(5,0);
+dopass(6,0);
+dopass(7,0);
+dopass(8,0);
+dopass(9,1);
+//                                       /* Pass 2 - generate output          */
+//settext("PASS", "3");
+//loccounter = 0;
+//errors = 0;
+//warnings = 0;
+//generating = 0;
+//terminate = 0;
+////memset(bUsedBytes, 0, sizeof(bUsedBytes));
+//for (i = 0; i < symcounter; i++)        /* reset all PASSED flags            */
+//  if (symtable[i].cat != SYMCAT_COMMONDATA)
+//    symtable[i].u.flags &= ~SYMFLAG_PASSED;
+//
+//if (listing & LIST_ON)
+//  {
+//  if ((dwOptions & OPTION_LP1))
+//    {
+//    if (dwOptions & OPTION_PAG)
+//      PageFeed();
+//    else
+//      putlist("\n");
+//    putlist( "*** Pass 2 ***\n\n");
+//    }
+//  else if (nTotErrors || nTotWarnings)
+//    putlist( "%ld error(s), %ld warning(s) unlisted in pass 1\n",
+//            nTotErrors, nTotWarnings);
+//  }
+//
+//if ((outmode >= OUT_BIN) &&
+//    ((objfile = fopen(objname,
+//                     ((outmode != OUT_SREC) && (outmode != OUT_IHEX)) ? "wb" : "w"))
+//                     == 0))
+//  {
+//  printf("%s(0) : error 20: cannot write object file %s\n", srcname, objname);
+//  if (((dwOptions & OPTION_LP1) || pass == 2) && (listing & LIST_ON))
+//    putlist( "*** Error 20: cannot write object file %s\n", objname);
+//  exit(4);
+//  }
+//
+//if (outmode == OUT_REL)                 /* if writing FLEX Relocatable       */
+//  {
+//  writerelcommon();                     /* write out common blocks           */
+//  relhdrfoff = ftell(objfile);
+//  writerelhdr(0);                       /* write out initial header          */
+//  }
+//
+//processfile(rootline);
+//
+//if (errors)
+//  {
+//  printf("%ld error(s) in pass 2\n", errors);
+//  nTotErrors += errors;
+//  }
+//if (warnings)
+//  {
+//  printf("%ld warning(s) in pass 2\n", warnings);
+//  nTotWarnings += warnings;
+//  }
 
 if (listing & LIST_ON)
   {
