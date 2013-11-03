@@ -2566,7 +2566,11 @@ STORE1:
 		`SW_ACCB:	wb_write(wadr,accb[7:0]);
 		`SW_DPR:	wb_write(wadr,dpr);
 		`SW_XL:	wb_write(wadr,xr[7:0]);
-		`SW_XH:	wb_write(wadr,xr[15:8]);
+		`SW_XH:
+				if (wadr[1:0]!=2'b11)
+					wb_write2({xr[7:0],xr[15:8]});
+				else
+					wb_write(wadr,xr[15:8]);
 		`SW_X2316:	wb_write(wadr,xr[23:16]);
 		`SW_X3124:
 				if (wadr[1:0]==2'b00)
@@ -2685,7 +2689,14 @@ STORE2:
 				next_state(IFETCH);
 				lock_o <= 1'b0;
 				end
-		`SW_CCR:	next_state(PUSH2);
+		`SW_CCR:
+			begin
+				if (isINT) begin
+					im <= 1'b1;
+					firqim <= 1'b1;
+				end
+				next_state(PUSH2);
+			end
 		`SW_ACCA:
 			if (isINT | isPSHS | isPSHU)
 				next_state(PUSH2);
@@ -2699,8 +2710,10 @@ STORE2:
 		`SW_ACCDH:
 			begin
 				store_what <= `SW_ACCDL;
-				if (wadr[1:0]!=2'b11)
+				if (wadr[1:0]!=2'b11) begin
+					wadr <= wadr + 32'd2;
 					next_state(IFETCH);
+				end
 				else
 					next_state(STORE1);
 			end
@@ -2726,7 +2739,14 @@ STORE2:
 				next_state(STORE1);
 			end
 		`SW_XH:
-			begin
+			if (wadr[1:0]!=2'b11) begin
+				wadr <= wadr + 32'd2;
+				if (isINT | isPSHS | isPSHU)
+					next_state(PUSH2);
+				else	// STX
+					next_state(IFETCH);
+			end
+			else begin
 				store_what <= `SW_XL;
 				next_state(STORE1);
 			end
@@ -3357,8 +3377,9 @@ begin
 				firqim <= dat[6];
 				ef <= dat[7];
 				if (isRTI) begin
+					$display("loaded ccr=%b", dat);
 					ir[15:8] <= dat[7] ? 8'hFE : 8'h80;
-					ssp <= ssp + 16'd1;
+					ssp <= ssp + 32'd1;
 				end
 				else if (isPULS)
 					ssp <= ssp + 16'd1;
@@ -3369,6 +3390,7 @@ begin
 				acca <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loaded acca=%h from %h", dat, radr);
 					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
@@ -3387,6 +3409,7 @@ begin
 				accb <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loaded accb=%h from ", dat, radr);
 					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
@@ -3405,6 +3428,7 @@ begin
 				dpr <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loaded dpr=%h from %h", dat, radr);
 					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
@@ -3455,6 +3479,7 @@ begin
 				xr[15:8] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loaded XH=%h from %h", dat, radr);
 					ssp <= ssp + 16'd1;
 				end
 				else if (isPULU) begin
@@ -3468,6 +3493,7 @@ begin
 				xr[7:0] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loaded XL=%h from %h", dat, radr);
 					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
@@ -3518,6 +3544,7 @@ begin
 				yr[15:8] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loadded YH=%h", dat);
 					ssp <= ssp + 16'd1;
 				end
 				else if (isPULU) begin
@@ -3531,6 +3558,7 @@ begin
 				yr[7:0] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loadded YL=%h", dat);
 					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
@@ -3581,6 +3609,7 @@ begin
 				usp[15:8] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loadded USPH=%h", dat);
 					ssp <= ssp + 16'd1;
 				end
 				else if (isPULU) begin
@@ -3594,6 +3623,7 @@ begin
 				usp[7:0] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
+					$display("loadded USPL=%h", dat);
 					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
@@ -3674,8 +3704,10 @@ begin
 	`LW_PCL:	begin
 				pc[7:0] <= dat;
 				radr <= radr + 32'd1;
-				if (isRTI|isRTS|isRTF|isPULS)
+				if (isRTI|isRTS|isRTF|isPULS) begin
+					$display("loadded PCL=%h", dat);
 					ssp <= ssp + 32'd1;
+				end
 				else if (isPULU)
 					usp <= usp + 32'd1;
 				next_state(IFETCH);
@@ -3684,8 +3716,10 @@ begin
 				pc[15:8] <= dat;
 				load_what <= `LW_PCL;
 				radr <= radr + 32'd1;
-				if (isRTI|isRTS|isRTF|isPULS)
+				if (isRTI|isRTS|isRTF|isPULS) begin
+					$display("loadded PCH=%h", dat);
 					ssp <= ssp + 32'd1;
+				end
 				else if (isPULU)
 					usp <= usp + 32'd1;
 				next_state(LOAD1);

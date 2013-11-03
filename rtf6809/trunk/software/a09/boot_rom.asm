@@ -35,6 +35,9 @@ CTRLX	EQU	$18
 XON		EQU	$11
 XOFF	EQU	$13
 
+MAX_TASKNO	EQU 63
+DRAM_BASE	EQU $10000000
+
 ScreenLocation		EQU		$10
 ColorCodeLocation	EQU		$14
 ScreenLocation2		EQU		$18
@@ -75,10 +78,17 @@ KeybdBuffer		EQU		$17EFB000	; buffer is 16 chars
 LEDS		EQU		$FFDC0600
 TEXTSCR		EQU		$FFD00000
 TEXTREG		EQU		$FFDA0000
-TEXT_COLS	EQU		1
-TEXT_ROWS	EQU		3
+TEXT_COLS	EQU		0
+TEXT_ROWS	EQU		2
 TEXT_CURPOS	EQU		22
+KEYBD		EQU		$FFDC0000
+KEYBDCLR	EQU		$FFDC0002
 BIOS_SCREENS	EQU	$17000000	; $17000000 to $171FFFFF
+
+; EhBASIC vars:
+;
+NmiBase		EQU		$DC
+IrqBase		EQU		$DF
 
 QNdx0		EQU		$780
 QNdx1		EQU		QNdx0+2
@@ -96,9 +106,12 @@ nMsgBlk		EQU		FreeMsg + 2
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
 IOFocusNdx	EQU		nMsgBlk + 2
+IrqSource	EQU		$79A
 
 CharColor	EQU		$7C0
 ScreenColor	EQU		$7C2
+CursorFlash	EQU		$7C4
+IRQFlag		EQU		$7C6
 
 	org		$0000F000
 
@@ -106,15 +119,30 @@ start:
 	lda		#1
 	sta		LEDS
 	leas	$3FFF
+	andcc	#$EF			; unmask irq
 	ldd		#$CE
 	std		ScreenColor
 	std		CharColor
 	jsr		ClearScreen
+	jsr		HomeCursor
+	ldd		#<msgStartup
+	std		Strptr+2
+	ldd		#>msgStartup
+	std		Strptr
+	lda		#5
+	sta		LEDS
+	jsr		DisplayString
+	jmp		Monitor
+
+msgStartup
+	fcb		"RTF6809 System Starting.",CR,LF,0
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character to screen display character.
 ; Parameter
 ;	acca = ascii character
+; Returns:
+;	d = screen character
 ;------------------------------------------------------------------------------
 ;
 AsciiToScreen:
@@ -129,8 +157,19 @@ AsciiToScreen:
 	blo		atoscr1
 	suba	#$60
 atoscr1:
-	orb		#$100
-	exg		a,b
+	orb		#$1
+TestRts:
+	rts
+
+;------------------------------------------------------------------------------
+; Convert screen character to ascii character
+;------------------------------------------------------------------------------
+;
+ScreenToAscii:
+	cmpa	#26+1
+	bcs		stasc1
+	adda	#$60
+stasc1:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -177,7 +216,7 @@ CopyVirtualScreenToScreen
 	; add in screens array base address
 	ldd		BlkcpySrc+2
 	addd	#<BIOS_SCREENS
-	stdd	BlkcpySrc+2
+	std		BlkcpySrc+2
 	ldd		BlkcpySrc
 	adcb	#0
 	adca	#0
@@ -204,7 +243,7 @@ CopyVirtualScreenToScreen
 	; add in screens array base address
 	ldd		BlkcpySrc+2
 	addd	#<BIOS_SCREENS+4096
-	stdd	BlkcpySrc+2
+	std 	BlkcpySrc+2
 	ldd		BlkcpySrc
 	adcb	#0
 	adca	#0
@@ -246,7 +285,7 @@ CopyScreenToVirtualScreen
 	; add in screens array base address
 	ldd		BlkcpyDst+2
 	addd	#<BIOS_SCREENS
-	stdd	BlkcpyDst+2
+	std		BlkcpyDst+2
 	ldd		BlkcpyDst
 	adcb	#0
 	adca	#0
@@ -273,7 +312,7 @@ CopyScreenToVirtualScreen
 	; add in screens array base address
 	ldd		BlkcpyDst+2
 	addd	#<BIOS_SCREENS+4096
-	stdd	BlkcpyDst+2
+	std		BlkcpyDst+2
 	ldd		BlkcpyDst
 	adcb	#0
 	adca	#0
@@ -301,12 +340,16 @@ csvs3:
 ;
 far ClearScreen:
 	pshs	d,x,y,u
+	lda		#2
+	sta		LEDS
 	lda		TEXTREG+TEXT_COLS	; calc number to clear
 	ldb		TEXTREG+TEXT_ROWS
 	mul							; d = # chars to clear
 	tfr		d,x
 	tfr		d,u
 	jsr		GetScreenLocation
+	lda		#3
+	sta		LEDS
 	lda		#' '				; space char
 	jsr		AsciiToScreen
 	ldy		#0
@@ -315,8 +358,11 @@ cs1
 	leay	2,y					; increment y
 	leax	-1,x				; decrement x
 	bne		cs1
+	lda		#4
+	sta		LEDS
 	jsr		GetColorCodeLocation
 	ldd		ScreenColor			; x = value to use
+	exg		a,b
 	ldy		#0
 	tfr		u,x
 cs2
@@ -389,6 +435,8 @@ blnkln1:
 ; private
 GetScreenLocation:
 	pshs	d
+	lda		#10
+	sta		LEDS
 	ldd		RunningTCB
 	cmpd	IOFocusNdx
 	beq		gsl1
@@ -406,13 +454,19 @@ GetScreenLocation:
 	adca	#0
 	addd	#>BIOS_SCREENS
 	std		ScreenLocation
+	lda		#13
+	sta		LEDS
 	puls	d
 	rts
 gsl1:
+	lda		#11
+	sta		LEDS
 	ldd		#>TEXTSCR
 	std		ScreenLocation
 	ldd		#<TEXTSCR
 	std		ScreenLocation+2
+	lda		#12
+	sta		LEDS
 	puls	d
 	rts
 
@@ -508,7 +562,9 @@ CalcScreenLoc:
 	bne		csl1					; only for the task with the output focus
 	stx		TEXTREG+TEXT_CURPOS
 csl1:
-	tfr		x,d
+	tfr		x,d						
+	aslb							; * 2 for 2 bytes per char displayed.
+	rola
 	jsr		GetScreenLocation
 	addd	ScreenLocation+2
 	std		ScreenLocation+2
@@ -622,6 +678,8 @@ dcx3:
 	std		far [ScreenLocation]
 	jsr		GetScreenLocation
 	jsr		GetColorCodeLocation
+	ldx		ScreenLocation+2
+	stx		ColorCodeLocation+2
 	ldd		CharColor
 	std		far [ColorCodeLocation]
 	jsr		IncCursorPos
@@ -684,6 +742,200 @@ dsretB:
 	puls	a,x
 	rtf
 
-	org		$FFFC
-	fcw		start
-	fcw		start
+far CRLF
+	lda		#CR
+	jsr		DisplayChar
+	lda		#LF
+	jsr		DisplayChar
+	rtf
+
+;==============================================================================
+; Keyboard I/O
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; Check if there is a keyboard character available. If so return true (1)
+; otherwise return false (0) in acca.
+;------------------------------------------------------------------------------
+;
+KeybdCheckForKeyDirect:
+	ldd		KEYBD
+	clrb
+	anda	#$80
+	beq		kcfkd1
+	lda		#1
+kcfkd1
+	rts
+
+;------------------------------------------------------------------------------
+; Get character directly from keyboard. This routine blocks until a key is
+; available.
+;------------------------------------------------------------------------------
+;
+KeybdGetCharDirect:
+	pshs	x
+kgc1:
+	ldd		KEYBD
+	bita	#$80			; is there a char available ?
+	beq		kgc1			; no, check again
+	std		KEYBD+2			; clear keyboard strobe
+	bita	#$8				; is it a keydown event ?
+	bne		kgc1			; no, go back check for another char
+	tfr		b,a				; tranfser ascii code to acca
+	ldb		KeybdEcho		; is keyboard echo on ?
+	beq		gk1				; no keyboard echo, just return char
+	cmpa	#CR
+	bne		gk2				; convert CR keystroke into CRLF
+	jsr		CRLF
+	bra		gk1
+gk2:
+	jsr		DisplayChar
+gk1:
+	puls	x
+	rts
+
+;------------------------------------------------------------------------------
+; r1 0=echo off, non-zero = echo on
+;------------------------------------------------------------------------------
+;
+far SetKeyboardEcho:
+	pshs	x
+	ldx		RunningTCB
+	sta		KeybdEcho,x
+	puls	x
+	rtf
+
+;==============================================================================
+;==============================================================================
+;
+Monitor:
+	leas	$3FFF
+	lda		#0					; turn off keyboard echo
+	jsr		SetKeyboardEcho
+;	jsr		RequestIOFocus
+PromptLn:
+	jsr		CRLF
+	lda		#'$'
+	jsr		DisplayChar
+
+; Get characters until a CR is keyed
+;
+Prompt3:
+	jsr		KeybdGetCharDirect
+	cmpa	#CR
+	beq		Prompt1
+	jsr		DisplayChar
+	bra		Prompt3
+
+; Process the screen line that the CR was keyed on
+;
+Prompt1:
+	ldy		#0				; index to start of line
+	ldd		#$5050
+	std		LEDS
+	ldx		RunningTCB
+	cmpx	#MAX_TASKNO
+	bhi		Prompt3
+	ldd		#$5151
+	std		LEDS
+	clr		TCB_CursorCol,x	; go back to the start of the line
+	jsr		CalcScreenLoc	; calc screen memory location
+	ldd		#$5252
+	std		LEDS
+	jsr		MonGetch
+	cmpa	#'$'
+	bne		Prompt2			; skip over '$' prompt character
+	lda		#$5353
+	std		LEDS
+	jsr		MonGetch
+
+; Dispatch based on command character
+;
+Prompt2:
+	cmpa	#'?'			; $? - display help
+	bne		Prompt3
+	ldd		#<HelpMsg
+	std		Strptr+2
+	ldd		#>HelpMsg
+	std		Strptr
+	jsr		DisplayString
+	jmp		Monitor
+
+MonGetch:
+	ldd		far [ScreenLocation],y
+	exg		a,b
+	leay	2,y
+	jsr		ScreenToAscii
+	rts
+
+HelpMsg:
+	fcb		"? = Display help",CR,LF
+;	db	"CLS = clear screen",CR,LF
+;	db	"S = Boot from SD Card",CR,LF
+;	db	": = Edit memory bytes",CR,LF
+;	db	"L = Load sector",CR,LF
+;	db	"W = Write sector",CR,LF
+;	db  "DR = Dump registers",CR,LF
+;	db	"D = Dump memory",CR,LF
+;	db	"F = Fill memory",CR,LF
+;	db  "FL = Dump I/O Focus List",CR,LF
+;	db  "FIG = start FIG Forth",CR,LF
+;	db	"KILL n = kill task #n",CR,LF
+;	db	"B = start tiny basic",CR,LF
+;	db	"b = start EhBasic 6502",CR,LF
+;	db	"J = Jump to code",CR,LF
+;	db	"R[n] = Set register value",CR,LF
+;	db	"r = random lines - test bitmap",CR,LF
+;	db	"e = ethernet test",CR,LF
+;	db	"T = Dump task list",CR,LF
+;	db	"TO = Dump timeout list",CR,LF
+;	db	"TI = display date/time",CR,LF
+;	db	"TEMP = display temperature",CR,LF
+;	db	"P = Piano",CR,LF,0
+	fcb		0
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+irq_rout:
+	lda		#3				; Timer is IRQ #3
+	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
+	lda		IrqBase			; get the IRQ flag byte
+	lsra
+	ora		IrqBase
+	anda	#$E0
+	sta		IrqBase
+
+	inc		TEXTSCR+110		; update IRQ live indicator on screen
+	
+	; flash the cursor
+	ldx		RunningTCB
+	cpx		IOFocusNdx		; only bother to flash the cursor for the task with the IO focus.
+	bne		tr1a
+	lda		CursorFlash		; test if we want a flashing cursor
+	beq		tr1a
+	jsr		CalcScreenLoc	; compute cursor location in memory
+	ldy		ScreenLocation+2
+	lda		$FFD10000,y		; get color code $10000 higher in memory
+	ldb		IRQFlag			; get counter
+	lsrb
+	lsra
+	lsra
+	lsra
+	lsra
+	lsrb
+	rola
+	lsrb
+	rola
+	lsrb
+	rola
+	lsrb
+	rola
+	sta		$FFD10000,y		; store the color code back to memory
+tr1a
+	rti
+
+	org		$FFF8
+	fcw		irq_rout
+	fcw		start		; SWI
+	fcw		start		; NMI
+	fcw		start		; RST
