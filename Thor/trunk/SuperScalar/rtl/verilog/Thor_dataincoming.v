@@ -20,7 +20,7 @@
 //
 //
 // Thor SuperScalar
-// Instruction fetch logic
+// Data Incoming logic
 //
 // ============================================================================
 //
@@ -37,14 +37,16 @@
 	if (alu0_v) begin
 	    iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
 	    iqentry_exc	[ alu0_id[2:0] ] <= alu0_exc;
-	    iqentry_done[ alu0_id[2:0] ] <= !fnIsMem(iqentry_op[ alu0_id[2:0] ]);
+	    iqentry_done[ alu0_id[2:0] ] <= !fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
+		iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
 	    iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 	    iqentry_agen[ alu0_id[2:0] ] <= `TRUE;
 	end
 	if (alu1_v) begin
 	    iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
 	    iqentry_exc	[ alu1_id[2:0] ] <= alu1_exc;
-	    iqentry_done[ alu1_id[2:0] ] <= !fnIsMem(iqentry_op[ alu1_id[2:0] ]);
+	    iqentry_done[ alu1_id[2:0] ] <= !fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
+		iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
 	    iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 	    iqentry_agen[ alu1_id[2:0] ] <= `TRUE;
 	end
@@ -52,6 +54,7 @@
 	    iqentry_res	[ dram_id[2:0] ] <= dram_bus;
 	    iqentry_exc	[ dram_id[2:0] ] <= dram_exc;
 	    iqentry_done[ dram_id[2:0] ] <= `TRUE;
+		iqentry_cmt [ dram_id[2:0] ] <= `TRUE;
 	end
 
 	//
@@ -60,16 +63,19 @@
 	if (dram0 == 2'd1 && fnIsStore(dram0_op)) begin
 	    if ((alu0_v && dram0_id[2:0] == alu0_id[2:0]) || (alu1_v && dram0_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram0_id[2:0] ] <= `TRUE;
+		iqentry_cmt [ dram0_id[2:0]] <= `TRUE;
 	    iqentry_out[ dram0_id[2:0] ] <= `FALSE;
 	end
 	if (dram1 == 2'd1 && fnIsStore(dram1_op)) begin
 	    if ((alu0_v && dram1_id[2:0] == alu0_id[2:0]) || (alu1_v && dram1_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram1_id[2:0] ] <= `TRUE;
+		iqentry_cmt [ dram1_id[2:0]] <= `TRUE;
 	    iqentry_out[ dram1_id[2:0] ] <= `FALSE;
 	end
 	if (dram2 == 2'd1 && fnIsStore(dram2_op)) begin
 	    if ((alu0_v && dram2_id[2:0] == alu0_id[2:0]) || (alu1_v && dram2_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram2_id[2:0] ] <= `TRUE;
+		iqentry_cmt [ dram2_id[2:0]] <= `TRUE;
 	    iqentry_out[ dram2_id[2:0] ] <= `FALSE;
 	end
 
@@ -84,6 +90,10 @@
 
 	for (n = 0; n < 8; n = n + 1)
 	begin
+		if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
+			iqentry_pred[n] <= alu0_bus[3:0];
+			iqentry_p_v[n] <= `VAL;
+		end
 		if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
 			iqentry_a1[n] <= alu0_bus;
 			iqentry_a1_v[n] <= `VAL;
@@ -91,6 +101,10 @@
 		if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
 			iqentry_a2[n] <= alu0_bus;
 			iqentry_a2_v[n] <= `VAL;
+		end
+		if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
+			iqentry_pred[n] <= alu1_bus[3:0];
+			iqentry_p_v[n] <= `VAL;
 		end
 		if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
 			iqentry_a1[n] <= alu1_bus;
@@ -100,6 +114,10 @@
 			iqentry_a2[n] <= alu1_bus;
 			iqentry_a2_v[n] <= `VAL;
 		end
+		if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+			iqentry_pred[n] <= dram_bus[3:0];
+			iqentry_p_v[n] <= `VAL;
+		end
 		if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 			iqentry_a1[n] <= dram_bus;
 			iqentry_a1_v[n] <= `VAL;
@@ -108,6 +126,10 @@
 			iqentry_a2[n] <= dram_bus;
 			iqentry_a2_v[n] <= `VAL;
 		end
+		if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
+			iqentry_pred[n] <= commit0_bus[3:0];
+			iqentry_p_v[n] <= `VAL;
+		end
 		if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
 			iqentry_a1[n] <= commit0_bus;
 			iqentry_a1_v[n] <= `VAL;
@@ -115,6 +137,10 @@
 		if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
 			iqentry_a2[n] <= commit0_bus;
 			iqentry_a2_v[n] <= `VAL;
+		end
+		if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
+			iqentry_pred[n] <= commit1_bus[3:0];
+			iqentry_p_v[n] <= `VAL;
 		end
 		if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
 			iqentry_a1[n] <= commit1_bus;

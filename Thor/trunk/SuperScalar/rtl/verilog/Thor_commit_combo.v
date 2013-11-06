@@ -20,7 +20,7 @@
 //
 //
 // Thor SuperScalar
-// Instruction fetch logic
+// Commit combinational logic
 //
 // ============================================================================
 //
@@ -28,9 +28,9 @@
     // additional COMMIT logic
     //
 
-    assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic && iqentry_pred[head0]);
+    assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic && iqentry_cmt[head0]);
     assign commit1_v = ({iqentry_v[head0], iqentry_done[head0]} != 2'b10 
-			&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && iqentry_pred[head1]);
+			&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && iqentry_cmt[head1]);
 
     assign commit0_id = {iqentry_mem[head0], head0};	// if a memory op, it has a DRAM-bus id
     assign commit1_id = {iqentry_mem[head1], head1};	// if a memory op, it has a DRAM-bus id

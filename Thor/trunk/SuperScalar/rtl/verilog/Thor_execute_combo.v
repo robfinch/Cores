@@ -20,13 +20,17 @@
 //
 //
 // Thor SuperScalar
-// Execute assignments
+// Execute combinational logic
 //
 // ============================================================================
 //
     //
     // EXECUTE
     //
+wire [127:0] shlo0 = {64'd0,alu0_argA} << alu0_argB[5:0];
+wire [127:0] shruo0 = {alu0_argA,64'd0} >> alu0_argB[5:0];
+wire signed [63:0] shro0 = signed(alu0_argA) >> alu0_argB[5:0];
+
 function [63:0] fnAluCalc;
 input [7:0] alu_op;
 input [63:0] alu_argA;
@@ -81,6 +85,31 @@ default:	fnAluCalc = 64'hDEADDEADDEADDEAD;
 endcase
 end
 endfunction
+
+function fnPredicate;
+input [3:0] pr;
+input [3:0] cond;
+
+case(cond)
+PF:		fnPredicate = 1'b0;
+PT:		fnPredicate = 1'b1;
+PEQ:	fnPredicate =  pr[0];
+PNE:	fnPredicate = !pr[0];
+PLE:	fnPredicate =  pr[0]|pr[1];
+PGT:	fnPredicate = !(pr[0]|pr[1]);
+PLT:	fnPredicate =  pr[1];
+PGE:	fnPredicate = !pr[1];
+PLEU:	fnPredicate =  pr[0]|pr[2];
+PGTU:	fnPredicate = !(pr[0]|pr[2]);
+PLTU:	fnPredicate =  pr[2];
+PGEU:	fnPredicate = !pr[2];
+default:	fnPredicate = 1'b1;
+endcase
+
+endfunction
+
+	assign alu0_cmt = fnPredicate(alu0_pred, alu0_cond);
+	assign alu1_cmt = fnPredicate(alu1_pred, alu1_cond);
 
     assign alu0_bus = fnAluCalc(alu0_op, alu0_argA, alu0_argB, alu0_argI, alu0_pc);
     assign alu1_bus = fnAluCalc(alu1_op, alu1_argA, alu1_argB, alu1_argI, alu1_pc);

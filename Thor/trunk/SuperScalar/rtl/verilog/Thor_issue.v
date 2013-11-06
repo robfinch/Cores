@@ -64,16 +64,19 @@
 			case (iqentry_0_islot) 
 			2'd0: if (alu0_available) begin
 				alu0_sourceid	<= n[3:0];
-				alu0_op		<= fnIsMem(iqentry_op[n]) ? `ADDI : iqentry_op[n];
+				alu0_op		<= iqentry_op[n];
+				alu0_cond   <= iqentry_cond[n];
 				alu0_bt		<= iqentry_bt[n];
 				alu0_pc		<= iqentry_pc[n];
+				alu0_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
+								(iqentry_p_s[n] == alu0_id) ? alu0_bus[3:0] :
+								(iqentry_p_s[n] == alu1_id) ? alu1_bus[3:0] :
+								: 4'h0;
 				alu0_argA	<= iqentry_a1_v[n] ? iqentry_a1[0]
 							: (iqentry_a1_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a1_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;
-				alu0_argB	<= iqentry_imm[n]
-							? iqentry_a0[n]
-							: (iqentry_a2_v[n] ? iqentry_a2[0]
+				alu0_argB	<= iqentry_a2_v[n] ? iqentry_a2[0]
 							: (iqentry_a2_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a2_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;
@@ -81,16 +84,19 @@
 				end
 			2'd1: if (alu1_available) begin
 				alu1_sourceid	<= n[3:0];
-				alu1_op		<= fnIsMem(iqentry_op[n]) ? `ADDI : iqentry_op[n];
+				alu1_op		<= iqentry_op[n];
+				alu1_cond   <= iqentry_cond[n];
 				alu1_bt		<= iqentry_bt[n];
 				alu1_pc		<= iqentry_pc[n];
+				alu1_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
+								(iqentry_p_s[n] == alu0_id) ? alu0_bus[3:0] :
+								(iqentry_p_s[n] == alu1_id) ? alu1_bus[3:0] :
+								: 4'h0;
 				alu1_argA	<= iqentry_a1_v[n] ? iqentry_a1[0]
 							: (iqentry_a1_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a1_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;
-				alu1_argB	<= iqentry_imm[n]
-							? iqentry_a0[n]
-							: (iqentry_a2_v[n] ? iqentry_a2[n]
+				alu1_argB	<= iqentry_a2_v[n] ? iqentry_a2[n]
 							: (iqentry_a2_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a2_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;

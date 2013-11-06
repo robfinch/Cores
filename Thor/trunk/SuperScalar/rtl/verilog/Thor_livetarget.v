@@ -1,6 +1,31 @@
-
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//
+//
+// Thor SuperScalar
+// Live Target logic
+//
+// ============================================================================
+//
 //1675 LUTs
-module Thor_livetarget(iqentry_v,iqentry_stomp,tgt0,tgt1,tgt2,tgt3,tgt4,tgt5,tgt6,tgt7,livetarget,
+module Thor_livetarget(iqentry_v,iqentry_stomp,iqentry_cmt,tgt0,tgt1,tgt2,tgt3,tgt4,tgt5,tgt6,tgt7,livetarget,
 	iqentry_0_livetarget,
 	iqentry_1_livetarget,
 	iqentry_2_livetarget,
@@ -10,8 +35,10 @@ module Thor_livetarget(iqentry_v,iqentry_stomp,tgt0,tgt1,tgt2,tgt3,tgt4,tgt5,tgt
 	iqentry_6_livetarget,
 	iqentry_7_livetarget
 );
+parameter NREGS = 303;
 input [7:0] iqentry_v;
 input [7:0] iqentry_stomp;
+input [7:0] iqentry_cmt;
 input [8:0] tgt0;
 input [8:0] tgt1;
 input [8:0] tgt2;
@@ -20,15 +47,15 @@ input [8:0] tgt4;
 input [8:0] tgt5;
 input [8:0] tgt6;
 input [8:0] tgt7;
-output [287:1] livetarget;
-output [287:1] iqentry_0_livetarget;
-output [287:1] iqentry_1_livetarget;
-output [287:1] iqentry_2_livetarget;
-output [287:1] iqentry_3_livetarget;
-output [287:1] iqentry_4_livetarget;
-output [287:1] iqentry_5_livetarget;
-output [287:1] iqentry_6_livetarget;
-output [287:1] iqentry_7_livetarget;
+output [NREGS:1] livetarget;
+output [NREGS:1] iqentry_0_livetarget;
+output [NREGS:1] iqentry_1_livetarget;
+output [NREGS:1] iqentry_2_livetarget;
+output [NREGS:1] iqentry_3_livetarget;
+output [NREGS:1] iqentry_4_livetarget;
+output [NREGS:1] iqentry_5_livetarget;
+output [NREGS:1] iqentry_6_livetarget;
+output [NREGS:1] iqentry_7_livetarget;
 
 wire [8:0] iqentry_tgt [0:7];
 assign iqentry_tgt[0] = tgt0;
@@ -40,16 +67,16 @@ assign iqentry_tgt[5] = tgt5;
 assign iqentry_tgt[6] = tgt6;
 assign iqentry_tgt[7] = tgt7;
 
-wire [287:1] iq0_out;
-wire [287:1] iq1_out;
-wire [287:1] iq2_out;
-wire [287:1] iq3_out;
-wire [287:1] iq4_out;
-wire [287:1] iq5_out;
-wire [287:1] iq6_out;
-wire [287:1] iq7_out;
+wire [NREGS:1] iq0_out;
+wire [NREGS:1] iq1_out;
+wire [NREGS:1] iq2_out;
+wire [NREGS:1] iq3_out;
+wire [NREGS:1] iq4_out;
+wire [NREGS:1] iq5_out;
+wire [NREGS:1] iq6_out;
+wire [NREGS:1] iq7_out;
 
-reg [287:1] livetarget;
+reg [NREGS:1] livetarget;
 
 decoder9 iq0(.num(iqentry_tgt[0]), .out(iq0_out));
 decoder9 iq1(.num(iqentry_tgt[1]), .out(iq1_out));
@@ -62,29 +89,29 @@ decoder9 iq7(.num(iqentry_tgt[7]), .out(iq7_out));
 
 integer n;
 always @*
-	for (n = 1; n < 288; n = n + 1)
+	for (n = 1; n < NREGS+1; n = n + 1)
 		livetarget[n] <= iqentry_0_livetarget[n] | iqentry_1_livetarget[n] | iqentry_2_livetarget[n] | iqentry_3_livetarget[n] |
 			iqentry_4_livetarget[n] | iqentry_5_livetarget[n] | iqentry_6_livetarget[n] | iqentry_7_livetarget[n]
 			;
 assign 
-	iqentry_0_livetarget = {288{iqentry_v[0]}} & {288{~iqentry_stomp[0]}} & iq0_out,
-	iqentry_1_livetarget = {288{iqentry_v[1]}} & {288{~iqentry_stomp[1]}} & iq1_out,
-	iqentry_2_livetarget = {288{iqentry_v[2]}} & {288{~iqentry_stomp[2]}} & iq2_out,
-	iqentry_3_livetarget = {288{iqentry_v[3]}} & {288{~iqentry_stomp[3]}} & iq3_out,
-	iqentry_4_livetarget = {288{iqentry_v[4]}} & {288{~iqentry_stomp[4]}} & iq4_out,
-	iqentry_5_livetarget = {288{iqentry_v[5]}} & {288{~iqentry_stomp[5]}} & iq5_out,
-	iqentry_6_livetarget = {288{iqentry_v[6]}} & {288{~iqentry_stomp[6]}} & iq6_out,
-	iqentry_7_livetarget = {288{iqentry_v[7]}} & {288{~iqentry_stomp[7]}} & iq7_out;
+	iqentry_0_livetarget = {NREGS+1{iqentry_v[0]}} & {NREGS+1{~iqentry_stomp[0]}} & {NREGS+1{iqentry_cmt[0]}} & iq0_out,
+	iqentry_1_livetarget = {NREGS+1{iqentry_v[1]}} & {NREGS+1{~iqentry_stomp[1]}} & {NREGS+1{iqentry_cmt[1]}} & iq1_out,
+	iqentry_2_livetarget = {NREGS+1{iqentry_v[2]}} & {NREGS+1{~iqentry_stomp[2]}} & {NREGS+1{iqentry_cmt[2]}} & iq2_out,
+	iqentry_3_livetarget = {NREGS+1{iqentry_v[3]}} & {NREGS+1{~iqentry_stomp[3]}} & {NREGS+1{iqentry_cmt[3]}} & iq3_out,
+	iqentry_4_livetarget = {NREGS+1{iqentry_v[4]}} & {NREGS+1{~iqentry_stomp[4]}} & {NREGS+1{iqentry_cmt[4]}} & iq4_out,
+	iqentry_5_livetarget = {NREGS+1{iqentry_v[5]}} & {NREGS+1{~iqentry_stomp[5]}} & {NREGS+1{iqentry_cmt[5]}} & iq5_out,
+	iqentry_6_livetarget = {NREGS+1{iqentry_v[6]}} & {NREGS+1{~iqentry_stomp[6]}} & {NREGS+1{iqentry_cmt[6]}} & iq6_out,
+	iqentry_7_livetarget = {NREGS+1{iqentry_v[7]}} & {NREGS+1{~iqentry_stomp[7]}} & {NREGS+1{iqentry_cmt[7]}} & iq7_out;
 
 endmodule
 
 module decoder9 (num, out);
 input [8:0] num;
-output [287:1] out;
+output [303:1] out;
 
-wire [287:0] out1;
+wire [303:0] out1;
 
-assign out1 = 288'd1 << num;
-assign out = out1[287:1];
+assign out1 = 304'd1 << num;
+assign out = out1[303:1];
 
 endmodule

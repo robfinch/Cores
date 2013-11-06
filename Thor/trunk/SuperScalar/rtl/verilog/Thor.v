@@ -23,54 +23,57 @@
 //
 // ============================================================================
 //
+`define INSTRUCTION_RA	23:16
+`define INSTRUCTION_RB	31:24
+
 module Thor(rst_i, clk_i, nmi_i, irq_i, );
+parameter NREGS = 303;
+parameter PF = 4'd0;
+parameter PT = 4'd1;
+parameter PEQ = 4'd2;
+parameter PNE = 4'd3;
+parameter PLE = 4'd4;
+parameter PGT = 4'd5;
+parameter PGE = 4'd6;
+parameter PLT = 4'd7;
+parameter PLEU = 4'd8;
+parameter PGTU = 4'd9;
+parameter PGEU = 4'd10;
+parameter PLTU = 4'd11;
+input rst_i;
+input clk_i;
+input nmi_i;
+input irq_i;
 
-reg [122:0] ir,xir;
-reg [63:0] pc0,pc1,pc2;		// program counters
+reg [63:0] pc;					// program counter
 reg [3:0] panic;
-
-reg [63:0] pc;					// instruction pointer
 reg [63:0] bregs [0:15];		// branch target registers
 reg [ 3:0] pregs [0:15];		// predicate registers
 reg [63:12] sregs [0:15];		// segment registers
-reg loadm1,loadm2;
-reg pres0,pres1,pres2;
-reg pv0,pv1,pv2;
-wire [63:0] rfoa0,rfoa1,rfoa2;
-wire [63:0] rfob0,rfob1,rfob2;
-reg [6:0] xRt0,xRt1,xRt2;
+wire [63:0] rfoa0,rfoa1;
+wire [63:0] rfob0,rfob1;
 
 wire clk = clk_i;
 
 // Operand registers
-reg [63:0] a0,b0,a1,b1,a2,b2;
 wire take_branch;
 
-reg [3:0] rf_source [0:287];
+reg [3:0] rf_source [0:NREGS];
 
 // instruction queue (ROB)
 reg        iqentry_v  	[0:7];	// entry valid?  -- this should be the first bit
 reg        iqentry_out	[0:7];	// instruction has been issued to an ALU ... 
 reg        iqentry_done	[0:7];	// instruction result valid
+reg        iqentry_cmt  [0:7];  // commit result to machine state
 reg        iqentry_bt  	[0:7];	// branch-taken (used only for branches)
 reg        iqentry_agen [0:7];	// address-generate ... signifies that address is ready (only for LW/SW)
 reg        iqentry_mem	[0:7];	// touches memory: 1 if LW/SW
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_rfw	[0:7];	// writes to register file
-reg        iqentry_pfw  [0:7];  // writes to predicate register file
-reg        iqentry_bfw  [0:7];  // writes to branch regiser file
 reg [63:0] iqentry_res	[0:7];	// instruction result
-reg  [6:0] iqentry_op	[0:7];	// instruction opcode
+reg  [7:0] iqentry_op	[0:7];	// instruction opcode
 reg  [3:0] iqentry_exc	[0:7];	// only for branches ... indicates a HALT instruction
-reg  [6:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
-reg  [3:0] iqentry_ptgt [0:7];	// Pt field - target predicate register
-reg  [3:0] iqentry_btgt [0:7];  // Bt field - target branch register
-reg  [3:0] iqentry_p    [0:7];  // predicate argument
-reg        iqentry_p_v  [0:7];  // predicate argument valid
-reg  [3:0] iqentry_p_s  [0:7];  // predicate source
-reg [63:0] iqentry_b    [0:7];  // branch register value
-reg        iqentry_b_v  [0:7];  // branch register argument valid
-reg  [3:0] iqentry_b_s  [0:7];  // branch register source
+reg  [8:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg [63:0] iqentry_a0	[0:7];	// argument 0 (immediate)
 reg [63:0] iqentry_a1	[0:7];	// argument 1
 reg        iqentry_a1_v	[0:7];	// arg1 valid
@@ -98,31 +101,31 @@ wire  [1:0] iqentry_6_islot;
 wire  [1:0] iqentry_7_islot;
 reg [1:0] iqentry_islot[0:7];
 
-reg   [287:1] livetarget;
-wire  [287:1] iqentry_0_livetarget;
-wire  [287:1] iqentry_1_livetarget;
-wire  [287:1] iqentry_2_livetarget;
-wire  [287:1] iqentry_3_livetarget;
-wire  [287:1] iqentry_4_livetarget;
-wire  [287:1] iqentry_5_livetarget;
-wire  [287:1] iqentry_6_livetarget;
-wire  [287:1] iqentry_7_livetarget;
-wire  [287:1] iqentry_0_latestID;
-wire  [287:1] iqentry_1_latestID;
-wire  [287:1] iqentry_2_latestID;
-wire  [287:1] iqentry_3_latestID;
-wire  [287:1] iqentry_4_latestID;
-wire  [287:1] iqentry_5_latestID;
-wire  [287:1] iqentry_6_latestID;
-wire  [287:1] iqentry_7_latestID;
-wire  [287:1] iqentry_0_cumulative;
-wire  [287:1] iqentry_1_cumulative;
-wire  [287:1] iqentry_2_cumulative;
-wire  [287:1] iqentry_3_cumulative;
-wire  [287:1] iqentry_4_cumulative;
-wire  [287:1] iqentry_5_cumulative;
-wire  [287:1] iqentry_6_cumulative;
-wire  [287:1] iqentry_7_cumulative;
+reg   [NREGS:1] livetarget;
+wire  [NREGS:1] iqentry_0_livetarget;
+wire  [NREGS:1] iqentry_1_livetarget;
+wire  [NREGS:1] iqentry_2_livetarget;
+wire  [NREGS:1] iqentry_3_livetarget;
+wire  [NREGS:1] iqentry_4_livetarget;
+wire  [NREGS:1] iqentry_5_livetarget;
+wire  [NREGS:1] iqentry_6_livetarget;
+wire  [NREGS:1] iqentry_7_livetarget;
+wire  [NREGS:1] iqentry_0_latestID;
+wire  [NREGS:1] iqentry_1_latestID;
+wire  [NREGS:1] iqentry_2_latestID;
+wire  [NREGS:1] iqentry_3_latestID;
+wire  [NREGS:1] iqentry_4_latestID;
+wire  [NREGS:1] iqentry_5_latestID;
+wire  [NREGS:1] iqentry_6_latestID;
+wire  [NREGS:1] iqentry_7_latestID;
+wire  [NREGS:1] iqentry_0_cumulative;
+wire  [NREGS:1] iqentry_1_cumulative;
+wire  [NREGS:1] iqentry_2_cumulative;
+wire  [NREGS:1] iqentry_3_cumulative;
+wire  [NREGS:1] iqentry_4_cumulative;
+wire  [NREGS:1] iqentry_5_cumulative;
+wire  [NREGS:1] iqentry_6_cumulative;
+wire  [NREGS:1] iqentry_7_cumulative;
 
 
 reg  [2:0] tail0;
@@ -146,7 +149,6 @@ wire        fetchbuf0_mem;
 wire        fetchbuf0_jmp;
 wire        fetchbuf0_rfw;
 wire        fetchbuf0_pfw;
-wire        fetchbuf0_bfw;
 wire [63:0] fetchbuf1_instr;
 wire [63:0] fetchbuf1_pc;
 wire        fetchbuf1_v;
@@ -174,11 +176,14 @@ reg        did_branchback;
 reg        alu0_available;
 reg        alu0_dataready;
 reg  [3:0] alu0_sourceid;
-reg  [6:0] alu0_op;
+reg  [7:0] alu0_op;
+reg  [3:0] alu0_cond;
 reg        alu0_bt;
+reg        alu0_cmt;
 reg [63:0] alu0_argA;
 reg [63:0] alu0_argB;
-reg [63:0] alu0_argI;	// only used by BEQ
+reg [63:0] alu0_argI;
+reg  [3:0] alu0_pred;
 reg [63:0] alu0_pc;
 wire [63:0] alu0_bus;
 wire  [3:0] alu0_id;
@@ -190,11 +195,14 @@ wire [63:0] alu0_misspc;
 reg        alu1_available;
 reg        alu1_dataready;
 reg  [3:0] alu1_sourceid;
-reg  [6:0] alu1_op;
+reg  [7:0] alu1_op;
+reg  [3:0] alu1_cond;
 reg        alu1_bt;
+reg        alu1_cmt;
 reg [63:0] alu1_argA;
 reg [63:0] alu1_argB;
-reg [63:0] alu1_argI;	// only used by BEQ
+reg [63:0] alu1_argI;
+reg  [3:0] alu1_pred;
 reg [63:0] alu1_pc;
 wire [63:0] alu1_bus;
 wire  [3:0] alu1_id;
@@ -256,9 +264,11 @@ wire [63:0] commit1_bus;
 // therefore, if it is zero it implies the rf_v value should become VALID on a branchmiss
 // 
 
-Thor_livetarget ultgt1 (
+Thor_livetarget ultgt1 #(NREGS)
+(
 	iqentry_v,
 	iqentry_stomp,
+	iqentry_cmt,
 	iqentry_tgt[0],
 	iqentry_tgt[1],
 	iqentry_tgt[2],
@@ -285,58 +295,58 @@ Thor_livetarget ultgt1 (
 // a particular register.  looks a lot like scheduling logic, but in reverse.
 // 
 
-assign iqentry_0_latestID = (missid == 3'd0 || ((iqentry_0_livetarget & iqentry_1_cumulative) == 287'd0))
+assign iqentry_0_latestID = (missid == 3'd0 || ((iqentry_0_livetarget & iqentry_1_cumulative) == {NREGS{1'b0}}))
 				? iqentry_0_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_0_cumulative = (missid == 3'd0)
 				? iqentry_0_livetarget
 				: iqentry_0_livetarget | iqentry_1_cumulative;
 
-assign iqentry_1_latestID = (missid == 3'd1 || ((iqentry_1_livetarget & iqentry_2_cumulative) == 287'd0))
+assign iqentry_1_latestID = (missid == 3'd1 || ((iqentry_1_livetarget & iqentry_2_cumulative) == {NREGS{1'b0}}))
 				? iqentry_1_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_1_cumulative = (missid == 3'd1)
 				? iqentry_1_livetarget
 				: iqentry_1_livetarget | iqentry_2_cumulative;
 
-assign iqentry_2_latestID = (missid == 3'd2 || ((iqentry_2_livetarget & iqentry_3_cumulative) == 287'd0))
+assign iqentry_2_latestID = (missid == 3'd2 || ((iqentry_2_livetarget & iqentry_3_cumulative) == {NREGS{1'b0}}))
 				? iqentry_2_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_2_cumulative = (missid == 3'd2)
 				? iqentry_2_livetarget
 				: iqentry_2_livetarget | iqentry_3_cumulative;
 
-assign iqentry_3_latestID = (missid == 3'd3 || ((iqentry_3_livetarget & iqentry_4_cumulative) == 287'd0))
+assign iqentry_3_latestID = (missid == 3'd3 || ((iqentry_3_livetarget & iqentry_4_cumulative) == {NREGS{1'b0}}))
 				? iqentry_3_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_3_cumulative = (missid == 3'd3)
 				? iqentry_3_livetarget
 				: iqentry_3_livetarget | iqentry_4_cumulative;
 
-assign iqentry_4_latestID = (missid == 3'd4 || ((iqentry_4_livetarget & iqentry_5_cumulative) == 287'd0))
+assign iqentry_4_latestID = (missid == 3'd4 || ((iqentry_4_livetarget & iqentry_5_cumulative) == {NREGS{1'b0}}))
 				? iqentry_4_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_4_cumulative = (missid == 3'd4)
 				? iqentry_4_livetarget
 				: iqentry_4_livetarget | iqentry_5_cumulative;
 
-assign iqentry_5_latestID = (missid == 3'd5 || ((iqentry_5_livetarget & iqentry_6_cumulative) == 287'd0))
+assign iqentry_5_latestID = (missid == 3'd5 || ((iqentry_5_livetarget & iqentry_6_cumulative) == {NREGS{1'b0}}))
 				? iqentry_5_livetarget
 				: 287'd0;
 assign iqentry_5_cumulative = (missid == 3'd5)
 				? iqentry_5_livetarget
 				: iqentry_5_livetarget | iqentry_6_cumulative;
 
-assign iqentry_6_latestID = (missid == 3'd6 || ((iqentry_6_livetarget & iqentry_7_cumulative) == 287'd0))
+assign iqentry_6_latestID = (missid == 3'd6 || ((iqentry_6_livetarget & iqentry_7_cumulative) == {NREGS{1'b0}}))
 				? iqentry_6_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_6_cumulative = (missid == 3'd6)
 				? iqentry_6_livetarget
 				: iqentry_6_livetarget | iqentry_7_cumulative;
 
-assign iqentry_7_latestID = (missid == 3'd7 || ((iqentry_7_livetarget & iqentry_0_cumulative) == 287'd0))
+assign iqentry_7_latestID = (missid == 3'd7 || ((iqentry_7_livetarget & iqentry_0_cumulative) == {NREGS{1'b0}}))
 				? iqentry_7_livetarget
-				: 287'd0;
+				: {NREGS{1'b0}};
 assign iqentry_7_cumulative = (missid == 3'd7)
 				? iqentry_7_livetarget
 				: iqentry_7_livetarget | iqentry_0_cumulative;
@@ -367,16 +377,13 @@ wire [7:0] Rb0 = fetchbuf0_instr[`INSTRUCTION_RB];
 wire [7:0] Ra1 = fetchbuf1_instr[`INSTRUCTION_RA];
 wire [7:0] Rb1 = fetchbuf1_instr[`INSTRUCTION_RB];
 
-wire [63:0] rfoa0,rfob0;
-wire [63:0] rfoa1,rfob1;
-
 Thor_regfile2w4r
 (
 	.clk(clk),
 	.wr0(commit0_v & ~commit0_tgt[8]),
 	.wr1(commit1_v & ~commit1_tgt[8]),
-	.wa0(commit0_tgt),
-	.wa1(commit1_tgt),
+	.wa0(commit0_tgt[7:0]),
+	.wa1(commit1_tgt[7:0]),
 	.ra0(Ra0),
 	.ra1(Rb0),
 	.ra2(Ra1),
@@ -391,65 +398,58 @@ Thor_regfile2w4r
 
 always @(posedge clk)
 begin
-	if (commit0_v && commit0_tgt[8:4]==5'h00)
+	if (commit0_v && commit0_tgt[8:4]==5'h10)
 		pregs[commit0_tgt[3:0]] <= commit0_bus[3:0];
-	if (commit1_v && commit1_tgt[8:4]==5'h00)
+	if (commit1_v && commit1_tgt[8:4]==5'h10)
 		pregs[commit1_tgt[3:0]] <= commit1_bus[3:0];
 end
 
 always @(posedge clk)
 begin
-	if (commit0_v && commit0_tgt[8:4]==5'h01)
+	if (commit0_v && commit0_tgt[8:4]==5'h11)
 		bregs[commit0_tgt[3:0]] <= commit0_bus;
-	if (commit1_v && commit1_tgt[8:4]==5'h01)
+	if (commit1_v && commit1_tgt[8:4]==5'h11)
 		bregs[commit1_tgt[3:0]] <= commit1_bus;
+end
+
+always @(posedge clk)
+begin
+	if (commit0_v && commit0_tgt[8:4]==5'h12)
+		sregs[commit0_tgt[3:0]] <= commit0_bus;
+	if (commit1_v && commit1_tgt[8:4]==5'h12)
+		sregs[commit1_tgt[3:0]] <= commit1_bus;
 end
 
 //
 // 1 if the the operand is automatically valid, 
 // 0 if we need a RF value
-function source1_v;
-input [41:0] insn;
-	case(insn[`INSTRUCTION_OP])
-	`RR:
-		case(insn[`INSTRUCTION_FN])
-		`ADD:	source1_v = 0;
-		`SUB:	source1_v = 0;
-		`AND:	source1_v = 0;
-		`OR:	source1_v = 0;
-		`EOR:	source1_v = 0;
-		default:	source1_v = 0;
-		endcase
-	`ADDI:	source1_v = 0;
-	`SUBI:	source1_v = 0;
-	`ANDI:	source1_v = 0;
-	`ORI:	source1_v = 0;
-	`EORI:	source1_v = 0;
-	default:	source1_v = 0;
+function fnSource1_v;
+input [7:0] opcode;
+	case(opcode)
+	`SEI,`CLI:		fnSource1_v <= 1'b1;
+	`BR:			fnSource1_v <= 1'b1;
+	default:			fnSource1_v = 1'b0;
 	endcase
 endfunction
 
 //
 // 1 if the the operand is automatically valid, 
 // 0 if we need a RF value
-function source2_v;
-input [41:0] insn;
-	case(insn[`INSTRUCTION_OP])
-	`RR:
-		case(insn[`INSTRUCTION_FN])
-		`ADD:	source2_v = 0;
-		`SUB:	source2_v = 0;
-		`AND:	source2_v = 0;
-		`OR:	source2_v = 0;
-		`EOR:	source2_v = 0;
-		default:	source2_v = 1;
-		endcase
-	`ADDI:	source2_v = 1;
-	`SUBI:	source2_v = 1;
-	`ANDI:	source2_v = 1;
-	`ORI:	source2_v = 1;
-	`EORI:	source2_v = 1;
-	default:	source2_v = 1;
+function fnSource2_v;
+input [7:0] opcode;
+	case(opcode)
+	`TST:			fnSource2_v = 1'b1;
+	`ADDI,`ADDUI:	fnSource2_v = 1'b1;
+	`SUBI,`SUBUI:	fnSource2_v = 1'b1;
+	`ANDI:			fnSource2_v = 1'b1;
+	`ORI:			fnSource2_v = 1'b1;
+	`EORI:			fnSource2_v = 1'b1;
+	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW:
+			fnSource2_v <= 1'b1;
+	`JSR,`SYS,`INT,`RTS,`BR:
+			fnSource2_v <= 1'b1;
+	default:	fnSource2_v = 1'b0;
 	endcase
 endfunction
 
@@ -460,68 +460,16 @@ case(opcode)
 endcase
 endfunction
 
-task tskIncFetchbuf;
-begin
-	fetchbuf <= fetchbuf + ~iqentry_v[tail0];
-end
-endtask
-
-wire [5:0] xopcode0 = xir[40:35];
-wire [5:0] xopcode1 = xir[81:76];
-wire [5:0] xopcode2 = xir[122:117];
-
-// Template decoding
-wire [4:0] itemplate = insn[127:123];
-reg [4:0] dtemplate;
-reg [4:0] xtemplate;
-wire xisInt0 = xtemplate <= 5'h0d;
-wire xisInt1 = 	xtemplate==5'd00 || xtemplate==5'd01 || xtemplate==5'd02 ||
-				xtemplate==5'd06 || xtemplate==5'h10 || xtemplate==5'h11;
-wire xisCmp0 = xir[34] & xisInt0;
-wire xisCmp1 = xir[75] & xisInt1;
-wire i0isBranch = itemplate[4];
-wire i1isBranch = itemplate==5'h12 || itemplate==5'h13 || itemplate==5'h16 || itemplate==5'h17;
-wire i2isBranch = itemplate==5'h16 || itemplate==5'h17;
-wire x0isBranch = xtemplate[4];
-wire x1isBranch = xtemplate==5'h12 || xtemplate==5'h13 || xtemplate==5'h16 || xtemplate==5'h17;
-wire x2isBranch = xtemplate==5'h16 || xtemplate==5'h17;
-
-m_cmp ucmp1(xopcode0,a0,b0,imm0,pv0);
-m_cmp ucmp2(xopcode1,a1,b1,imm1,pv1);
-
-wire [5:0] prn0 = xir[40:35];
-wire [5:0] prn1 = xir[81:76];
-wire [5:0] prn2 = xir[122:117];
-wire [5:0] prt0 = xir[21:16];
-wire [5:0] prt1 = xir[62:57];
-wire [5:0] prt2 = xir[103:98];
-
-wire [6:0] Ra0 = fetchbuf0_instr[`INSTRUCTION_RA];
-wire [6:0] Ra1 = fetchbuf1_instr[`INSTRUCTION_RA];
-wire [6:0] Ra2 = fetchbuf2_instr[`INSTRUCTION_RA];
-wire [6:0] Rb0 = fetchbuf0_instr[`INSTRUCTION_RB];
-wire [6:0] Rb1 = fetchbuf1_instr[`INSTRUCTION_RB];
-wire [6:0] Rb2 = fetchbuf2_instr[`INSTRUCTION_RB];
-
-// Predicates with forwarding
-wire pr0 = prn0==6'd0 ? 1'b0 : prn0==6'd1 ? 1'b1 : xisCmp1 ? pv1 : xisCmp0 ? pv0 : pr[prn0];
-wire pr1 = prn1==6'd0 ? 1'b0 : prn1==6'd1 ? 1'b1 : xisCmp1 ? pv1 : xisCmp0 ? pv0 : pr[prn1];
-wire pr2 = prn2==6'd0 ? 1'b0 : prn2==6'd1 ? 1'b1 : xisCmp1 ? pv1 : xisCmp0 ? pv0 : pr[prn2];
-
-wire takb0 = (x0isBranch & pr0);
-wire takb1 = (x1isBranch & pr1) & !takb0;
-wire takb2 = (x2isBranch & pr2) & !takb0 & !takb1;
-
 wire predict_takenA,predict_takenB,predict_takenC,predict_takenD;
 
 Thor_BranchHistory ubhtA
 (
 	.rst(rst_i),
 	.clk(clk),
-	.advanceX(advanceX),
-	.xisBranch(x0isBranch),
-	.pc(pc[63:4]),
-	.xpc(xpc[63:4]),
+	.advanceX(),
+	.xisBranch(),
+	.pc(pc),
+	.xpc(),
 	.takb(takbA),
 	.predict_taken(predict_takenA)
 );
@@ -530,10 +478,10 @@ Thor_BranchHistory ubhtB
 (
 	.rst(rst_i),
 	.clk(clk),
-	.advanceX(advanceX),
-	.xisBranch(x1isBranch),
-	.ip(ip[57:4]),
-	.xip(ip[57:4]),
+	.advanceX(),
+	.xisBranch(),
+	.pc(pc),
+	.xpc(),
 	.takb(takbB),
 	.predict_taken(predict_takenB)
 );
@@ -544,8 +492,8 @@ Thor_BranchHistory ubhtC
 	.clk(clk),
 	.advanceX(advanceX),
 	.xisBranch(x2isBranch),
-	.ip(ip[57:4]),
-	.xip(ip[57:4]),
+	.pc(pc),
+	.xpc(),
 	.takb(takbC),
 	.predict_taken(predict_takenC)
 );
@@ -554,19 +502,36 @@ Thor_BranchHistory ubhtD
 (
 	.rst(rst_i),
 	.clk(clk),
-	.advanceX(advanceX),
-	.xisBranch(x2isBranch),
-	.ip(ip[57:4]),
-	.xip(ip[57:4]),
+	.advanceX(),
+	.xisBranch(),
+	.pc(pc),
+	.xpc(),
 	.takb(takbD),
 	.predict_taken(predict_takenD)
 );
 
+wire [3:0] Pn = ir[7:4];
 
-function [8:0] fnTargetReg;
+function [8:0] fnRa;
 input [63:0] ir;
 begin
-	// Set target register
+	case(ir[15:8])
+	`JSR:
+		fnRa = {1'b1,4'h1,ir[23:20]};
+	default:
+		fnRa = {1'b0,ir[23:16]};
+	endcase
+end
+endfunction
+
+// Set the target register
+// 00xx = general register file
+// 010x = predicate register
+// 011x = branch register
+// 012x = segment register
+function [8:0] fnTargetReg;
+input [7:0] opcode;
+begin
 	case(opcode)
 	`ADD,`ADDU,`SUB,`SUBU,
 	`AND,`OR,`EOR,`NAND,`NOR,`ENOR,`ANDC,`ORC,
@@ -580,11 +545,16 @@ begin
 	`MFSPR:
 		fnTargetReg = {1'b0,ir[31:24]};
 	`STSB,`STSW:
-		fnTargetReg = {1'b0,Ra};
+		fnTargetReg = {1'b0,ir[23:16]};
 	`CMP,`CMPI,`TST:
 		fnTargetReg = {1'b1,4'h0,ir[11:8]};
 	`JSR,`SYS,`INT:
 		fnTargetReg = {1'b1,4'h1,ir[19:16]};
+	`MTSPR:
+		if (ir[31:28]==4'h2)	// Move to seg. reg.
+			fnTargetReg = {1'b1,4'h2,ir[27:24]};
+		else
+			fnTargetReg = 9'h000;
 	default:	fnTargetReg = 9'h00;
 	endcase
 end
@@ -637,19 +607,16 @@ assign fetchbuf2_instr = (fetchbuf == 1'b0) ? fetchbufC_instr : fetchbufF_instr;
 assign fetchbuf2_v     = (fetchbuf == 1'b0) ? fetchbufC_v     : fetchbufF_v    ;
 assign fetchbuf2_pc    = (fetchbuf == 1'b0) ? fetchbufC_pc    : fetchbufF_pc   ;
 
-wire [6:0] opcodeA = fetchbufA_instr[`INSTRUCTION_OP];
-wire [6:0] opcodeB = fetchbufB_instr[`INSTRUCTION_OP];
-wire [6:0] opcodeC = fetchbufC_instr[`INSTRUCTION_OP];
-wire [6:0] opcodeD = fetchbufD_instr[`INSTRUCTION_OP];
-wire [6:0] opcodeE = fetchbufE_instr[`INSTRUCTION_OP];
-wire [6:0] opcodeF = fetchbufF_instr[`INSTRUCTION_OP];
+wire [7:0] opcodeA = fetchbufA_instr[`INSTRUCTION_OP];
+wire [7:0] opcodeB = fetchbufB_instr[`INSTRUCTION_OP];
+wire [7:0] opcodeC = fetchbufC_instr[`INSTRUCTION_OP];
+wire [7:0] opcodeD = fetchbufD_instr[`INSTRUCTION_OP];
 
-wire [6:0] opcode0 = fetchbuf ? opcodeD : opcodeA;
-wire [6:0] opcode1 = fetchbuf ? opcodeE : opcodeB;
-wire [6:0] opcode2 = fetchbuf ? opcodeF : opcodeC;
+wire [7:0] opcode0 = fetchbuf ? opcodeD : opcodeA;
+wire [7:0] opcode1 = fetchbuf ? opcodeE : opcodeB;
 
 function fnIsMem;
-input [6:0] opcode;
+input [7:0] opcode;
 fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW
 			;
@@ -860,14 +827,26 @@ always @(posedge clk) begin
 	// requires BLOCKING assignments, so that we can read from rf[i] later.
 	//
 	if (commit0_v) begin
-	    if (!rf_v[ commit0_tgt ]) 
-			rf_v[ commit0_tgt ] <= rf_source[ commit0_tgt ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[2:0] ]);
-	    if (commit0_tgt != 7'd0) $display("r%d <- %h", commit0_tgt, commit0_bus);
+		if (~commit0_tgt[8]) begin
+			if (!rf_v[ commit0_tgt ]) 
+				rf_v[ commit0_tgt ] <= rf_source[ commit0_tgt ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[2:0] ]);
+			if (commit0_tgt != 8'd0) $display("r%d <- %h", commit0_tgt, commit0_bus);
+		end
+		else if (commit0_tgt[8:4]==5'h10) begin
+			if (!pf_v[commit0_tgt[3:0]])
+				pf_v[commit0_tgt[3:0]] <= pf_source[commit0_tgt[3:0]]==commit0_id || (branchmiss && iqentry_source[ commit0_id[2:0] ]);
+		end
 	end
 	if (commit1_v) begin
-	    if (!rf_v[ commit1_tgt ]) 
-			rf_v[ commit1_tgt ] <= rf_source[ commit1_tgt ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
-	    if (commit1_tgt != 7'd0) $display("r%d <- %h", commit1_tgt, commit1_bus);
+		if (~commit1_tgt[8]) begin
+			if (!rf_v[ commit1_tgt ]) 
+				rf_v[ commit1_tgt ] <= rf_source[ commit1_tgt ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
+			if (commit1_tgt != 8'd0) $display("r%d <- %h", commit1_tgt, commit1_bus);
+		end
+		else if (commit1_tgt[8:4]==5'h10) begin
+			if (!pf_v[commit1_tgt[3:0]])
+				pf_v[commit1_tgt[3:0]] <= pf_source[commit1_tgt[3:0]]==commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
+		end
 	end
 
 	rf_v[0] <= 1'b1;

@@ -255,7 +255,7 @@
 	if (dram2 == `DRAMSLOT_AVAIL)	dram2_exc <= `EXC_NONE;
 
 	for (n = 0; n < 8; n = n + 1)
-		if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n]) begin
+		if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && iqentry_cmt[n]) begin
 			if (dram0 == `DRAMSLOT_AVAIL) begin
 				dram0 		<= 2'd1;
 				dram0_id 	<= { 1'b1, n[2:0] };
