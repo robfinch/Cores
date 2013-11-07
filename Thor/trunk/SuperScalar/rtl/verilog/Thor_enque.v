@@ -24,6 +24,17 @@
 //
 // ============================================================================
 //
+    //
+    // ENQUEUE
+    //
+    // place up to three instructions from the fetch buffer into slots in the IQ.
+    //   note: they are placed in-order, and they are expected to be executed
+    // 0, 1, or 2 of the fetch buffers may have valid data
+    // 0, 1, or 2 slots in the instruction queue may be available.
+    // if we notice that one of the instructions in the fetch buffer is a backwards branch,
+    // predict it taken (set branchback/backpc and delete any instructions after it in fetchbuf)
+    //
+
 	if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 
 		case ({fetchbuf0_v, fetchbuf1_v})
@@ -38,15 +49,16 @@
 					iqentry_cmt	 [tail0]    <=   `INV;
 					iqentry_out  [tail0]    <=   `INV;
 					iqentry_res  [tail0]    <=   `ZERO;
+					iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf1_instr);
 					iqentry_op   [tail0]    <=   opcode1;
 					iqentry_cond [tail0]    <=   cond1;
-					iqentry_bt   [tail0]    <=   fnIsFlowctrl(opcode1) && predict_taken1; 
+					iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
 					iqentry_agen [tail0]    <=   `INV;
 					iqentry_pc   [tail0]    <=   fetchbuf1_pc;
 					iqentry_mem  [tail0]    <=   fetchbuf1_mem;
 					iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
 					iqentry_rfw  [tail0]    <=   fetchbuf1_rfw;
-					iqentry_tgt  [tail0]    <=   fnTargetReg(insn1);
+					iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf1_instr);
 					iqentry_exc  [tail0]    <=   `EXC_NONE;
 					iqentry_pred [tail0]    <=   pregs[Pn1];
 					iqentry_p_v  [tail0]    <=   pf_v [Pn1];
@@ -56,9 +68,9 @@
 						iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf1_instr)};
 					else
 						iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
-					iqentry_a1   [tail0]    <=   rfoa1;
-					iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ Ra1 ];
-					iqentry_a1_s [tail0]    <=   rf_source [Ra1];
+					iqentry_a1   [tail0]    <=  (opcode1==`JSR || opcode1==`SYS || opcode1==`INT || opcode1==`RTS) ? bregs[fetchbuf1_instr[23:20]] : rfoa1;
+					iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
+					iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf1_instr)];
 					iqentry_a2   [tail0]    <=   rfob1;
 					iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1 ) | rf_v[ Rb1 ];
 					iqentry_a2_s [tail0]    <=   rf_source[Rb1];
@@ -69,8 +81,8 @@
 						pf_source[Pt1] <= {fetchbuf1_mem, tail0};
 					end
 					if (fetchbuf1_rfw) begin
-						rf_v[ Rt1 ] <= `INV;
-						rf_source[ Rt1 ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v[ fnTargetReg(fetchbuf1_instr) ] <= `INV;
+						rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
 					end
 				end
 
@@ -82,15 +94,16 @@
 					iqentry_cmt	 [tail0]    <=   `INV;
 					iqentry_out  [tail0]    <=   `INV;
 					iqentry_res  [tail0]    <=   `ZERO;
+					iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
 					iqentry_op   [tail0]    <=   opcode0; 
 					iqentry_cond [tail0]    <=   cond0;
-					iqentry_bt   [tail0]    <=   fnIsFlowctrl(opcode0) && predict_taken0; 
+					iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
 					iqentry_agen [tail0]    <=   `INV;
 					iqentry_pc   [tail0]    <=   fetchbuf0_pc;
 					iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 					iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 					iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
-					iqentry_tgt  [tail0]    <=   fnTargetReg(insn0);
+					iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
 					iqentry_exc  [tail0]    <=   `EXC_NONE;
 					iqentry_pred [tail0]    <=   pregs[Pn0];
 					iqentry_p_v  [tail0]    <=   pf_v [Pn0];
@@ -100,9 +113,9 @@
 						iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf0_instr)};
 					else
 						iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
-					iqentry_a1   [tail0]    <=   rfoa0;
-					iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ Ra0 ];
-					iqentry_a1_s [tail0]    <=   rf_source [Ra0];
+					iqentry_a1   [tail0]    <=   (opcode0==`JSR || opcode0==`SYS || opcode0==`INT || opcode0==`RTS) ? bregs[fetchbuf0_instr[23:20]] : rfoa0;
+					iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
+					iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
 					iqentry_a2   [tail0]    <=   rfob0;
 					iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0) | rf_v[Rb0];
 					iqentry_a2_s [tail0]    <=   rf_source [Rb0];
@@ -113,8 +126,8 @@
 						pf_source[Pt0] <= {fetchbuf0_mem, tail0};
 					end
 					if (fetchbuf0_rfw) begin
-						rf_v[ Rt0 ] <= `INV;
-						rf_source[ Rt0 ] <= { fetchbuf0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v[ fnTargetReg(fetchbuf0_instr) ] <= `INV;
+						rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };	// top bit indicates ALU/MEM bus
 					end
 				end
 		
@@ -123,29 +136,35 @@
 			//
 			// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
 			//
-			if ({fetchbuf0_instr[`INSTRUCTION_OP], fetchbuf0_instr[`INSTRUCTION_SB]} == {`BEQ, `BACK_BRANCH}) begin
+			if ({fnIsBranch(opcode0), predict_taken0} == {`TRUE, `TRUE}) begin
 
 				iqentry_v    [tail0]    <=	`VAL;
 				iqentry_done [tail0]    <=	`INV;
 				iqentry_cmt	 [tail0]    <=  `INV;
 				iqentry_out  [tail0]    <=	`INV;
 				iqentry_res  [tail0]    <=	`ZERO;
-				iqentry_op   [tail0]    <=	fetchbuf0_instr[`INSTRUCTION_OP]; 			// BEQ
+				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
+				iqentry_op   [tail0]    <=	opcode0; 			// BEQ
+				iqentry_cond [tail0]    <=   cond0;
 				iqentry_bt   [tail0]    <=	`VAL;
 				iqentry_agen [tail0]    <=	`INV;
 				iqentry_pc   [tail0]    <=	fetchbuf0_pc;
 				iqentry_mem  [tail0]    <=	fetchbuf0_mem;
 				iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
 				iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
-				iqentry_tgt  [tail0]    <=	fetchbuf0_rfw ? fetchbuf0_instr[`INSTRUCTION_RA] : 3'd0;
+				iqentry_tgt  [tail0]    <=	fnTargetReg(fetchbuf0_instr);
 				iqentry_exc  [tail0]    <=	`EXC_NONE;
-				iqentry_a0   [tail0]    <=	{{9 {fetchbuf0_instr[`INSTRUCTION_SB]}}, fetchbuf0_instr[`INSTRUCTION_IM]};
-				iqentry_a1   [tail0]    <=	rf [fetchbuf0_instr[`INSTRUCTION_RB]];
-				iqentry_a1_v [tail0]    <=	rf_v [fetchbuf0_instr[`INSTRUCTION_RB]];
-				iqentry_a1_s [tail0]    <=	rf_source [fetchbuf0_instr[`INSTRUCTION_RB]];
-				iqentry_a2   [tail0]    <=	rf[ fetchbuf0_instr[`INSTRUCTION_RA] ];
-				iqentry_a2_v [tail0]    <=	rf_v[ fetchbuf0_instr[`INSTRUCTION_RA] ];
-				iqentry_a2_s [tail0]    <=	rf_source[ fetchbuf0_instr[`INSTRUCTION_RA] ];
+				// Look at the previous queue slot to see if an immediate prefix is enqueued
+				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
+					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf0_instr)};
+				else
+					iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+				iqentry_a1   [tail0]    <=	(opcode0==`JSR || opcode0==`SYS || opcode0==`INT || opcode0==`RTS) ? bregs[fetchbuf0_instr[23:20]] : rfoa0;
+				iqentry_a1_v [tail0]    <=	fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
+				iqentry_a1_s [tail0]    <=	rf_source [fnRa(fetchbuf0_instr)];
+				iqentry_a2   [tail0]    <=	rfob0;
+				iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
+				iqentry_a2_s [tail0]    <=	rf_source[ Rb0 ];
 				tail0 <= tail0 + 1;
 				tail1 <= tail1 + 1;
 
@@ -177,35 +196,29 @@
 				iqentry_done [tail0]    <=   `INV;
 				iqentry_out  [tail0]    <=   `INV;
 				iqentry_res  [tail0]    <=   `ZERO;
-				iqentry_op   [tail0]    <=   fetchbuf0_instr[`INSTRUCTION_OP]; 
+				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
+				iqentry_op   [tail0]    <=   opcode0; 
+				iqentry_cond [tail0]    <=   cond0;
 				iqentry_bt   [tail0]    <=   `INV;
 				iqentry_agen [tail0]    <=   `INV;
 				iqentry_pc   [tail0]    <=   fetchbuf0_pc;
 				iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 				iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 				iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
-				iqentry_tgt  [tail0]    <=   fetchbuf0_rfw ? fetchbuf0_instr[`INSTRUCTION_RA] : 3'd0;
+				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
 				iqentry_exc  [tail0]    <=   `EXC_NONE;
-				iqentry_a0   [tail0]    <=   (fetchbuf0_instr[`INSTRUCTION_OP] == `LUI)
-							  ? {fetchbuf0_instr[`INSTRUCTION_LI], 6'd0}
-							  : {{9 {fetchbuf0_instr[`INSTRUCTION_SB]}}, fetchbuf0_instr[`INSTRUCTION_IM]};
-				iqentry_a1   [tail0]    <=   rf [fetchbuf0_instr[`INSTRUCTION_RB]];
-				iqentry_a1_v [tail0]    <=   source1_v[ fetchbuf0_instr[`INSTRUCTION_OP] ]
-								| rf_v[ fetchbuf0_instr[`INSTRUCTION_RB] ];
-				iqentry_a1_s [tail0]    <=   rf_source [fetchbuf0_instr[`INSTRUCTION_RB]];
-				iqentry_a2   [tail0]    <=   (fetchbuf0_rfw) 
-							  ? ((fetchbuf0_instr[`INSTRUCTION_OP] == `JALR)
-								 ? fetchbuf0_pc
-								 : rf[ fetchbuf0_instr[`INSTRUCTION_RC] ])
-							  : rf[ fetchbuf0_instr[`INSTRUCTION_RA] ];
-				iqentry_a2_v [tail0]    <=   source2_v[ fetchbuf0_instr[`INSTRUCTION_OP] ]
-							  | (fetchbuf0_rfw
-								  ? rf_v[ fetchbuf0_instr[`INSTRUCTION_RC] ]
-								  : rf_v[ fetchbuf0_instr[`INSTRUCTION_RA] ]);
-				iqentry_a2_s [tail0]    <=   (fetchbuf0_rfw
-							  ? rf_source[ fetchbuf0_instr[`INSTRUCTION_RC] ]
-							  : rf_source[ fetchbuf0_instr[`INSTRUCTION_RA] ]);
-
+				// Look at the previous queue slot to see if an immediate prefix is enqueued
+				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
+					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf0_instr)};
+				else
+					iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+				iqentry_a1   [tail0]    <=   (opcode0==`JSR || opcode0==`SYS || opcode0==`INT || opcode0==`RTS) ? bregs[fetchbuf0_instr[23:20]] : rfoa0;
+				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
+								
+				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
+				iqentry_a2   [tail0]    <=   rfob0;
+				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
+				iqentry_a2_s [tail0]    <=   rf_source[Rb0];
 				//
 				// if there is room for a second instruction, enqueue it
 				//
@@ -215,26 +228,24 @@
 				iqentry_done [tail1]    <=   `INV;
 				iqentry_out  [tail1]    <=   `INV;
 				iqentry_res  [tail1]    <=   `ZERO;
-				iqentry_op   [tail1]    <=   fetchbuf1_instr[`INSTRUCTION_OP]; 
-				iqentry_bt   [tail1]    <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `BEQ 
-								&& fetchbuf1_instr[`INSTRUCTION_SB] == `BACK_BRANCH); 
+				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf1_instr);
+				iqentry_op   [tail1]    <=   opcode1; 
+				iqentry_cond [tail1]    <=   cond1;
+				iqentry_bt   [tail1]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
 				iqentry_agen [tail1]    <=   `INV;
 				iqentry_pc   [tail1]    <=   fetchbuf1_pc;
 				iqentry_mem  [tail1]    <=   fetchbuf1_mem;
 				iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
 				iqentry_rfw  [tail1]    <=   fetchbuf1_rfw;
-				iqentry_tgt  [tail1]    <=   fetchbuf1_rfw ? fetchbuf1_instr[`INSTRUCTION_RA] : 3'd0;
+				iqentry_tgt  [tail1]    <=   fnTargetReg(fetchbuf1_instr);
 				iqentry_exc  [tail1]    <=   `EXC_NONE;
-				iqentry_a0   [tail1]    <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `LUI)
-								  ? {fetchbuf1_instr[`INSTRUCTION_LI], 6'd0}
-								  : {{9 {fetchbuf1_instr[`INSTRUCTION_SB]}}, fetchbuf1_instr[`INSTRUCTION_IM]};
-				iqentry_a1   [tail1]    <=   rf [fetchbuf1_instr[`INSTRUCTION_RB]];
-				iqentry_a2   [tail1]    <=   (fetchbuf1_rfw) 
-								  ? ((fetchbuf1_instr[`INSTRUCTION_OP] == `JALR)
-								 ? fetchbuf1_pc
-								 : rf[ fetchbuf1_instr[`INSTRUCTION_RC] ])
-								  : rf[ fetchbuf1_instr[`INSTRUCTION_RA] ];
-
+				// Look at the previous queue slot to see if an immediate prefix is enqueued
+				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
+					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf1_instr)};
+				else
+					iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
+				iqentry_a1   [tail1]    <=  (opcode1==`JSR || opcode1==`SYS || opcode1==`INT || opcode1==`RTS) ? bregs[fetchbuf1_instr[23:20]] : rfoa1;
+				iqentry_a2   [tail1]    <=   rfob1;
 				// a1/a2_v and a1/a2_s values require a bit of thinking ...
 
 				//
@@ -242,26 +253,26 @@
 				// that have a source (i.e. every instruction but LUI) read from RB
 				//
 				// if the argument is an immediate or not needed, we're done
-				if (source1_v[ fetchbuf1_instr[`INSTRUCTION_OP] ] == `VAL) begin
+				if (fnSource1_v( opcode1 ) == `VAL) begin
 					iqentry_a1_v [tail1] <= `VAL;
 					iqentry_a1_s [tail1] <= 4'd0;
 				end
 				// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 				else if (~fetchbuf0_rfw) begin
-					iqentry_a1_v [tail1]    <=   rf_v [fetchbuf1_instr[`INSTRUCTION_RB]];
-					iqentry_a1_s [tail1]    <=   rf_source [fetchbuf1_instr[`INSTRUCTION_RB]];
+					iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
+					iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
 				end
 				// otherwise, previous instruction does write to RF ... see if overlap
-				else if (fetchbuf0_instr[`INSTRUCTION_RA] != 3'd0
-					&& fetchbuf1_instr[`INSTRUCTION_RB] == fetchbuf0_instr[`INSTRUCTION_RA]) begin
+				else if (fnTargetReg(fetchbuf0_instr) != 9'd0
+					&& fnRa(fetchbuf1_instr) == fnTargetReg(fetchbuf0_instr)) begin
 					// if the previous instruction is a LW, then grab result from memq, not the iq
 					iqentry_a1_v [tail1]    <=   `INV;
 					iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
 				end
 				// if no overlap, get info from rf_v and rf_source
 				else begin
-					iqentry_a1_v [tail1]    <=   rf_v [fetchbuf1_instr[`INSTRUCTION_RB]];
-					iqentry_a1_s [tail1]    <=   rf_source [fetchbuf1_instr[`INSTRUCTION_RB]];
+					iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
+					iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
 				end
 
 				//
@@ -269,42 +280,26 @@
 				// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
 				//
 				// if the argument is an immediate or not needed, we're done
-				if (source2_v[ fetchbuf1_instr[`INSTRUCTION_OP] ] == `VAL) begin
+				if (fnSource2_v( opcode1 ) == `VAL) begin
 					iqentry_a2_v [tail1] <= `VAL;
 					iqentry_a2_s [tail1] <= 4'd0;
 				end
 				// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 				else if (~fetchbuf0_rfw) begin
-					iqentry_a2_v [tail1] <= ((fetchbuf1_instr[`INSTRUCTION_OP] == `ADD 
-								|| fetchbuf1_instr[`INSTRUCTION_OP] == `NAND)
-								  ? rf_v[ fetchbuf1_instr[`INSTRUCTION_RC] ]
-								  : rf_v[ fetchbuf1_instr[`INSTRUCTION_RA] ]);
-					iqentry_a2_s [tail1] <= ((fetchbuf1_instr[`INSTRUCTION_OP] == `ADD 
-								|| fetchbuf1_instr[`INSTRUCTION_OP] == `NAND)
-								  ? rf_source[ fetchbuf1_instr[`INSTRUCTION_RC] ]
-								  : rf_source[ fetchbuf1_instr[`INSTRUCTION_RA] ]);
+					iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
+					iqentry_a2_s [tail1] <= rf_source[Rb1];
 				end
 				// otherwise, previous instruction does write to RF ... see if overlap
-				else if (fetchbuf0_instr[`INSTRUCTION_RA] != 3'd0 &&
-					(((fetchbuf1_instr[`INSTRUCTION_OP] == `ADD || fetchbuf1_instr[`INSTRUCTION_OP] == `NAND)
-						 && fetchbuf1_instr[`INSTRUCTION_RC] == fetchbuf0_instr[`INSTRUCTION_RA])
-					  || 
-					 ((fetchbuf1_instr[`INSTRUCTION_OP] == `SW || fetchbuf1_instr[`INSTRUCTION_OP] == `BEQ)
-						 && fetchbuf1_instr[`INSTRUCTION_RA] == fetchbuf0_instr[`INSTRUCTION_RA]))) begin
+				else if (fnTargetReg(fetchbuf0_instr) != 9'd0 &&
+					Rb1 == fnTargetReg(fetchbuf0_instr)) begin
 					// if the previous instruction is a LW, then grab result from memq, not the iq
 					iqentry_a2_v [tail1]    <=   `INV;
 					iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
 				end
 				// if no overlap, get info from rf_v and rf_source
 				else begin
-					iqentry_a2_v [tail1] <= ((fetchbuf1_instr[`INSTRUCTION_OP] == `ADD 
-								|| fetchbuf1_instr[`INSTRUCTION_OP] == `NAND)
-								  ? rf_v[ fetchbuf1_instr[`INSTRUCTION_RC] ]
-								  : rf_v[ fetchbuf1_instr[`INSTRUCTION_RA] ]);
-					iqentry_a2_s [tail1] <= ((fetchbuf1_instr[`INSTRUCTION_OP] == `ADD 
-								|| fetchbuf1_instr[`INSTRUCTION_OP] == `NAND)
-								  ? rf_source[ fetchbuf1_instr[`INSTRUCTION_RC] ]
-								  : rf_source[ fetchbuf1_instr[`INSTRUCTION_RA] ]);
+					iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
+					iqentry_a2_s [tail1] <= rf_source[Rb1];
 				end
 
 				//
@@ -313,32 +308,32 @@
 				// first is allowed to update rf_v and rf_source only if the
 				// second has no target (BEQ or SW)
 				//
-				if (fetchbuf0_instr[`INSTRUCTION_RA] == fetchbuf1_instr[`INSTRUCTION_RA]) begin
+				if (fnTargetReg(fetchbuf0_instr) == fnTargetReg(fetchbuf1_instr)) begin
 					if (fetchbuf1_rfw) begin
-					rf_v[ fetchbuf1_instr[`INSTRUCTION_RA] ] <= `INV;
-					rf_source[ fetchbuf1_instr[`INSTRUCTION_RA] ] <= { fetchbuf1_mem, tail1 };
+						rf_v[ fnTargetReg(fetchbuf1_instr) ] <= `INV;
+						rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail1 };
 					end
 					else if (fetchbuf0_rfw) begin
-					rf_v[ fetchbuf0_instr[`INSTRUCTION_RA] ] <= `INV;
-					rf_source[ fetchbuf0_instr[`INSTRUCTION_RA] ] <= { fetchbuf0_mem, tail0 };
+						rf_v[ fnTargetReg(fetchbuf0_instr) ] <= `INV;
+						rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };
 					end
 				end
 				else begin
 					if (fetchbuf0_rfw) begin
-					rf_v[ fetchbuf0_instr[`INSTRUCTION_RA] ] <= `INV;
-					rf_source[ fetchbuf0_instr[`INSTRUCTION_RA] ] <= { fetchbuf0_mem, tail0 };
+						rf_v[ fnTargetReg(fetchbuf0_instr) ] <= `INV;
+						rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };
 					end
 					if (fetchbuf1_rfw) begin
-					rf_v[ fetchbuf1_instr[`INSTRUCTION_RA] ] <= `INV;
-					rf_source[ fetchbuf1_instr[`INSTRUCTION_RA] ] <= { fetchbuf1_mem, tail1 };
+					rf_v[ fnTargetReg(fetchbuf1_instr) ] <= `INV;
+					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail1 };
 					end
 				end
 
 				end	// ends the "if IQ[tail1] is available" clause
 				else begin	// only first instruction was enqueued
 				if (fetchbuf0_rfw) begin
-					rf_v[ fetchbuf0_instr[`INSTRUCTION_RA] ] <= `INV;
-					rf_source[ fetchbuf0_instr[`INSTRUCTION_RA] ] <= {fetchbuf0_mem, tail0};
+					rf_v[ fnTargetReg(fetchbuf0_instr) ] <= `INV;
+					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= {fetchbuf0_mem, tail0};
 				end
 				end
 

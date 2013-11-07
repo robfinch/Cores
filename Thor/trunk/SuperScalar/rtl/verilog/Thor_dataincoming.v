@@ -37,7 +37,9 @@
 	if (alu0_v) begin
 	    iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
 	    iqentry_exc	[ alu0_id[2:0] ] <= alu0_exc;
-	    iqentry_done[ alu0_id[2:0] ] <= !fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
+	    iqentry_done[ alu0_id[2:0] ] <= 
+				(iqentry_op[alu0_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
+				!fnIsMem(iqentry_op0_) || !alu0_cmt;
 		iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
 	    iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 	    iqentry_agen[ alu0_id[2:0] ] <= `TRUE;
@@ -45,7 +47,9 @@
 	if (alu1_v) begin
 	    iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
 	    iqentry_exc	[ alu1_id[2:0] ] <= alu1_exc;
-	    iqentry_done[ alu1_id[2:0] ] <= !fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
+	    iqentry_done[ alu1_id[2:0] ] <= 
+				(iqentry_op[alu1_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
+				!fnIsMem(iqentry_op1_) || !alu1_cmt;
 		iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
 	    iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 	    iqentry_agen[ alu1_id[2:0] ] <= `TRUE;

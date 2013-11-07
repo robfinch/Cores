@@ -23,48 +23,37 @@
 //
 // ============================================================================
 //
-module Thor_icachemem(wclk, wce, wr, wa, wd, rclk, pc, insn);
+module Thor_itagmem(wclk, wce, wr, wa, invalidate, rclk, rce, pc, hit0, hit1);
+parameter AMSB=63;
 input wclk;
 input wce;
 input wr;
-input [63:0] wa;
-input [63:0] wd;
+input [AMSB:0] wa;
+input invalidate;
 input rclk;
-input [63:0] pc;
-output reg [127:0] insn;
+input rce;
+input [AMSB:0] pc;
+output hit0;
+output hit1;
 
-reg [127:0] mem [0:511];
-reg [12:0] rpc,rpcp16;
+reg [AMSB:12] mem [0:127];
+reg [0:127] tvalid;
+reg [AMSB:0] rpc,rpcp16;
+wire [AMSB-11:0] tag0,tag1;
 
 always @(posedge wclk)
-	if (wce & wr & ~wa[3]) mem[wa[12:4]][63:0] <= wd;
+	if (wce & wr) mem[wa[11:5]] <= wa[AMSB:12];
 always @(posedge wclk)
-	if (wce & wr &  wa[3]) mem[wa[12:4]][127:64] <= wd;
+	if (invalidate) tvalid <= 128'd0;
+	else if (wce & wr) tvalid[wa[11:5]] <= 1'b1;
+always @(posedge rclk)
+	if (rce) rpc <= pc;
+always @(posedge rclk)
+	if (rce) rpcp16 <= pc + 64'd16;
+assign tag0 = {mem[rpc[11:5]],tvalid[rpc[11:5]]};
+assign tag1 = {mem[rpcp16[11:5]],tvalid[rpcp16[11:5]]};
 
-always @(posedge rclk)
-	rpc <= pc[12:0];
-always @(posedge rclk)
-	rpcp16 <= pc[12:0] + 13'd16;
-wire [127:0] insn0 = mem[rpc[12:4]];
-wire [127:0] insn1 = mem[rpcp16[12:4]];
-always @(rpc or insn0 or insn1)
-case(rpc[3:0])
-4'd0:	insn <= insn0;
-4'd1:	insn <= {insn1[7:0],insn0[127:8]};
-4'd2:	insn <= {insn1[15:0],insn0[127:16]};
-4'd3:	insn <= {insn1[23:0],insn0[127:24]};
-4'd4:	insn <= {insn1[31:0],insn0[127:32]};
-4'd5:	insn <= {insn1[39:0],insn0[127:40]};
-4'd6:	insn <= {insn1[47:0],insn0[127:48]};
-4'd7:	insn <= {insn1[55:0],insn0[127:56]};
-4'd8:	insn <= {insn1[63:0],insn0[127:64]};
-4'd9:	insn <= {insn1[71:0],insn0[127:72]};
-4'd10:	insn <= {insn1[79:0],insn0[127:80]};
-4'd11:	insn <= {insn1[87:0],insn0[127:88]};
-4'd12:	insn <= {insn1[95:0],insn0[127:96]};
-4'd13:	insn <= {insn1[103:0],insn0[127:104]};
-4'd14:	insn <= {insn1[111:0],insn0[127:112]};
-4'd15:	insn <= {insn1[119:0],insn0[127:120]};
-endcase
+assign hit0 = tag0 == {rpc[AMSB:12],1'b1};
+assign hit1 = tag1 == {rpcp16[AMSB:12],1'b1};
 
 endmodule

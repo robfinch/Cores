@@ -20,7 +20,7 @@
 //
 //
 // Thor SuperScalar
-// Instruction fetch logic
+// Issue combinational logic
 //
 // ============================================================================
 //
@@ -48,7 +48,7 @@
 		for (n = 0; n < 8; n = n + 1)
 		begin
 			iqentry_issue[n] <= (iqentry_v[n] && !iqentry_out[n] && !iqentry_agen[n]
-					&& (head0 == n[2:0] || ~|iqentry_islot[n[2:0]-1] || (iqentry_islot[n[2:0]-1] == 2'b01 && ~iqentry_issue[n[2:0]-1]))
+					&& (head0 == n[2:0] || ~|iqentry_islot[(n[2:0]-1)&3'h7] || (iqentry_islot[(n[2:0]-1)&3'h7] == 2'b01 && ~iqentry_issue[(n[2:0]-1)&3'h7]))
 					&& (iqentry_a1_v[n] 
 						|| (iqentry_a1_s[n] == alu0_sourceid && alu0_dataready)
 						|| (iqentry_a1_s[n] == alu1_sourceid && alu1_dataready))
@@ -57,8 +57,8 @@
 						|| (iqentry_a2_s[n] == alu0_sourceid && alu0_dataready)
 						|| (iqentry_a2_s[n] == alu1_sourceid && alu1_dataready)));
 			iqentry_islot[n[2:0]] <= (head0 == n[2:0]) ? 2'b00
-					: (iqentry_islot[n[2:0]-1] == 2'b11) ? 2'b11
-					: (iqentry_islot[n[2:0]-1] + {1'b0, iqentry_issue[n[2:0]-1]});
+					: (iqentry_islot[(n[2:0]-1)&3'h7] == 2'b11) ? 2'b11
+					: (iqentry_islot[(n[2:0]-1)&3'h7] + {1'b0, iqentry_issue[(n[2:0]-1)&3'h7]});
 		end
 
     // 

@@ -24,6 +24,39 @@
 //
 // ============================================================================
 //
+	//
+	// COMMIT PHASE (register-file update only ... dequeue is elsewhere)
+	//
+	// look at head0 and head1 and let 'em write the register file if they are ready
+	//
+	// why is it happening here and not in another phase?
+	// want to emulate a pass-through register file ... i.e. if we are reading
+	// out of r3 while writing to r3, the value read is the value written.
+	// requires BLOCKING assignments, so that we can read from rf[i] later.
+	//
+	if (commit0_v) begin
+		if (~commit0_tgt[8]) begin
+			if (!rf_v[ commit0_tgt ]) 
+				rf_v[ commit0_tgt ] <= rf_source[ commit0_tgt ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[2:0] ]);
+			if (commit0_tgt != 8'd0) $display("r%d <- %h", commit0_tgt, commit0_bus);
+		end
+		else if (commit0_tgt[8:4]==5'h10) begin
+			if (!pf_v[commit0_tgt[3:0]])
+				pf_v[commit0_tgt[3:0]] <= pf_source[commit0_tgt[3:0]]==commit0_id || (branchmiss && iqentry_source[ commit0_id[2:0] ]);
+		end
+	end
+	if (commit1_v) begin
+		if (~commit1_tgt[8]) begin
+			if (!rf_v[ commit1_tgt ]) 
+				rf_v[ commit1_tgt ] <= rf_source[ commit1_tgt ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
+			if (commit1_tgt != 8'd0) $display("r%d <- %h", commit1_tgt, commit1_bus);
+		end
+		else if (commit1_tgt[8:4]==5'h10) begin
+			if (!pf_v[commit1_tgt[3:0]])
+				pf_v[commit1_tgt[3:0]] <= pf_source[commit1_tgt[3:0]]==commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
+		end
+	end
+
     //
     // COMMIT PHASE (dequeue only ... not register-file update)
     //

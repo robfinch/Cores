@@ -20,7 +20,7 @@
 //
 //
 // Thor SuperScalar
-// Instruction fetch logic
+// Memory logic
 //
 // ============================================================================
 //
@@ -28,21 +28,20 @@
     // MEMORY
     //
     // update the memory queues and put data out on bus if appropriate
+	// Always puts data on the bus even for stores. In the case of
+	// stores, the data is ignored.
     //
 	//
 	// dram0, dram1, dram2 are the "state machines" that keep track
 	// of three pipelined DRAM requests.  if any has the value "00", 
 	// then it can accept a request (which bumps it up to the value "01"
-	// at the end of the cycle).  once it hits the value "11" the request
+	// at the end of the cycle).  once it hits the value "10" the request
+	// and the bus is acknowledged the dram request
 	// is finished and the dram_bus takes the value.  if it is a store, the 
 	// dram_bus value is not used, but the dram_v value along with the
 	// dram_id value signals the waiting memq entry that the store is
 	// completed and the instruction can commit.
 	//
-
-	if (dram0 != `DRAMSLOT_AVAIL)	dram0 <= dram0 + 2'd1;
-	if (dram1 != `DRAMSLOT_AVAIL)	dram1 <= dram1 + 2'd1;
-	if (dram2 != `DRAMSLOT_AVAIL)	dram2 <= dram2 + 2'd1;
 
 	casex ({dram0, dram1, dram2})
 	    // not particularly portable ...
@@ -53,41 +52,66 @@
 	    default: begin
 		//
 		// grab requests that have finished and put them on the dram_bus
-		if (dram0 == `DRAMREQ_READY) begin
-		    dram_v <= (dram0_op == `LW);
+		if (dram0 == 2'd2 && ack_i) begin
+		    dram_v <= fnIsLoad(dram0_op);
 		    dram_id <= dram0_id;
 		    dram_tgt <= dram0_tgt;
 		    dram_exc <= dram0_exc;
-		    if (dram0_op == `LW) 	dram_bus <= m[ dram0_addr ];
-		    else if (dram0_op == `SW) 	m[ dram0_addr ] <= dram0_data;
-		    else			panic <= `PANIC_INVALIDMEMOP;
-		    if (dram0_op == `SW) 	$display("m[%h] <- %h", dram0_addr, dram0_data);
+			dram_bus <= fnDatai(dram0_op,dat_i,sel_o);
+			dram0 <= 2'd0;
+			wb_nack();
 		end
-		else if (dram1 == `DRAMREQ_READY) begin
-		    dram_v <= (dram1_op == `LW);
+		else if (dram1 == 2'd2 && ack_i) begin
+		    dram_v <= fnIsLoad(dram1_op);
 		    dram_id <= dram1_id;
 		    dram_tgt <= dram1_tgt;
 		    dram_exc <= dram1_exc;
-		    if (dram1_op == `LW) 	dram_bus <= m[ dram1_addr ];
-		    else if (dram1_op == `SW) 	m[ dram1_addr ] <= dram1_data;
-		    else			panic <= `PANIC_INVALIDMEMOP;
-		    if (dram1_op == `SW) 	$display("m[%h] <- %h", dram1_addr, dram1_data);
+			dram_bus <= fnDatai(dram1_op,dat_i,sel_o);
+			dram1 <= 2'd0;
+			wb_nack();
 		end
-		else if (dram2 == `DRAMREQ_READY) begin
-		    dram_v <= (dram2_op == `LW);
+		else if (dram2 == 2'd2 && ack_i) begin
+		    dram_v <= fnIsLoad(dram2_op);
 		    dram_id <= dram2_id;
 		    dram_tgt <= dram2_tgt;
 		    dram_exc <= dram2_exc;
-		    if (dram2_op == `LW) 	dram_bus <= m[ dram2_addr ];
-		    else if (dram2_op == `SW) 	m[ dram2_addr ] <= dram2_data;
-		    else			panic <= `PANIC_INVALIDMEMOP;
-		    if (dram2_op == `SW) 	$display("m[%h] <- %h", dram2_addr, dram2_data);
+			dram_bus <= fnDatai(dram2_op,dat_i,sel_o);
+			dram2 <= 2'd0;
+			wb_nack();
 		end
 		else begin
 		    dram_v <= `INV;
 		end
 	    end
 	endcase
+	if (dram0==2'd1 && !cyc_o) begin
+		cyc_o <= 1'b1;
+		stb_o <= 1'b1;
+		we_o <= fnIsStore(dram0_op);
+		sel_o <= fnSelect(dram0_op,dram0_addr);
+		adr_o <= dram0_addr;
+		dat_o <= fnDatao(dram0_op,dram0_data);
+		dram0 <= 2'd2;
+	end
+	else if (dram1==2'd1 && !cyc_o) begin
+		cyc_o <= 1'b1;
+		stb_o <= 1'b1;
+		we_o <= fnIsStore(dram1_op);
+		sel_o <= fnSelect(dram1_op,dram1_addr);
+		adr_o <= dram1_addr;
+		dat_o <= fnDatao(dram1_op,dram1_data);
+		dram1 <= 2'd2;
+	end
+	else if (dram2==2'd1 && !cyc_o) begin
+		cyc_o <= 1'b1;
+		stb_o <= 1'b1;
+		we_o <= fnIsStore(dram2_op);
+		sel_o <= fnSelect(dram2_op,dram2_addr);
+		adr_o <= dram2_addr;
+		dat_o <= fnDatao(dram2_op,dram2_data);
+		dram2 <= 2'd2;
+	end
+
 
 	//
 	// determine if the instructions ready to issue can, in fact, issue.
