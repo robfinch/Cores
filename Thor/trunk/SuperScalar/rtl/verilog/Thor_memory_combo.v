@@ -20,7 +20,7 @@
 //
 //
 // Thor SuperScalar
-// Instruction fetch logic
+// Memory combinational logic
 //
 // ============================================================================
 //
@@ -47,5 +47,5 @@
 	    iqentry_memready[6] = (iqentry_v[6] & iqentry_memopsvalid[6] & ~iqentry_memissue[6] & ~iqentry_done[6] & ~iqentry_out[6] & ~iqentry_stomp[6]),
 	    iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]);
 
-    assign outstanding_stores = (dram0 && dram0_op == `SW) || (dram1 && dram1_op == `SW) || (dram2 && dram2_op == `SW);
+    assign outstanding_stores = (dram0 && fnIsStore(dram0_op)) || (dram1 && fnIsStore(dram1_op)) || (dram2 && fnIsStore(dram2_op));
 

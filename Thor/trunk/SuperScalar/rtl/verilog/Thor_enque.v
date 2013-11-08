@@ -64,14 +64,16 @@
 					iqentry_p_v  [tail0]    <=   pf_v [Pn1];
 					iqentry_p_s  [tail0]    <=   pf_source [Pn1];
 					// Look at the previous queue slot to see if an immediate prefix is enqueued
-					if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
-						iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf1_instr)};
+					// But don't allow it for a branch
+					if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode1))
+						iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf1_instr)};
 					else
-						iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
-					iqentry_a1   [tail0]    <=  (opcode1==`JSR || opcode1==`SYS || opcode1==`INT || opcode1==`RTS) ? bregs[fetchbuf1_instr[23:20]] : rfoa1;
+						iqentry_a0[tail0]   <=  fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} : 
+												{{DBW-8{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
+					iqentry_a1   [tail0]    <=   fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
 					iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
 					iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf1_instr)];
-					iqentry_a2   [tail0]    <=   rfob1;
+					iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode1) ? {{DBW-6{1'b0}},Rb1[5:0]} : rfob1;
 					iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1 ) | rf_v[ Rb1 ];
 					iqentry_a2_s [tail0]    <=   rf_source[Rb1];
 					tail0 <= tail0 + 1;
@@ -109,14 +111,15 @@
 					iqentry_p_v  [tail0]    <=   pf_v [Pn0];
 					iqentry_p_s  [tail0]    <=   pf_source [Pn0];
 					// Look at the previous queue slot to see if an immediate prefix is enqueued
-					if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
-						iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf0_instr)};
+					if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode0))
+						iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf0_instr)};
 					else
-						iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
-					iqentry_a1   [tail0]    <=   (opcode0==`JSR || opcode0==`SYS || opcode0==`INT || opcode0==`RTS) ? bregs[fetchbuf0_instr[23:20]] : rfoa0;
+						iqentry_a0[tail0]   <=  fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
+												{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+					iqentry_a1   [tail0]    <=   fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 					iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 					iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-					iqentry_a2   [tail0]    <=   rfob0;
+					iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 					iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0) | rf_v[Rb0];
 					iqentry_a2_s [tail0]    <=   rf_source [Rb0];
 					tail0 <= tail0 + 1;
@@ -155,14 +158,15 @@
 				iqentry_tgt  [tail0]    <=	fnTargetReg(fetchbuf0_instr);
 				iqentry_exc  [tail0]    <=	`EXC_NONE;
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
-				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
-					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf0_instr)};
+				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode0))
+					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf0_instr)};
 				else
-					iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
-				iqentry_a1   [tail0]    <=	(opcode0==`JSR || opcode0==`SYS || opcode0==`INT || opcode0==`RTS) ? bregs[fetchbuf0_instr[23:20]] : rfoa0;
+					iqentry_a0[tail0]   <=  fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
+											{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+				iqentry_a1   [tail0]    <=	fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 				iqentry_a1_v [tail0]    <=	fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 				iqentry_a1_s [tail0]    <=	rf_source [fnRa(fetchbuf0_instr)];
-				iqentry_a2   [tail0]    <=	rfob0;
+				iqentry_a2   [tail0]    <=	fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 				iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 				iqentry_a2_s [tail0]    <=	rf_source[ Rb0 ];
 				tail0 <= tail0 + 1;
@@ -181,12 +185,12 @@
 				//
 
 				if (iqentry_v[tail1] == `INV) begin
-				tail0 <= tail0 + 2;
-				tail1 <= tail1 + 2;
+					tail0 <= tail0 + 2;
+					tail1 <= tail1 + 2;
 				end
 				else begin
-				tail0 <= tail0 + 1;
-				tail1 <= tail1 + 1;
+					tail0 <= tail0 + 1;
+					tail1 <= tail1 + 1;
 				end
 
 				//
@@ -194,10 +198,11 @@
 				//
 				iqentry_v    [tail0]    <=   `VAL;
 				iqentry_done [tail0]    <=   `INV;
+				iqentry_cmt  [tail0]    <=   `INV;
 				iqentry_out  [tail0]    <=   `INV;
 				iqentry_res  [tail0]    <=   `ZERO;
 				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
-				iqentry_op   [tail0]    <=   opcode0; 
+				iqentry_op   [tail0]    <=  opcode0;
 				iqentry_cond [tail0]    <=   cond0;
 				iqentry_bt   [tail0]    <=   `INV;
 				iqentry_agen [tail0]    <=   `INV;
@@ -208,15 +213,16 @@
 				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
 				iqentry_exc  [tail0]    <=   `EXC_NONE;
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
-				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
-					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf0_instr)};
+				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode0))
+					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf0_instr)};
 				else
-					iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
-				iqentry_a1   [tail0]    <=   (opcode0==`JSR || opcode0==`SYS || opcode0==`INT || opcode0==`RTS) ? bregs[fetchbuf0_instr[23:20]] : rfoa0;
+					iqentry_a0[tail0]   <=  fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
+											{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+				iqentry_a1   [tail0]    <=   fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 								
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-				iqentry_a2   [tail0]    <=   rfob0;
+				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 				iqentry_a2_s [tail0]    <=   rf_source[Rb0];
 				//
@@ -226,9 +232,10 @@
 
 				iqentry_v    [tail1]    <=   `VAL;
 				iqentry_done [tail1]    <=   `INV;
+				iqentry_cmt  [tail1]    <=   `INV;
 				iqentry_out  [tail1]    <=   `INV;
 				iqentry_res  [tail1]    <=   `ZERO;
-				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf1_instr);
+				iqentry_insnsz[tail1]   <=  fnInsnLength(fetchbuf1_instr);
 				iqentry_op   [tail1]    <=   opcode1; 
 				iqentry_cond [tail1]    <=   cond1;
 				iqentry_bt   [tail1]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
@@ -240,12 +247,13 @@
 				iqentry_tgt  [tail1]    <=   fnTargetReg(fetchbuf1_instr);
 				iqentry_exc  [tail1]    <=   `EXC_NONE;
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
-				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM)
-					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][63:8],fnImm(fetchbuf1_instr)};
+				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode1))
+					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf1_instr)};
 				else
-					iqentry_a0[tail0]   <=   {{56{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
-				iqentry_a1   [tail1]    <=  (opcode1==`JSR || opcode1==`SYS || opcode1==`INT || opcode1==`RTS) ? bregs[fetchbuf1_instr[23:20]] : rfoa1;
-				iqentry_a2   [tail1]    <=   rfob1;
+					iqentry_a0[tail0]   <=  fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} : 
+											{{DBW-8{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
+				iqentry_a1   [tail1]    <=   fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
+				iqentry_a2   [tail1]    <=   fnIsShiftiop(opcode1) ? {58'b0,Rb1[5:0]} : rfob1;
 				// a1/a2_v and a1/a2_s values require a bit of thinking ...
 
 				//

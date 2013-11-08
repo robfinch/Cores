@@ -91,7 +91,7 @@
 				end
 			4'b1100: 
 				if (fnIsBranch(opcodeA) && predict_takenA) begin
-					pc <= backpc;
+					pc <= branch_pc;
 					fetchbufA_v <= iqentry_v[tail0];
 					fetchbufB_v <= `INV;		// stomp on it
 					if (~iqentry_v[tail0])	fetchbuf <= 1'b0;
@@ -176,7 +176,7 @@
 				end
 			4'b1100:
 				if (fnIsBranch(opcodeC) && predict_takenC) begin
-					pc <= backpc;
+					pc <= branch_pc;
 					fetchbufC_v <= iqentry_v[tail0];
 					fetchbufD_v <= `INV;		// stomp on it
 					if (~iqentry_v[tail0])	fetchbuf <= 1'b0;
@@ -238,6 +238,7 @@
 				fetchbufA_v <= `INV;
 				end
 			4'b11_11 : begin
+				$display("case 11_11");
 				fetchbufA_v <= `INV;
 				fetchbufB_v <= `INV;
 				fetchbuf <= ~fetchbuf;

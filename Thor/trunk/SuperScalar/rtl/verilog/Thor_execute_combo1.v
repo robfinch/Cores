@@ -27,26 +27,26 @@
     //
     // EXECUTE
     //
-function [DBW-1:0] fnAluCalc;
+function [63:0] fnAluCalc;
 input [7:0] alu_op;
-input [DBW-1:0] alu_argA;
-input [DBW-1:0] alu_argB;
-input [DBW-1:0] alu_argI;
-input signed [DBW-1:0] alu_argAs;
-input signed [DBW-1:0] alu_argBs;
-input signed [DBW-1:0] alu_argIs;
-input [DBW-1:0] alu_pc;
+input [63:0] alu_argA;
+input [63:0] alu_argB;
+input [63:0] alu_argI;
+input signed [63:0] alu_argAs;
+input signed [63:0] alu_argBs;
+input signed [63:0] alu_argIs;
+input [63:0] alu_pc;
 input [3:0] insnsz;
 begin
 casex(alu_op)
-`_2ADDU:		fnAluCalc = {alu_argA[DBW-2:0],1'b0} + alu_argB;
-`_4ADDU:		fnAluCalc = {alu_argA[DBW-3:0],2'b0} + alu_argB;
-`_8ADDU:		fnAluCalc = {alu_argA[DBW-4:0],3'b0} + alu_argB;
-`_16ADDU:		fnAluCalc = {alu_argA[DBW-5:0],4'b0} + alu_argB;
-`_2ADDUI:		fnAluCalc = {alu_argA[DBW-2:0],1'b0} + alu_argI;
-`_4ADDUI:		fnAluCalc = {alu_argA[DBW-3:0],2'b0} + alu_argI;
-`_8ADDUI:		fnAluCalc = {alu_argA[DBW-4:0],3'b0} + alu_argI;
-`_16ADDUI:		fnAluCalc = {alu_argA[DBW-5:0],4'b0} + alu_argI;
+`_2ADDU:		fnAluCalc = {alu_argA,1'b0} + alu_argB;
+`_4ADDU:		fnAluCalc = {alu_argA,2'b0} + alu_argB;
+`_8ADDU:		fnAluCalc = {alu_argA,3'b0} + alu_argB;
+`_16ADDU:		fnAluCalc = {alu_argA,4'b0} + alu_argB;
+`_2ADDUI:		fnAluCalc = {alu_argA,1'b0} + alu_argI;
+`_4ADDUI:		fnAluCalc = {alu_argA,2'b0} + alu_argI;
+`_8ADDUI:		fnAluCalc = {alu_argA,3'b0} + alu_argI;
+`_16ADDUI:		fnAluCalc = {alu_argA,4'b0} + alu_argI;
 `ADD,`ADDU:		fnAluCalc = alu_argA + alu_argB;
 `SUB,`SUBU:		fnAluCalc = alu_argA - alu_argB;
 `ADDI,`ADDUI:	fnAluCalc = alu_argA + alu_argI;
@@ -62,21 +62,21 @@ casex(alu_op)
 `ENOR:			fnAluCalc = !(alu_argA ^ alu_argB);
 `TST:	begin
 			fnAluCalc[0] = alu_argA == 64'd0;
-			fnAluCalc[1] = alu_argA[DBW-1];
+			fnAluCalc[1] = alu_argA[63];
 			fnAluCalc[2] = 1'b0;
-			fnAluCalc[DBW-1:3] = 61'd0;
+			fnAluCalc[63:3] = 61'd0;
 		end
 `CMP:	begin
 			fnAluCalc[0] = alu_argA == alu_argB;
 			fnAluCalc[1] = alu_argAs < alu_argBs;
 			fnAluCalc[2] = alu_argA < alu_argB;
-			fnAluCalc[DBW-1:3] = 61'd0;
+			fnAluCalc[63:3] = 61'd0;
 		end
 `CMPI:	begin
 			fnAluCalc[0] = alu_argA == alu_argI;
 			fnAluCalc[1] = alu_argAs < alu_argIs;
 			fnAluCalc[2] = alu_argA < alu_argI;
-			fnAluCalc[DBW-1:3] = 61'd0;
+			fnAluCalc[63:3] = 61'd0;
 		end
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW:
 				fnAluCalc = alu_argA + alu_argI;
@@ -124,10 +124,10 @@ endfunction
 			alu1_id = alu1_sourceid;
 
     assign  alu0_misspc = (alu0_op == `JSR) ? alu0_argA + alu0_argI :
-						  (alu0_op==`SYS || alu0_op==`INT) ? {alu0_argA[DBW-5:0],4'b0} + alu0_argI :
+						  (alu0_op==`SYS || alu0_op==`INT) ? {alu0_argA[59:0],4'b0} + alu0_argI :
 						  (alu0_bt ? alu0_pc : alu0_pc + alu0_argI),
 			alu1_misspc = (alu1_op == `JSR) ? alu1_argA + alu1_argI :
-						  (alu0_op==`SYS || alu0_op==`INT) ? {alu1_argA[DBW-5:0],4'b0} + alu1_argI :
+						  (alu0_op==`SYS || alu0_op==`INT) ? {alu1_argA[59:0],4'b0} + alu1_argI :
 						  (alu1_bt ? alu1_pc : alu1_pc + alu1_argI);
 
     assign  alu0_exc = alu0_op==`SYS ? `EXC_SYS :

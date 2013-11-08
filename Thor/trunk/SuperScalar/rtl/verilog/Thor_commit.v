@@ -20,7 +20,7 @@
 //
 //
 // Thor SuperScalar
-// Instruction fetch logic
+// Commit phase logic
 //
 // ============================================================================
 //
@@ -56,6 +56,26 @@
 				pf_v[commit1_tgt[3:0]] <= pf_source[commit1_tgt[3:0]]==commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
 		end
 	end
+	
+	// When the INT instruction commits set the hardware interrupt status to disable further interrupts.
+	if ((iqentry_op[head0]==`INT && iqentry_done[head0] && iqentry_v[head0]) ||
+		(iqentry_done[head0] && iqentry_v[head0] && iqentry_op[head1]==`INT && iqentry_done[head1] && iqentry_v[head1]))
+	begin
+		StatusHWI <= `TRUE;
+		nmi_edge <= 1'b0;
+	end
+	// When the RTI instruction commits clear the hardware interrupt status to enable interrupts.
+	if ((iqentry_op[head0]==`RTI && iqentry_done[head0] && iqentry_v[head0] && commit0_v) ||
+		(iqentry_done[head0] && iqentry_v[head0] && iqentry_op[head1]==`RTI && iqentry_done[head1] && iqentry_v[head1] && commit1_v))
+	begin
+		StatusHWI <= `FALSE;
+	end
+	if ((iqentry_op[head0]==`CLI && iqentry_done[head0] && iqentry_v[head0]) ||
+		(iqentry_done[head0] && iqentry_v[head0] && iqentry_op[head1]==`CLI && iqentry_done[head1] && iqentry_v[head1]))
+		im <= 1'b0;
+	if ((iqentry_op[head0]==`SEI && iqentry_done[head0] && iqentry_v[head0]) ||
+		(iqentry_done[head0] && iqentry_v[head0] && iqentry_op[head1]==`SEI && iqentry_done[head1] && iqentry_v[head1]))
+		im <= 1'b1;
 
     //
     // COMMIT PHASE (dequeue only ... not register-file update)

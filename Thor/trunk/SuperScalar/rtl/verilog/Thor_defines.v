@@ -30,10 +30,13 @@
 `define FALSE	1'b0
 `define INV		1'b0
 `define VAL		1'b1
+`define ZERO		64'd0
+
 
 `define TST			8'b0000xxxx
 `define CMP			8'b0001xxxx
 `define CMPI		8'b0010xxxx
+`define BR			8'b0011xxxx
 
 `define ADD			8'h40
 `define SUB			8'h41
@@ -99,6 +102,7 @@
 `define LW			8'h86
 `define LFS			8'h87
 `define LFD			8'h88
+`define PFLD		8'h8F
 
 `define SB			8'h90
 `define SC			8'h91
@@ -112,8 +116,9 @@
 `define STSH		8'h99
 `define STSW		8'h9A
 
-// Branch Opcodes
-`define BR			8'hA0
+`define CACHE		8'h9F
+
+// Flow control Opcodes
 `define JSR			8'hA2
 `define RTS			8'hA3
 `define LOOP		8'hA4
@@ -124,9 +129,11 @@
 `define MTSPR		8'hA9
 
 `define NOP		8'hE1
-`define CLI		8'hF0
-`define SEI		8'hF1
+`define RTE		8'hF3
+`define RTI		8'hF4
 `define SYNC	8'hF8
+`define CLI		8'hFA
+`define SEI		8'hFB
 `define IMM		8'hFF
 
 `define PREDC	3:0
@@ -134,6 +141,8 @@
 `define OPCODE	15:8
 `define RA		23:16
 `define RB		31:24
+`define INSTRUCTION_RA	23:16
+`define INSTRUCTION_RB	31:24
 
 `define XTBL	4'd12
 `define EPC		4'd13
@@ -142,6 +151,7 @@
 // Special Registers
 `define TICK		8'h02
 `define PREGS		8'h04
+`define BREGS		8'h1x
 `define SREGS		8'h2x
 
 `endif

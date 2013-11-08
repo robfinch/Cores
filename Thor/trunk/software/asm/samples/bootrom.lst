@@ -1,0 +1,29 @@
+00000000	           				code
+FFFFF800	           		 		org		0xFFFFF800
+FFFFF800	           		 start
+FFFFF800	0140020301       		add		r1,r2,r3
+FFFFF805	0166040503       		nand	r3,r4,r5
+FFFFF80A	0166050604       		nand	r4,r5,r6
+FFFFF80F	0140030401       		add		r1,r3,r4
+FFFFF814	010101           		tst		p1,r1
+FFFFF817	12300A           p1.eq	br		foobar
+FFFFF81A	0140040501       		add		r1,r4,r5
+FFFFF81F	10               		nop
+FFFFF820	10               		nop
+FFFFF821	           		 foobar
+FFFFF821	200401483901D2   		addi	r1,r57,#1234
+FFFFF828	2004012101D1     		cmpi	p1,r1,#1233
+FFFFF82E	124901010A       p1.eq	subi	r1,r1,#10
+FFFFFFF0	           		 		org		0xFFFFFFF0
+FFFFFFF0	10               		nop
+FFFFFFF1	01380F           		br		start
+FFFFFFF4	01380C           		br		start
+FFFFFFFF	           		 		org		0xFFFFFFFF
+ 
+ 
+Symbol Table:
+============================================================
+Name                   Typ  Segment     Scope Address/Value
+------------------------------------------------------------
+0start              	L	code    	  	00000000FFFFF800
+0foobar             	L	code    	  	00000000FFFFF821

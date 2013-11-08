@@ -25,12 +25,13 @@
 //=============================================================================
 //
 module Thor_BranchHistory(rst, clk, advanceX, xisBranch, pc, xpc, takb, predict_taken);
+parameter DBW=64;
 input rst;
 input clk;
 input advanceX;
 input xisBranch;
-input [63:0] pc;
-input [63:0] xpc;
+input [DBW-1:0] pc;
+input [DBW-1:0] xpc;
 input takb;
 output predict_taken;
 

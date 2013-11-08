@@ -94,14 +94,14 @@ always @*
 			iqentry_4_livetarget[n] | iqentry_5_livetarget[n] | iqentry_6_livetarget[n] | iqentry_7_livetarget[n]
 			;
 assign 
-	iqentry_0_livetarget = {NREGS+1{iqentry_v[0]}} & {NREGS+1{~iqentry_stomp[0]}} & {NREGS+1{iqentry_cmt[0]}} & iq0_out,
-	iqentry_1_livetarget = {NREGS+1{iqentry_v[1]}} & {NREGS+1{~iqentry_stomp[1]}} & {NREGS+1{iqentry_cmt[1]}} & iq1_out,
-	iqentry_2_livetarget = {NREGS+1{iqentry_v[2]}} & {NREGS+1{~iqentry_stomp[2]}} & {NREGS+1{iqentry_cmt[2]}} & iq2_out,
-	iqentry_3_livetarget = {NREGS+1{iqentry_v[3]}} & {NREGS+1{~iqentry_stomp[3]}} & {NREGS+1{iqentry_cmt[3]}} & iq3_out,
-	iqentry_4_livetarget = {NREGS+1{iqentry_v[4]}} & {NREGS+1{~iqentry_stomp[4]}} & {NREGS+1{iqentry_cmt[4]}} & iq4_out,
-	iqentry_5_livetarget = {NREGS+1{iqentry_v[5]}} & {NREGS+1{~iqentry_stomp[5]}} & {NREGS+1{iqentry_cmt[5]}} & iq5_out,
-	iqentry_6_livetarget = {NREGS+1{iqentry_v[6]}} & {NREGS+1{~iqentry_stomp[6]}} & {NREGS+1{iqentry_cmt[6]}} & iq6_out,
-	iqentry_7_livetarget = {NREGS+1{iqentry_v[7]}} & {NREGS+1{~iqentry_stomp[7]}} & {NREGS+1{iqentry_cmt[7]}} & iq7_out;
+	iqentry_0_livetarget = {NREGS{iqentry_v[0]}} & {NREGS{~iqentry_stomp[0]}} & {NREGS{iqentry_cmt[0]}} & iq0_out,
+	iqentry_1_livetarget = {NREGS{iqentry_v[1]}} & {NREGS{~iqentry_stomp[1]}} & {NREGS{iqentry_cmt[1]}} & iq1_out,
+	iqentry_2_livetarget = {NREGS{iqentry_v[2]}} & {NREGS{~iqentry_stomp[2]}} & {NREGS{iqentry_cmt[2]}} & iq2_out,
+	iqentry_3_livetarget = {NREGS{iqentry_v[3]}} & {NREGS{~iqentry_stomp[3]}} & {NREGS{iqentry_cmt[3]}} & iq3_out,
+	iqentry_4_livetarget = {NREGS{iqentry_v[4]}} & {NREGS{~iqentry_stomp[4]}} & {NREGS{iqentry_cmt[4]}} & iq4_out,
+	iqentry_5_livetarget = {NREGS{iqentry_v[5]}} & {NREGS{~iqentry_stomp[5]}} & {NREGS{iqentry_cmt[5]}} & iq5_out,
+	iqentry_6_livetarget = {NREGS{iqentry_v[6]}} & {NREGS{~iqentry_stomp[6]}} & {NREGS{iqentry_cmt[6]}} & iq6_out,
+	iqentry_7_livetarget = {NREGS{iqentry_v[7]}} & {NREGS{~iqentry_stomp[7]}} & {NREGS{iqentry_cmt[7]}} & iq7_out;
 
 endmodule
 
