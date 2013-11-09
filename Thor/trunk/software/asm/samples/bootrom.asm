@@ -1,6 +1,12 @@
 		code
 		org		0xFFFFF800
 start
+		ldi		r1,#1234
+		ldi		r2,#5678
+		ldi		r3,#7777
+		ldi		r4,#4444
+		ldi		r5,#8888
+		ldi		r6,#9999
 		add		r1,r2,r3
 		nand	r3,r4,r5
 		nand	r4,r5,r6

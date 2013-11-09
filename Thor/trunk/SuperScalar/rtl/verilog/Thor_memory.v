@@ -47,7 +47,11 @@
 	    // not particularly portable ...
 	    6'b1111xx,
 	    6'b11xx11,
-	    6'bxx1111:	panic <= `PANIC_IDENTICALDRAMS;
+	    6'bxx1111:
+			if (!rst_i) begin
+				$display("dramx=%b",{dram0, dram1, dram2});
+				panic <= `PANIC_IDENTICALDRAMS;
+			end
 
 	    default: begin
 		//
@@ -280,6 +284,7 @@
 
 	for (n = 0; n < 8; n = n + 1)
 		if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && iqentry_cmt[n]) begin
+			$display("issued memory cycle");
 			if (dram0 == `DRAMSLOT_AVAIL) begin
 				dram0 		<= 2'd1;
 				dram0_id 	<= { 1'b1, n[2:0] };

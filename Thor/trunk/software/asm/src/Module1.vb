@@ -75,7 +75,7 @@ Module Module1
     Dim currentFl As textfile
     Dim predicateByte As Int64
     Dim processedPredicate As Boolean
-    Dim bytesbuf(16) As Int64
+    Dim bytesbuf(40) As Int64
     Dim bytn As Int64
 
     Sub Main(ByVal args() As String)
@@ -266,6 +266,8 @@ j1:
                             Case "org"
                                 ProcessOrg()
                                 GoTo j3
+                            Case "ldi"
+                                ProcessLdi(s, &H6F)
                             Case "addi"
                                 ProcessRIOp(s, &H48)
                             Case "addui"
@@ -277,11 +279,11 @@ j1:
                             Case "cmpi"
                                 ProcessCmpIOp(s, &H20)
                             Case "andi"
-                                ProcessRIOp(s, 10)
+                                ProcessRIOp(s, &H53)
                             Case "ori"
-                                ProcessRIOp(s, 11)
-                            Case "xori"
-                                ProcessRIOp(s, 12)
+                                ProcessRIOp(s, &H54)
+                            Case "eori"
+                                ProcessRIOp(s, &H55)
                             Case "mului"
                                 ProcessRIOp(s, 13)
                             Case "mulsi"
@@ -1261,6 +1263,28 @@ j3:
         str = iline
     End Sub
 
+    Sub ProcessLdi(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim func As Int64
+        Dim rt As Int64
+        Dim ra As Int64
+        Dim imm As Int64
+        Dim msb As Int64
+        Dim i2 As Int64
+        Dim str As String
+
+        rt = GetRegister(strs(1))
+        imm = eval(strs(2))
+
+        If imm < -128 Or imm > 127 Then
+            emitIMM2(imm)
+        End If
+        emitOpcode(oc)
+        emitbyte(rt, False)
+        emitbyte(imm, False)
+        str = iline
+    End Sub
+
     Sub ProcessRIOp(ByVal ops As String, ByVal oc As Int64)
         Dim opcode As Int64
         Dim func As Int64
@@ -1840,9 +1864,13 @@ j3:
             Case "bss"
                 bss_address = imm
             Case "code"
-                While address Mod 4
+                While address Mod 32
                     emitbyte(0, False)
                 End While
+                w0 = 0
+                w1 = 0
+                w2 = 0
+                w3 = 0
                 address = imm
             Case "data"
                 data_address = imm
@@ -2422,7 +2450,7 @@ j3:
             'imm = (L.address + (L.slot << 2)) >> 2
         End If
         emitOpcode(oc Or ((disp >> 8) And &HF))
-        emitbyte(disp, False)
+        emitbyte(disp And &HFF, False)
     End Sub
 
     Function GetSymbol(ByVal nm As String) As Symbol
@@ -2937,7 +2965,10 @@ j1:
         Dim hh As String
         Dim jj As Integer
 
-        bytesbuf(bytn) = n
+        If n = &H38 Then
+            bytesbuf(bytn) = n And 255
+        End If
+        bytesbuf(bytn) = n And 255
         bytn = bytn + 1
 
         'If flush Then
@@ -3487,7 +3518,7 @@ j1:
                     p = p + 1
                 End If
             Next
-            s = vbTab & "rommem[" & ((address >> 3) And 4095) & "] = 65'h" & (p And 1) & Hex(w).PadLeft(16, "0") & ";" ' & Hex(address)
+            s = vbTab & "rommem[" & ((address >> 3) And 8191) & "] = 65'h" & (p And 1) & Hex(w).PadLeft(16, "0") & ";" ' & Hex(address)
             ofs.WriteLine(s)
             If segment = "code" Then
                 codebytes(cbindex) = w

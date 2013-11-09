@@ -33,24 +33,24 @@
     //
 
 	alu0_dataready <= alu0_available 
-				&& ((iqentry_issue[0] && iqentry_0_islot == 2'd0 && !iqentry_stomp[0])
-				 || (iqentry_issue[1] && iqentry_1_islot == 2'd0 && !iqentry_stomp[1])
-				 || (iqentry_issue[2] && iqentry_2_islot == 2'd0 && !iqentry_stomp[2])
-				 || (iqentry_issue[3] && iqentry_3_islot == 2'd0 && !iqentry_stomp[3])
-				 || (iqentry_issue[4] && iqentry_4_islot == 2'd0 && !iqentry_stomp[4])
-				 || (iqentry_issue[5] && iqentry_5_islot == 2'd0 && !iqentry_stomp[5])
-				 || (iqentry_issue[6] && iqentry_6_islot == 2'd0 && !iqentry_stomp[6])
-				 || (iqentry_issue[7] && iqentry_7_islot == 2'd0 && !iqentry_stomp[7]));
+				&& ((iqentry_issue[0] && iqentry_islot[0] == 2'd0 && !iqentry_stomp[0])
+				 || (iqentry_issue[1] && iqentry_islot[1] == 2'd0 && !iqentry_stomp[1])
+				 || (iqentry_issue[2] && iqentry_islot[2] == 2'd0 && !iqentry_stomp[2])
+				 || (iqentry_issue[3] && iqentry_islot[3] == 2'd0 && !iqentry_stomp[3])
+				 || (iqentry_issue[4] && iqentry_islot[4] == 2'd0 && !iqentry_stomp[4])
+				 || (iqentry_issue[5] && iqentry_islot[5] == 2'd0 && !iqentry_stomp[5])
+				 || (iqentry_issue[6] && iqentry_islot[6] == 2'd0 && !iqentry_stomp[6])
+				 || (iqentry_issue[7] && iqentry_islot[7] == 2'd0 && !iqentry_stomp[7]));
 
 	alu1_dataready <= alu1_available 
-				&& ((iqentry_issue[0] && iqentry_0_islot == 2'd1 && !iqentry_stomp[0])
-				 || (iqentry_issue[1] && iqentry_1_islot == 2'd1 && !iqentry_stomp[1])
-				 || (iqentry_issue[2] && iqentry_2_islot == 2'd1 && !iqentry_stomp[2])
-				 || (iqentry_issue[3] && iqentry_3_islot == 2'd1 && !iqentry_stomp[3])
-				 || (iqentry_issue[4] && iqentry_4_islot == 2'd1 && !iqentry_stomp[4])
-				 || (iqentry_issue[5] && iqentry_5_islot == 2'd1 && !iqentry_stomp[5])
-				 || (iqentry_issue[6] && iqentry_6_islot == 2'd1 && !iqentry_stomp[6])
-				 || (iqentry_issue[7] && iqentry_7_islot == 2'd1 && !iqentry_stomp[7]));
+				&& ((iqentry_issue[0] && iqentry_islot[0] == 2'd1 && !iqentry_stomp[0])
+				 || (iqentry_issue[1] && iqentry_islot[1] == 2'd1 && !iqentry_stomp[1])
+				 || (iqentry_issue[2] && iqentry_islot[2] == 2'd1 && !iqentry_stomp[2])
+				 || (iqentry_issue[3] && iqentry_islot[3] == 2'd1 && !iqentry_stomp[3])
+				 || (iqentry_issue[4] && iqentry_islot[4] == 2'd1 && !iqentry_stomp[4])
+				 || (iqentry_issue[5] && iqentry_islot[5] == 2'd1 && !iqentry_stomp[5])
+				 || (iqentry_issue[6] && iqentry_islot[6] == 2'd1 && !iqentry_stomp[6])
+				 || (iqentry_issue[7] && iqentry_islot[7] == 2'd1 && !iqentry_stomp[7]));
 
 	for (n = 0; n < 8; n = n + 1)
 	begin
@@ -61,8 +61,9 @@
 			if (dram2_id[2:0] == n[2:0])	dram2 <= `DRAMSLOT_AVAIL;
 		end
 		else if (iqentry_issue[n]) begin
-			case (iqentry_0_islot) 
+			case (iqentry_islot[n]) 
 			2'd0: if (alu0_available) begin
+					$display("n: %d  alu0_cond=%h, v%b alu0_pred=%h", n, iqentry_cond[n], iqentry_p_v[n], iqentry_pred[n]);
 				alu0_sourceid	<= n[3:0];
 				alu0_insnsz <= iqentry_insnsz[n];
 				alu0_op		<= iqentry_op[n];
@@ -72,17 +73,18 @@
 				alu0_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
 								(iqentry_p_s[n] == alu0_id) ? alu0_bus[3:0] :
 								(iqentry_p_s[n] == alu1_id) ? alu1_bus[3:0] : 4'h0;
-				alu0_argA	<= iqentry_a1_v[n] ? iqentry_a1[0]
+				alu0_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
 							: (iqentry_a1_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a1_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;
-				alu0_argB	<= iqentry_a2_v[n] ? iqentry_a2[0]
+				alu0_argB	<= iqentry_a2_v[n] ? iqentry_a2[n]
 							: (iqentry_a2_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a2_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;
 				alu0_argI	<= iqentry_a0[n];
 				end
 			2'd1: if (alu1_available) begin
+					$display("n%d  alu1_cond=%h, alu1_pred=%h", n, alu1_cond, alu1_pred);
 				alu1_sourceid	<= n[3:0];
 				alu1_insnsz <= iqentry_insnsz[n];
 				alu1_op		<= iqentry_op[n];
@@ -92,7 +94,7 @@
 				alu1_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
 								(iqentry_p_s[n] == alu0_id) ? alu0_bus[3:0] :
 								(iqentry_p_s[n] == alu1_id) ? alu1_bus[3:0] : 4'h0;
-				alu1_argA	<= iqentry_a1_v[n] ? iqentry_a1[0]
+				alu1_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
 							: (iqentry_a1_s[n] == alu0_id) ? alu0_bus
 							: (iqentry_a1_s[n] == alu1_id) ? alu1_bus
 							: 64'hDEADDEADDEADDEAD;

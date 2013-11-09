@@ -24,9 +24,6 @@
 //
 // ============================================================================
 //
-    //
-    // EXECUTE
-    //
 function [DBW-1:0] fnAluCalc;
 input [7:0] alu_op;
 input [DBW-1:0] alu_argA;
@@ -39,6 +36,7 @@ input [DBW-1:0] alu_pc;
 input [3:0] insnsz;
 begin
 casex(alu_op)
+`LDI:			fnAluCalc = alu_argI;
 `_2ADDU:		fnAluCalc = {alu_argA[DBW-2:0],1'b0} + alu_argB;
 `_4ADDU:		fnAluCalc = {alu_argA[DBW-3:0],2'b0} + alu_argB;
 `_8ADDU:		fnAluCalc = {alu_argA[DBW-4:0],3'b0} + alu_argB;
@@ -49,6 +47,9 @@ casex(alu_op)
 `_16ADDUI:		fnAluCalc = {alu_argA[DBW-5:0],4'b0} + alu_argI;
 `ADD,`ADDU:		fnAluCalc = alu_argA + alu_argB;
 `SUB,`SUBU:		fnAluCalc = alu_argA - alu_argB;
+`NEG:			fnAluCalc = -alu_argA;
+`NOT:			fnAluCalc = ~alu_argA;
+`MULU:			fnAluCalc = alu_argA * alu_argB;
 `ADDI,`ADDUI:	fnAluCalc = alu_argA + alu_argI;
 `SUBI,`SUBUI:	fnAluCalc = alu_argA - alu_argI;
 `ANDI:			fnAluCalc = alu_argA & alu_argI;
@@ -82,6 +83,7 @@ casex(alu_op)
 				fnAluCalc = alu_argA + alu_argI;
 `JSR,`SYS:	fnAluCalc = alu_pc + insnsz;
 `INT:		fnAluCalc = alu_pc;
+`MFSPR:		fnAluCalc = alu_argA;
 default:	fnAluCalc = 64'hDEADDEADDEADDEAD;
 endcase
 end
@@ -125,10 +127,10 @@ endfunction
 
     assign  alu0_misspc = (alu0_op == `JSR) ? alu0_argA + alu0_argI :
 						  (alu0_op==`SYS || alu0_op==`INT) ? {alu0_argA[DBW-5:0],4'b0} + alu0_argI :
-						  (alu0_bt ? alu0_pc : alu0_pc + alu0_argI),
+						  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_argI),
 			alu1_misspc = (alu1_op == `JSR) ? alu1_argA + alu1_argI :
 						  (alu0_op==`SYS || alu0_op==`INT) ? {alu1_argA[DBW-5:0],4'b0} + alu1_argI :
-						  (alu1_bt ? alu1_pc : alu1_pc + alu1_argI);
+						  (alu1_bt ? alu1_pc + alu0_insnsz : alu1_pc + alu1_argI);
 
     assign  alu0_exc = alu0_op==`SYS ? `EXC_SYS :
 					   alu0_op==`INT ? `EXC_INT :
@@ -159,12 +161,12 @@ endfunction
 //			: `EXC_INVALID;
 
     assign alu0_branchmiss = alu0_dataready && 
-			   ((alu0_op == `BR)  ? ((alu0_cmt && ~alu0_bt) || (!alu0_cmt && alu0_bt))
-			  : alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS));
+			   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
+			  : (alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS)));
 
     assign alu1_branchmiss = alu1_dataready && 
-			   ((alu1_op == `BR)  ? ((alu1_cmt && ~alu1_bt) || (!alu1_cmt && alu1_bt))
-			  : alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS));
+			   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
+			  : (alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS)));
 
     assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
 	    misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),

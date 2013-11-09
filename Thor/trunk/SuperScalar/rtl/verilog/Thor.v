@@ -1,3 +1,59 @@
+//
+//	COPYRIGHT 2000 by Bruce L. Jacob
+//	(contact info: http://www.ece.umd.edu/~blj/)
+//
+//	You are welcome to use, modify, copy, and/or redistribute this implementation, provided:
+//	  1. you share with the author (Bruce Jacob) any changes you make;
+//	  2. you properly credit the author (Bruce Jacob) if used within a larger work; and
+//	  3. you do not modify, delete, or in any way obscure the implementation's copyright 
+//	     notice or following comments (i.e. the first 3-4 dozen lines of this file).
+//
+//	RiSC-16
+//
+//	This is an out-of-order implementation of the RiSC-16, a teaching instruction-set used by
+//	the author at the University of Maryland, and which is a blatant (but sanctioned) rip-off
+//	of the Little Computer (LC-896) developed by Peter Chen at the University of Michigan.
+//	The primary differences include the following:
+//	  1. a move from 17-bit to 16-bit instructions; and
+//	  2. the replacement of the NOP and HALT opcodes by ADDI and LUI ... HALT and NOP are
+//	     now simply special instances of other instructions: NOP is a do-nothing ADD, and
+//	     HALT is a subset of JALR.
+//
+//	RiSC stands for Ridiculously Simple Computer, which makes sense in the context in which
+//	the instruction-set is normally used -- to teach simple organization and architecture to
+//	undergraduates who do not yet know how computers work.  This implementation was targetted
+//	towards more advanced undergraduates doing design & implementation and was intended to 
+//	demonstrate some high-performance concepts on a small scale -- an 8-entry reorder buffer,
+//	eight opcodes, two ALUs, two-way issue, two-way commit, etc.  However, the out-of-order 
+//	core is much more complex than I anticipated, and I hope that its complexity does not 
+//	obscure its underlying structure.  We'll see how well it flies in class ...
+//
+//	CAVEAT FREELOADER: This Verilog implementation was developed and debugged in a (somewhat
+//	frantic) 2-week period before the start of the Fall 2000 semester.  Not surprisingly, it
+//	still contains many bugs and some horrible, horrible logic.  The logic is also written so
+//	as to be debuggable and/or explain its function, rather than to be efficient -- e.g. in
+//	several places, signals are over-constrained so that they are easy to read in the debug
+//	output ... also, you will see statements like
+//
+//	    if (xyz[`INSTRUCTION_OP] == `BEQ || xyz[`INSTRUCTION_OP] == `SW)
+//
+//	instead of and/nand combinations of bits ... sorry; can't be helped.  Use at your own risk.
+//
+//	DOCUMENTATION: Documents describing the RiSC-16 in all its forms (sequential, pipelined,
+//	as well as out-of-order) can be found on the author's website at the following URL:
+//
+//	    http://www.ece.umd.edu/~blj/RiSC/
+//
+//	If you do not find what you are looking for, please feel free to email me with suggestions
+//	for more/different/modified documents.  Same goes for bug fixes.
+//
+//
+//	KNOWN PROBLEMS (i.e., bugs I haven't got around to fixing yet)
+//
+//	- If the target of a backwards branch is a backwards branch, the fetchbuf steering logic
+//	  will get confused.  This can be fixed by having a separate did_branchback status register
+//	  for each of the fetch buffers.
+//
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2013  Robert Finch, Stratford
@@ -21,37 +77,24 @@
 //
 // Thor Superscaler
 //
+// This work is starting with the RiSC-16 as noted in the copyright statement
+// above. Hopefully it will be possible to run this processor in real hardware
+// (FPGA) as opposed to just simulation. To the RiSC-16 are added:
+//
+//	64/32 bit datapath rather than 16 bit
+//  256 general purpose registers
+//   16 branch registers
+//   16 predicate registers / predicated instruction execution
+//      A branch history table, and a (2,2) correlating branch predictor added
+//      variable length instruction encodings (code density)
+//      support for interrupts
+//      The instruction set is changed completely with many new instructions.
+//      An instruction cache was added.
+//      A WISHBONE bus interface was added,
+//
 // ============================================================================
 //
 `include "Thor_defines.v"
-
-// exception types:
-`define EXC_NONE	4'd0
-`define EXC_HALT	4'd1
-`define EXC_TLBMISS	4'd2
-`define EXC_SIGSEGV	4'd3
-`define EXC_INVALID	4'd4
-`define EXC_SYS		4'd5
-`define EXC_INT		4'd6
-
-//
-// define PANIC types
-//
-`define PANIC_NONE		4'd0
-`define PANIC_FETCHBUFBEQ	4'd1
-`define PANIC_INVALIDISLOT	4'd2
-`define PANIC_MEMORYRACE	4'd3
-`define PANIC_IDENTICALDRAMS	4'd4
-`define PANIC_OVERRUN		4'd5
-`define PANIC_HALTINSTRUCTION	4'd6
-`define PANIC_INVALIDMEMOP	4'd7
-`define PANIC_INVALIDFBSTATE	4'd9
-`define PANIC_INVALIDIQSTATE	4'd10
-`define PANIC_BRANCHBACK	4'd11
-`define PANIC_BADTARGETID	4'd12
-
-`define DRAMSLOT_AVAIL	2'b00
-`define DRAMREQ_READY	2'b11
 
 module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter DBW = 32;
@@ -82,7 +125,7 @@ output reg cyc_o;
 output reg stb_o;
 input ack_i;
 output reg we_o;
-output reg [7:0] sel_o;
+output reg [DBW/8-1:0] sel_o;
 output reg [DBW-1:0] adr_o;
 input [DBW-1:0] dat_i;
 output reg [DBW-1:0] dat_o;
@@ -91,7 +134,8 @@ integer n,i;
 reg [3:0] cstate;
 reg [DBW-1:0] pc;					// program counter
 wire [DBW-1:0] pcp16 = pc + 64'd16;
-reg [3:0] panic;
+reg [3:0] panic;		// indexes the message structure
+reg [128:0] message [0:15];	// indexed by panic
 reg [DBW-1:0] bregs [0:15];		// branch target registers
 reg [ 3:0] pregs [0:15];		// predicate registers
 reg [DBW-1:12] sregs [0:15];		// segment registers
@@ -101,8 +145,8 @@ wire [DBW-1:0] rfob0,rfob1;
 reg ic_invalidate;
 wire [127:0] insn;
 reg [303:0] rf_v;
-reg [15:0] pf_v;
-reg im;
+//reg [15:0] pf_v;
+reg im,imb;
 reg nmi1,nmi_edge;
 reg StatusHWI;
 wire [DBW-1:0] spc = (pc[DBW-1:DBW-4]==4'hF) ? pc : {sregs[15],12'h000} + pc;
@@ -112,9 +156,11 @@ wire clk = clk_i;
 
 // Operand registers
 wire take_branch;
+wire take_branch0;
+wire take_branch1;
 
 reg [3:0] rf_source [0:NREGS];
-reg [3:0] pf_source [15:0];
+//reg [3:0] pf_source [15:0];
 
 // instruction queue (ROB)
 reg [7:0]  iqentry_v;			// entry valid?  -- this should be the first bit
@@ -233,6 +279,8 @@ reg [DBW-1:0] fetchbufD_pc;
 reg        fetchbufD_v;
 
 reg        did_branchback;
+reg 		did_branchback0;
+reg			did_branchback1;
 
 reg        alu0_available;
 reg        alu0_dataready;
@@ -317,6 +365,8 @@ wire        commit1_v;
 wire  [3:0] commit1_id;
 wire  [8:0] commit1_tgt;
 wire [DBW-1:0] commit1_bus;
+wire limit_cmt;
+wire committing2;
 
 //
 // BRANCH-MISS LOGIC: livetarget
@@ -432,17 +482,21 @@ assign iqentry_5_islot = iqentry_islot[5];
 assign iqentry_6_islot = iqentry_islot[6];
 assign iqentry_7_islot = iqentry_islot[7];
 
-wire [7:0] iqentry_op0_ = iqentry_op[ alu0_id[2:0] ];
-wire [7:0] iqentry_op1_ = iqentry_op[ alu1_id[2:0] ];
 
 wire [7:0] Ra0 = fetchbuf0_instr[`INSTRUCTION_RA];
 wire [8:0] Rb0 = {1'b0,fetchbuf0_instr[`INSTRUCTION_RB]};
 wire [7:0] Ra1 = fetchbuf1_instr[`INSTRUCTION_RA];
 wire [8:0] Rb1 = {1'b0,fetchbuf1_instr[`INSTRUCTION_RB]};
-wire [7:0] opcode0 = (fetchbuf0_instr[3:0]==4'h0 && fetchbuf0_instr[7:4] > 4'h1 && fetchbuf0_instr[7:4] < 4'h9) ? `IMM : 
-						fetchbuf0_instr[7:0]==8'h11 ? `RTS : fetchbuf0_instr[15:8];
-wire [7:0] opcode1 = (fetchbuf1_instr[3:0]==4'h0 && fetchbuf1_instr[7:4] > 4'h1 && fetchbuf1_instr[7:4] < 4'h9) ? `IMM :
-						fetchbuf1_instr[7:0]==8'h11 ? `RTS :  fetchbuf1_instr[15:8];
+
+function [7:0] fnOpcode;
+input [63:0] insn;
+fnOpcode = (insn[3:0]==4'h0 && insn[7:4] > 4'h1 && insn[7:4] < 4'h9) ? `IMM : 
+						insn[7:0]==8'h10 ? `NOP :
+						insn[7:0]==8'h11 ? `RTS : insn[15:8];
+endfunction
+
+wire [7:0] opcode0 = fnOpcode(fetchbuf0_instr);
+wire [7:0] opcode1 = fnOpcode(fetchbuf1_instr);
 wire [3:0] cond0 = fetchbuf0_instr[3:0];
 wire [3:0] cond1 = fetchbuf1_instr[3:0];
 wire [3:0] Pn1 = fetchbuf1_instr[7:4];
@@ -500,7 +554,11 @@ Thor_regfile2w4r #(DBW) urf1
 );
 
 always @(posedge clk)
-begin
+if (rst_i) begin
+	for (i=0; i < 16; i=i+1)
+		pregs[i] <= 4'd0;
+end
+else begin
 	if (commit0_v && commit0_tgt[8:4]==5'h10)
 		pregs[commit0_tgt[3:0]] <= commit0_bus[3:0];
 	if (commit1_v && commit1_tgt[8:4]==5'h10)
@@ -532,10 +590,10 @@ end
 function fnSource1_v;
 input [7:0] opcode;
 	casex(opcode)
-	`SEI,`CLI,`SYNC:		fnSource1_v = 1'b1;
+	`SEI,`CLI,`SYNC,`NOP:		fnSource1_v = 1'b1;
 	`BR:			fnSource1_v = 1'b1;
-	`IMM:			fnSource1_v = 1'b1;
-	default:			fnSource1_v = 1'b0;
+	`LDI,`IMM:		fnSource1_v = 1'b1;
+	default:		fnSource1_v = 1'b0;
 	endcase
 endfunction
 
@@ -545,7 +603,8 @@ endfunction
 function fnSource2_v;
 input [7:0] opcode;
 	casex(opcode)
-	`IMM:			fnSource2_v = 1'b1;
+	`NEG,`NOT:		fnSource2_v = 1'b1;
+	`LDI,`IMM,`NOP:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`SYNC:	fnSource2_v = 1'b1;
 	`RTI,`RTE:		fnSource2_v = 1'b1;
 	`TST:			fnSource2_v = 1'b1;
@@ -631,7 +690,7 @@ Thor_BranchHistory #(DBW) ubhtD
 );
 
 
-Thor_icachemem uicm1 
+Thor_icachemem #(DBW) uicm1
 (
 	.wclk(clk),
 	.wce(cstate==ICACHE1),
@@ -639,7 +698,7 @@ Thor_icachemem uicm1
 	.wa(adr_o),
 	.wd(dat_i),
 	.rclk(~clk),
-	.pc(pc),
+	.pc(spc),
 	.insn(insn)
 );
 
@@ -647,20 +706,20 @@ wire hit0,hit1;
 Thor_itagmem #(DBW-1) uitm1
 (
 	.wclk(clk),
-	.wce(cstate==ICACHE1 && adr_o[4:3]==2'b11),
+	.wce(cstate==ICACHE1 && cti_o==3'b111),
 	.wr(ack_i),
 	.wa(adr_o),
 	.invalidate(ic_invalidate),
 	.rclk(~clk),
 	.rce(1'b1),
-	.pc(pc),
+	.pc(spc),
 	.hit0(hit0),
 	.hit1(hit1)
 );
 
 wire ihit = hit0 & hit1;
 
-wire [63:0] shfto0,shfto1;
+wire [DBW-1:0] shfto0,shfto1;
 
 Thor_shifter #(DBW) ushft0
 (
@@ -707,12 +766,15 @@ begin
 	if (ir[3:0]==4'h0)	// Process special predicates
 		fnTargetReg = 9'h000;
 	else
-		casex(ir[15:8])
+		casex(fnOpcode(ir))
+		`LDI:
+			fnTargetReg = {1'b0,ir[23:16]};
 		`ADD,`ADDU,`SUB,`SUBU,`MUL,`MULU,`DIV,`DIVU,
 		`AND,`OR,`EOR,`NAND,`NOR,`ENOR,`ANDC,`ORC,
 		`_2ADDU,`_4ADDU,`_8ADDU,`_16ADDU,
 		`SHL,`SHR,`SHLU,`SHRU,`ROL,`ROR:
 			fnTargetReg = {1'b0,ir[39:32]};
+		`NEG,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
@@ -742,6 +804,7 @@ endfunction
 function fnHasConst;
 input [7:0] opcode;
 	casex(opcode)
+	`LDI,
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 	`CMPI,
@@ -787,7 +850,7 @@ default:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`RTS:
 		fnInsnLength = 4'd3;
-	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR:
+	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG:
 		fnInsnLength = 4'd4;
 	default:
 		fnInsnLength = 4'd5;
@@ -833,12 +896,14 @@ endfunction
 function fnIsRFW;
 input [7:0] opcode;
 fnIsRFW =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
-			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI ||
+			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
-			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU ||
+			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
-			opcode==`NOT || opcode==`NEG || opcode==`ABS || opcode==`SGN
+			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
+			opcode==`NOT || opcode==`NEG ||
+			opcode==`LDI || opcode==`MFSPR
 			;
 endfunction
 
@@ -861,34 +926,55 @@ function [7:0] fnSelect;
 input [7:0] opcode;
 input [DBW-1:0] adr;
 begin
-case(opcode)
-`LB,`LBU,`SB:
-	case(adr[2:0])
-	3'd0:	fnSelect = 8'h01;
-	3'd1:	fnSelect = 8'h02;
-	3'd2:	fnSelect = 8'h04;
-	3'd3:	fnSelect = 8'h08;
-	3'd4:	fnSelect = 8'h10;
-	3'd5:	fnSelect = 8'h20;
-	3'd6:	fnSelect = 8'h40;
-	3'd7:	fnSelect = 8'h80;
+if (DBW==32)
+	case(opcode)
+	`LB,`LBU,`SB:
+		case(adr[1:0])
+		3'd0:	fnSelect = 8'h11;
+		3'd1:	fnSelect = 8'h22;
+		3'd2:	fnSelect = 8'h44;
+		3'd3:	fnSelect = 8'h88;
+		endcase
+	`LC,`LCU,`SC:
+		case(adr[1])
+		1'd0:	fnSelect = 8'h33;
+		1'd1:	fnSelect = 8'hCC;
+		endcase
+	`LH,`LHU,`SH:
+		fnSelect = 8'hFF;
+	`LW,`SW:
+		fnSelect = 8'hFF;
+	default:	fnSelect = 8'h00;
 	endcase
-`LC,`LCU,`SC:
-	case(adr[2:1])
-	2'd0:	fnSelect = 8'h03;
-	2'd1:	fnSelect = 8'h0C;
-	2'd2:	fnSelect = 8'h30;
-	2'd3:	fnSelect = 8'hC0;
+else
+	case(opcode)
+	`LB,`LBU,`SB:
+		case(adr[2:0])
+		3'd0:	fnSelect = 8'h01;
+		3'd1:	fnSelect = 8'h02;
+		3'd2:	fnSelect = 8'h04;
+		3'd3:	fnSelect = 8'h08;
+		3'd4:	fnSelect = 8'h10;
+		3'd5:	fnSelect = 8'h20;
+		3'd6:	fnSelect = 8'h40;
+		3'd7:	fnSelect = 8'h80;
+		endcase
+	`LC,`LCU,`SC:
+		case(adr[2:1])
+		2'd0:	fnSelect = 8'h03;
+		2'd1:	fnSelect = 8'h0C;
+		2'd2:	fnSelect = 8'h30;
+		2'd3:	fnSelect = 8'hC0;
+		endcase
+	`LH,`LHU,`SH:
+		case(adr[2])
+		1'b0:	fnSelect = 8'h0F;
+		1'b1:	fnSelect = 8'hF0;
+		endcase
+	`LW,`SW:
+		fnSelect = 8'hFF;
+	default:	fnSelect = 8'h00;
 	endcase
-`LH,`LHU,`SH:
-	case(adr[2])
-	1'b0:	fnSelect = 8'h0F;
-	1'b1:	fnSelect = 8'hF0;
-	endcase
-`LW,`SW:
-	fnSelect = 8'hFF;
-default:	fnSelect = 8'h00;
-endcase
 end
 endfunction
 
@@ -897,79 +983,123 @@ input [7:0] opcode;
 input [DBW-1:0] dat;
 input [7:0] sel;
 begin
-case(opcode)
-`LB:
-	case(sel)
-	8'h01:	fnDatai = {{DBW*7/8{dat[DBW*1/8-1]}},dat[DBW*1/8-1:0]};
-	8'h02:	fnDatai = {{DBW*7/8{dat[DBW*2/8-1]}},dat[DBW*2/8-1:DBW*1/8]};
-	8'h04:	fnDatai = {{DBW*7/8{dat[DBW*3/8-1]}},dat[DBW*3/8-1:DBW*2/8]};
-	8'h08:	fnDatai = {{DBW*7/8{dat[DBW*4/8-1]}},dat[DBW*4/8-1:DBW*3/8]};
-	8'h10:	fnDatai = {{DBW*7/8{dat[DBW*5/8-1]}},dat[DBW*5/8-1:DBW*4/8]};
-	8'h20:	fnDatai = {{DBW*7/8{dat[DBW*6/8-1]}},dat[DBW*6/8-1:DBW*5/8]};
-	8'h40:	fnDatai = {{DBW*7/8{dat[DBW*7/8-1]}},dat[DBW*7/8-1:DBW*6/8]};
-	8'h80:	fnDatai = {{DBW*7/8{dat[DBW-1]}},dat[DBW-1:DBW*7/8]};
+if (DBW==32)
+	case(opcode)
+	`LB:
+		case(sel[3:0])
+		8'h1:	fnDatai = {{24{dat[7]}},dat[7:0]};
+		8'h2:	fnDatai = {{24{dat[15]}},dat[15:8]};
+		8'h4:	fnDatai = {{24{dat[23]}},dat[23:16]};
+		8'h8:	fnDatai = {{24{dat[31]}},dat[31:24]};
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LBU:
+		case(sel[3:0])
+		4'h1:	fnDatai = dat[7:0];
+		4'h2:	fnDatai = dat[15:8];
+		4'h4:	fnDatai = dat[23:16];
+		4'h8:	fnDatai = dat[31:24];
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LC:
+		case(sel[3:0])
+		4'h3:	fnDatai = {{16{dat[15]}},dat[15:0]};
+		4'hC:	fnDatai = {{16{dat[31]}},dat[31:16]};
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LCU:
+		case(sel[3:0])
+		4'h3:	fnDatai = dat[15:0];
+		4'hC:	fnDatai = dat[31:16];
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LH,`LHU,`LW:
+		fnDatai = dat[31:0];
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
-`LBU:
-	case(sel)
-	8'h01:	fnDatai = dat[DBW*1/8-1:0];
-	8'h02:	fnDatai = dat[DBW*2/8-1:DBW*1/8];
-	8'h04:	fnDatai = dat[DBW*3/8-1:DBW*2/8];
-	8'h08:	fnDatai = dat[DBW*4/8-1:DBW*3/8];
-	8'h10:	fnDatai = dat[DBW*5/8-1:DBW*4/8];
-	8'h20:	fnDatai = dat[DBW*6/8-1:DBW*5/8];
-	8'h40:	fnDatai = dat[DBW*7/8-1:DBW*6/8];
-	8'h80:	fnDatai = dat[DBW-1:DBW*7/8];
+else
+	case(opcode)
+	`LB:
+		case(sel)
+		8'h01:	fnDatai = {{DBW*7/8{dat[DBW*1/8-1]}},dat[DBW*1/8-1:0]};
+		8'h02:	fnDatai = {{DBW*7/8{dat[DBW*2/8-1]}},dat[DBW*2/8-1:DBW*1/8]};
+		8'h04:	fnDatai = {{DBW*7/8{dat[DBW*3/8-1]}},dat[DBW*3/8-1:DBW*2/8]};
+		8'h08:	fnDatai = {{DBW*7/8{dat[DBW*4/8-1]}},dat[DBW*4/8-1:DBW*3/8]};
+		8'h10:	fnDatai = {{DBW*7/8{dat[DBW*5/8-1]}},dat[DBW*5/8-1:DBW*4/8]};
+		8'h20:	fnDatai = {{DBW*7/8{dat[DBW*6/8-1]}},dat[DBW*6/8-1:DBW*5/8]};
+		8'h40:	fnDatai = {{DBW*7/8{dat[DBW*7/8-1]}},dat[DBW*7/8-1:DBW*6/8]};
+		8'h80:	fnDatai = {{DBW*7/8{dat[DBW-1]}},dat[DBW-1:DBW*7/8]};
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LBU:
+		case(sel)
+		8'h01:	fnDatai = dat[DBW*1/8-1:0];
+		8'h02:	fnDatai = dat[DBW*2/8-1:DBW*1/8];
+		8'h04:	fnDatai = dat[DBW*3/8-1:DBW*2/8];
+		8'h08:	fnDatai = dat[DBW*4/8-1:DBW*3/8];
+		8'h10:	fnDatai = dat[DBW*5/8-1:DBW*4/8];
+		8'h20:	fnDatai = dat[DBW*6/8-1:DBW*5/8];
+		8'h40:	fnDatai = dat[DBW*7/8-1:DBW*6/8];
+		8'h80:	fnDatai = dat[DBW-1:DBW*7/8];
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LC:
+		case(sel)
+		8'h03:	fnDatai = {{DBW*3/4{dat[DBW/4-1]}},dat[DBW/4-1:0]};
+		8'h0C:	fnDatai = {{DBW*3/4{dat[DBW/2-1]}},dat[DBW/2-1:DBW/4]};
+		8'h30:	fnDatai = {{DBW*3/4{dat[DBW*3/4-1]}},dat[DBW*3/4-1:DBW/2]};
+		8'hC0:	fnDatai = {{DBW*3/4{dat[DBW-1]}},dat[DBW-1:DBW*3/4]};
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LCU:
+		case(sel)
+		8'h03:	fnDatai = dat[DBW/4-1:0];
+		8'h0C:	fnDatai = dat[DBW/2-1:DBW/4];
+		8'h30:	fnDatai = dat[DBW*3/4-1:DBW/2];
+		8'hC0:	fnDatai = dat[DBW-1:DBW*3/4];
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LH:
+		case(sel)
+		8'h0F:	fnDatai = {{DBW/2{dat[DBW/2-1]}},dat[DBW/2-1:0]};
+		8'hF0:	fnDatai = {{DBW/2{dat[DBW-1]}},dat[DBW-1:DBW/2]};
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LHU:
+		case(sel)
+		8'h0F:	fnDatai = dat[DBW/2-1:0];
+		8'hF0:	fnDatai = dat[DBW-1:DBW/2];
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
+	`LW:
+		case(sel)
+		8'hFF:	fnDatai = dat;
+		default:	fnDatai = {DBW{1'b1}};
+		endcase
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
-`LC:
-	case(sel)
-	8'h03:	fnDatai = {{DBW*3/4{dat[DBW/4-1]}},dat[DBW/4-1:0]};
-	8'h0C:	fnDatai = {{DBW*3/4{dat[DBW/2-1]}},dat[DBW/2-1:DBW/4]};
-	8'h30:	fnDatai = {{DBW*3/4{dat[DBW*3/4-1]}},dat[DBW*3/4-1:DBW/2]};
-	8'hC0:	fnDatai = {{DBW*3/4{dat[DBW-1]}},dat[DBW-1:DBW*3/4]};
-	default:	fnDatai = {DBW{1'b1}};
-	endcase
-`LCU:
-	case(sel)
-	8'h03:	fnDatai = dat[DBW/4-1:0];
-	8'h0C:	fnDatai = dat[DBW/2-1:DBW/4];
-	8'h30:	fnDatai = dat[DBW*3/4-1:DBW/2];
-	8'hC0:	fnDatai = dat[DBW-1:DBW*3/4];
-	default:	fnDatai = {DBW{1'b1}};
-	endcase
-`LH:
-	case(sel)
-	8'h0F:	fnDatai = {{DBW/2{dat[DBW/2-1]}},dat[DBW/2-1:0]};
-	8'hF0:	fnDatai = {{DBW/2{dat[DBW-1]}},dat[DBW-1:DBW/2]};
-	default:	fnDatai = {DBW{1'b1}};
-	endcase
-`LHU:
-	case(sel)
-	8'h0F:	fnDatai = dat[DBW/2-1:0];
-	8'hF0:	fnDatai = dat[DBW-1:DBW/2];
-	default:	fnDatai = {DBW{1'b1}};
-	endcase
-`LW:
-	case(sel)
-	8'hFF:	fnDatai = dat;
-	default:	fnDatai = {DBW{1'b1}};
-	endcase
-default:	fnDatai = {DBW{1'b1}};
-endcase
 end
 endfunction
 
 function [DBW-1:0] fnDatao;
 input [7:0] opcode;
 input [DBW-1:0] dat;
-case(opcode)
-`SW:	fnDatao = dat;
-`SH:	fnDatao = {2{dat[DBW/2-1:0]}};
-`SC:	fnDatao = {4{dat[DBW/4-1:0]}};
-`SB:	fnDatao = {8{dat[DBW/8-1:0]}};
-default:	fnDatao = dat;
-endcase
+if (DBW==32)
+	case(opcode)
+	`SW:	fnDatao = dat;
+	`SH:	fnDatao = dat;
+	`SC:	fnDatao = {2{dat[15:0]}};
+	`SB:	fnDatao = {4{dat[7:0]}};
+	default:	fnDatao = dat;
+	endcase
+else
+	case(opcode)
+	`SW:	fnDatao = dat;
+	`SH:	fnDatao = {2{dat[DBW/2-1:0]}};
+	`SC:	fnDatao = {4{dat[DBW/4-1:0]}};
+	`SB:	fnDatao = {8{dat[DBW/8-1:0]}};
+	default:	fnDatao = dat;
+	endcase
 endfunction
 
 assign fetchbuf0_mem	= fetchbuf ? fnIsMem(opcodeC) : fnIsMem(opcodeA);
@@ -988,14 +1118,14 @@ wire predict_taken1 = fetchbuf ? predict_takenD : predict_takenB;
 //
 // set branchback and backpc values ... ignore branches in fetchbuf slots not ready for enqueue yet
 //
-assign take_branch =
-		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ||
-		({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`VAL, `TRUE, `TRUE})
-		;
-wire [63:0] branch_pc =
+assign take_branch0 = ({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE});
+assign take_branch1 = ({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`VAL, `TRUE, `TRUE});
+assign take_branch = take_branch0 || take_branch1;
+
+wire [DBW-1:0] branch_pc =
 		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ? 
-			fetchbuf0_pc + {{52{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} :
-			fetchbuf1_pc + {{52{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]};
+			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} :
+			fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]};
 
 // "Stream" interrupt instructions into the instruction stream until an INT
 // instruction commits. This avoids the problem of an INT instruction being
@@ -1003,11 +1133,11 @@ wire [63:0] branch_pc =
 // Populate the instruction buffers with INT instructions for a hardware interrupt
 reg [63:0] insn1a;
 wire [63:0] insn0 = 
-			(nmi_edge & !StatusHWI) ?	 {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
+			(nmi_edge & !StatusHWI) ?	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
 			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
 			insn[63:0];
 wire [63:0] insn1 = 
-			(nmi_edge & !StatusHWI) ? 	 {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
+			(nmi_edge & !StatusHWI) ? 	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
 			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
 			insn1a;
 
@@ -1032,7 +1162,7 @@ input [127:0] insn;
 case(insn[15:8])
 `LOOP:
 	fnImm = insn[23:16];
-`SYS,`JSR,`INT,`CMPI:
+`SYS,`JSR,`INT,`CMPI,`LDI:
 	fnImm = insn[31:24];
 default:
 	fnImm = insn[39:32];
@@ -1047,13 +1177,81 @@ input [127:0] insn;
 case(insn[15:8])
 `LOOP:
 	fnImmMSB = insn[23];
-`SYS,`JSR,`INT,`CMPI:
+`SYS,`JSR,`INT,`CMPI,`LDI:
 	fnImmMSB = insn[31];
 default:
 	fnImmMSB = insn[39];
 endcase
 
 endfunction
+
+function [63:0] fnImmImm;
+input [63:0] insn;
+case(insn[7:4])
+4'd2:	fnImmImm = {{48{insn[15]}},insn[15:8],8'h00};
+4'd3:	fnImmImm = {{40{insn[23]}},insn[23:8],8'h00};
+4'd4:	fnImmImm = {{32{insn[31]}},insn[31:8],8'h00};
+4'd5:	fnImmImm = {{24{insn[39]}},insn[39:8],8'h00};
+4'd6:	fnImmImm = {{16{insn[47]}},insn[47:8],8'h00};
+4'd7:	fnImmImm = {{ 8{insn[55]}},insn[55:8],8'h00};
+4'd8:	fnImmImm = {insn[63:8],8'h00};
+default:	fnImmImm = 64'd0;
+endcase
+endfunction
+
+function [63:0] fnOpa;
+input [7:0] opcode;
+input [63:0] insn;
+input [63:0] rfo;
+begin
+	if (fnIsFlowCtrl(opcode))
+		fnOpa = fnBra(insn)==4'd0 ? 64'd0 : bregs[fnBra(insn)];
+	else if (opcode==`MFSPR)
+		casex(insn[23:16])
+		`TICK:	fnOpa = tick;
+		`PREGS:
+				begin
+					fnOpa[3:0] = pregs[0];
+					fnOpa[7:4] = pregs[1];
+					fnOpa[11:8] = pregs[2];
+					fnOpa[15:12] = pregs[3];
+					fnOpa[19:16] = pregs[4];
+					fnOpa[23:20] = pregs[5];
+					fnOpa[27:24] = pregs[6];
+					fnOpa[31:28] = pregs[7];
+					fnOpa[35:32] = pregs[8];
+					fnOpa[39:36] = pregs[9];
+					fnOpa[43:40] = pregs[10];
+					fnOpa[47:44] = pregs[11];
+					fnOpa[51:48] = pregs[12];
+					fnOpa[55:52] = pregs[13];
+					fnOpa[59:56] = pregs[14];
+					fnOpa[63:60] = pregs[15];
+				end
+		8'h1x:	fnOpa = insn[19:16]==4'h0 ? 64'd0 : bregs[insn[19:16]];
+		8'h2x:	fnOpa = sregs[insn[19:16]];
+		default:	fnOpa = 64'h0;
+		endcase
+	else
+		fnOpa = rfo;
+end
+endfunction
+
+initial begin
+	//
+	// set up panic messages
+	message[ `PANIC_NONE ]			= "NONE            ";
+	message[ `PANIC_FETCHBUFBEQ ]		= "FETCHBUFBEQ     ";
+	message[ `PANIC_INVALIDISLOT ]		= "INVALIDISLOT    ";
+	message[ `PANIC_IDENTICALDRAMS ]	= "IDENTICALDRAMS  ";
+	message[ `PANIC_OVERRUN ]		= "OVERRUN         ";
+	message[ `PANIC_HALTINSTRUCTION ]	= "HALTINSTRUCTION ";
+	message[ `PANIC_INVALIDMEMOP ]		= "INVALIDMEMOP    ";
+	message[ `PANIC_INVALIDFBSTATE ]	= "INVALIDFBSTATE  ";
+	message[ `PANIC_INVALIDIQSTATE ]	= "INVALIDIQSTATE  ";
+	message[ `PANIC_BRANCHBACK ]		= "BRANCHBACK      ";
+	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
+end
 
 `include "Thor_issue_combo.v"
 `include "Thor_execute_combo.v"
@@ -1096,6 +1294,15 @@ always @(posedge clk) begin
 		for (i=0; i<8; i=i+1) begin
 			iqentry_v[i] <= `INV;
 		end
+		// All the register are flagged as valid on startup even though they
+		// may not contain valid data. Otherwise the processor will stall
+		// waiting for the registers to become valid. Ideally the registers
+		// should be initialized with valid values before use. But who knows
+		// what someone will do in boot code and we don't want the processor
+		// to stall.
+		for (n = 1; n < NREGS; n = n + 1)
+			rf_v[n] = `VAL;
+		rf_v[0] = `VAL;
 		alu0_available <= `TRUE;
 		alu1_available <= `TRUE;
 		tail0 <= 3'd0;
@@ -1108,14 +1315,20 @@ always @(posedge clk) begin
 		head5 <= 3'd5;
 		head6 <= 3'd6;
 		head7 <= 3'd7;
+		dram0 <= 2'b00;
+		dram1 <= 2'b00;
+		dram2 <= 2'b00;
+		panic <= `PANIC_NONE;
 	end
 
-	rf_v[0] <= 1'b1;
+	rf_v[0] = 1'b1;
 	did_branchback <= take_branch;
+	did_branchback0 <= take_branch0;
+	did_branchback1 <= take_branch1;
 
 	if (branchmiss) begin
-		for (n = 1; n < 256; n = n + 1)
-			if (rf_v[n] == `INV && ~livetarget[n]) rf_v[n] <= `VAL;
+		for (n = 1; n < NREGS; n = n + 1)
+			if (rf_v[n] == `INV && ~livetarget[n]) rf_v[n] = `VAL;
 
 	    if (|iqentry_0_latestID[255:1])	rf_source[ iqentry_tgt[0] ] <= { iqentry_mem[0], 3'd0 };
 	    if (|iqentry_1_latestID[255:1])	rf_source[ iqentry_tgt[1] ] <= { iqentry_mem[1], 3'd1 };
@@ -1126,21 +1339,10 @@ always @(posedge clk) begin
 	    if (|iqentry_6_latestID[255:1])	rf_source[ iqentry_tgt[6] ] <= { iqentry_mem[6], 3'd6 };
 	    if (|iqentry_7_latestID[255:1])	rf_source[ iqentry_tgt[7] ] <= { iqentry_mem[7], 3'd7 };
 
-		for (n = 0; n < 16; n = n + 1)
-			if (pf_v[n] == `INV && ~livetarget[n+256]) pf_v[n] <= `VAL;
-
-	    if (|iqentry_0_latestID[271:256])	pf_source[ iqentry_tgt[0][3:0] ] <= { iqentry_mem[0], 3'd0 };
-	    if (|iqentry_1_latestID[271:256])	pf_source[ iqentry_tgt[1][3:0] ] <= { iqentry_mem[1], 3'd1 };
-	    if (|iqentry_2_latestID[271:256])	pf_source[ iqentry_tgt[2][3:0] ] <= { iqentry_mem[2], 3'd2 };
-	    if (|iqentry_3_latestID[271:256])	pf_source[ iqentry_tgt[3][3:0] ] <= { iqentry_mem[3], 3'd3 };
-	    if (|iqentry_4_latestID[271:256])	pf_source[ iqentry_tgt[4][3:0] ] <= { iqentry_mem[4], 3'd4 };
-	    if (|iqentry_5_latestID[271:256])	pf_source[ iqentry_tgt[5][3:0] ] <= { iqentry_mem[5], 3'd5 };
-	    if (|iqentry_6_latestID[271:256])	pf_source[ iqentry_tgt[6][3:0] ] <= { iqentry_mem[6], 3'd6 };
-	    if (|iqentry_7_latestID[271:256])	pf_source[ iqentry_tgt[7][3:0] ] <= { iqentry_mem[7], 3'd7 };
-		
 	end
 
 `include "Thor_ifetch.v"
+`include "Thor_commit_early.v"
 `include "Thor_enque.v"
 `include "Thor_dataincoming.v"
 `include "Thor_issue.v"
@@ -1153,37 +1355,53 @@ always @(posedge clk) begin
 			if (dram0!=2'd0 || dram1!=2'd0 || dram2!=2'd0)
 				;
 			else begin
+				$display("********************");
+				$display("Cache access to: %h",!hit0 ? {spc[DBW-1:5],5'b00000} : {spcp16[DBW-1:5],5'b00000});
+				$display("********************");
 				bte_o <= 2'b00;
 				cti_o <= 3'b001;
+				bl_o <= DBW==32 ? 5'd7 : 5'd3;
 				cyc_o <= 1'b1;
 				stb_o <= 1'b1;
 				we_o <= 1'b0;
-				sel_o <= 8'hFF;
+				sel_o <= {DBW/8{1'b1}};
 				adr_o <= !hit0 ? {spc[DBW-1:5],5'b00000} : {spcp16[DBW-1:5],5'b00000};
-				dat_o <= 64'd0;
+				dat_o <= {DBW{1'b0}};
 				cstate <= ICACHE1;
 			end
 		end
 	ICACHE1:
 		if (ack_i) begin
-			adr_o[4:3] <= adr_o[4:3] + 2'd1;
-			if (adr_o[4:3]==2'b10)
-				cti_o <= 3'b111;
-			if (adr_o[4:3]==2'b11) begin
-				wb_nack();
-				cstate <= IDLE;
+			if (DBW==32) begin
+				adr_o[4:2] <= adr_o[4:2] + 3'd1;
+				if (adr_o[4:2]==3'b110)
+					cti_o <= 3'b111;
+				if (adr_o[4:2]==3'b111) begin
+					wb_nack();
+					cstate <= IDLE;
+				end
+			end
+			else begin
+				adr_o[4:3] <= adr_o[4:3] + 2'd1;
+				if (adr_o[4:3]==2'b10)
+					cti_o <= 3'b111;
+				if (adr_o[4:3]==2'b11) begin
+					wb_nack();
+					cstate <= IDLE;
+				end
 			end
 		end
 	endcase
 
+	$display("\r\n\r\n");
 	$display("TIME %0d", $time);
-	$display("%h %b %b#", pc, hit0, hit1);
-	$display("%h",uitm1.tag0);
+	$display("%h hit0=%b hit1=%b#", spc, hit0, hit1);
+	$display("insn=%h", insn);
 
 //	for (i=0; i<8; i=i+1)
 //	    $display("%d: %h %d %o #", i, urf1.regs0[i], rf_v[i], rf_source[i]);
 
-	$display("%d %h #", take_branch, branch_pc);
+	$display("takb=%d br_pc=%h #", take_branch, branch_pc);
 	$display("%c%c A: %d %h %h #",
 	    45, fetchbuf?45:62, fetchbufA_v, fetchbufA_instr, fetchbufA_pc);
 	$display("%c%c B: %d %h %h #",
@@ -1193,15 +1411,56 @@ always @(posedge clk) begin
 	$display("%c%c D: %d %h %h #",
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 
+	for (i=0; i<8; i=i+1) 
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h 0%d %o %h %h %h %d %o %h %d %o %h #",
+		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
+		iqentry_v[i], iqentry_done[i], iqentry_cmt[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
+		((i==0) ? iqentry_0_islot : (i==1) ? iqentry_1_islot : (i==2) ? iqentry_2_islot : (i==3) ? iqentry_3_islot :
+		 (i==4) ? iqentry_4_islot : (i==5) ? iqentry_5_islot : (i==6) ? iqentry_6_islot : iqentry_7_islot), iqentry_stomp[i],
+		(fnIsFlowCtrl(iqentry_op[i]) ? 98 : fnIsMem(iqentry_op[i]) ? 109 : 97), 
+		iqentry_op[i], iqentry_tgt[i], iqentry_exc[i], iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
+		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
+
+	$display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
+	$display("dr=%d I=%h A=%h B=%h op=%c%d bt=%d src=%o pc=%h #",
+		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
+		 (fnIsFlowCtrl(alu0_op) ? 98 : (fnIsMem(alu0_op)) ? 109 : 97),
+		alu0_op, alu0_bt, alu0_sourceid, alu0_pc);
+	$display("dr=%d I=%h A=%h B=%h op=%c%d bt=%d src=%o pc=%h #",
+		alu1_dataready, alu1_argI, alu1_argA, alu1_argB, 
+		 (fnIsFlowCtrl(alu1_op) ? 98 : (fnIsMem(alu1_op)) ? 109 : 97),
+		alu1_op, alu1_bt, alu1_sourceid, alu1_pc);
+	$display("v=%d bus=%h id=%o 0 #", alu0_v, alu0_bus, alu0_id);
+	$display("bmiss0=%b src=%o mpc=%h #", alu0_branchmiss, alu0_sourceid, alu0_misspc); 
+	$display("cmt=%b cnd=%d prd=%d", alu0_cmt, alu0_cond, alu0_pred);
+	$display("bmiss1=%b src=%o mpc=%h #", alu1_branchmiss, alu1_sourceid, alu1_misspc); 
+	$display("cmt=%b cnd=%d prd=%d", alu1_cmt, alu1_cond, alu1_pred);
+	$display("bmiss=%b mpc=%h", branchmiss, misspc);
+
 	$display("0: %d %h %o 0%d #", commit0_v, commit0_bus, commit0_id, commit0_tgt);
 	$display("1: %d %h %o 0%d #", commit1_v, commit1_bus, commit1_id, commit1_tgt);
-
+	if (|panic) begin
+	    $display("");
+	    $display("-----------------------------------------------------------------");
+	    $display("-----------------------------------------------------------------");
+	    $display("---------------     PANIC:%s     -----------------", message[panic]);
+	    $display("-----------------------------------------------------------------");
+	    $display("-----------------------------------------------------------------");
+	    $display("");
+	    $display("instructions committed: %d", I);
+	    $display("total execution cycles: %d", $time / 10);
+	    $display("");
+	end
+	if (|panic && ~outstanding_stores) begin
+	    $finish;
+	end
 end
 
 task wb_nack;
 begin
 	bte_o <= 2'b00;
 	cti_o <= 3'b000;
+	bl_o <= 5'd0;
 	cyc_o <= 1'b0;
 	stb_o <= 1'b0;
 	we_o <= 1'b0;

@@ -62,15 +62,15 @@
 					fetchbufD_pc <= pc + fnInsnLength(insn);
 					fetchbufD_v <= ihit;
 					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-					if (iqentry_v[tail0]==`INV) begin
-						fetchbufA_v <= `INV;
+					fetchbufB_v <= iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
 						fetchbuf <= 1'b1;
-					end
 				end
 			4'b0111:
-				if (iqentry_v[tail0]==`INV) begin
-					fetchbufB_v <= `INV;
-					fetchbuf <= 1'b1;
+				begin
+					fetchbufB_v <= iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b1;
 				end
 			4'b1000:
 				begin
@@ -82,22 +82,27 @@
 					fetchbufD_pc <= pc + fnInsnLength(insn);
 					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 					fetchbufA_v <= iqentry_v[tail0];
-					fetchbuf <= fetchbuf + ~iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b1;
 				end
 			4'b1011:
-				if (iqentry_v[tail0]==`INV) begin
-					fetchbufA_v <= `INV;
-					fetchbuf <= 1'b1;
+				begin
+					fetchbufA_v <= iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b1;
 				end
 			4'b1100: 
+				// Note that there is no point to loading C,D here because
+				// there is a predicted taken branch that would stomp on the
+				// instructions anyways.
 				if (fnIsBranch(opcodeA) && predict_takenA) begin
 					pc <= branch_pc;
 					fetchbufA_v <= iqentry_v[tail0];
 					fetchbufB_v <= `INV;		// stomp on it
-					if (~iqentry_v[tail0])	fetchbuf <= 1'b0;
+					// may as well stick with same fetchbuf
 				end
 				else begin
-					if (did_branchback) begin
+					if (did_branchback0) begin
 						fetchbufC_instr <= insn0;
 						fetchbufC_v <= ihit;
 						fetchbufC_pc <= pc;
@@ -107,20 +112,22 @@
 						if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 						fetchbufA_v <= iqentry_v[tail0];
 						fetchbufB_v <= iqentry_v[tail1];
-						fetchbuf <= fetchbuf + (~iqentry_v[tail0] & ~iqentry_v[tail1]);
+						if (iqentry_v[tail1]==`INV)
+							fetchbuf <= 1'b1;
 					end
 					else begin
 						pc <= branch_pc;
 						fetchbufA_v <= iqentry_v[tail0];
 						fetchbufB_v <= iqentry_v[tail1];
-						if (~iqentry_v[tail0] & ~iqentry_v[tail1])	fetchbuf <= 1'b0;
+						// may as well keep the same fetchbuffer
 					end
 				end
 			4'b1111:
 				begin
 					fetchbufA_v <= iqentry_v[tail0];
 					fetchbufB_v <= iqentry_v[tail1];
-					fetchbuf <= fetchbuf + (~iqentry_v[tail0] & ~iqentry_v[tail1]);
+					if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
+						fetchbuf <= 1'b1;
 				end
 			default: panic <= `PANIC_INVALIDFBSTATE;
 			endcase
@@ -136,7 +143,7 @@
 					fetchbufB_pc <= pc + fnInsnLength(insn);
 					fetchbufB_v <= ihit;
 					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-					fetchbuf <= 1'b1;
+					fetchbuf <= 1'b0;
 				end
 			4'b0100:
 				begin
@@ -147,15 +154,15 @@
 					fetchbufB_pc <= pc + fnInsnLength(insn);
 					fetchbufB_v <= ihit;
 					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-					if (iqentry_v[tail0]==`INV) begin
-						fetchbufD_v <= `INV;
-						fetchbuf <= 1'b1;
-					end
+					fetchbufD_v <= iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b0;
 				end
 			4'b0111:
-				if (iqentry_v[tail0]==`INV) begin
-					fetchbufD_v <= `INV;
-					fetchbuf <= 1'b1;
+				begin
+					fetchbufD_v <= iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b0;
 				end
 			4'b1000:
 				begin
@@ -167,22 +174,24 @@
 					fetchbufB_pc <= pc + fnInsnLength(insn);
 					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 					fetchbufC_v <= iqentry_v[tail0];
-					fetchbuf <= fetchbuf + ~iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b0;
 				end
 			4'b1011:
-				if (iqentry_v[tail0]==`INV) begin
-					fetchbufC_v <= `INV;
-					fetchbuf <= 1'b1;
+				begin
+					fetchbufC_v <= iqentry_v[tail0];
+					if (iqentry_v[tail0]==`INV)
+						fetchbuf <= 1'b0;
 				end
 			4'b1100:
 				if (fnIsBranch(opcodeC) && predict_takenC) begin
 					pc <= branch_pc;
 					fetchbufC_v <= iqentry_v[tail0];
 					fetchbufD_v <= `INV;		// stomp on it
-					if (~iqentry_v[tail0])	fetchbuf <= 1'b0;
+					// may as well stick with same fetchbuf
 				end
 				else begin
-					if (did_branchback) begin
+					if (did_branchback1) begin
 						fetchbufA_instr <= insn0;
 						fetchbufA_v <= ihit;
 						fetchbufA_pc <= pc;
@@ -192,20 +201,22 @@
 						if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 						fetchbufC_v <= iqentry_v[tail0];
 						fetchbufD_v <= iqentry_v[tail1];
-						fetchbuf <= fetchbuf + (~iqentry_v[tail0] & ~iqentry_v[tail1]);
+						if (iqentry_v[tail1]==`INV)
+							fetchbuf <= 1'b0;
 					end
 					else begin
 						pc <= branch_pc;
 						fetchbufC_v <= iqentry_v[tail0];
 						fetchbufD_v <= iqentry_v[tail1];
-						if (~iqentry_v[tail0] & ~iqentry_v[tail1])	fetchbuf <= 1'b0;
+						// may as well keep the same fetchbuffer
 					end
 				end
 			4'b1111:
 				begin
 					fetchbufC_v <= iqentry_v[tail0];
 					fetchbufD_v <= iqentry_v[tail1];
-					fetchbuf <= fetchbuf + (~iqentry_v[tail0] & ~iqentry_v[tail1]);
+					if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
+						fetchbuf <= 1'b0;
 				end
 			default: panic <= `PANIC_INVALIDFBSTATE;
 			endcase
@@ -223,14 +234,14 @@
 			4'b01_10,
 			4'b01_11 : begin
 				fetchbufB_v <= `INV;
-				fetchbuf <= ~fetchbuf;
+				fetchbuf <= 1'b1;
 				end
 			4'b10_00 : ;
 			4'b10_01 : panic <= `PANIC_INVALIDIQSTATE;
 			4'b10_10,
 			4'b10_11 : begin
 				fetchbufA_v <= `INV;
-				fetchbuf <= ~fetchbuf;
+				fetchbuf <= 1'b1;
 				end
 			4'b11_00 : ;
 			4'b11_01 : panic <= `PANIC_INVALIDIQSTATE;
@@ -238,10 +249,9 @@
 				fetchbufA_v <= `INV;
 				end
 			4'b11_11 : begin
-				$display("case 11_11");
 				fetchbufA_v <= `INV;
 				fetchbufB_v <= `INV;
-				fetchbuf <= ~fetchbuf;
+				fetchbuf <= 1'b1;
 				end
 			endcase
 		else
@@ -256,7 +266,7 @@
 			4'b01_10,
 			4'b01_11 : begin
 				fetchbufD_v <= `INV;
-				fetchbuf <= ~fetchbuf;
+				fetchbuf <= 1'b0;
 				end
 
 			4'b10_00 : ;
@@ -265,7 +275,7 @@
 			4'b10_10,
 			4'b10_11 : begin
 				fetchbufC_v <= `INV;
-				fetchbuf <= ~fetchbuf;
+				fetchbuf <= 1'b0;
 				end
 
 			4'b11_00 : ;
@@ -278,7 +288,7 @@
 			4'b11_11 : begin
 				fetchbufC_v <= `INV;
 				fetchbufD_v <= `INV;
-				fetchbuf <= ~fetchbuf;
+				fetchbuf <= 1'b0;
 				end
 			endcase
 		if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin

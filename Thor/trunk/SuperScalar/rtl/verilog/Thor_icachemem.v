@@ -24,22 +24,39 @@
 // ============================================================================
 //
 module Thor_icachemem(wclk, wce, wr, wa, wd, rclk, pc, insn);
+parameter DBW=64;
 input wclk;
 input wce;
 input wr;
-input [63:0] wa;
-input [63:0] wd;
+input [DBW-1:0] wa;
+input [DBW-1:0] wd;
 input rclk;
-input [63:0] pc;
+input [DBW-1:0] pc;
 output reg [127:0] insn;
 
 reg [127:0] mem [0:511];
 reg [12:0] rpc,rpcp16;
 
-always @(posedge wclk)
-	if (wce & wr & ~wa[3]) mem[wa[12:4]][63:0] <= wd;
-always @(posedge wclk)
-	if (wce & wr &  wa[3]) mem[wa[12:4]][127:64] <= wd;
+generate
+begin : gen1
+	if (DBW==64) begin
+		always @(posedge wclk)
+			if (wce & wr & ~wa[3]) mem[wa[12:4]][63:0] <= wd;
+		always @(posedge wclk)
+			if (wce & wr &  wa[3]) mem[wa[12:4]][127:64] <= wd;
+	end
+	else if (DBW==32) begin
+		always @(posedge wclk)
+			if (wce & wr & wa[3:2]==2'b00) mem[wa[12:4]][31:0] <= wd;
+		always @(posedge wclk)
+			if (wce & wr & wa[3:2]==2'b01) mem[wa[12:4]][63:32] <= wd;
+		always @(posedge wclk)
+			if (wce & wr & wa[3:2]==2'b10) mem[wa[12:4]][95:64] <= wd;
+		always @(posedge wclk)
+			if (wce & wr & wa[3:2]==2'b11) mem[wa[12:4]][127:96] <= wd;
+	end
+end
+endgenerate
 
 always @(posedge rclk)
 	rpc <= pc[12:0];

@@ -24,20 +24,27 @@
 //
 // ============================================================================
 //
-    //
-    // additional COMMIT logic
-    //
+// If trying to write to two branch registers at once, or trying to write 
+// to two predicate registers at once, then limit the processor to single
+// commit.
+// The processor does not support writing two registers in the same register
+// group at the same time for anything other than the general purpose
+// registers. It is possible for the processor to write to two diffent groups
+// at the same time.
+//	assign limit_cmt = (iqentry_rfw[head0] && iqentry_rfw[head1] && iqentry_tgt[head0][8]==1'b1 && iqentry_tgt[head1][8]==1'b1);
+assign limit_cmt = 1'b0;
+//assign committing2 = (iqentry_v[head0] && iqentry_v[head1] && !limit_cmt) || (head0 != tail0 && head1 != tail0);
 
-    assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic && iqentry_cmt[head0]);
-    assign commit1_v = ({iqentry_v[head0], iqentry_done[head0]} != 2'b10 
-			&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && iqentry_cmt[head1]);
+assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic && iqentry_cmt[head0]);
+assign commit1_v = ({iqentry_v[head0], iqentry_done[head0]} != 2'b10 
+		&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && iqentry_cmt[head1] && !limit_cmt);
 
-    assign commit0_id = {iqentry_mem[head0], head0};	// if a memory op, it has a DRAM-bus id
-    assign commit1_id = {iqentry_mem[head1], head1};	// if a memory op, it has a DRAM-bus id
+assign commit0_id = {iqentry_mem[head0], head0};	// if a memory op, it has a DRAM-bus id
+assign commit1_id = {iqentry_mem[head1], head1};	// if a memory op, it has a DRAM-bus id
 
-    assign commit0_tgt = iqentry_tgt[head0];
-    assign commit1_tgt = iqentry_tgt[head1];
+assign commit0_tgt = iqentry_tgt[head0];
+assign commit1_tgt = iqentry_tgt[head1];
 
-    assign commit0_bus = iqentry_res[head0];
-    assign commit1_bus = iqentry_res[head1];
+assign commit0_bus = iqentry_res[head0];
+assign commit1_bus = iqentry_res[head1];
 

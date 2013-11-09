@@ -51,7 +51,7 @@ reg whichreg [0:255];	// tracks which register file is the valid one for a given
 
 assign o0 = rra0==8'd0 ? {WID{1'b0}} :
 	(wr1 && (rra0==wa1)) ? i1 :
-	(wr0 && (ra0==wa0)) ? i0 :
+	(wr0 && (rra0==wa0)) ? i0 :
 	whichreg[rra0]==1'b0 ? regs0[rra0] : regs1[rra0];
 assign o1 = rra1==8'd0 ? {WID{1'b0}} :
 	(wr1 && (rra1==wa1)) ? i1 :

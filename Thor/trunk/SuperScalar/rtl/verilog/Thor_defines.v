@@ -87,11 +87,10 @@
 `define _4ADDUI		8'h6C
 `define _8ADDUI		8'h6D
 `define _16ADDUI	8'h6E
+`define LDI			8'h6F
 
 `define NEG			8'h70
 `define NOT			8'h71
-`define SGN			8'h72
-`define ABS			8'h73
 
 `define LB			8'h80
 `define LBU			8'h81
@@ -153,5 +152,34 @@
 `define PREGS		8'h04
 `define BREGS		8'h1x
 `define SREGS		8'h2x
+
+// exception types:
+`define EXC_NONE	4'd0
+`define EXC_HALT	4'd1
+`define EXC_TLBMISS	4'd2
+`define EXC_SIGSEGV	4'd3
+`define EXC_INVALID	4'd4
+`define EXC_SYS		4'd5
+`define EXC_INT		4'd6
+`define EXC_OFL		4'd7
+
+//
+// define PANIC types
+//
+`define PANIC_NONE		4'd0
+`define PANIC_FETCHBUFBEQ	4'd1
+`define PANIC_INVALIDISLOT	4'd2
+`define PANIC_MEMORYRACE	4'd3
+`define PANIC_IDENTICALDRAMS	4'd4
+`define PANIC_OVERRUN		4'd5
+`define PANIC_HALTINSTRUCTION	4'd6
+`define PANIC_INVALIDMEMOP	4'd7
+`define PANIC_INVALIDFBSTATE	4'd9
+`define PANIC_INVALIDIQSTATE	4'd10
+`define PANIC_BRANCHBACK	4'd11
+`define PANIC_BADTARGETID	4'd12
+
+`define DRAMSLOT_AVAIL	2'b00
+`define DRAMREQ_READY	2'b11
 
 `endif
