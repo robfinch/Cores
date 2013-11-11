@@ -162,6 +162,7 @@
 `define EXC_SYS		4'd5
 `define EXC_INT		4'd6
 `define EXC_OFL		4'd7
+`define EXC_DBE		4'd8		// databus error
 
 //
 // define PANIC types

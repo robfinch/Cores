@@ -63,11 +63,10 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
 				iqentry_rfw  [tail0]    <=   fetchbuf1_rfw;
 				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf1_instr);
-				iqentry_exc  [tail0]    <=   `EXC_NONE;
 				iqentry_pred [tail0]    <=   pregs[Pn1];
 				// The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
-				iqentry_p_v  [tail0]    <=   rf_v [Pn1] || cond1 < 4'h2;
-				iqentry_p_s  [tail0]    <=   rf_source [Pn1];
+				iqentry_p_v  [tail0]    <=   rf_v [{1'b1,4'h0,Pn1}] || cond1 < 4'h2;
+				iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn1}];
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
 				// But don't allow it for a branch
 				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode1))
@@ -85,10 +84,6 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				iqentry_a2_s [tail0]    <=   rf_source[Rb1];
 				tail0 <= tail0 + 1;
 				tail1 <= tail1 + 1;
-//					if (fetchbuf1_pfw) begin
-//						pf_v [Pt1] <= `INV;
-//						pf_source[Pt1] <= {fetchbuf1_mem, tail0};
-//					end
 				if (fetchbuf1_rfw|fetchbuf1_pfw) begin
 					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
@@ -114,10 +109,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 				iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
 				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
-				iqentry_exc  [tail0]    <=   `EXC_NONE;
 				iqentry_pred [tail0]    <=   pregs[Pn0];
-				iqentry_p_v  [tail0]    <=   rf_v [Pn0] || cond0 < 4'h2;
-				iqentry_p_s  [tail0]    <=   rf_source [Pn0];
+				iqentry_p_v  [tail0]    <=   rf_v [{1'b1,4'h0,Pn0}] || cond0 < 4'h2;
+				iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn0}];
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
 				if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode0))
 					iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf0_instr)};
@@ -134,10 +128,6 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				iqentry_a2_s [tail0]    <=   rf_source [Rb0];
 				tail0 <= tail0 + 1;
 				tail1 <= tail1 + 1;
-//					if (fetchbuf0_pfw) begin
-//						pf_v [Pt0] <= `INV;
-//						pf_source[Pt0] <= {fetchbuf0_mem, tail0};
-//					end
 				if (fetchbuf0_rfw|fetchbuf0_pfw) begin
 					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };	// top bit indicates ALU/MEM bus
@@ -167,10 +157,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
 			iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
 			iqentry_tgt  [tail0]    <=	fnTargetReg(fetchbuf0_instr);
-			iqentry_exc  [tail0]    <=	`EXC_NONE;
 			iqentry_pred [tail0]    <=   pregs[Pn0];
-			iqentry_p_v  [tail0]    <=   rf_v [Pn0] || cond0 < 4'h2;
-			iqentry_p_s  [tail0]    <=   rf_source [Pn0];
+			iqentry_p_v  [tail0]    <=   rf_v [{1'b1,4'h0,Pn0}] || cond0 < 4'h2;
+			iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn0}];
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
 			if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode0))
 				iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf0_instr)};
@@ -227,10 +216,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 			iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
 			iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
-			iqentry_exc  [tail0]    <=   `EXC_NONE;
 			iqentry_pred [tail0]    <=   pregs[Pn0];
-			iqentry_p_v  [tail0]    <=   rf_v [Pn0] || cond0 < 4'h2;
-			iqentry_p_s  [tail0]    <=   rf_source [Pn0];
+			iqentry_p_v  [tail0]    <=   rf_v [{1'b1,4'h0,Pn0}] || cond0 < 4'h2;
+			iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn0}];
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
 			if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode0))
 				iqentry_a0[tail0]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf0_instr)};
@@ -246,6 +234,8 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 			iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=   rf_source[Rb0];
+			$display("a1sv=%b opcode=%h", fnSource1_v(opcode0), opcode0);
+			$display("Ra=%d",fnRa(fetchbuf0_instr));
 			//
 			// if there is room for a second instruction, enqueue it
 			//
@@ -266,11 +256,10 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
 			iqentry_rfw  [tail1]    <=   fetchbuf1_rfw;
 			iqentry_tgt  [tail1]    <=   fnTargetReg(fetchbuf1_instr);
-			iqentry_exc  [tail1]    <=   `EXC_NONE;
 			iqentry_pred [tail1]    <=   pregs[Pn1];
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
-			if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail0-3'd1]==`IMM && !fnIsBranch(opcode1))
-				iqentry_a0[tail1]   <=   {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf1_instr)};
+			if (iqentry_v[tail0-3'd1]==`VAL && iqentry_op[tail1-3'd1]==`IMM && !fnIsBranch(opcode1))
+				iqentry_a0[tail1]   <=   {iqentry_a0[tail1-3'd1][DBW-1:8],fnImm(fetchbuf1_instr)};
 			else
 				iqentry_a0[tail1]   <=  fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} : 
 											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
@@ -287,38 +276,42 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			//
 			// if the argument is an immediate or not needed, we're done
 			if (fnSource1_v( opcode1 ) == `VAL) begin
+				$display("a1 auto valid: %h", opcode1);
 				iqentry_a1_v [tail1] <= `VAL;
 //					iqentry_a1_s [tail1] <= 4'd0;
 			end
 			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 			else if (~fetchbuf0_rfw) begin
+				$display("fetchbuf0 not writing regfile");
 				iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
 				iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
 			else if (fnTargetReg(fetchbuf0_instr) != 9'd0
 				&& fnRa(fetchbuf1_instr) == fnTargetReg(fetchbuf0_instr)) begin
+				$display("target overlap");
 				// if the previous instruction is a LW, then grab result from memq, not the iq
 				iqentry_a1_v [tail1]    <=   `INV;
 				iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
 			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
+				$display("no overlapp");
 				iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
 				iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
 			end
 
 			if (~fetchbuf0_pfw) begin
-				iqentry_p_v  [tail1]    <=   rf_v [Pn1] || cond1 < 4'h2;
-				iqentry_p_s  [tail1]    <=   rf_source [Pn1];
+				iqentry_p_v  [tail1]    <=   rf_v [{1'b1,4'h0,Pn1}] || cond1 < 4'h2;
+				iqentry_p_s  [tail1]    <=   rf_source [{1'b1,4'h0,Pn1}];
 			end
 			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 && fetchbuf1_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF) begin
 				iqentry_p_v [tail1] <= cond1 < 4'h2;
 				iqentry_p_s [tail1] <= { fetchbuf0_mem, tail0 };
 			end
 			else begin
-				iqentry_p_v [tail1] <= rf_v[Pn1] || cond1 < 4'h2;
-				iqentry_p_s [tail1] <= rf_source[Pn1];
+				iqentry_p_v [tail1] <= rf_v[{1'b1,4'h0,Pn1}] || cond1 < 4'h2;
+				iqentry_p_s [tail1] <= rf_source[{1'b1,4'h0,Pn1}];
 			end
 
 			//
@@ -327,23 +320,27 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			//
 			// if the argument is an immediate or not needed, we're done
 			if (fnSource2_v( opcode1 ) == `VAL) begin
+				$display("a2 auto valid opcode:%h",opcode1);
 				iqentry_a2_v [tail1] <= `VAL;
 //					iqentry_a2_s [tail1] <= 4'd0;
 			end
 			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 			else if (~fetchbuf0_rfw) begin
+				$display("writes nothing to RF");
 				iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
 				iqentry_a2_s [tail1] <= rf_source[Rb1];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
 			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 &&
-				{1'b0,Rb1} == fnTargetReg(fetchbuf0_instr)) begin
+				Rb1 == fnTargetReg(fetchbuf0_instr)) begin
+				$display("target overllpas");
 				// if the previous instruction is a LW, then grab result from memq, not the iq
 				iqentry_a2_v [tail1]    <=   `INV;
 				iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
 			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
+				$display("target doesnt overllpas");
 				iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
 				iqentry_a2_s [tail1] <= rf_source[Rb1];
 			end
@@ -366,10 +363,13 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			end
 			else begin
 				if (fetchbuf0_rfw) begin
+					$display("0marking %d invalid", fnTargetReg(fetchbuf0_instr));
 					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };
 				end
+				$display("fetchbuf1_rfw=%d", fetchbuf1_rfw);
 				if (fetchbuf1_rfw) begin
+					$display("1marking %d invalid", fnTargetReg(fetchbuf1_instr));
 					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail1 };
 				end

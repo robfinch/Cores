@@ -41,9 +41,9 @@ generate
 begin : gen1
 	if (DBW==64) begin
 		always @(posedge wclk)
-			if (wce & wr & ~wa[3]) mem[wa[12:4]][63:0] <= wd;
+			if (wce & wr & ~wa[3]) mem[wa[12:4]][63:0] <= wd[63:0];
 		always @(posedge wclk)
-			if (wce & wr &  wa[3]) mem[wa[12:4]][127:64] <= wd;
+			if (wce & wr &  wa[3]) mem[wa[12:4]][127:64] <= wd[63:0];
 	end
 	else if (DBW==32) begin
 		always @(posedge wclk)

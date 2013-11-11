@@ -26,8 +26,13 @@
 //
 	
 // When the INT instruction commits set the hardware interrupt status to disable further interrupts.
-if ((iqentry_op[head0]==`INT && commit0_v) || (commit0_v && iqentry_op[head1]==`INT && commit1_v))
+if (int_commit)
 begin
+	$display("*********************");
+	$display("*********************");
+	$display("Interrupt committing");
+	$display("*********************");
+	$display("*********************");
 	StatusHWI <= `TRUE;
 	imb <= im;
 	im <= 1'b0;
@@ -37,8 +42,13 @@ begin
 		nmi_edge <= 1'b0;
 end
 // When the RTI instruction commits clear the hardware interrupt status to enable interrupts.
-if ((iqentry_op[head0]==`RTI && commit0_v) || (commmit0_v && iqentry_op[head1]==`RTI && commit1_v))
+if ((iqentry_op[head0]==`RTI && commit0_v) || (commit0_v && iqentry_op[head1]==`RTI && commit1_v))
 begin
+	$display("*********************");
+	$display("*********************");
+	$display("RTI clearing StatusHWI");
+	$display("*********************");
+	$display("*********************");
 	StatusHWI <= `FALSE;
 	im <= imb;
 end
@@ -87,7 +97,7 @@ case ({ iqentry_v[head0],
 	4'b00_10,
 	4'b01_10,
 	4'b11_10: begin
-		if (head0 != tail0) begin
+		if (iqentry_v[head0] || head0 != tail0) begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			head0 <= head0 + 1;
 			head1 <= head1 + 1;
@@ -97,7 +107,7 @@ case ({ iqentry_v[head0],
 			head5 <= head5 + 1;
 			head6 <= head6 + 1;
 			head7 <= head7 + 1;
-			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
+//			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
 			I <= I + 1;
 		end
 	end
@@ -116,8 +126,8 @@ case ({ iqentry_v[head0],
 			head5 <= head5 + 2;
 			head6 <= head6 + 2;
 			head7 <= head7 + 2;
-			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
-			if (iqentry_v[head1] && iqentry_exc[head1])	panic <= `PANIC_HALTINSTRUCTION;
+//			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
+//			if (iqentry_v[head1] && iqentry_exc[head1])	panic <= `PANIC_HALTINSTRUCTION;
 			I <= I + 2;
 		end
 		else if (iqentry_v[head0] || head0 != tail0) begin
@@ -130,7 +140,7 @@ case ({ iqentry_v[head0],
 			head5 <= head5 + 1;
 			head6 <= head6 + 1;
 			head7 <= head7 + 1;
-			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
+//			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
 			I <= I + 1;
 		end
 	end

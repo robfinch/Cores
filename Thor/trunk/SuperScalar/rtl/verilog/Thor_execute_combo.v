@@ -83,7 +83,7 @@ casex(alu_op)
 				fnAluCalc = alu_argA + alu_argI;
 `JSR,`SYS:	fnAluCalc = alu_pc + insnsz;
 `INT:		fnAluCalc = alu_pc;
-`MFSPR:		fnAluCalc = alu_argA;
+`MFSPR,`MTSPR:	fnAluCalc = alu_argA;
 default:	fnAluCalc = 64'hDEADDEADDEADDEAD;
 endcase
 end
@@ -111,30 +111,28 @@ endcase
 
 endfunction
 
-	assign alu0_cmt = fnPredicate(alu0_pred, alu0_cond);
-	assign alu1_cmt = fnPredicate(alu1_pred, alu1_cond);
+assign alu0_cmt = fnPredicate(alu0_pred, alu0_cond);
+assign alu1_cmt = fnPredicate(alu1_pred, alu1_cond);
 
-    assign alu0_bus = 	fnIsShiftop(alu0_op) ? shfto0 :
-						fnAluCalc(alu0_op, alu0_argA, alu0_argB, alu0_argI, alu0_argA, alu0_argB, alu0_argI, alu0_pc, alu0_insnsz);
-    assign alu1_bus = 	fnIsShiftop(alu1_op) ? shfto1 :
-						fnAluCalc(alu1_op, alu1_argA, alu1_argB, alu1_argI, alu1_argA, alu1_argB, alu1_argI, alu1_pc, alu1_insnsz);
+assign alu0_bus = 	fnIsShiftop(alu0_op) ? shfto0 :
+					fnAluCalc(alu0_op, alu0_argA, alu0_argB, alu0_argI, alu0_argA, alu0_argB, alu0_argI, alu0_pc, alu0_insnsz);
+assign alu1_bus = 	fnIsShiftop(alu1_op) ? shfto1 :
+					fnAluCalc(alu1_op, alu1_argA, alu1_argB, alu1_argI, alu1_argA, alu1_argB, alu1_argI, alu1_pc, alu1_insnsz);
 
-    assign  alu0_v = alu0_dataready,
-			alu1_v = alu1_dataready;
+assign  alu0_v = alu0_dataready,
+		alu1_v = alu1_dataready;
 
-    assign  alu0_id = alu0_sourceid,
-			alu1_id = alu1_sourceid;
+assign  alu0_id = alu0_sourceid,
+		alu1_id = alu1_sourceid;
 
-    assign  alu0_misspc = (alu0_op == `JSR) ? alu0_argA + alu0_argI :
-						  (alu0_op==`SYS || alu0_op==`INT) ? {alu0_argA[DBW-5:0],4'b0} + alu0_argI :
-						  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_argI),
-			alu1_misspc = (alu1_op == `JSR) ? alu1_argA + alu1_argI :
-						  (alu0_op==`SYS || alu0_op==`INT) ? {alu1_argA[DBW-5:0],4'b0} + alu1_argI :
-						  (alu1_bt ? alu1_pc + alu0_insnsz : alu1_pc + alu1_argI);
+assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI) ? alu0_argA + alu0_argI :
+					  (alu0_op == `SYS || alu0_op==`INT) ? alu0_argA + {alu0_argI[DBW-5:0],4'b0} :
+					  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_argI),
+		alu1_misspc = (alu1_op == `JSR || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI) ? alu1_argA + alu1_argI :
+					  (alu1_op == `SYS || alu1_op==`INT) ? alu1_argA + {alu1_argI[DBW-5:0],4'b0} :
+					  (alu1_bt ? alu1_pc + alu0_insnsz : alu1_pc + alu1_argI);
 
-    assign  alu0_exc = alu0_op==`SYS ? `EXC_SYS :
-					   alu0_op==`INT ? `EXC_INT :
-					   `EXC_NONE;
+assign  alu0_exc = `EXC_NONE;
 //			? `EXC_NONE
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu0_argB[`INSTRUCTION_S2]
@@ -146,9 +144,7 @@ endfunction
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu0_argB[`INSTRUCTION_S2]
 //			: `EXC_INVALID;
 
-    assign  alu1_exc = alu1_op==`SYS ? `EXC_SYS :
-					   alu1_op==`INT ? `EXC_INT :
-					   `EXC_NONE;
+assign  alu1_exc = `EXC_NONE;
 //			? `EXC_NONE
 //			: (alu1_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
 //			: (alu1_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu1_argB[`INSTRUCTION_S2]
@@ -160,15 +156,15 @@ endfunction
 //			: (alu1_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu1_argB[`INSTRUCTION_S2]
 //			: `EXC_INVALID;
 
-    assign alu0_branchmiss = alu0_dataready && 
-			   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
-			  : (alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS)));
+assign alu0_branchmiss = alu0_dataready && 
+		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
+		  : (alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI)));
 
-    assign alu1_branchmiss = alu1_dataready && 
-			   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
-			  : (alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS)));
+assign alu1_branchmiss = alu1_dataready && 
+		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
+		  : (alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI)));
 
-    assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
-	    misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),
-	    missid = (alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
+assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
+	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),
+	missid = (alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
 

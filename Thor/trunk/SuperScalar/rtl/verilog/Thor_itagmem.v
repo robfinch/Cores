@@ -20,32 +20,36 @@
 //
 //
 // Thor SuperScalar
+// Instruction cache tag memory
 //
 // ============================================================================
 //
-module Thor_itagmem(wclk, wce, wr, wa, invalidate, rclk, rce, pc, hit0, hit1);
+module Thor_itagmem(wclk, wce, wr, wa, err_i, invalidate, rclk, rce, pc, hit0, hit1, err_o);
 parameter AMSB=63;
 input wclk;
 input wce;
 input wr;
 input [AMSB:0] wa;
+input err_i;
 input invalidate;
 input rclk;
 input rce;
 input [AMSB:0] pc;
 output hit0;
 output hit1;
+output err_o;
 
 reg [AMSB:12] mem [0:127];
 reg [0:127] tvalid;
+reg [0:127] errmem;
 reg [AMSB:0] rpc,rpcp16;
 wire [AMSB-11:0] tag0,tag1;
 
 always @(posedge wclk)
 	if (wce & wr) mem[wa[11:5]] <= wa[AMSB:12];
 always @(posedge wclk)
-	if (invalidate) tvalid <= 128'd0;
-	else if (wce & wr) tvalid[wa[11:5]] <= 1'b1;
+	if (invalidate) begin tvalid <= 128'd0; errmem <= 128'd0; end
+	else if (wce & wr) begin tvalid[wa[11:5]] <= 1'b1; errmem[wa[11:5]] <= err_i; end
 always @(posedge rclk)
 	if (rce) rpc <= pc;
 always @(posedge rclk)
@@ -55,5 +59,6 @@ assign tag1 = {mem[rpcp16[11:5]],tvalid[rpcp16[11:5]]};
 
 assign hit0 = tag0 == {rpc[AMSB:12],1'b1};
 assign hit1 = tag1 == {rpcp16[AMSB:12],1'b1};
+assign err_o = errmem[rpc[11:5]]|errmem[rpcp16[11:5]];
 
 endmodule

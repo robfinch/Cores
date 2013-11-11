@@ -96,8 +96,8 @@
 //
 `include "Thor_defines.v"
 
-module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
-parameter DBW = 32;
+module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
+parameter DBW = 64;
 parameter IDLE = 4'd0;
 parameter ICACHE1 = 4'd1;
 parameter NREGS = 303;
@@ -124,6 +124,7 @@ output reg [4:0] bl_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
+input err_i;
 output reg we_o;
 output reg [DBW/8-1:0] sel_o;
 output reg [DBW-1:0] adr_o;
@@ -140,15 +141,19 @@ reg [DBW-1:0] bregs [0:15];		// branch target registers
 reg [ 3:0] pregs [0:15];		// predicate registers
 reg [DBW-1:12] sregs [0:15];		// segment registers
 reg [DBW-1:0] tick;
+reg [DBW-1:0] lc;				// loop counter
 wire [DBW-1:0] rfoa0,rfoa1;
 wire [DBW-1:0] rfob0,rfob1;
 reg ic_invalidate;
+reg ierr;						// err_i during icache load
+wire insnerr;					// err_i during icache load
 wire [127:0] insn;
-reg [303:0] rf_v;
+reg [NREGS:0] rf_v;
 //reg [15:0] pf_v;
 reg im,imb;
 reg nmi1,nmi_edge;
 reg StatusHWI;
+wire int_commit;
 wire [DBW-1:0] spc = (pc[DBW-1:DBW-4]==4'hF) ? pc : {sregs[15],12'h000} + pc;
 wire [DBW-1:0] spcp16 = spc + 64'd16;
 
@@ -179,7 +184,6 @@ reg  [3:0] iqentry_pred [0:7];
 reg        iqentry_p_v  [0:7];
 reg  [3:0] iqentry_p_s  [0:7];
 reg  [7:0] iqentry_op	[0:7];	// instruction opcode
-reg  [3:0] iqentry_exc	[0:7];	// only for branches ... indicates a HALT instruction
 reg  [8:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg [DBW-1:0] iqentry_a0	[0:7];	// argument 0 (immediate)
 reg [DBW-1:0] iqentry_a1	[0:7];	// argument 1
@@ -206,7 +210,7 @@ wire  [1:0] iqentry_4_islot;
 wire  [1:0] iqentry_5_islot;
 wire  [1:0] iqentry_6_islot;
 wire  [1:0] iqentry_7_islot;
-reg [1:0] iqentry_islot[0:7];
+reg  [1:0] iqentry_islot[0:7];
 
 wire  [NREGS:1] livetarget;
 wire  [NREGS:1] iqentry_0_livetarget;
@@ -249,16 +253,16 @@ reg  [2:0] head7;	// used only to determine memory-access ordering
 wire  [2:0] missid;
 reg   fetchbuf;		// determines which pair to read from & write to
 
-wire [63:0] fetchbuf0_instr;
-wire [DBW-1:0] fetchbuf0_pc;
-wire        fetchbuf0_v;
+reg  [63:0] fetchbuf0_instr;
+reg  [DBW-1:0] fetchbuf0_pc;
+reg         fetchbuf0_v;
 wire        fetchbuf0_mem;
 wire        fetchbuf0_jmp;
 wire        fetchbuf0_rfw;
 wire        fetchbuf0_pfw;
-wire [63:0] fetchbuf1_instr;
-wire [DBW-1:0] fetchbuf1_pc;
-wire        fetchbuf1_v;
+reg  [63:0] fetchbuf1_instr;
+reg  [DBW-1:0] fetchbuf1_pc;
+reg        fetchbuf1_v;
 wire        fetchbuf1_mem;
 wire        fetchbuf1_jmp;
 wire        fetchbuf1_rfw;
@@ -473,14 +477,14 @@ assign
 	iqentry_source[7] = | iqentry_7_latestID;
 
 
-assign iqentry_0_islot = iqentry_islot[0];
-assign iqentry_1_islot = iqentry_islot[1];
-assign iqentry_2_islot = iqentry_islot[2];
-assign iqentry_3_islot = iqentry_islot[3];
-assign iqentry_4_islot = iqentry_islot[4];
-assign iqentry_5_islot = iqentry_islot[5];
-assign iqentry_6_islot = iqentry_islot[6];
-assign iqentry_7_islot = iqentry_islot[7];
+//assign iqentry_0_islot = iqentry_islot[0];
+//assign iqentry_1_islot = iqentry_islot[1];
+//assign iqentry_2_islot = iqentry_islot[2];
+//assign iqentry_3_islot = iqentry_islot[3];
+//assign iqentry_4_islot = iqentry_islot[4];
+//assign iqentry_5_islot = iqentry_islot[5];
+//assign iqentry_6_islot = iqentry_islot[6];
+//assign iqentry_7_islot = iqentry_islot[7];
 
 
 wire [7:0] Ra0 = fetchbuf0_instr[`INSTRUCTION_RA];
@@ -489,10 +493,10 @@ wire [7:0] Ra1 = fetchbuf1_instr[`INSTRUCTION_RA];
 wire [8:0] Rb1 = {1'b0,fetchbuf1_instr[`INSTRUCTION_RB]};
 
 function [7:0] fnOpcode;
-input [63:0] insn;
-fnOpcode = (insn[3:0]==4'h0 && insn[7:4] > 4'h1 && insn[7:4] < 4'h9) ? `IMM : 
-						insn[7:0]==8'h10 ? `NOP :
-						insn[7:0]==8'h11 ? `RTS : insn[15:8];
+input [63:0] ins;
+fnOpcode = (ins[3:0]==4'h0 && ins[7:4] > 4'h1 && ins[7:4] < 4'h9) ? `IMM : 
+						ins[7:0]==8'h10 ? `NOP :
+						ins[7:0]==8'h11 ? `RTS : ins[15:8];
 endfunction
 
 wire [7:0] opcode0 = fnOpcode(fetchbuf0_instr);
@@ -578,6 +582,11 @@ end
 
 always @(posedge clk)
 begin
+	if (rst_i)
+		// The pc wraps around to address zero while fetching the reset vector.
+		// This causes the processor to use the code segement register so the
+		// CS has to be defined for reset.
+		sregs[15] <= 52'd0;
 	if (commit0_v && commit0_tgt[8:4]==5'h12)
 		sregs[commit0_tgt[3:0]] <= commit0_bus[DBW-1:12];
 	if (commit1_v && commit1_tgt[8:4]==5'h12)
@@ -619,7 +628,7 @@ input [7:0] opcode;
 	`ORI:			fnSource2_v = 1'b1;
 	`EORI:			fnSource2_v = 1'b1;
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW:
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			fnSource2_v = 1'b1;
 	`JSR,`SYS,`INT,`RTS,`BR:
 			fnSource2_v = 1'b1;
@@ -694,9 +703,9 @@ Thor_icachemem #(DBW) uicm1
 (
 	.wclk(clk),
 	.wce(cstate==ICACHE1),
-	.wr(ack_i),
+	.wr(ack_i|err_i),
 	.wa(adr_o),
-	.wd(dat_i),
+	.wd({err_i,dat_i}),
 	.rclk(~clk),
 	.pc(spc),
 	.insn(insn)
@@ -707,17 +716,20 @@ Thor_itagmem #(DBW-1) uitm1
 (
 	.wclk(clk),
 	.wce(cstate==ICACHE1 && cti_o==3'b111),
-	.wr(ack_i),
+	.wr(ack_i|err_i),
 	.wa(adr_o),
+	.err_i(err_i|ierr),
 	.invalidate(ic_invalidate),
 	.rclk(~clk),
 	.rce(1'b1),
 	.pc(spc),
 	.hit0(hit0),
-	.hit1(hit1)
+	.hit1(hit1),
+	.err_o(insnerr)
 );
 
 wire ihit = hit0 & hit1;
+wire ld_fetchbuf = ihit || (nmi_edge & !StatusHWI)||(irq_i & ~im & !StatusHWI);
 
 wire [DBW-1:0] shfto0,shfto1;
 
@@ -801,6 +813,42 @@ begin
 end
 endfunction
 
+function fnTargetsBr;
+input [63:0] ir;
+begin
+if (ir[3:0]==4'h0)
+	fnTargetsBr = `FALSE;
+else begin
+	case(fnOpcode(ir))
+	`JSR,`SYS,`INT:	fnTargetsBr = `TRUE;
+	`MTSPR:
+		begin
+			if (ir[31:28]==4'h1)
+				fnTargetsBr = `TRUE;
+			else
+				fnTargetsBr = `FALSE;
+		end
+	default:	fnTargetsBr = `FALSE;
+	endcase
+end
+end
+endfunction
+
+function fnTargetsSegreg;
+input [63:0] ir;
+if (ir[3:0]==4'h0)
+	fnTargetsSegreg = `FALSE;
+else
+	case(fnOpcode(ir))
+	`MTSPR:
+		if (ir[31:28]==4'h2)
+			fnTargetsSegreg = `TRUE;
+		else
+			fnTargetsSegreg = `FALSE;
+	default:	fnTargetsSegreg = `FALSE;
+	endcase
+endfunction
+
 function fnHasConst;
 input [7:0] opcode;
 	casex(opcode)
@@ -873,12 +921,19 @@ default:	fnInsnLength1 = 4'd0;
 endcase
 endfunction
 
-assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
-assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
-assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
-assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
-assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
-assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+always @(fetchbuf or fetchbufA_instr or fetchbufA_v or fetchbufA_pc
+ or fetchbufB_instr or fetchbufB_v or fetchbufB_pc
+ or fetchbufC_instr or fetchbufC_v or fetchbufC_pc
+ or fetchbufD_instr or fetchbufD_v or fetchbufD_pc
+)
+begin
+	fetchbuf0_instr <= (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
+	fetchbuf0_v     <= (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
+	fetchbuf0_pc    <= (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
+	fetchbuf1_instr <= (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
+	fetchbuf1_v     <= (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
+	fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+end
 
 wire [7:0] opcodeA = fetchbufA_instr[`OPCODE];
 wire [7:0] opcodeB = fetchbufB_instr[`OPCODE];
@@ -895,7 +950,10 @@ endfunction
 // Determines which instruction write to the register file
 function fnIsRFW;
 input [7:0] opcode;
-fnIsRFW =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
+input [63:0] ir;
+begin
+fnIsRFW =	// General regisiters
+			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
 			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
@@ -903,8 +961,14 @@ fnIsRFW =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
 			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
 			opcode==`NOT || opcode==`NEG ||
-			opcode==`LDI || opcode==`MFSPR
+			opcode==`LDI || opcode==`MFSPR ||
+			// Branch registers / Segment registers
+			(opcode==`MTSPR && (fnTargetsBr(ir) || fnTargetsSegreg(ir))) ||
+			opcode==`JSR || opcode==`SYS || opcode==`INT ||
+			// predicate registers
+			(opcode[7:4] < 4'h3)
 			;
+end
 endfunction
 
 function fnIsStore;
@@ -917,9 +981,11 @@ input [7:0] opcode;
 fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW;
 endfunction
 
+
+// *** check these
 function fnIsPFW;
 input [7:0] opcode;
-fnIsPFW =	opcode==`CMP || opcode==`CMPI || opcode==`TST;
+fnIsPFW =	opcode[7:4]<4'h3;//opcode==`CMP || opcode==`CMPI || opcode==`TST;
 endfunction
 
 function [7:0] fnSelect;
@@ -1108,8 +1174,8 @@ assign fetchbuf1_mem	= fetchbuf ? fnIsMem(opcodeD) : fnIsMem(opcodeB);
 assign fetchbuf0_jmp   = fnIsFlowCtrl(opcode0);
 assign fetchbuf1_jmp   = fnIsFlowCtrl(opcode1);
 
-assign fetchbuf0_rfw	= fetchbuf ? fnIsRFW(opcodeC) : fnIsRFW(opcodeA);
-assign fetchbuf1_rfw	= fetchbuf ? fnIsRFW(opcodeD) : fnIsRFW(opcodeB);
+assign fetchbuf0_rfw	= fetchbuf ? fnIsRFW(opcodeC,fetchbufC_instr) : fnIsRFW(opcodeA,fetchbufA_instr);
+assign fetchbuf1_rfw	= fetchbuf ? fnIsRFW(opcodeD,fetchbufD_instr) : fnIsRFW(opcodeB,fetchbufB_instr);
 assign fetchbuf0_pfw	= fetchbuf ? fnIsPFW(opcodeC) : fnIsPFW(opcodeA);
 assign fetchbuf1_pfw    = fetchbuf ? fnIsPFW(opcodeD) : fnIsPFW(opcodeB);
 
@@ -1127,19 +1193,53 @@ wire [DBW-1:0] branch_pc =
 			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} :
 			fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]};
 
+
 // "Stream" interrupt instructions into the instruction stream until an INT
 // instruction commits. This avoids the problem of an INT instruction being
 // stomped on by a previous branch instruction.
 // Populate the instruction buffers with INT instructions for a hardware interrupt
+// Also populate the instruction buffers with a call to the instruction error vector
+// if an error occurred during instruction load time.
 reg [63:0] insn1a;
-wire [63:0] insn0 = 
-			(nmi_edge & !StatusHWI) ?	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
-			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
-			insn[63:0];
-wire [63:0] insn1 = 
-			(nmi_edge & !StatusHWI) ? 	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
-			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
-			insn1a;
+reg [63:0] insn0,insn1;
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i)
+if (int_commit) begin
+	insn0 <= {8{8'h10}};	// load with NOPs
+end
+else if (nmi_edge & ~StatusHWI & ~int_commit) begin
+	insn0 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
+end
+else if (irq_i & ~im & ~StatusHWI & ~int_commit) begin
+	insn0 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+end
+else if (insnerr)
+	insn0 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+else begin
+	insn0 <= insn[63:0];
+end
+
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i)
+if (int_commit)
+	insn1 <= {8{8'h10}};	// load with NOPs
+else if (nmi_edge & ~StatusHWI & ~int_commit)
+	insn1 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn1 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+else if (insnerr)
+	insn1 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+else
+	insn1 <= insn1a;
+
+//wire [63:0] insn0 = 
+//			(nmi_edge & !StatusHWI) ?	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
+//			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
+//			insnerr ? 					 {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01} :
+//			insn[63:0];
+//wire [63:0] insn1 = 
+//			(nmi_edge & !StatusHWI) ? 	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
+//			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
+//			insnerr ? 					 {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01} :
+//			insn1a;
 
 // Find the second instruction in the instruction line.
 always @(insn)
@@ -1164,6 +1264,10 @@ case(insn[15:8])
 	fnImm = insn[23:16];
 `SYS,`JSR,`INT,`CMPI,`LDI:
 	fnImm = insn[31:24];
+`RTS:
+	fnImm = {4'h0,insn[19:16]};
+`RTE,`RTI:
+	fnImm = 8'h00;
 default:
 	fnImm = insn[39:32];
 endcase
@@ -1177,8 +1281,12 @@ input [127:0] insn;
 case(insn[15:8])
 `LOOP:
 	fnImmMSB = insn[23];
-`SYS,`JSR,`INT,`CMPI,`LDI:
+`JSR,`CMPI,`LDI:
 	fnImmMSB = insn[31];
+`SYS,`INT:
+	fnImmMSB = 1'b0;		// SYS,INT are unsigned
+`RTS,`RTE,`RTI:
+	fnImmMSB = 1'b0;		// RTS is unsigned
 default:
 	fnImmMSB = insn[39];
 endcase
@@ -1201,13 +1309,13 @@ endfunction
 
 function [63:0] fnOpa;
 input [7:0] opcode;
-input [63:0] insn;
+input [63:0] ins;
 input [63:0] rfo;
 begin
 	if (fnIsFlowCtrl(opcode))
-		fnOpa = fnBra(insn)==4'd0 ? 64'd0 : bregs[fnBra(insn)];
+		fnOpa = fnBra(ins)==4'd0 ? 64'd0 : bregs[fnBra(ins)];
 	else if (opcode==`MFSPR)
-		casex(insn[23:16])
+		casex(ins[23:16])
 		`TICK:	fnOpa = tick;
 		`PREGS:
 				begin
@@ -1228,8 +1336,8 @@ begin
 					fnOpa[59:56] = pregs[14];
 					fnOpa[63:60] = pregs[15];
 				end
-		8'h1x:	fnOpa = insn[19:16]==4'h0 ? 64'd0 : bregs[insn[19:16]];
-		8'h2x:	fnOpa = sregs[insn[19:16]];
+		8'h1x:	fnOpa = ins[19:16]==4'h0 ? 64'd0 : bregs[ins[19:16]];
+		8'h2x:	fnOpa = sregs[ins[19:16]];
 		default:	fnOpa = 64'h0;
 		endcase
 	else
@@ -1265,7 +1373,10 @@ always @(posedge clk)
 		tick <= tick + 64'd1;
 
 always @(posedge clk)
-	nmi1 <= nmi_i;
+	if (rst_i)
+		nmi1 <= 1'b0;
+	else
+		nmi1 <= nmi_i;
 
 always @(posedge clk) begin
 
@@ -1274,9 +1385,11 @@ always @(posedge clk) begin
 
 	ic_invalidate <= `FALSE;
 	if (rst_i) begin
+		nmi_edge <= 1'b0;
 		cstate <= IDLE;
 		pc <= {{DBW-4{1'b1}},4'h0};
 		StatusHWI <= `TRUE;		// disables interrupts at startup until an RTI instruction is executed.
+		im <= 1'b1;
 		ic_invalidate <= `TRUE;
 		fetchbuf <= 1'b0;
 		fetchbufA_v <= `INV;
@@ -1341,9 +1454,35 @@ always @(posedge clk) begin
 
 	end
 
+	$display("\r\n\r\n");
+	$display("TIME %0d", $time);
 `include "Thor_ifetch.v"
+	$display("%h hit0=%b hit1=%b#", spc, hit0, hit1);
+	$display("insn=%h", insn);
+	$display("%c insn0=%h insn1=%h", nmi_edge ? "*" : " ",insn0, insn1);
+	$display("takb=%d br_pc=%h #", take_branch, branch_pc);
+	$display("%c%c A: %d %h %h #",
+	    45, fetchbuf?45:62, fetchbufA_v, fetchbufA_instr, fetchbufA_pc);
+	$display("%c%c B: %d %h %h #",
+	    45, fetchbuf?45:62, fetchbufB_v, fetchbufB_instr, fetchbufB_pc);
+	$display("%c%c C: %d %h %h #",
+	    45, fetchbuf?62:45, fetchbufC_v, fetchbufC_instr, fetchbufC_pc);
+	$display("%c%c D: %d %h %h #",
+	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
+	$display("fetchbuf=%d",fetchbuf);
 `include "Thor_commit_early.v"
 `include "Thor_enque.v"
+	for (i=0; i<8; i=i+1) 
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h 0%d %h %h %h %d %o %h %d %o %h #",
+		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
+		iqentry_v[i], iqentry_done[i], iqentry_cmt[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
+		iqentry_islot[i],
+//		((i==0) ? iqentry_0_islot : (i==1) ? iqentry_1_islot : (i==2) ? iqentry_2_islot : (i==3) ? iqentry_3_islot :
+//		 (i==4) ? iqentry_4_islot : (i==5) ? iqentry_5_islot : (i==6) ? iqentry_6_islot : iqentry_7_islot),
+		 iqentry_stomp[i],
+		(fnIsFlowCtrl(iqentry_op[i]) ? 98 : fnIsMem(iqentry_op[i]) ? 109 : 97), 
+		iqentry_op[i], iqentry_tgt[i], iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
+		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
 `include "Thor_dataincoming.v"
 `include "Thor_issue.v"
 `include "Thor_memory.v"
@@ -1358,6 +1497,7 @@ always @(posedge clk) begin
 				$display("********************");
 				$display("Cache access to: %h",!hit0 ? {spc[DBW-1:5],5'b00000} : {spcp16[DBW-1:5],5'b00000});
 				$display("********************");
+				ierr <= 1'b0;
 				bte_o <= 2'b00;
 				cti_o <= 3'b001;
 				bl_o <= DBW==32 ? 5'd7 : 5'd3;
@@ -1371,7 +1511,8 @@ always @(posedge clk) begin
 			end
 		end
 	ICACHE1:
-		if (ack_i) begin
+		if (ack_i|err_i) begin
+			ierr <= ierr | err_i;	// cumulate an error status
 			if (DBW==32) begin
 				adr_o[4:2] <= adr_o[4:2] + 3'd1;
 				if (adr_o[4:2]==3'b110)
@@ -1393,33 +1534,8 @@ always @(posedge clk) begin
 		end
 	endcase
 
-	$display("\r\n\r\n");
-	$display("TIME %0d", $time);
-	$display("%h hit0=%b hit1=%b#", spc, hit0, hit1);
-	$display("insn=%h", insn);
-
 //	for (i=0; i<8; i=i+1)
 //	    $display("%d: %h %d %o #", i, urf1.regs0[i], rf_v[i], rf_source[i]);
-
-	$display("takb=%d br_pc=%h #", take_branch, branch_pc);
-	$display("%c%c A: %d %h %h #",
-	    45, fetchbuf?45:62, fetchbufA_v, fetchbufA_instr, fetchbufA_pc);
-	$display("%c%c B: %d %h %h #",
-	    45, fetchbuf?45:62, fetchbufB_v, fetchbufB_instr, fetchbufB_pc);
-	$display("%c%c C: %d %h %h #",
-	    45, fetchbuf?62:45, fetchbufC_v, fetchbufC_instr, fetchbufC_pc);
-	$display("%c%c D: %d %h %h #",
-	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
-
-	for (i=0; i<8; i=i+1) 
-	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h 0%d %o %h %h %h %d %o %h %d %o %h #",
-		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
-		iqentry_v[i], iqentry_done[i], iqentry_cmt[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
-		((i==0) ? iqentry_0_islot : (i==1) ? iqentry_1_islot : (i==2) ? iqentry_2_islot : (i==3) ? iqentry_3_islot :
-		 (i==4) ? iqentry_4_islot : (i==5) ? iqentry_5_islot : (i==6) ? iqentry_6_islot : iqentry_7_islot), iqentry_stomp[i],
-		(fnIsFlowCtrl(iqentry_op[i]) ? 98 : fnIsMem(iqentry_op[i]) ? 109 : 97), 
-		iqentry_op[i], iqentry_tgt[i], iqentry_exc[i], iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
-		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
 
 	$display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
 	$display("dr=%d I=%h A=%h B=%h op=%c%d bt=%d src=%o pc=%h #",
