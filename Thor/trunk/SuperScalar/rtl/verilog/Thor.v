@@ -97,7 +97,7 @@
 `include "Thor_defines.v"
 
 module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
-parameter DBW = 64;
+parameter DBW = 32;
 parameter IDLE = 4'd0;
 parameter ICACHE1 = 4'd1;
 parameter NREGS = 303;
@@ -133,13 +133,21 @@ output reg [DBW-1:0] dat_o;
 
 integer n,i;
 reg [3:0] cstate;
-reg [DBW-1:0] pc;					// program counter
-wire [DBW-1:0] pcp16 = pc + 64'd16;
+reg [DBW-1:0] pc;				// program counter (virtual)
+wire [DBW-1:0] ppc;				// physical pc address
+reg [DBW-1:0] vadr;				// data virtual address
 reg [3:0] panic;		// indexes the message structure
 reg [128:0] message [0:15];	// indexed by panic
 reg [DBW-1:0] bregs [0:15];		// branch target registers
 reg [ 3:0] pregs [0:15];		// predicate registers
+`ifdef SEGMENTATION
 reg [DBW-1:12] sregs [0:15];		// segment registers
+`endif
+reg [DBW-1:0] miss_addr;
+wire ITLBMiss;
+wire DTLBMiss;
+reg pwe;
+wire [DBW-1:0] pea;
 reg [DBW-1:0] tick;
 reg [DBW-1:0] lc;				// loop counter
 wire [DBW-1:0] rfoa0,rfoa1;
@@ -154,8 +162,14 @@ reg im,imb;
 reg nmi1,nmi_edge;
 reg StatusHWI;
 wire int_commit;
+wire int_pending;
+`ifdef SEGMENTATION
 wire [DBW-1:0] spc = (pc[DBW-1:DBW-4]==4'hF) ? pc : {sregs[15],12'h000} + pc;
-wire [DBW-1:0] spcp16 = spc + 64'd16;
+`else
+wire [DBW-1:0] spc = pc;
+`endif
+wire [DBW-1:0] ppcp16 = ppc + 64'd16;
+reg [DBW-1:0] string_pc;
 
 wire clk = clk_i;
 
@@ -178,11 +192,11 @@ reg        iqentry_mem	[0:7];	// touches memory: 1 if LW/SW
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_rfw	[0:7];	// writes to register file
 reg [DBW-1:0] iqentry_res	[0:7];	// instruction result
-reg  [3:0] iqentry_insnsz [0:7];
-reg  [3:0] iqentry_cond [0:7];
-reg  [3:0] iqentry_pred [0:7];
-reg        iqentry_p_v  [0:7];
-reg  [3:0] iqentry_p_s  [0:7];
+reg  [3:0] iqentry_insnsz [0:7];	// the size of the instruction
+reg  [3:0] iqentry_cond [0:7];	// predicating condition
+reg  [3:0] iqentry_pred [0:7];	// predicate value
+reg        iqentry_p_v  [0:7];	// predicate is valid
+reg  [3:0] iqentry_p_s  [0:7];	// predicate source
 reg  [7:0] iqentry_op	[0:7];	// instruction opcode
 reg  [8:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg [DBW-1:0] iqentry_a0	[0:7];	// argument 0 (immediate)
@@ -192,6 +206,9 @@ reg  [3:0] iqentry_a1_s	[0:7];	// arg1 source (iq entry # with top bit represent
 reg [DBW-1:0] iqentry_a2	[0:7];	// argument 2
 reg        iqentry_a2_v	[0:7];	// arg2 valid
 reg  [3:0] iqentry_a2_s	[0:7];	// arg2 source (iq entry # with top bit representing ALU/DRAM bus)
+reg [DBW-1:0] iqentry_a3	[0:7];	// argument 3
+reg        iqentry_a3_v	[0:7];	// arg3 valid
+reg  [3:0] iqentry_a3_s	[0:7];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [DBW-1:0] iqentry_pc	[0:7];	// program counter for this instruction
 
 wire  [7:0] iqentry_source;
@@ -199,6 +216,7 @@ wire  [7:0] iqentry_imm;
 wire  [7:0] iqentry_memready;
 wire  [7:0] iqentry_memopsvalid;
 
+wire stomp_all;
 reg  [7:0] iqentry_memissue;
 wire  [7:0] iqentry_stomp;
 reg  [7:0] iqentry_issue;
@@ -286,6 +304,7 @@ reg        did_branchback;
 reg 		did_branchback0;
 reg			did_branchback1;
 
+reg        alu0_ld;
 reg        alu0_available;
 reg        alu0_dataready;
 reg  [3:0] alu0_sourceid;
@@ -296,6 +315,7 @@ reg        alu0_bt;
 wire        alu0_cmt;
 reg [DBW-1:0] alu0_argA;
 reg [DBW-1:0] alu0_argB;
+reg [DBW-1:0] alu0_argC;
 reg [DBW-1:0] alu0_argI;
 reg  [3:0] alu0_pred;
 reg [DBW-1:0] alu0_pc;
@@ -306,6 +326,7 @@ wire        alu0_v;
 wire        alu0_branchmiss;
 wire [DBW-1:0] alu0_misspc;
 
+reg        alu1_ld;
 reg        alu1_available;
 reg        alu1_dataready;
 reg  [3:0] alu1_sourceid;
@@ -316,6 +337,7 @@ reg        alu1_bt;
 wire        alu1_cmt;
 reg [DBW-1:0] alu1_argA;
 reg [DBW-1:0] alu1_argB;
+reg [DBW-1:0] alu1_argC;
 reg [DBW-1:0] alu1_argI;
 reg  [3:0] alu1_pred;
 reg [DBW-1:0] alu1_pc;
@@ -330,9 +352,17 @@ wire        branchmiss;
 wire [DBW-1:0] misspc;
 
 wire        dram_avail;
-reg	 [1:0] dram0;	// state of the DRAM request (latency = 4; can have three in pipeline)
-reg	 [1:0] dram1;	// state of the DRAM request (latency = 4; can have three in pipeline)
-reg	 [1:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
+reg	 [2:0] dram0;	// state of the DRAM request (latency = 4; can have three in pipeline)
+reg	 [2:0] dram1;	// state of the DRAM request (latency = 4; can have three in pipeline)
+reg	 [2:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
+reg  [2:0] tlb_state;
+reg [3:0] tlb_id;
+reg [3:0] tlb_op;
+reg [3:0] tlb_regno;
+reg [8:0] tlb_tgt;
+reg [DBW-1:0] tlb_data;
+
+wire [DBW-1:0] tlb_dato;
 reg [DBW-1:0] dram0_data;
 reg [DBW-1:0] dram0_addr;
 reg  [7:0] dram0_op;
@@ -371,6 +401,19 @@ wire  [8:0] commit1_tgt;
 wire [DBW-1:0] commit1_bus;
 wire limit_cmt;
 wire committing2;
+
+wire [63:0] alu0_divq;
+wire [63:0] alu0_rem;
+wire alu0_div_done;
+
+wire [63:0] alu1_divq;
+wire [63:0] alu1_rem;
+wire alu1_div_done;
+
+wire [127:0] alu0_prod;
+wire alu0_mult_done;
+wire [127:0] alu1_prod;
+wire alu1_mult_done;
 
 //
 // BRANCH-MISS LOGIC: livetarget
@@ -486,11 +529,16 @@ assign
 //assign iqentry_6_islot = iqentry_islot[6];
 //assign iqentry_7_islot = iqentry_islot[7];
 
-
-wire [7:0] Ra0 = fetchbuf0_instr[`INSTRUCTION_RA];
-wire [8:0] Rb0 = {1'b0,fetchbuf0_instr[`INSTRUCTION_RB]};
-wire [7:0] Ra1 = fetchbuf1_instr[`INSTRUCTION_RA];
-wire [8:0] Rb1 = {1'b0,fetchbuf1_instr[`INSTRUCTION_RB]};
+// A single instruction can require 3 read ports. Only a total of four read
+// ports are supported because most of the time that's enough.
+// If there aren't enough read ports available then the second instruction
+// isn't enqueued (it'll be enqueued in the next cycle).
+wire [8:0] Ra0 = fnRa(fetchbuf0_instr);
+wire [8:0] Rb0 = ((fnNumReadPorts(fetchbuf0_instr) < 3'd2) || !fetchbuf0_v) ? {1'b0,fetchbuf1_instr[`INSTRUCTION_RC]} :
+				{1'b0,fetchbuf0_instr[`INSTRUCTION_RB]};
+wire [8:0] Ra1 = (!fetchbuf0_v || fnNumReadPorts(fetchbuf0_instr) < 3'd3) ? fnRa(fetchbuf1_instr) :
+					fetchbuf0_instr[`INSTRUCTION_RC];
+wire [8:0] Rb1 = (fnNumReadPorts(fetchbuf1_instr) < 3'd2 && fetchbuf0_v) ? fnRa(fetchbuf1_instr):{1'b0,fetchbuf1_instr[`INSTRUCTION_RB]};
 
 function [7:0] fnOpcode;
 input [63:0] ins;
@@ -522,6 +570,20 @@ else
 	endcase
 endfunction
 
+function [8:0] fnRb;
+input [63:0] insn;
+if (insn[7:0]==8'h11)	// RTS short form
+	fnRb = 9'h111;
+else
+	case(insn[15:8])
+	`RTI:	fnRb = 9'h11E;
+	`RTE:	fnRb = 9'h11D;
+	`JSR,`SYS,`INT,`RTS:
+		fnRb = {5'h11,insn[23:20]};
+	default:	fnRb = {1'b0,insn[`INSTRUCTION_RB]};
+	endcase
+endfunction
+
 function [3:0] fnBra;
 input [63:0] insn;
 if (insn[7:0]==8'h11)	// RTS short form
@@ -545,9 +607,9 @@ Thor_regfile2w4r #(DBW) urf1
 	.wr1(commit1_v & ~commit1_tgt[8]),
 	.wa0(commit0_tgt[7:0]),
 	.wa1(commit1_tgt[7:0]),
-	.ra0(Ra0),
+	.ra0(Ra0[7:0]),
 	.ra1(Rb0[7:0]),
-	.ra2(Ra1),
+	.ra2(Ra1[7:0]),
 	.ra3(Rb1[7:0]),
 	.i0(commit0_bus),
 	.i1(commit1_bus),
@@ -557,41 +619,8 @@ Thor_regfile2w4r #(DBW) urf1
 	.o3(rfob1)
 );
 
-always @(posedge clk)
-if (rst_i) begin
-	for (i=0; i < 16; i=i+1)
-		pregs[i] <= 4'd0;
-end
-else begin
-	if (commit0_v && commit0_tgt[8:4]==5'h10)
-		pregs[commit0_tgt[3:0]] <= commit0_bus[3:0];
-	if (commit1_v && commit1_tgt[8:4]==5'h10)
-		pregs[commit1_tgt[3:0]] <= commit1_bus[3:0];
-end
-
-wire [63:0] bregs0 = fnBra(fetchbuf0_instr)==4'd0 ? 64'd0 : bregs[fnBra(fetchbuf0_instr)];
-wire [63:0] bregs1 = fnBra(fetchbuf1_instr)==4'd0 ? 64'd0 : bregs[fnBra(fetchbuf1_instr)];
-
-always @(posedge clk)
-begin
-	if (commit0_v && commit0_tgt[8:4]==5'h11)
-		bregs[commit0_tgt[3:0]] <= commit0_bus;
-	if (commit1_v && commit1_tgt[8:4]==5'h11)
-		bregs[commit1_tgt[3:0]] <= commit1_bus;
-end
-
-always @(posedge clk)
-begin
-	if (rst_i)
-		// The pc wraps around to address zero while fetching the reset vector.
-		// This causes the processor to use the code segement register so the
-		// CS has to be defined for reset.
-		sregs[15] <= 52'd0;
-	if (commit0_v && commit0_tgt[8:4]==5'h12)
-		sregs[commit0_tgt[3:0]] <= commit0_bus[DBW-1:12];
-	if (commit1_v && commit1_tgt[8:4]==5'h12)
-		sregs[commit1_tgt[3:0]] <= commit1_bus[DBW-1:12];
-end
+wire [63:0] bregs0 = fnBra(fetchbuf0_instr)==4'd0 ? 64'd0 : fnBra(fetchbuf0_instr)==4'hF ? fetchbuf0_pc : bregs[fnBra(fetchbuf0_instr)];
+wire [63:0] bregs1 = fnBra(fetchbuf1_instr)==4'd0 ? 64'd0 : fnBra(fetchbuf1_instr)==4'hF ? fetchbuf1_pc : bregs[fnBra(fetchbuf1_instr)];
 
 //
 // 1 if the the operand is automatically valid, 
@@ -600,8 +629,9 @@ function fnSource1_v;
 input [7:0] opcode;
 	casex(opcode)
 	`SEI,`CLI,`SYNC,`NOP:		fnSource1_v = 1'b1;
-	`BR:			fnSource1_v = 1'b1;
+	`BR,`LOOP:		fnSource1_v = 1'b1;
 	`LDI,`IMM:		fnSource1_v = 1'b1;
+	`TLB:			fnSource1_v = 1'b1;
 	default:		fnSource1_v = 1'b0;
 	endcase
 endfunction
@@ -630,10 +660,56 @@ input [7:0] opcode;
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			fnSource2_v = 1'b1;
-	`JSR,`SYS,`INT,`RTS,`BR:
+	`JSR,`SYS,`INT,`RTS,`BR,`LOOP:
 			fnSource2_v = 1'b1;
+	`MTSPR,`MFSPR:
+				fnSource2_v = 1'b1;
 	default:	fnSource2_v = 1'b0;
 	endcase
+endfunction
+
+// 1 if the the operand is automatically valid, 
+// 0 if we need a RF value
+function fnSource3_v;
+input [7:0] opcode;
+	casex(opcode)
+	`SBX,`SCX,`SHX,`SWX:	fnSource3_v = 1'b0;
+	`MUX:	fnSource3_v = 1'b0;
+	default:	fnSource3_v = 1'b1;
+	endcase
+endfunction
+
+// Return the number of register read ports required for an instruction.
+function [2:0] fnNumReadPorts;
+input [63:0] ins;
+case(fnOpcode(ins))
+`SEI,`CLI,`SYNC,`NOP:	fnNumReadPorts = 3'd0;
+`BR,`LOOP:				fnNumReadPorts = 3'd0;
+`LDI,`IMM:				fnNumReadPorts = 3'd0;
+`NEG,`NOT:				fnNumReadPorts = 3'd1;
+`RTI,`RTE:			fnNumReadPorts = 3'd1;
+`TST:				fnNumReadPorts = 3'd1;
+`ADDI,`ADDUI:		fnNumReadPorts = 3'd1;
+`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI:
+					fnNumReadPorts = 3'd1;
+`SUBI,`SUBUI:		fnNumReadPorts = 3'd1;
+`CMPI:				fnNumReadPorts = 3'd1;
+`MULI,`MULUI,`DIVI,`DIVUI:
+					fnNumReadPorts = 3'd1;
+`ANDI,`ORI,`EORI:	fnNumReadPorts = 3'd1;
+`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI:
+					fnNumReadPorts = 3'd1;
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW:
+					fnNumReadPorts = 3'd1;
+`JSR,`SYS,`INT,`RTS,`BR,`LOOP:
+					fnNumReadPorts = 3'd1;
+`SBX,`SCX,`SHX,`SWX,
+`MUX:
+					fnNumReadPorts = 3'd3;
+`MTSPR,`MFSPR:		fnNumReadPorts = 3'd1;
+`TLB:				fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
+default:			fnNumReadPorts = 3'd2;
+endcase
 endfunction
 
 function fnIsBranch;
@@ -644,12 +720,21 @@ default:	fnIsBranch = `FALSE;
 endcase
 endfunction
 
+function fnIsStoreString;
+input [7:0] opcode;
+fnIsStoreString =
+	opcode==`STSW || opcode==`STSB || opcode==`STSH || opcode==`STSC;
+endfunction
+
 wire xbr = (iqentry_op[head0]==`BR) || (iqentry_op[head1]==`BR);
 wire takb = (iqentry_op[head0]==`BR) ? commit0_v : commit1_v;
 wire [DBW-1:0] xbrpc = (iqentry_op[head0]==`BR) ? iqentry_pc[head0] : iqentry_pc[head1];
 
 wire predict_takenA,predict_takenB,predict_takenC,predict_takenD;
 
+// There are really only two branch tables required one for fetchbuf0 and one
+// for fetchbuf1. Synthesis removes the extra tables.
+//
 Thor_BranchHistory #(DBW) ubhtA
 (
 	.rst(rst_i),
@@ -707,7 +792,7 @@ Thor_icachemem #(DBW) uicm1
 	.wa(adr_o),
 	.wd({err_i,dat_i}),
 	.rclk(~clk),
-	.pc(spc),
+	.pc(ppc),
 	.insn(insn)
 );
 
@@ -722,7 +807,7 @@ Thor_itagmem #(DBW-1) uitm1
 	.invalidate(ic_invalidate),
 	.rclk(~clk),
 	.rce(1'b1),
-	.pc(spc),
+	.pc(ppc),
 	.hit0(hit0),
 	.hit1(hit1),
 	.err_o(insnerr)
@@ -732,22 +817,6 @@ wire ihit = hit0 & hit1;
 wire ld_fetchbuf = ihit || (nmi_edge & !StatusHWI)||(irq_i & ~im & !StatusHWI);
 
 wire [DBW-1:0] shfto0,shfto1;
-
-Thor_shifter #(DBW) ushft0
-(
-	.opcode(alu0_op),
-	.a(alu0_argA),
-	.b(alu0_argB),
-	.o(shfto0)
-);
-
-Thor_shifter #(DBW) ushft1
-(
-	.opcode(alu1_op),
-	.a(alu1_argA),
-	.b(alu1_argB),
-	.o(shfto1)
-);
 
 function fnIsShiftiop;
 input [7:0] opcode;
@@ -772,6 +841,7 @@ endfunction
 // 10x = predicate register
 // 11x = branch register
 // 12x = segment register
+// 130 = predicate register horizontal
 function [8:0] fnTargetReg;
 input [63:0] ir;
 begin
@@ -784,7 +854,8 @@ begin
 		`ADD,`ADDU,`SUB,`SUBU,`MUL,`MULU,`DIV,`DIVU,
 		`AND,`OR,`EOR,`NAND,`NOR,`ENOR,`ANDC,`ORC,
 		`_2ADDU,`_4ADDU,`_8ADDU,`_16ADDU,
-		`SHL,`SHR,`SHLU,`SHRU,`ROL,`ROR:
+		`SHL,`SHR,`SHLU,`SHRU,`ROL,`ROR,
+		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX:
 			fnTargetReg = {1'b0,ir[39:32]};
 		`NEG,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
@@ -793,6 +864,11 @@ begin
 		`SHLI,`SHRI,`SHLUI,`SHRUI,`ROLI,`RORI,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			fnTargetReg = {1'b0,ir[31:24]};
+		`TLB:
+			if (ir[19:16]==`TLB_RDREG)
+				fnTargetReg = {1'b0,ir[31:24]};
+			else
+				fnTargetReg = 9'h000;
 		`MFSPR:
 			fnTargetReg = {1'b0,ir[31:24]};
 		`STSB,`STSW:
@@ -806,6 +882,8 @@ begin
 				fnTargetReg = {1'b1,4'h1,ir[27:24]};
 			else if (ir[31:28]==4'h2)	// Move to seg. reg.
 				fnTargetReg = {1'b1,4'h2,ir[27:24]};
+			else if (ir[31:24]==8'h04)
+				fnTargetReg = 9'h130;
 			else
 				fnTargetReg = 9'h000;
 		default:	fnTargetReg = 9'h00;
@@ -859,6 +937,9 @@ input [7:0] opcode;
 	`ANDI,`ORI,`EORI,
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,
+	`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,
+	`SBX,`SCX,`SHX,`SWX,
+	`LVB,`LVC,`LVH,`LVW,
 	`SB,`SC,`SH,`SW,
 	`JSR,`SYS,`INT,`BR:
 		fnHasConst = 1'b1;
@@ -898,8 +979,10 @@ default:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`RTS:
 		fnInsnLength = 4'd3;
-	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG:
+	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG,`TLB:
 		fnInsnLength = 4'd4;
+	`LBX,`LWX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`SCX,`SBX,`SHX,`SWX,`MUX:
+		fnInsnLength = 4'd6;
 	default:
 		fnInsnLength = 4'd5;
 	endcase
@@ -929,10 +1012,16 @@ always @(fetchbuf or fetchbufA_instr or fetchbufA_v or fetchbufA_pc
 begin
 	fetchbuf0_instr <= (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
 	fetchbuf0_v     <= (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
-	fetchbuf0_pc    <= (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
+	if (int_pending && string_pc!=64'd0)
+		fetchbuf0_pc <= string_pc;
+	else
+		fetchbuf0_pc    <= (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
 	fetchbuf1_instr <= (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
 	fetchbuf1_v     <= (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
-	fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+	if (int_pending && string_pc != 64'd0)
+		fetchbuf1_pc <= string_pc;
+	else
+		fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 end
 
 wire [7:0] opcodeA = fetchbufA_instr[`OPCODE];
@@ -942,8 +1031,13 @@ wire [7:0] opcodeD = fetchbufD_instr[`OPCODE];
 
 function fnIsMem;
 input [7:0] opcode;
-fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
-			opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW
+fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
+			opcode==`LBX || opcode==`LWX || opcode==`LBUX || opcode==`LHX || opcode==`LHUX || opcode==`LCX || opcode==`LCUX ||
+			opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
+			opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
+			opcode==`STSB || opcode==`STSC || opcode==`STSH || opcode==`STSW ||
+			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
+			opcode==`TLB
 			;
 endfunction
 
@@ -952,8 +1046,9 @@ function fnIsRFW;
 input [7:0] opcode;
 input [63:0] ir;
 begin
-fnIsRFW =	// General regisiters
+fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
+			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
 			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
@@ -966,21 +1061,31 @@ fnIsRFW =	// General regisiters
 			(opcode==`MTSPR && (fnTargetsBr(ir) || fnTargetsSegreg(ir))) ||
 			opcode==`JSR || opcode==`SYS || opcode==`INT ||
 			// predicate registers
-			(opcode[7:4] < 4'h3)
+			(opcode[7:4] < 4'h3) ||
+			(opcode==`TLB && ir[19:16]==`TLB_RDREG)
 			;
 end
 endfunction
 
 function fnIsStore;
 input [7:0] opcode;
-fnIsStore = 	opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW;
+fnIsStore = 	opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
+				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
+				opcode==`STSB || opcode==`STSC || opcode==`STSH || opcode==`STSW;
 endfunction
 
 function fnIsLoad;
 input [7:0] opcode;
-fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW;
+fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
+			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
+			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW;
 endfunction
 
+function fnIsIndexed;
+input [7:0] opcode;
+fnIsIndexed = opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
+				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX;
+endfunction
 
 // *** check these
 function fnIsPFW;
@@ -994,27 +1099,27 @@ input [DBW-1:0] adr;
 begin
 if (DBW==32)
 	case(opcode)
-	`LB,`LBU,`SB:
+	`LB,`LBU,`LBX,`LBUX,`SB,`SBX,`LVB:
 		case(adr[1:0])
 		3'd0:	fnSelect = 8'h11;
 		3'd1:	fnSelect = 8'h22;
 		3'd2:	fnSelect = 8'h44;
 		3'd3:	fnSelect = 8'h88;
 		endcase
-	`LC,`LCU,`SC:
+	`LC,`LCU,`SC,`LVC,`LCX,`LCUX,`SCX:
 		case(adr[1])
 		1'd0:	fnSelect = 8'h33;
 		1'd1:	fnSelect = 8'hCC;
 		endcase
-	`LH,`LHU,`SH:
+	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		fnSelect = 8'hFF;
-	`LW,`SW:
+	`LW,`LWX,`SW,`LVW,`SWX:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
 else
 	case(opcode)
-	`LB,`LBU,`SB:
+	`LB,`LBU,`LBX,`SB,`LVB,`LBUX,`SBX:
 		case(adr[2:0])
 		3'd0:	fnSelect = 8'h01;
 		3'd1:	fnSelect = 8'h02;
@@ -1025,19 +1130,19 @@ else
 		3'd6:	fnSelect = 8'h40;
 		3'd7:	fnSelect = 8'h80;
 		endcase
-	`LC,`LCU,`SC:
+	`LC,`LCU,`SC,`LVC,`LCX,`LCUX,`SCX:
 		case(adr[2:1])
 		2'd0:	fnSelect = 8'h03;
 		2'd1:	fnSelect = 8'h0C;
 		2'd2:	fnSelect = 8'h30;
 		2'd3:	fnSelect = 8'hC0;
 		endcase
-	`LH,`LHU,`SH:
+	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		case(adr[2])
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
-	`LW,`SW:
+	`LW,`LWX,`SW,`LVW,`SWX:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1051,7 +1156,7 @@ input [7:0] sel;
 begin
 if (DBW==32)
 	case(opcode)
-	`LB:
+	`LB,`LBX,`LVB:
 		case(sel[3:0])
 		8'h1:	fnDatai = {{24{dat[7]}},dat[7:0]};
 		8'h2:	fnDatai = {{24{dat[15]}},dat[15:8]};
@@ -1059,7 +1164,7 @@ if (DBW==32)
 		8'h8:	fnDatai = {{24{dat[31]}},dat[31:24]};
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LBU:
+	`LBU,`LBUX:
 		case(sel[3:0])
 		4'h1:	fnDatai = dat[7:0];
 		4'h2:	fnDatai = dat[15:8];
@@ -1067,25 +1172,25 @@ if (DBW==32)
 		4'h8:	fnDatai = dat[31:24];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LC:
+	`LC,`LVC,`LCX:
 		case(sel[3:0])
 		4'h3:	fnDatai = {{16{dat[15]}},dat[15:0]};
 		4'hC:	fnDatai = {{16{dat[31]}},dat[31:16]};
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LCU:
+	`LCU,`LCUX:
 		case(sel[3:0])
 		4'h3:	fnDatai = dat[15:0];
 		4'hC:	fnDatai = dat[31:16];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LH,`LHU,`LW:
+	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LHX,`LHUX:
 		fnDatai = dat[31:0];
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
 else
 	case(opcode)
-	`LB:
+	`LB,`LBX,`LVB:
 		case(sel)
 		8'h01:	fnDatai = {{DBW*7/8{dat[DBW*1/8-1]}},dat[DBW*1/8-1:0]};
 		8'h02:	fnDatai = {{DBW*7/8{dat[DBW*2/8-1]}},dat[DBW*2/8-1:DBW*1/8]};
@@ -1097,7 +1202,7 @@ else
 		8'h80:	fnDatai = {{DBW*7/8{dat[DBW-1]}},dat[DBW-1:DBW*7/8]};
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LBU:
+	`LBU,`LBUX:
 		case(sel)
 		8'h01:	fnDatai = dat[DBW*1/8-1:0];
 		8'h02:	fnDatai = dat[DBW*2/8-1:DBW*1/8];
@@ -1109,7 +1214,7 @@ else
 		8'h80:	fnDatai = dat[DBW-1:DBW*7/8];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LC:
+	`LC,`LVC,`LCX:
 		case(sel)
 		8'h03:	fnDatai = {{DBW*3/4{dat[DBW/4-1]}},dat[DBW/4-1:0]};
 		8'h0C:	fnDatai = {{DBW*3/4{dat[DBW/2-1]}},dat[DBW/2-1:DBW/4]};
@@ -1117,7 +1222,7 @@ else
 		8'hC0:	fnDatai = {{DBW*3/4{dat[DBW-1]}},dat[DBW-1:DBW*3/4]};
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LCU:
+	`LCU,`LCUX:
 		case(sel)
 		8'h03:	fnDatai = dat[DBW/4-1:0];
 		8'h0C:	fnDatai = dat[DBW/2-1:DBW/4];
@@ -1125,19 +1230,19 @@ else
 		8'hC0:	fnDatai = dat[DBW-1:DBW*3/4];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LH:
+	`LH,`LVH,`LHX:
 		case(sel)
 		8'h0F:	fnDatai = {{DBW/2{dat[DBW/2-1]}},dat[DBW/2-1:0]};
 		8'hF0:	fnDatai = {{DBW/2{dat[DBW-1]}},dat[DBW-1:DBW/2]};
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LHU:
+	`LHU,`LHUX:
 		case(sel)
 		8'h0F:	fnDatai = dat[DBW/2-1:0];
 		8'hF0:	fnDatai = dat[DBW-1:DBW/2];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LW:
+	`LW,`LWX,`LVW:
 		case(sel)
 		8'hFF:	fnDatai = dat;
 		default:	fnDatai = {DBW{1'b1}};
@@ -1152,18 +1257,18 @@ input [7:0] opcode;
 input [DBW-1:0] dat;
 if (DBW==32)
 	case(opcode)
-	`SW:	fnDatao = dat;
-	`SH:	fnDatao = dat;
-	`SC:	fnDatao = {2{dat[15:0]}};
-	`SB:	fnDatao = {4{dat[7:0]}};
+	`SW,`SWX:	fnDatao = dat;
+	`SH,`SHX:	fnDatao = dat;
+	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
+	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
 	default:	fnDatao = dat;
 	endcase
 else
 	case(opcode)
-	`SW:	fnDatao = dat;
-	`SH:	fnDatao = {2{dat[DBW/2-1:0]}};
-	`SC:	fnDatao = {4{dat[DBW/4-1:0]}};
-	`SB:	fnDatao = {8{dat[DBW/8-1:0]}};
+	`SW,`SWX:	fnDatao = dat;
+	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
+	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
+	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
 	default:	fnDatao = dat;
 	endcase
 endfunction
@@ -1194,39 +1299,46 @@ wire [DBW-1:0] branch_pc =
 			fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]};
 
 
+assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
+
 // "Stream" interrupt instructions into the instruction stream until an INT
 // instruction commits. This avoids the problem of an INT instruction being
 // stomped on by a previous branch instruction.
 // Populate the instruction buffers with INT instructions for a hardware interrupt
 // Also populate the instruction buffers with a call to the instruction error vector
 // if an error occurred during instruction load time.
+
+// There is a one cycle delay in setting the StatusHWI that allowed an extra INT
+// instruction to sneek into the queue. This is NOPped out by the int_commit
+// signal.
 reg [63:0] insn1a;
 reg [63:0] insn0,insn1;
-always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i)
-if (int_commit) begin
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ITLBMiss)
+if (int_commit)
 	insn0 <= {8{8'h10}};	// load with NOPs
-end
-else if (nmi_edge & ~StatusHWI & ~int_commit) begin
+else if (nmi_edge & ~StatusHWI & ~int_commit)
 	insn0 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
-end
-else if (irq_i & ~im & ~StatusHWI & ~int_commit) begin
-	insn0 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
-end
+else if (ITLBMiss)
+	insn0 <= {8'hF9,8'hCE,8'hA6,8'h01,8'hF9,8'hCE,8'hA6,8'h01};
 else if (insnerr)
 	insn0 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
-else begin
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn0 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+else
 	insn0 <= insn[63:0];
-end
 
-always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i)
+
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i or ITLBMiss)
 if (int_commit)
 	insn1 <= {8{8'h10}};	// load with NOPs
 else if (nmi_edge & ~StatusHWI & ~int_commit)
 	insn1 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
-else if (irq_i & ~im & ~StatusHWI & ~int_commit)
-	insn1 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+else if (ITLBMiss)
+	insn1 <= {8'hF9,8'hCE,8'hA6,8'h01,8'hF9,8'hCE,8'hA6,8'h01};
 else if (insnerr)
 	insn1 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn1 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
 else
 	insn1 <= insn1a;
 
@@ -1260,6 +1372,8 @@ function [7:0] fnImm;
 input [127:0] insn;
 
 case(insn[15:8])
+`TLB:
+	fnImm = insn[23:16];
 `LOOP:
 	fnImm = insn[23:16];
 `SYS,`JSR,`INT,`CMPI,`LDI:
@@ -1268,6 +1382,9 @@ case(insn[15:8])
 	fnImm = {4'h0,insn[19:16]};
 `RTE,`RTI:
 	fnImm = 8'h00;
+`LBX,`LBUX,`LHX,`LHUX,`LCX,`LCUX,`LWX,
+`SBX,`SCX,`SHX,`SWX:
+	fnImm = insn[47:40];
 default:
 	fnImm = insn[39:32];
 endcase
@@ -1279,6 +1396,8 @@ function fnImmMSB;
 input [127:0] insn;
 
 case(insn[15:8])
+`TLB:
+	fnImmMSB = 1'b0;		// TLB regno is unsigned
 `LOOP:
 	fnImmMSB = insn[23];
 `JSR,`CMPI,`LDI:
@@ -1287,6 +1406,9 @@ case(insn[15:8])
 	fnImmMSB = 1'b0;		// SYS,INT are unsigned
 `RTS,`RTE,`RTI:
 	fnImmMSB = 1'b0;		// RTS is unsigned
+`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
+`SBX,`SCX,`SHX,`SWX:
+	fnImmMSB = insn[47];
 default:
 	fnImmMSB = insn[39];
 endcase
@@ -1311,12 +1433,18 @@ function [63:0] fnOpa;
 input [7:0] opcode;
 input [63:0] ins;
 input [63:0] rfo;
+input [63:0] epc;
 begin
-	if (fnIsFlowCtrl(opcode))
-		fnOpa = fnBra(ins)==4'd0 ? 64'd0 : bregs[fnBra(ins)];
+	if (opcode==`LOOP)
+		fnOpa = epc;
+	else if (fnIsFlowCtrl(opcode))
+		fnOpa = fnBra(ins)==4'd0 ? 64'd0 : fnBra(ins)==4'd15 ? epc :
+			(commit0_v && commit0_tgt[8:4]==5'h11 && commit0_tgt[3:0]==fnBra(ins)) ? commit0_bus :
+			bregs[fnBra(ins)];
 	else if (opcode==`MFSPR)
 		casex(ins[23:16])
 		`TICK:	fnOpa = tick;
+		`LCTR:	fnOpa = lc;
 		`PREGS:
 				begin
 					fnOpa[3:0] = pregs[0];
@@ -1336,13 +1464,42 @@ begin
 					fnOpa[59:56] = pregs[14];
 					fnOpa[63:60] = pregs[15];
 				end
-		8'h1x:	fnOpa = ins[19:16]==4'h0 ? 64'd0 : bregs[ins[19:16]];
-		8'h2x:	fnOpa = sregs[ins[19:16]];
+		8'h1x:	fnOpa = ins[19:16]==4'h0 ? 64'd0 : ins[19:16]==4'hF ? epc :
+						(commit0_v && commit0_tgt[8:4]==5'h11 && commit0_tgt[3:0]==ins[19:16]) ? commit0_bus :
+						bregs[ins[19:16]];
+`ifdef SEGMENTATION
+		8'h2x:	fnOpa = 
+			(commit0_v && commit0_tgt[8:4]==5'h12 && commit0_tgt[3:0]==ins[19:16]) ? {commit0_bus[DBW-1:12],12'h000} :
+			{sregs[ins[19:16]],12'h000};
+`endif
 		default:	fnOpa = 64'h0;
 		endcase
 	else
 		fnOpa = rfo;
 end
+endfunction
+
+function [15:0] fnRegstrGrp;
+input [8:0] Rn;
+if (!Rn[8]) begin
+	fnRegstrGrp="GP";
+end
+else
+	case(Rn[7:4])
+	4'h0:	fnRegstrGrp="P ";
+	4'h1:	fnRegstrGrp="BR";
+	4'h2:	fnRegstrGrp="SG";
+	endcase
+
+endfunction
+
+function [7:0] fnRegstr;
+input [8:0] Rn;
+if (!Rn[8]) begin
+	fnRegstr = Rn[7:0];
+end
+else
+	fnRegstr = Rn[3:0];
 endfunction
 
 initial begin
@@ -1382,6 +1539,9 @@ always @(posedge clk) begin
 
 	if (nmi_i & !nmi1)
 		nmi_edge <= 1'b1;
+		
+	alu0_ld <= 1'b0;
+	alu1_ld <= 1'b0;
 
 	ic_invalidate <= `FALSE;
 	if (rst_i) begin
@@ -1416,6 +1576,8 @@ always @(posedge clk) begin
 		for (n = 1; n < NREGS; n = n + 1)
 			rf_v[n] = `VAL;
 		rf_v[0] = `VAL;
+		rf_v[9'h110] = `VAL;
+		rf_v[9'h11F] = `VAL;
 		alu0_available <= `TRUE;
 		alu1_available <= `TRUE;
 		tail0 <= 3'd0;
@@ -1432,9 +1594,20 @@ always @(posedge clk) begin
 		dram1 <= 2'b00;
 		dram2 <= 2'b00;
 		panic <= `PANIC_NONE;
+		string_pc <= 64'd0;
+		// The pc wraps around to address zero while fetching the reset vector.
+		// This causes the processor to use the code segement register so the
+		// CS has to be defined for reset.
+		sregs[15] <= 52'd0;
+		for (i=0; i < 16; i=i+1)
+			pregs[i] <= 4'd0;
 	end
 
-	rf_v[0] = 1'b1;
+	// The following registers are always valid
+	rf_v[9'h000] = `VAL;
+	rf_v[9'h110] = `VAL;	// BR0
+	rf_v[9'h11F] = `VAL;	// BR15 (PC)
+
 	did_branchback <= take_branch;
 	did_branchback0 <= take_branch0;
 	did_branchback1 <= take_branch1;
@@ -1454,7 +1627,7 @@ always @(posedge clk) begin
 
 	end
 
-	$display("\r\n\r\n");
+	$display("\r\n");
 	$display("TIME %0d", $time);
 `include "Thor_ifetch.v"
 	$display("%h hit0=%b hit1=%b#", spc, hit0, hit1);
@@ -1473,7 +1646,7 @@ always @(posedge clk) begin
 `include "Thor_commit_early.v"
 `include "Thor_enque.v"
 	for (i=0; i<8; i=i+1) 
-	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h 0%d %h %h %h %d %o %h %d %o %h #",
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h #",
 		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
 		iqentry_v[i], iqentry_done[i], iqentry_cmt[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
 		iqentry_islot[i],
@@ -1481,10 +1654,13 @@ always @(posedge clk) begin
 //		 (i==4) ? iqentry_4_islot : (i==5) ? iqentry_5_islot : (i==6) ? iqentry_6_islot : iqentry_7_islot),
 		 iqentry_stomp[i],
 		(fnIsFlowCtrl(iqentry_op[i]) ? 98 : fnIsMem(iqentry_op[i]) ? 109 : 97), 
-		iqentry_op[i], iqentry_tgt[i], iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
+		iqentry_op[i],
+		fnRegstr(iqentry_tgt[i]),fnRegstrGrp(iqentry_tgt[i]),
+		iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
 		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
 `include "Thor_dataincoming.v"
 `include "Thor_issue.v"
+	$display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
 `include "Thor_memory.v"
 `include "Thor_commit.v"
 
@@ -1495,7 +1671,7 @@ always @(posedge clk) begin
 				;
 			else begin
 				$display("********************");
-				$display("Cache access to: %h",!hit0 ? {spc[DBW-1:5],5'b00000} : {spcp16[DBW-1:5],5'b00000});
+				$display("Cache access to: %h",!hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000});
 				$display("********************");
 				ierr <= 1'b0;
 				bte_o <= 2'b00;
@@ -1505,7 +1681,7 @@ always @(posedge clk) begin
 				stb_o <= 1'b1;
 				we_o <= 1'b0;
 				sel_o <= {DBW/8{1'b1}};
-				adr_o <= !hit0 ? {spc[DBW-1:5],5'b00000} : {spcp16[DBW-1:5],5'b00000};
+				adr_o <= !hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000};
 				dat_o <= {DBW{1'b0}};
 				cstate <= ICACHE1;
 			end
@@ -1537,7 +1713,6 @@ always @(posedge clk) begin
 //	for (i=0; i<8; i=i+1)
 //	    $display("%d: %h %d %o #", i, urf1.regs0[i], rf_v[i], rf_source[i]);
 
-	$display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
 	$display("dr=%d I=%h A=%h B=%h op=%c%d bt=%d src=%o pc=%h #",
 		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
 		 (fnIsFlowCtrl(alu0_op) ? 98 : (fnIsMem(alu0_op)) ? 109 : 97),

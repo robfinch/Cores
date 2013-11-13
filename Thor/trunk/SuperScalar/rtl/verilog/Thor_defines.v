@@ -26,6 +26,8 @@
 `ifndef THOR_DEFINES
 `define THOR_DEFINES	1'b1
 
+`define SEGMENTATION	1'b1
+
 `define TRUE	1'b1
 `define FALSE	1'b0
 `define INV		1'b0
@@ -91,6 +93,18 @@
 
 `define NEG			8'h70
 `define NOT			8'h71
+`define MUX			8'h72
+
+`define ITOF		8'h76
+`define FTOI		8'h77
+`define FNEG		8'h78
+`define FABS		8'h79
+`define FSIGN		8'h7A
+`define FCMP		8'h7B
+`define FADD		8'h7C
+`define FSUB		8'h7D
+`define FMUL		8'h7E
+`define FDIV		8'h7F
 
 `define LB			8'h80
 `define LBU			8'h81
@@ -127,13 +141,55 @@
 `define MFSPR		8'hA8
 `define MTSPR		8'hA9
 
-`define NOP		8'hE1
-`define RTE		8'hF3
-`define RTI		8'hF4
-`define SYNC	8'hF8
-`define CLI		8'hFA
-`define SEI		8'hFB
-`define IMM		8'hFF
+`define LBX			8'hB0
+`define LBUX		8'hB1
+`define LCX			8'hB2
+`define LCUX		8'hB3
+`define LHX			8'hB4
+`define LHUX		8'hB5
+`define LWX			8'hB6
+
+`define SBX			8'hC0
+`define SCX			8'hC1
+`define SHX			8'hC2
+`define SWX			8'hC3
+
+// Uncached access instructions
+`define LVB			8'hD0
+`define LVC			8'hD1
+`define LVH			8'hD2
+`define LVW			8'hD3
+
+`define NOP			8'hE1
+
+`define TLB			8'hF0
+`define TLB_NOP			4'h0
+`define TLB_P			4'h1
+`define TLB_RD			4'h2
+`define TLB_WR			4'h3
+`define TLB_WI			4'h4
+`define TLB_EN			4'h5
+`define TLB_DIS			4'h6
+`define TLB_RDREG		4'h7
+`define TLB_WRREG		4'h8
+
+`define TLBWired		4'h0
+`define TLBIndex		4'h1
+`define TLBRandom		4'h2
+`define TLBPageMask		4'h3
+`define TLBVirtPage		4'h4
+`define TLBPhysPage0	4'h5
+`define TLBPhysPage1	4'h6
+`define TLBASID			4'h7
+`define TLBDMissAdr		4'd8
+`define TLBIMissAdr		4'd9
+
+`define RTE			8'hF3
+`define RTI			8'hF4
+`define SYNC		8'hF8
+`define CLI			8'hFA
+`define SEI			8'hFB
+`define IMM			8'hFF
 
 `define PREDC	3:0
 `define PREDR	7:4
@@ -142,17 +198,20 @@
 `define RB		31:24
 `define INSTRUCTION_RA	23:16
 `define INSTRUCTION_RB	31:24
+`define INSTRUCTION_RC	39:32
 
 `define XTBL	4'd12
 `define EPC		4'd13
 `define IPC		4'd14
 
 // Special Registers
-`define TICK		8'h02
-`define PREGS		8'h04
-`define BREGS		8'h1x
-`define SREGS		8'h2x
-
+`define TICK			8'h02
+`define LCTR			8'h03
+`define PREGS			8'h04
+`define MISSADR			8'h05
+`define BREGS			8'h1x
+`define SREGS			8'h2x
+		
 // exception types:
 `define EXC_NONE	4'd0
 `define EXC_HALT	4'd1

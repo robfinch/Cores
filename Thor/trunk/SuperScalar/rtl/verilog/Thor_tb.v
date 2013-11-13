@@ -1,5 +1,6 @@
 
 module Thor_tb();
+parameter DBW=32;
 reg rst;
 reg clk;
 reg nmi;
@@ -10,13 +11,13 @@ wire we;
 wire [7:0] sel;
 wire br_ack;
 wire [31:0] adr;
-wire [63:0] br_dato;
+wire [DBW-1:0] br_dato;
 wire scr_ack;
 wire [63:0] scr_dato;
 
 wire cpu_ack;
-wire [63:0] cpu_dati;
-wire [63:0] cpu_dato;
+wire [DBW-1:0] cpu_dati;
+wire [DBW-1:0] cpu_dato;
 
 initial begin
 	#0 rst = 1'b0;
@@ -57,7 +58,7 @@ scratchmem uscrm1
 	.dat_o(scr_dato)
 );
 
-bootrom ubr1
+bootrom #(DBW) ubr1
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -70,7 +71,7 @@ bootrom ubr1
 	.perr()
 );
 
-Thor uthor1
+Thor #(DBW) uthor1
 (
 	.rst_i(rst),
 	.clk_i(clk),

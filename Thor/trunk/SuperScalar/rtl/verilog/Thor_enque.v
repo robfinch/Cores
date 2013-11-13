@@ -35,15 +35,14 @@
 // predict it taken (set branchback/backpc and delete any instructions after it in fetchbuf)
 //
 
-if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
+if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's been a branch miss
 
-	case ({fetchbuf0_v, fetchbuf1_v})
+	case ({fetchbuf0_v, fetchbuf1_v && ((fnNumReadPorts(fetchbuf0_instr) + fnNumReadPorts(fetchbuf1_instr) < 3'd5)||!fetchbuf0_v)})
 
 	2'b00: ; // do nothing
 
 	2'b01:
 			if (iqentry_v[tail0] == `INV) begin
-				$display("cond1=%h", cond1);
 				iqentry_v    [tail0]    <=   `VAL;
 				iqentry_done [tail0]    <=   `INV;
 				iqentry_cmt	 [tail0]    <=   `INV;
@@ -57,7 +56,11 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				// If an interrupt is being enqueued and the previous instruction was an immediate prefix, then
 				// inherit the address of the previous instruction, so that the prefix will be executed on return
 				// from interrupt.
-				iqentry_pc   [tail0]    <=	(opcode1==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? iqentry_pc[tail0-3'd1] : fetchbuf1_pc;
+				// If a string operation was in progress then inherit the address of the string operation so that
+				// it can be continued.
+				iqentry_pc   [tail0]    <=	
+					(opcode1==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
+						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf1_pc;
 				//iqentry_pc   [tail0]    <=   fetchbuf1_pc;
 				iqentry_mem  [tail0]    <=   fetchbuf1_mem;
 				iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
@@ -76,12 +79,15 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
 											{{DBW-8{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
 				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
-												fnOpa(opcode1,fetchbuf1_instr,rfoa1);
+												fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf1_instr)];
 				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode1) ? {{DBW-6{1'b0}},Rb1[5:0]} : rfob1;
 				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1 ) | rf_v[ Rb1 ];
 				iqentry_a2_s [tail0]    <=   rf_source[Rb1];
+				iqentry_a3   [tail0]    <=   rfob0;
+				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rb0 ];
+				iqentry_a3_s [tail0]    <=   rf_source[Rb0];
 				tail0 <= tail0 + 1;
 				tail1 <= tail1 + 1;
 				if (fetchbuf1_rfw|fetchbuf1_pfw) begin
@@ -92,7 +98,6 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 
 	2'b10:
 			if (iqentry_v[tail0] == `INV) begin
-				$display("cond0=%h", cond0);
 
 				iqentry_v    [tail0]    <=   `VAL;
 				iqentry_done [tail0]    <=   `INV;
@@ -104,7 +109,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				iqentry_cond [tail0]    <=   cond0;
 				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
 				iqentry_agen [tail0]    <=   `INV;
-				iqentry_pc   [tail0]    <=   (opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? iqentry_pc[tail0-3'd1] : fetchbuf0_pc;
+				iqentry_pc   [tail0]    <=   
+					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
+						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
 				iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 				iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 				iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
@@ -120,12 +127,15 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
 											{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
 				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
-												fnOpa(opcode0,fetchbuf0_instr,rfoa0);
+												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
 				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0) | rf_v[Rb0];
 				iqentry_a2_s [tail0]    <=   rf_source [Rb0];
+				iqentry_a3   [tail0]    <=   rfoa1;
+				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Ra1 ];
+				iqentry_a3_s [tail0]    <=   rf_source[Ra1];
 				tail0 <= tail0 + 1;
 				tail1 <= tail1 + 1;
 				if (fetchbuf0_rfw|fetchbuf0_pfw) begin
@@ -135,13 +145,11 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			end
 	
 		2'b11: if (iqentry_v[tail0] == `INV) begin
-				$display("nq11 cond0=%h  %d", cond0, tail0);
 
 		//
 		// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
 		//
 		if ({fnIsBranch(opcode0), predict_taken0} == {`TRUE, `TRUE}) begin
-			$display("nq11 branch %d",tail0);
 			iqentry_v    [tail0]    <=	`VAL;
 			iqentry_done [tail0]    <=	`INV;
 			iqentry_cmt	 [tail0]    <=  `INV;
@@ -152,7 +160,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_cond [tail0]    <=   cond0;
 			iqentry_bt   [tail0]    <=	`VAL;
 			iqentry_agen [tail0]    <=	`INV;
-			iqentry_pc   [tail0]    <=	(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? iqentry_pc[tail0-3'd1] : fetchbuf0_pc;
+			iqentry_pc   [tail0]    <=	
+					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
+						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
 			iqentry_mem  [tail0]    <=	fetchbuf0_mem;
 			iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
 			iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
@@ -168,12 +178,15 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
 										{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
 			iqentry_a1   [tail0]    <=	//fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
-												fnOpa(opcode0,fetchbuf0_instr,rfoa0);
+												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 			iqentry_a1_v [tail0]    <=	fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 			iqentry_a1_s [tail0]    <=	rf_source [fnRa(fetchbuf0_instr)];
 			iqentry_a2   [tail0]    <=	fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 			iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=	rf_source[ Rb0 ];
+			iqentry_a3   [tail0]    <=   rfoa1;
+			iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Ra1 ];
+			iqentry_a3_s [tail0]    <=   rf_source[Ra1];
 			tail0 <= tail0 + 1;
 			tail1 <= tail1 + 1;
 
@@ -197,7 +210,6 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 				tail0 <= tail0 + 1;
 				tail1 <= tail1 + 1;
 			end
-			$display("nq11 no branch %d", tail0);
 			//
 			// enqueue the first instruction ...
 			//
@@ -211,7 +223,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_cond [tail0]    <=   cond0;
 			iqentry_bt   [tail0]    <=   `INV;
 			iqentry_agen [tail0]    <=   `INV;
-			iqentry_pc   [tail0]    <=   (opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? iqentry_pc[tail0-3'd1] : fetchbuf0_pc;
+			iqentry_pc   [tail0]    <=
+					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
+						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
 			iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 			iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 			iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
@@ -227,20 +241,20 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
 										{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
 			iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
-												fnOpa(opcode0,fetchbuf0_instr,rfoa0);
+												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 			iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 							
 			iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
 			iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
 			iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=   rf_source[Rb0];
-			$display("a1sv=%b opcode=%h", fnSource1_v(opcode0), opcode0);
-			$display("Ra=%d",fnRa(fetchbuf0_instr));
+			iqentry_a3   [tail0]    <=   rfoa1;
+			iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Ra1 ];
+			iqentry_a3_s [tail0]    <=   rf_source[Ra1];
 			//
 			// if there is room for a second instruction, enqueue it
 			//
 			if (iqentry_v[tail1] == `INV) begin
-				$display("nq second %d cond1 %h pred=%h",tail1, cond1, pregs[Pn1]);
 			iqentry_v    [tail1]    <=   `VAL;
 			iqentry_done [tail1]    <=   `INV;
 			iqentry_cmt  [tail1]    <=   `INV;
@@ -251,7 +265,7 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			iqentry_cond [tail1]    <=   cond1;
 			iqentry_bt   [tail1]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
 			iqentry_agen [tail1]    <=   `INV;
-			iqentry_pc   [tail1]    <=   (opcode1==`INT && opcode0==`IMM) ? fetchbuf0_pc : fetchbuf1_pc;
+			iqentry_pc   [tail1]    <=   (opcode1==`INT && opcode0==`IMM) ? (string_pc != 64'd0 ? string_pc : fetchbuf0_pc) : fetchbuf1_pc;
 			iqentry_mem  [tail1]    <=   fetchbuf1_mem;
 			iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
 			iqentry_rfw  [tail1]    <=   fetchbuf1_rfw;
@@ -266,8 +280,11 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) | fnImm(fetchbuf1_instr) :
 										{{DBW-8{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
 			iqentry_a1   [tail1]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
-												fnOpa(opcode1,fetchbuf1_instr,rfoa1);
+												(fnNumReadPorts(fetchbuf1_instr) < 3'd2) ?
+												  fnOpa(opcode1,fetchbuf1_instr,rfob1,fetchbuf1_pc)
+												: fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
 			iqentry_a2   [tail1]    <=   fnIsShiftiop(opcode1) ? {58'b0,Rb1[5:0]} : rfob1;
+			iqentry_a3   [tail1]    <=   rfob0;
 			// a1/a2_v and a1/a2_s values require a bit of thinking ...
 
 			//
@@ -276,29 +293,37 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			//
 			// if the argument is an immediate or not needed, we're done
 			if (fnSource1_v( opcode1 ) == `VAL) begin
-				$display("a1 auto valid: %h", opcode1);
 				iqentry_a1_v [tail1] <= `VAL;
 //					iqentry_a1_s [tail1] <= 4'd0;
 			end
 			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 			else if (~fetchbuf0_rfw) begin
-				$display("fetchbuf0 not writing regfile");
-				iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
-				iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
+				if (fnNumReadPorts(fetchbuf1_instr) < 3'd2) begin
+					iqentry_a1_v [tail1]    <=   rf_v [fnRb(fetchbuf1_instr)];
+					iqentry_a1_s [tail1]    <=   rf_source [fnRb(fetchbuf1_instr)];
+				end
+				else begin
+					iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
+					iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
+				end
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
 			else if (fnTargetReg(fetchbuf0_instr) != 9'd0
 				&& fnRa(fetchbuf1_instr) == fnTargetReg(fetchbuf0_instr)) begin
-				$display("target overlap");
 				// if the previous instruction is a LW, then grab result from memq, not the iq
 				iqentry_a1_v [tail1]    <=   `INV;
 				iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
 			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
-				$display("no overlapp");
-				iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
-				iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
+				if (fnNumReadPorts(fetchbuf1_instr) < 3'd2) begin
+					iqentry_a1_v [tail1]    <=   rf_v [fnRb(fetchbuf1_instr)];
+					iqentry_a1_s [tail1]    <=   rf_source [fnRb(fetchbuf1_instr)];
+				end
+				else begin
+					iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
+					iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
+				end
 			end
 
 			if (~fetchbuf0_pfw) begin
@@ -320,31 +345,63 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			//
 			// if the argument is an immediate or not needed, we're done
 			if (fnSource2_v( opcode1 ) == `VAL) begin
-				$display("a2 auto valid opcode:%h",opcode1);
 				iqentry_a2_v [tail1] <= `VAL;
 //					iqentry_a2_s [tail1] <= 4'd0;
 			end
 			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 			else if (~fetchbuf0_rfw) begin
-				$display("writes nothing to RF");
 				iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
 				iqentry_a2_s [tail1] <= rf_source[Rb1];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
 			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 &&
 				Rb1 == fnTargetReg(fetchbuf0_instr)) begin
-				$display("target overllpas");
 				// if the previous instruction is a LW, then grab result from memq, not the iq
 				iqentry_a2_v [tail1]    <=   `INV;
 				iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
 			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
-				$display("target doesnt overllpas");
 				iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
 				iqentry_a2_s [tail1] <= rf_source[Rb1];
 			end
 
+			//
+			// SOURCE 3 ... this is relatively straightforward, because all instructions
+			// that have a source (i.e. every instruction but LUI) read from RC
+			//
+			// if the argument is an immediate or not needed, we're done
+			if (fnSource3_v( opcode1 ) == `VAL) begin
+				iqentry_a3_v [tail1] <= `VAL;
+//					iqentry_a1_s [tail1] <= 4'd0;
+			end
+			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+			else if (~fetchbuf0_rfw) begin
+				if (fnNumReadPorts(fetchbuf1_instr) < 3'd2) begin
+					iqentry_a3_v [tail1]    <=   `VAL;
+				end
+				else begin
+					iqentry_a3_v [tail1]    <=   rf_v [Rb0];
+					iqentry_a3_s [tail1]    <=   rf_source [Rb0];
+				end
+			end
+			// otherwise, previous instruction does write to RF ... see if overlap
+			else if (fnTargetReg(fetchbuf0_instr) != 9'd0
+				&& Rb0 == fnTargetReg(fetchbuf0_instr)) begin
+				// if the previous instruction is a LW, then grab result from memq, not the iq
+				iqentry_a3_v [tail1]    <=   `INV;
+				iqentry_a3_s [tail1]    <=   { fetchbuf0_mem, tail0 };
+			end
+			// if no overlap, get info from rf_v and rf_source
+			else begin
+				if (fnNumReadPorts(fetchbuf1_instr) < 3'd2) begin
+					iqentry_a3_v [tail1]    <=   `VAL;
+				end
+				else begin
+					iqentry_a3_v [tail1]    <=   rf_v [Rb0];
+					iqentry_a3_s [tail1]    <=   rf_source [Rb0];
+				end
+			end
 			//
 			// if the two instructions enqueued target the same register, 
 			// make sure only the second writes to rf_v and rf_source.
@@ -363,13 +420,10 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 			end
 			else begin
 				if (fetchbuf0_rfw) begin
-					$display("0marking %d invalid", fnTargetReg(fetchbuf0_instr));
 					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };
 				end
-				$display("fetchbuf1_rfw=%d", fetchbuf1_rfw);
 				if (fetchbuf1_rfw) begin
-					$display("1marking %d invalid", fnTargetReg(fetchbuf1_instr));
 					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail1 };
 				end
@@ -386,8 +440,9 @@ if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 		end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
 		end
 	endcase
+	end
 	else begin	// if branchmiss
-		if (iqentry_stomp[0] & ~iqentry_stomp[7]) begin
+		if ((iqentry_stomp[0] & ~iqentry_stomp[7]) || stomp_all) begin
 			tail0 <= 0;
 			tail1 <= 1;
 		end

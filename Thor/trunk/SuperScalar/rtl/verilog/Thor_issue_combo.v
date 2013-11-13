@@ -53,7 +53,11 @@ assign args_valid[0] =
 			&& (iqentry_a2_v[0] 
 				|| (iqentry_mem[0] & ~iqentry_agen[0])
 				|| (iqentry_a2_s[0] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[0] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[0] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[0] 
+				|| (iqentry_mem[0] & ~iqentry_agen[0])
+				|| (iqentry_a3_s[0] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[0] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[1] =
 			(iqentry_p_v[3'd1]
@@ -65,7 +69,11 @@ assign args_valid[1] =
 			&& (iqentry_a2_v[1] 
 				|| (iqentry_mem[1] & ~iqentry_agen[1])
 				|| (iqentry_a2_s[1] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[1] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[1] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[1] 
+				|| (iqentry_mem[1] & ~iqentry_agen[1])
+				|| (iqentry_a3_s[1] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[1] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[2] =
 			(iqentry_p_v[3'd2]
@@ -77,7 +85,11 @@ assign args_valid[2] =
 			&& (iqentry_a2_v[2] 
 				|| (iqentry_mem[2] & ~iqentry_agen[2])
 				|| (iqentry_a2_s[2] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[2] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[2] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[2] 
+				|| (iqentry_mem[2] & ~iqentry_agen[2])
+				|| (iqentry_a3_s[2] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[2] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[3] =
 			(iqentry_p_v[3'd3]
@@ -89,7 +101,11 @@ assign args_valid[3] =
 			&& (iqentry_a2_v[3] 
 				|| (iqentry_mem[3] & ~iqentry_agen[3])
 				|| (iqentry_a2_s[3] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[3] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[3] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[3] 
+				|| (iqentry_mem[3] & ~iqentry_agen[3])
+				|| (iqentry_a3_s[3] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[3] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[4] =
 			(iqentry_p_v[3'd4]
@@ -101,7 +117,11 @@ assign args_valid[4] =
 			&& (iqentry_a2_v[4] 
 				|| (iqentry_mem[4] & ~iqentry_agen[4])
 				|| (iqentry_a2_s[4] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[4] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[4] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[4] 
+				|| (iqentry_mem[4] & ~iqentry_agen[4])
+				|| (iqentry_a3_s[4] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[4] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[5] =
 			(iqentry_p_v[3'd5]
@@ -113,7 +133,11 @@ assign args_valid[5] =
 			&& (iqentry_a2_v[5] 
 				|| (iqentry_mem[5] & ~iqentry_agen[5])
 				|| (iqentry_a2_s[5] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[5] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[5] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[5] 
+				|| (iqentry_mem[5] & ~iqentry_agen[5])
+				|| (iqentry_a3_s[5] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[5] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[6] =
 			(iqentry_p_v[3'd6]
@@ -125,7 +149,11 @@ assign args_valid[6] =
 			&& (iqentry_a2_v[6] 
 				|| (iqentry_mem[6] & ~iqentry_agen[6])
 				|| (iqentry_a2_s[6] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[6] == alu1_sourceid && alu1_dataready));
+				|| (iqentry_a2_s[6] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[6] 
+				|| (iqentry_mem[6] & ~iqentry_agen[6])
+				|| (iqentry_a3_s[6] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[6] == alu1_sourceid && alu1_dataready));
 
 assign args_valid[7] =
 			(iqentry_p_v[3'd7]
@@ -137,8 +165,11 @@ assign args_valid[7] =
 			&& (iqentry_a2_v[7] 
 				|| (iqentry_mem[7] & ~iqentry_agen[7])
 				|| (iqentry_a2_s[7] == alu0_sourceid && alu0_dataready)
-				|| (iqentry_a2_s[7] == alu1_sourceid && alu1_dataready));
-
+				|| (iqentry_a2_s[7] == alu1_sourceid && alu1_dataready))
+			&& (iqentry_a3_v[7] 
+				|| (iqentry_mem[7] & ~iqentry_agen[7])
+				|| (iqentry_a3_s[7] == alu0_sourceid && alu0_dataready)
+				|| (iqentry_a3_s[7] == alu1_sourceid && alu1_dataready));
 
 wire [7:0] could_issue;
 assign could_issue[0] = iqentry_v[0] && !iqentry_out[0] && !iqentry_agen[0] && args_valid[0];
@@ -155,6 +186,15 @@ reg [2:0] ispot;
 always @(could_issue or head0 or head1 or head2 or head3 or head4 or head5 or head6 or head7)
 begin
 	iqentry_issue = 8'h00;
+	iqentry_islot[0] = 2'b00;
+	iqentry_islot[1] = 2'b00;
+	iqentry_islot[2] = 2'b00;
+	iqentry_islot[3] = 2'b00;
+	iqentry_islot[4] = 2'b00;
+	iqentry_islot[5] = 2'b00;
+	iqentry_islot[6] = 2'b00;
+	iqentry_islot[7] = 2'b00;
+	ispot = head0;
 	if (could_issue[head0]) begin
 		iqentry_issue[head0] = `TRUE;
 		iqentry_islot[head0] = 2'b00;
@@ -226,17 +266,39 @@ begin
 	end
 end
 
+assign stomp_all = fnIsStoreString(iqentry_op[head0]) && int_pending;
 
 // 
 // additional logic for handling a branch miss (STOMP logic)
 //
 assign
-	iqentry_stomp[0] = branchmiss && iqentry_v[0] && head0 != 3'd0 && (missid == 3'd7 || iqentry_stomp[7]),
-	iqentry_stomp[1] = branchmiss && iqentry_v[1] && head0 != 3'd1 && (missid == 3'd0 || iqentry_stomp[0]),
-	iqentry_stomp[2] = branchmiss && iqentry_v[2] && head0 != 3'd2 && (missid == 3'd1 || iqentry_stomp[1]),
-	iqentry_stomp[3] = branchmiss && iqentry_v[3] && head0 != 3'd3 && (missid == 3'd2 || iqentry_stomp[2]),
-	iqentry_stomp[4] = branchmiss && iqentry_v[4] && head0 != 3'd4 && (missid == 3'd3 || iqentry_stomp[3]),
-	iqentry_stomp[5] = branchmiss && iqentry_v[5] && head0 != 3'd5 && (missid == 3'd4 || iqentry_stomp[4]),
-	iqentry_stomp[6] = branchmiss && iqentry_v[6] && head0 != 3'd6 && (missid == 3'd5 || iqentry_stomp[5]),
-	iqentry_stomp[7] = branchmiss && iqentry_v[7] && head0 != 3'd7 && (missid == 3'd6 || iqentry_stomp[6]);
+	iqentry_stomp[0] = stomp_all || (branchmiss && iqentry_v[0] && head0 != 3'd0 && (missid == 3'd7 || iqentry_stomp[7])),
+	iqentry_stomp[1] = stomp_all || (branchmiss && iqentry_v[1] && head0 != 3'd1 && (missid == 3'd0 || iqentry_stomp[0])),
+	iqentry_stomp[2] = stomp_all || (branchmiss && iqentry_v[2] && head0 != 3'd2 && (missid == 3'd1 || iqentry_stomp[1])),
+	iqentry_stomp[3] = stomp_all || (branchmiss && iqentry_v[3] && head0 != 3'd3 && (missid == 3'd2 || iqentry_stomp[2])),
+	iqentry_stomp[4] = stomp_all || (branchmiss && iqentry_v[4] && head0 != 3'd4 && (missid == 3'd3 || iqentry_stomp[3])),
+	iqentry_stomp[5] = stomp_all || (branchmiss && iqentry_v[5] && head0 != 3'd5 && (missid == 3'd4 || iqentry_stomp[4])),
+	iqentry_stomp[6] = stomp_all || (branchmiss && iqentry_v[6] && head0 != 3'd6 && (missid == 3'd5 || iqentry_stomp[5])),
+	iqentry_stomp[7] = stomp_all || (branchmiss && iqentry_v[7] && head0 != 3'd7 && (missid == 3'd6 || iqentry_stomp[6]));
+
+
+assign alu0_issue = (!(iqentry_v[0] && iqentry_stomp[0]) && iqentry_issue[0] && iqentry_islot[0]==2'd0) ||
+			(!(iqentry_v[1] && iqentry_stomp[1]) && iqentry_issue[1] && iqentry_islot[1]==2'd0) ||
+			(!(iqentry_v[2] && iqentry_stomp[2]) && iqentry_issue[2] && iqentry_islot[2]==2'd0) ||
+			(!(iqentry_v[3] && iqentry_stomp[3]) && iqentry_issue[3] && iqentry_islot[3]==2'd0) ||
+			(!(iqentry_v[4] && iqentry_stomp[4]) && iqentry_issue[4] && iqentry_islot[4]==2'd0) ||
+			(!(iqentry_v[5] && iqentry_stomp[5]) && iqentry_issue[5] && iqentry_islot[5]==2'd0) ||
+			(!(iqentry_v[6] && iqentry_stomp[6]) && iqentry_issue[6] && iqentry_islot[6]==2'd0) ||
+			(!(iqentry_v[7] && iqentry_stomp[7]) && iqentry_issue[7] && iqentry_islot[7]==2'd0)
+			;
+
+assign alu1_issue = (!(iqentry_v[0] && iqentry_stomp[0]) && iqentry_issue[0] && iqentry_islot[0]==2'd1) ||
+			(!(iqentry_v[1] && iqentry_stomp[1]) && iqentry_issue[1] && iqentry_islot[1]==2'd1) ||
+			(!(iqentry_v[2] && iqentry_stomp[2]) && iqentry_issue[2] && iqentry_islot[2]==2'd1) ||
+			(!(iqentry_v[3] && iqentry_stomp[3]) && iqentry_issue[3] && iqentry_islot[3]==2'd1) ||
+			(!(iqentry_v[4] && iqentry_stomp[4]) && iqentry_issue[4] && iqentry_islot[4]==2'd1) ||
+			(!(iqentry_v[5] && iqentry_stomp[5]) && iqentry_issue[5] && iqentry_islot[5]==2'd1) ||
+			(!(iqentry_v[6] && iqentry_stomp[6]) && iqentry_issue[6] && iqentry_islot[6]==2'd1) ||
+			(!(iqentry_v[7] && iqentry_stomp[7]) && iqentry_issue[7] && iqentry_islot[7]==2'd1)
+			;
 

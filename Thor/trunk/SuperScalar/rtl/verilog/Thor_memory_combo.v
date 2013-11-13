@@ -27,6 +27,26 @@
 //
 // additional DRAM-enqueue logic
 
+Thor_TLB #(DBW) utlb1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.pc(spc),
+	.ea(vadr),
+	.ppc(ppc),
+	.pea(pea),
+	.m1IsStore(we_o),
+	.ASID(8'h00),
+	.op(tlb_op),
+	.state(tlb_state),
+	.regno(tlb_regno),
+	.dati(tlb_data),
+	.dato(tlb_dato),
+	.ITLBMiss(ITLBMiss),
+	.DTLBMiss(DTLBMiss),
+	.HTLBVirtPageo()
+);
+	
 assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL || dram2 == `DRAMSLOT_AVAIL);
 
 assign  iqentry_memopsvalid[0] = (iqentry_mem[0] & iqentry_a2_v[0] & iqentry_agen[0]),

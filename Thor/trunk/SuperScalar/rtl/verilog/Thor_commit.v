@@ -24,7 +24,78 @@
 //
 // ============================================================================
 //
-	
+
+// It didn't work in simulation when the following was declared under an
+// independant always clk block
+//
+if (commit0_v && commit0_tgt[8:4]==5'h11) begin
+	bregs[commit0_tgt[3:0]] <= commit0_bus;
+	$display("bregs[%d]<=%h", commit0_tgt[3:0], commit0_bus);
+end
+if (commit1_v && commit1_tgt[8:4]==5'h11) begin
+	$display("bregs[%d]<=%h", commit1_tgt[3:0], commit1_bus);
+	bregs[commit1_tgt[3:0]] <= commit1_bus;
+end
+
+`ifdef SEGMENTATION
+if (commit0_v && commit0_tgt[8:4]==5'h12) begin
+	$display("sregs[%d]<=%h", commit0_tgt[3:0], commit0_bus);
+	sregs[commit0_tgt[3:0]] <= commit0_bus[DBW-1:12];
+end
+if (commit1_v && commit1_tgt[8:4]==5'h12) begin
+	$display("sregs[%d]<=%h", commit1_tgt[3:0], commit1_bus);
+	sregs[commit1_tgt[3:0]] <= commit1_bus[DBW-1:12];
+end
+`endif
+
+if (commit0_v && commit0_tgt[8:4]==5'h10)
+	pregs[commit0_tgt[3:0]] <= commit0_bus[3:0];
+if (commit1_v && commit1_tgt[8:4]==5'h10)
+	pregs[commit1_tgt[3:0]] <= commit1_bus[3:0];
+
+//	if (commit1_v && commit1_tgt[8:4]==5'h10)
+//		pregs[commit1_tgt[3:0]] <= commit1_bus[3:0];
+if (commit0_v && commit0_tgt==9'h130) begin
+	pregs[0] <= commit0_bus[3:0];
+	pregs[1] <= commit0_bus[7:4];
+	pregs[2] <= commit0_bus[11:8];
+	pregs[3] <= commit0_bus[15:12];
+	pregs[4] <= commit0_bus[19:16];
+	pregs[5] <= commit0_bus[23:20];
+	pregs[6] <= commit0_bus[27:24];
+	pregs[7] <= commit0_bus[31:28];
+	if (DBW==64) begin
+		pregs[8] <= commit0_bus[35:32];
+		pregs[9] <= commit0_bus[39:36];
+		pregs[10] <= commit0_bus[43:40];
+		pregs[11] <= commit0_bus[47:44];
+		pregs[12] <= commit0_bus[51:48];
+		pregs[13] <= commit0_bus[55:52];
+		pregs[14] <= commit0_bus[59:56];
+		pregs[15] <= commit0_bus[63:60];
+	end
+end
+if (commit1_v && commit1_tgt==9'h130) begin
+	pregs[0] <= commit1_bus[3:0];
+	pregs[1] <= commit1_bus[7:4];
+	pregs[2] <= commit1_bus[11:8];
+	pregs[3] <= commit1_bus[15:12];
+	pregs[4] <= commit1_bus[19:16];
+	pregs[5] <= commit1_bus[23:20];
+	pregs[6] <= commit1_bus[27:24];
+	pregs[7] <= commit1_bus[31:28];
+	if (DBW==64) begin
+		pregs[8] <= commit1_bus[35:32];
+		pregs[9] <= commit1_bus[39:36];
+		pregs[10] <= commit1_bus[43:40];
+		pregs[11] <= commit1_bus[47:44];
+		pregs[12] <= commit1_bus[51:48];
+		pregs[13] <= commit1_bus[55:52];
+		pregs[14] <= commit1_bus[59:56];
+		pregs[15] <= commit1_bus[63:60];
+	end
+end
+
 // When the INT instruction commits set the hardware interrupt status to disable further interrupts.
 if (int_commit)
 begin
@@ -40,22 +111,53 @@ begin
 	if ((iqentry_a0[head0][7:0]==8'hFE && commit0_v && iqentry_op[head0]==`INT) ||
 	    (iqentry_a0[head1][7:0]==8'hFE && commit1_v && iqentry_op[head1]==`INT))
 		nmi_edge <= 1'b0;
+	string_pc <= 64'd0;
 end
-// When the RTI instruction commits clear the hardware interrupt status to enable interrupts.
-if ((iqentry_op[head0]==`RTI && commit0_v) || (commit0_v && iqentry_op[head1]==`RTI && commit1_v))
-begin
-	$display("*********************");
-	$display("*********************");
-	$display("RTI clearing StatusHWI");
-	$display("*********************");
-	$display("*********************");
-	StatusHWI <= `FALSE;
-	im <= imb;
+
+if (commit0_v) begin
+	case(iqentry_op[head0])
+	`CLI:	im <= 1'b0;
+	`SEI:	im <= 1'b1;
+	// When the RTI instruction commits clear the hardware interrupt status to enable interrupts.
+	`RTI:	begin
+			StatusHWI <= `FALSE;
+			im <= imb;
+			end
+	`LOOP:
+		if (lc != 64'd0)
+			lc <= lc - 64'd1;
+	`MTSPR:
+		begin
+			if (iqentry_tgt[head0]==`LCTR)
+				lc <= commit0_bus;
+			if (iqentry_tgt[head1]==`MISSADR)
+				miss_addr <= commit0_bus;
+		end
+	default:	;
+	endcase
 end
-if ((iqentry_op[head0]==`CLI && commit0_v) || (commit0_v && iqentry_op[head1]==`CLI && commit1_v))
-	im <= 1'b0;
-if ((iqentry_op[head0]==`SEI && commit0_v) || (commit0_v && iqentry_op[head1]==`SEI && commit1_v))
-	im <= 1'b1;
+
+if (commit0_v && commit1_v) begin
+	case(iqentry_op[head1])
+	`CLI:	im <= 1'b0;
+	`SEI:	im <= 1'b1;
+	`RTI:	begin
+			StatusHWI <= `FALSE;
+			im <= imb;
+			end
+	`LOOP:
+		if (lc != 64'd0)
+			lc <= lc - 64'd1;
+	`MTSPR:
+		begin
+			if (iqentry_tgt[head1]==`LCTR)
+				lc <= commit1_bus;
+			if (iqentry_tgt[head1]==`MISSADR)
+				miss_addr <= commit1_bus;
+		end
+	default:	;
+	endcase
+end
 
 //
 // COMMIT PHASE (dequeue only ... not register-file update)
@@ -115,7 +217,7 @@ case ({ iqentry_v[head0],
 	//
 	// retire 2
 	default: begin
-		if ((iqentry_v[head0] && iqentry_v[head1] && !limit_cmt) || (head0 != tail0 && head1 != tail0)) begin
+		if (((iqentry_v[head0] && iqentry_v[head1]) || (head0 != tail0 && head1 != tail0)) && !limit_cmt) begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			iqentry_v[head1] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			head0 <= head0 + 2;

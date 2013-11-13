@@ -31,7 +31,7 @@
 // group at the same time for anything other than the general purpose
 // registers. It is possible for the processor to write to two diffent groups
 // at the same time.
-//	assign limit_cmt = (iqentry_rfw[head0] && iqentry_rfw[head1] && iqentry_tgt[head0][8]==1'b1 && iqentry_tgt[head1][8]==1'b1);
+//assign limit_cmt = (iqentry_rfw[head0] && iqentry_rfw[head1] && iqentry_tgt[head0][8]==1'b1 && iqentry_tgt[head1][8]==1'b1);
 assign limit_cmt = 1'b0;
 //assign committing2 = (iqentry_v[head0] && iqentry_v[head1] && !limit_cmt) || (head0 != tail0 && head1 != tail0);
 

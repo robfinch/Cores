@@ -299,6 +299,7 @@ else begin
 		fetchbufB_v <= ld_fetchbuf;
 		fetchbufB_pc <= pc + fnInsnLength(insn);
 		if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+		// fetchbuf steering logic correction
 		if (fetchbufC_v==`INV && fetchbufD_v==`INV && ihit)
 			fetchbuf <= 1'b0;
 	end

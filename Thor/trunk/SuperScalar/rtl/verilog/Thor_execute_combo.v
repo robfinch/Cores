@@ -24,70 +24,107 @@
 //
 // ============================================================================
 //
-function [DBW-1:0] fnAluCalc;
-input [7:0] alu_op;
-input [DBW-1:0] alu_argA;
-input [DBW-1:0] alu_argB;
-input [DBW-1:0] alu_argI;
-input signed [DBW-1:0] alu_argAs;
-input signed [DBW-1:0] alu_argBs;
-input signed [DBW-1:0] alu_argIs;
-input [DBW-1:0] alu_pc;
-input [3:0] insnsz;
-begin
-casex(alu_op)
-`LDI:			fnAluCalc = alu_argI;
-`_2ADDU:		fnAluCalc = {alu_argA[DBW-2:0],1'b0} + alu_argB;
-`_4ADDU:		fnAluCalc = {alu_argA[DBW-3:0],2'b0} + alu_argB;
-`_8ADDU:		fnAluCalc = {alu_argA[DBW-4:0],3'b0} + alu_argB;
-`_16ADDU:		fnAluCalc = {alu_argA[DBW-5:0],4'b0} + alu_argB;
-`_2ADDUI:		fnAluCalc = {alu_argA[DBW-2:0],1'b0} + alu_argI;
-`_4ADDUI:		fnAluCalc = {alu_argA[DBW-3:0],2'b0} + alu_argI;
-`_8ADDUI:		fnAluCalc = {alu_argA[DBW-4:0],3'b0} + alu_argI;
-`_16ADDUI:		fnAluCalc = {alu_argA[DBW-5:0],4'b0} + alu_argI;
-`ADD,`ADDU:		fnAluCalc = alu_argA + alu_argB;
-`SUB,`SUBU:		fnAluCalc = alu_argA - alu_argB;
-`NEG:			fnAluCalc = -alu_argA;
-`NOT:			fnAluCalc = ~alu_argA;
-`MULU:			fnAluCalc = alu_argA * alu_argB;
-`ADDI,`ADDUI:	fnAluCalc = alu_argA + alu_argI;
-`SUBI,`SUBUI:	fnAluCalc = alu_argA - alu_argI;
-`ANDI:			fnAluCalc = alu_argA & alu_argI;
-`ORI:			fnAluCalc = alu_argA | alu_argI;
-`EORI:			fnAluCalc = alu_argA ^ alu_argI;
-`AND:			fnAluCalc = alu_argA & alu_argB;
-`OR:			fnAluCalc = alu_argA | alu_argB;
-`EOR:			fnAluCalc = alu_argA ^ alu_argB;
-`NAND:			fnAluCalc = ~(alu_argA & alu_argB);
-`NOR:			fnAluCalc = ~(alu_argA | alu_argB);
-`ENOR:			fnAluCalc = !(alu_argA ^ alu_argB);
-`TST:	begin
-			fnAluCalc[0] = alu_argA == 64'd0;
-			fnAluCalc[1] = alu_argA[DBW-1];
-			fnAluCalc[2] = 1'b0;
-			fnAluCalc[DBW-1:3] = 61'd0;
-		end
-`CMP:	begin
-			fnAluCalc[0] = alu_argA == alu_argB;
-			fnAluCalc[1] = alu_argAs < alu_argBs;
-			fnAluCalc[2] = alu_argA < alu_argB;
-			fnAluCalc[DBW-1:3] = 61'd0;
-		end
-`CMPI:	begin
-			fnAluCalc[0] = alu_argA == alu_argI;
-			fnAluCalc[1] = alu_argAs < alu_argIs;
-			fnAluCalc[2] = alu_argA < alu_argI;
-			fnAluCalc[DBW-1:3] = 61'd0;
-		end
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW:
-				fnAluCalc = alu_argA + alu_argI;
-`JSR,`SYS:	fnAluCalc = alu_pc + insnsz;
-`INT:		fnAluCalc = alu_pc;
-`MFSPR,`MTSPR:	fnAluCalc = alu_argA;
-default:	fnAluCalc = 64'hDEADDEADDEADDEAD;
-endcase
-end
-endfunction
+wire [DBW-1:0] alu0_out, alu1_out;
+
+Thor_shifter #(DBW) ushft0
+(
+	.opcode(alu0_op),
+	.a(alu0_argA),
+	.b(alu0_argB),
+	.o(shfto0)
+);
+
+Thor_shifter #(DBW) ushft1
+(
+	.opcode(alu1_op),
+	.a(alu1_argA),
+	.b(alu1_argB),
+	.o(shfto1)
+);
+
+Thor_multiplier #(DBW) umult0
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ld(alu0_ld && (alu0_op==`MUL || alu0_op==`MULU || alu0_op==`MULI || alu0_op==`MULUI)),
+	.sgn(alu0_op==`MUL || alu0_op==`MULI),
+	.isMuli(alu0_op==`MULI || alu0_op==`MULUI),
+	.a(alu0_argA),
+	.b(alu0_argB),
+	.imm(alu0_argI),
+	.o(alu0_prod),
+	.done(alu0_mult_done)
+);
+
+Thor_multiplier #(DBW) umult1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ld(alu1_ld && (alu1_op==`MUL || alu1_op==`MULU || alu1_op==`MULI || alu1_op==`MULUI)),
+	.sgn(alu1_op==`MUL || alu1_op==`MULI),
+	.isMuli(alu1_op==`MULI || alu1_op==`MULUI),
+	.a(alu1_argA),
+	.b(alu1_argB),
+	.imm(alu1_argI),
+	.o(alu1_prod),
+	.done(alu1_mult_done)
+);
+
+Thor_divider #(DBW) udiv0
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ld(alu0_ld && (alu0_op==`DIV || alu0_op==`DIVI || alu0_op==`DIVU || alu0_op==`DIVUI)),
+	.sgn(alu0_op==`DIV || alu0_op==`DIVI),
+	.isDivi(alu0_op==`DIVI || alu0_op==`DIVUI),
+	.a(alu0_argA),
+	.b(alu0_argB),
+	.imm(alu0_argI),
+	.qo(alu0_divq),
+	.ro(alu0_rem),
+	.dvByZr(),
+	.done(alu0_div_done)
+);
+
+Thor_divider #(DBW) udiv1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ld(alu1_ld && (alu1_op==`DIV || alu1_op==`DIVI || alu1_op==`DIVU || alu1_op==`DIVUI)),
+	.sgn(alu1_op==`DIV || alu1_op==`DIVI),
+	.isDivi(alu1_op==`DIVI || alu1_op==`DIVUI),
+	.a(alu1_argA),
+	.b(alu1_argB),
+	.imm(alu1_argI),
+	.qo(alu1_divq),
+	.ro(alu1_rem),
+	.dvByZr(),
+	.done(alu1_div_done)
+);
+
+Thor_alu #(DBW) ualu0 
+(
+	.alu_op(alu0_op),
+	.alu_argA(alu0_argA),
+	.alu_argB(alu0_argB),
+	.alu_argC(alu0_argC),
+	.alu_argI(alu0_argI),
+	.alu_pc(alu0_pc),
+	.insnsz(alu0_insnsz),
+	.o(alu0_out)
+);
+
+Thor_alu #(DBW) ualu1 
+(
+	.alu_op(alu1_op),
+	.alu_argA(alu1_argA),
+	.alu_argB(alu1_argB),
+	.alu_argC(alu1_argC),
+	.alu_argI(alu1_argI),
+	.alu_pc(alu1_pc),
+	.insnsz(alu1_insnsz),
+	.o(alu1_out)
+);
 
 function fnPredicate;
 input [3:0] pr;
@@ -114,10 +151,8 @@ endfunction
 assign alu0_cmt = fnPredicate(alu0_pred, alu0_cond);
 assign alu1_cmt = fnPredicate(alu1_pred, alu1_cond);
 
-assign alu0_bus = 	fnIsShiftop(alu0_op) ? shfto0 :
-					fnAluCalc(alu0_op, alu0_argA, alu0_argB, alu0_argI, alu0_argA, alu0_argB, alu0_argI, alu0_pc, alu0_insnsz);
-assign alu1_bus = 	fnIsShiftop(alu1_op) ? shfto1 :
-					fnAluCalc(alu1_op, alu1_argA, alu1_argB, alu1_argI, alu1_argA, alu1_argB, alu1_argI, alu1_pc, alu1_insnsz);
+assign alu0_bus = 	fnIsShiftop(alu0_op) ? shfto0 : alu0_out;
+assign alu1_bus = 	fnIsShiftop(alu1_op) ? shfto1 : alu1_out;
 
 assign  alu0_v = alu0_dataready,
 		alu1_v = alu1_dataready;
@@ -125,10 +160,10 @@ assign  alu0_v = alu0_dataready,
 assign  alu0_id = alu0_sourceid,
 		alu1_id = alu1_sourceid;
 
-assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI) ? alu0_argA + alu0_argI :
+assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
 					  (alu0_op == `SYS || alu0_op==`INT) ? alu0_argA + {alu0_argI[DBW-5:0],4'b0} :
 					  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_argI),
-		alu1_misspc = (alu1_op == `JSR || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI) ? alu1_argA + alu1_argI :
+		alu1_misspc = (alu1_op == `JSR || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || alu1_op==`LOOP) ? alu1_argA + alu1_argI :
 					  (alu1_op == `SYS || alu1_op==`INT) ? alu1_argA + {alu1_argI[DBW-5:0],4'b0} :
 					  (alu1_bt ? alu1_pc + alu0_insnsz : alu1_pc + alu1_argI);
 
@@ -158,11 +193,11 @@ assign  alu1_exc = `EXC_NONE;
 
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
-		  : (alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI)));
+		  : (alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || (alu0_op==`LOOP && lc != 64'd0))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
-		  : (alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI)));
+		  : (alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || (alu1_op==`LOOP && lc != 64'd0))));
 
 assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
 	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),

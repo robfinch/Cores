@@ -64,6 +64,7 @@ begin
 		case (iqentry_islot[n]) 
 		2'd0: if (alu0_available) begin
 				$display("n: %d  alu0_cond=%h, v%b alu0_pred=%h", n, iqentry_cond[n], iqentry_p_v[n], iqentry_pred[n]);
+			alu0_ld <= 1'b1;
 			alu0_sourceid	<= n[3:0];
 			alu0_insnsz <= iqentry_insnsz[n];
 			alu0_op		<= iqentry_op[n];
@@ -81,10 +82,15 @@ begin
 						: (iqentry_a2_s[n] == alu0_id) ? alu0_bus
 						: (iqentry_a2_s[n] == alu1_id) ? alu1_bus
 						: 64'hDEADDEADDEADDEAD;
+			alu0_argC	<= iqentry_a3_v[n] ? iqentry_a3[n]
+						: (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+						: (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+						: 64'hDEADDEADDEADDEAD;
 			alu0_argI	<= iqentry_a0[n];
 			end
 		2'd1: if (alu1_available) begin
 				$display("n%d  alu1_cond=%h, alu1_pred=%h", n, alu1_cond, alu1_pred);
+			alu1_ld <= 1'b1;
 			alu1_sourceid	<= n[3:0];
 			alu1_insnsz <= iqentry_insnsz[n];
 			alu1_op		<= iqentry_op[n];
@@ -101,6 +107,10 @@ begin
 			alu1_argB	<= iqentry_a2_v[n] ? iqentry_a2[n]
 						: (iqentry_a2_s[n] == alu0_id) ? alu0_bus
 						: (iqentry_a2_s[n] == alu1_id) ? alu1_bus
+						: 64'hDEADDEADDEADDEAD;
+			alu1_argC	<= iqentry_a3_v[n] ? iqentry_a3[n]
+						: (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+						: (iqentry_a3_s[n] == alu1_id) ? alu1_bus
 						: 64'hDEADDEADDEADDEAD;
 			alu1_argI	<= iqentry_a0[n];
 			end

@@ -36,7 +36,6 @@
 //
 if (alu0_v) begin
 	$display("0results to iq[%d]=%h", alu0_id[2:0],alu0_bus);
-	iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
 	if (|alu0_exc) begin
 		iqentry_op [alu0_id[2:0] ] <= `INT;
 		iqentry_cond [alu0_id[2:0]] <= 4'd1;		// always execute
@@ -46,23 +45,40 @@ if (alu0_v) begin
 		iqentry_a1 [alu0_id[2:0]] <= bregs[4'hC];	// *** assumes BR12 is static
 		iqentry_a1_v [alu0_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [alu0_id[2:0]] <= `TRUE;
+		iqentry_a3_v [alu0_id[2:0]] <= `TRUE;
 		iqentry_out [alu0_id[2:0]] <= `FALSE;
 		iqentry_agen [alu0_id[2:0]] <= `FALSE;
 		iqentry_tgt[alu0_id[2:0]] <= {1'b1,4'h1,4'hE};	// Target IPC
 	end
 	else begin
-		iqentry_done[ alu0_id[2:0] ] <= 
-				(iqentry_op[alu0_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
-				!fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
+		if (alu0_op==`MUL || alu0_op==`MULI || alu0_op==`MULU || alu0_op==`MULUI) begin
+			if (alu0_mult_done) begin
+				iqentry_res	[ alu0_id[2:0] ] <= alu0_prod[63:0];
+				iqentry_done[alu0_id[2:0]] <= `TRUE;
+				iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
+			end
+		end
+		else if (alu0_op==`DIV || alu0_op==`DIVI || alu0_op==`DIVU || alu0_op==`DIVUI) begin
+			if (alu0_div_done) begin
+				iqentry_res	[ alu0_id[2:0] ] <= alu0_divq;
+				iqentry_done[alu0_id[2:0]] <= `TRUE;
+				iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
+			end
+		end
+		else begin
+			iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
+			iqentry_done[ alu0_id[2:0] ] <= 
+					(iqentry_op[alu0_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
+					!fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
+			iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
+		end
 		iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
-		iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 		iqentry_agen[ alu0_id[2:0] ] <= `TRUE;
 	end
 end
 
 if (alu1_v) begin
 	$display("1results to iq[%d]=%h", alu1_id[2:0],alu1_bus);
-	iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
 	if (|alu1_exc) begin
 		iqentry_op [alu1_id[2:0] ] <= `INT;
 		iqentry_cond [alu1_id[2:0]] <= 4'd1;		// always execute
@@ -72,16 +88,34 @@ if (alu1_v) begin
 		iqentry_a1 [alu1_id[2:0]] <= bregs[4'hC];	// *** assumes BR12 is static
 		iqentry_a1_v [alu1_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [alu1_id[2:0]] <= `TRUE;
+		iqentry_a3_v [alu1_id[2:0]] <= `TRUE;
 		iqentry_out [alu1_id[2:0]] <= `FALSE;
 		iqentry_agen [alu1_id[2:0]] <= `FALSE;
 		iqentry_tgt[alu1_id[2:0]] <= {1'b1,4'h1,4'hE};	// Target IPC
 	end
 	else begin
-		iqentry_done[ alu1_id[2:0] ] <= 
-				(iqentry_op[alu1_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
-				!fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
+		if (alu1_op==`MUL || alu1_op==`MULI || alu1_op==`MULU || alu1_op==`MULUI) begin
+			if (alu1_mult_done) begin
+				iqentry_res	[ alu1_id[2:0] ] <= alu1_prod[63:0];
+				iqentry_done[alu1_id[2:0]] <= `TRUE;
+				iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
+			end
+		end
+		else if (alu1_op==`DIV || alu1_op==`DIVI || alu1_op==`DIVU || alu1_op==`DIVUI) begin
+			if (alu1_div_done) begin
+				iqentry_res	[ alu1_id[2:0] ] <= alu1_divq;
+				iqentry_done[alu1_id[2:0]] <= `TRUE;
+				iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
+			end
+		end
+		else begin
+			iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
+			iqentry_done[ alu1_id[2:0] ] <= 
+					(iqentry_op[alu1_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
+					!fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
+			iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
+		end
 		iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
-		iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 		iqentry_agen[ alu1_id[2:0] ] <= `TRUE;
 	end
 end
@@ -96,17 +130,20 @@ if (dram_v && iqentry_v[ dram_id[2:0] ] && iqentry_mem[ dram_id[2:0] ] ) begin	/
 		iqentry_cond [dram_id[2:0]] <= 4'd1;		// always execute
 		iqentry_mem[dram_id[2:0]] <= `FALSE;		// It's no longer a memory op
 		iqentry_rfw[dram_id[2:0]] <= `TRUE;			// writes to IPC
-		iqentry_a0 [dram_id[2:0]] <= 64'hFB;		// DBE exeception vector
+		iqentry_a0 [dram_id[2:0]] <= dram_exc==`EXC_DBE ? 8'hFB : 8'hF8;
 		iqentry_a1 [dram_id[2:0]] <= bregs[4'hC];	// *** assumes BR12 is static
 		iqentry_a1_v [dram_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [dram_id[2:0]] <= `TRUE;
+		iqentry_a3_v [dram_id[2:0]] <= `TRUE;
 		iqentry_out [dram_id[2:0]] <= `FALSE;
 		iqentry_agen [dram_id[2:0]] <= `FALSE;
 		iqentry_tgt[dram_id[2:0]] <= {1'b1,4'h1,4'hE};	// Target IPC
 	end
 	else begin
 		iqentry_done[ dram_id[2:0] ] <= `TRUE;
-		iqentry_cmt [ dram_id[2:0] ] <= `TRUE;
+		if (iqentry_op[dram_id[2:0]]==`STSW && lc==64'd0) begin
+			string_pc <= 64'd0;
+		end
 	end
 end
 
@@ -155,6 +192,10 @@ begin
 		iqentry_a2[n] <= alu0_bus;
 		iqentry_a2_v[n] <= `VAL;
 	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
+		iqentry_a3[n] <= alu0_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
 		iqentry_pred[n] <= alu1_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
@@ -166,6 +207,10 @@ begin
 	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
 		iqentry_a2[n] <= alu1_bus;
 		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
+		iqentry_a3[n] <= alu1_bus;
+		iqentry_a3_v[n] <= `VAL;
 	end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_pred[n] <= dram_bus[3:0];
@@ -179,6 +224,10 @@ begin
 		iqentry_a2[n] <= dram_bus;
 		iqentry_a2_v[n] <= `VAL;
 	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+		iqentry_a3[n] <= dram_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
 		iqentry_pred[n] <= commit0_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
@@ -191,6 +240,10 @@ begin
 		iqentry_a2[n] <= commit0_bus;
 		iqentry_a2_v[n] <= `VAL;
 	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
+		iqentry_a3[n] <= commit0_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
 		iqentry_pred[n] <= commit1_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
@@ -202,5 +255,9 @@ begin
 	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
 		iqentry_a2[n] <= commit1_bus;
 		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
+		iqentry_a3[n] <= commit1_bus;
+		iqentry_a3_v[n] <= `VAL;
 	end
 end
