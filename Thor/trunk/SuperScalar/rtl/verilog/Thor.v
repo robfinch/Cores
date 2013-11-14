@@ -851,6 +851,7 @@ begin
 		casex(fnOpcode(ir))
 		`LDI:
 			fnTargetReg = {1'b0,ir[23:16]};
+		`BCD,
 		`ADD,`ADDU,`SUB,`SUBU,`MUL,`MULU,`DIV,`DIVU,
 		`AND,`OR,`EOR,`NAND,`NOR,`ENOR,`ANDC,`ORC,
 		`_2ADDU,`_4ADDU,`_8ADDU,`_16ADDU,
@@ -981,7 +982,7 @@ default:
 		fnInsnLength = 4'd3;
 	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG,`TLB:
 		fnInsnLength = 4'd4;
-	`LBX,`LWX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`SCX,`SBX,`SHX,`SWX,`MUX:
+	`LBX,`LWX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`SCX,`SBX,`SHX,`SWX,`MUX,`BCD:
 		fnInsnLength = 4'd6;
 	default:
 		fnInsnLength = 4'd5;
@@ -1062,7 +1063,8 @@ fnIsRFW =	// General registers
 			opcode==`JSR || opcode==`SYS || opcode==`INT ||
 			// predicate registers
 			(opcode[7:4] < 4'h3) ||
-			(opcode==`TLB && ir[19:16]==`TLB_RDREG)
+			(opcode==`TLB && ir[19:16]==`TLB_RDREG) ||
+			opcode==`BCD
 			;
 end
 endfunction
@@ -1372,6 +1374,8 @@ function [7:0] fnImm;
 input [127:0] insn;
 
 case(insn[15:8])
+`BCD:
+	fnImm = insn[47:40];
 `TLB:
 	fnImm = insn[23:16];
 `LOOP:
@@ -1396,7 +1400,7 @@ function fnImmMSB;
 input [127:0] insn;
 
 case(insn[15:8])
-`TLB:
+`TLB,`BCD:
 	fnImmMSB = 1'b0;		// TLB regno is unsigned
 `LOOP:
 	fnImmMSB = insn[23];
@@ -1590,9 +1594,10 @@ always @(posedge clk) begin
 		head5 <= 3'd5;
 		head6 <= 3'd6;
 		head7 <= 3'd7;
-		dram0 <= 2'b00;
-		dram1 <= 2'b00;
-		dram2 <= 2'b00;
+		dram0 <= 3'b00;
+		dram1 <= 3'b00;
+		dram2 <= 3'b00;
+		tlb_state <= 3'd0;
 		panic <= `PANIC_NONE;
 		string_pc <= 64'd0;
 		// The pc wraps around to address zero while fetching the reset vector.
@@ -1627,9 +1632,12 @@ always @(posedge clk) begin
 
 	end
 
-	$display("\r\n");
-	$display("TIME %0d", $time);
+	if (ihit) begin
+		$display("\r\n");
+		$display("TIME %0d", $time);
+	end
 `include "Thor_ifetch.v"
+	if (ihit) begin
 	$display("%h hit0=%b hit1=%b#", spc, hit0, hit1);
 	$display("insn=%h", insn);
 	$display("%c insn0=%h insn1=%h", nmi_edge ? "*" : " ",insn0, insn1);
@@ -1643,8 +1651,10 @@ always @(posedge clk) begin
 	$display("%c%c D: %d %h %h #",
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 	$display("fetchbuf=%d",fetchbuf);
+	end
 `include "Thor_commit_early.v"
 `include "Thor_enque.v"
+	if (ihit) begin
 	for (i=0; i<8; i=i+1) 
 	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h #",
 		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
@@ -1658,10 +1668,14 @@ always @(posedge clk) begin
 		fnRegstr(iqentry_tgt[i]),fnRegstrGrp(iqentry_tgt[i]),
 		iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
 		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
+	end
 `include "Thor_dataincoming.v"
 `include "Thor_issue.v"
-	$display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
+	if (ihit) $display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
 `include "Thor_memory.v"
+//	$display("TLB: en=%b imatch=%b pgsz=%d pcs=%h phys=%h", utlb1.TLBenabled,utlb1.IMatch,utlb1.PageSize,utlb1.pcs,utlb1.IPFN);
+//	for (i = 0; i < 64; i = i + 1)
+//		$display("vp=%h G=%b",utlb1.TLBVirtPage[i],utlb1.TLBG[i]);
 `include "Thor_commit.v"
 
 	case(cstate)
@@ -1713,6 +1727,7 @@ always @(posedge clk) begin
 //	for (i=0; i<8; i=i+1)
 //	    $display("%d: %h %d %o #", i, urf1.regs0[i], rf_v[i], rf_source[i]);
 
+	if (ihit) begin
 	$display("dr=%d I=%h A=%h B=%h op=%c%d bt=%d src=%o pc=%h #",
 		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
 		 (fnIsFlowCtrl(alu0_op) ? 98 : (fnIsMem(alu0_op)) ? 109 : 97),
@@ -1730,6 +1745,7 @@ always @(posedge clk) begin
 
 	$display("0: %d %h %o 0%d #", commit0_v, commit0_bus, commit0_id, commit0_tgt);
 	$display("1: %d %h %o 0%d #", commit1_v, commit1_bus, commit1_id, commit1_tgt);
+	end
 	if (|panic) begin
 	    $display("");
 	    $display("-----------------------------------------------------------------");

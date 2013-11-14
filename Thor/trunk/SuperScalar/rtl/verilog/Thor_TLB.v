@@ -29,7 +29,7 @@
 //
 //=============================================================================
 //
-`define TLBMissPage		{DBW-13{1'b1}}
+`define TLBMissPage		{DBW-12{1'b1}}
 
 module Thor_TLB(rst, clk, pc, ea, ppc, pea,
 	m1IsStore, ASID, state, op, regno, dati, dato,
@@ -39,8 +39,8 @@ input rst;
 input clk;
 input [DBW-1:0] pc;
 input [DBW-1:0] ea;
-output [DBW-1:0] ppc;
-output [DBW-1:0] pea;
+output reg [DBW-1:0] ppc;
+output reg [DBW-1:0] pea;
 input m1IsStore;
 input [7:0] ASID;
 input [2:0] state;
@@ -57,66 +57,51 @@ integer n;
 
 // Holding registers
 // These allow the TLB to updated in a single cycle
-reg [24:13] HTLBPageMask;
-reg [DBW-1:13] HTLBVirtPage;
-assign HTLBVirtPageo = {HTLBVirtPage,13'b0};
-reg [DBW-1:13] HTLBPhysPage0;
-reg [DBW-1:13] HTLBPhysPage1;
+reg [DBW-1:0] HTLBVirtPage;
+assign HTLBVirtPageo = {HTLBVirtPage,12'b0};
+reg [DBW-1:0] HTLBPhysPage;
 reg [7:0] HTLBASID;
 reg HTLBG;
-reg HTLBD0;
-reg [2:0] HTLBC0;
-reg HTLBValid0;
-reg HTLBD1;
-reg [2:0] HTLBC1;
-reg HTLBValid1;
+reg HTLBD;
+reg [2:0] HTLBC;
+reg HTLBValid;
 
 reg TLBenabled;
 reg [5:0] i;
 reg [DBW-1:0] Index;
 reg [2:0] Random;
 reg [2:0] Wired;
+reg [2:0] PageSize;
 reg [7:0] IMatch,DMatch;
 
 reg [3:0] m;
 reg [3:0] q;
 wire doddpage;
-reg [24:13] TLBPageMask [63:0];
-reg [DBW-1:13] TLBVirtPage [63:0];
-reg [DBW-1:13] TLBPhysPage0 [63:0];
-reg [DBW-1:13] TLBPhysPage1 [63:0];
+reg [DBW-1:0] TLBVirtPage [63:0];
+reg [DBW-1:0] TLBPhysPage [63:0];
 reg [63:0] TLBG;
-reg [63:0] TLBD0;
-reg [63:0] TLBD1;
-reg [2:0] TLBC0 [63:0];
-reg [2:0] TLBC1 [63:0];
+reg [63:0] TLBD;
+reg [2:0] TLBC [63:0];
 reg [7:0] TLBASID [63:0];
-reg [63:0] TLBValid0;
-reg [63:0] TLBValid1;
+reg [63:0] TLBValid;
 reg [DBW-1:0] imiss_addr;
 reg [DBW-1:0] dmiss_addr;
 
 initial begin
 	for (n = 0; n < 64; n = n + 1)
 	begin
-		TLBPageMask[n] = 0;
 		TLBVirtPage[n] = 0;
-		TLBPhysPage0[n] = 0;
-		TLBPhysPage1[n] = 0;
+		TLBPhysPage[n] = 0;
 		TLBG[n] = 0;
 		TLBASID[n] = 0;
-		TLBASID[n] = 0;
-		TLBD0[n] = 0;
-		TLBD1[n] = 0;
-		TLBC0[n] = 0;
-		TLBC1[n] = 0;
-		TLBValid0[n] = 0;
-		TLBValid1[n] = 0;
+		TLBD[n] = 0;
+		TLBC[n] = 0;
+		TLBValid[n] = 0;
 	end
 end
 
 // Assume the instruction doesn't overlap between a mapped and unmapped area.
-wire unmappedArea = pc[DBW-1:DBW-12]==12'hFFD || pc[DBW-1:DBW-12]==12'hFFE || pc[DBW-1:DBW-12]==12'hFFF || !TLBenabled;
+wire unmappedArea = /*pc[DBW-1:DBW-12]==12'hFFD || pc[DBW-1:DBW-12]==12'hFFE || pc[DBW-1:DBW-12]==12'hFFF ||*/ !TLBenabled;
 wire unmappedDataArea = ea[DBW-1:DBW-12]==12'hFFD || ea[DBW-1:DBW-12]==12'hFFE || ea[DBW-1:DBW-12]==12'hFFF || ea[DBW-1:DBW-12]==12'h000 || !TLBenabled;
 wire m1UnmappedDataArea = pea[DBW-1:DBW-12]==12'hFFD || pea[DBW-1:DBW-12]==12'hFFE || pea[DBW-1:DBW-12]==12'hFFF || pea[DBW-1:DBW-12]==12'h000 || !TLBenabled;
 
@@ -125,6 +110,7 @@ if (rst) begin
 	TLBenabled <= 1'b0;
 	Random <= 3'h7;
 	Wired <= 3'd0;
+	PageSize <= 3'd0;
 end
 else begin
 	if (dmiss_addr == {DBW{1'b0}} && DTLBMiss)
@@ -140,26 +126,22 @@ else begin
 	if (state==3'd1) begin
 		case(op)
 		`TLB_RD,`TLB_WI:
-			i <= {Index[5:3],HTLBVirtPage[15:13]};
+			i <= {Index[5:3],(HTLBVirtPage >> {PageSize,1'b0}) & 3'h7};
 		`TLB_WR:
-			i <= {Random,HTLBVirtPage[15:13]};
+			i <= {Random,(HTLBVirtPage >> {PageSize,1'b0}) & 3'h7};
 		`TLB_WRREG:
 			begin
 			case(regno)
 			`TLBWired:		Wired <= dati[2:0];
 			`TLBIndex:		Index <= dati[5:0];
-			`TLBRandom:	Random <= dati[2:0];
-			`TLBPageMask:	HTLBPageMask <= dati[24:13];
-			`TLBVirtPage:	HTLBVirtPage <= dati[DBW-1:13];
-			`TLBPhysPage0:	HTLBPhysPage0 <= dati[DBW-1:13];
-			`TLBPhysPage1:	HTLBPhysPage1 <= dati[DBW-1:13];
+			`TLBRandom:		Random <= dati[2:0];
+			`TLBPageSize:	PageSize <= dati[2:0];
+			`TLBVirtPage:	HTLBVirtPage <= dati;
+			`TLBPhysPage:	HTLBPhysPage <= dati;
 			`TLBASID:	begin
-						HTLBValid0 <= dati[0];
-						HTLBD0 <= dati[1];
-						HTLBC0 <= dati[4:2];
-						HTLBValid1 <= dati[8];
-						HTLBD1 <= dati[9];
-						HTLBC1 <= dati[12:10];
+						HTLBValid <= dati[0];
+						HTLBD <= dati[1];
+						HTLBC <= dati[4:2];
 						HTLBASID <= dati[23:16];
 						HTLBG <= dati[31];
 						end
@@ -181,32 +163,23 @@ else begin
 			end
 		`TLB_RD:
 			begin
-				HTLBPageMask <= TLBPageMask[i];
 				HTLBVirtPage <= TLBVirtPage[i];
-				HTLBPhysPage0 <= TLBPhysPage0[i];
-				HTLBPhysPage1 <= TLBPhysPage1[i];
+				HTLBPhysPage <= TLBPhysPage[i];
 				HTLBASID <= TLBASID[i];
 				HTLBG <= TLBG[i];
-				HTLBD0 <= TLBD0[i];
-				HTLBC0 <= TLBC0[i];
-				HTLBValid0 <= TLBValid0[i];
-				HTLBD1 <= TLBD1[i];
-				HTLBC1 <= TLBC1[i];
-				HTLBValid1 <= TLBValid1[i];
+				HTLBD <= TLBD[i];
+				HTLBC <= TLBC[i];
+				HTLBValid <= TLBValid[i];
 			end
 		`TLB_WR,`TLB_WI:
 			begin
 				TLBVirtPage[i] <= HTLBVirtPage;
-				TLBPhysPage0[i] <= HTLBPhysPage0;
-				TLBPhysPage1[i] <= HTLBPhysPage1;
+				TLBPhysPage[i] <= HTLBPhysPage;
 				TLBASID[i] <= HTLBASID;
 				TLBG[i] <= HTLBG;
-				TLBD0[i] <= HTLBD0;
-				TLBC0[i] <= HTLBC0;
-				TLBValid0[i] <= HTLBValid0;
-				TLBD1[i] <= HTLBD1;
-				TLBC1[i] <= HTLBC1;
-				TLBValid1[i] <= HTLBValid1;
+				TLBD[i] <= HTLBD;
+				TLBC[i] <= HTLBC;
+				TLBValid[i] <= HTLBValid;
 			end
 		endcase
 	end
@@ -214,10 +187,7 @@ else begin
 	// Set the dirty bit on a store
 	if (m1IsStore)
 		if (!m1UnmappedDataArea & !q[3]) begin
-			if (doddpage)
-				TLBD1[{q[2:0],pea[15:13]}] <= 1'b1;
-			else
-				TLBD0[{q[2:0],pea[15:13]}] <= 1'b1;
+			TLBD[{q[2:0],(pea[DBW-1:12]>>{PageSize,1'b0})&3'd7}] <= 1'b1;
 		end
 end
 
@@ -226,18 +196,14 @@ always @*
 	`TLBWired:		dato = Wired;
 	`TLBIndex:		dato = Index;
 	`TLBRandom:		dato = Random;
-	`TLBPhysPage0:	dato = {HTLBPhysPage0,13'd0};
-	`TLBPhysPage1:	dato = {HTLBPhysPage1,13'd0};
-	`TLBVirtPage:	dato = {HTLBVirtPage,13'd0};
-	`TLBPageMask:	dato = {HTLBPageMask,13'd0};
+	`TLBPhysPage:	dato = HTLBPhysPage;
+	`TLBVirtPage:	dato = HTLBVirtPage;
+	`TLBPageSize:	dato = PageSize;
 	`TLBASID:	begin
 				dato = {DBW{1'b0}};
-				dato[0] = HTLBValid0;
-				dato[1] = HTLBD0;
-				dato[4:2] = HTLBC0;
-				dato[8] = HTLBValid1;
-				dato[9] = HTLBD1;
-				dato[12:10] = HTLBC1;
+				dato[0] = HTLBValid;
+				dato[1] = HTLBD;
+				dato[4:2] = HTLBC;
 				dato[23:16] = HTLBASID;
 				dato[31] = HTLBG;
 				end
@@ -246,10 +212,14 @@ always @*
 	default:	dato = {DBW{1'b0}};
 	endcase
 
+wire [DBW-1:0] pcs = pc[DBW-1:12] >> {PageSize,1'b0};
 always @*
 for (n = 0; n < 8; n = n + 1)
-	IMatch[n[2:0]] = ((pc[DBW-1:13]|TLBPageMask[{n[2:0],pc[15:13]}])==(TLBVirtPage[{n[2:0],pc[15:13]}]|TLBPageMask[{n[2:0],pc[15:13]}])) &&
-				((TLBASID[{n,pc[15:13]}]==ASID) || TLBG[{n,pc[15:13]}]);
+begin
+	IMatch[n[2:0]] = (pcs[DBW-1:3]==TLBVirtPage[{n[2:0],pcs[2:0]}][DBW-1:3]) &&
+				((TLBASID[{n,pcs[2:0]}]==ASID) || TLBG[{n,pcs[2:0]}]) &&
+				TLBValid[{n[2:0],pcs[2:0]}];
+end
 
 always @(IMatch)
 if (IMatch[0]) m <= 4'd0;
@@ -263,18 +233,29 @@ else if (IMatch[7]) m <= 4'd7;
 else m <= 4'd15;
 
 
-wire ioddpage = |({TLBPageMask[{m[2:0],pc[15:13]}]+19'd1,13'd0}&pc);
-wire [DBW-1:13] IPFN = ioddpage ? TLBPhysPage1[{m[2:0],pc[15:13]}] : TLBPhysPage0[{m[2:0],pc[15:13]}];
+wire [DBW-1:0] IPFN = TLBPhysPage[{m[2:0],pcs[2:0]}];
 
-assign ITLBMiss = !unmappedArea & (m[3] | (ioddpage ? ~TLBValid1[{m[2:0],pc[15:13]}] : ~TLBValid0[{m[2:0],pc[15:13]}]));
+assign ITLBMiss = !unmappedArea & (m[3] | ~TLBValid[{m[2:0],pcs[2:0]}]);
 
-assign ppc[DBW-1:13] = unmappedArea ? pc[DBW-1:13] : ITLBMiss ? `TLBMissPage: IPFN;
-assign ppc[12:0] = pc[12:0];
+always @*
+begin
+	ppc[11:0] = pc[11:0];
+	case(PageSize)
+	3'd0:	ppc[DBW-1:12] = unmappedArea ? pc[DBW-1:12] : ITLBMiss ? `TLBMissPage: IPFN;				// 4KiB
+	3'd1:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:14] : ITLBMiss ? `TLBMissPage: IPFN,pc[13:12]};	// 16KiB
+	3'd2:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:16] : ITLBMiss ? `TLBMissPage: IPFN,pc[15:12]};	// 64KiB
+	3'd3:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:18] : ITLBMiss ? `TLBMissPage: IPFN,pc[17:12]};	// 256 KiB
+	3'd4:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:20] : ITLBMiss ? `TLBMissPage: IPFN,pc[19:12]};	// 1 MiB
+	default:	ppc[DBW-1:12] = 0;
+	endcase
+end
 
+wire [DBW-1:0] eas = ea[DBW-1:12] >> {PageSize,1'b0};
 always @(ea)
 for (n = 0; n < 8; n = n + 1)
-	DMatch[n[2:0]] = ((ea[DBW-1:13]|TLBPageMask[{n,ea[15:13]}])==(TLBVirtPage[{n,ea[15:13]}]|TLBPageMask[{n,ea[15:13]}])) &&
-				((TLBASID[{n,ea[15:13]}]==ASID) || TLBG[{n,ea[15:13]}]);
+	DMatch[n[2:0]] = (eas[DBW-1:3]==TLBVirtPage[{n,eas[2:0]}]) &&
+				((TLBASID[{n,eas[2:0]}]==ASID) || TLBG[{n,eas[2:0]}]) &&
+				TLBValid[{q[2:0],eas[2:0]}];
 always @(DMatch)
 if (DMatch[0]) q <= 4'd0;
 else if (DMatch[1]) q <= 4'd1;
@@ -286,13 +267,22 @@ else if (DMatch[6]) q <= 4'd6;
 else if (DMatch[7]) q <= 4'd7;
 else q <= 4'd15;
 
-assign doddpage = |({TLBPageMask[{q[2:0],ea[15:13]}]+19'd1,13'd0}&ea);
-wire [DBW-1:13] DPFN = doddpage ? TLBPhysPage1[{q[2:0],ea[15:13]}] : TLBPhysPage0[{q[2:0],ea[15:13]}];
+wire [DBW-1:0] DPFN = TLBPhysPage[{q[2:0],eas[2:0]}];
 
-assign DTLBMiss = !unmappedDataArea & (q[3] | (doddpage ? ~TLBValid1[{q[2:0],ea[15:13]}] : ~TLBValid0[{q[2:0],ea[15:13]}]));
+assign DTLBMiss = !unmappedDataArea & (q[3] | ~TLBValid[{q[2:0],eas[2:0]}]);
 
-assign pea[DBW-1:13] = unmappedDataArea ? ea[DBW-1:13] : DTLBMiss ? `TLBMissPage: DPFN;
-assign pea[12:0] = ea[12:0];
+always @*
+begin
+	case(PageSize)
+	3'd0:	pea[DBW-1:12] = unmappedDataArea ? ea[DBW-1:12] : DTLBMiss ? `TLBMissPage: DPFN;
+	3'd1:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:14] : DTLBMiss ? `TLBMissPage: DPFN,ea[13:12]};
+	3'd2:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:16] : DTLBMiss ? `TLBMissPage: DPFN,ea[15:12]};
+	3'd3:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:18] : DTLBMiss ? `TLBMissPage: DPFN,ea[17:12]};
+	3'd4:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:20] : DTLBMiss ? `TLBMissPage: DPFN,ea[19:12]};
+	default:	pea[DBW-1:12] = 0;
+	endcase
+	pea[11:0] = ea[11:0];
+end
 
 endmodule
 

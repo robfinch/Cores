@@ -22,6 +22,7 @@
 // ============================================================================
 //
 module bootrom(rst_i, clk_i, cti_i, cyc_i, stb_i, ack_o, adr_i, dat_o, perr);
+parameter DBW=64;
 input rst_i;
 input clk_i;
 input [2:0] cti_i;
@@ -29,8 +30,8 @@ input cyc_i;
 input stb_i;
 output ack_o;
 input [31:0] adr_i;
-output [63:0] dat_o;
-reg [63:0] dat_o;
+output [DBW-1:0] dat_o;
+reg [DBW-1:0] dat_o;
 output perr;
 reg perr;
 
@@ -50,9 +51,14 @@ end
 assign cs = cyc_i && stb_i && adr_i[31:16]==16'hFFFF;
 assign ack_o = cs & ack0;
 
-reg [64:0] rommem [0:8191];
+reg [DBW:0] rommem [0:8191];
 initial begin
+if (DBW==32) begin
+`include "..\..\software\asm\Thorasm\bin\bootrom32.ver"
+end
+else begin
 `include "..\..\software\asm\Thorasm\bin\bootrom.ver"
+end
 end
 
 wire pe_cs;
@@ -63,23 +69,30 @@ reg [15:3] radr;
 reg [15:3] ctr;
 
 always @(posedge clk_i)
-	if (pe_cs)
-		ctr <= adr_i[15:3] + 13'd1;
+	if (pe_cs) begin
+		if (DBW==32)
+			ctr <= adr_i[14:2] + 13'd1;
+		else
+			ctr <= adr_i[15:3] + 13'd1;
+	end
 	else if (cs)
 		ctr <= ctr + 13'd1;
 
 always @(posedge clk_i)
-	radr <= pe_cs ? adr_i[15:3] : ctr;
-
-always @(posedge clk_i)
-	if (cs)
-		dat_o <= rommem[radr][63:0];
+	if (DBW==32)
+		radr <= pe_cs ? adr_i[14:2] : ctr;
 	else
-		dat_o <= 64'd0;
+		radr <= pe_cs ? adr_i[15:3] : ctr;
 
 always @(posedge clk_i)
 	if (cs)
-		perr <= ^rommem[radr][63:0]!=rommem[radr][64];
+		dat_o <= rommem[radr][DBW-1:0];
+	else
+		dat_o <= {DBW{1'b0}};
+
+always @(posedge clk_i)
+	if (cs)
+		perr <= ^rommem[radr][DBW-1:0]!=rommem[radr][DBW];
 	else
 		perr <= 1'd0;
 

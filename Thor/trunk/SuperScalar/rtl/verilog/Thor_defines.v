@@ -176,16 +176,19 @@
 `define TLBWired		4'h0
 `define TLBIndex		4'h1
 `define TLBRandom		4'h2
-`define TLBPageMask		4'h3
+`define TLBPageSize		4'h3
 `define TLBVirtPage		4'h4
-`define TLBPhysPage0	4'h5
-`define TLBPhysPage1	4'h6
+`define TLBPhysPage		4'h5
 `define TLBASID			4'h7
 `define TLBDMissAdr		4'd8
 `define TLBIMissAdr		4'd9
 
 `define RTE			8'hF3
 `define RTI			8'hF4
+`define BCD			8'hF5
+`define BCDADD			8'h00
+`define BCDSUB			8'h01
+`define BCDMUL			8'h02
 `define SYNC		8'hF8
 `define CLI			8'hFA
 `define SEI			8'hFB

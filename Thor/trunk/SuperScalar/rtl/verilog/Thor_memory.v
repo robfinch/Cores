@@ -194,7 +194,6 @@ casex ({dram0, dram1, dram2})
 		wb_nack();
 	end
 	else if (tlb_state==3'd3) begin
-		$display("tlb state 2");
 		dram_v <= `TRUE;
 		dram_id <= tlb_id;
 		dram_tgt <= tlb_tgt;

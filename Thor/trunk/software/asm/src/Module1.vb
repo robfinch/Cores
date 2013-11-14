@@ -28,8 +28,8 @@ Module Module1
     Dim dfs As System.IO.BinaryWriter
     Dim cfs As System.IO.BinaryWriter
     Dim efs As System.IO.BinaryWriter
-    Dim opt64out As Boolean = True
-    Dim opt32out As Boolean = False
+    Dim opt64out As Boolean = False
+    Dim opt32out As Boolean = True
     Dim pass As Integer
     Dim symbols As New Collection
     Dim localSymbols As New Collection
@@ -77,6 +77,8 @@ Module Module1
     Dim processedPredicate As Boolean
     Dim bytesbuf(40) As Int64
     Dim bytn As Int64
+    Dim sa As Int64
+    Dim plbl As Boolean
 
     Sub Main(ByVal args() As String)
         Dim s As String
@@ -173,8 +175,6 @@ Module Module1
         Dim lines() As String   ' individual lines in the file
         fname = fname.Trim("""".ToCharArray)
         Dim fl As New TextFile(fname)
-        Dim sa As Int64
-        Dim plbl As Boolean
         Dim bb1 As Int64
         Dim xx As Int64
 
@@ -325,23 +325,23 @@ j1:
                             Case "lcu"
                                 ProcessMemoryOp(s, 38)
                             Case "lh"
-                                ProcessMemoryOp(s, 34)
+                                ProcessMemoryOp(s, &H84)
                             Case "lhu"
-                                ProcessMemoryOp(s, 39)
+                                ProcessMemoryOp(s, &H85)
                             Case "lw"
-                                ProcessMemoryOp(s, 35)
+                                ProcessMemoryOp(s, &H86)
                             Case "lp"
                                 ProcessMemoryOp(s, 36)
                             Case "lwr"
                                 ProcessMemoryOp(s, 46)
                             Case "sb"
-                                ProcessMemoryOp(s, 48)
+                                ProcessMemoryOp(s, &H90)
                             Case "sc"
-                                ProcessMemoryOp(s, 49)
+                                ProcessMemoryOp(s, &H91)
                             Case "sh"
-                                ProcessMemoryOp(s, 50)
+                                ProcessMemoryOp(s, &H92)
                             Case "sw"
-                                ProcessMemoryOp(s, 51)
+                                ProcessMemoryOp(s, &H93)
                             Case "stp"
                                 ProcessMemoryOp(s, 52)
                             Case "swu"
@@ -553,7 +553,7 @@ j1:
                                 ProcessBitfieldOp(s, 5)
 
                             Case "jmp"
-                                ProcessJOp(s, 25)
+                                ProcessJmp(s, &HA2)
                             Case "mjmp"
                                 ProcessJOp(s, 25)
                             Case "ljmp"
@@ -575,8 +575,8 @@ j1:
 
                             Case "nop"
                                 ProcessNop(s, &H10)
-                            Case "iret"
-                                ProcessIRet(&H1900020)
+                            Case "rti"
+                                ProcessRti(&HF4)
                             Case "eret"
                                 ProcessIRet(&H1800021)
                             Case "lm"
@@ -623,14 +623,22 @@ j1:
                                 processICacheOn(12)
                             Case "dcache_off"
                                 processICacheOn(13)
-                            Case "tlbp"
-                                ProcessTLBWR(49)
-                            Case "tlbr"
-                                ProcessTLBWR(50)
+                            Case "tlbdis"
+                                ProcessTLBWR(&H6F0)
+                            Case "tlben"
+                                ProcessTLBWR(&H5F0)
+                            Case "tlbpb"
+                                ProcessTLBWR(&H1F0)
+                            Case "tlbrd"
+                                ProcessTLBWR(&H2F0)
                             Case "tlbwr"
-                                ProcessTLBWR(52)
+                                ProcessTLBWR(&H3F0)
                             Case "tlbwi"
-                                ProcessTLBWR(51)
+                                ProcessTLBWR(&H4F0)
+                            Case "tlbrdreg"
+                                ProcessTLBRDREG(&H7F0)
+                            Case "tlbwrreg"
+                                ProcessTLBWRREG(&H8F0)
                             Case "iepp"
                                 emit(15)
                             Case "fip"
@@ -689,16 +697,27 @@ j1:
                     End If
                 End If
 j2:
-                If pass = maxpass And Not plbl Then
-                    lfs.Write(Hex(sa) & vbTab)
-                    For xx = 1 To bytn
-                        lfs.Write(Right(Hex(bytesbuf(xx - 1)).PadLeft(2, "0"), 2))
-                    Next
-                    lfs.WriteLine(Space(16 - bytn * 2) & iline)
-                End If
+                WriteListing()
 j3:
             End If
         Next
+    End Sub
+
+    Sub WriteListing()
+        Dim xx As Integer
+
+        If pass = maxpass And Not plbl Then
+            lfs.Write(Hex(sa) & vbTab)
+            For xx = 1 To bytn
+                lfs.Write(Right(Hex(bytesbuf(xx - 1)).PadLeft(2, "0"), 2))
+            Next
+            If bytn < 9 Then
+                lfs.WriteLine(Space(16 - bytn * 2) & iline)
+            Else
+                lfs.WriteLine(Space(1) & iline)
+            End If
+            sa = sa + bytn
+        End If
     End Sub
 
     Sub DumpSymbols()
@@ -995,14 +1014,39 @@ j3:
         End If
         emitRaw("")
     End Sub
+
     Sub ProcessTLBWR(ByVal oc As Int64)
         Dim opcode As Int64
         Dim rt As Int64
         Dim ra As Int64
 
-        opcode = 1L << 25
-        opcode = opcode Or oc
-        emit(opcode)
+        emitOpcode(oc)
+        emitbyte(oc >> 8, False)
+        emitbyte(0, False)
+    End Sub
+
+    Sub ProcessTLBRDREG(ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim Rt As Int64
+        Dim Tn As Int64
+
+        Rt = GetRegister(strs(1))
+        Tn = GetTLBRegister(strs(2))
+        emitOpcode(oc)
+        emitbyte((oc >> 8) Or (Tn << 4), False)
+        emitbyte(Rt, False)
+    End Sub
+
+    Sub ProcessTLBWRREG(ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim Rb As Int64
+        Dim Tn As Int64
+
+        Tn = GetTLBRegister(strs(1))
+        Rb = GetRegister(strs(2))
+        emitOpcode(oc)
+        emitbyte((oc >> 8) Or (Tn << 4), False)
+        emitbyte(Rb, False)
     End Sub
 
     Sub ProcessTst(ByVal s As String, ByVal oc As Int64)
@@ -1022,11 +1066,9 @@ j3:
 
         rt = GetSPRRegister(strs(1))
         ra = GetRegister(strs(2))
-        opcode = 1L << 25
-        opcode = opcode Or 41
-        opcode = opcode Or (ra << 20)
-        opcode = opcode Or (rt << 6)
-        emit(opcode)
+        emitOpcode(&HA9)
+        emitbyte(ra, False)
+        emitbyte(rt, False)
     End Sub
 
     Sub ProcessMfspr()
@@ -1233,6 +1275,11 @@ j3:
         emit(opcode)
     End Sub
 
+    ' rti and rte
+    Sub ProcessRti(ByVal oc As Int64)
+        emitOpcode(oc)
+    End Sub
+
     Function bit(ByVal v As Int64, ByVal b As Int64) As Integer
         Dim i As Int64
 
@@ -1327,32 +1374,32 @@ j3:
 
         str = iline
         iline = "; imm "
-        If imm >= -32768 And imm < 32768 Then
+        If imm >= -32768L And imm < 32768L Then
             emitbyte(&H20, False)
             emitbyte(imm >> 8, False)
-        ElseIf imm >= -8388608 And imm < 8388608 Then
+        ElseIf imm >= &HFFFFFFFFFF800000L And imm < &H7FFFFFL Then
             emitbyte(&H30, False)
             emitbyte(imm >> 8, False)
             emitbyte(imm >> 16, False)
-        ElseIf imm >= &H80000000 And imm <= &H7FFFFFFF Then
+        ElseIf imm >= &HFFFFFFFF80000000L And imm <= &H7FFFFFFFL Then
             emitbyte(&H40, False)
             emitbyte(imm >> 8, False)
             emitbyte(imm >> 16, False)
             emitbyte(imm >> 24, False)
-        ElseIf imm >= &H8000000000 And imm <= &H7FFFFFFFFF Then
+        ElseIf imm >= &HFFFFFF8000000000L And imm <= &H7FFFFFFFFFL Then
             emitbyte(&H50, False)
             emitbyte(imm >> 8, False)
             emitbyte(imm >> 16, False)
             emitbyte(imm >> 24, False)
             emitbyte(imm >> 32, False)
-        ElseIf imm >= &H800000000000 And imm <= &H7FFFFFFFFFFF Then
+        ElseIf imm >= &HFFFF800000000000L And imm <= &H7FFFFFFFFFFFL Then
             emitbyte(&H60, False)
             emitbyte(imm >> 8, False)
             emitbyte(imm >> 16, False)
             emitbyte(imm >> 24, False)
             emitbyte(imm >> 32, False)
             emitbyte(imm >> 40, False)
-        ElseIf imm >= &H80000000000000 And imm <= &H7FFFFFFFFFFFFF Then
+        ElseIf imm >= &HFF80000000000000L And imm <= &H7FFFFFFFFFFFFFL Then
             emitbyte(&H70, False)
             emitbyte(imm >> 8, False)
             emitbyte(imm >> 16, False)
@@ -1370,6 +1417,9 @@ j3:
             emitbyte(imm >> 48, False)
             emitbyte(imm >> 56, False)
         End If
+        iline = ""
+        WriteListing()
+        bytn = 0
         iline = str
     End Sub
 
@@ -2016,6 +2066,24 @@ j3:
         emit(opcode)
     End Sub
 
+    Sub ProcessJmp(ByVal ops As String, ByVal oc As Int64)
+        Dim ra As Int64
+        Dim offset As Int64
+        Dim s() As String
+
+        s = strs(1).Split("[".ToCharArray)
+        offset = eval(s(0))
+        If s.Length > 1 Then
+            s(1) = s(1).TrimEnd("]".ToCharArray)
+            ra = GetBrRegister(s(1))
+        End If
+        If (offset < -128 Or offset > 127) Then
+            emitIMM2(offset)
+        End If
+        emitOpcode(oc)
+        emitbyte(ra << 4, False)
+        emitbyte(offset, False)
+    End Sub
     Sub ProcessMemoryOp(ByVal ops As String, ByVal oc As Int64)
         Dim opcode As Int64
         Dim rt As Int64
@@ -2043,7 +2111,7 @@ j3:
         ' Convert lw Rn,#n to ori Rn,R0,#n
         If ops = "lw" Then
             If (strs(2).StartsWith("#")) Then
-                strs(0) = "ori"
+                strs(0) = "ldi"
                 strs(3) = strs(2)
                 strs(2) = "r0"
                 ProcessRIOp(ops, 11)
@@ -2090,85 +2158,16 @@ j3:
         End If
         If rb = -1 Then
             If Not optr26 Then
-                If TestForPrefix50(offset) Then
-                    emitIMM(offset >> 50, 126L)
-                    emitIMM(offset >> 25, 125L)
-                    emitIMM(offset, 124L)
-                ElseIf TestForPrefix25(offset) Then
-                    emitIMM(offset >> 25, 125L)
-                    emitIMM(offset, 124L)
-                ElseIf TestForPrefix15(offset) Then
-                    emitIMM(offset, 124L)
-                End If
-                If TestForPrefix12(offset) And (oc = 54 Or oc = 71) Then
-                    Console.WriteLine("STBC/OUTBC: Offset too large.")
-                End If
-                opcode = oc << 25
-                opcode = opcode + (ra << 20)
-                opcode = opcode + (rt << 15)
-                opcode = opcode + (offset And &H7FFFL)
-                emit(opcode)
             Else
-                If TestForPrefix15(offset) Then
-                    str = iline
-                    iline = "; SETLO"
-                    emitSETLO(offset)
-                    If TestForPrefix22(offset) Then
-                        iline = "; SETMID"
-                        emitSETMID(offset)
-                        If TestForPrefix44(offset) Then
-                            iline = "; SETHI"
-                            emitSETHI(offset)
-                        End If
-                    End If
-                    iline = str
-                    opcode = 53L << 25
-                    opcode = opcode + (ra << 20)
-                    opcode = opcode + (26L << 15)
-                    opcode = opcode + (rt << 10)
-                    opcode = opcode + (0 << 8)     ' scale = 0 for now
-                    opcode = opcode + ((0 And &H3) << 6)
-                    opcode = opcode Or (oc - 32)    ' indexed op's are 32 less
-                    emit(opcode)
-                Else
-                    If oc = 54 Or oc = 71 Then 'STBC/OUTBC
-                        opcode = oc << 25
-                        opcode = opcode + (ra << 20)
-                        opcode = opcode + ((imm And &HFF) << 12)
-                        opcode = opcode + (offset And &HFFFL)
-                        emit(opcode)
-                    Else
-                        opcode = oc << 25
-                        opcode = opcode + (ra << 20)
-                        opcode = opcode + (rt << 15)
-                        opcode = opcode + (offset And &H7FFFL)
-                        emit(opcode)
-                    End If
+                If offset < -128 Or offset > 127 Then
+                    emitIMM2(offset)
                 End If
+                emitOpcode(oc)
+                emitbyte(ra, False)
+                emitbyte(rt, False)
+                emitbyte(offset, False)
             End If
         Else
-            If Not optr26 Then
-                If offset > 3 Or offset < 0 Then
-                    If TestForPrefix50(offset) Then
-                        emitIMM(offset >> 50, 126L)
-                        emitIMM(offset >> 25, 125L)
-                        emitIMM(offset, 124L)
-                    ElseIf TestForPrefix25(imm) Then
-                        emitIMM(offset >> 25, 125L)
-                        emitIMM(offset, 124L)
-                    ElseIf offset > 3 Or offset < 0 Then
-                        emitIMM(offset, 124L)
-                    End If
-                End If
-            End If
-            opcode = 53L << 25
-            opcode = opcode + (ra << 20)
-            opcode = opcode + (rb << 15)
-            opcode = opcode + (rt << 10)
-            opcode = opcode + (scale << 8)     ' scale = 0 for now
-            opcode = opcode + ((offset And &H3) << 6)
-            opcode = opcode Or (oc - 32)    ' indexed op's are 32 less
-            emit(opcode)
         End If
     End Sub
 
@@ -2593,27 +2592,59 @@ j3:
 
     Function GetRegister(ByVal s As String) As Int64
         Dim r As Int16
-        If s.StartsWith("R") Or s.StartsWith("r") Then
-            s = s.TrimStart("Rr".ToCharArray)
+        Try
+            If s.StartsWith("R") Or s.StartsWith("r") Then
+                s = s.TrimStart("Rr".ToCharArray)
+                Try
+                    r = Int16.Parse(s)
+                Catch
+                    r = -1
+                End Try
+                Return r
+                'r26 is the constant building register
+            ElseIf s.ToLower = "bp" Then
+                Return 27
+            ElseIf s.ToLower = "xlr" Then
+                Return 28
+            ElseIf s.ToLower = "pc" Then
+                Return 29
+            ElseIf s.ToLower = "lr" Then
+                Return 31
+            ElseIf s.ToLower = "sp" Then
+                Return 30
+            ElseIf s.ToLower = "ssp" Then
+                Return 25
+            Else
+                Return -1
+            End If
+        Catch
+            Return -1
+        End Try
+    End Function
+
+    Function GetBrRegister(ByVal s As String) As Int64
+        Dim r As Int16
+        If s.StartsWith("B") Or s.StartsWith("b") Then
+            s = s.TrimStart("Bb".ToCharArray)
+            If s.StartsWith("R") Or s.StartsWith("r") Then
+                s = s.TrimStart("Rr".ToCharArray)
+            End If
             Try
                 r = Int16.Parse(s)
             Catch
                 r = -1
             End Try
             Return r
-            'r26 is the constant building register
-        ElseIf s.ToLower = "bp" Then
-            Return 27
-        ElseIf s.ToLower = "xlr" Then
-            Return 28
         ElseIf s.ToLower = "pc" Then
-            Return 29
+            Return 15
         ElseIf s.ToLower = "lr" Then
-            Return 31
-        ElseIf s.ToLower = "sp" Then
-            Return 30
-        ElseIf s.ToLower = "ssp" Then
-            Return 25
+            Return 1
+        ElseIf s.ToLower = "ipc" Then
+            Return 14
+        ElseIf s.ToLower = "epc" Then
+            Return 13
+        ElseIf s.ToLower = "vbr" Then
+            Return 12
         Else
             Return -1
         End If
@@ -2638,98 +2669,117 @@ j3:
 
     Function GetSPRRegister(ByVal s As String) As Int64
 
-        Select Case (s)
-            Case "TLBIndex"
-                Return 1
-            Case "TLBRandom"
+        Select Case (s.ToLower)
+            Case "tick"
                 Return 2
-            Case "PTA"
+            Case "pregs"
                 Return 4
-            Case "BadVAddr"
-                Return 8
-            Case "TLBVirtPage"
-                Return 11
-            Case "TLBPhysPage0"
-                Return 10
-            Case "TLBPhysPage1"
-                Return 11
-            Case "TLBPageMask"
-                Return 13
-            Case "TLBASID"
-                Return 14
-            Case "ASID"
-                Return 15
-            Case "EP0"
+            Case "cs"
+                Return 47
+            Case "ss"
+                Return 46
+            Case "br0"
+                Return 16
+            Case "br1"
                 Return 17
-            Case "EP1"
+            Case "br2"
                 Return 18
-            Case "EP2"
+            Case "br3"
                 Return 19
-            Case "EP3"
+            Case "br4"
                 Return 20
-            Case "AXC"
+            Case "br5"
                 Return 21
-            Case "TICK"
+            Case "br6"
                 Return 22
-            Case "EPC"
+            Case "br7"
                 Return 23
-            Case "ERRADR"
+            Case "br8"
                 Return 24
-            Case "CS"
-                Return 15
-            Case "DS"
-                Return 12
-            Case "SS"
-                Return 14
-            Case "ES"
-                Return 13
-            Case "IPC"
-                Return 33
-            Case "RAND"
-                Return 34
-            Case "rand"
-                Return 34
-            Case "SRAND1"
-                Return 35
-            Case "SRAND2"
-                Return 36
-            Case "PCHI"
-                Return 62
-            Case "PCHISTORIC"
-                Return 63
+            Case "br9"
+                Return 25
+            Case "br10"
+                Return 26
+            Case "br11"
+                Return 27
+            Case "br12"
+                Return 28
+            Case "br13"
+                Return 29
+            Case "br14"
+                Return 30
+            Case "br15"
+                Return 31
+            Case "epc"
+                Return 29
+            Case "ipc"
+                Return 30
+            Case "pc"
+                Return 31
             Case "seg0"
-                Return 0
+                Return 32
             Case "seg1"
-                Return 1
+                Return 33
             Case "seg2"
-                Return 2
+                Return 34
             Case "seg3"
-                Return 3
+                Return 35
             Case "seg4"
-                Return 4
+                Return 36
             Case "seg5"
-                Return 5
+                Return 37
             Case "seg6"
-                Return 6
+                Return 38
             Case "seg7"
-                Return 7
+                Return 39
             Case "seg8"
-                Return 8
+                Return 40
             Case "seg9"
-                Return 9
+                Return 41
             Case "seg10"
-                Return 10
+                Return 42
             Case "seg11"
-                Return 11
+                Return 43
             Case "seg12"
-                Return 12
+                Return 44
             Case "seg13"
-                Return 13
+                Return 45
             Case "seg14"
-                Return 14
+                Return 46
             Case "seg15"
-                Return 15
+                Return 47
         End Select
+        Return -1
+    End Function
+
+    Function GetTLBRegister(ByVal s As String) As Int64
+
+        Try
+            Select Case (s.ToLower)
+                Case "wired"
+                    Return 0
+                Case "index"
+                    Return 1
+                Case "random"
+                    Return 2
+                Case "pagesize"
+                    Return 3
+                Case "virtpage"
+                    Return 4
+                Case "physpage"
+                    Return 5
+                Case "asid"
+                    Return 7
+                Case "dma"
+                    Return 8
+                Case "ima"
+                    Return 9
+                Case Else
+                    Return Int64.Parse(s)
+            End Select
+        Catch
+            Return -1
+        End Try
         Return -1
     End Function
 
@@ -2789,8 +2839,8 @@ j3:
         End If
         If s.Chars(0) = "$" Then
             s = s.Replace("_", "")
-            s1 = "&H" & s.Substring(1)
-            n = Val(s1)
+            s1 = "0x" & s.Substring(1)
+            n = GetImmediate(s1, patchtype)
         ElseIf s.Chars(0) = "'" Then
             If s.Chars(1) = "\" Then
                 Select Case s.Chars(2)
@@ -3495,13 +3545,26 @@ j1:
         If row = 63 Then inst = inst + 1
 
     End Sub
+    Function calcParity32(ByVal q As Int64) As Integer
+        Dim p As Integer
+        Dim x As Integer
+
+        p = 0
+        For x = 0 To 31
+            p = p Xor ((q >> x) And 1)
+        Next
+        Return p
+    End Function
 
     Sub emitRom(ByVal w As Int64)
         Dim s As String
         Dim bt(64) As Integer
         Dim nn As Integer
         Dim p As Integer
+        Dim q As Int64
+        Dim ad As Int64
 
+        ad = address - 7
         If segment = "tls" Then
             tbindex = tbindex + 1
             tlsEnd = IIf(tlsEnd > tbindex * 8, tlsEnd, tbindex * 8)
@@ -3509,27 +3572,50 @@ j1:
             bbindex = bbindex + 1
             bssEnd = IIf(bssEnd > bbindex * 8, bssEnd, bbindex * 8)
         Else
-            For nn = 0 To 63
-                bt(nn) = (w0 >> nn) And 1
-            Next
-            p = 0
-            For nn = 0 To 63
-                If bt(nn) Then
-                    p = p + 1
+            If opt32out Then
+                p = 0
+                For nn = 0 To 63
+                    If bt(nn) Then
+                        p = p + 1
+                    End If
+                Next
+                s = vbTab & "rommem[" & ((ad >> 2) And 8191) & "] = 33'h" & calcParity32(w) & Hex(w And &HFFFFFFFFL).PadLeft(8, "0") & ";" ' & Hex(address)
+                ofs.WriteLine(s)
+                s = vbTab & "rommem[" & ((ad >> 2) And 8191) + 1 & "] = 33'h" & calcParity32(w >> 32) & Hex((w >> 32) And &HFFFFFFFFL).PadLeft(8, "0") & ";" ' & Hex(address)
+                ofs.WriteLine(s)
+                If segment = "code" Then
+                    codebytes(cbindex) = w
+                    cbindex = cbindex + 1
+                    codeEnd = IIf(codeEnd > cbindex * 8, codeEnd, cbindex * 8)
+                ElseIf segment = "data" Then
+                    databytes(dbindex) = w
+                    dbindex = dbindex + 1
+                    dataEnd = IIf(dataEnd > dbindex * 8, dataEnd, dbindex * 8)
                 End If
-            Next
-            s = vbTab & "rommem[" & ((address >> 3) And 8191) & "] = 65'h" & (p And 1) & Hex(w).PadLeft(16, "0") & ";" ' & Hex(address)
-            ofs.WriteLine(s)
-            If segment = "code" Then
-                codebytes(cbindex) = w
-                cbindex = cbindex + 1
-                codeEnd = IIf(codeEnd > cbindex * 8, codeEnd, cbindex * 8)
-            ElseIf segment = "data" Then
-                databytes(dbindex) = w
-                dbindex = dbindex + 1
-                dataEnd = IIf(dataEnd > dbindex * 8, dataEnd, dbindex * 8)
+                '            bfs.Write(w)
+            Else
+                For nn = 0 To 63
+                    bt(nn) = (w0 >> nn) And 1
+                Next
+                p = 0
+                For nn = 0 To 63
+                    If bt(nn) Then
+                        p = p + 1
+                    End If
+                Next
+                s = vbTab & "rommem[" & ((ad >> 3) And 8191) & "] = 65'h" & (p And 1) & Hex(w).PadLeft(16, "0") & ";" ' & Hex(address)
+                ofs.WriteLine(s)
+                If segment = "code" Then
+                    codebytes(cbindex) = w
+                    cbindex = cbindex + 1
+                    codeEnd = IIf(codeEnd > cbindex * 8, codeEnd, cbindex * 8)
+                ElseIf segment = "data" Then
+                    databytes(dbindex) = w
+                    dbindex = dbindex + 1
+                    dataEnd = IIf(dataEnd > dbindex * 8, dataEnd, dbindex * 8)
+                End If
+                '            bfs.Write(w)
             End If
-            '            bfs.Write(w)
         End If
     End Sub
 

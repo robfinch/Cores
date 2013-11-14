@@ -42,6 +42,35 @@ wire signed [DBW-1:0] alu_argBs = alu_argB;
 wire signed [DBW-1:0] alu_argIs = alu_argI;
 integer n;
 
+wire [7:0] bcdao,bcdso;
+wire [15:0] bcdmo;
+
+BCDAdd ubcda
+(
+	.ci(1'b0),
+	.a(alu_argA[7:0]),
+	.b(alu_argB[7:0]),
+	.o(bcdao),
+	.c()
+);
+
+BCDSub ubcds
+(
+	.ci(1'b0),
+	.a(alu_argA[7:0]),
+	.b(alu_argB[7:0]),
+	.o(bcdso),
+	.c()
+);
+
+BCDMul2 ubcdm
+(
+	.a(alu_argA),
+	.b(alu_argB),
+	.o(bcdmo)
+);
+
+
 always @(alu_argI or alu_argA or alu_argB or alu_argC or alu_op or insnsz)
 begin
 casex(alu_op)
@@ -107,6 +136,13 @@ casex(alu_op)
 			for (n = 0; n < DBW; n = n + 1)
 				o[n] <= alu_argA[n] ? alu_argB[n] : alu_argC[n];
 		end
+`BCD:
+		case(alu_argI[7:0])
+		`BCDADD:	o <= bcdao;
+		`BCDSUB:	o <= bcdso;
+		`BCDMUL:	o <= bcdmo;
+		default:	o <= 64'd0;
+		endcase
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end
