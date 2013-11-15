@@ -27,6 +27,7 @@
 `define THOR_DEFINES	1'b1
 
 `define SEGMENTATION	1'b1
+//`define FLOATING_POINT	1'b1
 
 `define TRUE	1'b1
 `define FALSE	1'b0
@@ -95,6 +96,9 @@
 `define NOT			8'h71
 `define MUX			8'h72
 
+`define FSTAT		8'h73
+`define FRM			8'h74
+`define FTX			8'h75
 `define ITOF		8'h76
 `define FTOI		8'h77
 `define FNEG		8'h78
@@ -154,6 +158,13 @@
 `define SHX			8'hC2
 `define SWX			8'hC3
 
+`define FNABS		8'hC8
+`define FMOV		8'hC9
+`define FMAN		8'hCA
+`define FCX			8'hCC
+`define FEX			8'hCD
+`define FDX			8'hCE
+
 // Uncached access instructions
 `define LVB			8'hD0
 `define LVC			8'hD1
@@ -183,13 +194,15 @@
 `define TLBDMissAdr		4'd8
 `define TLBIMissAdr		4'd9
 
+
 `define RTE			8'hF3
 `define RTI			8'hF4
 `define BCD			8'hF5
 `define BCDADD			8'h00
 `define BCDSUB			8'h01
 `define BCDMUL			8'h02
-`define SYNC		8'hF8
+`define MEMSB		8'hF8	// synchronization barrier
+`define MEMDB		8'hF9	// data barrier
 `define CLI			8'hFA
 `define SEI			8'hFB
 `define IMM			8'hFF

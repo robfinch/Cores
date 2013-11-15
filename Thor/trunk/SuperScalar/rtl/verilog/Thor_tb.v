@@ -19,6 +19,8 @@ wire cpu_ack;
 wire [DBW-1:0] cpu_dati;
 wire [DBW-1:0] cpu_dato;
 
+wire LEDS_ack;
+
 initial begin
 	#0 rst = 1'b0;
 	#0 clk = 1'b0;
@@ -31,9 +33,15 @@ end
 
 always #5 clk = ~clk;
 
+assign LEDS_ack = cyc && stb && adr[31:8]==32'hFFDC06;
+always @(posedge clk)
+	if (LEDS_ack)
+		$display("LEDS: %b", cpu_dato[7:0]);
+
 //wire cs0 = cyc&& stb && adr[31:16]==16'h0000;
 
 assign cpu_ack =
+	LEDS_ack |
 	scr_ack |
 	br_ack
 	;
@@ -41,10 +49,8 @@ assign cpu_dati =
 	scr_dato |
 	br_dato
 	;
-always @(posedge clk)
-	$display("ubr adr:%h", ubr1.radr);
 
-scratchmem uscrm1
+scratchmem32 #(DBW) uscrm1
 (
 	.rst_i(rst),
 	.clk_i(clk),

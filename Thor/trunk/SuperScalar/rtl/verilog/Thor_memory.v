@@ -52,7 +52,7 @@ casex ({dram0, dram1, dram2})
 	9'bxxx01x01x:
 		if (!rst_i) begin
 			$display("dramx=%b",{dram0, dram1, dram2});
-			panic <= `PANIC_IDENTICALDRAMS;
+//			panic <= `PANIC_IDENTICALDRAMS;
 		end
 
 	default: begin
@@ -293,9 +293,11 @@ iqentry_memissue[ head1 ] <=	~iqentry_stomp[head1] && iqentry_memready[ head1 ]	
 				&& ~iqentry_memready[head0]
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head1] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head1][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head1]));// || !fnIsFlowCtrl(iqentry_op[head0]));
+				&& (!fnIsStore(iqentry_op[head1]))// || !fnIsFlowCtrl(iqentry_op[head0]));
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				;
 
 iqentry_memissue[ head2 ] <=	~iqentry_stomp[head2] && iqentry_memready[ head2 ]		// addr and data are valid
 				// ... and no preceding instruction is ready to go
@@ -303,11 +305,14 @@ iqentry_memissue[ head2 ] <=	~iqentry_stomp[head2] && iqentry_memready[ head2 ]	
 				&& ~iqentry_memready[head1] 
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head2] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head2] != iqentry_a1[head1]))
+					|| (iqentry_a1_v[head1] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head2]));// ||
+				&& (!fnIsStore(iqentry_op[head2]))// ||
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
+				;
 //					(   !fnIsFlowCtrl(iqentry_op[head0])
 //					 && !fnIsFlowCtrl(iqentry_op[head1])));
 
@@ -318,14 +323,19 @@ iqentry_memissue[ head3 ] <=	~iqentry_stomp[head3] && iqentry_memready[ head3 ]	
 				&& ~iqentry_memready[head2] 
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head3] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head3] != iqentry_a1[head1]))
+					|| (iqentry_a1_v[head1] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head3] != iqentry_a1[head2]))
+					|| (iqentry_a1_v[head2] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head3]));/* ||
-					(   !fnIsFlowCtrl(iqentry_op[head0])
+				&& (!fnIsStore(iqentry_op[head3]))
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && iqentry_op[head2]==`MEMDB)
+				;
+/*					(   !fnIsFlowCtrl(iqentry_op[head0])
 					 && !fnIsFlowCtrl(iqentry_op[head1])
 					 && !fnIsFlowCtrl(iqentry_op[head2])));
 */
@@ -337,15 +347,22 @@ iqentry_memissue[ head4 ] <=	~iqentry_stomp[head4] && iqentry_memready[ head4 ]	
 				&& ~iqentry_memready[head3] 
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head4] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head4] != iqentry_a1[head1]))
+					|| (iqentry_a1_v[head1] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head4] != iqentry_a1[head2]))
+					|| (iqentry_a1_v[head2] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head4] != iqentry_a1[head3]))
+					|| (iqentry_a1_v[head3] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head4]));/* ||
+				&& (!fnIsStore(iqentry_op[head4]))
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && iqentry_op[head3]==`MEMDB)
+				;
+/* ||
 					(   !fnIsFlowCtrl(iqentry_op[head0])
 					 && !fnIsFlowCtrl(iqentry_op[head1])
 					 && !fnIsFlowCtrl(iqentry_op[head2])
@@ -360,17 +377,25 @@ iqentry_memissue[ head5 ] <=	~iqentry_stomp[head5] && iqentry_memready[ head5 ]	
 				&& ~iqentry_memready[head4] 
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head5] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head5] != iqentry_a1[head1]))
+					|| (iqentry_a1_v[head1] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head5] != iqentry_a1[head2]))
+					|| (iqentry_a1_v[head2] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head5] != iqentry_a1[head3]))
+					|| (iqentry_a1_v[head3] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
 				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-					|| (iqentry_a1_v[head4] && iqentry_a1[head5] != iqentry_a1[head4]))
+					|| (iqentry_a1_v[head4] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head5]));/*||
+				&& (!fnIsStore(iqentry_op[head5]))
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head4] && iqentry_op[head4]==`MEMDB)
+				;
+/*||
 					(   !fnIsFlowCtrl(iqentry_op[head0])
 					 && !fnIsFlowCtrl(iqentry_op[head1])
 					 && !fnIsFlowCtrl(iqentry_op[head2])
@@ -387,19 +412,28 @@ iqentry_memissue[ head6 ] <=	~iqentry_stomp[head6] && iqentry_memready[ head6 ]	
 				&& ~iqentry_memready[head5] 
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head6] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head6] != iqentry_a1[head1]))
+					|| (iqentry_a1_v[head1] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head6] != iqentry_a1[head2]))
+					|| (iqentry_a1_v[head2] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head6] != iqentry_a1[head3]))
+					|| (iqentry_a1_v[head3] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
 				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-					|| (iqentry_a1_v[head4] && iqentry_a1[head6] != iqentry_a1[head4]))
+					|| (iqentry_a1_v[head4] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
 				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
-					|| (iqentry_a1_v[head5] && iqentry_a1[head6] != iqentry_a1[head5]))
+					|| (iqentry_a1_v[head5] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head6]));/*||
+				&& (!fnIsStore(iqentry_op[head6]))
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head4] && iqentry_op[head4]==`MEMDB)
+				&& !(iqentry_v[head5] && iqentry_op[head5]==`MEMDB)
+				;
+				/*||
 					(   !fnIsFlowCtrl(iqentry_op[head0])
 					 && !fnIsFlowCtrl(iqentry_op[head1])
 					 && !fnIsFlowCtrl(iqentry_op[head2])
@@ -418,21 +452,31 @@ iqentry_memissue[ head7 ] <=	~iqentry_stomp[head7] && iqentry_memready[ head7 ]	
 				&& ~iqentry_memready[head6] 
 				// ... and there is no address-overlap with any preceding instruction
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head7] != iqentry_a1[head0]))
+					|| (iqentry_a1_v[head0] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head7] != iqentry_a1[head1]))
+					|| (iqentry_a1_v[head1] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head7] != iqentry_a1[head2]))
+					|| (iqentry_a1_v[head2] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head7] != iqentry_a1[head3]))
+					|| (iqentry_a1_v[head3] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
 				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-					|| (iqentry_a1_v[head4] && iqentry_a1[head7] != iqentry_a1[head4]))
+					|| (iqentry_a1_v[head4] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
 				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
-					|| (iqentry_a1_v[head5] && iqentry_a1[head7] != iqentry_a1[head5]))
+					|| (iqentry_a1_v[head5] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
 				&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) 
-					|| (iqentry_a1_v[head6] && iqentry_a1[head7] != iqentry_a1[head6]))
+					|| (iqentry_a1_v[head6] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head6][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head7]));/* ||
+				&& (!fnIsStore(iqentry_op[head7]))
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head4] && iqentry_op[head4]==`MEMDB)
+				&& !(iqentry_v[head5] && iqentry_op[head5]==`MEMDB)
+				&& !(iqentry_v[head6] && iqentry_op[head6]==`MEMDB)
+				;
+				/* ||
 					(   !fnIsFlowCtrl(iqentry_op[head0])
 					 && !fnIsFlowCtrl(iqentry_op[head1])
 					 && !fnIsFlowCtrl(iqentry_op[head2])

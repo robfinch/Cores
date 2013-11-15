@@ -75,6 +75,7 @@ Module Module1
     Dim currentFl As textfile
     Dim predicateByte As Int64
     Dim processedPredicate As Boolean
+    Dim processedEquate As Boolean
     Dim bytesbuf(40) As Int64
     Dim bytn As Int64
     Dim sa As Int64
@@ -198,6 +199,7 @@ Module Module1
                 emitEmptyLine(iline)
             End If
             processedPredicate = False
+            processedEquate = False
             bytn = 0
             sa = address
             plbl = False
@@ -266,6 +268,8 @@ j1:
                             Case "org"
                                 ProcessOrg()
                                 GoTo j3
+
+                                ' RI ops
                             Case "ldi"
                                 ProcessLdi(s, &H6F)
                             Case "addi"
@@ -285,53 +289,37 @@ j1:
                             Case "eori"
                                 ProcessRIOp(s, &H55)
                             Case "mului"
-                                ProcessRIOp(s, 13)
-                            Case "mulsi"
-                                ProcessRIOp(s, 14)
+                                ProcessRIOp(s, &H4E)
+                            Case "muli"
+                                ProcessRIOp(s, &H4A)
                             Case "divui"
-                                ProcessRIOp(s, 15)
-                            Case "divsi"
-                                ProcessRIOp(s, 16)
-                            Case "inb"
-                                ProcessMemoryOp(s, 64)
-                            Case "inch"
-                                ProcessMemoryOp(s, 65)
-                            Case "inh"
-                                ProcessMemoryOp(s, 66)
-                            Case "inw"
-                                ProcessMemoryOp(s, 67)
-                            Case "inbu"
-                                ProcessMemoryOp(s, 68)
-                            Case "incu"
-                                ProcessMemoryOp(s, 69)
-                            Case "inhu"
-                                ProcessMemoryOp(s, 70)
-                            Case "outbc"
-                                ProcessMemoryOp(s, 71)
-                            Case "outb"
-                                ProcessMemoryOp(s, 72)
-                            Case "outc"
-                                ProcessMemoryOp(s, 73)
-                            Case "outh"
-                                ProcessMemoryOp(s, 74)
-                            Case "outw"
-                                ProcessMemoryOp(s, 75)
+                                ProcessRIOp(s, &H4F)
+                            Case "divi"
+                                ProcessRIOp(s, &H4B)
+
+                            Case "lvb"
+                                ProcessMemoryOp(s, &HD0)
+                            Case "lvc"
+                                ProcessMemoryOp(s, &HD1)
+                            Case "lvh"
+                                ProcessMemoryOp(s, &HD2)
+                            Case "lww"
+                                ProcessMemoryOp(s, &HD3)
+
                             Case "lb"
-                                ProcessMemoryOp(s, 32)
+                                ProcessMemoryOp(s, &H80)
                             Case "lbu"
-                                ProcessMemoryOp(s, 37)
+                                ProcessMemoryOp(s, &H81)
                             Case "lc"
-                                ProcessMemoryOp(s, 33)
+                                ProcessMemoryOp(s, &H82)
                             Case "lcu"
-                                ProcessMemoryOp(s, 38)
+                                ProcessMemoryOp(s, &H83)
                             Case "lh"
                                 ProcessMemoryOp(s, &H84)
                             Case "lhu"
                                 ProcessMemoryOp(s, &H85)
                             Case "lw"
                                 ProcessMemoryOp(s, &H86)
-                            Case "lp"
-                                ProcessMemoryOp(s, 36)
                             Case "lwr"
                                 ProcessMemoryOp(s, 46)
                             Case "sb"
@@ -344,101 +332,36 @@ j1:
                                 ProcessMemoryOp(s, &H93)
                             Case "stp"
                                 ProcessMemoryOp(s, 52)
-                            Case "swu"
-                                ProcessMemoryOp(s, 55)
                             Case "swc"
                                 ProcessMemoryOp(s, 62)
                             Case "lea"
                                 ProcessMemoryOp(s, 77)
                             Case "stbc"
                                 ProcessMemoryOp(s, 54)
-                            Case "push"
-                                ProcessPush(s, 55)
+                            Case "memdb"
+                                emitOpcode(&HF9)
+                            Case "memsb"
+                                emitOpcode(&HF8)
 
-                                ' RI branches
-                            Case "beqi"
-                                ProcessRIBranch(s, 88)
-                            Case "bnei"
-                                ProcessRIBranch(s, 89)
-                            Case "blti"
-                                ProcessRIBranch(s, 80)
-                            Case "blei"
-                                ProcessRIBranch(s, 82)
-                            Case "bgti"
-                                ProcessRIBranch(s, 83)
-                            Case "bgei"
-                                ProcessRIBranch(s, 81)
-                            Case "bltui"
-                                ProcessRIBranch(s, 84)
-                            Case "bleui"
-                                ProcessRIBranch(s, 86)
-                            Case "bgtui"
-                                ProcessRIBranch(s, 87)
-                            Case "bgeui"
-                                ProcessRIBranch(s, 85)
                                 ' RR branches
-                            Case "beq"
-                                ProcessRRBranch(s, 8)
-                            Case "bne"
-                                ProcessRRBranch(s, 9)
-                            Case "blt"
-                                ProcessRRBranch(s, 0)
-                            Case "bge"
-                                ProcessRRBranch(s, 1)
-                            Case "ble"
-                                ProcessRRBranch(s, 2)
-                            Case "bgt"
-                                ProcessRRBranch(s, 3)
-                            Case "bltu"
-                                ProcessRRBranch(s, 4)
-                            Case "bgeu"
-                                ProcessRRBranch(s, 5)
-                            Case "bleu"
-                                ProcessRRBranch(s, 6)
-                            Case "bgtu"
-                                ProcessRRBranch(s, 7)
                             Case "bra"
                                 ProcessBra(s, &H30)
                             Case "br"
                                 ProcessBra(s, &H30)
                             Case "brn"
                                 ProcessBra(s, 11)
-                            Case "band"
-                                ProcessRRBranch(s, 12)
-                            Case "bor"
-                                ProcessRRBranch(s, 13)
                             Case "bnr"
                                 ProcessBra(s, 14)
                             Case "loop"
-                                ProcessLoop(s, 15)
+                                ProcessLoop(s, &HA4)
 
-                            Case "slti"
-                                ProcessRIOp(s, 96)
-                            Case "slei"
-                                ProcessRIOp(s, 97)
-                            Case "sgti"
-                                ProcessRIOp(s, 98)
-                            Case "sgei"
-                                ProcessRIOp(s, 99)
-                            Case "sltui"
-                                ProcessRIOp(s, 100)
-                            Case "sleui"
-                                ProcessRIOp(s, 101)
-                            Case "sgtui"
-                                ProcessRIOp(s, 102)
-                            Case "sgeui"
-                                ProcessRIOp(s, 103)
-                            Case "seqi"
-                                ProcessRIOp(s, 104)
-                            Case "snei"
-                                ProcessRIOp(s, 105)
                                 ' R
                             Case "com"
                                 ProcessROp(s, 4)
                             Case "not"
-                                ProcessROp(s, 5)
+                                ProcessROp(s, &H71)
                             Case "neg"
-                                ProcessROp(s, 6)
+                                ProcessROp(s, &H70)
                             Case "abs"
                                 ProcessROp(s, 7)
                             Case "sgn"
@@ -472,70 +395,46 @@ j1:
                             Case "subu"
                                 ProcessRROp(s, &H45)
                             Case "cmp"
-                                ProcessRROp(s, 6)
-                            Case "cmpu"
-                                ProcessRROp(s, 7)
+                                ProcessCmpRROp(s, &H10)
                             Case "and"
-                                ProcessRROp(s, 8)
+                                ProcessRROp(s, &H50)
                             Case "nand"
                                 ProcessRROp(s, &H66)
                             Case "or"
-                                ProcessRROp(s, 9)
-                            Case "xor"
-                                ProcessRROp(s, 10)
-                            Case "min"
-                                ProcessRROp(s, 20)
-                            Case "max"
-                                ProcessRROp(s, 21)
+                                ProcessRROp(s, &H51)
+                            Case "eor"
+                                ProcessRROp(s, &H52)
+                                'Case "min"
+                                '    ProcessRROp(s, 20)
+                                'Case "max"
+                                '    ProcessRROp(s, 21)
                             Case "mulu"
-                                ProcessRROp(s, 24)
-                            Case "muls"
-                                ProcessRROp(s, 25)
+                                ProcessRROp(s, &H46)
+                            Case "mul"
+                                ProcessRROp(s, &H42)
                             Case "divu"
-                                ProcessRROp(s, 26)
-                            Case "divs"
-                                ProcessRROp(s, 27)
-                            Case "modu"
-                                ProcessRROp(s, 28)
-                            Case "mods"
-                                ProcessRROp(s, 29)
-                            Case "mtep"
-                                ProcessMtep(s, 58)
+                                ProcessRROp(s, &H47)
+                            Case "div"
+                                ProcessRROp(s, &H43)
+                                'Case "modu"
+                                '    ProcessRROp(s, 28)
+                                'Case "mods"
+                                '    ProcessRROp(s, 29)
                             Case "tst"
                                 ProcessTst(s, &H0)
-                            Case "slt"
-                                ProcessRROp(s, 48)
-                            Case "sle"
-                                ProcessRROp(s, 49)
-                            Case "sgt"
-                                ProcessRROp(s, 50)
-                            Case "sge"
-                                ProcessRROp(s, 51)
-                            Case "sltu"
-                                ProcessRROp(s, 52)
-                            Case "sleu"
-                                ProcessRROp(s, 53)
-                            Case "sgtu"
-                                ProcessRROp(s, 54)
-                            Case "sgeu"
-                                ProcessRROp(s, 55)
-                            Case "seq"
-                                ProcessRROp(s, 56)
-                            Case "sne"
-                                ProcessRROp(s, 57)
 
                             Case "shli"
-                                ProcessShiftiOp(s, 0)
+                                ProcessShiftiOp(s, &H5E)
                             Case "shlui"
-                                ProcessShiftiOp(s, 6)
+                                ProcessShiftiOp(s, &H60)
                             Case "shrui"
-                                ProcessShiftiOp(s, 1)
+                                ProcessShiftiOp(s, &H61)
                             Case "roli"
-                                ProcessShiftiOp(s, 2)
+                                ProcessShiftiOp(s, &H62)
                             Case "shri"
-                                ProcessShiftiOp(s, 3)
+                                ProcessShiftiOp(s, &H5F)
                             Case "rori"
-                                ProcessShiftiOp(s, 4)
+                                ProcessShiftiOp(s, &H63)
 
                             Case "bfins"
                                 ProcessBitfieldOp(s, 0)
@@ -554,31 +453,19 @@ j1:
 
                             Case "jmp"
                                 ProcessJmp(s, &HA2)
-                            Case "mjmp"
-                                ProcessJOp(s, 25)
-                            Case "ljmp"
-                                ProcessJOp(s, 25)
-                            Case "call"
-                                ProcessJOp(s, 24)
-                            Case "mcall"
-                                ProcessJOp(s, 24)
-                            Case "lcall"
-                                ProcessJOp(s, 24)
-                            Case "ret"
-                                ProcessRetOp(s, 27)
-                            Case "rtd"
-                                ProcessRtdOp(s, 27)
-                            Case "jal"
-                                ProcessJAL(s, 26)
-                            Case "syscall"
-                                ProcessSyscall(s, 23)
+                            Case "jsr"
+                                ProcessJsr(s, &HA2)
+                            Case "rts"
+                                ProcessRtsOp(s, &HA3)
+                            Case "sys"
+                                ProcessSys(s, &HA5)
+                            Case "rti"
+                                ProcessRti(&HF4)
+                            Case "rte"
+                                ProcessRti(&HF3)
 
                             Case "nop"
                                 ProcessNop(s, &H10)
-                            Case "rti"
-                                ProcessRti(&HF4)
-                            Case "eret"
-                                ProcessIRet(&H1800021)
                             Case "lm"
                                 ProcessPush(78)
                             Case "sm"
@@ -605,16 +492,12 @@ j1:
                             Case "cmgi"
                                 ProcessCMG(53)
 
-                            Case "setlo"
-                                ProcessSETLO()
-                            Case "sethi"
-                                ProcessSETHI()
                             Case "gran"
                                 emit(80)
                             Case "cli"
-                                processCLI(64)
+                                processCLI(&HFA)
                             Case "sei"
-                                processCLI(65)
+                                processCLI(&HFB)
                             Case "icache_on"
                                 processICacheOn(10)
                             Case "icache_off"
@@ -639,6 +522,8 @@ j1:
                                 ProcessTLBRDREG(&H7F0)
                             Case "tlbwrreg"
                                 ProcessTLBWRREG(&H8F0)
+                            Case "sync"
+                                emitOpcode(&HF8)
                             Case "iepp"
                                 emit(15)
                             Case "fip"
@@ -697,7 +582,9 @@ j1:
                     End If
                 End If
 j2:
-                WriteListing()
+                If Not processedEquate Then
+                    WriteListing()
+                End If
 j3:
             End If
         Next
@@ -777,7 +664,7 @@ j3:
     End Sub
 
     Sub processCLI(ByVal oc As Int64)
-        emit(oc)
+        emitOpcode(oc)
     End Sub
 
     Sub ProcessPush(ByVal s As String, ByVal oc As Int64)
@@ -1060,7 +947,6 @@ j3:
     End Sub
 
     Sub ProcessMtspr()
-        Dim opcode As Int64
         Dim rt As Int64
         Dim ra As Int64
 
@@ -1072,18 +958,14 @@ j3:
     End Sub
 
     Sub ProcessMfspr()
-        Dim opcode As Int64
         Dim rt As Int64
         Dim ra As Int64
 
         rt = GetRegister(strs(1))
         ra = GetSPRRegister(strs(2))
-        opcode = 1L << 25
-        opcode = opcode Or 40
-        opcode = opcode Or (ra << 6)
-        opcode = opcode Or (rt << 15)
-        emit(opcode)
-
+        emitOpcode(&HA8)
+        emitbyte(ra, False)
+        emitbyte(rt, False)
     End Sub
 
     Sub ProcessMtseg()
@@ -1737,7 +1619,7 @@ j3:
         Dim t() As String
 
         t = s.Split(".".ToCharArray)
-        Select Case (t(1))
+        Select Case (t(1).ToLower)
             Case "f", "F"
                 predicateByte = predicateByte Or 0
             Case "t", "T"
@@ -1774,11 +1656,9 @@ j3:
 
         rt = GetRegister(strs(1))
         ra = GetRegister(strs(2))
-        opcode = 1L << 25
-        opcode = opcode Or (ra << 20)
-        opcode = opcode Or (rt << 15)
-        opcode = opcode Or fn
-        emit(opcode)
+        emitOpcode(fn)
+        emitbyte(ra, False)
+        emitbyte(rt, False)
     End Sub
 
     '
@@ -1860,32 +1740,38 @@ j3:
     End Sub
 
     '
-    ' Ret-ops have the form:   ret
+    ' Ret-ops have the form:   rts or rts 12[r1]
     '
-    Sub ProcessRetOp(ByVal ops As String, ByVal oc As Int64)
+    Sub ProcessRtsOp(ByVal ops As String, ByVal oc As Int64)
         Dim opcode As Int64
-        Dim ra As Int64
+        Dim Br As Int64
         Dim rt As Int64
         Dim imm As Int64
+        Dim s() As String
 
-        ra = 30
-        rt = 30
-        imm = 0
-        If Not strs(1) Is Nothing Then
-            If Left(strs(1), 1) = "#" Then
-                rt = 30
-                imm = GetImmediate(strs(1), "ret")
-            Else
-                rt = GetRegister(strs(1))
-                ra = GetRegister(strs(2))
-                imm = GetImmediate(strs(3), "ret")
-            End If
+        If strs.Length = 1 Then     ' RTS short form
+            emitbyte(&H11, False)
+            Return
         End If
-        opcode = oc << 25
-        opcode = opcode Or (30L << 20)
-        opcode = opcode Or (31L << 15)  ' link register
-        opcode = opcode Or (imm And &H7FF8)
-        emit(opcode)
+        Try
+            s = strs(1).Split("[".ToCharArray)
+            If s.Length > 1 Then
+                imm = GetImmediate(s(0), "rts")
+                Br = GetBrRegister(s(1).TrimEnd("]"))
+                emitOpcode(oc)
+                emitbyte((Br << 4) Or (imm And 15), False)
+                Return
+            Else
+                imm = 0
+                Br = GetBrRegister(s(0).TrimEnd("]"))
+                emitOpcode(oc)
+                emitbyte((Br << 4) Or (imm And 15), False)
+                Return
+            End If
+        Catch
+            Console.WriteLine("Error: bad string ")
+            emitbyte(&H11, False)
+        End Try
     End Sub
 
     Sub FlushConstants()
@@ -1956,6 +1842,28 @@ j3:
         Dim opcode As Int64
 
         emitbyte(oc, False)
+    End Sub
+
+    '
+    ' CMP RR-ops have the form: cmp Pt,Ra,Rb
+    '
+    Sub ProcessCmpRROp(ByVal ops As String, ByVal fn As Int64)
+        Dim opcode As Int64
+        Dim pt As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim imm As Int64
+
+        pt = GetPnRegister(strs(1))
+        ra = GetRegister(strs(2))
+        rb = GetRegister(strs(3))
+        If rb = -1 Then
+            ProcessCmpIOp(ops, &H20)
+            Return
+        End If
+        emitOpcode(fn Or pt)
+        emitbyte(ra, False)
+        emitbyte(rb, False)
     End Sub
 
     '
@@ -2084,6 +1992,63 @@ j3:
         emitbyte(ra << 4, False)
         emitbyte(offset, False)
     End Sub
+
+    Sub ProcessJsr(ByVal ops As String, ByVal oc As Int64)
+        Dim Bt As Int64
+        Dim ra As Int64
+        Dim offset As Int64
+        Dim s() As String
+
+        Bt = GetBrRegister(strs(1))
+        If Bt = -1 Then
+            Bt = 1
+            s = strs(1).Split("[".ToCharArray)
+        Else
+            s = strs(2).Split("[".ToCharArray)
+        End If
+        offset = eval(s(0))
+        If s.Length > 1 Then
+            s(1) = s(1).TrimEnd("]".ToCharArray)
+            ra = GetBrRegister(s(1))
+        End If
+        If (offset < -128 Or offset > 127) Then
+            emitIMM2(offset)
+        End If
+        emitOpcode(oc)
+        emitbyte((ra << 4) Or Bt, False)
+        emitbyte(offset, False)
+    End Sub
+
+    Sub ProcessSys(ByVal ops As String, ByVal oc As Int64)
+        Dim Bt As Int64
+        Dim ra As Int64
+        Dim offset As Int64
+        Dim s() As String
+
+        ra = 12
+        Bt = GetBrRegister(strs(1))
+        If (Bt = -1) Then
+            Bt = 13
+            s = strs(1).Split("[".ToCharArray)
+            offset = eval(s(0))
+            If s.Length > 1 Then
+                ra = GetBrRegister((s(1).TrimEnd("]".ToCharArray)))
+            End If
+            emitOpcode(oc)
+            emitbyte((ra << 4) Or Bt, False)
+            emitbyte(offset, False)
+            Return
+        End If
+        s = strs(2).Split("[".ToCharArray)
+        offset = eval(s(0))
+        If s.Length > 1 Then
+            ra = GetBrRegister((s(1).TrimEnd("]".ToCharArray)))
+        End If
+        emitOpcode(oc)
+        emitbyte((ra << 4) Or Bt, False)
+        emitbyte(offset, False)
+    End Sub
+
     Sub ProcessMemoryOp(ByVal ops As String, ByVal oc As Int64)
         Dim opcode As Int64
         Dim rt As Int64
@@ -2363,7 +2328,7 @@ j3:
         s = iline
         s = ""
         If Not strs(1) Is Nothing Then
-            If strs(1).ToUpper = "EQU" Then
+            If strs(1).ToUpper = "EQU" Or strs(1) = "=" Then
                 sym = New Symbol
                 sym.name = fileno & strs(0)
                 n = 2
@@ -2388,6 +2353,7 @@ j3:
                     symbols.Add(sym, sym.name)
                 End If
                 emitEmptyLine(iline)
+                processedEquate = True
                 Return True
             End If
         End If
@@ -2404,26 +2370,18 @@ j3:
         Dim disp As Int64
         Dim L As Symbol
 
-        ra = 0
-        rb = GetRegister(strs(1))
-        If rb = -1 Then
-            Console.WriteLine("Error: Loop bad register " & strs(1))
-            Return
-        End If
-        strs(2) = strs(2).Trim
-        L = GetSymbol(strs(2))
+        L = GetSymbol(strs(1))
         'If slot = 2 Then
         '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
         'Else
-        disp = (((L.address And &HFFFFFFFFFFFFFFFCL) - (address And &HFFFFFFFFFFFFFFFCL))) >> 2
+        disp = (((L.address And &HFFFFFFFFFFFFFFFFL) - (address And &HFFFFFFFFFFFFFFFFL)))
         'End If
         'imm = (L.address + (L.slot << 2)) >> 2
-        opcode = 95L << 25
-        opcode = opcode Or (rb << 15)
-        opcode = opcode Or ((disp And &H3FFL) << 5)
-        opcode = opcode Or oc
-        '            TestForPrefix(disp)
-        emit(opcode)
+        If disp < -128 Or disp > 127 Then
+            emitIMM2(disp)
+        End If
+        emitOpcode(oc)
+        emitbyte(disp, False)
     End Sub
 
     Sub ProcessBra(ByVal ops As String, ByVal oc As Int64)
@@ -2672,6 +2630,8 @@ j3:
         Select Case (s.ToLower)
             Case "tick"
                 Return 2
+            Case "lc"
+                Return 3
             Case "pregs"
                 Return 4
             Case "cs"

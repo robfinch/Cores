@@ -52,6 +52,18 @@ alu1_dataready <= alu1_available
 			 || (iqentry_issue[6] && iqentry_islot[6] == 4'd1 && !iqentry_stomp[6])
 			 || (iqentry_issue[7] && iqentry_islot[7] == 4'd1 && !iqentry_stomp[7]));
 
+`ifdef FLOATING_POINT
+fp0_dataready <= 1'b1
+			&& ((iqentry_fpissue[0] && iqentry_islot[0] == 4'd0 && !iqentry_stomp[0])
+			 || (iqentry_fpissue[1] && iqentry_islot[1] == 4'd0 && !iqentry_stomp[1])
+			 || (iqentry_fpissue[2] && iqentry_islot[2] == 4'd0 && !iqentry_stomp[2])
+			 || (iqentry_fpissue[3] && iqentry_islot[3] == 4'd0 && !iqentry_stomp[3])
+			 || (iqentry_fpissue[4] && iqentry_islot[4] == 4'd0 && !iqentry_stomp[4])
+			 || (iqentry_fpissue[5] && iqentry_islot[5] == 4'd0 && !iqentry_stomp[5])
+			 || (iqentry_fpissue[6] && iqentry_islot[6] == 4'd0 && !iqentry_stomp[6])
+			 || (iqentry_fpissue[7] && iqentry_islot[7] == 4'd0 && !iqentry_stomp[7]));
+`endif
+
 for (n = 0; n < 8; n = n + 1)
 begin
 	if (iqentry_v[n] && iqentry_stomp[n]) begin
@@ -125,3 +137,39 @@ begin
 	end
 end
 
+
+`ifdef FLOATING_POINT
+for (n = 0; n < 8; n = n + 1)
+begin
+	if (iqentry_v[n] && iqentry_stomp[n])
+		;
+	else if (iqentry_fpissue[n]) begin
+		case (iqentry_fpislot[n]) 
+		2'd0: if (1'b1) begin
+			fp0_ld <= 1'b1;
+			fp0_sourceid	<= n[3:0];
+			fp0_op		<= iqentry_op[n];
+			fp0_cond   <= iqentry_cond[n];
+			fp0_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
+							(iqentry_p_s[n] == alu0_id) ? alu0_bus[3:0] :
+							(iqentry_p_s[n] == alu1_id) ? alu1_bus[3:0] : 4'h0;
+			fp0_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
+						: (iqentry_a1_s[n] == alu0_id) ? alu0_bus
+						: (iqentry_a1_s[n] == alu1_id) ? alu1_bus
+						: 64'hDEADDEADDEADDEAD;
+			fp0_argB	<= iqentry_a2_v[n] ? iqentry_a2[n]
+						: (iqentry_a2_s[n] == alu0_id) ? alu0_bus
+						: (iqentry_a2_s[n] == alu1_id) ? alu1_bus
+						: 64'hDEADDEADDEADDEAD;
+			fp0_argC	<= iqentry_a3_v[n] ? iqentry_a3[n]
+						: (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+						: (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+						: 64'hDEADDEADDEADDEAD;
+			fp0_argI	<= iqentry_a0[n];
+			end
+		default: panic <= `PANIC_INVALIDISLOT;
+		endcase
+		iqentry_out[n] <= `TRUE;
+	end
+end
+`endif

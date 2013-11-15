@@ -190,6 +190,7 @@ reg        iqentry_bt  	[0:7];	// branch-taken (used only for branches)
 reg        iqentry_agen [0:7];	// address-generate ... signifies that address is ready (only for LW/SW)
 reg        iqentry_mem	[0:7];	// touches memory: 1 if LW/SW
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
+reg        iqentry_fp   [0:7];  // is an floating point operation
 reg        iqentry_rfw	[0:7];	// writes to register file
 reg [DBW-1:0] iqentry_res	[0:7];	// instruction result
 reg  [3:0] iqentry_insnsz [0:7];	// the size of the instruction
@@ -217,6 +218,7 @@ wire  [7:0] iqentry_memready;
 wire  [7:0] iqentry_memopsvalid;
 
 wire stomp_all;
+reg  [7:0] iqentry_fpissue;
 reg  [7:0] iqentry_memissue;
 wire  [7:0] iqentry_stomp;
 reg  [7:0] iqentry_issue;
@@ -229,6 +231,7 @@ wire  [1:0] iqentry_5_islot;
 wire  [1:0] iqentry_6_islot;
 wire  [1:0] iqentry_7_islot;
 reg  [1:0] iqentry_islot[0:7];
+reg [1:0] iqentry_fpislot[0:7];
 
 wire  [NREGS:1] livetarget;
 wire  [NREGS:1] iqentry_0_livetarget;
@@ -276,6 +279,7 @@ reg  [DBW-1:0] fetchbuf0_pc;
 reg         fetchbuf0_v;
 wire        fetchbuf0_mem;
 wire        fetchbuf0_jmp;
+wire 		fetchbuf0_fp;
 wire        fetchbuf0_rfw;
 wire        fetchbuf0_pfw;
 reg  [63:0] fetchbuf1_instr;
@@ -283,6 +287,7 @@ reg  [DBW-1:0] fetchbuf1_pc;
 reg        fetchbuf1_v;
 wire        fetchbuf1_mem;
 wire        fetchbuf1_jmp;
+wire 		fetchbuf1_fp;
 wire        fetchbuf1_rfw;
 wire        fetchbuf1_pfw;
 wire        fetchbuf1_bfw;
@@ -350,6 +355,27 @@ wire [DBW-1:0] alu1_misspc;
 
 wire        branchmiss;
 wire [DBW-1:0] misspc;
+
+`ifdef FLOATING_POINT
+reg        fp0_ld;
+reg        fp0_available;
+reg        fp0_dataready;
+reg  [3:0] fp0_sourceid;
+reg  [7:0] fp0_op;
+reg  [3:0] fp0_cond;
+wire        fp0_cmt;
+reg 		fp0_done;
+reg [DBW-1:0] fp0_argA;
+reg [DBW-1:0] fp0_argB;
+reg [DBW-1:0] fp0_argC;
+reg [DBW-1:0] fp0_argI;
+reg  [3:0] fp0_pred;
+reg [DBW-1:0] fp0_pc;
+reg [DBW-1:0] fp0_bus;
+wire  [3:0] fp0_id;
+wire  [3:0] fp0_exc;
+wire        fp0_v;
+`endif
 
 wire        dram_avail;
 reg	 [2:0] dram0;	// state of the DRAM request (latency = 4; can have three in pipeline)
@@ -628,7 +654,8 @@ wire [63:0] bregs1 = fnBra(fetchbuf1_instr)==4'd0 ? 64'd0 : fnBra(fetchbuf1_inst
 function fnSource1_v;
 input [7:0] opcode;
 	casex(opcode)
-	`SEI,`CLI,`SYNC,`NOP:		fnSource1_v = 1'b1;
+	`SEI,`CLI,`MEMSB,`MEMDB,`NOP:
+					fnSource1_v = 1'b1;
 	`BR,`LOOP:		fnSource1_v = 1'b1;
 	`LDI,`IMM:		fnSource1_v = 1'b1;
 	`TLB:			fnSource1_v = 1'b1;
@@ -644,7 +671,8 @@ input [7:0] opcode;
 	casex(opcode)
 	`NEG,`NOT:		fnSource2_v = 1'b1;
 	`LDI,`IMM,`NOP:		fnSource2_v = 1'b1;
-	`SEI,`CLI,`SYNC:	fnSource2_v = 1'b1;
+	`SEI,`CLI,`MEMSB,`MEMDB:
+					fnSource2_v = 1'b1;
 	`RTI,`RTE:		fnSource2_v = 1'b1;
 	`TST:			fnSource2_v = 1'b1;
 	`ADDI,`ADDUI:	fnSource2_v = 1'b1;
@@ -683,7 +711,8 @@ endfunction
 function [2:0] fnNumReadPorts;
 input [63:0] ins;
 case(fnOpcode(ins))
-`SEI,`CLI,`SYNC,`NOP:	fnNumReadPorts = 3'd0;
+`SEI,`CLI,`MEMSB,`MEMDB,`NOP:
+					fnNumReadPorts = 3'd0;
 `BR,`LOOP:				fnNumReadPorts = 3'd0;
 `LDI,`IMM:				fnNumReadPorts = 3'd0;
 `NEG,`NOT:				fnNumReadPorts = 3'd1;
@@ -834,6 +863,13 @@ fnIsShiftop = opcode==`SHL || opcode==`SHLI || opcode==`SHLU || opcode==`SHLUI |
 				;
 endfunction
 
+function fnIsFP;
+input [7:0] opcode;
+fnIsFP = 	opcode==`ITOF || opcode==`FTOI || opcode==`FNEG || opcode==`FSIGN || opcode==`FCMP || opcode==`FABS ||
+			opcode==`FADD || opcode==`FSUB || opcode==`FMUL || opcode==`FDIV
+			;
+endfunction
+
 //wire [3:0] Pn = ir[7:4];
 
 // Set the target register
@@ -976,7 +1012,7 @@ casex(insn[15:0])
 16'bxxxxxxxx00010001:	fnInsnLength = 4'd1;	// RTS short form
 default:
 	casex(insn[15:8])
-	`NOP,`SEI,`CLI,`RTI,`RTE,`SYNC:
+	`NOP,`SEI,`CLI,`RTI,`RTE,`MEMSB,`MEMDB:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`RTS:
 		fnInsnLength = 4'd3;
@@ -1280,7 +1316,8 @@ assign fetchbuf1_mem	= fetchbuf ? fnIsMem(opcodeD) : fnIsMem(opcodeB);
 
 assign fetchbuf0_jmp   = fnIsFlowCtrl(opcode0);
 assign fetchbuf1_jmp   = fnIsFlowCtrl(opcode1);
-
+assign fetchbuf0_fp		= fnIsFP(opcode0);
+assign fetchbuf1_fp		= fnIsFP(opcode1);
 assign fetchbuf0_rfw	= fetchbuf ? fnIsRFW(opcodeC,fetchbufC_instr) : fnIsRFW(opcodeA,fetchbufA_instr);
 assign fetchbuf1_rfw	= fetchbuf ? fnIsRFW(opcodeD,fetchbufD_instr) : fnIsRFW(opcodeB,fetchbufB_instr);
 assign fetchbuf0_pfw	= fetchbuf ? fnIsPFW(opcodeC) : fnIsPFW(opcodeA);
@@ -1313,12 +1350,16 @@ assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~St
 // There is a one cycle delay in setting the StatusHWI that allowed an extra INT
 // instruction to sneek into the queue. This is NOPped out by the int_commit
 // signal.
+
+// On a cache miss the instruction buffers are loaded with NOPs this prevents
+// the PC from being trashed by invalid branch instructions.
 reg [63:0] insn1a;
 reg [63:0] insn0,insn1;
-always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ITLBMiss)
-if (int_commit)
-	insn0 <= {8{8'h10}};	// load with NOPs
-else if (nmi_edge & ~StatusHWI & ~int_commit)
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ITLBMiss or ihit)
+//if (int_commit)
+//	insn0 <= {8{8'h10}};	// load with NOPs
+//else
+if (nmi_edge & ~StatusHWI & ~int_commit)
 	insn0 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
 else if (ITLBMiss)
 	insn0 <= {8'hF9,8'hCE,8'hA6,8'h01,8'hF9,8'hCE,8'hA6,8'h01};
@@ -1326,14 +1367,17 @@ else if (insnerr)
 	insn0 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
 else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 	insn0 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
-else
+else if (ihit)
 	insn0 <= insn[63:0];
+else
+	insn0 <= {8{8'h10}};	// load with NOPs
 
 
-always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i or ITLBMiss)
-if (int_commit)
-	insn1 <= {8{8'h10}};	// load with NOPs
-else if (nmi_edge & ~StatusHWI & ~int_commit)
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i or ITLBMiss or ihit)
+//if (int_commit)
+//	insn1 <= {8{8'h10}};	// load with NOPs
+//else
+if (nmi_edge & ~StatusHWI & ~int_commit)
 	insn1 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
 else if (ITLBMiss)
 	insn1 <= {8'hF9,8'hCE,8'hA6,8'h01,8'hF9,8'hCE,8'hA6,8'h01};
@@ -1341,19 +1385,11 @@ else if (insnerr)
 	insn1 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
 else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 	insn1 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
-else
+else if (ihit)
 	insn1 <= insn1a;
+else
+	insn1 <= {8{8'h10}};	// load with NOPs
 
-//wire [63:0] insn0 = 
-//			(nmi_edge & !StatusHWI) ?	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
-//			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
-//			insnerr ? 					 {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01} :
-//			insn[63:0];
-//wire [63:0] insn1 = 
-//			(nmi_edge & !StatusHWI) ? 	 {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01} :
-//			(irq_i & ~im & !StatusHWI) ? {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01} :
-//			insnerr ? 					 {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01} :
-//			insn1a;
 
 // Find the second instruction in the instruction line.
 always @(insn)
@@ -1546,6 +1582,9 @@ always @(posedge clk) begin
 		
 	alu0_ld <= 1'b0;
 	alu1_ld <= 1'b0;
+`ifdef FLOATING_POINT
+	fp0_ld <= 1'b0;
+`endif
 
 	ic_invalidate <= `FALSE;
 	if (rst_i) begin
@@ -1638,7 +1677,7 @@ always @(posedge clk) begin
 	end
 `include "Thor_ifetch.v"
 	if (ihit) begin
-	$display("%h hit0=%b hit1=%b#", spc, hit0, hit1);
+	$display("%h %h hit0=%b hit1=%b#", spc, pc, hit0, hit1);
 	$display("insn=%h", insn);
 	$display("%c insn0=%h insn1=%h", nmi_edge ? "*" : " ",insn0, insn1);
 	$display("takb=%d br_pc=%h #", take_branch, branch_pc);
@@ -1682,7 +1721,7 @@ always @(posedge clk) begin
 	IDLE:
 		if (!ihit) begin
 			if (dram0!=2'd0 || dram1!=2'd0 || dram2!=2'd0)
-				;
+				$display("drams non-zero");
 			else begin
 				$display("********************");
 				$display("Cache access to: %h",!hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000});

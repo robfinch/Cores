@@ -203,3 +203,55 @@ assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
 	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),
 	missid = (alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
 
+`ifdef FLOATING_POINT
+wire [DBW-1:0] fp0_zlout,fp0_loout,fp0_out;
+
+fpUnit ufp0
+(
+	.rst(rst_i),
+	.clk(clk),
+	.ce(1'b1),
+	.op(fp0_op),
+	.ld(fp0_ld),
+	.a(fp0_argA),
+	.b(fp0_argB),
+	.o(fp0_out),
+	.zl_o(fp0_zlout),
+	.loo_o(fp0_loout),
+	.loo_done(),
+	.exception()
+);
+
+reg [7:0] cnt;
+always @(posedge clk)
+if (fp0_ld)
+	cnt <= 8'h00;
+else begin
+	if (cnt < 8'hff)
+		cnt <= cnt + 8'd1;
+end
+
+always @*
+begin
+	case(fp0_op)
+	`FNEG,`FABS,`FSIGN:	fp0_done = 1'b1;		// These ops are done right away
+	`FTOI,`ITOF:		fp0_done = cnt > 8'd2;
+	`FADD,`FSUB,`FMUL:	fp0_done = cnt > 8'd4;
+	`FDIV:				fp0_done = cnt > 8'h70;
+	endcase
+end
+always @*
+begin
+	case(fp0_op)
+	`FNEG,`FABS,`FSIGN:	fp0_bus = fp0_zlout;
+	`FTOI,`ITOF:		fp0_bus = fp0_loout;
+	default:			fp0_bus = fp0_out;
+	endcase
+end
+
+assign fp0_cmt = fnPredicate(fp0_pred, fp0_cond);
+assign fp0_exc = `EXC_NONE;
+
+assign  fp0_v = fp0_dataready;
+assign  fp0_id = fp0_sourceid;
+`endif

@@ -45,6 +45,12 @@ reg [0:127] errmem;
 reg [AMSB:0] rpc,rpcp16;
 wire [AMSB-11:0] tag0,tag1;
 
+integer n;
+initial begin
+	for (n = 0; n < 128; n = n + 1)
+		mem[n] <= 0;
+end
+
 always @(posedge wclk)
 	if (wce & wr) mem[wa[11:5]] <= wa[AMSB:12];
 always @(posedge wclk)

@@ -67,9 +67,7 @@ if (alu0_v) begin
 		end
 		else begin
 			iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
-			iqentry_done[ alu0_id[2:0] ] <= 
-					(iqentry_op[alu0_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
-					!fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
+			iqentry_done[ alu0_id[2:0] ] <= !fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
 			iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 		end
 		iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
@@ -110,15 +108,40 @@ if (alu1_v) begin
 		end
 		else begin
 			iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
-			iqentry_done[ alu1_id[2:0] ] <= 
-					(iqentry_op[alu1_id[2:0]]==`SYNC) ? (dram0|dram1|dram2==2'b00) :
-					!fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
+			iqentry_done[ alu1_id[2:0] ] <= !fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
 			iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 		end
 		iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
 		iqentry_agen[ alu1_id[2:0] ] <= `TRUE;
 	end
 end
+
+`ifdef FLOATING_POINT
+if (fp0_v) begin
+	$display("0results to iq[%d]=%h", alu0_id[2:0],alu0_bus);
+	if (|fp0_exc) begin
+		iqentry_op [alu0_id[2:0] ] <= `INT;
+		iqentry_cond [alu0_id[2:0]] <= 4'd1;		// always execute
+		iqentry_mem[alu0_id[2:0]] <= `FALSE;
+		iqentry_rfw[alu0_id[2:0]] <= `TRUE;			// writes to IPC
+		iqentry_a0 [alu0_id[2:0]] <= fp0_exc;
+		iqentry_a1 [alu0_id[2:0]] <= bregs[4'hC];	// *** assumes BR12 is static
+		iqentry_a1_v [alu0_id[2:0]] <= `TRUE;		// Flag arguments as valid
+		iqentry_a2_v [alu0_id[2:0]] <= `TRUE;
+		iqentry_a3_v [alu0_id[2:0]] <= `TRUE;
+		iqentry_out [alu0_id[2:0]] <= `FALSE;
+		iqentry_agen [alu0_id[2:0]] <= `FALSE;
+		iqentry_tgt[alu0_id[2:0]] <= {1'b1,4'h1,4'hE};	// Target IPC
+	end
+	else begin
+		iqentry_res	[ alu0_id[2:0] ] <= fp0_bus;
+		iqentry_done[ alu0_id[2:0] ] <= fp0_done || !fp0_cmt;
+		iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
+		iqentry_cmt [ alu0_id[2:0] ] <= fp0_cmt;
+		iqentry_agen[ alu0_id[2:0] ] <= `TRUE;
+	end
+end
+`endif
 
 if (dram_v && iqentry_v[ dram_id[2:0] ] && iqentry_mem[ dram_id[2:0] ] ) begin	// if data for stomped instruction, ignore
 	$display("2results to iq[%d]=%h", dram_id[2:0],dram_bus);
@@ -173,6 +196,7 @@ end
 // see if anybody else wants the results ... look at lots of buses:
 //  - alu0_bus
 //  - alu1_bus
+//  - fp0_bus
 //  - dram_bus
 //  - commit0_bus
 //  - commit1_bus
@@ -212,6 +236,24 @@ begin
 		iqentry_a3[n] <= alu1_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+`ifdef FLOATING_POINT
+	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
+		iqentry_pred[n] <= fp0_bus[3:0];
+		iqentry_p_v[n] <= `VAL;
+	end
+	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
+		iqentry_a1[n] <= fp0_bus;
+		iqentry_a1_v[n] <= `VAL;
+	end
+	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
+		iqentry_a2[n] <= fp0_bus;
+		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
+		iqentry_a3[n] <= fp0_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
+`endif
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_pred[n] <= dram_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
