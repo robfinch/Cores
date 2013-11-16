@@ -69,3 +69,17 @@ assign  iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_
 
 assign outstanding_stores = (dram0 && fnIsStore(dram0_op)) || (dram1 && fnIsStore(dram1_op)) || (dram2 && fnIsStore(dram2_op));
 
+// This signal needed to stave off an instruction cache access.
+assign mem_will_issue =
+	(
+	(~iqentry_stomp[0] && iqentry_memissue[0] && iqentry_agen[0] && ~iqentry_out[0] && iqentry_cmt[0] && ihit) ||
+	(~iqentry_stomp[1] && iqentry_memissue[1] && iqentry_agen[1] && ~iqentry_out[1] && iqentry_cmt[1] && ihit) ||
+	(~iqentry_stomp[2] && iqentry_memissue[2] && iqentry_agen[2] && ~iqentry_out[2] && iqentry_cmt[2] && ihit) ||
+	(~iqentry_stomp[3] && iqentry_memissue[3] && iqentry_agen[3] && ~iqentry_out[3] && iqentry_cmt[3] && ihit) ||
+	(~iqentry_stomp[4] && iqentry_memissue[4] && iqentry_agen[4] && ~iqentry_out[4] && iqentry_cmt[4] && ihit) ||
+	(~iqentry_stomp[5] && iqentry_memissue[5] && iqentry_agen[5] && ~iqentry_out[5] && iqentry_cmt[5] && ihit) ||
+	(~iqentry_stomp[6] && iqentry_memissue[6] && iqentry_agen[6] && ~iqentry_out[6] && iqentry_cmt[6] && ihit) ||
+	(~iqentry_stomp[7] && iqentry_memissue[7] && iqentry_agen[7] && ~iqentry_out[7] && iqentry_cmt[7] && ihit))
+	&& (dram0 == 3'd0 || dram1==3'd0 || dram2==3'd0)
+	;
+

@@ -128,6 +128,7 @@
 `define SFS			8'h94
 `define SFD			8'h95
 
+`define CAS			8'h97
 `define STSB		8'h98
 `define STSC		8'h99
 `define STSH		8'h99
@@ -144,6 +145,13 @@
 
 `define MFSPR		8'hA8
 `define MTSPR		8'hA9
+
+`define BFINS		8'hAA
+`define BFSET		8'hAB
+`define BFCLR		8'hAC
+`define BFCHG		8'hAD
+`define BFEXTU		8'hAE
+`define BFEXT		8'hAF
 
 `define LBX			8'hB0
 `define LBUX		8'hB1
@@ -193,6 +201,7 @@
 `define TLBASID			4'h7
 `define TLBDMissAdr		4'd8
 `define TLBIMissAdr		4'd9
+`define TLBPageTblAddr	4'd10
 
 
 `define RTE			8'hF3
@@ -224,7 +233,6 @@
 `define TICK			8'h02
 `define LCTR			8'h03
 `define PREGS			8'h04
-`define MISSADR			8'h05
 `define BREGS			8'h1x
 `define SREGS			8'h2x
 		
@@ -238,6 +246,7 @@
 `define EXC_INT		4'd6
 `define EXC_OFL		4'd7
 `define EXC_DBE		4'd8		// databus error
+`define EXC_DBZ		4'd9		// divide by zero
 
 //
 // define PANIC types

@@ -32,7 +32,7 @@
 // do nothing (kinda like alpha approach)
 //
 if (branchmiss) begin
-	$display("pc <= 5h", misspc);
+	$display("pc <= %h", misspc);
 	pc <= misspc;
 	fetchbuf <= 1'b0;
 	fetchbufA_v <= 1'b0;

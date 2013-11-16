@@ -130,8 +130,6 @@ if (commit0_v) begin
 		begin
 			if (iqentry_tgt[head0]==`LCTR)
 				lc <= commit0_bus;
-			if (iqentry_tgt[head1]==`MISSADR)
-				miss_addr <= commit0_bus;
 		end
 	default:	;
 	endcase
@@ -152,8 +150,6 @@ if (commit0_v && commit1_v) begin
 		begin
 			if (iqentry_tgt[head1]==`LCTR)
 				lc <= commit1_bus;
-			if (iqentry_tgt[head1]==`MISSADR)
-				miss_addr <= commit1_bus;
 		end
 	default:	;
 	endcase

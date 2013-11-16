@@ -58,13 +58,15 @@ casex ({dram0, dram1, dram2})
 	default: begin
 	//
 	// grab requests that have finished and put them on the dram_bus
-	if (dram0 == 3'd3 && (ack_i|err_i|DTLBMiss)) begin
+	if ((dram0 == 3'd3 || dram0==3'd5) && (ack_i|err_i|DTLBMiss)) begin
 		$display("0WISHBONE ack");
-		dram_v <= fnIsMem(dram0_op);
+		dram_v <= fnIsMem(dram0_op) && dram0_op != `CAS;
 		dram_id <= dram0_id;
 		dram_tgt <= dram0_tgt;
 		dram_exc <= err_i ? `EXC_DBE : DTLBMiss ? `EXC_TLBMISS : `EXC_NONE;//dram0_exc;
-		dram_bus <= fnDatai(dram0_op,dat_i,sel_o);
+		if (dram0==3'd3)
+			dram_bus <= fnDatai(dram0_op,dat_i,sel_o);
+		wb_nack();
 		case(dram0_op)
 		`STSW:
 			if (lc != 0 && !int_pending) begin
@@ -98,18 +100,30 @@ casex ({dram0, dram1, dram2})
 			end
 			else
 				dram0 <= 3'd0;
+		`CAS:
+			if (dram0_datacmp == dat_i && dram0==3'd3) begin
+				$display("0CAS match");
+				cyc_o <= 1'b1;	// hold onto cyc_o
+				dram0 <= dram0 + 3'd1;
+			end
+			else begin
+				lock_o <= 1'b0;
+				dram_v <= `TRUE;
+				dram0 <= 3'd0;
+			end
 		default:
-			dram0 <= 3'd0;
+				dram0 <= 3'd0;
 		endcase
-		wb_nack();
 	end
-	else if (dram1 == 3'd3 && (ack_i|err_i|DTLBMiss)) begin
+	else if ((dram1 == 3'd3 || dram1==3'd5) && (ack_i|err_i|DTLBMiss)) begin
 		$display("1WISHBONE ack");
-		dram_v <= fnIsMem(dram1_op);
+		dram_v <= fnIsMem(dram1_op) && dram1_op != `CAS;
 		dram_id <= dram1_id;
 		dram_tgt <= dram1_tgt;
 		dram_exc <= err_i ? `EXC_DBE : DTLBMiss ? `EXC_TLBMISS : `EXC_NONE;//dram0_exc;
-		dram_bus <= fnDatai(dram1_op,dat_i,sel_o);
+		if (dram1==3'd3)
+			dram_bus <= fnDatai(dram1_op,dat_i,sel_o);
+		wb_nack();
 		case(dram1_op)
 		`STSW:
 			if (lc != 0 && !int_pending) begin
@@ -143,18 +157,30 @@ casex ({dram0, dram1, dram2})
 			end
 			else
 				dram1 <= 3'd0;
+		`CAS:
+			if (dram1_datacmp == dat_i && dram1==3'd3) begin
+				$display("1CAS match");
+				cyc_o <= 1'b1;	// hold onto cyc_o
+				dram1 <= dram1 + 3'd1;
+			end
+			else begin
+				lock_o <= 1'b0;
+				dram_v <= `TRUE;
+				dram1 <= 3'd0;
+			end
 		default:
 			dram1 <= 3'd0;
 		endcase
-		wb_nack();
 	end
-	else if (dram2 == 3'd3 && (ack_i|err_i|DTLBMiss)) begin
+	else if ((dram2 == 3'd3 || dram2==3'd5) && (ack_i|err_i|DTLBMiss)) begin
 		$display("2WISHBONE ack");
-		dram_v <= fnIsMem(dram2_op);
+		dram_v <= fnIsMem(dram2_op) && dram2_op != `CAS;
 		dram_id <= dram2_id;
 		dram_tgt <= dram2_tgt;
 		dram_exc <= err_i ? `EXC_DBE : DTLBMiss ? `EXC_TLBMISS : `EXC_NONE;//dram0_exc;
-		dram_bus <= fnDatai(dram2_op,dat_i,sel_o);
+		if (dram2==3'd3)
+			dram_bus <= fnDatai(dram2_op,dat_i,sel_o);
+		wb_nack();
 		case(dram2_op)
 		`STSW:
 			if (lc != 0 && !int_pending) begin
@@ -188,10 +214,20 @@ casex ({dram0, dram1, dram2})
 			end
 			else
 				dram2 <= 3'd0;
+		`CAS:
+			if (dram2_datacmp == dat_i && dram2==3'd3) begin
+				$display("2CAS match");
+				cyc_o <= 1'b1;	// hold onto cyc_o
+				dram2 <= dram2 + 3'd1;
+			end
+			else begin
+				lock_o <= 1'b0;
+				dram_v <= `TRUE;
+				dram2 <= 3'd0;
+			end
 		default:
 			dram2 <= 3'd0;
 		endcase
-		wb_nack();
 	end
 	else if (tlb_state==3'd3) begin
 		dram_v <= `TRUE;
@@ -207,74 +243,56 @@ casex ({dram0, dram1, dram2})
 	end
 	end
 endcase
-if (dram0==3'd1 && !cyc_o) begin
+if (dram0==3'd1 && dram1==3'd0 && dram2==3'd0) begin
 	$display("0WISHBONE %c:%h %h cycle started",fnIsLoad(dram0_op)?"L" : "S", dram0_addr, dram0_data);
-	cyc_o <= 1'b1;
-	stb_o <= 1'b1;
-	pwe <= fnIsStore(dram0_op);
-	sel_o <= fnSelect(dram0_op,dram0_addr);
 	vadr <= dram0_addr;
-	dat_o <= fnDatao(dram0_op,dram0_data);
-	dram0 <= 3'd2;
+	dram0 <= dram0 + 3'd1;
 end
-else if (dram1==3'd1 && !cyc_o) begin
+else if (dram1==3'd1 && dram0==3'd0 && dram2==3'd0) begin
 	$display("1WISHBONE %c:%h %h cycle started",fnIsLoad(dram1_op)?"L" : "S", dram1_addr, dram1_data);
-	cyc_o <= 1'b1;
-	stb_o <= 1'b1;
-	pwe <= fnIsStore(dram1_op);
-	sel_o <= fnSelect(dram1_op,dram1_addr);
 	vadr <= dram1_addr;
-	dat_o <= fnDatao(dram1_op,dram1_data);
-	dram1 <= 3'd2;
+	dram1 <= dram1 + 3'd1;
 end
-else if (dram2==3'd1 && !cyc_o) begin
+else if (dram2==3'd1 && dram0==3'd0 && dram1==3'd0) begin
 	$display("2WISHBONE %c:%h %h cycle started",fnIsLoad(dram2_op)?"L" : "S", dram2_addr, dram2_data);
-	cyc_o <= 1'b1;
-	stb_o <= 1'b1;
-	pwe <= fnIsStore(dram2_op);
-	sel_o <= fnSelect(dram2_op,dram2_addr);
 	vadr <= dram2_addr;
-	dat_o <= fnDatao(dram2_op,dram2_data);
-	dram2 <= 3'd2;
+	dram2 <= dram2 + 3'd1;
 end
-if (dram0==3'd2) begin
+if (dram0==3'd2 || dram0==3'd4) begin
 	if (!DTLBMiss) begin
+		lock_o <= dram0_op==`CAS;
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		we_o <= fnIsStore(dram0_op);
+		we_o <= fnIsStore(dram0_op) || dram0==3'd4;
 		sel_o <= fnSelect(dram0_op,pea);
 		adr_o <= pea;
 		dat_o <= fnDatao(dram0_op,dram0_data);
 	end
-	else if (miss_addr=={DBW{1'b0}})
-		miss_addr <= pea;
-	dram0 <= 3'd3;
+	dram0 <= dram0+3'd1;
 end
-if (dram1==3'd2) begin
+if (dram1==3'd2 || dram1==3'd4) begin
 	if (!DTLBMiss) begin
+		lock_o <= dram1_op==`CAS;
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		we_o <= fnIsStore(dram1_op);
+		we_o <= fnIsStore(dram1_op) || dram1==3'd4;
 		sel_o <= fnSelect(dram1_op,pea);
 		adr_o <= pea;
 		dat_o <= fnDatao(dram1_op,dram1_data);
 	end
-	else if (miss_addr=={DBW{1'b0}})
-		miss_addr <= pea;
-	dram1 <= 3'd3;
+	dram1 <= dram1+3'd1;
 end
-if (dram2==3'd2) begin
+if (dram2==3'd2 || dram2==3'd4) begin
 	if (!DTLBMiss) begin
+		lock_o <= dram2_op==`CAS;
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		we_o <= fnIsStore(dram2_op);
+		we_o <= fnIsStore(dram2_op) || dram2==3'd4;
 		sel_o <= fnSelect(dram2_op,pea);
 		adr_o <= pea;
 		dat_o <= fnDatao(dram2_op,dram2_data);
 	end
-	else if (miss_addr=={DBW{1'b0}})
-		miss_addr <= pea;
-	dram2 <= 3'd3;
+	dram2 <= dram2+3'd1;
 end
 
 //
@@ -296,6 +314,7 @@ iqentry_memissue[ head1 ] <=	~iqentry_stomp[head1] && iqentry_memready[ head1 ]	
 					|| (iqentry_a1_v[head0] && iqentry_a1[head1][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head1]))// || !fnIsFlowCtrl(iqentry_op[head0]));
+				&& (iqentry_op[head1]!=`CAS)
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				;
 
@@ -310,6 +329,7 @@ iqentry_memissue[ head2 ] <=	~iqentry_stomp[head2] && iqentry_memready[ head2 ]	
 					|| (iqentry_a1_v[head1] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head2]))// ||
+				&& (iqentry_op[head2]!=`CAS)
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
 				;
@@ -330,6 +350,7 @@ iqentry_memissue[ head3 ] <=	~iqentry_stomp[head3] && iqentry_memready[ head3 ]	
 					|| (iqentry_a1_v[head2] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head3]))
+				&& (iqentry_op[head3]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
@@ -356,6 +377,7 @@ iqentry_memissue[ head4 ] <=	~iqentry_stomp[head4] && iqentry_memready[ head4 ]	
 					|| (iqentry_a1_v[head3] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head4]))
+				&& (iqentry_op[head4]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
@@ -388,6 +410,7 @@ iqentry_memissue[ head5 ] <=	~iqentry_stomp[head5] && iqentry_memready[ head5 ]	
 					|| (iqentry_a1_v[head4] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head5]))
+				&& (iqentry_op[head5]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
@@ -425,6 +448,7 @@ iqentry_memissue[ head6 ] <=	~iqentry_stomp[head6] && iqentry_memready[ head6 ]	
 					|| (iqentry_a1_v[head5] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head6]))
+				&& (iqentry_op[head6]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
@@ -467,6 +491,7 @@ iqentry_memissue[ head7 ] <=	~iqentry_stomp[head7] && iqentry_memready[ head7 ]	
 					|| (iqentry_a1_v[head6] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head6][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (!fnIsStore(iqentry_op[head7]))
+				&& (iqentry_op[head7]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
@@ -510,7 +535,7 @@ for (n = 0; n < 8; n = n + 1)
 			iqentry_out[n] <= `TRUE;
 		end
 	end
-	else if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && iqentry_cmt[n]) begin
+	else if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && iqentry_cmt[n] && ihit) begin
 		if (fnIsStoreString(iqentry_op[n]))
 			string_pc <= iqentry_pc[n];
 		$display("issued memory cycle");
@@ -519,7 +544,8 @@ for (n = 0; n < 8; n = n + 1)
 			dram0_id 	<= { 1'b1, n[2:0] };
 			dram0_op 	<= iqentry_op[n];
 			dram0_tgt 	<= iqentry_tgt[n];
-			dram0_data	<= fnIsIndexed(iqentry_op[n]) ? iqentry_a3[n] : iqentry_a2[n];
+			dram0_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
+			dram0_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
 			dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
 `else
@@ -532,7 +558,8 @@ for (n = 0; n < 8; n = n + 1)
 			dram1_id 	<= { 1'b1, n[2:0] };
 			dram1_op 	<= iqentry_op[n];
 			dram1_tgt 	<= iqentry_tgt[n];
-			dram1_data	<= fnIsIndexed(iqentry_op[n]) ? iqentry_a3[n] : iqentry_a2[n];
+			dram1_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
+			dram1_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
 			dram1_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
 `else
@@ -545,7 +572,8 @@ for (n = 0; n < 8; n = n + 1)
 			dram2_id 	<= { 1'b1, n[2:0] };
 			dram2_op 	<= iqentry_op[n];
 			dram2_tgt 	<= iqentry_tgt[n];
-			dram2_data	<= fnIsIndexed(iqentry_op[n]) ? iqentry_a3[n] : iqentry_a2[n];
+			dram2_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
+			dram2_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
 			dram2_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
 `else

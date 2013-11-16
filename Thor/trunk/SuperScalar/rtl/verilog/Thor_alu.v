@@ -44,6 +44,7 @@ integer n;
 
 wire [7:0] bcdao,bcdso;
 wire [15:0] bcdmo;
+wire [DBW-1:0] bf_out;
 
 BCDAdd ubcda
 (
@@ -68,6 +69,16 @@ BCDMul2 ubcdm
 	.a(alu_argA),
 	.b(alu_argB),
 	.o(bcdmo)
+);
+
+Thor_bitfield #(DBW) ubf1
+(
+	.op(alu_op),
+	.a(alu_argA),
+	.b(alu_argB),
+	.m(alu_argI[15:0]),
+	.o(bf_out),
+	.masko()
 );
 
 
@@ -122,7 +133,7 @@ casex(alu_op)
 			o[2] <= alu_argA < alu_argI;
 			o[DBW-1:3] <= 61'd0;
 		end
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH:
 				o <= alu_argA + alu_argI;
 `LBX,`LBUX,`SBX:	o <= alu_argA + alu_argB + alu_argI;
 `LCX,`LCUX,`SCX:	o <= alu_argA + {alu_argB[DBW-2:0],1'b0} + alu_argI;
@@ -143,6 +154,8 @@ casex(alu_op)
 		`BCDMUL:	o <= bcdmo;
 		default:	o <= 64'd0;
 		endcase
+`BFINS,`BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:
+		o <= bf_out;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end

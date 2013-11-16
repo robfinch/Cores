@@ -96,7 +96,7 @@
 //
 `include "Thor_defines.v"
 
-module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter DBW = 32;
 parameter IDLE = 4'd0;
 parameter ICACHE1 = 4'd1;
@@ -121,6 +121,7 @@ input [7:0] vec_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg [4:0] bl_o;
+output reg lock_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
@@ -390,18 +391,21 @@ reg [DBW-1:0] tlb_data;
 
 wire [DBW-1:0] tlb_dato;
 reg [DBW-1:0] dram0_data;
+reg [DBW-1:0] dram0_datacmp;
 reg [DBW-1:0] dram0_addr;
 reg  [7:0] dram0_op;
 reg  [8:0] dram0_tgt;
 reg  [3:0] dram0_id;
 reg  [3:0] dram0_exc;
 reg [DBW-1:0] dram1_data;
+reg [DBW-1:0] dram1_datacmp;
 reg [DBW-1:0] dram1_addr;
 reg  [7:0] dram1_op;
 reg  [8:0] dram1_tgt;
 reg  [3:0] dram1_id;
 reg  [3:0] dram1_exc;
 reg [DBW-1:0] dram2_data;
+reg [DBW-1:0] dram2_datacmp;
 reg [DBW-1:0] dram2_addr;
 reg  [7:0] dram2_op;
 reg  [8:0] dram2_tgt;
@@ -413,6 +417,8 @@ reg  [8:0] dram_tgt;
 reg  [3:0] dram_id;
 reg  [3:0] dram_exc;
 reg        dram_v;
+
+wire mem_will_issue;
 
 wire        outstanding_stores;
 reg [DBW-1:0] I;	// instruction count
@@ -692,6 +698,8 @@ input [7:0] opcode;
 			fnSource2_v = 1'b1;
 	`MTSPR,`MFSPR:
 				fnSource2_v = 1'b1;
+	`BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:	// but not BFINS
+				fnSource2_v = 1'b1;
 	default:	fnSource2_v = 1'b0;
 	endcase
 endfunction
@@ -701,7 +709,7 @@ endfunction
 function fnSource3_v;
 input [7:0] opcode;
 	casex(opcode)
-	`SBX,`SCX,`SHX,`SWX:	fnSource3_v = 1'b0;
+	`SBX,`SCX,`SHX,`SWX,`CAS:	fnSource3_v = 1'b0;
 	`MUX:	fnSource3_v = 1'b0;
 	default:	fnSource3_v = 1'b1;
 	endcase
@@ -733,10 +741,13 @@ case(fnOpcode(ins))
 `JSR,`SYS,`INT,`RTS,`BR,`LOOP:
 					fnNumReadPorts = 3'd1;
 `SBX,`SCX,`SHX,`SWX,
-`MUX:
+`MUX,`CAS:
 					fnNumReadPorts = 3'd3;
 `MTSPR,`MFSPR:		fnNumReadPorts = 3'd1;
 `TLB:				fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
+`BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:
+					fnNumReadPorts = 3'd1;
+`BFINS:				fnNumReadPorts = 3'd2;
 default:			fnNumReadPorts = 3'd2;
 endcase
 endfunction
@@ -870,6 +881,11 @@ fnIsFP = 	opcode==`ITOF || opcode==`FTOI || opcode==`FNEG || opcode==`FSIGN || o
 			;
 endfunction
 
+function fnIsBitfield;
+input [7:0] opcode;
+fnIsBitfield = opcode==`BFSET || opcode==`BFCLR || opcode==`BFCHG || opcode==`BFINS || opcode==`BFEXT || opcode==`BFEXTU;
+endfunction
+
 //wire [3:0] Pn = ir[7:4];
 
 // Set the target register
@@ -900,6 +916,10 @@ begin
 		`ANDI,`ORI,`EORI,
 		`SHLI,`SHRI,`SHLUI,`SHRUI,`ROLI,`RORI,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
+			fnTargetReg = {1'b0,ir[31:24]};
+		`CAS:
+			fnTargetReg = {1'b0,ir[47:40]};
+		`BFSET,`BFCLR,`BFCHG,`BFINS,`BFEXT,`BFEXTU:
 			fnTargetReg = {1'b0,ir[31:24]};
 		`TLB:
 			if (ir[19:16]==`TLB_RDREG)
@@ -967,6 +987,7 @@ endfunction
 function fnHasConst;
 input [7:0] opcode;
 	casex(opcode)
+	`BFCLR,`BFSET,`BFCHG,`BFEXT,`BFEXTU,`BFINS,
 	`LDI,
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
@@ -977,7 +998,7 @@ input [7:0] opcode;
 	`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,
 	`SBX,`SCX,`SHX,`SWX,
 	`LVB,`LVC,`LVH,`LVW,
-	`SB,`SC,`SH,`SW,
+	`SB,`SC,`SH,`SW,`CAS,
 	`JSR,`SYS,`INT,`BR:
 		fnHasConst = 1'b1;
 	default:
@@ -1018,8 +1039,11 @@ default:
 		fnInsnLength = 4'd3;
 	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG,`TLB:
 		fnInsnLength = 4'd4;
+	`BFCLR,`BFSET,`BFCHG,`BFINS,`BFEXT,`BFEXTU,
 	`LBX,`LWX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`SCX,`SBX,`SHX,`SWX,`MUX,`BCD:
 		fnInsnLength = 4'd6;
+	`CAS:
+		fnInsnLength = 4'd7;
 	default:
 		fnInsnLength = 4'd5;
 	endcase
@@ -1074,7 +1098,7 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
 			opcode==`STSB || opcode==`STSC || opcode==`STSH || opcode==`STSW ||
 			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
-			opcode==`TLB
+			opcode==`TLB || opcode==`CAS
 			;
 endfunction
 
@@ -1086,6 +1110,7 @@ begin
 fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
+			opcode==`CAS ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
 			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
@@ -1151,7 +1176,7 @@ if (DBW==32)
 		endcase
 	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		fnSelect = 8'hFF;
-	`LW,`LWX,`SW,`LVW,`SWX:
+	`LW,`LWX,`SW,`LVW,`SWX,`CAS:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1180,7 +1205,7 @@ else
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
-	`LW,`LWX,`SW,`LVW,`SWX:
+	`LW,`LWX,`SW,`LVW,`SWX,`CAS:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1222,7 +1247,7 @@ if (DBW==32)
 		4'hC:	fnDatai = dat[31:16];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LHX,`LHUX:
+	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LHX,`LHUX,`CAS:
 		fnDatai = dat[31:0];
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
@@ -1280,7 +1305,7 @@ else
 		8'hF0:	fnDatai = dat[DBW-1:DBW/2];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LW,`LWX,`LVW:
+	`LW,`LWX,`LVW,`CAS:
 		case(sel)
 		8'hFF:	fnDatai = dat;
 		default:	fnDatai = {DBW{1'b1}};
@@ -1295,7 +1320,7 @@ input [7:0] opcode;
 input [DBW-1:0] dat;
 if (DBW==32)
 	case(opcode)
-	`SW,`SWX:	fnDatao = dat;
+	`SW,`SWX,`CAS:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = dat;
 	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
 	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
@@ -1303,7 +1328,7 @@ if (DBW==32)
 	endcase
 else
 	case(opcode)
-	`SW,`SWX:	fnDatao = dat;
+	`SW,`SWX,`CAS:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
 	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
 	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
@@ -1346,6 +1371,7 @@ assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~St
 // Populate the instruction buffers with INT instructions for a hardware interrupt
 // Also populate the instruction buffers with a call to the instruction error vector
 // if an error occurred during instruction load time.
+// Translate the BRK opcode to a syscall.
 
 // There is a one cycle delay in setting the StatusHWI that allowed an extra INT
 // instruction to sneek into the queue. This is NOPped out by the int_commit
@@ -1367,8 +1393,12 @@ else if (insnerr)
 	insn0 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
 else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 	insn0 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
-else if (ihit)
-	insn0 <= insn[63:0];
+else if (ihit) begin
+	if (insn[7:0]==8'h00)
+		insn0 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+	else
+		insn0 <= insn[63:0];
+end
 else
 	insn0 <= {8{8'h10}};	// load with NOPs
 
@@ -1385,8 +1415,12 @@ else if (insnerr)
 	insn1 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
 else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 	insn1 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
-else if (ihit)
-	insn1 <= insn1a;
+else if (ihit) begin
+	if (insn1a[7:0]==8'h00)
+		insn1 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+	else
+		insn1 <= insn1a;
+end
 else
 	insn1 <= {8{8'h10}};	// load with NOPs
 
@@ -1410,16 +1444,13 @@ function [7:0] fnImm;
 input [127:0] insn;
 
 case(insn[15:8])
-`BCD:
-	fnImm = insn[47:40];
-`TLB:
-	fnImm = insn[23:16];
-`LOOP:
-	fnImm = insn[23:16];
+`CAS:	fnImm = insn[55:48];
+`BCD:	fnImm = insn[47:40];
+`TLB:	fnImm = insn[23:16];
+`LOOP:	fnImm = insn[23:16];
 `SYS,`JSR,`INT,`CMPI,`LDI:
 	fnImm = insn[31:24];
-`RTS:
-	fnImm = {4'h0,insn[19:16]};
+`RTS:	fnImm = {4'h0,insn[19:16]};
 `RTE,`RTI:
 	fnImm = 8'h00;
 `LBX,`LBUX,`LHX,`LHUX,`LCX,`LCUX,`LWX,
@@ -1436,6 +1467,7 @@ function fnImmMSB;
 input [127:0] insn;
 
 case(insn[15:8])
+`CAS:	fnImmMSB = insn[55];
 `TLB,`BCD:
 	fnImmMSB = 1'b0;		// TLB regno is unsigned
 `LOOP:
@@ -1671,12 +1703,12 @@ always @(posedge clk) begin
 
 	end
 
-	if (ihit) begin
+//	if (ihit) begin
 		$display("\r\n");
 		$display("TIME %0d", $time);
-	end
+//	end
 `include "Thor_ifetch.v"
-	if (ihit) begin
+//	if (ihit) begin
 	$display("%h %h hit0=%b hit1=%b#", spc, pc, hit0, hit1);
 	$display("insn=%h", insn);
 	$display("%c insn0=%h insn1=%h", nmi_edge ? "*" : " ",insn0, insn1);
@@ -1690,10 +1722,10 @@ always @(posedge clk) begin
 	$display("%c%c D: %d %h %h #",
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 	$display("fetchbuf=%d",fetchbuf);
-	end
+//	end
 `include "Thor_commit_early.v"
 `include "Thor_enque.v"
-	if (ihit) begin
+//	if (ihit) begin
 	for (i=0; i<8; i=i+1) 
 	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h #",
 		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
@@ -1707,7 +1739,7 @@ always @(posedge clk) begin
 		fnRegstr(iqentry_tgt[i]),fnRegstrGrp(iqentry_tgt[i]),
 		iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
 		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
-	end
+//	end
 `include "Thor_dataincoming.v"
 `include "Thor_issue.v"
 	if (ihit) $display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
@@ -1719,7 +1751,8 @@ always @(posedge clk) begin
 
 	case(cstate)
 	IDLE:
-		if (!ihit) begin
+		begin
+		if (!ihit & !mem_will_issue) begin
 			if (dram0!=2'd0 || dram1!=2'd0 || dram2!=2'd0)
 				$display("drams non-zero");
 			else begin
@@ -1739,25 +1772,28 @@ always @(posedge clk) begin
 				cstate <= ICACHE1;
 			end
 		end
+		end
 	ICACHE1:
-		if (ack_i|err_i) begin
-			ierr <= ierr | err_i;	// cumulate an error status
-			if (DBW==32) begin
-				adr_o[4:2] <= adr_o[4:2] + 3'd1;
-				if (adr_o[4:2]==3'b110)
-					cti_o <= 3'b111;
-				if (adr_o[4:2]==3'b111) begin
-					wb_nack();
-					cstate <= IDLE;
+		begin
+			if (ack_i|err_i) begin
+				ierr <= ierr | err_i;	// cumulate an error status
+				if (DBW==32) begin
+					adr_o[4:2] <= adr_o[4:2] + 3'd1;
+					if (adr_o[4:2]==3'b110)
+						cti_o <= 3'b111;
+					if (adr_o[4:2]==3'b111) begin
+						wb_nack();
+						cstate <= IDLE;
+					end
 				end
-			end
-			else begin
-				adr_o[4:3] <= adr_o[4:3] + 2'd1;
-				if (adr_o[4:3]==2'b10)
-					cti_o <= 3'b111;
-				if (adr_o[4:3]==2'b11) begin
-					wb_nack();
-					cstate <= IDLE;
+				else begin
+					adr_o[4:3] <= adr_o[4:3] + 2'd1;
+					if (adr_o[4:3]==2'b10)
+						cti_o <= 3'b111;
+					if (adr_o[4:3]==2'b11) begin
+						wb_nack();
+						cstate <= IDLE;
+					end
 				end
 			end
 		end

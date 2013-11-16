@@ -86,6 +86,7 @@ reg [7:0] TLBASID [63:0];
 reg [63:0] TLBValid;
 reg [DBW-1:0] imiss_addr;
 reg [DBW-1:0] dmiss_addr;
+reg [DBW-1:0] PageTblAddr;
 
 initial begin
 	for (n = 0; n < 64; n = n + 1)
@@ -111,6 +112,7 @@ if (rst) begin
 	Random <= 3'h7;
 	Wired <= 3'd0;
 	PageSize <= 3'd0;
+	PageTblAddr <= {DBW{1'b0}};
 end
 else begin
 	if (dmiss_addr == {DBW{1'b0}} && DTLBMiss)
@@ -147,6 +149,7 @@ else begin
 						end
 			`TLBDMissAdr:	dmiss_addr <= dati;
 			`TLBIMissAdr:	imiss_addr <= dati;
+			`TLBPageTblAddr:	PageTblAddr <= dati;
 			endcase
 			end
 		`TLB_EN:
@@ -209,6 +212,7 @@ always @*
 				end
 	`TLBDMissAdr:	dato = dmiss_addr;
 	`TLBIMissAdr:	dato = imiss_addr;
+	`TLBPageTblAddr:	dato = PageTblAddr;
 	default:	dato = {DBW{1'b0}};
 	endcase
 

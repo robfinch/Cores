@@ -1,25 +1,34 @@
-`timescale 1ns / 1ps
 // ============================================================================
-//	(C) 2007-2013  Robert Finch
-//	robfinch@<remove>sympatico.ca
+//	(C) 2007,2011,2013  Robert Finch
+//  All rights reserved.
+//	robfinch@<remove>finitron.ca
 //
 //	rtfSimpleUart.v
 //		Basic uart with	baud rate generator based on a harmonic
 //	frequency synthesizer.
 //
 //
-// This source file is free software: you can redistribute it and/or modify 
-// it under the terms of the GNU Lesser General Public License as published 
-// by the Free Software Foundation, either version 3 of the License, or     
-// (at your option) any later version.                                      
-//                                                                          
-// This source file is distributed in the hope that it will be useful,      
-// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-// GNU General Public License for more details.                             
-//                                                                          
-// You should have received a copy of the GNU General Public License        
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//     * Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//     * Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the distribution.
+//     * Neither the name of the <organization> nor the
+//       names of its contributors may be used to endorse or promote products
+//       derived from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+// ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+// WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+// DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+// (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+// ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+// SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //
 //  	To use:
@@ -211,10 +220,7 @@
 //	|Special requirements:
 //	+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //
-//
-//	Ref. Spartan3 -4
-//	117 LUTs / 87 slices / 133 MHz
-//============================================================================
+//=============================================================================
 
 `define UART_TRB    4'd0    // transmit/receive buffer
 `define UART_LS     4'd1    // line status register
@@ -253,18 +259,14 @@ module rtfSimpleUart(
 	output txd_o,			// serial data out
 	output data_present_o
 );
-parameter pClkFreq = 20000000;	// clock frequency in Hz
+parameter pClkFreq = 20000000;	// clock frequency in MHz
 parameter pBaud = 19200;
 parameter pClkMul = (4096 * pBaud) / (pClkFreq / 65536);
 parameter pRts = 1;		// default to active
 parameter pDtr = 1;
-parameter pIOAddress = 32'hFFDC0A00;
 
-wire cs = cyc_i && stb_i && (adr_i[31:4]==pIOAddress[31:4]);
-reg rdy;
-always @(posedge clk_i)
-	rdy <= cs;
-assign ack_o = cs ? (we_i ? 1'b1 : rdy) : 1'b0;
+wire cs = cyc_i && stb_i && (adr_i[31:4]==28'hFFDC_0A0);
+assign ack_o = cs;
 assign vol_o = cs && adr_i[3:2]==2'b00;
 
 //-------------------------------------------
@@ -277,7 +279,7 @@ reg rx_present_ie;
 reg tx_empty_ie;
 reg dcd_ie;
 reg hwfc;			// hardware flow control enable
-wire clear = cyc_i && stb_i && we_i && adr_i[3:0]==4'd13;
+wire clear = cyc_i && stb_i && we_i && adr_i==4'd13;
 wire frame_err;		// receiver char framing error
 wire over_run;		// receiver over run
 reg [1:0] ctsx;		// cts_ni sampling
@@ -335,8 +337,8 @@ rtfSimpleUartTx uart_tx0(
 	.empty(tx_empty)
 );
 
-// mux and register the reg outputs
-always @(posedge clk_i)
+// mux the reg outputs
+always @*
 	if (cs) begin
 		case(adr_i[3:0])	// synopsys full_case parallel_case
 		`UART_MS:	dat_o <= {dcdx[1],1'b0,dsrx[1],ctsx[1],dcd_chg,3'b0};
