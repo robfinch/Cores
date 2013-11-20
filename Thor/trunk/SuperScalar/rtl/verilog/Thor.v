@@ -96,10 +96,16 @@
 //
 `include "Thor_defines.v"
 
-module Thor(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module Thor(rst_i, clk_i, km, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter DBW = 32;
 parameter IDLE = 4'd0;
 parameter ICACHE1 = 4'd1;
+parameter DCACHE1 = 4'd2;
+parameter IBUF1 = 4'd3;
+parameter IBUF2 = 4'd4;
+parameter IBUF3 = 4'd5;
+parameter IBUF4 = 4'd6;
+parameter IBUF5 = 4'd7;
 parameter NREGS = 303;
 parameter PF = 4'd0;
 parameter PT = 4'd1;
@@ -115,6 +121,7 @@ parameter PGEU = 4'd10;
 parameter PLTU = 4'd11;
 input rst_i;
 input clk_i;
+output km;
 input nmi_i;
 input irq_i;
 input [7:0] vec_i;
@@ -144,9 +151,10 @@ reg [ 3:0] pregs [0:15];		// predicate registers
 `ifdef SEGMENTATION
 reg [DBW-1:12] sregs [0:15];		// segment registers
 `endif
-reg [DBW-1:0] miss_addr;
 wire ITLBMiss;
 wire DTLBMiss;
+wire uncached;
+wire [DBW-1:0] cdat;
 reg pwe;
 wire [DBW-1:0] pea;
 reg [DBW-1:0] tick;
@@ -154,16 +162,23 @@ reg [DBW-1:0] lc;				// loop counter
 wire [DBW-1:0] rfoa0,rfoa1;
 wire [DBW-1:0] rfob0,rfob1;
 reg ic_invalidate;
-reg ierr;						// err_i during icache load
+reg ierr,derr;					// err_i during icache load
 wire insnerr;					// err_i during icache load
 wire [127:0] insn;
+reg [DBW-1:0] ibufadr;
+reg [127:0] ibuf;
+wire ibufhit = ibufadr==pc;
+wire iuncached;
 reg [NREGS:0] rf_v;
 //reg [15:0] pf_v;
 reg im,imb;
 reg nmi1,nmi_edge;
 reg StatusHWI;
+reg [7:0] StatusEXL;
+assign km = StatusHWI | |StatusEXL;
 wire int_commit;
 wire int_pending;
+wire sys_commit;
 `ifdef SEGMENTATION
 wire [DBW-1:0] spc = (pc[DBW-1:DBW-4]==4'hF) ? pc : {sregs[15],12'h000} + pc;
 `else
@@ -171,6 +186,7 @@ wire [DBW-1:0] spc = pc;
 `endif
 wire [DBW-1:0] ppcp16 = ppc + 64'd16;
 reg [DBW-1:0] string_pc;
+reg [7:0] asid;
 
 wire clk = clk_i;
 
@@ -390,6 +406,7 @@ reg [8:0] tlb_tgt;
 reg [DBW-1:0] tlb_data;
 
 wire [DBW-1:0] tlb_dato;
+reg dram0_owns_bus;
 reg [DBW-1:0] dram0_data;
 reg [DBW-1:0] dram0_datacmp;
 reg [DBW-1:0] dram0_addr;
@@ -397,6 +414,7 @@ reg  [7:0] dram0_op;
 reg  [8:0] dram0_tgt;
 reg  [3:0] dram0_id;
 reg  [3:0] dram0_exc;
+reg dram1_owns_bus;
 reg [DBW-1:0] dram1_data;
 reg [DBW-1:0] dram1_datacmp;
 reg [DBW-1:0] dram1_addr;
@@ -635,8 +653,8 @@ Thor_regfile2w4r #(DBW) urf1
 (
 	.clk(clk),
 	.rclk(~clk),
-	.wr0(commit0_v & ~commit0_tgt[8]),
-	.wr1(commit1_v & ~commit1_tgt[8]),
+	.wr0(commit0_v && ~commit0_tgt[8] && iqentry_op[head0]!=`MTSPR),
+	.wr1(commit1_v && ~commit1_tgt[8] && iqentry_op[head1]!=`MTSPR),
 	.wa0(commit0_tgt[7:0]),
 	.wa1(commit1_tgt[7:0]),
 	.ra0(Ra0[7:0]),
@@ -675,7 +693,7 @@ endfunction
 function fnSource2_v;
 input [7:0] opcode;
 	casex(opcode)
-	`NEG,`NOT:		fnSource2_v = 1'b1;
+	`NEG,`NOT,`MOV:		fnSource2_v = 1'b1;
 	`LDI,`IMM,`NOP:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB:
 					fnSource2_v = 1'b1;
@@ -723,7 +741,7 @@ case(fnOpcode(ins))
 					fnNumReadPorts = 3'd0;
 `BR,`LOOP:				fnNumReadPorts = 3'd0;
 `LDI,`IMM:				fnNumReadPorts = 3'd0;
-`NEG,`NOT:				fnNumReadPorts = 3'd1;
+`NEG,`NOT,`MOV:			fnNumReadPorts = 3'd1;
 `RTI,`RTE:			fnNumReadPorts = 3'd1;
 `TST:				fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI:		fnNumReadPorts = 3'd1;
@@ -854,7 +872,40 @@ Thor_itagmem #(DBW-1) uitm1
 );
 
 wire ihit = hit0 & hit1;
-wire ld_fetchbuf = ihit || (nmi_edge & !StatusHWI)||(irq_i & ~im & !StatusHWI);
+wire do_pcinc = iuncached ? ibufhit : ihit;
+wire ld_fetchbuf = (iuncached ? ibufhit : ihit) || (nmi_edge & !StatusHWI)||(irq_i & ~im & !StatusHWI);
+
+wire whit;
+
+Thor_dcachemem_1w1r #(DBW) udcm1
+(
+	.wclk(clk),
+	.wce(whit || cstate==DCACHE1),
+	.wr(ack_i|err_i),
+	.sel(whit ? sel_o : 8'hFF),
+	.wa(adr_o),
+	.wd(whit ? dat_o : dat_i),
+	.rclk(~clk),
+	.rce(1'b1),
+	.ra(pea),
+	.o(cdat)
+);
+
+Thor_dtagmem #(DBW-1) udtm1
+(
+	.wclk(clk),
+	.wce(cstate==DCACHE1 && cti_o==3'b111),
+	.wr(ack_i|err_i),
+	.wa(adr_o),
+	.err_i(err_i|derr),
+	.invalidate(ic_invalidate),
+	.rclk(~clk),
+	.rce(1'b1),
+	.ra(pea),
+	.whit(whit),
+	.rhit(rhit),
+	.err_o()
+);
 
 wire [DBW-1:0] shfto0,shfto1;
 
@@ -910,7 +961,7 @@ begin
 		`SHL,`SHR,`SHLU,`SHRU,`ROL,`ROR,
 		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX:
 			fnTargetReg = {1'b0,ir[39:32]};
-		`NEG,
+		`NEG,`NOT,`MOV,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
@@ -1037,7 +1088,7 @@ default:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`RTS:
 		fnInsnLength = 4'd3;
-	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG,`TLB:
+	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG,`NOT,`MOV,`TLB:
 		fnInsnLength = 4'd4;
 	`BFCLR,`BFSET,`BFCHG,`BFINS,`BFEXT,`BFEXTU,
 	`LBX,`LWX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`SCX,`SBX,`SHX,`SWX,`MUX,`BCD:
@@ -1117,7 +1168,7 @@ fnIsRFW =	// General registers
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
 			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
-			opcode==`NOT || opcode==`NEG ||
+			opcode==`NOT || opcode==`NEG || opcode==`MOV ||
 			opcode==`LDI || opcode==`MFSPR ||
 			// Branch registers / Segment registers
 			(opcode==`MTSPR && (fnTargetsBr(ir) || fnTargetsSegreg(ir))) ||
@@ -1125,7 +1176,7 @@ fnIsRFW =	// General registers
 			// predicate registers
 			(opcode[7:4] < 4'h3) ||
 			(opcode==`TLB && ir[19:16]==`TLB_RDREG) ||
-			opcode==`BCD
+			opcode==`BCD 
 			;
 end
 endfunction
@@ -1142,6 +1193,11 @@ input [7:0] opcode;
 fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW;
+endfunction
+
+function fnIsLoadV;
+input [7:0] opcode;
+fnIsLoadV = opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW;
 endfunction
 
 function fnIsIndexed;
@@ -1381,7 +1437,7 @@ assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~St
 // the PC from being trashed by invalid branch instructions.
 reg [63:0] insn1a;
 reg [63:0] insn0,insn1;
-always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ITLBMiss or ihit)
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ITLBMiss or ihit or iuncached or ibufhit or ierr or ibuf)
 //if (int_commit)
 //	insn0 <= {8{8'h10}};	// load with NOPs
 //else
@@ -1393,6 +1449,18 @@ else if (insnerr)
 	insn0 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
 else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 	insn0 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+else if (iuncached) begin
+	if (ibufhit) begin
+		if (ierr) 
+			insn0 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+		else if (ibuf[7:0]==8'h00)
+			insn0 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+		else
+			insn0 <= ibuf[63:0];
+	end
+	else
+		insn0 <= {8{8'h10}};	// load with NOPs
+end
 else if (ihit) begin
 	if (insn[7:0]==8'h00)
 		insn0 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
@@ -1403,7 +1471,7 @@ else
 	insn0 <= {8{8'h10}};	// load with NOPs
 
 
-always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i or ITLBMiss or ihit)
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn1a or vec_i or ITLBMiss or ihit or ierr or ibufhit or iuncached)
 //if (int_commit)
 //	insn1 <= {8{8'h10}};	// load with NOPs
 //else
@@ -1415,6 +1483,18 @@ else if (insnerr)
 	insn1 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
 else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 	insn1 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+else if (iuncached) begin
+	if (ibufhit) begin
+		if (ierr)
+			insn1 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+		else if (insn1a[7:0]==8'h00)
+			insn1 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+		else
+			insn1 <= insn1a[63:0];
+	end
+	else
+		insn1 <= {8{8'h10}};	// load with NOPs
+end
 else if (ihit) begin
 	if (insn1a[7:0]==8'h00)
 		insn1 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
@@ -1426,7 +1506,20 @@ else
 
 
 // Find the second instruction in the instruction line.
-always @(insn)
+always @(insn or iuncached or ibuf)
+if (iuncached)
+	case(fnInsnLength(ibuf))
+	4'd1:	insn1a <= ibuf[71: 8];
+	4'd2:	insn1a <= ibuf[79:16];
+	4'd3:	insn1a <= ibuf[87:24];
+	4'd4:	insn1a <= ibuf[95:32];
+	4'd5:	insn1a <= ibuf[103:40];
+	4'd6:	insn1a <= ibuf[111:48];
+	4'd7:	insn1a <= ibuf[119:56];
+	4'd8:	insn1a <= ibuf[127:64];
+	default:	insn1a <= {8{8'h10}};	// NOPs
+	endcase
+else
 	case(fnInsnLength(insn))
 	4'd1:	insn1a <= insn[71: 8];
 	4'd2:	insn1a <= insn[79:16];
@@ -1536,6 +1629,7 @@ begin
 					fnOpa[59:56] = pregs[14];
 					fnOpa[63:60] = pregs[15];
 				end
+		`ASID:	fnOpa = asid;
 		8'h1x:	fnOpa = ins[19:16]==4'h0 ? 64'd0 : ins[19:16]==4'hF ? epc :
 						(commit0_v && commit0_tgt[8:4]==5'h11 && commit0_tgt[3:0]==ins[19:16]) ? commit0_bus :
 						bregs[ins[19:16]];
@@ -1611,7 +1705,8 @@ always @(posedge clk) begin
 
 	if (nmi_i & !nmi1)
 		nmi_edge <= 1'b1;
-		
+	
+	dram_v <= `INV;
 	alu0_ld <= 1'b0;
 	alu1_ld <= 1'b0;
 `ifdef FLOATING_POINT
@@ -1677,6 +1772,7 @@ always @(posedge clk) begin
 		sregs[15] <= 52'd0;
 		for (i=0; i < 16; i=i+1)
 			pregs[i] <= 4'd0;
+		asid <= 8'h00;
 	end
 
 	// The following registers are always valid
@@ -1703,12 +1799,12 @@ always @(posedge clk) begin
 
 	end
 
-//	if (ihit) begin
+	if (ihit) begin
 		$display("\r\n");
 		$display("TIME %0d", $time);
-//	end
+	end
 `include "Thor_ifetch.v"
-//	if (ihit) begin
+	if (ihit) begin
 	$display("%h %h hit0=%b hit1=%b#", spc, pc, hit0, hit1);
 	$display("insn=%h", insn);
 	$display("%c insn0=%h insn1=%h", nmi_edge ? "*" : " ",insn0, insn1);
@@ -1722,10 +1818,10 @@ always @(posedge clk) begin
 	$display("%c%c D: %d %h %h #",
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 	$display("fetchbuf=%d",fetchbuf);
-//	end
+	end
 `include "Thor_commit_early.v"
 `include "Thor_enque.v"
-//	if (ihit) begin
+	if (ihit) begin
 	for (i=0; i<8; i=i+1) 
 	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h #",
 		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
@@ -1739,7 +1835,7 @@ always @(posedge clk) begin
 		fnRegstr(iqentry_tgt[i]),fnRegstrGrp(iqentry_tgt[i]),
 		iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
 		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
-//	end
+	end
 `include "Thor_dataincoming.v"
 `include "Thor_issue.v"
 	if (ihit) $display("iss=%b stomp=%b", iqentry_issue, iqentry_stomp);
@@ -1751,8 +1847,48 @@ always @(posedge clk) begin
 
 	case(cstate)
 	IDLE:
-		begin
-		if (!ihit & !mem_will_issue) begin
+		if (dram0 == 3'd6 && !rhit) begin
+				$display("********************");
+				$display("DCache access to: %h",{pea[DBW-1:5],5'b00000});
+				$display("********************");
+				derr <= 1'b0;
+				bte_o <= 2'b00;
+				cti_o <= 3'b001;
+				bl_o <= DBW==32 ? 5'd7 : 5'd3;
+				cyc_o <= 1'b1;
+				stb_o <= 1'b1;
+				we_o <= 1'b0;
+				sel_o <= {DBW/8{1'b1}};
+				adr_o <= {pea[DBW-1:5],5'b00000};
+				dat_o <= {DBW{1'b0}};
+				cstate <= DCACHE1;
+		end
+		else if (iuncached & !ibufhit & !mem_will_issue) begin
+			ierr <= 1'b0;
+			bte_o <= 2'b00;
+			cti_o <= 3'b001;
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= 1'b0;
+			sel_o <= {DBW/8{1'b1}};
+			dat_o <= {DBW{1'b0}};
+			cstate <= IBUF1;
+			if (DBW==64) begin
+				$display("********************");
+				$display("Insn access to: %h", {ppc[DBW-1:3],3'b000});
+				$display("********************");
+				bl_o <= 5'd2;
+				adr_o <= {ppc[DBW-1:3],3'b000};
+			end
+			else begin
+				$display("********************");
+				$display("Insn access to: %h", {ppc[DBW-1:2],2'b00});
+				$display("********************");
+				bl_o <= 5'd4;
+				adr_o <= {ppc[DBW-1:2],2'b00};
+			end
+		end
+		else if (!ihit & !mem_will_issue) begin
 			if (dram0!=2'd0 || dram1!=2'd0 || dram2!=2'd0)
 				$display("drams non-zero");
 			else begin
@@ -1771,7 +1907,6 @@ always @(posedge clk) begin
 				dat_o <= {DBW{1'b0}};
 				cstate <= ICACHE1;
 			end
-		end
 		end
 	ICACHE1:
 		begin
@@ -1796,6 +1931,138 @@ always @(posedge clk) begin
 					end
 				end
 			end
+		end
+	DCACHE1:
+		begin
+			if (ack_i|err_i) begin
+				derr <= derr | err_i;	// cumulate an error status
+				if (DBW==32) begin
+					adr_o[4:2] <= adr_o[4:2] + 3'd1;
+					if (adr_o[4:2]==3'b110)
+						cti_o <= 3'b111;
+					if (adr_o[4:2]==3'b111) begin
+						wb_nack();
+						cstate <= IDLE;
+					end
+				end
+				else begin
+					adr_o[4:3] <= adr_o[4:3] + 2'd1;
+					if (adr_o[4:3]==2'b10)
+						cti_o <= 3'b111;
+					if (adr_o[4:3]==2'b11) begin
+						wb_nack();
+						cstate <= IDLE;
+					end
+				end
+			end
+		end
+	IBUF1:
+		if (ack_i|err_i) begin
+			ierr <= ierr | err_i;
+			if (DBW==64) begin
+				adr_o[DBW-1:3] <= adr_o[DBW-1:3] + 61'd1;
+				case(ppc[2:0])
+				3'd0:	ibuf[63:0] <= dat_i;
+				3'd1:	ibuf[55:0] <= dat_i[63:8];
+				3'd2:	ibuf[47:0] <= dat_i[63:16];
+				3'd3:	ibuf[39:0] <= dat_i[63:24];
+				3'd4:	ibuf[31:0] <= dat_i[63:32];
+				3'd5:	ibuf[23:0] <= dat_i[63:40];
+				3'd6:	ibuf[15:0] <= dat_i[63:48];
+				3'd7:	ibuf[ 7:0] <= dat_i[63:56];
+				endcase
+			end
+			else begin
+				adr_o[DBW-1:2] <= adr_o[DBW-1:2] + 30'd1;
+				case(ppc[1:0])
+				2'd0:	ibuf[31:0] <= dat_i;
+				2'd1:	ibuf[23:0] <= dat_i[31:8];
+				2'd2:	ibuf[15:0] <= dat_i[31:16];
+				2'd3:	ibuf[7:0] <= dat_i[31:24];
+				endcase
+			end
+			cstate <= IBUF2;
+		end
+	IBUF2:
+		if (ack_i|err_i) begin
+			ierr <= ierr | err_i;
+			if (DBW==64) begin
+				adr_o[DBW-1:3] <= adr_o[DBW-1:3] + 61'd1;
+				case(ppc[2:0])
+				3'd0:	ibuf[127:64] <= dat_i;
+				3'd1:	ibuf[119:56] <= dat_i;
+				3'd2:	ibuf[111:48] <= dat_i;
+				3'd3:	ibuf[103:40] <= dat_i;
+				3'd4:	ibuf[95:32] <= dat_i;
+				3'd5:	ibuf[87:24] <= dat_i;
+				3'd6:	ibuf[79:16] <= dat_i;
+				3'd7:	ibuf[71: 8] <= dat_i;
+				endcase
+			end
+			else begin
+				adr_o[DBW-1:2] <= adr_o[DBW-1:2] + 30'd1;
+				case(ppc[1:0])
+				2'd0:	ibuf[63:32] <= dat_i;
+				2'd1:	ibuf[55:24] <= dat_i;
+				2'd2:	ibuf[47:16] <= dat_i;
+				2'd3:	ibuf[39: 8] <= dat_i;
+				endcase
+			end
+			cstate <= IBUF3;
+		end
+	IBUF3:
+		if (ack_i|err_i) begin
+			ierr <= ierr | err_i;
+			if (DBW==64) begin
+				wb_nack;
+				case(ppc[2:0])
+				3'd0:	;
+				3'd1:	ibuf[127:120] <= dat_i[7:0];
+				3'd2:	ibuf[127:112] <= dat_i[15:0];
+				3'd3:	ibuf[127:104] <= dat_i[23:0];
+				3'd4:	ibuf[127: 96] <= dat_i[31:0];
+				3'd5:	ibuf[127: 88] <= dat_i[39:0];
+				3'd6:	ibuf[127: 80] <= dat_i[47:0];
+				3'd7:	ibuf[127: 72] <= dat_i[55:0];
+				endcase
+				ibufadr <= ppc;
+				cstate <= IDLE;
+			end
+			else begin
+				adr_o[DBW-1:2] <= adr_o[DBW-1:2] + 30'd1;
+				case(ppc[1:0])
+				2'd0:	ibuf[95:64] <= dat_i;
+				2'd1:	ibuf[87:56] <= dat_i;
+				2'd2:	ibuf[79:48] <= dat_i;
+				2'd3:	ibuf[71:40] <= dat_i;
+				endcase
+				cstate <= IBUF4;
+			end
+		end
+	IBUF4:
+		if (ack_i|err_i) begin
+			ierr <= ierr | err_i;
+			adr_o[DBW-1:2] <= adr_o[DBW-1:2] + 30'd1;
+			case(ppc[1:0])
+			2'd0:	ibuf[127:96] <= dat_i;
+			2'd1:	ibuf[119:88] <= dat_i;
+			2'd2:	ibuf[111:80] <= dat_i;
+			2'd3:	ibuf[103:72] <= dat_i;
+			endcase
+			cstate <= IBUF5;
+		end
+	IBUF5:
+		if (ack_i|err_i) begin
+			ierr <= ierr | err_i;
+			wb_nack();
+			case(ppc[1:0])
+			2'd0:	;
+			2'd1:	ibuf[127:120] <= dat_i[7:0];
+			2'd2:	ibuf[127:112] <= dat_i[15:0];
+			2'd3:	ibuf[127:104] <= dat_i[23:0];
+			endcase
+			ibufadr <= ppc;
+			cstate <= IDLE;
 		end
 	endcase
 

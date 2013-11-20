@@ -51,7 +51,7 @@ else if (take_branch) begin
 				fetchbufD_instr <= insn1;
 				fetchbufD_pc <= pc + fnInsnLength(insn);
 				fetchbufD_v <= ld_fetchbuf;
-				if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 				fetchbuf <= 1'b1;
 			end
 		4'b0100:
@@ -62,7 +62,7 @@ else if (take_branch) begin
 				fetchbufD_instr <= insn1;
 				fetchbufD_pc <= pc + fnInsnLength(insn);
 				fetchbufD_v <= ld_fetchbuf;
-				if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 				fetchbufB_v <= iqentry_v[tail0];
 				if (iqentry_v[tail0]==`INV)
 					fetchbuf <= 1'b1;
@@ -81,7 +81,7 @@ else if (take_branch) begin
 				fetchbufD_instr <= insn1;
 				fetchbufD_v <= ld_fetchbuf;
 				fetchbufD_pc <= pc + fnInsnLength(insn);
-				if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 				fetchbufA_v <= iqentry_v[tail0];
 				if (iqentry_v[tail0]==`INV)
 					fetchbuf <= 1'b1;
@@ -110,7 +110,7 @@ else if (take_branch) begin
 					fetchbufD_instr <= insn1;
 					fetchbufD_v <= ld_fetchbuf;
 					fetchbufD_pc <= pc + fnInsnLength(insn);
-					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+					if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 					fetchbufA_v <= iqentry_v[tail0];
 					fetchbufB_v <= iqentry_v[tail1];
 					if (iqentry_v[tail1]==`INV)
@@ -143,7 +143,7 @@ else if (take_branch) begin
 				fetchbufB_instr <= insn1;
 				fetchbufB_pc <= pc + fnInsnLength(insn);
 				fetchbufB_v <= ld_fetchbuf;
-				if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 				fetchbuf <= 1'b0;
 			end
 		4'b0100:
@@ -154,7 +154,7 @@ else if (take_branch) begin
 				fetchbufB_instr <= insn1;
 				fetchbufB_pc <= pc + fnInsnLength(insn);
 				fetchbufB_v <= ld_fetchbuf;
-				if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 				fetchbufD_v <= iqentry_v[tail0];
 				if (iqentry_v[tail0]==`INV)
 					fetchbuf <= 1'b0;
@@ -173,7 +173,7 @@ else if (take_branch) begin
 				fetchbufB_instr <= insn1;
 				fetchbufB_v <= ld_fetchbuf;
 				fetchbufB_pc <= pc + fnInsnLength(insn);
-				if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 				fetchbufC_v <= iqentry_v[tail0];
 				if (iqentry_v[tail0]==`INV)
 					fetchbuf <= 1'b0;
@@ -199,7 +199,7 @@ else if (take_branch) begin
 					fetchbufB_instr <= insn1;
 					fetchbufB_v <= ld_fetchbuf;
 					fetchbufB_pc <= pc + fnInsnLength(insn);
-					if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+					if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 					fetchbufC_v <= iqentry_v[tail0];
 					fetchbufD_v <= iqentry_v[tail1];
 					if (iqentry_v[tail1]==`INV)
@@ -299,11 +299,11 @@ else begin
 		fetchbufB_instr <= insn1;
 		fetchbufB_v <= ld_fetchbuf;
 		fetchbufB_pc <= pc + fnInsnLength(insn);
-		if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+		if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 		// fetchbuf steering logic correction
-		if (fetchbufC_v==`INV && fetchbufD_v==`INV && ihit)
+		if (fetchbufC_v==`INV && fetchbufD_v==`INV && do_pcinc)
 			fetchbuf <= 1'b0;
-		$display("ihi%b 1pc <= %h", ihit, pc + fnInsnLength(insn) + fnInsnLength1(insn));
+		$display("hit %b 1pc <= %h", do_pcinc, pc + fnInsnLength(insn) + fnInsnLength1(insn));
 	end
 	else if (fetchbufC_v == `INV && fetchbufD_v == `INV) begin
 		fetchbufC_instr <= insn0;
@@ -312,7 +312,7 @@ else begin
 		fetchbufD_instr <= insn1;
 		fetchbufD_v <= ld_fetchbuf;
 		fetchbufD_pc <= pc + fnInsnLength(insn);
-		if (ihit) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
+		if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
 		$display("2pc <= %h", pc + fnInsnLength(insn) + fnInsnLength1(insn));
 	end
 end

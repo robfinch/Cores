@@ -1,0 +1,554 @@
+     1	#include "prog_prefix.h"
+ *** error 27: Can't open
+     2	#include "ctype.h"
+ *** error 27: Can't open
+     3	#include "io.h"
+     4	#include "stdio.h"
+     5	#include "stdlib.h"
+     6	
+     7	#define OFF		0
+     8	#define	ON		1
+     9	
+    10	char sprX[5];
+    11	char sprY[5];
+    12	char sprDX[5];
+    13	char sprDY[5];
+    14	char pacmanX;
+    15	char pacmanY;
+    16	int score;
+    17	
+    18	char map[27][27] =
+    19	{
+    20		{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    21		{1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    22		{1,0,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,0,1},
+    23		{1,0,1,0,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,0,1,0,1},
+    24		{1,0,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,0,1},
+    25		{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    26		{1,0,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,0,1},
+    27		{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    28		{1,1,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,1,1},
+    29		{0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0},
+    30		{0,0,0,0,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,0,0,0,0},
+    31		{0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0},
+    32		{0,0,0,0,0,1,0,1,0,1,1,2,2,2,2,2,1,1,0,1,0,1,0,0,0,0,0},
+    33		{1,1,1,1,1,1,0,1,0,1,0,0,0,0,0,0,0,1,0,1,0,1,1,1,1,1,1},
+    34		{3,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,3},
+    35		{1,1,1,1,1,1,0,1,0,1,0,0,0,0,0,0,0,1,0,1,0,1,1,1,1,1,1},
+    36		{0,0,0,0,0,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,0,0,0,0,0},
+    37		{0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0},
+    38		{1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1},
+    39		{1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    40		{1,0,1,1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,1,0,1},
+    41		{1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1},
+    42		{1,1,0,1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1,0,1,1},
+    43		{1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1},
+    44		{1,0,1,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,1,0,1},
+    45		{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    46		{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
+    47	
+    48		//{{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    49		//{1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    50		//{1,0,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,0,1},
+    51		//{1,0,1,0,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,0,1,0,1},
+    52		//{1,0,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,0,1},
+    53		//{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    54		//{1,0,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,0,1},
+    55		//{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    56		//{1,0,0,0,0,0,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,0,0,0,0,0,1},
+    57		//{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    58		//{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    59		//{1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    60		//{1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    61		//{1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    62		//{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    63		//{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}},
+    64	
+    65		//{{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    66		//{1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    67		//{1,0,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,0,1},
+    68		//{1,0,1,0,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,1,0,1,0,0,1,0,1},
+    69		//{1,0,1,1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,1,1,1,0,1},
+    70		//{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    71		//{1,0,1,1,1,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,0,1},
+    72		//{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    73		//{1,0,0,0,0,0,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,0,0,0,0,0,1},
+    74		//{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    75		//{1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    76		//{1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    77		//{1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    78		//{1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
+    79		//{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    80		//{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}}
+    81	};
+    82	
+    83	char AsciiToScreen(char ch)
+    84	{
+    85		ch = ch & 0xff;
+    86		if (ch < 'A') return ch | 0x100;
+    87		if (ch <= 'Z') goto j1;
+    88		if (ch > 'z') return ch | 0x100;
+    89		if (ch < 'a') return ch | 0x100;
+    90	j1:
+    91		ch = ch - 0x60;
+    92		ch = ch | 0x100;
+    93		return ch;
+    94	}
+    95	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+j1         =000000    -    Label
+
+
+
+    96	char MapToChar(char n)
+    97	{
+    98		switch(n) {
+    99		case 0: return '.';
+   100		case 1:	return '#';
+   101		case 2:	return '-';
+   102		case 3: return '?';
+   103		case 4: return ' ';
+   104		}
+   105		return '?';
+   106	}
+   107	
+
+
+*** local symbol table ***
+
+n          =000018    -    Auto        Char
+
+
+
+   108	void setRandDir(int n)
+   109	{
+   110		if (rand(100) > 50) {
+   111			sprDY[n] = rand(3) - 1;
+   112			sprDX[n] = 0;
+   113		}
+   114		else {
+   115			sprDX[n] = rand(3) - 1;
+   116			sprDY[n] = 0;
+   117		}
+   118	}
+   119	
+
+
+*** local symbol table ***
+
+n          =000018    -    Auto        Long
+
+
+
+   120	void RedrawMap()
+   121	{
+   122		char *screen;
+   123		int xx,yy;
+   124		char ch;
+   125		char nn;
+   126	
+   127		screen = (char *)0xD00000;
+   128		for (yy = 0; yy < 27; yy++) {
+   129			for (xx = 0; xx < 27; xx++) {
+   130				nn = map[xx][yy];
+   131				ch = MapToChar(nn);
+   132				outc(&screen[yy*84+xx],AsciiToScreen(ch));
+   133			}
+   134		}
+   135		setCursorPos(30,2);
+   136		putnum(score);
+   137	}
+   138	
+
+
+*** local symbol table ***
+
+screen     =fffffff8    -    Auto        Pointer to Char
+xx         =fffffff0    -    Auto        Long
+yy         =ffffffe8    -    Auto        Long
+ch         =ffffffe6    -    Auto        Char
+nn         =ffffffe4    -    Auto        Char
+
+
+
+   139	int main()
+   140	{
+   141		int xx,yy,zz;
+   142		int ny,nx;
+   143		char *screen;
+   144		char ch;
+   145		char nn;
+   146		screen = (char *)0xD00000;
+   147	
+   148		score = 0;
+   149		printf("\r\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+   150		RedrawMap();
+   151		for (nn = 0; nn < 6; nn++) {
+   152			setSpriteSize(nn, 15, 15);	// 16x16 sprites
+   153		}
+   154		setKeyboardEcho(OFF);
+   155		resetGhosts();
+   156		setRandDir(0);
+   157		setRandDir(1);
+   158		setRandDir(2);
+   159		setRandDir(3);
+   160		resetPacman();
+   161		turnOnSprites();
+   162		forever {
+   163			for (nn = 0; nn < 4; nn++)
+   164				moveGhost(nn);
+   165			ch = getchar2();
+   166			switch(ch) {
+   167			case 'Q','q':
+   168				goto j1;
+   169			case 0x90:	// up
+   170				ny = pacmanY - 4;
+   171				if (IsLegalPos(pacmanX,ny))
+   172					pacmanY = ny;
+   173				break;
+   174			case 0x93:	// left
+   175				nx = pacmanX-4;
+   176				if (IsLegalPos(nx,pacmanY))
+   177					pacmanX = nx;
+   178				break;
+   179			case 0x91:	// right
+   180				nx = pacmanX+4;
+   181				if (IsLegalPos(nx,pacmanY))
+   182					pacmanX = nx;
+   183				break;
+   184			case 0x92:	// down
+   185				ny = pacmanY + 4;
+   186				if (IsLegalPos(pacmanX,ny))
+   187					pacmanY = ny;
+   188				break;
+   189			}
+   190			setSpritePos(4,pacmanX,pacmanY);
+   191			nx = (pacmanX-hSyncOffset()) >> 4;
+   192			if (nx > 27) nx = 27;
+   193			ny = (pacmanY-vSyncOffset()) >> 4;
+   194			if (ny > 27) ny = 27;
+   195			if (map[nx][ny]==0) {
+   196				score += 10;
+   197				map[nx][ny] = 4;
+   198				RedrawMap();
+   199			}
+   200		}
+   201	j1:
+   202		setKeyboardEcho(ON);
+   203	}
+   204	
+
+
+*** local symbol table ***
+
+xx         =fffffff8    -    Auto        Long
+yy         =fffffff0    -    Auto        Long
+zz         =ffffffe8    -    Auto        Long
+ny         =ffffffe0    -    Auto        Long
+nx         =ffffffd8    -    Auto        Long
+screen     =ffffffd0    -    Auto        Pointer to Char
+ch         =ffffffce    -    Auto        Char
+nn         =ffffffcc    -    Auto        Char
+j1         =00001e    -    Label
+
+
+
+   205	int hSyncOffset()
+   206	{
+   207		return 216;
+   208	}
+   209	
+
+
+*** local symbol table ***
+
+
+
+
+   210	int vSyncOffset()
+   211	{
+   212		return 18;
+   213	}
+   214	
+
+
+*** local symbol table ***
+
+
+
+
+   215	int IsLegalPos(int x, int y)
+   216	{
+   217		x = (x-hSyncOffset()) >> 4;
+   218		y = (y-vSyncOffset()) >> 4;
+   219		if (x > 27) x = 27;
+   220		if (y > 27) y = 27;
+   221		return map[x][y]==0 || map[x][y]==2 || map[x][y]==4;
+   222	}
+   223	
+
+
+*** local symbol table ***
+
+x          =000018    -    Auto        Long
+y          =000020    -    Auto        Long
+
+
+
+   224	void resetPacman()
+   225	{
+   226		pacmanX = 9 * 16 + hSyncOffset();
+   227		pacmanY = 14 * 16 + vSyncOffset();
+   228		setSpritePos(4,pacmanX,pacmanY);
+   229	}
+   230	
+   231	// Set the ghosts to a legal starting position in the start box.
+
+
+*** local symbol table ***
+
+
+
+
+   232	void resetGhosts()
+   233	{
+   234		sprX[0] = 13 * 16 + hSyncOffset();
+   235		sprY[0] = 14 * 16 + vSyncOffset();
+   236		sprX[1] = 14 * 16 + hSyncOffset();
+   237		sprY[1] = 14 * 16 + vSyncOffset();
+   238		sprX[2] = 15 * 16 + hSyncOffset();
+   239		sprY[2] = 14 * 16 + vSyncOffset();
+   240		sprX[3] = 16 * 16 + hSyncOffset();
+   241		sprY[3] = 14 * 16 + vSyncOffset();
+   242		sprDX[0] = 0;
+   243		sprDY[0] = 0;
+   244		sprDX[1] = 0;
+   245		sprDY[1] = 0;
+   246		sprDX[2] = 0;
+   247		sprDY[2] = 0;
+   248		sprDX[3] = 0;
+   249		sprDY[3] = 0;
+   250		setSpritePos(0,sprX[0],sprY[0]);
+   251		setSpritePos(1,sprX[1],sprY[1]);
+   252		setSpritePos(2,sprX[2],sprY[2]);
+   253		setSpritePos(3,sprX[3],sprY[3]);
+   254	}
+   255	
+
+
+*** local symbol table ***
+
+
+
+
+   256	void moveGhost(int n)
+   257	{
+   258		int newX, newY;
+   259	
+   260		//while (!isLegalPos(sprX[n],sprY[n])) {
+   261		//	sprX[n] = sprX[n] + 1;
+   262		//	sprY[n] = sprY[n] + 1;
+   263		//	setSpritePos(n, sprX[n], sprY[n]);
+   264		//}
+   265		newX = sprX[n] + sprDX[n];
+   266		newY = sprY[n] + sprDY[n];
+   267	
+   268		if (IsLegalPos(newX, newY)) {
+   269			sprX[n] = newX;
+   270			sprY[n] = newY;
+   271		}
+   272		else
+   273			setRandDir(n);
+   274	
+   275		if (rand(100) > 96)
+   276			setRandDir(n);
+   277		setSpritePos(n, sprX[n], sprY[n]);
+   278	}
+   279	
+
+
+*** local symbol table ***
+
+n          =000018    -    Auto        Long
+newX       =fffffff8    -    Auto        Long
+newY       =fffffff0    -    Auto        Long
+
+
+
+   280	void setSpritePos(int n, int x, int y)
+   281	{
+   282		outh(0xDAD000+n*16,(y<<16)|x);
+   283	}
+   284	
+
+
+*** local symbol table ***
+
+n          =000018    -    Auto        Long
+x          =000020    -    Auto        Long
+y          =000028    -    Auto        Long
+
+
+
+   285	void setSpriteSize(int n, int x, int y)
+   286	{
+   287		outh(0xDAD004+n*16,((y & 63) << 8)|(x & 63));
+   288	}
+   289	
+
+
+*** local symbol table ***
+
+n          =000018    -    Auto        Long
+x          =000020    -    Auto        Long
+y          =000028    -    Auto        Long
+
+
+
+   290	void turnOnSprites()
+   291	{
+   292		outb(0xDAD0F0,0xFF);
+   293	}
+   294	
+
+
+*** local symbol table ***
+
+
+
+
+   295	void setKeyboardEcho(int n)
+   296	{
+   297		asm {
+   298			lw		r1,#0x01
+   299			lw		r2,24[bp]
+   300			syscall	#417
+   301		}
+   302	}
+   303	
+
+
+*** local symbol table ***
+
+n          =000018    -    Auto        Long
+
+
+
+   304	void setCursorPos(int x, int y)
+   305	{
+   306		asm {
+   307			lw		r1,#0x02
+   308			lw		r2,24[bp]
+   309			lw		r3,32[bp]
+   310			syscall	#410
+   311		}
+   312	}
+   313	
+   314	
+
+
+*** local symbol table ***
+
+x          =000018    -    Auto        Long
+y          =000020    -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+fread      =000070    -    Global      Function returning Long
+fsetpos    =000070    -    Global      Function returning Long
+sprintf    =000070    -    Global      Function returning Long
+fgetc      =000070    -    Global      Function returning Long
+vprintf    =000070    -    Global      Function returning Long
+scanf      =000070    -    Global      Function returning Long
+AsciiToScreen =00065a    -    Global      Function returning Char
+fseek      =000070    -    Global      Function returning Long
+getchar2   =000070    -    External    Function returning Long
+ftell      =000070    -    Global      Function returning Long
+fopen      =000070    -    Global      Function returning Pointer to struct <no name> 
+srand      =000070    -    Global      Function returning 
+fgets      =000070    -    Global      Function returning Pointer to Char
+score      =0000a0    -    Global      Long
+FILE       =000028    1   struct <no name> 
+fputc      =000070    -    Global      Function returning Long
+putch      =000070    -    Global      Function returning 
+fputs      =000070    -    Global      Function returning Long
+inb        =000000    -    Global      Function returning Long
+map        =0000a8    -    Global      Array of Array of Char
+inw        =000000    -    Global      Function returning Long
+clearerr   =000070    -    Global      Function returning 
+_Files     =000000    -    External    Array of Pointer to struct <no name> 
+_Fgpos     =000070    -    Global      Function returning Long
+setSpriteSize =000000    -    Global      Function returning 
+MapToChar  =00065a    -    Global      Function returning Char
+_Fspos     =000070    -    Global      Function returning Long
+hSyncOffset =000000    -    Global      Function returning Long
+_Sizet     =000010    1   Long
+vfprintf   =000070    -    Global      Function returning Long
+turnOnSprites =000000    -    Global      Function returning 
+fscanf     =000070    -    Global      Function returning Long
+resetPacman =000000    -    Global      Function returning 
+rename     =000070    -    Global      Function returning Long
+vSyncOffset =000000    -    Global      Function returning Long
+fclose     =000070    -    Global      Function returning Long
+sscanf     =000070    -    Global      Function returning Long
+RedrawMap  =00065a    -    Global      Function returning 
+ungetc     =000070    -    Global      Function returning Long
+fflush     =000070    -    Global      Function returning Long
+rewind     =000070    -    Global      Function returning 
+setbuf     =000070    -    Global      Function returning 
+fpos_t     =000020    1   struct <no name> 
+tmpnam     =000070    -    Global      Function returning Pointer to Char
+size_t     =000018    1   Long
+remove     =000070    -    Global      Function returning Long
+ferror     =000070    -    Global      Function returning Long
+fwrite     =000070    -    Global      Function returning Long
+printf     =000070    -    Global      Function returning Long
+perror     =000070    -    Global      Function returning 
+resetGhosts =000000    -    Global      Function returning 
+feof       =000070    -    Global      Function returning Long
+inch       =000000    -    Global      Function returning Long
+_Ptrdifft  =000008    1   Long
+getc       =000070    -    Global      Function returning Long
+rand       =000070    -    Global      Function returning Long
+main       =00065a    -    Global      Function returning Long
+putnum     =000070    -    Global      Function returning 
+sprX       =000070    -    Global      Array of Char
+inbu       =000000    -    Global      Function returning Long
+sprY       =00007a    -    Global      Array of Char
+incu       =000000    -    Global      Function returning Long
+putstr     =000070    -    Global      Function returning 
+gets       =000070    -    Global      Function returning Pointer to Char
+outb       =000000    -    Global      Function returning 
+outc       =000000    -    Global      Function returning 
+putc       =000070    -    Global      Function returning Long
+moveGhost  =000000    -    Global      Function returning 
+outh       =000000    -    Global      Function returning 
+_Wchart    =000000    1   Char
+pacmanX    =000098    -    Global      Char
+pacmanY    =00009a    -    Global      Char
+puts       =000070    -    Global      Function returning Long
+outw       =000000    -    Global      Function returning 
+IsLegalPos =000000    -    Global      Function returning Long
+getchar    =000070    -    Global      Function returning Long
+freopen    =000070    -    Global      Function returning Pointer to struct <no name> 
+setRandDir =00065a    -    Global      Function returning 
+tmpfile    =000070    -    Global      Function returning Pointer to struct <no name> 
+sprDX      =000084    -    Global      Array of Char
+sprDY      =00008e    -    Global      Array of Char
+setSpritePos =000000    -    Global      Function returning 
+putchar    =000070    -    Global      Function returning Long
+fgetpos    =000070    -    Global      Function returning Long
+fprintf    =000070    -    Global      Function returning Long
+setCursorPos =000000    -    Global      Function returning 
+setKeyboardEcho =000000    -    Global      Function returning 
+setvbuf    =000070    -    Global      Function returning Long
+
+ *** structures and unions ***
+

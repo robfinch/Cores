@@ -31,16 +31,20 @@
 //
 `define TLBMissPage		{DBW-12{1'b1}}
 
-module Thor_TLB(rst, clk, pc, ea, ppc, pea,
+module Thor_TLB(rst, clk, km, pc, ea, ppc, pea,
+	iuncached, uncached,
 	m1IsStore, ASID, state, op, regno, dati, dato,
 	ITLBMiss, DTLBMiss, HTLBVirtPageo);
 parameter DBW=64;
 input rst;
 input clk;
+input km;					// kernel mode
 input [DBW-1:0] pc;
 input [DBW-1:0] ea;
 output reg [DBW-1:0] ppc;
 output reg [DBW-1:0] pea;
+output iuncached;
+output uncached;
 input m1IsStore;
 input [7:0] ASID;
 input [2:0] state;
@@ -87,6 +91,7 @@ reg [63:0] TLBValid;
 reg [DBW-1:0] imiss_addr;
 reg [DBW-1:0] dmiss_addr;
 reg [DBW-1:0] PageTblAddr;
+reg [DBW-1:0] PageTblCtrl;
 
 initial begin
 	for (n = 0; n < 64; n = n + 1)
@@ -102,9 +107,10 @@ initial begin
 end
 
 // Assume the instruction doesn't overlap between a mapped and unmapped area.
-wire unmappedArea = /*pc[DBW-1:DBW-12]==12'hFFD || pc[DBW-1:DBW-12]==12'hFFE || pc[DBW-1:DBW-12]==12'hFFF ||*/ !TLBenabled;
-wire unmappedDataArea = ea[DBW-1:DBW-12]==12'hFFD || ea[DBW-1:DBW-12]==12'hFFE || ea[DBW-1:DBW-12]==12'hFFF || ea[DBW-1:DBW-12]==12'h000 || !TLBenabled;
-wire m1UnmappedDataArea = pea[DBW-1:DBW-12]==12'hFFD || pea[DBW-1:DBW-12]==12'hFFE || pea[DBW-1:DBW-12]==12'hFFF || pea[DBW-1:DBW-12]==12'h000 || !TLBenabled;
+wire unmappedArea = pc[DBW-1:DBW-4]==4'hF || !TLBenabled;
+wire unmappedDataArea = ea[DBW-1:DBW-4]==4'hF || !TLBenabled;
+wire m1UnmappedDataArea = pea[DBW-1:DBW-4]==4'hF || !TLBenabled;
+wire hitIOPage = ea[DBW-1:DBW-12]==12'hFFD;
 
 always @(posedge clk)
 if (rst) begin
@@ -113,6 +119,7 @@ if (rst) begin
 	Wired <= 3'd0;
 	PageSize <= 3'd0;
 	PageTblAddr <= {DBW{1'b0}};
+	PageTblCtrl <= {DBW{1'b0}};
 end
 else begin
 	if (dmiss_addr == {DBW{1'b0}} && DTLBMiss)
@@ -150,6 +157,7 @@ else begin
 			`TLBDMissAdr:	dmiss_addr <= dati;
 			`TLBIMissAdr:	imiss_addr <= dati;
 			`TLBPageTblAddr:	PageTblAddr <= dati;
+			`TLBPageTblCtrl:	PageTblCtrl <= dati;
 			endcase
 			end
 		`TLB_EN:
@@ -213,6 +221,7 @@ always @*
 	`TLBDMissAdr:	dato = dmiss_addr;
 	`TLBIMissAdr:	dato = imiss_addr;
 	`TLBPageTblAddr:	dato = PageTblAddr;
+	`TLBPageTblCtrl:	dato = PageTblCtrl;
 	default:	dato = {DBW{1'b0}};
 	endcase
 
@@ -238,6 +247,7 @@ else m <= 4'd15;
 
 
 wire [DBW-1:0] IPFN = TLBPhysPage[{m[2:0],pcs[2:0]}];
+assign iuncached = TLBC[{m[2:0],pcs[2:0]}]==3'd1;
 
 assign ITLBMiss = !unmappedArea & (m[3] | ~TLBValid[{m[2:0],pcs[2:0]}]);
 
@@ -272,8 +282,10 @@ else if (DMatch[7]) q <= 4'd7;
 else q <= 4'd15;
 
 wire [DBW-1:0] DPFN = TLBPhysPage[{q[2:0],eas[2:0]}];
+assign uncached = TLBC[{q[2:0],eas[2:0]}]==3'd1;// || unmappedDataArea;
 
-assign DTLBMiss = !unmappedDataArea & (q[3] | ~TLBValid[{q[2:0],eas[2:0]}]);
+assign DTLBMiss = !unmappedDataArea & (q[3] | ~TLBValid[{q[2:0],eas[2:0]}]) ||
+					(!km && hitIOPage);
 
 always @*
 begin

@@ -98,6 +98,7 @@ casex(alu_op)
 `SUB,`SUBU:		o <= alu_argA - alu_argB;
 `NEG:			o <= -alu_argA;
 `NOT:			o <= ~alu_argA;
+`MOV:			o <= alu_argA;
 `FNEG:			o <= {~alu_argA[DBW-1],alu_argA[DBW-2:0]};
 `FABS:			o <= {1'b0,alu_argA[DBW-2:0]};
 `FSIGN:			if (DBW==64)

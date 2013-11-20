@@ -119,6 +119,7 @@
 `define LW			8'h86
 `define LFS			8'h87
 `define LFD			8'h88
+`define LWS			8'h8E
 `define PFLD		8'h8F
 
 `define SB			8'h90
@@ -134,6 +135,8 @@
 `define STSH		8'h99
 `define STSW		8'h9A
 
+`define LDIS		8'h9D
+`define SWS			8'h9E
 `define CACHE		8'h9F
 
 // Flow control Opcodes
@@ -143,6 +146,7 @@
 `define SYS			8'hA5
 `define INT			8'hA6
 
+`define MOV			8'hA7
 `define MFSPR		8'hA8
 `define MTSPR		8'hA9
 
@@ -202,6 +206,7 @@
 `define TLBDMissAdr		4'd8
 `define TLBIMissAdr		4'd9
 `define TLBPageTblAddr	4'd10
+`define TLBPageTblCtrl	4'd11
 
 
 `define RTE			8'hF3
@@ -233,6 +238,7 @@
 `define TICK			8'h02
 `define LCTR			8'h03
 `define PREGS			8'h04
+`define ASID			8'h06
 `define BREGS			8'h1x
 `define SREGS			8'h2x
 		

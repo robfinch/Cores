@@ -44,29 +44,65 @@
 //
 if (tlb_state != 3'd0 && tlb_state < 3'd3)
 	tlb_state <= tlb_state + 3'd1;
+if (tlb_state==3'd3) begin
+	dram_v <= `TRUE;
+	dram_id <= tlb_id;
+	dram_tgt <= tlb_tgt;
+	dram_exc <= `EXC_NONE;
+	dram_bus <= tlb_dato;
+	tlb_op <= 4'h0;
+	tlb_state <= 3'd0;
+end
 
-casex ({dram0, dram1, dram2})
-	// not particularly portable ...
-	9'b01x01xxxx,
-	9'b01xxxx01x,
-	9'bxxx01x01x:
-		if (!rst_i) begin
-			$display("dramx=%b",{dram0, dram1, dram2});
-//			panic <= `PANIC_IDENTICALDRAMS;
-		end
+case(dram0)
+// The first state is to translate the virtual to physical address.
+3'd1:
+	begin
+		$display("0MEM %c:%h %h cycle started",fnIsLoad(dram0_op)?"L" : "S", dram0_addr, dram0_data);
+		dram0 <= dram0 + 3'd1;
+	end
 
-	default: begin
-	//
-	// grab requests that have finished and put them on the dram_bus
-	if ((dram0 == 3'd3 || dram0==3'd5) && (ack_i|err_i|DTLBMiss)) begin
-		$display("0WISHBONE ack");
-		dram_v <= fnIsMem(dram0_op) && dram0_op != `CAS;
+// State 2:
+// Check for a TLB miss on the translated address, and
+// Initiate a bus transfer
+3'd2:
+	if (DTLBMiss) begin
+		dram_v <= `TRUE;			// we are finished the memory cycle
 		dram_id <= dram0_id;
 		dram_tgt <= dram0_tgt;
-		dram_exc <= err_i ? `EXC_DBE : DTLBMiss ? `EXC_TLBMISS : `EXC_NONE;//dram0_exc;
-		if (dram0==3'd3)
-			dram_bus <= fnDatai(dram0_op,dat_i,sel_o);
+		dram_exc <= `EXC_TLBMISS;	//dram0_exc;
+		dram_bus <= 64'h0;
+		dram0 <= 3'd0;
+	end
+	else begin
+		if (uncached || fnIsStore(dram0_op) || fnIsLoadV(dram0_op) || dram0_op==`CAS) begin
+			dram0_owns_bus <= `TRUE;
+			lock_o <= dram0_op==`CAS;
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= fnIsStore(dram0_op);
+			sel_o <= fnSelect(dram0_op,pea);
+			adr_o <= pea;
+			dat_o <= fnDatao(dram0_op,dram0_data);
+			dram0 <= dram0 + 3'd1;
+		end
+		else	// cached read
+			dram0 <= 3'd6;
+	end
+
+// State 3:
+// Wait for a memory ack
+3'd3:
+	if (ack_i|err_i) begin
+		$display("MEM ack");
+		dram_v <= dram0_op != `CAS;
+		dram_id <= dram0_id;
+		dram_tgt <= dram0_tgt;
+		dram_exc <= err_i ? `EXC_DBE : `EXC_NONE;//dram0_exc;
+		dram_bus <= fnDatai(dram0_op,dat_i,sel_o);
+		dram0_owns_bus <= `FALSE;
 		wb_nack();
+		dram0 <= 3'd0;
 		case(dram0_op)
 		`STSW:
 			if (lc != 0 && !int_pending) begin
@@ -74,226 +110,77 @@ casex ({dram0, dram1, dram2})
 				lc <= lc - 64'd1;
 				dram0 <= 3'd1;
 			end
-			else
-				dram0 <= 3'd0;
 		`STSH:
 			if (lc != 0 && !int_pending) begin
 				dram0_addr <= dram0_addr + 64'd4;
 				lc <= lc - 64'd1;
 				dram0 <= 3'd1;
 			end
-			else
-				dram0 <= 3'd0;
 		`STSC:
 			if (lc != 0 && !int_pending) begin
 				dram0_addr <= dram0_addr + 64'd2;
 				lc <= lc - 64'd1;
 				dram0 <= 3'd1;
 			end
-			else
-				dram0 <= 3'd0;
 		`STSB:
 			if (lc != 0 && !int_pending) begin
 				dram0_addr <= dram0_addr + 64'd1;
 				lc <= lc - 64'd1;
 				dram0 <= 3'd1;
 			end
-			else
-				dram0 <= 3'd0;
 		`CAS:
-			if (dram0_datacmp == dat_i && dram0==3'd3) begin
-				$display("0CAS match");
+			if (dram0_datacmp == dat_i) begin
+				$display("CAS match");
+				dram0_owns_bus <= `TRUE;
 				cyc_o <= 1'b1;	// hold onto cyc_o
 				dram0 <= dram0 + 3'd1;
 			end
-			else begin
-				lock_o <= 1'b0;
-				dram_v <= `TRUE;
-				dram0 <= 3'd0;
-			end
-		default:
-				dram0 <= 3'd0;
+			else
+				dram_v <= `VAL;
 		endcase
 	end
-	else if ((dram1 == 3'd3 || dram1==3'd5) && (ack_i|err_i|DTLBMiss)) begin
-		$display("1WISHBONE ack");
-		dram_v <= fnIsMem(dram1_op) && dram1_op != `CAS;
-		dram_id <= dram1_id;
-		dram_tgt <= dram1_tgt;
-		dram_exc <= err_i ? `EXC_DBE : DTLBMiss ? `EXC_TLBMISS : `EXC_NONE;//dram0_exc;
-		if (dram1==3'd3)
-			dram_bus <= fnDatai(dram1_op,dat_i,sel_o);
-		wb_nack();
-		case(dram1_op)
-		`STSW:
-			if (lc != 0 && !int_pending) begin
-				dram1_addr <= dram1_addr + 64'd8;
-				lc <= lc - 64'd1;
-				dram1 <= 3'd1;
-			end
-			else
-				dram1 <= 3'd0;
-		`STSH:
-			if (lc != 0 && !int_pending) begin
-				dram1_addr <= dram1_addr + 64'd4;
-				lc <= lc - 64'd1;
-				dram1 <= 3'd1;
-			end
-			else
-				dram1 <= 3'd0;
-		`STSC:
-			if (lc != 0 && !int_pending) begin
-				dram1_addr <= dram1_addr + 64'd2;
-				lc <= lc - 64'd1;
-				dram1 <= 3'd1;
-			end
-			else
-				dram1 <= 3'd0;
-		`STSB:
-			if (lc != 0 && !int_pending) begin
-				dram1_addr <= dram1_addr + 64'd1;
-				lc <= lc - 64'd1;
-				dram1 <= 3'd1;
-			end
-			else
-				dram1 <= 3'd0;
-		`CAS:
-			if (dram1_datacmp == dat_i && dram1==3'd3) begin
-				$display("1CAS match");
-				cyc_o <= 1'b1;	// hold onto cyc_o
-				dram1 <= dram1 + 3'd1;
-			end
-			else begin
-				lock_o <= 1'b0;
-				dram_v <= `TRUE;
-				dram1 <= 3'd0;
-			end
-		default:
-			dram1 <= 3'd0;
-		endcase
-	end
-	else if ((dram2 == 3'd3 || dram2==3'd5) && (ack_i|err_i|DTLBMiss)) begin
-		$display("2WISHBONE ack");
-		dram_v <= fnIsMem(dram2_op) && dram2_op != `CAS;
-		dram_id <= dram2_id;
-		dram_tgt <= dram2_tgt;
-		dram_exc <= err_i ? `EXC_DBE : DTLBMiss ? `EXC_TLBMISS : `EXC_NONE;//dram0_exc;
-		if (dram2==3'd3)
-			dram_bus <= fnDatai(dram2_op,dat_i,sel_o);
-		wb_nack();
-		case(dram2_op)
-		`STSW:
-			if (lc != 0 && !int_pending) begin
-				dram2_addr <= dram2_addr + 64'd8;
-				lc <= lc - 64'd1;
-				dram2 <= 3'd1;
-			end
-			else
-				dram2 <= 3'd0;
-		`STSH:
-			if (lc != 0 && !int_pending) begin
-				dram2_addr <= dram2_addr + 64'd4;
-				lc <= lc - 64'd1;
-				dram2 <= 3'd1;
-			end
-			else
-				dram2 <= 3'd0;
-		`STSC:
-			if (lc != 0 && !int_pending) begin
-				dram2_addr <= dram2_addr + 64'd2;
-				lc <= lc - 64'd1;
-				dram2 <= 3'd1;
-			end
-			else
-				dram2 <= 3'd0;
-		`STSB:
-			if (lc != 0 && !int_pending) begin
-				dram2_addr <= dram2_addr + 64'd1;
-				lc <= lc - 64'd1;
-				dram2 <= 3'd1;
-			end
-			else
-				dram2 <= 3'd0;
-		`CAS:
-			if (dram2_datacmp == dat_i && dram2==3'd3) begin
-				$display("2CAS match");
-				cyc_o <= 1'b1;	// hold onto cyc_o
-				dram2 <= dram2 + 3'd1;
-			end
-			else begin
-				lock_o <= 1'b0;
-				dram_v <= `TRUE;
-				dram2 <= 3'd0;
-			end
-		default:
-			dram2 <= 3'd0;
-		endcase
-	end
-	else if (tlb_state==3'd3) begin
-		dram_v <= `TRUE;
-		dram_id <= tlb_id;
-		dram_tgt <= tlb_tgt;
-		dram_exc <= `EXC_NONE;
-		dram_bus <= tlb_dato;
-		tlb_op <= 4'h0;
-		tlb_state <= 3'd0;
-	end
-	else begin
-		dram_v <= `INV;
-	end
-	end
-endcase
-if (dram0==3'd1 && dram1==3'd0 && dram2==3'd0) begin
-	$display("0WISHBONE %c:%h %h cycle started",fnIsLoad(dram0_op)?"L" : "S", dram0_addr, dram0_data);
-	vadr <= dram0_addr;
-	dram0 <= dram0 + 3'd1;
-end
-else if (dram1==3'd1 && dram0==3'd0 && dram2==3'd0) begin
-	$display("1WISHBONE %c:%h %h cycle started",fnIsLoad(dram1_op)?"L" : "S", dram1_addr, dram1_data);
-	vadr <= dram1_addr;
-	dram1 <= dram1 + 3'd1;
-end
-else if (dram2==3'd1 && dram0==3'd0 && dram1==3'd0) begin
-	$display("2WISHBONE %c:%h %h cycle started",fnIsLoad(dram2_op)?"L" : "S", dram2_addr, dram2_data);
-	vadr <= dram2_addr;
-	dram2 <= dram2 + 3'd1;
-end
-if (dram0==3'd2 || dram0==3'd4) begin
-	if (!DTLBMiss) begin
-		lock_o <= dram0_op==`CAS;
-		cyc_o <= 1'b1;
+
+// State 4:
+// Start a second bus transaction for the CAS instruction
+3'd4:
+	begin
 		stb_o <= 1'b1;
-		we_o <= fnIsStore(dram0_op) || dram0==3'd4;
+		we_o <= 1'b1;
 		sel_o <= fnSelect(dram0_op,pea);
 		adr_o <= pea;
 		dat_o <= fnDatao(dram0_op,dram0_data);
+		dram0 <= dram0 + 3'd1;
 	end
-	dram0 <= dram0+3'd1;
-end
-if (dram1==3'd2 || dram1==3'd4) begin
-	if (!DTLBMiss) begin
-		lock_o <= dram1_op==`CAS;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= fnIsStore(dram1_op) || dram1==3'd4;
-		sel_o <= fnSelect(dram1_op,pea);
-		adr_o <= pea;
-		dat_o <= fnDatao(dram1_op,dram1_data);
+
+// State 5:
+// Wait for a memory ack for the second bus transaction of a CAS
+//
+3'd5:
+	if (ack_i|err_i) begin
+		$display("MEM ack2");
+		dram_v <= `VAL;
+		dram_id <= dram0_id;
+		dram_tgt <= dram0_tgt;
+		dram_exc <= err_i ? `EXC_DBE : `EXC_NONE;
+		dram0_owns_bus <= `FALSE;
+		wb_nack();
+		lock_o <= 1'b0;
+		dram0 <= 3'd0;
 	end
-	dram1 <= dram1+3'd1;
-end
-if (dram2==3'd2 || dram2==3'd4) begin
-	if (!DTLBMiss) begin
-		lock_o <= dram2_op==`CAS;
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= fnIsStore(dram2_op) || dram2==3'd4;
-		sel_o <= fnSelect(dram2_op,pea);
-		adr_o <= pea;
-		dat_o <= fnDatao(dram2_op,dram2_data);
+
+// State 6:
+// Wait for a data cache read hit
+3'd6:
+	if (rhit) begin
+		$display("Read hit");
+		dram_v <= `TRUE;
+		dram_id <= dram0_id;
+		dram_tgt <= dram0_tgt;
+		dram_exc <= `EXC_NONE;
+		dram_bus <= fnDatai(dram0_op,cdat,sel_o);
+		dram0 <= 3'd0;
 	end
-	dram2 <= dram2+3'd1;
-end
+endcase
 
 //
 // determine if the instructions ready to issue can, in fact, issue.
@@ -514,8 +401,6 @@ iqentry_memissue[ head7 ] <=	~iqentry_stomp[head7] && iqentry_memready[ head7 ]	
 // take requests that are ready and put them into DRAM slots
 
 if (dram0 == `DRAMSLOT_AVAIL)	dram0_exc <= `EXC_NONE;
-if (dram1 == `DRAMSLOT_AVAIL)	dram1_exc <= `EXC_NONE;
-if (dram2 == `DRAMSLOT_AVAIL)	dram2_exc <= `EXC_NONE;
 
 // Memory should also wait until segment registers are valid. The segment
 // registers are essentially static registers while a program runs. They are
@@ -550,34 +435,6 @@ for (n = 0; n < 8; n = n + 1)
 			dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
 `else
 			dram0_addr	<= iqentry_a1[n];
-`endif
-			iqentry_out[n]	<= `TRUE;
-		end
-		else if (dram1 == `DRAMSLOT_AVAIL) begin
-			dram1 		<= 3'd1;
-			dram1_id 	<= { 1'b1, n[2:0] };
-			dram1_op 	<= iqentry_op[n];
-			dram1_tgt 	<= iqentry_tgt[n];
-			dram1_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
-			dram1_datacmp <= iqentry_a2[n];
-`ifdef SEGMENTATION
-			dram1_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
-`else
-			dram1_addr	<= iqentry_a1[n];
-`endif
-			iqentry_out[n]	<= `TRUE;
-		end
-		else if (dram2 == `DRAMSLOT_AVAIL) begin
-			dram2 		<= 3'd1;
-			dram2_id 	<= { 1'b1, n[2:0] };
-			dram2_op 	<= iqentry_op[n];
-			dram2_tgt 	<= iqentry_tgt[n];
-			dram2_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
-			dram2_datacmp <= iqentry_a2[n];
-`ifdef SEGMENTATION
-			dram2_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
-`else
-			dram2_addr	<= iqentry_a1[n];
 `endif
 			iqentry_out[n]	<= `TRUE;
 		end

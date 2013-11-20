@@ -114,6 +114,12 @@ begin
 	string_pc <= 64'd0;
 end
 
+if (sys_commit)
+begin
+	if (StatusEXL!=8'hFF)
+		StatusEXL <= StatusEXL + 8'd1;
+end
+
 if (commit0_v) begin
 	case(iqentry_op[head0])
 	`CLI:	im <= 1'b0;
@@ -123,13 +129,20 @@ if (commit0_v) begin
 			StatusHWI <= `FALSE;
 			im <= imb;
 			end
+	`RTE:	begin
+				if (StatusEXL!=8'h00)
+					StatusEXL <= StatusEXL - 8'd1;
+			end
 	`LOOP:
 		if (lc != 64'd0)
 			lc <= lc - 64'd1;
 	`MTSPR:
 		begin
-			if (iqentry_tgt[head0]==`LCTR)
-				lc <= commit0_bus;
+			case(iqentry_tgt[head0])
+			`LCTR:	lc <= commit0_bus;
+			`ASID:	asid <= commit0_bus;
+			default:	;
+			endcase
 		end
 	default:	;
 	endcase
@@ -143,13 +156,20 @@ if (commit0_v && commit1_v) begin
 			StatusHWI <= `FALSE;
 			im <= imb;
 			end
+	`RTE:	begin
+				if (StatusEXL!=8'h00)
+					StatusEXL <= StatusEXL - 8'd1;
+			end
 	`LOOP:
 		if (lc != 64'd0)
 			lc <= lc - 64'd1;
 	`MTSPR:
 		begin
-			if (iqentry_tgt[head1]==`LCTR)
-				lc <= commit1_bus;
+			case(iqentry_tgt[head1])
+			`LCTR:	lc <= commit1_bus;
+			`ASID:	asid <= commit1_bus;
+			default:	;
+			endcase
 		end
 	default:	;
 	endcase
@@ -158,13 +178,131 @@ end
 //
 // COMMIT PHASE (dequeue only ... not register-file update)
 //
-// look at head0 and head1 and let 'em write to the register file if they are ready
+// If the third instruction is invalidated then it is allowed to commit too.
+// The head pointer might advance by three.
 //
 if (~|panic)
-case ({ iqentry_v[head0],
+casex ({ iqentry_v[head0],
 	iqentry_done[head0],
 	iqentry_v[head1],
-	iqentry_done[head1] })
+	iqentry_done[head1],
+	iqentry_v[head2],
+	iqentry_done[head2]})
+
+	// retire 3
+	6'b0x_0x_0x:
+		if (head0 != tail0 && head1 != tail0 && head2 != tail0) begin
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
+		end
+		else if (head0 != tail0 && head1 != tail0) begin
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+		else if (head0 != tail0) begin
+			head0 <= head0 + 1;
+			head1 <= head1 + 1;
+			head2 <= head2 + 1;
+			head3 <= head3 + 1;
+			head4 <= head4 + 1;
+			head5 <= head5 + 1;
+			head6 <= head6 + 1;
+			head7 <= head7 + 1;
+			I <= I + 1;
+		end
+
+	// retire 2 (wait for regfile for head2)
+	6'b0x_0x_1x:
+//		if (head0 != tail0 && head1 != tail0 && iqentry_rfw[head2]==`FALSE) begin
+//			head0 <= head0 + 3;
+//			head1 <= head1 + 3;
+//			head2 <= head2 + 3;
+//			head3 <= head3 + 3;
+//			head4 <= head4 + 3;
+//			head5 <= head5 + 3;
+//			head6 <= head6 + 3;
+//			head7 <= head7 + 3;
+//			I <= I + 3;
+//		end
+//		else
+		if (head0 != tail0 && head1 != tail0) begin
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+		else if (head0 != tail0) begin
+			head0 <= head0 + 1;
+			head1 <= head1 + 1;
+			head2 <= head2 + 1;
+			head3 <= head3 + 1;
+			head4 <= head4 + 1;
+			head5 <= head5 + 1;
+			head6 <= head6 + 1;
+			head7 <= head7 + 1;
+			I <= I + 1;
+		end
+
+	// retire 3
+	6'b0x_11_0x:
+		if (head0 != tail0 && head1 != tail0 && head2 != tail0) begin
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
+		end
+		else if (head0 != tail0) begin
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+
+	// retire 2	(wait on head2 or wait on register file for head2)
+	6'b0x_11_1x:
+		if (head0 != tail0) begin
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
 
 	// 4'b00_00	- neither valid; skip both
 	// 4'b00_01	- neither valid; skip both
@@ -184,17 +322,80 @@ case ({ iqentry_v[head0],
 	// 4'b11_11	- commit head0, commit head1
 
 	//
-	// retire 0
-	4'b10_00,
-	4'b10_01,
-	4'b10_10,
-	4'b10_11: ;
+	// retire 0 (stuck on head0)
+	6'b10_xx_xx:	;
+	
+	// retire 3
+	6'b11_0x_0x:
+		if (head1 != tail0 && head2 != tail0) begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
+		end
+		else if (head1 != tail0) begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+		else begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 1;
+			head1 <= head1 + 1;
+			head2 <= head2 + 1;
+			head3 <= head3 + 1;
+			head4 <= head4 + 1;
+			head5 <= head5 + 1;
+			head6 <= head6 + 1;
+			head7 <= head7 + 1;
+			I <= I + 1;
+		end
+
+	// retire 2 (wait for regfile for head2)
+	6'b11_0x_1x:
+		if (head1 != tail0) begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+		else begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 1;
+			head1 <= head1 + 1;
+			head2 <= head2 + 1;
+			head3 <= head3 + 1;
+			head4 <= head4 + 1;
+			head5 <= head5 + 1;
+			head6 <= head6 + 1;
+			head7 <= head7 + 1;
+			I <= I + 1;
+		end
 
 	//
-	// retire 1
-	4'b00_10,
-	4'b01_10,
-	4'b11_10: begin
+	// retire 1 (stuck on head1)
+	6'b00_10_xx,
+	6'b01_10_xx,
+	6'b11_10_xx:
 		if (iqentry_v[head0] || head0 != tail0) begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			head0 <= head0 + 1;
@@ -205,15 +406,41 @@ case ({ iqentry_v[head0],
 			head5 <= head5 + 1;
 			head6 <= head6 + 1;
 			head7 <= head7 + 1;
-//			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
 			I <= I + 1;
 		end
-	end
 
-	//
-	// retire 2
-	default: begin
-		if (((iqentry_v[head0] && iqentry_v[head1]) || (head0 != tail0 && head1 != tail0)) && !limit_cmt) begin
+	// retire 2 or 3
+	6'b11_11_0x:
+		if (head2 != tail0) begin
+			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
+			iqentry_v[head1] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
+		end
+		else begin
+			iqentry_v[head0] <= `INV;
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+
+	// retire 2 (wait on regfile for head2)
+	6'b11_11_1x:
+		begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			iqentry_v[head1] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			head0 <= head0 + 2;
@@ -224,22 +451,6 @@ case ({ iqentry_v[head0],
 			head5 <= head5 + 2;
 			head6 <= head6 + 2;
 			head7 <= head7 + 2;
-//			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
-//			if (iqentry_v[head1] && iqentry_exc[head1])	panic <= `PANIC_HALTINSTRUCTION;
 			I <= I + 2;
 		end
-		else if (iqentry_v[head0] || head0 != tail0) begin
-			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			head0 <= head0 + 1;
-			head1 <= head1 + 1;
-			head2 <= head2 + 1;
-			head3 <= head3 + 1;
-			head4 <= head4 + 1;
-			head5 <= head5 + 1;
-			head6 <= head6 + 1;
-			head7 <= head7 + 1;
-//			if (iqentry_v[head0] && iqentry_exc[head0])	panic <= `PANIC_HALTINSTRUCTION;
-			I <= I + 1;
-		end
-	end
 endcase

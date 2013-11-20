@@ -49,5 +49,6 @@ assign commit0_bus = iqentry_res[head0];
 assign commit1_bus = iqentry_res[head1];
 
 assign int_commit = (iqentry_op[head0]==`INT && commit0_v) || (commit0_v && iqentry_op[head1]==`INT && commit1_v);
+assign sys_commit = (iqentry_op[head0]==`SYS && commit0_v) || (commit0_v && iqentry_op[head1]==`SYS && commit1_v);
 
 
