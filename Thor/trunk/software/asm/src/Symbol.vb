@@ -1,5 +1,5 @@
 Public Class Symbol
-    Public name As String
+    Public name As Integer
     Public value As Int64   ' could be an address    
     Public segment As String
     Public address As Int64
@@ -11,5 +11,6 @@ Public Class Symbol
 
     Public Sub New()
         PatchAddresses = New Collection
+        scope = ""
     End Sub
 End Class

@@ -91,6 +91,11 @@
                     BuildAction = "Compile"
                 />
                 <File
+                    RelPath = "ELFFile.vb"
+                    SubType = "Code"
+                    BuildAction = "Compile"
+                />
+                <File
                     RelPath = "ElfHeader.vb"
                     SubType = "Code"
                     BuildAction = "Compile"
@@ -112,6 +117,11 @@
                 />
                 <File
                     RelPath = "Module2.vb"
+                    SubType = "Code"
+                    BuildAction = "Compile"
+                />
+                <File
+                    RelPath = "NameTable.vb"
                     SubType = "Code"
                     BuildAction = "Compile"
                 />
