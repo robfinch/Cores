@@ -189,23 +189,23 @@ EXECUTE:
 				sf <= resnw;
 				zf <= reszw;
 			end
-		`IMUL:
-			begin
-				state <= IFETCH;
-				wrregs <= 1'b1;
-				w <= 1'b1;
-				rrr <= 3'd0;
-				res <= alu_o;
-				if (w) begin
-					cf <= wp[31:16]!={16{resnw}};
-					vf <= wp[31:16]!={16{resnw}};
-					dx <= wp[31:16];
-				end
-				else begin
-					cf <= ah!={8{resnb}};
-					vf <= ah!={8{resnb}};
-				end
-			end
+//		`IMUL:
+//			begin
+//				state <= IFETCH;
+//				wrregs <= 1'b1;
+//				w <= 1'b1;
+//				rrr <= 3'd0;
+//				res <= alu_o;
+//				if (w) begin
+//					cf <= wp[31:16]!={16{resnw}};
+//					vf <= wp[31:16]!={16{resnw}};
+//					dx <= wp[31:16];
+//				end
+//				else begin
+//					cf <= ah!={8{resnb}};
+//					vf <= ah!={8{resnb}};
+//				end
+//			end
 
 
 		//-----------------------------------------------------------------

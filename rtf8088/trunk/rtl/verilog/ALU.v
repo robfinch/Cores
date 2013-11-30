@@ -3,8 +3,8 @@
 //  - perform datapath operations
 //
 //
-//  (C) 2009-2012  Robert Finch
-//  robfinch[remove]@opencores.org
+//  (C) 2009-2013  Robert Finch
+//  robfinch[remove]@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -131,7 +131,7 @@ divr2 #(32) udiv2
 );
 
 
-always @(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
+always @*	//(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
 	begin
 		casex(ir)
 		`MOV_M2AL,`MOV_M2AX,`LDS,`LES:
@@ -156,7 +156,7 @@ always @(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
 		`SCASB,`SCASW,`CMPSB,`CMPSW: alu_o <= a - b;
 		`INC_REG: alu_o <= a + 16'd1;
 		`DEC_REG: alu_o <= a - 16'd1;
-		`IMUL: alu_o <= w ? p : wp[15:0];
+//		`IMUL: alu_o <= w ? p : wp[15:0];
 		`ALU_I2R8:
 			case(TTT)
 			3'd0:	alu_o <= a + b;			// ADD
@@ -181,6 +181,7 @@ always @(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
 			default:	alu_o <= 16'h0000;
 			endcase
 		8'hF6,8'hF7:
+			begin
 			case(TTT)
 			3'd0:	alu_o <= a & b;			// TEST
 			3'd2:	alu_o <= ~b;			// NOT
@@ -191,6 +192,7 @@ always @(ir or ir2 or a or b or cf or af or al or ah or aldv10 or TTT)
 			3'd7:	alu_o <= 16'h0000;		// IDIV
 			default:	alu_o <= 16'h0000;
 			endcase
+			end
 		`AAA:
 			if (al[3:0]>4'h9 || af) begin
 				alu_o[3:0] <= al[3:0] + 4'd6;

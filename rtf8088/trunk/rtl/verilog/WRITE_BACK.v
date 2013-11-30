@@ -35,7 +35,7 @@ if (wrregs)
 	4'b1000:	ax <= res;
 	4'b1001:	cx <= res;
 	4'b1010:	dx <= res;
-	4'b1011:	bx <= res;
+	4'b1011:	begin bx <= res; $display("BX <- %h", res); end
 	4'b1100:	sp <= res;
 	4'b1101:	bp <= res;
 	4'b1110:	si <= res;

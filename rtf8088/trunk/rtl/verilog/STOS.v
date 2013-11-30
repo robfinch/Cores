@@ -3,9 +3,9 @@
 //  Store string data to memory.
 //
 //
-//  2009-2012 Robert Finch
+//  2009-2013 Robert Finch
 //  Stratford
-//  robfinch<remove>@opencores.org
+//  robfinch<remove>@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -37,7 +37,7 @@ STOS:
 	else if (w && (di==16'hFFFF)) begin
 		ir <= `NOP;
 		int_num <= 8'd13;
-		state <= INT1;
+		state <= INT2;
 	end
 	else if (repdone)
 		state <= IFETCH;

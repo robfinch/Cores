@@ -35,7 +35,7 @@ EACALC:
 	// Terminate an outstanding MODRM fetch cycle
 	if (cyc_o) begin
 		if (ack_i) begin
-			`TERMINATE_CODE_READ
+			term_code_read();
 			mod   <= dat_i[7:6];
 			rrr   <= dat_i[5:3];
 			sreg3 <= dat_i[5:3];
@@ -139,8 +139,21 @@ EACALC:
 					begin
 						b <= rmo;
 					end
+				// The TEST instruction is the only one needing to fetch an immediate value.
 				8'hF6,8'hF7:
-					b <= rmo;
+					// 000 = TEST
+					// 010 = NOT
+					// 011 = NEG
+					// 100 = MUL
+					// 101 = IMUL
+					// 110 = DIV
+					// 111 = IDIV
+					if (rrr==3'b000) begin	// TEST
+						a <= rmo;
+						state <= w ? FETCH_IMM16 : FETCH_IMM8;
+					end
+					else
+						b <= rmo;
 				default:
 				    begin
 						if (d) begin
@@ -165,23 +178,23 @@ EACALC:
 EACALC_DISP16:
 	begin
 		lock_o <= 1'b1;
-		`INITIATE_CODE_READ
+		code_read();
 		state <= EACALC_DISP16_ACK;
 	end
 EACALC_DISP16_ACK:
 	if (ack_i) begin
-		`TERMINATE_CODE_READ
+		term_code_read();
 		disp16[7:0] <= dat_i;
 		state <= EACALC_DISP16a;
 	end
 EACALC_DISP16a:
 	begin
-		`INITIATE_CODE_READ
+		code_read();
 		state <= EACALC_DISP16a_ACK;
 	end
 EACALC_DISP16a_ACK:
 	if (ack_i) begin
-		`TERMINATE_CODE_READ
+		term_code_read();
 		lock_o <= bus_locked;
 		disp16[15:8] <= dat_i;
 		state <= EACALC1;
@@ -193,12 +206,12 @@ EACALC_DISP16a_ACK:
 //
 EACALC_DISP8:
 	begin
-		`INITIATE_CODE_READ
+		code_read();
 		state <= EACALC_DISP8_ACK;
 	end
 EACALC_DISP8_ACK:
 	if (ack_i) begin
-		`TERMINATE_CODE_READ
+		term_code_read();
 		disp16 <= {{8{dat_i[7]}},dat_i};
 		state <= EACALC1;
 	end
@@ -222,7 +235,7 @@ EACALC1:
 					endcase
 					if (w && (offsdisp==16'hFFFF)) begin
 						int_num <= 8'h0d;
-						state <= INT;
+						state <= INT2;
 					end
 				end
 			8'h01:
@@ -234,20 +247,20 @@ EACALC1:
 					endcase
 					if (w && (offsdisp==16'hFFFF)) begin
 						int_num <= 8'h0d;
-						state <= INT;
+						state <= INT2;
 					end
 				end
 			8'h03:
 				if (w && (offsdisp==16'hFFFF)) begin
 					int_num <= 8'h0d;
-					state <= INT;
+					state <= INT2;
 				end
 				else
 					state <= FETCH_DATA;
 			default:
 				if (w && (offsdisp==16'hFFFF)) begin
 					int_num <= 8'h0d;
-					state <= INT;
+					state <= INT2;
 				end
 				else
 					state <= FETCH_DATA;
@@ -256,7 +269,7 @@ EACALC1:
 		`MOV_I16M:
 			if (ip==16'hFFFF) begin
 				int_num <= 8'h0d;
-				state <= INT;
+				state <= INT2;
 			end
 			else
 				state <= FETCH_IMM16;
@@ -274,7 +287,7 @@ EACALC1:
 				$display("EACALC1: state <= STORE_DATA");
 				if (w && (offsdisp==16'hFFFF)) begin
 					int_num <= 8'h0d;
-					state <= INT;
+					state <= INT2;
 				end
 				else begin	
 					res <= rrro;
@@ -286,7 +299,7 @@ EACALC1:
 				$display("EACALC1: state <= FETCH_DATA");
 				if (w && (offsdisp==16'hFFFF)) begin
 					int_num <= 8'h0d;
-					state <= INT;
+					state <= INT2;
 				end
 				else	
 					state <= FETCH_DATA;

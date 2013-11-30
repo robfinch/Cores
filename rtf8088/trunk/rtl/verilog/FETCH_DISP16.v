@@ -3,8 +3,8 @@
 //  - detch 16 bit displacement
 //
 //
-//  2009-2012  Robert Finch
-//  robfinch[remove]@opencores.org
+//  2009-2013  Robert Finch
+//  robfinch[remove]@finitron.ca
 //  Stratford
 //
 //
@@ -29,27 +29,27 @@
 //
 FETCH_DISP16:
 	begin
-		`INITIATE_CODE_READ;
+		code_read();
 		state <= FETCH_DISP16_ACK;
 	end
 
 FETCH_DISP16_ACK:
 	if (ack_i) begin
 		state <= FETCH_DISP16a;
-		`PAUSE_CODE_READ
+		pause_code_read();
 		disp16[7:0] <= dat_i;
 	end
 
 FETCH_DISP16a:
 	begin
 		state <= FETCH_DISP16a_ACK;
-		`INITIATE_CODE_READ
+		code_read();
 	end
 
 FETCH_DISP16a_ACK:
 	if (ack_i) begin
 		state <= FETCH_DISP16b;
-		`TERMINATE_CODE_READ
+		term_code_read();
 		disp16[15:8] <= dat_i;
 	end
 

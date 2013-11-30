@@ -3,8 +3,8 @@
 //  - assorted control logic
 //
 //
-//  (C) 2009,2010  Robert Finch
-//  robfinch[remove]@opencores.org
+//  (C) 2009,2010,2013  Robert Finch
+//  robfinch[remove]@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -203,9 +203,10 @@ wire hasDoublePrefix = hasPrefix && prefix2!=8'h00;
 wire repz = prefix1==`REPZ || prefix2==`REPZ;
 wire repnz = prefix1==`REPNZ || prefix2==`REPNZ;
 
+// ZF is tested only for SCAS, CMPS
 wire repdone =
 	((repz | repnz) & cxz) ||
-	(repz & !zf) ||
-	(repnz & zf)
+	(repz && !zf && (ir==`SCASB||ir==`SCASW||ir==`CMPSB||ir==`CMPSW)) ||
+	(repnz && zf && (ir==`SCASB||ir==`SCASW||ir==`CMPSB||ir==`CMPSW))
 	;
 

@@ -279,7 +279,7 @@
 `define REPZ	8'hF3
 `define HLT		8'hF4
 `define CMC		8'hF5
-`define IMUL	8'b1111011x
+//`define IMUL	8'b1111011x
 `define CLC		8'hF8
 `define STC		8'hF9
 `define CLI		8'hFA

@@ -2,8 +2,8 @@
 //  Fetch instruction
 //
 //
-//  (C) 2009,2010,2012 Robert Finch, Stratford
-//  robfinch<remove>@opencores.org
+//  (C) 2009,2010,2012,2013 Robert Finch, Stratford
+//  robfinch<remove>@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -36,7 +36,13 @@
 //
 IFETCH:
 	begin
+		$display("\r\n******************************************************");
+		$display("time: %d", $time);
 		$display("CSIP: %h", csip);
+		$display("AX=%h  SI=%h", ax, si);
+		$display("BX=%h  DI=%h", bx, di);
+		$display("CX=%h  BP=%h", cx, bp);
+		$display("DX=%h  SP=%h", dx, sp);
 		// Reset all instruction processing flags at instruction fetch
 		cyc_type <= `CT_PASSIVE;
 		mod <= 2'd0;
@@ -88,7 +94,7 @@ IFETCH:
 IFETCH_ACK:
 	if (ack_i) begin
 		nack_ir();
-		$display("IR: %h",dat_i);
+		$display("CSIP: %h IR: %h",csip,dat_i);
 		if (!hasPrefix)
 			ir_ip <= ip;
 //		ir_ip <= dat_i;

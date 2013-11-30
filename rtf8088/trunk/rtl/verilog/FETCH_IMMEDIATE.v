@@ -6,7 +6,7 @@
 //
 //
 //  2009-2012  Robert Finch
-//  robfinch[remove]@opencores.org
+//  robfinch[remove]@finitron.ca
 //  Stratford
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -34,13 +34,13 @@
 //
 FETCH_IMM8:
 	begin
-		`INITIATE_CODE_READ
+		code_read();
 		state <= FETCH_IMM8_ACK;
 	end
 
 FETCH_IMM8_ACK:
 	if (ack_i) begin
-		`TERMINATE_CODE_READ
+		term_code_read();
 		lock_o <= bus_locked;
 		b <= {{8{dat_i[7]}},dat_i};
 		state <= EXECUTE;
@@ -49,23 +49,23 @@ FETCH_IMM8_ACK:
 FETCH_IMM16:
 	begin
 		lock_o <= 1'b1;
-		`INITIATE_CODE_READ
+		code_read();
 		state <= FETCH_IMM16_ACK;
 	end
 FETCH_IMM16_ACK:
 	if (ack_i) begin
-		`PAUSE_CODE_READ
+		pause_code_read();
 		state <= FETCH_IMM16a;
 		b[ 7:0] <= dat_i;
 	end
 FETCH_IMM16a:
 	begin
-		`CONTINUE_CODE_READ
+		continue_code_read();
 		state <= FETCH_IMM16a_ACK;
 	end
 FETCH_IMM16a_ACK:
 	if (ack_i) begin
-		`TERMINATE_CODE_READ
+		term_code_read();
 		lock_o <= bus_locked;
 		b[15:8] <= dat_i;
 		$display("Fetched #%h", {dat_i,b[7:0]});

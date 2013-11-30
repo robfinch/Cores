@@ -267,7 +267,7 @@ DECODE:
 	//-----------------------------------------------------------------
 	`MOV_M2AL,`MOV_M2AX,`MOV_AL2M,`MOV_AX2M,`CALL,`JMP:
 		begin
-			`INITIATE_CODE_READ
+			code_read();
 			state <= FETCH_DISP16_ACK;
 		end
 
@@ -284,7 +284,7 @@ DECODE:
 		if (ir==`LDS || ir==`LES)
 			w <= 1'b1;
 		if (fetch_modrm) begin
-			`INITIATE_CODE_READ
+			code_read();
 			state <= EACALC;
 		end
 		else
