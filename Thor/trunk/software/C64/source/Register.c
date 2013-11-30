@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2012,2013 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@opencores.org
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // C64 - Raptor64 'C' derived language compiler
 //  - 64 bit CPU

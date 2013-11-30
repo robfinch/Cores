@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include <stdio.h>
 #include <string.h>
 #include "c.h"
@@ -22,11 +47,6 @@
  *		Box 920337
  *		Norcross, Ga 30092
  */
-/*******************************************************
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 int InitializeType(TYP *tp);
 int InitializeStructure(TYP *tp);
@@ -37,6 +57,7 @@ int initlong();
 int InitializePointer();
 void endinit();
 int InitializeArray(TYP *tp);
+extern int curseg;
 
 void doinit(SYM *sp)
 {
@@ -56,11 +77,18 @@ void doinit(SYM *sp)
 		nl();                   /* start a new line in object */
 	}
 	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
-		put_label(sp->value.i, sp->name);
+		put_label(sp->value.i, sp->name, GetNamespace(), 'D');
 	}
 	else {
-		if (sp->storage_class == sc_global)
+		if (sp->storage_class == sc_global) {
 			strcpy(lbl, "public ");
+			if (curseg==dataseg)
+				strcat(lbl, "data ");
+			else if (curseg==bssseg)
+				strcat(lbl, "bss ");
+			else if (curseg==tlsseg)
+				strcat(lbl, "tls ");
+		}
 		strcat(lbl, sp->name);
 		gen_strlab(lbl);
 	}
@@ -72,6 +100,8 @@ void doinit(SYM *sp)
 		InitializeType(sp->tp);
 	}
     endinit();
+	if (sp->storage_class == sc_global)
+		fprintf(output,"\nendpublic\n");
 }
 
 int InitializeType(TYP *tp)

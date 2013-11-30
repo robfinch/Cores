@@ -140,7 +140,6 @@ Public Class ELFFile
             efs.Seek(ELFSections(nn).hdr.sh_offset, IO.SeekOrigin.Begin)
             ELFSections(nn).Write()
         Next
-        Console.WriteLine("Header pos: " & Hex(efs.BaseStream.Position))
         efs.Seek(hdr.e_shoff, IO.SeekOrigin.Begin)
         WriteSectionHeaderTable()
     End Sub

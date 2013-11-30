@@ -30,9 +30,8 @@
 //`define I_BFEXTS	1
 //`define I_SEXT		1
 
-module Thor_bitfield(op, a, b, m, o, masko);
+module Thor_bitfield(a, b, m, o, masko);
 parameter DWIDTH=64;
-input [7:0] op;
 input [DWIDTH-1:0] a;
 input [DWIDTH-1:0] b;
 input [15:0] m;
@@ -47,8 +46,10 @@ reg [DWIDTH-1:0] o2;
 reg [DWIDTH-1:0] mask;
 assign masko = mask;
 wire [5:0] mb = m[ 5:0];
-wire [5:0] me = m[13:8];
+wire [5:0] me = m[11:6];
 wire [5:0] ml = me-mb;		// mask length-1
+wire [3:0] op = m[15:12];
+
 integer nn,n;
 always @(mb or me or nn)
 	for (nn = 0; nn < DWIDTH; nn = nn + 1)

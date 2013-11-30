@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2012,2013 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@finitron.ca
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // C64 - 'C' derived language compiler
 //  - 64 bit CPU
@@ -61,16 +63,20 @@ struct oplst {
         char    *s;
         int     ov;
         }       opl[] =
-{       {"move",op_move}, {"addu",op_add}, {"addu", op_addu}, {"mov", op_mov}, {"mtspr", op_mtspr},
+{       {"move",op_move}, {"addu",op_add}, {"addu", op_addu}, {"mov", op_mov}, {"mtspr", op_mtspr}, {"mfspr", op_mfspr},
 		{"ldi",op_ldi},
 		{"add",op_addi}, {"subu",op_sub}, {"subu", op_subu},
                 {"subi",op_subi}, {"and",op_and},
 		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},
 		{"subui",op_subui}, {"shru", op_shru}, {"divsi", op_divsi}, {"not", op_not},
-		{"addui",op_addui}, {"shr", op_shr}, {"dw", op_dw}, {"shl", op_shl}, {"shr", op_shr}, {"shru", op_shru},
+		{"addui",op_addui},
+		{"shr", op_shr}, {"dw", op_dw}, {"shl", op_shl}, {"shr", op_shr}, {"shru", op_shru},
+		{"shlu", op_shlu}, {"shlui", op_shlui},
 		{"shli", op_shli}, {"shri", op_shri}, {"shrui", op_shrui},
-		{"bfext", op_bfext}, {"bfextu", op_bfextu},
+		{"bfext", op_bfext}, {"bfextu", op_bfextu}, {"bfins", op_bfins},
 		{"sw", op_sw}, {"lw", op_lw}, {"lh", op_lh}, {"lc", op_lc}, {"lb", op_lb},
+		{"lbu", op_lbu}, {"lcu", op_lcu}, {"lhu", op_lhu}, {"sti", op_sti},
+
 		{"ldis", op_ldis}, {"lws", op_lws}, {"sws", op_sws},
 		{"lm", op_lm}, {"sm",op_sm}, {"sb",op_sb}, {"sc",op_sc}, {"sh",op_sh},
 		{"call", op_call}, {"ret", op_ret}, {"loop", op_loop}, {"beqi", op_beqi},
@@ -78,7 +84,7 @@ struct oplst {
 		{"rti", op_rti},
 		{"lwr", op_lwr}, {"swc", op_swc}, {"cache",op_cache},
 		{"or",op_or}, {"ori",op_ori}, {"iret", op_iret}, {"andi", op_andi},
-		{"xor",op_xor}, {"xori", op_xori}, {"muls",op_muls}, {"mulsi", op_mulsi}, {"mului", op_mului}, 
+		{"xor",op_xor}, {"xori", op_xori}, {"mul",op_mul}, {"muli", op_muli}, {"mului", op_mului}, 
 		{"fdmul", op_fdmul}, {"fddiv", op_fddiv}, {"fdadd", op_fdadd}, {"fdsub", op_fdsub},
 		{"fsmul", op_fsmul}, {"fsdiv", op_fsdiv}, {"fsadd", op_fsadd}, {"fssub", op_fssub},
 		{"fs2d", op_fs2d}, {"fi2d", op_i2d},
@@ -89,8 +95,8 @@ struct oplst {
                 {"bls",op_bls}, {"mulu",op_mulu}, {"divu",op_divu},
                 {"ne",op_ne}, {"lt",op_lt}, {"le",op_le},
 		{"gt",op_gt}, {"ge",op_ge}, {"neg",op_neg}, {"fdneg", op_fdneg}, {"nr", op_nr},
-		{"not",op_not}, {"cmp",op_cmp}, {"ext",op_ext}, {"tst", op_tst},
-                {"jmp",op_jmp},
+		{"not",op_not}, {"cmp",op_cmp}, {"ext",op_ext}, 
+		{"jmp",op_jmp},
                 {"lea",op_lea}, {"asr",op_asr}, 
                 {"clr",op_clr}, {"link",op_link}, {"unlk",op_unlk},
                 {"bra",op_bra}, {"pea",op_pea},
@@ -161,9 +167,13 @@ static void PutConstant(ENODE *offset)
 			fprintf(output,"%I64d",offset->i);
 			break;
 	case en_labcon:
-			fprintf(output,"L_%I64d",offset->i);
+			fprintf(output,"%s_%I64d",GetNamespace(),offset->i);
+			break;
+	case en_clabcon:
+			fprintf(output,"%s_%I64d",GetNamespace(),offset->i);
 			break;
 	case en_nacon:
+	case en_cnacon:
 			fprintf(output,"%s",offset->sp);
 			break;
 	case en_add:
@@ -309,6 +319,9 @@ void PutAddressMode(AMODE *ap)
 			//		fprintf(output,"[r%d]",ap->preg);
 			//}
 			//else
+			if (ap->offset != NULL)
+				if (ap->offset->i)
+					fprintf(output, "%I64d", ap->offset->i);
 				fprintf(output,"[%s]",RegMoniker(ap->preg));
 			break;
 	case am_brind:
@@ -443,14 +456,14 @@ void gen_strlab(char *s)
 /*
  *      output a compiler generated label.
  */
-void put_label(int lab, char *nm)
+void put_label(int lab, char *nm, char *ns, char d)
 {
 	if (nm==NULL)
-		fprintf(output,"L_%d:\n",lab);
+		fprintf(output,"%s_%d:\n",ns,lab);
 	else if (strlen(nm)==0)
-		fprintf(output,"L_%d:\n",lab);
+		fprintf(output,"%s_%d:\n",ns,lab);
 	else
-		fprintf(output,"L_%d:	; %s\n",lab,nm);
+		fprintf(output,"%s_%d:	; %s\n",ns,lab,nm);
 }
 
 void GenerateByte(int val)
@@ -534,9 +547,9 @@ void GenerateReference(SYM *sp,int offset)
         sign = '+';
     if( gentype == longgen && outcol < 55 - strlen(sp->name)) {
         if( sp->storage_class == sc_static)
-                fprintf(output,",L_%I64d%c%d",sp->value.i,sign,offset);
+                fprintf(output,",%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
         else if( sp->storage_class == sc_thread)
-                fprintf(output,",L_%I64d%c%d",sp->value.i,sign,offset);
+                fprintf(output,",%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
         else
                 fprintf(output,",%s%c%d",sp->name,sign,offset);
         outcol += (11 + strlen(sp->name));
@@ -544,9 +557,9 @@ void GenerateReference(SYM *sp,int offset)
     else {
         nl();
         if(sp->storage_class == sc_static)
-            fprintf(output,"\tdw\tL_%I64d%c%d",sp->value.i,sign,offset);
+            fprintf(output,"\tdw\t%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
         else if(sp->storage_class == sc_thread)
-            fprintf(output,"\tdw\tL_%I64d%c%d",sp->value.i,sign,offset);
+            fprintf(output,"\tdw\t%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
         else
             fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
         outcol = 26 + strlen(sp->name);
@@ -561,12 +574,12 @@ void genstorage(int nbytes)
 
 void GenerateLabelReference(int n)
 {       if( gentype == longgen && outcol < 58) {
-                fprintf(output,",L_%d",n);
+                fprintf(output,",%s_%d",GetNamespace(),n);
                 outcol += 6;
                 }
         else    {
                 nl();
-                fprintf(output,"\tlong\tL_%d",n);
+                fprintf(output,"\tlong\t%s_%d",GetNamespace(),n);
                 outcol = 22;
                 gentype = longgen;
                 }
@@ -575,7 +588,7 @@ void GenerateLabelReference(int n)
 /*
  *      make s a string literal and return it's label number.
  */
-int     stringlit(char *s)
+int stringlit(char *s)
 {      
 	struct slit *lp;
 
@@ -583,6 +596,7 @@ int     stringlit(char *s)
     lp = (struct slit *)xalloc(sizeof(struct slit));
     lp->label = nextlabel++;
     lp->str = litlate(s);
+	lp->nmspace = litlate(GetNamespace());
     lp->next = strtab;
     strtab = lp;
     --global_flag;
@@ -602,7 +616,7 @@ void dumplits()
     nl();
 	while( strtab != NULL) {
 	    nl();
-        put_label(strtab->label,strtab->str);
+        put_label(strtab->label,strtab->str,strtab->nmspace,'D');
         cp = strtab->str;
         while(*cp)
             GenerateChar(*cp++);

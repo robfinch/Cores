@@ -158,6 +158,7 @@ EXECUTE:
 					end
 				3'd6,3'd7:
 					begin
+						$display("state <= DIVIDE1");
 						state <= DIVIDE1;
 					end
 				default:	;

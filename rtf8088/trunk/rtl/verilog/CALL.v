@@ -25,23 +25,23 @@
 //
 CALL:
 	begin
-		wb_write(`CT_WRMEM,sssp,ip[15:8]);
+		write(`CT_WRMEM,sssp,ip[15:8]);
 		lock_o <= 1'b1;
 		state <= CALL1;
 	end
 CALL1:
 	if (ack_i) begin
 		state <= CALL2;
-		wb_pause_stack_push();
+		pause_stack_push();
 	end
 CALL2:
 	begin
 		state <= CALL3;
-		wb_write(`CT_WRMEM,sssp,ip[7:0]);
+		write(`CT_WRMEM,sssp,ip[7:0]);
 	end
 CALL3:
 	if (ack_i) begin
-		wb_nack();
+		nack();
 		lock_o <= 1'b0;
 		ip <= ip + disp16;
 		state <= IFETCH;

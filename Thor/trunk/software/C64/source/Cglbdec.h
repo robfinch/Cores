@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 /*
  *	68000 C compiler
  *
@@ -35,6 +60,7 @@ extern int parseEsc;
 
 extern TABLE            gsyms[257],
                         lsyms;
+extern TABLE            tagtable;
 extern SYM              *lasthead;
 extern struct slit      *strtab;
 extern int              lc_static;
@@ -55,6 +81,8 @@ extern int optimize;
 extern int exceptions;
 extern SYM *currentFn;
 extern int iflevel;
+extern int regmask;
+extern int bregmask;
 
 extern void error(int n);
 extern void needpunc(enum e_sym p);
@@ -134,13 +162,14 @@ extern void cseg();
 extern void dseg();
 //extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
 extern void put_code(struct ocode *);
-extern void put_label(int lab, char*);
+extern void put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
 extern void flush_peep();
 extern void GenerateLabel(int labno);
 // Gencode.c
 extern AMODE *make_label(__int64 lab);
+extern AMODE *make_clabel(__int64 lab);
 extern AMODE *make_immed(__int64);
 extern AMODE *make_indirect(int i);
 extern AMODE *make_offset(struct enode *node);

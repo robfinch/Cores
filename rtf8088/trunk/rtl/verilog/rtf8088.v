@@ -802,4 +802,6 @@ always @(posedge CLK)
 			endcase
 		end
 
+`include "wb_task.v"
+
 endmodule

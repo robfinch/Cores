@@ -52,7 +52,7 @@ begin : BRAMS
 			.rclk(rclk),
 			.rce(rce),
 			.ra(ra[13:3]),
-			.o0(o[n*8+7:n*8])
+			.o(o[n*8+7:n*8])
 		);
 	else
 		syncRam2kx8_1rw1r uga (

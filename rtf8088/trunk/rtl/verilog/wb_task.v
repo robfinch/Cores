@@ -1,17 +1,15 @@
-`define INITIATE_CODE_READ		cyc_type <= `CT_CODE; cyc_o <= 1'b1; stb_o <= 1'b1; we_o <= 1'b0; adr_o <= csip;
-`define TERMINATE_CYCLE			cyc_type <= `CT_PASSIVE; cyc_o <= 1'b0; stb_o <= 1'b0; we_o <= 1'b0;
-`define TERMINATE_CODE_READ		cyc_type <= `CT_PASSIVE; cyc_o <= 1'b0; stb_o <= 1'b0; we_o <= 1'b0; ip <= ip_inc;
-`define PAUSE_CODE_READ			cyc_type <= `CT_PASSIVE; stb_o <= 1'b0; ip <= ip_inc;
-`define CONTINUE_CODE_READ		cyc_type <= `CT_CODE; stb_o <= 1'b1; adr_o <= csip;
-`define INITIATE_STACK_WRITE	cyc_type <= `CT_WRMEM; cyc_o <= 1'b1; stb_o <= 1'b1; we_o <= 1'b1; adr_o <= sssp;
-`define PAUSE_STACK_WRITE		cyc_type <= `CT_PASSIVE; sp <= sp_dec; stb_o <= 1'b0; we_o <= 1'b0;
 
-`define INITIATE_STACK_POP		cyc_type <= `CT_RDMEM; lock_o <= 1'b1; cyc_o <= 1'b1; stb_o <= 1'b1; adr_o <= sssp;
-`define COMPLETE_STACK_POP		cyc_type <= `CT_PASSIVE; lock_o <= bus_locked; cyc_o <= 1'b0; stb_o <= 1'b0; sp <= sp_inc;
-`define PAUSE_STACK_POP			cyc_type <= `CT_PASSIVE; stb_o <= 1'b0; sp <= sp_inc;
-`define CONTINUE_STACK_POP		cyc_type <= `CT_RDMEM; stb_o <= 1'b1; adr_o <= sssp;
+task code_read;
+begin
+	cyc_type <= `CT_CODE;
+	cyc_o <= 1'b1;
+	stb_o <= 1'b1;
+	we_o <= 1'b0;
+	adr_o <= csip;
+end
+endtask
 
-task wb_read;
+task read;
 input [2:0] ct;
 input [19:0] ad;
 begin
@@ -23,14 +21,14 @@ begin
 end
 endtask
 
-task wb_pause_read;
+task pause_read;
 begin
 	cyc_type <= `CT_PASSIVE;
 	stb_o <= 1'b0;
 end
 endtask
 
-task wb_write;
+task write;
 input [2:0] ct;
 input [19:0] ad;
 input [7:0] dat;
@@ -44,7 +42,7 @@ begin
 end
 endtask
 
-task wb_nack;
+task nack;
 begin
 	cyc_type <= `CT_PASSIVE;
 	cyc_o <= 1'b0;
@@ -55,23 +53,23 @@ begin
 end
 endtask
 
-task wb_nack_ir;
+task nack_ir;
 begin
-	wb_nack();
+	nack();
 	ir <= dat_i;
 	ip <= ip_inc;
 end
 endtask
 
-task wb_nack_ir2;
+task nack_ir2;
 begin
-	wb_nack();
+	nack();
 	ir2 <= dat_i;
 	ip <= ip_inc;
 end
 endtask
 
-task wb_pause_code_read;
+task pause_code_read;
 begin
 	cyc_type <= `CT_PASSIVE;
 	stb_o <= 1'b0;
@@ -79,7 +77,22 @@ begin
 end
 endtask
 
-task wb_stack_push;
+task continue_code_read;
+begin
+	cyc_type <= `CT_CODE;
+	stb_o <= 1'b1;
+	adr_o <= csip;
+end
+endtask
+
+task term_code_read;
+begin
+	nack();
+	ip <= ip_inc;
+end
+endtask
+
+task stack_push;
 begin
 	cyc_type <= `CT_WRMEM;
 	cyc_o <= 1'b1;
@@ -89,7 +102,7 @@ begin
 end
 endtask
 
-task wb_pause_stack_push;
+task pause_stack_push;
 begin
 	cyc_type <= `CT_PASSIVE;
 	sp <= sp_dec;
@@ -98,7 +111,7 @@ begin
 end
 endtask
 
-task wb_stack_pop;
+task stack_pop;
 begin
 	cyc_type <= `CT_RDMEM;
 	lock_o <= 1'b1;
@@ -108,7 +121,7 @@ begin
 end
 endtask
 
-task wb_pause_stack_pop;
+task pause_stack_pop;
 begin
 	cyc_type <= `CT_PASSIVE;
 	stb_o <= 1'b0;
@@ -116,7 +129,7 @@ begin
 end
 endtask
 
-task wb_continue_stack_pop;
+task continue_stack_pop;
 begin
 	cyc_type <= `CT_RDMEM;
 	stb_o <= 1'b1;
@@ -124,11 +137,11 @@ begin
 end
 endtask
 
-task wb_stack_pop_nack;
+task stack_pop_nack;
 begin
 	lock_o <= bus_locked;
 	sp <= sp_inc;
-	wb_nack();
+	nack();
 end
 endtask
 

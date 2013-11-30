@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2012 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@opencores.org
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // C64 - Raptor64 'C' derived language compiler
 //  - 64 bit CPU
@@ -121,6 +123,7 @@ Statement *ParseWhileStatement()
 {       
 	Statement *snp;
 
+	currentFn->UsesPredicate = TRUE;
     snp = NewStatement(st_while, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
@@ -142,6 +145,8 @@ Statement *ParseWhileStatement()
 Statement *ParseUntilStatement()
 {
 	Statement *snp; 
+
+	currentFn->UsesPredicate = TRUE;
     snp = NewStatement(st_until, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
@@ -161,7 +166,9 @@ Statement *ParseUntilStatement()
 Statement *ParseDoStatement() 
 {       
 	Statement *snp; 
-    snp = NewStatement(st_do, TRUE); 
+
+	currentFn->UsesPredicate = TRUE;
+	snp = NewStatement(st_do, TRUE); 
 	snp->predreg = iflevel;
 	iflevel++;
     snp->s1 = ParseStatement(); 
@@ -187,7 +194,9 @@ Statement *ParseDoStatement()
 Statement *ParseForStatement() 
 {
 	Statement *snp; 
-    snp = NewStatement(st_for, TRUE);
+
+	currentFn->UsesPredicate = TRUE;
+	snp = NewStatement(st_for, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
     needpunc(openpa); 
@@ -330,6 +339,7 @@ Statement *ParseIfStatement()
 {
 	Statement *snp; 
 
+	currentFn->UsesPredicate = TRUE;
     snp = NewStatement(st_if, TRUE); 
 	snp->predreg = iflevel;
 	iflevel++;
@@ -474,6 +484,7 @@ Statement *ParseSwitchStatement()
 	Statement *snp; 
     Statement *head, *tail; 
 
+	currentFn->UsesPredicate = TRUE;
     snp = NewStatement(st_switch, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
@@ -647,6 +658,8 @@ Statement *ParseCompoundStatement()
 	Statement *head, *tail; 
 
 	head = 0; 
+	ParseAutoDeclarations();
+	cseg();
 	while( lastst != end ) {
 		if( head == NULL )
 			head = tail = ParseStatement(); 

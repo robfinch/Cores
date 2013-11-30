@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include        <stdio.h>
 #include        "c.h"
 #include        "expr.h"
@@ -40,7 +65,6 @@ int             incldepth;      /* shared with preproc */
 char            *linstack[20];  /* stack for substitutions */
 char            chstack[20];    /* place to save lastch */
 int             lstackptr = 0;  /* substitution stack pointer */
-
 
 int isalnum(char c)
 {       return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
@@ -171,6 +195,27 @@ int     getsch()        /* return an in-quote character */
                 }
 }
 
+void getFilename()
+{
+	int i;
+	char j;
+
+    for(i = 0;i < MAX_STRLEN;++i) {
+            if(lastch == '>')
+                    break;
+            if((j = getsch()) == -1)
+                    break;
+            else
+                    laststr[i] = j;
+            }
+    laststr[i] = 0;
+    lastst = sconst;
+    if(lastch != '>')
+            error(ERR_SYNTAX);
+    else
+            getch();
+}
+
 __int64 radix36(char c)
 {
 	if(isdigit(c))
@@ -298,6 +343,7 @@ void SkipSpaces()
 void NextToken()
 {       register int    i, j;
         SYM             *sp;
+		int tch;
 restart:        /* we come back here after comments */
 		SkipSpaces();
         if( lastch == -1)
@@ -306,13 +352,18 @@ restart:        /* we come back here after comments */
                 getnum();
         else if(isidch(lastch)) {
                 getid();
-                if( (sp = search(lastid,&defsyms)) != NULL ) {
-                        linstack[lstackptr] = lptr;
-                        chstack[lstackptr++] = lastch;
-                        lptr = sp->value.s;
-                        getch();
-                        goto restart;
-                        }
+				if( (sp = search(lastid,&defsyms)) != NULL) {
+						tch = lastch;
+						if (!(lastch==')' && sp->value.s[0]=='(')) {
+							if (lstackptr < 19) {
+								linstack[lstackptr] = lptr;
+								chstack[lstackptr++] = tch;
+								lptr = sp->value.s;
+							}
+							getch();
+							goto restart;
+						}
+						}
                 }
         else switch(lastch) {
                 case '+':
@@ -571,8 +622,10 @@ void needpunc(enum e_sym p)
 {
 	if( lastst == p)
         NextToken();
-    else
+	else {
+		printf("%d %s\r\n", lineno, inpline);
         error(ERR_PUNCT);
+	}
 }
 
 

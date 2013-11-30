@@ -119,6 +119,7 @@
 `define LW			8'h86
 `define LFS			8'h87
 `define LFD			8'h88
+`define LEA			8'h8D
 `define LWS			8'h8E
 `define PFLD		8'h8F
 
@@ -128,7 +129,7 @@
 `define SW			8'h93
 `define SFS			8'h94
 `define SFD			8'h95
-
+`define STI			8'h96
 `define CAS			8'h97
 `define STSB		8'h98
 `define STSC		8'h99
@@ -150,12 +151,15 @@
 `define MFSPR		8'hA8
 `define MTSPR		8'hA9
 
-`define BFINS		8'hAA
-`define BFSET		8'hAB
-`define BFCLR		8'hAC
-`define BFCHG		8'hAD
-`define BFEXTU		8'hAE
-`define BFEXT		8'hAF
+`define BITFIELD	8'hAA
+`define BFINS			4'h0
+`define BFSET			4'h1
+`define BFCLR			4'h2
+`define BFCHG			4'h3
+`define BFEXTU			4'h4
+`define BFEXT			4'h5
+
+`define MOVS		8'hAB
 
 `define LBX			8'hB0
 `define LBUX		8'hB1
@@ -186,15 +190,16 @@
 `define NOP			8'hE1
 
 `define TLB			8'hF0
-`define TLB_NOP			4'h0
-`define TLB_P			4'h1
-`define TLB_RD			4'h2
-`define TLB_WR			4'h3
-`define TLB_WI			4'h4
-`define TLB_EN			4'h5
-`define TLB_DIS			4'h6
-`define TLB_RDREG		4'h7
-`define TLB_WRREG		4'h8
+`define TLB_NOP			4'd0
+`define TLB_P			4'd1
+`define TLB_RD			4'd2
+`define TLB_WR			4'd3
+`define TLB_WI			4'd4
+`define TLB_EN			4'd5
+`define TLB_DIS			4'd6
+`define TLB_RDREG		4'd7
+`define TLB_WRREG		4'd8
+`define TLB_INVALL		4'd9
 
 `define TLBWired		4'h0
 `define TLBIndex		4'h1

@@ -78,7 +78,7 @@ Module Module1
     Dim predicateByte As Int64
     Dim processedPredicate As Boolean
     Dim processedEquate As Boolean
-    Dim bytesbuf(40) As Int64
+    Dim bytesbuf(10000000) As Int64
     Dim bytn As Int64
     Dim sa As Int64
     Dim dsa As Int64
@@ -198,32 +198,59 @@ Module Module1
                 WriteBinaryFile()
             End If
             If pass = 1 Then
+                ' Note that finding a symbol in the searched source code
+                ' libraries may introduce new symbols that aren't defined
+                ' yet. So we have to loop back and process for those as
+                ' well. We keep looping until all the undefined references
+                ' are defined, or we've looped too many times. (There could
+                ' be a genuine missing symbol).
                 iteration = 0
 j1:
                 foundAllSyms = True
                 For Each L In symbols
                     If L.defined = False Then
                         foundAllSyms = False
+                        ' "Promote" an undefined symbol to the global level.
+                        ' It's either an external reference or an error.
                         symbols.Remove(NameTable.GetName(L.name))
-                        snam = "0" & NameTable.GetName(L.name).Substring(1)
-                        L.name = NameTable.AddName(snam)
-                        symbols.Add(L, snam)
+                        snam = "0" & TrimLeadingDigits(NameTable.GetName(L.name))
+                        Try
+                            M = symbols.Item(snam)
+                        Catch
+                            M = Nothing
+                        End Try
+                        If M Is Nothing Then
+                            L.name = NameTable.AddName(snam)
+                            symbols.Add(L, snam)
+                        End If
                         For Each nm In SearchList
-                            Dim sf As New TextFile(nm)
-                            sftext = sf.ReadToEnd()
-                            snam = NameTable.GetName(L.name)
-                            snam = NameTable.GetName(L.name).Substring(1)
-                            nn = sftext.IndexOf("public " & snam & ":")
-                            If nn >= 0 Then
-                                en = sftext.IndexOf("endpublic", nn) + 9
-                                If en >= 9 Then
-                                    sftext2 = sftext.Substring(nn, en - nn)
-                                    sftext2 = sftext2.Replace(vbLf, "")
-                                    lines = sftext2.Split(vbCr.ToCharArray())
-                                    TextSnippets.Add(lines)
-                                    ProcessText()
+                            Try
+                                Dim sf As New TextFile(nm)
+                                sftext = CompressSpaces(sf.ReadToEnd())
+                                snam = NameTable.GetName(L.name)
+                                snam = TrimLeadingDigits(NameTable.GetName(L.name))
+                                nn = sftext.IndexOf("public code " & snam & ":")
+                                If nn < 0 Then
+                                    nn = sftext.IndexOf("public data " & snam & ":")
+                                    If nn < 0 Then
+                                        nn = sftext.IndexOf("public bss " & snam & ":")
+                                        If nn < 0 Then
+                                            nn = sftext.IndexOf("public tls " & snam & ":")
+                                        End If
+                                    End If
                                 End If
-                            End If
+                                If nn >= 0 Then
+                                    en = sftext.IndexOf("endpublic", nn) + 9
+                                    If en >= 9 Then
+                                        sftext2 = sftext.Substring(nn, en - nn)
+                                        sftext2 = sftext2.Replace(vbLf, "")
+                                        lines = sftext2.Split(vbCr.ToCharArray())
+                                        TextSnippets.Add(lines)
+                                        ProcessText()
+                                    End If
+                                End If
+                            Catch
+                            End Try
                         Next
                     End If
                 Next
@@ -237,6 +264,19 @@ j1:
             'Next
         Next
     End Sub
+
+    Function TrimLeadingDigits(ByVal str As String) As String
+        Dim ch As String
+
+        If str.Length > 0 Then
+            ch = Left(str, 1)
+            If ch >= "0" And ch <= "9" Then
+                str = str.Substring(1)
+                str = TrimLeadingDigits(str)
+            End If
+        End If
+        Return str
+    End Function
 
     Sub ProcessText()
         Dim s As String
@@ -336,7 +376,7 @@ j1:
                             Case "ldi"
                                 ProcessLdi(s, &H6F)
                             Case "ldis"
-                                ProcessLdi(s, &H9D)
+                                ProcessLdis(s, &H9D)
                             Case "addi"
                                 ProcessRIOp(s, &H48)
                             Case "addui"
@@ -406,9 +446,11 @@ j1:
                             Case "swc"
                                 ProcessMemoryOp(s, 62)
                             Case "lea"
-                                ProcessMemoryOp(s, 77)
+                                ProcessMemoryOp(s, &H4C)
                             Case "stbc"
                                 ProcessMemoryOp(s, 54)
+                            Case "sti"
+                                ProcessSti(s, &H96)
                             Case "memdb"
                                 emitOpcode(&HF9)
                             Case "memsb"
@@ -508,19 +550,19 @@ j1:
                                 ProcessShiftiOp(s, &H63)
 
                             Case "bfins"
-                                ProcessBitfieldOp(s, &HAA)
+                                ProcessBitfieldOp(s, &H0)
                             Case "bfset"
-                                ProcessBitfieldOp(s, &HAB)
+                                ProcessBitfieldOp(s, &H1)
                             Case "bfclr"
-                                ProcessBitfieldOp(s, &HAC)
+                                ProcessBitfieldOp(s, &H2)
                             Case "bfchg"
-                                ProcessBitfieldOp(s, &HAD)
+                                ProcessBitfieldOp(s, &H3)
                             Case "bfext"
-                                ProcessBitfieldOp(s, &HAF)
+                                ProcessBitfieldOp(s, &H5)
                             Case "bfextu"
-                                ProcessBitfieldOp(s, &HAE)
+                                ProcessBitfieldOp(s, &H4)
                             Case "bfexts"
-                                ProcessBitfieldOp(s, &HAF)
+                                ProcessBitfieldOp(s, &H5)
 
                             Case "jmp"
                                 ProcessJmp(s, &HA2)
@@ -625,11 +667,17 @@ j1:
                                 ' do nothing
                             Case "public"
                                 publicFlag = True
-                                For n = 1 To strs.Length - 1
-                                    strs(n - 1) = strs(n)
-                                Next
-                                strs(strs.Length - 1) = Nothing
-                                If Not strs(0) Is Nothing Then GoTo j1
+                                If (strs.Length < 2) Then
+                                    Console.WriteLine("Malformed public directive")
+                                Else
+                                    For n = 2 To strs.Length - 1
+                                        strs(n - 2) = strs(n)
+                                    Next
+                                    strs(strs.Length - 1) = Nothing
+                                    strs(strs.Length - 2) = Nothing
+                                    If Not strs(0) Is Nothing Then GoTo j1
+                                    segment = strs(1)
+                                End If
                             Case "endpublic"
                                 ' do nothing
                             Case "include", ".include"
@@ -644,16 +692,16 @@ j1:
                                     SearchList.Add(strs(1).TrimEnd("""".ToCharArray).TrimStart("""".ToCharArray))
                                 End If
                             Case Else
-                                    If Not ProcessEquate() Then
-                                        ProcessLabel(s)
-                                        plbl = True
-                                        For n = 1 To strs.Length - 1
-                                            strs(n - 1) = strs(n)
-                                        Next
-                                        strs(strs.Length - 1) = Nothing
-                                        If Not strs(0) Is Nothing Then GoTo j1
-                                        '                                        Console.WriteLine("Unknown instruction: " & s)
-                                    End If
+                                If Not ProcessEquate() Then
+                                    ProcessLabel(s)
+                                    plbl = True
+                                    For n = 1 To strs.Length - 1
+                                        strs(n - 1) = strs(n)
+                                    Next
+                                    strs(strs.Length - 1) = Nothing
+                                    If Not strs(0) Is Nothing Then GoTo j1
+                                    '                                        Console.WriteLine("Unknown instruction: " & s)
+                                End If
                         End Select
                         last_op = s
                     End If
@@ -966,7 +1014,7 @@ j3:
                 End While
                 'End If
                 While address Mod n
-                    emitbyte(&H0L, False)
+                    emitbyte(&H10L, False)
                 End While
                 slot = 0
             End If
@@ -2061,11 +2109,11 @@ j3:
         ra = GetRegister(strs(2))
         maskend = eval(strs(3))
         maskbegin = eval(strs(4))
-        emitOpcode(fn)
+        emitOpcode(&HAA)
         emitbyte(ra, False)
         emitbyte(rt, False)
-        emitbyte(maskbegin, False)
-        emitbyte(maskend, False)
+        emitbyte(maskbegin Or ((maskend << 6) And 3), False)
+        emitbyte((maskend And 15) Or (fn << 4), False)
     End Sub
 
     Sub ProcessJmp(ByVal ops As String, ByVal oc As Int64)
@@ -2105,12 +2153,14 @@ j3:
             s(1) = s(1).TrimEnd("]".ToCharArray)
             ra = GetBrRegister(s(1))
         End If
-        If (offset < -128 Or offset > 127) Then
+        If (offset < -8388608 Or offset > 8388607) Then
             emitIMM2(offset)
         End If
         emitOpcode(oc)
         emitbyte((ra << 4) Or Bt, False)
         emitbyte(offset, False)
+        emitbyte(offset >> 8, False)
+        emitbyte(offset >> 16, False)
     End Sub
 
     Sub ProcessSys(ByVal ops As String, ByVal oc As Int64)
@@ -2231,18 +2281,6 @@ j3:
             If s1.Length > 1 Then
                 s2 = s1(1).Split("*".ToCharArray)
                 rb = GetRegister(s2(0))
-                If (s2.Length > 1) Then
-                    scale = eval(s2(1))
-                    If (scale = 8) Then
-                        scale = 3
-                    ElseIf (scale = 4) Then
-                        scale = 2
-                    ElseIf (scale = 2) Then
-                        scale = 1
-                    Else
-                        scale = 0
-                    End If
-                End If
             End If
         Else
             ra = 0
@@ -2259,7 +2297,67 @@ j3:
                 emitbyte(offset, False)
             End If
         Else
+            Select Case (strs(0))
+                Case "lb"
+                    oc = &HB0
+                Case "lbu"
+                    oc = &HB1
+                Case "lc"
+                    oc = &HB2
+                Case "lcu"
+                    oc = &HB3
+                Case "lh"
+                    oc = &HB4
+                Case "lhu"
+                    oc = &HB5
+                Case "lw"
+                    oc = &HB6
+                Case "sb"
+                    oc = &HC0
+                Case "sc"
+                    oc = &HC1
+                Case "sh"
+                    oc = &HC2
+                Case "sw"
+                    oc = &HC3
+                Case "lea"
+                    oc = &H44
+            End Select
+            emitOpcode(oc)
+            emitbyte(ra, False)
+            emitbyte(rb, False)
+            emitbyte(rt, False)
         End If
+    End Sub
+
+    Sub ProcessSti(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim rt As Int64
+        Dim ra As Int64
+        Dim offset As Int64
+        Dim s() As String
+        Dim s1() As String
+        Dim s2() As String
+        Dim str As String
+        Dim imm As Int64
+
+        imm = eval(strs(1))
+        s = strs(2).Split("[".ToCharArray)
+        offset = eval(s(0))
+        If s.Length > 1 Then
+            s(1) = s(1).TrimEnd("]".ToCharArray)
+            s1 = s(1).Split("+".ToCharArray)
+            ra = GetRegister(s1(0))
+        Else
+            ra = 0
+        End If
+        If offset < -128 Or offset > 127 Then
+            emitIMM2(offset)
+        End If
+        emitOpcode(oc)
+        emitbyte(ra, False)
+        emitbyte(imm, False)
+        emitbyte(offset, False)
     End Sub
 
     Sub ProcessLws(ByVal ops As String, ByVal oc As Int64)
@@ -3092,6 +3190,10 @@ j1:
         Dim hh As String
         Dim jj As Integer
 
+        If bytn > 32 Then
+            WriteListing()
+            bytn = 0
+        End If
         If n = &H38 Then
             bytesbuf(bytn) = n And 255
         End If
@@ -3201,6 +3303,7 @@ j1:
                 End If
                 If (data_address And 31) = 31 Then
                     emitRom(dw3)
+                    bytn = 0
                 End If
                 If (data_address And 31) = 31 Then
                     emitInstRow(dw0, dw1, dw2, dw3)

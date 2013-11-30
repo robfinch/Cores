@@ -26,22 +26,6 @@
 //
 wire [DBW-1:0] alu0_out, alu1_out;
 
-Thor_shifter #(DBW) ushft0
-(
-	.opcode(alu0_op),
-	.a(alu0_argA),
-	.b(alu0_argB),
-	.o(shfto0)
-);
-
-Thor_shifter #(DBW) ushft1
-(
-	.opcode(alu1_op),
-	.a(alu1_argA),
-	.b(alu1_argB),
-	.o(shfto1)
-);
-
 Thor_multiplier #(DBW) umult0
 (
 	.rst(rst_i),
@@ -151,8 +135,8 @@ endfunction
 assign alu0_cmt = fnPredicate(alu0_pred, alu0_cond);
 assign alu1_cmt = fnPredicate(alu1_pred, alu1_cond);
 
-assign alu0_bus = 	fnIsShiftop(alu0_op) ? shfto0 : alu0_out;
-assign alu1_bus = 	fnIsShiftop(alu1_op) ? shfto1 : alu1_out;
+assign alu0_bus = 	alu0_out;
+assign alu1_bus = 	alu1_out;
 
 assign  alu0_v = alu0_dataready,
 		alu1_v = alu1_dataready;

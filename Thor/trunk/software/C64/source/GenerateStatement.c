@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2012,2013 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@finitron.ca
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // C64 - 'C' derived language compiler
 //  - 64 bit CPU
@@ -142,7 +144,7 @@ void GenerateWhile(struct snode *stmt)
 		initstack();
 		GenerateFalseJump(stmt->exp,breaklab,stmt->predreg);
 		GenerateStatement(stmt->s1);
-		GenerateDiadic(op_bra,0,make_label(contlab),NULL);
+		GenerateDiadic(op_bra,0,make_clabel(contlab),NULL);
 		GenerateLabel(breaklab);
 		breaklab = lab2;        /* restore old break label */
     }
@@ -172,7 +174,7 @@ void GenerateUntil(Statement *stmt)
                 initstack();
                 GenerateTrueJump(stmt->exp,breaklab,stmt->predreg);
                 GenerateStatement(stmt->s1);
-                GenerateDiadic(op_bra,0,make_label(contlab),NULL);
+                GenerateDiadic(op_bra,0,make_clabel(contlab),NULL);
                 GenerateLabel(breaklab);
                 breaklab = lab2;        /* restore old break label */
                 }
@@ -211,7 +213,7 @@ void GenerateFor(struct snode *stmt)
     initstack();
     if( stmt->incrExpr != NULL )
             GenerateExpression(stmt->incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(stmt->incrExpr));
-    GenerateTriadic(op_bra,0,make_label(loop_label),NULL,NULL);
+    GenerateTriadic(op_bra,0,make_clabel(loop_label),NULL,NULL);
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -234,7 +236,7 @@ void GenerateForever(Statement *stmt)
         breaklab = exit_label;
         GenerateStatement(stmt->s1);
 	}
-    GenerateDiadic(op_bra,0,make_label(loop_label),NULL);
+    GenerateDiadic(op_bra,0,make_clabel(loop_label),NULL);
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -260,7 +262,7 @@ void GenerateIf(struct snode *stmt)
         GenerateStatement(stmt->s1);
         if( stmt->s2 != 0 )             /* else part exists */
                 {
-                GenerateDiadic(op_bra,0,make_label(lab2),0);
+                GenerateDiadic(op_bra,0,make_clabel(lab2),0);
                 GenerateLabel(lab1);
                 if( stmt->s2 == 0 || stmt->s2->next == 0 )
                         breaklab = oldbreak;
@@ -381,7 +383,7 @@ void GenerateSwitch(Statement *stmt)
 				bf = stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
 					GenerateTriadic(op_cmp,0,makepred(predreg),makereg(1),make_immed(bf[nn]));
-					GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_label(curlab));
+					GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_clabel(curlab));
 				}
 		        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
 	            stmt->label = curlab;
@@ -391,9 +393,9 @@ void GenerateSwitch(Statement *stmt)
             stmt = stmt->next;
         }
         if( defcase == NULL )
-            GenerateTriadic(op_bra,0,make_label(breaklab),NULL,NULL);
+            GenerateTriadic(op_bra,0,make_clabel(breaklab),NULL,NULL);
         else
-			GenerateTriadic(op_bra,0,make_label(defcase->label),NULL,NULL);
+			GenerateTriadic(op_bra,0,make_clabel(defcase->label),NULL,NULL);
 }
 
 
@@ -497,9 +499,9 @@ void GenerateTry(Statement *stmt)
 	oldthrow = throwlab;
 	throwlab = nextlabel++;
 
-	GenerateDiadic(op_lea,0,makereg(28),make_label(throwlab));
+	GenerateDiadic(op_lea,0,makebreg(XLR),make_clabel(throwlab));
 	GenerateStatement(stmt->s1);
-    GenerateDiadic(op_bra,0,make_label(lab1),NULL);
+    GenerateDiadic(op_bra,0,make_clabel(lab1),NULL);
 	GenerateLabel(throwlab);
 	stmt = stmt->s2;
 	while (stmt) {
@@ -509,7 +511,7 @@ void GenerateTry(Statement *stmt)
 		if (stmt->s2==99999)
 			;
 		else
-			GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_label(nextlabel));
+			GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_clabel(nextlabel));
 		// move the throw expression result in 'r1' into the catch variable.
 		sym = (SYM *)stmt->label;
 		if (sym) {
@@ -524,7 +526,7 @@ void GenerateTry(Statement *stmt)
 		stmt=stmt->next;
 	}
     GenerateLabel(lab1);
-	GenerateDiadic(op_lea,0,makereg(28),make_label(oldthrow));
+	GenerateDiadic(op_lea,0,makereg(28),make_clabel(oldthrow));
 }
 
 void GenerateThrow(Statement *stmt)
@@ -544,7 +546,7 @@ void GenerateThrow(Statement *stmt)
 		ReleaseTempRegister(ap);
 		GenerateTriadic(op_ori,0,makereg(2),makereg(0),make_immed((int)stmt->label));
 	}
-	GenerateDiadic(op_bra,0,make_label(throwlab),NULL);
+	GenerateDiadic(op_bra,0,make_clabel(throwlab),NULL);
 }
 /*
 void GenerateCritical(struct snode *stmt)
@@ -594,7 +596,7 @@ void GenerateSpinlock(Statement *stmt)
 		// unlock
 		GenerateDiadic(op_outb, 0, makereg(0), make_indexed(stmt->incrExpr,ap->preg));
 		if (stmt->initExpr) {
-			GenerateTriadic(op_bra,0,make_label(lab3),NULL,NULL);
+			GenerateTriadic(op_bra,0,make_clabel(lab3),NULL,NULL);
 			GenerateLabel(lab2);
 			GenerateStatement(stmt->s2);
 			GenerateLabel(lab3);
@@ -697,7 +699,7 @@ void GenerateStatement(struct snode *stmt)
                         GenerateLabel(stmt->label);
                         break;
                 case st_goto:
-                        GenerateDiadic(op_bra,0,make_label(stmt->label),0);
+                        GenerateDiadic(op_bra,0,make_clabel(stmt->label),0);
                         break;
 				//case st_critical:
     //                    GenerateCritical(stmt);
@@ -744,10 +746,10 @@ void GenerateStatement(struct snode *stmt)
                         GenerateFirstcall(stmt);
                         break;
                 case st_continue:
-                        GenerateDiadic(op_bra,0,make_label(contlab),0);
+                        GenerateDiadic(op_bra,0,make_clabel(contlab),0);
                         break;
                 case st_break:
-                        GenerateDiadic(op_bra,0,make_label(breaklab),0);
+                        GenerateDiadic(op_bra,0,make_clabel(breaklab),0);
                         break;
                 case st_switch:
                         genxswitch(stmt);
@@ -799,9 +801,9 @@ void GenerateFirstcall(Statement *stmt)
     {
         breaklab = nextlabel++;
         GenerateLabel(lab3);	// marks address of brf
-        GenerateDiadic(op_bra,0,make_label(lab7),NULL);	// branch to the firstcall statement
+        GenerateDiadic(op_bra,0,make_clabel(lab7),NULL);	// branch to the firstcall statement
         GenerateLabel(lab6);	// prevent optimizer from optimizing move away
-		GenerateDiadic(op_bra,0,make_label(breaklab),NULL);	// then branch around it
+		GenerateDiadic(op_bra,0,make_clabel(breaklab),NULL);	// then branch around it
         GenerateLabel(lab7);	// prevent optimizer from optimizing move away
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();

@@ -3,8 +3,8 @@
 //  - calculation of effective address
 //
 //
-//  (C) 2009-2012  Robert Finch, Stratford
-//  robfinch[remove]@opencores.org
+//  (C) 2009-2013  Robert Finch, Stratford
+//  robfinch[remove]@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -269,8 +269,21 @@ EACALC1:
 //				bus_locked <= 1'b1;
 				state <= FETCH_DATA;
 			end
+		8'b1000100x:	// Move to memory
+			begin
+				$display("EACALC1: state <= STORE_DATA");
+				if (w && (offsdisp==16'hFFFF)) begin
+					int_num <= 8'h0d;
+					state <= INT;
+				end
+				else begin	
+					res <= rrro;
+					state <= STORE_DATA;
+				end
+			end
 		default:
 			begin
+				$display("EACALC1: state <= FETCH_DATA");
 				if (w && (offsdisp==16'hFFFF)) begin
 					int_num <= 8'h0d;
 					state <= INT;

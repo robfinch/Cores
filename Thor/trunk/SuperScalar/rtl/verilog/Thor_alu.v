@@ -45,6 +45,15 @@ integer n;
 wire [7:0] bcdao,bcdso;
 wire [15:0] bcdmo;
 wire [DBW-1:0] bf_out;
+wire [DBW-1:0] shfto;
+
+Thor_shifter #(DBW) ushft0
+(
+	.opcode(alu_op),
+	.a(alu_argA),
+	.b(alu_argB),
+	.o(shfto)
+);
 
 BCDAdd ubcda
 (
@@ -73,7 +82,6 @@ BCDMul2 ubcdm
 
 Thor_bitfield #(DBW) ubf1
 (
-	.op(alu_op),
 	.a(alu_argA),
 	.b(alu_argB),
 	.m(alu_argI[15:0]),
@@ -134,13 +142,12 @@ casex(alu_op)
 			o[2] <= alu_argA < alu_argI;
 			o[DBW-1:3] <= 61'd0;
 		end
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,`LEA:
 				o <= alu_argA + alu_argI;
-`LBX,`LBUX,`SBX:	o <= alu_argA + alu_argB + alu_argI;
-`LCX,`LCUX,`SCX:	o <= alu_argA + {alu_argB[DBW-2:0],1'b0} + alu_argI;
-`LHX,`LHUX,`SHX:	o <= alu_argA + {alu_argB[DBW-3:0],2'b0} + alu_argI;
-`LWX,`SWX:			o <= alu_argA + {alu_argB[DBW-4:0],3'b000} + alu_argI;
-
+`LBX,`LBUX,`SBX,
+`LCX,`LCUX,`SCX,
+`LHX,`LHUX,`SHX,
+`LWX,`SWX:	o <= alu_argA + alu_argB;
 `JSR,`SYS:	o <= alu_pc + insnsz;
 `INT:		o <= alu_pc;
 `MFSPR,`MTSPR:	o <= alu_argA;
@@ -155,7 +162,10 @@ casex(alu_op)
 		`BCDMUL:	o <= bcdmo;
 		default:	o <= 64'd0;
 		endcase
-`BFINS,`BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:
+`SHL,`SHR,`SHLU,`SHRU,`ROL,`ROR,
+`SHLI,`SHRI,`SHLUI,`SHRUI,`ROLI,`RORI:
+		o <= shfto;
+`BITFIELD:
 		o <= bf_out;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase

@@ -2,9 +2,9 @@
 //  CMPSB
 //
 //
-//  2009-2012 Robert Finch
+//  2009-2013 Robert Finch
 //  Stratford
-//  robfinch<remove>@opencores.org
+//  robfinch<remove>@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -24,15 +24,14 @@
 //=============================================================================
 //
 CMPSB:
-`include "check_for_ints.v"
-	else begin
-		wb_read(`CT_RDMEM,{seg_reg,`SEG_SHIFT} + si);
+	begin
+		read(`CT_RDMEM,{seg_reg,`SEG_SHIFT} + si);
 		lock_o <= 1'b0;
 		state <= CMPSB1;
 	end
 CMPSB1:
 	if (ack_i) begin
-		wb_nack();
+		nack();
 		state <= CMPSB2;
 		lock_o <= 1'b0;
 		a[ 7:0] <= dat_i[7:0];
@@ -41,12 +40,12 @@ CMPSB1:
 CMPSB2:
 	begin
 		state <= CMPSB3;
-		wb_read(`CT_RDMEM,esdi);
+		read(`CT_RDMEM,esdi);
 		lock_o <= 1'b0;
 	end
 CMPSB3:
 	if (ack_i) begin
-		wb_nack();
+		nack();
 		state <= CMPSB4;
 		lock_o <= 1'b0;
 		b[ 7:0] <= dat_i[7:0];
@@ -70,7 +69,8 @@ CMPSB4:
 		end
 		if ((repz & !cxz & zf) | (repnz & !cxz & !zf)) begin
 			cx <= cx_dec;
-			state <= CMPSB;
+			ip <= ir_ip;
+			state <= IFETCH;
 		end
 		else
 			state <= IFETCH;

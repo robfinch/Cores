@@ -74,16 +74,15 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
 				// But don't allow it for a branch
 				iqentry_a0[tail0]   <=  	opcode1==`INT ? fnImm(fetchbuf1_instr) :
-											fnIsBitfield(opcode1) ? fetchbuf1_instr[47:32] :
 											fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} :
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm(fetchbuf1_instr)} :
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf1_instr)} :
 											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
-											{{DBW-8{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
+											fnImm(fetchbuf1_instr);
 				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
 												fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf1_instr)];
-				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode1) ? {{DBW-6{1'b0}},Rb1[5:0]} : rfob1;
+				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode1) ? {{DBW-6{1'b0}},Rb1[5:0]} : opcode1==`STI ? Rb1 : rfob1;
 				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1 ) | rf_v[ Rb1 ];
 				iqentry_a2_s [tail0]    <=   rf_source[Rb1];
 				iqentry_a3   [tail0]    <=   rfob0;
@@ -123,16 +122,15 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn0}];
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
 				iqentry_a0[tail0]   <=  	opcode0==`INT ? fnImm(fetchbuf0_instr) :
-											fnIsBitfield(opcode0) ? fetchbuf0_instr[47:32] :
 											fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm(fetchbuf0_instr):
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm8(fetchbuf0_instr):
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
-											{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+											fnImm(fetchbuf0_instr);
 				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
+				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : opcode0==`STI ? Rb0 : rfob0;
 				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0) | rf_v[Rb0];
 				iqentry_a2_s [tail0]    <=   rf_source [Rb0];
 				iqentry_a3   [tail0]    <=   rfoa1;
@@ -175,16 +173,15 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn0}];
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
 			iqentry_a0[tail0]   	<=  opcode0==`INT ? fnImm(fetchbuf0_instr) :
-											fnIsBitfield(opcode0) ? fetchbuf0_instr[47:32] :
 										fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm(fetchbuf0_instr):
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm8(fetchbuf0_instr):
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
-										{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+										fnImm(fetchbuf0_instr);
 			iqentry_a1   [tail0]    <=	//fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 			iqentry_a1_v [tail0]    <=	fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 			iqentry_a1_s [tail0]    <=	rf_source [fnRa(fetchbuf0_instr)];
-			iqentry_a2   [tail0]    <=	fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
+			iqentry_a2   [tail0]    <=	fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : opcode0==`STI ? Rb0 : rfob0;
 			iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=	rf_source[ Rb0 ];
 			iqentry_a3   [tail0]    <=   rfoa1;
@@ -239,17 +236,16 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn0}];
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
 			iqentry_a0[tail0]   	<=  opcode0==`INT ? fnImm(fetchbuf0_instr) :
-											fnIsBitfield(opcode0) ? fetchbuf0_instr[47:32] :
 										fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm(fetchbuf0_instr):
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
-										{{DBW-8{fnImmMSB(fetchbuf0_instr)}},fnImm(fetchbuf0_instr)};
+										fnImm(fetchbuf0_instr);
 			iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 			iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 							
 			iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-			iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : rfob0;
+			iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode0) ? {58'b0,Rb0[5:0]} : opcode0==`STI ? Rb0 : rfob0;
 			iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=   rf_source[Rb0];
 			iqentry_a3   [tail0]    <=   rfoa1;
@@ -278,16 +274,15 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_pred [tail1]    <=   pregs[Pn1];
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
 			iqentry_a0[tail1]   <=  	opcode1==`INT ? fnImm(fetchbuf1_instr) :
-											fnIsBitfield(opcode1) ? fetchbuf1_instr[47:32] :
 										fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} : 
 											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
-											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) | fnImm(fetchbuf1_instr) :
-										{{DBW-8{fnImmMSB(fetchbuf1_instr)}},fnImm(fetchbuf1_instr)};
+											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) | fnImm8(fetchbuf1_instr) :
+										fnImm(fetchbuf1_instr);
 			iqentry_a1   [tail1]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
 												(fnNumReadPorts(fetchbuf1_instr) < 3'd2) ?
 												  fnOpa(opcode1,fetchbuf1_instr,rfob1,fetchbuf1_pc)
 												: fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
-			iqentry_a2   [tail1]    <=   fnIsShiftiop(opcode1) ? {58'b0,Rb1[5:0]} : rfob1;
+			iqentry_a2   [tail1]    <=   fnIsShiftiop(opcode1) ? {58'b0,Rb1[5:0]} : opcode1==`STI ? Rb1 : rfob1;
 			iqentry_a3   [tail1]    <=   rfob0;
 			// a1/a2_v and a1/a2_s values require a bit of thinking ...
 

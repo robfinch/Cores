@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include        <stdio.h>
 #include <string.h>
 #include        "c.h"
@@ -23,11 +48,6 @@
  *		Box 920337
  *		Norcross, Ga 30092
  */
-/*******************************************************
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 TYP             *head = NULL;
 TYP             *tail = NULL;
@@ -45,6 +65,8 @@ int isSigned = FALSE;
 int isVolatile = FALSE;
 int isConst = FALSE;
 int missingArgumentName = FALSE;
+int disableSubs;
+int parsingParameterList = FALSE;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -86,6 +108,8 @@ TYP *maketype(int bt, int siz)
     return tp;
 }
 
+// Parse a specifier. This is the first part of a declaration.
+//
 void ParseSpecifier(TABLE *table)
 {
 	SYM *sp;
@@ -318,6 +342,7 @@ int ParseDeclarationPrefix(char isUnion)
 {   
 	TYP *temp1, *temp2, *temp3, *temp4;
 	SYM *sp;
+	int nn;
 
 	switch (lastst) {
 		case ellipsis:
@@ -343,9 +368,9 @@ j1:
 					bit_next = bit_offset + bit_width;
 					break;	// no ParseDeclarationSuffix()
 				}
-				if (lastst==closepa) {
-					return 1;
-				}
+				//if (lastst==closepa) {
+				//	return 1;
+				//}
 	//			if (lastst==closepa) {
 	//				sp = search(lastid,&gsyms[0]);
 	//				if (strcmp(lastid,"getchar")==0)
@@ -372,7 +397,9 @@ j1:
                 if(tail == NULL)
                         tail = head;
                 NextToken();
-                ParseDeclarationPrefix(isUnion);
+				if (lastst==closepa)	// (*)
+					return 2;
+                return ParseDeclarationPrefix(isUnion);
                 break;
         case openpa:
                 NextToken();
@@ -380,13 +407,19 @@ j1:
                 temp2 = tail;
                 head = tail = NULL;	// It might be a typecast following.
 				// Do we have (getchar)()
-				if (ParseDeclarationPrefix(isUnion)) {
+				nn = ParseDeclarationPrefix(isUnion); 
+				/*if (nn==1) {
 					head = temp1;
 					tail = temp2;
-					if (lastst!=closepa)
-						error(ERR_PUNCT);
 					goto j1;
-				}
+				}*/
+				//else if (nn == 2) {
+				//	head = temp1;
+				//	tail = temp2;
+				//	NextToken();
+				//	ParseDeclarationSuffix();
+				//	break;
+				//}
                 needpunc(closepa);
                 temp3 = head;
                 temp4 = tail;
@@ -398,10 +431,10 @@ j1:
 					temp4->btp = head;
 					if(temp4->type == bt_pointer && temp4->val_flag != 0 && head != NULL)
 						temp4->size *= head->size;
+	                head = temp3;
 				}
-                head = temp3;
-				if (head==NULL)
-					head = tail = maketype(bt_long,8);
+				//if (head==NULL)
+				//	head = tail = maketype(bt_long,8);
                 break;
         default:
                 ParseDeclarationSuffix();
@@ -415,6 +448,8 @@ j1:
 void ParseDeclarationSuffix()
 {
 	TYP     *temp1;
+	int fd;
+
     switch (lastst) {
     case openbr:
         NextToken();
@@ -456,8 +491,16 @@ void ParseDeclarationSuffix()
             if(lastst == begin)
                 temp1->type = bt_ifunc;
         }
-        else
+		else {
             temp1->type = bt_ifunc;
+			// Parse the parameter list for a function pointer passed as a
+			// parameter.
+			if (parsingParameterList) {
+				fd = funcdecl;
+				ParseParameterDeclarations(0);
+				funcdecl = fd;
+			}
+		}
         break;
     }
 }
@@ -691,6 +734,7 @@ void ParseParameterDeclarations(int fd)
 {
 	funcdecl = fd;
 	missingArgumentName = FALSE;
+	parsingParameterList++;
     for(;;) {
 		switch(lastst) {
 		case kw_cdecl:
@@ -733,9 +777,11 @@ void ParseParameterDeclarations(int fd)
                 --global_flag;
                 break;
         default:
+				parsingParameterList--;
                 return;
 		}
 	}
+	parsingParameterList--;
 }
 
 

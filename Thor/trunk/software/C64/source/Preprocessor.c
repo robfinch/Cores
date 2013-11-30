@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include        <stdio.h>
 #include <string.h>
 #include        "c.h"
@@ -23,12 +48,6 @@
  *		Box 920337
  *		Norcross, Ga 30092
  */
-/*******************************************************
-	Copyright 2012	Robert Finch
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 FILE            *inclfile[10];
 //int             incldepth = 0;
@@ -38,6 +57,7 @@ extern char     inpline[132];
 int endifCount = 0;
 int dodefine();
 int doinclude();
+extern void getFilename();
 
 int preprocess()
 {   
@@ -68,8 +88,16 @@ int preprocess()
 int doinclude()
 {
 	int     rv;
+	static char pathname[5000];
+
 	parseEsc = FALSE;
     NextToken();               /* get file to include */
+	if (lastst==lt) {
+		getFilename();
+		searchenv(laststr, "C64INC", pathname);
+	}
+	else
+		strcpy(pathname, laststr);
 	parseEsc = TRUE;
     if( lastst != sconst ) {
             error(ERR_INCLFILE);
@@ -77,14 +105,14 @@ int doinclude()
             }
     inclline[incldepth] = lineno;
     inclfile[incldepth++] = input;  /* push current input file */
-    input = fopen(laststr,"r");
+    input = fopen(pathname,"r");
     if( input == 0 ) {
             input = inclfile[--incldepth];
             error(ERR_CANTOPEN);
             rv = getline(incldepth == 0);
             }
     else    {
-			_splitpath(laststr,NULL,NULL,nmspace[incldepth],NULL);
+			_splitpath(pathname,NULL,NULL,nmspace[incldepth],NULL);
             rv = getline(incldepth == 1);
             lineno = -32768;        /* dont list include files */
             }

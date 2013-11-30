@@ -49,12 +49,14 @@ DIVIDE1:
 	end
 DIVIDE2:
 	begin
+		$display("DIVIDE2");
 		ld_div32 <= 1'b0;
 		ld_div16 <= 1'b0;
 		state <= DIVIDE2a;
 	end
 DIVIDE2a:
 	begin
+		$display("DIVIDE2a");
 		if (w & div32_done)
 			state <= DIVIDE3;
 		else if (!w & div16_done)
@@ -65,18 +67,21 @@ DIVIDE2a:
 // Trap on divider overflow
 DIVIDE3:
 	begin
+		$display("DIVIDE3 state <= IFETCH");
 		state <= IFETCH;
 		if (w) begin
 			ax <= q32[15:0];
 			dx <= r32[15:0];
 			if (TTT[0]) begin
 				if (q32[31:16]!={16{q32[15]}}) begin
+					$display("DIVIDE Overflow");
 					int_num <= 8'h00;
 					state <= INT2;
 				end
 			end
 			else begin
 				if (q32[31:16]!=16'h0000) begin
+					$display("DIVIDE Overflow");
 					int_num <= 8'h00;
 					state <= INT2;
 				end
@@ -87,12 +92,14 @@ DIVIDE3:
 			ax[15:8] <= r16;
 			if (TTT[0]) begin
 				if (q16[15:8]!={8{q16[7]}}) begin
+					$display("DIVIDE Overflow");
 					int_num <= 8'h00;
 					state <= INT2;
 				end
 			end
 			else begin
 				if (q16[15:8]!=8'h00) begin
+					$display("DIVIDE Overflow");
 					int_num <= 8'h00;
 					state <= INT2;
 				end

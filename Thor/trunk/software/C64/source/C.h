@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 /*
  *	68000 C compiler
  *
@@ -58,6 +83,7 @@ struct slit {
     struct slit     *next;
     int             label;
     char            *str;
+	char			*nmspace;
 };
 
 struct typ;
@@ -67,7 +93,8 @@ struct sym {
     char *name;
     __int8 storage_class;
 	// Function attributes
-	__int8 NumParms;
+	unsigned __int8 NumRegisterVars;
+	unsigned __int8 NumParms;
 	struct sym *parms;
 	struct sym *nextparm;
 	unsigned int IsPrototype : 1;
@@ -76,6 +103,7 @@ struct sym {
 	unsigned int IsPascal : 1;
 	unsigned int IsLeaf : 1;
 	unsigned int DoesThrow : 1;
+	unsigned int UsesPredicate : 1;
     union {
         __int64 i;
         unsigned __int64 u;

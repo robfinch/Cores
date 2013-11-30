@@ -61,7 +61,7 @@ assign o2 = rra2==8'd0 ? {WID{1'b0}} :
 	(wr1 && (rra2==wa1)) ? i1 :
 	(wr0 && (rra2==wa0)) ? i0 :
 	whichreg[rra2]==1'b0 ? regs0[rra2] : regs1[rra2];
-assign o3 = ra3==8'd0 ? {WID{1'b0}} :
+assign o3 = rra3==8'd0 ? {WID{1'b0}} :
 	(wr1 && (rra3==wa1)) ? i1 :
 	(wr0 && (rra3==wa0)) ? i0 :
 	whichreg[rra3]==1'b0 ? regs0[rra3] : regs1[rra3];

@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include        <stdio.h>
 #include        "c.h"
 #include        "expr.h"
@@ -22,11 +47,6 @@
  *		Box 920337
  *		Norcross, Ga 30092
  */
-/*******************************************************
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 TYP             stdint = { bt_long, bt_long, 0, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
 TYP             stduint = { bt_long, bt_long, 0, TRUE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
@@ -78,6 +98,7 @@ ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
     ep = (ENODE *)xalloc(sizeof(ENODE));
     ep->nodetype = nt;
     ep->constflag = FALSE;
+	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->p[0] = v1;
@@ -91,6 +112,7 @@ ENODE *makesnode(int nt, char *v1, __int64 i)
     ep = (ENODE *)xalloc(sizeof(ENODE));
     ep->nodetype = nt;
     ep->constflag = FALSE;
+	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->sp = v1;
@@ -104,6 +126,7 @@ ENODE *makenodei(int nt, ENODE *v1, __int64 i)
     ep = (ENODE *)xalloc(sizeof(ENODE));
     ep->nodetype = nt;
     ep->constflag = FALSE;
+	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->i = i;
@@ -118,6 +141,7 @@ ENODE *makeinode(int nt, __int64 v1)
     ep = (ENODE *)xalloc(sizeof(ENODE));
     ep->nodetype = nt;
     ep->constflag = TRUE;
+	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
     ep->i = v1;
@@ -130,6 +154,7 @@ ENODE *makefnode(int nt, double v1)
     ep = (ENODE *)xalloc(sizeof(ENODE));
     ep->nodetype = nt;
     ep->constflag = TRUE;
+	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
     ep->f = v1;
@@ -149,8 +174,10 @@ TYP *deref(ENODE **node, TYP *tp)
 {
 	switch( tp->type ) {
 		case bt_byte:
-			if (tp->isUnsigned)
+			if (tp->isUnsigned) {
 				*node = makenode(en_ub_ref,*node,NULL);
+				(*node)->isUnsigned = TRUE;
+			}
 			else
 				*node = makenode(en_b_ref,*node,NULL);
 			(*node)->esize = tp->size;
@@ -159,8 +186,10 @@ TYP *deref(ENODE **node, TYP *tp)
             break;
 		case bt_char:
         case bt_enum:
-			if (tp->isUnsigned)
+			if (tp->isUnsigned) {
 				*node = makenode(en_uc_ref,*node,NULL);
+				(*node)->isUnsigned = TRUE;
+			}
 			else
 				*node = makenode(en_c_ref,*node,NULL);
 			(*node)->esize = tp->size;
@@ -168,17 +197,37 @@ TYP *deref(ENODE **node, TYP *tp)
             tp = &stdchar;
             break;
         case bt_short:
-            *node = makenode(en_h_ref,*node,NULL);
-			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
-            tp = &stdint;
+			if (tp->isUnsigned) {
+				*node = makenode(en_uh_ref,*node,NULL);
+				(*node)->esize = tp->size;
+				(*node)->etype = tp->type;
+				(*node)->isUnsigned = TRUE;
+				tp = &stduint;
+			}
+			else {
+				*node = makenode(en_h_ref,*node,NULL);
+				(*node)->esize = tp->size;
+				(*node)->etype = tp->type;
+				tp = &stdint;
+			}
             break;
 		case bt_long:
+			(*node)->esize = tp->size;
+			(*node)->etype = tp->type;
+			if (tp->isUnsigned) {
+				(*node)->isUnsigned = TRUE;
+				*node = makenode(en_uw_ref,*node,NULL);
+			}
+			else {
+				*node = makenode(en_w_ref,*node,NULL);
+			}
+            break;
 		case bt_pointer:
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = tp->type;
             *node = makenode(en_w_ref,*node,NULL);
+			(*node)->isUnsigned = TRUE;
             break;
         case bt_double:
             *node = makenode(en_dbl_ref,*node,NULL);
@@ -202,6 +251,7 @@ TYP *deref(ENODE **node, TYP *tp)
 					*node = makenode(en_uhfieldref, *node, NULL);
 				else
 					*node = makenode(en_wfieldref, *node, NULL);
+				(*node)->isUnsigned = TRUE;
 			}
 			else {
 				if (tp->size==1)
@@ -256,8 +306,10 @@ TYP *nameref(ENODE **node)
             insert(sp,&gsyms);
             --global_flag;
             tp = &stdfunc;
-            *node = makesnode(en_nacon,sp->name,sp->value.i);
+            *node = makesnode(en_cnacon,sp->name,sp->value.i);
             (*node)->constflag = TRUE;
+			if (sp->tp->isUnsigned)
+				(*node)->isUnsigned = TRUE;
         }
         else {
             tp = NULL;
@@ -276,7 +328,7 @@ TYP *nameref(ENODE **node)
 								//strcat(stnm,"_");
 								stnm[0] = '\0';
 								strcat(stnm,sp->name);
-								*node = makesnode(en_nacon,litlate(stnm),sp->value.i);
+								*node = makesnode(en_cnacon,litlate(stnm),sp->value.i);
 								(*node)->constflag = TRUE;
 								//*node = makesnode(en_nacon,sp->name);
 								//(*node)->constflag = TRUE;
@@ -285,21 +337,32 @@ TYP *nameref(ENODE **node)
 								*node = makeinode(en_labcon,sp->value.i);
 								(*node)->constflag = TRUE;
 							}
+							if (sp->tp->isUnsigned)
+								(*node)->isUnsigned = TRUE;
                             break;
 					case sc_thread:
 							*node = makeinode(en_labcon,sp->value.i);
 							(*node)->constflag = TRUE;
+							if (sp->tp->isUnsigned)
+								(*node)->isUnsigned = TRUE;
 							break;
                     case sc_global:
                     case sc_external:
-                            *node = makesnode(en_nacon,sp->name,sp->value.i);
+							if (sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
+	                            *node = makesnode(en_cnacon,sp->name,sp->value.i);
+							else
+	                            *node = makesnode(en_nacon,sp->name,sp->value.i);
                             (*node)->constflag = TRUE;
+							(*node)->isUnsigned = sp->tp->isUnsigned;
                             break;
                     case sc_const:
 							if (sp->tp->type==bt_float || sp->tp->type==bt_double)
 								*node = makefnode(en_fcon,sp->value.f);
-							else
+							else {
 								*node = makeinode(en_icon,sp->value.i);
+								if (sp->tp->isUnsigned)
+									(*node)->isUnsigned = TRUE;
+							}
                             (*node)->constflag = TRUE;
                             break;
                     default:        /* auto and any errors */
@@ -307,8 +370,11 @@ TYP *nameref(ENODE **node)
                                     error(ERR_ILLCLASS);
 							if (sp->tp->type==bt_float || sp->tp->type==bt_double)
 								*node = makeinode(en_autofcon,sp->value.i);
-							else
+							else {
 								*node = makeinode(en_autocon,sp->value.i);
+								if (sp->tp->isUnsigned)
+									(*node)->isUnsigned = TRUE;
+							}
                             break;
                     }
             if( tp->val_flag == FALSE)
@@ -450,6 +516,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 									expression(&rnode);
 									pnode = makenode(en_add,rnode,pnode);
 									pnode->constflag = rnode->constflag && pnode->p[1]->constflag;
+									pnode->isUnsigned = rnode->isUnsigned && pnode->p[1]->isUnsigned;
 									pnode->scale = tptr->size;
 								}
 								else {
@@ -470,6 +537,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 									else
 										qnode2 = qnode;
 									qnode->constflag = TRUE;
+									qnode->isUnsigned = tptr->isUnsigned;
 									expression(&rnode);
 									needpunc(closebr);
 	/*
@@ -512,6 +580,10 @@ TYP *ParsePrimaryExpression(ENODE **node)
  *      fall through to dot operation
  */
                         case dot:
+							if (tptr==NULL) {
+								error(ERR_UNDEFINED);
+								goto fini;
+							}
                                 NextToken();       /* past -> or . */
                                 if( lastst != id )
                                         error(ERR_IDEXPECT);
@@ -649,6 +721,7 @@ TYP *ParseUnaryExpression(ENODE **node)
                         }
                         ep1 = makenode(en_uminus,ep1,NULL);
                         ep1->constflag = ep1->p[0]->constflag;
+						ep1->isUnsigned = ep1->p[0]->isUnsigned;
                         break;
 
                 case not:
@@ -1039,7 +1112,7 @@ TYP     *shiftop(ENODE **node)
 							error(ERR_UNDEF_OP);
 						else {
 							if (tp1->isUnsigned)
-								ep1 = makenode(oper ? en_shl : en_shru,ep1,ep2);
+								ep1 = makenode(oper ? en_shlu : en_shru,ep1,ep2);
 							else
 								ep1 = makenode(oper ? en_shl : en_shr,ep1,ep2);
 							PromoteConstFlag(ep1);

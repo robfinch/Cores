@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2012,2013 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@finitron.ca
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // C64 - 'C' derived language compiler
 //  - 64 bit CPU
@@ -78,6 +80,7 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
     cd->oper2 = NULL;
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
+	currentFn->UsesPredicate = TRUE;
     AddToPeepList(cd);
 }
 
@@ -108,6 +111,7 @@ void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMOD
     cd->oper2 = copy_addr(ap2);
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
+	currentFn->UsesPredicate = TRUE;
     AddToPeepList(cd);
 }
 
@@ -182,6 +186,7 @@ void GenerateLabel(int labno)
     newl = (struct ocode *)xalloc(sizeof(struct ocode));
     newl->opcode = op_label;
     newl->oper1 = (struct amode *)labno;
+	newl->oper2 = (struct amode *)currentFn->name;
     AddToPeepList(newl);
 }
 
@@ -204,7 +209,7 @@ void flush_peep()
     while( peep_head != NULL )
     {
 		if( peep_head->opcode == op_label )
-			put_label(peep_head->oper1,"");
+			put_label(peep_head->oper1,"",GetNamespace(),'C');
 		else
 			put_ocode(peep_head);
 		peep_head = peep_head->fwd;
@@ -227,9 +232,16 @@ void put_ocode(struct ocode *p)
  *      changes long moves to address registers to short when
  *              possible.
  *      changes move immediate to stack to pea.
+ *      mov r3,r3 removed
  */
 void peep_move(struct ocode	*ip)
 {
+	if (equal_address(ip->oper1, ip->oper2)) {
+		if (ip->fwd)
+			ip->fwd->back = ip->back;
+		if (ip->back)
+			ip->back->fwd = ip->fwd;
+	}
 	return;
 }
 
@@ -386,6 +398,8 @@ void PeepoptBranch(struct ocode *ip)
 			else if (fwd1->opcode==op_label)
 				return;
 		}
+		if (fwd1->predop != 1)
+			return;
 	}
 	if (fwd2) {
 		if (fwd2->opcode==op_label && ip->oper1) {
@@ -402,6 +416,8 @@ void PeepoptBranch(struct ocode *ip)
 			else if (fwd2->opcode==op_label)
 				return;
 		}
+		if (fwd2->predop != 1)
+			return;
 	}
 	if (fwd3) {
 		if (fwd3->opcode==op_label && ip->oper1) {
@@ -420,6 +436,8 @@ void PeepoptBranch(struct ocode *ip)
 			else if (fwd3->opcode==op_label)
 				return;
 		}
+		if (fwd3->predop != 1)
+			return;
 	}
 	if (fwd4) {
 		if (fwd4->opcode==op_label && ip->oper1) {
@@ -440,6 +458,8 @@ void PeepoptBranch(struct ocode *ip)
 			else if (fwd4->opcode==op_label)
 				return;
 		}
+		if (fwd4->predop != 1)
+			return;
 	}
 	return;
 }
@@ -471,7 +491,7 @@ void opt3()
     {
         switch( ip->opcode )
         {
-            case op_move:
+            case op_mov:
                     peep_move(ip);
                     break;
             case op_add:
@@ -483,8 +503,8 @@ void opt3()
             case op_cmp:
                     peep_cmp(ip);
                     break;
-            case op_muls:
-                    PeepoptMuldiv(ip,op_shl);
+            case op_mul:
+//                    PeepoptMuldiv(ip,op_shl);
                     break;
 			case op_lc:
 					PeepoptLc(ip);

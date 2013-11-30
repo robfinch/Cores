@@ -7,7 +7,7 @@
 //
 //  (C) 2009-2012 Robert Finch
 //  Stratford
-//  robfinch<remove>@opencores.org
+//  robfinch<remove>@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -30,7 +30,7 @@
 //
 BRANCH1:
 	if (take_br) begin
-		`INITIATE_CODE_READ
+		code_read();
 		state <= BRANCH2;
 	end
 	else begin
@@ -39,7 +39,7 @@ BRANCH1:
 	end
 BRANCH2:
 	if (ack_i) begin
-		`TERMINATE_CODE_READ
+		term_code_read();
 		disp16 <= {{8{dat_i[7]}},dat_i};
 		state <= BRANCH3;
 	end

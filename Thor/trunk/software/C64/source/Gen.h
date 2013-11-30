@@ -11,7 +11,9 @@
 #define F_ALL   15      /* all modes allowed */
 #define F_VOL   16      /* need volitile operand */
 #define F_NOVALUE 32    /* dont need result value */
-#define F_IMMED18	64		// 18-bit immediate constant
+#define F_IMMED18	64	// 18-bit immediate constant
+#define F_IMM0	128		/* immediate value 0 */
+#define F_IMM8	256
 
 /*      addressing mode structure       */
 
@@ -21,6 +23,7 @@ typedef struct amode {
 	unsigned int sreg : 8;
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
+	unsigned int isUnsigned : 1;
 	int deep;           /* stack depth on allocation */
 	struct enode *offset;
 	__int8 scale;
@@ -39,11 +42,11 @@ struct ocode {
 };
 
 enum e_op {
-        op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_ldi,
-        op_muls, op_mulsi, op_mulu, op_divs, op_divsi, op_divu, op_and, op_andi,
+        op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi,
+        op_mul, op_muli, op_mulu, op_divs, op_divsi, op_divu, op_and, op_andi,
         op_or, op_ori, op_xor, op_xori, op_asr, op_shl, op_shr, op_shru,
-		op_shli, op_shri, op_shrui,
-		op_bfext, op_bfextu,
+		op_shli, op_shri, op_shrui, op_shlu, op_shlui,
+		op_bfext, op_bfextu, op_bfins,
 		op_jmp, op_jsr, op_mului, op_mod, op_modu,
 		op_fdmul, op_fdsub, op_fddiv, op_fdadd, op_fdneg,
 		op_fsmul, op_fssub, op_fsdiv, op_fsadd, op_fsneg,
@@ -54,6 +57,7 @@ enum e_op {
 		op_sw, op_sh, op_sc, op_sb, op_outb, op_inb, op_inbu,
 		op_call, op_jal, op_beqi, op_bnei, op_tst,
 		op_lw, op_lh, op_lc, op_lb, op_ret, op_sm, op_lm, op_ldis, op_lws, op_sws,
+		op_lbu, op_lcu, op_lhu, op_sti,
         op_rts, op_rti,
 		op_bra, op_bf, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
 		op_gtu, op_geu, op_ltu, op_leu, op_nr,

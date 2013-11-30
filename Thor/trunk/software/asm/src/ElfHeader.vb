@@ -185,7 +185,7 @@ End Class
 Public Class ELFSection
     Public hdr As Elf64Shdr
     Public length As Integer
-    Public bytes(65536) As Byte
+    Public bytes(10000000) As Byte
 
     Public Sub New()
         hdr = New Elf64Shdr

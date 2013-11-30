@@ -97,7 +97,7 @@
 `include "Thor_defines.v"
 
 module Thor(rst_i, clk_i, km, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
-parameter DBW = 32;
+parameter DBW = 64;
 parameter IDLE = 4'd0;
 parameter ICACHE1 = 4'd1;
 parameter DCACHE1 = 4'd2;
@@ -694,7 +694,7 @@ function fnSource2_v;
 input [7:0] opcode;
 	casex(opcode)
 	`NEG,`NOT,`MOV:		fnSource2_v = 1'b1;
-	`LDI,`IMM,`NOP:		fnSource2_v = 1'b1;
+	`LDI,`STI,`LDIS,`IMM,`NOP:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB:
 					fnSource2_v = 1'b1;
 	`RTI,`RTE:		fnSource2_v = 1'b1;
@@ -710,7 +710,7 @@ input [7:0] opcode;
 	`ORI:			fnSource2_v = 1'b1;
 	`EORI:			fnSource2_v = 1'b1;
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA:
 			fnSource2_v = 1'b1;
 	`JSR,`SYS,`INT,`RTS,`BR,`LOOP:
 			fnSource2_v = 1'b1;
@@ -737,11 +737,11 @@ endfunction
 function [2:0] fnNumReadPorts;
 input [63:0] ins;
 case(fnOpcode(ins))
-`SEI,`CLI,`MEMSB,`MEMDB,`NOP:
+`SEI,`CLI,`MEMSB,`MEMDB,`NOP,`MOVS:
 					fnNumReadPorts = 3'd0;
 `BR,`LOOP:				fnNumReadPorts = 3'd0;
-`LDI,`IMM:				fnNumReadPorts = 3'd0;
-`NEG,`NOT,`MOV:			fnNumReadPorts = 3'd1;
+`LDI,`LDIS,`IMM:		fnNumReadPorts = 3'd0;
+`NEG,`NOT,`MOV,`STI:	fnNumReadPorts = 3'd1;
 `RTI,`RTE:			fnNumReadPorts = 3'd1;
 `TST:				fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI:		fnNumReadPorts = 3'd1;
@@ -754,7 +754,7 @@ case(fnOpcode(ins))
 `ANDI,`ORI,`EORI:	fnNumReadPorts = 3'd1;
 `SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI:
 					fnNumReadPorts = 3'd1;
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LWS,`LEA:
 					fnNumReadPorts = 3'd1;
 `JSR,`SYS,`INT,`RTS,`BR,`LOOP:
 					fnNumReadPorts = 3'd1;
@@ -954,6 +954,8 @@ begin
 		casex(fnOpcode(ir))
 		`LDI:
 			fnTargetReg = {1'b0,ir[23:16]};
+		`LDIS:
+			fnTargetReg = {1'b1,ir[23:16]};
 		`BCD,
 		`ADD,`ADDU,`SUB,`SUBU,`MUL,`MULU,`DIV,`DIVU,
 		`AND,`OR,`EOR,`NAND,`NOR,`ENOR,`ANDC,`ORC,
@@ -966,8 +968,10 @@ begin
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
 		`SHLI,`SHRI,`SHLUI,`SHRUI,`ROLI,`RORI,
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
 			fnTargetReg = {1'b0,ir[31:24]};
+		`LWS:
+			fnTargetReg = {1'b1,ir[31:24]};
 		`CAS:
 			fnTargetReg = {1'b0,ir[47:40]};
 		`BFSET,`BFCLR,`BFCHG,`BFINS,`BFEXT,`BFEXTU:
@@ -985,7 +989,7 @@ begin
 			fnTargetReg = {1'b1,4'h0,ir[11:8]};
 		`JSR,`SYS,`INT:
 			fnTargetReg = {1'b1,4'h1,ir[19:16]};
-		`MTSPR:
+		`MTSPR,`MOVS:
 			if (ir[31:28]==4'h1)		// Move to branch register
 				fnTargetReg = {1'b1,4'h1,ir[27:24]};
 			else if (ir[31:28]==4'h2)	// Move to seg. reg.
@@ -1007,7 +1011,17 @@ if (ir[3:0]==4'h0)
 else begin
 	case(fnOpcode(ir))
 	`JSR,`SYS,`INT:	fnTargetsBr = `TRUE;
-	`MTSPR:
+	`LWS:
+		if (ir[31:28]==4'h1)
+			fnTargetsBr = `TRUE;
+		else
+			fnTargetsBr = `FALSE;
+	`LDIS:
+		if (ir[23:20]==4'h1)
+			fnTargetsBr = `TRUE;
+		else
+			fnTargetsBr = `FALSE;
+	`MTSPR,`MOVS:
 		begin
 			if (ir[31:28]==4'h1)
 				fnTargetsBr = `TRUE;
@@ -1026,7 +1040,17 @@ if (ir[3:0]==4'h0)
 	fnTargetsSegreg = `FALSE;
 else
 	case(fnOpcode(ir))
-	`MTSPR:
+	`LWS:
+		if (ir[31:28]==4'h2)
+			fnTargetsSegreg = `TRUE;
+		else
+			fnTargetsSegreg = `FALSE;
+	`LDIS:
+		if (ir[23:20]==4'h2)
+			fnTargetsSegreg = `TRUE;
+		else
+			fnTargetsSegreg = `FALSE;
+	`MTSPR,`MOVS:
 		if (ir[31:28]==4'h2)
 			fnTargetsSegreg = `TRUE;
 		else
@@ -1039,17 +1063,15 @@ function fnHasConst;
 input [7:0] opcode;
 	casex(opcode)
 	`BFCLR,`BFSET,`BFCHG,`BFEXT,`BFEXTU,`BFINS,
-	`LDI,
+	`LDI,`LDIS,
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 	`CMPI,
 	`ANDI,`ORI,`EORI,
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,
-	`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,
-	`SBX,`SCX,`SHX,`SWX,
-	`LVB,`LVC,`LVH,`LVW,
-	`SB,`SC,`SH,`SW,`CAS,
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,
+	`LVB,`LVC,`LVH,`LVW,`STI,
+	`SB,`SC,`SH,`SW,`CAS,`SWS,
 	`JSR,`SYS,`INT,`BR:
 		fnHasConst = 1'b1;
 	default:
@@ -1088,10 +1110,10 @@ default:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`RTS:
 		fnInsnLength = 4'd3;
-	`JSR,`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`NEG,`NOT,`MOV,`TLB:
+	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`NEG,`NOT,`MOV,`TLB,`MOVS:
 		fnInsnLength = 4'd4;
 	`BFCLR,`BFSET,`BFCHG,`BFINS,`BFEXT,`BFEXTU,
-	`LBX,`LWX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`SCX,`SBX,`SHX,`SWX,`MUX,`BCD:
+	`JSR,`MUX,`BCD:
 		fnInsnLength = 4'd6;
 	`CAS:
 		fnInsnLength = 4'd7;
@@ -1149,7 +1171,8 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
 			opcode==`STSB || opcode==`STSC || opcode==`STSH || opcode==`STSW ||
 			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
-			opcode==`TLB || opcode==`CAS
+			opcode==`TLB || opcode==`CAS ||
+			opcode==`LWS || opcode==`SWS || opcode==`STI
 			;
 endfunction
 
@@ -1161,17 +1184,17 @@ begin
 fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
-			opcode==`CAS ||
+			opcode==`CAS || opcode==`LWS ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
 			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
 			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
-			opcode==`NOT || opcode==`NEG || opcode==`MOV ||
-			opcode==`LDI || opcode==`MFSPR ||
+			opcode==`NOT || opcode==`NEG || opcode==`MOV || opcode==`LEA ||
+			opcode==`LDI || opcode==`LDIS || opcode==`MFSPR ||
 			// Branch registers / Segment registers
-			(opcode==`MTSPR && (fnTargetsBr(ir) || fnTargetsSegreg(ir))) ||
+			((opcode==`MTSPR || opcode==`MOVS) && (fnTargetsBr(ir) || fnTargetsSegreg(ir))) ||
 			opcode==`JSR || opcode==`SYS || opcode==`INT ||
 			// predicate registers
 			(opcode[7:4] < 4'h3) ||
@@ -1185,14 +1208,16 @@ function fnIsStore;
 input [7:0] opcode;
 fnIsStore = 	opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
-				opcode==`STSB || opcode==`STSC || opcode==`STSH || opcode==`STSW;
+				opcode==`STSB || opcode==`STSC || opcode==`STSH || opcode==`STSW ||
+				opcode==`SWS || opcode==`STI;
 endfunction
 
 function fnIsLoad;
 input [7:0] opcode;
 fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
-			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW;
+			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
+			opcode==`LWS;
 endfunction
 
 function fnIsLoadV;
@@ -1232,7 +1257,7 @@ if (DBW==32)
 		endcase
 	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		fnSelect = 8'hFF;
-	`LW,`LWX,`SW,`LVW,`SWX,`CAS:
+	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1261,7 +1286,7 @@ else
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
-	`LW,`LWX,`SW,`LVW,`SWX,`CAS:
+	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1303,7 +1328,7 @@ if (DBW==32)
 		4'hC:	fnDatai = dat[31:16];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LHX,`LHUX,`CAS:
+	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LHX,`LHUX,`CAS,`LWS:
 		fnDatai = dat[31:0];
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
@@ -1361,7 +1386,7 @@ else
 		8'hF0:	fnDatai = dat[DBW-1:DBW/2];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LW,`LWX,`LVW,`CAS:
+	`LW,`LWX,`LVW,`CAS,`LWS:
 		case(sel)
 		8'hFF:	fnDatai = dat;
 		default:	fnDatai = {DBW{1'b1}};
@@ -1376,7 +1401,7 @@ input [7:0] opcode;
 input [DBW-1:0] dat;
 if (DBW==32)
 	case(opcode)
-	`SW,`SWX,`CAS:	fnDatao = dat;
+	`SW,`SWX,`CAS,`SWS:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = dat;
 	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
 	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
@@ -1384,7 +1409,7 @@ if (DBW==32)
 	endcase
 else
 	case(opcode)
-	`SW,`SWX,`CAS:	fnDatao = dat;
+	`SW,`SWX,`CAS,`SWS:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
 	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
 	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
@@ -1533,26 +1558,42 @@ else
 	endcase
 
 // Return the immediate field of an instruction
-function [7:0] fnImm;
+function [63:0] fnImm;
 input [127:0] insn;
 
 case(insn[15:8])
-`CAS:	fnImm = insn[55:48];
+`CAS:	fnImm = {{56{insn[55]}},insn[55:48]};
 `BCD:	fnImm = insn[47:40];
 `TLB:	fnImm = insn[23:16];
-`LOOP:	fnImm = insn[23:16];
-`SYS,`JSR,`INT,`CMPI,`LDI:
-	fnImm = insn[31:24];
-`RTS:	fnImm = {4'h0,insn[19:16]};
-`RTE,`RTI:
-	fnImm = 8'h00;
-`LBX,`LBUX,`LHX,`LHUX,`LCX,`LCUX,`LWX,
-`SBX,`SCX,`SHX,`SWX:
-	fnImm = insn[47:40];
+`LOOP:	fnImm = {{56{insn[23]}},insn[23:16]};
+`JSR:	fnImm = insn[47:24];
+`BITFIELD:	fnImm = insn[47:32];
+`SYS,`INT:	fnImm = insn[31:24];
+`CMPI,`LDI,`LDIS:
+	fnImm = {{56{insn[31]}},insn[31:24]};
+`RTS:	fnImm = insn[19:16];
+`RTE,`RTI:	fnImm = 8'h00;
 default:
-	fnImm = insn[39:32];
+	fnImm = {{56{insn[39]}},insn[39:32]};
 endcase
 
+endfunction
+
+function [7:0] fnImm8;
+input [127:0] insn;
+case(insn[15:8])
+`CAS:	fnImm8 = insn[55:48];
+`BCD:	fnImm8 = insn[47:40];
+`TLB:	fnImm8 = insn[23:16];
+`LOOP:	fnImm8 = insn[23:16];
+`JSR:	fnImm8 = insn[31:24];
+`BITFIELD:	fnImm8 = insn[39:32];
+`SYS,`INT:	fnImm8 = insn[31:24];
+`CMPI,`LDI,`LDIS:	fnImm8 = insn[31:24];
+`RTS:	fnImm8 = insn[19:16];
+`RTE,`RTI:	fnImm8 = 8'h00;
+default:	fnImm8 = insn[39:32];
+endcase
 endfunction
 
 // Return MSB of immediate value for instruction
@@ -1565,7 +1606,9 @@ case(insn[15:8])
 	fnImmMSB = 1'b0;		// TLB regno is unsigned
 `LOOP:
 	fnImmMSB = insn[23];
-`JSR,`CMPI,`LDI:
+`JSR:
+	fnImmMSB = insn[47];
+`CMPI,`LDI,`LDIS:
 	fnImmMSB = insn[31];
 `SYS,`INT:
 	fnImmMSB = 1'b0;		// SYS,INT are unsigned
@@ -1606,7 +1649,7 @@ begin
 		fnOpa = fnBra(ins)==4'd0 ? 64'd0 : fnBra(ins)==4'd15 ? epc :
 			(commit0_v && commit0_tgt[8:4]==5'h11 && commit0_tgt[3:0]==fnBra(ins)) ? commit0_bus :
 			bregs[fnBra(ins)];
-	else if (opcode==`MFSPR)
+	else if (opcode==`MFSPR || opcode==`SWS || opcode==`MOVS)
 		casex(ins[23:16])
 		`TICK:	fnOpa = tick;
 		`LCTR:	fnOpa = lc;

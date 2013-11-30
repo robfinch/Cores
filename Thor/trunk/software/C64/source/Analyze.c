@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include        <stdio.h>
 #include        "c.h"
 #include        "expr.h"
@@ -23,11 +48,6 @@
  *		Norcross, Ga 30092
  */
 
-/*******************************************************
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 int bsave_mask;
 extern int popcnt(int m);
@@ -188,6 +208,8 @@ static void scanexpr(ENODE *node, int duse)
         case en_icon:
         case en_labcon:
         case en_nacon:
+		case en_cnacon:
+		case en_clabcon:
                 InsertNodeIntoCSEList(node,duse);
                 break;
 		case en_autofcon:
@@ -377,7 +399,7 @@ int bsort(CSE **list)
  *      AllocateRegisterVars will allocate registers for the expressions that have
  *      a high enough desirability.
  */
-void AllocateRegisterVars()
+static int AllocateRegisterVars()
 {
 	CSE *csp;
     ENODE *exptr;
@@ -400,7 +422,7 @@ void AllocateRegisterVars()
             csp->reg = -1;
 //        else if( csp->duses > csp->uses / 4 && reg < 18 )
 		else {
-			if (csp->exp->nodetype==en_labcon || csp->exp->nodetype==en_nacon) {
+			if ((csp->exp->nodetype==en_clabcon || csp->exp->nodetype==en_cnacon)) {
 				if (brreg < 1011)
 					csp->reg = brreg++;
 				else
@@ -476,6 +498,7 @@ void AllocateRegisterVars()
                     }
             csp = csp->next;
             }
+	return popcnt(mask) + popcnt(brmask);
 }
 
 /*
@@ -494,6 +517,8 @@ void repexpr(ENODE *node)
                 case en_nacon:
                 case en_labcon:
                 case en_autocon:
+				case en_cnacon:
+				case en_clabcon:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if (csp->reg > 1000) {
                                         node->nodetype = en_bregvar;
@@ -632,10 +657,13 @@ void repcse(Statement *block)
  *
  *		optimizer is currently turned off...
  */
-void opt1(Statement *block)
+int opt1(Statement *block)
 {
+	int nn;
+
 	olist = NULL;
     scan(block);            /* collect expressions */
-    AllocateRegisterVars();             /* allocate registers */
+    nn = AllocateRegisterVars();             /* allocate registers */
     repcse(block);          /* replace allocated expressions */
+	return nn;
 }

@@ -164,6 +164,8 @@ else begin
 			TLBenabled <= 1'b1;
 		`TLB_DIS:
 			TLBenabled <= 1'b0;
+		`TLB_INVALL:
+			TLBValid <= 64'd0;
 		endcase
 	end
 	else if (state==3'd2) begin
