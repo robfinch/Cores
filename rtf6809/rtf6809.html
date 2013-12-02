@@ -7,7 +7,8 @@
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
 <title>RTF6809</title>
 
-<!--mstheme--><link rel="stylesheet" type="text/css" href="../../_themes/water/wate1011.css"><meta name="Microsoft Theme" content="water 1011, default">
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
+<meta name="Microsoft Theme" content="water 1011, default">
 </head>
 
 <body>
@@ -54,9 +55,11 @@ from address $1000 above.</p>
 address, so the FAR prefix has to be inserted manually in the code where 
 required.</p>
 <p>&nbsp;</p>
-<h3>Outer indexed indirect addressing.</h3>
+<h3 style="margin-top: 0; margin-bottom: 0">Outer indexed indirect addressing.</h3>
+<p style="margin-top: 0; margin-bottom: 0">The Outer Prefix</p>
 <p>As further support for 32 bit addressing a new outer indexed indirect 
-addressing mode has been added to the processor. Outer indexing of a indirect 
+addressing mode has been added to the processor. This addressing mode is invoked 
+using another instruction prefix which is automatically output by the assembler. Outer indexing of a indirect 
 address is typically more useful than inner indexing because it allows an 
 indexing operation similar to regular indexed addresses.</p>
 <p>In outer indexed indirect addressing the index register is applied to the 
@@ -69,9 +72,17 @@ address to form the final address from which the data is fetched.</p>
 <p>Inner Indexing:&nbsp;&nbsp;&nbsp; ldd&nbsp;&nbsp;&nbsp; [AnAddress,y]</p>
 <p>An address is fetched from address AnAddress+y which is then used to fetch 
 the data.</p>
+<h2>&nbsp;</h2>
+<h2>Issues</h2>
+<p>The push and pull PC operations currently push and pull the entire 32 bit 
+program counter. This breaks some 6809 code that uses the trick of loading the 
+program counter from the stack using a pull instruction to return rather than a 
+normal return instruction. This may be fixed by defining an additional new 
+push/pull instruction that works with a 32 bit program counter, and restoring 
+the functionality of the original push / pull instruction. This is yet to be 
+done.</p>
 <p>&nbsp;</p>
 <p><a href="insn6809.htm">RTF6809 Instruction Set Table</a></p>
-<p>&nbsp;</p>
 <h2>Links</h2>
 <p><a href="http://members.optushome.com.au/jekent/system09/index.html">John 
 Kent's 6809 core in VHDL.</a></p>
