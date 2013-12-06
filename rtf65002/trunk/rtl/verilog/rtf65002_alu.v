@@ -211,6 +211,8 @@ always @*
 	`BMC_ZPX,`BMC_ABS,`BMC_ABSX:	res <= b & (~(32'b1 << acc[4:0]));
 	`BMF_ZPX,`BMF_ABS,`BMF_ABSX:	res <= b ^ (32'b1 << acc[4:0]);
 	`BMT_ZPX,`BMT_ABS,`BMT_ABSX:	res <= b & (32'b1 << acc[4:0]);
+	`TRB_ZPX,`TRB_ABS:	res <= ~a & b;
+	`TSB_ZPX,`TSB_ABS:	res <= a | b;
 	default:	res <= 33'd0;
 	endcase
 endmodule

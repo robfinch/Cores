@@ -346,15 +346,21 @@ task decode_tsk;
 				store_what <= `STW_Y;
 				state <= STORE1;
 			end
-		`ADD_ZPX,`SUB_ZPX,`AND_ZPX:
+		`ADD_ZPX,`SUB_ZPX,`AND_ZPX,`TRB_ZPX:
 			begin
 				Rt <= ir[19:16];
 				radr <= zpx32_address;
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
+		`LEA_ZPX:
+			begin
+				Rt <= ir[19:16];
+				res <= zpx32_address;
+				state <= IFETCH;
+			end
 		// Trim a clock cycle off of loads by testing for Ra = 0.
-		`OR_ZPX,`EOR_ZPX:
+		`OR_ZPX,`EOR_ZPX,`TSB_ZPX:
 			begin
 				Rt <= ir[19:16];
 				radr <= zpx32_address;
@@ -373,6 +379,12 @@ task decode_tsk;
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
+		`LEA_DSP:
+			begin
+				Rt <= ir[15:12];
+				res <= {{24{ir[23]}},ir[23:16]} + isp;
+				state <= IFETCH;
+			end
 		`ADD_DSP,`SUB_DSP,`OR_DSP,`AND_DSP,`EOR_DSP:
 			begin
 				Rt <= ir[15:12];
@@ -380,7 +392,7 @@ task decode_tsk;
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`ADD_IX,`SUB_IX,`OR_IX,`AND_IX,`EOR_IX,`ST_IX:
+		`ADD_IX,`SUB_IX,`OR_IX,`AND_IX,`EOR_IX,`ST_IX,`LEA_IX:
 			begin
 				if (ir[7:0]!=`ST_IX)	// for ST_IX, Rt=0
 					Rt <= ir[19:16];
@@ -388,6 +400,12 @@ task decode_tsk;
 				load_what <= `IA_310;
 				store_what <= `STW_A;
 				state <= LOAD_MAC1;			
+			end
+		`LEA_RIND:
+			begin
+				Rt <= ir[19:16];
+				res <= rfob;
+				state <= IFETCH;
 			end
 		`ADD_RIND,`SUB_RIND,`OR_RIND,`AND_RIND,`EOR_RIND:
 			begin
@@ -402,7 +420,7 @@ task decode_tsk;
 				store_what <= `STW_RFA;
 				state <= STORE1;
 			end
-		`ADD_IY,`SUB_IY,`OR_IY,`AND_IY,`EOR_IY,`ST_IY:
+		`ADD_IY,`SUB_IY,`OR_IY,`AND_IY,`EOR_IY,`ST_IY,`LEA_IY:
 			begin
 				if (ir[7:0]!=`ST_IY)	// for ST_IY, Rt=0
 					Rt <= ir[19:16];
@@ -412,14 +430,20 @@ task decode_tsk;
 				store_what <= `STW_A;
 				state <= LOAD_MAC1;	
 			end
-		`OR_ABS,`EOR_ABS:
+		`LEA_ABS:
+			begin
+				res <= ir[47:16];
+				Rt <= ir[15:12];
+				state <= IFETCH;
+			end
+		`OR_ABS,`EOR_ABS,`TSB_ABS:
 			begin
 				radr <= ir[47:16];
 				Rt <= ir[15:12];
 				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`ADD_ABS,`SUB_ABS,`AND_ABS:
+		`ADD_ABS,`SUB_ABS,`AND_ABS,`TRB_ABS:
 			begin
 				radr <= ir[47:16];
 				Rt <= ir[15:12];
@@ -437,6 +461,12 @@ task decode_tsk;
 				radr <= ir[39:8] + acc[31:5];
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
+			end
+		`LEA_ABSX:
+			begin
+				res <= absx32_address;
+				Rt <= ir[19:16];
+				state <= IFETCH;
 			end
 		`ADD_ABSX,`SUB_ABSX,`AND_ABSX:
 			begin
@@ -670,11 +700,20 @@ task decode_tsk;
 			end
 		`PUSH:
 			begin
-				radr <= isp_dec;
-				wadr <= isp_dec;
+				if (ir[15:12]==4'h0) begin
+					radr <= isp_dec;
+					wadr <= isp_dec;
+					isp <= isp_dec;
+				end
+				else begin
+					radr <= rfob-32'd1;
+					wadr <= rfob-32'd1;
+					wrrf <= 1'b1;
+					Rt <= ir[15:12];
+					res <= rfob-32'd1;
+				end
 				store_what <= `STW_A;
 				state <= STORE1;
-				isp <= isp_dec;
 			end
 		`PUSHA:
 			begin
@@ -718,9 +757,16 @@ task decode_tsk;
 			end
 		`POP:
 			begin
-				Rt <= ir[15:12];
-				radr <= isp;
-				isp <= isp_inc;
+				if (ir[11:8]!=4'h0) begin
+					Rt <= ir[11:8];
+					res <= rfoa+32'd1;
+					wrrf <= 1'b1;
+					radr <= rfoa;
+				end
+				else begin
+					radr <= isp;
+					isp <= isp_inc;
+				end
 				load_what <= `WORD_311;
 				state <= LOAD_MAC1;
 			end

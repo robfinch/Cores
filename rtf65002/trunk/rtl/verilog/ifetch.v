@@ -125,13 +125,6 @@ IFETCH:
 			history_ndx <= history_ndx+7'd1;
 		end
 `endif
-		regfile[Rt] <= res[31:0];
-		case(Rt)
-		4'h1:	acc <= res[31:0];
-		4'h2:	x <= res[31:0];
-		4'h3:	y <= res[31:0];
-		default:	;
-		endcase
 		case(ir9)
 		`TAS,`TXS:	begin isp <= res[31:0]; gie <= 1'b1; end
 		`SUB_SP8,`SUB_SP16,`SUB_SP32:	isp <= res[31:0];
@@ -220,5 +213,9 @@ IFETCH:
 		`TSA,`TYA,`TXA,`INA,`DEA,
 		`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`PLA:	begin nf <= resn32; zf <= resz32; end
 		`POP:	begin nf <= resn32; zf <= resz32; end
+		`TRB_ZPX,`TRB_ABS,`TSB_ZPX,`TSB_ABS:
+			begin zf <= resz32; end
+		`BMT_ZPX,`BMT_ABS,`BMT_ABSX:
+			begin zf <= resz32; nf <= resn32; end
 		endcase
 	end

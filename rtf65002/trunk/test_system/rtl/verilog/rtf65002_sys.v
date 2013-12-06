@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //	(C) 2012,2013  Robert Finch
-//	robfinch@<remove>opencores.org
+//	robfinch@<remove>finitron.ca
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -22,8 +22,8 @@
 `define NSPRITES	8
 `define ETHMAC	2
 `define PSG		4
-//`define EPPCTRL	8
-//`define TMPDEVICE	16
+`define EPPCTRL	8
+`define TMPDEVICE	16
 //`define UART	32
 `define SDCARD	64
 `define GACCEL	128
@@ -34,15 +34,15 @@
 //`define MMU			4096
 //`define SUPPORT_FORTH	8192
 
-`define CLK_FREQ	20000000
+`define CLK_FREQ	25000000
 
 // Memory Ports
 // 0: cpu read/write
-// 1: ethernet controller read/write
-// 2: bitmapped graphics controller read
+// 1: ethernet controller/epp read/write
+// 2: bitmapped/sprite graphics controller read
 // 3: graphics accelerate write
 // 4: 
-// 5: sprite graphics controller read
+// 5:
  
 module rtf65002_sys(btn, clk, Led, sw, kclk, kd,
 	HDMIOUTCLKP, HDMIOUTCLKN,
@@ -54,10 +54,12 @@ module rtf65002_sys(btn, clk, Led, sw, kclk, kd,
 	DDR2CLK0,DDR2CLK1,DDR2CKE,DDR2RASN,DDR2CASN,DDR2WEN,DDR2RZQ,DDR2ZIO,
 	DDR2BA,DDR2A,DDR2DQ,DDR2UDQS,DDR2UDQSN,DDR2LDQS,DDR2LDQSN,DDR2LDM,DDR2UDM,DDR2ODT,
 	UartRx,UartTx,
+	eppAstb,eppDstb,eppWr,eppDB,eppWait,eppRst,
 	spiClkOut,spiDataIn,spiDataOut,spiCS_n,
 	mdc,mdio,eth_rst,eth_col,eth_rs,eth_gtxclk,
 	eth_txclk,eth_txerr,eth_txen,eth_txd,
-	eth_rxclk,eth_rxerr,eth_rxdv,eth_rxd
+	eth_rxclk,eth_rxerr,eth_rxdv,eth_rxd,
+	rst1626,clk1626,dq1626
 );
 input [5:0] btn;
 input clk;
@@ -105,6 +107,12 @@ output DDR2UDM;
 output DDR2ODT;
 input UartRx;
 output UartTx;
+input eppAstb;
+input eppDstb;
+input eppWr;
+inout [7:0] eppDB;
+output eppWait;
+input eppRst;
 output spiClkOut;
 input spiDataIn;
 output spiDataOut;
@@ -124,6 +132,10 @@ input eth_rxclk;
 input eth_rxerr;
 input eth_rxdv;
 input [7:0] eth_rxd;
+output rst1626;
+output clk1626;
+inout dq1626;
+tri dq1626;
 
 wire [3:0] TMDS;
 wire [3:0] TMDSB;
@@ -149,6 +161,7 @@ wire p100ack,p1000ack;
 wire locked;
 wire rst;
 wire dram_clk;
+wire bmp_clk;
 
 wire hsync;
 wire vsync;
@@ -171,7 +184,7 @@ wire bm_stb;
 wire bm_ack;
 wire [31:0] bm_adr_o;
 wire [31:0] bm_dat_i;
-wire [7:0] bm_rgb;
+wire [23:0] bm_rgb;
 
 wire dt_ack;
 wire [31:0] dt_dato;
@@ -261,9 +274,32 @@ wire [15:0] ac97_dato;
 wire cwt_ack;
 wire [15:0] cwt_dato;
 
-wire mmu_ack;
-wire [15:0] mmu_dato;
+wire mmu1_ack,mmu2_ack;
+wire [15:0] mmu1_dato,mmu2_dato;
 wire [33:0] mem_adr;
+wire tmp_ack;
+wire [15:0] tmp_dato;
+wire bmp_ack;
+wire [31:0] bmp_dato;
+
+wire epp_cyc;
+wire epp_stb;
+wire epp_ack;
+wire epp_we;
+wire [3:0] epp_sel;
+wire [31:0] epp_adr;
+wire [31:0] epp_dati;
+wire [31:0] epp_dato;
+
+wire [2:0] txt_cti;
+wire txt_cyc;
+wire txt_stb;
+wire txt_ack;
+wire txt_we;
+wire [3:0] txt_sel;
+wire [31:0] txt_adr;
+wire [31:0] txt_dati;
+wire [31:0] txt_dato;
 
 wire iob1_ack;
 wire [31:0] iob1_dato;
@@ -338,13 +374,15 @@ assign io1_ack =
 	em_ack |
 	spi_ack |
 	uart_ack |
-	mmu_ack
+	mmu1_ack |
+	mmu2_ack
 	;
 assign io1_dati =
 	em_s_dato |
 	spi_dato |
 	uart_do |
-	mmu_dato
+	mmu1_dato |
+	mmu2_dato
 	;
 // Audio bridge
 assign io2_ack =
@@ -359,12 +397,14 @@ assign io2_dati =
 	;
 // Video bridge
 assign io3_ack =
+	bmp_ack |
 	tc_ack |
 	spr_ack |
 	ga_ack |
 	rast_ack
 	;
 assign io3_dati =
+	bmp_dato |
 	tc_dato |
 	spr_dato |
 	ga_s_dato |
@@ -376,13 +416,15 @@ assign io4_ack =
 	pic_ack |
 	kbd_ack |
 	dt_ack |
+	tmp_ack |
 	Leds_ack
 	;
 assign io4_dati =
 	config_reco |
 	pic_dato |
 	kbd_dato |
-	dt_dato
+	dt_dato |
+	tmp_dato
 	;
 
 clkgen1366x768 #(.pClkFreq(`CLK_FREQ)) u1
@@ -391,12 +433,13 @@ clkgen1366x768 #(.pClkFreq(`CLK_FREQ)) u1
 	.xclk(clk),
 	.rst(rst),
 	.clk100(clk100),
-	.clk50(sys_clk),
+	.clk25(sys_clk),
 	.clk125(eth_gtxclk),
 	.clk200(),
 	.vclk(pixel_clk),
 	.vclk2(pixel_clk2),
 	.vclk10(pixel_clk10),
+	.bmp_clk(bmp_clk),
 	.sys_clk(),
 	.dram_clk(dram_clk),
 	.locked(locked),
@@ -423,6 +466,34 @@ begin
 end
 `else
 assign Leds_ack = 1'b0;
+`endif
+
+`ifdef TMPDEVICE
+wire d1626,q1626,en1626;
+assign dq1626 = en1626 ? q1626 : 1'bz;
+assign d1626 = dq1626;
+
+ds1626io #(.pClkFreq(`CLK_FREQ)) utmp
+(
+	.rst_i(rst),
+	.clk_i(sys_clk),
+	.cyc_i(io4_cyc),
+	.stb_i(io4_stb),
+	.ack_o(tmp_ack),
+	.we_i(io4_we),
+	.adr_i(io4_adr),
+	.dat_i(io4_dato[15:0]),
+	.dat_o(tmp_dato), 
+	.rst1626(rst1626),
+	.clk1626(clk1626),
+	.d1626(d1626),
+	.q1626(q1626),
+	.en1626(en1626)
+);
+`else
+assign dq1626 = 1'bz;
+assign rst1626 = 1'b0;
+assign clk1626 = 1'b0;
 `endif
 
 PS2KbdToAscii #(.pClkFreq(`CLK_FREQ)) ukbd1
@@ -481,6 +552,7 @@ rtfTextController tc1 (
 	.adr_i(io3_adr),
 	.dat_i(io3_dato),
 	.dat_o(tc_dato),
+
 	.lp(),
 	.curpos(),
 	.vclk(pixel_clk),
@@ -488,7 +560,7 @@ rtfTextController tc1 (
 	.vsync(vsync),
 	.blank(blank),
 	.border(border),
-	.rgbIn(),
+	.rgbIn(bm_rgb),
 	.rgbOut(tc_rgb)
 );
 
@@ -499,9 +571,9 @@ always @(sw,tc_rgb,bm_rgb,spr_rgb)
 		blue <= tc_rgb[7:0];
 	end
 	else if (sw[1]) begin
-		red <= {bm_rgb[7:5],5'b10000};
-		green <= {bm_rgb[4:2],5'b10000};
-		blue <= {bm_rgb[1:0],6'b100000};
+		red <= bm_rgb[23:16];
+		green <= bm_rgb[15:8];
+		blue <= bm_rgb[7:0];
 	end
 	else begin
 		red <= spr_rgb[23:16];
@@ -523,14 +595,17 @@ wire [5:0] c3_p0_cmd_bl;
 wire [31:0] c3_p0_wr_data;
 wire [31:0] c3_p0_rd_data;
 wire [29:0] c3_p0_cmd_byte_addr;
+wire c3_p0_cmd_error;
 wire [3:0] c3_p0_wr_mask;
 wire c3_p0_wr_full;
 wire c3_p0_wr_empty;
-wire [5:0] c3_p0_wr_count;
+wire [6:0] c3_p0_wr_count;
+wire c3_p0_wr_error;
 wire c3_p0_rd_empty;
 wire c3_p0_rd_full;
 wire c3_p0_rd_en;
 wire c3_p0_wr_en;
+wire c3_p0_rd_error;
 
 wire c3_p1_cmd_full;
 wire c3_p1_cmd_empty;
@@ -543,7 +618,7 @@ wire [29:0] c3_p1_cmd_byte_addr;
 wire [3:0] c3_p1_wr_mask;
 wire c3_p1_wr_full;
 wire c3_p1_wr_empty;
-wire [5:0] c3_p1_wr_count;
+wire [6:0] c3_p1_wr_count;
 wire c3_p1_rd_empty;
 wire c3_p1_rd_full;
 wire c3_p1_rd_en;
@@ -569,6 +644,7 @@ wire [29:0] c3_p3_cmd_byte_addr;
 wire c3_p3_wr_en;
 wire [3:0] c3_p3_wr_mask;
 wire [31:0] c3_p3_wr_data;
+wire [6:0] c3_p3_wr_count;
 wire c3_p3_wr_empty;
 wire c3_p3_wr_full;
 
@@ -644,9 +720,9 @@ u_mig_39 (
    .c3_p0_wr_data                          (c3_p0_wr_data),
    .c3_p0_wr_full                          (c3_p0_wr_full),
    .c3_p0_wr_empty                         (c3_p0_wr_empty),
-   .c3_p0_wr_count                         (),
+   .c3_p0_wr_count                         (c3_p0_wr_count),
    .c3_p0_wr_underrun                      (),
-   .c3_p0_wr_error                         (),
+   .c3_p0_wr_error                         (c3_p0_wr_error),
    .c3_p0_rd_clk                           (sys_clk),
    .c3_p0_rd_en                            (c3_p0_rd_en),
    .c3_p0_rd_data                          (c3_p0_rd_data),
@@ -654,9 +730,9 @@ u_mig_39 (
    .c3_p0_rd_empty                         (c3_p0_rd_empty),
    .c3_p0_rd_count                         (),
    .c3_p0_rd_overflow                      (),
-   .c3_p0_rd_error                         (),
+   .c3_p0_rd_error                         (c3_p0_rd_error),
 
-	// Ethmac port
+	// Ethmac/Epp read/write port
    .c3_p1_cmd_clk                          (sys_clk),
    .c3_p1_cmd_en                           (c3_p1_cmd_en),
    .c3_p1_cmd_instr                        (c3_p1_cmd_instr),
@@ -682,15 +758,15 @@ u_mig_39 (
    .c3_p1_rd_overflow                      (),
    .c3_p1_rd_error                         (),
  
-	// Bitmap controller read port
-   .c3_p2_cmd_clk                          (pixel_clk),
+	// Bitmap/Sprite controller read port
+   .c3_p2_cmd_clk                          (bmp_clk),
    .c3_p2_cmd_en                           (c3_p2_cmd_en),
    .c3_p2_cmd_instr                        (c3_p2_cmd_instr),	// read with auto-precharge
    .c3_p2_cmd_bl                           (c3_p2_cmd_bl),		// burst length
    .c3_p2_cmd_byte_addr                    (c3_p2_cmd_byte_addr),
    .c3_p2_cmd_empty                        (),
    .c3_p2_cmd_full                         (c3_p2_cmd_full),
-   .c3_p2_rd_clk                           (pixel_clk),
+   .c3_p2_rd_clk                           (bmp_clk),
    .c3_p2_rd_en                            (c3_p2_rd_en),
    .c3_p2_rd_data                          (c3_p2_rd_data),
    .c3_p2_rd_full                          (),
@@ -713,7 +789,7 @@ u_mig_39 (
    .c3_p3_wr_data                          (c3_p3_wr_data),
    .c3_p3_wr_full                          (c3_p3_wr_full),
    .c3_p3_wr_empty                         (c3_p3_wr_empty),
-   .c3_p3_wr_count                         (),
+   .c3_p3_wr_count                         (c3_p3_wr_count),
    .c3_p3_wr_underrun                      (),
    .c3_p3_wr_error                         (),
 
@@ -733,19 +809,18 @@ u_mig_39 (
    .c3_p4_rd_overflow                      (),
    .c3_p4_rd_error                         (),
 
-	// Sprite image data read port
-   .c3_p5_cmd_clk                          (sys_clk),
-   .c3_p5_cmd_en                           (c3_p5_cmd_en),
-   .c3_p5_cmd_instr                        (c3_p5_cmd_instr),
-   .c3_p5_cmd_bl                           (c3_p5_cmd_bl),
-   .c3_p5_cmd_byte_addr                    (c3_p5_cmd_byte_addr),
+   .c3_p5_cmd_clk                          (),
+   .c3_p5_cmd_en                           (),
+   .c3_p5_cmd_instr                        (),
+   .c3_p5_cmd_bl                           (),
+   .c3_p5_cmd_byte_addr                    (),
    .c3_p5_cmd_empty                        (),
-   .c3_p5_cmd_full                         (c3_p5_cmd_full),
-   .c3_p5_rd_clk                           (sys_clk),
-   .c3_p5_rd_en                            (c3_p5_rd_en),
-   .c3_p5_rd_data                          (c3_p5_rd_data),
+   .c3_p5_cmd_full                         (),
+   .c3_p5_rd_clk                           (),
+   .c3_p5_rd_en                            (),
+   .c3_p5_rd_data                          (),
    .c3_p5_rd_full                          (),
-   .c3_p5_rd_empty                         (c3_p5_rd_empty),
+   .c3_p5_rd_empty                         (),
    .c3_p5_rd_count                         (),
    .c3_p5_rd_overflow                      (),
    .c3_p5_rd_error                         ()
@@ -766,23 +841,36 @@ assign em_bl = 6'd3;	// defined in ethmac_defines
 `ifdef ETHMAC
 wire cs_bridge5 = em_adr[31:28]==4'h01;// || (thread_area_cs && thread_index!=8'h00);
 
-WB32ToMIG32 u_bridge5
+WB32ToMIG32x2 u_bridge5
 (
 	.rst_i(rst),
 	.clk_i(sys_clk),	// was pixel_clk
 
 	// WISHBONE PORT
-	.bte_i(em_bte),				// burst type extension
-	.cti_i(em_cti),				// cycle type indicator
-	.cyc_i(em_cyc & cs_bridge5),				// cycle in progress
-	.stb_i(em_stb & cs_bridge5),				// data strobe
-	.ack_o(bridge5_ack),			// acknowledge
-	.we_i(em_we),				// write cycle
-	.sel_i(em_sel),				// byte lane selects
-	.adr_i(em_adr),				// address
-	.dat_i(em_dato),			// data 
-	.dat_o(bridge5_dato),
-	.bl_i(em_bl),				// burst length
+	.c1_bte_i(em_bte),				// burst type extension
+	.c1_cti_i(em_cti),				// cycle type indicator
+	.c1_cyc_i(em_cyc & cs_bridge5),				// cycle in progress
+	.c1_stb_i(em_stb & cs_bridge5),				// data strobe
+	.c1_ack_o(bridge5_ack),			// acknowledge
+	.c1_we_i(em_we),				// write cycle
+	.c1_sel_i(em_sel),				// byte lane selects
+	.c1_adr_i(em_adr),				// address
+	.c1_dat_i(em_dato),			// data 
+	.c1_dat_o(em_dati),
+	.c1_bl_i(em_bl),				// burst length
+
+	// WISHBONE PORT
+	.c2_bte_i(2'b00),				// burst type extension
+	.c2_cti_i(3'b000),				// cycle type indicator
+	.c2_cyc_i(epp_cyc),				// cycle in progress
+	.c2_stb_i(epp_stb),				// data strobe
+	.c2_ack_o(epp_ack),			// acknowledge
+	.c2_we_i(epp_we),				// write cycle
+	.c2_sel_i(epp_sel),				// byte lane selects
+	.c2_adr_i(epp_adr),				// address
+	.c2_dat_i(epp_dato),			// data 
+	.c2_dat_o(epp_dati),
+	.c2_bl_i(6'd0),				// burst length
 
 	// MIG port
 	.calib_done(c3_calib_done),
@@ -831,7 +919,7 @@ ethmac uemac1
   .m_wb_ack_i(bridge5_ack),
   .m_wb_err_i(), 
   .m_wb_cti_o(em_cti),
-  .m_wb_bte_o(),
+  .m_wb_bte_o(em_bte),
 
   //TX
   .mtx_clk_pad_i(eth_txclk),
@@ -877,25 +965,145 @@ assign mdo = 1'b0;
 assign mden = 1'b0;
 `endif
 
-`ifdef BMPCTRL
-WB32ToMIG32 u_bridge1
+wire [7:0] busEppOut;
+wire [7:0] busEppIn;
+wire ctlEppDwrOut;
+wire ctlEppRdcycleOut;
+wire [7:0] regEppAdrOut;
+wire HandShareReqIn;
+wire ctlEppStartOut;
+wire ctlEppDoneIn;
+
+//wire epp_DBT;
+//wire [7:0] epp_DBO;
+//assign eppDB = epp_DBT ? epp_DBO : 8'hzz;
+//assign epp_DBI = eppDB;
+//assign eppRst = rst;
+
+//
+//usb_epp_imp uepp1
+//(
+//	.DB_O(epp_DBO),
+//	.DB_I(epp_DBI),
+//	.DB_T(epp_DBT),
+//	.EPP_write(eppWr),
+//	.ASTB(eppAstb),
+//	.DSTB(eppDstb),
+//	.BUSY(eppWait),
+//	.EPP_Irpt(),
+//	.INT_USB()			// not used
+//	.EppRst(eppRst),
+//    .Bus2IP_Clk(sys_clk),
+//    .Bus2IP_Reset(rst),
+//    .Bus2IP_Data()                    : in  std_logic_vector(0 to C_SLV_DWIDTH-1);
+//    .Bus2IP_BE                      : in  std_logic_vector(0 to C_SLV_DWIDTH/8-1);
+//    .Bus2IP_RdCE                    : in  std_logic_vector(0 to C_NUM_REG-1);
+//    .Bus2IP_WrCE                    : in  std_logic_vector(0 to C_NUM_REG-1);
+//    .IP2Bus_Data                    : out std_logic_vector(0 to C_SLV_DWIDTH-1);
+//    .IP2Bus_RdAck                   : out std_logic;
+//    .IP2Bus_WrAck                   : out std_logic;
+//    .IP2Bus_Error                   : out std_logic
+//);
+
+
+`ifdef EPPCTRL
+// Epp interface circuit courtesy Diligent
+//
+EppCtrl ueppctrl
+(
+	.clk(sys_clk),
+	.EppAstb(eppAstb),
+	.EppDstb(eppDstb),
+	.EppWr(eppWr),
+	.EppRst(eppRst),
+	.EppDB(eppDB),
+	.EppWait(eppWait),
+	
+	.busEppOut(busEppOut),
+	.busEppIn(busEppIn),
+	.ctlEppDwrOut(ctlEppDwrOut),
+	.ctlEppRdCycleOut(ctlEppRdCycleOut),
+	.regEppAdrOut(regEppAdrOut),
+	.HandShakeReqIn(HandShakeReqIn),
+	.ctlEppStartOut(ctlEppStartOut),
+	.ctlEppDoneIn(ctlEppDoneIn)
+);
+
+EppToWB ueppwb1
 (
 	.rst_i(rst),
-	.clk_i(pixel_clk),
+	.clk_i(sys_clk),
+
+	.eppWr(ctlEppDwrOut),
+	.eppRd(ctlEppRdCycleOut),
+	.eppAdr(regEppAdrOut),
+	.eppDati(busEppOut),
+	.eppDato(busEppIn),
+	.eppHSReq(HandShakeReqIn),
+	.eppDone(ctlEppDoneIn),
+	.eppStart(ctlEppStartOut),
+	
+	.cyc_o(epp_cyc),
+	.stb_o(epp_stb),
+	.ack_i(epp_ack),
+	.we_o(epp_we),
+	.sel_o(epp_sel),
+	.adr_o(epp_adr),
+	.dat_i(epp_dati),
+	.dat_o(epp_dato)
+);
+
+`else
+assign eppDB = 8'hzz;
+assign eppWait = 1'b0;
+`endif
+
+
+wire [1:0] spr_bte;
+wire [2:0] spr_cti;
+wire [5:0] spr_bl;
+wire spr_cyc;
+wire spr_stb;
+wire bridge4_ack;
+wire spr_we;
+wire [3:0] spr_sel;
+wire [33:0] spr_adr;
+wire [31:0] spr_dat;
+wire bridge4_cs = spr_adr[33:28]==6'h1;
+
+`ifdef BMPCTRL
+WB32ToMIG32x2 u_bridge1
+(
+	.rst_i(rst),
+	.clk_i(bmp_clk),
 
 	// WISHBONE PORT
-	.bte_i(bm_bte),				// burst type extension
-	.cti_i(bm_cti),				// cycle type indicator
-	.cyc_i(bm_cyc),				// cycle in progress
-	.stb_i(bm_stb),				// data strobe
-	.ack_o(bm_ack),		// acknowledge
-	.we_i(1'b0),				// write cycle
-	.sel_i(4'hF),				// byte lane selects
-	.adr_i(bm_adr_o[31:0]),			// address
-	.dat_i(32'h0000_0000),			// data 
-	.dat_o(bm_dat_i),
-	.bl_i(bm_bl),				// burst length
+	.c1_bte_i(bm_bte),				// burst type extension
+	.c1_cti_i(bm_cti),				// cycle type indicator
+	.c1_cyc_i(bm_cyc),				// cycle in progress
+	.c1_stb_i(bm_stb),				// data strobe
+	.c1_ack_o(bm_ack),		// acknowledge
+	.c1_we_i(1'b0),				// write cycle
+	.c1_sel_i(4'hF),				// byte lane selects
+	.c1_adr_i(bm_adr_o[31:0]),			// address
+	.c1_dat_i(32'h0000_0000),			// data 
+	.c1_dat_o(bm_dat_i),
+	.c1_bl_i(bm_bl),				// burst length
 
+`ifdef SPRITE_CTRL
+	// WISHBONE PORT
+	.c2_bte_i(spr_bte),			// burst type extension
+	.c2_cti_i(spr_cti),			// cycle type indicator
+	.c2_cyc_i(spr_cyc & bridge4_cs),			// cycle in progress
+	.c2_stb_i(spr_stb & bridge4_cs),			// data strobe
+	.c2_ack_o(bridge4_ack),		// acknowledge
+	.c2_we_i(spr_we),				// write cycle
+	.c2_sel_i(spr_sel),			// byte lane selects
+	.c2_adr_i(spr_adr[31:0]),			// address
+	.c2_dat_i(32'h0000_0000),		// data 
+	.c2_dat_o(spr_dat),
+	.c2_bl_i(spr_bl),				// burst length
+`endif
 	// MIG port
 	.calib_done(c3_calib_done),
 	.cmd_full(c3_p2_cmd_full),
@@ -915,81 +1123,80 @@ WB32ToMIG32 u_bridge1
 	.wr_full()
 );
 
-rtfBitmapController1364x768 ubmc
+rtfBitmapController ubmc
 (
 	.rst_i(rst),
-	.clk_i(pixel_clk),
-	.bte_o(bm_bte),
-	.cti_o(bm_cti),
-	.bl_o(bm_bl),
-	.cyc_o(bm_cyc),
-	.stb_o(bm_stb),
-	.ack_i(bm_ack),
-	.we_o(),
-	.sel_o(),
-	.adr_o(bm_adr_o),
-	.dat_i(bm_dat_i),
-	.dat_o(),
+
+	.s_clk_i(sys_clk),
+	.s_cyc_i(io3_cyc),
+	.s_stb_i(io3_stb),
+	.s_ack_o(bmp_ack),
+	.s_we_i(io3_we),
+	.s_adr_i(io3_adr),
+	.s_dat_i(io3_dato),
+	.s_dat_o(bmp_dato),
+
+	.m_clk_i(bmp_clk),
+	.m_bte_o(bm_bte),
+	.m_cti_o(bm_cti),
+	.m_bl_o(bm_bl),
+	.m_cyc_o(bm_cyc),
+	.m_stb_o(bm_stb),
+	.m_ack_i(bm_ack),
+	.m_we_o(),
+	.m_sel_o(),
+	.m_adr_o(bm_adr_o),
+	.m_dat_i(bm_dat_i),
+	.m_dat_o(),
+
 	.vclk(pixel_clk),
 	.hSync(hsync),
 	.vSync(vsync),
 	.blank(blank),
 	.rgbo(bm_rgb),
-	.page(1'b0),
-	.onoff(sw[6])
+	.xonoff(sw[6])
 );
 `else
 `endif
 
-wire [1:0] spr_bte;
-wire [2:0] spr_cti;
-wire [5:0] spr_bl;
-wire spr_cyc;
-wire spr_stb;
-wire bridge4_ack;
-wire spr_we;
-wire [3:0] spr_sel;
-wire [33:0] spr_adr;
-wire [31:0] spr_dat;
-wire bridge4_cs = spr_adr[33:28]==6'h1;
 
 `ifdef SPRITE_CTRL
-WB32ToMIG32 u_bridge4
-(
-	.rst_i(rst),
-	.clk_i(sys_clk),
-
-	// WISHBONE PORT
-	.bte_i(spr_bte),			// burst type extension
-	.cti_i(spr_cti),			// cycle type indicator
-	.cyc_i(spr_cyc & bridge4_cs),			// cycle in progress
-	.stb_i(spr_stb & bridge4_cs),			// data strobe
-	.ack_o(bridge4_ack),		// acknowledge
-	.we_i(spr_we),				// write cycle
-	.sel_i(spr_sel),			// byte lane selects
-	.adr_i(spr_adr[31:0]),			// address
-	.dat_i(32'h0000_0000),		// data 
-	.dat_o(spr_dat),
-	.bl_i(spr_bl),				// burst length
-
-	// MIG port
-	.calib_done(c3_calib_done),
-	.cmd_full(c3_p5_cmd_full),
-	.cmd_en(c3_p5_cmd_en),
-	.cmd_instr(c3_p5_cmd_instr),
-	.cmd_bl(c3_p5_cmd_bl),
-	.cmd_byte_addr(c3_p5_cmd_byte_addr),
-
-	.rd_en(c3_p5_rd_en),
-	.rd_data(c3_p5_rd_data),
-	.rd_empty(c3_p5_rd_empty),
-
-	.wr_en(),
-	.wr_mask(),
-	.wr_data(),
-	.wr_empty(1'b1),
-	.wr_full()
-);
+//WB32ToMIG32 u_bridge4
+//(
+//	.rst_i(rst),
+//	.clk_i(sys_clk),
+//
+//	// WISHBONE PORT
+//	.bte_i(spr_bte),			// burst type extension
+//	.cti_i(spr_cti),			// cycle type indicator
+//	.cyc_i(spr_cyc & bridge4_cs),			// cycle in progress
+//	.stb_i(spr_stb & bridge4_cs),			// data strobe
+//	.ack_o(bridge4_ack),		// acknowledge
+//	.we_i(spr_we),				// write cycle
+//	.sel_i(spr_sel),			// byte lane selects
+//	.adr_i(spr_adr[31:0]),			// address
+//	.dat_i(32'h0000_0000),		// data 
+//	.dat_o(spr_dat),
+//	.bl_i(spr_bl),				// burst length
+//
+//	// MIG port
+//	.calib_done(c3_calib_done),
+//	.cmd_full(c3_p5_cmd_full),
+//	.cmd_en(c3_p5_cmd_en),
+//	.cmd_instr(c3_p5_cmd_instr),
+//	.cmd_bl(c3_p5_cmd_bl),
+//	.cmd_byte_addr(c3_p5_cmd_byte_addr),
+//
+//	.rd_en(c3_p5_rd_en),
+//	.rd_data(c3_p5_rd_data),
+//	.rd_empty(c3_p5_rd_empty),
+//
+//	.wr_en(),
+//	.wr_mask(),
+//	.wr_data(),
+//	.wr_empty(1'b1),
+//	.wr_full()
+//);
 
 rtfSpriteController #(.pnSpr(`NSPRITES)) u_sc1
 (
@@ -1009,6 +1216,7 @@ rtfSpriteController #(.pnSpr(`NSPRITES)) u_sc1
 	.vol_o(),			// volatile register
 	//------------------------------
 	// Bus Master Signals
+	.m_clk_i(bmp_clk),
 	.m_bte_o(spr_bte),
 	.m_cti_o(spr_cti),
 	.m_bl_o(spr_bl),
@@ -1060,13 +1268,14 @@ WB32ToMIG32 u_bridge3
 
 	.rd_en(),
 	.rd_data(),
-	.rd_empty(),
+	.rd_empty(1'b1),
 
 	.wr_en(c3_p3_wr_en),
 	.wr_mask(c3_p3_wr_mask),
 	.wr_data(c3_p3_wr_data),
 	.wr_empty(c3_p3_wr_empty),
-	.wr_full(c3_p3_wr_full)
+	.wr_full(c3_p3_wr_full),
+	.wr_count(c3_p3_wr_count)
 );
 
 rtfGraphicsAccelerator u_ga1
@@ -1327,7 +1536,7 @@ assign spiDataOut = 1'b0;
 assign spiCS_n = 1'b1;
 `endif
 
-wire cs_mem = cpu_adr[33:28]==6'h01;// || (thread_area_cs && thread_index!=8'h00);
+wire cs_mem = (cpu_adr[33:28]==6'h00 || cpu_adr[33:28]==6'h01) && cpu_adr[33:16]!=18'h00000;// || (thread_area_cs && thread_index!=8'h00);
 
 WB32ToMIG32 u_bridge2
 (
@@ -1363,12 +1572,14 @@ WB32ToMIG32 u_bridge2
 	.wr_mask(c3_p0_wr_mask),
 	.wr_data(c3_p0_wr_data),
 	.wr_empty(c3_p0_wr_empty),
-	.wr_full(c3_p0_wr_full)
+	.wr_full(c3_p0_wr_full),
+	.wr_count(c3_p0_wr_count)
 );
 
 wire km;
 
 `ifdef MMU
+wire [33:0] mem1_adr,mem2_adr;
 SimpleMMU smmu1
 (
 	.num(3'd0),
@@ -1379,14 +1590,33 @@ SimpleMMU smmu1
 	.me(1'b1),
 	.cyc_i(io1_cyc),
 	.stb_i(io1_stb),
-	.ack_o(mmu_ack),
+	.ack_o(mmu1_ack),
 	.we_i(io1_we),
 	.adr_i(io1_adr),
 	.dat_i(io1_dato[15:0]),
-	.dat_o(mmu_dato),
+	.dat_o(mmu1_dato),
 	.ea_i(cpu_adr),
-	.ea_o(mem_adr)
+	.ea_o(mem1_adr)
 );
+SimpleMMU smmu2
+(
+	.num(3'd1),
+	.rst_i(rst),
+	.clk_i(sys_clk),
+	.dma_i(1'b0),
+	.kernel_mode(km),
+	.me(1'b1),
+	.cyc_i(io1_cyc),
+	.stb_i(io1_stb),
+	.ack_o(mmu2_ack),
+	.we_i(io1_we),
+	.adr_i(io1_adr),
+	.dat_i(io1_dato[15:0]),
+	.dat_o(mmu2_dato),
+	.ea_i(cpu_adr),
+	.ea_o(mem2_adr)
+);
+assign mem_adr = mem1_adr|mem2_adr;
 `else
 assign mem_adr = cpu_adr;
 assign mmu_ack = 1'b0;
@@ -1651,6 +1881,18 @@ assign config_rec[7] = 1'b0;
 assign config_rec[8] = 1'b1;
 `else
 assign config_rec[8] = 1'b0;
+`endif
+
+`ifdef LEDS
+assign config_rec[9] = 1'b1;
+`else
+assign config_rec[9] = 1'b0;
+`endif
+
+`ifdef RASTIRQ
+assign config_rec[10] = 1'b1;
+`else
+assign config_rec[10] = 1'b0;
 `endif
 
 `ifdef DATETIME
