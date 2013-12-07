@@ -54,6 +54,10 @@ from address $1000 above.</p>
 <p>Note also that the assembler can't tell whether or not the address is a far 
 address, so the FAR prefix has to be inserted manually in the code where 
 required.</p>
+<p>The FAR prefix may also be applied to the PSH/PUL instructions to indicate 
+that the PC address is four bytes in length, otherwise a PSH/PUL only transfers 
+the low order 16 bits of the PC as usual. As mentioned earlier, interrupts and 
+the RTI instruction always transfer the full 32 bit program counter.</p>
 <p>&nbsp;</p>
 <h3 style="margin-top: 0; margin-bottom: 0">Outer indexed indirect addressing.</h3>
 <p style="margin-top: 0; margin-bottom: 0">The Outer Prefix</p>
@@ -73,15 +77,6 @@ address to form the final address from which the data is fetched.</p>
 <p>An address is fetched from address AnAddress+y which is then used to fetch 
 the data.</p>
 <h2>&nbsp;</h2>
-<h2>Issues</h2>
-<p>The push and pull PC operations currently push and pull the entire 32 bit 
-program counter. This breaks some 6809 code that uses the trick of loading the 
-program counter from the stack using a pull instruction to return rather than a 
-normal return instruction. This may be fixed by defining an additional new 
-push/pull instruction that works with a 32 bit program counter, and restoring 
-the functionality of the original push / pull instruction. This is yet to be 
-done.</p>
-<p>&nbsp;</p>
 <p><a href="insn6809.htm">RTF6809 Instruction Set Table</a></p>
 <h2>Links</h2>
 <p><a href="http://members.optushome.com.au/jekent/system09/index.html">John 

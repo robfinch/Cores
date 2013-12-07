@@ -21,12 +21,12 @@
 //                                                                          
 // ============================================================================
 //
-// 6000? LUTS / 781 FF's / 5 BRAMs
-// 60.0 MHz
+// 6733 LUTS / 745 FF's / 5 BRAMs
+// 60.0/94.0 MHz
 //`define SUPPORT_M32	1'b1
 //`define H6309	1'b1
 
-module rtf6809(rst_i, clk_i, halt_i, nmi_i, irq_i, firq_i, ba_o, bs_o, lic_o, tsc_i,
+module rtf6809(rst_i, clk_i, halt_i, nmi_i, irq_i, firq_i, vec_i, ba_o, bs_o, lic_o, tsc_i,
 	rty_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, we_o, ack_i, sel_o, adr_o, dat_i, dat_o, state);
 parameter RESET = 6'd0;
 parameter IFETCH = 6'd1;
@@ -54,6 +54,7 @@ input halt_i;
 input nmi_i;
 input irq_i;
 input firq_i;
+input [31:0] vec_i;
 output reg ba_o;
 output reg bs_o;
 output lic_o;
@@ -194,7 +195,7 @@ begin
 			(ir[12] ? (md32 ? 5'd4 : 5'd2) : 5'd0) +
 			(ir[13] ? (md32 ? 5'd4 : 5'd2) : 5'd0) +
 			(ir[14] ? (md32 ? 5'd4 : 5'd2) : 5'd0) +
-			(ir[15] ? 5'd4 : 5'd0)
+			(ir[15] ? (isFar ? 5'd4 : 5'd2) : 5'd0)
 			;
 //  cnt = 0;
 //	if (ir[8]) cnt = cnt + 5'd1;	// CC
@@ -586,6 +587,9 @@ IFETCH:
 				vect <= `FIRQ_VECT;
 			end
 			else if (irq_i & !im) begin
+				$display("**************************************");
+				$display("****** Interrupt *********************");
+				$display("**************************************");
 				bs_o <= 1'b1;
 				ir[7:0] <= `INT;
 				ipg <= 2'b11;
@@ -666,7 +670,7 @@ IFETCH:
 					vf <= (res32[31] ^ b[31]) & (1'b1 ^ a[31] ^ b[31]);
 					nf <= res32[31];
 					zf <= res32[31:0]==32'h0000;
-					accd <= res32;
+					accd <= res32[31:0];
 				end
 				else begin
 					cf <= (a[15]&b[15])|(a[15]&~res[15])|(b[15]&~res[15]);
@@ -1578,7 +1582,7 @@ IFETCH:
 					vf <= (1'b1 ^ res32[31] ^ b[31]) & (a[31] ^ b[31]);
 					nf <= res32[31];
 					zf <= res32[31:0]==32'h0000;
-					accd <= res32;
+					accd <= res32[31:0];
 				end
 				else begin
 					cf <= res16c;
@@ -1682,6 +1686,7 @@ DECODE:
 				pc <= pc + 32'd2;
 				ir[15:8] <= 8'hFF;
 				wait_state <= `TRUE;
+				isFar <= `TRUE;
 				next_state(PUSH1);
 				end
 		`LDMD:	begin
@@ -1701,12 +1706,12 @@ DECODE:
 		`OUTER:	begin isOuterIndexed <= `TRUE;  ir <= ir[63:8]; next_state(DECODE); end
 
 		`NEGA,`NEGB:	begin res8 <= -acc[7:0]; res32 <= -acc; a <= 32'h00; b <= acc; end
-		`COMA,`COMB:	begin res8 <= ~acc; res32 <= ~acc; end
+		`COMA,`COMB:	begin res8 <= ~acc[7:0]; res32 <= ~acc; end
 		`LSRA,`LSRB:	begin res8 <= {acc[0],1'b0,acc[7:1]}; res32 <= {acc[0],1'b0,acc[31:1]}; end
 		`RORA,`RORB:	begin res8 <= {acc[0],cf,acc[7:1]}; res32 <= {acc[0],cf,acc[31:1]}; end
 		`ASRA,`ASRB:	begin res8 <= {acc[0],acc[7],acc[7:1]}; res32 <= {acc[0],acc[31],acc[31:1]}; end
-		`ASLA,`ASLB:	begin res8 <= {acc,1'b0}; res32 <= {acc,1'b0}; end
-		`ROLA,`ROLB:	begin res8 <= {acc,cf}; res32 <= {acc,cf}; end
+		`ASLA,`ASLB:	begin res8 <= {acc[7:0],1'b0}; res32 <= {acc,1'b0}; end
+		`ROLA,`ROLB:	begin res8 <= {acc[7:0],cf}; res32 <= {acc,cf}; end
 		`DECA,`DECB:	begin res8 <= acc[7:0] - 8'd1; res32 <= acc - 32'd1; end
 		`INCA,`INCB:	begin res8 <= acc[7:0] + 8'd1; res32 <= acc + 32'd1; end
 		`TSTA,`TSTB:	begin res8 <= acc[7:0]; res32 <= acc; end
@@ -2324,6 +2329,7 @@ DECODE:
 			begin
 				load_what <= `LW_CCR;
 				radr <= ssp;
+				isFar <= `TRUE;
 				next_state(LOAD1);
 			end
 		`SWI:
@@ -2377,6 +2383,7 @@ DECODE:
 						end
 					end
 					pc <= pc;
+					isFar <= `TRUE;
 					next_state(PUSH1);
 				end
 			end
@@ -2394,22 +2401,22 @@ CALC:
 		`SUBD_DP,`SUBD_NDX,`SUBD_EXT,
 		`CMPD_DP,`CMPD_NDX,`CMPD_EXT:
 			if (md32)
-				res32 <= {acca[7:0],accb[7:0],acce,accf} - b[31:0];
+				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} - b[31:0];
 			else
 				res <= {acca[7:0],accb[7:0]} - b[15:0];
 		`SBCD_DP,`SBCD_NDX,`SBCD_EXT:
 			if (md32)
-				res32 <= {acca[7:0],accb[7:0],acce,accf} - b[31:0] - cf;
+				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} - b[31:0] - cf;
 			else
 				res <= {acca[7:0],accb[7:0]} - b[15:0] - cf;
 		`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
 			if (md32)
-				res32 <= {acca[7:0],accb[7:0],acce,accf} + b[31:0];
+				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} + b[31:0];
 			else
 				res <= {acca[7:0],accb[7:0]} + b[15:0];
 		`ADCD_DP,`ADCD_NDX,`ADCD_EXT:
 			if (md32)
-				res32 <= {acca[7:0],accb[7:0],acce,accf} + b[31:0] + cf;
+				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} + b[31:0] + cf;
 			else
 				res <= {acca[7:0],accb[7:0]} + b[15:0] + cf;
 		`LDD_DP,`LDD_NDX,`LDD_EXT:		
@@ -2931,15 +2938,22 @@ PUSH2:
 			ir[14] <= 1'b0;
 		end
 		else if (ir[15]) begin
-			store_what <= `SW_PC3124;
+			store_what <= isFar ? `SW_PC3124 : `SW_PCH;
 			ir[15] <= 1'b0;
 		end
 		else begin
 			if (isINT) begin
 				radr <= vect;
-				pc[31:16] <= 16'h0000;
-				load_what <= `LW_PCH;
-				next_state(LOAD1);
+				if (vec_i != 32'h0) begin
+					$display("vector: %h", vec_i);
+					pc <= vec_i;
+					next_state(IFETCH);
+				end
+				else begin
+					pc[31:16] <= 16'h0000;
+					load_what <= `LW_PCH;
+					next_state(LOAD1);
+				end
 			end
 			else
 				next_state(IFETCH);
@@ -2980,7 +2994,7 @@ PULL1:
 			ir[14] <= 1'b0;
 		end
 		else if (ir[15]) begin
-			load_what <= `LW_PC3124;
+			load_what <= isFar ? `LW_PC3124 : `LW_PCH;
 			ir[15] <= 1'b0;
 		end
 		else
