@@ -32,6 +32,9 @@
 //
 // ============================================================================
 //
+`define MISC	6'd0
+`define RET			6'd16
+`define R		6'd1
 `define RR		6'd2
 `define ADD			6'd4
 `define SUB			6'd5
@@ -49,13 +52,23 @@
 `define ASRI		6'd23
 `define ROLI		6'd24
 `define RORI		6'd25
+`define MFSPR		6'd62
+`define MTSPR		6'd63
+`define CTX_REG			5'd1
+`define CAS_REG			5'd3
 `define ADDI	6'd4
 `define SUBI	6'd5
 `define CMPI	6'd6
 `define ANDI	6'd8
 `define ORI		6'd9
 `define XORI	6'd10
+`define ANDIS	6'd12
+`define ORIS	6'd13
+`define ADDIS	6'd14
 `define Bcc		6'd16
+`define JMP		6'd17
+`define CALL	6'd18
+`define JAL		6'd19
 `define BRA			4'd0
 `define BEQ			4'd2
 `define BNE			4'd3
@@ -80,19 +93,24 @@
 `define SB		6'd40
 `define SH		6'd41
 `define SW		6'd42
+`define CAS		6'd43
 `define NOP		6'd63
 
 `define NOP_INSN	{26'd0,`NOP};
 
-module rtfBarrel(rst_i, clk_i, bte_o, cti_o, cyc_o, stb_o, sel_o, we_o, adr_o, dat_i, dat_o);
+module rtfBarrel(boardno_i, coreno_i, rst_i, clk_i, bte_o, cti_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o);
+parameter NCTX = 16;
 parameter ICACHE = 2'd1;
 parameter RUN = 2'd2;
+input [3:0] boardno_i;
+input [3:0] coreno_i;
 input rst_i;
 input clk_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg cyc_o;
 output reg stb_o;
+input ack_i;
 output reg [3:0] sel_o;
 output reg we_o;
 output reg [31:0] adr_o;
@@ -100,26 +118,30 @@ input [31:0] dat_i;
 output reg [31:0] dat_o;
 
 reg [1:0] state;
-reg [31:0] pc [0:7];
-reg [2:0] if_ctx,dc_ctx,ex_ctx,mem_ctx,wb_ctx;
+reg [31:0] pc [0:NCTX-1];
+reg [3:0] if_ctx,dc_ctx,ex_ctx,mem_ctx,wb_ctx;
 reg [31:0] if_ir,dc_ir,ex_ir,mem_ir,wb_ir;
-reg [7:0] cf,nf,vf,zf;		// flags register
+reg [NCTX-1:0] cf,nf,vf,zf;		// flags register
 wire [5:0] ex_op = ex_ir[5:0];
 wire [5:0] mem_op = mem_ir[5:0];
-reg [31:0] regfile[0:255];	// regfile: 32 regs * 8 contexts
+reg [31:0] regfile[0:NCTX*32-1];	// regfile: 32 regs * 16 contexts
+reg [31:0] cas_reg[0:NCTX-1];
 reg [4:0] Ra, Rb, wb_Rt;
 reg [31:0] a,b,imm,mem_b,mem_a,mem_imm;
 reg [32:0] res,mem_res;
-reg [31:0] imiss_adr [0:7];
+reg [31:0] imiss_adr [0:NCTX-1];
+wire cas_complete;
 
+wire [5:0] if_op = insn[5:0];
+wire [5:0] if_func = insn[31:26];
 wire [5:0] dc_op = dc_ir[5:0];
 wire [5:0] dc_func = dc_ir[31:26];
 wire dc_isShifti = dc_op==`RR && (dc_func==`SHLI || dc_func==`SHRI || dc_func==`ASRI || dc_func==`ROLI || dc_func==`RORI);
 
 wire memIsMem = mem_op==`LB || mem_op==`LBU || mem_op==`LH || mem_op==`LHU || mem_op==`LW || mem_op==`LICL ||
-				mem_op==`SB || mem_op==`SH || mem_op==`SW
+				mem_op==`SB || mem_op==`SH || mem_op==`SW || mem_op==`CAS
 				;
-wire adv_pipe = memIsMem ? ack_i && ( cti_o==3'b000 || cti_o==3'b111) : 1'b1;
+wire adv_pipe = mem_op==`CAS ? cas_complete : memIsMem ? ack_i && (cti_o==3'b000 || cti_o==3'b111) : 1'b1;
 
 wire signed [31:0] as = a;
 wire signed [31:0] bs = b;
@@ -137,12 +159,14 @@ wire rst_edge = rst_i & ~rst1;
 // 4-way set associative.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
+wire [1:0] wcnt;
 wire [31:0] insn0,insn1,insn2,insn3;
 
 icache_ram u1
 (
 	.wclk(clk_i),
 	.we(state==ICACHE && ack_i),
+	.wcnt(wcnt),
 	.adr(adr_o),
 	.dat(dat_i),
 	.rclk(~clk_i),
@@ -158,9 +182,11 @@ wire ihit = ihit0|ihit1|ihit2|ihit3;
 
 itag_ram u2
 (
+	.rst(rst_i),
 	.wclk(clk_i),
 	.we(state==ICACHE && ack_i && adr_o[3:2]==2'b11),
 	.adr(adr_o),
+	.wcnt(wcnt),
 	.rclk(~clk_i),
 	.pc(pc[if_ctx]),
 	.ihit0(ihit0),
@@ -217,19 +243,22 @@ if (rst_i) begin
 	dc_ir <= `NOP_INSN;
 	Ra <= 5'd0;
 	Rb <= 5'd0;
-	if_ctx <= 3'd0;
-	dc_ctx <= 3'd0;
+	if_ctx <= 4'd0;
+	dc_ctx <= 4'd0;
 end
 else begin
-if (adv_pipe) begin
-	dc_ir <= insn;
-	Ra <= insn[10: 5];
-	Rb <= insn[15:11];
-	if_ctx <= if_ctx + 3'd1;
-	dc_ctx <= if_ctx;
-	if (!ihit)
-		imiss_adr[if_ctx] <= pc[if_ctx];
-end
+	if (adv_pipe) begin
+		dc_ir <= insn;
+		if (if_op==`MISC && if_func==`RET)
+			Ra <= 5'd31;
+		else
+			Ra <= insn[10: 6];
+		Rb <= insn[15:11];
+		if_ctx <= if_ctx + 4'd1;
+		dc_ctx <= if_ctx;
+		if (!ihit)
+			imiss_adr[if_ctx] <= pc[if_ctx];
+	end
 end
 
 
@@ -242,26 +271,33 @@ end
 always @(posedge clk_i)
 if (rst_i) begin
 	if (rst_edge)
-		ex_ctx <= 3'd0;
+		ex_ctx <= 4'd0;
 	else
-		ex_ctx <= ex_ctx + 3'd1;
+		ex_ctx <= ex_ctx + 4'd1;
 	ex_ir <= `NOP_INSN;
 	a <= 32'd0;
 	b <= 32'd0;
 	imm <= 32'd0;
 end
 else begin
-if (adv_pipe) begin
-	ex_ir <= dc_ir;
-	ex_ctx <= dc_ctx;
-	a <= Ra==5'd0 ? 32'd0 : regfile[{dc_ctx,Ra}];
-	if (dc_isShifti)
-		b <= Rb;
-	else
-		b <= Rb==5'd0 ? 32'd0 : regfile[{dc_ctx,Rb}];
-	imm <= {{16{dc_ir[31]}},dc_ir[31:16]};
+	if (adv_pipe) begin
+		ex_ir <= dc_ir;
+		ex_ctx <= dc_ctx;
+		a <= Ra==5'd0 ? 32'd0 : regfile[{dc_ctx,Ra}];
+		if (dc_isShifti)
+			b <= Rb;
+		else
+			b <= Rb==5'd0 ? 32'd0 : regfile[{dc_ctx,Rb}];
+		case(dc_op)
+		`ORI,`XORI:	imm <= dc_ir[31:16];
+		`ANDI:	imm <= {16'hFFFF,dc_ir[31:16]};
+		`ORIS,`ADDIS:	imm <= {dc_ir[31:16],16'h0000};
+		`ANDIS:	imm <= {dc_ir[31:16],16'hFFFF};
+		default:	imm <= {{16{dc_ir[31]}},dc_ir[31:16]};
+		endcase
+	end
 end
-end
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // EX stage
@@ -271,7 +307,7 @@ end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 //
 initial begin
-	mem_ctx <= 3'd0;
+	mem_ctx <= 4'd0;
 end
 
 always @(posedge clk_i)
@@ -283,54 +319,64 @@ if (rst_i) begin
 	pc[ex_ctx] <= 32'hFFFFFFF0;
 	res <= 33'd0;
 	if (rst_edge)
-		mem_ctx <= 3'd0;
+		mem_ctx <= 4'd0;
 	else
-		mem_ctx <= mem_ctx + 3'd1;
+		mem_ctx <= mem_ctx + 4'd1;
 end
 else begin
-if (adv_pipe) begin
-	if (ex_op!=`LICL)
-		pc[ex_ctx] <= pc[ex_ctx] + 32'd4;
-	mem_ir <= ex_ir;
-	mem_ctx <= ex_ctx;
-	mem_a <= a;
-	mem_b <= b;
-	mem_imm <= imm;
-	case(ex_op)
-	`RR:
-		case(ex_ir[31:26])
-		`ADD:	res <= a + b;
-		`SUB:	res <= a - b;
-		`CMP:	res <= a - b;
-		`AND:	res <= a & b;
-		`OR:	res <= a | b;
-		`XOR:	res <= a ^ b;
-		`SHL,`SHLI:	res <= shlo[32: 0];
-		`SHR,`SHRI:	res <= shro[64:32];
-		`ASR,`ASRI:	res <= asro[31: 0];
-		`ROL,`ROLI:	res <= shlo[31:0]|shlo[63:32];
-		`ROR,`RORI:	res <= shro[31:0]|shro[63:32];
+	if (adv_pipe) begin
+		if (ex_op!=`LICL)
+			pc[ex_ctx] <= pc[ex_ctx] + 32'd4;
+		mem_ir <= ex_ir;
+		mem_ctx <= ex_ctx;
+		mem_a <= a;
+		mem_b <= b;
+		mem_imm <= imm;
+		case(ex_op)
+		`MISC:
+			case(ex_ir[31:26])
+			`RET:	pc[ex_ctx] <= a;
+			endcase
+		`RR:
+			case(ex_ir[31:26])
+			`ADD:	res <= a + b;
+			`SUB:	res <= a - b;
+			`CMP:	res <= a - b;
+			`AND:	res <= a & b;
+			`OR:	res <= a | b;
+			`XOR:	res <= a ^ b;
+			`SHL,`SHLI:	res <= shlo[32: 0];
+			`SHR,`SHRI:	res <= shro[64:32];
+			`ASR,`ASRI:	res <= asro[31: 0];
+			`ROL,`ROLI:	res <= shlo[31:0]|shlo[63:32];
+			`ROR,`RORI:	res <= shro[31:0]|shro[63:32];
+			`MFSPR:
+				case(ex_ir[10:6])
+				`CTX_REG:	res <= {boardno_i,coreno_i,ex_ctx};
+				`CAS_REG:	res <= cas_reg[ex_ctx];
+				endcase
+			default:	res <= 32'd0;
+			endcase
+		`ADDI,`ADDIS:	res <= a + imm;
+		`SUBI:	res <= a - imm;
+		`CMPI:	res <= a - imm;
+		`ANDI,`ANDIS:	res <= a & imm;
+		`ORI,`ORIS:	res <= a | imm;
+		`XORI:	res <= a ^ imm;
+		`JMP:	pc[ex_ctx] <= {pc[ex_ctx][31:28],ex_ir[31:6],2'b00};
+		`CALL:	begin res <= pc[ex_ctx]; pc[ex_ctx] <= {pc[ex_ctx][31:28],ex_ir[31:6],2'b00}; end
+		`JAL:	begin res <= pc[ex_ctx]; pc[ex_ctx] <= a + imm; end
+		`Bcc:
+			case(ex_ir[9:6])
+			`BRA,`BEQ,`BNE,`BLT,`BLE,`BGT,`BGE,`BLTU,`BLEU,`BGTU,`BGEU,`BMI,`BPL,`BVS,`BVC:
+				if (takb)
+					pc[ex_ctx] <= pc[ex_ctx] + {{16{ex_ir[31]}},ex_ir[31:16]};
+			endcase
+		`LB,`LBU,`LH,`LHU,`LW,`SB,`SH,`SW,`CAS:
+			res <= a + imm;
 		default:	res <= 32'd0;
 		endcase
-	`ADDI:	res <= a + imm;
-	`SUBI:	res <= a - imm;
-	`CMPI:	res <= a - imm;
-	`ANDI:	res <= a & imm;
-	`ORI:	res <= a | imm;
-	`XORI:	res <= a ^ imm;
-	`JMP:	pc[ex_ctx] <= ir[31:6];
-	`CALL:	begin res <= pc[ex_ctx]; pc[ex_ctx] <= ir[31:6]; end
-	`Bcc:
-		case(ex_ir[9:6])
-		`BRA,`BEQ,`BNE,`BLT,`BLE,`BGT,`BGE,`BLTU,`BLEU,`BGTU,`BGEU,`BMI,`BPL,`BVS,`BVC:
-			if (takb)
-				pc[ex_ctx] <= pc[ex_ctx] + {{16{ex_ir[31]}},ex_ir[31:16]};
-		endcase
-	`LB,`LBU,`LH,`LHU,`LW,`SB,`SH,`SW:
-		res <= a + imm;
-	default:	res <= 32'd0;
-	endcase
-end
+	end
 end
 
 
@@ -349,50 +395,51 @@ if (rst_i) begin
 	wb_ir <= `NOP_INSN;
 	wb_Rt <= 5'd0;
 	if (rst_edge)
-		wb_ctx <= 3'd0;
+		wb_ctx <= 4'd0;
 	else
-		wb_ctx <= wb_ctx + 3'd1;
+		wb_ctx <= wb_ctx + 4'd1;
 	vf[mem_ctx] <= 1'b0;
 	mem_res <= 33'd0;
 	nack();
 end
 else begin
-if (adv_pipe) begin
-	wb_ir <= mem_ir;
-	wb_ctx <= mem_ctx;
-	case(mem_ir[5:0])
-	`RR:
-		case (mem_ir[31:26])
-		`ADD:		vf[mem_ctx] <= (res[31] ^ mem_b[31]) & (1'b1 ^ mem_a[31] ^ mem_b[31]);
-		`SUB,`CMP:	vf[mem_ctx] <= (1'b1 ^ res[31] ^ mem_b[31]) & (mem_a[31] ^ mem_b[31]);
+	if (adv_pipe) begin
+		wb_ir <= mem_ir;
+		wb_ctx <= mem_ctx;
+		case(mem_ir[5:0])
+		`RR:
+			case (mem_ir[31:26])
+			`ADD:		vf[mem_ctx] <= (res[31] ^ mem_b[31]) & (1'b1 ^ mem_a[31] ^ mem_b[31]);
+			`SUB,`CMP:	vf[mem_ctx] <= (1'b1 ^ res[31] ^ mem_b[31]) & (mem_a[31] ^ mem_b[31]);
+			endcase
+		`ADDI:			vf[mem_ctx] <= (res[31] ^ mem_imm[31]) & (1'b1 ^ mem_a[31] ^ mem_imm[31]);
+		`SUBI,`CMPI:	vf[mem_ctx] <= (1'b1 ^ res[31] ^ mem_imm[31]) & (mem_a[31] ^ mem_imm[31]);
+		`LB,`LBU:	read_byte(res[31:0]);
+		`LH,`LHU:	read_half(res[31:0]);
+		`LW:		read_word(res[31:0]);
+		`LICL:		read_iline(imiss_adr[mem_ctx]);
+		`SB:		write_byte(res[31:0],mem_b);
+		`SH:		write_half(res[31:0],mem_b);
+		`SW:		write_word(res[31:0],mem_b);
+		`CAS:		do_cas(res[31:0],mem_b);
+		default:	mem_res <= res;
 		endcase
-	`ADDI:			vf[mem_ctx] <= (res[31] ^ mem_imm[31]) & (1'b1 ^ mem_a[31] ^ mem_imm[31]);
-	`SUBI,`CMPI:	vf[mem_ctx] <= (1'b1 ^ res[31] ^ mem_imm[31]) & (mem_a[31] ^ mem_imm[31]);
-	`LB,`LBU:	read_byte(res);
-	`LH,`LHU:	read_half(res);
-	`LW:		read_word(res);
-	`LICL:		read_iline(imiss_adr[mem_ctx]);
-	`SB:		write_byte(res,mem_b);
-	`SH:		write_half(res,mem_b);
-	`SW:		write_half(res,mem_b);
-	default:	mem_res <= res;
-	endcase
-	// Set target register
-	case(mem_ir[5:0])
-	`RR:
-		wb_Rt <= mem_ir[20:16];
-	`ADDI,`SUBI:
-		wb_Rt <= mem_ir[15:11];
-	`ANDI,`XORI,`ORI:
-		wb_Rt <= mem_ir[15:11];
-	`CALL:
-		wb_Rt <= 5'd31;
-	`LB,`LBU,`LH,`LHU,`LW:
-		wb_Rt <= mem_ir[15:11];
-	default:
-		wb_Rt <= 5'h00;
-	endcase
-end
+		// Set target register
+		case(mem_ir[5:0])
+		`RR:
+			wb_Rt <= mem_ir[20:16];
+		`ADDI,`SUBI,`ADDIS,`JAL:
+			wb_Rt <= mem_ir[15:11];
+		`ANDI,`XORI,`ORI,`ANDIS,`ORIS:
+			wb_Rt <= mem_ir[15:11];
+		`CALL:
+			wb_Rt <= 5'd31;
+		`LB,`LBU,`LH,`LHU,`LW,`CAS:
+			wb_Rt <= mem_ir[15:11];
+		default:
+			wb_Rt <= 5'h00;
+		endcase
+	end
 end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -409,47 +456,52 @@ if (rst_i) begin
 	regfile[{wb_ctx,wb_Rt}] <= 32'd0;
 end
 else begin
-if (adv_pipe) begin
-	case(wb_ir[5:0])
-	`RR:
-		case(wb_ir[31:26])
-		`ADD,`SUB,`CMP:
+	if (adv_pipe) begin
+		case(wb_ir[5:0])
+		`RR:
+			case(wb_ir[31:26])
+			`ADD,`SUB,`CMP:
+				begin
+					cf[wb_ctx] <= mem_res[32];
+					zf[wb_ctx] <= mem_res[31:0]==32'd0;
+					nf[wb_ctx] <= mem_res[31];
+				end
+			`SHL,`SHR,`ASR,`ROL,`ROR,`SHLI,`SHRI,`ASRI,`RORI,`ROLI:
+				begin
+					cf[wb_ctx] <= mem_res[32];
+					zf[wb_ctx] <= mem_res[31:0]==32'd0;
+					nf[wb_ctx] <= mem_res[31];
+				end
+			`AND,`OR,`XOR:
+				begin
+					zf[wb_ctx] <= mem_res[31:0]==32'd0;
+					nf[wb_ctx] <= mem_res[31];
+				end
+			`MTSPR:
+				case(wb_Rt)
+				`CTX_REG:	;	// read-only
+				`CAS_REG:	cas_reg[wb_ctx] <= mem_res[31:0];
+				endcase
+			endcase
+		`ADDI,`SUBI,`CMPI:
 			begin
 				cf[wb_ctx] <= mem_res[32];
 				zf[wb_ctx] <= mem_res[31:0]==32'd0;
 				nf[wb_ctx] <= mem_res[31];
 			end
-		`SHL,`SHR,`ASR,`ROL,`ROR,`SHLI,`SHRI,`ASRI,`RORI,`ROLI:
+		`ANDI,`ORI,`XORI:
 			begin
-				cf[wb_ctx] <= mem_res[32];
 				zf[wb_ctx] <= mem_res[31:0]==32'd0;
 				nf[wb_ctx] <= mem_res[31];
 			end
-		`AND,`OR,`XOR:
+		`LB,`LBU,`LH,`LHU,`LW,`CAS:
 			begin
 				zf[wb_ctx] <= mem_res[31:0]==32'd0;
 				nf[wb_ctx] <= mem_res[31];
 			end
 		endcase
-	`ADDI,`SUBI,`CMPI:
-		begin
-			cf[wb_ctx] <= mem_res[32];
-			zf[wb_ctx] <= mem_res[31:0]==32'd0;
-			nf[wb_ctx] <= mem_res[31];
-		end
-	`ANDI,`ORI,`XORI:
-		begin
-			zf[wb_ctx] <= mem_res[31:0]==32'd0;
-			nf[wb_ctx] <= mem_res[31];
-		end
-	`LB,`LBU,`LH,`LHU,`LW:
-		begin
-			zf[wb_ctx] <= mem_res[31:0]==32'd0;
-			nf[wb_ctx] <= mem_res[31];
-		end
-	endcase
-	regfile[{wb_ctx,wb_Rt}] <= mem_res;
-end
+		regfile[{wb_ctx,wb_Rt}] <= mem_res[31:0];
+	end
 end
 
 // ----------------------------------------------------------------------------
@@ -517,7 +569,7 @@ begin
 		1'd0:	sel_o <= 4'b0011;
 		1'd1:	sel_o <= 4'b1100;
 		endcase
-		adr_o <= ad;
+		adr_o <= {ad[31:1],1'b0};
 	end
 	else if (ack_i) begin
 		nack();
@@ -544,7 +596,7 @@ begin
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		sel_o <= 4'b1111;
-		adr_o <= ad;
+		adr_o <= {ad[31:2],2'b00};
 	end
 	else if (ack_i) begin
 		nack();
@@ -646,11 +698,48 @@ begin
 end
 endtask
 
+task do_cas;
+input [31:0] ad;
+input [31:0] dt;
+begin
+	if (!cyc_o) begin
+		bte_o <= 2'b00;
+		cti_o <= 3'b000;	// classic bus cycles
+		cyc_o <= 1'b1;
+		stb_o <= 1'b1;
+		we_o <= 1'b0;
+		sel_o <= 4'b1111;
+		adr_o <= {ad[31:2],2'b00};
+		dat_o <= dt;
+	end
+	else begin
+		// If stb_o is low the read portion of the cycle must have completed.
+		// Re-assert stb_o and switch to write cycle.
+		if (!stb_o) begin
+			stb_o <= 1'b1;
+			we_o <= 1'b1;
+		end
+		if (ack_i && we_o==1'b0) begin
+			stb_o <= 1'b0;
+			if (dat_i!=cas_reg[mem_ctx]) begin
+				nack();
+			end
+		end
+		else if (ack_i && we_o==1'b1) begin
+			nack();
+		end
+	end
+end
+endtask
+
+assign cas_complete = (ack_i && we_o) || (ack_i && dat_i!=cas_reg[mem_ctx]);
+
 endmodule
 
-module icache_ram(wclk, we, adr, dat, rclk, pc, insn0, insn1, insn2, insn3);
+module icache_ram(wclk, we, wcnt, adr, dat, rclk, pc, insn0, insn1, insn2, insn3);
 input wclk;
 input we;
+input [1:0] wcnt;
 input [31:0] adr;
 input [31:0] dat;
 input rclk;
@@ -664,7 +753,7 @@ reg [31:0] mem0 [0:1023];
 reg [31:0] mem1 [0:1023];
 reg [31:0] mem2 [0:1023];
 reg [31:0] mem3 [0:1023];
-reg [12:2] rpc;
+reg [11:2] rpc;
 integer n;
 
 initial begin
@@ -678,9 +767,15 @@ initial begin
 end
 
 always @(posedge wclk)
-	if (we) mem[adr[12:2]] <= dat;
+	if (we && wcnt==2'b00) mem0[adr[11:2]] <= dat;
+always @(posedge wclk)
+	if (we && wcnt==2'b01) mem1[adr[11:2]] <= dat;
+always @(posedge wclk)
+	if (we && wcnt==2'b10) mem2[adr[11:2]] <= dat;
+always @(posedge wclk)
+	if (we && wcnt==2'b11) mem3[adr[11:2]] <= dat;
 always @(posedge rclk)
-	rpc <= pc[12:2];
+	rpc <= pc[11:2];
 assign insn0 = mem0[rpc];
 assign insn1 = mem1[rpc];
 assign insn2 = mem2[rpc];
@@ -688,10 +783,12 @@ assign insn3 = mem3[rpc];
 
 endmodule
 
-module itag_ram(wclk, we, adr, rclk, pc, ihit0, ihit1, ihit2, ihit3);
+module itag_ram(rst, wclk, we, adr, wcnt, rclk, pc, ihit0, ihit1, ihit2, ihit3);
+input rst;
 input wclk;
 input we;
 input [31:0] adr;
+output reg [1:0] wcnt;	// way counter
 input rclk;
 input [31:0] pc;
 output ihit0;
@@ -699,48 +796,54 @@ output ihit1;
 output ihit2;
 output ihit3;
 
-reg [1:0] wcnt;				// way counter
-reg [32:13] mem0 [0:255];
-reg [32:13] mem1 [0:255];
-reg [32:13] mem2 [0:255];
-reg [32:13] mem3 [0:255];
-reg [31:2] rpc;
+reg [32:12] mem0 [0:255];
+reg [32:12] mem1 [0:255];
+reg [32:12] mem2 [0:255];
+reg [32:12] mem3 [0:255];
+reg [31:4] rpc;
 integer n;
 
 initial begin
 	for (n = 0; n < 256; n = n + 1)
 	begin
-		mem0[n] <= 20'd0;
-		mem1[n] <= 20'd0;
-		mem2[n] <= 20'd0;
-		mem3[n] <= 20'd0;
+		mem0[n] <= 21'd0;
+		mem1[n] <= 21'd0;
+		mem2[n] <= 21'd0;
+		mem3[n] <= 21'd0;
 	end
 end
 
 always @(posedge wclk)
 	if (we & wcnt==2'b00)
-		mem0[adr[12:2]] <= {1'b1,adr[31:13]};
+		mem0[adr[11:4]] <= {1'b1,adr[31:12]};
 always @(posedge wclk)
 	if (we & wcnt==2'b01)
-		mem1[adr[12:2]] <= {1'b1,adr[31:13]};
+		mem1[adr[11:4]] <= {1'b1,adr[31:12]};
 always @(posedge wclk)
 	if (we & wcnt==2'b10)
-		mem2[adr[12:2]] <= {1'b1,adr[31:13]};
+		mem2[adr[11:4]] <= {1'b1,adr[31:12]};
 always @(posedge wclk)
 	if (we & wcnt==2'b11)
-		mem3[adr[12:2]] <= {1'b1,adr[31:13]};
+		mem3[adr[11:4]] <= {1'b1,adr[31:12]};
+always @(posedge wclk)
+if (rst)
+	wcnt <= 2'd0;
+else begin
+	if (we)
+		wcnt <= wcnt + 2'd1;
+end
 always @(posedge rclk)
-	rpc <= pc[12:2];
+	rpc <= pc[31:4];
 
-wire [32:13] tag0 = mem0[rpc];
-wire [32:13] tag1 = mem1[rpc];
-wire [32:13] tag2 = mem2[rpc];
-wire [32:13] tag3 = mem3[rpc];
+wire [32:12] tag0 = mem0[rpc[11:4]];
+wire [32:12] tag1 = mem1[rpc[11:4]];
+wire [32:12] tag2 = mem2[rpc[11:4]];
+wire [32:12] tag3 = mem3[rpc[11:4]];
 
-assign ihit0 = tag0=={1'b1,rpc[31:13]};
-assign ihit1 = tag1=={1'b1,rpc[31:13]};
-assign ihit2 = tag2=={1'b1,rpc[31:13]};
-assign ihit3 = tag3=={1'b1,rpc[31:13]};
+assign ihit0 = tag0=={1'b1,rpc[31:12]};
+assign ihit1 = tag1=={1'b1,rpc[31:12]};
+assign ihit2 = tag2=={1'b1,rpc[31:12]};
+assign ihit3 = tag3=={1'b1,rpc[31:12]};
 
 endmodule
 

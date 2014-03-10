@@ -21,8 +21,9 @@
 //
 // ============================================================================
 //
-module rtfMultiBarrel(rst_i, clk_i, bte_o, cti_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module rtfMultiBarrel(boardno_i, rst_i, clk_i, bte_o, cti_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter NCPUS = 8;
+input [3:0] boardno_i;
 input rst_i;
 input clk_i;
 output reg [1:0] bte_o;
@@ -58,6 +59,8 @@ for (g = 0; g < NCPUS; g = g + 1)
 begin : skid
 	rtfBarrel ug
 	(
+		.boardno_i(boardno_i),
+		.coreno_i(g[3:0]),
 		.rst_i(rst_i),
 		.clk_i(clk_i),
 		.bte_o(bte[g]),
@@ -75,7 +78,7 @@ end
 end
 endgenerate
 
-always @(which or ack_i)
+always @(which or ack_i or dat_i)
 begin
 	bte_o <= bte[which];
 	cti_o <= cti[which];
