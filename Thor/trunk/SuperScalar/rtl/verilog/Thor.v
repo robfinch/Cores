@@ -106,7 +106,7 @@ parameter IBUF2 = 4'd4;
 parameter IBUF3 = 4'd5;
 parameter IBUF4 = 4'd6;
 parameter IBUF5 = 4'd7;
-parameter NREGS = 303;
+parameter NREGS = 111;
 parameter PF = 4'd0;
 parameter PT = 4'd1;
 parameter PEQ = 4'd2;
@@ -172,10 +172,14 @@ wire iuncached;
 reg [NREGS:0] rf_v;
 //reg [15:0] pf_v;
 reg im,imb;
+reg fxe;
 reg nmi1,nmi_edge;
 reg StatusHWI;
 reg [7:0] StatusEXL;
 assign km = StatusHWI | |StatusEXL;
+reg [7:0] GM;		// register group mask
+reg [7:0] GMB;
+wire [63:0] sr = {32'd0,imb,7'b0,GMB,im,1'b0,km,fxe,4'b0,GM};
 wire int_commit;
 wire int_pending;
 wire sys_commit;
@@ -216,7 +220,9 @@ reg  [3:0] iqentry_pred [0:7];	// predicate value
 reg        iqentry_p_v  [0:7];	// predicate is valid
 reg  [3:0] iqentry_p_s  [0:7];	// predicate source
 reg  [7:0] iqentry_op	[0:7];	// instruction opcode
-reg  [8:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
+reg  [5:0] iqentry_fn   [0:7];  // instruction function
+reg  [2:0] iqentry_renmapno [0:7];	// register rename map number
+reg  [6:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg [DBW-1:0] iqentry_a0	[0:7];	// argument 0 (immediate)
 reg [DBW-1:0] iqentry_a1	[0:7];	// argument 1
 reg        iqentry_a1_v	[0:7];	// arg1 valid
@@ -332,6 +338,7 @@ reg        alu0_dataready;
 reg  [3:0] alu0_sourceid;
 reg  [3:0] alu0_insnsz;
 reg  [7:0] alu0_op;
+reg  [5:0] alu0_fn;
 reg  [3:0] alu0_cond;
 reg        alu0_bt;
 wire        alu0_cmt;
@@ -354,6 +361,7 @@ reg        alu1_dataready;
 reg  [3:0] alu1_sourceid;
 reg  [3:0] alu1_insnsz;
 reg  [7:0] alu1_op;
+reg  [5:0] alu1_fn;
 reg  [3:0] alu1_cond;
 reg        alu1_bt;
 wire        alu1_cmt;
@@ -585,10 +593,10 @@ assign
 // isn't enqueued (it'll be enqueued in the next cycle).
 wire [8:0] Ra0 = fnRa(fetchbuf0_instr);
 wire [8:0] Rb0 = ((fnNumReadPorts(fetchbuf0_instr) < 3'd2) || !fetchbuf0_v) ? {1'b0,fetchbuf1_instr[`INSTRUCTION_RC]} :
-				{1'b0,fetchbuf0_instr[`INSTRUCTION_RB]};
+				fnRb(fetchbuf0_instr);
 wire [8:0] Ra1 = (!fetchbuf0_v || fnNumReadPorts(fetchbuf0_instr) < 3'd3) ? fnRa(fetchbuf1_instr) :
 					fetchbuf0_instr[`INSTRUCTION_RC];
-wire [8:0] Rb1 = (fnNumReadPorts(fetchbuf1_instr) < 3'd2 && fetchbuf0_v) ? fnRa(fetchbuf1_instr):{1'b0,fetchbuf1_instr[`INSTRUCTION_RB]};
+wire [8:0] Rb1 = (fnNumReadPorts(fetchbuf1_instr) < 3'd2 && fetchbuf0_v) ? fnRa(fetchbuf1_instr):fnRb(fetchbuf1_instr);
 
 function [7:0] fnOpcode;
 input [63:0] ins;
@@ -606,30 +614,31 @@ wire [3:0] Pn0 = fetchbuf0_instr[7:4];
 wire [3:0] Pt1 = fetchbuf1_instr[11:8];
 wire [3:0] Pt0 = fetchbuf0_instr[11:8];
 
-function [8:0] fnRa;
+function [6:0] fnRa;
 input [63:0] insn;
 if (insn[7:0]==8'h11)	// RTS short form
-	fnRa = 9'h111;
+	fnRa = 7'h51;
 else
 	case(insn[15:8])
-	`RTI:	fnRa = 9'h11E;
-	`RTE:	fnRa = 9'h11D;
+	`RTI:	fnRa = 7'h5E;
+	`RTE:	fnRa = 7'h5D;
 	`JSR,`SYS,`INT,`RTS:
-		fnRa = {5'h11,insn[23:20]};
+		fnRa = {3'h5,insn[23:20]};
 	default:	fnRa = {1'b0,insn[`INSTRUCTION_RA]};
 	endcase
 endfunction
 
-function [8:0] fnRb;
+function [6:0] fnRb;
 input [63:0] insn;
 if (insn[7:0]==8'h11)	// RTS short form
-	fnRb = 9'h111;
+	fnRb = 7'h51;
 else
 	case(insn[15:8])
-	`RTI:	fnRb = 9'h11E;
-	`RTE:	fnRb = 9'h11D;
+	`RTI:	fnRb = 7'h5E;
+	`RTE:	fnRb = 7'h5D;
 	`JSR,`SYS,`INT,`RTS:
-		fnRb = {5'h11,insn[23:20]};
+		fnRb = {3'h5,insn[23:20]};
+	`TLB:	fnRb = {1'b0,insn[29:24]};
 	default:	fnRb = {1'b0,insn[`INSTRUCTION_RB]};
 	endcase
 endfunction
@@ -648,6 +657,14 @@ else
 	endcase
 endfunction
 
+function fnFunc;
+input [63:0] insn;
+case(insn[15:8])
+`BITFIELD:	fnFunc = insn[43:40];
+default:
+	fnFunc = insn[39:34];
+endcase
+endfunction
 
 Thor_regfile2w4r #(DBW) urf1
 (
@@ -655,12 +672,12 @@ Thor_regfile2w4r #(DBW) urf1
 	.rclk(~clk),
 	.wr0(commit0_v && ~commit0_tgt[8] && iqentry_op[head0]!=`MTSPR),
 	.wr1(commit1_v && ~commit1_tgt[8] && iqentry_op[head1]!=`MTSPR),
-	.wa0(commit0_tgt[7:0]),
-	.wa1(commit1_tgt[7:0]),
-	.ra0(Ra0[7:0]),
-	.ra1(Rb0[7:0]),
-	.ra2(Ra1[7:0]),
-	.ra3(Rb1[7:0]),
+	.wa0(commit0_tgt[5:0]),
+	.wa1(commit1_tgt[5:0]),
+	.ra0(Ra0[5:0]),
+	.ra1(Rb0[5:0]),
+	.ra2(Ra1[5:0]),
+	.ra3(Rb1[5:0]),
 	.i0(commit0_bus),
 	.i1(commit1_bus),
 	.o0(rfoa0),
@@ -694,7 +711,7 @@ function fnSource2_v;
 input [7:0] opcode;
 	casex(opcode)
 	`NEG,`NOT,`MOV:		fnSource2_v = 1'b1;
-	`LDI,`STI,`LDIS,`IMM,`NOP:		fnSource2_v = 1'b1;
+	`LDI,`STI,`LDIS,`IMM,`NOP,`LDIT8:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB:
 					fnSource2_v = 1'b1;
 	`RTI,`RTE:		fnSource2_v = 1'b1;
@@ -710,14 +727,14 @@ input [7:0] opcode;
 	`ORI:			fnSource2_v = 1'b1;
 	`EORI:			fnSource2_v = 1'b1;
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA:
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`STI:
 			fnSource2_v = 1'b1;
 	`JSR,`SYS,`INT,`RTS,`BR,`LOOP:
 			fnSource2_v = 1'b1;
 	`MTSPR,`MFSPR:
 				fnSource2_v = 1'b1;
-	`BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:	// but not BFINS
-				fnSource2_v = 1'b1;
+//	`BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:	// but not BFINS
+//				fnSource2_v = 1'b1;
 	default:	fnSource2_v = 1'b0;
 	endcase
 endfunction
@@ -736,12 +753,12 @@ endfunction
 // Return the number of register read ports required for an instruction.
 function [2:0] fnNumReadPorts;
 input [63:0] ins;
-case(fnOpcode(ins))
+casex(fnOpcode(ins))
 `SEI,`CLI,`MEMSB,`MEMDB,`NOP,`MOVS:
 					fnNumReadPorts = 3'd0;
 `BR,`LOOP:				fnNumReadPorts = 3'd0;
 `LDI,`LDIS,`IMM:		fnNumReadPorts = 3'd0;
-`NEG,`NOT,`MOV,`STI:	fnNumReadPorts = 3'd1;
+`NEG,`NOT,`MOV,`STI,`LDIT8:	fnNumReadPorts = 3'd1;
 `RTI,`RTE:			fnNumReadPorts = 3'd1;
 `TST:				fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI:		fnNumReadPorts = 3'd1;
@@ -945,62 +962,67 @@ endfunction
 // 11x = branch register
 // 12x = segment register
 // 130 = predicate register horizontal
-function [8:0] fnTargetReg;
+function [6:0] fnTargetReg;
 input [63:0] ir;
 begin
 	if (ir[3:0]==4'h0)	// Process special predicates
-		fnTargetReg = 9'h000;
+		fnTargetReg = 7'h000;
 	else
 		casex(fnOpcode(ir))
-		`LDI:
-			fnTargetReg = {1'b0,ir[23:16]};
+		`LDI,`LDIT8:
+			fnTargetReg = {1'b0,ir[21:16]};
 		`LDIS:
-			fnTargetReg = {1'b1,ir[23:16]};
+			fnTargetReg = {1'b1,ir[21:16]};
 		`BCD,
 		`ADD,`ADDU,`SUB,`SUBU,`MUL,`MULU,`DIV,`DIVU,
 		`AND,`OR,`EOR,`NAND,`NOR,`ENOR,`ANDC,`ORC,
 		`_2ADDU,`_4ADDU,`_8ADDU,`_16ADDU,
 		`SHL,`SHR,`SHLU,`SHRU,`ROL,`ROR,
 		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX:
-			fnTargetReg = {1'b0,ir[39:32]};
+			fnTargetReg = {1'b0,ir[33:28]};
 		`NEG,`NOT,`MOV,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
 		`SHLI,`SHRI,`SHLUI,`SHRUI,`ROLI,`RORI,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
-			fnTargetReg = {1'b0,ir[31:24]};
+			fnTargetReg = {1'b0,ir[27:22]};
 		`LWS:
-			fnTargetReg = {1'b1,ir[31:24]};
+			fnTargetReg = {1'b1,ir[27:22]};
 		`CAS:
-			fnTargetReg = {1'b0,ir[47:40]};
+			fnTargetReg = {1'b0,ir[39:34]};
 		`BFSET,`BFCLR,`BFCHG,`BFINS,`BFEXT,`BFEXTU:
-			fnTargetReg = {1'b0,ir[31:24]};
+			fnTargetReg = {1'b0,ir[27:22]};
 		`TLB:
 			if (ir[19:16]==`TLB_RDREG)
-				fnTargetReg = {1'b0,ir[31:24]};
+				fnTargetReg = {1'b0,ir[29:24]};
 			else
-				fnTargetReg = 9'h000;
+				fnTargetReg = 7'h00;
 		`MFSPR:
-			fnTargetReg = {1'b0,ir[31:24]};
+			fnTargetReg = {1'b0,ir[27:22]};
 		`STSB,`STSW:
-			fnTargetReg = {1'b0,ir[23:16]};
+			fnTargetReg = {1'b0,ir[21:16]};
 		`CMP,`CMPI,`TST:
-			fnTargetReg = {1'b1,4'h0,ir[11:8]};
+			fnTargetReg = {1'b1,2'h0,ir[11:8]};
 		`JSR,`SYS,`INT:
-			fnTargetReg = {1'b1,4'h1,ir[19:16]};
+			fnTargetReg = {1'b1,2'h1,ir[19:16]};
 		`MTSPR,`MOVS:
-			if (ir[31:28]==4'h1)		// Move to branch register
-				fnTargetReg = {1'b1,4'h1,ir[27:24]};
-			else if (ir[31:28]==4'h2)	// Move to seg. reg.
-				fnTargetReg = {1'b1,4'h2,ir[27:24]};
-			else if (ir[31:24]==8'h04)
-				fnTargetReg = 9'h130;
+			if (ir[27:26]==2'h1)		// Move to branch register
+				fnTargetReg = {1'b1,2'h1,ir[25:22]};
+			else if (ir[27:26]==2'h2)	// Move to seg. reg.
+				fnTargetReg = {1'b1,2'h2,ir[25:22]};
+			else if (ir[27:22]==6'h04)
+				fnTargetReg = 7'h70;
 			else
-				fnTargetReg = 9'h000;
-		default:	fnTargetReg = 9'h00;
+				fnTargetReg = 7'h00;
+		default:	fnTargetReg = 7'h00;
 		endcase
 end
+endfunction
+
+function fnAllowedReg;
+input [8:0] regno;
+fnAllowedReg = allowedRegs[regno] ? regno : 9'h000;
 endfunction
 
 function fnTargetsBr;
@@ -1012,18 +1034,18 @@ else begin
 	case(fnOpcode(ir))
 	`JSR,`SYS,`INT:	fnTargetsBr = `TRUE;
 	`LWS:
-		if (ir[31:28]==4'h1)
+		if (ir[27:26]==2'h1)
 			fnTargetsBr = `TRUE;
 		else
 			fnTargetsBr = `FALSE;
 	`LDIS:
-		if (ir[23:20]==4'h1)
+		if (ir[21:20]==2'h1)
 			fnTargetsBr = `TRUE;
 		else
 			fnTargetsBr = `FALSE;
 	`MTSPR,`MOVS:
 		begin
-			if (ir[31:28]==4'h1)
+			if (ir[27:26]==2'h1)
 				fnTargetsBr = `TRUE;
 			else
 				fnTargetsBr = `FALSE;
@@ -1041,17 +1063,17 @@ if (ir[3:0]==4'h0)
 else
 	case(fnOpcode(ir))
 	`LWS:
-		if (ir[31:28]==4'h2)
+		if (ir[27:26]==2'h2)
 			fnTargetsSegreg = `TRUE;
 		else
 			fnTargetsSegreg = `FALSE;
 	`LDIS:
-		if (ir[23:20]==4'h2)
+		if (ir[21:29]==2'h2)
 			fnTargetsSegreg = `TRUE;
 		else
 			fnTargetsSegreg = `FALSE;
 	`MTSPR,`MOVS:
-		if (ir[31:28]==4'h2)
+		if (ir[27:26]==2'h2)
 			fnTargetsSegreg = `TRUE;
 		else
 			fnTargetsSegreg = `FALSE;
@@ -1063,7 +1085,7 @@ function fnHasConst;
 input [7:0] opcode;
 	casex(opcode)
 	`BFCLR,`BFSET,`BFCHG,`BFEXT,`BFEXTU,`BFINS,
-	`LDI,`LDIS,
+	`LDI,`LDIS,`LDIT8,
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 	`CMPI,
@@ -1110,13 +1132,12 @@ default:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`RTS:
 		fnInsnLength = 4'd3;
-	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`NEG,`NOT,`MOV,`TLB,`MOVS:
+	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`LDIT8,`NEG,`NOT,`MOV,`TLB,`MOVS:
 		fnInsnLength = 4'd4;
-	`BFCLR,`BFSET,`BFCHG,`BFINS,`BFEXT,`BFEXTU,
-	`JSR,`MUX,`BCD:
+	`BITFIELD,`JSR,`MUX,`BCD:
 		fnInsnLength = 4'd6;
 	`CAS:
-		fnInsnLength = 4'd7;
+		fnInsnLength = 4'd6;
 	default:
 		fnInsnLength = 4'd5;
 	endcase
@@ -1192,7 +1213,7 @@ fnIsRFW =	// General registers
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
 			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
 			opcode==`NOT || opcode==`NEG || opcode==`MOV || opcode==`LEA ||
-			opcode==`LDI || opcode==`LDIS || opcode==`MFSPR ||
+			opcode==`LDI || opcode==`LDIS || opcode==`LDIT8 || opcode==`MFSPR ||
 			// Branch registers / Segment registers
 			((opcode==`MTSPR || opcode==`MOVS) && (fnTargetsBr(ir) || fnTargetsSegreg(ir))) ||
 			opcode==`JSR || opcode==`SYS || opcode==`INT ||
@@ -1401,7 +1422,7 @@ input [7:0] opcode;
 input [DBW-1:0] dat;
 if (DBW==32)
 	case(opcode)
-	`SW,`SWX,`CAS,`SWS:	fnDatao = dat;
+	`SW,`SWX,`CAS,`SWS,`STI:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = dat;
 	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
 	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
@@ -1409,7 +1430,7 @@ if (DBW==32)
 	endcase
 else
 	case(opcode)
-	`SW,`SWX,`CAS,`SWS:	fnDatao = dat;
+	`SW,`SWX,`CAS,`SWS,`STI:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
 	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
 	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
@@ -1562,7 +1583,7 @@ function [63:0] fnImm;
 input [127:0] insn;
 
 case(insn[15:8])
-`CAS:	fnImm = {{56{insn[55]}},insn[55:48]};
+`CAS:	fnImm = {{56{insn[47]}},insn[47:40]};
 `BCD:	fnImm = insn[47:40];
 `TLB:	fnImm = insn[23:16];
 `LOOP:	fnImm = {{56{insn[23]}},insn[23:16]};
@@ -1570,11 +1591,15 @@ case(insn[15:8])
 `BITFIELD:	fnImm = insn[47:32];
 `SYS,`INT:	fnImm = insn[31:24];
 `CMPI,`LDI,`LDIS:
-	fnImm = {{56{insn[31]}},insn[31:24]};
+	fnImm = {{54{insn[31]}},insn[31:22]};
+`LDIT10:	fnImm = {insn[31:22],54'd0};
 `RTS:	fnImm = insn[19:16];
 `RTE,`RTI:	fnImm = 8'h00;
+`STI:	fnImm = {{56{insn[39]}},insn[39:32]};
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW:
+	fnImm = {{52{insn[39]}},insn[39:28]};
 default:
-	fnImm = {{56{insn[39]}},insn[39:32]};
+	fnImm = {{52{insn[39]}},insn[39:28]};
 endcase
 
 endfunction
@@ -1582,17 +1607,20 @@ endfunction
 function [7:0] fnImm8;
 input [127:0] insn;
 case(insn[15:8])
-`CAS:	fnImm8 = insn[55:48];
+`CAS:	fnImm8 = insn[47:40];
 `BCD:	fnImm8 = insn[47:40];
 `TLB:	fnImm8 = insn[23:16];
 `LOOP:	fnImm8 = insn[23:16];
 `JSR:	fnImm8 = insn[31:24];
 `BITFIELD:	fnImm8 = insn[39:32];
 `SYS,`INT:	fnImm8 = insn[31:24];
-`CMPI,`LDI,`LDIS:	fnImm8 = insn[31:24];
+`CMPI,`LDI,`LDIS:	fnImm8 = insn[29:22];
 `RTS:	fnImm8 = insn[19:16];
-`RTE,`RTI:	fnImm8 = 8'h00;
-default:	fnImm8 = insn[39:32];
+`RTE,`RTI,`LDIT8:	fnImm8 = 8'h00;
+`STI:	fnImm8 = insn[39:32];
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW:
+	fnImm8 = insn[35:28];
+default:	fnImm8 = insn[35:28];
 endcase
 endfunction
 
@@ -1601,14 +1629,14 @@ function fnImmMSB;
 input [127:0] insn;
 
 case(insn[15:8])
-`CAS:	fnImmMSB = insn[55];
+`CAS:	fnImmMSB = insn[47];
 `TLB,`BCD:
 	fnImmMSB = 1'b0;		// TLB regno is unsigned
 `LOOP:
 	fnImmMSB = insn[23];
 `JSR:
 	fnImmMSB = insn[47];
-`CMPI,`LDI,`LDIS:
+`CMPI,`LDI,`LDIS,`LDIT8:
 	fnImmMSB = insn[31];
 `SYS,`INT:
 	fnImmMSB = 1'b0;		// SYS,INT are unsigned
@@ -1617,6 +1645,8 @@ case(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`STI:
+	fnImmMSB = insn[39];
 default:
 	fnImmMSB = insn[39];
 endcase
@@ -1647,10 +1677,10 @@ begin
 		fnOpa = epc;
 	else if (fnIsFlowCtrl(opcode))
 		fnOpa = fnBra(ins)==4'd0 ? 64'd0 : fnBra(ins)==4'd15 ? epc :
-			(commit0_v && commit0_tgt[8:4]==5'h11 && commit0_tgt[3:0]==fnBra(ins)) ? commit0_bus :
+			(commit0_v && commit0_tgt[6:4]==3'h5 && commit0_tgt[3:0]==fnBra(ins)) ? commit0_bus :
 			bregs[fnBra(ins)];
 	else if (opcode==`MFSPR || opcode==`SWS || opcode==`MOVS)
-		casex(ins[23:16])
+		casex(ins[21:16])
 		`TICK:	fnOpa = tick;
 		`LCTR:	fnOpa = lc;
 		`PREGS:
@@ -1673,12 +1703,13 @@ begin
 					fnOpa[63:60] = pregs[15];
 				end
 		`ASID:	fnOpa = asid;
-		8'h1x:	fnOpa = ins[19:16]==4'h0 ? 64'd0 : ins[19:16]==4'hF ? epc :
-						(commit0_v && commit0_tgt[8:4]==5'h11 && commit0_tgt[3:0]==ins[19:16]) ? commit0_bus :
+		`SR:	fnOpa = sr;
+		6'h1x:	fnOpa = ins[19:16]==4'h0 ? 64'd0 : ins[19:16]==4'hF ? epc :
+						(commit0_v && commit0_tgt[6:4]==3'h5 && commit0_tgt[3:0]==ins[19:16]) ? commit0_bus :
 						bregs[ins[19:16]];
 `ifdef SEGMENTATION
-		8'h2x:	fnOpa = 
-			(commit0_v && commit0_tgt[8:4]==5'h12 && commit0_tgt[3:0]==ins[19:16]) ? {commit0_bus[DBW-1:12],12'h000} :
+		6'h2x:	fnOpa = 
+			(commit0_v && commit0_tgt[6:4]==3'h6 && commit0_tgt[3:0]==ins[19:16]) ? {commit0_bus[DBW-1:12],12'h000} :
 			{sregs[ins[19:16]],12'h000};
 `endif
 		default:	fnOpa = 64'h0;
@@ -1689,23 +1720,23 @@ end
 endfunction
 
 function [15:0] fnRegstrGrp;
-input [8:0] Rn;
-if (!Rn[8]) begin
+input [6:0] Rn;
+if (!Rn[6]) begin
 	fnRegstrGrp="GP";
 end
 else
-	case(Rn[7:4])
-	4'h0:	fnRegstrGrp="P ";
-	4'h1:	fnRegstrGrp="BR";
-	4'h2:	fnRegstrGrp="SG";
+	case(Rn[5:4])
+	2'h0:	fnRegstrGrp="P ";
+	2'h1:	fnRegstrGrp="BR";
+	2'h2:	fnRegstrGrp="SG";
 	endcase
 
 endfunction
 
 function [7:0] fnRegstr;
-input [8:0] Rn;
-if (!Rn[8]) begin
-	fnRegstr = Rn[7:0];
+input [6:0] Rn;
+if (!Rn[6]) begin
+	fnRegstr = Rn[5:0];
 end
 else
 	fnRegstr = Rn[3:0];
@@ -1758,6 +1789,7 @@ always @(posedge clk) begin
 
 	ic_invalidate <= `FALSE;
 	if (rst_i) begin
+		GM <= 8'hFF;
 		nmi_edge <= 1'b0;
 		cstate <= IDLE;
 		pc <= {{DBW-4{1'b1}},4'h0};
