@@ -135,6 +135,18 @@ always @*
 	`ROR_RR:	res <= {rfoa[0],cf,rfoa[31:1]};
 	`DEC_RR:	res <= rfoa - 32'd1;
 	`INC_RR:	res <= rfoa + 32'd1;
+	
+	`ADD_R:		res <= rfoa + rfob + {31'b0,df&cf};
+	`SUB_R:		res <= rfoa - rfob - {31'b0,df&~cf&|ir[15:12]};
+	`AND_R:		res <= rfoa & rfob;
+	`OR_R:		res <= rfoa | rfob;
+	`EOR_R:		res <= rfoa ^ rfob;
+	
+	`ADD_IMM4:	res <= rfoa + {{28{ir[15]}},ir[15:12]} + {31'b0,df&cf};
+	`SUB_IMM4:	res <= rfoa - {{28{ir[15]}},ir[15:12]} - {31'b0,df&~cf&|ir[11:8]};
+	`OR_IMM4:	res <= rfoa | {{28{ir[15]}},ir[15:12]};
+	`AND_IMM4: 	res <= rfoa & {{28{ir[15]}},ir[15:12]};
+	`EOR_IMM4:	res <= rfoa ^ {{28{ir[15]}},ir[15:12]};
 
 	`ADD_IMM8:	res <= rfoa + {{24{ir[23]}},ir[23:16]} + {31'b0,df&cf};
 	`SUB_IMM8:	res <= rfoa - {{24{ir[23]}},ir[23:16]} - {31'b0,df&~cf&|ir[15:12]};

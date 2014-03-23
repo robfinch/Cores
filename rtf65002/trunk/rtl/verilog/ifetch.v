@@ -166,8 +166,10 @@ IFETCH:
 			endcase
 		`LD_RR:	begin zf <= resz32; nf <= resn32; end
 		`DEC_RR,`INC_RR: begin zf <= resz32; nf <= resn32; end
+		`ADD_IMM4,`ADD_R,
 		`ADD_IMM8,`ADD_IMM16,`ADD_IMM32,`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND:
 			begin vf <= resv32; cf <= resc32; nf <= resn32; zf <= resz32; end
+		`SUB_IMM4,`SUB_R,
 		`SUB_IMM8,`SUB_IMM16,`SUB_IMM32,`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND:
 			if (Rt==4'h0)	// CMP doesn't set overflow
 				begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
@@ -179,13 +181,16 @@ IFETCH:
 `endif
 		`MUL_IMM8,`MUL_IMM16,`MUL_IMM32:
 			begin nf <= resn32; zf <= resz32; end
+		`AND_IMM4,`AND_R,
 		`AND_IMM8,`AND_IMM16,`AND_IMM32,`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_RIND:
 			if (Rt==4'h0)	// BIT sets overflow
 				begin nf <= b[31]; vf <= b[30]; zf <= resz32; end
 			else
 				begin nf <= resn32; zf <= resz32; end
 		`ORB_ZPX,`ORB_ABS,`ORB_ABSX,
+		`OR_IMM4,`OR_R,
 		`OR_IMM8,`OR_IMM16,`OR_IMM32,`OR_ZPX,`OR_IX,`OR_IY,`OR_ABS,`OR_ABSX,`OR_RIND,
+		`EOR_IMM4,`EOR_R,
 		`EOR_IMM8,`EOR_IMM16,`EOR_IMM32,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_RIND:
 			begin nf <= resn32; zf <= resz32; end
 		`ASL_ACC,`ROL_ACC,`LSR_ACC,`ROR_ACC:

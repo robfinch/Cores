@@ -158,6 +158,18 @@ task decode_tsk;
 		`DEC_RR:	Rt <= ir[15:12];
 		`INC_RR:	Rt <= ir[15:12];
 
+		`ADD_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`SUB_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`OR_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`AND_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`EOR_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		
+		`ADD_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
+		`SUB_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
+		`OR_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
+		`AND_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
+		`EOR_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
+
 		`ADD_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
 		`SUB_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
 		`MUL_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end

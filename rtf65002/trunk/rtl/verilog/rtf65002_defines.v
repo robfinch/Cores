@@ -109,6 +109,8 @@
 `define LSR_RRR			4'd15
 `define LD_RR		9'h7B
 
+`define ADD_R		9'h77
+`define ADD_IMM4	9'h67
 `define ADD_IMM8	9'h65		// 8 bit operand
 `define ADD_IMM16	9'h79		// 16 bit operand
 `define ADD_IMM32	9'h69		// 32 bit operand
@@ -120,6 +122,8 @@
 `define ADD_RIND	9'h72
 `define ADD_DSP		9'h63
 
+`define SUB_R		9'hF7
+`define SUB_IMM4	9'hE7
 `define SUB_IMM8	9'hE5
 `define SUB_IMM16	9'hF9
 `define SUB_IMM32	9'hE9
@@ -170,6 +174,8 @@
 `define LDA_IMM16	9'hB9
 `define LDA_IMM32	9'hA9
 
+`define AND_R		9'h37
+`define AND_IMM4	9'h27
 `define AND_IMM8	9'h25
 `define AND_IMM16	9'h39
 `define AND_IMM32	9'h29
@@ -185,6 +191,8 @@
 `define AND_I		9'h32
 `define AND_DSP		9'h23
 
+`define OR_R		9'h17
+`define OR_IMM4		9'h07
 `define OR_IMM8		9'h05
 `define OR_IMM16	9'h19
 `define OR_IMM32	9'h09
@@ -206,6 +214,8 @@
 `define ORA_ABSY	9'h19
 `define ORA_I		9'h12
 
+`define EOR_R		9'h57
+`define EOR_IMM4	9'h47
 `define EOR_IMM		9'h49
 `define EOR_IMM8	9'h45
 `define EOR_IMM16	9'h59
@@ -447,6 +457,15 @@
 `define BMT_ABSX	9'h17E
 `define HOFF		9'h158
 `define CMPS		9'h144
+
+`define LEA_ZPX		9'h1D5
+`define LEA_IX		9'h1C1
+`define LEA_IY		9'h1D1
+`define LEA_ABS		9'h1CD
+`define LEA_ABSX	9'h1DD
+`define LEA_RIND	9'h1D2
+`define LEA_I		9'h1D2
+`define LEA_DSP		9'h1C3
 
 `define NOTHING		5'd0
 `define SR_70		5'd1
