@@ -7,6 +7,7 @@ namespace RTFClasses
 	{
 	public:
 		static void out16(Opa *o) { theAssembler.out16(o); };
+		static void r(Opa *);
 		static void rn(Opa *);
 		static void rn2(Opa *);
 		static void rn1(Opa *);
@@ -43,6 +44,7 @@ namespace RTFClasses
 		static void stz_zp(Opa *);
 		static void stz_abs(Opa *);
 //		static void acc_zpx(Opa *);
+		static void imm4(Opa *);
 		static void imm8(Opa *);
 		static void imm16(Opa *);
 		static void imm32(Opa *);

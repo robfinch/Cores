@@ -31,6 +31,7 @@ enum {
 	AM_ZIL,
 	AM_SRIY,
 	AM_RR,
+	AM_IMM4,
 	AM_IMM8,
 	AM_IMM16,
 	AM_IMM32,

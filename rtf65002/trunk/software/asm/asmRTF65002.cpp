@@ -52,6 +52,15 @@ namespace RTFClasses
 		theAssembler.emit8((Rb<<4)|Ra);
 	}
 
+	void AsmRTF65002::r(Opa *o)
+	{
+		int Ra = ((Operands65002 *)getCpu()->getOp())->op[1].r1;
+		int Rt = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
+
+		theAssembler.emit8(o->oc & 0xff);
+		theAssembler.emit8((Rt<<4)|Ra);
+	}
+
 	void AsmRTF65002::rn(Opa *o)
 	{
 		int Ra = ((Operands65002 *)getCpu()->getOp())->op[1].r1;
@@ -103,6 +112,16 @@ namespace RTFClasses
 		theAssembler.emit8(o->oc & 0xff);
 		theAssembler.emit8((Rb<<4)|Ra);
 		theAssembler.emit8(((o->oc>>8)& 0xf0) | Rt);
+	}
+
+	void AsmRTF65002::imm4(Opa *o)
+	{
+		int op = o->oc;
+		int data = ((Operands65002 *)getCpu()->getOp())->op[1].val.value;
+		int Ra = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
+
+		theAssembler.emit8(op);
+		theAssembler.emit8(((data & 0xf)<<4)|Ra);
 	}
 
 	void AsmRTF65002::imm8(Opa *o)
