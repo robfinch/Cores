@@ -503,17 +503,18 @@ overflow uovr2 (
 	.v(resv8)
 );
 
-wire [7:0] bcaio;
-wire [7:0] bcao;
-wire [7:0] bcsio;
-wire [7:0] bcso;
+wire [15:0] bcaio;
+wire [15:0] bcao;
+wire [15:0] bcsio;
+wire [15:0] bcso;
 wire bcaico,bcaco,bcsico,bcsco;
+wire bcaico8,bcaco8,bcsico8,bcsco8;
 
 `ifdef SUPPORT_BCD
-BCDAdd ubcdai1 (.ci(cf),.a(acc8),.b(ir[15:8]),.o(bcaio),.c(bcaico));
-BCDAdd ubcda2 (.ci(cf),.a(acc8),.b(b8),.o(bcao),.c(bcaco));
-BCDSub ubcdsi1 (.ci(cf),.a(acc8),.b(ir[15:8]),.o(bcsio),.c(bcsico));
-BCDSub ubcds2 (.ci(cf),.a(acc8),.b(b8),.o(bcso),.c(bcsco));
+BCDAdd4 ubcdai1 (.ci(cf),.a(acc16),.b(ir[23:8]),.o(bcaio),.c(bcaico),.c8(bcaico8));
+BCDAdd4 ubcda2 (.ci(cf),.a(acc16),.b(b8),.o(bcao),.c(bcaco),.c8(bcaco8));
+BCDSub4 ubcdsi1 (.ci(cf),.a(acc16),.b(ir[23:8]),.o(bcsio),.c(bcsico),.c8(bcsico8));
+BCDSub4 ubcds2 (.ci(cf),.a(acc16),.b(b8),.o(bcso),.c(bcsco),.c8(bcsco8));
 `endif
 
 reg [7:0] dati;
@@ -573,7 +574,7 @@ wire [31:0] absx32xy_address 	= ir[47:16] + rfob;
 wire [31:0] zpx32_address 		= ir[31:20] + rfob;
 wire [31:0] absx32_address 		= ir[55:24] + rfob;
 
-wire [31:0] dsp_address = m816 ? {abs8[31:24],8'h00,sp + ir[15:8]} : {abs8[31:16],8'h01,sp[7:0]+ir[7:0]};
+wire [31:0] dsp_address = m816 ? {abs8[31:24],8'h00,sp + ir[15:8]} : {abs8[31:16],8'h01,sp[7:0]+ir[15:8]};
 
 rtf65002_alu ualu1
 (
@@ -656,6 +657,9 @@ if (rst_i) begin
 	write_allocate <= 1'b0;
 	nmoi <= 1'b1;
 	state <= RESET1;
+	m816 <= 1'b0;
+	m_bit <= 1'b1;
+	x_bit <= 1'b1;
 	if (rst_md) begin
 		pc <= 32'h0000FFF0;		// set high-order pc to zero
 		vect <= `BYTE_RST_VECT;

@@ -32,7 +32,14 @@ BYTE_DECODE:
 		`STP:	begin clk_en <= 1'b0; end
 //		`NAT:	begin em <= 1'b0; state <= IFETCH; end
 		`WDM:	if (ir[15:8]==`XCE) begin em <= 1'b0; state <= IFETCH; pc <= pc + 32'd2; end
-		`XCE:	begin m816 <= ~cf; cf <= ~m816; end
+		`XCE:	begin
+					m816 <= ~cf;
+					cf <= ~m816;
+					if (~cf) begin		// switching to 816 mode sets 8 bit memory/indexes
+						m_bit <= 1'b1;
+						x_bit <= 1'b1;
+					end
+				end
 		`NOP:	;
 		`CLC:	begin cf <= 1'b0; end
 		`SEC:	begin cf <= 1'b1; end
@@ -242,26 +249,6 @@ BYTE_DECODE:
 				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
-		// Handle (d,sp),y
-		`ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY:
-			begin
-				radr <= dsp_address[31:2];
-				radr2LSB <= dsp_address[1:0];
-				isIY <= `TRUE;
-				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				state <= LOAD_MAC1;
-			end
-		// Handle [zp],y
-		`ADC_IYL,`SBC_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`CMP_IYL,`LDA_IYL,`STA_IYL:
-			begin
-				radr <= zp_address[31:2];
-				radr2LSB <= zp_address[1:0];
-				isIY24 <= `TRUE;
-				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				state <= LOAD_MAC1;
-			end
 		// Handle abs
 		`LDA_ABS:
 			begin
@@ -373,6 +360,27 @@ BYTE_DECODE:
 				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= STORE1;
 			end
+`ifdef SUPPORT_816
+		// Handle (d,sp),y
+		`ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY:
+			begin
+				radr <= dsp_address[31:2];
+				radr2LSB <= dsp_address[1:0];
+				isIY <= `TRUE;
+				load_what <= `IA_70;
+				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
+				state <= LOAD_MAC1;
+			end
+		// Handle [zp],y
+		`ADC_IYL,`SBC_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`CMP_IYL,`LDA_IYL,`STA_IYL:
+			begin
+				radr <= zp_address[31:2];
+				radr2LSB <= zp_address[1:0];
+				isIY24 <= `TRUE;
+				load_what <= `IA_70;
+				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
+				state <= LOAD_MAC1;
+			end
 		// Handle al
 		`ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL,`LDA_AL:
 			begin
@@ -403,19 +411,20 @@ BYTE_DECODE:
 				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= STORE1;
 			end
-		// Handle (zp)
-		`ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`LDA_I,`STA_I,`PEI:
+		// Handle [zp]
+		`ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`LDA_IL,`STA_IL:
 			begin
+				isI24 <= `TRUE;
 				radr <= zp_address[31:2];
 				radr2LSB <= zp_address[1:0];
 				load_what <= `IA_70;
 				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
-		// Handle [zp]
-		`ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`LDA_IL,`STA_IL:
+`endif
+		// Handle (zp)
+		`ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`LDA_I,`STA_I,`PEI:
 			begin
-				isI24 <= `TRUE;
 				radr <= zp_address[31:2];
 				radr2LSB <= zp_address[1:0];
 				load_what <= `IA_70;

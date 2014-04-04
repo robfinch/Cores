@@ -142,6 +142,8 @@ BYTE_IFETCH:
 			begin
 				acc[7:0] <= acc[15:8];
 				acc[15:8] <= acc[7:0];
+				nf <= acc[15];
+				zf <= acc[15:8]==8'h00;
 			end
 		`TAY,`TXY,`DEY,`INY:
 			if (xb16) begin y[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end
@@ -158,33 +160,33 @@ BYTE_IFETCH:
 					cf <= df ? bcaico : resc16;
 //						vf <= resv8;
 					vf <= (res16[15] ^ b16[15]) & (1'b1 ^ acc[15] ^ b16[15]);
-					nf <= df ? bcaio[7] : resn16;
-					zf <= df ? bcaio==8'h00 : resz16;
+					nf <= df ? bcaio[15] : resn16;
+					zf <= df ? bcaio==16'h0000 : resz16;
 				end
 				else begin
-					acc[7:0] <= df ? bcaio : res8[7:0];
-					cf <= df ? bcaico : resc8;
+					acc[7:0] <= df ? bcaio[7:0] : res8[7:0];
+					cf <= df ? bcaico8 : resc8;
 //						vf <= resv8;
 					vf <= (res8[7] ^ b8[7]) & (1'b1 ^ acc[7] ^ b8[7]);
 					nf <= df ? bcaio[7] : resn8;
-					zf <= df ? bcaio==8'h00 : resz8;
+					zf <= df ? bcaio[7:0]==8'h00 : resz8;
 				end
 			end
-		`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I,`ADC_IL,`ADC_AL,`ADC_ALX:
+		`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I,`ADC_IL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY:
 			begin
 				if (m16) begin
 					acc[15:0] <= df ? bcao : res16[15:0];
 					cf <= df ? bcaco : resc16;
 					vf <= (res16[15] ^ b16[15]) & (1'b1 ^ acc[15] ^ b16[15]);
-					nf <= df ? bcao[7] : resn16;
-					zf <= df ? bcao==8'h00 : resz16;
+					nf <= df ? bcao[15] : resn16;
+					zf <= df ? bcao==16'h0000 : resz16;
 				end
 				else begin
-					acc[7:0] <= df ? bcao : res8[7:0];
-					cf <= df ? bcaco : resc8;
+					acc[7:0] <= df ? bcao[7:0] : res8[7:0];
+					cf <= df ? bcaco8 : resc8;
 					vf <= (res8[7] ^ b8[7]) & (1'b1 ^ acc[7] ^ b8[7]);
 					nf <= df ? bcao[7] : resn8;
-					zf <= df ? bcao==8'h00 : resz8;
+					zf <= df ? bcao[7:0]==8'h00 : resz8;
 				end
 			end
 		`SBC_IMM:
@@ -193,47 +195,47 @@ BYTE_IFETCH:
 					acc[15:0] <= df ? bcsio : res16[15:0];
 					cf <= ~(df ? bcsico : resc16);
 					vf <= (1'b1 ^ res16[15] ^ b16[15]) & (acc[15] ^ b16[15]);
-					nf <= df ? bcsio[7] : resn16;
-					zf <= df ? bcsio==8'h00 : resz16;
+					nf <= df ? bcsio[15] : resn16;
+					zf <= df ? bcsio==16'h0000 : resz16;
 				end
 				else begin
-					acc[7:0] <= df ? bcsio : res8[7:0];
-					cf <= ~(df ? bcsico : resc8);
+					acc[7:0] <= df ? bcsio[7:0] : res8[7:0];
+					cf <= ~(df ? bcsico8 : resc8);
 					vf <= (1'b1 ^ res8[7] ^ b8[7]) & (acc[7] ^ b8[7]);
 					nf <= df ? bcsio[7] : resn8;
-					zf <= df ? bcsio==8'h00 : resz8;
+					zf <= df ? bcsio[7:0]==8'h00 : resz8;
 				end
 			end
-		`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_I,`SBC_IL,`SBC_AL,`SBC_ALX:
+		`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_I,`SBC_IL,`SBC_AL,`SBC_ALX,`SBC_DSP,`SBC_DSPIY:
 			begin
 				if (m16) begin
 					acc[15:0] <= df ? bcso : res16[15:0];
 					vf <= (1'b1 ^ res16[15] ^ b16[15]) & (acc[15] ^ b16[15]);
 					cf <= ~(df ? bcsco : resc16);
-					nf <= df ? bcso[7] : resn16;
-					zf <= df ? bcso==8'h00 : resz16;
+					nf <= df ? bcso[15] : resn16;
+					zf <= df ? bcso==16'h0000 : resz16;
 				end
 				else begin
-					acc[7:0] <= df ? bcso : res8[7:0];
+					acc[7:0] <= df ? bcso[7:0] : res8[7:0];
 					vf <= (1'b1 ^ res8[7] ^ b8[7]) & (acc[7] ^ b8[7]);
-					cf <= ~(df ? bcsco : resc8);
+					cf <= ~(df ? bcsco8 : resc8);
 					nf <= df ? bcso[7] : resn8;
-					zf <= df ? bcso==8'h00 : resz8;
+					zf <= df ? bcso[7:0]==8'h00 : resz8;
 				end
 			end
-		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_I,`CMP_IL,`CMP_AL,`CMP_ALX:
+		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_I,`CMP_IL,`CMP_AL,`CMP_ALX,`CMP_DSP,`CMP_DSPIY:
 				if (m16) begin cf <= ~resc16; nf <= resn16; zf <= resz16; end else begin cf <= ~resc8; nf <= resn8; zf <= resz8; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS,
 		`CPY_IMM,`CPY_ZP,`CPY_ABS:
 				if (xb16) begin cf <= ~resc16; nf <= resn16; zf <= resz16; end else begin cf <= ~resc8; nf <= resn8; zf <= resz8; end
 		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX:
-				begin nf <= b8[7]; vf <= b8[6]; zf <= resz8; end
+				if (m16) begin nf <= b16[15]; vf <= b16[14]; zf <= resz16; end else begin nf <= b8[7]; vf <= b8[6]; zf <= resz8; end
 		`TRB_ZP,`TRB_ABS,`TSB_ZP,`TSB_ABS:
 			if (m16) begin zf <= resz16; end else begin zf <= resz8; end
-		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_I,`LDA_IL,`LDA_AL,`LDA_ALX,
-		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_I,`AND_IL,`AND_AL,`AND_ALX,
-		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_I,`ORA_IL,`ORA_AL,`ORA_ALX,
-		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_I,`EOR_IL,`EOR_AL,`EOR_ALX:
+		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_I,`LDA_IL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,
+		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_I,`AND_IL,`AND_AL,`AND_ALX,`AND_DSP,`AND_DSPIY,
+		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_I,`ORA_IL,`ORA_AL,`ORA_ALX,`ORA_DSP,`ORA_DSPIY,
+		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_I,`EOR_IL,`EOR_AL,`EOR_ALX,`EOR_DSP,`EOR_DSPIY:
 			if (m16) begin acc[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end
 			else begin acc[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`ASL_ACC:	if (m16) begin acc[15:0] <= res16[15:0]; cf <= resc16; nf <= resn16; zf <= resz16; end else begin acc[7:0] <= res8[7:0]; cf <= resc8; nf <= resn8; zf <= resz8; end

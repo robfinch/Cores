@@ -129,7 +129,8 @@ namespace RTFClasses
 	static Opa clcAsm[] = { {Asm6502::out8, 0x18, 0, 0, 2}, NULL };
 	static Opa cldAsm[] = { {Asm6502::out8, 0xD8, 0, 0, 2}, NULL };
 	static Opa cliAsm[] = { {Asm6502::out8, 0x58, 0, 0, 2}, NULL };
-	static Opa natAsm[] = { {Asm6502::out8, 0xFB, 0, 0, 2}, NULL };
+//	static Opa natAsm[] = { {Asm6502::out8, 0xFB, 0, 0, 2}, NULL };
+	static Opa xceAsm[] = { {Asm6502::out8, 0xFB, 0, 0, 2}, NULL };
 	static Opa clvAsm[] = { {Asm6502::out8, 0xB8, 0, 0, 2}, NULL };
 	static Opa dexAsm[] = { {Asm6502::out8, 0xCA, 0, 0, 2}, NULL };
 	static Opa deyAsm[] = { {Asm6502::out8, 0x88, 0, 0, 2}, NULL };
@@ -407,7 +408,7 @@ static Mne opsW65C02[] =
     {"ldy", ldyAsm, 1 },
 
 	{"lsr", lsrAsm, 1 },
-	{"nat", natAsm, 0 },
+//	{"nat", natAsm, 0 },
 	{"nop", nopAsm, 0 },
 
 	{"ora", oraAsm, 1 },
@@ -447,6 +448,8 @@ static Mne opsW65C02[] =
 	{"txa", txaAsm, 0 },
 	{"txs", txsAsm, 0 },
 	{"tya", tyaAsm, 0 },
+
+	{"xce", xceAsm, 0 },
 };
 
 	Operands6502 operW65C02;

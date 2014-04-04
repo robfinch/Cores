@@ -950,7 +950,8 @@ static Mne opsRTF65002[] =
 	{"tya", tyaAsm, 0 },
 	{"tyx", tyxAsm, 0 },
 
-	{"wai", waiAsm, 0 }
+	{"wai", waiAsm, 0 },
+	{"xce", xceAsm, 0 },
 
 };
 
