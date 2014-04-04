@@ -58,6 +58,7 @@
 `define IRQ_VECT_816	34'h00000FFEE
 `define NMI_VECT_816	34'h00000FFEA
 `define ABT_VECT_816	34'h00000FFE8
+`define COP_VECT_816	34'h00000FFE4
 
 `define BRK			9'h00
 `define RTI			9'h40
@@ -91,11 +92,20 @@
 `define TSA			9'h3B
 `define TRS			9'h8B
 `define TSR			9'hAB
+`define TCD			9'h5B
+`define TDC			9'h7B
 `define STP			9'hDB
 `define NAT			9'hFB
 `define EMM			9'hFB
+`define XCE			9'hFB
 `define INA			9'h1A
 `define DEA			9'h3A
+`define SEP			9'hE2
+`define REP			9'hC2
+`define PEA			9'hF4
+`define PEI			9'hD4
+`define PER			9'h62
+`define WDM			9'h42
 
 `define RR			9'h02
 `define ADD_RR			4'd0
@@ -156,6 +166,7 @@
 `define ADC_AL		9'h6F
 `define ADC_ALX		9'h7F
 `define ADC_DSP		9'h63
+`define ADC_DSPIY	9'h73
 
 `define SBC_IMM		9'hE9
 `define SBC_ZP		9'hE5
@@ -171,6 +182,7 @@
 `define SBC_AL		9'hEF
 `define SBC_ALX		9'hFF
 `define SBC_DSP		9'hE3
+`define SBC_DSPIY	9'hF3
 
 `define CMP_IMM8	9'hC5
 `define CMP_IMM32	9'hC9
@@ -188,6 +200,7 @@
 `define CMP_AL		9'hCF
 `define CMP_ALX		9'hDF
 `define CMP_DSP		9'hC3
+`define CMP_DSPIY	9'hD3
 
 `define LDA_IMM8	9'hA5
 `define LDA_IMM16	9'hB9
@@ -211,6 +224,7 @@
 `define AND_I		9'h32
 `define AND_IL		9'h27
 `define AND_DSP		9'h23
+`define AND_DSPIY	9'h33
 `define AND_AL		9'h2F
 `define AND_ALX		9'h3F
 
@@ -241,6 +255,7 @@
 `define ORA_AL		9'h0F
 `define ORA_ALX		9'h1F
 `define ORA_DSP		9'h03
+`define ORA_DSPIY	9'h13
 
 `define EOR_R		9'h57
 `define EOR_IMM4	9'h47
@@ -260,6 +275,7 @@
 `define EOR_I		9'h52
 `define EOR_IL		9'h47
 `define EOR_DSP		9'h43
+`define EOR_DSPIY	9'h53
 `define EOR_AL		9'h4F
 `define EOR_ALX		9'h5F
 
@@ -300,6 +316,7 @@
 `define LDA_AL		9'hAF
 `define LDA_ALX		9'hBF
 `define LDA_DSP		9'hA3
+`define LDA_DSPIY	9'hB3
 
 `define STA_ZP		9'h85
 `define STA_ZPX		9'h95
@@ -314,6 +331,7 @@
 `define STA_AL		9'h8F
 `define STA_ALX		9'h9F
 `define STA_DSP		9'h83
+`define STA_DSPIY	9'h93
 
 `define ASL_IMM8	9'h24
 `define ASL_ACC		9'h0A
@@ -403,6 +421,13 @@
 `define WAI			9'hCB
 `define PUSH		9'h0B
 `define POP			9'h2B
+`define PHB			9'h8B
+`define PHD			9'h0B
+`define PHK			9'h4B
+`define XBA			9'hEB
+`define COP			9'h02
+`define PLB			9'hAB
+`define PLD			9'h2B
 
 `define LDX_IMM		9'hA2
 `define LDX_ZP		9'hA6
@@ -534,6 +559,7 @@
 `define HALF_159	5'd22
 `define HALF_71S	5'd23
 `define HALF_159S	5'd24
+`define BYTE_72		5'd25
 
 `define STW_DEF		6'h0
 `define STW_ACC		6'd1
@@ -571,6 +597,12 @@
 `define STW_Y158	6'd37
 `define STW_Z70		6'd38
 `define STW_Z158	6'd39
-
+`define STW_DBR		6'd40
+`define STW_DPR158	6'd41
+`define STW_DPR70	6'd42
+`define STW_TMP158	6'd43
+`define STW_TMP70	6'd44
+`define STW_IA158	6'd45
+`define STW_IA70	6'd46
 
 `endif

@@ -32,6 +32,7 @@ input x_bit;
 always @(opcode,suppress_pcinc)
 if (suppress_pcinc==4'hF)
 	case(opcode)
+	`SEP,`REP:	inc <= 4'd2;
 	`BRK:	inc <= 4'd0;
 	`BPL,`BMI,`BCS,`BCC,`BVS,`BVC,`BEQ,`BNE,`BRA:	inc <= 4'd2;
 	`BRL: inc <= 4'd3;
@@ -63,7 +64,7 @@ if (suppress_pcinc==4'hF)
 	`ADC_IX,`SBC_IX,`CMP_IX,`AND_IX,`OR_IX,`EOR_IX,`LDA_IX,`STA_IX: inc <= 4'd2;
 
 	`ADC_IY,`SBC_IY,`CMP_IY,`AND_IY,`OR_IY,`EOR_IY,`LDA_IY,`STA_IY: inc <= 4'd2;
-	`ADC_IYL,`SBC_IYL,`CMP_IYL,`AND_IYL,`OR_IYL,`EOR_IYL,`LDA_IYL,`STA_IYL: inc <= 4'd2;
+	`ADC_IYL,`SBC_IYL,`CMP_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`LDA_IYL,`STA_IYL: inc <= 4'd2;
 
 	`TRB_ABS,`TSB_ABS,
 	`ADC_ABS,`SBC_ABS,`CMP_ABS,`AND_ABS,`OR_ABS,`EOR_ABS,`LDA_ABS,`STA_ABS: inc <= 4'd3;

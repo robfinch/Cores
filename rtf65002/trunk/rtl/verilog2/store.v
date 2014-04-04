@@ -63,6 +63,13 @@ STORE1:
 		`STW_Y158:		wb_write(1,{4{y[15:8]}});
 		`STW_Z70:		wb_write(1,{4{8'h00}});
 		`STW_Z158:		wb_write(1,{4{8'h00}});
+		`STW_DBR:		wb_write(1,{4{dbr}});
+		`STW_DPR158:	wb_write(1,{4{dpr[15:8]}});
+		`STW_DPR70:		wb_write(1,{4{dpr[7:0]}});
+		`STW_TMP158:	wb_write(1,{4{tmp16[15:8]}});
+		`STW_TMP70:		wb_write(1,{4{tmp16[7:0]}});
+		`STW_IA158:		wb_write(1,{4{ia[15:8]}});
+		`STW_IA70:		wb_write(1,{4{ia[7:0]}});
 `endif
 		default:	wb_write(0,wdat);
 		endcase
@@ -93,8 +100,14 @@ STORE2:
 		end
 		else begin
 			if (em) begin
-				state <= BYTE_IFETCH;
-				retstate <= BYTE_IFETCH;
+				if (isMove) begin
+					state <= MVN816;
+					retstate <= MVN816;
+				end
+				else begin
+					state <= BYTE_IFETCH;
+					retstate <= BYTE_IFETCH;
+				end
 			end
 			else begin
 				state <= IFETCH;
@@ -190,6 +203,63 @@ STORE2:
 				retstate <= STORE1;
 				state <= STORE1;
 			end
+		`STW_DPR158:
+			begin
+				if (m816) begin
+					radr <= {spage[31:24],8'h00,sp[15:2]};
+					wadr <= {spage[31:24],8'h00,sp[15:2]};
+					radr2LSB <= sp[1:0];
+					wadr2LSB <= sp[1:0];
+				end
+				else begin
+					radr <= {spage[31:16],8'h01,sp[7:2]};
+					wadr <= {spage[31:16],8'h01,sp[7:2]};
+					radr2LSB <= sp[1:0];
+					wadr2LSB <= sp[1:0];
+				end
+				store_what <= `STW_DPR70;
+				sp <= sp_dec;
+				retstate <= STORE1;
+				state <= STORE1;
+			end
+		`STW_TMP158:
+			begin
+				if (m816) begin
+					radr <= {spage[31:24],8'h00,sp[15:2]};
+					wadr <= {spage[31:24],8'h00,sp[15:2]};
+					radr2LSB <= sp[1:0];
+					wadr2LSB <= sp[1:0];
+				end
+				else begin
+					radr <= {spage[31:16],8'h01,sp[7:2]};
+					wadr <= {spage[31:16],8'h01,sp[7:2]};
+					radr2LSB <= sp[1:0];
+					wadr2LSB <= sp[1:0];
+				end
+				store_what <= `STW_TMP70;
+				sp <= sp_dec;
+				retstate <= STORE1;
+				state <= STORE1;
+			end
+		`STW_IA158:
+			begin
+				if (m816) begin
+					radr <= {spage[31:24],8'h00,sp[15:2]};
+					wadr <= {spage[31:24],8'h00,sp[15:2]};
+					radr2LSB <= sp[1:0];
+					wadr2LSB <= sp[1:0];
+				end
+				else begin
+					radr <= {spage[31:16],8'h01,sp[7:2]};
+					wadr <= {spage[31:16],8'h01,sp[7:2]};
+					radr2LSB <= sp[1:0];
+					wadr2LSB <= sp[1:0];
+				end
+				store_what <= `STW_IA70;
+				sp <= sp_dec;
+				retstate <= STORE1;
+				state <= STORE1;
+			end
 `endif
 `ifdef SUPPORT_EM8
 		`STW_PC3124:
@@ -205,22 +275,24 @@ STORE2:
 			end
 		`STW_PC2316:
 			begin
-				if (m816) begin
-					radr <= {spage[31:24],8'h00,sp[15:2]};
-					wadr <= {spage[31:24],8'h00,sp[15:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
+				if (ir9 != `PHK) begin
+					if (m816) begin
+						radr <= {spage[31:24],8'h00,sp[15:2]};
+						wadr <= {spage[31:24],8'h00,sp[15:2]};
+						radr2LSB <= sp[1:0];
+						wadr2LSB <= sp[1:0];
+					end
+					else begin
+						radr <= {spage[31:16],8'h01,sp[7:2]};
+						wadr <= {spage[31:16],8'h01,sp[7:2]};
+						radr2LSB <= sp[1:0];
+						wadr2LSB <= sp[1:0];
+					end
+					sp <= sp_dec;
+					store_what <= `STW_PC158;
+					retstate <= STORE1;
+					state <= STORE1;
 				end
-				else begin
-					radr <= {spage[31:16],8'h01,sp[7:2]};
-					wadr <= {spage[31:16],8'h01,sp[7:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
-				sp <= sp_dec;
-				store_what <= `STW_PC158;
-				retstate <= STORE1;
-				state <= STORE1;
 			end
 		`STW_PC158:
 			begin
@@ -244,7 +316,8 @@ STORE2:
 		`STW_PC70:
 			begin
 				case({1'b0,ir[7:0]})
-				`BRK: 	begin
+				`BRK,`COP:
+						begin
 						if (m816) begin
 							radr <= {spage[31:24],8'h00,sp[15:2]};
 							wadr <= {spage[31:24],8'h00,sp[15:2]};
@@ -288,6 +361,15 @@ STORE2:
 					radr <= vect[33:2];
 					radr2LSB <= vect[1:0];
 					im <= hwi;
+				end
+				else if (ir[7:0]==`COP) begin
+					load_what <= `PC_70;
+					state <= LOAD_MAC1;
+					retstate <= LOAD_MAC1;
+					pc[31:16] <= abs8[31:16];
+					radr <= vect[33:2];
+					radr2LSB <= vect[1:0];
+					im <= 1'b1;
 				end
 			end
 `endif

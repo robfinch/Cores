@@ -115,7 +115,7 @@ BYTE_IY5:
 		radr <= iapy8[31:2];
 		radr2LSB <= iapy8[1:0];
 		$display("IY addr: %h", iapy8);
-		if (ir[7:0]==`STA_IY) begin
+		if (ir[7:0]==`STA_IY || ir[7:0]==`STA_DSPIY) begin
 			wadr <= iapy8[31:2];
 			wadr2LSB <= iapy8[1:0];
 			store_what <= m16 ? `STW_ACC70 : `STW_ACC8;

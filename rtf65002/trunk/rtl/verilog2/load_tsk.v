@@ -115,6 +115,19 @@ begin
 					b16[15:8] <= dat8;
 					state <= BYTE_IFETCH;
 				end
+	`BYTE_72:
+				begin
+					wdat[7:0] <= dat8;
+					radr <= {ir[15:8],xb16 ? y[15:0] : {8'h00,y[7:0]}};
+					wadr <= {ir[15:8],xb16 ? y[15:0] : {8'h00,y[7:0]}};
+					store_what <= `STW_DEF8;
+					acc[15:0] <= acc[15:0] - 16'd1;
+					if (ir9==`MVN)
+						y[15:0] <= y[15:0] + 16'd1;
+					else
+						y[15:0] <= y[15:0] - 16'd1;
+					state <= STORE1;
+				end
 `endif
 	`SR_310:	begin
 					cf <= dat[0];
@@ -242,7 +255,7 @@ begin
 	`IA_158:
 			begin
 				ia[15:8] <= dat8;
-				ia[31:16] <= abs8[31:16];
+				ia[31:16] <= {abs8[31:24],dbr};
 				if (isIY24|isI24) begin
 					radr <= radr34p1[33:2];
 					radr2LSB <= radr34p1[1:0];

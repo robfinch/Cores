@@ -63,6 +63,7 @@ parameter IBUF1 = 6'd32;
 parameter DCACHE1 = 6'd33;
 parameter CMPS1 = 6'd34;
 parameter HALF_CALC = 6'd35;
+parameter MVN816 = 6'd36;
 
 input rst_md;		// reset mode, 1=emulation mode, 0=native mode
 input rst_i;
@@ -116,6 +117,8 @@ reg [31:0] acc;
 reg [31:0] x;
 reg [31:0] y;
 reg [15:0] sp;
+reg [15:0] dpr;		// direct page register
+reg [7:0] dbr;		// data bank register
 reg [31:0] spage;	// stack page
 wire [7:0] acc8 = acc[7:0];
 wire [7:0] x8 = x[7:0];
@@ -126,6 +129,7 @@ wire [15:0] y16 = y[15:0];
 reg [31:0] isp;		// interrupt stack pointer
 reg [31:0] oisp;	// original isp for bus retry
 wire [63:0] prod;
+reg [15:0] tmp16;
 wire [31:0] q,r;
 reg [31:0] tick;
 wire [15:0] sp_dec = sp - 16'd1;
@@ -259,6 +263,7 @@ reg hist_capture;
 
 reg isBusErr;
 reg isBrk,isMove,isSts;
+reg isMove816;
 reg isRTI,isRTL,isRTS;
 reg isOrb,isStb;
 reg isRMW;
@@ -341,7 +346,9 @@ rtf65002_pcinc8 upci2
 (
 	.opcode(ir[7:0]),
 	.suppress_pcinc(suppress_pcinc),
-	.inc(pc_inc8)
+	.inc(pc_inc8),
+	.m_bit(m16),
+	.x_bit(xb16)
 );
 	
 mult_div umd1
@@ -553,18 +560,20 @@ default:	takb <= 1'b0;
 endcase
 
 wire [31:0] iapy8 			= ia + (xb16 ? y16 : y8);	// Don't add in abs8, already included with ia
-wire [31:0] zp_address 		= {abs8[31:16],8'h00,ir[15:8]};
-wire [31:0] zpx_address 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? x16 : x8);
-wire [31:0] zpy_address	 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? y16 : y8);
-wire [31:0] abs_address 	= {abs8[31:16],ir[23:8]};
-wire [31:0] absx_address 	= {abs8[31:16],ir[23:8] + (xb16 ? x16 : {8'h0,x8}});	// simulates 64k bank wrap-around
-wire [31:0] absy_address 	= {abs8[31:16],ir[23:8] + (xb16 ? y16 : {8'h0,y8}});
+wire [31:0] zp_address 		= {abs8[31:16],8'h00,ir[15:8]} + dpr;
+wire [31:0] zpx_address 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? x16 : x8) + dpr;
+wire [31:0] zpy_address	 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? y16 : y8) + dpr;
+wire [31:0] abs_address 	= {abs8[31:24],dbr,ir[23:8]};
+wire [31:0] absx_address 	= {abs8[31:24],dbr,ir[23:8] + (xb16 ? x16 : {8'h0,x8})};	// simulates 64k bank wrap-around
+wire [31:0] absy_address 	= {abs8[31:24],dbr,ir[23:8] + (xb16 ? y16 : {8'h0,y8})};
 wire [31:0] al_address		= {abs8[31:24],ir[31:8]};
-wire [31:0] alx_address		= {abs8[31:24],ir[31:8] + (xb16 ? x16 : {8'h00,x8}});
+wire [31:0] alx_address		= {abs8[31:24],ir[31:8] + (xb16 ? x16 : {8'h00,x8})};
 wire [31:0] zpx32xy_address 	= ir[23:12] + rfoa;
 wire [31:0] absx32xy_address 	= ir[47:16] + rfob;
 wire [31:0] zpx32_address 		= ir[31:20] + rfob;
 wire [31:0] absx32_address 		= ir[55:24] + rfob;
+
+wire [31:0] dsp_address = m816 ? {abs8[31:24],8'h00,sp + ir[15:8]} : {abs8[31:16],8'h01,sp[7:0]+ir[7:0]};
 
 rtf65002_alu ualu1
 (
@@ -659,6 +668,8 @@ if (rst_i) begin
 	end
 	suppress_pcinc <= 4'hF;
 	exbuf <= 64'd0;
+	dbr <= 8'h00;
+	dpr <= 16'h0000;
 	spage <= 32'h00000100;
 	bufadr <= 32'd0;
 	abs8 <= 32'd0;
@@ -791,6 +802,7 @@ end
 `include "calc.v"
 `include "load_tsk.v"
 `include "wb_task.v"
+`include "misc_task.v"
 
 task next_state;
 input [5:0] nxt;
