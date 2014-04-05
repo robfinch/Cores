@@ -22,12 +22,12 @@
 //
 `include "rtf65002_defines.v"
 
-module rtf65002_pcinc8(opcode,suppress_pcinc,inc,m_bit,x_bit);
+module rtf65002_pcinc8(opcode,suppress_pcinc,inc,m16,xb16);
 input [7:0] opcode;
 input [3:0] suppress_pcinc;
 output reg [3:0] inc;
-input m_bit;
-input x_bit;
+input m16;
+input xb16;
 
 always @(opcode,suppress_pcinc)
 if (suppress_pcinc==4'hF)
@@ -47,8 +47,8 @@ if (suppress_pcinc==4'hF)
 	`JSL:	inc <= 4'd4;
 	`NOP: inc <= 4'd1;
 
-	`ADC_IMM,`SBC_IMM,`CMP_IMM,`AND_IMM,`ORA_IMM,`EOR_IMM,`LDA_IMM,`BIT_IMM:	inc <= m_bit ? 4'd2 : 4'd3;
-	`LDX_IMM,`LDY_IMM,`CPX_IMM,`CPY_IMM: inc <= x_bit ? 4'd2 : 4'd3;
+	`ADC_IMM,`SBC_IMM,`CMP_IMM,`AND_IMM,`ORA_IMM,`EOR_IMM,`LDA_IMM,`BIT_IMM:	inc <= m16 ? 4'd3 : 4'd2;
+	`LDX_IMM,`LDY_IMM,`CPX_IMM,`CPY_IMM: inc <= xb16 ? 4'd3 : 4'd2;
 
 	`TRB_ZP,`TSB_ZP,
 	`ADC_ZP,`SBC_ZP,`CMP_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`LDA_ZP,`STA_ZP: inc <= 4'd2;

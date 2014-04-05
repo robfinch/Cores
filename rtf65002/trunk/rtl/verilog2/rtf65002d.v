@@ -347,8 +347,8 @@ rtf65002_pcinc8 upci2
 	.opcode(ir[7:0]),
 	.suppress_pcinc(suppress_pcinc),
 	.inc(pc_inc8),
-	.m_bit(m16),
-	.x_bit(xb16)
+	.m16(m16),
+	.xb16(xb16)
 );
 	
 mult_div umd1
