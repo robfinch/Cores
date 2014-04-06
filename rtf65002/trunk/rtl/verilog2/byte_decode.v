@@ -223,13 +223,6 @@ BYTE_DECODE:
 				store_what <= xb16 ? `STW_X70 : `STW_X8;
 				state <= STORE1;
 			end
-		`ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP,`LDA_DSP,`STA_DSP:
-			begin
-				radr <= dsp_address[31:2];
-				radr2LSB <= dsp_address[1:0];
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				state <= LOAD_MAC1;
-			end
 		// Handle (zp,x)
 		`ADC_IX,`SBC_IX,`AND_IX,`ORA_IX,`EOR_IX,`CMP_IX,`LDA_IX,`STA_IX:
 			begin
@@ -361,6 +354,21 @@ BYTE_DECODE:
 				state <= STORE1;
 			end
 `ifdef SUPPORT_816
+		// Handle d,sp
+		`ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP,`LDA_DSP:
+			begin
+				radr <= dsp_address[31:2];
+				radr2LSB <= dsp_address[1:0];
+				load_what <= m16 ? `HALF_70 : `BYTE_70;
+				state <= LOAD_MAC1;
+			end
+		`STA_DSP:
+			begin
+				wadr <= dsp_address[31:2];
+				wadr2LSB <= dsp_address[1:0];
+				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
+				state <= STORE1;
+			end
 		// Handle (d,sp),y
 		`ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY:
 			begin
@@ -450,6 +458,7 @@ BYTE_DECODE:
 				state <= STORE1;
 				bf <= !hwi;
 			end
+`ifdef SUPPORT_816
 		`COP:
 			begin
 				if (m816) begin
@@ -469,6 +478,7 @@ BYTE_DECODE:
 				state <= STORE1;
 				vect <= `COP_VECT_816;
 			end
+`endif
 		`JMP:
 			begin
 				pc[15:0] <= abs_address[15:0];

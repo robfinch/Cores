@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -37,9 +37,9 @@ if (suppress_pcinc==4'hF)
 	`BPL,`BMI,`BCS,`BCC,`BVS,`BVC,`BEQ,`BNE,`BRA:	inc <= 4'd2;
 	`BRL: inc <= 4'd3;
 	`CLC,`SEC,`CLD,`SED,`CLV,`CLI,`SEI:	inc <= 4'd1;
-	`TAS,`TSA,`TAY,`TYA,`TAX,`TXA,`TSX,`TXS,`TYX,`TXY:	inc <= 4'd1;
+	`TAS,`TSA,`TAY,`TYA,`TAX,`TXA,`TSX,`TXS,`TYX,`TXY,`TCD,`TDC:	inc <= 4'd1;
 	`INY,`DEY,`INX,`DEX,`INA,`DEA: inc <= 4'd1;
-	`NAT: inc <= 4'd1;
+	`XCE,`WDM: inc <= 4'd1;
 	`STP,`WAI: inc <= 4'd1;
 	`JMP,`JML,`JMP_IND,`JMP_INDX,
 	`RTS,`RTL,`RTI: inc <= 4'd0;

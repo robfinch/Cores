@@ -31,13 +31,13 @@ HALF_CALC:
 			wadr <= radr;
 		store_what <= `STW_DEF70;
 		case(ir[7:0])
-		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I:	begin res16 <= acc16 + b16 + {15'd0,cf}; end
-		`SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_I:	begin res16 <= acc16 - b16 - {15'd0,~cf}; end
-		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_I:	begin res16 <= acc16 - b16; end
-		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_I:	begin res16 <= acc16 & b16; end
-		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_I:	begin res16 <= acc16 | b16; end
-		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_I:	begin res16 <= acc16 ^ b16; end
-		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_I: begin res16 <= b16; end
+		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_AL,`ADC_ALX,`ADC_I,`ADC_IL,`ADC_DSP,`ADC_DSPIY:	begin res16 <= acc16 + b16 + {15'd0,cf}; end
+		`SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_AL,`SBC_ALX,`SBC_I,`SBC_IL,`SBC_DSP,`SBC_DSPIY:	begin res16 <= acc16 - b16 - {15'd0,~cf}; end
+		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_AL,`CMP_ALX,`CMP_I,`CMP_IL,`CMP_DSP,`CMP_DSPIY:	begin res16 <= acc16 - b16; end
+		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_AL,`AND_ALX,`AND_I,`AND_IL,`AND_DSP,`AND_DSPIY:	begin res16 <= acc16 & b16; end
+		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_AL,`ORA_ALX,`ORA_I,`ORA_IL,`ORA_DSP,`ORA_DSPIY:	begin res16 <= acc16 | b16; end
+		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_AL,`EOR_ALX,`EOR_I,`EOR_IL,`EOR_DSP,`EOR_DSPIY:	begin res16 <= acc16 ^ b16; end
+		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_AL,`LDA_ALX,`LDA_I,`LDA_IL,`LDA_DSP,`LDA_DSPIY:	begin res16 <= b16; end
 		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX:	begin res16 <= acc16 & b16; end
 		`TRB_ZP,`TRB_ABS:	begin res16 <= ~acc16 & b16; wdat <= {2{~acc16 & b16}}; state <= STORE1; end
 		`TSB_ZP,`TSB_ABS:	begin res16 <= acc16 | b16; wdat <= {2{acc16 | b16}}; state <= STORE1; end
