@@ -205,58 +205,22 @@ STORE2:
 			end
 		`STW_DPR158:
 			begin
-				if (m816) begin
-					radr <= {spage[31:24],8'h00,sp[15:2]};
-					wadr <= {spage[31:24],8'h00,sp[15:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
-				else begin
-					radr <= {spage[31:16],8'h01,sp[7:2]};
-					wadr <= {spage[31:16],8'h01,sp[7:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
+				set_sp();
 				store_what <= `STW_DPR70;
-				sp <= sp_dec;
 				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_TMP158:
 			begin
-				if (m816) begin
-					radr <= {spage[31:24],8'h00,sp[15:2]};
-					wadr <= {spage[31:24],8'h00,sp[15:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
-				else begin
-					radr <= {spage[31:16],8'h01,sp[7:2]};
-					wadr <= {spage[31:16],8'h01,sp[7:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
+				set_sp();
 				store_what <= `STW_TMP70;
-				sp <= sp_dec;
 				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_IA158:
 			begin
-				if (m816) begin
-					radr <= {spage[31:24],8'h00,sp[15:2]};
-					wadr <= {spage[31:24],8'h00,sp[15:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
-				else begin
-					radr <= {spage[31:16],8'h01,sp[7:2]};
-					wadr <= {spage[31:16],8'h01,sp[7:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
+				set_sp();
 				store_what <= `STW_IA70;
-				sp <= sp_dec;
 				retstate <= STORE1;
 				state <= STORE1;
 			end
@@ -276,19 +240,7 @@ STORE2:
 		`STW_PC2316:
 			begin
 				if (ir9 != `PHK) begin
-					if (m816) begin
-						radr <= {spage[31:24],8'h00,sp[15:2]};
-						wadr <= {spage[31:24],8'h00,sp[15:2]};
-						radr2LSB <= sp[1:0];
-						wadr2LSB <= sp[1:0];
-					end
-					else begin
-						radr <= {spage[31:16],8'h01,sp[7:2]};
-						wadr <= {spage[31:16],8'h01,sp[7:2]};
-						radr2LSB <= sp[1:0];
-						wadr2LSB <= sp[1:0];
-					end
-					sp <= sp_dec;
+					set_sp();
 					store_what <= `STW_PC158;
 					retstate <= STORE1;
 					state <= STORE1;
@@ -296,19 +248,7 @@ STORE2:
 			end
 		`STW_PC158:
 			begin
-				if (m816) begin
-					radr <= {spage[31:24],8'h00,sp[15:2]};
-					wadr <= {spage[31:24],8'h00,sp[15:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
-				else begin
-					radr <= {spage[31:16],8'h01,sp[7:2]};
-					wadr <= {spage[31:16],8'h01,sp[7:2]};
-					radr2LSB <= sp[1:0];
-					wadr2LSB <= sp[1:0];
-				end
-				sp <= sp_dec;
+				set_sp();
 				store_what <= `STW_PC70;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -318,19 +258,7 @@ STORE2:
 				case({1'b0,ir[7:0]})
 				`BRK,`COP:
 						begin
-						if (m816) begin
-							radr <= {spage[31:24],8'h00,sp[15:2]};
-							wadr <= {spage[31:24],8'h00,sp[15:2]};
-							radr2LSB <= sp[1:0];
-							wadr2LSB <= sp[1:0];
-						end
-						else begin
-							radr <= {spage[31:16],8'h01,sp[7:2]};
-							wadr <= {spage[31:16],8'h01,sp[7:2]};
-							radr2LSB <= sp[1:0];
-							wadr2LSB <= sp[1:0];
-						end
-						sp <= sp_dec;
+						set_sp();
 						store_what <= `STW_SR70;
 						retstate <= STORE1;
 						state <= STORE1;
@@ -339,7 +267,7 @@ STORE2:
 						pc[15:0] <= ir[23:8];
 						end
 				`JSL: 	begin
-						pc <= ir[31:8];
+						pc[23:0] <= ir[31:8];
 						end
 				`JSR_INDX:
 						begin

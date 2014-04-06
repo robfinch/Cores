@@ -1,3 +1,22 @@
+task set_sp;
+begin
+	if (m816) begin
+		radr <= {spage[31:24],8'h00,sp[15:2]};
+		radr2LSB <= sp[1:0];
+		wadr <= {spage[31:24],8'h00,sp[15:2]};
+		wadr2LSB <= sp[1:0];
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {spage[31:16],8'h01,sp[7:2]};
+		radr2LSB <= sp[1:0];
+		wadr <= {spage[31:16],8'h01,sp[7:2]};
+		wadr2LSB <= sp[1:0];
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end
+endtask
 
 task inc_sp;
 begin
@@ -17,13 +36,14 @@ endtask
 task tsk_push;
 input [5:0] SW8;
 input [5:0] SW16;
+input szFlg;
 begin
 	if (m816) begin
 		radr <= {spage[31:24],8'h00,sp[15:2]};
 		radr2LSB <= sp[1:0];
 		wadr <= {spage[31:24],8'h00,sp[15:2]};
 		wadr2LSB <= sp[1:0];
-		if (m16) begin
+		if (szFlg) begin
 			store_what <= SW16;
 			sp <= sp_dec2;
 		end
@@ -38,7 +58,8 @@ begin
 		wadr <= {spage[31:16],8'h01,sp[7:2]};
 		wadr2LSB <= sp[1:0];
 		store_what <= SW8;
-		sp <= sp_dec;
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
 	end
 	state <= STORE1;
 end

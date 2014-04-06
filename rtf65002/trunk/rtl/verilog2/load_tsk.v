@@ -91,7 +91,7 @@ begin
 				end
 	`HALF_71:
 				begin
-					b16[7:0] <= dat8;
+					res16[7:0] <= dat8;
 					load_what <= `HALF_159;
 					if (radr2LSB==2'b11)
 						radr <= radr+32'd1;
@@ -100,19 +100,19 @@ begin
 				end
 	`HALF_159:
 				begin
-					b16[15:8] <= dat8;
+					res16[15:8] <= dat8;
 					state <= BYTE_IFETCH;
 				end
 	`HALF_71S:
 				begin
-					b16[7:0] <= dat8;
+					res16[7:0] <= dat8;
 					load_what <= `HALF_159S;
 					inc_sp();
 					state <= LOAD_MAC1;
 				end
 	`HALF_159S:
 				begin
-					b16[15:8] <= dat8;
+					res16[15:8] <= dat8;
 					state <= BYTE_IFETCH;
 				end
 	`BYTE_72:
@@ -184,7 +184,7 @@ begin
 				end
 	`PC_158:	begin
 					pc[15:8] <= dat8;
-					if (isRTI|isRTL) begin
+					if ((isRTI&m816)|isRTL) begin
 						load_what <= `PC_2316;
 						inc_sp();
 						state <= LOAD_MAC1;
@@ -201,11 +201,13 @@ begin
 						state <= RTS1;
 					end
 					else begin
-						load_what <= `PC_3124;
-						if (isRTI) begin
-							inc_sp();
-						end
-						state <= LOAD_MAC1;	
+						load_what <= `NOTHING;
+						state <= BYTE_IFETCH;
+//						load_what <= `PC_3124;
+//						if (isRTI) begin
+//							inc_sp();
+//						end
+//						state <= LOAD_MAC1;	
 					end
 				end
 	`PC_3124:	begin
