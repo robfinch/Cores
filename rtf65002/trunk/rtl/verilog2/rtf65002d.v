@@ -727,6 +727,9 @@ RESET2:
 `include "byte_ifetch.v"
 `include "byte_decode.v"
 `include "byte_calc.v"
+`ifdef SUPPORT_816
+`include "half_calc.v"
+`endif
 `endif
 
 `include "load_mac.v"
