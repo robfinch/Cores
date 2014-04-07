@@ -44,7 +44,7 @@ if (suppress_pcinc==4'hF)
 	`JMP,`JML,`JMP_IND,`JMP_INDX,
 	`RTS,`RTL,`RTI: inc <= 4'd0;
 	`JSR,`JSR_INDX:	inc <= 4'd2;
-	`JSL:	inc <= 4'd4;
+	`JSL:	inc <= 4'd3;
 	`NOP: inc <= 4'd1;
 
 	`ADC_IMM,`SBC_IMM,`CMP_IMM,`AND_IMM,`ORA_IMM,`EOR_IMM,`LDA_IMM,`BIT_IMM:	inc <= m16 ? 4'd3 : 4'd2;

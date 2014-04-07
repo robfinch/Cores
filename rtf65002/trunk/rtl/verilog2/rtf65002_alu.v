@@ -53,7 +53,7 @@ input nmoi;
 input [31:0] derr_address;
 input [31:0] history_buf;
 input [31:0] spage;
-input [7:0] sp;
+input [15:0] sp;
 input df;
 input cf;
 output reg [32:0] res;
@@ -103,7 +103,7 @@ always @*
 `ifdef DEBUG
 					4'hA:	res <= history_buf;
 `endif
-					4'hE:	res <= {spage[31:8],sp};
+					4'hE:	res <= {spage[31:16],sp};
 					4'hF:	res <= isp;
 					default:	res <= 33'd0;
 					endcase

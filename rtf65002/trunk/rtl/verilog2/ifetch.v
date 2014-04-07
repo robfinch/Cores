@@ -146,7 +146,7 @@ IFETCH:
 				4'h5:	lfsr <= res[31:0];
 				4'h7:	abs8 <= res[31:0];
 				4'h8:	begin vbr <= {res[31:9],9'h000}; nmoi <= res[0]; end
-				4'hE:	begin sp <= res[7:0]; spage[31:8] <= res[31:8]; end
+				4'hE:	begin sp <= res[15:0]; spage[31:16] <= res[31:16]; end
 				4'hF:	begin isp <= res[31:0]; gie <= 1'b1; end
 				endcase
 			end

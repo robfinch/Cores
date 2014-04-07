@@ -39,15 +39,19 @@ input [5:0] SW16;
 input szFlg;
 begin
 	if (m816) begin
-		radr <= {spage[31:24],8'h00,sp[15:2]};
-		radr2LSB <= sp[1:0];
-		wadr <= {spage[31:24],8'h00,sp[15:2]};
-		wadr2LSB <= sp[1:0];
 		if (szFlg) begin
+			radr <= {spage[31:24],8'h00,sp_dec[15:2]};
+			radr2LSB <= sp_dec[1:0];
+			wadr <= {spage[31:24],8'h00,sp_dec[15:2]};
+			wadr2LSB <= sp_dec[1:0];
 			store_what <= SW16;
 			sp <= sp_dec2;
 		end
 		else begin
+			radr <= {spage[31:24],8'h00,sp[15:2]};
+			radr2LSB <= sp[1:0];
+			wadr <= {spage[31:24],8'h00,sp[15:2]};
+			wadr2LSB <= sp[1:0];
 			store_what <= SW8;
 			sp <= sp_dec;
 		end

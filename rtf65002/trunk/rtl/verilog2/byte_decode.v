@@ -592,7 +592,7 @@ BYTE_DECODE:
 		`PLD:
 			begin
 				inc_sp();
-				load_what <= `HALF_71;
+				load_what <= `HALF_71S;
 				state <= LOAD_MAC1;
 			end
 		`MVN:
