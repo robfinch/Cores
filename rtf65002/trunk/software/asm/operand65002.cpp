@@ -452,7 +452,9 @@ int Operand65002::parse(char *op)
 	// Immediate
 	if(op[0] == '#') {
 		val = ob.expeval(NULL);
-		if (val.value >= -128 && val.value < 128)
+		if (val.value >= -8 && val.value < 8)
+			type = AM_IMM4;
+		else if (val.value >= -128 && val.value < 128)
 			type = AM_IMM8;
 		else if (val.value >= -32768 && val.value < 32768)
 			type = AM_IMM16;
@@ -602,12 +604,10 @@ j1:
 		}
 	}
 	// d,sp
-    if (strmat(op, " %s, %c ", eb.getBuf(), &ch))
+    if (strimat(op, " %s, sp ", eb.getBuf()))
     {
-		if (tolower(ch)=='s') {
-			val = eb.expeval(NULL);
-			return type = AM_SR;
-		}
+		val = eb.expeval(NULL);
+		return type = AM_SR;
     }
 
     // Could be indexed

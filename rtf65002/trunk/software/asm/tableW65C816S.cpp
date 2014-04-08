@@ -226,6 +226,7 @@ static Opa tdcAsm[] = { {Asm6502::out8, 0x7B}, NULL };
 static Opa tcsAsm[] = { {Asm6502::out8, 0x1B}, NULL };
 static Opa tscAsm[] = { {Asm6502::out8, 0x3B}, NULL };
 static Opa waiAsm[] = { {Asm6502::out8, 0xCB}, NULL };
+static Opa wdmAsm[] = { {Asm6502::out8, 0x42}, NULL };
 static Opa stpAsm[] = { {Asm6502::out8, 0xDB}, NULL };
 static Opa xbaAsm[] = { {Asm6502::out8, 0xEB}, NULL };
 static Opa xceAsm[] = { {Asm6502::out8, 0xFB}, NULL };
@@ -532,8 +533,8 @@ static Mne opsW65C816S[] =
 	{"iny", inyAsm, 0 },
 
 	{"jmp", jmpAsm, 1 },
-	{"jsr", jsrAsm, 1 },
 	{"jsl", jslAsm, 1 },
+	{"jsr", jsrAsm, 1 },
 
     {"lda", ldaAsm, 1 },
     {"ldx", ldxAsm, 1 },
@@ -606,6 +607,7 @@ static Mne opsW65C816S[] =
 	{"tyx", tyxAsm, 0 },
 
 	{"wai", waiAsm, 0 },
+	{"wdm", wdmAsm, 0 },
 
 	{"xba", xbaAsm, 0 },
 	{"xce", xceAsm, 0 },

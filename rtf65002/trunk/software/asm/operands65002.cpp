@@ -36,6 +36,7 @@ namespace RTFClasses
 		int reg;
 		int sndx;	// start index
 		int endx;	// end index
+		bool isSP;
 
 		ii = 0;
 		buf->skipSpacesLF();
@@ -171,7 +172,9 @@ ExitLoop:
     // this represents an indexed addressing mode
     if (ii > 1)
     {
-		if (Operand65002::isReg(op[ii-1].buf(), &reg) && !Operand65002::isReg(op[ii-2].buf(), &reg) && !Operand65002::isSprReg(op[ii-2].buf(), &reg) && op[ii-2].buf()[0]!='#')
+		Operand65002::isSprReg(op[ii-1].buf(), &reg);
+		isSP = reg==15;
+		if ((Operand65002::isReg(op[ii-1].buf(), &reg)||isSP) && !Operand65002::isReg(op[ii-2].buf(), &reg) && !Operand65002::isSprReg(op[ii-2].buf(), &reg) && op[ii-2].buf()[0]!='#')
         {
 //			buf->getBuf()[op[ii-2].nullpos] = op[ii-2].nullch;
 //			op[ii-2].end = op[ii-1].end;

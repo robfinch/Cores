@@ -23,10 +23,11 @@ static Opa addAsm[] =
 {
 	{AsmRTF65002::rn, 0x0002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::r,  0x77, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::imm4, 0x67, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x69, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32, 2},
 	{AsmRTF65002::imm16, 0x79, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16, 2},
 	{AsmRTF65002::imm8, 0x65, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8, 2},
-	{AsmRTF65002::imm4, 0x67, 2, (AM_RN<<8)|AM_IMM4, 2},
+	{AsmRTF65002::imm8, 0x65, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::zp, 0x75, 3, (AM_RN<<16)|(AM_RN<<8)|AM_Z, 5},
 	{AsmRTF65002::zp, 0x75, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZX, 5},
 	{AsmRTF65002::zp, 0x75, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZY, 5},
@@ -41,6 +42,7 @@ static Opa addAsm[] =
 	{AsmRTF65002::acc_imm32, 0x69, 1, AM_IMM32, 2},
 	{AsmRTF65002::acc_imm16, 0x79, 1, AM_IMM16, 2},
 	{AsmRTF65002::acc_imm8, 0x65, 1, AM_IMM8, 2},
+	{AsmRTF65002::acc_imm8, 0x65, 1, AM_IMM4, 2},
 	{AsmRTF65002::acc_zp, 0x75, 1, AM_ZX, 5},
 	{AsmRTF65002::acc_zp, 0x75, 1, AM_Z, 5},
 	{AsmRTF65002::acc_zp, 0x61, 1, AM_IX, 6},
@@ -58,10 +60,11 @@ static Opa andAsm[] =
 {
 	{AsmRTF65002::rn, 0x3002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN,2},
 	{AsmRTF65002::r,  0x37, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::imm4, 0x27, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x29, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16, 0x39, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,2},
 	{AsmRTF65002::imm8, 0x25, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,2},
-	{AsmRTF65002::imm4, 0x27, 2, (AM_RN<<8)|AM_IMM4, 2},
+	{AsmRTF65002::imm8, 0x25, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::zp, 0x35, 3, (AM_RN<<16)|(AM_RN<<8)|AM_Z,5},
 	{AsmRTF65002::zp, 0x35, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZX,5},
 	{AsmRTF65002::zp, 0x35, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZY,5},
@@ -75,6 +78,7 @@ static Opa andAsm[] =
 	{AsmRTF65002::acc_imm32, 0x29, 1, AM_IMM32,2},
 	{AsmRTF65002::acc_imm16, 0x39, 1, AM_IMM16,2},
 	{AsmRTF65002::acc_imm8, 0x25, 1, AM_IMM8,2},
+	{AsmRTF65002::acc_imm8, 0x25, 1, AM_IMM4,2},
 	{AsmRTF65002::acc_zp, 0x35, 1, AM_ZX,5},
 	{AsmRTF65002::acc_zp, 0x35, 1, AM_Z,5},
 	{AsmRTF65002::acc_zp, 0x21, 1, AM_IX,6},
@@ -94,6 +98,7 @@ static Opa bitAsm[] =
 	{AsmRTF65002::imm32bit, 0x29, 2, (AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16bit, 0x39, 2, (AM_RN<<8)|AM_IMM16,2},
 	{AsmRTF65002::imm8bit, 0x25, 2, (AM_RN<<8)|AM_IMM8,2},
+	{AsmRTF65002::imm8bit, 0x25, 2, (AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::zpbit, 0x35, 2, (AM_RN<<8)|AM_Z,5},
 	{AsmRTF65002::zpbit, 0x35, 2, (AM_RN<<8)|AM_ZX,5},
 	{AsmRTF65002::zpbit, 0x35, 2, (AM_RN<<8)|AM_ZY,5},
@@ -103,6 +108,7 @@ static Opa bitAsm[] =
 	{AsmRTF65002::absbit, 0x2D, 2, (AM_RN<<8)|AM_A,5},
 	{AsmRTF65002::bit_absx, 0x3D, 2, (AM_RN<<8)|AM_AX,5},
 	{AsmRTF65002::bit_absx, 0x3D, 2, (AM_RN<<8)|AM_AY,5},
+	{AsmRTF65002::bit_acc_imm8, 0x25, 1, AM_IMM4,2},
 	{AsmRTF65002::bit_acc_imm8, 0x25, 1, AM_IMM8,2},
 	{AsmRTF65002::bit_acc_imm16, 0x39, 1, AM_IMM16,2},
 	{AsmRTF65002::bit_acc_imm32, 0x29, 1, AM_IMM32,2},
@@ -121,6 +127,7 @@ static Opa mulAsm[] =
 	{AsmRTF65002::mul_imm32, 0x0942, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,5},
 	{AsmRTF65002::mul_imm16, 0x1942, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,5},
 	{AsmRTF65002::mul_imm8, 0x0542, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,5},
+	{AsmRTF65002::mul_imm8, 0x0542, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,5},
 	NULL
 };
 static Opa mulsAsm[] = 
@@ -134,6 +141,7 @@ static Opa divAsm[] =
 	{AsmRTF65002::mul_imm32, 0x4942, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,36},
 	{AsmRTF65002::mul_imm16, 0x5942, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,36},
 	{AsmRTF65002::mul_imm8, 0x4542, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,36},
+	{AsmRTF65002::mul_imm8, 0x4542, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,36},
 	NULL
 };
 static Opa divsAsm[] = 
@@ -147,6 +155,7 @@ static Opa modAsm[] =
 	{AsmRTF65002::mul_imm32, 0x8942, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,36},
 	{AsmRTF65002::mul_imm16, 0x9942, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,36},
 	{AsmRTF65002::mul_imm8, 0x8542, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,36},
+	{AsmRTF65002::mul_imm8, 0x8542, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,36},
 	NULL
 };
 static Opa modsAsm[] = 
@@ -158,6 +167,7 @@ static Opa modsAsm[] =
 static Opa aslAsm[] =
 {
 	{AsmRTF65002::imm8, 0x24, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,2},
+	{AsmRTF65002::imm8, 0x24, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::rn, 0xE002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN,2},
     {Asm6502::out8, 0x0a, 0, AM_, 2},
     {Asm6502::out8, 0x0a, 1, AM_ACC, 2},
@@ -202,6 +212,7 @@ static Opa rorAsm[] =
 static Opa lsrAsm[] =
 {
 	{AsmRTF65002::imm8, 0x34, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,2},
+	{AsmRTF65002::imm8, 0x34, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::rn, 0xF002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN,2},
     {Asm6502::out8, 0x4a, 0, AM_, 2},
     {Asm6502::out8, 0x4a, 1, AM_ACC, 2},
@@ -265,6 +276,7 @@ static Opa tsrAsm[] =
 static Opa intAsm[] =
 {
 	{AsmRTF65002::int_, 0xDC, 1, AM_IMM8, 7},
+	{AsmRTF65002::int_, 0xDC, 1, AM_IMM4, 7},
 	{AsmRTF65002::int_, 0xDC, 1, AM_IMM16, 7},
 	NULL
 };
@@ -331,6 +343,7 @@ static Opa cmpAsm[] =
 	{AsmRTF65002::imm32bit, 0xE9, 2, (AM_RN<<8)|AM_IMM32, 2},
 	{AsmRTF65002::imm16bit, 0xF9, 2, (AM_RN<<8)|AM_IMM16, 2},
 	{AsmRTF65002::imm8bit, 0xE5, 2, (AM_RN<<8)|AM_IMM8, 2},
+	{AsmRTF65002::imm8bit, 0xE5, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::zpbit, 0xF5, 2, (AM_RN<<8)|AM_Z, 5},
 	{AsmRTF65002::zpbit, 0xF5, 2, (AM_RN<<8)|AM_ZX, 5},
 	{AsmRTF65002::zpbit, 0xF5, 2, (AM_RN<<8)|AM_ZY, 5},
@@ -346,6 +359,7 @@ static Opa cmpAsm[] =
 	{AsmRTF65002::bit_acc_zpx, 0xF5, 1, AM_ZX, 5},
 	{AsmRTF65002::bit_acc_zpx, 0xF5, 1, AM_ZY, 5},
 	{AsmRTF65002::Ximm8, 0xC5, 1, AM_IMM8, 2},
+	{AsmRTF65002::Ximm8, 0xC5, 1, AM_IMM4, 2},
 //	{AsmRTF65002::bit_acc_imm8, 0xE5, 1, AM_IMM8},
 	{AsmRTF65002::bit_acc_abs, 0xED, 1, AM_A, 5},
 	{AsmRTF65002::bit_acc_absx, 0xFD, 1, AM_AX,5},
@@ -357,6 +371,7 @@ static Opa cmpAsm[] =
 
 static Opa cpxAsm[] =
 {
+	{AsmRTF65002::Ximm32, 0xE0, 1, AM_IMM4, 2},
 	{AsmRTF65002::Ximm32, 0xE0, 1, AM_IMM8, 2},
  	{AsmRTF65002::Ximm32, 0xE0, 1, AM_IMM16, 2},
 	{AsmRTF65002::Ximm32, 0xE0, 1, AM_IMM32, 2},
@@ -369,6 +384,7 @@ static Opa cpxAsm[] =
 
 static Opa cpyAsm[] =
 {
+	{AsmRTF65002::Ximm32, 0xC0, 1, AM_IMM4, 2},
 	{AsmRTF65002::Ximm32, 0xC0, 1, AM_IMM8, 2},
 	{AsmRTF65002::Ximm32, 0xC0, 1, AM_IMM16, 2},
 	{AsmRTF65002::Ximm32, 0xC0, 1, AM_IMM32, 2},
@@ -454,10 +470,11 @@ static Opa eorAsm[] =
 {
 	{AsmRTF65002::rn, 0x4002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::r,  0x57, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::imm4, 0x47, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x49, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32, 2},
 	{AsmRTF65002::imm16, 0x59, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16, 2},
 	{AsmRTF65002::imm8, 0x45, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8, 2},
-	{AsmRTF65002::imm4, 0x47, 2, (AM_RN<<8)|AM_IMM4, 2},
+	{AsmRTF65002::imm8, 0x45, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::zp, 0x55, 3, (AM_RN<<16)|(AM_RN<<8)|AM_Z, 5},
 	{AsmRTF65002::zp, 0x55, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZX, 5},
 	{AsmRTF65002::zp, 0x55, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZY, 5},
@@ -471,6 +488,7 @@ static Opa eorAsm[] =
 	{AsmRTF65002::acc_imm32, 0x49, 1, AM_IMM32, 2},
 	{AsmRTF65002::acc_imm16, 0x59, 1, AM_IMM16, 2},
 	{AsmRTF65002::acc_imm8, 0x45, 1, AM_IMM8, 2},
+	{AsmRTF65002::acc_imm8, 0x45, 1, AM_IMM4, 2},
 	{AsmRTF65002::acc_zp, 0x55, 1, AM_ZX, 5},
 	{AsmRTF65002::acc_zp, 0x55, 1, AM_Z, 5},
 	{AsmRTF65002::acc_zp, 0x41, 1, AM_IX, 6},
@@ -488,10 +506,11 @@ static Opa subAsm[] =
 {
 	{AsmRTF65002::rn, 0x1002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::r,  0xF7, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::imm4, 0xE7, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0xE9, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32, 22},
 	{AsmRTF65002::imm16, 0xF9, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16, 2},
 	{AsmRTF65002::imm8, 0xE5, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8, 2},
-	{AsmRTF65002::imm4, 0xE7, 2, (AM_RN<<8)|AM_IMM4, 2},
+	{AsmRTF65002::imm8, 0xE5, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::zp, 0xF5, 3, (AM_RN<<16)|(AM_RN<<8)|AM_Z,5},
 	{AsmRTF65002::zp, 0xF5, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZX,5},
 	{AsmRTF65002::zp, 0xF5, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZY,5},
@@ -505,6 +524,7 @@ static Opa subAsm[] =
 	{AsmRTF65002::acc_imm32, 0xE9, 1, AM_IMM32,2},
 	{AsmRTF65002::acc_imm16, 0xF9, 1, AM_IMM16,2},
 	{AsmRTF65002::acc_imm8, 0xE5, 1, AM_IMM8,2},
+	{AsmRTF65002::acc_imm8, 0xE5, 1, AM_IMM4,2},
 	{AsmRTF65002::acc_zp, 0xF5, 1, AM_ZX,5},
 	{AsmRTF65002::acc_zp, 0xF5, 1, AM_Z,5},
 	{AsmRTF65002::acc_zp, 0xE1, 1, AM_IX,6},
@@ -525,10 +545,11 @@ static Opa orAsm[] =
 {
 	{AsmRTF65002::rn, 0x5002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN,2},
 	{AsmRTF65002::r,  0x17, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::imm4, 0x07, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x09, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16, 0x19, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,2},
 	{AsmRTF65002::imm8, 0x05, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,2},
-	{AsmRTF65002::imm4, 0x07, 2, (AM_RN<<8)|AM_IMM4, 2},
+	{AsmRTF65002::imm8, 0x05, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::zp, 0x15, 3, (AM_RN<<16)|(AM_RN<<8)|AM_Z,5},
 	{AsmRTF65002::zp, 0x15, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZX,5},
 	{AsmRTF65002::zp, 0x15, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZY,5},
@@ -542,6 +563,7 @@ static Opa orAsm[] =
 	{AsmRTF65002::acc_imm32, 0x09, 1, AM_IMM32,2},
 	{AsmRTF65002::acc_imm16, 0x19, 1, AM_IMM16,2},
 	{AsmRTF65002::acc_imm8, 0x05, 1, AM_IMM8,2},
+	{AsmRTF65002::acc_imm8, 0x05, 1, AM_IMM4,2},
 	{AsmRTF65002::acc_zp, 0x15, 1, AM_ZX,5},
 	{AsmRTF65002::acc_zp, 0x15, 1, AM_Z,5},
 	{AsmRTF65002::acc_zp, 0x01, 1, AM_IX,6},
@@ -572,6 +594,7 @@ static Opa oraAsm[] =
 	{AsmRTF65002::imm32, 0x09, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16, 0x19, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,2},
 	{AsmRTF65002::imm8, 0x05, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM8,2},
+	{AsmRTF65002::imm8, 0x05, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::zp, 0x15, 3, (AM_RN<<16)|(AM_RN<<8)|AM_Z,5},
 	{AsmRTF65002::zp, 0x15, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZX,5},
 	{AsmRTF65002::zp, 0x15, 3, (AM_RN<<16)|(AM_RN<<8)|AM_ZY,5},
@@ -585,6 +608,7 @@ static Opa oraAsm[] =
 	{AsmRTF65002::acc_imm32, 0x09, 1, AM_IMM32,2},
 	{AsmRTF65002::acc_imm16, 0x19, 1, AM_IMM16,2},
 	{AsmRTF65002::acc_imm8, 0x05, 1, AM_IMM8,2},
+	{AsmRTF65002::acc_imm8, 0x05, 1, AM_IMM4,2},
 	{AsmRTF65002::acc_zp, 0x15, 1, AM_ZX,5},
 	{AsmRTF65002::acc_zp, 0x15, 1, AM_Z,5},
 	{AsmRTF65002::acc_zp, 0x01, 1, AM_IX,6},
@@ -681,6 +705,7 @@ static Opa ldAsm[] =
 	{AsmRTF65002::imm32ld, 0x09, 2, (AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16ld, 0x19, 2, (AM_RN<<8)|AM_IMM16,2},
 	{AsmRTF65002::imm8ld, 0x05, 2, (AM_RN<<8)|AM_IMM8,2},
+	{AsmRTF65002::imm8ld, 0x05, 2, (AM_RN<<8)|AM_IMM4,2},
 	{AsmRTF65002::zpld, 0x15, 2, (AM_RN<<8)|AM_Z,4},
 	{AsmRTF65002::zpld, 0x15, 2, (AM_RN<<8)|AM_ZY,4},	// force abs,y
     {AsmRTF65002::zpld, 0x15, 2,(AM_RN<<8)| AM_ZX,4},
@@ -711,6 +736,7 @@ static Opa ldaAsm[] =
 	{AsmRTF65002::Ximm32, 0xA9, 1, AM_IMM32,2},
 	{AsmRTF65002::Ximm16, 0xB9, 1, AM_IMM16,2},
 	{AsmRTF65002::Ximm8, 0xA5, 1, AM_IMM8,2},
+	{AsmRTF65002::Ximm8, 0xA5, 1, AM_IMM4,2},
 	{AsmRTF65002::zplda, 0x15, 1, AM_Z,4},
 	{AsmRTF65002::zplda, 0x15, 1, AM_ZY,4},	// force abs,y
     {AsmRTF65002::zplda, 0x15, 1, AM_ZX,4},
@@ -727,6 +753,7 @@ static Opa ldaAsm[] =
 
 static Opa ldxAsm[] =
 {
+	{AsmRTF65002::Ximm8, 0xA6, 1, AM_IMM4,2},
 	{AsmRTF65002::Ximm8, 0xA6, 1, AM_IMM8,2},
 	{AsmRTF65002::Ximm16, 0xB2, 1, AM_IMM16,2},
 	{AsmRTF65002::Ximm32, 0xA2, 1, AM_IMM32,2},
@@ -743,6 +770,7 @@ static Opa ldxAsm[] =
 static Opa ldyAsm[] =
 {
 //	{AsmRTF65002::rny, 0x5002, 1 AM_RN},
+	{AsmRTF65002::Ximm32, 0xA0, 1, AM_IMM4,2},
 	{AsmRTF65002::Ximm32, 0xA0, 1, AM_IMM8,2},
 	{AsmRTF65002::Ximm32, 0xA0, 1, AM_IMM16,2},
 	{AsmRTF65002::Ximm32, 0xA0, 1, AM_IMM32,2},
