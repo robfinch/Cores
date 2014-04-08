@@ -45,7 +45,7 @@ begin
 				wadr <= y;
 				store_what <= `STW_B;
 				x <= res[31:0];
-				acc <= acc - 32'd1;
+				acc <= acc_dec;
 				state <= STORE1;
 			end
 	`WORD_313:
@@ -118,14 +118,16 @@ begin
 	`BYTE_72:
 				begin
 					wdat[7:0] <= dat8;
-					radr <= {ir[15:8],xb16 ? y[15:0] : {8'h00,y[7:0]}};
-					wadr <= {ir[15:8],xb16 ? y[15:0] : {8'h00,y[7:0]}};
+					radr <= mvndst_address[31:2];
+					radr2LSB <= mvndst_address[1:0];
+					wadr <= mvndst_address[31:2];
+					wadr2LSB <= mvndst_address[1:0];
 					store_what <= `STW_DEF8;
-					acc[15:0] <= acc[15:0] - 16'd1;
+					acc[15:0] <= acc_dec[15:0];
 					if (ir9==`MVN)
-						y[15:0] <= y[15:0] + 16'd1;
+						y[15:0] <= y_inc[15:0];
 					else
-						y[15:0] <= y[15:0] - 16'd1;
+						y[15:0] <= y_dec[15:0];
 					state <= STORE1;
 				end
 `endif

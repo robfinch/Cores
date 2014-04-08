@@ -44,7 +44,7 @@ CMPS1:
 `ifdef SUPPORT_816
 MVN816:
 	begin
-		state <= IFETCH;
+		state <= BYTE_IFETCH;
 		if (acc[15:0]==16'hFFFF) begin
 			pc <= pc + 32'd3;
 			dbr <= ir[15:8];

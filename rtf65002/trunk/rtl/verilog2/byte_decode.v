@@ -49,12 +49,12 @@ BYTE_DECODE:
 		`CLD:	begin df <= 1'b0; end
 		`SED:	begin df <= 1'b1; end
 		`WAI:	begin wai <= 1'b1; end
-		`DEX:	begin res8 <= x[7:0] - 8'd1; res16 <= x[15:0] - 16'd1; end
-		`INX:	begin res8 <= x[7:0] + 8'd1; res16 <= x[15:0] + 16'd1; end
-		`DEY:	begin res8 <= y[7:0] - 8'd1; res16 <= y[15:0] - 16'd1; end
-		`INY:	begin res8 <= y[7:0] + 8'd1; res16 <= y[15:0] + 16'd1; end
-		`DEA:	begin res8 <= acc[7:0] - 8'd1; res16 <= acc[15:0] - 16'd1; end
-		`INA:	begin res8 <= acc[7:0] + 8'd1; res16 <= acc[15:0] + 16'd1; end
+		`DEX:	begin res8 <= x_dec[7:0]; res16 <= x_dec[15:0]; end
+		`INX:	begin res8 <= x_inc[7:0]; res16 <= x_inc[15:0]; end
+		`DEY:	begin res8 <= y_dec[7:0]; res16 <= y_dec[15:0]; end
+		`INY:	begin res8 <= y_inc[7:0]; res16 <= y_inc[15:0]; end
+		`DEA:	begin res8 <= acc_dec[7:0]; res16 <= acc_dec[15:0]; end
+		`INA:	begin res8 <= acc_inc[7:0]; res16 <= acc_inc[15:0]; end
 		`TSX,`TSA:	begin res8 <= sp[7:0]; res16 <= sp[15:0]; end
 		`TXS,`TXA,`TXY:	begin res8 <= x[7:0]; res16 <= xb16 ? x[15:0] : {8'h00,x8}; end
 		`TAX,`TAY:	begin res8 <= acc[7:0]; res16 <= m16 ? acc[15:0] : {8'h00,acc8}; end
@@ -597,15 +597,17 @@ BYTE_DECODE:
 			end
 		`MVN:
 			begin
-				radr <= {ir[23:16],xb16 ? x[15:0] : {8'h00,x[7:0]}};
-				x[15:0] <= x[15:0] + 16'd1;
+				radr <= mvnsrc_address[31:2];
+				radr2LSB <= mvnsrc_address[1:0];
+				x[15:0] <= x_inc[15:0];
 				load_what <= `BYTE_72;
 				state <= LOAD_MAC1;
 			end
 		`MVP:
 			begin
-				radr <= {ir[23:16],xb16 ? x[15:0] : {8'h00,x[7:0]}};
-				x[15:0] <= x[15:0] - 16'd1;
+				radr <= mvnsrc_address[31:2];
+				radr2LSB <= mvnsrc_address[1:0];
+				x[15:0] <= x_dec[15:0];
 				load_what <= `BYTE_72;
 				state <= LOAD_MAC1;
 			end

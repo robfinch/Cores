@@ -126,6 +126,12 @@ wire [7:0] y8 = y[7:0];
 wire [15:0] acc16 = acc[15:0];
 wire [15:0] x16 = x[15:0];
 wire [15:0] y16 = y[15:0];
+wire [31:0] x_dec = x - 32'd1;
+wire [31:0] x_inc = x + 32'd2;
+wire [31:0] y_dec = y - 32'd1;
+wire [31:0] y_inc = y + 32'd1;
+wire [31:0] acc_dec = acc - 32'd1;
+wire [31:0] acc_inc = acc + 32'd1;
 reg [31:0] isp;		// interrupt stack pointer
 reg [31:0] oisp;	// original isp for bus retry
 wire [63:0] prod;
@@ -560,6 +566,8 @@ case(ir9)
 default:	takb <= 1'b0;
 endcase
 
+wire [31:0] mvnsrc_address	= {abs8[31:24],ir[23:16],xb16 ? x[15:0] : {8'h00,x[7:0]}};
+wire [31:0] mvndst_address	= {abs8[31:24],ir[15: 8],xb16 ? y[15:0] : {8'h00,y[7:0]}};
 wire [31:0] iapy8 			= ia + (xb16 ? y16 : y8);	// Don't add in abs8, already included with ia
 wire [31:0] zp_address 		= {abs8[31:16],8'h00,ir[15:8]} + dpr;
 wire [31:0] zpx_address 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? x16 : x8) + dpr;
