@@ -172,7 +172,7 @@ BYTE_IFETCH:
 					zf <= df ? bcaio[7:0]==8'h00 : resz8;
 				end
 			end
-		`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I,`ADC_IL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY:
+		`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I,`ADC_IL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY:
 			begin
 				if (m16) begin
 					acc[15:0] <= df ? bcao : res16[15:0];
