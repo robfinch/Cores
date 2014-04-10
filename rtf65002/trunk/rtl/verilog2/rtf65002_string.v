@@ -25,14 +25,14 @@ MVN3:
 	begin
 		state <= IFETCH;
 		res <= alu_out;
-		if (acc==32'hFFFFFFFF)
+		if (&acc)
 			pc <= pc + 32'd1;
 	end
 CMPS1:
 	begin
 		state <= IFETCH;
 		res <= alu_out;
-		if (a!=b || acc==32'hFFFFFFFF) begin
+		if (a!=b || &acc) begin
 			cf <= !(ltu|eq);
 			nf <= lt;
 			vf <= 1'b0;
@@ -45,7 +45,7 @@ CMPS1:
 MVN816:
 	begin
 		state <= BYTE_IFETCH;
-		if (acc[15:0]==16'hFFFF) begin
+		if (&acc[15:0]) begin
 			pc <= pc + 32'd3;
 			dbr <= ir[15:8];
 		end

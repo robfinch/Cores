@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -107,6 +107,13 @@ BYTE_IX5:
 			store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 			state <= STORE1;
 		end
+`ifdef SUPPORT_816
+		else if (ir[7:0]==`PEI) begin
+			set_sp();
+			store_what <= `STW_IA158;
+			state <= STORE1;
+		end
+`endif
 	end
 BYTE_IY5:
 	begin
@@ -115,7 +122,7 @@ BYTE_IY5:
 		radr <= iapy8[31:2];
 		radr2LSB <= iapy8[1:0];
 		$display("IY addr: %h", iapy8);
-		if (ir[7:0]==`STA_IY || ir[7:0]==`STA_DSPIY) begin
+		if (ir[7:0]==`STA_IY || ir[7:0]==`STA_IYL || ir[7:0]==`STA_DSPIY) begin
 			wadr <= iapy8[31:2];
 			wadr2LSB <= iapy8[1:0];
 			store_what <= m16 ? `STW_ACC70 : `STW_ACC8;

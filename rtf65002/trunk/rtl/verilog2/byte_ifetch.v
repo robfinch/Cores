@@ -145,9 +145,7 @@ BYTE_IFETCH:
 				nf <= acc[15];
 				zf <= acc[15:8]==8'h00;
 			end
-		`TAY,`TXY,`DEY,`INY:
-			if (xb16) begin y[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end
-			else begin y[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
+		`TAY,`TXY,`DEY,`INY:		if (xb16) begin y[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end	else begin y[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`TAX,`TYX,`TSX,`DEX,`INX:	if (xb16) begin x[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end else begin x[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`TSA,`TYA,`TXA,`INA,`DEA:	if (m16) begin acc[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end else begin acc[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`TAS,`TXS: begin if (m816) sp <= res16[15:0]; else sp <= {8'h01,res8[7:0]}; end

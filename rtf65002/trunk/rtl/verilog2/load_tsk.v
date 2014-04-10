@@ -137,6 +137,9 @@ begin
 					im <= dat[2];
 					df <= dat[3];
 					bf <= dat[4];
+					x_bit <= dat[8];
+					m_bit <= dat[9];
+					m816 <= dat[10];
 					tf <= dat[28];
 					em <= dat[29];
 					vf <= dat[30];

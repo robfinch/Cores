@@ -53,22 +53,22 @@ STORE1:
 		`STW_DEF8:		wb_write(1,{4{wdat[7:0]}});
 `endif
 `ifdef SUPPORT_816
-		`STW_DEF70:		wb_write(1,{4{wdat[7:0]}});
+		`STW_DEF70:		begin wb_write(1,{4{wdat[7:0]}}); lock_o <= 1'b1; end
 		`STW_DEF158:	wb_write(1,{4{wdat[15:8]}});
-		`STW_ACC70:		wb_write(1,{4{acc[7:0]}});
+		`STW_ACC70:		begin wb_write(1,{4{acc[7:0]}}); lock_o <= 1'b1; end
 		`STW_ACC158:	wb_write(1,{4{acc[15:8]}});
-		`STW_X70:		wb_write(1,{4{x[7:0]}});
+		`STW_X70:		begin wb_write(1,{4{x[7:0]}}); lock_o <= 1'b1; end
 		`STW_X158:		wb_write(1,{4{x[15:8]}});
-		`STW_Y70:		wb_write(1,{4{y[7:0]}});
+		`STW_Y70:		begin wb_write(1,{4{y[7:0]}}); lock_o <= 1'b1; end
 		`STW_Y158:		wb_write(1,{4{y[15:8]}});
-		`STW_Z70:		wb_write(1,{4{8'h00}});
+		`STW_Z70:		begin wb_write(1,{4{8'h00}}); lock_o <= 1'b1; end
 		`STW_Z158:		wb_write(1,{4{8'h00}});
 		`STW_DBR:		wb_write(1,{4{dbr}});
-		`STW_DPR158:	wb_write(1,{4{dpr[15:8]}});
+		`STW_DPR158:	begin wb_write(1,{4{dpr[15:8]}}); lock_o <= 1'b1; end
 		`STW_DPR70:		wb_write(1,{4{dpr[7:0]}});
-		`STW_TMP158:	wb_write(1,{4{tmp16[15:8]}});
+		`STW_TMP158:	begin wb_write(1,{4{tmp16[15:8]}}); lock_o <= 1'b1; end
 		`STW_TMP70:		wb_write(1,{4{tmp16[7:0]}});
-		`STW_IA158:		wb_write(1,{4{ia[15:8]}});
+		`STW_IA158:		begin wb_write(1,{4{ia[15:8]}}); lock_o <= 1'b1; end
 		`STW_IA70:		wb_write(1,{4{ia[7:0]}});
 `endif
 		default:	wb_write(0,wdat);
@@ -93,7 +93,7 @@ STORE2:
 		state <= DECODE;
 	end
 	else if (ack_i) begin
-		wdat <= dat_o;
+//		wdat <= dat_o;
 		if (isMove|isSts) begin
 			state <= MVN3;
 			retstate <= MVN3;

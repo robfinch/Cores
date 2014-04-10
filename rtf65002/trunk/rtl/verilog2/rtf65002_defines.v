@@ -575,6 +575,7 @@
 `define STW_B		6'd11
 `define STW_CALC	6'd12
 `define STW_OPC		6'd13
+`define STW_RES8	6'd14
 
 `define STW_ACC8	6'd16
 `define STW_X8		6'd17

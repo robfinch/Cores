@@ -126,6 +126,8 @@ BYTE_DECODE:
 			begin
 				radr <= zp_address[31:2];
 				radr2LSB <= zp_address[1:0];
+				wadr <= zp_address[31:2];
+				wadr2LSB <= zp_address[1:0];
 				load_what <= m16 ? `HALF_70 : `BYTE_70;
 				state <= LOAD_MAC1;
 			end
@@ -185,6 +187,8 @@ BYTE_DECODE:
 			begin
 				radr <= zpx_address[31:2];
 				radr2LSB <= zpx_address[1:0];
+				wadr <= zpx_address[31:2];
+				wadr2LSB <= zpx_address[1:0];
 				load_what <= m16 ? `HALF_70 : `BYTE_70;
 				state <= LOAD_MAC1;
 			end
@@ -230,7 +234,6 @@ BYTE_DECODE:
 				radr <= zpx_address[31:2];
 				radr2LSB <= zpx_address[1:0];
 				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
 		// Handle (zp),y
@@ -240,7 +243,6 @@ BYTE_DECODE:
 				radr2LSB <= zp_address[1:0];
 				isIY <= `TRUE;
 				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
 		// Handle abs
@@ -264,6 +266,8 @@ BYTE_DECODE:
 			begin
 				radr <= abs_address[31:2];
 				radr2LSB <= abs_address[1:0];
+				wadr <= abs_address[31:2];
+				wadr2LSB <= abs_address[1:0];
 				load_what <= m16 ? `HALF_70 : `BYTE_70;
 				state <= LOAD_MAC1;
 			end
@@ -303,11 +307,20 @@ BYTE_DECODE:
 				state <= STORE1;
 			end
 		// Handle abs,x
-		`ADC_ABSX,`SBC_ABSX,`AND_ABSX,`ORA_ABSX,`EOR_ABSX,`CMP_ABSX,`LDA_ABSX,
+		`LDA_ABSX:
+			begin
+				radr <= absx_address[31:2];
+				radr2LSB <= absx_address[1:0];
+				load_what <= m16 ? `HALF_71 : `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+		`ADC_ABSX,`SBC_ABSX,`AND_ABSX,`ORA_ABSX,`EOR_ABSX,`CMP_ABSX,
 		`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`BIT_ABSX:
 			begin
 				radr <= absx_address[31:2];
 				radr2LSB <= absx_address[1:0];
+				wadr <= absx_address[31:2];
+				wadr2LSB <= absx_address[1:0];
 				load_what <= m16 ? `HALF_70 : `BYTE_70;
 				state <= LOAD_MAC1;
 			end
@@ -315,7 +328,7 @@ BYTE_DECODE:
 			begin
 				radr <= absx_address[31:2];
 				radr2LSB <= absx_address[1:0];
-				load_what <= xb16 ? `HALF_70 : `BYTE_70;
+				load_what <= xb16 ? `HALF_71 : `BYTE_71;
 				state <= LOAD_MAC1;
 			end
 		`STA_ABSX:
@@ -333,7 +346,14 @@ BYTE_DECODE:
 				state <= STORE1;
 			end
 		// Handle abs,y
-		`ADC_ABSY,`SBC_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`CMP_ABSY,`LDA_ABSY:
+		`LDA_ABSY:
+			begin
+				radr <= absy_address[31:2];
+				radr2LSB <= absy_address[1:0];
+				load_what <= m16 ? `HALF_71	: `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+		`ADC_ABSY,`SBC_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`CMP_ABSY:
 			begin
 				radr <= absy_address[31:2];
 				radr2LSB <= absy_address[1:0];
@@ -344,7 +364,7 @@ BYTE_DECODE:
 			begin
 				radr <= absy_address[31:2];
 				radr2LSB <= absy_address[1:0];
-				load_what <= xb16 ? `HALF_70 : `BYTE_70;
+				load_what <= xb16 ? `HALF_71 : `BYTE_71;
 				state <= LOAD_MAC1;
 			end
 		`STA_ABSY:
@@ -356,7 +376,14 @@ BYTE_DECODE:
 			end
 `ifdef SUPPORT_816
 		// Handle d,sp
-		`ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP,`LDA_DSP:
+		`LDA_DSP:
+			begin
+				radr <= dsp_address[31:2];
+				radr2LSB <= dsp_address[1:0];
+				load_what <= m16 ? `HALF_71 : `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+		`ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP:
 			begin
 				radr <= dsp_address[31:2];
 				radr2LSB <= dsp_address[1:0];
@@ -377,7 +404,6 @@ BYTE_DECODE:
 				radr2LSB <= dsp_address[1:0];
 				isIY <= `TRUE;
 				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
 		// Handle [zp],y
@@ -387,11 +413,17 @@ BYTE_DECODE:
 				radr2LSB <= zp_address[1:0];
 				isIY24 <= `TRUE;
 				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
 		// Handle al
-		`ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL,`LDA_AL:
+		`LDA_AL:
+			begin
+				radr <= al_address[31:2];
+				radr2LSB <= al_address[1:0];
+				load_what <= m16 ? `HALF_71 : `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+		`ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL:
 			begin
 				radr <= al_address[31:2];
 				radr2LSB <= al_address[1:0];
@@ -406,7 +438,14 @@ BYTE_DECODE:
 				state <= STORE1;
 			end
 		// Handle alx
-		`ADC_ALX,`SBC_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`CMP_ALX,`LDA_ALX:
+		`LDA_ALX:
+			begin
+				radr <= alx_address[31:2];
+				radr2LSB <= alx_address[1:0];
+				load_what <= m16 ? `HALF_71 : `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+		`ADC_ALX,`SBC_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`CMP_ALX:
 			begin
 				radr <= alx_address[31:2];
 				radr2LSB <= alx_address[1:0];
@@ -427,7 +466,6 @@ BYTE_DECODE:
 				radr <= zp_address[31:2];
 				radr2LSB <= zp_address[1:0];
 				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
 `endif
@@ -437,7 +475,6 @@ BYTE_DECODE:
 				radr <= zp_address[31:2];
 				radr2LSB <= zp_address[1:0];
 				load_what <= `IA_70;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
 				state <= LOAD_MAC1;
 			end
 		`BRK:

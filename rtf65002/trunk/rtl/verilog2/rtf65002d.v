@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -103,7 +103,7 @@ reg em1;
 reg gie;	// global interrupt enable (set when sp is loaded)
 reg hwi;	// hardware interrupt indicator
 reg nmoi;	// native mode on interrupt
-wire [31:0] sr = {nf,vf,em,tf,23'b0,bf,df,im,zf,cf};
+wire [31:0] sr = {nf,vf,em,tf,17'b0,m816,m_bit,x_bit,3'b0,bf,df,im,zf,cf};
 reg m_bit;	// acc/mem is 16 bit
 reg x_bit;	// index regs are 16 bit
 reg m816;	// 816 mode
@@ -127,7 +127,7 @@ wire [15:0] acc16 = acc[15:0];
 wire [15:0] x16 = x[15:0];
 wire [15:0] y16 = y[15:0];
 wire [31:0] x_dec = x - 32'd1;
-wire [31:0] x_inc = x + 32'd2;
+wire [31:0] x_inc = x + 32'd1;
 wire [31:0] y_dec = y - 32'd1;
 wire [31:0] y_inc = y + 32'd1;
 wire [31:0] acc_dec = acc - 32'd1;
@@ -566,12 +566,12 @@ case(ir9)
 default:	takb <= 1'b0;
 endcase
 
-wire [31:0] mvnsrc_address	= {abs8[31:24],ir[23:16],xb16 ? x[15:0] : {8'h00,x[7:0]}};
-wire [31:0] mvndst_address	= {abs8[31:24],ir[15: 8],xb16 ? y[15:0] : {8'h00,y[7:0]}};
+wire [31:0] mvnsrc_address	= {abs8[31:24],ir[23:16],x[15:0]};
+wire [31:0] mvndst_address	= {abs8[31:24],ir[15: 8],y[15:0]};
 wire [31:0] iapy8 			= ia + (xb16 ? y16 : y8);	// Don't add in abs8, already included with ia
 wire [31:0] zp_address 		= {abs8[31:16],8'h00,ir[15:8]} + dpr;
-wire [31:0] zpx_address 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? x16 : x8) + dpr;
-wire [31:0] zpy_address	 	= {abs8[31:16],8'h00,ir[15:8]} + (xb16 ? y16 : y8) + dpr;
+wire [31:0] zpx_address 	= {abs8[31:16],{8'h00,ir[15:8]} + (xb16 ? x16 : {8'h00,x8})} + dpr;
+wire [31:0] zpy_address	 	= {abs8[31:16],{8'h00,ir[15:8]} + (xb16 ? y16 : {8'h00,y8})} + dpr;
 wire [31:0] abs_address 	= {abs8[31:24],dbr,ir[23:8]};
 wire [31:0] absx_address 	= {abs8[31:24],dbr,ir[23:8] + (xb16 ? x16 : {8'h0,x8})};	// simulates 64k bank wrap-around
 wire [31:0] absy_address 	= {abs8[31:24],dbr,ir[23:8] + (xb16 ? y16 : {8'h0,y8})};
