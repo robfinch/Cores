@@ -22,6 +22,13 @@
 ;                                                                          
 ; ============================================================================
 ;
+P	EQU		2
+Q	EQU		1193*2 + 2
+R	EQU		Q + 2
+SSS	EQU		R + 2
+data_ptr		equ		$08
+dpf				equ		$AA
+;
 CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
@@ -52,6 +59,7 @@ E_NoMoreMbx	=		0x40
 E_NoMoreMsgBlks	=	0x41
 E_NoMoreAlarmBlks	=0x44
 E_NoMoreTCBs	=	0x45
+E_NoMem		= 12
 
 ; task status
 TS_NONE     =0
@@ -284,79 +292,82 @@ DATETIME_SNAPSHOT	EQU		0xFFDC0405
 SPRITEREGS	EQU		0xFFDAD000
 SPRRAM		EQU		0xFFD80000
 
-THRD_AREA	EQU		0x04000000	; threading area 0x04000000-0x40FFFFF
-BITMAPSCR	EQU		0x04100000
-SECTOR_BUF	EQU		0x05FBEC00
-BIOS_STACKS	EQU		0x05FC0000	; room for 256 1kW stacks
-BIOS_SCREENS	EQU	0x05C00000	; 0x05C00000 to 0x05DFFFFF
+THRD_AREA	EQU		0x00000000	; threading area 0x04000000-0x40FFFFF
+BITMAPSCR	EQU		0x00100000
+SECTOR_BUF	EQU		0x01FBEC00
+BIOS_STACKS	EQU		0x01FC0000	; room for 256 1kW stacks
+BIOS_SCREENS	EQU	0x01C00000	; 0x01C00000 to 0x01DFFFFF
 
 BYTE_SECTOR_BUF	EQU	SECTOR_BUF<<2
-PROG_LOAD_AREA	EQU		0x4300000<<2
+PROG_LOAD_AREA	EQU		0x0300000<<2
 
-FCBs			EQU		0x5F40000	; room for 128 FCB's
+FCBs			EQU		0x1F40000	; room for 128 FCB's
 
-FATOFFS			EQU		0x5F50000	; offset into FAT on card
-FATBUF			EQU		0x5F60000
-DIRBUF			EQU		0x5F70000
-eth_rx_buffer	EQU		0x5F80000
-eth_tx_buffer	EQU		0x5F84000
+FATOFFS			EQU		0x1F50000	; offset into FAT on card
+FATBUF			EQU		0x1F60000
+DIRBUF			EQU		0x1F70000
+eth_rx_buffer	EQU		0x1F80000
+eth_tx_buffer	EQU		0x1F84000
 
 ; Mailboxes, room for 2048
-MBX_LINK	EQU		0x05F90000
-MBX_TQ_HEAD	EQU		0x05F90800
-MBX_TQ_TAIL	EQU		0x05F91000
-MBX_MQ_HEAD	EQU		0x05F91800
-MBX_MQ_TAIL	EQU		0x05F92000
-MBX_TQ_COUNT	EQU	0x05F92800
-MBX_MQ_SIZE	EQU		0x05F93000
-MBX_MQ_COUNT	EQU	0x05F93800
-MBX_MQ_MISSED	EQU	0x05F94000
-MBX_OWNER		EQU	0x05F94800
-MBX_MQ_STRATEGY	EQU	0x05F95000
-MBX_RESV		EQU	0x05F95800
+MBX_LINK	EQU		0x01F90000
+MBX_TQ_HEAD	EQU		0x01F90800
+MBX_TQ_TAIL	EQU		0x01F91000
+MBX_MQ_HEAD	EQU		0x01F91800
+MBX_MQ_TAIL	EQU		0x01F92000
+MBX_TQ_COUNT	EQU	0x01F92800
+MBX_MQ_SIZE	EQU		0x01F93000
+MBX_MQ_COUNT	EQU	0x01F93800
+MBX_MQ_MISSED	EQU	0x01F94000
+MBX_OWNER		EQU	0x01F94800
+MBX_MQ_STRATEGY	EQU	0x01F95000
+MBX_RESV		EQU	0x01F95800
 
 ; Messages, room for 8kW (8,192) messages
-MSG_LINK	EQU		0x05FA0000
-MSG_D1		EQU		0x05FA2000
-MSG_D2		EQU		0x05FA4000
-MSG_TYPE	EQU		0x05FA6000
+MSG_LINK	EQU		0x01FA0000
+MSG_D1		EQU		0x01FA2000
+MSG_D2		EQU		0x01FA4000
+MSG_TYPE	EQU		0x01FA6000
 
 ; Task control blocks, room for 256 tasks
-TCB_NxtRdy		EQU		0x05FBE100	; next task on ready / timeout list
-TCB_PrvRdy		EQU		0x05FBE200	; previous task on ready / timeout list
-TCB_NxtTCB		EQU		0x05FBE300
-TCB_Timeout		EQU		0x05FBE400
-TCB_Priority	EQU		0x05FBE500
-TCB_MSGPTR_D1	EQU		0x05FBE600
-TCB_MSGPTR_D2	EQU		0x05FBE700
-TCB_hJCB		EQU		0x05FBE800
-TCB_Status		EQU		0x05FBE900
-TCB_CursorRow	EQU		0x05FBD100
-TCB_CursorCol	EQU		0x05FBD200
-TCB_hWaitMbx	EQU		0x05FBD300	; handle of mailbox task is waiting at
-TCB_mbq_next	EQU		0x05FBD400	; mailbox queue next
-TCB_mbq_prev	EQU		0x05FBD500	; mailbox queue previous
-TCB_iof_next	EQU		0x05FBD600
-TCB_iof_prev	EQU		0x05FBD700
-TCB_SP8Save		EQU		0x05FBD800	; TCB_SP8Save area 
-TCB_SPSave		EQU		0x05FBD900	; TCB_SPSave area
-TCB_ABS8Save	EQU		0x05FBDA00
-TCB_mmu_map		EQU		0x05FBDB00
+TCB_NxtRdy		EQU		0x01FBE100	; next task on ready / timeout list
+TCB_PrvRdy		EQU		0x01FBE200	; previous task on ready / timeout list
+TCB_NxtTCB		EQU		0x01FBE300
+TCB_Timeout		EQU		0x01FBE400
+TCB_Priority	EQU		0x01FBE500
+TCB_MSGPTR_D1	EQU		0x01FBE600
+TCB_MSGPTR_D2	EQU		0x01FBE700
+TCB_hJCB		EQU		0x01FBE800
+TCB_Status		EQU		0x01FBE900
+TCB_CursorRow	EQU		0x01FBD100
+TCB_CursorCol	EQU		0x01FBD200
+TCB_hWaitMbx	EQU		0x01FBD300	; handle of mailbox task is waiting at
+TCB_mbq_next	EQU		0x01FBD400	; mailbox queue next
+TCB_mbq_prev	EQU		0x01FBD500	; mailbox queue previous
+TCB_iof_next	EQU		0x01FBD600
+TCB_iof_prev	EQU		0x01FBD700
+TCB_SP8Save		EQU		0x01FBD800	; TCB_SP8Save area 
+TCB_SPSave		EQU		0x01FBD900	; TCB_SPSave area
+TCB_ABS8Save	EQU		0x01FBDA00
+TCB_mmu_map		EQU		0x01FBDB00
+TCB_npages		EQU		0x01FBDC00
+TCB_ASID		EQU		0x01FBDD00
+TCB_errno		EQU		0x01FBDE00
 
-KeybdHead	EQU		0x05FBEA00
-KeybdTail	EQU		0x05FBEB00
-KeybdEcho	EQU		0x05FBEC00
-KeybdBad	EQU		0x05FBED00
-KeybdAck	EQU		0x05FBEE00
-KeybdLocks	EQU		0x05FBEF00
-KeybdBuffer	EQU		0x05FBF000	; buffer is 16 chars
+KeybdHead	EQU		0x01FBEA00
+KeybdTail	EQU		0x01FBEB00
+KeybdEcho	EQU		0x01FBEC00
+KeybdBad	EQU		0x01FBED00
+KeybdAck	EQU		0x01FBEE00
+KeybdLocks	EQU		0x01FBEF00
+KeybdBuffer	EQU		0x01FBF000	; buffer is 16 chars
 
-HeapStart	EQU		0x04200000
-HeapEnd		EQU		0x043FFFFF
+HeapStart	EQU		0x00200000
+HeapEnd		EQU		0x003FFFFF
 
 ; Bitmap of tasks requesting the I/O focus
 ;
-IOFocusTbl	EQU		0x05FBD000
+IOFocusTbl	EQU		0x01FBD000
 
 ; EhBASIC vars:
 ;
@@ -365,12 +376,15 @@ IrqBase		EQU		0xDF
 
 ; BIOS vars at the top of the 8kB scratch memory
 ;
-; TinyBasic AREA = 0xF00 to 0xF7F
+; TinyBasic AREA = 0x6C0 to 0x77F
 
-PageMap		EQU		0xE00
-PageMapEnd	EQU		0xE3F
+PageMap		EQU		0x600
+PageMapEnd	EQU		0x63F
+PageMap2	EQU		0x640
+PageMap2End	EQU		0x67F
+mem_pages_free	EQU		0x680
 
-QNdx0		EQU		0xF80
+QNdx0		EQU		0x780
 QNdx1		EQU		QNdx0+1
 QNdx2		EQU		QNdx1+1
 QNdx3		EQU		QNdx2+1
@@ -387,60 +401,61 @@ nMsgBlk		EQU		FreeMsg + 1
 ;
 IOFocusNdx	EQU		nMsgBlk + 1
 
-IrqSource	EQU		0xF98
+IrqSource	EQU		0x798
 
-JMPTMP		EQU		0xFA0
-SP8Save		EQU		0xFAE
-SRSave		EQU		0xFAF
-R1Save		EQU		0xFB0
-R2Save		EQU		0xFB1
-R3Save		EQU		0xFB2
-R4Save		EQU		0xFB3
-R5Save		EQU		0xFB4
-R6Save		EQU		0xFB5
-R7Save		EQU		0xFB6
-R8Save		EQU		0xFB7
-R9Save		EQU		0xFB8
-R10Save		EQU		0xFB9
-R11Save		EQU		0xFBA
-R12Save		EQU		0xFBB
-R13Save		EQU		0xFBC
-R14Save		EQU		0xFBD
-R15Save		EQU		0xFBE
-SPSave		EQU		0xFBF
+JMPTMP		EQU		0x7A0
+SP8Save		EQU		0x7AE
+SRSave		EQU		0x7AF
+R1Save		EQU		0x7B0
+R2Save		EQU		0x7B1
+R3Save		EQU		0x7B2
+R4Save		EQU		0x7B3
+R5Save		EQU		0x7B4
+R6Save		EQU		0x7B5
+R7Save		EQU		0x7B6
+R8Save		EQU		0x7B7
+R9Save		EQU		0x7B8
+R10Save		EQU		0x7B9
+R11Save		EQU		0x7BA
+R12Save		EQU		0x7BB
+R13Save		EQU		0x7BC
+R14Save		EQU		0x7BD
+R15Save		EQU		0x7BE
+SPSave		EQU		0x7BF
 
-CharColor	EQU		0xFC0
-ScreenColor	EQU		0xFC1
-CursorRow	EQU		0xFC2
-CursorCol	EQU		0xFC3
-CursorFlash	EQU		0xFC4
-Milliseconds	EQU		0xFC5
-IRQFlag		EQU		0xFC6
-RdyQueTick	EQU		0xFC7
-eth_unique_id	EQU		0xFC8
-LineColor	EQU		0xFC9
-QIndex		EQU		0xFCA
-ROMcs		EQU		0xFCB
-mmu_present	EQU		0xFCC
-TestTask	EQU		0xFCD
-BASIC_SESSION	EQU		0xFCE
+CharColor	EQU		0x7C0
+ScreenColor	EQU		0x7C1
+CursorRow	EQU		0x7C2
+CursorCol	EQU		0x7C3
+CursorFlash	EQU		0x7C4
+Milliseconds	EQU		0x7C5
+IRQFlag		EQU		0x7C6
+UserTick	EQU		0x7C7
+eth_unique_id	EQU		0x7C8
+LineColor	EQU		0x7C9
+QIndex		EQU		0x7CA
+ROMcs		EQU		0x7CB
+mmu_present	EQU		0x7CC
+TestTask	EQU		0x7CD
+BASIC_SESSION	EQU		0x7CE
+gr_cmd		EQU		0x7CF
 
-Uart_rxfifo		EQU		0x05FBC000
-Uart_rxhead		EQU		0xFD0
-Uart_rxtail		EQU		0xFD1
-Uart_ms			EQU		0xFD2
-Uart_rxrts		EQU		0xFD3
-Uart_rxdtr		EQU		0xFD4
-Uart_rxxon		EQU		0xFD5
-Uart_rxflow		EQU		0xFD6
-Uart_fon		EQU		0xFD7
-Uart_foff		EQU		0xFD8
-Uart_txrts		EQU		0xFD9
-Uart_txdtr		EQU		0xFDA
-Uart_txxon		EQU		0xFDB
-Uart_txxonoff	EQU		0xFDC
+Uart_rxfifo		EQU		0x01FBC000
+Uart_rxhead		EQU		0x7D0
+Uart_rxtail		EQU		0x7D1
+Uart_ms			EQU		0x7D2
+Uart_rxrts		EQU		0x7D3
+Uart_rxdtr		EQU		0x7D4
+Uart_rxxon		EQU		0x7D5
+Uart_rxflow		EQU		0x7D6
+Uart_fon		EQU		0x7D7
+Uart_foff		EQU		0x7D8
+Uart_txrts		EQU		0x7D9
+Uart_txdtr		EQU		0x7DA
+Uart_txxon		EQU		0x7DB
+Uart_txxonoff	EQU		0x7DC
 
-startSector	EQU		0xFF0
+startSector	EQU		0x7F0
 
 
 	cpu		rtf65002
@@ -494,7 +509,7 @@ st_nommu:
 	sta		LEDS
 
 	; setup interrupt vectors
-	ldx		#$05FB0001		; interrupt vector table from $5FB0000 to $5FB01FF
+	ldx		#$01FB0001		; interrupt vector table from $5FB0000 to $5FB01FF
 							; also sets nmoi policy (native mode on interrupt)
 	trs		r2,vbr
 	dex
@@ -537,6 +552,8 @@ st_nommu:
 	stz		NmiBase
 
 	jsr		($FFFFC000>>2)		; Initialize multi-tasking
+	lda		#TickRout		; setup tick routine
+	sta		UserTick
 
 	lda		#1
 	sta		MBX_SEMA
@@ -647,7 +664,7 @@ ibmp1:
 ; Initialize the 64 maps of the MMU.
 ; Initially all the maps are set the same:
 ; Virtual Page  Physical Page
-; 000-383		383 (invalid page marker)
+; 000-382		383 (invalid page marker)
 ; 384-511		1920-2047
 ; Note that there are only 512 virtual pages per map, and 2048 real
 ; physical pages of memory. This limits maps to 32MB.
@@ -1510,6 +1527,39 @@ CRLF:
 	rts
 
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+TickRout:
+	; support EhBASIC's IRQ functionality
+	; code derived from minimon.asm
+	lda		#3				; Timer is IRQ #3
+	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
+	lb		r1,IrqBase		; get the IRQ flag byte
+	lsr		r4,r1
+	or		r1,r1,r4
+	and		#$E0
+	sb		r1,IrqBase
+
+	inc		TEXTSCR+55		; update IRQ live indicator on screen
+	
+	; flash the cursor
+	ldx		RunningTCB
+	cpx		IOFocusNdx		; only bother to flash the cursor for the task with the IO focus.
+	bne		tr1a
+	lda		CursorFlash		; test if we want a flashing cursor
+	beq		tr1a
+	jsr		CalcScreenLoc	; compute cursor location in memory
+	tay
+	lda		$10000,y		; get color code $10000 higher in memory
+	ld		r4,IRQFlag		; get counter
+	lsr		r4,r4
+	and		r4,r4,#$0F		; limit to low order nybble
+	and		#$F0			; prepare to or in new value, mask off foreground color
+	or		r1,r1,r4		; set new foreground color for cursor
+	sta		$10000,y		; store the color code back to memory
+tr1a
+	rts
+
+;------------------------------------------------------------------------------
 ; Initialize keyboard
 ;
 ; Issues a 'reset keyboard' command to the keyboard, then selects scan code
@@ -1727,7 +1777,7 @@ KeybdIRQc:
 KeybdRstIRQ:
 	jmp		start
 
-;------------------------------------------------------------------------------
+;-----------------------------------------------------------------------------
 ; r1 0=echo off, non-zero = echo on
 ;------------------------------------------------------------------------------
 SetKeyboardEcho:
@@ -2554,7 +2604,7 @@ Prompt17:
 	jmp		Monitor
 Prompt19:
 	cmp		#'K'
-	bne		Monitor
+	bne		Prompt20
 Prompt19a:
 	jsr		MonGetch
 	cmp		#' '
@@ -2562,6 +2612,11 @@ Prompt19a:
 	jsr		ignBlanks
 	jsr		GetDecNumber
 	jsr		KillTask
+	jmp		Monitor
+Prompt20:
+	cmp		#'8'
+	bne		Monitor
+	jsr		Test816
 	jmp		Monitor
 
 message "Prompt16"
@@ -2625,7 +2680,8 @@ HelpMsg:
 	db	"TO = Dump timeout list",CR,LF
 	db	"TI = display date/time",CR,LF
 	db	"TEMP = display temperature",CR,LF
-	db	"P = Piano",CR,LF,0
+	db	"P = Piano",CR,LF
+	db	"8 = 816 test",CR,LF,0
 
 ;------------------------------------------------------------------------------
 ; Ignore blanks in the input
@@ -2933,14 +2989,14 @@ ClearBmpScreen:
 	phy
 	lda		#(680*384)		; a = # bytes to clear
 	ldx		#0x29292929			; acc = color for four pixels
-	ldy		#BITMAPSCR<<2		; y = screen address
+	ldy		#BITMAPSCR;<<2		; y = screen address
 cbmp1:
-	tsr		LFSR,r2
-	sb		r2,0,y
-	iny
-	dea
-	bne		cbmp1
-;	stos
+;	tsr		LFSR,r2
+;	sb		r2,0,y
+;	iny
+;	dea
+;	bne		cbmp1
+	stos
 	ply
 	plx
 	pla
@@ -3322,7 +3378,7 @@ spi_read_multiple:
 spi_rm1:
 	pha
 	jsr		spi_read_sector
-	add		r4,r4,r1
+	add		r4,r1
 	add		r2,r2,#512
 	pla
 	ina
@@ -4378,6 +4434,8 @@ RandomLines:
 	jsr		HomeCursor
 	lda		#msgRandomLines
 	jsr		DisplayStringB
+	lda		#1
+	sta		gr_cmd
 rl5:
 	tsr		LFSR,r1
 	tsr		LFSR,r2
@@ -4400,12 +4458,45 @@ rl4:						; random Y1
 	tsr		LFSR,r4
 	mod		r4,r4,#384
 rl8:
-	lda		GA_STATE		; make sure state is IDLE
+	ld		r5,GA_STATE		; make sure state is IDLE
 	bne		rl8
+	ld 		r5,gr_cmd
+	cmp		r5,#2
+	bne		rl11
 	jsr		DrawLine
+	bra		rl12
+rl11:
+	cmp		r5,#1
+	bne		rl13
+	jsr		DrawPixel
+	bra		rl12
+rl13:
+	cmp		r5,#4
+	bne		rl12
+	jsr		DrawRectangle
+rl12:
 	jsr		KeybdGetChar
 	cmp		#CTRLC
 	beq		rl7
+	cmp		#'p'
+	bne		rl9
+	jsr		ClearBmpScreen
+	lda		#1
+	sta		gr_cmd
+	bra		rl5
+rl9:
+	cmp		#'r'
+	bne		rl10
+	jsr		ClearBmpScreen
+	lda		#4
+	sta		gr_cmd
+	bra		rl5
+rl10
+	cmp		#'l'
+	bne		rl5
+	jsr		ClearBmpScreen
+	lda		#2
+	sta		gr_cmd
 	bra		rl5
 rl7:
 ;	jsr		ReleaseIOFocus
@@ -4439,11 +4530,9 @@ DrawPixel:
 comment ~
 	pha
 	phx
-	push	r4
 	mul		r2,r2,#680	; y * 680
 	add		r1,r1,r2	; + x
 	sb		r3,BITMAPSCR<<2,r1
-	pop		r4
 	plx
 	pla
 	rts
@@ -4480,6 +4569,19 @@ DrawLine:
 	lda		LineColor
 	sta		GA_PEN
 	lda		#2
+	sta		GA_CMD
+	pla
+	rts
+
+DrawRectangle:
+	pha
+	sta		GA_X0
+	stx		GA_Y0
+	sty		GA_X1
+	st		r4,GA_Y1
+	lda		LineColor
+	sta		GA_PEN
+	lda		#4
 	sta		GA_CMD
 	pla
 	rts
@@ -4771,10 +4873,15 @@ MemInit:
 	sta		HeapStart+MEM_NEXT	; next of first MEMHDR
 	lda		#HeapStart
 	sta		HeapEnd-1		; prev of last MEMHDR
+
 	; Initialize the allocated page map to zero.
 	lda		#64				; 64*32 = 2048 bits
 	ldx		#0
 	ldy		#PageMap
+	stos
+	lda		#64				; 64*32 = 2048 bits
+	ldx		#0
+	ldy		#PageMap2
 	stos
 	; Mark the last 128 pages as used (by the OS)
 	; 4-32 bit words
@@ -4956,7 +5063,206 @@ amp3:
 	rts
 
 ;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = size of allocation in words
+; Returns:
+;	r1 = word pointer to memory
+; No MMU
 ;------------------------------------------------------------------------------
+;
+AllocMemPages:
+	php
+	phx
+	phy
+	push	r4
+	sei
+amp5:
+	tay
+	lsr		r3,r3,#14	; convert amount to #pages
+	iny					; round up
+	tyx					; x = request size in pages
+	; Search for a group of free pages large enough to satisfy the request
+	lda		#0
+amp7:
+	bmt		PageMap		; test for a free page
+	bne		amp6		; not a free page
+	ld		r4,r1		; remember the page we were on
+	cpx		#1			; did we find enough free pages ?
+	bls		amp8
+	dex					; keep checking for next free page
+	ina
+	cmp		#1919		; did we hit end of map ?
+	bhi		amp11		; can't allocate enough memory
+	bra		amp7		; go back and test for another free page
+amp6:
+	tyx					; reset size count
+	ina					; move to the next page
+	cmp		#1919		; test if hit end of map
+	bls		amp7
+amp11:
+	; Insufficient memory, return NULL pointer
+	lda		#0
+	pop		r4
+	ply
+	plx
+	plp
+	rts
+
+	; Mark pages as allocated
+amp8:
+	ld		r1,r4
+amp10:
+	bms		PageMap
+	bmc		PageMap2
+	cpy		#1
+	bls		amp9
+	dey
+	ina
+	cmp		#1919
+	blo		amp10
+amp9:
+	bms		PageMap
+	bms		PageMap2	; flag end of allocation
+	ld		r1,r4
+	asl		r1,r1,#14	; * 16kW
+	add		r1,r1,#DRAM_BASE
+	pop		r4
+	ply
+	plx
+	plp
+	rts
+
+;------------------------------------------------------------------------------
+; brk
+; Establish a new program break
+;
+; Parameters:
+; r1 = new program break address
+;------------------------------------------------------------------------------
+;
+_brk:
+	phx
+	push	r4
+	push	r5
+	push	r6
+	ldx		RunningTCB
+	ld		r4,TCB_ASID,x
+	st		r4,MMU_AKEY
+	ld		r4,TCB_npages,x
+	lsr		r1,r1,#14
+	add		r1,r1,#1
+	cmp		r1,r4
+	beq		brk6			; allocation isn't changing
+	blo		brk1			; reducing allocation
+
+	; Here we're increasing the amount of memory allocated to the program.
+	;
+	cmp		r1,#383			; max 383 RAM pages
+	bhi		brk2
+	sub		r1,r1,r4		; number of new pages
+	cmp		r1,mem_pages_free	; are there enough free pages ?
+	bhi		brk2
+	ld		r5,mem_pages_free
+	sub		r5,r5,r1
+	st		r5,mem_pages_free
+	ld		r6,r1			; r6 = number of pages to allocate
+	add		r1,r1,r4		; get back value of address
+	sta		TCB_npages,x
+	lda		#0
+brk5:
+	bmt		PageMap			; test if page is free
+	bne		brk4			; no, go for next page
+	bms		PageMap			; allocate the page
+	sta		MMU,r4			; store the page number in the MMU table
+	add		r4,r4,#1		; move to next MMU entry
+	sub		r6,r6,#1		; decrement count of needed
+	beq		brk6			; we're done if count = 0
+brk4:
+	ina
+	cmp		#2048
+	blo		brk5
+
+	; Here there was an OS or hardware error
+	; According to mem_pages_free there should have been enough free pages
+	; to fulfill the request. Something is corrupt.
+	;
+
+	; Here we are reducing the program break, which means freeing up pages of
+	; memory.
+brk1:
+	sta		TCB_npages,x
+	add		r5,r1,#1		; move to page after last page
+brk7:
+	cmp		r5,r4			; are we done freeing pages ?
+	bhi		brk6
+	lda		MMU,r5			; get the page to free
+	bmc		PageMap			; free the page
+	inc		mem_pages_free
+	add		r5,r5,#1
+	bra		brk7
+
+	; Successful return
+brk6:
+	pop		r6
+	pop		r5
+	pop		r4
+	plx
+	lda		#0
+	rts
+
+; Return insufficient memory error
+;
+brk2:
+	lda		#E_NoMem
+	sta		TCB_errno,x
+	pop		r6
+	pop		r5
+	pop		r4
+	plx
+	lda		#-1
+	rts
+
+;------------------------------------------------------------------------------
+; Parameters:
+; r1 = change in memory allocation
+;------------------------------------------------------------------------------
+_sbrk:
+	phx
+	push	r4
+	push	r5
+	ldx		RunningTCB
+	ld		r4,TCB_npages,x		; get the current memory allocation
+	cmp		r1,#0				; zero difference = get old brk address
+	beq		sbrk2
+	asl		r5,r4,#14			; convert to words
+	add		r1,r1,r5			; +/- amount
+	jsr		_brk
+	cmp		r1,#-1
+	bne		sbrk2
+
+; Failure return, return -1
+;
+	pop		r5
+	pop		r4
+	plx
+	rts
+
+; Successful return, return the old break address
+;	
+sbrk2:
+	ld		r1,r4
+	asl		r1,r1,#14
+	pop		r5
+	pop		r4
+	plx
+	rts
+
+
+;------------------------------------------------------------------------------
+; Parameters:
+; r1 = virtual memory address
+;------------------------------------------------------------------------------
+;
 FreeMemPage:
 	php
 	phx
@@ -4979,7 +5285,39 @@ FreeMemPage:
 	plx
 	plp
 	rts
-	
+
+;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = pointer to memory
+;------------------------------------------------------------------------------
+;
+FreeMemPages:
+	php
+	phx
+	sei
+	cmp		#0			; test for a proper pointer
+	beq		fmp4
+	; Turn the memory pointer into a bit index
+	sub		r1,r1,#DRAM_BASE
+	lsr		r1,r1,#14	; / 16kW
+	cmp		#1919		; make sure index is sensible
+	bhi		fmp4
+fmp2:
+	bmt		PageMap2	; Test to see if end of allocation
+	bne		fmp3
+	bmc		PageMap		; deallocate page
+	ina
+	cmp		#1919		; last 128 pages aren't freeanle
+	bls		fmp2
+fmp3
+	; Clear the last bit
+	bmc		PageMap
+	bmc		PageMap2
+fmp4:
+	plx
+	plp
+	rts
+
 ;------------------------------------------------------------------------------
 ; Convert a virtual address to a physical address.
 ;------------------------------------------------------------------------------
@@ -5267,6 +5605,7 @@ MTKInitialize:
 	sta		2,x
 	lda		#MTKTick
 	sta		448+3,x
+	stz		UserTick
 
 	lda		#-1
 	sta		TimeoutList		; no entries in timeout list
@@ -6506,35 +6845,10 @@ p100Hz11:
 	sta		TCB_ABS8Save,x	; 8 bit emulation base register
 	lda		#TS_READY
 	sta		TCB_Status,x
+	lda		UserTick
+	beq		p100Hz4
+	jsr		(r1)
 p100Hz4:
-;	jsr		(UserTick)
-	; support EhBASIC's IRQ functionality
-	; code derived from minimon.asm
-	lda		#3				; Timer is IRQ #3
-	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
-	lb		r1,IrqBase		; get the IRQ flag byte
-	lsr		r4,r1
-	or		r1,r1,r4
-	and		#$E0
-	sb		r1,IrqBase
-
-	inc		TEXTSCR+55		; update IRQ live indicator on screen
-	
-	; flash the cursor
-	cpx		IOFocusNdx		; only bother to flash the cursor for the task with the IO focus.
-	bne		p100Hz1a
-	lda		CursorFlash		; test if we want a flashing cursor
-	beq		p100Hz1a
-	jsr		CalcScreenLoc	; compute cursor location in memory
-	tay
-	lda		$10000,y		; get color code $10000 higher in memory
-	ld		r4,IRQFlag		; get counter
-	lsr		r4,r4
-	and		r4,r4,#$0F		; limit to low order nybble
-	and		#$F0			; prepare to or in new value, mask off foreground color
-	or		r1,r1,r4		; set new foreground color for cursor
-	sta		$10000,y		; store the color code back to memory
-p100Hz1a
 
 	; Check the timeout list to see if there are items ready to be removed from
 	; the list. Also decrement the timeout of the item at the head of the list.
@@ -6616,6 +6930,396 @@ sttr3:
 	ldx		#94
 	stx		LEDS
 	bra		sttr3
+
+;================================================================================
+; 65C816 mode test
+;================================================================================
+Test816:
+	clc
+	xce
+	cpu		W65C816S
+	rep		#$30		; acc,ndx = 16 bit
+	mem		16
+	ndx		16
+
+	lda		#$1800		; setup stack pointer
+	tas
+
+	jsr		putmsg
+	db		"Testing 816 Mode", 13, 10, 0
+
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+; First thing to test is branches. If you can't branch reliably
+; then the validity of the remaining tests are in question.
+; Test branches and also simultaneously some other simple
+; instructions.
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+	jsr		putmsg
+	db		"Test branches",13,10,0
+
+	bra		braok
+	jsr		putmsg
+	db		"BRA:F", 13, 10, 0
+braok
+	brl		brlok
+	jsr		putmsg
+	db		"BRL:F", 13, 10, 0
+brlok
+	sec
+	bcs		bcsok
+	jsr		putmsg
+	db		"BCS:F", 13, 10, 0
+bcsok
+	clc
+	bcc		bccok
+	jsr		putmsg
+	db		"BCC:F", 13, 10, 0
+bccok
+	lda		#$00
+	beq		beqok
+	jsr		putmsg
+	db		"BEQ:F", 13, 10, 0
+beqok
+	lda		#$8000
+	bne		bneok
+	jsr		putmsg
+	db		"BNE:F", 13, 10, 0
+bneok
+	ora		#$00
+	bmi		bmiok
+	jsr		putmsg
+	db		"BMI:F", 13, 10, 0
+bmiok
+	eor		#$8000
+	bpl		bplok
+	jsr		putmsg
+	db		"BPL:F", 13, 10, 0
+bplok
+	lda		#$7fff
+	clc
+	adc		#$1000		; should give signed overflow
+	bvs		bvsok
+	jsr		putmsg
+	db		"BVS:F", 13, 10, 0
+bvsok
+	clv
+	bvc		bvcok
+	jsr		putmsg
+	db		"BVC:F", 13, 10, 0
+bvcok
+
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+; Compare Instructions
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+	jsr		putmsg
+	db		"test cmp/cpx/cpy", 13, 10, 0
+
+	lda		#27			; bit 7 = 0
+	clc
+	cmp		#27
+	bcc		cmperr
+	bne		cmperr
+	bmi		cmperr
+	lda		#$A001
+	cmp		#20
+	bpl		cmperr		; should be neg.
+	sec
+	lda		#10
+	cmp		#20			; should be a borrow here
+	bcs		cmperr
+	clv
+	lda		#$8000		; -128 - 32 = -160 should overflow
+	cmp		#$2000		; compare doesn't affect overflow
+	bvs		cmperr
+	bvc		cmpok
+
+cmperr
+	jsr		putmsg
+	db		"CMP:F", 13, 10, 0
+
+cmpok
+
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+	jsr		putmsg
+	db		"Test psh/pul", 13, 10, 0
+
+; pha / pla
+	lda		#$ee00
+	pha
+	lda		#00
+	clc
+	pla
+	bpl		plaerr
+	beq		plaerr
+	bcs		plaerr
+	cmp		#$ee00
+	beq		plaok
+
+plaerr
+	jsr		putmsg
+	db		"PLA:F", 13, 10, 0
+
+plaok
+
+; ror m
+
+	clc
+	lda		#$8000
+	sta		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	ror		dpf
+	bmi		rormerr
+	beq		rormerr
+	bcs		rormerr
+	lda		dpf
+	cmp		#$0001		; this will set the carry !!!
+	bne		rormerr
+	clc
+	ror		dpf
+	bcc		rormerr
+	bne		rormerr
+	bmi		rormerr
+	ror		dpf
+	bcs		rormerr
+	bpl		rormerr
+	beq		rormerr
+	lda		dpf
+	cmp		#$8000
+	bne		rormerr
+	jmp		rormok
+
+rormerr
+	jsr		putmsg
+	db		"RORM:F", 13, 10, 0
+	jmp		rormok
+	
+rormok
+
+		jsr		INITSUB
+		ldx		#359
+		ldy		#1193
+L1S:	
+		phy
+		pha
+		phx
+		stz		Q
+;		txa
+;		ldx		#5
+;		wdm
+;		xce
+;		cpu		RTF65002
+;		jsr		PRTNUM
+;		clc
+;		xce
+;		cpu		W65C816S
+;		rep		#$30
+;		plx
+;		phx
+		tya
+		tax
+L2S:	
+		txa
+
+;		phx
+;		ldx		#5
+;		wdm
+;		xce
+;		cpu		RTF65002
+;		jsr		PRTNUM
+;		clc
+;		xce
+;		cpu		W65C816S
+;		rep		#$30
+;		plx
+;		txa
+
+		jsr		MULSUB
+		sta		SSS
+		lda		#10
+		sta		Q
+		jsr		ADJ1SUB
+		lda		P-1,x
+		jsr		UNADJ1SUB
+		jsr		MULSUB
+		clc
+		adc		SSS
+		sta		Q
+		txa
+		asl
+		dea
+		jsr		DIVSUB
+		jsr		ADJ1SUB
+		sta		P-1,x
+		jsr		UNADJ1SUB
+		dex
+		bne		L2S
+		lda		#10
+		jsr		DIVSUB
+		sta		P
+		plx
+		pla
+		ldy		Q
+		cpy		#10
+		bcc		L3S
+		ldy		#0
+		ina
+L3S:	
+		cpx		#358
+		bcc		L4S
+		bne		L5S
+		jsr		OUTPUTSUB
+		lda		#46
+L4S:	
+		jsr		OUTPUTSUB
+L5S:	
+		tya
+		eor		#48
+		ply
+		cpx		#358
+		bcs		L6S
+		dey
+		dey
+		dey
+L6S:	
+		dex
+		beq		L7S
+		jmp		L1S
+L7S:
+		jsr		OUTPUTSUB
+		wdm
+		xce
+		cpu		RTF65002
+		rts
+
+		cpu		W65C816S
+INITSUB:
+		lda		#2
+		ldx		#1192
+IS1:
+		jsr		ADJSUB
+		sta		P,x
+		jsr		UNADJSUB
+		dex
+		bpl		IS1
+		rts
+
+MULSUB:
+		sta		R
+		ldy		#16
+M1S:	asl
+		asl		Q
+		bcc		M2S
+		clc
+		adc		R
+M2S:	dey
+		bne		M1S
+		rts
+
+DIVSUB:
+		sta		R
+		ldy		#16
+		lda		#0
+		asl		Q
+D1S:	rol
+		cmp		R
+		bcc		D2S
+		sbc		R
+D2S:	rol		Q
+		dey
+		bne		D1S
+		rts
+		
+ADJSUB:
+		pha
+		txa
+		asl
+		tax
+		pla
+		rts
+UNADJSUB:	
+		pha
+		txa
+		lsr
+		tax
+		pla
+		rts
+ADJ1SUB:
+		pha
+		txa
+		asl
+		tax
+		pla
+		dex
+		rts
+UNADJ1SUB:
+		pha
+		txa
+		lsr
+		tax
+		pla
+		inx
+		rts
+
+OUTPUTSUB:
+		wdm		; switch to 32 bit mode
+		xce
+		cpu		RTF65002
+		jsr		DisplayChar
+		clc		; switch back to 816 mode
+		xce
+		cpu		W65C816S
+		rep		#$30		; acc,ndx = 16 bit
+		rts
+
+;------------------------------------------------------------------
+; Kind of a chicken and egg problem here. If there is something
+; wrong with the processor, then this code likely won't execute.
+;
+
+; put message to screen
+; tests pla,sta,ldy,inc,bne,ora,jmp,jmp(abs)
+
+putmsg
+	pla					; pop the return address off the stack
+	wdm					; switch to 32 bits
+	xce
+	cpu		RTF65002
+	push	r4			; save off r4
+	or		r4,r1,#$FFFF0000	; set program bank bits; code is at $FFFFxxxx
+pm2
+	add		r4,#1		; increment pointer
+	lb		r1,0,r4		; get a byte from the code space
+	and		#$FF		; we want only eight bits
+	beq		pm1			; is it end of string ?
+	jsr		DisplayChar
+	jmp		pm2
+pm1						; must update the return address !
+	ld		r1,r4		; get return address into acc
+	pop		r4			; restore r4
+	clc					; switch back to '816 mode
+	xce
+	cpu		W65C816S
+	rep		#$30		; mem,ndx = 16 bits
+	pha
+	rts
+	
+	cpu		RTF65002
 
 message "1298"
 include "TinyBasic65002.asm"
