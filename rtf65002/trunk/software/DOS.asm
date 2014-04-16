@@ -1,3 +1,4 @@
+	cpu		rtf65002
 ; 64GB card
 ; 36 address bits
 ; 9 bits for 512 byte block size
@@ -14,6 +15,10 @@ DIRTY		EQU		'D'
 CLEAN		EQU		'C'
 NORMAL		EQU		0
 
+ONE_SHOT	EQU		1
+WRITE_IMMED	EQU		2
+ZUPER_BLOCK	EQU		2	; write superblock immediately
+SUPER_BLOCK_NUM		EQU		1	; should calculate this
 ;
 ; Note that structure offsets are word offsets
 ; The super block always occupies a whole block for simplicity even though
@@ -106,17 +111,21 @@ DE_SIZE			EQU		16		; size in words
 ; Structure of a disk buffer
 ; STRUCT BUF
 ;
-BUF_DEV			EQU		0		; device 
-BUF_BLOCKNUM	EQU		1		; disk block number
+b_dev			EQU		0		; device 
+b_blocknum	EQU		1		; disk block number
 BUF_COUNT		EQU		2		; reference count
-BUF_DIRTY		EQU		3		; buffer has been altered
+b_dirty		EQU		3		; buffer has been altered
 BUF_NEXT		EQU		4		; next buffer on LRU list
 BUF_PREV		EQU		5
-BUF_HASH		EQU		6		; pointer to hashed buffer
+b_hash		EQU		6		; pointer to hashed buffer
 BUF_DATA		EQU		8		; beginning of data area
 BUF_INODE		EQU		8
 BUF_SIZE		EQU		BUF_DATA+256
-NR_BUFS			EQU		2048	; number of disk buffers in the system
+
+NR_BUFS			EQU		8192	; number of disk buffers in the system (must be a power of 2)
+NR_BUF_HASH		EQU		1024	; number of hash chains (must be a power of two)
+BT_DATA_BLOCK	EQU		0
+BT_SUPERBLOCK	EQU		1
 
 IAM_BUF_SIZE	EQU		1032	; 1024 + 8
 CAM_SUPERMAP_SIZE	EQU		128
@@ -133,20 +142,26 @@ DOS_DATA		EQU		0x00300000					; start address of DOS data area
 super_bufs		EQU		DOS_DATA
 super_bufs_end	EQU		super_bufs + SUPERBUF_SIZE * 32
 BGD_bufs		EQU		super_bufs_end
-BGD_bufs_end	EQU		BGD_buf + 1024 * BGD_BUFSIZE	; 32 kB = 1024 descriptors
-iam_bufs		EQU		BGDT_buf_end
+BGD_bufs_end	EQU		BGD_bufs + 1024 * BGD_BUFSIZE	; 32 kB = 1024 descriptors
+iam_bufs		EQU		BGD_bufs_end
 inode_array		EQU		iam_bufs + IAM_BUF_SIZE * 32	; 129 kB worth (256 open files)
 cam_supermaps	EQU		inode_array + INODE_SIZE * 256	; 64kB worth 
 cam_bufs		EQU		cam_supermaps + CAM_SUPERMAP_SIZE * 32
-data_bufs		EQU		0x00400000			; room for 2048 buffers
+data_bufs		EQU		0x00400000			; room for 8192 buffers
 data_bufs_end	EQU		data_bufs + BUF_SIZE * NR_BUFS
-superbuf_dump	EQU		data_bufs_end + 1
+buf_hash		EQU		data_bufs_end
+buf_hash_end	EQU		buf_hash + NR_b_hash
+superbuf_dump	EQU		buf_hash_end + 1
 bufs_in_use		EQU		superbuf_dump + 1
 blockbuf_dump	EQU		bufs_in_use + 1
 disk_size		EQU		blockbuf_dump + 1
 block_size		EQU		disk_size + 1
 fs_start_block	EQU		block_size + 1
 bgdt_valid		EQU		fs_start_block + 1
+front			EQU		bgdt_valid + 1
+rear			EQU		front + 1
+panicking		EQU		rear + 1
+fs_active		EQU		panicking + 1
 
 ; number of buffers for the inode allocation map
 ; number of buffers for inode array
@@ -162,6 +177,8 @@ sector_buf	EQU		0x01FBEC00
 init_DOS:
 	stz		bgdt_valid
 	jsr		init_superbufs
+	lda		#'A'
+	sta		fs_active
 	rts
 
 ;------------------------------------------------------------------------------
@@ -236,6 +253,8 @@ get_inodes_per_group:
 	plx
 	rts
 
+; inodes per block does not need to be a power of 2
+;
 get_inodes_per_block:
 	phx
 	pha
@@ -243,7 +262,7 @@ get_inodes_per_block:
 	tax
 	pla
 	jsr		get_inode_size
-	divu	r1,r2,r1
+	div		r1,r2,r1
 	plx
 	rts
 
@@ -256,59 +275,9 @@ get_bgd_per_block:
 	lsr
 	rts
 
-;------------------------------------------------------------------------------
-; get_super:
-;	Get the super block.
-; There is a super block for each device. This code should really call
-; device driver code to read the disk. However for now it is hardcoded
-; to read/write the SDCard.
-;	We cheat here and read only a sector rather than a block because
-; the superblock is only a sector in size.
-;   Note that this routine calls the sector read/write routines rather
-; than get_block. The superblocks have caching independent of the
-; regular block cache.
-;
-; Parameters:
-;	r1 = device number
-; Returns:
-;	r1 = pointer to superblock buffer
-;------------------------------------------------------------------------------
-;
-get_super:
-	phx
-	; first search the superbuf array to see if the block is already
-	; memory resident
-	ldx		#super_bufs
-gs2:
-	cmp		s_dev,x					; device number match ?
-	beq		gs1						; yes, found superblock buffer for device
-	add		r2,r2,#SUPERBUF_SIZE
-	cpx		#super_bufs_end
-	bltu	gs2
-	; Here we couldn't find the device superblock cached
-	; So dump one from memory and load cache
-	inc		superbuf_dump			; "randomizer" for dump select
-	ldx		superbuf_dump
-	and		r2,r2,#31				; 32 buffers
-	mul		r2,r2,#SUPERBUF_SIZE
-	add		r2,r2,#super_bufs
-	; if the superblock is dirty, then write it out
-	ldy		s_dirty,x
-	asl		r2,r2,#2				; convert word to byte address
-	cpy		#DIRTY
-	bne		gs3
-	jsr		get_filesystem_offset
-	jsr		spi_write_sector		; put_block
-gs3:
-	jsr		get_filesystem_offset	; r1 = sector number of superblock
-	jsr		spi_read_sector			; get_block
-gs1:
-	txa
-	lsr								; convert byte address to word address
-	lsr
-	plx
-	rts
-
+;==============================================================================
+; INODE code
+;==============================================================================
 ;------------------------------------------------------------------------------
 ; Parameters:
 ;	r1 = device number
@@ -326,8 +295,8 @@ free_inode:
 	push	r9
 	ld		r7,r1		; r7 = device number
 	jsr		get_inodes_per_group
-	divu	r4,r2,r1	; r4 = group number of inode
-	modu	r5,r2,r1	; r5 = group index
+	div		r4,r2,r1	; r4 = group number of inode
+	mod		r5,r2,r1	; r5 = group index
 	ld		r1,r7
 	ld		r2,r4
 	jsr		get_bgdt_entry
@@ -346,7 +315,7 @@ free_inode:
 	inc		s_free_inodes_count,x
 	lda		#DIRTY
 	sta		s_dirty,x
-	sta		BUF_DIRTY,r8
+	sta		b_dirty,r8
 fi1:
 	pop		r9
 	pop		r8
@@ -588,8 +557,8 @@ rw_inode:
 	ld		r5,r1			; r4 = inodes per group
 	pla
 	ldx		INODE_INUM,r1
-	divu	r6,r2,r5		; r6 = group number
-	modu	r7,r2,r5		; r7 = index into group
+	div		r6,r2,r5		; r6 = group number
+	mod		r7,r2,r5		; r7 = index into group
 	lda		INODE_DEV,r1
 	pha
 	ld		r2,r6
@@ -597,8 +566,8 @@ rw_inode:
 	lda		bg_inode_table,r1	; get block address of inode table
 	pha
 	jsr		get_inodes_per_block
-	divu	r6,r7,r1
-	modu	r8,r7,r1
+	div		r6,r7,r1
+	mod		r8,r7,r1
 	pla
 	add		r2,r1,r6
 	pla
@@ -609,7 +578,7 @@ rw_inode:
 	pop		r4					; r4 = inode
 	add		r5,r1,#BUF_INODE	; r5 = address of inode data
 
-	mulu	r6,r8,#INODE_SIZE
+	mul		r6,r8,#INODE_SIZE
 	add		r5,r6
 	pop		r6					; r6 = R/W indicator
 	cmp		r6,#READING
@@ -626,9 +595,15 @@ rwi1:
 	ld		r2,r4
 	ld		r3,r5
 	mvn
+	jsr		get_datetime
+	stx		INODE_WTIME,r4
+	sta		INODE_WTIME+1,r4
 	lda		#DIRTY
-	sta		BUF_DIRTY,r7
-rwi2:	
+	sta		b_dirty,r7
+rwi2:
+	jsr		get_datetime
+	stx		INODE_ATIME,r4
+	sta		INODE_ATIME+1,r4
 	ld		r1,r7				; r1 = pointer to block buffer
 	ld		r2,#INODE_BLOCK
 	jsr		put_block
@@ -671,8 +646,8 @@ load_iam_map_block:
 ;
 get_bgdt_entry:
 	push	r5
-	modu	r5,r2,#1024			; r5 = hashed group number
-	mulu	r5,r5,#BGD_BUFSIZE
+	mod		r5,r2,#1024			; r5 = hashed group number
+	mul		r5,r5,#BGD_BUFSIZE
 	add		r5,r5,#BGD_bufs		; r5 = pointer to BGD buffer
 	cmp		bg_dev,r5
 	bne		gbe1
@@ -692,8 +667,8 @@ gbe1:
 	; Compute the block number containing the group
 	jsr		get_bgd_per_block
 	ld		r2,bg_group_num,r5
-	divu	r8,r2,r1
-	modu	r4,r2,r1
+	div		r8,r2,r1
+	mod		r4,r2,r1
 	lda		fs_start_block
 	ina							; the next block after the file system start
 	add		r2,r1,r8			; r2 = block number
@@ -701,7 +676,7 @@ gbe1:
 	jsr		get_block
 	pha
 	add		r1,r1,#BUF_DATA		; move to data area
-	mulu	r4,r4,#BGDESC_SIZE
+	mul		r4,r4,#BGDESC_SIZE
 	add		r1,r4				; r1 = pointer to desired BGD
 	; copy BGD to the block
 	tay
@@ -710,21 +685,21 @@ gbe1:
 	mvn
 	pla
 	ld		r2,#DIRTY
-	stx		BUF_DIRTY,r1
+	stx		b_dirty,r1
 gbe3:
 	; Compute the block number containing the group
 	ld		r1,r6
 	ld		r2,r7
 	jsr		get_bgd_per_block
-	divu	r8,r2,r1
-	modu	r4,r2,r1
+	div		r8,r2,r1
+	mod		r4,r2,r1
 	lda		fs_start_block
 	ina							; the next block after the file system start
 	add		r2,r1,r8			; r2 = block number
 	ld		r1,r6				; r1 = device number
 	jsr		get_block
 	add		r1,r1,#BUF_DATA		; move to data area
-	mulu	r4,r4,#BGDESC_SIZE
+	mul		r4,r4,#BGDESC_SIZE
 	add		r1,r4				; r1 = pointer to desired BGD
 	; copy BGD from the block to the buffer
 	tax
@@ -745,16 +720,21 @@ gbe2:
 	rts
 
 ;==============================================================================
+; Block Caching
 ;==============================================================================
 
 ;------------------------------------------------------------------------------
 ; get_block
+;
 ;	Gets a block from the device. First the block cache is checked for the
 ; block; if found the cached buffer is returned.
+;	The block number is hashed to determine where to start the search for a
+; cached buffer. 
 ;
 ; Parameters:
 ;	r1 = device
 ;	r2 = block number
+;	r3 = only searching
 ; Returns:
 ;	r1 = pointer to buffer containing block
 ;------------------------------------------------------------------------------
@@ -769,21 +749,23 @@ get_block:
 	push	r8
 	ld		r4,r1				; r4 = device number
 	ld		r5,r2				; r5 = block number
-	ld		r8,#0				; r8 = NULL pointer to empty disk buffer
-	ld		r6,#NR_BUFS			; number of disk buffers
-	ldx		#data_bufs
-gb3:
-	cmp		r4,BUF_DEV,x		; check device number and
-	bne		gb1
-	cmp		r5,BUF_BLOCKNUM,x	; block number against current buffer values
-	bne		gb1
-	lda		BUF_COUNT,x			; if it's a match
-	bne		gb2
-	inc		bufs_in_use
-gb2:
-	ina
-	sta		BUF_COUNT,x
-	txa
+	and		r6,r5,#NR_BUF_HASH-1
+	ldx		buf_hash,r6
+	cmp		r4,#NO_DEV
+	beq		gb11
+gb15:
+	cmp		r2,r0				; while (bp <> NULL) {
+	beq		gb12
+	cmp		r4,b_dev,x		;	if (bp->b_dev == dev) {
+	bne		gb13
+	cmp		r5,b_blocknum,x	;		if (bp->b_blocknum==block) {
+	bne		gb13
+	cmp		r0,BUF_COUNT,x		;			if (bp->b_count==0)
+	bne		gb14
+	inc		bufs_in_use			;				bufs_in_use++
+gb14:
+	inc		BUF_COUNT,x			;			bp->b_count++
+	txa							;			return (bp)
 gb_ret:
 	pop		r8
 	pop		r7
@@ -793,68 +775,94 @@ gb_ret:
 	ply
 	plx
 	rts
-	; Here, we iterate to the next buffer
-gb1:
-	ld		r7,BUF_DEV,x
-	cmp		r7,#NO_DEV
-	bne		gb4
-	ld		r8,r2				; r8 = pointer to empty disk buffer
-gb4:
-	add		r2,r2,#BUF_SIZE
-	sub		r6,#1
-	bne		gb3
-	; Here we searched the entire buffer cache and didn't find the
-	; block cached. Did we find an empty buffer though ?
-	cmp		r8,#0
-	beq		gb5
-gb8:
-	; Here we have an available buffer in r8
-	st		r4,BUF_DEV,r8
-	st		r5,BUF_BLOCKNUM,r8
-	inc		BUF_COUNT,r8
-
-	cmp		r4,#NO_DEV
-	beq		gb6
-	cmp		r3,#NORMAL
-	bne		gb6
-	ld		r1,r8
-	ldx		#READING
-	jsr		rw_block
-	bra		gb_ret
-gb6:
-	ld		r1,r8
-	bra		gb_ret
-	; Implement random replacement of disk block buffer
-gb5:
-	inc		blockbuf_dump
-	lda		blockbuf_dump
-	and		#$7ff
-	ldx		#data_bufs
-	mulu	r1,r1,#BUF_SIZE
-	add		r2,r1
-	lda		BUF_DEV,x
-	cmp		#NO_DEV
-	bne		gb7
-gb9:
-	ld		r8,r2
-	stz		BUF_COUNT,x
-	bra		gb8	
-gb7:
-	; If the buffer being dumped isn't dirty then we don't need to write it to disk
-	lda		BUF_DIRTY,x
-	cmp		#DIRTY
-	bne		gb9
+gb13:
+	ldx		b_hash,x			;	bp = bp->b_hash
+	bra		gb15
+gb11:
+gb12:
+	lda		bufs_in_use
+	cmp		#NR_BUFS
+	bltu	gb16
+	jsr		panic
+	db		"All buffers in use.",0
+gb16:
+	inc		bufs_in_use
+	ldx		front
+gb18:
+	cmp		r0,BUF_COUNT,x
+	bleu	gb17
+	cmp		r0,BUF_NEXT,x
+	beq		gb17
+	ldx		BUF_NEXT,x
+	bra		gb18
+gb17:
+	cmp		r2,r0
+	beq		gb19
+	cmp		r0,BUF_COUNT,x
+	bleu	gb20
+gb19:	
+	jsr		panic
+	db		"No free buffer.", 0
+gb20:
+	ld		r6,b_blocknum,x
+	and		r6,r6,#NR_BUF_HASH-1
+	ld		r7,buf_hash,r6
+	cmp		r7,r2
+	bne		gb21
+	ld		r8,b_hash,x
+	st		r8,buf_hash,r6
+	bra		gb22
+gb21:
+	cmp		r0,b_hash,r7
+	beq		gb22
+	cmp		r2,b_hash,r7
+	bne		gb23
+	ld		r8,b_hash,x
+	st		r8,b_hash,r7
+	bra		gb22
+gb23:
+	ld		r7,b_hash,r7
+	bra		gb21
+gb22:
+	ld		r8,b_dirty,x
+	cmp		r8,#DIRTY
+	bne		gb24
+	ld		r8,b_dev,x
+	cmp		r8,#NO_DEV
+	beq		gb24
+	phx
 	txa
 	ldx		#WRITING
 	jsr		rw_block
-	ld		r8,r1
-	stz		BUF_COUNT,r1
-	bra		gb8
+	plx
+gb24:
+	st		r4,b_dev,x		; bp->b_dev = dev
+	st		r5,b_blocknum,x	; bp->b_blocknum = block
+	inc		BUF_COUNT,x			; bp->b_count++
+	ld		r7,buf_hash,r6
+	st		r7,b_hash,x		; bp->b_hash = buf_hash[bp->b_blocknr & (NR_b_hash - 1)]
+	st		r2,buf_hash,r6		; buf_hash[bp->b_blocknr & (NR_b_hash - 1)] = bp
+	cmp		r4,#NO_DEV
+	beq		gb25
+	cmp		r3,#NORMAL
+	bne		gb25
+	phx
+	txa
+	ldx		#READING
+	jsr		rw_block
+	pla
+	bra		gb_ret
+gb25:
+	txa
+	bra		gb_ret
 
 ;------------------------------------------------------------------------------
+; put_block
+;	Put a block back to device
 ;
 ; Parameters:
 ;	r1 = pointer to buffer to put
+;	r2 = block type
 ;
 ;------------------------------------------------------------------------------
 ;
@@ -864,9 +872,82 @@ put_block:
 pb2:
 	rts
 pb1:
+	pha
+	phx
+	push	r4
+	push	r5
+	push	r7
+	push	r8
+	ld		r4,r1
+	ld		r5,r2
 	dec		BUF_COUNT,r1	; if buf count > 0 then buffer is still in use
 	bne		pb2
 	dec		bufs_in_use
+	tax
+	ld		r7,BUF_NEXT,x
+	ld		r8,BUF_PREV,x
+	beq		pb3
+	st		r7,BUF_NEXT,r8	; prev_ptr->b_next = next_ptr
+	bra		pb4
+pb3:
+	st		r7,front		; front = next_ptr
+pb4:
+	cmp		r7,r0
+	beq		pb5
+	st		r8,BUF_NEXT,r7
+	bra		pb6
+pb5:
+	st		r8,rear
+pb6:
+	bit		r5,#ONE_SHOT
+	beq		pb7
+	stz		BUF_PREV,x
+	lda		front
+	sta		BUF_NEXT,x
+	bne		bp8
+	stx		rear
+	bra		bp9
+bp8:
+	stx		BUF_PREV,r1		; front->b_prev = bp
+bp9:
+	stx		front			; front = bp
+	bra		bp10
+bp7:
+	stz		BUF_NEXT,x		; bp->b_next = NULL
+	lda		rear
+	sta		BUF_PREV,x		; bp->b_prev = rear
+	bne		bp11
+	stx		front			; front = bp
+	bra		bp12
+bp11:
+	stx		BUF_NEXT,r1		; rear->b_next = bp
+bp12:
+	stx		rear			; read = bp
+bp10:
+	cmp		r0,b_dev,x
+	beq		bp13
+	lda		#DIRTY
+	cmp		b_dirty,x
+	bne		bp13
+	bit		r5,#WRITE_IMMED	
+	beq		bp13
+	phx
+	txa
+	ldx		#WRITING
+	jsr		rw_block
+	plx
+bp13:
+	cmp		r5,#ZUPER_BLOCK
+	bne		bp14
+	lda		#NO_DEV
+	sta		b_dev,x
+bp14:
+	pop		r8
+	pop		r7
+	pop		r5
+	pop		r4
+	plx
+	pla
 	rts
 	
 ;------------------------------------------------------------------------------
@@ -888,7 +969,7 @@ block_to_sector:
 	asl		r1,r1,r2
 	plx
 	rts
-	
+
 ;------------------------------------------------------------------------------
 ; rw_block
 ;	This function should really go through a device driver interface, but for
@@ -905,14 +986,14 @@ rw_block:
 	phx
 	phy
 	pha
-	ldy		BUF_DEV,r1
+	ldy		b_dev,r1
 	cpy		#NO_DEV
 	beq		rwb1
 	cpx		#READING
 	bne		rwb2
 	tax
+	lda		b_blocknum,x
 	add		r2,r2,#BUF_DATA
-	lda		BUF_BLOCKNUM,r1
 	jsr		block_to_sector
 	pha
 	asl		r2,r2,#2			; convert word address to byte address
@@ -924,8 +1005,8 @@ rw_block:
 	bra		rwb1
 rwb2:
 	tax
+	lda		b_blocknum,x
 	add		r2,r2,#BUF_DATA
-	lda		BUF_BLOCKNUM,r1
 	jsr		block_to_sector
 	pha
 	asl		r2,r2,#2			; convert word address to byte address
@@ -937,7 +1018,7 @@ rwb2:
 rwb1:
 	pla
 	ldy		#CLEAN
-	sty		BUF_DIRTY,r1
+	sty		b_dirty,r1
 	ply
 	plx
 	rts
@@ -958,34 +1039,275 @@ invalidate_dev:
 	ldy		#NR_BUFS
 	ldx		#data_bufs
 id2:
-	ld		r4,BUF_DEV,x
+	ld		r4,b_dev,x
 	cmp		r4,r1
 	bne		id1
 	ld		r4,#NO_DEV
-	st		r4,BUF_DEV,x
+	st		r4,b_dev,x
 id1:
 	add		r2,r2,#BUF_SIZE
 	dey
 	bne		id2
 
-	ldy		#32
-	ldx		#super_bufs
+; invalidate the superblock
+;	ldy		#32
+;	ldx		#super_bufs
 id3:
-	ld		r4,s_dev,x
-	cmp		r4,r1
-	bne		id4
-	ld		r4,#NO_DEV
-	st		r4,s_dev,x
+;	ld		r4,s_dev,x
+;	cmp		r4,r1
+;	bne		id4
+;	ld		r4,#NO_DEV
+;	st		r4,s_dev,x
 id4:
-	add		r2,r2,#SUPERBUF_SIZE
-	dey
-	bne		id3
+;	add		r2,r2,#SUPERBUF_SIZE
+;	dey
+;	bne		id3
 
 	pop		r4
 	ply
 	plx
 	rts
 	
+;==============================================================================
+; SUPERBLOCK code
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; get_super:
+;	Get the super block.
+; There is a super block for each device.
+;
+; Parameters:
+;	r1 = device number
+; Returns:
+;	r1 = pointer to superblock buffer
+;------------------------------------------------------------------------------
+;
+get_super:
+	phx
+	phy
+	push	r4
+	; first search the superbuf array to see if the block is already
+	; memory resident
+	ldy		#0
+	ldx		#super_bufs
+gs2:
+	ld		r4,s_dev,x
+	cmp		r1,r4					; device number match ?
+	beq		gs1						; yes, found superblock buffer for device
+	cmp		r4,#NO_DEV
+	bne		gs4
+	txy								; record empty buffer
+gs4:
+	add		r2,r2,#SUPERBUF_SIZE
+	cpx		#super_bufs_end
+	bltu	gs2
+	cpy		#0
+	beq		gs5
+	tyx
+	sta		s_dev,x
+	bra		gs3
+gs5:
+	; Here we couldn't find the device superblock cached and there wasn't a slot free.
+	; So dump one from memory and load cache
+	inc		superbuf_dump			; "randomizer" for dump select
+	ldx		superbuf_dump
+	and		r2,r2,#31				; 32 buffers
+	mul		r2,r2,#SUPERBUF_SIZE
+	add		r2,r2,#super_bufs
+	; if the superblock is dirty, then write it out
+	ldy		s_dirty,x
+	cpy		#DIRTY
+	bne		gs3
+	jsr		write_super
+gs3:
+	sta		s_dev,x
+	jsr		read_super
+gs1:
+	txa
+	pop		r4
+	ply
+	plx
+	rts
+
+;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = pointer to superblock buffer
+;------------------------------------------------------------------------------
+read_super:
+	pha
+	phx
+	phy
+	ldy		s_dev,r1			; save device number in .Y
+	pha
+	jsr		get_filesystem_offset
+	tax
+	pla
+	pha
+	asl							; convert pointer to byte pointer
+	asl
+	jsr		spi_read_sector
+	plx
+	lda		#CLEAN
+	sta		s_dirty,x
+	sty		s_dev,x				; restore device number
+	ply
+	plx
+	pla
+	rts
+	
+;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = pointer to superblock buffer
+;------------------------------------------------------------------------------
+write_super:
+	pha
+	phx
+	phy
+	push	r4
+	ld		r4,r1
+	ldy		s_dev,r1			; save device number in .Y
+	jsr		get_datetime
+	stx		s_wtime,r4
+	sta		s_wtime+1,r4
+	pop		r4
+	pha
+	jsr		get_filesystem_offset
+	tax
+	pla
+	pha
+	asl							; convert pointer to byte pointer
+	asl
+	jsr		spi_write_sector
+	plx
+	lda		#CLEAN
+	sta		s_dirty,x
+	sty		s_dev,x				; restore device number
+	ply
+	plx
+	pla
+	rts
+	
+;==============================================================================
+; Utility functions
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; get_datetime:
+;	Get the date and time.
+; Returns:
+;	r1 = date
+;	r2 = time
+;------------------------------------------------------------------------------
+get_datetime:
+	php
+	sei
+	stz		DATETIME_SNAPSHOT	; take a snapshot of the running date/time
+	lda		DATETIME_DATE
+	ldx		DATETIME_TIME
+	plp
+	rts
+
+;------------------------------------------------------------------------------
+; panic
+;	Display a filesystem panic message and abort.
+;
+; Parameters:
+;	r1 = numeric constant
+;	inline string
+;------------------------------------------------------------------------------
+;
+panic:
+	pha
+	lda		panicking
+	beq		pan1
+	pla
+	rts
+pan1:
+	ina
+	sta		panicking	; panicking = TRUE;
+	jsr		dos_msg
+	db		"File system panic: ", 0
+	ply
+	plx						; pull return address from stack
+pan2:
+	lb		r1,0,x
+	beq		pan3
+	jsr		DisplayChar
+	inx
+	bra		pan2
+pan3:
+	inx
+	phx
+	tya
+	cmp		#NO_NUM
+	beq		pan4
+	ldx		#5
+	jsr		PRTNUM
+pan4:
+	jsr		CRLF
+	jsr		do_sync
+	jsr		sys_abort
+	;
+pan5:						; we should not get back to here after the sys_abort()
+	bra		pan5
+	
+;------------------------------------------------------------------------------
+; Display a message on the screen
+; Parameters:
+;	inline string
+;------------------------------------------------------------------------------
+;
+dos_msg:
+	plx			; get return address
+dm2:
+	lb		r1,0,x
+	beq		dm1
+	jsr		DisplayChar
+	inx
+	bra		dm2
+dm1:
+	inx
+	phx
+	rts
+
+;==============================================================================
+;==============================================================================
+;------------------------------------------------------------------------------
+; File system CLEAN task
+;------------------------------------------------------------------------------
+fs_clean:
+fsc4:
+	lda		#100			; sleep for 1s
+	jsr		Sleep
+fsc3:
+	lda		fs_active
+	beq		fsc4
+	ldx		#data_bufs
+fsc2:
+	lda		b_dev,x			; is the buffer in use ?
+	cmp		#NO_DEV
+	beq		fsc1			; if not, goto next buffer
+	sei
+	lda		b_dirty,x		; is the buffer dirty ?
+	cmp		#CLEAN
+	beq		fsc1			; if not, goto next buffer
+	; Found a dirty buffer
+	phx
+	txa
+	ldx		#WRITING		; write the dirty buffer out to disk
+	jsr		rw_block
+	plx
+	lda		#CLEAN			; mark the buffer as clean
+	sta		b_dirty,x
+fsc1:						; iterate to the next buffer
+	cli
+	add		r2,r2,#BUF_SIZE
+	cpx		#data_bufs_end
+	bltu	fsc2
+	bra		fsc3
+	
+
 ;==============================================================================
 ;==============================================================================
 
@@ -1025,7 +1347,6 @@ spi_rp1:
 	plx
 	lda		#1
 	rts
-
 
 
 ;==============================================================================
