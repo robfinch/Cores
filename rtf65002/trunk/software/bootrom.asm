@@ -402,6 +402,9 @@ nMsgBlk		EQU		FreeMsg + 1
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
 IOFocusNdx	EQU		nMsgBlk + 1
+test_mbx	EQU		IOFocusNdx + 1
+test_D1		EQU		test_mbx + 1
+test_D2		EQU		test_D1 + 1
 
 IrqSource	EQU		0x798
 
@@ -2552,6 +2555,12 @@ Prompt14:
 	lda		#10
 	ldx		#100
 	jsr		AddToTimeoutList
+	jsr		DumpTimeoutList
+	jsr		PopTimeoutList
+	jsr		DumpTimeoutList
+	lda		#10
+	ldx		#100
+	jsr		AddToTimeoutList
 	lda		#12
 	ldx		#1000
 	jsr		AddToTimeoutList
@@ -2635,9 +2644,17 @@ Prompt19a:
 	jmp		Monitor
 Prompt20:
 	cmp		#'8'
-	bne		Monitor
+	bne		Prompt21
 	jsr		Test816
 	jmp		Monitor
+Prompt21:
+	cmp		#'m'
+	bne		Monitor
+	lda		#3
+	ldx		#0
+	ldy		#test_mbx_prg
+	jsr		StartTask
+	bra		Monitor
 
 message "Prompt16"
 RandomLinesCall:
@@ -3185,13 +3202,13 @@ Tone:
 	sta		PSGADSR0
 	lda		#0x1104			; gate, output enable, triangle waveform
 	sta		PSGCTRL0
-;	lda		#20				; delay about 100ms
-;	jsr		Sleep
-	jsr		Delay10
+	lda		#20				; delay about 100ms
+	jsr		Sleep
+;	jsr		Delay10
 	lda		#0x0104			; gate off, output enable, triangle waveform
 	sta		PSGCTRL0
 	lda		#20				; delay about 100ms
-;	jsr		Sleep
+	jsr		Sleep
 ; 	jsr		Delay10
 	lda		#0x0000			; gate off, output enable off, no waveform
 	sta		PSGCTRL0
@@ -5609,7 +5626,7 @@ msgPerr:
 	db	"Parity error at: ",0
 
 ;==============================================================================
-; Multi-tasking kernel
+; Finitron Multi-Tasking Kernel (FMTK)
 ;==============================================================================
 	org		$FFFFC000
 	dw		MTKInitialize
@@ -5658,6 +5675,12 @@ MTKInitialize:
 	lda		#255
 	ldx		#-1
 	ldy		#TCB_iof_prev
+	stos
+	
+	; Set owning job to zero
+	lda		#255
+	ldx		#0
+	ldy		#TCB_hJCB
 	stos
 
 	; Initialize free message list
@@ -5948,6 +5971,7 @@ xtsk1:
 ; r1 = task number
 ; r2 = new priority
 ;------------------------------------------------------------------------------
+;
 SetTaskPriority:
 	cmp		#MAX_TASKNO					; make sure task number is reasonable
 	bhi		stp1
@@ -6091,13 +6115,13 @@ AddToTimeoutList:
 	phx
 	push	r4
 	push	r5
-	sei
 
 	ld		r5,#-1
-	st		r5,TCB_NxtTo,r1	; these fields should already be -1
+	sei
+	st		r5,TCB_NxtTo,r1		; these fields should already be -1
 	st		r5,TCB_PrvTo,r1
 	ld		r4,TimeoutList		; are there any tasks on the timeout list ?
-	bmi		attl1
+	bmi		attl_add_at_head	; If not, update head of list
 attl_check_next:
 	sub		r2,r2,TCB_Timeout,r4	; is this timeout > next
 	bmi		attl_insert_before
@@ -6108,7 +6132,7 @@ attl_check_next:
 	; Here we scanned until the end of the timeout list and didn't find a 
 	; timeout of a greater value. So we add the task to the end of the list.
 attl_add_at_end:
-	st		r4,TCB_NxtTo,r1	; r4 was = -1
+	st		r4,TCB_NxtTo,r1		; r4 is = -1
 	st		r1,TCB_NxtTo,r5
 	st		r5,TCB_PrvTo,r1
 	stx		TCB_Timeout,r1
@@ -6116,21 +6140,21 @@ attl_add_at_end:
 
 attl_insert_before:
 	cmp		r5,#0
-	bmi		attl2
-	st		r4,TCB_NxtTo,r1	; next on list goes after this task
-	st		r5,TCB_PrvTo,r1	; set previous link
+	bmi		attl_insert_before_head
+	st		r4,TCB_NxtTo,r1		; next on list goes after this task
+	st		r5,TCB_PrvTo,r1		; set previous link
 	st		r1,TCB_NxtTo,r5
 	st		r1,TCB_PrvTo,r4
-	bra		attl3
+	bra		attl_adjust_timeout
 
 	; Here there is no previous entry in the timeout list
 	; Add at start
-attl2:
+attl_insert_before_head:
 	sta		TCB_PrvTo,r4
-	st		r5,TCB_PrvTo,r1	; r5 = -1
+	st		r5,TCB_PrvTo,r1		; r5 is = -1
 	st		r4,TCB_NxtTo,r1
-	sta		TimeoutList		; update the head pointer
-attl3:
+	sta		TimeoutList			; update the head pointer
+attl_adjust_timeout:
 	add		r2,r2,TCB_Timeout,r4	; get back timeout
 	stx		TCB_Timeout,r1
 	ld		r5,TCB_Timeout,r4	; adjust the timeout of the next task
@@ -6140,14 +6164,14 @@ attl3:
 
 	; Here there were no tasks on the timeout list, so we add at the
 	; head of the list.
-attl1:
-	sta		TimeoutList		; set the head of the timeout list
+attl_add_at_head:
+	sta		TimeoutList			; set the head of the timeout list
 	stx		TCB_Timeout,r1
-	ldx		#-1				; flag no more entries in timeout list
+	ldx		#-1					; flag no more entries in timeout list
 	stx		TCB_NxtTo,r1		; no next entries
 	stx		TCB_PrvTo,r1		; and no prev entries
 attl_exit:
-	ldx		TCB_Status,r1	; set the task's status as timing out
+	ldx		TCB_Status,r1		; set the task's status as timing out
 	or		r2,r2,#TS_TIMEOUT
 	stx		TCB_Status,r1
 	pop		r5
@@ -6155,8 +6179,6 @@ attl_exit:
 	plx
 	plp
 	rts
-msgTimeout1:
-	db	CR,LF,"Adding to timeout list:",CR,LF,0
 	
 ;------------------------------------------------------------------------------
 ; RemoveFromTimeoutList
@@ -6170,33 +6192,33 @@ msgTimeout1:
 ;------------------------------------------------------------------------------
 message "RemoveFromTimeoutList"
 RemoveFromTimeoutList:
-	php
 	phx
 	push	r4
 	push	r5
+	php
 	sei
 
 	ld		r4,TCB_Status,r1		; Is the task even on the timeout list ?
 	bit		r4,#TS_TIMEOUT
-	beq		rftl5
+	beq		rftl_not_on_list
 	cmp		TimeoutList				; Are we removing the head of the list ?
-	beq		rftl2
-	ld		r4,TCB_PrvTo,r1		; adjust the links of the next and previous
-	bmi		rftl3					; no previous link - list corrupt?
-	ld		r5,TCB_NxtTo,r1		; tasks on the list to point around the task
+	beq		rftl_remove_from_head
+	ld		r4,TCB_PrvTo,r1			; adjust the links of the next and previous
+	bmi		rftl_empty_list			; no previous link - list corrupt?
+	ld		r5,TCB_NxtTo,r1			; tasks on the list to point around the task
 	st		r5,TCB_NxtTo,r4
-	bmi		rftl3
+	bmi		rftl_empty_list
 	st		r4,TCB_PrvTo,r5
 	ldx		TCB_Timeout,r1			; update the timeout of the next on list
 	add		r2,r2,TCB_Timeout,r5	; with any remaining timeout in the task
 	stx		TCB_Timeout,r5			; removed from the list
-	bra		rftl3
+	bra		rftl_empty_list
 
 	; Update the head of the list.
-rftl2:
+rftl_remove_from_head:
 	ld		r5,TCB_NxtTo,r1
-	st		r5,TimeoutList		; store next field into list head
-	bmi		rftl3
+	st		r5,TimeoutList			; store next field into list head
+	bmi		rftl_empty_list
 	ld		r4,TCB_Timeout,r1		; add any remaining timeout to the timeout
 	add		r4,r4,TCB_Timeout,r5	; of the next task on the list.
 	st		r4,TCB_Timeout,r5
@@ -6205,18 +6227,18 @@ rftl2:
 	
 	; Here there is no previous or next items in the list, so the list
 	; will be empty once this task is removed from it.
-rftl3:
-	ldx		TCB_Status,r1		; clear timeout status
+rftl_empty_list:
+	ldx		TCB_Status,r1			; clear timeout status
 	and		r2,r2,#~TS_TIMEOUT
 	stx		TCB_Status,r1
-	ldx		#-1					; make sure the next and prev fields indicate
-	stx		TCB_NxtTo,r1		; the task is not on a list.
+	ldx		#-1						; make sure the next and prev fields indicate
+	stx		TCB_NxtTo,r1			; the task is not on a list.
 	stx		TCB_PrvTo,r1
-rftl5:
+rftl_not_on_list:
+	plp
 	pop		r5
 	pop		r4
 	plx
-	plp
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6238,18 +6260,21 @@ PopTimeoutList:
 	phy
 	
 	ldy		#-1
+	php
+	sei
 	ldx		TimeoutList
 	lda		TCB_NxtTo,x
-	sta		TimeoutList			; store next field into list head
+	sta		TimeoutList		; store next field into list head
 	bmi		ptl1
-	sty		TCB_PrvTo,r1
+	sty		TCB_PrvTo,r1	; previous link = -1
 ptl1:
-	lda		TCB_Status,x		; clear timeout status
+	lda		TCB_Status,x	; clear timeout status
 	and		#~TS_TIMEOUT
 	sta		TCB_Status,x
 	sty		TCB_NxtTo,x		; make sure the next and prev fields indicate
 	sty		TCB_PrvTo,x		; the task is not on a list.
 
+	plp
 	txa
 	ply
 	plx
@@ -6262,24 +6287,23 @@ ptl1:
 ;
 ; Registers Affected: none
 ; Parameters:
-; r1 = time duration in centi-seconds (1/100 second).
+;	r1 = time duration in centi-seconds (1/100 second).
+; Returns: none
 ;------------------------------------------------------------------------------
+;
 Sleep:
-	php
 	pha
 	phx
 	tax
+	php
 	sei
 	lda		RunningTCB
 	jsr		RemoveTaskFromReadyList
 	jsr		AddToTimeoutList	; The scheduler will be returning to this
-;	jsr		DumpTimeoutList
-;	jsr		DumpTaskList
 	int		#2					; task eventually, once the timeout expires,
-;SleepRet:
+	plp
 	plx
 	pla
-	plp
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6317,27 +6341,34 @@ kt1:
 
 ;------------------------------------------------------------------------------
 ; Allocate a mailbox
-; r1 = pointer to place to store handle
+; Parameters:
+;	r1 = pointer to place to store handle
+; Returns:
+;	r1 = E_Ok	means mailbox allocated properly
+;	r1 = E_Arg	means a NULL pointer was passed in r1
+;	r1 = E_NoMoreMbx	means no more mailboxes were available
+;	zf is set if everything is ok, otherwise zf is clear
 ;------------------------------------------------------------------------------
+;
 message "AllocMbx"
 AllocMbx:
 	cmp		#0
-	beq		ambx1
+	beq		ambx_bad_ptr
 	phx
 	phy
 	push	r4
-	ld		r4,r1
+	ld		r4,r1			; r4 = pointer to returned handle
 	php
 	sei
 	lda		FreeMbx			; Get mailbox off of free mailbox list
 	sta		(r4)			; store off the mailbox number
-	bmi		ambx2
+	bmi		ambx_no_mbxs
 	ldx		MBX_LINK,r1		; and update the head of the list
 	stx		FreeMbx
 	dec		nMailbox		; decrement number of available mailboxes
 	tax
 	ldy		RunningTCB			; set the mailbox owner
-	bmi		RunningTCBErr
+;	bmi		RunningTCBErr
 	lda		TCB_hJCB,y
 	sta		MBX_OWNER,x
 	lda		#-1				; initialize the head and tail of the queues
@@ -6352,17 +6383,17 @@ AllocMbx:
 	sta		MBX_MQ_SIZE,x	; and
 	lda		#MQS_NEWEST		; queueing strategy
 	sta		MBX_MQ_STRATEGY,x
-ambx3:
+
 	plp
 	pop		r4
 	ply
 	plx
 	lda		#E_Ok
 	rts
-ambx1:
+ambx_bad_ptr:
 	lda		#E_Arg
 	rts
-ambx2:
+ambx_no_mbxs:
 	plp
 	pop		r4
 	ply
@@ -6371,36 +6402,103 @@ ambx2:
 	rts
 
 ;------------------------------------------------------------------------------
-; r1 = message
-; r2 = mailbox
+; Queue a message at a mailbox.
+;
+; Parameters:
+;	r1 = message
+;	r2 = mailbox
 ;------------------------------------------------------------------------------
 message "QueueMsgAtMbx"
 QueueMsgAtMbx:
+	cmp		#0
+	beq		qmam_bad_msg
 	pha
 	phx
 	phy
+	push	r4
 	php
 	sei
+	ld		r4,MBX_MQ_STRATEGY,x
+	cmp		r4,#MQS_UNLIMITED
+	beq		qmam_unlimited
+	cmp		r4,#MQS_NEWEST
+	beq		qmam_newest
+	cmp		r4,#MQS_OLDEST
+	beq		qmam_oldest
+	jsr		kernel_panic
+	db		"Illegal message queue strategy",0
+	bra		qmam8
+	; Here we assumed "unlimited" message storage. Just add the new message at
+	; the tail of the queue.
+qmam_unlimited:
 	ldy		MBX_MQ_TAIL,x
-	bmi		qmam1
-	sta		MBX_LINK,y
+	bmi		qmam_add_at_head
+	sta		MSG_LINK,y
 	bra		qmam2
-qmam1:
+qmam_add_at_head:
 	sta		MBX_MQ_HEAD,x
 qmam2:
 	sta		MBX_MQ_TAIL,x
+qmam6:
 	inc		MBX_MQ_COUNT,x		; increase the queued message count
 	ldx		#-1
 	stx		MSG_LINK,r1
 	plp
+	pop		r4
+	ply
+	plx
+	pla
+qmam_bad_msg:
+	rts
+	; Here we are queueing a limited number of messages. As new messages are
+	; added at the tail of the queue, messages drop off the head of the queue.
+qmam_newest:
+	ldy		MBX_MQ_TAIL,x
+	bmi		qmam3
+	sta		MSG_LINK,y
+	bra		qmam4
+qmam3:
+	sta		MBX_MQ_HEAD,x
+qmam4:
+	sta		MBX_MQ_TAIL,x
+	ldy		MBX_MQ_COUNT,x
+	iny
+	cmp		r3,MBX_MQ_SIZE,x
+	bls		qmam6
+	ldy		#-1
+	sty		MSG_LINK,r1
+	; Remove the oldest message which is the one at the head of the mailbox queue.
+	; Add the message back to the pool of free messages.
+	lda		MBX_MQ_HEAD,x
+	ldy		MSG_LINK,r1			; move next in queue
+	sty		MBX_MQ_HEAD,x		; to head of list
+qmam8:
+	inc		MBX_MQ_MISSED,x
+	ldy		FreeMsg				; put old message back into free message list
+	sty		MSG_LINK,r1
+	sta		FreeMsg
+	inc		nMsgBlk
+	plp
+	pop		r4
 	ply
 	plx
 	pla
 	rts
+	; Here we are buffering the oldest messages. So if there are too many messages
+	; in the queue already, then the queue doesn't change and the new message is
+	; lost.
+qmam_oldest:
+	ldy		MBX_MQ_COUNT,x		; Check if the queue is full
+	cmp		r3,MBX_MQ_SIZE,x
+	bhs		qmam8				; If the queue is full, then lose the current message
+	bra		qmam_unlimited		; Otherwise add message to queue
 
 ;------------------------------------------------------------------------------
+; Dequeue a message from a mailbox.
+;
 ; Returns
-; r1 = message number
+;	r1 = message number
+;	nf set if there is no message, otherwise clear
 ;------------------------------------------------------------------------------
 message "DequeueMsgFromMbx"
 DequeueMsgFromMbx:
@@ -6410,11 +6508,11 @@ DequeueMsgFromMbx:
 	sei
 	tax						; x = mailbox index
 	lda		MBX_MQ_COUNT,x		; are there any messages available ?
-	beq		dmfm1
+	beq		dmfm3
 	dea
 	sta		MBX_MQ_COUNT,x		; update the message count
 	lda		MBX_MQ_HEAD,x		; Get the head of the list, this should not be -1
-	bmi		dmfm1			; since the message count > 0
+	bmi		dmfm3			; since the message count > 0
 	ldy		MSG_LINK,r1		; get the link to the next message
 	sty		MBX_MQ_HEAD,x		; update the head of the list
 	bpl		dmfm2			; if there was no more messages then update the
@@ -6425,27 +6523,39 @@ dmfm1:
 	plp
 	ply
 	plx
+	cmp		#0
 	rts
-	
+dmfm3:
+	plp
+	ply
+	plx
+	lda		#-1
+	rts
+
 ;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = mailbox handle
+; Returns:
+;	r1 = E_arg		means pointer is invalid
+;	r1 = E_NoThread	means no thread was queued at the mailbox
+;	r2 = thead handle
 ;------------------------------------------------------------------------------
+message "DequeueThreadFromNbx"
 DequeueThreadFromMbx:
-	cpx		#0
-	beq		dtfm1
 	php
 	sei
 	push	r4
 	ld		r4,MBX_TQ_HEAD,r1
 	bpl		dtfm2
-		pop		r4
-		stz		(x)
-		plp
-		lda		#E_NoThread
-		rts
+	pop		r4
+	plp
+	ldx		#-1
+	lda		#E_NoThread
+	rts
 dtfm2:
 	push	r5
 	dec		MBX_TQ_COUNT,r1
-	st		r4,(x)
+	ld		r2,r4
 	ld		r4,TCB_mbq_next,r4
 	st		r4,MBX_TQ_HEAD,r1
 	bmi		dtfm3
@@ -6456,13 +6566,13 @@ dtfm3:
 		ld		r5,#-1
 		st		r5,MBX_TQ_TAIL,r1
 dtfm4:
-	stz		MBX_SEMA+1
-	ld		r5,(x)
+;	stz		MBX_SEMA+1
+	ld		r5,r2
 	lda		TCB_Status,r5
 	bit		#TS_TIMEOUT
 	beq		dtfm5
-		ld		r1,r5
-		jsr		RemoveFromTimeoutList
+	ld		r1,r5
+	jsr		RemoveFromTimeoutList
 dtfm5:
 	ld		r4,#-1
 	st		r4,TCB_mbq_next,r5
@@ -6473,9 +6583,6 @@ dtfm5:
 	pop		r4
 	plp
 	lda		#E_Ok
-	rts
-dtfm1:
-	lda		#E_Arg
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6513,6 +6620,7 @@ SendMsg:
 ;	r1=E_BadMbx		for a bad mailbox number
 ;	r1=E_NotAlloc	for a mailbox that isn't allocated
 ;	r1=E_NoMsg		if there are no more message blocks available
+;	zf is set if everything is okay, otherwise zf is clear
 ;------------------------------------------------------------------------------
 message "SendMsgPrim"
 SendMsgPrim:
@@ -6527,7 +6635,7 @@ SendMsgPrim:
 	bmi		smsg2					; error: no owner
 	pha
 	phx
-	jsr		DequeueThreadFromMbx	; r1=mbx, r2=thread (returned)
+	jsr		DequeueThreadFromMbx	; r1=mbx
 	ld		r6,r2					; r6 = thread
 	plx
 	pla
@@ -6631,7 +6739,7 @@ WaitMsg:
 	cmp		r5,#MAX_TASKNO
 	bhi		wmsg2					; error: no owner
 	jsr		DequeueMsgFromMbx
-	cmp		#0
+;	cmp		#0
 	bpl		wmsg3
 
 	; Here there was no message available, remove the task from
@@ -6647,7 +6755,7 @@ WaitMsg:
 	st		r7,TCB_mbq_next,r1			; adding at tail, so there is no next
 	stx		TCB_MSGPTR_D1,r1			; save off the message pointers
 	sty		TCB_MSGPTR_D2,r1
-	ld		r7,MBX_TQ_HEAD,r1			; is there a task que setup at the mailbox ?
+	ld		r7,MBX_TQ_HEAD,r6			; is there a task que setup at the mailbox ?
 	bmi		wmsg6
 	ld		r7,MBX_TQ_TAIL,r6
 	st		r7,TCB_mbq_prev,r1
@@ -7476,6 +7584,48 @@ pm1						; must update the return address !
 	rep		#$30		; mem,ndx = 16 bits
 	pha
 	rts
+	
+	cpu		RTF65002
+;------------------------------------------------------------------
+; This test program just loop around waiting to recieve a message.
+; The message is a pointer to a string to display.
+;------------------------------------------------------------------
+;
+test_mbx_prg:
+	jsr		RequestIOFocus
+	lda		#test_mbx	; where to put mailbox handle
+	jsr		AllocMbx
+	ldx		#5
+	jsr		PRTNUM
+	lda		#4			; priority
+	ldx		#0			; no flags
+	ldy		#test_mbx_prg2
+	jsr		StartTask
+tmp2:
+	lda		test_mbx
+	ldx		#test_D1
+	ldy		#test_D2
+	ld		r4,#100
+	jsr		WaitMsg
+	cmp		#E_Ok
+	bne		tmp1
+	lda		test_D1
+	jsr		DisplayStringB
+	bra		tmp2
+tmp1:
+	ldx		#5
+	jsr		PRTNUM
+	bra		tmp2
+
+test_mbx_prg2:
+tmp2a:
+	lda		test_mbx		; get mailbox handle
+	ldx		#msg_hello		; MSG D1
+	ldy		#0				; MSG D2
+	jsr		SendMsg
+	bra		tmp2a
+msg_hello:
+	db		"Hello from message sender",13,10,0
 
 message "DOS.asm"
 include "DOS.asm"
