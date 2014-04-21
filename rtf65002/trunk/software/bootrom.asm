@@ -1,7 +1,7 @@
 
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2013  Robert Finch, Stratford
+;   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@opencores.org
 ;       ||
@@ -161,13 +161,22 @@ PIC_IE		EQU		0xFFDC0FF1
 PIC_ES		EQU		0xFFDC0FF4
 PIC_RSTE	EQU		0xFFDC0FF5
 TASK_SELECT	EQU		0xFFDD0008
+
 RQ_SEMA		EQU		0xFFDB0000
-TO_SEMA		EQU		0xFFDB0010
+to_sema		EQU		0xFFDB0010
 SERIAL_SEMA	EQU		0xFFDB0020
 KEYBD_SEMA	EQU		0xFFDB0030
 IOF_LIST_SEMA	EQU	0xFFDB0040
-MBX_SEMA	EQU		0xFFDB0050
-MEM_SEMA	EQU		0xFFDB0060
+mbx_sema	EQU		0xFFDB0050
+freembx_sema	EQU		0xFFDB0060
+MEM_SEMA	EQU		0xFFDB0070
+freemsg_sema	EQU	0xFFDB0080
+tcb_sema	EQU		0xFFDB0090
+readylist_sema	EQU	0xFFDB00A0
+tolist_sema		EQU	0xFFDB00B0
+msg_sema		EQU	0xFFDB00C0
+freetcb_sema	EQU	0xFFDB00D0
+
 
 SPIMASTER	EQU		0xFFDC0500
 SPI_MASTER_VERSION_REG	EQU	0x00
@@ -310,26 +319,29 @@ eth_rx_buffer	EQU		0x1F80000
 eth_tx_buffer	EQU		0x1F84000
 
 ; Mailboxes, room for 2048
-MBX_LINK	EQU		0x01F90000
-MBX_TQ_HEAD	EQU		0x01F90800
-MBX_TQ_TAIL	EQU		0x01F91000
-MBX_MQ_HEAD	EQU		0x01F91800
+NR_MBX		EQU		$800
+MBX_LINK	EQU		0x01F90000			; link to next mailbox in list (free list)
+MBX_TQ_HEAD	EQU		MBX_LINK + NR_MBX	; head of task queue
+MBX_TQ_TAIL	EQU		MBX_TQ_HEAD + NR_MBX
+MBX_MQ_HEAD	EQU		0x01F91800	; head of message queue
 MBX_MQ_TAIL	EQU		0x01F92000
-MBX_TQ_COUNT	EQU	0x01F92800
-MBX_MQ_SIZE	EQU		0x01F93000
-MBX_MQ_COUNT	EQU	0x01F93800
-MBX_MQ_MISSED	EQU	0x01F94000
-MBX_OWNER		EQU	0x01F94800
-MBX_MQ_STRATEGY	EQU	0x01F95000
+MBX_TQ_COUNT	EQU	0x01F92800	; count of queued threads
+MBX_MQ_SIZE	EQU		0x01F93000	; number of messages that may be queued
+MBX_MQ_COUNT	EQU	0x01F93800	; count of messages that are queued
+MBX_MQ_MISSED	EQU	0x01F94000	; number of messages dropped from queue
+MBX_OWNER		EQU	0x01F94800	; job handle of mailbox owner
+MBX_MQ_STRATEGY	EQU	0x01F95000	; message queueing strategy
 MBX_RESV		EQU	0x01F95800
 
-; Messages, room for 8kW (8,192) messages
-MSG_LINK	EQU		0x01FA0000
-MSG_D1		EQU		0x01FA2000
-MSG_D2		EQU		0x01FA4000
-MSG_TYPE	EQU		0x01FA6000
+; Messages, room for 64kW (16,384) messages
+NR_MSG		EQU		16384
+MSG_LINK	EQU		0x01FA0000	; link to next message in queue or free list
+MSG_D1		EQU		MSG_LINK + NR_MSG	; message data 1
+MSG_D2		EQU		MSG_D1 + NR_MSG		; message data 2
+MSG_TYPE	EQU		MSG_D2 + NR_MSG		; message type
 
 ; Task control blocks, room for 256 tasks
+NR_TCB			EQU		256
 TCB_NxtRdy		EQU		0x01FBE100	; next task on ready / timeout list
 TCB_PrvRdy		EQU		0x01FBE200	; previous task on ready / timeout list
 TCB_NxtTCB		EQU		0x01FBE300
@@ -364,8 +376,8 @@ KeybdAck	EQU		0x01FBEE00
 KeybdLocks	EQU		0x01FBEF00
 KeybdBuffer	EQU		0x01FBF000	; buffer is 16 chars
 
-HeapStart	EQU		0x00200000
-HeapEnd		EQU		0x003FFFFF
+HeapStart	EQU		0x00540000
+HeapEnd		EQU		0x017FFFFF
 
 ; Bitmap of tasks requesting the I/O focus
 ;
@@ -561,10 +573,10 @@ st_nommu:
 	sta		UserTick
 
 	lda		#1
-	sta		MBX_SEMA
+;	sta		MBX_SEMA
 	sta		IOF_LIST_SEMA
-	sta		RQ_SEMA			; set ready queue semaphore
-	sta		TO_SEMA			; set timeout list semaphore
+;	sta		RQ_SEMA			; set ready queue semaphore
+;	sta		TO_SEMA			; set timeout list semaphore
 
 	lda		#$CE			; CE =blue on blue FB = grey on grey
 	sta		ScreenColor
@@ -1543,7 +1555,7 @@ TickRout:
 	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
 	lb		r1,IrqBase		; get the IRQ flag byte
 	lsr		r4,r1
-	or		r1,r1,r4
+	or		r1,r4
 	and		#$E0
 	sb		r1,IrqBase
 
@@ -4892,7 +4904,7 @@ tSleep:
 	txa
 tSleep1:
 	ldx		Milliseconds
-	sub		r2,r2,r1
+	sub		r2,r1
 	cpx		#100
 	blo		tSleep1
 	rts
@@ -5279,7 +5291,7 @@ _sbrk:
 	cmp		r1,#0				; zero difference = get old brk address
 	beq		sbrk2
 	asl		r5,r4,#14			; convert to words
-	add		r1,r1,r5			; +/- amount
+	add		r1,r5				; +/- amount
 	jsr		_brk
 	cmp		r1,#-1
 	bne		sbrk2
@@ -5644,6 +5656,17 @@ msgPerr:
 
 	org		$FFFFC200
 MTKInitialize:
+	; Initialize semaphores
+	lda		#1
+	sta		freetcb_sema
+	sta		freembx_sema
+	sta		freemsg_sema
+	sta		tcb_sema
+	sta		readylist_sema
+	sta		tolist_sema
+	sta		mbx_sema
+	sta		msg_sema
+
 	tsr		vbr,r2
 	and		r2,#-2
 	lda		#reschedule
@@ -5684,7 +5707,7 @@ MTKInitialize:
 	stos
 
 	; Initialize free message list
-	lda		#8192
+	lda		#NR_MSG
 	sta		nMsgBlk
 	stz		FreeMsg
 	ldx		#0
@@ -5693,13 +5716,13 @@ st4:
 	sta		MSG_LINK,x
 	ina
 	inx
-	cpx		#8192
+	cpx		#NR_MSG
 	bne		st4
 	lda		#-1
-	sta		MBX_LINK+8191
+	sta		MBX_LINK+NR_MSG-1
 	
 	; Initialize free mailbox list
-	lda		#2048
+	lda		#NR_MBX
 	sta		nMailbox
 	
 	stz		FreeMbx
@@ -5709,10 +5732,10 @@ st3:
 	sta		MBX_LINK,x
 	ina
 	inx
-	cpx		#2048
+	cpx		#NR_MBX
 	bne		st3
 	lda		#-1
-	sta		MBX_LINK+2047
+	sta		MBX_LINK+NR_MBX-1
 
 	; Initialize the FreeTCB list
 	lda		#1				; the next available TCB
@@ -5820,14 +5843,15 @@ StartTask:
 	
 	; get a free TCB
 	;
-	php
-	sei
+stask5:
+	ld		r0,freetcb_sema+1
+	beq		stask5
 	lda		FreeTCB				; get free tcb list pointer
 	bmi		stask1
 	tax
 	lda		TCB_NxtTCB,x
 	sta		FreeTCB				; update the FreeTCB list pointer
-	plp
+	stz		freetcb_sema+1
 	txa							; acc = TCB index (task number)
 	
 	; setup the stack for the task
@@ -5847,9 +5871,10 @@ StartTask:
 	pla
 	
 	add		r2,r2,#$3FF			; Move pointer to top of stack
-	php
 	tsr		sp,r9				; save off current stack pointer
-	sei
+stask6:
+	ld		r0,tcb_sema+1
+	beq		stask6
 	txs
 	st		r6,TCB_Priority,r7
 	stz		TCB_Status,r7
@@ -5907,13 +5932,16 @@ stask4:
 	push	r4
 	tsx
 	stx		TCB_SPSave,r7
-
+	stz		tcb_sema+1
 	; now restore the current stack pointer
 	trs		r9,sp
 
 	; Insert the task into the ready list
+stask7:
+	ld		r0,readylist_sema + 1
+	beq		stask7
 	jsr		AddTaskToReadyList
-	plp
+	stz		readylist_sema + 1
 	int		#2		; invoke the scheduler
 stask2:
 	pop		r9
@@ -5927,7 +5955,7 @@ stask2:
 	pla
 	rts
 stask1:
-	plp
+	stz		freetcb_sema+1
 	lda		#msgNoTCBs
 	jsr		DisplayStringB
 	bra		stask2
@@ -5945,11 +5973,19 @@ msgNoTCBs:
 ;------------------------------------------------------------------------------
 message "ExitTask"
 ExitTask:
-	sei
 	; release any aquired resources
 	; - mailboxes
 	; - messages
 	hoff
+xtsk2:
+	ld		r0,readylist_sema+1
+	beq		xtsk2
+xtsk3:
+	ld		r0,tolist_sema + 1
+	beq		xtsk3
+xtsk5:
+	lda		tcb_sema + 1
+	beq		xtsk5
 	lda		RunningTCB
 	cmp		#MAX_TASKNO
 	bhi		xtsk1
@@ -5961,10 +5997,17 @@ ExitTask:
 ;	jsr		FreeMemPage
 	ldx		#86
 	stx		LEDS
+xtsk4:
+	ldx		freetcb_sema+1
+	beq		xtsk4
 	ldx		FreeTCB						; add the task control block to the free list
 	stx		TCB_NxtTCB,r1
 	sta		FreeTCB
+	stz		freetcb_sema+1
 xtsk1:
+	stz		tcb_sema + 1
+	stz		tolist_sema + 1
+	stz		readylist_sema + 1
 	jmp		SelectTaskToRun
 
 ;------------------------------------------------------------------------------
@@ -5978,21 +6021,27 @@ SetTaskPriority:
 	cpx		#5							; make sure priority is okay
 	bhs		stp1
 	phy
-	php
-	sei
+stp3:
+	ld		r0,tcb_sema + 1
+	beq		stp3
+stp4:
+	ld		r0,readylist_sema + 1
+	beq		stp4		
 	ldy		TCB_Status,r1				; if the task is on the ready list
 	bit		r3,#TS_READY|TS_RUNNING		; then remove it and re-add it.
 	beq		stp2						; Otherwise just go set the priority field
 	jsr		RemoveTaskFromReadyList
 	stx		TCB_Priority,r1
 	jsr		AddTaskToReadyList
-	plp
+	stz		readylist_sema + 1
+	stz		tcb_sema + 1
 	ply
 stp1:
 	rts
 stp2:
 	stx		TCB_Priority,r1
-	plp
+	stz		readylist_sema + 1
+	stz		tcb_sema + 1
 	ply
 	rts
 
@@ -6015,10 +6064,8 @@ stp2:
 ;
 message "AddTaskToReadyList"
 AddTaskToReadyList:
-	php
 	phx
 	phy
-	sei
 	ldx		#TS_READY
 	stx		TCB_Status,r1
 	ldx		#-1
@@ -6032,10 +6079,8 @@ AddTaskToReadyList:
 	sty		TCB_PrvRdy,r1
 	sta		TCB_PrvRdy,x
 	stx		TCB_NxtRdy,r1
-arl3:	
 	ply
 	plx
-	plp
 	rts
 
 	; Here the ready list was empty, so add at head
@@ -6045,7 +6090,6 @@ arl5:
 	sta		TCB_PrvRdy,r1
 	ply
 	plx
-	plp
 	rts
 	
 ;------------------------------------------------------------------------------
@@ -6062,13 +6106,11 @@ arl5:
 
 message "RemoveTaskFromReadyList"
 RemoveTaskFromReadyList:
-	php						; save off interrupt mask state
 	phx
 	phy
 	push	r4
 	push	r5
 
-	sei
 	ldy		TCB_Status,r1	; is the task on the ready list ?
 	bit		r3,#TS_READY|TS_RUNNING
 	beq		rfr2
@@ -6096,7 +6138,6 @@ rfr2:
 	pop		r4
 	ply
 	plx
-	plp
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6111,13 +6152,11 @@ rfr2:
 ;------------------------------------------------------------------------------
 message "AddToTimeoutList"
 AddToTimeoutList:
-	php
 	phx
 	push	r4
 	push	r5
 
 	ld		r5,#-1
-	sei
 	st		r5,TCB_NxtTo,r1		; these fields should already be -1
 	st		r5,TCB_PrvTo,r1
 	ld		r4,TimeoutList		; are there any tasks on the timeout list ?
@@ -6177,7 +6216,6 @@ attl_exit:
 	pop		r5
 	pop		r4
 	plx
-	plp
 	rts
 	
 ;------------------------------------------------------------------------------
@@ -6195,8 +6233,6 @@ RemoveFromTimeoutList:
 	phx
 	push	r4
 	push	r5
-	php
-	sei
 
 	ld		r4,TCB_Status,r1		; Is the task even on the timeout list ?
 	bit		r4,#TS_TIMEOUT
@@ -6235,7 +6271,6 @@ rftl_empty_list:
 	stx		TCB_NxtTo,r1			; the task is not on a list.
 	stx		TCB_PrvTo,r1
 rftl_not_on_list:
-	plp
 	pop		r5
 	pop		r4
 	plx
@@ -6260,8 +6295,6 @@ PopTimeoutList:
 	phy
 	
 	ldy		#-1
-	php
-	sei
 	ldx		TimeoutList
 	lda		TCB_NxtTo,x
 	sta		TimeoutList		; store next field into list head
@@ -6274,7 +6307,6 @@ ptl1:
 	sty		TCB_NxtTo,x		; make sure the next and prev fields indicate
 	sty		TCB_PrvTo,x		; the task is not on a list.
 
-	plp
 	txa
 	ply
 	plx
@@ -6295,15 +6327,41 @@ Sleep:
 	pha
 	phx
 	tax
-	php
-	sei
+slp3:
+	ld		r0,readylist_sema + 1
+	beq		slp3
+slp2:
+	ld		r0,tolist_sema + 1
+	beq		slp2
 	lda		RunningTCB
 	jsr		RemoveTaskFromReadyList
 	jsr		AddToTimeoutList	; The scheduler will be returning to this
+	stz		tolist_sema + 1
+	stz		readylist_sema + 1
 	int		#2					; task eventually, once the timeout expires,
-	plp
 	plx
 	pla
+	rts
+
+;------------------------------------------------------------------------------
+; Short delay routine.
+;	This routine works by reading the tick register. When a subsequent read
+; of the tick register exceeds the value of the original read by at least
+; the value passed as a parameter, then this routine returns.
+;	The tick register increments at the clock rate (eg 25 MHz).
+;------------------------------------------------------------------------------
+;
+short_delay:
+	phx
+	phy
+	tsr		tick,r2
+usec1:
+	tsr		tick,r3
+	sub		r3,r2
+	cmp		r1,r3
+	blo		usec1
+	ply
+	plx
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6319,24 +6377,36 @@ Sleep:
 ;------------------------------------------------------------------------------
 ;
 KillTask:
-	php
 	phx
 	cmp		#1							; BIOS task and IDLE task are immortal
 	bls		kt1
 	cmp		#MAX_TASKNO
 	bhi		kt1
+	php
 	sei
 	jsr		ForceReleaseIOFocus
+	plp
+kt2:
+	ld		r0,readylist_sema + 1
+	beq		kt2
+kt3:
+	ld		r0,tolist_sema + 1
+	beq		kt3
 	jsr		RemoveTaskFromReadyList
 	jsr		RemoveFromTimeoutList
 	stz		TCB_Status,r1				; set task status to TS_NONE
+kt4:
+	ld		r0,freetcb_sema + 1
+	beq		kt4
 	ldx		FreeTCB						; add the task control block to the free list
 	stx		TCB_NxtTCB,r1
 	sta		FreeTCB
+	stz		freetcb_sema + 1
+	stz		tolist_sema + 1
+	stz		readylist_sema + 1
 	int		#2							; invoke scheduler to reschedule tasks
 kt1:
 	plx
-	plp
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6358,18 +6428,27 @@ AllocMbx:
 	phy
 	push	r4
 	ld		r4,r1			; r4 = pointer to returned handle
-	php
-	sei
+ambx1:
+	ld		r0,freembx_sema + 1
+	beq		ambx1
 	lda		FreeMbx			; Get mailbox off of free mailbox list
 	sta		(r4)			; store off the mailbox number
 	bmi		ambx_no_mbxs
 	ldx		MBX_LINK,r1		; and update the head of the list
 	stx		FreeMbx
 	dec		nMailbox		; decrement number of available mailboxes
+	stz		freembx_sema + 1
 	tax
+ambx2:
+	ld		r0,readylist_sema + 1
+	beq		ambx2
 	ldy		RunningTCB			; set the mailbox owner
 ;	bmi		RunningTCBErr
 	lda		TCB_hJCB,y
+	stz		readylist_sema + 1
+ambx3:
+	ld		r0,mbx_sema + 1
+	beq		ambx3
 	sta		MBX_OWNER,x
 	lda		#-1				; initialize the head and tail of the queues
 	sta		MBX_TQ_HEAD,x
@@ -6383,8 +6462,7 @@ AllocMbx:
 	sta		MBX_MQ_SIZE,x	; and
 	lda		#MQS_NEWEST		; queueing strategy
 	sta		MBX_MQ_STRATEGY,x
-
-	plp
+	stz		mbx_sema + 1
 	pop		r4
 	ply
 	plx
@@ -6394,7 +6472,7 @@ ambx_bad_ptr:
 	lda		#E_Arg
 	rts
 ambx_no_mbxs:
-	plp
+	stz		freembx_sema + 1
 	pop		r4
 	ply
 	plx
@@ -6416,8 +6494,6 @@ QueueMsgAtMbx:
 	phx
 	phy
 	push	r4
-	php
-	sei
 	ld		r4,MBX_MQ_STRATEGY,x
 	cmp		r4,#MQS_UNLIMITED
 	beq		qmam_unlimited
@@ -6443,7 +6519,6 @@ qmam6:
 	inc		MBX_MQ_COUNT,x		; increase the queued message count
 	ldx		#-1
 	stx		MSG_LINK,r1
-	plp
 	pop		r4
 	ply
 	plx
@@ -6478,7 +6553,6 @@ qmam8:
 	sty		MSG_LINK,r1
 	sta		FreeMsg
 	inc		nMsgBlk
-	plp
 	pop		r4
 	ply
 	plx
@@ -6504,8 +6578,6 @@ message "DequeueMsgFromMbx"
 DequeueMsgFromMbx:
 	phx
 	phy
-	php
-	sei
 	tax						; x = mailbox index
 	lda		MBX_MQ_COUNT,x		; are there any messages available ?
 	beq		dmfm3
@@ -6520,13 +6592,11 @@ DequeueMsgFromMbx:
 dmfm2:
 	sta		MSG_LINK,r1		; point the link to the messahe itself to indicate it's dequeued
 dmfm1:
-	plp
 	ply
 	plx
 	cmp		#0
 	rts
 dmfm3:
-	plp
 	ply
 	plx
 	lda		#-1
@@ -6542,13 +6612,10 @@ dmfm3:
 ;------------------------------------------------------------------------------
 message "DequeueThreadFromNbx"
 DequeueThreadFromMbx:
-	php
-	sei
 	push	r4
 	ld		r4,MBX_TQ_HEAD,r1
 	bpl		dtfm2
 	pop		r4
-	plp
 	ldx		#-1
 	lda		#E_NoThread
 	rts
@@ -6581,7 +6648,6 @@ dtfm5:
 	stz		TCB_Status,r5		; set task status = TS_NONE
 	pop		r5
 	pop		r4
-	plp
 	lda		#E_Ok
 	rts
 
@@ -6624,13 +6690,14 @@ SendMsg:
 ;------------------------------------------------------------------------------
 message "SendMsgPrim"
 SendMsgPrim:
-	cmp		#2047					; check the mailbox number to make sure
-	bhi		smsg1					; that it's sensible
+	cmp		#NR_MBX					; check the mailbox number to make sure
+	bhs		smsg1					; that it's sensible
 	push	r5
 	push	r6
 	push	r7
-	php
-	sei
+smp1:
+	ld		r0,mbx_sema + 1
+	beq		smp1
 	ld		r7,MBX_OWNER,r1
 	bmi		smsg2					; error: no owner
 	pha
@@ -6643,11 +6710,15 @@ SendMsgPrim:
 	bpl		smsg3
 		; Here there was no thread waiting at the mailbox, so a message needs to
 		; be allocated
+smp2:
+		ld		r0,freemsg_sema + 1
+		beq		smp2
 		ld		r7,FreeMsg
 		bmi		smsg4		; no more messages available
 		ld		r5,MSG_LINK,r7
 		st		r5,FreeMsg
 		dec		nMsgBlk		; decrement the number of available messages
+		stz		freemsg_sema + 1
 		stx		MSG_D1,r7
 		sty		MSG_D2,r7
 		pha
@@ -6668,22 +6739,36 @@ smsg6:
 	beq		smsg7
 	sty		(r5)
 smsg7:
+	ld		r0,tcb_sema + 1
+	beq		smsg7
 	ld		r5,TCB_Status,r6
 	bit		r5,#TS_TIMEOUT
 	beq		smsg8
 	ld		r1,r6
+smp3:
+	ld		r0,tolist_sema + 1
+	beq		smp3
 	jsr		RemoveFromTimeoutList
+	stz		tolist_sema + 1
 smsg8:
 	lda		TCB_Status,r6
 	and		#~TS_WAITMSG
 	sta		TCB_Status,r6
+	stz		tcb_sema + 1
 	ld		r1,r6
+smp4:
+	ld		r0,readylist_sema + 1
+	beq		smp4
 	jsr		AddTaskToReadyList
+	stz		readylist_sema + 1
 	cmp		r4,#0
-	beq		smsg5
+	beq		smsg9
+	stz		mbx_sema + 1
 	int		#2			; invoke the scheduler
+	bra		smsg9
 smsg5:
-	plp
+	stz		mbx_sema + 1
+smsg9:
 	pop		r7
 	pop		r6
 	pop		r5
@@ -6693,14 +6778,15 @@ smsg1:
 	lda		#E_BadMbx
 	rts
 smsg2:
-	plp
+	stz		mbx_sema + 1
 	pop		r7
 	pop		r6
 	pop		r5
 	lda		#E_NotAlloc
 	rts
 smsg4:
-	plp
+	stz		freemsg_sema + 1
+	stz		mbx_sema + 1
 	pop		r7
 	pop		r6
 	pop		r5
@@ -6723,9 +6809,10 @@ smsg4:
 ;	r1=E_BadMbx		for a bad mailbox number
 ;	r1=E_NotAlloc	for a mailbox that isn't allocated
 ;------------------------------------------------------------------------------
+message "WaitMsg"
 WaitMsg:
-	cmp		#2047					; check the mailbox number to make sure
-	bhi		wmsg1					; that it's sensible
+	cmp		#NR_MBX				; check the mailbox number to make sure
+	bhs		wmsg1				; that it's sensible
 	phx
 	phy
 	push	r4
@@ -6733,8 +6820,9 @@ WaitMsg:
 	push	r6
 	push	r7
 	ld		r6,r1
-	php
-	sei
+wmsg11:
+	ld		r0,mbx_sema + 1
+	beq		wmsg11
 	ld		r5,MBX_OWNER,r1
 	cmp		r5,#MAX_TASKNO
 	bhi		wmsg2					; error: no owner
@@ -6745,8 +6833,15 @@ WaitMsg:
 	; Here there was no message available, remove the task from
 	; the ready list, and optionally add it to the timeout list.
 	; Queue the task at the mailbox.
+wmsg12:
+	ld		r0,readylist_sema + 1
+	beq		wmsg12
 	lda		RunningTCB				; remove the task from the ready list
 	jsr		RemoveTaskFromReadyList
+	stz		readylist_sema + 1
+wmsg13:
+	ld		r0,tcb_sema + 1
+	beq		wmsg13
 	ld		r7,TCB_Status,r1
 	or		r7,r7,#TS_WAITMSG			; set task status to waiting
 	st		r7,TCB_Status,r1
@@ -6763,10 +6858,16 @@ WaitMsg:
 	sta		MBX_TQ_TAIL,r6
 	inc		MBX_TQ_COUNT,r6				; increment number of tasks queued
 wmsg7:
+	stz		tcb_sema + 1
+	stz		mbx_sema + 1
 	cmp		r4,#0						; check for a timeout
 	beq		wmsg10
 	ld		r2,r4
+wmsg14:
+	ld		r0,tolist_sema + 1
+	beq		wmsg14
 	jsr		AddToTimeoutList
+	stz		tolist_sema + 1
 wmsg10:
 	int		#2			; invoke the scheduler
 	; At this point either a message was sent to the task, or the task
@@ -6778,8 +6879,7 @@ wmsg10:
 	ldx		TCB_Status,r1
 	bit		r2,#TS_WAITMSG	; Is the task still waiting for a message ?
 	beq		wmsg8			; If not, go return OK status
-	plp						; Otherwise return timeout error
-	pop		r7
+	pop		r7				; Otherwise return timeout error
 	pop		r6
 	pop		r5
 	pop		r4
@@ -6801,6 +6901,7 @@ wmsg6:
 	
 	; Store message D1 to pointer
 wmsg3:
+	stz		mbx_sema + 1
 	cpx		#0
 	beq		wmsg4
 	ld		r7,MSG_D1,r1
@@ -6813,12 +6914,14 @@ wmsg4:
 	st		r7,(y)
 	; Add the newly dequeued message to the free messsage list
 wmsg5:
+	ld		r0,freemsg_sema + 1
+	beq		wmsg5
 	ld		r7,FreeMsg
 	st		r7,MSG_LINK,r1
 	sta		FreeMsg
 	inc		nMsgBlk
+	stz		freemsg_sema + 1
 wmsg8:
-	plp
 	pop		r7
 	pop		r6
 	pop		r5
@@ -6831,7 +6934,7 @@ wmsg1:
 	lda		#E_BadMbx
 	rts
 wmsg2:
-	plp
+	stz		mbx_sema + 1
 	pop		r7
 	pop		r6
 	pop		r5
@@ -6847,7 +6950,7 @@ wmsg2:
 ; Check for a message at a mailbox. Does not block.
 ;
 ; Parameters
-;	r1=mailbox
+;	r1=mailbox handle
 ;	r2=pointer to D1
 ;	r3=pointer to D2
 ;	r4=remove from queue if present
@@ -6858,14 +6961,15 @@ wmsg2:
 ;	r1=E_NotAlloc	for a mailbox that isn't allocated
 ;------------------------------------------------------------------------------
 CheckMsg:
-	cmp		#2047					; check the mailbox number to make sure
-	bhi		cmsg1					; that it's sensible
+	cmp		#NR_MBX					; check the mailbox number to make sure
+	bhs		cmsg1					; that it's sensible
 	phx
 	phy
 	push	r4
 	push	r5
-	php
-	sei
+cmsg9:
+	ld		r0,mbx_sema + 1
+	beq		cmsg9
 	ld		r5,MBX_OWNER,r1
 	bmi		cmsg2					; error: no owner
 	cmp		r4,#0					; are we to dequeue the message ?
@@ -6889,12 +6993,16 @@ cmsg6:
 cmsg7:
 	cmp		r4,#0
 	beq		cmsg8
+cmsg10:
+	ld		r0,freemsg_sema + 1
+	beq		cmsg10
 	ld		r5,FreeMsg
 	st		r5,MSG_LINK,r1
 	sta		FreeMsg
 	inc		nMsgBlk
+	stz		freemsg_sema + 1
 cmsg8:
-	plp
+	stz		mbx_sema + 1
 	pop		r5
 	pop		r4
 	ply
@@ -6905,7 +7013,7 @@ cmsg1:
 	lda		#E_BadMbx
 	rts
 cmsg2:
-	plp
+	stz		mbx_sema + 1
 	pop		r5
 	pop		r4
 	ply
@@ -6913,7 +7021,7 @@ cmsg2:
 	lda		#E_NotAlloc
 	rts
 cmsg5:
-	plp
+	stz		mbx_sema + 1
 	pop		r5
 	pop		r4
 	ply
@@ -7054,10 +7162,16 @@ rliof3:
 ;------------------------------------------------------------------------------
 ;
 reschedule:
+	cli		; enable interrupts
 	cld		; clear extended precision mode
 
 	pusha	; save off regs on the stack
-
+rs1:
+	ld		r0,readylist_sema + 1
+	beq		rs1
+rs2:
+	ld		r0,tcb_sema + 1
+	beq		rs2
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
 	sta		TCB_SPSave,x
@@ -7083,23 +7197,31 @@ strStartQue:
 ;------------------------------------------------------------------------------
 ;
 MTKTick:
-	; Handle every other interrupt because 100Hz interrupts may be too fast.
 	pha
 	lda		#3				; reset the edge sense circuit
 	sta		PIC_RSTE
-	lda		IRQFlag
-	ina
-	sta		IRQFlag
-	ror
 	pla
-	bcc		p100Hz11	
-	rti
-
+	inc		IRQFlag
+	; Try and aquire the ready list and tcb. If unsucessful it means there is
+	; a system function in the process of updating the list. All we can do is
+	; return to the system function and let it complete whatever it was doing.
+	; The tick will be deferred; however if the system function was busy updating
+	; the ready list, in all likelyhood it's about to call the reschedule
+	; interrupt.
 p100Hz11:
-
+	ld		r0,readylist_sema+ 1
+	beq		tck1
+	ld		r0,tcb_sema + 1
+	bne		tck2
+	stz		readylist_sema + 1
+tck1:
+	rti
+tck2:
+	cli
 	cld		; clear extended precision mode
 
 	pusha	; save off regs on the stack
+
 
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
@@ -7115,11 +7237,17 @@ p100Hz11:
 	beq		p100Hz4
 	jsr		(r1)
 p100Hz4:
+	; The tcb state has been saved, and list semaphores activated so
+	; allow other interrupts to occur.
+	cli		
 
 	; Check the timeout list to see if there are items ready to be removed from
 	; the list. Also decrement the timeout of the item at the head of the list.
-
-p100Hz15:	
+	; If we are unable to get access to the timeout list then skip the timeout
+	; updates.
+	ld		r0,tolist_sema + 1
+	beq		tck3
+p100Hz15:
 	ldx		TimeoutList
 	bmi		p100Hz12				; are there any entries in the timeout list ?
 	lda		TCB_Timeout,x
@@ -7133,7 +7261,9 @@ p100Hz14:
 	sta		TCB_Timeout,x
 	
 p100Hz12:
+	stz		tolist_sema + 1
 	; Falls through into selecting a task to run
+tck3:
 
 ;------------------------------------------------------------------------------
 ; Search the ready queues for a ready task.
@@ -7176,6 +7306,8 @@ sttr4:
 	lda		TCB_SP8Save,x		; get back eight bit stack pointer
 	trs		r1,sp8
 	ldx		TCB_SPSave,x		; get back stack pointer
+	stz		tcb_sema + 1
+	stz		readylist_sema + 1
 	txs
 	popa						; restore registers
 	rti

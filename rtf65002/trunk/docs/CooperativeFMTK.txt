@@ -1,0 +1,13 @@
+Cooperative Multi-tasking with FMTK
+
+FMTK can be used in a cooperative multi-tasking fashion by disabling the timer
+interrupt and avoiding system functions that rely on timer operation.
+
+Specifically the Sleep() call will not work as it relys on the timer. Also
+the WaitMsg() call must have zero passed as the timeout argument which will
+cause the function to avoid placing the caller on the timeout list.
+
+Next, to cooperatively yeild processing to another task, the scheduler
+interrupt (int #2) must be invoked. This will reschedule the tasks and choose
+the next task to run on a priority basis.
+
