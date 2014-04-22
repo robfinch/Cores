@@ -22,13 +22,6 @@
 ;                                                                          
 ; ============================================================================
 ;
-P	EQU		2
-Q	EQU		1193*2 + 2
-R	EQU		Q + 2
-SSS	EQU		R + 2
-data_ptr		equ		$08
-dpf				equ		$AA
-;
 CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
@@ -54,6 +47,7 @@ E_NoMsg		=		0x0b
 E_Timeout	=		0x10
 E_BadAlarm	=		0x11
 E_NotOwner	=		0x12
+E_QueStrategy =		0x13
 ; resource errors
 E_NoMoreMbx	=		0x40
 E_NoMoreMsgBlks	=	0x41
@@ -367,6 +361,7 @@ TCB_ASID		EQU		0x01FBDD00
 TCB_errno		EQU		0x01FBDE00
 TCB_NxtTo		EQU		0x01FBDF00
 TCB_PrvTo		EQU		0x01FBE000
+TCB_MbxList		EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
 
 KeybdHead	EQU		0x01FBEA00
 KeybdTail	EQU		0x01FBEB00
@@ -406,14 +401,16 @@ QNdx4		EQU		QNdx3+1
 FreeTCB		EQU		QNdx4+1
 TimeoutList	EQU		FreeTCB+1
 RunningTCB		EQU		TimeoutList+1
-FreeMbx		EQU		RunningTCB + 1
-nMailbox	EQU		FreeMbx + 1
+FreeMbxHandle		EQU		RunningTCB + 1
+nMailbox	EQU		FreeMbxHandle + 1
 FreeMsg		EQU		nMailbox + 1
 nMsgBlk		EQU		FreeMsg + 1
+missed_ticks	EQU	nMsgBlk + 1
 
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
-IOFocusNdx	EQU		nMsgBlk + 1
+IOFocusNdx	EQU		missed_ticks + 1
+;
 test_mbx	EQU		IOFocusNdx + 1
 test_D1		EQU		test_mbx + 1
 test_D2		EQU		test_D1 + 1
@@ -5683,6 +5680,7 @@ MTKInitialize:
 	sta		QNdx3
 	sta		QNdx4
 
+	stz		missed_ticks
 
 	; Initialize IO Focus List
 	;
@@ -5725,7 +5723,7 @@ st4:
 	lda		#NR_MBX
 	sta		nMailbox
 	
-	stz		FreeMbx
+	stz		FreeMbxHandle
 	ldx		#0
 	lda		#1
 st3:
@@ -5843,9 +5841,7 @@ StartTask:
 	
 	; get a free TCB
 	;
-stask5:
-	ld		r0,freetcb_sema+1
-	beq		stask5
+	spl		freetcb_sema+1
 	lda		FreeTCB				; get free tcb list pointer
 	bmi		stask1
 	tax
@@ -5872,9 +5868,7 @@ stask5:
 	
 	add		r2,r2,#$3FF			; Move pointer to top of stack
 	tsr		sp,r9				; save off current stack pointer
-stask6:
-	ld		r0,tcb_sema+1
-	beq		stask6
+	spl		tcb_sema+1
 	txs
 	st		r6,TCB_Priority,r7
 	stz		TCB_Status,r7
@@ -5885,6 +5879,8 @@ stask6:
 	stz		TCB_mmu_map,r7		; use mmu map
 ;	jsr		AllocateMemPage
 	pha
+	lda		#-1
+	sta		TCB_MbxList,r7
 	lda		BASIC_SESSION
 	cmp		#1
 	bls		stask3
@@ -5937,9 +5933,7 @@ stask4:
 	trs		r9,sp
 
 	; Insert the task into the ready list
-stask7:
-	ld		r0,readylist_sema + 1
-	beq		stask7
+	spl		readylist_sema + 1
 	jsr		AddTaskToReadyList
 	stz		readylist_sema + 1
 	int		#2		; invoke the scheduler
@@ -5956,12 +5950,9 @@ stask2:
 	rts
 stask1:
 	stz		freetcb_sema+1
-	lda		#msgNoTCBs
-	jsr		DisplayStringB
+	jsr		kernel_panic
+	db		"No more task control blocks available.",0
 	bra		stask2
-
-msgNoTCBs:
-	db		"No more task control blocks available.",CR,LF,0
 
 ;------------------------------------------------------------------------------
 ; ExitTask
@@ -5995,6 +5986,20 @@ xtsk5:
 	jsr		ReleaseIOFocus
 ;	lda		TCB_ABS8Save,x
 ;	jsr		FreeMemPage
+	; Free up all the mailboxes associated with the task.
+xtsk8:
+	ld		r0,tcb_sema + 1
+	beq		xtsk8
+xtsk7:
+	pha
+	lda		TCB_MbxList,r1
+	bmi		xtsk6
+	jsr		FreeMbx
+	pla
+	bra		xtsk7
+xtsk6:
+	stz		tcb_sema + 1
+	pla
 	ldx		#86
 	stx		LEDS
 xtsk4:
@@ -6224,6 +6229,7 @@ attl_exit:
 ; This routine is called when a task is killed. The task may need to be
 ; removed from the middle of the timeout list.
 ;
+; On entry: the timeout list semaphore must be already set.
 ; Registers Affected: none
 ; Parameters:
 ;	 r1 = task number
@@ -6327,17 +6333,13 @@ Sleep:
 	pha
 	phx
 	tax
-slp3:
-	ld		r0,readylist_sema + 1
-	beq		slp3
-slp2:
-	ld		r0,tolist_sema + 1
-	beq		slp2
+	spl		readylist_sema + 1
 	lda		RunningTCB
 	jsr		RemoveTaskFromReadyList
+	stz		readylist_sema + 1
+	spl		tolist_sema + 1
 	jsr		AddToTimeoutList	; The scheduler will be returning to this
 	stz		tolist_sema + 1
-	stz		readylist_sema + 1
 	int		#2					; task eventually, once the timeout expires,
 	plx
 	pla
@@ -6395,6 +6397,23 @@ kt3:
 	jsr		RemoveTaskFromReadyList
 	jsr		RemoveFromTimeoutList
 	stz		TCB_Status,r1				; set task status to TS_NONE
+
+	; Free up all the mailboxes associated with the task.
+kt5:
+	ld		r0,tcb_sema + 1
+	beq		kt5
+kt7:
+	pha
+	tax
+	lda		TCB_MbxList,r1
+	bmi		kt6
+	jsr		FreeMbx2
+	pla
+	bra		kt7
+kt6:
+	stz		tcb_sema + 1
+	pla
+
 kt4:
 	ld		r0,freetcb_sema + 1
 	beq		kt4
@@ -6431,13 +6450,17 @@ AllocMbx:
 ambx1:
 	ld		r0,freembx_sema + 1
 	beq		ambx1
-	lda		FreeMbx			; Get mailbox off of free mailbox list
+	lda		FreeMbxHandle			; Get mailbox off of free mailbox list
 	sta		(r4)			; store off the mailbox number
 	bmi		ambx_no_mbxs
 	ldx		MBX_LINK,r1		; and update the head of the list
-	stx		FreeMbx
+	stx		FreeMbxHandle
 	dec		nMailbox		; decrement number of available mailboxes
 	stz		freembx_sema + 1
+	ldy		RunningTCB		; Add the mailbox to the list of mailboxes
+	ldx		TCB_MbxList,y	; managed by the task.
+	stx		MBX_LINK,r1
+	sta		TCB_MbxList,y
 	tax
 ambx2:
 	ld		r0,readylist_sema + 1
@@ -6480,7 +6503,122 @@ ambx_no_mbxs:
 	rts
 
 ;------------------------------------------------------------------------------
+; Free up a mailbox.
+;	This function frees a mailbox from the currently running task. It may be
+; called by ExitTask().
+;
+; Parameters:
+;	r1 = mailbox handle
+;------------------------------------------------------------------------------
+;
+FreeMbx:
+	phx
+	ldx		RunningTCB
+	jsr		FreeMbx2
+	plx
+	rts
+
+;------------------------------------------------------------------------------
+; Free up a mailbox.
+;	This function dequeues any messages from the mailbox and adds the messages
+; back to the free message pool. The function also dequeues any threads from
+; the mailbox.
+;	Called from KillTask() and FreeMbx().
+;
+; Parameters:
+;	r1 = mailbox handle
+;	r2 = task handle
+; Returns:
+;	r1 = E_Ok	if everything ok
+;	r1 = E_Arg	if a bad handle is passed
+;------------------------------------------------------------------------------
+;
+FreeMbx2:
+	cmp		#NR_MBX				; check mailbox handle parameter
+	bhs		fmbx1
+	cpx		#MAX_TASKNO
+	bhi		fmbx1
+fmbx8:
+	ld		r0,mbx_sema + 1
+	beq		fmbx8
+	phx
+	phy
+
+	; Dequeue messages from mailbox and add them back to the free message list.
+fmbx5:
+	pha
+	jsr		DequeueMsgFromMbx
+	bmi		fmbx3
+fmbx4:
+	ld		r0,freemsg_sema + 1
+	beq		fmbx4
+	phx
+	ldx		FreeMsg
+	stx		MSG_LINK,r1
+	sta		FreeMsg
+	stz		freemsg_sema + 1
+	plx
+	pla
+	bra		fmbx5
+fmbx3:
+	pla
+
+	; Dequeue threads from mailbox.
+fmbx6:
+	pha
+	jsr		DequeueThreadFromMbx2
+	bmi		fmbx7
+	pla
+	bra		fmbx6
+fmbx7:
+	pla
+
+	; Remove mailbox from TCB list
+	ldy		TCB_MbxList,x
+	phx
+	ldx		#-1
+fmbx10:
+	cmp		r1,r3
+	beq		fmbx9
+	tyx
+	ldy		MBX_LINK,y
+	bpl		fmbx10
+	; ?The mailbox was not in the list managed by the task.
+	bra		fmbx2
+fmbx9:
+	cmp		r2,r0
+	bmi		fmbx11
+	ldy		MBX_LINK,y
+	sty		MBX_LINK,x
+	plx
+	bra		fmbx12
+fmbx11:
+	; No prior mailbox in list, update head
+	ldy		MBX_LINK,r1
+	plx
+	sty		TCB_MbxList,x
+
+fmbx12:
+	; Add mailbox back to mailbox pool
+fmbx2:
+	ld		r0,freembx_sema + 1
+	beq		fmbx2
+	ldx		FreeMbxHandle
+	stx		MBX_LINK,r1
+	sta		FreeMbxHandle
+	stz		freembx_sema + 1
+	stz		mbx_sema + 1
+	ply
+	plx
+	lda		#E_Ok
+	rts
+fmbx1:
+	lda		#E_Arg
+	rts
+
+;------------------------------------------------------------------------------
 ; Queue a message at a mailbox.
+; On entry the mailbox semaphore is already activated.
 ;
 ; Parameters:
 ;	r1 = message
@@ -6549,10 +6687,13 @@ qmam4:
 	sty		MBX_MQ_HEAD,x		; to head of list
 qmam8:
 	inc		MBX_MQ_MISSED,x
+qmam1:
+	spl		freemsg_sema + 1
 	ldy		FreeMsg				; put old message back into free message list
 	sty		MSG_LINK,r1
 	sta		FreeMsg
 	inc		nMsgBlk
+	stz		freemsg_sema + 1
 	pop		r4
 	ply
 	plx
@@ -6652,6 +6793,55 @@ dtfm5:
 	rts
 
 ;------------------------------------------------------------------------------
+;	This function is called from FreeMbx(). It dequeues threads from the
+; mailbox without removing the thread from the timeout list. The thread will
+; then timeout waiting for a message that can never be delivered.
+;
+; Parameters:
+;	r1 = mailbox handle
+; Returns:
+;	r1 = E_arg		means pointer is invalid
+;	r1 = E_NoThread	means no thread was queued at the mailbox
+;	r2 = thead handle
+;------------------------------------------------------------------------------
+message "DequeueThreadFromNbx2"
+DequeueThreadFromMbx2:
+	push	r4
+	ld		r4,MBX_TQ_HEAD,r1
+	bpl		dtfm2a
+	pop		r4
+	ldx		#-1
+	lda		#E_NoThread
+	rts
+dtfm2a:
+	push	r5
+	dec		MBX_TQ_COUNT,r1
+	ld		r2,r4
+	ld		r4,TCB_mbq_next,r4
+	st		r4,MBX_TQ_HEAD,r1
+	bmi		dtfm3a
+		ld		r5,#-1
+		st		r5,TCB_mbq_prev,r4
+		bra		dtfm4a
+dtfm3a:
+		ld		r5,#-1
+		st		r5,MBX_TQ_TAIL,r1
+dtfm4a:
+	ld		r4,#-1
+	st		r4,TCB_mbq_next,x
+	st		r4,TCB_mbq_prev,x
+	stz		TCB_hWaitMbx,x
+	sei
+	lda		TCB_Status,x
+	and		#~TS_WAITMSG
+	sta		TCB_Status,x
+	cli
+	pop		r5
+	pop		r4
+	lda		#E_Ok
+	rts
+
+;------------------------------------------------------------------------------
 ; PostMsg and SendMsg are the same operation except that PostMsg doesn't
 ; invoke rescheduling while SendMsg does. So they both call the same
 ; SendMsgPrim primitive routine. This two wrapper functions for convenience.
@@ -6695,9 +6885,8 @@ SendMsgPrim:
 	push	r5
 	push	r6
 	push	r7
-smp1:
-	ld		r0,mbx_sema + 1
-	beq		smp1
+
+	spl		mbx_sema + 1
 	ld		r7,MBX_OWNER,r1
 	bmi		smsg2					; error: no owner
 	pha
@@ -6711,8 +6900,7 @@ smp1:
 		; Here there was no thread waiting at the mailbox, so a message needs to
 		; be allocated
 smp2:
-		ld		r0,freemsg_sema + 1
-		beq		smp2
+		spl		freemsg_sema + 1
 		ld		r7,FreeMsg
 		bmi		smsg4		; no more messages available
 		ld		r5,MSG_LINK,r7
@@ -6739,15 +6927,13 @@ smsg6:
 	beq		smsg7
 	sty		(r5)
 smsg7:
-	ld		r0,tcb_sema + 1
-	beq		smsg7
+	spl		tcb_sema + 1
 	ld		r5,TCB_Status,r6
 	bit		r5,#TS_TIMEOUT
 	beq		smsg8
 	ld		r1,r6
 smp3:
-	ld		r0,tolist_sema + 1
-	beq		smp3
+	spl		tolist_sema + 1
 	jsr		RemoveFromTimeoutList
 	stz		tolist_sema + 1
 smsg8:
@@ -6757,12 +6943,11 @@ smsg8:
 	stz		tcb_sema + 1
 	ld		r1,r6
 smp4:
-	ld		r0,readylist_sema + 1
-	beq		smp4
+	spl		readylist_sema + 1
 	jsr		AddTaskToReadyList
 	stz		readylist_sema + 1
 	cmp		r4,#0
-	beq		smsg9
+	beq		smsg5
 	stz		mbx_sema + 1
 	int		#2			; invoke the scheduler
 	bra		smsg9
@@ -6821,8 +7006,7 @@ WaitMsg:
 	push	r7
 	ld		r6,r1
 wmsg11:
-	ld		r0,mbx_sema + 1
-	beq		wmsg11
+	spl		mbx_sema + 1
 	ld		r5,MBX_OWNER,r1
 	cmp		r5,#MAX_TASKNO
 	bhi		wmsg2					; error: no owner
@@ -6834,14 +7018,12 @@ wmsg11:
 	; the ready list, and optionally add it to the timeout list.
 	; Queue the task at the mailbox.
 wmsg12:
-	ld		r0,readylist_sema + 1
-	beq		wmsg12
+	spl		readylist_sema + 1
 	lda		RunningTCB				; remove the task from the ready list
 	jsr		RemoveTaskFromReadyList
 	stz		readylist_sema + 1
 wmsg13:
-	ld		r0,tcb_sema + 1
-	beq		wmsg13
+	spl		tcb_sema + 1
 	ld		r7,TCB_Status,r1
 	or		r7,r7,#TS_WAITMSG			; set task status to waiting
 	st		r7,TCB_Status,r1
@@ -6864,8 +7046,7 @@ wmsg7:
 	beq		wmsg10
 	ld		r2,r4
 wmsg14:
-	ld		r0,tolist_sema + 1
-	beq		wmsg14
+	spl		tolist_sema + 1
 	jsr		AddToTimeoutList
 	stz		tolist_sema + 1
 wmsg10:
@@ -6914,8 +7095,7 @@ wmsg4:
 	st		r7,(y)
 	; Add the newly dequeued message to the free messsage list
 wmsg5:
-	ld		r0,freemsg_sema + 1
-	beq		wmsg5
+	spl		freemsg_sema + 1
 	ld		r7,FreeMsg
 	st		r7,MSG_LINK,r1
 	sta		FreeMsg
@@ -6967,9 +7147,8 @@ CheckMsg:
 	phy
 	push	r4
 	push	r5
-cmsg9:
-	ld		r0,mbx_sema + 1
-	beq		cmsg9
+
+	spl		mbx_sema + 1
 	ld		r5,MBX_OWNER,r1
 	bmi		cmsg2					; error: no owner
 	cmp		r4,#0					; are we to dequeue the message ?
@@ -6994,8 +7173,7 @@ cmsg7:
 	cmp		r4,#0
 	beq		cmsg8
 cmsg10:
-	ld		r0,freemsg_sema + 1
-	beq		cmsg10
+	spl		freemsg_sema + 1
 	ld		r5,FreeMsg
 	st		r5,MSG_LINK,r1
 	sta		FreeMsg
@@ -7166,12 +7344,8 @@ reschedule:
 	cld		; clear extended precision mode
 
 	pusha	; save off regs on the stack
-rs1:
-	ld		r0,readylist_sema + 1
-	beq		rs1
-rs2:
-	ld		r0,tcb_sema + 1
-	beq		rs2
+	spl		readylist_sema + 1
+	spl		tcb_sema + 1
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
 	sta		TCB_SPSave,x
@@ -7202,9 +7376,10 @@ MTKTick:
 	sta		PIC_RSTE
 	pla
 	inc		IRQFlag
-	; Try and aquire the ready list and tcb. If unsucessful it means there is
+	; Try and aquire the ready list and tcb. If unsuccessful it means there is
 	; a system function in the process of updating the list. All we can do is
 	; return to the system function and let it complete whatever it was doing.
+	; As if we don't return to the system function we will be deadlocked.
 	; The tick will be deferred; however if the system function was busy updating
 	; the ready list, in all likelyhood it's about to call the reschedule
 	; interrupt.
@@ -7215,6 +7390,7 @@ p100Hz11:
 	bne		tck2
 	stz		readylist_sema + 1
 tck1:
+	inc		missed_ticks
 	rti
 tck2:
 	cli
@@ -7251,13 +7427,15 @@ p100Hz15:
 	ldx		TimeoutList
 	bmi		p100Hz12				; are there any entries in the timeout list ?
 	lda		TCB_Timeout,x
-	bne		p100Hz14				; has this entry timed out ?
+	bgt		p100Hz14				; has this entry timed out ?
 	jsr		PopTimeoutList
 	jsr		AddTaskToReadyList
 	bra		p100Hz15				; go back and see if there's another task to be removed
 									; there could be a string of tasks to make ready.
 p100Hz14:
 	dea								; decrement the entry's timeout
+	sub		r1,r1,missed_ticks		; account for any missed ticks
+	stz		missed_ticks
 	sta		TCB_Timeout,x
 	
 p100Hz12:
@@ -7275,7 +7453,7 @@ tck3:
 SelectTaskToRun:
 	ld		r6,#5			; number of queues to search
 	ldy		IRQFlag			; use the IRQFlag as a buffer index
-	lsr		r3,r3,#1		; the LSB is always the same
+;	lsr		r3,r3,#1		; the LSB is always the same
 	and		r3,r3,#$0F		; counts from 0 to 15
 	lb		r3,strStartQue,y	; get the queue to start search at
 sttr2:
@@ -7318,372 +7496,52 @@ sttr1:
 	cpy		#5
 	bne		sttr5
 	ldy		#0
-sttr5
+sttr5:
 	dec		r6
 	bne		sttr2
 
 	; Here there were no tasks ready
-	; This should not be able to happen, so hang the machine.
+	; This should not be able to happen, so hang the machine (in a lower
+	; power mode).
 sttr3:
 	ldx		#94
 	stx		LEDS
-	bra		sttr3
+	jsr		kernel_panic
+	db		"No tasks in ready queue.",0
+	; Might as well power down the clock and wait for a reset or
+	; NMI. In the case of an NMI the kernel is reinitialized without
+	; doing the boot reset.
+	stp								
+	jmp		MTKInitialize
 
-;================================================================================
-; 65C816 mode test
-;================================================================================
-Test816:
-	clc
-	xce
-	cpu		W65C816S
-	rep		#$30		; acc,ndx = 16 bit
-	mem		16
-	ndx		16
-
-	lda		#$1800		; setup stack pointer
-	tas
-
-	jsr		putmsg
-	db		"Testing 816 Mode", 13, 10, 0
-
-;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-; First thing to test is branches. If you can't branch reliably
-; then the validity of the remaining tests are in question.
-; Test branches and also simultaneously some other simple
-; instructions.
-;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-	jsr		putmsg
-	db		"Test branches",13,10,0
-
-	bra		braok
-	jsr		putmsg
-	db		"BRA:F", 13, 10, 0
-braok
-	brl		brlok
-	jsr		putmsg
-	db		"BRL:F", 13, 10, 0
-brlok
-	sec
-	bcs		bcsok
-	jsr		putmsg
-	db		"BCS:F", 13, 10, 0
-bcsok
-	clc
-	bcc		bccok
-	jsr		putmsg
-	db		"BCC:F", 13, 10, 0
-bccok
-	lda		#$00
-	beq		beqok
-	jsr		putmsg
-	db		"BEQ:F", 13, 10, 0
-beqok
-	lda		#$8000
-	bne		bneok
-	jsr		putmsg
-	db		"BNE:F", 13, 10, 0
-bneok
-	ora		#$00
-	bmi		bmiok
-	jsr		putmsg
-	db		"BMI:F", 13, 10, 0
-bmiok
-	eor		#$8000
-	bpl		bplok
-	jsr		putmsg
-	db		"BPL:F", 13, 10, 0
-bplok
-	lda		#$7fff
-	clc
-	adc		#$1000		; should give signed overflow
-	bvs		bvsok
-	jsr		putmsg
-	db		"BVS:F", 13, 10, 0
-bvsok
-	clv
-	bvc		bvcok
-	jsr		putmsg
-	db		"BVC:F", 13, 10, 0
-bvcok
-
-;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-; Compare Instructions
-;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
-	jsr		putmsg
-	db		"test cmp/cpx/cpy", 13, 10, 0
-
-	lda		#27			; bit 7 = 0
-	clc
-	cmp		#27
-	bcc		cmperr
-	bne		cmperr
-	bmi		cmperr
-	lda		#$A001
-	cmp		#20
-	bpl		cmperr		; should be neg.
-	sec
-	lda		#10
-	cmp		#20			; should be a borrow here
-	bcs		cmperr
-	clv
-	lda		#$8000		; -128 - 32 = -160 should overflow
-	cmp		#$2000		; compare doesn't affect overflow
-	bvs		cmperr
-	bvc		cmpok
-
-cmperr
-	jsr		putmsg
-	db		"CMP:F", 13, 10, 0
-
-cmpok
-
-;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-;- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-
-	jsr		putmsg
-	db		"Test psh/pul", 13, 10, 0
-
-; pha / pla
-	lda		#$ee00
-	pha
-	lda		#00
-	clc
-	pla
-	bpl		plaerr
-	beq		plaerr
-	bcs		plaerr
-	cmp		#$ee00
-	beq		plaok
-
-plaerr
-	jsr		putmsg
-	db		"PLA:F", 13, 10, 0
-
-plaok
-
-; ror m
-
-	clc
-	lda		#$8000
-	sta		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	ror		dpf
-	bmi		rormerr
-	beq		rormerr
-	bcs		rormerr
-	lda		dpf
-	cmp		#$0001		; this will set the carry !!!
-	bne		rormerr
-	clc
-	ror		dpf
-	bcc		rormerr
-	bne		rormerr
-	bmi		rormerr
-	ror		dpf
-	bcs		rormerr
-	bpl		rormerr
-	beq		rormerr
-	lda		dpf
-	cmp		#$8000
-	bne		rormerr
-	jmp		rormok
-
-rormerr
-	jsr		putmsg
-	db		"RORM:F", 13, 10, 0
-	jmp		rormok
+;------------------------------------------------------------------------------
+; kernal_panic:
+;	All this does right now is display the panic message on the screen.
+; Parameters:
+;	inline: string
+;------------------------------------------------------------------------------
+;
+kernel_panic:
+	pla					; pop the return address off the stack
+	push	r4			; save off r4
+	ld		r4,r1
+kpan2:
+	lb		r1,0,r4		; get a byte from the code space
+	add		r4,#1		; increment pointer
+	and		#$FF		; we want only eight bits
+	beq		kpan1			; is it end of string ?
+	jsr		DisplayChar
+	bra		kpan2
+kpan1:						; must update the return address !
+	jsr		CRLF
+	ld		r1,r4		; get return address into acc
+	pop		r4			; restore r4
+	jmp		(r1)
 	
-rormok
-
-		jsr		INITSUB
-		ldx		#359
-		ldy		#1193
-L1S:	
-		phy
-		pha
-		phx
-		stz		Q
-;		txa
-;		ldx		#5
-;		wdm
-;		xce
-;		cpu		RTF65002
-;		jsr		PRTNUM
-;		clc
-;		xce
-;		cpu		W65C816S
-;		rep		#$30
-;		plx
-;		phx
-		tya
-		tax
-L2S:	
-		txa
-
-;		phx
-;		ldx		#5
-;		wdm
-;		xce
-;		cpu		RTF65002
-;		jsr		PRTNUM
-;		clc
-;		xce
-;		cpu		W65C816S
-;		rep		#$30
-;		plx
-;		txa
-
-		jsr		MULSUB
-		sta		SSS
-		lda		#10
-		sta		Q
-		jsr		ADJ1SUB
-		lda		P-1,x
-		jsr		UNADJ1SUB
-		jsr		MULSUB
-		clc
-		adc		SSS
-		sta		Q
-		txa
-		asl
-		dea
-		jsr		DIVSUB
-		jsr		ADJ1SUB
-		sta		P-1,x
-		jsr		UNADJ1SUB
-		dex
-		bne		L2S
-		lda		#10
-		jsr		DIVSUB
-		sta		P
-		plx
-		pla
-		ldy		Q
-		cpy		#10
-		bcc		L3S
-		ldy		#0
-		ina
-L3S:	
-		cpx		#358
-		bcc		L4S
-		bne		L5S
-		jsr		OUTPUTSUB
-		lda		#46
-L4S:	
-		jsr		OUTPUTSUB
-L5S:	
-		tya
-		eor		#48
-		ply
-		cpx		#358
-		bcs		L6S
-		dey
-		dey
-		dey
-L6S:	
-		dex
-		beq		L7S
-		jmp		L1S
-L7S:
-		jsr		OUTPUTSUB
-		wdm
-		xce
-		cpu		RTF65002
-		rts
-
-		cpu		W65C816S
-INITSUB:
-		lda		#2
-		ldx		#1192
-IS1:
-		jsr		ADJSUB
-		sta		P,x
-		jsr		UNADJSUB
-		dex
-		bpl		IS1
-		rts
-
-MULSUB:
-		sta		R
-		ldy		#16
-M1S:	asl
-		asl		Q
-		bcc		M2S
-		clc
-		adc		R
-M2S:	dey
-		bne		M1S
-		rts
-
-DIVSUB:
-		sta		R
-		ldy		#16
-		lda		#0
-		asl		Q
-D1S:	rol
-		cmp		R
-		bcc		D2S
-		sbc		R
-D2S:	rol		Q
-		dey
-		bne		D1S
-		rts
-		
-ADJSUB:
-		pha
-		txa
-		asl
-		tax
-		pla
-		rts
-UNADJSUB:	
-		pha
-		txa
-		lsr
-		tax
-		pla
-		rts
-ADJ1SUB:
-		pha
-		txa
-		asl
-		tax
-		pla
-		dex
-		rts
-UNADJ1SUB:
-		pha
-		txa
-		lsr
-		tax
-		pla
-		inx
-		rts
-
-OUTPUTSUB:
-		wdm		; switch to 32 bit mode
-		xce
-		cpu		RTF65002
-		jsr		DisplayChar
-		clc		; switch back to 816 mode
-		xce
-		cpu		W65C816S
-		rep		#$30		; acc,ndx = 16 bit
-		rts
+;------------------------------------------------------------------
+;------------------------------------------------------------------
+include "Test816.asm"
+include "pi_calc816.asm"
 
 ;------------------------------------------------------------------
 ; Kind of a chicken and egg problem here. If there is something
@@ -7754,10 +7612,10 @@ tmp2a:
 	lda		test_mbx		; get mailbox handle
 	ldx		#msg_hello		; MSG D1
 	ldy		#0				; MSG D2
-	jsr		SendMsg
+	jsr		PostMsg
 	bra		tmp2a
 msg_hello:
-	db		"Hello from message sender",13,10,0
+	db		"Hello from RTF",13,10,0
 
 message "DOS.asm"
 include "DOS.asm"

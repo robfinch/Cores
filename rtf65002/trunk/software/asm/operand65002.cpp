@@ -648,7 +648,7 @@ j1:
 	// Absolute / Zero page
 	// This must be the last mode tested for since anything will
 	// match
-	strmat(op, " %s ", eb.getBuf());
+	strmat(op, " %s", eb.getBuf());
 	val = eb.expeval(NULL);
 	if (val.value < 4096 && val.value >= 0) {
 		r2 = 0;

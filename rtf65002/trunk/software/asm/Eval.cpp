@@ -173,6 +173,7 @@ void AsmBuf::constant(Value *val)
    /* -----------------------------
       Check if numeric constant.
    ----------------------------- */
+   while(peekCh()==' ') nextCh();
    if (isdigit(peekCh())||peekCh()=='$')
    {
 	   val->fLabel = false;
@@ -526,7 +527,9 @@ void AsmBuf::factor(Value *val)
       goto exitpt;
    }
 
-   switch (nextCh())
+//    while(isspace(peekCh()) && peekCh() != '\n') nextCh();
+	while ((ch=nextCh())==' ');
+	switch (ch)
    {
       case '!':
          factor(val);
