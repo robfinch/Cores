@@ -48,6 +48,9 @@ E_Timeout	=		0x10
 E_BadAlarm	=		0x11
 E_NotOwner	=		0x12
 E_QueStrategy =		0x13
+E_BadDevNum	=		0x18
+E_DCBInUse	=		0x19
+
 ; resource errors
 E_NoMoreMbx	=		0x40
 E_NoMoreMsgBlks	=	0x41
@@ -63,6 +66,12 @@ TS_PREEMPT	=4
 TS_RUNNING	=8
 TS_READY	=16
 TS_SLEEP	=32
+
+PRI_HIGHEST	=0
+PRI_HIGH	=1
+PRI_NORMAL	=2
+PRI_LOW		=3
+PRI_LOWEST	=4
 
 MAX_TASKNO	= 63
 DRAM_BASE	= $04000000
@@ -159,8 +168,8 @@ TASK_SELECT	EQU		0xFFDD0008
 RQ_SEMA		EQU		0xFFDB0000
 to_sema		EQU		0xFFDB0010
 SERIAL_SEMA	EQU		0xFFDB0020
-KEYBD_SEMA	EQU		0xFFDB0030
-IOF_LIST_SEMA	EQU	0xFFDB0040
+keybd_sema	EQU		0xFFDB0030
+iof_sema	EQU		0xFFDB0040
 mbx_sema	EQU		0xFFDB0050
 freembx_sema	EQU		0xFFDB0060
 MEM_SEMA	EQU		0xFFDB0070
@@ -170,7 +179,8 @@ readylist_sema	EQU	0xFFDB00A0
 tolist_sema		EQU	0xFFDB00B0
 msg_sema		EQU	0xFFDB00C0
 freetcb_sema	EQU	0xFFDB00D0
-
+device_semas	EQU	0xFFDB1000
+device_semas_end	EQU	0xFFDB1200
 
 SPIMASTER	EQU		0xFFDC0500
 SPI_MASTER_VERSION_REG	EQU	0x00
@@ -333,6 +343,10 @@ MSG_LINK	EQU		0x01FA0000	; link to next message in queue or free list
 MSG_D1		EQU		MSG_LINK + NR_MSG	; message data 1
 MSG_D2		EQU		MSG_D1 + NR_MSG		; message data 2
 MSG_TYPE	EQU		MSG_D2 + NR_MSG		; message type
+MSG_END		EQU		MSG_TYPE + NR_MSG
+
+MT_IRQ		EQU		0xFFFFFFF0
+MT_GETCHAR	EQU		0xFFFFFFEF
 
 ; Task control blocks, room for 256 tasks
 NR_TCB			EQU		256
@@ -362,6 +376,33 @@ TCB_errno		EQU		0x01FBDE00
 TCB_NxtTo		EQU		0x01FBDF00
 TCB_PrvTo		EQU		0x01FBE000
 TCB_MbxList		EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
+TCB_mbx			EQU		0x01FBCE00
+
+; Device Control Block
+;
+DCB_NAME			EQU		0
+DCB_NAME_LEN		EQU		3
+DCB_TYPE			EQU		4
+DCB_nBPB			EQU		5
+DCB_last_erc		EQU		6
+DCB_nBlocks			EQU		7
+DCB_pDevOp			EQU		8
+DCB_pDevInit		EQU		9
+DCB_pDevSt			EQU		10
+DCB_ReentCount		EQU		11
+DCB_fSingleUser		EQU		12
+DCB_hJob			EQU		13
+DCB_Mbx				EQU		14
+DCB_Sema			EQU		15
+DCB_OSD3			EQU		16
+DCB_OSD4			EQU		17
+DCB_OSD5			EQU		18
+DCB_OSD6			EQU		19
+DCB_SIZE			EQU		20
+
+NR_DCB		EQU		32
+DCBs		EQU		MSG_END
+DCBs_END	EQU		DCBs + DCB_SIZE * NR_DCB
 
 KeybdHead	EQU		0x01FBEA00
 KeybdTail	EQU		0x01FBEB00
@@ -406,6 +447,15 @@ nMailbox	EQU		FreeMbxHandle + 1
 FreeMsg		EQU		nMailbox + 1
 nMsgBlk		EQU		FreeMsg + 1
 missed_ticks	EQU	nMsgBlk + 1
+keybdmsg_d1		EQU	missed_ticks + 1
+keybdmsg_d2		EQU	keybdmsg_d1 + 1
+keybd_mbx		EQU	keybdmsg_d2 + 1
+keybd_char		EQU	keybd_mbx + 1
+iof_switch		EQU	keybd_char + 1
+clockmsg_d1		EQU iof_switch + 1
+clockmsg_d2		EQU	clockmsg_d1 + 1
+tcbsema_d1		EQU	clockmsg_d2 + 1
+tcbsema_d2		EQU	tcbsema_d1 + 1
 
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
@@ -471,6 +521,76 @@ Uart_txxonoff	EQU		0x7DC
 
 startSector	EQU		0x7F0
 
+macro DisTimer
+	pha
+	lda		#3
+	sta		PIC+2
+	pla
+endm
+
+macro EnTimer
+	pha
+	lda		#3
+	sta		PIC+3
+	pla
+endm
+
+macro DisTmrKbd
+	pha
+	lda		#3
+	sta		PIC+2
+	lda		#15
+	sta		PIC+2
+	pla
+endm
+
+macro EnTmrKbd
+	pha
+	lda		#3
+	sta		PIC+3
+	lda		#15
+	sta		PIC+3
+	pla
+endm
+
+macro GoReschedule
+	int		#2
+endm
+
+;------------------------------------------------------------------------------
+; Wait for the TCB array to become available
+;------------------------------------------------------------------------------
+;
+macro mAquireTCB
+	lda		#33
+	ldx		#0
+	txy
+	ld		r4,#-1
+	jsr		WaitMsg
+endm
+
+macro mReleaseTCB
+	lda		#33
+	ldx		#$FFFFFFFE
+	txy
+	jsr		SendMsg
+endm
+
+macro mAquireMBX
+	lda		#34
+	ldx		#0
+	txy
+	ld		r4,#-1
+	jsr		WaitMsg
+endm
+
+macro mReleaseMBX
+	lda		#34
+	ldx		#$FFFFFFFE
+	txy
+	jsr		SendMsg
+endm
+
 
 	cpu		rtf65002
 	code
@@ -518,12 +638,13 @@ start
 	sta		mmu_present
 st_nommu:
 	jsr		MemInit			; Initialize the heap
+	stz		iof_switch
 
 	lda		#2
 	sta		LEDS
 
 	; setup interrupt vectors
-	ldx		#$01FB0001		; interrupt vector table from $5FB0000 to $5FB01FF
+	ldx		#$01FB8001		; interrupt vector table from $5FB0000 to $5FB01FF
 							; also sets nmoi policy (native mode on interrupt)
 	trs		r2,vbr
 	dex
@@ -540,6 +661,8 @@ st_nommu:
 	sta		1,x
 	lda		#reschedule
 	sta		2,x
+	lda		#spinlock_irq
+	sta		3,x
 	lda		#KeybdRST
 	sta		448+1,x
 	lda		#p1000Hz
@@ -570,10 +693,12 @@ st_nommu:
 	sta		UserTick
 
 	lda		#1
-;	sta		MBX_SEMA
-	sta		IOF_LIST_SEMA
-;	sta		RQ_SEMA			; set ready queue semaphore
-;	sta		TO_SEMA			; set timeout list semaphore
+	sta		iof_sema
+
+	lda		#(DCB_SIZE * NR_DCB)-1
+	ldx		#0
+	ldy		#DCBs
+	stos
 
 	lda		#$CE			; CE =blue on blue FB = grey on grey
 	sta		ScreenColor
@@ -587,7 +712,7 @@ st_nommu:
 	; This will likely cause an interrupt right away because the timer
 	; pulses run since power-up.
 	cli						
-	lda		#4
+	lda		#PRI_LOWEST
 	ldx		#0
 	ldy		#IdleTask
 	jsr		StartTask
@@ -615,7 +740,10 @@ st8:
 	cli						
 	lda		#14
 	sta		LEDS
-	jsr		KeybdInit
+	lda		#PRI_NORMAL
+	ldx		#0
+	ldy		#KeybdSetup
+	jsr		StartTask
 	lda		#1
 	sta		KeybdEcho
 	lda		#6
@@ -785,8 +913,7 @@ DumpTaskList:
 	lda		#msgTaskList
 	jsr		DisplayStringB
 	ldy		#0
-	php
-	sei
+	spl		tcb_sema + 1
 dtl2:
 	lda		QNdx0,y
 	ld		r4,r1
@@ -829,7 +956,7 @@ dtl1:
 	iny
 	cpy		#5
 	bne		dtl2
-	plp
+	stz		tcb_sema + 1
 	pop		r4
 	ply
 	plx
@@ -850,12 +977,11 @@ DumpTimeoutList:
 	lda		#msgTimeoutList
 	jsr		DisplayStringB
 	ldy		#11
-	php
-	sei
 dtol2:
 	lda		TimeoutList
 	ld		r4,r1
 	bmi		dtol1
+	spl		tcb_sema + 1
 dtol3:
 	dey
 	beq		dtol1
@@ -883,7 +1009,7 @@ dtol3:
 	ld		r4,TCB_NxtTo,r4
 	bpl		dtol3
 dtol1:
-	plp
+	stz		tcb_sema + 1
 	pop		r4
 	ply
 	plx
@@ -900,10 +1026,9 @@ DumpIOFocusList:
 	pha
 	phx
 	phy
-	php
-	sei
 	lda		#msgIOFocusList
 	jsr		DisplayStringB
+	spl		iof_sema + 1
 	lda		IOFocusNdx
 diofl2:
 	bmi		diofl1
@@ -926,7 +1051,7 @@ diofl2:
 	bne		diofl2
 	
 diofl1:
-	plp
+	stz		iof_sema + 1
 	ply
 	plx
 	pla
@@ -1211,10 +1336,12 @@ stasc1:
 ;------------------------------------------------------------------------------
 HomeCursor:
 	phx
+	spl		tcb_sema + 1
 	ldx		RunningTCB
 	and		r2,r2,#$FF
 	stz		TCB_CursorRow,x
 	stz		TCB_CursorCol,x
+	stz		tcb_sema + 1
 	cpx		IOFocusNdx
 	bne		hc1
 	stz		TEXTREG+TEXT_CURPOS
@@ -1273,7 +1400,7 @@ CalcScreenLoc:
 	stx		TEXTREG+TEXT_CURPOS
 csl1:
 	jsr		GetScreenLocation
-	add		r1,r2,r1
+	add		r1,r1,r2
 	pop		r4
 	plx
 	rts
@@ -1552,7 +1679,7 @@ TickRout:
 	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
 	lb		r1,IrqBase		; get the IRQ flag byte
 	lsr		r4,r1
-	or		r1,r4
+	or		r1,r1,r4
 	and		#$E0
 	sb		r1,IrqBase
 
@@ -1576,233 +1703,7 @@ TickRout:
 tr1a
 	rts
 
-;------------------------------------------------------------------------------
-; Initialize keyboard
-;
-; Issues a 'reset keyboard' command to the keyboard, then selects scan code
-; set #2 (the most common one). Also sets up the keyboard buffer and
-; initializes the keyboard semaphore.
-;------------------------------------------------------------------------------
-;
-message "KeybdInit"
-KeybdInit:
-	lda		#1			; setup semaphore
-	sta		KEYBD_SEMA
-	lda		#32
-	sta		LEDS
-	ldx		#0
-
-	lda		#MAX_TASKNO
-	ldx		#0
-	ldy		#KeybdHead
-	stos
-	lda		#MAX_TASKNO
-	ldy		#KeybdTail
-	stos
-	lda		#MAX_TASKNO
-	ldy		#KeybdBad
-	stos
-	lda		#MAX_TASKNO
-	ldx		#1				; turn on keyboard echo
-	ldy		#KeybdEcho
-	stos
-	
-	lda		PIC_IE
-	or		r1,r1,#$8000		; enable kbd_irq
-	sta		PIC_IE
-
-	lda		#33
-	sta		LEDS
-	lda		#$ff		; issue keyboard reset
-	jsr		SendByteToKeybd
-	lda		#38
-	sta		LEDS
-	lda		#1000000		; delay a bit
-kbdi5:
-	dea
-	sta		LEDS
-	bne		kbdi5
-	lda		#34
-	sta		LEDS
-	lda		#0xf0		; send scan code select
-	jsr		SendByteToKeybd
-	lda		#35
-	sta		LEDS
-	ldx		#0xFA
-	jsr		WaitForKeybdAck
-	cmp		#$FA
-	bne		kbdi2
-	lda		#36
-	sta		LEDS
-	lda		#2			; select scan code set#2
-	jsr		SendByteToKeybd
-	lda		#39
-	sta		LEDS
-kbdi2:
-	rts
-
-msgBadKeybd:
-	db		"Keyboard not responding.",0
-
-SendByteToKeybd:
-	phx
-	ldx		RunningTCB
-	sta		KEYBD
-	lda		#40
-	sta		LEDS
-	tsr		TICK,r3
-kbdi4:						; wait for transmit complete
-	tsr		TICK,r4
-	sub		r4,r4,r3
-	cmp		r4,#1000000
-	bcs		kbdbad
-	lda		#41
-	sta		LEDS
-	lda		KEYBD+3
-	bit		#64
-	beq		kbdi4
-	bra		sbtk1
-kbdbad:
-	lda		#42
-	sta		LEDS
-	lda		KeybdBad,x
-	bne		sbtk1
-	lda		#1
-	sta		KeybdBad,x
-	lda		#43
-	sta		LEDS
-	lda		#msgBadKeybd
-	jsr		DisplayStringCRLFB
-sbtk1:
-	lda		#44
-	sta		LEDS
-	plx
-	rts
-	
-; Wait for keyboard to respond with an ACK (FA)
-;
-WaitForKeybdAck:
-	lda		#64
-	sta		LEDS
-	tsr		TICK,r3
-wkbdack1:
-	tsr		TICK,r4
-	sub		r4,r4,r3
-	cmp		r4,#1000000
-	bcs		wkbdbad
-	lda		#65
-	sta		LEDS
-	lda		KEYBD
-	bit		#$8000
-	beq		wkbdack1
-;	lda		KEYBD+8
-	and		#$ff
-wkbdbad:
-	rts
-
-; Wait for keyboard to respond with an ACK (FA)
-; This routine picks up the ack status left by the
-; keyboard IRQ routine.
-; r2 = 0xFA (could also be 0xEE for echo command)
-;
-WaitForKeybdAck2:
-	phx
-	ldx		RunningTCB
-WaitForKeybdAck2a:
-	lda		KeybdAck,x
-	cmp		r1,r2
-	bne		WaitForKeybdAck2a
-	stz		KeybdAck,x
-	plx
-	rts
-
-;------------------------------------------------------------------------------
-; KeybdIRQ
-;
-; Normal keyboard interrupt, the lowest priority interrupt in the system.
-; Grab the character from the keyboard device and store it in a buffer.
-; The buffer of the task with the input focus is updated.
-; This IRQ has to check for the ALT-tab character and take care of
-; switching the IO focus if detected. It can't be done in the KeybdGetChar
-; because the app with the IO focus may not call that routine. We know for
-; sure the interrupt routine will be called when a key is pressed.
-;------------------------------------------------------------------------------
-;
-message "KeybdIRQ"
-KeybdIRQ:
-	cld
-	pha
-	phx
-	phy
-	push	r4
-
-	; support EhBASIC's IRQ functionality
-	; code derived from minimon.asm
-	lda		#15				; Keyboard is IRQ #15
-	sta		IrqSource	
-	lb		r1,IrqBase		; get the IRQ flag byte
-	lsr		r2,r1
-	or		r1,r1,r2
-	and		#$E0
-	sb		r1,IrqBase		; save the new IRQ flag byte
-
-	ld		r4,IOFocusNdx	; get the task with the input focus
-
-	ldx		KEYBD				; get keyboard character
-	ld		r0,KEYBD+1			; clear keyboard strobe (turns off the IRQ)
-	txy							; check for a keyboard ACK code
-
-	bit		r3,#$800				; test bit #11
-	bne		KeybdIRQc				; ignore keyup messages for now
-	bit		r3,#$200			; check for ALT-tab
-	beq		KeybdIrq3
-	and		r3,r3,#$FF
-	cmp		r3,#TAB					; if we find an ALT-tab
-	bne		KeybdIrq3
-	jsr		SwitchIOFocus
-	bra		KeybdIRQc				; don't store off the ALT-tab character
-KeybdIrq3:
-	and		r3,r3,#$ff
-	cmp		r3,#$FA
-	bne		KeybdIrq1
-	sty		KeybdAck,r4
-	bra		KeybdIRQc
-KeybdIrq1:
-	bit		r2,#$800				; test bit #11
-	bne		KeybdIRQc				; ignore keyup messages for now
-KeybdIrq2:
-	lda		KeybdHead,r4			
-	ina								; increment head pointer
-	and		#$f						; limit
-	ldy		KeybdTail,r4			; check for room in the keyboard buffer
-	cmp		r1,r3
-	beq		KeybdIRQc				; if no room, the newest char will be lost
-	sta		KeybdHead,r4
-	dea
-	and		#$f
-	stx		KeybdLocks,r4
-	asl		r4,r4,#4					; * 16
-	add		r1,r1,r4
-	stx		KeybdBuffer,r1			; store character in buffer
-KeybdIRQc:
-	pop		r4
-	ply
-	plx
-	pla
-	rti
-
-KeybdRstIRQ:
-	jmp		start
-
-;-----------------------------------------------------------------------------
-; r1 0=echo off, non-zero = echo on
-;------------------------------------------------------------------------------
-SetKeyboardEcho:
-	phx
-	ldx		RunningTCB
-	sta		KeybdEcho,x
-	plx
-	rts
+include "keyboard.asm"
 
 comment ~
 ;------------------------------------------------------------------------------
@@ -1828,9 +1729,9 @@ GetIOFocusBit:
 ;------------------------------------------------------------------------------
 ;
 ForceIOFocus:
-	php
 	pha
 	phy
+	spl		iof_sema + 1
 	ldy		IOFocusNdx
 	cmp		r1,r3
 	beq		fif1
@@ -1838,9 +1739,9 @@ ForceIOFocus:
 	sta		IOFocusNdx
 	jsr		CopyVirtualScreenToScreen
 fif1:
+	stz		iof_sema + 1
 	ply
 	pla
-	plp
 	rts
 	
 ;------------------------------------------------------------------------------
@@ -1849,6 +1750,7 @@ fif1:
 ; Switches the IO focus to the next task requesting the I/O focus. This
 ; routine may be called when a task releases the I/O focus as well as when
 ; the user presses ALT-TAB on the keyboard.
+; On Entry: the io focus semaphore is set already.
 ;------------------------------------------------------------------------------
 ;
 SwitchIOFocus:
@@ -1878,130 +1780,6 @@ siof3:
 	pla
 	rts
 	
-;------------------------------------------------------------------------------
-; Get character from keyboard buffer
-; return character in acc or -1 if no
-; characters available.
-; Also check for ALT-TAB and switch the I/O focus.
-;------------------------------------------------------------------------------
-message "KeybdGetChar"
-KeybdGetChar:
-	php
-	phx
-	push	r4
-	sei
-	ld		r4,RunningTCB
-	cmp		r4,#MAX_TASKNO
-	bhi		nochar
-	ldx		KeybdTail,r4	; if keybdTail==keybdHead then there are no 
-	lda		KeybdHead,r4	; characters in the keyboard buffer
-	cmp		r1,r2
-	beq		nochar
-	asl		r4,r4,#4			; * 16
-	phx
-	add		r2,r2,r4
-	lda		KeybdBuffer,x
-	plx
-	and		r1,r1,#$ff		; mask off control bits
-	inx						; increment index
-	and		r2,r2,#$0f
-	lsr		r4,r4,#4			; / 16
-	stx		KeybdTail,r4
-	ldx		KeybdEcho,r4
-	beq		kgc3
-	cmp		#CR
-	bne		kgc8
-	jsr		CRLF			; convert CR keystroke into CRLF
-	bra		kgc3
-kgc8:
-	jsr		DisplayChar
-	bra		kgc3
-nochar:
-	lda		#-1
-kgc3:
-	pop		r4
-	plx
-	plp
-	rts
-
-;------------------------------------------------------------------------------
-; Check if there is a keyboard character available in the keyboard buffer.
-; Returns
-; r1 = 1, Z=0 if there is a key available, otherwise
-; r1 = 0, Z=1 if there is not a key available
-;------------------------------------------------------------------------------
-;
-message "KeybdCheckForKey"
-KeybdCheckForKey:
-	phx
-	push	r4
-	php
-	sei
-	ld		r4,RunningTCB
-	lda		KeybdTail,r4
-	ldx		KeybdHead,r4
-	sub		r1,r1,r2
-	bne		kcfk1
-	plp
-	pop		r4
-	plx
-	lda		#0
-	rts
-kcfk1
-	plp
-	pop		r4
-	plx
-	lda		#1
-	rts
-;------------------------------------------------------------------------------
-; Check if there is a keyboard character available. If so return true (1)
-; otherwise return false (0) in r1.
-;------------------------------------------------------------------------------
-;
-message "KeybdCheckForKeyDirect"
-KeybdCheckForKeyDirect:
-	lda		KEYBD
-	and		#$8000
-	beq		kcfkd1
-	lda		#1
-kcfkd1
-	rts
-
-;------------------------------------------------------------------------------
-; Get character directly from keyboard. This routine blocks until a key is
-; available.
-;------------------------------------------------------------------------------
-;
-KeybdGetCharDirect:
-	phx
-kgc1:
-	lda		KEYBD
-	bit		#$8000
-	beq		kgc1
-	ld		r0,KEYBD+1		; clear keyboard strobe
-	bit		#$800			; is it a keydown event ?
-	bne		kgc1
-;	bit		#$200				; check for ALT-tab
-;	bne		kgc2
-;	and		r2,r1,#$7f
-;	cmp		r2,#TAB					; if we find an ALT-tab
-;	bne		kgc2
-;	jsr		SwitchIOFocus
-;	bra		kgc1
-;kgc2:
-	and		#$ff			; remove strobe bit
-	ldx		KeybdEcho		; is keyboard echo on ?
-	beq		gk1
-	cmp		#CR
-	bne		gk2				; convert CR keystroke into CRLF
-	jsr		CRLF
-	bra		gk1
-gk2:
-	jsr		DisplayChar
-gk1:
-	plx
-	rts
-
 
 ;==============================================================================
 ; Serial port
@@ -2561,27 +2339,6 @@ Prompt14:
 	jsr		MonGetch
 	cmp		#'O'
 	bne		Prompt14a
-	lda		#10
-	ldx		#100
-	jsr		AddToTimeoutList
-	jsr		DumpTimeoutList
-	jsr		PopTimeoutList
-	jsr		DumpTimeoutList
-	lda		#10
-	ldx		#100
-	jsr		AddToTimeoutList
-	lda		#12
-	ldx		#1000
-	jsr		AddToTimeoutList
-	lda		#14
-	ldx		#100
-	jsr		AddToTimeoutList
-	lda		#12
-	jsr		RemoveFromTimeoutList
-	lda		#10
-	jsr		RemoveFromTimeoutList
-	lda		#14
-	jsr		RemoveFromTimeoutList
 	jsr		DumpTimeoutList
 	jmp		Monitor
 Prompt14a:
@@ -3066,7 +2823,7 @@ sac974:
 	stz		AC97+0x26		; trigger a read of register 26 (status reg)
 sac971:						; wait for status to register 0xF (all ready)
 	ld		r3,Milliseconds
-	sub		r3,r4
+	sub		r3,r3,r4
 	cmp		r3,#1000
 	bhi		sac97Abort
 	jsr		KeybdGetChar	; see if we needed to CTRL-C
@@ -3088,7 +2845,7 @@ sac973:
 	ld		r4,Milliseconds
 sac972:
 	ld		r3,Milliseconds
-	sub		r3,r4
+	sub		r3,r3,r4
 	cmp		r3,#1000
 	bhi		sac97Abort
 	jsr		KeybdGetChar
@@ -3431,7 +3188,7 @@ spi_read_multiple:
 spi_rm1:
 	pha
 	jsr		spi_read_sector
-	add		r4,r1
+	add		r4,r4,r1
 	add		r2,r2,#512
 	pla
 	ina
@@ -4901,7 +4658,7 @@ tSleep:
 	txa
 tSleep1:
 	ldx		Milliseconds
-	sub		r2,r1
+	sub		r2,r2,r1
 	cpx		#100
 	blo		tSleep1
 	rts
@@ -5004,7 +4761,7 @@ mema3:						; insufficient memory
 	rts
 memaSplit:
 	add		r4,r1,r2
-	add		r4,r4,#4
+	add		r4,#4
 	ldy		#$4D454D20
 	sty		(r4)
 	sty		MEM_FLAG,r4
@@ -5227,8 +4984,8 @@ brk5:
 	bne		brk4			; no, go for next page
 	bms		PageMap			; allocate the page
 	sta		MMU,r4			; store the page number in the MMU table
-	add		r4,r4,#1		; move to next MMU entry
-	sub		r6,r6,#1		; decrement count of needed
+	add		r4,#1			; move to next MMU entry
+	sub		r6,#1			; decrement count of needed
 	beq		brk6			; we're done if count = 0
 brk4:
 	ina
@@ -5251,7 +5008,7 @@ brk7:
 	lda		MMU,r5			; get the page to free
 	bmc		PageMap			; free the page
 	inc		mem_pages_free
-	add		r5,r5,#1
+	add		r5,#1
 	bra		brk7
 
 	; Successful return
@@ -5288,7 +5045,7 @@ _sbrk:
 	cmp		r1,#0				; zero difference = get old brk address
 	beq		sbrk2
 	asl		r5,r4,#14			; convert to words
-	add		r1,r5				; +/- amount
+	add		r1,r1,r5				; +/- amount
 	jsr		_brk
 	cmp		r1,#-1
 	bne		sbrk2
@@ -5617,6 +5374,10 @@ msgUnimp:
 	db	"Unimplemented at: ",0
 
 brk_rout:
+	lda		#16
+	sta		LEDS
+	jsr		kernel_panic
+	db		"Break routine",0
 	rti
 nmirout:
 	pha
@@ -5636,6 +5397,11 @@ msgPerr:
 
 ;==============================================================================
 ; Finitron Multi-Tasking Kernel (FMTK)
+;        __
+;   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@opencores.org
+;       ||
 ;==============================================================================
 	org		$FFFFC000
 	dw		MTKInitialize
@@ -5720,12 +5486,14 @@ st4:
 	sta		MBX_LINK+NR_MSG-1
 	
 	; Initialize free mailbox list
-	lda		#NR_MBX
+	; Note the first NR_TCB mailboxes are statically allocated to the tasks.
+	; They are effectively pre-allocated.
+	lda		#NR_MBX-NR_TCB
 	sta		nMailbox
 	
-	stz		FreeMbxHandle
-	ldx		#0
-	lda		#1
+	ldx		#NR_TCB
+	stx		FreeMbxHandle
+	lda		#NR_TCB+1
 st3:
 	sta		MBX_LINK,x
 	ina
@@ -5758,13 +5526,13 @@ st2:
 	lda		#-1
 	sta		TCB_NxtTo
 	sta		TCB_PrvTo
-	stz		QNdx0			; insert at priority 0
+	stz		QNdx2			; insert at priority 2
 	stz		TCB_iof_next	; manually build the IO focus list
 	stz		TCB_iof_prev
 	stz		IOFocusNdx		; task #0 has the focus
 	lda		#1
 	sta		IOFocusTbl		; set the task#0 request bit
-	lda		#0
+	lda		#PRI_NORMAL
 	sta		TCB_Priority
 	stz		TCB_Timeout
 	lda		#TS_RUNNING|TS_READY
@@ -5848,7 +5616,11 @@ StartTask:
 	lda		TCB_NxtTCB,x
 	sta		FreeTCB				; update the FreeTCB list pointer
 	stz		freetcb_sema+1
+;	GoReschedule
+	lda		#81
+	sta		LEDS
 	txa							; acc = TCB index (task number)
+	sta		TCB_mbx,x
 	
 	; setup the stack for the task
 	; Zap the stack memory.
@@ -5868,7 +5640,7 @@ StartTask:
 	
 	add		r2,r2,#$3FF			; Move pointer to top of stack
 	tsr		sp,r9				; save off current stack pointer
-	spl		tcb_sema+1
+	spl		tcb_sema + 1
 	txs
 	st		r6,TCB_Priority,r7
 	stz		TCB_Status,r7
@@ -5879,6 +5651,8 @@ StartTask:
 	stz		TCB_mmu_map,r7		; use mmu map
 ;	jsr		AllocateMemPage
 	pha
+	lda		#82
+	sta		LEDS
 	lda		#-1
 	sta		TCB_MbxList,r7
 	lda		BASIC_SESSION
@@ -5895,6 +5669,8 @@ stask3:
 	sta		TCB_SP8Save,r7
 	stz		TCB_ABS8Save,r7
 stask4:
+	lda		#83
+	sta		LEDS
 	pla
 ;	tay
 
@@ -5928,15 +5704,16 @@ stask4:
 	push	r4
 	tsx
 	stx		TCB_SPSave,r7
-	stz		tcb_sema+1
 	; now restore the current stack pointer
 	trs		r9,sp
 
 	; Insert the task into the ready list
-	spl		readylist_sema + 1
+	ld		r4,#84
+	st		r4,LEDS
 	jsr		AddTaskToReadyList
-	stz		readylist_sema + 1
-	int		#2		; invoke the scheduler
+	lda		#1
+	sta		tcb_sema
+;	GoReschedule		; invoke the scheduler
 stask2:
 	pop		r9
 	pop		r8
@@ -5946,6 +5723,8 @@ stask2:
 	pop		r4
 	ply
 	plx
+	lda		#85
+	sta		LEDS
 	pla
 	rts
 stask1:
@@ -5968,15 +5747,7 @@ ExitTask:
 	; - mailboxes
 	; - messages
 	hoff
-xtsk2:
-	ld		r0,readylist_sema+1
-	beq		xtsk2
-xtsk3:
-	ld		r0,tolist_sema + 1
-	beq		xtsk3
-xtsk5:
-	lda		tcb_sema + 1
-	beq		xtsk5
+	spl		tcb_sema + 1
 	lda		RunningTCB
 	cmp		#MAX_TASKNO
 	bhi		xtsk1
@@ -5987,9 +5758,6 @@ xtsk5:
 ;	lda		TCB_ABS8Save,x
 ;	jsr		FreeMemPage
 	; Free up all the mailboxes associated with the task.
-xtsk8:
-	ld		r0,tcb_sema + 1
-	beq		xtsk8
 xtsk7:
 	pha
 	lda		TCB_MbxList,r1
@@ -5998,21 +5766,15 @@ xtsk7:
 	pla
 	bra		xtsk7
 xtsk6:
-	stz		tcb_sema + 1
 	pla
 	ldx		#86
 	stx		LEDS
-xtsk4:
-	ldx		freetcb_sema+1
-	beq		xtsk4
+	spl		freetcb_sema+1
 	ldx		FreeTCB						; add the task control block to the free list
 	stx		TCB_NxtTCB,r1
 	sta		FreeTCB
 	stz		freetcb_sema+1
 xtsk1:
-	stz		tcb_sema + 1
-	stz		tolist_sema + 1
-	stz		readylist_sema + 1
 	jmp		SelectTaskToRun
 
 ;------------------------------------------------------------------------------
@@ -6023,31 +5785,23 @@ xtsk1:
 SetTaskPriority:
 	cmp		#MAX_TASKNO					; make sure task number is reasonable
 	bhi		stp1
-	cpx		#5							; make sure priority is okay
-	bhs		stp1
 	phy
-stp3:
-	ld		r0,tcb_sema + 1
-	beq		stp3
-stp4:
-	ld		r0,readylist_sema + 1
-	beq		stp4		
+	spl		tcb_sema + 1
 	ldy		TCB_Status,r1				; if the task is on the ready list
 	bit		r3,#TS_READY|TS_RUNNING		; then remove it and re-add it.
 	beq		stp2						; Otherwise just go set the priority field
 	jsr		RemoveTaskFromReadyList
 	stx		TCB_Priority,r1
 	jsr		AddTaskToReadyList
-	stz		readylist_sema + 1
-	stz		tcb_sema + 1
-	ply
-stp1:
-	rts
+	bra		stp3
 stp2:
 	stx		TCB_Priority,r1
-	stz		readylist_sema + 1
-	stz		tcb_sema + 1
+stp3:
+	ldy		#1
+	sty		tcb_sema
+	GoReschedule
 	ply
+stp1:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6077,6 +5831,10 @@ AddTaskToReadyList:
 	stx		TCB_NxtRdy,r1
 	stx		TCB_PrvRdy,r1
 	ldy		TCB_Priority,r1
+	cpy		#5
+	blo		arl1
+	ldy		#PRI_LOWEST
+arl1:
 	ldx		QNdx0,y
 	bmi		arl5
 	ldy		TCB_PrvRdy,x
@@ -6202,7 +5960,7 @@ attl_adjust_timeout:
 	add		r2,r2,TCB_Timeout,r4	; get back timeout
 	stx		TCB_Timeout,r1
 	ld		r5,TCB_Timeout,r4	; adjust the timeout of the next task
-	sub		r5,r2
+	sub		r5,r5,r2
 	st		r5,TCB_Timeout,r4
 	bra		attl_exit
 
@@ -6236,6 +5994,8 @@ attl_exit:
 ;------------------------------------------------------------------------------
 message "RemoveFromTimeoutList"
 RemoveFromTimeoutList:
+	cmp		#MAX_TASKNO
+	bhi		rftl_not_on_list2
 	phx
 	push	r4
 	push	r5
@@ -6270,16 +6030,18 @@ rftl_remove_from_head:
 	; Here there is no previous or next items in the list, so the list
 	; will be empty once this task is removed from it.
 rftl_empty_list:
-	ldx		TCB_Status,r1			; clear timeout status
-	and		r2,r2,#~TS_TIMEOUT
-	stx		TCB_Status,r1
-	ldx		#-1						; make sure the next and prev fields indicate
-	stx		TCB_NxtTo,r1			; the task is not on a list.
-	stx		TCB_PrvTo,r1
+	tax
+	lda		#0					; clear timeout status (bit #0)
+	bmc		TCB_Status,x
+	dea							; acc=-1; make sure the next and prev fields indicate
+	sta		TCB_NxtTo,x			; the task is not on a list.
+	sta		TCB_PrvTo,x
+	txa
 rftl_not_on_list:
 	pop		r5
 	pop		r4
 	plx
+rftl_not_on_list2:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -6289,34 +6051,30 @@ rftl_not_on_list:
 ; timeout expires. It's always the head of the list that's being removed in
 ; the timer ISR so the removal from the timeout list is optimized. We know
 ; the timeout expired, so the amount of time to add to the next task is zero.
+;	This routine is written as a macro since it's only called from one place.
+; This routine is inlined. Implementing it as a macro increases performance.
 ;
-; Registers Affected: acc
-; Parameters:  none
+; Registers Affected: acc, x, y, flags
+; Parameters:
+;	x: head of timeout list
 ; Returns:
 ;	r1 = task id of task popped from timeout list
 ;------------------------------------------------------------------------------
+;
 message "PopTimeoutList"
-PopTimeoutList:
-	phx
-	phy
-	
+macro PopTimeoutList
 	ldy		#-1
-	ldx		TimeoutList
 	lda		TCB_NxtTo,x
 	sta		TimeoutList		; store next field into list head
 	bmi		ptl1
 	sty		TCB_PrvTo,r1	; previous link = -1
 ptl1:
-	lda		TCB_Status,x	; clear timeout status
-	and		#~TS_TIMEOUT
-	sta		TCB_Status,x
+	lda		#0				; clear timeout status
+	bmc		TCB_Status,x
 	sty		TCB_NxtTo,x		; make sure the next and prev fields indicate
 	sty		TCB_PrvTo,x		; the task is not on a list.
-
 	txa
-	ply
-	plx
-	rts
+endm
 
 ;------------------------------------------------------------------------------
 ; Sleep
@@ -6333,14 +6091,13 @@ Sleep:
 	pha
 	phx
 	tax
-	spl		readylist_sema + 1
+	spl		tcb_sema + 1
 	lda		RunningTCB
 	jsr		RemoveTaskFromReadyList
-	stz		readylist_sema + 1
-	spl		tolist_sema + 1
 	jsr		AddToTimeoutList	; The scheduler will be returning to this
-	stz		tolist_sema + 1
-	int		#2					; task eventually, once the timeout expires,
+	lda		#1
+	sta		tcb_sema
+	GoReschedule				; task eventually, once the timeout expires,
 	plx
 	pla
 	rts
@@ -6359,7 +6116,7 @@ short_delay:
 	tsr		tick,r2
 usec1:
 	tsr		tick,r3
-	sub		r3,r2
+	sub		r3,r3,r2
 	cmp		r1,r3
 	blo		usec1
 	ply
@@ -6384,24 +6141,13 @@ KillTask:
 	bls		kt1
 	cmp		#MAX_TASKNO
 	bhi		kt1
-	php
-	sei
 	jsr		ForceReleaseIOFocus
-	plp
-kt2:
-	ld		r0,readylist_sema + 1
-	beq		kt2
-kt3:
-	ld		r0,tolist_sema + 1
-	beq		kt3
+	spl		tcb_sema + 1
 	jsr		RemoveTaskFromReadyList
 	jsr		RemoveFromTimeoutList
 	stz		TCB_Status,r1				; set task status to TS_NONE
 
 	; Free up all the mailboxes associated with the task.
-kt5:
-	ld		r0,tcb_sema + 1
-	beq		kt5
 kt7:
 	pha
 	tax
@@ -6411,19 +6157,18 @@ kt7:
 	pla
 	bra		kt7
 kt6:
-	stz		tcb_sema + 1
+	lda		#1
+	sta		tcb_sema
 	pla
 
-kt4:
-	ld		r0,freetcb_sema + 1
-	beq		kt4
+	spl		freetcb_sema + 1
 	ldx		FreeTCB						; add the task control block to the free list
 	stx		TCB_NxtTCB,r1
 	sta		FreeTCB
 	stz		freetcb_sema + 1
-	stz		tolist_sema + 1
-	stz		readylist_sema + 1
-	int		#2							; invoke scheduler to reschedule tasks
+	cmp		RunningTCB					; keep running the current task as long as
+	bne		kt1							; the task didn't kill itself.
+	GoReschedule						; invoke scheduler to reschedule tasks
 kt1:
 	plx
 	rts
@@ -6447,9 +6192,7 @@ AllocMbx:
 	phy
 	push	r4
 	ld		r4,r1			; r4 = pointer to returned handle
-ambx1:
-	ld		r0,freembx_sema + 1
-	beq		ambx1
+	spl		freembx_sema + 1
 	lda		FreeMbxHandle			; Get mailbox off of free mailbox list
 	sta		(r4)			; store off the mailbox number
 	bmi		ambx_no_mbxs
@@ -6457,21 +6200,18 @@ ambx1:
 	stx		FreeMbxHandle
 	dec		nMailbox		; decrement number of available mailboxes
 	stz		freembx_sema + 1
+	spl		tcb_sema + 1
 	ldy		RunningTCB		; Add the mailbox to the list of mailboxes
 	ldx		TCB_MbxList,y	; managed by the task.
 	stx		MBX_LINK,r1
 	sta		TCB_MbxList,y
 	tax
-ambx2:
-	ld		r0,readylist_sema + 1
-	beq		ambx2
 	ldy		RunningTCB			; set the mailbox owner
 ;	bmi		RunningTCBErr
 	lda		TCB_hJCB,y
-	stz		readylist_sema + 1
-ambx3:
-	ld		r0,mbx_sema + 1
-	beq		ambx3
+	stz		tcb_sema + 1
+
+	spl		mbx_sema + 1
 	sta		MBX_OWNER,x
 	lda		#-1				; initialize the head and tail of the queues
 	sta		MBX_TQ_HEAD,x
@@ -6538,20 +6278,16 @@ FreeMbx2:
 	bhs		fmbx1
 	cpx		#MAX_TASKNO
 	bhi		fmbx1
-fmbx8:
-	ld		r0,mbx_sema + 1
-	beq		fmbx8
 	phx
 	phy
+	spl		mbx_sema + 1
 
 	; Dequeue messages from mailbox and add them back to the free message list.
 fmbx5:
 	pha
 	jsr		DequeueMsgFromMbx
 	bmi		fmbx3
-fmbx4:
-	ld		r0,freemsg_sema + 1
-	beq		fmbx4
+	spl		freemsg_sema + 1
 	phx
 	ldx		FreeMsg
 	stx		MSG_LINK,r1
@@ -6584,6 +6320,7 @@ fmbx10:
 	ldy		MBX_LINK,y
 	bpl		fmbx10
 	; ?The mailbox was not in the list managed by the task.
+	plx
 	bra		fmbx2
 fmbx9:
 	cmp		r2,r0
@@ -6600,13 +6337,12 @@ fmbx11:
 
 fmbx12:
 	; Add mailbox back to mailbox pool
-fmbx2:
-	ld		r0,freembx_sema + 1
-	beq		fmbx2
+	spl		freembx_sema + 1
 	ldx		FreeMbxHandle
 	stx		MBX_LINK,r1
 	sta		FreeMbxHandle
 	stz		freembx_sema + 1
+fmbx2:
 	stz		mbx_sema + 1
 	ply
 	plx
@@ -6694,6 +6430,7 @@ qmam1:
 	sta		FreeMsg
 	inc		nMsgBlk
 	stz		freemsg_sema + 1
+	GoReschedule
 	pop		r4
 	ply
 	plx
@@ -6932,24 +6669,21 @@ smsg7:
 	bit		r5,#TS_TIMEOUT
 	beq		smsg8
 	ld		r1,r6
-smp3:
-	spl		tolist_sema + 1
 	jsr		RemoveFromTimeoutList
-	stz		tolist_sema + 1
 smsg8:
 	lda		TCB_Status,r6
 	and		#~TS_WAITMSG
 	sta		TCB_Status,r6
-	stz		tcb_sema + 1
+	lda		#1
+	sta		tcb_sema
 	ld		r1,r6
-smp4:
-	spl		readylist_sema + 1
+	spl		tcb_sema + 1
 	jsr		AddTaskToReadyList
-	stz		readylist_sema + 1
+	stz		tcb_sema + 1
 	cmp		r4,#0
 	beq		smsg5
 	stz		mbx_sema + 1
-	int		#2			; invoke the scheduler
+	GoReschedule
 	bra		smsg9
 smsg5:
 	stz		mbx_sema + 1
@@ -6986,8 +6720,8 @@ smsg4:
 ;
 ; Parameters
 ;	r1=mailbox
-;	r2=pointer to D1
-;	r3=pointer to D2
+;	r2=pointer to D1 storage
+;	r3=pointer to D2 storage
 ;	r4=timeout
 ; Returns:
 ;	r1=E_Ok			if everything is ok
@@ -7018,10 +6752,10 @@ wmsg11:
 	; the ready list, and optionally add it to the timeout list.
 	; Queue the task at the mailbox.
 wmsg12:
-	spl		readylist_sema + 1
+	spl		tcb_sema + 1
 	lda		RunningTCB				; remove the task from the ready list
 	jsr		RemoveTaskFromReadyList
-	stz		readylist_sema + 1
+	stz		tcb_sema + 1
 wmsg13:
 	spl		tcb_sema + 1
 	ld		r7,TCB_Status,r1
@@ -7046,11 +6780,11 @@ wmsg7:
 	beq		wmsg10
 	ld		r2,r4
 wmsg14:
-	spl		tolist_sema + 1
+	spl		tcb_sema + 1
 	jsr		AddToTimeoutList
-	stz		tolist_sema + 1
+	stz		tcb_sema + 1
+	GoReschedule			; invoke the scheduler
 wmsg10:
-	int		#2			; invoke the scheduler
 	; At this point either a message was sent to the task, or the task
 	; timed out. If a message is still not available then the task must
 	; have timed out. Return a timeout error.
@@ -7089,7 +6823,7 @@ wmsg3:
 	st		r7,(x)
 	; Store message D2 to pointer
 wmsg4:
-	cpy		#0
+	cmp		r3,r0
 	beq		wmsg5
 	ld		r7,MSG_D2,r1
 	st		r7,(y)
@@ -7231,8 +6965,7 @@ RequestIOFocus:
 	pha
 	phx
 	phy
-	php
-	sei
+	DisTmrKbd
 	ldx		RunningTCB	
 	cpx		#MAX_TASKNO
 	bhi		riof1
@@ -7252,7 +6985,7 @@ riof3:
 	bms		IOFocusTbl
 ;	jsr		SetIOFocusBit
 riof1:
-	plp
+	EnTmrKbd
 	ply
 	plx
 	pla
@@ -7275,20 +7008,18 @@ riof2:
 ;
 message "ForceReleaseIOFocus"
 ForceReleaseIOFocus:
-	php
 	pha
 	phx
 	phy
-	sei
 	tax
+	DisTmrKbd
 	jmp		rliof4
 message "ReleaseIOFocus"	
 ReleaseIOFocus:
-	php
 	pha
 	phx
 	phy
-	sei
+	DisTmrKbd
 	ldx		RunningTCB	
 rliof4:
 	cpx		#MAX_TASKNO
@@ -7302,7 +7033,7 @@ rliof4:
 comment ~
 	and		r1,r2,#$1F		; get bit index 0 to 31
 	asl		r3,r3,r1		; shift bit to proper place
-	eor		r3,r3,#-1		; invert bit mask
+	eor		r3,#-1			; invert bit mask
 	lsr		r2,r2,#5		; get word index /32 bits per word
 	lda		IOFocusTbl,x
 	and		r1,r1,r3
@@ -7329,11 +7060,26 @@ rliof2:
 	sta		TCB_iof_next,x	; the task is no longer on the list.
 	sta		TCB_iof_prev,x
 rliof3:
+	EnTmrKbd
 	ply
 	plx
 	pla
-	plp
 	rts
+
+;------------------------------------------------------------------------------
+; Spinlock interrupt
+;	Go reschedule tasks if a spinlock is taking too long.
+;------------------------------------------------------------------------------
+;
+spinlock_irq:
+	cli
+	ld		r0,tcb_sema + 1
+	beq		spi1
+	cld
+	pusha
+	bra		resched1	
+spi1:
+	rti
 
 ;------------------------------------------------------------------------------
 ; Reschedule tasks to run without affecting the timeout list timing.
@@ -7344,8 +7090,8 @@ reschedule:
 	cld		; clear extended precision mode
 
 	pusha	; save off regs on the stack
-	spl		readylist_sema + 1
 	spl		tcb_sema + 1
+resched1:
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
 	sta		TCB_SPSave,x
@@ -7353,9 +7099,8 @@ reschedule:
 	sta		TCB_SP8Save,x
 	tsr		abs8,r1
 	sta		TCB_ABS8Save,x	; 8 bit emulation base register
-	lda		TCB_Status,x
-	and		#~TS_RUNNING
-	sta		TCB_Status,x
+	lda		#3				; clear RUNNING status (bit #3)
+	bmc		TCB_Status,x
 	jmp		SelectTaskToRun
 
 
@@ -7383,21 +7128,17 @@ MTKTick:
 	; The tick will be deferred; however if the system function was busy updating
 	; the ready list, in all likelyhood it's about to call the reschedule
 	; interrupt.
-p100Hz11:
-	ld		r0,readylist_sema+ 1
-	beq		tck1
-	ld		r0,tcb_sema + 1
-	bne		tck2
-	stz		readylist_sema + 1
-tck1:
+	ld		r0,tcb_sema+1
+	bne		p100Hz11
 	inc		missed_ticks
 	rti
-tck2:
+p100Hz11:
 	cli
 	cld		; clear extended precision mode
 
 	pusha	; save off regs on the stack
-
+	lda		#96
+	sta		LEDS
 
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
@@ -7412,23 +7153,19 @@ tck2:
 	lda		UserTick
 	beq		p100Hz4
 	jsr		(r1)
+	cli
 p100Hz4:
-	; The tcb state has been saved, and list semaphores activated so
-	; allow other interrupts to occur.
-	cli		
+	lda		#97
+	sta		LEDS
 
 	; Check the timeout list to see if there are items ready to be removed from
 	; the list. Also decrement the timeout of the item at the head of the list.
-	; If we are unable to get access to the timeout list then skip the timeout
-	; updates.
-	ld		r0,tolist_sema + 1
-	beq		tck3
 p100Hz15:
 	ldx		TimeoutList
 	bmi		p100Hz12				; are there any entries in the timeout list ?
 	lda		TCB_Timeout,x
 	bgt		p100Hz14				; has this entry timed out ?
-	jsr		PopTimeoutList
+	PopTimeoutList
 	jsr		AddTaskToReadyList
 	bra		p100Hz15				; go back and see if there's another task to be removed
 									; there could be a string of tasks to make ready.
@@ -7439,10 +7176,10 @@ p100Hz14:
 	sta		TCB_Timeout,x
 	
 p100Hz12:
-	stz		tolist_sema + 1
 	; Falls through into selecting a task to run
 tck3:
-
+	lda		#98
+	sta		LEDS
 ;------------------------------------------------------------------------------
 ; Search the ready queues for a ready task.
 ; The search is occasionally started at a lower priority queue in order
@@ -7479,13 +7216,20 @@ sttr2:
 	lda		#2
 	sta		MMU_FUSE			; set fuse to 2 clocks before mapping starts
 sttr4:
+	lda		#99
+	sta		LEDS
 	lda		TCB_ABS8Save,x		; 8 bit emulation base register
 	trs		r1,abs8
 	lda		TCB_SP8Save,x		; get back eight bit stack pointer
 	trs		r1,sp8
 	ldx		TCB_SPSave,x		; get back stack pointer
-	stz		tcb_sema + 1
-	stz		readylist_sema + 1
+	lda		#1
+	sta		tcb_sema
+	ld		r0,iof_switch
+	beq		sttr6
+	stz		iof_switch
+	jsr		SwitchIOFocus
+sttr6:
 	txs
 	popa						; restore registers
 	rti
@@ -7537,7 +7281,9 @@ kpan1:						; must update the return address !
 	ld		r1,r4		; get return address into acc
 	pop		r4			; restore r4
 	jmp		(r1)
-	
+
+include "DeviceDriver.asm"
+
 ;------------------------------------------------------------------
 ;------------------------------------------------------------------
 include "Test816.asm"

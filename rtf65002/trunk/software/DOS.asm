@@ -1,3 +1,28 @@
+;==============================================================================
+;        __
+;   \\__/ o\    (C) 2014  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@opencores.org
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;
+; DOS.asm
+;	Disk operating system code
+;==============================================================================
+;
 	cpu		rtf65002
 ; 64GB card
 ; 36 address bits
@@ -62,7 +87,19 @@ SUPERBUF_SIZE			EQU		128
 
 ; STRUCT INODE
 ;
-INODE_P0	EQU		17
+i_mode		EQU		0
+i_uid		EQU		1
+i_size		EQU		2
+i_gid		EQU		3
+i_atime		EQU		4
+i_ctime		EQU		6
+i_mtime		EQU		8
+i_dtime		EQU		10
+i_links_count	EQU	12
+i_blocks	EQU		13
+i_flags		EQU		14
+i_osd1		EQU		15
+INODE_P0	EQU		16
 INODE_P1	EQU		INODE_P0+1
 INODE_P2	EQU		INODE_P1+1
 INODE_P3	EQU		INODE_P2+1
@@ -77,6 +114,11 @@ INODE_P11	EQU		INODE_P10+1
 INODE_IP	EQU		INODE_P11+1		; indirect pointer
 INODE_IIP	EQU		INODE_IP+1		; double indirect pointer
 INODE_IIIP	EQU		INODE_IIP+1		; triple indirect pointer
+i_generation	EQU		31
+i_file_acl		EQU		32
+i_dir_acl		EQU		33
+i_faddr			EQU		34
+i_osd2			EQU		35
 INODE_DEV	EQU		37
 INODE_INUM	EQU		38
 INODE_ICOUNT	EQU	39
@@ -109,21 +151,25 @@ DE_INODE		EQU		15
 DE_SIZE			EQU		16		; size in words
 
 ; Structure of a disk buffer
+; The disk buffer contains a number of fields for file system management
+; followed by a payload area containing disk block contents.
+;
 ; STRUCT BUF
 ;
 b_dev			EQU		0		; device 
 b_blocknum	EQU		1		; disk block number
-BUF_COUNT		EQU		2		; reference count
+b_count		EQU		2		; reference count
 b_dirty		EQU		3		; buffer has been altered
-BUF_NEXT		EQU		4		; next buffer on LRU list
-BUF_PREV		EQU		5
+b_next		EQU		4		; next buffer on LRU list
+b_prev		EQU		5
 b_hash		EQU		6		; pointer to hashed buffer
-BUF_DATA		EQU		8		; beginning of data area
+b_data		EQU		8		; beginning of data area
 BUF_INODE		EQU		8
-BUF_SIZE		EQU		BUF_DATA+256
+BUF_SIZE		EQU		b_data+256
 
 NR_BUFS			EQU		8192	; number of disk buffers in the system (must be a power of 2)
 NR_BUF_HASH		EQU		1024	; number of hash chains (must be a power of two)
+NR_BGD_BUFS		EQU		1024
 BT_DATA_BLOCK	EQU		0
 BT_SUPERBLOCK	EQU		1
 
@@ -138,19 +184,21 @@ CAM_SUPERMAP_SIZE	EQU		128
 ; $00040103 cluster allocation map (2MB)
 ; $00041103 start of data clusters
 
+; Approximately 12MB (10% of memory) is allowed for the file system variables.
+; Most of the space 8MB+ is alloted to disk buffers.
+
 DOS_DATA		EQU		0x00300000					; start address of DOS data area
 super_bufs		EQU		DOS_DATA
 super_bufs_end	EQU		super_bufs + SUPERBUF_SIZE * 32
 BGD_bufs		EQU		super_bufs_end
-BGD_bufs_end	EQU		BGD_bufs + 1024 * BGD_BUFSIZE	; 32 kB = 1024 descriptors
+BGD_bufs_end	EQU		BGD_bufs + NR_BGD_BUFS * BGD_BUFSIZE	; 32 kB = 1024 descriptors
 iam_bufs		EQU		BGD_bufs_end
-inode_array		EQU		iam_bufs + IAM_BUF_SIZE * 32	; 129 kB worth (256 open files)
-cam_supermaps	EQU		inode_array + INODE_SIZE * 256	; 64kB worth 
-cam_bufs		EQU		cam_supermaps + CAM_SUPERMAP_SIZE * 32
-data_bufs		EQU		0x00400000			; room for 8192 buffers
+inode_array		EQU		iam_bufs + IAM_BUF_SIZE * 32	; 129 kB worth 
+inode_array_end	EQU		inode_array + INODE_SIZE * 256	; 41kB worth (256 open files)
+data_bufs		EQU		0x00320000			; room for 8192 buffers
 data_bufs_end	EQU		data_bufs + BUF_SIZE * NR_BUFS
 buf_hash		EQU		data_bufs_end
-buf_hash_end	EQU		buf_hash + NR_b_hash
+buf_hash_end	EQU		buf_hash + NR_BUF_HASH
 superbuf_dump	EQU		buf_hash_end + 1
 bufs_in_use		EQU		superbuf_dump + 1
 blockbuf_dump	EQU		bufs_in_use + 1
@@ -171,14 +219,24 @@ fs_active		EQU		panicking + 1
 
 inode_bufs	EQU		DOS_DATA	; 128B x 256 bufs
 iam_buf		EQU		0x01FBE800
-super_buf	EQU		0x01FBEA00
 sector_buf	EQU		0x01FBEC00
 
-init_DOS:
+	org		$FFFFD800
+
+;------------------------------------------------------------------------------
+; Initialize the file system.
+;------------------------------------------------------------------------------
+;
+init_fs:
 	stz		bgdt_valid
 	jsr		init_superbufs
+	jsr		init_databufs
 	lda		#'A'
 	sta		fs_active
+	lda		#4
+	ldx		#0				; no flags (em =0 native mode)
+	ldy		#fs_clean
+	jsr		StartTask
 	rts
 
 ;------------------------------------------------------------------------------
@@ -207,6 +265,39 @@ isb1:
 	add		r2,r2,#SUPERBUF_SIZE
 	cpx		#super_bufs_end
 	bltu	isb1
+	plx
+	pla
+	rts
+
+init_databufs:
+	pha
+	phx
+	phy
+	stz		bufs_in_use
+	ldx		#data_bufs
+	stx		front
+	lda		#data_bufs_end
+	sub		#BUF_SIZE
+	sta		rear
+idb1:
+	lda		#NO_DEV
+	sta		b_dev,x
+	lda		#CLEAN
+	sta		b_dirty,x
+	sub		r3,r2,#BUF_SIZE
+	sty		b_prev,x
+	add		r3,r2,#BUF_SIZE
+	sty		b_next,x
+	sty		b_hash,x
+	tyx
+	cpx		#data_bufs_end
+	bltu	idb1
+	ldx		front
+	stz		b_prev,x
+	stx		buf_hash			; buf_hash[0] = front
+	ldx		rear
+	stz		b_next,x	
+	ply
 	plx
 	pla
 	rts
@@ -274,11 +365,30 @@ get_bgd_per_block:
 	lsr
 	lsr
 	rts
+	
+get_bits_per_block:
+	jsr		get_block_size
+	asl
+	asl
+	asl
+	rts
 
+get_num_bgd:
+	phx
+	jsr		get_super
+	lda		s_blocks_count,r1
+	tax
+	jsr		get_bits_per_block
+	div		r1,r2,r1
+	plx
+	rts
+	
 ;==============================================================================
 ; INODE code
 ;==============================================================================
 ;------------------------------------------------------------------------------
+; Free an inode.
+;
 ; Parameters:
 ;	r1 = device number
 ;	r2 = inode number
@@ -306,16 +416,22 @@ free_inode:
 	jsr		get_block	; get the bitmap block
 	ld		r8,r1		; r8 = bitmap block
 	ld		r1,r5
-	bmt		BUF_DATA,r8	; is the inode already free ?
+	bmt		b_data,r8	; is the inode already free ?
 	beq		fi1
-	bmc		BUF_DATA,r8
+	bmc		b_data,r8
 	inc		bg_free_inodes_count,r9
+	lda		#DIRTY
+	sta		bg_dirty,r9
 	jsr		get_super
 	tax
 	inc		s_free_inodes_count,x
 	lda		#DIRTY
 	sta		s_dirty,x
 	sta		b_dirty,r8
+	txy
+	jsr		get_datetime
+	stx		s_mtime,y
+	sta		s_mtime+1,y
 fi1:
 	pop		r9
 	pop		r8
@@ -327,110 +443,139 @@ fi1:
 	pla
 	rts
 
-;	r1 = inode number
-;
-mark_iam_bit:
-	pha
-	phx
-	phy
-	div		r2,r1,#4096	; r2 = iam block number
-	mod		r1,r1,#4096	; r1 = bit number in block
-	pha
-	txa
-	jsr		get_iam_block
-	tay
-	pla
-	bms		0,y
-	tya
-	jsr		put_iam_block
-	; check if all bits have been marked
-	lda		#0
-mib2:
-	bmt		0,y
-	beq		mib1
-	ina
-	cmp		#4096
-	bltu	mib2
-	txa
-	bms		super_buf+112	; set the all allocated bit
-	lda		#DIRTY
-	sta		super_buf+s_dirty
-mib1:
-	ply
-	plx
-	pla
-	rts
-
 ;------------------------------------------------------------------------------
 ; Allocate an inode
-; This is called when a file or directory is created
+; This is called when a file or directory is created. The routine allocates
+; an inode on disk, then gets an inode buffer.
 ;
 ; Parameters:
 ;	r1 = device number
 ;	r2 = mode bits
+; Returns:
+;	r1 = pointer to inode buffer
 ;------------------------------------------------------------------------------
 ;		
 alloc_inode:
-
+	phx
+	phy
+	push	r4
+	push	r7
+	push	r8
+	push	r9
+	push	r10
+	push	r11
 ; search the super match for a block with available inode
 	lda		#0				; start at bit zero
+	ld		r7,r1
+	ld		r8,r2
+	jsr		get_num_bgd
+	tay
+	jsr		get_inodes_per_block
+	ld		r9,r1
+	ld		r2,#0			; start with group #0
 alin2:
-	bmt		super_buf+112	; offset of super iam map
-	beq		alin1			; 0=free inode in block
-	ina
-	cmp		#256
-	bltu	alin2
-	; Here there are no more free inodes - the file system is full
+	ld		r1,r7
+	jsr		get_bgdt_entry
+	ld		r4,r1
+	lda		bg_free_inodes_count,r4
+	bne		alin3
+	inx
+	dey
+	bne		alin2
+	ld		r1,r7
+	jsr		dos_msg
+	db		"Out of inodes on device ",0
+alin7:
+	pop		r11
+	pop		r10
+	pop		r9
+	pop		r8
+	pop		r7
+	pop		r4
+	ply
+	plx
 	lda		#0
 	rts
-
-	; We found an inode block with free inodes
-alin1:
-	ldx		#super_buf
-	add		r2,r2,#s_imap_block
-	tay						; save off block in y
-	add		r1,r1,(r2)
-	jsr		load_iam_map_block
-	lda		#0
 alin3:
-	bmt		iam_buf
+	ld		r1,r7
+	ld		r10,r2					; r10 = bgd entry number
+	ldx		bg_inode_bitmap,r4
+	ldy		#NORMAL
+	jsr		get_block
+	tax
+	ld		r3,r9					; r3 = indoes per block
+	lda		#0
+alin5:
+	bmt		b_data,x
 	beq		alin4
 	ina
-	cmp		#4096			; 4096 bits per block
-	bltu	alin3
-	; we should not get here as it was indicated there was a 
-	; free inode
-	lda		#0
+	dey
+	bne		alin5
+alin4:
+	bms		b_data,x				; mark inode allocated
+	ld		r5,r1					; r5 = inode number within block
+	dec		bg_free_inodes_count,r4
+	mul		r11,r10,r9
+	add		r5,r5,r11					; r5 = inode number
+	lda		#DIRTY
+	sta		bg_dirty,r4
+	jsr		get_super				; decrement free inode count in superblock
+	dec		s_free_inodes_count,r1	; and mark the superblock dirty
+	tay
+	lda		#DIRTY
+	sta		s_dirty,y
+	jsr		get_datetime
+	stx		i_mtime,y
+	sta		i_mtime+1,y
+	;
+	ld		r1,r7					; r1 = device number
+	ld		r2,r5					; r2 = inode number
+	jsr		get_inode
+	cmp		#0
+	bne		alin6
+	ld		r1,r7
+	ld		r2,r5
+	jsr		free_inode
+	bra		alin7
+alin6:
+	st		r8,i_mode,r1
+	stz		i_link_count,r1
+	; set uid,gid
+	st		r7,i_dev,r1
+	jsr		wipe_inode
+	pop		r11
+	pop		r10
+	pop		r9
+	pop		r8
+	pop		r7
+	pop		r4
+	ply
+	plx
 	rts
 
-	; we found the free inode
-alin4:
-	bms		iam_buf			; mark inode as allocated
-	pha						; save off inode number
-
-; now check if all inodes in the block have been allocated
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 ;
-	ldx		#0
-alin6:
-	lda		iam_buf,x
-	cmp		#$FFFFFFFF
-	bne		alin5
-	inx
-	cpx		#128
-	bne		alin6
-; Here, all inodes in block have been allocated, so mark it
-; in the superblock
-	tya
-	bms		super_buf+112
-alin5:
-	mul		r3,r3,#4096
-	pla						; restore inode number
-	add		r1,r3
-	jsr		get_inode		; get a buffer to correspond to the allocated inode
-	cmp		#0
-	bne		alin7
-	
-alin7:
+wipe_inode:
+	pha
+	phx
+	phy
+	tay
+	stz		i_size,y
+	jsr		get_datetime
+	stx		i_mtime,y
+	sta		i_mtime+1,y
+	lda		#DIRTY
+	sta		i_dirty,y
+	ldx		#15
+win1:
+	stz		INODE_P0,y
+	iny
+	dex
+	bne		win1
+	ply
+	plx
+	pla
 	rts
 
 ;------------------------------------------------------------------------------
@@ -579,7 +724,7 @@ rw_inode:
 	add		r5,r1,#BUF_INODE	; r5 = address of inode data
 
 	mul		r6,r8,#INODE_SIZE
-	add		r5,r6
+	add		r5,r5,r6
 	pop		r6					; r6 = R/W indicator
 	cmp		r6,#READING
 	bne		rwi1
@@ -588,7 +733,7 @@ rw_inode:
 	ld		r2,r5
 	ld		r3,r4
 	mvn
-	bra		rw2
+	bra		rwi2
 rwi1:			
 	jsr		get_inode_size
 	dea
@@ -625,15 +770,6 @@ dup_inode:
 	rts
 
 ;------------------------------------------------------------------------------
-; load a block from the inode allocation map table
-;	r1 = block to load
-;
-load_iam_map_block:
-	ldx		#iam_buf
-	jsr		spi_read_sector
-	rts
-
-;------------------------------------------------------------------------------
 ; get_bgdt_entry:
 ;	Get block group descriptor from the descriptor table.
 ;
@@ -646,7 +782,7 @@ load_iam_map_block:
 ;
 get_bgdt_entry:
 	push	r5
-	mod		r5,r2,#1024			; r5 = hashed group number
+	and		r5,r2,#NR_BGD_BUFS-1		; r5 = hashed group number
 	mul		r5,r5,#BGD_BUFSIZE
 	add		r5,r5,#BGD_bufs		; r5 = pointer to BGD buffer
 	cmp		bg_dev,r5
@@ -675,9 +811,9 @@ gbe1:
 	ld		r1,r6				; r1 = device number
 	jsr		get_block
 	pha
-	add		r1,r1,#BUF_DATA		; move to data area
+	add		r1,r1,#b_data		; move to data area
 	mul		r4,r4,#BGDESC_SIZE
-	add		r1,r4				; r1 = pointer to desired BGD
+	add		r1,r1,r4			; r1 = pointer to desired BGD
 	; copy BGD to the block
 	tay
 	ld		r2,r5
@@ -698,9 +834,9 @@ gbe3:
 	add		r2,r1,r8			; r2 = block number
 	ld		r1,r6				; r1 = device number
 	jsr		get_block
-	add		r1,r1,#BUF_DATA		; move to data area
+	add		r1,r1,#b_data		; move to data area
 	mul		r4,r4,#BGDESC_SIZE
-	add		r1,r4				; r1 = pointer to desired BGD
+	add		r1,r1,r4			; r1 = pointer to desired BGD
 	; copy BGD from the block to the buffer
 	tax
 	ld		r3,r5
@@ -760,11 +896,11 @@ gb15:
 	bne		gb13
 	cmp		r5,b_blocknum,x	;		if (bp->b_blocknum==block) {
 	bne		gb13
-	cmp		r0,BUF_COUNT,x		;			if (bp->b_count==0)
+	cmp		r0,b_count,x		;			if (bp->b_count==0)
 	bne		gb14
 	inc		bufs_in_use			;				bufs_in_use++
 gb14:
-	inc		BUF_COUNT,x			;			bp->b_count++
+	inc		b_count,x			;			bp->b_count++
 	txa							;			return (bp)
 gb_ret:
 	pop		r8
@@ -789,16 +925,16 @@ gb16:
 	inc		bufs_in_use
 	ldx		front
 gb18:
-	cmp		r0,BUF_COUNT,x
+	cmp		r0,b_count,x
 	bleu	gb17
-	cmp		r0,BUF_NEXT,x
+	cmp		r0,b_next,x
 	beq		gb17
-	ldx		BUF_NEXT,x
+	ldx		b_next,x
 	bra		gb18
 gb17:
 	cmp		r2,r0
 	beq		gb19
-	cmp		r0,BUF_COUNT,x
+	cmp		r0,b_count,x
 	bleu	gb20
 gb19:	
 	jsr		panic
@@ -838,7 +974,7 @@ gb22:
 gb24:
 	st		r4,b_dev,x		; bp->b_dev = dev
 	st		r5,b_blocknum,x	; bp->b_blocknum = block
-	inc		BUF_COUNT,x			; bp->b_count++
+	inc		b_count,x			; bp->b_count++
 	ld		r7,buf_hash,r6
 	st		r7,b_hash,x		; bp->b_hash = buf_hash[bp->b_blocknr & (NR_b_hash - 1)]
 	st		r2,buf_hash,r6		; buf_hash[bp->b_blocknr & (NR_b_hash - 1)] = bp
@@ -880,47 +1016,47 @@ pb1:
 	push	r8
 	ld		r4,r1
 	ld		r5,r2
-	dec		BUF_COUNT,r1	; if buf count > 0 then buffer is still in use
+	dec		b_count,r1	; if buf count > 0 then buffer is still in use
 	bne		pb2
 	dec		bufs_in_use
 	tax
-	ld		r7,BUF_NEXT,x
-	ld		r8,BUF_PREV,x
+	ld		r7,b_next,x
+	ld		r8,b_prev,x
 	beq		pb3
-	st		r7,BUF_NEXT,r8	; prev_ptr->b_next = next_ptr
+	st		r7,b_next,r8	; prev_ptr->b_next = next_ptr
 	bra		pb4
 pb3:
 	st		r7,front		; front = next_ptr
 pb4:
 	cmp		r7,r0
 	beq		pb5
-	st		r8,BUF_NEXT,r7
+	st		r8,b_next,r7
 	bra		pb6
 pb5:
 	st		r8,rear
 pb6:
 	bit		r5,#ONE_SHOT
 	beq		pb7
-	stz		BUF_PREV,x
+	stz		b_prev,x
 	lda		front
-	sta		BUF_NEXT,x
+	sta		b_next,x
 	bne		bp8
 	stx		rear
 	bra		bp9
 bp8:
-	stx		BUF_PREV,r1		; front->b_prev = bp
+	stx		b_prev,r1		; front->b_prev = bp
 bp9:
 	stx		front			; front = bp
 	bra		bp10
-bp7:
-	stz		BUF_NEXT,x		; bp->b_next = NULL
+pb7:
+	stz		b_next,x		; bp->b_next = NULL
 	lda		rear
-	sta		BUF_PREV,x		; bp->b_prev = rear
+	sta		b_prev,x		; bp->b_prev = rear
 	bne		bp11
 	stx		front			; front = bp
 	bra		bp12
 bp11:
-	stx		BUF_NEXT,r1		; rear->b_next = bp
+	stx		b_next,r1		; rear->b_next = bp
 bp12:
 	stx		rear			; read = bp
 bp10:
@@ -993,7 +1129,7 @@ rw_block:
 	bne		rwb2
 	tax
 	lda		b_blocknum,x
-	add		r2,r2,#BUF_DATA
+	add		r2,r2,#b_data
 	jsr		block_to_sector
 	pha
 	asl		r2,r2,#2			; convert word address to byte address
@@ -1006,7 +1142,7 @@ rw_block:
 rwb2:
 	tax
 	lda		b_blocknum,x
-	add		r2,r2,#BUF_DATA
+	add		r2,r2,#b_data
 	jsr		block_to_sector
 	pha
 	asl		r2,r2,#2			; convert word address to byte address
@@ -1075,7 +1211,8 @@ id4:
 ;------------------------------------------------------------------------------
 ; get_super:
 ;	Get the super block.
-; There is a super block for each device.
+; There is a super block for each device. Superblocks have their own buffer
+; cache.
 ;
 ; Parameters:
 ;	r1 = device number
@@ -1131,9 +1268,13 @@ gs1:
 	rts
 
 ;------------------------------------------------------------------------------
+; read_super:
+;	Read the superblock from disk. Only a single sector is read.
+;
 ; Parameters:
 ;	r1 = pointer to superblock buffer
 ;------------------------------------------------------------------------------
+;
 read_super:
 	pha
 	phx
@@ -1148,7 +1289,7 @@ read_super:
 	asl
 	jsr		spi_read_sector
 	plx
-	lda		#CLEAN
+	lda		#CLEAN				; mark superblock clean
 	sta		s_dirty,x
 	sty		s_dev,x				; restore device number
 	ply
@@ -1281,8 +1422,9 @@ fsc4:
 	lda		#100			; sleep for 1s
 	jsr		Sleep
 fsc3:
-	lda		fs_active
-	beq		fsc4
+	lda		fs_active		; is the file system active ?
+	cmp		#'A'
+	bne		fsc4
 	ldx		#data_bufs
 fsc2:
 	lda		b_dev,x			; is the buffer in use ?
