@@ -842,6 +842,10 @@ namespace RTFClasses
 			message();
 			return true;
 		}
+		if (p=="fill") {
+			fill();
+			return true;
+		}
 		return false;
 	}
 

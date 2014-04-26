@@ -1186,7 +1186,7 @@ namespace RTFClasses
 		__int32 d;
 		int Ra = 0;
 		int Rt = 1;
-		d = ((Operands65002 *)getCpu()->getOp())->op[2].val.value;
+		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
 		theAssembler.emit8(op->oc);
 		theAssembler.emit8((Rt<<4)|Ra);
 		theAssembler.emit8(d&0xff);

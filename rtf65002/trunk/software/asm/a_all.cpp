@@ -27,6 +27,7 @@
 #include "Assembler.h"
 #include "fstreamS19.h"
 #include "operands6502.h"
+#include "operands65002.h"
 
 namespace RTFClasses
 {
@@ -576,12 +577,14 @@ int Assembler::equ(char *iid)
 		long i,n, j;
 
 		//   printf("Fill: %c, %s, %s\n", gSzChar, theAssembler.gOperand[0], theAssembler.gOperand[1]);
+		gSzChar = getSzChar();
 		if (gSzChar == 0)
 			gSzChar = 'W';
 		if (!strchr("WCB", gSzChar)) {
 			Err(E_LENGTH); // Wrong length..
 			return;
 		}
+		g_nops = getCpu()->getOp()->get();
 		i = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
 		n = ((Operands6502 *)getCpu()->getOp())->op[1].val.value;
 		DoingDc = TRUE;

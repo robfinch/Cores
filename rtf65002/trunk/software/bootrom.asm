@@ -22,6 +22,8 @@
 ;                                                                          
 ; ============================================================================
 ;
+	cpu		RTF65002
+
 CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
@@ -66,6 +68,11 @@ TS_PREEMPT	=4
 TS_RUNNING	=8
 TS_READY	=16
 TS_SLEEP	=32
+
+TS_TIMEOUT_BIT	=0
+TS_WAITMSG_BIT	=1
+TS_RUNNING_BIT	=3
+TS_READY_BIT	=4
 
 PRI_HIGHEST	=0
 PRI_HIGH	=1
@@ -213,18 +220,6 @@ SPI_WRITE_NO_ERROR	EQU		0x00
 RW_READ_SD_BLOCK	EQU		0x02
 RW_WRITE_SD_BLOCK	EQU		0x03
 
-UART		EQU		0xFFDC0A00
-UART_LS		EQU		0xFFDC0A01
-UART_MS		EQU		0xFFDC0A02
-UART_IS		EQU		0xFFDC0A03
-UART_IE		EQU		0xFFDC0A04
-UART_MC		EQU		0xFFDC0A06
-UART_CM1	EQU		0xFFDC0A09
-UART_CM2	EQU		0xFFDC0A0A
-UART_CM3	EQU		0xFFDC0A0B
-txempty		EQU		0x40
-rxfull		EQU		0x01
-
 CONFIGREC	EQU		0xFFDCFFF0
 CR_CLOCK	EQU		0xFFDCFFF4
 GACCEL		EQU		0xFFDAE000
@@ -309,7 +304,6 @@ THRD_AREA	EQU		0x00000000	; threading area 0x04000000-0x40FFFFF
 BITMAPSCR	EQU		0x00100000
 SECTOR_BUF	EQU		0x01FBEC00
 BIOS_STACKS	EQU		0x01FC0000	; room for 256 1kW stacks
-BIOS_SCREENS	EQU	0x01C00000	; 0x01C00000 to 0x01DFFFFF
 
 BYTE_SECTOR_BUF	EQU	SECTOR_BUF<<2
 PROG_LOAD_AREA	EQU		0x0300000<<2
@@ -323,60 +317,73 @@ eth_rx_buffer	EQU		0x1F80000
 eth_tx_buffer	EQU		0x1F84000
 
 ; Mailboxes, room for 2048
+			.bss
+			.org		0x01F90000
 NR_MBX		EQU		$800
-MBX_LINK	EQU		0x01F90000			; link to next mailbox in list (free list)
-MBX_TQ_HEAD	EQU		MBX_LINK + NR_MBX	; head of task queue
-MBX_TQ_TAIL	EQU		MBX_TQ_HEAD + NR_MBX
-MBX_MQ_HEAD	EQU		0x01F91800	; head of message queue
-MBX_MQ_TAIL	EQU		0x01F92000
-MBX_TQ_COUNT	EQU	0x01F92800	; count of queued threads
-MBX_MQ_SIZE	EQU		0x01F93000	; number of messages that may be queued
-MBX_MQ_COUNT	EQU	0x01F93800	; count of messages that are queued
-MBX_MQ_MISSED	EQU	0x01F94000	; number of messages dropped from queue
-MBX_OWNER		EQU	0x01F94800	; job handle of mailbox owner
-MBX_MQ_STRATEGY	EQU	0x01F95000	; message queueing strategy
-MBX_RESV		EQU	0x01F95800
+MBX_LINK		fill.b	NR_MBX,0	; link to next mailbox in list (free list)
+MBX_TQ_HEAD		fill.b	NR_MBX,0	; head of task queue
+MBX_TQ_TAIL		fill.b	NR_MBX,0
+MBX_MQ_HEAD		fill.b	NR_MBX,0	; head of message queue
+MBX_MQ_TAIL		fill.b	NR_MBX,0
+MBX_TQ_COUNT	fill.b	NR_MBX,0	; count of queued threads
+MBX_MQ_SIZE		fill.b	NR_MBX,0	; number of messages that may be queued
+MBX_MQ_COUNT	fill.b	NR_MBX,0	; count of messages that are queued
+MBX_MQ_MISSED	fill.b	NR_MBX,0	; number of messages dropped from queue
+MBX_OWNER		fill.b	NR_MBX,0	; job handle of mailbox owner
+MBX_MQ_STRATEGY	fill.b	NR_MBX,0	; message queueing strategy
+MBX_RESV		fill.b	NR_MBX,0
 
 ; Messages, room for 64kW (16,384) messages
+			.bss
+			.org		0x01FA0000
 NR_MSG		EQU		16384
-MSG_LINK	EQU		0x01FA0000	; link to next message in queue or free list
-MSG_D1		EQU		MSG_LINK + NR_MSG	; message data 1
-MSG_D2		EQU		MSG_D1 + NR_MSG		; message data 2
-MSG_TYPE	EQU		MSG_D2 + NR_MSG		; message type
+MSG_LINK	fill.b	NR_MSG,0	; link to next message in queue or free list
+MSG_D1		fill.b	NR_MSG,0	; message data 1
+MSG_D2		fill.b	NR_MSG,0	; message data 2
+MSG_TYPE	fill.b	NR_MSG,0	; message type
 MSG_END		EQU		MSG_TYPE + NR_MSG
 
 MT_IRQ		EQU		0xFFFFFFF0
 MT_GETCHAR	EQU		0xFFFFFFEF
 
+			.bss
+			.org		0x01FBCE00
+
 ; Task control blocks, room for 256 tasks
 NR_TCB			EQU		256
-TCB_NxtRdy		EQU		0x01FBE100	; next task on ready / timeout list
-TCB_PrvRdy		EQU		0x01FBE200	; previous task on ready / timeout list
-TCB_NxtTCB		EQU		0x01FBE300
-TCB_Timeout		EQU		0x01FBE400
-TCB_Priority	EQU		0x01FBE500
-TCB_MSGPTR_D1	EQU		0x01FBE600
-TCB_MSGPTR_D2	EQU		0x01FBE700
-TCB_hJCB		EQU		0x01FBE800
-TCB_Status		EQU		0x01FBE900
-TCB_CursorRow	EQU		0x01FBD100
-TCB_CursorCol	EQU		0x01FBD200
-TCB_hWaitMbx	EQU		0x01FBD300	; handle of mailbox task is waiting at
-TCB_mbq_next	EQU		0x01FBD400	; mailbox queue next
-TCB_mbq_prev	EQU		0x01FBD500	; mailbox queue previous
-TCB_iof_next	EQU		0x01FBD600
-TCB_iof_prev	EQU		0x01FBD700
-TCB_SP8Save		EQU		0x01FBD800	; TCB_SP8Save area 
-TCB_SPSave		EQU		0x01FBD900	; TCB_SPSave area
-TCB_ABS8Save	EQU		0x01FBDA00
-TCB_mmu_map		EQU		0x01FBDB00
-TCB_npages		EQU		0x01FBDC00
-TCB_ASID		EQU		0x01FBDD00
-TCB_errno		EQU		0x01FBDE00
-TCB_NxtTo		EQU		0x01FBDF00
-TCB_PrvTo		EQU		0x01FBE000
-TCB_MbxList		EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
-TCB_mbx			EQU		0x01FBCE00
+TCB_NxtRdy		fill.b	NR_TCB,0	;	EQU		0x01FBE100	; next task on ready / timeout list
+TCB_PrvRdy		fill.b	NR_TCB,0	;	EQU		0x01FBE200	; previous task on ready / timeout list
+TCB_NxtTCB		fill.b	NR_TCB,0	;	EQU		0x01FBE300
+TCB_Timeout		fill.b	NR_TCB,0	;	EQU		0x01FBE400
+TCB_Priority	fill.b	NR_TCB,0	;	EQU		0x01FBE500
+TCB_MSG_D1		fill.b	NR_TCB,0	;	EQU		0x01FBE600
+TCB_MSG_D2		fill.b	NR_TCB,0	;	EQU		0x01FBE700
+TCB_hJCB		fill.b	NR_TCB,0	;	EQU		0x01FBE800
+TCB_Status		fill.b	NR_TCB,0	;	EQU		0x01FBE900
+TCB_CursorRow	fill.b	NR_TCB,0	;	EQU		0x01FBD100
+TCB_CursorCol	fill.b	NR_TCB,0	;	EQU		0x01FBD200
+TCB_hWaitMbx	fill.b	NR_TCB,0	;	EQU		0x01FBD300	; handle of mailbox task is waiting at
+TCB_mbq_next	fill.b	NR_TCB,0	;	EQU		0x01FBD400	; mailbox queue next
+TCB_mbq_prev	fill.b	NR_TCB,0	;	EQU		0x01FBD500	; mailbox queue previous
+TCB_iof_next	fill.b	NR_TCB,0	;	EQU		0x01FBD600
+TCB_iof_prev	fill.b	NR_TCB,0	;	EQU		0x01FBD700
+TCB_SP8Save		fill.b	NR_TCB,0	;	EQU		0x01FBD800	; TCB_SP8Save area 
+TCB_SPSave		fill.b	NR_TCB,0	;	EQU		0x01FBD900	; TCB_SPSave area
+TCB_ABS8Save	fill.b	NR_TCB,0	;	EQU		0x01FBDA00
+TCB_mmu_map		fill.b	NR_TCB,0	;	EQU		0x01FBDB00
+TCB_npages		fill.b	NR_TCB,0	;	EQU		0x01FBDC00
+TCB_ASID		fill.b	NR_TCB,0	;	EQU		0x01FBDD00
+TCB_errno		fill.b	NR_TCB,0	;	EQU		0x01FBDE00
+TCB_NxtTo		fill.b	NR_TCB,0	;	EQU		0x01FBDF00
+TCB_PrvTo		fill.b	NR_TCB,0	;	EQU		0x01FBE000
+TCB_MbxList		fill.b	NR_TCB,0	;	EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
+TCB_mbx			fill.b	NR_TCB,0	;	EQU		0x01FBCE00
+
+			.bss
+			.org		0x01C00000
+SCREEN_SIZE		EQU		8192
+BIOS_SCREENS	fill.b	SCREEN_SIZE * NR_TCB	; 0x01C00000 to 0x01DFFFFF
+
 
 ; Device Control Block
 ;
@@ -388,7 +395,7 @@ DCB_last_erc		EQU		6
 DCB_nBlocks			EQU		7
 DCB_pDevOp			EQU		8
 DCB_pDevInit		EQU		9
-DCB_pDevSt			EQU		10
+DCB_pDevStat		EQU		10
 DCB_ReentCount		EQU		11
 DCB_fSingleUser		EQU		12
 DCB_hJob			EQU		13
@@ -401,23 +408,15 @@ DCB_OSD6			EQU		19
 DCB_SIZE			EQU		20
 
 NR_DCB		EQU		32
-DCBs		EQU		MSG_END
+DCBs		fill	NR_DCB * DCB_SIZE,0		;	EQU		MSG_END
 DCBs_END	EQU		DCBs + DCB_SIZE * NR_DCB
-
-KeybdHead	EQU		0x01FBEA00
-KeybdTail	EQU		0x01FBEB00
-KeybdEcho	EQU		0x01FBEC00
-KeybdBad	EQU		0x01FBED00
-KeybdAck	EQU		0x01FBEE00
-KeybdLocks	EQU		0x01FBEF00
-KeybdBuffer	EQU		0x01FBF000	; buffer is 16 chars
 
 HeapStart	EQU		0x00540000
 HeapEnd		EQU		0x017FFFFF
 
 ; Bitmap of tasks requesting the I/O focus
 ;
-IOFocusTbl	EQU		0x01FBD000
+IOFocusTbl	fill.b	8,0
 
 ; EhBASIC vars:
 ;
@@ -434,90 +433,81 @@ PageMap2	EQU		0x640
 PageMap2End	EQU		0x67F
 mem_pages_free	EQU		0x680
 
-QNdx0		EQU		0x780
-QNdx1		EQU		QNdx0+1
-QNdx2		EQU		QNdx1+1
-QNdx3		EQU		QNdx2+1
-QNdx4		EQU		QNdx3+1
-FreeTCB		EQU		QNdx4+1
-TimeoutList	EQU		FreeTCB+1
-RunningTCB		EQU		TimeoutList+1
-FreeMbxHandle		EQU		RunningTCB + 1
-nMailbox	EQU		FreeMbxHandle + 1
-FreeMsg		EQU		nMailbox + 1
-nMsgBlk		EQU		FreeMsg + 1
-missed_ticks	EQU	nMsgBlk + 1
-keybdmsg_d1		EQU	missed_ticks + 1
-keybdmsg_d2		EQU	keybdmsg_d1 + 1
-keybd_mbx		EQU	keybdmsg_d2 + 1
-keybd_char		EQU	keybd_mbx + 1
-iof_switch		EQU	keybd_char + 1
-clockmsg_d1		EQU iof_switch + 1
-clockmsg_d2		EQU	clockmsg_d1 + 1
-tcbsema_d1		EQU	clockmsg_d2 + 1
-tcbsema_d2		EQU	tcbsema_d1 + 1
+			bss
+			org	0x780
+
+QNdx0		db		0
+QNdx1		db		0
+QNdx2		db		0
+QNdx3		db		0
+QNdx4		db		0
+FreeTCB		db		0
+TimeoutList	db		0
+RunningTCB	db		0
+FreeMbxHandle		db		0
+nMailbox	db		0
+FreeMsg		db		0
+nMsgBlk		db		0
+missed_ticks	db		0
+keybdmsg_d1		db		0
+keybdmsg_d2		db		0
+keybd_mbx		db		0
+keybd_char		db		0
+iof_switch		db		0
+clockmsg_d1		db		0
+clockmsg_d2		db		0
+tcbsema_d1		db		0
+tcbsema_d2		db		0
 
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
-IOFocusNdx	EQU		missed_ticks + 1
+IOFocusNdx	db		0
 ;
-test_mbx	EQU		IOFocusNdx + 1
-test_D1		EQU		test_mbx + 1
-test_D2		EQU		test_D1 + 1
+test_mbx	db		0
+test_D1		db		0
+test_D2		db		0
+tone_cnt	db		0
 
-IrqSource	EQU		0x798
+IrqSource	EQU		0x79F
 
-JMPTMP		EQU		0x7A0
-SP8Save		EQU		0x7AE
-SRSave		EQU		0x7AF
-R1Save		EQU		0x7B0
-R2Save		EQU		0x7B1
-R3Save		EQU		0x7B2
-R4Save		EQU		0x7B3
-R5Save		EQU		0x7B4
-R6Save		EQU		0x7B5
-R7Save		EQU		0x7B6
-R8Save		EQU		0x7B7
-R9Save		EQU		0x7B8
-R10Save		EQU		0x7B9
-R11Save		EQU		0x7BA
-R12Save		EQU		0x7BB
-R13Save		EQU		0x7BC
-R14Save		EQU		0x7BD
-R15Save		EQU		0x7BE
-SPSave		EQU		0x7BF
+			org		0x7A0
+JMPTMP		db		0
+SP8Save		db		0
+SRSave		db		0
+R1Save		db		0
+R2Save		db		0
+R3Save		db		0
+R4Save		db		0
+R5Save		db		0
+R6Save		db		0
+R7Save		db		0
+R8Save		db		0
+R9Save		db		0
+R10Save		db		0
+R11Save		db		0
+R12Save		db		0
+R13Save		db		0
+R14Save		db		0
+R15Save		db		0
+SPSave		db		0
 
-CharColor	EQU		0x7C0
-ScreenColor	EQU		0x7C1
-CursorRow	EQU		0x7C2
-CursorCol	EQU		0x7C3
-CursorFlash	EQU		0x7C4
-Milliseconds	EQU		0x7C5
-IRQFlag		EQU		0x7C6
-UserTick	EQU		0x7C7
-eth_unique_id	EQU		0x7C8
-LineColor	EQU		0x7C9
-QIndex		EQU		0x7CA
-ROMcs		EQU		0x7CB
-mmu_present	EQU		0x7CC
-TestTask	EQU		0x7CD
-BASIC_SESSION	EQU		0x7CE
-gr_cmd		EQU		0x7CF
-
-Uart_rxfifo		EQU		0x01FBC000
-Uart_rxhead		EQU		0x7D0
-Uart_rxtail		EQU		0x7D1
-Uart_ms			EQU		0x7D2
-Uart_rxrts		EQU		0x7D3
-Uart_rxdtr		EQU		0x7D4
-Uart_rxxon		EQU		0x7D5
-Uart_rxflow		EQU		0x7D6
-Uart_fon		EQU		0x7D7
-Uart_foff		EQU		0x7D8
-Uart_txrts		EQU		0x7D9
-Uart_txdtr		EQU		0x7DA
-Uart_txxon		EQU		0x7DB
-Uart_txxonoff	EQU		0x7DC
+			org		0x7C0
+CharColor	db		0
+ScreenColor	db		0
+CursorRow	db		0
+CursorCol	db		0
+CursorFlash	db		0
+Milliseconds	db		0
+IRQFlag		db		0
+UserTick	db		0
+eth_unique_id	db		0
+LineColor	db		0
+QIndex		db		0
+ROMcs		db		0
+mmu_present	db		0
+TestTask	db		0
+BASIC_SESSION	db		0
+gr_cmd		db		0
 
 startSector	EQU		0x7F0
 
@@ -744,8 +734,6 @@ st8:
 	ldx		#0
 	ldy		#KeybdSetup
 	jsr		StartTask
-	lda		#1
-	sta		KeybdEcho
 	lda		#6
 	sta		LEDS
 
@@ -1703,6 +1691,7 @@ TickRout:
 tr1a
 	rts
 
+include "null.asm"
 include "keyboard.asm"
 
 comment ~
@@ -1780,308 +1769,7 @@ siof3:
 	pla
 	rts
 	
-
-;==============================================================================
-; Serial port
-;==============================================================================
-;------------------------------------------------------------------------------
-; Initialize the serial port
-; r1 = low 28 bits = baud rate
-; r2 = other settings
-; The desired baud rate must fit in 28 bits or less.
-;------------------------------------------------------------------------------
-;
-SerialInit:
-;	asl		r1,r1,#4			; * 16
-;	shlui	r1,r1,#32			; * 2^32
-;	inhu	r2,CR_CLOCK			; get clock frequency from config record
-;	divu	r1,r1,r2			; / clock frequency
-
-	lsr		r1,r1,#8			; drop the lowest 8 bits
-	sta		UART_CM1			; set LSB
-	lsr		r1,r1,#8
-	sta		UART_CM2			; set middle bits
-	lsr		r1,r1,#8
-	sta		UART_CM3			; set MSB
-	stz		Uart_rxhead			; reset buffer indexes
-	stz		Uart_rxtail
-	lda		#0x1f0
-	sta		Uart_foff			; set threshold for XOFF
-	lda		#0x010
-	sta		Uart_fon			; set threshold for XON
-	lda		#1
-	sta		UART_IE				; enable receive interrupt only
-	stz		Uart_rxrts			; no RTS/CTS signals available
-	stz		Uart_txrts			; no RTS/CTS signals available
-	stz		Uart_txdtr			; no DTR signals available
-	stz		Uart_rxdtr			; no DTR signals available
-	lda		#1
-	sta		Uart_txxon			; for now
-	lda		#1
-	sta		SERIAL_SEMA
-	rts
-
-;---------------------------------------------------------------------------------
-; Get character directly from serial port. Blocks until a character is available.
-;---------------------------------------------------------------------------------
-;
-SerialGetCharDirect:
-sgc1:
-	lda		UART_LS		; uart status
-	and		#rxfull		; is there a char available ?
-	beq		sgc1
-	lda		UART
-	rts
-
-;------------------------------------------------
-; Check for a character at the serial port
-; returns r1 = 1 if char available, 0 otherwise
-;------------------------------------------------
-;
-SerialCheckForCharDirect:
-	lda		UART_LS			; uart status
-	and		#rxfull			; is there a char available ?
-	rts
-
-;-----------------------------------------
-; Put character to serial port
-; r1 = char to put
-;-----------------------------------------
-;
-SerialPutChar:
-	phx
-	phy
-	push	r4
-	push	r5
-
-	ldx		UART_MC
-	or		r2,r2,#3		; assert DTR / RTS
-	stx		UART_MC
-	ldx		Uart_txrts
-	beq		spcb1
-	ld		r4,Milliseconds
-	ldy		#1000			; delay count (1 s)
-spcb3:
-	ldx		UART_MS
-	and		r2,r2,#$10		; is CTS asserted ?
-	bne		spcb1
-	ld		r5,Milliseconds
-	cmp		r4,r5
-	beq		spcb3
-	ld		r4,r5
-	dey
-	bne		spcb3
-	bra		spcabort
-spcb1:
-	ldx		Uart_txdtr
-	beq		spcb2
-	ld		r4,Milliseconds
-	ldy		#1000			; delay count
-spcb4:
-	ldx		UART_MS
-	and		r2,r2,#$20		; is DSR asserted ?
-	bne		spcb2
-	ld		r5,Milliseconds
-	cmp		r4,r5
-	beq		spcb4
-	ld		r4,r5
-	dey
-	bne		spcb4
-	bra		spcabort
-spcb2:	
-	ldx		Uart_txxon
-	beq		spcb5
-spcb6:
-	ldx		Uart_txxonoff
-	beq		spcb5
-	ld		r4,UART_MS
-	and		r4,r4,#0x80			; DCD ?
-	bne		spcb6
-spcb5:
-	ld		r4,Milliseconds
-	ldy		#1000				; wait up to 1s
-spcb8:
-	ldx		UART_LS
-	and		r2,r2,#0x20			; tx not full ?
-	bne		spcb7
-	ld		r5,Milliseconds
-	cmp		r4,r5
-	beq		spcb8
-	ld		r4,r5
-	dey
-	bne		spcb8
-	bra		spcabort
-spcb7:
-	sta		UART
-spcabort:
-	pop		r5
-	pop		r4
-	ply
-	plx
-	rts
-
-;-------------------------------------------------
-; Compute number of characters in recieve buffer.
-; r4 = number of chars
-;-------------------------------------------------
-CharsInRxBuf:
-	ld		r4,Uart_rxhead
-	ldx		Uart_rxtail
-	sub		r4,r4,r2
-	bpl		cirxb1
-	ld		r4,#0x200
-	add		r4,r4,r2
-	ldx		Uart_rxhead
-	sub		r4,r4,r2
-cirxb1:
-	rts
-
-;----------------------------------------------
-; Get character from rx fifo
-; If the fifo is empty enough then send an XON
-;----------------------------------------------
-;
-SerialGetChar:
-	phx
-	phy
-	push	r4
-
-	ldy		Uart_rxhead
-	ldx		Uart_rxtail
-	cmp		r2,r3
-	beq		sgcfifo1		; is there a char available ?
-	lda		Uart_rxfifo,x	; get the char from the fifo into r1
-	inx						; increment the fifo pointer
-	and		r2,r2,#$1ff
-	stx		Uart_rxtail
-	ldx		Uart_rxflow		; using flow control ?
-	beq		sgcfifo2
-	ldy		Uart_fon		; enough space in Rx buffer ?
-	jsr		CharsInRxBuf
-	cmp		r4,r3
-	bpl		sgcfifo2
-	stz		Uart_rxflow		; flow off
-	ld		r4,Uart_rxrts
-	beq		sgcfifo3
-	ld		r4,UART_MC		; set rts bit in MC
-	or		r4,r4,#2
-	st		r4,UART_MC
-sgcfifo3:
-	ld		r4,Uart_rxdtr
-	beq		sgcfifo4
-	ld		r4,UART_MC		; set DTR
-	or		r4,r4,#1
-	st		r4,UART_MC
-sgcfifo4:
-	ld		r4,Uart_rxxon
-	beq		sgcfifo5
-	ld		r4,#XON
-	st		r4,UART
-sgcfifo5:
-sgcfifo2:					; return with char in r1
-	pop		r4
-	ply
-	plx
-	rts
-sgcfifo1:
-	lda		#-1				; no char available
-	pop		r4
-	ply
-	plx
-	rts
-
-
-;-----------------------------------------
-; Serial port IRQ
-;-----------------------------------------
-;
-SerialIRQ:
-	pha
-	phx
-	phy
-	push	r4
-
-	lda		UART_IS			; get interrupt status
-	bpl		sirq1			; no interrupt
-	and		#0x7f			; switch on interrupt type
-	cmp		#4
-	beq		srxirq
-	cmp		#$0C
-	beq		stxirq
-	cmp		#$10
-	beq		smsirq
-	; unknown IRQ type
-sirq1:
-	pop		r4
-	ply
-	plx
-	pla
-	rti
-
-
-; Get the modem status and record it
-smsirq:
-	lda		UART_MS
-	sta		Uart_ms
-	bra		sirq1
-
-stxirq:
-	bra		sirq1
-
-; Get a character from the uart and store it in the rx fifo
-srxirq:
-srxirq1:
-	lda		UART				; get the char (clears interrupt)
-	ldx		Uart_txxon
-	beq		srxirq3
-	cmp		#XOFF
-	bne		srxirq2
-	lda		#1
-	sta		Uart_txxonoff
-	bra		srxirq5
-srxirq2:
-	cmp		#XON
-	bne		srxirq3
-	stz		Uart_txxonoff
-	bra		srxirq5
-srxirq3:
-	stz		Uart_txxonoff
-	ldx		Uart_rxhead
-	sta		Uart_rxfifo,x		; store in buffer
-	inx
-	and		r2,r2,#$1ff
-	stx		Uart_rxhead
-srxirq5:
-	lda		UART_LS				; check for another ready character
-	and		#rxfull
-	bne		srxirq1
-	lda		Uart_rxflow			; are we using flow controls?
-	bne		srxirq8
-	jsr		CharsInRxBuf
-	lda		Uart_foff
-	cmp		r4,r1
-	bmi		srxirq8
-	lda		#1
-	sta		Uart_rxflow
-	lda		Uart_rxrts
-	beq		srxirq6
-	lda		UART_MC
-	and		#$FD			; turn off RTS
-	sta		UART_MC
-srxirq6:
-	lda		Uart_rxdtr
-	beq		srxirq7
-	lda		UART_MC
-	and		#$FE			; turn off DTR
-	sta		UART_MC
-srxirq7:
-	lda		Uart_rxxon
-	beq		srxirq8
-	lda		#XOFF
-	sta		UART
-srxirq8:
-	bra		sirq1
-
+include "serial.asm"
 
 ;------------------------------------------------------------------------------
 ; Display nybble in r1
@@ -2900,93 +2588,7 @@ Beep:
 	sta		PSGCTRL0
 	rts
 
-;--------------------------------------------------------------------------
-;--------------------------------------------------------------------------
-; 
-Piano:
-	jsr		RequestIOFocus
-	lda		#15				; master volume to max
-	sta		PSG+64
-playnt:
-	jsr		KeybdGetChar
-	cmp		#CTRLC
-	beq		PianoX
-	cmp		#'a'
-	beq		playnt1a
-	cmp		#'b'
-	beq		playnt1b
-	cmp		#'c'
-	beq		playnt1c
-	cmp		#'d'
-	beq		playnt1d
-	cmp		#'e'
-	beq		playnt1e
-	cmp		#'f'
-	beq		playnt1f
-	cmp		#'g'
-	beq		playnt1g
-	bra		playnt
-PianoX:
-	jsr		ReleaseIOFocus
-	rts
-
-playnt1a:
-	ld		r4,#7217
-	bra		playnta
-playnt1b:
-	ld		r4,#8101
-	bra		playnta
-playnt1c:
-	ld		r4,#4291
-	bra		playnta
-playnt1d:
-	ld		r4,#4817
-	bra		playnta
-playnt1e:
-	ld		r4,#5407
-	bra		playnta
-playnt1f:
-	ld		r4,#5728
-	bra		playnta
-playnt1g:
-	ld		r4,#6430
-playnta
-	lda		#1	; priority 1
-	ldx		#0	; no flags
-	ldy		#Tone
-	jsr		StartTask
-	bra		playnt
-
-Tone:
-	pha
-	sta		PSGFREQ0
-	; decay  (16.384 ms)2
-	; attack (8.192 ms)1
-	; release (1.024 s)A
-	; sustain level C
-	lda		#0xCA12
-	sta		PSGADSR0
-	lda		#0x1104			; gate, output enable, triangle waveform
-	sta		PSGCTRL0
-	lda		#20				; delay about 100ms
-	jsr		Sleep
-;	jsr		Delay10
-	lda		#0x0104			; gate off, output enable, triangle waveform
-	sta		PSGCTRL0
-	lda		#20				; delay about 100ms
-	jsr		Sleep
-; 	jsr		Delay10
-	lda		#0x0000			; gate off, output enable off, no waveform
-	sta		PSGCTRL0
-	pla
-	rts
-
-Delay10:
-	lda		#500000
-dly10a:
-	dea
-	bne		dly10a
-	rts
+include "Piano.asm"
 
 ;==============================================================================
 ;==============================================================================
@@ -3591,627 +3193,8 @@ dlod1:
 
 msgFileNotFound:
 	db	CR,LF,"File not found.",CR,LF
-	
-;==============================================================================
-; Ethernet
-;==============================================================================
-my_MAC1	EQU	0x00
-my_MAC2	EQU	0xFF
-my_MAC3	EQU	0xEE
-my_MAC4	EQU	0xF0
-my_MAC5	EQU	0xDA
-my_MAC6	EQU	0x42
 
-; r1 = PHY
-; r2 = regnum
-; r3 = data
-;
-eth_mii_write:
-	pha
-	phx
-	push	r4
-	ld		r4,#ETHMAC
-	asl		r2,r2,#8
-	or		r1,r1,r2
-	sta		ETH_MIIADDRESS,r4
-	sty		ETH_MIITX_DATA,r4
-	lda		#ETH_WCTRLDATA
-	sta		ETH_MIICOMMAND,r4
-	stz		ETH_MIICOMMAND,r4
-emiw1:
-	lda		ETH_MIISTATUS,r4
-	bit		#ETH_MIISTATUS_BUSY
-	bne		emiw1
-	pop		r4
-	plx
-	pla
-	rts
-
-; r1 = PHY
-; r2 = reg
-
-eth_mii_read:
-	phx
-	phy
-	ldy		#ETHMAC
-	asl		r2,r2,#8
-	or		r1,r1,r2
-	sta		ETH_MIIADDRESS,y	
-	lda		#ETH_MIICOMMAND_RSTAT
-	sta		ETH_MIICOMMAND,y
-	stz		ETH_MIICOMMAND,y
-emir1:
-	lda		ETH_MIISTATUS,y
-	bit		#ETH_MIISTATUS_BUSY
-	bne		emir1	
-	lda		ETH_MIIRX_DATA,y
-	ply
-	plx
-	rts
-
-ethmac_setup:
-	ld		r4,#ETHMAC
-	lda		#ETH_MIIMODER_RST
-	sta		ETH_MIIMODER,r4
-	lda		ETH_MIIMODER,r4
-	and		#~ETH_MIIMODER_RST
-	sta		ETH_MIIMODER,r4
-	lda		#$10				; /16=1.25MHz
-	sta		ETH_MIIMODER,r4		; Clock divider for MII Management interface 
-	lda		#ETH_MODER_RST
-	sta		ETH_MODER,r4
-	lda		ETH_MODER,r4
-	and		#~ETH_MODER_RST
-	sta		ETH_MODER,r4
-
-	stz		ETH_MIITX_DATA,r4
-	stz		ETH_MIIADDRESS,r4
-	stz		ETH_MIICOMMAND,r4
-	
-	lda		#0xEEF0DA42
-	sta		ETH_MAC_ADDR0,r4		; MAC0
-	lda		#0x00FF
-	sta		ETH_MAC_ADDR1,r4		; MAC1
-
-	lda		#-1
-	sta		ETH_INT_SOURCE,r4
-
-	; Advertise support for 10/100 FD/HD
-	lda		#ETH_PHY
-	ldx		#ETH_MII_ADVERTISE
-	jsr		eth_mii_read
-	or		r3,r1,#ETH_ADVERTISE_ALL
-	lda		#ETH_PHY
-	ldx		#ETH_MII_ADVERTISE
-	jsr		eth_mii_write
-
-	; Do NOT advertise support for 1000BT
-	lda		#ETH_PHY
-	ldx		#ETH_MII_CTRL1000
-	jsr		eth_mii_read
-	and		r3,r1,#~(ETH_ADVERTISE_1000FULL|ETH_ADVERTISE_1000HALF)
-	lda		#ETH_PHY
-	ldx		#ETH_MII_CTRL1000
-	jsr		eth_mii_write
- 
-	; Disable 1000BT
-	lda		#ETH_PHY
-	ldx		#ETH_MII_EXPANSION
-	jsr		eth_mii_read
-	and		r3,r1,#~(ETH_ESTATUS_1000_THALF|ETH_ESTATUS_1000_TFULL)
-	ldx		#ETH_MII_EXPANSION
-	jsr		eth_mii_write
-  
-	; Restart autonegotiation
-	lda		#0
-	ldx		#ETH_MII_BMCR
-	jsr		eth_mii_read
-	and		r3,r1,#~(ETH_BMCR_ANRESTART|ETH_BMCR_ANENABLE)
-	lda		#7
-	jsr		eth_mii_write
-	
-	; Enable BOTH the transmiter and receiver
-	lda		#$A003
-	sta		ETH_MODER,r4
-	rts
-  
-; Initialize the ethmac controller.
-; Supply a MAC address, set MD clock
-;
-message "eth_init"
-eth_init:
-	pha
-	phy
-	ldy		#ETHMAC
-	lda		#$A003
-	sta		ETH_MODER,y
-;	lda		#0x64				; 100
-;	sta		ETH_MIIMODER,y
-;	lda		#7					; PHY address
-;	sta		ETH_MIIADDRESS,y
-	lda		#0xEEF0DA42
-	sta		ETH_MAC_ADDR0,y		; MAC0
-	lda		#0x00FF
-	sta		ETH_MAC_ADDR1,y		; MAC1
-	ply
-	pla
-	rts
-
-; Request a packet and display on screen
-; r1 = address where to put packet
-;
-message "eth_request_packet"
-eth_request_packet:
-	phx
-	phy
-	push	r4
-	push	r5
-	ldy		#ETHMAC
-	ldx		#4					; clear rx interrupt
-	stx		ETH_INT_SOURCE,y
-	sta		0x181,y				; storage address
-	ldx		#0xe000				; enable interrupt
-	stx		0x180,y
-eth1:
-	nop
-	ldx		ETH_INT_SOURCE,y
-	bit		r2,#4				; get bit #2
-	beq		eth1
-	ldx		0x180,y				; get from descriptor
-	lsr		r2,r2,#16
-	ldy		#0
-	pha
-	jsr		GetScreenLocation
-	add		r4,r1,3780			; second last line of screen
-	pla
-eth20:
-	add		r5,r1,r3
-	lb		r2,0,r5				; get byte
-	add		r5,r4,r3
-	stx		(r5)				; store to screen
-	iny
-	cpy		#83
-	bne		eth20
-	pop		r5
-	pop		r4
-	ply
-	plx
-	rts
-
-; r1 = packet address
-;
-message "eth_interpret_packet"
-eth_interpret_packet:
-	phx
-	phy
-	lb		r2,12,r1
-	lb		r3,13,r1
-	cpx		#8					; 0x806 ?
-	bne		eth2	
-	cpy		#6		
-	bne		eth2
-	lda		#2					; return r1 = 2 for ARP
-eth5:
-	ply
-	plx
-	rts
-eth2:
-	cpx		#8
-	bne		eth3				; 0x800 ?
-	cpy		#0
-	bne		eth3
-	lb		r2,23,r1
-	cpx		#1
-	bne		eth4
-	lda		#1
-	bra		eth5				; return 1 ICMP
-eth4:
-	cpx		#$11
-	bne		eth6
-	lda		#3					; return 3 for UDP
-	bra		eth5
-eth6:
-	cpx		#6
-	bne		eth7
-	lda		#4					; return 4 for TCP
-	bra		eth5
-eth7:
-eth3:
-	eor		r1,r1,r1			; return zero for unknown
-	ply
-	plx
-	rts
-
-; r1 = address of packet to send
-; r2 = packet length
-;
-message "eth_send_packet"
-eth_send_packet:
-	phx
-	phy
-	push	r4
-	ldy		#ETHMAC
-	; wait for tx buffer to be clear
-eth8:
-	ld		r4,0x100,y
-	bit		r4,#$8000
-	bne		eth8
-	ld		r4,#1			; clear tx interrupt
-	st		r4,ETH_INT_SOURCE,y
-	; set address
-	sta		0x101,y
-	; set the packet length field and enable interrupts
-	asl		r2,r2,#16
-	or		r2,r2,#0xF000
-	stx		0x100,y
-	pop		r4
-	ply
-	plx
-	rts
-
-; Only for IP type packets (not ARP)
-; r1 = rx buffer address
-; r2 = swap flag
-; Returns:
-; r1 = data start index
-;
-message "eth_build_packet"
-eth_build_packet:
-	phy
-	push	r4
-	push	r5
-	push	r6
-	push	r7
-	push	r8
-	push	r9
-	push	r10
-
-	lb		r3,6,r1
-	lb		r4,7,r1
-	lb		r5,8,r1
-	lb		r6,9,r1
-	lb		r7,10,r1
-	lb		r8,11,r1
-	; write to destination header
-	sb		r3,0,r1
-	sb		r4,1,r1
-	sb		r5,2,r1
-	sb		r6,3,r1
-	sb		r7,4,r1
-	sb		r8,5,r1
-	; write to source header
-	ld		r3,#my_MAC1
-	sb		r3,6,r1
-	ld		r3,#my_MAC2
-	sb		r3,7,r1
-	ld		r3,#my_MAC3
-	sb		r3,8,r1
-	ld		r3,#my_MAC4
-	sb		r3,9,r1
-	ld		r3,#my_MAC5
-	sb		r3,10,r1
-	ld		r3,#my_MAC6
-	sb		r3,11,r1
-	cmp		r2,#1
-	bne		eth16			; if (swap)
-	lb		r3,26,r1
-	lb		r4,27,r1
-	lb		r5,28,r1
-	lb		r6,29,r1
-	; read destination
-	lb		r7,30,r1
-	lb		r8,31,r1
-	lb		r9,32,r1
-	lb		r10,33,r1
-	; write to sender
-	sb		r7,26,r1
-	sb		r8,27,r1
-	sb		r9,28,r1
-	sb		r10,29,r1
-	; write destination
-	sb		r3,30,r1
-	sb		r4,31,r1
-	sb		r5,32,r1
-	sb		r6,33,r1
-eth16:
-	ldy		eth_unique_id
-	iny
-	sty		eth_unique_id
-	sb		r3,19,r1
-	lsr		r3,r3,#8
-	sb		r3,18,r1
-	lb		r3,14,r1
-	and		r3,r3,#0xF
-	asl		r3,r3,#2		; *4
-	add		r1,r3,#14		; return datastart in r1
-	pop		r10
-	pop		r9
-	pop		r8
-	pop		r7
-	pop		r6
-	pop		r5
-	pop		r4
-	ply
-	rts
-
-; Compute IPv4 checksum of header
-; r1 = packet address
-; r2 = data start
-;
-message "eth_checksum"
-eth_checksum:
-	phy
-	push	r4
-	push	r5
-	push	r6
-	; set checksum to zero
-	stz		24,r1
-	stz		25,r1
-	eor		r3,r3,r3		; r3 = sum = zero
-	ld		r4,#14
-eth15:
-	ld		r5,r2
-	dec		r5				; r5 = datastart - 1
-	cmp		r4,r5
-	bpl		eth14
-	add		r6,r1,r4
-	lb		r5,0,r6			; shi = [rx_addr+i]
-	lb		r6,1,r6		    ; slo = [rx_addr+i+1]
-	asl 	r5,r5,#8
-	or		r5,r5,r6		; shilo
-	add		r3,r3,r5		; sum = sum + shilo
-	add		r4,r4,#2		; i = i + 2
-	bra		eth15
-eth14:
-	ld		r5,r3			; r5 = sum
-	and		r3,r3,#0xffff
-	lsr		r5,r5,#16
-	add		r3,r3,r5
-	eor		r3,r3,#-1
-	sb		r3,25,r1		; low byte
-	lsr		r3,r3,#8
-	sb		r3,24,r1		; high byte
-	pop		r6
-	pop		r5
-	pop		r4
-	ply
-	rts
-
-; r1 = packet address
-; returns r1 = 1 if this IP
-;	
-message "eth_verifyIP"
-eth_verifyIP:
-	phx
-	phy
-	push	r4
-	push	r5
-	lb		r2,30,r1
-	lb		r3,31,r1
-	lb		r4,32,r1
-	lb		r5,33,r1
-	; Check for general broadcast
-	cmp		r2,#$FF
-	bne		eth11
-	cmp		r3,#$FF
-	bne		eth11
-	cmp		r4,#$FF
-	bne		eth11
-	cmp		r5,#$FF
-	bne		eth11
-eth12:
-	lda		#1
-eth13:
-	pop		r5
-	pop		r4
-	ply
-	plx
-	rts
-eth11:
-	ld		r1,r2
-	asl		r1,r1,#8
-	or		r1,r1,r3
-	asl		r1,r1,#8
-	or		r1,r1,r4
-	asl		r1,r1,#8
-	or		r1,r1,r5
-	cmp		#$C0A8012A		; 192.168.1.42
-	beq		eth12
-	eor		r1,r1,r1
-	bra		eth13
-
-msgEthTest
-	db		CR,LF,"Ethernet test - press CTRL-C to exit.",CR,LF,0
-
-message "eth_main"
-eth_main:
-	jsr		RequestIOFocus
-	jsr		ClearScreen
-	jsr		HomeCursor
-	lda		#msgEthTest
-	jsr		DisplayStringB
-;	jsr		eth_init
-	jsr		ethmac_setup
-eth_loop:
-	jsr		KeybdGetChar
-	cmp		#-1
-	beq		eth17
-	cmp		#CTRLC
-	bne		eth17
-	lda		#$A000					; tunr off transmit/recieve
-	sta		ETH_MODER+ETHMAC
-	jsr		ReleaseIOFocus
-	rts
-eth17
-	lda		#eth_rx_buffer<<2		; memory address zero
-	jsr		eth_request_packet
-	jsr		eth_interpret_packet	; r1 = packet type
-
-	cmp		#1
-	bne		eth10
-	ld		r2,r1					; save off r1, r2 = packet type
-	lda		#eth_rx_buffer<<2		; memory address zero
-	jsr		eth_verifyIP
-	tay
-	txa								; r1 = packet type again
-	cpy		#1
-	bne		eth10
-
-	lda		#eth_rx_buffer<<2		; memory address zero
-	ldx		#1
-	jsr		eth_build_packet
-	tay								; y = icmpstart
-	lda		#eth_rx_buffer<<2		; memory address zero
-	add		r4,r1,r3
-	sb		r0,0,r4					; [rx_addr+icmpstart] = 0
-	lb		r2,17,r1
-	add		r2,r2,#14				; r2 = len
-	ld		r6,r2					; r6 = len
-	add		r15,r1,r3
-	lb		r4,2,r15				; shi
-	lb		r5,3,r15				; slo
-	asl		r4,r4,#8
-	or		r4,r4,r5				; sum = {shi,slo};
-	eor		r4,r4,#-1				; sum = ~sum
-	sub		r4,r4,#0x800			; sum = sum - 0x800
-	eor		r4,r4,#-1				; sum = ~sum
-	add		r15,r1,r3
-	sb		r4,3,r15
-	lsr		r4,r4,#8
-	sb		r4,2,r15
-	tyx
-	jsr		eth_checksum
-	lda		#eth_rx_buffer<<2		; memory address zero
-	ld		r2,r6
-	jsr		eth_send_packet
-	jmp		eth_loop
-eth10:
-	; r2 = rx_addr
-	cmp		#2
-	bne		eth_loop		; Do we have ARP ?
-;	xor		r2,r2,r2			; memory address zero
-	ldx		#eth_rx_buffer<<2
-	; get the opcode
-	lb		r13,21,x
-	cmp		r13,#1
-	bne		eth_loop		; ARP request
-	; get destination IP address
-	lb		r9,38,x
-	lb		r10,39,x
-	lb		r11,40,x
-	lb		r12,41,x
-	; set r15 = destination IP
-	ld		r15,r9
-	asl		r15,r15,#8
-	or		r15,r15,r10
-	asl		r15,r15,#8
-	or		r15,r15,r11
-	asl		r15,r15,#8
-	or		r15,r15,r12
-	; Is it our IP ?
-	cmp		r15,#$C0A8012A	; //192.168.1.42
-	bne		eth_loop
-	; get source IP address
-	lb		r5,28,x
-	lb		r6,29,x
-	lb		r7,30,x
-	lb		r8,31,x
-	; set r14 = source IP
-	ld		r14,r5
-	asl		r14,r14,#8
-	or		r14,r14,r6
-	asl		r14,r14,#8
-	or		r14,r14,r7
-	asl		r14,r14,#8
-	or		r14,r14,r8
-	; Get the source MAC address
-	push	r6
-	push	r7
-	push	r8
-	push	r9
-	push	r10
-	push	r11
-	lb		r6,22,x
-	lb		r7,23,x
-	lb		r8,24,x
-	lb		r9,25,x
-	lb		r10,26,x
-	lb		r11,27,x
-	; write to destination header
-	sb		r6,0,x
-	sb		r7,1,x
-	sb		r8,2,x
-	sb		r9,3,x
-	sb		r10,4,x
-	sb		r11,5,x
-	; and write to ARP destination
-	sb		r6,32,x
-	sb		r7,33,x
-	sb		r8,34,x
-	sb		r9,35,x
-	sb		r10,36,x
-	sb		r11,37,x
-	pop		r11
-	pop		r10
-	pop		r9
-	pop		r8
-	pop		r7
-	pop		r6
-	; write to source header
-;	stbc	#0x00,6[r2]
-;	stbc	#0xFF,7[r2]
-;	stbc	#0xEE,8[r2]
-;	stbc	#0xF0,9[r2]
-;	stbc	#0xDA,10[r2]
-;	stbc	#0x42,11[r2]
-	sb		r0,6,x
-	lda		#0xFF
-	sb		r1,7,x
-	lda		#0xEE
-	sb		r1,8,x
-	lda		#0xF0
-	sb		r1,9,x
-	lda		#0xDA
-	sb		r1,10,x
-	lda		#0x42
-	sb		r1,11,x
-	; write to ARP source
-;	stbc	#0x00,22[r2]
-;	stbc	#0xFF,23[r2]
-;	stbc	#0xEE,24[r2]
-;	stbc	#0xF0,25[r2]
-;	stbc	#0xDA,26[r2]
-;	stbc	#0x42,27[r2]
-	sb		r0,22,x
-	lda		#0xFF
-	sb		r1,23,x
-	lda		#0xEE
-	sb		r1,24,x
-	lda		#0xF0
-	sb		r1,25,x
-	lda		#0xDA
-	sb		r1,26,x
-	lda		#0x42
-	sb		r1,27,x
-	; swap sender / destination IP
-	; write sender
-	sb		r9,28,x
-	sb		r10,29,x
-	sb		r11,30,x
-	sb		r12,31,x
-	; write destination
-	sb		r5,38,x
-	sb		r6,39,x
-	sb		r7,40,x
-	sb		r8,41,x
-	; change request to reply
-;	stbc	#2,21[r2]
-	lda		#2
-	sb		r1,21,x
-	txa						; r1 = packet address
-	ldx		#0x2A			; r2 = packet length
-	jsr		eth_send_packet
-	jmp		eth_loop
+;include "ethernet.asm"	
 
 ;--------------------------------------------------------------------------
 ; Initialize sprite image caches with random data.
@@ -4529,139 +3512,7 @@ DisplayDatetime
 	pla
 	rts
 
-;--------------------------------------------------------------------------
-; ReadTemp
-;    Read and display the temperature from a DS1626 temperature sensor
-; device. RTF65002 source code.
-;--------------------------------------------------------------------------
-DS1626_CMD	=$FFDC0300
-DS1626_DAT	=$FFDC0301
-; Commands
-START_CNV = $51;
-STOP_CNV = $22;
-READ_TEMP = $AA;
-READ_CONFIG = $AC;
-READ_TH = $A1;
-READ_TL = $A2;
-WRITE_TH = $01;
-WRITE_TL = $02;
-WRITE_CONFIG = $0C;
-POR = $54;
-
-ReadTemp:
-	lda		CONFIGREC	; Do we even have a temperature sensor ?
-	bit		#$10
-	beq		rdtmp3		; If not, output '0.000'
-rdtmp1:
-	; On power up the DS1626 interface circuit sends a power on reset (POR)
-	; command to the DS1626. Waiting here makes sure this command has been
-	; completed.
-	jsr		rdt_busy_wait
-	lda		#$0F			; 12 bits resolution, cpu mode, one-shot mode
-	sta		DS1626_DAT
-	lda		#WRITE_CONFIG	; write the desired config to the device
-	sta		DS1626_CMD
-	jsr		rdt_busy_wait
-	lda		#10
-	jsr		tSleep
-	lda		#0
-	sta		DS1626_DAT
-	lda		#START_CNV		; issue a start conversion command
-	sta		DS1626_CMD
-	jsr		rdt_busy_wait
-	lda		#10
-	jsr		tSleep
-	; Now poll the config register to determine when the conversion has completed.
-rdtmp2:
-	lda		#READ_CONFIG	; issue the READ_CONFIG command
-	sta		DS1626_CMD
-	jsr		rdt_busy_wait
-	pha
-	lda		#10				; Wait a bit before checking again. The conversion
-	jsr		tSleep			; can take up to 1s to complete.
-	pla
-	bit		#$80			; test done bit
-	beq		rdtmp2			; loop back if not done conversion
-	lda		#0
-	sta		DS1626_DAT		; issue a stop conversion command
-	lda		#STOP_CNV
-	sta		DS1626_CMD
-	jsr		rdt_busy_wait
-	lda		#10
-	jsr		tSleep
-	lda		#READ_TEMP		; issue the READ_TEMP command
-	sta		DS1626_CMD
-	jsr		rdt_busy_wait
-	pha
-	lda		#10
-	jsr		tSleep
-	pla
-rdtmp4:
-	jsr		CRLF
-	and		#$FFF
-	bit		#$800		; check for negative temperature
-	beq		rdtmp7
-	sub		r1,r0,r1	; negate the number
-	and		#$FFF
-	pha
-	lda		#'-'		; output a minus sign
-	jsr		DisplayChar
-	pla
-rdtmp7:
-	pha					; save off value
-	lsr		r1,r1,#4	; get rid of fractional portion
-	and		#$7F		; strip off sign bit
-	ldx		#3			; output the whole number part
-	jsr		PRTNUM
-	lda		#'.'		; followed by a decimal point
-	jsr		DisplayChar
-	pla					; get back temp value
-	and		#$0F
-	mul		r1,r1,#625	; 1/16th's per degree
-	ldx		#1
-	jsr		PRTNUM
-;	pha					; save off fraction bits
-;	div		r1,r1,#1000	; calculate the first digit
-;	add		#'0'
-;	jsr		DisplayChar	; output digit
-;	pla					; get back fractions bits
-;	pha					; and save again
-;	div		r1,r1,#100	; shift over to second digit
-;	mod		r1,r1,#10	; ignore high order bits
-;	add		#'0'
-;	jsr		DisplayChar	; display the digit
-;	pla					; get back fraction
-;	div		r1,r1,#10
-;	mod		r1,r1,#10	; compute low order digit
-;	add		#'0'
-;	jsr		DisplayChar	; display low order digit
-	jsr		CRLF
-	rts
-rdtmp3:
-	lda		#0
-	bra		rdtmp4
-
-; Returns:
-;	acc = value from data register
-;
-rdt_busy_wait:
-	jsr		KeybdGetChar
-	cmp		#CTRLC
-	beq		Monitor
-	lda		DS1626_DAT
-	bit		#$8000
-	bne		rdt_busy_wait
-	rts
-
-tSleep:
-	ldx		Milliseconds
-	txa
-tSleep1:
-	ldx		Milliseconds
-	sub		r2,r2,r1
-	cpx		#100
-	blo		tSleep1
-	rts
+include "ReadTemp.asm"
 
 ;==============================================================================
 ; Memory Management routines follow.
@@ -6569,9 +5420,8 @@ dtfm4a:
 	st		r4,TCB_mbq_prev,x
 	stz		TCB_hWaitMbx,x
 	sei
-	lda		TCB_Status,x
-	and		#~TS_WAITMSG
-	sta		TCB_Status,x
+	lda		#TS_WAITMSG_BIT
+	bmc		TCB_Status,x
 	cli
 	pop		r5
 	pop		r4
@@ -6656,13 +5506,8 @@ smp2:
 		cmp		r6,#0			; check if there is a thread waiting for a message
 		bmi		smsg5
 smsg3:
-	ld		r5,TCB_MSGPTR_D1,r6
-	beq		smsg6
-	stx		(r5)
-smsg6:
-	ld		r5,TCB_MSGPTR_D2,r6
-	beq		smsg7
-	sty		(r5)
+	stx		TCB_MSG_D1,r6
+	sty		TCB_MSG_D2,r6
 smsg7:
 	spl		tcb_sema + 1
 	ld		r5,TCB_Status,r6
@@ -6671,9 +5516,8 @@ smsg7:
 	ld		r1,r6
 	jsr		RemoveFromTimeoutList
 smsg8:
-	lda		TCB_Status,r6
-	and		#~TS_WAITMSG
-	sta		TCB_Status,r6
+	lda		#TS_WAITMSG_BIT
+	bmc		TCB_Status,r6
 	lda		#1
 	sta		tcb_sema
 	ld		r1,r6
@@ -6720,20 +5564,18 @@ smsg4:
 ;
 ; Parameters
 ;	r1=mailbox
-;	r2=pointer to D1 storage
-;	r3=pointer to D2 storage
-;	r4=timeout
+;	r2=timeout
 ; Returns:
 ;	r1=E_Ok			if everything is ok
 ;	r1=E_BadMbx		for a bad mailbox number
 ;	r1=E_NotAlloc	for a mailbox that isn't allocated
+;	r2=message D1
+;	r3=message D2
 ;------------------------------------------------------------------------------
 message "WaitMsg"
 WaitMsg:
 	cmp		#NR_MBX				; check the mailbox number to make sure
 	bhs		wmsg1				; that it's sensible
-	phx
-	phy
 	push	r4
 	push	r5
 	push	r6
@@ -6764,8 +5606,6 @@ wmsg13:
 	st		r6,TCB_hWaitMbx,r1			; set which mailbox is waited for
 	ld		r7,#-1
 	st		r7,TCB_mbq_next,r1			; adding at tail, so there is no next
-	stx		TCB_MSGPTR_D1,r1			; save off the message pointers
-	sty		TCB_MSGPTR_D2,r1
 	ld		r7,MBX_TQ_HEAD,r6			; is there a task que setup at the mailbox ?
 	bmi		wmsg6
 	ld		r7,MBX_TQ_TAIL,r6
@@ -6776,9 +5616,8 @@ wmsg13:
 wmsg7:
 	stz		tcb_sema + 1
 	stz		mbx_sema + 1
-	cmp		r4,#0						; check for a timeout
+	cmp		r2,#0						; check for a timeout
 	beq		wmsg10
-	ld		r2,r4
 wmsg14:
 	spl		tcb_sema + 1
 	jsr		AddToTimeoutList
@@ -6791,15 +5630,15 @@ wmsg10:
 	; Note that SendMsg will directly set the message D1, D2 data
 	; without queing a message at the mailbox (if there is a task
 	; waiting already). So we cannot just try dequeing a message again.
-	ldx		TCB_Status,r1
-	bit		r2,#TS_WAITMSG	; Is the task still waiting for a message ?
+	ldx		TCB_MSG_D1,r1
+	ldy		TCB_MSG_D2,r1
+	ld		r4,TCB_Status,r1
+	bit		r4,#TS_WAITMSG	; Is the task still waiting for a message ?
 	beq		wmsg8			; If not, go return OK status
 	pop		r7				; Otherwise return timeout error
 	pop		r6
 	pop		r5
 	pop		r4
-	ply
-	plx
 	lda		#E_Timeout
 	rts
 	
@@ -6814,19 +5653,10 @@ wmsg6:
 	st		r7,MBX_TQ_COUNT,r6		; one task queued
 	bra		wmsg7					; check for a timeout value
 	
-	; Store message D1 to pointer
 wmsg3:
 	stz		mbx_sema + 1
-	cpx		#0
-	beq		wmsg4
-	ld		r7,MSG_D1,r1
-	st		r7,(x)
-	; Store message D2 to pointer
-wmsg4:
-	cmp		r3,r0
-	beq		wmsg5
-	ld		r7,MSG_D2,r1
-	st		r7,(y)
+	ldx		MSG_D1,r1
+	ldy		MSG_D2,r1
 	; Add the newly dequeued message to the free messsage list
 wmsg5:
 	spl		freemsg_sema + 1
@@ -6840,8 +5670,6 @@ wmsg8:
 	pop		r6
 	pop		r5
 	pop		r4
-	ply
-	plx
 	lda		#E_Ok
 	rts
 wmsg1:
@@ -6853,39 +5681,55 @@ wmsg2:
 	pop		r6
 	pop		r5
 	pop		r4
-	ply
-	plx
 	lda		#E_NotAlloc
 	rts
 
-	
+;------------------------------------------------------------------------------
+; Check for a message at a mailbox. Does not block. This function is a
+; convenience wrapper for CheckMsg().
+;
+; Parameters
+;	r1=mailbox handle
+; Returns:
+;	r1=E_Ok			if everything is ok
+;	r1=E_NoMsg		if no message is available
+;	r1=E_BadMbx		for a bad mailbox number
+;	r1=E_NotAlloc	for a mailbox that isn't allocated
+;	r2=message D1
+;	r3=message D2
+;------------------------------------------------------------------------------
+;
+PeekMsg:
+	ld		r2,#0		; don't remove from queue
+	jsr		CheckMsg
+	rts
+
 ;------------------------------------------------------------------------------
 ; CheckMsg
 ; Check for a message at a mailbox. Does not block.
 ;
 ; Parameters
 ;	r1=mailbox handle
-;	r2=pointer to D1
-;	r3=pointer to D2
-;	r4=remove from queue if present
+;	r2=remove from queue if present
 ; Returns:
 ;	r1=E_Ok			if everything is ok
 ;	r1=E_NoMsg		if no message is available
 ;	r1=E_BadMbx		for a bad mailbox number
 ;	r1=E_NotAlloc	for a mailbox that isn't allocated
+;	r2=message D1
+;	r3=message D2
 ;------------------------------------------------------------------------------
 CheckMsg:
 	cmp		#NR_MBX					; check the mailbox number to make sure
 	bhs		cmsg1					; that it's sensible
-	phx
-	phy
 	push	r4
 	push	r5
 
 	spl		mbx_sema + 1
 	ld		r5,MBX_OWNER,r1
 	bmi		cmsg2					; error: no owner
-	cmp		r4,#0					; are we to dequeue the message ?
+	cpx		#0						; are we to dequeue the message ?
+	php
 	beq		cmsg3
 	jsr		DequeueMsgFromMbx
 	bra		cmsg4
@@ -6894,17 +5738,9 @@ cmsg3:
 cmsg4:
 	cmp		#0
 	bmi		cmsg5
-	cpx		#0
-	beq		cmsg6
-	ld		r5,MSG_D1,r1
-	st		r5,(x)
-cmsg6:
-	cpy		#0
-	beq		cmsg7
-	ld		r5,MSG_D2,r1
-	st		r5,(y)
-cmsg7:
-	cmp		r4,#0
+	ldx		MSG_D1,r1
+	ldy		MSG_D2,r1
+	plp								; get back dequeue flag
 	beq		cmsg8
 cmsg10:
 	spl		freemsg_sema + 1
@@ -6917,8 +5753,6 @@ cmsg8:
 	stz		mbx_sema + 1
 	pop		r5
 	pop		r4
-	ply
-	plx
 	lda		#E_Ok
 	rts
 cmsg1:
@@ -6928,16 +5762,12 @@ cmsg2:
 	stz		mbx_sema + 1
 	pop		r5
 	pop		r4
-	ply
-	plx
 	lda		#E_NotAlloc
 	rts
 cmsg5:
 	stz		mbx_sema + 1
 	pop		r5
 	pop		r4
-	ply
-	plx
 	lda		#E_NoMsg
 	rts
 

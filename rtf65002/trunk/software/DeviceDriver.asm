@@ -23,7 +23,7 @@
 ; ============================================================================
 ;
 ;------------------------------------------------------------------
-; Initialize a device driver.
+; Initialize/install a device driver.
 ;
 ; Parameters:
 ;	r1 = device number
@@ -31,14 +31,15 @@
 ;	r3 = # of devices in array
 ;------------------------------------------------------------------
 ;
+	cpu		RTF65002
 InitDevDrv:
 	push	r5
 	push	r6
 	push	r7
 	cmp		#NR_DCB					; check for a good device number
 	bhs		idd1
-	ld		r5,r1
-	mul		r5,r5,#DCB_SIZE
+	mul		r5,r1,#DCB_SIZE
+	add		r5,r5,#DCBs
 	ld		r0,DCB_pDevOp,r5		; check a pointer to see if device is setup
 	beq		idd2
 	cmp		r4,#1
@@ -53,12 +54,24 @@ idd2:
 	ld		r6,r2
 idd4:
 	; Initialize device semaphores
+;	ld		r7,DCB_ReentCount,x	; prime the semaphore
 	pha
+;	phx
+;	phy
+idd7:
+;	lda		DCB_Mbx,r5
+;	ldx		#$FFFFFFFB
+;	txy
+;	jsr		PostMsg
 	asl		r1,r1,#4		; * 16 words
 	add		r1,r1,#device_semas
 	sta		DCB_Sema,r5
 	ld		r7,DCB_ReentCount,x	; prime the semaphore
 	st		r7,(r1)
+;	dec		r7
+;	bne		idd7
+;	ply
+;	plx
 	pla
 idd5:
 	pha
@@ -96,14 +109,14 @@ public DeviceInit:
 	bhs		dvi1
 	phx
 	push	r6
-	tax
-	mul		r2,r2,#DCB_SIZE
-	ld		r0,DCB_pDevInit,x	; check a pointer to see if device is setup
+	mul		r2,r1,#DCB_SIZE
+	add		r2,r2,#DCBs
+	ld		r2,DCB_pDevInit,x	; check a pointer to see if device is setup
 	beq		dvi2
 	
 	asl		r6,r1,#4
 	spl		device_semas+1,r6	; Wait for semaphore
-	jsr		(DCB_pDevInit,x)
+	jsr		(x)
 	stz		device_semas+1,r6	; unlock device semaphore
 	pop		r6
 	plx
@@ -130,8 +143,8 @@ public DeviceOp:
 	bhs		dvo1
 	push	r6
 	push	r7
-	ld		r6,r1
-	mul		r6,r6,#DCB_SIZE
+	mul		r6,r1,#DCB_SIZE
+	add		r6,r6,#DCBs
 	ld		r6,DCB_pDevOp,r6		; check a pointer to see if device is setup
 	beq		dvo2
 
@@ -162,8 +175,8 @@ public DeviceStat:
 	bhs		dvs1
 	push	r6
 	push	r7
-	ld		r6,r1
-	mul		r6,r6,#DCB_SIZE
+	mul		r6,r1,#DCB_SIZE
+	add		r6,r6,#DCBs
 	ld		r6,DCB_pDevStat,r6		; check a pointer to see if device is setup
 	beq		dvs2
 
@@ -180,3 +193,20 @@ dvs2:
 dvs1:
 	lda		#E_BadDevNum
 	rts
+
+;------------------------------------------------------------------
+;------------------------------------------------------------------
+
+InitDevices:
+	lda		#0	
+	ldx		#NullDCB
+	ldy		#1
+	jsr		InitDevDrv
+	lda		#1
+	ldx		#KeybdDCB
+	ldy		#1
+	jsr		InitDevDrv
+	rts
+
+
+

@@ -45,6 +45,19 @@ DCMD_GETCHAR		EQU		32
 
 DRSP_DONE			EQU		1
 
+		cpu		RTF65002
+		.bss
+		org		0x01FBEA00
+
+KeybdHead	fill.b	256,0
+KeybdTail	fill.b	256,0
+KeybdEcho	fill.b	256,0
+KeybdBad	fill.b	256,0
+KeybdAck	fill.b	256,0
+KeybdLocks	fill.b	256,0
+KeybdBuffer	fill.b	256*16,0	;EQU		0x01FBF000	; buffer is 16 chars
+
+		.code
 ;------------------------------------------------------------------------------
 ;	The keyboard interrupt is selectively disabled and enabled to protect
 ; the keyboard buffers structure. Other interrupts are still enabled.
@@ -64,7 +77,6 @@ macro EnKeybd
 	pla
 endm
 
-	cpu		RTF65002
 	align	4
 	; Device driver struct
 	dw		0xFFFFFFFF			; link to next device
@@ -87,7 +99,7 @@ endm
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-KeybdDCB:
+public KeybdDCB:
 	align	4
 	db	"KBD1        "	; name
 	dw	4	; number of chars in name
@@ -292,29 +304,26 @@ public KeybdService:
 kbds3:
 	; Wait for a message to arrive at the service
 	lda		keybd_mbx
-	ldx		#keybdmsg_d1
-	ldy		#keybdmsg_d2
-	ld		r4,#-1			; wait forever
+	ldx		#-1				; wait forever
 	jsr		WaitMsg
-	lda		keybdmsg_d1
-	cmp		#DCMD_IRQ
+	cpx		#DCMD_IRQ
 	beq		kbds1
-	cmp		#DCMD_GETCHAR
+	cpx		#DCMD_GETCHAR
 	beq		kbds2
-	cmp		#DCMD_INITIALIZE
+	cpx		#DCMD_INITIALIZE
 	beq		kbds4
 	bra		kbds3
 kbds1:
-	ldx		keybdmsg_d2		; D2 holds character
+	tyx		; D2 holds character
 	jsr		IKeybdIRQ
 	bra		kbds3
 kbds2:
 	; The mailbox number is the same as the TCB number
-	lda		keybdmsg_d2
+	tya
 	jsr		IKeybdGetChar
 	; Send a message back to the requester containing the key value.
 	tax
-	lda		keybdmsg_d2
+	tya
 	ldy		#0
 	jsr		SendMsg	
 	bra		kbds3		
@@ -332,8 +341,7 @@ public XKeybdIRQ:
 	ldy		KEYBD				; get keyboard character
 	ld		r0,KEYBD+1			; clear keyboard strobe (turns off the IRQ)
 	cli
-;	jsr		PostMsg
-	jsr		IKeybdIRQ
+	jsr		PostMsg
 	ply
 	plx
 	pla
@@ -365,12 +373,12 @@ public KeybdIRQ:
 	phy
 	push	r4
 
-	lda		#15					; diable further keyboard interrupts
+	lda		#15					; disable further keyboard interrupts
 	sta		PIC+2
 	ldx		KEYBD				; get keyboard character
 	ld		r0,KEYBD+1			; clear keyboard strobe (turns off the IRQ)
 	txy							; 
-	cli
+	cli							; global interrupt enable
 	bit		r3,#$800			; test bit #11
 	bne		KeybdIRQc			; ignore keyup messages for now
 	ld		r4,IOFocusNdx		; get the task with the input focus
@@ -464,14 +472,9 @@ public SetKeyboardEcho:
 ;------------------------------------------------------------------------------
 ;
 message "KeybdGetChar"
-;------------------------------------------------------------------------------
-; Parameter
-;	r1 = task number
-;------------------------------------------------------------------------------
-;
+
 comment ~
 public KeybdGetChar:
-	sub		sp,#1			; reserve local storage for char
 	phx
 	phy
 	push	r4
@@ -482,33 +485,45 @@ public KeybdGetChar:
 	jsr		SendMsg
 	; Wait for a response message from the keyboard service.
 	tya
-	tsx
-	add		r2,#3
-	ldy		#0
-	ld		r4,#-1
+	ldx		#-1
 	jsr		WaitMsg
-	lda		3,sp
+	txa
 	pop		r4
 	ply
 	plx
-	sub		sp,#-1
 	rts
 ~
+;
+;------------------------------------------------------------------------------
+; Get keyboard character from buffer for the specified task. This entry point
+; is meant to be called by the keyboard service.
+;
+; Parameters:
+;	r1 = task number
+; Returns:
+;	r1 = keyboard character or -1 if no character is available.
+;------------------------------------------------------------------------------
 ;
 IKeybdGetChar:
 	phx
 	push	r4
 	ld		r4,r1
-	cmp		r4,#MAX_TASKNO
-	bhi		nochar
 	bra		kgc4
+
+;------------------------------------------------------------------------------
+; Get keyboard character from buffer for the current task.
+; Parameters: none
+; Returns:
+;	r1 = keyboard character or -1 if no character is available.
+;------------------------------------------------------------------------------
+;
 public KeybdGetChar:
 	phx
 	push	r4
 	ld		r4,RunningTCB
+kgc4:
 	cmp		r4,#MAX_TASKNO
 	bhi		nochar
-kgc4:
 	DisKeybd
 	ldx		KeybdTail,r4	; if keybdTail==keybdHead then there are no 
 	lda		KeybdHead,r4	; characters in the keyboard buffer
@@ -577,6 +592,7 @@ kcfk1
 	rts
 
 ;------------------------------------------------------------------------------
+; Tests the keyboard port directly.
 ; Check if there is a keyboard character available. If so return true (1)
 ; otherwise return false (0) in r1.
 ;------------------------------------------------------------------------------
