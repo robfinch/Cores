@@ -199,11 +199,11 @@ always @*
 	`CPY_IMM32:	res <= y - ir[39:8];
 	// The following results are available for CALC only after the DECODE/LOAD_MAC
 	// stage as the 'a' and 'b' side registers need to be loaded.
-	`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND:	res <= a + b + {31'b0,df&cf};
-	`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND:	res <= a - b - {31'b0,df&~cf&|Rt}; // Also CMP
-	`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_RIND:	res <= a & b;	// Also BIT
-	`OR_ZPX,`OR_IX,`OR_IY,`OR_ABS,`OR_ABSX,`OR_RIND:		res <= a | b;	// Also LD
-	`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_RIND:	res <= a ^ b;
+	`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND,`ADD_DSP:	res <= a + b + {31'b0,df&cf};
+	`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND,`SUB_DSP:	res <= a - b - {31'b0,df&~cf&|Rt}; // Also CMP
+	`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_RIND,`AND_DSP:	res <= a & b;	// Also BIT
+	`OR_ZPX,`OR_IX,`OR_IY,`OR_ABS,`OR_ABSX,`OR_RIND,`OR_DSP:		res <= a | b;	// Also LD
+	`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_RIND,`EOR_DSP:	res <= a ^ b;
 	`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	res <= b;
 	`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	res <= b;
 	`CPX_ZPX,`CPX_ABS:	res <= x - b;
@@ -225,6 +225,7 @@ always @*
 	`BMT_ZPX,`BMT_ABS,`BMT_ABSX:	res <= b & (32'b1 << acc[4:0]);
 	`TRB_ZPX,`TRB_ABS:	res <= ~a & b;
 	`TSB_ZPX,`TSB_ABS:	res <= a | b;
+	`SPL_ABS,`SPL_ABSX:	res <= b;
 	default:	res <= 33'd0;
 	endcase
 endmodule

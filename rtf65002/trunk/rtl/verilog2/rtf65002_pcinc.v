@@ -84,7 +84,7 @@ if (suppress_pcinc==4'hF)
 	`ORB_ABS,`LDX_ABSY,`LDY_ABSX,`ST_ABS,`STB_ABS,
 	`ADD_ABS,`SUB_ABS,`OR_ABS,`AND_ABS,`EOR_ABS,
 	`BMS_ABSX,`BMC_ABSX,`BMF_ABSX,`BMT_ABSX,
-	`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX: inc <= 4'd6;
+	`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`SPL_ABSX: inc <= 4'd6;
 	`ORB_ABSX,`ST_ABSX,`STB_ABSX,
 	`ADD_ABSX,`SUB_ABSX,`OR_ABSX,`AND_ABSX,`EOR_ABSX: inc <= 4'd7;
 	`PHP,`PHA,`PHX,`PHY,`PLP,`PLA,`PLX,`PLY: inc <= 4'd1;
@@ -93,6 +93,7 @@ if (suppress_pcinc==4'hF)
 	`PG2:	inc <= 4'd1;
 	`TON,`TOFF:	inc <= 4'd1;
 	`PUSHA,`POPA: inc <= 4'd1;
+	`SPL_ABS:	inc <= 4'd5;
 	default:	inc <= 4'd0;	// unimplemented instruction
 	endcase
 else

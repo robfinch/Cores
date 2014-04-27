@@ -210,6 +210,7 @@ front			EQU		bgdt_valid + 1
 rear			EQU		front + 1
 panicking		EQU		rear + 1
 fs_active		EQU		panicking + 1
+DOS_DATA_ENDS	EQU		0x0540000
 
 ; number of buffers for the inode allocation map
 ; number of buffers for inode array

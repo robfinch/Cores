@@ -65,6 +65,8 @@ parameter CMPS1 = 6'd34;
 parameter HALF_CALC = 6'd35;
 parameter MVN816 = 6'd36;
 
+parameter SPIN_CYCLES = 8'd30;
+
 input rst_md;		// reset mode, 1=emulation mode, 0=native mode
 input rst_i;
 input clk_i;
@@ -112,6 +114,8 @@ wire xb16 = m816 & ~x_bit;
 wire [7:0] sr8 = m816 ? {nf,vf,m_bit,x_bit,df,im,zf,cf} : {nf,vf,1'b0,bf,df,im,zf,cf};
 reg nmi1,nmi_edge;
 reg wai;
+reg spi;		// spinlock interrupt
+reg [7:0] spi_cnt;
 reg wrrf;		// write register file
 reg [31:0] acc;
 reg [31:0] x;
@@ -147,6 +151,7 @@ reg [3:0] suppress_pcinc;
 reg [31:0] pc;
 reg [31:0] opc;
 wire [3:0] pc_inc;
+reg [3:0] pc_inc2;
 wire [3:0] pc_inc8;
 wire [31:0] pcp2 = pc + (32'd2 & suppress_pcinc);	// for branches
 wire [31:0] pcp4 = pc + (32'd4 & suppress_pcinc);	// for branches
@@ -202,9 +207,9 @@ wire resv8,resv16,resv32;
 wire resc8 = res8[8];
 wire resc16 = res16[16];
 wire resc32 = res[32];
-wire resz8 = res8[7:0]==8'h00;
-wire resz16 = res16[15:0]==16'd0;
-wire resz32 = res[31:0]==32'd0;
+wire resz8 = ~|res8[7:0];
+wire resz16 = ~|res16[15:0];
+wire resz32 = ~|res[31:0];
 wire resn8 = res8[7];
 wire resn16 = res16[15];
 wire resn32 = res[31];
@@ -656,6 +661,8 @@ if (rst_i) begin
 	dat_o <= 32'd0;
 	nmi_edge <= 1'b0;
 	wai <= 1'b0;
+	spi <= 1'b0;
+	spi_cnt <= SPIN_CYCLES;
 	cf <= 1'b0;
 	ir <= 64'hEAEAEAEAEAEAEAEA;
 	imiss <= `FALSE;

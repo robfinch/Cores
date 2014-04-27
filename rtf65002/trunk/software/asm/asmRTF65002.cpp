@@ -473,7 +473,10 @@ namespace RTFClasses
 		int Rt = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
 		int Rb = ((Operands65002 *)getCpu()->getOp())->op[1].r1;
 		d = ((Operands65002 *)getCpu()->getOp())->op[1].val.value;
-		theAssembler.emit8(op->oc);
+		if (op->oc & 0xff00)
+			theAssembler.emit16(op->oc);
+		else
+			theAssembler.emit8(op->oc);
 		theAssembler.emit8((Rb<<4)|Ra);
 		theAssembler.emit16(((d<<4)&0xfff0)|Rt);
 	}
@@ -690,7 +693,10 @@ namespace RTFClasses
 		int Rt = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
 
 		d = ((Operands65002 *)getCpu()->getOp())->op[1].val.value;
-		theAssembler.emit8(o->oc);
+		if (o->oc & 0xff00)
+			theAssembler.emit16(o->oc);
+		else
+			theAssembler.emit8(o->oc);
 		theAssembler.emit8((Rt<<4)|Ra);
 		theAssembler.emit32(d);
 	}
@@ -851,7 +857,10 @@ namespace RTFClasses
 		int Rb = ((Operands65002 *)getCpu()->getOp())->op[1].r1;
 
 		d = ((Operands65002 *)getCpu()->getOp())->op[1].val.value;
-		theAssembler.emit8(o->oc);
+		if (o->oc & 0xff00)
+			theAssembler.emit16(o->oc);
+		else
+			theAssembler.emit8(o->oc);
 		theAssembler.emit8((Rb<<4)|Ra);
 		theAssembler.emit8(Rt);
 		theAssembler.emit32(d);
@@ -1034,7 +1043,10 @@ namespace RTFClasses
 		int Rt = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
 		int Rb = ((Operands65002 *)getCpu()->getOp())->op[1].r1;
 
-		theAssembler.emit8(o->oc);
+		if (o->oc & 0xff00)
+			theAssembler.emit16(o->oc);
+		else
+			theAssembler.emit8(o->oc);
 		theAssembler.emit8((Rb<<4)|Ra);
 		theAssembler.emit8(Rt);
 	}
@@ -1175,8 +1187,11 @@ namespace RTFClasses
 		__int32 d;
 		int Ra = 0;
 		int Rt = ((Operands65002 *)getCpu()->getOp())->op[0].r1;
-		d = ((Operands65002 *)getCpu()->getOp())->op[2].val.value;
-		theAssembler.emit8(op->oc);
+		d = ((Operands65002 *)getCpu()->getOp())->op[1].val.value;
+		if (op->oc & 0xff00)
+			theAssembler.emit16(op->oc);
+		else
+			theAssembler.emit8(op->oc);
 		theAssembler.emit8((Rt<<4)|Ra);
 		theAssembler.emit8(d&0xff);
 	}
@@ -1187,7 +1202,10 @@ namespace RTFClasses
 		int Ra = 0;
 		int Rt = 1;
 		d = ((Operands65002 *)getCpu()->getOp())->op[0].val.value;
-		theAssembler.emit8(op->oc);
+		if (op->oc & 0xff00)
+			theAssembler.emit16(op->oc);
+		else
+			theAssembler.emit8(op->oc);
 		theAssembler.emit8((Rt<<4)|Ra);
 		theAssembler.emit8(d&0xff);
 	}

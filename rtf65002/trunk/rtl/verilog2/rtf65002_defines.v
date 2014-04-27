@@ -524,6 +524,8 @@
 `define BMT_ABSX	9'h17E
 `define HOFF		9'h158
 `define CMPS		9'h144
+`define SPL_ABS		9'h18E
+`define SPL_ABSX	9'h19E
 
 `define LEA_ZPX		9'h1D5
 `define LEA_IX		9'h1C1

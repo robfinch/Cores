@@ -39,7 +39,7 @@ IFETCH:
 			next_state(DECODE);
 			vect <= `NMI_VECT;
 		end
-		else if (irq_i & gie & !isExec & !isAtni) begin
+		else if ((irq_i|spi) & gie & !isExec & !isAtni) begin
 			wai <= 1'b0;
 			if (im) begin
 				if (ttrig) begin
@@ -79,7 +79,14 @@ IFETCH:
 			else begin
 				ir[7:0] <= `BRK;
 				hwi <= `TRUE;
-				vect <= {vbr[31:9],irq_vect,2'b00};
+				if (spi) begin
+					spi <= 1'b0;
+					spi_cnt <= SPIN_CYCLES;
+					vect <= {vbr[31:9],9'd3,2'b00};
+				end
+				else begin
+					vect <= {vbr[31:9],irq_vect,2'b00};
+				end
 				next_state(DECODE);
 			end
 		end
@@ -224,5 +231,6 @@ IFETCH:
 			begin zf <= resz32; end
 		`BMT_ZPX,`BMT_ABS,`BMT_ABSX:
 			begin zf <= resz32; nf <= resn32; end
+//		`SPL:	begin if (radr==65002) acc <= 32'h52544600; end
 		endcase
 	end

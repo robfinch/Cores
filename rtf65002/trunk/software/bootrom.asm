@@ -179,7 +179,7 @@ keybd_sema	EQU		0xFFDB0030
 iof_sema	EQU		0xFFDB0040
 mbx_sema	EQU		0xFFDB0050
 freembx_sema	EQU		0xFFDB0060
-MEM_SEMA	EQU		0xFFDB0070
+mem_sema	EQU		0xFFDB0070
 freemsg_sema	EQU	0xFFDB0080
 tcb_sema	EQU		0xFFDB0090
 readylist_sema	EQU	0xFFDB00A0
@@ -303,7 +303,6 @@ SPRRAM		EQU		0xFFD80000
 THRD_AREA	EQU		0x00000000	; threading area 0x04000000-0x40FFFFF
 BITMAPSCR	EQU		0x00100000
 SECTOR_BUF	EQU		0x01FBEC00
-BIOS_STACKS	EQU		0x01FC0000	; room for 256 1kW stacks
 
 BYTE_SECTOR_BUF	EQU	SECTOR_BUF<<2
 PROG_LOAD_AREA	EQU		0x0300000<<2
@@ -347,7 +346,7 @@ MT_IRQ		EQU		0xFFFFFFF0
 MT_GETCHAR	EQU		0xFFFFFFEF
 
 			.bss
-			.org		0x01FBCE00
+			.org		0x01FBA000
 
 ; Task control blocks, room for 256 tasks
 NR_TCB			EQU		256
@@ -379,10 +378,21 @@ TCB_PrvTo		fill.b	NR_TCB,0	;	EQU		0x01FBE000
 TCB_MbxList		fill.b	NR_TCB,0	;	EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
 TCB_mbx			fill.b	NR_TCB,0	;	EQU		0x01FBCE00
 
+NR_MMU_MAP		EQU		64
+VPM_bitmap_b0	fill.b	NR_MMU_MAP * 16,0
+VPM_bitmap_b1	fill.b	NR_MMU_MAP * 16,0
+nPagesFree		db		0
+
 			.bss
-			.org		0x01C00000
+			.org		0x01D00000
 SCREEN_SIZE		EQU		8192
-BIOS_SCREENS	fill.b	SCREEN_SIZE * NR_TCB	; 0x01C00000 to 0x01DFFFFF
+BIOS_SCREENS	fill.b	SCREEN_SIZE * NR_TCB	; 0x01D00000 to 0x01EFFFFF
+
+; preallocated stacks for TCBs
+			.bss
+			.org		0x01FC0000				; to 0x01FFFFFF
+STACK_SIZE		EQU		$400					; 1kW
+BIOS_STACKS		fill.b	STACK_SIZE * NR_TCB		; room for 256 1kW stacks
 
 
 ; Device Control Block
@@ -412,7 +422,7 @@ DCBs		fill	NR_DCB * DCB_SIZE,0		;	EQU		MSG_END
 DCBs_END	EQU		DCBs + DCB_SIZE * NR_DCB
 
 HeapStart	EQU		0x00540000
-HeapEnd		EQU		0x017FFFFF
+HeapEnd		EQU		BIOS_SCREENS-1
 
 ; Bitmap of tasks requesting the I/O focus
 ;
@@ -453,11 +463,15 @@ keybdmsg_d1		db		0
 keybdmsg_d2		db		0
 keybd_mbx		db		0
 keybd_char		db		0
+keybdIsSetup	db		0
+keybdLock		db		0
+keybdInIRQ		db		0
 iof_switch		db		0
 clockmsg_d1		db		0
 clockmsg_d2		db		0
 tcbsema_d1		db		0
 tcbsema_d2		db		0
+mmu_acc_save	db		0
 
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
@@ -510,6 +524,41 @@ BASIC_SESSION	db		0
 gr_cmd		db		0
 
 startSector	EQU		0x7F0
+
+macro mStartTask pri,flags,start_addr,param
+	lda		pri
+	ldx		flags
+	ldy		start_addr
+	ld		r4,param
+	int		#4
+	db		1
+endm
+
+macro mSleep tm
+	lda		tm
+	int		#4
+	db		5
+endm
+
+macro mAllocMbx
+	int		#4
+	db		6
+endm
+
+macro mWaitMsg mbx,tmout
+	lda		mbx
+	ldx		tmout
+	int		#4
+	db		10
+endm
+
+macro mPostMsg	mbx,d1,d2
+	lda		mbx
+	ldx		d1
+	ldy		d2
+	int		#4
+	db		8
+endm
 
 macro DisTimer
 	pha
@@ -649,14 +698,18 @@ st_nommu:
 	sta		(x)
 	lda		#slp_rout
 	sta		1,x
-	lda		#reschedule
+	lda		#reschedule		; must be initialized after vectors are initialized to the break vector
 	sta		2,x
 	lda		#spinlock_irq
 	sta		3,x
+	lda		#syscall_int
+	sta		4,x
 	lda		#KeybdRST
 	sta		448+1,x
 	lda		#p1000Hz
 	sta		448+2,x
+	lda		#MTKTick
+	sta		448+3,x
 	lda		#KeybdIRQ
 	sta		448+15,x
 	lda		#SerialIRQ
@@ -702,10 +755,7 @@ st_nommu:
 	; This will likely cause an interrupt right away because the timer
 	; pulses run since power-up.
 	cli						
-	lda		#PRI_LOWEST
-	ldx		#0
-	ldy		#IdleTask
-	jsr		StartTask
+	mStartTask	#PRI_LOWEST,#0,#IdleTask,#0
 	lda		CONFIGREC		; do we have a serial port ?
 	bit		#32
 	beq		st7
@@ -730,10 +780,12 @@ st8:
 	cli						
 	lda		#14
 	sta		LEDS
-	lda		#PRI_NORMAL
-	ldx		#0
-	ldy		#KeybdSetup
-	jsr		StartTask
+	stz		keybdIsSetup
+	mStartTask	#PRI_NORMAL,#0,#KeybdSetup,#0
+;	lda		#PRI_NORMAL
+;	ldx		#0
+;	lea		r3,KeybdStatusLEDs
+;	jsr		StartTask
 	lda		#6
 	sta		LEDS
 
@@ -794,21 +846,34 @@ ibmp1:
 ; Initialize the 64 maps of the MMU.
 ; Initially all the maps are set the same:
 ; Virtual Page  Physical Page
-; 000-382		383 (invalid page marker)
-; 384-511		1920-2047
+; 000-319		000 (invalid page marker)
+; 320-511		1856-2047
 ; Note that there are only 512 virtual pages per map, and 2048 real
 ; physical pages of memory. This limits maps to 32MB.
 ; This range includes the BIOS assigned stacks for the tasks and tasks
 ; virtual video buffers.
-; Note that physical pages 0 to 1919 are not mapped, but do exist. They may
+; Note that physical pages 0 to 1855 are not mapped, but do exist. They may
 ; be mapped into a task's address space as required.
-; If changing the maps the last 128 pages (8MB) of the map should always point
-; to the BIOS area. Don't change map entries 384-511 or the system may
+; If changing the maps the last 192 pages (12MB) of the map should always point
+; to the BIOS area. Don't change map entries 320-511 or the system may
 ; crash.
 ; If the rts at the end of this routine works, then memory was mapped
 ; successfully.
+;
+; System Memory Map (Physical Addresses)
+; Page
+; 0000			BASIC ROM, scratch memory ( 1 page global)
+; 0001-0063		unassigned (4MB - 63 pages)
+; 0064-0191		Bitmap video memory (8 MB - 128 pages)
+; 0192-0336		DOS usage, disk cache etc. (9.4MB - 145 pages)
+; 0337-1855		Heap space (99MB - 1519 pages)
+; 1856-1983		Virtual Screen buffers (8MB - 128 pages)
+; 1984-2047		BIOS/OS area (4MB - 64 pages)
+;	2032-2047		Stacks area (1MB - 16 pages)
+; 65535			BIOS ROM (64kB - 1 Page global)
+; 261952-262015		I/O area (4MB - 64 pages global)
 ;------------------------------------------------------------------------------
-INV_PAGE	EQU	383		; page umber to use for invalud entries
+INV_PAGE	EQU	000		; page number to use for invalid entries
 
 InitMMU:
 	lda		#1
@@ -819,13 +884,13 @@ immu1:
 	sta		MMU_AKEY	; set access key for map
 	ldx		#0
 immu2:
-	; set the first 384 pages to invalid page marker
-	; set the last 128 pages to physical page 1920-2047
+	; set the first 320 pages to invalid page marker
+	; set the last 192 pages to physical page 1856-2047
 	ld		r4,#INV_PAGE
-	cpx		#384
+	cpx		#320
 	blo		immu3
 	ld		r4,r2
-	add		r4,r4,#1536	; 1920-384
+	add		r4,r4,#1536	; 1856-320
 immu3:
 	st		r4,MMU,x
 	inx
@@ -840,14 +905,34 @@ immu3:
 	nop
 	nop
 
+;------------------------------------------------------------------------------
+; Note that when switching the memory map, the stack address changes, and may
+; even be mapped out. We cannot just "rts" from these functions. The return
+; address has to be saved off and an register indirect jump performed.
+;------------------------------------------------------------------------------
+;
 EnableMMUMapping:
-	pha
-	lda		#1
-	sta		MMU_MAPEN
+	lda		RunningTCB	; no need to enable mapping for BIOS task
+	cmp		#1
+	blo		DisableMMUMapping
+	lda		#12			; is there even an MMU present ?
+	bmt		CONFIGREC
+	beq		emm1
 	pla
+	sec					; use a rotate to avoid consuming another processor register
+	rol		MMU_MAPEN	; set MMU_MAPEN = 1
+	jmp		(r1)
+emm1:
 	rts
+
 DisableMMUMapping:
-	stz		MMU_MAPEN
+	lda		#12			; is there even an MMU present ?
+	bmt		CONFIGREC
+	beq		dmm1
+	pla					; get return address into acc
+	stz		MMU_MAPEN	; disabling mapping will change stack placement
+	jmp		(r1)
+dmm1:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1946,10 +2031,11 @@ Prompt8a:
 Prompt7:
 	cmp		#'B'			; $B - start tiny basic
 	bne		Prompt4
-	lda		#3
-	ldy		#CSTART
-	ldx		#0
-	jsr		StartTask
+	mStartTask	#PRI_LOW,#0,#CSTART,#0
+;	lda		#3
+;	ldy		#CSTART
+;	ldx		#0
+;	jsr		StartTask
 ;	jsr		CSTART
 	bra		Monitor
 Prompt4:
@@ -1959,11 +2045,12 @@ Prompt4:
 	cmp		#0
 	bne		bsess1
 	inc		BASIC_SESSION
-	lda		#3				; priority level 3
-	ldy		#$F000			; start address $F000
-	ldx		#$00000000		; flags: 
+;	lda		#3				; priority level 3
+;	ldy		#$F000			; start address $F000
+;	ldx		#$00000000		; flags: 
 ;	jmp		(y)
-	jsr		($FFFFC004>>2)		; StartTask
+;	jsr		($FFFFC004>>2)		; StartTask
+	mStartTask	#PRI_LOW,#0,#$F000,#0
 	bra		Monitor
 bsess1:
 	inc		BASIC_SESSION
@@ -2015,10 +2102,11 @@ Prompt12:
 Prompt13:
 	cmp		#'P'
 	bne		Prompt14
-	lda		#2
-	ldx		#0
-	ldy		#Piano
-	jsr		($FFFFC004>>2)		; StartTask
+;	lda		#2
+;	ldx		#0
+;	ldy		#Piano
+;	jsr		($FFFFC004>>2)		; StartTask
+	mStartTask	#PRI_NORMAL,#0,#Piano,#0
 	jmp		Monitor
 
 Prompt14:
@@ -2070,10 +2158,11 @@ Prompt18:
 Prompt16:
 	cmp		#'e'
 	bne		Prompt17
-	lda		#1
-	ldx		#0
-	ldy		#eth_main
-	jsr		StartTask
+;	lda		#1
+;	ldx		#0
+;	ldy		#eth_main
+;	jsr		StartTask
+	mStartTask	#PRI_HIGH,#0,#eth_main,#0
 ;	jsr		eth_main
 	jmp		Monitor
 Prompt17:
@@ -2104,10 +2193,11 @@ Prompt20:
 Prompt21:
 	cmp		#'m'
 	bne		Monitor
-	lda		#3
-	ldx		#0
-	ldy		#test_mbx_prg
-	jsr		StartTask
+;	lda		#3
+;	ldx		#0
+;	ldy		#test_mbx_prg
+;	jsr		StartTask
+	mStartTask	#PRI_LOW,#0,#test_mbx_prg,#0
 	bra		Monitor
 
 message "Prompt16"
@@ -2576,12 +2666,12 @@ Beep:
 	sta		PSGADSR0
 	lda		#0x1104			; gate, output enable, triangle waveform
 	sta		PSGCTRL0
-	lda		#1000			; delay about 1s
-	jsr		Sleep
+;	lda		#1000			; delay about 1s
+	mSleep	#1000
 	lda		#0x0104			; gate off, output enable, triangle waveform
 	sta		PSGCTRL0
-	lda		#1000			; delay about 1s
-	jsr		Sleep
+;	lda		#1000			; delay about 1s
+	mSleep	#1000
 	lda		#83
 	sta		LEDS
 	lda		#0x0000			; gate off, output enable off, no waveform
@@ -3519,7 +3609,9 @@ include "ReadTemp.asm"
 ;==============================================================================
 MemInit:
 	lda		#1					; initialize memory semaphore
-	sta		MEM_SEMA
+	sta		mem_sema
+	lda		#1519
+	sta		nPagesFree
 	lda		#$4D454D20
 	sta		HeapStart+MEM_CHK
 	sta		HeapStart+MEM_FLAG
@@ -3540,17 +3632,25 @@ MemInit:
 	ldx		#0
 	ldy		#PageMap
 	stos
-	lda		#64				; 64*32 = 2048 bits
-	ldx		#0
-	ldy		#PageMap2
-	stos
-	; Mark the last 128 pages as used (by the OS)
-	; 4-32 bit words
+	; Mark the last 192 pages as used (by the OS)
+	; 6-32 bit words
 	lda		#-1
+	sta		PageMap+58
+	sta		PageMap+59
 	sta		PageMap+60
 	sta		PageMap+61
 	sta		PageMap+62
 	sta		PageMap+63
+	; Mark page #0 used
+	lda		#1		
+	sta		PageMap
+	; Mark 64-336 used (DOS)
+	lda		#64
+meminit1:
+	bms		PageMap
+	ina
+	cmp		#336
+	blo		meminit1
 	rts
 
 ReportMemFree:
@@ -3575,7 +3675,7 @@ MemAlloc:
 	phy
 	push	r4
 memaSpin:
-	ldx		MEM_SEMA+1
+	ldx		mem_sema+1
 	beq		memaSpin
 	ldx		#HeapStart
 mema4:
@@ -3597,14 +3697,14 @@ mema2:
 	sub		r4,r4,r1
 	cmp		r4,#4			; is the block large enough to split
 	bpl		memaSplit
-	stz		MEM_SEMA+1
+	stz		mem_sema+1
 	txa
 	pop		r4
 	ply
 	plx
 	rts
 mema3:						; insufficient memory
-	stz		MEM_SEMA+1
+	stz		mem_sema+1
 	pop		r4
 	ply
 	plx
@@ -3621,7 +3721,7 @@ memaSplit:
 	sty		MEM_NEXT,r4
 	st		r4,MEM_PREV,y
 	ld		r1,r4
-	stz		MEM_SEMA+1
+	stz		mem_sema+1
 	pop		r4
 	ply
 	plx
@@ -3637,7 +3737,7 @@ MemFree:
 	phx
 	phy
 memfSpin:
-	ldx		MEM_SEMA+1
+	ldx		mem_sema+1
 	beq		memfSpin
 	ldx		MEM_FLAG,r1
 	cpx		#$6D656D20	; is the block allocated ?
@@ -3663,135 +3763,13 @@ memf3:
 	beq		memf1		; no previous block
 	sty		MEM_NEXT,x
 memf1:
-	stz		MEM_SEMA+1
+	stz		mem_sema+1
 	ply
 	plx
 memf2:
 	rts
 
-;------------------------------------------------------------------------------
-; Allocate a memory page from the available memory pool.
-; Returns a pointer to the page in memory. The address returned is the
-; virtual memory address.
-;------------------------------------------------------------------------------
-AllocateMemPage:
-	php
-	phx
-	phy
-	lda		#0
-	ldx		#2048
-	cli
-amp2:
-	bmt		PageMap
-	beq		amp1
-	ina
-	dex
-	bne		amp2
-	; Here all memory pages are already in use. No more memmory is available.
-	ply
-	plx
-	plp
-	lda		#0
-	rts
-	; Here we found an unallocated memory page. Next find a spot in the MMU
-	; map to place the page.
-amp1:
-	; Find unallocated map slot in the MMU
-	ldx		RunningTCB		; set access key for MMU
-	stx		MMU_AKEY
-	ldx		#0
-amp4:
-	ldy		MMU,x
-	cpy		#INV_PAGE
-	beq		amp3
-	inx
-	cpx		#383
-	bne		amp4
-	; Here we searched the entire MMU slots and none were available
-	ply
-	plx
-	plp
-	lda		#0		; return NULL pointer
-	rts
-amp3:
-	bms		PageMap		; mark page as allocated
-	sta		MMU,x		; put the page# into the map slot
-	asl		r2,r2,#14	; pages are 16kW in size
-	add		r1,r2,#DRAM_BASE	; add in base address
-	ply
-	plx
-	plp
-	rts
 
-;------------------------------------------------------------------------------
-; Parameters:
-;	r1 = size of allocation in words
-; Returns:
-;	r1 = word pointer to memory
-; No MMU
-;------------------------------------------------------------------------------
-;
-AllocMemPages:
-	php
-	phx
-	phy
-	push	r4
-	sei
-amp5:
-	tay
-	lsr		r3,r3,#14	; convert amount to #pages
-	iny					; round up
-	tyx					; x = request size in pages
-	; Search for a group of free pages large enough to satisfy the request
-	lda		#0
-amp7:
-	bmt		PageMap		; test for a free page
-	bne		amp6		; not a free page
-	ld		r4,r1		; remember the page we were on
-	cpx		#1			; did we find enough free pages ?
-	bls		amp8
-	dex					; keep checking for next free page
-	ina
-	cmp		#1919		; did we hit end of map ?
-	bhi		amp11		; can't allocate enough memory
-	bra		amp7		; go back and test for another free page
-amp6:
-	tyx					; reset size count
-	ina					; move to the next page
-	cmp		#1919		; test if hit end of map
-	bls		amp7
-amp11:
-	; Insufficient memory, return NULL pointer
-	lda		#0
-	pop		r4
-	ply
-	plx
-	plp
-	rts
-
-	; Mark pages as allocated
-amp8:
-	ld		r1,r4
-amp10:
-	bms		PageMap
-	bmc		PageMap2
-	cpy		#1
-	bls		amp9
-	dey
-	ina
-	cmp		#1919
-	blo		amp10
-amp9:
-	bms		PageMap
-	bms		PageMap2	; flag end of allocation
-	ld		r1,r4
-	asl		r1,r1,#14	; * 16kW
-	add		r1,r1,#DRAM_BASE
-	pop		r4
-	ply
-	plx
-	plp
-	rts
 
 ;------------------------------------------------------------------------------
 ; brk
@@ -3818,7 +3796,7 @@ _brk:
 
 	; Here we're increasing the amount of memory allocated to the program.
 	;
-	cmp		r1,#383			; max 383 RAM pages
+	cmp		r1,#320			; max 320 RAM pages
 	bhi		brk2
 	sub		r1,r1,r4		; number of new pages
 	cmp		r1,mem_pages_free	; are there enough free pages ?
@@ -3918,123 +3896,7 @@ sbrk2:
 	plx
 	rts
 
-
-;------------------------------------------------------------------------------
-; Parameters:
-; r1 = virtual memory address
-;------------------------------------------------------------------------------
-;
-FreeMemPage:
-	php
-	phx
-	sei
-	; First mark the page as available in the page map.
-	pha
-	jsr		VirtToPhys
-	sub		r1,r1,#DRAM_BASE
-	lsr		r1,r1,#14
-	bmc		PageMap
-	pla
-	; Now mark the MMU slot as empty
-	sub		r1,r1,#DRAM_BASE
-	lsr		r1,r1,#14	; / 16kW r1 = page # now
-	ldx		RunningTCB
-	stx		MMU_AKEY
-	tax
-	lda		#INV_PAGE
-	sta		MMU,x
-	plx
-	plp
-	rts
-
-;------------------------------------------------------------------------------
-; Parameters:
-;	r1 = pointer to memory
-;------------------------------------------------------------------------------
-;
-FreeMemPages:
-	php
-	phx
-	sei
-	cmp		#0			; test for a proper pointer
-	beq		fmp4
-	; Turn the memory pointer into a bit index
-	sub		r1,r1,#DRAM_BASE
-	lsr		r1,r1,#14	; / 16kW
-	cmp		#1919		; make sure index is sensible
-	bhi		fmp4
-fmp2:
-	bmt		PageMap2	; Test to see if end of allocation
-	bne		fmp3
-	bmc		PageMap		; deallocate page
-	ina
-	cmp		#1919		; last 128 pages aren't freeanle
-	bls		fmp2
-fmp3
-	; Clear the last bit
-	bmc		PageMap
-	bmc		PageMap2
-fmp4:
-	plx
-	plp
-	rts
-
-;------------------------------------------------------------------------------
-; Convert a virtual address to a physical address.
-;------------------------------------------------------------------------------
-VirtToPhys:
-	phx
-	php
-	sei
-	ldx		RunningTCB
-	stx		MMU_AKEY
-	sub		r1,r1,#DRAM_BASE
-	lsr		r2,r1,#14	; convert to MMU index
-	lda		MMU,x		; a = physical page#
-	asl		r1,r1,#14	; *16kW
-	add		r1,r1,#DRAM_BASE
-	plp
-	plx
-	rts
-
-;------------------------------------------------------------------------------
-; PhysToVirt
-;
-; Convert a physical address to a virtual address. A little more complex
-; than converting virtual to physical addresses as the MMU map table must
-; be searched for the physcial page.
-;
-; Parameters:
-;	r1 = physical address to translate
-; Returns:
-;	r1 = virtual address
-;------------------------------------------------------------------------------
-PhysToVirt:
-	phx
-	php
-	sei
-	ldx		RunningTCB
-	stx		MMU_AKEY
-	sub		r1,r1,#DRAM_BASE
-	lsr		r1,r1,#14	; /16k to get index
-	ldx		#0
-ptv2:
-	cmp		MMU,x
-	beq		ptv1
-	inx
-	cpx		#512
-	bne		ptv2
-	; Return NULL pointer if address translation fails
-	plp
-	plx
-	lda		#0
-	rts
-ptv1:
-	asl		r1,r2,#14	; * 16k
-	plp
-	plx
-	add		r1,r1,#DRAM_BASE
-	rts
+include "memory.asm"
 
 ;------------------------------------------------------------------------------
 ; Bus Error Routine
@@ -4255,6 +4117,7 @@ msgPerr:
 ;       ||
 ;==============================================================================
 	org		$FFFFC000
+syscall_vectors:
 	dw		MTKInitialize
 	dw		StartTask
 	dw		ExitTask
@@ -4285,6 +4148,8 @@ MTKInitialize:
 	and		r2,#-2
 	lda		#reschedule
 	sta		2,x
+	lda		#syscall_int
+	sta		4,x
 	lda		#MTKTick
 	sta		448+3,x
 	stz		UserTick
@@ -4424,7 +4289,9 @@ it2:
 	cmp		#TS_SLEEP
 	bne		it1
 	txa
-	jsr		KillTask
+	int		#4				; KillTask function
+	db		3
+;	jsr		KillTask
 it1:
 	inc		TestTask
 	cli						; enable interrupts
@@ -5912,6 +5779,59 @@ spi1:
 	rti
 
 ;------------------------------------------------------------------------------
+; System Call Interrupt
+;
+;	The system function must execute with direct access to all of memory,
+; hence memmory mapping is turned off before the call, then back on again
+; after the call. This is complicated by the need to translate the stack
+; pointer between virtual and physical addresses.
+;
+; Stack Frame
+; 4,sp:	 return address
+; 3,sp:	 status register
+; 2,sp:  r6 save
+; 1,sp:  r7 save
+; 0,sp:  r8 save
+;------------------------------------------------------------------------------
+;
+syscall_int:
+	cli
+	cld
+	push	r6					; save off some working registers
+	push	r7
+	push	r8
+	ld		r6,4,sp				; get return address into r6
+	lb		r7,0,r6				; get static call number parameter into r7
+	inc		r6					; update return address
+	st		r6,4,sp
+	; translate the stack address to a physical address
+	pha							
+	tsr		sp,r1
+	jsr		VirtToPhys
+	ld		r8,r1
+	jsr		DisableMMUMapping
+	trs		r8,sp
+	; The stack pointer should now be pointing to the same memory cell, except as
+	; a physical address rather than a virtual one.
+	pla
+	ld		r6,(syscall_vectors>>2),r7	; load the vector into r6
+	jsr		(r6)				; do the system function
+	; translate the stack address back to a virtual address
+	pha
+	tsr		sp,r1
+	jsr		PhysToVirt
+	ld		r8,r1
+	jsr		EnableMMUMapping
+	trs		r8,sp
+	; The stack pointer should now be pointing to the same memory cell, except as
+	; a virtual address rather than a physical one.
+	pla
+	pop		r8
+	pop		r7
+	pop		r6
+	rti
+
+;------------------------------------------------------------------------------
 ; Reschedule tasks to run without affecting the timeout list timing.
 ;------------------------------------------------------------------------------
 ;
@@ -6041,10 +5961,17 @@ sttr2:
 ;	lda		CONFIGREC
 ;	bit		#4096
 	beq		sttr4
+	; The BIOS task has a "flat" memory map of all of memory
+	cpx		#0
+	bhi		sttr7
+	jsr		DisableMMUMapping
+	bra		sttr4
+sttr7:
 	lda		TCB_mmu_map,x
 	sta		MMU_OKEY			; select the mmu map for the task
 	lda		#2
 	sta		MMU_FUSE			; set fuse to 2 clocks before mapping starts
+	jsr		EnableMMUMapping
 sttr4:
 	lda		#99
 	sta		LEDS
@@ -6160,35 +6087,25 @@ pm1						; must update the return address !
 test_mbx_prg:
 	jsr		RequestIOFocus
 	lda		#test_mbx	; where to put mailbox handle
-	jsr		AllocMbx
+	mAllocMbx
 	ldx		#5
 	jsr		PRTNUM
-	lda		#4			; priority
-	ldx		#0			; no flags
-	ldy		#test_mbx_prg2
-	jsr		StartTask
+	mStartTask	#PRI_LOWEST,#0,#test_mbx_prg2,#0
 tmp2:
-	lda		test_mbx
-	ldx		#test_D1
-	ldy		#test_D2
-	ld		r4,#100
-	jsr		WaitMsg
+	mWaitMsg	test_mbx,#100
 	cmp		#E_Ok
 	bne		tmp1
-	lda		test_D1
+	txa
 	jsr		DisplayStringB
 	bra		tmp2
 tmp1:
-	ldx		#5
+	ldx		#4
 	jsr		PRTNUM
 	bra		tmp2
 
 test_mbx_prg2:
 tmp2a:
-	lda		test_mbx		; get mailbox handle
-	ldx		#msg_hello		; MSG D1
-	ldy		#0				; MSG D2
-	jsr		PostMsg
+	mPostMsg	test_mbx,#msg_hello,#0
 	bra		tmp2a
 msg_hello:
 	db		"Hello from RTF",13,10,0

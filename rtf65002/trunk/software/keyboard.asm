@@ -178,6 +178,8 @@ public KeybdSetup:
 	ldy		#1				; number of DCB's to setup
 	ld		r4,#1			; Flag: is okay to replace existing device
 ;	jsr		InitDevDrv
+	stz		keybdInIRQ
+	inc		keybdIsSetup	; set the setup flag
 	rts
 
 KeybdInit:
@@ -282,13 +284,11 @@ wkbdbad:
 WaitForKeybdAck2:
 	phy
 	ldy		RunningTCB
-	DisKeybd
 WaitForKeybdAck2a:
 	lda		KeybdAck,y
 	cmp		r1,r2
 	bne		WaitForKeybdAck2a
 	stz		KeybdAck,y
-	EnKeybd
 	ply
 	rts
 
@@ -367,6 +367,7 @@ message "KeybdIRQ"
 
 public IKeybdIRQ:
 public KeybdIRQ:
+	inc		keybdInIRQ
 	cld
 	pha
 	phx
@@ -419,6 +420,7 @@ KeybdIrq2:
 	dea
 	and		#$f
 	stx		KeybdLocks,r4
+	stx		keybdLock			; global keyboard lock status
 	asl		r4,r4,#4			; * 16
 	add		r1,r1,r4
 	stx		KeybdBuffer,r1		; store character in buffer
@@ -440,6 +442,7 @@ KeybdIRQd:
 	ply
 	plx
 	pla
+	dec		keybdInIRQ
 	rti
 
 
@@ -520,11 +523,14 @@ IKeybdGetChar:
 public KeybdGetChar:
 	phx
 	push	r4
-	ld		r4,RunningTCB
 kgc4:
+	ld		r0,keybdIsSetup	; the system might call GetChar before the keyboard
+	beq		nochar			; is setup.
+	ld		r4,RunningTCB
 	cmp		r4,#MAX_TASKNO
 	bhi		nochar
-	DisKeybd
+	lda		#15				; disable keyboard interrupt
+	sta		PIC+2
 	ldx		KeybdTail,r4	; if keybdTail==keybdHead then there are no 
 	lda		KeybdHead,r4	; characters in the keyboard buffer
 	cmp		r1,r2
@@ -541,7 +547,8 @@ kgc4:
 	stx		KeybdTail,r4
 	ldx		KeybdEcho,r4
 	php
-	EnKeybd
+	ldx		#15				; re-enable keyboard interrupt
+	stx		PIC+3
 	plp
 	beq		kgc3			; status from the ldx
 	cmp		#CR
@@ -552,7 +559,8 @@ kgc8:
 	jsr		DisplayChar
 	bra		kgc3
 kgc2:
-	EnKeybd
+	lda		#15				; re-enable keyboard interrupt
+	sta		PIC+3
 nochar:
 	lda		#-1
 kgc3:
@@ -574,6 +582,8 @@ message "KeybdCheckForKey"
 public KeybdCheckForKey:
 	phx
 	push	r4
+	ld		r0,keybdIsSetup
+	beq		kcfk2
 	ld		r4,RunningTCB
 	sei
 	lda		KeybdTail,r4
@@ -581,6 +591,7 @@ public KeybdCheckForKey:
 	cli
 	sub		r1,r1,r2
 	bne		kcfk1
+kcfk2:
 	pop		r4
 	plx
 	lda		#0
@@ -641,3 +652,46 @@ gk1:
 	plx
 	rts
 
+
+;------------------------------------------------------------------------------
+; Keyboard LEDs task
+;	This small task tracks the keyboard lock status keys and updates the 
+; keyboard LEDs accordingly. This task runs every 100ms.
+;------------------------------------------------------------------------------
+;
+public KeybdStatusLEDs:
+ksl4:
+	lda		#15				; disable keyboard interrupt
+	sta		PIC+2
+	ld		r0,keybdInIRQ
+	bne		ksl5
+	lda		#$ED
+	jsr		SendByteToKeybd
+	jsr		WaitForKeybdAck	; wait for a feedback char
+	cmp		#$FA		; was it an acknowledge (should be)
+	beq		ksl7
+	lda		#15			; if not, re-enable keyboard, wait till next time
+	sta		PIC+3
+	bra		ksl5
+ksl7:
+	lda		#0
+	ldx		keybdLock
+	bit		r2,#4000	; bit 14 = scroll lock status
+	beq		ksl1
+	lda		#1
+ksl1:
+	bit		r2,#1000	; bit 12 = numlock status
+	beq		ksl2
+	or		r1,#2
+ksl2:
+	bit		r2,#2000	; bit 13 = capslock status
+	beq		ksl3
+	or		r1,#4
+ksl3:
+    jsr		SendByteToKeybd
+    lda		#15			; re-enabled keyboard interrupt
+    sta		PIC+3
+ksl5:
+	lda		#10
+	jsr		Sleep
+	bra		ksl4

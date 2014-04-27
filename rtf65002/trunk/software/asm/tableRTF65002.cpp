@@ -732,6 +732,24 @@ static Opa ldAsm[] =
 	{AsmRTF65002::ld_acc_dsp, 0x03, 1, AM_SR,4},
 	NULL
 };
+
+static Opa leaAsm[] =
+{
+	{AsmRTF65002::zpld, 0xD542, 2, (AM_RN<<8)|AM_Z,4},
+	{AsmRTF65002::zpld, 0xD542, 2, (AM_RN<<8)|AM_ZY,4},	// force abs,y
+    {AsmRTF65002::zpld, 0xD542, 2,(AM_RN<<8)| AM_ZX,4},
+    {AsmRTF65002::zpld, 0xC142, 2, (AM_RN<<8)|AM_IX,5},
+    {AsmRTF65002::zpld, 0xD142, 2, (AM_RN<<8)|AM_IY,6},
+	{AsmRTF65002::zpld, 0xD242, 2, (AM_RN<<8)|AM_ZI,5},
+	{AsmRTF65002::absld, 0xCD42, 2, (AM_RN<<8)|AM_A,4},
+	{AsmRTF65002::absxld, 0xDD42, 2, (AM_RN<<8)|AM_AX,4},
+	{AsmRTF65002::absxld, 0xDD42, 2, (AM_RN<<8)|AM_AY,4},
+	{AsmRTF65002::rindld, 0xD242, 2, (AM_RN<<8)|AM_RIND,4},
+	{AsmRTF65002::ld_dsp, 0xC342, 2, (AM_RN<<8)|AM_SR,4},
+	{AsmRTF65002::ld_acc_dsp, 0x03, 1, AM_SR,4},
+	NULL
+};
+
 static Opa lbAsm[] =
 {
 	{AsmRTF65002::lb_zp, 0xB5, 2, (AM_RN<<8)|AM_Z,4},
@@ -923,6 +941,7 @@ static Mne opsRTF65002[] =
 	{"lda", ldaAsm, 1 },
 	{"ldx", ldxAsm, 1 },
     {"ldy", ldyAsm, 1 },
+	{"lea", leaAsm, 2 },
 	{"lsr", lsrAsm, 1 },
 	{"mod", modAsm, 3 },
 	{"mods", modsAsm, 3},
