@@ -34,6 +34,11 @@ unsigned __int64 stouxl(char *instr, char **outstr)
         for(++str; isxdigit(*str); ++str)
             num = (num * 16) + (isdigit(*str) ? *str - '0' : toupper(*str) - 'A' + 10);
    }
+   else if (*str == '@')
+   {
+        for(++str; *str=='0' || *str=='1'; ++str)
+            num = (num * 2) + *str - '0';
+   }
    else if (*str != '0')
    {
       while(isdigit(*str))

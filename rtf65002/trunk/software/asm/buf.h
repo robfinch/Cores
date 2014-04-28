@@ -36,7 +36,10 @@ namespace RTFClasses
 		void clear() { ptr = buf; memset(buf, '\0', size); }; // zeros out buffer
 		void set(char *p, size_t n) { buf = p; size = n; ptr = buf; };   // set data buffer
 		void setptr(char *p) { ptr = p; };
-		int peekCh() { return (*ptr); };             // gets character without incrementing pointer
+		int peekCh() {
+			if (ptr >= buf + size - 1)
+				return 0;
+			return (*ptr); };             // gets character without incrementing pointer
 		int peekCh(int d);							// gets dth character forward
 		int nextCh();                                // gets character and increments pointer
 		void unNextCh() { if (ptr > buf) --ptr; };   // Backs up pointer a character

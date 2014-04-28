@@ -330,7 +330,16 @@ int Assembler::equ(char *iid)
 	char tbuf[80];
 	Value v;
 	bool defAlready = false;
+	String nm;
 
+
+	//size = (char)getSzChar();
+	//if (size != 0 && !strchr("BCHWLDS", size))
+	//{
+	//	printf("wl1:\r\n");
+	//	Err(E_LENGTH);       //Wrong length.
+	//	return (TRUE);
+	//}
 
 	ptr = ibuf->getPtr();    // Save off starting point // inptr;
 	if (*ptr=='=')
@@ -345,7 +354,11 @@ int Assembler::equ(char *iid)
 	found during pass one then it is a redefined symbol
 	error.
 	------------------------------------------------------- */
-	tdef.setName(iid);
+	if (iid[0]=='.')
+		nm = lastLabel + iid;
+	else
+		nm = iid;
+	tdef.setName(nm.buf());
 	p = NULL;
 	if (localSymTbl)
 		p = localSymTbl->find(&tdef);
@@ -353,23 +366,17 @@ int Assembler::equ(char *iid)
 		p = gSymbolTable->find(&tdef);
 	if(pass == 1)
 	{
+		printf("ibuf:%.20s|\r\n", ibuf->getPtr());
 		v = ibuf->expeval(&eptr);
 		if(p != NULL)
 		{
 			defAlready = true;
 			if (v.value!=p->getValue()) {
-				Err(E_DEFINED, label);    // Symbol already defined.
+				Err(E_DEFINED, nm.buf());    // Symbol already defined.
 				return (TRUE);
 			}
 		}
 
-		size = (char)getSzChar();
-		if (size != 0 && !strchr("BCHWLDS", size))
-		{
-			Err(E_LENGTH);       //Wrong length.
-			return (TRUE);
-		}
-	
 		if (p==NULL)
 			p = new Symbol;
 		if (p == NULL) {
@@ -386,7 +393,7 @@ int Assembler::equ(char *iid)
                 size = 'W';
       }
 		p->setSize(size);
-		p->setName(iid);
+		p->setName(nm.buf());
 		p->setLabel(0);
 		p->Def(NO_OCLASS, File[CurFileNum].LastLine, CurFileNum);
 
@@ -432,14 +439,6 @@ int Assembler::equ(char *iid)
       if(p == NULL)
       {
          Err(E_NOTDEFINED, iid); // Undefined symbol.
-         return (TRUE);
-      }
-
-      // skip over size spec
-      size = (char)getSzChar();
-      if (size != 0 && !strchr("BWCHLDS", size))
-      {
-         Err(E_LENGTH);       //Wrong length.
          return (TRUE);
       }
 
@@ -716,6 +715,7 @@ int Assembler::equ(char *iid)
 		idlen = ibuf->getIdentifier(&sptr, &eptr);
 		if (idlen == 0)
 		{
+			//printf("aaa:%.20s|\r\n", sptr);
 			Err(E_MACRONAME);
 			return;
 		}
@@ -748,23 +748,17 @@ int Assembler::equ(char *iid)
 	int Assembler::macro2(char *iid)
 	{
 		Symbol *p, tdef;
-		__int64 n;
-		char size, label[50];
-		char *eptr, *ptr;
-		char tbuf[80];
-		Value v;
-		bool defAlready = false;
+		char *eptr;
 		char *sptr;
 		char nbuf[NAME_MAX+1];
 		int idlen, xx;
 		Macro *fmac;
 
-
-		ptr = ibuf->getPtr();    // Save off starting point // inptr;
-		if (!ibuf->isNext(".macro", 6) && !ibuf->isNext("macro",5))
+		if (!ibuf->isNext(".macro", 6) && !ibuf->isNext("macro",5)) {
+//			printf("next:%.5s|\r\n", ibuf->getPtr());
+//			getchar();
 			return 0;
-		ibuf->getIdentifier(&sptr);	// skip over .macro
-
+		}
 		gNargs = 0;
 		macrobuf = "";
 		idlen = strlen(iid);
@@ -778,7 +772,6 @@ int Assembler::equ(char *iid)
 			memset(nbuf, '\0', sizeof(nbuf));
 			memcpy(nbuf, iid, min(idlen, NAME_MAX));
 			gMacro.setName(nbuf);
-			printf("searching for macro\r\n");
 			fmac = (Macro *)macroTbl->find(&gMacro);
 			if (fmac)
 			{
@@ -792,6 +785,7 @@ int Assembler::equ(char *iid)
 				delete parmlist[xx];
 				parmlist[xx] = NULL;
 			}
+		//printf("ibuf:%.20s|\r\n",ibuf->getPtr());
 		xx = gNargs = ibuf->getParmList(parmlist);
 		gMacro.setArgCount(xx);
 		gMacro.setFileLine(CurFileNum, File[CurFileNum].LastLine);

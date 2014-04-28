@@ -7,6 +7,7 @@
 #include "Assembler.h"
 #include "asmbuf.h"
 
+
 /* ===============================================================
 	(C) 2000 Bird Computer
 	All rights reserved
@@ -174,7 +175,7 @@ void AsmBuf::constant(Value *val)
       Check if numeric constant.
    ----------------------------- */
    while(peekCh()==' ') nextCh();
-   if (isdigit(peekCh())||peekCh()=='$')
+   if (isdigit(peekCh())||peekCh()=='$'||peekCh()=='@')
    {
 	   val->fLabel = false;
        value = stouxl(getPtr(), &ep1);
@@ -482,6 +483,7 @@ void AsmBuf::factor(Value *val)
    char ch, ch2;
    char *sptr, *eptr, sz;
    Symbol ts, *pts;
+   String nm;
 
    val->fLabel = false;
    val->fForcedSize = false;
@@ -502,16 +504,26 @@ void AsmBuf::factor(Value *val)
       {
 		  val->bDefined = true;	// default to TRUE
          pts = NULL;
-         ts.setName(sptr);
+		 printf("sptr:%.20s|\r\n", sptr);
+		 if (sptr[0]=='.')
+			 nm = theAssembler.lastLabel + sptr;
+		 else
+			 nm = sptr;
+		 printf("nm=%s|\r\n", nm.buf());
+         ts.setName(nm.buf());
          if (theAssembler.getLocalSymTbl())
             pts = theAssembler.getLocalSymTbl()->find(&ts);
          if (pts == NULL)
             pts = theAssembler.getGlobalSymTbl()->find(&ts);
          if (theAssembler.getPass() > 1) {
-            if (pts == NULL)
-               Err(E_NOTDEFINED, sptr);
-            else if (pts->isDefined() == 0)
-               Err(E_NOTDEFINED, sptr);
+			 if (pts == NULL) {
+				printf("22222");
+               Err(E_NOTDEFINED, nm.buf());
+			 }
+			else if (pts->isDefined() == 0) {
+				printf("1");
+               Err(E_NOTDEFINED, nm.buf());
+			}
          }
          value = (pts) ? pts->getValue() : 0;
 //		 if (value ==0)

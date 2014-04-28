@@ -189,6 +189,8 @@ namespace RTFClasses
 	{
 		int ch;
 
+		if (ptr>=buf+size-1)
+			return 0;
 		ch = *ptr;
 		if (*ptr)
 			ptr++;

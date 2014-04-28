@@ -211,7 +211,9 @@ namespace RTFClasses
 		int PageLength;
 		int PageWidth;
 		int col;                // current column in source output
-
+public:
+		String lastLabel;
+private:
 		SymbolTable *localSymTbl;
 		SymbolTable *gSymbolTable;
 		ExtRefTbl *extRefTbl;
@@ -247,7 +249,6 @@ namespace RTFClasses
 		// Output
 		void emit(int size, unsigned __int64 data);  // output routines
 		void emit0(void);
-		void emit24(int word);
 		int emitrest(void);
 		int emits(int, unsigned __int64);
 		int stdemit(char *, int, int, int, int);
@@ -343,6 +344,7 @@ namespace RTFClasses
 		void incErrors() { File[CurFileNum].errors++; errors++; };
 		void incErrorsDuringPass() { errorsDuringPass++; };
 		int emit32(unsigned int word);
+		void emit24(int word);
 		void emit16(int word);
 		void emit8(unsigned int byte);   // spits out a data byte to file/listing, increments counters
 		bool isBlockComment2();

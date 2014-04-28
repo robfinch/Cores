@@ -43,10 +43,12 @@ namespace RTFClasses
 	{
 		int r;
 		int l1, l2;
+		Symbol *ts;
 
-//		printf("Comparing: %s to %s\r\n", (char *)name.buf(),(char *)((Symbol *)ps)->name.buf());
+		//printf("Comparing: %s to %s\r\n", (char *)name.buf(),(char *)((Symbol *)ps)->name.buf());
+		ts = (Symbol*)ps;
 		r = strcmp((char *)name.buf(), (char *)((Symbol *)ps)->name.buf());
-//		printf("result: %d\r\n", r);
+		//printf("result: %d\r\n", r);
 //		if (r==0) getchar();
 		if (r==0) {
 			l1 = strlen((char *)name.buf());

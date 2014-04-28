@@ -91,6 +91,7 @@ namespace RTFClasses
 		EndOfLoop:
 		if (Depth > 0)
 			Err(E_PAREN);
+		//printf("arg:%s|", arg->buf());
 		arg->trim();		// get rid of spaces around argument
 		return arg;
 	}
@@ -123,6 +124,7 @@ namespace RTFClasses
 		while(1)
 		{
 			id = getArg();
+			//printf("arg:%s|\r\n", id->buf());
 			if (id)
 			{
 				if (id->len())

@@ -60,7 +60,8 @@ namespace RTFClasses
 		U64 d;
 		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
 		theAssembler.emit8(o->oc);
-		theAssembler.emit32(d);
+		theAssembler.emit24(d);
+//		theAssembler.emit32(d);
 	}
 
 	//	beq/bne/bpl/bmi/bcc/bcs/bvc/bvs/bra

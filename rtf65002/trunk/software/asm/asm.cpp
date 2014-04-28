@@ -460,6 +460,14 @@ namespace RTFClasses
 	{
 		Symbol *p, *q = NULL;
 		Symbol tdef;
+		String lab;
+
+		if (label[0] != '.') {
+			lab = label;
+			lastLabel = label;
+		}
+		else
+			lab = lastLabel + label;
 
 		/* -----------------------------------------------------------
 				See if the symbol exists in the symbol table
@@ -467,7 +475,7 @@ namespace RTFClasses
 			defined.
 		----------------------------------------------------------- */
 		p = NULL;
-		tdef.setName(label);
+		tdef.setName(lab.buf());
 		if (oclass == PUB || FileLevel == 0)
 			p = gSymbolTable->find(&tdef);
 		else
@@ -479,7 +487,7 @@ namespace RTFClasses
 			// Check if label has been defined already.
 			if(p != NULL && p->isDefined() == 1) {
 				ForceErr = 1;
-				Err(E_DEFINED, label);
+				Err(E_DEFINED, lab.buf());
 				ForceErr = 0;
 				return;
 			}
@@ -498,7 +506,7 @@ namespace RTFClasses
 					Err(E_MEMORY);
 					return;
 				}
-				q->setName(label);
+				q->setName(lab.buf());
 				if (oclass == PUB || FileLevel == 0)
 					p = gSymbolTable->insert(q);
 				else {
@@ -1010,7 +1018,8 @@ namespace RTFClasses
 							break;
 						}
 						else if (macro2(idbuf)) {
-							continue;
+							ibuf->scanToEOL();
+							break;
 						}
 						else {
 							label(idbuf, PRI);
@@ -1034,6 +1043,10 @@ namespace RTFClasses
 			else if (ibuf->peekCh() == ':')		// ignore
 				ibuf->nextCh();
 
+			else if (ibuf->peekCh()=='\n') {
+				ibuf->nextCh();
+				lineno++;
+			}
 			else if (isspace(ibuf->peekCh()))   // ignore
 				ibuf->nextCh();
 
@@ -1160,11 +1173,12 @@ namespace RTFClasses
 	void Assembler::SearchAndSub()
 	{
 		Macro tmacr, *mp;
-		char *sptr, *eptr, *sptr1;
+		char *sptr, *eptr, *sptr1, *sptr2;
 		String *plist[MAX_MACRO_PARMS];
 		char nbuf[NAME_MAX+1];
 		int na;
 		int idlen = 0;
+		int idlen2 = 0;
 		int slen, tomove;
 		int ic1, ic2, iq;
 		int SkipNextIdentifier = 0;
@@ -1253,16 +1267,23 @@ namespace RTFClasses
 			sptr1 = ibuf->getPtr();
 			idlen = ibuf->getIdentifier(&sptr, &eptr); // look for an identifier
 			if (idlen) {
-				indx = sptr-ibuf->getBuf();
-				if ((strncmp(sptr, "comment", 7)==0) && !IsIdentChar(sptr[7])) {
+				indx = sptr1-ibuf->getBuf();
+				if ((strncmp(sptr, "comment", 7)==0) && !IsIdentChar(sptr[7]))
+				{
 					ic1++;
 					CommentChar = ibuf->nextNonSpace();
 					continue;
 				}
+				if (ibuf->isNext(".macro",6) || ibuf->isNext("macro",5)) {
+					ibuf->scanToEOL();
+					continue;
+				}
+
 				//    If macro definition found, we want to skip over the macro name
 				// otherwise the macro will substitute for the macro name during the
 				// second pass.
-				if ((strnicmp(sptr, "macro", 5) == 0) && !IsIdentChar(sptr[5]))
+				if (((strnicmp(sptr, "macro", 5) == 0) && !IsIdentChar(sptr[5])) ||
+					((strnicmp(sptr, ".macro", 6) == 0) && !IsIdentChar(sptr[6])))
 					SkipNextIdentifier = TRUE;
 				else {
 					if (SkipNextIdentifier == TRUE)
@@ -1286,7 +1307,7 @@ namespace RTFClasses
 						//        = buffer size - current pointer position
 						tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->getBuf());
 						// sptr = where to begin substitution
-						//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr,slen,tomove);
+						//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr1,slen,tomove);
 						mp->sub(plist, ibuf, indx, slen, tomove);
 					}
 				}
