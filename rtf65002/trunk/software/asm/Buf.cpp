@@ -284,12 +284,12 @@ namespace RTFClasses
 
 	void Buf::scanToEOL()
 	{
-		char ch;
+		unsigned char ch;
 
 		while(1)
 		{
-			ch = (char)nextCh();
-			if (ch < 1 || ch == '\n')
+			ch = (unsigned char)nextCh();
+			if (ch < 1 || ch == '\n' || ch==255)
 				break;
 		}
 	}

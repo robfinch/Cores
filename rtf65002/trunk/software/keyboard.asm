@@ -46,16 +46,6 @@ DCMD_GETCHAR		EQU		32
 DRSP_DONE			EQU		1
 
 		cpu		RTF65002
-		.bss
-		org		0x01FBEA00
-
-KeybdHead	fill.b	256,0
-KeybdTail	fill.b	256,0
-KeybdEcho	fill.b	256,0
-KeybdBad	fill.b	256,0
-KeybdAck	fill.b	256,0
-KeybdLocks	fill.b	256,0
-KeybdBuffer	fill.b	256*16,0	;EQU		0x01FBF000	; buffer is 16 chars
 
 		.code
 ;------------------------------------------------------------------------------
@@ -147,21 +137,6 @@ public KeybdSetup:
 	sta		LEDS
 	ldx		#0
 
-	lda		#MAX_TASKNO
-	ldx		#0
-	ldy		#KeybdHead
-	stos
-	lda		#MAX_TASKNO
-	ldy		#KeybdTail
-	stos
-	lda		#MAX_TASKNO
-	ldy		#KeybdBad
-	stos
-	lda		#MAX_TASKNO
-	ldx		#1				; turn on keyboard echo
-	ldy		#KeybdEcho
-	stos
-
 	; Set Keyboard IRQ vector	
 	tsr		vbr,r2
 	and		r2,#-2
@@ -220,7 +195,7 @@ msgBadKeybd:
 
 SendByteToKeybd:
 	phx
-	ldx		RunningTCB
+	ldx		IOFocusNdx
 	sta		KEYBD
 	lda		#40
 	sta		LEDS
@@ -239,10 +214,10 @@ kbdi4:						; wait for transmit complete
 kbdbad:
 	lda		#42
 	sta		LEDS
-	lda		KeybdBad,x
+	lda		JCB_KeybdBad,x
 	bne		sbtk2
 	lda		#1
-	sta		KeybdBad,x
+	sta		JCB_KeybdBad,x
 	lda		#43
 	sta		LEDS
 	lda		#msgBadKeybd
@@ -283,12 +258,12 @@ wkbdbad:
 ;
 WaitForKeybdAck2:
 	phy
-	ldy		RunningTCB
+	ldy		IOFocusNdx
 WaitForKeybdAck2a:
-	lda		KeybdAck,y
+	lda		JCB_KeybdAck,y
 	cmp		r1,r2
 	bne		WaitForKeybdAck2a
-	stz		KeybdAck,y
+	stz		JCB_KeybdAck,y
 	ply
 	rts
 
@@ -382,7 +357,7 @@ public KeybdIRQ:
 	cli							; global interrupt enable
 	bit		r3,#$800			; test bit #11
 	bne		KeybdIRQc			; ignore keyup messages for now
-	ld		r4,IOFocusNdx		; get the task with the input focus
+	ld		r4,IOFocusNdx		; get the job with the input focus
 	bit		r3,#$200			; check for ALT-tab
 	beq		KeybdIrq3
 	and		r3,r3,#$FF
@@ -395,7 +370,7 @@ KeybdIrq3:
 	and		r3,r3,#$ff
 	cmp		r3,#$FA
 	bne		KeybdIrq1
-	sty		KeybdAck,r4
+	sty		JCB_KeybdAck,r4
 	bra		KeybdIRQc
 	; strip out non-key keyboard responses
 KeybdIrq1:
@@ -410,20 +385,19 @@ KeybdIrq1:
 	bit		r2,#$800			; test bit #11
 	bne		KeybdIRQc			; ignore keyup messages for now
 KeybdIrq2:
-	lda		KeybdHead,r4			
+	lda		JCB_KeybdHead,r4			
 	ina							; increment head pointer
 	and		#$f					; limit
-	ldy		KeybdTail,r4		; check for room in the keyboard buffer
+	ldy		JCB_KeybdTail,r4	; check for room in the keyboard buffer
 	cmp		r1,r3
 	beq		KeybdIRQc			; if no room, the newest char will be lost
-	sta		KeybdHead,r4
+	sta		JCB_KeybdHead,r4
 	dea
 	and		#$f
-	stx		KeybdLocks,r4
+	stx		JCB_KeybdLocks,r4
 	stx		keybdLock			; global keyboard lock status
-	asl		r4,r4,#4			; * 16
 	add		r1,r1,r4
-	stx		KeybdBuffer,r1		; store character in buffer
+	stx		JCB_KeybdBuffer,r1	; store character in buffer
 KeybdIRQc:
 
 	; support EhBASIC's IRQ functionality
@@ -462,10 +436,16 @@ KeybdMediaChk:
 ; r1 0=echo off, non-zero = echo on
 ;------------------------------------------------------------------------------
 public SetKeyboardEcho:
+	pha
 	phx
-	ldx		RunningTCB
-	sta		KeybdEcho,x
+	phy
+	tay
+	jsr		GetPtrCurrentJCB
+	tax
+	sty		JCB_KeybdEcho,x
+	ply
 	plx
+	pla
 	rts
 
 ;------------------------------------------------------------------------------
@@ -498,11 +478,11 @@ public KeybdGetChar:
 ~
 ;
 ;------------------------------------------------------------------------------
-; Get keyboard character from buffer for the specified task. This entry point
+; Get keyboard character from buffer for the specified job. This entry point
 ; is meant to be called by the keyboard service.
 ;
 ; Parameters:
-;	r1 = task number
+;	r1 = job number
 ; Returns:
 ;	r1 = keyboard character or -1 if no character is available.
 ;------------------------------------------------------------------------------
@@ -527,25 +507,26 @@ kgc4:
 	ld		r0,keybdIsSetup	; the system might call GetChar before the keyboard
 	beq		nochar			; is setup.
 	ld		r4,RunningTCB
-	cmp		r4,#MAX_TASKNO
-	bhi		nochar
-	lda		#15				; disable keyboard interrupt
+	ld		r4,TCB_hJCB,r4
+	cmp		r4,#NR_JCB
+	bhs		nochar
+	mul		r4,r4,#JCB_Size		; convert handle to pointer
+	add		r4,r4,#JCBs
+	lda		#15					; disable keyboard interrupt
 	sta		PIC+2
-	ldx		KeybdTail,r4	; if keybdTail==keybdHead then there are no 
-	lda		KeybdHead,r4	; characters in the keyboard buffer
+	ldx		JCB_KeybdTail,r4	; if keybdTail==keybdHead then there are no 
+	lda		JCB_KeybdHead,r4	; characters in the keyboard buffer
 	cmp		r1,r2
 	beq		kgc2
-	asl		r4,r4,#4			; * 16
 	phx
 	add		r2,r2,r4
-	lda		KeybdBuffer,x
+	lda		JCB_KeybdBuffer,x
 	plx
 	and		r1,r1,#$ff		; mask off control bits
 	inx						; increment index
 	and		r2,r2,#$0f
-	lsr		r4,r4,#4			; / 16
-	stx		KeybdTail,r4
-	ldx		KeybdEcho,r4
+	stx		JCB_KeybdTail,r4
+	ldx		JCB_KeybdEcho,r4
 	php
 	ldx		#15				; re-enable keyboard interrupt
 	stx		PIC+3
@@ -584,10 +565,11 @@ public KeybdCheckForKey:
 	push	r4
 	ld		r0,keybdIsSetup
 	beq		kcfk2
-	ld		r4,RunningTCB
+	jsr		GetPtrCurrentJCB
+	ld		r4,r1
 	sei
-	lda		KeybdTail,r4
-	ldx		KeybdHead,r4
+	lda		JCB_KeybdTail,r4
+	ldx		JCB_KeybdHead,r4
 	cli
 	sub		r1,r1,r2
 	bne		kcfk1

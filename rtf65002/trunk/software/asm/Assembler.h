@@ -317,6 +317,7 @@ namespace RTFClasses
 		void list();
 		void lword();
 		void macro();
+		int macro2(char *);
 		void message();
 		void org();
 		void a_public();

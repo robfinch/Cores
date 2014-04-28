@@ -24,6 +24,143 @@
 ;
 MAX_VIRTUAL_PAGE	EQU		320
 MAX_PHYSICAL_PAGE	EQU		2048
+INV_PAGE	EQU	000		; page number to use for invalid entries
+
+;------------------------------------------------------------------------------
+; InitMMU
+;
+; Initialize the 64 maps of the MMU.
+; Initially all the maps are set the same:
+; Virtual Page  Physical Page
+; 000-319		000 (invalid page marker)
+; 320-511		1856-2047
+; Note that there are only 512 virtual pages per map, and 2048 real
+; physical pages of memory. This limits maps to 32MB.
+; This range includes the BIOS assigned stacks for the tasks and tasks
+; virtual video buffers.
+; Note that physical pages 0 to 1855 are not mapped, but do exist. They may
+; be mapped into a task's address space as required.
+; If changing the maps the last 192 pages (12MB) of the map should always point
+; to the BIOS area. Don't change map entries 320-511 or the system may
+; crash.
+; If the rts at the end of this routine works, then memory was mapped
+; successfully.
+;
+; System Memory Map (Physical Addresses)
+; Page
+; 0000			BASIC ROM, scratch memory ( 1 page global)
+; 0001-0063		unassigned (4MB - 63 pages)
+; 0064-0191		Bitmap video memory (8 MB - 128 pages)
+; 0192-0336		DOS usage, disk cache etc. (9.4MB - 145 pages)
+; 0337-1855		Heap space (99MB - 1519 pages)
+; 1856-1983		Virtual Screen buffers (8MB - 128 pages)
+; 1984-2047		BIOS/OS area (4MB - 64 pages)
+;	2032-2047		Stacks area (1MB - 16 pages)
+; 65535			BIOS ROM (64kB - 1 Page global)
+; 261952-262015		I/O area (4MB - 64 pages global)
+;------------------------------------------------------------------------------
+
+	align	8
+public InitMMU:
+	lda		#1
+	sta		MMU_KVMMU+1
+	dea
+	sta		MMU_KVMMU
+immu1:
+	sta		MMU_AKEY	; set access key for map
+	ldx		#0
+immu2:
+	; set the first 320 pages to invalid page marker
+	; set the last 192 pages to physical page 1856-2047
+	ld		r4,#INV_PAGE
+	cpx		#320
+	blo		immu3
+	ld		r4,r2
+	add		r4,r4,#1536	; 1856-320
+immu3:
+	st		r4,MMU,x
+	inx
+	cpx		#512
+	bne		immu2
+	ina
+	cmp		#64			; 64 MMU maps
+	bne		immu1
+	stz		MMU_OKEY	; set operating key to map #0
+	lda		#2
+	sta		MMU_FUSE	; set fuse to 2 clocks before mapping starts
+	nop
+	nop
+
+;------------------------------------------------------------------------------
+; Note that when switching the memory map, the stack address changes, and may
+; even be mapped out. We cannot just "rts" from these functions. The return
+; address has to be saved off and an register indirect jump performed.
+;------------------------------------------------------------------------------
+;
+	align	8
+public EnableMMUMapping:
+	lda		RunningTCB	; no need to enable mapping for BIOS task
+	cmp		#1
+	blo		DisableMMUMapping
+	lda		#12			; is there even an MMU present ?
+	bmt		CONFIGREC
+	beq		emm1
+	lda		TCB_mmu_map,r1
+	sta		MMU_OKEY			; select the mmu map for the task
+	lda		#2
+	sta		MMU_FUSE			; set fuse to 2 clocks before mapping starts
+	pla
+	sec					; use a rotate to avoid consuming another processor register
+	rol		MMU_MAPEN	; set MMU_MAPEN = 1
+	jmp		(r1)
+emm1:
+	rts
+
+public DisableMMUMapping:
+	lda		#12			; is there even an MMU present ?
+	bmt		CONFIGREC
+	beq		dmm1
+	pla					; get return address into acc
+	stz		MMU_MAPEN	; disabling mapping will change stack placement
+	jmp		(r1)
+dmm1:
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+;
+	align	8
+public MemInit:
+	lda		#1					; initialize memory semaphore
+	sta		mem_sema
+	lda		#1519
+	sta		nPagesFree
+
+	; Initialize the allocated page map to zero.
+	lda		#64				; 64*32 = 2048 bits
+	ldx		#0
+	ldy		#PageMap
+	stos
+	; Mark the last 192 pages as used (by the OS)
+	; 6-32 bit words
+	lda		#-1
+	sta		PageMap+58
+	sta		PageMap+59
+	sta		PageMap+60
+	sta		PageMap+61
+	sta		PageMap+62
+	sta		PageMap+63
+	; Mark page #0 used
+	lda		#1		
+	sta		PageMap
+	; Mark 64-336 used (DOS)
+	lda		#64
+meminit1:
+	bms		PageMap
+	ina
+	cmp		#336
+	blo		meminit1
+	rts
 
 ;------------------------------------------------------------------------------
 ; Allocate a memory page from the available memory pool.
@@ -35,6 +172,7 @@ MAX_PHYSICAL_PAGE	EQU		2048
 ;	r1 = virtual address of allocated memory page
 ;------------------------------------------------------------------------------
 ;
+	align	8
 public AllocMemPage:
 	phx
 	phy
@@ -94,6 +232,7 @@ amp3:
 ; No MMU
 ;------------------------------------------------------------------------------
 ;
+	align	8
 public AllocMemPages:
 	php
 	phx
@@ -175,6 +314,7 @@ amp14:
 ;	r1 = virtual memory address
 ;------------------------------------------------------------------------------
 ;
+	align	8
 FreeMemPage:
 	pha
 	php
@@ -225,6 +365,7 @@ FreeMemPage:
 ;	r1 = pointer to memory
 ;------------------------------------------------------------------------------
 ;
+	align	8
 public FreeMemPages:
 	cmp		#0x3fff				; test for a proper pointer
 	bls		fmp5
@@ -268,6 +409,7 @@ fmp5:
 ;	r1 = physical address
 ;------------------------------------------------------------------------------
 ;
+	align	8
 public VirtToPhys:
 	cmp		#$3FFF				; page #0 is physical page #0
 	bls		vtp2
@@ -309,6 +451,7 @@ vtp2:
 ;	r1 = virtual address
 ;------------------------------------------------------------------------------
 ;
+	align	8
 public PhysToVirt:
 	cmp		#$3FFF				; first check for direct translations
 	bls		ptv3				; outside of the MMU managed range
@@ -346,3 +489,286 @@ ptv4:
 	plx
 ptv3:
 	rts
+
+; ============================================================================
+; Heap related functions.
+;
+;	The heap is managed as a doublely linked list of memory blocks.
+; ============================================================================
+
+	align	8
+public InitHeap:
+	lda		RunningTCB
+	ldx		TCB_HeapStart,r1
+	ldy		TCB_HeapEnd,r1
+	lda		#$4D454D20
+	sta		MEM_CHK,x
+	sta		MEM_FLAG,x
+	lda		#$6D656D20		; mark the last block as allocated
+	sta		MEM_CHK,y
+	sta		MEM_FLAG,y
+	lda		#0
+	sta		MEM_PREV,x		; prev of first MEMHDR
+	sty		MEM_NEXT,x
+	sta		MEM_NEXT,y
+	stx		MEM_PREV,y
+	rts
+
+;------------------------------------------------------------------------------
+; Allocate memory from the heap.
+; Each task has it's own memory heap.
+;------------------------------------------------------------------------------
+	align	8
+public MemAlloc:
+	phx
+	phy
+	push	r4
+	ldx		RunningTCB
+	ldx		TCB_HeapStart,x
+mema4:
+	ldy		MEM_FLAG,x		; Check the flag word to see if this block is available
+	cpy		#$4D454D20
+	bne		mema1			; block not available, go to next block
+	ld		r4,MEM_NEXT,x	; compute the size of this block
+	sub		r4,r4,r2
+	sub		r4,r4,#4		; minus size of block header
+	cmp		r1,r4			; is the block large enough ?
+	bmi		mema2			; if yes, go allocate
+mema1:
+	ldx		MEM_NEXT,x		; go to the next block
+	beq		mema3			; if no more blocks, out of memory error
+	bra		mema4
+mema2:
+	ldy		#$6D656D20
+	sty		MEM_FLAG,x
+	sub		r4,r4,r1
+	cmp		r4,#4			; is the block large enough to split
+	bpl		memaSplit
+	txa
+	add		#4				; point to payload area
+	pop		r4
+	ply
+	plx
+	rts
+mema3:						; insufficient memory
+	pop		r4
+	ply
+	plx
+	lda		#0
+	rts
+memaSplit:
+	add		r4,r1,r2
+	add		r4,#4
+	ldy		#$4D454D20
+	sty		(r4)
+	sty		MEM_FLAG,r4
+	stx		MEM_PREV,r4
+	ldy		MEM_NEXT,x
+	sty		MEM_NEXT,r4
+	st		r4,MEM_PREV,y
+	ld		r1,r4
+	add		#4
+	pop		r4
+	ply
+	plx
+	rts
+
+;------------------------------------------------------------------------------
+; Free previously allocated memory. Recombine with next and previous blocks
+; if they are free as well.
+;------------------------------------------------------------------------------
+	align	8
+public MemFree:
+	cmp		#4			; null pointer ?
+	blo		memf2
+	phx
+	phy
+	sub		#4			; backup to header area
+	ldx		MEM_FLAG,r1
+	cpx		#$6D656D20	; is the block allocated ?
+	bne		memf1
+	ldx		#$4D454D20
+	stx		MEM_FLAG,r1	; mark block as free
+	ldx		MEM_PREV,r1	; is the previous block free ?
+	beq		memf3		; no previous block
+	ldy		MEM_FLAG,x
+	cpy		#$4D454D20
+	bne		memf3		; the previous block is not free
+	ldy		MEM_NEXT,r1
+	sty		MEM_NEXT,x
+	beq		memf1		; no next block
+	stx		MEM_PREV,y
+memf3:
+	ldy		MEM_NEXT,r1
+	ldx		MEM_FLAG,y
+	cpx		#$4D454D20
+	bne		memf1		; next block not free
+	ldx		MEM_PREV,r1
+	stx		MEM_PREV,y
+	beq		memf1		; no previous block
+	sty		MEM_NEXT,x
+memf1:
+	ply
+	plx
+memf2:
+	rts
+
+;------------------------------------------------------------------------------
+; Report the amount of system memory free. Counts up the number of
+; unallocated pages in the page bitmap.
+;------------------------------------------------------------------------------
+;
+public ReportMemFree:
+	jsr		CRLF
+	lda		#' '
+	jsr		DisplayChar
+	lda		#0
+	tay
+rmf2:
+	bmt		PageMap
+	bne		rmf1
+	iny
+rmf1:
+	ina
+	cmp		#2048
+	blo		rmf2
+	tya
+	asl		r1,r1,#14		; 16kW per bit
+	ldx		#5
+	jsr		PRTNUM
+	lea		r1,msgMemFree
+	jsr		DisplayStringB
+	rts
+
+msgMemFree:
+	db	" words free",CR,LF,0
+	
+;==============================================================================
+; Memory Management routines follow.
+;==============================================================================
+
+;------------------------------------------------------------------------------
+; brk
+; Establish a new program break
+;
+; Parameters:
+; r1 = new program break address
+;------------------------------------------------------------------------------
+;
+public _brk:
+	phx
+	push	r4
+	push	r5
+	push	r6
+	ldx		RunningTCB
+	ld		r4,TCB_ASID,x
+	st		r4,MMU_AKEY
+	ld		r4,TCB_npages,x
+	lsr		r1,r1,#14
+	add		r1,r1,#1
+	cmp		r1,r4
+	beq		brk6			; allocation isn't changing
+	blo		brk1			; reducing allocation
+
+	; Here we're increasing the amount of memory allocated to the program.
+	;
+	cmp		r1,#320			; max 320 RAM pages
+	bhi		brk2
+	sub		r1,r1,r4		; number of new pages
+	cmp		r1,mem_pages_free	; are there enough free pages ?
+	bhi		brk2
+	ld		r5,mem_pages_free
+	sub		r5,r5,r1
+	st		r5,mem_pages_free
+	ld		r6,r1			; r6 = number of pages to allocate
+	add		r1,r1,r4		; get back value of address
+	sta		TCB_npages,x
+	lda		#0
+brk5:
+	bmt		PageMap			; test if page is free
+	bne		brk4			; no, go for next page
+	bms		PageMap			; allocate the page
+	sta		MMU,r4			; store the page number in the MMU table
+	add		r4,#1			; move to next MMU entry
+	sub		r6,#1			; decrement count of needed
+	beq		brk6			; we're done if count = 0
+brk4:
+	ina
+	cmp		#2048
+	blo		brk5
+
+	; Here there was an OS or hardware error
+	; According to mem_pages_free there should have been enough free pages
+	; to fulfill the request. Something is corrupt.
+	;
+
+	; Here we are reducing the program break, which means freeing up pages of
+	; memory.
+brk1:
+	sta		TCB_npages,x
+	add		r5,r1,#1		; move to page after last page
+brk7:
+	cmp		r5,r4			; are we done freeing pages ?
+	bhi		brk6
+	lda		MMU,r5			; get the page to free
+	bmc		PageMap			; free the page
+	inc		mem_pages_free
+	add		r5,#1
+	bra		brk7
+
+	; Successful return
+brk6:
+	pop		r6
+	pop		r5
+	pop		r4
+	plx
+	lda		#0
+	rts
+
+; Return insufficient memory error
+;
+brk2:
+	lda		#E_NoMem
+	sta		TCB_errno,x
+	pop		r6
+	pop		r5
+	pop		r4
+	plx
+	lda		#-1
+	rts
+
+;------------------------------------------------------------------------------
+; Parameters:
+; r1 = change in memory allocation
+;------------------------------------------------------------------------------
+public _sbrk:
+	phx
+	push	r4
+	push	r5
+	ldx		RunningTCB
+	ld		r4,TCB_npages,x		; get the current memory allocation
+	cmp		r1,#0				; zero difference = get old brk address
+	beq		sbrk2
+	asl		r5,r4,#14			; convert to words
+	add		r1,r1,r5				; +/- amount
+	jsr		_brk
+	cmp		r1,#-1
+	bne		sbrk2
+
+; Failure return, return -1
+;
+	pop		r5
+	pop		r4
+	plx
+	rts
+
+; Successful return, return the old break address
+;	
+sbrk2:
+	ld		r1,r4
+	asl		r1,r1,#14
+	pop		r5
+	pop		r4
+	plx
+	rts
+

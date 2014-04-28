@@ -579,7 +579,7 @@ namespace RTFClasses
 		{
 	StartOfLoop:
 		// If end of buffer then reset quote flag
-		if (ibuf->peekCh() < 1)
+		if (ibuf->peekCh() ==-1 || ibuf->peekCh() == 0)
 			break;
 
 		//    If end of line detected then copy newline to macro buffer
@@ -767,19 +767,19 @@ namespace RTFClasses
 		String p(buf);
 
 		p.toLower();
-		if (p=="align") {
+		if (p=="align" || p==".align") {
 			align();
 			return true;
 		}
-		if (p=="cpu") {
+		if (p=="cpu" || p==".cpu") {
 			a_cpu();
 			return true;
 		}
-		if (p=="endm") {
+		if (p=="endm" || p==".endm") {
 			endm();
 			return true;
 		}
-		if (p=="db" || p=="byte") {
+		if (p=="db" || p=="byte" || p==".byte") {
 			db('B');
 			return true;
 		}
@@ -787,34 +787,34 @@ namespace RTFClasses
 			db('C');
 			return true;
 		}
-		if (p=="dw" || p=="word") {
-			if (gProcessor=="W65C02")
+		if (p=="dw" || p=="word" || p==".word") {
+			if (gProcessor=="W65C02" || gProcessor=="W65C816S")
 				db('C');
 			else
 				db('W');
 			return true;
 		}
-		if (p=="include") {
+		if (p=="include" || p==".include") {
 			include();
 			return true;
 		}
-		if (p=="org") {
+		if (p=="org" || p==".org") {
 			org();
 			return true;
 		}
-		if (p=="macro") {
+		if (p=="macro" || p==".macro") {
 			macro();
 			return true;
 		}
-		if (p=="data") {
+		if (p=="data" || p==".data") {
 			data();
 			return true;
 		}
-		if (p=="code") {
+		if (p=="code" || p==".code") {
 			code();
 			return true;
 		}
-		if (p=="bss") {
+		if (p=="bss" || p==".bss") {
 			bss();
 			return true;
 		}
@@ -822,7 +822,7 @@ namespace RTFClasses
 			comment();
 			return true;
 		}
-		if (p=="end") {
+		if (p=="end" || p==".end") {
 			end();
 			return true;
 		}
@@ -838,7 +838,7 @@ namespace RTFClasses
 			list();
 			return true;
 		}
-		if (p=="message") {
+		if (p=="message" || p==".message") {
 			message();
 			return true;
 		}
@@ -894,7 +894,7 @@ namespace RTFClasses
 		{
 			if (!inBlockComment())
 			{
-				if (ibuf->isNext("endm", 4)) {
+				if (ibuf->isNext("endm", 4) || ibuf->isNext(".endm",5)) {
 					endm();
 					goto LoopStart;   // Allows subsequent commands on line
 				}
@@ -902,7 +902,6 @@ namespace RTFClasses
 			ibuf->moveTo(msol);   // reset to start of line
 			return (CollectMacroLine());
 		}
-
 
 	LoopStart:
 		while(1)
@@ -941,6 +940,7 @@ namespace RTFClasses
 				ibuf->nextCh();
 				continue;
 			}
+
 			// Skip any leading spaces on the line
 			ibuf->skipSpacesLF();
 
@@ -1008,6 +1008,9 @@ namespace RTFClasses
 						if (equ(idbuf)) {
 							ibuf->scanToEOL();
 							break;
+						}
+						else if (macro2(idbuf)) {
+							continue;
 						}
 						else {
 							label(idbuf, PRI);
@@ -1128,9 +1131,9 @@ namespace RTFClasses
 			File[CurFileNum].LastLine = lineno;
 
 			sol = p1;
-			if(processLine() != TRUE)
+			if(processLine() != TRUE) {
 				Err(E_INV);
-
+			}
 			// Only output on second pass
 			if (isGenerationPass() && fListing) {
 //				if (col < SRC_COL)  // && col > 1)
@@ -1283,7 +1286,7 @@ namespace RTFClasses
 						//        = buffer size - current pointer position
 						tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->getBuf());
 						// sptr = where to begin substitution
-						// printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr,slen,tomove);
+						//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr,slen,tomove);
 						mp->sub(plist, ibuf, indx, slen, tomove);
 					}
 				}

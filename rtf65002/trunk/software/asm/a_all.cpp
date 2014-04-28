@@ -745,9 +745,65 @@ int Assembler::equ(char *iid)
 	}
 
 
+	int Assembler::macro2(char *iid)
+	{
+		Symbol *p, tdef;
+		__int64 n;
+		char size, label[50];
+		char *eptr, *ptr;
+		char tbuf[80];
+		Value v;
+		bool defAlready = false;
+		char *sptr;
+		char nbuf[NAME_MAX+1];
+		int idlen, xx;
+		Macro *fmac;
+
+
+		ptr = ibuf->getPtr();    // Save off starting point // inptr;
+		if (!ibuf->isNext(".macro", 6) && !ibuf->isNext("macro",5))
+			return 0;
+		ibuf->getIdentifier(&sptr);	// skip over .macro
+
+		gNargs = 0;
+		macrobuf = "";
+		idlen = strlen(iid);
+		if (idlen == 0)
+		{
+			Err(E_MACRONAME);
+			return 0;
+		}
+		if (pass < 2)
+		{
+			memset(nbuf, '\0', sizeof(nbuf));
+			memcpy(nbuf, iid, min(idlen, NAME_MAX));
+			gMacro.setName(nbuf);
+			printf("searching for macro\r\n");
+			fmac = (Macro *)macroTbl->find(&gMacro);
+			if (fmac)
+			{
+				Err(E_DEFINED, nbuf);
+				return 0;
+			}
+		}
+		// Free parameter list (if not already freed)
+		for (xx = 0; xx < MAX_MACRO_PARMS; xx++)
+			if (parmlist[xx]) {
+				delete parmlist[xx];
+				parmlist[xx] = NULL;
+			}
+		xx = gNargs = ibuf->getParmList(parmlist);
+		gMacro.setArgCount(xx);
+		gMacro.setFileLine(CurFileNum, File[CurFileNum].LastLine);
+		CollectingMacro = true;
+		return 1;
+	}
+
+
 	void Assembler::message()
 	{
 		g_nops = getCpu()->getOp()->get();
+//		fprintf(stdout, "%x: ", getCounter().val);
 		fprintf(stdout, ((Operands6502 *)getCpu()->getOp())->op[0].buf());
 		fprintf(stdout, "\n");
 	}
@@ -776,8 +832,12 @@ int Assembler::equ(char *iid)
 			{
 				if (fBinOut | bMemOut | fListing) {
 					DoingDc = true;
-					while (getCounter().val < loc)
+					//printf("%x %x\r\n", getCounter().val, loc);
+					//getchar();
+					while (getCounter().val < loc) {
+					//printf("%x %x\r\n", getCounter().val, loc);
 						emit('B', 0xff);
+					}
 					DoingDc = false;
 				}
 				getCounter().set(loc);

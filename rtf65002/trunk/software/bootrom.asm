@@ -186,6 +186,8 @@ readylist_sema	EQU	0xFFDB00A0
 tolist_sema		EQU	0xFFDB00B0
 msg_sema		EQU	0xFFDB00C0
 freetcb_sema	EQU	0xFFDB00D0
+freejcb_sema	EQU	0xFFDB00E0
+jcb_sema		EQU	0xFFDB00F0
 device_semas	EQU	0xFFDB1000
 device_semas_end	EQU	0xFFDB1200
 
@@ -342,8 +344,60 @@ MSG_D2		fill.b	NR_MSG,0	; message data 2
 MSG_TYPE	fill.b	NR_MSG,0	; message type
 MSG_END		EQU		MSG_TYPE + NR_MSG
 
+MT_SEMA		EQU		0xFFFFFFFF
 MT_IRQ		EQU		0xFFFFFFF0
 MT_GETCHAR	EQU		0xFFFFFFEF
+
+NR_JCB			EQU		32
+JCB_Number		EQU		0
+JCB_Name		EQU		1		; 32 bytes (1 len + 31)
+JCB_Map			EQU		9		; memory map number associated with job
+JCB_pCode		EQU		10
+JCB_nCode		EQU		11		; size of code
+JCB_pData		EQU		12
+JCB_nData		EQU		13		; size of data
+JCB_pStack		EQU		14
+JCB_nStack		EQU		15
+JCB_UserName	EQU		16		; 32 bytes
+JCB_Path		EQU		24		; 80 bytes
+JCB_ExitRF		EQU		44		; 80 bytes
+JCB_CmdLine		EQU		84		; 240 bytes		
+JCB_SysIn		EQU		140		; 40 chars
+JCB_SysOut		EQU		150		; 40 chars
+JCB_ExitError	EQU		160
+JCB_pVidMem		EQU		161		; pointer to video memory
+JCB_pVidMemAttr	EQU		162
+JCB_pVirtVid	EQU		163		; pointer to virtual video buffer
+JCB_pVirtVidAttr	EQU		164
+JCB_VideoMode	EQU		165
+JCB_VideoRows	EQU		166
+JCB_VideoCols	EQU		167
+JCB_CursorRow	EQU		168
+JCB_CursorCol	EQU		169
+JCB_CursorOn	EQU		170
+JCB_CursorFlash	EQU		171
+JCB_CursorType	EQU		172
+JCB_NormAttr	EQU		173
+JCB_ScrlCnt		EQU		174
+JCB_fVidPause	EQU		175
+JCB_Next		EQU		176
+JCB_iof_next	EQU		177		; I/O focus list
+JCB_iof_prev	EQU		178
+JCB_VMP_bitmap_b0	EQU		179		; 512 bits	- virtual memory page bitmap
+JCB_VMP_bitmap_b1	EQU		195		; 512 bits	- virtual memory page bitmap
+JCB_KeybdHead	EQU		211
+JCB_KeybdTail	EQU		212
+JCB_KeybdEcho	EQU		213
+JCB_KeybdBad	EQU		214
+JCB_KeybdAck	EQU		215
+JCB_KeybdLocks	EQU		216
+JCB_KeybdBuffer	EQU		217		; buffer is 16 words (chars = words)
+JCB_Size		EQU		256
+JCB_LogSize		EQU		8
+
+		.bss
+JCBs			fill.b	NR_JCB * JCB_Size,0
+FreeJCB		db		0
 
 			.bss
 			.org		0x01FBA000
@@ -364,8 +418,6 @@ TCB_CursorCol	fill.b	NR_TCB,0	;	EQU		0x01FBD200
 TCB_hWaitMbx	fill.b	NR_TCB,0	;	EQU		0x01FBD300	; handle of mailbox task is waiting at
 TCB_mbq_next	fill.b	NR_TCB,0	;	EQU		0x01FBD400	; mailbox queue next
 TCB_mbq_prev	fill.b	NR_TCB,0	;	EQU		0x01FBD500	; mailbox queue previous
-TCB_iof_next	fill.b	NR_TCB,0	;	EQU		0x01FBD600
-TCB_iof_prev	fill.b	NR_TCB,0	;	EQU		0x01FBD700
 TCB_SP8Save		fill.b	NR_TCB,0	;	EQU		0x01FBD800	; TCB_SP8Save area 
 TCB_SPSave		fill.b	NR_TCB,0	;	EQU		0x01FBD900	; TCB_SPSave area
 TCB_ABS8Save	fill.b	NR_TCB,0	;	EQU		0x01FBDA00
@@ -377,8 +429,12 @@ TCB_NxtTo		fill.b	NR_TCB,0	;	EQU		0x01FBDF00
 TCB_PrvTo		fill.b	NR_TCB,0	;	EQU		0x01FBE000
 TCB_MbxList		fill.b	NR_TCB,0	;	EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
 TCB_mbx			fill.b	NR_TCB,0	;	EQU		0x01FBCE00
+TCB_HeapStart	fill.b	NR_TCB,0	;	Starting address of heap in task's memory space
+TCB_HeapEnd		fill.b	NR_TCB,0	;	Ending addres of heap in task's memory space
 
-NR_MMU_MAP		EQU		64
+;include "jcb.inc"
+
+NR_MMU_MAP		EQU		32
 VPM_bitmap_b0	fill.b	NR_MMU_MAP * 16,0
 VPM_bitmap_b1	fill.b	NR_MMU_MAP * 16,0
 nPagesFree		db		0
@@ -386,7 +442,7 @@ nPagesFree		db		0
 			.bss
 			.org		0x01D00000
 SCREEN_SIZE		EQU		8192
-BIOS_SCREENS	fill.b	SCREEN_SIZE * NR_TCB	; 0x01D00000 to 0x01EFFFFF
+BIOS_SCREENS	fill.b	SCREEN_SIZE * NR_JCB	; 0x01D00000 to 0x01EFFFFF
 
 ; preallocated stacks for TCBs
 			.bss
@@ -475,7 +531,7 @@ mmu_acc_save	db		0
 
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
-IOFocusNdx	db		0
+IOFocusNdx	db		0		; really a pointer to the JCB owning the IO focus
 ;
 test_mbx	db		0
 test_D1		db		0
@@ -525,11 +581,18 @@ gr_cmd		db		0
 
 startSector	EQU		0x7F0
 
-macro mStartTask pri,flags,start_addr,param
+;
+; CAUTION:
+; - do not use these macros.
+; - there is currently a bug in the assembler that causes it to lose the
+;   macro text
+;
+macro mStartTask pri,flags,start_addr,param,job
 	lda		pri
 	ldx		flags
 	ldy		start_addr
 	ld		r4,param
+	ld		r5,job
 	int		#4
 	db		1
 endm
@@ -686,7 +749,7 @@ st_nommu:
 	ldx		#$01FB8001		; interrupt vector table from $5FB0000 to $5FB01FF
 							; also sets nmoi policy (native mode on interrupt)
 	trs		r2,vbr
-	dex
+	and		r2,r2,#-2		; mask off policy bit
 	phx
 	txy						; y = pointer to vector table
 	lda		#511			; 512 vectors to setup
@@ -755,7 +818,14 @@ st_nommu:
 	; This will likely cause an interrupt right away because the timer
 	; pulses run since power-up.
 	cli						
-	mStartTask	#PRI_LOWEST,#0,#IdleTask,#0
+;	mStartTask	#PRI_LOWEST,#0,#IdleTask,#0,#0
+	lda		#PRI_LOWEST
+	ldx		#0
+	ldy		#IdleTask
+	ld		r4,#0
+	ld		r5,#0
+	int		#4
+	db		1
 	lda		CONFIGREC		; do we have a serial port ?
 	bit		#32
 	beq		st7
@@ -781,9 +851,14 @@ st8:
 	lda		#14
 	sta		LEDS
 	stz		keybdIsSetup
-	mStartTask	#PRI_NORMAL,#0,#KeybdSetup,#0
-;	lda		#PRI_NORMAL
-;	ldx		#0
+;	mStartTask	#PRI_NORMAL,#0,#KeybdSetup,#0
+	lda		#PRI_NORMAL
+	ldx		#0
+	ldy		#KeybdSetup
+	ld		r4,#0
+	ld		r5,#0
+	int		#4
+	db		1
 ;	lea		r3,KeybdStatusLEDs
 ;	jsr		StartTask
 	lda		#6
@@ -840,100 +915,6 @@ ibmp1:
 	bne		ibmp1
 	rts
 
-;------------------------------------------------------------------------------
-; InitMMU
-;
-; Initialize the 64 maps of the MMU.
-; Initially all the maps are set the same:
-; Virtual Page  Physical Page
-; 000-319		000 (invalid page marker)
-; 320-511		1856-2047
-; Note that there are only 512 virtual pages per map, and 2048 real
-; physical pages of memory. This limits maps to 32MB.
-; This range includes the BIOS assigned stacks for the tasks and tasks
-; virtual video buffers.
-; Note that physical pages 0 to 1855 are not mapped, but do exist. They may
-; be mapped into a task's address space as required.
-; If changing the maps the last 192 pages (12MB) of the map should always point
-; to the BIOS area. Don't change map entries 320-511 or the system may
-; crash.
-; If the rts at the end of this routine works, then memory was mapped
-; successfully.
-;
-; System Memory Map (Physical Addresses)
-; Page
-; 0000			BASIC ROM, scratch memory ( 1 page global)
-; 0001-0063		unassigned (4MB - 63 pages)
-; 0064-0191		Bitmap video memory (8 MB - 128 pages)
-; 0192-0336		DOS usage, disk cache etc. (9.4MB - 145 pages)
-; 0337-1855		Heap space (99MB - 1519 pages)
-; 1856-1983		Virtual Screen buffers (8MB - 128 pages)
-; 1984-2047		BIOS/OS area (4MB - 64 pages)
-;	2032-2047		Stacks area (1MB - 16 pages)
-; 65535			BIOS ROM (64kB - 1 Page global)
-; 261952-262015		I/O area (4MB - 64 pages global)
-;------------------------------------------------------------------------------
-INV_PAGE	EQU	000		; page number to use for invalid entries
-
-InitMMU:
-	lda		#1
-	sta		MMU_KVMMU+1
-	dea
-	sta		MMU_KVMMU
-immu1:
-	sta		MMU_AKEY	; set access key for map
-	ldx		#0
-immu2:
-	; set the first 320 pages to invalid page marker
-	; set the last 192 pages to physical page 1856-2047
-	ld		r4,#INV_PAGE
-	cpx		#320
-	blo		immu3
-	ld		r4,r2
-	add		r4,r4,#1536	; 1856-320
-immu3:
-	st		r4,MMU,x
-	inx
-	cpx		#512
-	bne		immu2
-	ina
-	cmp		#64			; 64 MMU maps
-	bne		immu1
-	stz		MMU_OKEY	; set operating key to map #0
-	lda		#2
-	sta		MMU_FUSE	; set fuse to 2 clocks before mapping starts
-	nop
-	nop
-
-;------------------------------------------------------------------------------
-; Note that when switching the memory map, the stack address changes, and may
-; even be mapped out. We cannot just "rts" from these functions. The return
-; address has to be saved off and an register indirect jump performed.
-;------------------------------------------------------------------------------
-;
-EnableMMUMapping:
-	lda		RunningTCB	; no need to enable mapping for BIOS task
-	cmp		#1
-	blo		DisableMMUMapping
-	lda		#12			; is there even an MMU present ?
-	bmt		CONFIGREC
-	beq		emm1
-	pla
-	sec					; use a rotate to avoid consuming another processor register
-	rol		MMU_MAPEN	; set MMU_MAPEN = 1
-	jmp		(r1)
-emm1:
-	rts
-
-DisableMMUMapping:
-	lda		#12			; is there even an MMU present ?
-	bmt		CONFIGREC
-	beq		dmm1
-	pla					; get return address into acc
-	stz		MMU_MAPEN	; disabling mapping will change stack placement
-	jmp		(r1)
-dmm1:
-	rts
 
 ;------------------------------------------------------------------------------
 ; The ROM contents are summed up to ensure the ROM is okay.
@@ -1104,22 +1085,22 @@ DumpIOFocusList:
 	spl		iof_sema + 1
 	lda		IOFocusNdx
 diofl2:
-	bmi		diofl1
+	beq		diofl1
 	tay
 	ldx		#3
 	jsr		PRTNUM
 	lda		#' '
 	jsr		DisplayChar
-	lda		TCB_iof_prev,y
+	lda		JCB_iof_prev,y
 	ldx		#3
 	jsr		PRTNUM
 	lda		#' '
 	jsr		DisplayChar
-	lda		TCB_iof_next,y
+	lda		JCB_iof_next,y
 	ldx		#3
 	jsr		PRTNUM
 	jsr		CRLF
-	lda		TCB_iof_next,y
+	lda		JCB_iof_next,y
 	cmp		IOFocusNdx
 	bne		diofl2
 	
@@ -1148,31 +1129,35 @@ msgRunningTCB:
 	db	CR,LF,"RunningTCB is bad.",CR,LF,0
 
 ;------------------------------------------------------------------------------
+; Get a pointer to the JCB for the currently running task.
+;------------------------------------------------------------------------------
+;
+GetPtrCurrentJCB:
+	ld		r1,RunningTCB
+	ld		r1,TCB_hJCB,r1		; get the handle
+	and		r1,r1,#NR_JCB-1		; and convert it to a pointer
+;	mul		r1,r1,#JCB_Size
+	asl		r1,r1,#JCB_LogSize	; 256 words
+	add		r1,r1,#JCBs
+	rts
+
+;------------------------------------------------------------------------------
 ; Get the location of the screen and screen attribute memory. The location
 ; depends on whether or not the task has the output focus.
 ;------------------------------------------------------------------------------
 GetScreenLocation:
-	lda		RunningTCB
-	cmp		IOFocusNdx
-	beq		gsl1
-	and		r1,r1,#$FF
-	asl		r1,r1,#13			; 8192 words per screen
-	add		r1,r1,#BIOS_SCREENS
-	rts
-gsl1:
-	lda		#TEXTSCR
+	jsr		GetPtrCurrentJCB
+	lda		JCB_pVidMem,r1
 	rts
 
 GetColorCodeLocation:
-	lda		RunningTCB
-	cmp		IOFocusNdx
-	beq		gccl1
-	and		r1,r1,#$FF
-	asl		r1,r1,#13			; 8192 words per screen
-	add		r1,r1,#BIOS_SCREENS+4096
+	jsr		GetPtrCurrentJCB
+	lda		JCB_pVidMemAttr,r1
 	rts
-gccl1:
-	lda		#TEXTSCR+$10000
+
+GetNormAttr:
+	jsr		GetPtrCurrentJCB
+	lda		JCB_NormAttr,r1
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1183,41 +1168,26 @@ CopyVirtualScreenToScreen
 	phx
 	phy
 	push	r4
-	lda		#4095				; number of words to copy-1
 	ldx		IOFocusNdx			; compute virtual screen location
-	bmi		cvss3
-	asl		r2,r2,#13			; 8192 words per screen
-	add		r2,r2,#BIOS_SCREENS	; add in screens array base address
+	beq		cvss3
+	; copy screen chars
+	lda		#4095				; number of words to copy-1
+	ldx		JCB_pVirtVid,x
 	ldy		#TEXTSCR
 	mvn
-;cvss1:
-;	ld		r4,(x)
-;	st		r4,(y)
-;	inx
-;	iny
-;	dea
-;	bne		cvss1
 	; now copy the color codes
 	lda		#4095
 	ldx		IOFocusNdx
-	asl		r2,r2,#13
-	add		r2,r2,#BIOS_SCREENS+4096	; virtual char color array
+	ldx		JCB_pVirtVidAttr,x
 	ldy		#TEXTSCR+$10000
 	mvn
-;cvss2:
-;	ld		r4,(x)
-;	st		r4,(y)
-;	inx
-;	iny
-;	dea
-;	bne		cvss2
 cvss3:
 	; reset the cursor position in the text controller
 	ldy		IOFocusNdx
-	ldx		TCB_CursorRow,y
+	ldx		JCB_CursorRow,y
 	lda		TEXTREG+TEXT_COLS
 	mul		r2,r2,r1
-	add		r2,r2,TCB_CursorCol,y
+	add		r2,r2,JCB_CursorCol,y
 	stx		TEXTREG+TEXT_CURPOS
 	pop		r4
 	ply
@@ -1233,30 +1203,14 @@ CopyScreenToVirtualScreen
 	lda		#4095
 	ldx		#TEXTSCR
 	ldy		IOFocusNdx
-	bmi		csvs3
-	asl		r3,r3,#13
-	add		r3,r3,#BIOS_SCREENS
+	beq		csvs3
+	ldy		JCB_pVirtVid,y
 	mvn
-;csvs1:
-;	ld		r4,(x)
-;	st		r4,(y)
-;	inx
-;	iny
-;	dea
-;	bne		csvs1
 	lda		#4095
 	ldx		#TEXTSCR+$10000
 	ldy		IOFocusNdx
-	asl		r3,r3,#13
-	add		r3,r3,#BIOS_SCREENS+4096
+	ldy		JCB_pVirtVidAttr,y
 	mvn
-;csvs2:
-;	ld		r4,(x)
-;	st		r4,(y)
-;	inx
-;	iny
-;	dea
-;	bne		csvs2
 csvs3:
 	pop		r4
 	ply
@@ -1287,9 +1241,10 @@ ClearScreen:
 	pla							; a is count
 	pha
 	stos						; clear the memory
-	ld		r2,ScreenColor		; x = value to use
+	jsr		GetNormAttr
+	tax							; x = value to use
 	jsr		GetColorCodeLocation
-	tay							; y = targte address
+	tay							; y = target address
 	pla							; a = count
 	stos
 	ply
@@ -1408,18 +1363,22 @@ stasc1:
 ; Set the cursor location to the top left of the screen.
 ;------------------------------------------------------------------------------
 HomeCursor:
+	pha
 	phx
-	spl		tcb_sema + 1
-	ldx		RunningTCB
-	and		r2,r2,#$FF
-	stz		TCB_CursorRow,x
-	stz		TCB_CursorCol,x
-	stz		tcb_sema + 1
+	phy
+	spl		jcb_sema + 1
+	jsr		GetPtrCurrentJCB
+	tax
+	stz		JCB_CursorRow,x
+	stz		JCB_CursorCol,x
+	stz		jcb_sema + 1
 	cpx		IOFocusNdx
 	bne		hc1
 	stz		TEXTREG+TEXT_CURPOS
 hc1:
+	ply
 	plx
+	pla
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1429,23 +1388,23 @@ hc1:
 ;
 UpdateCursorPos:
 	pha
+	jsr		GetPtrCurrentJCB
+	cmp		IOFocusNdx				; update cursor position in text controller
+	bne		ucp1					; only for the task with the output focus
 	phx
 	push	r4
-	ld		r4,RunningTCB
-	and		r4,r4,#$FF
-	cmp		r4,IOFocusNdx			; update cursor position in text controller
-	bne		ucp1					; only for the task with the output focus
-	lda		TCB_CursorRow,r4
+	ld		r4,r1
+	lda		JCB_CursorRow,r4
 	and		#$3F					; limit of 63 rows
 	ldx		TEXTREG+TEXT_COLS
 	mul		r2,r2,r1
-	lda		TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 	and		#$7F					; limit of 127 cols
 	add		r2,r2,r1
 	stx		TEXTREG+TEXT_CURPOS
-ucp1:
 	pop		r4
 	plx
+ucp1:
 	pla
 	rts
 
@@ -1459,13 +1418,13 @@ ucp1:
 CalcScreenLoc:
 	phx
 	push	r4
-	ld		r4,RunningTCB
-	and		r4,r4,#$FF
-	lda		TCB_CursorRow,r4
+	jsr		GetPtrCurrentJCB
+	ld		r4,r1
+	lda		JCB_CursorRow,r4
 	and		#$3F					; limit to 63 rows
 	ldx		TEXTREG+TEXT_COLS
 	mul		r2,r2,r1
-	ld		r1,TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 	and		#$7F					; limit to 127 cols
 	add		r2,r2,r1
 	cmp		r4,IOFocusNdx			; update cursor position in text controller
@@ -1474,11 +1433,6 @@ CalcScreenLoc:
 csl1:
 	jsr		GetScreenLocation
 	add		r1,r1,r2
-	pop		r4
-	plx
-	rts
-csl2:
-	lda		#TEXTSCR
 	pop		r4
 	plx
 	rts
@@ -1493,12 +1447,14 @@ csl2:
 message "DisplayChar"
 DisplayChar:
 	push	r4
-	ld		r4,RunningTCB
-	and		r4,r4,#$FF
+	pha
+	jsr		GetPtrCurrentJCB
+	ld		r4,r1
+	pla
 	and		#$FF				; mask off any higher order bits (called from eight bit mode).
 	cmp		#'\r'				; carriage return ?
 	bne		dccr
-	stz		TCB_CursorCol,r4	; just set cursor column to zero on a CR
+	stz		JCB_CursorCol,r4	; just set cursor column to zero on a CR
 	jsr		UpdateCursorPos
 dcx14:
 	pop		r4
@@ -1507,11 +1463,11 @@ dccr:
 	cmp		#$91				; cursor right ?
 	bne		dcx6
 	pha
-	lda		TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 	cmp		#55
 	bcs		dcx7
 	ina
-	sta		TCB_CursorCol,r4
+	sta		JCB_CursorCol,r4
 dcx7:
 	jsr		UpdateCursorPos
 	pla
@@ -1521,40 +1477,40 @@ dcx6:
 	cmp		#$90				; cursor up ?
 	bne		dcx8		
 	pha
-	lda		TCB_CursorRow,r4
+	lda		JCB_CursorRow,r4
 	beq		dcx7
 	dea
-	sta		TCB_CursorRow,r4
+	sta		JCB_CursorRow,r4
 	bra		dcx7
 dcx8:
 	cmp		#$93				; cursor left ?
 	bne		dcx9
 	pha
-	lda		TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 	beq		dcx7
 	dea
-	sta		TCB_CursorCol,r4
+	sta		JCB_CursorCol,r4
 	bra		dcx7
 dcx9:
 	cmp		#$92				; cursor down ?
 	bne		dcx10
 	pha
-	lda		TCB_CursorRow,r4
+	lda		JCB_CursorRow,r4
 	cmp		#46
 	beq		dcx7
 	ina
-	sta		TCB_CursorRow,r4
+	sta		JCB_CursorRow,r4
 	bra		dcx7
 dcx10:
 	cmp		#$94				; cursor home ?
 	bne		dcx11
 	pha
-	lda		TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 	beq		dcx12
-	stz		TCB_CursorCol,r4
+	stz		JCB_CursorCol,r4
 	bra		dcx7
 dcx12:
-	stz		TCB_CursorRow,r4
+	stz		JCB_CursorRow,r4
 	bra		dcx7
 dcx11:
 	pha
@@ -1564,18 +1520,18 @@ dcx11:
 	bne		dcx13
 	jsr		CalcScreenLoc
 	tay							; y = screen location
-	lda		TCB_CursorCol,r4	; acc = cursor column
+	lda		JCB_CursorCol,r4	; acc = cursor column
 	bra		dcx5
 dcx13	
 	cmp		#CTRLH				; backspace ?
 	bne		dcx3
-	lda		TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 	beq		dcx4
 	dea
-	sta		TCB_CursorCol,r4
+	sta		JCB_CursorCol,r4
 	jsr		CalcScreenLoc		; acc = screen location
 	tay							; y = screen location
-	lda		TCB_CursorCol,r4
+	lda		JCB_CursorCol,r4
 dcx5:
 	ldx		$4,y
 	stx		(y)
@@ -1601,7 +1557,7 @@ dcx3:
 	sub		r3,r3,r1		; make y an index into the screen
 	jsr		GetColorCodeLocation
 	add		r3,r3,r1
-	lda		CharColor
+	jsr		GetNormAttr
 	sta		(y)
 	jsr		IncCursorPos
 	bra		dcx4
@@ -1618,36 +1574,37 @@ dcx4:
 ; Increment the cursor position, scroll the screen if needed.
 ;------------------------------------------------------------------------------
 ;
+message "IncCursorPos"
 IncCursorPos:
 	pha
 	phx
 	push	r4
-	ld		r4,RunningTCB
-	and		r4,r4,#$FF
-	lda		TCB_CursorCol,r4
+	jsr		GetPtrCurrentJCB
+	ld		r4,r1
+	lda		JCB_CursorCol,r4
 	ina
-	sta		TCB_CursorCol,r4
+	sta		JCB_CursorCol,r4
 	ldx		TEXTREG+TEXT_COLS
 	cmp		r1,r2
 	bcc		icc1
-	stz		TCB_CursorCol,r4		; column = 0
+	stz		JCB_CursorCol,r4		; column = 0
 	bra		icr1
 IncCursorRow:
 	pha
 	phx
 	push	r4
-	ld		r4,RunningTCB
-	and		r4,r4,#$FF
+	jsr		GetPtrCurrentJCB
+	ld		r4,r1
 icr1:
-	lda		TCB_CursorRow,r4
+	lda		JCB_CursorRow,r4
 	ina
-	sta		TCB_CursorRow,r4
+	sta		JCB_CursorRow,r4
 	ldx		TEXTREG+TEXT_ROWS
 	cmp		r1,r2
 	bcc		icc1
 	beq		icc1
 	dex							; backup the cursor row, we are scrolling up
-	stx		TCB_CursorRow,r4
+	stx		JCB_CursorRow,r4
 	jsr		ScrollUp
 icc1:
 	jsr		UpdateCursorPos
@@ -1662,6 +1619,7 @@ icc2:
 ; The characters are packed 4 per word
 ;------------------------------------------------------------------------------
 ;
+message "DisplayStringB"
 DisplayStringB:
 	pha
 	phx
@@ -1716,6 +1674,7 @@ DisplayCharQ:
 ; The characters are packed 1 per word
 ;------------------------------------------------------------------------------
 ;
+message "DisplayStringW"
 DisplayStringW:
 	pha
 	phx
@@ -1745,6 +1704,7 @@ CRLF:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+message "TickRout"
 TickRout:
 	; support EhBASIC's IRQ functionality
 	; code derived from minimon.asm
@@ -1759,10 +1719,11 @@ TickRout:
 	inc		TEXTSCR+55		; update IRQ live indicator on screen
 	
 	; flash the cursor
-	ldx		RunningTCB
+	jsr		GetPtrCurrentJCB
+	tax
 	cpx		IOFocusNdx		; only bother to flash the cursor for the task with the IO focus.
 	bne		tr1a
-	lda		CursorFlash		; test if we want a flashing cursor
+	lda		JCB_CursorFlash,x	; test if we want a flashing cursor
 	beq		tr1a
 	jsr		CalcScreenLoc	; compute cursor location in memory
 	tay
@@ -1776,90 +1737,20 @@ TickRout:
 tr1a
 	rts
 
+message "null.asm"
 include "null.asm"
+message "keyboard.asm"
 include "keyboard.asm"
-
-comment ~
-;------------------------------------------------------------------------------
-; Get a bit from the I/O focus table.
-;------------------------------------------------------------------------------
-GetIOFocusBit:
-	phx
-	phy
-	tax
-	and		r1,r1,#$1F		; get bit index into word
-	lsr		r2,r2,#5		; get word index into table
-	ldy		IOFocusTbl,x
-	lsr		r3,r3,r1		; extract bit
-	and		r1,r3,#1
-	ply
-	plx
-	rts
-~
-;------------------------------------------------------------------------------
-; ForceIOFocus
-;
-; Force the IO focus to a specific task.
-;------------------------------------------------------------------------------
-;
-ForceIOFocus:
-	pha
-	phy
-	spl		iof_sema + 1
-	ldy		IOFocusNdx
-	cmp		r1,r3
-	beq		fif1
-	jsr		CopyScreenToVirtualScreen
-	sta		IOFocusNdx
-	jsr		CopyVirtualScreenToScreen
-fif1:
-	stz		iof_sema + 1
-	ply
-	pla
-	rts
-	
-;------------------------------------------------------------------------------
-; SwitchIOFocus
-;
-; Switches the IO focus to the next task requesting the I/O focus. This
-; routine may be called when a task releases the I/O focus as well as when
-; the user presses ALT-TAB on the keyboard.
-; On Entry: the io focus semaphore is set already.
-;------------------------------------------------------------------------------
-;
-SwitchIOFocus:
-	pha
-	phy
-
-	; First check if it's even possible to switch the focus to another
-	; task. The I/O focus list could be empty or there may be only a
-	; single task in the list. In either case it's not possible to
-	; switch.
-	ldy		IOFocusNdx		; Get the task at the head of the list.
-	bmi		siof3			; Is the list empty ?
-	lda		TCB_iof_next,y	; Get the next task on the list.
-	cmp		r1,r3			; Will the list head change ?
-	beq		siof3			; If not then no switch will occur
-	
-	; Copy the current task's screen to it's virtual screen buffer.
-	jsr		CopyScreenToVirtualScreen
-
-	sta		IOFocusNdx		; Make task the new head of list.
-
-	; Copy the virtual screen of the task recieving the I/O focus to the
-	; text screen.
-	jsr		CopyVirtualScreenToScreen
-siof3:
-	ply
-	pla
-	rts
-	
+message "iofocus.asm"
+include "iofocus.asm"
+message "serial.asm"
 include "serial.asm"
 
 ;------------------------------------------------------------------------------
 ; Display nybble in r1
 ;------------------------------------------------------------------------------
 ;
+message "DisplayNybble"
 DisplayNybble:
 	pha
 	and		#$0F
@@ -1983,11 +1874,14 @@ Prompt1:
 	lda		#80
 	sta		LEDS
 	ldx		RunningTCB
-	cpx		#MAX_TASKNO
-	bhi		Prompt3
+	ldx		TCB_hJCB,x
+	cpx		#NR_JCB
+	bhs		Prompt3
+	mul		r2,r2,#JCB_Size
+	add		r2,r2,#JCBs
 	lda		#81
 	sta		LEDS
-	stz		TCB_CursorCol,x	; go back to the start of the line
+	stz		JCB_CursorCol,x	; go back to the start of the line
 	jsr		CalcScreenLoc	; r1 = screen memory location
 	tay
 	lda		#82
@@ -2031,7 +1925,14 @@ Prompt8a:
 Prompt7:
 	cmp		#'B'			; $B - start tiny basic
 	bne		Prompt4
-	mStartTask	#PRI_LOW,#0,#CSTART,#0
+;	mStartTask	#PRI_LOW,#0,#CSTART,#0,#0
+	lda		#PRI_LOW
+	ldx		#0
+	ldy		#CSTART
+	ld		r4,#0
+	ld		r5,#4
+	int		#4
+	db		1
 ;	lda		#3
 ;	ldy		#CSTART
 ;	ldx		#0
@@ -2050,7 +1951,14 @@ Prompt4:
 ;	ldx		#$00000000		; flags: 
 ;	jmp		(y)
 ;	jsr		($FFFFC004>>2)		; StartTask
-	mStartTask	#PRI_LOW,#0,#$F000,#0
+;	mStartTask	#PRI_LOW,#0,#$F000,#0,#0
+	lda		#PRI_LOW
+	ldx		#0
+	ldy		#$F000
+	ld		r4,#0
+	ld		r5,#3
+	int		#4
+	db		1
 	bra		Monitor
 bsess1:
 	inc		BASIC_SESSION
@@ -2106,7 +2014,14 @@ Prompt13:
 ;	ldx		#0
 ;	ldy		#Piano
 ;	jsr		($FFFFC004>>2)		; StartTask
-	mStartTask	#PRI_NORMAL,#0,#Piano,#0
+;	mStartTask	#PRI_NORMAL,#0,#Piano,#0,#0
+	lda		#PRI_NORMAL
+	ldx		#0
+	ldy		#Piano
+	ld		r4,#0
+	ld		r5,#2
+	int		#4
+	db		1
 	jmp		Monitor
 
 Prompt14:
@@ -2162,7 +2077,7 @@ Prompt16:
 ;	ldx		#0
 ;	ldy		#eth_main
 ;	jsr		StartTask
-	mStartTask	#PRI_HIGH,#0,#eth_main,#0
+	mStartTask	#PRI_HIGH,#0,#eth_main,#0,#0
 ;	jsr		eth_main
 	jmp		Monitor
 Prompt17:
@@ -2197,7 +2112,13 @@ Prompt21:
 ;	ldx		#0
 ;	ldy		#test_mbx_prg
 ;	jsr		StartTask
-	mStartTask	#PRI_LOW,#0,#test_mbx_prg,#0
+	lda		#PRI_LOW
+	ldx		#0
+	ldy		#test_mbx_prg
+	ld		r4,#0
+	ld		r5,#1		; Job 1!
+	int		#4
+	db		1
 	bra		Monitor
 
 message "Prompt16"
@@ -2232,10 +2153,8 @@ TestCLS:
 	cmp		#'S'
 	bne		Monitor
 	jsr 	ClearScreen
-	ldx		RunningTCB
-	stz		TCB_CursorCol,x
-	stz		TCB_CursorRow,x
-	jsr		CalcScreenLoc
+	jsr		HomeCursor
+;	jsr		CalcScreenLoc
 	jmp		Monitor
 message "HelpMsg"
 HelpMsg:
@@ -3301,255 +3220,8 @@ rsr1:
 	bne		rsr1
 	rts
 
-;--------------------------------------------------------------------------
-; Draw random lines on the bitmap screen.
-;--------------------------------------------------------------------------
-;
-message "RandomLines"
-RandomLines:
-	pha
-	phx
-	phy
-	push	r4
-	push	r5
-	jsr		RequestIOFocus
-	jsr		ClearScreen
-	jsr		HomeCursor
-	lda		#msgRandomLines
-	jsr		DisplayStringB
-	lda		#1
-	sta		gr_cmd
-rl5:
-	tsr		LFSR,r1
-	tsr		LFSR,r2
-	tsr		LFSR,r3
-	mod		r1,r1,#680
-	mod		r2,r2,#384
-	jsr		DrawPixel
-	tsr		LFSR,r1
-	sta		LineColor		; select a random color
-rl1:						; random X0
-	tsr		LFSR,r1
-	mod		r1,r1,#680
-rl2:						; random X1
-	tsr		LFSR,r3
-	mod		r3,r3,#680
-rl3:						; random Y0
-	tsr		LFSR,r2
-	mod		r2,r2,#384
-rl4:						; random Y1
-	tsr		LFSR,r4
-	mod		r4,r4,#384
-rl8:
-	ld		r5,GA_STATE		; make sure state is IDLE
-	bne		rl8
-	ld 		r5,gr_cmd
-	cmp		r5,#2
-	bne		rl11
-	jsr		DrawLine
-	bra		rl12
-rl11:
-	cmp		r5,#1
-	bne		rl13
-	jsr		DrawPixel
-	bra		rl12
-rl13:
-	cmp		r5,#4
-	bne		rl12
-	jsr		DrawRectangle
-rl12:
-	jsr		KeybdGetChar
-	cmp		#CTRLC
-	beq		rl7
-	cmp		#'p'
-	bne		rl9
-	jsr		ClearBmpScreen
-	lda		#1
-	sta		gr_cmd
-	bra		rl5
-rl9:
-	cmp		#'r'
-	bne		rl10
-	jsr		ClearBmpScreen
-	lda		#4
-	sta		gr_cmd
-	bra		rl5
-rl10
-	cmp		#'l'
-	bne		rl5
-	jsr		ClearBmpScreen
-	lda		#2
-	sta		gr_cmd
-	bra		rl5
-rl7:
-;	jsr		ReleaseIOFocus
-	pop		r5
-	pop		r4
-	ply
-	plx
-	pla
-	rts
-
-
-msgRandomLines:
-	db		CR,LF,"Random lines running - press CTRL-C to exit.",CR,LF,0
-
-;--------------------------------------------------------------------------
-; Draw a pixel on the bitmap screen.
-; r1 = x coordinate
-; r2 = y coordinate
-; r3 = color
-;--------------------------------------------------------------------------
-message "DrawPixel"
-DrawPixel:
-	pha
-	sta		GA_X0
-	stx		GA_Y0
-	sty		GA_PEN
-	lda		#1
-	sta		GA_CMD
-	pla
-	rts
-comment ~
-	pha
-	phx
-	mul		r2,r2,#680	; y * 680
-	add		r1,r1,r2	; + x
-	sb		r3,BITMAPSCR<<2,r1
-	plx
-	pla
-	rts
-~
-;--------------------------------------------------------------------------
-; Draw a line on the bitmap screen.
-;--------------------------------------------------------------------------
-;50 REM DRAWLINE
-;100 dx = ABS(xb-xa)
-;110 dy = ABS(yb-ya)
-;120 sx = SGN(xb-xa)
-;130 sy = SGN(yb-ya)
-;140 er = dx-dy
-;150 PLOT xa,ya
-;160 if xa<>xb goto 200
-;170 if ya=yb goto 300
-;200 ee = er * 2
-;210 if ee <= -dy goto 240
-;220 er = er - dy
-;230 xa = xa + sx
-;240 if ee >= dx goto 270
-;250 er = er + dx
-;260 ya = ya + sy
-;270 GOTO 150
-;300 RETURN
-
-message "DrawLine"
-DrawLine:
-	pha
-	sta		GA_X0
-	stx		GA_Y0
-	sty		GA_X1
-	st		r4,GA_Y1
-	lda		LineColor
-	sta		GA_PEN
-	lda		#2
-	sta		GA_CMD
-	pla
-	rts
-
-DrawRectangle:
-	pha
-	sta		GA_X0
-	stx		GA_Y0
-	sty		GA_X1
-	st		r4,GA_Y1
-	lda		LineColor
-	sta		GA_PEN
-	lda		#4
-	sta		GA_CMD
-	pla
-	rts
-
-comment ~
-	pha
-	phx
-	phy
-	push	r4
-	push	r5
-	push	r6
-	push	r7
-	push	r8
-	push	r9
-	push	r10
-	push	r11
-
-	sub		r5,r3,r1	; dx = abs(x2-x1)
-	bpl		dln1
-	sub		r5,r0,r5
-dln1:
-	sub		r6,r4,r2	; dy = abs(y2-y1)
-	bpl		dln2
-	sub		r6,r0,r6
-dln2:
-
-	sub		r7,r3,r1	; sx = sgn(x2-x1)
-	beq		dln5
-	bpl		dln4
-	ld		r7,#-1
-	bra		dln5
-dln4:
-	ld		r7,#1
-dln5:
-
-	sub		r8,r4,r2	; sy = sgn(y2-y1)
-	beq		dln8
-	bpl		dln7
-	ld		r8,#-1
-	bra		dln8
-dln7:
-	ld		r8,#1
-
-dln8:
-	sub		r9,r5,r6	; er = dx-dy
-dln150:
-	phy
-	ldy		LineColor
-	jsr		DrawPixel
-	ply
-	cmp		r1,r3		; if (xa <> xb)
-	bne		dln200		;    goto 200
-	cmp		r2,r4		; if (ya==yb)
-	beq		dln300		;    goto 300
-dln200:
-	asl		r10,r9		; ee = er * 2
-	sub		r11,r0,r6	; r11 = -dy
-	cmp		r10,r11		; if (ee <= -dy)
-	bmi		dln240		;     goto 240
-	beq		dln240
-	sub		r9,r9,r6	; er = er - dy
-	add		r1,r1,r7	; xa = xa + sx
-dln240:
-	cmp		r10,r5		; if (ee >= dx)
-	bpl		dln150		;    goto 150
-	add		r9,r9,r5	; er = er + dx
-	add		r2,r2,r8	; ya = ya + sy
-	bra		dln150		; goto 150
-
-dln300:
-	pop		r11
-	pop		r10
-	pop		r9
-	pop		r8
-	pop		r7
-	pop		r6
-	pop		r5
-	pop		r4
-	ply
-	plx
-	pla
-	rts
-~
-
 ;include "float.asm"
+include "RandomLines.asm"
 
 ;--------------------------------------------------------------------------
 ; RTF65002 code to display the date and time from the date/time device.
@@ -3604,298 +3276,6 @@ DisplayDatetime
 
 include "ReadTemp.asm"
 
-;==============================================================================
-; Memory Management routines follow.
-;==============================================================================
-MemInit:
-	lda		#1					; initialize memory semaphore
-	sta		mem_sema
-	lda		#1519
-	sta		nPagesFree
-	lda		#$4D454D20
-	sta		HeapStart+MEM_CHK
-	sta		HeapStart+MEM_FLAG
-	sta		HeapEnd-2
-	sta		HeapEnd-3
-	lda		#0
-	sta		HeapStart+MEM_PREV	; prev of first MEMHDR
-	sta		HeapEnd			; next of last MEMHDR
-	lda		#HeapEnd
-	ina
-	sub		#$4
-	sta		HeapStart+MEM_NEXT	; next of first MEMHDR
-	lda		#HeapStart
-	sta		HeapEnd-1		; prev of last MEMHDR
-
-	; Initialize the allocated page map to zero.
-	lda		#64				; 64*32 = 2048 bits
-	ldx		#0
-	ldy		#PageMap
-	stos
-	; Mark the last 192 pages as used (by the OS)
-	; 6-32 bit words
-	lda		#-1
-	sta		PageMap+58
-	sta		PageMap+59
-	sta		PageMap+60
-	sta		PageMap+61
-	sta		PageMap+62
-	sta		PageMap+63
-	; Mark page #0 used
-	lda		#1		
-	sta		PageMap
-	; Mark 64-336 used (DOS)
-	lda		#64
-meminit1:
-	bms		PageMap
-	ina
-	cmp		#336
-	blo		meminit1
-	rts
-
-ReportMemFree:
-	jsr		CRLF
-	lda		#HeapEnd
-	ina
-	sub		#HeapStart
-	ldx		#5
-	jsr		PRTNUM
-	lda		#msgMemFree
-	jsr		DisplayStringB
-	rts
-
-msgMemFree:
-	db	" words free",CR,LF,0
-	
-;------------------------------------------------------------------------------
-; Allocate memory from the heap.
-;------------------------------------------------------------------------------
-MemAlloc:
-	phx
-	phy
-	push	r4
-memaSpin:
-	ldx		mem_sema+1
-	beq		memaSpin
-	ldx		#HeapStart
-mema4:
-	ldy		MEM_FLAG,x		; Check the flag word to see if this block is available
-	cpy		#$4D454D20
-	bne		mema1			; block not available, go to next block
-	ld		r4,MEM_NEXT,x	; compute the size of this block
-	sub		r4,r4,r2
-	sub		r4,r4,#4		; minus size of block header
-	cmp		r1,r4			; is the block large enough ?
-	bmi		mema2			; if yes, go allocate
-mema1:
-	ldx		MEM_NEXT,x		; go to the next block
-	beq		mema3			; if no more blocks, out of memory error
-	bra		mema4
-mema2:
-	ldy		#$6D656D20
-	sty		MEM_FLAG,x
-	sub		r4,r4,r1
-	cmp		r4,#4			; is the block large enough to split
-	bpl		memaSplit
-	stz		mem_sema+1
-	txa
-	pop		r4
-	ply
-	plx
-	rts
-mema3:						; insufficient memory
-	stz		mem_sema+1
-	pop		r4
-	ply
-	plx
-	lda		#0
-	rts
-memaSplit:
-	add		r4,r1,r2
-	add		r4,#4
-	ldy		#$4D454D20
-	sty		(r4)
-	sty		MEM_FLAG,r4
-	stx		MEM_PREV,r4
-	ldy		MEM_NEXT,x
-	sty		MEM_NEXT,r4
-	st		r4,MEM_PREV,y
-	ld		r1,r4
-	stz		mem_sema+1
-	pop		r4
-	ply
-	plx
-	rts
-
-;------------------------------------------------------------------------------
-; Free previously allocated memory. Recombine with next and previous blocks
-; if they are free as well.
-;------------------------------------------------------------------------------
-MemFree:
-	cmp		#0			; null pointer ?
-	beq		memf2
-	phx
-	phy
-memfSpin:
-	ldx		mem_sema+1
-	beq		memfSpin
-	ldx		MEM_FLAG,r1
-	cpx		#$6D656D20	; is the block allocated ?
-	bne		memf1
-	ldx		#$4D454D20
-	stx		MEM_FLAG,r1	; mark block as free
-	ldx		MEM_PREV,r1	; is the previous block free ?
-	beq		memf3		; no previous block
-	ldy		MEM_FLAG,x
-	cpy		#$4D454D20
-	bne		memf3		; the previous block is not free
-	ldy		MEM_NEXT,r1
-	sty		MEM_NEXT,x
-	beq		memf1		; no next block
-	stx		MEM_PREV,y
-memf3:
-	ldy		MEM_NEXT,r1
-	ldx		MEM_FLAG,y
-	cpx		#$4D454D20
-	bne		memf1		; next block not free
-	ldx		MEM_PREV,r1
-	stx		MEM_PREV,y
-	beq		memf1		; no previous block
-	sty		MEM_NEXT,x
-memf1:
-	stz		mem_sema+1
-	ply
-	plx
-memf2:
-	rts
-
-
-
-;------------------------------------------------------------------------------
-; brk
-; Establish a new program break
-;
-; Parameters:
-; r1 = new program break address
-;------------------------------------------------------------------------------
-;
-_brk:
-	phx
-	push	r4
-	push	r5
-	push	r6
-	ldx		RunningTCB
-	ld		r4,TCB_ASID,x
-	st		r4,MMU_AKEY
-	ld		r4,TCB_npages,x
-	lsr		r1,r1,#14
-	add		r1,r1,#1
-	cmp		r1,r4
-	beq		brk6			; allocation isn't changing
-	blo		brk1			; reducing allocation
-
-	; Here we're increasing the amount of memory allocated to the program.
-	;
-	cmp		r1,#320			; max 320 RAM pages
-	bhi		brk2
-	sub		r1,r1,r4		; number of new pages
-	cmp		r1,mem_pages_free	; are there enough free pages ?
-	bhi		brk2
-	ld		r5,mem_pages_free
-	sub		r5,r5,r1
-	st		r5,mem_pages_free
-	ld		r6,r1			; r6 = number of pages to allocate
-	add		r1,r1,r4		; get back value of address
-	sta		TCB_npages,x
-	lda		#0
-brk5:
-	bmt		PageMap			; test if page is free
-	bne		brk4			; no, go for next page
-	bms		PageMap			; allocate the page
-	sta		MMU,r4			; store the page number in the MMU table
-	add		r4,#1			; move to next MMU entry
-	sub		r6,#1			; decrement count of needed
-	beq		brk6			; we're done if count = 0
-brk4:
-	ina
-	cmp		#2048
-	blo		brk5
-
-	; Here there was an OS or hardware error
-	; According to mem_pages_free there should have been enough free pages
-	; to fulfill the request. Something is corrupt.
-	;
-
-	; Here we are reducing the program break, which means freeing up pages of
-	; memory.
-brk1:
-	sta		TCB_npages,x
-	add		r5,r1,#1		; move to page after last page
-brk7:
-	cmp		r5,r4			; are we done freeing pages ?
-	bhi		brk6
-	lda		MMU,r5			; get the page to free
-	bmc		PageMap			; free the page
-	inc		mem_pages_free
-	add		r5,#1
-	bra		brk7
-
-	; Successful return
-brk6:
-	pop		r6
-	pop		r5
-	pop		r4
-	plx
-	lda		#0
-	rts
-
-; Return insufficient memory error
-;
-brk2:
-	lda		#E_NoMem
-	sta		TCB_errno,x
-	pop		r6
-	pop		r5
-	pop		r4
-	plx
-	lda		#-1
-	rts
-
-;------------------------------------------------------------------------------
-; Parameters:
-; r1 = change in memory allocation
-;------------------------------------------------------------------------------
-_sbrk:
-	phx
-	push	r4
-	push	r5
-	ldx		RunningTCB
-	ld		r4,TCB_npages,x		; get the current memory allocation
-	cmp		r1,#0				; zero difference = get old brk address
-	beq		sbrk2
-	asl		r5,r4,#14			; convert to words
-	add		r1,r1,r5				; +/- amount
-	jsr		_brk
-	cmp		r1,#-1
-	bne		sbrk2
-
-; Failure return, return -1
-;
-	pop		r5
-	pop		r4
-	plx
-	rts
-
-; Successful return, return the old break address
-;	
-sbrk2:
-	ld		r1,r4
-	asl		r1,r1,#14
-	pop		r5
-	pop		r4
-	plx
-	rts
-
 include "memory.asm"
 
 ;------------------------------------------------------------------------------
@@ -3916,7 +3296,8 @@ bus_err_rout:
 	stx		LEDS
 	jsr		CRLF
 	stz		RunningTCB
-	stz		IOFocusNdx
+	lda		#JCBs
+	sta		IOFocusNdx
 	lda		#msgBusErr
 	jsr		DisplayStringB
 	tya
@@ -3954,13 +3335,12 @@ msgDataAddr:
 	db		" data address: ",0
 
 
-
 ;------------------------------------------------------------------------------
 ; 1000 Hz interrupt
 ; This IRQ must be fast.
 ; Increments the millisecond counter
 ;------------------------------------------------------------------------------
-;
+message "p1000Hz"
 p1000Hz:
 	pha
 	lda		#2						; reset edge sense circuit
@@ -3974,6 +3354,7 @@ p1000Hz:
 ; This interrupt just selects another task to run. The current task is
 ; stuck in an infinite loop.
 ;------------------------------------------------------------------------------
+message "slp_rout"
 slp_rout:
 	cld		; clear extended precision mode
 	pusha
@@ -4116,6 +3497,7 @@ msgPerr:
 ;     \/_//     robfinch<remove>@opencores.org
 ;       ||
 ;==============================================================================
+message "FMTK"
 	org		$FFFFC000
 syscall_vectors:
 	dw		MTKInitialize
@@ -4132,6 +3514,7 @@ syscall_vectors:
 	dw		CheckMsg
 
 	org		$FFFFC200
+message "MTKInitialize"
 MTKInitialize:
 	; Initialize semaphores
 	lda		#1
@@ -4143,6 +3526,7 @@ MTKInitialize:
 	sta		tolist_sema
 	sta		mbx_sema
 	sta		msg_sema
+	sta		jcb_sema
 
 	tsr		vbr,r2
 	and		r2,#-2
@@ -4171,20 +3555,59 @@ MTKInitialize:
 	ldy		#IOFocusTbl
 	stos
 
-	lda		#255
-	ldx		#-1
-	ldy		#TCB_iof_next
-	stos
-	lda		#255
-	ldx		#-1
-	ldy		#TCB_iof_prev
-	stos
-	
-	; Set owning job to zero
+	; Set owning job to zero (the monitor)
 	lda		#255
 	ldx		#0
 	ldy		#TCB_hJCB
 	stos
+
+	; zero out JCB's
+	; This will NULL out the I/O focus list pointers
+	lda		#NR_JCB * JCB_Size
+	ldx		#0
+	lea		r3,JCBs
+	stos
+
+	; Setup default values in the JCB's
+	ldy		#0
+	ldx		#JCBs
+ijcb1:
+	sty		JCB_Number,x
+	lda		#31
+	sta		JCB_VideoRows,x
+	lda		#56
+	sta		JCB_VideoCols,x
+	lda		#1					; turn on keyboard echo
+	sta		JCB_KeybdEcho,x
+	sta		JCB_CursorOn,x
+	sta		JCB_CursorFlash,x
+	stz		JCB_CursorRow,x
+	stz		JCB_CursorCol,x
+	stz		JCB_CursorType,x
+	lda		#$DE				; CE =blue on blue FB = grey on grey
+	sta		JCB_NormAttr,x
+	ld		r4,r3
+	mul		r4,r4,#8192			; 8192 words per screen
+	add		r4,r4,#BIOS_SCREENS
+	st		r4,JCB_pVirtVid,x
+	st		r4,JCB_pVidMem,x
+	add		r4,r4,#$1000
+	st		r4,JCB_pVirtVidAttr,x
+	st		r4,JCB_pVidMemAttr,x
+	cpy		#0
+	bne		ijcb2
+	lda		#$CE				; CE =blue on blue FB = grey on grey
+	sta		JCB_NormAttr,x
+	ld		r4,#TEXTSCR
+	st		r4,JCB_pVidMem,x
+	add		r4,r4,#$10000
+	st		r4,JCB_pVidMemAttr,x
+ijcb2:
+	iny
+	add		r2,r2,#JCB_Size
+	cpy		#32
+	blo		ijcb1
+	
 
 	; Initialize free message list
 	lda		#NR_MSG
@@ -4200,7 +3623,8 @@ st4:
 	bne		st4
 	lda		#-1
 	sta		MBX_LINK+NR_MSG-1
-	
+message "4"
+
 	; Initialize free mailbox list
 	; Note the first NR_TCB mailboxes are statically allocated to the tasks.
 	; They are effectively pre-allocated.
@@ -4218,6 +3642,21 @@ st3:
 	bne		st3
 	lda		#-1
 	sta		MBX_LINK+NR_MBX-1
+message "5"
+
+	; Initialize the FreeJCB list
+	lda		#JCBs+JCB_Size		; the next available JCB
+	sta		FreeJCB
+	tax
+	add		r1,r1,#JCB_Size
+	ldy		#NR_JCB-1
+st4:
+	sta		JCB_Next,x
+	add		r1,r1,#JCB_Size
+	add		r2,r2,#JCB_Size
+	dey
+	bne		st4
+	stz		JCB_Next,x
 
 	; Initialize the FreeTCB list
 	lda		#1				; the next available TCB
@@ -4234,6 +3673,7 @@ st2:
 	sta		TCB_NxtTCB+255
 	lda		#4
 	sta		LEDS
+message "6"
 
 	; Manually setup the BIOS task
 	stz		RunningTCB		; BIOS is task #0
@@ -4243,11 +3683,14 @@ st2:
 	sta		TCB_NxtTo
 	sta		TCB_PrvTo
 	stz		QNdx2			; insert at priority 2
-	stz		TCB_iof_next	; manually build the IO focus list
-	stz		TCB_iof_prev
-	stz		IOFocusNdx		; task #0 has the focus
+	; manually build the IO focus list
+	lda		#JCBs
+	sta		IOFocusNdx		; Job #0 (Monitor) has the focus
+	stz		JCB_iof_next,r1
+	stz		JCB_iof_prev,r1
 	lda		#1
-	sta		IOFocusTbl		; set the task#0 request bit
+	sta		IOFocusTbl		; set the job #0 request bit
+
 	lda		#PRI_NORMAL
 	sta		TCB_Priority
 	stz		TCB_Timeout
@@ -4261,9 +3704,11 @@ st2:
 	ldx		#$1FF
 	stx		TCB_SP8Save
 	rts
+message "7"
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+message "startIdleTask"
 StartIdleTask:
 	lda		#4
 	ldx		#0
@@ -4299,6 +3744,44 @@ it1:
 	bra		it2
 
 ;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = job name
+;	r2 = start address
+;------------------------------------------------------------------------------
+;
+StartJob:
+	pha
+	
+	; Get a free JCB
+	spl		freejcb_sema + 1
+	ld		r6,FreeJCB
+	beq		sjob1
+	ld		r7,JCB_Next,r6
+	st		r7,FreeJCB
+	stz		freejcb_sema + 1
+
+	lea		r7,JCB_Name,r6		; r7 = address of name field
+	asl		r7,r7,#2			; convert word to byte address
+	ld		r9,r7				; save off buffer address
+	ld		r8,#0				; r8 = count of characters (0 to 31)
+sjob3:
+	lb		r5,0,r1				; get a character
+	beq		sjob2				; end of string ?
+	sb		r5,1,r7
+	ina
+	inc		r7
+	inc		r8
+	cmp		r8,#31				; max number of chars ?
+	blo		sjob3
+sjob2:
+	sb		r8,0,r9				; save name length
+
+sjob1:
+	stz		freejcb_sema + 1
+	pla
+	rts
+
+;------------------------------------------------------------------------------
 ; StartTask
 ;
 ; Startup a task. The task is automatically allocated a 1kW stack from the BIOS
@@ -4310,18 +3793,11 @@ it1:
 ;	r2 = start flags
 ;	r3 = start address
 ;	r4 = start parameter
+;	r5 = job handle
 ;------------------------------------------------------------------------------
 message "StartTask"
 StartTask:
-	pha
-	phx
-	phy
-	push	r4
-	push	r5
-	push	r6
-	push	r7
-	push	r8
-	push	r9
+	pusha
 	ld		r6,r1				; r6 = task priority
 	ld		r8,r2				; r8 = flag register value on startup
 	
@@ -4334,7 +3810,6 @@ StartTask:
 	lda		TCB_NxtTCB,x
 	sta		FreeTCB				; update the FreeTCB list pointer
 	stz		freetcb_sema+1
-;	GoReschedule
 	lda		#81
 	sta		LEDS
 	txa							; acc = TCB index (task number)
@@ -4363,9 +3838,10 @@ StartTask:
 	st		r6,TCB_Priority,r7
 	stz		TCB_Status,r7
 	stz		TCB_Timeout,r7
+	st		r5,TCB_hJCB,r7		; save job handle
 	; setup virtual video for the task
-	stz		TCB_CursorRow,r7
-	stz		TCB_CursorCol,r7
+;	stz		TCB_CursorRow,r7
+;	stz		TCB_CursorCol,r7
 	stz		TCB_mmu_map,r7		; use mmu map
 ;	jsr		AllocateMemPage
 	pha
@@ -4431,19 +3907,10 @@ stask4:
 	jsr		AddTaskToReadyList
 	lda		#1
 	sta		tcb_sema
+	int		#2			; invoke the scheduler
 ;	GoReschedule		; invoke the scheduler
 stask2:
-	pop		r9
-	pop		r8
-	pop		r7
-	pop		r6
-	pop		r5
-	pop		r4
-	ply
-	plx
-	lda		#85
-	sta		LEDS
-	pla
+	popa
 	rts
 stask1:
 	stz		freetcb_sema+1
@@ -4517,7 +3984,7 @@ stp2:
 stp3:
 	ldy		#1
 	sty		tcb_sema
-	GoReschedule
+	int		#2
 	ply
 stp1:
 	rts
@@ -4815,7 +4282,7 @@ Sleep:
 	jsr		AddToTimeoutList	; The scheduler will be returning to this
 	lda		#1
 	sta		tcb_sema
-	GoReschedule				; task eventually, once the timeout expires,
+	int		#2				; task eventually, once the timeout expires,
 	plx
 	pla
 	rts
@@ -4859,7 +4326,10 @@ KillTask:
 	bls		kt1
 	cmp		#MAX_TASKNO
 	bhi		kt1
+	tax
+	lda		TCB_hJCB,r1
 	jsr		ForceReleaseIOFocus
+	txa
 	spl		tcb_sema + 1
 	jsr		RemoveTaskFromReadyList
 	jsr		RemoveFromTimeoutList
@@ -4886,7 +4356,7 @@ kt6:
 	stz		freetcb_sema + 1
 	cmp		RunningTCB					; keep running the current task as long as
 	bne		kt1							; the task didn't kill itself.
-	GoReschedule						; invoke scheduler to reschedule tasks
+	int		#2							; invoke scheduler to reschedule tasks
 kt1:
 	plx
 	rts
@@ -5148,7 +4618,7 @@ qmam1:
 	sta		FreeMsg
 	inc		nMsgBlk
 	stz		freemsg_sema + 1
-	GoReschedule
+	;GoReschedule
 	pop		r4
 	ply
 	plx
@@ -5394,7 +4864,8 @@ smsg8:
 	cmp		r4,#0
 	beq		smsg5
 	stz		mbx_sema + 1
-	GoReschedule
+	int		#2
+	;GoReschedule
 	bra		smsg9
 smsg5:
 	stz		mbx_sema + 1
@@ -5489,7 +4960,7 @@ wmsg14:
 	spl		tcb_sema + 1
 	jsr		AddToTimeoutList
 	stz		tcb_sema + 1
-	GoReschedule			; invoke the scheduler
+	int		#2	;	GoReschedule			; invoke the scheduler
 wmsg10:
 	; At this point either a message was sent to the task, or the task
 	; timed out. If a message is still not available then the task must
@@ -5639,131 +5110,6 @@ cmsg5:
 	rts
 
 ;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-comment ~
-SetIOFocusBit:
-	and		r2,r2,#$FF
-	and		r1,r2,#$1F		; get bit index 0 to 31
-	ldy		#1
-	asl		r3,r3,r1		; shift bit to proper place
-	lsr		r2,r2,#5		; get word index /32 bits per word
-	lda		IOFocusTbl,x
-	or		r1,r1,r3
-	sta		IOFocusTbl,x
-	rts
-~
-;------------------------------------------------------------------------------
-; The I/O focus list is an array indicating which tasks are requesting the
-; I/O focus. The I/O focus is user controlled by pressing ALT-TAB on the
-; keyboard.
-;------------------------------------------------------------------------------
-message "RequestIOFocus"
-RequestIOFocus:
-	pha
-	phx
-	phy
-	DisTmrKbd
-	ldx		RunningTCB	
-	cpx		#MAX_TASKNO
-	bhi		riof1
-	ldy		IOFocusNdx		; Is the focus list empty ?
-	bmi		riof2
-riof4:
-	lda		TCB_iof_next,x	; is the task already in the IO focus list ?
-	bpl		riof3
-	lda		IOFocusNdx		; Expand the list
-	ldy		TCB_iof_prev,r1
-	stx		TCB_iof_prev,r1
-	sta		TCB_iof_next,x
-	sty		TCB_iof_prev,x
-	stx		TCB_iof_next,y
-riof3:
-	txa
-	bms		IOFocusTbl
-;	jsr		SetIOFocusBit
-riof1:
-	EnTmrKbd
-	ply
-	plx
-	pla
-	rts
-
-	; Here, the IO focus list was empty. So expand it.
-	; Update pointers to loop back to self.
-riof2:
-	stx		IOFocusNdx
-	stx		TCB_iof_next,x
-	stx		TCB_iof_prev,x
-	bra		riof3
-
-;------------------------------------------------------------------------------
-; Releasing the I/O focus causes the focus to switch if the running task
-; had the I/O focus.
-; ForceReleaseIOFocus forces the release of the IO focus for a task
-; different than the one currently running.
-;------------------------------------------------------------------------------
-;
-message "ForceReleaseIOFocus"
-ForceReleaseIOFocus:
-	pha
-	phx
-	phy
-	tax
-	DisTmrKbd
-	jmp		rliof4
-message "ReleaseIOFocus"	
-ReleaseIOFocus:
-	pha
-	phx
-	phy
-	DisTmrKbd
-	ldx		RunningTCB	
-rliof4:
-	cpx		#MAX_TASKNO
-	bhi		rliof3
-;	phx	
-	ldy		#1
-	txa
-	bmt		IOFocusTbl
-	beq		rliof3
-	bmc		IOFocusTbl
-comment ~
-	and		r1,r2,#$1F		; get bit index 0 to 31
-	asl		r3,r3,r1		; shift bit to proper place
-	eor		r3,#-1			; invert bit mask
-	lsr		r2,r2,#5		; get word index /32 bits per word
-	lda		IOFocusTbl,x
-	and		r1,r1,r3
-	sta		IOFocusTbl,x
-~
-;	plx
-	cpx		IOFocusNdx		; Does the running task have the I/O focus ?
-	bne		rliof1
-	jsr		SwitchIOFocus	; If so, then switch the focus.
-rliof1:
-	lda		TCB_iof_next,x	; get next and previous fields.
-	bmi		rliof2			; Is the task on the list ?
-	ldy		TCB_iof_prev,x
-	sta		TCB_iof_next,y	; prev->next = current->next
-	sty		TCB_iof_prev,r1	; next->prev = current->prev
-	cmp		r1,r3			; Check if the IO focus list is collapsing.
-	bne		rliof2			; If the list just points back to the task
-	cmp		r1,r2			; being removed, then it's the last task
-	bne		rliof2			; removed from the list, so the list is being
-	lda		#-1				; emptied.
-	sta		IOFocusNdx
-rliof2:
-	lda		#-1				; Update the next and prev fields to indicate
-	sta		TCB_iof_next,x	; the task is no longer on the list.
-	sta		TCB_iof_prev,x
-rliof3:
-	EnTmrKbd
-	ply
-	plx
-	pla
-	rts
-
-;------------------------------------------------------------------------------
 ; Spinlock interrupt
 ;	Go reschedule tasks if a spinlock is taking too long.
 ;------------------------------------------------------------------------------
@@ -5842,6 +5188,7 @@ reschedule:
 	pusha	; save off regs on the stack
 	spl		tcb_sema + 1
 resched1:
+	jsr		DisableMMUMapping
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
 	sta		TCB_SPSave,x
@@ -5889,7 +5236,13 @@ p100Hz11:
 	pusha	; save off regs on the stack
 	lda		#96
 	sta		LEDS
+	lda		UserTick
+	beq		p100Hz4
+	jsr		(r1)
+	cli
+p100Hz4:
 
+	jsr		DisableMMUMapping
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
 	sta		TCB_SPSave,x
@@ -5900,11 +5253,6 @@ p100Hz11:
 	lda		TCB_Status,x
 	and		#~TS_RUNNING
 	sta		TCB_Status,x
-	lda		UserTick
-	beq		p100Hz4
-	jsr		(r1)
-	cli
-p100Hz4:
 	lda		#97
 	sta		LEDS
 
@@ -5953,26 +5301,7 @@ sttr2:
 	ldx		TCB_Status,r1	; flag the task as the running task
 	or		r2,r2,#TS_RUNNING
 	stx		TCB_Status,r1
-	; The mmu map better have the task control block area mapped
-	; properly.
 	tax
-	lda		#12
-	bmt		CONFIGREC
-;	lda		CONFIGREC
-;	bit		#4096
-	beq		sttr4
-	; The BIOS task has a "flat" memory map of all of memory
-	cpx		#0
-	bhi		sttr7
-	jsr		DisableMMUMapping
-	bra		sttr4
-sttr7:
-	lda		TCB_mmu_map,x
-	sta		MMU_OKEY			; select the mmu map for the task
-	lda		#2
-	sta		MMU_FUSE			; set fuse to 2 clocks before mapping starts
-	jsr		EnableMMUMapping
-sttr4:
 	lda		#99
 	sta		LEDS
 	lda		TCB_ABS8Save,x		; 8 bit emulation base register
@@ -5982,11 +5311,15 @@ sttr4:
 	ldx		TCB_SPSave,x		; get back stack pointer
 	lda		#1
 	sta		tcb_sema
-	ld		r0,iof_switch
-	beq		sttr6
+	ld		r0,iof_switch		
+	beq		sttr6				
+	ld		r0,iof_sema + 1		; just ignore the request to switch
+	beq		sttr6				; I/O focus if the semaphore can't be aquired
 	stz		iof_switch
 	jsr		SwitchIOFocus
+	stz		iof_sema + 1
 sttr6:
+	jsr		EnableMMUMapping
 	txs
 	popa						; restore registers
 	rti
@@ -6087,12 +5420,23 @@ pm1						; must update the return address !
 test_mbx_prg:
 	jsr		RequestIOFocus
 	lda		#test_mbx	; where to put mailbox handle
-	mAllocMbx
+	int		#4
+	db		6			; AllocMbx
 	ldx		#5
 	jsr		PRTNUM
-	mStartTask	#PRI_LOWEST,#0,#test_mbx_prg2,#0
+;	mStartTask	#PRI_LOWEST,#0,#test_mbx_prg2,#0,#0
+	lda		#PRI_LOWEST
+	ldx		#0
+	ldy		#test_mbx_prg2
+	ld		r4,#0
+	ld		r5,#1
+	int		#4
+	db		1			; StartTask
 tmp2:
-	mWaitMsg	test_mbx,#100
+	lda		test_mbx
+	ldx		#100
+	int		#4
+	db		10			; WaitMsg
 	cmp		#E_Ok
 	bne		tmp1
 	txa
@@ -6105,7 +5449,11 @@ tmp1:
 
 test_mbx_prg2:
 tmp2a:
-	mPostMsg	test_mbx,#msg_hello,#0
+	lda		test_mbx
+	ldx		#msg_hello
+	ldy		#0
+	int		#4
+	db		8			; PostMsg
 	bra		tmp2a
 msg_hello:
 	db		"Hello from RTF",13,10,0
