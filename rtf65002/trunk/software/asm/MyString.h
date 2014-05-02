@@ -37,7 +37,7 @@ namespace RTFClasses
 		String(char *);
 		String(String &);
 		~String();
-		char *buf() const { return desc->m_buf; };
+		char *buf() { return desc->m_buf; };
 		char buf(int) const;             // return character at buffer position
 		int bufsz() const { return desc->m_bufsz; };
 		int len() const { return desc->m_len; };

@@ -30,6 +30,9 @@ namespace RTFClasses
 	StrDesc::StrDesc()
 	{
 		m_buf = new char[32];
+		if (m_buf==NULL)
+			throw "Out of string descriptor space.";
+		m_buf[0] = '\0';
 		m_bufsz = 32;
 		m_len = 0;
 	};
@@ -40,6 +43,9 @@ namespace RTFClasses
 	{
 		n = ((n+32)&~31);
 		m_buf = new char[n];
+		if (m_buf==NULL)
+			throw "Out of string descriptor space.";
+		m_buf[0] = '\0';
 		m_bufsz = n;
 		m_len = 0;
 	};
@@ -48,6 +54,7 @@ namespace RTFClasses
 	// Delete descriptor
 	StrDesc::~StrDesc()
 	{
+		if (m_buf) memset(m_buf, '\0', m_bufsz);
 		delete[] m_buf;
 		m_buf = NULL;
 	}
@@ -66,6 +73,8 @@ namespace RTFClasses
 			int len = n < desc->m_len ? n : desc->m_len;
 			StrDesc *newbuf;
 			newbuf = new StrDesc(n+1);
+			if (newbuf==NULL)
+				throw "Out of string descriptor space.";
 			copy(newbuf->m_buf, desc->m_buf, len+1);
 			newbuf->m_len = len;
 			delete desc;
@@ -107,10 +116,10 @@ namespace RTFClasses
 
 	void String::copy(char *str, int n)
 	{
+		if (desc->m_bufsz < n+1)
+			realloc(n+1, false);
+		copy(desc->m_buf, str, n+1);
 		desc->m_len = n;
-		if (desc->m_bufsz < desc->m_len+1)
-			realloc(desc->m_len+1, false);
-		copy(desc->m_buf, str, desc->m_len+1);
 		desc->m_buf[n] = '\0';
 	};
 
@@ -427,7 +436,7 @@ namespace RTFClasses
 
 	String &String::operator=(char *s)
 	{
-		this->copy(s);
+		this->copy(s, strlen(s));
 		return *this;
 	};
 

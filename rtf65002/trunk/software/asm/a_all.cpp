@@ -275,22 +275,28 @@ int Assembler::dc(Opa *o)
 		CollectingMacro = false;
 		if (pass < 2)
 		{
-			mac = new Macro;
-			if (mac == NULL)
-				throw Err(E_MEMORY);
-			macrobuf.rtrim();
-			// Strip out spaces on the first line because these will be
-			// supplied where the macro is to be substituted.
-//			ltrim(macrobuf.buf()+1);
-			macrobuf += "\r\n";
-			//printf("macrobuf:%s|\r\n", macrobuf.buf());
-			mac->setBody(macrobuf);
-			mac->setArgCount(gMacro.Nargs());
-			mac->setName(gMacro.getName().buf());
-			mac->setFileLine(gMacro.getFile(), gMacro.getLine());
-			bdy = mac->initBody(parmlist);   // put parameter markers into body
-			bdy2 = bdy;
-			mac->setBody(bdy2);              // save body with markers
+			try {
+				mac = new Macro;
+				if (mac == NULL)
+					throw Err(E_MEMORY);
+				macrobuf.rtrim();
+				// Strip out spaces on the first line because these will be
+				// supplied where the macro is to be substituted.
+	//			ltrim(macrobuf.buf()+1);
+				macrobuf += "\r\n";
+				//printf("macrobuf:%s|\r\n",macrobuf.buf());
+				mac->setBody(macrobuf);
+				mac->setArgCount(gMacro.Nargs());
+				mac->setName(gMacro.getName().buf());
+				mac->setFileLine(gMacro.getFile(), gMacro.getLine());
+				bdy = mac->initBody(parmlist);   // put parameter markers into body
+				bdy2 = bdy;
+				mac->setBody(bdy2);              // save body with markers
+			}
+			catch (char *msg) {
+				printf(":%s\r\n", msg);
+				getchar();
+			}
 		}
 		// we don't need parms any more so free them up
 		for (ii = 0; ii < MAX_MACRO_PARMS; ii++) {
