@@ -10,6 +10,7 @@
 #include "sym.h"
 #include "HashTable.h"
 #include "Macro.h"
+#include "Rept.h"
 #include "objfile.h"
 #include "types.h"
 #include "fstreamS19.h"
@@ -157,6 +158,7 @@ namespace RTFClasses
 		String macrobuf;		// working macro buffer
 		int gNargs;             // number of macro arguments
 		Macro gMacro;           // Current working macro
+		Rept gRept;				// Current working repeat
 		bool lineExpanded;
 
 		Counter ProgramCounter; // current program location during assembly
@@ -221,6 +223,7 @@ private:
 
 		Declarator *headFreeLink;  // head of list of free links
 		HashTable *macroTbl;
+		HashTable *reptTbl;
 
 		void setProcessor(String cpu);
 		int getIdentifier(char *ptr, char **sptr, char **eptr);
@@ -311,6 +314,7 @@ private:
 		void dc(char sz);
 		void end();
 		void endm();
+		void endr();
 		int equ(char *iid);
 		void a_extern();
 		void fill();
@@ -319,6 +323,7 @@ private:
 		void lword();
 		void macro();
 		int macro2(char *);
+		void rept();
 		void message();
 		void org();
 		void a_public();

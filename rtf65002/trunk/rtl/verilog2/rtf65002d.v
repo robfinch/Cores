@@ -187,6 +187,7 @@ endcase
 reg [3:0] Rt;
 reg [33:0] ea;
 reg first_ifetch;
+reg [5:0] ic_whence;
 reg [31:0] lfsr;
 wire lfsr_fb; 
 xnor(lfsr_fb,lfsr[0],lfsr[1],lfsr[21],lfsr[31]);
@@ -571,17 +572,17 @@ case(ir9)
 default:	takb <= 1'b0;
 endcase
 
-wire [31:0] mvnsrc_address	= {abs8[31:24],ir[23:16],x[15:0]};
-wire [31:0] mvndst_address	= {abs8[31:24],ir[15: 8],y[15:0]};
-wire [31:0] iapy8 			= ia + (xb16 ? y16 : y8);	// Don't add in abs8, already included with ia
+wire [31:0] mvnsrc_address	= {abs8[31:24],ir[23:16],x16};
+wire [31:0] mvndst_address	= {abs8[31:24],ir[15: 8],y16};
+wire [31:0] iapy8 			= ia + y16;		// Don't add in abs8, already included with ia
 wire [31:0] zp_address 		= {abs8[31:16],8'h00,ir[15:8]} + dpr;
-wire [31:0] zpx_address 	= {abs8[31:16],{8'h00,ir[15:8]} + (xb16 ? x16 : {8'h00,x8})} + dpr;
-wire [31:0] zpy_address	 	= {abs8[31:16],{8'h00,ir[15:8]} + (xb16 ? y16 : {8'h00,y8})} + dpr;
+wire [31:0] zpx_address 	= {abs8[31:16],{8'h00,ir[15:8]} + x16} + dpr;
+wire [31:0] zpy_address	 	= {abs8[31:16],{8'h00,ir[15:8]} + y16} + dpr;
 wire [31:0] abs_address 	= {abs8[31:24],dbr,ir[23:8]};
-wire [31:0] absx_address 	= {abs8[31:24],dbr,ir[23:8] + (xb16 ? x16 : {8'h0,x8})};	// simulates 64k bank wrap-around
-wire [31:0] absy_address 	= {abs8[31:24],dbr,ir[23:8] + (xb16 ? y16 : {8'h0,y8})};
+wire [31:0] absx_address 	= {abs8[31:24],dbr,ir[23:8] + x16};	// simulates 64k bank wrap-around
+wire [31:0] absy_address 	= {abs8[31:24],dbr,ir[23:8] + y16};
 wire [31:0] al_address		= {abs8[31:24],ir[31:8]};
-wire [31:0] alx_address		= {abs8[31:24],ir[31:8] + (xb16 ? x16 : {8'h00,x8})};
+wire [31:0] alx_address		= {abs8[31:24],ir[31:8] + x16};
 wire [31:0] zpx32xy_address 	= ir[23:12] + rfoa;
 wire [31:0] absx32xy_address 	= ir[47:16] + rfob;
 wire [31:0] zpx32_address 		= ir[31:20] + rfob;
@@ -798,7 +799,7 @@ BUS_ERROR:
 		vect <= {vbr[31:9],intno,2'b00};
 		hwi <= `TRUE;
 		isBusErr <= `TRUE;
-		state <= STORE1;
+		next_state(STORE1);
 	end
 `endif
 

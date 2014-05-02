@@ -57,9 +57,20 @@ task decode_tsk;
 		`TON:	tf <= 1'b1;
 		`TOFF:	tf <= 1'b0;
 		`HOFF:	hist_capture <= 1'b0;
-		`XCE:	begin em <= 1'b1; m816 <= ~cf; cf <= ~m816; x_bit <= 1'b1; m_bit <= 1'b1;
+		// Switching to 65c02 mode zeros out the upper part of the index registers.
+		// Switching to 65c816 mode does not zero out the upper part of the index registers,
+		// this is unlike switching from '02 to '816 mode. Also, the register size select
+		// bits are not affected.
+		`XCE:	begin
+					em <= 1'b1;
+					m816 <= ~cf;
+					cf <= ~m816;
+					if (cf) begin
+						x[31:8] <= 24'd0;
+						y[31:8] <= 24'd0;
+					end
 `ifdef SUPPORT_EM8
-				state <= BYTE_IFETCH;
+					next_state(BYTE_IFETCH);
 `endif
 				end
 		`DEX:	Rt <= 4'd2;

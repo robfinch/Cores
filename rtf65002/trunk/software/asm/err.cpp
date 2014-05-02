@@ -138,7 +138,8 @@ static char *error[] =
 	"Edemo version, line number limit reached",
    "Eonly byte (.B) or word (.W) size supported",
    "Erotate count must be one.",
-   "Ecab constant must be one of -8,-4,-2,-1,1,2,4, or 8."	// 2120
+   "Ecab constant must be one of -8,-4,-2,-1,1,2,4, or 8.",	// 2120
+   "Wrepeat count should be supplied, assuming one."
 };
 
 

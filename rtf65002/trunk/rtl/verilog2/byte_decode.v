@@ -24,23 +24,32 @@
 BYTE_DECODE:
 	begin
 		first_ifetch <= `TRUE;
-		state <= BYTE_IFETCH;
+		next_state(BYTE_IFETCH);
 		pc <= pc + pc_inc8;
 		case(ir[7:0])
 		`SEP:	;	// see byte_ifetch
 		`REP:	;
+//		`XBA:	;	// doesn't route if included here
 		`STP:	begin clk_en <= 1'b0; end
 //		`NAT:	begin em <= 1'b0; state <= IFETCH; end
-		`WDM:	if (ir[15:8]==`XCE) begin em <= 1'b0; state <= IFETCH; pc <= pc + 32'd2; end
+		`WDM:	if (ir[15:8]==`XCE) begin
+					em <= 1'b0;
+					next_state(IFETCH);
+					pc <= pc + 32'd2;
+				end
+		// Switching the processor mode always zeros out the upper part of the index registers.
+		// switching to 816 mode sets 8 bit memory/indexes
 		`XCE:	begin
 					m816 <= ~cf;
 					cf <= ~m816;
-					if (~cf) begin		// switching to 816 mode sets 8 bit memory/indexes
+					if (~cf) begin		
 						m_bit <= 1'b1;
 						x_bit <= 1'b1;
 					end
+					x[31:8] <= 24'd0;
+					y[31:8] <= 24'd0;
 				end
-		`NOP:	;
+//		`NOP:	;	// may help routing
 		`CLC:	begin cf <= 1'b0; end
 		`SEC:	begin cf <= 1'b1; end
 		`CLV:	begin vf <= 1'b0; end
@@ -555,18 +564,40 @@ BYTE_DECODE:
 				else
 				begin
 					if (takb)
-						pc <= pc + {{24{ir[15]}},ir[15:8]} + 32'd2;
+						pc <= pc + pc_inc8 + {{24{ir[15]}},ir[15:8]};
 					else
-						pc <= pc + 32'd2;
+						pc <= pc + pc_inc8;
 				end
 			end
-		`BRL:	pc <= pc + {{16{ir[23]}},ir[23:8]} + 32'd3;
+		`BRL:	pc <= pc + pc_inc8 + {{16{ir[23]}},ir[23:8]};
 		`PHP:
 			begin
 				set_sp();
 				store_what <= `STW_SR70;
 				state <= STORE1;
 			end
+		`PHA:	tsk_push(`STW_ACC8,`STW_ACC70,m16);
+		`PHX:	tsk_push(`STW_X8,`STW_X70,xb16);
+		`PHY:	tsk_push(`STW_Y8,`STW_Y70,xb16);
+		`PLP:
+			begin
+				inc_sp();
+				load_what <= `SR_70;
+				state <= LOAD_MAC1;
+			end
+		`PLA:
+			begin
+				inc_sp();
+				load_what <= m16 ? `HALF_71S : `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+		`PLX,`PLY:
+			begin
+				inc_sp();
+				load_what <= xb16 ? `HALF_71S : `BYTE_71;
+				state <= LOAD_MAC1;
+			end
+`ifdef SUPPORT_816
 		`PHB:
 			begin
 				set_sp();
@@ -585,9 +616,6 @@ BYTE_DECODE:
 				store_what <= `STW_PC2316;
 				state <= STORE1;
 			end
-		`PHA:	tsk_push(`STW_ACC8,`STW_ACC70,m16);
-		`PHX:	tsk_push(`STW_X8,`STW_X70,xb16);
-		`PHY:	tsk_push(`STW_Y8,`STW_Y70,xb16);
 		`PEA:
 			begin
 				tmp16 <= ir[23:8];
@@ -601,24 +629,6 @@ BYTE_DECODE:
 				set_sp();
 				store_what <= `STW_TMP158;
 				state <= STORE1;
-			end
-		`PLP:
-			begin
-				inc_sp();
-				load_what <= `SR_70;
-				state <= LOAD_MAC1;
-			end
-		`PLA:
-			begin
-				inc_sp();
-				load_what <= m16 ? `HALF_71S : `BYTE_71;
-				state <= LOAD_MAC1;
-			end
-		`PLX,`PLY:
-			begin
-				inc_sp();
-				load_what <= xb16 ? `HALF_71S : `BYTE_71;
-				state <= LOAD_MAC1;
 			end
 		`PLB:
 			begin
@@ -638,6 +648,7 @@ BYTE_DECODE:
 				radr2LSB <= mvnsrc_address[1:0];
 				x[15:0] <= x_inc[15:0];
 				load_what <= `BYTE_72;
+				pc <= pc;	// override increment above
 				state <= LOAD_MAC1;
 			end
 		`MVP:
@@ -646,8 +657,10 @@ BYTE_DECODE:
 				radr2LSB <= mvnsrc_address[1:0];
 				x[15:0] <= x_dec[15:0];
 				load_what <= `BYTE_72;
+				pc <= pc;	// override increment above
 				state <= LOAD_MAC1;
 			end
+`endif
 		default:	// unimplemented opcode
 			pc <= pc + 32'd1;
 		endcase

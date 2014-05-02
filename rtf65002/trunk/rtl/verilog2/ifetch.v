@@ -22,6 +22,7 @@
 //
 IFETCH:
 	begin
+		ic_whence <= IFETCH;
 		vect <= {vbr[31:9],`BRK_VECTNO,2'b00};
 		suppress_pcinc <= 4'hF;				// default: no suppression of increment
 		opc <= pc;
@@ -72,7 +73,7 @@ IFETCH:
 					end
 					else begin
 						pg2 <= pg2;
-						state <= ICACHE1;
+						next_state(ICACHE1);
 					end
 				end
 			end

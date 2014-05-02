@@ -108,6 +108,7 @@
 #define E_ONLYBW		2118	// only byte or word size supported
 #define E_ROTCOUNT		2119	// rotate count must be one
 #define E_CABCONST		2120
+#define E_REPCNT		2121
 
 #define ERR_MSG_PREFIX
 

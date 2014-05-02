@@ -101,19 +101,19 @@ begin
 	`HALF_159:
 				begin
 					res16[15:8] <= dat8;
-					state <= BYTE_IFETCH;
+					next_state(BYTE_IFETCH);
 				end
 	`HALF_71S:
 				begin
 					res16[7:0] <= dat8;
 					load_what <= `HALF_159S;
 					inc_sp();
-					state <= LOAD_MAC1;
+					next_state(LOAD_MAC1);
 				end
 	`HALF_159S:
 				begin
 					res16[15:8] <= dat8;
-					state <= BYTE_IFETCH;
+					next_state(BYTE_IFETCH);
 				end
 	`BYTE_72:
 				begin
@@ -145,6 +145,16 @@ begin
 					vf <= dat[30];
 					nf <= dat[31];
 					if (isRTI) begin
+						// If we will be returning to emulation mode and emulating the 816
+						// then force the upper part of the registers to zero if eigth bit
+						// registers are selected.
+//						if (dat[10] & dat[29]) begin
+//							if (dat[8]) begin
+//								x[31:8] <= 24'd0;
+//								y[31:8] <= 24'd0;
+//							end
+//							//if (dat[9]) acc[31:8] <= 24'd0;
+//						end
 						radr <= isp;
 						isp <= isp_inc;
 						load_what <= `PC_310;
@@ -162,6 +172,11 @@ begin
 					if (m816) begin
 						x_bit <= dat8[4];
 						m_bit <= dat8[5];
+						if (dat8[4]) begin
+							x[31:8] <= 24'd0;
+							y[31:8] <= 24'd0;
+						end
+						//if (dat8[5]) acc[31:8] <= 24'd0;
 					end
 					else
 						bf <= dat8[4];
@@ -195,19 +210,19 @@ begin
 						state <= LOAD_MAC1;
 					end
 					else if (isRTS)	// rts instruction
-						state <= RTS1;
+						next_state(RTS1);
 					else			// jmp (abs)
-						state <= BYTE_IFETCH;
+						next_state(BYTE_IFETCH);
 				end
 	`PC_2316:	begin
 					pc[23:16] <= dat8;
 					if (isRTL) begin
 						load_what <= `NOTHING;
-						state <= RTS1;
+						next_state(RTS1);
 					end
 					else begin
 						load_what <= `NOTHING;
-						state <= BYTE_IFETCH;
+						next_state(BYTE_IFETCH);
 //						load_what <= `PC_3124;
 //						if (isRTI) begin
 //							inc_sp();
@@ -218,7 +233,7 @@ begin
 	`PC_3124:	begin
 					pc[31:24] <= dat8;
 					load_what <= `NOTHING;
-					state <= BYTE_IFETCH;
+					next_state(BYTE_IFETCH);
 				end
 `endif
 	`PC_310:	begin
@@ -230,7 +245,9 @@ begin
 						hist_capture <= `TRUE;
 `endif
 					end
-					state <= em ? BYTE_IFETCH : IFETCH;
+					next_state(em ? BYTE_IFETCH : IFETCH);
+//					else	// indirect jumps
+//						next_state(IFETCH);
 				end
 	`IA_310:
 			begin

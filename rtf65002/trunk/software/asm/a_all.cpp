@@ -283,6 +283,7 @@ int Assembler::dc(Opa *o)
 			// supplied where the macro is to be substituted.
 //			ltrim(macrobuf.buf()+1);
 			macrobuf += "\r\n";
+			//printf("macrobuf:%s|\r\n", macrobuf.buf());
 			mac->setBody(macrobuf);
 			mac->setArgCount(gMacro.Nargs());
 			mac->setName(gMacro.getName().buf());
@@ -300,6 +301,53 @@ int Assembler::dc(Opa *o)
 		macrobuf = "";
 		if (pass < 2)
 			macroTbl->insert(mac);
+	}
+
+
+	void Assembler::endr()
+	{
+		String bdy2;
+		char *bdy;
+		Rept *mac;
+		int ii, slen, tomove;
+
+		// First check if in the macro definition process
+		if (!CollectingMacro) {
+			Err(E_ENDM);
+			return;
+		}
+		CollectingMacro = false;
+		macrobuf.rtrim();
+		// Strip out spaces on the first line because these will be
+		// supplied where the macro is to be substituted.
+//			ltrim(macrobuf.buf()+1);
+		macrobuf += "\r\n";
+		printf("got body:%s|\r\n", macrobuf.buf());
+		gRept.setBody(macrobuf);
+		bdy = gRept.initBody(parmlist);   // put parameter markers into body
+		printf("1");
+		bdy2 = bdy;
+		gRept.setBody(bdy2);              // save body with markers
+		printf("2");
+		// we don't need parms any more so free them up
+		for (ii = 0; ii < MAX_MACRO_PARMS; ii++) {
+			delete parmlist[ii];
+			parmlist[ii] = NULL;
+		}
+		printf("3");
+		// Reset macro buffer
+		macrobuf = "";
+		slen = ibuf->ndx() - gRept.sptr;
+		printf("replacing:%.*s|\r\n", slen, &ibuf->getBuf()[gRept.sptr]);
+		// tomove = number of characters to move
+		//        = buffer size - current pointer position
+		tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->getBuf());
+		// sptr = where to begin substitution
+		//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr1,slen,tomove);
+		printf("sptr:%.80s|\r\n", &ibuf->getBuf()[gRept.sptr]);
+//		getchar();
+		gRept.sub(NULL, ibuf, gRept.sptr, slen, tomove);
+		ibuf->moveTo(gRept.sptr);
 	}
 
 
@@ -366,7 +414,7 @@ int Assembler::equ(char *iid)
 		p = gSymbolTable->find(&tdef);
 	if(pass == 1)
 	{
-		printf("ibuf:%.20s|\r\n", ibuf->getPtr());
+		//printf("ibuf:%.20s|\r\n", ibuf->getPtr());
 		v = ibuf->expeval(&eptr);
 		if(p != NULL)
 		{
@@ -794,6 +842,41 @@ int Assembler::equ(char *iid)
 	}
 
 
+	void Assembler::rept()
+	{
+		char *sptr, *eptr;
+		char nbuf[NAME_MAX+1];
+		int idlen, xx, ii;
+		Rept *fmac;
+
+		gNargs = 0;
+		macrobuf = "";
+		// Free parameter list (if not already freed)
+		for (xx = 0; xx < MAX_MACRO_PARMS; xx++)
+			if (parmlist[xx]) {
+				delete parmlist[xx];
+				parmlist[xx] = NULL;
+			}
+
+		xx = gNargs = ibuf->getParmList(parmlist);
+		if (xx < 1) {
+			Err(E_REPCNT);
+			gRept.count = 1;
+		}
+		else {
+			gRept.count = expeval(parmlist[0]->buf(),&eptr).value;
+			for (ii = 1; ii < xx; ii++) {
+				parmlist[ii-1] = parmlist[ii];
+			}
+			delete parmlist[ii];
+			parmlist[ii] = NULL;
+		}
+		gRept.sptr = sol;
+		gRept.setArgCount(xx-1);
+		gRept.setFileLine(CurFileNum, File[CurFileNum].LastLine);
+		CollectingMacro = true;
+	}
+
 	void Assembler::message()
 	{
 		g_nops = getCpu()->getOp()->get();
@@ -862,6 +945,7 @@ int Assembler::equ(char *iid)
 		int len, ch;
 		Symbol tdef, *p;
 		char labeln[100];
+		String lbl;
 
 		len = ibuf->getIdentifier(&sptr, &eptr);
 		if (len < 1)
@@ -873,13 +957,20 @@ int Assembler::equ(char *iid)
 		len = min(len, sizeof(labeln)-1);
 		strncpy(labeln, sptr, len);
 		labeln[len] = '\0';
-		tdef.setName(labeln);
+		if (labeln[0]!='.') {
+			lastLabel = labeln;
+			lbl = labeln;
+		}
+		else
+			lbl = lastLabel + labeln;
+
+		tdef.setName(lbl.buf());
 		p = gSymbolTable->find(&tdef);
 
 		if (p) {
 			if (pass < 2 && p->isDefined()) {
 				ForceErr = 1;
-				Err(E_DEFINED, labeln);
+				Err(E_DEFINED, lbl.buf());
 				ForceErr = 0;
 			}
 			else

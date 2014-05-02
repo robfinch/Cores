@@ -37,7 +37,7 @@ if (suppress_pcinc==4'hF)
 	`BPL,`BMI,`BCS,`BCC,`BVS,`BVC,`BEQ,`BNE,`BRA:	inc <= 4'd2;
 	`BRL: inc <= 4'd3;
 	`CLC,`SEC,`CLD,`SED,`CLV,`CLI,`SEI:	inc <= 4'd1;
-	`TAS,`TSA,`TAY,`TYA,`TAX,`TXA,`TSX,`TXS,`TYX,`TXY,`TCD,`TDC:	inc <= 4'd1;
+	`TAS,`TSA,`TAY,`TYA,`TAX,`TXA,`TSX,`TXS,`TYX,`TXY,`TCD,`TDC,`XBA:	inc <= 4'd1;
 	`INY,`DEY,`INX,`DEX,`INA,`DEA: inc <= 4'd1;
 	`XCE,`WDM: inc <= 4'd1;
 	`STP,`WAI: inc <= 4'd1;
@@ -88,7 +88,7 @@ if (suppress_pcinc==4'hF)
 	`ASL_ACC,`LSR_ACC,`ROR_ACC,`ROL_ACC: inc <= 4'd1;
 
 	`PHP,`PHA,`PHX,`PHY,`PHK,`PHB,`PHD,`PLP,`PLA,`PLX,`PLY,`PLB,`PLD: inc <= 4'd1;
-	`PEA,`PER: inc <= 4'd3;
+	`PEA,`PER,`MVN,`MVP: inc <= 4'd3;
 	`PEI:	inc <= 4'd2;
 
 	default:	inc <= 4'd0;	// unimplemented instruction

@@ -79,6 +79,8 @@ namespace RTFClasses
 	void Buf::shift(int pos, int amt)
 	{
 		// shift open space in destination buffer
+		if (amt==0)
+			return;
 		if (amt > 0)
 			memmove(&buf[pos+amt], &buf[pos], size - amt - pos);//-ndx());
 		else

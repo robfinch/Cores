@@ -31,13 +31,15 @@ unsigned __int64 stouxl(char *instr, char **outstr)
 
    if (*str == '$')
    {
-        for(++str; isxdigit(*str); ++str)
-            num = (num * 16) + (isdigit(*str) ? *str - '0' : toupper(*str) - 'A' + 10);
+        for(++str; isxdigit(*str) || *str=='_'; ++str)
+			if (*str != '_')
+				num = (num * 16) + (isdigit(*str) ? *str - '0' : toupper(*str) - 'A' + 10);
    }
-   else if (*str == '@')
+   else if (*str == '@' || *str=='%')
    {
-        for(++str; *str=='0' || *str=='1'; ++str)
-            num = (num * 2) + *str - '0';
+        for(++str; *str=='0' || *str=='1' || *str=='_'; ++str)
+			if (*str != '_')
+				num = (num * 2) + *str - '0';
    }
    else if (*str != '0')
    {
@@ -51,20 +53,20 @@ unsigned __int64 stouxl(char *instr, char **outstr)
       {
          case 'x':
          case 'X':
-            for(++str; isxdigit(*str); ++str)
-               num = (num * 16) + (isdigit(*str) ? *str - '0' : toupper(*str) - 'A' + 10);
+            for(++str; isxdigit(*str) || *str=='_'; ++str)
+               if (*str != '_') num = (num * 16) + (isdigit(*str) ? *str - '0' : toupper(*str) - 'A' + 10);
             break;
 
          case 'o':
          case 'O':
-            for(++str; *str >= '0' && *str <= '7'; ++str)
-               num = (num * 8) + *str - '0';
+            for(++str; (*str >= '0' && *str <= '7') || *str == '_'; ++str)
+               if (*str != '_') num = (num * 8) + *str - '0';
             break;
 
          case 'b':
          case 'B':
-            for(++str; *str == '0' || *str == '1'; ++str)
-               num = (num + num) + *str - '0';
+            for(++str; *str == '0' || *str == '1' || *str == '_'; ++str)
+               if (*str != '_') num = (num + num) + *str - '0';
             break;
 
          default:

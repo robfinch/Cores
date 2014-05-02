@@ -94,7 +94,7 @@ STORE2:
 	end
 	else if (ack_i) begin
 //		wdat <= dat_o;
-		if (isMove|isSts) begin
+		if (!em && (isMove|isSts)) begin
 			state <= MVN3;
 			retstate <= MVN3;
 		end

@@ -46,7 +46,7 @@ MVN816:
 	begin
 		state <= BYTE_IFETCH;
 		if (&acc[15:0]) begin
-			pc <= pc + 32'd3;
+			pc <= pc + pc_inc8;
 			dbr <= ir[15:8];
 		end
 	end

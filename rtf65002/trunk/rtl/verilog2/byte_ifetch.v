@@ -22,7 +22,8 @@
 //
 BYTE_IFETCH:
 	begin
-		vect <= `BYTE_IRQ_VECT;
+		ic_whence <= BYTE_IFETCH;
+		vect <= m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		vect[31:16] <= abs8[31:16];
 		suppress_pcinc <= 4'hF;				// default: no suppression of increment
 		opc <= pc;
@@ -56,7 +57,7 @@ BYTE_IFETCH:
 						next_state(BYTE_DECODE);
 					end
 					else
-						state <= LOAD_IBUF1;
+						next_state(LOAD_IBUF1);
 				end
 				else begin
 					if (ihit) begin
@@ -64,7 +65,7 @@ BYTE_IFETCH:
 						next_state(BYTE_DECODE);
 					end
 					else
-						state <= ICACHE1;
+						next_state(ICACHE1);
 				end
 			end
 			else begin
@@ -88,7 +89,7 @@ BYTE_IFETCH:
 					next_state(BYTE_DECODE);
 				end
 				else
-					state <= LOAD_IBUF1;
+					next_state(LOAD_IBUF1);
 			end
 			else begin
 				if (ihit) begin
@@ -96,7 +97,7 @@ BYTE_IFETCH:
 					next_state(BYTE_DECODE);
 				end
 				else
-					state <= ICACHE1;
+					next_state(ICACHE1);
 			end
 		end
 `ifdef DEBUG
@@ -106,6 +107,8 @@ BYTE_IFETCH:
 		end
 `endif
 		case(ir[7:0])
+		// Note the break flag is not affected by SEP/REP
+		// Setting the index registers to eight bit zeros out the upper part of the register.
 		`SEP:
 			begin
 				cf <= cf | ir[8];
@@ -115,9 +118,11 @@ BYTE_IFETCH:
 				if (m816) begin
 					x_bit <= x_bit | ir[12];
 					m_bit <= m_bit | ir[13];
-				end
-				else begin
-					bf <= bf | ir[12];
+					//if (ir[13]) acc[31:8] <= 24'd0;
+					if (ir[12]) begin
+						x[31:8] <= 24'd0;
+						y[31:8] <= 24'd0;
+					end
 				end
 				vf <= vf | ir[14];
 				nf <= nf | ir[15];
@@ -131,9 +136,6 @@ BYTE_IFETCH:
 				if (m816) begin
 					x_bit <= x_bit & ~ir[12];
 					m_bit <= m_bit & ~ir[13];
-				end
-				else begin
-					bf <= bf & ~ir[12];
 				end
 				vf <= vf & ~ir[14];
 				nf <= nf & ~ir[15];

@@ -399,8 +399,12 @@ namespace RTFClasses
 				fclose(fpList);
 			if (bMemOut)
 				fclose(fpMem);
-			if (bVerOut)
+			if (bVerOut) {
+				emit8Verilog(255);
+				emit8Verilog(255);
+				emit8Verilog(255);
 				fclose(fpVer);
+			}
 			if (fSOut)
 				gSOut.close(StartAddress);
 
@@ -578,6 +582,8 @@ namespace RTFClasses
 	int Assembler::CollectMacroLine()
 	{
 		char ch;
+		bool inQuote2 = false;
+		bool inQuote1 = false;
 
 		// Copy macro indicator to start of line
 		copyChToMacro('+');
@@ -653,55 +659,64 @@ namespace RTFClasses
 		}
 
 		// look for quote
-		if (ibuf->peekCh() == '"') {
-			while(1) {
-				if (macrobuf.len() >= MAX_MACRO_EXP) {
-					Err(E_MACSIZE);
-					goto ExitPt;
-				}
-				ch = ibuf->nextCh();
-				if (ch < 1) goto ExitPt;
-				macrobuf += ch;
-				if (ch == '"') goto StartOfLoop;
-				if (ch =='\n') goto ExitPt;
-			}
-		}
+		if (!inQuote1)
+			if (ibuf->peekCh() == '"')
+				inQuote2 = !inQuote2;
+		//{
+		//	while(1) {
+		//		if (macrobuf.len() >= MAX_MACRO_EXP) {
+		//			Err(E_MACSIZE);
+		//			goto ExitPt;
+		//		}
+		//		ch = ibuf->nextCh();
+		//		if (ch < 1) goto ExitPt;
+		//		macrobuf += ch;
+		//		if (ch == '"') goto StartOfLoop;
+		//		if (ch =='\n') goto ExitPt;
+		//	}
+		//}
 
 		// look for quote
-		if (ibuf->peekCh() == '\'') {
-			while(1) {
-				if (macrobuf.len() >= MAX_MACRO_EXP) {
-					Err(E_MACSIZE);
-					goto ExitPt;
-				}
-				ch = ibuf->nextCh();
-				if (ch < 1) goto ExitPt;
-				macrobuf += ch;
-				if (ch == '\'') goto StartOfLoop;
-				if (ch =='\n') goto ExitPt;
-			}
-		}
+		if (!inQuote2)
+			if (ibuf->peekCh() == '\'')
+				inQuote1 = !inQuote1;
+
+		//{
+		//	while(1) {
+		//		if (macrobuf.len() >= MAX_MACRO_EXP) {
+		//			Err(E_MACSIZE);
+		//			goto ExitPt;
+		//		}
+		//		ch = ibuf->nextCh();
+		//		if (ch < 1) goto ExitPt;
+		//		macrobuf += ch;
+		//		if (ch == '\'') goto StartOfLoop;
+		//		if (ch =='\n') goto ExitPt;
+		//	}
+		//}
 
 	EndOfLoop:
 		// Skip over comment
-		if (ibuf->peekCh() == ';') {
-			if (ibuf->getPtr()[1] != ';') {
-				ibuf->scanToEOL();
-				macrobuf.rtrim();
-				copyChToMacro('\n');
-				goto ExitPt;
-			}
-			// Preserve comment
-			else {
-				while(1) {
-					if (macrobuf.len() >= MAX_MACRO_EXP) {
-						Err(E_MACSIZE);
-						goto ExitPt;
+		if (!inQuote1 && !inQuote2) {
+			if (ibuf->peekCh() == ';') {
+				if (ibuf->getPtr()[1] != ';') {
+					ibuf->scanToEOL();
+					macrobuf.rtrim();
+					copyChToMacro('\n');
+					goto ExitPt;
+				}
+				// Preserve comment
+				else {
+					while(1) {
+						if (macrobuf.len() >= MAX_MACRO_EXP) {
+							Err(E_MACSIZE);
+							goto ExitPt;
+						}
+						ch = ibuf->nextCh();
+						if (ch < 1) goto ExitPt;
+						macrobuf += ch;
+						if (ch =='\n') goto ExitPt;
 					}
-					ch = ibuf->nextCh();
-					if (ch < 1) goto ExitPt;
-					macrobuf += ch;
-					if (ch =='\n') goto ExitPt;
 				}
 			}
 		}
@@ -787,6 +802,10 @@ namespace RTFClasses
 			endm();
 			return true;
 		}
+		if (p=="endr" || p==".endr") {
+			endr();
+			return true;
+		}
 		if (p=="db" || p=="byte" || p==".byte") {
 			db('B');
 			return true;
@@ -812,6 +831,14 @@ namespace RTFClasses
 		}
 		if (p=="macro" || p==".macro") {
 			macro();
+			return true;
+		}
+		if (p=="rept") {
+			rept();
+			return true;
+		}
+		if (p==".rept") {
+			rept();
 			return true;
 		}
 		if (p=="data" || p==".data") {
@@ -904,6 +931,10 @@ namespace RTFClasses
 			{
 				if (ibuf->isNext("endm", 4) || ibuf->isNext(".endm",5)) {
 					endm();
+					goto LoopStart;   // Allows subsequent commands on line
+				}
+				else if (ibuf->isNext("endr", 4) || ibuf->isNext(".endr",5)) {
+					endr();
 					goto LoopStart;   // Allows subsequent commands on line
 				}
 			}
@@ -1308,6 +1339,7 @@ namespace RTFClasses
 						tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->getBuf());
 						// sptr = where to begin substitution
 						//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr1,slen,tomove);
+						//printf("mp:%s|\r\n", mp->body.buf());
 						mp->sub(plist, ibuf, indx, slen, tomove);
 					}
 				}

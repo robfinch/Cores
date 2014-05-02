@@ -29,7 +29,7 @@
 `define GACCEL	128
 `define BMPCTRL		256
 `define LEDS	512
-`define RASTIRQ	1024
+//`define RASTIRQ	1024
 `define DATETIME	2048
 //`define MMU			4096
 //`define SUPPORT_FORTH	8192
