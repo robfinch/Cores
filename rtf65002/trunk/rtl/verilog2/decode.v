@@ -824,6 +824,7 @@ task decode_tsk;
 				radr <= x;
 				res <= x + 32'd1;
 				load_what <= `WORD_312;
+				pc <= pc;
 				state <= LOAD_MAC1;
 			end
 		`MVP:
@@ -832,6 +833,7 @@ task decode_tsk;
 				radr <= x;
 				res <= x - 32'd1;
 				load_what <= `WORD_312;
+				pc <= pc;
 				state <= LOAD_MAC1;
 			end
 		`STS:
@@ -841,6 +843,7 @@ task decode_tsk;
 				wadr <= y;
 				store_what <= `STW_X;
 				acc <= acc - 32'd1;
+				pc <= pc;
 				state <= STORE1;
 			end
 		`CMPS:
@@ -848,6 +851,7 @@ task decode_tsk;
 				Rt <= 4'd3;
 				radr <= x;
 				res <= x + 32'd1;
+				pc <= pc;
 				load_what <= `WORD_313;
 				state <= LOAD_MAC1;
 			end

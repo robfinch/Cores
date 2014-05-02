@@ -89,7 +89,7 @@ if (suppress_pcinc==4'hF)
 	`ADD_ABSX,`SUB_ABSX,`OR_ABSX,`AND_ABSX,`EOR_ABSX: inc <= 4'd7;
 	`PHP,`PHA,`PHX,`PHY,`PLP,`PLA,`PLX,`PLY: inc <= 4'd1;
 	`PUSH,`POP: inc <= 4'd2;
-	`MVN,`MVP,`STS: inc <= 4'd0;
+	`MVN,`MVP,`STS: inc <= 4'd1;
 	`PG2:	inc <= 4'd1;
 	`TON,`TOFF:	inc <= 4'd1;
 	`PUSHA,`POPA: inc <= 4'd1;

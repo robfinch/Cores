@@ -28,6 +28,7 @@ CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
 CTRLC	EQU	0x03
+BELL	EQU	0x07
 CTRLH	EQU	0x08
 CTRLI	EQU	0x09
 CTRLJ	EQU	0x0A
@@ -35,6 +36,7 @@ CTRLK	EQU	0x0B
 CTRLM   EQU 0x0D
 CTRLS	EQU	0x13
 CTRLX	EQU	0x18
+ESC		EQU	0x1b
 XON		EQU	0x11
 XOFF	EQU	0x13
 
@@ -163,6 +165,7 @@ TEXTREG		EQU		0xFFDA0000
 TEXT_COLS	EQU		0x0
 TEXT_ROWS	EQU		0x1
 TEXT_CURPOS	EQU		11
+TEXT_CURCTL	EQU		8
 BMP_CLUT	EQU		$FFDC5800
 KEYBD		EQU		0xFFDC0000
 KEYBDCLR	EQU		0xFFDC0001
@@ -378,20 +381,22 @@ JCB_CursorOn	EQU		170
 JCB_CursorFlash	EQU		171
 JCB_CursorType	EQU		172
 JCB_NormAttr	EQU		173
-JCB_ScrlCnt		EQU		174
-JCB_fVidPause	EQU		175
-JCB_Next		EQU		176
-JCB_iof_next	EQU		177		; I/O focus list
-JCB_iof_prev	EQU		178
-JCB_VMP_bitmap_b0	EQU		179		; 512 bits	- virtual memory page bitmap
-JCB_VMP_bitmap_b1	EQU		195		; 512 bits	- virtual memory page bitmap
-JCB_KeybdHead	EQU		211
-JCB_KeybdTail	EQU		212
-JCB_KeybdEcho	EQU		213
-JCB_KeybdBad	EQU		214
-JCB_KeybdAck	EQU		215
-JCB_KeybdLocks	EQU		216
-JCB_KeybdBuffer	EQU		217		; buffer is 16 words (chars = words)
+JCB_CurrAttr	EQU		174
+JCB_ScrlCnt		EQU		175
+JCB_fVidPause	EQU		176
+JCB_Next		EQU		177
+JCB_iof_next	EQU		178		; I/O focus list
+JCB_iof_prev	EQU		179
+JCB_VMP_bitmap_b0	EQU		180		; 512 bits	- virtual memory page bitmap
+JCB_VMP_bitmap_b1	EQU		196		; 512 bits	- virtual memory page bitmap
+JCB_KeybdHead	EQU		212
+JCB_KeybdTail	EQU		213
+JCB_KeybdEcho	EQU		214
+JCB_KeybdBad	EQU		215
+JCB_KeybdAck	EQU		216
+JCB_KeybdLocks	EQU		217
+JCB_KeybdBuffer	EQU		218		; buffer is 16 words (chars = words)
+JCB_esc			EQU		234		; escape flag for DisplayChar processing
 JCB_Size		EQU		256
 JCB_LogSize		EQU		8
 
@@ -420,6 +425,7 @@ TCB_mbq_next	fill.b	NR_TCB,0	;	EQU		0x01FBD400	; mailbox queue next
 TCB_mbq_prev	fill.b	NR_TCB,0	;	EQU		0x01FBD500	; mailbox queue previous
 TCB_SP8Save		fill.b	NR_TCB,0	;	EQU		0x01FBD800	; TCB_SP8Save area 
 TCB_SPSave		fill.b	NR_TCB,0	;	EQU		0x01FBD900	; TCB_SPSave area
+TCB_StackTop	fill.b	NR_TCB,0
 TCB_ABS8Save	fill.b	NR_TCB,0	;	EQU		0x01FBDA00
 TCB_mmu_map		fill.b	NR_TCB,0	;	EQU		0x01FBDB00
 TCB_npages		fill.b	NR_TCB,0	;	EQU		0x01FBDC00
@@ -1129,12 +1135,20 @@ msgRunningTCB:
 	db	CR,LF,"RunningTCB is bad.",CR,LF,0
 
 ;------------------------------------------------------------------------------
+; Get the handle of the currently running job.
+;------------------------------------------------------------------------------
+;
+GetCurrentJob:
+	ld		r1,RunningTCB
+	ld		r1,TCB_hJCB,r1		; get the handle
+	rts
+
+;------------------------------------------------------------------------------
 ; Get a pointer to the JCB for the currently running task.
 ;------------------------------------------------------------------------------
 ;
 GetPtrCurrentJCB:
-	ld		r1,RunningTCB
-	ld		r1,TCB_hJCB,r1		; get the handle
+	jsr		GetCurrentJob
 	and		r1,r1,#NR_JCB-1		; and convert it to a pointer
 ;	mul		r1,r1,#JCB_Size
 	asl		r1,r1,#JCB_LogSize	; 256 words
@@ -1158,6 +1172,11 @@ GetColorCodeLocation:
 GetNormAttr:
 	jsr		GetPtrCurrentJCB
 	lda		JCB_NormAttr,r1
+	rts
+
+GetCurrAttr:
+	jsr		GetPtrCurrentJCB
+	lda		JCB_CurrAttr,r1
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1241,7 +1260,7 @@ ClearScreen:
 	pla							; a is count
 	pha
 	stos						; clear the memory
-	jsr		GetNormAttr
+	jsr		GetCurrAttr
 	tax							; x = value to use
 	jsr		GetColorCodeLocation
 	tay							; y = target address
@@ -1330,20 +1349,16 @@ blnkln1:
 ; Convert ASCII character to screen display character.
 ;------------------------------------------------------------------------------
 ;
+	align	8
 AsciiToScreen:
 	and		#$FF
-	cmp		#'A'
-	bcc		atoscr1		; blt
-	cmp		#'Z'
-	bcc		atoscr1
-	beq		atoscr1
-	cmp		#'z'+1
-	bcs		atoscr1
-	cmp		#'a'
-	bcc		atoscr1
-	sub		#$60
-atoscr1:
 	or		#$100
+	bit		#%00100000	; if bit 5 isn't set
+	beq		.00001
+	bit		#%01000000	; or bit 6 isn't set
+	beq		.00001
+	and		#%110011111
+.00001:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1390,7 +1405,10 @@ UpdateCursorPos:
 	pha
 	jsr		GetPtrCurrentJCB
 	cmp		IOFocusNdx				; update cursor position in text controller
-	bne		ucp1					; only for the task with the output focus
+	bne		.ucp1					; only for the task with the output focus
+	ld		r0,JCB_CursorOn,r4		; only update if cursor is showing
+	beq		.ucp2
+	jsr		CursorOn
 	phx
 	push	r4
 	ld		r4,r1
@@ -1404,7 +1422,29 @@ UpdateCursorPos:
 	stx		TEXTREG+TEXT_CURPOS
 	pop		r4
 	plx
-ucp1:
+.ucp1:
+	pla
+	rts
+.ucp2:
+	jsr		CursorOff
+	pla
+	rts
+
+CursorOff:
+	pha
+	lda		#5
+	bms		TEXTREG+TEXT_CURCTL
+	lda		#6
+	bmc		TEXTREG+TEXT_CURCTL
+	pla
+	rts
+
+CursorOn:
+	pha
+	lda		#5
+	bmc		TEXTREG+TEXT_CURCTL
+	lda		#6
+	bms		TEXTREG+TEXT_CURCTL
 	pla
 	rts
 
@@ -1441,7 +1481,9 @@ csl1:
 ; Display a character on the screen.
 ; If the task doesn't have the I/O focus then the character is written to
 ; the virtual screen.
-; r1 = char to display
+;
+; Parameters:
+;	r1 = char to display
 ;------------------------------------------------------------------------------
 ;
 message "DisplayChar"
@@ -1450,103 +1492,118 @@ DisplayChar:
 	pha
 	jsr		GetPtrCurrentJCB
 	ld		r4,r1
+	lda		JCB_esc,r4			; are we building an escape sequence ?
+	bne		.processEsc
 	pla
 	and		#$FF				; mask off any higher order bits (called from eight bit mode).
-	cmp		#'\r'				; carriage return ?
-	bne		dccr
-	stz		JCB_CursorCol,r4	; just set cursor column to zero on a CR
-	jsr		UpdateCursorPos
-dcx14:
+	cmp		#ESC	
+	bne		.0001
+	sta		JCB_esc,r4			; begin the esc sequence
 	pop		r4
 	rts
-dccr:
+.0001
+	cmp		#BELL
+	bne		.noBell
+	jsr		Beep
+	pop		r4
+	rts
+.noBell
+	cmp		#'\r'				; carriage return ?
+	bne		.dccr
+	stz		JCB_CursorCol,r4	; just set cursor column to zero on a CR
+	jsr		UpdateCursorPos
+.dcx14:
+	pop		r4
+	rts
+.dccr:
 	cmp		#$91				; cursor right ?
-	bne		dcx6
+	bne		.dcx6
 	pha
 	lda		JCB_CursorCol,r4
-	cmp		#55
-	bcs		dcx7
 	ina
+	cmp		JCB_VideoCols,r4
+	bhs		.dcx7
 	sta		JCB_CursorCol,r4
-dcx7:
+.dcx7:
 	jsr		UpdateCursorPos
 	pla
 	pop		r4
 	rts
-dcx6:
+.dcx6:
 	cmp		#$90				; cursor up ?
-	bne		dcx8		
+	bne		.dcx8		
 	pha
 	lda		JCB_CursorRow,r4
-	beq		dcx7
+	beq		.dcx7
 	dea
 	sta		JCB_CursorRow,r4
-	bra		dcx7
-dcx8:
+	bra		.dcx7
+.dcx8:
 	cmp		#$93				; cursor left ?
-	bne		dcx9
+	bne		.dcx9
 	pha
 	lda		JCB_CursorCol,r4
-	beq		dcx7
+	beq		.dcx7
 	dea
 	sta		JCB_CursorCol,r4
-	bra		dcx7
-dcx9:
+	bra		.dcx7
+.dcx9:
 	cmp		#$92				; cursor down ?
-	bne		dcx10
+	bne		.dcx10
 	pha
 	lda		JCB_CursorRow,r4
-	cmp		#46
-	beq		dcx7
 	ina
+	cmp		JCB_VideoRows,r4
+	bhs		.dcx7
 	sta		JCB_CursorRow,r4
-	bra		dcx7
-dcx10:
+	bra		.dcx7
+.dcx10:
 	cmp		#$94				; cursor home ?
-	bne		dcx11
+	bne		.dcx11
 	pha
 	lda		JCB_CursorCol,r4
-	beq		dcx12
+	beq		.dcx12
 	stz		JCB_CursorCol,r4
-	bra		dcx7
-dcx12:
+	bra		.dcx7
+.dcx12:
 	stz		JCB_CursorRow,r4
-	bra		dcx7
-dcx11:
+	bra		.dcx7
+.dcx11:
 	pha
 	phx
 	phy
 	cmp		#$99				; delete ?
-	bne		dcx13
+	bne		.dcx13
+.doDel:
 	jsr		CalcScreenLoc
 	tay							; y = screen location
 	lda		JCB_CursorCol,r4	; acc = cursor column
-	bra		dcx5
-dcx13	
+	bra		.dcx5
+.dcx13	
 	cmp		#CTRLH				; backspace ?
-	bne		dcx3
+	bne		.dcx3
 	lda		JCB_CursorCol,r4
-	beq		dcx4
+	beq		.dcx4
 	dea
 	sta		JCB_CursorCol,r4
 	jsr		CalcScreenLoc		; acc = screen location
 	tay							; y = screen location
 	lda		JCB_CursorCol,r4
-dcx5:
+.dcx5:
 	ldx		$4,y
 	stx		(y)
 	iny
 	ina
-	cmp		TEXTREG+TEXT_COLS
-	bcc		dcx5
+	cmp		JCB_VideoCols,r4
+	blo		.dcx5
 	lda		#' '
 	jsr		AsciiToScreen
 	dey
 	sta		(y)
-	bra		dcx4
-dcx3:
+	bra		.dcx4
+.dcx3:
 	cmp		#'\n'			; linefeed ?
-	beq		dclf
+	beq		.dclf
 	tax						; save acc in x
 	jsr 	CalcScreenLoc	; acc = screen location
 	tay						; y = screen location
@@ -1557,18 +1614,138 @@ dcx3:
 	sub		r3,r3,r1		; make y an index into the screen
 	jsr		GetColorCodeLocation
 	add		r3,r3,r1
-	jsr		GetNormAttr
+	jsr		GetCurrAttr
 	sta		(y)
 	jsr		IncCursorPos
-	bra		dcx4
-dclf:
+	bra		.dcx4
+.dclf:
 	jsr		IncCursorRow
-dcx4:
+.dcx4:
 	ply
 	plx
 	pla
 	pop		r4
 	rts
+
+	; ESC processing
+.processEsc:
+	cmp		#(ESC<<24)+('('<<16)+(ESC<<8)+'G'
+	beq		.procAttr
+	bit		#$FF000000			; is it some other five byte escape sequence ?
+	bne		.unrecogEsc
+	cmp		#(ESC<<16)+('('<<8)+ESC
+	beq		.testG
+	bit		#$FF0000			; is it some other four byte escape sequence ?
+	bne		.unrecogEsc			; - unrecognized escape sequence
+	cmp		#(ESC<<8)+'`'
+	beq		.cursOnOff
+	cmp		#(ESC<<8)+'('
+	beq		.testEsc
+	bit		#$FF00				; is it some other three byte sequence ?
+	bne		.unrecogEsc			; - unrecognized escape sequence
+	cmp		#ESC				; check for single char escapes
+	beq		.esc1
+	pla							; some other garbage in the esc buffer ?
+	stz		JCB_esc,r4
+	pop		r4
+	rts
+
+.cursOnOff:
+	pla
+	stz		JCB_CursorOn,r4
+	and		#$FF
+	cmp		#'0'
+	beq		.escRst
+	inc		JCB_CursorOn,r4
+.escRst:
+	stz		JCB_esc,r4			; reset escape sequence capture
+	pop		r4
+	rts
+
+.procAttr:
+	pla
+	and		#$FF
+	cmp		#'0'
+	bne		.0005
+	lda		JCB_NormAttr,r4
+	sta		JCB_CurrAttr,r4
+	bra		.escRst
+.0005:
+	cmp		#'4'
+	bne		.escRst
+	phx
+	lda		JCB_NormAttr,r4		; get the normal attribute
+	tax
+	lsr		r1,r1,#5			; swap foreground and background colors
+	and		#$1F
+	asl		r2,r2,#5
+	or		r1,r1,r2
+	plx
+	sta		JCB_CurrAttr,r4		; store in current attribute
+	bra		.escRst
+
+.esc1:
+	pla
+	and		#$FF
+	cmp		#'W'				; esc 'W' - delete char under cursor
+	bne		.0006
+	stz		JCB_esc,r4
+	bra		.doDel
+.0006:
+	cmp		#'T'				; esc 'T' - clear to end of line
+	bne		.0009
+	phx
+	phy
+	ldx		JCB_CursorCol,r4
+	jsr 	CalcScreenLoc		; acc = screen location
+	tay
+	lda		#' '
+	jsr		AsciiToScreen
+.0008:
+	sta		(y)
+	iny
+	inx
+	cpx		JCB_VideoCols,r4
+	blo		.0008
+	ply
+	plx
+	bra		.escRst
+.0009:
+	cmp		#'`'
+	bne		.0010
+	bra		.stuffChar
+.0010:
+	cmp		#'('
+	bne		.escRst
+	bra		.stuffChar
+
+.unrecogEsc:
+	pla
+	bra		.escRst
+
+.testG:
+	pla
+	and		#$FF
+	cmp		#'G'
+	bne		.escRst
+	
+	; stuff a character into the escape sequence
+.stuffChar:
+	pha
+	lda		JCB_esc,r4
+	asl		r1,r1,#8
+	or		r1,r1,0,sp
+	sta		JCB_esc,r4
+	pla
+	pop		r4
+	rts
+
+.testEsc:
+	pla
+	and		#$FF
+	cmp		#ESC
+	bne		.escRst
+	bra		.stuffChar
 
 ;------------------------------------------------------------------------------
 ; Increment the cursor position, scroll the screen if needed.
@@ -1584,9 +1761,9 @@ IncCursorPos:
 	lda		JCB_CursorCol,r4
 	ina
 	sta		JCB_CursorCol,r4
-	ldx		TEXTREG+TEXT_COLS
+	ldx		JCB_VideoCols,r4
 	cmp		r1,r2
-	bcc		icc1
+	blo		icc1
 	stz		JCB_CursorCol,r4		; column = 0
 	bra		icr1
 IncCursorRow:
@@ -1599,10 +1776,9 @@ icr1:
 	lda		JCB_CursorRow,r4
 	ina
 	sta		JCB_CursorRow,r4
-	ldx		TEXTREG+TEXT_ROWS
+	ldx		JCB_VideoRows,r4
 	cmp		r1,r2
-	bcc		icc1
-	beq		icc1
+	blo		icc1
 	dex							; backup the cursor row, we are scrolling up
 	stx		JCB_CursorRow,r4
 	jsr		ScrollUp
@@ -2058,6 +2234,19 @@ Prompt15:
 	sta		SPSave
 	jmp		Monitor
 Prompt18:
+	cmp		#'U'
+	bne		Prompt18a
+;	jsl		$F500
+	mStartTask	#PRI_HIGH,#0,#$F500,#0,#6
+;	lda		#PRI_HIGH
+;	ldx		#0
+;	ldy		#$F500
+;	ld		r4,#0
+;	ld		r5,#6
+;	int		#4
+;	db		1
+	jmp		Monitor
+Prompt18a:
 	dey
 	jsr		spi_init
 	cmp		#0
@@ -2161,6 +2350,7 @@ HelpMsg:
 	db	"? = Display help",CR,LF
 	db	"CLS = clear screen",CR,LF
 	db	"S = Boot from SD Card",CR,LF
+	db	"SU = supermon816",CR,LF
 	db	": = Edit memory bytes",CR,LF
 	db	"L = Load sector",CR,LF
 	db	"W = Write sector",CR,LF
@@ -2573,6 +2763,9 @@ msgAC97bad:
 ;--------------------------------------------------------------------------
 ;
 Beep:
+	lda		#2				; check for a PSG
+	bmt		CONFIGREC
+	beq		.ret
 	lda		#15				; master volume to max
 	sta		PSG+64
 	lda		#13422			; 800Hz
@@ -2595,6 +2788,7 @@ Beep:
 	sta		LEDS
 	lda		#0x0000			; gate off, output enable off, no waveform
 	sta		PSGCTRL0
+.ret
 	rts
 
 include "Piano.asm"
@@ -3398,6 +3592,15 @@ InvalidOpIRQ:
 	jsr		CRLF
 	ina
 	sta		4,x		; save incremented return address back to stack
+	jsr		DumpHistoryTable
+	ply
+	plx
+	pla
+	rti
+
+DumpHistoryTable:
+	pha
+	phx
 	ldx		#64
 ioi1:
 	tsr		hist,r1
@@ -3406,11 +3609,9 @@ ioi1:
 	jsr		DisplayChar
 	dex
 	bne		ioi1
-	jsr		CRLF
-	ply
 	plx
 	pla
-	rti
+	rts
 
 EmuMVP:
 	push	r4
@@ -3472,17 +3673,17 @@ brk_rout:
 	sta		LEDS
 	jsr		kernel_panic
 	db		"Break routine",0
+	jsr		DumpHistoryTable
+	stp
 	rti
+
 nmirout:
 	pha
-	phx
 	lda		#msgPerr
 	jsr		DisplayStringB
-	tsx
-	lda		4,x
+	lda		3,sp
 	jsr		DisplayWord
 	jsr		CRLF
-	plx
 	pla
 	rti
 
@@ -3573,6 +3774,8 @@ MTKInitialize:
 	ldx		#JCBs
 ijcb1:
 	sty		JCB_Number,x
+	sty		JCB_Map,x
+	stz		JCB_esc,x
 	lda		#31
 	sta		JCB_VideoRows,x
 	lda		#56
@@ -3584,8 +3787,9 @@ ijcb1:
 	stz		JCB_CursorRow,x
 	stz		JCB_CursorCol,x
 	stz		JCB_CursorType,x
-	lda		#$DE				; CE =blue on blue FB = grey on grey
+	lda		#%1011_01111		; grey on grey
 	sta		JCB_NormAttr,x
+	sta		JCB_CurrAttr,x
 	ld		r4,r3
 	mul		r4,r4,#8192			; 8192 words per screen
 	add		r4,r4,#BIOS_SCREENS
@@ -3596,13 +3800,16 @@ ijcb1:
 	st		r4,JCB_pVidMemAttr,x
 	cpy		#0
 	bne		ijcb2
-	lda		#$CE				; CE =blue on blue FB = grey on grey
+	lda		#%0110_01110		; CE =blue on blue FB = grey on grey
 	sta		JCB_NormAttr,x
+	sta		JCB_CurrAttr,x
 	ld		r4,#TEXTSCR
 	st		r4,JCB_pVidMem,x
 	add		r4,r4,#$10000
 	st		r4,JCB_pVidMemAttr,x
 ijcb2:
+	lda		#8
+	sta		JCB_LogSize,x
 	iny
 	add		r2,r2,#JCB_Size
 	cpy		#32
@@ -3623,7 +3830,6 @@ st4:
 	bne		st4
 	lda		#-1
 	sta		MBX_LINK+NR_MSG-1
-message "4"
 
 	; Initialize free mailbox list
 	; Note the first NR_TCB mailboxes are statically allocated to the tasks.
@@ -3642,7 +3848,6 @@ st3:
 	bne		st3
 	lda		#-1
 	sta		MBX_LINK+NR_MBX-1
-message "5"
 
 	; Initialize the FreeJCB list
 	lda		#JCBs+JCB_Size		; the next available JCB
@@ -3650,12 +3855,12 @@ message "5"
 	tax
 	add		r1,r1,#JCB_Size
 	ldy		#NR_JCB-1
-st4:
+st5:
 	sta		JCB_Next,x
 	add		r1,r1,#JCB_Size
 	add		r2,r2,#JCB_Size
 	dey
-	bne		st4
+	bne		st5
 	stz		JCB_Next,x
 
 	; Initialize the FreeTCB list
@@ -3673,7 +3878,6 @@ st2:
 	sta		TCB_NxtTCB+255
 	lda		#4
 	sta		LEDS
-message "6"
 
 	; Manually setup the BIOS task
 	stz		RunningTCB		; BIOS is task #0
@@ -3704,7 +3908,6 @@ message "6"
 	ldx		#$1FF
 	stx		TCB_SP8Save
 	rts
-message "7"
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -3832,6 +4035,8 @@ StartTask:
 	pla
 	
 	add		r2,r2,#$3FF			; Move pointer to top of stack
+	stx		TCB_StackTop,r7
+	sub		r2,r2,#128
 	tsr		sp,r9				; save off current stack pointer
 	spl		tcb_sema + 1
 	txs
@@ -5127,10 +5332,7 @@ spi1:
 ;------------------------------------------------------------------------------
 ; System Call Interrupt
 ;
-;	The system function must execute with direct access to all of memory,
-; hence memmory mapping is turned off before the call, then back on again
-; after the call. This is complicated by the need to translate the stack
-; pointer between virtual and physical addresses.
+; The system call is executed using the caller's system stack.
 ;
 ; Stack Frame
 ; 4,sp:	 return address
@@ -5150,28 +5352,13 @@ syscall_int:
 	lb		r7,0,r6				; get static call number parameter into r7
 	inc		r6					; update return address
 	st		r6,4,sp
-	; translate the stack address to a physical address
-	pha							
-	tsr		sp,r1
-	jsr		VirtToPhys
-	ld		r8,r1
-	jsr		DisableMMUMapping
-	trs		r8,sp
-	; The stack pointer should now be pointing to the same memory cell, except as
-	; a physical address rather than a virtual one.
-	pla
+;	tsr		sp,r8				; save off stack pointer
+;	ld		r6,RunningTCB		; load the stack pointer with the system call
+;	ld		r6,TCB_StackTop,r6	; stack area
+;	trs		r6,sp
 	ld		r6,(syscall_vectors>>2),r7	; load the vector into r6
 	jsr		(r6)				; do the system function
-	; translate the stack address back to a virtual address
-	pha
-	tsr		sp,r1
-	jsr		PhysToVirt
-	ld		r8,r1
-	jsr		EnableMMUMapping
-	trs		r8,sp
-	; The stack pointer should now be pointing to the same memory cell, except as
-	; a virtual address rather than a physical one.
-	pla
+;	trs		r8,sp				; restore the stack pointer
 	pop		r8
 	pop		r7
 	pop		r6
@@ -5188,16 +5375,17 @@ reschedule:
 	pusha	; save off regs on the stack
 	spl		tcb_sema + 1
 resched1:
-	jsr		DisableMMUMapping
 	ldx		RunningTCB
-	tsa						; save off the stack pointer
-	sta		TCB_SPSave,x
+	tsa
+	sta		TCB_SPSave,x	; save stack pointer in TCB
 	tsr		sp8,r1			; and the eight bit mode stack pointer
 	sta		TCB_SP8Save,x
 	tsr		abs8,r1
 	sta		TCB_ABS8Save,x	; 8 bit emulation base register
-	lda		#3				; clear RUNNING status (bit #3)
+	lda		#TS_RUNNING_BIT	; clear RUNNING status (bit #3)
 	bmc		TCB_Status,x
+;	lda		TCB_StackTop,x	; switch to the system call stack
+;	tas
 	jmp		SelectTaskToRun
 
 
@@ -5242,7 +5430,6 @@ p100Hz11:
 	cli
 p100Hz4:
 
-	jsr		DisableMMUMapping
 	ldx		RunningTCB
 	tsa						; save off the stack pointer
 	sta		TCB_SPSave,x
@@ -5250,9 +5437,8 @@ p100Hz4:
 	sta		TCB_SP8Save,x
 	tsr		abs8,r1
 	sta		TCB_ABS8Save,x	; 8 bit emulation base register
-	lda		TCB_Status,x
-	and		#~TS_RUNNING
-	sta		TCB_Status,x
+	lda		#TS_RUNNING_BIT
+	bmc		TCB_Status,x
 	lda		#97
 	sta		LEDS
 
@@ -5298,10 +5484,9 @@ sttr2:
 	sta		QNdx0,y
 	; This is the only place the RunningTCB is set (except for initialization).
 	sta		RunningTCB
-	ldx		TCB_Status,r1	; flag the task as the running task
-	or		r2,r2,#TS_RUNNING
-	stx		TCB_Status,r1
 	tax
+	lda		#TS_RUNNING_BIT
+	bms		TCB_Status,x		; flag the task as the running task
 	lda		#99
 	sta		LEDS
 	lda		TCB_ABS8Save,x		; 8 bit emulation base register
@@ -5309,6 +5494,7 @@ sttr2:
 	lda		TCB_SP8Save,x		; get back eight bit stack pointer
 	trs		r1,sp8
 	ldx		TCB_SPSave,x		; get back stack pointer
+	txs
 	lda		#1
 	sta		tcb_sema
 	ld		r0,iof_switch		
@@ -5319,8 +5505,6 @@ sttr2:
 	jsr		SwitchIOFocus
 	stz		iof_sema + 1
 sttr6:
-	jsr		EnableMMUMapping
-	txs
 	popa						; restore registers
 	rti
 

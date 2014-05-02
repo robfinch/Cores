@@ -96,7 +96,7 @@ begin
 					if (radr2LSB==2'b11)
 						radr <= radr+32'd1;
 					radr2LSB <= radr2LSB + 2'b01;
-					state <= LOAD_MAC1;
+					next_state(LOAD_MAC1);
 				end
 	`HALF_159:
 				begin

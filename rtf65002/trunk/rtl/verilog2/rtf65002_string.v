@@ -23,28 +23,28 @@
 `ifdef SUPPORT_STRING
 MVN3:
 	begin
-		state <= IFETCH;
+		next_state(IFETCH);
 		res <= alu_out;
 		if (&acc)
-			pc <= pc + 32'd1;
+			pc <= pc + pc_inc;
 	end
 CMPS1:
 	begin
-		state <= IFETCH;
+		next_state(IFETCH);
 		res <= alu_out;
 		if (a!=b || &acc) begin
 			cf <= !(ltu|eq);
 			nf <= lt;
 			vf <= 1'b0;
 			zf <= eq;
-			pc <= pc + 32'd1;
+			pc <= pc + pc_inc;
 		end
 	end
 `endif
 `ifdef SUPPORT_816
 MVN816:
 	begin
-		state <= BYTE_IFETCH;
+		next_state(BYTE_IFETCH);
 		if (&acc[15:0]) begin
 			pc <= pc + pc_inc8;
 			dbr <= ir[15:8];

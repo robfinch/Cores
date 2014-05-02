@@ -29,7 +29,14 @@ BYTE_DECODE:
 		case(ir[7:0])
 		`SEP:	;	// see byte_ifetch
 		`REP:	;
-//		`XBA:	;	// doesn't route if included here
+		// XBA cannot be done in the ifetch stage because it'd repeat when there
+		// was a cache miss, causing the instruction to be done twice.
+		`XBA:	
+			begin
+				res16 <= {acc[7:0],acc[15:8]};
+				res8 <= acc[15:8];	// for flag settings
+			end
+		//;	// doesn't route if included here
 		`STP:	begin clk_en <= 1'b0; end
 //		`NAT:	begin em <= 1'b0; state <= IFETCH; end
 		`WDM:	if (ir[15:8]==`XCE) begin
