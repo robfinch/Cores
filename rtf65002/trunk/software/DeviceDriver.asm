@@ -37,43 +37,21 @@ InitDevDrv:
 	push	r6
 	push	r7
 	cmp		#NR_DCB					; check for a good device number
-	bhs		idd1
+	bhs		.idd1
 	mul		r5,r1,#DCB_SIZE
 	add		r5,r5,#DCBs
 	ld		r0,DCB_pDevOp,r5		; check a pointer to see if device is setup
-	beq		idd2
+	beq		.idd2
 	cmp		r4,#1
-	beq		idd2
+	beq		.idd2
 	lda		#E_DCBInUse
 	pop		r7
 	pop		r6
 	pop		r5
 	rts
+.idd2:
+.idd4:
 	; Copy the DCB parameter to DCB array
-idd2:
-	ld		r6,r2
-idd4:
-	; Initialize device semaphores
-;	ld		r7,DCB_ReentCount,x	; prime the semaphore
-	pha
-;	phx
-;	phy
-idd7:
-;	lda		DCB_Mbx,r5
-;	ldx		#$FFFFFFFB
-;	txy
-;	jsr		PostMsg
-	asl		r1,r1,#4		; * 16 words
-	add		r1,r1,#device_semas
-	sta		DCB_Sema,r5
-	ld		r7,DCB_ReentCount,x	; prime the semaphore
-	st		r7,(r1)
-;	dec		r7
-;	bne		idd7
-;	ply
-;	plx
-	pla
-idd5:
 	pha
 	phy
 	lda		#DCB_SIZE-1
@@ -81,18 +59,24 @@ idd5:
 	mvn
 	ply
 	pla
-idd6:
-	dey
-	beq		idd3
+	; Initialize device semaphores
+	pha
+	asl		r1,r1,#4		; * 16 words per semaphore
+	add		r1,r1,#device_semas
+	sta		DCB_Sema,r5
+	ld		r7,DCB_ReentCount,x	; prime the semaphore
+	st		r7,(r1)
+	pla
 	add		r5,r5,#DCB_SIZE
-	add		r6,r6,#DCB_SIZE
-	bra		idd4
-idd3:
+	add		r2,r2,#DCB_SIZE
+	dey
+	bne		.idd4
 	pop		r7
 	pop		r6
 	pop		r5
+	lda		#E_Ok
 	rts
-idd1:
+.idd1:
 	pop		r7
 	pop		r6
 	pop		r5
@@ -106,13 +90,13 @@ idd1:
 ;
 public DeviceInit:
 	cmp		#NR_DCB
-	bhs		dvi1
+	bhs		.dvi1
 	phx
 	push	r6
 	mul		r2,r1,#DCB_SIZE
 	add		r2,r2,#DCBs
 	ld		r2,DCB_pDevInit,x	; check a pointer to see if device is setup
-	beq		dvi2
+	beq		.dvi2
 	
 	asl		r6,r1,#4
 	spl		device_semas+1,r6	; Wait for semaphore
@@ -122,10 +106,10 @@ public DeviceInit:
 	plx
 	; lda # result from jsr() above
 	rts
-dvi2:
+.dvi2:
 	pop		r6
 	plx
-dvi1:
+.dvi1:
 	lda		#E_BadDevNum
 	rts
 
@@ -195,15 +179,20 @@ dvs1:
 	rts
 
 ;------------------------------------------------------------------
+; Load up the system's built in device drivers.
 ;------------------------------------------------------------------
 
-InitDevices:
+public InitDevices:
 	lda		#0	
-	ldx		#NullDCB
+	ldx		#NullDCB>>2
 	ldy		#1
 	jsr		InitDevDrv
 	lda		#1
-	ldx		#KeybdDCB
+	ldx		#KeybdDCB>>2
+	ldy		#1
+	jsr		InitDevDrv
+	lda		#16
+	ldx		#SDCardDCB>>2
 	ldy		#1
 	jsr		InitDevDrv
 	rts

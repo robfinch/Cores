@@ -54,6 +54,14 @@ E_NotOwner	=		0x12
 E_QueStrategy =		0x13
 E_BadDevNum	=		0x18
 E_DCBInUse	=		0x19
+; Device driver errors
+E_BadDevNum	=		0x20
+E_NoDev		=		0x21
+E_BadDevOp	=		0x22
+E_ReadError	=		0x23
+E_WriteError =		0x24
+E_BadBlockNum	=	0x25
+E_TooManyBlocks	=	0x26
 
 ; resource errors
 E_NoMoreMbx	=		0x40
@@ -324,27 +332,27 @@ eth_tx_buffer	EQU		0x1F84000
 			.bss
 			.org		0x01F90000
 NR_MBX		EQU		$800
-MBX_LINK		fill.b	NR_MBX,0	; link to next mailbox in list (free list)
-MBX_TQ_HEAD		fill.b	NR_MBX,0	; head of task queue
-MBX_TQ_TAIL		fill.b	NR_MBX,0
-MBX_MQ_HEAD		fill.b	NR_MBX,0	; head of message queue
-MBX_MQ_TAIL		fill.b	NR_MBX,0
-MBX_TQ_COUNT	fill.b	NR_MBX,0	; count of queued threads
-MBX_MQ_SIZE		fill.b	NR_MBX,0	; number of messages that may be queued
-MBX_MQ_COUNT	fill.b	NR_MBX,0	; count of messages that are queued
-MBX_MQ_MISSED	fill.b	NR_MBX,0	; number of messages dropped from queue
-MBX_OWNER		fill.b	NR_MBX,0	; job handle of mailbox owner
-MBX_MQ_STRATEGY	fill.b	NR_MBX,0	; message queueing strategy
-MBX_RESV		fill.b	NR_MBX,0
+MBX_LINK		fill.w	NR_MBX,0	; link to next mailbox in list (free list)
+MBX_TQ_HEAD		fill.w	NR_MBX,0	; head of task queue
+MBX_TQ_TAIL		fill.w	NR_MBX,0
+MBX_MQ_HEAD		fill.w	NR_MBX,0	; head of message queue
+MBX_MQ_TAIL		fill.w	NR_MBX,0
+MBX_TQ_COUNT	fill.w	NR_MBX,0	; count of queued threads
+MBX_MQ_SIZE		fill.w	NR_MBX,0	; number of messages that may be queued
+MBX_MQ_COUNT	fill.w	NR_MBX,0	; count of messages that are queued
+MBX_MQ_MISSED	fill.w	NR_MBX,0	; number of messages dropped from queue
+MBX_OWNER		fill.w	NR_MBX,0	; job handle of mailbox owner
+MBX_MQ_STRATEGY	fill.w	NR_MBX,0	; message queueing strategy
+MBX_RESV		fill.w	NR_MBX,0
 
 ; Messages, room for 64kW (16,384) messages
 			.bss
 			.org		0x01FA0000
 NR_MSG		EQU		16384
-MSG_LINK	fill.b	NR_MSG,0	; link to next message in queue or free list
-MSG_D1		fill.b	NR_MSG,0	; message data 1
-MSG_D2		fill.b	NR_MSG,0	; message data 2
-MSG_TYPE	fill.b	NR_MSG,0	; message type
+MSG_LINK	fill.w	NR_MSG,0	; link to next message in queue or free list
+MSG_D1		fill.w	NR_MSG,0	; message data 1
+MSG_D2		fill.w	NR_MSG,0	; message data 2
+MSG_TYPE	fill.w	NR_MSG,0	; message type
 MSG_END		EQU		MSG_TYPE + NR_MSG
 
 MT_SEMA		EQU		0xFFFFFFFF
@@ -401,61 +409,69 @@ JCB_Size		EQU		256
 JCB_LogSize		EQU		8
 
 		.bss
-JCBs			fill.b	NR_JCB * JCB_Size,0
-FreeJCB		db		0
+JCBs			fill.w	NR_JCB * JCB_Size,0
+FreeJCB		dw		0
 
 			.bss
 			.org		0x01FBA000
 
 ; Task control blocks, room for 256 tasks
 NR_TCB			EQU		256
-TCB_NxtRdy		fill.b	NR_TCB,0	;	EQU		0x01FBE100	; next task on ready / timeout list
-TCB_PrvRdy		fill.b	NR_TCB,0	;	EQU		0x01FBE200	; previous task on ready / timeout list
-TCB_NxtTCB		fill.b	NR_TCB,0	;	EQU		0x01FBE300
-TCB_Timeout		fill.b	NR_TCB,0	;	EQU		0x01FBE400
-TCB_Priority	fill.b	NR_TCB,0	;	EQU		0x01FBE500
-TCB_MSG_D1		fill.b	NR_TCB,0	;	EQU		0x01FBE600
-TCB_MSG_D2		fill.b	NR_TCB,0	;	EQU		0x01FBE700
-TCB_hJCB		fill.b	NR_TCB,0	;	EQU		0x01FBE800
-TCB_Status		fill.b	NR_TCB,0	;	EQU		0x01FBE900
-TCB_CursorRow	fill.b	NR_TCB,0	;	EQU		0x01FBD100
-TCB_CursorCol	fill.b	NR_TCB,0	;	EQU		0x01FBD200
-TCB_hWaitMbx	fill.b	NR_TCB,0	;	EQU		0x01FBD300	; handle of mailbox task is waiting at
-TCB_mbq_next	fill.b	NR_TCB,0	;	EQU		0x01FBD400	; mailbox queue next
-TCB_mbq_prev	fill.b	NR_TCB,0	;	EQU		0x01FBD500	; mailbox queue previous
-TCB_SP8Save		fill.b	NR_TCB,0	;	EQU		0x01FBD800	; TCB_SP8Save area 
-TCB_SPSave		fill.b	NR_TCB,0	;	EQU		0x01FBD900	; TCB_SPSave area
-TCB_StackTop	fill.b	NR_TCB,0
-TCB_ABS8Save	fill.b	NR_TCB,0	;	EQU		0x01FBDA00
-TCB_mmu_map		fill.b	NR_TCB,0	;	EQU		0x01FBDB00
-TCB_npages		fill.b	NR_TCB,0	;	EQU		0x01FBDC00
-TCB_ASID		fill.b	NR_TCB,0	;	EQU		0x01FBDD00
-TCB_errno		fill.b	NR_TCB,0	;	EQU		0x01FBDE00
-TCB_NxtTo		fill.b	NR_TCB,0	;	EQU		0x01FBDF00
-TCB_PrvTo		fill.b	NR_TCB,0	;	EQU		0x01FBE000
-TCB_MbxList		fill.b	NR_TCB,0	;	EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
-TCB_mbx			fill.b	NR_TCB,0	;	EQU		0x01FBCE00
-TCB_HeapStart	fill.b	NR_TCB,0	;	Starting address of heap in task's memory space
-TCB_HeapEnd		fill.b	NR_TCB,0	;	Ending addres of heap in task's memory space
+TCB_NxtRdy		fill.w	NR_TCB,0	;	EQU		0x01FBE100	; next task on ready / timeout list
+TCB_PrvRdy		fill.w	NR_TCB,0	;	EQU		0x01FBE200	; previous task on ready / timeout list
+TCB_NxtTCB		fill.w	NR_TCB,0	;	EQU		0x01FBE300
+TCB_Timeout		fill.w	NR_TCB,0	;	EQU		0x01FBE400
+TCB_Priority	fill.w	NR_TCB,0	;	EQU		0x01FBE500
+TCB_MSG_D1		fill.w	NR_TCB,0	;	EQU		0x01FBE600
+TCB_MSG_D2		fill.w	NR_TCB,0	;	EQU		0x01FBE700
+TCB_hJCB		fill.w	NR_TCB,0	;	EQU		0x01FBE800
+TCB_Status		fill.w	NR_TCB,0	;	EQU		0x01FBE900
+TCB_CursorRow	fill.w	NR_TCB,0	;	EQU		0x01FBD100
+TCB_CursorCol	fill.w	NR_TCB,0	;	EQU		0x01FBD200
+TCB_hWaitMbx	fill.w	NR_TCB,0	;	EQU		0x01FBD300	; handle of mailbox task is waiting at
+TCB_mbq_next	fill.w	NR_TCB,0	;	EQU		0x01FBD400	; mailbox queue next
+TCB_mbq_prev	fill.w	NR_TCB,0	;	EQU		0x01FBD500	; mailbox queue previous
+TCB_SP8Save		fill.w	NR_TCB,0	;	EQU		0x01FBD800	; TCB_SP8Save area 
+TCB_SPSave		fill.w	NR_TCB,0	;	EQU		0x01FBD900	; TCB_SPSave area
+TCB_StackTop	fill.w	NR_TCB,0
+TCB_ABS8Save	fill.w	NR_TCB,0	;	EQU		0x01FBDA00
+TCB_mmu_map		fill.w	NR_TCB,0	;	EQU		0x01FBDB00
+TCB_npages		fill.w	NR_TCB,0	;	EQU		0x01FBDC00
+TCB_ASID		fill.w	NR_TCB,0	;	EQU		0x01FBDD00
+TCB_errno		fill.w	NR_TCB,0	;	EQU		0x01FBDE00
+TCB_NxtTo		fill.w	NR_TCB,0	;	EQU		0x01FBDF00
+TCB_PrvTo		fill.w	NR_TCB,0	;	EQU		0x01FBE000
+TCB_MbxList		fill.w	NR_TCB,0	;	EQU		0x01FBCF00	; head pointer to list of mailboxes associated with task
+TCB_mbx			fill.w	NR_TCB,0	;	EQU		0x01FBCE00
+TCB_HeapStart	fill.w	NR_TCB,0	;	Starting address of heap in task's memory space
+TCB_HeapEnd		fill.w	NR_TCB,0	;	Ending addres of heap in task's memory space
 
 ;include "jcb.inc"
 
 NR_MMU_MAP		EQU		32
-VPM_bitmap_b0	fill.b	NR_MMU_MAP * 16,0
-VPM_bitmap_b1	fill.b	NR_MMU_MAP * 16,0
-nPagesFree		db		0
+VPM_bitmap_b0	fill.w	NR_MMU_MAP * 16,0
+VPM_bitmap_b1	fill.w	NR_MMU_MAP * 16,0
+nPagesFree		dw		0
 
+message "cachInvRout"
+			.bss
+			.align		4096
+cacheInvRout:
+			fill.w		4096,0
+cacheLineInvRout:
+			fill.w		4096,0
+
+message "SCREEN_SIZE"
 			.bss
 			.org		0x01D00000
 SCREEN_SIZE		EQU		8192
-BIOS_SCREENS	fill.b	SCREEN_SIZE * NR_JCB	; 0x01D00000 to 0x01EFFFFF
+BIOS_SCREENS	fill.w	SCREEN_SIZE * NR_JCB	; 0x01D00000 to 0x01EFFFFF
 
-; preallocated stacks for TCBs
-			.bss
-			.org		0x01FC0000				; to 0x01FFFFFF
-STACK_SIZE		EQU		$400					; 1kW
-BIOS_STACKS		fill.b	STACK_SIZE * NR_TCB		; room for 256 1kW stacks
+; Bitmap of tasks requesting the I/O focus
+;
+IOFocusTbl	fill.w	8,0
 
+MAX_DEV_OP			EQU		31
 
 ; Device Control Block
 ;
@@ -479,16 +495,56 @@ DCB_OSD5			EQU		18
 DCB_OSD6			EQU		19
 DCB_SIZE			EQU		20
 
+;Standard Devices are:
+
+;#		Device					Standard name
+
+;0		NULL device 			NUL		(OS built-in)
+;1		Keyboard (sequential)	KBD		(OS built-in)
+;2		Video (sequential)		VID		(OS built-in)
+;3		Printer (parallel 1)	LPT
+;4		Printer (parallel 2)	LPT2
+;5		RS-232 1				COM1	(OS built-in)
+;6		RS-232 2				COM2
+;7		RS-232 3				COM3
+;8		RS-232 4				COM4
+;9
+;10		Floppy					FD0
+;11		Floppy					FD1
+;12		Hard disk				HD0
+;13		Hard disk				HD1
+;14
+;15
+;16		SDCard					CARD1 	(OS built-in)
+;17
+;18
+;19
+;20
+;21
+;22
+;23
+;24
+;25
+;26
+;27
+;28		Audio					PSG1	(OS built-in)
+;29
+;30
+;31
+
 NR_DCB		EQU		32
 DCBs		fill	NR_DCB * DCB_SIZE,0		;	EQU		MSG_END
 DCBs_END	EQU		DCBs + DCB_SIZE * NR_DCB
 
+; preallocated stacks for TCBs
+			.bss
+			.org		0x01FC0000				; to 0x01FFFFFF
+STACK_SIZE		EQU		$400					; 1kW
+BIOS_STACKS		fill.w	STACK_SIZE * NR_TCB		; room for 256 1kW stacks
+
+
 HeapStart	EQU		0x00540000
 HeapEnd		EQU		BIOS_SCREENS-1
-
-; Bitmap of tasks requesting the I/O focus
-;
-IOFocusTbl	fill.b	8,0
 
 ; EhBASIC vars:
 ;
@@ -508,84 +564,86 @@ mem_pages_free	EQU		0x680
 			bss
 			org	0x780
 
-QNdx0		db		0
-QNdx1		db		0
-QNdx2		db		0
-QNdx3		db		0
-QNdx4		db		0
-FreeTCB		db		0
-TimeoutList	db		0
-RunningTCB	db		0
-FreeMbxHandle		db		0
-nMailbox	db		0
-FreeMsg		db		0
-nMsgBlk		db		0
-missed_ticks	db		0
-keybdmsg_d1		db		0
-keybdmsg_d2		db		0
-keybd_mbx		db		0
-keybd_char		db		0
-keybdIsSetup	db		0
-keybdLock		db		0
-keybdInIRQ		db		0
-iof_switch		db		0
-clockmsg_d1		db		0
-clockmsg_d2		db		0
-tcbsema_d1		db		0
-tcbsema_d2		db		0
-mmu_acc_save	db		0
+QNdx0		dw		0
+QNdx1		dw		0
+QNdx2		dw		0
+QNdx3		dw		0
+QNdx4		dw		0
+FreeTCB		dw		0
+TimeoutList	dw		0
+RunningTCB	dw		0
+FreeMbxHandle		dw		0
+nMailbox	dw		0
+FreeMsg		dw		0
+nMsgBlk		dw		0
+missed_ticks	dw		0
+keybdmsg_d1		dw		0
+keybdmsg_d2		dw		0
+keybd_mbx		dw		0
+keybd_char		dw		0
+keybdIsSetup	dw		0
+keybdLock		dw		0
+keybdInIRQ		dw		0
+iof_switch		dw		0
+clockmsg_d1		dw		0
+clockmsg_d2		dw		0
+tcbsema_d1		dw		0
+tcbsema_d2		dw		0
+mmu_acc_save	dw		0
 
 ; The IO focus list is a doubly linked list formed into a ring.
 ;
-IOFocusNdx	db		0		; really a pointer to the JCB owning the IO focus
+IOFocusNdx	dw		0		; really a pointer to the JCB owning the IO focus
 ;
-test_mbx	db		0
-test_D1		db		0
-test_D2		db		0
-tone_cnt	db		0
+test_mbx	dw		0
+test_D1		dw		0
+test_D2		dw		0
+tone_cnt	dw		0
 
 IrqSource	EQU		0x79F
 
-			org		0x7A0
-JMPTMP		db		0
-SP8Save		db		0
-SRSave		db		0
-R1Save		db		0
-R2Save		db		0
-R3Save		db		0
-R4Save		db		0
-R5Save		db		0
-R6Save		db		0
-R7Save		db		0
-R8Save		db		0
-R9Save		db		0
-R10Save		db		0
-R11Save		db		0
-R12Save		db		0
-R13Save		db		0
-R14Save		db		0
-R15Save		db		0
-SPSave		db		0
+			.align	0x10
+JMPTMP		dw		0
+SP8Save		dw		0
+SRSave		dw		0
+R1Save		dw		0
+R2Save		dw		0
+R3Save		dw		0
+R4Save		dw		0
+R5Save		dw		0
+R6Save		dw		0
+R7Save		dw		0
+R8Save		dw		0
+R9Save		dw		0
+R10Save		dw		0
+R11Save		dw		0
+R12Save		dw		0
+R13Save		dw		0
+R14Save		dw		0
+R15Save		dw		0
+SPSave		dw		0
 
-			org		0x7C0
-CharColor	db		0
-ScreenColor	db		0
-CursorRow	db		0
-CursorCol	db		0
-CursorFlash	db		0
-Milliseconds	db		0
-IRQFlag		db		0
-UserTick	db		0
-eth_unique_id	db		0
-LineColor	db		0
-QIndex		db		0
-ROMcs		db		0
-mmu_present	db		0
-TestTask	db		0
-BASIC_SESSION	db		0
-gr_cmd		db		0
-
-startSector	EQU		0x7F0
+			.align	0x10
+CharColor	dw		0
+ScreenColor	dw		0
+CursorRow	dw		0
+CursorCol	dw		0
+CursorFlash	dw		0
+Milliseconds	dw		0
+IRQFlag		dw		0
+UserTick	dw		0
+eth_unique_id	dw		0
+LineColor	dw		0
+QIndex		dw		0
+ROMcs		dw		0
+mmu_present	dw		0
+TestTask	dw		0
+BASIC_SESSION	dw		0
+gr_cmd		dw		0
+			
+			.align	0x10
+startSector	dw		0
+disk_size	dw		0
 
 ;
 ; CAUTION:
@@ -721,6 +779,8 @@ ROMStart:
 	dw	Sleep
 	dw	do_load
 	dw	do_save
+	dw		ICacheInvalidateAll
+	dw		ICacheInvalidateLine
 
 	org		$FFFF8400		; leave room for 256 vectors
 message "cold start point"
@@ -737,6 +797,8 @@ start
 	trs		r1,cc			; enable dcache and icache
 	jsr		ROMChecksum
 	sta		ROMcs
+	jsr		SetupCacheInvalidate
+	jsr		InitDevices
 	stz		mmu_present		; assume no mmu
 	lda		CONFIGREC
 	bit		#4096
@@ -908,6 +970,86 @@ st1
 	
 msgStart
 	db		"RTF65002 system starting.",$0d,$0a,00
+
+;------------------------------------------------------------------------------
+; SetupCacheInvalidate:
+;
+;	Setup the cache invalidate routines. Cache's in the FPGA don't have
+; invalidate logic as it cannot be efficiently implemented. So we handle
+; cache invalidations using software. By calling a software routine, or
+; accessing data in the setup cache invalidate area, the cache will be
+; effectively invalidated. This works for caches up to 16kB. (4kW)
+;------------------------------------------------------------------------------
+
+message "SetupCacheInvalidate"
+SetupCacheInvalidate:
+	lda		#4095
+	ldx		#$EAEAEAEA			; fill memory with NOP's
+	ldy		#cacheInvRout
+	stos
+	lda		#4095
+	ldx		#$60606060			; fill memory with RTS's
+	ldy		#cacheLineInvRout
+	stos
+	rts
+
+;------------------------------------------------------------------------------
+; ICacheInvalidateAll:
+;
+; Call to invalidate the entire ICache
+;------------------------------------------------------------------------------
+
+ICacheInvalidateAll:
+	jml		cacheInvRout<<2
+
+;------------------------------------------------------------------------------
+; ICacheInvalidateLine:
+;
+; Call to invalidate a specific cache line
+;
+; Parameters:
+;	r1 = code address in line to invalidate
+;------------------------------------------------------------------------------
+;
+ICacheInvalidateLine:
+	and		#$3FFF
+	add		#cacheLineInvRout<<2
+	jmp		(r1)				; this will touch the cache line then RTS
+
+;------------------------------------------------------------------------------
+; DCacheInvalidateAll:
+;
+; Call to invalidate the entire DCache. Works by performing a data fetch from
+; dummy data at each possible cache address. Works for caches up to 16kB in
+; size.
+;------------------------------------------------------------------------------
+
+DCacheInvalidateAll:
+	phx
+	ldx		#0
+.0001:
+	ld		r0,cacheInvRout,x
+	inx
+	cpx		#$FFF
+	bls		.0001
+	plx
+	rts
+
+;------------------------------------------------------------------------------
+; DCacheInvalidateLine:
+;
+; Call to invalidate a specific cache line in the data cache.
+;
+; Parameters:
+;	r1 = data address in line to invalidate
+;------------------------------------------------------------------------------
+;
+DCacheInvalidateLine:
+	pha
+	and		#$FFF
+	ld		r0,cacheInvRout,r1
+	pla
+	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -1325,8 +1467,10 @@ BlankLine:
 	phx
 	phy
 	push	r4
+	push	r5
 	ldx		TEXTREG+TEXT_COLS	; x = # chars to blank out from video controller
 	mul		r3,r2,r1			; y = screen index (row# * #cols)
+	ld		r5,r3				; r5 = screen index
 	pha
 	jsr		GetScreenLocation
 	ld		r4,r1
@@ -1339,6 +1483,16 @@ blnkln1:
 	iny
 	dex
 	bne		blnkln1
+	; reset the color codes on the display line to the normal attribute
+	jsr		GetColorCodeLocation
+	tay							; y = destination
+	add		r3,r3,r5			; add in index
+	jsr		GetNormAttr			; get the value to set
+	tax
+	lda		TEXTREG+TEXT_COLS	; number of columns to blank out
+	dea							; acc is one less
+	stos
+	pop		r5
 	pop		r4
 	ply
 	plx
@@ -1690,6 +1844,9 @@ DisplayChar:
 	cmp		#'W'				; esc 'W' - delete char under cursor
 	bne		.0006
 	stz		JCB_esc,r4
+	pha
+	phx
+	phy
 	bra		.doDel
 .0006:
 	cmp		#'T'				; esc 'T' - clear to end of line
@@ -1922,11 +2079,41 @@ include "iofocus.asm"
 message "serial.asm"
 include "serial.asm"
 
+message "797"
+;------------------------------------------------------------------------------
+; Display the half-word in r1
+;------------------------------------------------------------------------------
+;
+DisplayWord:
+	pha
+	lsr		r1,r1,#16
+	jsr		DisplayHalf
+	pla
+	
+;------------------------------------------------------------------------------
+; Display the half-word in r1
+;------------------------------------------------------------------------------
+;
+DisplayHalf:
+	pha
+	lsr		r1,r1,#8
+	jsr		DisplayByte
+	pla
+
+;------------------------------------------------------------------------------
+; Display the byte in r1
+;------------------------------------------------------------------------------
+;
+DisplayByte:
+	pha
+	lsr		r1,r1,#4
+	jsr		DisplayNybble
+	pla
+	
 ;------------------------------------------------------------------------------
 ; Display nybble in r1
 ;------------------------------------------------------------------------------
 ;
-message "DisplayNybble"
 DisplayNybble:
 	pha
 	and		#$0F
@@ -1939,41 +2126,6 @@ dispnyb1:
 	pla
 	rts
 
-;------------------------------------------------------------------------------
-; Display the byte in r1
-;------------------------------------------------------------------------------
-;
-DisplayByte:
-	pha
-	lsr		r1,r1,#4
-	jsr		DisplayNybble
-	pla
-	jmp		DisplayNybble	; tail rts 
-message "785"
-;------------------------------------------------------------------------------
-; Display the half-word in r1
-;------------------------------------------------------------------------------
-;
-DisplayHalf:
-	pha
-	lsr		r1,r1,#8
-	jsr		DisplayByte
-	pla
-	jsr		DisplayByte
-	rts
-
-message "797"
-;------------------------------------------------------------------------------
-; Display the half-word in r1
-;------------------------------------------------------------------------------
-;
-DisplayWord:
-	pha
-	lsr		r1,r1,#16
-	jsr		DisplayHalf
-	pla
-	jsr		DisplayHalf
-	rts
 message "810"
 ;------------------------------------------------------------------------------
 ; Display memory pointed to by r2.
@@ -1982,7 +2134,7 @@ message "810"
 ;
 DisplayMemW:
 	pha
-	lda		#':'
+	lda		#'>'
 	jsr		DisplayChar
 	txa
 	jsr		DisplayWord
@@ -2010,6 +2162,52 @@ DisplayMemW:
 	pla
 	rts
 
+;------------------------------------------------------------------------------
+; Display memory pointed to by r2.
+; destroys r1,r3
+;------------------------------------------------------------------------------
+;
+DisplayMemBytes:
+	pha
+	phy
+	lda		#'>'
+	jsr		DisplayChar
+	lda		#'B'
+	jsr		DisplayChar
+	lda		#' '
+	jsr		DisplayChar
+	txa
+	jsr		DisplayWord
+	ldy		#0
+.001:
+	lda		#' '
+	jsr		DisplayChar
+	lb		r1,0,x
+	jsr		DisplayByte
+	inx
+	iny
+	cpy		#8
+	blo		.001
+	lda		#':'
+	jsr		DisplayChar
+	ldy		#0
+	sub		r2,r2,#8
+.002
+	lb		r1,0,x
+	cmp		#26			; convert control characters to '.'
+	bhs		.003
+	lda		#'.'
+.003:
+	jsr		DisplayChar
+	inx
+	iny
+	cpy		#8
+	blo		.002
+	jsr		CRLF
+	ply
+	pla
+	rts
+
 message "Monitor"
 ;==============================================================================
 ; System Monitor Program
@@ -2022,14 +2220,14 @@ Monitor:
 	lda		#0					; turn off keyboard echo
 	jsr		SetKeyboardEcho
 	jsr		RequestIOFocus
-PromptLn:
+.PromptLn:
 	jsr		CRLF
 	lda		#'$'
 	jsr		DisplayChar
 
 ; Get characters until a CR is keyed
 ;
-Prompt3:
+.Prompt3:
 	jsr		RequestIOFocus
 ;	lw		r1,#2			; get keyboard character
 ;	syscall	#417
@@ -2037,22 +2235,22 @@ Prompt3:
 ;	cmp		#0
 	jsr		KeybdGetChar
 	cmp		#-1
-	beq		Prompt3
+	beq		.Prompt3
 ;	jsr		KeybdGetCharDirect
 	cmp		#CR
-	beq		Prompt1
+	beq		.Prompt1
 	jsr		DisplayChar
-	bra		Prompt3
+	bra		.Prompt3
 
 ; Process the screen line that the CR was keyed on
 ;
-Prompt1:
+.Prompt1:
 	lda		#80
 	sta		LEDS
 	ldx		RunningTCB
 	ldx		TCB_hJCB,x
 	cpx		#NR_JCB
-	bhs		Prompt3
+	bhs		.Prompt3
 	mul		r2,r2,#JCB_Size
 	add		r2,r2,#JCBs
 	lda		#81
@@ -2064,43 +2262,47 @@ Prompt1:
 	sta		LEDS
 	jsr		MonGetch
 	cmp		#'$'
-	bne		Prompt2			; skip over '$' prompt character
+	bne		.Prompt2			; skip over '$' prompt character
 	lda		#83
 	sta		LEDS
 	jsr		MonGetch
 
 ; Dispatch based on command character
 ;
-Prompt2:
-	cmp		#':'
+.Prompt2:
+	cmp		#'>'
 	beq		EditMem
-	cmp		#'D'
-	bne		Prompt8
+	cmp		#'M'
+	bne		.testDIR
 	jsr		MonGetch
-	cmp		#'R'
-	beq		DumpReg
-	cmp		#'I'
-	beq		DoDir
+	cmp		#'B'
+	beq		DumpMemBytes
 	dey
 	bra		DumpMem
-Prompt8:
+.testDIR:
+	cmp		#'D'
+	bne		.Prompt8
+	cmp		#'I'
+	beq		DoDir
+	bra		Monitor
+.Prompt8:
 	cmp		#'F'
-	bne		Prompt7
+	bne		.Prompt7
 	jsr		MonGetch
 	cmp		#'L'
-	bne		Prompt8a
+	bne		.Prompt8a
 	jsr		DumpIOFocusList
 	jmp		Monitor
-Prompt8a:
+.Prompt8a:
 	cmp		#'I'
 	beq		DoFig
 	cmp		#'M'
 	beq		DoFmt
 	dey
 	bra		FillMem
-Prompt7:
+.Prompt7:
 	cmp		#'B'			; $B - start tiny basic
-	bne		Prompt4
+	bne		.Prompt4
 ;	mStartTask	#PRI_LOW,#0,#CSTART,#0,#0
 	lda		#PRI_LOW
 	ldx		#0
@@ -2115,12 +2317,12 @@ Prompt7:
 ;	jsr		StartTask
 ;	jsr		CSTART
 	bra		Monitor
-Prompt4:
+.Prompt4:
 	cmp		#'b'
-	bne		Prompt5
+	bne		.Prompt5
 	lda		BASIC_SESSION
 	cmp		#0
-	bne		bsess1
+	bne		.bsess1
 	inc		BASIC_SESSION
 ;	lda		#3				; priority level 3
 ;	ldy		#$F000			; start address $F000
@@ -2136,7 +2338,7 @@ Prompt4:
 	int		#4
 	db		1
 	bra		Monitor
-bsess1:
+.bsess1:
 	inc		BASIC_SESSION
 	ldx		#$3000
 	ldy		#$4303000
@@ -2156,24 +2358,24 @@ bsess1:
 	cpu		W65C02
 	jml		$0C000
 	cpu		rtf65002
-Prompt5:
+.Prompt5:
 	cmp		#'J'			; $J - execute code
 	beq		ExecuteCode
 	cmp		#'L'			; $L - load dector
-	beq		LoadSector
+	beq		LoadBlock
 	cmp		#'W'
-	beq		WriteSector
-Prompt9:
+	beq		WriteBlock
+.Prompt9:
 	cmp		#'?'			; $? - display help
-	bne		Prompt10
+	bne		.Prompt10
 	lda		#HelpMsg
 	jsr		DisplayStringB
 	jmp		Monitor
-Prompt10:
+.Prompt10:
 	cmp		#'C'			; $C - clear screen
 	beq		TestCLS
 	cmp		#'r'
-	bne		Prompt12
+	bne		.Prompt12
 	lda		#4				; priority level 4
 	ldx		#0				; zero all flags at startup
 	ldy		#RandomLines	; task address
@@ -2182,60 +2384,49 @@ Prompt10:
 ;	jsr		($FFFFC004>>2)	; StartTask
 	jmp		Monitor
 ;	jmp		RandomLinesCall
-Prompt12:
-Prompt13:
+.Prompt12:
+.Prompt13:
 	cmp		#'P'
-	bne		Prompt14
-;	lda		#2
-;	ldx		#0
-;	ldy		#Piano
-;	jsr		($FFFFC004>>2)		; StartTask
-;	mStartTask	#PRI_NORMAL,#0,#Piano,#0,#0
-	lda		#PRI_NORMAL
-	ldx		#0
-	ldy		#Piano
-	ld		r4,#0
-	ld		r5,#2
-	int		#4
-	db		1
+	bne		.Prompt14
+	mStartTask	#PRI_NORMAL,#0,#Piano,#0,#2
 	jmp		Monitor
 
-Prompt14:
+.Prompt14:
 	cmp		#'T'
-	bne		Prompt15
+	bne		.Prompt15
 	jsr		MonGetch
 	cmp		#'O'
-	bne		Prompt14a
+	bne		.Prompt14a
 	jsr		DumpTimeoutList
 	jmp		Monitor
-Prompt14a:
+.Prompt14a:
 	cmp		#'I'
-	bne		Prompt14b
+	bne		.Prompt14b
 	jsr		DisplayDatetime
 	jmp		Monitor
-Prompt14b:
+.Prompt14b:
 	cmp		#'E'
-	bne		Prompt14c
+	bne		.Prompt14c
 	jsr		ReadTemp
 	jmp		Monitor
-Prompt14c:
+.Prompt14c:
 	dey
 	jsr		DumpTaskList
 	jmp		Monitor
 
-Prompt15:
+.Prompt15:
 	cmp		#'S'
-	bne		Prompt16
+	bne		.Prompt16
 	jsr		MonGetch
 	cmp		#'P'
-	bne		Prompt18
+	bne		.Prompt18
 	jsr		ignBlanks
 	jsr		GetHexNumber
 	sta		SPSave
 	jmp		Monitor
-Prompt18:
+.Prompt18:
 	cmp		#'U'
-	bne		Prompt18a
+	bne		.Prompt18a
 ;	jsl		$F500
 	mStartTask	#PRI_HIGH,#0,#$F500,#0,#6
 ;	lda		#PRI_HIGH
@@ -2246,22 +2437,22 @@ Prompt18:
 ;	int		#4
 ;	db		1
 	jmp		Monitor
-Prompt18a:
+.Prompt18a:
 	dey
-	jsr		spi_init
+	jsr		SDInit
 	cmp		#0
 	bne		Monitor
-	jsr		spi_read_part
+	jsr		SDReadPart
 	cmp		#0
 	bne		Monitor
-	jsr		spi_read_boot
+	jsr		SDReadBoot
 	cmp		#0
 	bne		Monitor
 	jsr		loadBootFile
 	jmp		Monitor
-Prompt16:
+.Prompt16:
 	cmp		#'e'
-	bne		Prompt17
+	bne		.Prompt17
 ;	lda		#1
 ;	ldx		#0
 ;	ldy		#eth_main
@@ -2269,32 +2460,32 @@ Prompt16:
 	mStartTask	#PRI_HIGH,#0,#eth_main,#0,#0
 ;	jsr		eth_main
 	jmp		Monitor
-Prompt17:
+.Prompt17:
 	cmp		#'R'
-	bne		Prompt19
+	bne		.Prompt19
 	jsr		MonGetch
 	cmp		#'S'
-	beq		LoadSector
+	beq		LoadBlock
 	dey
 	bra		SetRegValue
 	jmp		Monitor
-Prompt19:
+.Prompt19:
 	cmp		#'K'
-	bne		Prompt20
-Prompt19a:
+	bne		.Prompt20
+.Prompt19a:
 	jsr		MonGetch
 	cmp		#' '
-	bne		Prompt19a
+	bne		.Prompt19a
 	jsr		ignBlanks
 	jsr		GetDecNumber
 	jsr		KillTask
 	jmp		Monitor
-Prompt20:
+.Prompt20:
 	cmp		#'8'
-	bne		Prompt21
+	bne		.Prompt21
 	jsr		Test816
 	jmp		Monitor
-Prompt21:
+.Prompt21:
 	cmp		#'m'
 	bne		Monitor
 ;	lda		#3
@@ -2351,11 +2542,11 @@ HelpMsg:
 	db	"CLS = clear screen",CR,LF
 	db	"S = Boot from SD Card",CR,LF
 	db	"SU = supermon816",CR,LF
-	db	": = Edit memory bytes",CR,LF
-	db	"L = Load sector",CR,LF
-	db	"W = Write sector",CR,LF
-	db  "DR = Dump registers",CR,LF
-	db	"D = Dump memory",CR,LF
+	db	"L = Load Block",CR,LF
+	db	"W = Write Block",CR,LF
+	db  "DIR = Disk directory",CR,LF
+	db	"M = Dump memory words, MB = Dump memory bytes",CR,LF
+	db	"> = Edit memory words",CR,LF
 	db	"F = Fill memory",CR,LF
 	db  "FL = Dump I/O Focus List",CR,LF
 ;	db  "FIG = start FIG Forth",CR,LF
@@ -2363,7 +2554,7 @@ HelpMsg:
 	db	"B = start tiny basic",CR,LF
 	db	"b = start EhBasic 6502",CR,LF
 	db	"J = Jump to code",CR,LF
-	db	"R[n] = Set register value",CR,LF
+	db	"R = Dump registers, Rn = Set register value",CR,LF
 	db	"r = random lines - test bitmap",CR,LF
 	db	"e = ethernet test",CR,LF
 	db	"T = Dump task list",CR,LF
@@ -2394,7 +2585,7 @@ ignBlanks1:
 EditMem:
 	jsr		ignBlanks
 	jsr		GetHexNumber
-	or		r5,r1,r0
+	ld		r5,r1
 	ld		r4,#3
 edtmem1:
 	jsr		ignBlanks
@@ -2457,7 +2648,7 @@ xcret:
 	sta		SRSave
 	jmp     Monitor
 
-LoadSector:
+LoadBlock:
 	jsr		ignBlanks
 	jsr		GetDecNumber
 	pha
@@ -2466,13 +2657,22 @@ LoadSector:
 	tax
 	phx
 ;	ld		r2,#0x3800
-	jsr		spi_init
+	lda		#16				; SD Card device #
+	ldx		#1				; Init
+	jsr		DeviceOp
+;	jsr		SDInit
 	plx
 	pla
-	jsr		spi_read_sector
+	lda		#16				; SD Card device #
+	ldx		#11				; opcode: Read blocks
+	pop		r5				; r5 = pointer to data storage area
+	ply						; y = block number to read
+	ld		r4,#1			; 1 block to read	
+	jsr		DeviceOp
+;	jsr		SDReadSector
 	jmp		Monitor
 
-WriteSector:
+WriteBlock:
 	jsr		ignBlanks
 	jsr		GetDecNumber
 	pha
@@ -2480,10 +2680,10 @@ WriteSector:
 	jsr		GetHexNumber
 	tax
 	phx
-	jsr		spi_init
+	jsr		SDInit
 	plx
 	pla
-	jsr		spi_write_sector
+	jsr		SDWriteSector
 	jmp		Monitor
 
 ;------------------------------------------------------------------------------
@@ -2494,7 +2694,7 @@ DumpReg:
 	ldy		#0
 DumpReg1:
 	jsr		CRLF
-	lda		#':'
+	lda		#'$'
 	jsr		DisplayChar
 	lda		#'R'
 	jsr		DisplayChar
@@ -2526,6 +2726,8 @@ DumpReg1:
 ;------------------------------------------------------------------------------
 SetRegValue:
 	jsr		GetDecNumber
+	cmp		#0
+	beq		DumpReg
 	cmp		#15
 	bpl		Monitor
 	pha
@@ -2534,39 +2736,100 @@ SetRegValue:
 	ply
 	sta		R1Save,y
 	jmp		Monitor
-		
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+GetTwoParams:
+	jsr		ignBlanks
+	jsr		GetHexNumber	; get start address of dump
+	tax
+	jsr		ignBlanks
+	jsr		GetHexNumber	; get end address of dump
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+GetRange:
+	jsr		GetTwoParams
+	cmp		r2,r1
+	bhi		DisplayErr
+	rts
+
 ;------------------------------------------------------------------------------
 ; Do a memory dump of the requested location.
 ;------------------------------------------------------------------------------
 ;
 DumpMem:
-	jsr		ignBlanks
-	jsr		GetHexNumber	; get start address of dump
-	tax
-	jsr		ignBlanks
-	jsr		GetHexNumber	; get number of words to dump
-	lsr						; 1/4 as many dump rows
-	lsr
-	bne		Dumpmem2
-	lda		#1				; dump at least one row
-Dumpmem2:
+	jsr		GetRange
 	jsr		CRLF
-	bra		DumpmemW
 DumpmemW:
+	jsr		CheckKeys
 	jsr		DisplayMemW
-	dea
-	bne		DumpmemW
+	cmp		r2,r1
+	bls		DumpmemW
 	jmp		Monitor
 
+DumpMemBytes:
+	jsr		GetRange
+	jsr		CRLF
+.001:
+	jsr		CheckKeys
+	jsr		DisplayMemBytes
+	cmp		r2,r1
+	bls		.001
+	jmp		Monitor
 
-	bra		Monitor
+;------------------------------------------------------------------------------
+; CheckKeys:
+;	Checks for a CTRLC or a scroll lock during long running dumps.
+;------------------------------------------------------------------------------
+CheckKeys:
+	jsr		CTRLCCheck
+	jmp		CheckScrollLock
+
+;------------------------------------------------------------------------------
+; CTRLCCheck
+;	Checks to see if CTRL-C is pressed. If so then the current routine is
+; aborted and control is returned to the monitor.
+;------------------------------------------------------------------------------
+
+CTRLCCheck:
+	pha
+	jsr		KeybdGetChar
+	cmp		#CTRLC
+	beq		.0001
+	pla
+	rts
+.0001:
+	pla
+	pla
+	jmp		Monitor
+
+;------------------------------------------------------------------------------
+; CheckScrollLock:
+;	Check for a scroll lock by the user. If scroll lock is active then tasks
+; are rescheduled while the scroll lock state is tested in a loop.
+;------------------------------------------------------------------------------
+
+CheckScrollLock:
+	pha
+.0002:
+	jsr		GetPtrCurrentJCB
+	lda		JCB_KeybdLocks,r1
+	bit		#$4000				; is scroll lock active ?
+	beq		.0001
+	int		#2					; reschedule tasks
+	bra		.0002
+.0001:
+	pla
+	rts
+
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 message "FillMem"
 FillMem:
-	jsr		ignBlanks
-	jsr		GetHexNumber	; get start address of dump
-	tax
-	jsr		ignBlanks
-	jsr		GetHexNumber	; get number of bytes to fill
+	jsr		GetRange
 	ld		r5,r1
 	jsr		ignBlanks
 	jsr		GetHexNumber	; get the fill byte
@@ -2670,6 +2933,16 @@ gtdc3:
 	lda		#-1
 	rts
 
+DisplayErr:
+	lda		#msgErr
+	jsr		DisplayStringB
+	jmp		Monitor
+
+msgErr:
+	db	"**Err",CR,LF,0
+
+;==============================================================================
+;==============================================================================
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -2792,323 +3065,7 @@ Beep:
 	rts
 
 include "Piano.asm"
-
-;==============================================================================
-;==============================================================================
-;
-; Initialize the SD card
-; Returns
-; acc = 0 if successful, 1 otherwise
-; Z=1 if successful, otherwise Z=0
-;
-message "spi_init"
-spi_init
-	lda		#SPI_INIT_SD
-	sta		SPIMASTER+SPI_TRANS_TYPE_REG
-	lda		#SPI_TRANS_START
-	sta		SPIMASTER+SPI_TRANS_CTRL_REG
-	nop
-spi_init1
-	lda		SPIMASTER+SPI_TRANS_STATUS_REG
-	nop
-	nop
-	cmp		#SPI_TRANS_BUSY
-	beq		spi_init1
-	lda		SPIMASTER+SPI_TRANS_ERROR_REG
-	and		#3
-	cmp		#SPI_INIT_NO_ERROR
-	bne		spi_error
-;	lda		#spi_init_ok_msg
-;	jsr		DisplayStringB
-	lda		#0
-	rts
-spi_error
-	jsr		DisplayByte
-	lda		#spi_init_error_msg
-	jsr		DisplayStringB
-	lda		SPIMASTER+SPI_RESP_BYTE1
-	jsr		DisplayByte
-	lda		SPIMASTER+SPI_RESP_BYTE2
-	jsr		DisplayByte
-	lda		SPIMASTER+SPI_RESP_BYTE3
-	jsr		DisplayByte
-	lda		SPIMASTER+SPI_RESP_BYTE4
-	jsr		DisplayByte
-	lda		#1
-	rts
-
-spi_delay:
-	nop
-	nop
-	rts
-
-
-; SPI read sector
-;
-; r1= sector number to read
-; r2= address to place read data
-; Returns:
-; r1 = 0 if successful
-;
-spi_read_sector:
-	phx
-	phy
-	push	r4
-	
-	sta		SPIMASTER+SPI_SD_SECT_7_0_REG
-	lsr		r1,r1,#8
-	sta		SPIMASTER+SPI_SD_SECT_15_8_REG
-	lsr		r1,r1,#8
-	sta		SPIMASTER+SPI_SD_SECT_23_16_REG
-	lsr		r1,r1,#8
-	sta		SPIMASTER+SPI_SD_SECT_31_24_REG
-
-	ld		r4,#20	; retry count
-
-spi_read_retry:
-	; Force the reciever fifo to be empty, in case a prior error leaves it
-	; in an unknown state.
-	lda		#1
-	sta		SPIMASTER+SPI_RX_FIFO_CTRL_REG
-
-	lda		#RW_READ_SD_BLOCK
-	sta		SPIMASTER+SPI_TRANS_TYPE_REG
-	lda		#SPI_TRANS_START
-	sta		SPIMASTER+SPI_TRANS_CTRL_REG
-	nop
-spi_read_sect1:
-	lda		SPIMASTER+SPI_TRANS_STATUS_REG
-	jsr		spi_delay			; just a delay between consecutive status reg reads
-	cmp		#SPI_TRANS_BUSY
-	beq		spi_read_sect1
-	lda		SPIMASTER+SPI_TRANS_ERROR_REG
-	lsr
-	lsr
-	and		#3
-	cmp		#SPI_READ_NO_ERROR
-	bne		spi_read_error
-	ldy		#512		; read 512 bytes from fifo
-spi_read_sect2:
-	lda		SPIMASTER+SPI_RX_FIFO_DATA_REG
-	sb		r1,0,x
-	inx
-	dey
-	bne		spi_read_sect2
-	lda		#0
-	bra		spi_read_ret
-spi_read_error:
-	dec		r4
-	bne		spi_read_retry
-	jsr		DisplayByte
-	lda		#spi_read_error_msg
-	jsr		DisplayStringB
-	lda		#1
-spi_read_ret:
-	pop		r4
-	ply
-	plx
-	rts
-
-; SPI write sector
-;
-; r1= sector number to write
-; r2= address to get data from
-; Returns:
-; r1 = 0 if successful
-;
-spi_write_sector:
-	phx
-	phy
-	pha
-	; Force the transmitter fifo to be empty, in case a prior error leaves it
-	; in an unknown state.
-	lda		#1
-	sta		SPIMASTER+SPI_TX_FIFO_CTRL_REG
-	nop			; give I/O time to respond
-	nop
-
-	; now fill up the transmitter fifo
-	ldy		#512
-spi_write_sect1:
-	lb		r1,0,x
-	sta		SPIMASTER+SPI_TX_FIFO_DATA_REG
-	nop			; give the I/O time to respond
-	nop
-	inx
-	dey
-	bne		spi_write_sect1
-
-	; set the sector number in the spi master address registers
-	pla
-	sta		SPIMASTER+SPI_SD_SECT_7_0_REG
-	lsr		r1,r1,#8
-	sta		SPIMASTER+SPI_SD_SECT_15_8_REG
-	lsr		r1,r1,#8
-	sta		SPIMASTER+SPI_SD_SECT_23_16_REG
-	lsr		r1,r1,#8
-	sta		SPIMASTER+SPI_SD_SECT_31_24_REG
-
-	; issue the write command
-	lda		#RW_WRITE_SD_BLOCK
-	sta		SPIMASTER+SPI_TRANS_TYPE_REG
-	lda		#SPI_TRANS_START
-	sta		SPIMASTER+SPI_TRANS_CTRL_REG
-	nop
-spi_write_sect2:
-	lda		SPIMASTER+SPI_TRANS_STATUS_REG
-	nop							; just a delay between consecutive status reg reads
-	nop
-	cmp		#SPI_TRANS_BUSY
-	beq		spi_write_sect2
-	lda		SPIMASTER+SPI_TRANS_ERROR_REG
-	lsr		r1,r1,#4
-	and		#3
-	cmp		#SPI_WRITE_NO_ERROR
-	bne		spi_write_error
-	lda		#0
-	bra		spi_write_ret
-spi_write_error:
-	jsr		DisplayByte
-	lda		#spi_write_error_msg
-	jsr		DisplayStringB
-	lda		#1
-
-spi_write_ret:
-	ply
-	plx
-	rts
-
-; SPI read multiple sector
-;
-; r1= sector number to read
-; r2= address to write data
-; r3= number of sectors to read
-;
-; Returns:
-; r1 = 0 if successful
-;
-spi_read_multiple:
-	push	r4
-	ld		r4,#0
-spi_rm1:
-	pha
-	jsr		spi_read_sector
-	add		r4,r4,r1
-	add		r2,r2,#512
-	pla
-	ina
-	dey
-	bne		spi_rm1
-	ld		r1,r4
-	pop		r4
-	rts
-
-; SPI write multiple sector
-;
-; r1= sector number to write
-; r2= address to get data from
-; r3= number of sectors to write
-;
-; Returns:
-; r1 = 0 if successful
-;
-spi_write_multiple:
-	push	r4
-	ld		r4,#0
-spi_wm1:
-	pha
-	jsr		spi_write_sector
-	add		r4,r4,r1		; accumulate an error count
-	add		r2,r2,#512		; 512 bytes per sector
-	pla
-	ina
-	dey
-	bne		spi_wm1
-	ld		r1,r4
-	pop		r4
-	rts
-	
-; read the partition table to find out where the boot sector is.
-; Returns
-; r1 = 0 everything okay, 1=read error
-; also Z=1=everything okay, Z=0=read error
-;
-spi_read_part:
-	phx
-	stz		startSector						; default starting sector
-	lda		#0								; r1 = sector number (#0)
-	ldx		#BYTE_SECTOR_BUF				; r2 = target address (word to byte address)
-	jsr		spi_read_sector
-	cmp		#0
-	bne		spi_rp1
-	lb		r1,BYTE_SECTOR_BUF+$1C9
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1C8
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1C7
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1C6
-	sta		startSector						; r1 = 0, for okay status
-	plx
-	lda		#0
-	rts
-spi_rp1:
-	plx
-	lda		#1
-	rts
-
-; Read the boot sector from the disk.
-; Make sure it's the boot sector by looking for the signature bytes 'EB' and '55AA'.
-; Returns:
-; r1 = 0 means this card is bootable
-; r1 = 1 means a read error occurred
-; r1 = 2 means the card is not bootable
-;
-spi_read_boot:
-	phx
-	phy
-	push	r5
-	lda		startSector					; r1 = sector number
-	ldx		#BYTE_SECTOR_BUF			; r2 = target address
-	jsr		spi_read_sector
-	cmp		#0
-	bne		spi_read_boot_err
-	lb		r1,BYTE_SECTOR_BUF
-	cmp		#$EB
-	bne		spi_eb_err
-spi_read_boot2:
-	lda		#msgFoundEB
-	jsr		DisplayStringB
-	lb		r1,BYTE_SECTOR_BUF+$1FE		; check for 0x55AA signature
-	cmp		#$55
-	bne		spi_eb_err
-	lb		r1,BYTE_SECTOR_BUF+$1FF		; check for 0x55AA signature
-	cmp		#$AA
-	bne		spi_eb_err
-	pop		r5
-	ply
-	plx
-	lda		#0						; r1 = 0, for okay status
-	rts
-spi_read_boot_err:
-	pop		r5
-	ply
-	plx
-	lda		#1
-	rts
-spi_eb_err:
-	lda		#msgNotFoundEB
-	jsr		DisplayStringB
-	pop		r5
-	ply
-	plx
-	lda		#2
-	rts
-
-msgFoundEB:
-	db	"Found EB code.",CR,LF,0
-msgNotFoundEB:
-	db	"EB/55AA Code missing.",CR,LF,0
+include "SDCard.asm"
 
 ; Load the root directory from disk
 ; r2 = where to place root directory in memory
@@ -3150,7 +3107,7 @@ loadBootFileTmp:
 	lb		r3,BYTE_SECTOR_BUF+$D			; sectors per cluster
 loadBootFile1:
 	ld		r1,r5							; r1=sector to read
-	jsr		spi_read_sector
+	jsr		SDReadSector
 	inc		r5						; r5 = next sector
 	add		r2,r2,#512
 	dec		r3
@@ -3189,24 +3146,21 @@ spi_write_error_msg:
 	db	"SD card write error",0
 
 do_fmt:
-	jsr		spi_init
+	jsr		SDInit
 	cmp		#0
 	bne		fmt_abrt
-	ldx		#DIRBUF
-	ldy		#65536
 	; clear out the directory buffer
-dfmt1:
-	stz		(x)
-	inx
-	dey
-	bne		dfmt1
+	lda		#65535
+	ldx		#0
+	ldy		#DIRBUF
+	stos
 	jsr		store_dir
 fmt_abrt:
 	rts
 
 do_dir:
 	jsr		CRLF
-	jsr		spi_init
+	jsr		SDInit
 	cmp		#0
 	bne		dirabrt
 	jsr		load_dir
@@ -3254,7 +3208,7 @@ load_dir:
 	lda		#4000
 	ldx		#DIRBUF<<2
 	ldy		#64
-	jsr		spi_read_multiple
+	jsr		SDReadMultiple
 	ply
 	plx
 	pla
@@ -3266,7 +3220,7 @@ store_dir:
 	lda		#4000
 	ldx		#DIRBUF<<2
 	ldy		#64
-	jsr		spi_write_multiple
+	jsr		SDWriteMultiple
 	ply
 	plx
 	pla
@@ -3278,7 +3232,7 @@ store_dir:
 ;
 do_save:
 	pha
-	jsr		spi_init
+	jsr		SDInit
 	cmp		#0
 	bne		dsavErr
 	pla
@@ -3305,7 +3259,7 @@ dsav8:
 	ld		r1,r7		; r1 = sector number
 	lsr		r3,r3,#9	; r3/512
 	iny					; +1
-	jsr		spi_write_multiple
+	jsr		SDWriteMultiple
 dsav3:
 	rts
 	; Here the filename didn't match
@@ -3351,7 +3305,7 @@ msgDiskFull
 
 do_load:
 	pha
-	jsr		spi_init
+	jsr		SDInit
 	cmp		#0
 	bne		dsavErr
 	pla
@@ -3380,7 +3334,7 @@ dlod8:
 	ld		r1,r7		; r1 = sector number
 	lsr		r3,r3,#9	; r3/512
 	iny					; +1
-	jsr		spi_read_multiple
+	jsr		SDReadMultiple
 dlod3:
 	rts
 	; Here the filename didn't match

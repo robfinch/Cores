@@ -48,30 +48,30 @@ CTRLX	EQU	0x18
 XON		EQU	0x11
 XOFF	EQU	0x13
 
-CursorFlash	EQU		0xFC4
-IRQFlag		EQU		0xFC6
+CursorFlash	EQU		0x7C4
+IRQFlag		EQU		0x7C6
 
-OUTPTR		EQU		0xEBE
-INPPTR		EQU		0xEBF
-FILENAME	EQU		0xEC0
-FILEBUF		EQU		0x05F60000
-OSSP		EQU		0xF00
-TXTUNF		EQU		0xF01
-VARBGN		EQU		0xF02
-LOPVAR		EQU		0xF03
-STKGOS		EQU		0xF04
-CURRNT		EQU		0xF05
-BUFFER		EQU		0xF06
+OUTPTR		EQU		0x778
+INPPTR		EQU		0x779
+FILENAME	EQU		0x6C0
+FILEBUF		EQU		0x01F60000
+OSSP		EQU		0x700
+TXTUNF		EQU		0x701
+VARBGN		EQU		0x702
+LOPVAR		EQU		0x703
+STKGOS		EQU		0x704
+CURRNT		EQU		0x705
+BUFFER		EQU		0x706
 BUFLEN		EQU		84
-LOPPT		EQU		0xF60
-LOPLN		EQU		0xF61
-LOPINC		EQU		0xF62
-LOPLMT		EQU		0xF63
-NUMWKA		EQU		0xF64
-STKINP		EQU		0xF74
-STKBOT		EQU		0xF75
-usrJmp		EQU		0xF76
-IRQROUT		EQU		0xF77
+LOPPT		EQU		0x760
+LOPLN		EQU		0x761
+LOPINC		EQU		0x762
+LOPLMT		EQU		0x763
+NUMWKA		EQU		0x764
+STKINP		EQU		0x774
+STKBOT		EQU		0x775
+usrJmp		EQU		0x776
+IRQROUT		EQU		0x777
 
 
 
@@ -97,10 +97,10 @@ GOBYE:
 ;
 		align	4
 ;THRD_AREA	dw	0x04000000	; threading switch area 0x04000000-0x40FFFFF
-;bitmap dw	0x04100000	; bitmap graphics memory 0x04100000-0x417FFFF
-TXTBGN	dw	0x04180000	;TXT		;beginning of program memory
-ENDMEM	dw	0x041EFFFF	;	end of available memory
-STACKOFFS	dw	0x041FFFFF	; stack offset - leave a little room for the BIOS stacks
+;bitmap dw	0x00100000	; bitmap graphics memory 0x04100000-0x417FFFF
+TXTBGN	dw	0x01800000	;TXT		;beginning of program memory
+ENDMEM	dw	0x018EFFFF	;	end of available memory
+STACKOFFS	dw	0x018FFFFF	; stack offset - leave a little room for the BIOS stacks
 ;
 ; The main interpreter starts here:
 ;
@@ -1159,13 +1159,13 @@ LOAD3:
 ;	jsr		OREXPR		;evaluate the following expression
 ;	lda		#5000
 	ldx		#$E00
-	jsr		spi_read_sector
+	jsr		SDReadSector
 	ina
 	ldx		TXTBGN>>2
 	asl		r2,r2,#2
 LOAD4:
 	pha
-	jsr		spi_read_sector
+	jsr		SDReadSector
 	add		r2,r2,#512
 	pla
 	ina
@@ -1185,13 +1185,13 @@ SAVE3:
 	jsr		OREXPR		;evaluate the following expression
 ;	lda		#5000		; starting sector
 	ldx		#$E00		; starting address to write
-	jsr		spi_write_sector
+	jsr		SDWriteSector
 	ina
 	ldx		TXTBGN>>2
 	asl		r2,r2,#2
 SAVE4:
 	pha
-	jsr		spi_write_sector
+	jsr		SDWriteSector
 	add		r2,r2,#512
 	pla
 	ina

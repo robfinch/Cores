@@ -21,11 +21,18 @@
 macro nat
 	.byte	$42
 	xce
+	cpu		RTF65002
 endm
 
 macro emm
 	sec
 	xce
+endm
+
+macro emm816
+	clc
+	xce
+	cpu		W65C816S
 endm
 
 DisplayChar				= $FFFF8000
@@ -42,6 +49,9 @@ SetKeyboardEcho			= $FFFF8028
 Sleep					= $FFFF802C
 LoadFile				= $FFFF8030
 SaveFile				= $FFFF8034
+ICacheInvalidateAll		= $FFFF8038
+ICacheInvalidateLine	= $FFFF803C
+
 LEDS				=$FFDC0600
 
 OUTNDX		EQU		0x778
@@ -9050,6 +9060,21 @@ outchar:
 	jsr		(DisplayChar>>2)		; should not trash char
 	rts
 	cpu		rtf65002
+
+ICacheIA816:
+	nat
+	jsr		(ICacheInvalidateAll>>2)
+	emm816
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------	
+
+ICacheIL816:
+	nat
+	jsr		(ICacheInvalidateLine>>2)
+	emm816
+	rts
 
 ;==============================================================================
 ;==============================================================================

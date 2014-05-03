@@ -124,11 +124,15 @@ begin
 					wadr2LSB <= mvndst_address[1:0];
 					store_what <= `STW_DEF8;
 					acc[15:0] <= acc_dec[15:0];
-					if (ir9==`MVN)
+					if (ir9==`MVN) begin
+						x[15:0] <= x_inc[15:0];
 						y[15:0] <= y_inc[15:0];
-					else
+					end
+					else begin
+						x[15:0] <= x_dec[15:0];
 						y[15:0] <= y_dec[15:0];
-					state <= STORE1;
+					end
+					next_state(STORE1);
 				end
 `endif
 	`SR_310:	begin

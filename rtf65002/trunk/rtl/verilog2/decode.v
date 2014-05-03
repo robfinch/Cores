@@ -822,7 +822,7 @@ task decode_tsk;
 			begin
 				Rt <= 4'd3;
 				radr <= x;
-				res <= x + 32'd1;
+				res <= x_inc;
 				load_what <= `WORD_312;
 				pc <= pc;
 				state <= LOAD_MAC1;
@@ -831,7 +831,7 @@ task decode_tsk;
 			begin
 				Rt <= 4'd3;
 				radr <= x;
-				res <= x - 32'd1;
+				res <= x_dec;
 				load_what <= `WORD_312;
 				pc <= pc;
 				state <= LOAD_MAC1;
@@ -842,7 +842,7 @@ task decode_tsk;
 				radr <= y;
 				wadr <= y;
 				store_what <= `STW_X;
-				acc <= acc - 32'd1;
+				acc <= acc_dec;
 				pc <= pc;
 				state <= STORE1;
 			end
@@ -850,7 +850,7 @@ task decode_tsk;
 			begin
 				Rt <= 4'd3;
 				radr <= x;
-				res <= x + 32'd1;
+				res <= x_inc;
 				pc <= pc;
 				load_what <= `WORD_313;
 				state <= LOAD_MAC1;

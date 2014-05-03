@@ -515,7 +515,7 @@ BYTE_DECODE:
 			end
 		`JML:
 			begin
-				pc[23:8] <= ir[31:8];
+				pc[23:0] <= ir[31:8];
 			end
 		`JMP_IND:
 			begin
@@ -531,7 +531,7 @@ BYTE_DECODE:
 				load_what <= `PC_70;
 				state <= LOAD_MAC1;
 			end	
-		`JSR:
+		`JSR,`JSR_INDX:
 			begin
 				set_sp();
 				store_what <= `STW_PC158;
@@ -541,12 +541,6 @@ BYTE_DECODE:
 			begin
 				set_sp();
 				store_what <= `STW_PC2316;
-				state <= STORE1;
-			end
-		`JSR_INDX:
-			begin
-				set_sp();
-				store_what <= `STW_PC158;
 				state <= STORE1;
 			end
 		`RTS,`RTL:
@@ -561,6 +555,7 @@ BYTE_DECODE:
 				state <= LOAD_MAC1;
 				end
 		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA:
+/*
 			begin
 				if (ir[15:8]==8'hFF) begin
 					if (takb)
@@ -568,14 +563,14 @@ BYTE_DECODE:
 					else
 						pc <= pc + 32'd4;
 				end
-				else
+				else */
 				begin
 					if (takb)
 						pc <= pc + pc_inc8 + {{24{ir[15]}},ir[15:8]};
 					else
 						pc <= pc + pc_inc8;
 				end
-			end
+			//end
 		`BRL:	pc <= pc + pc_inc8 + {{16{ir[23]}},ir[23:8]};
 		`PHP:
 			begin
@@ -649,20 +644,10 @@ BYTE_DECODE:
 				load_what <= `HALF_71S;
 				state <= LOAD_MAC1;
 			end
-		`MVN:
+		`MVN,`MVP:
 			begin
 				radr <= mvnsrc_address[31:2];
 				radr2LSB <= mvnsrc_address[1:0];
-				x[15:0] <= x_inc[15:0];
-				load_what <= `BYTE_72;
-				pc <= pc;	// override increment above
-				state <= LOAD_MAC1;
-			end
-		`MVP:
-			begin
-				radr <= mvnsrc_address[31:2];
-				radr2LSB <= mvnsrc_address[1:0];
-				x[15:0] <= x_dec[15:0];
 				load_what <= `BYTE_72;
 				pc <= pc;	// override increment above
 				state <= LOAD_MAC1;

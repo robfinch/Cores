@@ -927,7 +927,7 @@ gb16:
 	ldx		front
 gb18:
 	cmp		r0,b_count,x
-	bleu	gb17
+	bls		gb17
 	cmp		r0,b_next,x
 	beq		gb17
 	ldx		b_next,x
@@ -936,7 +936,7 @@ gb17:
 	cmp		r2,r0
 	beq		gb19
 	cmp		r0,b_count,x
-	bleu	gb20
+	bls		gb20
 gb19:	
 	jsr		panic
 	db		"No free buffer.", 0
@@ -1108,10 +1108,7 @@ block_to_sector:
 	rts
 
 ;------------------------------------------------------------------------------
-; rw_block
-;	This function should really go through a device driver interface, but for
-; now just calls the spi read/write sector routines.
-;	This routine currently assumes a block size of 1024 bytes (2 sectors).
+; rw_block:
 ; ToDo: add error handling
 ;
 ; Parameters:
@@ -1122,40 +1119,30 @@ block_to_sector:
 rw_block:
 	phx
 	phy
+	push	r4
+	push	r5
 	pha
+	ld		r5,r1				; r5 = pointer to data buffer
+	add		r5,r5,#b_data
 	ldy		b_dev,r1
 	cpy		#NO_DEV
 	beq		rwb1
+	ldy		b_blocknum,r1		; y = block number
+	ld		r4,#1				; r4 = # of blocks
+	lda		b_dev,r1			; device number
 	cpx		#READING
 	bne		rwb2
-	tax
-	lda		b_blocknum,x
-	add		r2,r2,#b_data
-	jsr		block_to_sector
-	pha
-	asl		r2,r2,#2			; convert word address to byte address
-	jsr		spi_read_sector
-	pla
-	ina
-	add		r2,r2,#512
-	jsr		spi_read_sector
+	ldx		#11					; read blocks opcode
 	bra		rwb1
 rwb2:
-	tax
-	lda		b_blocknum,x
-	add		r2,r2,#b_data
-	jsr		block_to_sector
-	pha
-	asl		r2,r2,#2			; convert word address to byte address
-	jsr		spi_write_sector
-	pla
-	ina
-	add		r2,r2,#512
-	jsr		spi_write_sector
+	ldx		#12					; write blocks opcode
 rwb1:
+	jsr		DeviceOp
 	pla
 	ldy		#CLEAN
 	sty		b_dirty,r1
+	pop		r5
+	pop		r4
 	ply
 	plx
 	rts
@@ -1239,7 +1226,7 @@ gs2:
 gs4:
 	add		r2,r2,#SUPERBUF_SIZE
 	cpx		#super_bufs_end
-	bltu	gs2
+	blo		gs2
 	cpy		#0
 	beq		gs5
 	tyx
@@ -1288,7 +1275,7 @@ read_super:
 	pha
 	asl							; convert pointer to byte pointer
 	asl
-	jsr		spi_read_sector
+	jsr		SDReadSector
 	plx
 	lda		#CLEAN				; mark superblock clean
 	sta		s_dirty,x
@@ -1320,7 +1307,7 @@ write_super:
 	pha
 	asl							; convert pointer to byte pointer
 	asl
-	jsr		spi_write_sector
+	jsr		SDWriteSector
 	plx
 	lda		#CLEAN
 	sta		s_dirty,x
@@ -1452,47 +1439,6 @@ fsc1:						; iterate to the next buffer
 	
 
 ;==============================================================================
-;==============================================================================
-
-; read the partition table to find out where the boot sector is.
-; Returns
-; r1 = 0 everything okay, 1=read error
-; also Z=1=everything okay, Z=0=read error
-;
-spi_read_part2:
-	phx
-	stz		startSector						; default starting sector
-	lda		#0								; r1 = sector number (#0)
-	ldx		#BYTE_SECTOR_BUF				; r2 = target address (word to byte address)
-	jsr		spi_read_sector
-	cmp		#0
-	bne		spi_rp1
-	lb		r1,BYTE_SECTOR_BUF+$1C9
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1C8
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1C7
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1C6
-	sta		startSector						; r1 = 0, for okay status
-	lb		r1,BYTE_SECTOR_BUF+$1CD
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1CC
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1CB
-	asl		r1,r1,#8
-	orb		r1,r1,BYTE_SECTOR_BUF+$1CA
-	sta		disk_size						; r1 = 0, for okay status
-	plx
-	lda		#0
-	rts
-spi_rp1:
-	plx
-	lda		#1
-	rts
-
-
-;==============================================================================
 ; DOS commands
 ;==============================================================================
 
@@ -1504,10 +1450,10 @@ spi_rp1:
 	; nbg = ((disk size in bytes / 
 	;	(blocks  per block group * block size)) * block group descriptor size ) / block size + 1
 	
-	jsr		spi_init
+	jsr		SDInit
 	lda		#1024
 	sta		block_size
-	jsr		spi_read_part2
+	jsr		SDReadPart
 	jsr		get_super
 	tax
 	;	blocks_count = disk size * 512 / block size
@@ -1532,7 +1478,7 @@ spi_rp1:
 	sta		s_magic,x
 	stz		s_errors,x
 	jsr		get_filesystem_offset
-	jsr		spi_write_sector		; put_block
+	jsr		SDWriteSector		; put_block
 
 	lda		disk_size
 	div		r1,r1,#16384			; 8388608/512

@@ -184,15 +184,6 @@ rliof4:
 	bmt		IOFocusTbl
 	beq		rliof3
 	bmc		IOFocusTbl
-comment ~
-	and		r1,r2,#$1F		; get bit index 0 to 31
-	asl		r3,r3,r1		; shift bit to proper place
-	eor		r3,#-1			; invert bit mask
-	lsr		r2,r2,#5		; get word index /32 bits per word
-	lda		IOFocusTbl,x
-	and		r1,r1,r3
-	sta		IOFocusTbl,x
-~
 ;	plx
 	mul		r4,r2,#JCB_Size
 	add		r4,r4,#JCBs

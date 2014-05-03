@@ -76,6 +76,7 @@ endm
 	dw		KeybdCmdProc		; command processor
 
 	align	4
+	dw	KeybdNop
 	dw	KeybdInit
 	dw	KeybdMediaChk
 	dw	KeybdBuildBPB
@@ -119,6 +120,9 @@ KeybdStat:
 KeybdBuildBPB:
 	rts
 KeybdSetpos:
+	rts
+KeybdNop:
+	lda		#E_Ok
 	rts
 
 ;------------------------------------------------------------------------------
@@ -438,12 +442,9 @@ KeybdMediaChk:
 public SetKeyboardEcho:
 	pha
 	phx
-	phy
-	tay
-	jsr		GetPtrCurrentJCB
 	tax
-	sty		JCB_KeybdEcho,x
-	ply
+	jsr		GetPtrCurrentJCB
+	stx		JCB_KeybdEcho,r1
 	plx
 	pla
 	rts
@@ -476,11 +477,25 @@ public KeybdGetChar:
 	plx
 	rts
 ~
+;------------------------------------------------------------------------------
+; KeybdGetChar
 ;
+;	Get keyboard character from buffer for the current job.
+;
+; Registers Affected: r1, flags
+; Parameters: none
+; Returns:
+;	r1 = keyboard character or -1 if no character is available.
+;------------------------------------------------------------------------------
+;
+public KeybdGetChar:
+	jsr		GetCurrentJob
+
 ;------------------------------------------------------------------------------
 ; Get keyboard character from buffer for the specified job. This entry point
 ; is meant to be called by the keyboard service.
 ;
+; Registers Affected: r1, flags
 ; Parameters:
 ;	r1 = job number
 ; Returns:
@@ -489,99 +504,84 @@ public KeybdGetChar:
 ;
 IKeybdGetChar:
 	phx
-	push	r4
-	ld		r4,r1
-	bra		kgc4
-
-;------------------------------------------------------------------------------
-; Get keyboard character from buffer for the current task.
-; Parameters: none
-; Returns:
-;	r1 = keyboard character or -1 if no character is available.
-;------------------------------------------------------------------------------
-;
-public KeybdGetChar:
-	phx
-	push	r4
-kgc4:
+	phy
 	ld		r0,keybdIsSetup	; the system might call GetChar before the keyboard
-	beq		nochar			; is setup.
-	ld		r4,RunningTCB
-	ld		r4,TCB_hJCB,r4
-	cmp		r4,#NR_JCB
-	bhs		nochar
-	mul		r4,r4,#JCB_Size		; convert handle to pointer
-	add		r4,r4,#JCBs
+	beq		.nochar			; is setup.
+	tay
+	cmp		r3,#NR_JCB
+	bhs		.nochar
+	mul		r3,r3,#JCB_Size		; convert handle to pointer
+	add		r3,r3,#JCBs
 	lda		#15					; disable keyboard interrupt
 	sta		PIC+2
-	ldx		JCB_KeybdTail,r4	; if keybdTail==keybdHead then there are no 
-	lda		JCB_KeybdHead,r4	; characters in the keyboard buffer
+	ld		r0,keybdInIRQ
+	bne		.nochari
+	ldx		JCB_KeybdTail,y		; if keybdTail==keybdHead then there are no 
+	lda		JCB_KeybdHead,y		; characters in the keyboard buffer
 	cmp		r1,r2
-	beq		kgc2
+	beq		.nochari
 	phx
-	add		r2,r2,r4
+	add		r2,r2,r3
 	lda		JCB_KeybdBuffer,x
 	plx
 	and		r1,r1,#$ff		; mask off control bits
 	inx						; increment index
 	and		r2,r2,#$0f
-	stx		JCB_KeybdTail,r4
-	ldx		JCB_KeybdEcho,r4
+	stx		JCB_KeybdTail,y
+	ldx		JCB_KeybdEcho,y
 	php
 	ldx		#15				; re-enable keyboard interrupt
 	stx		PIC+3
 	plp
-	beq		kgc3			; status from the ldx
+	beq		.xit			; status from the ldx
 	cmp		#CR
-	bne		kgc8
+	bne		.dispchar
 	jsr		CRLF			; convert CR keystroke into CRLF
-	bra		kgc3
-kgc8:
+	bra		.xit
+.dispchar:
 	jsr		DisplayChar
-	bra		kgc3
-kgc2:
+	bra		.xit
+.nochari
 	lda		#15				; re-enable keyboard interrupt
 	sta		PIC+3
-nochar:
+.nochar:
 	lda		#-1
-kgc3:
-	pop		r4
+.xit:
+	ply
 	plx
 	rts
 
 ;------------------------------------------------------------------------------
 ; Check if there is a keyboard character available in the keyboard buffer.
-; We cheat in this routine and momentarily disable ALL interrupts. Because
-; it's only for a couple of clock cycles, it's acceptable to do this.
 ;
 ; Returns
-; r1 = 1, Z=0 if there is a key available, otherwise
+; r1 = n, Z=0 if there is a key available, otherwise
 ; r1 = 0, Z=1 if there is not a key available
 ;------------------------------------------------------------------------------
 ;
 message "KeybdCheckForKey"
 public KeybdCheckForKey:
 	phx
-	push	r4
+	phy
+	ldx		#0
 	ld		r0,keybdIsSetup
-	beq		kcfk2
+	beq		.nochar2
 	jsr		GetPtrCurrentJCB
-	ld		r4,r1
-	sei
-	lda		JCB_KeybdTail,r4
-	ldx		JCB_KeybdHead,r4
-	cli
-	sub		r1,r1,r2
-	bne		kcfk1
-kcfk2:
-	pop		r4
+	tay
+	lda		#15				; disable keyboard interrupt
+	sta		PIC+2
+	ld		r0,keybdInIRQ
+	bne		.nochar
+	ldx		JCB_KeybdTail,y
+	sub		r2,r2,JCB_KeybdHead,y
+.nochar
+	lda		#15				; re-enable keyboard interrupt
+	sta		PIC+3
+.nochar2
+	txa
+	ply
 	plx
-	lda		#0
-	rts
-kcfk1
-	pop		r4
-	plx
-	lda		#1
+	cmp		#0
 	rts
 
 ;------------------------------------------------------------------------------
