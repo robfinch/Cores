@@ -169,14 +169,13 @@ task decode_tsk;
 		`ROR_RR:	Rt <= ir[15:12];
 		`DEC_RR:	Rt <= ir[15:12];
 		`INC_RR:	Rt <= ir[15:12];
-/*
-		Can't P&R this
-		`ADD_R:		begin Rt <= ir[11: 8]; b <= rfob; end
-		`SUB_R:		begin Rt <= ir[11: 8]; b <= rfob; end
-		`OR_R:		begin Rt <= ir[11: 8]; b <= rfob; end
-		`AND_R:		begin Rt <= ir[11: 8]; b <= rfob; end
-		`EOR_R:		begin Rt <= ir[11: 8]; b <= rfob; end
-*/	
+
+		`ADD_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`SUB_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`OR_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`AND_R:		begin Rt <= ir[15:12]; b <= rfob; end
+		`EOR_R:		begin Rt <= ir[15:12]; b <= rfob; end
+	
 		`ADD_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
 		`SUB_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end
 		`OR_IMM4:	begin Rt <= ir[11: 8]; b <= {{28{ir[15]}},ir[15:12]}; end

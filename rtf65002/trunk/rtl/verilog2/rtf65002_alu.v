@@ -137,7 +137,7 @@ always @*
 	`INC_RR:	res <= rfoa + 32'd1;
 	
 	`ADD_R:		res <= rfoa + rfob + {31'b0,df&cf};
-	`SUB_R:		res <= rfoa - rfob - {31'b0,df&~cf&|ir[15:12]};
+	`SUB_R:		res <= rfob - rfoa - {31'b0,df&~cf&|ir[15:12]};
 	`AND_R:		res <= rfoa & rfob;
 	`OR_R:		res <= rfoa | rfob;
 	`EOR_R:		res <= rfoa ^ rfob;

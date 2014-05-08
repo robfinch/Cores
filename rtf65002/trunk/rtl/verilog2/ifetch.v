@@ -179,7 +179,12 @@ IFETCH:
 		`ADD_IMM4,`ADD_R,
 		`ADD_IMM8,`ADD_IMM16,`ADD_IMM32,`ADD_ZPX,`ADD_IX,`ADD_IY,`ADD_ABS,`ADD_ABSX,`ADD_RIND:
 			begin vf <= resv32; cf <= resc32; nf <= resn32; zf <= resz32; end
-		`SUB_IMM4,`SUB_R,
+		`SUB_R:
+			if (Rt==4'h0)	// CMP doesn't set overflow
+				begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+			else
+				begin vf <= resv32a; cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`SUB_IMM4,
 		`SUB_IMM8,`SUB_IMM16,`SUB_IMM32,`SUB_ZPX,`SUB_IX,`SUB_IY,`SUB_ABS,`SUB_ABSX,`SUB_RIND:
 			if (Rt==4'h0)	// CMP doesn't set overflow
 				begin cf <= ~resc32; nf <= resn32; zf <= resz32; end

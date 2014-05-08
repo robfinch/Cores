@@ -204,7 +204,7 @@ wire [32:0] alu_out;
 reg [32:0] res;
 reg [16:0] res16;
 reg [8:0] res8;
-wire resv8,resv16,resv32;
+wire resv8,resv16,resv32,resv32a;
 wire resc8 = res8[8];
 wire resc16 = res16[16];
 wire resc32 = res[32];
@@ -310,7 +310,8 @@ wire isRMW8 =
 always @(posedge clk)
 	if (state==DECODE||state==BYTE_DECODE) begin
 		isSub <= ir9==`SUB_ZPX || ir9==`SUB_IX || ir9==`SUB_IY ||
-			 ir9==`SUB_ABS || ir9==`SUB_ABSX || ir9==`SUB_IMM8 || ir9==`SUB_IMM16 || ir9==`SUB_IMM32;
+			 ir9==`SUB_ABS || ir9==`SUB_ABSX || ir9==`SUB_IMM8 || ir9==`SUB_IMM16 || ir9==`SUB_IMM32 ||
+			 ir9==`SUB_R || (ir9==`RR && (ir[23:20]==`SUB_RR));
 		isSub8 <= ir9==`SBC_ZP || ir9==`SBC_ZPX || ir9==`SBC_IX || ir9==`SBC_IY || ir9==`SBC_I ||
 			 ir9==`SBC_ABS || ir9==`SBC_ABSX || ir9==`SBC_ABSY || ir9==`SBC_IMM;
 		isRMW <= em ? isRMW8 : isRMW32;
@@ -515,6 +516,14 @@ overflow uovr2 (
 	.v(resv8)
 );
 
+overflow uovr3 (
+	.op(isSub),
+	.a(b[31]),
+	.b(a[31]),
+	.s(res[31]),
+	.v(resv32a)
+);
+
 wire [15:0] bcaio;
 wire [15:0] bcao;
 wire [15:0] bcsio;
@@ -583,9 +592,9 @@ wire [31:0] absx_address 	= {abs8[31:24],dbr,ir[23:8] + x16};	// simulates 64k b
 wire [31:0] absy_address 	= {abs8[31:24],dbr,ir[23:8] + y16};
 wire [31:0] al_address		= {abs8[31:24],ir[31:8]};
 wire [31:0] alx_address		= {abs8[31:24],ir[31:8] + x16};
-wire [31:0] zpx32xy_address 	= ir[23:12] + rfoa;
+wire [31:0] zpx32xy_address 	= {{20{ir[23]}},ir[23:12]} + rfoa;
 wire [31:0] absx32xy_address 	= ir[47:16] + rfob;
-wire [31:0] zpx32_address 		= ir[31:20] + rfob;
+wire [31:0] zpx32_address 		= {{20{ir[31]}},ir[31:20]} + rfob;
 wire [31:0] absx32_address 		= ir[55:24] + rfob;
 
 wire [31:0] dsp_address = m816 ? {abs8[31:24],8'h00,sp + ir[15:8]} : {abs8[31:16],8'h01,sp[7:0]+ir[15:8]};
