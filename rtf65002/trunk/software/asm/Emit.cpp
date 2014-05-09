@@ -369,7 +369,15 @@ namespace RTFClasses
 
 		// Increment counter for appropriate area
 //		getCounter().ByteInc(getCpu()->stride);
-		getCounter().inc();
+		if (stricmp(getCpu()->name,"RTF65002")==0) {
+			if (CurrentArea==BSS_AREA || CurrentArea==DATA_AREA) {
+				getCounter().ByteInc(4);
+			}
+			else
+				getCounter().inc();
+		}
+		else
+			getCounter().inc();
 	}
 
 
@@ -427,8 +435,15 @@ namespace RTFClasses
 		case 0:
 		case 'S':
 		case 'L': 
-		case 'W':
 			emit32((unsigned int) (data & 0xffffffff));
+			break;
+		case 'W':
+			if (gProcessor.equalsNoCase("RTF65002"))
+				emit32((unsigned int) (data & 0xffffffff));
+			else {
+				emit8((unsigned int) (data & 0xff));
+				emit8((unsigned int) ((data >> 8) & 0xff));
+			}
 			break;
 		case 'H':
 		case 'C':

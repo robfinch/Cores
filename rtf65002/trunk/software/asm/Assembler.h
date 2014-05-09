@@ -99,9 +99,11 @@ namespace RTFClasses
 
 		char **progArg;
 		int progArgc;
-
+	public:
+		int sol2;
 		// user specified (command line options)
 		int Processor;          // Processor to assemble for
+	private:
 		String gProcessor;
 		String giProcessor;		// processor set by command line
 		int OutputFormat;       // Output format (COFF,ELF,BIN)
@@ -215,6 +217,7 @@ namespace RTFClasses
 		int col;                // current column in source output
 public:
 		String lastLabel;
+		bool bGlobalEquates;
 private:
 		SymbolTable *localSymTbl;
 		SymbolTable *gSymbolTable;
@@ -358,6 +361,8 @@ private:
 		int out16(Opa *o);
 		int out24(Opa *o);
 		int out32(Opa *o);
+		int getStartOfLine() { return sol; };
+		void setStartOfLine(int s) { sol = s; };
 	};
 
 	Cpu *getCpu();

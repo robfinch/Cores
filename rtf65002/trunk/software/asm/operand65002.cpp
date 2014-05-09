@@ -556,7 +556,7 @@ j1:
     if (strmat(op, " %s, r%d ", eb.getBuf(), &reg))
 	{
 		val = eb.expeval(NULL);
-        if (val.value < 4096 && val.value >= 0)
+        if (val.value < 2048 && val.value >= -2048)
 		{
 			if (reg >= 0 && reg < 16) {
 				r1 = reg;
@@ -582,7 +582,7 @@ j1:
     if (strmat(op, " %s, R%d ", eb.getBuf(), &reg))
 	{
 		val = eb.expeval(NULL);
-        if (val.value < 4096 && val.value >= 0)
+        if (val.value < 2048 && val.value >= -2048)
 		{
 			if (reg >= 0 && reg < 16) {
 				r1 = reg;
@@ -614,7 +614,7 @@ j1:
     if (strmat(op, " %s, %c ", eb.getBuf(), &ch))
 	{
 		val = eb.expeval(NULL);
-        if (val.value < 4096 && val.value >= 0)
+        if (val.value < 2048 && val.value >= -2048)
 		{
 			if (tolower(ch)=='x') {
 				r1 = 2;
@@ -650,7 +650,7 @@ j1:
 	// match
 	strmat(op, " %s", eb.getBuf());
 	val = eb.expeval(NULL);
-	if (val.value < 4096 && val.value >= 0) {
+	if (val.value < 2048 && val.value >= -2048) {
 		r2 = 0;
 		return type = AM_ZX;
 	}

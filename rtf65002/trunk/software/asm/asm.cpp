@@ -45,8 +45,8 @@ namespace RTFClasses
 	Debug debug(0,"");
 	Assembler theAssembler;
 
-	char *Assembler::verstr = "Finitron 65002 assembler   version 1.0   %.24s     Page %d\r\n";
-	char *Assembler::verstr2 = "asm V1.0  (c) 2013 Finitron - 65002 cross assembler\r\n";
+	char *Assembler::verstr = "Finitron 65002 assembler   version 1.1   %.24s     Page %d\r\n";
+	char *Assembler::verstr2 = "asm V1.1  (c) 2013,2014 Finitron - 65002 cross assembler\r\n";
 
 	Cpu *getCpu()
 	{
@@ -189,6 +189,7 @@ namespace RTFClasses
 		ByteCount = 0;
 		CycleCount = 0;
 		checksum = 0;
+		bGlobalEquates = false;
 		fprintf(fpErr, "\r\nPass %d\r\n",pass);
 	}
 
@@ -881,6 +882,14 @@ namespace RTFClasses
 			fill();
 			return true;
 		}
+		if (p=="global" || p==".global") {
+			File[FileNum].bGlobalEquates = true;
+			return true;
+		}
+		if (p=="local" || p==".local") {
+			File[FileNum].bGlobalEquates = false;
+			return true;
+		}
 		return false;
 	}
 
@@ -1120,6 +1129,7 @@ namespace RTFClasses
 		File[FileNum].errors = 0;
 		File[FileNum].warnings = 0;
 		File[FileNum].LastLine = 0;
+		File[FileNum].bGlobalEquates = false;
 				File[FileNum].name = fname;
 				if (File[FileNum].load(fname)==0)
 				{
@@ -1174,7 +1184,7 @@ namespace RTFClasses
 
 			File[CurFileNum].LastLine = lineno;
 
-			sol = p1;
+			setStartOfLine(p1);
 			if(processLine() != TRUE) {
 				Err(E_INV);
 			}

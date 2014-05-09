@@ -22,7 +22,7 @@ namespace RTFClasses
 static Opa addAsm[] =
 {
 	{AsmRTF65002::rn, 0x0002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN, 2},
-//	{AsmRTF65002::r,  0x77, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::r,  0x77, 2,  (AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::imm4, 0x67, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x69, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32, 2},
 	{AsmRTF65002::imm16, 0x79, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16, 2},
@@ -59,7 +59,7 @@ static Opa addAsm[] =
 static Opa andAsm[] =
 {
 	{AsmRTF65002::rn, 0x3002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN,2},
-//	{AsmRTF65002::r,  0x37, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::r,  0x37, 2,  (AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::imm4, 0x27, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x29, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16, 0x39, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,2},
@@ -480,7 +480,7 @@ static Opa inaAsm[] = {{Asm6502::out8, 0x1a,0,0,2}, NULL };
 static Opa eorAsm[] =
 {
 	{AsmRTF65002::rn, 0x4002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN, 2},
-//	{AsmRTF65002::r,  0x57, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::r,  0x57, 2,  (AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::imm4, 0x47, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x49, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32, 2},
 	{AsmRTF65002::imm16, 0x59, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16, 2},
@@ -516,7 +516,7 @@ static Opa eorAsm[] =
 static Opa subAsm[] =
 {
 	{AsmRTF65002::rn, 0x1002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN, 2},
-//	{AsmRTF65002::r,  0xF7, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::r,  0xF7, 2,  (AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::imm4, 0xE7, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0xE9, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32, 22},
 	{AsmRTF65002::imm16, 0xF9, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16, 2},
@@ -556,7 +556,7 @@ static Opa subAsm[] =
 static Opa orAsm[] =
 {
 	{AsmRTF65002::rn, 0x5002, 3, (AM_RN<<16)|(AM_RN<<8)|AM_RN,2},
-//	{AsmRTF65002::r,  0x17, 2,  (AM_RN<<8)|AM_RN, 2},
+	{AsmRTF65002::r,  0x17, 2,  (AM_RN<<8)|AM_RN, 2},
 	{AsmRTF65002::imm4, 0x07, 2, (AM_RN<<8)|AM_IMM4, 2},
 	{AsmRTF65002::imm32, 0x09, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM32,2},
 	{AsmRTF65002::imm16, 0x19, 3, (AM_RN<<16)|(AM_RN<<8)|AM_IMM16,2},

@@ -27,7 +27,7 @@ namespace RTFClasses
 		bool isMacroLine = false;
 
 		// isMacroLine
-		pp = ibuf->getBuf() + sol;
+		pp = &ibuf->getBuf()[getStartOfLine()];
 		solp = pp;
 		for (; *pp && *pp != '\n' && isspace(*pp); pp++)
 			;
@@ -66,7 +66,7 @@ namespace RTFClasses
 			ii++;
 
 		// Tracking to prevent duplicate lines
-		if (sol != psol && sol > 0)
+		if (getStartOfLine() != psol || getStartOfLine() == 0)
 			fprintf(fpList, "  %.*s\r\n", ii, solp);
 		else
 			fprintf(fpList, "\r\n");
@@ -83,7 +83,7 @@ namespace RTFClasses
 			//fputs("\r\n", fpList);
 			//fflush(fpList);
 		}
-		psol = sol;
+		psol = getStartOfLine();
 //		getCpu()->op->reTerm();
 	}
 

@@ -16,6 +16,7 @@ namespace RTFClasses
 		SymbolTable *lst;  // local symbol table
 		AsmBuf *buf;
 		int length;
+		bool bGlobalEquates;
 	public:
 		AsmBuf *getBuf() { return buf; };
 		int load(String fname);

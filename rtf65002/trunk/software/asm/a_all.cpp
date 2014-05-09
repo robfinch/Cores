@@ -1,4 +1,5 @@
 /* ===============================================================
+	(C) 2014 Robert Finch
 	(C) 2003 Bird Computer
 	All rights reserved.
 
@@ -65,12 +66,13 @@ namespace RTFClasses
 				break;
 
 			case BSS_AREA:
-				while(BSSCounter.byte)
-					emit8(0xff);
+//				while(BSSCounter.byte)
+//					emit8(0xff);
 				if (BSSCounter.val % data)
 				{
-					while(BSSCounter.val % data)
-					emit32(0xffffffff);
+					while(BSSCounter.val % data) {
+						emit32(0xffffffff);
+					}
 				}
 				break;
 		}
@@ -414,7 +416,7 @@ int Assembler::equ(char *iid)
 		nm = iid;
 	tdef.setName(nm.buf());
 	p = NULL;
-	if (localSymTbl)
+	if (localSymTbl && !File[FileNum].bGlobalEquates)
 		p = localSymTbl->find(&tdef);
 	if (p == NULL)
 		p = gSymbolTable->find(&tdef);
@@ -452,7 +454,7 @@ int Assembler::equ(char *iid)
 		p->Def(NO_OCLASS, File[CurFileNum].LastLine, CurFileNum);
 
 		if (!defAlready) {
-			if (localSymTbl)
+			if (localSymTbl && !File[FileNum].bGlobalEquates)
 				localSymTbl->insert(p);
 			else
 				gSymbolTable->insert(p);
@@ -663,12 +665,14 @@ int Assembler::equ(char *iid)
 		char *ptr;
 		int ndx;
 		int tmplineno;
+		int sol3;
 		time_t tim;
 #ifdef DEMO
 		Err(E_DEMOI);
 		return;
 #endif
 
+		sol3 = getStartOfLine();
 		g_nops = getCpu()->getOp()->get();
 		memset(buf, '\0', sizeof(buf));
 		strncpy(buf, ((Operands6502 *)getCpu()->getOp())->op[0].buf(), sizeof(buf)-1);
@@ -692,7 +696,7 @@ int Assembler::equ(char *iid)
 		else {
 //			ptr = ibuf->getPtr();
 			ndx = ibuf->ndx();
-			ptr++;
+			//ptr++;
 			//ibuf->clear();        // Start with fresh buffer for new file.
 			FileLevel++;
 			processFile(buf);
@@ -718,6 +722,7 @@ int Assembler::equ(char *iid)
 			}
 		}
 //		gOperand[0] = buf;	// So it can be freed on return to PrcMneumonic.
+		setStartOfLine(sol3);
 		return;
 	}
 
