@@ -223,6 +223,10 @@ private:
 		SymbolTable *gSymbolTable;
 		ExtRefTbl *extRefTbl;
 		StructTbl *structTbl;
+		String SearchList[500];
+		int nSearchList;
+		String appendText;
+		String appendFiles;
 
 		Declarator *headFreeLink;  // head of list of free links
 		HashTable *macroTbl;
@@ -242,7 +246,7 @@ private:
 		void copyChToMacro(char ch);
 		void SearchAndSub();
 		int processLine();
-		void processFile(char *);
+		void processFile(char *, String="*");
 		void processMneumonic(Mne *optr);
 		int run();
 
@@ -337,6 +341,7 @@ private:
 		int getCurFilenum() { return CurFileNum; };
 		int getCurLinenum() { return File[getCurFilenum()].LastLine; };
 		int getLineno() { return lineno; };
+		int getFileLevel() { return FileLevel; };
 		SymbolTable *getLocalSymTbl() { return localSymTbl; };
 		SymbolTable *getGlobalSymTbl() { return gSymbolTable; };
 		__int8 getFpFormat() { return fpFormat; };
@@ -363,6 +368,10 @@ private:
 		int out32(Opa *o);
 		int getStartOfLine() { return sol; };
 		void setStartOfLine(int s) { sol = s; };
+		void AddToSearchList();
+		void ProcessUndefs();
+		void processAppendFiles();
+		void makeUnresolvedSymbolsGlobal(SymbolTable *tbl);
 	};
 
 	Cpu *getCpu();

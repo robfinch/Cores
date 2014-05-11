@@ -30,6 +30,8 @@ namespace RTFClasses
 		static char buf[MAX_MACRO_EXP];
 		int ii, found, c, idlen;
 		Buf tb(body.buf(), body.len()+1);
+		bool inQuote1 = false;
+		bool inQuote2 = false;
 
 		memset(buf, 0, sizeof(buf));
 		b = buf;
@@ -37,37 +39,50 @@ namespace RTFClasses
 		{
 		StartOfLoop:
 			c = tb.peekCh();
-			if (c < 1)
+			if (c ==0 || c==-1)
 				break;
+			if (!inQuote1)
+				if (c=='"') {
+					inQuote2 = !inQuote2;
+					goto EndOfLoop;
+				}
+			if (!inQuote2)
+				if (c=='\'') {
+					inQuote1 = !inQuote1;
+					goto EndOfLoop;
+				}
+
 			// If quote detected scan to end of quote, end of line, or end of
 			// buffer.
-			if (c == '"') {
-				while(1) {
-					*b = c;
-					b++;
-					c = tb.nextCh();
-					if (c == '\n' || c == '"')
-						break;
-					if (c < 1)
-						goto EndOfLoop2;
-				}
-				goto EndOfLoop;
-			}
+			//if (c == '"') {
+			//	while(1) {
+			//		*b = c;
+			//		b++;
+			//		c = tb.nextCh();
+			//		if (c == '\n' || c == '"')
+			//			break;
+			//		if (c < 1)
+			//			goto EndOfLoop2;
+			//	}
+			//	goto EndOfLoop;
+			//}
 			// If quote detected scan to end of quote, end of line, or end of
 			// buffer.
-			else if (c == '\'') {
-				while(1) {
-					*b = c;
-					b++;
-					c = tb.nextCh();
-					if (c == '\n' || c == '\'')
-						break;
-					if (c < 1)
-						goto EndOfLoop2;
-				}
-				goto EndOfLoop;
-			}
-			else if (c == '\n') {
+			//else if (c == '\'') {
+			//	while(1) {
+			//		*b = c;
+			//		b++;
+			//		c = tb.nextCh();
+			//		if (c == '\n' || c == '\'')
+			//			break;
+			//		if (c < 1)
+			//			goto EndOfLoop2;
+			//	}
+			//	goto EndOfLoop;
+			//}
+			if (c == '\n') {
+				inQuote1 = false;
+				inQuote2 = false;
 				goto EndOfLoop;
 			}
 
@@ -77,36 +92,38 @@ namespace RTFClasses
 		      
 			if (plist == NULL)
 				goto EndOfLoop;
-		         
-			// First search for an identifier to substitute with parameter
-			p1 = tb.getPtr();
-			idlen = tb.getIdentifier(&sptr, &eptr);
-			if (idlen)
-			{
-				for (found = ii = 0; ii < MAX_MACRO_PARMS; ii++)
-					if (plist[ii])
-					{
-						if (plist[ii]->equals(sptr, idlen))
-						{
-							*b = MACRO_PARM_MARKER;
-							b++;
-							*b = (char)ii+'A';
-							b++;
-							found = 1;
-							goto StartOfLoop;
-						}
-					}
-				// if the identifier was not a parameter then just copy it to
-				// the macro body
-				if (!found)
+		     
+			if (!inQuote1 && !inQuote2) {
+				// First search for an identifier to substitute with parameter
+				p1 = tb.getPtr();
+				idlen = tb.getIdentifier(&sptr, &eptr);
+				if (idlen)
 				{
-					strncpy(b, p1, eptr - p1);
-					b += eptr-p1;
-					goto StartOfLoop;
+					for (found = ii = 0; ii < MAX_MACRO_PARMS; ii++)
+						if (plist[ii])
+						{
+							if (plist[ii]->equals(sptr, idlen))
+							{
+								*b = MACRO_PARM_MARKER;
+								b++;
+								*b = (char)ii+'A';
+								b++;
+								found = 1;
+								goto StartOfLoop;
+							}
+						}
+					// if the identifier was not a parameter then just copy it to
+					// the macro body
+					if (!found)
+					{
+						strncpy(b, p1, eptr - p1);
+						b += eptr-p1;
+						goto StartOfLoop;
+					}
 				}
+				else
+					tb.setptr(p1);    // reset inptr if no identifier found
 			}
-			else
-				tb.setptr(p1);    // reset inptr if no identifier found
 		EndOfLoop:
 			*b = c;
 			b++;
@@ -137,7 +154,7 @@ namespace RTFClasses
 		int n;
 
 		memset(buf, 0, sizeof(buf));
-
+		//printf("bdy=%s\r\n", bdy);
 		// Scan through the body for the correct substitution code
 		for (o = buf; *bdy && --count > 0; bdy++, o++)
 		{
@@ -185,7 +202,7 @@ namespace RTFClasses
 
 		// Substitute parameter list into macro body, if needed.
 		mp = nargs ? subParmList(plist) : body.buf();
-
+		//printf("mp=%s|\r\n", mp);
 		// Stick in macro number where requested
 		counter++;
 		memset(buf, '\0', sizeof(buf));
@@ -201,18 +218,18 @@ namespace RTFClasses
 		// dif = difference in length between characters being substituted and
 		// macro substitution
 		dif = mlen - slen;
-	//   printf("mlen = %d,dif = %d\n", mlen, dif);
-	//   printf("writing over:%s|\n", eptr+dif);
-	//   printf("writing from:%s|\n", eptr);
+//	   printf("mlen = %d,dif = %d\n", mlen, dif);
+	   //printf("writing over:%s|\n", eptr+dif);
+	   //printf("writing from:%s|\n", buf);
 		if (dif > 0) {
 //			printf("dif:%d ", dif);
 			ib->enlarge(dif);
 		}
-	//   printf("wro:%s|\n", eptr);
-	//   printf("buf:%s|\n", buf);
+	   //printf("wro:%s|\n", eptr);
+	   //printf("buf:%s|\n", buf);
 		ib->shift(indx, dif);
 		ib->insert(indx, buf, mlen);		// copy macro body in place over identifier
-//		printf("inserting:%s|\r\n", buf);
+	//	printf("inserting:%s|\r\n", buf);
 	}
 
 
@@ -228,6 +245,6 @@ namespace RTFClasses
 	void Macro::print(FILE *fp)
 	{
 		fprintf(fp, "%-32.32s  %2d   %5d  ", name.buf(), nargs, line);//, theAssembler.File[file].name.buf());
-		//   fprintf(fp, "%s\n", body);
+		//fprintf(fp, "|%s|\n", body.buf());
 	}
 }

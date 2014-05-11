@@ -13,6 +13,7 @@ namespace RTFClasses
 		tbl = (ListObject **)new ListObject *[nel];
 		if (tbl == NULL)
 			throw FatalErr(E_MEMORY);
+		tbl2 = tbl;
 		memset (tbl, 0, nel * sizeof(ListObject *));
 	}
 
@@ -34,7 +35,12 @@ namespace RTFClasses
 
 	ListObject **HashTable::getChain(ListObject *item) const
 	{
-		ListObject **p = &tbl[item->getHash().hash % sz];
+		int ndx;
+		ListObject **p;
+		HashVal h;
+		h = item->getHash();
+		ndx = h.hash % sz;
+		p = &tbl[ndx];
 		return p;
 	}
 
@@ -42,8 +48,14 @@ namespace RTFClasses
 	// insert always inserts at the head of the chain
 	ListObject *HashTable::insert(ListObject *item)
 	{
+		ListObject *pp;
+
 		if (item)
 		{
+			if (pp=find(item)) {
+				if (pp==item)
+					return item;
+			}
 			ListObject **p = getChain(item);
 			item->insertBefore(*p);
 			*p = item;
@@ -55,9 +67,18 @@ namespace RTFClasses
 
 	void HashTable::remove(ListObject *item)
 	{
+		ListObject **p,*q;
+
+		p = getChain(item);
+		q = item->next;
 		if (item) {
-			item->removeFromList();
-			--numObjects;
+			if (find(item)) {
+				item->removeFromList();
+				--numObjects;
+				if (*p==item) {
+					*p = q;
+				}
+			}
 		}
 	}
 
@@ -65,8 +86,17 @@ namespace RTFClasses
 	ListObject *HashTable::find(ListObject *item) const
 	{
 		ListObject *p;
-	
-		for (p = *getChain(item); p && item->cmp(p); p = p->getNext());
+		ListObject *s;
+		int ii = 0;
+
+		s = *getChain(item);
+		for (p = *getChain(item); p && item->cmp(p); p = p->getNext()) {
+			if (p==s)
+				if (ii > 0)
+					throw "Stuck in loop.";
+				else
+					ii++;
+		}
 		return p;
 	}
 
@@ -76,32 +106,55 @@ namespace RTFClasses
 	{
 		ListObject **linearList;
 		ListObject *obj;
+		int cnt;
+
+		cnt = countObjects();
+		if (cnt != numObjects) {
+			printf("cnt:%d num:%d\r\n", cnt, numObjects);
+			getchar();
+		}
 
 		try {
-			linearList = (ListObject **)new ListObject *[numObjects];
+			linearList = (ListObject **)new ListObject *[cnt];
 		}
 		catch(...) {
 			return NULL;
 		}
 		if (linearList==NULL)
 			return NULL;
-		memset(linearList, 0, numObjects * sizeof(ListObject *));
+		memset(linearList, 0, cnt * sizeof(ListObject *));
 
 		int i, j;
 		for (j = i = 0; j < sz; j++) {
 			// Extract all hash clash elements from horizontal linked list.
 			for (obj = tbl[j]; obj; obj = obj->getNext()) {
-				if (i > numObjects)
+				if (i > cnt) {
+					//goto xit;
+					printUnsorted(stdout);
 					throw FatalErr(E_TBLOVR, "Internal error <getList()>, table overflow.\n");
+				}
 				linearList[i] = obj;	// map to vertical list
 				i++;
 			}
 		}
+xit:;
 		return linearList;
 	}
 
+	int HashTable::countObjects() const
+	{
+		int i,j;
+		int cnt;
+		ListObject *obj;
 
-	void HashTable::printHeading(FILE *fp)
+		for (cnt = j = i = 0; i < sz; i++) {
+			for (obj = tbl[i]; obj; obj = obj->getNext())
+				cnt++;
+		}
+		return cnt;
+	}
+
+	void HashTable::printHeading(FILE *fp) const
 	{
 		fprintf(fp, "\nHash Table:\n");
 		fprintf(fp, " #  Name                            Nargs  Line   File\n");
@@ -114,11 +167,12 @@ namespace RTFClasses
 	      (int) 1 if table is output as requested
 	            0 if memory for sorted table could not be allocated.
 	----------------------------------------------------------------------------- */
-	bool HashTable::printSorted(FILE *fp)
+	bool HashTable::printSorted(FILE *fp) const
 	{
 		ListObject **OutTab;
 		ListObject *obj;
 		int i;
+		int cnt = countObjects();
 		
 		OutTab = getLinearList();
 		if (OutTab==NULL)
@@ -126,21 +180,21 @@ namespace RTFClasses
 			
 		sort(OutTab);
 		printHeading(fp);
-		for (i = 0; i < numObjects; i++) {
+		for (i = 0; i < cnt; i++) {
 			obj = OutTab[i];
 			fprintf(fp, "%3d ", i);
 			if (obj)
 				obj->print(fp);
 			else
 				fputs("????", fp);
-			fputs("\r\n",fp);
+			fputs("\n",fp);
 		}
 		delete[] OutTab;
 		return true;
 	}
 
 
-	bool HashTable::printUnsorted(FILE *fp)
+	bool HashTable::printUnsorted(FILE *fp) const
 	{
 		ListObject *obj;
 		int i, j;
@@ -194,12 +248,13 @@ namespace RTFClasses
 	{
 		int i,j,gap;
 		ListObject *p1, *p2;
-		
-		if (numObjects==1) return;
-		for (gap = 1; gap <= numObjects; gap = 3 * gap + 1);
+		int cnt = countObjects();
+
+		if (cnt==1) return;
+		for (gap = 1; gap <= cnt; gap = 3 * gap + 1);
 		
 		for (gap /= 3; gap > 0; gap /= 3)
-			for (i = gap; i < numObjects; i++)
+			for (i = gap; i < cnt; i++)
 				for (j = i - gap; j >= 0; j -= gap) {
 					p1 = base[j];
 					p2 = base[j+gap];

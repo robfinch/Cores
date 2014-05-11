@@ -29,31 +29,36 @@ namespace RTFClasses
 	{
 		StrDesc *desc;
 		void round_bufsz(int n);
+	protected:
 		void realloc(int n, bool preserve);
 	public:
 
 		String();
 		String(int);
 		String(char *);
+		String(char *, int);
 		String(String &);
 		~String();
 		char *buf() { return desc->m_buf; };
 		char buf(int) const;             // return character at buffer position
 		int bufsz() const { return desc->m_bufsz; };
 		int len() const { return desc->m_len; };
+		void setlen(int n) { desc->m_len = n; };
 		void copy(char *str) { copy(str, strlen(str)); };
 		void copy(String str);
 		void copy(String str, int n);
 		void copy(char *str, int n);
 		inline void copy(char *, char *, int) const;
 		void format(int n);
-		int find(char ch) const;    // look for first occurance of character in string
-		int find(int start, char ch) const;
+		int find(char ch);			// look for first occurance of character in string
+		int find(int start, char ch);
 		int findrev(char ch) const; // look backwards through string for last occurance of character
 		int findext() const;    // find filename extension '.'
+		int find(String str, int start=0);
+		int find(char *, int start=0);
 		void add(char *str);            // add onto string
 		void add(char ch);              // add character onto string
-		void add(String s);
+		void add(String str);
 		void rtrim();                   // trim spaces from right
 		void ltrim();                   // trim spaces from left
 		void trim();                    // trim spaces from both sides
@@ -68,12 +73,12 @@ namespace RTFClasses
 		void toLower();
 		void toUpper();
 		int count(char ch);				// count all occurrences of a character
-		String *split(char ch);			// split string into array of strings
+		String *split(char ch, int *nele=NULL);			// split string into array of strings
 		void fill(char ch, int n);   // fill string with char
 		void rev(); // reverse order of characters
 		HashVal hashAdd();			// hash by summing characters
 		HashVal hashSym();		
-		HashVal hashPJW();	
+		HashVal hashPJW() const;	
 
 		bool equalsNoCase(String) const;
 		bool equalsNoCase(char *) const;

@@ -347,4 +347,24 @@ namespace RTFClasses
 			return a;
 		return a;
 	}
+
+	String AsmBuf::ExtractPublicSymbol(String symName)
+	{
+		String str;
+		int st,nd,nd1;
+
+		st =find(String("public ") + symName);
+		if (st < 0)
+			return String("");
+		nd = find(String("endpublic"),st);
+		if (nd < 0)
+			return String("");
+		nd1 = find(String("\r\n"),nd);
+		if (nd1 > 0)
+			nd = nd1;
+		else
+			nd += 9;	// skip over to end of "endpublic"
+		str.copy(&buf()[st],nd-st);
+		return str;
+	}
 }

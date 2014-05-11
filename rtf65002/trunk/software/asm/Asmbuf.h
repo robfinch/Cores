@@ -34,6 +34,7 @@ namespace RTFClasses
 		String *getArg();
 		int getParmList(String *[]);
 		Value expeval(char **);
+		String ExtractPublicSymbol(String symName);
 	};
 
 	Value expeval(char *, char **);

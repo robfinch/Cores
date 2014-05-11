@@ -27,7 +27,7 @@ namespace RTFClasses
 		bool isMacroLine = false;
 
 		// isMacroLine
-		pp = &ibuf->getBuf()[getStartOfLine()];
+		pp = &ibuf->buf()[getStartOfLine()];
 		solp = pp;
 		for (; *pp && *pp != '\n' && isspace(*pp); pp++)
 			;

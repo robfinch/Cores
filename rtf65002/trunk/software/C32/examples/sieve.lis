@@ -1,0 +1,235 @@
+     1	/*#include <stdio.h>*/
+     2	
+     3	#define LIMIT 1500000
+     4	#define PRIMES 100000
+     5	
+     6	int numbers[1500000];
+     7	int primes[100000];
+     8	
+     9	int main(){
+    10	    int i,j;
+    11		int limit;
+    12		int start_tick,end_tick;
+    13	
+    14		// Request I/O focus
+    15		asm {
+    16			jsr	(0xFFFF8014>>2)
+    17		}
+    18	j1:
+    19		//disable_ints();
+    20		start_tick = get_tick();
+    21		printf("\r\nStart tick %d\r\n", start_tick);
+    22	
+    23		limit=LIMIT;
+    24	
+    25	 	for (i=0;i<limit;i++){
+    26			numbers[i]=i+2;
+    27		}
+    28	
+    29	    /*sieve the non-primes*/
+    30	    for (i=0;i<limit;i++){
+    31	        if (numbers[i]!=-1){
+    32	            for (j=2*numbers[i]-2;j<limit;j+=numbers[i])
+    33	                numbers[j]=-1;
+    34	        }
+    35	    }
+    36	
+    37	    /*transfer the primes to their own array*/
+    38	    j = 0;
+    39	    for (i=0;i<limit&&j<PRIMES;i++)
+    40	        if (numbers[i]!=-1)
+    41	            primes[j++] = numbers[i];
+    42	
+    43		end_tick = get_tick();
+    44		printf("Clock ticks %d\r\n", end_tick-start_tick);
+    45		printf("Press a key to list primes.");
+    46		getchar();
+    47	
+    48	    /*print*/
+    49	    for (i=0;i<PRIMES;i++)
+    50	        printf("%d\r\n",primes[i]);
+    51	
+    52		//enable_ints();
+    53	
+    54	return 0;
+    55	}
+    56	
+
+
+*** local symbol table ***
+
+i          =ffffffff    -    Auto        Long
+j          =fffffffe    -    Auto        Long
+limit      =fffffffd    -    Auto        Long
+start_tick =fffffffc    -    Auto        Long
+end_tick   =fffffffb    -    Auto        Long
+j1         =000002    -    Label
+
+
+
+    57	int printf(char *p)
+    58	{
+    59		int *q;
+    60		q = &p;
+    61	
+    62		for (; *p; p++) {
+    63			if (*p=='%') {
+    64				p++;
+    65				switch(*p) {
+    66				case '%':
+    67					putch('%');
+    68					break;
+    69				case 'c':
+    70					q++;
+    71					putch(*q);
+    72					break;
+    73				case 'd':
+    74					q++;
+    75					putnum(*q);
+    76					break;
+    77				case 's':
+    78					q++;
+    79					putstr(*q);
+    80					break;
+    81				}
+    82			}
+    83			else
+    84				putch(*p);
+    85		}
+    86	}
+    87	
+
+
+*** local symbol table ***
+
+p          =000003    -    Auto        Pointer to Char
+q          =ffffffff    -    Auto        Pointer to Long
+
+
+
+    88	int getchar()
+    89	{
+    90		asm {
+    91	gc1:
+    92			jsr		($FFFF800C>>2)
+    93			cmp		#-1
+    94			beq		gc1
+    95		}
+    96	}
+    97	
+
+
+*** local symbol table ***
+
+
+
+
+    98	void putch(char ch)
+    99	{
+   100		asm {
+   101			ld		r1,3,sp
+   102			jsr		($FFFF8000>>2)
+   103		}
+   104	}
+   105	
+
+
+*** local symbol table ***
+
+ch         =000003    -    Auto        Char
+
+
+
+   106	void putnum(int num)
+   107	{
+   108		asm {
+   109			ld		r1,3,sp
+   110			ld		r2,#5
+   111			jsl		$FFFFF5A4
+   112			;jsr		($FFFF8048>>2)
+   113		}
+   114	}
+   115	
+
+
+*** local symbol table ***
+
+num        =000003    -    Auto        Long
+
+
+
+   116	void putstr(char *p)
+   117	{
+   118		for (; *p; p++)
+   119			putch(*p);
+   120	}
+   121	
+
+
+*** local symbol table ***
+
+p          =000003    -    Auto        Pointer to Char
+
+
+
+   122	int get_tick()
+   123	{
+   124		asm {
+   125			tsr		tick,r1
+   126		}
+   127	}
+   128	
+
+
+*** local symbol table ***
+
+
+
+
+   129	void disable_ints()
+   130	{
+   131		asm {
+   132			lda		#0x8001
+   133			sta		0xFFDC0FF2
+   134		}
+   135	}
+   136	
+
+
+*** local symbol table ***
+
+
+
+
+   137	void enable_ints()
+   138	{
+   139		asm {
+   140			lda		#0x800F
+   141			sta		0xFFDC0FF2
+   142		}
+   143	}
+   144	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+putch      =000000    -    Global      Function returning 
+get_tick   =000000    -    Global      Function returning Long
+enable_ints =186a00    -    Global      Function returning 
+primes     =16e360    -    Global      Array of Long
+printf     =000000    -    Global      Function returning Long
+main       =186a00    -    Global      Function returning Long
+putnum     =000000    -    Global      Function returning 
+putstr     =000000    -    Global      Function returning 
+getchar    =000000    -    Global      Function returning Long
+disable_ints =186a00    -    Global      Function returning 
+numbers    =000000    -    Global      Array of Long
+
+ *** structures and unions ***
+

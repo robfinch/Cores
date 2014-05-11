@@ -14,14 +14,17 @@ namespace RTFClasses
 {
 	class Macro : public ListObject
 	{
+	protected:
 	   String name;				// Input variable name
-	   String body;
 	   int nargs;              // number of arguments
 	   int line;               // line symbol defined on
 	   int file;               // file number symbol defined in
 	   static int counter;
 	public:
+	   String body;
+	public:
 		static void zeroCounter() { counter = 0; };
+		int getCounter() { return counter; };
 		HashVal getHash() { return name.hashPJW(); };
 		int cmp(Object *);
 		int Nargs() { return nargs; };

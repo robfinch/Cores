@@ -25,6 +25,10 @@ namespace RTFClasses
 			size = 'W';
 		}
 		oclass = ocls;
+		if (ocls==PUB)
+			_extern = false;
+		if (ocls==EXT)
+			_extern = true;
 		line = theAssembler.getCurLinenum();
 		file = theAssembler.getCurFilenum();
 		defined = 1;
@@ -77,16 +81,16 @@ namespace RTFClasses
 	char *Symbol::oclassstr(int n) const
 	{
 	static char *str[5] = {
-		"NON", "PUB", "PRI", "COM", "EXT"
+		"NON\0", "PUB\0", "PRI\0", "COM\0", "EXT\0"
 	};
-	return n < 5 && n >= 0 ? str[n] : "<?>";
+	return (n < 5 && n >= 0) ? str[n] : "<?>";
 	}
 
 	char *Symbol::basestr(int n) const
 	{
 	static char *str[4] = {
-		"DATA", "CODE", "BSS", "NONE" };
-		return n < 4 && n >= 0 ? str[n] : "<?>";
+		"DATA\0", "CODE\0", "BSS\0", "NONE\0" };
+		return (n < 4 && n >= 0) ? str[n] : "<?>";
 	}
 }
 

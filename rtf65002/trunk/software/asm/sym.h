@@ -175,9 +175,9 @@ class Symbol : public ListObject
 	__int64 value;			// symbol value
 
 public:
-
 	bool phaseErr;
 	bool isDefined() { return defined; };
+	bool isExtern() { return _extern; };
 	bool isLabel() { return label; };
 
 	bool isBool() { return noun == ptBOOL; };
@@ -215,10 +215,10 @@ public:
 	String getName() { return name; };
 	__int64 getValue() { return value; };
 
-	void Def(int oc, int ln, int fl) { oclass = oc; line = ln; file = fl; };
+	void Def(int oc, int ln, int fl) { oclass = oc; line = ln; file = fl; if (oc==EXT) _extern = true; else _extern = false; };
 	int getSize() { return size; };
 	void define(int);
-	HashVal getHash() { return name.hashPJW(); };
+	HashVal getHash() {  return name.hashPJW(); };
 	bool equals(Symbol *);
 	int cmp(Object *);
 	void print(FILE *);
@@ -249,6 +249,33 @@ public:
 		Symbol *insert(Symbol *s) { return (Symbol *)HashTable::insert((ListObject *)s); };
 		void remove(Symbol *s) { HashTable::remove((ListObject *)s); };
 		Symbol *find(Symbol *s) { return (Symbol *)HashTable::find((ListObject *)s); };
+		int getExternCount() const {
+			int ii,undef=0;
+			int cnt = countObjects();
+			Symbol **symlist = (Symbol **)getLinearList();
+			for (ii = 0; ii < cnt; ii++) {
+				if (symlist[ii]) {
+					if (symlist[ii]->isExtern()==true)
+						undef++;
+				}
+			}
+			delete[] symlist;
+			return undef;
+		};
+		int getUndefinedCount() const {
+			int ii,undef=0;
+			int cnt = countObjects();
+			Symbol **symlist = (Symbol **)getLinearList();
+			for (ii = 0; ii < cnt; ii++) {
+				if (symlist[ii]) {
+					if (symlist[ii]->isDefined()!=true)
+						undef++;
+				}
+			}
+			delete[] symlist;
+			return undef;
+		}
+
 	};
 
 

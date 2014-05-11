@@ -99,6 +99,13 @@ namespace RTFClasses
 		desc->m_len = n;
 	};
 
+	String::String(char *s, int n)
+	{
+		int nn = strlen(s);
+		desc = new StrDesc((n < nn ? nn : n)+1);
+		copy(desc->m_buf, s, nn+1);
+		desc->m_len = nn;
+	};
 
 	String::String(String &a)
 	{
@@ -144,7 +151,7 @@ namespace RTFClasses
 	};
 
 	// look forwards through String for character
-	int String::find(int start, char ch) const
+	int String::find(int start, char ch)
 	{
 		int i;
 		
@@ -153,7 +160,7 @@ namespace RTFClasses
 	};
 
 	// look forwards through String for character
-	int String::find(char ch) const
+	int String::find(char ch)
 	{
 		int i;
 		
@@ -181,6 +188,42 @@ namespace RTFClasses
 		}
 		return n;
 	};
+
+	int String::find(String str, int st)
+	{
+		int ii, jj;
+
+		while ((jj = find(st, str.buf(0))) != -1) {	// Find the first character
+			st = jj + 1;
+			for (ii = 0; ii < str.len(); ii++, jj++) {
+				if (jj >= len())
+					return -1;
+				if (buf(jj) != str.buf(ii))
+					goto j1;
+			}
+			return st-1;
+j1:;
+		}
+		return -1;
+	}
+
+	int String::find(char *str, int st)
+	{
+		int ii, jj;
+
+		while ((jj = find(st, str[0])) != -1) {	// Find the first character
+			st = jj + 1;
+			for (ii = 0; str[ii]; ii++, jj++) {
+				if (jj >= len())
+					return -1;
+				if (buf(jj) != str[ii])
+					goto j1;
+			}
+			return st-1;
+j1:;
+		}
+		return -1;
+	}
 
 	void String::add(String s)
 	{
@@ -249,7 +292,7 @@ namespace RTFClasses
 	{
 		for (; desc->m_len > 0; --(desc->m_len))
 		{
-			if (!desc->m_buf[desc->m_len-1]==ch)
+			if (desc->m_buf[desc->m_len-1]!=ch)
 				break;
 		}
 		desc->m_buf[desc->m_len] = 0;
@@ -259,7 +302,7 @@ namespace RTFClasses
 	{
 		int n;
 		for (n = 0; n < len(); n++) {
-			if (!desc->m_buf[n]==ch)
+			if (desc->m_buf[n]!=ch)
 				break;
 		}
 		desc->m_len -= n;
@@ -358,13 +401,15 @@ namespace RTFClasses
 
 
 	// Split a string into an array of strings
-	String *String::split(char ch)
+	String *String::split(char ch, int *nele)
 	{
 		int i,n,j,pi;
 		String *strs;
 
 		n = count(ch);
-		strs = new String[n];
+		if (nele)
+			*nele = n;
+		strs = new String[n+1];
 		for (i = j = pi = 0; i < len(); i++)
 			if (desc->m_buf[i]==ch) {
 				desc->m_buf[i]=0;
@@ -375,6 +420,8 @@ namespace RTFClasses
 				desc->m_buf[i]=ch;
 				pi = i+1;
 			}
+		// copy the last string
+		strs[j].copy(&desc->m_buf[pi]);
 
 		return strs;
 	}
@@ -579,9 +626,9 @@ namespace RTFClasses
 
 	/* HashPJW Aho's - version
 	*/
-	HashVal String::hashPJW()
+	HashVal String::hashPJW() const
 	{
-		HashVal h;
+		static HashVal h;
 		unsigned g;
 		char *name = desc->m_buf;
 

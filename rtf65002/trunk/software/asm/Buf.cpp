@@ -16,63 +16,63 @@
 namespace RTFClasses
 {
 
-	// construct a buffer
-	Buf::Buf(int sz)
-	{
-		size = sz;
-		buf = new char [sz+1];
-		if (buf)
-			clear();
-	}
+	//// construct a buffer
+	//Buf::Buf(int sz)
+	//{
+	//	size = sz;
+	//	buf = new char [sz+1];
+	//	if (buf)
+	//		clear();
+	//}
 
-	Buf::Buf(char *p, int sz)
-	{
-		size = sz;
-		buf = new char [sz+1];
-		if (buf)
-		{
-			clear();
-			memcpy(buf, p, sz);
-		}
-	}
+	//Buf::Buf(char *p, int sz)
+	//{
+	//	size = sz;
+	//	buf = new char [sz+1];
+	//	if (buf)
+	//	{
+	//		clear();
+	//		memcpy(buf, p, sz);
+	//	}
+	//}
 
-	// resize the buffer, preserving the original contents
-	bool Buf::resize(int sz)
-	{
-		char *p = new char[sz+1];
-		if (p)
-		{
-			memset(p, '\0', sz+1);
-			memcpy(p, buf, min(size,sz));
-			// reset pointer to same index so it looks the same
-			ptr = p + (ptr-buf);
-			if (ptr > &p[sz-1])
-				ptr = &p[sz];
-			// get rid of old buffer
-			delete[] buf;
-			buf = p;
-			size = sz;
-			return true;
-		}
-		return false;
-	}
+	//// resize the buffer, preserving the original contents
+	//bool Buf::resize(int sz)
+	//{
+	//	char *p = new char[sz+1];
+	//	if (p)
+	//	{
+	//		memset(p, '\0', sz+1);
+	//		memcpy(p, buf, min(size,sz));
+	//		// reset pointer to same index so it looks the same
+	//		ptr = p + (ptr-buf);
+	//		if (ptr > &p[sz-1])
+	//			ptr = &p[sz];
+	//		// get rid of old buffer
+	//		delete[] buf;
+	//		buf = p;
+	//		size = sz;
+	//		return true;
+	//	}
+	//	return false;
+	//}
 
 
-	bool Buf::copy(Buf *q)
-	{
-		char *p = new char[q->size+1];
-		if (p)
-		{
-			delete[] buf;
-			buf = p;
-			size = q->size;
-			memcpy(p, q->buf, size);
-			p[size]=0;
-			ptr = buf;
-			return true;
-		}
-		return false;
-	}
+	//bool Buf::copy(Buf *q)
+	//{
+	//	char *p = new char[q->size+1];
+	//	if (p)
+	//	{
+	//		delete[] buf;
+	//		buf = p;
+	//		size = q->size;
+	//		memcpy(p, q->buf, size);
+	//		p[size]=0;
+	//		ptr = buf;
+	//		return true;
+	//	}
+	//	return false;
+	//}
 
 
 	// add more error checking here
@@ -81,18 +81,23 @@ namespace RTFClasses
 		// shift open space in destination buffer
 		if (amt==0)
 			return;
-		if (amt > 0)
-			memmove(&buf[pos+amt], &buf[pos], size - amt - pos);//-ndx());
-		else
-			memmove(&buf[pos], &buf[pos-amt], size -pos);//- ndx());
+		if (amt > 0) {
+			memmove(&buf()[pos+amt], &buf()[pos], getSize() - amt - pos);//-ndx());
+			setlen(strlen(buf()));
+		}
+		else {
+			memmove(&buf()[pos], &buf()[pos-amt], getSize() -pos);//- ndx());
+			setlen(strlen(buf()));
+		}
 	}
 
 
 	bool Buf::insert(int pos, char *p, int len)
 	{
-		if (pos + len < size)
+		if (pos + len < getSize())
 		{
-			memcpy(&buf[pos], p, len);
+			memcpy(&buf()[pos], p, len);
+			setlen(strlen(buf()));
 			return true;
 		}
 		return false;
@@ -101,7 +106,7 @@ namespace RTFClasses
 
 	int Buf::peekCh(int d)
 	{
-		if (ptr + d < buf + size)
+		if (ptr + d < buf() + getSize())
 			return ptr[d];
 		return 0;
 	}
@@ -191,7 +196,7 @@ namespace RTFClasses
 	{
 		int ch;
 
-		if (ptr>=buf+size-1)
+		if (ptr>=buf()+getSize()-1)
 			return 0;
 		ch = *ptr;
 		if (*ptr)
@@ -219,7 +224,7 @@ namespace RTFClasses
 
 		do
 		{
-			ch = nextCh();
+			ch = nextCh() & 0xff;
 		} while (isspace(ch)&&ch!='\n');
 		if (ch!=0)
 			unNextCh();
@@ -271,6 +276,7 @@ namespace RTFClasses
 		len = strlen(str);
 		strcpy(ptr, str);
 		ptr += len;
+		setlen(ndx()+len);
 	}
 
 
@@ -284,6 +290,7 @@ namespace RTFClasses
 		ptr += len;
 		strcpy(ptr, "\n");
 		ptr++;
+		setlen(ndx()+len);
 	}
 
 	void Buf::scanToEOL()
@@ -300,11 +307,11 @@ namespace RTFClasses
 
 	int Buf::findLastNonSpace(int n)
 	{
-		if (n > size)
-			n = size;
+		if (n > getSize())
+			n = getSize();
 		if (n < 0)
 			return 0;
-		while (n > 0 && isspace(buf[n])) --n;
+		while (n > 0 && isspace(buf()[n])) --n;
 		return n;
 	}
 

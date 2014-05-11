@@ -32,6 +32,17 @@
 
 namespace RTFClasses
 {
+	void Assembler::AddToSearchList()
+	{
+		String fname;
+
+		g_nops = getCpu()->getOp()->get();
+		fname = ((Operands6502 *)getCpu()->getOp())->op[0];
+		fname.trim('"');
+		SearchList[nSearchList] = fname;
+		nSearchList++;
+	}
+
 	//		Performs processing for .align psuedo op. Updates the
 	//	appropriate counter.
 
@@ -346,13 +357,13 @@ int Assembler::dc(Opa *o)
 		// Reset macro buffer
 		macrobuf = "";
 		slen = ibuf->ndx() - gRept.sptr;
-		printf("replacing:%.*s|\r\n", slen, &ibuf->getBuf()[gRept.sptr]);
+		printf("replacing:%.*s|\r\n", slen, &ibuf->buf()[gRept.sptr]);
 		// tomove = number of characters to move
 		//        = buffer size - current pointer position
-		tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->getBuf());
+		tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->buf());
 		// sptr = where to begin substitution
 		//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr1,slen,tomove);
-		printf("sptr:%.80s|\r\n", &ibuf->getBuf()[gRept.sptr]);
+		printf("sptr:%.80s|\r\n", &ibuf->buf()[gRept.sptr]);
 //		getchar();
 		gRept.sub(NULL, ibuf, gRept.sptr, slen, tomove);
 		ibuf->moveTo(gRept.sptr);
@@ -397,6 +408,7 @@ int Assembler::equ(char *iid)
 	//	return (TRUE);
 	//}
 
+	size = 0;
 	ptr = ibuf->getPtr();    // Save off starting point // inptr;
 	if (*ptr=='=')
 		ibuf->nextCh();
@@ -612,7 +624,7 @@ int Assembler::equ(char *iid)
 					Err(E_MEMORY);
 					return;
 				}
-				sym->setDefined(0);
+				sym->setDefined(false);
 				sym->setName(label);
 				sym->setSize(gSzChar);
 				p = gSymbolTable->insert(sym);
@@ -688,7 +700,7 @@ int Assembler::equ(char *iid)
 		tmplineno = lineno;
 		fnum = CurFileNum;
 		lineno = 0;
-		tmp = strdup(ibuf->getBuf());  // Save copy of input buffer
+		tmp = strdup(ibuf->buf());  // Save copy of input buffer
 		if (tmp == NULL) {
 			Err(E_MEMORY);
 			ret = FALSE;
@@ -704,10 +716,11 @@ int Assembler::equ(char *iid)
 			if (FileLevel == 0)
 				localSymTbl = NULL;
 //			memcpy(ibuf->getBuf(), tmp, tmp.len());  // Restore input buffer.
-			ibuf->resize(strlen(tmp)+10);
-			strcpy(ibuf->getBuf(), tmp);
+			ibuf->enlarge(strlen(tmp)+10);
+			ibuf->copy(tmp,strlen(tmp));
+			//strcpy(ibuf->buf(), tmp);
 			free(tmp);
-			ibuf->setptr(&ibuf->getBuf()[ndx]);
+			ibuf->setptr(&ibuf->buf()[ndx]);
 			//getCpu()->getOp()->setInput(ibuf);
 			lineno = tmplineno;
 			CurFileNum = fnum;
@@ -957,6 +970,7 @@ int Assembler::equ(char *iid)
 		Symbol tdef, *p;
 		char labeln[100];
 		String lbl;
+		SymbolTable *lst;
 
 		len = ibuf->getIdentifier(&sptr, &eptr);
 		if (len < 1)
@@ -974,8 +988,22 @@ int Assembler::equ(char *iid)
 		}
 		else
 			lbl = lastLabel + labeln;
-
 		tdef.setName(lbl.buf());
+		// A forward reference may have been placed in the local symbol table.
+		// Promote it to global.
+		p = NULL;
+		lst = getLocalSymTbl();
+		if (lst)
+			p = lst->find(&tdef);
+		if (p) {
+			if (tdef.getName()=="loadBootFile7") {
+				printf("rmv lbf7\r\n");
+				getchar();
+			}
+			lst->remove(p);
+			if (!getGlobalSymTbl()->find(&tdef))
+				getGlobalSymTbl()->insert(p);
+		}
 		p = gSymbolTable->find(&tdef);
 
 		if (p) {

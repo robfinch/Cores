@@ -1,0 +1,39 @@
+     1	/*
+     2		This kind of code is normally emmitted by the compiler, and hidden.
+     3	*/
+     4	
+     5	naked crt_start()
+     6	{
+     7		asm {
+     8			cpu		RTF65002
+     9			.bss						; allow room for 1MB of code
+    10			.org	0x1900000>>2		; convert to data address
+    11			.code
+    12			.org	0x1800000			; allow room for command line
+    13			db		"BOOT"
+    14			.org	0x1800100
+    15			lda		#2					; normal prioity
+    16			ldx		#0					; flags
+    17			ldy		#main				; start address
+    18			ld		r4,#0x1800000			; start parameter
+    19			ld		r5,#2				; job to associate with
+    20			int		#4					; start as a task
+    21			db		1
+    22			jmp		(0xFFFF8040>>2)	; jump back to Monitor
+    23		}
+    24	}
+    25	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+crt_start  =000000    -    Global      Function returning 
+
+ *** structures and unions ***
+

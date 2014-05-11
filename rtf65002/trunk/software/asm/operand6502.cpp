@@ -255,7 +255,7 @@ int Operand6502::parse(char *op)
 	}
 
 	// (d,s),y
-    if (strmat(op, " ( %s, %c ) , %c ", eb.getBuf(), &ch1, &ch))
+    if (strmat(op, " ( %s, %c ) , %c ", eb.buf(), &ch1, &ch))
     {
 		if (tolower(ch1) == 's') {
 			val = eb.expeval(NULL);
@@ -266,7 +266,7 @@ int Operand6502::parse(char *op)
     }
 
 	// (zp),y
-    if (strmat(op, " ( %s) , %c ", eb.getBuf(), &ch))
+    if (strmat(op, " ( %s) , %c ", eb.buf(), &ch))
     {
 		val = eb.expeval(NULL);
 		if (tolower(ch)!='y')
@@ -276,7 +276,7 @@ int Operand6502::parse(char *op)
     }
 
 	// [zp],y
-    if (strmat(op, " [ %s] , %c ", eb.getBuf(), &ch))
+    if (strmat(op, " [ %s] , %c ", eb.buf(), &ch))
     {
 		val = eb.expeval(NULL);
 		if (tolower(ch)!='y')
@@ -285,7 +285,7 @@ int Operand6502::parse(char *op)
     }
 
 	// (zp,x)
-	if(strmat(op, " ( %s, %c) ", eb.getBuf(), &ch))
+	if(strmat(op, " ( %s, %c) ", eb.buf(), &ch))
 	{
 		val = eb.expeval(NULL);
 		r1 = 2;
@@ -295,7 +295,7 @@ int Operand6502::parse(char *op)
 	}
 
 	// (abs)  { jmp }
-	if(strmat(op, " ( %s) ", eb.getBuf()))
+	if(strmat(op, " ( %s) ", eb.buf()))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 256 && val.value >= 0)
@@ -304,7 +304,7 @@ int Operand6502::parse(char *op)
 	}
 
 	// [abs]  { jmp }
-	if(strmat(op, " [ %s] ", eb.getBuf()))
+	if(strmat(op, " [ %s] ", eb.buf()))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 256 && val.value >= 0)
@@ -313,7 +313,7 @@ int Operand6502::parse(char *op)
 	}
 
 	// d,sp
-    if (strmat(op, " %s, %c ", eb.getBuf(), &ch))
+    if (strmat(op, " %s, %c ", eb.buf(), &ch))
     {
 		if (tolower(ch)=='s') {
 			val = eb.expeval(NULL);
@@ -322,7 +322,7 @@ int Operand6502::parse(char *op)
     }
 
     // Could be indexed
-    if (strmat(op, " %s, %c ", eb.getBuf(), &ch))
+    if (strmat(op, " %s, %c ", eb.buf(), &ch))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 256 && val.value >= 0)
@@ -351,7 +351,7 @@ int Operand6502::parse(char *op)
 	// Absolute / Zero page
 	// This must be the last mode tested for since anything will
 	// match
-	strmat(op, " %s ", eb.getBuf());
+	strmat(op, " %s ", eb.buf());
 	val = eb.expeval(NULL);
 	if (val.value < 256 && val.value >= 0) {
 		r2 = 0;

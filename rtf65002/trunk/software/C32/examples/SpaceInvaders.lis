@@ -1,135 +1,226 @@
-     1	#define TEXTSCR	0xFFD00000
-     2	
-     3	#define ST_DESTROYED	0
-     4	#define ST_HAPPY		1
-     5	
-     6	#define MV_DOWN		0
-     7	#define MV_LEFT		1
-     8	#define MV_RIGHT	2
-     9	
-    10	int *screen;
-    11	int moveDir;
-    12	
-    13	typedef struct _tagInvader
-    14	{
-    15		int status;
-    16		int type;
-    17		int x;
-    18		int y;
-    19		int maxX;
-    20		int minX;
-    21	} Invader;
-    22	
-    23	int LeftColInv,RightColInv;
-    24	
-    25	Invader Invaders[5][8];
-    26	
-    27	void DrawInvader(unsigned int row, unsigned int col)
-    28	{
-    29		Invader *i;
-    30		unsigned int *base;
-    31	
-    32		i = &Invaders[row][col];
-    33		if (i->status == ST_DESTROYED)
-    34			return;
-    35		base = &screen[i->y * 56 + i->x];
+     1	#define ST_DESTROYED	0
+     2	#define ST_HAPPY		1
+     3	
+     4	#define MV_DOWN		0
+     5	#define MV_LEFT		1
+     6	#define MV_RIGHT	2
+     7	
+     8	int prevMoveDir;
+     9	int moveDir;
+    10	int score;
+    11	
+    12	typedef struct _tagInvader
+    13	{
+    14		int status;
+    15		int type;
+    16		unsigned int x;
+    17		unsigned int y;
+    18		unsigned int maxX;
+    19		unsigned int minX;
+    20		unsigned int maxY;
+    21		unsigned int minY;
+    22	} Invader;
+    23	
+    24	int LeftColInv,RightColInv;
+    25	int TopRowInv,BotRowInv;
+    26	int tanksLeft;
+    27	
+    28	Invader Invaders[5][8];
+    29	
+    30	void DrawInvader(Invader *i)
+    31	{
+    32		unsigned int x, y;
+    33	
+    34		if (i->status == ST_DESTROYED)
+    35			return;
     36	
-    37		switch (i->type)
-    38		{
-    39		case 1:
-    40			// Above
-    41			base[0] = 32;
-    42			base[1] = 32;
-    43			base[2] = 32;
-    44			base[3] = 32;
-    45			base[4] = 32;
-    46			// top
-    47			base[56] = 32;
-    48			base[57] = 233;
-    49			base[58] = 242;
-    50			base[59] = 223;
-    51			base[60] = 32;
-    52			// bottom
-    53			base[112] = 32;
-    54			if (i->x & 1) {
-    55				base[113] = 24;
-    56				base[115] = 24;
-    57			}
-    58			else {
-    59				base[113] = 22;
-    60				base[115] = 22;
-    61			}
-    62			base[114] = 32;
-    63			break;
-    64		}
-    65	}
-    66	
+    37		// Above
+    38		x = i->x;
+    39		y = i->y;
+    40		CharPlot(x+0,y,32);
+    41		CharPlot(x+1,y,32);
+    42		CharPlot(x+2,y,32);
+    43		CharPlot(x+3,y,32);
+    44		CharPlot(x+4,y,32);
+    45		switch (i->type)
+    46		{
+    47		case 1:
+    48			// top
+    49			CharPlot(x,y+1,32);
+    50			CharPlot(x+1,y+1,233);
+    51			CharPlot(x+2,y+1,242);
+    52			CharPlot(x+3,y+1,223);
+    53			CharPlot(x+4,y+1,32);
+    54			// bottom
+    55			CharPlot(x,y+2,32);
+    56			if (i->x & 1) {
+    57				CharPlot(x+1,y+2,24);
+    58				CharPlot(x+3,y+2,24);
+    59			}
+    60			else {
+    61				CharPlot(x+1,y+2,22);
+    62				CharPlot(x+3,y+2,22);
+    63			}
+    64			CharPlot(x+2,y+2,32);
+    65			CharPlot(x+4,y+2,32);
+    66			break;
+    67		case 2:
+    68			if (i->x & 1) {
+    69				CharPlot(x,y+1,32);
+    70				CharPlot(x+1,y+1,98);
+    71				CharPlot(x+2,y+1,153);
+    72				CharPlot(x+3,y+1,98);
+    73				CharPlot(x+4,y+1,32);
+    74				CharPlot(x,y+2,32);
+    75				CharPlot(x+1,y+2,236);
+    76				CharPlot(x+2,y+2,98);
+    77				CharPlot(x+3,y+2,251);
+    78				CharPlot(x+4,y+2,32);
+    79			}
+    80			else {
+    81				CharPlot(x,y+1,32);
+    82				CharPlot(x+1,y+1,252);
+    83				CharPlot(x+2,y+1,153);
+    84				CharPlot(x+3,y+1,254);
+    85				CharPlot(x+4,y+1,32);
+    86				CharPlot(x,y+2,32);
+    87				CharPlot(x+1,y+2,251);
+    88				CharPlot(x+2,y+2,98);
+    89				CharPlot(x+3,y+2,236);
+    90				CharPlot(x+4,y+2,32);
+    91			}
+    92			break;
+    93		}
+    94	}
+    95	
 
 
 *** local symbol table ***
 
-row        =000002    -    Auto        Long
-col        =000003    -    Auto        Long
-i          =ffffffff    -    Auto        Pointer to struct _tagInvader 
-base       =fffffffe    -    Auto        Pointer to Long
+i          =000003    -    Auto        Pointer to struct _tagInvader 
+x          =ffffffff    -    Auto        Long
+y          =fffffffe    -    Auto        Long
 
 
 
-    67	void main ()
-    68	{
-    69		int i, j;
-    70		Invader *pi;
-    71	
-    72		InitializeForScreen();
-    73		while (IsColumnDestroyed(LeftColInv)) {
-    74			LeftColInv++;
-    75			if (LeftColInv > RightColInv) {
-    76				return;
-    77			}
-    78			for (i = 0; i < 5; i++) {
-    79				for (j = 0; j < 8; j++)  {
-    80					Invaders[i][j].minX -= 4;
-    81				}
-    82			}
-    83		}
-    84		while (IsColumnDestroyed(RightColInv)) {
-    85			RightColInv--;
-    86			if (LeftColInv > RightColInv) {
-    87				return;
-    88			}
-    89			for (i = 0; i < 5; i++) {
-    90				for (j = 0; j < 8; j++)  {
-    91					Invaders[i][j].maxX += 4;
-    92				}
-    93			}
-    94		}
-    95		for (i = 0; i < 5; i++) {
-    96			for (j = 0; j < 8; j++) {
-    97				DrawInvader(i,j);
-    98			}
-    99		}
-   100		pi = &Invaders[0][0];
-   101		if (moveDir==MV_LEFT) {
-   102			if (!MoveLeft(pi))
-   103				moveDir = MV_DOWN;
+    96	void main ()
+    97	{
+    98		int i, j;
+    99		Invader *pi;
+   100	
+   101		// Request I/O focus
+   102		asm {
+   103			jsr	(0xFFFF8014>>2)
    104		}
-   105		if (moveDir==MV_RIGHT) {
-   106			if (!MoveRight(pi)) {
-   107				moveDir = MV_DOWN;
-   108			}
-   109		}
-   110		for (i = 0; i < 5; i++) {
-   111			for (j = 0; j < 8; j++) {
-   112				pi = &Invaders[i][j];
-   113				switch(moveDir) {
-   114				case MV_LEFT:	MoveLeft(pi); break;
-   115				case MV_RIGHT:	MoveRight(pi); break;
-   116				case MV_DOWN:	MoveDown(pi); break;
-   117				}
-   118			}
-   119		}
-   120	}
-   121	
+   105	nextGame:
+   106		InitializeForGame();
+   107		// Master game loop
+   108		forever {
+   109	nextScreen:
+   110			InitializeForScreen();
+   111			forever {
+   112				while (IsColumnDestroyed(LeftColInv)) {
+   113					LeftColInv++;
+   114					if (LeftColInv > RightColInv) {
+   115						score += 1000;
+   116						goto nextScreen;
+   117					}
+   118					for (i = 0; i < 5; i++) {
+   119						for (j = 0; j < 8; j++)  {
+   120							Invaders[i][j].minX -= 4;
+   121						}
+   122					}
+   123				}
+   124				while (IsColumnDestroyed(RightColInv)) {
+   125					RightColInv--;
+   126					if (LeftColInv > RightColInv) {
+   127						score += 1000;
+   128						goto nextScreen;
+   129					}
+   130					for (i = 0; i < 5; i++) {
+   131						for (j = 0; j < 8; j++)  {
+   132							Invaders[i][j].maxX += 4;
+   133						}
+   134					}
+   135				}
+   136				while (IsRowDestroyed(TopRowInv)) {
+   137					TopRowInv++;
+   138					if (TopRowInv > BotRowInv) {
+   139						score += 1000;
+   140						goto nextScreen;
+   141					}
+   142					for (i = 0; i < 5; i++) {
+   143						for (j = 0; j < 8; j++)  {
+   144							Invaders[i][j].minY -= 3;
+   145						}
+   146					}
+   147				}
+   148				while (IsRowDestroyed(BotRowInv)) {
+   149					BotRowInv--;
+   150					if (TopRowInv > BotRowInv) {
+   151						score += 1000;
+   152						goto nextScreen;
+   153					}
+   154					for (i = 0; i < 5; i++) {
+   155						for (j = 0; j < 8; j++)  {
+   156							Invaders[i][j].maxY += 3;
+   157						}
+   158					}
+   159				}
+   160				for (i = 0; i < 5; i++) {
+   161					for (j = 0; j < 8; j++) {
+   162						pi = &Invaders[i][j];
+   163						DrawInvader(pi);
+   164					}
+   165				}
+   166				pi = &Invaders[0][0];
+   167				if (moveDir==MV_LEFT) {
+   168					if (!MoveLeft(pi)) {
+   169						prevMoveDir = MV_LEFT;
+   170						moveDir = MV_DOWN;
+   171					}
+   172				}
+   173				else if (moveDir==MV_RIGHT) {
+   174					if (!MoveRight(pi)) {
+   175						prevMoveDir = MV_RIGHT;
+   176						moveDir = MV_DOWN;
+   177					}
+   178				}
+   179				else if (moveDir==MV_DOWN) {
+   180					if (!MoveDown(pi)) {
+   181						tanksLeft--;
+   182						if (tanksLeft <= 0) {
+   183							GameOver();
+   184							goto nextGame;
+   185						}
+   186						goto nextScreen;
+   187					}
+   188				}
+   189	
+   190				for (i = 0; i < 5; i++) {
+   191					for (j = 0; j < 8; j++) {
+   192						pi = &Invaders[i][j];
+   193						switch(moveDir) {
+   194						case MV_LEFT:	MoveLeft(pi); break;
+   195						case MV_RIGHT:	MoveRight(pi); break;
+   196						case MV_DOWN:	MoveDown(pi); break;
+   197						}
+   198					}
+   199				}
+   200				if (moveDir==MV_DOWN) {
+   201					if (prevMoveDir==MV_LEFT) {
+   202						prevMoveDir = MV_DOWN;
+   203						moveDir = MV_RIGHT;
+   204					}
+   205					else if (prevMoveDir==MV_RIGHT) {
+   206						prevMoveDir = MV_DOWN;
+   207						moveDir = MV_LEFT;
+   208					}
+   209				}
+   210			}
+   211		}
+   212	}
+   213	
 
 
 *** local symbol table ***
@@ -137,31 +228,71 @@ base       =fffffffe    -    Auto        Pointer to Long
 i          =ffffffff    -    Auto        Long
 j          =fffffffe    -    Auto        Long
 pi         =fffffffd    -    Auto        Pointer to struct _tagInvader 
+nextGame   =00000d    -    Label
+nextScreen =00000e    -    Label
 
 
 
-   122	void InitializeForScreen()
-   123	{
-   124		unsigned int i,j;
-   125	
-   126		screen = (unsigned int *)TEXTSCR;
-   127		for (i = 0; i < 5; i++)
-   128			for (j = 0; j < 8; j++) {
-   129				switch(i) {
-   130				case 0:		Invaders[i][j].type = 1;
-   131				case 1,2:	Invaders[i][j].type = 2;
-   132				case 3,4:	Invaders[i][j].type = 3;
-   133				}
-   134				Invaders[i][j].status = ST_HAPPY;
-   135				Invaders[i][j].x = j * 4 + 12;
-   136				Invaders[i][j].y = i * 3 + 1;
-   137				Invaders[i][j].maxX = j * 4 + 24;
-   138				Invaders[i][j].minX = j * 4;
-   139			}
-   140		LeftColInv = 0;
-   141		RightColInv = 4;
-   142	}
-   143	
+   214	void ClearScreen()
+   215	{
+   216		asm {
+   217			jsr ($FFFF801C>>2)
+   218		}
+   219	}
+   220	
+
+
+*** local symbol table ***
+
+
+
+
+   221	void CharPlot(unsigned int x, unsigned int y, unsigned int ch)
+   222	{
+   223		asm {
+   224			ld	r1,5,sp
+   225			ld	r2,4,sp
+   226			ld	r3,3,sp
+   227			jsr	($FFFF8044>>2)
+   228		}
+   229	}
+   230	
+
+
+*** local symbol table ***
+
+x          =000003    -    Auto        Long
+y          =000004    -    Auto        Long
+ch         =000005    -    Auto        Long
+
+
+
+   231	void InitializeForScreen()
+   232	{
+   233		unsigned int i,j;
+   234	
+   235		ClearScreen();
+   236		for (i = 0; i < 5; i++)
+   237			for (j = 0; j < 8; j++) {
+   238				switch(i) {
+   239				case 0:		Invaders[i][j].type = 1;
+   240				case 1,2:	Invaders[i][j].type = 2;
+   241				case 3,4:	Invaders[i][j].type = 3;
+   242				}
+   243				Invaders[i][j].status = ST_HAPPY;
+   244				Invaders[i][j].x = j * 4 + 12;
+   245				Invaders[i][j].y = i * 3 + 1;
+   246				Invaders[i][j].maxX = j * 4 + 24;
+   247				Invaders[i][j].minX = j * 4;
+   248				Invaders[i][j].maxY = i * 3 + 24;
+   249				Invaders[i][j].minY = i * 3 + 1;
+   250			}
+   251		LeftColInv = 0;
+   252		RightColInv = 4;
+   253		TopRowInv = 0;
+   254		BotRowInv = 7;
+   255	}
+   256	
 
 
 *** local symbol table ***
@@ -171,91 +302,145 @@ j          =fffffffe    -    Auto        Long
 
 
 
-   144	int IsColumnDestroyed(int col)
-   145	{
-   146		if ((Invaders[0][col].status==ST_DESTROYED) && 
-   147			(Invaders[1][col].status==ST_DESTROYED) && 
-   148			(Invaders[2][col].status==ST_DESTROYED) && 
-   149			(Invaders[3][col].status==ST_DESTROYED) && 
-   150			(Invaders[4][col].status==ST_DESTROYED))
-   151			return 1;
-   152		return 0;
-   153	}
-   154	
+   257	void InitializeForGame()
+   258	{
+   259		score = 0;
+   260		tanksLeft = 3;
+   261	}
+   262	
 
 
 *** local symbol table ***
 
-col        =000002    -    Auto        Long
 
 
 
-   155	int MoveLeft(Invader *i)
-   156	{
-   157		if (i->x > i->minX) {
-   158			i->x--;
-   159			return 1;
-   160		}
-   161		return 0;
-   162	}
-   163	
-
-
-*** local symbol table ***
-
-i          =000002    -    Auto        Pointer to struct _tagInvader 
-
-
-
-   164	int MoveRight(Invader *i)
-   165	{
-   166		if (i->x < i->maxX) {
-   167			i->x++;
-   168			return 1;
-   169		}
-   170		return 0;
-   171	}
-   172	
+   263	int IsColumnDestroyed(int col)
+   264	{
+   265		if ((Invaders[0][col].status==ST_DESTROYED) && 
+   266			(Invaders[1][col].status==ST_DESTROYED) && 
+   267			(Invaders[2][col].status==ST_DESTROYED) && 
+   268			(Invaders[3][col].status==ST_DESTROYED) && 
+   269			(Invaders[4][col].status==ST_DESTROYED))
+   270			return 1;
+   271		return 0;
+   272	}
+   273	
 
 
 *** local symbol table ***
 
-i          =000002    -    Auto        Pointer to struct _tagInvader 
+col        =000003    -    Auto        Long
 
 
 
-   173	int MoveDown(Invader *i)
-   174	{
-   175		if (i->y < 31) {
-   176			i->y++;
-   177			return 1;
-   178		}
-   179		return 0;
-   180	}
-   181	
+   274	int IsRowDestroyed(int row)
+   275	{
+   276		if ((Invaders[row][0].status==ST_DESTROYED) && 
+   277			(Invaders[row][1].status==ST_DESTROYED) && 
+   278			(Invaders[row][2].status==ST_DESTROYED) && 
+   279			(Invaders[row][3].status==ST_DESTROYED) && 
+   280			(Invaders[row][4].status==ST_DESTROYED) &&
+   281			(Invaders[row][5].status==ST_DESTROYED) &&
+   282			(Invaders[row][6].status==ST_DESTROYED) &&
+   283			(Invaders[row][7].status==ST_DESTROYED))
+   284			return 1;
+   285		return 0;
+   286	}
+   287	
 
 
 *** local symbol table ***
 
-i          =000002    -    Auto        Pointer to struct _tagInvader 
+row        =000003    -    Auto        Long
+
+
+
+   288	int MoveLeft(Invader *i)
+   289	{
+   290		if (i->x > i->minX) {
+   291			i->x--;
+   292			return 1;
+   293		}
+   294		return 0;
+   295	}
+   296	
+
+
+*** local symbol table ***
+
+i          =000003    -    Auto        Pointer to struct _tagInvader 
+
+
+
+   297	int MoveRight(Invader *i)
+   298	{
+   299		if (i->x < i->maxX) {
+   300			i->x++;
+   301			return 1;
+   302		}
+   303		return 0;
+   304	}
+   305	
+
+
+*** local symbol table ***
+
+i          =000003    -    Auto        Pointer to struct _tagInvader 
+
+
+
+   306	int MoveDown(Invader *i)
+   307	{
+   308		if (i->y < 31) {
+   309			i->y++;
+   310			return 1;
+   311		}
+   312		return 0;
+   313	}
+   314	
+
+
+*** local symbol table ***
+
+i          =000003    -    Auto        Pointer to struct _tagInvader 
+
+
+
+   315	void GameOver()
+   316	{
+   317	}
+
+
+*** local symbol table ***
+
 
 
 
 
  *** global scope typedef symbol table ***
 
+GameOver   =000000    -    Global      Function returning 
+score      =000002    -    Global      Long
+CharPlot   =000000    -    Global      Function returning 
 MoveLeft   =000000    -    Global      Function returning Long
 MoveDown   =000000    -    Global      Function returning Long
-Invaders   =00000a    -    Global      Array of Array of struct _tagInvader 
-RightColInv =000009    -    Global      Long
-DrawInvader =0000fa    -    Global      Function returning 
-screen     =000000    -    Global      Pointer to Long
+Invaders   =000010    -    Global      Array of Array of struct _tagInvader 
+ClearScreen =000150    -    Global      Function returning 
+RightColInv =00000c    -    Global      Long
+DrawInvader =000150    -    Global      Function returning 
+prevMoveDir =000000    -    Global      Long
+BotRowInv  =00000e    -    Global      Long
 MoveRight  =000000    -    Global      Function returning Long
+TopRowInv  =00000d    -    Global      Long
 InitializeForScreen =000000    -    Global      Function returning 
-main       =0000fa    -    Global      Function returning 
-Invader    =000002    1   struct _tagInvader 
+main       =000150    -    Global      Function returning 
+IsRowDestroyed =000000    -    Global      Function returning Long
+tanksLeft  =00000f    -    Global      Long
+InitializeForGame =000000    -    Global      Function returning 
+Invader    =000003    1   struct _tagInvader 
 moveDir    =000001    -    Global      Long
-LeftColInv =000008    -    Global      Long
+LeftColInv =00000b    -    Global      Long
 IsColumnDestroyed =000000    -    Global      Function returning Long
 
  *** structures and unions ***
@@ -267,3 +452,5 @@ _tagInvader =000000    -    Type        struct _tagInvader
     y          =000003    -    Member      Long
     maxX       =000004    -    Member      Long
     minX       =000005    -    Member      Long
+    maxY       =000006    -    Member      Long
+    minY       =000007    -    Member      Long

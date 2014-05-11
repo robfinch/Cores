@@ -475,7 +475,7 @@ int Operand65002::parse(char *op)
 	}
 j1:
 	// (d,s),y
-    if (strmat(op, " ( %s, %c ) , %c ", eb.getBuf(), &ch1, &ch))
+    if (strmat(op, " ( %s, %c ) , %c ", eb.buf(), &ch1, &ch))
     {
 		if (tolower(ch1) == 's') {
 			val = eb.expeval(NULL);
@@ -486,7 +486,7 @@ j1:
     }
 
 	// (zp),y
-    if (strmat(op, " ( %s) , %c ", eb.getBuf(), &ch))
+    if (strmat(op, " ( %s) , %c ", eb.buf(), &ch))
     {
 		val = eb.expeval(NULL);
 		if (tolower(ch)!='y')
@@ -496,7 +496,7 @@ j1:
     }
 
 	// [zp],y
-    if (strmat(op, " [ %s] , %c ", eb.getBuf(), &ch))
+    if (strmat(op, " [ %s] , %c ", eb.buf(), &ch))
     {
 		val = eb.expeval(NULL);
 		if (tolower(ch)!='y')
@@ -505,7 +505,7 @@ j1:
     }
 
 	// (zp,x)
-	if(strmat(op, " ( %s, %c) ", eb.getBuf(), &ch))
+	if(strmat(op, " ( %s, %c) ", eb.buf(), &ch))
 	{
 		val = eb.expeval(NULL);
 		r1 = 2;
@@ -535,7 +535,7 @@ j1:
 	}
 
 	// (abs)  { jmp }
-	if(strmat(op, " ( %s) ", eb.getBuf()))
+	if(strmat(op, " ( %s) ", eb.buf()))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 4096 && val.value >= 0)
@@ -544,7 +544,7 @@ j1:
 	}
 
 	// [abs]  { jmp }
-	if(strmat(op, " [ %s] ", eb.getBuf()))
+	if(strmat(op, " [ %s] ", eb.buf()))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 4096 && val.value >= 0)
@@ -553,7 +553,7 @@ j1:
 	}
 
     // Could be indexed
-    if (strmat(op, " %s, r%d ", eb.getBuf(), &reg))
+    if (strmat(op, " %s, r%d ", eb.buf(), &reg))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 2048 && val.value >= -2048)
@@ -579,7 +579,7 @@ j1:
 	}
 
    // Could be indexed
-    if (strmat(op, " %s, R%d ", eb.getBuf(), &reg))
+    if (strmat(op, " %s, R%d ", eb.buf(), &reg))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 2048 && val.value >= -2048)
@@ -604,14 +604,14 @@ j1:
 		}
 	}
 	// d,sp
-    if (strimat(op, " %s, sp ", eb.getBuf()))
+    if (strimat(op, " %s, sp ", eb.buf()))
     {
 		val = eb.expeval(NULL);
 		return type = AM_SR;
     }
 
     // Could be indexed
-    if (strmat(op, " %s, %c ", eb.getBuf(), &ch))
+    if (strmat(op, " %s, %c ", eb.buf(), &ch))
 	{
 		val = eb.expeval(NULL);
         if (val.value < 2048 && val.value >= -2048)
@@ -648,7 +648,7 @@ j1:
 	// Absolute / Zero page
 	// This must be the last mode tested for since anything will
 	// match
-	strmat(op, " %s", eb.getBuf());
+	strmat(op, " %s", eb.buf());
 	val = eb.expeval(NULL);
 	if (val.value < 2048 && val.value >= -2048) {
 		r2 = 0;

@@ -11,8 +11,10 @@ namespace RTFClasses
 		ListObject *next;
 		ListObject *prev;
 	public:
-		ListObject() { next = prev = NULL; };
-		virtual ~ListObject() {};
+		ListObject() {
+			next = prev = NULL; };
+		virtual ~ListObject() {
+			next = prev = NULL; };
 		ListObject *getNext() const { return next; };
 		ListObject *getPrev() const { return prev; };
 		void insertBefore(ListObject *obj);

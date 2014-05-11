@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string.h>
+#include "MyString.h"
 
 #ifndef _CTYPE
 #include <ctype.h>
@@ -9,40 +10,41 @@
 
 namespace RTFClasses
 {
-	class Buf
+	class Buf : public String
 	{
 		char *ptr;
-		char *buf;
-		size_t size;
 	public:
-		Buf(int sz);
-		Buf(char *, int);
-		~Buf() { if (buf) delete[] buf; };
-		size_t getSize() { return (size); };
-		bool copy(Buf *p);
+		Buf(int sz) : String(sz) { ptr = buf(); };
+		Buf(char *p, int n) : String(p,n) { ptr = buf(); };
+		~Buf() { };
+		size_t getSize() { return bufsz(); };
+//		bool copy(Buf *p);
 		void shift(int pos, int amt);
 		bool insert(int pos, char *p, int len);
-		bool resize(int n);				// make the buffer larger
-		bool enlarge(int n) { return resize(n+size); };
-		void rewind() { ptr = buf; };
+		//bool resize(int n);				// make the buffer larger
+		bool enlarge(int n) {
+				int nn = ndx();
+				realloc(n+getSize(), true);
+				moveTo(nn);
+				return true; };
+		void rewind() { ptr = buf(); };
 		void write(char *);
 		void writeln(char *);
-		char *getBuf() { return (buf); };
 		char *getPtr() { return (ptr); };
-		int ndx() { return ptr - buf; };
-		int move(int n) { ptr += n; return ptr-buf; };
-		int moveTo(int n) { ptr = &buf[n]; return n; };
-		void end() { ptr = buf + size - 1; };
-		void clear() { ptr = buf; memset(buf, '\0', size); }; // zeros out buffer
-		void set(char *p, size_t n) { buf = p; size = n; ptr = buf; };   // set data buffer
+		int ndx() { return ptr - buf(); };
+		int move(int n) { ptr += n; return ndx(); };
+		int moveTo(int n) { ptr = &buf()[n]; return n; };
+		void end() { ptr = buf() + getSize() - 1; };
+		void clear() { ptr = buf(); memset(buf(), '\0', getSize()); }; // zeros out buffer
+//		void set(char *p, size_t n) { buf = p; size = n; ptr = buf; };   // set data buffer
 		void setptr(char *p) { ptr = p; };
 		int peekCh() {
-			if (ptr >= buf + size - 1)
+			if (ptr >= buf() + getSize() - 1)
 				return 0;
 			return (*ptr); };             // gets character without incrementing pointer
 		int peekCh(int d);							// gets dth character forward
 		int nextCh();                                // gets character and increments pointer
-		void unNextCh() { if (ptr > buf) --ptr; };   // Backs up pointer a character
+		void unNextCh() { if (ptr > buf()) --ptr; };   // Backs up pointer a character
 		int nextNonSpace();                          // gets the next non space character
 		int nextNonSpaceLF();                         // gets the next non space character excluding line feeds
 		void skipSpaces();                           // increments pointer past spaces

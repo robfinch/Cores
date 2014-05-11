@@ -20,9 +20,11 @@ namespace RTFClasses
 
 	FileInfo::~FileInfo(void)
 	{
-		delete lst;
+		if (lst)
+			delete lst;
 		lst = NULL;
-		delete buf;
+		if (buf)
+			delete buf;
 		buf = NULL;
 	}
 
@@ -46,7 +48,7 @@ namespace RTFClasses
 		buf = new AsmBuf(length + 20000);
 		if (!buf)
 			return 0;
-		if ((n = read(fh, buf->getBuf(), length)) <= 0) {
+		if ((n = read(fh, buf->buf(), length)) <= 0) {
 			Err(E_OPEN, fname.buf()); // Unable to open file.
 			length = 0;
 			ret = 0;
@@ -54,8 +56,8 @@ namespace RTFClasses
 		// null terminate buffer
 		// character translation from opening the file in text mode
 		// can cause the file to contain extraneous data.
-		memset(&buf->getBuf()[n], 0, length-n);
-
+		memset(&buf->buf()[n], 0, length-n);
+		buf->setlen(strlen(buf->buf()));
 		close(fh);
 		return ret;
 	}

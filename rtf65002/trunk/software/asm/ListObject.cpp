@@ -20,6 +20,6 @@ namespace RTFClasses
 			next->prev = prev;
 		if (prev)
 			prev->next = next;
+		next = prev = (ListObject *)0;
 	}
-
 }

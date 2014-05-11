@@ -246,6 +246,7 @@ static Opa blsAsm[] = {	{AsmRTF65002::br, 0x33, 1, NULL, 2}, NULL };
 static Opa brkAsm[] = {	{Asm6502::out8, 0x00, 0, NULL, 6}, NULL };
 static Opa bhsAsm[] = {	{AsmRTF65002::br, 0xB0, 1, NULL, 2}, NULL };
 static Opa bloAsm[] = {	{AsmRTF65002::br, 0x90, 1, NULL, 2}, NULL };
+static Opa acbrAsm[] = { {AsmRTF65002::br, 0x53, 1, NULL, 2}, NULL };
 
 static Opa tsbAsm[] =
 {
@@ -333,6 +334,8 @@ static Opa mvnAsm[] = { {Asm6502::out8, 0x54, 0, 0, 6}, NULL };
 static Opa mvpAsm[] = { {Asm6502::out8, 0x44, 0, 0, 6}, NULL };
 static Opa stosAsm[] = { {Asm6502::out8, 0x64, 0, 0, 5}, NULL };
 static Opa cmpsAsm[] = { {AsmRTF65002::out16, 0x4442, 0, 0, 6}, NULL };
+static Opa icoffAsm[] = { {AsmRTF65002::out16, 0x0842, 0, 0, 2}, NULL };
+static Opa iconAsm[] = { {AsmRTF65002::out16, 0x2842, 0, 0, 2}, NULL };
 
 
 static Opa nopAsm[] = { {Asm6502::out8, 0xEA, 0, 0 ,2}, NULL };
@@ -868,8 +871,10 @@ static Opa pushAsm[] =
 	NULL
 };
 
+
 static Mne opsRTF65002[] =
 {
+	{"acbr", acbrAsm, 1},
 	{"add", addAsm, 3 },
 	{"and", andAsm, 3 },
 	{"asl", aslAsm, 1 },
@@ -923,6 +928,8 @@ static Mne opsRTF65002[] =
 
 	{"hoff", hoffAsm, 0 },
 
+	{"icoff", icoffAsm, 0},
+	{"icon", iconAsm, 0},
 	{"ina", inaAsm, 0 },
 	{"inc", incAsm, 1 },
 	{"int", intAsm, 1 },

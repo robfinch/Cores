@@ -162,9 +162,11 @@ namespace RTFClasses
 		}
 	}
 
+	// Initialization for each pass of the assembler.
 
 	void Assembler::initializeForPass()
 	{
+		int ii;
 		errorsDuringPass = 0;
 		StartAddress = 0;
 		fStartDefined = false;
@@ -190,7 +192,81 @@ namespace RTFClasses
 		CycleCount = 0;
 		checksum = 0;
 		bGlobalEquates = false;
+		for (ii = 0; ii < nSearchList; ii++)
+			SearchList[ii] = "";
+		nSearchList = 0;
 		fprintf(fpErr, "\r\nPass %d\r\n",pass);
+	}
+
+	// Go through the list of files that were appended in order resolve externals
+	// during the first pass.
+
+	void Assembler::processAppendFiles()
+	{
+		String *fls;
+		String *nms;
+		int ii,jj;
+	
+		jj = appendFiles.count('\n');
+		if (jj) {
+			fls = appendFiles.split('\n');
+			for (ii = 0; ii < jj; ii++) {
+				nms = fls[ii].split('|');
+				processFile(nms[0].buf(),nms[1]);
+				delete[] nms;
+			}
+			delete[] fls;
+		}
+	}
+
+	// Process the symbol table for external declarations and resolve them by
+	// searching the specified search files. Record a list of what files were
+	// searched and what symbols were found for processing during subsequent
+	// passes.
+
+	void Assembler::ProcessUndefs()
+	{
+		int ii,jj;
+		int rty;
+		Symbol **symlist;
+		int undef,undef1;
+		int no;
+		String str;
+
+		rty = 0;
+		do {
+			// IF there are undefined symbols, then search the search file list
+			// for the symbols.
+			undef = gSymbolTable->getExternCount() + gSymbolTable->getUndefinedCount();
+			//gSymbolTable->print(stdout, 1); getchar();
+			if (undef > 0) {
+				symlist = (Symbol **)gSymbolTable->getLinearList();
+				no = gSymbolTable->countObjects();
+				for (ii = 0; ii < nSearchList; ii++) {
+					// Number of objects in table will change when processFile() is called.
+					// We want the old count.
+					for (jj = 0; jj < no; jj++) {
+						if (symlist[jj]) {
+							if (symlist[jj]->isExtern()==true || symlist[jj]->isDefined()==false) {
+								appendText = "";
+								processFile(SearchList[ii].buf(), symlist[jj]->getName());
+								if (appendText != "") {
+									str = "";
+									str = str + SearchList[ii].buf() + "|" + symlist[jj]->getName() + "\n";
+									if (appendFiles.find(str,0) < 0)
+										appendFiles.add(str);
+								}
+							}
+						}
+					}
+				}
+				delete[] symlist;
+			}
+			undef1 = gSymbolTable->getExternCount() + gSymbolTable->getUndefinedCount();
+			rty++;
+		}
+		while (undef1 > 0 && rty < 20);
+		printf ("append files:%s\r\n", appendFiles.buf());
 	}
 
 	int Assembler::main(int argc, _TCHAR **argv, _TCHAR **envp)
@@ -272,6 +348,7 @@ namespace RTFClasses
 
 			macroTbl = new HashTable(200);
 			//   StructTbl = new CStructTbl(100);
+			appendFiles = "";
 
 			// set up input/working buffers
 	//		ibuf->set(inbuf, sizeof(inbuf));        // input buffer which can contain macro expansion
@@ -359,7 +436,6 @@ namespace RTFClasses
 			bOutOfPhase = 0;
 			bGen = false;
 			errorsDuringPass = 0;
-
 //			for(pass = 1; (pass <= 20 || bOutOfPhase) && errorsDuringPass==0; pass++) {
 			for(pass = 1; pass <= 20 && (bOutOfPhase||pass<5); pass++) {
 				initializeForPass();
@@ -371,12 +447,17 @@ namespace RTFClasses
 				processFile(sfname);
 	//			if (bOutOfPhase==0)
 	//				break;
+				if (pass==1)
+					ProcessUndefs();
+				else
+					processAppendFiles();
 			}
 			// Output generation pass
 			bOutOfPhase = 0;
 			bGen = true;
 			initializeForPass();
 			processFile(sfname);
+			processAppendFiles();
 
 			// Flush object buffer.
 			if (bObjOut) {
@@ -420,13 +501,14 @@ namespace RTFClasses
 
 				// Print local symbol tables
 				fprintf(fpSym, "\n\nLocal symbols:\n");
-				for (ii = 0; ii < FileNum; ii++)
+				for (ii = 0; ii < FileNum; ii++) {
 					if (File[ii].lst) {
-					fprintf(fpSym, "File:%s\n", File[ii].name);
-					printf("File:%s\n", File[ii].name);
-					File[ii].lst->print(fpSym, 1);
-					fprintf(fpSym, "\n\n");
+						fprintf(fpSym, "File:%s\n", File[ii].name.buf());
+						printf("File:%s\n", File[ii].name.buf());
+						File[ii].lst->print(fpSym, 1);
+						fprintf(fpSym, "\n\n");
 					}
+				}
 
 				macroTbl->print(fpSym, 0);
 				fclose(fpSym);
@@ -481,8 +563,16 @@ namespace RTFClasses
 		----------------------------------------------------------- */
 		p = NULL;
 		tdef.setName(lab.buf());
-		if (oclass == PUB || FileLevel == 0)
+		if (lab=="loadBootFile7")
+			printf("lbf7\r\n");
+		if (oclass == PUB || FileLevel == 0) {
 			p = gSymbolTable->find(&tdef);
+			if (p==NULL) {
+				if (localSymTbl) {
+					p = localSymTbl->find(&tdef);
+				}
+			}
+		}
 		else
 			if (localSymTbl)
 				p = localSymTbl->find(&tdef);
@@ -490,7 +580,7 @@ namespace RTFClasses
 		if (pass == 1)
 		{
 			// Check if label has been defined already.
-			if(p != NULL && p->isDefined() == 1) {
+			if(p != NULL && p->isDefined()) {
 				ForceErr = 1;
 				Err(E_DEFINED, lab.buf());
 				ForceErr = 0;
@@ -826,6 +916,13 @@ namespace RTFClasses
 			include();
 			return true;
 		}
+		if (p=="search" || p==".search") {
+			AddToSearchList();
+			return true;
+		}
+		if (p=="endpublic") {
+			return true;
+		}
 		if (p=="org" || p==".org") {
 			org();
 			return true;
@@ -959,6 +1056,8 @@ namespace RTFClasses
 				break;
 
 			// Check for end of line
+			if (ibuf->peekCh() == '\r')
+				ibuf->nextCh();
 			if (ibuf->peekCh() == '\n') {
 				ibuf->nextCh();
 				break;
@@ -1110,12 +1209,13 @@ namespace RTFClasses
 			Assembles a file.
 	--------------------------------------------------------------- */
 
-	void Assembler::processFile(char *fname)
+	void Assembler::processFile(char *fname, String publicName)
 	{
 		int nargs = 0;
 		time_t tim;
 	//	char *p1;
 		int p1;
+		String str;
 
 		lineno = 0;
 
@@ -1137,14 +1237,19 @@ namespace RTFClasses
 					throw Err(E_OPEN, fname);
 					return;
 				}
+				if (publicName=="*")
+					;
+				else {
+					str = File[FileNum].buf->ExtractPublicSymbol(publicName);
+				}
 			if (pass < 2) {
 
-			if (FileLevel > 0)	// was == 1
+			if (FileLevel > 0)
 				File[FileNum].lst = new SymbolTable(200);
 			else
 				File[FileNum].lst = NULL;
 		}
-		if (FileLevel > 0)	// was == 1
+		if (FileLevel > 0)
 			localSymTbl = File[FileNum].lst;
 
 		// echo filename
@@ -1165,14 +1270,18 @@ namespace RTFClasses
 			}
 		}
 
-		ibuf = File[FileNum].getBuf();
+		if (publicName=="*")
+			ibuf =File[FileNum].getBuf();
+		else {
+			ibuf->copy(str);
+			appendText += str;
+		}
 		getCpu()->getOp()->setInput(ibuf);
 		ibuf->rewind();
 		// Loop processing lines from file.
 		while(1)
 		{
-//			p1 = ibuf->getPtr();		// save off start of line
-			p1 = ibuf->ndx();
+			p1 = ibuf->ndx();		// save off start of line
 			if (ibuf->peekCh() == '\0') {
 				break;
 			}
@@ -1189,20 +1298,38 @@ namespace RTFClasses
 				Err(E_INV);
 			}
 			// Only output on second pass
-			if (isGenerationPass() && fListing) {
-//				if (col < SRC_COL)  // && col > 1)
-				{
-	//				fprintf(fpList, "%*s", SRC_COL-col, ""); // Tab out listing area
-					OutListLine();
-				}
-			}
+			if (isGenerationPass() && fListing)
+				OutListLine();
 		}
 		ibuf->rewind();
+		makeUnresolvedSymbolsGlobal(File[CurFileNum].lst);
 
 		if (isGenerationPass() && fListing)
 			fputc('\f', fpList); // form feed
 	}
 
+
+	// First remove the symbol from the local symbol table.
+	// Then add it to the global symbol table.
+
+	void Assembler::makeUnresolvedSymbolsGlobal(SymbolTable *tbl)
+	{
+		Symbol **p;
+		int ii,no;
+
+		if (tbl) {
+			p = (Symbol **)tbl->getLinearList();
+			no = tbl->numObjects;
+			for (ii = 0; ii < no; ii++) {
+				if (p[ii]) {
+					if (!p[ii]->isDefined()) {
+						tbl->remove(p[ii]);
+						gSymbolTable->insert(p[ii]);
+					}
+				}
+			}
+		}
+	}
 
 	/* ---------------------------------------------------------------
    		Description :
@@ -1232,6 +1359,8 @@ namespace RTFClasses
 		ic1 = InComment;
 		ic2 = InComment2;
 		startndx = ibuf->ndx();
+		memset(plist, 0, sizeof(plist));
+		//printf("stndx:%.60s\r\n", &ibuf->buf()[startndx]);
 		// iq should be 0 coming in since we SearchAndSub at start of line processing.
 		iq = 0;
 		while (ibuf->peekCh()) {
@@ -1265,7 +1394,7 @@ namespace RTFClasses
 			if ((ibuf->peekCh() == '/' && ibuf->peekCh(1) == '/') || ibuf->peekCh() == ';') {
 				while(1) {
 					ch = ibuf->nextCh();
-					if (ch < 1 || ch == '\n')
+					if (ch ==0 || ch == '\n')
 						goto EndOfLoop2;
 				}
 			}
@@ -1308,7 +1437,7 @@ namespace RTFClasses
 			sptr1 = ibuf->getPtr();
 			idlen = ibuf->getIdentifier(&sptr, &eptr); // look for an identifier
 			if (idlen) {
-				indx = sptr1-ibuf->getBuf();
+				indx = sptr1-ibuf->buf();
 				if ((strncmp(sptr, "comment", 7)==0) && !IsIdentChar(sptr[7]))
 				{
 					ic1++;
@@ -1346,7 +1475,7 @@ namespace RTFClasses
 						slen = ibuf->getPtr() - sptr1;
 						// tomove = number of characters to move
 						//        = buffer size - current pointer position
-						tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->getBuf());
+						tomove = ibuf->getSize() - (ibuf->getPtr() - ibuf->buf());
 						// sptr = where to begin substitution
 						//printf("sptr:%.*s|,slen=%d,tomove=%d\n", slen, sptr1,slen,tomove);
 						//printf("mp:%s|\r\n", mp->body.buf());
@@ -1361,6 +1490,9 @@ namespace RTFClasses
 	EndOfLoop2:
 		// restore pointer
 		ibuf->moveTo(startndx);
+		for (na = 0; na < MAX_MACRO_PARMS; na++)
+			if (plist[na])
+				delete plist[na];
 	}
 
 

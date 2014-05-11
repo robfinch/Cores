@@ -9,7 +9,7 @@ namespace RTFClasses
 		int ii;
 
 		for (ii = 0; ii < nops; ii++)
-			buf->getBuf()[op[ii].nullpos] = op[ii].nullch;
+			buf->buf()[op[ii].nullpos] = op[ii].nullch;
 	}
 
 
@@ -19,7 +19,7 @@ namespace RTFClasses
 		int ii;
 
 		for (ii = 0; ii < nops; ii++)
-			buf->getBuf()[op[ii].nullpos] = '\0';
+			buf->buf()[op[ii].nullpos] = '\0';
 	}
 }
 

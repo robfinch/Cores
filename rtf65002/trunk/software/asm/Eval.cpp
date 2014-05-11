@@ -9,6 +9,7 @@
 
 
 /* ===============================================================
+	(C) 2014 Robert Finch
 	(C) 2000 Bird Computer
 	All rights reserved
 
@@ -509,6 +510,8 @@ void AsmBuf::factor(Value *val)
 		 else
 			 nm = sptr;
          ts.setName(nm.buf());
+		 if (nm=="loadBootFile7")
+			 printf("lbf7\r\n");
          if (theAssembler.getLocalSymTbl())
             pts = theAssembler.getLocalSymTbl()->find(&ts);
          if (pts == NULL)
@@ -517,16 +520,37 @@ void AsmBuf::factor(Value *val)
 			 if (pts == NULL) {
                Err(E_NOTDEFINED, nm.buf());
 			 }
-			else if (pts->isDefined() == 0) {
+			else if (pts->isDefined() == false) {
                Err(E_NOTDEFINED, nm.buf());
 			}
          }
+		 // The symbol is unknown, so define it locally.
+		 else {
+			 if (pts==NULL) {
+				if (theAssembler.getLocalSymTbl() && theAssembler.getFileLevel() > 0) {
+					Symbol *ns = new Symbol;
+					ns->setName(ts.getName().buf());
+					ns->setDefined(false);
+					ns->setLine(theAssembler.getLineno());
+					ns->setFile(theAssembler.getCurFilenum());
+					theAssembler.getLocalSymTbl()->insert(ns);
+				}
+				else {
+					Symbol *ns = new Symbol;
+					ns->setName(ts.getName().buf());
+					ns->setDefined(false);
+					ns->setLine(theAssembler.getLineno());
+					ns->setFile(theAssembler.getCurFilenum());
+					theAssembler.getGlobalSymTbl()->insert(ns);
+				}
+			 }
+		 }
          value = (pts) ? pts->getValue() : 0;
 //		 if (value ==0)
 //			 printf("name:%s\r\n", sptr);
          sz = (pts) ? (char)pts->getSize() : 'W';
 		 val->fLabel = (pts) ? pts->isLabel() : false;
-		 if (pts == NULL || pts->isDefined() == 0) {
+		 if (pts == NULL || pts->isDefined() == false) {
 			val->fForwardRef = true;
 			val->bDefined = true;
 		 }

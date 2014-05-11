@@ -269,7 +269,7 @@ namespace RTFClasses
 //                                        fputc(' ', fpList);
                             OutListLine();
                             //*sol = '\0';   // to prevent duplicates
-							ibuf->getBuf()[sol] = '\0';
+							ibuf->buf()[sol] = '\0';
 							emit8(byte);	// try again
 							return;
                         }
