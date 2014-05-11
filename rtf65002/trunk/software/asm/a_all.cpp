@@ -690,7 +690,6 @@ int Assembler::equ(char *iid)
 		strncpy(buf, ((Operands6502 *)getCpu()->getOp())->op[0].buf(), sizeof(buf)-1);
 		buf[sizeof(buf)-1] = '\0';
 
-//		gOperand[0] = "";
 		// Trim quotes from filename
 		if (buf[0]=='"' || buf[0]=='\'')
 			memmove(buf, &buf[1], strlen(buf));
@@ -711,7 +710,7 @@ int Assembler::equ(char *iid)
 			//ptr++;
 			//ibuf->clear();        // Start with fresh buffer for new file.
 			FileLevel++;
-			processFile(buf);
+			processFile(buf, "*");
 			FileLevel--;
 			if (FileLevel == 0)
 				localSymTbl = NULL;
@@ -720,6 +719,7 @@ int Assembler::equ(char *iid)
 			ibuf->copy(tmp,strlen(tmp));
 			//strcpy(ibuf->buf(), tmp);
 			free(tmp);
+			//ibuf=File[fnum].getBuf();
 			ibuf->setptr(&ibuf->buf()[ndx]);
 			//getCpu()->getOp()->setInput(ibuf);
 			lineno = tmplineno;

@@ -510,8 +510,6 @@ void AsmBuf::factor(Value *val)
 		 else
 			 nm = sptr;
          ts.setName(nm.buf());
-		 if (nm=="loadBootFile7")
-			 printf("lbf7\r\n");
          if (theAssembler.getLocalSymTbl())
             pts = theAssembler.getLocalSymTbl()->find(&ts);
          if (pts == NULL)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <setjmp.h>
+#include "MyString.h"
 
 #define E_PAREN        2001
 #define E_DIV          2002      // division by zero
@@ -116,7 +117,9 @@ namespace RTFClasses
 {
 	class Err
 	{
+	public:
 		int num;
+		String msg;
 	public:
 		Err(int num);
 		Err(int num, char *s);

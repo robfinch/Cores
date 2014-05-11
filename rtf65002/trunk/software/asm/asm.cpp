@@ -1,4 +1,5 @@
 /* ===============================================================
+	(C) 2014  Robert Finch
 	(C) 2006  Robert Finch
 	All rights reserved
 =============================================================== */
@@ -45,8 +46,8 @@ namespace RTFClasses
 	Debug debug(0,"");
 	Assembler theAssembler;
 
-	char *Assembler::verstr = "Finitron 65002 assembler   version 1.1   %.24s     Page %d\r\n";
-	char *Assembler::verstr2 = "asm V1.1  (c) 2013,2014 Finitron - 65002 cross assembler\r\n";
+	char *Assembler::verstr = "Finitron 65002 assembler   version 1.2   %.24s     Page %d\r\n";
+	char *Assembler::verstr2 = "asm V1.2  (c) 2013,2014 Finitron - 65002 cross assembler\r\n";
 
 	Cpu *getCpu()
 	{
@@ -212,6 +213,7 @@ namespace RTFClasses
 			fls = appendFiles.split('\n');
 			for (ii = 0; ii < jj; ii++) {
 				nms = fls[ii].split('|');
+				//printf("processing:%s::%s\r\n", nms[0].buf(), nms[1].buf());
 				processFile(nms[0].buf(),nms[1]);
 				delete[] nms;
 			}
@@ -249,8 +251,18 @@ namespace RTFClasses
 						if (symlist[jj]) {
 							if (symlist[jj]->isExtern()==true || symlist[jj]->isDefined()==false) {
 								appendText = "";
-								processFile(SearchList[ii].buf(), symlist[jj]->getName());
-								if (appendText != "") {
+								// Build a name-string containing the file name, and check against known
+								// included snippets. We don't want to process the same snippet more
+								// than once.
+								str = "";
+								str = str + SearchList[ii].buf() + "|" + symlist[jj]->getName() + "\n";
+								if (appendFiles.find(str,0) < 0)
+									processFile(SearchList[ii].buf(), symlist[jj]->getName());
+
+								// Record which file snippets were successfully included. We need these
+								// same files for each pass, but we don't want to include them more 
+								// than once.
+								if (appendText != "") {	// something was found in the file
 									str = "";
 									str = str + SearchList[ii].buf() + "|" + symlist[jj]->getName() + "\n";
 									if (appendFiles.find(str,0) < 0)
@@ -266,7 +278,7 @@ namespace RTFClasses
 			rty++;
 		}
 		while (undef1 > 0 && rty < 20);
-		printf ("append files:%s\r\n", appendFiles.buf());
+		//printf ("append files:%s\r\n", appendFiles.buf());
 	}
 
 	int Assembler::main(int argc, _TCHAR **argv, _TCHAR **envp)
@@ -523,11 +535,13 @@ namespace RTFClasses
 			delete macroTbl;
 			delete gSymbolTable;
 			delete extRefTbl;
+			// Garbage collect the strings.
+			String::destroyAllDesc();
 			return FALSE;
 		}
 		catch (Err e)
 		{
-			printf("Caught error:\r\n");
+			printf("Caught error: %s\r\n", e.msg.buf());
 			nRetCode = 0;
 		}
 		return nRetCode;
@@ -563,8 +577,6 @@ namespace RTFClasses
 		----------------------------------------------------------- */
 		p = NULL;
 		tdef.setName(lab.buf());
-		if (lab=="loadBootFile7")
-			printf("lbf7\r\n");
 		if (oclass == PUB || FileLevel == 0) {
 			p = gSymbolTable->find(&tdef);
 			if (p==NULL) {
@@ -1214,43 +1226,55 @@ namespace RTFClasses
 		int nargs = 0;
 		time_t tim;
 	//	char *p1;
-		int p1;
+		int p1, ii;
+		bool needLoad = false;
 		String str;
 
 		lineno = 0;
 
+		// search for the file in memory
+		//for (ii = 0; ii <= FileNum; ii++) {
+		//	if (File[ii].name==fname) {
+		//		CurFileNum = ii;
+		//		goto j1;
+		//	}
+		//}
+
 		// record file in table
+		needLoad = true;
 		FileNum++;
 		CurFileNum = FileNum;
 		if (FileNum >= 255) {
 			Err(E_FILES);
 			return;
 		}
-		File[FileNum].errors = 0;
-		File[FileNum].warnings = 0;
-		File[FileNum].LastLine = 0;
-		File[FileNum].bGlobalEquates = false;
-				File[FileNum].name = fname;
-				if (File[FileNum].load(fname)==0)
-				{
-					ForceErr = true;
-					throw Err(E_OPEN, fname);
-					return;
-				}
-				if (publicName=="*")
-					;
-				else {
-					str = File[FileNum].buf->ExtractPublicSymbol(publicName);
-				}
-			if (pass < 2) {
-
+j1:
+		File[CurFileNum].errors = 0;
+		File[CurFileNum].warnings = 0;
+		File[CurFileNum].LastLine = 0;
+		File[CurFileNum].bGlobalEquates = false;
+		File[CurFileNum].name = fname;
+		if (needLoad) {
+			if (File[CurFileNum].load(fname)==0)
+			{
+				ForceErr = true;
+				throw Err(E_OPEN, fname);
+				return;
+			}
+		}
+		if (publicName=="*")
+			;
+		else {
+			str = File[CurFileNum].buf->ExtractPublicSymbol(publicName);
+		}
+		if (pass < 2) {
 			if (FileLevel > 0)
-				File[FileNum].lst = new SymbolTable(200);
+				File[CurFileNum].lst = new SymbolTable(200);
 			else
-				File[FileNum].lst = NULL;
+				File[CurFileNum].lst = NULL;
 		}
 		if (FileLevel > 0)
-			localSymTbl = File[FileNum].lst;
+			localSymTbl = File[CurFileNum].lst;
 
 		// echo filename
 		fprintf(fpErr, "File: %s\r\n", fname);
@@ -1271,7 +1295,7 @@ namespace RTFClasses
 		}
 
 		if (publicName=="*")
-			ibuf =File[FileNum].getBuf();
+			ibuf =File[CurFileNum].getBuf();
 		else {
 			ibuf->copy(str);
 			appendText += str;

@@ -1,22 +1,26 @@
 #pragma once
 
 #include <string.h>
+#include "ListObject.h"
 #include "HashVal.h"
 
 namespace RTFClasses
 {
 	// String descriptor class.
 	// Contains all the attributes and information needed to manage the string.
-
-	class StrDesc
+	class String;
+	class StrDesc : public ListObject
 	{
+		static StrDesc *first;
+		String *m_str;	// owning string
 		int m_bufsz;	// size of the buffer used to store the string
 		int m_len;		// the length of the string
 		char *m_buf;	// pointer to storgage buffer
 
-		StrDesc();
-		StrDesc(int);
+		StrDesc(String *);
+		StrDesc(String *,int);
 		~StrDesc();
+		static void destroyAll();
 		friend class String;
 	};
 
@@ -39,6 +43,7 @@ namespace RTFClasses
 		String(char *, int);
 		String(String &);
 		~String();
+		static void destroyAllDesc();
 		char *buf() { return desc->m_buf; };
 		char buf(int) const;             // return character at buffer position
 		int bufsz() const { return desc->m_bufsz; };
@@ -99,6 +104,7 @@ namespace RTFClasses
 		String operator+=(int);
 		String operator+(int);
 		char operator[](int n) { if (n >= len()) throw 1; return buf()[n]; };
+		friend class StrDesc;
 	};
 
 	String &str(int n, char *fmt);

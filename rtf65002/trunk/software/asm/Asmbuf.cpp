@@ -352,10 +352,16 @@ namespace RTFClasses
 	{
 		String str;
 		int st,nd,nd1;
-
-		st =find(String("public ") + symName);
+		st = 0;
+j1:
+		st =find(String("public ") + symName, st);
 		if (st < 0)
 			return String("");
+		// Make sure the name matches exactly, and is not a substring.
+		if (IsIdentChar(buf()[st+7+symName.len()])) {
+			st += 7+symName.len();
+			goto j1;
+		}
 		nd = find(String("endpublic"),st);
 		if (nd < 0)
 			return String("");

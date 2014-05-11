@@ -167,6 +167,7 @@ char errMsgBuf[128];
 			else
 				theAssembler.incWarnings();
 		}
+		msg = errMsgBuf;
 	}
 
 
@@ -192,6 +193,7 @@ char errMsgBuf[128];
 			else
 				theAssembler.incWarnings();
 		}
+		msg = errMsgBuf;
 	}
 
 
@@ -217,6 +219,7 @@ char errMsgBuf[128];
 			else
 				theAssembler.incWarnings();
 		}
+		msg = errMsgBuf;
 	}
 }
 

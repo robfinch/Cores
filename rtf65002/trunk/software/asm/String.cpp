@@ -18,6 +18,8 @@ inline static int strlen(char *str)
 namespace RTFClasses
 {
 
+	StrDesc *StrDesc::first = NULL;
+
 	inline void String::copy(char *a, char *b, int n) const
 	{
 		for (int i = 0; i < n; i++)
@@ -27,36 +29,58 @@ namespace RTFClasses
 
 	// Construct descriptor object
 	// Default buffer size
-	StrDesc::StrDesc()
+	StrDesc::StrDesc(String *str)
 	{
+		m_str = str;
 		m_buf = new char[32];
 		if (m_buf==NULL)
 			throw "Out of string descriptor space.";
 		m_buf[0] = '\0';
 		m_bufsz = 32;
 		m_len = 0;
+		insertBefore(first);
+		first = this;
 	};
 
 
 	// Construct descriptor object
-	StrDesc::StrDesc(int n)
+	StrDesc::StrDesc(String *str, int n)
 	{
 		n = ((n+32)&~31);
+		m_str = str;
 		m_buf = new char[n];
 		if (m_buf==NULL)
 			throw "Out of string descriptor space.";
 		m_buf[0] = '\0';
 		m_bufsz = n;
 		m_len = 0;
+		insertBefore(first);
+		first = this;
 	};
 
 
 	// Delete descriptor
 	StrDesc::~StrDesc()
 	{
-		if (m_buf) memset(m_buf, '\0', m_bufsz);
-		delete[] m_buf;
-		m_buf = NULL;
+		if (m_buf) {
+			memset(m_buf, '\0', m_bufsz);
+			delete[] m_buf;
+			m_buf = NULL;
+		}
+		if (!prev)
+			first = (StrDesc *)next;
+		removeFromList();
+	}
+
+	void StrDesc::destroyAll()
+	{
+		StrDesc *p, *q;
+		String *s;
+		while (p=(StrDesc *)first) {
+			s = ((StrDesc *)p)->m_str;
+			delete p;		// deleting p will reset first
+			s->desc = NULL;
+		}
 	}
 
 
@@ -67,12 +91,12 @@ namespace RTFClasses
 	void String::realloc(int n, bool preserve) {
 		if (!preserve) {
 			delete desc;
-			desc = new StrDesc(n+1);
+			desc = new StrDesc(this,n+1);
 		}
 		else {
 			int len = n < desc->m_len ? n : desc->m_len;
 			StrDesc *newbuf;
-			newbuf = new StrDesc(n+1);
+			newbuf = new StrDesc(this,n+1);
 			if (newbuf==NULL)
 				throw "Out of string descriptor space.";
 			copy(newbuf->m_buf, desc->m_buf, len+1);
@@ -83,18 +107,18 @@ namespace RTFClasses
 	};
 
 	String::String() {
-		desc = new StrDesc(32);
+		desc = new StrDesc(this,32);
 	};
 
 	String::String(int n) {
-		desc = new StrDesc(n);
+		desc = new StrDesc(this,n);
 	}
 
 
 	String::String(char *s)
 	{
 		int n = strlen(s);
-		desc = new StrDesc(n+1);
+		desc = new StrDesc(this,n+1);
 		copy(desc->m_buf, s, n+1);
 		desc->m_len = n;
 	};
@@ -102,7 +126,7 @@ namespace RTFClasses
 	String::String(char *s, int n)
 	{
 		int nn = strlen(s);
-		desc = new StrDesc((n < nn ? nn : n)+1);
+		desc = new StrDesc(this,(n < nn ? nn : n)+1);
 		copy(desc->m_buf, s, nn+1);
 		desc->m_len = nn;
 	};
@@ -110,7 +134,7 @@ namespace RTFClasses
 	String::String(String &a)
 	{
 		int n = a.len();
-		desc = new StrDesc(n+1);
+		desc = new StrDesc(this,n+1);
 		copy(desc->m_buf, a.buf(), n);
 		desc->m_len = n;
 		desc->m_buf[n] = '\0';
@@ -118,8 +142,14 @@ namespace RTFClasses
 
 
 	String::~String() {
-		delete desc;
+		if (desc)
+			delete desc;
+		desc = NULL;
 	};
+
+	void String::destroyAllDesc() {
+		StrDesc::destroyAll();
+	}
 
 	void String::copy(char *str, int n)
 	{
