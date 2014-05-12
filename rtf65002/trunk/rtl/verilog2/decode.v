@@ -185,9 +185,12 @@ task decode_tsk;
 		`ADD_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
 		`SUB_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
 		`MUL_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
+		`MULS_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
 		`DIV_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
 		`MOD_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
+		`DIVS_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
+		`MODS_IMM8:	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; state <= MULDIV1; end
 `endif
 		`OR_IMM8:	begin Rt <= ir[15:12]; end
 		`AND_IMM8: 	begin Rt <= ir[15:12]; b <= {{24{ir[23]}},ir[23:16]}; end
@@ -201,9 +204,12 @@ task decode_tsk;
 		`ADD_IMM16:	begin Rt <= ir[15:12]; a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; end
 		`SUB_IMM16:	begin Rt <= ir[15:12]; a <= rfoa; b <= {{16{ir[31]}},ir[31:16]}; end
 		`MUL_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
+		`MULS_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
 		`DIV_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
 		`MOD_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
+		`DIVS_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
+		`MODS_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; state <= MULDIV1; end
 `endif
 		`OR_IMM16:	begin Rt <= ir[15:12]; end
 		`AND_IMM16:	begin Rt <= ir[15:12]; b <= {{16{ir[31]}},ir[31:16]}; end
@@ -211,10 +217,13 @@ task decode_tsk;
 	
 		`ADD_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; end
 		`SUB_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; end
-		`MUL_IMM16:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
+		`MUL_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
+		`MULS_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
 `ifdef SUPPORT_DIVMOD
 		`DIV_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
 		`MOD_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
+		`DIVS_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
+		`MODS_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; state <= MULDIV1; end
 `endif
 		`OR_IMM32:	begin Rt <= ir[15:12]; end
 		`AND_IMM32:	begin Rt <= ir[15:12]; b <= ir[47:16]; end

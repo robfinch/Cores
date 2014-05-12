@@ -325,8 +325,9 @@ always @(posedge clk)
 		isSts <= ir9==`STS;
 		isJsrIndx <= ir9==`JSR_INDX;
 		isJsrInd <= ir9==`JSR_IND;
-		ldMuldiv <= ir9==`MUL_IMM8 || ir9==`MUL_IMM16 || ir9==`MUL_IMM32 ||
+		ldMuldiv <= ir9==`MUL_IMM8 || ir9==`MUL_IMM16 || ir9==`MUL_IMM32 || ir9==`MULS_IMM8 || ir9==`MULS_IMM16 || ir9==`MULS_IMM32 ||
 			ir9==`DIV_IMM8 || ir9==`MOD_IMM8 || ir9==`DIV_IMM16 || ir9==`DIV_IMM32 || ir9==`MOD_IMM16 || ir9==`MOD_IMM32 ||
+			ir9==`DIVS_IMM8 || ir9==`MODS_IMM8 || ir9==`DIVS_IMM16 || ir9==`DIVS_IMM32 || ir9==`MODS_IMM16 || ir9==`MODS_IMM32 ||
 			(ir9==`RR && (
 			ir[23:20]==`MUL_RR || ir[23:20]==`MULS_RR || ir[23:20]==`DIV_RR || ir[23:20]==`DIVS_RR || ir[23:20]==`MOD_RR || ir[23:20]==`MODS_RR)); 
 		isPusha <= ir9==`PUSHA;
@@ -786,9 +787,12 @@ MULDIV2:
 `endif
 			endcase
 		`MUL_IMM8,`MUL_IMM16,`MUL_IMM32:	res <= prod[31:0];
+		`MULS_IMM8,`MULS_IMM16,`MULS_IMM32:	res <= prod[31:0];
 `ifdef SUPPORT_DIVMOD
 		`DIV_IMM8,`DIV_IMM16,`DIV_IMM32:	res <= q;
 		`MOD_IMM8,`MOD_IMM16,`MOD_IMM32:	res <= r;
+		`DIVS_IMM8,`DIVS_IMM16,`DIVS_IMM32:	res <= q;
+		`MODS_IMM8,`MODS_IMM16,`MODS_IMM32:	res <= r;
 `endif
 		endcase
 	end
@@ -880,6 +884,7 @@ IBUF1:			fnStateName = "IBUF1      ";
 DCACHE1:		fnStateName = "DCACHE1    ";
 CMPS1:			fnStateName = "CMPS1      ";
 HALF_CALC:		fnStateName = "HALF_CALC  ";
+MVN816:			fnStateName = "MVN816     ";
 default:		fnStateName = "UNKNOWN    ";
 endcase
 endfunction

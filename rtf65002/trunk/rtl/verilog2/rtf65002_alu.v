@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -151,9 +151,12 @@ always @*
 	`ADD_IMM8:	res <= rfoa + {{24{ir[23]}},ir[23:16]} + {31'b0,df&cf};
 	`SUB_IMM8:	res <= rfoa - {{24{ir[23]}},ir[23:16]} - {31'b0,df&~cf&|ir[15:12]};
 	`MUL_IMM8:	res <= 33'd0;
+	`MULS_IMM8:	res <= 33'd0;
 `ifdef SUPPORT_DIVMOD
 	`DIV_IMM8:	res <= 33'd0;
 	`MOD_IMM8:	res <= 33'd0;
+	`DIVS_IMM8:	res <= 33'd0;
+	`MODS_IMM8:	res <= 33'd0;
 `endif
 	`OR_IMM8:	res <= rfoa | {{24{ir[23]}},ir[23:16]};
 	`AND_IMM8: 	res <= rfoa & {{24{ir[23]}},ir[23:16]};
@@ -164,9 +167,12 @@ always @*
 	`ADD_IMM16:	res <= rfoa + {{16{ir[31]}},ir[31:16]} + {31'b0,df&cf};
 	`SUB_IMM16:	res <= rfoa - {{16{ir[31]}},ir[31:16]} - {31'b0,df&~cf&|ir[15:12]};
 	`MUL_IMM16:	res <= 33'd0;
+	`MULS_IMM16:	res <= 33'd0;
 `ifdef SUPPORT_DIVMOD
 	`DIV_IMM16:	res <= 33'd0;
 	`MOD_IMM16:	res <= 33'd0;
+	`DIVS_IMM16:	res <= 33'd0;
+	`MODS_IMM16:	res <= 33'd0;
 `endif
 	`OR_IMM16:	res <= rfoa | {{16{ir[31]}},ir[31:16]};
 	`AND_IMM16:	
@@ -179,9 +185,12 @@ always @*
 	`ADD_IMM32:	res <= rfoa + ir[47:16] + {31'b0,df&cf};
 	`SUB_IMM32:	res <= rfoa - ir[47:16] - {31'b0,df&~cf&|ir[15:12]};
 	`MUL_IMM16:	res <= 33'd0;
+	`MULS_IMM16:	res <= 33'd0;
 `ifdef SUPPORT_DIVMOD
 	`DIV_IMM32:	res <= 33'd0;
 	`MOD_IMM32:	res <= 33'd0;
+	`DIVS_IMM32:	res <= 33'd0;
+	`MODS_IMM32:	res <= 33'd0;
 `endif
 	`OR_IMM32:	res <= rfoa | ir[47:16];
 	`AND_IMM32:	res <= rfoa & ir[47:16];

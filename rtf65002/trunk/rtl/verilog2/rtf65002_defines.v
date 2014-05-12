@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -398,6 +398,7 @@
 `define BLT			9'hB3
 `define BGT			9'hD3
 `define BLE			9'hF3
+`define ACBR		9'h53
 
 `define JML			9'h5C
 `define JMP			9'h4C
@@ -498,17 +499,28 @@
 // Page Two Opcodes
 `define PG2			9'h42
 
+`define ICOFF		9'h108
+`define ICON		9'h128
 `define TOFF		9'h118
 `define TON			9'h138
 `define MUL_IMM8	9'h105
 `define MUL_IMM16	9'h119
 `define MUL_IMM32	9'h109
+`define MULS_IMM8	9'h125
+`define MULS_IMM16	9'h139
+`define MULS_IMM32	9'h129
 `define DIV_IMM8	9'h145
 `define DIV_IMM16	9'h159
 `define DIV_IMM32	9'h149
+`define DIVS_IMM8	9'h165
+`define DIVS_IMM16	9'h179
+`define DIVS_IMM32	9'h169
 `define MOD_IMM8	9'h185
 `define MOD_IMM16	9'h199
 `define MOD_IMM32	9'h189
+`define MODS_IMM8	9'h1A5
+`define MODS_IMM16	9'h1B9
+`define MODS_IMM32	9'h1A9
 `define PUSHA		9'h10B
 `define POPA		9'h12B
 `define BMS_ZPX		9'h106
@@ -608,5 +620,6 @@
 `define STW_TMP70	6'd44
 `define STW_IA158	6'd45
 `define STW_IA70	6'd46
+`define STW_BRA		6'd47
 
 `endif
