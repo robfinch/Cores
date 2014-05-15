@@ -68,7 +68,7 @@ IFETCH:
 					end
 					else begin
 						pg2 <= pg2;
-						leaPreifx <= leaPrefix;
+						leaPrefix <= leaPrefix;
 						peaPrefix <= peaPrefix;
 						bytePrefix <= bytePrefix;
 						ubytePrefix <= ubytePrefix;
@@ -85,7 +85,7 @@ IFETCH:
 					end
 					else begin
 						pg2 <= pg2;
-						leaPreifx <= leaPrefix;
+						leaPrefix <= leaPrefix;
 						peaPrefix <= peaPrefix;
 						bytePrefix <= bytePrefix;
 						ubytePrefix <= ubytePrefix;
@@ -129,7 +129,7 @@ IFETCH:
 				end
 				else begin
 					pg2 <= pg2;
-					leaPreifx <= leaPrefix;
+					leaPrefix <= leaPrefix;
 					peaPrefix <= peaPrefix;
 					bytePrefix <= bytePrefix;
 					ubytePrefix <= ubytePrefix;
@@ -146,7 +146,7 @@ IFETCH:
 				end
 				else begin
 					pg2 <= pg2;
-					leaPreifx <= leaPrefix;
+					leaPrefix <= leaPrefix;
 					peaPrefix <= peaPrefix;
 					bytePrefix <= bytePrefix;
 					ubytePrefix <= ubytePrefix;
@@ -257,11 +257,11 @@ IFETCH:
 		`LDX_IMM32,`LDX_IMM16,`LDX_IMM8,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`PLX:
 			begin nf <= resn32; zf <= resz32; end
 		`TAY,`TXY,`DEY,`INY,
-		`LDY_IMM32,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`PLY:
+		`LDY_IMM32,`LDY_IMM8,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`PLY:
 			begin nf <= resn32; zf <= resz32; end
 		`CPX_IMM32,`CPX_ZPX,`CPX_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
 		`CPY_IMM32,`CPY_ZPX,`CPY_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-		`CMP_IMM8: begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`CMP_IMM32,`CMP_IMM16,`CMP_IMM8,`CMP_RR: begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
 		`TSA,`TYA,`TXA,`INA,`DEA,
 		`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`PLA:	begin nf <= resn32; zf <= resz32; end
 		`POP:	begin nf <= resn32; zf <= resz32; end

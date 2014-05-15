@@ -23,7 +23,7 @@
 //                                                                          
 // ============================================================================
 //
-`include "rtf65002_defines.v"
+`include "rtf65003_defines.v"
 
 module mult_div(rst, clk, ld, op, fn, a, b, p, q, r, done);
 parameter IDLE=3'd0;

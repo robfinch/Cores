@@ -120,6 +120,7 @@ reg wrrf;		// write register file
 reg [31:0] acc;
 reg [31:0] x;
 reg [31:0] y;
+reg [31:0] r4;
 reg [15:0] sp;
 reg [15:0] dpr;		// direct page register
 reg [7:0] dbr;		// data bank register
@@ -347,7 +348,7 @@ reg isIY;
 reg isIY24;
 reg isI24;
 
-rtf65002_pcinc upci1
+rtf65003_pcinc upci1
 (
 	.opcode(ir9),
 	.suppress_pcinc(suppress_pcinc),
@@ -611,7 +612,7 @@ wire [31:0] absx32_address 		= ir[55:24] + rfob;
 
 wire [31:0] dsp_address = m816 ? {abs8[31:24],8'h00,sp + ir[15:8]} : {abs8[31:16],8'h01,sp[7:0]+ir[15:8]};
 
-rtf65002_alu ualu1
+rtf65003_alu ualu1
 (
 	.pg2(pg2),
 	.ir(ir),
@@ -842,6 +843,7 @@ if (wrrf || state==IFETCH || state==LOAD_MAC3) begin
 	4'h1:	acc <= res[31:0];
 	4'h2:	x <= res[31:0];
 	4'h3:	y <= res[31:0];
+	4'h4:	r4 <= res[31:0];
 	default:	;
 	endcase
 end

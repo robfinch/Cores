@@ -66,7 +66,15 @@
 `define CHAR		9'h97
 `define UCHAR		9'hB7
 `define LEA			9'hC7
-`define PEA			9'hD7
+`define R			9'hD7
+`define SXB				4'h0
+`define SXC				4'h1
+`define ZXB				4'h2
+`define ZXC				4'h3
+`define RBO				4'h4
+`define NOT				4'h5
+`define COM				4'h6
+`define CLR				4'h7
 
 `define BRK			9'h00
 `define RTI			9'h40
@@ -194,6 +202,7 @@
 
 `define CMP_IMM8	9'hC5
 `define CMP_IMM32	9'hC9
+`define CMP_IMM16	9'hD9
 `define CMP_IMM		9'hC9
 `define CMP_ZP		9'hC5
 `define CMP_ZPX		9'hD5
@@ -209,6 +218,7 @@
 `define CMP_ALX		9'hDF
 `define CMP_DSP		9'hC3
 `define CMP_DSPIY	9'hD3
+`define CMP_RR		9'h86
 
 `define LDA_IMM8	9'hA5
 `define LDA_IMM16	9'hB9
@@ -289,11 +299,11 @@
 
 // LD is OR rt,r0,....
 
-`define ST_ZPX		9'h95
+`define ST_ZPX		9'h84
 `define ST_IX		9'h81
 `define ST_IY		9'h91
-`define ST_ABS		9'h8D
-`define ST_ABSX		9'h9D
+`define ST_ABS		9'h9C
+`define ST_ABSX		9'h9E
 `define ST_RIND		9'h92
 `define ST_DSP		9'h83
 
@@ -437,6 +447,8 @@
 `define COP			9'h02
 `define PLB			9'hAB
 `define PLD			9'h2B
+`define PSHR4		9'h0F
+`define POPR4		9'h2F
 
 `define LDX_IMM		9'hA2
 `define LDX_ZP		9'hA6
@@ -453,6 +465,7 @@
 `define LDY_ZP		9'hA4
 `define LDY_ZPX		9'hB4
 `define LDY_IMM32	9'hA0
+`define LDY_IMM8	9'hA1
 `define LDY_ABS		9'hAC
 `define LDY_ABSX	9'hBC
 
@@ -598,7 +611,7 @@
 `define STW_CALC	6'd12
 `define STW_OPC		6'd13
 `define STW_RES8	6'd14
-
+`define STW_R4		6'd15
 `define STW_ACC8	6'd16
 `define STW_X8		6'd17
 `define STW_Y8		6'd18

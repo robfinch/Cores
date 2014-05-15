@@ -23,7 +23,7 @@
 `include "rtf65003_defines.v"
 
 // This table being setup to set the pc increment. It should synthesize to a ROM.
-module rtf65002_pcinc(opcode,suppress_pcinc,inc);
+module rtf65003_pcinc(opcode,suppress_pcinc,inc);
 input [8:0] opcode;
 input [3:0] suppress_pcinc;
 output reg [3:0] inc;
@@ -49,18 +49,19 @@ if (suppress_pcinc==4'hF)
 	`NOP: inc <= 4'd1;
 	`BSR: inc <= 4'd3;
 	`RR: inc <= 4'd3;
-	`LD_RR:	inc <= 4'd2;
+	`LD_RR,`CMP_RR,`R:	inc <= 4'd2;
 	`ADD_IMM4,`SUB_IMM4,`AND_IMM4,`OR_IMM4,`EOR_IMM4,
 	`ADD_R,`SUB_R,`AND_R,`OR_R,`EOR_R:	inc <= 4'd2;
 	`ADD_IMM8,`SUB_IMM8,`AND_IMM8,`OR_IMM8,`EOR_IMM8,`ASL_IMM8,`LSR_IMM8:	inc <= 4'd3;
 	`MUL_IMM8,`DIV_IMM8,`MOD_IMM8: inc <= 4'd3;
-	`LDX_IMM8,`LDA_IMM8,`CMP_IMM8,`SUB_SP8: inc <= 4'd2;
+	`LDX_IMM8,`LDY_IMM8,`LDA_IMM8,`CMP_IMM8,`SUB_SP8: inc <= 4'd2;
 	`ADD_IMM16,`SUB_IMM16,`AND_IMM16,`OR_IMM16,`EOR_IMM16:	inc <= 4'd4;
 	`MUL_IMM16,`DIV_IMM16,`MOD_IMM16: inc <= 4'd4;
-	`LDX_IMM16,`LDA_IMM16,`SUB_SP16: inc <= 4'd3;
+	`LDX_IMM16,`LDA_IMM16,`CMP_IMM16,`SUB_SP16: inc <= 4'd3;
 	`ADD_IMM32,`SUB_IMM32,`AND_IMM32,`OR_IMM32,`EOR_IMM32:	inc <= 4'd6;
 	`MUL_IMM32,`DIV_IMM32,`MOD_IMM32: inc <= 4'd6;
-	`LDX_IMM32,`LDY_IMM32,`LDA_IMM32,`SUB_SP32,`CPX_IMM32,`CPY_IMM32: inc <= 4'd5;
+	`LDX_IMM32,`LDY_IMM32,`LDA_IMM32,`SUB_SP32,
+	`CMP_IMM32,`CPX_IMM32,`CPY_IMM32: inc <= 4'd5;
 	`ADD_ZPX,`SUB_ZPX,`AND_ZPX,`OR_ZPX,`EOR_ZPX,`LEA_ZPX: inc <= 4'd4;
 	`ADD_IX,`SUB_IX,`AND_IX,`OR_IX,`EOR_IX,`LEA_IX: inc <= 4'd4;
 	`ADD_IY,`SUB_IY,`AND_IY,`OR_IY,`EOR_IY,`LEA_IY: inc <= 4'd4;
@@ -71,23 +72,24 @@ if (suppress_pcinc==4'hF)
 	`ASL_ACC,`LSR_ACC,`ROR_ACC,`ROL_ACC: inc <= 4'd1;
 	`ASL_RR,`ROL_RR,`LSR_RR,`ROR_RR,`INC_RR,`DEC_RR: inc <= 4'd2;
 	`ST_RIND: inc <= 4'd2;
-	`LDX_ZPX,`LDY_ZPX,`ST_DSP,`STX_ZPX,`STY_ZPX,`CPX_ZPX,`CPY_ZPX,
+	`LDA_ZPX,`LDX_ZPX,`LDY_ZPX,`ST_DSP,
+	`STA_ZPX,`STX_ZPX,`STY_ZPX,`CPX_ZPX,`CPY_ZPX,
 	`BMS_ZPX,`BMC_ZPX,`BMF_ZPX,`BMT_ZPX,
 	`ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX,
 	`ADD_DSP,`SUB_DSP,`OR_DSP,`AND_DSP,`EOR_DSP: inc <= 4'd3;
 	`ORB_ZPX,`ST_ZPX,`STB_ZPX,`ADD_ZPX,`SUB_ZPX,`OR_ZPX,`AND_ZPX,`EOR_ZPX,
 	`ADD_IX,`SUB_IX,`OR_IX,`AND_IX,`EOR_IX,`ST_IX,
 	`ADD_IY,`SUB_IY,`OR_IY,`AND_IY,`EOR_IY,`ST_IY: inc <= 4'd4;
-	`LDX_ABS,`LDY_ABS,`STX_ABS,`STY_ABS,
+	`LDA_ABS,`LDX_ABS,`LDY_ABS,`STX_ABS,`STY_ABS,`STA_ABS,
 	`BMS_ABS,`BMC_ABS,`BMF_ABS,`BMT_ABS,
 	`ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS,`CPX_ABS,`CPY_ABS: inc <= 4'd5;
-	`ORB_ABS,`LDX_ABSY,`LDY_ABSX,`ST_ABS,`STB_ABS,
+	`ORB_ABS,`LDA_ABSX,`LDX_ABSY,`LDY_ABSX,`ST_ABS,`STA_ABSX,
 	`ADD_ABS,`SUB_ABS,`OR_ABS,`AND_ABS,`EOR_ABS,
 	`BMS_ABSX,`BMC_ABSX,`BMF_ABSX,`BMT_ABSX,
 	`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`SPL_ABSX: inc <= 4'd6;
-	`ORB_ABSX,`ST_ABSX,`STB_ABSX,
+	`ORB_ABSX,`ST_ABSX,
 	`ADD_ABSX,`SUB_ABSX,`OR_ABSX,`AND_ABSX,`EOR_ABSX: inc <= 4'd7;
-	`PHP,`PHA,`PHX,`PHY,`PLP,`PLA,`PLX,`PLY: inc <= 4'd1;
+	`PHP,`PHA,`PHX,`PHY,`PLP,`PLA,`PLX,`PLY,`PSHR4,`POPR4: inc <= 4'd1;
 	`PUSH,`POP: inc <= 4'd2;
 	`MVN,`MVP,`STS,`CMPS: inc <= 4'd1;
 	`PG2,`LEA,`PEA,`BYTE,`UBYTE,`CHAR,`UCHAR:	inc <= 4'd1;

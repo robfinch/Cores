@@ -30,6 +30,7 @@ STORE1:
 		`STW_ACC:	wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,acc);
 		`STW_X:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,x);
 		`STW_Y:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,y);
+		`STW_R4:	wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,r4);
 		`STW_PC:	wb_write(0,0,pc);
 		`STW_PC2:	wb_write(0,0,pc + 32'd2);
 		`STW_PCHWI:	wb_write(0,0,pc+{30'b0,~hwi,1'b0});
