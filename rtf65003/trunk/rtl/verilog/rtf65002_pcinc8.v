@@ -20,7 +20,7 @@
 //                                                                          
 // ============================================================================
 //
-`include "rtf65002_defines.v"
+`include "rtf65003_defines.v"
 
 module rtf65002_pcinc8(opcode,suppress_pcinc,inc,m16,xb16);
 input [7:0] opcode;

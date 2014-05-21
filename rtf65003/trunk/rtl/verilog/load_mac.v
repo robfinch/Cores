@@ -79,16 +79,9 @@ IY3:
 			store_what <= `STW_A;
 			state <= STORE1;
 		end
-		else if (leaPrefix) begin
+		else if (ir9==`LEA_IY) begin
 			res <= radr + y;
 			next_state(IFETCH);
-		end
-		else if (peaPrefix) begin
-			res <= radr + y;
-			wadr <= isp_dec;
-			isp <= isp_dec;
-			store_what <= `STW_CALC;
-			next_state(STORE1);
 		end
 		else begin
 			load_what <= `WORD_310;

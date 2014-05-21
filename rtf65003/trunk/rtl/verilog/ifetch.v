@@ -22,6 +22,7 @@
 //
 IFETCH:
 	begin
+		next_state(DECODE);
 		ic_whence <= IFETCH;
 		vect <= {vbr[31:11],`BRK_VECTNO,2'b00};
 		suppress_pcinc <= 4'hF;				// default: no suppression of increment
@@ -32,18 +33,16 @@ IFETCH:
 		isIY <= `FALSE;
 		isIY24 <= `FALSE;
 		store_what <= `STW_DEF;
-		leaPrefix <= `FALSE;
-		peaPrefix <= `FALSE;
 		bytePrefix <= `FALSE;
 		ubytePrefix <= `FALSE;
 		charPrefix <= `FALSE;
 		ucharPrefix <= `FALSE;
+		bmi <= 3'd4;
 		if (nmi_edge & gie & !isExec & !isAtni) begin
 			ir[7:0] <= `BRK;
 			nmi_edge <= 1'b0;
 			wai <= 1'b0;
 			hwi <= `TRUE;
-			next_state(DECODE);
 			vect <= `NMI_VECT;
 		end
 		else if ((irq_i|spi) & gie & !isExec & !isAtni) begin
@@ -52,45 +51,39 @@ IFETCH:
 				if (ttrig) begin
 					ir[7:0] <= `BRK;
 					vect <= {vbr[31:11],9'd490,2'b00};
-					next_state(DECODE);
 				end
 				else if (isExec) begin
 					ir <= exbuf;
 					exbuf <= 64'd0;
 					suppress_pcinc <= 4'h0;
-					next_state(DECODE);
 				end
 				else if (unCachedInsn) begin
 					if (bhit) begin
 						ir <= ibuf + exbuf;
 						exbuf <= 64'd0;
-						next_state(DECODE);
 					end
 					else begin
 						pg2 <= pg2;
-						leaPrefix <= leaPrefix;
-						peaPrefix <= peaPrefix;
 						bytePrefix <= bytePrefix;
 						ubytePrefix <= ubytePrefix;
 						charPrefix <= charPrefix;
 						ucharPrefix <= ucharPrefix;
-						state <= LOAD_IBUF1;
+						bmi <= bmi;
+						next_state(LOAD_IBUF1);
 					end
 				end
 				else begin
 					if (ihit) begin
 						ir <= insn + exbuf;
 						exbuf <= 64'd0;
-						next_state(DECODE);
 					end
 					else begin
 						pg2 <= pg2;
-						leaPrefix <= leaPrefix;
-						peaPrefix <= peaPrefix;
 						bytePrefix <= bytePrefix;
 						ubytePrefix <= ubytePrefix;
 						charPrefix <= charPrefix;
 						ucharPrefix <= ucharPrefix;
+						bmi <= bmi;
 						next_state(ICACHE1);
 					end
 				end
@@ -106,52 +99,45 @@ IFETCH:
 				else begin
 					vect <= {vbr[31:11],irq_vect,2'b00};
 				end
-				next_state(DECODE);
 			end
 		end
 		else if (!wai) begin
 			if (ttrig) begin
 				ir[7:0] <= `BRK;
 				vect <= {vbr[31:11],9'd490,2'b00};
-				next_state(DECODE);
 			end
 			else if (isExec) begin
 				ir <= exbuf;
 				exbuf <= 64'd0;
 				suppress_pcinc <= 4'h0;
-				next_state(DECODE);
 			end
 			else if (unCachedInsn) begin
 				if (bhit) begin
 					ir <= ibuf + exbuf;
 					exbuf <= 64'd0;
-					next_state(DECODE);
 				end
 				else begin
 					pg2 <= pg2;
-					leaPrefix <= leaPrefix;
-					peaPrefix <= peaPrefix;
 					bytePrefix <= bytePrefix;
 					ubytePrefix <= ubytePrefix;
 					charPrefix <= charPrefix;
 					ucharPrefix <= ucharPrefix;
-					state <= LOAD_IBUF1;
+					bmi <= bmi;
+					next_state(LOAD_IBUF1);
 				end
 			end
 			else begin
 				if (ihit) begin
 					ir <= insn + exbuf;
 					exbuf <= 64'd0;
-					next_state(DECODE);
 				end
 				else begin
 					pg2 <= pg2;
-					leaPrefix <= leaPrefix;
-					peaPrefix <= peaPrefix;
 					bytePrefix <= bytePrefix;
 					ubytePrefix <= ubytePrefix;
 					charPrefix <= charPrefix;
 					ucharPrefix <= ucharPrefix;
+					bmi <= bmi;
 					next_state(ICACHE1);
 				end
 			end
@@ -259,11 +245,12 @@ IFETCH:
 		`TAY,`TXY,`DEY,`INY,
 		`LDY_IMM32,`LDY_IMM8,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`PLY:
 			begin nf <= resn32; zf <= resz32; end
-		`CPX_IMM32,`CPX_ZPX,`CPX_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
-		`CPY_IMM32,`CPY_ZPX,`CPY_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`CPX_IMM32,`CPX_IMM8,`CPX_ZPX,`CPX_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
+		`CPY_IMM32,`CPY_IMM8,`CPY_ZPX,`CPY_ABS:	begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
 		`CMP_IMM32,`CMP_IMM16,`CMP_IMM8,`CMP_RR: begin cf <= ~resc32; nf <= resn32; zf <= resz32; end
 		`TSA,`TYA,`TXA,`INA,`DEA,
-		`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`PLA:	begin nf <= resn32; zf <= resz32; end
+		`LDA_IMM32,`LDA_IMM16,`LDA_IMM8,`LDA_ZPX,`LDA_ABS,`LDA_ABSX,`PLA:
+			begin nf <= resn32; zf <= resz32; end
 		`POP:	begin nf <= resn32; zf <= resz32; end
 		`TRB_ZPX,`TRB_ABS,`TSB_ZPX,`TSB_ABS:
 			begin zf <= resz32; end

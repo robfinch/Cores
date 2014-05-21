@@ -154,6 +154,7 @@ reg [31:0] opc;
 wire [3:0] pc_inc;
 reg [3:0] pc_inc2;
 wire [3:0] pc_inc8;
+reg [2:0] bmi;		// block move increment amount
 wire [31:0] pcp2 = pc + (32'd2 & suppress_pcinc);	// for branches
 wire [31:0] pcp4 = pc + (32'd4 & suppress_pcinc);	// for branches
 wire [31:0] pcp8 = pc + 32'd8;						// cache controller needs this
@@ -276,12 +277,12 @@ reg isBusErr;
 reg isBrk,isMove,isSts;
 reg isMove816;
 reg isRTI,isRTL,isRTS;
-reg isOrb,isStb;
 reg isRMW;
 reg isSub,isSub8;
 reg isJsrIndx,isJsrInd;
 reg ldMuldiv;
 reg isPusha,isPopa;
+reg isLeaIX,isStIX;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS || ir9==`CPX_IMM32 ||
 			 ir9==`CPY_ZPX || ir9==`CPY_ABS || ir9==`CPY_IMM32;
@@ -314,12 +315,12 @@ always @(posedge clk)
 		isSub8 <= ir9==`SBC_ZP || ir9==`SBC_ZPX || ir9==`SBC_IX || ir9==`SBC_IY || ir9==`SBC_I ||
 			 ir9==`SBC_ABS || ir9==`SBC_ABSX || ir9==`SBC_ABSY || ir9==`SBC_IMM;
 		isRMW <= em ? isRMW8 : isRMW32;
-		isOrb <= ir9==`ORB_ZPX || ir9==`ORB_IX || ir9==`ORB_IY || ir9==`ORB_ABS || ir9==`ORB_ABSX;
-		isStb <= ir9==`STB_ZPX || ir9==`STB_ABS || ir9==`STB_ABSX;
 		isRTI <= ir9==`RTI;
 		isRTL <= ir9==`RTL;
 		isRTS <= ir9==`RTS;
 		isBrk <= ir9==`BRK;
+		isLeaIX <= ir9==`LEA_IX;
+		isStIX <= ir9==`ST_IX;
 		isMove <= ir9==`MVP || ir9==`MVN;
 		isSts <= ir9==`STS;
 		isJsrIndx <= ir9==`JSR_INDX;
@@ -589,7 +590,7 @@ case(ir9)
 `BLS:	takb <= !cf | zf;
 `BGE:	takb <= (nf & vf)|(!nf & !vf);
 `BLT:	takb <= (nf & !vf)|(!nf & vf);
-`BGT:	takb <= (nf & vf & !zf) + (!nf & !vf & !zf);
+`BGT:	takb <= (nf & vf & !zf) | (!nf & !vf & !zf);
 `BLE:	takb <= zf | (nf & !vf)|(!nf & vf);
 default:	takb <= 1'b0;
 endcase
@@ -641,8 +642,7 @@ rtf65003_alu ualu1
 	.sp(sp),
 	.df(df),
 	.cf(cf),
-	.bytePrefix(bytePrefix|ubytePrefix),
-	.charPrefix(charPrefix|ucharPrefix),
+	.bmi(bmi),
 	.res(alu_out)
 );
 
@@ -727,7 +727,6 @@ if (rst_i) begin
 	history_ndx <= 6'd0;
 `endif
 	pg2 <= `FALSE;
-	leaPrefix <= `FALSE;
 	peaPrefix <= `FALSE;
 	bytePrefix <= `FALSE;
 	ubytePrefix <= `FALSE;

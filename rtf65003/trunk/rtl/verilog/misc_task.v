@@ -1,3 +1,25 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@opencores.org
+//       ||
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 task set_sp;
 begin
 	if (m816) begin
@@ -56,3 +78,26 @@ begin
 	state <= STORE1;
 end
 endtask
+
+
+// This task is called by load_tsk() to load data to the appropriate bus.
+
+task sized_load;
+input [7:0] dat8;
+input [15:0] dat16;
+input [31:0] dat;
+output [31:0] b;
+begin
+	if (ubytePrefix)
+		b <= dat8;
+	else if (bytePrefix)
+		b <= {{24{dat8[7]}},dat8};
+	else if (ucharPrefix)
+		b <= dat16;
+	else if (charPrefix)
+		b <= {{16{dat16[15]}},dat16};
+	else
+		b <= dat;
+end
+endtask
+

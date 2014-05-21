@@ -37,41 +37,43 @@ STORE1:
 		`STW_OPC:	wb_write(0,0,opc);
 		`STW_SR:	wb_write(0,0,sr);
 		`STW_RFA:	wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,rfoa);
-		`STW_RFA8:	wb_write(1,0,{4{rfoa[7:0]}});
+		`STW_RFA8:	wb_write(1,0,rfoa);
 		`STW_A:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,a);
 		`STW_B:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,b);
 		`STW_CALC:	wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,res[31:0]);
-		`STW_BRA:	wb_write(1,0,{4{8'h80}});	// store bra instruction
+`ifdef SUPPORT_ACBR
+		`STW_BRA:	wb_write(1,0,8'h80);	// store bra instruction
+`endif
 `ifdef SUPPORT_EM8
-		`STW_ACC8:	wb_write(1,0,{4{acc8}});
-		`STW_X8:	wb_write(1,0,{4{x8}});
-		`STW_Y8:	wb_write(1,0,{4{y8}});
-		`STW_Z8:	wb_write(1,0,{4{8'h00}});
-		`STW_PC3124:	wb_write(1,0,{4{pc[31:24]}});
-		`STW_PC2316:	wb_write(1,0,{4{pc[23:16]}});
-		`STW_PC158:		wb_write(1,0,{4{pc[15:8]}});
-		`STW_PC70:		wb_write(1,0,{4{pc[7:0]}});
-		`STW_SR70:		wb_write(1,0,{4{sr8}});
-		`STW_DEF8:		wb_write(1,0,{4{wdat[7:0]}});
+		`STW_ACC8:	wb_write(1,0,acc);
+		`STW_X8:	wb_write(1,0,x);
+		`STW_Y8:	wb_write(1,0,y);
+		`STW_Z8:	wb_write(1,0,8'h00);
+		`STW_PC3124:	wb_write(1,0,pc[31:24]);
+		`STW_PC2316:	wb_write(1,0,pc[23:16]);
+		`STW_PC158:		wb_write(1,0,pc[15:8]);
+		`STW_PC70:		wb_write(1,0,pc[7:0]);
+		`STW_SR70:		wb_write(1,0,sr8);
+		`STW_DEF8:		wb_write(1,0,wdat);
 `endif
 `ifdef SUPPORT_816
-		`STW_DEF70:		begin wb_write(1,0,{4{wdat[7:0]}}); lock_o <= 1'b1; end
-		`STW_DEF158:	wb_write(1,0,{4{wdat[15:8]}});
-		`STW_ACC70:		begin wb_write(1,0,{4{acc[7:0]}}); lock_o <= 1'b1; end
-		`STW_ACC158:	wb_write(1,0,{4{acc[15:8]}});
-		`STW_X70:		begin wb_write(1,0,{4{x[7:0]}}); lock_o <= 1'b1; end
-		`STW_X158:		wb_write(1,0,{4{x[15:8]}});
-		`STW_Y70:		begin wb_write(1,0,{4{y[7:0]}}); lock_o <= 1'b1; end
-		`STW_Y158:		wb_write(1,0,{4{y[15:8]}});
-		`STW_Z70:		begin wb_write(1,0,{4{8'h00}}); lock_o <= 1'b1; end
-		`STW_Z158:		wb_write(1,0,{4{8'h00}});
-		`STW_DBR:		wb_write(1,0,{4{dbr}});
-		`STW_DPR158:	begin wb_write(1,0,{4{dpr[15:8]}}); lock_o <= 1'b1; end
-		`STW_DPR70:		wb_write(1,0,{4{dpr[7:0]}});
-		`STW_TMP158:	begin wb_write(1,0,{4{tmp16[15:8]}}); lock_o <= 1'b1; end
-		`STW_TMP70:		wb_write(1,0,{4{tmp16[7:0]}});
-		`STW_IA158:		begin wb_write(1,0,{4{ia[15:8]}}); lock_o <= 1'b1; end
-		`STW_IA70:		wb_write(1,0,{4{ia[7:0]}});
+		`STW_DEF70:		begin wb_write(1,0,wdat); lock_o <= 1'b1; end
+		`STW_DEF158:	wb_write(1,0,wdat[15:8]);
+		`STW_ACC70:		begin wb_write(1,0,acc); lock_o <= 1'b1; end
+		`STW_ACC158:	wb_write(1,0,acc[15:8]);
+		`STW_X70:		begin wb_write(1,0,x); lock_o <= 1'b1; end
+		`STW_X158:		wb_write(1,0,x[15:8]);
+		`STW_Y70:		begin wb_write(1,0,y); lock_o <= 1'b1; end
+		`STW_Y158:		wb_write(1,0,y[15:8]);
+		`STW_Z70:		begin wb_write(1,0,8'h00); lock_o <= 1'b1; end
+		`STW_Z158:		wb_write(1,0,8'h00);
+		`STW_DBR:		wb_write(1,0,dbr);
+		`STW_DPR158:	begin wb_write(1,0,dpr[15:8]); lock_o <= 1'b1; end
+		`STW_DPR70:		wb_write(1,0,dpr);
+		`STW_TMP158:	begin wb_write(1,0,tmp16[15:8]); lock_o <= 1'b1; end
+		`STW_TMP70:		wb_write(1,0,tmp16);
+		`STW_IA158:		begin wb_write(1,0,ia[15:8]); lock_o <= 1'b1; end
+		`STW_IA70:		wb_write(1,0,ia);
 `endif
 		default:	wb_write(0,0,wdat);
 		endcase

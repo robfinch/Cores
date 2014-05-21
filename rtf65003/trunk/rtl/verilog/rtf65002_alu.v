@@ -20,7 +20,7 @@
 //                                                                          
 // ============================================================================
 //
-`include "rtf65002_defines.v"
+`include "rtf65003_defines.v"
 
 module rtf65002_alu(pg2, ir, acc, x, y, isp, rfoa, rfob, a, b, b8, Rt,
 	icacheOn, dcacheOn, write_allocate, prod, tick, lfsr, abs8, vbr, nmoi,

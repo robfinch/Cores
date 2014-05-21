@@ -24,7 +24,7 @@
 
 module rtf65003_alu(pg2, ir, acc, x, y, isp, rfoa, rfob, a, b, b8, Rt,
 	icacheOn, dcacheOn, write_allocate, prod, tick, lfsr, abs8, vbr, nmoi,
-	derr_address, history_buf, spage, sp, df, cf, bytePrefix, charPrefix,
+	derr_address, history_buf, spage, sp, df, cf, bmi,
 	res);
 input pg2;
 input [63:0] ir;
@@ -53,8 +53,7 @@ input [31:0] spage;
 input [15:0] sp;
 input df;
 input cf;
-input bytePrefix;
-input charPrefix;
+input [2:0] bmi;
 output reg [32:0] res;
 
 `ifdef SUPPORT_SHIFT
@@ -70,21 +69,9 @@ always @*
 	`DEX:	res <= x - 32'd1;
 	`INX:	res <= x + 32'd1;
 	`DEY:	res <= y - 32'd1;
-	`MVP:	
-			if (bytePrefix)
-				res <= y - 32'd1;
-			else if (charPrefix)
-				res <= y - 32'd2;
-			else
-				res <= y - 32'd4;
+	`MVP:	res <= y - bmi;
 	`INY:	res <= y + 32'd1;
-	`STS,`MVN,`CMPS:
-			if (bytePrefix)
-				res <= y + 32'd1;
-			else if (charPrefix)
-				res <= y + 32'd2;
-			else
-				res <= y + 32'd4;
+	`STS,`MVN,`CMPS:	res <= y + bmi;
 	`DEA:	res <= acc - 32'd1;
 	`INA:	res <= acc + 32'd1;
 	`TSX,`TSA:	res <= isp;
@@ -186,7 +173,6 @@ always @*
 	`OR_IMM8:	res <= rfoa | {{24{ir[23]}},ir[23:16]};
 	`AND_IMM8: 	res <= rfoa & {{24{ir[23]}},ir[23:16]};
 	`EOR_IMM8:	res <= rfoa ^ {{24{ir[23]}},ir[23:16]};
-	`CMP_IMM8:	res <= acc - {{24{ir[15]}},ir[15:8]};
 
 
 	`ADD_IMM16:	res <= rfoa + {{16{ir[31]}},ir[31:16]} + {31'b0,df&cf};
@@ -232,6 +218,9 @@ always @*
 	`CMP_IMM32:	res <= acc - ir[39:8];
 	`CPX_IMM32:	res <= x - ir[39:8];
 	`CPY_IMM32:	res <= y - ir[39:8];
+	`CMP_IMM8:	res <= acc - {{24{ir[15]}},ir[15:8]};
+	`CPX_IMM8:	res <= x - {{24{ir[15]}},ir[15:8]};
+	`CPY_IMM8:	res <= y - {{24{ir[15]}},ir[15:8]};
 	
 	`CMP_IMM16:	res <= acc - {{16{ir[23]}},ir[23:8]};
 	`CMP_RR:	res <= rfoa - rfob;
@@ -257,7 +246,6 @@ always @*
 	`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	res <= {b[0],cf,b[31:1]};
 	`INC_ZPX,`INC_ABS,`INC_ABSX:	res <= b + 32'd1;
 	`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	res <= b - 32'd1;
-	`ORB_ZPX,`ORB_ABS,`ORB_ABSX:	res <= a | {24'h0,b8};
 	`BMS_ZPX,`BMS_ABS,`BMS_ABSX:	res <= b | (32'b1 << acc[4:0]);
 	`BMC_ZPX,`BMC_ABS,`BMC_ABSX:	res <= b & (~(32'b1 << acc[4:0]));
 	`BMF_ZPX,`BMF_ABS,`BMF_ABSX:	res <= b ^ (32'b1 << acc[4:0]);

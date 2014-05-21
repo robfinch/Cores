@@ -45,6 +45,7 @@
 `define SUPPORT_BERR	1'b1
 `define SUPPORT_STRING	1'b1
 `define SUPPORT_SHIFT	1'b1
+//`define SUPPORT_CGI		1'b1			// support the control giveaway interrupt
 
 `define RST_VECT	32'hFFFFFFF8
 `define NMI_VECT	32'hFFFFFFF4
@@ -126,7 +127,6 @@
 `define RR			9'h02
 `define ADD_RR			4'd0
 `define SUB_RR			4'd1
-`define CMP_RR			4'd2
 `define AND_RR			4'd3
 `define EOR_RR			4'd4
 `define OR_RR			4'd5
@@ -307,17 +307,6 @@
 `define ST_RIND		9'h92
 `define ST_DSP		9'h83
 
-`define ORB_ZPX		9'hB5
-`define ORB_IX		9'hA1
-`define ORB_IY		9'hB1
-`define ORB_ABS		9'hAD
-`define ORB_ABSX	9'hBD
-
-`define STB_ZPX		9'h74
-`define STB_ABS		9'h9C
-`define STB_ABSX	9'h9E
-
-
 //`define LDB_RIND	9'hB2	// Conflict with LDX #imm16
 
 `define LDA_IMM		9'hA9
@@ -485,11 +474,13 @@
 
 `define CPX_IMM		9'hE0
 `define CPX_IMM32	9'hE0
+`define CPX_IMM8	9'hE2
 `define CPX_ZP		9'hE4
 `define CPX_ZPX		9'hE4
 `define CPX_ABS		9'hEC
 `define CPY_IMM		9'hC0
 `define CPY_IMM32	9'hC0
+`define CPY_IMM8	9'hC1
 `define CPY_ZP		9'hC4
 `define CPY_ZPX		9'hC4
 `define CPY_ABS		9'hCC

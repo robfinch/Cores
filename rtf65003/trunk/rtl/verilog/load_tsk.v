@@ -26,52 +26,19 @@ input [7:0] dat8;
 input [15:0] dat16;
 begin
 	case(load_what)
-	`WORD_310:
-				begin
-					if (leaPrefix)
-						b <= radr;
-					else if (ubytePrefix)
-						b <= dat8;
-					else if (bytePrefix)
-						b <= {{24{dat8[7]}},dat8};
-					else if (ucharPrefix)
-						b <= dat16;
-					else if (charPrefix)
-						b <= {{16{dat16[15]}},dat16};
-					else
-						b <= dat;
-					state <= CALC;
-				end
+	`WORD_310:	
+			begin
+				sized_load(dat8,dat16,dat,b);
+				state <= CALC;
+			end
 	`WORD_311:	// For pla/plx/ply/pop/ldx/ldy
-				begin
-					if (ir9==`POP)
-						Rt <= ir[15:12];
-					if (leaPrefix)
-						res <= radr;
-					else if (ubytePrefix)
-						res <= dat8;
-					else if (bytePrefix)
-						res <= {{24{dat8[7]}},dat8};
-					else if (ucharPrefix)
-						res <= dat16;
-					else if (charPrefix)
-						res <= {{16{dat16[15]}},dat16};
-					else
-						res <= dat;
-					state <= isPopa ? LOAD_MAC3 : IFETCH;
-				end
+			begin
+				sized_load(dat8,dat16,dat,res);
+				state <= isPopa ? LOAD_MAC3 : IFETCH;
+			end
 	`WORD_312:
 			begin
-				if (ubytePrefix)
-					b <= dat8;
-				else if (bytePrefix)
-					b <= {{24{dat8[7]}},dat8};
-				else if (ucharPrefix)
-					b <= dat16;
-				else if (charPrefix)
-					b <= {{16{dat16[15]}},dat16};
-				else
-					b <= dat;
+				sized_load(dat8,dat16,dat,b);
 				radr <= y;
 				wadr <= y;
 				store_what <= `STW_B;
@@ -81,16 +48,7 @@ begin
 			end
 	`WORD_313:
 			begin
-				if (ubytePrefix)
-					a <= dat8;
-				else if (bytePrefix)
-					a <= {{24{dat8[7]}},dat8};
-				else if (ucharPrefix)
-					a <= dat16;
-				else if (charPrefix)
-					a <= {{16{dat16[15]}},dat16};
-				else
-					a <= dat;
+				sized_load(dat8,dat16,dat,a);
 				radr <= y;
 				load_what <= `WORD_314;
 				x <= res[31:0];
@@ -98,25 +56,16 @@ begin
 			end
 	`WORD_314:
 			begin
-				if (ubytePrefix)
-					b <= dat8;
-				else if (bytePrefix)
-					b <= {{24{dat8[7]}},dat8};
-				else if (ucharPrefix)
-					b <= dat16;
-				else if (charPrefix)
-					b <= {{16{dat16[15]}},dat16};
-				else
-					b <= dat;
+				sized_load(dat8,dat16,dat,b);
 				acc <= acc - 32'd1;
 				state <= CMPS1;
 			end
 `ifdef SUPPORT_EM8
 	`BYTE_70:
-				begin
-					b8 <= dat8;
-					state <= BYTE_CALC;
-				end
+			begin
+				b8 <= dat8;
+				state <= BYTE_CALC;
+			end
 	`BYTE_71:
 			begin
 				res8 <= dat8;
@@ -203,7 +152,7 @@ begin
 //							//if (dat[9]) acc[31:8] <= 24'd0;
 //						end
 						radr <= isp;
-						isp <= isp + 32'd4;
+						isp <= isp_inc;
 						load_what <= `PC_310;
 						state <= LOAD_MAC1;
 					end
@@ -276,11 +225,11 @@ begin
 //						state <= LOAD_MAC1;	
 					end
 				end
-	`PC_3124:	begin
-					pc[31:24] <= dat8;
-					load_what <= `NOTHING;
-					next_state(BYTE_IFETCH);
-				end
+//	`PC_3124:	begin
+//					pc[31:24] <= dat8;
+//					load_what <= `NOTHING;
+//					next_state(BYTE_IFETCH);
+//				end
 `endif
 	`PC_310:	begin
 					pc <= dat;
@@ -302,9 +251,9 @@ begin
 				wdat <= a;
 				if (isIY)
 					state <= IY3;
-				else if (ir9==`ST_IX)
+				else if (isStIX)
 					state <= STORE1;
-				else if (leaPrefix) begin
+				else if (isLeaIX) begin
 					res <= dat;
 					next_state(IFETCH);
 				end

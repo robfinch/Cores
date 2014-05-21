@@ -229,6 +229,8 @@ task decode_tsk;
 		`CMP_IMM16:	;
 
 		`CMP_IMM8:	;
+		`CPX_IMM8:	;
+		`CPY_IMM8:	;
 
 		`CMP_RR:	;
 
@@ -361,7 +363,7 @@ task decode_tsk;
 				store_what <= `STW_ACC;
 				state <= STORE1;
 			end
-		`ADD_ZPX,`SUB_ZPX,`AND_ZPX,`TRB_ZPX:
+		`ADD_ZPX,`SUB_ZPX,`AND_ZPX,`TRB_ZPX,`OR_ZPX,`EOR_ZPX,`TSB_ZPX:
 			begin
 				Rt <= ir[19:16];
 				radr <= zpx32_address;
@@ -375,13 +377,13 @@ task decode_tsk;
 				state <= IFETCH;
 			end
 		// Trim a clock cycle off of loads by testing for Ra = 0.
-		`OR_ZPX,`EOR_ZPX,`TSB_ZPX:
-			begin
-				Rt <= ir[19:16];
-				radr <= zpx32_address;
-				load_what <= (Ra==4'd0) ? `WORD_311: `WORD_310;
-				state <= LOAD_MAC1;
-			end
+//		`OR_ZPX,`EOR_ZPX,`TSB_ZPX:
+//			begin
+//				Rt <= ir[19:16];
+//				radr <= zpx32_address;
+//				load_what <= (Ra==4'd0) ? `WORD_311: `WORD_310;
+//				state <= LOAD_MAC1;
+//			end
 		`ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX:
 			begin
 				radr <= zpx32xy_address;
@@ -451,14 +453,14 @@ task decode_tsk;
 				Rt <= ir[15:12];
 				state <= IFETCH;
 			end
-		`OR_ABS,`EOR_ABS,`TSB_ABS:
-			begin
-				radr <= ir[47:16];
-				Rt <= ir[15:12];
-				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
-				state <= LOAD_MAC1;
-			end
-		`ADD_ABS,`SUB_ABS,`AND_ABS,`TRB_ABS:
+//		`OR_ABS,`EOR_ABS,`TSB_ABS:
+//			begin
+//				radr <= ir[47:16];
+//				Rt <= ir[15:12];
+//				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
+//				state <= LOAD_MAC1;
+//			end
+		`ADD_ABS,`SUB_ABS,`AND_ABS,`TRB_ABS,`OR_ABS,`EOR_ABS,`TSB_ABS:
 			begin
 				radr <= ir[47:16];
 				Rt <= ir[15:12];
@@ -484,20 +486,26 @@ task decode_tsk;
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`ADD_ABSX,`SUB_ABSX,`AND_ABSX:
+		`LEA_ABSX:
+			begin
+				res <= absx32_address;
+				Rt <= ir[19:16];
+				next_state(IFETCH);
+			end
+		`ADD_ABSX,`SUB_ABSX,`AND_ABSX,`OR_ABSX,`EOR_ABSX:
 			begin
 				radr <= absx32_address;
 				Rt <= ir[19:16];
 				load_what <= `WORD_310;
 				state <= LOAD_MAC1;
 			end
-		`OR_ABSX,`EOR_ABSX:
-			begin
-				radr <= absx32_address;
-				Rt <= ir[19:16];
-				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
-				state <= LOAD_MAC1;
-			end
+//		`OR_ABSX,`EOR_ABSX:
+//			begin
+//				radr <= absx32_address;
+//				Rt <= ir[19:16];
+//				load_what <= (Ra==4'd0) ? `WORD_311 : `WORD_310;
+//				state <= LOAD_MAC1;
+//			end
 		`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX:
 			begin
 				radr <= absx32xy_address;
@@ -547,7 +555,7 @@ task decode_tsk;
 				bf <= !hwi;
 				km <= `TRUE;
 `ifdef DEBUG
-				hist_capture <= `FALSE;
+//				hist_capture <= `FALSE;
 `endif
 				radr <= isp_dec;
 				wadr <= isp_dec;
@@ -648,14 +656,17 @@ task decode_tsk;
 		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA,
 		`BGT,`BGE,`BLT,`BLE,`BHI,`BLS:
 			begin
-				if (ir[15:8]==8'hFE) begin
+`ifdef SUPPORT_CGI
+				if (takb && (ir[15:8]==8'hFE || ir[31:8]==24'hFFFCFF)) begin
 					pg2 <= `FALSE;
 					ir <= {8{`BRK}};
 					pc <= pc;		// override the pc increment
 					vect <= {vbr[31:11],`SLP_VECTNO,2'b00};
 					state <= DECODE;
 				end
-				else if (ir[15:8]==8'hFF) begin
+				else
+`endif
+				if (ir[15:8]==8'hFF) begin
 					if (takb)
 						pc <= pcp4 + {{16{ir[31]}},ir[31:16]};
 					else
@@ -670,6 +681,7 @@ task decode_tsk;
 			end
 		`BRL:
 			begin
+`ifdef SUPPORT_CGI
 				if (ir[23:8]==16'hFFFD) begin
 					pg2 <= `FALSE;
 					ir <= {8{`BRK}};
@@ -677,11 +689,14 @@ task decode_tsk;
 					pc <= pc;		// override the pc increment
 					state <= DECODE;
 				end
-				else begin
+				else
+`endif
+				begin
 					pc <= pc + 32'd3 + {{16{ir[23]}},ir[23:8]};
 					state <= IFETCH;
 				end
 			end
+`ifdef SUPPORT_ACBR
 		`ACBR:
 			begin
 				if (ir[15:8]==8'hFF)
@@ -692,6 +707,7 @@ task decode_tsk;
 				store_what <= `STW_BRA;
 				next_state(STORE1);
 			end
+`endif
 `ifdef SUPPORT_EXEC
 		`EXEC,`ATNI:
 			begin
@@ -756,6 +772,15 @@ task decode_tsk;
 				state <= STORE1;
 				isp <= isp_dec;
 			end
+		`PEA:	
+			begin
+				res <= ir[39:8];
+				radr <= isp_dec;
+				wadr <= isp_dec;
+				isp <= isp_dec;
+				store_what <= `STW_CALC;
+				next_state(STORE1);
+			end
 		`PLP:
 			begin
 				radr <= isp;
@@ -797,6 +822,7 @@ task decode_tsk;
 			end
 		`POP:
 			begin
+				Rt <= ir[15:12];
 				radr <= isp;
 				isp <= isp_inc;
 				load_what <= `WORD_311;
@@ -811,41 +837,15 @@ task decode_tsk;
 				state <= LOAD_MAC1;
 			end
 `ifdef SUPPORT_STRING
-		`MVN:
+		`MVN,`MVP:
 			begin
 				Rt <= 4'd3;
 				radr <= x;
-				if (ubytePrefix|bytePrefix) begin
-					res <= x_inc;
+				res <= x + bmi;
+				if (ubytePrefix|bytePrefix|ucharPrefix|charPrefix)
 					pc <= pc - 32'd1;
-				end
-				else if (ucharPrefix|charPrefix) begin
-					res <= x + 32'd2;
-					pc <= pc - 32'd1;
-				end
-				else begin
-					res <= x + 32'd4;
+				else
 					pc <= pc;
-				end
-				load_what <= `WORD_312;
-				state <= LOAD_MAC1;
-			end
-		`MVP:
-			begin
-				Rt <= 4'd3;
-				radr <= x;
-				if (ubytePrefix|bytePrefix) begin
-					res <= x_dec;
-					pc <= pc - 32'd1;
-				end
-				else if (ucharPrefix|charPrefix) begin
-					res <= x - 32'd2;
-					pc <= pc - 32'd1;
-				end
-				else begin
-					res <= x - 32'd4;
-					pc <= pc;
-				end
 				load_what <= `WORD_312;
 				state <= LOAD_MAC1;
 			end
@@ -866,18 +866,11 @@ task decode_tsk;
 			begin
 				Rt <= 4'd3;
 				radr <= x;
-				if (ubytePrefix|bytePrefix) begin
-					res <= x_inc;
+				res <= x + bmi;
+				if (ubytePrefix|bytePrefix|ucharPrefix|charPrefix)
 					pc <= pc - 32'd1;
-				end
-				else if (ucharPrefix|charPrefix) begin
-					res <= x + 32'd2;
-					pc <= pc - 32'd1;
-				end
-				else begin
-					res <= x + 32'd4;
+				else
 					pc <= pc;
-				end
 				load_what <= `WORD_313;
 				state <= LOAD_MAC1;
 			end
@@ -890,31 +883,25 @@ task decode_tsk;
 		`BYTE:	begin
 					bytePrefix <= `TRUE;
 					ir <= {8'hEA,ir[63:8]};
+					bmi <= 3'd1;
 					next_state(DECODE);
 				end
 		`UBYTE:	begin
 					ubytePrefix <= `TRUE;
 					ir <= {8'hEA,ir[63:8]};
+					bmi <= 3'd1;
 					next_state(DECODE);
 				end
 		`CHAR:	begin
 					charPrefix <= `TRUE;
 					ir <= {8'hEA,ir[63:8]};
+					bmi <= 3'd2;
 					next_state(DECODE);
 				end
 		`UCHAR:	begin
 					ucharPrefix <= `TRUE;
 					ir <= {8'hEA,ir[63:8]};
-					next_state(DECODE);
-				end
-		`LEA:	begin
-					leaPrefix <= `TRUE;
-					ir <= {8'hEA,ir[63:8]};
-					next_state(DECODE);
-				end
-		`PEA:	begin
-					peaPrefix <= `TRUE;
-					ir <= {8'hEA,ir[63:8]};
+					bmi <= 3'd2;
 					next_state(DECODE);
 				end
 		default:	// unimplemented opcode

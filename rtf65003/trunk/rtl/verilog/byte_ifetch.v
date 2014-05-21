@@ -22,6 +22,7 @@
 //
 BYTE_IFETCH:
 	begin
+		next_state(BYTE_DECODE);
 		ic_whence <= BYTE_IFETCH;
 		vect <= m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		vect[31:16] <= abs8[31:16];
@@ -45,25 +46,20 @@ BYTE_IFETCH:
 			else begin
 				vect <= m816 ? `NMI_VECT_816 : `BYTE_NMI_VECT;
 				vect[31:16] <= abs8[31:16];
-				next_state(BYTE_DECODE);
 			end
 		end
 		else if (irq_i & gie) begin
 			wai <= 1'b0;
 			if (im) begin
 				if (unCachedInsn) begin
-					if (bhit) begin
+					if (bhit)
 						ir <= ibuf;
-						next_state(BYTE_DECODE);
-					end
 					else
 						next_state(LOAD_IBUF1);
 				end
 				else begin
-					if (ihit) begin
+					if (ihit)
 						ir <= insn;
-						next_state(BYTE_DECODE);
-					end
 					else
 						next_state(ICACHE1);
 				end
@@ -77,25 +73,18 @@ BYTE_IFETCH:
 					vect <= {vbr[31:11],irq_vect,2'b00};
 					next_state(DECODE);
 				end
-				else begin
-					next_state(BYTE_DECODE);
-				end
 			end
 		end
 		else if (!wai) begin
 			if (unCachedInsn) begin
-				if (bhit) begin
+				if (bhit)
 					ir <= ibuf;
-					next_state(BYTE_DECODE);
-				end
 				else
 					next_state(LOAD_IBUF1);
 			end
 			else begin
-				if (ihit) begin
+				if (ihit)
 					ir <= insn;
-					next_state(BYTE_DECODE);
-				end
 				else
 					next_state(ICACHE1);
 			end
