@@ -142,6 +142,8 @@ IFETCH:
 				end
 			end
 		end
+		else	// wai
+			next_state(IFETCH);
 		// During a cache miss all these assignments will repeat. It's not a
 		// problem. The history buffer will be stuffed with the same pc address
 		// for several cycles until the cache load is complete.

@@ -89,6 +89,8 @@ BYTE_IFETCH:
 					next_state(ICACHE1);
 			end
 		end
+		else
+			next_state(BYTE_IFETCH);
 `ifdef DEBUG
 		if (hist_capture) begin
 			history_buf[history_ndx] <= pc;
