@@ -6,7 +6,7 @@
 <meta name="ProgId" content="FrontPage.Editor.Document">
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
 <title>System Memory Map</title>
-<!--mstheme--><link rel="stylesheet" href="../../spi_master%20(modified)/trunk/docs/wate1011.css">
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
 <meta name="Microsoft Theme" content="water 1011, default">
 </head>
 
@@ -15,7 +15,7 @@
 <h1>System Memory Map</h1>
 <table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" width="74%">
   <tr>
-    <td width="20%">Word Address</td>
+    <td width="20%">Byte Address</td>
     <td width="9%" align="center">Present in Bitfile</td>
     <td width="120%">&nbsp;</td>
     <td width="28%">&nbsp;</td>
@@ -23,29 +23,29 @@
   <tr>
     <td width="20%">
     <p style="margin-top: 0; margin-bottom: 0">$0000_0000 to</p>
-    <p style="margin-top: 0; margin-bottom: 0">$0000_0FFF</td>
+    <p style="margin-top: 0; margin-bottom: 0">$0000_3FFF</td>
     <td width="9%" align="center">Yes</td>
     <td width="120%">Scratchpad RAM (16kB)</td>
     <td width="28%">&nbsp;</td>
   </tr>
   <tr>
     <td width="20%">
-    <p style="margin-top: 0; margin-bottom: 0">$0000_2800 to</p>
-    <p style="margin-top: 0; margin-bottom: 0">$0000_2FFF</td>
+    <p style="margin-top: 0; margin-bottom: 0">$0000_A000 to</p>
+    <p style="margin-top: 0; margin-bottom: 0">$0000_AFFF</td>
     <td width="9%" align="center">No</td>
     <td width="120%">Reserved: Forth ROM</td>
     <td width="28%">&nbsp;</td>
   </tr>
   <tr>
-    <td width="20%">$0000_3000 to $0000_3FFF</td>
+    <td width="20%">$0000_C000 to $0000_EFFF</td>
     <td width="9%" align="center">Yes</td>
     <td width="120%">Reserved: EhBASIC</td>
     <td width="28%">&nbsp;</td>
   </tr>
   <tr>
     <td width="20%">
-    <p style="margin-top: 0; margin-bottom: 0">$0400_0000 to</p>
-    <p style="margin-top: 0; margin-bottom: 0">$05FF_FFFF</td>
+    <p style="margin-top: 0; margin-bottom: 0">$0000_0000 to</p>
+    <p style="margin-top: 0; margin-bottom: 0">$07FF_FFFF</td>
     <td width="9%" align="center">Yes</td>
     <td width="120%">System RAM (128MB)</td>
     <td width="28%">&nbsp;</td>
