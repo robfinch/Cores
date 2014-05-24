@@ -45,6 +45,8 @@
 `define ICON		8'h34
 `define ICOFF		8'h35
 `define RTI			8'h40
+`define MTSPR		8'h48
+`define MFSPR		8'h49
 `define RR		8'h02
 `define ADD			8'h04
 `define SUB			8'h05
@@ -112,6 +114,7 @@
 `define JSR_IX	8'h53
 `define JMP_DRN	8'h54
 `define JSR_DRN	8'h55
+`define BSR		8'h56
 `define BRZ		8'h58
 `define BRNZ	8'h59
 `define DBNZ	8'h5A
@@ -153,11 +156,15 @@
 `define STW_B	4'd4
 `define STW_C	4'd5
 
-module Table888(rst_i, clk_i, nmi_i, irq_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o);
+`define TICK	8'h00
+`define VBR		8'h01
+
+module Table888(rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o);
 input rst_i;
 input clk_i;
 input nmi_i;
 input irq_i;
+input [8:0] vect_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg [5:0] bl_o;
@@ -240,13 +247,15 @@ wire ihit;
 reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSR,isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
-reg isShifti;
+reg isShifti,isBSR;
 wire hasIMM = isIMM1|isIMM2;
 reg [63:0] rfoa,rfob,rfoc;
 reg [64:0] res;			// result bus
 reg [63:0] a,b,c;		// operand holding registers
 reg [63:0] imm;
 reg [63:0] immbuf;
+reg [63:0] tick;		// tick count
+reg [31:0] vbr;			// vector base register
 
 // - - - - - - - - - - - - - - - - - -
 // Convenience Functions
@@ -425,8 +434,11 @@ if (rst_i) begin
 	wb_nack();
 	state <= RESET;
 	store_what <= `STW_NONE;
+	tick <= 64'd0;
+	vbr <= 32'h07FFE000;
 end
 else begin
+tick <= tick + 64'd1;
 if (nmi_i & !nmi1)
 	nmi_edge <= `TRUE;
 wrrf <= `FALSE;
@@ -458,7 +470,7 @@ IFETCH:
 		end
 		else if (irq_i & gie & !im & ~hasIMM) begin
 			ir[7:0] <= `BRK;
-			ir[39:8] <= `IRQ_VECT;
+			ir[39:8] <= {vbr[31:13],vect_i,4'd0};
 			hwi <= `TRUE;
 		end
 		else if (!ihit & !uncachedArea & icacheOn)
@@ -552,6 +564,7 @@ DECODE:
 		isIMM2 <= `FALSE;
 		isCMPI <= `FALSE;
 		isBRK <= `FALSE;
+		isBSR <= `FALSE;
 		isJSR <= `FALSE;
 		isJSRix <= `FALSE;
 		isJMPix <= `FALSE;
@@ -658,6 +671,14 @@ DECODE:
 				next_state(STORE1);
 			end
 		`JMP:	begin pc <= ir[39:8]; next_state(IFETCH); end
+		`BSR:
+			begin
+				isBSR <= `TRUE;
+				wadr <= sp_dec[31:0];
+				sp <= sp_dec;
+				store_what <= `STW_PC;
+				next_state(STORE1);	
+			end
 		`JSR:
 			begin
 				isJSR <= `TRUE;
@@ -751,6 +772,17 @@ EXECUTE:
 			`SXB:	res <= {{56{a[7]}},a[7:0]};
 			`SXC:	res <= {{48{a[15]}},a[15:0]};
 			`SXH:	res <= {{32{a[31]}},a[31:0]};
+			`MFSPR:
+				case(Ra)
+				`TICK:	res <= tick;
+				`VBR:	res <= vbr;
+				default:	res <= 65'd0;
+				endcase
+			`MTSPR:
+				case(Rt)
+				`TICK:	tick <= a;
+				`VBR:	vbr <= a;
+				endcase
 			endcase
 		`RR:
 			case(func)
@@ -1234,6 +1266,12 @@ STORE4:
 					next_state(STORE1);
 				end
 			end
+		isBSR:
+			begin
+				pc[15: 0] <= ir[31:16];
+				pc[31:16] <= pc[31:16] + {{11{ir[36]}},ir[36:32]};
+				next_state(IFETCH);
+			end
 		isJSR:
 			begin
 				pc <= imm;
@@ -1241,12 +1279,12 @@ STORE4:
 			end
 		isJSRdrn:
 			begin
-				pc <= rfoa + imm;
+				pc <= a + imm;
 				next_state(IFETCH);
 			end
 		isJSRix:
 			next_state(LOAD1);
-		isPOP,isPUSH:
+		isPUSH:
 			next_state(DECODE);
 		default:
 			next_state(IFETCH);
