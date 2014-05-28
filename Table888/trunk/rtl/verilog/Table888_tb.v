@@ -4,6 +4,7 @@ integer n;
 reg rst;
 reg clk;
 reg nmi;
+reg irq;
 wire wr;
 wire [5:0] bl;
 wire [3:0] sel;
@@ -33,6 +34,8 @@ initial begin
 	nmi = 0;
 	#100 rst = 1;
 	#100 rst = 0;
+	#29000 irq = 1;
+	#10 irq = 0;
 	#500 nmi = 0;
 	#10 nmi = 0;
 end
@@ -43,7 +46,8 @@ Table888 cpu0 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.nmi_i(nmi),
-	.irq_i(1'b0),
+	.irq_i(irq),
+	.vect_i(9'd451),
 	.bte_o(),
 	.cti_o(cti),
 	.bl_o(bl),
@@ -66,6 +70,7 @@ wire tc_cs = (cyc && stb && (a[31:16]==16'hFFD0 || a[31:16]==16'hFFDA ||a[31:16]
 wire leds_cs = (cyc && stb && a[31:0]==32'hFFDC0600);
 wire configrec_cs = (cyc && stb && a[31:4]==28'hFFDCFFF);
 wire bmp_clut_cs = cyc && stb && a[31:11]==21'b1111_1111_1101_1100_0101_1;
+wire pic_cs = cyc && stb && a[31:8]==24'hFFDC_0F;
 
 assign d = wr ? dato : 32'bz;
 assign dati = ~romcs ? btrm_dato : 32'bz;
@@ -89,7 +94,8 @@ assign ack =
 	~ramcs |
 	~romcs1 |
 	uartcs |
-	bmp_clut_cs
+	bmp_clut_cs |
+	pic_cs
 	;
 
 //rom2Kx32 #(.MEMFILE("t65c.mem")) rom0(.ce(romcs), .oe(wr), .addr(a[12:2]), .d(d));
@@ -164,7 +170,7 @@ always @(posedge clk) begin
 		$display("t   n  cti cyc we   addr din adnx do vma wr ird sync vma nmi irq  PC  IR A  X  Y  SP nvmdizcb\n");
 	$display("%d %d %b  %b%b  %c  %h %h %h %h pc=%h ir=%h sp=%h imm=%h %b %s %b %b wadr=%h",
 		$time, n, cpu0.cti_o, cpu0.cyc_o, cpu0.ack_i, cpu0.we_o?"W":" ", cpu0.adr_o, cpu0.dat_i, cpu0.dat_o, cpu0.res,  cpu0.pc, cpu0.ir,	cpu0.sp, 
-		cpu0.imm, cpu0.im, cpu0.fnStateName(cpu0.state), cpu0.ihit,ubr1.cs,cpu0.wadr);
+		cpu0.imm, cpu0.im, cpu0.fnStateName(cpu0.state), cpu0.ihit,ubr1.cs,cpu0.regfile[3]);
 end
 	
 endmodule

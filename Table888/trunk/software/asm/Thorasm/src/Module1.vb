@@ -54,6 +54,9 @@ Module Module1
     Dim nextFileno As Integer
     Dim isGlobal As Boolean
     Dim processor As String
+    Dim lastLabel As String
+    Dim doingDB As Boolean
+    Public lineno As Integer
 
     Dim NameTable As New clsNameTable
     Dim sectionNameStringTable(1000) As Byte
@@ -149,6 +152,7 @@ Module Module1
         'textfile = textfile.Replace(vbLf, " ")
         'lines = textfile.Split(vbCr.ToCharArray())
         For pass = 0 To maxpass
+            lineno = 1
             fileno = 0
             nextFileno = 0
             codeStart = 512
@@ -166,6 +170,7 @@ Module Module1
             bytndx = 0
             last_op = ""
             firstCodeOrg = True
+            doingDB = False
             If pass = maxpass Then
                 If (args.Length > 1) Then
                     vname = args(1)
@@ -347,10 +352,10 @@ j1:
                         End If
                         ' no need to flush word buffer
                         If s <> "fill.b" And last_op = "fill.b" Then
-                            emitbyte(0, True)
+                            'emitbyte(0, True)
                         End If
                         If s <> "fill.c" And last_op = "fill.c" Then
-                            emitchar(0, True)
+                            'emitchar(0, True)
                         End If
                         If s <> "fill.h" And last_op = "fill.h" Then
                             '                                emithalf(0, True)
@@ -423,6 +428,8 @@ j1:
                                 ProcessMemoryOp(s, &H85)
                             Case "lw"
                                 ProcessMemoryOp(s, &H86)
+                            Case "ld"
+                                ProcessMemoryOp(s, &H86)
                             Case "sb"
                                 ProcessMemoryOp(s, &HA0)
                             Case "sc"
@@ -431,10 +438,16 @@ j1:
                                 ProcessMemoryOp(s, &HA2)
                             Case "sw"
                                 ProcessMemoryOp(s, &HA3)
+                            Case "st"
+                                ProcessMemoryOp(s, &HA3)
                             Case "lea"
                                 ProcessMemoryOp(s, &H4C)
                             Case "stbc"
                                 ProcessMemoryOp(s, 54)
+                            Case "smr"
+                                ProcessSmr(s, &H30)
+                            Case "lmr"
+                                ProcessSmr(s, &H31)
 
                             Case "push"
                                 ProcessPush(&HA6)
@@ -490,8 +503,12 @@ j1:
                                 ProcessBra(s, &H4E)
                             Case "blo"
                                 ProcessBra(s, &H4F)
+                            Case "bsr"
+                                ProcessBsr(s, &H56)
 
                                 ' R
+                            Case "mov"
+                                ProcessROp(s, 4)
                             Case "com"
                                 ProcessROp(s, 6)
                             Case "not"
@@ -504,6 +521,12 @@ j1:
                                 ProcessROp(s, &H9)
                             Case "sxh"
                                 ProcessROp(s, &HA)
+                            Case "mtspr"
+                                ProcessMtspr(s, &H48)
+                            Case "mfspr"
+                                ProcessMfspr(s, &H49)
+                            Case "swap"
+                                ProcessROp(s, 3)
 
                                 ' RR
                             Case "add"
@@ -524,6 +547,8 @@ j1:
                                 ProcessRROp(s, &H21)
                             Case "eor"
                                 ProcessRROp(s, &H22)
+                            Case "andn"
+                                ProcessRROp(s, &H23)
                             Case "mulu"
                                 ProcessRROp(s, &H17)
                             Case "mul"
@@ -567,6 +592,8 @@ j1:
 
                             Case "rti"
                                 ProcessRti(&H40)
+                            Case "brk"
+                                ProcessBRK(s, &H0)
 
                             Case "nop"
                                 ProcessNop(s, &HEA)
@@ -649,6 +676,7 @@ j2:
                 End If
 j3:
             End If
+            lineno = lineno + 1
         Next
     End Sub
 
@@ -664,6 +692,7 @@ j3:
 
     Sub WriteListing()
         Dim xx As Integer
+        Static lastIline As String
 
         If pass = maxpass And Not plbl Then
             If segment = "data" Then
@@ -672,14 +701,19 @@ j3:
                 lfs.Write(Hex(sa).PadLeft(8, "0") & vbTab)
             End If
             For xx = 1 To bytn
-                lfs.Write(Right(Hex(bytesbuf(xx - 1)).PadLeft(2, "0"), 2))
+                lfs.Write(Right(Hex(bytesbuf(xx - 1)).PadLeft(2, "0"), 2) & " ")
             Next
-            If bytn < 9 Then
-                lfs.WriteLine(Space(16 - bytn * 2) & iline)
+            If iline <> lastIline Then
+                If bytn < 9 Then
+                    lfs.WriteLine(Space(16 - bytn * 2) & iline)
+                Else
+                    lfs.WriteLine(Space(1) & iline)
+                End If
             Else
-                lfs.WriteLine(Space(1) & iline)
+                lfs.WriteLine("")
             End If
             sa = sa + bytn
+            lastIline = iline
         End If
     End Sub
 
@@ -720,22 +754,22 @@ j1:
 
         Select Case s
             Case "fill.b"
-                numbytes = GetImmediate(strs(1), "fill.b")
-                FillByte = GetImmediate(strs(2), "fill.b")
+                numbytes = eval(strs(1))
+                FillByte = eval(strs(2))
                 For n = 0 To numbytes - 1
                     emitbyte(FillByte, False)
                 Next
                 ' emitbyte(0, True)
             Case "fill.c"
-                numbytes = GetImmediate(strs(1), "fill.c")
-                FillByte = GetImmediate(strs(2), "fill.c")
+                numbytes = eval(strs(1))
+                FillByte = eval(strs(2))
                 For n = 0 To numbytes - 1
                     emitchar(FillByte, False)
                 Next
                 'emitchar(0, True)
             Case "fill.w"
-                numbytes = GetImmediate(strs(1), "fill.w")
-                FillByte = GetImmediate(strs(2), "fill.w")
+                numbytes = eval(strs(1))
+                FillByte = eval(strs(2))
                 For n = 0 To numbytes - 1
                     emitword(FillByte, False)
                 Next
@@ -744,11 +778,11 @@ j1:
     End Sub
 
     Sub processCLI(ByVal oc As Int64)
-        emitbyte(1, False)
-        emitbyte(0, False)
-        emitbyte(0, False)
-        emitbyte(0, False)
-        emitbyte(oc, False)
+        emitAlignedCode(1)
+        emitCode(0)
+        emitCode(0)
+        emitCode(0)
+        emitCode(oc)
     End Sub
 
     Sub ProcessPush(ByVal oc As Int64)
@@ -758,7 +792,7 @@ j1:
         Dim r As Int64
         Dim offset As Int64
 
-        emitbyte(oc, False)
+        emitAlignedCode(oc)
         If strs(1).StartsWith("[") Then
             strs(1) = strs(1).TrimStart("[".ToCharArray)
             strs(1) = strs(1).TrimEnd("]".ToCharArray)
@@ -766,10 +800,10 @@ j1:
         s = Split(strs(1), "/")
         For n = 0 To s.Length - 1
             r = GetRegister(s(n))
-            emitbyte(r, False)
+            emitCode(r)
         Next
         While (n < 4)
-            emitbyte(0, False)
+            emitCode(0)
             n = n + 1
         End While
     End Sub
@@ -816,9 +850,16 @@ j1:
         Dim L As New Symbol
         Dim M As Symbol
         Dim nm As String
+        Dim isLocal As Boolean
 
         s = s.TrimEnd(":")
+        isLocal = s.Chars(0) = "."
         nm = s
+        If isLocal Then
+            nm = lastLabel & nm
+        Else
+            lastLabel = nm
+        End If
         L.segment = segment
         L.fileno = fileno
         If publicFlag Then
@@ -828,6 +869,9 @@ j1:
         '        L.name = CStr(L.fileno) & L.name
         Select Case segment
             Case "code"
+                While (address And 15) <> 0 And (address And 15) <> 5 And (address And 15) <> 10
+                    emitCode(0)
+                End While
                 If ((address And 15) = 15) Then
                     L.address = address + 1
                 Else
@@ -845,10 +889,10 @@ j1:
         L.type = "L"
         If symbols.Count > 0 Then
             Try
-                M = symbols.Item(NameTable.FindName(fileno & s))
+                M = symbols.Item(NameTable.FindName(fileno & nm))
             Catch
                 Try
-                    M = symbols.Item(NameTable.FindName("0" & s))
+                    M = symbols.Item(NameTable.FindName("0" & nm))
                 Catch
                     M = Nothing
                 End Try
@@ -861,6 +905,7 @@ j1:
         Else
             nm = fileno & nm
         End If
+
         If pass = 2 And M Is Nothing Then
             Console.WriteLine("missed symbol: " & nm)
         End If
@@ -913,10 +958,10 @@ j1:
                 'ElseIf last_op = "dw" Then
                 '    emitword(0, True)
                 'Else
-                While slot <> 0
-                    '                    slot = (slot + 1) Mod 3
-                    emit(&H37800000000L)    ' nop
-                End While
+                'While slot <> 0
+                '                    slot = (slot + 1) Mod 3
+                'emit(&H37800000000L)    ' nop
+                'End While
                 'End If
                 na = address + n + n
                 While address Mod n And address < na
@@ -962,6 +1007,7 @@ j1:
         Dim k As Int64
         Dim ch As Char
 
+        doingDB = True
         For m = 1 To strs.Length - 1
             n = 1
             While n <= Len(strs(m))
@@ -989,6 +1035,7 @@ j1:
             End While
         Next
         'emitbyte(0, True)
+        doingDB = False
     End Sub
 
     Sub ProcessDC()
@@ -1089,11 +1136,11 @@ j1:
 
     ' rti and rte
     Sub ProcessRti(ByVal oc As Int64)
-        emitbyte(1, False)
-        emitbyte(0, False)
-        emitbyte(0, False)
-        emitbyte(0, False)
-        emitbyte(oc, False)
+        emitAlignedCode(1)
+        emitCode(0)
+        emitCode(0)
+        emitCode(0)
+        emitCode(oc)
     End Sub
 
     Function bit(ByVal v As Int64, ByVal b As Int64) As Integer
@@ -1104,14 +1151,8 @@ j1:
     End Function
 
     Sub ProcessLdi(ByVal ops As String, ByVal oc As Int64)
-        Dim opcode As Int64
-        Dim func As Int64
         Dim rt As Int64
-        Dim ra As Int64
         Dim imm As Int64
-        Dim msb As Int64
-        Dim i2 As Int64
-        Dim str As String
 
         rt = GetRegister(strs(1))
         imm = eval(strs(2))
@@ -1119,37 +1160,30 @@ j1:
         If imm < &HFFFFFFFFFF800000L Or imm > &H7FFFFF Then
             emitImm24(imm)
         End If
-        emitbyte(oc, False)
-        emitbyte(rt, False)
-        emitbyte(imm, False)
-        emitbyte((imm >> 8) And 255, False)
-        emitbyte((imm >> 16) And 255, False)
-        str = iline
+        emitAlignedCode(oc)
+        emitCode(rt)
+        emitCode(imm)
+        emitCode((imm >> 8) And 255)
+        emitCode((imm >> 16) And 255)
     End Sub
 
     Sub ProcessRIOp(ByVal ops As String, ByVal oc As Int64)
-        Dim opcode As Int64
-        Dim func As Int64
         Dim rt As Int64
         Dim ra As Int64
         Dim imm As Int64
-        Dim msb As Int64
-        Dim i2 As Int64
-        Dim str As String
-
+ 
         rt = GetRegister(strs(1))
         ra = GetRegister(strs(2))
         imm = eval(strs(3))
 
         If imm < -32768 Or imm > 32767 Then
-            emitImm3(imm)
+            emitImm16(imm)
         End If
-        emitbyte(oc, False)
-        emitbyte(ra, False)
-        emitbyte(rt, False)
-        emitbyte(imm And 255, False)
-        emitbyte((imm >> 8) And 255, False)
-        str = iline
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(imm And 255)
+        emitCode((imm >> 8) And 255)
     End Sub
 
     Sub emitIMM(ByVal imm As Int64, ByVal oc As Int64)
@@ -1164,28 +1198,28 @@ j1:
         iline = str
     End Sub
 
-    Sub emitImm3(ByVal imm As Int64)
+    Sub emitImm16(ByVal imm As Int64)
         Dim str As String
 
         str = iline
         iline = "; imm "
         If imm >= &HFFFF800000000000L And imm < &H7FFFFFFFFFFFL Then
-            emitbyte(&HFD, False)
-            emitbyte(imm >> 16, False)
-            emitbyte((imm >> 24) And 255, False)
-            emitbyte((imm >> 32) And 255, False)
-            emitbyte((imm >> 40) And 255, False)
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 16)
+            emitCode((imm >> 24) And 255)
+            emitCode((imm >> 32) And 255)
+            emitCode((imm >> 40) And 255)
         Else
-            emitbyte(&HFD, False)
-            emitbyte(imm >> 16, False)
-            emitbyte((imm >> 24) And 255, False)
-            emitbyte((imm >> 32) And 255, False)
-            emitbyte((imm >> 40) And 255, False)
-            emitbyte(&HFE, False)
-            emitbyte(imm >> 48, False)
-            emitbyte((imm >> 56) And 255, False)
-            emitbyte(0, False)
-            emitbyte(0, False)
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 16)
+            emitCode((imm >> 24) And 255)
+            emitCode((imm >> 32) And 255)
+            emitCode((imm >> 40) And 255)
+            emitCode(&HFE)
+            emitCode(imm >> 48)
+            emitCode((imm >> 56) And 255)
+            emitCode(0)
+            emitCode(0)
         End If
         iline = str
         bytn = 0
@@ -1197,22 +1231,22 @@ j1:
         str = iline
         iline = "; imm "
         If imm >= &HFFFFFFE000000000L And imm < &H1FFFFFFFFFL Then
-            emitbyte(&HFD, False)
-            emitbyte(imm >> 6, False)
-            emitbyte((imm >> 14) And 255, False)
-            emitbyte((imm >> 22) And 255, False)
-            emitbyte((imm >> 30) And 255, False)
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 6)
+            emitCode((imm >> 14) And 255)
+            emitCode((imm >> 22) And 255)
+            emitCode((imm >> 30) And 255)
         Else
-            emitbyte(&HFD, False)
-            emitbyte(imm >> 6, False)
-            emitbyte((imm >> 14) And 255, False)
-            emitbyte((imm >> 22) And 255, False)
-            emitbyte((imm >> 30) And 255, False)
-            emitbyte(&HFE, False)
-            emitbyte(imm >> 38, False)
-            emitbyte((imm >> 46) And 255, False)
-            emitbyte((imm >> 54) And 255, False)
-            emitbyte((imm >> 62) And 255, False)
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 6)
+            emitCode((imm >> 14) And 255)
+            emitCode((imm >> 22) And 255)
+            emitCode((imm >> 30) And 255)
+            emitCode(&HFE)
+            emitCode(imm >> 38)
+            emitCode((imm >> 46) And 255)
+            emitCode((imm >> 54) And 255)
+            emitCode((imm >> 62) And 255)
         End If
         iline = str
         bytn = 0
@@ -1221,25 +1255,28 @@ j1:
     Sub emitImm24(ByVal imm As Int64)
         Dim str As String
 
+        If imm >= &HFFFFFFFFFF800000 And imm <= &H7FFFFF Then
+            Return
+        End If
         str = iline
         iline = "; imm "
         If imm >= &HFF80000000000000L And imm < &H7FFFFFFFFFFFFFL Then
-            emitbyte(&HFD, False)
-            emitbyte(imm >> 24, False)
-            emitbyte((imm >> 32) And 255, False)
-            emitbyte((imm >> 40) And 255, False)
-            emitbyte((imm >> 48) And 255, False)
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 24)
+            emitCode((imm >> 32) And 255)
+            emitCode((imm >> 40) And 255)
+            emitCode((imm >> 48) And 255)
         Else
-            emitbyte(&HFD, False)
-            emitbyte(imm >> 24, False)
-            emitbyte((imm >> 32) And 255, False)
-            emitbyte((imm >> 40) And 255, False)
-            emitbyte((imm >> 48) And 255, False)
-            emitbyte(&HFE, False)
-            emitbyte(imm >> 56, False)
-            emitbyte(0, False)
-            emitbyte(0, False)
-            emitbyte(0, False)
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 24)
+            emitCode((imm >> 32) And 255)
+            emitCode((imm >> 40) And 255)
+            emitCode((imm >> 48) And 255)
+            emitCode(&HFE)
+            emitCode(imm >> 56)
+            emitCode(0)
+            emitCode(0)
+            emitCode(0)
         End If
         iline = str
         bytn = 0
@@ -1250,11 +1287,11 @@ j1:
 
         str = iline
         iline = "; imm "
-        emitbyte(&HFD, False)
-        emitbyte(imm >> 32, False)
-        emitbyte((imm >> 40) And 255, False)
-        emitbyte((imm >> 48) And 255, False)
-        emitbyte((imm >> 56) And 255, False)
+        emitAlignedCode(&HFD)
+        emitCode(imm >> 32)
+        emitCode((imm >> 40) And 255)
+        emitCode((imm >> 48) And 255)
+        emitCode((imm >> 56) And 255)
         iline = str
         bytn = 0
         sa = address
@@ -1357,11 +1394,39 @@ j1:
 
         rt = GetRegister(strs(1))
         ra = GetRegister(strs(2))
-        emitbyte(1, False)
-        emitbyte(ra, False)
-        emitbyte(rt, False)
-        emitbyte(0, False)
-        emitbyte(fn, False)
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
+    End Sub
+    '
+    '
+    Sub ProcessMtspr(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+
+        rt = GetSprRegister(strs(1))
+        ra = GetRegister(strs(2))
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
+    End Sub
+    '
+    '
+    Sub ProcessMfspr(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+
+        rt = GetRegister(strs(1))
+        ra = GetSprRegister(strs(2))
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
     End Sub
 
     '
@@ -1454,11 +1519,11 @@ j1:
                 imm = GetImmediate(strs(1), "rts")
             End If
         End If
-        emitbyte(oc, False)
-        emitbyte(0, False)
-        emitbyte(imm And 255, False)
-        emitbyte((imm >> 8) And 255, False)
-        emitbyte(0, False)
+        emitAlignedCode(oc)
+        emitCode(0)
+        emitCode(imm And 255)
+        emitCode((imm >> 8) And 255)
+        emitCode(0)
     End Sub
 
     Sub FlushConstants()
@@ -1481,7 +1546,7 @@ j1:
         ' dump any data left over in word buffers
 
         s = strs(1).Split(".".ToCharArray)
-        imm = GetImmediate(s(0), "org")
+        imm = eval(s(0))
         slot = 0
         Select Case segment
             Case "tls"
@@ -1497,20 +1562,20 @@ j1:
                 'w1 = 0
                 'w2 = 0
                 'w3 = 0
+                If (imm And 15) <> 0 And (imm And 15) <> 5 And (imm And 15) <> 10 Then
+                    Console.WriteLine("Bad origin for code.")
+                End If
                 If firstCodeOrg Then
                     firstCodeOrg = False
                     address = imm
                     bytn = 0
+                    sa = imm
                 Else
                     str = iline
-                    While address + 5 < imm
+                    While address < imm
                         bytn = 0
                         sa = address
-                        emitbyte(&HFF, False)
-                        emitbyte(&HFF, False)
-                        emitbyte(&HFF, False)
-                        emitbyte(&HFF, False)
-                        emitbyte(&HFF, False)
+                        emitCode(&H0)
                         iline = ""
                     End While
                     iline = str
@@ -1523,11 +1588,11 @@ j1:
     '
     '
     Sub ProcessNop(ByVal ops As String, ByVal oc As Int64)
-        emitbyte(oc, False)
-        emitbyte(oc, False)
-        emitbyte(oc, False)
-        emitbyte(oc, False)
-        emitbyte(oc, False)
+        emitCode(oc)
+        emitCode(oc)
+        emitCode(oc)
+        emitCode(oc)
+        emitCode(oc)
     End Sub
 
     '
@@ -1588,11 +1653,11 @@ j1:
             End Select
             Return
         End If
-        emitbyte(2, False)
-        emitbyte(ra, False)
-        emitbyte(rb, False)
-        emitbyte(rt, False)
-        emitbyte(fn, False)
+        emitAlignedCode(2)
+        emitCode(ra)
+        emitCode(rb)
+        emitCode(rt)
+        emitCode(fn)
     End Sub
     '
     ' -ops have the form: shri Rt,Ra,#
@@ -1605,11 +1670,11 @@ j1:
         rt = GetRegister(strs(1))
         ra = GetRegister(strs(2))
         imm = eval(strs(3))
-        emitbyte(2, False)
-        emitbyte(ra, False)
-        emitbyte(imm And 63, False)
-        emitbyte(rt, False)
-        emitbyte(fn, False)
+        emitAlignedCode(2)
+        emitCode(ra)
+        emitCode(imm And 63)
+        emitCode(rt)
+        emitCode(fn)
     End Sub
 
     '
@@ -1637,20 +1702,35 @@ j1:
         Dim offset As Int64
         Dim s() As String
 
+        ra = 0
+        If strs(1).StartsWith("(") Then
+            s = strs(1).Split(",".ToCharArray)
+            If s.Length > 1 Then
+                ra = GetRegister(s(1))
+            End If
+            offset = eval(s(0).Trim("()".ToCharArray))
+            emitImm24(offset)
+            emitAlignedCode(oc + 2)
+            emitCode(ra)
+            emitCode(offset And 255)
+            emitCode((offset >> 8) And 255)
+            emitCode((offset >> 16) And 255)
+            Return
+        End If
         's = strs(1).Split("(".ToCharArray)
         offset = eval(strs(1))
         ' If s.Length > 1 Then
         's(1) = s(1).TrimEnd(")".ToCharArray)
         'ra = GetBrRegister(s(1))
         'End If
-        If (offset < &HFFFFFFFF80000000L Or offset > &H7FFFFFFF) Then
+        If (offset < &HFFFFFFFF00000000L Or offset > &HFFFFFFFF) Then
             emitImm32(offset)
         End If
-        emitbyte(oc, False)
-        emitbyte(offset And 255, False)
-        emitbyte((offset >> 8) And 255, False)
-        emitbyte((offset >> 16) And 255, False)
-        emitbyte((offset >> 24) And 255, False)
+        emitAlignedCode(oc)
+        emitCode(offset And 255)
+        emitCode((offset >> 8) And 255)
+        emitCode((offset >> 16) And 255)
+        emitCode((offset >> 24) And 255)
     End Sub
 
     Sub ProcessMemoryOp(ByVal ops As String, ByVal oc As Int64)
@@ -1670,6 +1750,10 @@ j1:
         '    Console.WriteLine("Reached address B96C")
         'End If
 
+        If (strs.Length < 2) Or strs(2) Is Nothing Then
+            Console.WriteLine("Line:" & lineno & " Missing memory operand.")
+            Return
+        End If
         scale = 1
         rb = -1
         If oc = 54 Or oc = 71 Then
@@ -1678,12 +1762,12 @@ j1:
             rt = GetRegister(strs(1))
         End If
         ' Convert lw Rn,#n to ori Rn,R0,#n
-        If ops = "lw" Then
+        If ops = "lw" Or ops = "ld" Then
             If (strs(2).StartsWith("#")) Then
                 strs(0) = "ldi"
-                strs(3) = strs(2)
-                strs(2) = "r0"
-                ProcessRIOp(ops, 11)
+                'strs(3) = strs(2)
+                'strs(2) = "r0"
+                ProcessLdi(ops, &H16)
                 Return
             End If
         End If
@@ -1720,13 +1804,13 @@ j1:
             If Not optr26 Then
             Else
                 If offset < -32768 Or offset > 32767 Then
-                    emitImm3(offset)
+                    emitImm16(offset)
                 End If
-                emitbyte(oc, False)
-                emitbyte(ra, False)
-                emitbyte(rt, False)
-                emitbyte(offset And 255, False)
-                emitbyte((offset >> 8) And 255, False)
+                emitAlignedCode(oc)
+                emitCode(ra)
+                emitCode(rt)
+                emitCode(offset And 255)
+                emitCode((offset >> 8) And 255)
             End If
         Else
             Select Case (strs(0))
@@ -1749,19 +1833,21 @@ j1:
                 Case "sc"
                     oc = &HA9
                 Case "sh"
-                    oc = &HAB
+                    oc = &HAA
                 Case "sw"
-                    oc = &HAC
+                    oc = &HAB
+                Case "st"
+                    oc = &HAB
                 Case "lea"
                     oc = &H44
             End Select
-            If offset > 63 Then
+            If offset > 63 Or offset < 0 Then
                 emitImm6(offset)
             End If
-            emitbyte(oc, False)
-            emitbyte(ra, False)
-            emitbyte(rb, False)
-            emitbyte(rt, False)
+            emitAlignedCode(oc)
+            emitCode(ra)
+            emitCode(rb)
+            emitCode(rt)
             Select Case scale
                 Case 1 : scale = 0
                 Case 2 : scale = 1
@@ -1769,8 +1855,26 @@ j1:
                 Case 8 : scale = 3
                 Case Else : scale = 0
             End Select
-            emitbyte(scale Or (offset << 2), False)
+            emitCode(scale Or (offset << 2))
         End If
+    End Sub
+
+    Sub ProcessSmr(ByVal ops As String, ByVal oc As Int64)
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim rc As Int64
+        Dim str As String
+
+        ra = GetRegister(strs(1))
+        rb = GetRegister(strs(2))
+        str = strs(3).TrimStart("[".ToCharArray)
+        str = str.TrimEnd("]".ToCharArray)
+        rc = GetRegister(str)
+        emitAlignedCode(2)
+        emitCode(ra)
+        emitCode(rb)
+        emitCode(rc)
+        emitCode(oc)
     End Sub
 
     Sub ProcessJAL(ByVal ops As String, ByVal oc As Int64)
@@ -1814,6 +1918,18 @@ j1:
         End If
     End Sub
 
+    Sub ProcessBRK(ByVal ops As String, ByVal oc As Int64)
+        Dim tgt As Int64
+        Dim str As String
+
+        str = strs(1).TrimStart("#".ToCharArray)
+        tgt = eval(str)
+        emitAlignedCode(oc)
+        emitCode(tgt And 255)
+        emitCode((tgt >> 8) And 31)
+        emitCode(0)
+        emitCode(0)
+    End Sub
     Sub ProcessSyscall(ByVal ops As String, ByVal oc As Int64)
         Dim opcode As Int64
         Dim imm As Int64
@@ -1879,30 +1995,6 @@ j1:
         Return False
     End Function
 
-
-    Sub ProcessLoop(ByVal ops As String, ByVal oc As Int64)
-        Dim opcode As Int64
-        Dim ra As Int64
-        Dim rb As Int64
-        Dim rc As Int64
-        Dim imm As Int64
-        Dim disp As Int64
-        Dim L As Symbol
-
-        L = GetSymbol(strs(1))
-        'If slot = 2 Then
-        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
-        'Else
-        disp = (((L.address And &HFFFFFFFFFFFFFFFFL) - (address And &HFFFFFFFFFFFFFFFFL)))
-        'End If
-        'imm = (L.address + (L.slot << 2)) >> 2
-        If disp < -128 Or disp > 127 Then
-            emitIMM2(disp)
-        End If
-        emitOpcode(oc)
-        emitbyte(disp, False)
-    End Sub
-
     Sub ProcessBra(ByVal ops As String, ByVal oc As Int64)
         Dim opcode As Int64
         Dim ra As Int64
@@ -1917,7 +2009,7 @@ j1:
         rb = 0
         rc = 0
         If strs(2) Is Nothing Then
-            Console.WriteLine("missing register in branch?")
+            Console.WriteLine("missing register in branch? line" & lineno)
             Return
             L = Nothing
         Else
@@ -1929,18 +2021,56 @@ j1:
         disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
         'End If
         'imm = (L.address + (L.slot << 2)) >> 2
-        emitbyte(oc, False)
-        emitbyte(ra, False)
-        emitbyte(L.address And &HFF, False)
-        emitbyte((L.address >> 8) And &HFF, False)
-        emitbyte((disp >> 16) And &HFF, False)
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(L.address And &HFF)
+        emitCode((L.address >> 8) And &HFF)
+        emitCode((disp >> 16) And &HFF)
+    End Sub
+
+    Sub ProcessBsr(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim rc As Int64
+        Dim imm As Int64
+        Dim disp As Int64
+        Dim L As Symbol
+        Dim P As LabelPatch
+
+        ra = 0    ' branching to register ?
+        rb = 0
+        rc = 0
+        If strs(1) Is Nothing Then
+            Console.WriteLine("missing target address for branch?")
+            Return
+            L = Nothing
+        Else
+            L = GetSymbol(strs(1))
+        End If
+        'If slot = 2 Then
+        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
+        'Else
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
+        'End If
+        'imm = (L.address + (L.slot << 2)) >> 2
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(L.address And &HFF)
+        emitCode((L.address >> 8) And &HFF)
+        emitCode((disp >> 16) And &HFF)
     End Sub
 
     Function GetSymbol(ByVal nm As String) As Symbol
         Dim L As Symbol
         Dim P As LabelPatch
+        Dim isLocal As Boolean
 
         nm = nm.Trim
+        isLocal = nm.Chars(0) = "."
+        If isLocal Then
+            nm = lastLabel + nm
+        End If
         Try
             L = symbols.Item(NameTable.FindName(fileno & nm))
         Catch
@@ -2025,16 +2155,43 @@ j1:
                 End Try
                 Return r
                 'r26 is the constant building register
+            ElseIf s.ToLower().StartsWith("fl") Then
+                s = s.TrimStart("Ff".ToCharArray)
+                s = s.TrimStart("Ll".ToCharArray)
+                Try
+                    r = Int16.Parse(s) + 248
+                Catch
+                    r = -1
+                End Try
+                Return r
             ElseIf s.ToLower = "bp" Then
                 Return 253
             ElseIf s.ToLower = "sp" Then
                 Return 255
+            ElseIf s.ToLower = "tr" Then
+                Return 252
             ElseIf s.ToLower = "pc" Then
                 Return 254
             Else
                 Return -1
             End If
         Catch
+            Return -1
+        End Try
+    End Function
+
+    Function GetSprRegister(ByVal s As String) As Integer
+        Try
+            If s.ToLower = "tick" Then
+                Return 0
+            ElseIf s.ToLower = "vbr" Then
+                Return 1
+            ElseIf s.ToLower = "bear" Then
+                Return 2
+            Else
+                Return -1
+            End If
+        Catch ex As Exception
             Return -1
         End Try
     End Function
@@ -2051,6 +2208,8 @@ j1:
         Dim LP As LabelPatch
         Dim shr32 As Boolean
         Dim mask32 As Boolean
+        Dim ii As Integer
+        Dim nm As String
 
         shr32 = False
         mask32 = False
@@ -2067,6 +2226,10 @@ j1:
         If s.Chars(0) = "$" Then
             s = s.Replace("_", "")
             s1 = "0x" & s.Substring(1)
+            n = GetImmediate(s1, patchtype)
+        ElseIf s.Chars(0) = "%" Then
+            s = s.Replace("_", "")
+            s1 = "0b" & s.Substring(1)
             n = GetImmediate(s1, patchtype)
         ElseIf s.Chars(0) = "'" Then
             If s.Chars(1) = "\" Then
@@ -2105,22 +2268,44 @@ j1:
                     '    n = -n
                     'End If
                 End If
+            ElseIf s.Chars(1) = "b" Or s.Chars(1) = "B" Then
+                If s.Length >= 66 Then
+                    s = "0b" & Right(s, 64)    ' max that will fit into 64 bits
+                End If
+                n = 0
+                s = s.Substring(2)
+                For m = 0 To s.Length - 1
+                    n = n << 1
+                    s1 = s.Substring(m, 1)
+                    If s1 = "1" Then
+                        n = n Or 1
+                    End If
+                Next
+                'If s.Substring(2, 1) = "0" And n < 0 Then
+                '    n = -n
+                'End If
             End If
         Else
-            If s.Chars(0) > "9" Then
+            If s.Chars(0) > "9" Or s.Chars(0) = "." Then
                 sym = Nothing
+                If s.Chars(0) = "." Then
+                    nm = lastLabel & s
+                Else
+                    nm = s
+                End If
+
                 Try
-                    sym = symbols.Find(NameTable.FindName(fileno & s))
+                    sym = symbols.Find(NameTable.FindName(fileno & nm))
                 Catch
                     Try
-                        sym = symbols.Find(NameTable.FindName("0" & s))
+                        sym = symbols.Find(NameTable.FindName("0" & nm))
                     Catch
                         sym = Nothing
                     End Try
                 End Try
                 If sym Is Nothing Then
                     sym = New Symbol
-                    sym.name = NameTable.AddName(fileno & s)
+                    sym.name = NameTable.AddName(fileno & nm)
                     sym.defined = False
                     sym.type = "U"
                     sym.segment = "Unknown"
@@ -2512,23 +2697,49 @@ j1:
         End Select
     End Sub
 
-    Sub emitbyte(ByVal n As Int64, ByVal flush As Boolean)
+    Sub emitAlignedCode(ByVal n As Int64)
+        Dim ad As Int64
+
+        ad = (address And 15)
+        While ad <> 0 And ad <> 5 And ad <> 10
+            emitbyte(&H0, False, False)
+            ad = (address And 15)
+        End While
+        emitbyte(n, False)
+    End Sub
+    Sub emitCode(ByVal n As Int64)
+        emitbyte(n, False)
+    End Sub
+
+    Sub emitbyte(ByVal n As Int64, ByVal flush As Boolean, Optional ByVal abb As Boolean = True)
+        Dim ad As Int64
+        Dim nn As Int64
+
+        ad = address And 15
         If (address And 15) = 15 Then
             binbuf.add(insnBundle)
             insnBundle.clear()
         End If
-        bytesbuf(bytn) = n And 255
-        bytn = bytn + 1
 
-        If bytn > 4 Then
-            WriteListing()
-            bytn = 0
+        If segment <> "bss" Then
+            If abb Then
+                bytesbuf(bytn) = n And 255
+                bytn = bytn + 1
+            Else
+                sa = sa + 1
+            End If
+
+            nn = 4
+            If bytn > nn Then
+                WriteListing()
+                bytn = 0
+            End If
         End If
 
-        If (address And 15) > 14 Then
-            emitbyte2(&H0, flush)
-            sa = sa + 1
-        End If
+        'If (address And 15) > 14 And Not doingDB Then
+        'emitbyte2(&H0, flush)
+        'sa =' sa + 1
+        'End If
         emitbyte2(n, flush)
     End Sub
 
@@ -2658,6 +2869,16 @@ j1:
         Dim s As String
         Dim nn As Int64
         Dim ad As Int64
+
+        emitbyte(n And 255, False)
+        emitbyte((n >> 8) And 255, False)
+        emitbyte((n >> 16) And 255, False)
+        emitbyte((n >> 24) And 255, False)
+        emitbyte((n >> 32) And 255, False)
+        emitbyte((n >> 40) And 255, False)
+        emitbyte((n >> 48) And 255, False)
+        emitbyte((n >> 56) And 255, False)
+        Return
 
         word = n
         If pass = maxpass Then

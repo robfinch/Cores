@@ -32,6 +32,8 @@
 
 `define BRK		8'h00
 `define R		8'h01
+`define SWAP		8'h03
+`define MOV			8'h04
 `define NEG			8'h05
 `define COM			8'h06
 `define NOT			8'h07
@@ -67,6 +69,8 @@
 `define NOR			8'h25
 `define ENOR		8'h26
 `define ORN			8'h27
+`define SMR			8'h30
+`define LMR			8'h31
 `define SHLI		8'h50
 `define ROLI		8'h51
 `define SHRI		8'h52
@@ -158,8 +162,9 @@
 
 `define TICK	8'h00
 `define VBR		8'h01
+`define BEAR	8'h02
 
-module Table888(rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o);
+module Table888(rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o);
 input rst_i;
 input clk_i;
 input nmi_i;
@@ -171,6 +176,7 @@ output reg [5:0] bl_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
+input err_i;
 output reg [3:0] sel_o;
 output reg we_o;
 output reg [31:0] adr_o;
@@ -204,6 +210,8 @@ parameter ICACHE2 = 6'd21;
 parameter IBUF1 = 6'd24;
 parameter IBUF2 = 6'd25;
 parameter IBUF3 = 6'd26;
+parameter PC_DELAY = 6'd28;
+parameter PC_DELAY2 =6'd29;
 // - - - - - - - - - - - - - - - - - -
 // codes for load/store sizes
 // - - - - - - - - - - - - - - - - - -
@@ -229,6 +237,7 @@ reg isInsnCacheLoad,isCacheReset;
 reg nmi_edge,nmi1;
 reg hwi;			// hardware interrupt indicator
 reg im;				// irq interrupt mask bit
+reg [2:0] imcd;		// mask countdown bits
 wire [31:0] sr = {23'd0,im,8'h00};
 reg [63:0] regfile [255:0];
 reg [63:0] sp;	// stack pointer
@@ -247,7 +256,7 @@ wire ihit;
 reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSR,isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
-reg isShifti,isBSR;
+reg isShifti,isBSR,isLMR,isSMR;
 wire hasIMM = isIMM1|isIMM2;
 reg [63:0] rfoa,rfob,rfoc;
 reg [64:0] res;			// result bus
@@ -256,6 +265,7 @@ reg [63:0] imm;
 reg [63:0] immbuf;
 reg [63:0] tick;		// tick count
 reg [31:0] vbr;			// vector base register
+reg [31:0] berr_addr;
 
 // - - - - - - - - - - - - - - - - - -
 // Convenience Functions
@@ -297,7 +307,7 @@ icache_tagram u1 (
 	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
 	.wa(adr_o),
 	.v(!isCacheReset),
-	.rclk(~clk_i),
+	.rclk(clk_i),
 	.pc(pc),
 	.hit(ihit)
 );
@@ -308,7 +318,7 @@ icache_ram u2 (
 	.wr(ack_i & isInsnCacheLoad),
 	.wa(adr_o[12:0]),
 	.i(dat_i),
-	.rclk(~clk_i),
+	.rclk(clk_i),
 	.pc(pc[12:0]),
 	.insn(insn),
 	.debug_bits(debug_bits)
@@ -364,7 +374,7 @@ wire [64:0] cmp_res = a - (isCMPI ? imm : b);
 reg nf,vf,cf,zf;
 always @(cmp_res or a or b or imm or isCMPI)
 begin
-	cf <= cmp_res[64];
+	cf <= ~cmp_res[64];
 	nf <= cmp_res[63];
 	vf <= overflow(1,a[63],isCMPI ? imm[63] : b[63], cmp_res[63]);
 	zf <= cmp_res[63:0]==64'd0;
@@ -436,17 +446,19 @@ if (rst_i) begin
 	store_what <= `STW_NONE;
 	tick <= 64'd0;
 	vbr <= 32'h07FFE000;
+	imcd <= 3'b111;
 end
 else begin
 tick <= tick + 64'd1;
 if (nmi_i & !nmi1)
 	nmi_edge <= `TRUE;
 wrrf <= `FALSE;
+
 case(state)
 RESET:
 	begin
 		adr_o[3:2] <= 2'b11;		// The tagram checks for this
-		adr_o <= adr_o + 32'd16;
+		adr_o[31:4] <= adr_o[31:4] + 28'd1;
 		if (adr_o[12:6]==7'h7F) begin
 			isCacheReset <= `FALSE;
 			next_state(IFETCH);
@@ -468,17 +480,25 @@ IFETCH:
 			nmi_edge <= 1'b0;
 			hwi <= `TRUE;
 		end
-		else if (irq_i & gie & !im & ~hasIMM) begin
+		else if (irq_i & gie & ~im & ~hasIMM) begin
+			$display("****************");
+			$display("****************");
+			$display("IRQ");
+			$display("****************");
+			$display("****************");
 			ir[7:0] <= `BRK;
 			ir[39:8] <= {vbr[31:13],vect_i,4'd0};
 			hwi <= `TRUE;
+			$stop;
 		end
-		else if (!ihit & !uncachedArea & icacheOn)
+		else if (!ihit & !uncachedArea & icacheOn) begin
 			next_state(ICACHE1);
-		else if (ibufmiss & (uncachedArea | !icacheOn))
+		end
+		else if (ibufmiss & (uncachedArea | !icacheOn)) begin
 			next_state(IBUF1);
+		end
 		else if (icacheOn & !uncachedArea) begin
-			if (debug_bits[0]) begin
+			if (debug_bits[0] & 1'b0) begin
 				ir[7:0] <= `BRK;
 				ir[39:8] <= `DBG_VECT;
 				hwi <= `TRUE;
@@ -488,6 +508,13 @@ IFETCH:
 		end
 		else
 			ir <= ibuf;
+		if (imcd != 3'b111) begin
+			imcd <= {imcd,1'b0};
+			if (imcd[2]==1'b0) begin
+				im <= `FALSE;
+				imcd <= 3'b111;
+			end
+		end
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -550,6 +577,11 @@ IBUF3:
 		end
 	end
 
+PC_DELAY:
+	next_state(PC_DELAY2);
+PC_DELAY2:
+	next_state(IFETCH);
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 // DECODE Stage
@@ -558,14 +590,16 @@ IBUF3:
 DECODE:
 	begin
 		next_state(EXECUTE);
+		if (!hwi)
+			pc <= pc_inc(pc);
 		// Default a number of signals. These defaults may be overridden later.
-		pc <= pc_inc(pc);
 		isIMM1 <= `FALSE;
 		isIMM2 <= `FALSE;
 		isCMPI <= `FALSE;
 		isBRK <= `FALSE;
 		isBSR <= `FALSE;
 		isJSR <= `FALSE;
+		isJSRdrn <= `FALSE;
 		isJSRix <= `FALSE;
 		isJMPix <= `FALSE;
 		isRTS <= `FALSE;
@@ -573,6 +607,8 @@ DECODE:
 		isPUSH <= `FALSE;
 		isPLP <= `FALSE;
 		isRTI <= `FALSE;
+		isLMR <= `FALSE;
+		isSMR <= `FALSE;
 		isShifti = func==`SHLI || func==`SHRI || func==`ROLI || func==`RORI || func==`ASRI;
 		a <= rfoa;
 		b <= rfob;
@@ -582,7 +618,11 @@ DECODE:
 		
 		// Set the target register
 		case(opcode)
-		`R:		Rt <= ir[23:16];
+		`R:	
+			case(func)
+			`MTSPR:	Rt <= 8'h00;	// We are writing to an SPR not the general register file
+			default:	Rt <= ir[23:16];
+			endcase
 		`RR:	Rt <= ir[31:24];
 		`LDI:	Rt <= ir[15:8];
 		`DBNZ:	Rt <= ir[15:8];
@@ -599,6 +639,7 @@ DECODE:
 
 		// Immediate value multiplexer
 		case(opcode)
+		`BRK:		imm <= hwi ? ir[39:8] : {vbr[31:13],ir[20:8]};
 		`LDI:		imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : {{40{ir[39]}},ir[39:16]};
 		`JSR:		imm <= ir[39:8];	// PC has only 32 bits implemented
 		`JMP:		imm <= ir[39:8];
@@ -617,13 +658,13 @@ DECODE:
 
 		// This case statement decodes all instructions.
 		case(opcode)
-		`NOP:	next_state(IFETCH);
+		`NOP:	next_state(PC_DELAY);
 		`R:
 			case(func)
-			`SEI:	begin im <= `TRUE; next_state(IFETCH); end
-			`CLI:	begin im <= `FALSE; next_state(IFETCH); end
-			`ICON:	begin icacheOn <= `TRUE; next_state(IFETCH); end
-			`ICOFF:	begin icacheOn <= `FALSE; next_state(IFETCH); end
+			`SEI:	begin im <= `TRUE; next_state(PC_DELAY); end
+			`CLI:	begin imcd <= 3'b110; next_state(PC_DELAY); end
+			`ICON:	begin icacheOn <= `TRUE; next_state(PC_DELAY); end
+			`ICOFF:	begin icacheOn <= `FALSE; next_state(PC_DELAY); end
 			`PHP:
 				begin
 					wadr <= sp_dec;
@@ -663,14 +704,12 @@ DECODE:
 		`BRK:
 			begin
 				isBRK <= `TRUE;
-				if (hwi)
-					pc <= pc;
 				wadr <= sp_dec;
 				sp <= sp_dec;
 				store_what <= `STW_SR;
 				next_state(STORE1);
 			end
-		`JMP:	begin pc <= ir[39:8]; next_state(IFETCH); end
+		`JMP:	begin pc <= ir[39:8]; next_state(PC_DELAY); end
 		`BSR:
 			begin
 				isBSR <= `TRUE;
@@ -712,10 +751,13 @@ DECODE:
 				wadr <= sp_dec[31:0];
 				store_what <= `STW_A;
 				if (ir[39:8]==32'h0)
-					next_state(IFETCH);
-				else if (ir[15:8]==8'h00)
+					next_state(PC_DELAY);
+				else if (ir[15:8]==8'h00) begin
+					pc <= pc;
 					next_state(DECODE);
+				end
 				else begin
+					pc <= pc;
 					sp <= sp_dec;
 					next_state(STORE1);
 				end
@@ -727,10 +769,13 @@ DECODE:
 				ir[39:8] <= {8'h00,ir[39:16]};
 				radr <= sp[31:0];
 				if (ir[39:8]==32'h0)
-					next_state(IFETCH);
-				else if (ir[15:8]==8'h00)
+					next_state(PC_DELAY);
+				else if (ir[15:8]==8'h00) begin
+					pc <= pc;
 					next_state(DECODE);
+				end
 				else begin
+					pc <= pc;
 					sp <= sp_inc;
 					next_state(LOAD1);
 				end
@@ -743,13 +788,13 @@ DECODE:
 			begin
 				isIMM1 <= `TRUE;
 				immbuf <= {{32{ir[39]}},ir[39:8]};
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 			end
 		`IMM2:
 			begin
 				isIMM2 <= `TRUE;
 				immbuf[63:32] <= ir[39:8];
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 			end
 		endcase
 	end
@@ -761,11 +806,13 @@ DECODE:
 // ----------------------------------------------------------------------------
 EXECUTE:
 	begin
-		next_state(IFETCH);
+		next_state(PC_DELAY);
 		// This case statement execute instructions.
 		case(opcode)
 		`R:
 			case(func)
+			`SWAP:	res <= {a[31:0],a[63:32]};
+			`MOV:	res <= a;
 			`NEG:	res <= -a;
 			`COM:	res <= ~a;
 			`NOT:	res <= ~|a;
@@ -776,12 +823,13 @@ EXECUTE:
 				case(Ra)
 				`TICK:	res <= tick;
 				`VBR:	res <= vbr;
+				`BEAR:	res <= berr_addr;
 				default:	res <= 65'd0;
 				endcase
 			`MTSPR:
-				case(Rt)
-				`TICK:	tick <= a;
-				`VBR:	vbr <= a;
+				case(ir[23:16])	// Don't use Rt!
+				//`TICK:	tick <= a;
+				`VBR:	vbr <= {a[31:13],13'd0};
 				endcase
 			endcase
 		`RR:
@@ -802,6 +850,23 @@ EXECUTE:
 			`RORI,`ROR:	res <= shro[127:64]|shro[63:0];
 			`SHRI,`SHR:	res <= shro[127:64];
 			`ASRI,`ASR:	res <= asro;
+			// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+			// LMR / SMR
+			// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+			`LMR:
+				begin
+					isLMR <= `TRUE;
+					Rt <= Ra;
+					radr <= c;
+					next_state(LOAD1);
+				end
+			`SMR:
+				begin
+					isSMR <= `TRUE;
+					wadr <= c;
+					store_what <= `STW_A;
+					next_state(STORE1);
+				end
 			// Unimplemented instruction
 			default:	res <= 65'd0;
 			endcase
@@ -819,7 +884,7 @@ EXECUTE:
 		`BEQ,`BNE,`BVS,`BVC,`BMI,`BPL,`BRA,`BRN,`BGT,`BGE,`BLT,`BLE,`BHI,`BHS,`BLO,`BLS,
 		`BRZ,`BRNZ:
 			begin
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 				if (take_branch) begin
 					pc[15: 0] <= ir[31:16];
 					pc[31:16] <= pc[31:16] + {{11{ir[36]}},ir[36:32]};
@@ -827,7 +892,7 @@ EXECUTE:
 			end
 		`DBNZ:
 			begin
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 				if (take_branch) begin
 					pc[15: 0] <= ir[31:16];
 					pc[31:16] <= pc[31:16] + {{11{ir[36]}},ir[36:32]};
@@ -840,7 +905,7 @@ EXECUTE:
 				radr <= a + imm;
 				next_state(LOAD1);
 			end
-		`JMP_DRN:	pc <= a + imm;
+		`JMP_DRN:	begin pc <= a + imm; next_state(PC_DELAY); end
 		`JSR_IX:
 			begin
 				radr <= a + imm;
@@ -1156,17 +1221,19 @@ LOAD2:
 			end
 			else begin
 				case(ld_size)
-				uhalf:	res <= dat32;
+				uhalf:	res <= {32'd0,dat32};
 				half:	res <= {{32{dat32[31]}},dat32};
-				uchar:	res <= dat16;
+				uchar:	res <= {48'd0,dat16};
 				char:	res <= {{48{dat16[15]}},dat16};
-				ubyte:	res <= dat8;
+				ubyte:	res <= {56'd0,dat8};
 				byt:	res <= {{56{dat8[7]}},dat8};
 				default:	res[31:0] <= dat32;
 				endcase
 				next_state(IFETCH);
 			end
 		end
+		else if (err_i)
+			bus_err();
 	end
 LOAD3:
 	begin
@@ -1180,21 +1247,32 @@ LOAD4:
 			wb_nack();
 			res[63:32] <= dat32;
 			case(1'b1)
+			isLMR:
+				begin
+					wrrf <= `TRUE;
+					if (Rt==Rb) begin
+						Rt <= 8'h00;
+						next_state(IFETCH);
+					end
+					else
+						next_state(LOAD1);
+				end
 			isJSRix,isJMPix:
 				begin
 					pc <= res[31:0];
-					next_state(IFETCH);
+					next_state(PC_DELAY);
 				end
 			isRTS:
 				begin
-					pc <= res[31:0] + ir[15:8];
-					next_state(IFETCH);
+					pc <= res[31:0];// + ir[15:8];
+					next_state(PC_DELAY);
 				end
 			isRTI:
 				begin
 					isPLP <= `TRUE;
 					isRTI <= `FALSE;
 					pc <= res[31:0];
+					sp <= sp_inc;
 					next_state(LOAD1);
 				end
 			isPOP:
@@ -1204,13 +1282,18 @@ LOAD4:
 				end
 			isPLP:
 				begin
-					im <= res[8];
+					if (res[8]==1'b0)
+						imcd <= 3'b110;
+					else
+						im <= 1'b1;
 					next_state(IFETCH);
 				end
 			default:
 				next_state(IFETCH);
 			endcase
 		end
+		else if (err_i)
+			bus_err();
 	end
 
 
@@ -1226,11 +1309,12 @@ STORE1:
 		`STW_C:		wb_write(st_size,wadr,c[31:0]);
 		`STW_PC:	wb_write(word,wadr,pc[31:0]);
 		`STW_SR:	wb_write(word,wadr,sr[31:0]);
+		default:	next_state(RESET);	// hardware fault
 		endcase
 		next_state(STORE2);
 	end
 STORE2:
-	begin
+	if (ack_i) begin
 		wb_nack();
 		wadr <= wadr + 32'd4;
 		if (st_size==word)
@@ -1238,6 +1322,8 @@ STORE2:
 		else
 			next_state(IFETCH);
 	end
+	else if (err_i)
+		bus_err();
 STORE3:
 	begin
 		case (store_what)
@@ -1246,50 +1332,62 @@ STORE3:
 		`STW_C:		wb_write(word,wadr,c[63:32]);
 		`STW_PC:	wb_write(word,wadr,32'h0);
 		`STW_SR:	wb_write(word,wadr,32'd0);
+		default:	next_state(RESET);	// hardware fault
 		endcase
 		next_state(STORE4);
+		if (isSMR)
+			ir[15:8] <= ir[15:8] + 8'd1;
 	end
 STORE4:
-	begin
+	if (ack_i) begin
 		wb_nack();
 		wadr <= wadr + 32'd4;
-		case(1'b1)
-		isBRK:
+		if (isSMR) begin
+			a <= rfoa;
+			if (Ra>Rb || Ra==0)
+				next_state(IFETCH);
+			else
+				next_state(STORE1);
+		end
+		else if (isBRK)
 			begin
 				if (store_what==`STW_PC) begin
 					pc <= imm;
-					next_state(IFETCH);
+					next_state(PC_DELAY);
 				end
 				else begin
 					store_what <= `STW_PC;
-					wadr <= wadr - 32'd12;
+					wadr <= sp_dec;
+					sp <= sp_dec;
+					im <= `TRUE;
 					next_state(STORE1);
 				end
 			end
-		isBSR:
+		else if (isBSR)
 			begin
 				pc[15: 0] <= ir[31:16];
 				pc[31:16] <= pc[31:16] + {{11{ir[36]}},ir[36:32]};
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 			end
-		isJSR:
+		else if (isJSR)
 			begin
 				pc <= imm;
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 			end
-		isJSRdrn:
+		else if (isJSRdrn)
 			begin
 				pc <= a + imm;
-				next_state(IFETCH);
+				next_state(PC_DELAY);
 			end
-		isJSRix:
+		else if (isJSRix)
 			next_state(LOAD1);
-		isPUSH:
+		else if (isPUSH)
 			next_state(DECODE);
-		default:
+		else
 			next_state(IFETCH);
-		endcase
 	end
+	else if (err_i)
+		bus_err();
 endcase
 
 
@@ -1310,6 +1408,8 @@ if (state==IFETCH || wrrf) begin
 		sp <= {res[63:3],3'b000};
 		gie <= `TRUE;
 	end
+	if (isLMR && wrrf)
+		Rt <= Rt + 8'd1;
 end
 
 end
@@ -1400,11 +1500,22 @@ begin
 end
 endtask
 
+task bus_err;
+begin
+	berr_addr <= adr_o;
+	ir <= {vbr[31:13],9'd508,4'h0,`BRK};
+	hwi <= `TRUE;
+	next_state(DECODE);
+end
+endtask
+
 function [127:0] fnStateName;
 input [5:0] state;
 case(state)
 RESET:	fnStateName = "RESET      ";
 IFETCH:	fnStateName = "IFETCH     ";
+PC_DELAY:	fnStateName = "PC_DELAY   ";
+PC_DELAY2:	fnStateName = "PC_DELAY2  ";
 DECODE:	fnStateName = "DECODE     ";
 EXECUTE:	fnStateName = "EXECUTE   ";
 RTS1:	fnStateName = "RTS1       ";
@@ -1474,7 +1585,7 @@ syncram_512x32_1rw1r u4 (wclk, wr && wa[3:2]==2'b11, wa[12:4], i, rclk, pc[12:4]
 
 wire [127:0] bundle = {o4,o3,o2,o1};
 
-always @(bundle or pc)
+always @(posedge rclk)
 case(pc[3:0])
 4'h0:	insn <= bundle[ 39: 0];
 4'h5:	insn <= bundle[ 79:40];
@@ -1482,7 +1593,7 @@ case(pc[3:0])
 default:	insn <= {`ALN_VECT,8'h50};	// JMP Alignment fault
 endcase
 
-always @(bundle or pc)
+always @(posedge rclk)
 case(pc[3:0])
 4'h0:	debug_bits <= bundle[121:120];
 4'h5:	debug_bits <= bundle[123:122];
@@ -1499,13 +1610,14 @@ input [31:0] wa;
 input v;
 input rclk;
 input [31:0] pc;
-output hit;
+output reg hit;
 
 wire [31:0] tag;
 
-syncram_512x32_1rw1r u1 (wclk, wr && wa[3:2]==2'b11, wa[12:4], {wa[31:1],v}, rclk, pc[12:4], tag);
+syncram_512x32_1rw1r u1 (wclk, wr && wa[3:2]==2'b11, wa[12:4], {wa[31:13],12'd0,v}, rclk, pc[12:4], tag);
 
-assign hit = tag[31:13]==pc[31:13] && tag[0];
+always @(posedge rclk)
+	hit <= tag[31:13]==pc[31:13] && tag[0];
 
 endmodule
 
