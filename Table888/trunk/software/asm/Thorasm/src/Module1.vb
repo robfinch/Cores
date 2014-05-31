@@ -197,9 +197,13 @@ Module Module1
             End If
 
             ' flush instruction holding bundle
-            While (address Mod 4)
-                emitbyte(0, False)
-            End While
+            'While (address Mod 4)
+            '    emitbyte(0, False)
+            'End While
+            emitbyte(0, False)
+            emitbyte(0, False)
+            emitbyte(0, False)
+            emitbyte(0, False)
             emitbyte(0, False)
             emitbyte(0, False)
             emitbyte(0, False)
@@ -340,6 +344,14 @@ j1:
                         plbl = True
                     Else
                         nn = s.IndexOf(":")
+                        If nn >= 0 Then
+                            sg = GetSegRegister(s.Substring(0, nn))
+                            If sg >= 0 Then
+                                segreg = sg
+                                s = s.Substring(nn + 1)
+                                strs(0) = s
+                            End If
+                        End If
                         If Not processedPredicate Then
                             processedPredicate = True
                         End If
@@ -440,6 +452,16 @@ j1:
                                 ProcessMemoryOp(s, &HA3)
                             Case "st"
                                 ProcessMemoryOp(s, &HA3)
+                            Case "cinv"
+                                ProcessMemoryOp(s, &HA4)
+                            Case "lidt"
+                                ProcessLidtOp(s, &H90)
+                            Case "lgdt"
+                                ProcessLidtOp(s, &H91)
+                            Case "sidt"
+                                ProcessLidtOp(s, &HB0)
+                            Case "sgdt"
+                                ProcessLidtOp(s, &HB1)
                             Case "lea"
                                 ProcessMemoryOp(s, &H4C)
                             Case "stbc"
@@ -525,6 +547,10 @@ j1:
                                 ProcessMtspr(s, &H48)
                             Case "mfspr"
                                 ProcessMfspr(s, &H49)
+                            Case "mtseg"
+                                ProcessMtSeg(s, &HC)
+                            Case "mfseg"
+                                ProcessMfseg(s, &HD)
                             Case "swap"
                                 ProcessROp(s, 3)
 
@@ -602,6 +628,10 @@ j1:
                                 processCLI(&H31)
                             Case "sei"
                                 processCLI(&H30)
+                            Case "php"
+                                processCLI(&H32)
+                            Case "plp"
+                                processCLI(&H33)
                             Case "icache_on"
                                 processCLI(&H34)
                             Case "icache_off"
@@ -720,6 +750,7 @@ j3:
     Sub DumpSymbols()
         Dim sym As Symbol
         Dim ii As Integer
+        Dim symseg As String
 
         lfs.WriteLine(" ")
         lfs.WriteLine(" ")
@@ -730,12 +761,17 @@ j3:
         For ii = 0 To symbols.Size - 1
             sym = symbols.Item(ii)
             If sym Is Nothing Then GoTo j1
+            If sym.segment Is Nothing Then
+                symseg = "<nothing>"
+            Else
+                symseg = sym.segment
+            End If
             If sym.type = "L" Then
-                If sym.segment = "code" Then
+                If symseg = "code" Then
                     lfs.WriteLine(NameTable.GetName(sym.name).PadRight(20, " ") & vbTab & sym.type & vbTab & sym.segment.PadRight(8) & vbTab & " " & sym.scope.PadRight(3, " ") & " " & vbTab & Hex(sym.address).PadLeft(16, "0"))
                 Else
                     If sym.defined Then
-                        lfs.WriteLine(NameTable.GetName(sym.name).PadRight(20, " ") & vbTab & sym.type & vbTab & sym.segment.PadRight(8) & vbTab & " " & sym.scope.PadRight(3, " ") & " " & vbTab & Hex(sym.address).PadLeft(16, "0"))
+                        lfs.WriteLine(NameTable.GetName(sym.name).PadRight(20, " ") & vbTab & sym.type & vbTab & symseg.PadRight(8) & vbTab & " " & sym.scope.PadRight(3, " ") & " " & vbTab & Hex(sym.address).PadLeft(16, "0"))
                     Else
                         lfs.WriteLine(NameTable.GetName(sym.name).PadRight(20, " ") & vbTab & "undef" & vbTab & " " & sym.scope.PadRight(3, " ") & " " & vbTab & Hex(sym.address).PadLeft(16, "0"))
                     End If
@@ -1126,7 +1162,7 @@ j1:
                     emitword(Asc(Mid(strs(m), n + 1)), False)
                     n = n + 2
                 Else
-                    emitword(GetImmediate(Mid(strs(m), n), "dw"), False)
+                    emitword(eval(Mid(strs(m), n)), False)
                     Exit While
                 End If
             End While
@@ -1198,6 +1234,34 @@ j1:
         iline = str
     End Sub
 
+    Sub emitImm14(ByVal imm As Int64)
+        Dim str As String
+
+        str = iline
+        iline = "; imm "
+        If imm >= &HFFFFFE0000000000L And imm < &H1FFFFFFFFFFL Then
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 14)
+            emitCode((imm >> 22) And 255)
+            emitCode((imm >> 30) And 255)
+            emitCode(((imm >> 38) And 15) Or (segreg << 4))
+        Else
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 14)
+            emitCode((imm >> 22) And 255)
+            emitCode((imm >> 30) And 255)
+            emitCode((imm >> 38) And 255)
+            emitAlignedCode(&HFE)
+            emitCode(imm >> 46)
+            emitCode((imm >> 54) And 255)
+            emitCode((imm >> 62) And 255)
+            emitCode(segreg << 4)
+        End If
+        iline = str
+        bytn = 0
+        sa = address
+    End Sub
+
     Sub emitImm16(ByVal imm As Int64)
         Dim str As String
 
@@ -1215,7 +1279,7 @@ j1:
             emitCode((imm >> 24) And 255)
             emitCode((imm >> 32) And 255)
             emitCode((imm >> 40) And 255)
-            emitCode(&HFE)
+            emitAlignedCode(&HFE)
             emitCode(imm >> 48)
             emitCode((imm >> 56) And 255)
             emitCode(0)
@@ -1225,6 +1289,35 @@ j1:
         bytn = 0
         sa = address
     End Sub
+
+    Sub emitImm4(ByVal imm As Int64)
+        Dim str As String
+
+        str = iline
+        iline = "; imm "
+        If imm >= &HFFFFFFF800000000L And imm < &H7FFFFFFFFL Then
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 4)
+            emitCode((imm >> 12) And 255)
+            emitCode((imm >> 20) And 255)
+            emitCode(((imm >> 28) And 15) Or (segreg << 4))
+        Else
+            emitAlignedCode(&HFD)
+            emitCode(imm >> 4)
+            emitCode((imm >> 12) And 255)
+            emitCode((imm >> 20) And 255)
+            emitCode((imm >> 28) And 255)
+            emitAlignedCode(&HFE)
+            emitCode(imm >> 36)
+            emitCode((imm >> 44) And 255)
+            emitCode((imm >> 52) And 255)
+            emitCode(((imm >> 60) And 15) Or (segreg << 4))
+        End If
+        iline = str
+        bytn = 0
+        sa = address
+    End Sub
+
     Sub emitImm6(ByVal imm As Int64)
         Dim str As String
 
@@ -1242,7 +1335,7 @@ j1:
             emitCode((imm >> 14) And 255)
             emitCode((imm >> 22) And 255)
             emitCode((imm >> 30) And 255)
-            emitCode(&HFE)
+            emitAlignedCode(&HFE)
             emitCode(imm >> 38)
             emitCode((imm >> 46) And 255)
             emitCode((imm >> 54) And 255)
@@ -1272,7 +1365,7 @@ j1:
             emitCode((imm >> 32) And 255)
             emitCode((imm >> 40) And 255)
             emitCode((imm >> 48) And 255)
-            emitCode(&HFE)
+            emitAlignedCode(&HFE)
             emitCode(imm >> 56)
             emitCode(0)
             emitCode(0)
@@ -1414,6 +1507,18 @@ j1:
         emitCode(0)
         emitCode(fn)
     End Sub
+    Sub ProcessMtseg(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+
+        rt = GetSegRegister(strs(1))
+        ra = GetRegister(strs(2))
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
+    End Sub
     '
     '
     Sub ProcessMfspr(ByVal ops As String, ByVal fn As Int64)
@@ -1428,7 +1533,18 @@ j1:
         emitCode(0)
         emitCode(fn)
     End Sub
+    Sub ProcessMfseg(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
 
+        rt = GetRegister(strs(1))
+        ra = GetSegRegister(strs(2))
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
+    End Sub
     '
     ' J-ops have the form:   call   address
     '
@@ -1745,10 +1861,26 @@ j1:
         Dim s2() As String
         Dim str As String
         Dim imm As Int64
+        Dim segbits As Int64
+        Dim needSegPrefix = False
 
         'If address = &HFFFFFFFFFFFFB96CL Then
         '    Console.WriteLine("Reached address B96C")
         'End If
+
+        If segreg = 1 Then
+            segbits = 0
+        ElseIf segreg = 3 Then
+            segbits = 1
+        ElseIf segreg = 5 Then
+            segbits = 2
+        ElseIf segreg = 14 Then
+            segbits = 3
+        Else
+            segbits = 0
+            needSegPrefix = True
+        End If
+
 
         If (strs.Length < 2) Or strs(2) Is Nothing Then
             Console.WriteLine("Line:" & lineno & " Missing memory operand.")
@@ -1803,14 +1935,14 @@ j1:
         If rb = -1 Then
             If Not optr26 Then
             Else
-                If offset < -32768 Or offset > 32767 Then
-                    emitImm16(offset)
+                If offset < -8192 Or offset > 8191 Or needSegPrefix Then
+                    emitImm14(offset)
                 End If
                 emitAlignedCode(oc)
                 emitCode(ra)
                 emitCode(rt)
-                emitCode(offset And 255)
-                emitCode((offset >> 8) And 255)
+                emitCode(((offset And 63) << 2) Or segbits)
+                emitCode((offset >> 6) And 255)
             End If
         Else
             Select Case (strs(0))
@@ -1838,11 +1970,13 @@ j1:
                     oc = &HAB
                 Case "st"
                     oc = &HAB
+                Case "cinv"
+                    oc = &HAC
                 Case "lea"
                     oc = &H44
             End Select
-            If offset > 63 Or offset < 0 Then
-                emitImm6(offset)
+            If offset > 15 Or offset < 0 Or needSegPrefix Then
+                emitImm4(offset)
             End If
             emitAlignedCode(oc)
             emitCode(ra)
@@ -1855,7 +1989,77 @@ j1:
                 Case 8 : scale = 3
                 Case Else : scale = 0
             End Select
-            emitCode(scale Or (offset << 2))
+            emitCode(scale Or (offset << 4) Or (segbits << 2))
+        End If
+    End Sub
+
+    Sub ProcessLidtOp(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim rt As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim offset As Int64
+        Dim scale As Int64
+        Dim s() As String
+        Dim s1() As String
+        Dim s2() As String
+        Dim str As String
+        Dim imm As Int64
+        Dim segbits As Int64
+        Dim needSegPrefix = False
+
+        'If address = &HFFFFFFFFFFFFB96CL Then
+        '    Console.WriteLine("Reached address B96C")
+        'End If
+
+        If segreg = 1 Then
+            segbits = 0
+        ElseIf segreg = 3 Then
+            segbits = 1
+        ElseIf segreg = 5 Then
+            segbits = 2
+        ElseIf segreg = 14 Then
+            segbits = 3
+        Else
+            segbits = 0
+            needSegPrefix = True
+        End If
+
+
+        If (strs.Length < 1) Or strs(1) Is Nothing Then
+            Console.WriteLine("Line:" & lineno & " Missing memory operand.")
+            Return
+        End If
+        scale = 1
+        rb = -1
+        ra = GetRegister(strs(1))
+        s = strs(1).Split("[".ToCharArray)
+        'offset = GetImmediate(s(0), "memop")
+        offset = eval(s(0))
+        If s.Length > 1 Then
+            s(1) = s(1).TrimEnd("]".ToCharArray)
+            s1 = s(1).Split("+".ToCharArray)
+            ra = GetRegister(s1(0))
+            If s1.Length > 1 Then
+                s2 = s1(1).Split("*".ToCharArray)
+                rb = GetRegister(s2(0))
+                If s2.Length > 1 Then
+                    scale = eval(s2(1))
+                End If
+            End If
+        Else
+            ra = 0
+        End If
+        If Not optr26 Then
+        Else
+            If offset < -8192 Or offset > 8191 Or needSegPrefix Then
+                emitImm14(offset)
+            End If
+            emitAlignedCode(oc)
+            emitCode(ra)
+            emitCode(rt)
+            emitCode(((offset And 63) << 2) Or segbits)
+            emitCode((offset >> 6) And 255)
         End If
     End Sub
 
@@ -2188,6 +2392,75 @@ j1:
                 Return 1
             ElseIf s.ToLower = "bear" Then
                 Return 2
+            ElseIf s.ToLower = "sp0" Then
+                Return 8
+            ElseIf s.ToLower = "sp1" Then
+                Return 9
+            ElseIf s.ToLower = "sp2" Then
+                Return 10
+            ElseIf s.ToLower = "sp3" Then
+                Return 11
+            ElseIf s.ToLower = "sp4" Then
+                Return 12
+            ElseIf s.ToLower = "sp5" Then
+                Return 13
+            ElseIf s.ToLower = "sp6" Then
+                Return 14
+            ElseIf s.ToLower = "sp7" Then
+                Return 15
+            Else
+                Return -1
+            End If
+        Catch ex As Exception
+            Return -1
+        End Try
+    End Function
+
+    Function GetSegRegister(ByVal s As String) As Integer
+        Dim nn As Integer
+        Try
+            If s.ToLower = "ns" Then
+                Return 0
+            ElseIf s.ToLower = "ds" Then
+                Return 1
+            ElseIf s.ToLower = "bss" Then
+                Return 3
+            ElseIf s.ToLower = "ss" Then
+                Return 14
+            ElseIf s.ToLower = "cs" Then
+                Return 15
+            ElseIf s.ToLower = "tss" Then
+                Return 12
+            ElseIf s.ToLower = "seg1" Then
+                Return 1
+            ElseIf s.ToLower = "seg2" Then
+                Return 2
+            ElseIf s.ToLower = "seg3" Then
+                Return 3
+            ElseIf s.ToLower = "seg4" Then
+                Return 4
+            ElseIf s.ToLower = "seg5" Then
+                Return 5
+            ElseIf s.ToLower = "seg6" Then
+                Return 6
+            ElseIf s.ToLower = "seg7" Then
+                Return 7
+            ElseIf s.ToLower = "seg8" Then
+                Return 8
+            ElseIf s.ToLower = "seg9" Then
+                Return 9
+            ElseIf s.ToLower = "seg10" Then
+                Return 10
+            ElseIf s.ToLower = "seg11" Then
+                Return 11
+            ElseIf s.ToLower = "seg12" Then
+                Return 12
+            ElseIf s.ToLower = "seg13" Then
+                Return 13
+            ElseIf s.ToLower = "seg14" Then
+                Return 14
+            ElseIf s.ToLower = "seg15" Then
+                Return 15
             Else
                 Return -1
             End If
@@ -3302,7 +3575,6 @@ j1:
         Elf.hdr.e_entry = 4052
         Elf.hdr.e_phoff = 0
         Elf.hdr.e_shoff = Round512(512 + cbindex * 8 + dbindex * 8 + NameTable.length) + (symbols.Count + 1) * 24
-        Console.WriteLine(Hex(Elf.hdr.e_shoff))
         Elf.hdr.e_flags = 0
         Elf.hdr.e_ehsize = Elf.hdr.Elf64HdrSz
         Elf.hdr.e_phentsize = 0
