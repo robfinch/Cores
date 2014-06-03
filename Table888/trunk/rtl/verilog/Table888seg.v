@@ -44,6 +44,8 @@
 `define MFSEG		8'h0D
 `define MTSEGI		8'h0E
 `define MFSEGI		8'h0F
+`define LSL			8'h10
+`define LAR			8'h11
 `define SEI			8'h30
 `define CLI			8'h31
 `define PHP			8'h32
@@ -51,9 +53,13 @@
 `define ICON		8'h34
 `define ICOFF		8'h35
 `define PROT		8'h36
+`define CLP			8'h37
 `define RTI			8'h40
 `define MTSPR		8'h48
 `define MFSPR		8'h49
+`define VERR		8'h80
+`define VERW		8'h81
+`define VERX		8'h82
 `define RR		8'h02
 `define ADD			8'h04
 `define SUB			8'h05
@@ -181,9 +187,13 @@
 `define TICK	8'h00
 `define VBR		8'h01
 `define BEAR	8'h02
+`define PTA		8'h04
+`define MMU_CR	8'h05
 `define SPx		8'b00010xxx
 
-module Table888seg(rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o);
+module Table888seg(
+	rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o,
+	mmu_cyc_o, mmu_stb_o, mmu_ack_i, mmu_sel_o, mmu_we_o, mmu_adr_o, mmu_dat_i, mmu_dat_o);
 input rst_i;
 input clk_i;
 input nmi_i;
@@ -201,6 +211,16 @@ output reg we_o;
 output reg [31:0] adr_o;
 input [31:0] dat_i;
 output reg [31:0] dat_o;
+output mmu_cyc_o;
+output mmu_stb_o;
+input mmu_ack_i;
+output [3:0] mmu_sel_o;
+output mmu_we_o;
+output [31:0] mmu_adr_o;
+input [31:0] mmu_dat_i;
+output [31:0] mmu_dat_o;
+
+parameter PCMSB = 39;
 // - - - - - - - - - - - - - - - - - -
 // Machine states
 // - - - - - - - - - - - - - - - - - -
@@ -234,8 +254,8 @@ parameter PC_DELAY2 =6'd29;
 parameter CINV1 = 6'd32;
 parameter CINV2 = 6'd33;
 parameter VERIFY_SEG_LOAD = 6'd34;
-parameter JGR5 = 6'd36;
-parameter JGR6 = 6'd37;
+parameter LOAD_CS = 6'd36;
+parameter HANG = 6'd37;
 parameter JGR7 = 6'd38;
 parameter JGR8 = 6'd39;
 parameter JGR9 = 6'd40;
@@ -264,17 +284,20 @@ reg [39:0] ir;
 wire [39:0] insn;
 wire [7:0] opcode = ir[7:0];
 wire [7:0] func = ir[39:32];
-reg [39:0] pc;
-reg [39:0] ibufadr;
-wire ibufmiss = ibufadr != segmented_pc[39:0];
+reg [PCMSB:0] pc;
+wire [63:0] segmented_pc;
+wire [63:0] paged_pc;
+reg [PCMSB:0] ibufadr;
+wire ibufmiss = ibufadr != paged_pc[PCMSB:0];
 reg [39:0] ibuf;	// instruction buffer
 reg isInsnCacheLoad,isCacheReset;
 reg nmi_edge,nmi1;
 reg hwi;			// hardware interrupt indicator
 reg im;				// irq interrupt mask bit
 reg pe;				// protection enabled
+reg pv;				// privilege violation
 reg [2:0] imcd;		// mask countdown bits
-wire [31:0] sr = {23'd0,im,8'h00};
+wire [31:0] sr = {23'd0,im,6'h00,pv,pe};
 reg [63:0] regfile [255:0];
 
 reg gie;						// global interrupt enable
@@ -284,7 +307,8 @@ wire [7:0] Rc = ir[31:24];
 reg [7:0] Rt;
 reg [3:0] St,Sa;
 reg wrrf;
-reg [31:0] wadr, radr;
+reg [31:0] rwadr,rwadr2;
+wire [31:0] rwadr_o;
 reg icacheOn;
 wire uncachedArea = 1'b0;
 wire ihit;
@@ -292,8 +316,8 @@ reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
 reg isShifti,isBSR,isLMR,isSMR,isLGDT,isLIDT,isSIDT,isSGDT;
-reg isJSP,isJSR,isJGR;
-reg [1:0] nMTSEG,nDT;
+reg isJSP,isJSR,isJGR,isVERR,isVERW,isVERX,isLSL,isLAR;
+reg [1:0] nMTSEG,nDT,nLD;
 reg [2:0] nJGR;
 wire hasIMM = isIMM1|isIMM2;
 wire hasJSP = isJSP;
@@ -305,38 +329,55 @@ reg [63:0] immbuf;
 reg [63:0] tick;		// tick count
 reg [31:0] vbr;			// vector base register
 reg [31:0] berr_addr;
-reg [63:0] gdt_lbound;
-reg [63:0] gdt_ubound;
-reg [63:0] idt_lbound;
-reg [63:0] idt_ubound;
+reg [2:0] brkCnt;		// break counter for detecting multiple faults
+reg [63:0] gdt_base;
+reg [63:0] gdt_limit,gdt_limit2;
+reg [63:0] idt_base;
+reg [63:0] idt_limit,idt_limit2;
 reg [31:0] seg_selector [15:0];
-reg [63:0] seg_lbound [15:0];	// lower bound
-reg [63:0] seg_ubound [15:0];	// upper bound
-reg [2:0] seg_dpl [15:0];	// privilege level
+reg [63:0] seg_base [15:0];	// lower bound
+reg [63:0] seg_limit [15:0];	// upper bound
+reg [3:0] seg_dpl [15:0];	// privilege level
 reg [7:0] seg_acr [15:0];	// access rights
-reg [19:0] seg_index;
 
 reg [63:0] desc_w0, desc_w1;
 wire [7:0] desc_acr = desc_w1[63:56];
-wire [2:0] desc_dpl = desc_w0[63:61];
-wire [63:0] desc_ubound = {desc_w1[55:0],8'h00};
-wire [63:0] desc_lbound = {desc_w0[55:0],8'h00};
+wire [3:0] desc_dpl = desc_w0[63:60];
+wire [63:0] desc_limit = desc_w1[55:0];
+wire [63:0] desc_base = desc_w0[59:0];
 wire isCallGate = desc_acr[4:0]==5'b01100;
+wire isConforming = desc_acr[2];
+wire isPresent = desc_acr[7];
 
 reg [23:0] cg_selector;
-reg [39:0] cg_offset;
-reg [2:0] cg_dpl;
+reg [59:0] cg_offset;
+reg [3:0] cg_dpl;
 reg [7:0] cg_acr;
 reg [4:0] cg_ncopy;
 
 wire [31:0] cs_selector = seg_selector[15];
 wire [7:0] cs_acr = seg_acr[15];
-wire [2:0] cpl = seg_dpl[15];
-wire [2:0] dpl = seg_dpl[Sa];
-wire [2:0] rpl = a[63:61];
-wire [63:0] code_base = pc[31:16]==16'h0000 ? 64'd0 : {seg_lbound[15][63:8],8'h00};
-wire [63:0] segmented_pc = code_base + pc;
-wire pcOutOfBounds = segmented_pc > {seg_ubound[15][63:8],8'h00};
+wire [3:0] cpl = seg_dpl[15];
+wire [3:0] dpl = seg_dpl[Sa];
+wire [3:0] rpl = a[63:60];
+assign segmented_pc = seg_base[15] + pc;
+wire pcOutOfBounds = segmented_pc > seg_limit[15];
+wire selectorIsNull = a[63:40]==24'd0;
+
+wire cpnp,dpnp;
+reg rst_cpnp,rst_dpnp;
+reg [63:0] mmu_cr;
+reg [63:0] pta;
+wire paging_en = mmu_cr[63];
+wire [63:0] cpte;
+wire [63:0] dpte;
+wire drdy;
+wire data_readable;
+wire data_writeable;
+wire pmmu_data_readable;
+wire pmmu_data_writeable;
+wire page_executable;
+reg isWR;
 
 reg [63:0] sp;	// stack pointer
 wire [63:0] sp_inc = sp + 64'd8;
@@ -399,6 +440,58 @@ icache_ram u2 (
 	.debug_bits(debug_bits)
 );
 
+Table888_pmmu u3
+(
+	// syscon
+	.rst_i(rst),
+	.clk_i(clk),
+
+	// master
+	.soc_o(),			// start of cycle
+	.cyc_o(mmu_cyc_o),	// bus cycle active
+	.stb_o(mmu_stb_o),
+	.lock_o(),			// lock the bus
+	.ack_i(mmu_ack_i),	// acknowledge from memory system
+	.wr_o(mmu_we_o),	// write enable output
+	.byt_o(mmu_sel_o),	// lane selects (always all active)
+	.adr_o(mmu_adr_o),
+	.dat_i(mmu_dat_i),	// data input from memory
+	.dat_o(mmu_dat_o),	// data to memory
+
+	// Translation request / control
+	.paging_en(paging_en),
+	.invalidate(),		// invalidate a specific entry
+	.invalidate_all(),	// causes all entries to be invalidated
+	.pta(pta),		// page directory/table address register
+	.rst_cpnp(rst_cpnp),	// reset the pnp bit
+	.rst_dpnp(rst_dpnp),
+	.cpnp(cpnp),			// page not present
+	.dpnp(dpnp),
+	.cpte(cpte),	// holding place for data
+	.dpte(dpte),
+
+	.vcadr(segmented_pc),	// virtual code address to translate
+	.tcadr(paged_pc),	// translated code address
+	.rdy(rdy),				// address translation is ready
+	.p(),		// privilege (0= supervisor)
+	.c(),
+	.r(),
+	.w(),
+	.x(page_executable),	// cacheable, read, write and execute attributes
+	.v(),			// translation is valid
+
+	.wr(isWR),			// cpu is performing write cycle
+	.vdadr(rwadr),		// virtual data address to translate
+	.tdadr(rwadr_o),		// translated data address
+	.drdy(drdy),			// address translation is ready
+	.dp(),
+	.dc(),
+	.dr(pmmu_data_readable),
+	.dw(pmmu_data_writeable),
+	.dx(),
+	.dv()
+);
+
 // - - - - - - - - - - - - - - - - - -
 // Combinational logic follows.
 // - - - - - - - - - - - - - - - - - -
@@ -428,16 +521,16 @@ endcase
 
 // Data input multiplexers
 reg [7:0] dat8;
-always @(dat_i or radr)
-case(radr[1:0])
+always @(dat_i or rwadr)
+case(rwadr[1:0])
 2'b00:	dat8 <= dat_i[7:0];
 2'b01:	dat8 <= dat_i[15:8];
 2'b10:	dat8 <= dat_i[23:16];
 2'b11:	dat8 <= dat_i[31:24];
 endcase
 reg [15:0] dat16;
-always @(dat_i or radr)
-case(radr[1])
+always @(dat_i or rwadr)
+case(rwadr[1])
 1'b0:	dat16 <= dat_i[15:0];
 1'b1:	dat16 <= dat_i[31:16];
 endcase
@@ -502,21 +595,23 @@ wire [63:0] diff = r - bb;
 // For scaled indexed address mode
 wire [63:0] b_scaled = b << ir[33:32];
 reg [63:0] ea;
-wire [63:0] seg_base = Sa==4'd0 ? 64'd0 : {seg_lbound[Sa][63:8],8'h00};
-wire [63:0] ea_drn = seg_base + a + imm;
-wire [63:0] ea_ndx = seg_base + a + b_scaled + imm;
-wire [63:0] mr_ea = seg_base + c;
-wire seg_over_drn = ea_drn[63:8] > seg_ubound[Sa][63:8];
-wire seg_over_ndx = ea_ndx[63:8] > seg_ubound[Sa][63:8];
+wire [63:0] seg_bas = seg_base[Sa];
+wire [63:0] ea_drn1 = a + imm;
+wire [63:0] ea_ndx1 = a + b_scaled + imm;
+wire [63:0] ea_drn = seg_bas + ea_drn1;
+wire [63:0] ea_ndx = seg_bas + ea_ndx1;
+wire [63:0] mr_ea = seg_bas + c;
 
-wire [63:0] gdt_adr = {gdt_lbound[63:8],8'h00} + {a[59:40],4'h0};
-wire [63:0] ldt_adr = {seg_lbound[11][63:8],8'h00} + {a[59:40],4'h0};
-wire gdt_seg_ubound_violation = gdt_adr[63:8] > gdt_ubound[63:8];
-wire ldt_seg_ubound_violation = ldt_adr[63:8] > seg_ubound[11][63:8];
+wire [63:0] gdt_adr = gdt_base + {a[59:40],4'h0};
+wire [63:0] ldt_adr = seg_base[11] + {a[59:40],4'h0};
+wire gdt_seg_limit_violation = gdt_adr > gdt_limit;
+wire ldt_seg_limit_violation = ldt_adr > seg_limit[11];
 
-wire [63:0] sp_segd = {seg_lbound[14][63:8],8'h00} + sp;
-wire [63:0] spdec_segd = {seg_lbound[14][63:8],8'h00} + sp_dec;
+wire [63:0] sp_segd = seg_base[14] + sp;
+wire [63:0] spdec_segd = seg_base[14] + sp_dec;
 reg [2:0] pcpl;
+assign data_readable = pmmu_data_readable;
+assign data_writable = pmmu_data_writeable && seg_acr[Sa][1];
 
 // - - - - - - - - - - - - - - - - - -
 // Clocked logic follows.
@@ -540,14 +635,33 @@ if (rst_i) begin
 	vbr <= 32'h00006000;
 	imcd <= 3'b111;
 	pe <= `FALSE;
+	pv <= `FALSE;
+	mmu_cr <= 64'd0;
+	St <= 4'd0;
+	rst_cpnp <= `TRUE;
+	rst_dpnp <= `TRUE;
+	isWR <= `FALSE;
 end
 else begin
 tick <= tick + 64'd1;
 if (nmi_i & !nmi1)
 	nmi_edge <= `TRUE;
 wrrf <= `FALSE;
+rst_cpnp <= `FALSE;
+rst_dpnp <= `FALSE;
+
+gdt_limit <= gdt_base + gdt_limit2;
+idt_limit <= idt_base + idt_limit2;
 
 case(state)
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// RESET:
+// - Invalidate the instruction cache
+// - Initialize the segment register to a flat memory model.
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 RESET:
 	begin
 		adr_o[3:2] <= 2'b11;		// The tagram checks for this
@@ -556,6 +670,17 @@ RESET:
 			isCacheReset <= `FALSE;
 			next_state(PC_DELAY);
 		end
+		seg_selector[St] <= {St,8'h00};
+		seg_base[St] <= 64'h0;
+		seg_limit[St] <= 64'hFFFFFFFFFFFFFFFF;
+		seg_dpl[St] <= 4'h0;
+		seg_acr[St] <= 8'h92;
+		case(St)
+		4'd0:	seg_limit[St] <= 64'h0;
+		4'd15:	seg_acr[St] <= 8'h9A;
+		default:	;	
+		endcase
+		St <= adr_o[7:4];
 	end
 
 // ----------------------------------------------------------------------------
@@ -566,27 +691,33 @@ RESET:
 IFETCH:
 	begin
 		hwi <= `FALSE;
-		next_state(DECODE);
+		brkCnt <= 3'd0;
+		if (rdy)
+			next_state(DECODE);
 		if (nmi_edge & gie & ~hasIMM) begin
 			ir[7:0] <= `BRK;
-			ir[39:8] <= 9'd510;
+			ir[39:8] <= {9'd510,4'h0};
 			nmi_edge <= 1'b0;
 			hwi <= `TRUE;
 		end
 		else if (irq_i & gie & ~im & ~hasIMM) begin
 			ir[7:0] <= `BRK;
-			ir[39:8] <= vect_i;
+			ir[39:8] <= {vect_i,4'h0};
 			hwi <= `TRUE;
 		end
 		else if (pcOutOfBounds)
 			bounds_violation();
-		else if (!ihit & !uncachedArea & icacheOn) begin
+		else if (cpnp)
+			code_page_fault();
+		else if (!page_executable)
+			executable_fault();
+		else if (!ihit & !uncachedArea & icacheOn & rdy) begin
 			next_state(ICACHE1);
 		end
-		else if (ibufmiss & (uncachedArea | !icacheOn)) begin
+		else if (ibufmiss & (uncachedArea | !icacheOn) & rdy) begin
 			next_state(IBUF1);
 		end
-		else if (icacheOn & !uncachedArea) begin
+		else if (icacheOn & !uncachedArea & rdy) begin
 			if (debug_bits[0] & 1'b0) begin
 				ir[7:0] <= `BRK;
 				ir[39:8] <= `DBG_VECT;
@@ -595,9 +726,9 @@ IFETCH:
 			else
 				ir <= insn;
 		end
-		else
+		else if (rdy)
 			ir <= ibuf;
-		if (imcd != 3'b111) begin
+		if (imcd != 3'b111 && rdy) begin
 			imcd <= {imcd,1'b0};
 			if (imcd[2]==1'b0) begin
 				im <= `FALSE;
@@ -613,7 +744,7 @@ IFETCH:
 ICACHE1:
 	begin
 		isInsnCacheLoad <= `TRUE;
-		wb_burst(6'd3,{segmented_pc[31:4],4'h0});
+		wb_burst(6'd3,{paged_pc[31:4],4'h0});
 		next_state(ICACHE2);
 	end
 ICACHE2:
@@ -634,7 +765,7 @@ ICACHE2:
 
 IBUF1:
 	begin
-		wb_burst(6'd1,{segmented_pc[31:2],2'h0});
+		wb_burst(6'd1,{paged_pc[31:2],2'h0});
 		next_state(IBUF2);
 	end
 IBUF2:
@@ -655,7 +786,7 @@ IBUF3:
 	begin
 		if (ack_i) begin
 			wb_nack();
-			ibufadr <= segmented_pc[31:0];
+			ibufadr <= paged_pc[PCMSB:0];
 			case(pc[1:0])
 			2'b00:	ibuf[39:32] <= dat_i[7:0];
 			2'b01:	ibuf[39:24] <= dat_i[15:0];
@@ -704,10 +835,14 @@ DECODE:
 		isLGDT <= `FALSE;
 		isSIDT <= `FALSE;
 		isSGDT <= `FALSE;
+		isVERR <= `FALSE;
+		isVERW <= `FALSE;
+		isVERX <= `FALSE;
+		isLSL <= `FALSE;
 		nMTSEG <= 2'b00;
 		nDT <= 2'b00;
+		nLD <= 2'b00;
 		nJGR <= 3'b000;
-		cg_loaded <= `FALSE;
 		isShifti = func==`SHLI || func==`SHRI || func==`ROLI || func==`RORI || func==`ASRI;
 		a <= rfoa;
 		b <= rfob;
@@ -762,38 +897,87 @@ DECODE:
 		`NOP:	next_state(PC_DELAY);
 		`R:
 			case(func)
-			`SEI:	begin im <= `TRUE; next_state(PC_DELAY); end
-			`CLI:	begin imcd <= 3'b110; next_state(PC_DELAY); end
+			`SEI:	begin 
+						if (cpl > 0 && pe)
+							privilege_violation();
+						else begin
+							im <= `TRUE;
+							next_state(PC_DELAY);
+						end
+					end
+			`CLI:	begin
+						if (cpl > 0 && pe)
+							privilege_violation();
+						else begin
+							imcd <= 3'b110;
+							next_state(PC_DELAY);
+						end
+					end
+			`CLP:	begin pv <= `FALSE; next_state(PC_DELAY); end
 			`PROT:	begin pe <= `TRUE; next_state(PC_DELAY); end
 			`ICON:	begin icacheOn <= `TRUE; next_state(PC_DELAY); end
 			`ICOFF:	begin icacheOn <= `FALSE; next_state(PC_DELAY); end
 			`PHP:
 				begin
-					wadr <= spdec_segd;
-					Rt <= 8'hFF;
-					wrrf <= `TRUE;
-					res <= sp_dec;
-					store_what <= `STW_SR;
-					next_state(STORE1);
+					if (sp_dec < seg_base[14] + 32'd32)
+						stack_fault();
+					else begin
+						isWR <= `TRUE;
+						rwadr <= spdec_segd;
+						update_sp(sp_dec);
+						store_what <= `STW_SR;
+						next_state(STORE1);
+					end
 				end
 			`PLP:
 				begin
-					isPLP <= `TRUE;
-					radr <= sp_segd;
-					Rt <= 8'hFF;
-					wrrf <= `TRUE;
-					res <= sp_inc;
-					next_state(LOAD1);
+					if (sp_inc > seg_limit[14])
+						stack_fault();
+					else begin
+						isPLP <= `TRUE;
+						rwadr <= sp_segd;
+						update_sp(sp_inc);
+						next_state(LOAD1);
+					end
 				end
 			`RTI:
 				begin
-					isRTI <= `TRUE;
-					radr <= sp_segd;
-					Rt <= 8'hFF;
-					wrrf <= `TRUE;
-					res <= sp_inc;
-					next_state(LOAD1);
+					if (cpl == 4'd15 && pe)
+						privilege_violation();
+					else if (sp_inc > seg_limit[14])
+						stack_fault();
+					else begin
+						isRTI <= `TRUE;
+						rwadr <= sp_segd;
+						update_sp(sp_inc);
+						next_state(LOAD1);
+					end
 				end
+			`VERR:
+				begin
+					isVERR <= `TRUE;
+					load_seg();
+				end
+			`VERW:
+				begin
+					isVERW <= `TRUE;
+					load_seg();
+				end
+			`VERX:
+				begin
+					isVERX <= `TRUE;
+					load_seg();
+				end
+			`LSL:	begin
+					isLSL <= `TRUE;
+					load_seg();
+					end
+			`LAR:
+				begin
+					isLAR <= `TRUE;
+					load_seg();
+				end
+			`MFSEG:	Sa <= ir[11:8];
 			// Unimplemented instruction
 			default:	;
 			endcase
@@ -808,8 +992,6 @@ DECODE:
 					8'd255:		Sa <= 4'd14;	// stack pointer
 					default:	Sa <= 4'd1;
 					endcase
-			`MSO:	Sa <= Rb[3:0];
-			`SSO:	St <= Rb[3:0];
 			endcase
 
 		`MULI,`MULUI,`DIVI,`DIVUI,`MOD,`MODU:	next_state(MULDIV);
@@ -827,12 +1009,21 @@ DECODE:
 				$display("*****************");
 				$display("*****************");
 				isBRK <= `TRUE;
-				wadr <= sp_dec;
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_dec;
+				rwadr <= sp_dec;
 				store_what <= `STW_SR;
-				next_state(STORE1);
+				// Double fault ?
+				brkCnt <= brkCnt + 3'd1;
+				if (brkCnt > 3'd2)
+					next_state(HANG);
+				else if (idt_base + {ir[20:12],3'b000} > idt_limit && pe)
+					bounds_violation();
+				else if (sp_dec < seg_base[14] + 32'd16)
+					stack_fault();
+				else begin
+					isWR <= `TRUE;
+					update_sp(sp_dec);
+					next_state(STORE1);
+				end
 				$stop;
 			end
 		`JMP:
@@ -844,56 +1035,85 @@ DECODE:
 			end
 		`BSR:
 			begin
-				isBSR <= `TRUE;
-				wadr <= sp_dec[31:0];
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_dec;
-				store_what <= `STW_PC;
-				next_state(STORE1);	
+				if (sp_dec < seg_base[14] + 32'd32)
+					stack_fault();
+				else begin
+					isBSR <= `TRUE;
+					isWR <= `TRUE;
+					rwadr <= sp_dec[31:0];
+					update_sp(sp_dec);
+					store_what <= `STW_PC;
+					next_state(STORE1);	
+				end
 			end
 		`JSR:
 			begin
-				isJSR <= `TRUE;
-				isJSP <= isJSP;
-				wadr <= sp_dec[31:0];
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_dec;
-				store_what <= `STW_PC;
-				a <= {immbuf[31:0],ir[39:8]};
-				next_state(STORE1);
+				if (sp_dec < seg_base[14] + 32'd32)
+					stack_fault();
+				else begin
+					isJSR <= `TRUE;
+					isJSP <= isJSP;
+					isWR <= `TRUE;
+					rwadr <= sp_dec[31:0];
+					update_sp(sp_dec);
+					store_what <= `STW_PC;
+					a <= {immbuf[31:0],ir[39:8]};
+					next_state(STORE1);
+				end
+			end
+		`JSR_IX,`JMP_IX:
+			begin
+				if (isIMM1) begin
+					Sa <= immbuf[31:28];
+					imm <= {{12{immbuf[27]}},immbuf[27:0],ir[39:19],3'b000};
+				end
+				else if (isIMM2) begin
+					Sa <= immbuf[63:60];
+					imm <= {immbuf[39:0],ir[39:19],3'b000};
+				end
+				else begin
+					set_default_seg(ir[17:16]);
+					imm <= {{40{ir[39]}},ir[39:19],3'b000};
+				end
 			end
 		`JGR:
 			begin
-				isJGR <= `TRUE;
-				nJGR <= 3'b001;
-				wadr <= sp_dec[31:0];
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_dec;
-				store_what <= `STW_PC;
-				a <= {ir[39:8],32'd0};
-				next_state(STORE1);
+				if (sp_dec < seg_base[14] + 32'd32)
+					stack_fault();
+				else begin
+					isJGR <= `TRUE;
+					nJGR <= 3'b001;
+					isWR <= `TRUE;
+					rwadr <= sp_dec[31:0];
+					update_sp(sp_dec);
+					store_what <= `STW_PC;
+					a <= {ir[39:8],32'd0};
+					next_state(STORE1);
+				end
 			end
 		`JSR_DRN:
 			begin
-				isJSRdrn <= `TRUE;
-				wadr <= sp_dec[31:0];
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_dec;
-				store_what <= `STW_PC;
-				next_state(STORE1);
+				if (sp_dec < seg_base[14] + 32'd32)
+					stack_fault();
+				else begin
+					isJSRdrn <= `TRUE;
+					isWR <= `TRUE;
+					rwadr <= sp_dec[31:0];
+					update_sp(sp_dec);
+					store_what <= `STW_PC;
+					next_state(STORE1);
+				end
 			end
 		`RTS:
 			begin
-				isRTS <= `TRUE;
-				radr <= sp_segd;
-				next_state(LOAD1);
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_inc + ir[31:16];
+				if (sp_inc + ir[31:16] > seg_limit[14])
+					stack_fault();
+				else begin
+					isRTS <= `TRUE;
+					rwadr <= sp_segd;
+					next_state(LOAD1);
+					update_sp(sp_inc + ir[31:16]);
+				end
 			end
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LIDT,`LGDT,
 		`SB,`SC,`SH,`SW,`SIDT,`SGDT:
@@ -907,19 +1127,7 @@ DECODE:
 					imm <= {immbuf[49:0],ir[39:16]};
 				end
 				else begin
-					case(ir[25:24])
-					2'b00:
-						case(Ra)
-						8'd252:		Sa <= 4'd12;	// task register
-						8'd253:		Sa <= 4'd14;	// base pointer
-						8'd254:		Sa <= 4'd15;	// instruction pointer
-						8'd255:		Sa <= 4'd14;	// stack pointer
-						default:	Sa <= 4'd1;
-						endcase
-					2'b01:	Sa <= 4'd3;
-					2'b10:	Sa <= 4'd5;
-					2'b11:	Sa <= 4'd14;
-					endcase
+					set_default_seg(ir[25:24]);
 					imm <= {{50{ir[39]}},ir[39:26]};
 				end
 			end
@@ -934,19 +1142,7 @@ DECODE:
 					imm <= {immbuf[49:0],ir[39:16]};
 				end
 				else begin
-					case(ir[25:24])
-					2'b00:
-						case(Ra)
-						8'd252:		Sa <= 4'd12;	// task register
-						8'd253:		Sa <= 4'd14;	// base pointer
-						8'd254:		Sa <= 4'd15;	// instruction pointer
-						8'd255:		Sa <= 4'd14;	// stack pointer
-						default:	Sa <= 4'd1;
-						endcase
-					2'b01:	Sa <= 4'd3;
-					2'b10:	Sa <= 4'd5;
-					2'b11:	Sa <= 4'd14;
-					endcase
+					set_default_seg(ir[25:24]);
 					imm <= {{50{ir[39]}},ir[39:26]};
 				end
 				if (ir[23:16]==8'h00)
@@ -964,19 +1160,7 @@ DECODE:
 					imm <= {immbuf[59:0],ir[39:36]};
 				end
 				else begin
-					case(ir[25:24])
-					2'b00:
-						case(Ra)
-						8'd252:		Sa <= 4'd12;	// task register
-						8'd253:		Sa <= 4'd14;	// base pointer
-						8'd254:		Sa <= 4'd15;	// instruction pointer
-						8'd255:		Sa <= 4'd14;	// stack pointer
-						default:	Sa <= 4'd1;
-						endcase
-					2'b01:	Sa <= 4'd3;
-					2'b10:	Sa <= 4'd5;
-					2'b11:	Sa <= 4'd14;
-					endcase
+					set_default_seg(ir[35:34]);
 					imm <= {{60{ir[39]}},ir[39:36]};
 				end
 			end
@@ -991,53 +1175,52 @@ DECODE:
 					imm <= {immbuf[59:0],ir[39:36]};
 				end
 				else begin
-					case(ir[25:24])
-					2'b00:
-						case(Ra)
-						8'd252:		Sa <= 4'd12;	// task register
-						8'd253:		Sa <= 4'd14;	// base pointer
-						8'd254:		Sa <= 4'd15;	// instruction pointer
-						8'd255:		Sa <= 4'd14;	// stack pointer
-						default:	Sa <= 4'd1;
-						endcase
-					2'b01:	Sa <= 4'd3;
-					2'b10:	Sa <= 4'd5;
-					2'b11:	Sa <= 4'd14;
-					endcase
+					set_default_seg(ir[35:34]);
 					imm <= {{60{ir[39]}},ir[39:36]};
 				end
 				if (ir[31:24]==8'h00)
 					Sa <= 4'd15;
 			end
+
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// PUSH / POP
+		// !isPUSH limits the test to the first word pushed, make
+		// sure there is enough room to push four words (32 bytes)
+		// plus a fault handler address.
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		`PUSH:
 			begin
 				isPUSH <= `TRUE;
 				store_what <= `STW_A;
 				ir[39:8] <= {8'h00,ir[39:16]};
-				wadr <= {seg_lbound[4'd14][63:8],8'h00} + sp_dec[31:0];
-				if (ir[39:8]==32'h0)
+				rwadr <= {seg_base[4'd14][63:8],8'h00} + sp_dec[31:0];
+				if (ir[39:8]==32'h0) begin
+					isWR <= `FALSE;
 					next_state(PC_DELAY);
+				end
 				else if (ir[15:8]==8'h00) begin
 					pc <= pc;
 					next_state(DECODE);
 				end
 				else begin
 					pc <= pc;
-					Rt <= 8'hFF;
-					wrrf <= `TRUE;
-					res <= sp_dec;
-					next_state(STORE1);
+					if (cpl > seg_dpl[14])
+						privilege_violation();
+					else if (sp_dec < seg_base[14] + 32'd64 && !isPUSH)
+						stack_fault();
+					else begin
+						isWR <= `TRUE;
+						update_sp(sp_dec);
+						next_state(STORE1);
+					end
 				end
 			end
+
 		`POP:
 			begin
 				isPOP <= `TRUE;
-				Rt <= ir[15:8];
 				ir[39:8] <= {8'h00,ir[39:16]};
-				radr <= sp_segd;
+				rwadr <= sp_segd;
 				if (ir[39:8]==32'h0)
 					next_state(PC_DELAY);
 				else if (ir[15:8]==8'h00) begin
@@ -1046,10 +1229,17 @@ DECODE:
 				end
 				else begin
 					pc <= pc;
-					sp <= sp_inc;
-					next_state(LOAD1);
+					if (cpl > seg_dpl[14])
+						privilege_violation();
+					else if (sp_inc > seg_limit[14])
+						stack_fault();
+					else begin
+						update_sp(sp_inc);
+						next_state(LOAD1);
+					end
 				end
 			end
+
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// Prefixes follow
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1099,12 +1289,16 @@ EXECUTE:
 				`TICK:	res <= tick;
 				`VBR:	res <= vbr;
 				`BEAR:	res <= berr_addr;
+				`PTA:	res <= pta;
+				`MMU_CR:	res <= mmu_cr;
 				default:	res <= 65'd0;
 				endcase
 			`MTSPR:
 				case(ir[23:16])	// Don't use Rt!
 				//`TICK:	tick <= a;
 				`VBR:	vbr <= {a[31:13],13'd0};
+				`PTA:		pta <= a;
+				`MMU_CR:	mmu_cr <= a;
 				endcase
 			`MTSEG:
 				begin
@@ -1113,7 +1307,7 @@ EXECUTE:
 				end
 			`MFSEG:
 				begin
-					res <= {seg_selector[Ra[3:0]][31:8],40'd0};
+					res <= {seg_selector[Sa][31:8],40'd0};
 				end
 			endcase
 		`RR:
@@ -1136,8 +1330,8 @@ EXECUTE:
 			`ASRI,`ASR:	res <= asro;
 			`ARPL:
 				begin
-					if (a[63:61] < b[63:61])
-						res <= {b[63:61],a[60:0]};
+					if (a[63:60] < b[63:60])
+						res <= {b[63:60],a[59:0]};
 					else
 						res <= a;
 				end
@@ -1148,18 +1342,17 @@ EXECUTE:
 				begin
 					isLMR <= `TRUE;
 					Rt <= Ra;
-					radr <= mr_ea;
+					rwadr <= mr_ea;
 					next_state(LOAD1);
 				end
 			`SMR:
 				begin
 					isSMR <= `TRUE;
-					wadr <= mr_ea;
+					isWR <= `TRUE;
+					rwadr <= mr_ea;
 					store_what <= `STW_A;
 					next_state(STORE1);
 				end
-			`MSO:	res <= {seg_selector[Sa][31:8],a[39:0]};
-			`SSO:	load_seg();
 			// Unimplemented instruction
 			default:	res <= 65'd0;
 			endcase
@@ -1180,7 +1373,7 @@ EXECUTE:
 				next_state(PC_DELAY);
 				if (take_branch) begin
 					pc[15: 0] <= ir[31:16];
-					pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
+					pc[PCMSB:16] <= pc[PCMSB:16] + {{PCMSB-20{ir[36]}},ir[36:32]};
 				end
 			end
 		`DBNZ:
@@ -1188,15 +1381,13 @@ EXECUTE:
 				next_state(PC_DELAY);
 				if (take_branch) begin
 					pc[15: 0] <= ir[31:16];
-					pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
+					pc[PCMSB:16] <= pc[PCMSB:16] + {{PCMSB-20{ir[36]}},ir[36:32]};
 				end
 				res <= a - 64'd1;
 			end
-		// If the selector isn't changing then just continue to the next
-		// instruction. Otherwise load the selector.
 		`JMP:
 			begin
-				if (a[63:40]==cs_selector[31:8])
+				if (a[63:40]==24'd0)
 					next_state(PC_DELAY);
 				else
 					load_cs_seg();
@@ -1204,7 +1395,7 @@ EXECUTE:
 		`JMP_IX:
 			begin
 				isJMPix <= `TRUE;
-				radr <= a + imm;
+				rwadr <= ea_drn;
 				next_state(LOAD1);
 			end
 		`JMP_DRN:	
@@ -1216,15 +1407,18 @@ EXECUTE:
 					load_cs_seg();
 			end
 		`JSR_IX:
-			begin
-				radr <= ea_drn;
-				wadr <= sp_dec[31:0];
-				Rt <= 8'hFF;
-				wrrf <= `TRUE;
-				res <= sp_dec;
-				isJSRix <= `TRUE;
-				store_what <= `STW_PC;
-				next_state(STORE1);
+			begin	
+				if (sp_dec <= seg_base[14] + 32'd32)
+					stack_fault();
+				else begin
+					rwadr2 <= ea_drn;
+					rwadr <= sp_dec[31:0];
+					isWR <= `TRUE;
+					update_sp(sp_dec);
+					isJSRix <= `TRUE;
+					store_what <= `STW_PC;
+					next_state(STORE1);
+				end
 			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1315,30 +1509,35 @@ EXECUTE:
 		`SB:
 			begin
 				st_size <= byt;
+				isWR <= `TRUE;
 				store_what <= `STW_B;
 				store_check(ea_drn);
 			end
 		`SC:
 			begin
 				st_size <= char;
+				isWR <= `TRUE;
 				store_what <= `STW_B;
 				store_check(ea_drn);
 			end
 		`SH:
 			begin
 				st_size <= half;
+				isWR <= `TRUE;
 				store_what <= `STW_B;
 				store_check(ea_drn);
 			end
 		`SW:
 			begin
 				st_size <= word;
+				isWR <= `TRUE;
 				store_what <= `STW_B;
 				store_check(ea_drn);
 			end
 		`SGDT:
 			begin
 				isSGDT <= `TRUE;
+				isWR <= `TRUE;
 				nDT <= 2'b01;
 				store_what <= `STW_GDT;
 				store_check(ea_drn);
@@ -1346,6 +1545,7 @@ EXECUTE:
 		`SIDT:
 			begin
 				isSIDT <= `TRUE;
+				isWR <= `TRUE;
 				nDT <= 2'b01;
 				store_what <= `STW_IDT;
 				store_check(ea_drn);
@@ -1358,24 +1558,28 @@ EXECUTE:
 		`SBX:
 			begin
 				st_size <= byt;
+				isWR <= `TRUE;
 				store_what <= `STW_C;
 				store_check(ea_ndx);
 			end
 		`SCX:
 			begin
 				st_size <= char;
+				isWR <= `TRUE;
 				store_what <= `STW_C;
 				store_check(ea_ndx);
 			end
 		`SHX:
 			begin
 				st_size <= half;
+				isWR <= `TRUE;
 				store_what <= `STW_C;
 				store_check(ea_ndx);
 			end
 		`SWX:
 			begin
 				st_size <= word;
+				isWR <= `TRUE;
 				store_what <= `STW_C;
 				store_check(ea_ndx);
 			end
@@ -1530,14 +1734,20 @@ MD_RES:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 LOAD1:
-	begin
-		wb_read(radr);
-		next_state(LOAD2);
+	if (drdy) begin
+		if (data_readable) begin
+			wb_read(rwadr_o);
+			next_state(LOAD2);
+		end
+		else
+			data_read_fault();
 	end
+	else if (dpnp)
+		data_page_fault();
 LOAD2:
 	begin
 		if (ack_i) begin
-			radr <= radr + 32'd4;
+			rwadr <= rwadr + 32'd4;
 			wb_nack();
 			if (ld_size==word) begin
 				res[31:0] <= dat32;
@@ -1564,14 +1774,20 @@ LOAD2:
 			bus_err();
 	end
 LOAD3:
-	begin
-		wb_read(radr);
-		next_state(LOAD4);
+	if (drdy) begin
+		if (data_readable) begin
+			wb_read(rwadr_o);
+			next_state(LOAD4);
+		end
+		else
+			data_read_fault();
 	end
+	else if (dpnp)
+		data_page_fault();
 LOAD4:
 	begin
 		if (ack_i) begin
-			radr <= radr + 32'd4;
+			rwadr <= rwadr + 32'd4;
 			wb_nack();
 			res[63:32] <= dat32;
 			if (nMTSEG==2'b01) begin
@@ -1584,8 +1800,8 @@ LOAD4:
 				next_state(VERIFY_SEG_LOAD);
 			end
 			else if (nJGR==3'b001) begin
-				cg_offset <= {dat32[7:0],res[31:0]};
-				cg_dpl <= dat32[31:29];
+				cg_offset <= {dat32[27:0],res[31:0]};
+				cg_dpl <= dat32[31:28];
 				nJGR <= 3'b010;
 			end
 			else if (nJGR==3'b010) begin
@@ -1599,7 +1815,7 @@ LOAD4:
 				else if (cg_dpl < (cpl > rpl ? cpl : rpl) && pe)
 					privilege_violation();
 				else
-					load_cs_seg();
+					next_state(LOAD_CS);
 			end
 			else
 			case(1'b1)
@@ -1613,43 +1829,92 @@ LOAD4:
 				end
 			isJSRix,isJMPix:
 				begin
-					pc <= res[31:0];
-					pc[39:32] <= dat32[7:0];
-					a[63:32] <= dat32;
-					load_cs_seg();
+					if (nLD==2'b00) begin
+						pc <= res[31:0];
+						pc[39:32] <= dat32[7:0];
+						pc[1:0] <= res[3:2];
+						a[63:32] <= dat32;
+						if (res[1:0]==2'b11) begin
+							nLD <= 2'b01;
+							next_state(LOAD1);
+						end
+						else if (dat32[31:8]!=24'd0 && res[1:0]==2'b01)
+							next_state(LOAD_CS);
+						else
+							next_state(PC_DELAY);
+					end
+					else begin
+						a[63:32] <= dat32;
+						next_state(LOAD_CS);
+					end
 				end
 			isRTS:
 				begin
-					pc <= res[31:0];// + ir[15:8];
-					pc[39:32] <= dat32[7:0];
-					a[63:32] <= dat32;
-					load_cs_seg();
+					casex({nLD,res[1:0]})
+					4'b00_00:	// short format
+						begin
+							pc[31:0] <= res[31:0];
+							pc[39:32] <= dat32[7:0];
+							pc[1:0] <= res[3:2];
+							next_state(PC_DELAY);
+						end
+					4'b00_01:	// short format with selector
+						begin
+							pc[31:0] <= res[31:0];
+							pc[39:32] <= dat32[7:0];
+							a[63:32] <= dat32;
+							next_state(LOAD_CS);
+						end
+					4'b00_11:	// long format load
+						begin
+							pc[31:0] <= res[31:0];
+							pc[39:32] <= dat32[27:0];
+							pc[1:0] <= res[3:2];
+							nLD <= 2'b01;
+							next_state(LOAD1);
+						end
+					4'b01_xx:
+						begin
+							a[63:32] <= dat32;
+							next_state(LOAD_CS);
+						end
+					endcase
 				end
 			isBRK:
 				begin
-					if (cpl > res[31:29] && pe)
+					if (cpl > res[31:28] && pe)
 						privilege_violation();
 					else begin
 						if (dat32[28:24]==5'd6)	// interrupt gate sets interrupt mask
 							im <= `TRUE;
 						pc[39:0] <= res[27:0];
 						a[63:32] <= {dat32[23:0],8'h00};
-						load_cs_seg();
+						next_state(LOAD_CS);
 					end
 				end
 			isRTI:
 				begin
-					pc <= res[31:0];
-					pc[39:32] <= dat32[7:0];
-					Rt <= 8'hFF;
-					wrrf <= `TRUE;
-					res <= sp_inc;
-					a[63:32] <= dat32;
-					load_cs_seg();
+					if (nLD==2'b00) begin
+						pc <= res[31:0];
+						pc[39:32] <= dat32[7:0];
+						pc[1:0] <= res[3:2];
+						update_sp(sp_inc);
+						nLD <= 2'b01;
+						next_state(LOAD1);
+					end
+					else begin
+						if (res[8]==1'b0)
+							imcd <= 3'b110;
+						else
+							im <= 1'b1;
+						a[63:32] <= dat32;
+						next_state(LOAD_CS);
+					end
 				end
 			isPOP:
 				begin
 					wrrf <= `TRUE;
+					Rt <= ir[15:8];
 					next_state(DECODE);
 				end
 			isPLP:
@@ -1664,13 +1929,12 @@ LOAD4:
 				begin
 					if (nDT==2'b01) begin
 						nDT <= 2'b10;
-						idt_lbound[31:8] <= res[31:8];
-						idt_lbound[63:32] <= dat32;
+						idt_base[31:0] <= res[31:0];
+						idt_base[63:32] <= dat32;
 						next_state(LOAD1);
 					end
 					else begin
-						idt_ubound[31:8] <= res[31:8];
-						idt_ubound[63:32] <= dat32;
+						idt_limit2 <= {dat32,res[31:0]};
 						next_state(IFETCH);
 					end
 				end
@@ -1678,13 +1942,12 @@ LOAD4:
 				begin
 					if (nDT==2'b01) begin
 						nDT <= 2'b10;
-						gdt_lbound[31:8] <= res[31:8];
-						gdt_lbound[63:32] <= dat32;
+						gdt_base[31:0] <= res[31:0];
+						gdt_base[63:32] <= dat32;
 						next_state(LOAD1);
 					end
 					else begin
-						gdt_ubound[31:8] <= res[31:8];
-						gdt_ubound[63:32] <= dat32;
+						gdt_limit2 <= {dat32,res[31:0]};
 						next_state(IFETCH);
 					end
 				end
@@ -1698,163 +1961,220 @@ LOAD4:
 
 VERIFY_SEG_LOAD:
 	begin
+		res <= 65'd0;
 		// Is the segment resident in memory ?
-		if (!desc_acr[7])
-			segment_not_present();
+		if (!isPresent && !selectorIsNull) begin
+			if (isVERR|isVERW|isVERX|isLSL|isLAR)
+				;
+			else begin
+				if (St==4'd14)
+					stack_fault();
+				else
+					segment_not_present();
+			end
+		end
 		// are we trying to load a non-code segment into the code segment ?
-		else if (St==4'd15 && desc_acr[4:3]!=2'b11 && pe)
-			segtype_violation();
+		else if ((St==4'd15||isVERX) && desc_acr[4:3]!=2'b11 && pe && !selectorIsNull) begin
+			if (isVERX)
+				;
+			else
+				segtype_violation();
+		end
 		// are we trying to load a code segment into a data segment ?
-		else if (St!=4'd15 && desc_acr[4:3]==2'b11 && pe)
-			segtype_violation();
+		else if ((St!=4'd15||isVERR||isVERW) && desc_acr[4:3]==2'b11 && pe && !selectorIsNull) begin
+			if (isVERR|isVERW)
+				;
+			else
+				segtype_violation();
+		end
 		// The code privilege level must be the same or higher (numerically
 		// lower) than the data descriptor privilege level.
 //		// CPL <= DPL
-		else if ((St!=4'd15||isCallGate) && cpl > desc_dpl && pe)	// data segment
-			privilege_violation();
-		else if (St==4'd15 && cpl < desc_dpl && !desc_acr[2] && !isCallGate && pe)
-			privilege_violation();
+		else if ((St!=4'd15||isCallGate||isVERR||isVERW||isLSL||isLAR) && cpl > desc_dpl && pe && !selectorIsNull) begin	// data segment
+			if (isVERR||isVERW||isLSL||isLAR)
+				;
+			else
+				privilege_violation();
+		end
+		else if ((St==4'd15||isVERX) && cpl < desc_dpl && !isConforming && !isCallGate && pe && !selectorIsNull) begin
+			if (isVERX)
+				;
+			else
+				privilege_violation();
+		end
 //		else if (cpl >= seg_dpl[Rt[3:0]] && dat32[28:27]==2'b11)	// code segment
 //			next_state(IFETCH);
 		else
 		begin
-			if (isCallGate) begin
-				cg_offset <= desc_w0[39:0];
+			if (isLAR) begin
+				res <= desc_acr;
+				next_state(IFETCH);
+			end
+			else if (isLSL) begin
+				res <= desc_limit;
+				next_state(IFETCH);
+			end
+			else if (isVERR||isVERW||isVERX) begin
+				res <= !selectorIsNull;
+				next_state(IFETCH);
+			end
+			else if (isCallGate) begin
+				cg_offset <= desc_w0[59:0];
 				cg_selector <= desc_w1[23:0];
-				cg_dpl <= desc_w0[63:61];
+				cg_dpl <= desc_w0[63:60];
 				cg_acr <= desc_w1[63:56];
 				cg_ncopy <= desc_w1[28:24];
-				cg_loaded <= `TRUE;
 				isJGR <= `TRUE;
 				a[63:40] <= desc_w1[23:0];
-				if (!desc_acr[7])
+				if (!isPresent)
 					segment_not_present();
 				else if ((cpl > rpl ? cpl : rpl) > desc_dpl && pe)
 					privilege_violation();
 				else
-					load_cs_seg();
+					next_state(LOAD_CS);
 			end
 			else begin
-				seg_selector[St] <= a[63:32];
-				seg_lbound[St] <= desc_lbound;
-				seg_ubound[St] <= desc_ubound;
-				if (St==4'd15 && desc_acr[2])	// conforming code segment inherits CPL
-					seg_dpl[St] <= cpl;
-				else
-					seg_dpl[St] <= desc_dpl;
-				seg_acr[St] <= desc_acr;
-				if (isRTI) begin
-					isRTI <= `FALSE;
-					isPLP <= `TRUE;
-					next_state(LOAD1);
-				end
-				else if (isJGR) begin
-					Rt <= 8'hFB;	// 251
-					wrrf <= `TRUE;
-					res <= {cs_selector[31:8],pc[39:0]};
-					pc[39:0] <= cg_offset;
-					next_state(PC_DELAY);
-				end
-				else
+				if (St==4'd0)	// not possible to load segment #0
+					next_state(IFETCH);
+				else if (St==4'd15 && selectorIsNull)
+					segtype_violation();
+				else begin
+					seg_selector[St] <= a[63:32];
+					seg_base[St] <=  selectorIsNull ? 64'd0 : desc_base;
+					seg_limit[St] <= selectorIsNull ? 64'd0 : desc_base + desc_limit;
+					if (St==4'd15 && isConforming)	// conforming code segment inherits CPL
+						seg_dpl[St] <= cpl;
+					else
+						seg_dpl[St] <= selectorIsNull ? cpl : desc_dpl;
+					seg_acr[St] <= selectorIsNull ? 8'h80 : desc_acr;
+					if (isJGR)
+						pc[39:0] <= cg_offset[39:0];
 					next_state(PC_DELAY);	// in case code segment loaded
+				end
 			end
 		end
 	end
-
+LOAD_CS:
+	load_cs_seg();
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // STORE machine states.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 STORE1:
-	begin
-		case (store_what)
-		`STW_A:		wb_write(st_size,wadr,a[31:0]);
-		`STW_B:		wb_write(st_size,wadr,b[31:0]);
-		`STW_C:		wb_write(st_size,wadr,c[31:0]);
-		`STW_PC:	wb_write(word,wadr,pc[31:0]);
-		`STW_SR:	wb_write(word,wadr,sr[31:0]);
-		`STW_IDT:	if (nDT==2'b01)
-						wb_write(word,wadr,{idt_lbound[31:8],8'h00});
-					else
-						wb_write(word,wadr,{idt_ubound[31:8],8'h00});
-		`STW_GDT:	if (nDT==2'b01)
-						wb_write(word,wadr,{gdt_lbound[31:8],8'h00});
-					else
-						wb_write(word,wadr,{gdt_ubound[31:8],8'h00});
-		default:	next_state(RESET);	// hardware fault
-		endcase
-		next_state(STORE2);
+	if (drdy) begin	
+		if (data_writeable) begin
+			case (store_what)
+			`STW_A:		wb_write(st_size,rwadr_o,a[31:0]);
+			`STW_B:		wb_write(st_size,rwadr_o,b[31:0]);
+			`STW_C:		wb_write(st_size,rwadr_o,c[31:0]);
+			`STW_PC:	if (isBRK)	// || (hasJSP && pc[59:40]!=20'd0))
+							wb_write(word,rwadr_o,{pc[31:2],2'b11});
+						else if (hasJSP)
+							wb_write(word,rwadr_o,{pc[31:2],2'b01});
+						else
+							wb_write(word,rwadr_o,{pc[31:2],2'b00});
+			`STW_SR:	wb_write(word,rwadr_o,sr[31:0]);
+			`STW_IDT:	if (nDT==2'b01)
+							wb_write(word,rwadr_o,idt_base[31:0]);
+						else
+							wb_write(word,rwadr_o,idt_limit2[31:0]);
+			`STW_GDT:	if (nDT==2'b01)
+							wb_write(word,rwadr_o,gdt_base[31:0]);
+						else
+							wb_write(word,rwadr_o,gdt_limit2[31:0]);
+			default:	next_state(RESET);	// hardware fault
+			endcase
+			next_state(STORE2);
+		end
+		else
+			data_write_fault();
 	end
+	else if (dpnp)
+		data_page_fault();
 STORE2:
 	if (ack_i) begin
 		wb_nack();
-		wadr <= wadr + 32'd4;
+		rwadr <= rwadr + 32'd4;
 		if (st_size==word)
 			next_state(STORE3);
-		else
+		else begin
+			isWR <= `FALSE;
 			next_state(IFETCH);
+		end
 	end
 	else if (err_i)
 		bus_err();
 STORE3:
-	begin
-		case (store_what)
-		`STW_A:		wb_write(word,wadr,a[63:32]);
-		`STW_B:		wb_write(word,wadr,b[63:32]);
-		`STW_C:		wb_write(word,wadr,c[63:32]);
-		`STW_PC:	wb_write(word,wadr,{cs_selector[31:8],pc[39:32]});
-		`STW_SR:	wb_write(word,wadr,32'd0);
-		`STW_IDT:	if (nDT==2'b01)
-						wb_write(word,wadr,idt_lbound[63:32]);
-					else	
-						wb_write(word,wadr,idt_ubound[63:32]);
-		`STW_GDT:	if (nDT==2'b01)
-						wb_write(word,wadr,gdt_lbound[63:32]);
-					else
-						wb_write(word,wadr,gdt_ubound[63:32]);
-		default:	next_state(RESET);	// hardware fault
-		endcase
-		next_state(STORE4);
-		if (isSMR)
-			ir[15:8] <= ir[15:8] + 8'd1;
+	if (drdy) begin
+		if (data_writeable) begin
+			case (store_what)
+			`STW_A:		wb_write(word,rwadr_o,a[63:32]);
+			`STW_B:		wb_write(word,rwadr_o,b[63:32]);
+			`STW_C:		wb_write(word,rwadr_o,c[63:32]);
+			`STW_PC:	if (isBRK)	// || (hasJSP && pc[59:40]!=20'd0))
+							wb_write(word,rwadr_o,pc[39:32]);
+						else if (hasJSP)
+							wb_write(word,rwadr_o,{cs_selector[31:8],pc[39:32]});
+						else
+							wb_write(word,rwadr_o,{24'd0,pc[39:32]});
+			`STW_SR:	wb_write(word,rwadr_o,{cs_selector[31:8],8'h00});
+			`STW_IDT:	if (nDT==2'b01)
+							wb_write(word,rwadr_o,idt_base[63:32]);
+						else	
+							wb_write(word,rwadr_o,idt_limit2[63:32]);
+			`STW_GDT:	if (nDT==2'b01)
+							wb_write(word,rwadr_o,gdt_base[63:32]);
+						else
+							wb_write(word,rwadr_o,gdt_limit2[63:32]);
+			default:	next_state(RESET);	// hardware fault
+			endcase
+			next_state(STORE4);
+			if (isSMR)
+				ir[15:8] <= ir[15:8] + 8'd1;
+		end
+		else
+			data_write_fault();
 	end
+	else if (dpnp)
+		data_page_fault();
 STORE4:
 	if (ack_i) begin
 		wb_nack();
-		wadr <= wadr + 32'd4;
+		rwadr <= rwadr + 32'd4;
 		if (isSMR) begin
 			a <= rfoa;
-			if (Ra>Rb || Ra==0)
+			if (Ra>Rb || Ra==0) begin
+				isWR <= `FALSE;
 				next_state(IFETCH);
+			end
 			else
 				next_state(STORE1);
 		end
-		else if (isBRK)
-			begin
-				if (store_what==`STW_PC) begin
-					radr <= {idt_lbound[63:8],8'h00} + {ir[16:8],3'b000};
-					next_state(LOAD1);
-				end
-				else begin
-					store_what <= `STW_PC;
-					wadr <= sp_dec;
-					Rt <= 8'hFF;
-					wrrf <= `TRUE;
-					res <= sp_dec;
-					next_state(STORE1);
-				end
+		else if (isBRK) begin
+			if (store_what==`STW_PC) begin
+				rwadr <= idt_base + {ir[20:12],3'b000};
+				isWR <= `FALSE;
+				next_state(LOAD1);
 			end
-		else if (isBSR)
-			begin
-				pc[15: 0] <= ir[31:16];
-				pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
-				next_state(PC_DELAY);
+			else begin
+				store_what <= `STW_PC;
+				rwadr <= sp_dec;
+				update_sp(sp_dec);
+				next_state(STORE1);
 			end
+		end
+		else if (isBSR)	begin
+			pc[15: 0] <= ir[31:16];
+			pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
+			isWR <= `FALSE;
+			next_state(PC_DELAY);
+		end
 		else if (isJSR)
 			begin
-				pc <= imm[31:0];
-				pc[39:32] <= dat32[7:0];
+				isWR <= `FALSE;
+				pc[31:0] <= imm[31:0];
+				pc[39:32] <= imm[39:32];
 				if (hasJSP) begin
 					isJSP <= `FALSE;
 					load_cs_seg();
@@ -1863,22 +2183,24 @@ STORE4:
 					next_state(PC_DELAY);
 			end
 		else if (isJGR) begin
-			if (a[60])
-				radr <= ldt_adr;
+			isWR <= `FALSE;
+			if (a[59])
+				rwadr <= ldt_adr;
 			else
-				radr <= gdt_adr;
+				rwadr <= gdt_adr;
 			next_state(LOAD1);
 		end
 		else if (isJSRdrn)
 			begin
-				pc <= ea_drn[39:0];
-				if (ea_drn[63:40]==cs_selector[31:8])
-					next_state(PC_DELAY);
-				else
-					load_cs_seg();
+				isWR <= `FALSE;
+				pc[39:0] <= a[39:0];
+				load_cs_seg();
 			end
-		else if (isJSRix)
+		else if (isJSRix) begin
+			isWR <= `FALSE;
+			rwadr <= rwadr2;
 			next_state(LOAD1);
+		end
 		else if (isPUSH)
 			next_state(DECODE);
 		else if (isSIDT|isSGDT) begin
@@ -1886,11 +2208,15 @@ STORE4:
 				nDT <= 2'b10;
 				next_state(STORE1);
 			end
-			else
+			else begin
+				isWR <= `FALSE;
 				next_state(IFETCH);
+			end
 		end
-		else
+		else begin
+			isWR <= `FALSE;
 			next_state(IFETCH);
+		end
 	end
 	else if (err_i)
 		bus_err();
@@ -1900,7 +2226,7 @@ STORE4:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 CINV1:
 	begin
-		adr_o <= {wadr[31:4],2'b11,2'b00};
+		adr_o <= {rwadr[31:4],2'b11,2'b00};
 		if (Rt==8'h00)
 			isCacheReset <= `TRUE;
 		// else reset data cache
@@ -1911,6 +2237,9 @@ CINV2:
 		isCacheReset <= `FALSE;
 		next_state(IFETCH);
 	end
+
+HANG:
+	next_state(HANG);
 endcase
 
 
@@ -2031,9 +2360,18 @@ endtask
 task bus_err;
 begin
 	berr_addr <= adr_o;
-	ir <= {9'd508,`BRK};
+	ir <= {9'd508,4'h0,`BRK};
 	hwi <= `TRUE;
 	next_state(DECODE);
+end
+endtask
+
+task update_sp;
+input [63:0] newsp;
+begin
+	Rt <= 8'hFF;
+	wrrf <= `TRUE;
+	res <= newsp;
 end
 endtask
 
@@ -2041,27 +2379,47 @@ task bounds_violation;
 begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
-	ir[39:8] <= 9'd500;
+	ir[39:8] <= {9'd500,4'h0};
 	next_state(DECODE);
 end
 endtask
 
+// If a NULL selector is passed, default the fields rather than reading them
+// from the descriptor table. Also set the result bus to false for the 
+// verify instructions.
+
 task load_seg;
 begin
 	nMTSEG <= 2'b01;
-	if (a[60]) begin
-		radr <= ldt_adr;
-		if (ldt_seg_ubound_violation && pe)
+	if (a[59]) begin
+		rwadr <= ldt_adr[31:0];
+		if (ldt_seg_limit_violation && pe)
 			bounds_violation();
 		else
 			next_state(LOAD1);
 	end
 	else begin
-		radr <= gdt_adr;
-		if (gdt_seg_ubound_violation && pe)
-			bounds_violation();
-		else
-			next_state(LOAD1);
+//		if (a[63:40]==24'd0) begin
+//			if (St==4'd15)
+//				segtype_violation();
+//			else begin
+//				seg_selector[St] <= a[63:32];
+//				seg_base[St] <= 64'd0;
+//				seg_limit[St] <= 64'd0;
+//				seg_dpl[St] <= cpl;
+//				seg_acr[St] <= 8'h80;	// present, type zero
+//				res <= 64'd0;
+//				next_state(PC_DELAY);
+//			end
+//		end
+//		else
+		begin
+			rwadr <= gdt_adr[31:0];
+			if (gdt_seg_limit_violation && pe)
+				bounds_violation();
+			else
+				next_state(LOAD1);
+		end
 	end
 end
 endtask
@@ -2073,11 +2431,67 @@ begin
 end
 endtask
 
+task stack_fault;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ir[39:8] <= {9'd504,4'h0};
+	next_state(DECODE);
+end
+endtask
+
+task code_page_fault;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ir[39:8] <= {9'h505,4'h0};
+	rst_cpnp <= `TRUE;
+	next_state(DECODE);
+end
+endtask
+
+task data_page_fault;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ir[39:8] <= {9'h506,4'h0};
+	rst_dpnp <= `TRUE;
+	next_state(DECODE);
+end
+endtask
+
+task data_read_fault;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ir[39:8] <= {9'h499,4'h0};
+	next_state(DECODE);
+end
+endtask
+
+task executable_fault;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ir[39:8] <= {9'h497,4'h0};
+	next_state(DECODE);
+end
+endtask
+
+task data_write_fault;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ir[39:8] <= {9'h498,4'h0};
+	next_state(DECODE);
+end
+endtask
+
 task segment_not_present;
 begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
-	ir[39:8] <= 9'd503;
+	ir[39:8] <= {9'd503,4'h0};
 	next_state(DECODE);
 end
 endtask
@@ -2086,7 +2500,7 @@ task privilege_violation;
 begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
-	ir[39:8] <= 9'd501;
+	ir[39:8] <= {9'd501,4'h0};
 	next_state(DECODE);
 end
 endtask
@@ -2095,7 +2509,7 @@ task segtype_violation;
 begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
-	ir[39:8] <= 9'd502;
+	ir[39:8] <= {9'd502,4'h0};
 	next_state(DECODE);
 end
 endtask
@@ -2103,12 +2517,13 @@ endtask
 task load_check;
 input [63:0] adr;
 begin
-	if (cpl <= dpl || !pe) begin
-		radr <= adr;
-		next_state(LOAD1);
-	end
-	else begin
+	if (cpl > dpl && pe)
 		privilege_violation();
+	else if (adr > seg_limit[Sa])
+		bounds_violation();
+	else begin
+		rwadr <= adr;
+		next_state(LOAD1);
 	end
 end
 endtask
@@ -2116,13 +2531,33 @@ endtask
 task store_check;
 input [63:0] adr;
 begin
-	if (cpl <= dpl || !pe) begin
-		wadr <= adr;
+	if (cpl > dpl && pe)
+		privilege_violation();
+	else if (adr > seg_limit[Sa])
+		bounds_violation();
+	else begin
+		rwadr <= adr;
 		next_state(STORE1);
 	end
-	else begin
-		privilege_violation();
-	end
+end
+endtask
+
+task set_default_seg;
+input [1:0] cd;
+begin
+	case(cd)
+	2'b00:
+		case(Ra)
+		8'd252:		Sa <= 4'd12;	// task register
+		8'd253:		Sa <= 4'd14;	// base pointer
+		8'd254:		Sa <= 4'd15;	// instruction pointer
+		8'd255:		Sa <= 4'd14;	// stack pointer
+		default:	Sa <= 4'd1;
+		endcase
+	2'b01:	Sa <= 4'd3;
+	2'b10:	Sa <= 4'd5;
+	2'b11:	Sa <= 4'd14;
+	endcase
 end
 endtask
 
@@ -2156,6 +2591,10 @@ IBUF2:		fnStateName = "IBUF2 ";
 IBUF3:		fnStateName = "IBUF3 ";
 ICACHE1:		fnStateName = "ICACHE1    ";
 ICACHE2:		fnStateName = "ICACHE2    ";
+CINV1:			fnStateName = "CINV1      ";
+CINV2:			fnStateName = "CINV2      ";
+LOAD_CS:		fnStateName = "LOAD_CS    ";
+VERIFY_SEG_LOAD:	fnStateName = "VER_SEG_LOAD ";
 default:		fnStateName = "UNKNOWN    ";
 endcase
 endfunction

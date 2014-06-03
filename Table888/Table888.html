@@ -7,7 +7,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
 <title>Table888</title>
 
-<!--mstheme--><link rel="stylesheet" href="file:///C:/Users/ROBFI_~1/AppData/Local/Temp/FrontPageTempDir/mstheme/water/wate1011.css">
+<!--mstheme--><link rel="stylesheet" href="wate1011.css">
 
 <meta name="Microsoft Theme" content="water 1011, default">
 </head>
@@ -33,6 +33,17 @@ indirect with displacement and indexed</p>
 <p style="margin-top: 0; margin-bottom: 0">Status:</p>
 <p style="margin-top: 0; margin-bottom: 0">- the processor is running a bootrom 
 in an FPGA</p>
+<p style="margin-top: 0; margin-bottom: 0">- Currently segmentation is not 
+completely working, it only seems to work when the registers are initialized to 
+a flat memory model. If the base address is non-zero then it doesn't work. But, 
+the perplexing problem is that it seems to work fine in simulation (the exact 
+same software), so it's going to be a tough one to debug.</p>
+<p style="margin-top: 0; margin-bottom: 0">- Paging has not been tested yet. The 
+paging unit has been run in a simple test bench and seemed to work. The 
+processor is being built including the paging unit, but it disabled.</p>
+<p style="margin-top: 0; margin-bottom: 0">- The instruction cache needs some 
+more work. It seems not to work on occasion. Once again it seems to be working 
+in simulation but not in real life.</p>
 <p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
 
 </body>
