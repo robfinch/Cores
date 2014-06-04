@@ -636,6 +636,10 @@ j1:
                                 processCLI(&H34)
                             Case "icache_off"
                                 processCLI(&H35)
+                            Case "prot"
+                                processCLI(&H36)
+                            Case "segon"
+                                processCLI(&H37)
 
                             Case "align"
                                 ProcessAlign()
@@ -1345,31 +1349,52 @@ j1:
         bytn = 0
         sa = address
     End Sub
-    Sub emitImm24(ByVal imm As Int64)
+    Sub emitImm24(ByVal imm As Int64, Optional ByVal addseg As Boolean = False)
         Dim str As String
 
-        If imm >= &HFFFFFFFFFF800000 And imm <= &H7FFFFF Then
+        If imm >= &HFFFFFFFFFF800000 And imm <= &H7FFFFF And Not addseg Then
             Return
         End If
         str = iline
         iline = "; imm "
-        If imm >= &HFF80000000000000L And imm < &H7FFFFFFFFFFFFFL Then
-            emitAlignedCode(&HFD)
-            emitCode(imm >> 24)
-            emitCode((imm >> 32) And 255)
-            emitCode((imm >> 40) And 255)
-            emitCode((imm >> 48) And 255)
+        If addseg Then
+            If imm >= &HFFF8000000000000L And imm < &H7FFFFFFFFFFFFL Then
+                emitAlignedCode(&HFD)
+                emitCode(imm >> 24)
+                emitCode((imm >> 32) And 255)
+                emitCode((imm >> 40) And 255)
+                emitCode(((imm >> 48) And 15) Or (segreg << 4))
+            Else
+                emitAlignedCode(&HFD)
+                emitCode(imm >> 24)
+                emitCode((imm >> 32) And 255)
+                emitCode((imm >> 40) And 255)
+                emitCode((imm >> 48) And 255)
+                emitAlignedCode(&HFE)
+                emitCode(imm >> 56)
+                emitCode(0)
+                emitCode(0)
+                emitCode(segreg << 4)
+            End If
         Else
-            emitAlignedCode(&HFD)
-            emitCode(imm >> 24)
-            emitCode((imm >> 32) And 255)
-            emitCode((imm >> 40) And 255)
-            emitCode((imm >> 48) And 255)
-            emitAlignedCode(&HFE)
-            emitCode(imm >> 56)
-            emitCode(0)
-            emitCode(0)
-            emitCode(0)
+            If imm >= &HFF80000000000000L And imm < &H7FFFFFFFFFFFFFL Then
+                emitAlignedCode(&HFD)
+                emitCode(imm >> 24)
+                emitCode((imm >> 32) And 255)
+                emitCode((imm >> 40) And 255)
+                emitCode((imm >> 48) And 255)
+            Else
+                emitAlignedCode(&HFD)
+                emitCode(imm >> 24)
+                emitCode((imm >> 32) And 255)
+                emitCode((imm >> 40) And 255)
+                emitCode((imm >> 48) And 255)
+                emitAlignedCode(&HFE)
+                emitCode(imm >> 56)
+                emitCode(0)
+                emitCode(0)
+                emitCode(0)
+            End If
         End If
         iline = str
         bytn = 0
@@ -1704,7 +1729,7 @@ j1:
     '
     '
     Sub ProcessNop(ByVal ops As String, ByVal oc As Int64)
-        emitCode(oc)
+        emitAlignedCode(oc)
         emitCode(oc)
         emitCode(oc)
         emitCode(oc)
@@ -1817,6 +1842,21 @@ j1:
         Dim ra As Int64
         Dim offset As Int64
         Dim s() As String
+        Dim segbits As Int64
+        Dim needSegPrefix As Boolean
+
+        If segreg = 1 Then
+            segbits = 0
+        ElseIf segreg = 3 Then
+            segbits = 1
+        ElseIf segreg = 5 Then
+            segbits = 2
+        ElseIf segreg = 14 Then
+            segbits = 3
+        Else
+            segbits = 0
+            needSegPrefix = True
+        End If
 
         ra = 0
         If strs(1).StartsWith("(") Then
@@ -1825,10 +1865,12 @@ j1:
                 ra = GetRegister(s(1))
             End If
             offset = eval(s(0).Trim("()".ToCharArray))
-            emitImm24(offset)
+            If (offset <= &HFFFFFFFFFF800000L Or offset > &H7FFFFF Or needSegPrefix) Then
+                emitImm24(offset, True)
+            End If
             emitAlignedCode(oc + 2)
             emitCode(ra)
-            emitCode(offset And 255)
+            emitCode((offset And 248) Or segbits)
             emitCode((offset >> 8) And 255)
             emitCode((offset >> 16) And 255)
             Return
@@ -2392,22 +2434,10 @@ j1:
                 Return 1
             ElseIf s.ToLower = "bear" Then
                 Return 2
-            ElseIf s.ToLower = "sp0" Then
+            ElseIf s.ToLower = "fault_pc" Then
                 Return 8
-            ElseIf s.ToLower = "sp1" Then
+            ElseIf s.ToLower = "fault_cs" Then
                 Return 9
-            ElseIf s.ToLower = "sp2" Then
-                Return 10
-            ElseIf s.ToLower = "sp3" Then
-                Return 11
-            ElseIf s.ToLower = "sp4" Then
-                Return 12
-            ElseIf s.ToLower = "sp5" Then
-                Return 13
-            ElseIf s.ToLower = "sp6" Then
-                Return 14
-            ElseIf s.ToLower = "sp7" Then
-                Return 15
             Else
                 Return -1
             End If
@@ -2423,6 +2453,8 @@ j1:
                 Return 0
             ElseIf s.ToLower = "ds" Then
                 Return 1
+            ElseIf s.ToLower = "es" Then
+                Return 5
             ElseIf s.ToLower = "bss" Then
                 Return 3
             ElseIf s.ToLower = "ss" Then
@@ -2972,13 +3004,20 @@ j1:
 
     Sub emitAlignedCode(ByVal n As Int64)
         Dim ad As Int64
+        Static po As Int64 = 0
 
         ad = (address And 15)
         While ad <> 0 And ad <> 5 And ad <> 10
             emitbyte(&H0, False, False)
             ad = (address And 15)
         End While
+        ad = (address And &HFFF)
+        If ad > &HFF0 And (n = &HFD Or n = &H61) Then
+            ProcessNop("", &HEA)
+            ProcessNop("", &HEA)
+        End If
         emitbyte(n, False)
+        po = n
     End Sub
     Sub emitCode(ByVal n As Int64)
         emitbyte(n, False)

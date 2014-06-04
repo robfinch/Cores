@@ -10,6 +10,10 @@ wire [5:0] bl;
 wire [3:0] sel;
 wire [31:0] a;
 tri [31:0] d;
+tri [31:0] d2;
+tri [31:0] d3;
+tri [31:0] d4;
+tri [31:0] d5;
 wire [31:0] dato;
 wire [31:0] dati;
 wire [2:0] cti;
@@ -27,6 +31,8 @@ wire sema_ack;
 wire [31:0] sema_dat;
 wire ga_ack;
 wire [31:0] ga_dat;
+wire kbd_ack;
+wire [15:0] kbd_dat;
 
 initial begin
 	clk = 1;
@@ -42,7 +48,7 @@ end
 
 always #1 clk = ~clk;	// 500 MHz
 
-Table888 cpu0 (
+Table888seg cpu0 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.nmi_i(nmi),
@@ -62,8 +68,12 @@ Table888 cpu0 (
 );
 
 wire uartcs = 1'b0;//cyc && stb && a[31:8]==24'h0000BF;
-wire romcs = ~(cyc && stb && a[31:20]==12'h0FFF);
-wire ramcs = ~(cyc && stb && (a[31:28]==4'h0));//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
+wire romcs = ~(cyc && stb && a[31:15]==17'b01);
+wire ramcs_zer = ~(cyc && stb && (a[31:20]>=12'h000)&&romcs && (a[31:20] < 12'h001));
+wire ramcs_gdt = ~(cyc && stb && (a[31:20]>=12'h07F)&&romcs && (a[31:20] < 12'h080));
+wire ramcs3 = ~(cyc && stb && (a[31:20]>=12'h07B)&&romcs && (a[31:20] < 12'h07F));
+wire ramcs2 = ~(cyc && stb && (a[31:24]>=8'h01)&&romcs && (a[31:24] < 8'h07)&&ramcs3);//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
+wire ramcs1 = ~(cyc && stb && (a[31:28]==4'h0)&&romcs&&ramcs2&&ramcs3&&ramcs_zer);//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
 wire romcs1 = 1'b1;//~(cyc && stb && a[33:13]==21'h07);	// E000
 wire bas_cs = (cyc && stb && a[31:14]==18'h03);
 wire tc_cs = (cyc && stb && (a[31:16]==16'hFFD0 || a[31:16]==16'hFFDA ||a[31:16]==16'hFFD1 || a[31:16]==16'hFFD2));
@@ -73,8 +83,16 @@ wire bmp_clut_cs = cyc && stb && a[31:11]==21'b1111_1111_1101_1100_0101_1;
 wire pic_cs = cyc && stb && a[31:8]==24'hFFDC_0F;
 
 assign d = wr ? dato : 32'bz;
+assign d2 = wr ? dato : 32'bz;
+assign d3 = wr ? dato : 32'bz;
+assign d4 = wr ? dato : 32'bz;
+assign d5 = wr ? dato : 32'bz;
 assign dati = ~romcs ? btrm_dato : 32'bz;
-assign dati = ~ramcs ? d : 32'bz;
+assign dati = ~ramcs1 ? d : 32'bz;
+assign dati = ~ramcs2 ? d2 : 32'bz;
+assign dati = ~ramcs3 ? d3 : 32'bz;
+assign dati = ~ramcs_gdt ? d4 : 32'bz;
+assign dati = ~ramcs_zer ? d5 : 32'bz;
 assign dati = uartcs ? {4{udo}} : 32'bz;
 assign dati = ~romcs1 ? d : 32'bz;
 assign dati = bas_cs ? bas_dato : 32'bz;
@@ -82,6 +100,7 @@ assign dati = tc_cs ? tc_dato : 32'bz;
 assign dati = configrec_cs ? 32'h00000FDF : 32'bz;
 assign dati = sema_ack ? sema_dat : 32'bz;
 assign dati = ga_ack ? ga_dat : 32'bz;
+assign dati = kbd_ack ? kbd_dat : 32'bz;
 
 assign ack =
 	1'b0 | 
@@ -91,19 +110,29 @@ assign ack =
 	sema_ack |
 	ga_ack |
 	btrm_ack |
-	~ramcs |
+	~ramcs1 |
+	~ramcs2 |
+	~ramcs3 |
 	~romcs1 |
+	~ramcs_gdt |
+	~ramcs_zer |
 	uartcs |
 	bmp_clut_cs |
-	pic_cs
+	pic_cs |
+	kbd_ack
 	;
 
 //rom2Kx32 #(.MEMFILE("t65c.mem")) rom0(.ce(romcs), .oe(wr), .addr(a[12:2]), .d(d));
 rom2Kx32 #(.MEMFILE("t65c.mem")) rom1(.ce(romcs1), .oe(wr), .addr(a[12:2]), .d(d));
-ram8Kx32 ram0 (.clk(clk), .ce(ramcs), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d));
+ram8Kx32 ram0 (.clk(clk), .ce(ramcs1), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d));
+ram8Kx32 ram2 (.clk(clk), .ce(ramcs2), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d2));
+ram8Kx32 ram3 (.clk(clk), .ce(ramcs3), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d3));
+ram8Kx32 ram4 (.clk(clk), .ce(ramcs_gdt), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d4));
+ram8Kx32 ram5 (.clk(clk), .ce(ramcs_zer), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d5));
 uart uart0(.clk(clk), .cs(uartcs), .wr(wr), .a(a[2:0]), .di(dato[7:0]), .do(udo));
 bootrom ubr1 (.rst_i(rst), .clk_i(clk), .cti_i(cti), .cyc_i(cyc), .stb_i(stb), .ack_o(btrm_ack), .adr_i(a), .dat_o(btrm_dato), .perr());
 //basic_rom ubas1(.rst_i(rst), .clk_i(clk), .cti_i(cti), .cyc_i(cyc), .stb_i(stb), .ack_o(bas_ack), .adr_i(a), .dat_o(bas_dato), .perr());
+kbd_em ukbd1 (rst, clk, cyc, stb, a, dato, kbd_dat, kbd_ack);
 rtfTextController tc1 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -168,9 +197,9 @@ always @(posedge clk) begin
 		n = n + 1;
 	if ((n & 7)==0)
 		$display("t   n  cti cyc we   addr din adnx do vma wr ird sync vma nmi irq  PC  IR A  X  Y  SP nvmdizcb\n");
-	$display("%d %d %b  %b%b  %c  %h %h %h %h pc=%h ir=%h sp=%h imm=%h %b %s %b %b wadr=%h",
+	$display("%d %d %b  %b%b  %c  %h %h %h %h pc=%h ir=%h sp=%h imm=%h %b %s %b %b rwadr=%h tr=%h",
 		$time, n, cpu0.cti_o, cpu0.cyc_o, cpu0.ack_i, cpu0.we_o?"W":" ", cpu0.adr_o, cpu0.dat_i, cpu0.dat_o, cpu0.res,  cpu0.pc, cpu0.ir,	cpu0.sp, 
-		cpu0.imm, cpu0.im, cpu0.fnStateName(cpu0.state), cpu0.ihit,ubr1.cs,cpu0.regfile[3]);
+		cpu0.imm, cpu0.im, cpu0.fnStateName(cpu0.state), cpu0.ihit,ubr1.cs,cpu0.rwadr,cpu0.regfile[252]);
 end
 	
 endmodule
@@ -319,5 +348,33 @@ module uart(clk, cs, wr, a, di, do);
 	end
 
 //	assign do = 8'h00;
+
+endmodule
+
+module kbd_em(rst_i, clk_i, cyc_i, stb_i, adr_i, dat_i, dat_o, ack_o);
+input rst_i;
+input clk_i;
+input cyc_i;
+input stb_i;
+input [31:0] adr_i;
+input [15:0] dat_i;
+output [15:0] dat_o;
+output ack_o;
+
+assign ack_o = cyc_i && stb_i && adr_i[31:8]==24'hFFDC_00;
+reg [7:0] cnt;
+reg [15:0] dato;
+always @(posedge clk_i)
+if (rst_i) begin
+	cnt <= 0;
+end
+else begin
+	if (ack_o)
+		cnt <= cnt + 1;
+	if (cnt==0)
+		dato <= 16'h00FA;
+end
+
+assign dat_o = ack_o ? dato : 16'd0;
 
 endmodule
