@@ -21,6 +21,8 @@
 //                                                                          
 // ============================================================================
 //
+//`define SUPPORT_BITMAP_FNS		1'b1
+
 `define TRUE	1'b1
 `define FALSE	1'b0
 
@@ -46,6 +48,8 @@
 `define MFSEGI		8'h0F
 `define LSL			8'h10
 `define LAR			8'h11
+`define LSB			8'h12
+`define GRAN		8'h14
 `define SEI			8'h30
 `define CLI			8'h31
 `define PHP			8'h32
@@ -60,6 +64,10 @@
 `define VERR		8'h80
 `define VERW		8'h81
 `define VERX		8'h82
+`define MRK1		8'hF0
+`define MRK2		8'hF1
+`define MRK3		8'hF2
+`define MRK4		8'hF3
 `define RR		8'h02
 `define ADD			8'h04
 `define SUB			8'h05
@@ -169,6 +177,10 @@
 `define CINVX	8'hAC
 `define SIDT	8'hB0
 `define SGDT	8'hB1
+`define BMS		8'hB4
+`define BMC		8'hB5
+`define BMF		8'hB6
+`define BMT		8'hB7
 
 `define NOP		8'hEA
 
@@ -188,9 +200,12 @@
 `define VBR		8'h01
 `define BEAR	8'h02
 `define PTA		8'h04
-`define MMU_CR	8'h05
+`define CR0		8'h05
 `define FAULT_PC	8'h08
 `define FAULT_CS	8'h09
+`define SRAND1	8'h10
+`define SRAND2	8'h11
+`define RAND	8'h12
 
 module Table888seg(
 	rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o,
@@ -294,7 +309,7 @@ reg isInsnCacheLoad,isCacheReset;
 reg nmi_edge,nmi1;
 reg hwi;			// hardware interrupt indicator
 reg im;				// irq interrupt mask bit
-reg pe;				// protection enabled
+wire pe;			// protection enabled
 reg pv;				// privilege violation
 reg [2:0] imcd;		// mask countdown bits
 wire [31:0] sr = {23'd0,im,6'h00,pv,pe};
@@ -316,7 +331,8 @@ reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
 reg isShifti,isBSR,isLMR,isSMR,isLGDT,isLIDT,isSIDT,isSGDT;
-reg isJSP,isJSR,isJGR,isVERR,isVERW,isVERX,isLSL,isLAR;
+reg isJSP,isJSR,isJGR,isVERR,isVERW,isVERX,isLSL,isLAR,isLSB;
+reg isBM;
 reg [1:0] nMTSEG,nDT,nLD;
 reg [2:0] nJGR;
 wire hasIMM = isIMM1|isIMM2;
@@ -341,7 +357,7 @@ reg [63:0] seg_base [15:0];	// lower bound
 reg [63:0] seg_limit [15:0];	// upper bound
 reg [3:0] seg_dpl [15:0];	// privilege level
 reg [7:0] seg_acr [15:0];	// access rights
-
+reg cav,dav;				// address is valid for mmu translation
 reg [63:0] desc_w0, desc_w1;
 wire [7:0] desc_acr = desc_w1[63:56];
 wire [3:0] desc_dpl = desc_w0[63:60];
@@ -368,9 +384,10 @@ wire selectorIsNull = a[63:40]==24'd0;
 
 wire cpnp,dpnp;
 reg rst_cpnp,rst_dpnp;
-reg [63:0] mmu_cr;
+reg [63:0] cr0;
 reg [63:0] pta;
-wire paging_en = mmu_cr[63];
+wire paging_en = cr0[31];
+assign pe = cr0[0];
 wire [63:0] cpte;
 wire [63:0] dpte;
 wire drdy;
@@ -447,8 +464,8 @@ icache_ram u2 (
 Table888_pmmu u3
 (
 	// syscon
-	.rst_i(rst),
-	.clk_i(clk),
+	.rst_i(rst_i),
+	.clk_i(clk_i),
 
 	// master
 	.soc_o(),			// start of cycle
@@ -474,7 +491,8 @@ Table888_pmmu u3
 	.cpte(cpte),	// holding place for data
 	.dpte(dpte),
 
-	.vcadr(segmented_pc),	// virtual code address to translate
+	.cav(1'b1),			// code address valid
+	.vcadr({32'd0,segmented_pc}),	// virtual code address to translate
 	.tcadr(paged_pc),	// translated code address
 	.rdy(rdy),				// address translation is ready
 	.p(pmmu_cpl),		// privilege (0= supervisor)
@@ -485,7 +503,8 @@ Table888_pmmu u3
 	.v(),			// translation is valid
 
 	.wr(isWR),			// cpu is performing write cycle
-	.vdadr(rwadr),		// virtual data address to translate
+	.dav(1'b1),					// data address is valid
+	.vdadr({32'd0,rwadr}),		// virtual data address to translate
 	.tdadr(rwadr_o),		// translated data address
 	.drdy(drdy),			// address translation is ready
 	.dp(pmmu_dpl),
@@ -605,6 +624,10 @@ wire [63:0] ea_ndx1 = a + b_scaled + imm;
 wire [63:0] ea_drn = seg_bas + ea_drn1;
 wire [63:0] ea_ndx = seg_bas + ea_ndx1;
 wire [63:0] mr_ea = seg_bas + c;
+`ifdef SUPPORT_BITMAP_FNS
+wire [63:0] ea_bm1 = a + {(b >> 6),3'b000} + imm;
+wire [63:0] ea_bm = seg_bas + ea_bm1;
+`endif
 
 wire [63:0] gdt_adr = gdt_base + {a[59:40],4'h0};
 wire [63:0] ldt_adr = seg_base[11] + {a[59:40],4'h0};
@@ -616,6 +639,33 @@ wire [63:0] spdec_segd = seg_base[14] + sp_dec;
 reg [2:0] pcpl;
 assign data_readable = pmmu_data_readable;
 assign data_writeable = pmmu_data_writeable && seg_acr[Sa][1];
+
+//-----------------------------------------------------------------------------
+// Random number register:
+//
+// Uses George Marsaglia's multiply method.
+//-----------------------------------------------------------------------------
+reg [63:0] m_z;
+reg [63:0] m_w;
+reg [63:0] next_m_z;
+reg [63:0] next_m_w;
+
+always @(m_z or m_w)
+begin
+	next_m_z <= (36'd3696936969 * m_z[31:0]) + m_z[63:32];
+	next_m_w <= (36'd1800018000 * m_w[31:0]) + m_w[63:32];
+end
+
+wire [63:0] rand = {m_z[31:0],32'd0} + m_w;
+
+//wire [10:0] bias = 11'h3FF;				// bias amount (eg 127)
+//wire [10:0] xl = rand[62:53];
+//wire sgn = 1'b0;								// floating point: always generate a positive number
+//wire [10:0] exp = xl > bias-1 ? bias-1 : xl;	// 2^-1 otherwise number could be over 1
+//wire [52:0] man = rand[52:0];					// a leading '1' will be assumed
+//wire [63:0] randfd = {sgn,exp,man};
+reg [63:0] rando;
+
 
 // - - - - - - - - - - - - - - - - - -
 // Clocked logic follows.
@@ -638,9 +688,8 @@ if (rst_i) begin
 	tick <= 64'd0;
 	vbr <= 32'h00006000;
 	imcd <= 3'b111;
-	pe <= `FALSE;
 	pv <= `FALSE;
-	mmu_cr <= 64'd0;
+	cr0 <= 64'd0;
 	St <= 4'd0;
 	rst_cpnp <= `TRUE;
 	rst_dpnp <= `TRUE;
@@ -838,6 +887,8 @@ DECODE:
 		isVERW <= `FALSE;
 		isVERX <= `FALSE;
 		isLSL <= `FALSE;
+		isLSB <= `FALSE;
+		isBM <= `FALSE;
 		nMTSEG <= 2'b00;
 		nDT <= 2'b00;
 		nLD <= 2'b00;
@@ -865,7 +916,7 @@ DECODE:
 			Rt <= ir[23:16];
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			Rt <= ir[23:16];
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX:
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`BMT:
 			Rt <= ir[31:24];
 		default:
 			Rt <= 8'h00;
@@ -896,6 +947,10 @@ DECODE:
 		`NOP:	next_state(IFETCH);
 		`R:
 			case(func)
+			`MRK1:	next_state(IFETCH);
+			`MRK2:	next_state(IFETCH);
+			`MRK3:	next_state(IFETCH);
+			`MRK4:	next_state(IFETCH);
 			`SEI:	begin 
 						if (cpl > 0 && pe)
 							privilege_violation();
@@ -913,7 +968,7 @@ DECODE:
 						end
 					end
 			`CLP:	begin pv <= `FALSE; next_state(IFETCH); end
-			`PROT:	begin pe <= `TRUE; next_state(IFETCH); end
+//			`PROT:	begin pe <= `TRUE; next_state(IFETCH); end
 			`ICON:	begin icacheOn <= `TRUE; next_state(IFETCH); end
 			`ICOFF:	begin icacheOn <= `FALSE; next_state(IFETCH); end
 			`PHP:
@@ -976,6 +1031,11 @@ DECODE:
 					isLAR <= `TRUE;
 					load_seg();
 				end
+			//`LSB:	begin
+					//isLSB <= `TRUE;
+					//load_seg();
+			//		end
+			`LSB:	Sa <= ir[11:8];
 			`MFSEG:	Sa <= ir[11:8];
 			// Unimplemented instruction
 			default:	;
@@ -1148,7 +1208,8 @@ DECODE:
 					Sa <= 4'd15;
 			end
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
-		`SBX,`SCX,`SHX,`SWX:
+		`SBX,`SCX,`SHX,`SWX,
+		`BMS,`BMC,`BMF,`BMT:
 			begin
 				if (isIMM1) begin
 					Sa <= immbuf[31:28];
@@ -1290,9 +1351,10 @@ EXECUTE:
 				`VBR:	res <= vbr;
 				`BEAR:	res <= berr_addr;
 				`PTA:	res <= pta;
-				`MMU_CR:	res <= mmu_cr;
+				`CR0:	res <= cr0;
 				`FAULT_PC:	res <= fault_pc;
 				`FAULT_CS:	res <= fault_cs;
+				`RAND:		res <= rand;
 				default:	res <= 65'd0;
 				endcase
 			`MTSPR:
@@ -1300,7 +1362,9 @@ EXECUTE:
 				//`TICK:	tick <= a;
 				`VBR:	vbr <= {a[31:13],13'd0};
 				`PTA:		pta <= a;
-				`MMU_CR:	mmu_cr <= a;
+				`CR0:		cr0 <= a;
+				`SRAND1:	m_z <= a;
+				`SRAND2:	m_w <= a;
 				endcase
 			`MTSEG:
 				if (ir[19:16]!=4'd0) begin	// can't move to segment reg #0
@@ -1310,6 +1374,13 @@ EXECUTE:
 			`MFSEG:
 				begin
 					res <= {seg_selector[Sa][31:8],40'd0};
+				end
+			`LSB:	res <= seg_base[Sa];
+			`GRAN:
+				begin
+					res <= rand;
+					m_z <= next_m_z;
+					m_w <= next_m_w;
 				end
 			endcase
 		`RR:
@@ -1496,6 +1567,13 @@ EXECUTE:
 				ld_size <= word;
 				load_check(ea_ndx);
 			end
+`ifdef SUPPORT_BITMAP_FNS
+		`BMS,`BMC,`BMF,`BMT:
+			begin
+				isBM <= `TRUE;
+				load_check(ea_bm);
+			end
+`endif
 		`LGDT:
 			begin
 				isLGDT <= `TRUE;
@@ -1957,6 +2035,26 @@ LOAD4:
 						next_state(IFETCH);
 					end
 				end
+/*
+	Bitmap functions make the processor about 5% larger and have limited
+	usefullness. Usually one would want to manipulate bitmaps a word-at-a
+	time for performance reasons. Other functions like count leadings ones
+	or zero maybe more valuable.
+*/
+`ifdef SUPPORT_BITMAP_FNS
+			isBM:
+				begin
+					store_what <= `STW_A;
+					if (ir[7:0]!=`BMT)
+						store_check(rwadr - 32'd4);
+					case(ir[7:0])
+					`BMS:	a <= {dat32,res[31:0]} | ( 64'd1 << b[5:0] );
+					`BMC:	a <= {dat32,res[31:0]} & ~( 64'd1 << b[5:0] );
+					`BMF:	a <= {dat32,res[31:0]} ^ ( 64'd1 << b[5:0] );
+					`BMT:	res <= ({dat32,res[31:0]} >> b[5:0]) & 64'd1;
+					endcase
+				end
+`endif
 			default:
 				next_state(IFETCH);
 			endcase
@@ -1970,7 +2068,7 @@ VERIFY_SEG_LOAD:
 		res <= 65'd0;
 		// Is the segment resident in memory ?
 		if (!isPresent && !selectorIsNull) begin
-			if (isVERR|isVERW|isVERX|isLSL|isLAR)
+			if (isVERR|isVERW|isVERX|isLSL|isLAR|isLSB)
 				;
 			else begin
 				if (St==4'd14)
@@ -1996,8 +2094,8 @@ VERIFY_SEG_LOAD:
 		// The code privilege level must be the same or higher (numerically
 		// lower) than the data descriptor privilege level.
 //		// CPL <= DPL
-		else if ((St!=4'd15||isCallGate||isVERR||isVERW||isLSL||isLAR) && cpl > desc_dpl && pe && !selectorIsNull) begin	// data segment
-			if (isVERR||isVERW||isLSL||isLAR)
+		else if ((St!=4'd15||isCallGate||isVERR||isVERW||isLSL||isLAR||isLSB) && cpl > desc_dpl && pe && !selectorIsNull) begin	// data segment
+			if (isVERR||isVERW||isLSL||isLAR||isLSB)
 				;
 			else
 				privilege_violation();
@@ -2012,7 +2110,11 @@ VERIFY_SEG_LOAD:
 //			next_state(IFETCH);
 		else
 		begin
-			if (isLAR) begin
+			if (isLSB) begin
+				res <= desc_base;
+				next_state(IFETCH);
+			end
+			else if (isLAR) begin
 				res <= desc_acr;
 				next_state(IFETCH);
 			end

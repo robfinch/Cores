@@ -1,10 +1,12 @@
 // ============================================================================
-// (C) 2007,2013,2014 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@finitron.ca
+//        __
+//   \\__/ o\    (C) 2007,2013,2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // Table888_pmmu.v - mmu
-//  - 64 bit CPU memory management unit
+//  - 64 bit CPU paged memory management unit
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,8 +25,7 @@
 //	mmu.v
 //		Remaps (translates) a virtual address to a real address.
 //
-//	Webpack 14.4  xc6slx45-3csg324	
-//  2550 LUTs / 543 FFs / ??? MHz (64 bit -
+//	Webpack 14.7  xc6slx45-3csg324	
 // ============================================================================
 //
 module Table888_pmmu
@@ -78,6 +79,7 @@ output reg dpnp,
 output reg [63:0] cpte,	// holding place for data
 output reg [63:0] dpte,
 
+input cav,				// code address valid
 input [63:0] vcadr,		// virtual code address to translate
 output reg [63:0] tcadr,	// translated code address
 output reg rdy,				// address translation is ready
@@ -86,9 +88,10 @@ output reg c,r,w,x,		// cacheable, read, write and execute attributes
 output reg v,			// translation is valid
 
 input wr,				// cpu is performing write cycle
+input dav,				// data address valid
 input [63:0] vdadr,		// virtual data address to translate
 output reg [63:0] tdadr,	// translated data address
-output drdy,				// address translation is ready
+output reg drdy,			// address translation is ready
 output reg [3:0] dp,
 output reg dc,dr,dw,dx,
 output reg dv
@@ -105,10 +108,8 @@ reg miss,missc,missd;
 reg [63:0] miss_adr;
 wire pta_changed;
 reg [63:0] pte;
-//assign rdy = !missc;
-assign drdy = !missd;
+reg [31:0] adrx;
 
-wire [pAssociativity-1:0] tlb_cd;
 wire [pAssociativity-1:0] tlb_dd;
 wire [ 7: 0] tlb_cflags [pAssociativity-1:0];
 wire [ 7: 0] tlb_dflags [pAssociativity-1:0];
@@ -159,18 +160,18 @@ generate
 			.o0(tlb_cflags[g]),
 			.o1(tlb_dflags[g])
 		);
-		ram_ar1w2r #( 1,pTLB_size) tlbD    
+
+		ram_ar1w1r #( 1,pTLB_size) tlbD
 		(
 			.clk(clk_i),
-			.ce(wr_tlb?whichSet==g:nnx==g),
-			.we(wr_tlb||state==S_WAIT_MISS && wr && !missd),
+			.ce(wr_tlb?whichSet==g:nnxd==g),
+			.we(wr_tlb||(state==S_WAIT_MISS && wr && !missd)),
 			.wa(wr_tlb?miss_adr[17:12]:vdadr[17:12]),
-			.ra0(vcadr[17:12]),
-			.ra1(vdadr[17:12]),
+			.ra(vdadr[17:12]),
 			.i(!wr_tlb),
-			.o0(tlb_cd[g]),
-			.o1(tlb_dd[g])
+			.o(tlb_dd[g])
 		);
+
 	end
 endgenerate
 
@@ -189,14 +190,12 @@ change_det u1
 // This must be fast !!!
 // Lookup the virtual address in the tlb
 // Translate the address
-// I/O and system BIOS addresses are not mapped
-// Cxxx_xxxx_xxxx_xxxx to FFFF_FFFF_FFFF_FFFF not mapped (kernel segment)
-// 0000_0000_0000_0000 to 0000_0000_0000_xxxx not mapped (kernel data segement)
 always @*
 begin
 	rdy <= 0;
-	missc <= 1;
-	missd <= 1;
+	missc <= cav;
+	missd <= dav;
+	drdy <= 1'b0;
 	nnx <= pAssociativity;
 	p <= 4'd0;
 	c <= 1;
@@ -206,10 +205,10 @@ begin
 	v <= 0;
 	tcadr[11: 0] <= vcadr[11: 0];
 	tcadr[63:12] <= vcadr[63:12];
-	if (&vcadr[63:62] || !paging_en) begin
+	if (!paging_en || vcadr[31:16]==16'h0000) begin
 		rdy <= 1;
 		missc <= 0;
-		c <= vcadr[61:60]==2'b00;	// C000_0000 to CFFF_FFFF is cacheable
+		c <= 1;
 		v <= 1;
 	end
 	else begin
@@ -228,6 +227,7 @@ begin
 			end
 	end
 	// The first 64k of data memory is unmapped
+	nnxd <= 3'd0;
 	dp <= 4'd0;
 	dc <= 1;
 	dr <= 1;
@@ -236,9 +236,10 @@ begin
 	dv <= 0;
 	tdadr[11: 0] <= vdadr[11: 0];
 	tdadr[63:12] <= vdadr[63:12];
-	if (vdadr[63:16]==48'h0 || !paging_en) begin
+	if (!paging_en || vdadr[31:28]==4'd0 || vdadr[31:20]==12'hFFD) begin
+		drdy <= 1'b1;
 		missd <= 0;
-		dc <= 1;
+		dc <= 0;
 		dv <= 1;
 	end
 	else begin
@@ -246,6 +247,7 @@ begin
 			if (tlb_v[{nn,vdadr[17:12]}] && vdadr[63:18]==tlb_vdadr[nn]) begin
 				tdadr[63:12] <= tlb_tdadr[nn];
 				missd <= 1'b0;
+				drdy <= 1'b1;
 				nnxd <= nn;
 				dp <= tlb_dflags[nn][7:4];
 				dc <= tlb_dflags[nn][3];
@@ -262,13 +264,7 @@ end
 // miss.
 always @(posedge clk_i)
 if (rst_i) begin
-	soc_o <= 0;
-	cyc_o <= 0;
-	stb_o <= 0;
-	byt_o <= 4'h0;
-	lock_o <= 0;
-	wr_o  <= 0;
-	adr_o <= 0;
+	wb_nack();
 	state <= S_WAIT_MISS;
 	dbit  <= 0;
 	whichSet <= 0;
@@ -307,7 +303,7 @@ else begin
 			state <= S_WAIT_MISS;
 			dbit <= wr;
 
-			if (!cpnp && !dpnp) begin
+			if (!cpnp && !dpnp && paging_en) begin
 				if (missd) begin
 					miss_adr <= vdadr;
 					// try and pick an empty tlb entry
@@ -315,7 +311,7 @@ else begin
 					for (nn = 0; nn < pAssociativity; nn = nn + 1)
 						if (!tlb_v[{nn,vdadr[17:12]}])
 							whichSet <= nn;
-					state <= S_RD_PTL5;
+					choose_state();
 				end
 				else if (missc) begin
 					miss_adr <= vcadr;
@@ -324,58 +320,21 @@ else begin
 					for (nn = 0; nn < pAssociativity; nn = nn + 1)
 						if (!tlb_v[{nn,vcadr[17:12]}])
 							whichSet <= nn;
-					state <= S_RD_PTL5;
+					choose_state();
 				end
 				// If there's a write cycle, check to see if the
 				// dirty bit is set. If the dirty bit hasn't been
 				// set yet, then set it and write the dirty status
 				// to memory.
-				else if (wr && !tlb_dd[nnx]) begin
+				else if (wr && !tlb_dd[nnxd]) begin
 					miss_adr <= vdadr;
 					whichSet <= nnxd;
-					state <= S_RD_PTL5;
+					choose_state();
 				end
 			end
 		end
 
-	S_RD_PTL5:
-		begin
-			soc_o <= 1;
-			cyc_o <= 1;
-			stb_o <= 1;
-			byt_o <= 4'hF;
-			lock_o <= 0;
-			wr_o  <= 0;
-			case(pta[2:0])
-			3'd0:	state <= S_RD_PTL0;
-			3'd1:	state <= S_RD_PTL1;
-			3'd2:	state <= S_RD_PTL2;
-			3'd3:	state <= S_RD_PTL3;
-			3'd4:	state <= S_RD_PTL4;
-			3'd5:	state <= S_RD_PTL5_ACK;
-			default:	;
-			endcase
-			// Set page table address for lookup
-			case(pta[2:0])
-			3'b000:	adr_o <= {pta[31:12],miss_adr[20:12],3'b0};	// 2MB translations
-			3'b001:	adr_o <= {pta[31:12],miss_adr[29:21],3'b0};	// 1GB translations
-			3'b010:	adr_o <= {pta[31:12],miss_adr[38:30],3'b0};	// 512GB translations
-			3'b011:	adr_o <= {pta[31:12],miss_adr[47:39],3'b0};	// 256TB translations
-			3'b100:	adr_o <= {pta[31:12],miss_adr[56:48],3'b0};	// 128XB translations
-			3'b101:	adr_o <= {pta[31:12],2'b00,miss_adr[63:57],3'b0};	//  translations
-			default:	;
-			endcase
-		end
-	// Wait for ack from system
-	// Setup to access page table
-	// If app uses a page directory, now address the page table
-	S_RD_PTL5_ACK:
-		if (ack_i) begin
-			stb_o <= 0;
-			byt_o <= 4'h0;
-			pte[31:0] <= dat_i;
-			state <= S_RD_PTL5b;
-		end
+	S_RD_PTL5:	wb_reada({pte[31:12],miss_adr[63:57],3'b0}, S_RD_PTL5b);
 	S_RD_PTL5b:	wb_readb(S_RD_PTL4);
 	S_RD_PTL4:	wb_reada({pte[31:12],miss_adr[56:48],3'b0}, S_RD_PTL4b);
 	S_RD_PTL4b:	wb_readb(S_RD_PTL3);
@@ -398,16 +357,17 @@ else begin
 	// set the accessed bit for the page table entry
 	// Also set dirty bit if a write access.
 	S_WR_PTL0:
-		if (!stb_o) begin
+		if (!cyc_o) begin
+			cyc_o <= 1;
 			stb_o <= 1;
 			wr_o  <= 1;
 			byt_o <= 4'hF;
+			adr_o <= {pte[31:12],miss_adr[20:12],3'b0};
 			dat_o <= pte[31:0]|{1'b1,dbit,8'b0};
 		end
 		else if (ack_i) begin
-			stb_o <= 0;
-			byt_o <= 4'h0;
-			wr_o  <= 0;
+			wb_nack();
+			adrx <= adr_o + 32'd4;
 			state <= S_RD_PTL0b;
 		end
 
@@ -416,11 +376,7 @@ else begin
 	//---------------------------------------------------
 	default:
 		begin
-			soc_o <= 0;
-			cyc_o <= 0;
-			byt_o <= 8'h00;
-			lock_o <= 0;
-			wr_o  <= 0;
+			wb_nack();
 			state <= S_WAIT_MISS;
 		end
 
@@ -441,6 +397,19 @@ else if (state==S_WAIT_MISS && (missd|missc)) begin
 		cnt <= cnt + 1;
 end
 
+task wb_nack;
+begin
+	lock_o <= 1'b0;
+	soc_o <= 1'b0;
+	cyc_o <= 1'b0;
+	stb_o <= 1'b0;
+	wr_o <= 1'b0;
+	byt_o <= 4'd0;
+	adr_o <= 32'd0;
+	dat_o <= 32'd0;
+end
+endtask
+
 task wb_reada;
 input [31:0] adr;
 input [5:0] nxt;
@@ -454,8 +423,8 @@ begin
 		lock_o <= 0;
 	end
 	else if (ack_i) begin
-		stb_o <= 0;
-		byt_o <= 4'h0;
+		wb_nack();
+		adrx <= adr_o + 32'd4;
 		pte[31:0] <= dat_i;
 		state <= nxt;
 	end
@@ -465,16 +434,14 @@ endtask
 task wb_readb;
 input [5:0] nxt;
 begin
-	if (!stb_o) begin
+	if (!cyc_o) begin
+		cyc_o <= 1;
 		stb_o <= 1;
 		byt_o <= 4'hF;
-		adr_o <= adr_o + 32'd4;
+		adr_o <= adrx;
 	end
 	else if (ack_i) begin
-		cyc_o <= 0;
-		stb_o <= 0;
-		byt_o <= 4'h0;
-		adr_o <= 32'd0;
+		wb_nack();
 		pte[63:32] <= dat_i;
 		if (|pte[2:0])
 			state <= nxt;
@@ -486,6 +453,30 @@ begin
 			state <= S_WAIT_MISS;
 		end
 	end
+end
+endtask
+
+task choose_state;
+begin
+	case(pta[2:0])
+	3'd0:	state <= S_RD_PTL0;
+	3'd1:	state <= S_RD_PTL1;
+	3'd2:	state <= S_RD_PTL2;
+	3'd3:	state <= S_RD_PTL3;
+	3'd4:	state <= S_RD_PTL4;
+	3'd5:	state <= S_RD_PTL5;
+	default:	;
+	endcase
+	// Set page table address for lookup
+	case(pta[2:0])
+	3'b000:	pte <= {pta[31:12],miss_adr[20:12],3'b0};	// 2MB translations
+	3'b001:	pte <= {pta[31:12],miss_adr[29:21],3'b0};	// 1GB translations
+	3'b010:	pte <= {pta[31:12],miss_adr[38:30],3'b0};	// 512GB translations
+	3'b011:	pte <= {pta[31:12],miss_adr[47:39],3'b0};	// 256TB translations
+	3'b100:	pte <= {pta[31:12],miss_adr[56:48],3'b0};	// 128XB translations
+	3'b101:	pte <= {pta[31:12],2'b00,miss_adr[63:57],3'b0};	//  translations
+	default:	;
+	endcase
 end
 endtask
 

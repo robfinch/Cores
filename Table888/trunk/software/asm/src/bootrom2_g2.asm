@@ -64,9 +64,9 @@ SECTOR_BUF	EQU		0x06FFB000
 BYTE_SECTOR_BUF	EQU	SECTOR_BUF
 PROG_LOAD_AREA	EQU		0x1800000
 
-;IDTBaseAddress	EQU		$7EFF000
-;GDTBaseAddress	EQU		$7F01000
-;TSSBaseAddress	EQU		$7C08000
+IDTBaseAddress	EQU		$7EFF000
+GDTBaseAddress	EQU		$7F01000
+TSSBaseAddress	EQU		$7C08000
 
 ; error codes
 E_Ok		=		0x00
@@ -94,7 +94,7 @@ E_TooManyBlocks	=	0x26
 ; resource errors
 E_NoMoreMbx	=		0x40
 E_NoMoreMsgBlks	=	0x41
-E_NoMoreAlarmBlks	= 0x44
+E_NoMoreAlarmBlks	=0x44
 E_NoMoreTCBs	=	0x45
 E_NoMem		= 12
 
@@ -124,12 +124,12 @@ SPI_MASTER_CONTROL_REG	EQU	0x04
 SPI_TRANS_TYPE_REG	EQU		0x08
 SPI_TRANS_CTRL_REG	EQU		0x0C
 SPI_TRANS_STATUS_REG	EQU	0x10
-SPI_TRANS_ERROR_REG		EQU	0x14
-SPI_DIRECT_ACCESS_DATA_REG		EQU	0x18
-SPI_SD_SECT_7_0_REG		EQU	0x1C
-SPI_SD_SECT_15_8_REG	EQU	0x20
-SPI_SD_SECT_23_16_REG	EQU	0x24
-SPI_SD_SECT_31_24_REG	EQU	0x28
+SPI_TRANS_ERROR_REG		EQU	0x11
+SPI_DIRECT_ACCESS_DATA_REG		EQU	0x12
+SPI_SD_SECT_7_0_REG		EQU	0x13
+SPI_SD_SECT_15_8_REG	EQU	0x14
+SPI_SD_SECT_23_16_REG	EQU	0x15
+SPI_SD_SECT_31_24_REG	EQU	0x16
 SPI_RX_FIFO_DATA_REG	EQU	0x40
 SPI_RX_FIFO_DATA_COUNT_MSB	EQU	0x48
 SPI_RX_FIFO_DATA_COUNT_LSB  EQU 0x4C
@@ -140,7 +140,6 @@ SPI_RESP_BYTE1			EQU	0xC0
 SPI_RESP_BYTE2			EQU	0xC4
 SPI_RESP_BYTE3			EQU	0xC8
 SPI_RESP_BYTE4			EQU	0xCC
-
 SPI_INIT_SD			EQU		0x01
 SPI_TRANS_START		EQU		0x01
 SPI_TRANS_BUSY		EQU		0x01
@@ -209,53 +208,9 @@ KeybdLocks		dc		0
 startSector		dh		0
 disk_size		dh		0
 
-; Just past the Bootrom
-	org		$00010000
-NR_PTBL		EQU		32
-
-; GDT is 1MB reserved
-GDTBaseAddress:
-	fill.w	65536,0
-	fill.w	65536,0
-IDTBaseAddress:
-	fill.w	512,0
-
-; Memory Page Allocation Map
-
-PAM1			fill.w	512,0
-PAM2			fill.w	512,0
-
-RootPageTbl:
-	fill.b	4096*NR_PTBL,0
-PgSD0:
-	fill.w	512,0
-PgSD3:
-	fill.w	512,0
-PgTbl0:
-	fill.w	512,0
-PgTbl1:
-	fill.w	512,0
-PgTbl2:
-	fill.w	512,0
-PgTbl3:
-	fill.w	512,0
-PgTbl4:
-	fill.w	512,0
-PgTbl5:
-	fill.w	512,0
-IOPgTbl:
-	fill.w	512,0
-
-TempTCB:
-	fill.b	TCB_Size,0
-
-	; 2MB for TSS space
-TSSBaseAddress:
+	org		$07C00000
 TCBs:
-	fill.b	TCB_Size*NR_TCB,0
-
-EndStaticAllocations:
-	dw		0
+	fill.b	TCB_Size * NR_TCB,0
 
 	code
 	org		$00008000
@@ -288,13 +243,13 @@ start:
 
 	; setup I/O segment
 	ldi		r4,#GDTBaseAddress+$40
-	ldi		r1,#$F0000000FFD00000
-	ldi		r2,#$920FFFFFFFFFFFFF
+	ldi		r1,#$F000000000000000
+	ldi		r2,#$92FFFFFFFFFFFFFF
 	sw		r1,[r4]
 	sw		r2,8[r4]
 
 	ldi		r4,#GDTBaseAddress+$F0
-	ldi		r1,#TempTCB		; temporary tss
+	ldi		r1,#$0000000007BFE000	; temporary tss
 	sw		r1,[r4]
 	
 	; setup TSS segments
@@ -317,45 +272,17 @@ start:
 	mtseg	ds,r1
 	ldi		r1,#$030000000000
 	mtseg	ss,r1
-	ldi		sp,#$03FFFF8			; load the stack pointer at the top of OS memory
+	ldi		r1,#$040000000000
+	mtseg	es,r1
 	ldi		r1,#$020000000000
-	mtseg	seg2,r1
-	mtseg	seg3,r1
-	mtseg	seg4,r1
-	mtseg	seg5,r1
-	mtseg	seg6,r1
-	mtseg	seg7,r1
-	mtseg	seg8,r1
-	mtseg	seg9,r1
-	mtseg	seg10,r1
-	mtseg	seg11,r1
-	mtseg	seg12,r1
-	mtseg	seg13,r1
-									
-	; setup page tables and the page table address register
-	bsr		SetupPageTbl
-	ldi		r1,#RootPageTbl+4096+2	; 3 level page table system
-	mtspr	cr3,r1
-	; turn on paging
-	mrk2
-	ldi		r1,#$80000000			; paging off for now
-	mtspr	cr0,r1
-	
+	mtseg	tss,r1
 	;prot
-	
-	ldi		r1,#TickRout
-	and		r1,r1,#-4				; flag short address
-	sw		r1,TickVec
-
-;	ldi		r2,#32767
-;.st3:
-;	bmc		PAM1[r0+r2]
-;	bmc		PAM2[r0+r2]
-;	dbnz	r2,.st3
 
 	ldi		r1,#$FC
 	sb		r1,LEDS
 
+	ldi		sp,#$07EFEFF8			; load the stack pointer at the top of memory
+									
 	sw		r0,Milliseconds
 	ldi		r1,#$CE
 	sb		r1,KeybdEcho
@@ -425,18 +352,8 @@ SetupIntVectors:
 	; setup specific vectors
 	sw		r1,[r2+r3*8]
 	dbnz	r3,.siv1	
-	ldi		r1,#$8600000100000000+start
-	sw		r1,449*8[r2]
-	ldi		r1,#$8600000100000000+Tick1000Rout
-	sw		r1,450*8[r2]
-	ldi		r1,#$8600000100000000+KeybdIRQ
-	sw		r1,463*8[r2]
-	ldi		r1,#$8600000100000000+exf_rout
-	sw		r1,497*8[r2]
-	ldi		r1,#$8600000100000000+dwf_rout
-	sw		r1,498*8[r2]
-	ldi		r1,#$8600000100000000+drf_rout
-	sw		r1,499*8[r2]
+	ldi		r1,#$8600000100000000+berr_rout
+	sw		r1,508*8[r2]
 	ldi		r1,#$8600000100000000+sbv_rout
 	sw		r1,500*8[r2]
 	ldi		r1,#$8600000100000000+priv_rout
@@ -445,8 +362,12 @@ SetupIntVectors:
 	sw		r1,502*8[r2]
 	ldi		r1,#$8600000100000000+snp_rout
 	sw		r1,503*8[r2]
-	ldi		r1,#$8600000100000000+berr_rout
-	sw		r1,508*8[r2]
+	ldi		r1,#$8600000100000000+start
+	sw		r1,449*8[r2]
+	ldi		r1,#$8600000100000000+Tick1000Rout
+	sw		r1,450*8[r2]
+	ldi		r1,#$8600000100000000+KeybdIRQ
+	sw		r1,463*8[r2]
 	plp
 	rts
 
@@ -460,275 +381,6 @@ InitPIC:
 	ldi		r1,#$000F		; enable keyboard reset, timer interrupts
 	sh		r1,PIC_IE
 	rts
-
-;------------------------------------------------------------------------------
-; Setup the initial page tables.
-; Initialize the PAM.
-;------------------------------------------------------------------------------
-
-SetupPageTbl:
-	push	r1/r2/r3
-
-	;--------------------------------------------------------------------------
-	; Setup the root page directory
-	; The root page directory only has two valid entries in it.
-	; 0) A pointer to a subdirectory representing the memory in the system (128MB)
-	; 3) A pointer to a subdirectory locating the I/O in the system (2MB)
-	;           ++--------------- these two bits mapped by the root directory
-	; xrrr rrrr rrss_ssss_ssst_tttt_tttt_xxxx_xxxx_xxxx
-	; 0000_0000_rrxx_xxxx_xxxx_xxxx_xxxx_xxxx_xxxx_xxxx
-	;--------------------------------------------------------------------------
-	ldi		r1,#RootPageTbl+4096
-	bsr		ClearPageTable
-	mov		r2,r1
-	ldi		r1,#PgSD0
-	and		r1,r1,#-4096
-	or		r1,r1,#$0D	; priv 0, cacheable, readable, executable, writeable
-	sw		r1,[r2]
-	ldi		r1,#PgSD0
-	and		r1,r1,#-4096
-	or		r1,r1,#$0D	; priv 0, cacheable, readable, executable, writeable
-	sw		r1,8[r2]
-	ldi		r1,#PgSD3
-	and		r1,r1,#-4096
-	or		r1,r1,#$8D	; priv 8, cacheable, readable, executable, writeable
-	sw		r1,24[r2]
-
-	;--------------------------------------------------------------------------
-	; Setup subdirectory zero.
-	; This sub-directory is capable of mapping all the memory in the system
-	; (and more). Only the first 64 pages are used.
-	; clear out subdirectory entries
-	; ++--------------- these two bits mapped by the root directory
-	; ||++-++++-+++---- these nine bits mapped by subirectory SD0
-	; rrss_ssss_sss
-	; 0000_0sss_sssx_xxxx_xxxx_xxxx_xxxx_xxxx
-	;--------------------------------------------------------------------------
-	ldi		r2,#PgSD0
-	ldi		r3,#511
-.0002:
-	sw		r0,[r2+r3*8]
-	dbnz	r3,.0002
-
-	ldi		r1,#PgTbl0
-	and		r1,r1,#-4096
-	or		r1,r1,#$0D	; priv 0, cacheable, readable, executable, writeable
-	sw		r1,[r2]
-
-	ldi		r1,#PgTbl1
-	and		r1,r1,#-4096
-	or		r1,r1,#$0D	; priv 0, cacheable, readable, executable, writeable
-	sw		r1,8[r2]
-
-	; Bitmap graphics memory pages
-	ldi		r1,#PgTbl2
-	and		r1,r1,#-4096
-	or		r1,r1,#$8D	; priv 8, cacheable, readable, executable, writeable
-	sw		r1,2*8[r2]
-	ldi		r1,#PgTbl3
-	and		r1,r1,#-4096
-	or		r1,r1,#$8D	; priv 8, cacheable, readable, executable, writeable
-	sw		r1,3*8[r2]
-	ldi		r1,#PgTbl4
-	and		r1,r1,#-4096
-	or		r1,r1,#$8D	; priv 8, cacheable, readable, executable, writeable
-	sw		r1,4*8[r2]
-	ldi		r1,#PgTbl5
-	and		r1,r1,#-4096
-	or		r1,r1,#$8D	; priv 8, cacheable, readable, executable, writeable
-	sw		r1,5*8[r2]
-
-	; setup first four pages
-	; the lowest 16kB of memory is a scratch space
-	ldi		r1,#PgTbl0
-	bsr		ClearPageTable
-	mov		r2,r1
-	ldi		r1,#$008F
-	sw		r1,[r2]
-	ldi		r1,#$108F
-	sw		r1,8[r2]
-	ldi		r1,#$208F
-	sw		r1,16[r2]
-	ldi		r1,#$308F
-	sw		r1,24[r2]
-
-	; memory between $8000 and $FFFF is the bootrom
-	ldi		r3,#7		; eight pages to setup
-	ldi		r1,#$F00E	; priv 0, cacheable, readable, executable, but not writeable
-.0003:
-	sw		r1,8*8[r2+r3*8]
-	sub		r1,r1,#$1000
-	dbnz	r3,.0003
-	
-	; memmory above $FFFF to $1FFFFF is RAM for the OS (2MB)
-	ldi		r3,#495		; 512- 16-1
-	ldi		r1,#$1FFFFF
-.0006:
-	sw		r1,16*8[r2+r3*8]
-	sub		r1,r1,#$1000
-	dbnz	r3,.0006
-
-	; memory between $200000 and $3FFFFF is RAM for the OS (2MB)
-	ldi		r2,#PgTbl1
-	ldi		r1,#$3FFFFF
-	bsr		SetupBMTable
-
-	; Page2 range $400000 to $5FFFFF
-	; 0000_0000_010x_xxxx_xxxx_xxxx_xxxx_xxxx
-	ldi		r2,#PgTbl2
-	ldi		r1,#$5FFFFF
-	bsr		SetupBMTable
-
-	; Page3 range $600000 to $7FFFFF
-	; 0000_0000_011x_xxxx_xxxx_xxxx_xxxx_xxxx
-	ldi		r2,#PgTbl3
-	ldi		r1,#$7FFFFF
-	bsr		SetupBMTable
-
-	; Page4 range $800000 to $9FFFFF
-	; 0000_0000_100x_xxxx_xxxx_xxxx_xxxx_xxxx
-	ldi		r2,#PgTbl4
-	ldi		r1,#$9FFFFF
-	bsr		SetupBMTable
-
-	; Page5 range $A00000 to $BFFFFF
-	; 0000_0000_101x_xxxx_xxxx_xxxx_xxxx_xxxx
-	ldi		r2,#PgTbl5
-	ldi		r1,#$BFFFFF
-	bsr		SetupBMTable
-
-	;--------------------------------------------------------------------------
-	; Setup the PAM (page allocation map).
-	;--------------------------------------------------------------------------
-	; first mark all free
-	ldi		r3,#32768/64-1	; number of pages
-	ldi		r1,#0
-.0007:
-	sw		r0,PAM1[r3]
-	dbnz	r3,.0007
-
-	; We've allocated the first 12MB of RAM to the OS and bitmapped
-	; graphics display. Mark it in the PAM.
-	ldi		r3,#$63		; 3072 pages /64 - 1
-	ldi		r1,#-1
-.0008:
-	sw		r1,PAM1[r3]
-	dbnz	r3,.0008
-
-	;--------------------------------------------------------------------------
-	; Setup the I/O subdirectory
-	; clear out subdirectory entries
-	; The I/O subdirectory has only a single valid entry at #510
-	; ++--------------- these two bit mapped by the root directory
-	; ||++-++++-+++---- these nine bits mapped by subirectory SD3
-	; rrss_ssss_sss
-	; 1111_1111_110x_xxxx_xxxx_xxxx_xxxx_xxxx
-	;--------------------------------------------------------------------------
-	ldi		r1,#PgSD3
-	bsr		ClearPageTable
-	mov		r2,r1
-	ldi		r1,#IOPgTbl
-	or		r1,r1,#$8D		; priv 8,cachable, readable, non-executable, writeable
-	sw		r1,510*8[r2]	; put in proper slot
-
-	;--------------------------------------------------------------------------
-	; Setup the I/O page table
-	; We setup the I/O page table with linear addresses matching
-	; physical ones between $FFCxxxxx and $FFDFFFFF
-	; We map all entries assuming there is I/O in each one. In
-	; reality all the I/O is above $FFDx, it's too cumbersone
-	; to map on a device by device basis. If there happens not to be an I/O
-	; device at a memory location, a bus error will result.
-	; ++--------------- these two bit mapped by the root directory
-	; ||++-++++-+++---- these nine bits mapped by subirectory SD3
-	; |||| |||| |||+-++++-++++---- these nine bits mapped by the I/O page table
-	; rrss_ssss_sss| |||| ||||
-	; 1111_1111_110t_tttt_tttt_xxxx_xxxx_xxxx
-	;--------------------------------------------------------------------------
-	ldi		r2,#IOPgTbl
-	ldi		r3,#511
-	ldi		r1,#$FFDFF085	; priv 8, non-cachable, readable, non-executable, writeable
-.0005:
-	sw		r1,[r2+r3*8]
-	sub		r1,r1,#$1000
-	dbnz	r3,.0005
-
-	pop		r3/r2/r1
-	rts
-
-;------------------------------------------------------------------------------
-; Clear the page table ( a block of 512 words).
-; Parameters:
-;	r1 = address of page table
-;------------------------------------------------------------------------------
-
-ClearPageTable:
-	push	r2
-	ldi		r2,#511
-.0001:
-	sw		r0,[r1+r2*8]
-	dbnz	r2,.0001
-	pop		r2
-	rts
-
-;------------------------------------------------------------------------------
-; r1 = address
-; r2 = pointer to page table
-;------------------------------------------------------------------------------
-
-SetupBMTable:
-	push	r3
-	ldi		r3,#511
-.0006:
-	and		r1,r1,#-4096
-	or		r1,r1,#85
-	sw		r1,[r2+r3*8]
-	sub		r1,r1,#$1000
-	dbnz	r3,.0006
-	pop		r3
-	rts
-
-;------------------------------------------------------------------------------
-; Find the highest available page number and allocate it.
-;
-; Returns:
-;	r1 = physical page number, 0 if none available
-;------------------------------------------------------------------------------
-
-FindHiPage:
-	push	r2/r3
-	ldi		r1,#511*8		; start at top of map
-.0002:
-	lw		r2,PAM1[r1]
-	com		r2,r2			; com bit pattern so we can test for all ones
-	brnz	r2,.0001		; is any page free ?
-	dbnz	r1,.0002		; no, try next word
-	; Here we are out of memory
-	mov		r1,r0
-	pop		r3/r2
-	rts
-
-.0001:
-	com		r2,r2			; get back positive bits
-	ldi		r3,#63			; number of bits to test - 1
-.0004:
-	brpl	r2,.0003		; check MSB, is it clear ?
-	rol		r2,r2,#1		; rotate to next bit
-	dbnz	r3,.0004		; loop back
-.0003:
-	rol		r2,r2,#1		; make MSB the LSB
-	or		r2,r2,#1		; and set bit
-	rol		r2,r2,r3		; put the bits back in original place
-	sw		r2,PAM1[r1]		; update word in memory
-
-	shl		r3,r3,#13		; multiply bit # by page size
-	shl		r1,r1,#19		; 
-	or		r1,r1,r3		; r1 = physical address
-	pop		r3/r2
-	rts
-
-AddOSPT:
-	
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character to screen display character.
@@ -967,6 +619,8 @@ CalcScreenLoc:
 
 DisplayChar:
 	push	r1/r2/r3/r4
+	ldi		r4,#$040000000000
+	mtseg	es,r4
 	and		r1,r1,#$FF
 	cmp		fl0,r1,#'\r'
 	beq		fl0,.docr
@@ -1205,8 +859,6 @@ mon1:
 	beq		fl0,MRTest
 	cmp		fl0,r1,#'S'
 	beq		fl0,doSDBoot
-	cmp		fl0,r1,#'g'
-	beq		fl0,doRand
 	bra		r0,mon1
 
 .doHelp:
@@ -1279,18 +931,6 @@ doSDBoot:
 
 OutChar:
 	jmp		(OutputVec)
-
-doRand:
-	mfspr	r1,tick
-	mtspr	srand1,r1
-	mfspr	r1,tick
-	mtspr	srand2,r1
-.0001:
-	gran	r1
-	bsr		DisplayWord
-	bsr		CRLF
-	bsr		CheckKeys
-	bra		r0,.0001
 
 ;------------------------------------------------------------------------------
 ; Display memory pointed to by r2.
@@ -1632,41 +1272,37 @@ MRTest:
 ;------------------------------------------------------------------------------
 ;
 SDInit:
-	push	r2
-	ldi		r2,#SPIMASTER
 	ldi		r1,#SPI_INIT_SD
-	sb		r1,SPI_TRANS_TYPE_REG[r2]
+	sb		r1,SPIMASTER+SPI_TRANS_TYPE_REG
 	ldi		r1,#SPI_TRANS_START
-	sb		r1,SPI_TRANS_CTRL_REG[r2]
+	sb		r1,SPIMASTER+SPI_TRANS_CTRL_REG
 	nop
 .spi_init1
-	lbu		r1,SPI_TRANS_STATUS_REG[r2]
+	lbu		r1,SPIMASTER+SPI_TRANS_STATUS_REG
 	nop
 	nop
 	cmp		fl0,r1,#SPI_TRANS_BUSY
 	beq		fl0,.spi_init1
-	lbu		r1,SPI_TRANS_ERROR_REG[r2]
+	lbu		r1,SPIMASTER+SPI_TRANS_ERROR_REG
 	and		r1,r1,#3
 	cmp		fl0,r1,#SPI_INIT_NO_ERROR
-	bne		fl0,.spi_error
+	bne		fl0,spi_error
 ;	lda		#spi_init_ok_msg
 ;	jsr		DisplayStringB
-	pop		r2
 	ldi		r1,#E_Ok
 	rts
-.spi_error
+spi_error
 	bsr		DisplayByte
 	ldi		r1,#spi_init_error_msg
 	bsr		DisplayString
-	lbu		r1,SPI_RESP_BYTE1[r2]
+	lbu		r1,SPIMASTER+SPI_RESP_BYTE1
 	bsr		DisplayByte
-	lbu		r1,SPI_RESP_BYTE2[r2]
+	lbu		r1,SPIMASTER+SPI_RESP_BYTE2
 	bsr		DisplayByte
-	lbu		r1,SPI_RESP_BYTE3[r2]
+	lbu		r1,SPIMASTER+SPI_RESP_BYTE3
 	bsr		DisplayByte
-	lbu		r1,SPI_RESP_BYTE4[r2]
+	lbu		r1,SPIMASTER+SPI_RESP_BYTE4
 	bsr		DisplayByte
-	pop		r2
 	ldi		r1,#1
 	rts
 
@@ -1686,15 +1322,15 @@ spi_delay:
 ;------------------------------------------------------------------------------
 ;
 SDReadSector:
-	push	r2/r3/r4/r5
-	ldi		r5,#SPIMASTER	
-	sb		r1,SPI_SD_SECT_7_0_REG[r5]
+	push	r2/r3/r4
+	
+	sb		r1,SPIMASTER+SPI_SD_SECT_7_0_REG
 	shr		r1,r1,#8
-	sb		r1,SPI_SD_SECT_15_8_REG[r5]
+	sb		r1,SPIMASTER+SPI_SD_SECT_15_8_REG
 	shr		r1,r1,#8
-	sb		r1,SPI_SD_SECT_23_16_REG[r5]
+	sb		r1,SPIMASTER+SPI_SD_SECT_23_16_REG
 	shr		r1,r1,#8
-	sb		r1,SPI_SD_SECT_31_24_REG[r5]
+	sb		r1,SPIMASTER+SPI_SD_SECT_31_24_REG
 
 	ldi		r4,#19	; retry count
 
@@ -1702,26 +1338,26 @@ SDReadSector:
 	; Force the reciever fifo to be empty, in case a prior error leaves it
 	; in an unknown state.
 	ldi		r1,#1
-	sb		r1,SPI_RX_FIFO_CTRL_REG[r5]
+	sb		r1,SPIMASTER+SPI_RX_FIFO_CTRL_REG
 
 	ldi		r1,#RW_READ_SD_BLOCK
-	sb		r1,SPI_TRANS_TYPE_REG[r5]
+	sb		r1,SPIMASTER+SPI_TRANS_TYPE_REG
 	ldi		r1,#SPI_TRANS_START
-	sb		r1,SPI_TRANS_CTRL_REG[r5]
+	sb		r1,SPIMASTER+SPI_TRANS_CTRL_REG
 	nop
 .spi_read_sect1:
-	lbu		r1,SPI_TRANS_STATUS_REG[r5]
+	lbu		r1,SPIMASTER+SPI_TRANS_STATUS_REG
 	bsr		spi_delay			; just a delay between consecutive status reg reads
 	cmp		fl0,r1,#SPI_TRANS_BUSY
 	beq		fl0,.spi_read_sect1
-	lbu		r1,SPI_TRANS_ERROR_REG[r5]
+	lbu		r1,SPIMASTER+SPI_TRANS_ERROR_REG
 	shr		r1,r1,#2
 	and		r1,r1,#3
 	cmp		fl0,r1,#SPI_READ_NO_ERROR
 	bne		fl0,.spi_read_error
 	ldi		r3,#511		; read 512 bytes from fifo
 .spi_read_sect2:
-	lbu		r1,SPI_RX_FIFO_DATA_REG[r5]
+	lbu		r1,SPIMASTER+SPI_RX_FIFO_DATA_REG
 	sb		r1,[r2]
 	add		r2,r2,#1
 	dbnz	r3,.spi_read_sect2
@@ -1734,7 +1370,7 @@ SDReadSector:
 	bsr		DisplayString
 	ldi		r1,#1
 .spi_read_ret:
-	pop		r5/r4/r3/r2
+	pop		r4/r3/r2
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1783,13 +1419,11 @@ SDWriteBlocks:
 ;------------------------------------------------------------------------------
 ;
 SDWriteSector:
-	push	r2/r3/r4/r1
-	ldi		r4,#SPIMASTER
-
+	push	r2/r3/r1
 	; Force the transmitter fifo to be empty, in case a prior error leaves it
 	; in an unknown state.
 	ldi		r1,#1
-	sb		r1,SPI_TX_FIFO_CTRL_REG[r4]
+	sb		r1,SPIMASTER+SPI_TX_FIFO_CTRL_REG
 	nop			; give I/O time to respond
 	nop
 
@@ -1797,7 +1431,7 @@ SDWriteSector:
 	ldi		r3,#511
 .spi_write_sect1:
 	lbu		r1,[r2]
-	sb		r1,SPI_TX_FIFO_DATA_REG[r4]
+	sb		r1,SPIMASTER+SPI_TX_FIFO_DATA_REG
 	nop			; give the I/O time to respond
 	nop
 	add		r2,r2,#1
@@ -1805,27 +1439,27 @@ SDWriteSector:
 
 	; set the sector number in the spi master address registers
 	pop		r1
-	sb		r1,SPI_SD_SECT_7_0_REG[r4]
+	sb		r1,SPIMASTER+SPI_SD_SECT_7_0_REG
 	shr		r1,r1,#8
-	sb		r1,SPI_SD_SECT_15_8_REG[r4]
+	sb		r1,SPIMASTER+SPI_SD_SECT_15_8_REG
 	shr		r1,r1,#8
-	sb		r1,SPI_SD_SECT_23_16_REG[r4]
+	sb		r1,SPIMASTER+SPI_SD_SECT_23_16_REG
 	shr		r1,r1,#8
-	sb		r1,SPI_SD_SECT_31_24_REG[r4]
+	sb		r1,SPIMASTER+SPI_SD_SECT_31_24_REG
 
 	; issue the write command
 	ldi		r1,#RW_WRITE_SD_BLOCK
-	sb		r1,SPI_TRANS_TYPE_REG[r4]
+	sb		r1,SPIMASTER+SPI_TRANS_TYPE_REG
 	ldi		r1,#SPI_TRANS_START
-	sb		r1,SPI_TRANS_CTRL_REG[r4]
+	sb		r1,SPIMASTER+SPI_TRANS_CTRL_REG
 	nop
 .spi_write_sect2:
-	lbu		r1,SPI_TRANS_STATUS_REG[r4]
+	lbu		r1,SPIMASTER+SPI_TRANS_STATUS_REG
 	nop							; just a delay between consecutive status reg reads
 	nop
 	cmp		fl0,r1,#SPI_TRANS_BUSY
 	beq		fl0,.spi_write_sect2
-	lbu		r1,SPI_TRANS_ERROR_REG[r4]
+	lbu		r1,SPIMASTER+SPI_TRANS_ERROR_REG
 	shr		r1,r1,#4
 	and		r1,r1,#3
 	cmp		fl0,r1,#SPI_WRITE_NO_ERROR
@@ -1839,7 +1473,7 @@ SDWriteSector:
 	ldi		r1,#1
 
 .spi_write_ret:
-	pop		r4/r3/r2
+	pop		r3/r2
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1916,15 +1550,11 @@ SDReadPart:
 	shl		r1,r1,#16
 	or		r1,r1,r3
 	sh		r1,startSector					; r1 = 0, for okay status
-	bsr		DisplayHalf
-	bsr		CRLF
 	lcu		r1,BYTE_SECTOR_BUF+$1CC
 	lcu		r3,BYTE_SECTOR_BUF+$1CA
 	shl		r1,r1,#16
 	or		r1,r1,r3
 	sh		r1,disk_size					; r1 = 0, for okay status
-	bsr		DisplayHalf
-	bsr		CRLF
 	pop		r3/r2
 	ldi		r1,#0
 	rts
@@ -2163,7 +1793,7 @@ StartTask:
 	sw		r1,TCB_Seg2Save[r6]
 	sw		r1,TCB_Seg3Save[r6]
 	sw		r1,TCB_Seg4Save[r6]
-	ldi		r1,#$020000000000
+	ldi		r1,#$040000000000
 	sw		r1,TCB_Seg5Save[r6]
 	ldi		r1,#$020000000000
 	sw		r1,TCB_Seg6Save[r6]
@@ -2571,27 +2201,6 @@ uninit_rout:
 	bsr		DisplayStringCRLF
 .0001:
 	bra		r0,.0001
-exf_rout:
-	ldi		r1,#$bb
-	st		r1,LEDS
-	ldi		r1,#msgexf
-	bsr		DisplayStringCRLF
-.0001:
-	bra		r0,.0001
-drf_rout:
-	ldi		r1,#$bb
-	st		r1,LEDS
-	ldi		r1,#msgdrf
-	bsr		DisplayStringCRLF
-.0001:
-	bra		r0,.0001
-dwf_rout:
-	ldi		r1,#$bb
-	st		r1,LEDS
-	ldi		r1,#msgdwf
-	bsr		DisplayStringCRLF
-.0001:
-	bra		r0,.0001
 sbv_rout:
 	ldi		r1,#$bb
 	st		r1,LEDS
@@ -2626,12 +2235,6 @@ snp_rout:
 .0001:
 	bra		r0,.0001
 
-msgexf:
-	db	"exf ",0
-msgdrf:
-	db	"drf ",0
-msgdwf:
-	db	"dwf ",0
 msgSBV:
 	db	"sbv fault",0
 msgPriv:
