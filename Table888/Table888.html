@@ -38,9 +38,9 @@ completely working, it only seems to work when the registers are initialized to
 a flat memory model. If the base address is non-zero then it doesn't work. But, 
 the perplexing problem is that it seems to work fine in simulation (the exact 
 same software), so it's going to be a tough one to debug.</p>
-<p style="margin-top: 0; margin-bottom: 0">- Paging has not been tested yet. The 
-paging unit has been run in a simple test bench and seemed to work. The 
-processor is being built including the paging unit, but it disabled.</p>
+<p style="margin-top: 0; margin-bottom: 0">- Paging has passed a first test at 
+paging. The bootrom was mapped into a high memory area, then accessed with 
+memory dump commands to prove it got mapped correctly.</p>
 <p style="margin-top: 0; margin-bottom: 0">- The instruction cache needs some 
 more work. It seems not to work on occasion. Once again it seems to be working 
 in simulation but not in real life.</p>
