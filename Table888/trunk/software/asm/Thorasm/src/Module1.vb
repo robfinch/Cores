@@ -442,6 +442,8 @@ j1:
                                 ProcessMemoryOp(s, &H86)
                             Case "ld"
                                 ProcessMemoryOp(s, &H86)
+                            Case "bmld"
+                                ProcessMemoryOp(s, &HB7, True)
                             Case "sb"
                                 ProcessMemoryOp(s, &HA0)
                             Case "sc"
@@ -452,6 +454,8 @@ j1:
                                 ProcessMemoryOp(s, &HA3)
                             Case "st"
                                 ProcessMemoryOp(s, &HA3)
+                            Case "bmst"
+                                ProcessMemoryOp(s, &HB8, True)
                             Case "cinv"
                                 ProcessMemoryOp(s, &HA4)
                             Case "lidt"
@@ -470,6 +474,12 @@ j1:
                                 ProcessSmr(s, &H30)
                             Case "lmr"
                                 ProcessSmr(s, &H31)
+                            Case "bms"
+                                ProcessBitmapOp(s, &HB4)
+                            Case "bmc"
+                                ProcessBitmapOp(s, &HB5)
+                            Case "bmf"
+                                ProcessBitmapOp(s, &HB6)
 
                             Case "push"
                                 ProcessPush(&HA6)
@@ -548,11 +558,15 @@ j1:
                             Case "mfspr"
                                 ProcessMfspr(s, &H49)
                             Case "mtseg"
-                                ProcessMtSeg(s, &HC)
+                                ProcessMtseg(s, &HC)
                             Case "mfseg"
                                 ProcessMfseg(s, &HD)
+                            Case "lsb"
+                                ProcessMfseg(s, &H12)
                             Case "swap"
                                 ProcessROp(s, 3)
+                            Case "gran"
+                                ProcessGran(s, &H14)
 
                                 ' RR
                             Case "add"
@@ -613,6 +627,8 @@ j1:
                                 ProcessJmp(s, &H50)
                             Case "jsr"
                                 ProcessJmp(s, &H51)
+                            Case "jgr"
+                                ProcessJgr(s, &H57)
                             Case "rts"
                                 ProcessRtsOp(s, &H60)
 
@@ -640,6 +656,14 @@ j1:
                                 processCLI(&H36)
                             Case "segon"
                                 processCLI(&H37)
+                            Case "mrk1"
+                                processCLI(&HF0)
+                            Case "mrk2"
+                                processCLI(&HF1)
+                            Case "mrk3"
+                                processCLI(&HF2)
+                            Case "mrk4"
+                                processCLI(&HF3)
 
                             Case "align"
                                 ProcessAlign()
@@ -1570,6 +1594,17 @@ j1:
         emitCode(0)
         emitCode(fn)
     End Sub
+    Sub ProcessGran(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+
+        rt = GetRegister(strs(1))
+        emitAlignedCode(1)
+        emitCode(0)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
+    End Sub
     '
     ' J-ops have the form:   call   address
     '
@@ -1891,7 +1926,19 @@ j1:
         emitCode((offset >> 24) And 255)
     End Sub
 
-    Sub ProcessMemoryOp(ByVal ops As String, ByVal oc As Int64)
+    Sub ProcessJgr(ByVal ops As String, ByVal oc As Int64)
+        Dim ra As Int64
+        Dim offset As Int64
+
+        offset = eval(strs(1))
+        emitAlignedCode(oc)
+        emitCode(offset And 255)
+        emitCode((offset >> 8) And 255)
+        emitCode((offset >> 16) And 255)
+        emitCode((offset >> 24) And 255)
+    End Sub
+
+    Sub ProcessMemoryOp(ByVal ops As String, ByVal oc As Int64, Optional ByVal ndxOnly As Boolean = False)
         Dim opcode As Int64
         Dim rt As Int64
         Dim ra As Int64
@@ -1974,7 +2021,7 @@ j1:
         Else
             ra = 0
         End If
-        If rb = -1 Then
+        If rb = -1 And Not ndxOnly Then
             If Not optr26 Then
             Else
                 If offset < -8192 Or offset > 8191 Or needSegPrefix Then
@@ -1987,6 +2034,7 @@ j1:
                 emitCode((offset >> 6) And 255)
             End If
         Else
+            If rb = -1 Then rb = 0
             Select Case (strs(0))
                 Case "lb"
                     oc = &H88
@@ -2033,6 +2081,82 @@ j1:
             End Select
             emitCode(scale Or (offset << 4) Or (segbits << 2))
         End If
+    End Sub
+
+    Sub ProcessBitmapOp(ByVal ops As String, ByVal oc As Int64, Optional ByVal ndxOnly As Boolean = True)
+        Dim opcode As Int64
+        Dim rt As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim offset As Int64
+        Dim scale As Int64
+        Dim s() As String
+        Dim s1() As String
+        Dim s2() As String
+        Dim str As String
+        Dim imm As Int64
+        Dim segbits As Int64
+        Dim needSegPrefix = False
+
+        'If address = &HFFFFFFFFFFFFB96CL Then
+        '    Console.WriteLine("Reached address B96C")
+        'End If
+
+        If segreg = 1 Then
+            segbits = 0
+        ElseIf segreg = 3 Then
+            segbits = 1
+        ElseIf segreg = 5 Then
+            segbits = 2
+        ElseIf segreg = 14 Then
+            segbits = 3
+        Else
+            segbits = 0
+            needSegPrefix = True
+        End If
+
+
+        If (strs.Length < 1) Or strs(1) Is Nothing Then
+            Console.WriteLine("Line:" & lineno & " Missing memory operand.")
+            Return
+        End If
+        scale = 1
+        rb = -1
+        rt = 0
+        ra = GetRegister(strs(2))
+        s = strs(1).Split("[".ToCharArray)
+        'offset = GetImmediate(s(0), "memop")
+        offset = eval(s(0))
+        If s.Length > 1 Then
+            s(1) = s(1).TrimEnd("]".ToCharArray)
+            s1 = s(1).Split("+".ToCharArray)
+            ra = GetRegister(s1(0))
+            If s1.Length > 1 Then
+                s2 = s1(1).Split("*".ToCharArray)
+                rb = GetRegister(s2(0))
+                If s2.Length > 1 Then
+                    scale = eval(s2(1))
+                End If
+            End If
+        Else
+            ra = 0
+        End If
+        If rb = -1 Then rb = 0
+        If offset > 15 Or offset < 0 Or needSegPrefix Then
+            emitImm4(offset)
+        End If
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(rb)
+        emitCode(rt)
+        Select Case scale
+            Case 1 : scale = 0
+            Case 2 : scale = 1
+            Case 4 : scale = 2
+            Case 8 : scale = 3
+            Case Else : scale = 0
+        End Select
+        emitCode(scale Or (offset << 4) Or (segbits << 2))
     End Sub
 
     Sub ProcessLidtOp(ByVal ops As String, ByVal oc As Int64)
@@ -2255,9 +2379,14 @@ j1:
         rb = 0
         rc = 0
         If strs(2) Is Nothing Then
-            Console.WriteLine("missing register in branch? line" & lineno)
-            Return
-            L = Nothing
+            If oc = 46 Or oc = 47 Then
+                ProcessBra2(ops, oc)
+                Return
+            Else
+                Console.WriteLine("missing register in branch? line" & lineno)
+                Return
+                L = Nothing
+            End If
         Else
             L = GetSymbol(strs(2))
         End If
@@ -2271,7 +2400,40 @@ j1:
         emitCode(ra)
         emitCode(L.address And &HFF)
         emitCode((L.address >> 8) And &HFF)
-        emitCode((disp >> 16) And &HFF)
+        emitCode((disp >> 16) And &H1F)
+    End Sub
+
+    Sub ProcessBra2(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim rc As Int64
+        Dim imm As Int64
+        Dim disp As Int64
+        Dim L As Symbol
+        Dim P As LabelPatch
+
+        ra = 0
+        rb = 0
+        rc = 0
+        If strs(1) Is Nothing Then
+            Console.WriteLine("missing target in branch? line" & lineno)
+            Return
+            L = Nothing
+        Else
+            L = GetSymbol(strs(1))
+        End If
+        'If slot = 2 Then
+        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
+        'Else
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
+        'End If
+        'imm = (L.address + (L.slot << 2)) >> 2
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(L.address And &HFF)
+        emitCode((L.address >> 8) And &HFF)
+        emitCode((disp >> 16) And &H1F)
     End Sub
 
     Sub ProcessBsr(ByVal ops As String, ByVal oc As Int64)
@@ -2304,7 +2466,7 @@ j1:
         emitCode(ra)
         emitCode(L.address And &HFF)
         emitCode((L.address >> 8) And &HFF)
-        emitCode((disp >> 16) And &HFF)
+        emitCode((disp >> 16) And &H1F)
     End Sub
 
     Function GetSymbol(ByVal nm As String) As Symbol
@@ -2434,10 +2596,24 @@ j1:
                 Return 1
             ElseIf s.ToLower = "bear" Then
                 Return 2
+            ElseIf s.ToLower = "pta" Or s.ToLower = "cr3" Then
+                Return 4
+            ElseIf s.ToLower = "cr0" Then
+                Return 5
             ElseIf s.ToLower = "fault_pc" Then
                 Return 8
             ElseIf s.ToLower = "fault_cs" Then
                 Return 9
+            ElseIf s.ToLower = "fault_seg" Then
+                Return 10
+            ElseIf s.ToLower = "fault_st" Then
+                Return 11
+            ElseIf s.ToLower = "srand1" Then
+                Return 16
+            ElseIf s.ToLower = "srand2" Then
+                Return 17
+            ElseIf s.ToLower = "rand" Then
+                Return 18
             Else
                 Return -1
             End If

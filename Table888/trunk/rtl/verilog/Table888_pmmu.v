@@ -236,7 +236,7 @@ begin
 	dv <= 0;
 	tdadr[11: 0] <= vdadr[11: 0];
 	tdadr[63:12] <= vdadr[63:12];
-	if (!paging_en || vdadr[31:28]==4'd0 || vdadr[31:20]==12'hFFD) begin
+	if (!paging_en) begin // || vdadr[31:28]==4'd0 || vdadr[31:20]==12'hFFD) begin
 		drdy <= 1'b1;
 		missd <= 0;
 		dc <= 0;
@@ -247,7 +247,7 @@ begin
 			if (tlb_v[{nn,vdadr[17:12]}] && vdadr[63:18]==tlb_vdadr[nn]) begin
 				tdadr[63:12] <= tlb_tdadr[nn];
 				missd <= 1'b0;
-				drdy <= 1'b1;
+				drdy <= !(wr && !tlb_dd[nn]);
 				nnxd <= nn;
 				dp <= tlb_dflags[nn][7:4];
 				dc <= tlb_dflags[nn][3];
