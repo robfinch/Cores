@@ -59,11 +59,6 @@ BSI_VolID		= 0x27
 BSI_VolLabel	= 0x2B
 BSI_FileSysType = 0x36
 
-SECTOR_BUF	EQU		0x06FFB000
-
-BYTE_SECTOR_BUF	EQU	SECTOR_BUF
-PROG_LOAD_AREA	EQU		0x1800000
-
 ;IDTBaseAddress	EQU		$7EFF000
 ;GDTBaseAddress	EQU		$7F01000
 ;TSSBaseAddress	EQU		$7C08000
@@ -254,6 +249,10 @@ TSSBaseAddress:
 TCBs:
 	fill.b	TCB_Size*NR_TCB,0
 
+SECTOR_BUF	fill.b	512,0
+BYTE_SECTOR_BUF	EQU	SECTOR_BUF
+PROG_LOAD_AREA	dw	0
+
 EndStaticAllocations:
 	dw		0
 
@@ -337,21 +336,33 @@ start:
 	ldi		r1,#RootPageTbl+4096+2	; 3 level page table system
 	mtspr	cr3,r1
 	; turn on paging
-	mrk2
-	ldi		r1,#$80000000			; paging off for now
+	ldi		r1,#$80000001			; paging and protection on
 	mtspr	cr0,r1
-	
-	;prot
-	
+
+	; setup call gates
+	ldi		r3,#GDTBaseAddress+$2000
+	ldi		r1,#ClearScreen
+	ldi		r2,#$8C00000000000001	; call gate
+	sw		r1,[r3]
+	sw		r2,8[r3]
+	ldi		r1,#HomeCursor
+	sw		r1,16[r3]
+	sw		r2,16+8[r3]
+	ldi		r1,#DisplayString
+	sw		r1,2*16[r3]
+	sw		r2,2*16+8[r3]
+	ldi		r1,#KeybdGetCharDirectNB
+	sw		r1,3*16[r3]
+	sw		r2,3*16+8[r3]
+	ldi		r1,#ClearBmpScreen
+	sw		r1,4*16[r3]
+	sw		r2,4*16+8[r3]
+
+	bsr		InitBMP
+
 	ldi		r1,#TickRout
 	and		r1,r1,#-4				; flag short address
 	sw		r1,TickVec
-
-;	ldi		r2,#32767
-;.st3:
-;	bmc		PAM1[r0+r2]
-;	bmc		PAM2[r0+r2]
-;	dbnz	r2,.st3
 
 	ldi		r1,#$FC
 	sb		r1,LEDS
@@ -791,6 +802,30 @@ ClearScreen:
 	dbnz	r4,.cs1
 	pop		r5
 	pop		r4/r3/r2/r1
+	rts
+
+;------------------------------------------------------------------------------
+; Randomize the color lookup table for 8bpp mode (the default), so that
+; something will show on the bitmap display if it's written to.
+;------------------------------------------------------------------------------
+
+InitBMP:
+	ldi		r2,#511
+.ibmp1:
+	gran	r1
+	sh		r1,BMP_CLUT[r0+r2*4]
+	dbnz	r2,.ibmp1
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ClearBmpScreen:
+	ldi		r1,#$400000
+	ldi		r2,#$7FFFF
+.0001:
+	sw		r0,[r1+r2*8]
+	dbnz	r2,.0001
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1641,8 +1676,7 @@ SDInit:
 	nop
 .spi_init1
 	lbu		r1,SPI_TRANS_STATUS_REG[r2]
-	nop
-	nop
+	bsr		spi_delay
 	cmp		fl0,r1,#SPI_TRANS_BUSY
 	beq		fl0,.spi_init1
 	lbu		r1,SPI_TRANS_ERROR_REG[r2]
@@ -2185,6 +2219,7 @@ StartTask:
 	sw		r8,16[r7]				; setup exit address on stack
 	and		r2,r2,#$FFFFFFFF		; mask off any extraneous bits
 	mfseg	r1,cs					; put the code segment into the code segment field
+	ldi		r1,#$010000000000
 	or		r2,r2,r1
 	sw		r2,8[r7]				; setup flags to pop
 	or		r3,r3,#3				; flag long format address
@@ -2616,6 +2651,13 @@ stv_rout:
 	bsr		CRLF
 	mfspr	r1,fault_cs
 	bsr		DisplayHalf
+	bsr		CRLF
+	mfspr	r1,fault_seg
+	bsr		DisplayHalf
+	bsr		CRLF
+	mfspr	r1,fault_st
+	bsr		DisplayByte
+	bsr		CRLF
 .0001:
 	bra		r0,.0001
 snp_rout:
