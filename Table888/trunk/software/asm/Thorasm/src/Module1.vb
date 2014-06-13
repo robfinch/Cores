@@ -431,7 +431,9 @@ j1:
                             Case "Table888"
                                 rr = ProcessTable888Op(s)
                             Case "Thor"
-                                rr = ProcessTable888Op(s)
+                                rr = processThorOp(s)
+                            Case "Raptor64"
+                                rr = ProcessRaptor64Op(s)
                         End Select
                         If Not rr Then
                             Select Case LCase(s)

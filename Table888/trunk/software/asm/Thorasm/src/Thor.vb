@@ -2,7 +2,7 @@
 
 Module Thor
 
-    Sub processOp(ByVal s As String)
+    Function processThorOp(ByVal s As String) As Boolean
         Select Case s.ToLower
             ' RI ops
         Case "ldi"
@@ -275,8 +275,11 @@ Module Thor
                 emit(20)
             Case "wait"
                 emit(40)
+            Case Else
+                Return False
         End Select
-    End Sub
+        Return True
+    End Function
 
     Sub processCond(ByVal s As String)
         Dim t() As String
