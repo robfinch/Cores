@@ -113,8 +113,10 @@ TYP *maketype(int bt, int siz)
 }
 
 // Parse a specifier. This is the first part of a declaration.
+// Returns:
+// 0 usually, 1 if only a specifier is present
 //
-void ParseSpecifier(TABLE *table)
+int ParseSpecifier(TABLE *table)
 {
 	SYM *sp;
 
@@ -327,12 +329,14 @@ void ParseSpecifier(TABLE *table)
 
 			case kw_struct:
 				NextToken();
-				ParseStructDeclaration(bt_struct);
+				if (ParseStructDeclaration(bt_struct))
+					return 1;
 				goto lxit;
 
 			case kw_union:
 				NextToken();
-				ParseStructDeclaration(bt_union);
+				if (ParseStructDeclaration(bt_union))
+					return 1;
 				goto lxit;
 
 			default:
@@ -340,6 +344,7 @@ void ParseSpecifier(TABLE *table)
 			}
 	}
 lxit:;
+	return 0;
 }
 
 int ParseDeclarationPrefix(char isUnion)
@@ -433,8 +438,6 @@ j1:
 				//	ParseDeclarationSuffix();
 				//	break;
 				//}
-				if (strcmp(lastid, "sighandler_t")==0)
-					printf("hi");
                 needpunc(closepa);
                 temp3 = head;
                 temp4 = tail;
@@ -576,10 +579,11 @@ int declare(TABLE *table,int al,int ilc,int ztype)
     int nbytes;
 
 	nbytes = 0;
-    ParseSpecifier(table);
+    if (ParseSpecifier(table))
+		return nbytes;
     dhead = head;
     for(;;) {
-        declid = 0;
+        declid = NULL;
 		bit_width = -1;
         ParseDeclarationPrefix(ztype==bt_union);
 		// If a function declaration is taking place and just the type is
@@ -723,8 +727,8 @@ int declbegin(int st)
 
 void ParseGlobalDeclarations()
 {
-	funcdecl = 0;
     for(;;) {
+		funcdecl = 0;
 		switch(lastst) {
 		case ellipsis:
 		case id:

@@ -610,7 +610,10 @@ TYP *ParsePrimaryExpression(ENODE **node)
                                     error(ERR_NOFUNC);
                                 else
                                     tptr = tptr->btp;
-								currentFn->IsLeaf = FALSE;
+								if (currentFn==NULL)
+									error(ERR_SYNTAX);
+								else
+									currentFn->IsLeaf = FALSE;
                                 pnode = makenode(en_fcall,pnode,ArgumentList());
                                 needpunc(closepa);
                                 break;

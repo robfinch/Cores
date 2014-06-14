@@ -90,12 +90,17 @@ int getline(int listflag)
 
     if(lineno > 0 && listflag) {
         fprintf(list,"%6d\t%s",lineno,inpline);
-        while(numerrs--)
-			fprintf(list," *** error %d: %s\n",errno[numerrs],errtext(errno[numerrs]));
+		while(numerrs) {
+			if (numerrs < 80)
+				fprintf(list," *** error %d: %s\n",errno[numerrs],errtext(errno[numerrs]));
+			numerrs--;
+		}
         numerrs = 0;
     }
     ++lineno;
+	memset(inpline, 0, sizeof(inpline));
     rv = (fgets(inpline,131,input) == NULL);
+	//printf("line:%.60s\r\n", inpline);
     if( rv && incldepth > 0 ) {
         fclose(input);
         input = inclfile[--incldepth];
@@ -623,7 +628,7 @@ void needpunc(enum e_sym p)
 	if( lastst == p)
         NextToken();
 	else {
-		printf("%d %s\r\n", lineno, inpline);
+		//printf("%d %s\r\n", lineno, inpline);
         error(ERR_PUNCT);
 	}
 }

@@ -69,6 +69,13 @@ void ParseFunction(SYM *sp)
 	int oldglobal;
     SYM *sp1, *sp2, *makeint();
 
+	if (sp==NULL) {
+		fatal("Compiler error: ParseFunction: SYM is NULL\r\n");
+	}
+	if (strcmp(sp->name,"dev_open")==0) {
+		printf("dev_open\r\n");
+	}
+
 		oldglobal = global_flag;
         global_flag = 0;
         poffset = 32;            /* size of return block */

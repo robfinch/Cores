@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,12 +34,12 @@ __int64 GetIntegerExpression()       /* simple integer value */
 	TYP *tp;
 	ENODE *node;
 
-	tp = expression(&node);
+	tp = NonCommaExpression(&node);
 	if (node==NULL) {
 		error(ERR_SYNTAX);
 		return 0;
 	}
-	opt4(&node);	// This should reduce to a single integer expressionk
+	opt4(&node);	// This should reduce to a single integer expression
 	if (node==NULL) {
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
 		return 0;

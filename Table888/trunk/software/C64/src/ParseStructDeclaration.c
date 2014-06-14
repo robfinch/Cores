@@ -48,12 +48,6 @@
  *		Box 920337
  *		Norcross, Ga 30092
  */
-/*******************************************************
-	Copyright 2012	Robert Finch
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 extern TABLE tagtable;
 extern TYP *head;
@@ -61,22 +55,38 @@ extern TYP stdconst;
 extern int bit_next;
 extern int bit_offset;
 extern int bit_width;
+extern int parsingParameterList;
 
 __int16 typeno = bt_last;
 
 void ParseStructMembers(TYP *tp, int ztype);
 
-void ParseStructDeclaration(int ztype)
+int ParseStructDeclaration(int ztype)
 {
     SYM     *sp;
     TYP     *tp;
+	int gblflag;
+	int ret;
+
+	ret = 0;
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
     if(lastst == id) {
         if((sp = search(lastid,&tagtable)) == NULL) {
-            sp = allocSYM();
-            sp->name = litlate(lastid);
+			// If we encounted an unknown struct in a parameter list, we want
+			// it to go into the global memory pool, not a local one.
+			if (parsingParameterList) {
+				gblflag = global_flag;
+				global_flag++;
+	            sp = allocSYM();
+				sp->name = litlate(lastid);
+				global_flag = gblflag;
+			}
+			else {
+	            sp = allocSYM();
+				sp->name = litlate(lastid);
+			}
             sp->tp = allocTYP();
             sp->tp->type = ztype;
 			sp->tp->typeno = typeno++;
@@ -84,7 +94,11 @@ void ParseStructDeclaration(int ztype)
             sp->storage_class = sc_type;
             sp->tp->sname = sp->name;
             NextToken();
+
+			// Could be a forward structure declaration like:
+			// struct buf;
 			if (lastst==semicolon) {
+				ret = 1;
                 insert(sp,&tagtable);
                 NextToken();
 			}
@@ -122,6 +136,7 @@ void ParseStructDeclaration(int ztype)
         }
         head = tp;
     }
+	return ret;
 }
 
 void ParseStructMembers(TYP *tp, int ztype)

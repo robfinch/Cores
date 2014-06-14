@@ -1106,6 +1106,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             case en_umod:   return GenerateModDiv(node,flags,size,op_modu);
             case en_shl:    return GenerateShift(node,flags,size,op_shl);
             case en_shlu:   return GenerateShift(node,flags,size,op_shlu);
+            case en_asr:	return GenerateShift(node,flags,size,op_asr);
             case en_shr:	return GenerateShift(node,flags,size,op_asr);
             case en_shru:   return GenerateShift(node,flags,size,op_shru);
             case en_asadd:  return GenerateAssignAdd(node,flags,size,op_add);
@@ -1133,41 +1134,57 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
                     return GenerateAutoIncrement(node,flags,size,op_sub);
             case en_land:
 				size = GetNaturalSize(node);
+				ap3 = GetTempRegister();
 				ap1 = GenerateExpression(node->p[0],F_REG, size);
 				ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-				ap3 = GetTempRegister();
 				GenerateTriadic(op_and,0,ap3,ap1,ap2);
-				GenerateDiadic(op_tst,0,makepred(15),ap3);
-				ReleaseTempRegister(ap3);
 				ReleaseTempRegister(ap2);
 				ReleaseTempRegister(ap1);
-				ap3 = GetTempRegister();
-                GeneratePredicatedDiadic(PredOp(op_ne),15,op_ldi,0,ap3,make_immed(1));
-                GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap3,make_immed(0));
-                return ap3;
+				if (gCpu==888) {
+                    lab0 = nextlabel++;
+					GenerateDiadic(op_brz,0,ap3,make_clabel(lab0));
+					GenerateDiadic(op_ldi,0,ap3,make_immed(1));
+					GenerateLabel(lab0);
+					return ap3;
+				}
+				else {
+					GenerateDiadic(op_tst,0,makepred(15),ap3);
+					GeneratePredicatedDiadic(PredOp(op_ne),15,op_ldi,0,ap3,make_immed(1));
+					GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap3,make_immed(0));
+					return ap3;
+				}
 			case en_lor:
 				size = GetNaturalSize(node);
+				ap3 = GetTempRegister();
 				ap1 = GenerateExpression(node->p[0],F_REG, size);
 				ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-				ap3 = GetTempRegister();
 				GenerateTriadic(op_or,0,ap3,ap1,ap2);
-				GenerateDiadic(op_tst,0,makepred(15),ap3);
-				ReleaseTempRegister(ap3);
 				ReleaseTempRegister(ap2);
 				ReleaseTempRegister(ap1);
-				ap3 = GetTempRegister();
-                GeneratePredicatedDiadic(PredOp(op_ne),15,op_ldi,0,ap3,make_immed(1));
-                GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap3,make_immed(0));
+				if (gCpu==888) {
+                    lab0 = nextlabel++;
+					GenerateDiadic(op_brz,0,ap3,make_clabel(lab0));
+					GenerateDiadic(op_ldi,0,ap3,make_immed(1));
+					GenerateLabel(lab0);
+				}
+				else {
+					GenerateDiadic(op_tst,0,makepred(15),ap3);
+					GeneratePredicatedDiadic(PredOp(op_ne),15,op_ldi,0,ap3,make_immed(1));
+					GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap3,make_immed(0));
+				}
                 return ap3;
 			case en_not:
 				size = GetNaturalSize(node);
-				ap1 = GenerateExpression(node->p[0],F_REG|F_IMMED,size);
-				GenerateDiadic(op_tst,0,makepred(15),ap1);
-				ReleaseTempRegister(ap1);
-				ap3 = GetTempRegister();
-                GeneratePredicatedDiadic(PredOp(op_ne),15,op_ldi,0,ap3,make_immed(1));
-                GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap3,make_immed(0));
-                return ap3;
+				ap1 = GenerateExpression(node->p[0],F_REG,size);
+				if (gCpu==888) {
+					GenerateDiadic(op_not,0,ap1,ap1);
+				}
+				else {
+					GenerateDiadic(op_tst,0,makepred(15),ap1);
+					GeneratePredicatedDiadic(PredOp(op_ne),15,op_ldi,0,ap1,make_immed(0));
+					GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap1,make_immed(1));
+				}
+                return ap1;
 
             case en_eq:     case en_ne:
             case en_lt:     case en_le:
@@ -1180,7 +1197,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
                     GenerateFalseJump(node,lab0,0);
                     ap1 = GetTempRegister();
                     GenerateDiadic(op_ldi,0,ap1,make_immed(1));
-                    GenerateTriadic(op_bra,0,make_label(lab1),NULL,NULL);
+                    GenerateTriadic(op_bra,0,make_clabel(lab1),NULL,NULL);
                     GenerateLabel(lab0);
                     GenerateDiadic(op_ldi,0,ap1,make_immed(0));
                     GenerateLabel(lab1);
@@ -1440,7 +1457,7 @@ void GenerateFalseJump(ENODE *node,int label, int predreg)
 //                        GenerateDiadic(op_tst,siz1,ap,0);
                         ReleaseTempRegister(ap);
 						if (gCpu==888)
-							GenerateDiadic(op_brz,0,ap1,make_clabel(label));
+							GenerateDiadic(op_brz,0,ap,make_clabel(label));
 						else {
 							GenerateDiadic(op_tst,0,makepred(predreg),ap);
 							GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_clabel(label));

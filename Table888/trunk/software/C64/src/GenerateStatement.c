@@ -396,8 +396,14 @@ void GenerateSwitch(Statement *stmt)
             {
 				bf = stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
-					GenerateTriadic(op_cmp,0,makepred(predreg),makereg(1),make_immed(bf[nn]));
-					GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_clabel(curlab));
+					if (gCpu==888) {
+						GenerateTriadic(op_cmp,0,make_string("flg0"),makereg(1),make_immed(bf[nn]));
+						GenerateDiadic(op_beq,0,make_string("flg0"),make_clabel(curlab));
+					}
+					else {
+						GenerateTriadic(op_cmp,0,makepred(predreg),makereg(1),make_immed(bf[nn]));
+						GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_clabel(curlab));
+					}
 				}
 		        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
 	            stmt->label = curlab;

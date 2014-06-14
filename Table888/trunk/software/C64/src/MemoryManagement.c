@@ -126,6 +126,8 @@ void ReleaseLocalMemory()
     blkcnt = 0;
     bp1 = locblk;
     while( bp1 != NULL ) {
+		if (strcmp(bp1->name,"C64    "))
+			printf("Block corrupted.");
         bp2 = bp1->next;
         free( bp1 );
         ++blkcnt;
@@ -146,6 +148,8 @@ void ReleaseGlobalMemory()
     bp1 = glbblk;
     blkcnt = 0;
     while( bp1 != NULL ) {
+		if (strcmp(bp1->name,"C64    "))
+			printf("Block corrupted.");
         bp2 = bp1->next;
         free(bp1);
         ++blkcnt;
