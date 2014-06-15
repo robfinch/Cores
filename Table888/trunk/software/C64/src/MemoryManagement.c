@@ -138,7 +138,7 @@ void ReleaseLocalMemory()
     lsyms.head = NULL;
 	lsyms.tail = NULL;
 	currentStmt = NULL;
-	printf(" releasing %d bytes local tables.\n",blkcnt * BLKSIZE);
+	if (verbose) printf(" releasing %d bytes local tables.\n",blkcnt * BLKSIZE);
 }
 
 void ReleaseGlobalMemory()
@@ -160,7 +160,7 @@ void ReleaseGlobalMemory()
 //    gsyms.head = NULL;         /* clear global symbol table */
 //	gsyms.tail = NULL;
 	memset(gsyms,0,sizeof(gsyms));
-    printf(" releasing %d bytes global tables.\n",blkcnt * BLKSIZE);
+	if (verbose) printf(" releasing %d bytes global tables.\n",blkcnt * BLKSIZE);
     strtab = NULL;             /* clear literal table */
 }
 

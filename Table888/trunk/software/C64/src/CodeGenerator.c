@@ -484,6 +484,8 @@ long GetReferenceSize(ENODE *node)
 	case en_regvar:
 	case en_dbl_ref:
             return 8;
+	//case en_struct_ref:
+	//		return node->esize;
     }
 	return 8;
 }
@@ -844,12 +846,12 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
     return ap1;
 }
 
-/*
- *      generate code for an assignment node. if the size of the
- *      assignment destination is larger than the size passed then
- *      everything below this node will be evaluated with the
- *      assignment size.
- */
+// ----------------------------------------------------------------------------
+//      generate code for an assignment node. if the size of the
+//      assignment destination is larger than the size passed then
+//      everything below this node will be evaluated with the
+//      assignment size.
+// ----------------------------------------------------------------------------
 AMODE *GenerateAssign(ENODE *node, int flags, int size)
 {
 	struct amode    *ap1, *ap2 ,*ap3, *ap4;
@@ -870,8 +872,98 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 	ssize = GetReferenceSize(node->p[0]);
 	if( ssize > size )
 			size = ssize;
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMM0,size);
-	ap1 = GenerateExpression(node->p[0],F_ALL,ssize);
+	if (size > 8) {
+		ap2 = GenerateExpression(node->p[1],F_MEM,size);
+		ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
+	}
+	else {
+		ap2 = GenerateExpression(node->p[1],F_ALL,size);
+		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,ssize);
+	}
+
+	if (ap1->mode == am_reg) {
+		if (ap2->mode==am_reg)
+			GenerateDiadic(op_mov,0,ap1,ap2);
+		else if (ap2->mode==am_immed)
+			GenerateDiadic(op_ldi,0,ap1,ap2);
+		else {
+			if (ap1->isUnsigned) {
+				switch(size) {
+				case 1:	GenerateDiadic(op_lbu,0,ap1,ap2); break;
+				case 2:	GenerateDiadic(op_lcu,0,ap1,ap2); break;
+				case 4: GenerateDiadic(op_lhu,0,ap1,ap2); break;
+				case 8:	GenerateDiadic(op_lw,0,ap1,ap2); break;
+				}
+			}
+			else {
+				switch(size) {
+				case 1:	GenerateDiadic(op_lb,0,ap1,ap2); break;
+				case 2:	GenerateDiadic(op_lc,0,ap1,ap2); break;
+				case 4: GenerateDiadic(op_lh,0,ap1,ap2); break;
+				case 8:	GenerateDiadic(op_lw,0,ap1,ap2); break;
+				}
+			}
+		}
+	}
+	// ap1 is memory
+	else {
+		if (ap2->mode == am_reg)
+			switch(size) {
+			case 1:	GenerateDiadic(op_sb,0,ap2,ap1); break;
+			case 2:	GenerateDiadic(op_sc,0,ap2,ap1); break;
+			case 4: GenerateDiadic(op_sh,0,ap2,ap1); break;
+			case 8:	GenerateDiadic(op_sw,0,ap2,ap1); break;
+			}
+		else if (ap2->mode == am_immed) {
+			ap3 = GetTempRegister();
+			GenerateDiadic(op_ldi,0,ap3,ap2);
+			switch(size) {
+			case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
+			case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
+			case 4: GenerateDiadic(op_sh,0,ap3,ap1); break;
+			case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
+			}
+			ReleaseTempRegister(ap3);
+		}
+		else {
+			ap3 = GetTempRegister();
+			// Generate a memory to memory move (struct assignments)
+			if (size > 8) {
+				ap3 = GetTempRegister();
+				GenerateDiadic(op_ldi,0,ap3,make_immed(size));
+				GenerateTriadic(op_push,0,ap3,ap2,ap1);
+				GenerateDiadic(op_jal,0,makereg(LR),make_string("memcpy"));
+				GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(24));
+				ReleaseTempRegister(ap3);
+			}
+			else {
+				if (ap1->isUnsigned) {
+					switch(size) {
+					case 1:	GenerateDiadic(op_lbu,0,ap3,ap2); break;
+					case 2:	GenerateDiadic(op_lcu,0,ap3,ap2); break;
+					case 4: GenerateDiadic(op_lhu,0,ap3,ap2); break;
+					case 8:	GenerateDiadic(op_lw,0,ap3,ap2); break;
+					}
+				}
+				else {
+					switch(size) {
+					case 1:	GenerateDiadic(op_lb,0,ap3,ap2); break;
+					case 2:	GenerateDiadic(op_lc,0,ap3,ap2); break;
+					case 4: GenerateDiadic(op_lh,0,ap3,ap2); break;
+					case 8:	GenerateDiadic(op_lw,0,ap3,ap2); break;
+					}
+				}
+				switch(size) {
+				case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
+				case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
+				case 4: GenerateDiadic(op_sh,0,ap3,ap1); break;
+				case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
+				}
+				ReleaseTempRegister(ap3);
+			}
+		}
+	}
+/*
 	if (ap1->mode == am_reg) {
 		if (ap2->mode==am_immed)	// must be zero
 			GenerateDiadic(op_mov,0,ap1,makereg(0));
@@ -892,8 +984,18 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		case 2:	GenerateDiadic(op_sc,0,ap2,ap1); break;
 		case 4: GenerateDiadic(op_sh,0,ap2,ap1); break;
 		case 8:	GenerateDiadic(op_sw,0,ap2,ap1); break;
+		// Do structure assignment
+		default: {
+			ap3 = GetTempRegister();
+			GenerateDiadic(op_ldi,0,ap3,make_immed(size));
+			GenerateTriadic(op_push,0,ap3,ap2,ap1);
+			GenerateDiadic(op_jal,0,makereg(LR),make_string("memcpy"));
+			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(24));
+			ReleaseTempRegister(ap3);
+		}
 		}
 	}
+*/
 	ReleaseTempRegister(ap1);
 	return ap2;
 }
@@ -1041,6 +1143,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			case en_uc_ref:
 			case en_uh_ref:
 			case en_uw_ref:
+			case en_struct_ref:
 					ap1 = GenerateDereference(node,flags,size);
 					ap1->isUnsigned = TRUE;
                     return ap1;
@@ -1286,6 +1389,8 @@ int GetNaturalSize(ENODE *node)
 		case en_w_ref:  case en_uw_ref:
 		case en_dbl_ref:
                 return 8;
+		case en_struct_ref:
+				return node->esize;
         case en_not:    case en_compl:
         case en_uminus: case en_assign:
         case en_ainc:   case en_adec:
@@ -1299,6 +1404,7 @@ int GetNaturalSize(ENODE *node)
         case en_mod:    case en_and:
         case en_or:     case en_xor:
         case en_shl:    case en_shr:	case en_shru:
+		case en_asr:
         case en_eq:     case en_ne:
         case en_lt:     case en_le:
         case en_gt:     case en_ge:

@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 /*
  *	68000 C compiler
  *
@@ -28,6 +53,7 @@ enum e_node {
 		en_dlabcon, en_dnacon,
 		en_c_ref, en_uc_ref, en_h_ref, en_uh_ref,
         en_b_ref, en_w_ref, en_ub_ref, en_uw_ref,
+		en_struct_ref,
         en_fcall, en_tempref, en_regvar, en_bregvar,
 		en_add, en_sub, en_mul, en_mod,
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,

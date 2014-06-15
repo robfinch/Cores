@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -46,11 +46,6 @@
  *		Box 920337
  *		Norcross, Ga 30092
  */
-/*******************************************************
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 
 void ListTable(TABLE *t, int i);
 
@@ -195,4 +190,23 @@ void ListTable(TABLE *t, int i)
 }
 
 
-
+// Recursively list the vars contained in compound statements.
+
+void ListCompound(Statement *stmt)
+{
+	Statement *s1;
+
+	ListTable(&stmt->ssyms,0);
+	for (s1 = stmt->s1; s1; s1 = s1->next) {
+		if (s1->stype == st_compound)
+			ListCompound(s1);
+		if (s1->s1) {
+			if (s1->s1->stype==st_compound)
+				ListCompound(s1->s1);
+		}
+		if (s1->s2) {
+			if (s1->s2->stype==st_compound)
+				ListCompound(s1->s2);
+		}
+	}
+}

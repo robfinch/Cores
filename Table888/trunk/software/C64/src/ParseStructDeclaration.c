@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -56,6 +56,8 @@ extern int bit_next;
 extern int bit_offset;
 extern int bit_width;
 extern int parsingParameterList;
+extern int funcdecl;
+extern int isStructDecl;
 
 __int16 typeno = bt_last;
 
@@ -67,7 +69,10 @@ int ParseStructDeclaration(int ztype)
     TYP     *tp;
 	int gblflag;
 	int ret;
+	int psd;
 
+	psd = isStructDecl;
+	isStructDecl = TRUE;
 	ret = 0;
 	bit_offset = 0;
 	bit_next = 0;
@@ -136,14 +141,17 @@ int ParseStructDeclaration(int ztype)
         }
         head = tp;
     }
+	isStructDecl = psd;
 	return ret;
 }
 
 void ParseStructMembers(TYP *tp, int ztype)
 {
-	int     slc;
+	int slc;
+
     slc = 0;
     tp->val_flag = 1;
+//	tp->val_flag = FALSE;
     while( lastst != end) {
         if(ztype == bt_struct)
             slc += declare(&(tp->lst),sc_member,slc,ztype);

@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - Raptor64 'C' derived language compiler
+// C64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -58,8 +58,9 @@ int IdentifyKeyword()
 	if (p[0]=='w') {
 		if(p[1]=='h' && p[2]=='i' && p[3]=='l' && p[4]=='e' && p[5]=='\0')
 			return lastst = kw_while;
-		if (p[1]=='c' && p[2]=='h' && p[3]=='a' && p[4]=='r' && p[5]=='_' && p[6]=='t' && p[7]=='\0')
-			return lastst = kw_char;
+		if (wcharSupport)
+			if (p[1]=='c' && p[2]=='h' && p[3]=='a' && p[4]=='r' && p[5]=='_' && p[6]=='t' && p[7]=='\0')
+				return lastst = kw_char;
 	}
 
 	if (p[0]=='d') {	// do,default,double,dcache

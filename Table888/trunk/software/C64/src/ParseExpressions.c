@@ -272,6 +272,20 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->esize = tp->size;
 			tp = &stdint;
 			break;
+		//case bt_func:
+		//case bt_ifunc:
+		//	(*node)->esize = tp->size;
+		//	(*node)->etype = tp->type;
+		//	(*node)->isUnsigned = TRUE;
+		//	*node = makenode(en_uw_ref,*node,NULL);
+  //          break;
+		//case bt_struct:
+		//case bt_union:
+		//	(*node)->esize = tp->size;
+		//	(*node)->etype = tp->type;
+  //          *node = makenode(en_struct_ref,*node,NULL);
+		//	(*node)->isUnsigned = TRUE;
+  //          break;
 		default:
 			error(ERR_DEREF);
 			break;
@@ -518,6 +532,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 									pnode->constflag = rnode->constflag && pnode->p[1]->constflag;
 									pnode->isUnsigned = rnode->isUnsigned && pnode->p[1]->isUnsigned;
 									pnode->scale = tptr->size;
+//									needpunc(closebr);
 								}
 								else {
 									sza[brcount-1] = tptr->size;
@@ -539,7 +554,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 									qnode->constflag = TRUE;
 									qnode->isUnsigned = tptr->isUnsigned;
 									expression(&rnode);
-									needpunc(closebr);
+//							needpunc(closebr);
 	/*
  *      we could check the type of the expression here...
 									
@@ -548,7 +563,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 										error(ERR_EXPREXPECT);
 										break;
 									}
-									qnode = makenode(en_mulu,qnode,rnode);
+									qnode = makenode(en_mulu,rnode,qnode);
 									qnode->constflag = rnode->constflag && qnode->p[0]->constflag;
 									pnode = makenode(en_add,qnode,pnode);
 									pnode->constflag = qnode->constflag && pnode->p[1]->constflag;
@@ -562,7 +577,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
                                 ////pnode->constflag = snode->constflag && pnode->p[1]->constflag;
                                 if( tptr->val_flag == FALSE )
                                     tptr = deref(&pnode,tptr);
-//                                needpunc(closebr);
+                                needpunc(closebr);
                                 break;
 
                         case pointsto:
@@ -619,7 +634,10 @@ TYP *ParsePrimaryExpression(ENODE **node)
                                 break;
 
                         default:
-                                goto fini;
+							//if (tptr->type == bt_func || tptr->type== bt_ifunc) {
+       //                         tptr = deref(&pnode,tptr);
+							//}
+                            goto fini;
                         }
                 }
 fini:   *node = pnode;
@@ -652,6 +670,7 @@ int IsLValue(ENODE *node)
 	case en_uhfieldref:
 	case en_dbl_ref:
 	case en_flt_ref:
+	//case en_struct_ref:
             return TRUE;
 	case en_cbc:
 	case en_cbh:
@@ -946,6 +965,9 @@ TYP     *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2)
                 case bt_pointer:
                         if( isscalar(tp2) || tp2->type == bt_pointer)
                                 return tp1;
+						// pointer to function was really desired.
+						if (tp2->type == bt_func || tp2->type==bt_ifunc)
+							return tp1;
                         break;
                 case bt_unsigned:
                         if( tp2->type == bt_pointer )
@@ -960,6 +982,11 @@ TYP     *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2)
 				case bt_double:
 						if (tp2->type == bt_long)
 							*node2 = makenode(en_i2d,*node2,*node1);
+						return tp1;
+				case bt_struct:
+				case bt_union:
+						if (tp2->size > tp1->size)
+							return tp2;
 						return tp1;
                 }
         error( ERR_MISMATCH );
@@ -1310,6 +1337,10 @@ ascomm2:                        if( tp2 == 0 || !IsLValue(ep1) )
                                 else    {
                                         tp1 = forcefit(&ep1,tp1,&ep2,tp2);
                                         ep1 = makenode(op,ep1,ep2);
+										// Struct assign calls memcpy, so function is no
+										// longer a leaf routine.
+										if (tp1->size > 8)
+											currentFn->IsLeaf = FALSE;
                                         }
                                 break;
                         case asplus:

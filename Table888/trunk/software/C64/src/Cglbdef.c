@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -50,6 +50,8 @@
 
 int gCpu = 888;
 int farcode = 0;
+int wcharSupport = 1;
+int verbose = 0;
 
 FILE            *input = 0,
                 *list = 0,

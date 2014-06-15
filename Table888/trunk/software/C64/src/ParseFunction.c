@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -52,8 +52,10 @@ extern int funcdecl;
 extern char *names[20];
 extern int nparms;
 
-void ParseFunctionBody(SYM *sp);
-void funcbottom();
+Statement *ParseFunctionBody(SYM *sp);
+void funcbottom(Statement *stmt);
+void ListCompound(Statement *stmt);
+
 
 /*      function compilation routines           */
 
@@ -68,14 +70,12 @@ void ParseFunction(SYM *sp)
 	int poffset, i;
 	int oldglobal;
     SYM *sp1, *sp2, *makeint();
+	Statement *stmt;
 
 	if (sp==NULL) {
 		fatal("Compiler error: ParseFunction: SYM is NULL\r\n");
 	}
-	if (strcmp(sp->name,"dev_open")==0) {
-		printf("dev_open\r\n");
-	}
-
+	if (verbose) printf("Parsing function: %s\r\n", sp->name);
 		oldglobal = global_flag;
         global_flag = 0;
         poffset = 32;            /* size of return block */
@@ -162,8 +162,8 @@ void ParseFunction(SYM *sp)
 				sp->IsPascal = isPascal;
 				sp->IsInterrupt = isInterrupt;
 				sp->NumParms = nparms;
-				ParseFunctionBody(sp);
-				funcbottom();
+				stmt = ParseFunctionBody(sp);
+				funcbottom(stmt);
 			}
 		}
 //                error(ERR_BLOCK);
@@ -172,8 +172,8 @@ void ParseFunction(SYM *sp)
 			sp->IsPascal = isPascal;
 			sp->IsInterrupt = isInterrupt;
 			sp->NumParms = nparms;
-			ParseFunctionBody(sp);
-			funcbottom();
+			stmt = ParseFunctionBody(sp);
+			funcbottom(stmt);
         }
 		global_flag = oldglobal;
 }
@@ -207,13 +207,17 @@ void check_table(SYM *head)
 	}
 }
 
-void funcbottom()
+void funcbottom(Statement *stmt)
 { 
+	Statement *s, *s1;
 	nl();
     check_table(&lsyms);
     lc_auto = 0;
     fprintf(list,"\n\n*** local symbol table ***\n\n");
     ListTable(&lsyms,0);
+	// Should recurse into all the compound statements
+	if (stmt->stype==st_compound)
+		ListCompound(stmt);
     fprintf(list,"\n\n\n");
     ReleaseLocalMemory();        /* release local symbols */
 	isPascal = FALSE;
@@ -222,9 +226,11 @@ void funcbottom()
 	isNocall = FALSE;
 }
 
-static void ParseFunctionBody(SYM *sp)
+
+static Statement *ParseFunctionBody(SYM *sp)
 {    
 	char lbl[200];
+	Statement *stmt;
 
 	lbl[0] = 0;
 	needpunc(begin);
@@ -252,13 +258,13 @@ static void ParseFunctionBody(SYM *sp)
 	bregmask = 0;
 	currentStmt = NULL;
 	if (isThor)
-		GenerateFunction(sp, ParseCompoundStatement());
+		GenerateFunction(sp, stmt = ParseCompoundStatement());
 	else if (isTable888)
-		GenerateTable888Function(sp, ParseCompoundStatement());
+		GenerateTable888Function(sp, stmt = ParseCompoundStatement());
 //	if (optimize)
 		flush_peep();
 	if (sp->storage_class == sc_global) {
 		fprintf(output,"endpublic\r\n\r\n");
 	}
-
+	return stmt;
 }

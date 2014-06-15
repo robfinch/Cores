@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -53,6 +53,8 @@
 
 extern int gCpu;
 extern int farcode;
+extern int wcharSupport;
+extern int verbose;
 extern FILE             *input,
                         *list,
                         *output;

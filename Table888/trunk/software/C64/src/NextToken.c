@@ -91,9 +91,9 @@ int getline(int listflag)
     if(lineno > 0 && listflag) {
         fprintf(list,"%6d\t%s",lineno,inpline);
 		while(numerrs) {
+			numerrs--;
 			if (numerrs < 80)
 				fprintf(list," *** error %d: %s\n",errno[numerrs],errtext(errno[numerrs]));
-			numerrs--;
 		}
         numerrs = 0;
     }

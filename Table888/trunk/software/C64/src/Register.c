@@ -431,7 +431,7 @@ void checkstack()
         if (reg_in_use[i] != -1)
             fatal("checkstack()/1");
 	if (next_reg != 5) {
-		printf("Nextreg: %d\r\n", next_reg);
+		//printf("Nextreg: %d\r\n", next_reg);
         fatal("checkstack()/3");
 	}
     if (reg_stack_ptr != 0)
@@ -447,7 +447,7 @@ void checkbrstack()
         if (breg_in_use[i] != -1)
             fatal("checkbstack()/1");
 	if (next_breg != 5) {
-		printf("Nextreg: %d\r\n", next_breg);
+		//printf("Nextreg: %d\r\n", next_breg);
         fatal("checkbstack()/3");
 	}
     if (breg_stack_ptr != 0)
@@ -572,10 +572,10 @@ common:
 		return;
     }
  //   /* some consistency checks */
-	if (number != ap->deep) {
-		printf("number %d ap->deep %d\r\n", number, ap->deep);
-		//fatal("ReleaseTempRegister()/1");
-	}
+	//if (number != ap->deep) {
+	//	printf("number %d ap->deep %d\r\n", number, ap->deep);
+	//	//fatal("ReleaseTempRegister()/1");
+	//}
 	if (reg_alloc_ptr-- == 0)
 		fatal("ReleaseTempRegister(): no registers are allocated");
   //  if (reg_alloc_ptr != number)
@@ -631,10 +631,10 @@ common:
 		return;
     }
  //   /* some consistency checks */
-	if (number != ap->deep) {
-		printf("number %d ap->deep %d\r\n", number, ap->deep);
-		//fatal("ReleaseTempRegister()/1");
-	}
+	//if (number != ap->deep) {
+	//	printf("number %d ap->deep %d\r\n", number, ap->deep);
+	//	//fatal("ReleaseTempRegister()/1");
+	//}
 	if (breg_alloc_ptr-- == 0)
 		fatal("ReleaseTempBRegister(): no registers are allocated");
   //  if (reg_alloc_ptr != number)

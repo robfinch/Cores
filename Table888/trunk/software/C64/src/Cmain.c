@@ -109,6 +109,10 @@ int	options(char *s)
 		if (strcmp(&s[2],"farcode")==0)
 			farcode = 1;
 	}
+	else if (s[1]=='w')
+		wcharSupport = 0;
+	else if (s[1]=='v')
+		verbose = 1;
 	return 0;
 }
 

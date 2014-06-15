@@ -69,6 +69,7 @@ int disableSubs;
 int parsingParameterList = FALSE;
 int unnamedCnt = 0;
 int needParseFunction = FALSE;
+int isStructDecl = FALSE;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -201,19 +202,22 @@ int ParseSpecifier(TABLE *table)
 				break;
 
 			case kw_long:	// long, long int
+				NextToken();
 				if (lastst==kw_int) {
 					NextToken();
 				}
-				if (lastst==kw_float)
+				else if (lastst==kw_float) {
 					head = tail = maketype(bt_double,8);
+					NextToken();
+				}
 				else
 					head = tail = maketype(bt_long,8);
-				NextToken();
+				//NextToken();
 				if (lastst==kw_oscall) {
 					isOscall = TRUE;
 					NextToken();
 				}
-				if (lastst==kw_nocall || lastst==kw_naked) {
+				else if (lastst==kw_nocall || lastst==kw_naked) {
 					isNocall = TRUE;
 					NextToken();
 				}
@@ -355,6 +359,10 @@ int ParseDeclarationPrefix(char isUnion)
 	char buf[200];
 j2:
 	switch (lastst) {
+		case kw_const:
+			NextToken();
+			goto j2;
+
 		case ellipsis:
         case id:
 j1:
@@ -466,7 +474,9 @@ j1:
 void ParseDeclarationSuffix()
 {
 	TYP     *temp1;
-	int fd;
+	int fd, npf;
+	char *odecl;
+	TYP *tempHead, *tempTail;
 
     switch (lastst) {
     case openbr:
@@ -517,9 +527,18 @@ void ParseDeclarationSuffix()
             temp1->type = bt_ifunc;
 			// Parse the parameter list for a function pointer passed as a
 			// parameter.
-			if (parsingParameterList) {
+			// Parse parameter list for a function pointer defined within
+			// a structure.
+			if (parsingParameterList || isStructDecl) {
 				fd = funcdecl;
-				ParseParameterDeclarations(3);
+				needParseFunction = FALSE;
+				odecl = declid;
+				tempHead = head;
+				tempTail = tail;
+				ParseParameterDeclarations(10);	// parse and discard
+				head = tempHead;
+				tail = tempTail;
+				declid = odecl;
 				funcdecl = fd;
 				needpunc(closepa);
 				if (lastst != begin)
@@ -589,7 +608,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 		// If a function declaration is taking place and just the type is
 		// specified without a parameter name, assign an internal compiler
 		// generated name.
-		if (funcdecl>0 && declid==NULL) {
+		if (funcdecl>0 && funcdecl != 10 && declid==NULL) {
 			sprintf(lastid, "_p%d", nparms);
 			declid = litlate(lastid);
 			names[nparms++] = declid;
@@ -620,6 +639,8 @@ int declare(TABLE *table,int al,int ilc,int ztype)
                 }
                 ++nbytes;
             }
+
+			// Set the struct member storage offset.
 			if( al == sc_static || al==sc_thread) {
 				sp->value.i = nextlabel++;
 			}
@@ -627,6 +648,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
                 sp->value.i = ilc;
             else if( al != sc_auto )
                 sp->value.i = ilc + nbytes;
+			// Auto variables are referenced negative to the base pointer
             else
                 sp->value.i = -(ilc + nbytes + head->size);
 
@@ -641,23 +663,28 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 				sp->tp->bit_offset = bit_offset;
 			}
 
-            if( 
-				(sp->tp->type == bt_func) && 
-                    sp->storage_class == sc_global )
-                    sp->storage_class = sc_external;
+            if((sp->tp->type == bt_func) && sp->storage_class == sc_global )
+                sp->storage_class = sc_external;
+
+			// Increase the storage allocation by the type size.
             if(ztype == bt_union)
-                    nbytes = imax(nbytes,sp->tp->size);
-            else if(al != sc_external)
-                    nbytes += sp->tp->size;
-            if( sp->tp->type == bt_ifunc && (sp1 = search(sp->name,table)) != 0 &&
-                    sp1->tp->type == bt_func )
-                    {
-                    sp1->tp = sp->tp;
-                    sp1->storage_class = sp->storage_class;
-//                                sp1->value.i = sp->value.i;
-					sp1->IsPrototype = sp->IsPrototype;
-                    sp = sp1;
-                    }
+                nbytes = imax(nbytes,sp->tp->size);
+			else if(al != sc_external) {
+				// If a pointer to a function is defined in a struct.
+				if (isStructDecl && (sp->tp->type==bt_func || sp->tp->type==bt_ifunc))
+					nbytes += 8;
+				else
+					nbytes += sp->tp->size;
+			}
+            
+			if (sp->tp->type == bt_ifunc && (sp1 = search(sp->name,table)) != 0 && sp1->tp->type == bt_func )
+            {
+				sp1->tp = sp->tp;
+				sp1->storage_class = sp->storage_class;
+	            sp1->value.i = sp->value.i;
+				sp1->IsPrototype = sp->IsPrototype;
+				sp = sp1;
+            }
 			else {
 				sp2 = search(sp->name,table);
 				if (sp2 == NULL)
@@ -781,6 +808,9 @@ void ParseGlobalDeclarations()
 
 void ParseParameterDeclarations(int fd)
 {
+	int ofd;
+
+	ofd = funcdecl;
 	funcdecl = fd;
 	missingArgumentName = FALSE;
 	parsingParameterList++;
@@ -834,6 +864,7 @@ void ParseParameterDeclarations(int fd)
 		}
 	}
 	parsingParameterList--;
+	funcdecl = ofd;
 }
 
 
