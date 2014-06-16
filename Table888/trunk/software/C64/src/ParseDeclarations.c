@@ -53,7 +53,7 @@ TYP             *head = NULL;
 TYP             *tail = NULL;
 char            *declid = NULL;
 TABLE           tagtable = {0,0};
-TYP             stdconst = { bt_long, bt_long, 1, FALSE, FALSE, FALSE, 0, 0, 8, {0, 0}, 0, "stdconst"};
+TYP             stdconst = { bt_long, bt_long, 1, FALSE, FALSE, FALSE, FALSE, 0, 0, 8, {0, 0}, 0, "stdconst"};
 char *names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
@@ -110,6 +110,7 @@ TYP *maketype(int bt, int siz)
     tp->lst.head = 0;
 	tp->isUnsigned = FALSE;
 	tp->isVolatile = FALSE;
+	tp->isConst = FALSE;
     return tp;
 }
 
@@ -128,6 +129,7 @@ int ParseSpecifier(TABLE *table)
 	for (;;) {
 		switch (lastst) {
 			case kw_const:	// Ignore 'const'
+				isConst = TRUE;
 				NextToken();
 				break;
 
@@ -360,6 +362,7 @@ int ParseDeclarationPrefix(char isUnion)
 j2:
 	switch (lastst) {
 		case kw_const:
+			isConst = TRUE;
 			NextToken();
 			goto j2;
 
@@ -372,7 +375,7 @@ j1:
                 NextToken();
 				if (lastst == colon) {
 					NextToken();
-					bit_width = GetIntegerExpression();
+					bit_width = GetIntegerExpression(NULL);
 					if (isUnion)
 						bit_offset = 0;
 					else
@@ -485,17 +488,17 @@ void ParseDeclarationSuffix()
         temp1->val_flag = 1;
         temp1->btp = head;
         if(lastst == closebr) {
-                temp1->size = 0;
-                NextToken();
-                }
+			temp1->size = 0;
+			NextToken();
+        }
         else if(head != NULL) {
-                temp1->size = GetIntegerExpression() * head->size;
-                needpunc(closebr);
-                }
+			temp1->size = GetIntegerExpression(NULL) * head->size;
+			needpunc(closebr);
+		}
         else {
-                temp1->size = GetIntegerExpression();
-                needpunc(closebr);
-                }
+			temp1->size = GetIntegerExpression(NULL);
+			needpunc(closebr);
+		}
         head = temp1;
         if( tail == NULL)
                 tail = head;
@@ -593,6 +596,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 	char stnm[200];
 	int op;
 	int fd;
+	int fn_doneinit = 0;
 
     static long old_nbytes;
     int nbytes;
@@ -662,7 +666,8 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 				sp->tp->bit_width = bit_width;
 				sp->tp->bit_offset = bit_offset;
 			}
-
+			if (isConst)
+				sp->tp->isConst = TRUE;
             if((sp->tp->type == bt_func) && sp->storage_class == sc_global )
                 sp->storage_class = sc_external;
 
@@ -698,14 +703,15 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 			}
 			if (needParseFunction) {
 				needParseFunction = FALSE;
-				ParseFunction(sp);
-				return nbytes;
+				fn_doneinit = ParseFunction(sp);
+				if (sp->tp->type != bt_pointer)
+					return nbytes;
 			}
    //         if(sp->tp->type == bt_ifunc) { /* function body follows */
    //             ParseFunction(sp);
    //             return nbytes;
    //         }
-            if( (al == sc_global || al == sc_static || al==sc_thread) &&
+            if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
                     sp->tp->type != bt_func && sp->storage_class!=sc_typedef)
                     doinit(sp);
         }
@@ -936,10 +942,10 @@ void compile()
 {
 	while(lastst != eof)
 	{
-        ParseGlobalDeclarations();
-        if( lastst != eof)
-            NextToken();
-    }
-    dumplits();
+		ParseGlobalDeclarations();
+		if( lastst != eof)
+			NextToken();
+	}
+	dumplits();
 }
 

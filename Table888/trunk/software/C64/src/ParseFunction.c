@@ -65,7 +65,7 @@ void ListCompound(Statement *stmt);
  *      block. If begin is the current symbol then funcbody
  *      assumes that the function has no parameters.
  */
-void ParseFunction(SYM *sp)
+int ParseFunction(SYM *sp)
 {
 	int poffset, i;
 	int oldglobal;
@@ -124,6 +124,22 @@ void ParseFunction(SYM *sp)
                 }
 		if (lastst == closepa)
 			NextToken();
+		if (sp->tp->type == bt_pointer) {
+			if (lastst==assign) {
+				doinit(sp);
+			}
+			sp->IsNocall = isNocall;
+			sp->IsPascal = isPascal;
+			sp->IsInterrupt = isInterrupt;
+			sp->NumParms = nparms;
+			isPascal = FALSE;
+			isOscall = FALSE;
+			isInterrupt = FALSE;
+			isNocall = FALSE;
+		    ReleaseLocalMemory();        /* release local symbols (parameters)*/
+			global_flag = oldglobal;
+			return 1;
+		}
 		if (lastst == semicolon) {	// Function prototype
 			sp->IsPrototype = 1;
 			sp->IsNocall = isNocall;
@@ -135,6 +151,7 @@ void ParseFunction(SYM *sp)
 			isInterrupt = FALSE;
 			isNocall = FALSE;
 		    ReleaseLocalMemory();        /* release local symbols (parameters)*/
+			goto j1;
 		}
 		else if(lastst != begin) {
 //			NextToken();
@@ -175,7 +192,9 @@ void ParseFunction(SYM *sp)
 			stmt = ParseFunctionBody(sp);
 			funcbottom(stmt);
         }
+j1:
 		global_flag = oldglobal;
+		return 0;
 }
 
 SYM     *makeint(char *name)
@@ -234,6 +253,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 
 	lbl[0] = 0;
 	needpunc(begin);
+
+	TRACE( printf("Parse function body: %s\r\n", sp->name); )
     //ParseAutoDeclarations();
 	cseg();
 	if (sp->storage_class == sc_static)

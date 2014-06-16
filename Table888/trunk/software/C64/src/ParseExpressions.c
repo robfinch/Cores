@@ -30,6 +30,9 @@
 #include        "gen.h"
 #include        "cglbdec.h"
 
+#define EXPR_DEBUG
+static unsigned char sizeof_flag = 0;
+
 /*
  *	68000 C compiler
  *
@@ -48,20 +51,20 @@
  *		Norcross, Ga 30092
  */
 
-TYP             stdint = { bt_long, bt_long, 0, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
-TYP             stduint = { bt_long, bt_long, 0, TRUE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
-TYP             stdlong = { bt_long, bt_long, 0, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
-TYP             stdulong = { bt_long, bt_long, 0, TRUE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
-TYP             stdshort = { bt_short, bt_short, 0, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, 0, 0 };
-TYP             stdushort = { bt_short, bt_short, 0, TRUE, FALSE, FALSE, 0,0,4, {0, 0}, 0, 0 };
-TYP             stdchar = {bt_char, bt_char, 0, FALSE, FALSE, FALSE, 0,0,2, {0, 0}, 0, 0 };
-TYP             stduchar = {bt_char, bt_char, 0, TRUE, FALSE, FALSE, 0,0,2, {0, 0}, 0, 0 };
-TYP             stdbyte = {bt_byte, bt_byte, 0, FALSE, FALSE, FALSE, 0,0,1, {0, 0}, 0, 0 };
-TYP             stdubyte = {bt_byte, bt_byte, 0, TRUE, FALSE, FALSE, 0,0,1, {0, 0}, 0, 0 };
-TYP             stdstring = {bt_pointer, bt_pointer, 1, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, &stdchar, 0};
-TYP				stddbl = {bt_double, bt_double, 0, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0};
-TYP				stdflt = {bt_float, bt_float, 0, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, 0, 0};
-TYP             stdfunc = {bt_func, bt_func, 1, FALSE, FALSE, FALSE, 0,0,0, {0, 0}, &stdint, 0};
+TYP             stdint = { bt_long, bt_long, 0, FALSE, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
+TYP             stduint = { bt_long, bt_long, 0, TRUE, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
+TYP             stdlong = { bt_long, bt_long, 0, FALSE, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
+TYP             stdulong = { bt_long, bt_long, 0, TRUE, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0 };
+TYP             stdshort = { bt_short, bt_short, 0, FALSE, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, 0, 0 };
+TYP             stdushort = { bt_short, bt_short, 0, TRUE, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, 0, 0 };
+TYP             stdchar = {bt_char, bt_char, 0, FALSE, FALSE, FALSE, FALSE, 0,0,2, {0, 0}, 0, 0 };
+TYP             stduchar = {bt_char, bt_char, 0, TRUE, FALSE, FALSE, FALSE, 0,0,2, {0, 0}, 0, 0 };
+TYP             stdbyte = {bt_byte, bt_byte, 0, FALSE, FALSE, FALSE, FALSE, 0,0,1, {0, 0}, 0, 0 };
+TYP             stdubyte = {bt_byte, bt_byte, 0, TRUE, FALSE, FALSE, FALSE, 0,0,1, {0, 0}, 0, 0 };
+TYP             stdstring = {bt_pointer, bt_pointer, 1, FALSE, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, &stdchar, 0};
+TYP				stddbl = {bt_double, bt_double, 0, FALSE, FALSE, FALSE, FALSE, 0,0,8, {0, 0}, 0, 0};
+TYP				stdflt = {bt_float, bt_float, 0, FALSE, FALSE, FALSE, FALSE, 0,0,4, {0, 0}, 0, 0};
+TYP             stdfunc = {bt_func, bt_func, 1, FALSE, FALSE, FALSE, FALSE, 0,0,0, {0, 0}, &stdint, 0};
 extern TYP      *head;          /* shared with ParseSpecifier */
 extern TYP	*tail;
 
@@ -295,6 +298,27 @@ TYP *deref(ENODE **node, TYP *tp)
 }
 
 /*
+* dereference the node if val_flag is zero. If val_flag is non_zero and
+* tp->type is bt_pointer (array reference) set the size field to the
+* pointer size if this code is not executed on behalf of a sizeof
+* operator
+*/
+TYP *CondDeref(ENODE *node, TYP *tp)
+{
+    TYP *tp1;
+
+    if (tp->val_flag == 0)
+		return deref(node, tp);
+    if (tp->type == bt_pointer && sizeof_flag == 0) {
+		tp1 = tp->btp;
+		tp = maketype(bt_pointer, 8);
+		tp->btp = tp1;
+    }
+    return tp;
+}
+
+
+/*
  *      nameref will build an expression tree that references an
  *      identifier. if the identifier is not in the global or
  *      local symbol table then a look-ahead to the next character
@@ -391,8 +415,7 @@ TYP *nameref(ENODE **node)
 							}
                             break;
                     }
-            if( tp->val_flag == FALSE)
-                    tp = deref(node,tp);
+                    tp = CondDeref(node,tp);
             }
     NextToken();
     return tp;
@@ -428,7 +451,8 @@ static int IsIntrinsicType(int st)
 	return  st == kw_byte || st==kw_char || st == kw_short || st == kw_int || st==kw_void ||
 				st == kw_int16 || st == kw_int8 || st == kw_int32 || st == kw_int16 ||
                 st == kw_long || st == kw_float || st == kw_double || st==kw_enum ||
-                st == kw_struct || st == kw_union || st== kw_unsigned || st==kw_signed;
+                st == kw_struct || st == kw_union || st== kw_unsigned || st==kw_signed ||
+				st == kw_const;
 }
 
 int IsBeginningOfTypecast(int st)
@@ -465,6 +489,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 	int brcount;
         SYM             *sp;
         TYP             *tptr;
+
 		brcount = 0;
 		qnode1 = NULL;
 		qnode2 = NULL;
@@ -486,11 +511,24 @@ TYP *ParsePrimaryExpression(ENODE **node)
                         NextToken();
                         break;
                 case sconst:
+					if (sizeof_flag) {
+						tptr = maketype(bt_pointer, 0);
+						tptr->size = strlen(laststr) + 1;
+						tptr->btp = &stdchar;
+						tptr->val_flag = 1;
+						tptr->isConst = TRUE;
+					}
+					else {
                         tptr = &stdstring;
-                        pnode = makenodei(en_labcon,NULL,stringlit(laststr));
-                        pnode->constflag = TRUE;
-                        NextToken();
-                        break;
+					}
+                    pnode = makenodei(en_labcon,NULL,NULL);
+					if (sizeof_flag == 0)
+						pnode->i = stringlit(laststr);
+					pnode->etype = bt_pointer;
+					pnode->esize = 8;
+                    pnode->constflag = TRUE;
+                    NextToken();
+                    break;
 
                 case openpa:
                         NextToken();
@@ -575,8 +613,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
                                 ////snode->constflag = rnode->constflag && snode->p[0]->constflag;
                                 ////pnode = makenode(en_add,snode,pnode);
                                 ////pnode->constflag = snode->constflag && pnode->p[1]->constflag;
-                                if( tptr->val_flag == FALSE )
-                                    tptr = deref(&pnode,tptr);
+                                tptr = CondDeref(&pnode,tptr);
                                 needpunc(closebr);
                                 break;
 
@@ -612,8 +649,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
                                             qnode->constflag = TRUE;
                                             pnode = makenode(en_add,pnode,qnode);
                                             pnode->constflag = pnode->p[0]->constflag;
-                                            if( tptr->val_flag == FALSE )
-                                                tptr = deref(&pnode,tptr);
+                                            tptr = CondDeref(&pnode,tptr);
                                         }
                                         NextToken();       /* past id */
                                         }
@@ -707,10 +743,12 @@ TYP *ParseUnaryExpression(ENODE **node)
 {
 	TYP *tp, *tp1;
     ENODE *ep1, *ep2;
-    int flag;
+    int flag, flag2;
 	__int64 i;
+	SYM *sp;
 
         flag = 0;
+		flag2 = FALSE;
         switch( lastst ) {
                 case autodec:
                         flag = 1;
@@ -779,8 +817,7 @@ TYP *ParseUnaryExpression(ENODE **node)
 							error(ERR_DEREF);
                         else
                             tp = tp->btp;
-                        if( tp->val_flag == FALSE )
-							tp = deref(&ep1,tp);
+						tp = CondDeref(&ep1,tp);
                         break;
 
                 case and:
@@ -800,26 +837,46 @@ TYP *ParseUnaryExpression(ENODE **node)
                         tp1->lst.head = NULL;
                         tp1->sname = NULL;
                         tp = tp1;
+						sp = search("ta_int",&tp->btp->lst);
+						if (sp) {
+							printf("ta_int\r\n");
+						}
                         break;
 
                 case kw_sizeof:
                         NextToken();
-                        needpunc(openpa);
-						tp = head;
-						tp1 = tail;
-                        ParseSpecifier(0);
-                        ParseDeclarationPrefix(FALSE);
-                        if( head != NULL )
-                            ep1 = makeinode(en_icon,head->size);
+						if (lastst==openpa) {
+							flag2 = TRUE;
+							NextToken();
+						}
+						if (flag2 && IsBeginningOfTypecast(lastst)) {
+							tp = head;
+							tp1 = tail;
+							ParseSpecifier(0);
+							ParseDeclarationPrefix(FALSE);
+							if( head != NULL )
+								ep1 = makeinode(en_icon,head->size);
+							else {
+								error(ERR_IDEXPECT);
+								ep1 = makeinode(en_icon,1);
+							}
+							head = tp;
+							tail = tp1;
+						}
 						else {
-                            error(ERR_IDEXPECT);
-                            ep1 = makeinode(en_icon,1);
-                        }
-						head = tp;
-						tail = tp1;
-                        ep1->constflag = TRUE;
-                        tp = &stdint;
-                        needpunc(closepa);
+							sizeof_flag++;
+							tp = ParseUnaryExpression(&ep1);
+							sizeof_flag--;
+							if (tp == 0) {
+								error(ERR_SYNTAX);
+								ep1 = makeinode(en_icon,1);
+							} else
+								ep1 = makeinode(en_icon, (long) tp->size);
+						}
+						if (flag2)
+							needpunc(closepa);
+						ep1->constflag = TRUE;
+						tp = &stdint;
                         break;
 
                 case kw_typenum:
@@ -987,6 +1044,10 @@ TYP     *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2)
 				case bt_union:
 						if (tp2->size > tp1->size)
 							return tp2;
+						return tp1;
+				// Really working with pointers to functions.
+				case bt_func:
+				case bt_ifunc:
 						return tp1;
                 }
         error( ERR_MISMATCH );
@@ -1315,82 +1376,83 @@ cexit:  *node = ep1;
     return tp1;
 }
 
-/*
- *      asnop handles the assignment operators. currently only the
- *      simple assignment is implemented.
- */
+// ----------------------------------------------------------------------------
+//      asnop handles the assignment operators. currently only the
+//      simple assignment is implemented.
+// ----------------------------------------------------------------------------
 TYP *asnop(ENODE **node)
-{       struct ENODE    *ep1, *ep2, *ep3;
-        TYP             *tp1, *tp2;
-        int             op;
-        tp1 = conditional(&ep1);
-        if( tp1 == 0 )
-                return 0;
-        for(;;) {
-                switch( lastst ) {
-                        case assign:
-                                op = en_assign;
-ascomm:                         NextToken();
-                                tp2 = asnop(&ep2);
-ascomm2:                        if( tp2 == 0 || !IsLValue(ep1) )
-                                        error(ERR_LVALUE);
-                                else    {
-                                        tp1 = forcefit(&ep1,tp1,&ep2,tp2);
-                                        ep1 = makenode(op,ep1,ep2);
-										// Struct assign calls memcpy, so function is no
-										// longer a leaf routine.
-										if (tp1->size > 8)
-											currentFn->IsLeaf = FALSE;
-                                        }
-                                break;
-                        case asplus:
-                                op = en_asadd;
-ascomm3:                        tp2 = asnop(&ep2);
-                                if( tp1->type == bt_pointer ) {
-                                        ep3 = makeinode(en_icon,tp1->btp->size);
-                                        ep2 = makenode(en_mul,ep2,ep3);
-                                        }
-                                goto ascomm;
-                        case asminus:
-                                op = en_assub;
-                                goto ascomm3;
-                        case astimes:
-								if (tp1->isUnsigned)
-									op = en_asmulu;
-								else
-									op = en_asmul;
-                                goto ascomm;
-                        case asdivide:
-								if (tp1->isUnsigned)
-									op = en_asdivu;
-								else
-									op = en_asdiv;
-                                goto ascomm;
-                        case asmodop:
-								if (tp1->isUnsigned)
-									op = en_asmodu;
-								else
-									op = en_asmod;
-                                goto ascomm;
-                        case aslshift:
-                                op = en_aslsh;
-                                goto ascomm;
-                        case asrshift:
-								if (tp1->isUnsigned)
-									op = en_asrshu;
-								else
-									op = en_asrsh;
-                                goto ascomm;
-                        case asand:
-                                op = en_asand;
-                                goto ascomm;
-                        case asor:
-                                op = en_asor;
-                                goto ascomm;
-                        default:
-                                goto asexit;
-                        }
-                }
+{      
+	struct ENODE    *ep1, *ep2, *ep3;
+    TYP             *tp1, *tp2;
+    int             op;
+    tp1 = conditional(&ep1);
+    if( tp1 == 0 )
+        return 0;
+    for(;;) {
+        switch( lastst ) {
+            case assign:
+                op = en_assign;
+ascomm:         NextToken();
+                tp2 = asnop(&ep2);
+ascomm2:        if( tp2 == 0 || !IsLValue(ep1) )
+                    error(ERR_LVALUE);
+				else {
+					tp1 = forcefit(&ep1,tp1,&ep2,tp2);
+					ep1 = makenode(op,ep1,ep2);
+					// Struct assign calls memcpy, so function is no
+					// longer a leaf routine.
+					if (tp1->size > 8)
+						currentFn->IsLeaf = FALSE;
+				}
+				break;
+			case asplus:
+				op = en_asadd;
+ascomm3:        tp2 = asnop(&ep2);
+				if( tp1->type == bt_pointer ) {
+					ep3 = makeinode(en_icon,tp1->btp->size);
+					ep2 = makenode(en_mul,ep2,ep3);
+				}
+				goto ascomm;
+			case asminus:
+				op = en_assub;
+				goto ascomm3;
+			case astimes:
+				if (tp1->isUnsigned)
+					op = en_asmulu;
+				else
+					op = en_asmul;
+				goto ascomm;
+			case asdivide:
+				if (tp1->isUnsigned)
+					op = en_asdivu;
+				else
+					op = en_asdiv;
+				goto ascomm;
+			case asmodop:
+				if (tp1->isUnsigned)
+					op = en_asmodu;
+				else
+					op = en_asmod;
+				goto ascomm;
+			case aslshift:
+				op = en_aslsh;
+				goto ascomm;
+			case asrshift:
+				if (tp1->isUnsigned)
+					op = en_asrshu;
+				else
+					op = en_asrsh;
+				goto ascomm;
+			case asand:
+				op = en_asand;
+				goto ascomm;
+			case asor:
+				op = en_asor;
+				goto ascomm;
+			default:
+				goto asexit;
+			}
+	}
 asexit: *node = ep1;
         return tp1;
 }

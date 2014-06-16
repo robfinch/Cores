@@ -29,7 +29,7 @@
 #include "gen.h"
 #include "cglbdec.h"
 
-__int64 GetIntegerExpression()       /* simple integer value */
+__int64 GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 { 
 	TYP *tp;
 	ENODE *node;
@@ -44,9 +44,11 @@ __int64 GetIntegerExpression()       /* simple integer value */
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
 		return 0;
 	}
-	if (node->nodetype != en_icon) {
+	if (node->nodetype != en_icon && node->nodetype != en_cnacon) {
 		error(ERR_INT_CONST);
 		return 0;
 	}
+	if (pnode)
+		*pnode = node;
 	return node->i;
 }

@@ -231,19 +231,34 @@ static void PutConstant(ENODE *offset)
 	}
 }
 
+
+// Output a friendly register moniker
+
 char *RegMoniker(int regno)
 {
 	static char buf[4][20];
 	static int n;
 
 	n = (n + 1) & 3;
-	switch(regno) {
-	case 248:	sprintf(&buf[n], "fl0"); break;
-	case 253:	sprintf(&buf[n], "bp"); break;	// was 27
-	case 251:	sprintf(&buf[n], "xlr"); break;
-	case 254:	sprintf(&buf[n], "pc"); break;
-	case 255:	sprintf(&buf[n], "sp"); break;	// was 30
-	default:	sprintf(&buf[n], "r%d", regno); break;
+	if (!isRaptor64) {
+		switch(regno) {
+		case 244:	sprintf(&buf[n], "flg0"); break;
+		case 253:	sprintf(&buf[n], "bp"); break;
+		case 251:	sprintf(&buf[n], "xlr"); break;
+		case 254:	sprintf(&buf[n], "pc"); break;
+		case 255:	sprintf(&buf[n], "sp"); break;
+		default:	sprintf(&buf[n], "r%d", regno); break;
+		}
+	}
+	else {
+		switch(regno) {
+		case 27:	sprintf(&buf[n], "bp"); break;
+		case 28:	sprintf(&buf[n], "xlr"); break;
+		case 29:	sprintf(&buf[n], "pc"); break;
+		case 30:	sprintf(&buf[n], "sp"); break;
+		case 31:	sprintf(&buf[n], "lr"); break;
+		default:	sprintf(&buf[n], "r%d", regno); break;
+		}
 	}
 	return &buf[n];
 }
@@ -595,8 +610,12 @@ void GenerateReference(SYM *sp,int offset)
                 fprintf(output,",%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
         else if( sp->storage_class == sc_thread)
                 fprintf(output,",%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
-        else
+		else {
+			if (offset==0)
+                fprintf(output,",%s",sp->name);
+			else
                 fprintf(output,",%s%c%d",sp->name,sign,offset);
+		}
         outcol += (11 + strlen(sp->name));
     }
     else {
@@ -605,8 +624,12 @@ void GenerateReference(SYM *sp,int offset)
             fprintf(output,"\tdw\t%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
         else if(sp->storage_class == sc_thread)
             fprintf(output,"\tdw\t%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
-        else
-            fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
+		else {
+			if (offset==0)
+				fprintf(output,"\tdw\t%s",sp->name);
+			else
+				fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
+		}
         outcol = 26 + strlen(sp->name);
         gentype = longgen;
     }
@@ -618,16 +641,17 @@ void genstorage(int nbytes)
 }
 
 void GenerateLabelReference(int n)
-{       if( gentype == longgen && outcol < 58) {
-                fprintf(output,",%s_%d",GetNamespace(),n);
-                outcol += 6;
-                }
-        else    {
-                nl();
-                fprintf(output,"\tlong\t%s_%d",GetNamespace(),n);
-                outcol = 22;
-                gentype = longgen;
-                }
+{ 
+	if( gentype == longgen && outcol < 58) {
+        fprintf(output,",%s_%d",GetNamespace(),n);
+        outcol += 6;
+    }
+    else {
+        nl();
+        fprintf(output,"\tlong\t%s_%d",GetNamespace(),n);
+        outcol = 22;
+        gentype = longgen;
+    }
 }
 
 /*
@@ -649,7 +673,7 @@ int stringlit(char *s)
 }
 
 /*
- *      dump the string literal pool.
+ *      Dump the string literal pool.
  */
 void dumplits()
 {

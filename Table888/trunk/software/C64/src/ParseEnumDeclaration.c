@@ -92,7 +92,7 @@ void ParseEnumerationList(TABLE *table)
         NextToken();
 		if (lastst==assign) {
 			NextToken();
-			sp->value.i = GetIntegerExpression();
+			sp->value.i = GetIntegerExpression(NULL);
 			evalue = sp->value.i+1;
 		}
 		else

@@ -120,10 +120,10 @@ int InitializeType(TYP *tp)
             nbytes = initshort();
             break;
     case bt_pointer:
-            if( tp->val_flag)
-                nbytes = InitializeArray(tp);
-            else
-                nbytes = InitializePointer();
+			if( tp->val_flag)
+				nbytes = InitializeArray(tp);
+			else
+				nbytes = InitializePointer();
             break;
     case bt_long:
             nbytes = initlong();
@@ -205,31 +205,33 @@ int InitializeStructure(TYP *tp)
 
 int initbyte()
 {   
-	GenerateByte(GetIntegerExpression());
+	GenerateByte(GetIntegerExpression(NULL));
     return 1;
 }
 
 int initchar()
 {   
-	GenerateChar(GetIntegerExpression());
+	GenerateChar(GetIntegerExpression(NULL));
     return 2;
 }
 
 int initshort()
 {
-	GenerateWord(GetIntegerExpression());
+	GenerateWord(GetIntegerExpression(NULL));
     return 4;
 }
 
 int initlong()
 {
-	GenerateLong(GetIntegerExpression());
+	GenerateLong(GetIntegerExpression(NULL));
     return 8;
 }
 
 int InitializePointer()
 {   
 	SYM *sp;
+	ENODE *n;
+	long lng;
 
     if(lastst == and) {     /* address of a variable */
         NextToken();
@@ -240,7 +242,7 @@ int InitializePointer()
         else {
             NextToken();
             if( lastst == plus || lastst == minus)
-                GenerateReference(sp,GetIntegerExpression());
+                GenerateReference(sp,GetIntegerExpression(NULL));
             else
                 GenerateReference(sp,0);
             if( sp->storage_class == sc_auto)
@@ -251,10 +253,30 @@ int InitializePointer()
         GenerateLabelReference(stringlit(laststr));
         NextToken();
     }
-    else
-        GenerateLong(GetIntegerExpression());
+	//else if (lastst == id) {
+	//	sp = gsearch(lastid);
+	//	if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
+	//		NextToken();
+	//		GenerateReference(sp,0);
+	//	}
+	//	else
+	//		GenerateLong(GetIntegerExpression(NULL));
+	//}
+	else {
+		lng = GetIntegerExpression(&n);
+		if (n->nodetype == en_cnacon) {
+			if (n->sp) {
+				sp = gsearch(n->sp);
+				GenerateReference(sp,0);
+			}
+			else
+				GenerateLong(lng);
+		}
+		else
+			GenerateLong(lng);
+	}
     endinit();
-    return 8;       /* pointers are 4 bytes long */
+    return 8;       /* pointers are 8 bytes long */
 }
 
 void endinit()

@@ -245,7 +245,7 @@ void getbase(b)
                         }
                 else break;
                 }
-		if (lastch=='L')	// ignore a 'L'ong suffix
+		if (lastch=='L' || lastch=='U')	// ignore a 'L'ong suffix and 'U'nsigned
 			getch();
         ival = i;
         lastst = iconst;
@@ -321,7 +321,12 @@ getnum()
                         getch();
                         getexp();       /* get the exponent */
                         }
-                }
+				// Ignore 'U' unsigned suffix
+				if (lastch=='U' || lastch=='u') {
+					getch();
+				}
+				}
+				
 }
 
 void SkipSpaces()

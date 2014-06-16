@@ -48,8 +48,16 @@
 /*      global ParseSpecifierarations     */
 #define THOR		0
 #define TABLE888	888
+#define RAPTOR64	64
 #define isThor		(gCpu==THOR)
 #define isTable888	(gCpu==TABLE888)
+#define isRaptor64	(gCpu==RAPTOR64)
+#define DOTRACE	1
+#ifdef DOTRACE
+#define TRACE(x)	x
+#else
+#define TRACE(x)
+#endif
 
 extern int gCpu;
 extern int farcode;
@@ -131,7 +139,7 @@ extern int ParseSpecifier(TABLE *table);
 extern int ParseDeclarationPrefix();
 extern int ParseStructDeclaration(int);
 extern void ParseEnumerationList(TABLE *table);
-
+extern int ParseFunction(SYM *sp);
 extern void initstack();
 extern int getline(int listflag);
 
@@ -140,7 +148,7 @@ extern void doinit(SYM *sp);
 // Func.c
 extern void funcbody(SYM *sp);
 // Intexpr.c
-extern __int64 GetIntegerExpression();
+extern __int64 GetIntegerExpression(ENODE *p);
 // Expr.c
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, __int64 v1);

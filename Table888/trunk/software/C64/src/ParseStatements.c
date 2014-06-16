@@ -147,7 +147,9 @@ Statement *ParseWhileStatement()
 		if (lastst==kw_do)
 			NextToken();
         snp->s1 = ParseStatement(); 
-		snp->s1->outer = snp;
+		// Empty statements return NULL
+		if (snp->s1)
+			snp->s1->outer = snp;
     } 
 	iflevel--;
     return snp; 
@@ -169,7 +171,9 @@ Statement *ParseUntilStatement()
             error(ERR_EXPREXPECT); 
         needpunc( closepa ); 
         snp->s1 = ParseStatement(); 
- 		snp->s1->outer = snp;
+		// Empty statements return NULL
+		if (snp->s1)
+			snp->s1->outer = snp;
    } 
 	iflevel--;
     return snp; 
@@ -184,7 +188,9 @@ Statement *ParseDoStatement()
 	snp->predreg = iflevel;
 	iflevel++;
     snp->s1 = ParseStatement(); 
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
 	if (lastst == kw_until)
 		snp->stype = st_dountil;
 	else if (lastst== kw_loop)
@@ -223,7 +229,9 @@ Statement *ParseForStatement()
         snp->incrExpr = NULL; 
     needpunc(closepa); 
     snp->s1 = ParseStatement(); 
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
 	iflevel--;
     return snp; 
 } 
@@ -234,7 +242,9 @@ Statement *ParseForeverStatement()
     snp = NewStatement(st_forever, TRUE);
     snp->stype = st_forever; 
     snp->s1 = ParseStatement(); 
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
     return snp; 
 } 
 
@@ -262,7 +272,9 @@ struct snode *ParseCriticalStatement()
     snp->label = sp->name; 
     snp->next = 0; 
 	snp->s1 = ParseStatement();
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
 	return snp;
 }
   
@@ -289,24 +301,29 @@ Statement *ParseSpinlockStatement()
 //	NextToken();
 	if (lastst==comma) {
 		NextToken();
-		snp->incrExpr = GetIntegerExpression();
+		snp->incrExpr = GetIntegerExpression(NULL);
 		if (snp->incrExpr < 1 || snp->incrExpr > 15)
 			error(ERR_SEMA_INCR);
 		snp->incrExpr = (int)snp->incrExpr & 15;
 	}
 	if (lastst==comma) {
 		NextToken();
-		snp->initExpr = GetIntegerExpression();
+		snp->initExpr = GetIntegerExpression(NULL);
 	}
 	if (lastst==closepa)
 		NextToken();
 //    snp->label = sp->name; 
     snp->next = 0; 
 	snp->s1 = ParseStatement();
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
 	if (lastst==kw_lockfail) {
 		NextToken();
 		snp->s2 = ParseStatement();
+		// Empty statements return NULL
+		if (snp->s2)
+			snp->s2->outer = snp;
 	}
 	return snp;
 }
@@ -324,7 +341,7 @@ Statement *ParseSpinunlockStatement()
         error(ERR_EXPREXPECT); 
 	if (lastst==comma) {
 		NextToken();
-		snp->incrExpr = GetIntegerExpression();
+		snp->incrExpr = GetIntegerExpression(NULL);
 		if (snp->incrExpr < 1 || snp->incrExpr > 15)
 			error(ERR_SEMA_INCR);
 		snp->incrExpr = (int)snp->incrExpr & 15;
@@ -350,7 +367,9 @@ Statement *ParseFirstcallStatement()
 	Statement *snp; 
     snp = NewStatement(st_firstcall, TRUE); 
     snp->s1 = ParseStatement(); 
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
     return snp; 
 } 
   
@@ -404,6 +423,9 @@ Statement *ParseCatchStatement()
 		snp->label = NULL;
 		snp->s2 = 99999;
 		snp->s1 = ParseStatement();
+		// Empty statements return NULL
+		if (snp->s1)
+			snp->s1->outer = snp;
 		return snp;
 	}
     needpunc(openpa);
@@ -420,11 +442,16 @@ Statement *ParseCatchStatement()
 	if( (sp = search(declid,&lsyms)) == NULL)
         sp = makeint(declid);
 	snp->s1 = ParseStatement();
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
 	snp->label = (char *)sp;	// save off symbol pointer
 	if (sp->tp->typeno >= bt_last)
 		error(ERR_CATCHSTRUCT);
 	snp->s2 = GetTypeHash(sp->tp);
+	// Empty statements return NULL
+	if (snp->s2)
+		snp->s2->outer = snp;
 	return snp;
 }
 
@@ -444,7 +471,7 @@ Statement *ParseCaseStatement()
         snp->s2 = 0;
 		nn = 0;
 		do {
-			buf[nn] = GetIntegerExpression();
+			buf[nn] = GetIntegerExpression(NULL);
 			nn++;
 			if (lastst != comma)
 				break;
@@ -472,7 +499,8 @@ Statement *ParseCaseStatement()
     while( lastst != end && lastst != kw_case && lastst != kw_default ) { 
 		if( head == NULL ) {
 			head = tail = ParseStatement(); 
-			head->outer = snp;
+			if (head)
+				head->outer = snp;
 		}
 		else { 
 			tail->next = ParseStatement(); 
@@ -526,7 +554,8 @@ Statement *ParseSwitchStatement()
     while( lastst != end ) { 
 		if( head == NULL ) {
 			head = tail = ParseCaseStatement(); 
-			head->outer = snp;
+			if (head)
+				head->outer = snp;
 		}
 		else { 
 			tail->next = ParseCaseStatement(); 
@@ -622,7 +651,7 @@ Statement *ParseStopStatement()
   
 Statement *ParseAsmStatement() 
 {
-	static char buf[2001];
+	static char buf[20001];
 	int nn;
 
 	Statement *snp; 
@@ -639,8 +668,8 @@ Statement *ParseAsmStatement()
 			break;
 		buf[nn++] = lastch;
 	}
-	while(lastch!=-1 && nn < 2000);
-	if (nn >= 2000)
+	while(lastch!=-1 && nn < 20000);
+	if (nn >= 20000)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
 	snp->label = litlate(buf);
@@ -658,13 +687,16 @@ Statement *ParseTryStatement()
 	tl = NULL;
 	snp = NewStatement(st_try, TRUE);
     snp->s1 = ParseStatement();
-	snp->s1->outer = snp;
+	// Empty statements return NULL
+	if (snp->s1)
+		snp->s1->outer = snp;
 	if (lastst != kw_catch)
         error(ERR_CATCHEXPECT);
     while( lastst == kw_catch ) {
 		if( hd == NULL ) {
 			hd = tl = ParseCatchStatement(); 
-			hd->outer = snp;
+			if (hd)
+				hd->outer = snp;
 		}
 		else { 
 			tl->next = ParseCatchStatement(); 
@@ -692,7 +724,9 @@ Statement *ParseExpressionStatement()
         needpunc( semicolon );
     return snp; 
 } 
-  
+
+// Parse a compound statement.
+
 Statement *ParseCompoundStatement()
 {  
 	Statement *snp;
@@ -701,21 +735,26 @@ Statement *ParseCompoundStatement()
     snp = NewStatement(st_compound, FALSE); 
 	currentStmt = snp;
 	head = 0; 
+	if (lastst==colon) {
+		NextToken();
+		TRACE(printf("Compound <%s>\r\n",lastid);)
+		if (strcmp(lastid,"clockbug")==0)
+			printf("clockbug\r\n");
+	}
 	ParseAutoDeclarations(&snp->ssyms);
 	cseg();
+	// Add the first statement at the head of the list.
+	if (lastst != end) {
+		head = tail = ParseStatement(); 
+		if (head)
+			head->outer = snp;
+	}
+	// Add remaining statements onto the tail of the list.
 	while( lastst != end ) {
-		if( head == NULL ) {
-			head = tail = ParseStatement(); 
-			if (head) {
-				head->outer = snp;
-			}
-		}
-		else { 
-			tail->next = ParseStatement(); 
-			if( tail->next != NULL ) {
-				tail->next->outer = snp;
-				tail = tail->next;
-			}
+		tail->next = ParseStatement(); 
+		if( tail->next != NULL ) {
+			tail->next->outer = snp;
+			tail = tail->next;
 		}
 	}
     NextToken();

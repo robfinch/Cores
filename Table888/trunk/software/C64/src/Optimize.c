@@ -82,6 +82,7 @@ void dooper(ENODE **node)
             ep->i = ep->p[0]->i / ep->p[1]->i;
             break;
     case en_shl:
+	case en_shlu:
             ep->nodetype = en_icon;
             ep->i = ep->p[0]->i << ep->p[1]->i;
             break;
@@ -155,8 +156,9 @@ void dooper(ENODE **node)
 		ep->i = (signed)ep->p[0]->i != (signed)ep->p[1]->i;
 		break;
 	case en_cond:
-		ep->nodetype = en_icon;
-		ep->i = ep->p[0]->i ? ep->p[1]->p[0] : ep->p[1]->p[1];
+		ep->nodetype = ep->p[1]->p[0]->nodetype;
+		ep->i = ep->p[0]->i ? ep->p[1]->p[0]->i : ep->p[1]->p[1]->i;
+		ep->sp = ep->p[0]->i ? ep->p[1]->p[0]->sp : ep->p[1]->p[1]->sp;
 		break;
     }
 }
@@ -359,8 +361,9 @@ void opt0(ENODE **node)
                             }
                     break;
             case en_and:    case en_or:
-			case en_xor:    case en_shr:	case en_shru:
-            case en_shl:
+			case en_xor:    
+			case en_shr:	case en_shru:	case en_asr:
+			case en_shl:	case en_shlu:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon &&
@@ -382,7 +385,9 @@ void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
 					opt0(&(ep->p[1]->p[0]));
 					opt0(&(ep->p[1]->p[1]));
-					if (ep->p[0]->nodetype==en_icon && ep->p[1]->p[0]->nodetype==en_icon && ep->p[1]->p[1]->nodetype==en_icon)
+					if ((ep->p[0]->nodetype==en_icon||ep->p[0]->nodetype==en_cnacon) &&
+						 (ep->p[1]->p[0]->nodetype==en_icon || ep->p[1]->p[0]->nodetype==en_cnacon) &&
+						 (ep->p[1]->p[1]->nodetype==en_icon || ep->p[1]->p[1]->nodetype==en_cnacon))
 						dooper(node);
 					break;
             case en_asand:  case en_asor:
@@ -428,7 +433,7 @@ __int64 xfold(ENODE *node)
                         else if( node->p[1]->nodetype == en_icon )
                                 return xfold(node->p[0]) * node->p[1]->i;
                         else return 0;
-                case en_shl:
+				case en_shl:	case en_shlu:
                         if( node->p[0]->nodetype == en_icon )
                                 return xfold(node->p[1]) << node->p[0]->i;
                         else if( node->p[1]->nodetype == en_icon )

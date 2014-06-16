@@ -121,6 +121,7 @@ typedef struct typ {
 	unsigned int isUnsigned : 1;
 	unsigned int isShort : 1;
 	unsigned int isVolatile : 1;
+	unsigned int isConst : 1;	// const in declaration
 	__int8		bit_width;
 	__int8		bit_offset;
     long        size;
