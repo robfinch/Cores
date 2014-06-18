@@ -90,7 +90,7 @@ void doinit(SYM *sp)
 				strcat(lbl, "tls ");
 		}
 		strcat(lbl, sp->name);
-		gen_strlab(lbl);
+		//gen_strlab(lbl);
 	}
 	if( lastst != assign) {
 		genstorage(sp->tp->size);

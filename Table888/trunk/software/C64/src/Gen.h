@@ -65,13 +65,13 @@ enum e_op {
 		op_brz, op_brnz,
 		op_lw, op_lh, op_lc, op_lb, op_ret, op_sm, op_lm, op_ldis, op_lws, op_sws,
 		op_lbu, op_lcu, op_lhu, op_sti,
-        op_rts, op_rti,
+        op_rts, op_rti, op_rtd,
 		op_push, op_pop, op_movs,
 		op_bra, op_bf, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
 		op_gtu, op_geu, op_ltu, op_leu, op_nr,
         op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_swap,
         op_neg, op_not, op_cmp, op_clr, op_link, op_unlk, op_label, op_ilabel,
-        op_pea, op_cmpi, op_dc, op_asm, op_stop, op_empty };
+        op_pea, op_cmpi, op_dc, op_asm, op_stop, op_fnname, op_empty };
 
 enum e_seg {
 	op_ns = 0,

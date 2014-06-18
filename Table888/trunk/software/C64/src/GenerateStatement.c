@@ -178,20 +178,20 @@ void GenerateUntil(Statement *stmt)
         contlab = nextlabel++;  /* new continue label */
         GenerateLabel(contlab);
         if( stmt->s1 != NULL )      /* has block */
-                {
-                breaklab = nextlabel++;
-                initstack();
-                GenerateTrueJump(stmt->exp,breaklab,stmt->predreg);
-                GenerateStatement(stmt->s1);
-                GenerateDiadic(op_bra,0,make_clabel(contlab),NULL);
-                GenerateLabel(breaklab);
-                breaklab = lab2;        /* restore old break label */
-                }
+        {
+            breaklab = nextlabel++;
+            initstack();
+            GenerateTrueJump(stmt->exp,breaklab,stmt->predreg);
+            GenerateStatement(stmt->s1);
+            GenerateDiadic(op_bra,0,make_clabel(contlab),NULL);
+            GenerateLabel(breaklab);
+            breaklab = lab2;        /* restore old break label */
+        }
         else					        /* no loop code */
-                {
-                initstack();
-                GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
-                }
+        {
+            initstack();
+            GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
+        }
         contlab = lab1;         /* restore old continue label */
 }
 
@@ -299,20 +299,11 @@ void GenerateDo(struct snode *stmt)
     oldbreak = breaklab;
     contlab = nextlabel++;
     GenerateLabel(contlab);
-    if( stmt->s1 != 0 && stmt->s1->next != 0 )
-            {
-            breaklab = nextlabel++;
-            GenerateStatement(stmt->s1);      /* generate body */
-            initstack();
-            GenerateTrueJump(stmt->exp,contlab,stmt->predreg);
-            GenerateLabel(breaklab);
-            }
-    else
-            {
-            GenerateStatement(stmt->s1);
-            initstack();
-            GenerateTrueJump(stmt->exp,contlab,stmt->predreg);
-            }
+	breaklab = nextlabel++;
+	GenerateStatement(stmt->s1);      /* generate body */
+	initstack();
+	GenerateTrueJump(stmt->exp,contlab,stmt->predreg);
+	GenerateLabel(breaklab);
     breaklab = oldbreak;
     contlab = oldcont;
 }
@@ -327,20 +318,11 @@ void GenerateDoUntil(struct snode *stmt)
     oldbreak = breaklab;
     contlab = nextlabel++;
     GenerateLabel(contlab);
-    if( stmt->s1 != 0 && stmt->s1->next != 0 )
-    {
-        breaklab = nextlabel++;
-        GenerateStatement(stmt->s1);      /* generate body */
-        initstack();
-        GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
-        GenerateLabel(breaklab);
-    }
-    else
-    {
-        GenerateStatement(stmt->s1);
-        initstack();
-        GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
-    }
+    breaklab = nextlabel++;
+    GenerateStatement(stmt->s1);      /* generate body */
+    initstack();
+    GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
+    GenerateLabel(breaklab);
     breaklab = oldbreak;
     contlab = oldcont;
 }
@@ -380,6 +362,10 @@ void GenerateSwitch(Statement *stmt)
         curlab = nextlabel++;
         defcase = 0;
         initstack();
+		if (stmt->exp==NULL) {
+			error(ERR_BAD_SWITCH_EXPR);
+			return;
+		}
         ap = GenerateExpression(stmt->exp,F_REG,4);
         if( ap->preg != 0 )
                 GenerateDiadic(op_mov,0,makereg(1),ap);

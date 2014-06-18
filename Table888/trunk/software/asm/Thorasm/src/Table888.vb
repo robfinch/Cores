@@ -2,6 +2,26 @@
 
 Module Table888
 
+    Function IsTable888Mnemonic(ByVal s As String) As Boolean
+        Static mnes As String = "ldi~addi~addui~subi~subui~add~addu~sub~subu~and~or~eor~andi~ori~eori~mul~mulu~muli~mului~"
+        Static mne() As String
+        Dim nn As Integer
+        Dim str As String
+
+        If mnes.Length > 0 Then
+            mnes = mnes & "div~divu~divi~divui~mod~modu~modi~modui~cmp~cmpi~"
+            mnes = mnes & "lb~lbu~lc~lcu~lh~lhu~lw~sb~sc~sh~sw~"
+            mne = mnes.Split("~".ToCharArray)
+            mnes = ""
+        End If
+
+        For Each str In mne
+            If s = str Then Return True
+        Next
+        Return False
+
+    End Function
+
     Function ProcessTable888Op(ByVal s As String) As Boolean
         Select Case LCase(s)
             ' RI ops
@@ -52,6 +72,8 @@ Module Table888
                 ProcessTable888MemoryOp(s, &H86)
             Case "ld"
                 ProcessTable888MemoryOp(s, &H86)
+            Case "lea"
+                ProcessTable888MemoryOp(s, &H92)
             Case "bmld"
                 ProcessTable888MemoryOp(s, &HB7, True)
             Case "sb"
@@ -124,9 +146,9 @@ Module Table888
             Case "bpl"
                 ProcessBra(s, &H45)
             Case "bra"
-                ProcessBra(s, &H46)
+                ProcessTable888Bra(s, &H46)
             Case "br"
-                ProcessBra(s, &H46)
+                ProcessTable888Bra(s, &H46)
             Case "brn"
                 ProcessBra(s, &H47)
             Case "bgt"
@@ -238,7 +260,11 @@ Module Table888
 
             Case "shli"
                 ProcessShiftiOp(s, &H50)
+            Case "shlui"
+                ProcessShiftiOp(s, &H50)
             Case "shri"
+                ProcessShiftiOp(s, &H52)
+            Case "shrui"
                 ProcessShiftiOp(s, &H52)
             Case "roli"
                 ProcessShiftiOp(s, &H51)
@@ -248,9 +274,9 @@ Module Table888
                 ProcessShiftiOp(s, &H53)
 
             Case "jmp"
-                ProcessJmp(s, &H50)
+                ProcessTable888Jmp(s, &H50)
             Case "jsr"
-                ProcessJmp(s, &H51)
+                ProcessTable888Jmp(s, &H51)
             Case "jgr"
                 ProcessJgr(s, &H57)
             Case "rts"
@@ -258,6 +284,8 @@ Module Table888
             Case "jal"
                 ProcessTable888JAL(s, &H5B)
 
+            Case "rtd"
+                ProcessTable888Link(s, &HFAFF63)
             Case "rti"
                 ProcessTable888Rti(&H40)
             Case "brk"
@@ -290,6 +318,13 @@ Module Table888
                 processCLI(&HF2)
             Case "mrk4"
                 processCLI(&HF3)
+
+            Case "link"
+                ProcessTable888Link(s, &HFDFF62)
+            Case "unlink"
+                ProcessTable888Insn(&H4200FFFD01)
+            Case "unlk"
+                ProcessTable888Insn(&H4200FFFD01)
             Case Else
                 Return False
         End Select
@@ -353,6 +388,8 @@ Module Table888
                     ProcessTable888RIOp(ops, &H17)
                 Case "div"
                     ProcessTable888RIOp(ops, &H8)
+                Case "divs"
+                    ProcessTable888RIOp(ops, &H8)
                 Case "divu"
                     ProcessTable888RIOp(ops, &H18)
                 Case "mod"
@@ -377,6 +414,23 @@ Module Table888
         emitCode(rb)
         emitCode(rt)
         emitCode(fn)
+    End Sub
+
+    Sub ProcessTable888Link(ByVal ops As String, ByVal oc As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+        Dim imm As Int64
+
+        imm = eval(strs(1))
+
+        If imm < -32768 Or imm > 32767 Then
+            emitImm16(imm)
+        End If
+        emitAlignedCode(oc And 255)
+        emitCode((oc >> 8) And 255)
+        emitCode((oc >> 16) And 255)
+        emitCode(imm And 255)
+        emitCode((imm >> 8) And 255)
     End Sub
 
     Sub ProcessTable888JAL(ByVal ops As String, ByVal oc As Int64)
@@ -521,6 +575,10 @@ Module Table888
                     oc = &H8D
                 Case "lw"
                     oc = &H8E
+                Case "ld"
+                    oc = &H8E
+                Case "lea"
+                    oc = &H8F
                 Case "sb"
                     oc = &HA8
                 Case "sc"
@@ -533,8 +591,6 @@ Module Table888
                     oc = &HAB
                 Case "cinv"
                     oc = &HAC
-                Case "lea"
-                    oc = &H44
             End Select
             If offset > 15 Or offset < 0 Or needSegPrefix Then
                 emitImm4(offset)
@@ -584,6 +640,15 @@ Module Table888
         emitCode(0)
         emitCode(0)
         emitCode(oc)
+    End Sub
+
+    ' link
+    Sub ProcessTable888Insn(ByVal oc As Int64)
+        emitAlignedCode(oc And 255)
+        emitCode((oc >> 8) And 255)
+        emitCode((oc >> 16) And 255)
+        emitCode((oc >> 24) And 255)
+        emitCode((oc >> 32) And 255)
     End Sub
 
     Sub emitImm14(ByVal imm As Int64)
@@ -640,6 +705,104 @@ Module Table888
         iline = str
         bytn = 0
         sa = address
+    End Sub
+
+    Sub ProcessTable888Jmp(ByVal ops As String, ByVal oc As Int64)
+        Dim ra As Int64
+        Dim offset As Int64
+        Dim s() As String
+        Dim segbits As Int64
+        Dim needSegPrefix As Boolean
+
+        If segreg = 1 Then
+            segbits = 0
+        ElseIf segreg = 3 Then
+            segbits = 1
+        ElseIf segreg = 5 Then
+            segbits = 2
+        ElseIf segreg = 14 Then
+            segbits = 3
+        Else
+            segbits = 0
+            needSegPrefix = True
+        End If
+
+        ra = 0
+        If strs(1).StartsWith("(") Or strs(1).StartsWith("[") Then
+            s = strs(1).Split(",".ToCharArray)
+            If s.Length > 1 Then
+                ra = GetRegister(s(1))
+            End If
+            offset = eval(s(0).Trim("()[]".ToCharArray))
+            If (offset <= &HFFFFFFFFFF800000L Or offset > &H7FFFFF) Then ' Or needSegPrefix) Then
+                emitImm24(offset, True)
+            End If
+            emitAlignedCode(oc + 2)
+            emitCode(ra)
+            emitCode((offset And 248) Or segbits)
+            emitCode((offset >> 8) And 255)
+            emitCode((offset >> 16) And 255)
+            Return
+        End If
+        's = strs(1).Split("(".ToCharArray)
+        offset = eval(strs(1))
+        ' If s.Length > 1 Then
+        's(1) = s(1).TrimEnd(")".ToCharArray)
+        'ra = GetBrRegister(s(1))
+        'End If
+        If (offset < &HFFFFFFFF00000000L Or offset > &HFFFFFFFFL) Then
+            emitImm32(offset)
+        End If
+        emitAlignedCode(oc)
+        emitCode(offset And 255)
+        emitCode((offset >> 8) And 255)
+        emitCode((offset >> 16) And 255)
+        emitCode((offset >> 24) And 255)
+    End Sub
+
+    Sub ProcessJgr(ByVal ops As String, ByVal oc As Int64)
+        Dim ra As Int64
+        Dim offset As Int64
+
+        offset = eval(strs(1))
+        emitAlignedCode(oc)
+        emitCode(offset And 255)
+        emitCode((offset >> 8) And 255)
+        emitCode((offset >> 16) And 255)
+        emitCode((offset >> 24) And 255)
+    End Sub
+
+    Sub ProcessTable888Bra(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim rc As Int64
+        Dim imm As Int64
+        Dim disp As Int64
+        Dim L As Symbol
+        Dim P As LabelPatch
+
+        ra = 0
+        rb = 0
+        rc = 0
+        If strs(1) Is Nothing Then
+            Console.WriteLine("missing target in branch? line" & lineno)
+            Return
+            L = Nothing
+        Else
+            L = GetSymbol(strs(1))
+        End If
+        'If slot = 2 Then
+        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
+        'Else
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
+        'End If
+        'imm = (L.address + (L.slot << 2)) >> 2
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(L.address And &HFF)
+        emitCode((L.address >> 8) And &HFF)
+        emitCode((disp >> 16) And &H1F)
     End Sub
 
 End Module

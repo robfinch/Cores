@@ -109,7 +109,8 @@ int SubParmMacro(SDef *p)
 
 void SearchAndSub()
 {
-   int c, InComment = 0, InComment2 = 0;
+	static int InComment = 0;
+   int c, InComment2 = 0;
    int QuoteToggle = 0;
    char *id, *ptr, *optr;
    SDef *p, tdef;
@@ -176,14 +177,17 @@ void SearchAndSub()
 		 // Search and see if the identifier corresponds to a macro
          if ((p = htFind(&HashInfo, &tdef)) != NULL)
          {
+			 if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
             //    If this isn't a macro with parameters, then just copy
             // the body directly to the input. Overwrite the identifier
             // string
 			 if (p->nArgs >= 0) {
+				 if (fdbg) fprintf(fdbg, "bef:%s", inbuf);
                  SubParmMacro(p);
+				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf);
 			 }
 			else {
-               SubMacro(p->body, strlen(p->name));
+                SubMacro(p->body, strlen(p->name));
 			}
          }
          free(tdef.name);

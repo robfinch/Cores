@@ -575,20 +575,20 @@ TYP *ParsePrimaryExpression(ENODE **node)
 								else {
 									sza[brcount-1] = tptr->size;
 									qnode = makeinode(en_icon,tptr->size);
-									// swap sizes for array indexing
-									if (brcount==3) {
-										qnode->i = sza[0];
-										qnode2->i = sza[1];
-										qnode1->i = sza[2];
-									}
-									else if (brcount==2) {
-										qnode->i = sza[0];
-										qnode1->i = sza[1];
-									}
-									if (qnode1==NULL)
-										qnode1 = qnode;
-									else
-										qnode2 = qnode;
+									//// swap sizes for array indexing
+									//if (brcount==3) {
+									//	qnode->i = sza[0];
+									//	qnode2->i = sza[1];
+									//	qnode1->i = sza[2];
+									//}
+									//else if (brcount==2) {
+									//	qnode->i = sza[0];
+									//	qnode1->i = sza[1];
+									//}
+									//if (qnode1==NULL)
+									//	qnode1 = qnode;
+									//else
+									//	qnode2 = qnode;
 									qnode->constflag = TRUE;
 									qnode->isUnsigned = tptr->isUnsigned;
 									expression(&rnode);

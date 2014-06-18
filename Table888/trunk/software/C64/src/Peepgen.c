@@ -570,6 +570,7 @@ void opt3()
             case op_jmp:
             case op_rts:
 			case op_rti:
+			case op_rtd:
 					if (ip->predop==1 || gCpu==888)
 						PeepoptUctran(ip);
 					break;

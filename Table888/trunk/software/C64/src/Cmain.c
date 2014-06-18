@@ -95,7 +95,7 @@ int main(int argc, char **argv)
 			}
         }
     }
-	getchar();
+	//getchar();
 	return 0;
 }
 
@@ -108,6 +108,12 @@ int	options(char *s)
 			exceptions = 0;
 		if (strcmp(&s[2],"farcode")==0)
 			farcode = 1;
+	}
+	else if (s[1]=='p') {
+		if (strcmp(&s[2],"Thor")==0)
+			gCpu = THOR;
+		else if (strcmp(&s[2],"Raptor64")==0)
+			gCpu = RAPTOR64;
 	}
 	else if (s[1]=='w')
 		wcharSupport = 0;
@@ -123,7 +129,7 @@ int PreProcessFile(char *nm)
 
 	strcpy(outname, nm);
 	makename(outname,".fpp");
-	sprintf(sysbuf, "fpp %s %s", nm, outname);
+	sprintf(sysbuf, "fpp -b %s %s", nm, outname);
 	return system(sysbuf);
 }
 

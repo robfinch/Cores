@@ -24,6 +24,7 @@ void difskip(int s)
       // Get a line and ignore it unless it's a preprocessor line
       inptr = inbuf;
       fgets(inbuf, MAXLINE, fin);
+		if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf);
       if (NextNonSpace(0) != '#') {
          inptr = inbuf;
          continue;

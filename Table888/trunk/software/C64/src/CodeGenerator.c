@@ -82,6 +82,8 @@ AMODE *make_clabel(__int64 lab)
     lnode = xalloc(sizeof(struct enode));
     lnode->nodetype = en_clabcon;
     lnode->i = lab;
+	if (lab==-1)
+		printf("-1\r\n");
     ap = xalloc(sizeof(struct amode));
     ap->mode = am_direct;
     ap->offset = lnode;
@@ -459,6 +461,12 @@ AMODE *GenerateIndex(ENODE *node)
         ap2->deep = ap1->deep;
         return ap2;
     }
+	if (ap2->mode == am_ind && ap1->mode == am_reg) {
+        ap2->mode = am_indx2;
+        ap2->sreg = ap1->preg;
+        ap2->deep = ap1->deep;
+        return ap2;
+	}
 	// ap1->mode must be F_REG
 	MakeLegalAmode(ap2,F_REG,8);
     ap1->mode = am_indx2;            /* make indexed */

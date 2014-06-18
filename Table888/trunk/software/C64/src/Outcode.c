@@ -49,6 +49,7 @@
 
 void put_mask(int mask);
 void align(int n);
+void roseg();
 
 /*      variable initialization         */
 
@@ -88,7 +89,7 @@ struct oplst {
 		{"beq", op_beq}, {"bne", op_bne},
 		{"blt", op_blt}, {"ble", op_ble}, {"bgt", op_bgt}, {"bge", op_bge},
 		{"bltu", op_bltu}, {"bleu", op_bleu}, {"bgtu", op_bgtu}, {"bgeu", op_bgeu},
-		{"rti", op_rti},
+		{"rti", op_rti}, {"rtd", op_rtd},
 		{"lwr", op_lwr}, {"swc", op_swc}, {"cache",op_cache},
 		{"or",op_or}, {"ori",op_ori}, {"iret", op_iret}, {"andi", op_andi},
 		{"xor",op_xor}, {"xori", op_xori}, {"mul",op_mul}, {"muli", op_muli}, {"mului", op_mului}, 
@@ -105,14 +106,14 @@ struct oplst {
 		{"not",op_not}, {"cmp",op_cmp}, {"ext",op_ext}, 
 		{"jmp",op_jmp},
 		{"lea",op_lea}, {"asr",op_asr}, {"asri", op_asri },
-                {"clr",op_clr}, {"link",op_link}, {"unlk",op_unlk},
+                {"clr",op_clr}, {"link",op_link}, {"unlink",op_unlk},
                 {"bra",op_bra}, {"pea",op_pea},
 				{"cmp",op_cmpi}, {"tst",op_tst},
 		{"stop", op_stop}, {"movs", op_movs},
 		{"bmi", op_bmi}, {"outb", op_outb}, {"inb", op_inb}, {"inbu", op_inbu},
 				{"dc",op_dc},
 		{"push",op_push}, {"pop", op_pop},
-		{"",op_empty}, {"",op_asm},
+		{"",op_empty}, {"",op_asm}, {"", op_fnname},
                 {0,0} };
 
 static char *pad(char *op)
@@ -189,6 +190,8 @@ void putop(int op)
 
 static void PutConstant(ENODE *offset)
 {
+	static char buf[200];
+
 	switch( offset->nodetype )
 	{
 	case en_autofcon:
@@ -202,13 +205,19 @@ static void PutConstant(ENODE *offset)
 			fprintf(output,"%I64d",offset->i);
 			break;
 	case en_labcon:
-			fprintf(output,"%s_%I64d",GetNamespace(),offset->i);
+			sprintf(buf, "%s_%I64d",GetNamespace(),offset->i);
+			fprintf(output,buf);
 			break;
 	case en_clabcon:
-			fprintf(output,"%s_%I64d",GetNamespace(),offset->i);
+			sprintf(buf,"%s_%I64d",GetNamespace(),offset->i);
+			fprintf(output,buf);
 			break;
 	case en_nacon:
 	case en_cnacon:
+			sprintf(buf,"%s",offset->sp);
+			if (strncmp(buf, "public code",11)==0) {
+				printf("pub code\r\n");
+			}
 			fprintf(output,"%s",offset->sp);
 			break;
 	case en_add:
@@ -240,12 +249,23 @@ char *RegMoniker(int regno)
 	static int n;
 
 	n = (n + 1) & 3;
-	if (!isRaptor64) {
+	if (isTable888) {
 		switch(regno) {
 		case 244:	sprintf(&buf[n], "flg0"); break;
-		case 253:	sprintf(&buf[n], "bp"); break;
+		case 250:	sprintf(&buf[n], "lr"); break;
 		case 251:	sprintf(&buf[n], "xlr"); break;
+		case 252:	sprintf(&buf[n], "tr"); break;
+		case 253:	sprintf(&buf[n], "bp"); break;
 		case 254:	sprintf(&buf[n], "pc"); break;
+		case 255:	sprintf(&buf[n], "sp"); break;
+		default:	sprintf(&buf[n], "r%d", regno); break;
+		}
+	}
+	else if (isThor) {
+		switch(regno) {
+		case 253:	sprintf(&buf[n], "bp"); break;
+		//case 251:	sprintf(&buf[n], "xlr"); break;
+		//case 254:	sprintf(&buf[n], "pc"); break;
 		case 255:	sprintf(&buf[n], "sp"); break;
 		default:	sprintf(&buf[n], "r%d", regno); break;
 		}
@@ -421,6 +441,7 @@ void put_code(struct ocode *p)
 {
 	int op = p->opcode;
 	AMODE *aps,*apd,*ap3,*ap4;
+	ENODE *ep;
 	int pop = p->predop;
 	int predreg = p->pregreg;
 	int len = p->length;
@@ -439,7 +460,7 @@ void put_code(struct ocode *p)
 			case 8: fprintf(output,"\tdw"); break;
 			}
 		}
-	else
+	else if (op != op_fnname)
 		{
 			fprintf(output, "\t");
 			if (pop!=1)
@@ -448,31 +469,35 @@ void put_code(struct ocode *p)
 				fprintf(output, "%6.6s\t", "");
 			putop(op);
 		}
-        if( aps != 0 )
+	if (op==op_fnname) {
+		ep = (ENODE *)p->oper1->offset;
+		fprintf(output, "%s:", ep->sp);
+	}
+	else if( aps != 0 )
         {
                 fprintf(output,"\t");
-				PutAddressMode(aps);
-                if( apd != 0 )
-                {
-					if (op==op_push || op==op_pop)
-                        fprintf(output,"/");
-					else
-                        fprintf(output,",");
-                       	PutAddressMode(apd);
-						if (ap3 != NULL) {
-							if (op==op_push || op==op_pop)
-								fprintf(output,"/");
-							else
-								fprintf(output,",");
-							PutAddressMode(ap3);
-							if (ap4 != NULL) {
+					PutAddressMode(aps);
+					if( apd != 0 )
+					{
+						if (op==op_push || op==op_pop)
+							fprintf(output,"/");
+						else
+							fprintf(output,",");
+                       		PutAddressMode(apd);
+							if (ap3 != NULL) {
 								if (op==op_push || op==op_pop)
 									fprintf(output,"/");
 								else
 									fprintf(output,",");
-								PutAddressMode(ap4);
-							}
-						}
+								PutAddressMode(ap3);
+								if (ap4 != NULL) {
+									if (op==op_push || op==op_pop)
+										fprintf(output,"/");
+									else
+										fprintf(output,",");
+									PutAddressMode(ap4);
+								}
+					}
                 }
         }
         fprintf(output,"\n");
@@ -637,7 +662,7 @@ void GenerateReference(SYM *sp,int offset)
 
 void genstorage(int nbytes)
 {       nl();
-        fprintf(output,"\tdcb.b\t%d,0xff\n",nbytes);
+        fprintf(output,"\tdcb.b\t%d,0x00\n",nbytes);
 }
 
 void GenerateLabelReference(int n)
@@ -648,7 +673,7 @@ void GenerateLabelReference(int n)
     }
     else {
         nl();
-        fprintf(output,"\tlong\t%s_%d",GetNamespace(),n);
+        fprintf(output,"\tdw\t%s_%d",GetNamespace(),n);
         outcol = 22;
         gentype = longgen;
     }
@@ -679,7 +704,7 @@ void dumplits()
 {
 	char            *cp;
 
-    cseg();
+    roseg();
     nl();
 	align(8);
     nl();
@@ -720,12 +745,12 @@ void cseg()
 
 void dseg()
 {    
+	nl();
 	if( curseg != dataseg) {
-		nl();
 		fprintf(output,"\tdata\n");
-		fprintf(output,"\talign\t8\n");
 		curseg = dataseg;
     }
+	fprintf(output,"\talign\t8\n");
 }
 
 void tseg()
@@ -738,10 +763,20 @@ void tseg()
     }
 }
 
+void roseg()
+{
+	if( curseg != rodataseg) {
+		nl();
+		fprintf(output,"\trodata\n");
+		fprintf(output,"\talign\t16\n");
+		curseg = roseg;
+    }
+}
+
 void seg(int sg)
 {    
+	nl();
 	if( curseg != sg) {
-		nl();
 		switch(sg) {
 		case bssseg:
 			fprintf(output,"\tbss\n");
@@ -763,7 +798,12 @@ void seg(int sg)
 			fprintf(output,"\tcode\n");
 			fprintf(output,"\talign\t16\n");
 			break;
+		case rodataseg:
+			fprintf(output,"\trodata\n");
+			fprintf(output,"\talign\t16\n");
+			break;
 		}
 		curseg = sg;
     }
+	fprintf(output,"\talign\t8\n");
 }

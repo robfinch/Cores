@@ -205,6 +205,8 @@ char *GetMacroArg()
       *argstr++ = c;       // copy input argument to argstr.
    }
    *argstr = '\0';         // NULL terminate buffer.
+   if (argbuf[0])
+	   if (fdbg) fprintf(fdbg,"    macro arg<%s>\r\n",argbuf);
    return argbuf[0] ? argbuf : NULL;
 }
 

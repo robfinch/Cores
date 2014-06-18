@@ -177,6 +177,7 @@ typedef struct typ {
 #define ERR_SEMA_ADDR	36
 #define ERR_UNDEF_OP	37
 #define ERR_INT_CONST	38
+#define ERR_BAD_SWITCH_EXPR	39
 
 /*      alignment sizes         */
 

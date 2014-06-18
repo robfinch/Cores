@@ -712,7 +712,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
    //             return nbytes;
    //         }
             if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
-                    sp->tp->type != bt_func && sp->storage_class!=sc_typedef)
+                    sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
                     doinit(sp);
         }
 		if (funcdecl>0) {

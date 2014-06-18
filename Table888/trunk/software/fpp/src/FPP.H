@@ -112,10 +112,12 @@ E char inbuf[3000000];  // input buffer
 E int errors;
 E int warnings;
 E FILE *fin, *fout;
+E FILE *fdbg;
 E int verbose I(=0);
 E int ShowLines I(=0);
 E int CharCount I(=0);
 E char *cmdStart I(=0);
 E char *cmdEnd I(=0);
 E int collect I(=0);
+E int debug I(=0);
 

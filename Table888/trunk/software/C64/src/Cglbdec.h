@@ -52,7 +52,7 @@
 #define isThor		(gCpu==THOR)
 #define isTable888	(gCpu==TABLE888)
 #define isRaptor64	(gCpu==RAPTOR64)
-#define DOTRACE	1
+//#define DOTRACE	1
 #ifdef DOTRACE
 #define TRACE(x)	x
 #else
@@ -210,6 +210,6 @@ extern void GenerateFalseJump(struct enode *node,int label,int predreg);
 extern void GenerateTrueJump(struct enode *node,int label,int predreg);
 extern char *GetNamespace();
 extern char nmspace[20][100];
-enum e_sg { noseg, codeseg, dataseg, bssseg, idataseg, tlsseg };
+enum e_sg { noseg, codeseg, dataseg, bssseg, idataseg, tlsseg, rodataseg };
 
 #endif

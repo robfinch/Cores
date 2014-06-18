@@ -281,10 +281,11 @@ Module Thor
         Return True
     End Function
 
-    Sub processCond(ByVal s As String)
+    Function processCond(ByVal s As String) As Boolean
         Dim t() As String
 
         t = s.Split(".".ToCharArray)
+        If t.Length < 2 Then Return False
         Select Case (t(1).ToLower)
             Case "f", "F"
                 predicateByte = predicateByte Or 0
@@ -310,8 +311,11 @@ Module Thor
                 predicateByte = predicateByte Or 10
             Case "ltu", "LTU"
                 predicateByte = predicateByte Or 11
+            Case Else
+                Return False
         End Select
-    End Sub
+        Return True
+    End Function
 
     Sub emitIMM2(ByVal imm As Int64)
         Dim opcode As Int64

@@ -38,6 +38,7 @@ char *SymSpace, *SymSpacePtr;
 SHashTbl HashInfo = { HashFnc, icmp, 0, sizeof(SDef), NULL };
 int MacroCount;
 FILE *ofp;
+int banner = 1;
 
 // Storage for standard #defines
 
@@ -368,9 +369,14 @@ void ProcLine()
    else {
       inptr = inbuf;
 //      unNextCh();
+	  if (fdbg) fprintf(fdbg, "bef sub  :%s", inbuf);
       SearchAndSub();
+	  if (fdbg) fprintf(fdbg, "aft sub  :%s", inbuf);
       DoPastes(inbuf);
-      fputs(inbuf,ofp); // write out the current input buffer
+	  // write out the current input buffer
+	  if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf);
+      if (fputs(inbuf,ofp)==EOF)
+		  printf("fputs failed.\r\n");
    }
    InLineNo++;          // Update line number (including __LINE__).
    sprintf(bbline.body, "%5d", InLineNo);
@@ -414,6 +420,13 @@ void parsesw(char *s)
 
    switch(s[1])
    {
+   case 'd':
+	   debug = 1;
+	   break;
+   case 'b':
+	   banner = 0;
+	   break;
+
       case 'D':
          strcpy(inbuf, &s[2]);
          for(ii = 0; inbuf[ii] && IsIdentChar(inbuf[ii]); ii++)
@@ -574,7 +587,6 @@ void SetStandardDefines(void)
 
 /* ----------------------------------------------------------------------------
    Description :
-
 ---------------------------------------------------------------------------- */
 
 main(int argc, char *argv[]) {
@@ -582,18 +594,17 @@ main(int argc, char *argv[]) {
       xx;
    SDef *p;
    
-//   fprintf(stderr, "FPP version 1.13  (C) 1998  FinchWare  ("__DATE__","__TIME__")\n");
-   fprintf(stderr, "FPP version 1.17  (C) 1998,2011-2014 Robert T Finch  \n");
    HashInfo.size = MAXMACROS;
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-      fprintf(stderr, "\nfpp [options] <filename> [<output filename>]\n\n");
-      fprintf(stderr, "Options:\n");
-      fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
-      fprintf(stderr, "/L                            - output #lines\n");
-      fprintf(stderr, "/V                            - verbose, outputs macro table\n\n");
-      exit(0);
+		fprintf(stderr, "FPP version 1.19  (C) 1998,2011-2014 Robert T Finch  \n");
+		fprintf(stderr, "\nfpp [options] <filename> [<output filename>]\n\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
+		fprintf(stderr, "/L                            - output #lines\n");
+		fprintf(stderr, "/V                            - verbose, outputs macro table\n\n");
+		exit(0);
    }
    /* ----------------------------------------------
          Allocate storage for macro information.
@@ -611,6 +622,9 @@ main(int argc, char *argv[]) {
    bbfile.body = StorePlainStr("<cmdln>");
    for(xx = 1; strchr("-/+", argv[xx][0]) && (xx < argc); xx++)
       parsesw(argv[xx]);
+
+	if (banner)
+		fprintf(stderr, "FPP version 1.19  (C) 1998,2011-2014 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.
@@ -643,6 +657,10 @@ main(int argc, char *argv[]) {
    /* -----------------------
          Process file. 
    ----------------------- */
+   if (debug)
+	   fdbg = fopen("fpp_debug_log","w");
+   else
+	   fdbg = NULL;
    if (OutputName[0]) {
       ofp = fopen(OutputName, "w");
       if (ofp == NULL) {
@@ -658,8 +676,12 @@ main(int argc, char *argv[]) {
    if (p)
       p->body = bbfile.body;
    ProcFile(SourceName);
-   if (ofp != stdout)
+   if (ofp != stdout) {
+	   fflush(ofp);
       fclose(ofp);
+   }
+   if (fdbg)
+	   fclose(fdbg);
 
    if(errors > 0)
       fprintf(stderr, "\nPreProcessor Errors: %d\n",errors);

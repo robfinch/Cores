@@ -13,12 +13,15 @@ int NextCh()
 	if (ch == 0 || first) {
 		first = 0;
 		if (collect) {
+			inptr--;
 			fgets(inptr, MAXLINE, fin);
+			if (fdbg) fprintf(fdbg, "Fetched:%s", inptr);
 		}
 		else {
 			inptr = inbuf;
 			memset(inbuf, 0, sizeof(inbuf));
 			fgets(inbuf, MAXLINE, fin);
+			if (fdbg) fprintf(fdbg, "Fetched:%s", inbuf);
 			inptr = inbuf;
 		}
 		ch = *inptr++;

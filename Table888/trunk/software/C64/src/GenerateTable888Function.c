@@ -65,32 +65,32 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
 		//GenerateTriadic(op_subui,0,makereg(30),makereg(30),make_immed(30*8));
 		//GenerateDiadic(op_sm,0,make_indirect(30), make_mask(0x9FFFFFFE));
 	}
-	// 24[sp]   flags
-	// 16[sp]	LR
-	// 8[sp]	CLR		
-	// 0[sp]	BP
+	// 24[bp]   return address
+	// 16[bp]	flags
+	// 8[bp]	catch link register
+	// 0[bp]	base pointer
 	if (!sym->IsNocall) {
-		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(32));
-		if (lc_auto || sym->NumParms > 0)
+//		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(32));
+		if (lc_auto || sym->NumParms > 0) {
+//			GenerateMonadic(op_link,0,make_immed(24));
+			GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(24));
 			GenerateDiadic(op_sw,0,makereg(BP),make_indirect(SP));
-		// For a leaf routine don't bother to store the link register or exception link register.
-		if (!sym->IsLeaf) {
-			if (exceptions) {
-				GenerateDiadic(op_sw, 0, makereg(CLR), make_indexed(8,SP));
-			}
-			GenerateDiadic(op_sw, 0, makereg(LR), make_indexed(16,SP));
-			if (exceptions) {
-				ep = xalloc(sizeof(struct enode));
-				ep->nodetype = en_clabcon;
-				ep->i = throwlab;
-				ap = allocAmode();
-				ap->mode = am_immed;
-				ap->offset = ep;
-				GenerateDiadic(op_ldi,0, makereg(CLR), ap);
-			}
+			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
+		}
+		else
+			GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(24));
+		if (exceptions) {
+			GenerateDiadic(op_sw, 0, makereg(CLR), make_indexed(8,SP));
+			ep = xalloc(sizeof(struct enode));
+			ep->nodetype = en_clabcon;
+			ep->i = throwlab;
+			ap = allocAmode();
+			ap->mode = am_immed;
+			ap->offset = ep;
+			GenerateDiadic(op_ldi,0, makereg(CLR), ap);
 		}
 		if (lc_auto || sym->NumParms > 0) {
-			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
+//			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
 			if (lc_auto)
 				GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(lc_auto));
 		}
@@ -114,19 +114,10 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
     GenerateTable888Return(sym,0);
 	// Generate code for the hidden default catch
 	if (exceptions) {
-		if (sym->IsLeaf){
-			if (sym->DoesThrow) {
-				GenerateLabel(throwlab);
-				GenerateDiadic(op_mov,0,makereg(LR),makereg(CLR));
-				GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
-			}
-		}
-		else {
-			GenerateLabel(throwlab);
-			GenerateDiadic(op_lw,0,makereg(LR),make_indexed(8,BP));		// load throw return address from stack into LR
-			GenerateDiadic(op_sw,0,makereg(LR),make_indexed(16,BP));		// and store it back (so it can be loaded with the lm)
-			GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
-		}
+		GenerateLabel(throwlab);
+		GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,BP));		// load throw return address from stack into LR
+		GenerateDiadic(op_sw,0,makereg(CLR),make_indexed(24,BP));		// and store it back (so it can be picked up by RTS)
+		GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
 	}
 }
 
@@ -191,20 +182,19 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
 		if (lc_auto || sym->NumParms > 0) {
+			//GenerateMonadic(op_unlk,0,NULL);
 			GenerateDiadic(op_mov,0,makereg(SP),makereg(BP));
 			GenerateDiadic(op_lw,0,makereg(BP),make_indirect(SP));
 		}
-		if (!sym->IsLeaf) {
-			if (exceptions)
-				GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,SP));
-			GenerateDiadic(op_lw,0,makereg(LR),make_indexed(16,SP));
-//			if (sym->UsesPredicate)
-		}
+
+		if (exceptions)
+			GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,SP));
 		//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
 		//if (isOscall) {
 		//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
 		//	gen_regrestore();
 		//}
+		GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(24));
 		// Generate the return instruction. For the Pascal calling convention pop the parameters
 		// from the stack.
 		if (sym->IsInterrupt) {
@@ -215,12 +205,10 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 			return;
 		}
 		if (sym->IsPascal) {
-			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(32+sym->NumParms * 8));
-			GenerateDiadic(op_jal,0,makereg(0),make_indirect(LR));
+			GenerateMonadic(op_rts,0,make_immed(sym->NumParms * 8));
 		}
 		else {
-			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(32));
-			GenerateDiadic(op_jal,0,makereg(0),make_indirect(LR));
+			GenerateMonadic(op_rts,0,make_immed(0));
 		}
     }
 	// Just branch to the already generated stack cleanup code.
@@ -304,7 +292,7 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
     i = GenerateTable888PushParameterList(node->p[1]);
 	// Call the function
 	if( node->p[0]->nodetype == en_cnacon ) {
-        GenerateDiadic(op_jal,0,makereg(LR),make_offset(node->p[0]));
+        GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
 		sym = gsearch(node->p[0]->sp);
 	}
     else
@@ -312,7 +300,7 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 		ap = GenerateExpression(node->p[0],F_REG,8);
 		ap->mode = am_ind;
 		ap->offset = 0;
-		GenerateDiadic(op_jal,0,makereg(LR),ap);
+		GenerateMonadic(op_jsr,0,ap);
 		ReleaseTempRegister(ap);
     }
 	// Pop parameters off the stack

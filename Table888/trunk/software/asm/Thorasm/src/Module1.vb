@@ -11,6 +11,7 @@ Module Module1
     Public iline As String     ' copy of input line
     Dim line As String      ' line being worked on
     Public strs() As String    ' parts of the line
+    Public strs_comma() As String
     Dim operands() As String
     Dim lname As String
     Dim uname As String
@@ -58,7 +59,8 @@ Module Module1
     Dim doingDB As Boolean
     Public lineno As Integer
     Public ROMWidth As Integer = 32
-
+    Public phasingErrors = 0
+    Public lastPhasingErrors = 0
     Dim NameTable As New clsNameTable
     Dim sectionNameStringTable(1000) As Byte
     Dim sectionNameTableOffset As Int64
@@ -121,6 +123,7 @@ Module Module1
         Dim iteration As Integer
         Dim iter As Integer
         Dim ac As Integer
+        Dim bbb As Boolean = False
 
         'textfile = fl.ReadToEnd()
         'fl.Close()
@@ -186,6 +189,7 @@ Module Module1
             last_op = ""
             firstCodeOrg = True
             doingDB = False
+            phasingErrors = 0
             If pass = maxpass Then
                 If (args.Length > 1) Then
                     vname = args(ac + 1)
@@ -223,14 +227,14 @@ Module Module1
             emitbyte(0, False)
             emitbyte(0, False)
             emitbyte(0, False)
-            If pass = maxpass Then
-                DumpSymbols()
-                ufs.Close()
-                lfs.Close()
-                ofs.Close()
-                WriteELFFile()
-                WriteBinaryFile()
-            End If
+            'If pass = maxpass Then
+            '    DumpSymbols()
+            '    ufs.Close()
+            '    lfs.Close()
+            '    ofs.Close()
+            '    WriteELFFile()
+            '    WriteBinaryFile()
+            'End If
             If pass = 1 Then
                 ' Note that finding a symbol in the searched source code
                 ' libraries may introduce new symbols that aren't defined
@@ -294,13 +298,39 @@ j2:
                 Next
                 iteration = iteration + 1
                 If Not foundAllSyms And iteration < 100 Then GoTo j1
+                ' make one final pass
+                If bbb = False Then
+                    bbb = True
+                    GoTo j1
+                End If
             End If
-            'For Each L In symbols
-            '    If L.defined = False Then
-            '        Console.WriteLine("Undefined label: |" & NameTable.GetName(L.name) & "|")
-            '    End If
-            'Next
+
+            ' Go through the symbol table and eliminate undefined symbols that have
+            ' global equivalents
+            For iter = 0 To symbols.Size - 1
+                L = symbols.Find(iter)
+                If L Is Nothing Then GoTo j3
+
+                If L.type = "U" Or L.defined = False Then
+                    s = NameTable.FindName(iter)
+                    s = TrimLeadingDigits(s)
+                    If symbols.Find(NameTable.FindName("0" & s)) Then
+                        symbols.Remove(iter)
+                        Console.WriteLine(NameTable.GetName(L.name) & " removed")
+                    End If
+                End If
+j3:
+            Next
+            Console.WriteLine("Phasing errors: " & phasingErrors)
+            '            If lastPhasingErrors = 0 And phasingErrors = 0 Then maxpass = pass + 1
+            lastPhasingErrors = phasingErrors
         Next
+        DumpSymbols()
+        ufs.Close()
+        lfs.Close()
+        ofs.Close()
+        WriteELFFile()
+        WriteBinaryFile()
     End Sub
 
     Function TrimLeadingDigits(ByVal str As String) As String
@@ -405,23 +435,27 @@ j1:
                         End If
 
                         Select Case LCase(s)
-                            Case "code"
+                            Case "code", ".code"
                                 segment = "code"
                                 emitRaw("")
                                 GoTo j3
-                            Case "bss"
+                            Case "bss", ".bss"
                                 segment = "bss"
                                 emitRaw("")
                                 GoTo j3
-                            Case "tls"
+                            Case "tls", ".tls"
                                 segment = "tls"
                                 emitRaw("")
                                 GoTo j3
-                            Case "data"
+                            Case "data", ".data"
                                 segment = "data"
                                 emitRaw("")
                                 GoTo j3
-                            Case "org"
+                            Case "rodata", ".rodata"
+                                segment = "rodata"
+                                emitRaw("")
+                                GoTo j3
+                            Case "org", ".org"
                                 ProcessOrg()
                                 GoTo j3
                         End Select
@@ -464,13 +498,13 @@ j1:
                                     If (strs.Length < 2) Then
                                         Console.WriteLine("Malformed public directive")
                                     Else
+                                        segment = strs(1)
                                         For n = 2 To strs.Length - 1
                                             strs(n - 2) = strs(n)
                                         Next
                                         strs(strs.Length - 1) = Nothing
                                         strs(strs.Length - 2) = Nothing
                                         If Not strs(0) Is Nothing Then GoTo j1
-                                        segment = strs(1)
                                     End If
                                 Case "endpublic"
                                     ' do nothing
@@ -499,7 +533,7 @@ j1:
                             End Select
                         End If
                         last_op = s
-                        End If
+                    End If
                 End If
 j2:
                 If Not processedEquate Then
@@ -526,7 +560,7 @@ j3:
         Static lastIline As String
 
         If pass = maxpass And Not plbl Then
-            If segment = "data" Then
+            If segment = "datax" Then
                 lfs.Write(Hex(dsa).PadLeft(8, "0") & vbTab)
             Else
                 lfs.Write(Hex(sa).PadLeft(8, "0") & vbTab)
@@ -593,9 +627,13 @@ j1:
             Case "fill.b"
                 numbytes = eval(strs(1))
                 FillByte = eval(strs(2))
-                For n = 0 To numbytes - 1
-                    emitbyte(FillByte, False)
-                Next
+                If segment = "bss" Then
+                    bss_address = bss_address + numbytes
+                Else
+                    For n = 0 To numbytes - 1
+                        emitbyte(FillByte, False)
+                    Next
+                End If
                 ' emitbyte(0, True)
             Case "fill.c"
                 numbytes = eval(strs(1))
@@ -660,6 +698,72 @@ j1:
         Return ss
     End Function
 
+    ' Split an assembly line apart into it's components
+    ' Could be a label: followed by a predicate followed by a segment:
+    ' followed by the mnemonic followed by comma separated operands
+    ' Split only splits on spaces for the 'first space' which should be
+    ' the space character between the mnemonic and it's operands.
+    ' Spaces following labels and segments are ignored.
+
+    Function SplitLine_new(ByVal s As String) As String()
+        Dim ss() As String
+        Dim n As Integer
+        Dim i As Integer
+        Dim inQuote As Char
+        Dim firstSpace As Boolean
+
+        i = 0
+        firstSpace = True
+        If s = "TAB5_1" Then
+            i = 0
+        End If
+        inQuote = "?"
+        ReDim ss(1)
+        For n = 1 To s.Length
+            If inQuote <> "?" Then
+                ss(i) = ss(i) & Mid(s, n, 1)
+                If Mid(s, n, 1) = inQuote Then
+                    inQuote = "?"
+                End If
+            ElseIf Mid(s, n, 1) = ":" Then
+                ss(i) = ss(i) & Mid(s, n, 1)
+                i = i + 1
+                If n < s.Length Then
+                    If Mid(s, n + 1, 1) = " " Then
+                        n = n + 1
+                    End If
+                End If
+                ReDim Preserve ss(ss.Length + 1)
+            ElseIf Mid(s, n, 1) = "," Then
+                i = i + 1
+                ReDim Preserve ss(ss.Length + 1)
+            ElseIf firstSpace And Mid(s, n, 1) = " " Then
+                If n < s.Length Then
+                    If Mid(s, n + 1, 1) = "=" Then GoTo j1
+                End If
+                If n < s.Length - 3 Then
+                    If Mid(s, n + 1, 4).ToUpper() = "EQU " Then GoTo j1
+                End If
+                If GetPnRegister(ss(i)) >= 0 And processCond(ss(i)) Then
+                Else
+                    firstSpace = False
+                End If
+j1:
+                i = i + 1
+                ReDim Preserve ss(ss.Length + 1)
+            ElseIf Mid(s, n, 1) = "'" Then
+                ss(i) = ss(i) & Mid(s, n, 1)
+                inQuote = Mid(s, n, 1)
+            ElseIf Mid(s, n, 1) = Chr(34) Then
+                ss(i) = ss(i) & Mid(s, n, 1)
+                inQuote = Mid(s, n, 1)
+            Else
+                ss(i) = ss(i) & Mid(s, n, 1)
+            End If
+        Next
+        Return ss
+    End Function
+
     Sub ProcessLabel(ByVal s As String)
         Dim L As New Symbol
         Dim M As Symbol
@@ -696,8 +800,8 @@ j1:
                 L.address = bss_address
             Case "tls"
                 L.address = tls_address
-            Case "data"
-                L.address = data_address
+            Case "data", "rodata"
+                L.address = address 'data_address
         End Select
         L.defined = True
         L.type = "L"
@@ -732,6 +836,9 @@ j1:
         Else
             M.defined = True
             M.type = "L"
+            If (M.address <> L.address) Then
+                phasingErrors = phasingErrors + 1
+            End If
             M.address = L.address
             M.segment = L.segment
         End If
@@ -794,7 +901,7 @@ j1:
                 While bss_address Mod n
                     bss_address = bss_address + 1
                 End While
-            ElseIf segment = "code" Then
+            ElseIf segment = "code" Or segment = "data" Or segment = "rodata" Then
                 'Console.WriteLine("Error: Code addresses can only be aligned on 16 byte boundaries.")
                 While address Mod n
                     emitbyte(0, False)
@@ -1386,216 +1493,6 @@ j1:
         emitbyte((maskend And 15) Or (fn << 4), False)
     End Sub
 
-    Sub ProcessJmp(ByVal ops As String, ByVal oc As Int64)
-        Dim ra As Int64
-        Dim offset As Int64
-        Dim s() As String
-        Dim segbits As Int64
-        Dim needSegPrefix As Boolean
-
-        If segreg = 1 Then
-            segbits = 0
-        ElseIf segreg = 3 Then
-            segbits = 1
-        ElseIf segreg = 5 Then
-            segbits = 2
-        ElseIf segreg = 14 Then
-            segbits = 3
-        Else
-            segbits = 0
-            needSegPrefix = True
-        End If
-
-        ra = 0
-        If strs(1).StartsWith("(") Then
-            s = strs(1).Split(",".ToCharArray)
-            If s.Length > 1 Then
-                ra = GetRegister(s(1))
-            End If
-            offset = eval(s(0).Trim("()".ToCharArray))
-            If (offset <= &HFFFFFFFFFF800000L Or offset > &H7FFFFF Or needSegPrefix) Then
-                emitImm24(offset, True)
-            End If
-            emitAlignedCode(oc + 2)
-            emitCode(ra)
-            emitCode((offset And 248) Or segbits)
-            emitCode((offset >> 8) And 255)
-            emitCode((offset >> 16) And 255)
-            Return
-        End If
-        's = strs(1).Split("(".ToCharArray)
-        offset = eval(strs(1))
-        ' If s.Length > 1 Then
-        's(1) = s(1).TrimEnd(")".ToCharArray)
-        'ra = GetBrRegister(s(1))
-        'End If
-        If (offset < &HFFFFFFFF00000000L Or offset > &HFFFFFFFF) Then
-            emitImm32(offset)
-        End If
-        emitAlignedCode(oc)
-        emitCode(offset And 255)
-        emitCode((offset >> 8) And 255)
-        emitCode((offset >> 16) And 255)
-        emitCode((offset >> 24) And 255)
-    End Sub
-
-    Sub ProcessJgr(ByVal ops As String, ByVal oc As Int64)
-        Dim ra As Int64
-        Dim offset As Int64
-
-        offset = eval(strs(1))
-        emitAlignedCode(oc)
-        emitCode(offset And 255)
-        emitCode((offset >> 8) And 255)
-        emitCode((offset >> 16) And 255)
-        emitCode((offset >> 24) And 255)
-    End Sub
-
-    Sub ProcessMemoryOp(ByVal ops As String, ByVal oc As Int64, Optional ByVal ndxOnly As Boolean = False)
-        Dim opcode As Int64
-        Dim rt As Int64
-        Dim ra As Int64
-        Dim rb As Int64
-        Dim offset As Int64
-        Dim scale As Int64
-        Dim s() As String
-        Dim s1() As String
-        Dim s2() As String
-        Dim str As String
-        Dim imm As Int64
-        Dim segbits As Int64
-        Dim needSegPrefix = False
-
-        'If address = &HFFFFFFFFFFFFB96CL Then
-        '    Console.WriteLine("Reached address B96C")
-        'End If
-
-        If segreg = 1 Then
-            segbits = 0
-        ElseIf segreg = 3 Then
-            segbits = 1
-        ElseIf segreg = 5 Then
-            segbits = 2
-        ElseIf segreg = 14 Then
-            segbits = 3
-        Else
-            segbits = 0
-            needSegPrefix = True
-        End If
-
-
-        If (strs.Length < 2) Or strs(2) Is Nothing Then
-            Console.WriteLine("Line:" & lineno & " Missing memory operand.")
-            Return
-        End If
-        scale = 1
-        rb = -1
-        If oc = 54 Or oc = 71 Then
-            imm = eval(strs(1))
-        Else
-            rt = GetRegister(strs(1))
-        End If
-        ' Convert lw Rn,#n to ori Rn,R0,#n
-        If ops = "lw" Or ops = "ld" Then
-            If (strs(2).StartsWith("#")) Then
-                strs(0) = "ldi"
-                'strs(3) = strs(2)
-                'strs(2) = "r0"
-                ProcessLdi(ops, &H16)
-                Return
-            End If
-        End If
-        ra = GetRegister(strs(2))
-        If ra <> -1 Then
-            If strs(0).Chars(0) = "l" Then
-                opcode = 2L << 25
-                opcode = opcode + (ra << 20)
-                opcode = opcode + (0L << 15)
-                opcode = opcode + (rt << 10)
-                opcode = opcode Or 9    ' or
-                emit(opcode)
-                Return
-            End If
-        End If
-        s = strs(2).Split("[".ToCharArray)
-        'offset = GetImmediate(s(0), "memop")
-        offset = eval(s(0))
-        If s.Length > 1 Then
-            s(1) = s(1).TrimEnd("]".ToCharArray)
-            s1 = s(1).Split("+".ToCharArray)
-            ra = GetRegister(s1(0))
-            If s1.Length > 1 Then
-                s2 = s1(1).Split("*".ToCharArray)
-                rb = GetRegister(s2(0))
-                If s2.Length > 1 Then
-                    scale = eval(s2(1))
-                End If
-            End If
-        Else
-            ra = 0
-        End If
-        If rb = -1 And Not ndxOnly Then
-            If Not optr26 Then
-            Else
-                If offset < -8192 Or offset > 8191 Or needSegPrefix Then
-                    emitImm14(offset)
-                End If
-                emitAlignedCode(oc)
-                emitCode(ra)
-                emitCode(rt)
-                emitCode(((offset And 63) << 2) Or segbits)
-                emitCode((offset >> 6) And 255)
-            End If
-        Else
-            If rb = -1 Then rb = 0
-            Select Case (strs(0))
-                Case "lb"
-                    oc = &H88
-                Case "lbu"
-                    oc = &H89
-                Case "lc"
-                    oc = &H8A
-                Case "lcu"
-                    oc = &H8B
-                Case "lh"
-                    oc = &H8C
-                Case "lhu"
-                    oc = &H8D
-                Case "lw"
-                    oc = &H8E
-                Case "sb"
-                    oc = &HA8
-                Case "sc"
-                    oc = &HA9
-                Case "sh"
-                    oc = &HAA
-                Case "sw"
-                    oc = &HAB
-                Case "st"
-                    oc = &HAB
-                Case "cinv"
-                    oc = &HAC
-                Case "lea"
-                    oc = &H44
-            End Select
-            If offset > 15 Or offset < 0 Or needSegPrefix Then
-                emitImm4(offset)
-            End If
-            emitAlignedCode(oc)
-            emitCode(ra)
-            emitCode(rb)
-            emitCode(rt)
-            Select Case scale
-                Case 1 : scale = 0
-                Case 2 : scale = 1
-                Case 4 : scale = 2
-                Case 8 : scale = 3
-                Case Else : scale = 0
-            End Select
-            emitCode(scale Or (offset << 4) Or (segbits << 2))
-        End If
-    End Sub
-
     Sub ProcessBitmapOp(ByVal ops As String, ByVal oc As Int64, Optional ByVal ndxOnly As Boolean = True)
         Dim opcode As Int64
         Dim rt As Int64
@@ -1893,7 +1790,7 @@ j1:
         rc = 0
         If strs(2) Is Nothing Then
             If oc = 46 Or oc = 47 Then
-                ProcessBra2(ops, oc)
+                ProcessTable888Bra(ops, oc)
                 Return
             Else
                 Console.WriteLine("missing register in branch? line" & lineno)
@@ -1902,39 +1799,6 @@ j1:
             End If
         Else
             L = GetSymbol(strs(2))
-        End If
-        'If slot = 2 Then
-        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
-        'Else
-        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
-        'End If
-        'imm = (L.address + (L.slot << 2)) >> 2
-        emitAlignedCode(oc)
-        emitCode(ra)
-        emitCode(L.address And &HFF)
-        emitCode((L.address >> 8) And &HFF)
-        emitCode((disp >> 16) And &H1F)
-    End Sub
-
-    Sub ProcessBra2(ByVal ops As String, ByVal oc As Int64)
-        Dim opcode As Int64
-        Dim ra As Int64
-        Dim rb As Int64
-        Dim rc As Int64
-        Dim imm As Int64
-        Dim disp As Int64
-        Dim L As Symbol
-        Dim P As LabelPatch
-
-        ra = 0
-        rb = 0
-        rc = 0
-        If strs(1) Is Nothing Then
-            Console.WriteLine("missing target in branch? line" & lineno)
-            Return
-            L = Nothing
-        Else
-            L = GetSymbol(strs(1))
         End If
         'If slot = 2 Then
         '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
@@ -2076,19 +1940,19 @@ j1:
                 End Try
                 Return r
                 'r26 is the constant building register
-            ElseIf s.ToLower().StartsWith("fl") Then
+            ElseIf s.ToLower().StartsWith("flg") Then
                 s = s.TrimStart("Ff".ToCharArray)
                 s = s.TrimStart("Ll".ToCharArray)
+                s = s.TrimStart("Gg".ToCharArray)
                 Try
                     r = Int16.Parse(s) + 244
                 Catch
                     r = -1
                 End Try
                 Return r
-            ElseIf s.ToLower().StartsWith("flg") Then
+            ElseIf s.ToLower().StartsWith("fl") Then
                 s = s.TrimStart("Ff".ToCharArray)
                 s = s.TrimStart("Ll".ToCharArray)
-                s = s.TrimStart("Gg".ToCharArray)
                 Try
                     r = Int16.Parse(s) + 244
                 Catch
@@ -2224,7 +2088,7 @@ j1:
 
         shr32 = False
         mask32 = False
-        s = s.TrimStart("#".ToCharArray)
+        s = s.TrimStart("# ".ToCharArray)
         If s.Length = 0 Then Return 0
         If s.Chars(0) = ">" Then
             s = s.TrimStart(">".ToCharArray)
@@ -2306,7 +2170,17 @@ j1:
                 End If
 
                 Try
+                    If nm = "main" Then
+                        Console.WriteLine("main found")
+                    End If
                     sym = symbols.Find(NameTable.FindName(fileno & nm))
+                    If sym Is Nothing Then
+                        Try
+                            sym = symbols.Find(NameTable.FindName("0" & nm))
+                        Catch
+                            sym = Nothing
+                        End Try
+                    End If
                 Catch
                     Try
                         sym = symbols.Find(NameTable.FindName("0" & nm))
@@ -2405,8 +2279,10 @@ j1:
 
         If pass = maxpass Then
             ad = address
-            If address Mod 16 = 15 Then
-                ad = address + 1
+            If segment = "code" Then
+                If address Mod 16 = 15 Then
+                    ad = address + 1
+                End If
             End If
             s = Hex(ad).PadLeft(8, "0") & vbTab & "           " & vbTab & vbTab & iline
             lfs.WriteLine(s)
@@ -2452,7 +2328,7 @@ j1:
 
         insnBundle.add(n And 255)
 
-        If segment = "code" Then
+        If segment = "code" Or segment = "data" Or segment = "rodata" Then
             If (address And 31) = 0 Then
                 w0 = 0
                 w1 = 0
@@ -2500,7 +2376,7 @@ j1:
                 End If
             End If
         End If
-        If segment = "data" Then
+        If segment = "data" And False Then
             If (data_address And 31) = 0 Then
                 dw0 = 0
                 dw1 = 0
@@ -2546,10 +2422,10 @@ j1:
                     ad = tls_address
                 Case "bss"
                     ad = bss_address
-                Case "code"
+                Case "code", "data", "rodata"
                     ad = address
-                Case "data"
-                    ad = data_address
+                    'Case "data"
+                    '    ad = data_address
             End Select
             If (ad And 7) = 7 Then
                 nn = (ad >> 3) And 3
@@ -2571,12 +2447,12 @@ j1:
             Case "bss"
                 bss_address = bss_address + 1
                 ad = bss_address
-            Case "code"
+            Case "code", "data", "rodata"
                 address = address + 1
                 ad = address
-            Case "data"
-                data_address = data_address + 1
-                ad = data_address
+                'Case "data"
+                '    data_address = data_address + 1
+                '    ad = data_address
         End Select
     End Sub
 
@@ -2588,6 +2464,9 @@ j1:
         Dim hh As String
         Dim jj As Integer
 
+        emitbyte(n And 255, False)
+        emitbyte((n >> 8) And 255, False)
+        Return
         If segment = "code" Then
             If (address And 31) = 0 Then
                 w0 = 0
@@ -2769,6 +2648,11 @@ j1:
         Dim hh As String
         Dim jj As Integer
 
+        emitbyte(n And 255, False)
+        emitbyte((n >> 8) And 255, False)
+        emitbyte((n >> 16) And 255, False)
+        emitbyte((n >> 24) And 255, False)
+        Return
         If segment = "code" Then
             If (address And 31) = 0 Then
                 w0 = 0
@@ -3025,11 +2909,11 @@ j1:
                         s = vbTab & "rommem[" & ((ad >> 3) And 8191) & "] = 65'h" & calcParity64(w) & Hex(w).PadLeft(8, "0") & ";" ' & Hex(address)
                         ofs.WriteLine(s)
                 End Select
-                If segment = "code" Then
+                If segment = "code" Or segment = "data" Or segment = "rodata" Then
                     codebytes(cbindex) = w
                     cbindex = cbindex + 1
                     codeEnd = IIf(codeEnd > cbindex * 8, codeEnd, cbindex * 8)
-                ElseIf segment = "data" Then
+                ElseIf segment = "datax" Then
                     databytes(dbindex) = w
                     dbindex = dbindex + 1
                     dataEnd = IIf(dataEnd > dbindex * 8, dataEnd, dbindex * 8)
@@ -3047,11 +2931,11 @@ j1:
                 Next
                 s = vbTab & "rommem[" & ((ad >> 3) And 8191) & "] = 65'h" & (p And 1) & Hex(w).PadLeft(16, "0") & ";" ' & Hex(address)
                 ofs.WriteLine(s)
-                If segment = "code" Then
+                If segment = "code" Or segment = "data" Or segment = "rodata" Then
                     codebytes(cbindex) = w
                     cbindex = cbindex + 1
                     codeEnd = IIf(codeEnd > cbindex * 8, codeEnd, cbindex * 8)
-                ElseIf segment = "data" Then
+                ElseIf segment = "datax" Then
                     databytes(dbindex) = w
                     dbindex = dbindex + 1
                     dataEnd = IIf(dataEnd > dbindex * 8, dataEnd, dbindex * 8)

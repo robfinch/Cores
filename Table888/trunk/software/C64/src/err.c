@@ -68,7 +68,8 @@ static char *errtextstr[] = {
 	"Semaphore increment / decrement limited to 1 to 15.",
 	"Semaphore address must be 16 byte aligned.",
 	"Operator is not defined for float/double type.",
-	"Integer constant required."
+	"Integer constant required.",
+	"Bad switch expression."
 };
 
 char *errtext(int errnum)

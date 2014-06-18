@@ -534,6 +534,7 @@ static int AllocateTable888RegisterVars()
     AMODE *ap, *ap2, *ap3;
 	int nn;
 	int cnt;
+	int size;
 
 	reg = 11;
 	brreg = 19;
@@ -587,12 +588,31 @@ static int AllocateTable888RegisterVars()
                     if( !IsLValue(exptr) || (exptr->p[0]->i > 0) )
                             {
                             initstack();
-                            ap = GenerateExpression(exptr,F_REG|F_IMMED,8);
+                            ap = GenerateExpression(exptr,F_ALL,8);
 							ap2 = makereg(csp->reg);
 							if (ap->mode==am_immed)
 								GenerateDiadic(op_ldi,0,ap2,ap);
-							else
+							else if (ap->mode==am_reg)
 								GenerateDiadic(op_mov,0,ap2,ap);
+							else {
+								size = GetNaturalSize(exptr);
+								if (exptr->isUnsigned) {
+									switch(size) {
+									case 1:	GenerateDiadic(op_lbu,0,ap2,ap); break;
+									case 2:	GenerateDiadic(op_lcu,0,ap2,ap); break;
+									case 4:	GenerateDiadic(op_lhu,0,ap2,ap); break;
+									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
+									}
+								}
+								else {
+									switch(size) {
+									case 1:	GenerateDiadic(op_lb,0,ap2,ap); break;
+									case 2:	GenerateDiadic(op_lc,0,ap2,ap); break;
+									case 4:	GenerateDiadic(op_lh,0,ap2,ap); break;
+									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
+									}
+								}
+							}
                             ReleaseTempRegister(ap);
                             }
                     }

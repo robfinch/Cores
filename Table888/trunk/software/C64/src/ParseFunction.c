@@ -262,15 +262,16 @@ static Statement *ParseFunctionBody(SYM *sp)
 		//strcpy(lbl,GetNamespace());
 		//strcat(lbl,"_");
 		strcpy(lbl,sp->name);
-		gen_strlab(lbl);
+		//gen_strlab(lbl);
 	}
 	//	put_label((unsigned int) sp->value.i);
 	else {
 		if (sp->storage_class == sc_global)
 			strcpy(lbl, "public code ");
 		strcat(lbl,sp->name);
-		gen_strlab(lbl);
+		//gen_strlab(lbl);
 	}
+	GenerateMonadic(op_fnname,0,make_string(litlate(lbl)));
 	currentFn = sp;
 	currentFn->IsLeaf = TRUE;
 	currentFn->DoesThrow = FALSE;
