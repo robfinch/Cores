@@ -19,16 +19,22 @@ Module Module1
     Dim cname As String
     Dim dname As String
     Dim vname As String
+    Dim p0name As String
+    Dim p1Name As String
     Dim elfname As String
     Dim ofl As System.IO.File
     Dim lfl As System.IO.File
     Dim ufl As System.IO.File
+    Dim p0fl As System.IO.File
+    Dim p1fl As System.IO.File
     Dim ofs As System.IO.TextWriter
     Dim lfs As System.IO.TextWriter
     Dim ufs As System.IO.TextWriter
     Dim bfs As System.IO.BinaryWriter
     Dim dfs As System.IO.BinaryWriter
     Dim cfs As System.IO.BinaryWriter
+    Dim p0fs As System.IO.TextWriter
+    Dim p1fs As System.IO.TextWriter
     Public efs As System.IO.BinaryWriter
     Dim opt64out As Boolean = False
     Dim opt32out As Boolean = True
@@ -48,7 +54,7 @@ Module Module1
     Dim dw2 As Int64
     Dim dw3 As Int64
     Public optr26 As Boolean = True
-    Dim maxpass As Integer = 10
+    Dim maxpass As Integer = 6
     Dim dbi As Integer
     Dim cbi As Integer
     Public fileno As Integer
@@ -96,10 +102,18 @@ Module Module1
     Public ELFSections(10) As ELFSection
     Public SearchList As Collection
     Public TextSnippets As Collection
+    Public p1Code As Collection
+    Public p1Data As Collection
+    Public p1Bss As Collection
+    Public p1Rodata As Collection
+    Public p1Tls As Collection
     Public segreg As Integer
     Public binbuf As New binfile
     Public firstCodeOrg As Boolean
 
+    ' Pass 0: collect all the included files into a single file for processing
+    ' Pass 1: collect all the same segments together and order the segments
+    '
     Sub Main(ByVal args() As String)
         Dim s As String
         Dim rdr As System.IO.TextReader
@@ -112,7 +126,7 @@ Module Module1
         Dim bfss As System.IO.FileStream
         Dim cfss As System.IO.FileStream
         Dim dfss As System.IO.FileStream
-        Dim efss As System.io.FileStream
+        Dim efss As System.IO.FileStream
         Dim nm As String
         Dim sftext As String
         Dim sftext2 As String
@@ -124,6 +138,7 @@ Module Module1
         Dim iter As Integer
         Dim ac As Integer
         Dim bbb As Boolean = False
+        Dim str As String
 
         'textfile = fl.ReadToEnd()
         'fl.Close()
@@ -153,6 +168,11 @@ Module Module1
         End While
         SearchList = New Collection
         TextSnippets = New Collection
+        p1Code = New Collection
+        p1Data = New Collection
+        p1Bss = New Collection
+        p1Rodata = New Collection
+        p1Tls = New Collection
         Dim fl As New TextFile(args(ac))
         instname = "ubr/ram"
         lname = args(ac)
@@ -167,9 +187,12 @@ Module Module1
         cname = lname.Replace(".lst", ".binc")
         dname = lname.Replace(".lst", ".bind")
         elfname = lname.Replace(".lst", ".elf")
+        p0name = lname.Replace(".lst", ".pass0")
+        p1Name = lname.Replace(".lst", ".pass1")
         'textfile = textfile.Replace(vbLf, " ")
         'lines = textfile.Split(vbCr.ToCharArray())
         For pass = 0 To maxpass
+            Console.WriteLine("Pass " & pass)
             lineno = 1
             fileno = 0
             nextFileno = 0
@@ -190,6 +213,12 @@ Module Module1
             firstCodeOrg = True
             doingDB = False
             phasingErrors = 0
+            If pass = 0 Then
+                p0fs = p0fl.CreateText(p0name)
+            End If
+            If pass = 1 Then
+                p1fs = p1fl.CreateText(p1Name)
+            End If
             If pass = maxpass Then
                 If (args.Length > 1) Then
                     vname = args(ac + 1)
@@ -208,12 +237,20 @@ Module Module1
                 efss = New System.IO.FileStream(elfname, IO.FileMode.Create)
                 efs = New System.IO.BinaryWriter(efss)
             End If
-            ProcessFile(args(ac))
-            If pass > 1 Then
-                For Each lines In TextSnippets
-                    ProcessText()
-                Next
+            If pass = 0 Then
+                ProcessFile(args(ac))
             End If
+            If pass = 1 Then
+                ProcessFile(p0name)
+            End If
+            If pass > 1 Then
+                ProcessFile(p1Name)
+            End If
+            'If pass > 1 Then
+            '    For Each lines In TextSnippets
+            '        ProcessText()
+            '    Next
+            'End If
 
             ' flush instruction holding bundle
             'While (address Mod 4)
@@ -235,7 +272,7 @@ Module Module1
             '    WriteELFFile()
             '    WriteBinaryFile()
             'End If
-            If pass = 1 Then
+            If pass = 1 And False Then
                 ' Note that finding a symbol in the searched source code
                 ' libraries may introduce new symbols that aren't defined
                 ' yet. So we have to loop back and process for those as
@@ -324,6 +361,61 @@ j3:
             Console.WriteLine("Phasing errors: " & phasingErrors)
             '            If lastPhasingErrors = 0 And phasingErrors = 0 Then maxpass = pass + 1
             lastPhasingErrors = phasingErrors
+            If pass = 0 Then
+                p0fs.Close()
+            End If
+            If pass = 1 Then
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine("; CODE - code segment")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(vbTab & "code")
+                For Each str In p1Code
+                    p1fs.WriteLine(str)
+                Next
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine("; READ ONLY DATA - rodata segment")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(vbTab & "rodata")
+                p1fs.WriteLine(vbTab & "align 4096")
+                For Each str In p1Rodata
+                    p1fs.WriteLine(str)
+                Next
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine("; DATA - data segment")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(vbTab & "data")
+                p1fs.WriteLine(vbTab & "align 4096")
+                For Each str In p1Data
+                    p1fs.WriteLine(str)
+                Next
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine("; UNINTIALIZED DATA -Bss segment")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(vbTab & "bss")
+                p1fs.WriteLine(vbTab & "align 4096")
+                For Each str In p1Bss
+                    p1fs.WriteLine(str)
+                Next
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine("; THREAD DATA -Tls segment")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(";===============================================================================")
+                p1fs.WriteLine(vbTab & "tls")
+                p1fs.WriteLine(vbTab & "align 4096")
+                For Each str In p1Tls
+                    p1fs.WriteLine(str)
+                Next
+                p1fs.Close()
+            End If
         Next
         DumpSymbols()
         ufs.Close()
@@ -354,8 +446,39 @@ j3:
         Dim sg As Integer
         Dim nn As Integer
         Dim rr As Boolean
+        Dim spc As String
 
+        spc = ". " & vbTab
         For Each iline In lines
+            If pass = 0 Then
+                If iline.Trim(spc.ToCharArray()).ToLower.StartsWith("include") Then
+                    p0fs.WriteLine("; " & iline)
+                Else
+                    p0fs.WriteLine(iline)
+                End If
+            End If
+            If pass = 1 Then
+                ' strip out the segment directives
+                If iline.Trim(spc.ToCharArray()).ToLower = "code" Then
+                ElseIf iline.Trim(spc.ToCharArray()).ToLower = "data" Then
+                ElseIf iline.Trim(spc.ToCharArray()).ToLower = "rodata" Then
+                ElseIf iline.Trim(spc.ToCharArray()).ToLower = "bss" Then
+                ElseIf iline.Trim(spc.ToCharArray()).ToLower = "tls" Then
+                Else
+                    Select Case segment
+                        Case "code"
+                            p1Code.Add(iline)
+                        Case "data"
+                            p1Data.Add(iline)
+                        Case "rodata"
+                            p1Rodata.Add(iline)
+                        Case "bss"
+                            p1Bss.Add(iline)
+                        Case "tls"
+                            p1Tls.Add(iline)
+                    End Select
+                End If
+            End If
             publicFlag = False
             firstline = True
             line = iline
@@ -558,6 +681,7 @@ j3:
     Sub WriteListing()
         Dim xx As Integer
         Static lastIline As String
+        Dim str As String
 
         If pass = maxpass And Not plbl Then
             If segment = "datax" Then
@@ -568,11 +692,13 @@ j3:
             For xx = 1 To bytn
                 lfs.Write(Right(Hex(bytesbuf(xx - 1)).PadLeft(2, "0"), 2) & " ")
             Next
+            str = iline.Replace(vbCr, ".")
+            str = str.Replace(vbLf, ".")
             If iline <> lastIline Then
                 If bytn < 9 Then
-                    lfs.WriteLine(Space(16 - bytn * 2) & iline)
+                    lfs.WriteLine(Space(16 - bytn * 2) & str)
                 Else
-                    lfs.WriteLine(Space(1) & iline)
+                    lfs.WriteLine(Space(1) & str)
                 End If
             Else
                 lfs.WriteLine("")
@@ -824,13 +950,13 @@ j1:
             nm = fileno & nm
         End If
 
-        If pass = 2 And M Is Nothing Then
-            Console.WriteLine("missed symbol: " & nm)
-        End If
+        'If pass = 2 And M Is Nothing Then
+        '    Console.WriteLine("missed symbol: " & nm)
+        'End If
         If M Is Nothing Then
-            If nm = "0printf" Then
-                Console.WriteLine("L7")
-            End If
+            'If nm = "0printf" Then
+            '    Console.WriteLine("L7")
+            'End If
             L.name = NameTable.AddName(nm)
             symbols.Add(L, L.name)
         Else
@@ -2170,9 +2296,6 @@ j1:
                 End If
 
                 Try
-                    If nm = "main" Then
-                        Console.WriteLine("main found")
-                    End If
                     sym = symbols.Find(NameTable.FindName(fileno & nm))
                     If sym Is Nothing Then
                         Try
@@ -3214,9 +3337,9 @@ j1:
             nn = nn + 1
 j1:
         Next
-        If nn <> symbols.Count Then
-            Console.WriteLine("Mismatch: " & nn & "vs " & symbols.Count)
-        End If
+        'If nn <> symbols.Count Then
+        '    Console.WriteLine("Mismatch: " & nn & "vs " & symbols.Count)
+        'End If
 
         NumSections = 6
         Elf.hdr.e_ident(0) = 127

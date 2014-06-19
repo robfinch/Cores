@@ -131,7 +131,7 @@ AMODE *make_indirect(int i)
     ap = allocAmode();
 	ap->mode = am_ind;
 	ap->preg = i;
-    ap->offset = ep;
+    ap->offset = 0;//ep;	//=0;
     return ap;
 }
 
@@ -440,6 +440,7 @@ AMODE *GenerateIndex(ENODE *node)
         ap2 = GenerateExpression(node->p[1],F_REG,8);
         ap1->mode = am_indx2;
         ap1->sreg = ap2->preg;
+		ap1->deep2 = ap2->deep2;
 		ap1->offset = makeinode(en_icon,0);
 		ap1->scale = node->scale;
         return ap1;
@@ -464,13 +465,14 @@ AMODE *GenerateIndex(ENODE *node)
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
         ap2->mode = am_indx2;
         ap2->sreg = ap1->preg;
-        ap2->deep = ap1->deep;
+		ap2->deep2 = ap1->deep;
         return ap2;
 	}
 	// ap1->mode must be F_REG
 	MakeLegalAmode(ap2,F_REG,8);
     ap1->mode = am_indx2;            /* make indexed */
 	ap1->sreg = ap2->preg;
+	ap1->deep2 = ap2->deep;
 	ap1->offset = makeinode(en_icon,0);
 	ap1->scale = node->scale;
     return ap1;                     /* return indexed */
@@ -561,6 +563,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size)
     if( ap1->mode == am_reg )
     {
         ap1->mode = am_ind;
+		ap1->offset = 0;	// ****
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -583,8 +586,9 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size)
 AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap,*ap1;
-    ap = GenerateExpression(node->p[0],F_REG,size);
+
 	ap1 = GetTempRegister();
+    ap = GenerateExpression(node->p[0],F_REG,size);
     GenerateDiadic(op,0,ap1,ap);
     ReleaseTempRegister(ap);
     MakeLegalAmode(ap1,flags,size);
@@ -628,7 +632,7 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size, int op)
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
 	GenerateTriadic(op,0,ap3,ap1,ap2);
 //    GenerateDiadic(op_ext,0,ap3,0);
-    MakeLegalAmode(ap3,flags,4);
+    MakeLegalAmode(ap3,flags,8);
     ReleaseTempRegister(ap2);
     ReleaseTempRegister(ap1);
     return ap3;
@@ -1434,7 +1438,7 @@ int GetNaturalSize(ENODE *node)
         case en_land:   case en_lor:
         case en_asadd:  case en_assub:
 		case en_asmul:  case en_asmulu:
-		case en_asdiv:
+		case en_asdiv:	case en_asdivu:
         case en_asmod:  case en_asand:
 		case en_asor:   case en_asxor:	case en_aslsh:
         case en_asrsh:

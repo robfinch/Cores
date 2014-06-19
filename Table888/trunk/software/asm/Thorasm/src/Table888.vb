@@ -98,8 +98,6 @@ Module Table888
                 ProcessLidtOp(s, &HB0)
             Case "sgdt"
                 ProcessLidtOp(s, &HB1)
-            Case "lea"
-                ProcessTable888MemoryOp(s, &H4C)
             Case "stbc"
                 ProcessTable888MemoryOp(s, 54)
             Case "smr"
@@ -713,6 +711,7 @@ Module Table888
         Dim s() As String
         Dim segbits As Int64
         Dim needSegPrefix As Boolean
+        Dim rs As String
 
         If segreg = 1 Then
             segbits = 0
@@ -732,6 +731,19 @@ Module Table888
             s = strs(1).Split(",".ToCharArray)
             If s.Length > 1 Then
                 ra = GetRegister(s(1))
+            Else
+                ' test for simple register indirect - JSR [R5]
+                rs = s(0).Trim("[()]".ToCharArray)
+                ra = GetRegister(rs)
+                If ra >= 0 Then
+                    emitAlignedCode(oc + 4)
+                    emitCode(ra)
+                    emitCode(0)
+                    emitCode(0)
+                    emitCode(0)
+                    Return
+                End If
+                ra = 0
             End If
             offset = eval(s(0).Trim("()[]".ToCharArray))
             If (offset <= &HFFFFFFFFFF800000L Or offset > &H7FFFFF) Then ' Or needSegPrefix) Then

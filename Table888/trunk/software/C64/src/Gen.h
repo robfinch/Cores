@@ -27,7 +27,8 @@ typedef struct amode {
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
 	unsigned int isUnsigned : 1;
-	int deep;           /* stack depth on allocation */
+	short int deep;           /* stack depth on allocation */
+	short int deep2;
 	struct enode *offset;
 	__int8 scale;
 } AMODE;

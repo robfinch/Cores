@@ -391,8 +391,9 @@ void PutAddressMode(AMODE *ap)
 			//}
 			//else
 			if (ap->offset != NULL)
-				if (ap->offset->i)
-					fprintf(output, "%I64d", ap->offset->i);
+				PutConstant(ap->offset);
+//				if (ap->offset->i)
+//					fprintf(output, "%I64d", ap->offset->i);
 				fprintf(output,"[%s]",RegMoniker(ap->preg));
 			break;
 	case am_brind:
@@ -407,12 +408,12 @@ void PutAddressMode(AMODE *ap)
             fprintf(output,"******[a%d]",ap->preg);
             break;
     case am_indx:
-			if (ap->offset->i != 0)
+			if (ap->offset != 0)
 				PutConstant(ap->offset);
             fprintf(output,"[%s]",RegMoniker(ap->preg));
             break;
     case am_indx2:
-			if (ap->offset->i != 0)
+			if (ap->offset != 0)
 				PutConstant(ap->offset);
 			if (ap->scale==1)
 	            fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));

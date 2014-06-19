@@ -105,6 +105,8 @@ static int equalnode(ENODE *node1, ENODE *node2)
 			return (node1->i == node2->i);
       case en_nacon:
 			return (!strcmp(node1->sp, node2->sp));
+	  case en_cnacon:
+			return (!strcmp(node1->sp, node2->sp));
       default:
 	        if( IsLValue(node1) && equalnode(node1->p[0], node2->p[0])  )
 		        return TRUE;
@@ -266,7 +268,7 @@ static void scanexpr(ENODE *node, int duse)
                 scanexpr(node->p[1],duse);
                 break;
 		case en_mul:    case en_mulu:   case en_div:	case en_udiv:
-		case en_shl:    case en_shr:	case en_shru:
+		case en_shl:    case en_shlu:	case en_shr:	case en_shru:	case en_asr:
         case en_mod:    case en_and:
         case en_or:     case en_xor:
         case en_lor:    case en_land:
@@ -339,6 +341,7 @@ static void scan(Statement *block)
                     scan(block->s1);
                     break;
             case st_case:
+			case st_default:
                     scan(block->s1);
                     break;
             case st_spinlock:
@@ -643,6 +646,7 @@ void repexpr(ENODE *node)
 						if (csp->reg > 1000) {
                                         node->nodetype = en_bregvar;
                                         node->i = csp->reg-1000;
+										node->sp = csp->exp->sp;	// retain the symbol pointer
 						}
 						else if( csp->reg > 0 ) {
                                         node->nodetype = en_regvar;
@@ -670,6 +674,7 @@ void repexpr(ENODE *node)
 							if (csp->reg > 1000) {
                                         node->nodetype = en_bregvar;
                                         node->i = csp->reg - 1000;
+										node->sp = csp->exp->sp;	// retain the symbol pointer
 							}
 							else if( csp->reg > 0 ) {
                                         node->nodetype = en_regvar;
@@ -694,8 +699,10 @@ void repexpr(ENODE *node)
                         break;
                 case en_add:    case en_sub:
 				case en_mul:    case en_mulu:   case en_div:	case en_udiv:
-				case en_mod:    case en_shl:	case en_shru:
-                case en_shr:    case en_and:
+				case en_mod:    
+				case en_shl:	case en_shlu:	case en_shru:	case en_asr:
+                case en_shr:
+				case en_and:
                 case en_or:     case en_xor:
                 case en_land:   case en_lor:
                 case en_eq:     case en_ne:
@@ -762,6 +769,7 @@ void repcse(Statement *block)
 			case st_try:
 			case st_catch:
 			case st_case:
+			case st_default:
 					repcse(block->s1);
 					break;
 			case st_spinlock:

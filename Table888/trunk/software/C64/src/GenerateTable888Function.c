@@ -298,6 +298,8 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
     else
     {
 		ap = GenerateExpression(node->p[0],F_REG,8);
+		if (node->p[0]->sp)
+			sym = gsearch(node->p[0]->sp);
 		ap->mode = am_ind;
 		ap->offset = 0;
 		GenerateMonadic(op_jsr,0,ap);

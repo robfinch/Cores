@@ -720,13 +720,46 @@ int IsLValue(ENODE *node)
     return FALSE;
 }
 
+TYP *Autoincdec(TYP *tp, ENODE **node)
+{
+	ENODE *ep1, *ep2;
+
+	ep1 = *node;
+	if (lastst==autoinc) {
+		if( IsLValue(ep1) ) {
+			if (tp->type == bt_pointer)
+				ep2 = makeinode(en_icon,tp->btp->size);
+			else
+				ep2 = makeinode(en_icon,1);
+			ep2->constflag = TRUE;
+			ep1 = makenode(en_asadd,ep1,ep2);
+		}
+        else
+            error(ERR_LVALUE);
+        NextToken();
+	}
+	else if (lastst==autodec) {
+		if( IsLValue(ep1) ) {
+			if (tp->type == bt_pointer)
+				ep2 = makeinode(en_icon,tp->btp->size);
+			else
+				ep2 = makeinode(en_icon,1);
+			ep2->constflag = TRUE;
+			ep1 = makenode(en_assub,ep1,ep2);
+		}
+        else
+            error(ERR_LVALUE);
+        NextToken();
+	}
+	*node = ep1;
+	return tp;
+}
+
 /*
  *      ParseUnaryExpression evaluates unary expressions and returns the type of the
  *      expression evaluated. unary expressions are any of:
  *
  *                      primary
- *                      primary++
- *                      primary--
  *                      !unary
  *                      ~unary
  *                      ++unary
@@ -804,6 +837,7 @@ TYP *ParseUnaryExpression(ENODE **node)
                         }
                         ep1 = makenode(en_compl,ep1,NULL);
                         ep1->constflag = ep1->p[0]->constflag;
+						Autoincdec(tp,&ep1);
                         break;
 
                 case star:
@@ -817,6 +851,8 @@ TYP *ParseUnaryExpression(ENODE **node)
 							error(ERR_DEREF);
                         else
                             tp = tp->btp;
+						tp1 = tp;
+						//Autoincdec(tp,&ep1);
 						tp = CondDeref(&ep1,tp);
                         break;
 
@@ -902,39 +938,12 @@ TYP *ParseUnaryExpression(ENODE **node)
                 default:
                         tp = ParsePrimaryExpression(&ep1);
                         if( tp != NULL ) {
-                                if( tp->type == bt_pointer )
-                                        i = tp->btp->size;
-                                else
-                                        i = 1;
-                                if( lastst == autoinc) {
-									if( IsLValue(ep1) ) {
-										if (tp->type == bt_pointer)
-											ep2 = makeinode(en_icon,tp->btp->size);
-										else
-											ep2 = makeinode(en_icon,1);
-										ep2->constflag = TRUE;
-										ep1 = makenode(en_asadd,ep1,ep2);
-//                                        ep1 = makenodei(en_ainc,ep1,i);
-									}
-                                    else
-                                        error(ERR_LVALUE);
-                                    NextToken();
-                                }
-                                else if( lastst == autodec ) {
-									if( IsLValue(ep1) ) {
-										if (tp->type == bt_pointer)
-											ep2 = makeinode(en_icon,tp->btp->size);
-										else
-											ep2 = makeinode(en_icon,1);
-										ep2->constflag = TRUE;
-										ep1 = makenode(en_assub,ep1,ep2);
-//                                                ep1 = makenodei(en_adec,ep1,i);
-										}
-                                        else
-                                                error(ERR_LVALUE);
-                                        NextToken();
-                                        }
-                                }
+                            if( tp->type == bt_pointer )
+                                    i = tp->btp->size;
+                            else
+                                    i = 1;
+							Autoincdec(tp,&ep1);
+                        }
                         break;
                 }
         *node = ep1;
@@ -1072,23 +1081,57 @@ int     isscalar(TYP *tp)
 }
 
 /*
+ *              unary
+ *              unary--
+ *              unary++
+*/
+TYP *postIncDec(ENODE ** node)
+{
+	TYP *tp1;
+	ENODE *ep1, *ep2;
+	int flag;
+
+	tp1 = ParseUnaryExpression(&ep1);
+	if( tp1 == 0 )
+		return 0;
+	if (lastst==autodec)
+        flag = 1;
+        /* fall through to common increment */
+	if (lastst==autoinc || lastst==autodec) {
+        NextToken();
+        if( IsLValue(ep1)) {
+            if( tp1->type == bt_pointer )
+                ep2 = makeinode(en_icon,tp1->btp->size);
+            else
+                ep2 = makeinode(en_icon,1);
+            ep2->constflag = TRUE;
+            ep1 = makenode(flag ? en_assub : en_asadd,ep1,ep2);
+        }
+        else
+            error(ERR_LVALUE);
+	}
+	*node = ep1;
+	return tp1;
+}
+/*
  *      multops parses the multiply priority operators. the syntax of
  *      this group is:
  *
  *              unary
- *              multop * unary
- *              multop / unary
- *              multop % unary
+ *              unary * unary
+ *              unary / unary
+ *              unary % unary
  */
-TYP *multops(struct ENODE **node)
+TYP *multops(ENODE **node)
 {
-	struct ENODE    *ep1, *ep2;
-        TYP             *tp1, *tp2;
-        int		      oper;
-        tp1 = ParseUnaryExpression(&ep1);
-        if( tp1 == 0 )
-                return 0;
-        while( lastst == star || lastst == divide || lastst == modop ) {
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+	int	oper;
+
+	tp1 = ParseUnaryExpression(&ep1);
+	if( tp1 == 0 )
+		return 0;
+        while( lastst == star || lastst == divide || lastst == modop) {
                 oper = lastst;
                 NextToken();       /* move on to next unary op */
                 tp2 = ParseUnaryExpression(&ep2);
