@@ -24,11 +24,11 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-`define RST_VECT	32'hFFFFFFF0
-`define NMI_VECT	32'hFFFFFFE0
-`define IRQ_VECT	32'hFFFFFFD0
-`define DBG_VECT	32'hFFFFFFC0
-`define ALN_VECT	32'hFFFFFFB0
+`define RST_VECT	32'h0000FFF0
+`define NMI_VECT	32'h0000FFE0
+`define IRQ_VECT	32'h0000FFD0
+`define DBG_VECT	32'h0000FFC0
+`define ALN_VECT	32'h0000FFB0
 
 `define BRK		8'h00
 `define R		8'h01
@@ -141,12 +141,14 @@
 `define SC		8'hA1
 `define SH		8'hA2
 `define SW		8'hA3
+`define CINV	8'hA4
 `define PUSH	8'hA6
 `define POP		8'hA7
 `define SBX		8'hA8
 `define SCX		8'hA9
 `define SHX		8'hAA
 `define SWX		8'hAB
+`define CINVX	8'hAC
 
 `define NOP		8'hEA
 
@@ -212,6 +214,8 @@ parameter IBUF2 = 6'd25;
 parameter IBUF3 = 6'd26;
 parameter PC_DELAY = 6'd28;
 parameter PC_DELAY2 =6'd29;
+parameter CINV1 = 6'd32;
+parameter CINV2 = 6'd33;
 // - - - - - - - - - - - - - - - - - -
 // codes for load/store sizes
 // - - - - - - - - - - - - - - - - - -
@@ -433,7 +437,7 @@ wire [63:0] b_scaled = b << ir[33:32];
 
 always @(posedge clk_i)
 if (rst_i) begin
-	pc <= 32'hFFFFFFF0;
+	pc <= `RST_VECT;
 	ibufadr <= 32'h00000000;
 	icacheOn <= `FALSE;
 	gie <= `FALSE;
@@ -442,10 +446,11 @@ if (rst_i) begin
 	isInsnCacheLoad <= `FALSE;
 	isCacheReset <= `TRUE;
 	wb_nack();
+	adr_o[3:2] <= 2'b11;		// The tagram checks for this
 	state <= RESET;
 	store_what <= `STW_NONE;
 	tick <= 64'd0;
-	vbr <= 32'h07FFE000;
+	vbr <= 32'h00006000;
 	imcd <= 3'b111;
 end
 else begin
@@ -458,10 +463,10 @@ case(state)
 RESET:
 	begin
 		adr_o[3:2] <= 2'b11;		// The tagram checks for this
-		adr_o[31:4] <= adr_o[31:4] + 28'd1;
-		if (adr_o[12:6]==7'h7F) begin
+		adr_o[12:4] <= adr_o[12:4] + 9'd1;
+		if (adr_o[12:4]==9'h1FF) begin
 			isCacheReset <= `FALSE;
-			next_state(IFETCH);
+			next_state(PC_DELAY);
 		end
 	end
 
@@ -481,15 +486,9 @@ IFETCH:
 			hwi <= `TRUE;
 		end
 		else if (irq_i & gie & ~im & ~hasIMM) begin
-			$display("****************");
-			$display("****************");
-			$display("IRQ");
-			$display("****************");
-			$display("****************");
 			ir[7:0] <= `BRK;
 			ir[39:8] <= {vbr[31:13],vect_i,4'd0};
 			hwi <= `TRUE;
-			$stop;
 		end
 		else if (!ihit & !uncachedArea & icacheOn) begin
 			next_state(ICACHE1);
@@ -529,14 +528,14 @@ ICACHE1:
 	end
 ICACHE2:
 	if (ack_i) begin
+		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 		if (adr_o[3:2]==2'b10)
 			cti_o <= 3'b111;
 		if (adr_o[3:2]==2'b11) begin
 			isInsnCacheLoad <= `FALSE;
 			wb_nack();
-			state <= IFETCH;			// return to where we came from
+			next_state(PC_DELAY);
 		end
-		adr_o[3:2] <= adr_o[3:2] + 2'd1;
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -641,7 +640,7 @@ DECODE:
 		case(opcode)
 		`BRK:		imm <= hwi ? ir[39:8] : {vbr[31:13],ir[20:8]};
 		`LDI:		imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : {{40{ir[39]}},ir[39:16]};
-		`JSR:		imm <= ir[39:8];	// PC has only 32 bits implemented
+		`JSR:		imm <= ir[39:8];	// PC has only 28 bits implemented
 		`JMP:		imm <= ir[39:8];
 		`JSR_IX:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`JMP_IX:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
@@ -703,11 +702,17 @@ DECODE:
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		`BRK:
 			begin
+				$display("*****************");
+				$display("*****************");
+				$display("BRK");
+				$display("*****************");
+				$display("*****************");
 				isBRK <= `TRUE;
 				wadr <= sp_dec;
 				sp <= sp_dec;
 				store_what <= `STW_SR;
 				next_state(STORE1);
+				$stop;
 			end
 		`JMP:	begin pc <= ir[39:8]; next_state(PC_DELAY); end
 		`BSR:
@@ -1031,6 +1036,12 @@ EXECUTE:
 				store_what <= `STW_B;
 				next_state(STORE1);
 			end
+		`CINV:
+			begin
+				wadr <= a + imm;
+				Rt <= Rb;
+				next_state(CINV1);
+			end
 		`SBX:
 			begin
 				wadr <= a + b_scaled + imm;
@@ -1059,7 +1070,12 @@ EXECUTE:
 				store_what <= `STW_C;
 				next_state(STORE1);
 			end
-
+		`CINVX:
+			begin
+				wadr <= a + b_scaled + imm;
+				Rt <= Rc;
+				next_state(CINV1);
+			end
 		// Unimplemented opcodes handled here
 		default:
 			;
@@ -1077,21 +1093,21 @@ MULDIV:
 		`MULUI:
 			begin
 				aa <= a;
-				bb <= b;
+				bb <= imm;
 				res_sgn <= 1'b0;
 				next_state(MULT1);
 			end
 		`MULI:
 			begin
 				aa <= a[63] ? -a : a;
-				bb <= b[63] ? -b : b;
-				res_sgn <= a[63] ^ b[63];
+				bb <= imm[63] ? -imm : imm;
+				res_sgn <= a[63] ^ imm[63];
 				next_state(MULT1);
 			end
 		`DIVUI,`MODUI:
 			begin
 				aa <= a;
-				bb <= b;
+				bb <= imm;
 				q <= a[62:0];
 				r <= a[63];
 				res_sgn <= 1'b0;
@@ -1100,10 +1116,10 @@ MULDIV:
 		`DIVI,`MODI:
 			begin
 				aa <= a[63] ? -a : a;
-				bb <= b[63] ? -b : b;
+				bb <= imm[63] ? -imm : imm;
 				q <= pa[62:0];
 				r <= pa[63];
-				res_sgn <= a[63] ^ b[63];
+				res_sgn <= a[63] ^ imm[63];
 				next_state(DIV);
 			end
 		`RR:
@@ -1250,10 +1266,8 @@ LOAD4:
 			isLMR:
 				begin
 					wrrf <= `TRUE;
-					if (Rt==Rb) begin
-						Rt <= 8'h00;
+					if (Rt==Rb)
 						next_state(IFETCH);
-					end
 					else
 						next_state(LOAD1);
 				end
@@ -1388,6 +1402,23 @@ STORE4:
 	end
 	else if (err_i)
 		bus_err();
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Cache invalidate machine states.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+CINV1:
+	begin
+		adr_o <= {wadr[31:4],2'b11,2'b00};
+		if (Rt==8'h00)
+			isCacheReset <= `TRUE;
+		// else reset data cache
+		next_state(CINV2);
+	end
+CINV2:
+	begin
+		isCacheReset <= `FALSE;
+		next_state(IFETCH);
+	end
 endcase
 
 
@@ -1408,8 +1439,12 @@ if (state==IFETCH || wrrf) begin
 		sp <= {res[63:3],3'b000};
 		gie <= `TRUE;
 	end
-	if (isLMR && wrrf)
-		Rt <= Rt + 8'd1;
+	if (isLMR && wrrf) begin
+		if (Rt==Rb)
+			Rt <= 8'h00;
+		else
+			Rt <= Rt + 8'd1;
+	end
 end
 
 end

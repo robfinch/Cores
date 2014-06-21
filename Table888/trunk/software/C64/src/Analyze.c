@@ -203,17 +203,18 @@ CSE *voidauto(ENODE *node)
 static void scanexpr(ENODE *node, int duse)
 {
 	CSE *csp, *csp1;
+	int first, i;
 
     if( node == NULL )
         return;
 
 	switch( node->nodetype ) {
+		case en_cnacon:
+		case en_clabcon:
 		case en_fcon:
         case en_icon:
         case en_labcon:
         case en_nacon:
-		case en_cnacon:
-		case en_clabcon:
                 InsertNodeIntoCSEList(node,duse);
                 break;
 		case en_autofcon:
@@ -244,10 +245,51 @@ static void scanexpr(ENODE *node, int duse)
 		case en_wfieldref:
 		case en_uwfieldref:
                 if( node->p[0]->nodetype == en_autocon || node->p[0]->nodetype==en_autofcon) {
-                        csp = InsertNodeIntoCSEList(node,duse);
-                        if( csp->voidf )
-                                scanexpr(node->p[0],1);
-                        }
+					first = (SearchCSEList(node)==NULL);	// Detect if this is the first insert
+                    csp = InsertNodeIntoCSEList(node,duse);
+					if (csp->voidf)
+						scanexpr(node->p[0], 1);
+					// take care: the non-derereferenced use of the autocon node may
+					// already be in the list. In this case, set voidf to 1
+					if (SearchCSEList(node->p[0]) != NULL) {
+						csp->voidf = 1;
+						scanexpr(node->p[0], 1);
+					}
+					//else {
+							//if (first) {
+							///* look for register nodes */
+							//int i = 0;
+							//long j = node->p[0]->i;
+							//if ((node->p[0]->nodetype== en_regvar || node->p[0]->nodetype==en_bregvar) &&
+							//	(j >= 11 && j < 18))
+							//{
+							//	csp->voidf--;	/* this is not in auto_lst */
+							//	//csp->uses += 90 * (100 - i);
+							//	//csp->duses += 30 * (100 - i);
+							//	break;
+							//}
+							///* set voidf if the node is not in autolst */
+							//csp->voidf++;
+							//i = 0;
+							//while (i < autoptr) {
+							//	if (autolst[i] == j) {
+							//		csp->voidf--;
+							//		break;
+							//	}
+							//	++i;
+							//}
+						/*
+						* even if that item must not be put in a register,
+								* it is legal to put its address therein
+								*/
+							//if (csp->voidf)
+							//	scanexpr(node->p[0], 1);
+						//}
+
+                        //if( csp->voidf )
+                        //        scanexpr(node->p[0],1);
+                        //}
+				}
                 else
                         scanexpr(node->p[0],1);
                 break;
@@ -558,8 +600,10 @@ static int AllocateTable888RegisterVars()
 				else
 					csp->reg = -1;
 			}
-			else {
-				if( reg < 18 )	// was / 4
+			else
+			{
+				if( csp->duses > csp->uses / 4 && reg < 18 )
+//				if( reg < 18 )	// was / 4
 					csp->reg = reg++;
 				else
 					csp->reg = -1;
@@ -578,6 +622,7 @@ static int AllocateTable888RegisterVars()
 		for (nn = 0; nn < 32; nn++) {
 			if (rmask & (0x80000000 >> nn)) {
 				GenerateMonadic(op_push,0,makereg(nn&31));//,make_indexed(cnt,SP),NULL);
+				//GenerateDiadic(op_sw,0,makereg(nn&31),make_indexed(cnt,SP));
 				cnt+=8;
 			}
 		}
@@ -644,16 +689,16 @@ void repexpr(ENODE *node)
 				case en_clabcon:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if (csp->reg > 1000) {
-                                        node->nodetype = en_bregvar;
-                                        node->i = csp->reg-1000;
-										node->sp = csp->exp->sp;	// retain the symbol pointer
+							node->nodetype = en_bregvar;
+							node->i = csp->reg-1000;
+							node->sp = csp->exp->sp;	// retain the symbol pointer
 						}
 						else if( csp->reg > 0 ) {
-                                        node->nodetype = en_regvar;
-                                        node->i = csp->reg;
-                                        }
+							node->nodetype = en_regvar;
+							node->i = csp->reg;
+						}
 					}
-                        break;
+					break;
                 case en_b_ref:
 				case en_c_ref:
 				case en_h_ref:
@@ -670,22 +715,22 @@ void repexpr(ENODE *node)
 				case en_uhfieldref:
 				case en_wfieldref:
 				case en_uwfieldref:
-                        if( (csp = SearchCSEList(node)) != NULL ) {
-							if (csp->reg > 1000) {
-                                        node->nodetype = en_bregvar;
-                                        node->i = csp->reg - 1000;
-										node->sp = csp->exp->sp;	// retain the symbol pointer
-							}
-							else if( csp->reg > 0 ) {
-                                        node->nodetype = en_regvar;
-                                        node->i = csp->reg;
-                                        }
-                                else
-                                        repexpr(node->p[0]);
-                                }
-                        else
-                                repexpr(node->p[0]);
-                        break;
+					if( (csp = SearchCSEList(node)) != NULL ) {
+						if (csp->reg > 1000) {
+							node->nodetype = en_bregvar;
+							node->i = csp->reg - 1000;
+							node->sp = csp->exp->sp;	// retain the symbol pointer
+						}
+						else if( csp->reg > 0 ) {
+							node->nodetype = en_regvar;
+							node->i = csp->reg;
+						}
+						else
+							repexpr(node->p[0]);
+					}
+					else
+						repexpr(node->p[0]);
+					break;
 				case en_cbc:
 				case en_cbh:
                 case en_cbw:

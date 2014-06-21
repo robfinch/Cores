@@ -47,7 +47,7 @@ enum e_sym {
         id, cconst, iconst, lconst, sconst, rconst, plus, minus,
         star, divide, lshift, rshift, modop, eq, neq, lt, leq, gt,
         geq, assign, asplus, asminus, astimes, asdivide, asmodop,
-		aslshift, asrshift, asand, asor, autoinc, autodec, hook, compl,
+		aslshift, asrshift, asand, asor, asxor, autoinc, autodec, hook, compl,
         comma, colon, semicolon, uparrow, openbr, closebr, begin, end,
         openpa, closepa, pointsto, dot, lor, land, not, or, and,
 		ellipsis,

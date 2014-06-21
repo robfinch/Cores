@@ -830,8 +830,7 @@ Statement *ParseStatement()
 	Statement *snp; 
     switch( lastst ) { 
     case semicolon: 
-        NextToken(); 
-        snp = NULL; 
+        snp = NewStatement(st_empty,1);
         break; 
     case begin: 
 		NextToken(); 

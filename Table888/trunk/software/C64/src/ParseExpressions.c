@@ -32,6 +32,9 @@
 
 #define EXPR_DEBUG
 static unsigned char sizeof_flag = 0;
+static TYP *ParseCastExpression(ENODE **node);
+// Tells subsequent levels that ParseCastExpression already fetched a token.
+static unsigned char expr_flag = 0;
 
 /*
  *	68000 C compiler
@@ -303,7 +306,7 @@ TYP *deref(ENODE **node, TYP *tp)
 * pointer size if this code is not executed on behalf of a sizeof
 * operator
 */
-TYP *CondDeref(ENODE *node, TYP *tp)
+TYP *CondDeref(ENODE **node, TYP *tp)
 {
     TYP *tp1;
 
@@ -468,216 +471,88 @@ int IsBeginningOfTypecast(int st)
 		return IsIntrinsicType(st);
 }
 
-/*
- *      primary will parse a primary expression and set the node pointer
- *      returning the type of the expression parsed. primary expressions
- *      are any of:
- *                      id
- *                      constant
- *                      string
- *                      ( expression )
- *                      primary[ expression ]
- *                      primary.id
- *                      primary->id
- *                      primary( parameter list )
- */
+// ----------------------------------------------------------------------------
+//      primary will parse a primary expression and set the node pointer
+//      returning the type of the expression parsed. primary expressions
+//      are any of:
+//                      id
+//                      constant
+//                      string
+//                      ( expression )
+// ----------------------------------------------------------------------------
 TYP *ParsePrimaryExpression(ENODE **node)
 {
 	ENODE    *pnode, *qnode, *rnode, *snode, *rnode1, *pnode1, *qnode1, *qnode2;
 	__int64 i ;
-	int sza[10];
-	int brcount;
-        SYM             *sp;
-        TYP             *tptr;
+    SYM *sp;
+    TYP *tptr;
 
-		brcount = 0;
-		qnode1 = NULL;
-		qnode2 = NULL;
-        switch( lastst ) {
-				case ellipsis:
-                case id:
-                        tptr = nameref(&pnode);
-                        break;
-                case iconst:
-                        tptr = &stdint;
-                        pnode = makeinode(en_icon,ival);
-                        pnode->constflag = TRUE;
-                        NextToken();
-                        break;
-                case rconst:
-                        tptr = &stddbl;
-                        pnode = makefnode(en_fcon,rval);
-                        pnode->constflag = TRUE;
-                        NextToken();
-                        break;
-                case sconst:
-					if (sizeof_flag) {
-						tptr = maketype(bt_pointer, 0);
-						tptr->size = strlen(laststr) + 1;
-						tptr->btp = &stdchar;
-						tptr->val_flag = 1;
-						tptr->isConst = TRUE;
-					}
-					else {
-                        tptr = &stdstring;
-					}
-                    pnode = makenodei(en_labcon,NULL,NULL);
-					if (sizeof_flag == 0)
-						pnode->i = stringlit(laststr);
-					pnode->etype = bt_pointer;
-					pnode->esize = 8;
-                    pnode->constflag = TRUE;
-                    NextToken();
-                    break;
+	qnode1 = NULL;
+	qnode2 = NULL;
+	if (expr_flag)
+		goto processExpression;
+    switch( lastst ) {
+	case ellipsis:
+    case id:
+        tptr = nameref(&pnode);
+        break;
+    case iconst:
+        tptr = &stdint;
+        pnode = makeinode(en_icon,ival);
+        pnode->constflag = TRUE;
+        NextToken();
+        break;
+    case rconst:
+        tptr = &stddbl;
+        pnode = makefnode(en_fcon,rval);
+        pnode->constflag = TRUE;
+        NextToken();
+        break;
+    case sconst:
+		if (sizeof_flag) {
+			tptr = maketype(bt_pointer, 0);
+			tptr->size = strlen(laststr) + 1;
+			tptr->btp = &stdchar;
+			tptr->val_flag = 1;
+			tptr->isConst = TRUE;
+		}
+		else {
+            tptr = &stdstring;
+		}
+        pnode = makenodei(en_labcon,NULL,NULL);
+		if (sizeof_flag == 0)
+			pnode->i = stringlit(laststr);
+		pnode->etype = bt_pointer;
+		pnode->esize = 8;
+        pnode->constflag = TRUE;
+        NextToken();
+        break;
 
-                case openpa:
-                        NextToken();
-                        if( !IsBeginningOfTypecast(lastst) ) {
-                            tptr = expression(&pnode);
-                            needpunc(closepa);
-                        }
-                        else {			/* cast operator */
-                            ParseSpecifier(0); /* do cast ParseSpecifieraration */
-                            ParseDeclarationPrefix(FALSE);
-                            tptr = head;
-                            needpunc(closepa);
-                            if( ParseUnaryExpression(&pnode) == NULL ) {
-                                error(ERR_IDEXPECT);
-                                tptr = NULL;
-                            }
-                        }
-                        break;
+    case openpa:
+        NextToken();
+processExpression:
+//        if( !IsBeginningOfTypecast(lastst) ) {
+		expr_flag = 0;
+        tptr = expression(&pnode);
+        needpunc(closepa);
+//        }
+        //else {			/* cast operator */
+        //    ParseSpecifier(0); /* do cast ParseSpecifieraration */
+        //    ParseDeclarationPrefix(FALSE);
+        //    tptr = head;
+        //    needpunc(closepa);
+        //    if( ParseUnaryExpression(&pnode) == NULL ) {
+        //        error(ERR_IDEXPECT);
+        //        tptr = NULL;
+        //    }
+        //}
+        break;
 
-                default:
-                        return NULL;
-                }
-        for(;;) {
-                switch( lastst ) {
-                        case openbr:    /* build a subscript reference */
-							brcount++;
-							if (tptr==NULL) {
-								error(ERR_UNDEFINED);
-								goto fini;
-							}
-                                if( tptr->type != bt_pointer )
-                                        error(ERR_NOPOINTER);
-                                else
-                                        tptr = tptr->btp;
-                                NextToken();
-								if (tptr->val_flag && (tptr->size==1 || tptr->size==2 || tptr->size==4 || tptr->size==8)) {
-									expression(&rnode);
-									pnode = makenode(en_add,rnode,pnode);
-									pnode->constflag = rnode->constflag && pnode->p[1]->constflag;
-									pnode->isUnsigned = rnode->isUnsigned && pnode->p[1]->isUnsigned;
-									pnode->scale = tptr->size;
-//									needpunc(closebr);
-								}
-								else {
-									sza[brcount-1] = tptr->size;
-									qnode = makeinode(en_icon,tptr->size);
-									//// swap sizes for array indexing
-									//if (brcount==3) {
-									//	qnode->i = sza[0];
-									//	qnode2->i = sza[1];
-									//	qnode1->i = sza[2];
-									//}
-									//else if (brcount==2) {
-									//	qnode->i = sza[0];
-									//	qnode1->i = sza[1];
-									//}
-									//if (qnode1==NULL)
-									//	qnode1 = qnode;
-									//else
-									//	qnode2 = qnode;
-									qnode->constflag = TRUE;
-									qnode->isUnsigned = tptr->isUnsigned;
-									expression(&rnode);
-//							needpunc(closebr);
-	/*
- *      we could check the type of the expression here...
-									
- */
-									if (rnode==NULL) {
-										error(ERR_EXPREXPECT);
-										break;
-									}
-									qnode = makenode(en_mulu,rnode,qnode);
-									qnode->constflag = rnode->constflag && qnode->p[0]->constflag;
-									pnode = makenode(en_add,qnode,pnode);
-									pnode->constflag = qnode->constflag && pnode->p[1]->constflag;
-									pnode->scale = 1;
-									//if( tptr->val_flag == 0 )
-									//	tptr = deref(&pnode,tptr);
-								}
-                                ////snode = makenode(en_mul,qnode,rnode);
-                                ////snode->constflag = rnode->constflag && snode->p[0]->constflag;
-                                ////pnode = makenode(en_add,snode,pnode);
-                                ////pnode->constflag = snode->constflag && pnode->p[1]->constflag;
-                                tptr = CondDeref(&pnode,tptr);
-                                needpunc(closebr);
-                                break;
-
-                        case pointsto:
-							if (tptr==NULL) {
-								error(ERR_UNDEFINED);
-								goto fini;
-							}
-                            if( tptr->type != bt_pointer )
-                                error(ERR_NOPOINTER);
-                            else
-                                tptr = tptr->btp;
-                            if( tptr->val_flag == FALSE )
-                                pnode = makenode(en_w_ref,pnode,NULL);
-/*
- *      fall through to dot operation
- */
-                        case dot:
-							if (tptr==NULL) {
-								error(ERR_UNDEFINED);
-								goto fini;
-							}
-                                NextToken();       /* past -> or . */
-                                if( lastst != id )
-                                        error(ERR_IDEXPECT);
-                                else    {
-                                        sp = search(lastid,&tptr->lst);
-                                        if( sp == NULL )
-                                            error(ERR_NOMEMBER);
-                                        else {
-                                            tptr = sp->tp;
-                                            qnode = makeinode(en_icon,sp->value.i);
-                                            qnode->constflag = TRUE;
-                                            pnode = makenode(en_add,pnode,qnode);
-                                            pnode->constflag = pnode->p[0]->constflag;
-                                            tptr = CondDeref(&pnode,tptr);
-                                        }
-                                        NextToken();       /* past id */
-                                        }
-                                break;
-
-                        case openpa:    /* function reference */
-                                NextToken();
-                                if( tptr->type != bt_func && tptr->type != bt_ifunc )
-                                    error(ERR_NOFUNC);
-                                else
-                                    tptr = tptr->btp;
-								if (currentFn==NULL)
-									error(ERR_SYNTAX);
-								else
-									currentFn->IsLeaf = FALSE;
-                                pnode = makenode(en_fcall,pnode,ArgumentList());
-                                needpunc(closepa);
-                                break;
-
-                        default:
-							//if (tptr->type == bt_func || tptr->type== bt_ifunc) {
-       //                         tptr = deref(&pnode,tptr);
-							//}
-                            goto fini;
-                        }
-                }
+    default:
+        return NULL;
+    }
 fini:   *node = pnode;
-        return tptr;
+    return tptr;
 }
 
 /*
@@ -720,55 +595,178 @@ int IsLValue(ENODE *node)
     return FALSE;
 }
 
-TYP *Autoincdec(TYP *tp, ENODE **node)
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 {
 	ENODE *ep1, *ep2;
 
 	ep1 = *node;
-	if (lastst==autoinc) {
-		if( IsLValue(ep1) ) {
-			if (tp->type == bt_pointer)
-				ep2 = makeinode(en_icon,tp->btp->size);
-			else
-				ep2 = makeinode(en_icon,1);
-			ep2->constflag = TRUE;
-			ep1 = makenode(en_asadd,ep1,ep2);
-		}
-        else
-            error(ERR_LVALUE);
-        NextToken();
+	if( IsLValue(ep1) ) {
+		if (tp->type == bt_pointer)
+			ep2 = makeinode(en_icon,tp->btp->size);
+		else
+			ep2 = makeinode(en_icon,1);
+		ep2->constflag = TRUE;
+		ep1 = makenode(flag ? en_assub : en_asadd,ep1,ep2);
 	}
-	else if (lastst==autodec) {
-		if( IsLValue(ep1) ) {
-			if (tp->type == bt_pointer)
-				ep2 = makeinode(en_icon,tp->btp->size);
-			else
-				ep2 = makeinode(en_icon,1);
-			ep2->constflag = TRUE;
-			ep1 = makenode(en_assub,ep1,ep2);
-		}
-        else
-            error(ERR_LVALUE);
-        NextToken();
-	}
+    else
+        error(ERR_LVALUE);
 	*node = ep1;
 	return tp;
+}
+
+// ----------------------------------------------------------------------------
+// A Postfix Expression is:
+//		primary
+//		postfix_expression[expression]
+//		postfix_expression()
+//		postfix_expression(argument expression list)
+//		postfix_expression.ID
+//		postfix_expression->ID
+//		postfix_expression++
+//		postfix_expression--
+// ----------------------------------------------------------------------------
+
+TYP *ParsePostfixExpression(ENODE **node)
+{
+	TYP *tp1;
+	ENODE *ep1;
+	ENODE *rnode,*qnode;
+	SYM *sp;
+
+	tp1 = ParsePrimaryExpression(&ep1);
+	if (tp1 == NULL)
+		return NULL;
+	while(1) {
+		switch(lastst) {
+		case openbr:
+			if (tp1==NULL) {
+				error(ERR_UNDEFINED);
+				goto j1;
+			}
+            if( tp1->type != bt_pointer )
+                error(ERR_NOPOINTER);
+            else
+                tp1 = tp1->btp;
+            NextToken();
+			if (tp1->val_flag && (tp1->size==1 || tp1->size==2 || tp1->size==4 || tp1->size==8)) {
+				expression(&rnode);
+				ep1 = makenode(en_add,rnode,ep1);
+				ep1->constflag = rnode->constflag && ep1->p[1]->constflag;
+				ep1->isUnsigned = rnode->isUnsigned && ep1->p[1]->isUnsigned;
+				ep1->scale = tp1->size;
+			}
+			else {
+				qnode = makeinode(en_icon,tp1->size);
+				qnode->constflag = TRUE;
+				qnode->isUnsigned = tp1->isUnsigned;
+				expression(&rnode);
+/*
+ *      we could check the type of the expression here...
+									
+ */
+				if (rnode==NULL) {
+					error(ERR_EXPREXPECT);
+					break;
+				}
+				qnode = makenode(en_mulu,rnode,qnode);
+				qnode->constflag = rnode->constflag && qnode->p[0]->constflag;
+				ep1 = makenode(en_add,qnode,ep1);
+				ep1->constflag = qnode->constflag && ep1->p[1]->constflag;
+				ep1->scale = 1;
+			}
+            tp1 = CondDeref(&ep1,tp1);
+            needpunc(closebr);
+            break;
+
+		case openpa:
+            NextToken();
+            if( tp1->type != bt_func && tp1->type != bt_ifunc )
+                error(ERR_NOFUNC);
+            else
+                tp1 = tp1->btp;
+			if (currentFn==NULL)
+				error(ERR_SYNTAX);
+			else
+				currentFn->IsLeaf = FALSE;
+			if (lastst==closepa) {
+				NextToken();
+				ep1 = makenode(en_fcall,ep1,NULL);
+			}
+			else {
+				ep1 = makenode(en_fcall,ep1,ArgumentList());
+				needpunc(closepa);
+			}
+            break;
+
+		case pointsto:
+			if (tp1==NULL) {
+				error(ERR_UNDEFINED);
+				goto j1;
+			}
+            if( tp1->type != bt_pointer )
+                error(ERR_NOPOINTER);
+            else
+                tp1 = tp1->btp;
+            if( tp1->val_flag == FALSE )
+                ep1 = makenode(en_w_ref,ep1,NULL);
+		 // fall through to dot operation
+		case dot:
+			if (tp1==NULL) {
+				error(ERR_UNDEFINED);
+				goto j1;
+			}
+            NextToken();       /* past -> or . */
+            if( lastst != id )
+                error(ERR_IDEXPECT);
+            else {
+                sp = search(lastid,&tp1->lst);
+                if( sp == NULL )
+                    error(ERR_NOMEMBER);
+                else {
+                    tp1 = sp->tp;
+                    qnode = makeinode(en_icon,sp->value.i);
+                    qnode->constflag = TRUE;
+                    ep1 = makenode(en_add,ep1,qnode);
+                    ep1->constflag = ep1->p[0]->constflag;
+                    tp1 = CondDeref(&ep1,tp1);
+                }
+                NextToken();       /* past id */
+            }
+            break;
+		case autodec:
+			NextToken();
+			Autoincdec(tp1,&ep1,1);
+			break;
+		case autoinc:
+			NextToken();
+			Autoincdec(tp1,&ep1,0);
+			break;
+		default:	goto j1;
+		}
+	}
+j1:
+	*node = ep1;
+	return tp1;
 }
 
 /*
  *      ParseUnaryExpression evaluates unary expressions and returns the type of the
  *      expression evaluated. unary expressions are any of:
  *
- *                      primary
- *                      !unary
- *                      ~unary
+ *                      postfix expression
  *                      ++unary
  *                      --unary
- *                      -unary
- *                      *unary
- *                      &unary
- *                      (typecast)unary
+ *                      !cast_expression
+ *                      ~cast_expression
+ *                      -cast_expression
+ *                      +cast_expression
+ *                      *cast_expression
+ *                      &cast_expression
+ **                      (typecast)unary
  *                      sizeof(typecast)
+ *                      sizeof unary
  *                      typenum(typecast)
  *
  */
@@ -776,178 +774,201 @@ TYP *ParseUnaryExpression(ENODE **node)
 {
 	TYP *tp, *tp1;
     ENODE *ep1, *ep2;
-    int flag, flag2;
-	__int64 i;
+    int flag2;
 	SYM *sp;
 
-        flag = 0;
-		flag2 = FALSE;
-        switch( lastst ) {
-                case autodec:
-                        flag = 1;
-                /* fall through to common increment */
-                case autoinc:
-                        NextToken();
-                        tp = ParseUnaryExpression(&ep1);
-                        if( tp == NULL ) {
-                            error(ERR_IDEXPECT);
-                            return NULL;
-                        }
-                        if( IsLValue(ep1)) {
-                            if( tp->type == bt_pointer )
-                                ep2 = makeinode(en_icon,tp->btp->size);
-                            else
-                                ep2 = makeinode(en_icon,1);
-                            ep2->constflag = TRUE;
-                            ep1 = makenode(flag ? en_assub : en_asadd,ep1,ep2);
-                        }
-                        else
-                            error(ERR_LVALUE);
-                        break;
+	flag2 = FALSE;
+	if (expr_flag) {
+        tp = ParsePostfixExpression(&ep1);
+		*node = ep1;
+		return tp;
+	}
+    switch( lastst ) {
+    case autodec:
+		NextToken();
+		tp = ParseUnaryExpression(&ep1);
+		Autoincdec(tp,&ep1,1);
+		break;
+    case autoinc:
+		NextToken();
+		tp = ParseUnaryExpression(&ep1);
+		Autoincdec(tp,&ep1,0);
+		break;
+	case plus:
+        NextToken();
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return NULL;
+        }
+        break;
+    case minus:
+        NextToken();
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return NULL;
+        }
+        ep1 = makenode(en_uminus,ep1,NULL);
+        ep1->constflag = ep1->p[0]->constflag;
+		ep1->isUnsigned = ep1->p[0]->isUnsigned;
+        break;
+    case not:
+        NextToken();
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return NULL;
+        }
+        ep1 = makenode(en_not,ep1,NULL);
+        ep1->constflag = ep1->p[0]->constflag;
+        break;
+    case compl:
+        NextToken();
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return 0;
+        }
+        ep1 = makenode(en_compl,ep1,NULL);
+        ep1->constflag = ep1->p[0]->constflag;
+        break;
+    case star:
+        NextToken();
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return NULL;
+        }
+        if( tp->btp == NULL )
+			error(ERR_DEREF);
+        else
+            tp = tp->btp;
+		tp1 = tp;
+		//Autoincdec(tp,&ep1);
+		tp = CondDeref(&ep1,tp);
+        break;
+    case and:
+        NextToken();
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return NULL;
+        }
+        if( IsLValue(ep1))
+            ep1 = ep1->p[0];
+        tp1 = allocTYP();
+        tp1->size = 8;
+        tp1->type = bt_pointer;
+        tp1->btp = tp;
+        tp1->val_flag = FALSE;
+        tp1->lst.head = NULL;
+        tp1->sname = NULL;
+        tp = tp1;
+		sp = search("ta_int",&tp->btp->lst);
+		if (sp) {
+			printf("ta_int\r\n");
+		}
+        break;
+    case kw_sizeof:
+        NextToken();
+		if (lastst==openpa) {
+			flag2 = TRUE;
+			NextToken();
+		}
+		if (flag2 && IsBeginningOfTypecast(lastst)) {
+			tp = head;
+			tp1 = tail;
+			ParseSpecifier(0);
+			ParseDeclarationPrefix(FALSE);
+			if( head != NULL )
+				ep1 = makeinode(en_icon,head->size);
+			else {
+				error(ERR_IDEXPECT);
+				ep1 = makeinode(en_icon,1);
+			}
+			head = tp;
+			tail = tp1;
+		}
+		else {
+			sizeof_flag++;
+			tp = ParseUnaryExpression(&ep1);
+			sizeof_flag--;
+			if (tp == 0) {
+				error(ERR_SYNTAX);
+				ep1 = makeinode(en_icon,1);
+			} else
+				ep1 = makeinode(en_icon, (long) tp->size);
+		}
+		if (flag2)
+			needpunc(closepa);
+		ep1->constflag = TRUE;
+		tp = &stdint;
+        break;
+    case kw_typenum:
+        NextToken();
+        needpunc(openpa);
+		tp = head;
+		tp1 = tail;
+        ParseSpecifier(0);
+        ParseDeclarationPrefix(FALSE);
+        if( head != NULL )
+            ep1 = makeinode(en_icon,GetTypeHash(head));
+		else {
+            error(ERR_IDEXPECT);
+            ep1 = makeinode(en_icon,1);
+        }
+		head = tp;
+		tail = tp1;
+        ep1->constflag = TRUE;
+        tp = &stdint;
+        needpunc(closepa);
+        break;
+    default:
+        tp = ParsePostfixExpression(&ep1);
+        break;
+    }
+    *node = ep1;
+    return tp;
+}
 
-                case minus:
-                        NextToken();
-                        tp = ParseUnaryExpression(&ep1);
-                        if( tp == NULL ) {
-                            error(ERR_IDEXPECT);
-                            return NULL;
-                        }
-                        ep1 = makenode(en_uminus,ep1,NULL);
-                        ep1->constflag = ep1->p[0]->constflag;
-						ep1->isUnsigned = ep1->p[0]->isUnsigned;
-                        break;
+// ----------------------------------------------------------------------------
+// A cast_expression is:
+//		unary_expression
+//		(type name)cast_expression
+// ----------------------------------------------------------------------------
+static TYP *ParseCastExpression(ENODE **node)
+{
+	TYP *tp, *tp1;
+	ENODE *ep1;
 
-                case not:
-                        NextToken();
-                        tp = ParseUnaryExpression(&ep1);
-                        if( tp == NULL ) {
-                            error(ERR_IDEXPECT);
-                            return NULL;
-                        }
-                        ep1 = makenode(en_not,ep1,NULL);
-                        ep1->constflag = ep1->p[0]->constflag;
-                        break;
-
-                case compl:
-                        NextToken();
-                        tp = ParseUnaryExpression(&ep1);
-                        if( tp == NULL ) {
-                            error(ERR_IDEXPECT);
-                            return 0;
-                        }
-                        ep1 = makenode(en_compl,ep1,NULL);
-                        ep1->constflag = ep1->p[0]->constflag;
-						Autoincdec(tp,&ep1);
-                        break;
-
-                case star:
-                        NextToken();
-                        tp = ParseUnaryExpression(&ep1);
-                        if( tp == NULL ) {
-                            error(ERR_IDEXPECT);
-                            return NULL;
-                        }
-                        if( tp->btp == NULL )
-							error(ERR_DEREF);
-                        else
-                            tp = tp->btp;
-						tp1 = tp;
-						//Autoincdec(tp,&ep1);
-						tp = CondDeref(&ep1,tp);
-                        break;
-
-                case and:
-                        NextToken();
-                        tp = ParseUnaryExpression(&ep1);
-                        if( tp == NULL ) {
-                            error(ERR_IDEXPECT);
-                            return NULL;
-                        }
-                        if( IsLValue(ep1))
-                                ep1 = ep1->p[0];
-                        tp1 = allocTYP();
-                        tp1->size = 8;
-                        tp1->type = bt_pointer;
-                        tp1->btp = tp;
-                        tp1->val_flag = FALSE;
-                        tp1->lst.head = NULL;
-                        tp1->sname = NULL;
-                        tp = tp1;
-						sp = search("ta_int",&tp->btp->lst);
-						if (sp) {
-							printf("ta_int\r\n");
-						}
-                        break;
-
-                case kw_sizeof:
-                        NextToken();
-						if (lastst==openpa) {
-							flag2 = TRUE;
-							NextToken();
-						}
-						if (flag2 && IsBeginningOfTypecast(lastst)) {
-							tp = head;
-							tp1 = tail;
-							ParseSpecifier(0);
-							ParseDeclarationPrefix(FALSE);
-							if( head != NULL )
-								ep1 = makeinode(en_icon,head->size);
-							else {
-								error(ERR_IDEXPECT);
-								ep1 = makeinode(en_icon,1);
-							}
-							head = tp;
-							tail = tp1;
-						}
-						else {
-							sizeof_flag++;
-							tp = ParseUnaryExpression(&ep1);
-							sizeof_flag--;
-							if (tp == 0) {
-								error(ERR_SYNTAX);
-								ep1 = makeinode(en_icon,1);
-							} else
-								ep1 = makeinode(en_icon, (long) tp->size);
-						}
-						if (flag2)
-							needpunc(closepa);
-						ep1->constflag = TRUE;
-						tp = &stdint;
-                        break;
-
-                case kw_typenum:
-                        NextToken();
-                        needpunc(openpa);
-						tp = head;
-						tp1 = tail;
-                        ParseSpecifier(0);
-                        ParseDeclarationPrefix(FALSE);
-                        if( head != NULL )
-                            ep1 = makeinode(en_icon,GetTypeHash(head));
-						else {
-                            error(ERR_IDEXPECT);
-                            ep1 = makeinode(en_icon,1);
-                        }
-						head = tp;
-						tail = tp1;
-                        ep1->constflag = TRUE;
-                        tp = &stdint;
-                        needpunc(closepa);
-                        break;
-
-                default:
-                        tp = ParsePrimaryExpression(&ep1);
-                        if( tp != NULL ) {
-                            if( tp->type == bt_pointer )
-                                    i = tp->btp->size;
-                            else
-                                    i = 1;
-							Autoincdec(tp,&ep1);
-                        }
-                        break;
-                }
-        *node = ep1;
-        return tp;
+	switch(lastst) {
+	case openpa:
+		NextToken();
+        if(IsBeginningOfTypecast(lastst) ) {
+            ParseSpecifier(0); /* do cast ParseSpecifieraration */
+            ParseDeclarationPrefix(FALSE);
+            tp = head;
+			tp1 = tail;
+            needpunc(closepa);
+            if(ParseCastExpression(&ep1) == NULL ) {
+                error(ERR_IDEXPECT);
+                tp = NULL;
+            }
+			head = tp;
+			tail = tp1;
+        }
+		else {
+			expr_flag = 1;
+			tp = ParseUnaryExpression(&ep1);
+		}
+		break;
+	default:
+		tp = ParseUnaryExpression(&ep1);
+		break;
+	}
+	*node = ep1;
+	return tp;
 }
 
 /*
@@ -1128,13 +1149,13 @@ TYP *multops(ENODE **node)
 	TYP *tp1, *tp2;
 	int	oper;
 
-	tp1 = ParseUnaryExpression(&ep1);
+	tp1 = ParseCastExpression(&ep1);
 	if( tp1 == 0 )
 		return 0;
         while( lastst == star || lastst == divide || lastst == modop) {
                 oper = lastst;
                 NextToken();       /* move on to next unary op */
-                tp2 = ParseUnaryExpression(&ep2);
+                tp2 = ParseCastExpression(&ep2);
                 if( tp2 == 0 ) {
                         error(ERR_IDEXPECT);
                         *node = ep1;
@@ -1492,6 +1513,9 @@ ascomm3:        tp2 = asnop(&ep2);
 			case asor:
 				op = en_asor;
 				goto ascomm;
+			case asxor:
+				op = en_asxor;
+				goto ascomm;
 			default:
 				goto asexit;
 			}
@@ -1500,9 +1524,11 @@ asexit: *node = ep1;
         return tp1;
 }
 
-/*
- *      evaluate an expression where the comma operator is not legal.
- */
+// ----------------------------------------------------------------------------
+// Evaluate an expression where the comma operator is not legal.
+// Externally visible entry point for GetIntegerExpression() and
+// ArgumentList().
+// ----------------------------------------------------------------------------
 TYP *NonCommaExpression(ENODE **node)
 {
 	TYP *tp;
@@ -1557,9 +1583,9 @@ TYP *commaop(ENODE **node)
 //        return tp1;
 //}
 
-/*
- *      evaluate an expression where all operators are legal.
- */
+// ----------------------------------------------------------------------------
+// Evaluate an expression where all operators are legal.
+// ----------------------------------------------------------------------------
 TYP *expression(ENODE **node)
 {
 	TYP *tp;

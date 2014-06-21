@@ -1,0 +1,539 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-ca">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>C64 Grammar</title>
+<link rel="stylesheet" type="text/css" href="styles.css">
+<link rel="stylesheet" type="text/css" href="../styles.css">
+<meta name="Microsoft Theme" content="water 011">
+</head>
+
+<body background="../_themes/water/background_water.gif" bgcolor="#4F68A7" text="#FFFFFF" link="#B6F1BC" vlink="#DBD7FF" alink="#FFFFFF"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">
+
+<h1 style="margin-top: 0; margin-bottom: 0"><!--mstheme--><b>C64 Grammar<!--mstheme--></b></h1>
+<p style="margin-top: 0; margin-bottom: 0"><a href="http://www.finitron.ca/">
+Home</a></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">
+
+<A name="primary-expression">primary_expression</A><br>
+	: IDENTIFIER<br>
+	| CONSTANT<br>
+	| STRING_LITERAL<br>
+	| '(' expression ')'<br>
+	;<br>
+<br>
+<a name="postfix-expression">postfix_expression</a><br>
+	: <a href="#primary-expression">primary_expression</a><br>
+	| postfix_expression '[' expression ']'<br>
+	| postfix_expression '(' ')'<br>
+	| postfix_expression '(' argument_expression_list ')'<br>
+	| postfix_expression '.' IDENTIFIER<br>
+	| postfix_expression '-&gt;' IDENTIFIER<br>
+	| postfix_expression '++'<br>
+	| postfix_expression '--'</p>
+<p style="margin-top: 0; margin-bottom: 0">	;<br>
+<br>
+
+<A name="argument-expression-list">argument_expression_list</A><br>
+	: <a href="#assignment-expression">assignment_expression</a><br>
+	| argument_expression_list ',' assignment_expression<br>
+	;<br>
+<br>
+
+<A name="unary-expression">unary_expression</A><br>
+	: <a href="#postfix-expression">postfix_expression</a><br>
+	| &quot;++&quot; unary_expression<br>
+	| &quot;--&quot; unary_expression<br>
+	| <a href="#unary-operator">unary_operator</a> <a href="#cast-expression">cast_expression</a><br>
+	| SIZEOF unary_expression<br>
+	| SIZEOF '(' type_name ')'<br>
+	;<br>
+<br>
+
+<A name="unary-operator">unary_operator</A><br>
+	: '&amp;'<br>
+	| '*'<br>
+	| '+'<br>
+	| '-'<br>
+	| '~'<br>
+	| '!'<br>
+	;<br>
+<br>
+
+<A name="cast-expression">cast_expression</A><br>
+	: <a href="#unary-expression">unary_expression</a><br>
+	| '(' type_name ')' cast_expression<br>
+	;<br>
+<br>
+
+<A name="multiplicative-expression">multiplicative_expression</A><br>
+	: <a href="#cast-expression">cast_expression</a><br>
+	| multiplicative_expression '*' cast_expression<br>
+	| multiplicative_expression '/' cast_expression<br>
+	| multiplicative_expression '%' cast_expression<br>
+	| multiplicative_expression 'mod' cast_expression<br>
+	;<br>
+<br>
+
+<A name="additive-expression">additive_expression</A><br>
+	: <a href="#multiplicative-expression">multiplicative_expression</a><br>
+	| additive_expression '+' multiplicative_expression<br>
+	| additive_expression '-' multiplicative_expression<br>
+	;<br>
+<br>
+
+<A name="shift-expression">shift_expression</A><br>
+	: additive_expression<br>
+	| shift_expression LEFT_OP additive_expression<br>
+	| shift_expression RIGHT_OP additive_expression<br>
+	;<br>
+<br>
+
+<A name="relational-expression">relational_expression</A><br>
+	: <a href="#shift-expression">shift_expression</a><br>
+	| relational_expression '&lt;' shift_expression<br>
+	| relational_expression '&gt;' shift_expression<br>
+	| relational_expression '&lt;=' shift_expression<br>
+	| relational_expression '&gt;=' shift_expression<br>
+	;<br>
+<br>
+
+<A name="equality-expression">equality_expression</A><br>
+	: relational_expression<br>
+	| equality_expression '==' relational_expression<br>
+	| equality_expression '!=' relational_expression<br>
+	| equality_expression '&lt;&gt;' relational_expression<br>
+	;<br>
+<br>
+bitwise_<A name="and-expression">and_expression</A><br>
+	: equality_expression<br>
+	| and_expression '&amp;' equality_expression<br>
+	;<br>
+<br>
+bitwise_<A name="exclusive-or-expression">exclusive_or_expression</A><br>
+	: and_expression<br>
+	| exclusive_or_expression '^' and_expression<br>
+	;<br>
+<br>
+bitwise_<A name="inclusive-or-expression">inclusive_or_expression</A><br>
+	: exclusive_or_expression<br>
+	| inclusive_or_expression '|' exclusive_or_expression<br>
+	;<br>
+<br>
+
+<A name="logical-and-expression">logical_and_expression</A><br>
+	: inclusive_or_expression<br>
+	| logical_and_expression '&amp;&amp;' inclusive_or_expression<br>
+<font color="#FFFF00">	| logical_and_expression 'and' inclusive_or_expression<br>
+</font>	;<br>
+<br>
+
+<A name="logical-or-expression">logical_or_expression</A><br>
+	: logical_and_expression<br>
+	| logical_or_expression '||' logical_and_expression<br>
+<font color="#FFFF00">	| logical_or_expression 'or' logical_and_expression<br>
+</font>	;<br>
+<br>
+
+<A name="conditional-expression">conditional_expression</A><br>
+	: logical_or_expression<br>
+	| logical_or_expression '?' expression ':' conditional_expression<br>
+	;<br>
+<br>
+
+<A name="assignment-expression">assignment_expression</A><br>
+	: conditional_expression<br>
+	| <a href="#unary-expression">unary_expression</a> assignment_operator assignment_expression<br>
+	;<br>
+<br>
+
+<A name="assignment-operator">assignment_operator</A><br>
+	: '='<br>
+	| '*='<br>
+	| '/='<br>
+	| '%='<br>
+	| '+='<br>
+	| '-='<br>
+	| '&lt;&lt;='<br>
+	| '&gt;&gt;='<br>
+	| '&amp;='<br>
+	| '^='<br>
+	| '|='<br>
+	;<br>
+<br>
+non_comma_<A name="expression">expression</A><br>
+	: assignment_expression<br>
+	;<br>
+<br>
+
+<A name="expression">expression</A><br>
+	: non_comma_expression<br>
+	| expression ',' non_comma_expression<br>
+	;<br>
+<br>
+
+<A name="constant-expression">constant_expression</A><br>
+	: conditional_expression<br>
+	;<br>
+<br>
+
+<A name="declaration">declaration</A><br>
+	: declaration_specifiers ';'<br>
+	| declaration_specifiers init_declarator_list ';'<br>
+	;<br>
+<br>
+
+<A name="declaration-specifiers">declaration_specifiers</A><br>
+	: storage_class_specifier<br>
+	| storage_class_specifier declaration_specifiers<br>
+	| type_specifier<br>
+	| type_specifier declaration_specifiers<br>
+	| type_qualifier<br>
+	| type_qualifier declaration_specifiers<br>
+	;<br>
+<br>
+
+<A name="init-declarator-list">init_declarator_list</A><br>
+	: init_declarator<br>
+	| init_declarator_list ',' init_declarator<br>
+	;<br>
+<br>
+
+<A name="init-declarator">init_declarator</A><br>
+	: declarator<br>
+	| declarator '=' initializer<br>
+	;<br>
+<br>
+
+<A name="storage-class-specifier">storage_class_specifier</A><br>
+	: TYPEDEF<br>
+	| EXTERN<br>
+	| STATIC<br>
+	| AUTO<br>
+	| REGISTER<br>
+	<font color="#FFFF00">| THREAD</font><br>
+	;<br>
+<br>
+
+<A name="type-specifier">type_specifier</A><br>
+	: VOID<br>
+	<font color="#FFFF00">| BYTE</font><br>
+	| CHAR<br>
+	| SHORT<br>
+	| INT<br>
+	<font color="#FFFF00">| __INT8<br>
+	| __INT16<br>
+	| __INT32<br>
+	| __INT64</font><br>
+	| LONG<br>
+	| FLOAT<br>
+	| DOUBLE<br>
+	| SIGNED<br>
+	| UNSIGNED<br>
+	| struct_or_union_specifier<br>
+	| enum_specifier<br>
+	| TYPE_NAME<br>
+	;<br>
+<br>
+
+<A name="struct-or-union-specifier">struct_or_union_specifier</A><br>
+	: struct_or_union IDENTIFIER '{' struct_declaration_list '}'<br>
+	| struct_or_union '{' struct_declaration_list '}'<br>
+	| struct_or_union IDENTIFIER<br>
+	;<br>
+<br>
+
+<A name="struct-or-union">struct_or_union</A><br>
+	: STRUCT<br>
+	| UNION<br>
+	;<br>
+<br>
+
+<A name="struct-declaration-list">struct_declaration_list</A><br>
+	: struct_declaration<br>
+	| struct_declaration_list struct_declaration<br>
+	;<br>
+<br>
+
+<A name="struct-declaration">struct_declaration</A><br>
+	: specifier_qualifier_list struct_declarator_list ';'<br>
+	;<br>
+<br>
+
+<A name="specifier-qualifier-list">specifier_qualifier_list</A><br>
+	: type_specifier specifier_qualifier_list<br>
+	| type_specifier<br>
+	| type_qualifier specifier_qualifier_list<br>
+	| type_qualifier<br>
+	;<br>
+<br>
+
+<A name="struct-declarator-list">struct_declarator_list</A><br>
+	: struct_declarator<br>
+	| struct_declarator_list ',' struct_declarator<br>
+	;<br>
+<br>
+
+<A name="struct-declarator">struct_declarator</A><br>
+	: declarator<br>
+	| ':' constant_expression<br>
+	| declarator ':' constant_expression<br>
+	;<br>
+<br>
+
+<A name="enum-specifier">enum_specifier</A><br>
+	: ENUM '{' enumerator_list '}'<br>
+	| ENUM IDENTIFIER '{' enumerator_list '}'<br>
+	| ENUM IDENTIFIER<br>
+	;<br>
+<br>
+
+<A name="enumerator-list">enumerator_list</A><br>
+	: enumerator<br>
+	| enumerator_list ',' enumerator<br>
+	;<br>
+<br>
+
+<A name="enumerator">enumerator</A><br>
+	: IDENTIFIER<br>
+	| IDENTIFIER '=' constant_expression<br>
+	;<br>
+<br>
+
+<A name="type-qualifier">type_qualifier</A><br>
+	: CONST<br>
+	| VOLATILE<br>
+	;<br>
+<br>
+
+<A name="declarator">declarator</A><br>
+	: pointer direct_declarator<br>
+	| direct_declarator<br>
+	;<br>
+<br>
+
+<A name="direct-declarator">direct_declarator</A><br>
+	: IDENTIFIER<br>
+	| '(' declarator ')'<br>
+	| direct_declarator '[' constant_expression ']'<br>
+	| direct_declarator '[' ']'<br>
+	| direct_declarator '(' parameter_type_list ')'<br>
+	| direct_declarator '(' identifier_list ')'<br>
+	| direct_declarator '(' ')'<br>
+	;<br>
+<br>
+
+<A name="pointer">pointer</A><br>
+	: '*'<br>
+	| '*' type_qualifier_list<br>
+	| '*' pointer<br>
+	| '*' type_qualifier_list pointer<br>
+	;<br>
+<br>
+
+<A name="type-qualifier-list">type_qualifier_list</A><br>
+	: type_qualifier<br>
+	| type_qualifier_list type_qualifier<br>
+	;<br>
+<br>
+<br>
+
+
+<A name="parameter-type-list">parameter_type_list</A><br>
+	: parameter_list<br>
+	| parameter_list ',' ELLIPSIS<br>
+	;<br>
+<br>
+
+<A name="parameter-list">parameter_list</A><br>
+	: parameter_declaration<br>
+	| parameter_list ',' parameter_declaration<br>
+	;<br>
+<br>
+
+<A name="parameter-declaration">parameter_declaration</A><br>
+	: declaration_specifiers declarator<br>
+	| declaration_specifiers abstract_declarator<br>
+	| declaration_specifiers<br>
+	;<br>
+<br>
+
+<A name="identifier-list">identifier_list</A><br>
+	: IDENTIFIER<br>
+	| identifier_list ',' IDENTIFIER<br>
+	;<br>
+<br>
+
+<A name="type-name">type_name</A><br>
+	: specifier_qualifier_list<br>
+	| specifier_qualifier_list abstract_declarator<br>
+	;<br>
+<br>
+
+<A name="abstract-declarator">abstract_declarator</A><br>
+	: pointer<br>
+	| direct_abstract_declarator<br>
+	| pointer direct_abstract_declarator<br>
+	;<br>
+<br>
+
+<A name="direct-abstract-declarator">direct_abstract_declarator</A><br>
+	: '(' abstract_declarator ')'<br>
+	| '[' ']'<br>
+	| '[' constant_expression ']'<br>
+	| direct_abstract_declarator '[' ']'<br>
+	| direct_abstract_declarator '[' constant_expression ']'<br>
+	| '(' ')'<br>
+	| '(' parameter_type_list ')'<br>
+	| direct_abstract_declarator '(' ')'<br>
+	| direct_abstract_declarator '(' parameter_type_list ')'<br>
+	;<br>
+<br>
+
+<A name="initializer">initializer</A><br>
+	: assignment_expression<br>
+	| '{' initializer_list '}'<br>
+	| '{' initializer_list ',' '}'<br>
+	;<br>
+<br>
+
+<A name="initializer-list">initializer_list</A><br>
+	: initializer<br>
+	| initializer_list ',' initializer<br>
+	;<br>
+<br>
+
+<A name="statement">statement</A><br>
+	: labeled_statement<br>
+	| compound_statement<br>
+	| expression_statement<br>
+	| selection_statement<br>
+	| iteration_statement<br>
+	| jump_statement</p>
+<p style="margin-top: 0; margin-bottom: 0">	<font color="#FFFF00">| try_statement</font></p>
+<p style="margin-top: 0; margin-bottom: 0"><font color="#FFFF00">	| asm_statement</font></p>
+<p style="margin-top: 0; margin-bottom: 0">	;<br>
+<br>
+<font color="#FFFF00">try_<A name="statement">statement</A><br>
+	: TRY statement CATCH '(' LVALUE ')' statement<br>
+	| TRY statement CATCH '(...)' statement<br>
+	;<br>
+</font><br>
+<font color="#FFFF00"><a name="labeled-statement">constant_expression_list</a><br>
+	: constant_expression<br>
+	| constant_expression_list ',' constant_expression<br>
+	;<br>
+&nbsp;</font></p>
+<p style="margin-top: 0; margin-bottom: 0">
+
+<A name="labeled-statement">labeled_statement</A><br>
+	: IDENTIFIER ':' statement<br>
+	| CASE constant_expression_list ':' statement<br>
+	| DEFAULT ':' statement<br>
+	;<br>
+<br>
+<font color="#FFFF00"><a name="compound-statement">asm_statement</a><br>
+	| ASM '{' assembler_text '}'<br>
+	;<br>
+</font><br>
+
+<A name="compound-statement">compound_statement</A>_start<br>
+	: '{'<br>
+<font color="#FFFF00">	| '{:' IDENTIFIER</font></p>
+<p style="margin-top: 0; margin-bottom: 0">	;</p>
+<p>
+
+<A name="compound-statement">compound_statement</A><br>
+	:
+
+<A name="compound-statement">compound_statement</A>_start '}'<br>
+	|
+
+<A name="compound-statement">compound_statement</A>_start statement_list '}'<br>
+	|
+
+<A name="compound-statement">compound_statement</A>_start declaration_list '}'<br>
+	|
+
+<A name="compound-statement">compound_statement</A>_start declaration_list statement_list '}'<br>
+	;<br>
+<br>
+
+<A name="declaration-list">declaration_list</A><br>
+	: declaration<br>
+	| declaration_list declaration<br>
+	;<br>
+<br>
+
+<A name="statement-list">statement_list</A><br>
+	: statement<br>
+	| statement_list statement<br>
+	;<br>
+<br>
+
+<A name="expression-statement">expression_statement</A><br>
+	: ';'<br>
+	| expression ';'<br>
+	;<br>
+<br>
+<font color="#FFFF00"><a name="expression-statement">then</a><br>
+	: THEN<br>
+	;</font></p>
+<p><br>
+
+<A name="selection-statement">selection_statement</A><br>
+	: IF '(' expression ')' <font color="#FFFF00">then</font> statement<br>
+	| IF '(' expression ')' <font color="#FFFF00">then</font> statement ELSE statement<br>
+<font color="#FFFF00">	| IF '(' expression ')' then statement ELSIF '(' 
+expression ')' then statement ELSE statement<br>
+</font>	| SWITCH '(' expression ')' statement<br>
+	;<br>
+<br>
+
+<A name="iteration-statement">iteration_statement</A><br>
+<font color="#FFFF00">	: FOREVER statement<br>
+</font>	| WHILE '(' expression ')' statement<br>
+<font color="#FFFF00">	| UNTIL '(' expression ')' statement<br>
+</font>	| DO statement WHILE '(' expression ')' ';'<br>
+<font color="#FFFF00">	| DO statement UNTIL '(' expression ')' ';'<br>
+</font>	| FOR '(' expression_statement expression_statement ')' statement<br>
+	| FOR '(' expression_statement expression_statement expression ')' statement<br>
+	;<br>
+<br>
+
+<A name="jump-statement">jump_statement</A><br>
+	: GOTO IDENTIFIER ';'<br>
+	| CONTINUE ';'<br>
+	| BREAK ';'<br>
+	| RETURN ';'<br>
+	| RETURN expression ';'<br>
+	;<br>
+<br>
+
+<A name="translation-unit">translation_unit</A><br>
+	: external_declaration<br>
+	| translation_unit external_declaration<br>
+	;<br>
+<br>
+
+<A name="external-declaration">external_declaration</A><br>
+	: function_definition<br>
+	| declaration<br>
+	;<br>
+<br>
+
+<A name="function-definition">function_definition</A><br>
+	: declaration_specifiers declarator declaration_list compound_statement<br>
+	| declaration_specifiers declarator compound_statement<br>
+	| declarator declaration_list compound_statement<br>
+	| declarator compound_statement<br>
+	;<br>
+&nbsp;</p>
+
+<!--mstheme--></font></body>
+
+</html>

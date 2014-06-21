@@ -449,7 +449,12 @@ restart:        /* we come back here after comments */
                         break;
                 case '^':
                         getch();
-                        lastst = uparrow;
+                        if( lastch == '=') {
+							lastst = asxor;
+							getch();
+                        }
+						else
+							lastst = uparrow;
                         break;
                 case ';':
                         getch();

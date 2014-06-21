@@ -1485,15 +1485,17 @@ static void GenerateCmp(ENODE *node, int op, int label, int predreg)
 		case op_gtu: op = op_bgtu; break;
 		case op_geu: op = op_bgeu; break;
 		}
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
 		GenerateDiadic(op,0,make_string("flg0"),make_clabel(label));
 	}
 	else {
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
 		sprintf(buf[ndx], "p%d", predreg);
 		GenerateTriadic(op_cmp,0,make_string(buf[ndx]),ap1,ap2);
 		GeneratePredicatedMonadic(predreg,PredOp(op),op_bra,0,make_clabel(label));
 	}
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
 }
 /*
  *      generate a jump to label if the node passed evaluates to

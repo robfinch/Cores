@@ -787,6 +787,8 @@ void GenerateStatement(Statement *stmt)
                 case st_switch:
                         genxswitch(stmt);
                         break;
+				case st_empty:
+						break;
                 default:
                         printf("DIAG - unknown statement.\n");
                         break;

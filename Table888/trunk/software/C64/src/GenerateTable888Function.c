@@ -72,7 +72,7 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
 	if (!sym->IsNocall) {
 //		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(32));
 		if (lc_auto || sym->NumParms > 0) {
-//			GenerateMonadic(op_link,0,make_immed(24));
+			//GenerateMonadic(op_link,0,make_immed(24));
 			GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(24));
 			GenerateDiadic(op_sw,0,makereg(BP),make_indirect(SP));
 			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
@@ -173,6 +173,7 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 			cnt = (bitsset(save_mask)-1)*8;
 			for (nn = 31; nn >=1 ; nn--) {
 				if (save_mask & (1 << nn)) {
+					//GenerateDiadic(op_lw,0,makereg(nn),make_indexed(cnt,SP));
 					GenerateMonadic(op_pop,0,makereg(nn));//,make_indexed(cnt,SP),NULL);
 					cnt -= 8;
 				}
@@ -223,11 +224,14 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 //
 static void GenerateTable888PushParameter(ENODE *ep, int i, int n)
 {    
-	static AMODE *ap[4];
+	//static AMODE *ap[4];
+	AMODE *ap;
 
 	if (ep==NULL)
 		return;
-	ap[i % 4] = GenerateExpression(ep,F_REG,8);
+	ap = GenerateExpression(ep,F_REG,8);
+	GenerateMonadic(op_push,0,ap);
+/*	ap[i % 4] = GenerateExpression(ep,F_REG,8);
 	if (n-1==i) {
 		switch(i % 3) {
 		case 0:	GenerateMonadic(op_push,0,ap[0]);
@@ -258,7 +262,7 @@ static void GenerateTable888PushParameter(ENODE *ep, int i, int n)
 			ReleaseTempRegister(ap[1]);
 			ReleaseTempRegister(ap[0]);
 		}
-	}
+	}*/
 }
 
 // push entire parameter list onto stack

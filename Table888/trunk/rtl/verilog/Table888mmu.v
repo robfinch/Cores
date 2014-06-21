@@ -70,6 +70,7 @@
 `define CLP			8'h37
 `define RTI			8'h40
 `define STP			8'h41
+`define UNLINK		8'h42
 `define MTSPR		8'h48
 `define MFSPR		8'h49
 `define VERR		8'h80
@@ -157,8 +158,11 @@
 `define BRZ		8'h58
 `define BRNZ	8'h59
 `define DBNZ	8'h5A
+`define JAL		8'h5B
 `define RTS		8'h60
 `define JSP		8'h61
+`define LINK	8'h62
+`define RTD		8'h63
 `define LB		8'h80
 `define LBU		8'h81
 `define LC		8'h82
@@ -174,6 +178,8 @@
 `define LHX		8'h8C
 `define LHUX	8'h8D
 `define LWX		8'h8E
+`define LEAX	8'h8F
+`define LEA		8'h92
 `define SB		8'hA0
 `define SC		8'hA1
 `define SH		8'hA2
@@ -212,6 +218,8 @@
 `define CR0		8'h05
 `define CLK		8'h06
 `define FAULT_PC	8'h08
+`define IVNO	8'h0C
+`define HISTORY	8'h0D
 `define SRAND1	8'h10
 `define SRAND2	8'h11
 `define RAND	8'h12
@@ -235,7 +243,7 @@ input ack_i;
 input err_i;
 output reg [3:0] sel_o;
 output reg we_o;
-output reg [31:0] adr_o;
+output reg [33:0] adr_o;
 input [31:0] dat_i;
 output reg [31:0] dat_o;
 
@@ -283,9 +291,21 @@ parameter ICACHE2 = 6'd21;
 parameter IBUF1 = 6'd24;
 parameter IBUF2 = 6'd25;
 parameter IBUF3 = 6'd26;
+parameter IBUF4 = 6'd27;
 parameter CINV1 = 6'd32;
 parameter CINV2 = 6'd33;
-parameter HANG = 6'd37;
+parameter LINK1 = 6'd34;
+parameter IBUF1b = 6'd35;
+parameter IBUF2b = 6'd36;
+parameter IBUF3b = 6'd37;
+parameter IBUF1c = 6'd38;
+parameter IBUF2c = 6'd39;
+parameter IBUF3c = 6'd40;
+parameter LOAD5 = 6'd41;
+parameter LOAD6 = 6'd42;
+parameter LOAD7 = 6'd43;
+parameter DIV2 = 6'd44;
+parameter HANG = 6'd63;
 
 // - - - - - - - - - - - - - - - - - -
 // codes for load/store sizes
@@ -324,7 +344,12 @@ reg [PCMSB:0] pc;
 wire [63:0] paged_pc;
 reg [PCMSB:0] ibufadr;
 wire ibufmiss = ibufadr != paged_pc[PCMSB:0];
-reg [39:0] ibuf;	// instruction buffer
+reg [39:0] ibuf1,ibuf2,ibuf3;	// instruction buffer
+wire [39:0] ibuf = (ibuf1 & ibuf2) | (ibuf1 & ibuf3) | (ibuf2 & ibuf3);
+reg hist_capture;
+reg [31:0] history_buf [63:0];
+reg [5:0] history_ndx;
+reg [5:0] history_ndx2;
 reg isInsnCacheLoad,isCacheReset;
 reg nmi_edge,nmi1;
 reg hwi;			// hardware interrupt indicator
@@ -333,7 +358,9 @@ wire pe;			// protection enabled
 reg pv;				// privilege violation
 reg [2:0] imcd;		// mask countdown bits
 wire [31:0] sr = {23'd0,im,6'h00,pv,pe};
-reg [63:0] regfile [255:0];
+reg [63:0] regfile1 [255:0];
+reg [63:0] regfile2 [255:0];
+reg [63:0] regfile3 [255:0];
 
 reg gie;						// global interrupt enable
 wire [7:0] Ra = ir[15:8];
@@ -353,7 +380,7 @@ reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
 reg isShifti,isBSR,isLMR,isSMR;
-reg isJSP,isJSR,isLWS;
+reg isJSP,isJSR,isLWS,isLink;
 reg isBM;
 reg [1:0] nLD;
 wire hasIMM = isIMM1|isIMM2;
@@ -372,6 +399,8 @@ reg cav;
 wire dav;				// address is valid for mmu translation
 reg [15:0] JOB;
 reg [15:0] TASK;
+reg [63:0] lresx [2:0];
+wire [63:0] lres = (lresx[0] & lresx[1]) | (lresx[0] & lresx[2]) | (lresx[1] & lresx[2]);
 
 assign dav=state==LOAD1||state==LOAD3||state==STORE1||state==STORE3;
 
@@ -381,6 +410,10 @@ reg [63:0] cr0;
 reg [63:0] pta;
 wire paging_en = cr0[31];
 assign pe = cr0[0];
+wire tmrx = cr0[4];			// triple mode redundancy execute
+wire tmrw = cr0[3];			// triple mode redundancy writes
+wire tmrr = cr0[2];			// triple mode redundancy reads
+reg [1:0] tmrcyc;			// tmr cycle number
 wire [3:0] cpl = cr0[7:4];
 wire [63:0] cpte;
 wire [63:0] dpte;
@@ -393,6 +426,7 @@ wire page_executable;
 reg isWR;
 wire [3:0] pmmu_cpl;
 wire [3:0] pmmu_dpl;
+reg [31:0] ivno;
 
 reg [63:0] sp;	// stack pointer
 wire [63:0] sp_inc = sp + 64'd8;
@@ -529,21 +563,21 @@ case(Ra)
 8'h00:	rfoa <= 64'd0;
 8'hFE:	rfoa <= pc[39:0];
 8'hFF:	rfoa <= sp;
-default:	rfoa <= regfile[Ra];
+default:	rfoa <= (regfile1[Ra] & regfile2[Ra]) | (regfile1[Ra] & regfile3[Ra]) | (regfile2[Ra] & regfile3[Ra]);
 endcase
 always @*
 case(Rb)
 8'h00:	rfob <= 64'd0;
 8'hFE:	rfob <= pc[39:0];
 8'hFF:	rfob <= sp;
-default:	rfob <= regfile[Rb];
+default:	rfob <= (regfile1[Rb] & regfile2[Rb]) | (regfile1[Rb] & regfile3[Rb]) | (regfile2[Rb] & regfile3[Rb]);
 endcase
 always @*
 case(Rc)
 8'h00:	rfoc <= 64'd0;
 8'hFE:	rfoc <= pc[39:0];
 8'hFF:	rfoc <= sp;
-default:	rfoc <= regfile[Rc];
+default:	rfoc <= (regfile1[Rc] & regfile2[Rc]) | (regfile1[Rc] & regfile3[Rc]) | (regfile2[Rc] & regfile3[Rc]);
 endcase
 
 // Data input multiplexers
@@ -614,6 +648,8 @@ reg [6:0] cnt;
 reg res_sgn;
 reg [63:0] aa, bb;
 reg [63:0] q, r;
+reg ld_divider;
+wire div_done;
 wire [63:0] pa = a[63] ? -a : a;
 wire [127:0] p1 = aa * bb;
 reg [127:0] p;
@@ -666,6 +702,8 @@ always @*
 	`CLK:	spro <= clk_throttle_new;
 `endif
 	`FAULT_PC:	spro <= fault_pc;
+	`IVNO:		spro <= ivno;
+	`HISTORY:	spro <= history_buf[history_ndx2];
 	`RAND:		spro <= rand;
 	default:	spro <= 65'd0;
 	endcase
@@ -735,6 +773,11 @@ if (rst_i) begin
 	rst_cpnp <= `TRUE;
 	rst_dpnp <= `TRUE;
 	isWR <= `FALSE;
+	tmrcyc <= 2'd0;
+	hist_capture <= `TRUE;
+	history_ndx <= 6'd0;
+	history_ndx2 <= 6'd0;
+	ld_divider <= `FALSE;
 `ifdef SUPPORT_CLKGATE
 	ld_clk_throttle <= `FALSE;
 `endif
@@ -782,6 +825,10 @@ IFETCH:
 		hwi <= `FALSE;
 		brkCnt <= 3'd0;
 		if (rdy) begin
+			if (hist_capture) begin
+				history_buf[history_ndx] <= pc[31:0];
+				history_ndx <= history_ndx + 1;
+			end
 			next_state(DECODE);
 			if (nmi_edge & gie & ~hasIMM) begin
 				ir[7:0] <= `BRK;
@@ -853,36 +900,96 @@ ICACHE2:
 
 IBUF1:
 	begin
-		wb_burst(6'd1,{paged_pc[31:2],2'h0});
+		wb_burst(6'd1,{paged_pc[31:16],2'b00,paged_pc[15:2],2'h0});
 		next_state(IBUF2);
 	end
 IBUF2:
-	begin
-		if (ack_i) begin
-			cti_o <= 3'b111;
-			adr_o <= adr_o + 32'd4;
-			case(pc[1:0])
-			2'b00:	ibuf[31:0] <= dat_i;
-			2'b01:	ibuf[23:0] <= dat_i[31:8];
-			2'b10:	ibuf[15:0] <= dat_i[31:16];
-			2'b11:	ibuf[7:0] <= dat_i[31:24];
-			endcase
-			next_state(IBUF3);
-		end
+	if (ack_i) begin
+		cti_o <= 3'b111;
+		adr_o <= adr_o + 32'd4;
+		case(pc[1:0])
+		2'b00:	ibuf1[31:0] <= dat_i;
+		2'b01:	ibuf1[23:0] <= dat_i[31:8];
+		2'b10:	ibuf1[15:0] <= dat_i[31:16];
+		2'b11:	ibuf1[7:0] <= dat_i[31:24];
+		endcase
+		next_state(IBUF3);
 	end
 IBUF3:
+	if (ack_i) begin
+		wb_nack();
+		ibufadr <= paged_pc[PCMSB:0];
+		case(pc[1:0])
+		2'b00:	ibuf1[39:32] <= dat_i[7:0];
+		2'b01:	ibuf1[39:24] <= dat_i[15:0];
+		2'b10:	ibuf1[39:16] <= dat_i[23:0];
+		2'b11:	ibuf1[39:8] <= dat_i;
+		endcase
+		next_state(tmrx ? IBUF1b : IBUF4);
+	end
+IBUF4:
 	begin
-		if (ack_i) begin
-			wb_nack();
-			ibufadr <= paged_pc[PCMSB:0];
-			case(pc[1:0])
-			2'b00:	ibuf[39:32] <= dat_i[7:0];
-			2'b01:	ibuf[39:24] <= dat_i[15:0];
-			2'b10:	ibuf[39:16] <= dat_i[23:0];
-			2'b11:	ibuf[39:8] <= dat_i;
-			endcase
-			next_state(IFETCH);
-		end
+		ibuf2 <= ibuf1;
+		ibuf3 <= ibuf1;
+		next_state(IFETCH);
+	end
+
+IBUF1b:
+	begin
+		wb_burst(6'd1,{paged_pc[31:16],2'b01,paged_pc[15:2],2'h0});
+		next_state(IBUF2b);
+	end
+IBUF2b:
+	if (ack_i) begin
+		cti_o <= 3'b111;
+		adr_o <= adr_o + 32'd4;
+		case(pc[1:0])
+		2'b00:	ibuf2[31:0] <= dat_i;
+		2'b01:	ibuf2[23:0] <= dat_i[31:8];
+		2'b10:	ibuf2[15:0] <= dat_i[31:16];
+		2'b11:	ibuf2[7:0] <= dat_i[31:24];
+		endcase
+		next_state(IBUF3b);
+	end
+IBUF3b:
+	if (ack_i) begin
+		wb_nack();
+		case(pc[1:0])
+		2'b00:	ibuf2[39:32] <= dat_i[7:0];
+		2'b01:	ibuf2[39:24] <= dat_i[15:0];
+		2'b10:	ibuf2[39:16] <= dat_i[23:0];
+		2'b11:	ibuf2[39:8] <= dat_i;
+		endcase
+		next_state(IBUF1c);
+	end
+
+IBUF1c:
+	begin
+		wb_burst(6'd1,{paged_pc[31:16],2'b10,paged_pc[15:2],2'h0});
+		next_state(IBUF2c);
+	end
+IBUF2c:
+	if (ack_i) begin
+		cti_o <= 3'b111;
+		adr_o <= adr_o + 32'd4;
+		case(pc[1:0])
+		2'b00:	ibuf3[31:0] <= dat_i;
+		2'b01:	ibuf3[23:0] <= dat_i[31:8];
+		2'b10:	ibuf3[15:0] <= dat_i[31:16];
+		2'b11:	ibuf3[7:0] <= dat_i[31:24];
+		endcase
+		next_state(IBUF3c);
+	end
+IBUF3c:
+	if (ack_i) begin
+		wb_nack();
+		case(pc[1:0])
+		2'b00:	ibuf3[39:32] <= dat_i[7:0];
+		2'b01:	ibuf3[39:24] <= dat_i[15:0];
+		2'b10:	ibuf3[39:16] <= dat_i[23:0];
+		2'b11:	ibuf3[39:8] <= dat_i;
+		endcase
+		next_state(IFETCH);
 	end
 
 // ----------------------------------------------------------------------------
@@ -935,12 +1042,15 @@ DECODE:
 		`BITFIELD:
 			Rt <= ir[23:16];
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`CMPI,`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
-		`ANDI,`ORI,`EORI:
+		`ANDI,`ORI,`EORI,
+		`JAL:
 			Rt <= ir[23:16];
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
 			Rt <= ir[23:16];
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`BMT:
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,`BMT:
 			Rt <= ir[31:24];
+		`LINK,`RTD:
+			Rt <= ir[15:8];
 		default:
 			Rt <= 8'h00;
 		endcase
@@ -955,8 +1065,8 @@ DECODE:
 		`JMP_IX:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`JMP_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`JSR_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`SBX,`SCX,`SHX,`SWX,
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`LEA,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`SBX,`SCX,`SHX,`SWX,`LEAX,
 		`CINV,`CINVX:	;
 		default:
 			if (hasIMM)
@@ -1012,6 +1122,7 @@ DECODE:
 				end
 			`RTI:
 				begin
+					hist_capture <= `TRUE;
 					if (cpl == 4'd15 && pe)
 						privilege_violation();
 					else begin
@@ -1034,7 +1145,7 @@ DECODE:
 			`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:	next_state(MULDIV);
 			endcase
 
-		`MULI,`MULUI,`DIVI,`DIVUI,`MOD,`MODU:	next_state(MULDIV);
+		`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI:	next_state(MULDIV);
 		`CMPI:	isCMPI <= `TRUE;
 
 
@@ -1048,6 +1159,8 @@ DECODE:
 				$display("BRK");
 				$display("*****************");
 				$display("*****************");
+				ivno <= ir[20:12];
+				hist_capture <= `FALSE;
 				isBRK <= `TRUE;
 				rwadr <= sp_dec;
 				store_what <= `STW_SR;
@@ -1115,7 +1228,7 @@ DECODE:
 				next_state(LOAD1);
 				update_sp(sp_inc + ir[31:16]);
 			end
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,
 		`SB,`SC,`SH,`SW:
 			begin
 				if (isIMM1) begin
@@ -1140,7 +1253,7 @@ DECODE:
 					imm <= {{50{ir[39]}},ir[39:26]};
 				end
 			end
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX,
 		`BMS,`BMC,`BMF,`BMT:
 			begin
@@ -1256,7 +1369,11 @@ EXECUTE:
 						res <= spro;
 						wrspr <= `TRUE;
 					end
-			`MFSPR:	res <= spro;
+			`MFSPR:	begin
+					res <= spro;
+					if (Ra==8'h0D)
+						history_ndx2 <= history_ndx2 + 6'd1;
+					end
 			`MTSPR:	begin
 						res <= a;
 						wrspr <= `TRUE;
@@ -1283,6 +1400,13 @@ EXECUTE:
 					4'd13:	res <= {CORE,48'h0000};
 					default:	res <= 65'd0;
 					endcase
+				end
+			`UNLINK:
+				begin
+					wrrf <= `TRUE;
+					res <= a;						// MOV SP,BP
+					ir <= {16'h0000,Ra,8'hFF,`LW};	// LW BP,[SP]
+					next_state(LINK1);				// need cycle to update SP
 				end
 			endcase
 		`RR:
@@ -1339,6 +1463,14 @@ EXECUTE:
 		`ANDI:	res <= a & imm;
 		`ORI:	res <= a | imm;
 		`EORI:	res <= a ^ imm;
+		
+		`LINK:	begin
+				isLink <= `TRUE;
+				wrrf <= `TRUE;
+				res <= a - imm;						// SUBUI SP,SP,#imm
+				ir <= {16'h0000,Rb,Ra,`SW};			// SW BP,[SP]
+				next_state(LINK1);					// need time to update and read reg
+				end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// Flow Control Instructions Follow
@@ -1382,6 +1514,16 @@ EXECUTE:
 				store_what <= `STW_PC;
 				next_state(STORE1);
 			end
+		`JAL:
+			begin
+				res <= pc;
+				pc <= a + imm;
+			end
+		`RTD:
+			begin
+				pc <= b;
+				res <= a + imm;
+			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// Loads and Stores follow
@@ -1421,6 +1563,7 @@ EXECUTE:
 				ld_size <= word;
 				load_check(ea_drn);
 			end
+		`LEA:	res <= ea_drn;
 		`LWS:
 			begin
 				isLWS <= `TRUE;
@@ -1462,6 +1605,7 @@ EXECUTE:
 				ld_size <= word;
 				load_check(ea_ndx);
 			end
+		`LEAX:	res <= ea_ndx;
 `ifdef SUPPORT_BITMAP_FNS
 		`BMS,`BMC,`BMF,`BMT:
 			begin
@@ -1496,6 +1640,11 @@ EXECUTE:
 				isWR <= `TRUE;
 				store_what <= `STW_B;
 				store_check(ea_drn);
+				if (isLink) begin		// MOV BP,SP
+					Rt <= Rb;
+					res <= a;
+				end
+				isLink <= `FALSE;
 			end
 		`SWS:
 			begin
@@ -1559,21 +1708,22 @@ MULDIV:
 		`MULUI:
 			begin
 				aa <= a;
-				bb <= b;
+				bb <= imm;
 				res_sgn <= 1'b0;
 				next_state(MULT1);
 			end
 		`MULI:
 			begin
 				aa <= a[63] ? -a : a;
-				bb <= b[63] ? -b : b;
-				res_sgn <= a[63] ^ b[63];
+				bb <= imm[63] ? ~imm+64'd1 : imm;
+				res_sgn <= a[63] ^ imm[63];
 				next_state(MULT1);
 			end
 		`DIVUI,`MODUI:
 			begin
+				ld_divider <= `TRUE;
 				aa <= a;
-				bb <= b;
+				bb <= imm;
 				q <= a[62:0];
 				r <= a[63];
 				res_sgn <= 1'b0;
@@ -1581,11 +1731,12 @@ MULDIV:
 			end
 		`DIVI,`MODI:
 			begin
-				aa <= a[63] ? -a : a;
-				bb <= b[63] ? -b : b;
+				ld_divider <= `TRUE;
+				aa <= a[63] ? ~a+64'd1 : a;
+				bb <= imm[63] ? ~imm+64'd1 : imm;
 				q <= pa[62:0];
 				r <= pa[63];
-				res_sgn <= a[63] ^ b[63];
+				res_sgn <= a[63] ^ imm[63];
 				next_state(DIV);
 			end
 		`RR:
@@ -1606,6 +1757,7 @@ MULDIV:
 				end
 			`DIVU,`MODU:
 				begin
+					ld_divider <= `TRUE;
 					aa <= a;
 					bb <= b;
 					q <= a[62:0];
@@ -1615,6 +1767,7 @@ MULDIV:
 				end
 			`DIV,`MOD:
 				begin
+					ld_divider <= `TRUE;
 					aa <= a[63] ? -a : a;
 					bb <= b[63] ? -b : b;
 					q <= pa[62:0];
@@ -1636,7 +1789,6 @@ MULT3:	begin
 			p <= p1;
 			next_state(res_sgn ? FIX_SIGN : MD_RES);
 		end
-
 DIV:
 	begin
 		q <= {q[62:0],~diff[63]};
@@ -1706,20 +1858,32 @@ LOAD2:
 			rwadr <= rwadr + 32'd4;
 			wb_nack();
 			if (ld_size==word) begin
-				res[31:0] <= dat32;
+				lresx[tmrcyc][31:0] <= dat32;
 				next_state(LOAD3);
 			end
 			else begin
 				case(ld_size)
-				uhalf:	res <= {32'd0,dat32};
-				half:	res <= {{32{dat32[31]}},dat32};
-				uchar:	res <= {48'd0,dat16};
-				char:	res <= {{48{dat16[15]}},dat16};
-				ubyte:	res <= {56'd0,dat8};
-				byt:	res <= {{56{dat8[7]}},dat8};
-				default:	res[31:0] <= dat32;
+				uhalf:	lresx[tmrcyc] <= {32'd0,dat32};
+				half:	lresx[tmrcyc] <= {{32{dat32[31]}},dat32};
+				uchar:	lresx[tmrcyc] <= {48'd0,dat16};
+				char:	lresx[tmrcyc] <= {{48{dat16[15]}},dat16};
+				ubyte:	lresx[tmrcyc] <= {56'd0,dat8};
+				byt:	lresx[tmrcyc] <= {{56{dat8[7]}},dat8};
+				default:	lresx[tmrcyc][31:0] <= dat32;
 				endcase
-				next_state(IFETCH);
+				if (tmrr) begin
+					tmrcyc <= tmrcyc + 2'd1;
+					if (tmrcyc==2'd2) begin
+						tmrcyc <= 2'd0;
+						next_state(LOAD7);
+					end
+					else begin
+						rwadr <= rwadr;
+						next_state(LOAD1);
+					end
+				end
+				else
+					next_state(LOAD6);
 			end
 		end
 		else if (err_i)
@@ -1739,103 +1903,130 @@ LOAD3:
 	else if (dpnp)
 		data_page_fault();
 LOAD4:
+	if (ack_i) begin
+		rwadr <= rwadr + 32'd4;
+		wb_nack();
+		lresx[tmrcyc][63:32] <= dat32;
+		if (tmrr) begin
+			tmrcyc <= tmrcyc + 2'd1;
+			if (tmrcyc==2'd2) begin
+				tmrcyc <= 2'd0;
+				next_state(LOAD5);
+			end
+			else begin
+				rwadr <= rwadr - 32'd4;
+				next_state(LOAD1);
+			end
+		end
+		else begin
+			next_state(LOAD5);
+			lresx[1] <= {dat32,lresx[0][31:0]};
+			lresx[2] <= {dat32,lresx[0][31:0]};
+		end
+	end
+	else if (err_i)
+		bus_err();
+LOAD5:
 	begin
-		if (ack_i) begin
-			rwadr <= rwadr + 32'd4;
-			wb_nack();
-			res[63:32] <= dat32;
-			case(1'b1)
-			isLWS:
-				begin
-					wrspr <= `TRUE;
+		res <= lres;
+		case(1'b1)
+		isLWS:
+			begin
+				wrspr <= `TRUE;
+				next_state(IFETCH);
+			end
+		isLMR:
+			begin
+				wrrf <= `TRUE;
+				if (Rt==Rb)
 					next_state(IFETCH);
+				else
+					next_state(LOAD1);
+			end
+		isJSRix,isJMPix,isRTS:
+			begin
+				pc[39:2] <= lres[39:2];
+				pc[1:0] <= lres[3:2];
+				next_state(IFETCH);
+			end
+		isBRK:
+			begin
+				im <= `TRUE;
+				pc[39:2] <= lres[39:2];
+				pc[1:0] <= lres[3:2];
+				next_state(IFETCH);
+			end
+		isRTI:
+			begin
+				if (nLD==2'b00) begin
+					pc <= lres[39:0];
+					pc[1:0] <= lres[3:2];
+					update_sp(sp_inc);
+					nLD <= 2'b01;
+					next_state(LOAD1);
 				end
-			isLMR:
-				begin
-					wrrf <= `TRUE;
-					if (Rt==Rb)
-						next_state(IFETCH);
-					else
-						next_state(LOAD1);
-				end
-			isJSRix,isJMPix:
-				begin
-					pc <= res[31:0];
-					pc[39:32] <= dat32[7:0];
-					pc[1:0] <= res[3:2];
-					next_state(IFETCH);
-				end
-			isRTS:
-				begin
-					pc[31:0] <= res[31:0];
-					pc[39:32] <= dat32[7:0];
-					pc[1:0] <= res[3:2];
-					next_state(IFETCH);
-				end
-			isBRK:
-				begin
-					im <= `TRUE;
-					pc[39:0] <= res[39:0];
-					next_state(IFETCH);
-				end
-			isRTI:
-				begin
-					if (nLD==2'b00) begin
-						pc <= res[31:0];
-						pc[39:32] <= dat32[7:0];
-						pc[1:0] <= res[3:2];
-						update_sp(sp_inc);
-						nLD <= 2'b01;
-						next_state(LOAD1);
-					end
-					else begin
-						if (res[8]==1'b0)
-							imcd <= 3'b110;
-						else
-							im <= 1'b1;
-						next_state(IFETCH);
-					end
-				end
-			isPOP:
-				begin
-					wrrf <= `TRUE;
-					Rt <= RtPop;
-					next_state(DECODE);
-				end
-			isPLP:
-				begin
-					if (res[8]==1'b0)
+				else begin
+					if (lres[8]==1'b0)
 						imcd <= 3'b110;
 					else
 						im <= 1'b1;
 					next_state(IFETCH);
 				end
+			end
+		isPOP:
+			begin
+				wrrf <= `TRUE;
+				Rt <= RtPop;
+				next_state(DECODE);
+			end
+		isPLP:
+			begin
+				if (lres[8]==1'b0)
+					imcd <= 3'b110;
+				else
+					im <= 1'b1;
+				next_state(IFETCH);
+			end
 /*
-	Bitmap functions make the processor about 5% larger and have limited
-	usefullness. Usually one would want to manipulate bitmaps a word-at-a
-	time for performance reasons. Other functions like count leadings ones
-	or zero maybe more valuable.
+Bitmap functions make the processor about 5% larger and have limited
+usefullness. Usually one would want to manipulate bitmaps a word-at-a
+time for performance reasons. Other functions like count leadings ones
+or zero maybe more valuable.
 */
 `ifdef SUPPORT_BITMAP_FNS
-			isBM:
-				begin
-					store_what <= `STW_A;
-					if (ir[7:0]!=`BMT)
-						store_check(rwadr - 32'd4);
-					case(ir[7:0])
-					`BMS:	a <= {dat32,res[31:0]} | ( 64'd1 << b[5:0] );
-					`BMC:	a <= {dat32,res[31:0]} & ~( 64'd1 << b[5:0] );
-					`BMF:	a <= {dat32,res[31:0]} ^ ( 64'd1 << b[5:0] );
-					`BMT:	res <= ({dat32,res[31:0]} >> b[5:0]) & 64'd1;
-					endcase
-				end
+		isBM:
+			begin
+				store_what <= `STW_A;
+				if (ir[7:0]!=`BMT)
+					store_check(rwadr - 32'd4);
+				case(ir[7:0])
+				`BMS:	a <= {lres} | ( 64'd1 << b[5:0] );
+				`BMC:	a <= {lres} & ~( 64'd1 << b[5:0] );
+				`BMF:	a <= {lres} ^ ( 64'd1 << b[5:0] );
+				`BMT:	res <= ({lres} >> b[5:0]) & 64'd1;
+				endcase
+			end
 `endif
-			default:
-				next_state(IFETCH);
-			endcase
-		end
-		else if (err_i)
-			bus_err();
+		default:
+			next_state(IFETCH);
+		endcase
+	end
+
+// If not triple mode redundant and less than a word in size, cause the TMR
+// logic to work out to the value loaded.
+LOAD6:
+	begin
+		lresx[1] <= lresx[0];
+		lresx[2] <= lresx[0];
+		next_state(LOAD7);
+	end
+
+// After a triple mode load of less than a word size has completed, the loaded
+// value is placed on the result bus.
+LOAD7:
+	begin
+		res <= lres;
+		next_state(IFETCH);
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1870,12 +2061,25 @@ STORE2:
 	if (ack_i) begin
 		wb_nack();
 		rwadr <= rwadr + 32'd4;
-		if (st_size==word) begin
+		if (st_size==word)
 			next_state(STORE3);
-		end
 		else begin
-			isWR <= `FALSE;
-			next_state(IFETCH);
+			if (tmrw) begin
+				tmrcyc <= tmrcyc + 2'd1;
+				if (tmrcyc==2'd2) begin
+					tmrcyc <= 2'd0;
+					isWR <= `FALSE;
+					next_state(IFETCH);
+				end
+				else begin
+					rwadr <= rwadr;
+					next_state(STORE1);
+				end
+			end
+			else begin
+				isWR <= `FALSE;
+				next_state(IFETCH);
+			end
 		end
 	end
 	else if (err_i)
@@ -1907,55 +2111,66 @@ STORE4:
 	if (ack_i) begin
 		wb_nack();
 		rwadr <= rwadr + 32'd4;
-		if (isSMR) begin
-			a <= rfoa;
-			if (Ra>Rb || Ra==0) begin
+		if (tmrw) begin
+			tmrcyc <= tmrcyc + 2'd1;
+			if (tmrcyc==2'd2)
+				tmrcyc <= 2'd0;
+			else begin
+				rwadr <= rwadr - 32'd4;
+				next_state(STORE1);
+			end
+		end
+		if (!tmrw || tmrcyc==2'd2) begin
+			if (isSMR) begin
+				a <= rfoa;
+				if (Ra>Rb || Ra==0) begin
+					isWR <= `FALSE;
+					next_state(IFETCH);
+				end
+				else
+					next_state(STORE1);
+			end
+			else if (isBRK) begin
+				if (store_what==`STW_PC) begin
+					rwadr <= {vbr[31:12],ir[20:12],3'b000};
+					isWR <= `FALSE;
+					next_state(LOAD1);
+				end
+				else begin
+					store_what <= `STW_PC;
+					rwadr <= sp_dec;
+					update_sp(sp_dec);
+					next_state(STORE1);
+				end
+			end
+			else if (isBSR)	begin
+				pc[15: 0] <= ir[31:16];
+				pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
 				isWR <= `FALSE;
 				next_state(IFETCH);
 			end
-			else
-				next_state(STORE1);
-		end
-		else if (isBRK) begin
-			if (store_what==`STW_PC) begin
-				rwadr <= {vbr[31:12],ir[20:12],3'b000};
+			else if (isJSR)	begin
 				isWR <= `FALSE;
+				pc[31:0] <= imm[31:0];
+				pc[39:32] <= imm[39:32];
+				next_state(IFETCH);
+			end
+			else if (isJSRdrn) begin
+				isWR <= `FALSE;
+				pc[39:0] <= a[39:0];
+				next_state(IFETCH);
+			end
+			else if (isJSRix) begin
+				isWR <= `FALSE;
+				rwadr <= rwadr2;
 				next_state(LOAD1);
 			end
+			else if (isPUSH)
+				next_state(DECODE);
 			else begin
-				store_what <= `STW_PC;
-				rwadr <= sp_dec;
-				update_sp(sp_dec);
-				next_state(STORE1);
+				isWR <= `FALSE;
+				next_state(IFETCH);
 			end
-		end
-		else if (isBSR)	begin
-			pc[15: 0] <= ir[31:16];
-			pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
-			isWR <= `FALSE;
-			next_state(IFETCH);
-		end
-		else if (isJSR)	begin
-			isWR <= `FALSE;
-			pc[31:0] <= imm[31:0];
-			pc[39:32] <= imm[39:32];
-			next_state(IFETCH);
-		end
-		else if (isJSRdrn) begin
-			isWR <= `FALSE;
-			pc[39:0] <= a[39:0];
-			next_state(IFETCH);
-		end
-		else if (isJSRix) begin
-			isWR <= `FALSE;
-			rwadr <= rwadr2;
-			next_state(LOAD1);
-		end
-		else if (isPUSH)
-			next_state(DECODE);
-		else begin
-			isWR <= `FALSE;
-			next_state(IFETCH);
 		end
 	end
 	else if (err_i)
@@ -1980,6 +2195,8 @@ CINV2:
 
 HANG:
 	next_state(HANG);
+LINK1:
+	next_state(DECODE);
 endcase
 
 
@@ -1996,7 +2213,9 @@ endcase
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if (state==IFETCH || wrrf) begin
 	$display("writing regfile[%h]=%h",Rt,res);
-	regfile[Rt] <= res;
+	regfile1[Rt] <= res;
+	regfile2[Rt] <= res;
+	regfile3[Rt] <= res;
 	if (Rt==8'hFF) begin
 		sp <= {res[63:3],3'b000};
 		gie <= `TRUE;
@@ -2046,7 +2265,7 @@ begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
 	sel_o <= 4'hF;
-	adr_o <= {adr[31:2],2'b00};
+	adr_o <= {adr[31:16],tmrcyc,adr[15:2],2'b00};
 end
 endtask
 
@@ -2058,7 +2277,7 @@ begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
 	we_o <= 1'b1;
-	adr_o <= {adr[31:2],2'b00};
+	adr_o <= {adr[31:16],tmrcyc,adr[15:2],2'b00};
 	case(size)
 	word,half,uhalf:
 		begin
@@ -2085,7 +2304,7 @@ endtask
 
 task wb_burst;
 input [5:0] bl;
-input [31:0] adr;
+input [33:0] adr;
 begin
 	bte_o <= 2'b00;
 	cti_o <= 3'b001;
@@ -2351,4 +2570,5 @@ assign hit = (tag[31:13]==pc[31:13]) && tag[0];
 
 
 endmodule
+
 

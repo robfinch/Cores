@@ -67,7 +67,8 @@ void ParseEnumDeclaration(TABLE *table)
     }
     else {
         tp = allocTYP();	// fix here
-        tp->type = bt_short;
+        tp->type = bt_enum;
+		tp->size = 2;
         if( lastst != begin)
             error(ERR_INCOMPLETE);
         else {

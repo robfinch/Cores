@@ -653,8 +653,9 @@ int declare(TABLE *table,int al,int ilc,int ztype)
             else if( al != sc_auto )
                 sp->value.i = ilc + nbytes;
 			// Auto variables are referenced negative to the base pointer
-            else
+			else {
                 sp->value.i = -(ilc + nbytes + head->size);
+			}
 
 			if (bit_width == -1)
 				sp->tp = head;
