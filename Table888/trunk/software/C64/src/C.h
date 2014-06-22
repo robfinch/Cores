@@ -73,7 +73,7 @@ enum e_sc {
         sc_member, sc_label, sc_ulabel, sc_typedef };
 
 enum e_bt {
-		bt_byte,
+		bt_byte, bt_ubyte,
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
         bt_unsigned, bt_struct, bt_union, bt_enum, bt_void, bt_func, bt_ifunc,

@@ -109,13 +109,16 @@ int InitializeType(TYP *tp)
 	int nbytes;
 
     switch(tp->type) {
+	case bt_ubyte:
 	case bt_byte:
 			nbytes = initbyte();
 			break;
+	case bt_uchar:
     case bt_char:
     case bt_enum:
             nbytes = initchar();
             break;
+	case bt_ushort:
     case bt_short:
             nbytes = initshort();
             break;
@@ -125,6 +128,7 @@ int InitializeType(TYP *tp)
 			else
 				nbytes = InitializePointer();
             break;
+	case bt_ulong:
     case bt_long:
             nbytes = initlong();
             break;

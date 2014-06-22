@@ -293,9 +293,11 @@ static void scanexpr(ENODE *node, int duse)
                 else
                         scanexpr(node->p[0],1);
                 break;
-        case en_cbc: 
-		case en_cbh:
-		case en_cbw:
+		case en_cbc: case en_cubw:
+		case en_cbh: case en_cucw:
+		case en_cbw: case en_cuhw:
+		case en_cbu: case en_ccu: case en_chu:
+		case en_cubu: case en_cucu: case en_cuhu:
 		case en_cch:
 		case en_ccw:
 		case en_chw:
@@ -319,7 +321,8 @@ static void scanexpr(ENODE *node, int duse)
         case en_lt:     case en_le:
         case en_ugt:    case en_uge:
         case en_ult:    case en_ule:
-        case en_asmul:  case en_asdiv:
+		case en_asmul:  case en_asmulu:
+		case en_asdiv:	case en_asdivu:
         case en_asmod:  case en_aslsh:
 		case en_asrsh:
 		case en_asand:	case en_asxor: case en_asor:
@@ -731,9 +734,11 @@ void repexpr(ENODE *node)
 					else
 						repexpr(node->p[0]);
 					break;
-				case en_cbc:
-				case en_cbh:
-                case en_cbw:
+				case en_cbc: case en_cubw:
+				case en_cbh: case en_cucw:
+				case en_cbw: case en_cuhw:
+				case en_cbu: case en_ccu: case en_chu:
+				case en_cubu: case en_cucu: case en_cuhu:
 				case en_cch:
 				case en_ccw:
 				case en_chw:
@@ -757,7 +762,8 @@ void repexpr(ENODE *node)
 				case en_ugt:	case en_uge:
                 case en_cond:   case en_void:
                 case en_asadd:  case en_assub:
-                case en_asmul:  case en_asdiv:
+				case en_asmul:  case en_asmulu:
+				case en_asdiv:  case en_asdivu:
                 case en_asor:   case en_asand:
                 case en_asmod:  case en_aslsh:
                 case en_asrsh:  case en_fcall:

@@ -369,6 +369,8 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
 
 	if( isize == osize )
         return;
+	if (ap->isUnsigned)
+		return;
     if(ap->mode != am_reg)
         MakeLegalAmode(ap,flags & F_REG,isize);
 	if (ap->isFloat) {
@@ -380,7 +382,8 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
 		if (gCpu==888) {
 			switch( isize )
 			{
-			case 1:	GenerateDiadic(op_sxb,0,ap,ap); break;
+			case 1:
+				GenerateDiadic(op_sxb,0,ap,ap); break;
 			case 2:	GenerateDiadic(op_sxc,0,ap,ap); break;
 			case 4:	GenerateDiadic(op_sxh,0,ap,ap); break;
 			}
@@ -515,7 +518,7 @@ long GetReferenceSize(ENODE *node)
 /*
  *      return the addressing mode of a dereferenced node.
  */
-AMODE *GenerateDereference(ENODE *node,int flags,int size)
+AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
 	struct amode    *ap1;
     int             siz1;
@@ -524,7 +527,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size)
     if( node->p[0]->nodetype == en_add )
     {
         ap1 = GenerateIndex(node->p[0]);
-		ap1->isUnsigned = node->isUnsigned;
+		ap1->isUnsigned = !su;//node->isUnsigned;
 		if (!node->isUnsigned)
 			GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -538,6 +541,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size)
         ap1->mode = am_indx;
         ap1->preg = BP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
+		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -564,6 +568,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size)
     {
         ap1->mode = am_ind;
 		ap1->offset = 0;	// ****
+		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -572,6 +577,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size)
         return ap1;
     }
     ap1->mode = am_direct;
+	ap1->isUnsigned = !su;
 	if (!node->isUnsigned)
 	    GenerateSignExtend(ap1,siz1,size,flags);
 	else
@@ -740,7 +746,8 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 		ReleaseTempRegister(ap3);
 	}
     ReleaseTempRegister(ap2);
-    GenerateSignExtend(ap1,ssize,size,flags);
+	if (!ap1->isUnsigned)
+		GenerateSignExtend(ap1,ssize,size,flags);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
 }
@@ -782,7 +789,8 @@ AMODE *GenerateAssignLogic(ENODE *node,int flags, int size, int op)
 		ReleaseTempRegister(ap3);
 	}
     ReleaseTempRegister(ap2);
-    GenerateSignExtend(ap1,ssize,size,flags);
+	if (!ap1->isUnsigned)
+		GenerateSignExtend(ap1,ssize,size,flags);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
 }
@@ -894,8 +902,8 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
     }
 
 	ssize = GetReferenceSize(node->p[0]);
-	if( ssize > size )
-			size = ssize;
+//	if( ssize > size )
+//			size = ssize;
 	if (size > 8) {
 		ap2 = GenerateExpression(node->p[1],F_MEM,size);
 		ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
@@ -926,13 +934,20 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 				case 4: GenerateDiadic(op_lh,0,ap1,ap2); break;
 				case 8:	GenerateDiadic(op_lw,0,ap1,ap2); break;
 				}
+				if (ssize > size) {
+					switch(size) {
+					case 1:	GenerateDiadic(op_sxb,0,ap1,ap1); break;
+					case 2:	GenerateDiadic(op_sxc,0,ap1,ap1); break;
+					case 4: GenerateDiadic(op_sxh,0,ap1,ap1); break;
+					}
+				}
 			}
 		}
 	}
 	// ap1 is memory
 	else {
 		if (ap2->mode == am_reg)
-			switch(size) {
+			switch(ssize) {
 			case 1:	GenerateDiadic(op_sb,0,ap2,ap1); break;
 			case 2:	GenerateDiadic(op_sc,0,ap2,ap1); break;
 			case 4: GenerateDiadic(op_sh,0,ap2,ap1); break;
@@ -941,7 +956,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		else if (ap2->mode == am_immed) {
 			ap3 = GetTempRegister();
 			GenerateDiadic(op_ldi,0,ap3,ap2);
-			switch(size) {
+			switch(ssize) {
 			case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
 			case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
 			case 4: GenerateDiadic(op_sh,0,ap3,ap1); break;
@@ -952,7 +967,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		else {
 			ap3 = GetTempRegister();
 			// Generate a memory to memory move (struct assignments)
-			if (size > 8) {
+			if (ssize > 8) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,make_immed(size));
 				GenerateTriadic(op_push,0,ap3,ap2,ap1);
@@ -976,8 +991,15 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 					case 4: GenerateDiadic(op_lh,0,ap3,ap2); break;
 					case 8:	GenerateDiadic(op_lw,0,ap3,ap2); break;
 					}
+					if (ssize > size) {
+						switch(size) {
+						case 1:	GenerateDiadic(op_sxb,0,ap3,ap3); break;
+						case 2:	GenerateDiadic(op_sxc,0,ap3,ap3); break;
+						case 4: GenerateDiadic(op_sxh,0,ap3,ap3); break;
+						}
+					}
 				}
-				switch(size) {
+				switch(ssize) {
 				case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
 				case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
 				case 4: GenerateDiadic(op_sh,0,ap3,ap1); break;
@@ -1045,11 +1067,21 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
 			}
 			if (ap1->mode != am_reg) {
 				ap2 = GetTempRegister();
-				switch(size) {
-				case 1:	GenerateTriadic(op_lb,0,ap2,ap1,NULL); break;
-				case 2:	GenerateTriadic(op_lc,0,ap2,ap1,NULL); break;
-				case 4:	GenerateTriadic(op_lh,0,ap2,ap1,NULL); break;
-				case 8:	GenerateTriadic(op_lw,0,ap2,ap1,NULL); break;
+				if (ap1->isUnsigned) {
+					switch(size) {
+					case 1:	GenerateTriadic(op_lbu,0,ap2,ap1,NULL); break;
+					case 2:	GenerateTriadic(op_lcu,0,ap2,ap1,NULL); break;
+					case 4:	GenerateTriadic(op_lhu,0,ap2,ap1,NULL); break;
+					case 8:	GenerateTriadic(op_lw,0,ap2,ap1,NULL); break;
+					}
+				}
+				else {
+					switch(size) {
+					case 1:	GenerateTriadic(op_lb,0,ap2,ap1,NULL); break;
+					case 2:	GenerateTriadic(op_lc,0,ap2,ap1,NULL); break;
+					case 4:	GenerateTriadic(op_lh,0,ap2,ap1,NULL); break;
+					case 8:	GenerateTriadic(op_lw,0,ap2,ap1,NULL); break;
+					}
 				}
 	            GenerateTriadic(op,0,ap2,ap2,make_immed(node->i));
 				switch(size) {
@@ -1072,11 +1104,21 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
 	}
 	else {
 	    ap1 = GetTempRegister();
-		switch(siz1) {
-		case 1:	GenerateDiadic(op_lb,0,ap1,ap2); break;
-		case 2:	GenerateDiadic(op_lc,0,ap1,ap2); break;
-		case 4:	GenerateDiadic(op_lh,0,ap1,ap2); break;
-		case 8:	GenerateDiadic(op_lw,0,ap1,ap2); break;
+		if (ap2->isUnsigned) {
+			switch(siz1) {
+			case 1:	GenerateDiadic(op_lbu,0,ap1,ap2); break;
+			case 2:	GenerateDiadic(op_lcu,0,ap1,ap2); break;
+			case 4:	GenerateDiadic(op_lhu,0,ap1,ap2); break;
+			case 8:	GenerateDiadic(op_lw,0,ap1,ap2); break;
+			}
+		}
+		else {
+			switch(siz1) {
+			case 1:	GenerateDiadic(op_lb,0,ap1,ap2); break;
+			case 2:	GenerateDiadic(op_lc,0,ap1,ap2); break;
+			case 4:	GenerateDiadic(op_lh,0,ap1,ap2); break;
+			case 8:	GenerateDiadic(op_lw,0,ap1,ap2); break;
+			}
 		}
 		switch(op) {
 		case op_addu:	op = op_addui; break;
@@ -1168,7 +1210,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_uh_ref:
 	case en_uw_ref:
 	case en_struct_ref:
-			ap1 = GenerateDereference(node,flags,size);
+			ap1 = GenerateDereference(node,flags,size,0);
 			ap1->isUnsigned = TRUE;
             return ap1;
     case en_b_ref:
@@ -1177,7 +1219,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_w_ref:
 	case en_flt_ref:
 	case en_dbl_ref:
-			ap1 = GenerateDereference(node,flags,size);
+			ap1 = GenerateDereference(node,flags,size,1);
             return ap1;
 	case en_ubfieldref:
 	case en_ucfieldref:
@@ -1255,10 +1297,8 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_asmodu: return GenerateAssignModiv(node,flags,size,op_modu);
     case en_assign:
             return GenerateAssign(node,flags,size);
-    case en_ainc:
-            return GenerateAutoIncrement(node,flags,size,op_add);
-    case en_adec:
-            return GenerateAutoIncrement(node,flags,size,op_sub);
+    case en_ainc: return GenerateAutoIncrement(node,flags,size,op_add);
+    case en_adec: return GenerateAutoIncrement(node,flags,size,op_sub);
     case en_land:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
@@ -1353,6 +1393,36 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 				return GenerateTable888FunctionCall(node,flags);
 			else
 				return GenerateFunctionCall(node,flags);
+	case en_cubw:
+	case en_cubu:
+	case en_cbu:
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xff));
+			return ap1;
+	case en_cucw:
+	case en_cucu:
+	case en_ccu:
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xffff));
+			return ap1;
+	case en_cuhw:
+	case en_cuhu:
+	case en_chu:
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xffffffffL));
+			return ap1;
+	case en_cbw:
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateDiadic(op_sxb,0,ap1,ap1);
+			return ap1;
+	case en_ccw:
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateDiadic(op_sxc,0,ap1,ap1);
+			return ap1;
+	case en_chw:
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateDiadic(op_sxh,0,ap1,ap1);
+			return ap1;
     default:
             printf("DIAG - uncoded node in GenerateExpression.\n");
             return 0;
@@ -1395,9 +1465,11 @@ int GetNaturalSize(ENODE *node)
 		case en_cnacon: case en_nacon:  case en_autocon: case en_autofcon:
 		case en_tempref:
 		case en_regvar:
-        case en_cbw:
-		case en_ccw:
-		case en_chw:
+		case en_cbw: case en_cubw:
+		case en_ccw: case en_cucw:
+		case en_chw: case en_cuhw:
+		case en_cbu: case en_ccu: case en_chu:
+		case en_cubu: case en_cucu: case en_cuhu:
                 return 8;
 		case en_b_ref:
 		case en_ub_ref:
@@ -1429,7 +1501,7 @@ int GetNaturalSize(ENODE *node)
 		case en_and:    case en_or:     case en_xor:
 		case en_shl:    case en_shlu:
 		case en_shr:	case en_shru:
-		case en_asr:
+		case en_asr:	case en_asrshu:
         case en_eq:     case en_ne:
         case en_lt:     case en_le:
         case en_gt:     case en_ge:

@@ -223,6 +223,15 @@ void opt0(ENODE **node)
             case en_uw_ref:          /* optimize unary node */
 			case en_flt_ref:
 			case en_dbl_ref:
+			case en_cubw:
+			case en_cucw:
+			case en_cuhw:
+			case en_cubu:
+			case en_cucu:
+			case en_cuhu:
+			case en_cbu:
+			case en_ccu:
+			case en_chu:
 			case en_cbc:
 			case en_cbh:
 			case en_cbw:

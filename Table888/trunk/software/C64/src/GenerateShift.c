@@ -31,11 +31,14 @@
 #include "cglbdec.h"
 
 // Setup the value to be shifted by sign/zero extending it.
+// ToFix: for some reason the op is coming through as signed when it should be
+// unsigned according to the type. So there's a fudge jump to fix this.
 
 static void MaskShift(int op, AMODE *ap1, int size)
 {
 	switch(op) {
 	case op_shru:
+j1:
 		switch (size) {
 			case 1:	GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0xff)); break;
 			case 2:	GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0xffff)); break;
@@ -46,6 +49,8 @@ static void MaskShift(int op, AMODE *ap1, int size)
 	case op_asr:
 	case op_shr:
 		if (gCpu==888) {
+			if (ap1->isUnsigned)
+				goto j1;
 			switch (size) {
 				case 1:	GenerateTriadic(op_sxb,0,ap1,ap1,NULL); break;
 				case 2:	GenerateTriadic(op_sxc,0,ap1,ap1,NULL); break;

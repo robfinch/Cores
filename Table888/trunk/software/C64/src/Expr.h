@@ -45,8 +45,14 @@
 
 enum e_node {
         en_void,        /* used for parameter lists */
-        en_cbw, en_cbc, en_cbh,
-		en_ccw, en_cch, en_chw,
+
+		en_cbu, en_ccu, en_chu,
+		en_cubu, en_cucu, en_cuhu,
+		en_cbw, en_ccw, en_chw,
+		en_cubw, en_cucw, en_cuhw,
+
+        en_cbc, en_cbh,
+		en_cch,
 		en_cwl, en_cld, en_cfd,
         en_icon, en_fcon, en_labcon, en_nacon, en_autocon, en_autofcon,
 		en_clabcon, en_cnacon,

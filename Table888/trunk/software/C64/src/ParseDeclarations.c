@@ -70,6 +70,7 @@ int parsingParameterList = FALSE;
 int unnamedCnt = 0;
 int needParseFunction = FALSE;
 int isStructDecl = FALSE;
+int worstAlignment = 0;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -143,7 +144,7 @@ int ParseSpecifier(TABLE *table)
 				isNocall = TRUE;
 				head = tail = maketype(bt_oscall,8);
 				NextToken();
-				goto lxit;
+				break;
 
 			case kw_oscall:
 				isOscall = TRUE;
@@ -167,7 +168,10 @@ int ParseSpecifier(TABLE *table)
 			// the 'signed' keyword
 			//
 			case kw_byte:
-				head = tail = maketype(bt_byte,1);
+				if (isUnsigned)
+					head = tail = maketype(bt_ubyte,1);
+				else
+					head = tail = maketype(bt_byte,1);
 				NextToken();
 				head->isUnsigned = !isSigned;
 				head->isVolatile = isVolatile;
@@ -175,7 +179,10 @@ int ParseSpecifier(TABLE *table)
 				goto lxit;
 			
 			case kw_char:
-				head = tail = maketype(bt_char,2);
+				if (isUnsigned)
+					head = tail = maketype(bt_uchar,2);
+				else
+					head = tail = maketype(bt_char,2);
 				NextToken();
 				head->isUnsigned = !isSigned;
 				head->isVolatile = isVolatile;
@@ -183,7 +190,10 @@ int ParseSpecifier(TABLE *table)
 				goto lxit;
 
 			case kw_int16:
-				head = tail = maketype(bt_char,2);
+				if (isUnsigned)
+					head = tail = maketype(bt_uchar,2);
+				else
+					head = tail = maketype(bt_char,2);
 				NextToken();
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
@@ -192,7 +202,10 @@ int ParseSpecifier(TABLE *table)
 
 			case kw_int32:
 			case kw_short:
-				head = tail = maketype(bt_short,4);
+				if (isUnsigned)
+					head = tail = maketype(bt_ushort,4);
+				else
+					head = tail = maketype(bt_short,4);
 				bit_max = 32;
 				NextToken();
 				if( lastst == kw_int )
@@ -212,8 +225,12 @@ int ParseSpecifier(TABLE *table)
 					head = tail = maketype(bt_double,8);
 					NextToken();
 				}
-				else
-					head = tail = maketype(bt_long,8);
+				else {
+					if (isUnsigned)
+						head = tail = maketype(bt_ulong,8);
+					else
+						head = tail = maketype(bt_long,8);
+				}
 				//NextToken();
 				if (lastst==kw_oscall) {
 					isOscall = TRUE;
@@ -231,7 +248,10 @@ int ParseSpecifier(TABLE *table)
 
 			case kw_int64:
 			case kw_int:
-				head = tail = maketype(bt_long,8);
+				if (isUnsigned)
+					head = tail = maketype(bt_ulong,8);
+				else
+					head = tail = maketype(bt_long,8);
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
 				NextToken();
@@ -248,7 +268,10 @@ int ParseSpecifier(TABLE *table)
 				break;
 
 			case kw_int8:
-				head = tail = maketype(bt_byte,1);
+				if (isUnsigned)
+					head = tail = maketype(bt_ubyte,1);
+				else
+					head = tail = maketype(bt_byte,1);
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
 				NextToken();
@@ -558,10 +581,10 @@ int alignment(TYP *tp)
 	if (tp==NULL)
 		return AL_BYTE;
 	switch(tp->type) {
-	case bt_byte:			return AL_BYTE;
-    case bt_char:           return AL_CHAR;
-    case bt_short:          return AL_SHORT;
-    case bt_long:           return AL_LONG;
+	case bt_byte:	case bt_ubyte:	return AL_BYTE;
+	case bt_char:   case bt_uchar:  return AL_CHAR;
+	case bt_short:  case bt_ushort: return AL_SHORT;
+	case bt_long:   case bt_ulong:  return AL_LONG;
     case bt_enum:           return AL_CHAR;
     case bt_pointer:
             if(tp->val_flag)
@@ -574,6 +597,64 @@ int alignment(TYP *tp)
     case bt_union:          return AL_STRUCT;
     default:                return AL_CHAR;
     }
+}
+
+int walignment(TYP *tp)
+{
+	int ii;
+	SYM *sp;
+
+	//printf("DIAG: type NULL in alignment()\r\n");
+	if (tp==NULL)
+		return imax(AL_BYTE,worstAlignment);
+	switch(tp->type) {
+	case bt_byte:	case bt_ubyte:		return imax(AL_BYTE,worstAlignment);
+	case bt_char:   case bt_uchar:     return imax(AL_CHAR,worstAlignment);
+	case bt_short:  case bt_ushort:    return imax(AL_SHORT,worstAlignment);
+	case bt_long:   case bt_ulong:     return imax(AL_LONG,worstAlignment);
+    case bt_enum:           return imax(AL_CHAR,worstAlignment);
+    case bt_pointer:
+            if(tp->val_flag)
+                return imax(alignment(tp->btp),worstAlignment);
+            else
+				return imax(AL_POINTER,worstAlignment);
+    case bt_float:          return imax(AL_FLOAT,worstAlignment);
+    case bt_double:         return imax(AL_DOUBLE,worstAlignment);
+    case bt_struct:
+    case bt_union:          
+		sp = tp->lst.head;
+		while(sp != NULL) {
+			worstAlignment = imax(worstAlignment,walignment(sp->tp));
+			sp = sp->next;
+        }
+		return worstAlignment;
+    default:                return imax(AL_CHAR,worstAlignment);
+    }
+}
+
+int roundAlignment(TYP *tp)
+{
+	worstAlignment = 0;
+	if (tp->type == bt_struct || tp->type == bt_union) {
+		return walignment(tp);
+	}
+	return alignment(tp);
+}
+
+int roundSize(TYP *tp)
+{
+	int sz;
+	int wa;
+
+	worstAlignment = 0;
+	if (tp->type == bt_struct || tp->type == bt_union) {
+		wa = walignment(tp);
+		sz = tp->size;
+		while(sz % wa)
+			sz++;
+		return sz;
+	}
+	return tp->size;
 }
 
 /*
@@ -633,7 +714,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 					sp->storage_class = sc_typedef;
 				isTypedef = FALSE;
 			}
-            while( (ilc + nbytes) % alignment(head)) {
+            while( (ilc + nbytes) % roundAlignment(head)) {
                 if( al != sc_member && al != sc_external && al != sc_auto) {
 					if (al==sc_thread)
 						tseg();
@@ -653,8 +734,12 @@ int declare(TABLE *table,int al,int ilc,int ztype)
             else if( al != sc_auto )
                 sp->value.i = ilc + nbytes;
 			// Auto variables are referenced negative to the base pointer
+			// Structs need to be aligned on the boundary of the largest
+			// struct element. If a struct is all chars this will be 2.
+			// If a struct contains a pointer this will be 8. It has to
+			// be the worst case alignment.
 			else {
-                sp->value.i = -(ilc + nbytes + head->size);
+                sp->value.i = -(ilc + nbytes + roundSize(head));
 			}
 
 			if (bit_width == -1)
@@ -680,7 +765,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 				if (isStructDecl && (sp->tp->type==bt_func || sp->tp->type==bt_ifunc))
 					nbytes += 8;
 				else
-					nbytes += sp->tp->size;
+					nbytes += roundSize(sp->tp);
 			}
             
 			if (sp->tp->type == bt_ifunc && (sp1 = search(sp->name,table)) != 0 && sp1->tp->type == bt_func )
@@ -762,6 +847,7 @@ int declbegin(int st)
 void ParseGlobalDeclarations()
 {
     for(;;) {
+		worstAlignment = 0;
 		funcdecl = 0;
 		switch(lastst) {
 		case ellipsis:
@@ -817,6 +903,7 @@ void ParseParameterDeclarations(int fd)
 {
 	int ofd;
 
+	worstAlignment = 0;
 	ofd = funcdecl;
 	funcdecl = fd;
 	missingArgumentName = FALSE;
@@ -881,6 +968,7 @@ void ParseAutoDeclarations(TABLE *ssyms)
 
 	funcdecl = 0;
     for(;;) {
+		worstAlignment = 0;
 		switch(lastst) {
 		case kw_cdecl:
 		case kw_interrupt:
