@@ -15,8 +15,8 @@ int MMC_disk_read(byte *buff, int sector, int count)
 {
 	asm {
 		lw	r1,40[bp]
-		lw	r2,48[bp]
-		lw	r3,32[bp]
+		lw	r2,32[bp]
+		lw	r3,48[bp]
 		jsr	($8038)		; SDReadMultiple
 	}
 }
@@ -25,8 +25,8 @@ int MMC_disk_write(byte *buff, int sector, int count)
 {
 	asm {
 		lw	r1,40[bp]
-		lw	r2,48[bp]
-		lw	r3,32[bp]
+		lw	r2,32[bp]
+		lw	r3,48[bp]
 		jsr	($8040)		; SDWriteMultiple
 	}
 }
@@ -44,7 +44,7 @@ int MMC_disk_ioctl(int cmd, void *buff)
 	case GET_SECTOR_COUNT:	
 		asm {
 			jsr	($8050)		; get disk size
-			lw	r2,32[bp]
+			lw	r2,40[bp]
 			sw	r1,[r2]
 		}
 		return 0;

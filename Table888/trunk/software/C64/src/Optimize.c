@@ -347,7 +347,10 @@ void opt0(ENODE **node)
                             if( sc != -1 )
                                     {
                                     ep->p[1]->i = sc;
-                                    ep->nodetype = en_shr;
+									if ((*node)->nodetype == en_udiv)
+										ep->nodetype = en_shru;
+									else
+										ep->nodetype = ep->p[0]->isUnsigned ? en_shru : en_shr;
                                     }
                             }
                     break;

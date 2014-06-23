@@ -130,20 +130,38 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 	int nn;
 	int lab1;
 	int cnt;
+	int sz;
 
 	// Generate code to evaluate the return expression.
     if( stmt != NULL && stmt->exp != NULL )
 	{
 		initstack();
-		ap = GenerateExpression(stmt->exp,F_ALL & ~F_BREG,8);
+		sz = GetNaturalSize(stmt->exp);
+		ap = GenerateExpression(stmt->exp,F_ALL & ~F_BREG,sz);
 		// Force return value into register 1
 		if( ap->preg != 1 ) {
 			if (ap->mode == am_immed)
 				GenerateDiadic(op_ldi, 0, makereg(1),ap);
 			else if (ap->mode == am_reg)
 				GenerateDiadic(op_mov, 0, makereg(1),ap);
-			else
-				GenerateDiadic(op_lw,0,makereg(1),ap);
+			else {
+				if (stmt->exp->isUnsigned) {
+					switch(sz) {
+					case 1: GenerateDiadic(op_lbu,0,makereg(1),ap); break;
+					case 2: GenerateDiadic(op_lcu,0,makereg(1),ap); break;
+					case 4: GenerateDiadic(op_lhu,0,makereg(1),ap); break;
+					case 8: GenerateDiadic(op_lw,0,makereg(1),ap); break;
+					}
+				}
+				else {
+					switch(sz) {
+					case 1: GenerateDiadic(op_lb,0,makereg(1),ap); break;
+					case 2: GenerateDiadic(op_lc,0,makereg(1),ap); break;
+					case 4: GenerateDiadic(op_lh,0,makereg(1),ap); break;
+					case 8: GenerateDiadic(op_lw,0,makereg(1),ap); break;
+					}
+				}
+			}
 		}
 		ReleaseTempRegister(ap);
 	}

@@ -1161,6 +1161,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			exit(0);
         return NULL;
     }
+	//size = node->esize;
     switch( node->nodetype )
     {
 	case en_fcon:
@@ -1424,7 +1425,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
     default:
-            printf("DIAG - uncoded node in GenerateExpression.\n");
+            printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
             return 0;
     }
 }
@@ -1496,7 +1497,8 @@ int GetNaturalSize(ENODE *node)
 		case en_fsadd:	case en_fssub:
 		case en_fsmul:	case en_fsdiv:
         case en_add:    case en_sub:
-		case en_mul:    case en_div:	case en_udiv:
+		case en_mul:    case en_mulu:
+		case en_div:	case en_udiv:
 		case en_mod:    case en_umod:
 		case en_and:    case en_or:     case en_xor:
 		case en_shl:    case en_shlu:

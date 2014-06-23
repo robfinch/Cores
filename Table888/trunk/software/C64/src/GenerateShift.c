@@ -77,7 +77,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 	ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
-	MaskShift(op, ap1, size);
+	MaskShift(op, ap1, GetNaturalSize(node->p[0]));
 	if (ap2->mode==am_immed) {
 		switch(op)
 		{

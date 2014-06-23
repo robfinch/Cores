@@ -93,9 +93,10 @@ extern FILE *_Files[FOPEN_MAX];
 #define putchar(c)			(_Files[1]->_Next < _Files[1]->_Wend ? (*_Files[1]->_Next++ = c) : (putchar)(c))
 
 
-void putch(char ch);
-void putnum(int num, int wid);
-void putstr(char *p);
+pascal void putch(char ch);
+pascal void putnum(int num, int wid, char sep);
+pascal void puthexnum(int num, int wid);
+pascal int putstr(char *p, int max);
 int getchar2( );
 
 //int getchar( );

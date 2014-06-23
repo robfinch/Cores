@@ -32,6 +32,7 @@ int strlen(char *p)
 {
 	int n;
 
+	if (p==(char *)0) return 0;
 	for (n = 0; p[n]; n++)
 		;
 	return n;

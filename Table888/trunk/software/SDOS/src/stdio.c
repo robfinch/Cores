@@ -1,52 +1,56 @@
 //#include "c:\AtlysCores\RTF65000\trunk\software\stdio.h"
 
-void putch(char ch)
+pascal void putch(char ch)
 {
-	asm {
-		ldi	r1,#$0A
-		sb	r1,$FFDC0600	; LEDS
-	}
 	asm {
 		lw		r1,32[bp]
 		jsr		($8028)
 	}
 }
 
-void putnum(int num, int wid)
+pascal void putnum(int num, int wid, char sep)
 {
-	int n;
+	int n, m10;
 	char sign;
 	char numwka[20];
 
-	n = 0;
+	if (wid < 0 or wid > 200)	// take care of nutty parameter
+		wid = 0;
 	sign = num < 0 ? '-' : '+';
 	if (num < 0) num = -num;
+	n = 0;
 	do {
-		numwka[n] = (num % 10) + '0';
+		if ((n % 4)==3 && sep) {
+			numwka[n]=sep;
+			n++;
+		}
+		m10 = num % 10;
+		if (m10 > 9 or m10 < 0)
+			printf("moderr ");
+		numwka[n] = m10 + '0';
 		num = num / 10;
 		n++;
-	}
-	while (num != 0 && n < 18);
+	} until (num == 0 or n > 18);
 	if (sign=='-') {
 		numwka[n] = sign;
 		n++;
 	}
-	while (n < wid) {
+	for (; n < wid; wid--)
 		putch(' ');
-		wid--;
-	}
 	while (n > 0) {
 		--n;
 		putch(numwka[n]);
 	}
 }
 
-void puthexnum(int num, int wid)
+pascal void puthexnum(int num, int wid)
 {
 	int n, m;
 	char sign;
 	char numwka[20];
 
+	if (wid < 0 or wid > 200)	// take care of nutty parameter
+		wid = 0;
 	n = 0;
 	sign = num < 0 ? '-' : '+';
 	if (num < 0) num = -num;
@@ -74,17 +78,16 @@ void puthexnum(int num, int wid)
 	}
 }
 
-void putstr(char *p, int maxchars)
+pascal int putstr(char *p, int maxchars)
 {
-	asm {
-		ldi	r1,#$09
-		sb	r1,$FFDC0600	; LEDS
-	}
-	for (; *p && maxchars > 0; p++, maxchars--)
+	char *q;
+
+	for (q = p; *p && maxchars > 0; p++, maxchars--)
 		putch(*p);
+	return p-q;
 }
 
-naked getcharNoWait()
+naked int getcharNoWait()
 {
 	asm {
 		jmp		($8018)
@@ -108,6 +111,7 @@ int printf(char *p, ...)
 	int *q;
 	int fmtwidth;
 	int maxwidth;
+	int wd;
 	q = &p;
 
 	for (; *p; p++) {
@@ -126,7 +130,7 @@ j1:
 				break;
 			case 'd':
 				q++;
-				putnum(*q,fmtwidth);
+				putnum(*q,fmtwidth,0);
 				break;
 			case 'x':
 				q++;
@@ -134,7 +138,11 @@ j1:
 				break;
 			case 's':
 				q++;
-				putstr(*q,maxwidth);
+				wd = putstr(*q,maxwidth);
+				//while (wd < fmtwidth) {
+				//	putch(' ');
+				//	wd++;
+				//}
 				break;
 			// width specification
 			case '0','1','2','3','4','5','6','7','8','9':

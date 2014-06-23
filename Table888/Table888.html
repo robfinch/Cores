@@ -36,14 +36,27 @@ indirect with displacement and indexed</p>
 <p style="margin-top: 0; margin-bottom: 0">- segmentation with 16 segment 
 registers</p>
 <p style="margin-top: 0; margin-bottom: 0">- paged memory management, with TLB</p>
+<p style="margin-top: 0; margin-bottom: 0">- Triple mode redundancy memory 
+access capability (TMR)</p>
 <p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
 <h1 style="margin-top: 0; margin-bottom: 0">Software:</h1>
 <p style="margin-top: 0; margin-bottom: 0">64 bit C Compiler - the C compiler 
 hasn't been thoroughly tested yet. It generates what looks like reasonable code.</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;&nbsp;&nbsp; The compiler is 
+coming along nicely. It's been able to compile about 5,000 lines of code without 
+problems.</p>
 <p style="margin-top: 0; margin-bottom: 0">64 bit assembler - this tool was used 
 to build the boot rom.</p>
+<p style="margin-top: 0; margin-bottom: 0">A rudimentary DOS is the works. It 
+will contain only bare necessities to be able to select a program from SD Card 
+to run.</p>
 <p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
 <h1 style="margin-top: 0; margin-bottom: 0">Status:</h1>
+<p style="margin-top: 0; margin-bottom: 0">- The processor has been modified to 
+support triple mode redundant (TMR) memory access as an option. I was having a 
+lot of mysterious problems due to I think my board being partially fried by a 
+lightning strike (two of the switches no longer work so maybe an I/O buffer or 
+two is shot). So I tried adding TMR and it seems to help.</p>
 <p style="margin-top: 0; margin-bottom: 0">- the processor is running a bootrom 
 in an FPGA</p>
 <p style="margin-top: 0; margin-bottom: 0">- The system can now boot from SD 
