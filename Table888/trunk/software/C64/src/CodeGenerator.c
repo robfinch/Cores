@@ -539,7 +539,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = xalloc(sizeof(struct amode));
         ap1->mode = am_indx;
-        ap1->preg = BP;
+        ap1->preg = regBP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
@@ -553,7 +553,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = xalloc(sizeof(struct amode));
         ap1->mode = am_indx;
-        ap1->preg = BP;
+        ap1->preg = regBP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->isFloat = TRUE;
 		if (!node->isUnsigned)
@@ -1191,7 +1191,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap1 = GetTempRegister();
             ap2 = allocAmode();
             ap2->mode = am_indx;
-            ap2->preg = BP;          /* frame pointer */
+            ap2->preg = regBP;          /* frame pointer */
             ap2->offset = node;     /* use as constant node */
             GenerateDiadic(op_lea,0,ap1,ap2);
             MakeLegalAmode(ap1,flags,size);
@@ -1201,7 +1201,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap2 = allocAmode();
 			ap2->isFloat = TRUE;
             ap2->mode = am_indx;
-            ap2->preg = BP;          /* frame pointer */
+            ap2->preg = regBP;          /* frame pointer */
             ap2->offset = node;     /* use as constant node */
             GenerateDiadic(op_lea,0,ap1,ap2);
             MakeLegalAmode(ap1,flags,size);
