@@ -118,63 +118,63 @@ Module Table888
 
                 ' branches
             Case "brz"
-                ProcessBra(s, &H58)
+                ProcessTable888Bcc(s, &H58)
             Case "brnz"
-                ProcessBra(s, &H59)
+                ProcessTable888Bcc(s, &H59)
             Case "brmi"
-                ProcessBra(s, &H44)
+                ProcessTable888Bcc(s, &H44)
             Case "brpl"
-                ProcessBra(s, &H45)
+                ProcessTable888Bcc(s, &H45)
             Case "brodd"
-                ProcessBra(s, &H4E)
+                ProcessTable888Bcc(s, &H4E)
             Case "brevn"
-                ProcessBra(s, &H4F)
+                ProcessTable888Bcc(s, &H4F)
             Case "dbnz"
-                ProcessBra(s, &H5A)
+                ProcessTable888Bcc(s, &H5A)
             Case "beq"
-                ProcessBra(s, &H40)
+                ProcessTable888Bcc(s, &H40)
             Case "bne"
-                ProcessBra(s, &H41)
+                ProcessTable888Bcc(s, &H41)
             Case "bvs"
-                ProcessBra(s, &H42)
+                ProcessTable888Bcc(s, &H42)
             Case "bvc"
-                ProcessBra(s, &H43)
+                ProcessTable888Bcc(s, &H43)
             Case "bmi"
-                ProcessBra(s, &H44)
+                ProcessTable888Bcc(s, &H44)
             Case "bpl"
-                ProcessBra(s, &H45)
+                ProcessTable888Bcc(s, &H45)
             Case "bra"
                 ProcessTable888Bra(s, &H46)
             Case "br"
                 ProcessTable888Bra(s, &H46)
             Case "brn"
-                ProcessBra(s, &H47)
+                ProcessTable888Bcc(s, &H47)
             Case "bgt"
-                ProcessBra(s, &H48)
+                ProcessTable888Bcc(s, &H48)
             Case "ble"
-                ProcessBra(s, &H49)
+                ProcessTable888Bcc(s, &H49)
             Case "bge"
-                ProcessBra(s, &H4A)
+                ProcessTable888Bcc(s, &H4A)
             Case "blt"
-                ProcessBra(s, &H4B)
+                ProcessTable888Bcc(s, &H4B)
             Case "bhi"
-                ProcessBra(s, &H4C)
+                ProcessTable888Bcc(s, &H4C)
             Case "bls"
-                ProcessBra(s, &H4D)
+                ProcessTable888Bcc(s, &H4D)
             Case "bhs"
-                ProcessBra(s, &H4E)
+                ProcessTable888Bcc(s, &H4E)
             Case "blo"
-                ProcessBra(s, &H4F)
+                ProcessTable888Bcc(s, &H4F)
             Case "bgtu"
-                ProcessBra(s, &H4C)
+                ProcessTable888Bcc(s, &H4C)
             Case "bleu"
-                ProcessBra(s, &H4D)
+                ProcessTable888Bcc(s, &H4D)
             Case "bgeu"
-                ProcessBra(s, &H4E)
+                ProcessTable888Bcc(s, &H4E)
             Case "bltu"
-                ProcessBra(s, &H4F)
+                ProcessTable888Bcc(s, &H4F)
             Case "bsr"
-                ProcessBsr(s, &H56)
+                ProcessTable888Bsr(s, &H56)
 
                 ' R
             Case "mov"
@@ -793,6 +793,7 @@ Module Table888
         Dim disp As Int64
         Dim L As Symbol
         Dim P As LabelPatch
+        Dim ad As Int64
 
         ra = 0
         rb = 0
@@ -807,7 +808,86 @@ Module Table888
         'If slot = 2 Then
         '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
         'Else
-        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
+        ad = address + 5
+        If (ad And 15) = 15 Then ad = ad + 1
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (ad And &HFFFFFFFFFFFF0000L)))
+        'End If
+        'imm = (L.address + (L.slot << 2)) >> 2
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(L.address And &HFF)
+        emitCode((L.address >> 8) And &HFF)
+        emitCode((disp >> 16) And &H1F)
+    End Sub
+
+    Sub ProcessTable888Bsr(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim rc As Int64
+        Dim imm As Int64
+        Dim disp As Int64
+        Dim L As Symbol
+        Dim P As LabelPatch
+        Dim ad As Int64
+
+        ra = 0    ' branching to register ?
+        rb = 0
+        rc = 0
+        If strs(1) Is Nothing Then
+            Console.WriteLine("missing target address for branch?")
+            Return
+            L = Nothing
+        Else
+            L = GetSymbol(strs(1))
+        End If
+        'If slot = 2 Then
+        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
+        'Else
+        ad = address + 5
+        If (ad And 15) = 15 Then ad = ad + 1
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (ad And &HFFFFFFFFFFFF0000L)))
+        'End If
+        'imm = (L.address + (L.slot << 2)) >> 2
+        emitAlignedCode(oc)
+        emitCode(ra)
+        emitCode(L.address And &HFF)
+        emitCode((L.address >> 8) And &HFF)
+        emitCode((disp >> 16) And &H1F)
+    End Sub
+
+    Sub ProcessTable888Bcc(ByVal ops As String, ByVal oc As Int64)
+        Dim opcode As Int64
+        Dim ra As Int64
+        Dim rb As Int64
+        Dim rc As Int64
+        Dim imm As Int64
+        Dim disp As Int64
+        Dim L As Symbol
+        Dim P As LabelPatch
+        Dim ad As Int64
+
+        ra = GetRegister(strs(1))    ' branching to register ?
+        rb = 0
+        rc = 0
+        If strs(2) Is Nothing Then
+            If oc = 46 Or oc = 47 Then
+                ProcessTable888Bra(ops, oc)
+                Return
+            Else
+                Console.WriteLine("missing register in branch? line" & lineno)
+                Return
+                L = Nothing
+            End If
+        Else
+            L = GetSymbol(strs(2))
+        End If
+        'If slot = 2 Then
+        '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
+        'Else
+        ad = address + 5
+        If (ad And 15) = 15 Then ad = ad + 1
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (ad And &HFFFFFFFFFFFF0000L)))
         'End If
         'imm = (L.address + (L.slot << 2)) >> 2
         emitAlignedCode(oc)

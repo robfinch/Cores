@@ -1910,6 +1910,7 @@ j1:
         Dim disp As Int64
         Dim L As Symbol
         Dim P As LabelPatch
+        Dim ad As Int64
 
         ra = GetRegister(strs(1))    ' branching to register ?
         rb = 0
@@ -1929,7 +1930,9 @@ j1:
         'If slot = 2 Then
         '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
         'Else
-        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
+        ad = address + 5
+        If (ad And 15) = 15 Then ad = ad + 1
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (ad And &HFFFFFFFFFFFF0000L)))
         'End If
         'imm = (L.address + (L.slot << 2)) >> 2
         emitAlignedCode(oc)
@@ -1948,6 +1951,7 @@ j1:
         Dim disp As Int64
         Dim L As Symbol
         Dim P As LabelPatch
+        Dim ad As Int64
 
         ra = 0    ' branching to register ?
         rb = 0
@@ -1962,7 +1966,9 @@ j1:
         'If slot = 2 Then
         '    imm = ((L.address - address - 16) + (L.slot << 2)) >> 2
         'Else
-        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (address And &HFFFFFFFFFFFF0000L)))
+        ad = address + 5
+        If (ad And 15) = 15 Then ad = ad + 1
+        disp = (((L.address And &HFFFFFFFFFFFF0000L) - (ad And &HFFFFFFFFFFFF0000L)))
         'End If
         'imm = (L.address + (L.slot << 2)) >> 2
         emitAlignedCode(oc)
@@ -2127,6 +2133,14 @@ j1:
                 Return 10
             ElseIf s.ToLower = "fault_st" Then
                 Return 11
+            ElseIf s.ToLower = "ivno" Then
+                Return 12
+            ElseIf s.ToLower = "history" Then
+                Return 13
+            ElseIf s.ToLower = "biterr" Then
+                Return 14
+            ElseIf s.ToLower = "bithist" Then
+                Return 15
             ElseIf s.ToLower = "srand1" Then
                 Return 16
             ElseIf s.ToLower = "srand2" Then

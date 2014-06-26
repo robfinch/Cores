@@ -1531,7 +1531,7 @@ int GetNaturalSize(ENODE *node)
     return 0;
 }
 
-
+/*
 static void GenerateCmp(ENODE *node, int op, int label, int predreg)
 {
 	int size;
@@ -1571,6 +1571,7 @@ static void GenerateCmp(ENODE *node, int op, int label, int predreg)
 		GeneratePredicatedMonadic(predreg,PredOp(op),op_bra,0,make_clabel(label));
 	}
 }
+*/
 /*
  *      generate a jump to label if the node passed evaluates to
  *      a true condition.
