@@ -68,7 +68,7 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 	if (!sym->IsNocall) {
 		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(32));
 		if (lc_auto || sym->NumParms > 0) {
-			GenerateDiadic(op_ss|op_sw,0,makereg(BP),make_indirect(SP));
+			GenerateDiadic(op_ss|op_sw,0,makereg(regBP),make_indirect(SP));
 		}
 //		if (sym->UsesPredicate)
 			GenerateDiadic(op_ss|op_sws, 0, make_string("pregs"), make_indexed(24,SP));
@@ -89,9 +89,9 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 			}
 		}
 		if (lc_auto || sym->NumParms > 0) {
-			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
+			GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
 			if (lc_auto)
-				GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(lc_auto));
+				GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(lc_auto));
 		}
 
 		// Save registers used as register variables.
@@ -125,8 +125,8 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 		}
 		else {
 			GenerateLabel(throwlab);
-			GenerateDiadic(op_lws,0,makebreg(LR),make_indexed(8,BP));		// load throw return address from stack into LR
-			GenerateDiadic(op_sws,0,makebreg(LR),make_indexed(16,BP));		// and store it back (so it can be loaded with the lm)
+			GenerateDiadic(op_lws,0,makebreg(regLR),make_indexed(8,regBP));		// load throw return address from stack into LR
+			GenerateDiadic(op_sws,0,makebreg(regLR),make_indexed(16,regBP));		// and store it back (so it can be loaded with the lm)
 			GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
 		}
 	}
@@ -192,8 +192,8 @@ void GenerateReturn(SYM *sym, Statement *stmt)
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
 		if (lc_auto || sym->NumParms > 0) {
-			GenerateDiadic(op_mov,0,makereg(SP),makereg(BP));
-			GenerateDiadic(op_ss|op_lw,0,makereg(BP),make_indirect(SP));
+			GenerateDiadic(op_mov,0,makereg(SP),makereg(regBP));
+			GenerateDiadic(op_ss|op_lw,0,makereg(regBP),make_indirect(regSP));
 		}
 		if (!sym->IsLeaf) {
 			if (exceptions)

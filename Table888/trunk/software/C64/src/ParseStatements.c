@@ -651,7 +651,7 @@ Statement *ParseStopStatement()
   
 Statement *ParseAsmStatement() 
 {
-	static char buf[20001];
+	static char buf[3501];
 	int nn;
 
 	Statement *snp; 
@@ -668,8 +668,8 @@ Statement *ParseAsmStatement()
 			break;
 		buf[nn++] = lastch;
 	}
-	while(lastch!=-1 && nn < 20000);
-	if (nn >= 20000)
+	while(lastch!=-1 && nn < 3500);
+	if (nn >= 3500)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
 	snp->label = litlate(buf);
@@ -749,6 +749,11 @@ Statement *ParseCompoundStatement()
 		if (head)
 			head->outer = snp;
 	}
+	//else {
+ //       head = tail = NewStatement(st_empty,1);
+	//	if (head)
+	//		head->outer = snp;
+	//}
 	// Add remaining statements onto the tail of the list.
 	while( lastst != end ) {
 		tail->next = ParseStatement(); 

@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - Raptor64 'C' derived language compiler
+// C64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -48,7 +48,7 @@ j1:
 		break;
 	case op_asr:
 	case op_shr:
-		if (gCpu==888) {
+		if (isTable888) {
 			if (ap1->isUnsigned)
 				goto j1;
 			switch (size) {

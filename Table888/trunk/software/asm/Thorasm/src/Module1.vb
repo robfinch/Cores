@@ -500,7 +500,7 @@ j3:
             sa = address
             dsa = data_address
             plbl = False
-            segreg = 1
+            segreg = -1
             If line.Length <> 0 Then
                 '                    strs = line.Split(p)
                 strs = SplitLine(line)
@@ -2147,6 +2147,12 @@ j1:
                 Return 17
             ElseIf s.ToLower = "rand" Then
                 Return 18
+            ElseIf s.ToLower = "cs" Then
+                Return 32
+            ElseIf s.ToLower = "ds" Then
+                Return 33
+            ElseIf s.ToLower = "ss" Then
+                Return 34
             Else
                 reg = GetSegRegister(s)
                 Return reg

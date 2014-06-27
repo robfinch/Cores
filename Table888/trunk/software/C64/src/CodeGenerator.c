@@ -56,6 +56,11 @@
 int hook_predreg=15;
 
 AMODE *GenerateExpression();            /* forward ParseSpecifieraration */
+AMODE *GenExprRaptor64(ENODE *node);
+void GenerateRaptor64Cmp(ENODE *node, int op, int label, int predreg);
+void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg);
+void GenerateThorCmp(ENODE *node, int op, int label, int predreg);
+
 
 extern int throwlab;
 /*
@@ -176,7 +181,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
         switch( ap->mode ) {
             case am_immed:
 					i = ((ENODE *)(ap->offset))->i;
-					if ((flags & F_IMMED18) && gCpu==64) {
+					if ((flags & F_IMMED18) && isRaptor64) {
 						if (i < 0x1ffff && i > -0x1ffff)
 							return;
 					}
@@ -213,7 +218,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
         if( flags & F_REG )
         {
             ReleaseTempRegister(ap);      /* maybe we can use it... */
-            ap2 = GetTempRegister();      /* AllocateRegisterVars to dreg */
+            ap2 = GetTempRegister();
 			if (ap->mode == am_ind || ap->mode==am_indx) {
 				if (ap->isUnsigned) 
 					switch(size) {
@@ -297,7 +302,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 			if (ap->isUnsigned)
 				GenerateTriadic(op_andi,0,ap2,ap2,make_immed(255));
 			else {
-				if (gCpu==888)
+				if (isTable888)
 					GenerateDiadic(op_sxb,0,ap2,ap2);
 				else
 					GenerateDiadic(op_sext8,0,ap2,ap2);
@@ -327,12 +332,12 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 			}
 			break;
 		case am_immed:
-			if (gCpu==888)
+			if (isTable888)
 				GenerateDiadic(op_ldi,0,ap2,ap);
 			else
 				GenerateTriadic(op_ori,0,ap2,makereg(0),ap);
 		case am_reg:
-			if (gCpu==888)
+			if (isTable888)
 				GenerateDiadic(op_mov,0,ap2,ap);
 			else
 				GenerateTriadic(op_or,0,ap2,ap,makereg(0));
@@ -379,11 +384,10 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
 		}
 	}
 	else {
-		if (gCpu==888) {
+		if (isTable888) {
 			switch( isize )
 			{
-			case 1:
-				GenerateDiadic(op_sxb,0,ap,ap); break;
+			case 1:	GenerateDiadic(op_sxb,0,ap,ap); break;
 			case 2:	GenerateDiadic(op_sxc,0,ap,ap); break;
 			case 4:	GenerateDiadic(op_sxh,0,ap,ap); break;
 			}
@@ -515,9 +519,9 @@ long GetReferenceSize(ENODE *node)
 	return 8;
 }
 
-/*
- *      return the addressing mode of a dereferenced node.
- */
+//
+//  Return the addressing mode of a dereferenced node.
+//
 AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
 	struct amode    *ap1;
@@ -528,6 +532,8 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = GenerateIndex(node->p[0]);
 		ap1->isUnsigned = !su;//node->isUnsigned;
+		// *** may have to fix for stackseg
+		ap1->segment = dataseg;
 		if (!node->isUnsigned)
 			GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -540,6 +546,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1 = xalloc(sizeof(struct amode));
         ap1->mode = am_indx;
         ap1->preg = regBP;
+		ap1->segment = stackseg;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
@@ -556,6 +563,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->preg = regBP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->isFloat = TRUE;
+		ap1->segment = stackseg;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -576,6 +584,12 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         MakeLegalAmode(ap1,flags,size);
         return ap1;
     }
+	// See segments notes
+	//if (node->p[0]->nodetype == en_labcon &&
+	//	node->p[0]->etype == bt_pointer && node->p[0]->constflag)
+	//	ap1->segment = codeseg;
+	//else
+	//	ap1->segment = dataseg;
     ap1->mode = am_direct;
 	ap1->isUnsigned = !su;
 	if (!node->isUnsigned)
@@ -586,9 +600,9 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     return ap1;
 }
 
-/*
- *      generate code to evaluate a unary minus or complement.
- */
+//
+// Generate code to evaluate a unary minus or complement.
+//
 AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap,*ap1;
@@ -708,6 +722,26 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
     return ap1;
 }
 
+void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
+{
+	AMODE *ap3;
+
+	ap3 = GetTempRegister();
+	switch(ssize) {
+	case 1:	GenerateDiadic(op_lb,0,ap3,ap1); break;
+	case 2:	GenerateDiadic(op_lc,0,ap3,ap1); break;
+	case 4:	GenerateDiadic(op_lh,0,ap3,ap1); break;
+	case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
+	}
+	GenerateTriadic(op,0,ap3,ap3,ap2);
+	switch(ssize) {
+	case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
+	case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
+	case 4:	GenerateDiadic(op_sh,0,ap3,ap1); break;
+	case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
+	}
+	ReleaseTempRegister(ap3);
+}
 
 AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 {
@@ -729,21 +763,7 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
 	}
 	else {
-		ap3 = GetTempRegister();
-		switch(ssize) {
-		case 1:	GenerateDiadic(op_lb,0,ap3,ap1); break;
-		case 2:	GenerateDiadic(op_lc,0,ap3,ap1); break;
-		case 4:	GenerateDiadic(op_lh,0,ap3,ap1); break;
-		case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
-		}
-		GenerateTriadic(op,0,ap3,ap3,ap2);
-		switch(ssize) {
-		case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
-		case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
-		case 4:	GenerateDiadic(op_sh,0,ap3,ap1); break;
-		case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
-		}
-		ReleaseTempRegister(ap3);
+		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempRegister(ap2);
 	if (!ap1->isUnsigned)
@@ -772,21 +792,7 @@ AMODE *GenerateAssignLogic(ENODE *node,int flags, int size, int op)
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
 	}
 	else {
-		ap3 = GetTempRegister();
-		switch(ssize) {
-		case 1:	GenerateDiadic(op_lb,0,ap3,ap1); break;
-		case 2:	GenerateDiadic(op_lc,0,ap3,ap1); break;
-		case 4:	GenerateDiadic(op_lh,0,ap3,ap1); break;
-		case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
-		}
-		GenerateTriadic(op,0,ap3,ap3,ap2);
-		switch(ssize) {
-		case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
-		case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
-		case 4:	GenerateDiadic(op_sh,0,ap3,ap1); break;
-		case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
-		}
-		ReleaseTempRegister(ap3);
+		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempRegister(ap2);
 	if (!ap1->isUnsigned)
@@ -816,21 +822,7 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
 	}
 	else {
-		ap3 = GetTempRegister();
-		switch(ssize) {
-		case 1:	GenerateDiadic(op_lb,0,ap3,ap1); break;
-		case 2:	GenerateDiadic(op_lc,0,ap3,ap1); break;
-		case 4:	GenerateDiadic(op_lh,0,ap3,ap1); break;
-		case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
-		}
-		GenerateTriadic(op,0,ap3,ap3,ap2);
-		switch(ssize) {
-		case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
-		case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
-		case 4:	GenerateDiadic(op_sh,0,ap3,ap1); break;
-		case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
-		}
-		ReleaseTempRegister(ap3);
+		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempRegister(ap2);
     GenerateSignExtend(ap1,ssize,size,flags);
@@ -1043,6 +1035,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 	}
 */
 	ReleaseTempRegister(ap1);
+    MakeLegalAmode(ap2,flags,size);
 	return ap2;
 }
 
@@ -1178,6 +1171,20 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             MakeLegalAmode(ap1,flags,size);
             return ap1;
     case en_labcon:
+            ap1 = allocAmode();
+			/* this code not really necessary, see segments notes
+			if (node->etype==bt_pointer && node->constflag) {
+				ap1->segment = codeseg;
+			}
+			else {
+				ap1->segment = dataseg;
+			}
+			*/
+            ap1->mode = am_immed;
+            ap1->offset = node;
+			ap1->isUnsigned = node->isUnsigned;
+            MakeLegalAmode(ap1,flags,size);
+            return ap1;
     case en_nacon:
 	case en_cnacon:
 	case en_clabcon:
@@ -1301,6 +1308,8 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_ainc: return GenerateAutoIncrement(node,flags,size,op_add);
     case en_adec: return GenerateAutoIncrement(node,flags,size,op_sub);
     case en_land:
+		if (isRaptor64)
+			return GenExprRaptor64(node);
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0],F_REG, size);
@@ -1308,7 +1317,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 		GenerateTriadic(op_and,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		if (gCpu==888) {
+		if (isTable888) {
             lab0 = nextlabel++;
 			GenerateDiadic(op_brz,0,ap3,make_clabel(lab0));
 			GenerateDiadic(op_ldi,0,ap3,make_immed(1));
@@ -1322,6 +1331,8 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			return ap3;
 		}
 	case en_lor:
+		if (isRaptor64)
+			return GenExprRaptor64(node);
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0],F_REG, size);
@@ -1329,7 +1340,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 		GenerateTriadic(op_or,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		if (gCpu==888) {
+		if (isTable888) {
             lab0 = nextlabel++;
 			GenerateDiadic(op_brz,0,ap3,make_clabel(lab0));
 			GenerateDiadic(op_ldi,0,ap3,make_immed(1));
@@ -1342,9 +1353,11 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 		}
         return ap3;
 	case en_not:
+		if (isRaptor64)
+			return GenExprRaptor64(node);
 		size = GetNaturalSize(node);
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		if (gCpu==888) {
+		if (isTable888) {
 			GenerateDiadic(op_not,0,ap1,ap1);
 		}
 		else {
@@ -1359,7 +1372,9 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_gt:     case en_ge:
     case en_ult:    case en_ule:
     case en_ugt:    case en_uge:
-		if (gCpu==888) {
+		if (isRaptor64)
+			return GenExprRaptor64(node);
+		if (isTable888) {
             lab0 = nextlabel++;
             lab1 = nextlabel++;
             GenerateFalseJump(node,lab0,0);
@@ -1390,7 +1405,9 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ReleaseTempRegister(GenerateExpression(node->p[0],F_ALL | F_NOVALUE,natsize));
             return GenerateExpression(node->p[1],flags,size);
     case en_fcall:
-			if (gCpu==888)
+			if (isRaptor64)
+				return GenerateRaptor64FunctionCall(node,flags);
+			else if (isTable888)
 				return GenerateTable888FunctionCall(node,flags);
 			else
 				return GenerateFunctionCall(node,flags);
@@ -1531,47 +1548,17 @@ int GetNaturalSize(ENODE *node)
     return 0;
 }
 
-/*
+
 static void GenerateCmp(ENODE *node, int op, int label, int predreg)
 {
-	int size;
-	struct amode *ap1, *ap2;
-	static char buf[4][20];
-	static int ndx;
-
-	ndx++;
-	ndx = ndx % 4;
-	size = GetNaturalSize(node);
-	ap1 = GenerateExpression(node->p[0],F_REG, size);
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	if (gCpu==888) {
-		GenerateTriadic(op_cmp,0,make_string("flg0"),ap1,ap2);
-		switch(op)
-		{
-		case op_eq:	op = op_beq; break;
-		case op_ne:	op = op_bne; break;
-		case op_lt: op = op_blt; break;
-		case op_le: op = op_ble; break;
-		case op_gt: op = op_bgt; break;
-		case op_ge: op = op_bge; break;
-		case op_ltu: op = op_bltu; break;
-		case op_leu: op = op_bleu; break;
-		case op_gtu: op = op_bgtu; break;
-		case op_geu: op = op_bgeu; break;
-		}
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		GenerateDiadic(op,0,make_string("flg0"),make_clabel(label));
-	}
-	else {
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		sprintf(buf[ndx], "p%d", predreg);
-		GenerateTriadic(op_cmp,0,make_string(buf[ndx]),ap1,ap2);
-		GeneratePredicatedMonadic(predreg,PredOp(op),op_bra,0,make_clabel(label));
-	}
+	if (isRaptor64)
+		GenerateRaptor64Cmp(node, op, label, 0);
+	else if (isTable888)
+		GenerateTable888Cmp(node, op, label, 0);
+	else
+		GenerateThorCmp(node, op, label, predreg);
 }
-*/
+
 /*
  *      generate a jump to label if the node passed evaluates to
  *      a true condition.
@@ -1613,8 +1600,10 @@ void GenerateTrueJump(ENODE *node, int label, int predreg)
                         ap1 = GenerateExpression(node,F_REG,siz1);
 //                        GenerateDiadic(op_tst,siz1,ap1,0);
                         ReleaseTempRegister(ap1);
-						if (gCpu==888)
+						if (isTable888)
 							GenerateDiadic(op_brnz,0,ap1,make_clabel(label));
+						else if (isRaptor64)
+							GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(label));
 						else {
 							GenerateDiadic(op_tst,0,makepred(predreg),ap1);
 							GeneratePredicatedMonadic(predreg,PredOp(op_ne),op_bra,0,make_clabel(label));
@@ -1665,8 +1654,10 @@ void GenerateFalseJump(ENODE *node,int label, int predreg)
                         ap = GenerateExpression(node,F_REG,siz1);
 //                        GenerateDiadic(op_tst,siz1,ap,0);
                         ReleaseTempRegister(ap);
-						if (gCpu==888)
+						if (isTable888)
 							GenerateDiadic(op_brz,0,ap,make_clabel(label));
+						else if (isRaptor64)
+							GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
 						else {
 							GenerateDiadic(op_tst,0,makepred(predreg),ap);
 							GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_clabel(label));

@@ -235,8 +235,12 @@ void funcbottom(Statement *stmt)
     fprintf(list,"\n\n*** local symbol table ***\n\n");
     ListTable(&lsyms,0);
 	// Should recurse into all the compound statements
-	if (stmt->stype==st_compound)
-		ListCompound(stmt);
+	if (stmt==NULL)
+		printf("DIAG: null statement in funcbottom.\r\n");
+	else {
+		if (stmt->stype==st_compound)
+			ListCompound(stmt);
+	}
     fprintf(list,"\n\n\n");
     ReleaseLocalMemory();        /* release local symbols */
 	isPascal = FALSE;
@@ -283,6 +287,9 @@ static Statement *ParseFunctionBody(SYM *sp)
 		GenerateFunction(sp, stmt = ParseCompoundStatement());
 	else if (isTable888)
 		GenerateTable888Function(sp, stmt = ParseCompoundStatement());
+	else if (isRaptor64)
+		GenerateRaptor64Function(sp, stmt = ParseCompoundStatement());
+
 //	if (optimize)
 		flush_peep();
 	if (sp->storage_class == sc_global) {

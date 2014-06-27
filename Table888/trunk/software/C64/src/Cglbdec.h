@@ -60,6 +60,10 @@
 #endif
 
 extern int gCpu;
+extern int regSP;
+extern int regBP;
+extern int regLR;
+extern int regXLR;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;
@@ -105,6 +109,12 @@ extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
 
+// Analyze.c
+extern int bsort(CSE **list);
+extern int OptimizationDesireability(CSE *csp);
+extern opt1(Statement *stmt);
+extern CSE *olist;         /* list of optimizable expressions */
+
 extern void error(int n);
 extern void needpunc(enum e_sym p);
 // Memmgt.c
@@ -112,6 +122,8 @@ extern char *xalloc(int);
 extern SYM *allocSYM();
 extern TYP *allocTYP();
 extern AMODE *allocAmode();
+extern ENODE *allocEnode();
+extern CSE *allocCSE();
 
 // NextToken.c
 extern void initsym();
@@ -154,6 +166,8 @@ extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, __int64 v1);
 extern TYP *expression(struct enode **node);
 extern int IsLValue(struct enode *node);
+extern AMODE *GenerateExpression(ENODE *node, int flags, int size);
+extern int GetNaturalSize(ENODE *node);
 // Optimize.c
 extern void opt4(struct enode **node);
 // GenerateStatement.c
@@ -167,7 +181,11 @@ extern void GenerateFirstcall(struct snode *stmt);
 extern void gen_regrestore();
 extern AMODE *make_direct(__int64 i);
 extern AMODE *makereg(int r);
+extern AMODE *makebreg(int r);
+extern int bitsset(int mask);
+extern int popcnt(int m);
 // Outcode.c
+extern int PredOp(int op);
 extern void GenerateByte(int val);
 extern void GenerateChar(int val);
 extern void genhalf(int val);
@@ -189,8 +207,10 @@ extern char *opstr(int op);
 // Peepgen.c
 extern void flush_peep();
 extern void GenerateLabel(int labno);
+extern void GenerateMonadic(int op, int len, AMODE *ap1);
 extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
+extern void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1);
 // Gencode.c
 extern AMODE *make_label(__int64 lab);
 extern AMODE *make_clabel(__int64 lab);
@@ -206,10 +226,11 @@ extern int preprocess();
 // CodeGenerator.c
 extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(__int64 o, int i);
+extern AMODE *make_string(char *s);
 extern void GenerateFalseJump(struct enode *node,int label,int predreg);
 extern void GenerateTrueJump(struct enode *node,int label,int predreg);
 extern char *GetNamespace();
 extern char nmspace[20][100];
-enum e_sg { noseg, codeseg, dataseg, bssseg, idataseg, tlsseg, rodataseg };
+enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 
 #endif

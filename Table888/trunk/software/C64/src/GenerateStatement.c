@@ -382,9 +382,12 @@ void GenerateSwitch(Statement *stmt)
             {
 				bf = stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
-					if (gCpu==888) {
+					if (isTable888) {
 						GenerateTriadic(op_cmp,0,make_string("flg0"),makereg(1),make_immed(bf[nn]));
 						GenerateDiadic(op_beq,0,make_string("flg0"),make_clabel(curlab));
+					}
+					else if (isRaptor64) {
+						GenerateTriadic(op_beq,0,makereg(1),make_immed(bf[nn]),make_label(curlab));
 					}
 					else {
 						GenerateTriadic(op_cmp,0,makepred(predreg),makereg(1),make_immed(bf[nn]));
@@ -505,7 +508,12 @@ void GenerateTry(Statement *stmt)
 	oldthrow = throwlab;
 	throwlab = nextlabel++;
 
-	GenerateDiadic(op_lea,0,makebreg(CLR),make_clabel(throwlab));
+	if (isTable888)
+		GenerateDiadic(op_lea,0,makereg(CLR),make_clabel(throwlab));
+	else if (isRaptor64)
+		GenerateDiadic(op_lea,0,makereg(28),make_clabel(throwlab));
+	else
+		GenerateDiadic(op_lea,0,makebreg(CLR),make_clabel(throwlab));
 	GenerateStatement(stmt->s1);
     GenerateDiadic(op_bra,0,make_clabel(lab1),NULL);
 	GenerateLabel(throwlab);
@@ -516,8 +524,19 @@ void GenerateTry(Statement *stmt)
 		GenerateLabel(curlab);
 		if (stmt->s2==99999)
 			;
-		else
-			GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_clabel(nextlabel));
+		else {
+			if (isRaptor64)
+				GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_clabel(nextlabel));
+			else if (isTable888) {
+				GenerateTriadic(op_cmp, 0, make_string("flg0"), makereg(2), make_immed((int)stmt->s2));
+				GenerateDiadic(op_bne, 0, make_string("flg0"), make_clabel(nextlabel));
+			}
+			else {
+				// ToDo: fix Thor
+				GenerateTriadic(op_cmp, 0, make_string("p0"), makereg(2), make_immed((int)stmt->s2));
+				GenerateDiadic(op_bne, 0, make_string("p0"), make_clabel(nextlabel));
+			}
+		}
 		// move the throw expression result in 'r1' into the catch variable.
 		sym = (SYM *)stmt->label;
 		if (sym) {
@@ -532,7 +551,12 @@ void GenerateTry(Statement *stmt)
 		stmt=stmt->next;
 	}
     GenerateLabel(lab1);
-	GenerateDiadic(op_lea,0,makereg(28),make_clabel(oldthrow));
+	if (isTable888)
+		GenerateDiadic(op_lea,0,makereg(CLR),make_clabel(oldthrow));
+	else if (isRaptor64)
+		GenerateDiadic(op_lea,0,makereg(28),make_clabel(oldthrow));
+	else
+		GenerateDiadic(op_lea,0,makebreg(CLR),make_clabel(oldthrow));
 }
 
 void GenerateThrow(Statement *stmt)
@@ -592,14 +616,34 @@ void GenerateSpinlock(Statement *stmt)
 			GenerateTriadic(op_ori, 0, ap1,makereg(0),make_immed(stmt->initExpr));
 		GenerateLabel(lab1);
 		if (stmt->initExpr) {
+			// Decrement timeout
 			GenerateTriadic(op_sub, 0, ap1, ap1, make_immed(1));
-			GenerateTriadic(op_eq, 0, ap1, makereg(0), make_label(lab2));
+			if (isTable888)
+				GenerateDiadic(op_brz, 0, ap1, make_label(lab2));
+			else if (isRaptor64)
+				GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab2));
+			// ToDo: finish for Thor
+			else
+				;
 		}
-		GenerateDiadic(op_inbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
-		GenerateTriadic(op_eq, 0, ap2, makereg(0), make_label(lab1));
+		if (isRaptor64) {
+			GenerateDiadic(op_inbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
+			GenerateTriadic(op_beq, 0, ap2, makereg(0), make_label(lab1));
+		}
+		else if (isTable888) {
+			GenerateDiadic(op_lbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_brz, 0, ap2, make_label(lab1));
+		}
+		// ToDo: finish for Thor
+		else {
+			GenerateDiadic(op_lbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
+		}
 		GenerateStatement(stmt->s1);
 		// unlock
-		GenerateDiadic(op_outb, 0, makereg(0), make_indexed(stmt->incrExpr,ap->preg));
+		if (isRaptor64)
+			GenerateDiadic(op_outb, 0, makereg(0), make_indexed(stmt->incrExpr,ap->preg));
+		else
+			GenerateDiadic(op_sb, 0, makereg(0), make_indexed(stmt->incrExpr,ap->preg));
 		if (stmt->initExpr) {
 			GenerateTriadic(op_bra,0,make_clabel(lab3),NULL,NULL);
 			GenerateLabel(lab2);
@@ -666,7 +710,10 @@ void GenerateSpinUnlock(struct snode *stmt)
 				GenerateTriadic(op_ori, 0, makereg(1),makereg(0),ap);
 			else
 				GenerateDiadic(op_mov, 0, makereg(1),ap);
-			GenerateDiadic(op_outb, 0, makereg(0),make_indexed(stmt->incrExpr,1));
+			if (isRaptor64)
+				GenerateDiadic(op_outb, 0, makereg(0),make_indexed(stmt->incrExpr,1));
+			else
+				GenerateDiadic(op_sb, 0, makereg(0),make_indexed(stmt->incrExpr,1));
 		}
 		ReleaseTempRegister(ap);
 	}
@@ -746,8 +793,10 @@ void GenerateStatement(Statement *stmt)
 						ReleaseTempRegister(ap);
                         break;
                 case st_return:
-						if (gCpu==888)
+						if (isTable888)
 							GenerateTable888Return(currentFn,stmt);
+						else if (isRaptor64)
+							GenerateRaptor64Return(currentFn,stmt);
 						else
 							GenerateReturn(currentFn,stmt);
                         break;

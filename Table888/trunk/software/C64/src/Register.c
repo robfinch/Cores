@@ -107,7 +107,16 @@ void GenerateTempRegPush(int reg, int rmode, int number)
     ap1->preg = reg;
     ap1->mode = rmode;
 
-	GenerateMonadic(op_push,0,ap1);
+	if (isTable888)
+		GenerateMonadic(op_push,0,ap1);
+	else if (isRaptor64) {
+		GenerateMonadic(op_subi,0,makereg(30),makereg(30),make_immed(8));
+		GenerateDiadic(op_sw,0,ap1,make_indirect(30));
+	}
+	else {
+		GenerateMonadic(op_subi,0,makereg(255),makereg(255),make_immed(8));
+		GenerateDiadic(op_sw,0,ap1,make_indirect(255));
+	}
 	TRACE(printf("pushing r%d\r\n", reg);)
     reg_stack[reg_stack_ptr].mode = rmode;
     reg_stack[reg_stack_ptr].reg = reg;
@@ -153,7 +162,16 @@ void GenerateTempRegPop(int reg, int rmode, int number)
 	ap1 = allocAmode();
 	ap1->preg = reg;
 	ap1->mode = rmode;
-	GenerateMonadic(op_pop,0,ap1);
+	if (isTable888)
+		GenerateMonadic(op_pop,0,ap1);
+	else if (isRaptor64) {
+		GenerateDiadic(op_lw,0,ap1,make_indirect(30));
+		GenerateMonadic(op_addi,0,makereg(30),makereg(30),make_immed(8));
+	}
+	else {
+		GenerateDiadic(op_lw,0,ap1,make_indirect(255));
+		GenerateMonadic(op_addi,0,makereg(255),makereg(255),make_immed(8));
+	}
     reg_alloc[number].f.isPushed = 'F';
 }
 

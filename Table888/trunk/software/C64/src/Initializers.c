@@ -151,7 +151,17 @@ int InitializeArray(TYP *tp)
     if( lastst == begin) {
         NextToken();               /* skip past the brace */
         while(lastst != end) {
-            nbytes += InitializeType(tp->btp);
+			// Allow char array initialization like { "something", "somethingelse" }
+			if (lastst == sconst && (tp->btp->type==bt_char || tp->btp->type==bt_uchar)) {
+				nbytes = strlen(laststr) * 2 + 2;
+				p = laststr;
+				while( *p )
+					GenerateChar(*p++);
+				GenerateChar(0);
+				NextToken();
+			}
+			else
+				nbytes += InitializeType(tp->btp);
             if( lastst == comma)
                 NextToken();
             else if( lastst != end)
@@ -159,7 +169,7 @@ int InitializeArray(TYP *tp)
         }
         NextToken();               /* skip closing brace */
     }
-    else if( lastst == sconst && tp->btp->type == bt_char) {
+    else if( lastst == sconst && (tp->btp->type == bt_char || tp->btp->type==bt_uchar)) {
         nbytes = strlen(laststr) * 2 + 2;
         p = laststr;
         while( *p )

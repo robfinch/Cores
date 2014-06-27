@@ -49,6 +49,10 @@
 /*      global definitions      */
 
 int gCpu = 888;
+int regSP = 255;
+int regBP = 253;
+int regLR = -1;
+int regXLR = 251;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;

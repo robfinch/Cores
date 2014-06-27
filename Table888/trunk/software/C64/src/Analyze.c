@@ -24,11 +24,16 @@
 // ============================================================================
 //
 #include        <stdio.h>
+#include <string.h>
 #include        "c.h"
 #include        "expr.h"
 #include "Statement.h"
 #include        "gen.h"
 #include        "cglbdec.h"
+
+extern int AllocateTable888RegisterVars();
+extern int AllocateRaptor64RegisterVars();
+extern int AllocateThorRegisterVars();
 
 /*
  *	68000 C compiler
@@ -72,7 +77,7 @@ static repcse_compound(Statement *stmt);
  *      opt1 will replace during the second optimization pass.
  */
 
-static CSE *olist;         /* list of optimizable expressions */
+CSE *olist;         /* list of optimizable expressions */
 
 /*
  *      equalnode will return 1 if the expressions pointed to by
@@ -140,7 +145,7 @@ static ENODE *DuplicateEnode(ENODE *node)
 	ENODE *temp;
 
     if( node == NULL )
-        return NULL;
+        return (ENODE *)NULL;
     temp = allocEnode();
 	memcpy(temp,node,sizeof(ENODE));	// copy all the fields
     return temp;
@@ -203,7 +208,7 @@ CSE *voidauto(ENODE *node)
 static void scanexpr(ENODE *node, int duse)
 {
 	CSE *csp, *csp1;
-	int first, i;
+	int first;
 
     if( node == NULL )
         return;
@@ -463,214 +468,6 @@ int bsort(CSE **list)
     return FALSE;
 }
 
-/*
- *      AllocateRegisterVars will allocate registers for the expressions that have
- *      a high enough desirability.
- */
-static int AllocateRegisterVars()
-{
-	CSE *csp;
-    ENODE *exptr;
-    int reg, mask, rmask;
-	int brreg, brmask, brrmask;
-    AMODE *ap, *ap2, *ap3;
-	int nn;
-	int cnt;
-
-	reg = 11;
-	brreg = 1009;
-    mask = 0;
-	rmask = 0;
-	brmask = 0;
-	brrmask = 0;
-    while( bsort(&olist) );         /* sort the expression list */
-    csp = olist;
-    while( csp != NULL ) {
-        if( OptimizationDesireability(csp) < 3 )	// was < 3
-            csp->reg = -1;
-//        else if( csp->duses > csp->uses / 4 && reg < 18 )
-		else {
-			if ((csp->exp->nodetype==en_clabcon || csp->exp->nodetype==en_cnacon)) {
-				if (brreg < 1011)
-					csp->reg = brreg++;
-				else
-					csp->reg = -1;
-			}
-			else {
-				if( reg < 18 )	// was / 4
-					csp->reg = reg++;
-				else
-					csp->reg = -1;
-			}
-		}
-        if( csp->reg != -1 )
-		{
-			if (csp->reg < 1000) {
-				rmask = rmask | (1 << (31 - csp->reg));
-				mask = mask | (1 << csp->reg);
-			}
-			else {
-				brrmask = brrmask | (1 << (15 - (csp->reg-1000)));
-				brmask = brmask | (1 << (csp->reg-1000));
-			}
-		}
-        csp = csp->next;
-    }
-	if( mask != 0 ) {
-		cnt = 0;
-		//GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(bitsset(rmask)*8));
-		for (nn = 0; nn < 32; nn++) {
-			if (rmask & (0x80000000 >> nn)) {
-				GenerateMonadic(op_push,0,makereg(nn&31));//,make_indexed(cnt,SP),NULL);
-				cnt+=8;
-			}
-		}
-	}
-	if( brmask != 0 ) {
-		cnt = 0;
-		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(bitsset(brrmask)*8));
-		for (nn = 0; nn < 16; nn++) {
-			if (brrmask & (0x8000 >> nn)) {
-				GenerateTriadic(op_ss|op_sws,0,makebreg(nn&15),make_indexed(cnt,SP),NULL);
-				cnt+=8;
-			}
-		}
-	}
-    save_mask = mask;
-	bsave_mask = brmask;
-    csp = olist;
-    while( csp != NULL ) {
-            if( csp->reg != -1 )
-                    {               /* see if preload needed */
-                    exptr = csp->exp;
-                    if( !IsLValue(exptr) || (exptr->p[0]->i > 0) )
-                            {
-                            initstack();
-                            ap = GenerateExpression(exptr,F_REG|F_BREG|F_IMMED,8);
-							if (csp->reg < 1000) {
-								ap2 = makereg(csp->reg);
-								if (ap->mode==am_immed)
-									GenerateDiadic(op_ldi,0,ap2,ap);
-								else
-									GenerateDiadic(op_mov,0,ap2,ap);
-							}
-							else {
-								ap2 = makebreg(csp->reg-1000);
-								if (ap->mode==am_immed)
-									GenerateDiadic(op_ldis,0,ap2,ap);
-								else
-									GenerateDiadic(op_mtspr,0,ap2,ap);
-							}
-                            ReleaseTempRegister(ap);
-                            }
-                    }
-            csp = csp->next;
-            }
-	return popcnt(mask) + popcnt(brmask);
-}
-
-/*
- *      AllocateRegisterVars will allocate registers for the expressions that have
- *      a high enough desirability.
- */
-static int AllocateTable888RegisterVars()
-{
-	CSE *csp;
-    ENODE *exptr;
-    int reg, mask, rmask;
-	int brreg, brmask, brrmask;
-    AMODE *ap, *ap2, *ap3;
-	int nn;
-	int cnt;
-	int size;
-
-	reg = 11;
-	brreg = 19;
-    mask = 0;
-	rmask = 0;
-	brmask = 0;
-	brrmask = 0;
-    while( bsort(&olist) );         /* sort the expression list */
-    csp = olist;
-    while( csp != NULL ) {
-        if( OptimizationDesireability(csp) < 3 )	// was < 3
-            csp->reg = -1;
-//        else if( csp->duses > csp->uses / 4 && reg < 18 )
-		else {
-			if ((csp->exp->nodetype==en_clabcon || csp->exp->nodetype==en_cnacon)) {
-				if (brreg < 21)
-					csp->reg = brreg++;
-				else
-					csp->reg = -1;
-			}
-			else
-			{
-				if( csp->duses > csp->uses / 4 && reg < 18 )
-//				if( reg < 18 )	// was / 4
-					csp->reg = reg++;
-				else
-					csp->reg = -1;
-			}
-		}
-        if( csp->reg != -1 )
-		{
-			rmask = rmask | (1 << (31 - csp->reg));
-			mask = mask | (1 << csp->reg);
-		}
-        csp = csp->next;
-    }
-	if( mask != 0 ) {
-		cnt = 0;
-		//GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(bitsset(rmask)*8));
-		for (nn = 0; nn < 32; nn++) {
-			if (rmask & (0x80000000 >> nn)) {
-				GenerateMonadic(op_push,0,makereg(nn&31));//,make_indexed(cnt,SP),NULL);
-				//GenerateDiadic(op_sw,0,makereg(nn&31),make_indexed(cnt,SP));
-				cnt+=8;
-			}
-		}
-	}
-    save_mask = mask;
-    csp = olist;
-    while( csp != NULL ) {
-            if( csp->reg != -1 )
-                    {               /* see if preload needed */
-                    exptr = csp->exp;
-                    if( !IsLValue(exptr) || (exptr->p[0]->i > 0) )
-                            {
-                            initstack();
-                            ap = GenerateExpression(exptr,F_ALL,8);
-							ap2 = makereg(csp->reg);
-							if (ap->mode==am_immed)
-								GenerateDiadic(op_ldi,0,ap2,ap);
-							else if (ap->mode==am_reg)
-								GenerateDiadic(op_mov,0,ap2,ap);
-							else {
-								size = GetNaturalSize(exptr);
-								if (exptr->isUnsigned) {
-									switch(size) {
-									case 1:	GenerateDiadic(op_lbu,0,ap2,ap); break;
-									case 2:	GenerateDiadic(op_lcu,0,ap2,ap); break;
-									case 4:	GenerateDiadic(op_lhu,0,ap2,ap); break;
-									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
-									}
-								}
-								else {
-									switch(size) {
-									case 1:	GenerateDiadic(op_lb,0,ap2,ap); break;
-									case 2:	GenerateDiadic(op_lc,0,ap2,ap); break;
-									case 4:	GenerateDiadic(op_lh,0,ap2,ap); break;
-									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
-									}
-								}
-							}
-                            ReleaseTempRegister(ap);
-                            }
-                    }
-            csp = csp->next;
-            }
-	return popcnt(mask);
-}
 
 /*
  *      repexpr will replace all allocated references within an expression
@@ -859,10 +656,12 @@ int opt1(Statement *block)
 
 	olist = NULL;
     scan(block);            /* collect expressions */
-	if (gCpu==888)
-		nn = AllocateTable888RegisterVars();             /* allocate registers */
+	if (isTable888)
+		nn = AllocateTable888RegisterVars();         /* allocate registers */
+	else if (isRaptor64)
+		nn = AllocateRaptor64RegisterVars();
 	else
-		nn = AllocateRegisterVars();             /* allocate registers */
+		nn = AllocateThorRegisterVars();             /* allocate registers */
     repcse(block);          /* replace allocated expressions */
 	return nn;
 }

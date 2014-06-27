@@ -390,7 +390,7 @@ void PeepoptBranch(struct ocode *ip)
 {
 	struct ocode *fwd1,*fwd2,*fwd3,*fwd4;
 
-	if (gCpu==888)
+	if (isTable888||isRaptor64)
 		return;
 
 	fwd1 = ip->fwd;
@@ -579,7 +579,7 @@ void opt3()
 					PeepoptLc(ip);
 					break;
             case op_bra:
-					if (ip->predop==1 || gCpu==888)
+					if (ip->predop==1 || isTable888)
 	                    PeepoptUctran(ip);
 					else
 						PeepoptBranch(ip);
@@ -595,7 +595,7 @@ void opt3()
             case op_rts:
 			case op_rti:
 			case op_rtd:
-					if (ip->predop==1 || gCpu==888)
+					if (ip->predop==1 || isTable888)
 						PeepoptUctran(ip);
 					break;
             }

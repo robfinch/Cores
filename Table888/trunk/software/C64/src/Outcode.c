@@ -113,6 +113,9 @@ struct oplst {
 		{"bmi", op_bmi}, {"outb", op_outb}, {"inb", op_inb}, {"inbu", op_inbu},
 				{"dc",op_dc},
 		{"push",op_push}, {"pop", op_pop},
+		{"seq", op_seq}, {"sne",op_sne},
+		{"slt", op_slt}, {"sle",op_sle},{"sgt",op_sgt}, {"sge",op_sge},
+		{"sltu", op_sltu}, {"sleu",op_sleu},{"sgtu",op_sgtu}, {"sgeu",op_sgeu},
 		{"",op_empty}, {"",op_asm}, {"", op_fnname},
                 {0,0} };
 
@@ -190,7 +193,8 @@ void putop(int op)
 
 static void PutConstant(ENODE *offset)
 {
-	static char buf[200];
+	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
+	static char buf[4000];
 
 	switch( offset->nodetype )
 	{
@@ -484,6 +488,8 @@ void put_code(struct ocode *p)
 							fprintf(output,"/");
 						else
 							fprintf(output,",");
+							if (op==op_cmp && apd->mode != am_reg)
+								printf("aha\r\n");
                        		PutAddressMode(apd);
 							if (ap3 != NULL) {
 								if (op==op_push || op==op_pop)

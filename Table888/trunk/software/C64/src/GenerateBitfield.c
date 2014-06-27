@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - Raptor64 'C' derived language compiler
+// C64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -37,9 +37,12 @@ static void SignExtendBitfield(ENODE *node, AMODE *ap3, __int64 mask)
 
 	umask = 0x8000000000000000L | ~(mask >> 1);
 	ap2 = GetTempRegister();
-	GenerateDiadic(op_ldi,0,ap2,make_immed(umask));
+	if (isRaptor64)
+		GenerateTriadic(op_ori,0,ap2,makereg(0),make_immed(umask));
+	else
+		GenerateDiadic(op_ldi,0,ap2,make_immed(umask));
 	GenerateTriadic(op_add,0,ap3,ap3,ap2);
-	GenerateTriadic(gCpu==888?op_eor:op_xor,0,ap3,ap3,ap2);
+	GenerateTriadic(isTable888?op_eor:op_xor,0,ap3,ap3,ap2);
 	ReleaseTempRegister(ap2);
 }
 
@@ -56,9 +59,12 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
     ap = GenerateDereference(node, flags, node->esize);
     MakeLegalAmode(ap, flags, node->esize);
 	ap3 = GetTempRegister();
-	GenerateDiadic(op_mov,0,ap3,ap);
+	if (isRaptor64)
+		GenerateTriadic(op_or,0,ap3,ap,makereg(0));
+	else
+		GenerateDiadic(op_mov,0,ap3,ap);
 	ReleaseTempRegister(ap);
-	if (gCpu==888) {
+	if (isTable888||isRaptor64) {
 		if (node->bit_offset > 0)
 			GenerateDiadic(op_shru, 0, ap3, make_immed((__int64) node->bit_offset));
 		GenerateDiadic(op_andi, 0, ap3, make_immed(mask));

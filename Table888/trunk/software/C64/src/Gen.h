@@ -68,6 +68,7 @@ enum e_op {
 		op_lbu, op_lcu, op_lhu, op_sti,
         op_rts, op_rti, op_rtd,
 		op_push, op_pop, op_movs,
+		op_seq, op_sne, op_slt, op_sle, op_sgt, op_sge, op_sltu, op_sleu, op_sgtu, op_sgeu,
 		op_bra, op_bf, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
 		op_gtu, op_geu, op_ltu, op_leu, op_nr,
         op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_swap,

@@ -110,10 +110,17 @@ int	options(char *s)
 			farcode = 1;
 	}
 	else if (s[1]=='p') {
-		if (strcmp(&s[2],"Thor")==0)
+		if (strcmp(&s[2],"Thor")==0) {
 			gCpu = THOR;
-		else if (strcmp(&s[2],"Raptor64")==0)
+			regXLR = 11;	// branch register
+		}
+		else if (strcmp(&s[2],"Raptor64")==0) {
 			gCpu = RAPTOR64;
+			regSP = 30;
+			regBP = 27;
+			regXLR = 28;
+			regLR = 31;
+		}
 	}
 	else if (s[1]=='w')
 		wcharSupport = 0;

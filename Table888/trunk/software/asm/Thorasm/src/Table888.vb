@@ -192,13 +192,9 @@ Module Table888
             Case "sxh"
                 ProcessROp(s, &HA)
             Case "mtspr"
-                ProcessMtspr(s, &H48)
+                ProcessTable888Mtspr(s, &H48)
             Case "mfspr"
-                ProcessMfspr(s, &H49)
-            Case "mtseg"
-                ProcessMtseg(s, &HC)
-            Case "mfseg"
-                ProcessMfseg(s, &HD)
+                ProcessTable888Mfspr(s, &H49)
             Case "lsb"
                 ProcessMfseg(s, &H12)
             Case "swap"
@@ -484,16 +480,14 @@ Module Table888
         'End If
 
         If segreg = 1 Then
-            segbits = 0
-        ElseIf segreg = 3 Then
             segbits = 1
-        ElseIf segreg = 5 Then
-            segbits = 2
         ElseIf segreg = 14 Then
-            segbits = 3
+            segbits = 2
+        ElseIf segreg = 15 Then
+            segbits = 0
         Else
             segbits = 0
-            needSegPrefix = True
+            'needSegPrefix = True
         End If
 
 
@@ -551,6 +545,22 @@ Module Table888
             If offset < -8192 Or offset > 8191 Or needSegPrefix Then
                 emitImm14(offset)
             End If
+            If segreg = 1 Then
+                segbits = 1
+            ElseIf segreg = 14 Then
+                segbits = 2
+            ElseIf segreg = 15 Then
+                segbits = 0
+            Else
+                If (ra = 255 Or ra = 253) Then
+                    segbits = 2
+                ElseIf ra = 254 Then
+                    segbits = 0
+                Else
+                    segbits = 1
+                End If
+            End If
+
             emitAlignedCode(oc)
             emitCode(ra)
             emitCode(rt)
@@ -593,6 +603,22 @@ Module Table888
             If offset > 15 Or offset < 0 Or needSegPrefix Then
                 emitImm4(offset)
             End If
+            If segreg = 1 Then
+                segbits = 1
+            ElseIf segreg = 14 Then
+                segbits = 2
+            ElseIf segreg = 15 Then
+                segbits = 0
+            Else
+                If (ra = 255 Or ra = 253) Then
+                    segbits = 2
+                ElseIf ra = 254 Then
+                    segbits = 0
+                Else
+                    segbits = 1
+                End If
+            End If
+
             emitAlignedCode(oc)
             emitCode(ra)
             emitCode(rb)
@@ -895,6 +921,89 @@ Module Table888
         emitCode(L.address And &HFF)
         emitCode((L.address >> 8) And &HFF)
         emitCode((disp >> 16) And &H1F)
+    End Sub
+
+    Function GetTable888SprRegister(ByVal s As String) As Integer
+        Dim reg As Int64
+
+        Try
+            If s.ToLower = "tick" Then
+                Return 0
+            ElseIf s.ToLower = "vbr" Then
+                Return 1
+            ElseIf s.ToLower = "bear" Then
+                Return 2
+            ElseIf s.ToLower = "pta" Or s.ToLower = "cr3" Then
+                Return 4
+            ElseIf s.ToLower = "cr0" Then
+                Return 5
+            ElseIf s.ToLower = "clk" Then
+                Return 6
+            ElseIf s.ToLower = "fault_pc" Then
+                Return 8
+            ElseIf s.ToLower = "fault_cs" Then
+                Return 9
+            ElseIf s.ToLower = "fault_seg" Then
+                Return 10
+            ElseIf s.ToLower = "fault_st" Then
+                Return 11
+            ElseIf s.ToLower = "ivno" Then
+                Return 12
+            ElseIf s.ToLower = "history" Then
+                Return 13
+            ElseIf s.ToLower = "biterr" Then
+                Return 14
+            ElseIf s.ToLower = "bithist" Then
+                Return 15
+            ElseIf s.ToLower = "srand1" Then
+                Return 16
+            ElseIf s.ToLower = "srand2" Then
+                Return 17
+            ElseIf s.ToLower = "rand" Then
+                Return 18
+            ElseIf s.ToLower = "cs" Then
+                Return 32
+            ElseIf s.ToLower = "ds" Then
+                Return 33
+            ElseIf s.ToLower = "ss" Then
+                Return 34
+            Else
+                reg = GetSegRegister(s)
+                Return reg
+            End If
+        Catch ex As Exception
+            Return -1
+        End Try
+    End Function
+
+    '
+    '
+    Sub ProcessTable888Mtspr(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+
+        rt = GetTable888SprRegister(strs(1))
+        ra = GetRegister(strs(2))
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
+    End Sub
+
+    '
+    '
+    Sub ProcessTable888Mfspr(ByVal ops As String, ByVal fn As Int64)
+        Dim rt As Int64
+        Dim ra As Int64
+
+        rt = GetRegister(strs(1))
+        ra = GetTable888SprRegister(strs(2))
+        emitAlignedCode(1)
+        emitCode(ra)
+        emitCode(rt)
+        emitCode(0)
+        emitCode(fn)
     End Sub
 
 End Module
