@@ -1,5 +1,5 @@
 // ============================================================================
-// Table888seg.v
+// Table888mmu.v
 //        __
 //   \\__/ o\    (C) 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
@@ -21,208 +21,7 @@
 //                                                                          
 // ============================================================================
 //
-//`define SUPPORT_BITMAP_FNS		1'b1
-`define SUPPORT_PAGING				1'b1
-`define SUPPORT_ICACHE				1'b1
-//`define SUPPORT_DCACHE				1'b1
-`define SUPPORT_BITFIELD			1'b1
-`define SUPPORT_CLKGATE				1'b1
-
-`define FEAT_DCACHE		1'b0
-`define FEAT_ICACHE		1'b1
-`define FEAT_PAGING		1'b1
-`define FEAT_SEG		1'b0
-`define FEAT_BITFIELD	1'b1
-`define FEAT_BITMAP		1'b0
-`define FEAT_CLK_GATE	1'b1
-
-`define TRUE	1'b1
-`define FALSE	1'b0
-
-`define RST_VECT	32'h0000FFF0
-`define NMI_VECT	32'h0000FFE0
-`define IRQ_VECT	32'h0000FFD0
-`define DBG_VECT	32'h0000FFC0
-`define ALN_VECT	32'h0000FFB0
-
-`define BRK		8'h00
-`define R		8'h01
-`define SWAP		8'h03
-`define MOV			8'h04
-`define NEG			8'h05
-`define COM			8'h06
-`define NOT			8'h07
-`define SXB			8'h08
-`define SXC			8'h09
-`define SXH			8'h0A
-`define MOVS		8'h0E
-`define LSL			8'h10
-`define LAR			8'h11
-`define LSB			8'h12
-`define GRAN		8'h14
-`define CPUID		8'h2A
-`define SEI			8'h30
-`define CLI			8'h31
-`define PHP			8'h32
-`define PLP			8'h33
-`define ICON		8'h34
-`define ICOFF		8'h35
-`define CLP			8'h37
-`define RTI			8'h40
-`define STP			8'h41
-`define UNLINK		8'h42
-`define MTSPR		8'h48
-`define MFSPR		8'h49
-`define VERR		8'h80
-`define VERW		8'h81
-`define VERX		8'h82
-`define MRK1		8'hF0
-`define MRK2		8'hF1
-`define MRK3		8'hF2
-`define MRK4		8'hF3
-`define RR		8'h02
-`define ADD			8'h04
-`define SUB			8'h05
-`define CMP			8'h06
-`define MUL			8'h07
-`define DIV			8'h08
-`define MOD			8'h09
-`define ADDU		8'h14
-`define SUBU		8'h15
-`define MULU		8'h17
-`define DIVU		8'h18
-`define MODU		8'h19
-`define AND			8'h20
-`define OR			8'h21
-`define EOR			8'h22
-`define ANDN		8'h23
-`define NAND		8'h24
-`define NOR			8'h25
-`define ENOR		8'h26
-`define ORN			8'h27
-`define MSO			8'h28
-`define SSO			8'h29
-`define SMR			8'h30
-`define LMR			8'h31
-`define ARPL		8'h38
-`define SHLI		8'h50
-`define ROLI		8'h51
-`define SHRI		8'h52
-`define RORI		8'h53
-`define ASRI		8'h54
-`define SHL			8'h40
-`define ROL			8'h41
-`define SHR			8'h42
-`define ROR			8'h43
-`define ASR			8'h44
-`define BITFIELD	8'h03
-`define ADDI	8'h04
-`define SUBI	8'h05
-`define CMPI	8'h06
-`define MULI	8'h07
-`define DIVI	8'h08
-`define MODI	8'h09
-`define ANDI	8'h0C
-`define ORI		8'h0D
-`define EORI	8'h0F
-`define ADDUI	8'h14
-`define SUBUI	8'h15
-`define LDI		8'h16
-`define MULUI	8'h17
-`define DIVUI	8'h18
-`define MODUI	8'h19
-`define BEQ		8'h40
-`define BNE		8'h41
-`define BVS		8'h42
-`define BVC		8'h43
-`define BMI		8'h44
-`define BPL		8'h45
-`define BRA		8'h46
-`define BRN		8'h47
-`define BGT		8'h48
-`define BLE		8'h49
-`define BGE		8'h4A
-`define BLT		8'h4B
-`define BHI		8'h4C
-`define BLS		8'h4D
-`define BHS		8'h4E
-`define BLO		8'h4F
-`define JMP		8'h50
-`define JSR		8'h51
-`define JMP_IX	8'h52
-`define JSR_IX	8'h53
-`define JMP_DRN	8'h54
-`define JSR_DRN	8'h55
-`define BSR		8'h56
-`define JGR		8'h57
-`define BRZ		8'h58
-`define BRNZ	8'h59
-`define DBNZ	8'h5A
-`define JAL		8'h5B
-`define RTS		8'h60
-`define JSP		8'h61
-`define LINK	8'h62
-`define RTD		8'h63
-`define LB		8'h80
-`define LBU		8'h81
-`define LC		8'h82
-`define LCU		8'h83
-`define LH		8'h84
-`define LHU		8'h85
-`define LW		8'h86
-`define LWS		8'h87
-`define LBX		8'h88
-`define LBUX	8'h89
-`define LCX		8'h8A
-`define LCUX	8'h8B
-`define LHX		8'h8C
-`define LHUX	8'h8D
-`define LWX		8'h8E
-`define LEAX	8'h8F
-`define LEA		8'h92
-`define SB		8'hA0
-`define SC		8'hA1
-`define SH		8'hA2
-`define SW		8'hA3
-`define CINV	8'hA4
-`define SWS		8'hA5
-`define PUSH	8'hA6
-`define POP		8'hA7
-`define SBX		8'hA8
-`define SCX		8'hA9
-`define SHX		8'hAA
-`define SWX		8'hAB
-`define CINVX	8'hAC
-`define BMS		8'hB4
-`define BMC		8'hB5
-`define BMF		8'hB6
-`define BMT		8'hB7
-
-`define NOP		8'hEA
-
-`define IMM1	8'hFD
-`define IMM2	8'hFE
-
-`define STW_NONE	4'd0
-`define STW_SR	4'd1
-`define STW_PC	4'd2
-`define STW_A	4'd3
-`define STW_B	4'd4
-`define STW_C	4'd5
-`define STW_SPR	4'd8
-
-`define TICK	8'h00
-`define VBR		8'h01
-`define BEAR	8'h02
-`define PTA		8'h04
-`define CR0		8'h05
-`define CLK		8'h06
-`define FAULT_PC	8'h08
-`define IVNO	8'h0C
-`define HISTORY	8'h0D
-`define SRAND1	8'h10
-`define SRAND2	8'h11
-`define RAND	8'h12
+`include "Table888_defines.v"
 
 module Table888mmu(
 	rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o,
@@ -295,12 +94,6 @@ parameter IBUF4 = 6'd27;
 parameter CINV1 = 6'd32;
 parameter CINV2 = 6'd33;
 parameter LINK1 = 6'd34;
-parameter IBUF1b = 6'd35;
-parameter IBUF2b = 6'd36;
-parameter IBUF3b = 6'd37;
-parameter IBUF1c = 6'd38;
-parameter IBUF2c = 6'd39;
-parameter IBUF3c = 6'd40;
 parameter LOAD5 = 6'd41;
 parameter LOAD6 = 6'd42;
 parameter LOAD7 = 6'd43;
@@ -335,45 +128,81 @@ wire [63:0] serial_no = "00000001";
 
 reg [5:0] state;
 wire clk;
+reg [63:0] cr0;
+reg [63:0] pta;
+wire paging_en = cr0[31];
+`ifdef SUPPORT_ICACHE
+wire cache_en = cr0[30];
+`else
+wire cache_en = 1'b0;		// Fixing this bit at zero should cause synthesis to strip out the i-cache code
+`endif
+wire pe = cr0[0];			// protection enable
+`ifdef TMR
+wire tmrb = cr0[9];			// bypass useless loads (biterr count not valid)
+wire tmrx = cr0[8];			// triple mode redundancy execute
+wire tmrw = cr0[7];			// triple mode redundancy writes
+wire tmrr = cr0[6];			// triple mode redundancy reads
+`else
+wire tmrb = 1'b0;
+wire tmrx = 1'b0;
+wire tmrw = 1'b0;
+wire tmrr = 1'b0;
+`endif
+reg [1:0] tmrcyc;			// tmr cycle number
 reg [3:0] store_what;
 reg [39:0] ir;
+`ifdef TMR_CACHE
+wire [39:0] insn_a,insn_b,insn_c;
+wire [39:0] insn = (insn_a & insn_b) | (insn_a & insn_c) | (insn_b & insn_c);
+`else
 wire [39:0] insn;
+`endif
 wire [7:0] opcode = ir[7:0];
 wire [7:0] func = ir[39:32];
 reg [PCMSB:0] pc;
+reg [PCMSB:0] cs;
+reg [31:0] ds,ss;
+wire [PCMSB:0] segmented_pc = pc + {cs[PCMSB:9],9'h00};
 wire [63:0] paged_pc;
 reg [PCMSB:0] ibufadr;
 wire ibufmiss = ibufadr != paged_pc[PCMSB:0];
-reg [39:0] ibuf1,ibuf2,ibuf3;	// instruction buffer
-wire [39:0] ibuf = (ibuf1 & ibuf2) | (ibuf1 & ibuf3) | (ibuf2 & ibuf3);
+reg [39:0] ibufx [3:0];		// instruction buffer
+wire [39:0] ibuf = (ibufx[0] & ibufx[1]) | (ibufx[0] & ibufx[2]) | (ibufx[1] & ibufx[2]);
 reg hist_capture;
 reg [31:0] history_buf [63:0];
 reg [5:0] history_ndx;
 reg [5:0] history_ndx2;
+reg [31:0] bithist [63:0];
+reg [5:0] bithist_ndx;
+reg [5:0] bithist_ndx2;
 reg isInsnCacheLoad,isCacheReset;
 reg nmi_edge,nmi1;
 reg hwi;			// hardware interrupt indicator
 reg im;				// irq interrupt mask bit
-wire pe;			// protection enabled
 reg pv;				// privilege violation
 reg [2:0] imcd;		// mask countdown bits
 wire [31:0] sr = {23'd0,im,6'h00,pv,pe};
+`ifdef TMR_REG
 reg [63:0] regfile1 [255:0];
 reg [63:0] regfile2 [255:0];
 reg [63:0] regfile3 [255:0];
+`else
+reg [63:0] regfile [255:0];
+reg [95:0] cregfile [63:0];
+`endif
 
 reg gie;						// global interrupt enable
 wire [7:0] Ra = ir[15:8];
 wire [7:0] Rb = ir[23:16];
 wire [7:0] Rc = ir[31:24];
 reg [7:0] Rt,RtPop;
-reg [3:0] St,Sa;
+reg [1:0] St,Sa;
 reg [7:0] Spr;		// special purpose register read port spec
 reg [7:0] Sprt;
 reg wrrf,wrsrf,wrspr;
 reg [31:0] rwadr,rwadr2;
 wire [31:0] rwadr_o;
-reg icacheOn;
+//reg icacheOn;
 wire uncachedArea = 1'b0;
 wire ihit;
 reg [2:0] ld_size, st_size;
@@ -384,16 +213,18 @@ reg isJSP,isJSR,isLWS,isLink;
 reg isBM;
 reg [1:0] nLD;
 wire hasIMM = isIMM1|isIMM2;
-reg [63:0] rfoa,rfob,rfoc;
-reg [64:0] res;			// result bus
-reg [63:0] a,b,c;		// operand holding registers
-reg [63:0] imm;
-reg [63:0] immbuf;
+reg [95:0] rfoa,rfob,rfoc;
+reg [96:0] res;			// result bus
+reg [95:0] a,b,c;		// operand holding registers
+reg [95:0] ca,cb;
+reg [95:0] imm;
+reg [95:0] immbuf;
 wire [63:0] bfo;		/// bitfield op output
 reg [63:0] tick;		// tick count
 reg [31:0] vbr;			// vector base register
 reg [31:0] berr_addr;
 reg [31:0] fault_pc;
+reg [31:0] fault_cs;
 reg [2:0] brkCnt;		// break counter for detecting multiple faults
 reg cav;
 wire dav;				// address is valid for mmu translation
@@ -401,20 +232,13 @@ reg [15:0] JOB;
 reg [15:0] TASK;
 reg [63:0] lresx [2:0];
 wire [63:0] lres = (lresx[0] & lresx[1]) | (lresx[0] & lresx[2]) | (lresx[1] & lresx[2]);
+reg [63:0] biterr_cnt;
 
 assign dav=state==LOAD1||state==LOAD3||state==STORE1||state==STORE3;
 
 wire cpnp,dpnp;
 reg rst_cpnp,rst_dpnp;
-reg [63:0] cr0;
-reg [63:0] pta;
-wire paging_en = cr0[31];
-assign pe = cr0[0];
-wire tmrx = cr0[4];			// triple mode redundancy execute
-wire tmrw = cr0[3];			// triple mode redundancy writes
-wire tmrr = cr0[2];			// triple mode redundancy reads
-reg [1:0] tmrcyc;			// tmr cycle number
-wire [3:0] cpl = cr0[7:4];
+wire [3:0] cpl = cs[3:0];
 wire [63:0] cpte;
 wire [63:0] dpte;
 wire drdy;
@@ -427,6 +251,7 @@ reg isWR;
 wire [3:0] pmmu_cpl;
 wire [3:0] pmmu_dpl;
 reg [31:0] ivno;
+wire [63:0] logic_o;
 
 reg [63:0] sp;	// stack pointer
 wire [63:0] sp_inc = sp + 64'd8;
@@ -470,7 +295,7 @@ endfunction
 icache_tagram u1 (
 	.wclk(clk),
 	.wr((ack_i & isInsnCacheLoad)|isCacheReset),
-	.wa(adr_o),
+	.wa({adr_o[33:18],adr_o[15:0]}),
 	.v(!isCacheReset),
 	.rclk(~clk),
 	.pc(paged_pc[31:0]),
@@ -478,16 +303,49 @@ icache_tagram u1 (
 );
 
 wire [1:0] debug_bits;
-icache_ram u2 (
+`ifdef TMR_CACHE
+icache_ram u2a (
 	.wclk(clk),
-	.wr(ack_i & isInsnCacheLoad),
+	.wr(ack_i && isInsnCacheLoad && (adr_o[17:16]==2'b00 || !tmrx)),
 	.wa(adr_o[12:0]),
 	.i(dat_i),
 	.rclk(~clk),
 	.pc(paged_pc[12:0]),
-	.insn(insn),
-	.debug_bits(debug_bits)
+	.insn(insn_a),
+	.debug_bits()
 );
+icache_ram u2b (
+	.wclk(clk),
+	.wr(ack_i && isInsnCacheLoad && (adr_o[17:16]==2'b01 || !tmrx)),
+	.wa(adr_o[12:0]),
+	.i(dat_i),
+	.rclk(~clk),
+	.pc(paged_pc[12:0]),
+	.insn(insn_b),
+	.debug_bits()
+);
+icache_ram u2c (
+	.wclk(clk),
+	.wr(ack_i && isInsnCacheLoad && (adr_o[17:16]==2'b00 || adr_o[17:16]==2'b10 || !tmrx)),
+	.wa(adr_o[12:0]),
+	.i(dat_i),
+	.rclk(~clk),
+	.pc(paged_pc[12:0]),
+	.insn(insn_c),
+	.debug_bits()
+);
+`else
+icache_ram u2 (
+	.wclk(clk),
+	.wr(ack_i && isInsnCacheLoad),
+	.wa(adr_o[12:0]),
+	.i(dat_i),
+	.rclk(~clk),
+	.pc(paged_pc[12:0]),
+	.insn(insn_a),
+	.debug_bits()
+);
+`endif
 
 Table888_pmmu u3
 (
@@ -520,7 +378,7 @@ Table888_pmmu u3
 	.dpte(dpte),
 
 	.cav(1'b1),			// code address valid
-	.vcadr({32'd0,pc}),	// virtual code address to translate
+	.vcadr({32'd0,segmented_pc}),	// virtual code address to translate
 	.tcadr(paged_pc),	// translated code address
 	.rdy(rdy),				// address translation is ready
 	.p(pmmu_cpl),		// privilege (0= supervisor)
@@ -553,31 +411,64 @@ Table888_bitfield u4
 	.masko()
 );
 
+Table888_logic u5
+(
+	.xIR(ir),
+	.a(a),
+	.b(b),
+	.imm(imm),
+	.o(logic_o)
+);
+
 // - - - - - - - - - - - - - - - - - -
 // Combinational logic follows.
 // - - - - - - - - - - - - - - - - - -
-
 // register read ports
 always @*
-case(Ra)
+casex(Ra)
 8'h00:	rfoa <= 64'd0;
+8'b10xxxxxx:	rfoa <= cregfile[Ra[5:0]];
 8'hFE:	rfoa <= pc[39:0];
 8'hFF:	rfoa <= sp;
+`ifdef TMR_REG
 default:	rfoa <= (regfile1[Ra] & regfile2[Ra]) | (regfile1[Ra] & regfile3[Ra]) | (regfile2[Ra] & regfile3[Ra]);
+`else
+default:	rfoa <= regfile[Ra];
+`endif
 endcase
 always @*
 case(Rb)
 8'h00:	rfob <= 64'd0;
+8'b10xxxxxx:	rfob <= cregfile[Rb[5:0]];
 8'hFE:	rfob <= pc[39:0];
 8'hFF:	rfob <= sp;
+`ifdef TMR_REG
 default:	rfob <= (regfile1[Rb] & regfile2[Rb]) | (regfile1[Rb] & regfile3[Rb]) | (regfile2[Rb] & regfile3[Rb]);
+`else
+default:	rfob <= regfile[Rb];
+`endif
 endcase
 always @*
 case(Rc)
 8'h00:	rfoc <= 64'd0;
+8'b10xxxxxx:	rfoc <= cregfile[Rc[5:0]];
 8'hFE:	rfoc <= pc[39:0];
 8'hFF:	rfoc <= sp;
+`ifdef TMR_REG
 default:	rfoc <= (regfile1[Rc] & regfile2[Rc]) | (regfile1[Rc] & regfile3[Rc]) | (regfile2[Rc] & regfile3[Rc]);
+`else
+default:	rfoc <= regfile[Rc];
+`endif
+endcase
+always @*
+case(Ra[5:0])
+6'h00:	crfoa <= 96'd0;
+default:	crfoa <= cregfile[Ra[5:0]];
+endcase
+always @*
+case(Rb[5:0])
+6'h00:	crfob <= 96'd0;
+default:	crfob <= cregfile[Rb[5:0]];
 endcase
 
 // Data input multiplexers
@@ -646,23 +537,33 @@ wire signed [63:0] asro = as >> shamt;
 // Multiply / Divide / Modulus
 reg [6:0] cnt;
 reg res_sgn;
-reg [63:0] aa, bb;
-reg [63:0] q, r;
-reg ld_divider;
+reg [95:0] aa, bb;
+reg [95:0] q, r;
 wire div_done;
-wire [63:0] pa = a[63] ? -a : a;
-wire [127:0] p1 = aa * bb;
-reg [127:0] p;
-wire [63:0] diff = r - bb;
+wire [95:0] pa = a[95] ? -a : a;
+reg [191:0] p1;// = aa * bb;
+reg [191:0] p;
+wire [95:0] diff = r - bb;
+// currency: 72.24 (21.7:7.2)
 
 // For scaled indexed address mode
 wire [63:0] b_scaled = b << ir[33:32];
+reg [63:0] segbase;
+always @(Sa or cs or ds or ss)
+case(Sa)
+2'd1:	segbase <= {ds[31:4],4'h0};
+2'd2:	segbase <= {ss[31:4],4'h0};
+default:	segbase <= {cs[PCMSB:9],9'h00};
+endcase
+
 reg [63:0] ea;
-wire [63:0] ea_drn = a + imm;
-wire [63:0] ea_ndx = a + b_scaled + imm;
-wire [63:0] mr_ea = c;
+wire [63:0] lea_drn = a + imm;
+wire [63:0] lea_ndx = a + b_scaled + imm;
+wire [63:0] ea_drn = segbase + lea_drn;
+wire [63:0] ea_ndx = segbase + lea_ndx;
+wire [63:0] mr_ea = segbase + c;
 `ifdef SUPPORT_BITMAP_FNS
-wire [63:0] ea_bm = a + {(b >> 6),3'b000} + imm;
+wire [63:0] ea_bm = segbase + a + {(b >> 6),3'b000} + imm;
 `endif
 
 assign data_readable = pmmu_data_readable;
@@ -702,9 +603,15 @@ always @*
 	`CLK:	spro <= clk_throttle_new;
 `endif
 	`FAULT_PC:	spro <= fault_pc;
+	`FAULT_CS:	spro <= fault_cs;
 	`IVNO:		spro <= ivno;
 	`HISTORY:	spro <= history_buf[history_ndx2];
 	`RAND:		spro <= rand;
+	`BITERR_CNT:	spro <= biterr_cnt;
+	`BITHIST:	spro <= bithist[bithist_ndx2];
+	`CS:		spro <= cs;
+	`DS:		spro <= ds;
+	`SS:		spro <= ss;
 	default:	spro <= 65'd0;
 	endcase
 
@@ -755,7 +662,6 @@ if (rst_i) begin
 	clk_en <= `TRUE;
 	pc <= `RST_VECT;
 	ibufadr <= 32'h00000000;
-	icacheOn <= `FALSE;
 	gie <= `FALSE;
 	nmi_edge <= `FALSE;
 	isInsnCacheLoad <= `FALSE;
@@ -765,10 +671,11 @@ if (rst_i) begin
 	state <= RESET;
 	store_what <= `STW_NONE;
 	tick <= 64'd0;
+	biterr_cnt <= 64'd0;
 	vbr <= 32'h00006000;
 	imcd <= 3'b111;
 	pv <= `FALSE;
-	cr0 <= 64'd0;
+	cr0 <= 64'h0;
 	St <= 4'd0;
 	rst_cpnp <= `TRUE;
 	rst_dpnp <= `TRUE;
@@ -777,7 +684,7 @@ if (rst_i) begin
 	hist_capture <= `TRUE;
 	history_ndx <= 6'd0;
 	history_ndx2 <= 6'd0;
-	ld_divider <= `FALSE;
+	cs <= 64'd0;
 `ifdef SUPPORT_CLKGATE
 	ld_clk_throttle <= `FALSE;
 `endif
@@ -843,23 +750,36 @@ IFETCH:
 			end
 			else if (!page_executable && pe)
 				executable_fault();
-			else if (!ihit & !uncachedArea & icacheOn) begin
+			else if (!ihit & !uncachedArea & cache_en) begin
 				next_state(ICACHE1);
 			end
-			else if (ibufmiss & (uncachedArea | !icacheOn)) begin
+			else if (ibufmiss & (uncachedArea | !cache_en)) begin
 				next_state(IBUF1);
 			end
-			else if (icacheOn & !uncachedArea) begin
+			else if (cache_en & !uncachedArea) begin
 				if (debug_bits[0] & 1'b0) begin
 					ir[7:0] <= `BRK;
 					ir[39:8] <= `DBG_VECT;
 					hwi <= `TRUE;
 				end
-				else
+				else begin
+`ifdef TMR_CACHE
+					if (tmrx && (insn_a!=insn_b || insn_a != insn_c || insn_b != insn_c))
+						biterr_cnt <= biterr_cnt + 64'd1;
+`endif
 					ir <= insn;
+				end
 			end
-			else
+			else begin
+`ifdef TMRX
+				if (tmrx && (ibufx[0]!=ibufx[1] || ibufx[0] != ibufx[2] || ibufx[1] != ibufx[2])) begin
+					biterr_cnt <= biterr_cnt + 64'd1;
+					bithist[bithist_ndx] <= pc;
+					bithist_ndx <= bithist_ndx + 6'd1;
+				end
+`endif
 				ir <= ibuf;
+			end
 			if (imcd != 3'b111) begin
 				imcd <= {imcd,1'b0};
 				if (imcd[2]==1'b0) begin
@@ -877,11 +797,19 @@ IFETCH:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ICACHE1:
+`ifdef TMR
 	begin
 		isInsnCacheLoad <= `TRUE;
-		wb_burst(6'd3,{paged_pc[31:4],4'h0});
+		wb_burst(6'd3,{paged_pc[31:16],tmrcyc,paged_pc[15:4],4'h0});
 		next_state(ICACHE2);
 	end
+`else
+	begin
+		isInsnCacheLoad <= `TRUE;
+		wb_burst(6'd3,{paged_pc[31:16],paged_pc[15:4],4'h0});
+		next_state(ICACHE2);
+	end
+`endif
 ICACHE2:
 	if (ack_i) begin
 		adr_o[3:2] <= adr_o[3:2] + 2'd1;
@@ -890,7 +818,14 @@ ICACHE2:
 		if (adr_o[3:2]==2'b11) begin
 			isInsnCacheLoad <= `FALSE;
 			wb_nack();
-			next_state(IFETCH);
+			if (tmrx && tmrcyc != 2'b10) begin
+				tmrcyc <= tmrcyc + 2'd1;
+				next_state(ICACHE1);
+			end
+			else begin
+				tmrcyc <= 2'b00;
+				next_state(IFETCH);
+			end
 		end
 	end
 
@@ -899,19 +834,35 @@ ICACHE2:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 IBUF1:
+`ifdef TMR_BYPASS
+	// Don't bother with the third load if the first two will win.
+	if ((tmrcyc==2'b10) && (ibufx[0]==ibufx[1]) && tmrb) begin
+		ibufx[2] <= ibufx[0];
+		tmrcyc <= 2'b00;
+		next_state(IFETCH);
+	end
+	else
+`endif
+`ifdef TMR
 	begin
-		wb_burst(6'd1,{paged_pc[31:16],2'b00,paged_pc[15:2],2'h0});
+		wb_burst(6'd1,{paged_pc[31:16],tmrcyc,paged_pc[15:2],2'h0});
 		next_state(IBUF2);
 	end
+`else
+	begin
+		wb_burst(6'd1,{paged_pc[31:16],paged_pc[15:2],2'h0});
+		next_state(IBUF2);
+	end
+`endif
 IBUF2:
 	if (ack_i) begin
 		cti_o <= 3'b111;
 		adr_o <= adr_o + 32'd4;
 		case(pc[1:0])
-		2'b00:	ibuf1[31:0] <= dat_i;
-		2'b01:	ibuf1[23:0] <= dat_i[31:8];
-		2'b10:	ibuf1[15:0] <= dat_i[31:16];
-		2'b11:	ibuf1[7:0] <= dat_i[31:24];
+		2'b00:	ibufx[tmrcyc][31:0] <= dat_i;
+		2'b01:	ibufx[tmrcyc][23:0] <= dat_i[31:8];
+		2'b10:	ibufx[tmrcyc][15:0] <= dat_i[31:16];
+		2'b11:	ibufx[tmrcyc][7:0] <= dat_i[31:24];
 		endcase
 		next_state(IBUF3);
 	end
@@ -920,75 +871,27 @@ IBUF3:
 		wb_nack();
 		ibufadr <= paged_pc[PCMSB:0];
 		case(pc[1:0])
-		2'b00:	ibuf1[39:32] <= dat_i[7:0];
-		2'b01:	ibuf1[39:24] <= dat_i[15:0];
-		2'b10:	ibuf1[39:16] <= dat_i[23:0];
-		2'b11:	ibuf1[39:8] <= dat_i;
+		2'b00:	ibufx[tmrcyc][39:32] <= dat_i[7:0];
+		2'b01:	ibufx[tmrcyc][39:24] <= dat_i[15:0];
+		2'b10:	ibufx[tmrcyc][39:16] <= dat_i[23:0];
+		2'b11:	ibufx[tmrcyc][39:8] <= dat_i;
 		endcase
-		next_state(tmrx ? IBUF1b : IBUF4);
+		if (tmrx)
+			tmrcyc <= tmrcyc + 2'd1;
+		if (tmrcyc==2'b10) begin
+			tmrcyc <= 2'b00;
+			next_state(IFETCH);
+		end
+		else if (tmrx)
+			next_state(IBUF1);
+		else
+			next_state(IBUF4);
 	end
+// Set the buffers to be consistent for non-TMRX mode
 IBUF4:
 	begin
-		ibuf2 <= ibuf1;
-		ibuf3 <= ibuf1;
-		next_state(IFETCH);
-	end
-
-IBUF1b:
-	begin
-		wb_burst(6'd1,{paged_pc[31:16],2'b01,paged_pc[15:2],2'h0});
-		next_state(IBUF2b);
-	end
-IBUF2b:
-	if (ack_i) begin
-		cti_o <= 3'b111;
-		adr_o <= adr_o + 32'd4;
-		case(pc[1:0])
-		2'b00:	ibuf2[31:0] <= dat_i;
-		2'b01:	ibuf2[23:0] <= dat_i[31:8];
-		2'b10:	ibuf2[15:0] <= dat_i[31:16];
-		2'b11:	ibuf2[7:0] <= dat_i[31:24];
-		endcase
-		next_state(IBUF3b);
-	end
-IBUF3b:
-	if (ack_i) begin
-		wb_nack();
-		case(pc[1:0])
-		2'b00:	ibuf2[39:32] <= dat_i[7:0];
-		2'b01:	ibuf2[39:24] <= dat_i[15:0];
-		2'b10:	ibuf2[39:16] <= dat_i[23:0];
-		2'b11:	ibuf2[39:8] <= dat_i;
-		endcase
-		next_state(IBUF1c);
-	end
-
-IBUF1c:
-	begin
-		wb_burst(6'd1,{paged_pc[31:16],2'b10,paged_pc[15:2],2'h0});
-		next_state(IBUF2c);
-	end
-IBUF2c:
-	if (ack_i) begin
-		cti_o <= 3'b111;
-		adr_o <= adr_o + 32'd4;
-		case(pc[1:0])
-		2'b00:	ibuf3[31:0] <= dat_i;
-		2'b01:	ibuf3[23:0] <= dat_i[31:8];
-		2'b10:	ibuf3[15:0] <= dat_i[31:16];
-		2'b11:	ibuf3[7:0] <= dat_i[31:24];
-		endcase
-		next_state(IBUF3c);
-	end
-IBUF3c:
-	if (ack_i) begin
-		wb_nack();
-		case(pc[1:0])
-		2'b00:	ibuf3[39:32] <= dat_i[7:0];
-		2'b01:	ibuf3[39:24] <= dat_i[15:0];
-		2'b10:	ibuf3[39:16] <= dat_i[23:0];
-		2'b11:	ibuf3[39:8] <= dat_i;
-		endcase
+		ibufx[1] <= ibufx[0];
+		ibufx[2] <= ibufx[0];
 		next_state(IFETCH);
 	end
 
@@ -1028,6 +931,7 @@ DECODE:
 		c <= rfoc;
 		ld_size <= word;
 		st_size <= word;
+		Sa <= 2'b00;		// default: use code segment
 		
 		// Set the target register
 		case(opcode)
@@ -1103,12 +1007,12 @@ DECODE:
 					end
 			`CLP:	begin pv <= `FALSE; next_state(IFETCH); end
 //			`PROT:	begin pe <= `TRUE; next_state(IFETCH); end
-			`ICON:	begin icacheOn <= `TRUE; next_state(IFETCH); end
-			`ICOFF:	begin icacheOn <= `FALSE; next_state(IFETCH); end
+			`ICON:	begin cr0[30] <= `TRUE; next_state(IFETCH); end
+			`ICOFF:	begin cr0[30] <= `FALSE; next_state(IFETCH); end
 			`PHP:
 				begin
 					isWR <= `TRUE;
-					rwadr <= sp_dec;
+					rwadr <= {ss[31:4],4'h0} + sp_dec;
 					update_sp(sp_dec);
 					store_what <= `STW_SR;
 					next_state(STORE1);
@@ -1116,7 +1020,7 @@ DECODE:
 			`PLP:
 				begin
 					isPLP <= `TRUE;
-					rwadr <= sp;
+					rwadr <= {ss[31:4],4'h0} + sp;
 					update_sp(sp_inc);
 					next_state(LOAD1);
 				end
@@ -1127,7 +1031,7 @@ DECODE:
 						privilege_violation();
 					else begin
 						isRTI <= `TRUE;
-						rwadr <= sp;
+						rwadr <= {ss[31:4],4'h0} + sp;
 						update_sp(sp_inc);
 						next_state(LOAD1);
 					end
@@ -1162,8 +1066,8 @@ DECODE:
 				ivno <= ir[20:12];
 				hist_capture <= `FALSE;
 				isBRK <= `TRUE;
-				rwadr <= sp_dec;
-				store_what <= `STW_SR;
+				rwadr <= {ss[31:4],4'h0} + sp_dec;
+				store_what <= `STW_CS;
 				// Double fault ?
 				brkCnt <= brkCnt + 3'd1;
 				if (brkCnt > 3'd2)
@@ -1184,7 +1088,7 @@ DECODE:
 			begin
 				isBSR <= `TRUE;
 				isWR <= `TRUE;
-				rwadr <= sp_dec[31:0];
+				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
 				update_sp(sp_dec);
 				store_what <= `STW_PC;
 				next_state(STORE1);	
@@ -1194,7 +1098,7 @@ DECODE:
 				isJSR <= `TRUE;
 				isJSP <= isJSP;
 				isWR <= `TRUE;
-				rwadr <= sp_dec[31:0];
+				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
 				update_sp(sp_dec);
 				store_what <= `STW_PC;
 				a <= {immbuf[31:0],ir[39:8]};
@@ -1211,12 +1115,13 @@ DECODE:
 				else begin
 					imm <= {{40{ir[39]}},ir[39:19],3'b000};
 				end
+				Sa <= ir[17:16];
 			end
 		`JSR_DRN:
 			begin
 				isJSRdrn <= `TRUE;
 				isWR <= `TRUE;
-				rwadr <= sp_dec[31:0];
+				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
 				update_sp(sp_dec);
 				store_what <= `STW_PC;
 				next_state(STORE1);
@@ -1224,7 +1129,7 @@ DECODE:
 		`RTS:
 			begin
 				isRTS <= `TRUE;
-				rwadr <= sp;
+				rwadr <= {ss[31:4],4'h0} + sp;
 				next_state(LOAD1);
 				update_sp(sp_inc + ir[31:16]);
 			end
@@ -1232,52 +1137,56 @@ DECODE:
 		`SB,`SC,`SH,`SW:
 			begin
 				if (isIMM1) begin
-					imm <= {{22{immbuf[27]}},immbuf[27:0],ir[39:26]};
+					imm <= {ir[25:24],{20{immbuf[27]}},immbuf[27:0],ir[39:26]};
 				end
 				else if (isIMM2) begin
-					imm <= {immbuf[49:0],ir[39:16]};
+					imm <= {ir[25:24],immbuf[47:0],ir[39:26]};
 				end
 				else begin
-					imm <= {{50{ir[39]}},ir[39:26]};
+					imm <= {ir[25:24],{48{ir[39]}},ir[39:26]};
 				end
+				Sa <= ir[25:24];
 			end
 		`CINV:
 			begin
 				if (isIMM1) begin
-					imm <= {{22{immbuf[27]}},immbuf[27:0],ir[39:26]};
+					imm <= {ir[25:24],{20{immbuf[27]}},immbuf[27:0],ir[39:26]};
 				end
 				else if (isIMM2) begin
-					imm <= {immbuf[49:0],ir[39:16]};
+					imm <= {ir[25:24],immbuf[47:0],ir[39:26]};
 				end
 				else begin
-					imm <= {{50{ir[39]}},ir[39:26]};
+					imm <= {ir[25:24],{48{ir[39]}},ir[39:26]};
 				end
+				Sa <= ir[25:24];
 			end
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX,
 		`BMS,`BMC,`BMF,`BMT:
 			begin
 				if (isIMM1) begin
-					imm <= {{32{immbuf[27]}},immbuf[27:0],ir[39:36]};
+					imm <= {ir[35:34],{30{immbuf[27]}},immbuf[27:0],ir[39:36]};
 				end
 				else if (isIMM2) begin
-					imm <= {immbuf[59:0],ir[39:36]};
+					imm <= {ir[35:34],immbuf[57:0],ir[39:36]};
 				end
 				else begin
-					imm <= {{60{ir[39]}},ir[39:36]};
+					imm <= {ir[35:34],{58{ir[39]}},ir[39:36]};
 				end
+				Sa <= ir[35:34];
 			end
 		`CINVX:
 			begin
 				if (isIMM1) begin
-					imm <= {{32{immbuf[27]}},immbuf[27:0],ir[39:36]};
+					imm <= {ir[35:34],{30{immbuf[27]}},immbuf[27:0],ir[39:36]};
 				end
 				else if (isIMM2) begin
-					imm <= {immbuf[59:0],ir[39:36]};
+					imm <= {ir[35:34],immbuf[57:0],ir[39:36]};
 				end
 				else begin
-					imm <= {{60{ir[39]}},ir[39:36]};
+					imm <= {ir[35:34],{58{ir[39]}},ir[39:36]};
 				end
+				Sa <= ir[35:34];
 			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1291,7 +1200,7 @@ DECODE:
 				isPUSH <= `TRUE;
 				store_what <= `STW_A;
 				ir[39:8] <= {8'h00,ir[39:16]};
-				rwadr <= sp_dec[31:0];
+				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
 				if (ir[39:8]==32'h0) begin
 					isWR <= `FALSE;
 					next_state(IFETCH);
@@ -1313,7 +1222,7 @@ DECODE:
 				isPOP <= `TRUE;
 				ir[39:8] <= {8'h00,ir[39:16]};
 				RtPop <= ir[15:8];
-				rwadr <= sp;
+				rwadr <= {ss[31:4],4'h0} + sp;
 				if (ir[39:8]==32'h0)
 					next_state(IFETCH);
 				else if (ir[15:8]==8'h00) begin
@@ -1373,6 +1282,8 @@ EXECUTE:
 					res <= spro;
 					if (Ra==8'h0D)
 						history_ndx2 <= history_ndx2 + 6'd1;
+					if (Ra==8'h0F)
+						bithist_ndx2 <= bithist_ndx2 + 6'd1;
 					end
 			`MTSPR:	begin
 						res <= a;
@@ -1405,7 +1316,7 @@ EXECUTE:
 				begin
 					wrrf <= `TRUE;
 					res <= a;						// MOV SP,BP
-					ir <= {16'h0000,Ra,8'hFF,`LW};	// LW BP,[SP]
+					ir <= {16'h0001,Ra,8'hFF,`LW};	// LW BP,[SP]
 					next_state(LINK1);				// need cycle to update SP
 				end
 			endcase
@@ -1414,14 +1325,8 @@ EXECUTE:
 			`ADD,`ADDU:	res <= a + b;
 			`SUB,`SUBU:	res <= a - b;
 			`CMP:		res <= {nf,vf,60'd0,zf,cf};
-			`AND:		res <= a & b;
-			`OR:		res <= a | b;
-			`EOR:		res <= a ^ b;
-			`ANDN:		res <= a & ~b;
-			`NAND:		res <= ~(a & b);
-			`NOR:		res <= ~(a | b);
-			`ENOR:		res <= ~(a ^ b);
-			`ORN:		res <= a | ~b;
+			`AND,`OR,`EOR,`ANDN,`NAND,`NOR,`ENOR,`ORN:		
+						res <= logic_o;
 			`SHLI,`SHL:	res <= shlo[63:0];
 			`ROLI,`ROL: res <= shlo[127:64]|shlo[63:0];
 			`RORI,`ROR:	res <= shro[127:64]|shro[63:0];
@@ -1460,15 +1365,13 @@ EXECUTE:
 		`ADDI,`ADDUI:	res <= a + imm;
 		`SUBI,`SUBUI:	res <= a - imm;
 		`CMPI:	res <= {nf,vf,60'd0,zf,cf};
-		`ANDI:	res <= a & imm;
-		`ORI:	res <= a | imm;
-		`EORI:	res <= a ^ imm;
+		`ANDI,`ORI,`EORI:	res <= logic_o;
 		
 		`LINK:	begin
 				isLink <= `TRUE;
 				wrrf <= `TRUE;
 				res <= a - imm;						// SUBUI SP,SP,#imm
-				ir <= {16'h0000,Rb,Ra,`SW};			// SW BP,[SP]
+				ir <= {16'h0001,Rb,Ra,`SW};			// SW BP,[SP]
 				next_state(LINK1);					// need time to update and read reg
 				end
 
@@ -1507,7 +1410,7 @@ EXECUTE:
 		`JSR_IX:
 			begin	
 				rwadr2 <= ea_drn;
-				rwadr <= sp_dec[31:0];
+				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
 				isWR <= `TRUE;
 				update_sp(sp_dec);
 				isJSRix <= `TRUE;
@@ -1563,7 +1466,7 @@ EXECUTE:
 				ld_size <= word;
 				load_check(ea_drn);
 			end
-		`LEA:	res <= ea_drn;
+		`LEA:	res <= lea_drn;
 		`LWS:
 			begin
 				isLWS <= `TRUE;
@@ -1605,7 +1508,7 @@ EXECUTE:
 				ld_size <= word;
 				load_check(ea_ndx);
 			end
-		`LEAX:	res <= ea_ndx;
+		`LEAX:	res <= lea_ndx;
 `ifdef SUPPORT_BITMAP_FNS
 		`BMS,`BMC,`BMF,`BMT:
 			begin
@@ -1703,7 +1606,7 @@ EXECUTE:
 
 MULDIV:
 	begin
-		cnt <= 7'd64;
+		cnt <= 7'd96;
 		case(opcode)
 		`MULUI:
 			begin
@@ -1721,7 +1624,6 @@ MULDIV:
 			end
 		`DIVUI,`MODUI:
 			begin
-				ld_divider <= `TRUE;
 				aa <= a;
 				bb <= imm;
 				q <= a[62:0];
@@ -1731,7 +1633,6 @@ MULDIV:
 			end
 		`DIVI,`MODI:
 			begin
-				ld_divider <= `TRUE;
 				aa <= a[63] ? ~a+64'd1 : a;
 				bb <= imm[63] ? ~imm+64'd1 : imm;
 				q <= pa[62:0];
@@ -1750,14 +1651,13 @@ MULDIV:
 				end
 			`MUL:
 				begin
-					aa <= a[31] ? -a : a;
-					bb <= b[31] ? -b : b;
+					aa <= a[63] ? -a : a;
+					bb <= b[63] ? -b : b;
 					res_sgn <= a[63] ^ b[63];
 					next_state(MULT1);
 				end
 			`DIVU,`MODU:
 				begin
-					ld_divider <= `TRUE;
 					aa <= a;
 					bb <= b;
 					q <= a[62:0];
@@ -1767,7 +1667,6 @@ MULDIV:
 				end
 			`DIV,`MOD:
 				begin
-					ld_divider <= `TRUE;
 					aa <= a[63] ? -a : a;
 					bb <= b[63] ? -b : b;
 					q <= pa[62:0];
@@ -1840,6 +1739,17 @@ MD_RES:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 LOAD1:
+`ifdef TMR_BYPASS
+	// bypass "useless" load in TMR mode.
+	if (lresx[0]==lresx[1] && tmrcyc==2'b10 && tmrb) begin
+		if (ld_size==word)
+			next_state(LOAD5);
+		else
+			next_state(LOAD7);
+		lresx[2] <= lresx[0];
+	end
+	else
+`endif
 	if (drdy) begin
 		if (cpl > pmmu_dpl && pe)
 			privilege_violation();
@@ -1928,6 +1838,12 @@ LOAD4:
 		bus_err();
 LOAD5:
 	begin
+		// Accumulate bit errs for TMR mode
+		if (lresx[0]!=lresx[1] || lresx[0]!=lresx[2] || lresx[1] != lresx[2]) begin
+			biterr_cnt <= biterr_cnt + 64'd1;
+			bithist[bithist_ndx] <= pc;
+			bithist_ndx <= bithist_ndx + 6'd1;
+		end
 		res <= lres;
 		case(1'b1)
 		isLWS:
@@ -1951,25 +1867,34 @@ LOAD5:
 			end
 		isBRK:
 			begin
-				im <= `TRUE;
-				pc[39:2] <= lres[39:2];
-				pc[1:0] <= lres[3:2];
-				next_state(IFETCH);
+				if (nLD==2'b00) begin
+					nLD <= 2'b01;
+					if (lres[0])
+						im <= 1'b1;
+					pc[39:2] <= lres[39:2];
+					pc[1:0] <= lres[3:2];
+					next_state(LOAD1);
+				end
+				else begin
+					cs <= lres[39:0];
+					next_state(IFETCH);
+				end
 			end
 		isRTI:
 			begin
 				if (nLD==2'b00) begin
-					pc <= lres[39:0];
+					pc[39:2] <= lres[39:2];
 					pc[1:0] <= lres[3:2];
 					update_sp(sp_inc);
 					nLD <= 2'b01;
-					next_state(LOAD1);
-				end
-				else begin
-					if (lres[8]==1'b0)
+					if (lres[0]==1'b0)
 						imcd <= 3'b110;
 					else
 						im <= 1'b1;
+					next_state(LOAD1);
+				end
+				else begin
+					cs <= lres[39:0];
 					next_state(IFETCH);
 				end
 			end
@@ -2023,8 +1948,14 @@ LOAD6:
 
 // After a triple mode load of less than a word size has completed, the loaded
 // value is placed on the result bus.
+// Accumulate the bit errs.
 LOAD7:
 	begin
+		if (lresx[0]!=lresx[1] || lresx[0]!=lresx[2] || lresx[1] != lresx[2]) begin
+			biterr_cnt <= biterr_cnt + 64'd1;
+			bithist[bithist_ndx] <= pc;
+			bithist_ndx <= bithist_ndx + 6'd1;
+		end
 		res <= lres;
 		next_state(IFETCH);
 	end
@@ -2043,9 +1974,10 @@ STORE1:
 			`STW_B:		wb_write(st_size,rwadr_o,b[31:0]);
 			`STW_C:		wb_write(st_size,rwadr_o,c[31:0]);
 			`STW_PC:	if (isBRK)
-							wb_write(word,rwadr_o,{pc[31:2],2'b11});
+							wb_write(word,rwadr_o,{pc[31:2],1'b1,im});
 						else
 							wb_write(word,rwadr_o,{pc[31:2],2'b00});
+			`STW_CS:	wb_write(word,rwadr_o,cs[31:0]);
 			`STW_SR:	wb_write(word,rwadr_o,sr[31:0]);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[31:0]);
 			default:	next_state(RESET);	// hardware fault
@@ -2094,12 +2026,13 @@ STORE3:
 			`STW_B:		wb_write(word,rwadr_o,b[63:32]);
 			`STW_C:		wb_write(word,rwadr_o,c[63:32]);
 			`STW_PC:	wb_write(word,rwadr_o,{24'd0,pc[39:32]});
+			`STW_CS:	wb_write(word,rwadr_o,{24'd0,cs[39:32]});
 			`STW_SR:	wb_write(word,rwadr_o,32'h00);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[63:32]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 			next_state(STORE4);
-			if (isSMR)
+			if (isSMR && (!tmrw || (tmrw && tmrcyc==2'b10)))
 				ir[15:8] <= ir[15:8] + 8'd1;
 		end
 		else
@@ -2132,7 +2065,7 @@ STORE4:
 			end
 			else if (isBRK) begin
 				if (store_what==`STW_PC) begin
-					rwadr <= {vbr[31:12],ir[20:12],3'b000};
+					rwadr <= {vbr[31:13],ir[20:12],4'h0};
 					isWR <= `FALSE;
 					next_state(LOAD1);
 				end
@@ -2213,9 +2146,13 @@ endcase
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 if (state==IFETCH || wrrf) begin
 	$display("writing regfile[%h]=%h",Rt,res);
+`ifdef TMR_REG
 	regfile1[Rt] <= res;
 	regfile2[Rt] <= res;
 	regfile3[Rt] <= res;
+`else
+	regfile[Rt] <= res;
+`endif
 	if (Rt==8'hFF) begin
 		sp <= {res[63:3],3'b000};
 		gie <= `TRUE;
@@ -2240,6 +2177,9 @@ if (wrspr) begin
 `ifdef SUPPORT_CLKGATE
 	`CLK:		begin clk_throttle_new <= res[49:0]; ld_clk_throttle <= `TRUE; end
 `endif
+	`CS:		;	// Can't be updated this way
+	`DS:		ds <= res[31:0];
+	`SS:		ss <= res[31:0];
 	endcase
 end
 
@@ -2265,7 +2205,11 @@ begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
 	sel_o <= 4'hF;
+`ifdef TMR
 	adr_o <= {adr[31:16],tmrcyc,adr[15:2],2'b00};
+`else
+	adr_o <= {adr[31:16],adr[15:2],2'b00};
+`endif
 end
 endtask
 
@@ -2277,7 +2221,11 @@ begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
 	we_o <= 1'b1;
+`ifdef TMR
 	adr_o <= {adr[31:16],tmrcyc,adr[15:2],2'b00};
+`else
+	adr_o <= {adr[31:16],adr[15:2],2'b00};
+`endif
 	case(size)
 	word,half,uhalf:
 		begin
@@ -2456,6 +2404,9 @@ LOAD1:	fnStateName = "LOAD1   ";
 LOAD2:	fnStateName = "LOAD2  ";
 LOAD3:	fnStateName = "LOAD3  ";
 LOAD4:	fnStateName = "LOAD4  ";
+LOAD5:	fnStateName = "LOAD5  ";
+LOAD6:	fnStateName = "LOAD6  ";
+LOAD7:	fnStateName = "LOAD7  ";
 STORE1:	fnStateName = "STORE1     ";
 STORE2:	fnStateName = "STORE2     ";
 STORE3:	fnStateName = "STORE3     ";
@@ -2463,6 +2414,7 @@ STORE4:	fnStateName = "STORE4     ";
 IBUF1:		fnStateName = "IBUF1 ";
 IBUF2:		fnStateName = "IBUF2 ";
 IBUF3:		fnStateName = "IBUF3 ";
+IBUF4:		fnStateName = "IBUF4 ";
 ICACHE1:		fnStateName = "ICACHE1    ";
 ICACHE2:		fnStateName = "ICACHE2    ";
 CINV1:			fnStateName = "CINV1      ";

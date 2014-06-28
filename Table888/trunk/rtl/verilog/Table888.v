@@ -1133,8 +1133,8 @@ MULDIV:
 				end
 			`MUL:
 				begin
-					aa <= a[31] ? -a : a;
-					bb <= b[31] ? -b : b;
+					aa <= a[63] ? -a : a;
+					bb <= b[63] ? -b : b;
 					res_sgn <= a[63] ^ b[63];
 					next_state(MULT1);
 				end
