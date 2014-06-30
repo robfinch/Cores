@@ -1,9 +1,52 @@
 #include "ff.h"
-#include "stdio.h"
+#include <stdio.h>
 
 static FATFS fat1;
 static char cmdbuf[200];
 static char currentPath[300];
+static DIR dir;
+static FILINFO fno;
+
+// ----------------------------------------------------------------------------
+// Test the RAM in the machine above $400000 (Above the DOS area).
+// If there is bad memory detected, then the DOS area is likely bad as well
+// because it's the same DRAM. However we may be able to tell a specific
+// bank or range of addresses that are bad.
+// ----------------------------------------------------------------------------
+
+private void ram_test()
+{
+	int *mem = 0x400000;
+	int badcnt;
+	char ch;
+
+	badcnt = 0;
+	for (mem = (int *)0x400000; mem < (int *)0x2000000; mem++) {
+		*mem = 0xAAAAAAAA55555555L;
+		if ((mem & 0xfff)==0) {
+			printf("%x\r", mem >> 12);
+			ch = getcharNoWait();
+			if (ch==3)
+				goto j1;
+		}
+	}
+	printf("\r\n");
+	for (mem = (int *)0x400000; mem < (int *)0x2000000; mem++) {
+		if (*mem != 0xAAAAAAAA55555555L) {
+			printf("bad at address: %x=%x\r\n", mem, *mem);
+			badcnt++;
+		}
+		if (badcnt > 10)
+			break;
+		if ((mem & 0xfff)==0) {
+			printf("%x\r", mem >> 12);
+			ch = getcharNoWait();
+			if (ch==3)
+				goto j1;
+		}
+	}
+j1:	;
+}
 
 void DisplayPrompt()
 {
@@ -75,6 +118,29 @@ private int xcode()
 	}
 }
 
+private int get_biterrs()
+{
+	asm {
+		mfspr	r1,biterr
+	}
+}
+
+private int get_bithist()
+{
+	asm {
+		mfspr	r1,bithist
+	}
+}
+
+void do_biterr()
+{
+	int nn;
+
+	printf("Biterrs: %d\r\n", get_biterrs());
+	for (nn = 0; nn < 64; nn++)
+		printf("%x ",get_bithist());
+}
+
 // ----------------------------------------------------------------------------
 // Run a file.
 // ----------------------------------------------------------------------------
@@ -136,21 +202,22 @@ err1:
 }
 
 // ----------------------------------------------------------------------------
-// Get a listing of the current directory.
+// Get a listing of a directory.
 // ----------------------------------------------------------------------------
 
-FRESULT do_dir()
+void do_dir(char *pth)
 {
-	DIR dir2;	// object padding
-	DIR dir;
 	FRESULT res;
-	FILINFO fno;
 	char *fn;
 	int nn;
 	static char lfn[300];
 	static TCHAR path[300];
 
-	res = f_getcwd(path, (UINT)sizeof(path)/sizeof(TCHAR));
+	memset(path, 0, sizeof(path));
+	strcpy(path,pth);
+	trim(path);
+	if (strlen(path)==0)
+		res = f_getcwd(path, (UINT)sizeof(path)/sizeof(TCHAR));
 	fno.lfname = lfn;
 	fno.lfsize = sizeof lfn;
 	res = f_opendir(&dir, path);
@@ -168,8 +235,6 @@ FRESULT do_dir()
 		} while (1);
 	}
 	f_closedir(&dir);
-	printf("closed dir\r\n");
-	return res;
 }
 
 
@@ -208,12 +273,42 @@ FRESULT do_cd()
 	return res;
 }
 
+private do_clk(int nn)
+{
+	asm {
+		bra		.j1
+		align	8
+.t1:
+		dw		%0000000000_0000000000_0000000000_0000000000_0000000001	; 2%
+		dw		%0000000000_0000000000_0000000000_0000000000_0000011111	; 10%
+		dw		%0000000000_0000000000_0000000000_0000000000_1111111111	; 20%
+		dw		%0000000000_0000000000_0000000000_0000011111_1111111111	; 30%
+		dw		%0000000000_0000000000_0000000000_1111111111_1111111111	; 40%
+		dw		%0000000000_0000000000_0000011111_1111111111_1111111111	; 50%
+		dw		%0000000000_0000000000_1111111111_1111111111_1111111111	; 60%
+		dw		%0000000000_0000011111_1111111111_1111111111_1111111111	; 70%
+		dw		%0000000000_1111111111_1111111111_1111111111_1111111111	; 80%
+		dw		%0000011111_1111111111_1111111111_1111111111_1111111111	; 90%
+		dw		%1111111111_1111111111_1111111111_1111111111_1111111111	; 100%
+		nop
+.j1:
+		lw		r1,32[bp]
+		div		r1,r1,#10	; round down to single digit
+		mod		r1,r1,#11	; limit to 0-10
+		lw		r1,.t1[r1]
+		mtspr	clk,r1
+	}
+}
+
+
 private int ParseCmdLine()
 {
 	static char nm[300];
+	int nn;
 
-	if (strncmp(cmdbuf,"dir",3)==0)
-		do_dir();
+	if (strncmp(cmdbuf,"dir",3)==0) {
+		do_dir(&cmdbuf[3]);
+	}
 	else if (strncmp(cmdbuf,"cd",2)==0)
 		do_cd();
 	else if (strncmp(cmdbuf,"cls",3)==0) {
@@ -224,6 +319,14 @@ private int ParseCmdLine()
 		return 1;
 	else if (strncmp(cmdbuf,"run",3)==0)
 		do_run();
+	else if (strncmp(cmdbuf,"biterr",6)==0)
+		do_biterr();
+	else if (strncmp(cmdbuf, "ramtest", 7)==0)
+		ram_test();
+	else if (strncmp(cmdbuf, "clk", 3)==0) {
+		nn = atoi(&cmdbuf[3]);
+		do_clk(nn);
+	}
 	return 0;
 }
 
@@ -251,6 +354,38 @@ private unsigned int get_time()
 	asm {
 		lhu	r1,DATETIME_TIME
 	}
+}
+
+
+private int ToJul(int year, int month, int day)
+{
+   int
+      JulDay,
+      LYear = year,
+      LMonth = month,
+      LDay = day;
+
+   JulDay = LDay - 32075L + 1461L * (LYear + 4800 + (LMonth - 14L) / 12L) /
+      4L + 367L * (LMonth - 2L - (LMonth - 14L) / 12L * 12L) /
+      12L - 3L * ((LYear + 4900L + (LMonth - 14L) / 12L) / 100L) / 4L;
+   return(JulDay);
+}
+
+// Get a 64 bit datetime serial number
+// Months are assumed to contain 31 days.
+
+private int get_time_serial()
+{
+	int ii,nn;
+	int year, month, day;
+	int hours, minutes, seconds, centiseconds;
+
+	datetime_snapshot();
+	ii = get_time() | (get_date() << 32);
+	date_split(ii, &year, &month, &day, &hours, &minutes, &seconds, &centiseconds);
+	nn = centiseconds + seconds * 100 + minutes * 6000 + hours * 360000 +
+		ToJul(year,month,day) * 8640000L;
+	return nn;
 }
 
 void date_split(int date, int *year, int *month, int *day,

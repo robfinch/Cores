@@ -107,6 +107,7 @@ struct amode *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 	struct amode    *ap1, *ap2, *ap3;
 
 	ap1 = GetTempRegister();
+	//size = GetNaturalSize(node->p[0]);
     ap3 = GenerateExpression(node->p[0],F_ALL,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
 	if (ap3->mode==am_reg)
@@ -115,15 +116,36 @@ struct amode *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 		error(ERR_LVALUE);
 		GenerateDiadic(op_ldi,0,ap1,ap3);
 	}
-	else
-		GenerateDiadic(op_lw,0,ap1,ap3);
+	else {
+		if (ap3->isUnsigned) {
+			switch(size) {
+			case 1:	GenerateDiadic(op_lbu,0,ap1,ap3); break;
+			case 2:	GenerateDiadic(op_lcu,0,ap1,ap3); break;
+			case 4:	GenerateDiadic(op_lhu,0,ap1,ap3); break;
+			case 8:	GenerateDiadic(op_lw,0,ap1,ap3); break;
+			}
+		}
+		else {
+			switch(size) {
+			case 1:	GenerateDiadic(op_lb,0,ap1,ap3); break;
+			case 2:	GenerateDiadic(op_lc,0,ap1,ap3); break;
+			case 4:	GenerateDiadic(op_lh,0,ap1,ap3); break;
+			case 8:	GenerateDiadic(op_lw,0,ap1,ap3); break;
+			}
+		}
+	}
 	MaskShift(op, ap1, size);
 	if (ap2->mode==am_immed)
 		GenerateTriadic(op,0,ap1,ap1,make_immed(ap2->offset->i));
 	else
 		GenerateTriadic(op,0,ap1,ap1,ap2);
 	if (ap3->mode != am_reg) {
-		GenerateDiadic(op_sw,0,ap1,ap3);
+		switch(size) {
+		case 1: GenerateDiadic(op_sb,0,ap1,ap3); break;
+		case 2: GenerateDiadic(op_sc,0,ap1,ap3); break;
+		case 4: GenerateDiadic(op_sh,0,ap1,ap3); break;
+		case 8: GenerateDiadic(op_sw,0,ap1,ap3); break;
+		}
 	}
     ReleaseTempRegister(ap2);
     ReleaseTempRegister(ap3);

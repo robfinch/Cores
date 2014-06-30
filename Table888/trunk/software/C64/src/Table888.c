@@ -192,6 +192,17 @@ void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg)
 	GenerateDiadic(op,0,make_string("flg0"),make_clabel(label));
 }
 
+void GenerateTable888StackLink(SYM *sym)
+{
+	if (lc_auto || sym->NumParms > 0) {
+		//GenerateMonadic(op_link,0,make_immed(24));
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		GenerateDiadic(op_sw,0,makereg(regBP),make_indirect(regSP));
+		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
+	}
+	else
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
+}
 
 // Generate a function body.
 //
@@ -216,14 +227,7 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
 	// 0[bp]	base pointer
 	if (!sym->IsNocall) {
 //		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(32));
-		if (lc_auto || sym->NumParms > 0) {
-			//GenerateMonadic(op_link,0,make_immed(24));
-			GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
-			GenerateDiadic(op_sw,0,makereg(regBP),make_indirect(regSP));
-			GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
-		}
-		else
-			GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		GenerateTable888StackLink(sym);
 		if (exceptions) {
 			GenerateDiadic(op_sw, 0, makereg(regXLR), make_indexed(8,regSP));
 			ep = (ENODE *)xalloc(sizeof(struct enode));
@@ -344,20 +348,35 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 		}
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
-		if (lc_auto || sym->NumParms > 0) {
-			//GenerateMonadic(op_unlk,0,NULL);
-			GenerateDiadic(op_mov,0,makereg(255),makereg(regBP));
-			GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(255));
-		}
+		if (exceptions) {
+			if (lc_auto || sym->NumParms > 0) {
+				//GenerateMonadic(op_unlk,0,NULL);
+				GenerateDiadic(op_mov,0,makereg(255),makereg(regBP));
+				GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(255));
+			}
 
-		if (exceptions)
-			GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,255));
-		//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
-		//if (isOscall) {
-		//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
-		//	gen_regrestore();
-		//}
-		GenerateTriadic(op_addui,0,makereg(255),makereg(255),make_immed(24));
+			if (exceptions)
+				GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,255));
+			//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
+			//if (isOscall) {
+			//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
+			//	gen_regrestore();
+			//}
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		}
+		else {
+			if (lc_auto || sym->NumParms > 0) {
+				//GenerateMonadic(op_unlk,0,make_immed(24));
+				GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
+				GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(regSP));
+			}
+			//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
+			//if (isOscall) {
+			//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
+			//	gen_regrestore();
+			//}
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		}
 		// Generate the return instruction. For the Pascal calling convention pop the parameters
 		// from the stack.
 		if (sym->IsInterrupt) {
