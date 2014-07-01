@@ -69,7 +69,8 @@ static char *errtextstr[] = {
 	"Semaphore address must be 16 byte aligned.",
 	"Operator is not defined for float/double type.",
 	"Integer constant required.",
-	"Bad switch expression."
+	"Bad switch expression.",
+	"Not in a loop."
 };
 
 char *errtext(int errnum)

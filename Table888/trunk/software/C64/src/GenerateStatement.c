@@ -207,7 +207,7 @@ void GenerateFor(struct snode *stmt)
     old_cont = contlab;
     loop_label = nextlabel++;
     exit_label = nextlabel++;
-    contlab = loop_label;
+    contlab = nextlabel++;
     initstack();
     if( stmt->initExpr != NULL )
             ReleaseTempRegister(GenerateExpression(stmt->initExpr,F_ALL | F_NOVALUE
@@ -221,6 +221,7 @@ void GenerateFor(struct snode *stmt)
             breaklab = exit_label;
             GenerateStatement(stmt->s1);
 	}
+	GenerateLabel(contlab);
     initstack();
     if( stmt->incrExpr != NULL )
             ReleaseTempRegister(GenerateExpression(stmt->incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(stmt->incrExpr)));
@@ -828,9 +829,13 @@ void GenerateStatement(Statement *stmt)
                         GenerateFirstcall(stmt);
                         break;
                 case st_continue:
+						if (contlab==-1)
+							error(ERR_NOT_IN_LOOP);
                         GenerateDiadic(op_bra,0,make_clabel(contlab),0);
                         break;
                 case st_break:
+						if (breaklab==-1)
+							error(ERR_NOT_IN_LOOP);
                         GenerateDiadic(op_bra,0,make_clabel(breaklab),0);
                         break;
                 case st_switch:

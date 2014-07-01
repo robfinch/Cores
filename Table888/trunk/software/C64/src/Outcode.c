@@ -103,7 +103,7 @@ struct oplst {
                 {"bls",op_bls}, {"mulu",op_mulu}, {"divu",op_divu},
                 {"ne",op_ne}, {"lt",op_lt}, {"le",op_le},
 		{"gt",op_gt}, {"ge",op_ge}, {"neg",op_neg}, {"fdneg", op_fdneg}, {"nr", op_nr},
-		{"not",op_not}, {"cmp",op_cmp}, {"ext",op_ext}, 
+		{"not",op_not}, {"com", op_com}, {"cmp",op_cmp}, {"ext",op_ext}, 
 		{"jmp",op_jmp},
 		{"lea",op_lea}, {"asr",op_asr}, {"asri", op_asri },
                 {"clr",op_clr}, {"link",op_link}, {"unlink",op_unlk},

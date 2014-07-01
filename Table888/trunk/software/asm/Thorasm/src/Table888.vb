@@ -41,7 +41,7 @@ Module Table888
                 ProcessTable888RIOp(s, &HC)
             Case "ori"
                 ProcessTable888RIOp(s, &HD)
-            Case "eori"
+            Case "eori", "xori"
                 ProcessTable888RIOp(s, &HE)
             Case "mului"
                 ProcessTable888RIOp(s, &H17)
@@ -55,6 +55,26 @@ Module Table888
                 ProcessTable888RIOp(s, &H9)
             Case "modui"
                 ProcessTable888RIOp(s, &H19)
+            Case "sgti"
+                ProcessTable888RIOp(s, &H38)
+            Case "slei"
+                ProcessTable888RIOp(s, &H39)
+            Case "sgei"
+                ProcessTable888RIOp(s, &H3A)
+            Case "slti"
+                ProcessTable888RIOp(s, &H3B)
+            Case "shii", "sgtui"
+                ProcessTable888RIOp(s, &H3C)
+            Case "slsi", "sleui"
+                ProcessTable888RIOp(s, &H3D)
+            Case "shsi", "sgeui"
+                ProcessTable888RIOp(s, &H3E)
+            Case "sloi", "sltui"
+                ProcessTable888RIOp(s, &H3F)
+            Case "seqi"
+                ProcessTable888RIOp(s, &H30)
+            Case "snei"
+                ProcessTable888RIOp(s, &H31)
 
             Case "lb"
                 ProcessTable888MemoryOp(s, &H80)
@@ -219,7 +239,7 @@ Module Table888
                 ProcessTable888RROp(s, &H24)
             Case "or"
                 ProcessTable888RROp(s, &H21)
-            Case "eor"
+            Case "eor", "xor"
                 ProcessTable888RROp(s, &H22)
             Case "andn"
                 ProcessTable888RROp(s, &H23)
@@ -251,6 +271,27 @@ Module Table888
                 ProcessTable888RROp(s, &H43)
             Case "asr"
                 ProcessTable888RROp(s, &H44)
+
+            Case "sgt"
+                ProcessTable888RROp(s, &H68)
+            Case "sle"
+                ProcessTable888RROp(s, &H69)
+            Case "sge"
+                ProcessTable888RROp(s, &H6A)
+            Case "slt"
+                ProcessTable888RROp(s, &H6B)
+            Case "shi", "sgtu"
+                ProcessTable888RROp(s, &H6C)
+            Case "sls", "sleu"
+                ProcessTable888RROp(s, &H6D)
+            Case "shs", "sgeu"
+                ProcessTable888RROp(s, &H6E)
+            Case "slo", "sltu"
+                ProcessTable888RROp(s, &H6F)
+            Case "seq"
+                ProcessTable888RROp(s, &H60)
+            Case "sne"
+                ProcessTable888RROp(s, &H61)
 
             Case "shli"
                 ProcessShiftiOp(s, &H50)
@@ -316,9 +357,9 @@ Module Table888
             Case "link"
                 ProcessTable888Link(s, &HFDFF62)
             Case "unlink"
-                ProcessTable888Insn(&H4200FFFD01)
+                ProcessTable888Link(s, &HFDFF64)
             Case "unlk"
-                ProcessTable888Insn(&H4200FFFD01)
+                ProcessTable888Link(s, &HFDFF64)
             Case Else
                 Return False
         End Select
@@ -374,7 +415,7 @@ Module Table888
                     ProcessTable888RIOp(ops, &HC)
                 Case "or"
                     ProcessTable888RIOp(ops, &HD)
-                Case "eor"
+                Case "eor", "xor"
                     ProcessTable888RIOp(ops, &HE)
                 Case "mul"
                     ProcessTable888RIOp(ops, &H7)
@@ -390,6 +431,26 @@ Module Table888
                     ProcessTable888RIOp(ops, &H9)
                 Case "modu"
                     ProcessTable888RIOp(ops, &H19)
+                Case "sgt"
+                    ProcessTable888RIOp(ops, &H38)
+                Case "sle"
+                    ProcessTable888RIOp(ops, &H39)
+                Case "sge"
+                    ProcessTable888RIOp(ops, &H3A)
+                Case "slt"
+                    ProcessTable888RIOp(ops, &H3B)
+                Case "shi", "sgtu"
+                    ProcessTable888RIOp(ops, &H3C)
+                Case "sls", "sleu"
+                    ProcessTable888RIOp(ops, &H3D)
+                Case "shs", "sgeu"
+                    ProcessTable888RIOp(ops, &H3E)
+                Case "slo", "sltu"
+                    ProcessTable888RIOp(ops, &H3F)
+                Case "seq"
+                    ProcessTable888RIOp(ops, &H30)
+                Case "sne"
+                    ProcessTable888RIOp(ops, &H31)
                 Case "shl"
                     ProcessShiftiOp(ops, &H50)
                 Case "shr"
@@ -417,8 +478,8 @@ Module Table888
 
         imm = eval(strs(1))
 
-        If imm < -32768 Or imm > 32767 Then
-            emitImm16(imm)
+        If imm < -8192 Or imm > 8191 Then
+            emitImm14(imm)
         End If
         emitAlignedCode(oc And 255)
         emitCode((oc >> 8) And 255)

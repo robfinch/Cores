@@ -152,6 +152,34 @@ int AllocateTable888RegisterVars()
 	return popcnt(mask);
 }
 
+AMODE *GenTable888Set(ENODE *node)
+{
+	AMODE *ap1,*ap2,*ap3;
+	int op;
+	int size;
+
+	switch(node->nodetype) {
+	case en_eq:		op = op_seq;	break;
+	case en_ne:		op = op_sne;	break;
+	case en_lt:		op = op_slt;	break;
+	case en_ult:	op = op_sltu;	break;
+	case en_le:		op = op_sle;	break;
+	case en_ule:	op = op_sleu;	break;
+	case en_gt:		op = op_sgt;	break;
+	case en_ugt:	op = op_sgtu;	break;
+	case en_ge:		op = op_sge;	break;
+	case en_uge:	op = op_sgeu;	break;
+	}
+	size = GetNaturalSize(node);
+	ap3 = GetTempRegister();
+	ap1 = GenerateExpression(node->p[0],F_REG, size);
+	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	GenerateTriadic(op,0,ap3,ap1,ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return ap3;
+}
+
 void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg)
 {
 	int size;

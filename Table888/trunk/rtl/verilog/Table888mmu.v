@@ -188,14 +188,14 @@ reg [63:0] regfile2 [255:0];
 reg [63:0] regfile3 [255:0];
 `else
 reg [63:0] regfile [255:0];
-reg [95:0] cregfile [63:0];
 `endif
 
+reg mpcf;					// multi-precision carry
 reg gie;						// global interrupt enable
 wire [7:0] Ra = ir[15:8];
 wire [7:0] Rb = ir[23:16];
 wire [7:0] Rc = ir[31:24];
-reg [7:0] Rt,RtPop;
+reg [7:0] Rt,RtPop,RtLW;
 reg [1:0] St,Sa;
 reg [7:0] Spr;		// special purpose register read port spec
 reg [7:0] Sprt;
@@ -209,16 +209,18 @@ reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
 reg isShifti,isBSR,isLMR,isSMR;
-reg isJSP,isJSR,isLWS,isLink;
+reg isJSP,isJSR,isLWS,isLink,isUnlk;
+reg isLW;
 reg isBM;
 reg [1:0] nLD;
 wire hasIMM = isIMM1|isIMM2;
-reg [95:0] rfoa,rfob,rfoc;
-reg [96:0] res;			// result bus
-reg [95:0] a,b,c;		// operand holding registers
-reg [95:0] ca,cb;
-reg [95:0] imm;
-reg [95:0] immbuf;
+reg [63:0] rfoa,rfob,rfoc;
+reg [64:0] res;			// result bus
+reg [63:0] a,b,c;		// operand holding registers
+reg [63:0] ca,cb;
+reg [63:0] imm;
+reg [63:0] pimm;		// previous immediate
+reg [63:0] immbuf;
 wire [63:0] bfo;		/// bitfield op output
 reg [63:0] tick;		// tick count
 reg [31:0] vbr;			// vector base register
@@ -252,6 +254,7 @@ wire [3:0] pmmu_cpl;
 wire [3:0] pmmu_dpl;
 reg [31:0] ivno;
 wire [63:0] logic_o;
+wire [63:0] set_o;
 
 reg [63:0] sp;	// stack pointer
 wire [63:0] sp_inc = sp + 64'd8;
@@ -342,7 +345,7 @@ icache_ram u2 (
 	.i(dat_i),
 	.rclk(~clk),
 	.pc(paged_pc[12:0]),
-	.insn(insn_a),
+	.insn(insn),
 	.debug_bits()
 );
 `endif
@@ -420,6 +423,15 @@ Table888_logic u5
 	.o(logic_o)
 );
 
+Table888_set u6
+(
+	.xIR(ir),
+	.a(a),
+	.b(b),
+	.imm(imm),
+	.o(set_o)
+);
+
 // - - - - - - - - - - - - - - - - - -
 // Combinational logic follows.
 // - - - - - - - - - - - - - - - - - -
@@ -427,7 +439,6 @@ Table888_logic u5
 always @*
 casex(Ra)
 8'h00:	rfoa <= 64'd0;
-8'b10xxxxxx:	rfoa <= cregfile[Ra[5:0]];
 8'hFE:	rfoa <= pc[39:0];
 8'hFF:	rfoa <= sp;
 `ifdef TMR_REG
@@ -439,7 +450,6 @@ endcase
 always @*
 case(Rb)
 8'h00:	rfob <= 64'd0;
-8'b10xxxxxx:	rfob <= cregfile[Rb[5:0]];
 8'hFE:	rfob <= pc[39:0];
 8'hFF:	rfob <= sp;
 `ifdef TMR_REG
@@ -451,7 +461,6 @@ endcase
 always @*
 case(Rc)
 8'h00:	rfoc <= 64'd0;
-8'b10xxxxxx:	rfoc <= cregfile[Rc[5:0]];
 8'hFE:	rfoc <= pc[39:0];
 8'hFF:	rfoc <= sp;
 `ifdef TMR_REG
@@ -459,16 +468,6 @@ default:	rfoc <= (regfile1[Rc] & regfile2[Rc]) | (regfile1[Rc] & regfile3[Rc]) |
 `else
 default:	rfoc <= regfile[Rc];
 `endif
-endcase
-always @*
-case(Ra[5:0])
-6'h00:	crfoa <= 96'd0;
-default:	crfoa <= cregfile[Ra[5:0]];
-endcase
-always @*
-case(Rb[5:0])
-6'h00:	crfob <= 96'd0;
-default:	crfob <= cregfile[Rb[5:0]];
 endcase
 
 // Data input multiplexers
@@ -537,13 +536,13 @@ wire signed [63:0] asro = as >> shamt;
 // Multiply / Divide / Modulus
 reg [6:0] cnt;
 reg res_sgn;
-reg [95:0] aa, bb;
-reg [95:0] q, r;
+reg [63:0] aa, bb;
+reg [63:0] q, r;
 wire div_done;
-wire [95:0] pa = a[95] ? -a : a;
-reg [191:0] p1;// = aa * bb;
-reg [191:0] p;
-wire [95:0] diff = r - bb;
+wire [63:0] pa = a[63] ? -a : a;
+wire [127:0] p1 = aa * bb;
+reg [127:0] p;
+wire [63:0] diff = r - bb;
 // currency: 72.24 (21.7:7.2)
 
 // For scaled indexed address mode
@@ -612,6 +611,7 @@ always @*
 	`CS:		spro <= cs;
 	`DS:		spro <= ds;
 	`SS:		spro <= ss;
+	`PROD_HIGH:	spro <= p[127:64];
 	default:	spro <= 65'd0;
 	endcase
 
@@ -924,6 +924,7 @@ DECODE:
 		isSMR <= `FALSE;
 		isLWS <= `FALSE;
 		isBM <= `FALSE;
+		isLW <= `FALSE;
 		nLD <= 2'b00;
 		isShifti = func==`SHLI || func==`SHRI || func==`ROLI || func==`RORI || func==`ASRI;
 		a <= rfoa;
@@ -947,13 +948,17 @@ DECODE:
 			Rt <= ir[23:16];
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`CMPI,`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
 		`ANDI,`ORI,`EORI,
+		`SLTI,`SLEI,`SGTI,`SGEI,`SLOI,`SLSI,`SHII,`SHSI,`SEQI,`SNEI,
 		`JAL:
 			Rt <= ir[23:16];
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
+			begin
 			Rt <= ir[23:16];
+			RtLW <= ir[23:16];
+			end
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,`BMT:
 			Rt <= ir[31:24];
-		`LINK,`RTD:
+		`LINK,`UNLK,`RTD:
 			Rt <= ir[15:8];
 		default:
 			Rt <= 8'h00;
@@ -1312,18 +1317,13 @@ EXECUTE:
 					default:	res <= 65'd0;
 					endcase
 				end
-			`UNLINK:
-				begin
-					wrrf <= `TRUE;
-					res <= a;						// MOV SP,BP
-					ir <= {16'h0001,Ra,8'hFF,`LW};	// LW BP,[SP]
-					next_state(LINK1);				// need cycle to update SP
-				end
 			endcase
 		`RR:
 			case(func)
 			`ADD,`ADDU:	res <= a + b;
+			`ADC:		res <= a + b + mpcf;
 			`SUB,`SUBU:	res <= a - b;
+			`SBC:		res <= a - b - mpcf;
 			`CMP:		res <= {nf,vf,60'd0,zf,cf};
 			`AND,`OR,`EOR,`ANDN,`NAND,`NOR,`ENOR,`ORN:		
 						res <= logic_o;
@@ -1339,6 +1339,8 @@ EXECUTE:
 					else
 						res <= a;
 				end
+			`SLT,`SLE,`SGT,`SGE,`SLO,`SLS,`SHI,`SHS,`SEQ,`SNE:
+				res <= set_o;
 			// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 			// LMR / SMR
 			// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1366,14 +1368,25 @@ EXECUTE:
 		`SUBI,`SUBUI:	res <= a - imm;
 		`CMPI:	res <= {nf,vf,60'd0,zf,cf};
 		`ANDI,`ORI,`EORI:	res <= logic_o;
+		`SLTI,`SLEI,`SGTI,`SGEI,`SLOI,`SLSI,`SHII,`SHSI,`SEQI,`SNEI:
+			res <= set_o;
 		
 		`LINK:	begin
 				isLink <= `TRUE;
 				wrrf <= `TRUE;
 				res <= a - imm;						// SUBUI SP,SP,#imm
-				ir <= {16'h0001,Rb,Ra,`SW};			// SW BP,[SP]
+				ir <= {16'h0002,Rb,Ra,`SW};			// SW BP,[SP]
 				next_state(LINK1);					// need time to update and read reg
 				end
+		`UNLK:
+			begin
+				isUnlk <= `TRUE;
+				pimm <= imm;
+				wrrf <= `TRUE;
+				res <= b;							// MOV SP,BP
+				ir <= {16'h0002,Rb,Ra,`LW};			// LW BP,[SP]
+				next_state(LINK1);					// need cycle to update SP
+			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// Flow Control Instructions Follow
@@ -1463,8 +1476,12 @@ EXECUTE:
 			end
 		`LW:
 			begin
+				isLW <= `TRUE;
 				ld_size <= word;
 				load_check(ea_drn);
+				if (isUnlk)
+					update_sp(sp + pimm);	// ADDUI SP,SP,#locs
+				isUnlk <= `FALSE;
 			end
 		`LEA:	res <= lea_drn;
 		`LWS:
@@ -1606,7 +1623,7 @@ EXECUTE:
 
 MULDIV:
 	begin
-		cnt <= 7'd96;
+		cnt <= 7'd64;
 		case(opcode)
 		`MULUI:
 			begin
@@ -1844,6 +1861,10 @@ LOAD5:
 			bithist[bithist_ndx] <= pc;
 			bithist_ndx <= bithist_ndx + 6'd1;
 		end
+		// This fudge needed for the UNLK instruction. There are three target
+		// registers specified during the execution of UNLK.
+		if (isLW)
+			Rt <= RtLW;
 		res <= lres;
 		case(1'b1)
 		isLWS:
@@ -2166,6 +2187,18 @@ if (state==IFETCH || wrrf) begin
 	end
 end
 
+if (state==IFETCH) begin
+case(ir[7:0])
+`RR:
+	case(ir[39:32])
+	`ADD,`SUB,`ADDU,`SUBU,`ADC,`SBC:
+		mpcf <= res[64];
+	endcase
+`ADDI,`ADDUI,`SUBI,`SUBUI:
+	mpcf <= res[64];
+endcase
+end
+
 if (wrspr) begin
 	casex(Sprt)
 	//`TICK:	tick <= a;
@@ -2480,18 +2513,18 @@ syncram_512x32_1rw1r u4 (
 wire [127:0] bundle = {o4,o3,o2,o1};
 
 always @(pc or bundle)
-case(pc[3:0])
-4'd0:	insn <= bundle[39:0];
-4'd5:	insn <= bundle[79:40];
-4'd10:	insn <= bundle[119:80];
+case(pc[1:0])
+2'd0:	insn <= bundle[39:0];
+2'd1:	insn <= bundle[79:40];
+2'd2:	insn <= bundle[119:80];
 default:	insn <= {`ALN_VECT,`BRK};
 endcase
 
 always @(pc or bundle)
-case(pc[3:0])
-4'd0:	debug_bits <= bundle[121:120];
-4'd5:	debug_bits <= bundle[123:122];
-4'd10:	debug_bits <= bundle[125:124];
+case(pc[1:0])
+2'd0:	debug_bits <= bundle[121:120];
+2'd1:	debug_bits <= bundle[123:122];
+2'd2:	debug_bits <= bundle[125:124];
 default:	debug_bits <= 2'b00;
 endcase
 

@@ -178,6 +178,7 @@ typedef struct typ {
 #define ERR_UNDEF_OP	37
 #define ERR_INT_CONST	38
 #define ERR_BAD_SWITCH_EXPR	39
+#define ERR_NOT_IN_LOOP	40
 
 /*      alignment sizes         */
 

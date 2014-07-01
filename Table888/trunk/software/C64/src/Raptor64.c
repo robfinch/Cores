@@ -148,16 +148,16 @@ AMODE *GenExprRaptor64(ENODE *node)
     lab0 = nextlabel++;
     lab1 = nextlabel++;
 	switch(node->nodetype) {
-	case en_eq:		op = op_seq;
-	case en_ne:		op = op_sne;
-	case en_lt:		op = op_slt;
-	case en_ult:	op = op_sltu;
-	case en_le:		op = op_sle;
-	case en_ule:	op = op_sleu;
-	case en_gt:		op = op_sgt;
-	case en_ugt:	op = op_sgtu;
-	case en_ge:		op = op_sge;
-	case en_uge:	op = op_sgeu;
+	case en_eq:		op = op_seq;	break;
+	case en_ne:		op = op_sne;	break;
+	case en_lt:		op = op_slt;	break;
+	case en_ult:	op = op_sltu;	break;
+	case en_le:		op = op_sle;	break;
+	case en_ule:	op = op_sleu;	break;
+	case en_gt:		op = op_sgt;	break;
+	case en_ugt:	op = op_sgtu;	break;
+	case en_ge:		op = op_sge;	break;
+	case en_uge:	op = op_sgeu;	break;
 	}
 	switch(node->nodetype) {
 	case en_eq:

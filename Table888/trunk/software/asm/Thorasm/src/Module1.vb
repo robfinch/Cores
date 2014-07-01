@@ -2743,6 +2743,11 @@ j1:
         If ad > &HFF0 And (n = &HFD Or n = &H61) Then
             ProcessNop("", &HEA)
             ProcessNop("", &HEA)
+            ad = (address And &HFFF)
+            While ad <> 0 And ad <> 5 And ad <> 10
+                emitbyte(&H0, False, False)
+                ad = (address And 15)
+            End While
         End If
         emitbyte(n, False)
         po = n

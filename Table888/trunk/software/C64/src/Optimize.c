@@ -240,9 +240,23 @@ void opt0(ENODE **node)
 			case en_chw:
 			case en_ainc:
 			case en_adec:
-			case en_not:
-			case en_compl:
                     opt0( &((*node)->p[0]));
+                    return;
+			case en_compl:
+                    opt0( &(ep->p[0]));
+                    if( ep->p[0]->nodetype == en_icon )
+                    {
+                        ep->nodetype = en_icon;
+                        ep->i = ~ep->p[0]->i;
+                    }
+                    return;
+			case en_not:
+                    opt0( &(ep->p[0]));
+                    if( ep->p[0]->nodetype == en_icon )
+                    {
+                        ep->nodetype = en_icon;
+                        ep->i = !ep->p[0]->i;
+                    }
                     return;
             case en_uminus:
                     opt0( &(ep->p[0]));
