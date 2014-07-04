@@ -2,34 +2,38 @@
 #include <stdlib.h>
 #include <string.h>
 #include <io.h>
+#include <unistd.h>
 
 /* ---------------------------------------------------------------------------
    void searchenv(filename, envname, pathname);
    char *filename;
    char *envname;
-   char *pathname;
+   char **pathname;
 
    Description :
       Search for a file by looking in the directories listed in the envname
    environment. Puts the full path name (if you find it) into pathname.
-   Otherwise set *pathname to 0. Unlike the DOS PATH command (and the
-   microsoft _searchenv), you can use either a space or a semicolon to
-   separate directory names. The pathname array must be at least 128
-   characters.
+   Otherwise set *pathname to 0.
 
    Returns :
       nothing
 --------------------------------------------------------------------------- */
 
-void searchenv(char *filename, char *envname, char *pathname)
+void searchenv(char *filename, char *envname, char **pathname)
 {
    static char pbuf[5000];
+   static char pname[5000];
    char *p;
 //   char *strpbrk(), *strtok(), *getenv();
 
-   strcpy(pathname, filename);
-   if (_access(pathname, 0) != -1)
+    if (pathname==(char **)NULL)
+        return;
+   strncpy(pname, filename, sizeof(pname)/sizeof(char)-1);
+   pname[4999] = '\0';
+   if (access(pname, 0) != -1) {
+      *pathname = strdup(pname);
       return;
+   }
 
    /* ----------------------------------------------------------------------
          The file doesn't exist in the current directory. If a specific
@@ -39,7 +43,7 @@ void searchenv(char *filename, char *envname, char *pathname)
    
    if (!(p = getenv(envname)))
    {
-      *pathname = '\0';
+      *pathname = strdup("");
       return;
    }
 
@@ -49,13 +53,15 @@ void searchenv(char *filename, char *envname, char *pathname)
    {
       do
       {
-         sprintf(pathname, "%0.90s\\%s", p, filename);
+         sprintf(pname, "%0.4999s\\%s", p, filename);
 
-         if (_access(pathname, 0) >= 0)
+         if (access(pname, 0) >= 0) {
+            *pathname = strdup(pname);
             return;
+         }
       }
-      while(p = strtok(NULL, "; "));
+      while(p = strtok(NULL, ";"));
    }
-   *pathname = 0;
+   *pathname = strdup("");
 }
 

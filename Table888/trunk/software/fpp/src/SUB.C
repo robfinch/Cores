@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <string.h>
-#include <ht.h>
+#include "ht.h"
 #include "fpp.h"
 
 /* -----------------------------------------------------------------------------
@@ -175,7 +175,7 @@ void SearchAndSub()
             err(5);
 
 		 // Search and see if the identifier corresponds to a macro
-         if ((p = htFind(&HashInfo, &tdef)) != NULL)
+         if ((p = (SDef *)htFind(&HashInfo, &tdef)) != NULL)
          {
 			 if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
             //    If this isn't a macro with parameters, then just copy
@@ -284,8 +284,8 @@ void SearchForDefined()
             if (c != ')')
                err(22);
             tdef.name = id;
-            p = htFind(&HashInfo, &tdef);
-            SubMacro(p ? "1" : "0", inptr-sptr);
+            p = (SDef *)htFind(&HashInfo, &tdef);
+            SubMacro((char *)(p ? "1" : "0"), inptr-sptr);
          }
       }
       else

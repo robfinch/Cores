@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <io.h>
+#include <unistd.h>
 
 /* ---------------------------------------------------------------------------
    void searchenv(filename, envname, pathname);
@@ -50,10 +51,10 @@ void searchenv(char *filename, char *envname, char *pathname)
 {
    static char pbuf[5000];
    char *p;
-   char *strpbrk(), *strtok(), *getenv();
+//   char *strpbrk(), *strtok(), *getenv();
 
    strcpy(pathname, filename);
-   if (_access(pathname, 0) != -1)
+   if (access(pathname, 0) != -1)
       return;
 
    /* ----------------------------------------------------------------------
@@ -75,12 +76,10 @@ void searchenv(char *filename, char *envname, char *pathname)
       {
          sprintf(pathname, "%0.90s\\%s", p, filename);
 
-         if (_access(pathname, 0) >= 0)
+         if (access(pathname, 0) >= 0)
             return;
       }
       while(p = strtok(NULL, ";"));
    }
    *pathname = 0;
 }
-
-

@@ -23,7 +23,7 @@ unsigned long _Stoul(const char *s, char **endptr, int base)
 	ptrdiff_t n;
 	unsigned long x, y;
 
-	for (sc = s; isspace(*sc); ++sc)
+	for (sc = s; my_isspace(*sc); ++sc)
 		;
 	sign = *sc=='-' || *sc=='+' ? *sc++ : '+';
 	if (base < 0 || base == 1 || BASE_MAX < base)
@@ -45,7 +45,7 @@ unsigned long _Stoul(const char *s, char **endptr, int base)
 	for (s1 = sc; *sc == '0'; ++sc)
 		;
 	x = 0;
-	for (s2 = sc; (sd = memchr(digits,tolower(*sc),base)) != NULL; ++sc) {
+	for (s2 = sc; (sd = (const char *)memchr((const void *)digits,tolower(*sc),base)) != (char *)NULL; ++sc) {
 		y = x;
 		x = x * base + (sd - digits);
 	}

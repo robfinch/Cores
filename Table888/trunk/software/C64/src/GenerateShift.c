@@ -52,17 +52,17 @@ j1:
 			if (ap1->isUnsigned)
 				goto j1;
 			switch (size) {
-				case 1:	GenerateTriadic(op_sxb,0,ap1,ap1,NULL); break;
-				case 2:	GenerateTriadic(op_sxc,0,ap1,ap1,NULL); break;
-				case 4:	GenerateTriadic(op_sxh,0,ap1,ap1,NULL); break;
+				case 1:	GenerateDiadic(op_sxb,0,ap1,ap1); break;
+				case 2:	GenerateDiadic(op_sxc,0,ap1,ap1); break;
+				case 4:	GenerateDiadic(op_sxh,0,ap1,ap1); break;
 				default:	;
 			}
 		}
 		else {
 			switch (size) {
-				case 1:	GenerateTriadic(op_sext8,0,ap1,ap1,NULL); break;
-				case 2:	GenerateTriadic(op_sext16,0,ap1,ap1,NULL); break;
-				case 4:	GenerateTriadic(op_sext32,0,ap1,ap1,NULL); break;
+				case 1:	GenerateDiadic(op_sext8,0,ap1,ap1); break;
+				case 2:	GenerateDiadic(op_sext16,0,ap1,ap1); break;
+				case 4:	GenerateDiadic(op_sext32,0,ap1,ap1); break;
 				default:	;
 			}
 		}
@@ -102,7 +102,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 /*
  *      generate shift equals operators.
  */
-struct amode *GenerateAssignShift(ENODE *node,int flags,int size,int op)
+AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 {
 	struct amode    *ap1, *ap2, *ap3;
 

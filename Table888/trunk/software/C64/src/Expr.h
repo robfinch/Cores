@@ -83,14 +83,14 @@ struct enode {
     enum e_node nodetype;
 	enum e_bt etype;
 	long      esize;
-    __int8 constflag;
+    int8_t constflag;
 	unsigned int isVolatile : 1;
 	unsigned int isUnsigned : 1;
-	__int8 bit_width;
-	__int8 bit_offset;
-	__int8 scale;
+	int8_t bit_width;
+	int8_t bit_offset;
+	int8_t scale;
 	// The following could be in a value union
-    __int64 i;
+    int64_t i;
     double f;
     char  *sp;
     struct enode *p[2];

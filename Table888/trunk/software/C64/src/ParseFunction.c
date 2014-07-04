@@ -24,11 +24,14 @@
 // ============================================================================
 //
 #include        <stdio.h>
+#include <string.h>
 #include        "c.h"
 #include        "expr.h"
 #include "Statement.h"
 #include        "gen.h"
 #include        "cglbdec.h"
+
+SYM *makeint(char *name);
 
 /*
  *	68000 C compiler
@@ -52,7 +55,7 @@ extern int funcdecl;
 extern char *names[20];
 extern int nparms;
 
-Statement *ParseFunctionBody(SYM *sp);
+static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
 void ListCompound(Statement *stmt);
 
@@ -69,7 +72,7 @@ int ParseFunction(SYM *sp)
 {
 	int poffset, i;
 	int oldglobal;
-    SYM *sp1, *sp2, *makeint();
+    SYM *sp1, *sp2;
 	Statement *stmt;
 
 	if (sp==NULL) {
@@ -93,7 +96,7 @@ int ParseFunction(SYM *sp)
                 //        }
                 //needpunc(closepa);
 //                dodecl(sc_member);      /* declare parameters */
-				sp->parms = NULL;
+				sp->parms = (SYM *)NULL;
 				ParseParameterDeclarations(1);
                 for(i = 0;i < nparms;++i) {
                         if( (sp1 = search(names[i],&lsyms)) == NULL)
@@ -111,9 +114,9 @@ int ParseFunction(SYM *sp)
 						sp1->value.i = poffset;
 						poffset += 8;
                         sp1->storage_class = sc_auto;
-						sp1->nextparm = NULL;
+						sp1->nextparm = (SYM *)NULL;
 						// record parameter list
-						if (sp->parms == NULL) {
+						if (sp->parms == (SYM *)NULL) {
 							sp->parms = sp1;
 						}
 						else {
@@ -230,7 +233,7 @@ void funcbottom(Statement *stmt)
 { 
 	Statement *s, *s1;
 	nl();
-    check_table(&lsyms);
+    check_table(lsyms.head);
     lc_auto = 0;
     fprintf(list,"\n\n*** local symbol table ***\n\n");
     ListTable(&lsyms,0);
@@ -282,7 +285,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	currentFn->UsesPredicate = FALSE;
 	regmask = 0;
 	bregmask = 0;
-	currentStmt = NULL;
+	currentStmt = (Statement *)NULL;
 	if (isThor)
 		GenerateFunction(sp, stmt = ParseCompoundStatement());
 	else if (isTable888)

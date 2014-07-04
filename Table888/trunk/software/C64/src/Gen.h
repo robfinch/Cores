@@ -30,7 +30,7 @@ typedef struct amode {
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	struct enode *offset;
-	__int8 scale;
+	int8_t scale;
 } AMODE;
 
 /*      output code structure   */

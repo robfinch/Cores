@@ -78,7 +78,7 @@ extern int              lastch;
 extern int              lastst;
 extern char             lastid[63];
 extern char             laststr[MAX_STLP1];
-extern __int64	ival;
+extern int64_t	ival;
 extern double           rval;
 extern int parseEsc;
 
@@ -112,8 +112,10 @@ extern Statement *currentStmt;
 // Analyze.c
 extern int bsort(CSE **list);
 extern int OptimizationDesireability(CSE *csp);
-extern opt1(Statement *stmt);
+extern int opt1(Statement *stmt);
 extern CSE *olist;         /* list of optimizable expressions */
+// CMain.c
+extern void closefiles();
 
 extern void error(int n);
 extern void needpunc(enum e_sym p);
@@ -124,73 +126,88 @@ extern TYP *allocTYP();
 extern AMODE *allocAmode();
 extern ENODE *allocEnode();
 extern CSE *allocCSE();
+extern void ReleaseGlobalMemory();
+extern void ReleaseLocalMemory();
 
 // NextToken.c
 extern void initsym();
 extern void NextToken();
 extern int getch();
-extern int isspace(char c);
-extern void getbase(b);
+extern int my_isspace(char c);
+extern void getbase(int);
 extern void SkipSpaces();
 
 // Stmt.c
+extern int GetTypeHash(TYP *p);
 extern struct snode *ParseCompoundStatement();
 
 extern void GenerateDiadic(int op, int len, struct amode *ap1,struct amode *ap2);
 // Symbol.c
 extern SYM *gsearch(char *na);
-extern SYM *search(char *na,SYM *thead);
+extern SYM *search(char *na,TABLE *thead);
 extern void insert(SYM* sp, TABLE *table);
 
 extern char *litlate(char *);
 // Decl.c
+extern int imax(int i, int j);
+extern TYP *maketype(int bt, int siz);
 extern void dodecl(int defclass);
 extern void ParseParameterDeclarations(int);
 extern void ParseAutoDeclarations(TABLE *table);
 extern int ParseSpecifier(TABLE *table);
-extern int ParseDeclarationPrefix();
+extern int ParseDeclarationPrefix(char isUnion);
 extern int ParseStructDeclaration(int);
 extern void ParseEnumerationList(TABLE *table);
 extern int ParseFunction(SYM *sp);
+extern int declare(TABLE *table,int al,int ilc,int ztype);
 extern void initstack();
 extern int getline(int listflag);
+extern void compile();
 
 // Init.c
 extern void doinit(SYM *sp);
 // Func.c
+extern SYM *makeint(char *);
 extern void funcbody(SYM *sp);
 // Intexpr.c
-extern __int64 GetIntegerExpression(ENODE *p);
+extern int64_t GetIntegerExpression(ENODE **p);
 // Expr.c
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
-extern ENODE *makeinode(int nt, __int64 v1);
+extern ENODE *makeinode(int nt, int64_t v1);
+extern ENODE *makesnode(int nt, char *v1, int64_t i);
+extern TYP *nameref(ENODE **node);
+extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
 extern TYP *expression(struct enode **node);
 extern int IsLValue(struct enode *node);
 extern AMODE *GenerateExpression(ENODE *node, int flags, int size);
 extern int GetNaturalSize(ENODE *node);
+extern TYP *asnop(ENODE **node);
+extern TYP *NonCommaExpression(ENODE **);
 // Optimize.c
 extern void opt4(struct enode **node);
 // GenerateStatement.c
 extern void GenerateStatement(struct snode *stmt);
-extern void GenerateFunction(struct snode *stmt);
+//extern void GenerateFunction(struct snode *stmt);
 extern void GenerateIntoff(struct snode *stmt);
 extern void GenerateInton(struct snode *stmt);
 extern void GenerateStop(struct snode *stmt);
 extern void GenerateAsm(struct snode *stmt);
 extern void GenerateFirstcall(struct snode *stmt);
 extern void gen_regrestore();
-extern AMODE *make_direct(__int64 i);
+extern AMODE *make_direct(int64_t i);
 extern AMODE *makereg(int r);
 extern AMODE *makebreg(int r);
+extern AMODE *makepred(int r);
 extern int bitsset(int mask);
 extern int popcnt(int m);
 // Outcode.c
 extern int PredOp(int op);
+extern int InvPredOp(int op);
 extern void GenerateByte(int val);
 extern void GenerateChar(int val);
 extern void genhalf(int val);
-extern void GenerateWord(__int64 val);
-extern void GenerateLong(__int64 val);
+extern void GenerateWord(int64_t val);
+extern void GenerateLong(int64_t val);
 extern void genstorage(int nbytes);
 extern void GenerateReference(SYM *sp,int offset);
 extern void GenerateLabelReference(int n);
@@ -198,23 +215,28 @@ extern void gen_strlab(char *s);
 extern void dumplits();
 extern int  stringlit(char *s);
 extern void nl();
+extern void seg(int sg);
 extern void cseg();
 extern void dseg();
+extern void tseg();
 //extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
 extern void put_code(struct ocode *);
 extern void put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
 extern void flush_peep();
+extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern void GenerateLabel(int labno);
 extern void GenerateMonadic(int op, int len, AMODE *ap1);
 extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
+extern void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
 extern void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1);
+extern void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2);
 // Gencode.c
-extern AMODE *make_label(__int64 lab);
-extern AMODE *make_clabel(__int64 lab);
-extern AMODE *make_immed(__int64);
+extern AMODE *make_label(int64_t lab);
+extern AMODE *make_clabel(int64_t lab);
+extern AMODE *make_immed(int64_t);
 extern AMODE *make_indirect(int i);
 extern AMODE *make_offset(struct enode *node);
 extern void swap_nodes(struct enode *node);
@@ -225,12 +247,43 @@ extern int IdentifyKeyword();
 extern int preprocess();
 // CodeGenerator.c
 extern AMODE *make_indirect(int i);
-extern AMODE *make_indexed(__int64 o, int i);
+extern AMODE *make_indexed(int64_t o, int i);
 extern AMODE *make_string(char *s);
 extern void GenerateFalseJump(struct enode *node,int label,int predreg);
 extern void GenerateTrueJump(struct enode *node,int label,int predreg);
 extern char *GetNamespace();
 extern char nmspace[20][100];
+extern AMODE *GenerateDereference(ENODE *, int, int, int);
+extern void MakeLegalAmode(AMODE *ap,int flags, int size);
+// List.c
+extern void ListTable(TABLE *t, int i);
+// Register.c
+extern AMODE *GetTempRegister();
+extern AMODE *GetTempBrRegister();
+extern void ReleaseTempRegister(AMODE *ap);
+extern int TempInvalidate();
+extern void TempRevalidate(int sp);
+// Table888.c
+extern void GenerateTable888Function(SYM *sym, Statement *stmt);
+extern void GenerateTable888Return(SYM *sym, Statement *stmt);
+extern AMODE *GenerateTable888FunctionCall(ENODE *node, int flags);
+extern AMODE *GenTable888Set(ENODE *node);
+// Raptor64.c
+extern void GenerateRaptor64Function(SYM *sym, Statement *stmt);
+extern void GenerateRaptor64Return(SYM *sym, Statement *stmt);
+extern AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags);
+extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
+
+extern void GenerateFunction(SYM *sym, Statement *stmt);
+extern void GenerateReturn(SYM *sym, Statement *stmt);
+
+extern AMODE *GenerateShift(ENODE *node,int flags, int size, int op);
+extern AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op);
+extern AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size);
+extern AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size);
+// err.c
+extern void fatal(char *str);
+
 enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 
 #endif

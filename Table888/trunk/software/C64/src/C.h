@@ -42,14 +42,17 @@
  */
 
 /*      compiler header file    */
+#include <inttypes.h>
+//typedef int8_t __int8
+//typedef int64_t __int64
 
 enum e_sym {
         id, cconst, iconst, lconst, sconst, rconst, plus, minus,
         star, divide, lshift, rshift, modop, eq, neq, lt, leq, gt,
         geq, assign, asplus, asminus, astimes, asdivide, asmodop,
-		aslshift, asrshift, asand, asor, asxor, autoinc, autodec, hook, compl,
+		aslshift, asrshift, asand, asor, asxor, autoinc, autodec, hook, cmpl,
         comma, colon, semicolon, uparrow, openbr, closebr, begin, end,
-        openpa, closepa, pointsto, dot, lor, land, not, or, and,
+        openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
 		ellipsis,
 
 		kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int64,
@@ -66,7 +69,7 @@ enum e_sym {
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
 		kw_cdecl,
-        eof };
+        my_eof };
 
 enum e_sc {
         sc_static, sc_auto, sc_global, sc_thread, sc_external, sc_type, sc_const,
@@ -91,10 +94,10 @@ struct typ;
 struct sym {
     struct sym *next;
     char *name;
-    __int8 storage_class;
+    int8_t storage_class;
 	// Function attributes
-	unsigned __int8 NumRegisterVars;
-	unsigned __int8 NumParms;
+	uint8_t NumRegisterVars;
+	uint8_t NumParms;
 	struct sym *parms;
 	struct sym *nextparm;
 	unsigned int IsPrototype : 1;
@@ -106,35 +109,37 @@ struct sym {
 	unsigned int UsesPredicate : 1;
 	struct enode *initexp;
     union {
-        __int64 i;
-        unsigned __int64 u;
+        int64_t i;
+        uint64_t u;
         double f;
         char *s;
     } value;
     struct typ *tp;
 };
 
+typedef struct stab {
+    struct sym *head, *tail;
+} TABLE;
+
 typedef struct typ {
-    __int8 type;
-	__int16 typeno;			// number of the type
+    int8_t type;
+	int16_t typeno;			// number of the type
 	unsigned int val_flag : 1;       /* is it a value type */
 	unsigned int isUnsigned : 1;
 	unsigned int isShort : 1;
 	unsigned int isVolatile : 1;
 	unsigned int isConst : 1;	// const in declaration
-	__int8		bit_width;
-	__int8		bit_offset;
+	int8_t		bit_width;
+	int8_t		bit_offset;
     long        size;
-    struct stab {
-            struct sym *head, *tail;
-            }       lst;
+    TABLE       lst;
     struct typ      *btp;
     char            *sname;
 } TYP;
 
 #define SYM     struct sym
 //#define TYP     struct typ
-#define TABLE   struct stab
+//#define TABLE   struct stab
 
 #define MAX_STRLEN      120
 #define MAX_STLP1       121
@@ -193,6 +198,4 @@ typedef struct typ {
 
 #define TRUE	1
 #define FALSE	0
-#define NULL	((void *)0)
-
-
+//#define NULL	((void *)0)

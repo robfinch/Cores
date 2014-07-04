@@ -59,7 +59,7 @@ extern int parsingParameterList;
 extern int funcdecl;
 extern int isStructDecl;
 
-__int16 typeno = bt_last;
+int16_t typeno = bt_last;
 
 void ParseStructMembers(TYP *tp, int ztype);
 

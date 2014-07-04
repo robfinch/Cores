@@ -145,9 +145,10 @@ char *opstr(int op)
 		}
 		++i;
     }
-	return NULL;
+	return (char *)NULL;
 }
 
+/*
 static char *segstr(int op)
 {
 	static char buf[20];
@@ -168,6 +169,7 @@ static char *segstr(int op)
 		return buf;
 	}
 }
+*/
 
 void putop(int op)
 {    
@@ -199,21 +201,21 @@ static void PutConstant(ENODE *offset)
 	switch( offset->nodetype )
 	{
 	case en_autofcon:
-			fprintf(output,"%I64d",offset->i);
+			fprintf(output,"%ld",offset->i);
 			break;
 	case en_fcon:
-			fprintf(output,"0x%I64x",offset->f);
+			fprintf(output,"0x%lx",offset->f);
 			break;
 	case en_autocon:
 	case en_icon:
-			fprintf(output,"%I64d",offset->i);
+			fprintf(output,"%ld",offset->i);
 			break;
 	case en_labcon:
-			sprintf(buf, "%s_%I64d",GetNamespace(),offset->i);
+			sprintf(buf, "%s_%ld",GetNamespace(),offset->i);
 			fprintf(output,buf);
 			break;
 	case en_clabcon:
-			sprintf(buf,"%s_%I64d",GetNamespace(),offset->i);
+			sprintf(buf,"%s_%ld",GetNamespace(),offset->i);
 			fprintf(output,buf);
 			break;
 	case en_nacon:
@@ -255,36 +257,36 @@ char *RegMoniker(int regno)
 	n = (n + 1) & 3;
 	if (isTable888) {
 		switch(regno) {
-		case 244:	sprintf(&buf[n], "flg0"); break;
-		case 250:	sprintf(&buf[n], "lr"); break;
-		case 251:	sprintf(&buf[n], "xlr"); break;
-		case 252:	sprintf(&buf[n], "tr"); break;
-		case 253:	sprintf(&buf[n], "bp"); break;
-		case 254:	sprintf(&buf[n], "pc"); break;
-		case 255:	sprintf(&buf[n], "sp"); break;
-		default:	sprintf(&buf[n], "r%d", regno); break;
+		case 244:	sprintf(&buf[n][0], "flg0"); break;
+		case 250:	sprintf(&buf[n][0], "lr"); break;
+		case 251:	sprintf(&buf[n][0], "xlr"); break;
+		case 252:	sprintf(&buf[n][0], "tr"); break;
+		case 253:	sprintf(&buf[n][0], "bp"); break;
+		case 254:	sprintf(&buf[n][0], "pc"); break;
+		case 255:	sprintf(&buf[n][0], "sp"); break;
+		default:	sprintf(&buf[n][0], "r%d", regno); break;
 		}
 	}
 	else if (isThor) {
 		switch(regno) {
-		case 253:	sprintf(&buf[n], "bp"); break;
+		case 253:	sprintf(&buf[n][0], "bp"); break;
 		//case 251:	sprintf(&buf[n], "xlr"); break;
 		//case 254:	sprintf(&buf[n], "pc"); break;
-		case 255:	sprintf(&buf[n], "sp"); break;
-		default:	sprintf(&buf[n], "r%d", regno); break;
+		case 255:	sprintf(&buf[n][0], "sp"); break;
+		default:	sprintf(&buf[n][0], "r%d", regno); break;
 		}
 	}
 	else {
 		switch(regno) {
-		case 27:	sprintf(&buf[n], "bp"); break;
-		case 28:	sprintf(&buf[n], "xlr"); break;
-		case 29:	sprintf(&buf[n], "pc"); break;
-		case 30:	sprintf(&buf[n], "sp"); break;
-		case 31:	sprintf(&buf[n], "lr"); break;
-		default:	sprintf(&buf[n], "r%d", regno); break;
+		case 27:	sprintf(&buf[n][0], "bp"); break;
+		case 28:	sprintf(&buf[n][0], "xlr"); break;
+		case 29:	sprintf(&buf[n][0], "pc"); break;
+		case 30:	sprintf(&buf[n][0], "sp"); break;
+		case 31:	sprintf(&buf[n][0], "lr"); break;
+		default:	sprintf(&buf[n][0], "r%d", regno); break;
 		}
 	}
-	return &buf[n];
+	return &buf[n][0];
 }
 
 char *BrRegMoniker(int regno)
@@ -294,12 +296,12 @@ char *BrRegMoniker(int regno)
 
 	n = (n + 1) & 3;
 	switch(regno) {
-	case  1:	sprintf(&buf[n], "lr"); break;
-	case 11:	sprintf(&buf[n], "xlr"); break;
-	case 15:	sprintf(&buf[n], "pc"); break;
-	default:	sprintf(&buf[n], "br%d", regno); break;
+	case  1:	sprintf(&buf[n][0], "lr"); break;
+	case 11:	sprintf(&buf[n][0], "xlr"); break;
+	case 15:	sprintf(&buf[n][0], "pc"); break;
+	default:	sprintf(&buf[n][0], "br%d", regno); break;
 	}
-	return &buf[n];
+	return &buf[n][0];
 }
 
 char *PredRegMoniker(int regno)
@@ -308,8 +310,8 @@ char *PredRegMoniker(int regno)
 	static int n;
 
 	n = (n + 1) & 3;
-	sprintf(&buf[n], "p%d", regno);
-	return &buf[n];
+	sprintf(&buf[n][0], "p%d", regno);
+	return &buf[n][0];
 }
 
 char *PredOpStr(int op)
@@ -430,7 +432,7 @@ void PutAddressMode(AMODE *ap)
             fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
             break;
     case am_mask:
-            put_mask(ap->offset);
+            put_mask((int64_t)ap->offset);
             break;
     default:
             printf("DIAG - illegal address mode.\n");
@@ -600,29 +602,29 @@ void genhalf(int val)
     }
 }
 
-void GenerateWord(__int64 val)
+void GenerateWord(int64_t val)
 {
 	if( gentype == wordgen && outcol < 58) {
-        fprintf(output,",%I64d",val);
+        fprintf(output,",%ld",val);
         outcol += 18;
     }
     else {
         nl();
-        fprintf(output,"\tdh\t%I64d",val);
+        fprintf(output,"\tdh\t%ld",val);
         gentype = wordgen;
         outcol = 33;
     }
 }
 
-void GenerateLong(__int64 val)
+void GenerateLong(int64_t val)
 { 
 	if( gentype == longgen && outcol < 56) {
-                fprintf(output,",%I64d",val);
+                fprintf(output,",%ld",val);
                 outcol += 10;
                 }
         else    {
                 nl();
-                fprintf(output,"\tdw\t%I64d",val);
+                fprintf(output,"\tdw\t%ld",val);
                 gentype = longgen;
                 outcol = 25;
                 }
@@ -639,9 +641,9 @@ void GenerateReference(SYM *sp,int offset)
         sign = '+';
     if( gentype == longgen && outcol < 55 - strlen(sp->name)) {
         if( sp->storage_class == sc_static)
-                fprintf(output,",%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
+                fprintf(output,",%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
         else if( sp->storage_class == sc_thread)
-                fprintf(output,",%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
+                fprintf(output,",%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
 		else {
 			if (offset==0)
                 fprintf(output,",%s",sp->name);
@@ -653,9 +655,9 @@ void GenerateReference(SYM *sp,int offset)
     else {
         nl();
         if(sp->storage_class == sc_static)
-            fprintf(output,"\tdw\t%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
+            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
         else if(sp->storage_class == sc_thread)
-            fprintf(output,"\tdw\t%s_%I64d%c%d",GetNamespace(),sp->value.i,sign,offset);
+            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
 		else {
 			if (offset==0)
 				fprintf(output,"\tdw\t%s",sp->name);
@@ -776,7 +778,7 @@ void roseg()
 		nl();
 		fprintf(output,"\trodata\n");
 		fprintf(output,"\talign\t16\n");
-		curseg = roseg;
+		curseg = rodataseg;
     }
 }
 

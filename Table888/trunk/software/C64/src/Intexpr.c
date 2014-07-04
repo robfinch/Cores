@@ -29,7 +29,7 @@
 #include "gen.h"
 #include "cglbdec.h"
 
-__int64 GetIntegerExpression(ENODE **pnode)       /* simple integer value */
+int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 { 
 	TYP *tp;
 	ENODE *node;

@@ -49,10 +49,10 @@
  *		Norcross, Ga 30092
  */
 
-TYP             *head = NULL;
-TYP             *tail = NULL;
-char            *declid = NULL;
-TABLE           tagtable = {0,0};
+TYP             *head = (TYP *)NULL;
+TYP             *tail = (TYP *)NULL;
+char            *declid = (char *)NULL;
+TABLE           tagtable = {(SYM *)0,(SYM *)0};
 TYP             stdconst = { bt_long, bt_long, 1, FALSE, FALSE, FALSE, FALSE, 0, 0, 8, {0, 0}, 0, "stdconst"};
 char *names[20];
 int nparms = 0;
@@ -398,7 +398,7 @@ j1:
                 NextToken();
 				if (lastst == colon) {
 					NextToken();
-					bit_width = GetIntegerExpression(NULL);
+					bit_width = GetIntegerExpression((ENODE **)NULL);
 					if (isUnion)
 						bit_offset = 0;
 					else
@@ -457,7 +457,7 @@ j1:
                 NextToken();
                 temp1 = head;
                 temp2 = tail;
-                head = tail = NULL;	// It might be a typecast following.
+                head = tail = (TYP *)NULL;	// It might be a typecast following.
 				// Do we have (getchar)()
 				nn = ParseDeclarationPrefix(isUnion); 
 				/*if (nn==1) {
@@ -515,11 +515,11 @@ void ParseDeclarationSuffix()
 			NextToken();
         }
         else if(head != NULL) {
-			temp1->size = GetIntegerExpression(NULL) * head->size;
+			temp1->size = GetIntegerExpression((ENODE **)NULL) * head->size;
 			needpunc(closebr);
 		}
         else {
-			temp1->size = GetIntegerExpression(NULL);
+			temp1->size = GetIntegerExpression((ENODE **)NULL);
 			needpunc(closebr);
 		}
         head = temp1;
@@ -687,13 +687,13 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 		return nbytes;
     dhead = head;
     for(;;) {
-        declid = NULL;
+        declid = (char *)NULL;
 		bit_width = -1;
         ParseDeclarationPrefix(ztype==bt_union);
 		// If a function declaration is taking place and just the type is
 		// specified without a parameter name, assign an internal compiler
 		// generated name.
-		if (funcdecl>0 && funcdecl != 10 && declid==NULL) {
+		if (funcdecl>0 && funcdecl != 10 && declid==(char *)NULL) {
 			sprintf(lastid, "_p%d", nparms);
 			declid = litlate(lastid);
 			names[nparms++] = declid;
@@ -865,21 +865,21 @@ void ParseGlobalDeclarations()
         case kw_long: case kw_struct: case kw_union:
         case kw_enum: case kw_void:
         case kw_float: case kw_double:
-                lc_static += declare(&gsyms,sc_global,lc_static,bt_struct);
+                lc_static += declare(&gsyms[0],sc_global,lc_static,bt_struct);
 				break;
         case kw_thread:
 				NextToken();
-                lc_thread += declare(&gsyms,sc_thread,lc_thread,bt_struct);
+                lc_thread += declare(&gsyms[0],sc_thread,lc_thread,bt_struct);
 				break;
 		case kw_register:
 				NextToken();
                 error(ERR_ILLCLASS);
-                lc_static += declare(&gsyms,sc_global,lc_static,bt_struct);
+                lc_static += declare(&gsyms[0],sc_global,lc_static,bt_struct);
 				break;
 		case kw_private:
         case kw_static:
                 NextToken();
-				lc_static += declare(&gsyms,sc_static,lc_static,bt_struct);
+				lc_static += declare(&gsyms[0],sc_static,lc_static,bt_struct);
                 break;
         case kw_extern:
                 NextToken();
@@ -890,7 +890,7 @@ void ParseGlobalDeclarations()
 				else if (lastst==kw_oscall || lastst==kw_interrupt || lastst==kw_nocall || lastst==kw_naked)
 					NextToken();
                 ++global_flag;
-                declare(&gsyms,sc_external,0,bt_struct);
+                declare(&gsyms[0],sc_external,0,bt_struct);
                 --global_flag;
                 break;
         default:
@@ -933,12 +933,12 @@ void ParseParameterDeclarations(int fd)
         case kw_thread:
                 NextToken();
                 error(ERR_ILLCLASS);
-				lc_thread += declare(&gsyms,sc_thread,lc_thread,bt_struct);
+				lc_thread += declare(&gsyms[0],sc_thread,lc_thread,bt_struct);
 				break;
         case kw_static:
                 NextToken();
                 error(ERR_ILLCLASS);
-				lc_static += declare(&gsyms,sc_static,lc_static,bt_struct);
+				lc_static += declare(&gsyms[0],sc_static,lc_static,bt_struct);
 				break;
         case kw_extern:
                 NextToken();
@@ -946,7 +946,7 @@ void ParseParameterDeclarations(int fd)
 				if (lastst==kw_oscall || lastst==kw_interrupt || lastst == kw_nocall || lastst==kw_naked)
 					NextToken();
                 ++global_flag;
-                declare(&gsyms,sc_external,0,bt_struct);
+                declare(&gsyms[0],sc_external,0,bt_struct);
                 --global_flag;
                 break;
 		case kw_register:
@@ -1013,7 +1013,7 @@ void ParseAutoDeclarations(TABLE *ssyms)
 				if (lastst==kw_oscall || lastst==kw_interrupt || lastst == kw_nocall || lastst==kw_naked)
 					NextToken();
                 ++global_flag;
-                declare(&gsyms,sc_external,0,bt_struct);
+                declare(&gsyms[0],sc_external,0,bt_struct);
                 --global_flag;
                 break;
         default:
@@ -1029,10 +1029,10 @@ void ParseAutoDeclarations(TABLE *ssyms)
  */
 void compile()
 {
-	while(lastst != eof)
+	while(lastst != my_eof)
 	{
 		ParseGlobalDeclarations();
-		if( lastst != eof)
+		if( lastst != my_eof)
 			NextToken();
 	}
 	dumplits();

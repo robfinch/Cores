@@ -31,9 +31,9 @@
 #include "gen.h"
 #include "cglbdec.h"
 
-static unsigned __int8 hashadd(char *nm)
+static uint8_t hashadd(char *nm)
 {
-	unsigned __int8 hsh;
+	uint8_t hsh;
 
 	for(hsh=0;*nm;nm++)
 		hsh += *nm;
@@ -90,9 +90,6 @@ SYM *gsearch(char *na)
 
 void insert(SYM* sp, TABLE *table)
 {
-	if (sp->name==0xfeeefeee || sp->name==NULL) {
-		printf("feeefeee found\r\n");
-	}
 	if (table==&gsyms[0])
 		table = &gsyms[hashadd(sp->name)];
 	if( search(sp->name,table) == NULL) {

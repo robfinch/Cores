@@ -1,11 +1,242 @@
 #include "ff.h"
 #include <stdio.h>
+#include <elf64.h>
 
 static FATFS fat1;
 static char cmdbuf[200];
 static char currentPath[300];
 static DIR dir;
 static FILINFO fno;
+
+enum {
+	E_Ok = 0,
+	E_BadPriority,
+};
+
+typedef struct {
+	__int64 regs[255];
+	__int64 cs;
+	__int64 ds;
+	__int64 ss;
+	TCB *nextRdy;
+	TCB *prevRdy;
+	TCB *nextTCB;
+	TCB *prevTCB;
+	TCB *nextTo;
+	TCB *prevTo;
+	__int64 timeout;
+	__int32 priority;
+	__int32 hJob;
+} TCB;
+
+TCB tempTCB;
+TCB tcbs[256];
+TCB *readyQ[8];
+TCB *runningTCB;
+TCB *freeTCB;
+__int64 sysstack[1024];
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+private void initFMTK()
+{
+	int nn;
+
+	for (nn = 0; nn < 8; nn++)
+		readyQ[nn] = 0;
+	for (nn = 0; nn < 256; nn++) {
+		tcbs[nn].nextTCB = &tcbs[nn+1];
+	}
+	tcbs[256].nextTCB = 0;
+	freeTCB = &tcbs[0];
+	tempTCB.nextTCB = 0;
+	tempTCB.prevTCB = 0;
+	tempTCB.nextRdy = 0;
+	tempTCB.prevRdy = 0;
+	tempTCB.priority = 7;
+	runningTCB = &tempTCB;
+}
+
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+private int insertIntoReadyList(TCB *tcb)
+{
+	TCB *p;
+
+	if (tcb->priority < 0 or tcb->priority > 7)
+		return E_BadPriority;
+	p = readyQ[tcb->priority];
+	if (p==0) {
+		p = tcb;
+		tcb->nextRdy = tcb;
+		tcb->prevRdy = tcb;
+		return E_Ok;
+	}
+	// Insert at tail of list
+	p->prevRdy->nextRdy = tcb;
+	tcb->prevRdy = p->prevRdy;
+	tcb->nextRdy = p;
+	p->prevRdy = tcb;
+}
+
+
+// ----------------------------------------------------------------------------
+// Reschedule tasks.
+// ----------------------------------------------------------------------------
+
+private naked Reschedule()
+{
+	// Switch to the system segments and stack
+	asm {
+		sei							; disable interrupts
+		mfspr	r1,ds				; get current data and stack segments
+		mfspr	r2,ss				; code segment was stored already on task's stack
+		mtspr	ds,r0				; select OS segments
+		mtspr	ss,r0
+		lw		r250,runningICB
+		sw		r1,256*8[r250]		; save off stack and data segments
+		sw		r2,257*8[r250]
+		sw		sp,254*8[r250]		; save off stack pointer
+		lea		sp,sysstack			; setup system stack
+		cli
+	}
+	// Save the running context
+	asm {
+		lw		tr,runningTCB
+		smr		r1,r15,[tr]
+		add		tr,tr,#15*8
+		smr		r16,r31,[tr]
+		add		tr,tr,#16*8
+		smr		r32,r47,[tr]
+		add		tr,tr,#16*8
+		smr		r48,r63,[tr]
+		add		tr,tr,#16*8
+		smr		r64,r79,[tr]
+		add		tr,tr,#16*8
+		smr		r80,r95,[tr]
+		add		tr,tr,#16*8
+		smr		r96,r111,[tr]
+		add		tr,tr,#16*8
+		smr		r112,r127,[tr]
+		add		tr,tr,#16*8
+		smr		r128,r143,[tr]
+		add		tr,tr,#16*8
+		smr		r144,r159,[tr]
+		add		tr,tr,#16*8
+		smr		r160,r175,[tr]
+		add		tr,tr,#16*8
+		smr		r176,r191,[tr]
+		add		tr,tr,#16*8
+		smr		r192,r207,[tr]
+		add		tr,tr,#16*8
+		smr		r208,r223,[tr]
+		add		tr,tr,#16*8
+		smr		r224,r239,[tr]
+		add		tr,tr,#16*8
+		smr		r240,r254,[tr]
+		add		tr,tr,#15*8
+	}
+	SelectTaskToRun();
+	asm {
+		mov		tr,r1
+		push	tr
+		lmr		r1,r15,[tr]
+		add		tr,tr,#15*8
+		lmr		r16,r31,[tr]
+		add		tr,tr,#16*8
+		lmr		r32,r47,[tr]
+		add		tr,tr,#16*8
+		lmr		r48,r63,[tr]
+		add		tr,tr,#16*8
+		lmr		r64,r79,[tr]
+		add		tr,tr,#16*8
+		lmr		r80,r95,[tr]
+		add		tr,tr,#16*8
+		lmr		r96,r111,[tr]
+		add		tr,tr,#16*8
+		lmr		r112,r127,[tr]
+		add		tr,tr,#16*8
+		lmr		r128,r143,[tr]
+		add		tr,tr,#16*8
+		lmr		r144,r159,[tr]
+		add		tr,tr,#16*8
+		lmr		r160,r175,[tr]
+		add		tr,tr,#16*8
+		lmr		r176,r191,[tr]
+		add		tr,tr,#16*8
+		lmr		r192,r207,[tr]
+		add		tr,tr,#16*8
+		lmr		r208,r223,[tr]
+		add		tr,tr,#16*8
+		lmr		r224,r239,[tr]
+		add		tr,tr,#16*8
+		lmr		r240,r251,[tr]
+		add		tr,tr,#12*8
+		lw		r253,8[tr]
+		pop		tr
+		sei
+		sw		tr,runningTCB
+		lw		sp,254*8[tr]
+		; After restoring the data segment the OS vars will be inaccessible,
+		; so the CS reg is used to access the vars.
+		cs:lw	r250,256*8[tr]	; we can use the cs because they all point to zero
+		mtspr	ds,r250
+		cs:lw	r250,257*8[tr]	; for the OS
+		mtspr	ss,r250
+		rti
+	}
+}
+
+// ----------------------------------------------------------------------------
+// Select a task to run.
+// ----------------------------------------------------------------------------
+
+private __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 0 };
+private __int8 startQNdx;
+
+private TCB *SelectTaskToRun()
+{
+	int nn;
+	TCB *p;
+	int qToCheck;
+
+	startQNdx++;
+	startQNdx &= 31;
+	qToCheck = startQ[startQNdx];
+	for (nn = 0; nn < 8; nn++) {
+		p = readyQ[qToCheck];
+		if (p) {
+			readyQ[qToCheck] = p->nextRdy;
+			return p;
+		}
+		qToCheck++;
+		qToCheck &= 7;
+	}
+	panic("No entries in ready queue.");
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+void rand_scr()
+{
+	asm {
+		mfspr	r2,tick
+		mtspr	srand1,r2
+		mfspr	r3,tick
+		mtspr	srand2,r3
+		ldi		r3,#$FFD00000
+		ldi		r2,#1736
+.j1:
+		gran	r1
+		mfspr	r1,rand
+		sh		r1,[r3]
+		add		r3,r3,#4
+		dbnz	r2,.j1
+	}
+}
 
 // ----------------------------------------------------------------------------
 // Test the RAM in the machine above $400000 (Above the DOS area).
@@ -114,7 +345,13 @@ void DumpWindow(BYTE *p)
 private int xcode()
 {
 	asm {
-		jsr	$C00200
+		ldi		r1,#$C00000
+		;mtspr	ds,r1
+		;mrspr	ss,r1
+		push	r1
+		ldi		r1,#$200
+		push	r1
+		rti
 	}
 }
 
@@ -154,9 +391,13 @@ void do_run()
 	int er;
 	int nn, ii;
 	int inquotes;
+	Elf64Header eh;
 
 	static char fname[200];
 	char *mem = 0xC00000;
+
+	printf("eh.e_shstrndx=%d\r\n", &eh.e_shstrndx - &eh);
+	printf("sizeof eh=%d\r\n", sizeof(eh));
 
 	inquotes = 0;
 	nn = ii = 0;
@@ -178,14 +419,16 @@ void do_run()
 	res = f_open(&fp,fname,FA_OPEN_EXISTING | FA_READ);
 	if (res) goto err1;
 	sz = f_size(&fp);
-	res = f_read(&fp,(void *)mem,sz,&br);
+	printf("file is %d bytes.\r\n", sz);
+	res = f_read(&fp,(void *)&eh,sizeof(eh),&br);
+	printf("eh.e_phoff=%d\r\n", eh.e_phoff);
+	res = f_read(&fp,(void *)mem,sz-sizeof(eh),&br);
 	if (res) goto err1;
 	f_close(&fp);
 	if (br==0) {
 		printf("Can't run file %s.\r\n", fname);
 		return;
 	}
-	f_close(&fp);
 	if (mem[0]=='R' && mem[1]=='U' && mem[2]=='N') {
 		strcpy(mem,cmdbuf);
 		res = xcode();
@@ -261,7 +504,7 @@ FRESULT do_cd()
 	//		}
 	//	}
 	//}
-	printf("newpath:%s\r\n",npath);
+	//printf("newpath:%s\r\n",npath);
 	res = f_chdir(npath);
 
 //	res = f_opendir(&dir, npath);
@@ -295,6 +538,7 @@ private do_clk(int nn)
 		lw		r1,32[bp]
 		div		r1,r1,#10	; round down to single digit
 		mod		r1,r1,#11	; limit to 0-10
+		shli	r1,r1,#3	; multiply by word size
 		lw		r1,.t1[r1]
 		mtspr	clk,r1
 	}
@@ -327,6 +571,8 @@ private int ParseCmdLine()
 		nn = atoi(&cmdbuf[3]);
 		do_clk(nn);
 	}
+	else if (strncmp(cmdbuf, "rs", 2)==0)
+		rand_scr();
 	return 0;
 }
 

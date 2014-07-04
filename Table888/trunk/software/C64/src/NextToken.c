@@ -24,6 +24,7 @@
 // ============================================================================
 //
 #include        <stdio.h>
+#include <string.h>
 #include        "c.h"
 #include        "expr.h"
 #include        "gen.h"
@@ -54,14 +55,14 @@
 extern char *errtext(int);
 
 int inComment = FALSE;
-int      errno[80];
+int      my_errno[80];
 int      numerrs;
 char     inpline[132];
 int             total_errors = 0;
-char            *lptr;          /* shared with preproc */
-FILE            *inclfile[10];  /* shared with preproc */
-int             inclline[10];   /* shared with preproc */
-int             incldepth;      /* shared with preproc */
+extern char     *lptr;          /* shared with preproc */
+extern FILE     *inclfile[10];  /* shared with preproc */
+extern int      inclline[10];   /* shared with preproc */
+extern int      incldepth;      /* shared with preproc */
 char            *linstack[20];  /* stack for substitutions */
 char            chstack[20];    /* place to save lastch */
 int             lstackptr = 0;  /* substitution stack pointer */
@@ -72,7 +73,7 @@ int isalnum(char c)
 }
 
 int isidch(char c) { return isalnum(c) || c == '_' || c == '$'; }
-int isspace(char c) { return c == ' ' || c == '\t' || c == '\n' || c=='\r'; }
+int my_isspace(char c) { return c == ' ' || c == '\t' || c == '\n' || c=='\r'; }
 int isdigit(char c) { return (c >= '0' && c <= '9'); }
 
 void initsym()
@@ -93,7 +94,7 @@ int getline(int listflag)
 		while(numerrs) {
 			numerrs--;
 			if (numerrs < 80)
-				fprintf(list," *** error %d: %s\n",errno[numerrs],errtext(errno[numerrs]));
+				fprintf(list," *** error %d: %s\n",my_errno[numerrs],errtext(my_errno[numerrs]));
 		}
         numerrs = 0;
     }
@@ -221,7 +222,7 @@ void getFilename()
             getch();
 }
 
-__int64 radix36(char c)
+int64_t radix36(char c)
 {
 	if(isdigit(c))
             return c - '0';
@@ -235,8 +236,8 @@ __int64 radix36(char c)
 /*
  *      getbase - get an integer in any base.
  */
-void getbase(b)
-{       register __int64 i, j;
+void getbase(int b)
+{       register int64_t i, j;
         i = 0;
         while(isalnum(lastch)) {
                 if((j = radix36(lastch)) < b) {
@@ -272,7 +273,7 @@ void getfrac()
  *      exponents are limited to +/-255 but most hardware
  *      won't support more anyway.
  */
-getexp()
+void getexp()
 {       double  expo, exmul;
         expo = 1.0;
         if(lastst != rconst)
@@ -298,7 +299,7 @@ getexp()
  *      getnum handles all of the numeric input. it accepts
  *      decimal, octal, hexidecimal, and floating point numbers.
  */
-getnum()
+void getnum()
 {       register int    i;
         i = 0;
         if(lastch == '0') {
@@ -331,7 +332,7 @@ getnum()
 
 void SkipSpaces()
 {
-    while( isspace(lastch) ) 
+    while( my_isspace(lastch) ) 
         getch(); 
 }
 /*
@@ -357,7 +358,7 @@ void NextToken()
 restart:        /* we come back here after comments */
 		SkipSpaces();
         if( lastch == -1)
-                lastst = eof;
+                lastst = my_eof;
         else if(isdigit(lastch))
                 getnum();
         else if(isidch(lastch)) {
@@ -540,7 +541,7 @@ restart:        /* we come back here after comments */
                                 getch();
                                 lastst = neq;
                                 }
-                        else lastst = not;
+                        else lastst = nott;
                         break;
                 case '%':
                         getch();
@@ -552,7 +553,7 @@ restart:        /* we come back here after comments */
                         break;
                 case '~':
                         getch();
-                        lastst = compl;
+                        lastst = cmpl;
                         break;
                 case '.':
                         getch();
@@ -581,7 +582,7 @@ restart:        /* we come back here after comments */
                                 getch();
                                 }
                         else
-                                lastst = and;
+                                lastst = bitandd;
                         break;
                 case '|':
                         getch();
@@ -594,7 +595,7 @@ restart:        /* we come back here after comments */
                                 getch();
                                 }
                         else
-                                lastst = or;
+                                lastst = bitorr;
                         break;
                 case '(':
                         getch();
@@ -642,5 +643,3 @@ void needpunc(enum e_sym p)
         error(ERR_PUNCT);
 	}
 }
-
-

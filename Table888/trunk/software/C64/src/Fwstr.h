@@ -1,5 +1,6 @@
 #ifndef FWSTR_H
 #define FWSTR_H
+#include <inttypes.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,7 +23,7 @@ int strimat(char *, char *, ...);		  // case insensitive match
 int strmcat(char *, int, ...);            // concatonates multiple strings
 //unsigned long strtoul(char *, char **, int, int);
 unsigned long stoul(char *, char **);     // convert string to unsigned long
-unsigned __int64 stouxl(char *, char **); // convert string to unsigned 64 bit
+unsigned int64_t stouxl(char *, char **); // convert string to unsigned 64 bit
 int *UcSet(int *, int, unsigned int);     // unicode strset
 int UcPrintf(int *, int *, ...);          // unicode sprintf
 int UcLen(int *);                         // unicode strlen

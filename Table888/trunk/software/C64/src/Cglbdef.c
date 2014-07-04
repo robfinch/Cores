@@ -68,14 +68,14 @@ int             lastch = 0;
 int             lastst = 0;
 char            lastid[33] = "";
 char            laststr[MAX_STRLEN + 1] = "";
-__int64			ival = 0;
+int64_t			ival = 0;
 double          rval = 0.0;
 int parseEsc = TRUE;
 
 TABLE           gsyms[257],// = {0,0},
 	           lsyms = {0,0};
-SYM             *lasthead = NULL;
-struct slit     *strtab = NULL;
+SYM             *lasthead = (SYM *)NULL;
+struct slit     *strtab = (struct slit *)NULL;
 int             lc_static = 0;
 int             lc_auto = 0;
 int				lc_thread = 0;
@@ -91,7 +91,7 @@ int isInterrupt = FALSE;
 int isNocall = FALSE;
 int optimize = TRUE;
 int exceptions = FALSE;
-SYM *currentFn = NULL;
+SYM *currentFn = (SYM *)NULL;
 int callsFn = FALSE;
 
 char nmspace[20][100];

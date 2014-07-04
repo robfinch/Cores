@@ -79,7 +79,7 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 			}
 			GenerateDiadic(op_ss|op_sws, 0, makebreg(LR), make_indexed(16,SP));
 			if (exceptions) {
-				ep = xalloc(sizeof(struct enode));
+				ep = allocEnode();
 				ep->nodetype = en_clabcon;
 				ep->i = throwlab;
 				ap = allocAmode();
@@ -120,14 +120,14 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 				GenerateDiadic(op_mfspr,0,ap,makebreg(CLR));
 				GenerateDiadic(op_mtspr,0,makebreg(LR),ap);
 				ReleaseTempRegister(ap);
-				GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
+				GenerateMonadic(op_bra,0,make_clabel(retlab));				// goto regular return cleanup code
 			}
 		}
 		else {
 			GenerateLabel(throwlab);
 			GenerateDiadic(op_lws,0,makebreg(regLR),make_indexed(8,regBP));		// load throw return address from stack into LR
 			GenerateDiadic(op_sws,0,makebreg(regLR),make_indexed(16,regBP));		// and store it back (so it can be loaded with the lm)
-			GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
+			GenerateMonadic(op_bra,0,make_clabel(retlab));				// goto regular return cleanup code
 		}
 	}
 }
@@ -173,7 +173,7 @@ void GenerateReturn(SYM *sym, Statement *stmt)
 			cnt = (bitsset(bsave_mask)-1)*8;
 			for (nn = 15; nn >=1 ; nn--) {
 				if (bsave_mask & (1 << nn)) {
-					GenerateTriadic(op_ss|op_lws,0,makebreg(nn),make_indexed(cnt,SP),NULL);
+					GenerateDiadic(op_ss|op_lws,0,makebreg(nn),make_indexed(cnt,SP));
 					cnt -= 8;
 				}
 			}
@@ -183,7 +183,7 @@ void GenerateReturn(SYM *sym, Statement *stmt)
 			cnt = (bitsset(save_mask)-1)*8;
 			for (nn = 31; nn >=1 ; nn--) {
 				if (save_mask & (1 << nn)) {
-					GenerateTriadic(op_ss|op_lw,0,makereg(nn),make_indexed(cnt,SP),NULL);
+					GenerateDiadic(op_ss|op_lw,0,makereg(nn),make_indexed(cnt,SP));
 					cnt -= 8;
 				}
 			}
@@ -197,11 +197,11 @@ void GenerateReturn(SYM *sym, Statement *stmt)
 		}
 		if (!sym->IsLeaf) {
 			if (exceptions)
-				GenerateDiadic(op_ss|op_lws,0,makebreg(CLR),make_indexed(8,SP));
-			GenerateDiadic(op_ss|op_lws,0,makebreg(LR),make_indexed(16,SP));
+				GenerateDiadic(op_ss|op_lws,0,makebreg(CLR),make_indexed(8,regSP));
+			GenerateDiadic(op_ss|op_lws,0,makebreg(LR),make_indexed(16,regSP));
 //			if (sym->UsesPredicate)
 		}
-		GenerateDiadic(op_ss|op_lws,0,make_string("pregs"),make_indexed(24,SP));
+		GenerateDiadic(op_ss|op_lws,0,make_string("pregs"),make_indexed(24,regSP));
 		//if (isOscall) {
 		//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
 		//	gen_regrestore();
@@ -212,16 +212,16 @@ void GenerateReturn(SYM *sym, Statement *stmt)
 			//GenerateTriadic(op_addui,0,makereg(30),makereg(30),make_immed(24));
 			//GenerateDiadic(op_lm,0,make_indirect(30),make_mask(0x9FFFFFFE));
 			//GenerateTriadic(op_addui,0,makereg(30),makereg(30),make_immed(popcnt(0x9FFFFFFE)*8));
-			GenerateMonadic(op_rti,0,NULL);
+			GenerateMonadic(op_rti,0,(AMODE *)NULL);
 			return;
 		}
 		if (sym->IsPascal) {
-			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(32+sym->NumParms * 8));
-			GenerateMonadic(op_rts,0,NULL);
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(32+sym->NumParms * 8));
+			GenerateMonadic(op_rts,0,(AMODE *)NULL);
 		}
 		else {
-			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(32));
-			GenerateMonadic(op_rts,0,NULL);
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(32));
+			GenerateMonadic(op_rts,0,(AMODE*)NULL);
 		}
     }
 	// Just branch to the already generated stack cleanup code.
@@ -259,7 +259,7 @@ static int GeneratePushParameterList(ENODE *plist)
 		plist = plist->p[1];
 	// move stack pointer down by number of parameters
 	if (st)
-		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(n*8));
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(n*8));
 	plist = st;
     for(i = 0; plist != NULL; i++ )
     {
@@ -279,11 +279,11 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 
  	//msk = SaveTempRegs();
 	sp = TempInvalidate();
-	sym = NULL;
+	sym = (SYM*)NULL;
     i = GeneratePushParameterList(node->p[1]);
 	// Call the function
 	if( node->p[0]->nodetype == en_cnacon ) {
-        GenerateDiadic(op_jsr,0,make_offset(node->p[0]),NULL);
+        GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
 		sym = gsearch(node->p[0]->sp);
 	}
     else
@@ -297,10 +297,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	if (i!=0) {
 		if (sym) {
 			if (!sym->IsPascal)
-				GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(i * 8));
+				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 		}
 		else
-			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(i * 8));
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 	}
 	//RestoreTempRegs(msk);
 	TempRevalidate(sp);

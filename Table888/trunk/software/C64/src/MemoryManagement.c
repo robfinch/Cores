@@ -81,8 +81,8 @@ char    *xalloc(int siz)
             return rv;
         }
         else {
-            bp = calloc(1,sizeof(struct blk) + BLKSIZE);
-			if( bp == NULL )
+            bp = (struct blk *)calloc(1,sizeof(struct blk) + BLKSIZE);
+			if( bp == (struct blk *)NULL )
 			{
 				printf(" not enough memory.\n");
 				exit(1);
@@ -103,7 +103,7 @@ char    *xalloc(int siz)
             return rv;
         }
         else {
-            bp = calloc(1,sizeof(struct blk) + BLKSIZE);
+            bp = (struct blk *)calloc(1,sizeof(struct blk) + BLKSIZE);
 			if( bp == NULL )
 			{
 				printf(" not enough local memory.\n");
@@ -133,11 +133,11 @@ void ReleaseLocalMemory()
         ++blkcnt;
         bp1 = bp2;
     }
-    locblk = NULL;
+    locblk = (struct blk *)NULL;
     locsize = 0;
-    lsyms.head = NULL;
-	lsyms.tail = NULL;
-	currentStmt = NULL;
+    lsyms.head = (SYM *)NULL;
+	lsyms.tail = (SYM *)NULL;
+	currentStmt = (Statement *)NULL;
 	if (verbose) printf(" releasing %d bytes local tables.\n",blkcnt * BLKSIZE);
 }
 
@@ -147,7 +147,7 @@ void ReleaseGlobalMemory()
     int             blkcnt;
     bp1 = glbblk;
     blkcnt = 0;
-    while( bp1 != NULL ) {
+    while( bp1 != (struct blk *)NULL ) {
 		if (strcmp(bp1->name,"C64    "))
 			printf("Block corrupted.");
         bp2 = bp1->next;
@@ -155,13 +155,13 @@ void ReleaseGlobalMemory()
         ++blkcnt;
         bp1 = bp2;
     }
-    glbblk = NULL;
+    glbblk = (struct blk *)NULL;
     glbsize = 0;
 //    gsyms.head = NULL;         /* clear global symbol table */
 //	gsyms.tail = NULL;
 	memset(gsyms,0,sizeof(gsyms));
 	if (verbose) printf(" releasing %d bytes global tables.\n",blkcnt * BLKSIZE);
-    strtab = NULL;             /* clear literal table */
+    strtab = (struct slit *)NULL;             /* clear literal table */
 }
 
 SYM *allocSYM() { return (SYM *)xalloc(sizeof(SYM)); };

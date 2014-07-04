@@ -34,7 +34,7 @@ void *htInsert(SHashTbl *hi, void *item)
    int count;
    char *htbl;
 
-   htbl = hi->table;
+   htbl = (char *)hi->table;
    hash = (*hi->Hash)(item);
    TableIndex = hash.hash;
    for (count = 0; count < hi->size; count++)
@@ -76,7 +76,7 @@ void *htDelete(SHashTbl *hi, void *item)
    int count;
    char *htbl;
 
-   htbl = hi->table;
+   htbl = (char *)hi->table;
    hash = (*hi->Hash)(item);
    TableIndex = hash.hash;
    for (count = 0; count < hi->size; count++)
@@ -111,7 +111,7 @@ void *htFind(SHashTbl *hi, void *item)
    int count;
    char *htbl;
 
-   htbl = hi->table;
+   htbl = (char *)hi->table;
    hash = (*hi->Hash)(item);
    TableIndex = hash.hash;
    for (count = 0; count < hi->size; count++)
@@ -128,4 +128,3 @@ void *htFind(SHashTbl *hi, void *item)
    return rr ? 0 : &htbl[TableIndex * hi->width];
 }
 
-

@@ -55,5 +55,3 @@ void err(int num, ...)
    else
       warnings++;
 }
-
-

@@ -39,5 +39,3 @@ SHashVal htSymHash(SHashTbl *hi, char *key)  // (this, key)
       tmp.delta = 1;
    return tmp;
 }
-
-

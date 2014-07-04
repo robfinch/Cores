@@ -23,11 +23,14 @@
 //                                                                          
 // ============================================================================
 //
+#include <stdio.h>
+#include <stdlib.h>
 #include "c.h"
 
 extern int numerrs;
 extern int total_errors;
-extern int errno[80];
+extern int my_errno[80];
+extern void closefiles();
 
 static char *errtextstr[] = {
 	"Syntax error",
@@ -84,7 +87,7 @@ char *errtext(int errnum)
 void error(int n)
 {
 	if (numerrs < 80) {
-		errno[numerrs++] = n;
+		my_errno[numerrs++] = n;
 		++total_errors;
 	}
 	else

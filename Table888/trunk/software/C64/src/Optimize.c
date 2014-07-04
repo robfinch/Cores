@@ -166,10 +166,10 @@ void dooper(ENODE **node)
 /*
  *      return which power of two i is or -1.
  */
-int pwrof2(__int64 i)
+int pwrof2(int64_t i)
 {       
 	int p;
-	__int64 q;
+	int64_t q;
 
     q = 2;
     p = 1;
@@ -186,9 +186,9 @@ int pwrof2(__int64 i)
 /*
  *      make a mod mask for a power of two.
  */
-__int64 mod_mask(int i)
+int64_t mod_mask(int i)
 {   
-	__int64 m;
+	int64_t m;
     m = 0;
     while( i-- )
         m = (m << 1) | 1;
@@ -207,10 +207,10 @@ __int64 mod_mask(int i)
 void opt0(ENODE **node)
 {
 	ENODE *ep;
-    __int64 val, sc;
+    int64_t val, sc;
 
     ep = *node;
-    if( ep == NULL )
+    if( ep == (ENODE *)NULL )
         return;
     switch( (*node)->nodetype ) {
             case en_b_ref:
@@ -436,9 +436,9 @@ void opt0(ENODE **node)
  *      xfold will remove constant nodes and return the values to
  *      the calling routines.
  */
-__int64 xfold(ENODE *node)
+int64_t xfold(ENODE *node)
 {
-	__int64 i;
+	int64_t i;
 
         if( node == NULL )
                 return 0;
@@ -496,7 +496,7 @@ __int64 xfold(ENODE *node)
  */
 void fold_const(ENODE **node)
 {       ENODE *ep;
-        __int64 i;
+        int64_t i;
         ep = *node;
         if( ep == 0 )
                 return;

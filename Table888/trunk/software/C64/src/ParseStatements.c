@@ -24,6 +24,7 @@
 // ============================================================================
 //
 #include <stdio.h> 
+#include <string.h>
 #include "c.h" 
 #include "expr.h" 
 #include "Statement.h"
@@ -46,10 +47,10 @@ Statement *NewStatement(int typ, int gt) {
 	s->stype = typ;
 	s->predreg = -1;
 	s->outer = currentStmt;
-	s->s1 = NULL;
-	s->s2 = NULL;
-	s->ssyms.head = NULL;
-	s->ssyms.tail = NULL;
+	s->s1 = (Statement *)NULL;
+	s->s2 = (Statement *)NULL;
+	s->ssyms.head = (SYM *)NULL;
+	s->ssyms.tail = (SYM *)NULL;
 	//memset(s->ssyms,0,sizeof(s->ssyms));
 	if (gt) NextToken();
 	return s;
@@ -101,8 +102,9 @@ int GetTypeHash(TYP *p)
 //        return snp; 
 //} 
 //  
-struct snode    *vortex_stmt()
-{       struct snode    *snp; 
+
+Statement *vortex_stmt()
+{       Statement *snp; 
         SYM             *sp; 
 	       TYP     *temp1;
 
@@ -123,7 +125,7 @@ struct snode    *vortex_stmt()
         needpunc( colon );
 		snp = (struct snode *)xalloc(sizeof(struct snode)); 
         snp->stype = st_vortex; 
-        snp->label = sp->name;
+        snp->label = (int64_t *)sp->name;
         snp->next = 0; 
 		snp->s1 = ParseStatement(); 
         return snp; 
@@ -220,13 +222,13 @@ Statement *ParseForStatement()
 	iflevel++;
     needpunc(openpa); 
     if( expression(&(snp->initExpr)) == NULL ) 
-        snp->initExpr = NULL; 
+        snp->initExpr = (ENODE *)NULL; 
     needpunc(semicolon); 
     if( expression(&(snp->exp)) == NULL ) 
-        snp->exp = NULL; 
+        snp->exp = (ENODE *)NULL; 
     needpunc(semicolon); 
     if( expression(&(snp->incrExpr)) == NULL ) 
-        snp->incrExpr = NULL; 
+        snp->incrExpr = (ENODE *)NULL; 
     needpunc(closepa); 
     snp->s1 = ParseStatement(); 
 	// Empty statements return NULL
@@ -269,7 +271,7 @@ struct snode *ParseCriticalStatement()
 	if (lastst==closepa)
 		NextToken();
     snp->stype = st_critical; 
-    snp->label = sp->name; 
+    snp->label = (int64_t *)sp->name; 
     snp->next = 0; 
 	snp->s1 = ParseStatement();
 	// Empty statements return NULL
@@ -288,8 +290,8 @@ Statement *ParseSpinlockStatement()
 		NextToken();
     if( NonCommaExpression(&(snp->exp)) == 0 ) 
         error(ERR_EXPREXPECT); 
-	snp->incrExpr = 1;
-	snp->initExpr = 0;
+	snp->incrExpr = (ENODE *)1;
+	snp->initExpr = (ENODE *)0;
 	//if( lastst != id ) { 
  //       error(ERR_IDEXPECT); 
  //       return 0; 
@@ -301,14 +303,14 @@ Statement *ParseSpinlockStatement()
 //	NextToken();
 	if (lastst==comma) {
 		NextToken();
-		snp->incrExpr = GetIntegerExpression(NULL);
-		if (snp->incrExpr < 1 || snp->incrExpr > 15)
+		snp->incrExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
+		if ((int64_t)snp->incrExpr < 1 || (int64_t)snp->incrExpr > 15)
 			error(ERR_SEMA_INCR);
-		snp->incrExpr = (int)snp->incrExpr & 15;
+		snp->incrExpr = (ENODE *)((int64_t)snp->incrExpr & 15);
 	}
 	if (lastst==comma) {
 		NextToken();
-		snp->initExpr = GetIntegerExpression(NULL);
+		snp->initExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
 	}
 	if (lastst==closepa)
 		NextToken();
@@ -334,17 +336,17 @@ Statement *ParseSpinunlockStatement()
 	SYM *sp;
 
     snp = NewStatement(st_spinunlock, TRUE); 
-	snp->incrExpr = 1;
+	snp->incrExpr = (ENODE *)1;
 	if (lastst==openpa)
 		NextToken();
     if( expression(&(snp->exp)) == 0 ) 
         error(ERR_EXPREXPECT); 
 	if (lastst==comma) {
 		NextToken();
-		snp->incrExpr = GetIntegerExpression(NULL);
-		if (snp->incrExpr < 1 || snp->incrExpr > 15)
+		snp->incrExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
+		if ((int64_t)snp->incrExpr < 1 || (int64_t)snp->incrExpr > 15)
 			error(ERR_SEMA_INCR);
-		snp->incrExpr = (int)snp->incrExpr & 15;
+		snp->incrExpr = (ENODE *)((int64_t)snp->incrExpr & 15);
 	}
     //if( lastst != id ) { 
     //    error(ERR_IDEXPECT); 
@@ -420,8 +422,8 @@ Statement *ParseCatchStatement()
 	snp = NewStatement(st_catch, TRUE);
 	currentStmt = snp;
 	if (lastst != openpa) {
-		snp->label = NULL;
-		snp->s2 = 99999;
+		snp->label = (int64_t *)NULL;
+		snp->s2 = (Statement *)99999;
 		snp->s1 = ParseStatement();
 		// Empty statements return NULL
 		if (snp->s1)
@@ -445,10 +447,10 @@ Statement *ParseCatchStatement()
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-	snp->label = (char *)sp;	// save off symbol pointer
+	snp->label = (int64_t *)sp;	// save off symbol pointer
 	if (sp->tp->typeno >= bt_last)
 		error(ERR_CATCHSTRUCT);
-	snp->s2 = GetTypeHash(sp->tp);
+	snp->s2 = (Statement *)GetTypeHash(sp->tp);
 	// Empty statements return NULL
 	if (snp->s2)
 		snp->s2->outer = snp;
@@ -471,7 +473,7 @@ Statement *ParseCaseStatement()
         snp->s2 = 0;
 		nn = 0;
 		do {
-			buf[nn] = GetIntegerExpression(NULL);
+			buf[nn] = GetIntegerExpression((ENODE **)NULL);
 			nn++;
 			if (lastst != comma)
 				break;
@@ -483,19 +485,19 @@ Statement *ParseCaseStatement()
 		bf[0] = nn;
 		for (; nn > 0; nn--)
 			bf[nn]=buf[nn-1];
-		snp->label = bf;
+		snp->label = (int64_t *)bf;
     }
     else if( lastst == kw_default) { 
         NextToken(); 
-        snp->s2 = 1; 
+        snp->s2 = (Statement *)1; 
 		snp->stype = st_default;
     } 
     else { 
         error(ERR_NOCASE); 
-        return NULL;
+        return (Statement *)NULL;
     } 
     needpunc(colon); 
-    head = NULL; 
+    head = (Statement *)NULL; 
     while( lastst != end && lastst != kw_case && lastst != kw_default ) { 
 		if( head == NULL ) {
 			head = tail = ParseStatement(); 
@@ -520,10 +522,10 @@ int CheckForDuplicateCases(Statement *head)
 	Statement *top, *cur;
 
 	cur = top = head;
-	while( top != NULL )
+	while( top != (Statement *)NULL )
 	{
 		cur = top->next;
-		while( cur != NULL )
+		while( cur != (Statement *)NULL )
 		{
 			if( (!(cur->s1 || cur->s2) && cur->label == top->label)
 				|| (cur->s2 && top->s2) )
@@ -552,20 +554,20 @@ Statement *ParseSwitchStatement()
     needpunc(begin); 
     head = 0; 
     while( lastst != end ) { 
-		if( head == NULL ) {
+		if( head == (Statement *)NULL ) {
 			head = tail = ParseCaseStatement(); 
 			if (head)
 				head->outer = snp;
 		}
 		else { 
 			tail->next = ParseCaseStatement(); 
-			if( tail->next != NULL ) {
+			if( tail->next != (Statement *)NULL ) {
 				tail->next->outer = snp;
 				tail = tail->next;
 			}
 		}
-		if (tail==NULL) break;	// end of file in switch
-        tail->next = NULL; 
+		if (tail==(Statement *)NULL) break;	// end of file in switch
+        tail->next = (Statement *)NULL; 
     } 
     snp->s1 = head; 
     NextToken(); 
@@ -594,7 +596,7 @@ Statement *ParseThrowStatement()
 	currentFn->DoesThrow = TRUE;
 	snp = NewStatement(st_throw, TRUE);
     tp = expression(&(snp->exp));
-	snp->label = GetTypeHash(tp);
+	snp->label = (int64_t *)GetTypeHash(tp);
     if( lastst != end )
         needpunc( semicolon );
     return snp;
@@ -656,7 +658,7 @@ Statement *ParseAsmStatement()
 
 	Statement *snp; 
     snp = NewStatement(st_asm, FALSE); 
-    while( isspace(lastch) )
+    while( my_isspace(lastch) )
 		getch(); 
     NextToken();
 	if (lastst != begin)
@@ -672,7 +674,7 @@ Statement *ParseAsmStatement()
 	if (nn >= 3500)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
-	snp->label = litlate(buf);
+	snp->label = (int64_t *)litlate(buf);
     return snp;
 } 
 
@@ -683,8 +685,8 @@ Statement *ParseTryStatement()
 	SYM *sp;
 	Statement *hd, *tl;
 
-	hd = NULL;
-	tl = NULL;
+	hd = (Statement *)NULL;
+	tl = (Statement *)NULL;
 	snp = NewStatement(st_try, TRUE);
     snp->s1 = ParseStatement();
 	// Empty statements return NULL
@@ -705,8 +707,8 @@ Statement *ParseTryStatement()
 				tl = tl->next;
 			}
 		}
-		if (tl==NULL) break;	// end of file in try
-        tl->next = NULL; 
+		if (tl==(Statement *)NULL) break;	// end of file in try
+        tl->next = (Statement *)NULL; 
     } 
     snp->s2 = hd;
     return snp;
@@ -790,8 +792,8 @@ Statement *ParseLabelStatement()
     NextToken();       /* get past id */ 
     needpunc(colon); 
     if( sp->storage_class == sc_label ) { 
-        snp->label = sp->value.i; 
-        snp->next = NULL; 
+        snp->label = (int64_t *)sp->value.i; 
+        snp->next = (Statement *)NULL; 
         return snp; 
     } 
     return 0; 
@@ -805,7 +807,7 @@ Statement *ParseGotoStatement()
     NextToken(); 
     if( lastst != id ) { 
         error(ERR_IDEXPECT); 
-        return NULL;
+        return (Statement *)NULL;
     } 
     snp = NewStatement(st_goto, FALSE);
     if( (sp = search(lastid,&lsyms)) == NULL ) { 
@@ -823,11 +825,11 @@ Statement *ParseGotoStatement()
         error( ERR_LABEL );
     else { 
         snp->stype = st_goto;
-        snp->label = sp->value.i;
-        snp->next = NULL;
+        snp->label = (int64_t *)sp->value.i;
+        snp->next = (Statement *)NULL;
         return snp; 
     } 
-    return NULL;
+    return (Statement *)NULL;
 } 
   
 Statement *ParseStatement() 
@@ -877,7 +879,7 @@ Statement *ParseStatement()
             break; 
     } 
 	if( snp != NULL ) {
-        snp->next = NULL;
+        snp->next = (Statement *)NULL;
 	}
     return snp; 
 } 

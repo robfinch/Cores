@@ -25,7 +25,13 @@
 //
 #include        <stdio.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#define _GNU_SOURCE
 #include <string.h>
+#include <libgen.h>
+#include <inttypes.h>
 #include        "c.h"
 #include        "expr.h"
 #include        "gen.h"
@@ -72,6 +78,7 @@ int main(int argc, char **argv)
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
+//	printf("c64 starting...\r\n");
 	while(--argc) {
         if( **++argv == '-')
             options(*argv);
@@ -144,11 +151,16 @@ int     openfiles(char *s)
 {
 	int     ofl,oflg;
 	int i;
+	char *p;
         strcpy(infile,s);
         strcpy(listfile,s);
         strcpy(outfile,s);
 		//strcpy(outfileG,s);
-		_splitpath(s,NULL,NULL,nmspace[0],NULL);
+		//_splitpath(s,NULL,NULL,nmspace[0],NULL);
+		strcpy(nmspace[0],basename(s));
+		p = strrchr(nmspace[0],'.');
+		if (p)
+			*p = '\0';
 		makename(infile,".fpp");
         makename(listfile,".lis");
         makename(outfile,".s");
@@ -156,7 +168,7 @@ int     openfiles(char *s)
                 printf(" cant open %s\n",infile);
                 return 0;
                 }
-        ofl = _creat(outfile,-1);
+        ofl = creat(outfile,-1);
         if( ofl < 0 )
                 {
                 printf(" cant create %s\n",outfile);
@@ -170,7 +182,7 @@ int     openfiles(char *s)
         //        fclose(input);
         //        return 0;
         //        }
-        if( (output = _fdopen(ofl,"w")) == 0) {
+        if( (output = fdopen(ofl,"w")) == 0) {
                 printf(" cant open %s\n",outfile);
                 fclose(input);
                 return 0;
@@ -207,7 +219,7 @@ void summary()
 {
 	printf("\n -- %d errors found.",total_errors);
     fprintf(list,"\f\n *** global scope typedef symbol table ***\n\n");
-    ListTable(&gsyms,0);
+    ListTable(&gsyms[0],0);
     fprintf(list,"\n *** structures and unions ***\n\n");
     ListTable(&tagtable,0);
 	fflush(list);

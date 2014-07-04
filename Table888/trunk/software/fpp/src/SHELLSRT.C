@@ -37,5 +37,3 @@ void ShellSort(void *base, int nel, int elsize, int (*cmp)(void*,void*))
             }
          }
 }
-
-

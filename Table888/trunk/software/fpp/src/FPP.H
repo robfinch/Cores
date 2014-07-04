@@ -58,7 +58,7 @@ typedef struct
 
 void ProcFile(char *);
 
-int icmp(SDef *, SDef *);
+int icmp(const void *, const void *);
 int fcmp(char *, SDef *);
 int ecmp(SDef *);
 char *StoreBody(char *,...);
@@ -106,10 +106,10 @@ void searchenv(char *filename, char *envname, char *pathname);
 SHashVal HashFnc(SDef *);
 
 E char *identchars I(= "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@?0123456789");
-E SHashTbl HashInfo;
+extern SHashTbl HashInfo;
 E char *inptr;       // pointer to current character in input buffer
 E char inbuf[3000000];  // input buffer
-E int errors;
+extern int errors;
 E int warnings;
 E FILE *fin, *fout;
 E FILE *fdbg;

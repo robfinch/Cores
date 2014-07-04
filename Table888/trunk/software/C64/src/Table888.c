@@ -438,7 +438,7 @@ static void GenerateTable888PushParameter(ENODE *ep, int i, int n)
 
 	if (ep==NULL)
 		return;
-	ap = GenerateExpression(ep,F_REG,8);
+	ap = GenerateExpression(ep,F_REG|F_IMMED,8);
 	GenerateMonadic(op_push,0,ap);
 /*	ap[i % 4] = GenerateExpression(ep,F_REG,8);
 	if (n-1==i) {

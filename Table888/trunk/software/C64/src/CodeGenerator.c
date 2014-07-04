@@ -23,7 +23,8 @@
 //                                                                          
 // ============================================================================
 //
-#include        <stdio.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include        "c.h"
 #include        "expr.h"
 #include "Statement.h"
@@ -66,30 +67,30 @@ extern int throwlab;
 /*
  *      construct a reference node for an internal label number.
  */
-AMODE *make_label(__int64 lab)
+AMODE *make_label(int64_t lab)
 {
-	struct enode    *lnode;
-    struct amode    *ap;
-    lnode = xalloc(sizeof(struct enode));
+	ENODE *lnode;
+    AMODE *ap;
+    lnode = allocEnode();
     lnode->nodetype = en_labcon;
     lnode->i = lab;
-    ap = xalloc(sizeof(struct amode));
+    ap = allocAmode();
     ap->mode = am_direct;
     ap->offset = lnode;
 	ap->isUnsigned = TRUE;
     return ap;
 }
 
-AMODE *make_clabel(__int64 lab)
+AMODE *make_clabel(int64_t lab)
 {
-	struct enode    *lnode;
-    struct amode    *ap;
-    lnode = xalloc(sizeof(struct enode));
+	ENODE *lnode;
+    AMODE *ap;
+    lnode = allocEnode();
     lnode->nodetype = en_clabcon;
     lnode->i = lab;
 	if (lab==-1)
 		printf("-1\r\n");
-    ap = xalloc(sizeof(struct amode));
+    ap = allocAmode();
     ap->mode = am_direct;
     ap->offset = lnode;
 	ap->isUnsigned = TRUE;
@@ -101,7 +102,7 @@ AMODE *make_string(char *s)
 	ENODE *lnode;
     AMODE *ap;
 
-    lnode = xalloc(sizeof(struct enode));
+    lnode = allocEnode();
     lnode->nodetype = en_nacon;
     lnode->sp = s;
     ap = allocAmode();
@@ -113,11 +114,11 @@ AMODE *make_string(char *s)
 /*
  *      make a node to reference an immediate value i.
  */
-AMODE *make_immed(__int64 i)
+AMODE *make_immed(int64_t i)
 {
 	AMODE *ap;
     ENODE *ep;
-    ep = xalloc(sizeof(struct enode));
+    ep = allocEnode();
     ep->nodetype = en_icon;
     ep->i = i;
     ap = allocAmode();
@@ -130,7 +131,7 @@ AMODE *make_indirect(int i)
 {
 	AMODE *ap;
     ENODE *ep;
-    ep = xalloc(sizeof(struct enode));
+    ep = allocEnode();
     ep->nodetype = en_uw_ref;
     ep->i = 0;
     ap = allocAmode();
@@ -140,11 +141,11 @@ AMODE *make_indirect(int i)
     return ap;
 }
 
-AMODE *make_indexed(__int64 o, int i)
+AMODE *make_indexed(int64_t o, int i)
 {
 	AMODE *ap;
     ENODE *ep;
-    ep = xalloc(sizeof(struct enode));
+    ep = allocEnode();
     ep->nodetype = en_icon;
     ep->i = o;
     ap = allocAmode();
@@ -173,9 +174,9 @@ AMODE *make_offset(ENODE *node)
 void MakeLegalAmode(AMODE *ap,int flags, int size)
 {
 	AMODE *ap2, *ap3;
-	__int64 i;
+	int64_t i;
 
-	if (ap==NULL) return;
+	if (ap==(AMODE*)NULL) return;
     if( ((flags & F_VOL) == 0) || ap->tempflag )
     {
         switch( ap->mode ) {
@@ -543,7 +544,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     }
     else if( node->p[0]->nodetype == en_autocon )
     {
-        ap1 = xalloc(sizeof(struct amode));
+        ap1 = allocAmode();
         ap1->mode = am_indx;
         ap1->preg = regBP;
 		ap1->segment = stackseg;
@@ -558,7 +559,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     }
     else if( node->p[0]->nodetype == en_autofcon )
     {
-        ap1 = xalloc(sizeof(struct amode));
+        ap1 = allocAmode();
         ap1->mode = am_indx;
         ap1->preg = regBP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
@@ -1082,26 +1083,26 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
 				ap2 = GetTempRegister();
 				if (ap1->isUnsigned) {
 					switch(size) {
-					case 1:	GenerateTriadic(op_lbu,0,ap2,ap1,NULL); break;
-					case 2:	GenerateTriadic(op_lcu,0,ap2,ap1,NULL); break;
-					case 4:	GenerateTriadic(op_lhu,0,ap2,ap1,NULL); break;
-					case 8:	GenerateTriadic(op_lw,0,ap2,ap1,NULL); break;
+					case 1:	GenerateDiadic(op_lbu,0,ap2,ap1); break;
+					case 2:	GenerateDiadic(op_lcu,0,ap2,ap1); break;
+					case 4:	GenerateDiadic(op_lhu,0,ap2,ap1); break;
+					case 8:	GenerateDiadic(op_lw,0,ap2,ap1); break;
 					}
 				}
 				else {
 					switch(size) {
-					case 1:	GenerateTriadic(op_lb,0,ap2,ap1,NULL); break;
-					case 2:	GenerateTriadic(op_lc,0,ap2,ap1,NULL); break;
-					case 4:	GenerateTriadic(op_lh,0,ap2,ap1,NULL); break;
-					case 8:	GenerateTriadic(op_lw,0,ap2,ap1,NULL); break;
+					case 1:	GenerateDiadic(op_lb,0,ap2,ap1); break;
+					case 2:	GenerateDiadic(op_lc,0,ap2,ap1); break;
+					case 4:	GenerateDiadic(op_lh,0,ap2,ap1); break;
+					case 8:	GenerateDiadic(op_lw,0,ap2,ap1); break;
 					}
 				}
 	            GenerateTriadic(op,0,ap2,ap2,make_immed(node->i));
 				switch(size) {
-				case 1:	GenerateTriadic(op_sb,0,ap2,ap1,NULL); break;
-				case 2:	GenerateTriadic(op_sc,0,ap2,ap1,NULL); break;
-				case 4:	GenerateTriadic(op_sh,0,ap2,ap1,NULL); break;
-				case 8:	GenerateTriadic(op_sw,0,ap2,ap1,NULL); break;
+				case 1:	GenerateDiadic(op_sb,0,ap2,ap1); break;
+				case 2:	GenerateDiadic(op_sc,0,ap2,ap1); break;
+				case 4:	GenerateDiadic(op_sh,0,ap2,ap1); break;
+				case 8:	GenerateDiadic(op_sw,0,ap2,ap1); break;
 				}
 				ReleaseTempRegister(ap2);
 			}
@@ -1166,13 +1167,13 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	static int ndx;
 	static int numDiags = 0;
 
-    if( node == NULL )
+    if( node == (ENODE *)NULL )
     {
 		numDiags++;
         printf("DIAG - null node in GenerateExpression.\n");
 		if (numDiags > 100)
 			exit(0);
-        return NULL;
+        return (AMODE *)NULL;
     }
 	//size = node->esize;
     switch( node->nodetype )
@@ -1263,7 +1264,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			ap1 = GenerateBitfieldDereference(node,flags,size);
 			return ap1;
 	case en_bregvar:
-            ap1 = xalloc(sizeof(struct amode));
+            ap1 = allocAmode();
             ap1->mode = am_breg;
             ap1->preg = node->i;
             ap1->tempflag = 0;      /* not a temporary */
@@ -1271,7 +1272,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             return ap1;
 	case en_regvar:
     case en_tempref:
-            ap1 = xalloc(sizeof(struct amode));
+            ap1 = allocAmode();
             ap1->mode = am_reg;
             ap1->preg = node->i;
             ap1->tempflag = 0;      /* not a temporary */
@@ -1644,7 +1645,7 @@ void GenerateFalseJump(ENODE *node,int label, int predreg)
 		int size;
         int             siz1;
         int             lab0;
-        if( node == NULL )
+        if( node == (ENODE *)NULL )
                 return;
         switch( node->nodetype )
                 {

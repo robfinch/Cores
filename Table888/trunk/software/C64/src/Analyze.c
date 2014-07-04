@@ -56,8 +56,8 @@ extern int AllocateThorRegisterVars();
 
 int bsave_mask;
 extern int popcnt(int m);
-static scan_compound(Statement *stmt);
-static repcse_compound(Statement *stmt);
+static void scan_compound(Statement *stmt);
+static void repcse_compound(Statement *stmt);
 
 /*
  *      this module will step through the parse tree and find all
@@ -128,12 +128,12 @@ static CSE *SearchCSEList(ENODE *node)
 	CSE *csp;
 
     csp = olist;
-    while( csp != NULL ) {
+    while( csp != (CSE *)NULL ) {
         if( equalnode(node,csp->exp) )
             return csp;
         csp = csp->next;
     }
-    return NULL;
+    return (CSE *)NULL;
 }
 
 /*
@@ -185,17 +185,17 @@ CSE *voidauto(ENODE *node)
 {
 	CSE *csp;
 
-	csp = olist;
+	csp = (CSE *)olist;
     while( csp != NULL ) {
         if( IsLValue(csp->exp) && equalnode(node,csp->exp->p[0]) ) {
             if( csp->voidf )
-                 return NULL;
+                 return (CSE *)NULL;
             csp->voidf = 1;
             return csp;
         }
         csp = csp->next;
     }
-    return NULL;
+    return (CSE *)NULL;
 }
 
 /*
@@ -403,7 +403,7 @@ static void scan(Statement *block)
     }
 }
 
-static scan_compound(Statement *stmt)
+static void scan_compound(Statement *stmt)
 {
 	SYM *sp;
 
@@ -629,7 +629,7 @@ void repcse(Statement *block)
     }
 }
 
-static repcse_compound(Statement *stmt)
+static void repcse_compound(Statement *stmt)
 {
 	SYM *sp;
 
@@ -654,7 +654,7 @@ int opt1(Statement *block)
 {
 	int nn;
 
-	olist = NULL;
+	olist = (CSE *)NULL;
     scan(block);            /* collect expressions */
 	if (isTable888)
 		nn = AllocateTable888RegisterVars();         /* allocate registers */

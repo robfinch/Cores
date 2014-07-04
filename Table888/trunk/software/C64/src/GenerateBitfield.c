@@ -30,10 +30,10 @@
 #include "gen.h"
 #include "cglbdec.h"
 
-static void SignExtendBitfield(ENODE *node, AMODE *ap3, __int64 mask)
+static void SignExtendBitfield(ENODE *node, AMODE *ap3, int64_t mask)
 {
 	AMODE *ap2;
-	__int64 umask;
+	int64_t umask;
 
 	umask = 0x8000000000000000L | ~(mask >> 1);
 	ap2 = GetTempRegister();
@@ -56,7 +56,7 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	isSigned = node->nodetype==en_wfieldref || node->nodetype==en_hfieldref || node->nodetype==en_cfieldref || node->nodetype==en_bfieldref;
 	mask = 0;
 	while (--width)	mask = mask + mask + 1;
-    ap = GenerateDereference(node, flags, node->esize);
+    ap = GenerateDereference(node, flags, node->esize, isSigned);
     MakeLegalAmode(ap, flags, node->esize);
 	ap3 = GetTempRegister();
 	if (isRaptor64)
@@ -66,7 +66,7 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	ReleaseTempRegister(ap);
 	if (isTable888||isRaptor64) {
 		if (node->bit_offset > 0)
-			GenerateDiadic(op_shru, 0, ap3, make_immed((__int64) node->bit_offset));
+			GenerateDiadic(op_shru, 0, ap3, make_immed((int64_t) node->bit_offset));
 		GenerateDiadic(op_andi, 0, ap3, make_immed(mask));
 		if (isSigned)
 			SignExtendBitfield(node, ap3, mask);
@@ -77,9 +77,9 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 //		GenerateDiadic(op_and, 0, ap3, make_immed(mask));
 		//MakeLegalAmode(ap, flags, node->esize);
 		if (isSigned)
-			Generate4adic(op_bfext,0,ap3,ap,make_immed((__int64) node->bit_offset),make_immed((__int64) node->bit_offset+node->bit_width));
+			Generate4adic(op_bfext,0,ap3,ap,make_immed((int64_t) node->bit_offset),make_immed((int64_t) node->bit_offset+node->bit_width));
 		else
-			Generate4adic(op_bfextu,0,ap3,ap,make_immed((__int64) node->bit_offset),make_immed((__int64) node->bit_offset+node->bit_width));
+			Generate4adic(op_bfextu,0,ap3,ap,make_immed((int64_t) node->bit_offset),make_immed((int64_t) node->bit_offset+node->bit_width));
 	}
 	MakeLegalAmode(ap3, flags, node->esize);
     return ap3;
@@ -134,7 +134,7 @@ AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size)
 		GenerateDiadic(op_mov, 0, ap3, ap1);
 	} else
 	ap3 = ap1;
-	ep = makenode(en_w_ref, node->p[0]->p[0], NULL);
+	ep = makenode(en_w_ref, node->p[0]->p[0], (ENODE *)NULL);
 	ap2 = GenerateExpression(ep, F_MEM,8);
 	if (ap2->mode == am_reg) {
 		Generate4adic(op_bfins,0,ap2,ap1,make_immed((long) node->p[0]->bit_offset),

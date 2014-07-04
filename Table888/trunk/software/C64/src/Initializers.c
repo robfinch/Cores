@@ -219,25 +219,25 @@ int InitializeStructure(TYP *tp)
 
 int initbyte()
 {   
-	GenerateByte(GetIntegerExpression(NULL));
+	GenerateByte(GetIntegerExpression((ENODE **)NULL));
     return 1;
 }
 
 int initchar()
 {   
-	GenerateChar(GetIntegerExpression(NULL));
+	GenerateChar(GetIntegerExpression((ENODE **)NULL));
     return 2;
 }
 
 int initshort()
 {
-	GenerateWord(GetIntegerExpression(NULL));
+	GenerateWord(GetIntegerExpression((ENODE **)NULL));
     return 4;
 }
 
 int initlong()
 {
-	GenerateLong(GetIntegerExpression(NULL));
+	GenerateLong(GetIntegerExpression((ENODE **)NULL));
     return 8;
 }
 
@@ -247,7 +247,7 @@ int InitializePointer()
 	ENODE *n;
 	long lng;
 
-    if(lastst == and) {     /* address of a variable */
+    if(lastst == bitandd) {     /* address of a variable */
         NextToken();
         if( lastst != id)
             error(ERR_IDEXPECT);
@@ -256,7 +256,7 @@ int InitializePointer()
         else {
             NextToken();
             if( lastst == plus || lastst == minus)
-                GenerateReference(sp,GetIntegerExpression(NULL));
+                GenerateReference(sp,GetIntegerExpression((ENODE **)NULL));
             else
                 GenerateReference(sp,0);
             if( sp->storage_class == sc_auto)

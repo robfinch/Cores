@@ -24,7 +24,9 @@
 // ============================================================================
 //
 #include        <stdio.h>
+#define _GNU_SOURCE
 #include <string.h>
+#include <libgen.h>
 #include        "c.h"
 #include        "expr.h"
 #include "Statement.h"
@@ -55,9 +57,14 @@ int             inclline[10];
 char            *lptr;
 extern char     inpline[132];
 int endifCount = 0;
+extern void searchenv(char *filename, char *envname, char *pathname);
 int dodefine();
 int doinclude();
 extern void getFilename();
+
+int doifdef();
+int doifndef();
+int doendif();
 
 int preprocess()
 {   
@@ -89,6 +96,7 @@ int doinclude()
 {
 	int     rv;
 	static char pathname[5000];
+	char *p;
 
 	parseEsc = FALSE;
     NextToken();               /* get file to include */
@@ -112,7 +120,10 @@ int doinclude()
             rv = getline(incldepth == 0);
             }
     else    {
-			_splitpath(pathname,NULL,NULL,nmspace[incldepth],NULL);
+			//_splitpath(pathname,NULL,NULL,nmspace[incldepth],NULL);
+			strcpy(nmspace[incldepth],basename(pathname));
+			p = strrchr(nmspace[incldepth],'.');
+			if (p) *p = '\0';
             rv = getline(incldepth == 1);
             lineno = -32768;        /* dont list include files */
             }
@@ -183,5 +194,3 @@ int doendif()
 	endifCount--;
     return getline(incldepth == 0);
 }
-
-

@@ -15,7 +15,7 @@ enum e_stmt {
         st_return, st_vortex, st_intoff, st_inton, st_stop };
 
 typedef struct snode {
-    __int8 stype;
+    int8_t stype;
 	struct snode *outer;	/* outer statement */
     struct snode *next;   /* next statement */
 	int predreg;		 /* assigned predicate register */
@@ -23,7 +23,7 @@ typedef struct snode {
     ENODE *initExpr;      /* initialization expression - for loops */
     ENODE *incrExpr;      /* increment expression - for loops */
     struct snode *s1, *s2;       /* internal statements */
-    __int64 *label;         /* label number for goto */
+    int64_t *label;         /* label number for goto */
 	TABLE ssyms;			/* local symbols associated with statement */
 	char *lptr;
 } Statement;

@@ -27,8 +27,8 @@
 --------------------------------------------------------------------------- */
 
 void ShellSort(void *, int, int, int (*)());   // Does a shellsort - like bsort()
-SHashVal HashFnc(SDef *def);
-int icmp (SDef *n1, SDef *n2);
+SHashVal HashFnc(void *def);
+int icmp (const void *n1, const void *n2);
 
 int errors;
 int InLineNo = 1;
@@ -56,8 +56,9 @@ void PrintDefines(void);
    Functions for parser (RR(0)).
 *****************************************************************************/
 
-SHashVal HashFnc(SDef *def)
+SHashVal HashFnc(void *d)
 {
+   SDef *def = (SDef *)d;
    return htSymHash(&HashInfo, def->name);
 }
 
@@ -67,20 +68,23 @@ SHashVal HashFnc(SDef *def)
       Comparison routines.
 ---------------------------------------------------------------------------- */
 
-icmp (SDef *n1, SDef *n2)
+int icmp (const void *m1, const void *m2)
 {
+    SDef *n1; SDef *n2;
+    n1 = (SDef *)m1;
+    n2 = (SDef *)m2;
 	if (n1->name==NULL) return 1;
 	if (n2->name==NULL) return -1;
   return (strcmp(n1->name, n2->name));
 }
 
-fcmp(char *key, SDef *n2)
+int fcmp(char *key, SDef *n2)
 {
    printf("Key:%s, Entry:%s|\n", key, n2->name);
    return (strncmp(key, n2->name, strlen(n2->name)));
 }
 
-ecmp(SDef *aa)
+int ecmp(SDef *aa)
 {
    return (aa->name ? 1 : 0);
 }
@@ -133,7 +137,7 @@ void ddefine()
    // See if the macro is already defined. If it is then if the definition
    // is not the same spit out an error, otherwise spit out warning.
    dp.body = ptr;
-   p = htFind(&HashInfo, &dp);
+   p = (SDef *)htFind(&HashInfo, &dp);
    if (p) {
       err((strcmp(p->body, dp.body) ? 6 : 23), dp.name);
       free(dp.name);
@@ -216,7 +220,7 @@ void dinclude()
          f++;
       } while(1);
       *f = 0;
-      searchenv(name, "INCLUDE", path);
+      searchenv((char *)name, (char *)"INCLUDE", (char *)path);
    }
    if (ch != '\n')
 	   ScanPastEOL();
@@ -224,12 +228,12 @@ void dinclude()
    if (path[0])
    {
       bbfile.body = StorePlainStr(path);
-      p = htFind(&HashInfo, &bbfile);
+      p = (SDef *)htFind(&HashInfo, &bbfile);
       if (p)
          p->body = bbfile.body;
       ProcFile(bbfile.body);
       bbfile.body = tname;
-      p = htFind(&HashInfo, &bbfile);
+      p = (SDef *)htFind(&HashInfo, &bbfile);
       if (p)
          p->body = bbfile.body;
    }
@@ -275,7 +279,7 @@ void dline()
       memset(name, 0, sizeof(name));
       strncpy(name, ptr+1, strcspn(ptr+1, " \t\n\r\x22"));
       bbfile.body = StorePlainStr(name);
-      p = htFind(&HashInfo, &bbfile);
+      p = (SDef *)htFind(&HashInfo, &bbfile);
       if (p)
          p->body = bbfile.body;
    }
@@ -305,7 +309,7 @@ void dpragma()
 
 ----------------------------------------------------------------------------- */
 
-directive()
+int directive()
 {
    int i;
    static SDirective dir[] =
@@ -439,7 +443,7 @@ void parsesw(char *s)
                for(jj = 0; inbuf[ii];)
                   buf[jj++] = inbuf[ii++];
                buf[jj] = 0;
-               tdef.body = buf[0] ? StorePlainStr(buf) : "";
+               tdef.body = (char *)(buf[0] ? StorePlainStr(buf) : "");
             }
             else
                tdef.body = "";
@@ -471,7 +475,7 @@ void PrintDefines()
    SDef *dp, *pt;
    char buf[8];
 
-   pt = HashInfo.table;
+   pt = (SDef *)HashInfo.table;
 
    // Pack any 'holes' in the table
    for(blnk= ii = count = 0; count < HashInfo.size; count++, ii++) {
@@ -564,7 +568,7 @@ char *StorePlainStr(char *str)
 
 void SetStandardDefines(void)
 {
-   long ltm;
+   time_t ltm;
    struct tm *LocalTime;
 
    time(&ltm);
@@ -613,7 +617,7 @@ main(int argc, char *argv[]) {
       err(5);
       return (1);
    }
-   if ((SymSpace = calloc(1, STRAREA)) == NULL) {
+   if ((SymSpace = (char *)calloc(1, STRAREA)) == NULL) {
       free(HashInfo.table);
       err(5);
       return(2);
@@ -672,7 +676,7 @@ main(int argc, char *argv[]) {
       ofp = stdout;
    errors = warnings = 0;
    bbfile.body = StorePlainStr(SourceName);
-   p = htFind(&HashInfo, &bbfile);
+   p = (SDef *)htFind(&HashInfo, &bbfile);
    if (p)
       p->body = bbfile.body;
    ProcFile(SourceName);

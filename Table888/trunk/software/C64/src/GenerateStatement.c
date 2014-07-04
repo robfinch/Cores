@@ -111,16 +111,16 @@ AMODE *make_mask(int mask)
 	AMODE *ap;
     ap = allocAmode();
     ap->mode = am_mask;
-    ap->offset = mask;
+    ap->offset = (ENODE *)mask;
     return ap;
 }
 
 /*
  *      make a direct reference to an immediate value.
  */
-AMODE *make_direct(__int64 i)
+AMODE *make_direct(int64_t i)
 {
-	return make_offset(makeinode(en_icon,i,0));
+	return make_offset(makeinode(en_icon,i));
 }
 
 /*
@@ -131,7 +131,7 @@ AMODE *make_strlab(char *s)
 	AMODE *ap;
     ap = allocAmode();
     ap->mode = am_direct;
-    ap->offset = makesnode(en_nacon,s);
+    ap->offset = makesnode(en_nacon,s,-1);
     return ap;
 }
 
@@ -153,7 +153,7 @@ void GenerateWhile(struct snode *stmt)
 		initstack();
 		GenerateFalseJump(stmt->exp,breaklab,stmt->predreg);
 		GenerateStatement(stmt->s1);
-		GenerateDiadic(op_bra,0,make_clabel(contlab),NULL);
+		GenerateMonadic(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;        /* restore old break label */
     }
@@ -183,7 +183,7 @@ void GenerateUntil(Statement *stmt)
             initstack();
             GenerateTrueJump(stmt->exp,breaklab,stmt->predreg);
             GenerateStatement(stmt->s1);
-            GenerateDiadic(op_bra,0,make_clabel(contlab),NULL);
+            GenerateMonadic(op_bra,0,make_clabel(contlab));
             GenerateLabel(breaklab);
             breaklab = lab2;        /* restore old break label */
         }
@@ -225,7 +225,7 @@ void GenerateFor(struct snode *stmt)
     initstack();
     if( stmt->incrExpr != NULL )
             ReleaseTempRegister(GenerateExpression(stmt->incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(stmt->incrExpr)));
-    GenerateTriadic(op_bra,0,make_clabel(loop_label),NULL,NULL);
+    GenerateMonadic(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -248,7 +248,7 @@ void GenerateForever(Statement *stmt)
         breaklab = exit_label;
         GenerateStatement(stmt->s1);
 	}
-    GenerateDiadic(op_bra,0,make_clabel(loop_label),NULL);
+    GenerateMonadic(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -376,12 +376,12 @@ void GenerateSwitch(Statement *stmt)
         {
             if( stmt->s2 )          /* default case ? */
             {
-				stmt->label = curlab;
+				stmt->label = (int64_t *)curlab;
 				defcase = stmt;
             }
             else
             {
-				bf = stmt->label;
+				bf = (int *)stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
 					if (isTable888) {
 						GenerateTriadic(op_cmp,0,make_string("flg0"),makereg(1),make_immed(bf[nn]));
@@ -396,16 +396,16 @@ void GenerateSwitch(Statement *stmt)
 					}
 				}
 		        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
-	            stmt->label = curlab;
+	            stmt->label = (int64_t *)curlab;
             }
             if( stmt->s1 != NULL && stmt->next != NULL )
                 curlab = nextlabel++;
             stmt = stmt->next;
         }
         if( defcase == NULL )
-            GenerateTriadic(op_bra,0,make_clabel(breaklab),NULL,NULL);
+            GenerateMonadic(op_bra,0,make_clabel(breaklab));
         else
-			GenerateTriadic(op_bra,0,make_clabel(defcase->label),NULL,NULL);
+			GenerateMonadic(op_bra,0,make_clabel((int64_t)defcase->label));
 }
 
 
@@ -413,15 +413,15 @@ void GenerateSwitch(Statement *stmt)
 //
 void GenerateCase(Statement *stmt)
 {
-	while( stmt != NULL )
+	while( stmt != (Statement *)NULL )
     {
-		if( stmt->s1 != NULL )
+		if( stmt->s1 != (Statement *)NULL )
 		{
-			GenerateLabel(stmt->label);
+			GenerateLabel((int64_t)stmt->label);
 			GenerateStatement(stmt->s1);
 		}
-		else if( stmt->next == NULL )
-			GenerateLabel(stmt->label);
+		else if( stmt->next == (Statement *)NULL )
+			GenerateLabel((int64_t)stmt->label);
 		stmt = stmt->next;
     }
 }
@@ -429,7 +429,7 @@ void GenerateCase(Statement *stmt)
 /*
  *      analyze and generate best switch statement.
  */
-genxswitch(Statement *stmt)
+void genxswitch(Statement *stmt)
 { 
 	int     oldbreak;
     oldbreak = breaklab;
@@ -516,25 +516,25 @@ void GenerateTry(Statement *stmt)
 	else
 		GenerateDiadic(op_lea,0,makebreg(CLR),make_clabel(throwlab));
 	GenerateStatement(stmt->s1);
-    GenerateDiadic(op_bra,0,make_clabel(lab1),NULL);
+    GenerateMonadic(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
 	stmt = stmt->s2;
 	while (stmt) {
 		throwlab = oldthrow;
 		curlab = nextlabel++;
 		GenerateLabel(curlab);
-		if (stmt->s2==99999)
+		if (stmt->s2==(Statement *)99999)
 			;
 		else {
 			if (isRaptor64)
-				GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_clabel(nextlabel));
+				GenerateTriadic(op_bnei,0,makereg(2),make_immed((int64_t)stmt->s2),make_clabel(nextlabel));
 			else if (isTable888) {
-				GenerateTriadic(op_cmp, 0, make_string("flg0"), makereg(2), make_immed((int)stmt->s2));
+				GenerateTriadic(op_cmp, 0, make_string("flg0"), makereg(2), make_immed((int64_t)stmt->s2));
 				GenerateDiadic(op_bne, 0, make_string("flg0"), make_clabel(nextlabel));
 			}
 			else {
 				// ToDo: fix Thor
-				GenerateTriadic(op_cmp, 0, make_string("p0"), makereg(2), make_immed((int)stmt->s2));
+				GenerateTriadic(op_cmp, 0, make_string("p0"), makereg(2), make_immed((int64_t)stmt->s2));
 				GenerateDiadic(op_bne, 0, make_string("p0"), make_clabel(nextlabel));
 			}
 		}
@@ -575,9 +575,9 @@ void GenerateThrow(Statement *stmt)
 		else if (ap->preg != 1 )
 			GenerateTriadic(op_or,0,makereg(1),ap,makereg(0));
 		ReleaseTempRegister(ap);
-		GenerateTriadic(op_ori,0,makereg(2),makereg(0),make_immed((int)stmt->label));
+		GenerateTriadic(op_ori,0,makereg(2),makereg(0),make_immed((int64_t)stmt->label));
 	}
-	GenerateDiadic(op_bra,0,make_clabel(throwlab),NULL);
+	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
 /*
 void GenerateCritical(struct snode *stmt)
@@ -607,14 +607,14 @@ void GenerateSpinlock(Statement *stmt)
 	lab2 = nextlabel++;
 	lab3 = nextlabel++;
 
-    if( stmt != NULL && stmt->exp != NULL )
+    if( stmt != (Statement *)NULL && stmt->exp != (ENODE *)NULL )
 	{
 		initstack();
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();
 		ap = GenerateExpression(stmt->exp,F_REG,8);
 		if (stmt->initExpr)
-			GenerateTriadic(op_ori, 0, ap1,makereg(0),make_immed(stmt->initExpr));
+			GenerateTriadic(op_ori, 0, ap1,makereg(0),make_immed((int64_t)stmt->initExpr));
 		GenerateLabel(lab1);
 		if (stmt->initExpr) {
 			// Decrement timeout
@@ -628,25 +628,25 @@ void GenerateSpinlock(Statement *stmt)
 				;
 		}
 		if (isRaptor64) {
-			GenerateDiadic(op_inbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_inbu, 0, ap2, make_indexed((int64_t)stmt->incrExpr,ap->preg));
 			GenerateTriadic(op_beq, 0, ap2, makereg(0), make_label(lab1));
 		}
 		else if (isTable888) {
-			GenerateDiadic(op_lbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_lbu, 0, ap2, make_indexed((int64_t)stmt->incrExpr,ap->preg));
 			GenerateDiadic(op_brz, 0, ap2, make_label(lab1));
 		}
 		// ToDo: finish for Thor
 		else {
-			GenerateDiadic(op_lbu, 0, ap2, make_indexed(stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_lbu, 0, ap2, make_indexed((int64_t)stmt->incrExpr,ap->preg));
 		}
 		GenerateStatement(stmt->s1);
 		// unlock
 		if (isRaptor64)
-			GenerateDiadic(op_outb, 0, makereg(0), make_indexed(stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_outb, 0, makereg(0), make_indexed((int64_t)stmt->incrExpr,ap->preg));
 		else
-			GenerateDiadic(op_sb, 0, makereg(0), make_indexed(stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_sb, 0, makereg(0), make_indexed((int64_t)stmt->incrExpr,ap->preg));
 		if (stmt->initExpr) {
-			GenerateTriadic(op_bra,0,make_clabel(lab3),NULL,NULL);
+			GenerateMonadic(op_bra,0,make_clabel(lab3));
 			GenerateLabel(lab2);
 			GenerateStatement(stmt->s2);
 			GenerateLabel(lab3);
@@ -712,9 +712,9 @@ void GenerateSpinUnlock(struct snode *stmt)
 			else
 				GenerateDiadic(op_mov, 0, makereg(1),ap);
 			if (isRaptor64)
-				GenerateDiadic(op_outb, 0, makereg(0),make_indexed(stmt->incrExpr,1));
+				GenerateDiadic(op_outb, 0, makereg(0),make_indexed((int64_t)stmt->incrExpr,1));
 			else
-				GenerateDiadic(op_sb, 0, makereg(0),make_indexed(stmt->incrExpr,1));
+				GenerateDiadic(op_sb, 0, makereg(0),make_indexed((int64_t)stmt->incrExpr,1));
 		}
 		ReleaseTempRegister(ap);
 	}
@@ -773,10 +773,10 @@ void GenerateStatement(Statement *stmt)
 						GenerateAsm(stmt);
 						break;
                 case st_label:
-                        GenerateLabel(stmt->label);
+                        GenerateLabel((int64_t)stmt->label);
                         break;
                 case st_goto:
-                        GenerateDiadic(op_bra,0,make_clabel(stmt->label),0);
+                        GenerateMonadic(op_bra,0,make_clabel((int64_t)stmt->label));
                         break;
 				//case st_critical:
     //                    GenerateCritical(stmt);
@@ -854,7 +854,7 @@ void GenerateStatement(Statement *stmt)
 void GenerateIntoff(Statement *stmt)
 {
 //	GenerateDiadic(op_move,0,make_string("sr"),make_string("_TCBsrsave"));
-	GenerateDiadic(op_sei,0,NULL,NULL);
+	GenerateMonadic(op_sei,0,(AMODE *)NULL);
 }
 
 void GenerateInton(Statement *stmt)
@@ -864,12 +864,12 @@ void GenerateInton(Statement *stmt)
 
 void GenerateStop(Statement *stmt)
 {
-	GenerateDiadic(op_stop,0,make_immed(0),NULL);
+	GenerateMonadic(op_stop,0,make_immed(0));
 }
 
 void GenerateAsm(Statement *stmt)
 {
-	GenerateTriadic(op_asm,0,make_string(stmt->label),NULL,NULL);
+	GenerateMonadic(op_asm,0,make_string((char *)stmt->label));
 }
 
 void GenerateFirstcall(Statement *stmt)
@@ -890,9 +890,9 @@ void GenerateFirstcall(Statement *stmt)
     {
         breaklab = nextlabel++;
         GenerateLabel(lab3);	// marks address of brf
-        GenerateDiadic(op_bra,0,make_clabel(lab7),NULL);	// branch to the firstcall statement
+        GenerateMonadic(op_bra,0,make_clabel(lab7));	// branch to the firstcall statement
         GenerateLabel(lab6);	// prevent optimizer from optimizing move away
-		GenerateDiadic(op_bra,0,make_clabel(breaklab),NULL);	// then branch around it
+		GenerateMonadic(op_bra,0,make_clabel(breaklab));	// then branch around it
         GenerateLabel(lab7);	// prevent optimizer from optimizing move away
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();
@@ -906,7 +906,7 @@ void GenerateFirstcall(Statement *stmt)
 		GenerateTriadic(op_ori,0,ap1,ap1,make_immed(0x000037800000000L));	// nop instruction
 		GenerateDiadic(op_sw,0,ap1,make_indirect(ap2->preg));
 		GenerateDiadic(op_cache,0,make_string("invil"),make_indirect(ap2->preg));
-		GenerateDiadic(op_bra,0,make_label(lab6),NULL);
+		GenerateMonadic(op_bra,0,make_label(lab6));
 		GenerateLabel(lab4);
 		GenerateDiadic(op_lea,0,ap2,make_label(lab3));
 		GenerateDiadic(op_lw,0,ap1,make_indirect(ap2->preg));
@@ -914,7 +914,7 @@ void GenerateFirstcall(Statement *stmt)
 		GenerateTriadic(op_ori,0,ap1,ap1,make_immed(0x3780000000000000L));	// nop instruction
 		GenerateDiadic(op_sw,0,ap1,make_indirect(ap2->preg));
 		GenerateDiadic(op_cache,0,make_string("invil"),make_indirect(ap2->preg));
-		GenerateDiadic(op_bra,0,make_label(lab6),NULL);
+		GenerateMonadic(op_bra,0,make_label(lab6));
 		GenerateLabel(lab5);
 		GenerateDiadic(op_lea,0,ap2,make_label(lab3));
 		GenerateDiadic(op_lw,0,ap1,make_indexed(4,ap2->preg));

@@ -24,6 +24,7 @@
 // ============================================================================
 //
 #include        <stdio.h>
+#include <string.h>
 #include        "c.h"
 #include        "expr.h"
 #include "Statement.h"
@@ -31,6 +32,7 @@
 #include        "cglbdec.h"
 
 #define EXPR_DEBUG
+static int isscalar(TYP *tp);
 static unsigned char sizeof_flag = 0;
 static TYP *ParseCastExpression(ENODE **node);
 TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
@@ -104,7 +106,7 @@ ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
 {
 	ENODE *ep;
     ep = (ENODE *)xalloc(sizeof(ENODE));
-    ep->nodetype = nt;
+    ep->nodetype = (enum e_node)nt;
     ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
@@ -114,11 +116,11 @@ ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
     return ep;
 }
 
-ENODE *makesnode(int nt, char *v1, __int64 i)
+ENODE *makesnode(int nt, char *v1, int64_t i)
 {
 	ENODE *ep;
     ep = (ENODE *)xalloc(sizeof(ENODE));
-    ep->nodetype = nt;
+    ep->nodetype = (enum e_node)nt;
     ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
@@ -128,26 +130,26 @@ ENODE *makesnode(int nt, char *v1, __int64 i)
     return ep;
 }
 
-ENODE *makenodei(int nt, ENODE *v1, __int64 i)
+ENODE *makenodei(int nt, ENODE *v1, int64_t i)
 {
 	ENODE *ep;
     ep = (ENODE *)xalloc(sizeof(ENODE));
-    ep->nodetype = nt;
+    ep->nodetype = (enum e_node)nt;
     ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->i = i;
 	ep->p[0] = v1;
-	ep->p[1] = NULL;
+	ep->p[1] = (ENODE *)NULL;
     return ep;
 }
 
-ENODE *makeinode(int nt, __int64 v1)
+ENODE *makeinode(int nt, int64_t v1)
 {
 	ENODE *ep;
     ep = (ENODE *)xalloc(sizeof(ENODE));
-    ep->nodetype = nt;
+    ep->nodetype = (enum e_node)nt;
     ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
@@ -160,7 +162,7 @@ ENODE *makefnode(int nt, double v1)
 {
 	ENODE *ep;
     ep = (ENODE *)xalloc(sizeof(ENODE));
-    ep->nodetype = nt;
+    ep->nodetype = (enum e_node)nt;
     ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
@@ -184,14 +186,14 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_byte:
 		case bt_ubyte:
 			if (tp->isUnsigned) {
-				*node = makenode(en_ub_ref,*node,NULL);
+				*node = makenode(en_ub_ref,*node,(ENODE *)NULL);
 				(*node)->isUnsigned = TRUE;
 			}
 			else {
-				*node = makenode(en_b_ref,*node,NULL);
+				*node = makenode(en_b_ref,*node,(ENODE *)NULL);
 			}
 			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
+			(*node)->etype = (enum e_bt)tp->type;
 			if (tp->isUnsigned)
 	            tp = &stduint;
 			else
@@ -201,13 +203,13 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_char:
         case bt_enum:
 			if (tp->isUnsigned) {
-				*node = makenode(en_uc_ref,*node,NULL);
+				*node = makenode(en_uc_ref,*node,(ENODE *)NULL);
 				(*node)->isUnsigned = TRUE;
 			}
 			else
-				*node = makenode(en_c_ref,*node,NULL);
+				*node = makenode(en_c_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
+			(*node)->etype = (enum e_bt)tp->type;
 			if (tp->isUnsigned)
 	            tp = &stduchar;
 			else
@@ -216,78 +218,78 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_ushort:
 		case bt_short:
 			if (tp->isUnsigned) {
-				*node = makenode(en_uh_ref,*node,NULL);
+				*node = makenode(en_uh_ref,*node,(ENODE *)NULL);
 				(*node)->esize = tp->size;
-				(*node)->etype = tp->type;
+				(*node)->etype = (enum e_bt)tp->type;
 				(*node)->isUnsigned = TRUE;
 				tp = &stduint;
 			}
 			else {
-				*node = makenode(en_h_ref,*node,NULL);
+				*node = makenode(en_h_ref,*node,(ENODE *)NULL);
 				(*node)->esize = tp->size;
-				(*node)->etype = tp->type;
+				(*node)->etype = (enum e_bt)tp->type;
 				tp = &stdint;
 			}
             break;
 		case bt_ulong:
 		case bt_long:
 			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
+			(*node)->etype = (enum e_bt)tp->type;
 			if (tp->isUnsigned) {
 				(*node)->isUnsigned = TRUE;
-				*node = makenode(en_uw_ref,*node,NULL);
+				*node = makenode(en_uw_ref,*node,(ENODE *)NULL);
 			}
 			else {
-				*node = makenode(en_w_ref,*node,NULL);
+				*node = makenode(en_w_ref,*node,(ENODE *)NULL);
 			}
             break;
 		case bt_pointer:
 		case bt_unsigned:
 			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
-            *node = makenode(en_uw_ref,*node,NULL);
+			(*node)->etype = (enum e_bt)tp->type;
+            *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
             break;
         case bt_double:
-            *node = makenode(en_dbl_ref,*node,NULL);
+            *node = makenode(en_dbl_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
+			(*node)->etype = (enum e_bt)tp->type;
             tp = &stddbl;
             break;
         case bt_float:
-            *node = makenode(en_flt_ref,*node,NULL);
+            *node = makenode(en_flt_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
-			(*node)->etype = tp->type;
+			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdflt;
             break;
 		case bt_bitfield:
 			if (tp->isUnsigned){
 				if (tp->size==1)
-					*node = makenode(en_ubfieldref, *node, NULL);
+					*node = makenode(en_ubfieldref, *node, (ENODE *)NULL);
 				else if (tp->size==2)
-					*node = makenode(en_ucfieldref, *node, NULL);
+					*node = makenode(en_ucfieldref, *node, (ENODE *)NULL);
 				else if (tp->size==4)
-					*node = makenode(en_uhfieldref, *node, NULL);
+					*node = makenode(en_uhfieldref, *node, (ENODE *)NULL);
 				else
-					*node = makenode(en_wfieldref, *node, NULL);
+					*node = makenode(en_wfieldref, *node, (ENODE *)NULL);
 				(*node)->isUnsigned = TRUE;
 			}
 			else {
 				if (tp->size==1)
-					*node = makenode(en_bfieldref, *node, NULL);
+					*node = makenode(en_bfieldref, *node, (ENODE *)NULL);
 				else if (tp->size==2)
-					*node = makenode(en_cfieldref, *node, NULL);
+					*node = makenode(en_cfieldref, *node, (ENODE *)NULL);
 				else if (tp->size==4)
-					*node = makenode(en_hfieldref, *node, NULL);
+					*node = makenode(en_hfieldref, *node, (ENODE *)NULL);
 				else
-					*node = makenode(en_wfieldref, *node, NULL);
+					*node = makenode(en_wfieldref, *node, (ENODE *)NULL);
 			}
 			(*node)->bit_width = tp->bit_width;
 			(*node)->bit_offset = tp->bit_offset;
 			/*
 			* maybe it should be 'unsigned'
 			*/
-			(*node)->etype = stdint.type;
+			(*node)->etype = (enum e_bt)stdint.type;
 			(*node)->esize = tp->size;
 			tp = &stdint;
 			break;
@@ -349,7 +351,7 @@ TYP *nameref(ENODE **node)
 	char stnm[200];
     sp = gsearch(lastid);
     if( sp == NULL ) {
-        while( isspace(lastch) )
+        while( my_isspace(lastch) )
             getch();
         if( lastch == '(') {
             ++global_flag;
@@ -357,7 +359,7 @@ TYP *nameref(ENODE **node)
             sp->tp = &stdfunc;
             sp->name = litlate(lastid);
             sp->storage_class = sc_external;
-            insert(sp,&gsyms);
+            insert(sp,&gsyms[0]);
             --global_flag;
             tp = &stdfunc;
             *node = makesnode(en_cnacon,sp->name,sp->value.i);
@@ -367,14 +369,14 @@ TYP *nameref(ENODE **node)
 			(*node)->esize = 8;
         }
         else {
-            tp = NULL;
+            tp = (TYP *)NULL;
             error(ERR_UNDEFINED);
         }
     }
     else    {
             if( (tp = sp->tp) == NULL ) {
                 error(ERR_UNDEFINED);
-                return NULL;       /* guard against untyped entries */
+                return (TYP *)NULL;       /* guard against untyped entries */
             }
             switch( sp->storage_class ) {
                     case sc_static:
@@ -454,7 +456,7 @@ TYP *nameref(ENODE **node)
  */
 ENODE *ArgumentList()
 {
-	struct ENODE    *ep1, *ep2;
+	ENODE *ep1, *ep2;
     ep1 = 0;
     while( lastst != closepa)
 	{
@@ -505,12 +507,12 @@ int IsBeginningOfTypecast(int st)
 TYP *ParsePrimaryExpression(ENODE **node)
 {
 	ENODE    *pnode, *qnode, *rnode, *snode, *rnode1, *pnode1, *qnode1, *qnode2;
-	__int64 i ;
+	int64_t i ;
     SYM *sp;
     TYP *tptr;
 
-	qnode1 = NULL;
-	qnode2 = NULL;
+	qnode1 = (ENODE *)NULL;
+	qnode2 = (ENODE *)NULL;
 	if (expr_flag)
 		goto processExpression;
     switch( lastst ) {
@@ -549,7 +551,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 		else {
             tptr = &stdstring;
 		}
-        pnode = makenodei(en_labcon,NULL,NULL);
+        pnode = makenodei(en_labcon,(ENODE *)NULL,0);
 		if (sizeof_flag == 0)
 			pnode->i = stringlit(laststr);
 		pnode->etype = bt_pointer;
@@ -579,7 +581,7 @@ processExpression:
         break;
 
     default:
-        return NULL;
+        return (TYP *)NULL;
     }
 fini:   *node = pnode;
     return tptr;
@@ -686,7 +688,7 @@ TYP *ParsePostfixExpression(ENODE **node)
 
 	tp1 = ParsePrimaryExpression(&ep1);
 	if (tp1 == NULL)
-		return NULL;
+		return (TYP *)NULL;
 	while(1) {
 		switch(lastst) {
 		case openbr:
@@ -744,7 +746,7 @@ TYP *ParsePostfixExpression(ENODE **node)
 				currentFn->IsLeaf = FALSE;
 			if (lastst==closepa) {
 				NextToken();
-				ep1 = makenode(en_fcall,ep1,NULL);
+				ep1 = makenode(en_fcall,ep1,(ENODE *)NULL);
 			}
 			else {
 				ep1 = makenode(en_fcall,ep1,ArgumentList());
@@ -763,7 +765,7 @@ TYP *ParsePostfixExpression(ENODE **node)
             else
                 tp1 = tp1->btp;
             if( tp1->val_flag == FALSE )
-                ep1 = makenode(en_w_ref,ep1,NULL);
+                ep1 = makenode(en_w_ref,ep1,(ENODE *)NULL);
 		 // fall through to dot operation
 		case dot:
 			if (tp1==NULL) {
@@ -854,7 +856,7 @@ TYP *ParseUnaryExpression(ENODE **node)
         tp = ParseCastExpression(&ep1);
         if( tp == NULL ) {
             error(ERR_IDEXPECT);
-            return NULL;
+            return (TYP *)NULL;
         }
         break;
     case minus:
@@ -862,33 +864,33 @@ TYP *ParseUnaryExpression(ENODE **node)
         tp = ParseCastExpression(&ep1);
         if( tp == NULL ) {
             error(ERR_IDEXPECT);
-            return NULL;
+            return (TYP *)NULL;
         }
-        ep1 = makenode(en_uminus,ep1,NULL);
+        ep1 = makenode(en_uminus,ep1,(ENODE *)NULL);
         ep1->constflag = ep1->p[0]->constflag;
 		ep1->isUnsigned = ep1->p[0]->isUnsigned;
 		ep1->esize = tp->size;
         break;
-    case not:
+    case nott:
         NextToken();
         tp = ParseCastExpression(&ep1);
         if( tp == NULL ) {
             error(ERR_IDEXPECT);
-            return NULL;
+            return (TYP *)NULL;
         }
-        ep1 = makenode(en_not,ep1,NULL);
+        ep1 = makenode(en_not,ep1,(ENODE *)NULL);
         ep1->constflag = ep1->p[0]->constflag;
 		ep1->isUnsigned = ep1->p[0]->isUnsigned;
 		ep1->esize = tp->size;
         break;
-    case compl:
+    case cmpl:
         NextToken();
         tp = ParseCastExpression(&ep1);
         if( tp == NULL ) {
             error(ERR_IDEXPECT);
             return 0;
         }
-        ep1 = makenode(en_compl,ep1,NULL);
+        ep1 = makenode(en_compl,ep1,(ENODE *)NULL);
         ep1->constflag = ep1->p[0]->constflag;
 		ep1->isUnsigned = ep1->p[0]->isUnsigned;
 		ep1->esize = tp->size;
@@ -898,7 +900,7 @@ TYP *ParseUnaryExpression(ENODE **node)
         tp = ParseCastExpression(&ep1);
         if( tp == NULL ) {
             error(ERR_IDEXPECT);
-            return NULL;
+            return (TYP *)NULL;
         }
         if( tp->btp == NULL )
 			error(ERR_DEREF);
@@ -908,12 +910,12 @@ TYP *ParseUnaryExpression(ENODE **node)
 		//Autoincdec(tp,&ep1);
 		tp = CondDeref(&ep1,tp);
         break;
-    case and:
+    case bitandd:
         NextToken();
         tp = ParseCastExpression(&ep1);
         if( tp == NULL ) {
             error(ERR_IDEXPECT);
-            return NULL;
+            return (TYP *)NULL;
         }
         if( IsLValue(ep1))
             ep1 = ep1->p[0];
@@ -922,8 +924,8 @@ TYP *ParseUnaryExpression(ENODE **node)
         tp1->type = bt_pointer;
         tp1->btp = tp;
         tp1->val_flag = FALSE;
-        tp1->lst.head = NULL;
-        tp1->sname = NULL;
+        tp1->lst.head = (SYM *)NULL;
+        tp1->sname = (char *)NULL;
         tp = tp1;
 		sp = search("ta_int",&tp->btp->lst);
 		if (sp) {
@@ -1015,9 +1017,9 @@ static TYP *ParseCastExpression(ENODE **node)
             needpunc(closepa);
             if((tp2 = ParseCastExpression(&ep1)) == NULL ) {
                 error(ERR_IDEXPECT);
-                tp = NULL;
+                tp = (TYP *)NULL;
             }
-			ep2 = makenode(en_void,ep1,NULL);
+			ep2 = makenode(en_void,ep1,(ENODE *)NULL);
 			ep2->constflag = ep1->constflag;
 			ep2->isUnsigned = ep1->isUnsigned;
 			ep2->etype = ep1->etype;
@@ -1048,11 +1050,11 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2)
 	ENODE *n2;
 
 	if (tp1==tp2)	// duh
-		return;
+		return tp1;
 	if (node2)
 		n2 = *node2;
 	else
-		n2 = NULL;
+		n2 = (ENODE *)NULL;
 	switch( tp1->type ) {
 	case bt_ubyte:
 		switch(tp2->type) {
@@ -1200,7 +1202,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2)
  *      this function returns true when the type of the argument is
  *      one of char, short, unsigned, or long.
  */
-int     isscalar(TYP *tp)
+static int isscalar(TYP *tp)
 {
 	return
 			tp->type == bt_byte ||
@@ -1292,8 +1294,8 @@ static TYP *addops(ENODE **node)
 
 	sz1 = sz2 = 0;
 	tp1 = multops(&ep1);
-    if( tp1 == NULL )
-        return NULL;
+    if( tp1 == (TYP *)NULL )
+        return (TYP *)NULL;
 	if (tp1->type == bt_pointer)
 		sz1 = tp1->btp->size;
     while( lastst == plus || lastst == minus ) {
@@ -1446,8 +1448,8 @@ TYP     *equalops(ENODE **node)
     TYP             *tp1, *tp2;
     int             oper;
     tp1 = relation(&ep1);
-    if( tp1 == NULL )
-            return NULL;
+    if( tp1 == (TYP *)NULL )
+            return (TYP *)NULL;
     while( lastst == eq || lastst == neq ) {
         oper = (lastst == eq);
         NextToken();
@@ -1469,7 +1471,7 @@ TYP     *equalops(ENODE **node)
  *      binop is a common routine to handle all of the legwork and
  *      error checking for bitand, bitor, bitxor, andop, and orop.
  */
-TYP *binop(ENODE **node, TYP *(*xfunc)(),int nt, int sy)
+TYP *binop(ENODE **node, TYP *(*xfunc)(ENODE **),int nt, int sy)
 {
 	ENODE    *ep1, *ep2;
         TYP             *tp1, *tp2;
@@ -1492,23 +1494,23 @@ TYP *binop(ENODE **node, TYP *(*xfunc)(),int nt, int sy)
         return tp1;
 }
 
-TYP     *bitand(ENODE **node)
+TYP *bitwiseand(ENODE **node)
 /*
  *      the bitwise and operator...
  */
-{       return binop(node,equalops,en_and,and);
+{       return binop(node,equalops,en_and,bitandd);
 }
 
-TYP     *bitxor(ENODE **node)
-{       return binop(node,bitand,en_xor,uparrow);
+TYP     *bitwisexor(ENODE **node)
+{       return binop(node,bitwiseand,en_xor,uparrow);
 }
 
-TYP     *bitor(ENODE **node)
-{       return binop(node,bitxor,en_or,or);
+TYP     *bitwiseor(ENODE **node)
+{       return binop(node,bitwisexor,en_or,bitorr);
 }
 
 TYP     *andop(ENODE **node)
-{       return binop(node,bitor,en_land,land);
+{       return binop(node,bitwiseor,en_land,land);
 }
 
 TYP *orop(ENODE **node)
@@ -1524,8 +1526,8 @@ TYP *conditional(ENODE **node)
 	TYP             *tp1, *tp2, *tp3;
     ENODE    *ep1, *ep2, *ep3;
     tp1 = orop(&ep1);       /* get condition */
-    if( tp1 == NULL )
-            return NULL;
+    if( tp1 == (TYP *)NULL )
+            return (TYP *)NULL;
     if( lastst == hook ) {
 			iflevel++;
             NextToken();
@@ -1645,8 +1647,8 @@ TYP *NonCommaExpression(ENODE **node)
 {
 	TYP *tp;
     tp = asnop(node);
-    if( tp == NULL )
-        *node = NULL;
+    if( tp == (TYP *)NULL )
+        *node =(ENODE *)NULL;
     return tp;
 }
 
@@ -1660,8 +1662,8 @@ TYP *commaop(ENODE **node)
 	ENODE *ep1,*ep2;
 
 	tp1 = NonCommaExpression(&ep1);
-	if (tp1==NULL)
-		return NULL;
+	if (tp1==(TYP *)NULL)
+		return (TYP *)NULL;
 	while(1) {
 		if (lastst==comma) {
 			NextToken();
@@ -1703,7 +1705,7 @@ TYP *expression(ENODE **node)
 {
 	TYP *tp;
     tp = commaop(node);
-    if( tp == NULL )
-        *node = NULL;
+    if( tp == (TYP *)NULL )
+        *node = (ENODE *)NULL;
     return tp;
 }

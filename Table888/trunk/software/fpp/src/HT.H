@@ -7,7 +7,7 @@ typedef struct {
 
 typedef struct {
    SHashVal (*Hash)(void *);
-   int (*IsEqual)(void *, void*);   // Must return 0 if hash entry = entry search for
+   int (*IsEqual)(const void *, const void*);   // Must return 0 if hash entry = entry search for
    int size;
    int width;
    void *table;
@@ -19,4 +19,3 @@ void *htInsert(SHashTbl *, void *);
 SHashVal htSymHash(SHashTbl *, char *);
 #define HT_H
 #endif
-

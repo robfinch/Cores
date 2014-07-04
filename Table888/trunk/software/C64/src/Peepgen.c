@@ -41,6 +41,8 @@
  *		Norcross, Ga 30092
  */
 #include        <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include        "c.h"
 #include        "expr.h"
 #include "Statement.h"
@@ -215,7 +217,7 @@ void flush_peep()
     while( peep_head != NULL )
     {
 		if( peep_head->opcode == op_label )
-			put_label(peep_head->oper1,"",GetNamespace(),'C');
+			put_label((int64_t)peep_head->oper1,"",GetNamespace(),'C');
 		else
 			put_ocode(peep_head);
 		peep_head = peep_head->fwd;
@@ -353,6 +355,7 @@ void PeepoptMuldiv(struct ocode *ip, int op)
         else if( shcnt == 8192) shcnt = 13;
         else if( shcnt == 16384) shcnt = 14;
 		else if( shcnt == 32768) shcnt = 15;
+		else if( shcnt == 65536) shcnt = 16;
         else return;
         ip->oper1->offset->i = shcnt;
         ip->opcode = op;
@@ -403,7 +406,7 @@ void PeepoptBranch(struct ocode *ip)
 
 	if (fwd1) {
 		if (fwd1->opcode == op_label && ip->oper1) {
-			if (fwd1->opcode==op_label && fwd1->oper1==ip->oper1->offset->i) {
+			if (fwd1->opcode==op_label && (int64_t)fwd1->oper1==ip->oper1->offset->i) {
 				fwd1->predop = InvPredOp(ip->predop);
 				fwd1->pregreg = ip->pregreg;
 				fwd1->back = ip->back;
@@ -419,7 +422,7 @@ void PeepoptBranch(struct ocode *ip)
 	}
 	if (fwd2) {
 		if (fwd2->opcode==op_label && ip->oper1) {
-			if (fwd2->opcode==op_label && fwd2->oper1==ip->oper1->offset->i) {
+			if (fwd2->opcode==op_label && (int64_t)fwd2->oper1==ip->oper1->offset->i) {
 				fwd1->predop = InvPredOp(ip->predop);
 				fwd1->pregreg = ip->pregreg;
 				fwd2->predop = InvPredOp(ip->predop);
@@ -437,7 +440,7 @@ void PeepoptBranch(struct ocode *ip)
 	}
 	if (fwd3) {
 		if (fwd3->opcode==op_label && ip->oper1) {
-			if (fwd3->oper1==ip->oper1->offset->i) {
+			if ((int64_t)fwd3->oper1==ip->oper1->offset->i) {
 				fwd1->predop = InvPredOp(ip->predop);
 				fwd1->pregreg = ip->pregreg;
 				fwd2->predop = InvPredOp(ip->predop);
@@ -457,7 +460,7 @@ void PeepoptBranch(struct ocode *ip)
 	}
 	if (fwd4) {
 		if (fwd4->opcode==op_label && ip->oper1) {
-			if (fwd4->opcode==op_label && fwd4->oper1==ip->oper1->offset->i) {
+			if (fwd4->opcode==op_label && (int64_t)fwd4->oper1==ip->oper1->offset->i) {
 				fwd1->predop = InvPredOp(ip->predop);
 				fwd1->pregreg = ip->pregreg;
 				fwd2->predop = InvPredOp(ip->predop);
@@ -500,10 +503,14 @@ void PeepoptPushPop(struct ocode *ip)
 {
 	struct ocode *ip2,*ip3,*ip4;
 
+	if (ip->oper1->mode == am_immed)
+		return;
 	ip2 = ip->fwd;
 	if (!ip2)
 		return;
 	if (ip2->opcode!=ip->opcode)
+		return;
+	if (ip2->oper1->mode==am_immed)
 		return;
 	ip->oper2 = copy_addr(ip2->oper1);
 	ip->fwd = ip2->fwd;
@@ -512,12 +519,16 @@ void PeepoptPushPop(struct ocode *ip)
 		return;
 	if (ip3->opcode!=ip->opcode)
 		return;
+	if (ip3->oper1->mode==am_immed)
+		return;
 	ip->oper3 = copy_addr(ip3->oper1);
 	ip->fwd = ip3->fwd;
 	ip4 = ip3->fwd;
 	if (!ip4)
 		return;
 	if (ip4->opcode!=ip->opcode)
+		return;
+	if (ip4->oper1->mode==am_immed)
 		return;
 	ip->oper4 = copy_addr(ip4->oper1);
 	ip->fwd = ip4->fwd;

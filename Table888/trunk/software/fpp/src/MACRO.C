@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include "fpp.h"
 
-#include "fwstr.h"
+//#include "fwstr.h"
 
 char *rtrim(char *str);
 

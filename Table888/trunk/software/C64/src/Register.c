@@ -24,6 +24,8 @@
 // ============================================================================
 //
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "c.h"
 #include "expr.h"
 #include "Statement.h"
@@ -110,15 +112,15 @@ void GenerateTempRegPush(int reg, int rmode, int number)
 	if (isTable888)
 		GenerateMonadic(op_push,0,ap1);
 	else if (isRaptor64) {
-		GenerateMonadic(op_subi,0,makereg(30),makereg(30),make_immed(8));
+		GenerateTriadic(op_subi,0,makereg(30),makereg(30),make_immed(8));
 		GenerateDiadic(op_sw,0,ap1,make_indirect(30));
 	}
 	else {
-		GenerateMonadic(op_subi,0,makereg(255),makereg(255),make_immed(8));
+		GenerateTriadic(op_subi,0,makereg(255),makereg(255),make_immed(8));
 		GenerateDiadic(op_sw,0,ap1,make_indirect(255));
 	}
 	TRACE(printf("pushing r%d\r\n", reg);)
-    reg_stack[reg_stack_ptr].mode = rmode;
+    reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
     reg_stack[reg_stack_ptr].reg = reg;
     reg_stack[reg_stack_ptr].f.allocnum = number;
     if (reg_alloc[number].f.isPushed=='T')
@@ -136,7 +138,7 @@ void GenerateTempBrRegPush(int reg, int rmode, int number)
     ap1->mode = rmode;
 
 	GenerateMonadic(op_push,0,ap1);
-    breg_stack[reg_stack_ptr].mode = rmode;
+    breg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
     breg_stack[reg_stack_ptr].reg = reg;
     breg_stack[reg_stack_ptr].f.allocnum = number;
     if (breg_alloc[number].f.isPushed=='T')
@@ -166,11 +168,11 @@ void GenerateTempRegPop(int reg, int rmode, int number)
 		GenerateMonadic(op_pop,0,ap1);
 	else if (isRaptor64) {
 		GenerateDiadic(op_lw,0,ap1,make_indirect(30));
-		GenerateMonadic(op_addi,0,makereg(30),makereg(30),make_immed(8));
+		GenerateTriadic(op_addi,0,makereg(30),makereg(30),make_immed(8));
 	}
 	else {
 		GenerateDiadic(op_lw,0,ap1,make_indirect(255));
-		GenerateMonadic(op_addi,0,makereg(255),makereg(255),make_immed(8));
+		GenerateTriadic(op_addi,0,makereg(255),makereg(255),make_immed(8));
 	}
     reg_alloc[number].f.isPushed = 'F';
 }
@@ -286,7 +288,7 @@ int SaveTempBrRegs()
 		for (i = 0; i < breg_alloc_ptr; i++)
 			if (breg_alloc[i].f.isPushed != 'T') {
 				rm = rm | (1 << breg_alloc[i].reg);
-				GenerateTempBrRegPush(breg_alloc[i].reg, breg_alloc[i].mode, i, 2);
+				GenerateTempBrRegPush(breg_alloc[i].reg, breg_alloc[i].mode, i);//, 2);
 				/* mark the register void */
 				breg_in_use[breg_alloc[i].reg] = -1;
 			}
