@@ -3,6 +3,7 @@
 #include <string.h>
 #include "symbol.h"
 
+extern FILE *ofp;
 SYM syms[65535];
 short int symorder[65535];
 int numsym = 0;
@@ -16,13 +17,14 @@ SYM *find_symbol(char *name)
 
     high = numsym-1;
     low = 0;
-    mid = (high-low) >> 1;
+    mid = (high+low) >> 1;
     do {
         nn = symorder[mid];
         rel = strcmp(name, syms[nn].name);
-        if (rel==0)
+        if (rel==0) {
             return &syms[nn];
-        if (rel < 0) {
+        }
+        if (rel > 0) {
             if (low == mid)
                 low++;
             else
@@ -30,7 +32,7 @@ SYM *find_symbol(char *name)
         }
         else
             high = mid;
-        mid = ((high-low) >> 1) + low;
+        mid = (high+low) >> 1;
     } while (low < high);
     nn = symorder[mid];
     rel = strcmp(name, syms[nn].name);
@@ -45,7 +47,7 @@ int insert_symbol(SYM *sym)
     int nn;
     int rel;
     int low,mid,high;
-    int symndx = (sym-&syms[0])/sizeof(SYM);
+    int symndx = sym-&syms[0];
 
     if (numsym==0) {
         symorder[0] = symndx;
@@ -53,13 +55,13 @@ int insert_symbol(SYM *sym)
     }
     high = numsym-1;
     low = 0;
-    mid = (high-low) >> 1;
+    mid = (high+low) >> 1;
     do {
         nn = symorder[mid];
         rel = strcmp(sym->name, syms[nn].name);
         if (rel==0)        // symbol already in list
             return 0;
-        if (rel < 0) {
+        if (rel > 0) {
             if (low == mid)
                 low++;
             else
@@ -67,7 +69,7 @@ int insert_symbol(SYM *sym)
         }
         else
             high = mid;
-        mid = ((high-low) >> 1) + low;
+        mid = (high+low) >> 1;
     } while (low < high);
     nn = symorder[mid];
     rel = strcmp(sym->name, syms[nn].name);
@@ -81,6 +83,10 @@ int insert_symbol(SYM *sym)
 
 SYM *new_symbol(char *name)
 {
+    if (numsym > 65535) {
+        printf("Too many symbols.\r\n");
+        return (SYM *)NULL;
+    }
      strncpy(syms[numsym].name, name, sizeof(syms[numsym].name)/sizeof(char)-1);
      syms[numsym].name[199] = '\0';
      syms[numsym].value = 0;
@@ -90,3 +96,14 @@ SYM *new_symbol(char *name)
      return &syms[numsym-1];
 }
 
+void DumpSymbols()
+{
+    int nn,qq;
+    
+    fprintf(ofp, "%d symbols\n", numsym);
+    fprintf(ofp, "  Symbol Name                            seg address\n"); 
+    for (nn = 0; nn < numsym; nn++) {
+        qq = symorder[nn];
+        fprintf(ofp, "%c %-40s %d  %06llx\n", syms[qq].phaserr, syms[qq].name, syms[qq].segment, syms[qq].value);
+    }
+}

@@ -20,7 +20,7 @@ int64_t primary()
     switch(token) {
     case tk_id:
          if (lastid[0]=='.')  // local label
-            sprintf(buf, "%s.%s", current_label, lastid);
+            sprintf(buf, "%s%s", current_label, lastid);
          else
              strcpy(buf, lastid);
          sym = find_symbol(buf);
