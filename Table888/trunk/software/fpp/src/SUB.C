@@ -175,7 +175,8 @@ void SearchAndSub()
             err(5);
 
 		 // Search and see if the identifier corresponds to a macro
-         if ((p = (SDef *)htFind(&HashInfo, &tdef)) != NULL)
+		 p = (SDef *)htFind(&HashInfo, &tdef);
+         if (p != (SDef *)NULL)
          {
 			 if (fdbg) fprintf(fdbg, "macro %s\r\n", p->name);
             //    If this isn't a macro with parameters, then just copy

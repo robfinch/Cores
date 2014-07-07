@@ -94,13 +94,10 @@ void *htDelete(SHashTbl *hi, void *item)
 
 
 /* -----------------------------------------------------------------------------
-
    Description :
       Finds an entry in a hash table.
-
    Returns :
       Pointer to entry in hash table.
-
 ----------------------------------------------------------------------------- */
 
 void *htFind(SHashTbl *hi, void *item)
@@ -114,12 +111,11 @@ void *htFind(SHashTbl *hi, void *item)
    htbl = (char *)hi->table;
    hash = (*hi->Hash)(item);
    TableIndex = hash.hash;
+   // Loop throughout the entire table. We cannot stop on a blank entry because
+   // the blank entry could be the result of a delete. Which means there might
+   // still be valid data somewhere in the table, after the deleted entry.
    for (count = 0; count < hi->size; count++)
    {
-      for (rr = ii = 0; ii < hi->width && rr == 0; ii++)
-         rr |= htbl[TableIndex * hi->width + ii];
-      if (rr == 0)
-         return(0);
       rr = (*hi->IsEqual)(item, &htbl[TableIndex * hi->width]);
       if (rr == 0)
          break;

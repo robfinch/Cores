@@ -2,13 +2,33 @@
 #include <stdio.h>
 #include <string.h>
 #include "symbol.h"
+#include "a64.h"
 
 extern FILE *ofp;
 SYM syms[65535];
 short int symorder[65535];
 int numsym = 0;
 
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+char *segname(int seg)
+{
+     switch(seg) {
+     case codeseg: return "code";
+     case dataseg: return "data";
+     case bssseg: return "bss";
+     case tlsseg: return "tls";
+     case rodataseg: return "rodata";
+     case constseg: return "const";
+     default: return "???";
+     }
+}
+
+// ----------------------------------------------------------------------------
 // Do a binary search to find the symbol.
+// ----------------------------------------------------------------------------
+
 SYM *find_symbol(char *name)
 {
     int nn;
@@ -41,6 +61,9 @@ SYM *find_symbol(char *name)
     return (SYM *)NULL;    
 }
 
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 int insert_symbol(SYM *sym)
 {
@@ -81,6 +104,9 @@ int insert_symbol(SYM *sym)
 }
 
 
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 SYM *new_symbol(char *name)
 {
     if (numsym > 65535) {
@@ -91,19 +117,24 @@ SYM *new_symbol(char *name)
      syms[numsym].name[199] = '\0';
      syms[numsym].value = 0;
      syms[numsym].defined = 0;
+     syms[numsym].segment = segment;
      insert_symbol(&syms[numsym]);
      numsym++;
      return &syms[numsym-1];
 }
+
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 void DumpSymbols()
 {
     int nn,qq;
     
     fprintf(ofp, "%d symbols\n", numsym);
-    fprintf(ofp, "  Symbol Name                            seg address\n"); 
+    fprintf(ofp, "  Symbol Name                              seg     address\n"); 
     for (nn = 0; nn < numsym; nn++) {
         qq = symorder[nn];
-        fprintf(ofp, "%c %-40s %d  %06llx\n", syms[qq].phaserr, syms[qq].name, syms[qq].segment, syms[qq].value);
+        fprintf(ofp, "%c %-40s %6s  %06llx\n", syms[qq].phaserr, syms[qq].name, segname(syms[qq].segment), syms[qq].value);
     }
 }

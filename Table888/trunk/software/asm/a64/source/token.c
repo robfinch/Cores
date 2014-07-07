@@ -85,7 +85,7 @@ void getbase(int b)
                 }
 		if (*inptr=='L' || *inptr=='U')	// ignore a 'L'ong suffix and 'U'nsigned
 			inptr++;
-    ival = (signed)i;
+    ival = i;
     token = tk_icon;
 }
 
@@ -192,6 +192,55 @@ void getnum()
 				
 }
 
+/*
+ *      getsch - get a character in a quoted string.
+ *
+ *      this routine handles all of the escape mechanisms
+ *      for characters in strings and character constants.
+ */
+int64_t getsch()        /* return an in-quote character */
+{   
+        register int64_t i, j;
+        if(*inptr == '\n')
+                return -1;
+        if(*inptr != '\\') {
+                i = *inptr;
+                inptr++;
+                return i;
+                }
+        inptr++;        /* get an escaped character */
+        if(isdigit(*inptr)) {
+                i = 0;
+                for(j = i = 0;j < 3;++j) {
+                        if(*inptr <= '7' && *inptr >= '0')
+                                i = (i << 3) + *inptr - '0';
+                        else
+                                break;
+                        inptr++;
+                        }
+                return i;
+                }
+        i = *inptr;
+        inptr++;
+        switch(i) {
+                case '\n':
+                        inptr++;
+                        return getsch();
+                case 'b':
+                        return '\b';
+                case 'f':
+                        return '\f';
+                case 'n':
+                        return '\n';
+                case 'r':
+                        return '\r';
+				case 't':
+						return '\t';
+                default:
+                        return i;
+                }
+}
+
 int getIdentifier()
 {
     int nn;
@@ -279,6 +328,14 @@ int NextToken()
         case ']': inptr++; return token = ']';
         case '(': inptr++; return token = '(';
         case ')': inptr++; return token = ')';
+        case '\'':
+             inptr++;
+             ival = getsch();
+             if (*inptr!='\'')
+                 printf("Syntax error - missing close quote.\r\n");
+             else
+                 inptr++;
+             return token = tk_icon;
         case '=':
              if (inptr[1]=='=') { inptr+=2; return token = tk_eq; }
              inptr++; 
@@ -327,7 +384,7 @@ int NextToken()
                 inptr += 5;
                 return token = tk_addui;
             }
-            if ((inptr[1]=='d' || inptr[1]=='D') && (inptr[2]=='d' || inptr[2]=='D') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[3])) {
+            if ((inptr[1]=='d' || inptr[1]=='D') && (inptr[2]=='d' || inptr[2]=='D') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
                 inptr += 4;
                 return token = tk_addi;
             }
@@ -462,6 +519,12 @@ int NextToken()
                 inptr += 4;
                 return token = tk_brnz;
             }
+            if ((inptr[1]=='s' || inptr[1]=='S') && 
+                (inptr[2]=='r' || inptr[2]=='R') &&
+                 isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_bsr;
+            }
             if ((inptr[1]=='m' || inptr[1]=='M') && 
                 (inptr[2]=='i' || inptr[2]=='I') &&
                  isspace(inptr[3])) {
@@ -489,6 +552,20 @@ int NextToken()
             if (inptr[1]=='r' && inptr[2]=='k' && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_brk;
+            }
+            if ((inptr[1]=='r' || inptr[1]=='R') && 
+                (inptr[2]=='p' || inptr[2]=='P') &&
+                (inptr[3]=='l' || inptr[3]=='L') &&
+                 isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_bpl;
+            }
+            if ((inptr[1]=='r' || inptr[1]=='R') && 
+                (inptr[2]=='m' || inptr[2]=='M') &&
+                (inptr[3]=='i' || inptr[3]=='I') &&
+                 isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_bmi;
             }
             if ((inptr[1]=='s' || inptr[1]=='S') && 
                 (inptr[2]=='s' || inptr[2]=='S') &&
@@ -593,8 +670,14 @@ int NextToken()
              }
              break;
 
-        // end eor eori endpublic extern
+        // end eor eori endpublic extern equ
         case 'e': case 'E':
+             if ((inptr[1]=='q' || inptr[1]=='Q') &&
+                 (inptr[2]=='u' || inptr[2]=='U') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_equ;
+             }
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  (inptr[2]=='r' || inptr[2]=='R') &&
                  (inptr[3]=='i' || inptr[3]=='I') &&
@@ -783,7 +866,7 @@ int NextToken()
             }
             break;
 
-        // not neg
+        // not neg nop
         case 'n': case 'N':
             if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='t' || inptr[2]=='T') && isspace(inptr[3])) {
                 inptr += 3;
@@ -792,6 +875,10 @@ int NextToken()
             if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='g' || inptr[2]=='G') && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_neg;
+            }
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='p' || inptr[2]=='P') && isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_nop;
             }
             break;
 
@@ -811,7 +898,7 @@ int NextToken()
             }
             break;
 
-        // push pop public
+        // push pop php plp public
         case 'p': case 'P':
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='s' || inptr[2]=='S') &&
@@ -825,6 +912,18 @@ int NextToken()
                 isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_pop;
+            }
+            if ((inptr[1]=='h' || inptr[1]=='H') &&
+                (inptr[2]=='p' || inptr[2]=='P') &&
+                isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_php;
+            }
+            if ((inptr[1]=='l' || inptr[1]=='L') &&
+                (inptr[2]=='p' || inptr[2]=='P') &&
+                isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_plp;
             }
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='b' || inptr[2]=='B') &&
@@ -874,7 +973,7 @@ int NextToken()
              }
             break;
         
-        // sb sc sh sw sxb sxc sxh sub subi subu subui shl shli shru shrui sei smr ss:
+        // sb sc sh sw sxb sxc sxh sub subi subu subui shl shli shr shru shrui sei smr ss:
         // seq seqi sne snei sge sgei sgt sgti slt slti sle slei sgeu sgeui sgtu sgtui sltu sltui sleu sleui
         case 's': case 'S':
             if ((inptr[1]=='w' || inptr[1]=='W') && isspace(inptr[2])) {
@@ -934,6 +1033,12 @@ int NextToken()
                 (inptr[3]=='u' || inptr[3]=='U') && 
                 isspace(inptr[4])) {
                 inptr += 4;
+                return token = tk_shru;
+            }
+            if ((inptr[1]=='h' || inptr[1]=='H') && 
+                (inptr[2]=='r' || inptr[2]=='R') && 
+                isspace(inptr[3])) {
+                inptr += 3;
                 return token = tk_shru;
             }
             if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='i' || inptr[2]=='I') && isspace(inptr[3])) {
@@ -1070,6 +1175,17 @@ int NextToken()
                  inptr+=3;
                  return token = tk_ss;
              }
+            if ((inptr[1]=='w' || inptr[1]=='W') &&
+                (inptr[2]=='a' || inptr[2]=='A') &&
+                (inptr[3]=='p' || inptr[3]=='P') &&
+                isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_swap;
+            }
+            if ((inptr[1]=='t' || inptr[1]=='T') && isspace(inptr[2])) {
+                inptr += 2;
+                return token = tk_sw;
+            }  
             break;
 
         // xor xori
@@ -1140,18 +1256,21 @@ int getRegister()
             NextToken();
             return 253;
         }
+        break;
     case 's': case 'S':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
             return 255;
         }
+        break;
     case 't': case 'T':
         if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
             return 252;
         }
+        break;
     case 'f': case 'F':
         if ((inptr[1]=='l' || inptr[1]=='L') &&
             (inptr[2]=='g' || inptr[2]=='G') &&
@@ -1162,15 +1281,26 @@ int getRegister()
             NextToken();
             return reg;
         }
+        if ((inptr[1]=='l' || inptr[1]=='L') &&
+            isdigit(inptr[2]) &&
+            !isIdentChar(inptr[3])) {
+            reg = inptr[2]-'0' + 244;
+            inptr += 3;
+            NextToken();
+            return reg;
+        }
+        break;
     case 'p': case 'P':
         if ((inptr[1]=='c' || inptr[1]=='C') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
             return 254;
         }
+        break;
     default:
         return -1;
     }
+    return -1;
 }
 
 // ----------------------------------------------------------------------------
@@ -1209,7 +1339,7 @@ int getSprRegister()
          }
          break;
 
-    // cs clk cr0
+    // cs clk cr0 cr3
     case 'c': case 'C':
          if ((inptr[1]=='s' || inptr[1]=='S') &&
              !isIdentChar(inptr[2])) {
@@ -1230,6 +1360,13 @@ int getSprRegister()
              inptr += 3;
              NextToken();
              return 0x05;
+         }
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='3') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x04;
          }
          break;
 
