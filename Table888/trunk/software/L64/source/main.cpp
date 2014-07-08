@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// L64 - Linker
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include <cstdlib>
 #include <iostream>
 #include <inttypes.h>
@@ -15,6 +40,8 @@ clsElf64Section sections[12];
 SymbolFactory symFactory;
 SymbolWarehouse symWarehouse;
 int debug = 1;
+int trigger = 0;
+int64_t textbase = 0xC00000;
 
 enum {
     codeseg = 0,
@@ -173,6 +200,13 @@ void LinkELFFile()
         }
         File[fn].sections[5]->hdr.sh_addr += sections[4].index;
     }
+    if (debug)
+        printf("Adding in textbase.\r\n");
+    for (fn = 0; fn < nFiles; fn++) {
+        for (sn = 0; sn < 5; sn++) {
+            File[fn].sections[sn]->hdr.sh_addr += textbase;
+        }
+    }
     
     // Go through the symbols and adjust their addresses.
     if (debug)
@@ -202,6 +236,7 @@ void LinkELFFile()
         for (mm = 0; mm < File[fn].sections[6]->hdr.sh_size / File[fn].sections[6]->hdr.sh_entsize; mm++, p++) {
             if ((p->st_info >> 4) == 1) { // Is it a global symbol ?
                 name = (char *)&File[fn].sections[5]->bytes[p->st_name];
+                if (debug)
                 printf("symbol:<%s>\r\n", name);
                 sym = symFactory.NewSymbol(name, 0, p->st_value);
                 symWarehouse.StoreSymbol(sym);
@@ -420,10 +455,11 @@ void WriteELFFile(FILE *fp)
     int nn;
     Elf64Symbol elfsym;
     clsElf64File elf;
+    int64_t start;
+    Symbol *sym;
 
     if (debug)
         printf("Writing ELF file.\r\n");
-    sections[0].hdr.sh_name = nmTable.AddName(".text");
     sections[0].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[0].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_EXECINSTR;
     sections[0].hdr.sh_offset = 512;  // offset in file
@@ -433,7 +469,6 @@ void WriteELFFile(FILE *fp)
     sections[0].hdr.sh_addralign = 1;
     sections[0].hdr.sh_entsize = 0;
 
-    sections[1].hdr.sh_name = nmTable.AddName(".rodata");
     sections[1].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[1].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC;
     sections[1].hdr.sh_offset = 512 + sections[0].index; // offset in file
@@ -443,7 +478,6 @@ void WriteELFFile(FILE *fp)
     sections[1].hdr.sh_addralign = 1;
     sections[1].hdr.sh_entsize = 0;
 
-    sections[2].hdr.sh_name = nmTable.AddName(".data");
     sections[2].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[2].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_WRITE;
     sections[2].hdr.sh_offset = 512 + sections[0].index + sections[1].index; // offset in file
@@ -453,7 +487,6 @@ void WriteELFFile(FILE *fp)
     sections[2].hdr.sh_addralign = 1;
     sections[2].hdr.sh_entsize = 0;
 
-    sections[3].hdr.sh_name = nmTable.AddName(".bss");
     sections[3].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[3].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_WRITE;
     sections[3].hdr.sh_offset = 512 + sections[0].index + sections[1].index + sections[2].index; // offset in file
@@ -463,7 +496,6 @@ void WriteELFFile(FILE *fp)
     sections[3].hdr.sh_addralign = 8;
     sections[3].hdr.sh_entsize = 0;
 
-    sections[4].hdr.sh_name = nmTable.AddName(".tls");
     sections[4].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[4].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_WRITE;
     sections[4].hdr.sh_offset = 512 + sections[0].index + sections[1].index + sections[2].index; // offset in file
@@ -473,22 +505,37 @@ void WriteELFFile(FILE *fp)
     sections[4].hdr.sh_addralign = 8;
     sections[4].hdr.sh_entsize = 0;
 
+    // This bit must be before the name table is cleared.
+    // Once the name table is cleared the symbol table is no longer valid.
+    sym = symWarehouse.FindSymbol("start");
+    if (sym) {
+        if (debug) printf("Found start: %llx\r\n", sym->value);
+        start = sym->value;
+    }
+    else
+        start = 0xC00200;
+
+    nmTable.Clear();
+    sections[0].hdr.sh_name = nmTable.AddName(".text");
+    sections[1].hdr.sh_name = nmTable.AddName(".rodata");
+    sections[2].hdr.sh_name = nmTable.AddName(".data");
+    sections[3].hdr.sh_name = nmTable.AddName(".bss");
+    sections[4].hdr.sh_name = nmTable.AddName(".tls");
+    sections[5].hdr.sh_name = nmTable.AddName(".strtab");
+    sections[5].hdr.sh_type = clsElf64Shdr::SHT_STRTAB;
+    sections[5].hdr.sh_flags = 0;
+    sections[5].hdr.sh_addr = 0;
+    sections[5].hdr.sh_offset = 512 + sections[0].index + sections[1].index + sections[2].index; // offset in file
+    sections[5].hdr.sh_size = nmTable.length;
+    sections[5].hdr.sh_link = 0;
+    sections[5].hdr.sh_info = 0;
+    sections[5].hdr.sh_addralign = 1;
+    sections[5].hdr.sh_entsize = 0;
+    memcpy(sections[5].bytes, nmTable.text, nmTable.length);
+
     // Unless debugging there is no real reason to output symbols to the final
     // executable image.
     if (0) {
-        sections[5].hdr.sh_name = nmTable.AddName(".strtab");
-        // The following line must be before the name table is copied to the section.
-        sections[6].hdr.sh_name = nmTable.AddName(".symtab");
-        sections[5].hdr.sh_type = clsElf64Shdr::SHT_STRTAB;
-        sections[5].hdr.sh_flags = 0;
-        sections[5].hdr.sh_addr = 0;
-        sections[5].hdr.sh_offset = 512 + sections[0].index + sections[1].index + sections[2].index; // offset in file
-        sections[5].hdr.sh_size = nmTable.length;
-        sections[5].hdr.sh_link = 0;
-        sections[5].hdr.sh_info = 0;
-        sections[5].hdr.sh_addralign = 1;
-        sections[5].hdr.sh_entsize = 0;
-        memcpy(sections[5].bytes, nmTable.text, nmTable.length);
     
         sections[6].hdr.sh_type = clsElf64Shdr::SHT_SYMTAB;
         sections[6].hdr.sh_flags = 0;
@@ -539,7 +586,7 @@ void WriteELFFile(FILE *fp)
     elf.hdr.e_type = 2;               // 2 = executable file
     elf.hdr.e_machine = 888;         // machine architecture
     elf.hdr.e_version = 1;
-    elf.hdr.e_entry = 256;
+    elf.hdr.e_entry = start;
     elf.hdr.e_phoff = 0;
     elf.hdr.e_shoff = sections[4].hdr.sh_offset + sections[4].index;
     elf.hdr.e_flags = 0;
@@ -550,7 +597,7 @@ void WriteELFFile(FILE *fp)
     elf.hdr.e_shnum = 0;              // This will be incremented by AddSection()
     elf.hdr.e_shstrndx = 5;           // index into section table of string table header
 
-    for (nn = 0; nn < 5; nn++)
+    for (nn = 0; nn < 6; nn++)
         elf.AddSection(&sections[nn]);    
     elf.Write(fp);
 }

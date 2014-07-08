@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// L64 - Linker
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #ifndef SYMBOL_HPP
 #define SYMBOL_HPP
 
@@ -5,6 +30,7 @@
 
 extern NameTable nmTable;
 extern char *segname(int seg);
+extern int trigger;
 
 class Symbol {
 public:
@@ -47,11 +73,14 @@ public:
     Symbol *FindSymbol(char *name) {
         int rel;
         int low,mid,high;
-    
+
+        if (numsym==0)
+            return (Symbol *)NULL;    
         high = numsym-1;
         low = 0;
         mid = (high+low) >> 1;
         do {
+            printf("mid:%d\r\n",mid);
             rel = strcmp(name, nmTable.GetName(syms[mid]->name));
             if (rel==0) {
                 return syms[mid];
@@ -79,6 +108,7 @@ public:
     
         if (numsym==0) {
             syms[0] = sym;
+            numsym++;
             return 1;
         }
         high = numsym-1;
@@ -103,6 +133,7 @@ public:
             mid++;
         memmove(&syms[mid+1],&syms[mid],(numsym-mid+1) * sizeof(Symbol *));
         syms[mid] = sym;
+        numsym++;
         return 1;    
     };
 
