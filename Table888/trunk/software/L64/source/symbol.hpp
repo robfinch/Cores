@@ -36,13 +36,13 @@ class Symbol {
 public:
     int name;       // name table index
     int64_t value;
-    Symbol *next;
-    Symbol *prev;
     char segment;
     char defined;
     char phaserr;
     char scope;     // P = public
-} SYM;
+public:
+    char *GetName() { return nmTable.GetName(name); };
+};
 
 class SymbolFactory {
 public:
@@ -56,8 +56,6 @@ public:
         sym->defined = 0;
         sym->phaserr = 0;
         sym->scope = scope;
-        sym->next = (Symbol *)NULL;
-        sym->prev = (Symbol *)NULL;
         return sym;
     };
 };
@@ -65,11 +63,17 @@ public:
 class SymbolWarehouse {
 public:
     int numsym;
-    Symbol *syms[1000000];
+    int maxsym;
+    Symbol **syms;
 
     SymbolWarehouse() {
+        maxsym = 30000;
         numsym = 0;
+        syms = new Symbol *[maxsym];
     };
+    ~SymbolWarehouse() {
+        delete[] syms;
+    }
     Symbol *FindSymbol(char *name) {
         int rel;
         int low,mid,high;
@@ -80,7 +84,6 @@ public:
         low = 0;
         mid = (high+low) >> 1;
         do {
-            printf("mid:%d\r\n",mid);
             rel = strcmp(name, nmTable.GetName(syms[mid]->name));
             if (rel==0) {
                 return syms[mid];
@@ -105,11 +108,19 @@ public:
     {
         int rel;
         int low,mid,high;
+        Symbol **ns;
     
         if (numsym==0) {
             syms[0] = sym;
             numsym++;
             return 1;
+        }
+        if (numsym>=maxsym-5) {
+            ns = new Symbol *[maxsym+30000];
+            memcpy(ns, syms, maxsym);
+            maxsym += 30000;
+            delete[] syms;
+            syms = ns;
         }
         high = numsym-1;
         low = 0;

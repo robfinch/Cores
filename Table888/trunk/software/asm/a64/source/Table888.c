@@ -1,9 +1,37 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include <stdio.h>
 #include <string.h>
 #include "a64.h"
 
 static void emitAlignedCode(int cd);
 static void process_shifti(int oc);
+
+int first_rodata;
+int first_data;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -44,7 +72,9 @@ void Table888_bump_address()
 //     if ((*address & 15)==15)
 //         *address = *address + 1;
      if (segment==codeseg) {
-         while ((code_address & 15)!=0 && (code_address & 15) != 5 && (code_address & 15) != 10) {
+         while ((sections[segment].address & 15) != 0 &&
+                (sections[segment].address & 15) != 5 &&
+                (sections[segment].address & 15) != 10) {
                emitByte(0x00);
          }
      }
@@ -54,16 +84,16 @@ void Table888_bump_address()
 // Emit constant extension for memory operands.
 // ---------------------------------------------------------------------------
 
-static void emitImm4(int64_t v)
+static void emitImm4(int64_t v, int force)
 {
-     if (v < -8L || v > 7L) {
+     if (v < -8L || v > 7L || force) {
           emitAlignedCode(0xfd);
           emitCode((v >> 4) & 255);
           emitCode((v >> 12) & 255);
           emitCode((v >> 20) & 255);
           emitCode((v >> 28) & 255);
      }
-     if (((v < 0) && ((v >> 36) != -1L)) || ((v > 0) && ((v >> 36) != 0L))) {
+     if (((v < 0) && ((v >> 36) != -1L)) || ((v > 0) && ((v >> 36) != 0L)) || (force && data_bits > 36)) {
           emitAlignedCode(0xfe);
           emitCode((v >> 36) & 255);
           emitCode((v >> 44) & 255);
@@ -76,16 +106,16 @@ static void emitImm4(int64_t v)
 // Emit constant extension for memory operands.
 // ---------------------------------------------------------------------------
 
-static void emitImm14(int64_t v)
+static void emitImm14(int64_t v, int force)
 {
-     if (v < -8192L || v > 8191L) {
+     if (v < -8192L || v > 8191L || force) {
           emitAlignedCode(0xfd);
           emitCode((v >> 14) & 255);
           emitCode((v >> 22) & 255);
           emitCode((v >> 30) & 255);
           emitCode((v >> 38) & 255);
      }
-     if (((v < 0) && ((v >> 46) != -1L)) || ((v > 0) && ((v >> 46) != 0L))) {
+     if (((v < 0) && ((v >> 46) != -1L)) || ((v > 0) && ((v >> 46) != 0L)) || (force && data_bits > 46)) {
           emitAlignedCode(0xfe);
           emitCode((v >> 46) & 255);
           emitCode((v >> 54) & 255);
@@ -98,16 +128,16 @@ static void emitImm14(int64_t v)
 // Emit constant extension for 16-bit operands.
 // ---------------------------------------------------------------------------
 
-static void emitImm16(int64_t v)
+static void emitImm16(int64_t v, int force)
 {
-     if (v < -32768L || v > 32767L) {
+     if (v < -32768L || v > 32767L || force) {
           emitAlignedCode(0xfd);
           emitCode((v >> 16) & 255);
           emitCode((v >> 24) & 255);
           emitCode((v >> 32) & 255);
           emitCode((v >> 40) & 255);
      }
-     if (((v < 0) && ((v >> 48) != -1L)) || ((v > 0) && ((v >> 48) != 0L))) {
+     if (((v < 0) && ((v >> 48) != -1L)) || ((v > 0) && ((v >> 48) != 0L)) || (force && (code_bits > 48 || data_bits > 48))) {
           emitAlignedCode(0xfe);
           emitCode((v >> 48) & 255);
           emitCode((v >> 56) & 255);
@@ -120,16 +150,16 @@ static void emitImm16(int64_t v)
 // Emit constant extension for 24-bit operands.
 // ---------------------------------------------------------------------------
 
-static void emitImm24(int64_t v)
+static void emitImm24(int64_t v, int force)
 {
-     if (v < -8388608L || v > 8388607L) {
+     if (v < -8388608L || v > 8388607L || force) {
           emitAlignedCode(0xfd);
           emitCode((v >> 24) & 255);
           emitCode((v >> 32) & 255);
           emitCode((v >> 40) & 255);
           emitCode((v >> 48) & 255);
      }
-     if (((v < 0) && ((v >> 56) != -1L)) || ((v > 0) && ((v >> 56) != 0L))) {
+     if (((v < 0) && ((v >> 56) != -1L)) || ((v > 0) && ((v >> 56) != 0L)) || (force && (code_bits > 56 || data_bits > 56))) {
           emitAlignedCode(0xfe);
           emitCode((v >> 56) & 255);
           emitCode(0x00);
@@ -142,9 +172,9 @@ static void emitImm24(int64_t v)
 // Emit constant extension for 32-bit operands.
 // ---------------------------------------------------------------------------
 
-static void emitImm32(int64_t v)
+static void emitImm32(int64_t v, int force)
 {
-     if (v < -2147483648LL || v > 2147483647LL) {
+     if (v < -2147483648LL || v > 2147483647LL || force) {
           emitAlignedCode(0xfd);
           emitCode((v >> 32) & 255);
           emitCode((v >> 40) & 255);
@@ -179,8 +209,13 @@ static void process_jmp(int oc)
            }
            if (token!=')' && token != ']')
                printf("Missing close bracket.\r\n");
-           emitImm24(addr);
+           emitImm24(addr,lastsym!=(SYM*)NULL);
            emitAlignedCode(oc+2);
+            if (bGen)
+                if (lastsym) {
+                    if( lastsym->segment < 5)
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                }
            emitCode(Ra);
            emitCode(addr & 255);
            emitCode((addr >> 8) & 255);
@@ -208,7 +243,7 @@ static void process_jmp(int oc)
             printf("Illegal jump address mode.\r\n");
             Ra = 0;
         }
-        emitImm24(addr);
+        emitImm24(addr,0);
         emitAlignedCode(oc+4);
         emitCode(Ra);
         emitCode(addr & 255);
@@ -217,8 +252,13 @@ static void process_jmp(int oc)
         return;
     }
 
-    emitImm32(addr);
+    emitImm32(addr, code_bits > 32);
     emitAlignedCode(oc);
+    if (bGen)
+       if (lastsym) {
+            if( lastsym->segment < 5)
+                sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+        }
     emitCode(addr & 255);
     emitCode((addr >> 8) & 255);
     emitCode((addr >> 16) & 255);
@@ -243,8 +283,14 @@ static void process_riop(int oc)
     need(',');
     NextToken();
     val = expr();
-    emitImm16(val);
+    emitImm16(val,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
+    if (bGen)
+    if (lastsym) {
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 3 | (lastsym->isExtern ? 128 : 0) |
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    }
     emitCode(Ra);
     emitCode(Rt);
     emitCode(val & 255);
@@ -351,7 +397,8 @@ static void process_bcc(int oc)
     NextToken();
     val = expr();
     ad = code_address + 5;
-    bump_address(&ad);
+    if ((ad & 15)==15)
+       ad++;
     disp = (val & 0xFFFFFFFFFFFF0000L) - (ad & 0xFFFFFFFFFFFF0000L); 
     emitAlignedCode(oc);
     emitCode(Ra);
@@ -373,7 +420,8 @@ static void process_bra(int oc)
     NextToken();
     val = expr();
     ad = code_address + 5;
-    bump_address(&ad);
+    if ((ad & 15)==15)
+       ad++;
     disp = (val & 0xFFFFFFFFFFFF0000L) - (ad & 0xFFFFFFFFFFFF0000L); 
     emitAlignedCode(oc);
     emitCode(0x00);
@@ -478,17 +526,27 @@ static void process_store(int oc)
         return;
     }
     if (Rb > 0) {
-       emitImm4(disp);
+       emitImm4(disp,lastsym!=(SYM*)NULL);
        emitAlignedCode(oc + 8);
+        if (bGen)
+        if (lastsym) {
+        if( lastsym->segment < 5)
+            sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 5 | (lastsym->isExtern ? 128 : 0)|
+            (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+        }
        emitCode(Ra);
        emitCode(Rb);
        emitCode(Rs);
        emitCode((disp << 4) | sc | ((sg & 3) << 2));
        return;
     }
-    if (disp < 0xFFFFFFFFFFFFE000L || disp > 0x1FFFL)
-       emitImm14(disp);
+    if (disp < 0xFFFFFFFFFFFFE000LL || disp > 0x1FFFLL)
+       emitImm14(disp,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
+    if (bGen && lastsym)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     if (Ra < 0) Ra = 0;
     emitCode(Ra);
     emitCode(Rs);
@@ -508,8 +566,12 @@ static void process_ldi(int oc)
     Rt = getRegister();
     expect(',');
     val = expr();
-    emitImm24(val);
+    emitImm24(val,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
+    if (bGen && lastsym)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emitCode(Rt);
     emitCode(val & 255);
     emitCode((val >> 8) & 255);
@@ -545,7 +607,7 @@ static void process_load(int oc)
     if (segprefix >= 0)
         sg = segprefix;
     if (Rb >= 0) {
-       emitImm4(disp);
+       emitImm4(disp,lastsym!=(SYM*)NULL);
        if (oc==0x87) {
           printf("Address mode not supported.\r\n");
           return;
@@ -553,15 +615,23 @@ static void process_load(int oc)
        if (oc==0x92) oc = 0x8F;  // LEA
        else oc = oc + 8;
        emitAlignedCode(oc);
+        if (bGen && lastsym)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 5 | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emitCode(Ra);
        emitCode(Rb);
        emitCode(Rt);
        emitCode((disp << 4) | sc | ((sg & 3) << 2));
        return;
     }
-    if (disp < 0xFFFFFFFFFFFFE000L || disp > 0x1FFF)
-       emitImm14(disp);
+    if (disp < 0xFFFFFFFFFFFFE000LL || disp > 0x1FFFLL)
+       emitImm14(disp,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
+    if (bGen && lastsym)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     if (Ra < 0) Ra = 0;
     emitCode(Ra);
     emitCode(Rt);
@@ -615,8 +685,12 @@ static void process_pushpop(int oc)
     NextToken();
     if (token=='#' && oc==0xA6) {  // Filter to PUSH
        val = expr();
-       emitImm32(val);
+       emitImm32(val,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
        emitAlignedCode(0xAD);                        
+        if (bGen && lastsym)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emitCode(val & 255);
        emitCode((val >> 8) & 255);
        emitCode((val >> 16) & 255);
@@ -711,7 +785,7 @@ static void process_shifti(int oc)
 // gran r1
 // ----------------------------------------------------------------------------
 
-static void process_gran()
+static void process_gran(int oc)
 {
     int Rt;
 
@@ -720,7 +794,7 @@ static void process_gran()
     emitCode(0x00);
     emitCode(Rt);
     emitCode(0x00);
-    emitCode(0x00);
+    emitCode(oc);
     prevToken();
 }
 
@@ -785,56 +859,66 @@ void Table888_processMaster()
     bss_address = 0;
     start_address = 0;
     first_org = 1;
+    first_rodata = 1;
+    first_data = 1;
+    for (nn = 0; nn < 12; nn++) {
+        sections[nn].index = 0;
+        sections[nn].address = 0;
+        sections[nn].start = 0;
+        sections[nn].end = 0;
+    }
     ca = code_address;
     segment = codeseg;
     memset(current_label,0,sizeof(current_label));
     NextToken();
     while (token != tk_eof) {
-//        printf("%d\r", lineno);
         switch(token) {
         case tk_eol:
+             //printf("Line: %d\r\n", lineno);
              segprefix = -1;
              if (bGen && (segment==codeseg || segment==dataseg || segment==rodataseg)) {
-             if ((ca & 15)==15) {
+             if ((ca & 15)==15 && segment==codeseg) {
                  ca++;
                  binstart++;
              }
             nn = binstart;
-            if (binfile[binstart]==0xfd) {
-                fprintf(ofp, "%06LLX ", ca);
-                for (nn = binstart; nn < binstart + 5 && nn < binndx; nn++) {
-                    fprintf(ofp, "%02X ", binfile[nn]);
+            if (segment==codeseg) {
+                if (sections[segment].bytes[binstart]==0xfd) {
+                    fprintf(ofp, "%06LLX ", ca);
+                    for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                        fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+                    }
+                    fprintf(ofp, "   ; imm\n");
+                     if (((ca+5) & 15)==15) {
+                         ca+=6;
+                         binstart+=6;
+                         nn++;
+                     }
+                     else {
+                          ca += 5;
+                          binstart += 5;
+                     }
                 }
-                fprintf(ofp, "   ; imm\n");
-                 if (((ca+5) & 15)==15) {
-                     ca+=6;
-                     binstart+=6;
-                     nn++;
-                 }
-                 else {
-                      ca += 5;
-                      binstart += 5;
-                 }
-            }
-             if (binfile[binstart]==0xfe) {
-                fprintf(ofp, "%06LLX ", ca);
-                for (nn = binstart; nn < binstart + 5 && nn < binndx; nn++) {
-                    fprintf(ofp, "%02X ", binfile[nn]);
+                 if (sections[segment].bytes[binstart]==0xfe) {
+                    fprintf(ofp, "%06LLX ", ca);
+                    for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                        fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+                    }
+                    fprintf(ofp, "   ; imm\n");
+                     if (((ca+5) & 15)==15) {
+                         ca+=6;
+                         nn++;
+                     }
+                     else {
+                          ca += 5;
+                     }
                 }
-                fprintf(ofp, "   ; imm\n");
-                 if (((ca+5) & 15)==15) {
-                     ca+=6;
-                     nn++;
-                 }
-                 else {
-                      ca += 5;
-                 }
             }
             first = 1;
-            while (nn < binndx) {
+            while (nn < sections[segment].index) {
                 fprintf(ofp, "%06LLX ", ca);
-                for (mm = nn; nn < mm + 8 && nn < binndx; nn++) {
-                    fprintf(ofp, "%02X ", binfile[nn]);
+                for (mm = nn; nn < mm + 8 && nn < sections[segment].index; nn++) {
+                    fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
                 }
                 for (; nn < mm + 8; nn++)
                     fprintf(ofp, "   ");
@@ -847,13 +931,13 @@ void Table888_processMaster()
                 ca += 8;
             }
             // empty (codeless) line
-            if (binstart==binndx) {
+            if (binstart==sections[segment].index) {
                 fprintf(ofp, "%24s\t%.*s", "", inptr-stptr, stptr);
             }
             } // bGen
-            binstart = binndx;
             stptr = inptr;
-            ca = code_address;
+            binstart = sections[segment].index;
+            ca = sections[segment].address;
             lineno++;
             break;
         case tk_add:  process_rrop(0x04); break;
@@ -886,9 +970,20 @@ void Table888_processMaster()
         case tk_bss: segment = bssseg; break;
         case tk_cli: emit_insn(0x3100000001); break;
         case tk_cmp: process_rrop(0x06); break;
-        case tk_code: segment = codeseg; break;
+        case tk_code: process_code(); break;
         case tk_com: process_rop(0x06); break;
         case tk_cs:  segprefix = 0; break;
+        case tk_data:
+            if (first_data) {
+                while(sections[segment].address & 4095)
+                    emitByte(0x00);
+                sections[2].address = sections[segment].address;   // set starting address
+                first_data = 0;
+                binstart = sections[2].index;
+                ca = sections[2].address;
+            }
+            process_data(dataseg);
+            break;
         case tk_db:  process_db(); break;
         case tk_dbnz: process_bcc(0x5A); break;
         case tk_dc:  process_dc(); break;
@@ -936,7 +1031,17 @@ void Table888_processMaster()
         case tk_pop:  process_pushpop(0xA7); break;
         case tk_public: process_public(); break;
         case tk_push: process_pushpop(0xA6); break;
-        case tk_rodata: segment = rodataseg; break;
+        case tk_rodata:
+            if (first_rodata) {
+                while(sections[segment].address & 4095)
+                    emitByte(0x00);
+                sections[1].address = sections[segment].address;
+                first_rodata = 0;
+                binstart = sections[1].index;
+                ca = sections[1].address;
+            }
+            segment = rodataseg;
+            break;
         case tk_rol: process_rrop(0x41); break;
         case tk_ror: process_rrop(0x43); break;
         case tk_rti: emit_insn(0x4000000001); break;

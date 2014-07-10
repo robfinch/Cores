@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// L64 - Linker
+// A64 - Assembler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -30,7 +30,7 @@
 
 class NameTable {
 public:
-    char text[1000000];
+    char text[100000];
     int length;
 
 public:    
@@ -44,8 +44,6 @@ public:
         text[1] = 0;
         length = 1;
     };
-    int GetLength() { return length; };
-    char *GetText() { return text; };
     char *GetName(int ndx) {
          return &text[ndx];
     };
@@ -58,8 +56,6 @@ public:
                 for(mm = 1; nm[mm] == text[nn+mm] && nm[mm]; mm++);
                 if (nm[mm]=='\0')
                    return nn;
-                while(text[nn]!=0 && nn < length) nn++;
-                nn++;
             }
             else {
                 while(text[nn]!=0 && nn < length) nn++;
@@ -72,23 +68,18 @@ public:
     int AddName(char *nm) {
         int ret;
         int olen;
-        int len;
         
         if ((ret = FindName(nm)) > 0)
            return ret;
-        len = strlen(nm);
-        if (length + len > sizeof(text)-1)
-            return 0;
         olen = length;
         strcpy(&text[length], nm);
-        length += len + 1;
+        length += strlen(nm) + 1;
         return olen;
     };
     
-    void Write(FILE *fp) {
+    void write(FILE *fp) {
          fwrite((void *)text, 1, length, fp);
     };
 };
-
 
 #endif

@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -40,7 +65,7 @@ SYM *find_symbol(char *name)
     mid = (high+low) >> 1;
     do {
         nn = symorder[mid];
-        rel = strcmp(name, syms[nn].name);
+        rel = strcmp(name, nmTable.GetName(syms[nn].name));
         if (rel==0) {
             return &syms[nn];
         }
@@ -55,7 +80,7 @@ SYM *find_symbol(char *name)
         mid = (high+low) >> 1;
     } while (low < high);
     nn = symorder[mid];
-    rel = strcmp(name, syms[nn].name);
+    rel = strcmp(name, nmTable.GetName(syms[nn].name));
     if (rel==0)
         return &syms[nn];
     return (SYM *)NULL;    
@@ -81,7 +106,7 @@ int insert_symbol(SYM *sym)
     mid = (high+low) >> 1;
     do {
         nn = symorder[mid];
-        rel = strcmp(sym->name, syms[nn].name);
+        rel = strcmp(nmTable.GetName(sym->name), nmTable.GetName(syms[nn].name));
         if (rel==0)        // symbol already in list
             return 0;
         if (rel > 0) {
@@ -95,7 +120,7 @@ int insert_symbol(SYM *sym)
         mid = (high+low) >> 1;
     } while (low < high);
     nn = symorder[mid];
-    rel = strcmp(sym->name, syms[nn].name);
+    rel = strcmp(nmTable.GetName(sym->name), nmTable.GetName(syms[nn].name));
     if (rel > 0)
         mid++;
     memmove(&symorder[mid+1],&symorder[mid],(numsym-mid+1) * sizeof(short int));
@@ -113,11 +138,14 @@ SYM *new_symbol(char *name)
         printf("Too many symbols.\r\n");
         return (SYM *)NULL;
     }
-     strncpy(syms[numsym].name, name, sizeof(syms[numsym].name)/sizeof(char)-1);
-     syms[numsym].name[199] = '\0';
+     syms[numsym].name = nmTable.AddName(name);
+//     strncpy(syms[numsym].name, name, sizeof(syms[numsym].name)/sizeof(char)-1);
+//     syms[numsym].name[199] = '\0';
      syms[numsym].value = 0;
      syms[numsym].defined = 0;
      syms[numsym].segment = segment;
+     syms[numsym].scope = ' ';
+     syms[numsym].isExtern = 0;
      insert_symbol(&syms[numsym]);
      numsym++;
      return &syms[numsym-1];
@@ -135,6 +163,6 @@ void DumpSymbols()
     fprintf(ofp, "  Symbol Name                              seg     address\n"); 
     for (nn = 0; nn < numsym; nn++) {
         qq = symorder[nn];
-        fprintf(ofp, "%c %-40s %6s  %06llx\n", syms[qq].phaserr, syms[qq].name, segname(syms[qq].segment), syms[qq].value);
+        fprintf(ofp, "%c %-40s %6s  %06llx\n", syms[qq].phaserr, nmTable.GetName(syms[qq].name), segname(syms[qq].segment), syms[qq].value);
     }
 }

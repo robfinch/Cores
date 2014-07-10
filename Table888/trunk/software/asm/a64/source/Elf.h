@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #ifndef ELF_H
 #define ELF_H
 
@@ -51,9 +76,6 @@ public:
         e_shstrndx = 0;
     };
 
-    // Why all the freads/fwrites ?
-    // The structure in memory may not be guarenteed to match the specific
-    // byte order required on disk.
     void Write(FILE *fp) {
          fwrite((void *)e_ident,1,16,fp);
          fwrite((void *)&e_type,1,sizeof(e_type),fp);
@@ -106,8 +128,6 @@ public:
         SHT_PROGBITS = 1,
         SHT_SYMTAB = 2,
         SHT_STRTAB = 3,
-        SHT_NOTE = 7,
-        SHT_NOBITS = 8,
         SHT_REL = 9,
     };
     enum {
@@ -175,47 +195,50 @@ typedef struct {
 } Elf64rela;
 
 // My own constructions
-
-// clsElf64Section allocates bytes for the section in increments of 64k.
+typedef struct {
+    clsElf64Shdr hdr;
+    int64_t length;
+    int64_t index;
+    int64_t address;
+    int64_t start;
+    int64_t end;
+    uint8_t bytes[10000000];
+} Elf64Section;
 
 class clsElf64Section {
 public:
     clsElf64Shdr hdr;
+    int64_t length;
     int64_t index;
-    uint8_t *bytes;    // Contents of the section
-    int64_t maxbytes;  // maximum number of bytes that can be in the section.
+    int64_t address;
+    int64_t start;
+    int64_t end;
+    uint8_t bytes[10000000];
 public:
     clsElf64Section() {
+        length = 0;
         index = 0;
-        maxbytes = 65536LL;
-        bytes = (uint8_t *)NULL;
+        start = 0;
+        end = 0;
+        address = 0;
+        memset(bytes,0,sizeof(bytes));
     };
-    ~clsElf64Section() {
-        if (bytes)
-            delete[] bytes;
-    };
-    int64_t max(int64_t a, int64_t b) { return a > b ? a : b; };
-    int64_t round64k(int64_t a) {
-        return (a + 65535LL) & 0xFFFFFFFFFFFF0000LL; };
     void Clear() {
+        length = 0;
         index = 0;
-        if (bytes)
-            delete[] bytes;
-        bytes = (uint8_t *)NULL;
-        maxbytes = 65536LL;
+        start = 0;
+        end = 0;
+        address = 0;
+        memset(bytes,0,sizeof(bytes));
     };
     void AddByte(int64_t byt) {
-        if (bytes==(uint8_t *)NULL)
-            bytes = new uint8_t[maxbytes];
-        if (index >= maxbytes) {
-            uint8_t *nb = new uint8_t[maxbytes+65536LL];
-            memcpy(nb,bytes,maxbytes);
-            delete[] bytes;
-            maxbytes += 65536LL;
-        }
         bytes[index] = byt & 255LL;
+        if (index==0)
+            start = address;
         index++;
-        hdr.sh_size = max(index,hdr.sh_size);
+        address++;
+        if (address > end)
+            end = address;
     };
     void AddChar(int64_t chr) {
         AddByte(chr & 255LL);
@@ -244,20 +267,14 @@ public:
     void Write(FILE *fp) {
         fwrite((void *)bytes,1,hdr.sh_size,fp);
     };
-    // The section size must have been set before the read.
     void Read(FILE *fp) {
-        if (bytes) delete[] bytes;
-        bytes = new uint8_t[maxbytes = round64k(hdr.sh_size)];
         fread((void *)bytes,1,hdr.sh_size,fp);
-        index = hdr.sh_size;
     };
 };
 
 class clsElf64File
 {
 public:
-    char name[500];
-    int valid;
     clsElf64Header hdr;
     clsElf64Section *sections[256];
 

@@ -1,19 +1,50 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #ifndef A64_H
 #define A64_H
 
 #include <inttypes.h>
 #include "token.h"
+#include "elf.h"
+#include "NameTable.hpp"
+#include "symbol.h"
 
 enum {
     codeseg = 0,
-    dataseg = 1,
-    stackseg = 2,
-    rodataseg = 3,
+    rodataseg = 1,
+    dataseg = 2,
+    bssseg = 3,
     tlsseg = 4,
-    bssseg = 5,
+    stackseg = 5,
     constseg = 6,
 };
 
+extern int rel_out;
+extern int code_bits;
+extern int data_bits;
 extern FILE *ofp, *vfp;
 extern int64_t start_address;
 extern char first_org;
@@ -35,9 +66,29 @@ extern char masterFile[10000000];
 extern uint8_t binfile[10000000];
 extern int binndx;
 extern int binstart;
+extern NameTable nmTable;
 
 
 extern int64_t expr();
 void Table888_processMaster();
+extern void emitCode(int cd);
+extern void emitByte(int64_t cd);
+extern void process_align();
+extern void process_db();
+extern void process_dc();
+extern void process_dh();
+extern void process_dw();
+extern void process_fill();
+extern void process_extern();
+extern void process_org();
+extern void process_code();
+extern void process_data(int);
+extern void process_public();
+extern void process_label();
+extern void bump_address();
+
+extern int NumSections;
+extern clsElf64Section sections[12];
+extern SYM *lastsym;
 
 #endif

@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include <inttypes.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -572,6 +597,13 @@ int NextToken()
                  isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_bss;
+            }
+            if ((inptr[1]=='i' || inptr[1]=='I') && 
+                (inptr[2]=='t' || inptr[2]=='T') &&
+                (inptr[3]=='s' || inptr[3]=='S') &&
+                 isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_bits;
             }
             break;
 
@@ -1187,6 +1219,15 @@ int NextToken()
                 return token = tk_sw;
             }  
             break;
+
+        // to
+        case 't': case 'T':
+             if ((inptr[1]=='o' || inptr[1]=='O') &&
+                 isspace(inptr[2])) {
+                 inptr += 2;
+                 return token = tk_to;
+             }
+             break;
 
         // xor xori
         case 'x': case 'X':

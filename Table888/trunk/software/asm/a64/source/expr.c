@@ -1,3 +1,28 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -6,6 +31,7 @@
 #include "symbol.h"
 
 int64_t expr();
+int nsym;
 
 // id
 // const
@@ -27,6 +53,9 @@ int64_t primary()
          if (!sym)
              sym = new_symbol(buf);
          val = sym->value;
+         if (sym->segment < 5)
+             nsym++;
+         lastsym = sym;
          NextToken();
          if (token==tk_eol)
             prevToken();
@@ -216,10 +245,16 @@ int64_t or_expr()
 int64_t expr()
 {
     int64_t val;
-    
+
+    nsym = 0;
+    lastsym = (SYM*)NULL;    
     if (token=='#')
        NextToken();
     val = or_expr();
+    // We only care about the symbol if relocatable output is being generated.
+    // Setting the symbol to NULL will result in no rel records being output.
+    if (nsym > 1 || !rel_out)
+        lastsym = (SYM *)NULL;
     return val;
 }
 
