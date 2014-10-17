@@ -54,6 +54,7 @@ char *stptr;
 int token;
 int phasing_errors;
 int bGen = 0;
+char fSeg = 0;
 int segment;
 int segprefix = -1;
 int64_t code_address;
@@ -103,6 +104,7 @@ void displayHelp()
      printf("a64 [options] file\r\n");
      printf("    +v      = verbose output\r\n");
      printf("    +r      = relocatable output\r\n");
+     printf("    -s      = non-segmented\r\n");
      printf("    -o[bvl] = suppress output file b=binary, v=verilog, l=listing\r\n");
 }
 
@@ -131,6 +133,8 @@ int processOptions(int argc, char **argv)
                        elf_out = 0;
                }
            }
+           if (argv[nn][1]=='s')
+               fSeg = 0;
            nn++;
         }
         else if (argv[nn][0]=='+') {
@@ -138,6 +142,8 @@ int processOptions(int argc, char **argv)
            if (argv[nn][1]=='r') {
                rel_out = 1;
            }
+           if (argv[nn][1]=='s')
+               fSeg = 1;
            nn++;
         }
         else break;
@@ -631,7 +637,7 @@ void process_dw()
     // A pointer to an object might be emitted as a data word.
     if (bGen && lastsym)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0));
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
             emitWord(val);
             prevToken();
         }

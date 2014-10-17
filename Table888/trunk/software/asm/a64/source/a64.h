@@ -49,6 +49,7 @@ extern FILE *ofp, *vfp;
 extern int64_t start_address;
 extern char first_org;
 extern int bGen;
+extern char fSeg;
 extern int segment;
 
 extern int gCpu;

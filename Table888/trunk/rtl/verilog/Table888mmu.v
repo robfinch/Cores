@@ -160,9 +160,7 @@ wire [39:0] insn;
 wire [7:0] opcode = ir[7:0];
 wire [7:0] func = ir[39:32];
 reg [PCMSB:0] pc;
-reg [PCMSB:0] cs;
-reg [31:0] ds,ss;
-wire [PCMSB:0] segmented_pc = pc + {cs[PCMSB:9],9'h00};
+wire [PCMSB:0] segmented_pc = pc;
 wire [63:0] paged_pc;
 reg [PCMSB:0] ibufadr;
 wire ibufmiss = ibufadr != paged_pc[PCMSB:0];
@@ -310,43 +308,39 @@ wire [1:0] debug_bits;
 icache_ram u2a (
 	.wclk(clk),
 	.wr(ack_i && isInsnCacheLoad && (adr_o[17:16]==2'b00 || !tmrx)),
-	.wa(adr_o[12:0]),
+	.wa(adr_o[13:0]),
 	.i(dat_i),
 	.rclk(~clk),
-	.pc(paged_pc[12:0]),
-	.insn(insn_a),
-	.debug_bits()
+	.pc(paged_pc[13:0]),
+	.insn(insn_a)
 );
 icache_ram u2b (
 	.wclk(clk),
 	.wr(ack_i && isInsnCacheLoad && (adr_o[17:16]==2'b01 || !tmrx)),
-	.wa(adr_o[12:0]),
+	.wa(adr_o[13:0]),
 	.i(dat_i),
 	.rclk(~clk),
-	.pc(paged_pc[12:0]),
-	.insn(insn_b),
-	.debug_bits()
+	.pc(paged_pc[13:0]),
+	.insn(insn_b)
 );
 icache_ram u2c (
 	.wclk(clk),
 	.wr(ack_i && isInsnCacheLoad && (adr_o[17:16]==2'b00 || adr_o[17:16]==2'b10 || !tmrx)),
-	.wa(adr_o[12:0]),
+	.wa(adr_o[13:0]),
 	.i(dat_i),
 	.rclk(~clk),
-	.pc(paged_pc[12:0]),
-	.insn(insn_c),
-	.debug_bits()
+	.pc(paged_pc[13:0]),
+	.insn(insn_c)
 );
 `else
 icache_ram u2 (
 	.wclk(clk),
 	.wr(ack_i && isInsnCacheLoad),
-	.wa(adr_o[12:0]),
+	.wa(adr_o[13:0]),
 	.i(dat_i),
 	.rclk(~clk),
-	.pc(paged_pc[12:0]),
-	.insn(insn),
-	.debug_bits()
+	.pc(paged_pc[13:0]),
+	.insn(insn)
 );
 `endif
 
@@ -545,24 +539,14 @@ reg [127:0] p;
 wire [63:0] diff = r - bb;
 // currency: 72.24 (21.7:7.2)
 
-// For scaled indexed address mode
-wire [63:0] b_scaled = b << ir[33:32];
-reg [63:0] segbase;
-always @(Sa or cs or ds or ss)
-case(Sa)
-2'd1:	segbase <= {ds[31:4],4'h0};
-2'd2:	segbase <= {ss[31:4],4'h0};
-default:	segbase <= {cs[PCMSB:9],9'h00};
-endcase
-
 reg [63:0] ea;
 wire [63:0] lea_drn = a + imm;
-wire [63:0] lea_ndx = a + b_scaled + imm;
-wire [63:0] ea_drn = segbase + lea_drn;
-wire [63:0] ea_ndx = segbase + lea_ndx;
-wire [63:0] mr_ea = segbase + c;
+wire [63:0] lea_ndx = a + b + imm;
+wire [63:0] ea_drn = lea_drn;
+wire [63:0] ea_ndx = lea_ndx;
+wire [63:0] mr_ea = c;
 `ifdef SUPPORT_BITMAP_FNS
-wire [63:0] ea_bm = segbase + a + {(b >> 6),3'b000} + imm;
+wire [63:0] ea_bm = a + {(b >> 6),3'b000} + imm;
 `endif
 
 assign data_readable = pmmu_data_readable;
@@ -608,9 +592,6 @@ always @*
 	`RAND:		spro <= rand;
 	`BITERR_CNT:	spro <= biterr_cnt;
 	`BITHIST:	spro <= bithist[bithist_ndx2];
-	`CS:		spro <= cs;
-	`DS:		spro <= ds;
-	`SS:		spro <= ss;
 	`PROD_HIGH:	spro <= p[127:64];
 	default:	spro <= 65'd0;
 	endcase
@@ -709,7 +690,6 @@ case(state)
 // ----------------------------------------------------------------------------
 // RESET:
 // - Invalidate the instruction cache
-// - Initialize the segment register to a flat memory model.
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 RESET:
@@ -757,12 +737,7 @@ IFETCH:
 				next_state(IBUF1);
 			end
 			else if (cache_en & !uncachedArea) begin
-				if (debug_bits[0] & 1'b0) begin
-					ir[7:0] <= `BRK;
-					ir[39:8] <= `DBG_VECT;
-					hwi <= `TRUE;
-				end
-				else begin
+				begin
 `ifdef TMR_CACHE
 					if (tmrx && (insn_a!=insn_b || insn_a != insn_c || insn_b != insn_c))
 						biterr_cnt <= biterr_cnt + 64'd1;
@@ -974,6 +949,7 @@ DECODE:
 		`JMP_IX:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`JMP_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`JSR_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
+		`PUSHC:		imm <= hasIMM ? {immbuf[31:0],ir[39:8]} : {{32{ir[39]}},ir[39:8]};
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`LEA,
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`SBX,`SCX,`SHX,`SWX,`LEAX,
 		`CINV,`CINVX:	;
@@ -1017,7 +993,7 @@ DECODE:
 			`PHP:
 				begin
 					isWR <= `TRUE;
-					rwadr <= {ss[31:4],4'h0} + sp_dec;
+					rwadr <= sp_dec;
 					update_sp(sp_dec);
 					store_what <= `STW_SR;
 					next_state(STORE1);
@@ -1025,7 +1001,7 @@ DECODE:
 			`PLP:
 				begin
 					isPLP <= `TRUE;
-					rwadr <= {ss[31:4],4'h0} + sp;
+					rwadr <= sp;
 					update_sp(sp_inc);
 					next_state(LOAD1);
 				end
@@ -1036,7 +1012,7 @@ DECODE:
 						privilege_violation();
 					else begin
 						isRTI <= `TRUE;
-						rwadr <= {ss[31:4],4'h0} + sp;
+						rwadr <= sp;
 						update_sp(sp_inc);
 						next_state(LOAD1);
 					end
@@ -1071,7 +1047,7 @@ DECODE:
 				ivno <= ir[20:12];
 				hist_capture <= `FALSE;
 				isBRK <= `TRUE;
-				rwadr <= {ss[31:4],4'h0} + sp_dec;
+				rwadr <= sp_dec;
 				store_what <= `STW_CS;
 				// Double fault ?
 				brkCnt <= brkCnt + 3'd1;
@@ -1093,7 +1069,7 @@ DECODE:
 			begin
 				isBSR <= `TRUE;
 				isWR <= `TRUE;
-				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
+				rwadr <= sp_dec[31:0];
 				update_sp(sp_dec);
 				store_what <= `STW_PC;
 				next_state(STORE1);	
@@ -1103,7 +1079,7 @@ DECODE:
 				isJSR <= `TRUE;
 				isJSP <= isJSP;
 				isWR <= `TRUE;
-				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
+				rwadr <= sp_dec[31:0];
 				update_sp(sp_dec);
 				store_what <= `STW_PC;
 				a <= {immbuf[31:0],ir[39:8]};
@@ -1120,13 +1096,12 @@ DECODE:
 				else begin
 					imm <= {{40{ir[39]}},ir[39:19],3'b000};
 				end
-				Sa <= ir[17:16];
 			end
 		`JSR_DRN:
 			begin
 				isJSRdrn <= `TRUE;
 				isWR <= `TRUE;
-				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
+				rwadr <= sp_dec[31:0];
 				update_sp(sp_dec);
 				store_what <= `STW_PC;
 				next_state(STORE1);
@@ -1134,7 +1109,7 @@ DECODE:
 		`RTS:
 			begin
 				isRTS <= `TRUE;
-				rwadr <= {ss[31:4],4'h0} + sp;
+				rwadr <= sp;
 				next_state(LOAD1);
 				update_sp(sp_inc + ir[31:16]);
 			end
@@ -1142,56 +1117,52 @@ DECODE:
 		`SB,`SC,`SH,`SW:
 			begin
 				if (isIMM1) begin
-					imm <= {ir[25:24],{20{immbuf[27]}},immbuf[27:0],ir[39:26]};
+					imm <= {{20{immbuf[27]}},immbuf[27:0],ir[39:24]};
 				end
 				else if (isIMM2) begin
-					imm <= {ir[25:24],immbuf[47:0],ir[39:26]};
+					imm <= {immbuf[47:0],ir[39:24]};
 				end
 				else begin
-					imm <= {ir[25:24],{48{ir[39]}},ir[39:26]};
+					imm <= {{48{ir[39]}},ir[39:24]};
 				end
-				Sa <= ir[25:24];
 			end
 		`CINV:
 			begin
 				if (isIMM1) begin
-					imm <= {ir[25:24],{20{immbuf[27]}},immbuf[27:0],ir[39:26]};
+					imm <= {{20{immbuf[27]}},immbuf[27:0],ir[39:24]};
 				end
 				else if (isIMM2) begin
-					imm <= {ir[25:24],immbuf[47:0],ir[39:26]};
+					imm <= {immbuf[47:0],ir[39:24]};
 				end
 				else begin
-					imm <= {ir[25:24],{48{ir[39]}},ir[39:26]};
+					imm <= {{48{ir[39]}},ir[39:24]};
 				end
-				Sa <= ir[25:24];
 			end
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX,
 		`BMS,`BMC,`BMF,`BMT:
 			begin
 				if (isIMM1) begin
-					imm <= {ir[35:34],{30{immbuf[27]}},immbuf[27:0],ir[39:36]};
+					imm <= {{28{immbuf[27]}},immbuf[27:0],ir[39:32]};
 				end
 				else if (isIMM2) begin
-					imm <= {ir[35:34],immbuf[57:0],ir[39:36]};
+					imm <= {immbuf[55:0],ir[39:32]};
 				end
 				else begin
-					imm <= {ir[35:34],{58{ir[39]}},ir[39:36]};
+					imm <= {{56{ir[39]}},ir[39:32]};
 				end
-				Sa <= ir[35:34];
 			end
 		`CINVX:
 			begin
 				if (isIMM1) begin
-					imm <= {ir[35:34],{30{immbuf[27]}},immbuf[27:0],ir[39:36]};
+					imm <= {{28{immbuf[27]}},immbuf[27:0],ir[39:32]};
 				end
 				else if (isIMM2) begin
-					imm <= {ir[35:34],immbuf[57:0],ir[39:36]};
+					imm <= {immbuf[55:0],ir[39:32]};
 				end
 				else begin
-					imm <= {ir[35:34],{58{ir[39]}},ir[39:36]};
+					imm <= {{56{ir[39]}},ir[39:32]};
 				end
-				Sa <= ir[35:34];
 			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1205,7 +1176,7 @@ DECODE:
 				isPUSH <= `TRUE;
 				store_what <= `STW_A;
 				ir[39:8] <= {8'h00,ir[39:16]};
-				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
+				rwadr <= sp_dec[31:0];
 				if (ir[39:8]==32'h0) begin
 					isWR <= `FALSE;
 					next_state(IFETCH);
@@ -1227,7 +1198,7 @@ DECODE:
 				isPOP <= `TRUE;
 				ir[39:8] <= {8'h00,ir[39:16]};
 				RtPop <= ir[15:8];
-				rwadr <= {ss[31:4],4'h0} + sp;
+				rwadr <= sp;
 				if (ir[39:8]==32'h0)
 					next_state(IFETCH);
 				else if (ir[15:8]==8'h00) begin
@@ -1239,6 +1210,18 @@ DECODE:
 					update_sp(sp_inc);
 					next_state(LOAD1);
 				end
+			end
+
+		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		// Push a constant onto the stack, used surprisingly often.
+		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		`PUSHC:
+			begin
+				store_what <= `STW_IMM;
+				rwadr <= sp_dec[31:0];
+				isWR <= `TRUE;
+				update_sp(sp_dec);
+				next_state(STORE1);
 			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1375,7 +1358,7 @@ EXECUTE:
 				isLink <= `TRUE;
 				wrrf <= `TRUE;
 				res <= a - imm;						// SUBUI SP,SP,#imm
-				ir <= {16'h0002,Rb,Ra,`SW};			// SW BP,[SP]
+				ir <= {16'h0000,Rb,Ra,`SW};			// SW BP,[SP]
 				next_state(LINK1);					// need time to update and read reg
 				end
 		`UNLK:
@@ -1384,7 +1367,7 @@ EXECUTE:
 				pimm <= imm;
 				wrrf <= `TRUE;
 				res <= b;							// MOV SP,BP
-				ir <= {16'h0002,Rb,Ra,`LW};			// LW BP,[SP]
+				ir <= {16'h0000,Rb,Ra,`LW};			// LW BP,[SP]
 				next_state(LINK1);					// need cycle to update SP
 			end
 
@@ -1423,7 +1406,7 @@ EXECUTE:
 		`JSR_IX:
 			begin	
 				rwadr2 <= ea_drn;
-				rwadr <= {ss[31:4],4'h0} + sp_dec[31:0];
+				rwadr <= sp_dec[31:0];
 				isWR <= `TRUE;
 				update_sp(sp_dec);
 				isJSRix <= `TRUE;
@@ -2001,6 +1984,7 @@ STORE1:
 			`STW_CS:	wb_write(word,rwadr_o,cs[31:0]);
 			`STW_SR:	wb_write(word,rwadr_o,sr[31:0]);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[31:0]);
+			`STW_IMM:	wb_write(word,rwadr_o,imm[31:0]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 			next_state(STORE2);
@@ -2050,6 +2034,7 @@ STORE3:
 			`STW_CS:	wb_write(word,rwadr_o,{24'd0,cs[39:32]});
 			`STW_SR:	wb_write(word,rwadr_o,32'h00);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[63:32]);
+			`STW_IMM:	wb_write(word,rwadr_o,imm[63:32]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 			next_state(STORE4);
@@ -2210,9 +2195,6 @@ if (wrspr) begin
 `ifdef SUPPORT_CLKGATE
 	`CLK:		begin clk_throttle_new <= res[49:0]; ld_clk_throttle <= `TRUE; end
 `endif
-	`CS:		;	// Can't be updated this way
-	`DS:		ds <= res[31:0];
-	`SS:		ss <= res[31:0];
 	endcase
 end
 
@@ -2458,74 +2440,38 @@ endfunction
 
 endmodule
 
-module icache_ram(wclk, wr, wa, i, rclk, pc, insn, debug_bits);
+
+// The cache ram doesn't implement byte #15 which is never used.
+
+module icache_ram(wclk, wr, wa, i, rclk, pc, insn);
 input wclk;
 input wr;
-input [12:0] wa;
+input [13:0] wa;
 input [31:0] i;
 input rclk;
-input [12:0] pc;
+input [13:0] pc;
 output reg [39:0] insn;
-output reg [1:0] debug_bits;
 
-wire [31:0] o1,o2,o3,o4;
+reg [119:0] ram [0:1023];	// should be 7 RAMS
+always @(posedge wclk)
+	case(wa[3:2])
+	2'd0:	ram[wa[13:4]][31: 0] <= i;
+	2'd1:	ram[wa[13:4]][63:32] <= i;
+	2'd2:	ram[wa[13:4]][95:64] <= i;
+	2'd3:	ram[wa[13:4]][119:96] <= i[23:0];
+	endcase
 
-syncram_512x32_1rw1r u1 (
-  .clka(wclk), // input clka
-  .wea(wr && wa[3:2]==2'b00), // input [0 : 0] wea
-  .addra(wa[12:4]), // input [8 : 0] addra
-  .dina(i), // input [31 : 0] dina
-  .clkb(rclk), // input clkb
-  .addrb(pc[12:4]), // input [8 : 0] addrb
-  .doutb(o1) // output [31 : 0] doutb
-);
+reg [13:0] rra;
+always @(posedge rclk)
+	rra <= pc;
+wire [119:0] bundle = ram[rra[13:4]];
 
-syncram_512x32_1rw1r u2 (
-  .clka(wclk), // input clka
-  .wea(wr && wa[3:2]==2'b01), // input [0 : 0] wea
-  .addra(wa[12:4]), // input [8 : 0] addra
-  .dina(i), // input [31 : 0] dina
-  .clkb(rclk), // input clkb
-  .addrb(pc[12:4]), // input [8 : 0] addrb
-  .doutb(o2) // output [31 : 0] doutb
-);
-
-syncram_512x32_1rw1r u3 (
-  .clka(wclk), // input clka
-  .wea(wr && wa[3:2]==2'b10), // input [0 : 0] wea
-  .addra(wa[12:4]), // input [8 : 0] addra
-  .dina(i), // input [31 : 0] dina
-  .clkb(rclk), // input clkb
-  .addrb(pc[12:4]), // input [8 : 0] addrb
-  .doutb(o3) // output [31 : 0] doutb
-);
-
-syncram_512x32_1rw1r u4 (
-  .clka(wclk), // input clka
-  .wea(wr && wa[3:2]==2'b11), // input [0 : 0] wea
-  .addra(wa[12:4]), // input [8 : 0] addra
-  .dina(i), // input [31 : 0] dina
-  .clkb(rclk), // input clkb
-  .addrb(pc[12:4]), // input [8 : 0] addrb
-  .doutb(o4) // output [31 : 0] doutb
-);
-
-wire [127:0] bundle = {o4,o3,o2,o1};
-
-always @(pc or bundle)
-case(pc[1:0])
-2'd0:	insn <= bundle[39:0];
+always @(rra or bundle)
+case(rra[3:2])
+2'd0:	insn <= bundle[39: 0];
 2'd1:	insn <= bundle[79:40];
 2'd2:	insn <= bundle[119:80];
-default:	insn <= {`ALN_VECT,`BRK};
-endcase
-
-always @(pc or bundle)
-case(pc[1:0])
-2'd0:	debug_bits <= bundle[121:120];
-2'd1:	debug_bits <= bundle[123:122];
-2'd2:	debug_bits <= bundle[125:124];
-default:	debug_bits <= 2'b00;
+2'd3:	insn <= {`ALN_VECT,`BRK};
 endcase
 
 endmodule
@@ -2539,20 +2485,18 @@ input rclk;
 input [31:0] pc;
 output hit;
 
-wire [31:0] tag;
+reg [18:0] ram [0:1023];
+reg [31:0] rra;
+wire [18:0] tag;
 
-syncram_512x32_1rw1r u1 (
-  .clka(wclk), // input clka
-  .wea(wr && wa[3:2]==2'b11), // input [0 : 0] wea
-  .addra(wa[12:4]), // input [8 : 0] addra
-  .dina({wa[31:13],12'd0,v}), // input [31 : 0] dina
-  .clkb(rclk), // input clkb
-  .addrb(pc[12:4]), // input [8 : 0] addrb
-  .doutb(tag) // output [31 : 0] doutb
-);
+always @(posedge wclk)
+	if (wr && (wa[3:2]==2'b11))
+		ram[wa[13:4]] <= {wa[31:14],v};
+always @(posedge rclk)
+	rra <= pc;
+assign tag = ram[rra[13:4]];
 
-assign hit = (tag[31:13]==pc[31:13]) && tag[0];
-
+assign hit = (tag[18:1]==rra[31:14]) && tag[0];
 
 endmodule
 

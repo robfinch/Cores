@@ -116,7 +116,7 @@ void LinkELFFile()
     char *symname;
     FILE *fp;
     int64_t wd;
-    uint8_t b0,b1,b2,b3,b4,b5,b6;
+    uint8_t b0,b1,b2,b3,b4,b5,b6,b7;
     int64_t offset;
     int64_t sz;
     int bits;
@@ -499,6 +499,99 @@ void LinkELFFile()
                          File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 28) & 15;
                      }
                      break;
+
+                // Data fixup
+                // 64 bit fixups
+                case 6:
+                     b0 = File[fn].sections[sn-7]->bytes[p->r_offset+0];
+                     b1 = File[fn].sections[sn-7]->bytes[p->r_offset+1];
+                     b2 = File[fn].sections[sn-7]->bytes[p->r_offset+2];
+                     b3 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                     b4 = File[fn].sections[sn-7]->bytes[p->r_offset+4];
+                     b5 = File[fn].sections[sn-7]->bytes[p->r_offset+5];
+                     b6 = File[fn].sections[sn-7]->bytes[p->r_offset+6];
+                     b7 = File[fn].sections[sn-7]->bytes[p->r_offset+7];
+                     wd = (b7 << 56) |
+                          (b6 << 48) | (b5 << 40) | (b4 << 32) |
+                          (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+                     wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+0] = wd & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+1] = (wd >> 8) & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 16) & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+3] = (wd >> 24) & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+4] = (wd >> 32) & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+5] = (wd >> 40) & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+6] = (wd >> 48) & 255;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+7] = (wd >> 56) & 255;
+                     break;
+                case 134:
+                     sym = Lookup(p, fn);
+                     if (!sym)
+                         printf("Unresolved external <%s>\r\n", nmTable.GetName(sym->name));
+                     else {
+                         wd = sym->value;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+0] = wd & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+1] = (wd >> 8) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 16) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] = (wd >> 24) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+4] = (wd >> 32) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+5] = (wd >> 40) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+6] = (wd >> 48) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+7] = (wd >> 56) & 255;
+                     }
+                     break;
+                // 8 bit fixups
+                case 7:
+                     if (bits <= 8) {
+                         b0 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                         wd = b0;
+                         wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] = wd & 255;
+                     }
+                     else {
+                         offset = p->r_offset;
+                         if ((offset & 15)==0)
+                             offset -= 6;
+                         else
+                             offset -= 5;
+                         b0 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                         b1 = File[fn].sections[sn-7]->bytes[offset];
+                         b2 = File[fn].sections[sn-7]->bytes[offset+1];
+                         b3 = File[fn].sections[sn-7]->bytes[offset+2];
+                         wd = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+                         wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] = wd & 255;
+                         File[fn].sections[sn-7]->bytes[offset+0] = (wd >> 8) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+1] = (wd >> 16) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+2] = (wd >> 24) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+3] = 0;
+                     }
+                     break;
+                case 135:
+                     sym = Lookup(p, fn);
+                     if (!sym)
+                         printf("Unresolved external <%s>\r\n", nmTable.GetName(sym->name));
+                     else {
+                         if (bits <= 8) {
+                             wd = sym->value;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+3] = wd & 255;
+                         }
+                         else {
+                             offset = p->r_offset;
+                             if ((offset & 15)==0)
+                                 offset -= 6;
+                             else
+                                 offset -= 5;
+                             wd = sym->value;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+3] = wd & 255;
+                             File[fn].sections[sn-7]->bytes[offset+0] = (wd >> 8) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+1] = (wd >> 16) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+2] = (wd >> 24) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+3] = 0;
+                         }
+                     }
+                     break;
+    
                 }
             }
         }

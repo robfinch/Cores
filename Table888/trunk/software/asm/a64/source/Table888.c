@@ -106,6 +106,28 @@ static void emitImm4(int64_t v, int force)
 // Emit constant extension for memory operands.
 // ---------------------------------------------------------------------------
 
+static void emitImm8(int64_t v, int force)
+{
+     if (v < -128L || v > 127L || force) {
+          emitAlignedCode(0xfd);
+          emitCode((v >> 8) & 255);
+          emitCode((v >> 16) & 255);
+          emitCode((v >> 24) & 255);
+          emitCode((v >> 32) & 255);
+     }
+     if (((v < 0) && ((v >> 40) != -1L)) || ((v > 0) && ((v >> 40) != 0L)) || (force && data_bits > 40)) {
+          emitAlignedCode(0xfe);
+          emitCode((v >> 40) & 255);
+          emitCode((v >> 48) & 255);
+          emitCode((v >> 56) & 255);
+          emitCode(0x00);
+     }
+}
+ 
+// ---------------------------------------------------------------------------
+// Emit constant extension for memory operands.
+// ---------------------------------------------------------------------------
+
 static void emitImm14(int64_t v, int force)
 {
      if (v < -8192L || v > 8191L || force) {
@@ -479,6 +501,8 @@ static void mem_operand(int64_t *disp, int *regA, int *regB, int *sc, int *sg)
               if (*regB == -1) {
                   printf("expecting a register\r\n");
               }
+              if (token=='*' && !fSeg)
+                  printf("Index scaling not supported.\r\n");
               if (token=='*') {
                   NextToken();
                   val = expr();
@@ -513,6 +537,7 @@ static void process_store(int oc)
     int Rs;
     int sc;
     int sg;
+    int fixup;
     int64_t disp;
 
     Rs = getRegister();
@@ -526,32 +551,56 @@ static void process_store(int oc)
         return;
     }
     if (Rb > 0) {
-       emitImm4(disp,lastsym!=(SYM*)NULL);
+       if (fSeg) {
+           fixup = 5;
+           emitImm4(disp,lastsym!=(SYM*)NULL);
+       }
+       else {
+           fixup = 7;
+           emitImm8(disp,lastsym!=(SYM*)NULL);
+       }
        emitAlignedCode(oc + 8);
         if (bGen)
         if (lastsym) {
         if( lastsym->segment < 5)
-            sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 5 | (lastsym->isExtern ? 128 : 0)|
+            sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
             (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
         }
        emitCode(Ra);
        emitCode(Rb);
        emitCode(Rs);
-       emitCode((disp << 4) | sc | ((sg & 3) << 2));
+       if (fSeg)
+            emitCode((disp << 4) | sc | ((sg & 3) << 2));
+       else
+            emitCode(disp & 255);
        return;
     }
-    if (disp < 0xFFFFFFFFFFFFE000LL || disp > 0x1FFFLL)
-       emitImm14(disp,lastsym!=(SYM*)NULL);
+    if (fSeg) {
+        fixup = 4;
+        if (disp < 0xFFFFFFFFFFFFE000LL || disp > 0x1FFFLL)
+           emitImm14(disp,lastsym!=(SYM*)NULL);
+    }
+    else {
+        fixup = 3;
+        if (disp < 0xFFFFFFFFFFFF8000LL || disp > 0x7FFFLL)
+           emitImm16(disp,lastsym!=(SYM*)NULL);
+    }
     emitAlignedCode(oc);
     if (bGen && lastsym)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     if (Ra < 0) Ra = 0;
     emitCode(Ra);
     emitCode(Rs);
-    emitCode(((disp << 2) & 0xFC) | (sg & 3));
-    emitCode((disp >> 6) & 255);
+    if (fSeg) {
+        emitCode(((disp << 2) & 0xFC) | (sg & 3));
+        emitCode((disp >> 6) & 255);
+    }
+    else {
+        emitCode(disp & 0xFF);
+        emitCode((disp >> 8) & 255);
+    }
     ScanToEOL();
 }
 
@@ -592,6 +641,7 @@ static void process_load(int oc)
     int sg;
     char *p;
     int64_t disp;
+    int fixup = 5;
 
     p = inptr;
     Rt = getRegister();
@@ -607,7 +657,14 @@ static void process_load(int oc)
     if (segprefix >= 0)
         sg = segprefix;
     if (Rb >= 0) {
-       emitImm4(disp,lastsym!=(SYM*)NULL);
+       if (fSeg) {
+           emitImm4(disp,lastsym!=(SYM*)NULL);
+           fixup = 5;
+       }
+       else {
+           emitImm8(disp,lastsym!=(SYM*)NULL);
+           fixup = 7;
+       }
        if (oc==0x87) {
           printf("Address mode not supported.\r\n");
           return;
@@ -617,26 +674,43 @@ static void process_load(int oc)
        emitAlignedCode(oc);
         if (bGen && lastsym)
         if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 5 | (lastsym->isExtern ? 128 : 0)|
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emitCode(Ra);
        emitCode(Rb);
        emitCode(Rt);
-       emitCode((disp << 4) | sc | ((sg & 3) << 2));
+       if (fSeg)
+           emitCode((disp << 4) | sc | ((sg & 3) << 2));
+       else
+           emitCode(disp & 255);
        return;
     }
-    if (disp < 0xFFFFFFFFFFFFE000LL || disp > 0x1FFFLL)
-       emitImm14(disp,lastsym!=(SYM*)NULL);
+    if (fSeg) {
+        fixup = 4;       // 14 bit
+        if (disp < 0xFFFFFFFFFFFFE000LL || disp > 0x1FFFLL)
+           emitImm14(disp,lastsym!=(SYM*)NULL);
+    }
+    else {
+        fixup = 3;       // 16 bit
+        if (disp < 0xFFFFFFFFFFFF8000LL || disp > 0x7FFFLL)
+           emitImm16(disp,lastsym!=(SYM*)NULL);
+    }
     emitAlignedCode(oc);
     if (bGen && lastsym)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     if (Ra < 0) Ra = 0;
     emitCode(Ra);
     emitCode(Rt);
-    emitCode(((disp << 2) & 0xFC) | (sg & 3));
-    emitCode((disp >> 6) & 255);
+    if (fSeg) {
+        emitCode(((disp << 2) & 0xFC) | (sg & 3));
+        emitCode((disp >> 6) & 255);
+    }
+    else {
+        emitCode(disp & 0xFF);
+        emitCode((disp >> 8) & 255);
+    }
     ScanToEOL();
 }
 
