@@ -188,11 +188,11 @@
 `define LBLO	8'h5F
 
 `define JSR_RN	8'h60
-`define JSR_IDX	8'h61
+`define JSR_IX	8'h61
 `define TRAPV	8'h62
 `define RTS		8'h63
 `define RTI		8'h64
-`define RTE		8'h65
+`define RTD		8'h65
 `define SWE		8'b0110011x
 `define BRZ		8'h68
 `define BRNZ	8'h69
@@ -200,7 +200,8 @@
 `define BRPL	8'h6B
 `define DBNZ	8'h6C
 `define SWE3	8'h6D
-`define HWI		8'h6F
+`define BSR16	8'h6E
+`define JSP		8'h6F
 
 `define BSR24	8'h70
 `define JSR16	8'h71
@@ -208,7 +209,10 @@
 `define JMP16	8'h73
 `define JMP24	8'h74
 `define JMP_RN	8'h75
-`define JMP_IDX	8'h76
+`define JMP_IX	8'h76
+`define JGR		8'h77
+`define JGRR	8'h78
+`define JSPR	8'h79
 
 `define LB		8'h80
 `define LBU		8'h81
@@ -285,24 +289,27 @@
 `define STW_SR	4'd6
 `define STW_SPR	4'd8
 `define STW_IMM	4'd9
+`define STW_IDT	4'd10
+`define STW_GDT	4'd11
+`define STW_SRCS	4'd12
 
-`define TICK		8'h00
-`define VBR			8'h01
-`define BEAR		8'h02
-`define PTA			8'h04
-`define CR0			8'h05
-`define CLK			8'h06
-`define FAULT_PC	8'h08
-`define IVNO		8'h0C
-`define HISTORY		8'h0D
-`define BITERR_CNT	8'h0E
-`define BITHIST		8'h0F
-`define SRAND1		8'h10
-`define SRAND2		8'h11
-`define RAND		8'h12
-`define PROD_HIGH	8'h13
-`define TLS_BASE	8'h20
-`define GS_BASE		8'h21
-`define IOS_BASE	8'h22
+`define TICK		6'h00
+`define VBR			6'h01
+`define BEAR		6'h02
+`define PTA			6'h04
+`define CR0			6'h05
+`define CLK			6'h06
+`define SR			6'h07
+`define FAULT_PC	6'h08
+`define FAULT_CS	6'h09
+`define IVNO		6'h0C
+`define HISTORY		6'h0D
+`define BITERR_CNT	6'h0E
+`define BITHIST		6'h0F
+`define SRAND1		6'h10
+`define SRAND2		6'h11
+`define RAND		6'h12
+`define PROD_HIGH	6'h13
+`define SEGS		6'h2x
 
 `endif

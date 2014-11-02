@@ -100,6 +100,11 @@ parameter LOAD5 = 6'd41;
 parameter LOAD6 = 6'd42;
 parameter LOAD7 = 6'd43;
 parameter DIV2 = 6'd44;
+parameter MOVESTK1 = 6'd48;
+parameter MOVESTK2 = 6'd49;
+parameter MOVESTK3 = 6'd50;
+parameter MOVESTK4 = 6'd51;
+parameter MOVESTK5 = 6'd52;
 parameter HANG = 6'd63;
 
 // - - - - - - - - - - - - - - - - - -
@@ -187,9 +192,8 @@ reg [2:0] imcd;		// mask countdown bits
 wire [63:0] sr = {8'd0,23'd0,im,6'h00,pv,pe};
 reg [63:0] regfile [63:0];
 reg [63:0] spregfile [15:0];
-reg [63:0] bptr;
-reg [63:0] tls_ptr;
-reg [63:0] gs_ptr;
+reg [63:0] prev_ss_base;
+reg [63:0] prev_sp;
 reg mpcf;					// multi-precision carry
 reg gie;						// global interrupt enable
 
@@ -219,7 +223,7 @@ wire ihit;
 reg [2:0] ld_size, st_size;
 reg isRTS,isPUSH,isPOP,isPOPS,isIMM,isCMPI;
 reg isJSRix,isJSRdrn,isJMPix,isBRK,isPLP,isRTI;
-reg isShifti,isBSR,isLMR,isSMR;
+reg isShifti,isBSR,isBSR16,isBSR24,isLMR,isSMR;
 reg isJSP,isJSR,isLWS,isLink,isUnlk;
 reg isRTSsf,isRTSsfs,isRTSlf;
 reg isLxDT,isSxDT;
@@ -228,6 +232,8 @@ reg isJGR,isVERR,isVERW,isVERX,isLSL,isLAR,isLSB;
 reg isBM;
 reg isCAS;
 reg isTLS,isGS,isIO,isSegx;
+
+reg [31:0] stack_fifo [63:0];
 
 reg [1:0] nLD, nMTSEG;
 wire hasJSP = isJSP;
@@ -288,11 +294,11 @@ reg [31:0] seg_limit [15:0];	// upper bound
 reg [3:0] seg_dpl [15:0];	// privilege level
 reg [7:0] seg_acr [15:0];	// access rights
 
-reg [63:0] desc_w0, desc_w1;
-wire [11:0] desc_acr = {desc_w0[63:60],desc_w1[63:56]};
-wire [3:0] desc_dpl = desc_w0[63:60];
-wire [31:0] desc_limit = desc_w1[31:0];
-wire [31:0] desc_base = desc_w0[31:0];
+reg [31:0] desc_h0,desc_h1,desc_h2,desc_h3;
+wire [7:0] desc_acr = desc_h0[31:24];//{desc_w0[63:60],desc_w1[63:56]};
+wire [3:0] desc_dpl = desc_h0[23:20];//desc_w0[63:60];
+wire [31:0] desc_limit = desc_h2;//desc_w1[31:0];
+wire [31:0] desc_base = desc_h1;//desc_w0[31:0];
 wire isCallGate = desc_acr[4:0]==5'b01100;
 wire isConforming = desc_acr[2];
 wire isPresent = desc_acr[7];
@@ -303,6 +309,7 @@ reg [3:0] cg_dpl;
 reg [7:0] cg_acr;
 reg [4:0] cg_ncopy;
 
+reg [23:0] cs;
 wire [23:0] cs_selector = seg_selector[4'd15];
 wire [31:0] cs_base = seg_base[4'd15];
 wire [31:0] cs_limit = seg_limit[4'd15];
@@ -350,12 +357,15 @@ casex(opcode)
 `LBcc:			pc_inc = 4'd3;
 `BRZ,`BRNZ,`BRMI,`BRPL,`DBNZ:
 				pc_inc = 4'd3;
-`JALR:			pc_inc = 4'd2;
-`JALR24:		pc_inc = 4'd5;
+`JSP,`JGR:				pc_inc = 4'd4;
+`JSPR,`JGRR:			pc_inc = 4'd2;
+`JMP_RN,`JSR_RN:		pc_inc = 4'd2;
+`JMP16,`JSR16,`BSR16:	pc_inc = 4'd3;
+`JMP24,`JSR24,`BSR24:	pc_inc = 4'd4;
+`JMP_IX,`JSR_IX:		pc_inc = 4'd4;
 `TRAPV:			pc_inc = 4'd1;
 `RTS:			pc_inc = 4'd1;
 `RTI:			pc_inc = 4'd1;
-`RTE:			pc_inc = 4'd1;
 8'b0110011x:	pc_inc = 4'd2;	// SWE x
 `LB4,`LBU4,`LC4,`LCU4,`LH4,`LHU4,`LW4,`SB4,`SC4,`SH4,`SW4:
 				pc_inc = 4'd3;
@@ -512,8 +522,7 @@ Table888_set u6
 always @*
 casex(Ra)
 6'd00:	rfoa <= 64'd0;
-6'd47:	rfoa <= spregfile[cpl];
-6'd48:	rfoa <= 64'd0;
+6'd62:	rfoa <= spregfile[cpl];
 6'd63:	rfoa <= pc[39:0];
 default:	rfoa <= regfile[Ra];
 endcase
@@ -521,8 +530,7 @@ endcase
 always @*
 case(Rb)
 6'd00:	rfob <= 64'd0;
-6'd47:	rfob <= spregfile[cpl];
-6'd48:	rfob <= 64'd0;
+6'd62:	rfob <= spregfile[cpl];
 6'd63:	rfob <= pc[39:0];
 default:	rfob <= regfile[Rb];
 endcase
@@ -530,8 +538,7 @@ endcase
 always @*
 case(Rc)
 6'd00:	rfoc <= 64'd0;
-6'd47:	rfoc <= spregfile[cpl];
-6'd48:	rfoc <= 64'd0;
+6'd62:	rfoc <= spregfile[cpl];
 6'd63:	rfoc <= pc[39:0];
 default:	rfoc <= regfile[Rc];
 endcase
@@ -620,6 +627,12 @@ wire [63:0] ea_drn = lea_drn;
 wire [63:0] ea_ndx = lea_ndx;
 wire [63:0] mr_ea = c;
 
+wire [63:0] gdt_adr = gdt_base + {a[18:0],4'h0};
+wire [63:0] ldt_adr = seg_base[11] + {a[18:0],4'h0};
+wire gdt_seg_limit_violation = {a[18:0],4'hF} > gdt_limit;
+wire ldt_seg_limit_violation = {a[18:0],4'hF} > seg_limit[11];
+
+
 assign data_readable = pmmu_data_readable;
 assign data_writeable = pmmu_data_writeable;
 
@@ -656,6 +669,7 @@ always @*
 `ifdef SUPPORT_CLKGATE
 	`CLK:	spro <= clk_throttle_new;
 `endif
+	`SR:		spro <= sr;
 	`FAULT_PC:	spro <= fault_pc;
 	`IVNO:		spro <= ivno;
 	`HISTORY:	spro <= history_buf[history_ndx2];
@@ -781,13 +795,19 @@ RESET:
 			next_state(IFETCH);
 		end
 		a[63:40] <= adr_o[7:4];
-		desc_w0 <= {4'h0,60'h0};
+		desc_h1 <= 32'd0;		// base = 64'd0
+		desc_h3 <= 32'd0;
+		desc_h2 <= 32'd0;
 		if (adr_o[7:4]==4'd0)
-			desc_w1 <= {8'h80,56'h0};
-		else if (adr_o[7:4]==4'd15)
-			desc_w1 <= {8'h9A,56'hFFFFFFFFFFFFFF};
-		else
-			desc_w1 <= {8'h92,56'hFFFFFFFFFFFFFF};
+			desc_h0 <= {8'h80,24'h0};
+		else if (adr_o[7:4]==4'd15) begin
+			desc_h0 <= {8'h9A,24'd0};
+			desc_h2 <= 32'hFFFFFFFF;
+		end
+		else begin
+			desc_h0 <= {8'h92,24'd0};
+			desc_h2 <= 32'hFFFFFFFF;
+		end
 		St <= adr_o[7:4];
 		wrsrf <= `TRUE;
 	end
@@ -955,6 +975,9 @@ DECODE:
 		isPOP <= `FALSE;
 		isPUSH <= `FALSE;
 		isPLP <= `FALSE;
+		isBSR <= `FALSE;
+		isBSR16 <= `FALSE;
+		isBSR24 <= `FALSE;
 		isRTI <= `FALSE;
 		isLMR <= `FALSE;
 		isSMR <= `FALSE;
@@ -1018,6 +1041,11 @@ DECODE:
 			imm <= hasImm ? {immbuf[51:0],ir[31:20]} : {{52{ir[31]}},ir[31:20]};
 		`LDI10,`CMPI:	imm <= hasIMM ? {immbuf[53:0],ir[23:14]} : {{54{ir[23]}},ir[23:14]};
 		`LDI18:		imm <= hasIMM ? {immbuf[45:0],ir[31:14]} : {{46{ir[31]}},ir[31:14]};
+		`JMP_IX,`JSR_IX:
+			if (hasIMM)
+				imm <= {immbuf[45:0],ir[31:14]};
+			else
+				imm <= ir[31:14];
 		`PUSHC8:	imm <= hasIMM ? {immbuf[55:0],ir[15:8]} : {{56{ir[15]}},ir[15:8]};
 		`PUSHC16:	imm <= hasIMM ? {immbuf[47:0],ir[23:8]} : {{48{ir[23]}},ir[23:8]};
 		`LB4,`LBU4,`LC4,`LCU4,`LH4,`LHU4,`LW4,
@@ -1146,6 +1174,18 @@ DECODE:
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// Flow Control Instructions Follow
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		`SWE:
+			begin
+				ir[7:0] <= `BRK;
+				ivect <= {ir[0],ir[15:8]};
+				next_state(DECODE);
+			end
+		`SWE3:
+			begin
+				ir[7:0] <= `BRK;
+				ivect <= 9'd3;
+				next_state(DECODE);
+			end
 		`BRK:
 			begin
 				$display("*****************");
@@ -1157,7 +1197,7 @@ DECODE:
 				hist_capture <= `FALSE;
 				isBRK <= `TRUE;
 				rwadr <= ss_base + sp_dec;
-				store_what <= `STW_SR;
+				store_what <= `STW_SRCS;
 				// Double fault ?
 				brkCnt <= brkCnt + 3'd1;
 				if (brkCnt > 3'd2)
@@ -1182,7 +1222,7 @@ DECODE:
 					stack_fault();
 				else begin
 					isRTI <= `TRUE;
-					rwadr <= sp_segd;
+					rwadr <= ss_base + sp;
 					update_sp(sp_inc);
 					next_state(LOAD1);
 				end
@@ -1207,33 +1247,103 @@ DECODE:
 					next_state(IFETCH);
 				a <= jsp_buf;
 			end
-		`JMP_IDX:
+		`BSR16:
 			begin
-				isJMPix <= `TRUE;
-				rwadr <= ea_drn;
-				next_state(LOAD1);
-			end
-		`JMP_DRN:	
-			begin
-				pc <= ea_drn;
-//				if (ea_drn[63:40]==cs_selector[23:0])
-					next_state(IFETCH);
-//				else
-//					load_cs_seg();
-			end
-		`JSR_IX:
-			begin	
-				if (sp_dec <= 32'd32)
+				isBSR <= `TRUE;
+				isBSR16 <= `TRUE;
+				if (sp_dec < 32'd32)
 					stack_fault();
 				else begin
-					rwadr2 <= ea_drn;
-					rwadr <= ss_base + sp_dec[31:0];
 					isWR <= `TRUE;
+					rwadr <= ss_base + sp_dec[31:0];
 					update_sp(sp_dec);
-					isJSRix <= `TRUE;
+					store_what <= `STW_PC;
+					next_state(STORE1);	
+				end
+			end
+		`BSR24:
+			begin
+				isBSR <= `TRUE;
+				isBSR24 <= `TRUE;
+				if (sp_dec < 32'd32)
+					stack_fault();
+				else begin
+					isWR <= `TRUE;
+					rwadr <= ss_base + sp_dec[31:0];
+					update_sp(sp_dec);
+					store_what <= `STW_PC;
+					next_state(STORE1);	
+				end
+			end
+		`JSR16:
+			begin
+				if (sp_dec < 32'd32)
+					stack_fault();
+				else begin
+					isJSR <= `TRUE;
+					isJSP <= isJSP;
+					isWR <= `TRUE;
+					rwadr <= ss_base + sp_dec[31:0];
+					update_sp(sp_dec);
+					// this should store in long format for PC > 38 bits
+					store_what <= `STW_PC;
+					if (hasIMM)
+						imm <= {immbuf[47:0],ir[23:8]};
+					else
+						imm <= ir[23:8];
+					next_state(STORE1);
+				end
+			end
+		`JSR24:
+			begin
+				if (sp_dec < 32'd32)
+					stack_fault();
+				else begin
+					isJSR <= `TRUE;
+					isJSP <= isJSP;
+					isWR <= `TRUE;
+					rwadr <= ss_base + sp_dec[31:0];
+					update_sp(sp_dec);
+					// this should store in long format for PC > 38 bits
+					store_what <= `STW_PC;
+					if (hasIMM)
+						imm <= {immbuf[39:0],ir[31:8]};
+					else
+						imm <= ir[31:8];
+					next_state(STORE1);
+				end
+			end
+		`JSR_DRN:
+			begin
+				if (sp_dec < 32'd32)
+					stack_fault();
+				else begin
+					isJSRdrn <= `TRUE;
+					isWR <= `TRUE;
+					rwadr <= ss_base + sp_dec[31:0];
+					update_sp(sp_dec);
 					store_what <= `STW_PC;
 					next_state(STORE1);
 				end
+			end
+		`RTS:
+			begin
+				if (sp_inc + 32'd8 > seg_limit[14])
+					stack_fault();
+				else begin
+					isRTS <= `TRUE;
+					rwadr <= ss_base + sp;
+					next_state(LOAD1);
+					update_sp(sp_inc + 32'd8);
+				end
+			end
+		`JGR:
+			begin
+				isJGR <= `TRUE;
+				nJGR <= 3'b001;
+				isWR <= `TRUE;
+				a <= ir[31:8];
+				next_state(LOAD1);
 			end
 
 
@@ -1284,7 +1394,8 @@ DECODE:
 					stack_fault();
 				else begin
 					isPOPS <= `TRUE;
-					RtPop <= ir[15:8];
+					RtPop <= 6'd0;
+					Sprt <= ir[13:8];
 					Sa <= 4'd14;
 					rwadr <= ss_base + sp;
 					update_sp(sp_inc);
@@ -1519,14 +1630,44 @@ EXECUTE:
 				end
 				res <= a - 64'd1;
 			end
-		`JALR,`JALR24:
+		`JMP16,`JMP24:
 			begin
-				res <= pc;
-				pc <= a + imm;
+				if (a[63:40]==24'd0)
+					next_state(IFETCH);
+				else
+					load_cs_seg();
 			end
-		`RTS:
+		`JMP_IX:
 			begin
-				pc <= a;
+				isJMPix <= `TRUE;
+				rwadr <= ea_drn;
+				next_state(LOAD1);
+			end
+		`JMP_DRN:	
+			begin
+				pc <= ea_drn;
+				next_state(IFETCH);
+			end
+		`JSR_IX:
+			begin	
+				if (sp_dec <= 32'd32)
+					stack_fault();
+				else begin
+					rwadr2 <= ea_drn;
+					rwadr <= ss_base + sp_dec[31:0];
+					isWR <= `TRUE;
+					update_sp(sp_dec);
+					isJSRix <= `TRUE;
+					store_what <= `STW_PC;
+					next_state(STORE1);
+				end
+			end
+		`JGRR:
+			begin
+				isJGR <= `TRUE;
+				nJGR <= 3'b001;
+				isWR <= `TRUE;
+				next_state(LOAD1);
 			end
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1943,13 +2084,34 @@ LOAD5:
 			bithist_ndx <= bithist_ndx + 6'd1;
 		end
 		if (nMTSEG==2'b01) begin
-			desc_w0 <= lres;
+			desc_h0 <= lres[31: 0];
+			desc_h1 <= lres[63:32];
 			nMTSEG <= 2'b10;
 			next_state(LOAD1);
 		end
 		else if (nMTSEG==2'b10) begin
-			desc_w1 <= lres;
+			desc_h2 <= lres[31: 0];
+			desc_h3 <= lres[63:32];
 			next_state(VERIFY_SEG_LOAD);
+		end
+		else if (nJGR==3'b001) begin
+			prev_ss_base <= ss_base;
+			prev_sp <= sp;
+			if (!lres[31])
+				segment_not_present();
+			else if (lres[23:20] < (cpl > rpl ? cpl : rpl) && pe)
+				privilege_violation();
+			cg_acr <= lres[31:24];
+			cg_dpl <= lres[23:20];
+			cg_ncopy <= lres[4:0];
+			cg_selector <= lres[55:32];
+			a[23:0] <= lres[55:32];
+			nJGR <= 3'b010;
+			next_state(LOAD1);
+		end
+		else if (nJGR==3'b010) begin
+			cg_offset <= lres[39:0];
+			next_state(LOAD_CS);
 		end
 		else begin
 			// This fudge needed for the UNLK instruction. There are three target
@@ -1987,7 +2149,7 @@ LOAD5:
 					4'b00_01:	// short format with selector
 						begin
 							pc[39:0] <= lres[37:0];
-							a[63:40] <= lres[61:38];
+							a[23:0] <= lres[61:38];
 							next_state(LOAD_CS);
 						end
 					4'b00_10:	// long format load
@@ -1998,34 +2160,54 @@ LOAD5:
 						end
 					4'b01_xx:
 						begin
-							a[63:40] <= lres[61:38];
+							a[23:0] <= lres[61:38];
 							next_state(LOAD_CS);
 						end
 					endcase
 				end
 			isBRK:
 				begin
-					if (lres[4])
-						im <= 1'b1;
-					pc[39:0] <= lres[47:8];
-					cpl <= lres[3:0];
-					next_state(IFETCH);
+					if (nLD==2'b00) begin
+						pc[39:0] <= lres[39:0];
+						cpl <= lres[63:60];
+						nLD <= 2'b01;
+						next_state(LOAD1);
+					end
+					else begin
+						if (~lres[56])	// TRAP bit
+							im <= 1'b1;
+						a[23:0] <= lres[23:0];
+						next_state(LOAD_CS);
+					end
 				end
-				else begin
-					next_state(IFETCH);
+			isRTI:
+				begin
+					if (nLD==2'b00) begin
+						pc <= lres[39:0];
+						// Bad return address if lres[63:62]!=2'b11
+						update_sp(sp_inc);
+						nLD <= 2'b01;
+						next_state(LOAD1);
+					end
+					else begin
+						if (lres[8]==1'b0)
+							imcd <= 3'b110;
+						else
+							im <= 1'b1;
+						a[23:0] <= lres[61:38];
+						next_state(LOAD_CS);
+					end
 				end
 			isPOP:
 				begin
 					wrrf <= `TRUE;
 					Rt <= RtPop;
-					next_state(DECODE);
+					next_state(IFETCH);
 				end
-			isPLP:
+			isPOPS:
 				begin
-					if (lres[8]==1'b0)
-						imcd <= 3'b110;
-					else
-						im <= 1'b1;
+					wrspr <= `TRUE;
+					Rt <= 6'd0;
 					next_state(IFETCH);
 				end
 			isLxDT:
@@ -2130,13 +2312,15 @@ VERIFY_SEG_LOAD:
 				next_state(IFETCH);
 			end
 			else if (isCallGate) begin
-				cg_offset <= desc_w0[31:0];
-				cg_selector <= desc_w1[23:0];
-				cg_dpl <= desc_w0[63:60];
-				cg_acr <= desc_w1[63:56];
-				cg_ncopy <= desc_w1[28:24];
+				prev_ss_base <= ss_base;
+				prev_sp <= sp;
+				cg_offset <= desc_h2[31:0];
+				cg_selector <= desc_h1[23:0];
+				cg_dpl <= desc_h0[23:20];
+				cg_acr <= desc_h0[31:24];
+				cg_ncopy <= desc_h0[4:0];
 				isJGR <= `TRUE;
-				a[23:0] <= desc_w1[23:0];
+				a[23:0] <= desc_h1[23:0];
 				if (!isPresent)
 					segment_not_present();
 				else if ((cpl > rpl ? cpl : rpl) > desc_dpl && pe)
@@ -2152,11 +2336,15 @@ VERIFY_SEG_LOAD:
 				else begin
 					wrsrf <= `TRUE;
 					if (isJGR)
-						pc[39:0] <= cg_offset[39:0];
-					if (St==4'd15)
-						next_state(CS_DELAY);
-					else
-						next_state(IFETCH);	// in case code segment loaded
+						next_state(MOVESTK1);
+					else begin
+						if (St==4'd15) begin
+							cs <= a[23:0];
+							next_state(CS_DELAY);
+						end
+						else
+							next_state(IFETCH);	// in case code segment loaded
+					end
 				end
 			end
 		end
@@ -2203,11 +2391,18 @@ STORE1:
 			`STW_A:		wb_write(st_size,rwadr_o,a[31:0]);
 			`STW_B:		wb_write(st_size,rwadr_o,b[31:0]);
 			`STW_C:		wb_write(st_size,rwadr_o,c[31:0]);
-			`STW_PC:	if (isBRK)
-							wb_write(word,rwadr_o,{pc[31:2],1'b1,im});
-						else
-							wb_write(word,rwadr_o,{pc[31:2],2'b00});
+			`STW_CS:	wb_write(st_size,rwadr_o,32'd0);
+			`STW_PC:	wb_write(word,rwadr_o,pc[31:0]});
+			`STW_SRCS,
 			`STW_SR:	wb_write(word,rwadr_o,sr[31:0]);
+			`STW_IDT:	if (nDT==2'b01)
+							wb_write(word,rwadr_o,idt_base[31:0]);
+						else
+							wb_write(word,rwadr_o,idt_limit[31:0]);
+			`STW_GDT:	if (nDT==2'b01)
+							wb_write(word,rwadr_o,gdt_base[31:0]);
+						else
+							wb_write(word,rwadr_o,gdt_limit[31:0]);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[31:0]);
 			`STW_IMM:	wb_write(word,rwadr_o,imm[31:0]);
 			default:	next_state(RESET);	// hardware fault
@@ -2255,7 +2450,18 @@ STORE3:
 			`STW_A:		wb_write(word,rwadr_o,a[63:32]);
 			`STW_B:		wb_write(word,rwadr_o,b[63:32]);
 			`STW_C:		wb_write(word,rwadr_o,c[63:32]);
-			`STW_PC:	wb_write(word,rwadr_o,{24'd0,pc[39:32]});
+			`STW_SRCS,
+			`STW_CS:	wb_write(word,rwadr_o,{2'b00,cs,6'b0});
+			`STW_PC:	if (isBRK)
+							wb_write(word,rwadr_o,{2'b11,22'd0,pc[39:32]});
+						else if (hasJSP|isJGR) begin
+							if (pc[39:38]==2'b00)
+								wb_write(word,rwadr_o,{2'b01,cs_selector[23:0],pc[37:32]});
+							else
+								wb_write(word,rwadr_o,{2'b10,22'b0,pc[39:32]});
+						end
+						else
+							wb_write(word,rwadr_o,{24'd0,pc[39:32]});
 			`STW_SR:	wb_write(word,rwadr_o,32'h00);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[63:32]);
 			`STW_IMM:	wb_write(word,rwadr_o,imm[63:32]);
@@ -2294,22 +2500,38 @@ STORE4:
 				else
 					next_state(STORE1);
 			end
+			else if (isJGR) begin
+				if (store_what==`STW_PC) begin
+					pc <= cg_offset;
+					cs <= cg_selector;
+					isWR <= `FALSE;
+					next_state(CS_DELAY);
+				end
+				else begin
+					store_what <= `STW_PC;
+					rwadr <= ss_base + sp_dec;
+					update_sp(sp_dec);
+					next_state(STORE1);
+				end
+			end
 			else if (isBRK) begin
 				if (store_what==`STW_PC) begin
-					rwadr <= {vbr[31:13],ir[20:12],4'h0};
+					rwadr <= {vbr[31:13],ivect,4'h0};
 					isWR <= `FALSE;
 					next_state(LOAD1);
 				end
 				else begin
 					store_what <= `STW_PC;
-					rwadr <= sp_dec;
+					rwadr <= ss_base + sp_dec;
 					update_sp(sp_dec);
 					next_state(STORE1);
 				end
 			end
 			else if (isBSR)	begin
-				pc[15: 0] <= ir[31:16];
-				pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
+				if (isBSR16)
+					pc <= pc + {{24{ir[23]}},ir[23:8]};
+				else
+					pc <= pc + {{16{ir[31]}},ir[31:8]};
 				isWR <= `FALSE;
 				next_state(IFETCH);
 			end
@@ -2329,8 +2551,6 @@ STORE4:
 				rwadr <= rwadr2;
 				next_state(LOAD1);
 			end
-			else if (isPUSH)
-				next_state(DECODE);
 			else begin
 				isWR <= `FALSE;
 				next_state(IFETCH);
@@ -2339,6 +2559,59 @@ STORE4:
 	end
 	else if (err_i)
 		bus_err();
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Move parameters from the caller's stack to the callee's stack during
+// a gate routine call.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+MOVESTK1:
+	begin
+		ncopy <= {cg_ncopy,1'b1};
+		if (cg_ncopy!=5'd0) begin
+			wb_burst(ncopy,prev_ss_base + {prev_sp[31:3],3'b00});
+			next_state(MOVESTK2);
+		end
+		else begin
+			next_state(MOVESTK5);
+		end
+	end
+MOVESTK2:
+	if (ack_i) begin
+		ncopy <= ncopy - 6'd1;
+		adr_o <= adr_o + 32'd4;
+		stack_fifo[ncopy] <= dat_i;
+		if (ncopy==6'd1)
+			cti_o <= 3'b111;
+		if (ncopy==6'd0) begin
+			wb_nack();
+			ncopy <= {cg_copy,1'b1};
+			adr_ox <= ss_base + sp_dec;
+			next_state(MOVESTK3);
+		end
+	end
+MOVESTK3:
+	begin
+		wb_write(half,adr_ox,stack_fifo[ncopy]);
+		next_state(MOVESTK4);
+	end
+MOVESTK4:
+	if (ack_i) begin
+		ncopy <= ncopy - 6'd1;
+		wb_nack();
+		adr_ox <= adr_ox - 32'd4;
+		if (ncopy!=6'd0)
+			next_state(MOVESTK3);
+		else
+			next_state(MOVESTK5);
+	end
+MOVESTK5:
+	begin
+		store_what <= `STW_CS;
+		rwadr <= ss_base + sp_dec;
+		update_sp(sp_dec);
+		next_state(STORE1);
+	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Cache invalidate machine states.
@@ -2425,6 +2698,14 @@ if (wrspr) begin
 `ifdef SUPPORT_CLKGATE
 	`CLK:		begin clk_throttle_new <= res[49:0]; ld_clk_throttle <= `TRUE; end
 `endif
+	`SR:	begin
+			if (res[8]==1'b0)
+				imcd <= 3'b110;
+			else
+				im <= 1'b1;
+			pv <= res[1];
+			pe <= res[0];
+			end
 	6'h2x:
 		if (ir[17:14]!=4'd0) begin	// can't move to segment reg #0
 			St <= ir[17:14];
