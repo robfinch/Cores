@@ -105,6 +105,9 @@ parameter MOVESTK2 = 6'd49;
 parameter MOVESTK3 = 6'd50;
 parameter MOVESTK4 = 6'd51;
 parameter MOVESTK5 = 6'd52;
+parameter VERIFY_SEG_LOAD = 6'd54;
+parameter LOAD_CS = 6'd55;
+parameter CS_DELAY = 6'd56;
 parameter HANG = 6'd63;
 
 // - - - - - - - - - - - - - - - - - -
@@ -158,7 +161,7 @@ wire tmrw = 1'b0;
 wire tmrr = 1'b0;
 `endif
 reg [1:0] tmrcyc;			// tmr cycle number
-reg [3:0] store_what;
+reg [4:0] store_what;
 reg [95:0] ir;
 `ifdef TMR_CACHE
 wire [39:0] insn_a,insn_b,insn_c;
@@ -193,6 +196,7 @@ wire [63:0] sr = {8'd0,23'd0,im,6'h00,pv,pe};
 reg [63:0] regfile [63:0];
 reg [63:0] spregfile [15:0];
 reg [63:0] prev_ss_base;
+reg [23:0] prev_ss;
 reg [63:0] prev_sp;
 reg mpcf;					// multi-precision carry
 reg gie;						// global interrupt enable
@@ -201,10 +205,6 @@ reg [5:0] Ra;
 always @(opcode,ir)
 casex(opcode)
 `Bcc,`LBcc:		Ra <= {3'b100,ir[10:8]};
-`JALR,`JALR24:	Ra <= {2'b11,ir[11:8]};
-`RTS:			Ra <= 6'd49;
-`RTI:			Ra <= 6'd62;
-`RTE:			Ra <= 6'd61;
 default:		Ra <= ir[13:8];
 endcase
 
@@ -228,14 +228,17 @@ reg isJSP,isJSR,isLWS,isLink,isUnlk;
 reg isRTSsf,isRTSsfs,isRTSlf;
 reg isLxDT,isSxDT;
 reg isLW;
-reg isJGR,isVERR,isVERW,isVERX,isLSL,isLAR,isLSB;
+reg isJGR,isVERR,isVERW,isVERX,isLDWx;
 reg isBM;
 reg isCAS;
 reg isTLS,isGS,isIO,isSegx;
+reg isTrapv;
 
 reg [31:0] stack_fifo [63:0];
+reg [5:0] ncopy;
 
-reg [1:0] nLD, nMTSEG;
+reg [2:0] nLD, nMTSEG, nJGR;
+reg [1:0] nDT;
 wire hasJSP = isJSP;
 wire hasIMM = isIMM;
 reg [63:0] rfoa,rfob,rfoc;
@@ -251,6 +254,7 @@ reg [63:0] tick;		// tick count
 reg [31:0] vbr;			// vector base register
 reg [31:0] berr_addr;
 reg [31:0] fault_pc;
+reg [23:0] fault_cs;
 reg [2:0] brkCnt;		// break counter for detecting multiple faults
 reg cav;
 wire dav;				// address is valid for mmu translation
@@ -264,7 +268,6 @@ assign dav=state==LOAD1||state==LOAD3||state==STORE1||state==STORE3;
 
 wire cpnp,dpnp;
 reg rst_cpnp,rst_dpnp;
-reg [3:0] cpl;
 wire [63:0] cpte;
 wire [63:0] dpte;
 wire drdy;
@@ -279,9 +282,6 @@ wire [3:0] pmmu_dpl;
 reg [31:0] ivno;
 wire [63:0] logic_o;
 wire [63:0] set_o;
-
-wire [63:0] sp_inc = spregfile[cpl] + 64'd8;
-wire [63:0] sp_dec = spregfile[cpl] - 64'd8;
 
 reg [31:0] gdt_base;
 reg [31:0] gdt_limit,gdt_limit2;
@@ -311,18 +311,24 @@ reg [4:0] cg_ncopy;
 
 reg [23:0] cs;
 wire [23:0] cs_selector = seg_selector[4'd15];
-wire [31:0] cs_base = seg_base[4'd15];
+wire [39:0] cs_base = seg_base[4'd15];
 wire [31:0] cs_limit = seg_limit[4'd15];
 wire [7:0] cs_acr = seg_acr[4'd15];
 wire [31:0] ss_base = seg_base[4'd14];
 wire [31:0] ss_limit = seg_limit[4'd14];
+wire [31:0] tss_base = seg_base[4'd12];
+wire [23:0] ss = seg_selector[4'd14];
 
+reg [3:0] ppl;		// previous privilege level
 wire [3:0] cpl = seg_dpl[4'd15];
 wire [3:0] dpl = seg_dpl[Sa];
 wire [3:0] rpl = a[63:60];
 assign segmented_pc = {cs_base[39:8],8'h00} + pc;
 wire pcOutOfBounds = pc > cs_limit;
 wire selectorIsNull = a[63:40]==24'd0;
+
+wire [63:0] sp_inc = spregfile[cpl] + 64'd8;
+wire [63:0] sp_dec = spregfile[cpl] - 64'd8;
 
 // - - - - - - - - - - - - - - - - - -
 // Convenience Functions
@@ -341,7 +347,7 @@ casex(opcode)
 `ADDI:			pc_inc = 4'd4;
 `ADDI4:			pc_inc = 4'd3;
 `SUBI:			pc_inc = 4'd4;
-`SUBI4			pc_inc = 4'd3;
+`SUBI4:			pc_inc = 4'd3;
 `MULI:			pc_inc = 4'd4;
 `DIVI:			pc_inc = 4'd4;
 `MODI:			pc_inc = 4'd4;
@@ -542,6 +548,8 @@ case(Rc)
 6'd63:	rfoc <= pc[39:0];
 default:	rfoc <= regfile[Rc];
 endcase
+
+wire [63:0] sp = regfile[62];
 
 // Data input multiplexers
 reg [7:0] dat8;
@@ -750,7 +758,6 @@ if (rst_i) begin
 	hist_capture <= `TRUE;
 	history_ndx <= 6'd0;
 	history_ndx2 <= 6'd0;
-	cpl <= 4'd0;
 `ifdef SUPPORT_CLKGATE
 	ld_clk_throttle <= `FALSE;
 `endif
@@ -979,18 +986,17 @@ DECODE:
 		isBSR16 <= `FALSE;
 		isBSR24 <= `FALSE;
 		isRTI <= `FALSE;
+		isJGR <= `FALSE;
 		isLMR <= `FALSE;
 		isSMR <= `FALSE;
 		isLWS <= `FALSE;
 		isVERR <= `FALSE;
 		isVERW <= `FALSE;
 		isVERX <= `FALSE;
-		isLAR <= `FALSE;
-		isLSL <= `FALSE;
-		isLSB <= `FALSE;
+		isLDWx <= `FALSE;
 		isLW <= `FALSE;
 		isCAS <= `FALSE;
-		nLD <= 2'b00;
+		nLD <= 3'd0;
 		isShifti = func==`SLLI || func==`SRLI || func==`ROLI || func==`RORI || func==`SRAI;
 		a <= rfoa;
 		b <= rfob;
@@ -1018,8 +1024,6 @@ DECODE:
 		`ANDI,`ORI,`EORI,
 		`SLTI,`SLEI,`SGTI,`SGEI,`SLOI,`SLSI,`SHII,`SHSI,`SEQI,`SNEI:
 			Rt <= ir[19:14];
-		`JALR,`JALR24:
-			Rt <= {2'b11,ir[15:12]};
 		`LB4,`LBU4,`LC4,`LCU4,`LH4,`LHU4,`LW4,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
 			begin
@@ -1038,7 +1042,7 @@ DECODE:
 		casex(opcode)
 		`ADDI4,`SUBI4:	imm <= {60'd0,ir[23:20]};
 		`ADDI,`SUBI,`ANDI,`ORI,`EORI,`MULI,`DIVI,`MODI,`MULUI,`DIVUI,`MODUI:		
-			imm <= hasImm ? {immbuf[51:0],ir[31:20]} : {{52{ir[31]}},ir[31:20]};
+			imm <= hasIMM ? {immbuf[51:0],ir[31:20]} : {{52{ir[31]}},ir[31:20]};
 		`LDI10,`CMPI:	imm <= hasIMM ? {immbuf[53:0],ir[23:14]} : {{54{ir[23]}},ir[23:14]};
 		`LDI18:		imm <= hasIMM ? {immbuf[45:0],ir[31:14]} : {{46{ir[31]}},ir[31:14]};
 		`JMP_IX,`JSR_IX:
@@ -1115,7 +1119,7 @@ DECODE:
 			default:	;
 			endcase
 		`SEGT:
-			case(ir[23:20])
+			casex(ir[23:20])
 			`VERR:
 				begin
 					isVERR <= `TRUE;
@@ -1131,17 +1135,8 @@ DECODE:
 					isVERX <= `TRUE;
 					load_seg();
 				end
-			`LSL:	begin
-					isLSL <= `TRUE;
-					load_seg();
-					end
-			`LAR:
-				begin
-					isLAR <= `TRUE;
-					load_seg();
-				end
-			`LSB:	begin
-					isLSB <= `TRUE;
+			`LDWx:	begin
+					isLDWx <= `TRUE;
 					load_seg();
 					end
 			//`LSB:	Sa <= ir[11:8];
@@ -1196,8 +1191,6 @@ DECODE:
 				ivno <= ivect;
 				hist_capture <= `FALSE;
 				isBRK <= `TRUE;
-				rwadr <= ss_base + sp_dec;
-				store_what <= `STW_SRCS;
 				// Double fault ?
 				brkCnt <= brkCnt + 3'd1;
 				if (brkCnt > 3'd2)
@@ -1207,8 +1200,9 @@ DECODE:
 				else if (sp_dec < 32'd16)
 					stack_fault();
 				else begin
-					isWR <= `TRUE;
-					update_sp(sp_dec);
+					// 1. Store the SS:SP in task state segment
+					store_what <= `STW_SP;
+					rwadr <= {tss_base[31:2],2'b00} + {cpl,4'h0} + 32'h200;
 					next_state(STORE1);
 				end
 				$stop;
@@ -1342,8 +1336,12 @@ DECODE:
 				isJGR <= `TRUE;
 				nJGR <= 3'b001;
 				isWR <= `TRUE;
-				a <= ir[31:8];
-				next_state(LOAD1);
+				// 1. Store the SS:SP in task state segment
+				store_what <= `STW_SP;
+				rwadr <= {tss_base[31:2],2'b00} + {cpl,4'h0} + 32'h200;
+				next_state(STORE1);
+//				a <= ir[31:8];
+//				next_state(LOAD1);
 			end
 
 
@@ -1365,7 +1363,7 @@ DECODE:
 		`PUSHS:
 			if (sp_dec <= 32'd32)
 				stack_fault();
-			begin
+			else begin
 				isPUSH <= `TRUE;
 				store_what <= `STW_SPR;
 				Sa <= 4'd14;
@@ -1409,7 +1407,7 @@ DECODE:
 		`PUSHC8,`PUSHC16:
 			if (sp_dec <= 32'd32)
 				stack_fault();
-			begin
+			else begin
 				store_what <= `STW_IMM;
 				Sa <= 4'd14;
 				rwadr <= ss_base + sp_dec[31:0];
@@ -2111,6 +2109,7 @@ LOAD5:
 		end
 		else if (nJGR==3'b010) begin
 			cg_offset <= lres[39:0];
+			nJGR <= 3'b011;
 			next_state(LOAD_CS);
 		end
 		else begin
@@ -2141,62 +2140,124 @@ LOAD5:
 			isRTS:
 				begin
 					casex({nLD,lres[63:62]})
-					4'b00_00:	// short format
+					5'b00_00:	// short format
 						begin
 							pc[39:0] <= lres[39:0];
 							next_state(IFETCH);
 						end
-					4'b00_01:	// short format with selector
+					5'b00_01:	// short format with selector
 						begin
+							ppl <= cpl;
+							prev_sp <= sp + 32'd16;
+							prev_ss <= ss;
 							pc[39:0] <= lres[37:0];
 							a[23:0] <= lres[61:38];
+							nLD <= 3'b010;
 							next_state(LOAD_CS);
 						end
-					4'b00_10:	// long format load
+					5'b00_10:	// long format load
 						begin
 							pc[39:0] <= lres[39:0];
-							nLD <= 2'b01;
+							nLD <= 3'b01;
 							next_state(LOAD1);
 						end
-					4'b01_xx:
+					5'b01_xx:
 						begin
+							ppl <= cpl;
+							prev_sp <= sp + 32'd16;
+							prev_ss <= ss;
 							a[23:0] <= lres[61:38];
+							nLD <= 3'b10;
 							next_state(LOAD_CS);
+						end
+					5'b010_xx:
+						begin
+							update_sp(lres);
+							nLD <= 3'b11;
+							next_state(LOAD1);
+						end
+					5'b011_xx:
+						begin
+							St <= 4'd14;
+							a <= lres[23:0];
+							load_seg();
+						end
+					endcase
+				end
+			isRTI:
+				begin
+					casex(nLD)
+					3'b00:	// long format load
+						begin
+							pc[39:0] <= lres[39:0];
+							if (lres[63:62]!=2'b11)
+								;	// bad return address
+							nLD <= 3'b01;
+							next_state(LOAD1);
+						end
+					3'b01:
+						begin
+							ppl <= cpl;
+							prev_sp <= sp + 32'd16;
+							prev_ss <= ss;
+							a[23:0] <= lres[61:38];
+							if (lres[8]==1'b0)
+								imcd <= 3'b110;
+							else
+								im <= 1'b1;
+							nLD <= 3'b10;
+							next_state(LOAD_CS);
+						end
+					3'b010:
+						begin
+							update_sp(lres);
+							nLD <= 3'b11;
+							next_state(LOAD1);
+						end
+					3'b011:
+						begin
+							St <= 4'd14;
+							a <= lres[23:0];
+							load_seg();
 						end
 					endcase
 				end
 			isBRK:
 				begin
-					if (nLD==2'b00) begin
-						pc[39:0] <= lres[39:0];
-						cpl <= lres[63:60];
-						nLD <= 2'b01;
-						next_state(LOAD1);
-					end
-					else begin
-						if (~lres[56])	// TRAP bit
-							im <= 1'b1;
-						a[23:0] <= lres[23:0];
-						next_state(LOAD_CS);
-					end
-				end
-			isRTI:
-				begin
-					if (nLD==2'b00) begin
-						pc <= lres[39:0];
-						// Bad return address if lres[63:62]!=2'b11
-						update_sp(sp_inc);
-						nLD <= 2'b01;
-						next_state(LOAD1);
-					end
-					else begin
-						if (lres[8]==1'b0)
-							imcd <= 3'b110;
-						else
-							im <= 1'b1;
-						a[23:0] <= lres[61:38];
-						next_state(LOAD_CS);
-					end
+					case (nLD)
+					// 3. Load next CS:PC for the interrupt routine
+					3'b000:
+						begin
+							cg_dpl <= lres[23:20];
+							cg_selector <= lres[55:32];
+							if (~lres[56])	// TRAP bit
+								im <= 1'b1;
+							nLD <= nLD + 3'd1;
+							next_state(LOAD1);
+							// Assume ACR = 86h or 87h
+						end
+					// 4. Load the SS:SP for the new CPL from the task state
+					3'b001:
+						begin
+							cg_offset <= lres[39:0];
+							rwadr <= {tss_base[31:2],2'b00} + {cg_dpl,4'h0} + 32'h200;
+							nLD <= nLD + 3'd1;
+							next_state(LOAD1);
+						end
+					3'b010:
+						begin
+							update_sp(lres);
+							nLD <= nLD + 3'd1;
+							next_state(LOAD1);
+						end
+					3'b011:
+						begin
+							St <= 4'd14;
+							a <= lres[23:0];
+							nLD <= nLD + 3'd1;
+							load_seg();
+						end
+					endcase
 				end
 			isPOP:
 				begin
@@ -2253,7 +2314,7 @@ VERIFY_SEG_LOAD:
 		res <= 65'd0;
 		// Is the segment resident in memory ?
 		if (!isPresent && !selectorIsNull) begin
-			if (isVERR|isVERW|isVERX|isLSL|isLAR|isLSB)
+			if (isVERR|isVERW|isVERX|isLDWx)
 				;
 			else begin
 				if (St==4'd14)
@@ -2279,8 +2340,8 @@ VERIFY_SEG_LOAD:
 		// The code privilege level must be the same or higher (numerically
 		// lower) than the data descriptor privilege level.
 //		// CPL <= DPL
-		else if ((St!=4'd15||isCallGate||isVERR||isVERW||isLSL||isLAR||isLSB) && cpl > desc_dpl && pe && !selectorIsNull) begin	// data segment
-			if (isVERR||isVERW||isLSL||isLAR||isLSB)
+		else if ((St!=4'd15||isCallGate||isVERR||isVERW||isLDWx) && cpl > desc_dpl && pe && !selectorIsNull) begin	// data segment
+			if (isVERR||isVERW||isLDWx)
 				;
 			else
 				privilege_violation();
@@ -2295,16 +2356,12 @@ VERIFY_SEG_LOAD:
 //			next_state(IFETCH);
 		else
 		begin
-			if (isLSB) begin
-				res <= desc_base;
-				next_state(IFETCH);
-			end
-			else if (isLAR) begin
-				res <= desc_acr;
-				next_state(IFETCH);
-			end
-			else if (isLSL) begin
-				res <= desc_limit;
+			if (isLDWx) begin
+				case(ir[21:20])
+				2'd0:	res <= {desc_h1,desc_h0};
+				2'd1:	res <= {desc_h3,desc_h2};
+				default:	res <= 64'd0;
+				endcase
 				next_state(IFETCH);
 			end
 			else if (isVERR||isVERW||isVERX) begin
@@ -2337,6 +2394,17 @@ VERIFY_SEG_LOAD:
 					wrsrf <= `TRUE;
 					if (isJGR)
 						next_state(MOVESTK1);
+					else if (isBRK) begin
+						// 5. Store the old CS:PC on the new SS:SP stack
+						if (nLD==3'b100) begin
+							isWR <= `TRUE;
+							rwadr <= ss_base + sp_dec;
+							store_what <= `STW_SRCS;
+							update_sp(sp_dec);
+							nLD <= nLD + 3'd1;
+							next_state(STORE1);
+						end
+					end
 					else begin
 						if (St==4'd15) begin
 							cs <= a[23:0];
@@ -2352,7 +2420,15 @@ VERIFY_SEG_LOAD:
 LOAD_CS:
 	load_cs_seg();
 CS_DELAY:
-	next_state(IFETCH);
+	if (isRTS|isRTI) begin
+		isWR <= `TRUE;
+		store_what <= `STW_PREV_SP;
+		rwadr <= {tss_base[31:2],2'b00} + {ppl,4'h0} + 32'h200;
+		next_state(STORE1);
+	end
+	else
+		next_state(IFETCH);
+
 
 
 // If not triple mode redundant and less than a word in size, cause the TMR
@@ -2391,8 +2467,12 @@ STORE1:
 			`STW_A:		wb_write(st_size,rwadr_o,a[31:0]);
 			`STW_B:		wb_write(st_size,rwadr_o,b[31:0]);
 			`STW_C:		wb_write(st_size,rwadr_o,c[31:0]);
+			`STW_PREV_SP:	wb_write(st_size,rwadr_o,prev_sp[31:0]);
+			`STW_PREV_SS:	wb_write(st_size,rwadr_o,{8'h00,prev_ss[23:0]});
+			`STW_SP:	wb_write(st_size,rwadr_o,sp[31:0]);
+			`STW_SS:	wb_write(st_size,rwadr_o,{8'h00,ss[23:0]});
 			`STW_CS:	wb_write(st_size,rwadr_o,32'd0);
-			`STW_PC:	wb_write(word,rwadr_o,pc[31:0]});
+			`STW_PC:	wb_write(word,rwadr_o,pc[31:0]);
 			`STW_SRCS,
 			`STW_SR:	wb_write(word,rwadr_o,sr[31:0]);
 			`STW_IDT:	if (nDT==2'b01)
@@ -2451,6 +2531,10 @@ STORE3:
 			`STW_B:		wb_write(word,rwadr_o,b[63:32]);
 			`STW_C:		wb_write(word,rwadr_o,c[63:32]);
 			`STW_SRCS,
+			`STW_PREV_SP:	wb_write(st_size,rwadr_o,prev_sp[63:32]);
+			`STW_PREV_SS:	wb_write(st_size,rwadr_o,32'h00);
+			`STW_SP:	wb_write(st_size,rwadr_o,sp[63:32]);
+			`STW_SS:	wb_write(st_size,rwadr_o,32'h00);
 			`STW_CS:	wb_write(word,rwadr_o,{2'b00,cs,6'b0});
 			`STW_PC:	if (isBRK)
 							wb_write(word,rwadr_o,{2'b11,22'd0,pc[39:32]});
@@ -2500,7 +2584,7 @@ STORE4:
 				else
 					next_state(STORE1);
 			end
-			else if (isJGR) begin
+/*			else if (isJGR) begin
 				if (store_what==`STW_PC) begin
 					pc <= cg_offset;
 					cs <= cg_selector;
@@ -2513,13 +2597,30 @@ STORE4:
 					update_sp(sp_dec);
 					next_state(STORE1);
 				end
-			end
-			else if (isBRK) begin
-				if (store_what==`STW_PC) begin
-					rwadr <= {vbr[31:13],ivect,4'h0};
-					isWR <= `FALSE;
-					next_state(LOAD1);
+			end */
+			else if (isBRK|isJGR) begin
+				// 1. First store the current SS:SP in the task state segment
+				if (store_what==`STW_SP) begin
+					store_what <= `STW_SS;
+					next_state(STORE1);
 				end
+				// 2. Load the interrupt/call gate from the IDT/LDT/GDT to get the cpl
+				else if (store_what==`STW_SS) begin
+					if (isJGR)
+						load_gate(0); 
+					else
+						load_gate(1);
+				end
+				// 6. Set new CS:PC
+				else if (store_what==`STW_PC) begin
+					pc <= cg_offset;
+					a <= cg_selector;
+					isWR <= `FALSE;
+					isBRK <= `FALSE;
+					isJGR <= `FALSE;
+					load_cs_seg();
+				end
+				// 5. Store CS:PC
 				else begin
 					store_what <= `STW_PC;
 					rwadr <= ss_base + sp_dec;
@@ -2550,6 +2651,17 @@ STORE4:
 				isWR <= `FALSE;
 				rwadr <= rwadr2;
 				next_state(LOAD1);
+			end
+			else if (isRTS|isRTI) begin
+				if (store_what==`STW_PREV_SP) begin
+					store_what <= `STW_PREV_SS;
+					next_state(STORE1);
+				end
+				else begin
+					isWR <= `FALSE;
+					rwadr <= {tss_base[31:2],2'b00} + {cpl,4'h0} + 32'h200;
+					next_state(LOAD1);
+				end
 			end
 			else begin
 				isWR <= `FALSE;
@@ -2585,7 +2697,7 @@ MOVESTK2:
 			cti_o <= 3'b111;
 		if (ncopy==6'd0) begin
 			wb_nack();
-			ncopy <= {cg_copy,1'b1};
+			ncopy <= {cg_ncopy,1'b1};
 			adr_ox <= ss_base + sp_dec;
 			next_state(MOVESTK3);
 		end
@@ -2704,7 +2816,7 @@ if (wrspr) begin
 			else
 				im <= 1'b1;
 			pv <= res[1];
-			pe <= res[0];
+			cr0[0] <= res[0];	// pe bit
 			end
 	6'h2x:
 		if (ir[17:14]!=4'd0) begin	// can't move to segment reg #0
@@ -2887,12 +2999,47 @@ begin
 end
 endtask
 
+task bounds_violation;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ivect <= 9'd500;
+	fault_pc <= pc;
+	next_state(DECODE);
+end
+endtask
+
+task segment_not_present;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ivect <= 9'd503;
+	fault_pc <= pc;
+	fault_cs <= cs_selector;
+	next_state(DECODE);
+end
+endtask
+
 task privilege_violation;
 begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
 	ivect <= 9'd501;
 	fault_pc <= pc;
+	fault_cs <= cs_selector;
+	next_state(DECODE);
+end
+endtask
+
+task segtype_violation;
+begin
+	hwi <= `TRUE;
+	ir[7:0] <= `BRK;
+	ivect <= 9'd502;
+	fault_pc <= pc;
+	fault_cs <= cs_selector;
+//	fault_seg <= a[63:32];
+//	fault_st <= St;
 	next_state(DECODE);
 end
 endtask
@@ -2901,39 +3048,55 @@ endtask
 // from the descriptor table. Also set the result bus to false for the 
 // verify instructions.
 
-task load_seg;
+task load_gate;
+input isIGate;
 begin
-	nMTSEG <= 2'b01;
-	if (a[19]) begin
-		rwadr <= ldt_adr[31:0];
-		if (ldt_seg_limit_violation && pe)
+	if (isIGate) begin
+		rwadr <= idt_base + {ivect,4'h0};
+		if ({ivect,4'h0} > idt_limit && pe)
 			bounds_violation();
 		else
 			next_state(LOAD1);
 	end
 	else begin
-//		if (a[63:40]==24'd0) begin
-//			if (St==4'd15)
-//				segtype_violation();
-//			else begin
-//				seg_selector[St] <= a[63:32];
-//				seg_base[St] <= 64'd0;
-//				seg_limit[St] <= 64'd0;
-//				seg_dpl[St] <= cpl;
-//				seg_acr[St] <= 8'h80;	// present, type zero
-//				res <= 64'd0;
-//				next_state(IFETCH);
-//			end
-//		end
-//		else
-		begin
-			rwadr <= gdt_adr[31:0];
-			if (gdt_seg_limit_violation && pe)
+		if (a[19]) begin
+			rwadr <= ldt_adr[31:0];
+			if (ldt_seg_limit_violation && pe)
 				bounds_violation();
 			else
 				next_state(LOAD1);
 		end
+		else begin
+	//		if (a[63:40]==24'd0) begin
+	//			if (St==4'd15)
+	//				segtype_violation();
+	//			else begin
+	//				seg_selector[St] <= a[63:32];
+	//				seg_base[St] <= 64'd0;
+	//				seg_limit[St] <= 64'd0;
+	//				seg_dpl[St] <= cpl;
+	//				seg_acr[St] <= 8'h80;	// present, type zero
+	//				res <= 64'd0;
+	//				next_state(IFETCH);
+	//			end
+	//		end
+	//		else
+			begin
+				rwadr <= gdt_adr[31:0];
+				if (gdt_seg_limit_violation && pe)
+					bounds_violation();
+				else
+					next_state(LOAD1);
+			end
+		end
 	end
+end
+endtask
+
+task load_seg;
+begin
+	nMTSEG <= 2'b01;
+	load_gate(0);
 end
 endtask
 

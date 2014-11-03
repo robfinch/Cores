@@ -122,7 +122,10 @@
 
 `define CMP		8'h18
 `define SEGT	8'h1F
-
+`define LDWx		4'b00xx
+`define VERR		4'h8
+`define VERW		4'h9
+`define VERX		4'hA
 `define ADDI	8'h20
 `define SUBI	8'h21
 `define MULI	8'h22
@@ -280,18 +283,22 @@
 `define CLI		8'hFA
 `define SEI		8'hFB
 
-`define STW_NONE	4'd0
-`define STW_CS	4'd1
-`define STW_PC	4'd2
-`define STW_A	4'd3
-`define STW_B	4'd4
-`define STW_C	4'd5
-`define STW_SR	4'd6
-`define STW_SPR	4'd8
-`define STW_IMM	4'd9
-`define STW_IDT	4'd10
-`define STW_GDT	4'd11
-`define STW_SRCS	4'd12
+`define STW_NONE	5'd0
+`define STW_CS	5'd1
+`define STW_PC	5'd2
+`define STW_A	5'd3
+`define STW_B	5'd4
+`define STW_C	5'd5
+`define STW_SR	5'd6
+`define STW_SPR	5'd8
+`define STW_IMM	5'd9
+`define STW_IDT	5'd10
+`define STW_GDT	5'd11
+`define STW_SRCS	5'd12
+`define STW_SP	5'd13
+`define STW_SS	5'd14
+`define STW_PREV_SP	5'd15
+`define STW_PREV_SS	5'd16
 
 `define TICK		6'h00
 `define VBR			6'h01
