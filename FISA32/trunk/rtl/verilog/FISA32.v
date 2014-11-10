@@ -34,6 +34,7 @@
 `define NAND		6'h00
 `define NOR			6'h01
 `define ENOR		6'h02
+`define ORC			6'h03
 `define ADD			6'h04
 `define SUB			6'h05
 `define MUL			6'h07
@@ -42,6 +43,7 @@
 `define AND			6'h0C
 `define OR			6'h0D
 `define EOR			6'h0E
+`define ANDC		6'h0F
 `define ADDU		6'h14
 `define SUBU		6'h15
 `define MULU		6'h17
@@ -113,6 +115,7 @@
 `define LH		6'h22
 `define LHU		6'h23
 `define LW		6'h24
+`define PUSHC	6'h25
 `define SEQI	6'h26
 `define SNEI	6'h27
 `define LBX		6'h28
@@ -209,10 +212,11 @@ reg hwi;					// hardware interrupt occurring
 reg im,imb,imb2;			// interrupt mask and backup
 reg nmi_edge,nmi1;
 reg isBRK;
+reg [1:0] lscyc;
 reg hasJSP;
 reg [2:0] brkCnt;
 reg [31:0] regfile [31:0];
-reg [31:0] sp;
+reg [22:0] sp;
 wire [4:0] Ra = ir[10:6];
 wire [4:0] Rb = ir[15:11];
 wire [4:0] Rc = ir[20:16];
@@ -288,7 +292,7 @@ descTable u3
 (	
 	.clk(clk),
 	.wa(adr_o[11:2]),
-	.we(cyc_o & stb_o & we_o && (adr_o[27:11]==17'b0000_0000_0000_0000_0)),
+	.we(cyc_o & stb_o & we_o && (adr_o[27:12]==17'b0000_0000_0000_0001)),
 	.i(dat_o),
 	.selector(srfo),
 	.cs_selector(cs),
@@ -351,7 +355,6 @@ endcase
 always @(posedge clk)
 if (rst_i) begin
 	wb_nack();
-	pc <= 32'd0;
 	ibufadr <= 32'd1;
 	insncnt <= 32'd0;
 	tick <= 32'd0;
@@ -361,7 +364,8 @@ if (rst_i) begin
 	pe <= 1'b0;
 	St <= 3'd7;
 	cs <= 10'd0;
-	res <= 64'd0;	// used to load segment registers
+	pc <= 23'h10000;
+	res <= 32'd0;	// used to load segment registers
 	adr <= 28'h0;
 	next_state(RESET1);
 end
@@ -377,15 +381,14 @@ case (state)
 //
 // - reset the segment registers
 // - The segment registers are all set to zero so that the processor has
-//   a flat image of memory. The segment limits are also zero and should be
-//   initialized before protected mode is turned on.
+//   a flat image of memory. The segment limits are set to the max.
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
 RESET1:
 	begin
 		// limit to max, base to zero (flat addressing)
-		wb_write1(word,adr,32'hFFFFFFFF);
+		wb_write1(word,adr,32'hFFFF0000);
 		next_state(RESET2);
 	end
 RESET2:
@@ -419,7 +422,7 @@ IFETCH1:
 		insncnt <= insncnt + 32'd1;
 		regfile[Rt] <= res;
 		if (Rt==5'd30) begin
-			sp <= res;
+			sp <= {res[31:2],2'b00};
 			gie <= `TRUE;
 		end
 		case(St)
@@ -527,6 +530,12 @@ DECODE:
 				imm <= {immbuf[25:0],ir[31:26]};
 			else
 				imm <= {{26{ir[31]}},ir[31:26]};
+		`JMP,`JSR:	imm <= {ir[31:11],2'b00};
+		`PUSHC:
+			if (hasImm)
+				imm <= {immbuf[5:0],ir[31:6]};
+			else
+				imm <= {{6{ir[31]}},ir[31:6]};
 		default:	imm <= 32'd0;
 		endcase
 
@@ -576,6 +585,11 @@ EXECUTE:
 			`AND:	res <= a & b;
 			`OR:	res <= a | b;
 			`EOR:	res <= a ^ b;
+			`NAND:	res <= ~(a & b);
+			`NOR:	res <= ~(a | b);
+			`ENOR:	res <= ~(a ^ b);
+			`ANDC:	res <= a & ~b;
+			`ORC:	res <= a | ~b;
 			`SLL:	res <= shlo[31:0];
 			`SLLI:	res <= shlo[31:0];
 			`SRL:	res <= shro[63:32];
@@ -617,7 +631,21 @@ EXECUTE:
 					sp <= sp + 32'd4;
 					next_state(LOADSTORE1);
 				end
-			default:	res <= 64'd0;
+			`PUSH:
+				begin
+					Sa <= 3'd6;
+					ea <= sp - 32'd4;
+					sp <= sp - 32'd4;
+					next_state(LOADSTORE1);
+				end
+			`POP:
+				begin
+					Sa <= 3'd6;
+					ea <= sp;
+					sp <= sp + 32'd4;
+					next_state(LOADSTORE1);
+				end
+			default:	res <= 32'd0;
 			endcase
 		`ADDI:	res <= a + imm;
 		`SUBI:	res <= a - imm;
@@ -640,11 +668,14 @@ EXECUTE:
 				brkCnt <= brkCnt + 3'd1;
 				if (brkCnt > 3'd2)
 					next_state(HANG);
-				res <= pc;
+				lscyc <= 2'd0;
+				b <= {cs,pc[22:2]};
 				imb2 <= imb;
 				imb <= im;
 				im <= 1'b1;
-				ea <= {vbr[31:11],ir[28:20],2'b00};
+				ea <= sp - 32'd4;
+				sp <= sp - 32'd4;
+				Sa <= 3'd6;
 				next_state(LOADSTORE1);
 			end
 		`Bcc,`Bccu,
@@ -653,10 +684,17 @@ EXECUTE:
 				if (takeb)
 					pc <= pc + {{8{ir[31]}},ir[31:19],2'b00};
 			end
+		`JMP:
+			begin
+				pc <= a + imm;
+				if (hasJSP)
+					cs <= jspbuf;
+			end
 		`JSR:
 			begin
 				Sa <= 3'd6;
 				ea <= sp - 32'd4;
+				sp <= sp - 32'd4;
 				b <= {cs,pc[22:2]};
 				pc <= a + imm;
 				if (hasJSP)
@@ -679,6 +717,13 @@ EXECUTE:
 				next_state(LOADSTORE1);
 				ea <= a + (b << ir[27:26]) + imm;
 				Sa <= ir[25:23];
+			end
+		`PUSHC:
+			begin
+				Sa <= 3'd6;
+				ea <= sp - 32'd4;
+				sp <= sp - 32'd4;
+				next_state(LOADSTORE1);
 			end
 		default:	res <= 32'd0;
 		endcase
@@ -827,15 +872,17 @@ LOADSTORE1:
 			res <= ea;
 			next_state(IFETCH1);
 		end
-		else if (ea > limit && pe)
-			bounds_violation();
 		else
 			next_state(LOADSTORE2);
 	end
 LOADSTORE2:
 	begin
-		segmented_ea <= {base,11'h000} + ea;
-		next_state(LOADSTORE3);
+		if (ea > limit && pe)
+			bounds_violation();
+		else begin
+			segmented_ea <= {base,11'h000} + ea;
+			next_state(LOADSTORE3);
+		end
 	end
 LOADSTORE3:
 	begin
@@ -843,15 +890,40 @@ LOADSTORE3:
 		case(opcode)
 		`RR:
 			case(func)
-			`RTS,`RTI:	wb_read(segmented_ea);
+			`RTS,`RTI,`POP:	wb_read(segmented_ea);
+			`PUSH:
+				if (ir[21]) begin
+					ir[21] <= 1'b0;
+					wb_write1(word,segmented_ea,a);
+				end
+				else if (ir[22]) begin
+					ir[22] <= 1'b0;
+					wb_write1(word,segmented_ea,b);
+				end
+				else if (ir[23]) begin
+					ir[23] <= 1'b0;
+					wb_write1(word,segmented_ea,c);
+				end
+				else
+					next_state(IFETCH1);
 			endcase
-		`BRK,
+		`BRK:
+			begin
+				if (lscyc==2'd0)
+					wb_write1(word,segmented_ea,b);
+				else
+					wb_read(segmented_ea);
+			end
 		`LB,`LBU,`LH,`LHU,`LW,
 		`LBX,`LBUX,`LHX,`LHUX,`LWX:
 			wb_read(segmented_ea);
-		`SB,`SBX:	wb_write1(byt,segmented_ea,b);
-		`SH,`SHX:	wb_write1(half,segmented_ea,b);
-		`SW,`SWX,`JSR:	wb_write1(word,segmented_ea,b);
+		`SB:	wb_write1(byt,segmented_ea,b);
+		`SH:	wb_write1(half,segmented_ea,b);
+		`SW,`JSR:	wb_write1(word,segmented_ea,b);
+		`SBX:	wb_write1(byt,segmented_ea,c);
+		`SHX:	wb_write1(half,segmented_ea,c);
+		`SWX:	wb_write1(word,segmented_ea,c);
+		`PUSHC:	wb_write1(word,segmented_ea,imm);
 		endcase
 		case(opcode)
 		`LH,`LHU,`LHX,`LHUX,`SH,`SHX:
@@ -923,12 +995,32 @@ LOADSTORE4:
 					cs <= dat_i[30:21];
 					next_state(CS_DELAY);
 				end
+			`PUSH:
+				if (ir[23:21]==3'b000)
+					next_state(IFETCH1);
+				else begin
+					ea <= sp - 32'd4;
+					sp <= sp - 32'd4;
+					next_state(LOADSTORE1);
+				end
+			`POP:
+				begin
+					res <= dat_i;
+					next_state(IFETCH1);
+				end
 			endcase
 		`BRK:	begin
-					pc[22:2] <= dat_i[20:0];
-					pc[1:0] <= 2'b00;
-					cs <= dat_i[30:21];
-					next_state(CS_DELAY);
+					if (lscyc==2'd0) begin
+						lscyc <= lscyc + 2'd1;
+						segmented_ea <= {vbr[31:11],ir[28:20],2'b00};
+						next_state(LOADSTORE3);
+					end
+					else begin
+						pc[22:2] <= dat_i[20:0];
+						pc[1:0] <= 2'b00;
+						cs <= dat_i[30:21];
+						next_state(CS_DELAY);
+					end
 				end
 		`SB,`SBX:	next_state(IFETCH1);
 		`SH,`SHX:	if (segmented_ea[1:0]==2'b11)
@@ -939,6 +1031,7 @@ LOADSTORE4:
 					next_state(LOADSTORE5);
 				else
 					next_state(IFETCH1);
+		`PUSHC:	next_state(IFETCH1);
 		endcase
 	end
 LOADSTORE5:
@@ -1006,6 +1099,9 @@ input [2:0] sz;
 input [27:0] adr;
 input [31:0] dat;
 begin
+	cyc_o <= 1'b1;
+	stb_o <= 1'b1;
+	we_o <= 1'b1;
 	case(sz)
 	byt:
 		begin
@@ -1045,6 +1141,9 @@ input [2:0] sz;
 input [27:0] adr;
 input [31:0] dat;
 begin
+	cyc_o <= 1'b1;
+	stb_o <= 1'b1;
+	we_o <= 1'b1;
 	case(sz)
 	half:
 		begin
