@@ -788,6 +788,12 @@ int NextToken()
                  inptr += 3;
                  return token = tk_jmp;
              }
+             if ((inptr[1]=='s' || inptr[1]=='S') &&
+                 (inptr[2]=='p' || inptr[2]=='P') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_jsp;
+             }
              break;
 
         // lb lbu lc lcu lh lhu lw ldi lea
@@ -1386,6 +1392,8 @@ int getSprRegister()
              !isIdentChar(inptr[2])) {
              inptr += 2;
              NextToken();
+             if (gCpu==889)
+                return 0x2F;
              return 0x20;
          }
          if ((inptr[1]=='l' || inptr[1]=='L') &&
@@ -1420,6 +1428,17 @@ int getSprRegister()
              return 0x21;
          }
          break;
+    
+    // GDT
+    case 'g': case 'G':
+         if ((inptr[1]=='d' || inptr[1]=='D') &&
+             (inptr[2]=='t' || inptr[2]=='T') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x19;
+         }
+         break;
 
     // history
     case 'h': case 'H':
@@ -1433,6 +1452,17 @@ int getSprRegister()
              inptr += 7;
              NextToken();
              return 0x0D;
+         }
+         break;
+
+    // LDT
+    case 'l': case 'L':
+         if ((inptr[1]=='d' || inptr[1]=='D') &&
+             (inptr[2]=='t' || inptr[2]=='T') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x18;
          }
          break;
 
@@ -1464,6 +1494,8 @@ int getSprRegister()
              !isIdentChar(inptr[2])) {
              inptr += 2;
              NextToken();
+             if (gCpu==889)
+                return 0x2E;
              return 0x22;
          }
          if ((inptr[1]=='r' || inptr[1]=='R') &&

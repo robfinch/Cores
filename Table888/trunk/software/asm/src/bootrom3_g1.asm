@@ -271,47 +271,8 @@ EndStaticAllocations:
 	org		$8200
 start:
 	sei
-	ldi     r1,#$000FF00000000001  ; 256 entries, base address $1000
-	mtspr   GDT,r1
-	ldi     r1,#$000FF00000000002  ; 256 entries, base address $2000
-	mtspr   LDT,r1
-	; Clear descriptor tables
-	ldi     r1,#511
-.strt1:
-	sw      r0,$1000[r0+r1*8]
-	dbnz    r1,.strt1
-	; Setup the first sixteen entries in the descriptor table corresponding to
-    ; the sixteen segment registers. They are setup for a flat memory model.
-	sw      r0,$1000
-	sw      r0,$1008
-	ldi     r1,#$920FFFFFFFFFFFFF  ; data segment
-	ldi     r2,#$1000
-    sw      r1,$18[r2]
-    sw      r1,$28[r2]
-    sw      r1,$38[r2]
-    sw      r1,$48[r2]
-    sw      r1,$58[r2]
-    sw      r1,$68[r2]
-    sw      r1,$78[r2]
-    sw      r1,$88[r2]
-    sw      r1,$98[r2]
-    sw      r1,$A8[r2]
-    sw      r1,$B8[r2]
-    sw      r1,$C8[r2]
-    sw      r1,$D8[r2]
-    sw      r1,$E8[r2]
-	ldi     r1,#$9A0FFFFFFFFFFFFF
-	sw      r0,$F0[r2]               ; setup code segment
-	sw      r1,$F8[r2]
-	; Setup data and stack segment
-	ldi     r1,#1
-	mtspr	ds,r1					; setup data and stack segments
-	ldi     r1,#14
-	mtspr	ss,r1
-	; now do a far jump to set the code segment
-	jsp     r0,#15                  ; selector index 15, GDT
-	jmp     .strt2
-.strt2:
+	mtspr	ds,r0					; setup data and stack segments
+	mtspr	ss,r0
 	ldi		r1,#$00000080			; tmr writes
 	mtspr	cr0,r1
 
@@ -332,7 +293,6 @@ start:
 	sb		r1,LEDS
 	ldi		sp,#$3FFFF8
 	ldi		r1,#IVTBaseAddress
-	shr     r1,r1,#12
 	mtspr	vbr,r1
 
 	; setup page tables and the page table address register

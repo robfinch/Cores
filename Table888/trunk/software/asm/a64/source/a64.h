@@ -28,7 +28,7 @@
 
 #include <inttypes.h>
 #include "token.h"
-#include "elf.h"
+#include "elf.hpp"
 #include "NameTable.hpp"
 #include "symbol.h"
 

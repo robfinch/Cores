@@ -79,7 +79,6 @@
 `define CLP			8'h37
 `define RTI			8'h40
 `define STP			8'h41
-`define UNLINK		8'h42
 `define MTSPR		8'h48
 `define MFSPR		8'h49
 `define VERR		8'h80
@@ -113,8 +112,6 @@
 `define ORN			8'h27
 `define MSO			8'h28
 `define SSO			8'h29
-`define SMR			8'h30
-`define LMR			8'h31
 `define ARPL		8'h38
 `define SHLI		8'h50
 `define ROLI		8'h51
@@ -212,6 +209,7 @@
 `define LWX		8'h8E
 `define LEAX	8'h8F
 `define LEA		8'h92
+`define LMR		8'h9C
 `define SB		8'hA0
 `define SC		8'hA1
 `define SH		8'hA2
@@ -225,24 +223,35 @@
 `define SHX		8'hAA
 `define SWX		8'hAB
 `define CINVX	8'hAC
+`define PUSHC	8'hAD
+`define CAS		8'hAE
 `define BMS		8'hB4
 `define BMC		8'hB5
 `define BMF		8'hB6
 `define BMT		8'hB7
-
+`define SMR		8'hBC
 `define NOP		8'hEA
 
 `define IMM1	8'hFD
 `define IMM2	8'hFE
 
-`define STW_NONE	4'd0
-`define STW_CS	4'd1
-`define STW_PC	4'd2
-`define STW_A	4'd3
-`define STW_B	4'd4
-`define STW_C	4'd5
-`define STW_SR	4'd6
-`define STW_SPR	4'd8
+`define STW_NONE	5'd0
+`define STW_CS	5'd1
+`define STW_PC	5'd2
+`define STW_A	5'd3
+`define STW_B	5'd4
+`define STW_C	5'd5
+`define STW_SR	5'd6
+`define STW_SPR	5'd8
+`define STW_IMM	5'd9
+`define STW_CSPC	5'd10
+`define STW_CSSR	5'd11
+`define STW_STK_FIFO	5'd12
+`define STW_PREV_CS		5'd13
+`define STW_PREV_PC		5'd14
+`define STW_SS		5'd15
+`define STW_SP		5'd16
+`define STW_PREV_CSSR	5'd17
 
 `define TICK		8'h00
 `define VBR			8'h01
@@ -260,8 +269,17 @@
 `define SRAND2		8'h11
 `define RAND		8'h12
 `define PROD_HIGH	8'h13
-`define CS			8'h20
-`define DS			8'h21
-`define SS			8'h22
+`define LDT_REG		8'h18
+`define GDT_REG		8'h19
+`define SEGx		8'h2x
+
+`define JGR_NONE		4'd0
+`define JGR_LOAD_FIFO	4'd1
+`define JGR_LOAD_SP		4'd2
+`define JGR_LOAD_SS		4'd3
+`define JGR_LOAD_CALLGATE	4'd4
+`define JGR_LOAD_CS		4'd5
+`define JGR_LOAD_SS_DESC	4'd6
+`define JGR_STORE_FIFO	4'd7
 
 `endif

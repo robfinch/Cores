@@ -95,6 +95,7 @@ void processFile(char *fname, int searchincl);
 void bump_address();
 extern void Table888_bump_address();
 extern void searchenv(char *filename, char *envname, char **pathname);
+extern void Table888mmu_processMaster();
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -105,6 +106,7 @@ void displayHelp()
      printf("    +v      = verbose output\r\n");
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
+     printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu\r\n");
      printf("    -o[bvl] = suppress output file b=binary, v=verilog, l=listing\r\n");
 }
 
@@ -144,6 +146,12 @@ int processOptions(int argc, char **argv)
            }
            if (argv[nn][1]=='s')
                fSeg = 1;
+           if (argv[nn][1]=='g') {
+              if (argv[nn][2]=='9') {
+                 gCpu=889;
+                 fSeg = 1;
+              }
+           }
            nn++;
         }
         else break;
@@ -692,7 +700,7 @@ void process_fill()
 
 void bump_address()
 {
-     if (gCpu==888)
+     if (gCpu==888 || gCpu==889)
         Table888_bump_address();
 }
 
@@ -996,6 +1004,8 @@ void processMaster()
 {
     if (gCpu==888)
        Table888_processMaster();
+    else if (gCpu==889)
+        Table888mmu_processMaster();
 }
 
 // ----------------------------------------------------------------------------
