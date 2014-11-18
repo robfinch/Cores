@@ -317,11 +317,11 @@ start:
 
 	; copy the ROM to RAM
 	
-	ldi		r3,#$7FFF
+	ldi		r3,#$FFF
 	ldi		r1,#$8000
 .st1:
-	lb		r2,[r1+r3]
-	sb		r2,[r1+r3]
+	lw		r2,[r1+r3*8]
+	sw		r2,[r1+r3*8]
 	dbnz	r3,.st1
 	ldi		r1,#$000000C0			; tmr reads/writes
 	mtspr	cr0,r1
@@ -332,7 +332,7 @@ start:
 	sb		r1,LEDS
 	ldi		sp,#$3FFFF8
 	ldi		r1,#IVTBaseAddress
-	shr     r1,r1,#12
+	shr     r1,r1,#13
 	mtspr	vbr,r1
 
 	; setup page tables and the page table address register
@@ -406,11 +406,12 @@ SetupIntVectors:
 	; Initialize all vectors to uninitialized interrupt routine vector
 	ldi		r3,#511
 	ldi		r1,#uninit_rout
+	ldi     r5,#15<<40      ; CS selector
 .siv1:
 	; setup specific vectors
 	shli	r4,r3,#4
 	sw		r1,[r2+r4]
-	sw		r0,8[r2+r4]		; set CS to zero
+	sw		r5,8[r2+r4]		; set CS to #15
 	dbnz	r3,.siv1	
 	ldi		r1,#start
 	sw		r1,449*16[r2]
