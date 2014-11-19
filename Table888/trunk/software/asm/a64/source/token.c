@@ -774,7 +774,7 @@ int NextToken()
              }
              break;
 
-        // jmp jsr
+        // jgr jmp jsr jsp
         case 'j': case 'J':
              if ((inptr[1]=='s' || inptr[1]=='S') &&
                  (inptr[2]=='r' || inptr[2]=='R') &&
@@ -793,6 +793,12 @@ int NextToken()
                  isspace(inptr[3])) {
                  inptr += 3;
                  return token = tk_jsp;
+             }
+             if ((inptr[1]=='g' || inptr[1]=='G') &&
+                 (inptr[2]=='r' || inptr[2]=='R') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_jgr;
              }
              break;
 
@@ -1429,7 +1435,39 @@ int getSprRegister()
          }
          break;
     
-    // GDT
+    // es
+    case 'e': case 'E':
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             !isIdentChar(inptr[2])) {
+             inptr += 2;
+             NextToken();
+             return 0x25;
+         }
+         break;
+    
+    // fs
+    case 'f': case 'F':
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             !isIdentChar(inptr[2])) {
+             inptr += 2;
+             NextToken();
+             return 0x26;
+         }
+         if ((inptr[1]=='a' || inptr[1]=='A') &&
+             (inptr[2]=='u' || inptr[2]=='U') &&
+             (inptr[3]=='l' || inptr[3]=='L') &&
+             (inptr[4]=='t' || inptr[4]=='T') &&
+             (inptr[5]=='_' || inptr[5]=='_') &&
+             (inptr[6]=='p' || inptr[6]=='P') &&
+             (inptr[7]=='c' || inptr[7]=='C') &&
+             !isIdentChar(inptr[8])) {
+             inptr += 8;
+             NextToken();
+             return 0x08;
+         }
+         break;
+
+    // GDT gs
     case 'g': case 'G':
          if ((inptr[1]=='d' || inptr[1]=='D') &&
              (inptr[2]=='t' || inptr[2]=='T') &&
@@ -1437,6 +1475,12 @@ int getSprRegister()
              inptr += 3;
              NextToken();
              return 0x19;
+         }
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             !isIdentChar(inptr[2])) {
+             inptr += 2;
+             NextToken();
+             return 0x27;
          }
          break;
 
@@ -1488,8 +1532,17 @@ int getSprRegister()
              return 0x12;
          }
          break;
-    // ss srand1 srand2
+    // ss ss_ll srand1 srand2
     case 's': case 'S':
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             (inptr[2]=='_' || inptr[2]=='_') &&
+             (inptr[3]=='l' || inptr[3]=='L') &&
+             (inptr[4]=='l' || inptr[4]=='L') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 0x1A;
+         }
          if ((inptr[1]=='s' || inptr[1]=='S') &&
              !isIdentChar(inptr[2])) {
              inptr += 2;
@@ -1527,7 +1580,8 @@ int getSprRegister()
              return (inptr[3]-'0')*10 + (inptr[4]-'0');
          }
          break;
-    // tick
+
+    // tick ts
     case 't': case 'T':
          if ((inptr[1]=='i' || inptr[1]=='I') &&
              (inptr[2]=='c' || inptr[2]=='C') &&
@@ -1537,7 +1591,14 @@ int getSprRegister()
              NextToken();
              return 0x00;
          }
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             !isIdentChar(inptr[2])) {
+             inptr += 2;
+             NextToken();
+             return 0x2C;
+         }
          break;
+
     // vbr
     case 'v': case 'V':
          if ((inptr[1]=='b' || inptr[1]=='B') &&

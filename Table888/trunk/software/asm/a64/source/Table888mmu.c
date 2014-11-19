@@ -59,6 +59,18 @@ static void emitAlignedCode(int cd)
          emitByte(0x00);
          ad = code_address & 15;
      }
+     ad = code_address & 0xfff;
+     if ((ad > 0xFF0 && cd == 0xFD) || (ad > 0xFEA && cd == 0x61)) {
+         emit_insn(0xEAEAEAEAEA);
+         emit_insn(0xEAEAEAEAEA);
+         if (cd==0x61)
+             emit_insn(0xEAEAEAEAEA);
+         ad = code_address & 0xfff;
+         while (ad != 0 && ad != 5 && ad != 10) {
+             emitByte(0x00);
+             ad = code_address & 15;
+         }
+     }
      emitByte(cd);
 }
 
@@ -232,7 +244,7 @@ static void process_jmp(int oc)
                         sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
                 }
            emitCode(Ra);
-           emitCode(((addr << 4) & 255)|sg);
+           emitCode(((addr << 4) & 0xF0)|sg);
            emitCode((addr >> 4) & 255);
            emitCode((addr >> 12) & 255);
            return;
@@ -1056,6 +1068,7 @@ void Table888mmu_processMaster()
         case tk_extern: process_extern(); break;
         case tk_fill: process_fill(); break;
         case tk_gran: process_gran(0x14); break;
+        case tk_jgr: process_jsp(0x57); break;
         case tk_jmp: process_jmp(0x50); break;
         case tk_jsp: process_jsp(0x61); break;
         case tk_jsr: process_jmp(0x51); break;

@@ -59,9 +59,20 @@ static void emitAlignedCode(int cd)
          emitByte(0x00);
          ad = code_address & 15;
      }
+     ad = code_address & 0xfff;
+     if ((ad > 0xFF0 && cd == 0xFD) || (ad > 0xFEA && cd == 0x61)) {
+         emit_insn(0xEAEAEAEAEA);
+         emit_insn(0xEAEAEAEAEA);
+         if (cd==0x61)
+             emit_insn(0xEAEAEAEAEA);
+         ad = code_address & 0xfff;
+         while (ad != 0 && ad != 5 && ad != 10) {
+             emitByte(0x00);
+             ad = code_address & 15;
+         }
+     }
      emitByte(cd);
 }
-
 
 // ----------------------------------------------------------------------------
 // Bump up the address to the next aligned code address.

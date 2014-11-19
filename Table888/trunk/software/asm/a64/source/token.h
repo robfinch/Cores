@@ -95,6 +95,7 @@ enum {
      tk_gt,
      tk_id,
      tk_icon,
+     tk_jgr,
      tk_jmp,
      tk_jsp,
      tk_jsr,
