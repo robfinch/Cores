@@ -8,7 +8,7 @@ reg irq;
 wire wr;
 wire [5:0] bl;
 wire [3:0] sel;
-wire [31:0] a;
+wire [33:0] a;
 tri [31:0] d;
 tri [31:0] d2;
 tri [31:0] d3;
@@ -33,6 +33,23 @@ wire ga_ack;
 wire [31:0] ga_dat;
 wire kbd_ack;
 wire [15:0] kbd_dat;
+wire mmu_cyc;
+wire mmu_stb;
+wire mmu_we;
+wire mmu_ack;
+wire [3:0] mmu_sel;
+wire [31:0] mmu_adr;
+wire [31:0] mmu_dati;
+wire [31:0] mmu_dato;
+wire [31:0] io_adr = {sys_adr[33:18],sys_adr[15:0]};
+
+// MMU takes precedence
+wire sys_cyc = mmu_cyc | cyc;
+wire sys_stb = mmu_cyc ? mmu_stb : stb;
+wire sys_we = mmu_cyc ? mmu_we : wr;
+wire [3:0] sys_sel = mmu_cyc ? mmu_sel : sel;
+wire [33:0] sys_adr = mmu_cyc ? mmu_adr : a;
+wire [31:0] sys_dato = mmu_cyc ? mmu_dato : dato;
 
 initial begin
 	clk = 1;
@@ -48,7 +65,7 @@ end
 
 always #1 clk = ~clk;	// 500 MHz
 
-Table888seg cpu0 (
+Table888mmu cpu0 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.nmi_i(nmi),
@@ -64,23 +81,31 @@ Table888seg cpu0 (
 	.sel_o(sel),
 	.adr_o(a),
 	.dat_i(dati),
-	.dat_o(dato)
+	.dat_o(dato),
+	.mmu_cyc_o(mmu_cyc),
+	.mmu_stb_o(mmu_stb),
+	.mmu_ack_i(mmu_ack),
+	.mmu_we_o(mmu_we),
+	.mmu_sel_o(mmu_sel),
+	.mmu_adr_o(mmu_adr),
+	.mmu_dat_i(mmu_dati),
+	.mmu_dat_o(mmu_dato)
 );
 
 wire uartcs = 1'b0;//cyc && stb && a[31:8]==24'h0000BF;
-wire romcs = ~(cyc && stb && a[31:15]==17'b01);
-wire ramcs_zer = ~(cyc && stb && (a[31:20]>=12'h000)&&romcs && (a[31:20] < 12'h001));
-wire ramcs_gdt = ~(cyc && stb && (a[31:20]>=12'h07F)&&romcs && (a[31:20] < 12'h080));
-wire ramcs3 = ~(cyc && stb && (a[31:20]>=12'h07B)&&romcs && (a[31:20] < 12'h07F));
-wire ramcs2 = ~(cyc && stb && (a[31:24]>=8'h01)&&romcs && (a[31:24] < 8'h07)&&ramcs3);//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
-wire ramcs1 = ~(cyc && stb && (a[31:28]==4'h0)&&romcs&&ramcs2&&ramcs3&&ramcs_zer);//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
+wire romcs = ~(sys_cyc && sys_stb && sys_adr[31:15]==17'b01);
+wire ramcs_zer = ~(sys_cyc && sys_stb && (sys_adr[31:22]>=12'h000)&&romcs && (sys_adr[31:22] < 12'h001));
+wire ramcs_gdt = ~(sys_cyc && sys_stb && (sys_adr[31:20]>=12'h07F)&&romcs && (sys_adr[31:20] < 12'h080));
+wire ramcs3 = ~(sys_cyc && sys_stb && (sys_adr[31:20]>=12'h07B)&&romcs && (sys_adr[31:20] < 12'h07F));
+wire ramcs2 = ~(sys_cyc && sys_stb && (sys_adr[31:24]>=8'h01)&&romcs && (sys_adr[31:24] < 8'h07)&&ramcs3);//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
+wire ramcs1 = ~(sys_cyc && sys_stb && (sys_adr[31:28]==4'h0)&&romcs&&ramcs2&&ramcs3&&ramcs_zer);//(a[33:14]==20'h00 || (a[33:28]!=6'h3F && a[33:28]!=6'h0 && a[33:28]!=6'h0F)));
 wire romcs1 = 1'b1;//~(cyc && stb && a[33:13]==21'h07);	// E000
-wire bas_cs = (cyc && stb && a[31:14]==18'h03);
-wire tc_cs = (cyc && stb && (a[31:16]==16'hFFD0 || a[31:16]==16'hFFDA ||a[31:16]==16'hFFD1 || a[31:16]==16'hFFD2));
-wire leds_cs = (cyc && stb && a[31:0]==32'hFFDC0600);
-wire configrec_cs = (cyc && stb && a[31:4]==28'hFFDCFFF);
-wire bmp_clut_cs = cyc && stb && a[31:11]==21'b1111_1111_1101_1100_0101_1;
-wire pic_cs = cyc && stb && a[31:8]==24'hFFDC_0F;
+wire bas_cs = (sys_cyc && sys_stb && sys_adr[31:14]==18'h03);
+wire tc_cs = (sys_cyc && sys_stb && (io_adr[31:16]==16'hFFD0 || io_adr[31:16]==16'hFFDA ||io_adr[31:16]==16'hFFD1 || io_adr[31:16]==16'hFFD2));
+wire leds_cs = (sys_cyc && sys_stb && io_adr[31:0]==32'hFFDC0600);
+wire configrec_cs = (sys_cyc && sys_stb && io_adr[31:4]==28'hFFDCFFF);
+wire bmp_clut_cs = sys_cyc && sys_stb && io_adr[31:11]==21'b1111_1111_1101_1100_0101_1;
+wire pic_cs = sys_cyc && sys_stb && io_adr[31:8]==24'hFFDC_0F;
 
 assign d = wr ? dato : 32'bz;
 assign d2 = wr ? dato : 32'bz;
@@ -101,8 +126,10 @@ assign dati = configrec_cs ? 32'h00000FDF : 32'bz;
 assign dati = sema_ack ? sema_dat : 32'bz;
 assign dati = ga_ack ? ga_dat : 32'bz;
 assign dati = kbd_ack ? kbd_dat : 32'bz;
+assign mmu_dati = dati;
 
 assign ack =
+	!mmu_cyc & (
 	1'b0 | 
 	configrec_cs |
 	leds_cs |
@@ -120,19 +147,42 @@ assign ack =
 	bmp_clut_cs |
 	pic_cs |
 	kbd_ack
+	)
+	;
+
+assign mmu_ack =
+	mmu_cyc & (
+	1'b0 | 
+	configrec_cs |
+	leds_cs |
+	tc_ack |
+	sema_ack |
+	ga_ack |
+	btrm_ack |
+	~ramcs1 |
+	~ramcs2 |
+	~ramcs3 |
+	~romcs1 |
+	~ramcs_gdt |
+	~ramcs_zer |
+	uartcs |
+	bmp_clut_cs |
+	pic_cs |
+	kbd_ack
+	)
 	;
 
 //rom2Kx32 #(.MEMFILE("t65c.mem")) rom0(.ce(romcs), .oe(wr), .addr(a[12:2]), .d(d));
-rom2Kx32 #(.MEMFILE("t65c.mem")) rom1(.ce(romcs1), .oe(wr), .addr(a[12:2]), .d(d));
-ram8Kx32 ram0 (.clk(clk), .ce(ramcs1), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d));
-ram8Kx32 ram2 (.clk(clk), .ce(ramcs2), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d2));
-ram8Kx32 ram3 (.clk(clk), .ce(ramcs3), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d3));
-ram8Kx32 ram4 (.clk(clk), .ce(ramcs_gdt), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d4));
-ram8Kx32 ram5 (.clk(clk), .ce(ramcs_zer), .oe(wr), .we(~wr), .sel(sel), .addr(a[19:0]), .d(d5));
+rom2Kx32 #(.MEMFILE("t65c.mem")) rom1(.ce(romcs1), .oe(wr), .addr(sys_adr[12:2]), .d(d));
+ram8Kx32 ram0 (.clk(clk), .ce(ramcs1), .oe(sys_we), .we(~sys_we), .sel(sys_sel), .addr(sys_adr[21:0]), .d(d));
+ram8Kx32 ram2 (.clk(clk), .ce(ramcs2), .oe(sys_we), .we(~sys_we), .sel(sys_sel), .addr(sys_adr[21:0]), .d(d2));
+ram8Kx32 ram3 (.clk(clk), .ce(ramcs3), .oe(sys_we), .we(~sys_we), .sel(sys_sel), .addr(sys_adr[21:0]), .d(d3));
+ram8Kx32 ram4 (.clk(clk), .ce(ramcs_gdt), .oe(sys_we), .we(~sys_we), .sel(sys_sel), .addr(sys_adr[21:0]), .d(d4));
+ram8Kx32 ram5 (.clk(clk), .ce(ramcs_zer), .oe(sys_we), .we(~sys_we), .sel(sys_sel), .addr(sys_adr[21:0]), .d(d5));
 uart uart0(.clk(clk), .cs(uartcs), .wr(wr), .a(a[2:0]), .di(dato[7:0]), .do(udo));
 bootrom ubr1 (.rst_i(rst), .clk_i(clk), .cti_i(cti), .cyc_i(cyc), .stb_i(stb), .ack_o(btrm_ack), .adr_i(a), .dat_o(btrm_dato), .perr());
 //basic_rom ubas1(.rst_i(rst), .clk_i(clk), .cti_i(cti), .cyc_i(cyc), .stb_i(stb), .ack_o(bas_ack), .adr_i(a), .dat_o(bas_dato), .perr());
-kbd_em ukbd1 (rst, clk, cyc, stb, a, dato, kbd_dat, kbd_ack);
+kbd_em ukbd1 (rst, clk, cyc, stb, io_adr, dato, kbd_dat, kbd_ack);
 rtfTextController tc1 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -140,7 +190,7 @@ rtfTextController tc1 (
 	.stb_i(stb),
 	.ack_o(tc_ack),
 	.we_i(wr),
-	.adr_i(a),
+	.adr_i(io_adr),
 	.dat_i(dato),
 	.dat_o(tc_dato),
 	.lp(),
@@ -176,7 +226,7 @@ rtfGraphicsAccelerator uga1 (
 .s_we_i(wr),
 .s_ack_o(ga_ack),
 .s_sel_i(sel),
-.s_adr_i(a),
+.s_adr_i(io_adr),
 .s_dat_i(dato),
 .s_dat_o(ga_dat),
 
@@ -197,9 +247,10 @@ always @(posedge clk) begin
 		n = n + 1;
 	if ((n & 7)==0)
 		$display("t   n  cti cyc we   addr din adnx do vma wr ird sync vma nmi irq  PC  IR A  X  Y  SP nvmdizcb\n");
-	$display("%d %d %b  %b%b  %c  %h %h %h %h pc=%h ir=%h sp=%h imm=%h %b %s %b %b rwadr=%h tr=%h",
-		$time, n, cpu0.cti_o, cpu0.cyc_o, cpu0.ack_i, cpu0.we_o?"W":" ", cpu0.adr_o, cpu0.dat_i, cpu0.dat_o, cpu0.res,  cpu0.pc, cpu0.ir,	cpu0.sp, 
+	$display("%d %d %b  %b%b  %c  %h %h %h %h cs:pc=%h:%h ir=%h ss:sp=%h:%h imm=%h %b %s %b %b rwadr=%h tr=%h",
+		$time, n, cpu0.cti_o, cpu0.cyc_o, cpu0.ack_i, cpu0.we_o?"W":" ", cpu0.adr_o, cpu0.dat_i, cpu0.dat_o, cpu0.res,  cpu0.cs, cpu0.pc, cpu0.ir,	cpu0.ss, cpu0.sp, 
 		cpu0.imm, cpu0.im, cpu0.fnStateName(cpu0.state), cpu0.ihit,ubr1.cs,cpu0.rwadr,cpu0.regfile[252]);
+	$display("r1=%h r2=%h r3=%h", cpu0.regfile[1], cpu0.regfile[2], cpu0.regfile[3]);
 end
 	
 endmodule
@@ -254,11 +305,11 @@ module ram8Kx32(clk, ce, oe, we, sel, addr, d);
 	input			oe;		// active low output enable
 	input			we;		// active low write enable
 	input [3:0] sel;		// byte lane selects
-	input	[19:0]	addr;	// byte address
+	input	[21:0]	addr;	// byte address
 	output	[31:0]	d;		// tri-state data I/O
 	tri [31:0] d;
 
-	reg		[31:0]	mem [0:262143];
+	reg		[31:0]	mem [0:1048575];
 	integer nn;
 
 	initial begin
@@ -266,15 +317,15 @@ module ram8Kx32(clk, ce, oe, we, sel, addr, d);
 			mem[nn] <= 32'b0;
 	end
 
-	assign d = (~oe & ~ce & we) ? mem[addr[19:2]] : 32'bz;
+	assign d = (~oe & ~ce & we) ? mem[addr[21:2]] : 32'bz;
 
 	always @(posedge clk) begin
 		if (clk) begin
 			if (~ce & ~we) begin
-				if (sel[0]) mem[addr[19:2]][7:0] <= d[7:0];
-				if (sel[1]) mem[addr[19:2]][15:8] <= d[15:8];
-				if (sel[2]) mem[addr[19:2]][23:16] <= d[23:16];
-				if (sel[3]) mem[addr[19:2]][31:24] <= d[31:24];
+				if (sel[0]) mem[addr[21:2]][7:0] <= d[7:0];
+				if (sel[1]) mem[addr[21:2]][15:8] <= d[15:8];
+				if (sel[2]) mem[addr[21:2]][23:16] <= d[23:16];
+				if (sel[3]) mem[addr[21:2]][31:24] <= d[31:24];
 				$display (" wrote: %h with %h", addr, d);
 			end
 			if (~ce & we & ~oe)

@@ -193,6 +193,7 @@ reg isDescCacheLoad,isDescCacheReset;
 reg nmi_edge,nmi1;
 reg hwi;			// hardware interrupt indicator
 reg im;				// irq interrupt mask bit
+reg im2;			// pending irq mask
 reg pv;				// privilege violation
 reg [2:0] imcd;		// mask countdown bits
 wire [31:0] sr = {23'd0,im,6'h00,pv,pe};
@@ -1224,6 +1225,7 @@ DECODE:
 				prev_pc <= pc;
 				prev_cs <= cs;
 				prev_sp <= sp;
+				prev_ss_base <= ss_base;
 				// Double fault ?
 				brkCnt <= brkCnt + 3'd1;
 				if (brkCnt > 3'd2)
@@ -1647,6 +1649,7 @@ EXECUTE:
 				prev_pc <= pc;
 				prev_cs <= cs;
 				prev_sp <= sp;
+				prev_ss_base <= ss_base;
 				ppl <= cpl;
 				next_state(LOAD1);
 			end
@@ -2222,26 +2225,36 @@ LOAD5:
 					cg_offset[39:2] <= lres[39:2];
 					cg_offset[1:0] <= lres[3:2];
 					cg_ncopy <= 5'd0;
-					// Short format, no segment info
-					if (lres[1:0]==2'b00)
+					case(lres[1:0])
+					2'b00:	// Short format, no segment info
 						next_state(IFETCH);
-					// FAR return/jump - short format
-					else if (lres[1:0]==2'b01) begin
-						a <= lres[63:48];
-						isRTS <= `FALSE;
-						isJGR <= `TRUE;
-						next_state(CS_LOAD);
-					end
-					// FAR return/jump - long format
-					else begin
+					2'b01:	// FAR return/jump - short format
+						begin
+							a <= lres[63:40];
+							isRTS <= `FALSE;
+							isJGR <= `TRUE;
+							jgr_state <= `JGR_LOAD_CS;
+							next_state(CS_LOAD);
+						end
+					2'b10:	// FAR return/jump - long format
 						next_state(LOAD1);
-					end
+					2'b11:	// interrupt return
+						begin
+							isRTS <= `FALSE;
+							isRTS2 <= `FALSE;
+							isRTI <= `TRUE;
+							isRTI2 <= `TRUE;
+							next_state(LOAD1);
+						end
+					endcase
 				end
 				// FAR return/jump - long format
 				else begin
-					a <= lres[63:48];
+					nLD <= 2'b00;
+					a <= lres[23:0];
 					isRTS <= `FALSE;
 					isJGR <= `TRUE;
+					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
@@ -2269,9 +2282,10 @@ LOAD5:
 					end
 					// FAR jump - short format
 					else if (lres[1:0]==2'b01) begin
-						a <= lres[63:48];
+						a <= lres[23:0];
 						isJGR <= `TRUE;
 						isJSRix <= `FALSE;
+						jgr_state <= `JGR_LOAD_CS;
 						next_state(CS_LOAD);
 					end
 					else begin
@@ -2280,18 +2294,20 @@ LOAD5:
 				end
 				// FAR jump - long format
 				else begin
-					a <= lres[63:48];
+					nLD <= 2'b00;
+					a <= lres[23:0];
 					isJGR <= `TRUE;
 					isJSRix <= `FALSE;
+					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
+		// Could check for a gate type here, 86x or 87x, but that'd
+		// be more hardware, so we'll just assume it's okay.
 		isBRK:
 			begin
 				if (nLD==2'b00) begin
 					nLD <= nLD + 2'd1;
-					if (lres[0])
-						im <= 1'b1;
 					pc[39:2] <= lres[39:2];
 					pc[1:0] <= lres[3:2];
 					cg_offset[39:2] <= lres[39:2];
@@ -2302,8 +2318,13 @@ LOAD5:
 				else begin
 					isBRK <= `FALSE;
 					isJGR <= `TRUE;
-					jgr_state <= `JGR_NONE;
-					a <= lres[63:48];
+					jgr_state <= `JGR_LOAD_CS;
+					nLD <= 2'b00;
+					if (lres[56])
+						im2 <= 1'b1;
+					else
+						im2 <= im;
+					a <= lres[23:0];
 					next_state(CS_LOAD);
 				end
 			end
@@ -2318,16 +2339,18 @@ LOAD5:
 					cg_offset[1:0] <= lres[3:2];
 					cg_ncopy <= 5'd0;
 					nLD <= nLD + 2'd1;
-					if (lres[0]==1'b0)
-						imcd <= 3'b110;
-					else
-						im <= 1'b1;
 					next_state(LOAD1);
 				end
 				else begin
+					nLD <= 2'b00;
 					isRTI <= `FALSE;
 					isJGR <= `TRUE;
-					a <= lres[63:48];
+					if (lres[40]==1'b0)
+						imcd <= 3'b110;
+					else
+						im <= 1'b1;
+					a <= lres[23:0];
+					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
@@ -2425,7 +2448,6 @@ LOAD5:
 //						ss <= lres[23:0];
 						a <= lres[23:0];
 						St <= 4'd14;
-						$display("Calling load_seg St=%d a=%h",St,lres[23:0]);
 						next_state(JGR1);
 						jgr_state <= `JGR_LOAD_SS_DESC;
 					end
@@ -2512,20 +2534,20 @@ STORE1:
 			`STW_B:		wb_write(st_size,rwadr_o,b[31:0]);
 			`STW_C:		wb_write(st_size,rwadr_o,c[31:0]);
 			`STW_PC:	if (isBRK)
-							wb_write(word,rwadr_o,{pc[31:2],1'b1,im});
+							wb_write(word,rwadr_o,{pc[31:2],2'b11});
 						else
-							wb_write(word,rwadr_o,{pc[31:2],2'b00});
+							wb_write(word,rwadr_o,{pc[31:2],fmt});
 			`STW_CSPC:	wb_write(word,rwadr_o,{pc[31:2],2'b01});
-			`STW_CS:	wb_write(word,rwadr_o,32'h0);
-			`STW_CSSR,
-			`STW_SR:	wb_write(word,rwadr_o,sr[31:0]);
+			`STW_CS:	wb_write(word,rwadr_o,{8'h00,cs});
+			`STW_CSSR: 	wb_write(word,rwadr_o,{8'h00,cs});
+			`STW_SR:	wb_write(word,rwadr_o,sr);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[31:0]);
 			`STW_IMM:	wb_write(word,rwadr_o,imm[31:0]);
 			`STW_SP:	wb_write(word,rwadr_o,sp[31:0]);
 			`STW_SS:	wb_write(word,rwadr_o,{8'h00,ss});
 			`STW_PREV_PC:	wb_write(word,rwadr_o,{prev_pc[31:2],fmt});
-			`STW_PREV_CS:	wb_write(word,rwadr_o,32'h0);
-			`STW_PREV_CSSR:	wb_write(word,rwadr_o,sr[31:0]);
+			`STW_PREV_CS:	wb_write(word,rwadr_o,{8'h00,prev_cs});
+			`STW_PREV_CSSR:	wb_write(word,rwadr_o,{8'h00,prev_cs});
 			`STW_STK_FIFO:	wb_write(half,rwadr_o,stack_fifo[ncopy]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
@@ -2603,17 +2625,17 @@ STORE3:
 			`STW_B:		wb_write(word,rwadr_o,b[63:32]);
 			`STW_C:		wb_write(word,rwadr_o,c[63:32]);
 			`STW_PC:	wb_write(word,rwadr_o,{cs,pc[39:32]});
-			`STW_CS:	wb_write(word,rwadr_o,{cs,8'h0});
+			`STW_CS:	wb_write(word,rwadr_o,32'd0);
 			`STW_CSPC:	wb_write(word,rwadr_o,{cs,pc[39:32]});
-			`STW_CSSR:	wb_write(word,rwadr_o,{cs,8'd0});
+			`STW_CSSR:	wb_write(word,rwadr_o,sr);
 			`STW_SR:	wb_write(word,rwadr_o,32'd0);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[63:32]);
 			`STW_IMM:	wb_write(word,rwadr_o,imm[63:32]);
 			`STW_SP:	wb_write(word,rwadr_o,sp[63:32]);
 			`STW_SS:	wb_write(word,rwadr_o,32'h0);
 			`STW_PREV_PC:	wb_write(word,rwadr_o,prev_pc[39:32]);
-			`STW_PREV_CS:	wb_write(word,rwadr_o,{prev_cs,8'h0});
-			`STW_PREV_CSSR:	wb_write(word,rwadr_o,{prev_cs,8'h0});
+			`STW_PREV_CS:	wb_write(word,rwadr_o,32'd0);
+			`STW_PREV_CSSR:	wb_write(word,rwadr_o,sr);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 			next_state(STORE4);
@@ -2673,6 +2695,8 @@ STORE4:
 					next_state(STORE1);
 				end
 				else if (store_what==`STW_PREV_CS || store_what==`STW_PREV_CSSR) begin
+					if (isBRK2)
+						im <= im2;
 					next_state(IFETCH);
 				end
 				else if (store_what==`STW_CS) begin
@@ -2702,6 +2726,7 @@ STORE4:
 						pc[31:0] <= imm[31:0];
 						pc[39:32] <= imm[39:32];
 						a <= jspbuf;
+						jgr_state <= `JGR_LOAD_CS;
 						next_state(CS_LOAD);
 					end
 					else
@@ -2855,8 +2880,10 @@ VERIFY_DESC:
 					segment_not_present();
 				else if ((cpl > rpl ? cpl : rpl) > desc_dpl && pe)
 					privilege_violation();
-				else
+				else begin
+					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
+				end
 			end
 			else begin
 				if (St==4'd0)	// not possible to load segment #0
@@ -2966,7 +2993,7 @@ end
 if (wrspr) begin
 	casex(Sprt)
 	//`TICK:	tick <= res;
-	`VBR:		vbr <= {res[31:0],13'd0};
+	`VBR:		vbr <= res;
 	`PTA:		pta <= res;
 	`CR0:		cr0 <= res;
 	`SRAND1:	m_z <= res;
