@@ -201,7 +201,7 @@ void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg)
 		GenerateDiadic(op_brnz,0,ap1,make_clabel(label));
 		return;
 	}
-	GenerateTriadic(op_cmp,0,make_string("flg0"),ap1,ap2);
+	GenerateTriadic(op_cmp,0,makereg(244),ap1,ap2);
 	switch(op)
 	{
 	case op_eq:	op = op_beq; break;
@@ -217,7 +217,7 @@ void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg)
 	}
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
-	GenerateDiadic(op,0,make_string("flg0"),make_clabel(label));
+	GenerateDiadic(op,0,makereg(244),make_clabel(label));
 }
 
 void GenerateTable888StackLink(SYM *sym)
@@ -504,7 +504,10 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
     i = GenerateTable888PushParameterList(node->p[1]);
 	// Call the function
 	if( node->p[0]->nodetype == en_cnacon ) {
-        GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
+        if (use_gp)
+            GenerateMonadic(op_jsr,0,make_indx(node->p[0],regGP));//make_offset(node->p[0]));
+        else
+            GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
 		sym = gsearch(node->p[0]->sp);
 	}
     else
@@ -512,8 +515,15 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 		ap = GenerateExpression(node->p[0],F_REG,8);
 		if (node->p[0]->sp)
 			sym = gsearch(node->p[0]->sp);
-		ap->mode = am_ind;
-		ap->offset = 0;
+		if (use_gp) {
+    		ap->mode = am_indx2;
+    		ap->offset = 0;
+    		ap->sreg = regGP;
+        }
+        else {
+    		ap->mode = am_indx;
+    		ap->offset = 0;
+        }
 		GenerateMonadic(op_jsr,0,ap);
 		ReleaseTempRegister(ap);
     }
@@ -521,10 +531,10 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 	if (i!=0) {
 		if (sym) {
 			if (!sym->IsPascal)
-				GenerateTriadic(op_addui,0,makereg(255),makereg(255),make_immed(i * 8));
+				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 		}
 		else
-			GenerateTriadic(op_addui,0,makereg(255),makereg(255),make_immed(i * 8));
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 	}
 	TempRevalidate(sp);
     result = GetTempRegister();

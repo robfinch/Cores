@@ -89,16 +89,42 @@ public:
     };
 };
 
-typedef struct {
-    int64_t p_type;             // type of segment
-    int64_t p_flags;            // segment attributes
+class clsElf64Phdr {
+public:
+    enum {
+         PT_NULL = 0,
+         PT_LOAD = 1,
+         PT_DYNAMIC = 2,
+         PT_INTEPR = 3,
+         PT_NOTE = 4,
+         PT_SHLIB = 5,
+         PT_PHDR = 6
+    };
+    enum {
+         PF_X = 1,
+         PF_W = 2,
+         PF_R = 4
+    };
+    int32_t p_type;             // type of segment
+    int32_t p_flags;            // segment attributes
     int64_t p_offset;           // offset in file
     int64_t p_vaddr;            // virtual address
     int64_t p_paddr;            // reserved
     int64_t p_filesz;           // size of segment in file
     int64_t p_memsz;            // size of segment in memory
     int64_t p_align;            // alignment of segment
-} Elf64Phdr;
+ 
+    void Write(FILE *fp) {
+         fwrite((void*)&p_type,1,sizeof(p_type),fp);
+         fwrite((void*)&p_flags,1,sizeof(p_flags),fp);
+         fwrite((void*)&p_offset,1,sizeof(p_offset),fp);
+         fwrite((void*)&p_vaddr,1,sizeof(p_vaddr),fp);
+         fwrite((void*)&p_paddr,1,sizeof(p_paddr),fp);
+         fwrite((void*)&p_filesz,1,sizeof(p_filesz),fp);
+         fwrite((void*)&p_memsz,1,sizeof(p_memsz),fp);
+         fwrite((void*)&p_align,1,sizeof(p_align),fp);
+    };
+};
 
 class clsElf64Shdr {
 public:
@@ -260,6 +286,12 @@ public:
     int valid;
     clsElf64Header hdr;
     clsElf64Section *sections[256];
+    clsElf64Phdr *phdrs[16];
+
+    void AddPhdr(clsElf64Phdr *phdr) {
+         phdrs[hdr.e_phnum] = phdr;
+         hdr.e_phnum++;
+    };
 
     void AddSection(clsElf64Section *sect) {
         sections[hdr.e_shnum] = sect;
@@ -277,7 +309,14 @@ public:
     void Write(FILE *fp) {
         int nn;
 
-        hdr.Write(fp);        
+        hdr.e_phoff = 64;
+        hdr.e_phentsize = 56;
+        hdr.Write(fp);
+        fseek(fp, hdr.e_phoff, SEEK_SET);
+        for (nn = 0; nn < hdr.e_phnum; nn++) {
+            fseek(fp, 64+nn*56, SEEK_SET);
+            phdrs[nn]->Write(fp);        
+        }
         fseek(fp, 512, SEEK_SET);
         for (nn = 0; nn < hdr.e_shnum; nn++) {
             fseek(fp, sections[nn]->hdr.sh_offset, SEEK_SET);

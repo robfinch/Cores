@@ -60,6 +60,7 @@
 #endif
 
 extern int gCpu;
+extern int regGP;
 extern int regSP;
 extern int regBP;
 extern int regLR;
@@ -67,6 +68,7 @@ extern int regXLR;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;
+extern int use_gp;
 extern FILE             *input,
                         *list,
                         *output;
@@ -248,6 +250,7 @@ extern int preprocess();
 // CodeGenerator.c
 extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(int64_t o, int i);
+extern AMODE *make_indx(ENODE *node, int reg);
 extern AMODE *make_string(char *s);
 extern void GenerateFalseJump(struct enode *node,int label,int predreg);
 extern void GenerateTrueJump(struct enode *node,int label,int predreg);

@@ -774,6 +774,16 @@ int NextToken()
              }
              break;
 
+        // ios
+        case 'i': case 'I':
+             if ((inptr[1]=='o' || inptr[1]=='O') &&
+                 (inptr[2]=='s' || inptr[2]=='S') &&
+                 (inptr[3]==':')) {
+                 inptr += 3;
+                 return token = tk_ios;
+             }
+             break;
+
         // jgr jmp jsr jsp
         case 'j': case 'J':
              if ((inptr[1]=='s' || inptr[1]=='S') &&
@@ -942,7 +952,7 @@ int NextToken()
             }
             break;
 
-        // push pop php plp public
+        // pea push pop php plp public
         case 'p': case 'P':
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='s' || inptr[2]=='S') &&
@@ -956,6 +966,12 @@ int NextToken()
                 isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_pop;
+            }
+            if ((inptr[1]=='e' || inptr[1]=='E') &&
+                (inptr[2]=='a' || inptr[2]=='A') &&
+                isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_pea;
             }
             if ((inptr[1]=='h' || inptr[1]=='H') &&
                 (inptr[2]=='p' || inptr[2]=='P') &&
@@ -1310,6 +1326,13 @@ int getRegister()
             return 253;
         }
         break;
+    case 'g': case 'G':
+        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 249;
+        }
+        break;
     case 's': case 'S':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
@@ -1496,6 +1519,17 @@ int getSprRegister()
              inptr += 7;
              NextToken();
              return 0x0D;
+         }
+         break;
+
+    // ios
+    case 'i': case 'I':
+         if ((inptr[1]=='o' || inptr[1]=='O') &&
+             (inptr[2]=='s' || inptr[2]=='S') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x2B;
          }
          break;
 

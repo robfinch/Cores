@@ -32,6 +32,7 @@ static void process_shifti(int oc);
 
 int first_rodata;
 int first_data;
+int first_bss;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -940,9 +941,9 @@ void Table888_processMaster()
     bs2 = 0;
     inptr = &masterFile[0];
     stptr = inptr;
-    code_address = 0;
+    code_address = 0x200;
     bss_address = 0;
-    start_address = 0;
+    start_address = 0x200;
     first_org = 1;
     first_rodata = 1;
     first_data = 1;

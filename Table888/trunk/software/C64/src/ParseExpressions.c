@@ -528,7 +528,7 @@ TYP *ParsePrimaryExpression(ENODE **node)
 			pnode->esize = 1;
 		else if (ival >= -32768 && ival < 32768)
 			pnode->esize = 2;
-		else if (ival >= -2147483648L && ival < 2147483648L)
+		else if (ival >= -2147483648LL && ival < 2147483648LL)
 			pnode->esize = 4;
 		else
 			pnode->esize = 8;

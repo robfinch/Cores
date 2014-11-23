@@ -25,6 +25,7 @@
 //
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "a64.h"
 
 static void emitAlignedCode(int cd);
@@ -32,6 +33,9 @@ static void process_shifti(int oc);
 
 extern int first_rodata;
 extern int first_data;
+extern int first_bss;
+
+int use_gp = 0;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -204,12 +208,13 @@ static void emitImm32(int64_t v, int force)
 // jmp main
 // jsr [r19]
 // jmp (tbl,r2)
+// jsr [gp+r20]
 // ---------------------------------------------------------------------------
 
 static void process_jmp(int oc)
 {
     int64_t addr;
-    int Ra;
+    int Ra, Rb;
     int sg;
     
     sg = 1; // Assume data segment
@@ -236,12 +241,18 @@ static void process_jmp(int oc)
                sg = segprefix;
            if (token!=')' && token != ']')
                printf("Missing close bracket.\r\n");
+/*
+           if (lastsym != (SYM *)NULL)
+               emitImm20(addr,!lastsym->defined);
+           else
+               emitImm20(addr,0);
+*/
            emitImm20(addr,lastsym!=(SYM*)NULL);
            emitAlignedCode(oc+2);
             if (bGen)
-                if (lastsym) {
+                if (lastsym && !use_gp) {
                     if( lastsym->segment < 5)
-                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 8 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
                 }
            emitCode(Ra);
            emitCode(((addr << 4) & 0xF0)|sg);
@@ -249,22 +260,35 @@ static void process_jmp(int oc)
            emitCode((addr >> 12) & 255);
            return;
        }
-       // Simple [Rn]
+       // Simple [Rn] or [Rn+Rn]?
        else {
-            if (token != ')' && token!=']')
-                printf("Missing close bracket\r\n");
-            emitAlignedCode(oc + 4);
-            emitCode(Ra);
-            emitCode(0x00);
-            emitCode(0x00);
-            emitCode(0x00);
-            return;
+            if (token == '+') {
+                //NextToken();
+                Rb = getRegister();
+                emitAlignedCode(0x65);  // JSR [Ra+Rb]
+                emitCode(Ra);
+                emitCode(Rb);
+                emitCode(0x00);
+                emitCode(0x00);
+                return;
+            }
+            else {
+                if (token != ')' && token!=']')
+                    printf("Missing close bracket\r\n");
+                emitAlignedCode(oc + 4);
+                emitCode(Ra);
+                emitCode(0x00);
+                emitCode(0x00);
+                emitCode(0x00);
+                return;
+            }
        }
     }
     addr = expr();
     prevToken();
     // d(Rn)? 
     if (token=='(' || token=='[') {
+        NextToken();
         Ra = getRegister();
         if (Ra==-1) {
             printf("Illegal jump address mode.\r\n");
@@ -282,7 +306,7 @@ static void process_jmp(int oc)
     emitImm32(addr, code_bits > 32);
     emitAlignedCode(oc);
     if (bGen)
-       if (lastsym) {
+       if (lastsym && !use_gp) {
             if( lastsym->segment < 5)
                 sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
         }
@@ -310,10 +334,16 @@ static void process_riop(int oc)
     need(',');
     NextToken();
     val = expr();
+/*
+   if (lastsym != (SYM *)NULL)
+       emitImm16(val,!lastsym->defined);
+   else
+       emitImm16(val,0);
+*/
     emitImm16(val,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
     if (bGen)
-    if (lastsym) {
+    if (lastsym && !use_gp) {
         if( lastsym->segment < 5)
         sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 3 | (lastsym->isExtern ? 128 : 0) |
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
@@ -426,12 +456,12 @@ static void process_bcc(int oc)
     ad = code_address + 5;
     if ((ad & 15)==15)
        ad++;
-    disp = (val & 0xFFFFFFFFFFFF0000L) - (ad & 0xFFFFFFFFFFFF0000L); 
+    disp = ((val & 0xFFFFFFFFFFFFF000L) - (ad & 0xFFFFFFFFFFFFF000L)) >> 12;
     emitAlignedCode(oc);
     emitCode(Ra);
     emitCode(val & 255);
-    emitCode((val >> 8) & 255);
-    emitCode((disp >> 16) & 31);
+    emitCode(((disp & 15) << 4)|((val >> 8) & 15));
+    emitCode((disp >> 4) & 31);
 }
 
 // ---------------------------------------------------------------------------
@@ -449,12 +479,15 @@ static void process_bra(int oc)
     ad = code_address + 5;
     if ((ad & 15)==15)
        ad++;
-    disp = (val & 0xFFFFFFFFFFFF0000L) - (ad & 0xFFFFFFFFFFFF0000L); 
+    disp = ((val & 0xFFFFFFFFFFFFF000L) - (ad & 0xFFFFFFFFFFFFF000L)) >> 12; 
     emitAlignedCode(oc);
     emitCode(0x00);
     emitCode(val & 255);
-    emitCode((val >> 8) & 255);
-    emitCode((disp >> 16) & 31);
+    emitCode(((disp & 15) << 4)|((val >> 8) & 15));
+    if (oc==0x56)   // BSR
+        emitCode((disp >> 4) & 255);
+    else
+        emitCode((disp >> 4) & 31);
 }
 
 // ---------------------------------------------------------------------------
@@ -558,11 +591,11 @@ static void process_store(int oc)
         return;
     }
     if (Rb > 0) {
-       fixup = 5;
+       fixup = 11;
        emitImm2(disp,lastsym!=(SYM*)NULL);
        emitAlignedCode(oc + 8);
         if (bGen)
-        if (lastsym) {
+        if (lastsym && Ra != 249 && !use_gp) {
         if( lastsym->segment < 5)
             sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
             (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
@@ -573,18 +606,23 @@ static void process_store(int oc)
        emitCode((disp << 6) | sc | ((sg & 15) << 2));
        return;
     }
-        fixup = 4;
-        if (disp < 0xFFFFFFFFFFFFF800LL || disp > 0x7FFLL)
-           emitImm12(disp,lastsym!=(SYM*)NULL);
+        fixup = 10;
+        if (disp < 0xFFFFFFFFFFFFF800LL || disp > 0x7FFLL) /*{
+           if (lastsym != (SYM *)NULL)
+               emitImm12(disp,!lastsym->defined);
+           else
+               emitImm12(disp,0);
+        } */
+            emitImm12(disp,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
-    if (bGen && lastsym)
+    if (bGen && lastsym && Ra != 249 && !use_gp)
     if( lastsym->segment < 5)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     if (Ra < 0) Ra = 0;
     emitCode(Ra);
     emitCode(Rs);
-    emitCode(((disp << 4) & 0xFC) | (sg & 15));
+    emitCode(((disp << 4) & 0xF0) | (sg & 15));
     emitCode((disp >> 4) & 255);
     ScanToEOL();
 }
@@ -600,9 +638,15 @@ static void process_ldi(int oc)
     Rt = getRegister();
     expect(',');
     val = expr();
+/*
+   if (lastsym != (SYM *)NULL)
+       emitImm24(val,!lastsym->defined);
+   else
+       emitImm24(val,0);
+*/
     emitImm24(val,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
-    if (bGen && lastsym)
+    if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
@@ -624,7 +668,7 @@ static void process_jsp(int oc)
     expect(',');
     val = expr();
     emitAlignedCode(oc);
-    if (bGen && lastsym)
+    if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
@@ -665,15 +709,15 @@ static void process_load(int oc)
         sg = segprefix;
     if (Rb >= 0) {
        emitImm2(disp,lastsym!=(SYM*)NULL);
-       fixup = 5;
-       if (oc==0x87) {
+       fixup = 11;
+       if (oc==0x87) {  //LWS
           printf("Address mode not supported.\r\n");
           return;
        }
-       if (oc==0x92) oc = 0x8F;  // LEA
+       if (oc==0x9F) oc = 0x8F;  // LEA
        else oc = oc + 8;
        emitAlignedCode(oc);
-        if (bGen && lastsym)
+        if (bGen && lastsym && Ra != 249 && !use_gp)
         if( lastsym->segment < 5)
         sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
@@ -683,18 +727,81 @@ static void process_load(int oc)
        emitCode((disp << 6) | sc | ((sg & 15) << 2));
        return;
     }
-    fixup = 4;       // 12 bit
-    if (disp < 0xFFFFFFFFFFFFF700LL || disp > 0x7FFLL)
-       emitImm12(disp,lastsym!=(SYM*)NULL);
+    fixup = 10;       // 12 bit
+    if (disp < 0xFFFFFFFFFFFFF700LL || disp > 0x7FFLL) /*{
+       if (lastsym != (SYM *)NULL)
+           emitImm12(disp,!lastsym->defined);
+       else
+           emitImm12(disp,0);
+    } */
+        emitImm12(disp,lastsym!=(SYM*)NULL);
     emitAlignedCode(oc);
-    if (bGen && lastsym)
+    if (bGen && lastsym && Ra != 249 && !use_gp)
     if( lastsym->segment < 5)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     if (Ra < 0) Ra = 0;
     emitCode(Ra);
     emitCode(Rt);
-    emitCode(((disp << 4) & 0xFC) | (sg & 15));
+    emitCode(((disp << 4) & 0xF0) | (sg & 15));
+    emitCode((disp >> 4) & 255);
+    ScanToEOL();
+}
+
+// ----------------------------------------------------------------------------
+// pea disp[r2]
+// pea [r2+r3]
+// ----------------------------------------------------------------------------
+
+static void process_pea()
+{
+    int oc;
+    int Ra;
+    int Rb;
+    int sc;
+    int sg;
+    char *p;
+    int64_t disp;
+    int fixup = 5;
+
+    p = inptr;
+    NextToken();
+    mem_operand(&disp, &Ra, &Rb, &sc, &sg);
+    if (segprefix >= 0)
+        sg = segprefix;
+    if (Rb >= 0) {
+       emitImm2(disp,lastsym!=(SYM*)NULL);
+       fixup = 11;
+       oc = 0xB9;  // PEAX
+       emitAlignedCode(oc);
+        if (bGen && lastsym && Ra != 249 && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+       emitCode(Ra);
+       emitCode(Rb);
+       emitCode(0x00);
+       emitCode((disp << 6) | sc | ((sg & 15) << 2));
+       return;
+    }
+    oc = 0xB8;        // PEA
+    fixup = 10;       // 12 bit
+    if (disp < 0xFFFFFFFFFFFFF700LL || disp > 0x7FFLL) /*{
+         if (lastsym != (SYM *)NULL)
+           emitImm12(disp,!lastsym->defined);
+       else
+           emitImm12(disp,0);
+    }*/
+        emitImm12(disp,lastsym!=(SYM*)NULL);
+    emitAlignedCode(oc);
+    if (bGen && lastsym && Ra != 249 && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    if (Ra < 0) Ra = 0;
+    emitCode(Ra);
+    emitCode(0x00);
+    emitCode((disp << 4) & 255);
     emitCode((disp >> 4) & 255);
     ScanToEOL();
 }
@@ -756,7 +863,7 @@ static void process_pushpop(int oc)
        val = expr();
        emitImm32(val,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
        emitAlignedCode(0xAD);                        
-        if (bGen && lastsym)
+        if (bGen && lastsym && !use_gp)
         if( lastsym->segment < 5)
         sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
@@ -930,8 +1037,12 @@ void Table888mmu_processMaster()
     first_org = 1;
     first_rodata = 1;
     first_data = 1;
+    first_bss = 1;
     for (nn = 0; nn < 12; nn++) {
         sections[nn].index = 0;
+        if (nn == 0)
+        sections[nn].address = 0;
+        else
         sections[nn].address = 0;
         sections[nn].start = 0;
         sections[nn].end = 0;
@@ -1036,7 +1147,17 @@ void Table888mmu_processMaster()
         case tk_bvc: process_bcc(0x43); break;
         case tk_bvs: process_bcc(0x42); break;
         case tk_bsr: process_bra(0x56); break;
-        case tk_bss: segment = bssseg; break;
+        case tk_bss:
+            if (first_bss) {
+                while(sections[segment].address & 4095)
+                    emitByte(0x00);
+                sections[3].address = sections[segment].address;
+                first_bss = 0;
+                binstart = sections[3].index;
+                ca = sections[3].address;
+            }
+            segment = bssseg;
+            break;
         case tk_cli: emit_insn(0x3100000001); break;
         case tk_cmp: process_rrop(0x06); break;
         case tk_code: process_code(); break;
@@ -1068,6 +1189,7 @@ void Table888mmu_processMaster()
         case tk_extern: process_extern(); break;
         case tk_fill: process_fill(); break;
         case tk_gran: process_gran(0x14); break;
+        case tk_ios: segprefix = 11; break;
         case tk_jgr: process_jsp(0x57); break;
         case tk_jmp: process_jmp(0x50); break;
         case tk_jsp: process_jsp(0x61); break;
@@ -1077,7 +1199,7 @@ void Table888mmu_processMaster()
         case tk_lc:  process_load(0x82); break;
         case tk_lcu: process_load(0x83); break;
         case tk_ldi: process_ldi(0x16); break;
-        case tk_lea: process_load(0x92); break;
+        case tk_lea: process_load(0x9F); break;
         case tk_lh:  process_load(0x84); break;
         case tk_lhu: process_load(0x85); break;
         case tk_lmr: process_lmr(0x9C); break;
@@ -1097,6 +1219,7 @@ void Table888mmu_processMaster()
         case tk_or:  process_rrop(0x21); break;
         case tk_ori: process_riop(0x0D); break;
         case tk_org: process_org(); break;
+        case tk_pea: process_pea(); break;
         case tk_php: emit_insn(0x3200000001); break;
         case tk_plp: emit_insn(0x3300000001); break;
         case tk_pop:  process_pushpop(0xA7); break;

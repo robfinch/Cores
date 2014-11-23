@@ -31,6 +31,9 @@
 #include "symbol.hpp"
 #include "elf.h"
 
+#define TXTBASE      0x23F000
+//#define TXTBASE      0xC00200
+
 using namespace std;
 
 int nFiles;
@@ -39,9 +42,9 @@ clsElf64File File[256];
 clsElf64Section sections[12];
 SymbolFactory symFactory;
 SymbolWarehouse symWarehouse;
-int debug = 0;
+int debug = 1;
 int trigger = 0;
-int64_t textbase = 0xC00200;
+int64_t textbase = TXTBASE;
 
 enum {
     codeseg = 0,
@@ -101,6 +104,15 @@ Symbol *Lookup(Elf64rel *p, int fn)
     sym = symWarehouse.FindSymbol(symname);
     return sym;
 }
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+int64_t Round4096(int64_t n)
+{
+    return (n + 4095LL) & 0xFFFFFFFFFFFFF000LL;
+}
+
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -173,9 +185,7 @@ void LinkELFFile()
         for (fn = 0; fn < nFiles; fn++)
             sections[sn].hdr.sh_size += File[fn].sections[sn]->hdr.sh_size;
         // Round to page boundary
-        sz = sections[sn].hdr.sh_size;
-        sz = (sz + 4095) & 0xFFFFFFFFFFFFF000LL;
-        sections[sn].hdr.sh_size = sz;
+        sections[sn].hdr.sh_size = Round4096(sections[sn].hdr.sh_size);
 
         for (fn = 1; fn < nFiles; fn++)
             File[fn].sections[sn]->hdr.sh_addr = File[fn-1].sections[sn]->hdr.sh_addr + File[fn-1].sections[sn]->hdr.sh_size;
@@ -186,8 +196,10 @@ void LinkELFFile()
     if (debug)
         printf("Adjusting section start addresses.\r\n");
     for (fn = 0; fn < nFiles; fn++) {
-        for (sn = 1; sn < 5; sn++)
+        for (sn = 1; sn < 5; sn++) {
             File[fn].sections[sn]->hdr.sh_addr += sections[0].hdr.sh_size;
+            //printf("File[%d].section[%d]->hdr.sh_addr=%llx\r\n",fn,sn,File[fn].sections[sn]->hdr.sh_addr);
+        }
         for (sn = 2; sn < 5; sn++)
             File[fn].sections[sn]->hdr.sh_addr += sections[1].hdr.sh_size;
         for (sn = 3; sn < 5; sn++)
@@ -201,6 +213,7 @@ void LinkELFFile()
     for (fn = 0; fn < nFiles; fn++) {
         for (sn = 0; sn < 5; sn++) {
             File[fn].sections[sn]->hdr.sh_addr += textbase;
+            //printf("File[%d].section[%d]->hdr.sh_addr=%llx\r\n",fn,sn,File[fn].sections[sn]->hdr.sh_addr);
         }
     }
     
@@ -258,7 +271,11 @@ void LinkELFFile()
                      b2 = File[fn].sections[sn-7]->bytes[p->r_offset+2];
                      b3 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
                      wd = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
+                     if (p->r_offset==0x20DB)
+                        printf("20DB:%llx -> ", wd);
                      wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                     if (p->r_offset==0x20DB)
+                        printf("%llx\r\n", wd);                     
                      File[fn].sections[sn-7]->bytes[p->r_offset+0] = wd & 255;
                      File[fn].sections[sn-7]->bytes[p->r_offset+1] = (wd >> 8) & 255;
                      File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 16) & 255;
@@ -407,7 +424,7 @@ void LinkELFFile()
                          b1 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
                          wd = (b1 << 6) | b0;
                          wd += File[fn].sections[sn-7]->hdr.sh_addr;
-                         File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 63);
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 0xFC);
                          File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 6) & 255;
                      }
                      else {
@@ -423,7 +440,7 @@ void LinkELFFile()
                          b4 = File[fn].sections[sn-7]->bytes[offset+2];
                          wd = (b4 << 30) | (b3 << 22) | (b2 << 14) | (b1 << 6) | b0;
                          wd += File[fn].sections[sn-7]->hdr.sh_addr;
-                         File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 63);
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 0xFC);
                          File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 6) & 255;
                          File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 14) & 255;
                          File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 22) & 255;
@@ -438,7 +455,7 @@ void LinkELFFile()
                      else {
                          if (bits <= 14) {
                              wd = sym->value;
-                             File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 63);
+                             File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 0xFC);
                              File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 6) & 255;
                          }
                          else {
@@ -448,7 +465,7 @@ void LinkELFFile()
                              else
                                  offset -= 5;
                              wd = sym->value;
-                             File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 63);
+                             File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0x3) | ((wd << 2) & 0xFC);
                              File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 6) & 255;
                              File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 14) & 255;
                              File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 22) & 255;
@@ -475,7 +492,7 @@ void LinkELFFile()
                      b4 = File[fn].sections[sn-7]->bytes[offset+3];
                      wd = (b4 << 28) | (b3 << 20) | (b2 << 12) | (b1 << 4) | b0;
                      wd += File[fn].sections[sn-7]->hdr.sh_addr;
-                     File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x15) | ((wd << 4) & 15);
+                     File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x15) | (((wd & 15) << 4));
                      File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 4) & 255;
                      File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 12) & 255;
                      File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 20) & 255;
@@ -492,7 +509,7 @@ void LinkELFFile()
                          else
                              offset -= 5;
                          wd = sym->value;
-                         File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x15) | ((wd << 4) & 15);
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x15) | (((wd & 15) << 4));
                          File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 4) & 255;
                          File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 12) & 255;
                          File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 20) & 255;
@@ -591,6 +608,176 @@ void LinkELFFile()
                          }
                      }
                      break;
+
+                // 20 bit fixups
+                case 8:
+                     if (bits <= 20) {
+                         b0 = File[fn].sections[sn-7]->bytes[p->r_offset+1] >> 4;
+                         b1 = File[fn].sections[sn-7]->bytes[p->r_offset+2];
+                         b2 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                         wd = (b2 << 12) | (b1 << 4) | b0;
+                         wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+1] &= 0x0F;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+1] |= ((wd & 15) << 4);
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 4) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] = (wd >> 12) & 255;
+                     }
+                     else if (bits <= 52) {
+                         offset = p->r_offset;
+                         if ((offset & 15)==0)
+                             offset -= 6;
+                         else
+                             offset -= 5;
+                         b0 = File[fn].sections[sn-7]->bytes[p->r_offset+1] >> 4;
+                         b1 = File[fn].sections[sn-7]->bytes[p->r_offset+2];
+                         b2 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                         b3 = File[fn].sections[sn-7]->bytes[offset+0];
+                         b4 = File[fn].sections[sn-7]->bytes[offset+1];
+                         b5 = File[fn].sections[sn-7]->bytes[offset+2];
+                         b6 = File[fn].sections[sn-7]->bytes[offset+3];
+                         wd = (b6 << 44) | (b5 << 36) | (b4 << 28) |
+                              (b3 << 20) | (b2 << 12) | (b1 << 4) | b0;
+                         wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+1] &= 0x0F;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+1] |= ((wd & 15) << 4);
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 4) & 255;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] = (wd >> 12) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+0] = (wd >> 20) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+1] = (wd >> 28) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+2] = (wd >> 36) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+3] = (wd >> 44) & 255;
+                     }
+                     break;
+                case 136:
+                     sym = Lookup(p, fn);
+                     if (!sym)
+                         printf("Unresolved external <%s>\r\n", nmTable.GetName(sym->name));
+                     else {
+                         if (bits <= 20) {
+                             wd = sym->value;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+1] &= 0x0F;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+1] |= ((wd & 15) << 4);
+                             File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 4) & 255;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+3] = (wd >> 12) & 255;
+                         }
+                         else if (bits <= 52) {
+                             offset = p->r_offset;
+                             if ((offset & 15)==0)
+                                 offset -= 6;
+                             else
+                                 offset -= 5;
+                             wd = sym->value;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+1] &= 0x0F;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+1] |= ((wd & 15) << 4);
+                             File[fn].sections[sn-7]->bytes[p->r_offset+2] = (wd >> 4) & 255;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+3] = (wd >> 12) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+0] = (wd >> 20) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+1] = (wd >> 28) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+2] = (wd >> 36) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+3] = (wd >> 44) & 255;
+                         }
+                     }
+                     break;
+
+                // 12 bit fixups
+                case 10: 
+                     if (bits <= 12) {
+                         b0 = (File[fn].sections[sn-7]->bytes[p->r_offset+2] >> 4) & 15;
+                         b1 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                         wd = (b1 << 4) | b0;
+                         wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0xF) | (((wd & 15) << 4));
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 4) & 255;
+                     }
+                     else {
+                         offset = p->r_offset;
+                         if ((offset & 15)==0)
+                             offset -= 6;
+                         else
+                             offset -= 5;
+                         b0 = (File[fn].sections[sn-7]->bytes[p->r_offset+2] >> 4) & 15;
+                         b1 = File[fn].sections[sn-7]->bytes[p->r_offset+3];
+                         b2 = File[fn].sections[sn-7]->bytes[offset+0];
+                         b3 = File[fn].sections[sn-7]->bytes[offset+1];
+                         b4 = File[fn].sections[sn-7]->bytes[offset+2];
+                         wd = (b4 << 28) | (b3 << 20) | (b2 << 12) | (b1 << 4) | b0;
+                         wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0xF) | (((wd & 15)<< 4));
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 4) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 12) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 20) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 28) & 15;
+                         File[fn].sections[sn-7]->bytes[offset+3] <= 0;
+                     }
+                     break;
+                case 138:
+                     sym = Lookup(p, fn);
+                     if (!sym)
+                         printf("Unresolved external <%s>\r\n", nmTable.GetName(sym->name));
+                     else {
+                         if (bits <= 12) {
+                             wd = sym->value;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0xF) | (((wd & 15) << 4));
+                             File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 4) & 255;
+                         }
+                         else {
+                             offset = p->r_offset;
+                             if ((offset & 15)==0)
+                                 offset -= 6;
+                             else
+                                 offset -= 5;
+                             wd = sym->value;
+                             File[fn].sections[sn-7]->bytes[p->r_offset+2] <= (File[fn].sections[0]->bytes[p->r_offset+2] & 0xF) | (((wd & 15) << 4));
+                             File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (wd >> 4) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 12) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 20) & 255;
+                             File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 28) & 15;
+                             File[fn].sections[sn-7]->bytes[offset+3] <= 0;
+                         }
+                     }
+                     break;
+
+               // 2 bit fixups
+               // For 2 bit fixups we just assume there will be a preceding constant
+               // extension word. A code or data address space less than three bits
+               // is bound to be a rare case.
+                case 11:
+                     offset = p->r_offset;
+                     if ((offset & 15)==0)
+                         offset -= 6;
+                     else
+                         offset -= 5;
+                     b0 = (File[fn].sections[sn-7]->bytes[p->r_offset+3] >> 6) & 3;
+                     b1 = File[fn].sections[sn-7]->bytes[offset+0];
+                     b2 = File[fn].sections[sn-7]->bytes[offset+1];
+                     b3 = File[fn].sections[sn-7]->bytes[offset+2];
+                     b4 = File[fn].sections[sn-7]->bytes[offset+3];
+                     wd = (b4 << 26) | (b3 << 18) | (b2 << 10) | (b1 << 2) | b0;
+                     wd += File[fn].sections[sn-7]->hdr.sh_addr;
+                     File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x3F) | (((wd & 3) << 6));
+                     File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 2) & 255;
+                     File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 10) & 255;
+                     File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 18) & 255;
+                     File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 26) & 63;
+                     break;
+                case 139:
+                     sym = Lookup(p, fn);
+                     if (!sym)
+                         printf("Unresolved external <%s>\r\n", nmTable.GetName(sym->name));
+                     else {
+                         offset = p->r_offset;
+                         if ((offset & 15)==0)
+                             offset -= 6;
+                         else
+                             offset -= 5;
+                         wd = sym->value;
+                         File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x3F) | (((wd & 3)<< 6));
+                         File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 2) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 10) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 18) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 26) & 63;
+                     }
+                     break;
     
                 }
             }
@@ -615,6 +802,7 @@ void LinkELFFile()
     // All section one's go to master section one, etc.
     //
     for (sn = 0; sn < 5; sn++) {
+        sections[sn].hdr.sh_addr = File[0].sections[sn]->hdr.sh_addr;
         for (fn = 0; fn < nFiles; fn++) {
             for (nn = 0; nn < File[fn].sections[sn]->hdr.sh_size; nn++) {
                 sections[sn].AddByte(File[fn].sections[sn]->bytes[nn]);
@@ -644,6 +832,7 @@ void WriteELFFile(FILE *fp)
     int nn;
     Elf64Symbol elfsym;
     clsElf64File elf;
+    clsElf64Phdr phdr[6];
     int64_t start;
     Symbol *sym;
 
@@ -658,6 +847,15 @@ void WriteELFFile(FILE *fp)
     sections[0].hdr.sh_info = 0;
     sections[0].hdr.sh_addralign = 16;
     sections[0].hdr.sh_entsize = 0;
+    phdr[0].p_type = clsElf64Phdr::PT_LOAD;
+    phdr[0].p_flags = clsElf64Phdr::PF_X | clsElf64Phdr::PF_R;
+    phdr[0].p_offset = 512;
+    phdr[0].p_vaddr = sections[0].hdr.sh_addr;
+    phdr[0].p_paddr = 0;   // reserved
+    phdr[0].p_filesz = sections[0].index;
+    phdr[0].p_memsz = sections[0].index;
+    phdr[0].p_align = 4096;
+
     // rodata
     sections[1].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[1].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC;
@@ -667,6 +865,16 @@ void WriteELFFile(FILE *fp)
     sections[1].hdr.sh_info = 0;
     sections[1].hdr.sh_addralign = 8;
     sections[1].hdr.sh_entsize = 0;
+    phdr[1].p_type = clsElf64Phdr::PT_LOAD;
+    phdr[1].p_flags = clsElf64Phdr::PF_R;
+    phdr[1].p_offset = sections[1].hdr.sh_offset;
+    phdr[1].p_vaddr = sections[1].hdr.sh_addr;
+    //printf("vaddr:%llx\r\n",sections[1].hdr.sh_addr);
+    phdr[1].p_paddr = 0;   // reserved
+    phdr[1].p_filesz = sections[1].index;
+    phdr[1].p_memsz = sections[1].index;
+    phdr[1].p_align = 4096;
+
     // data
     sections[2].hdr.sh_type = clsElf64Shdr::SHT_PROGBITS;
     sections[2].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_WRITE;
@@ -676,6 +884,15 @@ void WriteELFFile(FILE *fp)
     sections[2].hdr.sh_info = 0;
     sections[2].hdr.sh_addralign = 8;
     sections[2].hdr.sh_entsize = 0;
+    phdr[2].p_type = clsElf64Phdr::PT_LOAD;
+    phdr[2].p_flags = clsElf64Phdr::PF_W | clsElf64Phdr::PF_R;
+    phdr[2].p_offset = sections[2].hdr.sh_offset;
+    phdr[2].p_vaddr = sections[2].hdr.sh_addr;
+    phdr[2].p_paddr = 0;   // reserved
+    phdr[2].p_filesz = sections[2].index;
+    phdr[2].p_memsz = sections[2].index;
+    phdr[2].p_align = 4096;
+
     // bss
     sections[3].hdr.sh_type = clsElf64Shdr::SHT_NOBITS;
     sections[3].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_WRITE;
@@ -685,6 +902,15 @@ void WriteELFFile(FILE *fp)
     sections[3].hdr.sh_info = 0;
     sections[3].hdr.sh_addralign = 8;
     sections[3].hdr.sh_entsize = 0;
+    phdr[3].p_type = clsElf64Phdr::PT_NULL;
+    phdr[3].p_flags = clsElf64Phdr::PF_W | clsElf64Phdr::PF_R;
+    phdr[3].p_offset = sections[3].hdr.sh_offset;
+    phdr[3].p_vaddr = sections[3].hdr.sh_addr;
+    phdr[3].p_paddr = 0;   // reserved
+    phdr[3].p_filesz = 0;
+    phdr[3].p_memsz = sections[3].index;
+    phdr[3].p_align = 4096;
+
     // tls
     sections[4].hdr.sh_type = clsElf64Shdr::SHT_NOBITS;
     sections[4].hdr.sh_flags = clsElf64Shdr::SHF_ALLOC | clsElf64Shdr::SHF_WRITE;
@@ -694,6 +920,14 @@ void WriteELFFile(FILE *fp)
     sections[4].hdr.sh_info = 0;
     sections[4].hdr.sh_addralign = 8;
     sections[4].hdr.sh_entsize = 0;
+    phdr[4].p_type = clsElf64Phdr::PT_NULL;
+    phdr[4].p_flags = clsElf64Phdr::PF_W | clsElf64Phdr::PF_R;
+    phdr[4].p_offset = sections[4].hdr.sh_offset;
+    phdr[4].p_vaddr = sections[4].hdr.sh_addr;
+    phdr[4].p_paddr = 0;   // reserved
+    phdr[4].p_filesz = 0;
+    phdr[4].p_memsz = sections[4].index;
+    phdr[4].p_align = 4096;
 
     // This bit must be before the name table is cleared.
     // Once the name table is cleared the symbol table is no longer valid.
@@ -703,7 +937,7 @@ void WriteELFFile(FILE *fp)
         start = sym->value;
     }
     else
-        start = 0xC00200;
+        start = TXTBASE;
 
     nmTable.Clear();
     sections[0].hdr.sh_name = nmTable.AddName(".text");
@@ -788,6 +1022,8 @@ void WriteELFFile(FILE *fp)
     elf.hdr.e_shnum = 0;              // This will be incremented by AddSection()
     elf.hdr.e_shstrndx = 5;           // index into section table of string table header
 
+    for (nn = 0; nn < 5; nn++)
+        elf.AddPhdr(&phdr[nn]);
     for (nn = 0; nn < 6; nn++)
         elf.AddSection(&sections[nn]);    
     elf.Write(fp);

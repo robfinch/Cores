@@ -53,9 +53,11 @@ int regSP = 255;
 int regBP = 253;
 int regLR = -1;
 int regXLR = 251;
+int regGP = 249;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;
+int use_gp = 0;
 
 FILE            *input = 0,
                 *list = 0,

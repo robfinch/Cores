@@ -167,6 +167,15 @@ AMODE *make_offset(ENODE *node)
     return ap;
 }
         
+AMODE *make_indx(ENODE *node, int reg)
+{
+	AMODE *ap;
+    ap = allocAmode();
+    ap->mode = am_indx;
+    ap->offset = node;
+    ap->preg = reg;
+    return ap;
+}
 // ----------------------------------------------------------------------------
 //      MakeLegalAmode will coerce the addressing mode in ap1 into a
 //      mode that is satisfactory for the flag word.
@@ -1192,6 +1201,16 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             MakeLegalAmode(ap1,flags,size);
             return ap1;
     case en_labcon:
+            if (use_gp) {
+                ap1 = GetTempRegister();
+                ap2 = allocAmode();
+                ap2->mode = am_indx;
+                ap2->preg = regGP;      // global pointer
+                ap2->offset = node;     // use as constant node
+                GenerateDiadic(op_lea,0,ap1,ap2);
+                MakeLegalAmode(ap1,flags,size);
+                return ap1;             // return reg
+            }
             ap1 = allocAmode();
 			/* this code not really necessary, see segments notes
 			if (node->etype==bt_pointer && node->constflag) {
@@ -1206,7 +1225,19 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			ap1->isUnsigned = node->isUnsigned;
             MakeLegalAmode(ap1,flags,size);
             return ap1;
+
     case en_nacon:
+            if (use_gp) {
+                ap1 = GetTempRegister();
+                ap2 = allocAmode();
+                ap2->mode = am_indx;
+                ap2->preg = regGP;      // global pointer
+                ap2->offset = node;     // use as constant node
+                GenerateDiadic(op_lea,0,ap1,ap2);
+                MakeLegalAmode(ap1,flags,size);
+                return ap1;             // return reg
+            }
+            // fallthru
 	case en_cnacon:
 	case en_clabcon:
             ap1 = allocAmode();
@@ -1497,7 +1528,7 @@ int GetNaturalSize(ENODE *node)
                         return 1;
                 if( -32768 <= node->i && node->i <= 32767 )
                         return 2;
-				if (-2147483648L <= node->i && node->i <= 2147483647L)
+				if (-2147483648LL <= node->i && node->i <= 2147483647LL)
 					return 4;
 				return 8;
 		case en_fcon:

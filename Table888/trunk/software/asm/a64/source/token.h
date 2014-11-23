@@ -93,8 +93,9 @@ enum {
      // 180
      tk_gran,
      tk_gt,
-     tk_id,
      tk_icon,
+     tk_id,
+     tk_ios,
      tk_jgr,
      tk_jmp,
      tk_jsp,
@@ -130,6 +131,7 @@ enum {
      tk_or,
      tk_ori,
      tk_org,
+     tk_pea,
      tk_php,
      tk_plp,
      tk_pop,

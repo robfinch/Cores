@@ -1016,6 +1016,11 @@ int64_t Round512(int64_t n)
     return (n + 511LL) & 0xFFFFFFFFFFFFFE00LL;
 }
 
+int64_t Round4096(int64_t n)
+{
+    return (n + 4095LL) & 0xFFFFFFFFFFFFF000LL;
+}
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -1204,6 +1209,7 @@ int main(int argc, char *argv[])
     }
     strcpy(fname, argv[nn]);
     mfndx = 0;
+    start_address = 0;
     code_address = 0;
     bss_address = 0;
     for (qq = 0; qq < 12; qq++)

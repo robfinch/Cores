@@ -230,6 +230,7 @@ wire uncachedArea = 1'b0;
 wire ihit;
 reg [2:0] ld_size, st_size;
 reg swapSSSP;
+reg isIndexed;
 reg isRTS,isRTS2,isPUSH,isPOP,isIMM1,isIMM2,isCMPI;
 reg isJSRix,isJSRdrn,isJMPix,isJMPix2,isBRK,isBRK2,isPLP,isRTI,isRTI2,isJGR,isJMP,isJMPdrn;
 reg isShifti,isBSR,isLMR,isSMR;
@@ -423,6 +424,7 @@ wire [25:0] ss_upper_limit = ss_desc[115:90];
 wire [31:0] seg_base = srfo_desc[31:0];
 wire [31:0] seg_limit = srfo_desc[95:64];
 wire [11:0] seg_acr = srfo_desc[127:116];
+//wire is_stack_seg = seg_acr[11:4]==8'h96;
 wire [3:0] seg_dpl = seg_acr[3:0];
 reg [31:0] prev_ss_base;
 
@@ -628,6 +630,12 @@ wire [63:0] lea_drn = a + imm;
 wire [63:0] lea_ndx = a + (b << ir[33:32]) + imm;
 wire [63:0] ea_drn = lea_drn;
 wire [63:0] ea_ndx = lea_ndx;
+always @(isIndexed,ea_drn,ea_ndx)
+if (isIndexed)
+	ea <= ea_ndx;
+else
+	ea <= ea_drn;
+
 wire [63:0] mr_ea = c;
 `ifdef SUPPORT_BITMAP_FNS
 wire [63:0] ea_bm = a + {(b >> 6),3'b000} + imm;
@@ -1028,6 +1036,7 @@ DECODE:
 		isLW <= `FALSE;
 		isCAS <= `FALSE;
 		isMTSEG <= `FALSE;
+		isIndexed <= `FALSE;
 		jgr_state <= `JGR_NONE;
 		nLD <= 3'b00;
 		tmrcyc <= 2'b00;
@@ -1070,6 +1079,25 @@ DECODE:
 		default:
 			Rt <= 8'h00;
 		endcase
+
+		// Set segment register selection for memory ops
+		case(opcode)
+		`LMR:	Sa <= ir[35:32];
+		`SMR:	Sa <= ir[35:32];
+		`CINV,
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,
+		`SB,`SC,`SH,`SW:
+				Sa <= ir[27:24];
+		`CINVX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
+		`SBX,`SCX,`SHX,`SWX,
+		`BMS,`BMC,`BMF,`BMT:
+				Sa <= ir[37:34];
+		`CAS:	Sa <= 4'd13;	// volatile data segment; ToDo: fix seg selection Sa
+		`JGR:	Sa <= 4'd14;
+		`JSR_IX,`JMP_IX:	Sa <= ir[19:16];
+		default:	Sa <= 4'd1;	// defaults to data segment
+		endcase
 		
 		// The only segment register updateable outside of the MTSPR
 		// instruction is the code segment. So we set it to default
@@ -1093,19 +1121,23 @@ DECODE:
 		`JSP,`JGR:	imm <= ir[39:16];
 		`JSR:		imm <= ir[39:8];	// PC has only 28 bits implemented
 		`JMP:		imm <= ir[39:8];
-		`JSR_IX:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
-		`JMP_IX:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
+		`JSR_IX,`JMP_IX:
+					imm <= hasIMM ? {immbuf[43:0],ir[39:20]} : {{44{ir[39]}},ir[39:20]};
 		`JMP_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`JSR_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
 		`PUSHC:		imm <= hasIMM ? {immbuf[31:0],ir[39:8]} : {{32{ir[39]}},ir[39:8]};
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`LEA,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`SBX,`SCX,`SHX,`SWX,`LEAX,
-		`CINV,`CINVX:	;
-		default:
-			if (hasIMM)
-				imm <= {immbuf[47:0],ir[39:24]};
-			else
-				imm <= {{48{ir[39]}},ir[39:24]};
+		`JSRX:		imm <= 64'd0;
+		`PEA,`CINV,
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,
+		`SB,`SC,`SH,`SW:
+					imm <= hasIMM ? {immbuf[51:0],ir[39:28]} : {{52{ir[39]}},ir[39:28]};
+		`PEAX,`CINVX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
+		`SBX,`SCX,`SHX,`SWX,
+		`BMS,`BMC,`BMF,`BMT:
+					imm <= hasIMM ? {immbuf[61:0],ir[39:38]} : ir[39:38];
+		`CAS:		imm <= hasIMM ? immbuf[63:0] : 64'd0;
+		default:	imm <= hasIMM ? {immbuf[47:0],ir[39:24]} : {{48{ir[39]}},ir[39:24]};
 		endcase
 
 		// This case statement decodes all instructions.
@@ -1232,8 +1264,6 @@ DECODE:
 					next_state(HANG);
 				else begin
 					next_state(LOAD1);
-//					update_sp(sp_dec);
-//					next_state(PUSH2);
 				end
 				$stop;
 			end
@@ -1262,43 +1292,39 @@ DECODE:
 			begin
 				isJSR <= `TRUE;
 				isJSP <= isJSP;
+				a <= 64'd0;
 				// We could test if the high-order bits of the PC are zero
 				// here, but we know they are in the sample.
 				// if (hasJSP && pc[63:48]!=16'd0)
 				//     store_what <= `STW_CS;
 				// else
-				if (hasJSP) begin
-					a <= 64'd0;
-				end
-				else begin
+				if (!hasJSP) begin
 					store_what <= `STW_PC;
 					fmt <= 2'b00;
-					a <= {immbuf[31:0],ir[39:8]};
+					//ea <= ir[39:8];
 					push2();
 				end
 			end
-		`JGR:	begin
-				Sa <= 4'd14;
-				end
-		`JSR_IX,`JMP_IX:
-			begin
-				Sa <= ir[19:16];
-				if (isIMM1) begin
-					imm <= {{16{immbuf[27]}},immbuf[27:0],ir[39:20]};
-				end
-				else if (isIMM2) begin
-					imm <= {immbuf[43:0],ir[39:20]};
-				end
-				else begin
-					imm <= {{44{ir[39]}},ir[39:20]};
-				end
-			end
+		// The difference between JSR and JSR_DN is only that JSR sets
+		// 'a' to zero.
 		`JSR_DRN:
 			begin
-				isJSRdrn <= `TRUE;
+				isJSR <= `TRUE;
 				isJSP <= isJSP;
-				if (!hasJSP)
-				begin
+				if (!hasJSP) begin
+					store_what <= `STW_PC;
+					fmt <= 2'b00;
+				    push2();
+				end
+			end
+		// The only difference between JSR_DRN and JSRX is that the 
+		// indexed flag is set.
+		`JSRX:
+			begin
+				isJSR <= `TRUE;
+				isJSP <= isJSP;
+				isIndexed <= `TRUE;
+				if (!hasJSP) begin
 					store_what <= `STW_PC;
 					fmt <= 2'b00;
 				    push2();
@@ -1317,77 +1343,17 @@ DECODE:
 					update_sp(sp_inc2 + ir[31:16]);
 				end
 			end
-		`LMR:	Sa <= ir[35:32];
-		`SMR:	Sa <= ir[35:32];
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,
-		`SB,`SC,`SH,`SW:
-			begin
-				Sa <= ir[27:24];
-				if (isIMM1) begin
-					imm <= {{24{immbuf[27]}},immbuf[27:0],ir[39:28]};
-				end
-				else if (isIMM2) begin
-					imm <= {immbuf[51:0],ir[39:28]};
-				end
-				else begin
-					imm <= {{52{ir[39]}},ir[39:28]};
-				end
-			end
-		`CAS:	// ToDo: fix seg selection Sa
-			begin
-				Sa <= 4'd13;	// volatile data segment
-				if (isIMM1)
-				    imm <= {{32{immbuf[31]}},immbuf[31:0]};
-				else if (isIMM2)
-					imm <= immbuf[63:0];
-				else
-					imm <= 64'd0;
-			end
-		`CINV:
-			begin
-				Sa <= ir[27:24];
-				if (isIMM1) begin
-					imm <= {{24{immbuf[27]}},immbuf[27:0],ir[39:28]};
-				end
-				else if (isIMM2) begin
-					imm <= {immbuf[51:0],ir[39:28]};
-				end
-				else begin
-					imm <= {{52{ir[39]}},ir[39:28]};
-				end
-			end
+		`PEAX,`CINVX,
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX,
 		`BMS,`BMC,`BMF,`BMT:
-			begin
-				Sa <= ir[37:34];
-				if (isIMM1) begin
-					imm <= {{34{immbuf[27]}},immbuf[27:0],ir[39:38]};
-				end
-				else if (isIMM2) begin
-					imm <= {immbuf[61:0],ir[39:38]};
-				end
-				else begin
-					imm <= ir[39:38];
-				end
-			end
-		`CINVX:
-			begin
-				Sa <= ir[37:34];
-				if (isIMM1) begin
-					imm <= {{34{immbuf[27]}},immbuf[27:0],ir[39:38]};
-				end
-				else if (isIMM2) begin
-					imm <= {immbuf[61:0],ir[39:38]};
-				end
-				else begin
-					imm <= ir[39:38];
-				end
-			end
+				isIndexed <= `TRUE;
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// PUSH / POP
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		
+		// PUSH needs to capture the output of rfoa in the decode stage.
 		`PUSH:
 			begin
 				isPUSH <= `TRUE;
@@ -1448,6 +1414,29 @@ DECODE:
 				immbuf[63:32] <= ir[39:8];
 				next_state(IFETCH);
 			end
+		
+		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		// Mystery Operations
+		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+		`EXEC:
+			begin
+				ir <= rfoa;
+				next_state(DECODE);
+			end
+		`MYST_R:
+			begin
+				ir[7:0] <= 8'h01;
+				ir[23:16] <= ir[31:24];
+				ir[39:32] <= rfob;
+				next_state(DECODE);
+			end
+		`MYST_RR:
+			begin
+				ir[7:0] <= 8'h02;
+				ir[31:24] <= ir[39:32];
+				ir[39:32] <= rfoc;
+				next_state(DECODE);
+			end
 		endcase
 	end
 
@@ -1459,6 +1448,7 @@ DECODE:
 EXECUTE:
 	begin
 		next_state(IFETCH);
+
 		// This case statement execute instructions.
 		case(opcode)
 		`R:
@@ -1511,6 +1501,7 @@ EXECUTE:
 					m_z <= next_m_z;
 					m_w <= next_m_w;
 				end
+/*
 			`CPUID:
 				begin
 					case(a[3:0])
@@ -1528,18 +1519,19 @@ EXECUTE:
 					default:	res <= 65'd0;
 					endcase
 				end
+*/
 			endcase
 		`RR:
 			case(func)
 			`ADD:	begin
 					res <= a + b;
-					next_state(OVERFLOW_TEST);
+//					next_state(OVERFLOW_TEST);
 					end
 			`ADDU:	res <= a + b;
 			`ADC:		res <= a + b + mpcf;
 			`SUB:	begin
 					res <= a - b;
-					next_state(OVERFLOW_TEST);
+//					next_state(OVERFLOW_TEST);
 					end
 			`SUBU:	res <= a - b;
 			`SBC:		res <= a - b - mpcf;
@@ -1593,22 +1585,14 @@ EXECUTE:
 		// Flow Control Instructions Follow
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		`BEQ,`BNE,`BVS,`BVC,`BMI,`BPL,`BRA,`BRN,`BGT,`BGE,`BLT,`BLE,`BHI,`BHS,`BLO,`BLS,
-		`BRZ,`BRNZ:
+		`BRZ,`BRNZ,`DBNZ:
 			begin
 				next_state(IFETCH);
 				if (take_branch) begin
-					pc[15: 0] <= ir[31:16];
-					pc[PCMSB:16] <= pc[PCMSB:16] + {{PCMSB-20{ir[36]}},ir[36:32]};
+					pc[11: 0] <= ir[27:16];
+					pc[PCMSB:12] <= pc[PCMSB:12] + {{PCMSB-20{ir[36]}},ir[36:28]};
 				end
-			end
-		`DBNZ:
-			begin
-				next_state(IFETCH);
-				if (take_branch) begin
-					pc[15: 0] <= ir[31:16];
-					pc[PCMSB:16] <= pc[PCMSB:16] + {{PCMSB-20{ir[36]}},ir[36:32]};
-				end
-				res <= a - 64'd1;
+				res <= a - 64'd1;	// for DBNZ (it won't update for other branches)
 			end
 		// For indirect jump we fall through into the RTS code. Both
 		// instructions operate the same way, differing in only the source
@@ -1617,9 +1601,8 @@ EXECUTE:
 			begin
 				isRTS <= `TRUE;
 				isRTS2 <= `TRUE;
-				rwadr <= {seg_base,12'h000} + ea_drn;
 				ppl <= cpl;
-				next_state(LOAD1);
+				load_check(ea);
 			end
 		`JMP_DRN:	
 			begin
@@ -1633,25 +1616,24 @@ EXECUTE:
 					prev_pc <= pc;
 					prev_cs <= cs;
 					cg_ncopy <= 5'd0;
-					cg_offset <= ea_drn;
+					cg_offset <= ea;
 					jgr_state <= `JGR_LOAD_CALLGATE;
 					//store_what <= `STW_CSPC;
 				end
 				else begin
-					pc <= ea_drn;
+					pc <= ea;
 					next_state(IFETCH);
 				end
 			end
 		`JSR_IX:
 			begin	
-				rwadr <= {seg_base,12'h000} + ea_drn;
 				isJSRix <= `TRUE;
 				prev_pc <= pc;
 				prev_cs <= cs;
 				prev_sp <= sp;
 				prev_ss_base <= ss_base;
 				ppl <= cpl;
-				next_state(LOAD1);
+				load_check(ea);
 			end
 		`JAL:
 			begin
@@ -1668,7 +1650,7 @@ EXECUTE:
 				isJSP <= `TRUE;
 				jspbuf <= a[23:0] | imm[23:0];
 			end
-		`JSR,`JMP,`JSR_DRN:
+		`JSR,`JMP,`JSR_DRN,`JSRX:
 			begin
 				isJGR <= `TRUE;
 				next_state(JGR1);
@@ -1679,7 +1661,7 @@ EXECUTE:
 				prev_pc <= pc;
 				prev_cs <= cs;
 				cg_ncopy <= 5'd0;
-				cg_offset <= ea_drn;
+				cg_offset <= ea;
 				jgr_state <= `JGR_LOAD_CALLGATE;
 			end
 		`JGR:
@@ -1726,41 +1708,41 @@ EXECUTE:
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 		// Loads and Stores follow
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-		`LB:
+		`LB,`LBX:
 			begin
 				ld_size <= byt;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LBU:
+		`LBU,`LBUX:
 			begin
 				ld_size <= ubyte;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LC:
+		`LC,`LCX:
 			begin
 				ld_size <= char;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LCU:
+		`LCU,`LCUX:
 			begin
 				ld_size <= uchar;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LH:
+		`LH,`LHX:
 			begin
 				ld_size <= half;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LHU:
+		`LHU,`LHUX:
 			begin
 				ld_size <= uhalf;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LW:
+		`LW,`LWX:
 			begin
 				isLW <= `TRUE;
 				ld_size <= word;
-				load_check(ea_drn);
+				load_check(ea);
 				if (isUnlk)
 					update_sp(sp + pimm);	// ADDUI SP,SP,#locs
 				isUnlk <= `FALSE;
@@ -1769,51 +1751,15 @@ EXECUTE:
 			begin
 				isCAS <= `TRUE;
 				ld_size <= word;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LEA:	res <= lea_drn;
+		`LEA,`LEAX:	res <= ea;
 		`LWS:
 			begin
 				isLWS <= `TRUE;
 				ld_size <= word;
-				load_check(ea_drn);
+				load_check(ea);
 			end
-		`LBX:
-			begin
-				ld_size <= byt;
-				load_check(ea_ndx);
-			end
-		`LBUX:
-			begin
-				ld_size <= ubyte;
-				load_check(ea_ndx);
-			end
-		`LCX:
-			begin
-				ld_size <= char;
-				load_check(ea_ndx);
-			end
-		`LCUX:
-			begin
-				ld_size <= uchar;
-				load_check(ea_ndx);
-			end
-		`LHX:
-			begin
-				ld_size <= half;
-				load_check(ea_ndx);
-			end
-		`LHUX:
-			begin
-				ld_size <= uhalf;
-				load_check(ea_ndx);
-			end
-		`LWX:
-			begin
-				ld_size <= word;
-				load_check(ea_ndx);
-			end
-		`LEAX:	res <= lea_ndx;
 `ifdef SUPPORT_BITMAP_FNS
 		`BMS,`BMC,`BMF,`BMT:
 			begin
@@ -1826,28 +1772,28 @@ EXECUTE:
 				st_size <= byt;
 				isWR <= `TRUE;
 				store_what <= `STW_B;
-				store_check(ea_drn);
+				store_check(ea);
 			end
 		`SC:
 			begin
 				st_size <= char;
 				isWR <= `TRUE;
 				store_what <= `STW_B;
-				store_check(ea_drn);
+				store_check(ea);
 			end
 		`SH:
 			begin
 				st_size <= half;
 				isWR <= `TRUE;
 				store_what <= `STW_B;
-				store_check(ea_drn);
+				store_check(ea);
 			end
 		`SW:
 			begin
 				st_size <= word;
 				isWR <= `TRUE;
 				store_what <= `STW_B;
-				store_check(ea_drn);
+				store_check(ea);
 				if (isLink) begin		// MOV BP,SP
 					Rt <= Rb;
 					res <= a;
@@ -1859,45 +1805,51 @@ EXECUTE:
 				st_size <= word;
 				isWR <= `TRUE;
 				store_what <= `STW_SPR;
-				store_check(ea_drn);
+				store_check(ea);
 			end
 		`CINV:
 			begin
 				Rt <= Rb;
-				cache_check(ea_drn);
+				cache_check(ea);
 			end
 		`SBX:
 			begin
 				st_size <= byt;
 				isWR <= `TRUE;
 				store_what <= `STW_C;
-				store_check(ea_ndx);
+				store_check(ea);
 			end
 		`SCX:
 			begin
 				st_size <= char;
 				isWR <= `TRUE;
 				store_what <= `STW_C;
-				store_check(ea_ndx);
+				store_check(ea);
 			end
 		`SHX:
 			begin
 				st_size <= half;
 				isWR <= `TRUE;
 				store_what <= `STW_C;
-				store_check(ea_ndx);
+				store_check(ea);
 			end
 		`SWX:
 			begin
 				st_size <= word;
 				isWR <= `TRUE;
 				store_what <= `STW_C;
-				store_check(ea_ndx);
+				store_check(ea);
 			end
 		`CINVX:
 			begin
 				Rt <= Rc;
-				cache_check(ea_ndx);
+				cache_check(ea);
+			end
+		`PEA,`PEAX:
+			begin
+				store_what <= `STW_IMM;
+				imm <= ea;
+				push1();
 			end
 
 	// Unimplemented opcodes handled here
@@ -2020,9 +1972,9 @@ MULDIV:
 					q <= pa[62:0];
 					r <= pa[63];
 					res_sgn <= a[63] ^ b[63];
-					if (b==64'd0)
-						divide_by_zero();
-					else
+//					if (b==64'd0)
+//						divide_by_zero();
+//					else
 						next_state(DIV);
 				end
 			default:
@@ -2525,6 +2477,7 @@ CS_LOAD:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 STORE1:
+	begin
 	if (drdy) begin	
 		if (cpl > pmmu_dpl)
 			privilege_violation();
@@ -2558,6 +2511,7 @@ STORE1:
 	end
 	else if (dpnp)
 		data_page_fault();
+	end
 STORE2:
 	if (ack_i) begin
 		wb_nack();
@@ -2672,8 +2626,8 @@ STORE4:
 					next_state(STORE1);
 			end
 			else if (isBSR)	begin
-				pc[15: 0] <= ir[31:16];
-				pc[39:16] <= pc[39:16] + {{19{ir[36]}},ir[36:32]};
+				pc[11: 0] <= ir[27:16];
+				pc[39:12] <= pc[39:12] + {{16{ir[39]}},ir[39:28]};
 				isWR <= `FALSE;
 				next_state(IFETCH);
 			end
@@ -2714,6 +2668,7 @@ STORE4:
 			end
 			else if (isJSR)	begin
 				isWR <= `FALSE;
+				/*
 				if (hasJSP) begin
 					
 					if (nLD==3'b000) begin
@@ -2732,16 +2687,10 @@ STORE4:
 					else
 						privilege_violation();
 				end
-				else begin
-					pc[31:0] <= imm[31:0];
-					pc[39:32] <= imm[39:32];
+				else*/ begin
+					pc <= ea;
 					next_state(IFETCH);
 				end
-			end
-			else if (isJSRdrn) begin
-				isWR <= `FALSE;
-				pc[39:0] <= a[39:0];
-				next_state(IFETCH);
 			end
 			else if (isJSRix) begin
 				isWR <= `FALSE;

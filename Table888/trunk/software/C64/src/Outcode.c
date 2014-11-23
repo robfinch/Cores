@@ -112,7 +112,7 @@ struct oplst {
 		{"stop", op_stop}, {"movs", op_movs},
 		{"bmi", op_bmi}, {"outb", op_outb}, {"inb", op_inb}, {"inbu", op_inbu},
 				{"dc",op_dc},
-		{"push",op_push}, {"pop", op_pop},
+		{"push",op_push}, {"pop", op_pop}, {"pea", op_pea},
 		{"seq", op_seq}, {"sne",op_sne},
 		{"slt", op_slt}, {"sle",op_sle},{"sgt",op_sgt}, {"sge",op_sge},
 		{"sltu", op_sltu}, {"sleu",op_sleu},{"sgtu",op_sgtu}, {"sgeu",op_sgeu},
@@ -219,6 +219,8 @@ static void PutConstant(ENODE *offset)
 			fprintf(output,buf);
 			break;
 	case en_nacon:
+			fprintf(output,"%s",offset->sp);
+			break;
 	case en_cnacon:
 			sprintf(buf,"%s",offset->sp);
 			if (strncmp(buf, "public code",11)==0) {
@@ -258,6 +260,7 @@ char *RegMoniker(int regno)
 	if (isTable888) {
 		switch(regno) {
 		case 244:	sprintf(&buf[n][0], "flg0"); break;
+		case 249:   sprintf(&buf[n][0], "gp"); break;
 		case 250:	sprintf(&buf[n][0], "lr"); break;
 		case 251:	sprintf(&buf[n][0], "xlr"); break;
 		case 252:	sprintf(&buf[n][0], "tr"); break;
@@ -421,7 +424,7 @@ void PutAddressMode(AMODE *ap)
     case am_indx2:
 			if (ap->offset != 0)
 				PutConstant(ap->offset);
-			if (ap->scale==1)
+			if (ap->scale==1 || ap->scale==0)
 	            fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
 			else
 		        fprintf(output,"[%s+%s*%d]",RegMoniker(ap->sreg),RegMoniker(ap->preg),ap->scale);

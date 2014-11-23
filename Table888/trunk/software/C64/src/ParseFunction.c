@@ -81,7 +81,7 @@ int ParseFunction(SYM *sp)
 	if (verbose) printf("Parsing function: %s\r\n", sp->name);
 		oldglobal = global_flag;
         global_flag = 0;
-        poffset = 32;            /* size of return block */
+        poffset = 40;            /* size of return block */
         nparms = 0;
 		iflevel = 0;
 		// There could be unnamed parameters in a function prototype.

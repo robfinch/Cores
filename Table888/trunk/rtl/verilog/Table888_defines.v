@@ -143,6 +143,9 @@
 `define ANDI	8'h0C
 `define ORI		8'h0D
 `define EORI	8'h0F
+`define MYST_R	8'h11
+`define MYST_RR	8'h12
+`define EXEC	8'h13
 `define ADDUI	8'h14
 `define SUBUI	8'h15
 `define LDI		8'h16
@@ -192,6 +195,7 @@
 `define LINK	8'h62
 `define RTD		8'h63
 `define UNLK	8'h64
+`define JSRX	8'h65
 `define LB		8'h80
 `define LBU		8'h81
 `define LC		8'h82
@@ -208,8 +212,8 @@
 `define LHUX	8'h8D
 `define LWX		8'h8E
 `define LEAX	8'h8F
-`define LEA		8'h92
 `define LMR		8'h9C
+`define LEA		8'h9F
 `define SB		8'hA0
 `define SC		8'hA1
 `define SH		8'hA2
@@ -229,6 +233,8 @@
 `define BMC		8'hB5
 `define BMF		8'hB6
 `define BMT		8'hB7
+`define PEA		8'hB8
+`define PEAX	8'hB9
 `define SMR		8'hBC
 `define NOP		8'hEA
 

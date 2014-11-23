@@ -497,6 +497,34 @@ void PeepoptLc(struct ocode *ip)
 	}
 }
 
+// LEA followed by a push of the same register gets translated to PEA.
+// If LEA is followed by the push of more than one register, then leave it
+// alone. The register order of the push matters.
+
+void PeepoptLea(struct ocode *ip)
+{
+	struct ocode *ip2;
+	int whop;
+
+    whop = 0;
+	ip2 = ip->fwd;
+	if (!ip2)
+	   return;
+    if (ip2->opcode != op_push)
+       return;
+    whop =  ((ip2->oper1 != NULL) ? 1 : 0) +
+            ((ip2->oper2 != NULL) ? 1 : 0) +
+            ((ip2->oper3 != NULL) ? 1 : 0) +
+            ((ip2->oper4 != NULL) ? 1 : 0);
+    if (whop > 1)
+        return;
+         
+    ip->opcode = op_pea;
+    ip->oper1 = copy_addr(ip->oper2);
+    ip->oper2 = NULL;
+    ip->fwd = ip2->fwd;
+}
+
 // Combine a chain of push operations into a single push
 
 void PeepoptPushPop(struct ocode *ip)
@@ -563,6 +591,10 @@ void peep_ldi(struct ocode *ip)
 void opt3()
 {  
 	struct ocode    *ip;
+	int rep;
+	
+	for (rep = 0; rep < 2; rep++)
+	{
     ip = peep_head;
     while( ip != NULL )
     {
@@ -599,6 +631,9 @@ void opt3()
 			case op_push:
 					PeepoptPushPop(ip);
 					break;
+            case op_lea:
+                    PeepoptLea(ip);
+                    break;
 			case op_jal:
 					PeepoptJAL(ip);
 					break;
@@ -612,4 +647,5 @@ void opt3()
             }
 	       ip = ip->fwd;
         }
+     }
 }

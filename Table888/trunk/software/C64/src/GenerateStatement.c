@@ -384,8 +384,8 @@ void GenerateSwitch(Statement *stmt)
 				bf = (int *)stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
 					if (isTable888) {
-						GenerateTriadic(op_cmp,0,make_string("flg0"),makereg(1),make_immed(bf[nn]));
-						GenerateDiadic(op_beq,0,make_string("flg0"),make_clabel(curlab));
+						GenerateTriadic(op_cmp,0,makereg(244),makereg(1),make_immed(bf[nn]));
+						GenerateDiadic(op_beq,0,makereg(244),make_clabel(curlab));
 					}
 					else if (isRaptor64) {
 						GenerateTriadic(op_beq,0,makereg(1),make_immed(bf[nn]),make_label(curlab));
@@ -529,8 +529,8 @@ void GenerateTry(Statement *stmt)
 			if (isRaptor64)
 				GenerateTriadic(op_bnei,0,makereg(2),make_immed((int64_t)stmt->s2),make_clabel(nextlabel));
 			else if (isTable888) {
-				GenerateTriadic(op_cmp, 0, make_string("flg0"), makereg(2), make_immed((int64_t)stmt->s2));
-				GenerateDiadic(op_bne, 0, make_string("flg0"), make_clabel(nextlabel));
+				GenerateTriadic(op_cmp, 0, makereg(244), makereg(2), make_immed((int64_t)stmt->s2));
+				GenerateDiadic(op_bne, 0, makereg(244), make_clabel(nextlabel));
 			}
 			else {
 				// ToDo: fix Thor
