@@ -26,10 +26,22 @@
 
 //`define SUPPORT_BITMAP_FNS		1'b1
 `define SUPPORT_PAGING				1'b1
-`define SUPPORT_ICACHE				1'b1
+//`define SUPPORT_ICACHE				1'b1
 //`define SUPPORT_DCACHE				1'b1
-`define SUPPORT_BITFIELD			1'b1
+//`define SUPPORT_BITFIELD			1'b1
 `define SUPPORT_CLKGATE				1'b1
+//`define SUPPORT_CPUID				1'b1
+//`define SUPPORT_OVERFLOW			1'b1
+
+// Multi-precision carry bit
+//`define SUPPORT_MPC		1'b1
+
+// The following enables bounds checking on memory operations
+//`define SUPPORT_STKCHECK			1'b1
+//`define SUPPORT_LSCHECK			1'b1
+
+`define SUPPORT_RNG		1'b1
+
 `define TMR			1'b1
 `define TMRX		1'b1
 //`define TMR_BYPASS	1'b1		// bypass extra inconsequential loads

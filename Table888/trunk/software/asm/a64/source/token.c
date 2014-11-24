@@ -1522,7 +1522,7 @@ int getSprRegister()
          }
          break;
 
-    // ios
+    // ios ivno
     case 'i': case 'I':
          if ((inptr[1]=='o' || inptr[1]=='O') &&
              (inptr[2]=='s' || inptr[2]=='S') &&
@@ -1530,6 +1530,14 @@ int getSprRegister()
              inptr += 3;
              NextToken();
              return 0x2B;
+         }
+         if ((inptr[1]=='v' || inptr[1]=='V') &&
+             (inptr[2]=='n' || inptr[2]=='N') &&
+             (inptr[3]=='o' || inptr[3]=='O') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 0x0C;
          }
          break;
 

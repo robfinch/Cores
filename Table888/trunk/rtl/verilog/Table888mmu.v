@@ -91,7 +91,7 @@ parameter IBUF1 = 6'd24;
 parameter IBUF2 = 6'd25;
 parameter IBUF3 = 6'd26;
 parameter IBUF4 = 6'd27;
-parameter JGR1 = 6'd28;
+parameter LOADSEG = 6'd28;
 parameter JGR2 = 6'd29;
 parameter POP1 = 6'd30;
 parameter PUSH1 = 6'd31;
@@ -259,6 +259,7 @@ reg [31:0] vbr;			// vector base register
 reg [31:0] berr_addr;
 reg [31:0] fault_pc;
 reg [23:0] fault_cs;
+reg [23:0] ocs;
 reg [2:0] brkCnt;		// break counter for detecting multiple faults
 reg cav;
 wire dav;				// address is valid for mmu translation
@@ -296,10 +297,12 @@ wire [63:0] sp_inc = sp + 64'd8;
 wire [63:0] sp_inc2 = sp + 64'd16;
 wire [63:0] sp_dec = sp - 64'd8;
 wire [63:0] sp_dec2 = sp - 64'd16;
+`ifdef SUPPORT_STKCHECK
 wire [2:0] nstk = (ir[39:32]!=8'h00) +
 				  (ir[31:24]!=8'h00) +
 				  (ir[23:16]!=8'h00) +
 				  (ir[15: 8]!=8'h00);
+`endif
 // - - - - - - - - - - - - - - - - - -
 // Convenience Functions
 // - - - - - - - - - - - - - - - - - -
@@ -484,6 +487,7 @@ Table888_pmmu u3
 	.dv()
 );
 
+`ifdef SUPPORT_BITFIELD
 Table888_bitfield u4
 (
 	.op(ir[39:36]),
@@ -493,6 +497,7 @@ Table888_bitfield u4
 	.o(bfo),
 	.masko()
 );
+`endif
 
 Table888_logic u5
 (
@@ -648,6 +653,7 @@ wire ldt_seg_limit_violation = a[18:0] > ldt_entries;
 assign data_readable = pmmu_data_readable;
 assign data_writeable = pmmu_data_writeable;
 
+`ifdef SUPPORT_RNG
 //-----------------------------------------------------------------------------
 // Random number register:
 //
@@ -665,6 +671,7 @@ begin
 end
 
 wire [63:0] rand = {m_z[31:0],32'd0} + m_w;
+`endif
 
 //-----------------------------------------------------------------------------
 // Special Purpose Register File Read
@@ -685,7 +692,9 @@ always @*
 	`FAULT_CS:	spro <= fault_cs;
 	`IVNO:		spro <= ivno;
 	`HISTORY:	spro <= history_buf[history_ndx2];
+`ifdef SUPPORT_RNG
 	`RAND:		spro <= rand;
+`endif
 	`BITERR_CNT:	spro <= biterr_cnt;
 	`BITHIST:	spro <= bithist[bithist_ndx2];
 	`PROD_HIGH:	spro <= p[127:64];
@@ -997,8 +1006,14 @@ IBUF4:
 DECODE:
 	begin
 		next_state(EXECUTE);
-		if (!hasPrefix)
-			opc = pc;
+		// OCS:OPC track the instruction's address which may be inherited
+		// from the address of a prefix instruction. These are used to set
+		// the fault cs:pc to allow the faulted instruction including any
+		// prefix to be re-executed.
+		if (!hasPrefix) begin
+			opc <= pc;
+			ocs <= cs;
+		end
 		if (!hwi) begin
 			pc <= pc_inc(pc);
 			if (pc[3:0] != 4'd0 && pc[3:0]!=4'd5 && pc[3:0]!=4'd10) begin
@@ -1082,6 +1097,11 @@ DECODE:
 
 		// Set segment register selection for memory ops
 		case(opcode)
+		`R:
+			case(func)
+			`MFSPR:	Sa <= Ra[3:0];
+			default:	Sa <= 4'd1;	// defaults to data segment
+			endcase
 		`LMR:	Sa <= ir[35:32];
 		`SMR:	Sa <= ir[35:32];
 		`CINV,
@@ -1116,26 +1136,24 @@ DECODE:
 		// Immediate value multiplexer
 		case(opcode)
 		`BRK:		imm <= hwi ? ir[39:8] : {vbr[31:0],ir[20:8]};
-		`LMR,`SMR:	imm <= hasIMM ? {immbuf[59:0],ir[39:36],3'b000} : {ir[39:36],3'b000};
-		`LDI:		imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : {{40{ir[39]}},ir[39:16]};
 		`JSP,`JGR:	imm <= ir[39:16];
-		`JSR:		imm <= ir[39:8];	// PC has only 28 bits implemented
-		`JMP:		imm <= ir[39:8];
 		`JSR_IX,`JMP_IX:
 					imm <= hasIMM ? {immbuf[43:0],ir[39:20]} : {{44{ir[39]}},ir[39:20]};
-		`JMP_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
-		`JSR_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : ir[39:16];
-		`PUSHC:		imm <= hasIMM ? {immbuf[31:0],ir[39:8]} : {{32{ir[39]}},ir[39:8]};
-		`JSRX:		imm <= 64'd0;
+		`LDI:		imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : {{40{ir[39]}},ir[39:16]};
+		`JMP_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : {{40{ir[39]}},ir[39:16]};
+		`JSR_DRN:	imm <= hasIMM ? {immbuf[39:0],ir[39:16]} : {{40{ir[39]}},ir[39:16]};
+		`PUSHC,`JMP,`JSR:
+					imm <= hasIMM ? {immbuf[31:0],ir[39:8]} : {{32{ir[39]}},ir[39:8]};
 		`PEA,`CINV,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,
 		`SB,`SC,`SH,`SW:
 					imm <= hasIMM ? {immbuf[51:0],ir[39:28]} : {{52{ir[39]}},ir[39:28]};
+		`JSRX,
+		`LMR,`SMR,
 		`PEAX,`CINVX,
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX,
-		`BMS,`BMC,`BMF,`BMT:
-					imm <= hasIMM ? {immbuf[61:0],ir[39:38]} : ir[39:38];
+		`BMS,`BMC,`BMF,`BMT,
 		`CAS:		imm <= hasIMM ? immbuf[63:0] : 64'd0;
 		default:	imm <= hasIMM ? {immbuf[47:0],ir[39:24]} : {{48{ir[39]}},ir[39:24]};
 		endcase
@@ -1170,7 +1188,6 @@ DECODE:
 //			`PROT:	begin pe <= `TRUE; next_state(IFETCH); end
 			`ICON:	begin cr0[30] <= `TRUE; next_state(IFETCH); end
 			`ICOFF:	begin cr0[30] <= `FALSE; next_state(IFETCH); end
-			`MFSPR:	Sa <= Ra[3:0];
 			`PHP:
 				begin
 					store_what <= `STW_SR;
@@ -1192,40 +1209,45 @@ DECODE:
 						pop2();
 					end
 				end
+
+			// It generates less hardware to give load_seg it's own state
+			// and step to that state rather than calling the load_seg macro.
+			// The cost is an additional clock cycle.
 			`VERR:
 				begin
 					isVERR <= `TRUE;
 					ret_state <= IFETCH;
-					load_seg();
+					next_state(LOADSEG);
 				end
 			`VERW:
 				begin
 					isVERW <= `TRUE;
 					ret_state <= IFETCH;
-					load_seg();
+					next_state(LOADSEG);
 				end
 			`VERX:
 				begin
 					isVERX <= `TRUE;
 					ret_state <= IFETCH;
-					load_seg();
+					next_state(LOADSEG);
 				end
 			`LSL:	begin
 					isLSL <= `TRUE;
 					ret_state <= IFETCH;
-					load_seg();
+					next_state(LOADSEG);
 					end
 			`LAR:
 				begin
 					isLAR <= `TRUE;
 					ret_state <= IFETCH;
-					load_seg();
+					next_state(LOADSEG);
 				end
 			`LSB:	begin
 					isLSB <= `TRUE;
 					ret_state <= IFETCH;
-					load_seg();
+					next_state(LOADSEG);
 					end
+
 			// Unimplemented instruction
 			default:	;
 			endcase
@@ -1336,9 +1358,12 @@ DECODE:
 				isRTS2 <= `TRUE;
 				ppl <= cpl;
 				rwadr <= {ss_base,12'h000} + sp;
+`ifdef SUPPORT_STKCHECK
 				if (sp_inc2 + ir[31:16] > {ss_upper_limit,12'hFFF} && pe)
 					bounds_violation();
-				else begin
+				else
+`endif
+				begin
 					next_state(LOAD1);
 					update_sp(sp_inc2 + ir[31:16]);
 				end
@@ -1359,9 +1384,12 @@ DECODE:
 				isPUSH <= `TRUE;
 				store_what <= `STW_A;
 				rwadr <= {ss_base,12'h000} + sp_dec[31:0];
+`ifdef SUPPORT_STKCHECK
 				if (sp_dec[31:0] < {ss_lower_limit,12'h000} + {nstk,3'b000})
 					stack_fault();
-				else begin
+				else
+`endif
+				begin
 					ir[39:8] <= {8'h00,ir[39:16]};
 					if (ir[39:8]==32'h0) begin
 						isWR <= `FALSE;
@@ -1484,7 +1512,7 @@ EXECUTE:
 						// issue is reducing the complexity of the processor.
 						if (Sprt[7:4]==4'h2) begin
 							isMTSEG <= `TRUE;
-							load_seg();
+							next_state(LOADSEG);
 /*
 							if (Sprt[3:0] != 4'd15) begin	// Can't MTSPR cs,Rn
 								isMTSEG <= `TRUE;
@@ -1495,13 +1523,15 @@ EXECUTE:
 */
 						end
 					end
+`ifdef SUPPORT_RNG
 			`GRAN:
 				begin
 					res <= rand;
 					m_z <= next_m_z;
 					m_w <= next_m_w;
 				end
-/*
+`endif
+`ifdef SUPPORT_CPUID
 			`CPUID:
 				begin
 					case(a[3:0])
@@ -1519,22 +1549,28 @@ EXECUTE:
 					default:	res <= 65'd0;
 					endcase
 				end
-*/
+`endif
 			endcase
 		`RR:
 			case(func)
 			`ADD:	begin
 					res <= a + b;
-//					next_state(OVERFLOW_TEST);
+`ifdef SUPPORT_OVERFLOW
+					next_state(OVERFLOW_TEST);
+`endif
 					end
 			`ADDU:	res <= a + b;
-			`ADC:		res <= a + b + mpcf;
 			`SUB:	begin
 					res <= a - b;
-//					next_state(OVERFLOW_TEST);
+`ifdef SUPPORT_OVERFLOW
+					next_state(OVERFLOW_TEST);
+`endif
 					end
 			`SUBU:	res <= a - b;
+`ifdef SUPPORT_MPC
+			`ADC:		res <= a + b + mpcf;
 			`SBC:		res <= a - b - mpcf;
+`endif
 			`CMP:		res <= {nf,vf,60'd0,zf,cf};
 			`AND,`OR,`EOR,`ANDN,`NAND,`NOR,`ENOR,`ORN:		
 						res <= logic_o;
@@ -1543,6 +1579,7 @@ EXECUTE:
 			`RORI,`ROR:	res <= shro[127:64]|shro[63:0];
 			`SHRI,`SHR:	res <= shro[127:64];
 			`ASRI,`ASR:	res <= asro;
+/*
 			`ARPL:
 				begin
 					if (a[63:60] < b[63:60])
@@ -1550,6 +1587,7 @@ EXECUTE:
 					else
 						res <= a;
 				end
+*/
 			`SLT,`SLE,`SGT,`SGE,`SLO,`SLS,`SHI,`SHS,`SEQ,`SNE:
 				res <= set_o;
 			// Unimplemented instruction
@@ -1608,7 +1646,7 @@ EXECUTE:
 			begin
 				if (hasJSP) begin
 					isJGR <= `TRUE;
-					next_state(JGR1);
+					next_state(LOADSEG);
 					a <= jspbuf;
 					ppl <= cpl;
 					prev_sp <= sp;
@@ -1635,16 +1673,18 @@ EXECUTE:
 				ppl <= cpl;
 				load_check(ea);
 			end
+/*
 		`JAL:
 			begin
 				res <= pc;
-				pc <= a + imm;
+				pc <= ea;
 			end
 		`RTD:
 			begin
 				pc <= b;
 				res <= a + imm;
 			end
+*/
 		`JSP:
 			begin
 				isJSP <= `TRUE;
@@ -1653,7 +1693,7 @@ EXECUTE:
 		`JSR,`JMP,`JSR_DRN,`JSRX:
 			begin
 				isJGR <= `TRUE;
-				next_state(JGR1);
+				next_state(LOADSEG);
 				a <= jspbuf;
 				ppl <= cpl;
 				prev_sp <= sp;
@@ -1667,7 +1707,7 @@ EXECUTE:
 		`JGR:
 			begin
 				isJGR <= `TRUE;
-				next_state(JGR1);
+				next_state(LOADSEG);
 				jspbuf <= a[23:0] | imm[23:0];
 				a <= a[23:0] | imm[23:0];
 				ppl <= cpl;
@@ -1858,6 +1898,7 @@ EXECUTE:
 		endcase
 	end
 
+`ifdef SUPPORT_OVERFLOW
 // Check for overflow
 OVERFLOW_TEST:
 	begin
@@ -1876,6 +1917,7 @@ OVERFLOW_TEST:
 			endcase
 		endcase
 	end
+`endif
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1895,7 +1937,7 @@ POP1:
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-JGR1:
+LOADSEG:
 	begin
 		load_seg();
 	end
@@ -2185,7 +2227,6 @@ LOAD5:
 							a <= lres[63:40];
 							isRTS <= `FALSE;
 							isJGR <= `TRUE;
-							jgr_state <= `JGR_LOAD_CS;
 							next_state(CS_LOAD);
 						end
 					2'b10:	// FAR return/jump - long format
@@ -2206,7 +2247,6 @@ LOAD5:
 					a <= lres[23:0];
 					isRTS <= `FALSE;
 					isJGR <= `TRUE;
-					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
@@ -2237,7 +2277,6 @@ LOAD5:
 						a <= lres[23:0];
 						isJGR <= `TRUE;
 						isJSRix <= `FALSE;
-						jgr_state <= `JGR_LOAD_CS;
 						next_state(CS_LOAD);
 					end
 					else begin
@@ -2250,7 +2289,6 @@ LOAD5:
 					a <= lres[23:0];
 					isJGR <= `TRUE;
 					isJSRix <= `FALSE;
-					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
@@ -2270,9 +2308,8 @@ LOAD5:
 				else begin
 					isBRK <= `FALSE;
 					isJGR <= `TRUE;
-					jgr_state <= `JGR_LOAD_CS;
 					nLD <= 2'b00;
-					if (lres[56])
+					if (!lres[56])
 						im2 <= 1'b1;
 					else
 						im2 <= im;
@@ -2302,7 +2339,6 @@ LOAD5:
 					else
 						im <= 1'b1;
 					a <= lres[23:0];
-					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
@@ -2373,6 +2409,7 @@ LOAD5:
 						else begin
 							nLD <= 2'd0;
 							desc_data[127:64] <= lres;
+							St <= 4'd15;
 							next_state(VERIFY_DESC);
 						end
 					end
@@ -2400,7 +2437,7 @@ LOAD5:
 //						ss <= lres[23:0];
 						a <= lres[23:0];
 						St <= 4'd14;
-						next_state(JGR1);
+						next_state(LOADSEG);
 						jgr_state <= `JGR_LOAD_SS_DESC;
 					end
 				`JGR_LOAD_SS_DESC:
@@ -2469,7 +2506,9 @@ LOAD7:
 CS_LOAD:
 	begin
 		ret_state <= IFETCH;
-		load_cs_seg();
+		jgr_state <= `JGR_LOAD_CS;
+		St <= 4'd15;
+		next_state(LOADSEG);
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2482,29 +2521,22 @@ STORE1:
 		if (cpl > pmmu_dpl)
 			privilege_violation();
 		else if (data_writeable) begin
+			next_state(STORE2);
 			case (store_what)
 			`STW_A:		wb_write(st_size,rwadr_o,a[31:0]);
 			`STW_B:		wb_write(st_size,rwadr_o,b[31:0]);
 			`STW_C:		wb_write(st_size,rwadr_o,c[31:0]);
-			`STW_PC:	if (isBRK)
-							wb_write(word,rwadr_o,{pc[31:2],2'b11});
-						else
-							wb_write(word,rwadr_o,{pc[31:2],fmt});
-			`STW_CSPC:	wb_write(word,rwadr_o,{pc[31:2],2'b01});
-			`STW_CS:	wb_write(word,rwadr_o,{8'h00,cs});
-			`STW_CSSR: 	wb_write(word,rwadr_o,{8'h00,cs});
+			`STW_PC:	wb_write(word,rwadr_o,{pc[31:2],fmt});
 			`STW_SR:	wb_write(word,rwadr_o,sr);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[31:0]);
 			`STW_IMM:	wb_write(word,rwadr_o,imm[31:0]);
 			`STW_SP:	wb_write(word,rwadr_o,sp[31:0]);
 			`STW_SS:	wb_write(word,rwadr_o,{8'h00,ss});
 			`STW_PREV_PC:	wb_write(word,rwadr_o,{prev_pc[31:2],fmt});
-			`STW_PREV_CS:	wb_write(word,rwadr_o,{8'h00,prev_cs});
 			`STW_PREV_CSSR:	wb_write(word,rwadr_o,{8'h00,prev_cs});
 			`STW_STK_FIFO:	wb_write(half,rwadr_o,stack_fifo[ncopy]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
-			next_state(STORE2);
 		end
 		else
 			data_write_fault();
@@ -2574,25 +2606,21 @@ STORE3:
 		if (cpl > pmmu_dpl)
 			privilege_violation();
 		else if (data_writeable) begin
+			next_state(STORE4);
 			case (store_what)
 			`STW_A:		wb_write(word,rwadr_o,a[63:32]);
 			`STW_B:		wb_write(word,rwadr_o,b[63:32]);
 			`STW_C:		wb_write(word,rwadr_o,c[63:32]);
 			`STW_PC:	wb_write(word,rwadr_o,{cs,pc[39:32]});
-			`STW_CS:	wb_write(word,rwadr_o,32'd0);
-			`STW_CSPC:	wb_write(word,rwadr_o,{cs,pc[39:32]});
-			`STW_CSSR:	wb_write(word,rwadr_o,sr);
 			`STW_SR:	wb_write(word,rwadr_o,32'd0);
 			`STW_SPR:	wb_write(word,rwadr_o,spro[63:32]);
 			`STW_IMM:	wb_write(word,rwadr_o,imm[63:32]);
 			`STW_SP:	wb_write(word,rwadr_o,sp[63:32]);
 			`STW_SS:	wb_write(word,rwadr_o,32'h0);
 			`STW_PREV_PC:	wb_write(word,rwadr_o,prev_pc[39:32]);
-			`STW_PREV_CS:	wb_write(word,rwadr_o,32'd0);
 			`STW_PREV_CSSR:	wb_write(word,rwadr_o,sr);
 			default:	next_state(RESET);	// hardware fault
 			endcase
-			next_state(STORE4);
 			if (isSMR && (!tmrw || (tmrw && tmrcyc==2'b10)))
 				ir[15:8] <= ir[15:8] + 8'd1;
 		end
@@ -2632,31 +2660,37 @@ STORE4:
 				next_state(IFETCH);
 			end
 			else if (isJGR) begin
-				if (store_what==`STW_SP) begin
-					store_what <= `STW_SS;
-					next_state(STORE1);
-				end
-				else if (store_what==`STW_SS) begin
-					jgr_state <= `JGR_LOAD_SP;
-					rwadr <= {seg_base,12'h000} + 32'h800 + {cpl,4'h0};
-					next_state(LOAD1);
-				end
-				else if (store_what==`STW_PREV_PC) begin
-					if (isBRK2)
+				case(store_what)
+				`STW_SP:
+					begin
+						store_what <= `STW_SS;
+						next_state(STORE1);
+					end
+				`STW_SS:
+					begin
+						jgr_state <= `JGR_LOAD_SP;
+						rwadr <= {seg_base,12'h000} + 32'h800 + {cpl,4'h0};
+						next_state(LOAD1);
+					end
+				`STW_PREV_PC:
+					begin
 						store_what <= `STW_PREV_CSSR;
-					else
-						store_what <= `STW_PREV_CS;
-					next_state(STORE1);
-				end
-				else if (store_what==`STW_PREV_CS || store_what==`STW_PREV_CSSR) begin
-					if (isBRK2)
-						im <= im2;
-					next_state(IFETCH);
-				end
+						next_state(STORE1);
+					end
+				`STW_PREV_CSSR:
+					begin
+						if (isBRK2)
+							im <= im2;
+						next_state(IFETCH);
+					end
+				endcase
+/*
 				else if (store_what==`STW_CS) begin
 					store_what <= `STW_PC;
 					next_state(STORE1);
 				end
+*/
+/*
 				else begin
 					isWR <= `FALSE;
 					if (a[19])
@@ -2665,6 +2699,7 @@ STORE4:
 						rwadr <= gdt_adr;
 					next_state(LOAD1);
 				end
+*/
 			end
 			else if (isJSR)	begin
 				isWR <= `FALSE;
@@ -2830,7 +2865,6 @@ VERIFY_DESC:
 				else if ((cpl > rpl ? cpl : rpl) > desc_dpl && pe)
 					privilege_violation();
 				else begin
-					jgr_state <= `JGR_LOAD_CS;
 					next_state(CS_LOAD);
 				end
 			end
@@ -2927,6 +2961,7 @@ if (state==IFETCH || wrrf) begin
 	end
 end
 
+`ifdef SUPPORT_MPC
 if (state==IFETCH) begin
 case(ir[7:0])
 `RR:
@@ -2938,6 +2973,7 @@ case(ir[7:0])
 	mpcf <= res[64];
 endcase
 end
+`endif
 
 if (wrspr) begin
 	casex(Sprt)
@@ -2945,8 +2981,10 @@ if (wrspr) begin
 	`VBR:		vbr <= res;
 	`PTA:		pta <= res;
 	`CR0:		cr0 <= res;
+`ifdef SUPPORT_RNG
 	`SRAND1:	m_z <= res;
 	`SRAND2:	m_w <= res;
+`endif
 `ifdef SUPPORT_CLKGATE
 	`CLK:		begin clk_throttle_new <= res[49:0]; ld_clk_throttle <= `TRUE; end
 `endif
@@ -3071,7 +3109,8 @@ endtask
 task update_sp;
 input [63:0] newsp;
 begin
-// This check would add a lot of code and is likely unnecessary
+// This check would add a lot of code and is likely unnecessary - stack
+// checking is done at the source.
 //	if (newsp < {ss_lower_limit,12'h000} || newsp > {ss_upper_limit,12'hFFF})
 //		stack_fault();
 //	else
@@ -3085,9 +3124,12 @@ endtask
 
 task push1;
 begin
+`ifdef SUPPORT_STKCHECK
 	if (sp_dec[31:0] < {ss_lower_limit,12'h000})
 		stack_fault();
-	else begin
+	else
+`endif
+	begin
 		rwadr <= {ss_base,12'h000} + sp_dec[31:0];
 		isWR <= `TRUE;
 		update_sp(sp_dec);
@@ -3098,9 +3140,12 @@ endtask
 
 task push2;
 begin
+`ifdef SUPPORT_STKCHECK
 	if (sp_dec2[31:0] < {ss_lower_limit,12'h000})
 		stack_fault();
-	else begin
+	else
+`endif
+	begin
 		rwadr <= {ss_base,12'h000} + sp_dec2[31:0];
 		isWR <= `TRUE;
 		update_sp(sp_dec2);
@@ -3111,9 +3156,12 @@ endtask
 
 task pop1;
 begin
+`ifdef SUPPORT_STKCHECK
 	if (sp > {ss_upper_limit,12'hFFF})
 		stack_fault();
-	else begin
+	else
+`endif
+	begin
 		rwadr <= {ss_base,12'h000} + sp;
 		update_sp(sp_inc);
 		next_state(LOAD1);
@@ -3123,9 +3171,12 @@ endtask
 
 task pop2;
 begin
+`ifdef SUPPORT_STKCHECK
 	if (sp > {ss_upper_limit,12'hFFF})
 		stack_fault();
-	else begin
+	else
+`endif
+	begin
 		rwadr <= {ss_base,12'h000} + sp;
 		update_sp(sp_inc2);
 		next_state(LOAD1);
@@ -3139,7 +3190,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd504,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3151,7 +3202,7 @@ begin
 	ir[39:8] <= {9'd505,4'h0};
 	rst_cpnp <= `TRUE;
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3163,7 +3214,7 @@ begin
 	ir[39:8] <= {9'd506,4'h0};
 	rst_dpnp <= `TRUE;
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3174,7 +3225,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd499,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3185,7 +3236,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd497,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3196,7 +3247,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd498,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3206,8 +3257,8 @@ begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd503,4'h0};
-	fault_pc <= pc;
-	fault_cs <= cs;
+	fault_pc <= opc;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3217,8 +3268,8 @@ begin
 	hwi <= `TRUE;
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd502,4'h0};
-	fault_pc <= pc;
-	fault_cs <= cs;
+	fault_pc <= opc;
+	fault_cs <= ocs;
 //	fault_seg <= a[63:32];
 //	fault_st <= St;
 	next_state(DECODE);
@@ -3231,7 +3282,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd501,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3242,7 +3293,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd500,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3253,7 +3304,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd488,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3264,7 +3315,7 @@ begin
 	ir[7:0] <= `BRK;
 	ir[39:8] <= {9'd489,4'h0};
 	fault_pc <= opc;
-	fault_cs <= cs;
+	fault_cs <= ocs;
 	next_state(DECODE);
 end
 endtask
@@ -3272,9 +3323,12 @@ endtask
 task load_check;
 input [63:0] adr;
 begin
+`ifdef SUPPORT_LSCHECK
 	if (adr > {seg_limit,12'hFFF} && pe)
 		bounds_violation();
-	else begin
+	else
+`endif
+	begin
 		rwadr <= {seg_base,12'h000} + adr;
 		next_state(LOAD1);
 	end
@@ -3284,9 +3338,12 @@ endtask
 task store_check;
 input [63:0] adr;
 begin
+`ifdef SUPPORT_LSCHECK
 	if (adr > {seg_limit,12'hFFF} && pe)
 		bounds_violation();
-	else begin
+	else
+`endif
+	begin
 		rwadr <= {seg_base,12'h000} + adr;
 		next_state(STORE1);
 	end
@@ -3352,13 +3409,6 @@ begin
 end
 endtask
 
-task load_cs_seg;
-begin
-	St <= 4'd15;
-	load_seg();
-end
-endtask
-
 function [127:0] fnStateName;
 input [5:0] state;
 case(state)
@@ -3368,7 +3418,7 @@ IFETCH:	fnStateName = "IFETCH     ";
 DECODE:	fnStateName = "DECODE     ";
 EXECUTE:	fnStateName = "EXECUTE   ";
 RTS1:	fnStateName = "RTS1       ";
-JGR1:	fnStateName = "JGR1       ";
+LOADSEG:	fnStateName = "LOADSEG     ";
 MULDIV:	fnStateName = "MULDIV    ";
 MULT1:	fnStateName = "MULT1   ";
 MULT2:	fnStateName = "MULT2   ";

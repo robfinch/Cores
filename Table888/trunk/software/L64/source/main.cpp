@@ -31,7 +31,7 @@
 #include "symbol.hpp"
 #include "elf.h"
 
-#define TXTBASE      0x23F000
+#define TXTBASE      0x000000
 //#define TXTBASE      0xC00200
 
 using namespace std;
@@ -737,28 +737,25 @@ void LinkELFFile()
                      }
                      break;
 
-               // 2 bit fixups
-               // For 2 bit fixups we just assume there will be a preceding constant
-               // extension word. A code or data address space less than three bits
-               // is bound to be a rare case.
+               // 0 bit fixups
+               // For 0 bit fixups we just assume there will be a preceding constant
+               // extension word. 
                 case 11:
                      offset = p->r_offset;
                      if ((offset & 15)==0)
                          offset -= 6;
                      else
                          offset -= 5;
-                     b0 = (File[fn].sections[sn-7]->bytes[p->r_offset+3] >> 6) & 3;
-                     b1 = File[fn].sections[sn-7]->bytes[offset+0];
-                     b2 = File[fn].sections[sn-7]->bytes[offset+1];
-                     b3 = File[fn].sections[sn-7]->bytes[offset+2];
-                     b4 = File[fn].sections[sn-7]->bytes[offset+3];
-                     wd = (b4 << 26) | (b3 << 18) | (b2 << 10) | (b1 << 2) | b0;
+                     b0 = File[fn].sections[sn-7]->bytes[offset+0];
+                     b1 = File[fn].sections[sn-7]->bytes[offset+1];
+                     b2 = File[fn].sections[sn-7]->bytes[offset+2];
+                     b3 = File[fn].sections[sn-7]->bytes[offset+3];
+                     wd = (b3 << 24) | (b2 << 16) | (b1 << 8) | b0;
                      wd += File[fn].sections[sn-7]->hdr.sh_addr;
-                     File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x3F) | (((wd & 3) << 6));
-                     File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 2) & 255;
-                     File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 10) & 255;
-                     File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 18) & 255;
-                     File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 26) & 63;
+                     File[fn].sections[sn-7]->bytes[offset+0] <= wd & 255;
+                     File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 8) & 255;
+                     File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 16) & 255;
+                     File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 24) & 255;
                      break;
                 case 139:
                      sym = Lookup(p, fn);
@@ -771,11 +768,10 @@ void LinkELFFile()
                          else
                              offset -= 5;
                          wd = sym->value;
-                         File[fn].sections[sn-7]->bytes[p->r_offset+3] <= (File[fn].sections[0]->bytes[p->r_offset+3] & 0x3F) | (((wd & 3)<< 6));
-                         File[fn].sections[sn-7]->bytes[offset+0] <= (wd >> 2) & 255;
-                         File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 10) & 255;
-                         File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 18) & 255;
-                         File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 26) & 63;
+                         File[fn].sections[sn-7]->bytes[offset+0] <= wd & 255;
+                         File[fn].sections[sn-7]->bytes[offset+1] <= (wd >> 8) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+2] <= (wd >> 16) & 255;
+                         File[fn].sections[sn-7]->bytes[offset+3] <= (wd >> 24) & 255;
                      }
                      break;
     

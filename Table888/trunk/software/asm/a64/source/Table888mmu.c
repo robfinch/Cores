@@ -30,10 +30,12 @@
 
 static void emitAlignedCode(int cd);
 static void process_shifti(int oc);
+static void ProcessEOL(int opt);
 
 extern int first_rodata;
 extern int first_data;
 extern int first_bss;
+static int64_t ca;
 
 int use_gp = 0;
 
@@ -43,6 +45,18 @@ int use_gp = 0;
 static void emit_insn(int64_t oc)
 {
      emitAlignedCode(oc & 255);
+     emitCode((oc >> 8) & 255);
+     emitCode((oc >> 16) & 255);
+     emitCode((oc >> 24) & 255);
+     emitCode((oc >> 32) & 255);
+}
+ 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void emit_insn2(int64_t oc)
+{
+     emitCode(oc & 255);
      emitCode((oc >> 8) & 255);
      emitCode((oc >> 16) & 255);
      emitCode((oc >> 24) & 255);
@@ -69,6 +83,7 @@ static void emitAlignedCode(int cd)
          emit_insn(0xEAEAEAEAEA);
          if (cd==0x61)
              emit_insn(0xEAEAEAEAEA);
+         ProcessEOL(0);
          ad = code_address & 0xfff;
          while (ad != 0 && ad != 5 && ad != 10) {
              emitByte(0x00);
@@ -78,6 +93,28 @@ static void emitAlignedCode(int cd)
      emitByte(cd);
 }
 
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for memory operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm0(int64_t v, int force)
+{
+     if (v != 0 || force) {
+          emitAlignedCode(0xfd);
+          emitCode(v & 255);
+          emitCode((v >> 8) & 255);
+          emitCode((v >> 16) & 255);
+          emitCode((v >> 24) & 255);
+     }
+     if (((v < 0) && ((v >> 32) != -1L)) || ((v > 0) && ((v >> 32) != 0L)) || (force && data_bits > 32)) {
+          emitAlignedCode(0xfe);
+          emitCode((v >> 32) & 255);
+          emitCode((v >> 40) & 255);
+          emitCode((v >> 48) & 255);
+          emitCode((v >> 56) & 255);
+     }
+}
 
 // ---------------------------------------------------------------------------
 // Emit constant extension for memory operands.
@@ -294,13 +331,25 @@ static void process_jmp(int oc)
             printf("Illegal jump address mode.\r\n");
             Ra = 0;
         }
-        emitImm24(addr,0);
-        emitAlignedCode(oc+4);
-        emitCode(Ra);
-        emitCode(addr & 255);
-        emitCode((addr >> 8) & 255);
-        emitCode((addr >> 16) & 255);
-        return;
+        if (token=='+') {
+            emitImm0(addr,0);
+            Rb = getRegister();
+            emitAlignedCode(0x65);  // JSR [Ra+Rb]
+            emitCode(Ra);
+            emitCode(Rb);
+            emitCode(0x00);
+            emitCode(0x00);
+            return;
+        }
+        else {
+            emitImm24(addr,0);
+            emitAlignedCode(oc+4);
+            emitCode(Ra);
+            emitCode(addr & 255);
+            emitCode((addr >> 8) & 255);
+            emitCode((addr >> 16) & 255);
+            return;
+        }
     }
 
     emitImm32(addr, code_bits > 32);
@@ -592,7 +641,7 @@ static void process_store(int oc)
     }
     if (Rb > 0) {
        fixup = 11;
-       emitImm2(disp,lastsym!=(SYM*)NULL);
+       emitImm0(disp,lastsym!=(SYM*)NULL);
        emitAlignedCode(oc + 8);
         if (bGen)
         if (lastsym && Ra != 249 && !use_gp) {
@@ -603,7 +652,7 @@ static void process_store(int oc)
        emitCode(Ra);
        emitCode(Rb);
        emitCode(Rs);
-       emitCode((disp << 6) | sc | ((sg & 15) << 2));
+       emitCode(sc | ((sg & 15) << 2));
        return;
     }
         fixup = 10;
@@ -708,7 +757,7 @@ static void process_load(int oc)
     if (segprefix >= 0)
         sg = segprefix;
     if (Rb >= 0) {
-       emitImm2(disp,lastsym!=(SYM*)NULL);
+       emitImm0(disp,lastsym!=(SYM*)NULL);
        fixup = 11;
        if (oc==0x87) {  //LWS
           printf("Address mode not supported.\r\n");
@@ -724,7 +773,7 @@ static void process_load(int oc)
        emitCode(Ra);
        emitCode(Rb);
        emitCode(Rt);
-       emitCode((disp << 6) | sc | ((sg & 15) << 2));
+       emitCode(sc | ((sg & 15) << 2));
        return;
     }
     fixup = 10;       // 12 bit
@@ -770,7 +819,7 @@ static void process_pea()
     if (segprefix >= 0)
         sg = segprefix;
     if (Rb >= 0) {
-       emitImm2(disp,lastsym!=(SYM*)NULL);
+       emitImm0(disp,lastsym!=(SYM*)NULL);
        fixup = 11;
        oc = 0xB9;  // PEAX
        emitAlignedCode(oc);
@@ -781,7 +830,7 @@ static void process_pea()
        emitCode(Ra);
        emitCode(Rb);
        emitCode(0x00);
-       emitCode((disp << 6) | sc | ((sg & 15) << 2));
+       emitCode(sc | ((sg & 15) << 2));
        return;
     }
     oc = 0xB8;        // PEA
@@ -807,7 +856,7 @@ static void process_pea()
 }
 
 // ----------------------------------------------------------------------------
-// lmr r1,r12,[r252]
+// lmr r1,r12,d[r252]
 // ----------------------------------------------------------------------------
 
 static void process_lmr(int oc)
@@ -816,7 +865,10 @@ static void process_lmr(int oc)
     int Rb;
     int Rc;
     int sg;
+    int fixup;
+    int64_t disp;
 
+    disp = 0;
     Ra = getRegister();
     need(',');
     Rb = getRegister();
@@ -826,8 +878,43 @@ static void process_lmr(int oc)
         Rc = getRegister();
         need(']');
     }
-    else
+    else {
         Rc = getRegister();
+        if (Rc==-1) {
+            disp = expr();
+            if (token!='[') {
+                printf("Expecting register indirection.\r\n");
+                return;
+            }
+            Rc = getRegister();
+            need(']');
+            if (Rc==-1) {
+                printf("Expecting a register.\r\n");
+                return;
+            }
+            fixup = 11;
+            emitImm0(disp,lastsym!=(SYM*)NULL);
+            sg = 1;
+            if (Rc==255 || Rc==253)
+               sg = 14;
+            else if (Rc==254)
+                 sg = 15;
+            else if (Rc==252)
+                 sg = 12;
+            if (segprefix >= 0)
+               sg = segprefix;
+            emitAlignedCode(oc);
+            if (bGen && lastsym && Rc != 249 && !use_gp)
+            if( lastsym->segment < 5)
+            sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+            (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+            emitCode(Ra);
+            emitCode(Rb);
+            emitCode(Rc);
+            emitCode(sg);
+            return;
+        }
+    }
     sg = 1;
     if (Rc==255 || Rc==253)
        sg = 14;
@@ -1017,11 +1104,114 @@ static void process_mfspr(int oc)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
+static void ProcessEOL(int opt)
+{
+    int nn,mm;
+    int first;
+    int cc;
+    
+     //printf("Line: %d\r\n", lineno);
+     segprefix = -1;
+     if (bGen && (segment==codeseg || segment==dataseg || segment==rodataseg)) {
+     if ((ca & 15)==15 && segment==codeseg) {
+         ca++;
+         binstart++;
+     }
+    nn = binstart;
+    cc = 8;
+    if (segment==codeseg) {
+       cc = 5;
+/*
+        if (sections[segment].bytes[binstart]==0x61) {
+            fprintf(ofp, "%06LLX ", ca);
+            for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+            }
+            fprintf(ofp, "   ; imm\n");
+             if (((ca+5) & 15)==15) {
+                 ca+=6;
+                 binstart+=6;
+                 nn++;
+             }
+             else {
+                  ca += 5;
+                  binstart += 5;
+             }
+        }
+*/
+/*
+        if (sections[segment].bytes[binstart]==0xfd) {
+            fprintf(ofp, "%06LLX ", ca);
+            for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+            }
+            fprintf(ofp, "   ; imm\n");
+             if (((ca+5) & 15)==15) {
+                 ca+=6;
+                 binstart+=6;
+                 nn++;
+             }
+             else {
+                  ca += 5;
+                  binstart += 5;
+             }
+        }
+         if (sections[segment].bytes[binstart]==0xfe) {
+            fprintf(ofp, "%06LLX ", ca);
+            for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+            }
+            fprintf(ofp, "   ; imm\n");
+             if (((ca+5) & 15)==15) {
+                 ca+=6;
+                 nn++;
+             }
+             else {
+                  ca += 5;
+             }
+        }
+*/
+    }
+
+    first = 1;
+    while (nn < sections[segment].index) {
+        fprintf(ofp, "%06LLX ", ca);
+        for (mm = nn; nn < mm + cc && nn < sections[segment].index; nn++) {
+            fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+        }
+        for (; nn < mm + cc; nn++)
+            fprintf(ofp, "   ");
+        if (first & opt) {
+            fprintf(ofp, "\t%.*s\n", inptr-stptr-1, stptr);
+            first = 0;
+        }
+        else
+            fprintf(ofp, opt ? "\n" : "; NOP Ramp\n");
+        ca += cc;
+         if ((ca & 15)==15 && segment==codeseg) {
+             ca++;
+             nn++;
+         }   
+    }
+    // empty (codeless) line
+    if (binstart==sections[segment].index) {
+        fprintf(ofp, "%24s\t%.*s", "", inptr-stptr, stptr);
+    }
+    } // bGen
+    if (opt) {
+       stptr = inptr;
+       lineno++;
+    }
+    binstart = sections[segment].index;
+    ca = sections[segment].address;
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 void Table888mmu_processMaster()
 {
     int nn,mm;
-    int64_t ca;
-    int first;
     int64_t bs1, bs2;
 
     lineno = 1;
@@ -1053,73 +1243,7 @@ void Table888mmu_processMaster()
     NextToken();
     while (token != tk_eof) {
         switch(token) {
-        case tk_eol:
-             //printf("Line: %d\r\n", lineno);
-             segprefix = -1;
-             if (bGen && (segment==codeseg || segment==dataseg || segment==rodataseg)) {
-             if ((ca & 15)==15 && segment==codeseg) {
-                 ca++;
-                 binstart++;
-             }
-            nn = binstart;
-            if (segment==codeseg) {
-                if (sections[segment].bytes[binstart]==0xfd) {
-                    fprintf(ofp, "%06LLX ", ca);
-                    for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
-                        fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
-                    }
-                    fprintf(ofp, "   ; imm\n");
-                     if (((ca+5) & 15)==15) {
-                         ca+=6;
-                         binstart+=6;
-                         nn++;
-                     }
-                     else {
-                          ca += 5;
-                          binstart += 5;
-                     }
-                }
-                 if (sections[segment].bytes[binstart]==0xfe) {
-                    fprintf(ofp, "%06LLX ", ca);
-                    for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
-                        fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
-                    }
-                    fprintf(ofp, "   ; imm\n");
-                     if (((ca+5) & 15)==15) {
-                         ca+=6;
-                         nn++;
-                     }
-                     else {
-                          ca += 5;
-                     }
-                }
-            }
-            first = 1;
-            while (nn < sections[segment].index) {
-                fprintf(ofp, "%06LLX ", ca);
-                for (mm = nn; nn < mm + 8 && nn < sections[segment].index; nn++) {
-                    fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
-                }
-                for (; nn < mm + 8; nn++)
-                    fprintf(ofp, "   ");
-                if (first) {
-                    fprintf(ofp, "\t%.*s\n", inptr-stptr-1, stptr);
-                    first = 0;
-                }
-                else
-                    fprintf(ofp, "\n");
-                ca += 8;
-            }
-            // empty (codeless) line
-            if (binstart==sections[segment].index) {
-                fprintf(ofp, "%24s\t%.*s", "", inptr-stptr, stptr);
-            }
-            } // bGen
-            stptr = inptr;
-            binstart = sections[segment].index;
-            ca = sections[segment].address;
-            lineno++;
-            break;
+        case tk_eol: ProcessEOL(1); break;
         case tk_add:  process_rrop(0x04); break;
         case tk_addi: process_riop(0x04); break;
         case tk_addu: process_rrop(0x14); break;
