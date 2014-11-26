@@ -31,11 +31,8 @@ begin
 			end
 	`BYTE_71:
 			begin
-				vpa <= `TRUE;
-				vda <= `TRUE;
-				ado <= pc;
+				moveto_ifetch();
 				res8 <= dat8;
-				state <= IFETCH1;
 			end
 	`HALF_70:
 				begin
@@ -71,10 +68,7 @@ begin
 	`HALF_159S:
 				begin
 					res16[15:8] <= dat8;
-					vpa <= `TRUE;
-					vda <= `TRUE;
-					ado <= pc;
-					next_state(IFETCH1);
+					moveto_ifetch();
 				end
 	`BYTE_72:
 				begin
@@ -102,8 +96,8 @@ begin
 						x_bit <= dat8[4];
 						m_bit <= dat8[5];
 						if (dat8[4]) begin
-							x[31:8] <= 24'd0;
-							y[31:8] <= 24'd0;
+							x[15:8] <= 8'd0;
+							y[15:8] <= 8'd0;
 						end
 						//if (dat8[5]) acc[31:8] <= 24'd0;
 					end
@@ -117,10 +111,7 @@ begin
 						state <= LOAD_MAC1;
 					end		
 					else begin	// PLP
-						vpa <= `TRUE;
-						vda <= `TRUE;
-						ado <= pc;
-						state <= IFETCH1;
+						moveto_ifetch();
 					end
 				end
 	`PC_70:		begin
@@ -145,10 +136,7 @@ begin
 						next_state(RTS1);
 					else			// jmp (abs)
 					begin
-						vpa <= `TRUE;
-						vda <= `TRUE;
-						ado <= pc;
-						next_state(IFETCH1);
+						moveto_ifetch();
 					end
 				end
 	`PC_2316:	begin
@@ -159,10 +147,7 @@ begin
 					end
 					else begin
 						load_what <= `NOTHING;
-						vpa <= `TRUE;
-						vda <= `TRUE;
-						ado <= pc;
-						next_state(IFETCH1);
+						moveto_ifetch();
 //						load_what <= `PC_3124;
 //						if (isRTI) begin
 //							inc_sp();
@@ -197,7 +182,6 @@ begin
 	`IA_2316:
 			begin
 				ia[23:16] <= dat8;
-				ia[31:24] <= abs8[31:24];
 				state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
 			end
 	endcase

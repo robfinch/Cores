@@ -26,7 +26,7 @@ LOAD_MAC1:
 `endif
 	begin
 		if (isRMW)
-			lock_o <= 1'b1;
+			mlb <= 1'b1;
 		data_read(radr);
 		state <= LOAD_MAC2;
 	end
@@ -45,50 +45,17 @@ LOAD_MAC2:
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
-		lock_o <= 1'b0;
-		wb_nack();
-		derr_address <= adr_o;
+		mlb <= 1'b0;
+		data_nack();
+		derr_address <= ado;
 		intno <= 9'd508;
 		state <= BUS_ERROR;
 	end
 `endif
-LOAD_MAC3:
-	begin
-		// Rt will be zero by the time the IFETCH stage is entered because of
-		// the decrement below.
-		if (Rt==4'd1)
-			state <= IFETCH;
-		else begin
-			radr <= isp;
-			isp <= isp_inc;
-			state <= LOAD_MAC1;
-		end
-		Rt <= Rt - 4'd1;
-	end
-
 RTS1:
 	begin
 		pc <= pc + 32'd1;
 		state <= IFETCH1;
-	end
-IY3:
-	begin
-		radr <= radr + y;
-		wadr <= radr + y;
-		if (ir9==`ST_IY) begin
-			store_what <= `STW_A;
-			state <= STORE1;
-		end
-		else if (ir9==`LEA_IY) begin
-			res <= radr + y;
-			next_state(IFETCH);
-		end
-		else begin
-			load_what <= `WORD_310;
-			state <= LOAD_MAC1;
-		end
-		isIY <= 1'b0;
-		isIY24 <= `FALSE;
 	end
 BYTE_IX5:
 	begin

@@ -27,65 +27,45 @@
 STORE1:
 	begin
 		case(store_what)
-		`STW_ACC:	wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,acc);
-		`STW_X:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,x);
-		`STW_Y:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,y);
-		`STW_PC:	wb_write(0,0,pc);
-		`STW_PC2:	wb_write(0,0,pc + 24'd2);
-		`STW_PCHWI:	wb_write(0,0,pc+{22'b0,~hwi,1'b0});
-		`STW_OPC:	wb_write(0,0,opc);
-		`STW_SR:	wb_write(0,0,sr);
-		`STW_A:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,a);
-		`STW_B:		wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,b);
-		`STW_CALC:	wb_write(bytePrefix|ubytePrefix,charPrefix|ucharPrefix,res[31:0]);
-		`STW_ACC8:	wb_write(1,0,acc);
-		`STW_X8:	wb_write(1,0,x);
-		`STW_Y8:	wb_write(1,0,y);
-		`STW_Z8:	wb_write(1,0,8'h00);
-		`STW_PC2316:	wb_write(1,0,pc[23:16]);
-		`STW_PC158:		wb_write(1,0,pc[15:8]);
-		`STW_PC70:		wb_write(1,0,pc[7:0]);
-		`STW_SR70:		wb_write(1,0,sr8);
-		`STW_DEF8:		wb_write(1,0,wdat);
-		`STW_DEF70:		begin wb_write(1,0,wdat); lock_o <= 1'b1; end
-		`STW_DEF158:	wb_write(1,0,wdat[15:8]);
-		`STW_ACC70:		begin wb_write(1,0,acc); lock_o <= 1'b1; end
-		`STW_ACC158:	wb_write(1,0,acc[15:8]);
-		`STW_X70:		begin wb_write(1,0,x); lock_o <= 1'b1; end
-		`STW_X158:		wb_write(1,0,x[15:8]);
-		`STW_Y70:		begin wb_write(1,0,y); lock_o <= 1'b1; end
-		`STW_Y158:		wb_write(1,0,y[15:8]);
-		`STW_Z70:		begin wb_write(1,0,8'h00); lock_o <= 1'b1; end
-		`STW_Z158:		wb_write(1,0,8'h00);
-		`STW_DBR:		wb_write(1,0,dbr);
-		`STW_DPR158:	begin wb_write(1,0,dpr[15:8]); lock_o <= 1'b1; end
-		`STW_DPR70:		wb_write(1,0,dpr);
-		`STW_TMP158:	begin wb_write(1,0,tmp16[15:8]); lock_o <= 1'b1; end
-		`STW_TMP70:		wb_write(1,0,tmp16);
-		`STW_IA158:		begin wb_write(1,0,ia[15:8]); lock_o <= 1'b1; end
-		`STW_IA70:		wb_write(1,0,ia);
-		default:	wb_write(0,0,wdat);
+		`STW_ACC8:	data_write(acc[7:0]);
+		`STW_X8:	data_write(x[7:0]);
+		`STW_Y8:	data_write(y[7:0]);
+		`STW_Z8:	data_write(8'h00);
+		
+		`STW_PC2316:	data_write(pc[23:16]);
+		`STW_PC158:		data_write(pc[15:8]);
+		`STW_PC70:		data_write(pc[7:0]);
+		`STW_SR70:		data_write(sr8);
+		`STW_DEF8:		data_write(wdat);
+		`STW_DEF70:		begin data_write(wdat); mlb <= 1'b1; end
+		`STW_DEF158:	data_write(wdat[15:8]);
+		`STW_ACC70:		begin data_write(acc); mlb <= 1'b1; end
+		`STW_ACC158:	data_write(acc[15:8]);
+		`STW_X70:		begin data_write(x); mlb <= 1'b1; end
+		`STW_X158:		data_write(x[15:8]);
+		`STW_Y70:		begin data_write(y); mlb <= 1'b1; end
+		`STW_Y158:		data_write(y[15:8]);
+		`STW_Z70:		begin data_write(8'h00); mlb <= 1'b1; end
+		`STW_Z158:		data_write(8'h00);
+		`STW_DBR:		data_write(dbr);
+		`STW_DPR158:	begin data_write(dpr[15:8]); mlb<= 1'b1; end
+		`STW_DPR70:		data_write(dpr);
+		`STW_TMP158:	begin data_write(tmp16[15:8]); mlb <= 1'b1; end
+		`STW_TMP70:		data_write(tmp16);
+		`STW_IA158:		begin data_write(ia[15:8]); mlb <= 1'b1; end
+		`STW_IA70:		data_write(ia);
+		default:	data_write(wdat);
 		endcase
 `ifdef SUPPORT_DCACHE
 		radr <= wadr;		// Do a cache read to test the hit
 `endif
-		if (ir9==`PUSH)
-			Rt <= 4'h0;
 		state <= STORE2;
 	end
 	
 // Terminal state for stores. Update the data cache if there was a cache hit.
 // Clear any previously set lock status
 STORE2:
-	// On a retry operation, restore the stack pointer which may have been
-	// modified, then go back to the decode state to pick up original 
-	// addresses and data. This doesn't work for block move/store
-	if (rty_i) begin
-		data_nack();
-		isp <= oisp;
-		state <= DECODE;
-	end
-	else if (rdy) begin
+	if (rdy) begin
 //		wdat <= dat_o;
 		if (!em && (isMove|isSts)) begin
 			state <= MVN3;
@@ -99,40 +79,20 @@ STORE2:
 				end
 				else begin
 					moveto_ifetch();
-					retstate <= IFETCH;
+					retstate <= IFETCH1;
 				end
 			end
 			else begin
 				moveto_ifetch();
-				retstate <= IFETCH;
+				retstate <= IFETCH1;
 			end
 		end
 		mlb <= 1'b0;
 		data_nack();
 		case(store_what)
-		`STW_PC,`STW_PC2,`STW_PCHWI,`STW_OPC:
-			if (isBrk|isBusErr) begin
-				radr <= isp_dec;
-				wadr <= isp_dec;
-				isp <= isp_dec;
-				store_what <= `STW_SR;
-				state <= STORE1;
-				retstate <= STORE1;
-			end
-		`STW_SR:
-			if (isBrk|isBusErr) begin
-				load_what <= `PC_310;
-				state <= LOAD_MAC1;
-				retstate <= LOAD_MAC1;
-				radr <= vect;
-				ttrig <= 1'b0;
-				tf <= 1'b0;			// turn off trace mode
-				im <= 1'b1;
-				em <= 1'b0;			// make sure we process in native mode; we might have been called up during emulation mode
-			end
 		`STW_DEF70:
 			begin
-				lock_o <= 1'b1;
+				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
 				store_what <= `STW_DEF158;
 				retstate <= STORE1;
@@ -140,7 +100,7 @@ STORE2:
 			end
 		`STW_ACC70:
 			begin
-				lock_o <= 1'b1;
+				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
 				store_what <= `STW_ACC158;
 				retstate <= STORE1;
@@ -148,7 +108,7 @@ STORE2:
 			end
 		`STW_X70:
 			begin
-				lock_o <= 1'b1;
+				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
 				store_what <= `STW_X158;
 				retstate <= STORE1;
@@ -156,7 +116,7 @@ STORE2:
 			end
 		`STW_Y70:
 			begin
-				lock_o <= 1'b1;
+				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
 				store_what <= `STW_Y158;
 				retstate <= STORE1;
@@ -164,7 +124,7 @@ STORE2:
 			end
 		`STW_Z70:
 			begin
-				lock_o <= 1'b1;
+				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
 				store_what <= `STW_Z158;
 				retstate <= STORE1;
@@ -238,7 +198,7 @@ STORE2:
 					load_what <= `PC_70;
 					state <= LOAD_MAC1;
 					retstate <= LOAD_MAC1;
-					pc[23:16] <= abs8[23:16];
+					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
 					im <= hwi;
 				end
@@ -246,7 +206,7 @@ STORE2:
 					load_what <= `PC_70;
 					state <= LOAD_MAC1;
 					retstate <= LOAD_MAC1;
-					pc[23:16] <= abs8[23:16];
+					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
 					im <= 1'b1;
 				end
@@ -273,9 +233,9 @@ STORE2:
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
-		lock_o <= 1'b0;
+		mlb <= 1'b0;
 		data_nack();
-		derr_address <= adr_o[23:0];
+		derr_address <= ado[23:0];
 		intno <= 9'd508;
 		state <= BUS_ERROR;
 	end

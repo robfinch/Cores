@@ -2,7 +2,7 @@
 //        __
 //   \\__/ o\    (C) 2013,2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -38,13 +38,13 @@ BYTE_CALC:
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	begin res8 <= b8; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS:	begin res8 <= x8 - b8; end
 		`CPY_IMM,`CPY_ZP,`CPY_ABS:	begin res8 <= y8 - b8; end
-		`TRB_ZP,`TRB_ABS:	begin res8 <= ~acc8 & b8; wdat <= ~acc8 & b8; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`TSB_ZP,`TSB_ABS:	begin res8 <= acc8 | b8; wdat <= acc8 | b8; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX:	begin res8 <= {b8,1'b0}; wdat <= {b8[6:0],1'b0}; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	begin res8 <= {b8,cf}; wdat <= {b8[6:0],cf}; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	begin res8 <= {b8[0],1'b0,b8[7:1]}; wdat <= {1'b0,b8[7:1]}; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	begin res8 <= {b8[0],cf,b8[7:1]}; wdat <= {cf,b8[7:1]}; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:	begin res8 <= b8 + 8'd1; wdat <= {b8+8'd1}; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
-		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	begin res8 <= b8 - 8'd1; wdat <= {b8-8'd1}; state <= STORE1; vpa <= `FALSE; vda <= `FALSE; end
+		`TRB_ZP,`TRB_ABS:	begin res8 <= ~acc8 & b8; wdat <= ~acc8 & b8; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS:	begin res8 <= acc8 | b8; wdat <= acc8 | b8; state <= STORE1; data_nack(); end
+		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX:	begin res8 <= {b8,1'b0}; wdat <= {b8[6:0],1'b0}; state <= STORE1; data_nack(); end
+		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	begin res8 <= {b8,cf}; wdat <= {b8[6:0],cf}; state <= STORE1; data_nack(); end
+		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	begin res8 <= {b8[0],1'b0,b8[7:1]}; wdat <= {1'b0,b8[7:1]}; state <= STORE1; data_nack(); end
+		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	begin res8 <= {b8[0],cf,b8[7:1]}; wdat <= {cf,b8[7:1]}; state <= STORE1; data_nack(); end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:	begin res8 <= b8 + 8'd1; wdat <= {b8+8'd1}; state <= STORE1; data_nack(); end
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	begin res8 <= b8 - 8'd1; wdat <= {b8-8'd1}; state <= STORE1; data_nack(); end
 		endcase
 	end
