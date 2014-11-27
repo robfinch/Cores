@@ -54,8 +54,11 @@ LOAD_MAC2:
 `endif
 RTS1:
 	begin
-		pc <= pc + 32'd1;
-		state <= IFETCH1;
+		vpa <= `TRUE;
+		vda <= `TRUE;
+		pc <= pc + 24'd1;
+		ado <= pc + 24'd1;
+		next_state(IFETCH1);
 	end
 BYTE_IX5:
 	begin
