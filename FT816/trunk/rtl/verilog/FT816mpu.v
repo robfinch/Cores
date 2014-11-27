@@ -156,7 +156,7 @@ assign cs2 = !((trig1 & match_cs2 & mh1[2]) | (trig8 & match_cs2 & mh8[2]) | (ma
 assign cs3 = !((trig1 & match_cs3 & mh1[3]) | (trig8 & match_cs3 & mh8[3]) | (match_cs0 & mh32[3]));
 assign cs4 = !((trig1 & match_cs4 & mh1[4]) | (trig8 & match_cs4 & mh8[4]) | (match_cs0 & mh32[4]));
 assign cs5 = !((trig1 & match_cs5 & mh1[5]) | (trig8 & match_cs5 & mh8[5]) | (match_cs0 & mh32[5]));
-assign cs6 = !(match_cs0 & match_cs1 & match_cs2 & match_cs3 & match_cs4 & match_cs5 & (vda | vpa));
+assign cs6 = !(!(match_cs0 | match_cs1 | match_cs2 | match_cs3 | match_cs4 | match_cs5) & (vda | vpa));
 
 wire rdy816 = (vda|vpa) ? (
 			  dec_match1 ? trig1 && (cycle==5'd30) && rdy :

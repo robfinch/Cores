@@ -179,9 +179,11 @@ STORE2:
 						end
 				`JSR: 	begin
 						pc[15:0] <= ir[23:8];
+						ado <= {pc[23:16],ir[23:8]};
 						end
 				`JSL: 	begin
 						pc[23:0] <= ir[31:8];
+						ado <= ir[31:8];
 						end
 				`JSR_INDX:
 						begin
