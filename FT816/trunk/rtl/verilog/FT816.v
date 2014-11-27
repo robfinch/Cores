@@ -330,13 +330,6 @@
 `define BEQ			9'hF0
 `define BRL			9'h82
 `define BRA			9'h80
-`define BHI			9'h13
-`define BLS			9'h33
-`define BGE			9'h93
-`define BLT			9'hB3
-`define BGT			9'hD3
-`define BLE			9'hF3
-`define ACBR		9'h53
 
 `define JML			9'h5C
 `define JMP			9'h4C
@@ -554,7 +547,7 @@
 
 // Input Frequency is 32 times the 00 clock
 
-module FT816(rst, clk, cyc, phi11, phi12, phi81, phi82, nmi, irq, e, mx, rdy, be, bz, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
+module FT816(rst, clk, cyc, phi11, phi12, phi81, phi82, nmi, irq, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
 parameter RESET1 = 6'd0;
 parameter IFETCH1 = 6'd1;
 parameter IFETCH2 = 6'd2;
@@ -579,6 +572,7 @@ parameter LOAD_MAC1 = 6'd20;
 parameter LOAD_MAC2 = 6'd21;
 parameter LOAD_MAC3 = 6'd22;
 parameter MVN3 = 6'd23;
+parameter IFETCH0 = 6'd24;
 parameter LOAD_DCACHE = 6'd26;
 parameter LOAD_ICACHE = 6'd27;
 parameter LOAD_IBUF1 = 6'd28;
@@ -603,7 +597,6 @@ output e;
 output mx;
 input rdy;
 input be;
-input bz;
 output reg vpa;
 output reg vda;
 output reg mlb;
@@ -632,7 +625,7 @@ reg [23:0] pc;
 reg [15:0] dpr;		// direct page register
 reg [7:0] dbr;		// data bank register
 reg [15:0] x,y,acc,sp;
-reg [7:0] tmp;
+reg [15:0] tmp;
 wire [15:0] acc16 = acc;
 wire [7:0] acc8=acc[7:0];
 wire [7:0] x8=x[7:0];
@@ -770,15 +763,15 @@ wire [23:0] alx_address		= {ir[31:8] + x16};
 wire [31:0] dsp_address = m816 ? {8'h00,sp + ir[15:8]} : {16'h0001,sp[7:0]+ir[15:8]};
 reg [23:0] vect;
 
-assign rw = be ? (bz ? rwo : 1'b0) : 1'bz;
-assign ad = be ? (bz ? ado : 24'h000000) : {24{1'bz}};
-assign db = be ? (bz ? dbo : 8'h00) : {8{1'bz}};
+assign rw = be ? rwo : 1'bz;
+assign ad = be ? ado : {24{1'bz}};
+assign db = rwo ? {8{1'bz}} : be ? dbo : {8{1'bz}};
 
 reg [31:0] phi11r,phi12r,phi81r,phi82r;
 assign phi11 = phi11r[31];
 assign phi12 = phi12r[31];
-assign phi21 = phi81r[31];
-assign phi22 = phi82r[31];
+assign phi81 = phi81r[31];
+assign phi82 = phi82r[31];
 
 always @(posedge clk)
 if (rst) begin
@@ -898,6 +891,7 @@ if (rst) begin
 	dbr <= 8'h00;
 	dpr <= 16'h0000;
 	clk_en <= 1'b1;
+	im <= `TRUE;
 	gie <= 1'b0;
 	isIY <= 1'b0;
 	isIY24 <= 1'b0;
@@ -916,21 +910,51 @@ RESET1:
 		load_what <= `PC_70;
 		state <= LOAD_MAC1;
 	end
+IFETCH0:
+	moveto_ifetch();
 IFETCH1:
 	if (rdy) begin
+		vect <= m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
+		hwi <= `FALSE;
+		isBusErr <= `FALSE;
+		pg2 <= `FALSE;
+		isIY <= `FALSE;
+		isIY24 <= `FALSE;
+		store_what <= m16 ? `STW_DEF70 : `STW_DEF;
 		ir[7:0] <= db;
 		ado <= pc + 24'd1;
 		pc <= pc + 24'd1;
-		// Is it more than one byte ?
-		if (!isOneByte(db)) begin
-			vpa <= TRUE;
-			next_state(IFETCH2);
+		if (nmi_edge | irq)
+			wai <= 1'b0;
+		if (nmi_edge & gie) begin
+			ir[7:0] <= `BRK;
+			nmi_edge <= 1'b0;
+			hwi <= `TRUE;
+			vect <= m816 ? `NMI_VECT_816 : `BYTE_NMI_VECT;
+			vect[23:16] <= 8'h00;
+			next_state(DECODE2);
 		end
-		else begin
-			vpa <= FALSE;
-			next_state(DECODE1);
+		else if (irq & gie & ~im) begin
+			ir[7:0] <= `BRK;
+			hwi <= `TRUE;
+			if (m816)
+				vect <= `IRQ_VECT_816;
+			next_state(DECODE2);
 		end
-		vda <= FALSE;
+		else if (!wai) begin
+			// Is it more than one byte ?
+			if (!isOneByte(db)) begin
+				vpa <= TRUE;
+				next_state(IFETCH2);
+			end
+			else begin
+				vpa <= FALSE;
+				next_state(DECODE1);
+			end
+			vda <= FALSE;
+		end
+		else
+			next_state(IFETCH1);
 		case(ir[7:0])
 		// Note the break flag is not affected by SEP/REP
 		// Setting the index registers to eight bit zeros out the upper part of the register.
@@ -1082,11 +1106,11 @@ IFETCH1:
 		endcase
 	end
 IFETCH2:
-	begin
+	if (rdy) begin
 		ir[15:8] <= db;
 		ado <= pc + 24'd1;
 		pc <= pc + 24'd1;
-		if (!isTwoBytes(db,m16,xb16)) begin
+		if (!isTwoBytes(ir,m16,xb16)) begin
 			vpa <= TRUE;
 			next_state(IFETCH3);
 		end
@@ -1097,11 +1121,11 @@ IFETCH2:
 		vda <= FALSE;
 	end
 IFETCH3:
-	begin
+	if (rdy) begin
 		ir[23:16] <= db;
 		ado <= pc + 24'd1;
 		pc <= pc + 24'd1;
-		if (!isThreeBytes(db,m16,xb16)) begin
+		if (!isThreeBytes(ir,m16,xb16)) begin
 			vpa <= TRUE;
 			next_state(IFETCH4);
 		end
@@ -1112,7 +1136,7 @@ IFETCH3:
 		vda <= FALSE;
 	end
 IFETCH4:
-	begin
+	if (rdy) begin
 		ir[31:24] <= db;
 		ado <= pc + 24'd1;
 		pc <= pc + 24'd1;
@@ -1123,7 +1147,7 @@ IFETCH4:
 
 // Decode single byte opcodes
 DECODE1:
-	begin
+	if (rdy) begin
 		next_state(IFETCH1);
 		opcode_read();
 		case(ir[7:0])
@@ -1262,78 +1286,80 @@ DECODE1:
 				data_nack();
 				state <= LOAD_MAC1;
 			end
+		default:
+			begin
+				opcode_read();
+				next_state(IFETCH1);
+			end
 		endcase
 	end
 
 // Decode 2-byte opcodes
 DECODE2:
-	begin
+	if (rdy) begin
 		case(ir[7:0])
 		// Handle # mode
 		`LDA_IMM:
 			begin
-				res8 <= db;
-				res16[7:0] <= db;
+				res8 <= ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`LDX_IMM,`LDY_IMM:
 			begin
-				res8 <= db;
-				res16[7:0] <= db;
+				res8 <= ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`ADC_IMM:
 			begin
-				res8 <= acc8 + db + {7'b0,cf};
-				tmp <= db;
-				b8 <= db;		// for overflow calc
+				res8 <= acc8 + ir[15:8] + {7'b0,cf};
+				b8 <= ir[15:8];		// for overflow calc
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`SBC_IMM:
 			begin
-				res8 <= acc8 - db - {7'b0,~cf};
+				res8 <= acc8 - ir[15:8] - {7'b0,~cf};
 				$display("sbc: %h= %h-%h-%h", acc8 - ir[15:8] - {7'b0,~cf},acc8,ir[15:8],~cf);
-				b8 <= db;		// for overflow calc
+				b8 <= ir[15:8];		// for overflow calc
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`AND_IMM,`BIT_IMM:
 			begin
-				res8 <= acc8 & db;
-				b8 <= db;	// for bit flags
+				res8 <= acc8 & ir[15:8];
+				b8 <= ir[15:8];	// for bit flags
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`ORA_IMM:
 			begin
-				res8 <= acc8 | db;
+				res8 <= acc8 | ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`EOR_IMM:
 			begin
-				res8 <= acc8 ^ db;
+				res8 <= acc8 ^ ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`CMP_IMM:
 			begin
-				res8 <= acc8 - db;
+				res8 <= acc8 - ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`CPX_IMM:
 			begin
-				res8 <= x8 - db;
+				res8 <= x8 - ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
 		`CPY_IMM:
 			begin
-				res8 <= y8 - db;
+				res8 <= y8 - ir[15:8];
 				opcode_read();
 				next_state(IFETCH1);
 			end
@@ -1551,12 +1577,81 @@ DECODE2:
 					next_state(IFETCH1);
 				end
 			//end
+		default:
+			begin
+				opcode_read();
+				next_state(IFETCH1);
+			end
 		endcase
 	end
 
 DECODE3:
-	begin
+	if (rdy) begin
 		case(ir[7:0])
+		// Handle # mode
+		`LDA_IMM:
+			begin
+				res16 <= ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`LDX_IMM,`LDY_IMM:
+			begin
+				res16 <= ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`ADC_IMM:
+			begin
+				res16 <= acc16 + ir[23:8] + {15'b0,cf};
+				b16 <= ir[23:8];		// for overflow calc
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`SBC_IMM:
+			begin
+				res16 <= acc16 - ir[23:8] - {15'b0,~cf};
+				b16[15:8] <= ir[23:8];		// for overflow calc
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`AND_IMM,`BIT_IMM:
+			begin
+				res16 <= acc16 & ir[23:8];
+				b16 <= ir[23:8];	// for bit flags
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`ORA_IMM:
+			begin
+				res16 <= acc16 | ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`EOR_IMM:
+			begin
+				res16 <= acc16 ^ ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`CMP_IMM:
+			begin
+				res16 <= acc16 - ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`CPX_IMM:
+			begin
+				res16 <= x16 - ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
+		`CPY_IMM:
+			begin
+				res16 <= y16 - ir[23:8];
+				opcode_read();
+				next_state(IFETCH1);
+			end
 		// Handle abs
 		`LDA_ABS:
 			begin
@@ -1745,11 +1840,16 @@ DECODE3:
 				data_nack();
 				state <= LOAD_MAC1;
 			end
+		default:
+			begin
+				opcode_read();
+				next_state(IFETCH1);
+			end
 		endcase
 	end
 
 DECODE4:
-	begin
+	if (rdy) begin
 		first_ifetch <= `TRUE;
 		next_state(IFETCH1);
 		vpa <= `TRUE;
@@ -1821,8 +1921,11 @@ DECODE4:
 				data_nack();
 				state <= STORE1;
 			end
-		default:	// unimplemented opcode
-			;
+		default:
+			begin
+				opcode_read();
+				next_state(IFETCH1);
+			end
 		endcase
 	end
 
@@ -1831,6 +1934,15 @@ DECODE4:
 `include "half_calc.v"
 `include "byte_calc.v"
 
+MVN816:
+	begin
+		moveto_ifetch();
+		if (&acc[15:0]) begin
+			pc <= pc + 24'd3;
+			ado <= pc + 24'd3;
+			dbr <= ir[15:8];
+		end
+	end
 endcase
 end
 

@@ -67,6 +67,8 @@ STORE1:
 STORE2:
 	if (rdy) begin
 //		wdat <= dat_o;
+		mlb <= 1'b0;
+		data_nack();
 		if (!em && (isMove|isSts)) begin
 			state <= MVN3;
 			retstate <= MVN3;
@@ -87,8 +89,6 @@ STORE2:
 				retstate <= IFETCH1;
 			end
 		end
-		mlb <= 1'b0;
-		data_nack();
 		case(store_what)
 		`STW_DEF70:
 			begin

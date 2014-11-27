@@ -56,7 +56,7 @@ begin
 	`HALF_159:
 				begin
 					res16[15:8] <= dat8;
-					next_state(IFETCH1);
+					moveto_ifetch();
 				end
 	`HALF_71S:
 				begin
@@ -136,7 +136,7 @@ begin
 						next_state(RTS1);
 					else			// jmp (abs)
 					begin
-						moveto_ifetch();
+						next_state(IFETCH0);
 					end
 				end
 	`PC_2316:	begin
@@ -147,7 +147,7 @@ begin
 					end
 					else begin
 						load_what <= `NOTHING;
-						moveto_ifetch();
+						next_state(IFETCH0);
 //						load_what <= `PC_3124;
 //						if (isRTI) begin
 //							inc_sp();

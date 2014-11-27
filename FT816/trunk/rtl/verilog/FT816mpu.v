@@ -27,7 +27,7 @@
 `define TRUE 	1'b1
 `define FALSE	1'b0
 
-module FT816top(rst, clk, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, be, bz, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6);
+module FT816mpu(rst, clk, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, be, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6);
 input rst;
 input clk;
 output phi11;
@@ -40,14 +40,13 @@ output mx;
 input nmi;
 input irq;
 input be;
-input bz;
 output vpa;
 output vda;
 output mlb;
 output vpb;
-output rw;
-output [23:0] ad;
-inout [7:0] db;
+output tri rw;
+output tri [23:0] ad;
+inout tri [7:0] db;
 output cs0;
 output cs1;
 output cs2;
@@ -157,11 +156,12 @@ assign cs2 = !((trig1 & match_cs2 & mh1[2]) | (trig8 & match_cs2 & mh8[2]) | (ma
 assign cs3 = !((trig1 & match_cs3 & mh1[3]) | (trig8 & match_cs3 & mh8[3]) | (match_cs0 & mh32[3]));
 assign cs4 = !((trig1 & match_cs4 & mh1[4]) | (trig8 & match_cs4 & mh8[4]) | (match_cs0 & mh32[4]));
 assign cs5 = !((trig1 & match_cs5 & mh1[5]) | (trig8 & match_cs5 & mh8[5]) | (match_cs0 & mh32[5]));
-assign cs6 = !(cs0 & cs1 & cs2 & cs3 & cs4 & cs5 & (vda | vpa));
+assign cs6 = !(match_cs0 & match_cs1 & match_cs2 & match_cs3 & match_cs4 & match_cs5 & (vda | vpa));
 
-wire rdy816 = dec_match1 ? trig1 && (cycle==5'd30) && rdy :
+wire rdy816 = (vda|vpa) ? (
+			  dec_match1 ? trig1 && (cycle==5'd30) && rdy :
 			  dec_match8 ? trig8 && (cycle==5'd30 || cycle==5'd22 || cycle==5'd14 || cycle==5'd6) && rdy :
-				rdy;
+				rdy) : 1'b1;
 
 FT816 u1
 (
@@ -180,12 +180,13 @@ FT816 u1
 	.vpb(vpb),
 	.rdy(rdy816),
 	.be(be),
-	.bz(bz),
 	.vpa(vpa),
 	.vda(vda),
 	.rw(rw),
 	.ad(ad),
-	.db(db)
+	.db(db),
+	.err_i(1'b0),
+	.rty_i(1'b0)
 );
 
 endmodule
