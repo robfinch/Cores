@@ -1804,6 +1804,7 @@ DECODE3:
 		`JSR,`JSR_INDX:
 			begin
 				set_sp();
+				pc <= pc - 24'd1;
 				store_what <= `STW_PC158;
 				data_nack();
 				state <= STORE1;
@@ -1917,6 +1918,7 @@ DECODE4:
 		`JSL:
 			begin
 				set_sp();
+				pc <= pc - 24'd1;
 				store_what <= `STW_PC2316;
 				data_nack();
 				state <= STORE1;
