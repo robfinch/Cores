@@ -35,6 +35,7 @@ reg [7:0] Led;
 input [7:0] sw;
 
 wire xreset = ~btn[0];
+wire irq = btn[1];
 reg [32:0] rommem [2047:0];
 reg [7:0] rammem [8191:0];
 wire rw;
@@ -73,8 +74,8 @@ DCM dcm0(
 );
 defparam dcm0.CLK_FEEDBACK = "2x";
 defparam dcm0.CLKDV_DIVIDE = 5.0;
-defparam dcm0.CLKFX_DIVIDE = 25;	// (8/25)*100 = 32 MHz
-defparam dcm0.CLKFX_MULTIPLY = 8;
+defparam dcm0.CLKFX_DIVIDE = 25;	// (16/25)*100 = 64 MHz
+defparam dcm0.CLKFX_MULTIPLY = 16;
 defparam dcm0.CLKIN_DIVIDE_BY_2 = "FALSE";
 defparam dcm0.CLKIN_PERIOD = 10.000;
 defparam dcm0.CLKOUT_PHASE_SHIFT = "NONE";
@@ -123,7 +124,7 @@ FT816mpu u1
 	.e(),
 	.mx(),
 	.nmi(1'b0),
-	.irq(1'b0),
+	.irq(btn[1]),
 	.be(1'b1),
 	.vpa(),
 	.vda(),

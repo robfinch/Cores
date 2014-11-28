@@ -27,6 +27,8 @@ LOAD_MAC1:
 	begin
 		if (isRMW)
 			mlb <= 1'b1;
+		if (isBrk)
+			vpb <= `TRUE;
 		data_read(radr);
 		state <= LOAD_MAC2;
 	end

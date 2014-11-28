@@ -136,6 +136,7 @@ begin
 						next_state(RTS1);
 					else			// jmp (abs)
 					begin
+						vpb <= `FALSE;
 						next_state(IFETCH0);
 					end
 				end

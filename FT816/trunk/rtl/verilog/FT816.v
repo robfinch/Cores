@@ -44,9 +44,6 @@
 `define SUPPORT_SHIFT	1'b1
 //`define SUPPORT_CGI		1'b1			// support the control giveaway interrupt
 
-`define RST_VECT	32'hFFFFFFF8
-`define NMI_VECT	32'hFFFFFFF4
-`define IRQ_VECT	32'hFFFFFFF0
 `define BRK_VECTNO	9'd0
 `define SLP_VECTNO	9'd1
 `define BYTE_RST_VECT	32'h0000FFFC
@@ -58,21 +55,6 @@
 `define ABT_VECT_816	32'h0000FFE8
 `define BRK_VECT_816	32'h0000FFE6
 `define COP_VECT_816	32'h0000FFE4
-
-`define BYTE		9'h87
-`define UBYTE		9'hA7
-`define CHAR		9'h97
-`define UCHAR		9'hB7
-`define LEA			9'hC7
-`define R			9'hD7
-`define SXB				4'h0
-`define SXC				4'h1
-`define ZXB				4'h2
-`define ZXC				4'h3
-`define RBO				4'h4
-`define NOT				4'h5
-`define COM				4'h6
-`define CLR				4'h7
 
 `define BRK			9'h00
 `define RTI			9'h40
@@ -120,22 +102,6 @@
 `define PEI			9'hD4
 `define PER			9'h62
 `define WDM			9'h42
-
-`define RR			9'h02
-`define ADD_RR			4'd0
-`define SUB_RR			4'd1
-`define AND_RR			4'd3
-`define EOR_RR			4'd4
-`define OR_RR			4'd5
-`define MUL_RR			4'd8
-`define MULS_RR			4'd9
-`define DIV_RR			4'd10
-`define DIVS_RR			4'd11
-`define MOD_RR			4'd12
-`define MODS_RR			4'd13
-`define ASL_RRR			4'd14
-`define LSR_RRR			4'd15
-`define LD_RR		9'h7B
 
 // CMP = SUB r0,....
 
@@ -417,20 +383,9 @@
 `define TSB_ZPX		9'h04
 `define TSB_ABS		9'h0C
 
-`define BAZ			9'hC1
-`define BXZ			9'hD1
-`define BEQ_RR		9'hE2
-`define INT0		9'hDC
-`define INT1		9'hDD
-`define SUB_SP8		9'h85
-`define SUB_SP16	9'h99
-`define SUB_SP32	9'h89
 `define MVP			9'h44
 `define MVN			9'h54
 `define STS			9'h64
-`define EXEC		9'hEB
-`define ATNI		9'h4B
-`define MDR			9'h3C
 
 // Page Two Opcodes
 `define PG2			9'h42
@@ -697,14 +652,16 @@ wire isRMW8 =
 // the DECODE stage.
 
 always @(posedge clk)
-	if (state==DECODE1||state==DECODE2||state==DECODE3||state==DECODE4) begin
+	if (state==RESET1)
+		isBrk <= `TRUE;
+	else if (state==DECODE1||state==DECODE2||state==DECODE3||state==DECODE4) begin
 		isSub8 <= ir9==`SBC_ZP || ir9==`SBC_ZPX || ir9==`SBC_IX || ir9==`SBC_IY || ir9==`SBC_I ||
 			 ir9==`SBC_ABS || ir9==`SBC_ABSX || ir9==`SBC_ABSY || ir9==`SBC_IMM;
 		isRMW <= isRMW8;
 		isRTI <= ir9==`RTI;
 		isRTL <= ir9==`RTL;
 		isRTS <= ir9==`RTS;
-		isBrk <= ir9==`BRK;
+		isBrk <= ir9==`BRK || ir9==`COP;
 		isMove <= ir9==`MVP || ir9==`MVN;
 		isJsrIndx <= ir9==`JSR_INDX;
 		isJsrInd <= ir9==`JSR_IND;
@@ -873,6 +830,7 @@ always @(posedge clkx)
 if (rst) begin
 	vpa <= `FALSE;
 	vda <= `FALSE;
+	vpb <= `TRUE;
 	rwo <= `TRUE;
 	ado <= 24'h000000;
 	dbo <= 8'h00;
@@ -998,7 +956,7 @@ IFETCH1:
 		`TAY,`TXY,`DEY,`INY:		if (xb16) begin y[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end	else begin y[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`TAX,`TYX,`TSX,`DEX,`INX:	if (xb16) begin x[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end else begin x[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`TSA,`TYA,`TXA,`INA,`DEA:	if (m16) begin acc[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end else begin acc[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
-		`TAS,`TXS: begin if (m816) sp <= res16[15:0]; else sp <= {8'h01,res8[7:0]}; end
+		`TAS,`TXS: begin if (m816) sp <= res16[15:0]; else sp <= {8'h01,res8[7:0]}; gie <= `TRUE; end
 		`TCD:	begin dpr <= res16[15:0]; end
 		`TDC:	begin acc[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end
 		`ADC_IMM:
