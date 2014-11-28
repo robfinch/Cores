@@ -14,7 +14,7 @@ initial begin
 	#2000 btn[1] <= 1'b0;
 end
 
-FT816Sys u1
+FT816Sys2 u1
 (
 	.btn(btn),
 	.xclk(clk),
@@ -26,7 +26,9 @@ always @(posedge clk)
 begin
 	prev_state <= u1.u1.u1.state;
 	if (prev_state != u1.u1.u1.state) begin
-	$display("%d pc=%h ir=%h %s", $time, u1.u1.u1.pc, u1.u1.u1.ir, u1.u1.u1.fnStateName(u1.u1.u1.state));
+	$display("%d %c ad=%h db=%h pc=%h ir=%h %s", $time, u1.u1.u1.rw ? " " : "W",
+		u1.u1.u1.ad, u1.u1.u1.db,
+		u1.u1.u1.pc, u1.u1.u1.ir, u1.u1.u1.fnStateName(u1.u1.u1.state));
 	end
 end
 

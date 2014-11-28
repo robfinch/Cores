@@ -794,7 +794,7 @@ casex(ir)
 `LDY_IMM,`CPY_IMM,`CPX_IMM,`LDX_IMM:			isThreeBytes = xb16;
 `ORA_IMM,`AND_IMM,`EOR_IMM,`ADC_IMM,`SBC_IMM,`CMP_IMM,`LDA_IMM,`BIT_IMM:
 			isThreeBytes = m16;
-8'b1001xxx1:	isThreeBytes = TRUE;
+8'bxxx11001:	isThreeBytes = TRUE;
 `TSB_ABS,`TRB_ABS,`BIT_ABS,`BIT_ABSX,`JMP,`JMP_INDX,`STY_ABS,`STZ_ABS,`LDY_ABS,`LDY_ABSX,`CPY_ABS,
 `CPX_ABS,`JSR_INDX:	isThreeBytes = TRUE;
 8'hxD,8'hxE:	isThreeBytes = TRUE;
@@ -1811,10 +1811,6 @@ DECODE4:
 	if (rdy) begin
 		first_ifetch <= `TRUE;
 		next_state(IFETCH1);
-		vpa <= `TRUE;
-		vda <= `TRUE;
-		pc <= pc + 24'd1;
-		ado <= pc + 24'd1;
 		case(ir[7:0])
 		`WDM:	if (ir[15:8]==`XCE) begin
 					em <= 1'b0;
