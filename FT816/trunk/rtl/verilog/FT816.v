@@ -49,6 +49,7 @@
 `define BYTE_RST_VECT	32'h0000FFFC
 `define BYTE_NMI_VECT	32'h0000FFFA
 `define BYTE_IRQ_VECT	32'h0000FFFE
+`define BYTE_ABT_VECT	32'h0000FFF8
 `define RST_VECT_816	32'h0000FFFC
 `define IRQ_VECT_816	32'h0000FFEE
 `define NMI_VECT_816	32'h0000FFEA
@@ -502,7 +503,7 @@
 
 // Input Frequency is 32 times the 00 clock
 
-module FT816(rst, clk, cyc, phi11, phi12, phi81, phi82, nmi, irq, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
+module FT816(rst, clk, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
 parameter RESET1 = 6'd0;
 parameter IFETCH1 = 6'd1;
 parameter IFETCH2 = 6'd2;
@@ -548,6 +549,7 @@ output phi81;
 output phi82;
 input nmi;
 input irq;
+input abort;
 output e;
 output mx;
 input rdy;
@@ -576,7 +578,7 @@ reg [5:0] state;
 reg [5:0] retstate;
 reg [31:0] ir;
 wire [8:0] ir9 = {pg2,ir[7:0]};
-reg [23:0] pc;
+reg [23:0] pc,opc;
 reg [15:0] dpr;		// direct page register
 reg [7:0] dbr;		// data bank register
 reg [15:0] x,y,acc,sp;
@@ -824,6 +826,9 @@ else begin
 		cpu_clk_en <= clk_en;
 end
 
+reg abort1;
+reg abort_edge;
+
 always @(posedge clkx)
 if (rst) begin
 	vpa <= `FALSE;
@@ -853,11 +858,16 @@ if (rst) begin
 	isIY24 <= 1'b0;
 	isI24 <= `FALSE;
 	load_what <= `NOTHING;
+	abort_edge <= 1'b0;
+	abort1 <= 1'b0;
 end
 else begin
-if (nmi & !nmi1)
+abort1 <= abort;
+if (~abort & abort1)
+	abort_edge <= 1'b1;
+if (~nmi & nmi1)
 	nmi_edge <= 1'b1;
-if (nmi|nmi1)
+if (~nmi|~nmi1)
 	clk_en <= 1'b1;
 case(state)
 RESET1:
@@ -880,9 +890,19 @@ IFETCH1:
 		ir[7:0] <= db;
 		ado <= pc + 24'd1;
 		pc <= pc + 24'd1;
+		opc <= pc;
 		if (nmi_edge | irq)
 			wai <= 1'b0;
-		if (nmi_edge & gie) begin
+		if (abort_edge) begin
+			pc <= opc;
+			ir[7:0] <= `BRK;
+			abort_edge <= 1'b0;
+			hwi <= `TRUE;
+			vect <= m816 ? `ABT_VECT_816 : `BYTE_ABT_VECT;
+			vect[23:16] <= 8'h00;
+			next_state(DECODE2);
+		end
+		else if (nmi_edge & gie) begin
 			ir[7:0] <= `BRK;
 			nmi_edge <= 1'b0;
 			hwi <= `TRUE;
@@ -890,7 +910,7 @@ IFETCH1:
 			vect[23:16] <= 8'h00;
 			next_state(DECODE2);
 		end
-		else if (irq & gie & ~im) begin
+		else if (~irq & gie & ~im) begin
 			ir[7:0] <= `BRK;
 			hwi <= `TRUE;
 			if (m816)
@@ -911,6 +931,7 @@ IFETCH1:
 		end
 		else
 			next_state(IFETCH1);
+		if (!abort_edge) begin
 		case(ir[7:0])
 		// Note the break flag is not affected by SEP/REP
 		// Setting the index registers to eight bit zeros out the upper part of the register.
@@ -1060,6 +1081,7 @@ IFETCH1:
 		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	if (xb16) begin x[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end else begin x[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	if (xb16) begin y[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end else begin y[7:0] <= res8[7:0]; nf <= resn8; zf <= resz8; end
 		endcase
+		end	// abort_edge
 	end
 IFETCH2:
 	if (rdy) begin

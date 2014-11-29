@@ -27,7 +27,7 @@
 `define TRUE 	1'b1
 `define FALSE	1'b0
 
-module FT816mpu(rst, clk, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, be, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6);
+module FT816mpu(rst, clk, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, abort, be, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6);
 input rst;
 input clk;
 output phi11;
@@ -39,6 +39,7 @@ output e;
 output mx;
 input nmi;
 input irq;
+input abort;
 input be;
 output vpa;
 output vda;
@@ -169,6 +170,7 @@ FT816 u1
 	.clk(clk),
 	.nmi(nmi),
 	.irq(irq),
+	.abort(abort),
 	.e(e),
 	.mx(mx),
 	.cyc(cycle),
