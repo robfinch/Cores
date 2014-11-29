@@ -633,7 +633,7 @@ reg isBrk,isMove,isSts;
 reg isMove816;
 reg isRTI,isRTL,isRTS;
 reg isRMW;
-reg isSub,isSub8;
+reg isSub;
 reg isJsrIndx,isJsrInd;
 reg isIY,isIY24,isI24;
 
@@ -655,8 +655,6 @@ always @(posedge clk)
 	if (state==RESET1)
 		isBrk <= `TRUE;
 	else if (state==DECODE1||state==DECODE2||state==DECODE3||state==DECODE4) begin
-		isSub8 <= ir9==`SBC_ZP || ir9==`SBC_ZPX || ir9==`SBC_IX || ir9==`SBC_IY || ir9==`SBC_I ||
-			 ir9==`SBC_ABS || ir9==`SBC_ABSX || ir9==`SBC_ABSY || ir9==`SBC_IMM;
 		isRMW <= isRMW8;
 		isRTI <= ir9==`RTI;
 		isRTL <= ir9==`RTL;
@@ -1569,7 +1567,7 @@ DECODE3:
 		`SBC_IMM:
 			begin
 				res16 <= acc16 - ir[23:8] - {15'b0,~cf};
-				b16[15:8] <= ir[23:8];		// for overflow calc
+				b16 <= ir[23:8];		// for overflow calc
 				opcode_read();
 				next_state(IFETCH1);
 			end

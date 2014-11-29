@@ -81,7 +81,7 @@ assign HDMIOUTD2N = TMDSB[2];
 
 
 initial begin
-`include "..\..\software\asm\test816.ver"
+`include "..\..\software\asm\FTBios816.ver"
 end
 
 wire locked;
@@ -154,6 +154,16 @@ rtfTextController816 tc1
 	.rgbOut(tc_rgb)
 );
 
+PRNG u_prng
+(
+	.rst(rst),
+	.clk(clk),
+	.vda(vda),
+	.rw(rw),
+	.ad(ad),
+	.db(db),
+	.rdy(prng_rdy)
+);
 
 always @(posedge clk)
 if (~locked)
@@ -188,7 +198,7 @@ FT816mpu u1
 	.phi12(),
 	.phi81(),
 	.phi82(),
-	.rdy(1'b1),
+	.rdy(prng_rdy),
 	.e(),
 	.mx(),
 	.nmi(1'b0),

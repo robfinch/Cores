@@ -1,0 +1,1260 @@
+Finitron 65002 assembler   version 1.3   Sat Nov 29 00:43:57 2014     Page 1
+FTBios816.asm
+
+                                        ; ============================================================================
+                                        ; FTBios816.asm
+                                        ;        __
+                                        ;   \\__/ o\    (C) 2014  Robert Finch, Stratford
+                                        ;    \  __ /    All rights reserved.
+                                        ;     \/_//     robfinch<remove>@finitron.ca
+                                        ;       ||
+                                        ;  
+                                        ;
+                                        ; This source file is free software: you can redistribute it and/or modify 
+                                        ; it under the terms of the GNU Lesser General Public License as published 
+                                        ; by the Free Software Foundation, either version 3 of the License, or     
+                                        ; (at your option) any later version.                                      
+                                        ;                                                                          
+                                        ; This source file is distributed in the hope that it will be useful,      
+                                        ; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+                                        ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+                                        ; GNU General Public License for more details.                             
+                                        ;                                                                          
+                                        ; You should have received a copy of the GNU General Public License        
+                                        ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+                                        ;                                                                          
+                                        ; ============================================================================
+                                        ;
+     25 = 000000000000000D                            CR			EQU		13
+     26 = 000000000000000A                            LF			EQU		10
+                                        
+     28 = 0000000000000004                            TickCount	EQU		$4
+     29 = 0000000000000008                            CursorX		EQU		$8
+     30 = 0000000000000010                            CursorY		EQU		$10
+     31 = 0000000000000012                            VideoPos	EQU		$12
+     32 = 0000000000000014                            NormAttr	EQU		$14
+     33 = 0000000000000016                            StringPos	EQU		$16
+                                        
+     35 = 0000000000FD0000                            VIDBUF		EQU		$FD0000
+     36 = 0000000000FEA000                            VIDREGS		EQU		$FEA000
+                                        
+                                           	cpu		W65C816S
+                                           	.org	$E000
+                                           
+     41 00E000                             start:
+     42 00E000 78                           	sei
+     43 00E001 D8                           	cld
+     44 00E002 18                           	clc					; switch to '816 mode
+     45 00E003 FB                           	xce
+     46 00E004 C2 30                        	rep		#$30		; set 16 bit regs & mem
+                                           	ndx 	16
+                                           	mem		16
+     49 00E006 A9 FF 1F                     	lda		#$1FFF		; set top of stack
+     50 00E009 1B                           	tas
+     51 00E00A 58                           	cli
+     52 00E00B A9 70 00                     	lda		#$0070		; program chip selects for I/O
+     53 00E00E 8D 00 F0                     	sta		$F000		; at $007000
+     54 00E011 A9 71 00                     	lda		#$0071
+     55 00E014 8D 02 F0                     	sta		$F002
+     56 00E017 A9 A1 FE                     	lda		#$FEA1		; select $FEA1xx I/O
+     57 00E01A 8D 06 F0                     	sta		$F006
+     58 00E01D 64 04                        	stz		TickCount
+     59 00E01F A9 00 BF                     	lda		#$BF00
+     60 00E022 85 14                        	sta		NormAttr
+     61 00E024 20 11 E1                     	jsr		ClearScreen
+     62 00E027 20 03 E1                     	jsr		HomeCursor
+     63 00E02A A9 46 E0                     	lda		#msgStarting
+     64 00E02D 85 16                        	sta		StringPos
+     65 00E02F A9 00 00                     	lda		#msgStarting>>16
+     66 00E032 85 18                        	sta		StringPos+2
+     67 00E034 20 F0 E0                     	jsr		DisplayString
+     68 00E037 A0 00 00                     	ldy		#$0000
+     69 00E03A                             .st0001:
+     70 00E03A A2 00 00                     	ldx		#$0000
+     71 00E03D                             .st0002:
+     72 00E03D E8                           	inx
+     73 00E03E D0 FD                        	bne		.st0002
+     74 00E040 20 63 E0                     	jsr		echo_switch
+     75 00E043 C8                           	iny
+     76 00E044 80 F4                        	bra		.st0001
+                                           
+     78 00E046                             msgStarting:
+     79 00E046 46 54 38 31 36 20 54 65      	.byte	"FT816 Test system Starting",CR,LF,0
+     79 00E04E 73 74 20 73 79 73 74 65    
+     79 00E056 6D 20 53 74 61 72 74 69    
+     79 00E05E 6E 67 0D 0A 00             
+                                           
+     81 00E063                             echo_switch:
+     82 00E063 AD 00 71                     	lda		$7100
+     83 00E066 8D 00 70                     	sta		$7000
+     84 00E069 60                           	rts
+                                           
+                                           ;------------------------------------------------------------------------------
+                                           ; Convert ASCII character to screen display character.
+                                           ;------------------------------------------------------------------------------
+                                           
+     90 00E06A                             AsciiToScreen:
+     91 00E06A 29 FF 00                     	AND		#$FF
+                                           ;	ORA		#$100
+     93 00E06D 89 20 00                     	BIT		#$20		; if bit 5 or 6 isn't set
+     94 00E070 F0 08                        	BEQ		.0001
+     95 00E072 89 40 00                     	BIT		#$40
+     96 00E075 F0 03                        	BEQ		.0001
+     97 00E077 29 9F 01                     	AND		#$19F
+     98 00E07A                             .0001:
+     99 00E07A 60                           	RTS
+                                           
+    101 00E07B                             DisplayChar:
+    102 00E07B A6 12                        	LDX		VideoPos
+    103 00E07D 29 FF 00                     	AND		#$0FF
+    104 00E080 C9 0D 00                     	CMP		#CR
+    105 00E083 F0 43                        	BEQ		doCR
+    106 00E085 C9 0A 00                     	CMP		#LF
+    107 00E088 F0 4C                        	BEQ		doLF
+    108 00E08A 20 6A E0                     	JSR		AsciiToScreen
+    109 00E08D 05 14                        	ORA		NormAttr
+    110 00E08F 48                           	PHA
+    111 00E090 8A                           	TXA
+    112 00E091 0A                           	ASL
+    113 00E092 AA                           	TAX
+    114 00E093 68                           	PLA
+    115 00E094 9F 00 00 FD                  	STA		VIDBUF,X
+    116 00E098 E6 12                        	INC		VideoPos
+    117 00E09A A5 12                        	LDA		VideoPos
+    118 00E09C 8F 0D A0 FE                  	STA		VIDREGS+13
+    119 00E0A0 A5 08                        	LDA		CursorX
+    120 00E0A2 1A                           	INA
+    121 00E0A3 C9 56 00                     	CMP		#$56
+    122 00E0A6 D0 1D                        	BNE		.0001
+    123 00E0A8 64 08                        	STZ		CursorX
+    124 00E0AA A5 10                        	LDA		CursorY
+    125 00E0AC C9 30 00                     	CMP		#$30
+    126 00E0AF F0 04                        	BEQ		.0002
+    127 00E0B1 1A                           	INA
+    128 00E0B2 85 10                        	STA		CursorY
+    129 00E0B4 60                           	RTS
+    130 00E0B5                             .0002:
+    131 00E0B5 38                           	SEC
+    132 00E0B6 A5 12                        	LDA		VideoPos
+    133 00E0B8 E9 38 00                     	SBC		#56
+    134 00E0BB 85 12                        	STA		VideoPos
+    135 00E0BD 8F 0D A0 FE                  	STA		VIDREGS+13
+    136 00E0C1 20 26 E1                     	JSR		ScrollUp
+    137 00E0C4 60                           	RTS
+    138 00E0C5                             .0001:
+    139 00E0C5 85 08                        	STA		CursorX
+    140 00E0C7 60                           	RTS
+    141 00E0C8                             doCR:
+    142 00E0C8 38                           	SEC
+    143 00E0C9 A5 12                        	LDA		VideoPos
+    144 00E0CB E5 08                        	SBC		CursorX
+    145 00E0CD 85 12                        	STA		VideoPos
+    146 00E0CF 8F 0D A0 FE                  	STA		VIDREGS+13
+    147 00E0D3 64 08                        	STZ		CursorX
+    148 00E0D5 60                           	RTS
+    149 00E0D6                             doLF:
+    150 00E0D6 A5 10                        	LDA		CursorY
+    151 00E0D8 C9 1E 00                     	CMP		#30
+    152 00E0DB F0 10                        	BEQ		.0001
+    153 00E0DD 1A                           	INA
+    154 00E0DE 85 10                        	STA		CursorY
+    155 00E0E0 18                           	CLC
+    156 00E0E1 A5 12                        	LDA		VideoPos
+    157 00E0E3 69 38 00                     	ADC		#56
+    158 00E0E6 85 12                        	STA		VideoPos
+    159 00E0E8 8F 0D A0 FE                  	STA		VIDREGS+13
+    160 00E0EC 60                           	RTS
+    161 00E0ED                             .0001:
+    162 00E0ED 4C ED E0                     	JMP		SCrollUp
+                                           
+    164 00E0F0                             DisplayString:
+    165 00E0F0 A0 00 00                     	LDY		#0
+    166 00E0F3                             .0002:
+    167 00E0F3 B7 16                        	LDA		[StringPos],Y
+    168 00E0F5 29 FF 00                     	AND		#$FF				; mask off extra byte
+    169 00E0F8 F0 08                        	BEQ		.0001
+    170 00E0FA 5A                           	PHY
+    171 00E0FB 20 7B E0                     	JSR		DisplayChar
+    172 00E0FE 7A                           	PLY
+    173 00E0FF C8                           	INY
+    174 00E100 D0 F1                        	BNE		.0002
+    175 00E102                             .0001:
+    176 00E102 60                           	RTS
+                                           
+    178 00E103                             HomeCursor:
+    179 00E103 A9 00 00                     	LDA		#0
+    180 00E106 64 08                        	STZ		CursorX
+    181 00E108 64 10                        	STZ		CursorY
+    182 00E10A 64 12                        	STZ		VideoPos
+    183 00E10C 8F 0D A0 FE                  	STA		VIDREGS+13
+    184 00E110 60                           	RTS
+                                           
+    186 00E111                             ClearScreen:
+    187 00E111 A0 C7 06                     	LDY		#1735
+    188 00E114 A2 00 00                     	LDX		#$00
+    189 00E117 A5 14                        	LDA		NormAttr
+    190 00E119 09 20 00                     	ORA		#$20
+    191 00E11C                             .0001:
+    192 00E11C 9F 00 00 FD                  	STA		VIDBUF,X
+    193 00E120 E8                           	INX
+    194 00E121 E8                           	INX
+    195 00E122 88                           	DEY
+    196 00E123 D0 F7                        	BNE		.0001
+    197 00E125 60                           	RTS
+                                           
+    199 00E126                             ScrollUp:
+    200 00E126 A2 00 00                     	LDX		#0
+    201 00E129 A0 C7 06                     	LDY 	#1735
+    202 00E12C                             .0001:
+    203 00E12C BF 70 00 FD                  	LDA		VIDBUF+112,X
+    204 00E130 9F 00 00 FD                  	STA		VIDBUF,X
+    205 00E134 E8                           	INX
+    206 00E135 E8                           	INX
+    207 00E136 88                           	DEY
+    208 00E137 D0 F3                        	BNE		.0001
+    209 00E139 A2 1E 00                     	LDX		#30
+                                           
+    211 00E13C                             BlankLine:
+    212 00E13C BD 5B E1                     	LDA		LineTbl,X
+    213 00E13F AA                           	TAX
+    214 00E140 A0 37 00                     	LDY		#55
+    215 00E143 A9 20 CE                     	LDA		#$CE20
+    216 00E146                             .0001:
+    217 00E146 9F 00 00 FD                  	STA		VIDBUF,X
+    218 00E14A E8                           	INX
+    219 00E14B E8                           	INX
+    220 00E14C 88                           	DEY
+    221 00E14D D0 F7                        	BNE		.0001
+    222 00E14F 60                           	RTS
+                                           
+    224 00E150                             IRQRout:
+    225 00E150 48                           	pha
+    226 00E151 A9 AA 00                     	lda		#$AA
+    227 00E154 8D 00 70                     	sta		$7000
+    228 00E157 E6 04                        	inc		TickCount
+    229 00E159 68                           	pla
+    230 00E15A 40                           	rti
+                                           
+    232 00E15B                             LineTbl:
+    233 00E15B 00 00                        	.WORD	0
+    234 00E15D 38 00                        	.WORD	56
+    235 00E15F 70 00                        	.WORD	56*2
+    236 00E161 A8 00                        	.WORD	56*3
+    237 00E163 E0 00                        	.WORD	56*4
+    238 00E165 18 01                        	.WORD	56*5
+    239 00E167 50 01                        	.WORD	56*6
+    240 00E169 88 01                        	.WORD	56*7
+    241 00E16B C0 01                        	.WORD	56*8
+    242 00E16D F8 01                        	.WORD	56*9
+    243 00E16F 30 02                        	.WORD	56*10
+    244 00E171 68 02                        	.WORD	56*11
+    245 00E173 A0 02                        	.WORD	56*12
+    246 00E175 D8 02                        	.WORD	56*13
+    247 00E177 10 03                        	.WORD	56*14
+    248 00E179 48 03                        	.WORD	56*15
+    249 00E17B 80 03                        	.WORD	56*16
+    250 00E17D B8 03                        	.WORD	56*17
+    251 00E17F F0 03                        	.WORD	56*18
+    252 00E181 28 04                        	.WORD	56*19
+    253 00E183 60 04                        	.WORD	56*20
+    254 00E185 98 04                        	.WORD	56*21
+    255 00E187 D0 04                        	.WORD	56*22
+    256 00E189 08 05                        	.WORD	56*23
+    257 00E18B 40 05                        	.WORD	56*24
+    258 00E18D 78 05                        	.WORD	56*25
+    259 00E18F B0 05                        	.WORD	56*26
+    260 00E191 E8 05                        	.WORD	56*27
+    261 00E193 20 06                        	.WORD	56*28
+    262 00E195 58 06                        	.WORD	56*29
+    263 00E197 90 06                        	.WORD	56*30
+                                           
+    265 00E199 FF FF FF FF FF FF FF FF      	.org	$FFEE		; IRQ vector
+    265 00E1A1 FF FF FF FF FF FF FF FF    
+    265 00E1A9 FF FF FF FF FF FF FF FF    
+    265 00E1B1 FF FF FF FF FF FF FF FF    
+    265 00E1B9 FF FF FF FF FF FF FF FF    
+    265 00E1C1 FF FF FF FF FF FF FF FF    
+    265 00E1C9 FF FF FF FF FF FF FF FF    
+    265 00E1D1 FF FF FF FF FF FF FF FF    
+    265 00E1D9 FF FF FF FF FF FF FF FF    
+    265 00E1E1 FF FF FF FF FF FF FF FF    
+    265 00E1E9 FF FF FF FF FF FF FF FF    
+    265 00E1F1 FF FF FF FF FF FF FF FF    
+    265 00E1F9 FF FF FF FF FF FF FF FF    
+    265 00E201 FF FF FF FF FF FF FF FF    
+    265 00E209 FF FF FF FF FF FF FF FF    
+    265 00E211 FF FF FF FF FF FF FF FF    
+    265 00E219 FF FF FF FF FF FF FF FF    
+    265 00E221 FF FF FF FF FF FF FF FF    
+    265 00E229 FF FF FF FF FF FF FF FF    
+    265 00E231 FF FF FF FF FF FF FF FF    
+    265 00E239 FF FF FF FF FF FF FF FF    
+    265 00E241 FF FF FF FF FF FF FF FF    
+    265 00E249 FF FF FF FF FF FF FF FF    
+    265 00E251 FF FF FF FF FF FF FF FF    
+    265 00E259 FF FF FF FF FF FF FF FF    
+    265 00E261 FF FF FF FF FF FF FF FF    
+    265 00E269 FF FF FF FF FF FF FF FF    
+    265 00E271 FF FF FF FF FF FF FF FF    
+    265 00E279 FF FF FF FF FF FF FF FF    
+    265 00E281 FF FF FF FF FF FF FF FF    
+    265 00E289 FF FF FF FF FF FF FF FF    
+    265 00E291 FF FF FF FF FF FF FF FF    
+    265 00E299 FF FF FF FF FF FF FF FF    
+    265 00E2A1 FF FF FF FF FF FF FF FF    
+    265 00E2A9 FF FF FF FF FF FF FF FF    
+    265 00E2B1 FF FF FF FF FF FF FF FF    
+    265 00E2B9 FF FF FF FF FF FF FF FF    
+    265 00E2C1 FF FF FF FF FF FF FF FF    
+    265 00E2C9 FF FF FF FF FF FF FF FF    
+    265 00E2D1 FF FF FF FF FF FF FF FF    
+    265 00E2D9 FF FF FF FF FF FF FF FF    
+    265 00E2E1 FF FF FF FF FF FF FF FF    
+    265 00E2E9 FF FF FF FF FF FF FF FF    
+    265 00E2F1 FF FF FF FF FF FF FF FF    
+    265 00E2F9 FF FF FF FF FF FF FF FF    
+    265 00E301 FF FF FF FF FF FF FF FF    
+    265 00E309 FF FF FF FF FF FF FF FF    
+    265 00E311 FF FF FF FF FF FF FF FF    
+    265 00E319 FF FF FF FF FF FF FF FF    
+    265 00E321 FF FF FF FF FF FF FF FF    
+    265 00E329 FF FF FF FF FF FF FF FF    
+    265 00E331 FF FF FF FF FF FF FF FF    
+    265 00E339 FF FF FF FF FF FF FF FF    
+    265 00E341 FF FF FF FF FF FF FF FF    
+    265 00E349 FF FF FF FF FF FF FF FF    
+    265 00E351 FF FF FF FF FF FF FF FF    
+    265 00E359 FF FF FF FF FF FF FF FF    
+    265 00E361 FF FF FF FF FF FF FF FF    
+    265 00E369 FF FF FF FF FF FF FF FF    
+    265 00E371 FF FF FF FF FF FF FF FF    
+    265 00E379 FF FF FF FF FF FF FF FF    
+    265 00E381 FF FF FF FF FF FF FF FF    
+    265 00E389 FF FF FF FF FF FF FF FF    
+    265 00E391 FF FF FF FF FF FF FF FF    
+    265 00E399 FF FF FF FF FF FF FF FF    
+    265 00E3A1 FF FF FF FF FF FF FF FF    
+    265 00E3A9 FF FF FF FF FF FF FF FF    
+    265 00E3B1 FF FF FF FF FF FF FF FF    
+    265 00E3B9 FF FF FF FF FF FF FF FF    
+    265 00E3C1 FF FF FF FF FF FF FF FF    
+    265 00E3C9 FF FF FF FF FF FF FF FF    
+    265 00E3D1 FF FF FF FF FF FF FF FF    
+    265 00E3D9 FF FF FF FF FF FF FF FF    
+    265 00E3E1 FF FF FF FF FF FF FF FF    
+    265 00E3E9 FF FF FF FF FF FF FF FF    
+    265 00E3F1 FF FF FF FF FF FF FF FF    
+    265 00E3F9 FF FF FF FF FF FF FF FF    
+    265 00E401 FF FF FF FF FF FF FF FF    
+    265 00E409 FF FF FF FF FF FF FF FF    
+    265 00E411 FF FF FF FF FF FF FF FF    
+    265 00E419 FF FF FF FF FF FF FF FF    
+    265 00E421 FF FF FF FF FF FF FF FF    
+    265 00E429 FF FF FF FF FF FF FF FF    
+    265 00E431 FF FF FF FF FF FF FF FF    
+    265 00E439 FF FF FF FF FF FF FF FF    
+    265 00E441 FF FF FF FF FF FF FF FF    
+    265 00E449 FF FF FF FF FF FF FF FF    
+    265 00E451 FF FF FF FF FF FF FF FF    
+    265 00E459 FF FF FF FF FF FF FF FF    
+    265 00E461 FF FF FF FF FF FF FF FF    
+    265 00E469 FF FF FF FF FF FF FF FF    
+    265 00E471 FF FF FF FF FF FF FF FF    
+    265 00E479 FF FF FF FF FF FF FF FF    
+    265 00E481 FF FF FF FF FF FF FF FF    
+    265 00E489 FF FF FF FF FF FF FF FF    
+    265 00E491 FF FF FF FF FF FF FF FF    
+    265 00E499 FF FF FF FF FF FF FF FF    
+    265 00E4A1 FF FF FF FF FF FF FF FF    
+    265 00E4A9 FF FF FF FF FF FF FF FF    
+    265 00E4B1 FF FF FF FF FF FF FF FF    
+    265 00E4B9 FF FF FF FF FF FF FF FF    
+    265 00E4C1 FF FF FF FF FF FF FF FF    
+    265 00E4C9 FF FF FF FF FF FF FF FF    
+    265 00E4D1 FF FF FF FF FF FF FF FF    
+    265 00E4D9 FF FF FF FF FF FF FF FF    
+    265 00E4E1 FF FF FF FF FF FF FF FF    
+    265 00E4E9 FF FF FF FF FF FF FF FF    
+    265 00E4F1 FF FF FF FF FF FF FF FF    
+    265 00E4F9 FF FF FF FF FF FF FF FF    
+    265 00E501 FF FF FF FF FF FF FF FF    
+    265 00E509 FF FF FF FF FF FF FF FF    
+    265 00E511 FF FF FF FF FF FF FF FF    
+    265 00E519 FF FF FF FF FF FF FF FF    
+    265 00E521 FF FF FF FF FF FF FF FF    
+    265 00E529 FF FF FF FF FF FF FF FF    
+    265 00E531 FF FF FF FF FF FF FF FF    
+    265 00E539 FF FF FF FF FF FF FF FF    
+    265 00E541 FF FF FF FF FF FF FF FF    
+    265 00E549 FF FF FF FF FF FF FF FF    
+    265 00E551 FF FF FF FF FF FF FF FF    
+    265 00E559 FF FF FF FF FF FF FF FF    
+    265 00E561 FF FF FF FF FF FF FF FF    
+    265 00E569 FF FF FF FF FF FF FF FF    
+    265 00E571 FF FF FF FF FF FF FF FF    
+    265 00E579 FF FF FF FF FF FF FF FF    
+    265 00E581 FF FF FF FF FF FF FF FF    
+    265 00E589 FF FF FF FF FF FF FF FF    
+    265 00E591 FF FF FF FF FF FF FF FF    
+    265 00E599 FF FF FF FF FF FF FF FF    
+    265 00E5A1 FF FF FF FF FF FF FF FF    
+    265 00E5A9 FF FF FF FF FF FF FF FF    
+    265 00E5B1 FF FF FF FF FF FF FF FF    
+    265 00E5B9 FF FF FF FF FF FF FF FF    
+    265 00E5C1 FF FF FF FF FF FF FF FF    
+    265 00E5C9 FF FF FF FF FF FF FF FF    
+    265 00E5D1 FF FF FF FF FF FF FF FF    
+    265 00E5D9 FF FF FF FF FF FF FF FF    
+    265 00E5E1 FF FF FF FF FF FF FF FF    
+    265 00E5E9 FF FF FF FF FF FF FF FF    
+    265 00E5F1 FF FF FF FF FF FF FF FF    
+    265 00E5F9 FF FF FF FF FF FF FF FF    
+    265 00E601 FF FF FF FF FF FF FF FF    
+    265 00E609 FF FF FF FF FF FF FF FF    
+    265 00E611 FF FF FF FF FF FF FF FF    
+    265 00E619 FF FF FF FF FF FF FF FF    
+    265 00E621 FF FF FF FF FF FF FF FF    
+    265 00E629 FF FF FF FF FF FF FF FF    
+    265 00E631 FF FF FF FF FF FF FF FF    
+    265 00E639 FF FF FF FF FF FF FF FF    
+    265 00E641 FF FF FF FF FF FF FF FF    
+    265 00E649 FF FF FF FF FF FF FF FF    
+    265 00E651 FF FF FF FF FF FF FF FF    
+    265 00E659 FF FF FF FF FF FF FF FF    
+    265 00E661 FF FF FF FF FF FF FF FF    
+    265 00E669 FF FF FF FF FF FF FF FF    
+    265 00E671 FF FF FF FF FF FF FF FF    
+    265 00E679 FF FF FF FF FF FF FF FF    
+    265 00E681 FF FF FF FF FF FF FF FF    
+    265 00E689 FF FF FF FF FF FF FF FF    
+    265 00E691 FF FF FF FF FF FF FF FF    
+    265 00E699 FF FF FF FF FF FF FF FF    
+    265 00E6A1 FF FF FF FF FF FF FF FF    
+    265 00E6A9 FF FF FF FF FF FF FF FF    
+    265 00E6B1 FF FF FF FF FF FF FF FF    
+    265 00E6B9 FF FF FF FF FF FF FF FF    
+    265 00E6C1 FF FF FF FF FF FF FF FF    
+    265 00E6C9 FF FF FF FF FF FF FF FF    
+    265 00E6D1 FF FF FF FF FF FF FF FF    
+    265 00E6D9 FF FF FF FF FF FF FF FF    
+    265 00E6E1 FF FF FF FF FF FF FF FF    
+    265 00E6E9 FF FF FF FF FF FF FF FF    
+    265 00E6F1 FF FF FF FF FF FF FF FF    
+    265 00E6F9 FF FF FF FF FF FF FF FF    
+    265 00E701 FF FF FF FF FF FF FF FF    
+    265 00E709 FF FF FF FF FF FF FF FF    
+    265 00E711 FF FF FF FF FF FF FF FF    
+    265 00E719 FF FF FF FF FF FF FF FF    
+    265 00E721 FF FF FF FF FF FF FF FF    
+    265 00E729 FF FF FF FF FF FF FF FF    
+    265 00E731 FF FF FF FF FF FF FF FF    
+    265 00E739 FF FF FF FF FF FF FF FF    
+    265 00E741 FF FF FF FF FF FF FF FF    
+    265 00E749 FF FF FF FF FF FF FF FF    
+    265 00E751 FF FF FF FF FF FF FF FF    
+    265 00E759 FF FF FF FF FF FF FF FF    
+    265 00E761 FF FF FF FF FF FF FF FF    
+    265 00E769 FF FF FF FF FF FF FF FF    
+    265 00E771 FF FF FF FF FF FF FF FF    
+    265 00E779 FF FF FF FF FF FF FF FF    
+    265 00E781 FF FF FF FF FF FF FF FF    
+    265 00E789 FF FF FF FF FF FF FF FF    
+    265 00E791 FF FF FF FF FF FF FF FF    
+    265 00E799 FF FF FF FF FF FF FF FF    
+    265 00E7A1 FF FF FF FF FF FF FF FF    
+    265 00E7A9 FF FF FF FF FF FF FF FF    
+    265 00E7B1 FF FF FF FF FF FF FF FF    
+    265 00E7B9 FF FF FF FF FF FF FF FF    
+    265 00E7C1 FF FF FF FF FF FF FF FF    
+    265 00E7C9 FF FF FF FF FF FF FF FF    
+    265 00E7D1 FF FF FF FF FF FF FF FF    
+    265 00E7D9 FF FF FF FF FF FF FF FF    
+    265 00E7E1 FF FF FF FF FF FF FF FF    
+    265 00E7E9 FF FF FF FF FF FF FF FF    
+    265 00E7F1 FF FF FF FF FF FF FF FF    
+    265 00E7F9 FF FF FF FF FF FF FF FF    
+    265 00E801 FF FF FF FF FF FF FF FF    
+    265 00E809 FF FF FF FF FF FF FF FF    
+    265 00E811 FF FF FF FF FF FF FF FF    
+    265 00E819 FF FF FF FF FF FF FF FF    
+    265 00E821 FF FF FF FF FF FF FF FF    
+    265 00E829 FF FF FF FF FF FF FF FF    
+    265 00E831 FF FF FF FF FF FF FF FF    
+    265 00E839 FF FF FF FF FF FF FF FF    
+    265 00E841 FF FF FF FF FF FF FF FF    
+    265 00E849 FF FF FF FF FF FF FF FF    
+    265 00E851 FF FF FF FF FF FF FF FF    
+    265 00E859 FF FF FF FF FF FF FF FF    
+    265 00E861 FF FF FF FF FF FF FF FF    
+    265 00E869 FF FF FF FF FF FF FF FF    
+    265 00E871 FF FF FF FF FF FF FF FF    
+    265 00E879 FF FF FF FF FF FF FF FF    
+    265 00E881 FF FF FF FF FF FF FF FF    
+    265 00E889 FF FF FF FF FF FF FF FF    
+    265 00E891 FF FF FF FF FF FF FF FF    
+    265 00E899 FF FF FF FF FF FF FF FF    
+    265 00E8A1 FF FF FF FF FF FF FF FF    
+    265 00E8A9 FF FF FF FF FF FF FF FF    
+    265 00E8B1 FF FF FF FF FF FF FF FF    
+    265 00E8B9 FF FF FF FF FF FF FF FF    
+    265 00E8C1 FF FF FF FF FF FF FF FF    
+    265 00E8C9 FF FF FF FF FF FF FF FF    
+    265 00E8D1 FF FF FF FF FF FF FF FF    
+    265 00E8D9 FF FF FF FF FF FF FF FF    
+    265 00E8E1 FF FF FF FF FF FF FF FF    
+    265 00E8E9 FF FF FF FF FF FF FF FF    
+    265 00E8F1 FF FF FF FF FF FF FF FF    
+    265 00E8F9 FF FF FF FF FF FF FF FF    
+    265 00E901 FF FF FF FF FF FF FF FF    
+    265 00E909 FF FF FF FF FF FF FF FF    
+    265 00E911 FF FF FF FF FF FF FF FF    
+    265 00E919 FF FF FF FF FF FF FF FF    
+    265 00E921 FF FF FF FF FF FF FF FF    
+    265 00E929 FF FF FF FF FF FF FF FF    
+    265 00E931 FF FF FF FF FF FF FF FF    
+    265 00E939 FF FF FF FF FF FF FF FF    
+    265 00E941 FF FF FF FF FF FF FF FF    
+    265 00E949 FF FF FF FF FF FF FF FF    
+    265 00E951 FF FF FF FF FF FF FF FF    
+    265 00E959 FF FF FF FF FF FF FF FF    
+    265 00E961 FF FF FF FF FF FF FF FF    
+    265 00E969 FF FF FF FF FF FF FF FF    
+    265 00E971 FF FF FF FF FF FF FF FF    
+    265 00E979 FF FF FF FF FF FF FF FF    
+    265 00E981 FF FF FF FF FF FF FF FF    
+    265 00E989 FF FF FF FF FF FF FF FF    
+    265 00E991 FF FF FF FF FF FF FF FF    
+    265 00E999 FF FF FF FF FF FF FF FF    
+    265 00E9A1 FF FF FF FF FF FF FF FF    
+    265 00E9A9 FF FF FF FF FF FF FF FF    
+    265 00E9B1 FF FF FF FF FF FF FF FF    
+    265 00E9B9 FF FF FF FF FF FF FF FF    
+    265 00E9C1 FF FF FF FF FF FF FF FF    
+    265 00E9C9 FF FF FF FF FF FF FF FF    
+    265 00E9D1 FF FF FF FF FF FF FF FF    
+    265 00E9D9 FF FF FF FF FF FF FF FF    
+    265 00E9E1 FF FF FF FF FF FF FF FF    
+    265 00E9E9 FF FF FF FF FF FF FF FF    
+    265 00E9F1 FF FF FF FF FF FF FF FF    
+    265 00E9F9 FF FF FF FF FF FF FF FF    
+    265 00EA01 FF FF FF FF FF FF FF FF    
+    265 00EA09 FF FF FF FF FF FF FF FF    
+    265 00EA11 FF FF FF FF FF FF FF FF    
+    265 00EA19 FF FF FF FF FF FF FF FF    
+    265 00EA21 FF FF FF FF FF FF FF FF    
+    265 00EA29 FF FF FF FF FF FF FF FF    
+    265 00EA31 FF FF FF FF FF FF FF FF    
+    265 00EA39 FF FF FF FF FF FF FF FF    
+    265 00EA41 FF FF FF FF FF FF FF FF    
+    265 00EA49 FF FF FF FF FF FF FF FF    
+    265 00EA51 FF FF FF FF FF FF FF FF    
+    265 00EA59 FF FF FF FF FF FF FF FF    
+    265 00EA61 FF FF FF FF FF FF FF FF    
+    265 00EA69 FF FF FF FF FF FF FF FF    
+    265 00EA71 FF FF FF FF FF FF FF FF    
+    265 00EA79 FF FF FF FF FF FF FF FF    
+    265 00EA81 FF FF FF FF FF FF FF FF    
+    265 00EA89 FF FF FF FF FF FF FF FF    
+    265 00EA91 FF FF FF FF FF FF FF FF    
+    265 00EA99 FF FF FF FF FF FF FF FF    
+    265 00EAA1 FF FF FF FF FF FF FF FF    
+    265 00EAA9 FF FF FF FF FF FF FF FF    
+    265 00EAB1 FF FF FF FF FF FF FF FF    
+    265 00EAB9 FF FF FF FF FF FF FF FF    
+    265 00EAC1 FF FF FF FF FF FF FF FF    
+    265 00EAC9 FF FF FF FF FF FF FF FF    
+    265 00EAD1 FF FF FF FF FF FF FF FF    
+    265 00EAD9 FF FF FF FF FF FF FF FF    
+    265 00EAE1 FF FF FF FF FF FF FF FF    
+    265 00EAE9 FF FF FF FF FF FF FF FF    
+    265 00EAF1 FF FF FF FF FF FF FF FF    
+    265 00EAF9 FF FF FF FF FF FF FF FF    
+    265 00EB01 FF FF FF FF FF FF FF FF    
+    265 00EB09 FF FF FF FF FF FF FF FF    
+    265 00EB11 FF FF FF FF FF FF FF FF    
+    265 00EB19 FF FF FF FF FF FF FF FF    
+    265 00EB21 FF FF FF FF FF FF FF FF    
+    265 00EB29 FF FF FF FF FF FF FF FF    
+    265 00EB31 FF FF FF FF FF FF FF FF    
+    265 00EB39 FF FF FF FF FF FF FF FF    
+    265 00EB41 FF FF FF FF FF FF FF FF    
+    265 00EB49 FF FF FF FF FF FF FF FF    
+    265 00EB51 FF FF FF FF FF FF FF FF    
+    265 00EB59 FF FF FF FF FF FF FF FF    
+    265 00EB61 FF FF FF FF FF FF FF FF    
+    265 00EB69 FF FF FF FF FF FF FF FF    
+    265 00EB71 FF FF FF FF FF FF FF FF    
+    265 00EB79 FF FF FF FF FF FF FF FF    
+    265 00EB81 FF FF FF FF FF FF FF FF    
+    265 00EB89 FF FF FF FF FF FF FF FF    
+    265 00EB91 FF FF FF FF FF FF FF FF    
+    265 00EB99 FF FF FF FF FF FF FF FF    
+    265 00EBA1 FF FF FF FF FF FF FF FF    
+    265 00EBA9 FF FF FF FF FF FF FF FF    
+    265 00EBB1 FF FF FF FF FF FF FF FF    
+    265 00EBB9 FF FF FF FF FF FF FF FF    
+    265 00EBC1 FF FF FF FF FF FF FF FF    
+    265 00EBC9 FF FF FF FF FF FF FF FF    
+    265 00EBD1 FF FF FF FF FF FF FF FF    
+    265 00EBD9 FF FF FF FF FF FF FF FF    
+    265 00EBE1 FF FF FF FF FF FF FF FF    
+    265 00EBE9 FF FF FF FF FF FF FF FF    
+    265 00EBF1 FF FF FF FF FF FF FF FF    
+    265 00EBF9 FF FF FF FF FF FF FF FF    
+    265 00EC01 FF FF FF FF FF FF FF FF    
+    265 00EC09 FF FF FF FF FF FF FF FF    
+    265 00EC11 FF FF FF FF FF FF FF FF    
+    265 00EC19 FF FF FF FF FF FF FF FF    
+    265 00EC21 FF FF FF FF FF FF FF FF    
+    265 00EC29 FF FF FF FF FF FF FF FF    
+    265 00EC31 FF FF FF FF FF FF FF FF    
+    265 00EC39 FF FF FF FF FF FF FF FF    
+    265 00EC41 FF FF FF FF FF FF FF FF    
+    265 00EC49 FF FF FF FF FF FF FF FF    
+    265 00EC51 FF FF FF FF FF FF FF FF    
+    265 00EC59 FF FF FF FF FF FF FF FF    
+    265 00EC61 FF FF FF FF FF FF FF FF    
+    265 00EC69 FF FF FF FF FF FF FF FF    
+    265 00EC71 FF FF FF FF FF FF FF FF    
+    265 00EC79 FF FF FF FF FF FF FF FF    
+    265 00EC81 FF FF FF FF FF FF FF FF    
+    265 00EC89 FF FF FF FF FF FF FF FF    
+    265 00EC91 FF FF FF FF FF FF FF FF    
+    265 00EC99 FF FF FF FF FF FF FF FF    
+    265 00ECA1 FF FF FF FF FF FF FF FF    
+    265 00ECA9 FF FF FF FF FF FF FF FF    
+    265 00ECB1 FF FF FF FF FF FF FF FF    
+    265 00ECB9 FF FF FF FF FF FF FF FF    
+    265 00ECC1 FF FF FF FF FF FF FF FF    
+    265 00ECC9 FF FF FF FF FF FF FF FF    
+    265 00ECD1 FF FF FF FF FF FF FF FF    
+    265 00ECD9 FF FF FF FF FF FF FF FF    
+    265 00ECE1 FF FF FF FF FF FF FF FF    
+    265 00ECE9 FF FF FF FF FF FF FF FF    
+    265 00ECF1 FF FF FF FF FF FF FF FF    
+    265 00ECF9 FF FF FF FF FF FF FF FF    
+    265 00ED01 FF FF FF FF FF FF FF FF    
+    265 00ED09 FF FF FF FF FF FF FF FF    
+    265 00ED11 FF FF FF FF FF FF FF FF    
+    265 00ED19 FF FF FF FF FF FF FF FF    
+    265 00ED21 FF FF FF FF FF FF FF FF    
+    265 00ED29 FF FF FF FF FF FF FF FF    
+    265 00ED31 FF FF FF FF FF FF FF FF    
+    265 00ED39 FF FF FF FF FF FF FF FF    
+    265 00ED41 FF FF FF FF FF FF FF FF    
+    265 00ED49 FF FF FF FF FF FF FF FF    
+    265 00ED51 FF FF FF FF FF FF FF FF    
+    265 00ED59 FF FF FF FF FF FF FF FF    
+    265 00ED61 FF FF FF FF FF FF FF FF    
+    265 00ED69 FF FF FF FF FF FF FF FF    
+    265 00ED71 FF FF FF FF FF FF FF FF    
+    265 00ED79 FF FF FF FF FF FF FF FF    
+    265 00ED81 FF FF FF FF FF FF FF FF    
+    265 00ED89 FF FF FF FF FF FF FF FF    
+    265 00ED91 FF FF FF FF FF FF FF FF    
+    265 00ED99 FF FF FF FF FF FF FF FF    
+    265 00EDA1 FF FF FF FF FF FF FF FF    
+    265 00EDA9 FF FF FF FF FF FF FF FF    
+    265 00EDB1 FF FF FF FF FF FF FF FF    
+    265 00EDB9 FF FF FF FF FF FF FF FF    
+    265 00EDC1 FF FF FF FF FF FF FF FF    
+    265 00EDC9 FF FF FF FF FF FF FF FF    
+    265 00EDD1 FF FF FF FF FF FF FF FF    
+    265 00EDD9 FF FF FF FF FF FF FF FF    
+    265 00EDE1 FF FF FF FF FF FF FF FF    
+    265 00EDE9 FF FF FF FF FF FF FF FF    
+    265 00EDF1 FF FF FF FF FF FF FF FF    
+    265 00EDF9 FF FF FF FF FF FF FF FF    
+    265 00EE01 FF FF FF FF FF FF FF FF    
+    265 00EE09 FF FF FF FF FF FF FF FF    
+    265 00EE11 FF FF FF FF FF FF FF FF    
+    265 00EE19 FF FF FF FF FF FF FF FF    
+    265 00EE21 FF FF FF FF FF FF FF FF    
+    265 00EE29 FF FF FF FF FF FF FF FF    
+    265 00EE31 FF FF FF FF FF FF FF FF    
+    265 00EE39 FF FF FF FF FF FF FF FF    
+    265 00EE41 FF FF FF FF FF FF FF FF    
+    265 00EE49 FF FF FF FF FF FF FF FF    
+    265 00EE51 FF FF FF FF FF FF FF FF    
+    265 00EE59 FF FF FF FF FF FF FF FF    
+    265 00EE61 FF FF FF FF FF FF FF FF    
+    265 00EE69 FF FF FF FF FF FF FF FF    
+    265 00EE71 FF FF FF FF FF FF FF FF    
+    265 00EE79 FF FF FF FF FF FF FF FF    
+    265 00EE81 FF FF FF FF FF FF FF FF    
+    265 00EE89 FF FF FF FF FF FF FF FF    
+    265 00EE91 FF FF FF FF FF FF FF FF    
+    265 00EE99 FF FF FF FF FF FF FF FF    
+    265 00EEA1 FF FF FF FF FF FF FF FF    
+    265 00EEA9 FF FF FF FF FF FF FF FF    
+    265 00EEB1 FF FF FF FF FF FF FF FF    
+    265 00EEB9 FF FF FF FF FF FF FF FF    
+    265 00EEC1 FF FF FF FF FF FF FF FF    
+    265 00EEC9 FF FF FF FF FF FF FF FF    
+    265 00EED1 FF FF FF FF FF FF FF FF    
+    265 00EED9 FF FF FF FF FF FF FF FF    
+    265 00EEE1 FF FF FF FF FF FF FF FF    
+    265 00EEE9 FF FF FF FF FF FF FF FF    
+    265 00EEF1 FF FF FF FF FF FF FF FF    
+    265 00EEF9 FF FF FF FF FF FF FF FF    
+    265 00EF01 FF FF FF FF FF FF FF FF    
+    265 00EF09 FF FF FF FF FF FF FF FF    
+    265 00EF11 FF FF FF FF FF FF FF FF    
+    265 00EF19 FF FF FF FF FF FF FF FF    
+    265 00EF21 FF FF FF FF FF FF FF FF    
+    265 00EF29 FF FF FF FF FF FF FF FF    
+    265 00EF31 FF FF FF FF FF FF FF FF    
+    265 00EF39 FF FF FF FF FF FF FF FF    
+    265 00EF41 FF FF FF FF FF FF FF FF    
+    265 00EF49 FF FF FF FF FF FF FF FF    
+    265 00EF51 FF FF FF FF FF FF FF FF    
+    265 00EF59 FF FF FF FF FF FF FF FF    
+    265 00EF61 FF FF FF FF FF FF FF FF    
+    265 00EF69 FF FF FF FF FF FF FF FF    
+    265 00EF71 FF FF FF FF FF FF FF FF    
+    265 00EF79 FF FF FF FF FF FF FF FF    
+    265 00EF81 FF FF FF FF FF FF FF FF    
+    265 00EF89 FF FF FF FF FF FF FF FF    
+    265 00EF91 FF FF FF FF FF FF FF FF    
+    265 00EF99 FF FF FF FF FF FF FF FF    
+    265 00EFA1 FF FF FF FF FF FF FF FF    
+    265 00EFA9 FF FF FF FF FF FF FF FF    
+    265 00EFB1 FF FF FF FF FF FF FF FF    
+    265 00EFB9 FF FF FF FF FF FF FF FF    
+    265 00EFC1 FF FF FF FF FF FF FF FF    
+    265 00EFC9 FF FF FF FF FF FF FF FF    
+    265 00EFD1 FF FF FF FF FF FF FF FF    
+    265 00EFD9 FF FF FF FF FF FF FF FF    
+    265 00EFE1 FF FF FF FF FF FF FF FF    
+    265 00EFE9 FF FF FF FF FF FF FF FF    
+    265 00EFF1 FF FF FF FF FF FF FF FF    
+    265 00EFF9 FF FF FF FF FF FF FF FF    
+    265 00F001 FF FF FF FF FF FF FF FF    
+    265 00F009 FF FF FF FF FF FF FF FF    
+    265 00F011 FF FF FF FF FF FF FF FF    
+    265 00F019 FF FF FF FF FF FF FF FF    
+    265 00F021 FF FF FF FF FF FF FF FF    
+    265 00F029 FF FF FF FF FF FF FF FF    
+    265 00F031 FF FF FF FF FF FF FF FF    
+    265 00F039 FF FF FF FF FF FF FF FF    
+    265 00F041 FF FF FF FF FF FF FF FF    
+    265 00F049 FF FF FF FF FF FF FF FF    
+    265 00F051 FF FF FF FF FF FF FF FF    
+    265 00F059 FF FF FF FF FF FF FF FF    
+    265 00F061 FF FF FF FF FF FF FF FF    
+    265 00F069 FF FF FF FF FF FF FF FF    
+    265 00F071 FF FF FF FF FF FF FF FF    
+    265 00F079 FF FF FF FF FF FF FF FF    
+    265 00F081 FF FF FF FF FF FF FF FF    
+    265 00F089 FF FF FF FF FF FF FF FF    
+    265 00F091 FF FF FF FF FF FF FF FF    
+    265 00F099 FF FF FF FF FF FF FF FF    
+    265 00F0A1 FF FF FF FF FF FF FF FF    
+    265 00F0A9 FF FF FF FF FF FF FF FF    
+    265 00F0B1 FF FF FF FF FF FF FF FF    
+    265 00F0B9 FF FF FF FF FF FF FF FF    
+    265 00F0C1 FF FF FF FF FF FF FF FF    
+    265 00F0C9 FF FF FF FF FF FF FF FF    
+    265 00F0D1 FF FF FF FF FF FF FF FF    
+    265 00F0D9 FF FF FF FF FF FF FF FF    
+    265 00F0E1 FF FF FF FF FF FF FF FF    
+    265 00F0E9 FF FF FF FF FF FF FF FF    
+    265 00F0F1 FF FF FF FF FF FF FF FF    
+    265 00F0F9 FF FF FF FF FF FF FF FF    
+    265 00F101 FF FF FF FF FF FF FF FF    
+    265 00F109 FF FF FF FF FF FF FF FF    
+    265 00F111 FF FF FF FF FF FF FF FF    
+    265 00F119 FF FF FF FF FF FF FF FF    
+    265 00F121 FF FF FF FF FF FF FF FF    
+    265 00F129 FF FF FF FF FF FF FF FF    
+    265 00F131 FF FF FF FF FF FF FF FF    
+    265 00F139 FF FF FF FF FF FF FF FF    
+    265 00F141 FF FF FF FF FF FF FF FF    
+    265 00F149 FF FF FF FF FF FF FF FF    
+    265 00F151 FF FF FF FF FF FF FF FF    
+    265 00F159 FF FF FF FF FF FF FF FF    
+    265 00F161 FF FF FF FF FF FF FF FF    
+    265 00F169 FF FF FF FF FF FF FF FF    
+    265 00F171 FF FF FF FF FF FF FF FF    
+    265 00F179 FF FF FF FF FF FF FF FF    
+    265 00F181 FF FF FF FF FF FF FF FF    
+    265 00F189 FF FF FF FF FF FF FF FF    
+    265 00F191 FF FF FF FF FF FF FF FF    
+    265 00F199 FF FF FF FF FF FF FF FF    
+    265 00F1A1 FF FF FF FF FF FF FF FF    
+    265 00F1A9 FF FF FF FF FF FF FF FF    
+    265 00F1B1 FF FF FF FF FF FF FF FF    
+    265 00F1B9 FF FF FF FF FF FF FF FF    
+    265 00F1C1 FF FF FF FF FF FF FF FF    
+    265 00F1C9 FF FF FF FF FF FF FF FF    
+    265 00F1D1 FF FF FF FF FF FF FF FF    
+    265 00F1D9 FF FF FF FF FF FF FF FF    
+    265 00F1E1 FF FF FF FF FF FF FF FF    
+    265 00F1E9 FF FF FF FF FF FF FF FF    
+    265 00F1F1 FF FF FF FF FF FF FF FF    
+    265 00F1F9 FF FF FF FF FF FF FF FF    
+    265 00F201 FF FF FF FF FF FF FF FF    
+    265 00F209 FF FF FF FF FF FF FF FF    
+    265 00F211 FF FF FF FF FF FF FF FF    
+    265 00F219 FF FF FF FF FF FF FF FF    
+    265 00F221 FF FF FF FF FF FF FF FF    
+    265 00F229 FF FF FF FF FF FF FF FF    
+    265 00F231 FF FF FF FF FF FF FF FF    
+    265 00F239 FF FF FF FF FF FF FF FF    
+    265 00F241 FF FF FF FF FF FF FF FF    
+    265 00F249 FF FF FF FF FF FF FF FF    
+    265 00F251 FF FF FF FF FF FF FF FF    
+    265 00F259 FF FF FF FF FF FF FF FF    
+    265 00F261 FF FF FF FF FF FF FF FF    
+    265 00F269 FF FF FF FF FF FF FF FF    
+    265 00F271 FF FF FF FF FF FF FF FF    
+    265 00F279 FF FF FF FF FF FF FF FF    
+    265 00F281 FF FF FF FF FF FF FF FF    
+    265 00F289 FF FF FF FF FF FF FF FF    
+    265 00F291 FF FF FF FF FF FF FF FF    
+    265 00F299 FF FF FF FF FF FF FF FF    
+    265 00F2A1 FF FF FF FF FF FF FF FF    
+    265 00F2A9 FF FF FF FF FF FF FF FF    
+    265 00F2B1 FF FF FF FF FF FF FF FF    
+    265 00F2B9 FF FF FF FF FF FF FF FF    
+    265 00F2C1 FF FF FF FF FF FF FF FF    
+    265 00F2C9 FF FF FF FF FF FF FF FF    
+    265 00F2D1 FF FF FF FF FF FF FF FF    
+    265 00F2D9 FF FF FF FF FF FF FF FF    
+    265 00F2E1 FF FF FF FF FF FF FF FF    
+    265 00F2E9 FF FF FF FF FF FF FF FF    
+    265 00F2F1 FF FF FF FF FF FF FF FF    
+    265 00F2F9 FF FF FF FF FF FF FF FF    
+    265 00F301 FF FF FF FF FF FF FF FF    
+    265 00F309 FF FF FF FF FF FF FF FF    
+    265 00F311 FF FF FF FF FF FF FF FF    
+    265 00F319 FF FF FF FF FF FF FF FF    
+    265 00F321 FF FF FF FF FF FF FF FF    
+    265 00F329 FF FF FF FF FF FF FF FF    
+    265 00F331 FF FF FF FF FF FF FF FF    
+    265 00F339 FF FF FF FF FF FF FF FF    
+    265 00F341 FF FF FF FF FF FF FF FF    
+    265 00F349 FF FF FF FF FF FF FF FF    
+    265 00F351 FF FF FF FF FF FF FF FF    
+    265 00F359 FF FF FF FF FF FF FF FF    
+    265 00F361 FF FF FF FF FF FF FF FF    
+    265 00F369 FF FF FF FF FF FF FF FF    
+    265 00F371 FF FF FF FF FF FF FF FF    
+    265 00F379 FF FF FF FF FF FF FF FF    
+    265 00F381 FF FF FF FF FF FF FF FF    
+    265 00F389 FF FF FF FF FF FF FF FF    
+    265 00F391 FF FF FF FF FF FF FF FF    
+    265 00F399 FF FF FF FF FF FF FF FF    
+    265 00F3A1 FF FF FF FF FF FF FF FF    
+    265 00F3A9 FF FF FF FF FF FF FF FF    
+    265 00F3B1 FF FF FF FF FF FF FF FF    
+    265 00F3B9 FF FF FF FF FF FF FF FF    
+    265 00F3C1 FF FF FF FF FF FF FF FF    
+    265 00F3C9 FF FF FF FF FF FF FF FF    
+    265 00F3D1 FF FF FF FF FF FF FF FF    
+    265 00F3D9 FF FF FF FF FF FF FF FF    
+    265 00F3E1 FF FF FF FF FF FF FF FF    
+    265 00F3E9 FF FF FF FF FF FF FF FF    
+    265 00F3F1 FF FF FF FF FF FF FF FF    
+    265 00F3F9 FF FF FF FF FF FF FF FF    
+    265 00F401 FF FF FF FF FF FF FF FF    
+    265 00F409 FF FF FF FF FF FF FF FF    
+    265 00F411 FF FF FF FF FF FF FF FF    
+    265 00F419 FF FF FF FF FF FF FF FF    
+    265 00F421 FF FF FF FF FF FF FF FF    
+    265 00F429 FF FF FF FF FF FF FF FF    
+    265 00F431 FF FF FF FF FF FF FF FF    
+    265 00F439 FF FF FF FF FF FF FF FF    
+    265 00F441 FF FF FF FF FF FF FF FF    
+    265 00F449 FF FF FF FF FF FF FF FF    
+    265 00F451 FF FF FF FF FF FF FF FF    
+    265 00F459 FF FF FF FF FF FF FF FF    
+    265 00F461 FF FF FF FF FF FF FF FF    
+    265 00F469 FF FF FF FF FF FF FF FF    
+    265 00F471 FF FF FF FF FF FF FF FF    
+    265 00F479 FF FF FF FF FF FF FF FF    
+    265 00F481 FF FF FF FF FF FF FF FF    
+    265 00F489 FF FF FF FF FF FF FF FF    
+    265 00F491 FF FF FF FF FF FF FF FF    
+    265 00F499 FF FF FF FF FF FF FF FF    
+    265 00F4A1 FF FF FF FF FF FF FF FF    
+    265 00F4A9 FF FF FF FF FF FF FF FF    
+    265 00F4B1 FF FF FF FF FF FF FF FF    
+    265 00F4B9 FF FF FF FF FF FF FF FF    
+    265 00F4C1 FF FF FF FF FF FF FF FF    
+    265 00F4C9 FF FF FF FF FF FF FF FF    
+    265 00F4D1 FF FF FF FF FF FF FF FF    
+    265 00F4D9 FF FF FF FF FF FF FF FF    
+    265 00F4E1 FF FF FF FF FF FF FF FF    
+    265 00F4E9 FF FF FF FF FF FF FF FF    
+    265 00F4F1 FF FF FF FF FF FF FF FF    
+    265 00F4F9 FF FF FF FF FF FF FF FF    
+    265 00F501 FF FF FF FF FF FF FF FF    
+    265 00F509 FF FF FF FF FF FF FF FF    
+    265 00F511 FF FF FF FF FF FF FF FF    
+    265 00F519 FF FF FF FF FF FF FF FF    
+    265 00F521 FF FF FF FF FF FF FF FF    
+    265 00F529 FF FF FF FF FF FF FF FF    
+    265 00F531 FF FF FF FF FF FF FF FF    
+    265 00F539 FF FF FF FF FF FF FF FF    
+    265 00F541 FF FF FF FF FF FF FF FF    
+    265 00F549 FF FF FF FF FF FF FF FF    
+    265 00F551 FF FF FF FF FF FF FF FF    
+    265 00F559 FF FF FF FF FF FF FF FF    
+    265 00F561 FF FF FF FF FF FF FF FF    
+    265 00F569 FF FF FF FF FF FF FF FF    
+    265 00F571 FF FF FF FF FF FF FF FF    
+    265 00F579 FF FF FF FF FF FF FF FF    
+    265 00F581 FF FF FF FF FF FF FF FF    
+    265 00F589 FF FF FF FF FF FF FF FF    
+    265 00F591 FF FF FF FF FF FF FF FF    
+    265 00F599 FF FF FF FF FF FF FF FF    
+    265 00F5A1 FF FF FF FF FF FF FF FF    
+    265 00F5A9 FF FF FF FF FF FF FF FF    
+    265 00F5B1 FF FF FF FF FF FF FF FF    
+    265 00F5B9 FF FF FF FF FF FF FF FF    
+    265 00F5C1 FF FF FF FF FF FF FF FF    
+    265 00F5C9 FF FF FF FF FF FF FF FF    
+    265 00F5D1 FF FF FF FF FF FF FF FF    
+    265 00F5D9 FF FF FF FF FF FF FF FF    
+    265 00F5E1 FF FF FF FF FF FF FF FF    
+    265 00F5E9 FF FF FF FF FF FF FF FF    
+    265 00F5F1 FF FF FF FF FF FF FF FF    
+    265 00F5F9 FF FF FF FF FF FF FF FF    
+    265 00F601 FF FF FF FF FF FF FF FF    
+    265 00F609 FF FF FF FF FF FF FF FF    
+    265 00F611 FF FF FF FF FF FF FF FF    
+    265 00F619 FF FF FF FF FF FF FF FF    
+    265 00F621 FF FF FF FF FF FF FF FF    
+    265 00F629 FF FF FF FF FF FF FF FF    
+    265 00F631 FF FF FF FF FF FF FF FF    
+    265 00F639 FF FF FF FF FF FF FF FF    
+    265 00F641 FF FF FF FF FF FF FF FF    
+    265 00F649 FF FF FF FF FF FF FF FF    
+    265 00F651 FF FF FF FF FF FF FF FF    
+    265 00F659 FF FF FF FF FF FF FF FF    
+    265 00F661 FF FF FF FF FF FF FF FF    
+    265 00F669 FF FF FF FF FF FF FF FF    
+    265 00F671 FF FF FF FF FF FF FF FF    
+    265 00F679 FF FF FF FF FF FF FF FF    
+    265 00F681 FF FF FF FF FF FF FF FF    
+    265 00F689 FF FF FF FF FF FF FF FF    
+    265 00F691 FF FF FF FF FF FF FF FF    
+    265 00F699 FF FF FF FF FF FF FF FF    
+    265 00F6A1 FF FF FF FF FF FF FF FF    
+    265 00F6A9 FF FF FF FF FF FF FF FF    
+    265 00F6B1 FF FF FF FF FF FF FF FF    
+    265 00F6B9 FF FF FF FF FF FF FF FF    
+    265 00F6C1 FF FF FF FF FF FF FF FF    
+    265 00F6C9 FF FF FF FF FF FF FF FF    
+    265 00F6D1 FF FF FF FF FF FF FF FF    
+    265 00F6D9 FF FF FF FF FF FF FF FF    
+    265 00F6E1 FF FF FF FF FF FF FF FF    
+    265 00F6E9 FF FF FF FF FF FF FF FF    
+    265 00F6F1 FF FF FF FF FF FF FF FF    
+    265 00F6F9 FF FF FF FF FF FF FF FF    
+    265 00F701 FF FF FF FF FF FF FF FF    
+    265 00F709 FF FF FF FF FF FF FF FF    
+    265 00F711 FF FF FF FF FF FF FF FF    
+    265 00F719 FF FF FF FF FF FF FF FF    
+    265 00F721 FF FF FF FF FF FF FF FF    
+    265 00F729 FF FF FF FF FF FF FF FF    
+    265 00F731 FF FF FF FF FF FF FF FF    
+    265 00F739 FF FF FF FF FF FF FF FF    
+    265 00F741 FF FF FF FF FF FF FF FF    
+    265 00F749 FF FF FF FF FF FF FF FF    
+    265 00F751 FF FF FF FF FF FF FF FF    
+    265 00F759 FF FF FF FF FF FF FF FF    
+    265 00F761 FF FF FF FF FF FF FF FF    
+    265 00F769 FF FF FF FF FF FF FF FF    
+    265 00F771 FF FF FF FF FF FF FF FF    
+    265 00F779 FF FF FF FF FF FF FF FF    
+    265 00F781 FF FF FF FF FF FF FF FF    
+    265 00F789 FF FF FF FF FF FF FF FF    
+    265 00F791 FF FF FF FF FF FF FF FF    
+    265 00F799 FF FF FF FF FF FF FF FF    
+    265 00F7A1 FF FF FF FF FF FF FF FF    
+    265 00F7A9 FF FF FF FF FF FF FF FF    
+    265 00F7B1 FF FF FF FF FF FF FF FF    
+    265 00F7B9 FF FF FF FF FF FF FF FF    
+    265 00F7C1 FF FF FF FF FF FF FF FF    
+    265 00F7C9 FF FF FF FF FF FF FF FF    
+    265 00F7D1 FF FF FF FF FF FF FF FF    
+    265 00F7D9 FF FF FF FF FF FF FF FF    
+    265 00F7E1 FF FF FF FF FF FF FF FF    
+    265 00F7E9 FF FF FF FF FF FF FF FF    
+    265 00F7F1 FF FF FF FF FF FF FF FF    
+    265 00F7F9 FF FF FF FF FF FF FF FF    
+    265 00F801 FF FF FF FF FF FF FF FF    
+    265 00F809 FF FF FF FF FF FF FF FF    
+    265 00F811 FF FF FF FF FF FF FF FF    
+    265 00F819 FF FF FF FF FF FF FF FF    
+    265 00F821 FF FF FF FF FF FF FF FF    
+    265 00F829 FF FF FF FF FF FF FF FF    
+    265 00F831 FF FF FF FF FF FF FF FF    
+    265 00F839 FF FF FF FF FF FF FF FF    
+    265 00F841 FF FF FF FF FF FF FF FF    
+    265 00F849 FF FF FF FF FF FF FF FF    
+    265 00F851 FF FF FF FF FF FF FF FF    
+    265 00F859 FF FF FF FF FF FF FF FF    
+    265 00F861 FF FF FF FF FF FF FF FF    
+    265 00F869 FF FF FF FF FF FF FF FF    
+    265 00F871 FF FF FF FF FF FF FF FF    
+    265 00F879 FF FF FF FF FF FF FF FF    
+    265 00F881 FF FF FF FF FF FF FF FF    
+    265 00F889 FF FF FF FF FF FF FF FF    
+    265 00F891 FF FF FF FF FF FF FF FF    
+    265 00F899 FF FF FF FF FF FF FF FF    
+    265 00F8A1 FF FF FF FF FF FF FF FF    
+    265 00F8A9 FF FF FF FF FF FF FF FF    
+    265 00F8B1 FF FF FF FF FF FF FF FF    
+    265 00F8B9 FF FF FF FF FF FF FF FF    
+    265 00F8C1 FF FF FF FF FF FF FF FF    
+    265 00F8C9 FF FF FF FF FF FF FF FF    
+    265 00F8D1 FF FF FF FF FF FF FF FF    
+    265 00F8D9 FF FF FF FF FF FF FF FF    
+    265 00F8E1 FF FF FF FF FF FF FF FF    
+    265 00F8E9 FF FF FF FF FF FF FF FF    
+    265 00F8F1 FF FF FF FF FF FF FF FF    
+    265 00F8F9 FF FF FF FF FF FF FF FF    
+    265 00F901 FF FF FF FF FF FF FF FF    
+    265 00F909 FF FF FF FF FF FF FF FF    
+    265 00F911 FF FF FF FF FF FF FF FF    
+    265 00F919 FF FF FF FF FF FF FF FF    
+    265 00F921 FF FF FF FF FF FF FF FF    
+    265 00F929 FF FF FF FF FF FF FF FF    
+    265 00F931 FF FF FF FF FF FF FF FF    
+    265 00F939 FF FF FF FF FF FF FF FF    
+    265 00F941 FF FF FF FF FF FF FF FF    
+    265 00F949 FF FF FF FF FF FF FF FF    
+    265 00F951 FF FF FF FF FF FF FF FF    
+    265 00F959 FF FF FF FF FF FF FF FF    
+    265 00F961 FF FF FF FF FF FF FF FF    
+    265 00F969 FF FF FF FF FF FF FF FF    
+    265 00F971 FF FF FF FF FF FF FF FF    
+    265 00F979 FF FF FF FF FF FF FF FF    
+    265 00F981 FF FF FF FF FF FF FF FF    
+    265 00F989 FF FF FF FF FF FF FF FF    
+    265 00F991 FF FF FF FF FF FF FF FF    
+    265 00F999 FF FF FF FF FF FF FF FF    
+    265 00F9A1 FF FF FF FF FF FF FF FF    
+    265 00F9A9 FF FF FF FF FF FF FF FF    
+    265 00F9B1 FF FF FF FF FF FF FF FF    
+    265 00F9B9 FF FF FF FF FF FF FF FF    
+    265 00F9C1 FF FF FF FF FF FF FF FF    
+    265 00F9C9 FF FF FF FF FF FF FF FF    
+    265 00F9D1 FF FF FF FF FF FF FF FF    
+    265 00F9D9 FF FF FF FF FF FF FF FF    
+    265 00F9E1 FF FF FF FF FF FF FF FF    
+    265 00F9E9 FF FF FF FF FF FF FF FF    
+    265 00F9F1 FF FF FF FF FF FF FF FF    
+    265 00F9F9 FF FF FF FF FF FF FF FF    
+    265 00FA01 FF FF FF FF FF FF FF FF    
+    265 00FA09 FF FF FF FF FF FF FF FF    
+    265 00FA11 FF FF FF FF FF FF FF FF    
+    265 00FA19 FF FF FF FF FF FF FF FF    
+    265 00FA21 FF FF FF FF FF FF FF FF    
+    265 00FA29 FF FF FF FF FF FF FF FF    
+    265 00FA31 FF FF FF FF FF FF FF FF    
+    265 00FA39 FF FF FF FF FF FF FF FF    
+    265 00FA41 FF FF FF FF FF FF FF FF    
+    265 00FA49 FF FF FF FF FF FF FF FF    
+    265 00FA51 FF FF FF FF FF FF FF FF    
+    265 00FA59 FF FF FF FF FF FF FF FF    
+    265 00FA61 FF FF FF FF FF FF FF FF    
+    265 00FA69 FF FF FF FF FF FF FF FF    
+    265 00FA71 FF FF FF FF FF FF FF FF    
+    265 00FA79 FF FF FF FF FF FF FF FF    
+    265 00FA81 FF FF FF FF FF FF FF FF    
+    265 00FA89 FF FF FF FF FF FF FF FF    
+    265 00FA91 FF FF FF FF FF FF FF FF    
+    265 00FA99 FF FF FF FF FF FF FF FF    
+    265 00FAA1 FF FF FF FF FF FF FF FF    
+    265 00FAA9 FF FF FF FF FF FF FF FF    
+    265 00FAB1 FF FF FF FF FF FF FF FF    
+    265 00FAB9 FF FF FF FF FF FF FF FF    
+    265 00FAC1 FF FF FF FF FF FF FF FF    
+    265 00FAC9 FF FF FF FF FF FF FF FF    
+    265 00FAD1 FF FF FF FF FF FF FF FF    
+    265 00FAD9 FF FF FF FF FF FF FF FF    
+    265 00FAE1 FF FF FF FF FF FF FF FF    
+    265 00FAE9 FF FF FF FF FF FF FF FF    
+    265 00FAF1 FF FF FF FF FF FF FF FF    
+    265 00FAF9 FF FF FF FF FF FF FF FF    
+    265 00FB01 FF FF FF FF FF FF FF FF    
+    265 00FB09 FF FF FF FF FF FF FF FF    
+    265 00FB11 FF FF FF FF FF FF FF FF    
+    265 00FB19 FF FF FF FF FF FF FF FF    
+    265 00FB21 FF FF FF FF FF FF FF FF    
+    265 00FB29 FF FF FF FF FF FF FF FF    
+    265 00FB31 FF FF FF FF FF FF FF FF    
+    265 00FB39 FF FF FF FF FF FF FF FF    
+    265 00FB41 FF FF FF FF FF FF FF FF    
+    265 00FB49 FF FF FF FF FF FF FF FF    
+    265 00FB51 FF FF FF FF FF FF FF FF    
+    265 00FB59 FF FF FF FF FF FF FF FF    
+    265 00FB61 FF FF FF FF FF FF FF FF    
+    265 00FB69 FF FF FF FF FF FF FF FF    
+    265 00FB71 FF FF FF FF FF FF FF FF    
+    265 00FB79 FF FF FF FF FF FF FF FF    
+    265 00FB81 FF FF FF FF FF FF FF FF    
+    265 00FB89 FF FF FF FF FF FF FF FF    
+    265 00FB91 FF FF FF FF FF FF FF FF    
+    265 00FB99 FF FF FF FF FF FF FF FF    
+    265 00FBA1 FF FF FF FF FF FF FF FF    
+    265 00FBA9 FF FF FF FF FF FF FF FF    
+    265 00FBB1 FF FF FF FF FF FF FF FF    
+    265 00FBB9 FF FF FF FF FF FF FF FF    
+    265 00FBC1 FF FF FF FF FF FF FF FF    
+    265 00FBC9 FF FF FF FF FF FF FF FF    
+    265 00FBD1 FF FF FF FF FF FF FF FF    
+    265 00FBD9 FF FF FF FF FF FF FF FF    
+    265 00FBE1 FF FF FF FF FF FF FF FF    
+    265 00FBE9 FF FF FF FF FF FF FF FF    
+    265 00FBF1 FF FF FF FF FF FF FF FF    
+    265 00FBF9 FF FF FF FF FF FF FF FF    
+    265 00FC01 FF FF FF FF FF FF FF FF    
+    265 00FC09 FF FF FF FF FF FF FF FF    
+    265 00FC11 FF FF FF FF FF FF FF FF    
+    265 00FC19 FF FF FF FF FF FF FF FF    
+    265 00FC21 FF FF FF FF FF FF FF FF    
+    265 00FC29 FF FF FF FF FF FF FF FF    
+    265 00FC31 FF FF FF FF FF FF FF FF    
+    265 00FC39 FF FF FF FF FF FF FF FF    
+    265 00FC41 FF FF FF FF FF FF FF FF    
+    265 00FC49 FF FF FF FF FF FF FF FF    
+    265 00FC51 FF FF FF FF FF FF FF FF    
+    265 00FC59 FF FF FF FF FF FF FF FF    
+    265 00FC61 FF FF FF FF FF FF FF FF    
+    265 00FC69 FF FF FF FF FF FF FF FF    
+    265 00FC71 FF FF FF FF FF FF FF FF    
+    265 00FC79 FF FF FF FF FF FF FF FF    
+    265 00FC81 FF FF FF FF FF FF FF FF    
+    265 00FC89 FF FF FF FF FF FF FF FF    
+    265 00FC91 FF FF FF FF FF FF FF FF    
+    265 00FC99 FF FF FF FF FF FF FF FF    
+    265 00FCA1 FF FF FF FF FF FF FF FF    
+    265 00FCA9 FF FF FF FF FF FF FF FF    
+    265 00FCB1 FF FF FF FF FF FF FF FF    
+    265 00FCB9 FF FF FF FF FF FF FF FF    
+    265 00FCC1 FF FF FF FF FF FF FF FF    
+    265 00FCC9 FF FF FF FF FF FF FF FF    
+    265 00FCD1 FF FF FF FF FF FF FF FF    
+    265 00FCD9 FF FF FF FF FF FF FF FF    
+    265 00FCE1 FF FF FF FF FF FF FF FF    
+    265 00FCE9 FF FF FF FF FF FF FF FF    
+    265 00FCF1 FF FF FF FF FF FF FF FF    
+    265 00FCF9 FF FF FF FF FF FF FF FF    
+    265 00FD01 FF FF FF FF FF FF FF FF    
+    265 00FD09 FF FF FF FF FF FF FF FF    
+    265 00FD11 FF FF FF FF FF FF FF FF    
+    265 00FD19 FF FF FF FF FF FF FF FF    
+    265 00FD21 FF FF FF FF FF FF FF FF    
+    265 00FD29 FF FF FF FF FF FF FF FF    
+    265 00FD31 FF FF FF FF FF FF FF FF    
+    265 00FD39 FF FF FF FF FF FF FF FF    
+    265 00FD41 FF FF FF FF FF FF FF FF    
+    265 00FD49 FF FF FF FF FF FF FF FF    
+    265 00FD51 FF FF FF FF FF FF FF FF    
+    265 00FD59 FF FF FF FF FF FF FF FF    
+    265 00FD61 FF FF FF FF FF FF FF FF    
+    265 00FD69 FF FF FF FF FF FF FF FF    
+    265 00FD71 FF FF FF FF FF FF FF FF    
+    265 00FD79 FF FF FF FF FF FF FF FF    
+    265 00FD81 FF FF FF FF FF FF FF FF    
+    265 00FD89 FF FF FF FF FF FF FF FF    
+    265 00FD91 FF FF FF FF FF FF FF FF    
+    265 00FD99 FF FF FF FF FF FF FF FF    
+    265 00FDA1 FF FF FF FF FF FF FF FF    
+    265 00FDA9 FF FF FF FF FF FF FF FF    
+    265 00FDB1 FF FF FF FF FF FF FF FF    
+    265 00FDB9 FF FF FF FF FF FF FF FF    
+    265 00FDC1 FF FF FF FF FF FF FF FF    
+    265 00FDC9 FF FF FF FF FF FF FF FF    
+    265 00FDD1 FF FF FF FF FF FF FF FF    
+    265 00FDD9 FF FF FF FF FF FF FF FF    
+    265 00FDE1 FF FF FF FF FF FF FF FF    
+    265 00FDE9 FF FF FF FF FF FF FF FF    
+    265 00FDF1 FF FF FF FF FF FF FF FF    
+    265 00FDF9 FF FF FF FF FF FF FF FF    
+    265 00FE01 FF FF FF FF FF FF FF FF    
+    265 00FE09 FF FF FF FF FF FF FF FF    
+    265 00FE11 FF FF FF FF FF FF FF FF    
+    265 00FE19 FF FF FF FF FF FF FF FF    
+    265 00FE21 FF FF FF FF FF FF FF FF    
+    265 00FE29 FF FF FF FF FF FF FF FF    
+    265 00FE31 FF FF FF FF FF FF FF FF    
+    265 00FE39 FF FF FF FF FF FF FF FF    
+    265 00FE41 FF FF FF FF FF FF FF FF    
+    265 00FE49 FF FF FF FF FF FF FF FF    
+    265 00FE51 FF FF FF FF FF FF FF FF    
+    265 00FE59 FF FF FF FF FF FF FF FF    
+    265 00FE61 FF FF FF FF FF FF FF FF    
+    265 00FE69 FF FF FF FF FF FF FF FF    
+    265 00FE71 FF FF FF FF FF FF FF FF    
+    265 00FE79 FF FF FF FF FF FF FF FF    
+    265 00FE81 FF FF FF FF FF FF FF FF    
+    265 00FE89 FF FF FF FF FF FF FF FF    
+    265 00FE91 FF FF FF FF FF FF FF FF    
+    265 00FE99 FF FF FF FF FF FF FF FF    
+    265 00FEA1 FF FF FF FF FF FF FF FF    
+    265 00FEA9 FF FF FF FF FF FF FF FF    
+    265 00FEB1 FF FF FF FF FF FF FF FF    
+    265 00FEB9 FF FF FF FF FF FF FF FF    
+    265 00FEC1 FF FF FF FF FF FF FF FF    
+    265 00FEC9 FF FF FF FF FF FF FF FF    
+    265 00FED1 FF FF FF FF FF FF FF FF    
+    265 00FED9 FF FF FF FF FF FF FF FF    
+    265 00FEE1 FF FF FF FF FF FF FF FF    
+    265 00FEE9 FF FF FF FF FF FF FF FF    
+    265 00FEF1 FF FF FF FF FF FF FF FF    
+    265 00FEF9 FF FF FF FF FF FF FF FF    
+    265 00FF01 FF FF FF FF FF FF FF FF    
+    265 00FF09 FF FF FF FF FF FF FF FF    
+    265 00FF11 FF FF FF FF FF FF FF FF    
+    265 00FF19 FF FF FF FF FF FF FF FF    
+    265 00FF21 FF FF FF FF FF FF FF FF    
+    265 00FF29 FF FF FF FF FF FF FF FF    
+    265 00FF31 FF FF FF FF FF FF FF FF    
+    265 00FF39 FF FF FF FF FF FF FF FF    
+    265 00FF41 FF FF FF FF FF FF FF FF    
+    265 00FF49 FF FF FF FF FF FF FF FF    
+    265 00FF51 FF FF FF FF FF FF FF FF    
+    265 00FF59 FF FF FF FF FF FF FF FF    
+    265 00FF61 FF FF FF FF FF FF FF FF    
+    265 00FF69 FF FF FF FF FF FF FF FF    
+    265 00FF71 FF FF FF FF FF FF FF FF    
+    265 00FF79 FF FF FF FF FF FF FF FF    
+    265 00FF81 FF FF FF FF FF FF FF FF    
+    265 00FF89 FF FF FF FF FF FF FF FF    
+    265 00FF91 FF FF FF FF FF FF FF FF    
+    265 00FF99 FF FF FF FF FF FF FF FF    
+    265 00FFA1 FF FF FF FF FF FF FF FF    
+    265 00FFA9 FF FF FF FF FF FF FF FF    
+    265 00FFB1 FF FF FF FF FF FF FF FF    
+    265 00FFB9 FF FF FF FF FF FF FF FF    
+    265 00FFC1 FF FF FF FF FF FF FF FF    
+    265 00FFC9 FF FF FF FF FF FF FF FF    
+    265 00FFD1 FF FF FF FF FF FF FF FF    
+    265 00FFD9 FF FF FF FF FF FF FF FF    
+    265 00FFE1 FF FF FF FF FF FF FF FF    
+    265 00FFE9 FF FF FF FF FF             
+    266 00FFEE 50 E1                        	dw		IRQRout
+                                           
+    268 00FFF0 FF FF FF FF FF FF FF FF      	.org	$FFFC
+    268 00FFF8 FF FF FF FF                
+    269 00FFFC 00 E0                        	dw		$E000
+
+Checksum=1EDD508F
+
+Number of instructions processed: 150
+Number of opcode bytes: 318
+Bytes per instruction: 2.120000 (16.960000 bits)
+Clock cycle count: 0
+Clocks per instruction: 0.000000
+
+The above statistics are only estimates.
+
+	The CPI assumes data memory access requires two clock cycles and instruction
+	access is single cycle. The actual CPI may be higher if there are memory wait 
+	states, or lower if data is found in the cache.
