@@ -6,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// FT816.v
+// FT816mpu.v
 //  - 16 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -27,7 +27,9 @@
 `define TRUE 	1'b1
 `define FALSE	1'b0
 
-module FT816mpu(rst, clk, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, abort, be, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6);
+module FT816mpu(rst, clk, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, abort, be, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6, ct0, ct1, ct2);
+parameter pIOAddress = 24'h00F000;
+parameter pZPAddress = 24'h000010;
 input rst;
 input clk;
 output phi11;
@@ -55,7 +57,11 @@ output cs3;
 output cs4;
 output cs5;
 output cs6;
+input ct0;
+input ct1;
+input ct2;
 
+wire ivda;
 wire [4:0] cycle;
 reg [15:0] dec_cs0;
 reg [15:0] dec_cs1;
@@ -65,6 +71,21 @@ reg [8:0] dec_cs4;
 reg [8:0] dec_cs5;
 reg [7:0] mh1, mh8, mh32;
 reg isRegEnabled;
+reg cntIrq0,cntIrqEn0;
+reg cntIrq1,cntIrqEn1;
+reg cntIrq2,cntIrqEn2;
+reg cntUp0,cntUp1,cntUp2;
+reg [23:0] cntLimit0;
+reg [23:0] realCnt0;
+reg autoCnt0,cntTrig0;
+reg [23:0] cntLimit1;
+reg [23:0] realCnt1;
+reg autoCnt1,cntTrig1;
+reg [23:0] cntLimit2;
+reg [23:0] realCnt2;
+reg autoCnt2,cntTrig2;
+reg [1:0] cntSrc0,cntSrc1,cntSrc2;
+reg [7:0] zp_shadow [15:0];
 
 reg phi1d;
 always @(posedge clk)
@@ -100,8 +121,16 @@ wire dec_match32 = (match_cs0 & mh32[0]) |
 				  ;
 
 
+wire iirq = !((cntIrqEn0 & cntIrq0) || 
+			(cntIrqEn1 & cntIrq1) || 
+			(cntIrqEn2 & cntIrq2)) &&
+			irq
+			;
+
+reg [7:0] shadow_ram [31:0];
+
 always @(posedge clk)
-if (rst) begin
+if (~rst) begin
 	isRegEnabled <= `TRUE;
 	dec_cs0 <= 16'h00D0;
 	dec_cs1 <= 16'h00D1;
@@ -112,30 +141,134 @@ if (rst) begin
 	mh1 <= 8'h0F;
 	mh8 <= 8'h30;
 	mh32 <= 8'h00;
+	cntIrqEn0 <= 1'b0;
+	cntIrqEn1 <= 1'b0;
+	cntIrqEn2 <= 1'b0;
+	cntIrq0 <= 1'b0;
+	cntIrq1 <= 1'b0;
+	cntIrq2 <= 1'b0;
+	cntSrc0 <= 2'b00;
+	cntSrc1 <= 2'b00;
+	cntSrc2 <= 2'b00;
+	cntTrig0 <= 1'b0;
+	cntTrig1 <= 1'b0;
+	cntTrig2 <= 1'b0;
+	cntUp0 <= 1'b1;
+	cntUp1 <= 1'b1;
+	cntUp2 <= 1'b1;
 end
 else begin
-	if (vda && ad[23:8]==16'hF0 && isRegEnabled && ~rw) begin
-		case(ad[3:0])
-		4'h0:	dec_cs0[7:0] <= db;
-		4'h1:	dec_cs0[15:8] <= db;
-		4'h2:	dec_cs1[7:0] <= db;
-		4'h3:	dec_cs1[15:8] <= db;
-		4'h4:	dec_cs2[7:0] <= db;
-		4'h5:	dec_cs2[15:8] <= db;
-		4'h6:	dec_cs3[7:0] <= db;
-		4'h7:	dec_cs3[15:8] <= db;
-		4'h8:	dec_cs4[7:0] <= db;
-		4'h9:	dec_cs4[8] <= db[0];
-		4'hA:	dec_cs5[7:0] <= db;
-		4'hB:	dec_cs5[8] <= db[0];
-		4'hC:	mh1 <= db;
-		4'hD:	mh8 <= db;
-		4'hE:	mh32 <= db;
-		4'hF:	if (db==8'hE0)
+	cntTrig0 <= 1'b0;
+	cntTrig1 <= 1'b0;
+	cntTrig2 <= 1'b0;
+	if (cntSrc0==2'b01 || cntTrig0 || (cntSrc0==2'b10 && ct0))
+		realCnt0 <= cntUp0 ? realCnt0 + 24'd1 : realCnt0 - 24'd1;
+	if (cntSrc1==2'b01 || cntTrig1 || (cntSrc1==2'b10 && ct1))
+		realCnt1 <= cntUp1 ? realCnt1 + 24'd1 : realCnt1 - 24'd1;
+	if (cntSrc2==2'b01 || cntTrig2 || (cntSrc2==2'b10 && ct2))
+		realCnt2 <= cntUp2 ? realCnt2 + 24'd1 : realCnt2 - 24'd1;
+	if (((cntUp0 && realCnt0==cntLimit0) || (!cntUp0 && realCnt0==24'd0)) && cntIrqEn0)
+		cntIrq0 <= 1'b1;
+	if (((cntUp0 && realCnt0==cntLimit0) || (!cntUp0 && realCnt0==24'd0)))
+		realCnt0 <= cntUp0 ? 24'd0 : cntLimit0;
+	if (((cntUp1 && realCnt1==cntLimit1) || (!cntUp1 && realCnt1==24'd0)) && cntIrqEn1)
+		cntIrq1 <= 1'b1;
+	if (((cntUp1 && realCnt1==cntLimit1) || (!cntUp1 && realCnt1==24'd0)))
+		realCnt1 <= cntUp1 ? 24'd0 : cntLimit1;
+	if (((cntUp2 && realCnt2==cntLimit2) || (!cntUp2 && realCnt2==24'd0)) && cntIrqEn2)
+		cntIrq2 <= 1'b1;
+	if (((cntUp2 && realCnt2==cntLimit2) || (!cntUp2 && realCnt2==24'd0)))
+		realCnt2 <= cntUp2 ? 24'd0 : cntLimit2;
+	if (ivda && ad[23:8]==pIOAddress[23:8] && isRegEnabled && ~rw) begin
+		shadow_ram[ad[4:0]] <= db;
+		case(ad[4:0])
+		5'h00:	dec_cs0[7:0] <= db;
+		5'h01:	dec_cs0[15:8] <= db;
+		5'h02:	dec_cs1[7:0] <= db;
+		5'h03:	dec_cs1[15:8] <= db;
+		5'h04:	dec_cs2[7:0] <= db;
+		5'h05:	dec_cs2[15:8] <= db;
+		5'h06:	dec_cs3[7:0] <= db;
+		5'h07:	dec_cs3[15:8] <= db;
+		5'h08:	dec_cs4[7:0] <= db;
+		5'h09:	dec_cs4[8] <= db[0];
+		5'h0A:	dec_cs5[7:0] <= db;
+		5'h0B:	dec_cs5[8] <= db[0];
+		5'h0C:	mh1 <= db;
+		5'h0D:	mh8 <= db;
+		5'h0E:	mh32 <= db;
+		5'h0F:	if (db==8'hE0)
 					isRegEnabled <= `FALSE;
+		5'h10:	cntLimit0[7:0] <= db;
+		5'h11:	cntLimit0[15:8] <= db;
+		5'h12:	cntLimit0[23:16] <= db;
+		5'h13:	begin
+				cntIrqEn0 <= db[0];
+				cntIrq0 <= 1'b0;
+				cntSrc0 <= db[3:2];
+				cntUp0 <= db[4];
+				end
+		5'h14:	cntLimit1[7:0] <= db;
+		5'h15:	cntLimit1[15:8] <= db;
+		5'h16:	cntLimit1[23:16] <= db;
+		5'h17:	begin
+				cntIrqEn1 <= db[0];
+				cntIrq1 <= 1'b0;
+				cntSrc1 <= db[3:2];
+				cntUp1 <= db[4];
+				end
+		5'h18:	cntLimit2[7:0] <= db;
+		5'h19:	cntLimit2[15:8] <= db;
+		5'h1A:	cntLimit2[23:16] <= db;
+		5'h1B:	begin
+				cntIrqEn2 <= db[0];
+				cntIrq2 <= 1'b0;
+				cntSrc2 <= db[3:2];
+				cntUp2 <= db[4];
+				end
+		5'h1C:	cntTrig0 <= 1'b1;
+		5'h1D:	cntTrig1 <= 1'b1;
+		5'h1E:	cntTrig2 <= 1'b1;
+		endcase
+	end
+	if (ivda && ad[23:4]==pZPAddress[23:4] && ~rw) begin
+		zp_shadow[ad[3:0]] <= db;
+		case(ad[3:0])
+		4'h0:	realCnt0[7:0] <= db;
+		4'h1:	realCnt0[15:8] <= db;
+		4'h2:	realCnt0[23:16] <= db;
+		4'h4:	realCnt1[7:0] <= db;
+		4'h5:	realCnt1[15:8] <= db;
+		4'h6:	realCnt1[23:16] <= db;
+		4'h8:	realCnt2[7:0] <= db;
+		4'h9:	realCnt2[15:8] <= db;
+		4'hA:	realCnt2[23:16] <= db;
 		endcase
 	end
 end
+
+reg [7:0] dbo;
+always @*
+case(ad[3:0])
+4'h0:	dbo <= realCnt0[7:0];
+4'h1:	dbo <= realCnt0[15:8];
+4'h2:	dbo <= realCnt0[23:16];
+4'h4:	dbo <= realCnt1[7:0];
+4'h5:	dbo <= realCnt1[15:8];
+4'h6:	dbo <= realCnt1[23:16];
+4'h8:	dbo <= realCnt2[7:0];
+4'h9:	dbo <= realCnt2[15:8];
+4'hA:	dbo <= realCnt2[23:16];
+default:	dbo <= zp_shadow[ad[3:0]];
+endcase
+
+wire cs_mpu = (ivda && ad[23:4]==pZPAddress[23:4]) || (ivda && ad[23:8]==pIOAddress[23:8]);
+assign db = (ivda && ad[23:4]==pZPAddress[23:4] && rw) ? dbo : {8{1'bz}};
+assign db =	(ivda && ad[23:8]==pIOAddress[23:8] && rw) ? (
+	ad[4:0]==5'h1F ? {cntIrq2,cntIrq1,cntIrq0} :
+	shadow_ram[ad[4:0]] ) :
+	{8{1'bz}};
+assign vda = !cs_mpu & ivda;
 
 reg trig1;
 reg trig8;
@@ -169,7 +302,7 @@ FT816 u1
 	.rst(rst),
 	.clk(clk),
 	.nmi(nmi),
-	.irq(irq),
+	.irq(iirq),
 	.abort(abort),
 	.e(e),
 	.mx(mx),
@@ -183,7 +316,7 @@ FT816 u1
 	.rdy(rdy816),
 	.be(be),
 	.vpa(vpa),
-	.vda(vda),
+	.vda(ivda),
 	.rw(rw),
 	.ad(ad),
 	.db(db),

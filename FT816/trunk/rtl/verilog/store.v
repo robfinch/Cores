@@ -39,6 +39,7 @@ STORE1:
 		`STW_DEF8:		data_write(wdat);
 		`STW_DEF70:		begin data_write(wdat); mlb <= 1'b1; end
 		`STW_DEF158:	data_write(wdat[15:8]);
+		`STW_DEF2316:	data_write(wdat[23:16]);
 		`STW_ACC70:		begin data_write(acc); mlb <= 1'b1; end
 		`STW_ACC158:	data_write(acc[15:8]);
 		`STW_X70:		begin data_write(x); mlb <= 1'b1; end
@@ -92,9 +93,23 @@ STORE2:
 		case(store_what)
 		`STW_DEF70:
 			begin
-				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
 				store_what <= `STW_DEF158;
+				retstate <= STORE1;
+				if ((b16[15:8]!=wdat[15:8]) || !STORE_SKIPPING || isTribyte) begin
+					mlb <= 1'b1;
+					vpa <= `FALSE;	// override moveto_ifetch() setting.
+					vda <= `FALSE;
+					state <= STORE1;
+				end
+			end
+		`STW_DEF158:
+			if (isTribyte) begin
+				mlb <= 1'b1;
+				wadr <= wadr + 24'd1;
+				vpa <= `FALSE;	// override moveto_ifetch() setting.
+				vda <= `FALSE;
+				store_what <= `STW_DEF2316;
 				retstate <= STORE1;
 				state <= STORE1;
 			end
@@ -102,6 +117,8 @@ STORE2:
 			begin
 				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_ACC158;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -110,6 +127,8 @@ STORE2:
 			begin
 				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_X158;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -118,6 +137,8 @@ STORE2:
 			begin
 				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_Y158;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -126,6 +147,8 @@ STORE2:
 			begin
 				mlb <= 1'b1;
 				wadr <= wadr + 24'd1;
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_Z158;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -133,6 +156,8 @@ STORE2:
 		`STW_DPR158:
 			begin
 				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_DPR70;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -140,6 +165,8 @@ STORE2:
 		`STW_TMP158:
 			begin
 				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_TMP70;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -147,6 +174,8 @@ STORE2:
 		`STW_IA158:
 			begin
 				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_IA70;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -155,6 +184,8 @@ STORE2:
 			begin
 				if (ir9 != `PHK) begin
 					set_sp();
+					vpa <= `FALSE;
+					vda <= `FALSE;
 					store_what <= `STW_PC158;
 					retstate <= STORE1;
 					state <= STORE1;
@@ -163,6 +194,8 @@ STORE2:
 		`STW_PC158:
 			begin
 				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				store_what <= `STW_PC70;
 				retstate <= STORE1;
 				state <= STORE1;
@@ -173,6 +206,8 @@ STORE2:
 				`BRK,`COP:
 						begin
 						set_sp();
+						vpa <= `FALSE;
+						vda <= `FALSE;
 						store_what <= `STW_SR70;
 						retstate <= STORE1;
 						state <= STORE1;
@@ -187,6 +222,8 @@ STORE2:
 						end
 				`JSR_INDX:
 						begin
+						vpa <= `FALSE;
+						vda <= `FALSE;
 						state <= LOAD_MAC1;
 						retstate <= LOAD_MAC1;
 						load_what <= `PC_70;
@@ -199,6 +236,8 @@ STORE2:
 				if (ir[7:0]==`BRK) begin
 					load_what <= `PC_70;
 					state <= LOAD_MAC1;
+					vpa <= `FALSE;
+					vda <= `FALSE;
 					retstate <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
@@ -206,6 +245,8 @@ STORE2:
 				end
 				else if (ir[7:0]==`COP) begin
 					load_what <= `PC_70;
+					vpa <= `FALSE;
+					vda <= `FALSE;
 					state <= LOAD_MAC1;
 					retstate <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
@@ -216,12 +257,16 @@ STORE2:
 		default:
 			if (isJsrIndx) begin
 				load_what <= `PC_310;
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				state <= LOAD_MAC1;
 				retstate <= LOAD_MAC1;
 				radr <= ir[31:8] + x;
 			end
 			else if (isJsrInd) begin
 				load_what <= `PC_310;
+				vpa <= `FALSE;
+				vda <= `FALSE;
 				state <= LOAD_MAC1;
 				retstate <= LOAD_MAC1;
 				radr <= ir[31:8];

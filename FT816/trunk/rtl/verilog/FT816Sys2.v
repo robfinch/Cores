@@ -137,10 +137,12 @@ WXGASyncGen1366x768_60Hz u4
 	.border(border)
 );
 
+wire tc_rdy;
 rtfTextController816 tc1
 (
 	.rst(rst),
 	.clk(clk),
+	.rdy(tc_rdy),
 	.rw(rw),
 	.vda(vda),
 	.ad(ad),
@@ -174,11 +176,11 @@ else begin
 end
 
 always @(posedge clk)
-	if (~cs6 & ~rw)
+	if (~cs6 & ~rw && ad[23:15]==17'h0000)
 		rammem[ad[12:0]] <= db;
 
 reg [7:0] ro;
-always @*
+always @(posedge clk)
 case(ad[1:0])
 2'd0:	ro <= rommem[ad[12:2]][7:0];
 2'd1:	ro <= rommem[ad[12:2]][15:8];
@@ -188,17 +190,17 @@ endcase
 
 assign db = rw & ~cs1 ? sw : {8{1'bz}};
 assign db = rw & ~cs4 ? ro : {8{1'bz}};
-assign db = rw & ~cs6 ? rammem[ad[12:0]] : {8{1'bz}};
+assign db = rw & ~cs6 && ad[23:15]==17'h0000 ? rammem[ad[12:0]] : {8{1'bz}};
 
 FT816mpu u1
 (
-	.rst(rst),
+	.rst(~rst),
 	.clk(clk),
 	.phi11(),
 	.phi12(),
 	.phi81(),
 	.phi82(),
-	.rdy(prng_rdy),
+	.rdy(prng_rdy & tc_rdy),
 	.e(),
 	.mx(),
 	.nmi(1'b1),

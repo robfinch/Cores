@@ -38,13 +38,23 @@ begin
 				begin
 					b16[7:0] <= dat8;
 					load_what <= `HALF_158;
-					radr <= radr+32'd1;
+					radr <= radr+24'd1;
 					state <= LOAD_MAC1;
 				end
 	`HALF_158:
 				begin
 					b16[15:8] <= dat8;
-					state <= HALF_CALC;
+					if (isTribyte) begin
+						radr <= radr+24'd1;
+						load_what <= `TRIP_2316;
+						next_state(LOAD_MAC1);
+					end
+					else
+						state <= HALF_CALC;
+				end
+	`TRIP_2316:	begin
+					b24 <= dat8;
+					next_state(HALF_CALC);
 				end
 	`HALF_71:
 				begin
@@ -90,7 +100,10 @@ begin
 	`SR_70:		begin
 					cf <= dat8[0];
 					zf <= dat8[1];
-					im <= dat8[2];
+					if (dat8[2])
+						im <= 1'b1;
+					else
+						imcd <= 3'b110;
 					df <= dat8[3];
 					if (m816) begin
 						x_bit <= dat8[4];

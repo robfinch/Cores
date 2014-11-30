@@ -44,7 +44,7 @@ HALF_CALC:
 		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	begin res16 <= {b16,cf}; wdat <= {b16[14:0],cf}; state <= STORE1; data_nack(); end
 		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	begin res16 <= {b16[0],1'b0,b16[15:1]}; wdat <= {1'b0,b16[15:1]}; state <= STORE1; data_nack(); end
 		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	begin res16 <= {b16[0],cf,b16[15:1]}; wdat <= {cf,b16[15:1]}; state <= STORE1; data_nack(); end
-		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:	begin res16 <= b16 + 16'd1; wdat <= {b16+16'd1}; state <= STORE1; data_nack(); end
-		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	begin res16 <= b16 - 16'd1; wdat <= {b16-16'd1}; state <= STORE1; data_nack(); end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:	begin res16 <= {b24,b16} + 24'd1; wdat <= {{b24,b16}+24'd1}; state <= STORE1; data_nack(); end
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	begin res16 <= {b24,b16} - 24'd1; wdat <= {{b24,b16}-24'd1}; state <= STORE1; data_nack(); end
 		endcase
 	end

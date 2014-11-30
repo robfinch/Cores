@@ -3,7 +3,7 @@
 //        __
 //   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 // FT816.v
@@ -46,16 +46,17 @@
 
 `define BRK_VECTNO	9'd0
 `define SLP_VECTNO	9'd1
-`define BYTE_RST_VECT	32'h0000FFFC
-`define BYTE_NMI_VECT	32'h0000FFFA
-`define BYTE_IRQ_VECT	32'h0000FFFE
-`define BYTE_ABT_VECT	32'h0000FFF8
-`define RST_VECT_816	32'h0000FFFC
-`define IRQ_VECT_816	32'h0000FFEE
-`define NMI_VECT_816	32'h0000FFEA
-`define ABT_VECT_816	32'h0000FFE8
-`define BRK_VECT_816	32'h0000FFE6
-`define COP_VECT_816	32'h0000FFE4
+`define BYTE_RST_VECT	24'h00FFFC
+`define BYTE_NMI_VECT	24'h00FFFA
+`define BYTE_IRQ_VECT	24'h00FFFE
+`define BYTE_ABT_VECT	24'h00FFF8
+`define BYTE_COP_VECT	24'h00FFF4
+`define RST_VECT_816	24'h00FFFC
+`define IRQ_VECT_816	24'h00FFEE
+`define NMI_VECT_816	24'h00FFEA
+`define ABT_VECT_816	24'h00FFE8
+`define BRK_VECT_816	24'h00FFE6
+`define COP_VECT_816	24'h00FFE4
 
 `define BRK			9'h00
 `define RTI			9'h40
@@ -467,6 +468,7 @@
 `define HALF_71S	5'd23
 `define HALF_159S	5'd24
 `define BYTE_72		5'd25
+`define TRIP_2316	5'd26
 
 `define STW_DEF		6'h0
 `define STW_RES8	6'd14
@@ -483,6 +485,7 @@
 `define STW_DEF8	6'd25
 `define STW_DEF70	6'd26
 `define STW_DEF158	6'd27
+`define STW_DEF2316	6'd28
 
 `define STW_ACC70	6'd32
 `define STW_ACC158	6'd33
@@ -504,6 +507,9 @@
 // Input Frequency is 32 times the 00 clock
 
 module FT816(rst, clk, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
+parameter SUPPORT_TRIBYTES = 1'b0;
+parameter STORE_SKIPPING = 1'b1;
+parameter EXTRA_LONG_BRANCHES = 1'b1;
 parameter RESET1 = 6'd0;
 parameter IFETCH1 = 6'd1;
 parameter IFETCH2 = 6'd2;
@@ -611,6 +617,7 @@ reg nmi1,nmi_edge;
 reg wai;
 reg [7:0] b8;
 reg [15:0] b16;
+reg [7:0] b24;
 reg [8:0] res8;
 reg [16:0] res16;
 wire resc8 = res8[8];
@@ -621,7 +628,7 @@ wire resn8 = res8[7];
 wire resn16 = res16[15];
 reg [23:0] radr;
 reg [23:0] wadr;
-reg [15:0] wdat;
+reg [23:0] wdat;
 wire [7:0] rdat;
 reg [4:0] load_what;
 reg [5:0] store_what;
@@ -638,6 +645,7 @@ reg isRMW;
 reg isSub;
 reg isJsrIndx,isJsrInd;
 reg isIY,isIY24,isI24;
+reg isTribyte;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS ||
 			 ir9==`CPY_ZPX || ir9==`CPY_ABS;
@@ -647,7 +655,7 @@ wire isRMW8 =
 			 ir9==`ASL_ABS || ir9==`ROL_ABS || ir9==`LSR_ABS || ir9==`ROR_ABS || ir9==`INC_ABS || ir9==`DEC_ABS ||
 			 ir9==`ASL_ABSX || ir9==`ROL_ABSX || ir9==`LSR_ABSX || ir9==`ROR_ABSX || ir9==`INC_ABSX || ir9==`DEC_ABSX ||
 			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS;
-			 
+wire isBranch = ir9==`BRA || ir9==`BEQ || ir9==`BNE || ir9==`BVS || ir9==`BVC || ir9==`BMI || ir9==`BPL || ir9==`BCS || ir9==`BCC;
 
 // Registerable decodes
 // The following decodes can be registered because they aren't needed until at least the cycle after
@@ -731,7 +739,7 @@ assign phi81 = phi81r[31];
 assign phi82 = phi82r[31];
 
 always @(posedge clk)
-if (rst) begin
+if (~rst) begin
 	cyc <= 5'd0;
 	phi11r <= 32'b01111111111111100000000000000000;
 	phi12r <= 32'b00000000000000000111111111111110;
@@ -753,7 +761,7 @@ casex(ir)
 8'hx8:	isOneByte = TRUE;
 8'hxA:	isOneByte = TRUE;
 8'hxB: isOneByte = TRUE;
-`BRK,`RTI,`RTS,`COP:	isOneByte = TRUE;
+`RTI,`RTS:	isOneByte = TRUE;
 default:	isOneByte = FALSE;
 endcase
 endfunction
@@ -764,6 +772,7 @@ input [7:0] ir;
 input m16;
 input xb16;
 casex(ir)
+`BRK,`COP:	isTwoBytes = TRUE;
 8'hx1:	isTwoBytes = TRUE;
 8'hx3:	isTwoBytes = TRUE;
 8'hx5:	isTwoBytes = TRUE;
@@ -814,7 +823,7 @@ wire clkx;
 BUFGCE u20 (.CE(cpu_clk_en), .I(clk), .O(clkx) );
 
 always @(posedge clk)
-if (rst) begin
+if (~rst) begin
 	cpu_clk_en <= 1'b1;
 	nmi1 <= 1'b0;
 end
@@ -828,9 +837,10 @@ end
 
 reg abort1;
 reg abort_edge;
+reg [2:0] imcd;	// interrupt mask enable count down
 
 always @(posedge clkx)
-if (rst) begin
+if (~rst) begin
 	vpa <= `FALSE;
 	vda <= `FALSE;
 	vpb <= `TRUE;
@@ -860,6 +870,7 @@ if (rst) begin
 	load_what <= `NOTHING;
 	abort_edge <= 1'b0;
 	abort1 <= 1'b0;
+	imcd <= 3'b111;
 end
 else begin
 abort1 <= abort;
@@ -880,16 +891,21 @@ IFETCH0:
 	moveto_ifetch();
 IFETCH1:
 	if (rdy) begin
+		if (imcd != 3'b111)
+			imcd <= {imcd[1:0],1'b0};
+		if (imcd == 3'b000) begin
+			imcd <= 3'b111;
+			im <= 1'b0;
+		end
 		vect <= m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		hwi <= `FALSE;
 		isBusErr <= `FALSE;
 		pg2 <= `FALSE;
 		isIY <= `FALSE;
 		isIY24 <= `FALSE;
+		isTribyte <= `FALSE;
 		store_what <= m16 ? `STW_DEF70 : `STW_DEF;
 		ir[7:0] <= db;
-		ado <= pc + 24'd1;
-		pc <= pc + 24'd1;
 		opc <= pc;
 		if (nmi_edge | irq)
 			wai <= 1'b0;
@@ -918,6 +934,8 @@ IFETCH1:
 			next_state(DECODE2);
 		end
 		else if (!wai) begin
+			ado <= pc + 24'd1;
+			pc <= pc + 24'd1;
 			// Is it more than one byte ?
 			if (!isOneByte(db)) begin
 				vpa <= TRUE;
@@ -1088,7 +1106,8 @@ IFETCH2:
 		ir[15:8] <= db;
 		ado <= pc + 24'd1;
 		pc <= pc + 24'd1;
-		if (!isTwoBytes(ir,m16,xb16)) begin
+		if ((isBranch && db==8'hFF && EXTRA_LONG_BRANCHES) ||
+		   (!isTwoBytes(ir,m16,xb16))) begin
 			vpa <= TRUE;
 			next_state(IFETCH3);
 		end
@@ -1155,7 +1174,7 @@ DECODE1:
 		`CLC:	begin cf <= 1'b0; end
 		`SEC:	begin cf <= 1'b1; end
 		`CLV:	begin vf <= 1'b0; end
-		`CLI:	begin im <= 1'b0; end
+		`CLI:	begin imcd <= 3'b110; end
 		`SEI:	begin im <= 1'b1; end
 		`CLD:	begin df <= 1'b0; end
 		`SED:	begin df <= 1'b1; end
@@ -1177,14 +1196,6 @@ DECODE1:
 		`ROL_ACC:	begin res8 <= {acc8,cf}; res16 <= {acc16,cf}; end
 		`LSR_ACC:	begin res8 <= {acc8[0],1'b0,acc8[7:1]}; res16 <= {acc16[0],1'b0,acc16[15:1]}; end
 		`ROR_ACC:	begin res8 <= {acc8[0],cf,acc8[7:1]}; res16 <= {acc16[0],cf,acc16[15:1]}; end
-		`COP:
-			begin
-				set_sp();
-				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
-				state <= STORE1;
-				vect <= `COP_VECT_816;
-				data_nack();
-			end
 		`RTS,`RTL:
 			begin
 				inc_sp();
@@ -1358,10 +1369,19 @@ DECODE2:
 			end
 		`ADC_ZP,`SBC_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`CMP_ZP,
 		`BIT_ZP,
-		`ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`INC_ZP,`DEC_ZP,`TRB_ZP,`TSB_ZP:
+		`ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`TRB_ZP,`TSB_ZP:
 			begin
 				radr <= zp_address;
 				wadr <= zp_address;
+				load_what <= m16 ? `HALF_70 : `BYTE_70;
+				data_nack();
+				state <= LOAD_MAC1;
+			end
+		`INC_ZP,`DEC_ZP:
+			begin
+				radr <= zp_address;
+				wadr <= zp_address;
+				isTribyte <= zp_address[23:4]==16'h2 && SUPPORT_TRIBYTES;
 				load_what <= m16 ? `HALF_70 : `BYTE_70;
 				data_nack();
 				state <= LOAD_MAC1;
@@ -1543,6 +1563,14 @@ DECODE2:
 				data_nack();
 				state <= STORE1;
 				bf <= !hwi;
+			end
+		`COP:
+			begin
+				set_sp();
+				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
+				state <= STORE1;
+				vect <= m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
+				data_nack();
 			end
 		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA:
 				begin
@@ -1896,6 +1924,16 @@ DECODE4:
 				store_what <= `STW_PC2316;
 				data_nack();
 				state <= STORE1;
+			end
+		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA:
+			begin
+				vpa <= `TRUE;
+				vda <= `TRUE;
+				if (takb) begin
+					pc <= pc + {{8{ir[31]}},ir[31:16]};
+					ado <= pc + {{8{ir[31]}},ir[31:16]};
+				end
+				next_state(IFETCH1);
 			end
 		default:
 			begin
