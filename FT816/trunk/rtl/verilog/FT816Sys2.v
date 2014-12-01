@@ -27,7 +27,7 @@
 `define TRUE 	1'b1
 `define FALSE	1'b0
 
-module FT816Sys2(btn, xclk, Led, sw,
+module FT816Sys2(btn, xclk, Led, sw, kclk, kd,
 	HDMIOUTCLKP, HDMIOUTCLKN,
 	HDMIOUTD0P,HDMIOUTD0N,
 	HDMIOUTD1P,HDMIOUTD1N,
@@ -39,6 +39,10 @@ input xclk;
 output [7:0] Led;
 reg [7:0] Led;
 input [7:0] sw;
+inout kclk;
+tri kclk;
+inout kd;
+tri kd;
 output HDMIOUTCLKP;
 output HDMIOUTCLKN;
 output HDMIOUTD0P;
@@ -54,8 +58,8 @@ tri HDMIOUTSDA;
 
 wire xreset = ~btn[0];
 wire irq = btn[1];
-reg [32:0] rommem [2047:0];
-reg [7:0] rammem [8191:0];
+reg [32:0] rommem [4095:0];
+reg [7:0] rammem [16383:0];
 wire rw;
 wire vda;
 wire [23:0] ad;
@@ -156,6 +160,26 @@ rtfTextController816 tc1
 	.rgbOut(tc_rgb)
 );
 
+wire kbd_rst;
+wire kbd_rdy;
+PS2KbdToAscii #(.pIOAddress(32'h00FEA110)) u_kbd
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.cyc_i(vda),
+	.stb_i(vda),
+	.ack_o(kbd_rdy),
+	.we_i(~rw),
+	.adr_i({8'h00,ad}),
+	.dat_i(db),
+	.dat_o(),
+	.db(db),
+	.kclk(kclk),
+	.kd(kd),
+	.irq(),
+	.rst_o(kbd_rst)
+);
+
 PRNG u_prng
 (
 	.rst(rst),
@@ -177,20 +201,36 @@ end
 
 always @(posedge clk)
 	if (~cs6 & ~rw && ad[23:15]==17'h0000)
-		rammem[ad[12:0]] <= db;
+		rammem[ad[13:0]] <= db;
 
 reg [7:0] ro;
 always @(posedge clk)
 case(ad[1:0])
-2'd0:	ro <= rommem[ad[12:2]][7:0];
-2'd1:	ro <= rommem[ad[12:2]][15:8];
-2'd2:	ro <= rommem[ad[12:2]][23:16];
-2'd3:	ro <= rommem[ad[12:2]][31:24];
+2'd0:	ro <= rommem[ad[13:2]][7:0];
+2'd1:	ro <= rommem[ad[13:2]][15:8];
+2'd2:	ro <= rommem[ad[13:2]][23:16];
+2'd3:	ro <= rommem[ad[13:2]][31:24];
 endcase
-
+/*
+always @(posedge clk)
+if (~cs4 & ~rw)
+	case(ad[1:0])
+	2'd0:	rommem[ad[13:2]][7:0] <= db;
+	2'd0:	rommem[ad[13:2]][15:8] <= db;
+	2'd0:	rommem[ad[13:2]][23:16] <= db;
+	2'd0:	rommem[ad[13:2]][31:24] <= db;
+	endcase
+*/
+reg [7:0] ramo;
+reg ramrdy;
+always @(posedge clk)
+ramo <= rammem[ad[13:0]];
+always @(posedge clk)
+ramrdy <= ~cs6;
 assign db = rw & ~cs1 ? sw : {8{1'bz}};
 assign db = rw & ~cs4 ? ro : {8{1'bz}};
-assign db = rw & ~cs6 && ad[23:15]==17'h0000 ? rammem[ad[12:0]] : {8{1'bz}};
+assign db = (rw & ~cs6 && ad[23:15]==17'h0000) ? ramo : {8{1'bz}};
+wire ram_rdy = ~cs6 ? (~rw ? 1'b1 : ramrdy) : 1'b1;
 
 FT816mpu u1
 (
@@ -200,10 +240,10 @@ FT816mpu u1
 	.phi12(),
 	.phi81(),
 	.phi82(),
-	.rdy(prng_rdy & tc_rdy),
+	.rdy(prng_rdy & tc_rdy & ram_rdy),
 	.e(),
 	.mx(),
-	.nmi(1'b1),
+	.nmi(~kbd_rst),
 	.irq(~btn[1]),
 	.abort(1'b1),
 	.be(1'b1),

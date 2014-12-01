@@ -717,15 +717,15 @@ wire [23:0] mvnsrc_address	= {ir[23:16],x16};
 wire [23:0] mvndst_address	= {ir[15: 8],y16};
 wire [23:0] iapy8 			= ia + y16;		// Don't add in abs8, already included with ia
 wire [23:0] zp_address 		= {8'h00,ir[15:8]} + dpr;
-wire [23:0] zpx_address 	= {{8'h00,ir[15:8]} + x16} + dpr;
-wire [23:0] zpy_address	 	= {{8'h00,ir[15:8]} + y16} + dpr;
+wire [23:0] zpx_address 	= {{16'h00,ir[15:8]} + x16} + dpr;
+wire [23:0] zpy_address	 	= {{16'h00,ir[15:8]} + y16} + dpr;
 wire [23:0] abs_address 	= {dbr,ir[23:8]};
 wire [23:0] absx_address 	= {dbr,ir[23:8] + x16};	// simulates 64k bank wrap-around
 wire [23:0] absy_address 	= {dbr,ir[23:8] + y16};
 wire [23:0] al_address		= {ir[31:8]};
 wire [23:0] alx_address		= {ir[31:8] + x16};
 
-wire [31:0] dsp_address = m816 ? {8'h00,sp + ir[15:8]} : {16'h0001,sp[7:0]+ir[15:8]};
+wire [23:0] dsp_address = m816 ? {8'h00,sp + ir[15:8]} : {16'h0001,sp[7:0]+ir[15:8]};
 reg [23:0] vect;
 
 assign rw = be ? rwo : 1'bz;
@@ -804,7 +804,8 @@ casex(ir)
 `ORA_IMM,`AND_IMM,`EOR_IMM,`ADC_IMM,`SBC_IMM,`CMP_IMM,`LDA_IMM,`BIT_IMM:
 			isThreeBytes = m16;
 8'bxxx11001:	isThreeBytes = TRUE;
-`TSB_ABS,`TRB_ABS,`BIT_ABS,`BIT_ABSX,`JMP,`JMP_INDX,`STY_ABS,`STZ_ABS,`LDY_ABS,`LDY_ABSX,`CPY_ABS,
+`TSB_ABS,`TRB_ABS,`BIT_ABS,`BIT_ABSX,
+`JMP,`JMP_IND,`JMP_INDX,`STY_ABS,`STZ_ABS,`LDY_ABS,`LDY_ABSX,`CPY_ABS,
 `CPX_ABS,`JSR_INDX:	isThreeBytes = TRUE;
 8'hxD,8'hxE:	isThreeBytes = TRUE;
 default:	isThreeBytes = FALSE;
@@ -907,7 +908,7 @@ IFETCH1:
 		store_what <= m16 ? `STW_DEF70 : `STW_DEF;
 		ir[7:0] <= db;
 		opc <= pc;
-		if (nmi_edge | irq)
+		if (nmi_edge | ~irq)
 			wai <= 1'b0;
 		if (abort_edge) begin
 			pc <= opc;

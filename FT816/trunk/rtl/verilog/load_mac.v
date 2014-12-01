@@ -84,14 +84,12 @@ BYTE_IY5:
 		isIY <= `FALSE;
 		isIY24 <= `FALSE;
 		radr <= iapy8;
+		wadr <= iapy8;
+		store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
+		load_what <= m16 ? `HALF_70 : `BYTE_70;
 		$display("IY addr: %h", iapy8);
-		if (ir[7:0]==`STA_IY || ir[7:0]==`STA_IYL || ir[7:0]==`STA_DSPIY) begin
-			wadr <= iapy8;
-			store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
+		if (ir[7:0]==`STA_IY || ir[7:0]==`STA_IYL || ir[7:0]==`STA_DSPIY)
 			state <= STORE1;
-		end
-		else begin
-			load_what <= m16 ? `HALF_70 : `BYTE_70;
+		else
 			state <= LOAD_MAC1;
-		end
 	end

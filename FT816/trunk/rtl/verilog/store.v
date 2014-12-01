@@ -120,7 +120,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_ACC158;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_X70:
@@ -130,7 +129,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_X158;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_Y70:
@@ -140,7 +138,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_Y158;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_Z70:
