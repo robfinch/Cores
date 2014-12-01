@@ -104,10 +104,21 @@ start:
 .mon1:
 	JSR		OutCRLF
 	LDA		#'$'
+.mon3:
 	JSR		OutChar
 	JSR		KeybdGetCharWait
 	AND		#$FF
-	JSR		OutChar
+	CMP		#CR
+	BNE		.mon3
+	LDA		VideoPos	; get current video position
+	SEC
+	SBC		CursorX		; go back to the start of the line
+	ASL
+	TAX
+.mon4:
+	JSR		MonGetch
+	CMP		#'$'
+	BEQ		.mon4
 	CMP		#'S'
 	BNE		.mon2
 	JMP		$C000
@@ -116,6 +127,13 @@ start:
 	BNE		.mon1
 	JSR		ClearScreen
 	BRA		.mon1
+
+MonGetch:
+	LDA		VIDBUF,X
+	INX
+	INX
+	AND		#$FF
+	RTS
 
 .st0003:
 	LDA		KEYBD
@@ -144,11 +162,10 @@ echo_switch:
 	rts
 
 ;------------------------------------------------------------------------------
-; Convert ASCII character to screen display character.
+; Display a character on the screen device
 ;------------------------------------------------------------------------------
-
+;
 DisplayChar:
-	LDX		VideoPos
 	AND		#$0FF
 	BIT		EscState
 	LBMI	processEsc
@@ -168,22 +185,21 @@ DisplayChar:
 	BEQ		doCR
 	CMP		#LF
 	BEQ		doLF
+	CMP		#$94
+	LBEQ	doCursorHome	; cursor home
 	CMP		#ESC
 	BNE		.0003
-	LDA		#-1
-	STA		EscState
+	STZ		EscState		; put a -1 in the escape state
+	DEC		EscState
 	RTS
 .0003:
 	ORA		NormAttr
 	PHA
-	TXA
+	LDA		VideoPos
 	ASL
 	TAX
 	PLA
 	STA		VIDBUF,X
-	INC		VideoPos
-	LDA		VideoPos
-	STA		VIDREGS+13
 	LDA		CursorX
 	INA
 	CMP		#$56
@@ -194,48 +210,31 @@ DisplayChar:
 	BEQ		.0002
 	INA
 	STA		CursorY
-	RTS
+	BRL		SyncVideoPos
 .0002:
-	SEC
-	LDA		VideoPos
-	SBC		#56
-	STA		VideoPos
-	STA		VIDREGS+13
-	JSR		ScrollUp
-	RTS
+	JSR		SyncVideoPos
+	BRL		ScrollUp
 .0001:
 	STA		CursorX
-	RTS
+	BRL		SyncVideoPos
 doCR:
-	SEC
-	LDA		VideoPos
-	SBC		CursorX
-	STA		VideoPos
-	STA		VIDREGS+13
 	STZ		CursorX
-	RTS
+	BRL		SyncVideoPos
 doLF:
 	LDA		CursorY
 	CMP		#30
-	BEQ		.0001
+	LBEQ	ScrollUp
 	INA
 	STA		CursorY
-	CLC
-	LDA		VideoPos
-	ADC		#56
-	STA		VideoPos
-	STA		VIDREGS+13
-	RTS
-.0001:
-	JMP		ScrollUp
+	BRL		SyncVideoPos
+
 processEsc:
 	LDX		EscState
 	CPX		#-1
 	BNE		.0006
 	CMP		#'T'	; clear to EOL
 	BNE		.0003
-	LDX		VideoPos
-	TXA
+	LDA		VideoPos
 	ASL
 	TAX
 	LDY		CursorX
@@ -256,7 +255,7 @@ processEsc:
 	CMP		#'W'
 	BNE		.0004
 	STZ		EscState
-	BRA		doDelete
+	BRL		doDelete
 .0004:
 	CMP		#'`'
 	BNE		.0005
@@ -330,11 +329,11 @@ processEsc:
 	LDA		#$BF00		; Light Grey on Dark Grey
 	STA		NormAttr
 	RTS
+
 doBackSpace:
 	LDY		CursorX
 	BEQ		.0001		; Can't backspace anymore
-	LDX		VideoPos
-	TXA
+	LDA		VideoPos
 	ASL
 	TAX
 .0002:
@@ -350,14 +349,16 @@ doBackSpace:
 	ORA		NormAttr
 	STA		VIDBUF,X
 	DEC		CursorX
-	DEC		VideoPos
-	BRA		SetVideoPos
+	BRL		SyncVideoPos
 .0001:
 	RTS
+
+; Deleting a character does not change the video position so there's no need
+; to resynchronize it.
+
 doDelete:
 	LDY		CursorX
-	LDX		VideoPos
-	TXA
+	LDA		VideoPos
 	ASL
 	TAX
 .0002:
@@ -374,49 +375,55 @@ doDelete:
 	ORA		NormAttr
 	STA		VIDBUF,X
 	RTS
+
+doCursorHome:
+	LDA		CursorX
+	BEQ		.0001
+	STZ		CursorX
+	BRA		SyncVideoPos
+.0001:
+	STZ		CursorY
+	BRA		SyncVideoPos
 doCursorRight:
 	LDY		CursorX
 	CPY		#55
-	BEQ		.0001
-	INC		CursorX
-	INC		VideoPos
-SetVideoPos:
-	LDA		VideoPos
-	STA		VIDREGS+13
-.0001:
-	RTS
+	BEQ		doRTS
+	INY
+	STY		CursorX
+	BRA		SyncVideoPos
 doCursorLeft:
 	LDY		CursorX
-	BEQ		.0001
+	BEQ		doRTS
 	DEY
-	DEC		VideoPos
-	BRA		SetVideoPos
-.0001:
-	RTS
+	STY		CursorX
+	BRA		SyncVideoPos
 doCursorUp:
 	LDY		CursorY
-	BEQ		.0001
+	BEQ		doRTS
 	DEY
 	STY		CursorY
-	SEC
-	LDA		VideoPos
-	SBC		#56
-	STA		VideoPos
-	BRA		SetVideoPos
-.0001:
-	RTS
+	BRA		SyncVideoPos
 doCursorDown:
 	LDY		CursorY
 	CPY		#30
-	BEQ		.0001
+	BEQ		doRTS
 	INY
 	STY		CursorY
+	BRA		SyncVideoPos
+doRTS:
+	RTS
+
+; Synchronize the absolute video position with the cursor co-ordinates.
+;
+SyncVideoPos:
+	LDA		CursorY
+	ASL
+	TAX
+	LDA		LineTbl,X
 	CLC
-	LDA		VideoPos
-	ADC		#56
+	ADC		CursorX
 	STA		VideoPos
-	BRA		SetVideoPos
-.0001:
+	STA		VIDREGS+13		; Update the position in the text controller
 	RTS
 
 OutChar:
