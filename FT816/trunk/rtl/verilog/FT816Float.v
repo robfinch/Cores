@@ -92,7 +92,7 @@ wire [80:0] neg = 80'h0 - FAC1_man;
 wire [16:0] exp_sum = acc + FAC1_exp + cf;	// FMUL
 wire [16:0] exp_dif = acc - FAC1_exp - ~cf;	// FDIV
 
-reg cf,vf;
+reg cf,vf,nf,zf;
 reg busy;
 reg [7:0] dbo;
 
@@ -154,7 +154,7 @@ else begin
 	8'h09:	dbo <= FAC1[79:72];
 	8'h0A:	dbo <= FAC1[87:80];
 	8'h0B:	dbo <= FAC1[95:88];
-	8'h0F:	dbo <= {busy,7'h00};
+	8'h0F:	dbo <= {busy,5'h00,zf,vf};
 	8'h10:	dbo <= FAC2[7:0];
 	8'h11:	dbo <= FAC2[15:8];
 	8'h12:	dbo <= FAC2[23:16];
@@ -196,6 +196,7 @@ IDLE:
 
 MD1:
 	begin
+		$display("MD1");
 		sign <= {sign[2:0],1'b0};
 		next_state(ABSSWP);
 		push_state(ABSSWP);
@@ -220,6 +221,8 @@ ABSSWP1:
 //-----------------------------------------------------------------------------
 // Normalize
 // - Decrement exponent and shift left
+// - Normalization is normally the last step of an operation so it is used
+//   to set a couple of result flags.
 //-----------------------------------------------------------------------------
 NORM1:
 	begin
@@ -229,6 +232,11 @@ NORM1:
 	end
 NORM:
 	begin
+	$display("Normalize");
+	if (FAC1_exp==16'h0000)
+		zf <= 1'b1;
+	else
+		zf <= 1'b0;
 	if (FAC1[79]!=FAC1[78] || FAC1_exp==16'h0000)
 		pop_state();
 	// If the mantissa is zero, set the the exponent to zero. Otherwise 
@@ -236,6 +244,7 @@ NORM:
 	// the exponent to zero.
 	else if (~|FAC1_man) begin
 		FAC1[95:80] <= 16'h0;
+		zf <= 1'b1;
 		pop_state();
 	end
 	else
@@ -260,13 +269,20 @@ ADD:
 // Complement FAC1
 FCOMPL:
 	begin
+		$display("FCOMPL");
 		FAC1[79:0] <= neg[79:0];
 		cf <= ~neg[80];
 		vf <= neg[79]==FAC1[79];
 		next_state(ADDEND);
 	end
+
+//-----------------------------------------------------------------------------
+// Swap FAC1 and FAC2
+//-----------------------------------------------------------------------------
+
 SWAP:
 	begin
+		$display("Swapping FAC1 and FAC2");
 		FAC1 <= FAC2;
 		FAC2 <= FAC1;
 		E <= FAC2[79:0];
@@ -401,13 +417,14 @@ FDIV1:
 	begin
 		acc <= exp_dif[15:0];
 		cf <= ~exp_dif[16];
+		$display("acc=%h", exp_dif);
 		push_state(DIV1);
 		next_state(MD2);
 	end
 DIV1:
 	begin
 		y <= y - 8'd1;
-		FAC1[79:0] <= {FAC1[79:0],dif[80]};
+		FAC1[79:0] <= {FAC1[79:0],~dif[80]};
 		if (dif[80])
 			FAC2[79:0] <= {FAC2[78:0],1'b0};
 		else
