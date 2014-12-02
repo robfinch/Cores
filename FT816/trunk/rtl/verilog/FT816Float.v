@@ -22,6 +22,8 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
+// 1700 LUTs 400 FF's
+// 140 MHz
 // ============================================================================
 //
 module FT816Float(rst, clk, vda, rw, ad, db, rdy);
@@ -47,7 +49,7 @@ parameter RTAR = 8'd21;
 parameter RTLOG = 8'd22;
 parameter RTLOG1 = 8'd23;
 parameter FMUL1 = 8'd24;
-parameter FMUL2 = 8'd15;
+parameter FMUL2 = 8'd25;
 parameter MUL1 = 8'd26;
 parameter FMUL3 = 8'd27;
 parameter MUL2 = 8'd28;
@@ -81,18 +83,26 @@ reg [95:0] FAC2;
 reg [79:0] E;
 wire [15:0] FAC1_exp = FAC1[95:80];
 wire [79:0] FAC1_man = FAC1[79:0];
+wire [15:0] FAC2_exp = FAC2[95:80];
+wire [79:0] FAC2_man = FAC2[79:0];
 
-wire [80:0] sum = FAC1_man + FAC2[79:0];
+wire [80:0] sum = FAC1_man + FAC2_man;
 wire [80:0] dif = FAC2_man - E;
 wire [80:0] neg = 80'h0 - FAC1_man;
+wire [16:0] exp_sum = acc + FAC1_exp + cf;	// FMUL
+wire [16:0] exp_dif = acc - FAC1_exp - ~cf;	// FDIV
 
 reg cf,vf;
+reg busy;
 reg [7:0] dbo;
 
 wire cs = vda && (ad[23:8]==pIOAddress[23:8]);
 reg rdy1;
 always @(posedge clk)
-	rdy1 <= cs;
+if (rst)
+	rdy1 <= 1'b1;
+else
+	rdy1 <= cs & ~rdy1;
 assign rdy = cs ? (rw ? rdy1 : 1'b1) : 1'b1;
 assign db = cs & rw ? dbo : {8{1'bz}};
 
@@ -168,6 +178,7 @@ RESET:
 IDLE:
 	begin
 		busy <= 1'b0;
+		sp <= 6'h00;
 		case(cmd)
 		FADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; end
 		FSUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; end
@@ -175,8 +186,14 @@ IDLE:
 		FDIV:	begin push_state(IDLE); next_state(FDIV); busy <= 1'b1; end
 		FIX2FLT:	begin push_state(IDLE); next_state(FIX2FLT); busy <= 1'b1; end
 		FLT2FIX:	begin push_state(IDLE); next_state(FLT2FIX); busy <= 1'b1; end
+		FCOMPL:		begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; end
+		SWAP:		begin push_state(IDLE); next_state(SWAP); busy <= 1'b1; end
 		endcase
 	end
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
 MD1:
 	begin
 		sign <= {sign[2:0],1'b0};
@@ -199,7 +216,11 @@ ABSSWP1:
 		cf <= 1'b1;
 		next_state(SWAP);
 	end
-// Decrement exponent and shift left
+
+//-----------------------------------------------------------------------------
+// Normalize
+// - Decrement exponent and shift left
+//-----------------------------------------------------------------------------
 NORM1:
 	begin
 	FAC1[95:80] <= FAC1[95:80] - 16'd1;
@@ -209,16 +230,21 @@ NORM1:
 NORM:
 	begin
 	if (FAC1[79]!=FAC1[78] || FAC1_exp==16'h0000)
-		next_state(IDLE);
-	else 
+		pop_state();
+	// If the mantissa is zero, set the the exponent to zero. Otherwise 
+	// normalization could spin for thousands of clock cycles decrementing
+	// the exponent to zero.
+	else if (~|FAC1_man) begin
+		FAC1[95:80] <= 16'h0;
+		pop_state();
+	end
+	else
 		next_state(NORM1);
 	end
-FIX2FLT:
-	begin
-		FAC1[95:80] <= 16'h803E;	// exponent = 62
-		FAC1[15:0] <= 16'h0000;
-		next_state(NORM);
-	end
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
 ADD:
 	begin
 		FAC1[79:0] <= sum[79:0];
@@ -226,6 +252,11 @@ ADD:
 		vf <= (sum[79] ^ FAC2[79]) & (1'b1 ^ FAC1[79] ^ FAC2[79]);
 		pop_state();
 	end
+
+//-----------------------------------------------------------------------------
+// Negate
+//-----------------------------------------------------------------------------
+
 // Complement FAC1
 FCOMPL:
 	begin
@@ -242,6 +273,11 @@ SWAP:
 		acc <= FAC1_exp;
 		pop_state();
 	end
+
+//-----------------------------------------------------------------------------
+// Subtract
+//-----------------------------------------------------------------------------
+
 FSUB:
 	begin
 		push_state(SWPALG);
@@ -252,6 +288,11 @@ SWPALG:
 		push_state(FADD);
 		next_state(ALGNSW);
 	end
+
+//-----------------------------------------------------------------------------
+// Addition
+//-----------------------------------------------------------------------------
+
 FADD:
 	begin
 		if (FAC1_exp != FAC2_exp)
@@ -290,7 +331,9 @@ RTLOG:
 	end
 RTLOG1:
 	begin
-		FAC1[79:0] <= {cf,FAC1[79:1]};
+		FAC1[79:0] <= {FAC1[79],FAC1[79:1]};
+		E[79:0] <= {FAC1[0],E[78:1]};
+		cf <= E[0];
 		pop_state();
 	end
 
@@ -305,14 +348,15 @@ FMUL:
 	end
 FMUL1:
 	begin
-		acc <= acc + FAC1_exp + cf;
-		push_state(FMUL2)
+		acc <= exp_sum[15:0];
+		cf <= exp_sum[16];
+		push_state(FMUL2);
 		next_state(MD2);
 	end
 FMUL2:
 	begin
 		cf <= 1'b0;
-		next_state(FMUL3);
+		next_state(MUL1);
 	end
 MUL1:
 	begin
@@ -355,7 +399,8 @@ FDIV:
 	end
 FDIV1:
 	begin
-		acc <= acc - FAC1_exp - ~cf;
+		acc <= exp_dif[15:0];
+		cf <= ~exp_dif[16];
 		push_state(DIV1);
 		next_state(MD2);
 	end
@@ -410,6 +455,18 @@ OVFL:
 	end
 
 //-----------------------------------------------------------------------------
+// FIX2FLT
+// - convert 64 bit fixed point number to floating point
+//-----------------------------------------------------------------------------
+
+FIX2FLT:
+	begin
+		FAC1[95:80] <= 16'h803E;	// exponent = 62
+		FAC1[15:0] <= 16'h0000;
+		next_state(NORM);
+	end
+
+//-----------------------------------------------------------------------------
 // FLT2FIX
 // - convert floating point number to fixed point.
 //-----------------------------------------------------------------------------
@@ -441,6 +498,13 @@ task pop_state;
 begin
 	next_state(state_stk[sp]);
 	sp <= sp + 6'd1;
+end
+endtask
+
+task next_state;
+input [7:0] st;
+begin
+	state <= st;
 end
 endtask
 
