@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,6 +41,7 @@ parameter NORM1 = 8'd13;
 parameter NORM = 8'd14;
 parameter ADD = 8'd15;
 parameter FCOMPL = 8'd16;
+parameter FNEG = 8'd16;
 parameter SWAP = 8'd17;
 parameter SWPALG = 8'd18;
 parameter ADDEND = 8'd19;
@@ -89,8 +90,10 @@ wire [79:0] FAC2_man = FAC2[79:0];
 wire [80:0] sum = FAC1_man + FAC2_man;
 wire [80:0] dif = FAC2_man - E;
 wire [80:0] neg = 80'h0 - FAC1_man;
-wire [16:0] exp_sum = acc + FAC1_exp + cf;	// FMUL
-wire [16:0] exp_dif = acc - FAC1_exp - ~cf;	// FDIV
+// Note the carry flag must be extended manually!
+wire [16:0] exp_sum = acc + FAC1_exp + {15'd0,cf};	// FMUL
+wire [16:0] exp_dif = acc - FAC1_exp - {15'd0,~cf};	// FDIV
+reg [79:0] rem;
 
 reg cf,vf,nf,zf;
 reg busy;
@@ -175,6 +178,10 @@ RESET:
 		sp <= 6'h00;
 		next_state(IDLE);
 	end
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
 IDLE:
 	begin
 		busy <= 1'b0;
@@ -186,7 +193,7 @@ IDLE:
 		FDIV:	begin push_state(IDLE); next_state(FDIV); busy <= 1'b1; end
 		FIX2FLT:	begin push_state(IDLE); next_state(FIX2FLT); busy <= 1'b1; end
 		FLT2FIX:	begin push_state(IDLE); next_state(FLT2FIX); busy <= 1'b1; end
-		FCOMPL:		begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; end
+		FNEG:		begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; end
 		SWAP:		begin push_state(IDLE); next_state(SWAP); busy <= 1'b1; end
 		endcase
 	end
@@ -237,8 +244,10 @@ NORM:
 		zf <= 1'b1;
 	else
 		zf <= 1'b0;
-	if (FAC1[79]!=FAC1[78] || FAC1_exp==16'h0000)
+	if (FAC1[79]!=FAC1[78] || FAC1_exp==16'h0000) begin
+		$display("Normal: %h",FAC1);
 		pop_state();
+	end
 	// If the mantissa is zero, set the the exponent to zero. Otherwise 
 	// normalization could spin for thousands of clock cycles decrementing
 	// the exponent to zero.
@@ -417,24 +426,39 @@ FDIV1:
 	begin
 		acc <= exp_dif[15:0];
 		cf <= ~exp_dif[16];
-		$display("acc=%h", exp_dif);
+		$display("acc=%h %h %h", exp_dif, acc, FAC1_exp);
 		push_state(DIV1);
 		next_state(MD2);
 	end
 DIV1:
 	begin
+		$display("FAC1=%h, FAC2=%h, E=%h", FAC1, FAC2, E);
 		y <= y - 8'd1;
 		FAC1[79:0] <= {FAC1[79:0],~dif[80]};
-		if (dif[80])
+		if (dif[80]) begin
 			FAC2[79:0] <= {FAC2[78:0],1'b0};
-		else
+			if (FAC2[79]) begin
+				next_state(OVFL);
+			end
+			else if (y!=8'd1)
+				next_state(DIV1);
+			else begin
+				rem <= dif;
+				next_state(MDEND);
+			end
+		end
+		else begin
 			FAC2[79:0] <= {dif[78:0],1'b0};
-		if (FAC2[79])
-			next_state(OVFL);
-		else if (y!=8'd1)
-			next_state(DIV1);
-		else
-			next_state(MDEND);
+			if (dif[79]) begin
+				next_state(OVFL);
+			end
+			else if (y!=8'd1)
+				next_state(DIV1);
+			else begin
+				rem <= dif;
+				next_state(MDEND);
+			end
+		end
 	end
 
 //-----------------------------------------------------------------------------
@@ -500,7 +524,16 @@ FLT2FIX:
 endcase
 end
 
-
+/*
+DIVBY10:
+	begin
+		FAC2[95:80] <= 16'h8003;
+		FAC2[79] <= 1'b0;		// +ve
+		FAC2[78:75] <= 4'hA;	// 10
+		FAC2[74:0] <= 75'd0;
+		next_state(FDIV);
+	end
+*/
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 task push_state;
