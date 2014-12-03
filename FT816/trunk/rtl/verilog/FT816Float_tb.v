@@ -63,7 +63,7 @@ if (rst)
 else begin
 state <= state + 8'd1;
 case(state)
-8'h00:	b_write(24'hFEA202,8'h60);
+8'h00:	b_write(24'hFEA202,8'd100);
 8'h01:  if (rdy) b_write(24'hFEA203,8'h00); else state <= state;
 8'h02:  if (rdy) b_write(24'hFEA20F,8'h05); else state <= state;// FIX2FLT
 8'h04:  if (rdy) b_read(24'hFEA20F); else state <= state;
@@ -88,7 +88,7 @@ case(state)
 		end
 		else
 			state <= state;
-8'h10:  if (rdy) b_write(24'hFEA20F,8'h04); else state <= state;// DIV
+8'h10:  if (rdy) b_write(24'hFEA20F,8'h03); else state <= state;// DIV
 8'h12:  if (rdy) b_read(24'hFEA20F); else state <= state;
 8'h13:	if (rdy) begin
 			if (db[7]) state <= state - 1;
