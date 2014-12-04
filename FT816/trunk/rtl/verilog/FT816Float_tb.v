@@ -67,28 +67,28 @@ else begin
 state <= state + 8'd1;
 case(state)
 8'h00:	begin
-			value <= 96'h00007FFFFFFFFFFFFFFF0000;	// MAXINT
+			value <= 96'h00000000000000004D20000;	// MAXINT
 			fix2flt <= 1'b1;
 			state <= 8'h80;
 			retstate <= 8'h01;
 			 b_write(24'hFEA20F,8'd17); 	// prime bus
 		end
 8'h01:  if (rdy) b_write(24'hFEA20F,8'd17); else state <= state;// SWAP
-8'h02:  if (rdy) b_read(24'hFEA20F); else state <= state;
-8'h03:	if (rdy) begin
+8'h03:  if (rdy) b_read(24'hFEA20F); else state <= state;
+8'h04:	if (rdy) begin
 			if (db[7]) state <= state - 1;
 		end
 		else
 			state <= state;
-8'h04:	begin
-			value <= 96'h00007FFFFFFFFFFFFFFF0000;	// MAXINT
+8'h05:	begin
+			value <= 96'h000000000000000004D20000;	// MAXINT
 			fix2flt <= 1'b1;
 			state <= 8'h80;
-			retstate <= 8'h05;
+			retstate <= 8'h06;
 		end
-8'h05:  if (rdy) b_write(24'hFEA20F,8'h03); else state <= state;// MUL
-8'h06:  if (rdy) b_read(24'hFEA20F); else state <= state;
-8'h07:	if (rdy) begin
+8'h06:  if (rdy) b_write(24'hFEA20F,8'h06); else state <= state;// MUL
+8'h08:  if (rdy) b_read(24'hFEA20F); else state <= state;
+8'h09:	if (rdy) begin
 			if (db[7]) state <= state - 1;
 		end
 		else
@@ -108,8 +108,8 @@ case(state)
 8'h8A:  if (rdy) b_write(24'hFEA20A,value[87:80]); else state <= state;
 8'h8B:  if (rdy) begin b_write(24'hFEA20B,value[95:88]); if (fix2flt) state <= 8'h90; else state <= retstate; end else state <= state;
 8'h90:  if (rdy) b_write(24'hFEA20F,8'h05); else state <= state;// FIX2FLT
-8'h91:  if (rdy) b_read(24'hFEA20F); else state <= state;
-8'h92:	if (rdy) begin
+8'h92:  if (rdy) b_read(24'hFEA20F); else state <= state;
+8'h93:	if (rdy) begin
 			if (db[7]) state <= state - 1;
 			else state <= retstate;
 		end

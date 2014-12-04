@@ -115,13 +115,17 @@ wire lt = !(gt|eq);
 wire zf = ~|FAC1;
 
 wire cs = vda && (ad[23:8]==pIOAddress[23:8]);
-reg rdy1;
+reg rdy1,rdy2;
 always @(posedge clk)
-if (rst)
+if (rst) begin
 	rdy1 <= 1'b1;
-else
+	rdy2 <= 1'b1;
+end
+else begin
 	rdy1 <= cs & ~rdy1;
-assign rdy = cs ? (rw ? rdy1 : 1'b1) : 1'b1;
+	rdy2 <= cs & rdy1;
+end
+assign rdy = cs ? (rw ? rdy2 : 1'b1) : 1'b1;
 assign db = cs & rw ? dbo : {8{1'bz}};
 
 // This is a clock cycle counter used in simulation to determine the number of
@@ -155,7 +159,7 @@ else begin
 		8'h09:	FAC1[79:72] <= db;
 		8'h0A:	FAC1[87:80] <= db;
 		8'h0B:	FAC1[95:88] <= db;
-		8'h0F:	cmd <= db;
+		8'h0E:	cmd <= db;
 		8'h10:	FAC2[7:0] <= db;
 		8'h11:	FAC2[15:8] <= db;
 		8'h12:	FAC2[23:16] <= db;
@@ -183,7 +187,7 @@ else begin
 	8'h09:	dbo <= FAC1[79:72];
 	8'h0A:	dbo <= FAC1[87:80];
 	8'h0B:	dbo <= FAC1[95:88];
-	8'h0F:	dbo <= {busy,2'b00,lt,eq,gt,zf,vf};
+	8'h0E:	dbo <= {busy,2'b00,lt,eq,gt,zf,vf};
 	8'h10:	dbo <= FAC2[7:0];
 	8'h11:	dbo <= FAC2[15:8];
 	8'h12:	dbo <= FAC2[23:16];
@@ -274,13 +278,9 @@ ABS:
 // Normalize
 // - Decrement exponent and shift left
 // - Normalization is normally the last step of an operation.
+// - If possible the FAC is shifted by 16 bits at a time. This helps with
+//   the many small constants that are usually present.
 //-----------------------------------------------------------------------------
-NORM1:
-	begin
-	FAC1[EMSB+FMSB+1:FMSB+1] <= FAC1[EMSB+FMSB+1:FMSB+1] - (shiftBy16 ? 16'd16 : 16'd1);
-	FAC1[FMSB:0] <= shiftBy16 ? {FAC1[FMSB-16:0],16'h0} : {FAC1[FMSB-1:0],1'b0};
-	next_state(NORM);
-	end
 NORM:
 	begin
 	$display("Normalize FAC1H %h", FAC1[FMSB:FMSB-15]);
@@ -297,17 +297,18 @@ NORM:
 	end
 	else if (FAC1[FMSB:FMSB-15]=={16{FAC1[FMSB]}}) begin
 		$display("shift by 16");
-		shiftBy16 <= TRUE;
-		next_state(NORM1);
+		FAC1[EMSB+FMSB+1:FMSB+1] <= FAC1[EMSB+FMSB+1:FMSB+1] - 16'd16;
+		FAC1[FMSB:0] <= {FAC1[FMSB-16:0],16'h0};
 	end
 	else begin
-		shiftBy16 <= FALSE;
-		next_state(NORM1);
+		FAC1[EMSB+FMSB+1:FMSB+1] <= FAC1[EMSB+FMSB+1:FMSB+1] - 16'd1;
+		FAC1[FMSB:0] <= {FAC1[FMSB-1:0],1'b0};
 	end
 	end
 
 //-----------------------------------------------------------------------------
 // Add mantissa's and compute carry and overflow.
+// This is used by both ADD and MUL.
 //-----------------------------------------------------------------------------
 
 ADD:
@@ -348,6 +349,7 @@ SWAP:
 
 //-----------------------------------------------------------------------------
 // Subtract
+// - subtract first complements the FAC then performs an ADD operation.
 //-----------------------------------------------------------------------------
 
 FSUB:
@@ -443,14 +445,12 @@ FMUL3:
 			FAC1[FMSB:0] <= sum[FMSB:0];
 			cf <= sum[FMSB+1];
 			vf <= (sum[FMSB] ^ FAC2[FMSB]) & (1'b1 ^ FAC1[FMSB] ^ FAC2[FMSB]);
-//			push_state(MUL2);
-//			next_state(ADD);
 		end
 		y <= y - 8'd1;
-		if (y!=8'd0)
-			next_state(MUL1);
-		else
+		if (y==8'd0)
 			next_state(MDEND);
+		else
+			next_state(MUL1);
 	end
 MDEND:
 	begin
@@ -561,7 +561,24 @@ FIX2FLT:
 
 FLT2FIX:
 	begin
-		if (FAC1_exp==16'h803E)
+		// If the exponent is too small then no amount of shifting will
+		// result in a non-zero number. In this case we just set the 
+		// FAC to zero. Otherwise FLT2FIX would spin for thousands of cycles
+		// until the exponent incremented finally to 803Eh.
+		if (FAC1_exp < 16'h7FB0) begin
+			FAC1[79:0] <= 80'd0;
+			FAC1[95:80] <= 16'h803E;
+			pop_state();
+		end
+		// If the exponent is too large, we can't right shift and the value
+		// would overflow a 64-bit integer, so we just set it to the max.
+		else if (FAC1_exp > 16'h803E) begin
+			vf <= 1'b1;
+			FAC1[95:80] <= 16'h803E;
+			FAC1[79:0] <= FAC1[79] ? 80'h80000000000000000000 : 80'h7FFFFFFFFFFFFFFFFFFF;
+			pop_state();
+		end
+		else if (FAC1_exp==16'h803E)
 			pop_state();
 		else begin
 			push_state(FLT2FIX);
