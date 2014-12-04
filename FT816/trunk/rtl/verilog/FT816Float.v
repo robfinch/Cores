@@ -23,9 +23,11 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // 1600 LUTs 350 FF's
-// 150 MHz
+// 140 MHz
 // ============================================================================
 //
+`define SIMULATION	1'b1
+
 module FT816Float(rst, clk, vda, rw, ad, db, rdy);
 parameter pIOAddress = 24'hFEA200;
 parameter EMSB = 15;
@@ -38,6 +40,8 @@ parameter FMUL = 8'd3;
 parameter FDIV = 8'd4;
 parameter FIX2FLT = 8'd5;
 parameter FLT2FIX = 8'd6;
+parameter FABS = 8'd7;
+parameter ABS = 8'd7;
 parameter MD1 = 8'd10;
 parameter ABSSWP = 8'd11;
 parameter ABSSWP1 = 8'd12;
@@ -120,11 +124,22 @@ else
 assign rdy = cs ? (rw ? rdy1 : 1'b1) : 1'b1;
 assign db = cs & rw ? dbo : {8{1'bz}};
 
+// This is a clock cycle counter used in simulation to determine the number of
+// cycles a given operation takes to complete.
+reg [11:0] cyccnt;
+
 always @(posedge clk)
 if (rst) begin
 	next_state(RESET);
+`ifdef SIMULATION
+	FAC1 <= 96'd0;	// for simulation
+	FAC2 <= 96'd0;
+`endif
 end
 else begin
+`ifdef SIMULATION
+	cyccnt <= cyccnt + 1;
+`endif
 	cmd <= 8'h00;
 	if (cs & ~rw)
 		case(ad[7:0])
@@ -195,6 +210,11 @@ RESET:
 
 IDLE:
 	begin
+`ifdef SIMULATION
+		if (cyccnt > 0)
+			$display("Cycle Count=%d", cyccnt);
+		cyccnt <= 12'h0;
+`endif
 		busy <= 1'b0;
 		sp <= 4'h0;
 		case(cmd)
@@ -205,6 +225,7 @@ IDLE:
 		FIX2FLT:	begin push_state(IDLE); next_state(FIX2FLT); busy <= 1'b1; end
 		FLT2FIX:	begin push_state(IDLE); next_state(FLT2FIX); busy <= 1'b1; end
 		FNEG:		begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; end
+		FABS:		begin push_state(IDLE); next_state(ABS); busy <= 1'b1; end
 		SWAP:		begin push_state(IDLE); next_state(SWAP); busy <= 1'b1; end
 		endcase
 	end
@@ -236,6 +257,19 @@ ABSSWP1:
 		next_state(SWAP);
 	end
 
+
+//-----------------------------------------------------------------------------
+// Take the absolute value of FAC1
+//-----------------------------------------------------------------------------
+
+ABS:
+	begin
+		if (FAC1_man[FMSB])
+			next_state(FCOMPL);
+		else
+			pop_state();
+	end
+
 //-----------------------------------------------------------------------------
 // Normalize
 // - Decrement exponent and shift left
@@ -249,7 +283,7 @@ NORM1:
 	end
 NORM:
 	begin
-	$display("Normalize");
+	$display("Normalize FAC1H %h", FAC1[FMSB:FMSB-15]);
 	if (FAC1[FMSB]!=FAC1[FMSB-1] || ~|FAC1_exp) begin
 		$display("Normal: %h",FAC1);
 		pop_state();
@@ -262,6 +296,7 @@ NORM:
 		pop_state();
 	end
 	else if (FAC1[FMSB:FMSB-15]=={16{FAC1[FMSB]}}) begin
+		$display("shift by 16");
 		shiftBy16 <= TRUE;
 		next_state(NORM1);
 	end
