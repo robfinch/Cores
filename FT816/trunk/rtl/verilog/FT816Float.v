@@ -42,6 +42,8 @@ parameter FIX2FLT = 8'd5;
 parameter FLT2FIX = 8'd6;
 parameter FABS = 8'd7;
 parameter ABS = 8'd7;
+parameter NABS = 8'd8;
+parameter FNABS = 8'd8;
 parameter MD1 = 8'd10;
 parameter ABSSWP = 8'd11;
 parameter ABSSWP1 = 8'd12;
@@ -51,6 +53,12 @@ parameter ADD = 8'd15;
 parameter FCOMPL = 8'd16;
 parameter FNEG = 8'd16;
 parameter SWAP = 8'd17;
+parameter FIXED_ADD = 8'h81;
+parameter FIXED_SUB = 8'h82;
+parameter FIXED_MUL = 8'h83;
+parameter FIXED_DIV = 8'h84;
+parameter FIXED_ABS = 8'h87;
+parameter FIXED_NEG = 8'h90;
 parameter SWPALG = 8'd18;
 parameter ADDEND = 8'd19;
 parameter ALGNSW = 8'd20;
@@ -98,13 +106,14 @@ wire [FMSB+1:0] dif = FAC2_man - E;
 wire [FMSB+1:0] neg = {FMSB+1{1'b0}} - FAC1_man;
 wire [EMSB+1:0] expdif = FAC1_exp - FAC2_exp;
 // Note the carry flag must be extended manually!
+reg cf,vf,nf;
 wire [EMSB+1:0] exp_sum = acc + FAC1_exp + {15'd0,cf};	// FMUL
 wire [EMSB+1:0] exp_dif = acc - FAC1_exp - {15'd0,~cf};	// FDIV
 reg [FMSB:0] rem;
 reg isRTAR;
-reg cf,vf,nf;
 reg busy;
 reg shiftBy16;
+reg isFixedPoint;
 reg [7:0] dbo;
 
 wire eq = FAC1==FAC2;
@@ -221,6 +230,7 @@ IDLE:
 `endif
 		busy <= 1'b0;
 		sp <= 4'h0;
+		isFixedPoint <= FALSE;
 		case(cmd)
 		FADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; end
 		FSUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; end
@@ -230,7 +240,15 @@ IDLE:
 		FLT2FIX:	begin push_state(IDLE); next_state(FLT2FIX); busy <= 1'b1; end
 		FNEG:		begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; end
 		FABS:		begin push_state(IDLE); next_state(ABS); busy <= 1'b1; end
+		FNABS:		begin push_state(IDLE); next_state(NABS); busy <= 1'b1; end
 		SWAP:		begin push_state(IDLE); next_state(SWAP); busy <= 1'b1; end
+		// Fixed point operations
+		FIXED_ADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; isFixedPoint <= TRUE; end
+		FIXED_SUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; isFixedPoint <= TRUE; end
+		FIXED_MUL:	begin push_state(IDLE); next_state(FMUL); busy <= 1'b1; isFixedPoint <= TRUE; end
+		FIXED_DIV:	begin push_state(IDLE); next_state(FDIV); busy <= 1'b1; isFixedPoint <= TRUE; end
+		FIXED_NEG:	begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; isFixedPoint <= TRUE; end
+		FIXED_ABS:	begin push_state(IDLE); next_state(ABS); busy <= 1'b1; isFixedPoint <= TRUE; end
 		endcase
 	end
 
@@ -275,6 +293,18 @@ ABS:
 	end
 
 //-----------------------------------------------------------------------------
+// Take the negative absolute value of FAC1
+//-----------------------------------------------------------------------------
+
+NABS:
+	begin
+		if (~FAC1_man[FMSB])
+			next_state(FCOMPL);
+		else
+			pop_state();
+	end
+
+//-----------------------------------------------------------------------------
 // Normalize
 // - Decrement exponent and shift left
 // - Normalization is normally the last step of an operation.
@@ -283,6 +313,9 @@ ABS:
 //-----------------------------------------------------------------------------
 NORM:
 	begin
+	if (isFixedPoint)	// nothing to do for fixed point
+		pop_state();
+	else begin
 	$display("Normalize FAC1H %h", FAC1[FMSB:FMSB-15]);
 	if (FAC1[FMSB]!=FAC1[FMSB-1] || ~|FAC1_exp) begin
 		$display("Normal: %h",FAC1);
@@ -303,6 +336,7 @@ NORM:
 	else begin
 		FAC1[EMSB+FMSB+1:FMSB+1] <= FAC1[EMSB+FMSB+1:FMSB+1] - 16'd1;
 		FAC1[FMSB:0] <= {FAC1[FMSB-1:0],1'b0};
+	end
 	end
 	end
 
@@ -330,7 +364,10 @@ FCOMPL:
 		FAC1[FMSB:0] <= neg[FMSB:0];
 		cf <= ~neg[FMSB+1];
 		vf <= neg[FMSB]==FAC1[FMSB];
-		next_state(ADDEND);
+		if (isFixedPoint)
+			pop_state();
+		else
+			next_state(ADDEND);
 	end
 
 //-----------------------------------------------------------------------------
@@ -354,7 +391,10 @@ SWAP:
 
 FSUB:
 	begin
-		push_state(SWPALG);
+		if (isFixedPoint)
+			push_state(FADD);
+		else
+			push_state(SWPALG);
 		next_state(FCOMPL);
 	end
 SWPALG:
@@ -370,10 +410,10 @@ SWPALG:
 FADD:
 	begin
 		cf <= expdif[EMSB+1];	// Must set carry flag from compare
-		if (|expdif[15:0])
+		if (|expdif[15:0] & !isFixedPoint)
 			next_state(SWPALG);
 		else begin
-			push_state(ADDEND);
+			if (!isFixedPoint) push_state(ADDEND);
 			next_state(ADD);
 		end
 	end
@@ -513,7 +553,11 @@ DIV1:
 MD2:
 	begin
 		FAC1[FMSB:0] <= 80'h0;
-		if (cf)
+		if (isFixedPoint) begin
+			y <= 8'h4F;
+			pop_state();
+		end
+		else if (cf)
 			next_state(OVCHK);
 		else if (acc[EMSB])
 			next_state(MD3);
@@ -549,8 +593,7 @@ OVFL:
 
 FIX2FLT:
 	begin
-		FAC1[EMSB+FMSB+1:FMSB+1] <= 16'h803E;	// exponent = 62
-		FAC1[EMSB:0] <= 16'h0000;
+		FAC1[EMSB+FMSB+1:FMSB+1] <= 16'h804E;	// exponent = 78
 		next_state(NORM);
 	end
 
@@ -567,18 +610,18 @@ FLT2FIX:
 		// until the exponent incremented finally to 803Eh.
 		if (FAC1_exp < 16'h7FB0) begin
 			FAC1[79:0] <= 80'd0;
-			FAC1[95:80] <= 16'h803E;
+			FAC1[95:80] <= 16'h804E;
 			pop_state();
 		end
 		// If the exponent is too large, we can't right shift and the value
 		// would overflow a 64-bit integer, so we just set it to the max.
-		else if (FAC1_exp > 16'h803E) begin
+		else if (FAC1_exp > 16'h804E) begin
 			vf <= 1'b1;
-			FAC1[95:80] <= 16'h803E;
+			FAC1[95:80] <= 16'h804E;
 			FAC1[79:0] <= FAC1[79] ? 80'h80000000000000000000 : 80'h7FFFFFFFFFFFFFFFFFFF;
 			pop_state();
 		end
-		else if (FAC1_exp==16'h803E)
+		else if (FAC1_exp==16'h804E)
 			pop_state();
 		else begin
 			push_state(FLT2FIX);
