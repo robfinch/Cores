@@ -88,8 +88,8 @@ output rdy;
 
 reg [7:0] cmd;
 reg [7:0] state;
-reg [5:0] state_stk [15:0];
-reg [3:0] sp;
+reg [5:0] state_stk [3:0];
+//reg [3:0] sp;
 reg [1:0] sign;
 reg [EMSB:0] acc;
 reg [7:0] y;
@@ -101,10 +101,11 @@ wire [FMSB:0] FAC1_man = FAC1[FMSB:0];
 wire [EMSB:0] FAC2_exp = FAC2[EMSB+FMSB+1:FMSB+1];
 wire [FMSB:0] FAC2_man = FAC2[FMSB:0];
 
-wire [FMSB+1:0] sum = FAC1_man + FAC2_man;
+reg addOrSub;
+wire [FMSB+1:0] sum = addOrSub ? FAC2_man - FAC1_man : FAC2_man + FAC1_man;
 wire [FMSB+1:0] dif = FAC2_man - E;
 wire [FMSB+1:0] neg = {FMSB+1{1'b0}} - FAC1_man;
-wire [EMSB+1:0] expdif = FAC1_exp - FAC2_exp;
+wire [EMSB+1:0] expdif = FAC2_exp - FAC1_exp;
 // Note the carry flag must be extended manually!
 reg cf,vf,nf;
 wire [EMSB+1:0] exp_sum = acc + FAC1_exp + {15'd0,cf};	// FMUL
@@ -118,7 +119,7 @@ reg [7:0] dbo;
 
 wire eq = FAC1==FAC2;
 wire gt = (FAC1[FMSB]^FAC2[FMSB]) ? FAC2[FMSB] : // If the signs are different, whichever one is positive
-		   FAC1_exp==FAC2_exp ? (FAC1_man > FAC2_man) ^ FAC1[FMSB] :	// if exponents are equal check mantissa
+		   FAC1_exp==FAC2_exp ? (FAC1_man > FAC2_man) :	// if exponents are equal check mantissa
 		   FAC1_exp > FAC2_exp;	// else compare exponents
 wire lt = !(gt|eq);
 wire zf = ~|FAC1;
@@ -214,7 +215,7 @@ else begin
 case(state)
 RESET:
 	begin
-		sp <= 4'h0;
+//		sp <= 4'h0;
 		next_state(IDLE);
 	end
 
@@ -229,12 +230,12 @@ IDLE:
 		cyccnt <= 12'h0;
 `endif
 		busy <= 1'b0;
-		sp <= 4'h0;
+//		sp <= 4'h0;
 		isFixedPoint <= FALSE;
 		case(cmd)
-		FADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; end
-		FSUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; end
-		FMUL:	begin push_state(IDLE); next_state(FMUL); busy <= 1'b1; end
+		FADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; addOrSub <= 1'b0; end
+		FSUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; addOrSub <= 1'b0; end
+		FMUL:	begin push_state(IDLE); next_state(FMUL); busy <= 1'b1; addOrSub <= 1'b0; end 
 		FDIV:	begin push_state(IDLE); next_state(FDIV); busy <= 1'b1; end
 		FIX2FLT:	begin push_state(IDLE); next_state(FIX2FLT); busy <= 1'b1; end
 		FLT2FIX:	begin push_state(IDLE); next_state(FLT2FIX); busy <= 1'b1; end
@@ -243,9 +244,9 @@ IDLE:
 		FNABS:		begin push_state(IDLE); next_state(NABS); busy <= 1'b1; end
 		SWAP:		begin push_state(IDLE); next_state(SWAP); busy <= 1'b1; end
 		// Fixed point operations
-		FIXED_ADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; isFixedPoint <= TRUE; end
-		FIXED_SUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; isFixedPoint <= TRUE; end
-		FIXED_MUL:	begin push_state(IDLE); next_state(FMUL); busy <= 1'b1; isFixedPoint <= TRUE; end
+		FIXED_ADD:	begin push_state(IDLE); next_state(FADD); busy <= 1'b1; isFixedPoint <= TRUE; addOrSub <= 1'b0; end
+		FIXED_SUB:	begin push_state(IDLE); next_state(FSUB); busy <= 1'b1; isFixedPoint <= TRUE; addOrSub <= 1'b0; end
+		FIXED_MUL:	begin push_state(IDLE); next_state(FMUL); busy <= 1'b1; isFixedPoint <= TRUE; addOrSub <= 1'b0; end
 		FIXED_DIV:	begin push_state(IDLE); next_state(FDIV); busy <= 1'b1; isFixedPoint <= TRUE; end
 		FIXED_NEG:	begin push_state(IDLE); next_state(FCOMPL); busy <= 1'b1; isFixedPoint <= TRUE; end
 		FIXED_ABS:	begin push_state(IDLE); next_state(ABS); busy <= 1'b1; isFixedPoint <= TRUE; end
@@ -391,10 +392,11 @@ SWAP:
 
 FSUB:
 	begin
-		if (isFixedPoint)
-			push_state(FADD);
-		else
-			push_state(SWPALG);
+//		if (isFixedPoint)
+//			push_state(FADD);
+//		else
+//			push_state(SWPALG);
+		push_state(FADD);
 		next_state(FCOMPL);
 	end
 SWPALG:
@@ -409,8 +411,15 @@ SWPALG:
 
 FADD:
 	begin
-		cf <= expdif[EMSB+1];	// Must set carry flag from compare
-		if (|expdif[15:0] & !isFixedPoint)
+		cf <= ~expdif[EMSB+1];	// Must set carry flag from compare
+		// If the exponents are too different then one of the values will
+		// become zero, so the result is just the larger value. This check
+		// is to prevent shifting thousands of times.
+		if (expdif[15] ? expdif < 16'hFFB0 : expdif[15:0] > 16'h0050) begin
+			FAC1 <= expdif[15] ? FAC2 : FAC1;
+			pop_state();
+		end
+		else if (|expdif[15:0] & !isFixedPoint)
 			next_state(SWPALG);
 		else begin
 			if (!isFixedPoint) push_state(ADDEND);
@@ -647,15 +656,24 @@ DIVBY10:
 task push_state;
 input [5:0] st;
 begin
-	state_stk[sp-4'd1] <= st;
-	sp <= sp - 4'd1;
+	state_stk[0] <= st;
+	state_stk[1] <= state_stk[0];
+	state_stk[2] <= state_stk[1];
+	state_stk[3] <= state_stk[2];
+//	state_stk[sp-4'd1] <= st;
+//	sp <= sp - 4'd1;
 end
 endtask
 
 task pop_state;
 begin
-	next_state(state_stk[sp]);
-	sp <= sp + 4'd1;
+	state <= state_stk[0];
+	state_stk[0] <= state_stk[1];
+	state_stk[1] <= state_stk[2];
+	state_stk[2] <= state_stk[3];
+	state_stk[3] <= IDLE;
+//	next_state(state_stk[sp]);
+//	sp <= sp + 4'd1;
 end
 endtask
 

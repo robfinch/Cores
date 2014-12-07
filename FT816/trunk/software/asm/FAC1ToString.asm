@@ -32,14 +32,22 @@ expcnt		= $AA		; string to float exponent count
 Sendl			= $BA	; BASIC pointer temp low byte
 Sendh			= $BB	; BASIC pointer temp low byte
 
-Decss		= $3C0		; number to decimal string start
+Decss		= $3A0		; number to decimal string start
 Decssp1		= Decss+1	; number to decimal string start
 FP_ADD		EQU		1
+FP_SUB		EQU		2
 FP_MUL		EQU		3
 FP_DIV		EQU		4
 FP_FLT2FIX	EQU		6
+FP_ABS		EQU		7
 FP_NEG		EQU		16
 FP_SWAP		EQU		17
+FIXED_MUL	EQU		$83
+FIXED_ADD	EQU		$81
+FIXED_SUB	EQU		$82
+;parameter FIXED_DIV = 8'h84;
+;parameter FIXED_ABS = 8'h87;
+;parameter FIXED_NEG = 8'h90;
 FP_CMDREG	EQU		$FEA20E
 FP_STATREG	EQU		$FEA20E
 FAC1		EQU		$FEA200
@@ -56,14 +64,17 @@ FAC2		EQU		$FEA210
 	NDX		16
 	MEM		16
 	
-; convert FAC1 to ASCII string result in (AY)
-; not any more, moved scratchpad to page 0
 
 public FAC1ToString:
+
+; The first chunk of code determines if the number is positive or negative
+; and spits out the appropriate sign. Next it takes the absolute value of
+; the accumulator so following code only has to deal with positive numbers.
+
 	LDY	#$00			; set index = 1
 	LDA	FAC1_msw		; test FAC1 sign (b15) (Can't use BIT)
 	BPL	.0002		; branch if +ve
-	LDA	#$2D			; else character = "-"
+	LDA	#'-'			; else character = "-"
 	STA	Decss,Y		; save leading character (" " or "-")
 	LDA	#FP_NEG		; make the FAC positive
 	JSR	FPCommandWait
@@ -73,31 +84,57 @@ public FAC1ToString:
 	STA	Decss,Y
 .0001:
 	STY	Sendl			; save index
-	INY				; increment index
+
+; This little bit of code check for a zero exponent which indicates a
+; value of zero.
+
 	LDA	FAC1_e		; get FAC1 exponent
 	TAX
 	BNE	LAB_2989		; branch if FAC1<>0
-
 					; exponent was $00 so FAC1 is 0
 	LDA	#'0'			; set character = "0"
-	JMP	LAB_2A89		; save last character, [EOT] and exit
+	BRL	LAB_2A89		; save last character, [EOT] and exit
+
+; This loop attempts to make small values more significant, so that there are
+; fewer leading zeros in the value. (The exponent is decremented so that it
+; corresponds). Because of the potential for extremely small values looping is
+; limited. The problem is the 16 bit exponent can allow for much smaller
+; values than an 8 bit exponent would and we don't want to loop for thousands
+; of iterations in order to display a value that's almost zero.
 
 					; FAC1 is some non zero value
 LAB_2989
+	STY	Sendl			; save off .Y
+	LDY #1639			; max number of retries
 	LDA	#$00			; clear (number exponent count)
-	CPX	#$8000			; compare FAC1 exponent with $8001 (>1.00000)
-
+	STA numexp
+LOOP_MBMILLION:
+	CPX	#$8000			; compare FAC1 exponent with $8000 (>1.00000)
 	BCS	LAB_299A		; branch if FAC1=>1
-
 					; FAC1<1
 	PEA	A_MILLION		; multiply FAC * 1,000,000
-	JSR	LOAD_FAC2		; do convert AY, FCA1*(AY)
+	JSR	LOAD_FAC2		; 
 	PLA					; get rid of parameter
 	JSR	FMUL
-	LDA	#$FFFA			; set number exponent count (-6)
+	LDA numexp
+	SEC
+	SBC	#6				; set number exponent count (-6)
+	STA numexp
+	LDA FAC1_e
+	TAX
+	DEY
+	BPL	LOOP_MBMILLION
+
 LAB_299A
-	STA	numexp		; save number exponent count
-LAB_299C
+	LDY	Sendl		; get back .Y
+
+; These two loops coerce the value of the FAC to be between 100,000 and
+; 1,000,000. This gives a maximum of six digits before the decimal point
+; in scientific notation.
+
+; This loop divides by 10 until the value in the FAC is less than 1,000,000
+;
+LOOP_DB10:
 	PEA	MAX_BEFORE_SCI	; set pointer low byte to 999999.4375 (max before sci note)
 	JSR	LOAD_FAC2		; compare FAC1 with (AY)
 	PLA					; get rid of parameter
@@ -105,10 +142,17 @@ LAB_299C
 	BIT	#$08			; test equals bit
 	BNE	LAB_29C3		; exit if FAC1 = (AY)
 	BIT	#$04			; test greater than bit
-	BNE	LAB_29B9		; go do /10 if FAC1 > (AY)
+	BEQ	LOOP_MB10		; go do *10 if FAC1 < (AY)
 
+LAB_29B9
+	JSR	DivideByTen		; divide by 10
+	INC	numexp			; increment number exponent count
+	BRA	LOOP_DB10		; go test again (branch always)
+
+; This loop multiplies the value by 10 until it's greater than
+; 100,000.
 					; FAC1 < (AY)
-LAB_29A7
+LOOP_MB10
 	PEA CONST_9375		; set pointer to 99999.9375
 	JSR	LOAD_FAC2		; compare FAC1 with (AY)
 	PLA					; get rid of parameter
@@ -121,19 +165,14 @@ LAB_29A7
 LAB_29B2
 	JSR	MultiplyByTen	; multiply by 10
 	DEC	numexp		; decrement number exponent count
-	BRA	LAB_29A7		; go test again (branch always)
-
-LAB_29B9
-	JSR	DivideByTen		; divide by 10
-	INC	numexp		; increment number exponent count
-	BRA	LAB_299C		; go test again (branch always)
+	BRA	LOOP_MB10		; go test again (branch always)
 
 ; now we have just the digits to do
 
 LAB_29C0
-	JSR	AddPoint5		; add 0.5 to FAC1 (round FAC1)
+;	JSR	AddPoint5		; add 0.5 to FAC1 (round FAC1)
 LAB_29C3
-	JSR	FloatToFixed	; convert FAC1 floating-to-fixed
+;	JSR	FloatToFixed	; convert FAC1 floating-to-fixed
 	LDX	#$01			; set default digits before dp = 1
 	LDA	numexp		; get number exponent count
 	CLC				; clear carry for add
@@ -172,83 +211,53 @@ LAB_29E4
 	STA	Decss,Y		; save to output string
 LAB_29F5
 	STY	Sendl			; save output string index
+
 LAB_29F7
-	LDY	#$00			; clear index (point to 100,000)
-	LDX	#'0'			; 
+	LDX	#'0'			; holds onto the digit value
+
+; Now loop subtracting 100,000 as many times as we can. The value was coerced
+; to be between 100,000 and 1,000,000. Count the number of times subtraction
+; can be done successfully.
+;
 LAB_29FB
-	INX				; 
-	SEC
-	LDA FAC1_4
-	SBC LAB_2A9A+6,Y
-	STA FAC1_4
-	LDA FAC1_3
-	SBC LAB_2A9A+4,Y
-	STA FAC1_3
-	LDA FAC1_2
-	SBC LAB_2A9A+2,Y
-	STA FAC1_2
-	LDA	FAC1_1
-	SBC LAB_2A9A,Y
-	STA FAC1_1
-	BPL	LAB_29FB		; not -ve so try again
-
-	; we went one too far, so add back
-	CLC
-	LDA FAC1_4
-	ADC LAB_2A9A+6,Y
-	STA FAC1_4
-	LDA FAC1_3
-	ADC LAB_2A9A+4,Y
-	STA FAC1_3
-	LDA FAC1_2
-	ADC LAB_2A9A+2,Y
-	STA FAC1_2
-	LDA	FAC1_1
-	ADC LAB_2A9A,Y
-	STA FAC1_1
-	DEX
-
-LAB_2A18
-
-LAB_2A1A
-	TXA				; 
-LAB_2A21
-	INY
-	INY				; increment index ..
-	INY				; .. to next less ..
-	INY				; .. power of ten
-	INY
-	INY
-	INY
-	INY
-	STY	Cvaral		; save as current var address low byte
+	PEA CONST_100000
+	JSR LOAD_FAC2	; load FAC2 with 100,000
+	PLA				; get rid of parameter
+	LDA FP_STATREG
+	BIT #$04		; Is FAC1 > 100,000 ?
+	BEQ	.0005		; branch if not
+	LDA #FP_SWAP	; subtract is FAC2-FAC1!
+	JSR FPCommandWait;
+	LDA #FP_SUB		; subtract 100,000 from the mantissa.
+	JSR FPCommandWait
+	INX				; increment the value of the digit
+	BRA	LAB_29FB	; try again
+.0005:
+	TXA
 	LDY	Sendl			; get output string index
 	INY				; increment output string index
-	TAX				; copy character to X
-;	AND	#$7F			; mask out top bit
+	TXA
 	STA	Decss,Y		; save to output string
 	DEC	numexp		; decrement # of characters before the dp
 	BNE	LAB_2A3B		; branch if still characters to do
-
-					; else output the point
+				; else output the point
 	LDA	#'.'			; character "."
 	INY				; increment output string index
 	STA	Decss,Y		; save to output string
 LAB_2A3B
-	STY	Sendl			; save output string index
-	LDY	Cvaral		; get current var address low byte
-	LDX	#'0'
-	CPY	#$28			; compare index with max
-	LBNE	LAB_29FB		; loop if not max
-
+	STY	Sendl		; save output string index
+	; We subtracted until the value was < 100,000 so multiply the
+	; remainder upwards to get the next digit.
+	JSR	MultiplyByTen	; If not, multiply by 10
+	CPY #27			; converted (+/- . incl)
+	BCC	LAB_29F7
 					; now remove trailing zeroes
-	LDY	Sendl			; get output string index
-LAB_2A4B
+.RemoveTrailingZeros
 	LDA	Decss,Y		; get character from output string
 	AND	#$FF		; mask to a byte
 	DEY				; decrement output string index
 	CMP	#'0'			; compare with "0"
-	BEQ	LAB_2A4B		; loop until non "0" character found
+	BEQ	.RemoveTrailingZeros	; loop until non "0" character found
 
 	CMP	#'.'			; compare with "."
 	BEQ	LAB_2A58		; branch if was dp
@@ -258,7 +267,7 @@ LAB_2A4B
 LAB_2A58
 	LDA	#'+'			; character "+"
 	LDX	expcnt		; get exponent count
-	BEQ	LAB_2A8C		; if zero go set null terminator and exit
+	LBEQ	LAB_2A8C		; if zero go set null terminator and exit
 
 					; exponent isn't zero so write exponent
 	BPL	LAB_2A68		; branch if exponent count +ve
@@ -281,6 +290,7 @@ LAB_2A68
 	TXA				; get exponent count back
 
 ; do highest exponent digit
+	STZ Sendl
 	LDX	#'0'-1		; one less than "0" character
 	SEC				; set carry for subtract
 .0001:				
@@ -290,7 +300,11 @@ LAB_2A68
 	ADC #10000
 	CPX #'0'
 	BEQ .0005
-	STX Decss+3,Y
+	INC Sendl
+	PHA
+	TXA
+	STA Decss+3,Y
+	PLA
 	INY
 ; do the next exponent digit
 .0005:
@@ -301,9 +315,16 @@ LAB_2A68
 	SBC #1000
 	BCS .0002
 	ADC #1000
+	LSR Sendl
+	BCS .00010
 	CPX #'0'
 	BEQ .0006
-	STX Decss+3,Y
+.00010:
+	INC Sendl
+	PHA
+	TXA
+	STA Decss+3,Y
+	PLA
 	INY
 ; and the next
 .0006:
@@ -314,9 +335,16 @@ LAB_2A68
 	SBC #100
 	BCS .0003
 	ADC #100
+	LSR Sendl
+	BCS .00011
 	CPX #'0'
 	BEQ .0007
-	STX Decss+3,Y
+.00011:
+	INC Sendl
+	PHA
+	TXA
+	STA Decss+3,Y
+	PLA
 	INY
 
 .0007:
@@ -327,9 +355,16 @@ LAB_2A68
 	SBC #10
 	BCS .0004
 	ADC #10
+	LSR Sendl
+	BCS .00012
 	CPX #'0'
 	BEQ .0008
-	STX Decss+3,Y
+.00012:
+	INC Sendl
+	PHA
+	TXA
+	STA Decss+3,Y
+	PLA
 	INY
 
 .0008:
@@ -372,10 +407,12 @@ FMUL:
 	JMP		FPcommandWait
 	
 LOAD_FAC2:
+	PHX
+	PHY
 	LDY		#0
 	TYX
 .0002:
-	LDA		(3,s),Y
+	LDA		(7,s),Y
 	STA		FAC2,X
 	INY
 	INY
@@ -383,6 +420,8 @@ LOAD_FAC2:
 	INX
 	CPX		#12
 	BNE		.0002
+	PLY
+	PLX
 	RTS
 	
 FloatToFixed:
@@ -445,16 +484,24 @@ public DispFAC1:
 	JSR OutChar
 	RTS
 ;
-; 1,000,000 as a fixed point number
+; 1,000,000 as a floating point number
 ;
 A_MILLON:	; $F4240
 	dw		$0000
-	dw		$4240
-	dw		$000F
+	dw		$0000
+	dw		$0000
 	dW		$0000
-	dw		$0000
-	dw		$0000
+	dw		$7A12
+	dw		$8013
 
+CONST_100000:
+	;186A0
+	dw		$0000
+	dw		$0000
+	dw		$0000
+	dw		$0000
+	dw		$61A8
+	dw		$8010
 ; The constant 999999.4375 as hex
 ; 01.11_1010_0001_0001_1111_1011_1000_00000000000000000000000000
 MAX_BEFORE_SCI:
@@ -510,14 +557,15 @@ LAB_2A9C = LAB_2A9B+1
 ;	.word	$0000,$0000,$0000,$3B9A,$CA00
 ;	.word	$FFFF,$FFFF,$FFFF,$FF67,$6980
 ;	.word	$0000,$0000,$0000,$05F5,$E100		; 100000000
-;	.word	$FFFF,$FFFF,$FFFF,$FF67,$6980		; -10000000
-;	.word   $0000,$0000,$0000,$000F,$4240		; 1000000
-	.word	$0000,$0000,$0001,$86A0		; 100000
-	.word	$0000,$0000,$0000,$2710		; 10000
-	.word	$0000,$0000,$0000,$03E8		; 1000
-	.word	$0000,$0000,$0000,$0064		; 100
-	.word	$0000,$0000,$0000,$000A		; 10
-	.word	$0000,$0000,$0000,$0001		; 1
+;	.word	$0000,$0000,$0098,$9680		; 10000000
+;	.word   $4240,$000F,$0000,$0000,$0000,$804E		; 1000000
+	.word	$86A0,$0001,$0000,$0000,$0000,$804E		; 100000
+	.word	$2710,$0000,$0000,$0000,$0000,$804E		; 10000
+	.word	$03E8,$0000,$0000,$0000,$0000,$804E		; 1000
+	.word	$0064,$0000,$0000,$0000,$0000,$804E		; 100
+FIXED10:
+	.word	$000A,$0000,$0000,$0000,$0000,$804E		; 10
+	.word	$0001,$0000,$0000,$0000,$0000,$804E		; 1
 
 		 MEM	16
 		 NDX	16
