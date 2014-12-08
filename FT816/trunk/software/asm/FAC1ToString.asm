@@ -38,6 +38,7 @@ FP_ADD		EQU		1
 FP_SUB		EQU		2
 FP_MUL		EQU		3
 FP_DIV		EQU		4
+FP_FIX2FLT	EQU		5
 FP_FLT2FIX	EQU		6
 FP_ABS		EQU		7
 FP_NEG		EQU		16
@@ -404,7 +405,7 @@ LAB_25FB:
 	JSR		FPCommandWait
 FMUL:
 	LDA		#FP_MUL
-	JMP		FPcommandWait
+	JMP		FPCommandWait
 	
 LOAD_FAC2:
 	PHX
@@ -486,7 +487,7 @@ public DispFAC1:
 ;
 ; 1,000,000 as a floating point number
 ;
-A_MILLON:	; $F4240
+A_MILLION:	; $F4240
 	dw		$0000
 	dw		$0000
 	dw		$0000
