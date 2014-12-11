@@ -89,7 +89,10 @@
 
 	related integer:
 	graf	; 1  0  get random float (0,1]
-	
+
+	xc6slx45 - Webpack 14.7
+	1915 6-LUTs
+	99.65 MHz
 =============================================================== */
 
 `define FCXX	3'd3
@@ -339,7 +342,7 @@ delay5 u8(.clk(clk), .ce(ce), .i(ns), .o(nso) );
 delay5 u9(.clk(clk), .ce(ce), .i(aob_nan), .o(isNan) );
 
 wire [MSB:0] fpu_o;
-wire [MSB+3:0] fpn_o;
+wire [MSB+4:0] fpn_o;
 wire [EX:0] fdiv_o;
 wire [EX:0] fmul_o;
 wire [EX:0] fas_o;
@@ -349,8 +352,8 @@ wire mulUnder;
 reg under;
 
 // These units have a two clock cycle latency
-fpAddsub u10(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a), .b(b), .o(fas_o) );
-fpDiv    u11(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
+fpAddsub u10(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op==`FSUB), .a(a), .b(b), .o(fas_o) );
+fpDiv    u11(.rst(rst), .clk(clk), .ce(ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
 fpMul    u12(.clk(clk), .ce(pipe_ce),          .a(a), .b(b), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
 
 always @(op2 or mulUnder or divUnder)

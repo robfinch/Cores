@@ -54,7 +54,7 @@
 	316 LUTS / 174 slices / 49.7 MHz
 =============================================================== */
 
-module fpDiv(clk, ce, ld, a, b, o, done, sign_exe, overflow, underflow);
+module fpDiv(rst, clk, ce, ld, a, b, o, done, sign_exe, overflow, underflow);
 
 parameter WID = 32;
 localparam MSB = WID-1;
@@ -84,6 +84,7 @@ localparam FMSB = WID==128 ? 111 :
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
+input rst;
 input clk;
 input ce;
 input ld;
@@ -140,7 +141,7 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 // - correct the exponent for denormalized operands
 // - adjust the difference by the bias (add 127)
 // - also factor in the different decimal position for division
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB-1;
+assign ex1 = (xa|a_dn) - (xb|b_dn) + bias;// + FMSB-1;
 
 // check for exponent underflow/overflow
 wire under = ex1[EMSB+2];	// MSB set = negative exponent
@@ -148,7 +149,7 @@ wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 
 // Perform divide
 // could take either 1 or 16 clock cycles
-fpdivr8 #(WID) u2 (.clk(clk), .ld(ld), .a(fracta), .b(fractb), .q(divo), .r(), .done(done));
+fpdivr2 #(FMSB+2) u2 (.rst(rst), .clk(clk), .ce(ce), .ld(ld), .a(fracta), .b(fractb), .q(divo), .done(done));
 
 // determine when a NaN is output
 wire qNaNOut = (az&bz)|(aInf&bInf);

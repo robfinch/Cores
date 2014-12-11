@@ -221,7 +221,7 @@ always @*
 	3'b1xx:		mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
 	3'bx1x:		mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
 	3'bxx1: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
-	default:	mo1 = {mab,{FMSB-2{1'b0}}};	// mab has an extra lead bit and two trailing bits
+	default:	mo1 = {mab,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
 
 delay1 #(FX+1) d3(.clk(clk), .ce(ce), .i(mo1), .o(mo) );

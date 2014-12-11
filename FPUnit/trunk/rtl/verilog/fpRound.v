@@ -78,7 +78,7 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==24 ? 15 : 9;
 
 input [1:0] rm;			// rounding mode
-input [MSB+3:0] i;		// intermediate format input
+input [MSB+4:0] i;		// intermediate format input
 output [WID-1:0] o;		// rounded output
 
 //------------------------------------------------------------
@@ -86,8 +86,8 @@ output [WID-1:0] o;		// rounded output
 wire so;
 wire [EMSB:0] xo;
 reg  [FMSB:0] mo;
-wire [EMSB:0] xo1 = i[MSB+2:FMSB+4];
-wire [FMSB+3:0] mo1 = i[FMSB+3:0];
+wire [EMSB:0] xo1 = i[MSB+3:FMSB+5];
+wire [FMSB+4:0] mo1 = i[FMSB+4:0];
 wire xInf = &xo1;
 wire dn = !(|xo1);			// denormalized input
 assign o = {so,xo,mo};
@@ -112,20 +112,20 @@ always @(xInf,rm,g,r,s,so)
 // note: inf. exponent checked above (if the exponent was infinite already, then no rounding occurs as rnd = 0)
 // note: exponent increments if there is a carry (can only increment to infinity)
 // performance note: use the carry chain to increment the exponent
-wire [MSB:0] rounded = {xo1,mo1[FMSB+3:2]} + rnd;
-wire carry = mo1[FMSB+3] & !rounded[FMSB+1];
+wire [MSB+1:0] rounded = {xo1,mo1[FMSB+4:2]} + rnd;
+wire carry = mo1[FMSB+4] & !rounded[FMSB+2];
 
-assign so = i[MSB+3];
-assign xo = rounded[MSB:FMSB+2];
+assign so = i[MSB+4];
+assign xo = rounded[MSB+1:FMSB+3];
 
 always @(rnd or xo or carry or dn or rounded or mo1)
 	casex({rnd,&xo,carry,dn})
-	4'b0xx0:	mo = mo1[FMSB+2:1];		// not rounding, not denormalized, => hide MSB
-	4'b0xx1:	mo = mo1[FMSB+3:2];		// not rounding, denormalized
-	4'b1000:	mo = rounded[FMSB  :0];	// exponent didn't change, number was normalized, => hide MSB
-	4'b1001:	mo = rounded[FMSB+1:1];	// exponent didn't change, but number was denormalized, => retain MSB
-	4'b1010:	mo = rounded[FMSB+1:1];	// exponent incremented (new MSB generated), number was normalized, => hide 'extra (FMSB+2)' MSB
-	4'b1011:	mo = rounded[FMSB+1:1];	// exponent incremented (new MSB generated), number was denormalized, number became normalized, => hide 'extra (FMSB+2)' MSB
+	4'b0xx0:	mo = mo1[FMSB+3:3];		// not rounding, not denormalized, => hide MSB
+	4'b0xx1:	mo = mo1[FMSB+4:4];		// not rounding, denormalized
+	4'b1000:	mo = rounded[FMSB+1:1];	// exponent didn't change, number was normalized, => hide MSB
+	4'b1001:	mo = rounded[FMSB+2:2];	// exponent didn't change, but number was denormalized, => retain MSB
+	4'b1010:	mo = rounded[FMSB+2:2];	// exponent incremented (new MSB generated), number was normalized, => hide 'extra (FMSB+2)' MSB
+	4'b1011:	mo = rounded[FMSB+2:2];	// exponent incremented (new MSB generated), number was denormalized, number became normalized, => hide 'extra (FMSB+2)' MSB
 	4'b11xx:	mo = 0;					// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
 	endcase
 
@@ -163,7 +163,7 @@ localparam FMSB = WID==128 ? 111 :
 input clk;
 input ce;
 input [1:0] rm;			// rounding mode
-input [MSB+3:0] i;		// expanded format input
+input [MSB+4:0] i;		// expanded format input
 output reg [WID-1:0] o;		// rounded output
 
 wire [WID-1:0] o1;

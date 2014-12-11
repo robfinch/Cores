@@ -89,7 +89,7 @@ input clk;
 input ce;
 input under;
 input [EX:0] i;		// expanded format input
-output [WID+2:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
+output [WID+3:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
 
 // variables
 wire so;
@@ -113,7 +113,7 @@ wire rbit =  i[FMSB];
 wire sbit = |i[FMSB-1:0];
 // shift mantissa left by one to reduce to a single whole digit
 // if there is no exponent increment
-wire [FMSB+3:0] mo;
+wire [FMSB+4:0] mo;
 wire [FMSB+4:0] mo1 = xInf1 & incExp1 ? 0 :
 	incExp1 ? {i[FX:FMSB+2],gbit,rbit,sbit} :		// reduce mantissa size
 			 {i[FX-1:FMSB+2],gbit,rbit,sbit,1'b0};	// reduce mantissa size
@@ -121,7 +121,7 @@ wire [FMSB+4:0] mo2;
 wire [6:0] leadingZeros2;
 
 
-cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({64'd0,mo1} << (64-(FMSB+4))), .o(leadingZeros2) );
+cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({64'd0,mo1} << (64-(FMSB+5))), .o(leadingZeros2) );
 
 // compensate for leadingZeros delay
 wire xInf2;
@@ -166,7 +166,7 @@ wire [FMSB+4:0] mo2a = rightOrLeft2 ? mo2ar : mo2al;
 
 //	always @(posedge clk)
 //		if (ce)
-assign mo = mo2a[FMSB+3:0];//rightOrLeft2 ? mo2 >> rshiftAmt2 : mo2 << lshiftAmt2;
+assign mo = mo2a[FMSB+4:0];//rightOrLeft2 ? mo2 >> rshiftAmt2 : mo2 << lshiftAmt2;
 
 assign o = {so,xo,mo};
 
