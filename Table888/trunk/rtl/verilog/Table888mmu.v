@@ -24,11 +24,12 @@
 `include "Table888_defines.v"
 
 module Table888mmu(
-	rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o,
+	rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, sel_o, we_o, adr_o, dat_i, dat_o,
 	mmu_cyc_o, mmu_stb_o, mmu_ack_i, mmu_sel_o, mmu_we_o, mmu_adr_o, mmu_dat_i, mmu_dat_o
 );
 input rst_i;
 input clk_i;
+output clk_o;
 input nmi_i;
 input irq_i;
 input [8:0] vect_i;
@@ -98,6 +99,8 @@ parameter PUSH1 = 6'd31;
 parameter CINV1 = 6'd33;
 parameter CINV2 = 6'd34;
 parameter LINK1 = 6'd35;
+parameter FLT1 = 6'd36;
+parameter FLT2 = 6'd37;
 parameter LOAD5 = 6'd41;
 parameter LOAD6 = 6'd42;
 parameter LOAD7 = 6'd43;
@@ -237,6 +240,7 @@ reg isShifti,isBSR,isLMR,isSMR;
 reg isJSP,isJSR,isLWS,isLink,isUnlk;
 reg isLSB,isLAR,isLSL,isVERR,isVERW,isVERX;
 reg isLdDesc,isMTSEG;
+reg isLFT,isSFT;
 reg isLW;
 reg isBM;
 reg isCAS;
@@ -485,6 +489,32 @@ Table888_pmmu u3
 	.dw(pmmu_data_writeable),
 	.dx(),
 	.dv()
+);
+
+reg flt_cyc;
+reg flt_wr;
+reg [31:0] flt_adr;
+reg [31:0] flt_dati;
+wire [31:0] flt_dato;
+wire [95:0] FAC1o;
+
+wire flt_ack;
+reg ldFAC;
+
+Table888Float u_flt
+(
+	.rst_i(rst_i),
+	.clk_i(clk),
+	.cyc_i(flt_cyc),
+	.stb_i(flt_cyc),
+	.ack_o(flt_ack),
+	.we_i(flt_wr),
+	.adr_i(flt_adr),
+	.dat_i(flt_dati),
+	.dat_o(flt_dato),
+	.ldFAC(ldFAC),
+	.FAC1_i(desc_data[95:0]),
+	.FAC1_o(FAC1o)
 );
 
 `ifdef SUPPORT_BITFIELD
@@ -740,6 +770,7 @@ end
 `else
 assign clk = clk_i;
 `endif
+assign clk_o = clk;
 
 //-----------------------------------------------------------------------------
 // Clocked logic follows.
@@ -792,7 +823,7 @@ ld_clk_throttle <= `FALSE;
 `endif
 rst_cpnp <= `FALSE;
 rst_dpnp <= `FALSE;
-
+ldFAC <= 1'b0;
 case(state)
 
 // ----------------------------------------------------------------------------
@@ -1048,6 +1079,8 @@ DECODE:
 		isSMR <= `FALSE;
 		isLWS <= `FALSE;
 		isBM <= `FALSE;
+		isLFT <= `FALSE;
+		isSFT <= `FALSE;
 		isLW <= `FALSE;
 		isCAS <= `FALSE;
 		isMTSEG <= `FALSE;
@@ -1145,6 +1178,7 @@ DECODE:
 		`PUSHC,`JMP,`JSR:
 					imm <= hasIMM ? {immbuf[31:0],ir[39:8]} : {{32{ir[39]}},ir[39:8]};
 		`PEA,`CINV,
+		`LFT,`SFT,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,
 		`SB,`SC,`SH,`SW:
 					imm <= hasIMM ? {immbuf[51:0],ir[39:28]} : {{52{ir[39]}},ir[39:28]};
@@ -1247,12 +1281,21 @@ DECODE:
 					ret_state <= IFETCH;
 					next_state(LOADSEG);
 					end
+			`FIX2FLT:	flt_op1(`CMD_FIX2FLT);
+			`FLT2FIX:	flt_op1(`CMD_FLT2FIX);
+			`FLTSTAT:	flt_op1(`CMD_STAT);
+			`FMOV:		flt_op1(`CMD_MOVE);
 
 			// Unimplemented instruction
 			default:	;
 			endcase
 		`RR:
 			case(func)
+			`FADD:	flt_op2(`CMD_ADD);
+			`FSUB:	flt_op2(`CMD_SUB);
+			`FCMP:	flt_op2(`CMD_CMP);
+			`FMUL:	flt_op2(`CMD_MUL);
+			`FDIV:	flt_op2(`CMD_DIV);
 			`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:	next_state(MULDIV);
 			endcase
 
@@ -1298,6 +1341,10 @@ DECODE:
 				a <= 64'd0;
 				if (!hasJSP)
 					next_state(IFETCH);
+				// Rule is can only transfer to code at the same priv level.
+				// Should check that CPL==RPL or privilege violation
+				// if (cpl != jspbuf[23:20])
+				//     privilege_violation();
 			end
 		`JMP_DRN:
 			begin
@@ -1368,6 +1415,8 @@ DECODE:
 					update_sp(sp_inc2 + ir[31:16]);
 				end
 			end
+		`LFT:	isLFT <= `TRUE;
+		`SFT:	begin isSFT <= `TRUE; flt_op1(`CMD_READREG); end
 		`PEAX,`CINVX,
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX,
@@ -1692,8 +1741,11 @@ EXECUTE:
 			end
 		`JSR,`JMP,`JSR_DRN,`JSRX:
 			begin
+				//if (cpl != jspbuf[23:20])
+				//	privilege_violation();
+				//else
+					next_state(LOADSEG);
 				isJGR <= `TRUE;
-				next_state(LOADSEG);
 				a <= jspbuf;
 				ppl <= cpl;
 				prev_sp <= sp;
@@ -1786,6 +1838,11 @@ EXECUTE:
 				if (isUnlk)
 					update_sp(sp + pimm);	// ADDUI SP,SP,#locs
 				isUnlk <= `FALSE;
+			end
+		`LFT:
+			begin
+				ld_size <= word;
+				load_check(ea);
 			end
 		`CAS:
 			begin
@@ -2075,6 +2132,41 @@ MD_RES:
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
+FLT1:
+	if (flt_ack) begin
+		flt_cyc <= 1'b0;
+		flt_wr <= 1'b0;
+		res <= flt_dato;
+		if (opcode==`R && func==`FLTSTAT)
+			wrrf <= `TRUE;
+		else if (opcode==`RR && func==`FCMP) begin
+			wrrf <= `TRUE;
+			res <= {flt_dato[6],61'b0,flt_dato[5],1'b0};
+		end
+		else
+			Rt <= 8'h00;
+		if (isSFT) begin
+			st_size <= word;
+			isWR <= `TRUE;
+			store_what <= `STW_FACL;
+			store_check(ea);
+		end
+		else
+			next_state(IFETCH);
+	end
+
+// After a load FAC to write data to the target FP reg.
+FLT2:
+	begin
+		flt_cyc <= 1'b1;
+		flt_wr <= 1'b1;
+		flt_adr <= 32'hFFDEA210;
+		flt_dati <= {ir[23:16],8'h00,8'h00,`CMD_WRITEREG};
+		next_state(FLT1);
+	end
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Memory Stage
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -2101,7 +2193,7 @@ LOAD1:
 		else if (data_readable || !pe) begin
 			if (isCAS)
 				lock_o <= `TRUE;
-			wb_read(rwadr_o);
+			wb_read(ld_size,rwadr_o);
 			next_state(LOAD2);
 		end
 		else
@@ -2151,7 +2243,7 @@ LOAD3:
 		if (cpl > pmmu_dpl && pe)
 			privilege_violation();
 		else if (data_readable || !pe) begin
-			wb_read(rwadr_o);
+			wb_read(word,rwadr_o);
 			next_state(LOAD4);
 		end
 		else
@@ -2209,6 +2301,20 @@ LOAD5:
 					next_state(IFETCH);
 				else
 					next_state(LOAD1);
+			end
+		isLFT:
+			begin
+				if (nLD==2'b00) begin
+					nLD <= nLD + 2'd1;
+					desc_data <= lres;
+					next_state(LOAD1);
+				end
+				else begin
+					ldFAC <= 1'b1;
+					nLD <= 2'b00;
+					desc_data[127:64] <= lres;
+					next_state(FLT2);
+				end
 			end
 		isRTS:
 			begin
@@ -2535,6 +2641,8 @@ STORE1:
 			`STW_PREV_PC:	wb_write(word,rwadr_o,{prev_pc[31:2],fmt});
 			`STW_PREV_CSSR:	wb_write(word,rwadr_o,{8'h00,prev_cs});
 			`STW_STK_FIFO:	wb_write(half,rwadr_o,stack_fifo[ncopy]);
+			`STW_FACL:	wb_write(word,rwadr_o,FAC1o[31:0]);
+			`STW_FACH:	wb_write(half,rwadr_o,FAC1o[95:64]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 		end
@@ -2619,6 +2727,7 @@ STORE3:
 			`STW_SS:	wb_write(word,rwadr_o,32'h0);
 			`STW_PREV_PC:	wb_write(word,rwadr_o,prev_pc[39:32]);
 			`STW_PREV_CSSR:	wb_write(word,rwadr_o,sr);
+			`STW_FACL:	wb_write(word,rwadr_o,FAC1o[63:32]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 			if (isSMR && (!tmrw || (tmrw && tmrcyc==2'b10)))
@@ -2644,7 +2753,12 @@ STORE4:
 		end
 		if (!tmrw || tmrcyc==2'd2) begin
 		    lock_o <= `FALSE;
-			if (isSMR) begin
+			if (isSFT) begin
+				store_what <= `STW_FACH;
+				st_size <= half;
+				next_state(STORE1);
+			end
+			else if (isSMR) begin
 				a <= rfoa;
 				if (Ra>Rb || Ra==0) begin
 					isWR <= `FALSE;
@@ -3018,15 +3132,26 @@ endtask
 
 // the read task always reads a whole half-word
 task wb_read;
+input [2:0] size;
 input [31:0] adr;
 begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
-	sel_o <= 4'hF;
+	case(size)
+	word,half,uhalf:	sel_o <= 4'hF;
+	char,uchar:			sel_o <= adr[1] ? 4'b1100 : 4'b0011;
+	byt,ubyte:
+		case(adr[1:0])
+		2'd0:	sel_o <= 4'b0001;
+		2'd1:	sel_o <= 4'b0010;
+		2'd2:	sel_o <= 4'b0100;
+		2'd3:	sel_o <= 4'b1000;
+		endcase
+	endcase
 `ifdef TMR
-	adr_o <= {adr[31:16],tmrcyc,adr[15:2],2'b00};
+	adr_o <= {adr[31:16],tmrcyc,adr[15:0]};
 `else
-	adr_o <= {adr[31:16],adr[15:2],2'b00};
+	adr_o <= {adr[31:16],adr[15:0]};
 `endif
 end
 endtask
@@ -3040,9 +3165,9 @@ begin
 	stb_o <= 1'b1;
 	we_o <= 1'b1;
 `ifdef TMR
-	adr_o <= {adr[31:16],tmrcyc,adr[15:2],2'b00};
+	adr_o <= {adr[31:16],tmrcyc,adr[15:0]};
 `else
-	adr_o <= {adr[31:16],adr[15:2],2'b00};
+	adr_o <= {adr[31:16],adr[15:0]};
 `endif
 	case(size)
 	word,half,uhalf:
@@ -3406,6 +3531,28 @@ begin
 				next_state(LOAD1);
 		end
 	end
+end
+endtask
+
+task flt_op1;
+input [7:0] op;
+begin
+	flt_cyc <= 1'b1;
+	flt_wr <= 1'b1;
+	flt_adr <= 32'hFFDEA210;
+	flt_dati <= {ir[23:16],8'h00,ir[15:8],op};
+	next_state(FLT1);
+end
+endtask
+
+task flt_op2;
+input [7:0] op;
+begin
+	flt_cyc <= 1'b1;
+	flt_wr <= 1'b1;
+	flt_adr <= 32'hFFDEA210;
+	flt_dati <= {ir[31:8],op};
+	next_state(FLT1);
 end
 endtask
 
