@@ -43,6 +43,7 @@
 
 	The mantissa is assumed to start with two whole bits on
 	the left. The remaining bits are fractional.
+	*** currently doesn't support mantissa over 64 bits
 	
 	The width of the incoming format is reduced via a generation
 	of sticky bit in place of the low order fractional bits.
@@ -120,8 +121,12 @@ wire [FMSB+4:0] mo1 = xInf1 & incExp1 ? 0 :
 wire [FMSB+4:0] mo2;
 wire [6:0] leadingZeros2;
 
-
+generate
+if (WID <= 64)	// double precision or less
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({64'd0,mo1} << (64-(FMSB+5))), .o(leadingZeros2) );
+else			// triple, quad precision
+cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({128'd0,mo1} << (128-(FMSB+5))), .o(leadingZeros2) );
+endgenerate
 
 // compensate for leadingZeros delay
 wire xInf2;

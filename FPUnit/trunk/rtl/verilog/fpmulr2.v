@@ -6,8 +6,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpdivr4.v
-//		Radix 4 floating point divider primitive
+//	fpmulr2.v
+//		Radix 2 floating point multiplier primitive
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -28,7 +28,7 @@
 //	202 slices / 382 LUTs / 72.5 MHz
 // ============================================================================
 //
-module fpdivr4
+module fpmulr2
 #(	parameter WID = 24 )
 (
 	input rst,
@@ -37,19 +37,15 @@ module fpdivr4
 	input ld,
 	input [WID-1:0] a,
 	input [WID-1:0] b,
-	output reg [WID*2-1:0] q,
-	output [WID-1:0] r,
+	output reg [WID*2:0] p,
 	output done
 );
 localparam DMSB = WID-1;
 
-wire [DMSB:0] rx [1:0];		// remainder holds
-reg [DMSB:0] rxx;
-reg [5:0] cnt;				// iteration count
-reg [WID*2-1:0] qr;
-
-assign rx[0] = rxx  [DMSB] ? {rxx  ,qr[WID*2-1  ]} + b : {rxx  ,qr[WID*2-1  ]} - b;
-assign rx[1] = rx[0][DMSB] ? {rx[0],qr[WID*2-1-1]} + b : {rx[0],qr[WID*2-1-1]} - b;
+wire [WID:0] sum;		// remainder holds
+reg [7:0] cnt;				// iteration count
+reg [WID-1:0] m;
+assign sum = p[WID*2-1:0] + b;
 
 
 always @(posedge clk)
@@ -58,7 +54,7 @@ if (rst)
 else begin
 	if (ce) begin
 		if (ld)
-			cnt <= WID;
+			cnt <= WID*2-1;
 		else if (!done)
 			cnt <= cnt - 1;
 	end
@@ -67,30 +63,21 @@ end
 
 always @(posedge clk)
 	if (ce) begin
-		if (ld)
-			rxx = 0;
-		else if (!done)
-			rxx = rx[1];
-	end
-
-
-always @(posedge clk)
-	if (ce) begin
 		if (ld) begin
-			qr <= {a,{WID{1'b0}}};
-			q <= {WID*2{1'b0}}; 
+			m <= a;
+			p <= {WID*2{1'b0}};
 		end
 		else if (!done) begin
-			$display("rx[0]=%h rx[1]=%h", rx[0],rx[1]);
-			qr[WID*2-1:0] = {qr[WID*2-1-2:0],2'b00};
-			q[WID*2-1:2] = q[WID*2-1-2:0];
-			q[0] = ~rx[1][DMSB];
-			q[1] = ~rx[0][DMSB];
+			$display("sum=%h m=%h b=%h", sum, m, b);
+			m <= {m,1'b0};
+			if (m[WID-1])
+				p <= {sum,1'b0};
+			else
+				p <= {p,1'b0};
 		end
 	end
 
 // correct remainder
-assign r = rx[1][DMSB] ? rx[1] + b : rx[1];
 assign done = ~|cnt;
 
 endmodule

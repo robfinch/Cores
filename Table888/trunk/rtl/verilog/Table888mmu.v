@@ -101,6 +101,7 @@ parameter CINV2 = 6'd34;
 parameter LINK1 = 6'd35;
 parameter FLT1 = 6'd36;
 parameter FLT2 = 6'd37;
+parameter FLTWAIT = 6'd38;
 parameter LOAD5 = 6'd41;
 parameter LOAD6 = 6'd42;
 parameter LOAD7 = 6'd43;
@@ -125,6 +126,9 @@ parameter char = 3'b011;
 parameter uchar = 3'b010;
 parameter byt = 3'b001;
 parameter ubyte = 3'b000;
+
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 
 wire [95:0] manufacturer = "Finitron    ";
 wire [95:0] cpu_class = "Table888mmu ";
@@ -491,6 +495,9 @@ Table888_pmmu u3
 	.dv()
 );
 
+reg ldFAC;
+
+/*
 reg flt_cyc;
 reg flt_wr;
 reg [31:0] flt_adr;
@@ -499,7 +506,6 @@ wire [31:0] flt_dato;
 wire [95:0] FAC1o;
 
 wire flt_ack;
-reg ldFAC;
 
 Table888Float u_flt
 (
@@ -516,6 +522,109 @@ Table888Float u_flt
 	.FAC1_i(desc_data[95:0]),
 	.FAC1_o(FAC1o)
 );
+*/
+
+// This function translates between a CPU opcode and an FPU opcode
+
+function [5:0] fp_op;
+input [7:0] opcode;
+input [7:0] func;
+case(opcode)
+`R:
+	case(func)
+	`FPFIX2FLT:	fp_op = `I2F;
+	`FPFLT2FIX:	fp_op = `F2I;
+	`FPMOV:		fp_op = `FMOV;
+	`FPABS:		fp_op = `FABS;
+	`FPNABS:	fp_op = `FNABS;
+	`FPNEG:		fp_op = `FNEG;
+	`FPSIGN:	fp_op = `FSIGN;
+	`FPMAN:		fp_op = `FMAN;
+	`FPSTAT:	fp_op = `FSTAT;
+	default:	fp_op = `FNOP;
+	endcase
+`FPADD:	fp_op = `FADD;
+`FPSUB:	fp_op = `FSUB;
+`FPCMP:	fp_op = `FCxx|func[7:5];
+`FPMUL:	fp_op = `FMUL;
+`FPDIV:	fp_op = `FDIV;
+`LFD:	fp_op = `FLD;
+`SFD:	fp_op = `FSD;
+default:	fp_op = `FNOP;
+endcase
+endfunction
+
+// This function determines the number of clock cycles required for an FP op.
+
+function [7:0] fp_delay;
+input [5:0] op;
+case(op)
+`FPADD:	fp_delay = 10;
+`FPSUB:	fp_delay = 10;
+`FPMUL:	fp_delay = 10;
+`FPDIV:	fp_delay = 65;
+default:	fp_delay = 2;
+endcase
+endfunction
+
+function fp_rm;
+input [7:0] opcode;
+input [7:0] func;
+input [39:0] ir;
+case(opcode)
+`R:
+	case(func)
+	`FPFIX2FLT,`FPFLT2FIX,
+	`FPMOV,
+	`FPABS,
+	`FPNABS,
+	`FPNEG,
+	`FPSIGN,
+	`FPMAN:
+		fp_rm = ir[26:24];
+	default:	fp_rm = 3'b000;
+	endcase
+`FPADD,`FPSUB,`FPMUL,`FPDIV:
+	fp_rm = ir[34:32];
+default:	fp_rm = 3'b000;
+endcase
+endfunction
+
+reg [7:0] fp_cnt;
+reg ld_div;
+reg [5:0] fp_opcode;
+reg [63:0] fpregs [255:0];
+wire [63:0] frfoa = fpregs[Ra];
+wire [63:0] frfob = fpregs[opcode==`SFDX ? Rc : Rb];
+reg [63:0] fa;
+reg [63:0] fb;
+reg [7:0] FRt;
+wire [63:0] fp_o,fp_zl,fp_loo;
+reg [63:0] fres;
+reg wrfrf;
+
+/*
+wire isFP = opcode==`RR && (func==`FDADD || func==`FDSUB || func==`FDMUL || func==`FDDIV) ||
+			opcode==`LFD || opcode==`SFD;
+
+*/
+fpUnit #(64) u_flt1
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(1'b1),
+	.op(fp_opcode),
+	.xrm(fp_rm(opcode,func,ir)),
+	.ld(ld_div),
+	.a(fa),
+	.b(fb),
+	.o(fp_o),
+	.zl_o(fp_zl),
+	.loo_o(fp_loo),
+	.loo_done(),
+	.exception()
+);
+
 
 `ifdef SUPPORT_BITFIELD
 Table888_bitfield u4
@@ -811,6 +920,7 @@ if (rst_i) begin
 `endif
 	ldt_reg <= 64'h7FFFF00000000002;
 	gdt_reg <= 64'h7FFFF00000000001;
+	ld_div <= FALSE;
 end
 else begin
 tick <= tick + 64'd1;
@@ -824,6 +934,7 @@ ld_clk_throttle <= `FALSE;
 rst_cpnp <= `FALSE;
 rst_dpnp <= `FALSE;
 ldFAC <= 1'b0;
+ld_div <= FALSE;
 case(state)
 
 // ----------------------------------------------------------------------------
@@ -1036,6 +1147,14 @@ IBUF4:
 // ----------------------------------------------------------------------------
 DECODE:
 	begin
+/*
+		if (isFP) begin
+			ir[7:0] <= 8'hEA;	// convert to NOP
+			FRa <= ir[15:8];
+			FRb <= ir[23:16];
+			FRt <= ir[31:24];
+		end
+*/
 		next_state(EXECUTE);
 		// OCS:OPC track the instruction's address which may be inherited
 		// from the address of a prefix instruction. These are used to set
@@ -1092,6 +1211,8 @@ DECODE:
 		a <= rfoa;
 		b <= rfob;
 		c <= rfoc;
+		fa <= frfoa;
+		fb <= frfob;
 		ld_size <= word;
 		st_size <= word;
 		Sa <= 4'b00;		// default: use code segment
@@ -1101,9 +1222,15 @@ DECODE:
 		`R:	
 			case(func)
 			`MTSPR:	Rt <= 8'h00;	// We are writing to an SPR not the general register file
+			`MTFP:	Rt <= 8'h00;
+			`FPFIX2FLT:	Rt <= 8'h00;
+			`FPFLT2FIX:	Rt <= 8'h00;
+			`FPMOV:		Rt <= 8'h00;
+			`FPABS,`FPNABS,`FPSIGN,`FPMAN,`FPNEG: Rt <= 8'h00;
 			default:	Rt <= ir[23:16];
 			endcase
 		`RR:	Rt <= ir[31:24];
+		`FPCMP:	Rt <= ir[31:24];
 		`LDI:	Rt <= ir[15:8];
 		`DBNZ:	Rt <= ir[15:8];
 		`BITFIELD:
@@ -1128,6 +1255,29 @@ DECODE:
 			Rt <= 8'h00;
 		endcase
 
+		fp_opcode <= fp_op(opcode,func);
+		fp_cnt <= 8'h00;
+
+		// Set floating point target register
+		case(opcode)
+		`R:
+			case(func)
+			`MTFP:		FRt <= ir[23:16];
+			`FPFIX2FLT:	FRt <= ir[23:16];
+			`FPFLT2FIX:	FRt <= ir[23:16];
+			`FPMOV:		FRt <= ir[23:16];
+			`FPABS,`FPNABS,`FPMAN,`FPSIGN,`FPNEG:	FRt <= ir[23:16];
+			default:	FRt <= 8'h00;
+			endcase
+		`FPADD:	FRt <= ir[31:24];
+		`FPSUB:	FRt <= ir[31:24];
+		`FPMUL:	FRt <= ir[31:24];
+		`FPDIV:	begin FRt <= ir[31:24]; ld_div <= TRUE; end
+		`LFD:	FRt <= ir[23:16];
+		`LFDX:	FRt <= ir[31:24];
+		default:	FRt <= 8'h00;
+		endcase
+		
 		// Set segment register selection for memory ops
 		case(opcode)
 		`R:
@@ -1178,14 +1328,14 @@ DECODE:
 		`PUSHC,`JMP,`JSR:
 					imm <= hasIMM ? {immbuf[31:0],ir[39:8]} : {{32{ir[39]}},ir[39:8]};
 		`PEA,`CINV,
-		`LFT,`SFT,
+		`LFT,`SFT,`LFD,`SFD,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,
 		`SB,`SC,`SH,`SW:
 					imm <= hasIMM ? {immbuf[51:0],ir[39:28]} : {{52{ir[39]}},ir[39:28]};
 		`JSRX,
 		`LMR,`SMR,
 		`PEAX,`CINVX,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,`LFDX,`SFDX,
 		`SBX,`SCX,`SHX,`SWX,
 		`BMS,`BMC,`BMF,`BMT,
 		`CAS:		imm <= hasIMM ? immbuf[63:0] : 64'd0;
@@ -1281,26 +1431,30 @@ DECODE:
 					ret_state <= IFETCH;
 					next_state(LOADSEG);
 					end
-			`FIX2FLT:	flt_op1(`CMD_FIX2FLT);
-			`FLT2FIX:	flt_op1(`CMD_FLT2FIX);
-			`FLTSTAT:	flt_op1(`CMD_STAT);
-			`FMOV:		flt_op1(`CMD_MOVE);
-
+			`FPFIX2FLT:	next_state(FLTWAIT);	//flt_op1(`CMD_FIX2FLT);
+			`FPFLT2FIX:	next_state(FLTWAIT);	//flt_op1(`CMD_FLT2FIX);
+//			`FPFLTSTAT:	next_state(FLTWAIT);	//flt_op1(`CMD_STAT);
+			`FPMOV:		next_state(FLTWAIT);	//flt_op1(`CMD_MOVE);
+			`FPABS:		next_state(FLTWAIT);
+			`FPNABS:	next_state(FLTWAIT);
+			`FPNEG:		next_state(FLTWAIT);
+			`FPSIGN:	next_state(FLTWAIT);
+			`FPMAN:		next_state(FLTWAIT);
 			// Unimplemented instruction
 			default:	;
 			endcase
 		`RR:
 			case(func)
-			`FADD:	flt_op2(`CMD_ADD);
-			`FSUB:	flt_op2(`CMD_SUB);
-			`FCMP:	flt_op2(`CMD_CMP);
-			`FMUL:	flt_op2(`CMD_MUL);
-			`FDIV:	flt_op2(`CMD_DIV);
 			`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:	next_state(MULDIV);
 			endcase
 
 		`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI:	next_state(MULDIV);
 		`CMPI:	isCMPI <= `TRUE;
+		`FPADD:	next_state(FLTWAIT);	//flt_op2(`CMD_ADD);
+		`FPSUB:	next_state(FLTWAIT);	//flt_op2(`CMD_SUB);
+		`FPCMP:	next_state(FLTWAIT);	//flt_op2(`CMD_CMP);
+		`FPMUL:	next_state(FLTWAIT);	//flt_op2(`CMD_MUL);
+		`FPDIV:	next_state(FLTWAIT);	//flt_op2(`CMD_DIV);
 
 
 		// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1416,10 +1570,10 @@ DECODE:
 				end
 			end
 		`LFT:	isLFT <= `TRUE;
-		`SFT:	begin isSFT <= `TRUE; flt_op1(`CMD_READREG); end
+//		`SFT:	begin isSFT <= `TRUE; flt_op1(`CMD_READREG); end
 		`PEAX,`CINVX,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
-		`SBX,`SCX,`SHX,`SWX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,`LFDX,
+		`SBX,`SCX,`SHX,`SWX,`SFDX,
 		`BMS,`BMC,`BMF,`BMT:
 				isIndexed <= `TRUE;
 
@@ -1572,6 +1726,8 @@ EXECUTE:
 */
 						end
 					end
+			`MFFP:	res <= fp_o;
+			`MTFP:	fres <= a;
 `ifdef SUPPORT_RNG
 			`GRAN:
 				begin
@@ -1599,6 +1755,15 @@ EXECUTE:
 					endcase
 				end
 `endif
+			`FPFIX2FLT:	fres <= fp_loo;
+			`FPFLT2FIX:	fres <= fp_loo;
+			`FPMOV:		fres <= fp_zl;
+			`FPABS:		fres <= fp_zl;
+			`FPNABS:	fres <= fp_zl;
+			`FPNEG:		fres <= fp_zl;
+			`FPSIGN:	fres <= fp_zl;
+			`FPMAN:		fres <= fp_zl;
+			`FPSTAT:	res <= fp_o;
 			endcase
 		`RR:
 			case(func)
@@ -1643,6 +1808,8 @@ EXECUTE:
 			default:	res <= 65'd0;
 			endcase
 		`BITFIELD:	res <= bfo;
+		`FPADD,`FPSUB,`FPMUL,`FPDIV:	fres <= fp_o;
+		`FPCMP: res <= fp_zl;
 		`LDI:	res <= imm;
 		`ADDI,`ADDUI:	res <= a + imm;
 		`SUBI,`SUBUI:	res <= a - imm;
@@ -1839,7 +2006,7 @@ EXECUTE:
 					update_sp(sp + pimm);	// ADDUI SP,SP,#locs
 				isUnlk <= `FALSE;
 			end
-		`LFT:
+		`LFD,`LFDX:
 			begin
 				ld_size <= word;
 				load_check(ea);
@@ -1896,6 +2063,13 @@ EXECUTE:
 					res <= a;
 				end
 				isLink <= `FALSE;
+			end
+		`SFD,`SFDX:
+			begin
+				st_size <= word;
+				isWR <= TRUE;
+				store_what <= `STW_FB;
+				store_check(ea);
 			end
 		`SWS:
 			begin
@@ -2132,6 +2306,14 @@ MD_RES:
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
+FLTWAIT:
+	begin
+		fp_cnt <= fp_cnt + 8'd1;
+		if (fp_cnt>=fp_delay(fp_opcode))
+			next_state(EXECUTE);
+	end
+
+/*
 FLT1:
 	if (flt_ack) begin
 		flt_cyc <= 1'b0;
@@ -2164,6 +2346,7 @@ FLT2:
 		flt_dati <= {ir[23:16],8'h00,8'h00,`CMD_WRITEREG};
 		next_state(FLT1);
 	end
+*/
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -2641,8 +2824,9 @@ STORE1:
 			`STW_PREV_PC:	wb_write(word,rwadr_o,{prev_pc[31:2],fmt});
 			`STW_PREV_CSSR:	wb_write(word,rwadr_o,{8'h00,prev_cs});
 			`STW_STK_FIFO:	wb_write(half,rwadr_o,stack_fifo[ncopy]);
-			`STW_FACL:	wb_write(word,rwadr_o,FAC1o[31:0]);
-			`STW_FACH:	wb_write(half,rwadr_o,FAC1o[95:64]);
+//			`STW_FACL:	wb_write(word,rwadr_o,FAC1o[31:0]);
+//			`STW_FACH:	wb_write(half,rwadr_o,FAC1o[95:64]);
+			`STW_FB:	wb_write(word,rwadr_o,fb[31:0]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 		end
@@ -2727,7 +2911,8 @@ STORE3:
 			`STW_SS:	wb_write(word,rwadr_o,32'h0);
 			`STW_PREV_PC:	wb_write(word,rwadr_o,prev_pc[39:32]);
 			`STW_PREV_CSSR:	wb_write(word,rwadr_o,sr);
-			`STW_FACL:	wb_write(word,rwadr_o,FAC1o[63:32]);
+//			`STW_FACL:	wb_write(word,rwadr_o,FAC1o[63:32]);
+			`STW_FB:	wb_write(word,rwadr_o,fb[63:32]);
 			default:	next_state(RESET);	// hardware fault
 			endcase
 			if (isSMR && (!tmrw || (tmrw && tmrcyc==2'b10)))
@@ -3114,6 +3299,9 @@ if (wrspr) begin
 				end
 	endcase
 end
+
+if (state==IFETCH)
+	fpregs[FRt] <= fres;
 
 end
 
@@ -3534,6 +3722,7 @@ begin
 end
 endtask
 
+/*
 task flt_op1;
 input [7:0] op;
 begin
@@ -3555,6 +3744,7 @@ begin
 	next_state(FLT1);
 end
 endtask
+*/
 
 function [127:0] fnStateName;
 input [5:0] state;

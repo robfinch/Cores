@@ -41,6 +41,7 @@
 //`define SUPPORT_LSCHECK			1'b1
 
 `define SUPPORT_RNG		1'b1
+`define SUPPORT_FLOAT	1'b1
 
 `define TMR			1'b1
 `define TMRX		1'b1
@@ -93,9 +94,20 @@
 `define STP			8'h41
 `define MTSPR		8'h48
 `define MFSPR		8'h49
+`define MTFP		8'h4A
+`define MFFP		8'h4B
 `define VERR		8'h80
 `define VERW		8'h81
 `define VERX		8'h82
+`define FPFIX2FLT	8'h84
+`define FPFLT2FIX	8'h85
+`define FPSTAT		8'h86
+`define FPMOV		8'h87
+`define FPABS		8'h88
+`define FPNABS		8'h89
+`define FPNEG		8'h8A
+`define FPSIGN		8'h8B
+`define FPMAN		8'h8C
 `define MRK1		8'hF0
 `define MRK2		8'hF1
 `define MRK3		8'hF2
@@ -145,6 +157,7 @@
 `define SLS			8'h6D
 `define SHS			8'h6E
 `define SLO			8'h6F
+
 `define BITFIELD	8'h03
 `define ADDI	8'h04
 `define SUBI	8'h05
@@ -224,6 +237,9 @@
 `define LHUX	8'h8D
 `define LWX		8'h8E
 `define LEAX	8'h8F
+`define LFD		8'h91
+`define LFT		8'h92
+`define LFDX	8'h99
 `define LMR		8'h9C
 `define LEA		8'h9F
 `define SB		8'hA0
@@ -241,14 +257,23 @@
 `define CINVX	8'hAC
 `define PUSHC	8'hAD
 `define CAS		8'hAE
+`define SFD		8'hB1
+`define SFT		8'hB2
 `define BMS		8'hB4
 `define BMC		8'hB5
 `define BMF		8'hB6
 `define BMT		8'hB7
 `define PEA		8'hB8
 `define PEAX	8'hB9
+`define SFDX	8'hBB
 `define SMR		8'hBC
 `define NOP		8'hEA
+
+`define FPADD	8'hF4
+`define FPSUB	8'hF5
+`define FPCMP	8'hF6
+`define FPMUL	8'hF7
+`define FPDIV	8'hF8
 
 `define IMM1	8'hFD
 `define IMM2	8'hFE
@@ -270,6 +295,9 @@
 `define STW_SS		5'd15
 `define STW_SP		5'd16
 `define STW_PREV_CSSR	5'd17
+`define STW_FACL	5'd18
+`define STW_FACH	5'd19
+`define STW_FB		5'd20
 
 `define TICK		8'h00
 `define VBR			8'h01
@@ -299,5 +327,42 @@
 `define JGR_LOAD_CS		4'd5
 `define JGR_LOAD_SS_DESC	4'd6
 `define JGR_STORE_FIFO	4'd7
+
+`define CMD_ADD		8'd1
+`define CMD_SUB		8'd2
+`define CMD_CMP		8'd3
+`define CMD_MUL		8'd4
+`define CMD_DIV		8'd5
+`define CMD_NEG		8'd6
+`define CMD_FIX2FLT	8'd8
+`define CMD_FLT2FIX	8'd9
+`define CMD_READREG	8'd10
+`define CMD_WRITEREG 8'd11
+`define CMD_STAT	8'd12
+`define CMD_MOVE	8'd13
+
+`define FCXX	3'd3
+`define FNOP	6'd00
+`define FADD	6'd01
+`define FSUB	6'd02
+`define FMUL	6'd03
+`define FDIV	6'd04
+`define FABS	6'd08
+`define FNABS	6'd09
+`define FNEG	6'd10
+`define FMOV	6'd11
+`define FSIGN	6'd12
+`define FMAN	6'd13
+`define I2F		6'd16
+`define F2I		6'd17
+`define FCxx	6'h20	// 32-47
+`define FSTAT	6'd56
+`define FRM		6'd59
+`define FTX		6'd60
+`define FCX		6'd61
+`define FEX		6'd62
+`define FDX		6'd63
+`define FLD		6'd48
+`define FSD		6'd49
 
 `endif

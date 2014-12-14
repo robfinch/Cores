@@ -21,14 +21,15 @@
 
 ============================================================================ */
 
-`define FCLT		3'd0
-`define FCGE		3'd1
-`define FCLE		3'd2
-`define FCGT		3'd3
-`define FCEQ		3'd4
-`define FCNE		3'd5
-`define FCUN		3'd6
-`define FCOR		3'd7
+`define FCLT		4'd0
+`define FCGE		4'd1
+`define FCLE		4'd2
+`define FCGT		4'd3
+`define FCEQ		4'd4
+`define FCNE		4'd5
+`define FCUN		4'd6
+`define FCOR		4'd7
+`define FCMP		4'd15
 
 module fp_cmp_unit(op, a, b, o, nanx);
 parameter WID = 32;
@@ -56,7 +57,7 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
 
-input [2:0] op;
+input [3:0] op;
 input [WID-1:0] a, b;
 output o;
 reg o;
@@ -93,6 +94,7 @@ always @(op or unordered or eq or lt)
 	`FCGE:	o = !lt;
 	`FCLE:	o =  lt | eq;
 	`FCGT:	o = !(lt | eq);
+	`FCMP:	o = {lt,unordered,60'd0,eq,1'b0};
 	endcase
 
 // an unorder comparison will signal a nan exception

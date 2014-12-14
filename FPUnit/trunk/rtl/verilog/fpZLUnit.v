@@ -90,7 +90,7 @@ localparam FMSB = WID==128 ? 111 :
 wire az = a[WID-1:1]==0;
 wire cmp_o;
 
-fp_cmp_unit #(WID) u1 (.op(op[2:0]), .a(a), .b(b), .o(cmp_o), .nanx(nanx) );
+fp_cmp_unit #(WID) u1 (.op(op[3:0]), .a(a), .b(b), .o(cmp_o), .nanx(nanx) );
 
 always @(op,a,cmp_o,az)
 	case (op)

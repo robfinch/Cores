@@ -1,119 +1,103 @@
-/* ===============================================================
-	(C) 2006  Robert Finch
-	All rights reserved.
-	rob<remove>@finitron.ca
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2006, 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	fpUnit.v
+//		- floating point unit
+//		- parameterized width
+//		- IEEE 754 representation
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//	NaN operations
+//	There are some operations the fpu performs that can
+//	generate NaN's. The value of the NaN generated and
+//	the cause are listed below.
+//
+//	NaN Value		Origin
+//	31'h7FC00001	- infinity - infinity
+//	31'h7FC00002	- infinity / infinity
+//	31'h7FC00003	- zero / zero
+//	31'h7FC00004	- infinity X zero
+//	
+//	Whenever the fpu encounters a NaN input, the NaN is
+//	passed through to the output.
+//
+//	Ref: Webpack 8.2  Spartan3-4  xc3s1000-4ft256
+//	2335 LUTS / 1260 slices / 43.4 MHz
+//	Ref: Webpack 13.1 Spartan3e   xc3s1200e-4fg320
+//	2433 LUTs / 1301 slices / 51.6 MHz
+//	
+//	Instr.  Cyc Lat
+//	fc__	; 1  0	compare, lt le gt ge eq ne or un
+//	fabs	; 1  0 	absolute value
+//	fnabs	; 1  0 	negative absolute value
+//	fneg	; 1  0 	negate
+//	fmov	; 1  0 	move
+//	fman	; 1  0 	get mantissa
+//	fsign	; 1  0 	get sign
+//	
+//	f2i		; 1  1  convert float to integer
+//	i2f		; 1  1  convert integer to float
+//
+//	fadd	; 1  4	addition
+//	fsub	; 1  4  subtraction
+//	fmul	; 1  4  multiplication
+//
+//	fdiv	; 16 4	division
+//	
+//	ftx		; 1  0  trigger fp exception
+//	fcx		; 1  0  clear fp exception
+//	fex		; 1  0  enable fp exception
+//	fdx		; 1  0  disable fp exception
+//	frm		; 1  0  set rounding mode
+//	fstat	; 1  0  get status register
+//
+//	related integer:
+//	graf	; 1  0  get random float (0,1]
+//
+//	xc6slx45 - Webpack 14.7
+//	1915 6-LUTs
+//	99.65 MHz
+// ============================================================================
+//
 
-	fpUnit.v
-		- floating point unit
-		- parameterized width
-		- IEEE 754 representation
-
-	This source code is free for use and modification for
-	non-commercial or evaluation purposes, provided this
-	copyright statement and disclaimer remains present in
-	the file.
-
-	If the code is modified, please state the origin and
-	note that the code has been modified.
-
-	NO WARRANTY.
-	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF
-	ANY KIND, WHETHER EXPRESS OR IMPLIED. The user must assume
-	the entire risk of using the Work.
-
-	IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
-	ANY INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-	WHATSOEVER RELATING TO THE USE OF THIS WORK, OR YOUR
-	RELATIONSHIP WITH THE AUTHOR.
-
-	IN ADDITION, IN NO EVENT DOES THE AUTHOR AUTHORIZE YOU
-	TO USE THE WORK IN APPLICATIONS OR SYSTEMS WHERE THE
-	WORK'S FAILURE TO PERFORM CAN REASONABLY BE EXPECTED
-	TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN LOSS
-	OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK,
-	AND YOU AGREE TO HOLD THE AUTHOR AND CONTRIBUTORS HARMLESS
-	FROM ANY CLAIMS OR LOSSES RELATING TO SUCH UNAUTHORIZED
-	USE.
-
-	This multiplier/divider handles denormalized numbers.
-	The output format is of an internal expanded representation
-	in preparation to be fed into a normalization unit, then
-	rounding. Basically, it's the same as the regular format
-	except the mantissa is doubled in size, the leading two
-	bits of which are assumed to be whole bits.
-
-
-	NaN operations
-	There are some operations the fpu performs that can
-	generate NaN's. The value of the NaN generated and
-	the cause are listed below.
-
-	NaN Value		Origin
-	31'h7FC00001	- infinity - infinity
-	31'h7FC00002	- infinity / infinity
-	31'h7FC00003	- zero / zero
-	31'h7FC00004	- infinity X zero
-	
-	Whenever the fpu encounters a NaN input, the NaN is
-	passed through to the output.
-
-	Ref: Webpack 8.2  Spartan3-4  xc3s1000-4ft256
-	2335 LUTS / 1260 slices / 43.4 MHz
-	Ref: Webpack 13.1 Spartan3e   xc3s1200e-4fg320
-	2433 LUTs / 1301 slices / 51.6 MHz
-	
-	Instr.  Cyc Lat
-	fc__	; 1  0	compare, lt le gt ge eq ne or un
-	fabs	; 1  0 	absolute value
-	fnabs	; 1  0 	negative absolute value
-	fneg	; 1  0 	negate
-	fmov	; 1  0 	move
-	fman	; 1  0 	get mantissa
-	fsign	; 1  0 	get sign
-	
-	f2i		; 1  1  convert float to integer
-	i2f		; 1  1  convert integer to float
-
-	fadd	; 1  4	addition
-	fsub	; 1  4  subtraction
-	fmul	; 1  4  multiplication
-
-	fdiv	; 16 4	division
-	
-	ftx		; 1  0  trigger fp exception
-	fcx		; 1  0  clear fp exception
-	fex		; 1  0  enable fp exception
-	fdx		; 1  0  disable fp exception
-	frm		; 1  0  set rounding mode
-	fstat	; 1  0  get status register
-
-	related integer:
-	graf	; 1  0  get random float (0,1]
-
-	xc6slx45 - Webpack 14.7
-	1915 6-LUTs
-	99.65 MHz
-=============================================================== */
-
-`define FCXX	3'd3
+`define FCXX	2'd2
 `define FADD	6'd01
 `define FSUB	6'd02
 `define FMUL	6'd03
 `define FDIV	6'd04
-`define FABS	6'd8
-`define FNABS	6'd9
+`define FABS	6'd08
+`define FNABS	6'd09
 `define FNEG	6'd10
 `define FMOV	6'd11
 `define FSIGN	6'd12
 `define FMAN	6'd13
 `define I2F		6'd16
 `define F2I		6'd17
+// 32-47 = FCMP
 `define FSTAT	6'd56
+`define FMOVI	6'd57
 `define FRM		6'd59
 `define FTX		6'd60
 `define FCX		6'd61
-`define FEX		6'd62
-`define FDX		6'd63
+`define FEX		6'd62		// enable exceptions
+`define FDX		6'd63		// disable exceptions
 
 `define	QINFO		23'h7FC000		// info
 `define	QSUBINF		31'h7FC00001	// - infinity - infinity
@@ -122,9 +106,9 @@
 `define QINFZERO	31'h7FC00004	// - infinity X zero
 
 
-module fpUnit(rst, clk, ce, op, ld, a, b, o, zl_o, loo_o, loo_done, exception);
+module fpUnit(rst, clk, ce, op, xrm, ld, a, b, o, zl_o, loo_o, loo_done, exception);
 
-parameter WID = 32;
+parameter WID = 64;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
                   WID==96 ? 14 :
@@ -156,6 +140,7 @@ input rst;
 input clk;
 input ce;
 input [5:0] op;
+input [2:0] xrm;
 input ld;
 input [MSB:0] a;
 input [MSB:0] b;
@@ -186,8 +171,9 @@ wire ftx   	= op==`FTX;		// trigger exception
 wire fcx   	= op==`FCX;		// clear exception
 wire fex	= op==`FEX;		// enable exception
 wire fdx	= op==`FDX;		// disable exception
-wire fcxx	= op[5:3]==`FCXX;
+wire fcxx	= op[5:4]==`FCXX;
 wire frm	= op==`FRM;		// set rounding mode
+wire fmovi  = op==`FMOVI;
 
 wire subinf;
 wire zerozero;
@@ -195,7 +181,7 @@ wire infzero;
 wire infdiv;
 
 // floating point control and status
-reg [1:0] rm;	// rounding mode
+reg [2:0] rm;	// rounding mode
 reg inexe;		// inexact exception enable
 reg dbzxe;		// divide by zero exception enable
 reg underxe;	// underflow exception enable
@@ -255,46 +241,46 @@ always @(posedge clk)
 	end
 	else if (pipe_ce) begin
 		if (ftx) begin
-			inex <= inex     | b[4];
-			dbzx <= dbzx     | b[3];
-			underx <= underx | b[2];
-			overx <= overx   | b[1];
-			giopx <= giopx   | b[0];
+			inex <= inex     | a[4];
+			dbzx <= dbzx     | a[3];
+			underx <= underx | a[2];
+			overx <= overx   | a[1];
+			giopx <= giopx   | a[0];
 			swtx <= 1'b1;
 			sx <= 1'b1;
 		end
 		else if (fcx) begin
-			sx <= sx & !b[5];
-			inex <= inex     & !b[4];
-			dbzx <= dbzx     & !b[3];
-			underx <= underx & !b[2];
-			overx <= overx   & !b[1];
-			giopx <= giopx	 & !b[0];
+			sx <= sx & !a[5];
+			inex <= inex     & !a[4];
+			dbzx <= dbzx     & !a[3];
+			underx <= underx & !a[2];
+			overx <= overx   & !a[1];
+			giopx <= giopx	 & !a[0];
 			// clear exception type when global invalid operation is cleared
-			infdivx <= infdivx & !b[0];
-			zerozerox <= zerozerox & !b[0];
-			subinfx   <= subinfx   & !b[0];
-			infzerox  <= infzerox  & !b[0];
-			NaNCmpx   <= NaNCmpx   & !b[0];
-			dbzx <= dbzx & !b[0];
+			infdivx <= infdivx & !a[0];
+			zerozerox <= zerozerox & !a[0];
+			subinfx   <= subinfx   & !a[0];
+			infzerox  <= infzerox  & !a[0];
+			NaNCmpx   <= NaNCmpx   & !a[0];
+			dbzx <= dbzx & !a[0];
 			swtx <= 1'b1;
 		end
 		else if (fex) begin
-			inexe <= inexe     | b[4];
-			dbzxe <= dbzxe     | b[3];
-			underxe <= underxe | b[2];
-			overxe <= overxe   | b[1];
-			invopxe <= invopxe | b[0];
+			inexe <= inexe     | a[4];
+			dbzxe <= dbzxe     | a[3];
+			underxe <= underxe | a[2];
+			overxe <= overxe   | a[1];
+			invopxe <= invopxe | a[0];
 		end
 		else if (fdx) begin
-			inexe <= inexe     & !b[4];
-			dbzxe <= dbzxe     & !b[3];
-			underxe <= underxe & !b[2];
-			overxe <= overxe   & !b[1];
-			invopxe <= invopxe & !b[0];
+			inexe <= inexe     & !a[4];
+			dbzxe <= dbzxe     & !a[3];
+			underxe <= underxe & !a[2];
+			overxe <= overxe   & !a[1];
+			invopxe <= invopxe & !a[0];
 		end
 		else if (frm)
-			rm <= b[1:0];
+			rm <= a[2:0];
 
 		infzerox  <= infzerox  | (invopxe & infzero);
 		zerozerox <= zerozerox | (invopxe & zerozero);
@@ -315,16 +301,16 @@ wire [FMSB:0] ma, mb;
 wire aInf, bInf;
 wire aNan, bNan;
 wire az, bz;
-wire [1:0] rmd4;	// 1st stage delayed
+wire [2:0] rmd4;	// 1st stage delayed
 wire [5:0] op1, op2;
 
 fpZLUnit  #(WID) u6 (.op(op), .a(a), .b(b), .o(zl_o), .nanx(nanx) );
-fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .rm(rm), .op(op), .a(a), .o(loo_o), .done(loo_done) );
+fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .rm(xrm==3'b111 ? rm : xrm), .op(op), .a(a), .o(loo_o), .done(loo_done) );
 
 fp_decomp #(WID) u1 (.i(a), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
 fp_decomp #(WID) u2 (.i(b), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
 
-delay4 #(2) u3 (.clk(clk), .ce(pipe_ce), .i(rmd), .o(rmd4) );
+delay4 #(3) u3 (.clk(clk), .ce(pipe_ce), .i((xrm==3'b111)?rmd:xrm), .o(rmd4) );
 delay1 #(6) u4 (.clk(clk), .ce(pipe_ce), .i(op), .o(op1) );
 delay2 #(6) u5 (.clk(clk), .ce(pipe_ce), .i(op), .o(op2) );
 
@@ -417,16 +403,20 @@ assign o = fstat ? {
 	infdivx,
 	subinfx,
 	snanx
-	} : 'bz;
-
-assign o = !fstat ? {so,fpu_o[MSB-1:0]} : 'bz;
+	} : {WID{1'bz}};
+assign o = fmovi ? a : {WID{1'bz}};
+assign o = !(fstat|fmovi) ? {so,fpu_o[MSB-1:0]} : {WID{1'bz}};
 assign zero = fpu_o[MSB-1:0]==0;
 assign inf = &fpu_o[MSB-1:FMSB+1] && fpu_o[FMSB:0]==0;
-
-assign subinf 	= fpu_o[MSB-1:0]==`QSUBINF;
-assign infdiv 	= fpu_o[MSB-1:0]==`QINFDIV;
-assign zerozero = fpu_o[MSB-1:0]==`QZEROZERO;
-assign infzero 	= fpu_o[MSB-1:0]==`QINFZERO;
+//	NaN Value		Origin
+//	31'h7FC00001	- infinity - infinity
+//	31'h7FC00002	- infinity / infinity
+//	31'h7FC00003	- zero / zero
+//	31'h7FC00004	- infinity X zero
+assign subinf 	= fpu_o[MSB-1:0]=={{EMSB+1{1'b1}},1'b1,{FMSB-4{1'b0}},4'h1};	//`QSUBINF;
+assign infdiv 	= fpu_o[MSB-1:0]=={{EMSB+1{1'b1}},1'b1,{FMSB-4{1'b0}},4'h2};	//`QINFDIV;
+assign zerozero = fpu_o[MSB-1:0]=={{EMSB+1{1'b1}},1'b1,{FMSB-4{1'b0}},4'h3};	//`QZEROZERO;
+assign infzero 	= fpu_o[MSB-1:0]=={{EMSB+1{1'b1}},1'b1,{FMSB-4{1'b0}},4'h4};	//`QINFZERO;
 
 assign exception = gx;
 
