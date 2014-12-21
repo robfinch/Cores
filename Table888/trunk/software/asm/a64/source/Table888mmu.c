@@ -468,6 +468,130 @@ static void process_rrop(int oc)
 }
 
 // ---------------------------------------------------------------------------
+// fabs.d fp1,fp2[,rm]
+// ---------------------------------------------------------------------------
+
+static void process_fprop(int oc)
+{
+    int Ra;
+    int Rt;
+    char *p;
+    int  sz;
+    int fmt;
+    int rm;
+
+    rm = 0;
+    sz = 'd';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("sdtqSDTQ",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal float size.\r\n");
+    }
+    p = inptr;
+    if (oc==0xF6)        // fcmp
+        Rt = getRegister();
+    else
+        Rt = getFPRegister();
+    need(',');
+    Ra = getFPRegister();
+    if (token==',')
+       rm = getFPRoundMode();
+    prevToken();
+    emitAlignedCode(0x01);
+    emitCode(Ra);
+    emitCode(Rt);
+    switch(sz) {
+    case 's': fmt = 0; break;
+    case 'd': fmt = 1; break;
+    case 't': fmt = 2; break;
+    case 'q': fmt = 3; break;
+    }
+    emitCode((fmt << 3)|rm);
+    emitCode(oc);
+}
+
+// ---------------------------------------------------------------------------
+// fadd.d fp1,fp2,fp12[,rm]
+// fcmp.d r1,fp3,fp10[,rm]
+// ---------------------------------------------------------------------------
+
+static void process_fprrop(int oc)
+{
+    int Ra;
+    int Rb;
+    int Rt;
+    char *p;
+    int  sz;
+    int fmt;
+    int rm;
+
+    rm = 0;
+    sz = 'd';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("sdtqSDTQ",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal float size.\r\n");
+    }
+    p = inptr;
+    if (oc==0xF6)        // fcmp
+        Rt = getRegister();
+    else
+        Rt = getFPRegister();
+    need(',');
+    Ra = getFPRegister();
+    need(',');
+    Rb = getFPRegister();
+    if (token==',')
+       rm = getFPRoundMode();
+    prevToken();
+    emitAlignedCode(oc);
+    emitCode(Ra);
+    emitCode(Rb);
+    emitCode(Rt);
+    switch(sz) {
+    case 's': fmt = 0; break;
+    case 'd': fmt = 1; break;
+    case 't': fmt = 2; break;
+    case 'q': fmt = 3; break;
+    }
+    emitCode((fmt << 3)|rm);
+}
+
+// ---------------------------------------------------------------------------
+// fcx r0,#2
+// fdx r1,#0
+// ---------------------------------------------------------------------------
+
+static void process_fpstat(int oc)
+{
+    int Ra;
+    int64_t bits;
+    char *p;
+
+    p = inptr;
+    bits = 0;
+    Ra = getRegister();
+    if (token==',') {
+       NextToken();
+       bits = expr();
+    }
+    prevToken();
+    emitAlignedCode(0x01);
+    emitCode(Ra);
+    emitCode(bits & 0xff);
+    emitCode(0x00);
+    emitCode(oc);
+}
+
+// ---------------------------------------------------------------------------
 // not r3,r3
 // ---------------------------------------------------------------------------
 
@@ -798,6 +922,70 @@ static void process_load(int oc)
 }
 
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_inc(int oc)
+{
+    int Ra;
+    int Rb;
+    int sc;
+    int sg;
+    int64_t incamt;
+    int64_t disp;
+    char *p;
+    int fixup = 5;
+
+    NextToken();
+    p = inptr;
+    mem_operand(&disp, &Ra, &Rb, &sc, &sg);
+    incamt = 1;
+    if (token==']')
+       NextToken();
+    if (token==',') {
+        NextToken();
+        incamt = expr();
+        prevToken();
+    }
+    if (segprefix >= 0)
+        sg = segprefix;
+    if (Rb >= 0) {
+       emitImm0(disp,lastsym!=(SYM*)NULL);
+       fixup = 11;
+       oc = 0xC1;  // INCX
+       emitAlignedCode(oc);
+        if (bGen && lastsym && Ra != 249 && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+       emitCode(Ra);
+       emitCode(Rb);
+       emitCode(incamt & 255);
+       emitCode(sc | ((sg & 15) << 2));
+       return;
+    }
+    oc = 0xC0;        // INC
+    fixup = 10;       // 12 bit
+    if (disp < 0xFFFFFFFFFFFFF700LL || disp > 0x7FFLL) /*{
+         if (lastsym != (SYM *)NULL)
+           emitImm12(disp,!lastsym->defined);
+       else
+           emitImm12(disp,0);
+    }*/
+        emitImm12(disp,lastsym!=(SYM*)NULL);
+    emitAlignedCode(oc);
+    if (bGen && lastsym && Ra != 249 && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    if (Ra < 0) Ra = 0;
+    emitCode(Ra);
+    emitCode(incamt & 255);
+    emitCode(((disp << 4) & 0xF0) | (sg & 15));
+    emitCode((disp >> 4) & 255);
+    ScanToEOL();
+}
+       
+// ----------------------------------------------------------------------------
 // pea disp[r2]
 // pea [r2+r3]
 // ----------------------------------------------------------------------------
@@ -1084,6 +1272,26 @@ static void process_mtspr(int oc)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
+static void process_mtfp(int oc)
+{
+    int fpr;
+    int Ra;
+    
+    fpr = getFPRegister();
+    need(',');
+    Ra = getRegister();
+    emitAlignedCode(0x01);
+    emitCode(Ra);
+    emitCode(fpr);
+    emitCode(0x00);
+    emitCode(oc);
+    if (Ra >= 0)
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 static void process_mfspr(int oc)
 {
     int spr;
@@ -1104,13 +1312,48 @@ static void process_mfspr(int oc)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
+static void process_mffp(int oc)
+{
+    int fpr;
+    int Rt;
+    
+    Rt = getRegister();
+    need(',');
+    fpr = getFPRegister();
+    emitAlignedCode(0x01);
+    emitCode(fpr);
+    emitCode(Rt);
+    emitCode(0x00);
+    emitCode(oc);
+    if (fpr >= 0)
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_fprdstat(int oc)
+{
+    int Rt;
+    
+    Rt = getRegister();
+    emitAlignedCode(0x01);
+    emitCode(0x00);
+    emitCode(Rt);
+    emitCode(0x00);
+    emitCode(oc);
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 static void ProcessEOL(int opt)
 {
     int nn,mm;
     int first;
     int cc;
     
-     //printf("Line: %d\r\n", lineno);
+     //printf("Line: %d\r", lineno);
      segprefix = -1;
      if (bGen && (segment==codeseg || segment==dataseg || segment==rodataseg)) {
      if ((ca & 15)==15 && segment==codeseg) {
@@ -1242,6 +1485,8 @@ void Table888mmu_processMaster()
     memset(current_label,0,sizeof(current_label));
     NextToken();
     while (token != tk_eof) {
+//        printf("\t%.*s\n", inptr-stptr-1, stptr);
+//        printf("token=%d\r", token);
         switch(token) {
         case tk_eol: ProcessEOL(1); break;
         case tk_add:  process_rrop(0x04); break;
@@ -1264,7 +1509,7 @@ void Table888mmu_processMaster()
         case tk_bltu: process_bcc(0x4F); break;
         case tk_bmi: process_bcc(0x44); break;
         case tk_bne: process_bcc(0x41); break;
-        case tk_bpl: process_bcc(0x45); break;
+        case tk_bpl: process_bcc(0x45); break; // also brpl
         case tk_bra: process_bra(0x46); break;
         case tk_brnz: process_bcc(0x59); break;
         case tk_brz:  process_bcc(0x58); break;
@@ -1311,8 +1556,26 @@ void Table888mmu_processMaster()
         case tk_eor: process_rrop(0x22); break;
         case tk_eori: process_riop(0x0E); break;
         case tk_extern: process_extern(); break;
+        case tk_fabs: process_fprop(0x88); break;
+        case tk_fadd: process_fprrop(0xF4); break;
+        case tk_fcmp: process_fprrop(0xF6); break;
+        case tk_fcx: process_fpstat(0x74); break;
+        case tk_fdiv: process_fprrop(0xF8); break;
+        case tk_fdx: process_fpstat(0x77); break;
+        case tk_fex: process_fpstat(0x76); break;
         case tk_fill: process_fill(); break;
+        case tk_fix2flt: process_fprop(0x84); break;
+        case tk_flt2fix: process_fprop(0x85); break;
+        case tk_fmov: process_fprop(0x87); break;
+        case tk_fmul: process_fprrop(0xF7); break;
+        case tk_fnabs: process_fprop(0x89); break;
+        case tk_fneg: process_fprop(0x8A); break;
+        case tk_frm: process_fpstat(0x78); break;
+        case tk_fstat: process_fprdstat(0x86); break;
+        case tk_fsub: process_fprrop(0xF5); break;
+        case tk_ftx: process_fpstat(0x75); break;
         case tk_gran: process_gran(0x14); break;
+        case tk_inc: process_inc(0xC0); break;
         case tk_ios: segprefix = 11; break;
         case tk_jgr: process_jsp(0x57); break;
         case tk_jmp: process_jmp(0x50); break;
@@ -1328,10 +1591,12 @@ void Table888mmu_processMaster()
         case tk_lhu: process_load(0x85); break;
         case tk_lmr: process_lmr(0x9C); break;
         case tk_lw:  process_load(0x86); break;
+        case tk_mffp: process_mffp(0x4B); break;
         case tk_mfspr: process_mfspr(0x49); break;
         case tk_mod: process_rrop(0x09); break;
         case tk_modu: process_rrop(0x19); break;
         case tk_mov: process_mov(0x04); break;
+        case tk_mtfp: process_mtfp(0x4A); break;
         case tk_mtspr: process_mtspr(0x48); break;
         case tk_mul: process_rrop(0x07); break;
         case tk_muli: process_riop(0x07); break;

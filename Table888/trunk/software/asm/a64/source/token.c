@@ -288,7 +288,7 @@ int getIdentifier()
 
 static char *pseudos[] = {
     "align", "code", "data", "tls", "rodata",
-    "fill", "org", (char *)NULL
+    "fill", "org", "byte", (char *)NULL
 };
 
 int isPseudoOp()
@@ -306,7 +306,7 @@ int isPseudoOp()
         nn++;
     }
     buf[nn] = '\0';
-    for (nn = 0; nn < 7; nn++) {
+    for (nn = 0; nn < 8; nn++) {
         if (strcmp(buf, pseudos[nn])==0)
             return 1;
     }
@@ -435,6 +435,7 @@ int NextToken()
             }
             break;
 
+        // beq bne 
         case 'b':
         case 'B':
             if ((inptr[1]=='e' || inptr[1]=='E') && 
@@ -605,6 +606,13 @@ int NextToken()
                 inptr += 4;
                 return token = tk_bits;
             }
+            if ((inptr[1]=='y' || inptr[1]=='Y') && 
+                (inptr[2]=='t' || inptr[2]=='T') &&
+                (inptr[3]=='e' || inptr[3]=='E') &&
+                 isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_db;
+            }
             break;
 
         // cmp code cli com
@@ -752,7 +760,7 @@ int NextToken()
              }
              break;
 
-        // fill
+        // fill fabs fadd fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix
         case 'f': case 'F':
              if ((inptr[1]=='i' || inptr[1]=='I') &&
                  (inptr[2]=='l' || inptr[2]=='L') &&
@@ -760,6 +768,128 @@ int NextToken()
                  (isspace(inptr[4]) || inptr[4]=='.')) {
                  inptr += 4;
                  return token = tk_fill;
+             }
+             if ((inptr[1]=='a' || inptr[1]=='A') &&
+                 (inptr[2]=='d' || inptr[2]=='D') &&
+                 (inptr[3]=='d' || inptr[3]=='D') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fadd;
+             }
+             if ((inptr[1]=='s' || inptr[1]=='S') &&
+                 (inptr[2]=='u' || inptr[2]=='U') &&
+                 (inptr[3]=='b' || inptr[3]=='B') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fsub;
+             }
+             if ((inptr[1]=='c' || inptr[1]=='C') &&
+                 (inptr[2]=='m' || inptr[2]=='M') &&
+                 (inptr[3]=='p' || inptr[3]=='P') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fcmp;
+             }
+             if ((inptr[1]=='m' || inptr[1]=='M') &&
+                 (inptr[2]=='u' || inptr[2]=='U') &&
+                 (inptr[3]=='l' || inptr[3]=='L') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fmul;
+             }
+             if ((inptr[1]=='m' || inptr[1]=='M') &&
+                 (inptr[2]=='o' || inptr[2]=='O') &&
+                 (inptr[3]=='v' || inptr[3]=='V') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fmov;
+             }
+             if ((inptr[1]=='d' || inptr[1]=='D') &&
+                 (inptr[2]=='i' || inptr[2]=='I') &&
+                 (inptr[3]=='v' || inptr[3]=='V') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fdiv;
+             }
+             if ((inptr[1]=='i' || inptr[1]=='I') &&
+                 (inptr[2]=='x' || inptr[2]=='X') &&
+                 (inptr[3]=='2' || inptr[3]=='2') &&
+                 (inptr[4]=='f' || inptr[3]=='F') &&
+                 (inptr[5]=='l' || inptr[3]=='L') &&
+                 (inptr[6]=='t' || inptr[3]=='T') &&
+                 (isspace(inptr[7]) || inptr[7]=='.')) {
+                 inptr += 7;
+                 return token = tk_fix2flt;
+             }
+             if ((inptr[1]=='l' || inptr[1]=='L') &&
+                 (inptr[2]=='t' || inptr[2]=='T') &&
+                 (inptr[3]=='2' || inptr[3]=='2') &&
+                 (inptr[4]=='f' || inptr[3]=='F') &&
+                 (inptr[5]=='i' || inptr[3]=='I') &&
+                 (inptr[6]=='x' || inptr[3]=='X') &&
+                 (isspace(inptr[7]) || inptr[7]=='.')) {
+                 inptr += 7;
+                 return token = tk_flt2fix;
+             }
+             if ((inptr[1]=='a' || inptr[1]=='A') &&
+                 (inptr[2]=='b' || inptr[2]=='B') &&
+                 (inptr[3]=='s' || inptr[3]=='S') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fabs;
+             }
+             if ((inptr[1]=='n' || inptr[1]=='N') &&
+                 (inptr[2]=='e' || inptr[2]=='E') &&
+                 (inptr[3]=='g' || inptr[3]=='G') &&
+                 (isspace(inptr[4]) || inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_fneg;
+             }
+             if ((inptr[1]=='n' || inptr[1]=='N') &&
+                 (inptr[2]=='a' || inptr[2]=='A') &&
+                 (inptr[3]=='b' || inptr[3]=='B') &&
+                 (inptr[4]=='s' || inptr[4]=='S') &&
+                 (isspace(inptr[5]) || inptr[5]=='.')) {
+                 inptr += 5;
+                 return token = tk_fnabs;
+             }
+             if ((inptr[1]=='c' || inptr[1]=='C') &&
+                 (inptr[2]=='x' || inptr[2]=='X') &&
+                 (isspace(inptr[3]))) {
+                 inptr += 3;
+                 return token = tk_fcx;
+             }
+             if ((inptr[1]=='d' || inptr[1]=='D') &&
+                 (inptr[2]=='x' || inptr[2]=='X') &&
+                 (isspace(inptr[3]))) {
+                 inptr += 3;
+                 return token = tk_fdx;
+             }
+             if ((inptr[1]=='e' || inptr[1]=='E') &&
+                 (inptr[2]=='x' || inptr[2]=='X') &&
+                 (isspace(inptr[3]))) {
+                 inptr += 3;
+                 return token = tk_fex;
+             }
+             if ((inptr[1]=='r' || inptr[1]=='R') &&
+                 (inptr[2]=='m' || inptr[2]=='M') &&
+                 (isspace(inptr[3]))) {
+                 inptr += 3;
+                 return token = tk_frm;
+             }
+             if ((inptr[1]=='t' || inptr[1]=='T') &&
+                 (inptr[2]=='x' || inptr[2]=='X') &&
+                 (isspace(inptr[3]))) {
+                 inptr += 3;
+                 return token = tk_ftx;
+             }
+             if ((inptr[1]=='s' || inptr[1]=='S') &&
+                 (inptr[2]=='t' || inptr[2]=='T') &&
+                 (inptr[3]=='a' || inptr[3]=='A') &&
+                 (inptr[4]=='t' || inptr[4]=='T') &&
+                 (isspace(inptr[5]))) {
+                 inptr += 5;
+                 return token = tk_fstat;
              }
              break;
 
@@ -774,7 +904,7 @@ int NextToken()
              }
              break;
 
-        // ios
+        // ios inc
         case 'i': case 'I':
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  (inptr[2]=='s' || inptr[2]=='S') &&
@@ -782,10 +912,22 @@ int NextToken()
                  inptr += 3;
                  return token = tk_ios;
              }
+             if ((inptr[1]=='n' || inptr[1]=='N') &&
+                 (inptr[2]=='c' || inptr[2]=='C') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_inc;
+             }
              break;
 
-        // jgr jmp jsr jsp
+        // jal jgr jmp jsr jsp
         case 'j': case 'J':
+             if ((inptr[1]=='a' || inptr[1]=='A') &&
+                 (inptr[2]=='l' || inptr[2]=='L') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_jal;
+             }
              if ((inptr[1]=='s' || inptr[1]=='S') &&
                  (inptr[2]=='r' || inptr[2]=='R') &&
                  isspace(inptr[3])) {
@@ -857,7 +999,7 @@ int NextToken()
             }
             break;
 
-        // mod modu mov mul muli mulu mului mtspr mfspr
+        // mod modu mov mul muli mulu mului mtspr mfspr mtfp mffp
         case 'm': case 'M':
             if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
                 inptr += 3;
@@ -917,6 +1059,20 @@ int NextToken()
                 isspace(inptr[5])) {
                 inptr += 5;
                 return token = tk_mfspr;
+            }
+            if ((inptr[1]=='t' || inptr[1]=='T') &&
+                (inptr[2]=='f' || inptr[2]=='F') &&
+                (inptr[3]=='p' || inptr[3]=='P') &&
+                isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_mtfp;
+            }
+            if ((inptr[1]=='f' || inptr[1]=='F') &&
+                (inptr[2]=='f' || inptr[2]=='F') &&
+                (inptr[3]=='p' || inptr[3]=='P') &&
+                isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_mffp;
             }
             break;
 
@@ -1377,6 +1533,120 @@ int getRegister()
         return -1;
     }
     return -1;
+}
+
+// ----------------------------------------------------------------------------
+// Return the register number or -1 if not a register.
+// ----------------------------------------------------------------------------
+
+int getFPRegister()
+{
+    int reg;
+
+    while(isspace(*inptr)) inptr++;
+    switch(*inptr) {
+    case 'f': case 'F':
+         if (inptr[1]=='p' || inptr[1]=='P') {
+         if (isdigit(inptr[2])) {
+             reg = inptr[2]-'0';
+             if (isdigit(inptr[3])) {
+                 reg = 10 * reg + (inptr[3]-'0');
+                 if (isdigit(inptr[4])) {
+                     reg = 10 * reg + (inptr[4]-'0');
+                     if (isIdentChar(inptr[5]))
+                         return -1;
+                     inptr += 5;
+                     NextToken();
+                     return reg;
+                 }
+                 else if (isIdentChar(inptr[4]))
+                     return -1;
+                 else {
+                     inptr += 4;
+                     NextToken();
+                     return reg;
+                 }
+             }
+             else if (isIdentChar(inptr[3]))
+                 return -1;
+             else {
+                 inptr += 3;
+                 NextToken();
+                 return reg;
+             }
+         }
+         else return -1;
+         }
+         else return -1;
+    default:
+        return -1;
+    }
+    return -1;
+}
+
+// ----------------------------------------------------------------------------
+// Return the FP round mode.
+// ----------------------------------------------------------------------------
+
+int getFPRoundMode()
+{
+    int reg;
+
+    while(isspace(*inptr) || *inptr==',') inptr++;
+    switch(*inptr) {
+    case 'r': case 'R':
+         if ((inptr[1]=='n' || inptr[1]=='N') &&
+             (inptr[2]=='e' || inptr[2]=='E') &&
+             !isIdentChar(inptr[3]))
+         {
+             inptr += 3;
+             NextToken();
+             return 0;
+         }
+         if ((inptr[1]=='t' || inptr[1]=='T') &&
+             (inptr[2]=='z' || inptr[2]=='Z') &&
+             !isIdentChar(inptr[3]))
+         {
+             inptr += 3;
+             NextToken();
+             return 1;
+         }
+         if ((inptr[1]=='d' || inptr[1]=='D') &&
+             (inptr[2]=='n' || inptr[2]=='N') &&
+             !isIdentChar(inptr[3]))
+         {
+             inptr += 3;
+             NextToken();
+             return 2;
+         }
+         if ((inptr[1]=='u' || inptr[1]=='U') &&
+             (inptr[2]=='p' || inptr[2]=='P') &&
+             !isIdentChar(inptr[3]))
+         {
+             inptr += 3;
+             NextToken();
+             return 3;
+         }
+         if ((inptr[1]=='m' || inptr[1]=='M') &&
+             (inptr[2]=='m' || inptr[2]=='M') &&
+             !isIdentChar(inptr[3]))
+         {
+             inptr += 3;
+             NextToken();
+             return 4;
+         }
+         if ((inptr[1]=='f' || inptr[1]=='F') &&
+             (inptr[2]=='c' || inptr[2]=='C') &&
+             !isIdentChar(inptr[3]))
+         {
+             inptr += 3;
+             NextToken();
+             return 7;
+         }
+    default:
+        return 7;
+    }
+    return 7;
 }
 
 // ----------------------------------------------------------------------------

@@ -88,14 +88,35 @@ enum {
      tk_eq,
      tk_equ,
      tk_extern,
-     tk_fill,
-     tk_ge,
+     tk_fabs,
+     tk_fadd,
      // 180
+     tk_fcmp,
+     tk_fcx,
+     tk_fdiv,
+     tk_fdx,
+     tk_fex,
+     tk_fill,
+     tk_fix2flt,
+     tk_flt2fix,
+     tk_fmov,
+     tk_fmul,
+     // 190
+     tk_fnabs,
+     tk_fneg,
+     tk_frm,
+     tk_fstat,
+     tk_fsub,
+     tk_ftx,
+     tk_ge,
      tk_gran,
      tk_gt,
+     // 200
      tk_icon,
      tk_id,
+     tk_inc,
      tk_ios,
+     tk_jal,
      tk_jgr,
      tk_jmp,
      tk_jsp,
@@ -115,10 +136,12 @@ enum {
      tk_lshift,
      tk_lt,
      tk_lw,
+     tk_mffp,
      tk_mfspr,
      tk_mod,
      tk_modu,
      tk_mov,
+     tk_mtfp,
      tk_mtspr,
      tk_mul,
      tk_muli,
@@ -201,5 +224,7 @@ extern int need(int);
 extern int expect(int);
 extern int getRegister();
 extern int getSprRegister();
+extern int getFPRegister();
+extern int getFPRoundMode();
 
 #endif
