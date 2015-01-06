@@ -26,7 +26,7 @@
 `define MTSPR		6'd16
 `define	MFSPR		6'd17
 `define RTx			6'd18
-`define NEXTPC		6'd19
+`define NEXTPC		6'd20
 `define SHIFT		6'd24
 `define SHL					3'd0
 `define SRU					3'd1
@@ -110,6 +110,7 @@ parameter FIX_SIGN = 6'd29;
 parameter MD_RES = 6'd30;
 parameter LOAD_ICACHE = 6'd32;
 parameter LOAD_ICACHE2 = 6'd33;
+parameter JALS1 = 6'd34;
 parameter byt = 3'd0;
 parameter char = 3'd1;
 parameter half = 3'd2;
@@ -170,10 +171,10 @@ reg [2:0] ld_size,st_size;
 reg kernel_mode;
 reg im;								// interrupt mask
 reg [2:0] imcd;						// mask countdown
-reg [9:0] owner;					// current lot owner
+reg [9:0] owner [7:0];				// current lot owner
 reg [1:0] thread;
-reg [63:0] pc,dpc,xpc,wpc;
-reg [63:0] IPC,EPC;
+reg [31:0] pc,dpc,xpc,wpc;
+reg [31:0] IPC,EPC;
 reg [63:0] vbr;						// vector base register
 reg [39:0] ir,xir,mir,wir;
 wire [5:0] opcode = ir[5:0];
@@ -198,7 +199,7 @@ reg [63:0] a,b,c,imm,xa,xb,xc;
 reg [63:0] ea;
 reg [63:0] regfile [255:0];
 reg [63:0] rfoa,rfob,rfoc;
-reg [63:0] res,wres,tres;
+reg [63:0] res,mres,wres,tres;
 
 always @*
 casex(Ra)
@@ -241,39 +242,45 @@ endcase
 endfunction
 
 wire isCMPI = xopcode==`CMP;
+wire iisImm = insn[5:0]==`IMM1 || insn[5:0]==`IMM2;
+wire risImm = ir[5:0]==`IMM1 || ir[5:0]==`IMM2;
+wire xisImm = xir[5:0]==`IMM2 || xir[5:0]==`IMM2;
+wire wisImm = wir[5:0]==`IMM2 || wir[5:0]==`IMM2;
+
+wire stallEX = xisImm & risImm & !ihit;
+wire stallRF = risImm & !ihit;
 
 reg advanceWBx;
-reg advanceEX;
+reg advanceEXx;
 wire advanceWB = advanceEX | advanceWBx;
-wire advanceRF = advanceEX;
+wire advanceEX = advanceEXx & !stallEX;
+wire advanceRF = advanceEX & !stallRF;
 wire advanceIF = advanceEX & advanceRF & ihit;
 
 reg takb;
-always @(xir,b)
-case({xir[20:18],xir[1:0]})
-`BMI:	takb <=  b[63];
-`BPL:	takb <= !b[63];
-`BVS:	takb <=  b[62];
-`BVC:	takb <= !b[62];
-`BCS:	takb <=  b[0];
-`BCC:	takb <= !b[0];
-`BEQ:	takb <=  b[1];
-`BNE:	takb <= !b[1];
+always @(xir,a)
+case({xir[14:12],xir[1:0]})
+`BMI:	takb <=  a[63];
+`BPL:	takb <= !a[63];
+`BVS:	takb <=  a[62];
+`BVC:	takb <= !a[62];
+`BCS:	takb <=  a[0];
+`BCC:	takb <= !a[0];
+`BEQ:	takb <=  a[1];
+`BNE:	takb <= !a[1];
 `BRA:	takb <= TRUE;
 `BRN:	takb <= FALSE;
-`BHI:	takb <= b[0] & !b[1];
-`BHS:	takb <= b[0];
-`BLO:	takb <= !b[0];
-`BLS:	takb <= !b[0] | b[1];
-`BGT:	takb <= (b[63] & b[62] & !b[1]) | (!b[63] & !b[62] & !b[1]);
-`BGE:	takb <= (b[63] & b[62])|(!b[63] & !b[62]);
-`BLT:	takb <= (b[63] & !b[62])|(!b[63] & b[62]);
-`BLE:	takb <= b[1] | (b[63] & !b[62])|(!b[63] & b[62]);
-`BRA:	takb <= TRUE;
-`BRN:	takb <= FALSE;
-`BRZ:	takb <= b==64'd0;
-`BRNZ:	takb <= b!=64'd0;
-`DBNZ:	takb <= b!=64'd0;
+`BHI:	takb <= a[0] & !a[1];
+`BHS:	takb <= a[0];
+`BLO:	takb <= !a[0];
+`BLS:	takb <= !a[0] | a[1];
+`BGT:	takb <= (a[63] & a[62] & !a[1]) | (!a[63] & !a[62] & !a[1]);
+`BGE:	takb <= (a[63] & a[62])|(!a[63] & !a[62]);
+`BLT:	takb <= (a[63] & !a[62])|(!a[63] & a[62]);
+`BLE:	takb <= a[1] | (a[63] & !a[62])|(!a[63] & a[62]);
+`BRZ:	takb <= a==64'd0;
+`BRNZ:	takb <= a!=64'd0;
+`DBNZ:	takb <= a!=64'd0;
 default:	takb <= TRUE;
 endcase
 
@@ -307,13 +314,34 @@ fisa64_itag_ram u2
 wire [15:0] lotinfo_o;
 reg [10:0] rea;
 reg [15:0] lotinfo [2047:0];
-always @(negedge clk)
+always @(posedge clk)
+	if ((adr_o[31:12]==20'hFFDC6) && we_o && cyc_o && stb_o)
+		lotinfo[adr_o[11:1]] <= dat_o[15:0];
+always @(posedge clk)
 	rea <= ea[26:16];
 assign lotinfo_o = lotinfo[rea];
-
-wire iisImm = insn[5:0]==`IMM1 || insn[5:0]==`IMM2;
-wire xisImm = xir[5:0]==`IMM2 || xir[5:0]==`IMM2;
-wire wisImm = wir[5:0]==`IMM2 || wir[5:0]==`IMM2;
+reg owns_lot;
+always @*
+if (kernel_mode)				// the kernel always owns everything
+	owns_lot <= TRUE;
+else begin
+	if (lotinfo_o[15:6]==10'd0)	// 0 indicates no owner
+		owns_lot <= FALSE;
+	else if (
+		(lotinfo_o[15:10]==6'h3f) ||	// 3fx is a public lot
+		(lotinfo_o[15:6]==owner[0]) ||
+		(lotinfo_o[15:6]==owner[1]) ||
+		(lotinfo_o[15:6]==owner[2]) ||
+		(lotinfo_o[15:6]==owner[3]) ||
+		(lotinfo_o[15:6]==owner[4]) ||
+		(lotinfo_o[15:6]==owner[5]) ||
+		(lotinfo_o[15:6]==owner[6]) ||
+		(lotinfo_o[15:6]==owner[7])
+		)
+		owns_lot <= TRUE;
+	else
+		owns_lot <= FALSE;
+end
 
 
 // Overflow:
@@ -384,7 +412,7 @@ casex(xopcode)
 `AND:	res <= a & imm;
 `OR:	res <= a | imm;
 `XOR:	res <= a ^ imm;
-`Bcc:	res <= b - 64'd1;			// For DBNZ
+`Bcc:	res <= a - 64'd1;			// For DBNZ
 default:	res <= 64'd0;
 endcase
 
@@ -406,7 +434,7 @@ if (rst_i) begin
 	nop_ir();
 	nop_xir();
 	nop_wir();
-	advanceEX <= TRUE;
+	advanceEXx <= TRUE;
 	state <= RESET;
 	adr_o[3:2] <= 2'b11;
 	isICacheLoad <= FALSE;
@@ -469,8 +497,16 @@ begin
 		
 		// Set immediate value
 		casex(opcode)
-		`JAL:		imm <= {{40{ir[39]}},ir[39:18],ir[19:18]};
-		`Bcc:		imm <= {{43{ir[39]}},ir[39:21],ir[22:21]};
+		`JAL:	
+			begin
+				if (wisImm && xisImm)
+					imm <= {wir[11:6],xir[39:6],ir[39:18],ir[19:18]};
+				else if (xisImm)
+					imm <= {{6{xir[39]}},xir[39:6],ir[39:18],ir[19:18]};
+				else
+					imm <= {{40{ir[39]}},ir[39:18],ir[19:18]};
+			end
+		`Bcc:		imm <= ir[39:16];
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW:
 			begin
 				if (wisImm && xisImm)
@@ -508,7 +544,7 @@ begin
 			xRt <= Rb;
 		`Bcc:
 			if ({xir[20:18],xir[1:0]}==`DBNZ)
-				xRt <= Rb;
+				xRt <= Ra;
 			else
 				xRt <= {thread,6'd0};
 		default:	xRt <= {thread,6'd0};
@@ -546,15 +582,28 @@ begin
 				10'd5:	IPC <= a;
 				10'd6:	EPC <= a;
 				endcase
-			`MUL,`MULU,`DIV,`DIVU:
+			`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:
 				begin
-					advanceEX <= FALSE;
+					advanceEXx <= FALSE;
 					next_state(MULDIV);
 				end
+			`JALS:
+				begin
+					advanceEXx <= FALSE;
+					wres <= cs;
+					wRt <= xRt;
+					mRt <= xir[29:24];
+					mres <= xpc;
+					cs <= a;
+					pc <= b[23:0];
+					nop_ir();
+					nop_xir();
+					next_state(JALS1);
+				end
 			endcase
-		`MUL,`MULU,`DIV,`DIVU:
+		`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:
 			begin
-				advanceEX <= FALSE;
+				advanceEXx <= FALSE;
 				next_state(MULDIV);
 			end
 		`JAL:
@@ -562,25 +611,23 @@ begin
 				nop_ir();
 				nop_xir();
 				wres <= pcinc(xpc);
-				pc[63:4] <= a[63:4] + imm[63:4];
 				if (imm==64'd0)
-					pc[3:0] <= a[3:0];
-				else
-					pc[3:0] <= imm[3:0];
+					pc <= a;
+				else begin
+					pc[23:16] <= a[23:16] + imm[23:16];
+					pc[15:0] <= imm[15:0];
+				end
 			end
 		`Bcc:
 			if (takb) begin
 				nop_ir();
 				nop_xir();
-				pc[63:4] <= a[63:4] + imm[63:4];
-				if (imm==64'd0)
-					pc[3:0] <= a[3:0];
-				else
-					pc[3:0] <= imm[3:0];
+				pc[15:0] <= xir[31:16];
+				pc[31:16] <= xpc[31:16] + {{11{xir[36]}},xir[36:32]};
 			end
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			begin
-			advanceEX <= FALSE;
+			advanceEXx <= FALSE;
 			case(xmd)
 			3'd0:	begin ea <= a + imm; next_state(LOADSTORE1); end
 			3'd1:	begin ea <= a + (b << xsc) + imm; next_state(LOADSTORE1); end
@@ -602,7 +649,7 @@ begin
 			end
 		`SB,`SC,`SH,`SW:
 			begin
-			advanceEX <= FALSE;
+			advanceEXx <= FALSE;
 			case(xmd)
 			3'd0:	begin ea <= a + imm; next_state(LOADSTORE1); end
 			3'd1:	begin ea <= a + (b << xsc) + imm; next_state(LOADSTORE1); end
@@ -648,25 +695,31 @@ begin
 				nop_xir();
 				nop_wir();
 				if (wir[17]) begin
-					pc <= {IPC[63:2],IPC[3:2]};
+					cs <= ICS;
+					pc <= {IPC[23:2],IPC[3:2]};
 					if (IPC[0])
 						im <= TRUE;
 					else
 						imcd <= 3'b110;
 				end
-				else
+				else begin
+					cs <= ECS;
 					pc <= EPC;
+				end
 			end
 		else if (wopcode==`BRK) begin
 			nop_ir();
 			nop_xir();
 			nop_wir();
 			if (wir[17]) begin
-				IPC <= {wpc[63:2],1'b1,im};
+				ICS <= cs;
+				IPC <= {wpc[23:2],1'b1,im};
 				im <= 1'b1;
 			end
-			else
+			else begin
+				ECS <= cs;
 				EPC <= wpc;//pcinc(wpc);
+			end
 			pc <= {vbr[63:13],wir[14:6],4'h0};
 		end
 	end
@@ -749,7 +802,7 @@ MULDIV:
 				end
 			default:
 				begin
-				advanceEX <= TRUE;
+				advanceEXx <= TRUE;
 				state <= RUN;
 				end
 			endcase
@@ -802,7 +855,7 @@ MD_RES:
 			wres <= q[63:0];
 		else
 			wres <= r[63:0];
-		advanceEX <= TRUE;
+		advanceEXx <= TRUE;
 		next_state(RUN);
 	end
 
@@ -889,12 +942,12 @@ LOADSTORE2:
 		if (ack_i) begin
 			stb_o <= FALSE;	// deactive strobe
 			case(mopcode)
-			`LB:	begin wres <= {{56{dat8[7]}},dat8}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-			`LBU:	begin wres <= dat8; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+			`LB:	begin wres <= {{56{dat8[7]}},dat8}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+			`LBU:	begin wres <= dat8; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`LC:	if (ea[1:0]==2'b11) begin wres[7:0] <= dat16[7:0]; next_state(LOADSTORE3); end
-					else begin wres <= {{48{dat16[15]}},dat16}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					else begin wres <= {{48{dat16[15]}},dat16}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`LCU:	if (ea[1:0]==2'b11) begin wres[7:0] <= dat16[7:0]; next_state(LOADSTORE3); end
-					else begin wres <= dat16; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					else begin wres <= dat16; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`LH:	if (ea[1:0]!=2'b00) begin
 						case(ea[1:0])
 						2'd1:	wres <= dat32[23:0];
@@ -904,7 +957,7 @@ LOADSTORE2:
 						endcase
 						next_state(LOADSTORE3);
 					end
-					else begin wres <= {{32{dat32[31]}},dat32}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					else begin wres <= {{32{dat32[31]}},dat32}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`LHU:	if (ea[1:0]!=2'b00) begin
 						case(ea[1:0])
 						2'd1:	wres <= dat32[23:0];
@@ -914,7 +967,7 @@ LOADSTORE2:
 						endcase
 						next_state(LOADSTORE3);
 					end
-					else begin wres <= dat32; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					else begin wres <= dat32; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`LW:	begin
 						next_state(LOADSTORE3);
 						case(ea[1:0])
@@ -924,13 +977,13 @@ LOADSTORE2:
 						2'd3:	wres <= dat32[7:0];
 						endcase
 					end
-			`SB:	begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+			`SB:	begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`SC:	if (ea[1:0]==2'b11)
 						next_state(LOADSTORE3);
-					else begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					else begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`SH:	if (ea[1:0]!=2'b00)
 						next_state(LOADSTORE3);
-					else begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					else begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`SW:	next_state(LOADSTORE3);
 			endcase
 		end
@@ -954,29 +1007,29 @@ LOADSTORE4:
 		if (ack_i) begin
 			stb_o <= FALSE;
 			case(mopcode)
-			`LC:	begin wres[63:8] <= {{48{dat16[15]}},dat16[15:8]}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-			`LCU:	begin wres[63:8] <= dat16[15:8]; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+			`LC:	begin wres[63:8] <= {{48{dat16[15]}},dat16[15:8]}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+			`LCU:	begin wres[63:8] <= dat16[15:8]; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			`LH:	case(ea[1:0])
-					2'd1:	begin wres[63:24] <= {{32{dat32[31]}},dat32[31:24]}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-					2'd2:	begin wres[63:16] <= {{32{dat32[31]}},dat32[31:16]}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-					2'd3:	begin wres[63: 8] <= {{32{dat32[31]}},dat32[31: 8]}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-					default:	begin wres[63:32] <= {32{wres[31]}}; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					2'd1:	begin wres[63:24] <= {{32{dat32[31]}},dat32[31:24]}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+					2'd2:	begin wres[63:16] <= {{32{dat32[31]}},dat32[31:16]}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+					2'd3:	begin wres[63: 8] <= {{32{dat32[31]}},dat32[31: 8]}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+					default:	begin wres[63:32] <= {32{wres[31]}}; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 					endcase
 			`LHU:	case(ea[1:0])
-					2'd1:	begin wres[63:24] <= dat32[31:24]; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-					2'd2:	begin wres[63:16] <= dat32[31:16]; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-					2'd3:	begin wres[63: 8] <= dat32[31: 8]; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-					default:	begin wres[63:32] <= 32'd0; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					2'd1:	begin wres[63:24] <= dat32[31:24]; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+					2'd2:	begin wres[63:16] <= dat32[31:16]; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+					2'd3:	begin wres[63: 8] <= dat32[31: 8]; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+					default:	begin wres[63:32] <= 32'd0; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 					endcase
 			`LW:	case(ea[1:0])
-					2'd0:	begin wres[63:32] <= dat32; wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+					2'd0:	begin wres[63:32] <= dat32; wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 					2'd1:	begin wres[55:24] <= dat32; next_state(LOADSTORE5); end
 					2'd2:	begin wres[47:16] <= dat32; next_state(LOADSTORE5); end
 					2'd3:	begin wres[39: 8] <= dat32; next_state(LOADSTORE5); end
 					endcase
-			`SC:	begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-			`SH:	begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end
-			`SW:	if (ea[1:0]!=2'b00) next_state(LOADSTORE5); else begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end
+			`SC:	begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+			`SH:	begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
+			`SW:	if (ea[1:0]!=2'b00) next_state(LOADSTORE5); else begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end
 			endcase
 		end
 	end
@@ -987,7 +1040,7 @@ LOADSTORE5:
 		case(mopcode)
 		`LW:	wb_read3(ea);
 		`SW:	wb_write3(ea,xc);
-		default:	begin wb_nack(); next_state(RUN); advanceEX <= TRUE; end	// can't happen
+		default:	begin wb_nack(); next_state(RUN); advanceEXx <= TRUE; end	// can't happen
 		endcase
 	end
 
@@ -995,13 +1048,22 @@ LOADSTORE6:
 	if (ack_i) begin
 		wb_nack();
 		next_state(RUN);
-		advanceEX <= TRUE;
+		advanceEXx <= TRUE;
 		case(ea[1:0])
 		2'd0:	;	// can't happen
 		2'd1:	wres[63:56] <= dat32[31:24];
 		2'd2:	wres[63:48] <= dat32[31:16];
 		2'd3:	wres[63:40] <= dat32[31: 8];
 		endcase
+	end
+
+JALS1:
+	begin
+		wRt <= mRt;
+		wres <= mres;
+		advanceWBx <= TRUE;
+		advanceEXx <= TRUE;
+		next_state(RUN);
 	end
 
 // ----------------------------------------------------------------------------
@@ -1013,7 +1075,7 @@ LOADSTORE6:
 LOAD_ICACHE:
 	begin
 		isICacheLoad <= TRUE;
-		wb_burst(6'd3,{pc[31:4],4'h0});
+		wb_burst(6'd3,{cspc[31:4],4'h0});
 		next_state(LOAD_ICACHE2);
 	end
 LOAD_ICACHE2:
