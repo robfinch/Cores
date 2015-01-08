@@ -45,6 +45,16 @@ wire take_branch = FALSE;
 wire did_branchback0 = FALSE;
 wire did_branchback1 = FALSE;
 
+wire [5:0] Ra0;
+wire [5:0] Rb0;
+wire [5:0] Rc0;
+wire [5:0] Ra1;
+wire [5:0] Rb1;
+wire [5:0] Rc1;
+wire [5:0] Ra2;
+wire [5:0] Rb2;
+wire [5:0] Rc2;
+
 reg fetchbuf;
 reg fetchbufA_v;
 reg fetchbufB_v;
@@ -217,6 +227,35 @@ icache_tagram u2
 	.rclk(~clk),
 	.pc(pc),
 	.hit(ihit)
+);
+
+regfile u3
+(
+	.wclk(clk),
+	.wa0(),
+	.wa1(),
+	.wa2(),
+	.i0(),
+	.i1(),
+	.i2(),
+	.ra0(Ra0),
+	.ra1(Rb0),
+	.ra2(Rc0),
+	.ra3(Ra1),
+	.ra4(Rb1),
+	.ra5(Rc1),
+	.ra6(Ra2),
+	.ra7(Rb2),
+	.ra8(Rc2),
+	.o0(rfoa0),
+	.o1(rfob0),
+	.o2(rfoc0),
+	.o3(rfoa1),
+	.o4(rfob1),
+	.o5(rfoc1),
+	.o6(rfoa2),
+	.o7(rfob2),
+	.o8(rfoc2)
 );
 
 function [6:0] fnRa;
@@ -449,6 +488,7 @@ else begin
 	$display("fetchbuf=%d",fetchbuf);
 	end
 `include "commit_early.v"
+`include "enque.v"
 end
 
 task LD_fetchbufABC;
@@ -573,3 +613,4 @@ always @posedge (rclk)
 assign hit = mem[rcp[12:4]]=={1'b1,rpc[31:13]};
 
 endmodule
+

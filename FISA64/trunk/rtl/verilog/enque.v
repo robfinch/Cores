@@ -70,7 +70,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				tail0 <= tail0 + 4'd1;
 				tail1 <= tail1 + 4'd1;
 				tail2 <= tail2 + 4'd1;
-				if (fetchbuf1_rfw) begin
+				if (fetchbuf0_rfw) begin
 					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };	// top bit indicates ALU/MEM bus
 				end
