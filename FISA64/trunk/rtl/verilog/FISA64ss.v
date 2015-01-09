@@ -54,6 +54,9 @@ wire [5:0] Rc1;
 wire [5:0] Ra2;
 wire [5:0] Rb2;
 wire [5:0] Rc2;
+wire [63:0] rfoa0,rfoa1,rfoa2;
+wire [63:0] rfob0,rfob1,rfob2;
+wire [63:0] rfoc0,rfoc1,rfoc2;
 
 reg fetchbuf;
 reg fetchbufA_v;
@@ -207,6 +210,16 @@ reg [3:0] head15;
 
 wire [3:0] missid;
 
+reg commit0_v;
+reg commit1_v;
+reg commit2_v;
+reg [6:0] commit0_tgt;
+reg [6:0] commit1_tgt;
+reg [6:0] commit2_tgt;
+reg [63:0] commit0_bus;
+reg [63:0] commit1_bus;
+reg [63:0] commit2_bus;
+
 icache_ram u1
 (
 	.wclk(clk),
@@ -232,21 +245,24 @@ icache_tagram u2
 regfile u3
 (
 	.wclk(clk),
-	.wa0(),
-	.wa1(),
-	.wa2(),
-	.i0(),
-	.i1(),
-	.i2(),
-	.ra0(Ra0),
-	.ra1(Rb0),
-	.ra2(Rc0),
-	.ra3(Ra1),
-	.ra4(Rb1),
-	.ra5(Rc1),
-	.ra6(Ra2),
-	.ra7(Rb2),
-	.ra8(Rc2),
+	.wr0(commit0_v & ~commit0_tgt[6]),
+	.wr1(commit1_v & ~commit1_tgt[6]),
+	.wr2(commit2_v & ~commit2_tgt[6]),
+	.wa0(commit0_tgt[5:0]),
+	.wa1(commit1_tgt[5:0]),
+	.wa2(commit2_tgt[5:0]),
+	.i0(commit0_bus),
+	.i1(commit1_bus),
+	.i2(commit2_bus),
+	.ra0(fetchbuf0_instr[`INSTRUCTION_RA]),
+	.ra1(fetchbuf0_instr[`INSTRUCTION_RB]),
+	.ra2(fetchbuf0_instr[`INSTRUCTION_RC]),
+	.ra3(fetchbuf1_instr[`INSTRUCTION_RA]),
+	.ra4(fetchbuf1_instr[`INSTRUCTION_RB]),
+	.ra5(fetchbuf1_instr[`INSTRUCTION_RC]),
+	.ra6(fetchbuf2_instr[`INSTRUCTION_RA]),
+	.ra7(fetchbuf2_instr[`INSTRUCTION_RB]),
+	.ra8(fetchbuf2_instr[`INSTRUCTION_RC]),
 	.o0(rfoa0),
 	.o1(rfob0),
 	.o2(rfoc0),
@@ -255,7 +271,10 @@ regfile u3
 	.o5(rfoc1),
 	.o6(rfoa2),
 	.o7(rfob2),
-	.o8(rfoc2)
+	.o8(rfoc2),
+	.pc0(fetchbuf0_pc),
+	.pc1(fetchbuf1_pc),
+	.pc2(fetchbuf2_pc)
 );
 
 function [6:0] fnRa;
@@ -279,6 +298,18 @@ case(insn[5:0])
 	`RTE:	fnRb = 7'h5D;
 	endcase
 default:	fnRb = {1'b0,insn[`INSTRUCTION_RB]};
+endcase
+endfunction
+
+function [6:0] fnRc;
+input [39:0] insn;
+case(insn[5:0])
+`RR:
+	case(insn[39:34])
+	`RTI:	fnRc = 7'h5E;
+	`RTE:	fnRc = 7'h5D;
+	endcase
+default:	fnRc = {1'b0,insn[`INSTRUCTION_RC]};
 endcase
 endfunction
 
@@ -455,6 +486,29 @@ assign
 	iqentry_source[14] = | iqentry_14_latestID,
 	iqentry_source[15] = | iqentry_15_latestID;
 
+always @*
+if (fetchbuf) begin
+	fetchbuf0_instr <= fetchbufD_instr;
+	fetchbuf0_pc <= fetchbufD_pc;
+	fetchbuf0_v <= fetchbufD_v;
+	fetchbuf1_instr <= fetchbufE_instr;
+	fetchbuf1_pc <= fetchbufE_pc;
+	fetchbuf1_v <= fetchbufE_v;
+	fetchbuf2_instr <= fetchbufF_instr;
+	fetchbuf2_pc <= fetchbufF_pc;
+	fetchbuf2_v <= fetchbufF_v;
+end
+else begin
+	fetchbuf0_instr <= fetchbufA_instr;
+	fetchbuf0_pc <= fetchbufA_pc;
+	fetchbuf0_v <= fetchbufA_v;
+	fetchbuf1_instr <= fetchbufB_instr;
+	fetchbuf1_pc <= fetchbufB_pc;
+	fetchbuf1_v <= fetchbufB_v;
+	fetchbuf2_instr <= fetchbufC_instr;
+	fetchbuf2_pc <= fetchbufC_pc;
+	fetchbuf2_v <= fetchbufC_v;
+end
 
 always @(posedge clk)
 if (rst_i) begin
@@ -488,7 +542,8 @@ else begin
 	$display("fetchbuf=%d",fetchbuf);
 	end
 `include "commit_early.v"
-`include "enque.v"
+`include "FISA64_enque3.v"
+`include "FISA64_commit3.v"
 end
 
 task LD_fetchbufABC;
@@ -566,6 +621,29 @@ begin
 	iqentry_c    [tail]    <=   rfoc;
 	iqentry_cv   [tail]    <=   fnSource3_v( instr[5:0] ) | rf_v[ fnRc(instr) ];
 	iqentry_cs   [tail]    <=   rf_source[fnRc(instr)];
+end
+endtask
+
+task inc_head;
+input [3:0] amt;
+begin
+	head0 <= head0 + amt;
+	head1 <= head1 + amt;
+	head2 <= head2 + amt;
+	head3 <= head3 + amt;
+	head4 <= head4 + amt;
+	head5 <= head5 + amt;
+	head6 <= head6 + amt;
+	head7 <= head7 + amt;
+	head8 <= head8 + amt;
+	head9 <= head9 + amt;
+	head10 <= head10 + amt;
+	head11 <= head11 + amt;
+	head12 <= head12 + amt;
+	head13 <= head13 + amt;
+	head14 <= head14 + amt;
+	head15 <= head15 + amt;
+	I <= I + amt;
 end
 endtask
 
