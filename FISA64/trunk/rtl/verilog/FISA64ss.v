@@ -1,3 +1,6 @@
+`define BRK		6'd0
+`define NOP		6'd59
+
 `define INV	1'b0
 `define VAL	1'b1
 
@@ -5,16 +8,29 @@
 `define INSTRUCTION_RB		17:12
 `define INSTRUCTION_RC		23:18
 
+`define PANIC_NONE		4'd0
+`define PANIC_FETCHBUFBEQ	4'd1
+`define PANIC_INVALIDISLOT	4'd2
+`define PANIC_MEMORYRACE	4'd3
+`define PANIC_IDENTICALDRAMS	4'd4
+`define PANIC_OVERRUN		4'd5
+`define PANIC_HALTINSTRUCTION	4'd6
+`define PANIC_INVALIDMEMOP	4'd7
 `define PANIC_INVALIDFBSTATE	4'd9
 `define PANIC_INVALIDIQSTATE	4'd10
+`define PANIC_BRANCHBACK	4'd11
+`define PANIC_BADTARGETID	4'd12
 
-module FISA64ss(rst_i, clk_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module FISA64ss(rst_i, clk_i, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
 input rst_i;
 input clk_i;
+input nmi_i;
+input irq_i;
+input [8:0] vec_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg [5:0] bl_o;
@@ -27,23 +43,28 @@ output reg [31:0] adr_o;
 input [31:0] dat_i;
 output reg [31:0] dat_o;
 
+reg [128:0] message [0:15];
+
 wire clk = clk_i;
 reg [31:0] pc;
 wire [127:0] bundle;
-wire [39:0] insn0 = bundle[39: 0];
-wire [39:0] insn1 = bundle[79:40];
-wire [39:0] insn2 = bundle[119:80];
+wire [39:0] insn0a = bundle[39: 0];
+wire [39:0] insn1a = bundle[79:40];
+wire [39:0] insn2a = bundle[119:80];
+reg [39:0] insn0,insn1,insn2;
 reg isICacheLoad;
 reg isICacheReset;
 wire ihit;
 wire do_pcinc = ihit;
-//wire ld_fetchbuf = (iuncached ? ibufhit : ihit) || (nmi_edge & !StatusHWI)||(irq_i & ~im & !StatusHWI);
-wire ld_fetchbuf = ihit;
 wire branchmiss = FALSE;
 wire [31:0] misspc = 32'h0;
 wire take_branch = FALSE;
 wire did_branchback0 = FALSE;
 wire did_branchback1 = FALSE;
+reg StatusHWI;
+reg nmi_edge;
+reg im;
+wire ld_fetchbuf = ihit || (nmi_edge & !StatusHWI)||(irq_i & ~im & !StatusHWI);
 
 wire [5:0] Ra0;
 wire [5:0] Rb0;
@@ -187,6 +208,78 @@ wire  [NREGS:1] iqentry_13_cumulative;
 wire  [NREGS:1] iqentry_14_cumulative;
 wire  [NREGS:1] iqentry_15_cumulative;
 
+wire [NREGS:1] iq0_out;
+wire [NREGS:1] iq1_out;
+wire [NREGS:1] iq2_out;
+wire [NREGS:1] iq3_out;
+wire [NREGS:1] iq4_out;
+wire [NREGS:1] iq5_out;
+wire [NREGS:1] iq6_out;
+wire [NREGS:1] iq7_out;
+wire [NREGS:1] iq8_out;
+wire [NREGS:1] iq9_out;
+wire [NREGS:1] iq10_out;
+wire [NREGS:1] iq11_out;
+wire [NREGS:1] iq12_out;
+wire [NREGS:1] iq13_out;
+wire [NREGS:1] iq14_out;
+wire [NREGS:1] iq15_out;
+
+//
+// BRANCH-MISS LOGIC: livetarget
+//
+// livetarget implies that there is a not-to-be-stomped instruction that targets the register in question
+// therefore, if it is zero it implies the rf_v value should become VALID on a branchmiss
+// 
+
+reg [NREGS:1] livetarget;
+
+decoder7 iq0(.num(iqentry_tgt[0]), .out(iq0_out));
+decoder7 iq1(.num(iqentry_tgt[1]), .out(iq1_out));
+decoder7 iq2(.num(iqentry_tgt[2]), .out(iq2_out));
+decoder7 iq3(.num(iqentry_tgt[3]), .out(iq3_out));
+decoder7 iq4(.num(iqentry_tgt[4]), .out(iq4_out));
+decoder7 iq5(.num(iqentry_tgt[5]), .out(iq5_out));
+decoder7 iq6(.num(iqentry_tgt[6]), .out(iq6_out));
+decoder7 iq7(.num(iqentry_tgt[7]), .out(iq7_out));
+decoder7 iq8(.num(iqentry_tgt[8]), .out(iq8_out));
+decoder7 iq9(.num(iqentry_tgt[9]), .out(iq9_out));
+decoder7 iq10(.num(iqentry_tgt[10]), .out(iq10_out));
+decoder7 iq11(.num(iqentry_tgt[11]), .out(iq11_out));
+decoder7 iq12(.num(iqentry_tgt[12]), .out(iq12_out));
+decoder7 iq13(.num(iqentry_tgt[13]), .out(iq13_out));
+decoder7 iq14(.num(iqentry_tgt[14]), .out(iq14_out));
+decoder7 iq15(.num(iqentry_tgt[15]), .out(iq15_out));
+
+assign 
+	iqentry_0_livetarget = {NREGS{iqentry_v[0]}} & {NREGS{~iqentry_stomp[0]}} & {NREGS{iqentry_cmt[0]}} & iq0_out,
+	iqentry_1_livetarget = {NREGS{iqentry_v[1]}} & {NREGS{~iqentry_stomp[1]}} & {NREGS{iqentry_cmt[1]}} & iq1_out,
+	iqentry_2_livetarget = {NREGS{iqentry_v[2]}} & {NREGS{~iqentry_stomp[2]}} & {NREGS{iqentry_cmt[2]}} & iq2_out,
+	iqentry_3_livetarget = {NREGS{iqentry_v[3]}} & {NREGS{~iqentry_stomp[3]}} & {NREGS{iqentry_cmt[3]}} & iq3_out,
+	iqentry_4_livetarget = {NREGS{iqentry_v[4]}} & {NREGS{~iqentry_stomp[4]}} & {NREGS{iqentry_cmt[4]}} & iq4_out,
+	iqentry_5_livetarget = {NREGS{iqentry_v[5]}} & {NREGS{~iqentry_stomp[5]}} & {NREGS{iqentry_cmt[5]}} & iq5_out,
+	iqentry_6_livetarget = {NREGS{iqentry_v[6]}} & {NREGS{~iqentry_stomp[6]}} & {NREGS{iqentry_cmt[6]}} & iq6_out,
+	iqentry_7_livetarget = {NREGS{iqentry_v[7]}} & {NREGS{~iqentry_stomp[7]}} & {NREGS{iqentry_cmt[7]}} & iq7_out,
+	iqentry_8_livetarget = {NREGS{iqentry_v[8]}} & {NREGS{~iqentry_stomp[8]}} & {NREGS{iqentry_cmt[8]}} & iq8_out,
+	iqentry_9_livetarget = {NREGS{iqentry_v[9]}} & {NREGS{~iqentry_stomp[9]}} & {NREGS{iqentry_cmt[9]}} & iq9_out,
+	iqentry_10_livetarget = {NREGS{iqentry_v[10]}} & {NREGS{~iqentry_stomp[10]}} & {NREGS{iqentry_cmt[10]}} & iq10_out,
+	iqentry_11_livetarget = {NREGS{iqentry_v[11]}} & {NREGS{~iqentry_stomp[11]}} & {NREGS{iqentry_cmt[11]}} & iq11_out,
+	iqentry_12_livetarget = {NREGS{iqentry_v[12]}} & {NREGS{~iqentry_stomp[12]}} & {NREGS{iqentry_cmt[12]}} & iq12_out,
+	iqentry_13_livetarget = {NREGS{iqentry_v[13]}} & {NREGS{~iqentry_stomp[13]}} & {NREGS{iqentry_cmt[13]}} & iq13_out,
+	iqentry_14_livetarget = {NREGS{iqentry_v[14]}} & {NREGS{~iqentry_stomp[14]}} & {NREGS{iqentry_cmt[14]}} & iq14_out,
+	iqentry_15_livetarget = {NREGS{iqentry_v[15]}} & {NREGS{~iqentry_stomp[15]}} & {NREGS{iqentry_cmt[15]}} & iq15_out;
+
+
+integer n;
+always @*
+	for (n = 1; n < NREGS+1; n = n + 1)
+		livetarget[n] <=
+			iqentry_0_livetarget[n] | iqentry_1_livetarget[n] | iqentry_2_livetarget[n] | iqentry_3_livetarget[n] |
+			iqentry_4_livetarget[n] | iqentry_5_livetarget[n] | iqentry_6_livetarget[n] | iqentry_7_livetarget[n] |
+			iqentry_8_livetarget[n] | iqentry_9_livetarget[n] | iqentry_10_livetarget[n] | iqentry_11_livetarget[n] |
+			iqentry_12_livetarget[n] | iqentry_13_livetarget[n] | iqentry_14_livetarget[n] | iqentry_15_livetarget[n]
+			;
+
 reg [3:0] tail0;
 reg [3:0] tail1;
 reg [3:0] tail2;
@@ -242,7 +335,7 @@ icache_tagram u2
 	.hit(ihit)
 );
 
-regfile u3
+FISA64_regfile u3
 (
 	.wclk(clk),
 	.wr0(commit0_v & ~commit0_tgt[6]),
@@ -486,6 +579,52 @@ assign
 	iqentry_source[14] = | iqentry_14_latestID,
 	iqentry_source[15] = | iqentry_15_latestID;
 
+assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
+
+// "Stream" interrupt instructions into the instruction stream until an INT
+// instruction commits. This avoids the problem of an INT instruction being
+// stomped on by a previous branch instruction.
+// Populate the instruction buffers with INT instructions for a hardware interrupt
+// Also populate the instruction buffers with a call to the instruction error vector
+// if an error occurred during instruction load time.
+
+// There is a one cycle delay in setting the StatusHWI that allowed an extra INT
+// instruction to sneek into the queue. This is NOPped out by the int_commit
+// signal.
+
+// On a cache miss the instruction buffers are loaded with NOPs this prevents
+// the PC from being trashed by invalid branch instructions.
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ihit)
+if (nmi_edge & ~StatusHWI & ~int_commit)
+	insn0 <= {1'b1,2'b00,9'd510,`BRK};
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn0 <= {1'b1,2'b00,vec_i,`BRK};
+else if (ihit)
+	insn0 <= insn0a;
+else
+	insn0 <= {34'd0,`NOP};	// load with NOPs
+
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ihit)
+if (nmi_edge & ~StatusHWI & ~int_commit)
+	insn1 <= {1'b1,2'b00,9'd510,`BRK};
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn1 <= {1'b1,2'b00,vec_i,`BRK};
+else if (ihit)
+	insn1 <= insn1a;
+else
+	insn1 <= {34'd0,`NOP};	// load with NOPs
+
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ihit)
+if (nmi_edge & ~StatusHWI & ~int_commit)
+	insn2 <= {1'b1,2'b00,9'd510,`BRK};
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn2 <= {1'b1,2'b00,vec_i,`BRK};
+else if (ihit)
+	insn2 <= insn2a;
+else
+	insn2 <= {34'd0,`NOP};	// load with NOPs
+
+
 always @*
 if (fetchbuf) begin
 	fetchbuf0_instr <= fetchbufD_instr;
@@ -510,8 +649,30 @@ else begin
 	fetchbuf2_v <= fetchbufC_v;
 end
 
+initial begin
+	message[ `PANIC_NONE ]			= "NONE            ";
+	message[ `PANIC_FETCHBUFBEQ ]		= "FETCHBUFBEQ     ";
+	message[ `PANIC_INVALIDISLOT ]		= "INVALIDISLOT    ";
+	message[ `PANIC_IDENTICALDRAMS ]	= "IDENTICALDRAMS  ";
+	message[ `PANIC_OVERRUN ]		= "OVERRUN         ";
+	message[ `PANIC_HALTINSTRUCTION ]	= "HALTINSTRUCTION ";
+	message[ `PANIC_INVALIDMEMOP ]		= "INVALIDMEMOP    ";
+	message[ `PANIC_INVALIDFBSTATE ]	= "INVALIDFBSTATE  ";
+	message[ `PANIC_INVALIDIQSTATE ]	= "INVALIDIQSTATE  ";
+	message[ `PANIC_BRANCHBACK ]		= "BRANCHBACK      ";
+	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
+end
+
+reg nmi1;
+always @(posedge clk_i)
+	if (rst_i)
+		nmi1 <= 1'b0;
+	else
+		nmi1 <= nmi_i;
+
 always @(posedge clk)
 if (rst_i) begin
+	nmi_edge <= 1'b0;
 	fetchbuf <= 1'b0;
 	fetchbufA_v <= `INV;
 	fetchbufB_v <= `INV;
@@ -522,7 +683,9 @@ if (rst_i) begin
 	iqentry_v <= 16'h0000;
 end
 else begin
-`include "triple_ifetch.v"
+	if (nmi_i & !nmi1)
+		nmi_edge <= 1'b1;
+`include "FISA64_ifetch3.v"
 	if (ihit) begin
 	$display("%h %h hit=%b#", spc, pc, ihit);
 	$display("%c insn0=%h insn1=%h insn2=%h", nmi_edge ? "*" : " ",insn0, insn1, insn2);
@@ -543,7 +706,38 @@ else begin
 	end
 `include "commit_early.v"
 `include "FISA64_enque3.v"
+	if (ihit) begin
+	for (i=0; i<16; i=i+1) 
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h #",
+		(i[3:0]==head0)?72:46, (i[3:0]==tail0)?84:46, i,
+		iqentry_v[i], iqentry_done[i], iqentry_cmt[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
+		iqentry_islot[i],
+//		((i==0) ? iqentry_0_islot : (i==1) ? iqentry_1_islot : (i==2) ? iqentry_2_islot : (i==3) ? iqentry_3_islot :
+//		 (i==4) ? iqentry_4_islot : (i==5) ? iqentry_5_islot : (i==6) ? iqentry_6_islot : iqentry_7_islot),
+		 iqentry_stomp[i],
+		(fnIsFlowCtrl(iqentry_op[i]) ? 98 : fnIsMem(iqentry_op[i]) ? 109 : 97), 
+		iqentry_op[i],
+		fnRegstr(iqentry_tgt[i]),fnRegstrGrp(iqentry_tgt[i]),
+		iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
+		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
+	end
+`include "FISA64_data_incoming.v"
 `include "FISA64_commit3.v"
+	if (|panic) begin
+	    $display("");
+	    $display("-----------------------------------------------------------------");
+	    $display("-----------------------------------------------------------------");
+	    $display("---------------     PANIC:%s     -----------------", message[panic]);
+	    $display("-----------------------------------------------------------------");
+	    $display("-----------------------------------------------------------------");
+	    $display("");
+	    $display("instructions committed: %d", I);
+	    $display("total execution cycles: %d", $time / 10);
+	    $display("");
+	end
+	if (|panic && ~outstanding_stores) begin
+	    $finish;
+	end
 end
 
 task LD_fetchbufABC;
@@ -692,3 +886,13 @@ assign hit = mem[rcp[12:4]]=={1'b1,rpc[31:13]};
 
 endmodule
 
+module decoder7 (num, out);
+input [6:0] num;
+output [127:1] out;
+
+wire [127:0] out1;
+
+assign out1 = 128'd1 << num;
+assign out = out1[127:1];
+
+endmodule

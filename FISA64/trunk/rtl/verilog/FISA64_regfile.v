@@ -26,7 +26,7 @@
 // 80 MHz
 // ============================================================================
 //
-module regfile(wclk, wr0, wr1, wr2, wa0, wa1, wa2, i0, i1, i2,
+module FISA64_regfile(wclk, wr0, wr1, wr2, wa0, wa1, wa2, i0, i1, i2,
 	ra0, ra1, ra2, ra3, ra4, ra5, ra6, ra7, ra8,
 	o0, o1, o2, o3, o4, o5, o6, o7, o8,
 	pc0, pc1, pc2);
