@@ -137,6 +137,8 @@ wire [15:0] iqentry_memopsvalid;
 wire stomp_all;
 //reg  [7:0] iqentry_fpissue;
 reg  [15:0] iqentry_memissue;
+reg [15:0] iqentry_stissue;
+reg [15:0] iqentry_ldissue;
 wire [15:0] iqentry_stomp;
 reg  [15:0] iqentry_issue;
 wire [2:0] iqentry_0_islot;
@@ -663,6 +665,11 @@ initial begin
 	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
 end
 
+`include "FISA64_issue_combo.v"
+`include "FISA64_execute_combo.v"
+`include "FISA64_memory_combo.v"
+`include "FISA64_commit_combo.v"
+
 reg nmi1;
 always @(posedge clk_i)
 	if (rst_i)
@@ -804,7 +811,7 @@ begin
 	iqentry_imm  [tail]   <=  	instr[5:0]==`BRK ? fnImm(instr) :
 								fnIsBranch(instr[5:0]) ? {{DBW-12{instr[11]}},instr[11:8],instr[23:16]} :
 								iqentry_op[tail-4'd1]==`IMM && iqentry_v[tail-4'd1] ? {iqentry_imm[tail-4'd1][DBW-1:8],fnImm8(instr)} :
-								intr[5:0]==`IMM ? fnImmImm(instr) :
+								instr[5:0]==`IMM ? fnImmImm(instr) :
 								fnImm(instr);
 	iqentry_a    [tail]    <=   fnOpa(instr[5:0],instr,rfoa,pc);
 	iqentry_av   [tail]    <=   fnSource1_v( instr[5:0] ) | rf_v[ fnRa(instr) ];
