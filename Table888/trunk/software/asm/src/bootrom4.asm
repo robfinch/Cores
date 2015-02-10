@@ -1,5 +1,5 @@
 ; ============================================================================
-; bootrom3.asm
+; bootrom4.asm
 ;        __
 ;   \\__/ o\    (C) 2014  Robert Finch, Stratford
 ;    \  __ /    All rights reserved.
@@ -159,6 +159,15 @@ SPI_WRITE_NO_ERROR	EQU		0x00
 RW_READ_SD_BLOCK	EQU		0x02
 RW_WRITE_SD_BLOCK	EQU		0x03
 
+I2C_MASTER		EQU		0xFFDC0E00
+I2C_PRESCALE_LO	EQU		0x00
+I2C_PRESCALE_HI	EQU		0x01
+I2C_CONTROL		EQU		0x02
+I2C_TX			EQU		0x03
+I2C_RX			EQU		0x03
+I2C_CMD			EQU		0x04
+I2C_STAT		EQU		0x04
+
 NR_TCB		EQU		16
 TCB_BackLink    EQU     0
 TCB_Regs		EQU		8
@@ -241,6 +250,9 @@ KeybdWaitFlag	db		0
 KeybdLEDs		db		0
 startSector		dh		0
 disk_size		dh		0
+	align	16
+	; org $A0
+RTCC_BUF		fill.b	96,0
 
 ; Just past the Bootrom
 	org		$00010000
@@ -521,6 +533,9 @@ SetupIntVectors:
 	ldi		r1,#KeybdIRQ
 	lea		r3,463*16[r2]
 	bsr     SetVector
+	ldi		r1,#flt_except
+	lea		r3,493*16[r2]
+	bsr		SetVector
 	ldi		r1,#exf_rout
 	lea		r3,497*16[r2]
 	bsr     SetVector
@@ -1008,6 +1023,7 @@ DisplayString:
 
 DisplayStringCRLF:
 	bsr		DisplayString
+OutCRLF:
 CRLF:
 	push	r1
 	ldi		r1,#CR
@@ -1037,7 +1053,7 @@ msgStart:
 ;------------------------------------------------------------------------------
 
 KeybdIRQ:
-	sh		r0,KEYBD+4
+	sb		r0,KEYBD+1
 	rti
 
 ;------------------------------------------------------------------------------
@@ -1224,7 +1240,7 @@ IncCursorPos:
 	lbu		r1,CursorCol
 	addui	r1,r1,#1
 	sb		r1,CursorCol
-	cmp		fl0,r1,#56
+	cmp		fl0,r1,#TXTCOLS
 	blo		fl0,icc1
 	sb		r0,CursorCol
 	bra		icr1
@@ -1234,9 +1250,9 @@ icr1:
 	lbu		r1,CursorRow
 	addui	r1,r1,#1
 	sb		r1,CursorRow
-	cmp		fl0,r1,#31
+	cmp		fl0,r1,#TXTROWS
 	blo		fl0,icc1
-	ldi		r2,#30
+	ldi		r2,#TXTROWS-1
 	sb		r2,CursorRow
 	bsr		ScrollUp
 icc1:
@@ -1255,7 +1271,7 @@ ScrollUp:
 	sub		r2,r2,#1
 	mul		r6,r1,r2
 	ldi		r1,#TEXTSCR+$FFD00000
-	ldi		r2,#TEXTSCR+224+$FFD00000
+	ldi		r2,#TEXTSCR+TXTCOLS*4+$FFD00000
 	ldi		r3,#0
 .0001:
 	lh	r5,[r2+r3*4]
@@ -1348,14 +1364,22 @@ mon1:
 	beq		fl0,doCLS
 	cmp     fl0,r1,#'c'
 	beq     fl0,doCS
+	cmp		fl0,r1,#'F'
+	beq		fl0,doFillmem
 	cmp		fl0,r1,#'M'
 	beq		fl0,doDumpmem
+	cmp		fl0,r1,#'J'
+	beq		fl0,doJump
 	cmp		fl0,r1,#'m'
 	beq		fl0,MRTest
 	cmp		fl0,r1,#'S'
 	beq		fl0,doSDBoot
 	cmp		fl0,r1,#'g'
 	beq		fl0,doRand
+	cmp		fl0,r1,#'e'
+	beq		fl0,eval
+	cmp		fl0,r1,#'D'
+	beq		fl0,doDate
 	bra mon1
 
 .doHelp:
@@ -1416,6 +1440,47 @@ doDumpmem:
 	bls		fl0,.001
 	bra mon1
 
+;------------------------------------------------------------------------------
+; Fill memory
+;
+; FB FFD80000 FFD8FFFF r	; fill sprite memory with random bytes
+;------------------------------------------------------------------------------
+
+doFillmem:
+	bsr		CursorOff
+	bsr		MonGetch		; skip over 'B' of "FB"
+	cmp		fl0,r1,#'B'
+	beq		fl0,.0004
+	sub		r3,r3,#4		; backup text pointer
+.0004:
+	bsr		GetRange
+	push	r1/r2
+	bsr		ignBlanks
+	bsr		MonGetch		; check for random fill
+	cmp		fl0,r1,#'r'
+	beq		fl0,.0001
+	sub		r3,r3,#4
+	bsr		GetHexNumber
+	mov		r3,r1
+	pop		r2/r1
+.0002:
+	bsr		CheckKeys
+	sb		r3,[r2]
+	add		r2,r2,#1
+	cmp		fl0,r2,r1
+	blo		fl0,.0002
+	bra		mon1
+.0001:
+	pop		r2/r1
+.0003:
+	bsr		CheckKeys
+	gran	r3
+	sb		r3,[r2]
+	add		r2,r2,#1
+	cmp		fl0,r2,r1
+	blo		fl0,.0003
+	bra		mon1
+
 doSDBoot:
 ;	sub		r3,r3,#4
 	bsr		SDInit
@@ -1442,11 +1507,60 @@ doRand:
 	bsr		CheckKeys
 	bra .0001
 
+doJump:
+	bsr		MonGetch		; skip over 'S'
+	bsr		ignBlanks
+	bsr		GetHexNumber
+	jsr		[r1]
+	bra		mon1
+
 doCS:
     mfspr   r1,cs
     bsr     DisplayHalf
     bsr     CRLF
     bra     mon1
+
+doDate:
+	bsr		MonGetch		; skip over 'T'
+	cmp		fl0,r1,#'A'		; look for DAY
+	beq		fl0,doDay
+	bsr		ignBlanks
+	bsr		MonGetch
+	cmp		fl0,r1,#'?'
+	beq		fl0,.0001
+	sub		r3,r3,#4
+	bsr		GetHexNumber
+	sb		r1,RTCC_BUF+5	; update month
+	bsr		GetHexNumber
+	sb		r1,RTCC_BUF+4	; update day
+	bsr		GetHexNumber
+	sb		r1,RTCC_BUF+6	; update year
+	bsr		RTCCWritebuf
+	bra		mon1
+.0001:
+	bsr		RTCCReadbuf
+	bsr		CRLF
+	lbu		r1,RTCC_BUF+5
+	bsr		DisplayByte
+	ldi		r1,#'/'
+	bsr		OutChar
+	lbu		r1,RTCC_BUF+4
+	bsr		DisplayByte
+	ldi		r1,#'/'
+	bsr		OutChar
+	lbu		r1,RTCC_BUF+6
+	bsr		DisplayByte
+	bsr		CRLF
+	bra		mon1
+
+doDay:
+	bsr		ignBlanks
+	bsr		GetHexNumber
+	mov		r3,r1			; value to write
+	ldi		r1,#$6F			; device $6F
+	ldi		r2,#$03			; register 3
+	bsr		I2C_WRITE
+	bra		mon1
 
 ;------------------------------------------------------------------------------
 ; Display memory pointed to by r2.
@@ -1514,7 +1628,7 @@ CheckKeys:
 
 CTRLCCheck:
 	push	r1
-	bsr		KeybdGetCharDirectNB
+	bsr		KeybdGetCharNoWait
 	cmp		fl0,r1,#CTRLC
 	beq		fl0,.0001
 	pop		r1
@@ -1597,6 +1711,55 @@ AsciiToHexNybble:
 	ldi		r1,#-1		; not a hex number
 	rts
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+eval:
+	bsr		ignBlanks
+	bsr		GetHexNumber
+	mtfp	fp1,r1
+	fix2flt	fp1,fp1
+	mffp	r1,fp1
+	bsr		DisplayWord
+	bsr		OutCRLF
+	bsr		ignBlanks
+	bsr		MonGetch
+	push	r1
+	bsr		ignBlanks
+	bsr		GetHexNumber
+	mtfp	fp2,r1
+	fix2flt	fp2,fp2
+	mffp	r1,fp2
+	bsr		DisplayWord
+	bsr		OutCRLF
+	pop		r1
+	cmp		fl0,r1,#'+'
+	beq		fl0,.doPlus
+	cmp		fl0,r1,#'-'
+	beq		fl0,.doMinus
+	cmp		fl0,r1,#'*'
+	beq		fl0,.doMult
+	cmp		fl0,r1,#'/'
+	beq		fl0,.doDiv
+	bra		DisplayErr
+.doPlus:
+	fadd	fp3,fp2,fp1
+	bra		.dumpRes
+.doMinus:
+	fsub	fp3,fp1,fp2
+	bra		.dumpRes
+.doMult:
+	fmul	fp3,fp1,fp2
+	bra		.dumpRes
+.doDiv:
+	fdiv	fp3,fp1,fp2
+	bra		.dumpRes
+.dumpRes:
+	flt2fix	fp3,fp3
+	mffp	r1,fp3
+	bsr		DisplayWord
+	bsr		OutCRLF
+	bra		mon1
+	
 DisplayErr:
 	ldi		r1,#msgErr
 	bsr		DisplayString
@@ -1608,7 +1771,10 @@ msgErr:
 msgHelp:
 	db		"? = Display Help",CR,LF
 	db		"CLS = clear screen",CR,LF
+	db		"DT = set/read date",CR,LF
+	db		"FB = fill memory",CR,LF
 	db		"MB = dump memory",CR,LF
+	db		"JS = jump to code",CR,LF
 	db		"S = boot from SD card",CR,LF
 	db		0
 
@@ -2773,6 +2939,178 @@ msgDOSNotFound:
     db  "DOS file not found",CR,LF,0
 
 ; ============================================================================
+; I2C interface to RTCC
+; ============================================================================
+
+I2C_INIT:
+	push	r5/r1/r2
+	mfspr	r5,cr0		
+	mtspr	cr0,r0					; turn off TMR
+	ldi		r2,#I2C_MASTER
+	sb		r0,I2C_CONTROL[r2]		; disable the contoller
+	sb		r0,I2C_PRESCALE_HI[r2]	; set clock divisor for 100kHz
+	ldi		r1,#99					; 24=400kHz, 99=100KHz
+	sb		r1,I2C_PRESCALE_LO[r2]
+	ldi		r1,#$80					; controller enable bit
+	sb		r1,I2C_CONTROL[r2]
+	mtspr	cr0,r5					; restore TMR
+	pop		r2/r1/r5
+	rts
+
+;------------------------------------------------------------------------------
+; I2C Read
+;
+; Parameters:
+; 	r1 = device ($6F for RTCC)
+; 	r2 = register to read
+; Returns
+; 	r1 = register value $00 to $FF if successful, else r1 = -1 on error
+;------------------------------------------------------------------------------
+;
+I2C_READ:
+	push	r5/r2/r3/r4
+	mfspr	r5,cr0		
+	mtspr	cr0,r0					; turn off TMR
+	shl		r1,r1,#1				; clear rw bit for write
+;	or		r1,r1,#1				; set rw bit for a read
+	mov		r4,r1					; save device address in r4
+	mov		r3,r2
+	; transmit device #
+	ldi		r2,#I2C_MASTER
+	sb		r1,I2C_TX[r2]
+	ldi		r1,#$90					; STA($80) and WR($10) bits set
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC				; wait for transmit to complete
+	; transmit register #
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	brnz	r1,I2C_ERR
+	sb		r3,I2C_TX[r2]			; select register r3
+	ldi		r1,#$10					; set WR bit
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+
+	; transmit device #
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	brnz	r1,I2C_ERR
+	or		r4,r4,#1				; set read flag
+	sb		r4,I2C_TX[r2]
+	ldi		r1,#$90					; STA($80) and WR($10) bits set
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC				; wait for transmit to complete
+
+	; receive data byte
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	brnz	r1,I2C_ERR
+	ldi		r1,#$68					; STO($40), RD($20), and NACK($08)
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+	lbu		r1,I2C_RX[r2]			; $00 to $FF = byte read, -1=err
+	mtspr	cr0,r5					; restore TMR
+	pop		r4/r3/r2/r5
+	rts
+
+I2C_ERR:
+	ldi		r1,#-1
+	mtspr	cr0,r5					; restore TMR
+	pop		r4/r3/r2/r5
+	rts
+
+;------------------------------------------------------------------------------
+; I2C Write
+;
+; Parameters:
+; 	r1 = device ($6F)
+; 	r2 = register to write
+; 	r3 = value for register
+; Returns
+; 	r1 = 0 if successful, else r1 = -1 on error
+;------------------------------------------------------------------------------
+;
+I2C_WRITE:
+	push	r5/r2/r3/r4
+	mfspr	r5,cr0		
+	mtspr	cr0,r0					; turn off TMR
+	shl		r1,r1,#1				; clear rw bit for write
+	mov		r4,r3					; save value r4
+	mov		r3,r2
+	; transmit device #
+	ldi		r2,#I2C_MASTER			; r2 = I/O base address of controller
+	sb		r1,I2C_TX[r2]
+	ldi		r1,#$90					; STA($80) and WR($10) bits set
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC				; wait for transmit to complete
+	; transmit register #
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	brnz	r1,I2C_ERR
+	sb		r3,I2C_TX[r2]			; select register r3
+	ldi		r1,#$10					; set WR bit
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+	; transmit value
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	brnz	r1,I2C_ERR
+	sb		r4,I2C_TX[r2]			; select value in r4
+	ldi		r1,#$50					; set STO, WR bit
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+	mtspr	cr0,r5					; restore TMR
+	ldi		r1,#0					; everything okay
+	pop		r4/r3/r2/r5
+	rts
+
+; Wait for I2C controller transmit complete
+
+I2C_WAIT_TC:
+.0001:
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#2
+	brnz	r1,.0001
+	rts
+
+; Read the entire contents of the RTCC including 64 SRAM bytes
+
+RTCCReadbuf:
+	bsr		I2C_INIT
+	ldi		r2,#$00
+.0001:
+	ldi		r1,#$6F
+	bsr		I2C_READ
+	sb		r1,RTCC_BUF[r2]
+	add		r2,r2,#1
+	cmp		fl0,r2,#$60
+	blo		fl0,.0001
+	rts
+
+; Write the entire contents of the RTCC including 64 SRAM bytes
+
+RTCCWritebuf:
+	bsr		I2C_INIT
+	ldi		r2,#$00
+.0001:
+	ldi		r1,#$6F
+	lbu		r3,RTCC_BUF[r2]
+	bsr		I2C_WRITE
+	add		r2,r2,#1
+	cmp		fl0,r2,#$60
+	blo		fl0,.0001
+	rts
+
+RTCCOscOn:
+	bsr		I2C_INIT
+	ldi		r1,#$6F
+	ldi		r2,#$00			; register zero
+	bsr		I2C_READ		; read register zero
+	or		r3,r1,#$80		; set start osc bit
+	ldi		r1,#$6F
+	bsr		I2C_WRITE
+	rts
+
+; ============================================================================
 ; FMTK: Finitron Multi-Tasking Kernel
 ;        __
 ;   \\__/ o\    (C) 2014  Robert Finch, Stratford
@@ -3234,6 +3572,26 @@ uninit_rout:
 	dbnz	r3,.0002
 .0001:
 	bra .0001
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+flt_except:
+	push	r1
+	ldi		r1,#msgFltExcept
+	bsr		DisplayString
+	fstat	r1
+	bsr		DisplayHalf
+	bsr		OutCRLF
+.self:
+	bra		.self
+	bsr		KeybdGetCharWait
+	pop		r1
+	rti
+;	bra		mon1
+
+msgFltExcept:
+	.byte	"FLT Exception: ",0
 
 ;------------------------------------------------------------------------------
 ; Execution fault. Occurs when an attempt is made to execute code from a
