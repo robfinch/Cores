@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 //=============================================================================
-//	(C) 2007,2012,2013  Robert T Finch
+//	(C) 2007,2012-2015  Robert T Finch
 //	All rights reserved.
-//	robfinch<remove>@opencores.org
+//	robfinch<remove>@finitron.ca
 //
 //	rtfDatetime.v
 //	
@@ -35,9 +35,9 @@
 //	    [23:16] read / write minutes
 //      [31:24] read / write hours
 //  1
-//		[39:32] read/write day
-//		[47:40] read/write month
-//		[63:48] read/write year
+//		[7:0] read/write day
+//		[15:8] read/write month
+//		[31:16] read/write year
 //	2   ALM - alarm register same format as 0, but contain alarm setting
 //  3
 //
@@ -109,7 +109,7 @@ input stb_i,		// data transfer strobe
 output ack_o,		// transfer acknowledge
 input we_i,			// 1=write
 input [3:0] sel_i,	// byte select
-input [33:0] adr_i,	// address
+input [31:0] adr_i,	// address
 input [31:0] dat_i,	// data input
 output reg [31:0] dat_o,	// data output
 
@@ -225,7 +225,7 @@ wire incYearN2  = incYearN1 && yearN1 == 4'h9;
 wire incYearN3  = incYearN2 && yearN2 == 4'h9;
 
 
-wire cs = cyc_i && stb_i && (adr_i[33:7]==pIOAddress[31:5]);
+wire cs = cyc_i && stb_i && (adr_i[31:5]==pIOAddress[31:5]);
 
 reg ack1;
 always @(posedge clk_i)
@@ -271,6 +271,7 @@ always @(posedge clk_i)
 		oalarm <= 1'b0;
 		mars <= pMars;
 		tod_en <= 1'b1;
+		tod_freq <= 2'b01;	// default to 60Hz
 
 		jiffyL <= 4'h0;
 		jiffyH <= 4'h0;
@@ -326,31 +327,35 @@ always @(posedge clk_i)
 
 			3'd0:	begin
 					if (sel_i[0]) begin jiffyL <= dat_i[3:0]; jiffyH <= dat_i[7:4]; end
-					if (sel_i[1]) begin secL <= dat_i[3:0]; secH <= dat_i[7:4]; end
-					if (sel_i[2]) begin minL <= dat_i[3:0]; minH <= dat_i[7:4]; end
-					if (sel_i[3]) begin hourL <= dat_i[3:0]; hourH <= dat_i[7:4]; end
+					if (sel_i[1]) begin secL <= dat_i[11:8]; secH <= dat_i[15:12]; end
+					if (sel_i[2]) begin minL <= dat_i[19:16]; minH <= dat_i[23:20]; end
+					if (sel_i[3]) begin hourL <= dat_i[27:24]; hourH <= dat_i[31:28]; end
 					end
 			3'd1:	begin
 					if (sel_i[0]) begin dayL <= dat_i[3:0]; dayH <= dat_i[7:4]; end
-					if (sel_i[1]) begin monthL <= dat_i[3:0]; monthH <= dat_i[7:4]; end
-					if (sel_i[2]) begin yearN0 <= dat_i[3:0]; yearN1 <= dat_i[7:4]; end
-					if (sel_i[3]) begin yearN2 <= dat_i[3:0]; yearN3 <= dat_i[7:4]; end
+					if (sel_i[1]) begin monthL <= dat_i[11:8]; monthH <= dat_i[15:12]; end
+					if (sel_i[2]) begin yearN0 <= dat_i[19:16]; yearN1 <= dat_i[23:20]; end
+					if (sel_i[3]) begin yearN2 <= dat_i[27:24]; yearN3 <= dat_i[31:28]; end
 					end
 			3'd2:	begin
 					if (sel_i[0]) begin alm_jiffyL <= dat_i[3:0]; alm_jiffyH <= dat_i[7:4]; end
-					if (sel_i[1]) begin alm_secL <= dat_i[3:0]; alm_secH <= dat_i[7:4]; end
-					if (sel_i[2]) begin alm_minL <= dat_i[3:0]; alm_minH <= dat_i[7:4]; end
-					if (sel_i[3]) begin alm_hourL <= dat_i[3:0]; alm_hourH <= dat_i[7:4]; end
+					if (sel_i[1]) begin alm_secL <= dat_i[11:8]; alm_secH <= dat_i[15:12]; end
+					if (sel_i[2]) begin alm_minL <= dat_i[19:16]; alm_minH <= dat_i[23:20]; end
+					if (sel_i[3]) begin alm_hourL <= dat_i[27:24]; alm_hourH <= dat_i[31:28]; end
 					end
 			3'd3:	begin
 					if (sel_i[0]) begin alm_dayL <= dat_i[3:0]; alm_dayH <= dat_i[7:4]; end
-					if (sel_i[1]) begin alm_monthL <= dat_i[3:0]; alm_monthH <= dat_i[7:4]; end
-					if (sel_i[2]) begin alm_yearN0 <= dat_i[3:0]; alm_yearN1 <= dat_i[7:4]; end
-					if (sel_i[3]) begin alm_yearN2 <= dat_i[3:0]; alm_yearN3 <= dat_i[7:4]; end
+					if (sel_i[1]) begin alm_monthL <= dat_i[11:8]; alm_monthH <= dat_i[15:12]; end
+					if (sel_i[2]) begin alm_yearN0 <= dat_i[19:16]; alm_yearN1 <= dat_i[23:20]; end
+					if (sel_i[3]) begin alm_yearN2 <= dat_i[27:24]; alm_yearN3 <= dat_i[31:28]; end
 					end
 			3'd4:	begin
 					if (sel_i[0]) alarm_care <= dat_i[7:0];
-					if (sel_i[1]) tod_en <= dat_i[8];
+					if (sel_i[1])
+						begin
+							tod_en <= dat_i[8];
+							tod_freq <= dat_i[10:9];
+						end
 					if (sel_i[2]) mars <= dat_i[16];
 					end
 
@@ -371,7 +376,7 @@ always @(posedge clk_i)
 						dat_o <= {alm_yearN3,alm_yearN2,alm_yearN1,alm_yearN0,alm_monthH,alm_monthL,alm_dayH,alm_dayL};
 						alarm <= 1'b0;
 					end
-			3'd4:	dat_o <= {mars,7'b0,tod_en,alarm_care}; 
+			3'd4:	dat_o <= {mars,5'b0,tod_freq,tod_en,alarm_care}; 
 			3'd5:	dat_o <= 0;
 			endcase
 		end
