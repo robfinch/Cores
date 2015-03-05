@@ -292,6 +292,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 		GenerateTable888Function(sp, stmt = ParseCompoundStatement());
 	else if (isRaptor64)
 		GenerateRaptor64Function(sp, stmt = ParseCompoundStatement());
+	else if (is816)
+		Generate816Function(sp, stmt = ParseCompoundStatement());
 
 //	if (optimize)
 		flush_peep();

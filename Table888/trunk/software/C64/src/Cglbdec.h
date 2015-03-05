@@ -26,6 +26,7 @@
 //                                                                          
 // ============================================================================
 //
+#include "c.h"
 #include "Statement.h"
 /*
  *	68000 C compiler
@@ -49,9 +50,11 @@
 #define THOR		0
 #define TABLE888	888
 #define RAPTOR64	64
+#define W65C816     816
 #define isThor		(gCpu==THOR)
 #define isTable888	(gCpu==TABLE888)
 #define isRaptor64	(gCpu==RAPTOR64)
+#define is816       (gCpu==W65C816)
 //#define DOTRACE	1
 #ifdef DOTRACE
 #define TRACE(x)	x
@@ -83,6 +86,7 @@ extern char             laststr[MAX_STLP1];
 extern int64_t	ival;
 extern double           rval;
 extern int parseEsc;
+//extern FloatTriple      FAC1,FAC2;
 
 extern TABLE            gsyms[257],
                         lsyms;

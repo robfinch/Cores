@@ -128,6 +128,13 @@ int	options(char *s)
 			regXLR = 28;
 			regLR = 31;
 		}
+		else if (strcmp(&s[2],"816")==0) {
+             gCpu = W65C816;
+             regSP = 30 * 4 + 128;
+             regBP = 27 * 4 + 128;
+             regXLR = 28 * 4 + 128;
+             regLR = 31 * 4 + 128;
+        }
 	}
 	else if (s[1]=='w')
 		wcharSupport = 0;

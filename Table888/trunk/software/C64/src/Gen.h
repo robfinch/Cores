@@ -27,6 +27,7 @@ typedef struct amode {
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
 	unsigned int isUnsigned : 1;
+	unsigned int lowhigh : 1;
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	struct enode *offset;
@@ -52,9 +53,10 @@ enum e_op {
 		op_shli, op_shri, op_shrui, op_shlu, op_shlui,
 		op_bfext, op_bfextu, op_bfins,
 		op_jmp, op_jsr, op_mului, op_mod, op_modu,
+		op_ftmul, op_ftsub, op_ftdiv, op_ftadd, op_ftneg,
 		op_fdmul, op_fdsub, op_fddiv, op_fdadd, op_fdneg,
 		op_fsmul, op_fssub, op_fsdiv, op_fsadd, op_fsneg,
-		op_fs2d, op_i2d,
+		op_fs2d, op_i2d, op_i2t,
 		op_tas, op_bmi, op_subu, op_lwr, op_swc, op_loop, op_iret,
 		op_sext32,op_sext16,op_sext8, op_sxb, op_sxc, op_sxh, 
 		op_dw, op_cache,
@@ -64,7 +66,9 @@ enum e_op {
 		op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge,
 		op_bltu, op_bleu, op_bgtu, op_bgeu,
 		op_brz, op_brnz,
+		op_lft, op_sft,
 		op_lw, op_lh, op_lc, op_lb, op_ret, op_sm, op_lm, op_ldis, op_lws, op_sws,
+		op_inc,
 		op_lbu, op_lcu, op_lhu, op_sti,
         op_rts, op_rti, op_rtd,
 		op_push, op_pop, op_movs,
@@ -73,7 +77,12 @@ enum e_op {
 		op_gtu, op_geu, op_ltu, op_leu, op_nr,
         op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_swap,
         op_neg, op_not, op_com, op_cmp, op_clr, op_link, op_unlk, op_label, op_ilabel,
-        op_pea, op_cmpi, op_dc, op_asm, op_stop, op_fnname, op_empty };
+        op_pea, op_cmpi, op_dc, op_asm, op_stop, op_fnname, 
+        // W65C816 ops
+        op_sec, op_clc, op_lda, op_sta, op_stz, op_adc, op_sbc, op_ora,
+        op_jsl, 
+        op_rtl, op_php, op_plp, op_cli, op_ldx, op_stx, op_brl,
+        op_empty };
 
 enum e_seg {
 	op_ns = 0,

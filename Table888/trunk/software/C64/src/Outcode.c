@@ -80,6 +80,7 @@ struct oplst {
 		{"bfext", op_bfext}, {"bfextu", op_bfextu}, {"bfins", op_bfins},
 		{"sw", op_sw}, {"lw", op_lw}, {"lh", op_lh}, {"lc", op_lc}, {"lb", op_lb},
 		{"lbu", op_lbu}, {"lcu", op_lcu}, {"lhu", op_lhu}, {"sti", op_sti},
+		{"lft", op_lft}, {"sft", op_sft},
 
 		{"ldis", op_ldis}, {"lws", op_lws}, {"sws", op_sws},
 		{"lm", op_lm}, {"sm",op_sm}, {"sb",op_sb}, {"sc",op_sc}, {"sh",op_sh},
@@ -117,6 +118,14 @@ struct oplst {
 		{"slt", op_slt}, {"sle",op_sle},{"sgt",op_sgt}, {"sge",op_sge},
 		{"sltu", op_sltu}, {"sleu",op_sleu},{"sgtu",op_sgtu}, {"sgeu",op_sgeu},
 		{"",op_empty}, {"",op_asm}, {"", op_fnname},
+		{"ftadd", op_ftadd}, {"ftsub", op_ftsub}, {"ftmul", op_ftmul}, {"ftdiv", op_ftdiv},
+		{"inc", op_inc},
+
+		{"sec", op_sec}, {"clc", op_clc}, {"lda", op_lda}, {"sta", op_sta}, {"stz", op_stz},
+        {"sbc", op_sbc}, {"adc", op_adc}, {"ora", op_ora}, {"eor", op_eor},
+		{"ora", op_ora}, {"jsl", op_jsl}, {"rts", op_rts}, {"rtl", op_rtl}, {"rti", op_rti},
+		{"ldx", op_ldx}, {"stx", op_stx}, {"php", op_php}, {"plp", op_plp}, {"sei", op_sei},
+		{"cli", op_cli}, {"brl", op_brl},
                 {0,0} };
 
 static char *pad(char *op)
@@ -193,7 +202,7 @@ void putop(int op)
     printf("DIAG - illegal opcode.\n");
 }
 
-static void PutConstant(ENODE *offset)
+static void PutConstant(ENODE *offset, unsigned int lowhigh)
 {
 	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
 	static char buf[4000];
@@ -208,7 +217,12 @@ static void PutConstant(ENODE *offset)
 			break;
 	case en_autocon:
 	case en_icon:
-			fprintf(output,"%ld",offset->i);
+            if (lowhigh==2)
+	            fprintf(output,"%ld",offset->i & 0xffff);
+            else if (lowhigh==3)
+	            fprintf(output,"%ld",(offset->i >> 16) & 0xffff);
+            else
+            	fprintf(output,"%ld",offset->i);
 			break;
 	case en_labcon:
 			sprintf(buf, "%s_%ld",GetNamespace(),offset->i);
@@ -220,6 +234,8 @@ static void PutConstant(ENODE *offset)
 			break;
 	case en_nacon:
 			fprintf(output,"%s",offset->sp);
+			if (lowhigh==3)
+			    fprintf(output, ">>16");
 			break;
 	case en_cnacon:
 			sprintf(buf,"%s",offset->sp);
@@ -229,18 +245,18 @@ static void PutConstant(ENODE *offset)
 			fprintf(output,"%s",offset->sp);
 			break;
 	case en_add:
-			PutConstant(offset->p[0]);
+			PutConstant(offset->p[0],0);
 			fprintf(output,"+");
-			PutConstant(offset->p[1]);
+			PutConstant(offset->p[1],0);
 			break;
 	case en_sub:
-			PutConstant(offset->p[0]);
+			PutConstant(offset->p[0],0);
 			fprintf(output,"-");
-			PutConstant(offset->p[1]);
+			PutConstant(offset->p[1],0);
 			break;
 	case en_uminus:
 			fprintf(output,"-");
-			PutConstant(offset->p[0]);
+			PutConstant(offset->p[0],0);
 			break;
 	default:
 			printf("DIAG - illegal constant node.\n");
@@ -257,7 +273,10 @@ char *RegMoniker(int regno)
 	static int n;
 
 	n = (n + 1) & 3;
-	if (isTable888) {
+	if (is816) {
+        sprintf(&buf[n][0], "$%02X", regno);
+    }
+	else if (isTable888) {
 		switch(regno) {
 		case 244:	sprintf(&buf[n][0], "flg0"); break;
 		case 249:   sprintf(&buf[n][0], "gp"); break;
@@ -267,7 +286,12 @@ char *RegMoniker(int regno)
 		case 253:	sprintf(&buf[n][0], "bp"); break;
 		case 254:	sprintf(&buf[n][0], "pc"); break;
 		case 255:	sprintf(&buf[n][0], "sp"); break;
-		default:	sprintf(&buf[n][0], "r%d", regno); break;
+		default:
+                  if (regno > 255) {
+                      sprintf(&buf[n][0],"fp%d", regno); break;
+                  }	
+                  else
+                      sprintf(&buf[n][0], "r%d", regno); break;
 		}
 	}
 	else if (isThor) {
@@ -380,7 +404,7 @@ void PutAddressMode(AMODE *ap)
     case am_immed:
 		fprintf(output,"#");
     case am_direct:
-            PutConstant(ap->offset);
+            PutConstant(ap->offset,ap->lowhigh);
             break;
     case am_breg:
 			fprintf(output, "%s", BrRegMoniker(ap->preg));
@@ -392,6 +416,7 @@ void PutAddressMode(AMODE *ap)
 			fprintf(output, "%s", PredRegMoniker(ap->preg));
             break;
     case am_ind:
+    case am_indx:
 			//if (ap->offset != NULL) {
 			//	if (ap->offset->i != 0)
 			//		fprintf(output, "%I64d[r%d]", ap->offset->i, ap->preg);
@@ -399,11 +424,15 @@ void PutAddressMode(AMODE *ap)
 			//		fprintf(output,"[r%d]",ap->preg);
 			//}
 			//else
-			if (ap->offset != NULL)
-				PutConstant(ap->offset);
+			if (ap->offset != NULL && !is816) {
+                if (ap->offset->i)
+                	PutConstant(ap->offset,0);
+           }
 //				if (ap->offset->i)
 //					fprintf(output, "%I64d", ap->offset->i);
 				fprintf(output,"[%s]",RegMoniker(ap->preg));
+				if (is816)
+				   fprintf(output, ",y");
 			break;
 	case am_brind:
 			fprintf(output,"[%s]",BrRegMoniker(ap->preg));
@@ -416,14 +445,16 @@ void PutAddressMode(AMODE *ap)
 			fprintf(output,"subui\ta%d,a%d,#",ap->preg,ap->preg);
             fprintf(output,"******[a%d]",ap->preg);
             break;
+/*
     case am_indx:
 			if (ap->offset != 0)
-				PutConstant(ap->offset);
+				PutConstant(ap->offset,0);
             fprintf(output,"[%s]",RegMoniker(ap->preg));
             break;
+*/
     case am_indx2:
 			if (ap->offset != 0)
-				PutConstant(ap->offset);
+				PutConstant(ap->offset,0);
 			if (ap->scale==1 || ap->scale==0)
 	            fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
 			else
@@ -431,7 +462,7 @@ void PutAddressMode(AMODE *ap)
             break;
     case am_indx3:
 			if (ap->offset->i != 0)
-	            PutConstant(ap->offset);
+	            PutConstant(ap->offset,0);
             fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
             break;
     case am_mask:
@@ -477,6 +508,15 @@ void put_code(struct ocode *p)
 				fprintf(output, "p%d.%s\t",predreg,PredOpStr(pop));
 			else
 				fprintf(output, "%6.6s\t", "");
+			if (is816 && aps) {
+                if (aps->mode==am_ind || aps->mode==am_indx) {
+        			if (aps->offset != NULL) {
+                        fprintf(output,"%s\t#", pad("ldy"));
+                        PutConstant(aps->offset,0);
+    				    fprintf(output, "\n\t      \t");
+                   }
+                }
+            }
 			putop(op);
 		}
 	if (op==op_fnname) {
