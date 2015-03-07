@@ -49,6 +49,7 @@
 /*      global definitions      */
 
 int gCpu = 888;
+int regPC = 254;
 int regSP = 255;
 int regBP = 253;
 int regLR = -1;
@@ -58,6 +59,7 @@ int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;
 int use_gp = 0;
+int address_bits = 32;
 
 FILE            *input = 0,
                 *list = 0,
@@ -72,6 +74,8 @@ char            lastid[33] = "";
 char            laststr[MAX_STRLEN + 1] = "";
 int64_t			ival = 0;
 double          rval = 0.0;
+//FloatTriple     FAC1,FAC2;
+//FLOAT           rval = {0,0,0,0,0,0};
 int parseEsc = TRUE;
 
 TABLE           gsyms[257],// = {0,0},

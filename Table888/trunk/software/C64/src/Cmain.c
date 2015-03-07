@@ -108,6 +108,8 @@ int main(int argc, char **argv)
 
 int	options(char *s)
 {
+    int nn;
+
 	if (s[1]=='o')
 		optimize = 0;
 	else if (s[1]=='f') {
@@ -116,6 +118,9 @@ int	options(char *s)
 		if (strcmp(&s[2],"farcode")==0)
 			farcode = 1;
 	}
+	else if (s[1]=='a') {
+        address_bits = atoi(&s[2]);
+    }
 	else if (s[1]=='p') {
 		if (strcmp(&s[2],"Thor")==0) {
 			gCpu = THOR;
@@ -124,6 +129,7 @@ int	options(char *s)
 		else if (strcmp(&s[2],"Raptor64")==0) {
 			gCpu = RAPTOR64;
 			regSP = 30;
+			regPC = 29;
 			regBP = 27;
 			regXLR = 28;
 			regLR = 31;
@@ -134,6 +140,14 @@ int	options(char *s)
              regBP = 27 * 4 + 128;
              regXLR = 28 * 4 + 128;
              regLR = 31 * 4 + 128;
+        }
+        else if (strcmp(&s[2],"FISA64")==0) {
+             gCpu = FISA64;
+             regLR = 63;
+             regPC = 60;
+             regSP = 59;
+             regBP = 58;
+             regXLR = 54;
         }
 	}
 	else if (s[1]=='w')

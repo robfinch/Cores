@@ -126,6 +126,13 @@ struct oplst {
 		{"ora", op_ora}, {"jsl", op_jsl}, {"rts", op_rts}, {"rtl", op_rtl}, {"rti", op_rti},
 		{"ldx", op_ldx}, {"stx", op_stx}, {"php", op_php}, {"plp", op_plp}, {"sei", op_sei},
 		{"cli", op_cli}, {"brl", op_brl},
+		{"pha", op_pha}, {"phx", op_phx}, {"pla", op_pla}, {"plx", op_plx},
+		{"rep", op_rep}, {"sep", op_sep},
+		{"bpl", op_bpl},
+		
+		{"bsr", op_bsr},
+		{"cmpu", op_cmpu},
+		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
                 {0,0} };
 
 static char *pad(char *op)
@@ -202,7 +209,7 @@ void putop(int op)
     printf("DIAG - illegal opcode.\n");
 }
 
-static void PutConstant(ENODE *offset, unsigned int lowhigh)
+static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift)
 {
 	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
 	static char buf[4000];
@@ -223,19 +230,27 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh)
 	            fprintf(output,"%ld",(offset->i >> 16) & 0xffff);
             else
             	fprintf(output,"%ld",offset->i);
+           	if (rshift > 0)
+           	    fprintf(output, ">>%d", rshift);
 			break;
 	case en_labcon:
 			sprintf(buf, "%s_%ld",GetNamespace(),offset->i);
 			fprintf(output,buf);
+            if (rshift > 0)
+                fprintf(output, ">>%d", rshift);
 			break;
 	case en_clabcon:
 			sprintf(buf,"%s_%ld",GetNamespace(),offset->i);
 			fprintf(output,buf);
+            if (rshift > 0)
+                fprintf(output, ">>%d", rshift);
 			break;
 	case en_nacon:
 			fprintf(output,"%s",offset->sp);
 			if (lowhigh==3)
 			    fprintf(output, ">>16");
+            if (rshift > 0)
+                fprintf(output, ">>%d", rshift);
 			break;
 	case en_cnacon:
 			sprintf(buf,"%s",offset->sp);
@@ -243,20 +258,22 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh)
 				printf("pub code\r\n");
 			}
 			fprintf(output,"%s",offset->sp);
+            if (rshift > 0)
+                fprintf(output, ">>%d", rshift);
 			break;
 	case en_add:
-			PutConstant(offset->p[0],0);
+			PutConstant(offset->p[0],0,0);
 			fprintf(output,"+");
-			PutConstant(offset->p[1],0);
+			PutConstant(offset->p[1],0,0);
 			break;
 	case en_sub:
-			PutConstant(offset->p[0],0);
+			PutConstant(offset->p[0],0,0);
 			fprintf(output,"-");
-			PutConstant(offset->p[1],0);
+			PutConstant(offset->p[1],0,0);
 			break;
 	case en_uminus:
 			fprintf(output,"-");
-			PutConstant(offset->p[0],0);
+			PutConstant(offset->p[0],0,0);
 			break;
 	default:
 			printf("DIAG - illegal constant node.\n");
@@ -275,6 +292,20 @@ char *RegMoniker(int regno)
 	n = (n + 1) & 3;
 	if (is816) {
         sprintf(&buf[n][0], "$%02X", regno);
+    }
+    else if (isFISA64) {
+        if (regno==regBP)
+		    sprintf(&buf[n][0], "bp");
+	    else if (regno==regXLR)
+		    sprintf(&buf[n][0], "xlr");
+	    else if (regno==regPC)
+		    sprintf(&buf[n][0], "pc");
+	    else if (regno==regSP)
+		    sprintf(&buf[n][0], "sp");
+	    else if (regno==regLR)
+		    sprintf(&buf[n][0], "lr");
+	    else
+		    sprintf(&buf[n][0], "r%d", regno);
     }
 	else if (isTable888) {
 		switch(regno) {
@@ -404,7 +435,7 @@ void PutAddressMode(AMODE *ap)
     case am_immed:
 		fprintf(output,"#");
     case am_direct:
-            PutConstant(ap->offset,ap->lowhigh);
+            PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
     case am_breg:
 			fprintf(output, "%s", BrRegMoniker(ap->preg));
@@ -426,7 +457,7 @@ void PutAddressMode(AMODE *ap)
 			//else
 			if (ap->offset != NULL && !is816) {
                 if (ap->offset->i)
-                	PutConstant(ap->offset,0);
+                	PutConstant(ap->offset,0,0);
            }
 //				if (ap->offset->i)
 //					fprintf(output, "%I64d", ap->offset->i);
@@ -454,7 +485,7 @@ void PutAddressMode(AMODE *ap)
 */
     case am_indx2:
 			if (ap->offset != 0)
-				PutConstant(ap->offset,0);
+				PutConstant(ap->offset,0,0);
 			if (ap->scale==1 || ap->scale==0)
 	            fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
 			else
@@ -462,7 +493,7 @@ void PutAddressMode(AMODE *ap)
             break;
     case am_indx3:
 			if (ap->offset->i != 0)
-	            PutConstant(ap->offset,0);
+	            PutConstant(ap->offset,0,0);
             fprintf(output,"[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
             break;
     case am_mask:
@@ -512,7 +543,7 @@ void put_code(struct ocode *p)
                 if (aps->mode==am_ind || aps->mode==am_indx) {
         			if (aps->offset != NULL) {
                         fprintf(output,"%s\t#", pad("ldy"));
-                        PutConstant(aps->offset,0);
+                        PutConstant(aps->offset,0,0);
     				    fprintf(output, "\n\t      \t");
                    }
                 }

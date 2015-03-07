@@ -294,6 +294,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 		GenerateRaptor64Function(sp, stmt = ParseCompoundStatement());
 	else if (is816)
 		Generate816Function(sp, stmt = ParseCompoundStatement());
+	else if (isFISA64)
+		GenerateFISA64Function(sp, stmt = ParseCompoundStatement());
 
 //	if (optimize)
 		flush_peep();

@@ -16,6 +16,7 @@
 #define F_IMMED18	64	// 18-bit immediate constant
 #define F_IMM0	128		/* immediate value 0 */
 #define F_IMM8	256
+#define F_IMMED13  512
 
 /*      addressing mode structure       */
 
@@ -27,7 +28,8 @@ typedef struct amode {
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
 	unsigned int isUnsigned : 1;
-	unsigned int lowhigh : 1;
+	unsigned int lowhigh : 2;
+	unsigned int rshift : 8;
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	struct enode *offset;
@@ -82,6 +84,11 @@ enum e_op {
         op_sec, op_clc, op_lda, op_sta, op_stz, op_adc, op_sbc, op_ora,
         op_jsl, 
         op_rtl, op_php, op_plp, op_cli, op_ldx, op_stx, op_brl,
+        op_pha, op_phx, op_pla, op_plx, op_rep, op_sep,
+        op_bpl,
+        // FISA64
+        op_lc0i, op_lc1i, op_lc2i, op_lc3i,
+        op_cmpu, op_bsr,
         op_empty };
 
 enum e_seg {

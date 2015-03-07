@@ -794,7 +794,11 @@ void GenerateStatement(Statement *stmt)
 						ReleaseTempRegister(ap);
                         break;
                 case st_return:
-						if (isTable888)
+                        if (isFISA64)
+							GenerateFISA64Return(currentFn,stmt);
+                        else if (is816)
+							Generate816Return(currentFn,stmt);
+						else if (isTable888)
 							GenerateTable888Return(currentFn,stmt);
 						else if (isRaptor64)
 							GenerateRaptor64Return(currentFn,stmt);

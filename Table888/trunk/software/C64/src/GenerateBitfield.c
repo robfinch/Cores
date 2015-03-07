@@ -39,6 +39,8 @@ static void SignExtendBitfield(ENODE *node, AMODE *ap3, int64_t mask)
 	ap2 = GetTempRegister();
 	if (isRaptor64)
 		GenerateTriadic(op_ori,0,ap2,makereg(0),make_immed(umask));
+	else if (isFISA64)
+	     FISA64_GenLdi(ap2,make_immed(umask));
 	else
 		GenerateDiadic(op_ldi,0,ap2,make_immed(umask));
 	GenerateTriadic(op_add,0,ap3,ap3,ap2);

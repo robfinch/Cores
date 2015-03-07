@@ -219,7 +219,24 @@ void Generate816Cmp(ENODE *node, int op, int label, int predreg)
 
 	size = GetNaturalSize(node);
 	ap1 = GenerateExpression(node->p[0],F_REG, size);
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED18,size);
+	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	// Optimize CMP to zero and branch into BRZ/BRNZ
+	if (ap2->mode == am_immed && ap2->offset->i==0 && op==op_eq) {
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		GenerateMonadic(op_lda,0,ap1);
+		GenerateMonadic(op_ora,0,makereg(ap1->preg+1));
+		GenerateMonadic(op_beq,0,make_clabel(label));
+		return;
+	}
+	if (ap2->mode == am_immed && ap2->offset->i==0 && op==op_ne) {
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		GenerateMonadic(op_lda,0,ap1);
+		GenerateMonadic(op_ora,0,makereg(ap1->preg+1));
+		GenerateMonadic(op_bne,0,make_clabel(label));
+		return;
+	}
 	switch(op)
 	{
 	case op_eq:	op = op_beq; break;
@@ -233,9 +250,57 @@ void Generate816Cmp(ENODE *node, int op, int label, int predreg)
 	case op_gtu: op = op_bgtu; break;
 	case op_geu: op = op_bgeu; break;
 	}
-	GenerateTriadic(op,0,ap1,ap2,make_label(label));
+	switch(op)
+	{
+	case op_eq:	op = op_beq; break;
+	case op_ne:	op = op_bne; break;
+
+	case op_lt:
+	case op_le:
+	case op_gt:
+	case op_ge:
+	case op_ltu:
+	case op_leu:
+	case op_gtu:
+	case op_geu:
+        GenerateMonadic(op_sec,0,NULL);
+        GenerateMonadic(op_lda,0,ap1);
+        ap2->lowhigh = 2;
+        GenerateMonadic(op_sbc,0,ap2);
+        GenerateMonadic(op_lda,0,makereg(ap1->preg+2));
+        if (ap2->mode==am_reg)
+            GenerateMonadic(op_sbc,0,makereg(ap2->preg+2));
+        else {
+            ap2->lowhigh = 3;
+            GenerateMonadic(op_sbc,0,ap2);
+        }
+	    //GenerateDiadic(op_cmp,0,makereg(ap1->preg+2),makereg(ap2->preg+2));
+	}
+	switch(op)
+	{
+	case op_eq:	op = op_beq; break;
+	case op_ne:	op = op_bne; break;
+	case op_lt:
+        GenerateMonadic(op_bmi,0,make_clabel(label));
+        break;
+	case op_le:
+        GenerateMonadic(op_bmi,0,make_clabel(label));
+        GenerateMonadic(op_beq,0,make_clabel(label));
+        break;
+	case op_gt:
+        break;
+	case op_ge:
+        GenerateMonadic(op_bpl,0,make_clabel(label));
+        break;
+	case op_ltu:
+	case op_leu:
+	case op_gtu:
+	case op_geu:
+        break;
+    }
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
+//	GenerateMonadic(op,0,make_clabel(label));
 }
 
 // Generate a function body.
@@ -317,14 +382,33 @@ void Generate816Function(SYM *sym, Statement *stmt)
 	GenerateLabel(throwlab);
 	if (sym->IsLeaf){
 		if (sym->DoesThrow) {
-			GenerateDiadic(op_mov,0,makereg(regLR),makereg(regXLR));
-			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+            // Pop the return address and replace it with XLR
+			GenerateMonadic(op_sep,0,make_immed(0x10));                 // 8 bit index
+			GenerateMonadic(op_pla,0,NULL);                             // pop low order 16 bits
+			GenerateMonadic(op_plx,0,NULL);                             // pop high order 8 buts
+			GenerateMonadic(op_lda,0,makereg(regXLR));
+			GenerateMonadic(op_ldx,0,makereg(regXLR+2));
+			GenerateMonadic(op_phx,0,NULL);
+			GenerateMonadic(op_rep,0,make_immed(0x10));                 // 16 bit index
+			GenerateMonadic(op_pha,0,NULL);
+			GenerateMonadic(op_bra,0,make_label(retlab));				// goto regular return cleanup code
 		}
 	}
 	else {
-		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(8,regBP));		// load throw return address from stack into LR
-		GenerateDiadic(op_sw,0,makereg(regLR),make_indexed(16,regBP));		// and store it back (so it can be loaded with the lm)
-		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+        // load throw return address from stack into LR
+        // LW LR,4[BP]
+        GenerateMonadic(op_lda,0,make_indexed(4,regBP));
+        GenerateMonadic(op_sta,0,makereg(regLR));
+        GenerateMonadic(op_lda,0,make_indexed(6,regBP));
+        GenerateMonadic(op_sta,0,makereg(regLR+2));
+        // SW LR,8[BP]
+		// and store it back (so it can be loaded with the lm)
+        GenerateMonadic(op_lda,0,makereg(regLR));
+        GenerateMonadic(op_sta,0,make_indexed(8,regBP));
+        GenerateMonadic(op_lda,0,makereg(regLR+2));
+        GenerateMonadic(op_sta,0,make_indexed(10,regBP));
+		// goto regular return cleanup code
+		GenerateMonadic(op_bra,0,make_label(retlab));
 	}
 }
 
@@ -457,7 +541,14 @@ void Generate816Return(SYM *sym, Statement *stmt)
 			GenerateMonadic(op_adc,0,make_immed(0));
 			GenerateMonadic(op_sta,0,makereg(regSP+2));
             GenerateMonadic(op_plp,0,NULL);
-			GenerateMonadic(op_rtl,0,NULL);
+            GenerateMonadic(op_rtl,0,NULL);
+/*
+            GenerateMonadic(op_lda,0,makereg(LR));
+            GenerateMonadic(op_ldx,0,makereg(LR+2));
+            GenerateMonadic(op_sta,0,makereg(124));
+            GenerateMonadic(op_stx,0,makereg(126));
+			GenerateMonadic(op_jml,0,makereg(123));
+*/
         }
 		else {
 			//GenerateDiadic(op_ret,0,make_immed(24),NULL);
@@ -550,10 +641,10 @@ AMODE *Generate816FunctionCall(ENODE *node, int flags)
 		//ap->offset = 0;
 		//GenerateDiadic(op_jal,0,makereg(regLR),ap);
 		GenerateMonadic(op_lda,0,makereg(ap->preg));
-		GenerateMonadic(op_sta,0,makereg(125));
-		GenerateMonadic(op_lda,0,makereg(ap->preg+1));
+		GenerateMonadic(op_sta,0,makereg(124));
+		GenerateMonadic(op_lda,0,makereg(ap->preg+2));
 		GenerateMonadic(op_sta,0,makereg(126));
-		GenerateMonadic(op_jsl,0,makereg(124));
+		GenerateMonadic(op_jsl,0,makereg(123));
 		ReleaseTempRegister(ap);
     }
 	// Pop parameters off the stack

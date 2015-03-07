@@ -48,9 +48,9 @@ static short int next_breg;
 #define	MAX_REG_STACK	30
 
 // Only registers 5,6,7 and 8 are used for temporaries
-static short int reg_in_use[16];	// 0 to 15
+static short int reg_in_use[256];	// 0 to 15
 static short int breg_in_use[16];	// 0 to 15
-static short int save_reg_in_use[16];
+static short int save_reg_in_use[256];
 
 static struct {
     enum e_am mode;
@@ -86,12 +86,18 @@ void initRegStack()
 {
 	int i;
 
-    next_reg = 3;
-    next_breg = 5;
+    if (is816) {
+        next_reg = 3*4+128;
+        next_breg = 5*4+128;
+    }
+    else {
+        next_reg = 3;
+        next_breg = 5;
+    }
 	//for (rsp=0; rsp < 3; rsp=rsp+1)
 	//	regstack[rsp] = tmpregs[rsp];
 	//rsp = 0;
-	for (i = 0; i <= 15; i++) {
+	for (i = 0; i <= 255; i++) {
 		reg_in_use[i] = -1;
 		breg_in_use[i] = -1;
 	}
@@ -219,8 +225,14 @@ AMODE *GetTempRegister()
     reg_alloc[reg_alloc_ptr].reg = next_reg;
     reg_alloc[reg_alloc_ptr].mode = am_reg;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
-    if (next_reg++ >= 10)
-		next_reg = 3;		/* wrap around */
+    if (is816) {
+        if (next_reg++ >= 10*4+128)
+    		next_reg = 3*4+128;		/* wrap around */
+    }
+    else {
+        if (next_reg++ >= 10)
+    		next_reg = 3;		/* wrap around */
+    }
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
 	return ap;

@@ -51,10 +51,12 @@
 #define TABLE888	888
 #define RAPTOR64	64
 #define W65C816     816
+#define FISA64      164
 #define isThor		(gCpu==THOR)
 #define isTable888	(gCpu==TABLE888)
 #define isRaptor64	(gCpu==RAPTOR64)
 #define is816       (gCpu==W65C816)
+#define isFISA64    (gCpu==FISA64)
 //#define DOTRACE	1
 #ifdef DOTRACE
 #define TRACE(x)	x
@@ -68,10 +70,12 @@ extern int regSP;
 extern int regBP;
 extern int regLR;
 extern int regXLR;
+extern int regPC;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;
 extern int use_gp;
+extern int address_bits;
 extern FILE             *input,
                         *list,
                         *output;

@@ -275,8 +275,32 @@ int equal_address(AMODE *ap1, AMODE *ap2)
  *      peephole optimization for add instructions.
  *      makes quick immediates out of small constants.
  */
-void peep_add(struct ocode    *ip)
+void peep_add(struct ocode *ip)
 {
+     AMODE *a;
+     
+     // IF add to SP is followed by a move to SP, eliminate the add
+     if (ip==NULL)
+         return;
+     if (ip->fwd==NULL)
+         return;
+        if (ip->oper1) {
+            a = ip->oper1;
+            if (a->mode==am_reg) {
+                if (a->preg==regSP) {
+                    if (ip->fwd->opcode==op_mov) {
+                        if (ip->fwd->oper1->mode==am_reg) {
+                            if (ip->fwd->oper1->preg == regSP) {
+                                if (ip->back==NULL)
+                                    return;
+                                ip->back->fwd = ip->fwd;
+                                ip->fwd->back = ip->back;
+                            }
+                        }
+                    }
+                }
+            }
+     }
 	return;
 }
 
@@ -607,6 +631,8 @@ void opt3()
                     peep_move(ip);
                     break;
             case op_add:
+            case op_addu:
+            case op_addui:
                     peep_add(ip);
                     break;
             case op_sub:

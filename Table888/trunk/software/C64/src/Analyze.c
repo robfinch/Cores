@@ -656,7 +656,9 @@ int opt1(Statement *block)
 
 	olist = (CSE *)NULL;
     scan(block);            /* collect expressions */
-    if (is816)
+    if (isFISA64)
+       nn = AllocateFISA64RegisterVars();
+    else if (is816)
        nn = Allocate816RegisterVars();
 	else if (isTable888)
 		nn = AllocateTable888RegisterVars();         /* allocate registers */
