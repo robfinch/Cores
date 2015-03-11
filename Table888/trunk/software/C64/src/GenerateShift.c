@@ -46,9 +46,11 @@ j1:
 			default:	;
 		}
 		break;
+    case op_srl:
+    case op_sra:
 	case op_asr:
 	case op_shr:
-		if (isTable888) {
+		if (isTable888|isFISA64) {
 			if (ap1->isUnsigned)
 				goto j1;
 			switch (size) {
@@ -81,11 +83,14 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 	if (ap2->mode==am_immed) {
 		switch(op)
 		{
+        case op_sll:    op = op_slli; break;
 		case op_shl:	op = op_shli; break;
 		case op_shlu:	op = op_shlui; break;
 		case op_asr:	op = op_asri; break;
+		case op_sra:    op = op_srai; break;
 		case op_shr:	op = op_shri; break;
 		case op_shru:	op = op_shrui; break;
+		case op_srl:    op = op_srli; break;
 		}
 		GenerateTriadic(op,0,ap3,ap1,make_immed(ap2->offset->i));
 	}
@@ -114,7 +119,10 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 		GenerateDiadic(op_mov,0,ap1,ap3);
 	else if (ap3->mode == am_immed) {
 		error(ERR_LVALUE);
-		GenerateDiadic(op_ldi,0,ap1,ap3);
+		if (isFISA64)
+		    FISA64_GenLdi(ap1,ap2);
+        else
+		    GenerateDiadic(op_ldi,0,ap1,ap3);
 	}
 	else {
 		if (ap3->isUnsigned) {

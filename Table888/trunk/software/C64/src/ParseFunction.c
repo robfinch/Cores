@@ -286,16 +286,17 @@ static Statement *ParseFunctionBody(SYM *sp)
 	regmask = 0;
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
+	stmt = ParseCompoundStatement();
 	if (isThor)
-		GenerateFunction(sp, stmt = ParseCompoundStatement());
+		GenerateFunction(sp, stmt);
 	else if (isTable888)
-		GenerateTable888Function(sp, stmt = ParseCompoundStatement());
+		GenerateTable888Function(sp, stmt);
 	else if (isRaptor64)
-		GenerateRaptor64Function(sp, stmt = ParseCompoundStatement());
+		GenerateRaptor64Function(sp, stmt);
 	else if (is816)
-		Generate816Function(sp, stmt = ParseCompoundStatement());
+		Generate816Function(sp, stmt);
 	else if (isFISA64)
-		GenerateFISA64Function(sp, stmt = ParseCompoundStatement());
+		GenerateFISA64Function(sp, stmt);
 
 //	if (optimize)
 		flush_peep();

@@ -117,13 +117,28 @@ void GenerateTempRegPush(int reg, int rmode, int number)
 
 	if (isTable888)
 		GenerateMonadic(op_push,0,ap1);
-	else if (isRaptor64) {
-		GenerateTriadic(op_subi,0,makereg(30),makereg(30),make_immed(8));
-		GenerateDiadic(op_sw,0,ap1,make_indirect(30));
-	}
+	else if (is816) {
+        GenerateMonadic(op_sec,0,NULL);
+        GenerateMonadic(op_php,0,NULL);
+        GenerateMonadic(op_sei,0,NULL);
+        GenerateMonadic(op_lda,0,makereg(regSP));
+        GenerateMonadic(op_sbc,0,make_immed(4));
+        GenerateMonadic(op_sta,0,makereg(regSP));
+        GenerateMonadic(op_lda,0,makereg(regSP+2));
+        GenerateMonadic(op_sbc,0,make_immed(0));
+        GenerateMonadic(op_sta,0,makereg(regSP+2));
+        GenerateMonadic(op_plp,0,NULL);
+        GenerateMonadic(op_lda,0,makereg(reg));
+        GenerateMonadic(op_sta,0,make_indexed(0,regSP));
+        GenerateMonadic(op_lda,0,makereg(reg+2));
+        GenerateMonadic(op_sta,0,make_indexed(2,regSP));
+    }
+    else if (isFISA64) {
+		GenerateMonadic(op_push,0,ap1);
+    }
 	else {
-		GenerateTriadic(op_subi,0,makereg(255),makereg(255),make_immed(8));
-		GenerateDiadic(op_sw,0,ap1,make_indirect(255));
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(8));
+		GenerateDiadic(op_sw,0,ap1,make_indirect(regSP));
 	}
 	TRACE(printf("pushing r%d\r\n", reg);)
     reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
@@ -170,15 +185,11 @@ void GenerateTempRegPop(int reg, int rmode, int number)
 	ap1 = allocAmode();
 	ap1->preg = reg;
 	ap1->mode = rmode;
-	if (isTable888)
+	if (isTable888|isFISA64)
 		GenerateMonadic(op_pop,0,ap1);
-	else if (isRaptor64) {
-		GenerateDiadic(op_lw,0,ap1,make_indirect(30));
-		GenerateTriadic(op_addi,0,makereg(30),makereg(30),make_immed(8));
-	}
 	else {
-		GenerateDiadic(op_lw,0,ap1,make_indirect(255));
-		GenerateTriadic(op_addi,0,makereg(255),makereg(255),make_immed(8));
+		GenerateDiadic(op_lw,0,ap1,make_indirect(regSP));
+		GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 	}
     reg_alloc[number].f.isPushed = 'F';
 }

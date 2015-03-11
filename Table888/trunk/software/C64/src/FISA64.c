@@ -46,6 +46,7 @@ void ReleaseTempRegister(AMODE *ap);
 AMODE *GetTempRegister();
 void FISA64_GenLdi(AMODE *, AMODE *);
 extern AMODE *copy_addr(AMODE *ap);
+extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize);
 
 /*
  *      returns the desirability of optimization for a subexpression.
@@ -108,10 +109,11 @@ int AllocateFISA64RegisterVars()
     }
 	if( mask != 0 ) {
 		cnt = 0;
-		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(bitsset(rmask)*8));
+		//GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(bitsset(rmask)*8));
 		for (nn = 0; nn < 32; nn++) {
 			if (rmask & (0x80000000 >> nn)) {
-				GenerateDiadic(op_sw,0,makereg(nn&31),make_indexed(cnt,regSP));
+				//GenerateDiadic(op_sw,0,makereg(nn&31),make_indexed(cnt,regSP));
+				GenerateMonadic(op_push,0,makereg(nn&31));
 				cnt+=8;
 			}
 		}
@@ -134,22 +136,8 @@ int AllocateFISA64RegisterVars()
 								GenerateDiadic(op_mov,0,ap2,ap);
 							else {
 								size = GetNaturalSize(exptr);
-								if (exptr->isUnsigned) {
-									switch(size) {
-									case 1:	GenerateDiadic(op_lbu,0,ap2,ap); break;
-									case 2:	GenerateDiadic(op_lcu,0,ap2,ap); break;
-									case 4:	GenerateDiadic(op_lhu,0,ap2,ap); break;
-									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
-									}
-								}
-								else {
-									switch(size) {
-									case 1:	GenerateDiadic(op_lb,0,ap2,ap); break;
-									case 2:	GenerateDiadic(op_lc,0,ap2,ap); break;
-									case 4:	GenerateDiadic(op_lh,0,ap2,ap); break;
-									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
-									}
-								}
+								ap->isUnsigned = exptr->isUnsigned;
+								GenLoad(ap2,ap,size);
 							}
                             ReleaseTempRegister(ap);
                             }
@@ -195,7 +183,7 @@ AMODE *GenExprFISA64(ENODE *node)
 		size = GetNaturalSize(node);
 	    ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0],F_REG, size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED18,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 		GenerateTriadic(op,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
@@ -203,10 +191,10 @@ AMODE *GenExprFISA64(ENODE *node)
 	}
     GenerateFalseJump(node,lab0,0);
     ap1 = GetTempRegister();
-    GenerateTriadic(op_ori,0,ap1,makereg(0),make_immed(1));
-    GenerateTriadic(op_bra,0,make_label(lab1),NULL,NULL);
+    GenerateDiadic(op_lc0i,0,ap1,make_immed(1));
+    GenerateMonadic(op_bra,0,make_label(lab1));
     GenerateLabel(lab0);
-    GenerateTriadic(op_ori,0,ap1,makereg(0),make_immed(0));
+    GenerateDiadic(op_lc0i,0,ap1,make_immed(0));
     GenerateLabel(lab1);
     return ap1;
 }
@@ -214,31 +202,33 @@ AMODE *GenExprFISA64(ENODE *node)
 void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 {
 	int size;
-	AMODE *ap1, *ap2;
-	static int cc = 49;
+	AMODE *ap1, *ap2, *ap3;
 
-    cc = cc + 1;
-    if (cc > 52) cc = 49;
 	size = GetNaturalSize(node);
 	ap1 = GenerateExpression(node->p[0],F_REG, size);
 	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	// Optimize CMP to zero and branch into BEQ/BNE
-	if (ap2->mode == am_immed && ap2->offset->i==0 && op==op_eq) {
+	// Optimize CMP to zero and branch into plain branch, this works only for
+	// signed relational compares.
+	if (ap2->mode == am_immed && ap2->offset->i==0 && (op==op_eq || op==op_ne || op==op_lt || op==op_le || op==op_gt || op==op_ge)) {
+    	switch(op)
+    	{
+    	case op_eq:	op = op_beq; break;
+    	case op_ne:	op = op_bne; break;
+    	case op_lt: op = op_blt; break;
+    	case op_le: op = op_ble; break;
+    	case op_gt: op = op_bgt; break;
+    	case op_ge: op = op_bge; break;
+    	}
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_beq,0,ap1,make_clabel(label));
+		GenerateDiadic(op,0,ap1,make_clabel(label));
 		return;
 	}
-	if (ap2->mode == am_immed && ap2->offset->i==0 && op==op_ne) {
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_bne,0,ap1,make_clabel(label));
-		return;
-	}
+    ap3 = GetTempRegister();
 	if (op==op_ltu || op==op_leu || op==op_gtu || op==op_geu)
- 	    GenerateTriadic(op_cmpu,0,makereg(cc),ap1,ap2);
+ 	    GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
 	else
- 	    GenerateTriadic(op_cmp,0,makereg(cc),ap1,ap2);
+ 	    GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 	switch(op)
 	{
 	case op_eq:	op = op_beq; break;
@@ -252,9 +242,10 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 	case op_gtu: op = op_bgt; break;
 	case op_geu: op = op_bge; break;
 	}
+	GenerateDiadic(op,0,ap3,make_clabel(label));
+	ReleaseTempRegister(ap3);
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
-	GenerateDiadic(op,0,makereg(cc),make_clabel(label));
 }
 
 
@@ -264,6 +255,7 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 {
 	char buf[20];
 	char *bl;
+	AMODE *ap;
 
 	throwlab = retlab = contlab = breaklab = -1;
 	lastsph = 0;
@@ -284,7 +276,10 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 			GenerateDiadic(op_sw, 0, makereg(regBP), make_indexed(0,regSP));
 			GenerateDiadic(op_sw, 0, makereg(regXLR), make_indexed(8,regSP));
 			GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(16,regSP));
-			GenerateDiadic(op_lea,0,makereg(regXLR),make_label(throwlab));
+			ap = make_label(throwlab);
+			ap->mode = am_immed;
+			FISA64_GenLdi(makereg(regXLR),ap);
+			//GenerateDiadic(op_lea,0,makereg(regXLR),make_label(throwlab));
 		}
 		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
 		if (lc_auto)
@@ -326,7 +321,7 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 		// Force return value into register 1
 		if( ap->preg != 1 ) {
 			if (ap->mode == am_immed)
-				GenerateTriadic(op_ori, 0, makereg(1),makereg(0),ap);
+			    FISA64_GenLdi(makereg(1),ap);
 			else
 				GenerateDiadic(op_mov, 0, makereg(1),ap);
 		}
@@ -346,11 +341,12 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 			cnt = (bitsset(save_mask)-1)*8;
 			for (nn = 31; nn >=1 ; nn--) {
 				if (save_mask & (1 << nn)) {
-					GenerateTriadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP),NULL);
+					//GenerateTriadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP),NULL);
+					GenerateMonadic(op_pop,0,makereg(nn));
 					cnt -= 8;
 				}
 			}
-			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(popcnt(save_mask)*8));
+			//GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(popcnt(save_mask)*8));
 		}
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
@@ -362,27 +358,16 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(8,regSP));
 			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(16,regSP));
 		}
-		//if (isOscall) {
-		//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
-		//	gen_regrestore();
-		//}
 		// Generate the return instruction. For the Pascal calling convention pop the parameters
 		// from the stack.
 		if (sym->IsInterrupt) {
-			//GenerateTriadic(op_addui,0,makereg(30),makereg(30),make_immed(24));
-			//GenerateDiadic(op_lm,0,make_indirect(30),make_mask(0x9FFFFFFE));
-			//GenerateTriadic(op_addui,0,makereg(30),makereg(30),make_immed(popcnt(0x9FFFFFFE)*8));
-			GenerateMonadic(op_iret,0,NULL);
+			GenerateMonadic(op_rti,0,NULL);
 			return;
 		}
-		if (sym->IsPascal) {
-            GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24+sym->NumParms * 8));
-            GenerateDiadic(op_jal,0,makereg(0),make_indirect(regLR));
-        }
-		else {
-            GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
-            GenerateDiadic(op_jal,0,makereg(0),make_indirect(regLR));
-        }
+		if (sym->IsPascal)
+            GenerateMonadic(op_rts,0,make_immed(24+sym->NumParms * 8));
+		else
+            GenerateMonadic(op_rts,0,make_immed(24));
     }
 	// Just branch to the already generated stack cleanup code.
 	else {
@@ -396,7 +381,7 @@ static void GeneratePushParameter(ENODE *ep, int i, int n)
 {    
 	AMODE *ap;
 	ap = GenerateExpression(ep,F_REG,8);
-	GenerateDiadic(op_sw,0,ap,make_indexed((n-i)*8-8,regSP));
+	GenerateMonadic(op_push,0,ap);//,make_indexed((n-i)*8-8,regSP));
 	ReleaseTempRegister(ap);
 }
 
@@ -410,8 +395,8 @@ static int GeneratePushParameterList(ENODE *plist)
 	for(n = 0; plist != NULL; n++ )
 		plist = plist->p[1];
 	// move stack pointer down by number of parameters
-	if (st)
-		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(n*8));
+//	if (st)
+//		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(n*8));
 	plist = st;
     for(i = 0; plist != NULL; i++ )
     {
@@ -459,7 +444,7 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 */
 		sym = gsearch(node->p[0]->sp);
 //		ReleaseTempRegister(ap);
-        GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
+        GenerateMonadic(op_bsr,0,make_offset(node->p[0]));
 	}
     else
     {

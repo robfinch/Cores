@@ -353,6 +353,7 @@ void GenerateDoUntil(struct snode *stmt)
  */
 void GenerateSwitch(Statement *stmt)
 {    
+     AMODE *ap2;
 	int             curlab;
 	int *bf;
 	int nn;
@@ -368,9 +369,9 @@ void GenerateSwitch(Statement *stmt)
 			return;
 		}
         ap = GenerateExpression(stmt->exp,F_REG,4);
-        if( ap->preg != 0 )
-                GenerateDiadic(op_mov,0,makereg(1),ap);
-		ReleaseTempRegister(ap);
+//        if( ap->preg != 0 )
+//                GenerateDiadic(op_mov,0,makereg(1),ap);
+//		ReleaseTempRegister(ap);
         stmt = stmt->s1;
         while( stmt != NULL )
         {
@@ -383,15 +384,21 @@ void GenerateSwitch(Statement *stmt)
             {
 				bf = (int *)stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
-					if (isTable888) {
+                    if (isFISA64) {
+                        ap2 = GetTempRegister();
+                        GenerateTriadic(op_cmpi,0,ap2,ap,make_immed(bf[nn]));
+						GenerateDiadic(op_beq,0,ap2,make_clabel(curlab));
+						ReleaseTempRegister(ap2);
+                    }
+					else if (isTable888) {
 						GenerateTriadic(op_cmp,0,makereg(244),makereg(1),make_immed(bf[nn]));
 						GenerateDiadic(op_beq,0,makereg(244),make_clabel(curlab));
 					}
 					else if (isRaptor64) {
-						GenerateTriadic(op_beq,0,makereg(1),make_immed(bf[nn]),make_label(curlab));
+						GenerateTriadic(op_beq,0,ap,make_immed(bf[nn]),make_label(curlab));
 					}
 					else {
-						GenerateTriadic(op_cmp,0,makepred(predreg),makereg(1),make_immed(bf[nn]));
+						GenerateTriadic(op_cmp,0,makepred(predreg),ap,make_immed(bf[nn]));
 						GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_bra,0,make_clabel(curlab));
 					}
 				}
@@ -406,6 +413,7 @@ void GenerateSwitch(Statement *stmt)
             GenerateMonadic(op_bra,0,make_clabel(breaklab));
         else
 			GenerateMonadic(op_bra,0,make_clabel((int64_t)defcase->label));
+    ReleaseTempRegister(ap);
 }
 
 

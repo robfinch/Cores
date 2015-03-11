@@ -143,11 +143,11 @@ int	options(char *s)
         }
         else if (strcmp(&s[2],"FISA64")==0) {
              gCpu = FISA64;
-             regLR = 63;
-             regPC = 60;
-             regSP = 59;
-             regBP = 58;
-             regXLR = 54;
+             regLR = 31;
+             regPC = 29;
+             regSP = 30;
+             regBP = 27;
+             regXLR = 28;
         }
 	}
 	else if (s[1]=='w')

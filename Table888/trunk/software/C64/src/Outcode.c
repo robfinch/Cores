@@ -68,6 +68,7 @@ struct oplst {
 		{"ldi",op_ldi},
 		{"add",op_addi}, {"subu",op_sub}, {"subu", op_subu},
 		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori},
+		{"divi", op_divi}, {"divui", op_divui}, {"modi", op_modi}, {"modui", op_modui},
 		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},
 		{"sxb",op_sxb}, {"sxc", op_sxc}, {"sxh", op_sxh},
 		{"subui",op_subui}, {"shru", op_shru}, {"divsi", op_divsi}, {"not", op_not},
@@ -119,7 +120,7 @@ struct oplst {
 		{"sltu", op_sltu}, {"sleu",op_sleu},{"sgtu",op_sgtu}, {"sgeu",op_sgeu},
 		{"",op_empty}, {"",op_asm}, {"", op_fnname},
 		{"ftadd", op_ftadd}, {"ftsub", op_ftsub}, {"ftmul", op_ftmul}, {"ftdiv", op_ftdiv},
-		{"inc", op_inc},
+		{"inc", op_inc}, {"dec", op_dec},
 
 		{"sec", op_sec}, {"clc", op_clc}, {"lda", op_lda}, {"sta", op_sta}, {"stz", op_stz},
         {"sbc", op_sbc}, {"adc", op_adc}, {"ora", op_ora}, {"eor", op_eor},
@@ -133,6 +134,7 @@ struct oplst {
 		{"bsr", op_bsr},
 		{"cmpu", op_cmpu},
 		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
+		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
                 {0,0} };
 
 static char *pad(char *op)

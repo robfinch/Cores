@@ -50,7 +50,8 @@ struct ocode {
 
 enum e_op {
         op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi,
-        op_mul, op_muli, op_mulu, op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
+        op_mul, op_muli, op_mulu, op_divi, op_divui, op_modi, op_modui, 
+        op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
         op_or, op_ori, op_xor, op_xori, op_asr, op_asri, op_shl, op_shr, op_shru,
 		op_shli, op_shri, op_shrui, op_shlu, op_shlui,
 		op_bfext, op_bfextu, op_bfins,
@@ -70,7 +71,7 @@ enum e_op {
 		op_brz, op_brnz,
 		op_lft, op_sft,
 		op_lw, op_lh, op_lc, op_lb, op_ret, op_sm, op_lm, op_ldis, op_lws, op_sws,
-		op_inc,
+		op_inc, op_dec,
 		op_lbu, op_lcu, op_lhu, op_sti,
         op_rts, op_rti, op_rtd,
 		op_push, op_pop, op_movs,
@@ -89,6 +90,7 @@ enum e_op {
         // FISA64
         op_lc0i, op_lc1i, op_lc2i, op_lc3i,
         op_cmpu, op_bsr,
+        op_sll, op_slli, op_srl, op_srli, op_sra, op_srai,
         op_empty };
 
 enum e_seg {

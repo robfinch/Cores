@@ -549,12 +549,55 @@ void PeepoptLea(struct ocode *ip)
     ip->fwd = ip2->fwd;
 }
 
+// LW followed by a push of the same register gets translated to PUSH.
+
+void PeepoptLw(struct ocode *ip)
+{
+	struct ocode *ip2;
+
+    if (!isFISA64)
+       return;
+	ip2 = ip->fwd;
+	if (!ip2)
+	   return;
+    if (ip2->opcode != op_push)
+       return;
+         
+    ip->opcode = op_push;
+    ip->oper1 = copy_addr(ip->oper2);
+    ip->oper2 = NULL;
+    ip->fwd = ip2->fwd;
+}
+
+// LC0I followed by a push of the same register gets translated to PUSH.
+
+void PeepoptLc0i(struct ocode *ip)
+{
+	struct ocode *ip2;
+
+    if (!isFISA64)
+       return;
+	ip2 = ip->fwd;
+	if (!ip2)
+	   return;
+    if (ip2->opcode != op_push)
+       return;
+    if (ip->oper2->offset->i > 0x1fffLL || ip->oper2->offset->i <= -0x1fffLL)
+       return;
+    ip->opcode = op_push;
+    ip->oper1 = copy_addr(ip->oper2);
+    ip->oper2 = NULL;
+    ip->fwd = ip2->fwd;
+}
+
 // Combine a chain of push operations into a single push
 
 void PeepoptPushPop(struct ocode *ip)
 {
 	struct ocode *ip2,*ip3,*ip4;
 
+    if (!isTable888)
+        return;
 	if (ip->oper1->mode == am_immed)
 		return;
 	ip2 = ip->fwd;
@@ -607,6 +650,18 @@ void peep_ldi(struct ocode *ip)
 	ip->fwd = ip->fwd->fwd;
 }
 
+
+// Remove extra labels at end of subroutines
+
+void PeepoptLabel(struct ocode *ip)
+{
+    if (!ip)
+        return;
+    if (ip->fwd)
+        return;
+    ip->back->fwd = NULL;
+}
+ 
 /*
  *      peephole optimizer. This routine calls the instruction
  *      specific optimization routines above for each instruction
@@ -644,9 +699,15 @@ void opt3()
             case op_mul:
 //                    PeepoptMuldiv(ip,op_shl);
                     break;
+			case op_lc0i:
+					PeepoptLc0i(ip);
+					break;
 			case op_lc:
 					PeepoptLc(ip);
 					break;
+            case op_lw:
+                    PeepoptLw(ip);
+                    break;
             case op_bra:
 					if (ip->predop==1 || isTable888)
 	                    PeepoptUctran(ip);
@@ -670,6 +731,9 @@ void opt3()
 					if (ip->predop==1 || isTable888)
 						PeepoptUctran(ip);
 					break;
+			case op_label:
+                    PeepoptLabel(ip);
+                    break;
             }
 	       ip = ip->fwd;
         }
