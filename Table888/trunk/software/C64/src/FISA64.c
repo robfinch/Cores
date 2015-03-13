@@ -268,14 +268,15 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 		//GenerateDiadic(op_sm,0,make_indirect(30), make_mask(0x9FFFFFFE));
 	}
 	if (!sym->IsNocall) {
-		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
 		// For a leaf routine don't bother to store the link register or exception link register.
-		if (sym->IsLeaf)
-			GenerateDiadic(op_sw,0,makereg(regBP),make_indirect(regSP));
+		if (sym->IsLeaf) {
+    		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(16));
+			GenerateMonadic(op_push,0,makereg(regBP));
+        }
 		else {
-			GenerateDiadic(op_sw, 0, makereg(regBP), make_indexed(0,regSP));
-			GenerateDiadic(op_sw, 0, makereg(regXLR), make_indexed(8,regSP));
-			GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(16,regSP));
+			GenerateMonadic(op_push, 0, makereg(regLR));
+			GenerateMonadic(op_push, 0, makereg(regXLR));
+			GenerateMonadic(op_push, 0, makereg(regBP));
 			ap = make_label(throwlab);
 			ap->mode = am_immed;
 			FISA64_GenLdi(makereg(regXLR),ap);
@@ -313,19 +314,22 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 	int nn;
 	int lab1;
 	int cnt;
+	int toAdd;
 
+    // Generate the return expression and force the result into r1.
     if( stmt != NULL && stmt->exp != NULL )
 	{
 		initstack();
 		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,8);
-		// Force return value into register 1
-		if( ap->preg != 1 ) {
-			if (ap->mode == am_immed)
-			    FISA64_GenLdi(makereg(1),ap);
-			else
-				GenerateDiadic(op_mov, 0, makereg(1),ap);
-		}
+		if (ap->mode == am_immed)
+		    FISA64_GenLdi(makereg(1),ap);
+		else if (ap->mode == am_reg)
+			GenerateDiadic(op_mov, 0, makereg(1),ap);
+		else
+		    GenLoad(makereg(1),ap,8);
+		ReleaseTempRegister(ap);
 	}
+
 	// Generate the return code only once. Branch to the return code for all returns.
 	if( retlab == -1 )
     {
@@ -351,12 +355,15 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
 		GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
-		if (sym->IsLeaf)
-			GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(regSP));
+		if (sym->IsLeaf) {
+			GenerateMonadic(op_pop,0,makereg(regBP));
+			toAdd = 16;
+        }
 		else {
-			GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(regSP));
-			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(8,regSP));
-			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(16,regSP));
+			GenerateMonadic(op_pop,0,makereg(regBP));
+			GenerateMonadic(op_pop,0,makereg(regXLR));
+			GenerateMonadic(op_pop,0,makereg(regLR));
+			toAdd = 0;
 		}
 		// Generate the return instruction. For the Pascal calling convention pop the parameters
 		// from the stack.
@@ -365,9 +372,9 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 			return;
 		}
 		if (sym->IsPascal)
-            GenerateMonadic(op_rts,0,make_immed(24+sym->NumParms * 8));
+            GenerateMonadic(op_rts,0,make_immed(toAdd+sym->NumParms * 8));
 		else
-            GenerateMonadic(op_rts,0,make_immed(24));
+            GenerateMonadic(op_rts,0,make_immed(toAdd));
     }
 	// Just branch to the already generated stack cleanup code.
 	else {
@@ -377,11 +384,11 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 
 // push the operand expression onto the stack.
 //
-static void GeneratePushParameter(ENODE *ep, int i, int n)
+static void GeneratePushParameter(ENODE *ep)
 {    
 	AMODE *ap;
 	ap = GenerateExpression(ep,F_REG,8);
-	GenerateMonadic(op_push,0,ap);//,make_indexed((n-i)*8-8,regSP));
+	GenerateMonadic(op_push,0,ap);
 	ReleaseTempRegister(ap);
 }
 
@@ -389,18 +396,11 @@ static void GeneratePushParameter(ENODE *ep, int i, int n)
 //
 static int GeneratePushParameterList(ENODE *plist)
 {
-	ENODE *st = plist;
-	int i,n;
-	// count the number of parameters
-	for(n = 0; plist != NULL; n++ )
-		plist = plist->p[1];
-	// move stack pointer down by number of parameters
-//	if (st)
-//		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(n*8));
-	plist = st;
+	int i;
+
     for(i = 0; plist != NULL; i++ )
     {
-		GeneratePushParameter(plist->p[0],i,n);
+		GeneratePushParameter(plist->p[0]);
 		plist = plist->p[1];
     }
     return i;
@@ -413,7 +413,7 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 	SYM *sym;
     int             i;
 	int msk;
-	int sp;
+	int sp = 0;
 
 	sp = TempInvalidate();
 	sym = NULL;

@@ -595,21 +595,20 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 //
 AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 {
-	AMODE *ap,*ap1;
+	AMODE *ap;
 
-	ap1 = GetTempRegister();
     ap = GenerateExpression(node->p[0],F_REG,size);
-    GenerateDiadic(op,0,ap1,ap);
-    ReleaseTempRegister(ap);
-    MakeLegalAmode(ap1,flags,size);
-    return ap1;
+    GenerateDiadic(op,0,ap,ap);
+    MakeLegalAmode(ap,flags,size);
+    return ap;
 }
+
+// Generate code for a binary expression
 
 AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2, *ap3;
 	int op2;
-	ap3 = GetTempRegister();
 	ap1 = GenerateExpression(node->p[0],F_REG,size);
 	if (op==op_ftadd || op==op_ftsub || op==op_ftmul || op==op_ftdiv ||
         op==op_fdadd || op==op_fdsub || op==op_fdmul || op==op_fddiv ||
@@ -621,8 +620,9 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 	else {
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 	}
-	if (is816)
-	   Generate816Binary(op,ap3,ap1,ap2);
+	if (is816) {
+	   Generate816Binary(op,ap1,ap1,ap2);
+    }
     else {
        if (ap2->mode==am_immed) {
            switch(op) {
@@ -641,13 +641,11 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
            default:   ;
            }
        }
-       GenerateTriadic(op,0,ap3,ap1,ap2);
-    
+       GenerateTriadic(op,0,ap1,ap1,ap2);
     }
     ReleaseTempRegister(ap2);
-    ReleaseTempRegister(ap1);
-    MakeLegalAmode(ap3,flags,size);
-    return ap3;
+    MakeLegalAmode(ap1,flags,size);
+    return ap1;
 }
 
 /*
@@ -660,7 +658,6 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size, int op)
 
     if( node->p[0]->nodetype == en_icon )
          swap_nodes(node);
-	ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,8);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
     if (ap2->mode==am_immed) {
@@ -672,12 +669,11 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size, int op)
        default:   ;
        }
     }
-    GenerateTriadic(op,0,ap3,ap1,ap2);
+    GenerateTriadic(op,0,ap1,ap1,ap2);
 //    GenerateDiadic(op_ext,0,ap3,0);
-    MakeLegalAmode(ap3,flags,8);
+    MakeLegalAmode(ap1,flags,8);
     ReleaseTempRegister(ap2);
-    ReleaseTempRegister(ap1);
-    return ap3;
+    return ap1;
 }
 
 /*
@@ -696,10 +692,9 @@ void swap_nodes(ENODE *node)
  */
 AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 {       
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1, *ap2;
     if( node->p[0]->nodetype == en_icon )
         swap_nodes(node);
-	ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,8);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
     if (ap2->mode==am_immed) {
@@ -709,11 +704,10 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
        default:   ;
        }
     }
-	GenerateTriadic(op,0,ap3,ap1,ap2);
+	GenerateTriadic(op,0,ap1,ap1,ap2);
     ReleaseTempRegister(ap2);
-    ReleaseTempRegister(ap1);
-    MakeLegalAmode(ap3,flags,8);
-    return ap3;
+    MakeLegalAmode(ap1,flags,8);
+    return ap1;
 }
 
 /*

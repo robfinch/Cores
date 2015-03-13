@@ -106,6 +106,12 @@ void initRegStack()
     breg_stack_ptr = 0;
     breg_alloc_ptr = 0;
 //    act_scratch = 0;
+    memset(reg_stack,0,sizeof(reg_stack));
+    memset(reg_alloc,0,sizeof(reg_alloc));
+    memset(breg_stack,0,sizeof(breg_stack));
+    memset(breg_alloc,0,sizeof(breg_alloc));
+    memset(stacked_regs,0,sizeof(stacked_regs));
+    memset(save_reg_alloc,0,sizeof(save_reg_alloc));
 }
 
 void GenerateTempRegPush(int reg, int rmode, int number)
@@ -115,7 +121,7 @@ void GenerateTempRegPush(int reg, int rmode, int number)
     ap1->preg = reg;
     ap1->mode = rmode;
 
-	if (isTable888)
+	if (isTable888|isFISA64)
 		GenerateMonadic(op_push,0,ap1);
 	else if (is816) {
         GenerateMonadic(op_sec,0,NULL);
@@ -132,9 +138,6 @@ void GenerateTempRegPush(int reg, int rmode, int number)
         GenerateMonadic(op_sta,0,make_indexed(0,regSP));
         GenerateMonadic(op_lda,0,makereg(reg+2));
         GenerateMonadic(op_sta,0,make_indexed(2,regSP));
-    }
-    else if (isFISA64) {
-		GenerateMonadic(op_push,0,ap1);
     }
 	else {
 		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -224,7 +227,7 @@ void initstack()
 AMODE *GetTempRegister()
 {
 	AMODE *ap;
-
+    
 	if (reg_in_use[next_reg] >= 0)
 		GenerateTempRegPush(next_reg, am_reg, reg_in_use[next_reg]);
 	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
@@ -591,18 +594,20 @@ int TempInvalidate()
 	sp = 0;
 	TRACE(printf("TempInvalidate()\r\n");)
 	save_reg_alloc_ptr = reg_alloc_ptr;
-	memcpy(save_reg_alloc, reg_alloc, sizeof(reg_alloc));
-	memcpy(save_reg_in_use, reg_in_use, sizeof(reg_in_use));
+	memcpy(save_reg_alloc, reg_alloc, sizeof(save_reg_alloc));
+	memcpy(save_reg_in_use, reg_in_use, sizeof(save_reg_in_use));
 	for (i = 0; i < reg_alloc_ptr; i++) {
-		if (reg_alloc[i].f.isPushed != 'T') {
-			GenerateTempRegPush(reg_alloc[i].reg, reg_alloc[i].mode, i);
-			stacked_regs[sp].reg = reg_alloc[i].reg;
-			stacked_regs[sp].mode = reg_alloc[i].mode;
-			stacked_regs[sp].f.allocnum = i;
-			sp++;
-			// mark the register void
-			reg_in_use[reg_alloc[i].reg] = -1;
-		}
+        if (reg_in_use[reg_alloc[i].reg] != -1) {
+    		if (reg_alloc[i].f.isPushed == 'F') {
+    			GenerateTempRegPush(reg_alloc[i].reg, reg_alloc[i].mode, i);
+    			stacked_regs[sp].reg = reg_alloc[i].reg;
+    			stacked_regs[sp].mode = reg_alloc[i].mode;
+    			stacked_regs[sp].f.allocnum = i;
+    			sp++;
+    			// mark the register void
+    			reg_in_use[reg_alloc[i].reg] = -1;
+    		}
+        }
 	}
 	return sp;
 }

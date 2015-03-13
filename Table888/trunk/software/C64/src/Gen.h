@@ -90,7 +90,7 @@ enum e_op {
         // FISA64
         op_lc0i, op_lc1i, op_lc2i, op_lc3i,
         op_cmpu, op_bsr,
-        op_sll, op_slli, op_srl, op_srli, op_sra, op_srai,
+        op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri,
         op_empty };
 
 enum e_seg {
