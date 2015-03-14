@@ -1,0 +1,1911 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// A64 - Assembler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include "a64.h"
+
+#define BCC(x)       (((x) << 12)|0x38)
+
+static void emitAlignedCode(int cd);
+static void process_shifti(int oc);
+static void ProcessEOL(int opt);
+
+extern int first_rodata;
+extern int first_data;
+extern int first_bss;
+static int64_t ca;
+
+extern int use_gp;
+
+typedef struct tagInsn
+{
+    union {
+        struct {
+            unsigned int opcode : 7;
+            unsigned int Ra : 5;
+            unsigned int Rt : 5;
+            unsigned int imm : 15;
+        } ri;
+        struct {
+            unsigned int opcode : 7;
+            unsigned int Ra : 5;
+            unsigned int Rt : 5;
+            unsigned int Rb : 5;
+            unsigned int resv : 3;
+            unsigned int funct : 7;
+        } rr;
+    };
+};
+
+// ----------------------------------------------------------------------------
+// Return the register number or -1 if not a register.
+// ----------------------------------------------------------------------------
+
+static int getRegisterX()
+{
+    int reg;
+
+    while(isspace(*inptr)) inptr++;
+    switch(*inptr) {
+    case 'r': case 'R':
+         if (isdigit(inptr[1])) {
+             reg = inptr[1]-'0';
+             if (isdigit(inptr[2])) {
+                 reg = 10 * reg + (inptr[2]-'0');
+                 if (isdigit(inptr[3])) {
+                     reg = 10 * reg + (inptr[3]-'0');
+                     if (isIdentChar(inptr[4]))
+                         return -1;
+                     inptr += 4;
+                     NextToken();
+                     return reg;
+                 }
+                 else if (isIdentChar(inptr[3]))
+                     return -1;
+                 else {
+                     inptr += 3;
+                     NextToken();
+                     return reg;
+                 }
+             }
+             else if (isIdentChar(inptr[2]))
+                 return -1;
+             else {
+                 inptr += 2;
+                 NextToken();
+                 return reg;
+             }
+         }
+         else return -1;
+    case 'b': case 'B':
+        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 27;
+        }
+        break;
+    case 'g': case 'G':
+        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 26;
+        }
+        break;
+    case 's': case 'S':
+        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 30;
+        }
+        break;
+    case 't': case 'T':
+        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 25;
+        }
+        break;
+    case 'p': case 'P':
+        if ((inptr[1]=='c' || inptr[1]=='C') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 29;
+        }
+        break;
+    case 'l': case 'L':
+        if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 31;
+        }
+        break;
+    case 'x': case 'X':
+        if ((inptr[1]=='l' || inptr[1]=='L') && (inptr[2]=='r' || inptr[2]=='R') &&
+        !isIdentChar(inptr[3])) {
+            inptr += 3;
+            NextToken();
+            return 28;
+        }
+        break;
+    default:
+        return -1;
+    }
+    return -1;
+}
+
+
+// ----------------------------------------------------------------------------
+// Get the friendly name of a special purpose register.
+// ----------------------------------------------------------------------------
+
+static int FISA64_getSprRegister()
+{
+    int reg;
+
+    while(isspace(*inptr)) inptr++;
+    switch(*inptr) {
+
+
+    // clk cr0 cr3
+    case 'c': case 'C':
+         if ((inptr[1]=='l' || inptr[1]=='L') &&
+             (inptr[2]=='k' || inptr[2]=='K') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x06;
+         }
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='0') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x00;
+         }
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='3') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 0x03;
+         }
+         break;
+
+    // ea
+    case 'e': case 'E':
+         if ((inptr[1]=='a' || inptr[1]=='A') &&
+             !isIdentChar(inptr[2])) {
+             inptr += 2;
+             NextToken();
+             return 40;
+         }
+         break;
+
+    // fault_pc
+    case 'f': case 'F':
+         if ((inptr[1]=='a' || inptr[1]=='A') &&
+             (inptr[2]=='u' || inptr[2]=='U') &&
+             (inptr[3]=='l' || inptr[3]=='L') &&
+             (inptr[4]=='t' || inptr[4]=='T') &&
+             (inptr[5]=='_' || inptr[5]=='_') &&
+             (inptr[6]=='p' || inptr[6]=='P') &&
+             (inptr[7]=='c' || inptr[7]=='C') &&
+             !isIdentChar(inptr[8])) {
+             inptr += 8;
+             NextToken();
+             return 0x08;
+         }
+         break;
+
+    // history
+    case 'h': case 'H':
+         if ((inptr[1]=='i' || inptr[1]=='I') &&
+             (inptr[2]=='s' || inptr[2]=='S') &&
+             (inptr[3]=='t' || inptr[3]=='T') &&
+             (inptr[4]=='o' || inptr[4]=='O') &&
+             (inptr[5]=='r' || inptr[5]=='R') &&
+             (inptr[6]=='y' || inptr[6]=='Y') &&
+             !isIdentChar(inptr[7])) {
+             inptr += 7;
+             NextToken();
+             return 0x0D;
+         }
+         break;
+
+    // ivno
+    case 'i': case 'I':
+         if ((inptr[1]=='v' || inptr[1]=='V') &&
+             (inptr[2]=='n' || inptr[2]=='N') &&
+             (inptr[3]=='o' || inptr[3]=='O') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 0x0C;
+         }
+         break;
+
+    // LOTGRP
+    case 'l': case 'L':
+         if ((inptr[1]=='o' || inptr[1]=='O') &&
+             (inptr[2]=='t' || inptr[2]=='T') &&
+             (inptr[3]=='g' || inptr[3]=='G') &&
+             (inptr[4]=='r' || inptr[4]=='R') &&
+             (inptr[5]=='p' || inptr[5]=='P') &&
+             !isIdentChar(inptr[6])) {
+             inptr += 6;
+             NextToken();
+             return 42;
+         }
+         break;
+
+    // rand
+    case 'r': case 'R':
+         if ((inptr[1]=='a' || inptr[1]=='A') &&
+             (inptr[2]=='n' || inptr[2]=='N') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 0x12;
+         }
+         break;
+    // ss_ll srand1 srand2
+    case 's': case 'S':
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             (inptr[2]=='_' || inptr[2]=='_') &&
+             (inptr[3]=='l' || inptr[3]=='L') &&
+             (inptr[4]=='l' || inptr[4]=='L') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 0x1A;
+         }
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='n' || inptr[3]=='N') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='1') &&
+             !isIdentChar(inptr[6])) {
+             inptr += 6;
+             NextToken();
+             return 0x10;
+         }
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='n' || inptr[3]=='N') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='2') &&
+             !isIdentChar(inptr[6])) {
+             inptr += 6;
+             NextToken();
+             return 0x11;
+         }
+         if ((inptr[1]=='p' || inptr[1]=='P') &&
+             (inptr[2]=='r' || inptr[2]=='R') &&
+             isdigit(inptr[3]) && isdigit(inptr[4]) &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return (inptr[3]-'0')*10 + (inptr[4]-'0');
+         }
+         break;
+
+    // tag tick
+    case 't': case 'T':
+         if ((inptr[1]=='i' || inptr[1]=='I') &&
+             (inptr[2]=='c' || inptr[2]=='C') &&
+             (inptr[3]=='k' || inptr[3]=='K') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 4;
+         }
+         if ((inptr[1]=='a' || inptr[1]=='A') &&
+             (inptr[2]=='g' || inptr[2]=='G') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 41;
+         }
+         break;
+
+    // vbr
+    case 'v': case 'V':
+         if ((inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='r' || inptr[2]=='R') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 10;
+         }
+         break;
+    }
+    return -1;
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void emit_insn(int64_t oc)
+{
+     emitAlignedCode(oc & 255);
+     emitCode((oc >> 8) & 255);
+     emitCode((oc >> 16) & 255);
+     emitCode((oc >> 24) & 255);
+}
+ 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void emit_insn2(int64_t oc)
+{
+     emitCode(oc & 255);
+     emitCode((oc >> 8) & 255);
+     emitCode((oc >> 16) & 255);
+     emitCode((oc >> 24) & 255);
+}
+ 
+
+// ---------------------------------------------------------------------------
+// Emit code aligned to a code address.
+// ---------------------------------------------------------------------------
+
+static void emitAlignedCode(int cd)
+{
+     int64_t ad;
+
+     ad = code_address & 15;
+     while (ad != 0 && ad != 4 && ad != 8 && ad != 12) {
+         emitByte(0x00);
+         ad = code_address & 15;
+     }
+     emitByte(cd);
+}
+
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for memory operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm0(int64_t v, int force)
+{
+     if (v != 0 || force) {
+          emitAlignedCode(0xfd);
+          emitCode(v & 255);
+          emitCode((v >> 8) & 255);
+          emitCode((v >> 16) & 255);
+          emitCode((v >> 24) & 255);
+     }
+     if (((v < 0) && ((v >> 32) != -1L)) || ((v > 0) && ((v >> 32) != 0L)) || (force && data_bits > 32)) {
+          emitAlignedCode(0xfe);
+          emitCode((v >> 32) & 255);
+          emitCode((v >> 40) & 255);
+          emitCode((v >> 48) & 255);
+          emitCode((v >> 56) & 255);
+     }
+}
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for memory operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm2(int64_t v, int force)
+{
+     if (v < 0L || v > 3L || force) {
+          emitAlignedCode(0xfd);
+          emitCode((v >> 2) & 255);
+          emitCode((v >> 10) & 255);
+          emitCode((v >> 18) & 255);
+          emitCode((v >> 26) & 255);
+     }
+     if (((v < 0) && ((v >> 34) != -1L)) || ((v > 0) && ((v >> 34) != 0L)) || (force && data_bits > 34)) {
+          emitAlignedCode(0xfe);
+          emitCode((v >> 34) & 255);
+          emitCode((v >> 42) & 255);
+          emitCode((v >> 50) & 255);
+          emitCode((v >> 58) & 255);
+     }
+}
+ 
+// ---------------------------------------------------------------------------
+// Emit constant extension for memory operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm11(int64_t v, int force)
+{
+     if (v < -1024L || v > 1023L || force) {
+           emit_insn(
+               (((v >> 11) & 0x3ffffffff) << 6) |
+               60
+           );
+     }
+     if (((v < 0) && ((v >> 45) != -1L)) || ((v > 0) && ((v >> 45) != 0L)) || (force && data_bits > 45)) {
+           emit_insn(
+               (((v >> 45) & 0x3ffffffff) << 6) |
+               61
+           );
+     }
+}
+ 
+// ---------------------------------------------------------------------------
+// Emit constant extension for 16-bit operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm15(int64_t v, int force)
+{
+     if (((v < 0) && ((v >> 40) != -1L)) || ((v > 0) && ((v >> 40) != 0L)) || (force && (code_bits > 40 || data_bits > 40)))
+         emit_insn(0x7c|(((v >> 40)&0xFFFFFFLL) << 7));
+     if (v < -16384LL || v > 16383LL || force)
+         emit_insn(0x7c|(((v >> 15)&0x1FFFFFFLL) << 7));
+}
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for 24-bit operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm20(int64_t v, int force)
+{
+     if (v < -524288L || v > 524287L || force) {
+          emitAlignedCode(0xfd);
+          emitCode((v >> 20) & 255);
+          emitCode((v >> 28) & 255);
+          emitCode((v >> 36) & 255);
+          emitCode((v >> 44) & 255);
+     }
+     if (((v < 0) && ((v >> 52) != -1L)) || ((v > 0) && ((v >> 52) != 0L)) || (force && (code_bits > 52 || data_bits > 52))) {
+          emitAlignedCode(0xfe);
+          emitCode((v >> 52) & 255);
+          emitCode((v >> 60) & 255);
+          emitCode(0x00);
+          emitCode(0x00);
+     }
+}
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for 22-bit operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm22(int64_t v, int force)
+{
+     if (v < -2097152L || v > 2097151L || force) {
+          emit_insn(
+              (((v >> 22) & 0x3ffffffff) << 6) |
+              60
+          );
+     }
+     if (((v < 0) && ((v >> 56) != -1L)) || ((v > 0) && ((v >> 56) != 0L)) || (force && (code_bits > 56 || data_bits > 56))) {
+          emit_insn(
+              (((v >> 56) & 0xff) << 6) |
+              61
+          );
+     }
+}
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for 24-bit operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm24(int64_t v, int force)
+{
+     if (v < -8388608L || v > 8388607L || force) {
+          emitAlignedCode(0xfd);
+          emitCode((v >> 24) & 255);
+          emitCode((v >> 32) & 255);
+          emitCode((v >> 40) & 255);
+          emitCode((v >> 48) & 255);
+     }
+     if (((v < 0) && ((v >> 56) != -1L)) || ((v > 0) && ((v >> 56) != 0L)) || (force && (code_bits > 56 || data_bits > 56))) {
+          emitAlignedCode(0xfe);
+          emitCode((v >> 56) & 255);
+          emitCode(0x00);
+          emitCode(0x00);
+          emitCode(0x00);
+     }
+}
+
+// ---------------------------------------------------------------------------
+// Emit constant extension for 32-bit operands.
+// ---------------------------------------------------------------------------
+
+static void emitImm32(int64_t v, int force)
+{
+     if (v < -2147483648LL || v > 2147483647LL || force) {
+          emitAlignedCode(0xfd);
+          emitCode((v >> 32) & 255);
+          emitCode((v >> 40) & 255);
+          emitCode((v >> 48) & 255);
+          emitCode((v >> 56) & 255);
+     }
+}
+
+// ---------------------------------------------------------------------------
+// jmp main
+// jsr [r19]
+// jmp (tbl,r2)
+// jsr [gp+r20]
+// ---------------------------------------------------------------------------
+
+static void process_jmp(int oc)
+{
+    int64_t addr;
+    int Ra, Rb;
+    int sg;
+    
+    sg = 1; // Assume data segment
+    NextToken();
+    // Memory indirect ?
+    if (token=='(' || token=='[') {
+       Ra = getRegisterX();
+       if (Ra==-1) {
+           Ra = 0;
+           NextToken();
+           addr = expr();
+           prevToken();
+           if (token==',') {
+               Ra = getRegisterX();
+               if (Ra==-1) Ra = 0;
+               if (Ra==255 || Ra==253)
+                  sg = 14;
+               else if (Ra==254)
+                    sg = 15;
+               else if (Ra==252)
+                    sg = 12;
+           }
+            if (segprefix >= 0)
+               sg = segprefix;
+           if (token!=')' && token != ']')
+               printf("Missing close bracket.\r\n");
+/*
+           if (lastsym != (SYM *)NULL)
+               emitImm20(addr,!lastsym->defined);
+           else
+               emitImm20(addr,0);
+*/
+           emitImm20(addr,lastsym!=(SYM*)NULL);
+           emitAlignedCode(oc+2);
+            if (bGen)
+                if (lastsym && !use_gp) {
+                    if( lastsym->segment < 5)
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 8 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                }
+           emitCode(Ra);
+           emitCode(((addr << 4) & 0xF0)|sg);
+           emitCode((addr >> 4) & 255);
+           emitCode((addr >> 12) & 255);
+           return;
+       }
+       // Simple [Rn] or [Rn+Rn]?
+       else {
+            if (token == '+') {
+                //NextToken();
+                Rb = getRegisterX();
+                emitAlignedCode(0x65);  // JSR [Ra+Rb]
+                emitCode(Ra);
+                emitCode(Rb);
+                emitCode(0x00);
+                emitCode(0x00);
+                return;
+            }
+            else {
+                if (token != ')' && token!=']')
+                    printf("Missing close bracket\r\n");
+                emitAlignedCode(oc + 4);
+                emitCode(Ra);
+                emitCode(0x00);
+                emitCode(0x00);
+                emitCode(0x00);
+                return;
+            }
+       }
+    }
+    addr = expr();
+    prevToken();
+    // d(Rn)? 
+    if (token=='(' || token=='[') {
+        NextToken();
+        Ra = getRegisterX();
+        if (Ra==-1) {
+            printf("Illegal jump address mode.\r\n");
+            Ra = 0;
+        }
+        if (token=='+') {
+            emitImm0(addr,0);
+            Rb = getRegisterX();
+            emitAlignedCode(0x65);  // JSR [Ra+Rb]
+            emitCode(Ra);
+            emitCode(Rb);
+            emitCode(0x00);
+            emitCode(0x00);
+            return;
+        }
+        else {
+            emitImm24(addr,0);
+            emitAlignedCode(oc+4);
+            emitCode(Ra);
+            emitCode(addr & 255);
+            emitCode((addr >> 8) & 255);
+            emitCode((addr >> 16) & 255);
+            return;
+        }
+    }
+
+    emitImm32(addr, code_bits > 32);
+    emitAlignedCode(oc);
+    if (bGen)
+       if (lastsym && !use_gp) {
+            if( lastsym->segment < 5)
+                sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+        }
+    emitCode(addr & 255);
+    emitCode((addr >> 8) & 255);
+    emitCode((addr >> 16) & 255);
+    emitCode((addr >> 24) & 255);
+}
+
+// ---------------------------------------------------------------------------
+// subi r1,r2,#1234
+// ---------------------------------------------------------------------------
+
+static void process_riop(int oc)
+{
+    int Ra;
+    int Rt;
+    char *p;
+    int64_t val;
+    
+    p = inptr;
+    Rt = getRegisterX();
+    need(',');
+    Ra = getRegisterX();
+    need(',');
+    NextToken();
+    val = expr();
+/*
+   if (lastsym != (SYM *)NULL)
+       emitImm16(val,!lastsym->defined);
+   else
+       emitImm16(val,0);
+*/
+    emitImm15(val,lastsym!=(SYM*)NULL);
+    if (bGen)
+    if (lastsym && !use_gp) {
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 3 | (lastsym->isExtern ? 128 : 0) |
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    }
+    emit_insn(
+        ((val & 0x7fff) << 17) |
+        (Rt << 12) |
+        (Ra << 7) |
+        oc
+    );
+}
+
+// ---------------------------------------------------------------------------
+// add r1,r2,r12
+// ---------------------------------------------------------------------------
+
+static void process_rrop(int oc)
+{
+    int Ra;
+    int Rb;
+    int Rt;
+    char *p;
+
+    p = inptr;
+    Rt = getRegisterX();
+    need(',');
+    Ra = getRegisterX();
+    need(',');
+    NextToken();
+    if (token=='#') {
+        inptr = p;
+        switch(oc & 0x7F) {
+        case 4: process_riop(4); return;  // add
+        case 5: process_riop(5); return;  // sub
+        case 6: process_riop(6); return;  // cmp
+        case 7: process_riop(7); return;  // mul
+        case 8: process_riop(8); return;  // div
+        case 9: process_riop(9); return;  // mod
+        case 12: process_riop(12); return;  // and
+        case 13: process_riop(13); return;  // or
+        case 14: process_riop(14); return;  // eor
+        case 0x14: process_riop(0x14); return;  // addu
+        case 0x15: process_riop(0x15); return;  // subu
+        case 0x16: process_riop(0x16); return;  // cmpu
+        case 0x17: process_riop(0x17); return;  // mulu
+        case 0x18: process_riop(0x18); return;  // divu
+        case 0x19: process_riop(0x19); return;  // modu
+        // Shift
+        case 0x30:
+        case 0x31:
+        case 0x32:
+        case 0x33:
+        case 0x34:
+             process_shifti((oc & 0x7F) + 8); return;
+        default:    process_riop(oc); return;
+        }
+        return;
+    }
+    prevToken();
+    Rb = getRegisterX();
+    prevToken();
+    emit_insn(
+              ((oc & 0x7f) << 25) |
+//              ((oc >> 6) << 31) | // for shifts
+              (Rb << 17) |
+              (Rt << 12) |
+              (Ra << 7)|
+              2
+    );
+}
+
+// ---------------------------------------------------------------------------
+// fabs.d fp1,fp2[,rm]
+// ---------------------------------------------------------------------------
+
+static void process_fprop(int oc)
+{
+    int Ra;
+    int Rt;
+    char *p;
+    int  sz;
+    int fmt;
+    int rm;
+
+    rm = 0;
+    sz = 'd';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("sdtqSDTQ",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal float size.\r\n");
+    }
+    p = inptr;
+    if (oc==0xF6)        // fcmp
+        Rt = getRegister();
+    else
+        Rt = getFPRegister();
+    need(',');
+    Ra = getFPRegister();
+    if (token==',')
+       rm = getFPRoundMode();
+    prevToken();
+    emitAlignedCode(0x01);
+    emitCode(Ra);
+    emitCode(Rt);
+    switch(sz) {
+    case 's': fmt = 0; break;
+    case 'd': fmt = 1; break;
+    case 't': fmt = 2; break;
+    case 'q': fmt = 3; break;
+    }
+    emitCode((fmt << 3)|rm);
+    emitCode(oc);
+}
+
+// ---------------------------------------------------------------------------
+// fadd.d fp1,fp2,fp12[,rm]
+// fcmp.d r1,fp3,fp10[,rm]
+// ---------------------------------------------------------------------------
+
+static void process_fprrop(int oc)
+{
+    int Ra;
+    int Rb;
+    int Rt;
+    char *p;
+    int  sz;
+    int fmt;
+    int rm;
+
+    rm = 0;
+    sz = 'd';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("sdtqSDTQ",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal float size.\r\n");
+    }
+    p = inptr;
+    if (oc==0xF6)        // fcmp
+        Rt = getRegister();
+    else
+        Rt = getFPRegister();
+    need(',');
+    Ra = getFPRegister();
+    need(',');
+    Rb = getFPRegister();
+    if (token==',')
+       rm = getFPRoundMode();
+    prevToken();
+    emitAlignedCode(oc);
+    emitCode(Ra);
+    emitCode(Rb);
+    emitCode(Rt);
+    switch(sz) {
+    case 's': fmt = 0; break;
+    case 'd': fmt = 1; break;
+    case 't': fmt = 2; break;
+    case 'q': fmt = 3; break;
+    }
+    emitCode((fmt << 3)|rm);
+}
+
+// ---------------------------------------------------------------------------
+// fcx r0,#2
+// fdx r1,#0
+// ---------------------------------------------------------------------------
+
+static void process_fpstat(int oc)
+{
+    int Ra;
+    int64_t bits;
+    char *p;
+
+    p = inptr;
+    bits = 0;
+    Ra = getRegister();
+    if (token==',') {
+       NextToken();
+       bits = expr();
+    }
+    prevToken();
+    emitAlignedCode(0x01);
+    emitCode(Ra);
+    emitCode(bits & 0xff);
+    emitCode(0x00);
+    emitCode(oc);
+}
+
+// ---------------------------------------------------------------------------
+// not r3,r3
+// ---------------------------------------------------------------------------
+
+static void process_rop(int oc)
+{
+    int Ra;
+    int Rt;
+
+    Rt = getRegister();
+    need(',');
+    Ra = getRegister();
+    prevToken();
+    emit_insn(
+        (oc << 25) |
+        (Rt << 12) |
+        (Ra << 7) |
+        0x02
+    );
+}
+
+// ---------------------------------------------------------------------------
+// beq r1,label
+// ---------------------------------------------------------------------------
+
+static void process_bcc(int oc)
+{
+    int Ra;
+    int64_t val;
+    int64_t disp;
+    int64_t ad;
+
+    val = 0;
+    Ra = getRegisterX();
+    need(',');
+    NextToken();
+    val = expr();
+    ad = code_address;
+    disp = ((val - ad) >> 2) & 0x7fffLL;
+    emit_insn(
+        (disp << 17) |
+        oc  |
+        (Ra << 7) |
+        0x3D
+    );
+}
+
+// ---------------------------------------------------------------------------
+// bra label
+// ---------------------------------------------------------------------------
+
+static void process_bra(int oc)
+{
+    int64_t val;
+    int64_t disp;
+    int64_t ad;
+
+    val = 0;
+    NextToken();
+    val = expr();
+    ad = code_address;
+    disp = ((val - ad) >> 2) & 0x1ffffffLL;
+    emit_insn(
+        (disp << 7) |
+        (oc & 0x7f)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void getIndexScale(int *sc)
+{
+      int64_t val;
+
+      NextToken();
+      val = expr();
+      prevToken();
+      switch(val) {
+      case 0: *sc = 0; break;
+      case 1: *sc = 0; break;
+      case 2: *sc = 1; break;
+      case 4: *sc = 2; break;
+      case 8: *sc = 3; break;
+      default: printf("Illegal scaling factor.\r\n");
+      }
+}
+
+
+// ---------------------------------------------------------------------------
+// expr
+// expr[Reg]
+// expr[Reg+Reg*sc]
+// [Reg]
+// [Reg+Reg*sc]
+// ---------------------------------------------------------------------------
+
+static void mem_operand(int64_t *disp, int *regA, int *regB, int *sc, int *md)
+{
+     int64_t val;
+     int8_t ind;
+
+     ind = false;
+
+     // chech params
+     if (disp == (int64_t *)NULL)
+         return;
+     if (regA == (int *)NULL)
+         return;
+     if (regB == (int *)NULL)
+         return;
+     if (sc==(int *)NULL)
+         return;
+     if (md==(int *)NULL)
+         return;
+
+     *disp = 0;
+     *regA = -1;
+     *regB = -1;
+     *sc = 0;
+     if (token!='[') {;
+          val = expr();
+          *disp = val;
+     }
+     if (token=='[') {
+         *regA = getRegisterX();
+         // Memory indirect ?
+         if (*regA == -1) {
+             ind = true;
+             prevToken();
+             *disp = expr();
+             if (token=='[') {
+                 *regA = getRegisterX();
+                 need(']');
+                 if (*regA==-1)
+                     printf("expecting a register\r\n");
+                 NextToken();
+             }
+             else
+                 *regA = 0;
+             need(']');
+             NextToken();
+             if (token=='[') {
+                 *regB = getRegisterX();
+                 if (*regB==-1)
+                     printf("expecting a register\r\n");
+                 if (token=='*')
+                     getIndexScale(sc);
+                 need(']');
+             }
+             NextToken();
+             if (token=='+') {
+                 NextToken();
+                 if (token=='+') {
+                     *md = 7;
+                     return;
+                 }
+             }
+             else if (token=='-') {
+                  NextToken();
+                  if (token=='-') {
+                      *md = 6;
+                      return;
+                  }
+             }
+             *md = 5;
+             return;
+         }
+         if (token=='+') {
+              *sc = 0;
+              *regB = getRegisterX();
+              if (*regB == -1) {
+                  printf("expecting a register\r\n");
+              }
+              if (token=='*') {
+                  getIndexScale(sc);
+              }
+         }
+         need(']');
+         if (token=='+') {
+             NextToken();
+             if (token=='+') {
+                 *md = 3;
+                 return;
+             }
+         }
+         else if (token=='-') {
+              NextToken();
+              if (token=='-') {
+                  *md = 2;
+                  return;
+              }
+         }
+         *md = 1;
+     }
+}
+
+// ---------------------------------------------------------------------------
+// sw disp[r1],r2
+// sw [r1+r2],r3
+// ----------------------------------------------------------------------------
+
+static void process_store(int oc)
+{
+    int Ra;
+    int Rb;
+    int Rs;
+    int sc;
+    int md;
+    int fixup;
+    int64_t disp;
+
+    Rs = getRegisterX();
+    expect(',');
+    mem_operand(&disp, &Ra, &Rb, &sc, &md);
+    if (Rs < 0) {
+        printf("Expecting a source register.\r\n");
+        ScanToEOL();
+        return;
+    }
+    if (Rb > 0) {
+       fixup = 11;
+       emitImm11(disp,lastsym!=(SYM*)NULL);
+        if (bGen)
+        if (lastsym && Ra != 249 && !use_gp) {
+        if( lastsym->segment < 5)
+            sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+            (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+        }
+        emit_insn(
+            ((disp & 0xff) << 24) |
+            (sc << 22) |
+            (Rb << 17) |
+            (Rs << 12) |
+            (Ra << 7) |
+            oc+8
+        );
+       return;
+    }
+        fixup = 10;
+        if (disp < 0xFFFFFFFFFFFF8000LL || disp > 0x7FFFLL) /*{
+           if (lastsym != (SYM *)NULL)
+               emitImm12(disp,!lastsym->defined);
+           else
+               emitImm12(disp,0);
+        } */
+            emitImm15(disp,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && Ra != 249 && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    if (Ra < 0) Ra = 0;
+    emit_insn(
+        ((disp & 0x7fff) << 17) |
+        (Rs << 12) |
+        (Ra << 7) |
+        oc
+    );
+    ScanToEOL();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_ldi(int oc)
+{
+    int Rt;
+    int64_t val;
+
+    Rt = getRegisterX();
+    expect(',');
+    val = expr();
+/*
+   if (lastsym != (SYM *)NULL)
+       emitImm24(val,!lastsym->defined);
+   else
+       emitImm24(val,0);
+*/
+    emitImm15(val,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emit_insn(
+        ((val & 0x7FFFLL) << 17) |
+        (Rt << 12) |
+        oc
+    );
+}
+
+// ----------------------------------------------------------------------------
+// lw r1,disp[r2]
+// lw r1,[r2+r3]
+// ----------------------------------------------------------------------------
+
+static void process_load(int oc)
+{
+    int Ra;
+    int Rb;
+    int Rt;
+    int sc;
+    int md;
+    char *p;
+    int64_t disp;
+    int fixup = 5;
+
+    sc = 0;
+    p = inptr;
+    Rt = getRegisterX();
+    if (Rt < 0) {
+        printf("Expecting a target register.\r\n");
+//        printf("Line:%.60s\r\n",p);
+        ScanToEOL();
+        inptr-=2;
+        return;
+    }
+    expect(',');
+    mem_operand(&disp, &Ra, &Rb, &sc, &md);
+    if (Rb >= 0) {
+       emitImm11(disp,lastsym!=(SYM*)NULL);
+       fixup = 11;
+       if (oc==0x87) {  //LWS
+          printf("Address mode not supported.\r\n");
+          return;
+       }
+       if (oc==0x9F) oc = 0x8F;  // LEA
+       else oc = oc + 8;
+        if (bGen && lastsym && Ra != 249 && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+        emit_insn(
+            ((disp & 0xff) << 24) |
+            (sc << 22) |
+            (Rb << 17) |
+            (Rt << 12) |
+            (Ra << 7) |
+            oc
+        );
+       return;
+    }
+    fixup = 10;       // 12 bit
+    if (disp < 0xFFFFFFFFFFFF7000LL || disp > 0x7FFFLL) /*{
+       if (lastsym != (SYM *)NULL)
+           emitImm12(disp,!lastsym->defined);
+       else
+           emitImm12(disp,0);
+    } */
+        emitImm15(disp,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && Ra != 249 && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    if (Ra < 0) Ra = 0;
+    emit_insn(
+        ((disp & 0x7ffff) << 17) |
+        (Rt << 12) |
+        (Ra << 7) |
+        oc
+    );
+    ScanToEOL();
+}
+
+// ----------------------------------------------------------------------------
+// inc -8[bp],#1
+// ----------------------------------------------------------------------------
+
+static void process_inc(int oc)
+{
+    int Ra;
+    int Rb;
+    int sc;
+    int sg;
+    int64_t incamt;
+    int64_t disp;
+    char *p;
+    int fixup = 5;
+    int neg = 0;
+
+    NextToken();
+    p = inptr;
+    mem_operand(&disp, &Ra, &Rb, &sc, &sg);
+    incamt = 1;
+    if (token==']')
+       NextToken();
+    if (token==',') {
+        NextToken();
+        incamt = expr();
+        prevToken();
+    }
+    if (Rb >= 0) {
+       emitImm0(disp,lastsym!=(SYM*)NULL);
+       fixup = 11;
+       oc = 0xC1;  // INCX
+       emitAlignedCode(oc);
+        if (bGen && lastsym && Ra != 249 && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+       emitCode(Ra);
+       emitCode(Rb);
+       emitCode(incamt & 255);
+       emitCode(sc | ((sg & 15) << 2));
+       return;
+    }
+    if (oc==0x65) neg = 1;
+    oc = 0x64;        // INC
+    fixup = 10;       // 12 bit
+    if (disp < 0xFFFFFFFFFFFF7000LL || disp > 0x7FFFLL) /*{
+         if (lastsym != (SYM *)NULL)
+           emitImm12(disp,!lastsym->defined);
+       else
+           emitImm12(disp,0);
+    }*/
+        emitImm15(disp,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && Ra != 249 && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    if (Ra < 0) Ra = 0;
+    if (neg) incamt = -incamt;
+    emit_insn(
+        ((disp & 0x7FFF) << 17) |
+        ((incamt & 0x1F) << 12) |
+        (Ra << 7) |
+        oc
+    );
+    ScanToEOL();
+}
+       
+// ----------------------------------------------------------------------------
+// pea disp[r2]
+// pea [r2+r3]
+// ----------------------------------------------------------------------------
+
+static void process_pea()
+{
+    int oc;
+    int Ra;
+    int Rb;
+    int sc;
+    int sg;
+    char *p;
+    int64_t disp;
+    int fixup = 5;
+
+    p = inptr;
+    NextToken();
+    mem_operand(&disp, &Ra, &Rb, &sc, &sg);
+    if (Rb >= 0) {
+       emitImm0(disp,lastsym!=(SYM*)NULL);
+       fixup = 11;
+       oc = 0xB9;  // PEAX
+       emitAlignedCode(oc);
+        if (bGen && lastsym && Ra != 249 && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+       emitCode(Ra);
+       emitCode(Rb);
+       emitCode(0x00);
+       emitCode(sc | ((sg & 15) << 2));
+       return;
+    }
+    oc = 0x65;        // PEA
+    fixup = 10;       // 12 bit
+    if (disp < 0xFFFFFFFFFFFF7000LL || disp > 0x7FFFLL) /*{
+         if (lastsym != (SYM *)NULL)
+           emitImm12(disp,!lastsym->defined);
+       else
+           emitImm12(disp,0);
+    }*/
+        emitImm15(disp,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && Ra != 249 && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    if (Ra < 0) Ra = 0;
+    emit_insn(
+        ((disp & 0x7FFFLL) << 17) |
+        (0x1E << 12) |
+        (Ra << 7) |
+        oc
+    );
+    ScanToEOL();
+}
+
+
+// ----------------------------------------------------------------------------
+// push r1
+// push #123
+// push -8[BP]
+// ----------------------------------------------------------------------------
+
+static void process_pushpop(int oc)
+{
+    int Ra,Rb;
+    int64_t val;
+    int64_t disp;
+    int sc;
+    int sg;
+
+    Ra = -1;
+    Rb = -1;
+    NextToken();
+    if (token=='#' && oc==0x67) {  // Filter to PUSH
+       val = expr();
+       emitImm15(val,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
+        if (bGen && lastsym && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+        emit_insn(
+            ((val & 0x7FFFLL) << 17) |
+            (0x1E << 12) |
+            (0x00 << 7) |
+            0x65   // PEA
+        );
+        return;
+    }
+    prevToken();
+    Ra = getRegisterX();
+    if (Ra == -1) {
+        NextToken();
+        mem_operand(&disp, &Ra, &Rb, &sc, &sg);
+        emitImm15(disp,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
+        emit_insn(
+            ((disp & 0x7FFFLL) << 17) |
+            (0x1E << 12) |
+            (Ra << 7) |
+            0x66
+        );
+        ScanToEOL();
+        return;
+    }
+    emit_insn(
+        (0x1E << 12) |
+        (Ra << 7)
+        | oc
+    );
+    prevToken();
+}
+ 
+// ----------------------------------------------------------------------------
+// mov r1,r2
+// ----------------------------------------------------------------------------
+
+static void process_mov(int oc)
+{
+     int Ra;
+     int Rt;
+     
+     Rt = getRegisterX();
+     need(',');
+     Ra = getRegisterX();
+     emit_insn(
+         (0x0D << 25) | // OR
+         (Rt << 12) |
+         (Ra << 7) |
+         0x02
+     );
+     prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// rts
+// rts #24
+// ----------------------------------------------------------------------------
+
+static void process_rts(int oc)
+{
+     int64_t val;
+
+     val = 0;
+     NextToken();
+     if (token=='#') {
+        val = expr();
+     }
+     emitImm15(val,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
+     emit_insn(
+         ((val & 0x7FFFLL) << 17) |
+         (0x1E << 12) |
+         (0x1F << 7) |
+         oc
+     );
+}
+
+// ----------------------------------------------------------------------------
+// shli r1,r2,#5
+// ----------------------------------------------------------------------------
+
+static void process_shifti(int oc)
+{
+     int Ra;
+     int Rt;
+     int64_t val;
+     
+     Rt = getRegisterX();
+     need(',');
+     Ra = getRegisterX();
+     need(',');
+     NextToken();
+     val = expr();
+     emit_insn(
+         (oc << 25) |      
+         ((val & 63) << 17) |
+         (Rt << 12) |
+         (Ra << 7) |
+         0x02
+     );
+}
+
+// ----------------------------------------------------------------------------
+// gran r1
+// ----------------------------------------------------------------------------
+
+static void process_gran(int oc)
+{
+    int Rt;
+
+    Rt = getRegisterX();
+    emitAlignedCode(0x01);
+    emitCode(0x00);
+    emitCode(Rt);
+    emitCode(0x00);
+    emitCode(oc);
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_mtspr(int oc)
+{
+    int spr;
+    int Ra;
+    
+    spr = FISA64_getSprRegister();
+    need(',');
+    Ra = getRegisterX();
+    emit_insn(
+        (oc << 25) |
+        (spr << 17) |
+        (Ra << 7) |
+        0x02
+    );
+    if (Ra >= 0)
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_mtfp(int oc)
+{
+    int fpr;
+    int Ra;
+    
+    fpr = getFPRegister();
+    need(',');
+    Ra = getRegisterX();
+    emitAlignedCode(0x01);
+    emitCode(Ra);
+    emitCode(fpr);
+    emitCode(0x00);
+    emitCode(oc);
+    if (Ra >= 0)
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_mfspr(int oc)
+{
+    int spr;
+    int Rt;
+    
+    Rt = getRegisterX();
+    need(',');
+    spr = FISA64_getSprRegister();
+    emit_insn(
+        (oc << 25) |
+        (spr << 17) |
+        (Rt << 12) |
+        0x02
+    );
+    if (spr >= 0)
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_mffp(int oc)
+{
+    int fpr;
+    int Rt;
+    
+    Rt = getRegisterX();
+    need(',');
+    fpr = getFPRegister();
+    emitAlignedCode(0x01);
+    emitCode(fpr);
+    emitCode(Rt);
+    emitCode(0x00);
+    emitCode(oc);
+    if (fpr >= 0)
+    prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_fprdstat(int oc)
+{
+    int Rt;
+    
+    Rt = getRegisterX();
+    emitAlignedCode(0x01);
+    emitCode(0x00);
+    emitCode(Rt);
+    emitCode(0x00);
+    emitCode(oc);
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void ProcessEOL(int opt)
+{
+    int nn,mm;
+    int first;
+    int cc;
+    
+     //printf("Line: %d\r", lineno);
+     segprefix = -1;
+     if (bGen && (segment==codeseg || segment==dataseg || segment==rodataseg)) {
+    nn = binstart;
+    cc = 8;
+    if (segment==codeseg) {
+       cc = 4;
+/*
+        if (sections[segment].bytes[binstart]==0x61) {
+            fprintf(ofp, "%06LLX ", ca);
+            for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+            }
+            fprintf(ofp, "   ; imm\n");
+             if (((ca+5) & 15)==15) {
+                 ca+=6;
+                 binstart+=6;
+                 nn++;
+             }
+             else {
+                  ca += 5;
+                  binstart += 5;
+             }
+        }
+*/
+/*
+        if (sections[segment].bytes[binstart]==0xfd) {
+            fprintf(ofp, "%06LLX ", ca);
+            for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+            }
+            fprintf(ofp, "   ; imm\n");
+             if (((ca+5) & 15)==15) {
+                 ca+=6;
+                 binstart+=6;
+                 nn++;
+             }
+             else {
+                  ca += 5;
+                  binstart += 5;
+             }
+        }
+         if (sections[segment].bytes[binstart]==0xfe) {
+            fprintf(ofp, "%06LLX ", ca);
+            for (nn = binstart; nn < binstart + 5 && nn < sections[segment].index; nn++) {
+                fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+            }
+            fprintf(ofp, "   ; imm\n");
+             if (((ca+5) & 15)==15) {
+                 ca+=6;
+                 nn++;
+             }
+             else {
+                  ca += 5;
+             }
+        }
+*/
+    }
+
+    first = 1;
+    while (nn < sections[segment].index) {
+        fprintf(ofp, "%06LLX ", ca);
+        for (mm = nn; nn < mm + cc && nn < sections[segment].index; nn++) {
+            fprintf(ofp, "%02X ", sections[segment].bytes[nn]);
+        }
+        for (; nn < mm + cc; nn++)
+            fprintf(ofp, "   ");
+        if (first & opt) {
+            fprintf(ofp, "\t%.*s\n", inptr-stptr-1, stptr);
+            first = 0;
+        }
+        else
+            fprintf(ofp, opt ? "\n" : "; NOP Ramp\n");
+        ca += cc;
+    }
+    // empty (codeless) line
+    if (binstart==sections[segment].index) {
+        fprintf(ofp, "%24s\t%.*s", "", inptr-stptr, stptr);
+    }
+    } // bGen
+    if (opt) {
+       stptr = inptr;
+       lineno++;
+    }
+    binstart = sections[segment].index;
+    ca = sections[segment].address;
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+void FISA64_processMaster()
+{
+    int nn,mm;
+    int64_t bs1, bs2;
+
+    lineno = 1;
+    binndx = 0;
+    binstart = 0;
+    bs1 = 0;
+    bs2 = 0;
+    inptr = &masterFile[0];
+    stptr = inptr;
+    code_address = 0;
+    bss_address = 0;
+    start_address = 0;
+    first_org = 1;
+    first_rodata = 1;
+    first_data = 1;
+    first_bss = 1;
+    for (nn = 0; nn < 12; nn++) {
+        sections[nn].index = 0;
+        if (nn == 0)
+        sections[nn].address = 0;
+        else
+        sections[nn].address = 0;
+        sections[nn].start = 0;
+        sections[nn].end = 0;
+    }
+    ca = code_address;
+    segment = codeseg;
+    memset(current_label,0,sizeof(current_label));
+    NextToken();
+    while (token != tk_eof) {
+//        printf("\t%.*s\n", inptr-stptr-1, stptr);
+//        printf("token=%d\r", token);
+        switch(token) {
+        case tk_eol: ProcessEOL(1); break;
+        case tk_add:  process_rrop(0x04); break;
+        case tk_addi: process_riop(0x04); break;
+        case tk_addu:  process_rrop(0x14); break;
+        case tk_addui: process_riop(0x14); break;
+        case tk_align: process_align(); continue; break;
+        case tk_and:  process_rrop(12); break;
+        case tk_andi:  process_riop(12); break;
+        case tk_asl:  process_rrop(0x30); break;
+        case tk_asli: process_shifti(0x38); break;
+        case tk_asr:  process_rrop(0x34); break;
+        case tk_asri: process_shifti(0x3C); break;
+        case tk_beq: process_bcc(BCC(0)); break;
+        case tk_bge: process_bcc(BCC(3)); break;
+        case tk_bgt: process_bcc(BCC(2)); break;
+        case tk_ble: process_bcc(BCC(5)); break;
+        case tk_blt: process_bcc(BCC(4)); break;
+        case tk_bmi: process_bcc(BCC(4)); break;
+        case tk_bne: process_bcc(BCC(1)); break;
+        case tk_bpl: process_bcc(BCC(3)); break;
+        case tk_bra: process_bra(0x3A); break;
+        case tk_bsr: process_bra(0x39); break;
+//        case tk_bsr: process_bra(0x56); break;
+        case tk_bss:
+            if (first_bss) {
+                while(sections[segment].address & 4095)
+                    emitByte(0x00);
+                sections[3].address = sections[segment].address;
+                first_bss = 0;
+                binstart = sections[3].index;
+                ca = sections[3].address;
+            }
+            segment = bssseg;
+            break;
+        case tk_cli: emit_insn((0x37 << 25)|(0x00<<17)|(0x02)); break;
+        case tk_cmp: process_rrop(0x06); break;
+        case tk_cmpu: process_rrop(0x16); break;
+        case tk_code: process_code(); break;
+        case tk_com: process_rop(0x06); break;
+        case tk_data:
+            if (first_data) {
+                while(sections[segment].address & 4095)
+                    emitByte(0x00);
+                sections[2].address = sections[segment].address;   // set starting address
+                first_data = 0;
+                binstart = sections[2].index;
+                ca = sections[2].address;
+            }
+            process_data(dataseg);
+            break;
+        case tk_db:  process_db(); break;
+        case tk_dc:  process_dc(); break;
+        case tk_dec: process_inc(0x65); break;
+        case tk_dh:  process_dh(); break;
+        case tk_div: process_rrop(0x08); break;
+        case tk_divu: process_rrop(0x18); break;
+        case tk_dw:  process_dw(); break;
+        case tk_end: goto j1;
+        case tk_endpublic: break;
+        case tk_eor: process_rrop(0x0E); break;
+        case tk_eori: process_riop(0x0E); break;
+        case tk_extern: process_extern(); break;
+        case tk_fabs: process_fprop(0x88); break;
+        case tk_fadd: process_fprrop(0xF4); break;
+        case tk_fcmp: process_fprrop(0xF6); break;
+        case tk_fcx: process_fpstat(0x74); break;
+        case tk_fdiv: process_fprrop(0xF8); break;
+        case tk_fdx: process_fpstat(0x77); break;
+        case tk_fex: process_fpstat(0x76); break;
+        case tk_fill: process_fill(); break;
+        case tk_fix2flt: process_fprop(0x84); break;
+        case tk_flt2fix: process_fprop(0x85); break;
+        case tk_fmov: process_fprop(0x87); break;
+        case tk_fmul: process_fprrop(0xF7); break;
+        case tk_fnabs: process_fprop(0x89); break;
+        case tk_fneg: process_fprop(0x8A); break;
+        case tk_frm: process_fpstat(0x78); break;
+        case tk_fstat: process_fprdstat(0x86); break;
+        case tk_fsub: process_fprrop(0xF5); break;
+        case tk_ftx: process_fpstat(0x75); break;
+        case tk_gran: process_gran(0x14); break;
+        case tk_inc: process_inc(0x64); break;
+        case tk_ios: segprefix = 11; break;
+
+        case tk_jmp: process_jmp(0x50); break;
+        case tk_jsr: process_jmp(0x51); break;
+
+        case tk_lb:  process_load(0x40); break;
+        case tk_lbu: process_load(0x41); break;
+        case tk_lc:  process_load(0x42); break;
+        case tk_lcu: process_load(0x43); break;
+        case tk_ldi: process_ldi(0x0A); break;
+        case tk_lea: process_load(0x47); break;
+        case tk_lh:  process_load(0x44); break;
+        case tk_lhu: process_load(0x45); break;
+        case tk_lsr: process_rrop(0x39); break;
+        case tk_lsri: process_shifti(0x39); break;
+        case tk_lw:  process_load(0x46); break;
+        case tk_mffp: process_mffp(0x4B); break;
+        case tk_mfspr: process_mfspr(0x1F); break;
+        case tk_mod: process_rrop(0x09); break;
+        case tk_modu: process_rrop(0x19); break;
+        case tk_mov: process_mov(0x04); break;
+        case tk_mtfp: process_mtfp(0x4A); break;
+        case tk_mtspr: process_mtspr(0x1E); break;
+        case tk_mul: process_rrop(0x07); break;
+        case tk_muli: process_riop(0x07); break;
+        case tk_mulu: process_rrop(0x17); break;
+        case tk_mului: process_riop(0x17); break;
+//        case tk_neg: process_rop(0x05); break;
+        case tk_nop: emit_insn(0x0000003F); break;
+//        case tk_not: process_rop(0x07); break;
+        case tk_or:  process_rrop(0x0D); break;
+        case tk_ori: process_riop(0x0D); break;
+        case tk_org: process_org(); break;
+        case tk_pea: process_pea(); break;
+        case tk_pop:  process_pushpop(0x57); break;
+        case tk_public: process_public(); break;
+        case tk_push: process_pushpop(0x67); break;
+        case tk_rodata:
+            if (first_rodata) {
+                while(sections[segment].address & 4095)
+                    emitByte(0x00);
+                sections[1].address = sections[segment].address;
+                first_rodata = 0;
+                binstart = sections[1].index;
+                ca = sections[1].address;
+            }
+            segment = rodataseg;
+            break;
+//        case tk_rol: process_rrop(0x41); break;
+//        case tk_ror: process_rrop(0x43); break;
+        case tk_rte: emit_insn((0x3E<<25) | 0x02); break;
+        case tk_rti: emit_insn((0x3F<<25) | 0x02); break;
+        case tk_rts: process_rts(0x3B); break;
+        case tk_sb:  process_store(0x60); break;
+        case tk_sc:  process_store(0x61); break;
+        case tk_sei: emit_insn((0x37 << 25)|(0x01<<17)|(0x02)); break;
+        case tk_seq:  process_rrop(0x20); break;
+        case tk_sh:  process_store(0x62); break;
+        case tk_sne:  process_rrop(0x21); break;
+        case tk_sub:  process_rrop(0x05); break;
+        case tk_subi: process_riop(0x05); break;
+        case tk_subu:  process_rrop(0x15); break;
+        case tk_subui: process_riop(0x15); break;
+        case tk_sxb: process_rop(0x10); break;
+        case tk_sxc: process_rop(0x11); break;
+        case tk_sxh: process_rop(0x12); break;
+        case tk_sw:  process_store(0x63); break;
+        case tk_xor: process_rrop(0x0E); break;
+        case tk_xori: process_riop(0x0E); break;
+        case tk_id:  process_label(); break;
+        }
+        NextToken();
+    }
+j1:
+    ;
+}
+

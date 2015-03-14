@@ -97,6 +97,7 @@ extern void Table888_bump_address();
 extern void searchenv(char *filename, char *envname, char **pathname);
 extern void Table888mmu_processMaster();
 extern void Friscv_processMaster();
+extern void FISA64_processMaster();
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ void displayHelp()
      printf("    +v      = verbose output\r\n");
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
-     printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV\r\n");
+     printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64\r\n");
      printf("    -o[bvl] = suppress output file b=binary, v=verilog, l=listing\r\n");
 }
 
@@ -154,6 +155,9 @@ int processOptions(int argc, char **argv)
               }
               if (argv[nn][2]=='V') {
                  gCpu = 5;
+              }
+              if (argv[nn][2]=='6') {
+                 gCpu = 64;
               }
            }
            nn++;
@@ -1001,6 +1005,18 @@ int checksum(int32_t *val)
 }
 
 
+int checksum64(int64_t *val)
+{
+    int nn;
+    int cs;
+
+    cs = 0;
+    for (nn = 0; nn < 64; nn++)
+        cs ^= (*val & (1LL << nn))!=0;
+    return cs;
+}
+
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -1010,6 +1026,8 @@ void processMaster()
        Table888_processMaster();
     else if (gCpu==889)
         Table888mmu_processMaster();
+    else if (gCpu==64)
+        FISA64_processMaster();
     else if (gCpu==5)
         Friscv_processMaster();
 }
@@ -1328,9 +1346,19 @@ int main(int argc, char *argv[])
         strcat(fname, ".ver");
         vfp = fopen(fname, "w");
         if (vfp) {
-            for (nn = 0; nn < binndx; nn+=4) {
-                fprintf(vfp, "\trommem[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
-                    (((start_address+nn)/4)%8192), checksum((int32_t *)&binfile[nn]), binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+            if (gCpu==64) {
+                for (nn = 0; nn < binndx; nn+=8) {
+                    fprintf(vfp, "\trommem[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+                        (((start_address+nn)/8)%8192), checksum64((int64_t *)&binfile[nn]),
+                        binfile[nn+7], binfile[nn+6], binfile[nn+5], binfile[nn+4], 
+                        binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+                }
+            }
+            else {
+                for (nn = 0; nn < binndx; nn+=4) {
+                    fprintf(vfp, "\trommem[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
+                        (((start_address+nn)/4)%8192), checksum((int32_t *)&binfile[nn]), binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+                }
             }
             fclose(vfp);
         }
