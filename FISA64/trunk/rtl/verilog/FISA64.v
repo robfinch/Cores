@@ -223,6 +223,7 @@ reg [127:0] ibuf;
 reg [63:0] regfile [31:0];
 reg [63:0] sp;
 reg [31:0] ir,xir,mir,wir;
+wire [6:0] iopcode = insn[6:0];
 wire [6:0] opcode = ir[6:0];
 wire [6:0] funct = ir[31:25];
 reg [6:0] xfunct,mfunct;
@@ -232,6 +233,7 @@ wire [4:0] Rb = ir[21:17];
 wire [4:0] Rc = ir[16:12];
 reg [4:0] xRt,mRt,wRt;
 reg [63:0] rfoa,rfob,rfoc;
+reg [63:0] res,ea,xres,mres,wres,lres;
 always @*
 case(Ra)
 5'd0:	rfoa <= 64'd0;
@@ -261,7 +263,6 @@ reg [127:0] p;
 wire [127:0] p1 = aa * bb;
 wire [63:0] diff = r - bb;
 reg [6:0] cnt;
-reg [63:0] res,ea,xres,mres,wres,lres;
 reg res_sgn;
 reg [1:0] ld_size, st_size;
 reg [31:0] insncnt;
@@ -353,6 +354,37 @@ FISA64_bitfield u3
 	.m(xir[28:17]),
 	.o(btfldo),
 	.masko()
+);
+
+reg takb;
+always @(xir or a)
+	case(xir[14:12])
+	`BEQ:	takb <= ~|a;
+	`BNE:	takb <=  |a;
+	`BGT:	takb <= (~a[63] & |a[62:0]);
+	`BGE:	takb <= ~a[63];
+	`BLT:	takb <= a[63];
+	`BLE:	takb <= (a[63] | ~|a[63:0]);
+	endcase
+
+//-----------------------------------------------------------------------------
+// Branch history table.
+// The history table is updated by the EX stage and read in
+// both the EX and IF stages.
+//-----------------------------------------------------------------------------
+wire predict_taken;
+reg dbranch_taken,xbranch_taken;
+
+FISA64_BranchHistory u4
+(
+	.rst(rst_i),
+	.clk(clk),
+	.advanceX(advanceEX),
+	.xir(xir),
+	.pc(pc),
+	.xpc(xpc),
+	.takb(takb),
+	.predict_taken(predict_taken)
 );
 
 wire lti = $signed(a) < $signed(imm);
@@ -460,6 +492,10 @@ case(xopcode)
 	endcase
 `BTFLD:	res <= btfldo;
 `LEAX:	res <= a + (b << xir[23:22]) + imm;
+`PUSH:	res <= c - 64'd8;
+`PMW:	res <= c - 64'd8;
+`PEA:	res <= c - 64'd8;
+`POP:	res <= c + 64'd8;
 default:	res <= 64'd0;
 endcase
 
@@ -534,7 +570,13 @@ begin
 			ir <= ((isLotOwnerX && (km ? lottagX[0] : lottagX[3])) || !pe) ? insn : `BRK_EXF;
 		$display("%h: %h", pc, insn);
 		dpc <= pc;
-		pc <= pc + 32'd4;
+		dbranch_taken <= FALSE;
+		if (iopcode==`Bcc && predict_taken) begin
+			pc <= pc + {{47{insn[31]}},insn[31:17],2'b00};
+			dbranch_taken <= TRUE;
+		end
+		else
+			pc <= pc + 32'd4;
 	end
 	else begin
 		// On a cache miss, return flow to the head of any immediate prefix
@@ -560,6 +602,7 @@ begin
 	
 	// DECODE / REGFETCH
 	if (advanceRF) begin
+		xbranch_taken <= dbranch_taken;
 		xir <= ir;
 		xopcode <= opcode;
 		xfunct <= funct;
@@ -569,6 +612,7 @@ begin
 		a <= rfoa;
 		b <= rfob;
 		c <= rfoc;
+
 		case(opcode)
 /*
 		`LDI:
@@ -579,7 +623,7 @@ begin
 			2'd3:	imm <= {ir[31:17],ir[11],48'h0000};
 			endcase
 */
-		`BSR,`BRA:	imm <= {ir[31:7],2'b00};
+		`BSR,`BRA:	imm <= {{5{ir[31]}},ir[31:7],2'b00};
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX:
 			imm <= ir[31:24];
@@ -607,6 +651,11 @@ begin
 		`BSR:	xRt <= 5'h1F;
 		default:	xRt <= ir[16:12];
 		endcase
+		if (opcode==`BSR || opcode==`BRA) begin
+			pc <= dpc + {{5{ir[31]}},ir[31:7],2'b00};
+			tpc <= dpc + {{5{ir[31]}},ir[31:7],2'b00};
+			nop_ir();
+		end
 	end
 	else if (advanceEX) begin
 		nop_xir();
@@ -676,9 +725,7 @@ begin
 				if (km) begin
 					km <= kmb[0];
 					kmb <= {1'b1,kmb[7:1]};
-					pc <= epc;
-					nop_ir();
-					nop_xir();
+					update_pc(epc);
 				end
 				else privilege_violation();
 			`RTI:
@@ -686,9 +733,7 @@ begin
 				    imcd <= 3'b111;
 					km <= kmb[0];
 					kmb <= {1'b1,kmb[7:1]};
-					pc <= ipc;
-					nop_ir();
-					nop_xir();
+					update_pc(ipc);
 				end
 				else privilege_violation();
 			endcase
@@ -703,33 +748,16 @@ begin
 				next_state(MULDIV);
 				advanceEXr <= FALSE;
 				end
-		`BSR,`BRA:
-				begin
-					pc <= xpc + imm;
-					pc[1:0] <= 2'b0;
-					nop_ir();
-					nop_xir();
-				end
-		`JAL:	begin
-					pc <= a + {imm,2'b00};
-					pc[1:0] <= 2'b0;
-					nop_ir();
-					nop_xir();
-				end
+		`BSR,`BRA:	;//update_pc(xpc + imm); done already in RF
+		`JAL:		update_pc(a + {imm,2'b00});
 		`RTS:	begin
-					pc <= a;
-					pc[1:0] <= 2'b00;
-					nop_ir();
-					nop_xir();
+					update_pc(a);
+					$display("RTS: pc<=%h", a);
 				end
-		`Bcc:	case(xir[14:12])
-				`BEQ:	if (~|a) begin pc <= xpc + {imm,2'b00}; nop_ir(); nop_xir(); end
-				`BNE:	if ( |a) begin pc <= xpc + {imm,2'b00}; nop_ir(); nop_xir(); end
-				`BGT:	if (~a[63] & |a[62:0]) begin pc <= xpc + {imm,2'b00}; nop_ir(); nop_xir(); end
-				`BGE:	if (~a[63]) begin pc <= xpc + {imm,2'b00}; nop_ir(); nop_xir(); end
-				`BLT:	if (a[63]) begin pc <= xpc + {imm,2'b00}; nop_ir(); nop_xir(); end
-				`BLE:	if (a[63] | ~|a[63:0]) begin pc <= xpc + {imm,2'b00}; nop_ir(); nop_xir(); end
-				endcase
+		`Bcc:	if (takb & !xbranch_taken)
+					update_pc(xpc + {imm,2'b00});
+				else if (!takb & xbranch_taken)
+					update_pc(xpc + 64'd4);
 		`BRK:	begin
 				if (xir[31]) begin
 					StatusHWI <= `FALSE;
@@ -801,8 +829,7 @@ begin
 				next_state(STORE1);
 				advanceEXr <= FALSE;
 				mopcode <= xopcode;
-				ea <= c - 64'd8;
-				wres <= c - 64'd8;
+				ea <= res;
 				xb <= a;
 				st_size <= word;
 				end
@@ -813,6 +840,7 @@ begin
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= a + imm;
+				advanceWBx <= TRUE;
 				ld_size <= word;
 				st_size <= word;
 				end
@@ -821,8 +849,7 @@ begin
 				next_state(STORE1);
 				advanceEXr <= FALSE;
 				mopcode <= xopcode;
-				ea <= c - 64'd8;
-				wres <= c - 64'd8;
+				ea <= res;
 				xb <= a + imm;
 				st_size <= word;
 				end
@@ -833,8 +860,7 @@ begin
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= c;
-				advanceWBx <= `TRUE;
-				wres <= c + 64'd8;
+				advanceWBx <= TRUE;
 				ld_size <= word;
 				end
 		`SBX,`SCX,`SHX,`SWX:
@@ -853,11 +879,12 @@ begin
 				end
 		endcase
 	end
+/*
 	else if (advanceWB) begin
 		wRt <= 5'd0;
 		wres <= 64'd0;
 	end
-
+*/
 	// WRITEBACK
 	if (advanceWB) begin
 		regfile[wRt] <= wres;
@@ -1010,6 +1037,7 @@ LOAD2:
 	begin
 		// Check for read attribute on lot
 		if ((isLotOwner && (km ? lottag[2] : lottag[5])) || !pe) begin
+			$display("LOAD: %h",ea);
 			wb_read1(ld_size,ea);
 			next_state(LOAD3);
 		end
@@ -1123,20 +1151,18 @@ LOAD3:
 			endcase
 		`PMW:
 			case(ea[2:0])
-			3'd0:	begin wres <= dat_i[63:0]; next_state(PMW); wb_nack(); end
-			3'd1:	begin wres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
-			3'd2:	begin wres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
-			3'd3:	begin wres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
-			3'd4:	begin wres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
-			3'd5:	begin wres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
-			3'd6:	begin wres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
-			3'd7:	begin wres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= dat_i[63:0]; next_state(PMW); wb_nack(); end
+			3'd1:	begin lres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
+			3'd2:	begin lres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
+			3'd3:	begin lres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
+			3'd4:	begin lres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
+			3'd5:	begin lres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
+			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
+			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		// Memory access is aligned
 		`BRK:	begin
-					nop_ir();
-					nop_xir();
-					pc <= dat_i[63:0];
+					update_pc(dat_i[63:0]);
 					next_state(RUN);
 					wb_nack();
 					advanceEXr <= TRUE;
@@ -1209,7 +1235,7 @@ LOAD5:
 			3'd6:	wres[63:16] <= dat_i[47:0];
 			3'd7:	wres[63: 8] <= dat_i[55:0];
 			endcase
-		`INC,`PMW,`CAS:
+		`INC,`CAS:
 			case(ea[2:0])
 			3'd0:	;
 			3'd1:	wres[63:56] <= dat_i[7:0];
@@ -1219,6 +1245,17 @@ LOAD5:
 			3'd5:	wres[63:24] <= dat_i[39:0];
 			3'd6:	wres[63:16] <= dat_i[47:0];
 			3'd7:	wres[63: 8] <= dat_i[55:0];
+			endcase
+		`PMW:
+			case(ea[2:0])
+			3'd0:	;
+			3'd1:	lres[63:56] <= dat_i[7:0];
+			3'd2:	lres[63:48] <= dat_i[15:0];
+			3'd3:	lres[63:40] <= dat_i[23:0];
+			3'd4:	lres[63:32] <= dat_i[31:0];
+			3'd5:	lres[63:24] <= dat_i[39:0];
+			3'd6:	lres[63:16] <= dat_i[47:0];
+			3'd7:	lres[63: 8] <= dat_i[55:0];
 			endcase
 		endcase
 	end
@@ -1230,9 +1267,8 @@ INC:
 	end
 PMW:
 	begin
-		ea <= c - 64'd8;
-		wres <= c - 64'd8;
-		xb <= wres;
+		ea <= wres;
+		xb <= lres;
 		next_state(STORE1);
 	end
 CAS:
@@ -1251,13 +1287,14 @@ CAS:
 		end
 	end
 
-STORE1:	next_state(STORE2);
+STORE1:	begin next_state(STORE2); end
 
 STORE2:
 	begin
 		// check for write attribute on lot
 		if ((isLotOwner && (km ? lottag[1] : lottag[4])) || !pe) begin
 			wb_write1(st_size,ea,xb);
+			$display("STORE: %h=%h",ea,xb);
 			next_state(STORE3);
 		end
 		else begin
@@ -1540,6 +1577,18 @@ begin
 end
 endtask 
 
+task update_pc;
+input [31:0] npc;
+begin
+	pc <= npc;
+	pc[1:0] <= 2'b00;
+	tpc <= npc;
+	tpc[1:0] <= 2'b00;
+	nop_ir();
+	nop_xir();
+end
+endtask
+
 task next_state;
 input [5:0] st;
 begin
@@ -1694,4 +1743,64 @@ default:	o = {DWIDTH{1'b0}};
 endcase
 
 endmodule
+
+module FISA64_BranchHistory(rst, clk, advanceX, xir, pc, xpc, takb, predict_taken);
+input rst;
+input clk;
+input advanceX;
+input [31:0] xir;
+input [63:0] pc;
+input [63:0] xpc;
+input takb;
+output predict_taken;
+
+integer n;
+reg [2:0] gbl_branch_hist;
+reg [1:0] branch_history_table [255:0];
+// For simulation only, initialize the history table to zeros.
+// In the real world we don't care.
+initial begin
+	for (n = 0; n < 256; n = n + 1)
+		branch_history_table[n] = 0;
+end
+wire [7:0] bht_wa = {xpc[7:2],gbl_branch_hist[2:1]};		// write address
+wire [7:0] bht_ra1 = {xpc[7:2],gbl_branch_hist[2:1]};		// read address (EX stage)
+wire [7:0] bht_ra2 = {pc[7:2],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [1:0] bht_xbits = branch_history_table[bht_ra1];
+wire [1:0] bht_ibits = branch_history_table[bht_ra2];
+assign predict_taken = bht_ibits==2'd0 || bht_ibits==2'd1;
+
+wire [6:0] xOpcode = xir[6:0];
+wire isxBranch = (xOpcode==`Bcc);
+
+// Two bit saturating counter
+reg [1:0] xbits_new;
+always @(takb or bht_xbits)
+if (takb) begin
+	if (bht_xbits != 2'd1)
+		xbits_new <= bht_xbits + 2'd1;
+	else
+		xbits_new <= bht_xbits;
+end
+else begin
+	if (bht_xbits != 2'd2)
+		xbits_new <= bht_xbits - 2'd1;
+	else
+		xbits_new <= bht_xbits;
+end
+
+always @(posedge clk)
+if (rst)
+	gbl_branch_hist <= 3'b000;
+else begin
+	if (advanceX) begin
+		if (isxBranch) begin
+			gbl_branch_hist <= {gbl_branch_hist[1:0],takb};
+			branch_history_table[bht_wa] <= xbits_new;
+		end
+	end
+end
+
+endmodule
+
 
