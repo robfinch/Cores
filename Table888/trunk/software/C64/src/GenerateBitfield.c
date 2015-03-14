@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -66,9 +66,9 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	else
 		GenerateDiadic(op_mov,0,ap3,ap);
 	ReleaseTempRegister(ap);
-	if (isTable888||isRaptor64) {
+	if (isTable888||isRaptor64||isFISA64) {
 		if (node->bit_offset > 0)
-			GenerateDiadic(op_shru, 0, ap3, make_immed((int64_t) node->bit_offset));
+			GenerateDiadic(isFISA64?op_lsr:op_shru, 0, ap3, make_immed((int64_t) node->bit_offset));
 		GenerateDiadic(op_andi, 0, ap3, make_immed(mask));
 		if (isSigned)
 			SignExtendBitfield(node, ap3, mask);
@@ -152,12 +152,7 @@ AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size)
 		}
 		Generate4adic(op_bfins,0,ap4,ap1,make_immed((long) node->p[0]->bit_offset),
 			make_immed((long)node->p[0]->bit_offset + node->p[0]->bit_width - 1));
-		switch(size) {
-		case 1:	GenerateDiadic(op_sb,0,ap4,ap2);
-		case 2:	GenerateDiadic(op_sc,0,ap4,ap2);
-		case 4:	GenerateDiadic(op_sh,0,ap4,ap2);
-		case 8:	GenerateDiadic(op_sw,0,ap4,ap2);
-		}
+		GenStore(ap4,ap2,size);
 		ReleaseTempRegister(ap4);
 	}
 	ReleaseTempRegister(ap2);

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -510,18 +510,21 @@ void GenerateTry(Statement *stmt)
     int lab1,curlab;
 	int oldthrow;
 	char buf[20];
-	AMODE *ap;
+	AMODE *ap, *a;
 	SYM *sym;
 
     lab1 = nextlabel++;
 	oldthrow = throwlab;
 	throwlab = nextlabel++;
 
-	if (isTable888)
-		GenerateDiadic(op_lea,0,makereg(CLR),make_clabel(throwlab));
-	else if (isRaptor64)
-		GenerateDiadic(op_lea,0,makereg(28),make_clabel(throwlab));
-	else
+	if (isTable888|isRaptor64)
+		GenerateDiadic(op_lea,0,makereg(regXLR),make_clabel(throwlab));
+	else if (isFISA64) {
+        a = make_clabel(throwlab);
+        a->mode = am_immed;
+        FISA64_GenLdi(makereg(regXLR),a,8);
+    }
+    else
 		GenerateDiadic(op_lea,0,makebreg(CLR),make_clabel(throwlab));
 	GenerateStatement(stmt->s1);
     GenerateMonadic(op_bra,0,make_clabel(lab1));
@@ -536,6 +539,12 @@ void GenerateTry(Statement *stmt)
 		else {
 			if (isRaptor64)
 				GenerateTriadic(op_bnei,0,makereg(2),make_immed((int64_t)stmt->s2),make_clabel(nextlabel));
+			else if (isFISA64) {
+                ap = GetTempRegister();
+				GenerateTriadic(op_cmp, 0, ap, makereg(2), make_immed((int64_t)stmt->s2));
+				GenerateDiadic(op_bne, 0, ap, make_clabel(nextlabel));
+				ReleaseTempRegister(ap);
+            }
 			else if (isTable888) {
 				GenerateTriadic(op_cmp, 0, makereg(244), makereg(2), make_immed((int64_t)stmt->s2));
 				GenerateDiadic(op_bne, 0, makereg(244), make_clabel(nextlabel));
@@ -548,22 +557,19 @@ void GenerateTry(Statement *stmt)
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		sym = (SYM *)stmt->label;
-		if (sym) {
-			switch(sym->tp->size) {
-			case 1:	GenerateDiadic(op_sb,0,makereg(1),make_indexed(sym->value.i,27));
-			case 2: GenerateDiadic(op_sc,0,makereg(1),make_indexed(sym->value.i,27));
-			case 4: GenerateDiadic(op_sh,0,makereg(1),make_indexed(sym->value.i,27));
-			case 8: GenerateDiadic(op_sw,0,makereg(1),make_indexed(sym->value.i,27));
-			}
-		}
+		if (sym)
+            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
 		GenerateStatement(stmt->s1);
 		stmt=stmt->next;
 	}
     GenerateLabel(lab1);
-	if (isTable888)
-		GenerateDiadic(op_lea,0,makereg(CLR),make_clabel(oldthrow));
-	else if (isRaptor64)
-		GenerateDiadic(op_lea,0,makereg(28),make_clabel(oldthrow));
+	if (isTable888|isRaptor64)
+		GenerateDiadic(op_lea,0,makereg(regXLR),make_clabel(oldthrow));
+	else if (isFISA64) {
+        a = make_clabel(oldthrow);
+        a->mode = am_immed;
+        FISA64_GenLdi(makereg(regXLR),a,8);
+    }
 	else
 		GenerateDiadic(op_lea,0,makebreg(CLR),make_clabel(oldthrow));
 }
@@ -576,14 +582,21 @@ void GenerateThrow(Statement *stmt)
 	{
 		initstack();
 		ap = GenerateExpression(stmt->exp,F_ALL,8);
-		if (ap->mode==am_immed)
-			GenerateTriadic(op_ori,0,makereg(1),makereg(0),ap);
+		if (ap->mode==am_immed) {
+            if (isFISA64)
+                FISA64_GenLdi(makereg(1),ap,8);
+            else
+			    GenerateTriadic(op_ori,0,makereg(1),makereg(0),ap);
+        }
 		else if( ap->mode != am_reg)
 			GenerateDiadic(op_lw,0,makereg(1),ap);
 		else if (ap->preg != 1 )
 			GenerateTriadic(op_or,0,makereg(1),ap,makereg(0));
 		ReleaseTempRegister(ap);
-		GenerateTriadic(op_ori,0,makereg(2),makereg(0),make_immed((int64_t)stmt->label));
+		if (isFISA64)
+		    FISA64_GenLdi(makereg(2),make_immed((int64_t)stmt->label),8);
+        else
+		    GenerateTriadic(op_ori,0,makereg(2),makereg(0),make_immed((int64_t)stmt->label));
 	}
 	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
@@ -621,13 +634,19 @@ void GenerateSpinlock(Statement *stmt)
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();
 		ap = GenerateExpression(stmt->exp,F_REG,8);
-		if (stmt->initExpr)
-			GenerateTriadic(op_ori, 0, ap1,makereg(0),make_immed((int64_t)stmt->initExpr));
+		if (stmt->initExpr) {
+            if (isFISA64)
+                FISA64_GenLdi(ap1,make_immed((int64_t)stmt->initExpr));
+            else
+			    GenerateTriadic(op_ori, 0, ap1,makereg(0),make_immed((int64_t)stmt->initExpr));
+        }
 		GenerateLabel(lab1);
 		if (stmt->initExpr) {
 			// Decrement timeout
 			GenerateTriadic(op_sub, 0, ap1, ap1, make_immed(1));
-			if (isTable888)
+			if (isFISA64)
+				GenerateDiadic(op_beq, 0, ap1, make_label(lab2));
+			else if (isTable888)
 				GenerateDiadic(op_brz, 0, ap1, make_label(lab2));
 			else if (isRaptor64)
 				GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab2));
@@ -638,6 +657,10 @@ void GenerateSpinlock(Statement *stmt)
 		if (isRaptor64) {
 			GenerateDiadic(op_inbu, 0, ap2, make_indexed((int64_t)stmt->incrExpr,ap->preg));
 			GenerateTriadic(op_beq, 0, ap2, makereg(0), make_label(lab1));
+		}
+		else if (isFISA64) {
+			GenerateDiadic(op_lbu, 0, ap2, make_indexed((int64_t)stmt->incrExpr,ap->preg));
+			GenerateDiadic(op_beq, 0, ap2, make_label(lab1));
 		}
 		else if (isTable888) {
 			GenerateDiadic(op_lbu, 0, ap2, make_indexed((int64_t)stmt->incrExpr,ap->preg));
@@ -705,7 +728,7 @@ void GenerateSpinlock(Statement *stmt)
 	//}
 }
 
-void GenerateSpinUnlock(struct snode *stmt)
+void GenerateSpinUnlock(Statement *stmt)
 {
 	AMODE *ap;
 
@@ -715,8 +738,12 @@ void GenerateSpinUnlock(struct snode *stmt)
 		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,8);
 		// Force return value into register 1
 		if( ap->preg != 1 ) {
-			if (ap->mode == am_immed)
-				GenerateTriadic(op_ori, 0, makereg(1),makereg(0),ap);
+			if (ap->mode == am_immed) {
+                if (isFISA64)
+                    FISA64_GenLdi(makereg(1),ap,8);
+                else
+				    GenerateTriadic(op_ori, 0, makereg(1),makereg(0),ap);
+            }
 			else
 				GenerateDiadic(op_mov, 0, makereg(1),ap);
 			if (isRaptor64)

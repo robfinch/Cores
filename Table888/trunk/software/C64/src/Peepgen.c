@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -651,6 +651,26 @@ void peep_ldi(struct ocode *ip)
 }
 
 
+void PeepoptLdi(struct ocode *ip)
+{
+	struct ocode *ip2;
+
+    if (!isFISA64)
+       return;
+	ip2 = ip->fwd;
+	if (!ip2)
+	   return;
+    if (ip2->opcode != op_push)
+       return;
+    if (ip2->oper1->preg != ip->oper1->preg)
+       return;
+    ip->opcode = op_push;
+    ip->oper1 = copy_addr(ip->oper2);
+    ip->oper2 = NULL;
+    ip->fwd = ip2->fwd;
+}
+
+
 // Remove extra labels at end of subroutines
 
 void PeepoptLabel(struct ocode *ip)
@@ -681,6 +701,7 @@ void opt3()
         {
 		case op_ldi:
 			peep_ldi(ip);
+			PeepoptLdi(ip);
 			break;
             case op_mov:
                     peep_move(ip);

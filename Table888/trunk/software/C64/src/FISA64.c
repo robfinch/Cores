@@ -1,5 +1,5 @@
 // ============================================================================
-// (C) 2012-2014 Robert Finch
+// (C) 2012-2015 Robert Finch
 // All Rights Reserved.
 // robfinch<remove>@finitron.ca
 //
@@ -54,7 +54,7 @@ extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize);
 static int FISA64OptimizationDesireability(CSE *csp)
 {
 	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 4095 && csp->exp->i >= -4096))
+                       csp->exp->i < 16383 && csp->exp->i >= -16384))
         return 0;
     if (csp->exp->nodetype==en_cnacon)
         return 0;
@@ -181,13 +181,11 @@ AMODE *GenExprFISA64(ENODE *node)
 	case en_ge:
 	case en_uge:
 		size = GetNaturalSize(node);
-	    ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0],F_REG, size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op,0,ap3,ap1,ap2);
+		GenerateTriadic(op,0,ap1,ap1,ap2);
 		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return ap3;
+		return ap1;
 	}
     GenerateFalseJump(node,lab0,0);
     ap1 = GetTempRegister();
@@ -224,11 +222,10 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 		GenerateDiadic(op,0,ap1,make_clabel(label));
 		return;
 	}
-    ap3 = GetTempRegister();
 	if (op==op_ltu || op==op_leu || op==op_gtu || op==op_geu)
- 	    GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+ 	    GenerateTriadic(op_cmpu,0,ap1,ap1,ap2);
 	else
- 	    GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+ 	    GenerateTriadic(op_cmp,0,ap1,ap1,ap2);
 	switch(op)
 	{
 	case op_eq:	op = op_beq; break;
@@ -242,8 +239,7 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 	case op_gtu: op = op_bgt; break;
 	case op_geu: op = op_bge; break;
 	}
-	GenerateDiadic(op,0,ap3,make_clabel(label));
-	ReleaseTempRegister(ap3);
+	GenerateDiadic(op,0,ap1,make_clabel(label));
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 }
@@ -264,8 +260,6 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 	while( lc_auto & 7 )	/* round frame size to word */
 		++lc_auto;
 	if (sym->IsInterrupt) {
-		//GenerateTriadic(op_subui,0,makereg(30),makereg(30),make_immed(30*8));
-		//GenerateDiadic(op_sm,0,make_indirect(30), make_mask(0x9FFFFFFE));
 	}
 	if (!sym->IsNocall) {
 		// For a leaf routine don't bother to store the link register or exception link register.
@@ -280,7 +274,6 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 			ap = make_label(throwlab);
 			ap->mode = am_immed;
 			FISA64_GenLdi(makereg(regXLR),ap);
-			//GenerateDiadic(op_lea,0,makereg(regXLR),make_label(throwlab));
 		}
 		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
 		if (lc_auto)
@@ -345,12 +338,10 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 			cnt = (bitsset(save_mask)-1)*8;
 			for (nn = 31; nn >=1 ; nn--) {
 				if (save_mask & (1 << nn)) {
-					//GenerateTriadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP),NULL);
 					GenerateMonadic(op_pop,0,makereg(nn));
 					cnt -= 8;
 				}
 			}
-			//GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(popcnt(save_mask)*8));
 		}
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
@@ -378,7 +369,7 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
     }
 	// Just branch to the already generated stack cleanup code.
 	else {
-		GenerateDiadic(op_bra,0,make_label(retlab),0);
+		GenerateMonadic(op_bra,0,make_label(retlab));
 	}
 }
 
@@ -485,6 +476,9 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 void FISA64_GenLdi(AMODE *ap1, AMODE *ap2)
 {
     AMODE *a1,*a2,*a3,*a4;
+
+	GenerateDiadic(op_ldi,0,ap1,ap2);
+    return;
 
     a1 = copy_addr(ap2);
     a2 = copy_addr(ap2);

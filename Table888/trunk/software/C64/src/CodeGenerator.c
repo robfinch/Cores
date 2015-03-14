@@ -192,11 +192,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
         switch( ap->mode ) {
             case am_immed:
 					i = ((ENODE *)(ap->offset))->i;
-					if ((flags & F_IMMED) && isFISA64) {
-                         if (i < 0x1FFF && i > -0x1fff)
-                             return;
-                    }
-					else if ((flags & F_IMMED18) && isRaptor64) {
+                    if ((flags & F_IMMED18) && isRaptor64) {
 						if (i < 0x1ffff && i > -0x1ffff)
 							return;
 					}
@@ -348,6 +344,16 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize)
 		case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
 		case 12:	GenerateDiadic(op_lft,0,ap3,ap1); break;
 		}
+	}
+}
+
+void GenStore(AMODE *ap1, AMODE *ap3, int size)
+{
+	switch(size) {
+	case 1: GenerateDiadic(op_sb,0,ap1,ap3); break;
+	case 2: GenerateDiadic(op_sc,0,ap1,ap3); break;
+	case 4: GenerateDiadic(op_sh,0,ap1,ap3); break;
+	case 8: GenerateDiadic(op_sw,0,ap1,ap3); break;
 	}
 }
 
@@ -777,13 +783,7 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 	ap3 = GetTempRegister();
     GenLoad(ap3,ap1,ssize);
 	GenerateTriadic(op,0,ap3,ap3,ap2);
-	switch(ssize) {
-	case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
-	case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
-	case 4:	GenerateDiadic(op_sh,0,ap3,ap1); break;
-	case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
-	case 12:	GenerateDiadic(op_sft,0,ap3,ap1); break;
-	}
+	GenStore(ap3,ap1,ssize);
 	ReleaseTempRegister(ap3);
 }
 
@@ -897,12 +897,7 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 	if (ap2->mode==am_reg)
 		GenerateDiadic(op_mov,0,ap2,ap1);
 	else
-		switch(siz1) {
-			case 1:	GenerateDiadic(op_sb,0,ap1,ap2); break;
-			case 2:	GenerateDiadic(op_sc,0,ap1,ap2); break;
-			case 4:	GenerateDiadic(op_sh,0,ap1,ap2); break;
-			case 8:	GenerateDiadic(op_sw,0,ap1,ap2); break;
-		}
+	    GenStore(ap1,ap2,siz1);
     ReleaseTempRegister(ap2);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
@@ -982,20 +977,10 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 	// ap1 is memory
 	else {
 		if (ap2->mode == am_reg)
-			switch(ssize) {
-			case 1:	GenerateDiadic(op_sb,0,ap2,ap1); break;
-			case 2:	GenerateDiadic(op_sc,0,ap2,ap1); break;
-			case 4: GenerateDiadic(op_sh,0,ap2,ap1); break;
-			case 8:	GenerateDiadic(op_sw,0,ap2,ap1); break;
-			}
+		    GenStore(ap2,ap1,ssize);
 		else if (ap2->mode == am_immed) {
             if (ap2->offset->i == 0) {
-    			switch(ssize) {
-    			case 1:	GenerateDiadic(op_sb,0,makereg(0),ap1); break;
-    			case 2:	GenerateDiadic(op_sc,0,makereg(0),ap1); break;
-    			case 4: GenerateDiadic(op_sh,0,makereg(0),ap1); break;
-    			case 8:	GenerateDiadic(op_sw,0,makereg(0),ap1); break;
-     			}
+                GenStore(makereg(0),ap1,ssize);
             }
             else {
     			ap3 = GetTempRegister();
@@ -1003,12 +988,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
     			    FISA64_GenLdi(ap3,ap2);
     			else
                     GenerateDiadic(op_ldi,0,ap3,ap2);
-    			switch(ssize) {
-    			case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
-    			case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
-    			case 4: GenerateDiadic(op_sh,0,ap3,ap1); break;
-    			case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
-     			}
+                GenStore(ap3,ap1,ssize);
 		    	ReleaseTempRegister(ap3);
             }
 		}
@@ -1047,12 +1027,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 						}
 					}
 				}
-				switch(ssize) {
-				case 1:	GenerateDiadic(op_sb,0,ap3,ap1); break;
-				case 2:	GenerateDiadic(op_sc,0,ap3,ap1); break;
-				case 4: GenerateDiadic(op_sh,0,ap3,ap1); break;
-				case 8:	GenerateDiadic(op_sw,0,ap3,ap1); break;
-				}
+				GenStore(ap3,ap1,ssize);
 				ReleaseTempRegister(ap3);
 			}
 		}
@@ -1167,12 +1142,7 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
         return ap2;
         GenLoad(ap1,ap2,siz1);
 		GenerateTriadic(op,0,ap1,ap1,make_immed(node->i));
-		switch(siz1) {
-		case 1:	GenerateDiadic(op_sb,0,ap1,ap2); break;
-		case 2:	GenerateDiadic(op_sc,0,ap1,ap2); break;
-		case 4:	GenerateDiadic(op_sh,0,ap1,ap2); break;
-		case 8:	GenerateDiadic(op_sw,0,ap1,ap2); break;
-		}
+		GenStore(ap1,ap2,siz1);
 //		ReleaseTempRegister(ap1);
 	}
     //ReleaseTempRegister(ap2);
@@ -1356,22 +1326,22 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_udiv:   return GenerateModDiv(node,flags,size,op_divu);
     case en_mod:    return GenerateModDiv(node,flags,size,op_mod);
     case en_umod:   return GenerateModDiv(node,flags,size,op_modu);
-    case en_shl:    return GenerateShift(node,flags,size,isFISA64?op_sll:op_shl);
-    case en_shlu:   return GenerateShift(node,flags,size,isFISA64?op_sll:op_shlu);
-    case en_asr:	return GenerateShift(node,flags,size,isFISA64?op_sra:op_asr);
-    case en_shr:	return GenerateShift(node,flags,size,isFISA64?op_sra:op_asr);
-    case en_shru:   return GenerateShift(node,flags,size,isFISA64?op_srl:op_shru);
+    case en_shl:    return GenerateShift(node,flags,size,isFISA64?op_asl:op_shl);
+    case en_shlu:   return GenerateShift(node,flags,size,isFISA64?op_asl:op_shlu);
+    case en_asr:	return GenerateShift(node,flags,size,isFISA64?op_asr:op_asr);
+    case en_shr:	return GenerateShift(node,flags,size,isFISA64?op_asr:op_asr);
+    case en_shru:   return GenerateShift(node,flags,size,isFISA64?op_lsr:op_shru);
     case en_asadd:  return GenerateAssignAdd(node,flags,size,op_addu);
     case en_assub:  return GenerateAssignAdd(node,flags,size,op_subu);
     case en_asand:  return GenerateAssignLogic(node,flags,size,op_and);
     case en_asor:   return GenerateAssignLogic(node,flags,size,op_or);
 	case en_asxor:  return GenerateAssignLogic(node,flags,size,op_xor);
     case en_aslsh:
-            return GenerateAssignShift(node,flags,size,op_shl);
+            return GenerateAssignShift(node,flags,size,isFISA64?op_asl:op_shl);
     case en_asrsh:
             return GenerateAssignShift(node,flags,size,op_asr);
     case en_asrshu:
-            return GenerateAssignShift(node,flags,size,op_shru);
+            return GenerateAssignShift(node,flags,size,isFISA64?op_lsr:op_shru);
     case en_asmul: return GenerateAssignMultiply(node,flags,size,op_mul);
     case en_asmulu: return GenerateAssignMultiply(node,flags,size,op_mulu);
     case en_asdiv: return GenerateAssignModiv(node,flags,size,op_divs);

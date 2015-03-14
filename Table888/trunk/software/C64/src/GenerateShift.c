@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -29,6 +29,8 @@
 #include "Statement.h"
 #include "gen.h"
 #include "cglbdec.h"
+
+extern void GenStore(AMODE *, AMODE *, int);
 
 // Setup the value to be shifted by sign/zero extending it.
 // ToFix: for some reason the op is coming through as signed when it should be
@@ -124,37 +126,15 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
         else
 		    GenerateDiadic(op_ldi,0,ap1,ap3);
 	}
-	else {
-		if (ap3->isUnsigned) {
-			switch(size) {
-			case 1:	GenerateDiadic(op_lbu,0,ap1,ap3); break;
-			case 2:	GenerateDiadic(op_lcu,0,ap1,ap3); break;
-			case 4:	GenerateDiadic(op_lhu,0,ap1,ap3); break;
-			case 8:	GenerateDiadic(op_lw,0,ap1,ap3); break;
-			}
-		}
-		else {
-			switch(size) {
-			case 1:	GenerateDiadic(op_lb,0,ap1,ap3); break;
-			case 2:	GenerateDiadic(op_lc,0,ap1,ap3); break;
-			case 4:	GenerateDiadic(op_lh,0,ap1,ap3); break;
-			case 8:	GenerateDiadic(op_lw,0,ap1,ap3); break;
-			}
-		}
-	}
+	else
+        GenLoad(ap1,ap3,size);
 	MaskShift(op, ap1, size);
 	if (ap2->mode==am_immed)
 		GenerateTriadic(op,0,ap1,ap1,make_immed(ap2->offset->i));
 	else
 		GenerateTriadic(op,0,ap1,ap1,ap2);
-	if (ap3->mode != am_reg) {
-		switch(size) {
-		case 1: GenerateDiadic(op_sb,0,ap1,ap3); break;
-		case 2: GenerateDiadic(op_sc,0,ap1,ap3); break;
-		case 4: GenerateDiadic(op_sh,0,ap1,ap3); break;
-		case 8: GenerateDiadic(op_sw,0,ap1,ap3); break;
-		}
-	}
+	if (ap3->mode != am_reg)
+        GenStore(ap1,ap3,size);
     ReleaseTempRegister(ap2);
     ReleaseTempRegister(ap3);
     MakeLegalAmode(ap1,flags,size);
