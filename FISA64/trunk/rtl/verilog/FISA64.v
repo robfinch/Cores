@@ -230,9 +230,8 @@ reg [7:0] kmb;				// backup kernel mode flag
 reg pe;						// protected mode enabled
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
-reg [AMSB:0] pc,dpc,xpc,wpc,tpc;
+reg [AMSB:0] pc,dpc,xpc,wpc;
 reg [AMSB:0] epc,ipc,dbpc;	// exception, interrupt PC's, debug PC
-reg [AMSB:0] ibpt;			// instruction breakpoint
 reg gie;					// global interrupt enable
 reg StatusHWI;
 reg [31:4] ibufadr;
@@ -284,11 +283,16 @@ reg res_sgn;
 reg [1:0] ld_size, st_size;
 reg [31:0] insncnt;
 
+// Stall the pipeline if there's an immediate prefix in it during a cache miss.
+wire stallPipe =
+	((opcode==`IMM && xopcode==`IMM) ||
+	 (opcode==`IMM)) && !ihit;
+
 reg advanceEXr;
 reg advanceWBx;
-wire advanceWB = advanceEX|advanceWBx;
-wire advanceEX = advanceEXr;
-wire advanceRF = advanceEX;
+wire advanceWB = (advanceEX|advanceWBx) & !stallPipe;
+wire advanceEX = advanceEXr& !stallPipe;
+wire advanceRF = advanceEX & !stallPipe;
 wire advanceIF = advanceRF & ihit;
 
 reg isICacheReset;
@@ -329,8 +333,8 @@ reg [15:0] lottags [2047:0];
 always @(posedge clk)
 	if (advanceEX && xopcode==`RR && xfunct==`MTSPR && xir[24:17]==`TAGS)
 		lottags[ea[26:16]] <= a[15:0];
-wire [15:0] lottag = lottags[ea[26:16]];
-wire [15:0] lottagX = lottags[rpc[26:16]];
+wire [15:0] lottag = (ea[31:20]==12'hFFD) ? 16'h0006 : lottags[ea[26:16]];	// allow for I/O
+wire [15:0] lottagX = (ea[31:20]==12'hFFD) ? 16'h0000 : lottags[rpc[26:16]];
 
 reg [9:0] lotgrp [5:0];
 
@@ -727,15 +731,8 @@ begin
 	end
 	else begin
 		// On a cache miss, return flow to the head of any immediate prefix
-		if (!ihit) begin
-			if (opcode==`IMM && xopcode==`IMM)
-				tpc <= xpc;
-			else if (opcode==`IMM)
-				tpc <= dpc;
-			else
-				tpc <= pc;
+		if (!ihit)
 			next_state(LOAD_ICACHE);
-		end
 		if (advanceRF) begin
 			nop_ir();
 			dpc <= pc;
@@ -776,7 +773,9 @@ begin
 		case(opcode)
 		`RR:
 			case(funct)
-			`MTSPR,`RTI,`RTE,`FENCE:
+			`MTSPR,`FENCE:
+				xRt <= 5'd0;
+			`PCTRL:
 				xRt <= 5'd0;
 			default:	xRt <= ir[16:12];
 			endcase
@@ -1546,7 +1545,6 @@ LOAD_ICACHE4:
 	if (ack_i) begin
 		wb_nack();
 		isICacheLoad <= FALSE;
-		pc <= tpc;
 		next_state(RUN);
 	end
 
@@ -1790,8 +1788,6 @@ input [63:0] npc;
 begin
 	pc <= npc;
 	pc[1:0] <= 2'b00;
-	tpc <= npc;
-	tpc[1:0] <= 2'b00;
 	nop_ir();
 	nop_xir();
 	if (ssm)

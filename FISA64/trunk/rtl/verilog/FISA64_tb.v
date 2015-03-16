@@ -7,6 +7,7 @@ wire we;
 wire [7:0] sel;
 wire [31:0] adr;
 wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato;
+wire [31:0] tc_dato;
 
 initial begin
 	#0 clk = 1'b0;
@@ -19,10 +20,12 @@ always #5 clk = ~clk;
 
 wire cs_ram = adr[31:16]==16'd0;
 wire cs_rom = adr[31:16]==16'd1;
+wire cs_tc = adr[31:16]==16'hFFD0;
 
 FISA64 u1 (
 	.rst_i(rst),
 	.clk_i(clk),
+	.clk_o(),
 	.nmi_i(0),
 	.irq_i(0),
 	.vect_i(0),
@@ -54,7 +57,22 @@ RAM u3 (
 	.dat_i(cpu_dato)
 );
 
-assign cpu_dati = cs_rom ? rom_dato : ram_dato;
+TEXTCTRL u4 (
+	.clk(clk),
+	.cs(cs_tc),
+	.wr(we),
+	.sel(sel[7:4]|sel[3:0]),
+	.adr(adr[15:0]),
+	.dat_o(tc_dato),
+	.dat_i(cpu_dato[31:0])
+);
+
+
+assign cpu_dati = cs_rom ? rom_dato : 
+				cs_tc ? {2{tc_dato}} : ram_dato;
+
+always @(posedge clk)
+	$display("%d", $time);
 
 endmodule
 
@@ -97,6 +115,30 @@ always @(posedge clk)
 
 always @*
 	dat_o = mem[adr[13:3]];
+
+endmodule
+
+module TEXTCTRL(clk,cs,wr,sel,adr,dat_i,dat_o);
+input clk;
+input cs;
+input wr;
+input [3:0] sel;
+input [15:0] adr;
+input [31:0] dat_i;
+output reg [31:0] dat_o;
+
+reg [31:0] mem [0:2047];
+
+always @(posedge clk)
+	if (cs & wr) begin
+		if (sel[0]) mem[adr[12:2]][7:0] <= dat_i[7:0];
+		if (sel[1]) mem[adr[12:2]][15:8] <= dat_i[15:8];
+		if (sel[2]) mem[adr[12:2]][23:16] <= dat_i[23:16];
+		if (sel[3]) mem[adr[12:2]][31:24] <= dat_i[31:24];
+	end
+
+always @*
+	dat_o = mem[adr[12:2]];
 
 endmodule
 
