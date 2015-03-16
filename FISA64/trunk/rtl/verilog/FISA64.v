@@ -88,6 +88,7 @@
 `define PCTRL		7'h37
 `define CLI				5'd0
 `define SEI				5'd1
+`define STP				5'd2
 `define SLLI		7'h38
 `define SRLI		7'h39
 `define ROLI		7'h3A
@@ -132,6 +133,7 @@
 `define CR0			8'd00
 `define CR3			8'd03
 `define TICK		8'd04
+`define CLK			8'd06
 `define IPC			8'd08
 `define EPC			8'd09
 `define VBR			8'd10
@@ -146,9 +148,11 @@
 `define BRK_IRQ	{1'b1,5'd0,vect_i,10'd0,`BRK}
 `define BRK_EXF	{6'd0,9'd497,10'd0,`BRK}
 
-module FISA64(rst_i, clk_i, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module FISA64(rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
+parameter AMSB = 31;		// most significant address bit
 input rst_i;
 input clk_i;
+output clk_o;				// gated clock output
 input nmi_i;
 input irq_i;
 input [8:0] vect_i;
@@ -160,7 +164,7 @@ output reg stb_o;
 input ack_i;
 output reg we_o;
 output reg [7:0] sel_o;
-output reg [31:0] adr_o;
+output reg [AMSB:0] adr_o;
 input [63:0] dat_i;
 output reg [63:0] dat_o;
 
@@ -203,19 +207,20 @@ parameter half = 2'd1;
 parameter char = 2'd2;
 parameter word = 2'd3;
 
-wire clk = clk_i;
+wire clk;
 reg [5:0] state;
 reg [63:0] tick;			// tick counter
-reg [31:0] vbr;				// vector base register
+reg [AMSB:0] vbr;			// vector base register
 reg [63:0] casreg;			// compare-and-swap compare register
 reg [6:0] mystreg;
+reg [49:0] clk_throttle_new;
 reg km;						// kernel mode
 reg [7:0] kmb;				// backup kernel mode flag
 reg pe;						// protected mode enabled
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
-reg [31:0] pc,dpc,xpc,wpc,tpc;
-reg [31:0] epc,ipc;			// exception and interrupt PC's
+reg [AMSB:0] pc,dpc,xpc,wpc,tpc;
+reg [AMSB:0] epc,ipc;			// exception and interrupt PC's
 reg gie;					// global interrupt enable
 reg StatusHWI;
 reg [31:4] ibufadr;
@@ -301,12 +306,16 @@ FISA64_itag_ram u2
 	.hit(ihit)
 );
 
-reg [31:0] rpc;		// registered PC value
+//-----------------------------------------------------------------------------
+// Memory management stuff.
+//-----------------------------------------------------------------------------
+
+reg [AMSB:0] rpc;		// registered PC value
 always @(negedge clk)
 	rpc <= pc;
 reg [15:0] lottags [2047:0];
 always @(posedge clk)
-	if (advanceEX && xopcode==`RR && xfunct==`MTSPR && xir[24:19]==`TAGS)
+	if (advanceEX && xopcode==`RR && xfunct==`MTSPR && xir[24:17]==`TAGS)
 		lottags[ea[26:16]] <= a[15:0];
 wire [15:0] lottag = lottags[ea[26:16]];
 wire [15:0] lottagX = lottags[rpc[26:16]];
@@ -328,6 +337,8 @@ wire isLotOwnerX = km | (((lotgrp[0]==lottagX[15:6]) ||
 					(lotgrp[5]==lottagX[15:6])))
 					;
 
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 // Overflow:
 // Add: the signs of the inputs are the same, and the sign of the
 // sum is different
@@ -355,6 +366,10 @@ FISA64_bitfield u3
 	.o(btfldo),
 	.masko()
 );
+
+//-----------------------------------------------------------------------------
+// Evaluate branch condition, compare to zero.
+//-----------------------------------------------------------------------------
 
 reg takb;
 always @(xir or a)
@@ -387,6 +402,10 @@ FISA64_BranchHistory u4
 	.predict_taken(predict_taken)
 );
 
+
+//-----------------------------------------------------------------------------
+// Datapath
+//-----------------------------------------------------------------------------
 wire lti = $signed(a) < $signed(imm);
 wire ltui = a < imm;
 wire eqi = a==imm;
@@ -409,15 +428,6 @@ case(xopcode)
 `OR:	res <= a | imm;
 `EOR:	res <= a ^ imm;
 `LDI:	res <= imm;
-/*
-`LDI:
-	case(xir[8:7])
-	2'd0:	res <= imm;
-	2'd1:	res <= {imm[63:16],c[15:0]};
-	2'd2:	res <= {imm[63:32],c[31:0]};
-	2'd3:	res <= {imm[63:48],c[47:0]};
-	endcase
-*/
 `SEQ:	res <= eqi;
 `SNE:	res <= !eqi;
 `SGT:	res <= !(lti|eqi);
@@ -435,6 +445,7 @@ case(xopcode)
 			case(xir[24:17])
 			`CR0:		res <= pe;
 			`TICK:		res <= tick;
+			`CLK:		res <= clk_throttle_new;
 			`EPC:		res <= epc;
 			`IPC:		res <= ipc;
 			`VBR:		res <= vbr;
@@ -501,6 +512,39 @@ endcase
 
 reg nmi1;
 reg nmi_edge;
+reg ld_clk_throttle;
+//-----------------------------------------------------------------------------
+// Clock control
+// - reset or NMI reenables the clock
+// - this circuit must be under the clk_i domain
+//-----------------------------------------------------------------------------
+//
+reg cpu_clk_en;
+reg [49:0] clk_throttle;
+
+BUFGCE u20 (.CE(cpu_clk_en), .I(clk_i), .O(clk) );
+
+reg lct1;
+always @(posedge clk_i)
+if (rst_i) begin
+	cpu_clk_en <= 1'b1;
+	lct1 <= 1'b0;
+	clk_throttle <= 50'h3FFFFFFFFFFFF;	// 100% power
+end
+else begin
+	lct1 <= ld_clk_throttle;
+	if (ld_clk_throttle && !lct1)
+		clk_throttle <= clk_throttle_new;
+	else
+		clk_throttle <= {clk_throttle[48:0],clk_throttle[49]};
+	if (nmi_i)
+		clk_throttle <= 50'h3FFFFFFFFFFFF;
+	cpu_clk_en <= clk_throttle[49];
+end
+assign clk_o = clk;
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 always @(posedge clk)
 if (rst_i) begin
 	insncnt <= 32'd0;
@@ -525,6 +569,7 @@ if (rst_i) begin
 	StatusHWI <= `FALSE;
 	nmi1 <= `FALSE;
 	nmi_edge <= `FALSE;
+	ld_clk_throttle <= `FALSE;
 end
 else begin
 tick <= tick + 64'd1;
@@ -532,6 +577,7 @@ advanceWBx <= `FALSE;
 nmi1 <= nmi_i;
 if (nmi_i & ~nmi1)
 	nmi_edge <= `TRUE;
+ld_clk_throttle <= `FALSE;
 case (state)
 RESET:
 begin
@@ -548,7 +594,9 @@ begin
 end
 RUN:
 begin
+	//-----------------------------------------------------------------------------
 	// IFETCH stage
+	//-----------------------------------------------------------------------------
 	if (advanceIF) begin
 		if (imcd != 3'd000) begin
 			imcd <= {imcd[1:0],1'b0};
@@ -556,18 +604,14 @@ begin
 				im <= `FALSE;
 		end
 		insncnt <= insncnt + 32'd1;
-		if (!StatusHWI & gie & nmi_edge) begin
-			StatusHWI <= `TRUE;
+		if (!StatusHWI & gie & nmi_edge)
 			ir <= `BRK_NMI;
-			nmi_edge <= `FALSE;
-		end
-		else if (!StatusHWI & gie & !im & irq_i) begin
-			StatusHWI <= `TRUE;
-			im <= `TRUE;
+		else if (!StatusHWI & gie & !im & irq_i)
 			ir <= `BRK_IRQ;
-		end
+		else if (!((isLotOwnerX && (km ? lottagX[0] : lottagX[3])) || !pe))
+			ir <= `BRK_EXF;
 		else
-			ir <= ((isLotOwnerX && (km ? lottagX[0] : lottagX[3])) || !pe) ? insn : `BRK_EXF;
+			ir <= insn;
 		$display("%h: %h", pc, insn);
 		dpc <= pc;
 		dbranch_taken <= FALSE;
@@ -575,20 +619,18 @@ begin
 			pc <= pc + {{47{insn[31]}},insn[31:17],2'b00};
 			dbranch_taken <= TRUE;
 		end
+		else if (iopcode==`BSR || iopcode==`BRA)
+			pc <= pc + {{37{insn[31]}},insn[31:7],2'b00};
 		else
 			pc <= pc + 32'd4;
 	end
 	else begin
 		// On a cache miss, return flow to the head of any immediate prefix
 		if (!ihit) begin
-			if (opcode==`IMM && xopcode==`IMM) begin
-				$display("IMM IMM tpc=%h", xpc);
+			if (opcode==`IMM && xopcode==`IMM)
 				tpc <= xpc;
-			end
-			else if (opcode==`IMM) begin
-				$display("IMM tpc = %h", dpc);
+			else if (opcode==`IMM)
 				tpc <= dpc;
-			end
 			else
 				tpc <= pc;
 			next_state(LOAD_ICACHE);
@@ -600,7 +642,9 @@ begin
 		end
 	end
 	
+	//-----------------------------------------------------------------------------
 	// DECODE / REGFETCH
+	//-----------------------------------------------------------------------------
 	if (advanceRF) begin
 		xbranch_taken <= dbranch_taken;
 		xir <= ir;
@@ -614,16 +658,6 @@ begin
 		c <= rfoc;
 
 		case(opcode)
-/*
-		`LDI:
-			case(ir[8:7])
-			2'd0:	imm <= {{48{ir[31]}},ir[31:17],ir[11]};
-			2'd1:	imm <= {{32{ir[31]}},ir[31:17],ir[11],16'h0000};
-			2'd2:	imm <= {{16{ir[31]}},ir[31:17],ir[11],32'h0000};
-			2'd3:	imm <= {ir[31:17],ir[11],48'h0000};
-			endcase
-*/
-		`BSR,`BRA:	imm <= {{5{ir[31]}},ir[31:7],2'b00};
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
 		`SBX,`SCX,`SHX,`SWX:
 			imm <= ir[31:24];
@@ -637,6 +671,7 @@ begin
 			imm[63:15] <= {{24{xir[31]}},xir[31:7]};
 			xpc <= xpc;
 		end
+
 		case(opcode)
 		`RR:
 			case(funct)
@@ -644,24 +679,21 @@ begin
 				xRt <= 5'd0;
 			default:	xRt <= ir[16:12];
 			endcase
-		`Bcc,`BRK,`IMM:
+		`BRA,`Bcc,`BRK,`IMM:
 			xRt <= 5'd0;
 		`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`INC:
 			xRt <= 5'd0;
 		`BSR:	xRt <= 5'h1F;
 		default:	xRt <= ir[16:12];
 		endcase
-		if (opcode==`BSR || opcode==`BRA) begin
-			pc <= dpc + {{5{ir[31]}},ir[31:7],2'b00};
-			tpc <= dpc + {{5{ir[31]}},ir[31:7],2'b00};
-			nop_ir();
-		end
 	end
 	else if (advanceEX) begin
 		nop_xir();
 	end
 
+	//-----------------------------------------------------------------------------
 	// EXECUTE
+	//-----------------------------------------------------------------------------
 	if (advanceEX) begin
 		wRt <= xRt;
 		wres <= res;
@@ -675,9 +707,9 @@ begin
 				if (km) begin
 					case(xir[24:17])
 					`CR0:		pe <= a[0];
-					`EPC:		epc <= {a[31:2],2'b00};
-					`IPC:		ipc <= {a[31:2],2'b00};
-					`VBR:		begin vbr <= a[31:0]; vbr[12:0] <= 13'h000; end
+					`EPC:		epc <= {a[AMSB:2],2'b00};
+					`IPC:		ipc <= {a[AMSB:2],2'b00};
+					`VBR:		begin vbr <= a[AMSB:0]; vbr[12:0] <= 13'h000; end
 					`MULH:		p[127:64] <= a;
 					`EA:		ea <= a;
 					`LOTGRP:
@@ -691,6 +723,7 @@ begin
 						end
 					`CASREG:	casreg <= a;
 					`MYSTREG:	mystreg <= a;
+					`CLK:		begin clk_throttle_new <= res[49:0]; ld_clk_throttle <= `TRUE; end
 					endcase
 				end
 				else begin
@@ -707,6 +740,7 @@ begin
 					case(xir[21:17])
 					`CLI:	imcd <= 3'b111;
 					`SEI:	im <= `TRUE;
+					`STP:	begin clk_throttle_new <= 50'd0; ld_clk_throttle <= `TRUE; end
 					endcase
 				else
 					privilege_violation();
@@ -730,6 +764,7 @@ begin
 				else privilege_violation();
 			`RTI:
 				if (km) begin
+					StatusHWI <= FALSE;
 				    imcd <= 3'b111;
 					km <= kmb[0];
 					kmb <= {1'b1,kmb[7:1]};
@@ -748,7 +783,7 @@ begin
 				next_state(MULDIV);
 				advanceEXr <= FALSE;
 				end
-		`BSR,`BRA:	;//update_pc(xpc + imm); done already in RF
+		`BSR,`BRA:	;//update_pc(xpc + imm); done already in IF
 		`JAL:		update_pc(a + {imm,2'b00});
 		`RTS:	begin
 					update_pc(a);
@@ -760,8 +795,12 @@ begin
 					update_pc(xpc + 64'd4);
 		`BRK:	begin
 				if (xir[31]) begin
-					StatusHWI <= `FALSE;
+					StatusHWI <= `TRUE;
 					ipc <= xpc;
+					if (xir[25:17]==9'd510)
+						nmi_edge <= FALSE;
+					else
+						im <= TRUE;
 				end
 				else
 					epc <= xpc;
@@ -770,7 +809,7 @@ begin
 				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				mir <= xir;
-				ea <= {vbr[31:12],xir[25:17],3'b000};
+				ea <= {vbr[AMSB:12],xir[25:17],3'b000};
 				ld_size <= word;
 				next_state(LOAD1);
 				end
@@ -880,6 +919,11 @@ begin
 		endcase
 	end
 /*
+	// Omitting this code makes the writeback stage "sticky" - it remembers
+	// the last register update, and will be present on the bypass muxes.
+	// This is a harmless behaviour. This is used by memory ops (eg. pop)
+	// to update two registers with one instruction.
+
 	else if (advanceWB) begin
 		wRt <= 5'd0;
 		wres <= 64'd0;
@@ -1031,6 +1075,10 @@ MD_RES:
 		next_state(RUN);
 	end
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Load States
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 LOAD1:	next_state(LOAD2);
 
 LOAD2:
@@ -1042,7 +1090,7 @@ LOAD2:
 			next_state(LOAD3);
 		end
 		else begin
-			wb_read1(word,{vbr[31:12],9'd499,3'b000});	// Data read fault
+			wb_read1(word,{vbr[AMSB:12],9'd499,3'b000});	// Data read fault
 			mopcode <= `BRK;
 			epc <= xpc;
 			next_state(LOAD3);
@@ -1260,16 +1308,20 @@ LOAD5:
 		endcase
 	end
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// RMW States
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 INC:
 	begin
 		xb <= wres + {{59{mir[16]}},mir[16:12]};
-		next_state(STORE2);
+		next_state(STORE2);	// We don't need to wait for the ea address calc
 	end
 PMW:
 	begin
 		ea <= wres;
 		xb <= lres;
-		next_state(STORE1);
+		next_state(STORE1);	// We changed the ea so we need another cycle 
 	end
 CAS:
 	begin
@@ -1287,6 +1339,10 @@ CAS:
 		end
 	end
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Store States
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 STORE1:	begin next_state(STORE2); end
 
 STORE2:
@@ -1298,7 +1354,7 @@ STORE2:
 			next_state(STORE3);
 		end
 		else begin
-			wb_read1(word,{vbr[31:12],9'd498,3'b000});	// Data write fault
+			wb_read1(word,{vbr[AMSB:12],9'd498,3'b000});	// Data write fault
 			mopcode <= `BRK;
 			epc <= xpc;
 			next_state(LOAD3);
@@ -1330,10 +1386,14 @@ STORE5:
 		next_state(RUN);
 	end
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Instruction cache load states.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 LOAD_ICACHE:
 	begin
 		isICacheLoad <= TRUE;
-		wb_read1(word,{pc[31:4],4'h0});
+		wb_read1(word,{pc[AMSB:4],4'h0});
 		next_state(LOAD_ICACHE2);
 	end
 LOAD_ICACHE2:
@@ -1343,7 +1403,7 @@ LOAD_ICACHE2:
 	end
 LOAD_ICACHE3:
 	begin
-		wb_read1(word,{pc[31:4],4'h8});
+		wb_read1(word,{pc[AMSB:4],4'h8});
 		next_state(LOAD_ICACHE4);
 	end
 LOAD_ICACHE4:
@@ -1357,10 +1417,14 @@ LOAD_ICACHE4:
 endcase
 end
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Support tasks
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 // Set select lines for first memory cycle
 task wb_sel1;
 input [1:0] sz;
-input [31:0] adr;
+input [63:0] adr;
 begin
 	case(sz)
 	byt:
@@ -1414,7 +1478,7 @@ endtask
 // Set select lines for second memory cycle
 task wb_sel2;
 input [1:0] sz;
-input [31:0] adr;
+input [63:0] adr;
 begin
 	case(sz)
 	byt:	sel_o <= 8'h00;
@@ -1443,7 +1507,7 @@ endtask
 
 task wb_dato;
 input [1:0] sz;
-input [31:0] adr;
+input [63:0] adr;
 input [63:0] dat;
 begin
 	case(sz)
@@ -1480,7 +1544,7 @@ endtask
 
 task wb_read1;
 input [1:0] sz;
-input [31:0] adr;
+input [63:0] adr;
 begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
@@ -1491,7 +1555,7 @@ endtask;
 
 task wb_read2;
 input [1:0] sz;
-input [31:0] adr;
+input [63:0] adr;
 begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
@@ -1502,7 +1566,7 @@ endtask;
 
 task wb_burst;
 input [5:0] bl;
-input [31:0] adr;
+input [63:0] adr;
 begin
 	bte_o <= 2'b00;
 	cti_o <= 3'b001;
@@ -1515,8 +1579,8 @@ endtask
 
 task wb_write1;
 input [1:0] sz;
-input [31:0] adr;
-input [31:0] dat;
+input [63:0] adr;
+input [63:0] dat;
 begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
@@ -1529,8 +1593,8 @@ endtask
 
 task wb_write2;
 input [1:0] sz;
-input [31:0] adr;
-input [31:0] dat;
+input [63:0] adr;
+input [63:0] dat;
 begin
 	cyc_o <= 1'b1;
 	stb_o <= 1'b1;
@@ -1563,11 +1627,15 @@ begin
 end
 endtask
 
+// Flush the RF stage
+
 task nop_ir;
 begin
 	ir <= {25'h0,7'h3F};	// NOP
 end
 endtask
+
+// Flush the EX stage
 
 task nop_xir;
 begin
@@ -1577,8 +1645,12 @@ begin
 end
 endtask 
 
+// Sets the PC value for a branch / jump. Also sets the target PC preparing for
+// a cache miss. Flush the pipeline of instructions. This is meant to be used 
+// from the EX stage.
+
 task update_pc;
-input [31:0] npc;
+input [63:0] npc;
 begin
 	pc <= npc;
 	pc[1:0] <= 2'b00;
@@ -1620,6 +1692,10 @@ begin
 end
 endtask
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Debugging aid - pretty state names
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 function [127:0] fnStateName;
 input [5:0] state;
 case(state)
@@ -1644,6 +1720,9 @@ endcase
 endfunction
 
 endmodule
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 module FISA64_icache_ram(wclk, wa, wr, i, rclk, pc, insn);
 input wclk;
