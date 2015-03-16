@@ -89,14 +89,14 @@
 `define CLI				5'd0
 `define SEI				5'd1
 `define STP				5'd2
+`define RTD				5'd29
+`define RTE				5'd30
+`define RTI				5'd31
 `define SLLI		7'h38
 `define SRLI		7'h39
 `define ROLI		7'h3A
 `define RORI		7'h3B
 `define SRAI		7'h3C
-
-`define RTE			7'h3E
-`define RTI			7'h3F
 `define FENCE		7'h40
 `define LB		7'h40
 `define LBU		7'h41
@@ -143,10 +143,18 @@
 `define LOTGRP		8'd42
 `define CASREG		8'd44
 `define MYSTREG		8'd45
+`define DBAD0		8'd50
+`define DBAD1		8'd51
+`define DBAD2		8'd52
+`define DBAD3		8'd53
+`define DBCTRL		8'd54
+`define DBSTAT		8'd55
 
 `define BRK_NMI	{1'b1,5'd0,9'd510,10'd0,`BRK}
 `define BRK_IRQ	{1'b1,5'd0,vect_i,10'd0,`BRK}
 `define BRK_EXF	{6'd0,9'd497,10'd0,`BRK}
+`define BRK_IBPT	{2'b01,4'd0,9'd496,10'd0,`BRK}
+`define BRK_SSM	{2'b01,4'd0,9'd495,10'd0,`BRK}
 
 module FISA64(rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter AMSB = 31;		// most significant address bit
@@ -214,13 +222,17 @@ reg [AMSB:0] vbr;			// vector base register
 reg [63:0] casreg;			// compare-and-swap compare register
 reg [6:0] mystreg;
 reg [49:0] clk_throttle_new;
+reg [63:0] dbctrl,dbstat;	// debug control, debug status
+reg [AMSB:0] dbad0,dbad1,dbad2,dbad3;	// debug address
+wire ssm = dbctrl[63];		// single step mode
 reg km;						// kernel mode
 reg [7:0] kmb;				// backup kernel mode flag
 reg pe;						// protected mode enabled
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
 reg [AMSB:0] pc,dpc,xpc,wpc,tpc;
-reg [AMSB:0] epc,ipc;			// exception and interrupt PC's
+reg [AMSB:0] epc,ipc,dbpc;	// exception, interrupt PC's, debug PC
+reg [AMSB:0] ibpt;			// instruction breakpoint
 reg gie;					// global interrupt enable
 reg StatusHWI;
 reg [31:4] ibufadr;
@@ -336,6 +348,81 @@ wire isLotOwnerX = km | (((lotgrp[0]==lottagX[15:6]) ||
 					(lotgrp[4]==lottagX[15:6]) ||
 					(lotgrp[5]==lottagX[15:6])))
 					;
+
+//-----------------------------------------------------------------------------
+// Debug
+//-----------------------------------------------------------------------------
+
+wire db_imatch0 = (dbctrl[0] && dbctrl[17:16]==2'b00 && pc[AMSB:2]==dbad0[AMSB:2]);
+wire db_imatch1 = (dbctrl[1] && dbctrl[21:20]==2'b00 && pc[AMSB:2]==dbad1[AMSB:2]);
+wire db_imatch2 = (dbctrl[2] && dbctrl[25:24]==2'b00 && pc[AMSB:2]==dbad2[AMSB:2]);
+wire db_imatch3 = (dbctrl[3] && dbctrl[29:28]==2'b00 && pc[AMSB:2]==dbad3[AMSB:2]);
+wire db_imatch = db_imatch0|db_imatch1|db_imatch2|db_imatch3;
+
+wire db_lmatch0 =
+			dbctrl[0] && dbctrl[17:16]==2'b11 && ea[AMSB:3]==dbad0[AMSB:3] &&
+				((dbctrl[19:18]==2'b00 && ea[2:0]==dbad0[2:0]) ||
+				 (dbctrl[19:18]==2'b01 && ea[2:1]==dbad0[2:1]) ||
+				 (dbctrl[19:18]==2'b10 && ea[2]==dbad0[2]) ||
+				 dbctrl[19:18]==2'b11)
+				 ;
+wire db_lmatch1 = 
+			dbctrl[1] && dbctrl[21:20]==2'b11 && ea[AMSB:3]==dbad1[AMSB:3] &&
+				((dbctrl[23:22]==2'b00 && ea[2:0]==dbad1[2:0]) ||
+				 (dbctrl[23:22]==2'b01 && ea[2:1]==dbad1[2:1]) ||
+				 (dbctrl[23:22]==2'b10 && ea[2]==dbad1[2]) ||
+				 dbctrl[23:22]==2'b11)
+		    ;
+wire db_lmatch2 = 
+			dbctrl[2] && dbctrl[25:24]==2'b11 && ea[AMSB:3]==dbad2[AMSB:3] &&
+				((dbctrl[27:26]==2'b00 && ea[2:0]==dbad2[2:0]) ||
+				 (dbctrl[27:26]==2'b01 && ea[2:1]==dbad2[2:1]) ||
+				 (dbctrl[27:26]==2'b10 && ea[2]==dbad2[2]) ||
+				 dbctrl[27:26]==2'b11)
+			;
+wire db_lmatch3 =
+			dbctrl[3] && dbctrl[29:28]==2'b11 && ea[AMSB:3]==dbad3[AMSB:3]  &&
+				((dbctrl[31:30]==2'b00 && ea[2:0]==dbad3[2:0]) ||
+				 (dbctrl[31:30]==2'b01 && ea[2:1]==dbad3[2:1]) ||
+				 (dbctrl[31:30]==2'b10 && ea[2]==dbad3[2]) ||
+				 dbctrl[31:30]==2'b11)
+			;
+wire db_lmatch = db_lmatch0|db_lmatch1|db_lmatch2|db_lmatch3;
+
+wire db_smatch0 =
+			dbctrl[0] && dbctrl[17:16]==2'b01 && ea[AMSB:3]==dbad0[AMSB:3] &&
+				((dbctrl[19:18]==2'b00 && ea[2:0]==dbad0[2:0]) ||
+				 (dbctrl[19:18]==2'b01 && ea[2:1]==dbad0[2:1]) ||
+				 (dbctrl[19:18]==2'b10 && ea[2]==dbad0[2]) ||
+				 dbctrl[19:18]==2'b11)
+				 ;
+wire db_smatch1 = 
+			dbctrl[1] && dbctrl[21:20]==2'b01 && ea[AMSB:3]==dbad1[AMSB:3] &&
+				((dbctrl[23:22]==2'b00 && ea[2:0]==dbad1[2:0]) ||
+				 (dbctrl[23:22]==2'b01 && ea[2:1]==dbad1[2:1]) ||
+				 (dbctrl[23:22]==2'b10 && ea[2]==dbad1[2]) ||
+				 dbctrl[23:22]==2'b11)
+		    ;
+wire db_smatch2 = 
+			dbctrl[2] && dbctrl[25:24]==2'b01 && ea[AMSB:3]==dbad2[AMSB:3] &&
+				((dbctrl[27:26]==2'b00 && ea[2:0]==dbad2[2:0]) ||
+				 (dbctrl[27:26]==2'b01 && ea[2:1]==dbad2[2:1]) ||
+				 (dbctrl[27:26]==2'b10 && ea[2]==dbad2[2]) ||
+				 dbctrl[27:26]==2'b11)
+			;
+wire db_smatch3 =
+			dbctrl[3] && dbctrl[29:28]==2'b01 && ea[AMSB:3]==dbad3[AMSB:3]  &&
+				((dbctrl[31:30]==2'b00 && ea[2:0]==dbad3[2:0]) ||
+				 (dbctrl[31:30]==2'b01 && ea[2:1]==dbad3[2:1]) ||
+				 (dbctrl[31:30]==2'b10 && ea[2]==dbad3[2]) ||
+				 dbctrl[31:30]==2'b11)
+			;
+wire db_smatch = db_smatch0|db_smatch1|db_smatch2|db_smatch3;
+
+wire db_stat0 = db_imatch0 | db_lmatch0 | db_smatch0;
+wire db_stat1 = db_imatch1 | db_lmatch1 | db_smatch1;
+wire db_stat2 = db_imatch2 | db_lmatch2 | db_smatch2;
+wire db_stat3 = db_imatch3 | db_lmatch3 | db_smatch3;
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -455,6 +542,12 @@ case(xopcode)
 			`LOTGRP:	res <= {lotgrp[5],lotgrp[4],lotgrp[3],lotgrp[2],lotgrp[1],lotgrp[0]};
 			`CASREG:	res <= casreg;
 			`MYSTREG:	res <= mystreg;
+			`DBCTRL:	res <= dbctrl;
+			`DBAD0:		res <= dbad0;
+			`DBAD1:		res <= dbad1;
+			`DBAD2:		res <= dbad2;
+			`DBAD3:		res <= dbad3;
+			`DBSTAT:	res <= dbstat;
 			default:	res <= 64'd0;
 			endcase
 		end
@@ -570,6 +663,8 @@ if (rst_i) begin
 	nmi1 <= `FALSE;
 	nmi_edge <= `FALSE;
 	ld_clk_throttle <= `FALSE;
+	dbctrl <= 64'd0;
+	dbstat <= 64'd0;
 end
 else begin
 tick <= tick + 64'd1;
@@ -578,6 +673,10 @@ nmi1 <= nmi_i;
 if (nmi_i & ~nmi1)
 	nmi_edge <= `TRUE;
 ld_clk_throttle <= `FALSE;
+if (db_stat0) dbstat[0] <= TRUE;
+if (db_stat1) dbstat[1] <= TRUE;
+if (db_stat2) dbstat[2] <= TRUE;
+if (db_stat3) dbstat[3] <= TRUE;
 case (state)
 RESET:
 begin
@@ -608,6 +707,8 @@ begin
 			ir <= `BRK_NMI;
 		else if (!StatusHWI & gie & !im & irq_i)
 			ir <= `BRK_IRQ;
+		else if (db_imatch)
+			ir <= `BRK_IBPT;
 		else if (!((isLotOwnerX && (km ? lottagX[0] : lottagX[3])) || !pe))
 			ir <= `BRK_EXF;
 		else
@@ -700,6 +801,11 @@ begin
 		wir <= xir;
 		wopcode <= xopcode;
 		wpc <= xpc;
+		if (ssm) begin
+			nop_ir();
+			nop_xir();
+			xir <= `BRK_SSM;
+		end
 		case(xopcode)
 		`RR:
 			case(xfunct)
@@ -724,6 +830,11 @@ begin
 					`CASREG:	casreg <= a;
 					`MYSTREG:	mystreg <= a;
 					`CLK:		begin clk_throttle_new <= res[49:0]; ld_clk_throttle <= `TRUE; end
+					`DBCTRL:	dbctrl <= a;
+					`DBAD0:		dbad0 <= a;
+					`DBAD1:		dbad1 <= a;
+					`DBAD2:		dbad2 <= a;
+					`DBAD3:		dbad3 <= a;
 					endcase
 				end
 				else begin
@@ -741,6 +852,28 @@ begin
 					`CLI:	imcd <= 3'b111;
 					`SEI:	im <= `TRUE;
 					`STP:	begin clk_throttle_new <= 50'd0; ld_clk_throttle <= `TRUE; end
+					
+					`RTD:
+						begin
+							km <= kmb[0];
+							kmb <= {1'b1,kmb[7:1]};
+							dbctrl[63] <= dbctrl[62];
+							update_pc(dbpc);
+						end
+					`RTE:
+						begin
+							km <= kmb[0];
+							kmb <= {1'b1,kmb[7:1]};
+							update_pc(epc);
+						end
+					`RTI:
+						begin
+							StatusHWI <= FALSE;
+							imcd <= 3'b111;
+							km <= kmb[0];
+							kmb <= {1'b1,kmb[7:1]};
+							update_pc(ipc);
+						end
 					endcase
 				else
 					privilege_violation();
@@ -755,22 +888,6 @@ begin
 					next_state(MULDIV);
 					advanceEXr <= FALSE;
 					end
-			`RTE:
-				if (km) begin
-					km <= kmb[0];
-					kmb <= {1'b1,kmb[7:1]};
-					update_pc(epc);
-				end
-				else privilege_violation();
-			`RTI:
-				if (km) begin
-					StatusHWI <= FALSE;
-				    imcd <= 3'b111;
-					km <= kmb[0];
-					kmb <= {1'b1,kmb[7:1]};
-					update_pc(ipc);
-				end
-				else privilege_violation();
 			endcase
 		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]))
 					overflow();
@@ -794,16 +911,21 @@ begin
 				else if (!takb & xbranch_taken)
 					update_pc(xpc + 64'd4);
 		`BRK:	begin
-				if (xir[31]) begin
-					StatusHWI <= `TRUE;
-					ipc <= xpc;
-					if (xir[25:17]==9'd510)
-						nmi_edge <= FALSE;
-					else
-						im <= TRUE;
-				end
-				else
-					epc <= xpc;
+				case(xir[31:30])
+				2'b00:	epc <= xpc;
+				2'b01:	dbpc <= xpc;
+				2'b10:
+					begin
+						StatusHWI <= `TRUE;
+						ipc <= xpc;
+						if (xir[25:17]==9'd510)
+							nmi_edge <= FALSE;
+						else
+							im <= TRUE;
+					end
+				endcase
+				dbctrl[62] <= dbctrl[63];
+				dbctrl[63] <= FALSE;	// clear SSM
 				kmb <= {kmb[6:0],km};
 				km <= `TRUE;
 				advanceEXr <= FALSE;
@@ -1083,8 +1205,15 @@ LOAD1:	next_state(LOAD2);
 
 LOAD2:
 	begin
+		// Check for a breakpoint
+		if (db_lmatch) begin
+			wb_read1(word,{vbr[AMSB:12],9'd496,3'b000});	// Breakpoint
+			mopcode <= `BRK;
+			dbpc <= xpc;
+			next_state(LOAD3);
+		end
 		// Check for read attribute on lot
-		if ((isLotOwner && (km ? lottag[2] : lottag[5])) || !pe) begin
+		else if ((isLotOwner && (km ? lottag[2] : lottag[5])) || !pe) begin
 			$display("LOAD: %h",ea);
 			wb_read1(ld_size,ea);
 			next_state(LOAD3);
@@ -1347,8 +1476,15 @@ STORE1:	begin next_state(STORE2); end
 
 STORE2:
 	begin
+		// Check for a breakpoint
+		if (db_smatch|db_lmatch) begin
+			wb_read1(word,{vbr[AMSB:12],9'd496,3'b000});	// Breakpoint
+			mopcode <= `BRK;
+			dbpc <= xpc;
+			next_state(LOAD3);
+		end
 		// check for write attribute on lot
-		if ((isLotOwner && (km ? lottag[1] : lottag[4])) || !pe) begin
+		else if ((isLotOwner && (km ? lottag[1] : lottag[4])) || !pe) begin
 			wb_write1(st_size,ea,xb);
 			$display("STORE: %h=%h",ea,xb);
 			next_state(STORE3);
@@ -1658,6 +1794,8 @@ begin
 	tpc[1:0] <= 2'b00;
 	nop_ir();
 	nop_xir();
+	if (ssm)
+		xir <= `BRK_SSM;
 end
 endtask
 
@@ -1674,7 +1812,7 @@ begin
 	advanceEXr <= FALSE;
 	mopcode <= `BRK;
 	mir <= xir;
-	ea <= {vbr[31:12],9'd501,3'b000};	// privilege violation
+	ea <= {vbr[AMSB:12],9'd501,3'b000};	// privilege violation
 	ld_size <= word;
 	next_state(LOAD1);
 end
@@ -1686,7 +1824,7 @@ begin
 	advanceEXr <= FALSE;
 	mopcode <= `BRK;
 	mir <= xir;
-	ea <= {vbr[31:12],9'd489,3'b000};	// overflow violation
+	ea <= {vbr[AMSB:12],9'd489,3'b000};	// overflow violation
 	ld_size <= word;
 	next_state(LOAD1);
 end
@@ -1706,7 +1844,9 @@ LOAD2:  fnStateName = "LOAD2 ";
 LOAD3:  fnStateName = "LOAD3 ";
 LOAD4:  fnStateName = "LOAD4 ";
 LOAD5:  fnStateName = "LOAD5 ";
+CAS:  fnStateName = "CAS    ";
 INC:  fnStateName = "INC    ";
+PMW:  fnStateName = "PUSH m ";
 STORE1:  fnStateName = "STORE1 ";
 STORE2:  fnStateName = "STORE2 ";
 STORE3:  fnStateName = "STORE3 ";
