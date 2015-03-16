@@ -155,8 +155,10 @@
 `define BRK_EXF	{6'd0,9'd497,10'd0,`BRK}
 `define BRK_IBPT	{2'b01,4'd0,9'd496,10'd0,`BRK}
 `define BRK_SSM	{2'b01,4'd0,9'd495,10'd0,`BRK}
+`define BRK_IBE	{1'b1,5'd0,9'd509,10'd0,`BRK}
 
-module FISA64(rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module FISA64(rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o,
+	cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter AMSB = 31;		// most significant address bit
 input rst_i;
 input clk_i;
@@ -170,6 +172,7 @@ output reg [5:0] bl_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
+input err_i;
 output reg we_o;
 output reg [7:0] sel_o;
 output reg [AMSB:0] adr_o;
@@ -304,8 +307,8 @@ FISA64_icache_ram u1
 (
 	.wclk(clk),
 	.wa(adr_o[12:0]),
-	.wr(isICacheLoad & ack_i),
-	.i(dat_i),
+	.wr(isICacheLoad & (ack_i|err_i)),
+	.i(err_i ? {2{`BRK_IBE}} : dat_i),
 	.rclk(~clk),
 	.pc(pc[12:0]),
 	.insn(insn)
@@ -316,7 +319,7 @@ FISA64_itag_ram u2
 	.wclk(clk),
 	.wa(adr_o),
 	.v(!isICacheReset),
-	.wr((isICacheLoad & ack_i && (adr_o[3]==1'b1))|isICacheReset),
+	.wr((isICacheLoad & (ack_i|err_i) && (adr_o[3]==1'b1))|isICacheReset),
 	.rclk(~clk),
 	.pc(pc),
 	.hit(ihit)
@@ -1225,7 +1228,9 @@ LOAD2:
 		end
 	end
 LOAD3:
-	if (ack_i) begin
+	if (err_i)
+		databus_error();
+	else if (ack_i) begin
 		case(mopcode)
 		`LB,`LBX:
 			begin
@@ -1365,7 +1370,9 @@ LOAD4:
 		next_state(LOAD5);
 	end
 LOAD5:
-	if (ack_i) begin
+	if (err_i)
+		databus_error();
+	else if (ack_i) begin
 		if (mopcode==`INC) begin
 			wb_half_nack();
 			next_state(INC);
@@ -1496,7 +1503,9 @@ STORE2:
 		end
 	end
 STORE3:
-	if (ack_i) begin
+	if (err_i)
+		databus_error();
+	else if (ack_i) begin
 		if ((st_size==char && ea[2:0]==3'b111) ||
 			(st_size==half && ea[2:0]>3'd4) ||
 			(st_size==word && ea[2:0]!=3'b00)) begin
@@ -1515,7 +1524,9 @@ STORE4:
 		next_state(STORE5);
 	end
 STORE5:
-	if (ack_i) begin
+	if (err_i)
+		databus_error();
+	else if (ack_i) begin
 		wb_nack();
 		advanceEXr <= TRUE;
 		next_state(RUN);
@@ -1799,6 +1810,17 @@ task next_state;
 input [5:0] st;
 begin
 	state <= st;
+end
+endtask
+
+task databus_error;
+begin
+	wb_nack();
+	ea <= {vbr[AMSB:12],9'd508,3'b000};	// Databus error
+	mopcode <= `BRK;
+	ipc <= xpc;
+	ld_size <= word;
+	next_state(LOAD1);
 end
 endtask
 
