@@ -34,6 +34,9 @@
 `define BFINSI		3'd4
 `define BFEXT		3'd5
 `define BFEXTU		3'd6
+`define NAND		7'h00
+`define NOR			7'h01
+`define ENOR		7'h02
 `define ADD		7'h04
 `define SUB		7'h05
 `define CMP		7'h06
@@ -41,6 +44,7 @@
 `define DIV		7'h08
 `define MOD		7'h09
 `define LDI		7'h0A
+`define NOT			7'h0A
 `define MOV			7'h0B
 `define AND		7'h0C
 `define OR		7'h0D
@@ -134,6 +138,7 @@
 `define CR3			8'd03
 `define TICK		8'd04
 `define CLK			8'd06
+`define DBPC		8'd07
 `define IPC			8'd08
 `define EPC			8'd09
 `define VBR			8'd10
@@ -244,6 +249,7 @@ reg [63:0] sp;
 reg [31:0] ir,xir,mir,wir;
 wire [6:0] iopcode = insn[6:0];
 wire [6:0] opcode = ir[6:0];
+wire [6:0] ifunct = insn[31:25];
 wire [6:0] funct = ir[31:25];
 reg [6:0] xfunct,mfunct;
 reg [6:0] xopcode,mopcode,wopcode;
@@ -540,6 +546,7 @@ case(xopcode)
 			`CR0:		res <= pe;
 			`TICK:		res <= tick;
 			`CLK:		res <= clk_throttle_new;
+			`DBPC:		res <= dbpc;
 			`EPC:		res <= epc;
 			`IPC:		res <= ipc;
 			`VBR:		res <= vbr;
@@ -571,9 +578,13 @@ case(xopcode)
 	`SUBU:	res <= a - b;
 	`CMP:	res <= lt ? 64'hFFFFFFFFFFFFFFFF : eq ? 64'd0 : 64'd1;
 	`CMPU:	res <= ltu ? 64'hFFFFFFFFFFFFFFFF : eq ? 64'd0 : 64'd1;
+	`NOT:	res <= ~|a;
 	`AND:	res <= a & b;
 	`OR:	res <= a | b;
 	`EOR:	res <= a ^ b;
+	`NAND:	res <= ~(a & b);
+	`NOR:	res <= ~(a | b);
+	`ENOR:	res <= ~(a ^ b);
 	`SEQ:	res <= eq;
 	`SNE:	res <= !eq;
 	`SGT:	res <= !(lt|eq);
@@ -723,14 +734,24 @@ begin
 		$display("%h: %h", pc, insn);
 		dpc <= pc;
 		dbranch_taken <= FALSE;
+		// We take the following control transfers immediately in the IF stage,
+		// that makes them single cycle operations.
 		if (iopcode==`Bcc && predict_taken) begin
 			pc <= pc + {{47{insn[31]}},insn[31:17],2'b00};
 			dbranch_taken <= TRUE;
 		end
 		else if (iopcode==`BSR || iopcode==`BRA)
 			pc <= pc + {{37{insn[31]}},insn[31:7],2'b00};
+		else if (iopcode==`RR && ifunct==`PCTRL) begin
+			case(insn[21:17])
+			`RTD:	pc <= dbpc;
+			`RTE:	pc <= epc;
+			`RTI:	pc <= ipc;
+			default:	pc <= pc + 64'd4;
+			endcase
+		end
 		else
-			pc <= pc + 32'd4;
+			pc <= pc + 64'd4;
 	end
 	else begin
 		// On a cache miss, return flow to the head of any immediate prefix
@@ -803,10 +824,18 @@ begin
 		wir <= xir;
 		wopcode <= xopcode;
 		wpc <= xpc;
+		// The following ssm conditional places a BRK instruction in the 
+		// instruction stream immediately after an instruction. Immediate prefixes
+		// are not single-stepped. As soon as the SSM condition passes we turn it
+		// off so that the debug routine may run full speed.
 		if (ssm) begin
-			nop_ir();
-			nop_xir();
-			xir <= `BRK_SSM;
+			if (xopcode != `IMM) begin
+				xRt <= 5'd0;				// Inject appropriate BRK instruction
+				xopcode <= `BRK;			// into instruction stream.
+				xir <= `BRK_SSM;
+				dbctrl[62] <= dbctrl[63];	// record that SSM was on
+				dbctrl[63] <= FALSE;		// turn off SSM
+			end
 		end
 		case(xopcode)
 		`RR:
@@ -815,6 +844,7 @@ begin
 				if (km) begin
 					case(xir[24:17])
 					`CR0:		pe <= a[0];
+					`DBPC:		dbpc <= {a[AMSB:2],2'b00};
 					`EPC:		epc <= {a[AMSB:2],2'b00};
 					`IPC:		ipc <= {a[AMSB:2],2'b00};
 					`VBR:		begin vbr <= a[AMSB:0]; vbr[12:0] <= 13'h000; end
@@ -859,14 +889,12 @@ begin
 						begin
 							km <= kmb[0];
 							kmb <= {1'b1,kmb[7:1]};
-							dbctrl[63] <= dbctrl[62];
-							update_pc(dbpc);
+							dbctrl[63] <= dbctrl[62];	// maybe turn SSM back on
 						end
 					`RTE:
 						begin
 							km <= kmb[0];
 							kmb <= {1'b1,kmb[7:1]};
-							update_pc(epc);
 						end
 					`RTI:
 						begin
@@ -874,7 +902,6 @@ begin
 							imcd <= 3'b111;
 							km <= kmb[0];
 							kmb <= {1'b1,kmb[7:1]};
-							update_pc(ipc);
 						end
 					endcase
 				else
@@ -908,6 +935,7 @@ begin
 					update_pc(a);
 					$display("RTS: pc<=%h", a);
 				end
+		// Correct a mispredicted branch.
 		`Bcc:	if (takb & !xbranch_taken)
 					update_pc(xpc + {imm,2'b00});
 				else if (!takb & xbranch_taken)
@@ -915,7 +943,12 @@ begin
 		`BRK:	begin
 				case(xir[31:30])
 				2'b00:	epc <= xpc;
-				2'b01:	dbpc <= xpc;
+				2'b01:
+					begin
+						dbpc <= xpc;
+						//dbctrl[62] <= dbctrl[63];
+						//dbctrl[63] <= FALSE;	// clear SSM
+					end
 				2'b10:
 					begin
 						StatusHWI <= `TRUE;
@@ -926,10 +959,6 @@ begin
 							im <= TRUE;
 					end
 				endcase
-				dbctrl[62] <= dbctrl[63];
-				dbctrl[63] <= FALSE;	// clear SSM
-				kmb <= {kmb[6:0],km};
-				km <= `TRUE;
 				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				mir <= xir;
@@ -1136,9 +1165,9 @@ MULDIV:
 					q <= pa[62:0];
 					r <= pa[63];
 					res_sgn <= a[63] ^ b[63];
-//					if (b==64'd0)
-//						divide_by_zero();
-//					else
+					if (b==64'd0)
+						divide_by_zero();
+					else
 						next_state(DIV);
 				end
 			default:
@@ -1212,6 +1241,8 @@ LOAD2:
 			wb_read1(word,{vbr[AMSB:12],9'd496,3'b000});	// Breakpoint
 			mopcode <= `BRK;
 			dbpc <= xpc;
+			dbctrl[62] <= dbctrl[63];
+			dbctrl[63] <= FALSE;	// clear SSM
 			next_state(LOAD3);
 		end
 		// Check for read attribute on lot
@@ -1487,6 +1518,8 @@ STORE2:
 			wb_read1(word,{vbr[AMSB:12],9'd496,3'b000});	// Breakpoint
 			mopcode <= `BRK;
 			dbpc <= xpc;
+			dbctrl[62] <= dbctrl[63];
+			dbctrl[63] <= FALSE;	// clear SSM
 			next_state(LOAD3);
 		end
 		// check for write attribute on lot
@@ -1784,9 +1817,11 @@ endtask
 
 task nop_xir;
 begin
-	xopcode <= 7'h3F;
-	xRt <= 6'b0;
-	xir <= {25'h0,7'h3F};	// NOP
+	if (xir!=`BRK_SSM) begin
+		xopcode <= 7'h3F;
+		xRt <= 6'b0;
+		xir <= {25'h0,7'h3F};	// NOP
+	end
 end
 endtask 
 
@@ -1843,6 +1878,19 @@ begin
 	mopcode <= `BRK;
 	mir <= xir;
 	ea <= {vbr[AMSB:12],9'd489,3'b000};	// overflow violation
+	ld_size <= word;
+	next_state(LOAD1);
+end
+endtask
+
+// function argument bad
+task divide_by_zero;
+begin
+	epc <= xpc;
+	advanceEXr <= FALSE;
+	mopcode <= `BRK;
+	mir <= xir;
+	ea <= {vbr[AMSB:12],9'd488,3'b000};	// divide_by_zero
 	ld_size <= word;
 	next_state(LOAD1);
 end

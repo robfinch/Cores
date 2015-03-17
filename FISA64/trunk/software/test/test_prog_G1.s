@@ -22,14 +22,6 @@
 loop1:
     subui   r3,r3,#1
     bne     r3,loop1
-    ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
-    sw      r1,495*8
-    ldi     r1,#IBPT_ISR         ; set ISR vector for instruction breakpoint routine
-    sw      r1,496*8
-    ldi     r1,#brkpt1           ; set breakpoint address
-    mtspr   dbad0,r1
-    ldi     r1,#$8000000000000001   ; enable instruction breakpoint, turn on single step mode
-    mtspr   dbctrl,r1
     nop
     nop
     nop
@@ -49,11 +41,10 @@ hangprg:
 SetupMemtags:
     mtspr   ea,r0                ; select tag for first 64kB
     ldi     r1,#$0006            ; system only: readable, writeable, not executable
-brkpt1:
     mtspr   tag,r1
     ldi     r1,#$10000           ; select tag for second 64kB
     mtspr   ea,r1
-    ldi     r2,#$0005            ; system only: readable, executable, not writeable
+    ldi     r2,#$0005            ; systme only: readable, executable, not writeable
     mtspr   tag,r2
     ldi     r3,#20-2             ; number of tags to setup
 .0001:
@@ -101,13 +92,4 @@ Clearscreen:
     nop
     nop
     nop
-
-SSM_ISR:
-    rtd
-
-IBPT_ISR:
-    rtd
-.0001:
-    bra     .0001
-         
 
