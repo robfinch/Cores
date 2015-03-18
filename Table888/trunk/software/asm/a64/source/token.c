@@ -1179,7 +1179,7 @@ int NextToken()
             }
             break;
 
-        // rol roli ror rori rte rts rti rodata
+        // rol roli ror rori rtd rte rts rti rodata
         case 'r': case 'R':
             if ((inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='s' || inptr[2]=='S') && isspace(inptr[3])) {
                 inptr += 3;
@@ -1208,6 +1208,10 @@ int NextToken()
             if ((inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='e' || inptr[2]=='E') && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_rte;
+            }
+            if ((inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='d' || inptr[2]=='D') && isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_rtd;
             }
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  (inptr[2]=='d' || inptr[2]=='D') &&

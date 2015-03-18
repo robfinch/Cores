@@ -30,6 +30,13 @@
 
 #define BCC(x)       (((x) << 12)|0x38)
 
+// Fixup types
+#define FUT_C15       1
+#define FUT_C40       2
+#define FUT_C64       3
+#define FUT_R27       4
+
+
 static void emitAlignedCode(int cd);
 static void process_shifti(int oc);
 static void ProcessEOL(int opt);
@@ -41,6 +48,7 @@ static int64_t ca;
 
 extern int use_gp;
 
+// This structure not used.
 typedef struct tagInsn
 {
     union {
@@ -63,6 +71,7 @@ typedef struct tagInsn
 
 // ----------------------------------------------------------------------------
 // Return the register number or -1 if not a register.
+// Parses pretty register names like SP or BP in addition to r1,r2,etc.
 // ----------------------------------------------------------------------------
 
 static int getRegisterX()
@@ -192,6 +201,56 @@ static int FISA64_getSprRegister()
              inptr += 3;
              NextToken();
              return 0x03;
+         }
+         break;
+
+    // dbad0 dbad1 dbctrl
+    case 'd': case 'D':
+         if ((inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='0' || inptr[4]=='0') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 50;
+         }
+         if ((inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='1' || inptr[4]=='1') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 51;
+         }
+         if ((inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='2' || inptr[4]=='2') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 52;
+         }
+         if ((inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='3' || inptr[4]=='3') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 53;
+         }
+         if ((inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='c' || inptr[2]=='C') &&
+             (inptr[3]=='t' || inptr[3]=='T') &&
+             (inptr[4]=='r' || inptr[4]=='R') &&
+             (inptr[5]=='l' || inptr[5]=='L') &&
+             !isIdentChar(inptr[6])) {
+             inptr += 6;
+             NextToken();
+             return 54;
          }
          break;
 
@@ -388,178 +447,79 @@ static void emitAlignedCode(int cd)
 
 
 // ---------------------------------------------------------------------------
-// Emit constant extension for memory operands.
+// Emit constant extension for 15-bit operands.
+// Returns number of constant prefixes placed.
 // ---------------------------------------------------------------------------
 
-static void emitImm0(int64_t v, int force)
+static int emitImm15(int64_t v, int force)
 {
-     if (v != 0 || force) {
-          emitAlignedCode(0xfd);
-          emitCode(v & 255);
-          emitCode((v >> 8) & 255);
-          emitCode((v >> 16) & 255);
-          emitCode((v >> 24) & 255);
-     }
-     if (((v < 0) && ((v >> 32) != -1L)) || ((v > 0) && ((v >> 32) != 0L)) || (force && data_bits > 32)) {
-          emitAlignedCode(0xfe);
-          emitCode((v >> 32) & 255);
-          emitCode((v >> 40) & 255);
-          emitCode((v >> 48) & 255);
-          emitCode((v >> 56) & 255);
-     }
-}
+     int nn;
 
-// ---------------------------------------------------------------------------
-// Emit constant extension for memory operands.
-// ---------------------------------------------------------------------------
-
-static void emitImm2(int64_t v, int force)
-{
-     if (v < 0L || v > 3L || force) {
-          emitAlignedCode(0xfd);
-          emitCode((v >> 2) & 255);
-          emitCode((v >> 10) & 255);
-          emitCode((v >> 18) & 255);
-          emitCode((v >> 26) & 255);
+     nn = 0;
+     if (((v < 0) && ((v >> 40) != -1L)) || ((v > 0) && ((v >> 40) != 0L)) || (force && (code_bits > 40 || data_bits > 40))) {
+         emit_insn(0x7c|(((v >> 40)&0x7FFFFFLL) << 7));
+         nn = 1;
      }
-     if (((v < 0) && ((v >> 34) != -1L)) || ((v > 0) && ((v >> 34) != 0L)) || (force && data_bits > 34)) {
-          emitAlignedCode(0xfe);
-          emitCode((v >> 34) & 255);
-          emitCode((v >> 42) & 255);
-          emitCode((v >> 50) & 255);
-          emitCode((v >> 58) & 255);
-     }
-}
- 
-// ---------------------------------------------------------------------------
-// Emit constant extension for memory operands.
-// ---------------------------------------------------------------------------
-
-static void emitImm11(int64_t v, int force)
-{
-     if (v < -1024L || v > 1023L || force) {
-           emit_insn(
-               (((v >> 11) & 0x3ffffffff) << 6) |
-               60
-           );
-     }
-     if (((v < 0) && ((v >> 45) != -1L)) || ((v > 0) && ((v >> 45) != 0L)) || (force && data_bits > 45)) {
-           emit_insn(
-               (((v >> 45) & 0x3ffffffff) << 6) |
-               61
-           );
-     }
-}
- 
-// ---------------------------------------------------------------------------
-// Emit constant extension for 16-bit operands.
-// ---------------------------------------------------------------------------
-
-static void emitImm15(int64_t v, int force)
-{
-     if (((v < 0) && ((v >> 40) != -1L)) || ((v > 0) && ((v >> 40) != 0L)) || (force && (code_bits > 40 || data_bits > 40)))
-         emit_insn(0x7c|(((v >> 40)&0xFFFFFFLL) << 7));
-     if (v < -16384LL || v > 16383LL || force)
+     if (v < -16384LL || v > 16383LL || force) {
          emit_insn(0x7c|(((v >> 15)&0x1FFFFFFLL) << 7));
+         nn = nn + 1;
+     }
+     // ToDo: modify the fixup record type based on the number of prefixes emitted.
+    if (bGen && lastsym && !use_gp && (lastsym->isExtern || lastsym->defined==0))
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | nn+1 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+     return nn;
 }
 
 // ---------------------------------------------------------------------------
-// Emit constant extension for 24-bit operands.
+// COM is an alternate mnemonic for EOR Rt,Ra,#-1
+// com r3,r3
 // ---------------------------------------------------------------------------
 
-static void emitImm20(int64_t v, int force)
+static void process_com()
 {
-     if (v < -524288L || v > 524287L || force) {
-          emitAlignedCode(0xfd);
-          emitCode((v >> 20) & 255);
-          emitCode((v >> 28) & 255);
-          emitCode((v >> 36) & 255);
-          emitCode((v >> 44) & 255);
-     }
-     if (((v < 0) && ((v >> 52) != -1L)) || ((v > 0) && ((v >> 52) != 0L)) || (force && (code_bits > 52 || data_bits > 52))) {
-          emitAlignedCode(0xfe);
-          emitCode((v >> 52) & 255);
-          emitCode((v >> 60) & 255);
-          emitCode(0x00);
-          emitCode(0x00);
-     }
+    int Ra;
+    int Rt;
+
+    Rt = getRegister();
+    need(',');
+    Ra = getRegister();
+    prevToken();
+    emit_insn(
+        (0x7fff << 17) |
+        (Rt << 12) |
+        (Ra << 7) |
+        0x0e           // EOR
+    );
 }
 
 // ---------------------------------------------------------------------------
-// Emit constant extension for 22-bit operands.
-// ---------------------------------------------------------------------------
-
-static void emitImm22(int64_t v, int force)
-{
-     if (v < -2097152L || v > 2097151L || force) {
-          emit_insn(
-              (((v >> 22) & 0x3ffffffff) << 6) |
-              60
-          );
-     }
-     if (((v < 0) && ((v >> 56) != -1L)) || ((v > 0) && ((v >> 56) != 0L)) || (force && (code_bits > 56 || data_bits > 56))) {
-          emit_insn(
-              (((v >> 56) & 0xff) << 6) |
-              61
-          );
-     }
-}
-
-// ---------------------------------------------------------------------------
-// Emit constant extension for 24-bit operands.
-// ---------------------------------------------------------------------------
-
-static void emitImm24(int64_t v, int force)
-{
-     if (v < -8388608L || v > 8388607L || force) {
-          emitAlignedCode(0xfd);
-          emitCode((v >> 24) & 255);
-          emitCode((v >> 32) & 255);
-          emitCode((v >> 40) & 255);
-          emitCode((v >> 48) & 255);
-     }
-     if (((v < 0) && ((v >> 56) != -1L)) || ((v > 0) && ((v >> 56) != 0L)) || (force && (code_bits > 56 || data_bits > 56))) {
-          emitAlignedCode(0xfe);
-          emitCode((v >> 56) & 255);
-          emitCode(0x00);
-          emitCode(0x00);
-          emitCode(0x00);
-     }
-}
-
-// ---------------------------------------------------------------------------
-// Emit constant extension for 32-bit operands.
-// ---------------------------------------------------------------------------
-
-static void emitImm32(int64_t v, int force)
-{
-     if (v < -2147483648LL || v > 2147483647LL || force) {
-          emitAlignedCode(0xfd);
-          emitCode((v >> 32) & 255);
-          emitCode((v >> 40) & 255);
-          emitCode((v >> 48) & 255);
-          emitCode((v >> 56) & 255);
-     }
-}
-
-// ---------------------------------------------------------------------------
-// jmp main
-// jsr [r19]
+// JAL also processes JMP and JSR
+// jal r0,main
+// jal r0,[r19]
 // jmp (tbl,r2)
-// jsr [gp+r20]
 // ---------------------------------------------------------------------------
 
-static void process_jmp(int oc)
+static void process_jal(int oc, int Rt)
 {
     int64_t addr;
     int Ra, Rb;
-    int sg;
     
-    sg = 1; // Assume data segment
+    // -1 indicates to parse a target register
+    if (Rt == -1) {
+        Rt = getRegisterX();
+        if (Rt==-1) {
+            printf("Expecting a target register.");
+            return ;
+        }
+        need(',');
+    }
     NextToken();
     // Memory indirect ?
     if (token=='(' || token=='[') {
        Ra = getRegisterX();
+       // This memory indirect code isn't supported by the processor.
        if (Ra==-1) {
            Ra = 0;
            NextToken();
@@ -568,58 +528,28 @@ static void process_jmp(int oc)
            if (token==',') {
                Ra = getRegisterX();
                if (Ra==-1) Ra = 0;
-               if (Ra==255 || Ra==253)
-                  sg = 14;
-               else if (Ra==254)
-                    sg = 15;
-               else if (Ra==252)
-                    sg = 12;
            }
-            if (segprefix >= 0)
-               sg = segprefix;
            if (token!=')' && token != ']')
                printf("Missing close bracket.\r\n");
-/*
-           if (lastsym != (SYM *)NULL)
-               emitImm20(addr,!lastsym->defined);
-           else
-               emitImm20(addr,0);
-*/
-           emitImm20(addr,lastsym!=(SYM*)NULL);
-           emitAlignedCode(oc+2);
-            if (bGen)
-                if (lastsym && !use_gp) {
-                    if( lastsym->segment < 5)
-                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 8 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
-                }
-           emitCode(Ra);
-           emitCode(((addr << 4) & 0xF0)|sg);
-           emitCode((addr >> 4) & 255);
-           emitCode((addr >> 12) & 255);
+           emitImm15(addr,lastsym!=(SYM*)NULL);
+           emit_insn(
+               ((addr & 0x7fffLL) << 17) |
+               (Rt << 12) |
+               (Ra << 7) | 
+               0x3e
+           );
            return;
        }
-       // Simple [Rn] or [Rn+Rn]?
+       // Simple [Rn]
        else {
-            if (token == '+') {
-                //NextToken();
-                Rb = getRegisterX();
-                emitAlignedCode(0x65);  // JSR [Ra+Rb]
-                emitCode(Ra);
-                emitCode(Rb);
-                emitCode(0x00);
-                emitCode(0x00);
-                return;
-            }
-            else {
-                if (token != ')' && token!=']')
-                    printf("Missing close bracket\r\n");
-                emitAlignedCode(oc + 4);
-                emitCode(Ra);
-                emitCode(0x00);
-                emitCode(0x00);
-                emitCode(0x00);
-                return;
-            }
+            if (token != ')' && token!=']')
+                printf("Missing close bracket\r\n");
+            emit_insn(
+                (Rt << 12) |
+                (Ra << 7) |
+                0x3C
+            );
+            return;
        }
     }
     addr = expr();
@@ -632,38 +562,22 @@ static void process_jmp(int oc)
             printf("Illegal jump address mode.\r\n");
             Ra = 0;
         }
-        if (token=='+') {
-            emitImm0(addr,0);
-            Rb = getRegisterX();
-            emitAlignedCode(0x65);  // JSR [Ra+Rb]
-            emitCode(Ra);
-            emitCode(Rb);
-            emitCode(0x00);
-            emitCode(0x00);
-            return;
-        }
-        else {
-            emitImm24(addr,0);
-            emitAlignedCode(oc+4);
-            emitCode(Ra);
-            emitCode(addr & 255);
-            emitCode((addr >> 8) & 255);
-            emitCode((addr >> 16) & 255);
-            return;
-        }
+        emitImm15(addr,0);
+        emit_insn(
+            ((addr & 0x7fffLL) << 17) |
+            (Rt << 12) |
+            (Ra << 7) | 
+            0x3C
+        );
+        return;
     }
 
-    emitImm32(addr, code_bits > 32);
-    emitAlignedCode(oc);
-    if (bGen)
-       if (lastsym && !use_gp) {
-            if( lastsym->segment < 5)
-                sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
-        }
-    emitCode(addr & 255);
-    emitCode((addr >> 8) & 255);
-    emitCode((addr >> 16) & 255);
-    emitCode((addr >> 24) & 255);
+    emitImm15(addr, code_bits > 32);
+    emit_insn(
+        ((addr & 0x7fffLL) << 17) |
+        (Rt << 12) |
+        0x3C
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -684,19 +598,7 @@ static void process_riop(int oc)
     need(',');
     NextToken();
     val = expr();
-/*
-   if (lastsym != (SYM *)NULL)
-       emitImm16(val,!lastsym->defined);
-   else
-       emitImm16(val,0);
-*/
     emitImm15(val,lastsym!=(SYM*)NULL);
-    if (bGen)
-    if (lastsym && !use_gp) {
-        if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 3 | (lastsym->isExtern ? 128 : 0) |
-        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
-    }
     emit_insn(
         ((val & 0x7fff) << 17) |
         (Rt << 12) |
@@ -948,6 +850,11 @@ static void process_bra(int oc)
     val = 0;
     NextToken();
     val = expr();
+     // ToDo: modify the fixup record type based on the number of prefixes emitted.
+    if (bGen && lastsym && (lastsym->isExtern || lastsym->defined==0))
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     ad = code_address;
     disp = ((val - ad) >> 2) & 0x1ffffffLL;
     emit_insn(
@@ -1097,7 +1004,6 @@ static void process_store(int oc)
     int Rs;
     int sc;
     int md;
-    int fixup;
     int64_t disp;
 
     Rs = getRegisterX();
@@ -1109,14 +1015,10 @@ static void process_store(int oc)
         return;
     }
     if (Rb > 0) {
-       fixup = 11;
-       emitImm11(disp,lastsym!=(SYM*)NULL);
-        if (bGen)
-        if (lastsym && Ra != 249 && !use_gp) {
-        if( lastsym->segment < 5)
-            sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
-            (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
-        }
+       if (disp < 0)
+           printf("store offset must be greater than zero.\r\n");
+       if (disp > 255LL)
+           printf("store offset too large.\r\n");
         emit_insn(
             ((disp & 0xff) << 24) |
             (sc << 22) |
@@ -1127,18 +1029,7 @@ static void process_store(int oc)
         );
        return;
     }
-        fixup = 10;
-        if (disp < 0xFFFFFFFFFFFF8000LL || disp > 0x7FFFLL) /*{
-           if (lastsym != (SYM *)NULL)
-               emitImm12(disp,!lastsym->defined);
-           else
-               emitImm12(disp,0);
-        } */
-            emitImm15(disp,lastsym!=(SYM*)NULL);
-    if (bGen && lastsym && Ra != 249 && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emitImm15(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
     emit_insn(
         ((disp & 0x7fff) << 17) |
@@ -1156,21 +1047,12 @@ static void process_ldi(int oc)
 {
     int Rt;
     int64_t val;
+    int nn;
 
     Rt = getRegisterX();
     expect(',');
     val = expr();
-/*
-   if (lastsym != (SYM *)NULL)
-       emitImm24(val,!lastsym->defined);
-   else
-       emitImm24(val,0);
-*/
     emitImm15(val,lastsym!=(SYM*)NULL);
-    if (bGen && lastsym && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 2 | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_insn(
         ((val & 0x7FFFLL) << 17) |
         (Rt << 12) |
@@ -1207,7 +1089,10 @@ static void process_load(int oc)
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
     if (Rb >= 0) {
-       emitImm11(disp,lastsym!=(SYM*)NULL);
+       if (disp < 0)
+           printf("load offset must be greater than zero.\r\n");
+       if (disp > 255LL)
+           printf("load offset too large.\r\n");
        fixup = 11;
        if (oc==0x87) {  //LWS
           printf("Address mode not supported.\r\n");
@@ -1215,10 +1100,6 @@ static void process_load(int oc)
        }
        if (oc==0x9F) oc = 0x8F;  // LEA
        else oc = oc + 8;
-        if (bGen && lastsym && Ra != 249 && !use_gp)
-        if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
-        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
         emit_insn(
             ((disp & 0xff) << 24) |
             (sc << 22) |
@@ -1229,18 +1110,7 @@ static void process_load(int oc)
         );
        return;
     }
-    fixup = 10;       // 12 bit
-    if (disp < 0xFFFFFFFFFFFF7000LL || disp > 0x7FFFLL) /*{
-       if (lastsym != (SYM *)NULL)
-           emitImm12(disp,!lastsym->defined);
-       else
-           emitImm12(disp,0);
-    } */
-        emitImm15(disp,lastsym!=(SYM*)NULL);
-    if (bGen && lastsym && Ra != 249 && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emitImm15(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
     emit_insn(
         ((disp & 0x7ffff) << 17) |
@@ -1279,7 +1149,8 @@ static void process_inc(int oc)
         prevToken();
     }
     if (Rb >= 0) {
-       emitImm0(disp,lastsym!=(SYM*)NULL);
+       printf("INC: unsupported address mode.\r\n");
+       return;
        fixup = 11;
        oc = 0xC1;  // INCX
        emitAlignedCode(oc);
@@ -1295,18 +1166,7 @@ static void process_inc(int oc)
     }
     if (oc==0x65) neg = 1;
     oc = 0x64;        // INC
-    fixup = 10;       // 12 bit
-    if (disp < 0xFFFFFFFFFFFF7000LL || disp > 0x7FFFLL) /*{
-         if (lastsym != (SYM *)NULL)
-           emitImm12(disp,!lastsym->defined);
-       else
-           emitImm12(disp,0);
-    }*/
-        emitImm15(disp,lastsym!=(SYM*)NULL);
-    if (bGen && lastsym && Ra != 249 && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emitImm15(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
     if (neg) incamt = -incamt;
     emit_insn(
@@ -1338,10 +1198,11 @@ static void process_pea()
     NextToken();
     mem_operand(&disp, &Ra, &Rb, &sc, &sg);
     if (Rb >= 0) {
-       emitImm0(disp,lastsym!=(SYM*)NULL);
+       // For now PEAX isn't supported
+       printf("PEA: Illegal address mode.\r\n");
+       return;
        fixup = 11;
        oc = 0xB9;  // PEAX
-       emitAlignedCode(oc);
         if (bGen && lastsym && Ra != 249 && !use_gp)
         if( lastsym->segment < 5)
         sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
@@ -1353,18 +1214,7 @@ static void process_pea()
        return;
     }
     oc = 0x65;        // PEA
-    fixup = 10;       // 12 bit
-    if (disp < 0xFFFFFFFFFFFF7000LL || disp > 0x7FFFLL) /*{
-         if (lastsym != (SYM *)NULL)
-           emitImm12(disp,!lastsym->defined);
-       else
-           emitImm12(disp,0);
-    }*/
-        emitImm15(disp,lastsym!=(SYM*)NULL);
-    if (bGen && lastsym && Ra != 249 && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emitImm15(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
     emit_insn(
         ((disp & 0x7FFFLL) << 17) |
@@ -1389,6 +1239,7 @@ static void process_pushpop(int oc)
     int64_t disp;
     int sc;
     int sg;
+    int nn;
 
     Ra = -1;
     Rb = -1;
@@ -1396,10 +1247,6 @@ static void process_pushpop(int oc)
     if (token=='#' && oc==0x67) {  // Filter to PUSH
        val = expr();
        emitImm15(val,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
-        if (bGen && lastsym && !use_gp)
-        if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 1 | (lastsym->isExtern ? 128 : 0)|
-        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
         emit_insn(
             ((val & 0x7FFFLL) << 17) |
             (0x1E << 12) |
@@ -1414,6 +1261,7 @@ static void process_pushpop(int oc)
         NextToken();
         mem_operand(&disp, &Ra, &Rb, &sc, &sg);
         emitImm15(disp,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
+        if (Ra==-1) Ra = 0;
         emit_insn(
             ((disp & 0x7FFFLL) << 17) |
             (0x1E << 12) |
@@ -1435,7 +1283,7 @@ static void process_pushpop(int oc)
 // mov r1,r2
 // ----------------------------------------------------------------------------
 
-static void process_mov(int oc)
+static void process_mov()
 {
      int Ra;
      int Rt;
@@ -1450,6 +1298,23 @@ static void process_mov(int oc)
          0x02
      );
      prevToken();
+}
+
+// ----------------------------------------------------------------------------
+// sei
+// cli
+// rtd
+// rte
+// rti
+// ----------------------------------------------------------------------------
+
+static void process_pctrl(int oc)
+{
+     emit_insn(
+         (0x37 << 25) |
+         (oc << 17) |
+         0x02
+     );
 }
 
 // ----------------------------------------------------------------------------
@@ -1476,7 +1341,7 @@ static void process_rts(int oc)
 }
 
 // ----------------------------------------------------------------------------
-// shli r1,r2,#5
+// asli r1,r2,#5
 // ----------------------------------------------------------------------------
 
 static void process_shifti(int oc)
@@ -1526,6 +1391,7 @@ static void process_mtspr(int oc)
     int Ra;
     
     spr = FISA64_getSprRegister();
+    printf("spr=%d\r\n",spr);
     need(',');
     Ra = getRegisterX();
     emit_insn(
@@ -1700,7 +1566,7 @@ static void ProcessEOL(int opt)
     }
     // empty (codeless) line
     if (binstart==sections[segment].index) {
-        fprintf(ofp, "%24s\t%.*s", "", inptr-stptr, stptr);
+        fprintf(ofp, "%16s\t%.*s", "", inptr-stptr, stptr);
     }
     } // bGen
     if (opt) {
@@ -1784,11 +1650,11 @@ void FISA64_processMaster()
             }
             segment = bssseg;
             break;
-        case tk_cli: emit_insn((0x37 << 25)|(0x00<<17)|(0x02)); break;
+        case tk_cli: process_pctrl(0); break;
         case tk_cmp: process_rrop(0x06); break;
         case tk_cmpu: process_rrop(0x16); break;
         case tk_code: process_code(); break;
-        case tk_com: process_rop(0x06); break;
+        case tk_com: process_com(); break;
         case tk_data:
             if (first_data) {
                 while(sections[segment].address & 4095)
@@ -1812,6 +1678,7 @@ void FISA64_processMaster()
         case tk_eor: process_rrop(0x0E); break;
         case tk_eori: process_riop(0x0E); break;
         case tk_extern: process_extern(); break;
+/*
         case tk_fabs: process_fprop(0x88); break;
         case tk_fadd: process_fprrop(0xF4); break;
         case tk_fcmp: process_fprrop(0xF6); break;
@@ -1819,7 +1686,9 @@ void FISA64_processMaster()
         case tk_fdiv: process_fprrop(0xF8); break;
         case tk_fdx: process_fpstat(0x77); break;
         case tk_fex: process_fpstat(0x76); break;
+*/
         case tk_fill: process_fill(); break;
+/*
         case tk_fix2flt: process_fprop(0x84); break;
         case tk_flt2fix: process_fprop(0x85); break;
         case tk_fmov: process_fprop(0x87); break;
@@ -1830,12 +1699,13 @@ void FISA64_processMaster()
         case tk_fstat: process_fprdstat(0x86); break;
         case tk_fsub: process_fprrop(0xF5); break;
         case tk_ftx: process_fpstat(0x75); break;
+*/
         case tk_gran: process_gran(0x14); break;
         case tk_inc: process_inc(0x64); break;
-        case tk_ios: segprefix = 11; break;
-
-        case tk_jmp: process_jmp(0x50); break;
-        case tk_jsr: process_jmp(0x51); break;
+  
+        case tk_jal: process_jal(0x3C,-1); break;
+        case tk_jmp: process_jal(0x3C,0); break;
+        case tk_jsr: process_jal(0x3C,31); break;
 
         case tk_lb:  process_load(0x40); break;
         case tk_lbu: process_load(0x41); break;
@@ -1852,7 +1722,7 @@ void FISA64_processMaster()
         case tk_mfspr: process_mfspr(0x1F); break;
         case tk_mod: process_rrop(0x09); break;
         case tk_modu: process_rrop(0x19); break;
-        case tk_mov: process_mov(0x04); break;
+        case tk_mov: process_mov(); break;
         case tk_mtfp: process_mtfp(0x4A); break;
         case tk_mtspr: process_mtspr(0x1E); break;
         case tk_mul: process_rrop(0x07); break;
@@ -1861,7 +1731,7 @@ void FISA64_processMaster()
         case tk_mului: process_riop(0x17); break;
 //        case tk_neg: process_rop(0x05); break;
         case tk_nop: emit_insn(0x0000003F); break;
-//        case tk_not: process_rop(0x07); break;
+        case tk_not: process_rop(0x0A); break;
         case tk_or:  process_rrop(0x0D); break;
         case tk_ori: process_riop(0x0D); break;
         case tk_org: process_org(); break;
@@ -1880,16 +1750,21 @@ void FISA64_processMaster()
             }
             segment = rodataseg;
             break;
-//        case tk_rol: process_rrop(0x41); break;
-//        case tk_ror: process_rrop(0x43); break;
-        case tk_rte: emit_insn((0x3E<<25) | 0x02); break;
-        case tk_rti: emit_insn((0x3F<<25) | 0x02); break;
+        case tk_rol: process_rrop(0x32); break;
+        case tk_ror: process_rrop(0x33); break;
+        case tk_roli: process_shifti(0x3A); break;
+        case tk_rori: process_shifti(0x3B); break;
+        case tk_rtd: process_pctrl(29); break;
+        case tk_rte: process_pctrl(30); break;
+        case tk_rti: process_pctrl(31); break;
         case tk_rts: process_rts(0x3B); break;
         case tk_sb:  process_store(0x60); break;
         case tk_sc:  process_store(0x61); break;
-        case tk_sei: emit_insn((0x37 << 25)|(0x01<<17)|(0x02)); break;
+        case tk_sei: process_pctrl(1); break;
         case tk_seq:  process_rrop(0x20); break;
         case tk_sh:  process_store(0x62); break;
+        case tk_shl:  process_rrop(0x30); break;
+        case tk_shli: process_shifti(0x38); break;
         case tk_sne:  process_rrop(0x21); break;
         case tk_sub:  process_rrop(0x05); break;
         case tk_subi: process_riop(0x05); break;

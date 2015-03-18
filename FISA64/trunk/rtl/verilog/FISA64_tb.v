@@ -8,6 +8,7 @@ wire [7:0] sel;
 wire [31:0] adr;
 wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato;
 wire [31:0] tc_dato;
+wire br_ack, tc_ack;
 
 initial begin
 	#0 clk = 1'b0;
@@ -20,7 +21,7 @@ always #5 clk = ~clk;
 
 wire cs_ram = adr[31:16]==16'd0;
 wire cs_rom = adr[31:16]==16'd1;
-wire cs_tc = adr[31:16]==16'hFFD0;
+wire cs_leds = adr[31:8]==24'hFFDC06 && cyc && stb;
 
 FISA64 u1 (
 	.rst_i(rst),
@@ -34,7 +35,8 @@ FISA64 u1 (
 	.bl_o(),
 	.cyc_o(cyc),
 	.stb_o(stb),
-	.ack_i(cyc&stb),
+	.ack_i(cs_ram|cs_tc ? cyc&stb : br_ack | cs_leds | tc_ack),
+	.err_i(0),
 	.we_o(we),
 	.sel_o(sel),
 	.adr_o(adr),
@@ -42,9 +44,16 @@ FISA64 u1 (
 	.dat_o(cpu_dato)
 );
 
-ROM u2 (
-	.adr(adr[15:0]),
-	.dat_o(rom_dato)
+bootrom u2 (
+	.rst_i(rst),
+	.clk_i(clk),
+	.cti_i(0),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(br_ack),
+	.adr_i(adr),
+	.dat_o(rom_dato),
+	.perr()
 );
 
 RAM u3 (
@@ -57,22 +66,19 @@ RAM u3 (
 	.dat_i(cpu_dato)
 );
 
-TEXTCTRL u4 (
-	.clk(clk),
-	.cs(cs_tc),
-	.wr(we),
-	.sel(sel[7:4]|sel[3:0]),
-	.adr(adr[15:0]),
-	.dat_o(tc_dato),
-	.dat_i(cpu_dato[31:0])
+rtfTextController3 utc3
+(
+	.rst_i(rst), .clk_i(clk),
+	.cyc_i(cyc), .stb_i(stb), .ack_o(tc_ack), .we_i(we), .adr_i(adr), .dat_i(cpu_dato), .dat_o(tc_dato),
+	.lp(), .curpos(),
+	.vclk(), .hsync(), .vsync(), .blank(), .border(), .rgbIn(), .rgbOut()
 );
 
 
-assign cpu_dati = cs_rom ? rom_dato : 
-				cs_tc ? {2{tc_dato}} : ram_dato;
+assign cpu_dati = cs_ram ? ram_dato : rom_dato | {2{tc_dato}};
 
 always @(posedge clk)
-	$display("%d", $time);
+	$display("%d %h %h %s", $time, u1.pc, u1.ir, u1.fnStateName(u1.state));
 
 endmodule
 

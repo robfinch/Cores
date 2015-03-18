@@ -130,6 +130,9 @@ int insert_symbol(SYM *sym)
 
 
 // ----------------------------------------------------------------------------
+// When the symbol is first setup we force the value to be a large one in
+// order to force the assembler to generate a maximum size prefix in case the
+// symbol ends up being unresolved.
 // ----------------------------------------------------------------------------
 
 SYM *new_symbol(char *name)
@@ -141,7 +144,7 @@ SYM *new_symbol(char *name)
      syms[numsym].name = nmTable.AddName(name);
 //     strncpy(syms[numsym].name, name, sizeof(syms[numsym].name)/sizeof(char)-1);
 //     syms[numsym].name[199] = '\0';
-     syms[numsym].value = 0;
+     syms[numsym].value = 0x8000000000000000LL | numsym;
      syms[numsym].defined = 0;
      syms[numsym].segment = segment;
      syms[numsym].scope = ' ';

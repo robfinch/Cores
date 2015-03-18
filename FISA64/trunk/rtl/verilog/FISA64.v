@@ -83,6 +83,7 @@
 `define BGE			3'h3
 `define BLT			3'h4
 `define BLE			3'h5
+`define JALI	7'h3E
 `define NOP		7'h3F
 `define SLL			7'h30
 `define SRL			7'h31
@@ -118,6 +119,7 @@
 `define LWX		7'h4E
 `define LEAX	7'h4F
 `define POP		7'h57
+`define SUI		7'h5F
 `define SB		7'h60
 `define SC		7'h61
 `define SH		7'h62
@@ -192,6 +194,7 @@ parameter IFETCH1 = 6'd2;
 parameter IFETCH2 = 6'd3;
 parameter DECODE = 6'd4;
 parameter EXECUTE = 6'd5;
+parameter LOAD0 = 6'd7;
 parameter LOAD1 = 6'd8;
 parameter LOAD2 = 6'd9;
 parameter LOAD3 = 6'd10;
@@ -251,19 +254,21 @@ wire [6:0] iopcode = insn[6:0];
 wire [6:0] opcode = ir[6:0];
 wire [6:0] ifunct = insn[31:25];
 wire [6:0] funct = ir[31:25];
-reg [6:0] xfunct,mfunct;
-reg [6:0] xopcode,mopcode,wopcode;
+reg [6:0] xfunct,mfunct,mdfunct;
+reg [6:0] xopcode,mopcode,wopcode,mdopcode;
 wire [4:0] Ra = ir[11:7];
 wire [4:0] Rb = ir[21:17];
 wire [4:0] Rc = ir[16:12];
 reg [4:0] xRt,mRt,wRt;
 reg [63:0] rfoa,rfob,rfoc;
-reg [63:0] res,ea,xres,mres,wres,lres;
+reg [63:0] res,ea,xres,mres,wres,lres,md_res;
+reg mc_done;
 always @*
 case(Ra)
 5'd0:	rfoa <= 64'd0;
 xRt:	rfoa <= res;
 wRt:	rfoa <= wres;
+5'd30:	rfoa <= sp;
 default:	rfoa <= regfile[Ra];
 endcase
 always @*
@@ -271,6 +276,7 @@ case(Rb)
 5'd0:	rfob <= 64'd0;
 xRt:	rfob <= res;
 wRt:	rfob <= wres;
+5'd30:	rfob <= sp;
 default:	rfob <= regfile[Rb];
 endcase
 always @*
@@ -278,6 +284,7 @@ case(Rc)
 5'd0:	rfoc <= 64'd0;
 xRt:	rfoc <= res;
 wRt:	rfoc <= wres;
+5'd30:	rfoc <= sp;
 default:	rfoc <= regfile[Rc];
 endcase
 reg [63:0] a,b,c,imm,xb;
@@ -292,16 +299,34 @@ reg res_sgn;
 reg [1:0] ld_size, st_size;
 reg [31:0] insncnt;
 
-// Stall the pipeline if there's an immediate prefix in it during a cache miss.
-wire stallPipe =
-	((opcode==`IMM && xopcode==`IMM) ||
-	 (opcode==`IMM)) && !ihit;
+function fnIsMC;
+input [6:0] opcode;
+input [6:0] funct;
+case(opcode)
+`RR:
+	case(funct)
+	`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:	fnIsMC = TRUE;
+	default:	fnIsMC = FALSE;
+	endcase
+`BRK,
+`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU,
+`PUSH,`PMW,`PEA,`POP,
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC,`CAS,`JALI,
+`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
+`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX:
+	fnIsMC = TRUE;
+default:	fnIsMC = FALSE;
+endcase
+endfunction
 
-reg advanceEXr;
-reg advanceWBx;
-wire advanceWB = (advanceEX|advanceWBx) & !stallPipe;
-wire advanceEX = advanceEXr& !stallPipe;
-wire advanceRF = advanceEX & !stallPipe;
+// Stall the pipeline if there's an immediate prefix in it during a cache miss.
+wire stallPipe = (
+	((opcode==`IMM && xopcode==`IMM) ||
+	 (opcode==`IMM)) && !ihit);
+
+wire advanceWB = advanceEX;
+wire advanceEX = !stallPipe || mc_done==FALSE;
+wire advanceRF = advanceEX & (!fnIsMC(xopcode,xfunct) | mc_done);
 wire advanceIF = advanceRF & ihit;
 
 reg isICacheReset;
@@ -480,6 +505,7 @@ always @(xir or a)
 	`BGE:	takb <= ~a[63];
 	`BLT:	takb <= a[63];
 	`BLE:	takb <= (a[63] | ~|a[63:0]);
+	default:	takb <= FALSE;
 	endcase
 
 //-----------------------------------------------------------------------------
@@ -513,10 +539,16 @@ wire eq = a==b;
 wire lt = $signed(a) < $signed(b);
 wire ltu = a < b;
 
+wire [127:0] shl = {64'd0,a} << b[5:0];
+wire [127:0] shli = {64'd0,a} << xir[22:17];
+wire [127:0] shr = {a,64'd0} >> b[5:0];
+wire [127:0] shri = {a,64'd0} >> xir[22:17];
+
 always @*
 case(xopcode)
 `BSR:	res <= xpc + 64'd4;
 `JAL:	res <= xpc + 64'd4;
+`JALI:	res <= xpc + 64'd4;
 `RTS:	res <= c + imm;
 `ADD:	res <= a + imm;
 `ADDU:	res <= a + imm;
@@ -524,6 +556,12 @@ case(xopcode)
 `SUBU:	res <= a - imm;
 `CMP:	res <= lti ? 64'hFFFFFFFFFFFFFFFF : eqi ? 64'd0 : 64'd1;
 `CMPU:	res <= ltui ? 64'hFFFFFFFFFFFFFFFF : eqi ? 64'd0 : 64'd1;
+`MUL:	res <= lres;	// need the following so bypass muxing works
+`MULU:	res <= lres;
+`DIV:	res <= lres;
+`DIVU:	res <= lres;
+`MOD:	res <= lres;
+`MODU:	res <= lres;
 `AND:	res <= a & imm;
 `OR:	res <= a | imm;
 `EOR:	res <= a ^ imm;
@@ -578,6 +616,12 @@ case(xopcode)
 	`SUBU:	res <= a - b;
 	`CMP:	res <= lt ? 64'hFFFFFFFFFFFFFFFF : eq ? 64'd0 : 64'd1;
 	`CMPU:	res <= ltu ? 64'hFFFFFFFFFFFFFFFF : eq ? 64'd0 : 64'd1;
+	`MUL:	res <= lres;	// need the following so bypass muxing works
+	`MULU:	res <= lres;
+	`DIV:	res <= lres;
+	`DIVU:	res <= lres;
+	`MOD:	res <= lres;
+	`MODU:	res <= lres;
 	`NOT:	res <= ~|a;
 	`AND:	res <= a & b;
 	`OR:	res <= a | b;
@@ -595,18 +639,22 @@ case(xopcode)
 	`SHS:	res <= !ltu;
 	`SLO:	res <= ltu;
 	`SLS:	res <= ltu|eq;
-	`SLLI:	res <= a << xir[22:17];
-	`SLL:	res <= a << b[5:0];
-	`SRLI:	res <= a >> xir[22:17];
-	`SRL:	res <= a >> b[5:0];
+	`SLLI:	res <= shli[63:0];
+	`SLL:	res <= shl[63:0];
+	`SRLI:	res <= shri[127:64];
+	`SRL:	res <= shr[127:64];
 	`SRAI:	if (a[63])
-				res <= (a >> xir[22:17]) | ~(64'hFFFFFFFFFFFFFFFF >> xir[22:17]);
+				res <= (shri[127:64]) | ~(64'hFFFFFFFFFFFFFFFF >> xir[22:17]);
 			else
-				res <= a >> xir[22:17];
+				res <= shri[127:64];
 	`SRA:	if (a[63])
-				res <= (a >> b[5:0]) | ~(64'hFFFFFFFFFFFFFFFF >> b[5:0]);
+				res <= (shr[127:64]) | ~(64'hFFFFFFFFFFFFFFFF >> b[5:0]);
 			else
-				res <= a >> b[5:0];
+				res <= shr[127:64];
+	`ROL:	res <= shl[63:0]|shl[127:64];
+	`ROLI:	res <= shli[63:0]|shli[127:64];
+	`ROR:	res <= shr[63:0]|shr[127:64];
+	`RORI:	res <= shri[63:0]|shri[127:64];
 	`SXB:	res <= {{56{a[7]}},a[7:0]};
 	`SXC:	res <= {{48{a[15]}},a[15:0]};
 	`SXH:	res <= {{32{a[31]}},a[31:0]};
@@ -614,10 +662,12 @@ case(xopcode)
 	endcase
 `BTFLD:	res <= btfldo;
 `LEAX:	res <= a + (b << xir[23:22]) + imm;
-`PUSH:	res <= c - 64'd8;
-`PMW:	res <= c - 64'd8;
-`PEA:	res <= c - 64'd8;
-`POP:	res <= c + 64'd8;
+`PMW:	res <= lres;
+`POP:	res <= lres;
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC,`CAS,`JALI,
+`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX:
+		res <= lres;
+`SUI:	res <= lres;
 default:	res <= 64'd0;
 endcase
 
@@ -672,8 +722,6 @@ if (rst_i) begin
 	adr_o[3] <= 1'b1;	// adr_o[3] must be set
 	isICacheReset <= TRUE;
 	isICacheLoad <= FALSE;
-	advanceEXr <= TRUE;
-	advanceWBx <= `FALSE;
 	gie <= `FALSE;
 	im <= `TRUE;
 	imcd <= 3'b000;
@@ -683,10 +731,10 @@ if (rst_i) begin
 	ld_clk_throttle <= `FALSE;
 	dbctrl <= 64'd0;
 	dbstat <= 64'd0;
+	mc_done <= TRUE;
 end
 else begin
 tick <= tick + 64'd1;
-advanceWBx <= `FALSE;
 nmi1 <= nmi_i;
 if (nmi_i & ~nmi1)
 	nmi_edge <= `TRUE;
@@ -754,8 +802,7 @@ begin
 			pc <= pc + 64'd4;
 	end
 	else begin
-		// On a cache miss, return flow to the head of any immediate prefix
-		if (!ihit)
+		if (!ihit & (!fnIsMC(xopcode,xfunct) | mc_done))
 			next_state(LOAD_ICACHE);
 		if (advanceRF) begin
 			nop_ir();
@@ -772,6 +819,8 @@ begin
 		xir <= ir;
 		xopcode <= opcode;
 		xfunct <= funct;
+		if (fnIsMC(opcode,funct))
+			mc_done <= FALSE;
 		if (opcode==`MYST)
 			xfunct <= mystreg;
 		xpc <= dpc;
@@ -803,15 +852,17 @@ begin
 				xRt <= 5'd0;
 			default:	xRt <= ir[16:12];
 			endcase
+		`POP:	xRt <= ir[11:7];
 		`BRA,`Bcc,`BRK,`IMM:
 			xRt <= 5'd0;
-		`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`INC:
+		`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`INC,
+		`PUSH,`PEA,`PMW:
 			xRt <= 5'd0;
 		`BSR:	xRt <= 5'h1F;
 		default:	xRt <= ir[16:12];
 		endcase
 	end
-	else if (advanceEX) begin
+	else if (advanceEX & mc_done) begin
 		nop_xir();
 	end
 
@@ -911,24 +962,22 @@ begin
 			`SUB:	if (fnASOverflow(1,a[63],b[63],res[63]))
 						overflow();
 			`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:
-					begin
-					mopcode <= xopcode;
-					mfunct <= xfunct;
+				begin
+					mdopcode <= xopcode;
+					mdfunct <= xfunct;
 					next_state(MULDIV);
-					advanceEXr <= FALSE;
-					end
+				end
 			endcase
 		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]))
 					overflow();
 		`SUB:	if (fnASOverflow(1,a[63],imm[63],res[63]))
 					overflow();
 		`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:
-				begin
-				mopcode <= xopcode;
-				mfunct <= xfunct;
+			begin
+				mdopcode <= xopcode;
+				mdfunct <= xfunct;
 				next_state(MULDIV);
-				advanceEXr <= FALSE;
-				end
+			end
 		`BSR,`BRA:	;//update_pc(xpc + imm); done already in IF
 		`JAL:		update_pc(a + {imm,2'b00});
 		`RTS:	begin
@@ -959,17 +1008,15 @@ begin
 							im <= TRUE;
 					end
 				endcase
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= {vbr[AMSB:12],xir[25:17],3'b000};
 				ld_size <= word;
 				next_state(LOAD1);
 				end
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC:
-				begin
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC,`CAS,`JALI:
+			begin
 				next_state(LOAD1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= a + imm;
@@ -978,13 +1025,15 @@ begin
 				`LC,`LCU:	ld_size <= char;
 				`LH,`LHU:	ld_size <= half;
 				`LW,`INC:	ld_size <= word;
+				`CAS,`JALI:	ld_size <= word;
 				endcase
-				end
+				st_size <= word;
+			end
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX:
-				begin
+			begin
 				next_state(LOAD1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
+				mir <= xir;
 				ea <= a + (b << xir[23:22]) + imm;
 				case(xopcode)
 				`LBX,`LBUX:	ld_size <= byt;
@@ -992,20 +1041,20 @@ begin
 				`LHX,`LHUX:	ld_size <= half;
 				`LWX:		ld_size <= word;
 				endcase
-				end
-		`CAS:	begin
+			end
+		`PMW:
+			begin
 				next_state(LOAD1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= a + imm;
+				sp <= c - 64'd8;
 				ld_size <= word;
 				st_size <= word;
-				end
+			end
 		`SB,`SC,`SH,`SW:
 				begin
 				next_state(STORE1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				ea <= a + imm;
 				xb <= c;
@@ -1019,46 +1068,33 @@ begin
 		`PUSH:
 				begin
 				next_state(STORE1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
-				ea <= res;
+				sp <= c - 64'd8;
+				ea <= c - 64'd8;
 				xb <= a;
-				st_size <= word;
-				end
-		`PMW:
-				begin
-				next_state(LOAD1);
-				advanceEXr <= FALSE;
-				mopcode <= xopcode;
-				mir <= xir;
-				ea <= a + imm;
-				advanceWBx <= TRUE;
-				ld_size <= word;
 				st_size <= word;
 				end
 		`PEA:
 				begin
 				next_state(STORE1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
-				ea <= res;
+				sp <= c - 64'd8;
+				ea <= c - 64'd8;
 				xb <= a + imm;
 				st_size <= word;
 				end
 		`POP:
 				begin
 				next_state(LOAD1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= c;
-				advanceWBx <= TRUE;
+				sp <= c + 64'd8;
 				ld_size <= word;
 				end
 		`SBX,`SCX,`SHX,`SWX:
 				begin
 				next_state(STORE1);
-				advanceEXr <= FALSE;
 				mopcode <= xopcode;
 				ea <= a + (b << xir[23:22]) + imm;
 				xb <= c;
@@ -1085,8 +1121,10 @@ begin
 	// WRITEBACK
 	if (advanceWB) begin
 		regfile[wRt] <= wres;
-		if (wRt==5'd30)	// write to SP globally enables interrupts
+		if (wRt==5'd30)	begin // write to SP globally enables interrupts
 			gie <= `TRUE;
+			sp <= wres;
+		end
 		if (wRt != 5'd0)
 			$display("r%d = %h", wRt, wres);
 	end
@@ -1100,7 +1138,7 @@ end	// RUN
 MULDIV:
 	begin
 		cnt <= 7'd64;
-		case(mopcode)
+		case(mdopcode)
 		`MULU:
 			begin
 				aa <= a;
@@ -1134,7 +1172,7 @@ MULDIV:
 				next_state(DIV);
 			end
 		`RR:
-			case(mfunct)
+			case(mdfunct)
 			`MULU:
 				begin
 					aa <= a;
@@ -1172,8 +1210,8 @@ MULDIV:
 				end
 			default:
 				begin
-				advanceEXr <= TRUE;
-				state <= RUN;
+				mc_done <= TRUE;
+				state <= ihit ? RUN : LOAD_ICACHE;
 				end
 			endcase
 		endcase
@@ -1218,14 +1256,15 @@ FIX_SIGN:
 
 MD_RES:
 	begin
-		if (mopcode==`MUL || mopcode==`MULU || (mopcode==`RR && (mfunct==`MUL || mfunct==`MULU)))
-			wres <= p[63:0];
-		else if (mopcode==`DIV || mopcode==`DIVU || (mopcode==`RR && (mfunct==`DIV || mfunct==`DIVU)))
-			wres <= q[63:0];
+		if (mdopcode==`MUL || mdopcode==`MULU || (mdopcode==`RR && (mdfunct==`MUL || mdfunct==`MULU)))
+			lres <= p[63:0];
+		else if (mdopcode==`DIV || mdopcode==`DIVU || (mdopcode==`RR && (mdfunct==`DIV || mdfunct==`DIVU)))
+			lres <= q[63:0];
 		else
-			wres <= r[63:0];
-		advanceEXr <= TRUE;
-		next_state(RUN);
+			lres <= r[63:0];
+		mc_done <= TRUE;
+		xopcode <= `SUI;
+		next_state(ihit ? RUN : LOAD_ICACHE);
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1266,102 +1305,107 @@ LOAD3:
 		`LB,`LBX:
 			begin
 			wb_nack();
-			next_state(RUN);
-			advanceEXr <= TRUE;
+			next_state(ihit ? RUN : LOAD_ICACHE);
+			mc_done <= TRUE;
+			xopcode <= `SUI;
 			case(ea[2:0])
-			3'd0:	wres <= {{56{dat_i[7]}},dat_i[7:0]};
-			3'd1:	wres <= {{56{dat_i[15]}},dat_i[15:8]};
-			3'd2:	wres <= {{56{dat_i[23]}},dat_i[23:16]};
-			3'd3:	wres <= {{56{dat_i[31]}},dat_i[31:24]};
-			3'd4:	wres <= {{56{dat_i[39]}},dat_i[39:32]};
-			3'd5:	wres <= {{56{dat_i[47]}},dat_i[47:40]};
-			3'd6:	wres <= {{56{dat_i[55]}},dat_i[55:48]};
-			3'd7:	wres <= {{56{dat_i[63]}},dat_i[63:56]};
+			3'd0:	lres <= {{56{dat_i[7]}},dat_i[7:0]};
+			3'd1:	lres <= {{56{dat_i[15]}},dat_i[15:8]};
+			3'd2:	lres <= {{56{dat_i[23]}},dat_i[23:16]};
+			3'd3:	lres <= {{56{dat_i[31]}},dat_i[31:24]};
+			3'd4:	lres <= {{56{dat_i[39]}},dat_i[39:32]};
+			3'd5:	lres <= {{56{dat_i[47]}},dat_i[47:40]};
+			3'd6:	lres <= {{56{dat_i[55]}},dat_i[55:48]};
+			3'd7:	lres <= {{56{dat_i[63]}},dat_i[63:56]};
 			endcase
 			end
 		`LBU,`LBUX:
 			begin
 			wb_nack();
-			next_state(RUN);
-			advanceEXr <= TRUE;
+			next_state(ihit ? RUN : LOAD_ICACHE);
+			xopcode <= `SUI;
+			mc_done <= TRUE;
 			case(ea[2:0])
-			3'd0:	wres <= dat_i[7:0];
-			3'd1:	wres <= dat_i[15:8];
-			3'd2:	wres <= dat_i[23:16];
-			3'd3:	wres <= dat_i[31:24];
-			3'd4:	wres <= dat_i[39:32];
-			3'd5:	wres <= dat_i[47:40];
-			3'd6:	wres <= dat_i[55:48];
-			3'd7:	wres <= dat_i[63:56];
+			3'd0:	lres <= dat_i[7:0];
+			3'd1:	lres <= dat_i[15:8];
+			3'd2:	lres <= dat_i[23:16];
+			3'd3:	lres <= dat_i[31:24];
+			3'd4:	lres <= dat_i[39:32];
+			3'd5:	lres <= dat_i[47:40];
+			3'd6:	lres <= dat_i[55:48];
+			3'd7:	lres <= dat_i[63:56];
 			endcase
 			end
 		`LC,`LCX:
 			case(ea[2:0])
-			3'd0:	begin wres <= {{48{dat_i[15]}},dat_i[15:0]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd1:	begin wres <= {{48{dat_i[23]}},dat_i[23:8]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd2:	begin wres <= {{48{dat_i[31]}},dat_i[31:16]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd3:	begin wres <= {{48{dat_i[39]}},dat_i[39:24]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd4:	begin wres <= {{48{dat_i[47]}},dat_i[47:32]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd5:	begin wres <= {{48{dat_i[55]}},dat_i[55:40]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd6:	begin wres <= {{48{dat_i[63]}},dat_i[63:48]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd7:	begin wres[7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= {{48{dat_i[15]}},dat_i[15:0]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd1:	begin lres <= {{48{dat_i[23]}},dat_i[23:8]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd2:	begin lres <= {{48{dat_i[31]}},dat_i[31:16]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd3:	begin lres <= {{48{dat_i[39]}},dat_i[39:24]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd4:	begin lres <= {{48{dat_i[47]}},dat_i[47:32]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd5:	begin lres <= {{48{dat_i[55]}},dat_i[55:40]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd6:	begin lres <= {{48{dat_i[63]}},dat_i[63:48]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd7:	begin lres[7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		`LCU,`LCUX:
 			case(ea[2:0])
-			3'd0:	begin wres <= dat_i[15:0]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd1:	begin wres <= dat_i[23:8]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd2:	begin wres <= dat_i[31:16]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd3:	begin wres <= dat_i[39:24]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd4:	begin wres <= dat_i[47:32]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd5:	begin wres <= dat_i[55:40]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd6:	begin wres <= dat_i[63:48]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd7:	begin wres[7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= dat_i[15:0]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd1:	begin lres <= dat_i[23:8]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd2:	begin lres <= dat_i[31:16]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd3:	begin lres <= dat_i[39:24]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd4:	begin lres <= dat_i[47:32]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd5:	begin lres <= dat_i[55:40]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd6:	begin lres <= dat_i[63:48]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd7:	begin lres[7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		`LH,`LHX:
 			case(ea[2:0])
-			3'd0:	begin wres <= {{32{dat_i[31]}},dat_i[31:0]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd1:	begin wres <= {{32{dat_i[39]}},dat_i[39:8]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd2:	begin wres <= {{32{dat_i[47]}},dat_i[47:16]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd3:	begin wres <= {{32{dat_i[55]}},dat_i[55:24]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd4:	begin wres <= {{32{dat_i[63]}},dat_i[63:32]}; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd5:	begin wres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
-			3'd6:	begin wres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
-			3'd7:	begin wres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= {{32{dat_i[31]}},dat_i[31:0]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd1:	begin lres <= {{32{dat_i[39]}},dat_i[39:8]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd2:	begin lres <= {{32{dat_i[47]}},dat_i[47:16]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd3:	begin lres <= {{32{dat_i[55]}},dat_i[55:24]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd4:	begin lres <= {{32{dat_i[63]}},dat_i[63:32]}; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd5:	begin lres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
+			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
+			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		`LHU,`LHUX:
 			case(ea[2:0])
-			3'd0:	begin wres <= dat_i[31:0]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd1:	begin wres <= dat_i[39:8]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd2:	begin wres <= dat_i[47:16]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd3:	begin wres <= dat_i[55:24]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd4:	begin wres <= dat_i[63:32]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd5:	begin wres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
-			3'd6:	begin wres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
-			3'd7:	begin wres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= dat_i[31:0]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd1:	begin lres <= dat_i[39:8]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd2:	begin lres <= dat_i[47:16]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd3:	begin lres <= dat_i[55:24]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd4:	begin lres <= dat_i[63:32]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd5:	begin lres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
+			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
+			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		`LW,`LWX:
 			case(ea[2:0])
-			3'd0:	begin wres <= dat_i[63:0]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
-			3'd1:	begin wres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
-			3'd2:	begin wres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
-			3'd3:	begin wres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
-			3'd4:	begin wres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
-			3'd5:	begin wres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
-			3'd6:	begin wres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
-			3'd7:	begin wres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= dat_i[63:0]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI;end
+			3'd1:	begin lres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
+			3'd2:	begin lres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
+			3'd3:	begin lres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
+			3'd4:	begin lres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
+			3'd5:	begin lres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
+			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
+			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		`INC:
 			case(ea[2:0])
-			3'd0:	begin wres <= dat_i[63:0]; next_state(INC); wb_half_nack(); end
-			3'd1:	begin wres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
-			3'd2:	begin wres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
-			3'd3:	begin wres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
-			3'd4:	begin wres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
-			3'd5:	begin wres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
-			3'd6:	begin wres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
-			3'd7:	begin wres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= dat_i[63:0]; next_state(INC); wb_half_nack(); end
+			3'd1:	begin lres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
+			3'd2:	begin lres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
+			3'd3:	begin lres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
+			3'd4:	begin lres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
+			3'd5:	begin lres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
+			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
+			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
-		`PMW:
+		// For PMW, JALI the wres bus is occupied with a register update value,
+		// so it can't be used for the load. Fortunately it's easy to define
+		// another reg (lres) to hold onto the loaded value.
+		`PMW,`JALI:
 			case(ea[2:0])
 			3'd0:	begin lres <= dat_i[63:0]; next_state(PMW); wb_nack(); end
 			3'd1:	begin lres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
@@ -1375,23 +1419,24 @@ LOAD3:
 		// Memory access is aligned
 		`BRK:	begin
 					update_pc(dat_i[63:0]);
-					next_state(RUN);
+					next_state(ihit ? RUN : LOAD_ICACHE);
+					xopcode <= `SUI;
 					wb_nack();
-					advanceEXr <= TRUE;
+					mc_done <= TRUE;
 					km <= `TRUE;
 					kmb <= {kmb[6:0],km};
 				end
-		`POP:	begin wRt <= mir[11:7]; wres <= dat_i[63:0]; next_state(RUN); wb_nack(); advanceEXr <= TRUE; end
+		`POP:	begin lres <= dat_i[63:0]; next_state(ihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `SUI; end
 		`CAS:
 			case(ea[2:0])
-			3'd0:	begin wres <= dat_i[63:0]; next_state(CAS); wb_nack(); end
-			3'd1:	begin wres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
-			3'd2:	begin wres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
-			3'd3:	begin wres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
-			3'd4:	begin wres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
-			3'd5:	begin wres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
-			3'd6:	begin wres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
-			3'd7:	begin wres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
+			3'd0:	begin lres <= dat_i[63:0]; next_state(CAS); wb_nack(); end
+			3'd1:	begin lres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
+			3'd2:	begin lres[47:0] <= dat_i[63:16]; next_state(LOAD4); wb_half_nack(); end
+			3'd3:	begin lres[39:0] <= dat_i[63:24]; next_state(LOAD4); wb_half_nack(); end
+			3'd4:	begin lres[31:0] <= dat_i[63:32]; next_state(LOAD4); wb_half_nack(); end
+			3'd5:	begin lres[23:0] <= dat_i[63:40]; next_state(LOAD4); wb_half_nack(); end
+			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
+			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		endcase
 	end
@@ -1408,7 +1453,7 @@ LOAD5:
 			wb_half_nack();
 			next_state(INC);
 		end
-		else if (mopcode==`PMW) begin
+		else if (mopcode==`PMW || mopcode==`JALI) begin
 			wb_nack();
 			next_state(PMW);
 		end
@@ -1418,49 +1463,50 @@ LOAD5:
 		end
 		else begin
 			wb_nack();
-			next_state(RUN);
-			advanceEXr <= TRUE;
+			next_state(ihit ? RUN : LOAD_ICACHE);
+			xopcode <= `SUI;
+			mc_done <= TRUE;
 		end
 		case(mopcode)
-		`LC,`LCX:	wres[63:8] <= {{48{dat_i[7]}},dat_i[7:0]};
-		`LCU,`LCUX:	wres[63:8] <= dat_i[7:0];
+		`LC,`LCX:	lres[63:8] <= {{48{dat_i[7]}},dat_i[7:0]};
+		`LCU,`LCUX:	lres[63:8] <= dat_i[7:0];
 		`LH,`LHX:
 			case(ea[2:0])
-			3'd5:	wres[63:24] <= {{32{dat_i[7]}},dat_i[7:0]};
-			3'd6:	wres[63:16] <= {{32{dat_i[15]}},dat_i[15:0]};
-			3'd7:	wres[63: 8] <= {{32{dat_i[23]}},dat_i[23:0]};
+			3'd5:	lres[63:24] <= {{32{dat_i[7]}},dat_i[7:0]};
+			3'd6:	lres[63:16] <= {{32{dat_i[15]}},dat_i[15:0]};
+			3'd7:	lres[63: 8] <= {{32{dat_i[23]}},dat_i[23:0]};
 			default:	;
 			endcase
 		`LHU,`LHUX:
 			case(ea[2:0])
-			3'd5:	wres[63:24] <= dat_i[7:0];
-			3'd6:	wres[63:16] <= dat_i[15:0];
-			3'd7:	wres[63: 8] <= dat_i[23:0];
+			3'd5:	lres[63:24] <= dat_i[7:0];
+			3'd6:	lres[63:16] <= dat_i[15:0];
+			3'd7:	lres[63: 8] <= dat_i[23:0];
 			default:	;
 			endcase
 		`LW,`LWX:
 			case(ea[2:0])
 			3'd0:	;
-			3'd1:	wres[63:56] <= dat_i[7:0];
-			3'd2:	wres[63:48] <= dat_i[15:0];
-			3'd3:	wres[63:40] <= dat_i[23:0];
-			3'd4:	wres[63:32] <= dat_i[31:0];
-			3'd5:	wres[63:24] <= dat_i[39:0];
-			3'd6:	wres[63:16] <= dat_i[47:0];
-			3'd7:	wres[63: 8] <= dat_i[55:0];
+			3'd1:	lres[63:56] <= dat_i[7:0];
+			3'd2:	lres[63:48] <= dat_i[15:0];
+			3'd3:	lres[63:40] <= dat_i[23:0];
+			3'd4:	lres[63:32] <= dat_i[31:0];
+			3'd5:	lres[63:24] <= dat_i[39:0];
+			3'd6:	lres[63:16] <= dat_i[47:0];
+			3'd7:	lres[63: 8] <= dat_i[55:0];
 			endcase
 		`INC,`CAS:
 			case(ea[2:0])
 			3'd0:	;
-			3'd1:	wres[63:56] <= dat_i[7:0];
-			3'd2:	wres[63:48] <= dat_i[15:0];
-			3'd3:	wres[63:40] <= dat_i[23:0];
-			3'd4:	wres[63:32] <= dat_i[31:0];
-			3'd5:	wres[63:24] <= dat_i[39:0];
-			3'd6:	wres[63:16] <= dat_i[47:0];
-			3'd7:	wres[63: 8] <= dat_i[55:0];
+			3'd1:	lres[63:56] <= dat_i[7:0];
+			3'd2:	lres[63:48] <= dat_i[15:0];
+			3'd3:	lres[63:40] <= dat_i[23:0];
+			3'd4:	lres[63:32] <= dat_i[31:0];
+			3'd5:	lres[63:24] <= dat_i[39:0];
+			3'd6:	lres[63:16] <= dat_i[47:0];
+			3'd7:	lres[63: 8] <= dat_i[55:0];
 			endcase
-		`PMW:
+		`PMW,`JALI:
 			case(ea[2:0])
 			3'd0:	;
 			3'd1:	lres[63:56] <= dat_i[7:0];
@@ -1480,28 +1526,37 @@ LOAD5:
 
 INC:
 	begin
-		xb <= wres + {{59{mir[16]}},mir[16:12]};
+		xb <= lres + {{59{mir[16]}},mir[16:12]};
 		next_state(STORE2);	// We don't need to wait for the ea address calc
 	end
 PMW:
 	begin
-		ea <= wres;
-		xb <= lres;
-		next_state(STORE1);	// We changed the ea so we need another cycle 
+		if (mopcode==`JALI) begin
+			update_pc(lres);
+			mc_done <= TRUE;
+			xopcode <= `SUI;
+			next_state(ihit ? RUN : LOAD_ICACHE);
+		end
+		else begin
+			ea <= c - 64'd8;
+			xb <= lres;
+			next_state(STORE1);	// We changed the ea so we need another cycle 
+		end
 	end
 CAS:
 	begin
-		if (casreg == wres) begin
-			wres <= 64'd1;
+		if (casreg == lres) begin
+			lres <= 64'd1;
 			xb <= c;
 			next_state(STORE2);
 		end
 		else begin
-			casreg <= wres;
-			wres <= 64'd0;
+			casreg <= lres;
+			lres <= 64'd0;
 			wb_nack();
-			advanceEXr <= TRUE;
-			next_state(RUN);
+			mc_done <= TRUE;
+			xopcode <= `SUI;
+			next_state(ihit ? RUN : LOAD_ICACHE);
 		end
 	end
 
@@ -1547,8 +1602,9 @@ STORE3:
 		end
 		else begin
 			wb_nack();
-			advanceEXr <= TRUE;
-			next_state(RUN);
+			mc_done <= TRUE;
+			xopcode <= `SUI;
+			next_state(ihit ? RUN : LOAD_ICACHE);
 		end
 	end
 STORE4:
@@ -1561,8 +1617,9 @@ STORE5:
 		databus_error();
 	else if (ack_i) begin
 		wb_nack();
-		advanceEXr <= TRUE;
-		next_state(RUN);
+		mc_done <= TRUE;
+		xopcode <= `SUI;
+		next_state(ihit ? RUN : LOAD_ICACHE);
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1835,9 +1892,8 @@ begin
 	pc <= npc;
 	pc[1:0] <= 2'b00;
 	nop_ir();
-	nop_xir();
-	if (ssm)
-		xir <= `BRK_SSM;
+	if (!ssm)			// If in SSM the xir will be setup appropriately.
+		nop_xir();
 end
 endtask
 
@@ -1862,7 +1918,7 @@ endtask
 task privilege_violation;
 begin
 	epc <= xpc;
-	advanceEXr <= FALSE;
+	xopcode <= `BRK;
 	mopcode <= `BRK;
 	mir <= xir;
 	ea <= {vbr[AMSB:12],9'd501,3'b000};	// privilege violation
@@ -1874,7 +1930,7 @@ endtask
 task overflow;
 begin
 	epc <= xpc;
-	advanceEXr <= FALSE;
+	xopcode <= `BRK;
 	mopcode <= `BRK;
 	mir <= xir;
 	ea <= {vbr[AMSB:12],9'd489,3'b000};	// overflow violation
@@ -1887,7 +1943,7 @@ endtask
 task divide_by_zero;
 begin
 	epc <= xpc;
-	advanceEXr <= FALSE;
+	xopcode <= `BRK;
 	mopcode <= `BRK;
 	mir <= xir;
 	ea <= {vbr[AMSB:12],9'd488,3'b000};	// divide_by_zero
@@ -1905,6 +1961,12 @@ input [5:0] state;
 case(state)
 RESET:	fnStateName = "RESET ";
 RUN:	fnStateName = "RUN ";
+MULDIV:	fnStateName = "MULDIV ";
+MULT1:	fnStateName = "MULT1 ";
+MULT2:	fnStateName = "MULT2 ";
+MULT3:	fnStateName = "MULT3 ";
+FIX_SIGN:	fnStateName = "FIX_SIGN ";
+MD_RES:	fnStateName = "MD_RES ";
 LOAD1:  fnStateName = "LOAD1 ";
 LOAD2:  fnStateName = "LOAD2 ";
 LOAD3:  fnStateName = "LOAD3 ";
@@ -1922,6 +1984,7 @@ LOAD_ICACHE:	fnStateName = "LOAD_ICACHE ";
 LOAD_ICACHE2:	fnStateName = "LOAD_ICACHE2 ";
 LOAD_ICACHE3:	fnStateName = "LOAD_ICACHE3 ";
 LOAD_ICACHE4:	fnStateName = "LOAD_ICACHE4 ";
+default:	fnStateName = "UNKNOWN ";
 endcase
 endfunction
 
