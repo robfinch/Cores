@@ -224,17 +224,17 @@
 010000 3A 10 00 00 		bra     start
 010004 00 00 00 00 		align   
                 	
-010008 14 02 01 00 		dw		ClearScreen		; $8000
+010008 24 02 01 00 		dw		ClearScreen		; $8000
 01000C 00 00 00 00 
-010010 00 02 01 00 		dw		HomeCursor		; $8008
+010010 10 02 01 00 		dw		HomeCursor		; $8008
 010014 00 00 00 00 
-010018 00 03 01 00 		dw		DisplayString	; $8010
+010018 0C 03 01 00 		dw		DisplayString	; $8010
 01001C 00 00 00 00 
-010020 CC 0D 01 00 		dw		KeybdGetCharNoWait; $8018
+010020 D4 0D 01 00 		dw		KeybdGetCharNoWait; $8018
 010024 00 00 00 00 
 010028 B5 00 00 00 		dw		ClearBmpScreen	; $8020
 01002C 00 00 00 80 
-010030 7C 04 01 00 		dw		DisplayChar		; $8028
+010030 88 04 01 00 		dw		DisplayChar		; $8028
 010034 00 00 00 00 
 010038 B7 00 00 00 		dw		SDInit			; $8030
 01003C 00 00 00 80 
@@ -246,572 +246,617 @@
 010054 00 00 00 80 
 010058 BB 00 00 00 		dw		SDDiskSize		; $8050
 01005C 00 00 00 80 
-010060 7C 02 01 00 		dw		DisplayWord		; $8058
+010060 88 02 01 00 		dw		DisplayWord		; $8058
 010064 00 00 00 00 
-010068 90 02 01 00 		dw		DisplayHalf		; $8060
+010068 9C 02 01 00 		dw		DisplayHalf		; $8060
 01006C 00 00 00 00 
-010070 A4 02 01 00 		dw		DisplayCharHex	; $8068
+010070 B0 02 01 00 		dw		DisplayCharHex	; $8068
 010074 00 00 00 00 
-010078 B8 02 01 00 		dw		DisplayByte		; $8070
+010078 C4 02 01 00 		dw		DisplayByte		; $8070
 01007C 00 00 00 00 
                 	
                 	start:
 010080 02 00 02 6E 	    sei     ; interrupts off
-010084 FC 00 00 00 	    ldi     r1,#$FFFF
-010088 0A 10 FE FF 
-01008C 7C DC FF 00 	    sc      r1,LEDS
-010090 61 10 00 0C 
-010094 7C 00 00 00 	    ldi     sp,#32760            ; set stack pointer to top of 32k Area
-010098 0A E0 F1 FF 
-01009C 63 00 20 00 		sw		r0,Milliseconds
-0100A0 FC 26 00 00 		ldi		r1,#%000000100_110101110_0000000000
-0100A4 0A 10 00 70 
-0100A8 60 10 08 01 		sb		r1,KeybdEcho
-0100AC 60 00 0A 01 		sb		r0,KeybdBad
-0100B0 62 10 F0 00 		sh		r1,NormAttr
-0100B4 60 00 00 01 		sb		r0,CursorRow
-0100B8 60 00 02 01 		sb		r0,CursorCol
-0100BC 7C 01 00 00 		ldi		r1,#DisplayChar & 0xFFFFFFFFFC
-0100C0 0A 10 F8 08 
-0100C4 63 10 30 00 		sw		r1,OutputVec
-0100C8 B9 29 00 00 		bsr		ClearScreen
-0100CC B9 26 00 00 		bsr		HomeCursor
-0100D0 0A 10 10 00 		ldi     r1,#8
-0100D4 7C DC FF 00 		sb      r1,LEDS
-0100D8 60 10 00 0C 
-0100DC 39 03 00 00 		bsr		SetupIntVectors
-0100E0 39 71 01 00 		bsr		KeybdInit
-0100E4 B9 16 00 00 		bsr		InitPIC
-0100E8 BA D2 00 00 		bra		Monitor
-0100EC B9 FB DF FF 		bsr		FMTKInitialize
-0100F0 02 00 00 6E 		cli
+010084 7C 00 00 00 	    ldi     sp,#32760            ; set stack pointer to top of 32k Area
+010088 0A E0 F1 FF 
+01008C 0A 50 00 00 	    ldi     r5,#$0000
+010090 0A 10 28 00 	    ldi     r1,#20
+                	.0001:
+010094 7C DC FF 00 	    sc      r5,LEDS
+010098 61 50 00 0C 
+01009C 94 52 02 00 	    addui   r5,r5,#1
+                	;    bsr     MicroDelay
+                	;    bra     .0001
+0100A0 63 00 20 00 		sw		r0,Milliseconds
+0100A4 FC 26 00 00 		ldi		r1,#%000000100_110101110_0000000000
+0100A8 0A 10 00 70 
+0100AC 60 10 08 01 		sb		r1,KeybdEcho
+0100B0 60 00 0A 01 		sb		r0,KeybdBad
+0100B4 62 10 F0 00 		sh		r1,NormAttr
+0100B8 60 00 00 01 		sb		r0,CursorRow
+0100BC 60 00 02 01 		sb		r0,CursorCol
+0100C0 7C 01 00 00 		ldi		r1,#DisplayChar
+0100C4 0A 10 10 09 
+0100C8 63 10 30 00 		sw		r1,OutputVec
+0100CC 39 2B 00 00 		bsr		ClearScreen
+0100D0 39 28 00 00 		bsr		HomeCursor
+0100D4 7C 01 00 00 		ldi     r1,#msgStart
+0100D8 0A 10 D2 0E 
+0100DC B9 4C 00 00 		bsr     DisplayStringCRLF
+0100E0 0A 10 10 00 		ldi     r1,#8
+0100E4 7C DC FF 00 		sb      r1,LEDS
+0100E8 60 10 00 0C 
+0100EC 39 03 00 00 		bsr		SetupIntVectors
+0100F0 39 70 01 00 		bsr		KeybdInit
+0100F4 B9 16 00 00 		bsr		InitPIC
+0100F8 BA D1 00 00 		bra		Monitor
+0100FC 39 FA DF FF 		bsr		FMTKInitialize
+010100 02 00 00 6E 		cli
                 	
                 	SetupIntVectors:
-0100F4 0A 10 4E 01 		ldi     r1,#$00A7
-0100F8 7C DC FF 00 		sc      r1,LEDS
-0100FC 61 10 00 0C 
-010100 02 00 14 3C 		mtspr   vbr,r0               ; place vector table at $0000
-010104 3F 00 00 00 		nop
-010108 3F 00 00 00 		nop
-01010C 02 20 14 3E 		mfspr   r2,vbr
-010110 7C 01 00 00 		ldi		r1,#Tick1000Rout
-010114 0A 10 70 07 
-010118 63 11 40 38 		sw		r1,450*16[r2]
-01011C 7C 01 00 00 		ldi		r1,#TickRout         ; This vector will be taken over by FMTK
-010120 0A 10 30 07 
-010124 63 11 60 38 		sw		r1,451*16[r2]
-010128 7C 01 00 00 		ldi		r1,#KeybdIRQ
-01012C 0A 10 18 07 
-010130 63 11 E0 39 		sw		r1,463*16[r2]
-010134 7C 01 00 00 	    ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
-010138 0A 10 B8 29 
-01013C 63 11 F0 1E 	    sw      r1,495*8[r2]
-010140 7C 01 00 00 	    ldi     r1,#IBPT_ISR         ; set ISR vector for instruction breakpoint routine
-010144 0A 10 C0 29 
-010148 63 11 00 1F 	    sw      r1,496*8[r2]
-01014C 7C 01 00 00 		ldi		r1,#exf_rout
-010150 0A 10 68 28 
-010154 63 11 20 3E 		sw		r1,497*16[r2]
-010158 7C 01 00 00 		ldi		r1,#dwf_rout
-01015C 0A 10 D8 28 
-010160 63 11 40 3E 		sw		r1,498*16[r2]
-010164 7C 01 00 00 		ldi		r1,#drf_rout
-010168 0A 10 A0 28 
-01016C 63 11 60 3E 		sw		r1,499*16[r2]
-010170 7C 01 00 00 		ldi		r1,#priv_rout
-010174 0A 10 10 29 
-010178 63 11 A0 3E 		sw		r1,501*16[r2]
-01017C 7C 01 00 00 		ldi		r1,#berr_rout
-010180 0A 10 94 29 
-010184 63 11 80 3F 		sw		r1,508*16[r2]
-010188 0A 10 54 01 		ldi     r1,#$00AA
-01018C 7C DC FF 00 		sc      r1,LEDS
-010190 61 10 00 0C 
-010194 BB EF 01 00 	    rts
+010104 0A 10 4E 01 		ldi     r1,#$00A7
+010108 7C DC FF 00 		sc      r1,LEDS
+01010C 61 10 00 0C 
+010110 02 00 14 3C 		mtspr   vbr,r0               ; place vector table at $0000
+010114 3F 00 00 00 		nop
+010118 3F 00 00 00 		nop
+01011C 02 20 14 3E 		mfspr   r2,vbr
+010120 7C 01 00 00 		ldi		r1,#Tick1000Rout
+010124 0A 10 88 07 
+010128 63 11 40 38 		sw		r1,450*16[r2]
+01012C 7C 01 00 00 		ldi		r1,#TickRout         ; This vector will be taken over by FMTK
+010130 0A 10 48 07 
+010134 63 11 60 38 		sw		r1,451*16[r2]
+010138 7C 01 00 00 		ldi		r1,#KeybdIRQ
+01013C 0A 10 30 07 
+010140 63 11 E0 39 		sw		r1,463*16[r2]
+010144 7C 01 00 00 	    ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
+010148 0A 10 B8 29 
+01014C 63 11 F0 1E 	    sw      r1,495*8[r2]
+010150 7C 01 00 00 	    ldi     r1,#IBPT_ISR         ; set ISR vector for instruction breakpoint routine
+010154 0A 10 C0 29 
+010158 63 11 00 1F 	    sw      r1,496*8[r2]
+01015C 7C 01 00 00 		ldi		r1,#exf_rout
+010160 0A 10 68 28 
+010164 63 11 20 3E 		sw		r1,497*16[r2]
+010168 7C 01 00 00 		ldi		r1,#dwf_rout
+01016C 0A 10 D8 28 
+010170 63 11 40 3E 		sw		r1,498*16[r2]
+010174 7C 01 00 00 		ldi		r1,#drf_rout
+010178 0A 10 A0 28 
+01017C 63 11 60 3E 		sw		r1,499*16[r2]
+010180 7C 01 00 00 		ldi		r1,#priv_rout
+010184 0A 10 10 29 
+010188 63 11 A0 3E 		sw		r1,501*16[r2]
+01018C 7C 01 00 00 		ldi		r1,#berr_rout
+010190 0A 10 94 29 
+010194 63 11 80 3F 		sw		r1,508*16[r2]
+010198 0A 10 54 01 		ldi     r1,#$00AA
+01019C 7C DC FF 00 		sc      r1,LEDS
+0101A0 61 10 00 0C 
+0101A4 37 FF 01 00 	    rtl
  
                 	;------------------------------------------------------------------------------
                 	; Initialize the interrupt controller.
                 	;------------------------------------------------------------------------------
                 	
                 	InitPIC:
-010198 0A 10 18 00 		ldi		r1,#$0C			; timer interrupt(s) are edge sensitive
-01019C 7C DC FF 00 		sh		r1,PIC_ES
-0101A0 62 10 A0 1F 
-0101A4 0A 10 1E 00 		ldi		r1,#$000F		; enable keyboard reset, timer interrupts
-0101A8 7C DC FF 00 		sh		r1,PIC_IE
-0101AC 62 10 88 1F 
-0101B0 BB EF 01 00 		rts
+0101A8 0A 10 18 00 		ldi		r1,#$0C			; timer interrupt(s) are edge sensitive
+0101AC 7C DC FF 00 		sh		r1,PIC_ES
+0101B0 62 10 A0 1F 
+0101B4 0A 10 1E 00 		ldi		r1,#$000F		; enable keyboard reset, timer interrupts
+0101B8 7C DC FF 00 		sh		r1,PIC_IE
+0101BC 62 10 88 1F 
+0101C0 37 FF 01 00 		rtl
 
                 	;------------------------------------------------------------------------------
                 	; Convert ASCII character to screen display character.
                 	;------------------------------------------------------------------------------
                 	
                 	AsciiToScreen:
-0101B4 67 E1 01 00 	    push    r2
-0101B8 8C 10 FE 01 		and		r1,r1,#$FF
-0101BC 8D 10 00 02 		or		r1,r1,#$100
-0101C0 8C 20 40 00 		and		r2,r1,#%00100000	; if bit 5 or 6 isn't set
-0101C4 3D 01 08 00 		beq		r2,.00001
-0101C8 8C 20 80 00 		and		r2,r1,#%01000000
-0101CC 3D 01 04 00 		beq		r2,.00001
-0101D0 8C 10 3E 03 		and		r1,r1,#%110011111
+0101C4 67 E1 01 00 	    push    r2
+0101C8 8C 10 FE 01 		and		r1,r1,#$FF
+0101CC 8D 10 00 02 		or		r1,r1,#$100
+0101D0 8C 20 40 00 		and		r2,r1,#%00100000	; if bit 5 or 6 isn't set
+0101D4 3D 01 08 00 		beq		r2,.00001
+0101D8 8C 20 80 00 		and		r2,r1,#%01000000
+0101DC 3D 01 04 00 		beq		r2,.00001
+0101E0 8C 10 3E 03 		and		r1,r1,#%110011111
                 	.00001:
-0101D4 57 E1 01 00 	    pop     r2
-0101D8 BB EF 01 00 		rts
+0101E4 57 2F 10 00 	    pop     r2
+	rtl
 
+0101E8 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; Convert screen display character to ascii.
                 	;------------------------------------------------------------------------------
                 	
                 	ScreenToAscii:
-0101DC 67 E1 01 00 	    push    r2
-0101E0 8C 10 FE 01 		and		r1,r1,#$FF
-0101E4 96 20 36 00 		cmpu	r2,r1,#26+1
-0101E8 3D 31 04 00 		bge		r2,.stasc1
-0101EC 84 10 C0 00 		add		r1,r1,#$60
+0101EC 67 E1 01 00 	    push    r2
+0101F0 8C 10 FE 01 		and		r1,r1,#$FF
+0101F4 96 20 36 00 		cmpu	r2,r1,#26+1
+0101F8 3D 31 04 00 		bge		r2,.stasc1
+0101FC 84 10 C0 00 		add		r1,r1,#$60
                 	.stasc1:
-0101F0 57 E1 01 00 	    pop     r2
-0101F4 BB EF 01 00 		rts
+010200 57 2F 10 00 	    pop     r2
+	rtl
 
+010204 37 FF 01 00 
                 	CursorOff:
-0101F8 BB EF 01 00 		rts
+010208 37 FF 01 00 		rtl
 CursorOn:
-0101FC BB EF 01 00 		rts
+01020C 37 FF 01 00 		rtl
 HomeCursor:
-010200 60 00 00 01 		sb		r0,CursorRow
-010204 60 00 02 01 		sb		r0,CursorCol
-010208 7C DA FF 00 		sc	    r0,TEXTREG+TEXT_CURPOS+$FFD00000
-01020C 61 00 58 00 
-010210 BB EF 01 00 		rts
+010210 60 00 00 01 		sb		r0,CursorRow
+010214 60 00 02 01 		sb		r0,CursorCol
+010218 7C DA FF 00 		sc	    r0,TEXTREG+TEXT_CURPOS+$FFD00000
+01021C 61 00 58 00 
+010220 37 FF 01 00 		rtl
 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	                                                                               
                 	ClearScreen:
-010214 E7 EF 01 00 	    push    lr
-010218 E7 E0 01 00 	    push	r1
-01021C 67 E1 01 00 	    push    r2
-010220 E7 E1 01 00 	    push    r3
-010224 67 E2 01 00 	    push    r4
-010228 7C DA FF 00 		lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
-01022C 41 10 00 00 
-010230 7C DA FF 00 		lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
-010234 41 20 08 00 
-010238 02 41 02 2E 		mulu	r4,r2,r1
-01023C 15 42 02 00 		subui   r4,r4,#1
-010240 7C D0 FF 00 		ldi		r3,#TEXTSCR+$FFD00000
-010244 0A 30 00 00 
-010248 0A 10 40 00 		ldi		r1,#' '
-01024C 39 ED FF FF 		bsr		AsciiToScreen
-010250 45 20 F0 00 		lhu		r2,NormAttr
-010254 82 10 04 1A 		or		r1,r1,r2
+010224 E7 EF 01 00 	    push    lr
+010228 E7 E0 01 00 	    push	r1
+01022C 67 E1 01 00 	    push    r2
+010230 E7 E1 01 00 	    push    r3
+010234 67 E2 01 00 	    push    r4
+010238 7C DA FF 00 		lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
+01023C 41 10 00 00 
+010240 7C DA FF 00 		lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
+010244 41 20 08 00 
+010248 02 41 02 2E 		mulu	r4,r2,r1
+01024C 15 42 02 00 		subui   r4,r4,#1
+010250 7C D0 FF 00 		ldi		r3,#TEXTSCR+$FFD00000
+010254 0A 30 00 00 
+010258 0A 10 40 00 		ldi		r1,#' '
+01025C 39 ED FF FF 		bsr		AsciiToScreen
+010260 45 20 F0 00 		lhu		r2,NormAttr
+010264 82 10 04 1A 		or		r1,r1,r2
                 	.cs1:
-010258 EA 11 88 00 	    sh	    r1,[r3+r4*4]
-01025C 15 42 02 00 	    subui   r4,r4,#1
-010260 3D 12 FC FF 		bne	    r4,.cs1
-010264 57 E2 01 00 		pop     r4
-010268 D7 E1 01 00 		pop     r3
-01026C 57 E1 01 00 		pop     r2
-010270 D7 E0 01 00 		pop     r1
-010274 D7 EF 01 00 	    pop     lr
-010278 BB EF 01 00 		rts
+010268 EA 11 88 00 	    sh	    r1,[r3+r4*4]
+01026C 15 42 02 00 	    subui   r4,r4,#1
+010270 3D 12 FC FF 		bne	    r4,.cs1
+010274 57 4F 10 00 		pop     r4
+	pop     r3
+	pop     r2
+	pop     r1
+    rts
 
+010278 57 3F 10 00 
+01027C 57 2F 10 00 
+010280 57 1F 10 00 
+010284 3B FF 11 00 
                 	;------------------------------------------------------------------------------
                 	; Display the word in r1
                 	;------------------------------------------------------------------------------
                 	
                 	DisplayWord:
-01027C E7 EF 01 00 	    push    lr
-010280 82 10 40 74 		rol	    r1,r1,#32
-010284 B9 01 00 00 		bsr		DisplayHalf
-010288 82 10 40 74 		rol	    r1,r1,#32
-01028C D7 EF 01 00 	    pop     lr
-                	
+010288 E7 EF 01 00 	    push    lr
+01028C 82 10 40 74 		rol	    r1,r1,#32
+010290 B9 01 00 00 		bsr		DisplayHalf
+010294 82 10 40 74 		rol	    r1,r1,#32
+010298 57 FF 11 00 	    pop     lr
+
                 	;------------------------------------------------------------------------------
                 	; Display the half-word in r1
                 	;------------------------------------------------------------------------------
                 	
                 	DisplayHalf:
-010290 E7 EF 01 00 	    push    lr
-010294 82 10 20 76 		ror		r1,r1,#16
-010298 B9 01 00 00 		bsr		DisplayCharHex
-01029C 82 10 20 74 		rol		r1,r1,#16
-0102A0 D7 EF 01 00 	    pop     lr
-                	
+01029C E7 EF 01 00 	    push    lr
+0102A0 82 10 20 76 		ror		r1,r1,#16
+0102A4 B9 01 00 00 		bsr		DisplayCharHex
+0102A8 82 10 20 74 		rol		r1,r1,#16
+0102AC 57 FF 11 00 	    pop     lr
+
                 	;------------------------------------------------------------------------------
                 	; Display the char in r1
                 	;------------------------------------------------------------------------------
                 	
                 	DisplayCharHex:
-0102A4 E7 EF 01 00 	    push    lr
-0102A8 82 10 10 76 		ror		r1,r1,#8
-0102AC B9 01 00 00 		bsr		DisplayByte
-0102B0 82 10 10 74 		rol		r1,r1,#8
-0102B4 D7 EF 01 00 	    pop     lr
-                	
+0102B0 E7 EF 01 00 	    push    lr
+0102B4 82 10 10 76 		ror		r1,r1,#8
+0102B8 B9 01 00 00 		bsr		DisplayByte
+0102BC 82 10 10 74 		rol		r1,r1,#8
+0102C0 57 FF 11 00 	    pop     lr
+
                 	;------------------------------------------------------------------------------
                 	; Display the byte in r1
                 	;------------------------------------------------------------------------------
                 	
                 	DisplayByte:
-0102B8 E7 EF 01 00 	    push    lr
-0102BC 82 10 08 76 		ror		r1,r1,#4
-0102C0 B9 01 00 00 		bsr		DisplayNybble
-0102C4 82 10 08 74 		rol		r1,r1,#4
-0102C8 D7 EF 01 00 	    pop     lr
-                	
+0102C4 E7 EF 01 00 	    push    lr
+0102C8 82 10 08 76 		ror		r1,r1,#4
+0102CC B9 01 00 00 		bsr		DisplayNybble
+0102D0 82 10 08 74 		rol		r1,r1,#4
+0102D4 57 FF 11 00 	    pop     lr
+
                 	;------------------------------------------------------------------------------
                 	; Display nybble in r1
                 	;------------------------------------------------------------------------------
                 	
                 	DisplayNybble:
-0102CC E7 EF 01 00 	    push    lr
-0102D0 E7 E0 01 00 		push	r1
-0102D4 67 E1 01 00 		push    r2
-0102D8 8C 10 1E 00 		and		r1,r1,#$0F
-0102DC 84 10 60 00 		add		r1,r1,#'0'
-0102E0 96 20 74 00 		cmpu	r2,r1,#'9'+1
-0102E4 3D 41 04 00 		blt		r2,.0001
-0102E8 84 10 0E 00 		add		r1,r1,#7
+0102D8 E7 EF 01 00 	    push    lr
+0102DC E7 E0 01 00 		push	r1
+0102E0 67 E1 01 00 		push    r2
+0102E4 8C 10 1E 00 		and		r1,r1,#$0F
+0102E8 84 10 60 00 		add		r1,r1,#'0'
+0102EC 96 20 74 00 		cmpu	r2,r1,#'9'+1
+0102F0 3D 41 04 00 		blt		r2,.0001
+0102F4 84 10 0E 00 		add		r1,r1,#7
                 	.0001:
-0102EC 3E F0 31 00 		jsr		(OutputVec)
-0102F0 57 E1 01 00 		pop     r2
-0102F4 D7 E0 01 00 		pop		r1
-0102F8 D7 EF 01 00 		pop     lr
-0102FC BB EF 01 00 		rts
+0102F8 3E F0 31 00 		jsr		(OutputVec)
+0102FC 57 2F 10 00 		pop     r2
+	pop		r1
+	pop     lr
+	rtl
 
+010300 57 1F 10 00 
+010304 57 FF 11 00 
+010308 37 FF 01 00 
                 	DisplayString:
-010300 E7 EF 01 00 	    push    lr
-010304 E7 E0 01 00 		push	r1
-010308 67 E1 01 00 		push    r2
-01030C 82 20 00 1A 		mov		r2,r1
+01030C E7 EF 01 00 	    push    lr
+010310 E7 E0 01 00 		push	r1
+010314 67 E1 01 00 		push    r2
+010318 82 20 00 1A 		mov		r2,r1
                 	.dm2:
-010310 41 11 00 00 		lbu		r1,[r2]
-010314 14 21 02 00 		addui   r2,r2,#1	; increment text pointer
-010318 BD 00 06 00 		beq		r1,.dm1
-01031C 39 BE 00 00 		bsr		OutChar
-010320 3A FE FF FF 		bra		.dm2
+01031C 41 11 00 00 		lbu		r1,[r2]
+010320 14 21 02 00 		addui   r2,r2,#1	; increment text pointer
+010324 BD 00 06 00 		beq		r1,.dm1
+010328 B9 BD 00 00 		bsr		OutChar
+01032C 3A FE FF FF 		bra		.dm2
                 	.dm1:
-010324 57 E1 01 00 		pop		r2
-010328 D7 E0 01 00 	    pop     r1
-01032C D7 EF 01 00 		pop     lr
-010330 BB EF 01 00 		rts
+010330 57 2F 10 00 		pop		r2
+    pop     r1
+	pop     lr
+	rtl
 
+010334 57 1F 10 00 
+010338 57 FF 11 00 
+01033C 37 FF 01 00 
                 	DisplayStringCRLF:
-010334 E7 EF 01 00 	    push    lr
-010338 39 F9 FF FF 		bsr		DisplayString
+010340 E7 EF 01 00 	    push    lr
+010344 39 F9 FF FF 		bsr		DisplayString
                 	OutCRLF:
                 	CRLF:
-01033C E7 E0 01 00 		push	r1
-010340 0A 10 1A 00 		ldi		r1,#CR
-010344 39 B9 00 00 		bsr		OutChar
-010348 0A 10 14 00 		ldi		r1,#LF
-01034C 39 B8 00 00 		bsr		OutChar
-010350 D7 E0 01 00 		pop		r1
-010354 D7 EF 01 00 		pop     lr
-010358 BB EF 01 00 		rts
+010348 E7 E0 01 00 		push	r1
+01034C 0A 10 1A 00 		ldi		r1,#CR
+010350 B9 B8 00 00 		bsr		OutChar
+010354 0A 10 14 00 		ldi		r1,#LF
+010358 B9 B7 00 00 		bsr		OutChar
+01035C 57 1F 10 00 		pop		r1
+	pop     lr
+	rtl
 
+010360 57 FF 11 00 
+010364 37 FF 01 00 
                 	
                 	DispCharQ:
-01035C E7 EF 01 00 	    push    lr
-010360 B9 CA FF FF 		bsr		AsciiToScreen
-010364 E1 11 00 00 		sc		r1,[r3]
-010368 84 31 08 00 		add		r3,r3,#4
-01036C D7 EF 01 00 	    pop     lr
-010370 BB EF 01 00 		rts
+010368 E7 EF 01 00 	    push    lr
+01036C 39 CB FF FF 		bsr		AsciiToScreen
+010370 E1 11 00 00 		sc		r1,[r3]
+010374 84 31 08 00 		add		r3,r3,#4
+010378 57 FF 11 00 	    pop     lr
+	rtl
 
+01037C 37 FF 01 00 
                 	DispStartMsg:
-010374 E7 EF 01 00 	    push    lr
-010378 7C 01 00 00 		ldi		r1,#msgStart
-01037C 0A 10 C2 0E 
-010380 39 F0 FF FF 		bsr		DisplayString
-010384 D7 EF 01 00 	    pop     lr
-010388 BB EF 01 00 		rts
+010380 E7 EF 01 00 	    push    lr
+010384 7C 01 00 00 		ldi		r1,#msgStart
+010388 0A 10 D2 0E 
+01038C 39 F0 FF FF 		bsr		DisplayString
+010390 57 FF 11 00 	    pop     lr
+	rtl
 
+010394 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	KeybdIRQ:
-01038C 7C DC FF 00 		sb		r0,KEYBD+1
-010390 60 00 02 00 
-010394 02 00 3E 6E 		rti
+010398 7C DC FF 00 		sb		r0,KEYBD+1
+01039C 60 00 02 00 
+0103A0 02 00 3E 6E 		rti
                 	
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	TickRout:
-010398 E7 E0 01 00 	    push    r1
-01039C 7C D0 FF 00 		lh	    r1,TEXTSCR+220+$FFD00000
-0103A0 44 10 B8 01 
-0103A4 84 10 02 00 		add		r1,r1,#1
-0103A8 7C D0 FF 00 		sh	    r1,TEXTSCR+220+$FFD00000
-0103AC 62 10 B8 01 
-0103B0 D7 E0 01 00 		pop     r1
-0103B4 BB EF 01 00 		rts
+0103A4 E7 E0 01 00 	    push    r1
+0103A8 7C D0 FF 00 		lh	    r1,TEXTSCR+220+$FFD00000
+0103AC 44 10 B8 01 
+0103B0 84 10 02 00 		add		r1,r1,#1
+0103B4 7C D0 FF 00 		sh	    r1,TEXTSCR+220+$FFD00000
+0103B8 62 10 B8 01 
+0103BC 57 1F 10 00 		pop     r1
+	rtl
 
+0103C0 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	Tick1000Rout:
-0103B8 E7 E0 01 00 		push	r1
-0103BC 0A 10 04 00 		ldi		r1,#2				; reset the edge sense circuit
-0103C0 7C DC FF 00 		sh		r1,PIC_RSTE
-0103C4 62 10 A8 1F 
-0103C8 64 10 20 00 		inc     Milliseconds
-0103CC D7 E0 01 00 		pop		r1
-0103D0 02 00 3E 6E 		rti
+0103C4 E7 E0 01 00 		push	r1
+0103C8 0A 10 04 00 		ldi		r1,#2				; reset the edge sense circuit
+0103CC 7C DC FF 00 		sh		r1,PIC_RSTE
+0103D0 62 10 A8 1F 
+0103D4 64 10 20 00 		inc     Milliseconds
+0103D8 57 1F 10 00 		pop		r1
+	rti
+0103DC 02 00 3E 6E 
                 	
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	GetScreenLocation:
-0103D4 7C D0 FF 00 		ldi		r1,#TEXTSCR+$FFD00000
-0103D8 0A 10 00 00 
-0103DC BB EF 01 00 		rts
+0103E0 7C D0 FF 00 		ldi		r1,#TEXTSCR+$FFD00000
+0103E4 0A 10 00 00 
+0103E8 37 FF 01 00 		rtl
 GetCurrAttr:
-0103E0 45 10 F0 00 		lhu		r1,NormAttr
-0103E4 BB EF 01 00 		rts
+0103EC 45 10 F0 00 		lhu		r1,NormAttr
+0103F0 37 FF 01 00 		rtl
 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	UpdateCursorPos:
-0103E8 E7 E0 01 00 		push	r1
-0103EC 67 E1 01 00 		push    r2
-0103F0 67 E2 01 00 		push    r4
-0103F4 41 10 00 01 		lbu		r1,CursorRow
-0103F8 8C 10 7E 00 		and		r1,r1,#$3f
-0103FC 7C DA FF 00 		lbu	r2,TEXTREG+TEXT_COLS+$FFD00000
-010400 41 20 00 00 
-010404 02 21 02 0E 		mul		r2,r2,r1
-010408 41 10 02 01 		lbu		r1,CursorCol
-01040C 8C 10 FE 00 		and		r1,r1,#$7f
-010410 02 21 02 08 		add		r2,r2,r1
-010414 7C DA FF 00 		sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
-010418 61 20 58 00 
-01041C 57 E2 01 00 		pop		r4
-010420 57 E1 01 00 	    pop     r2
-010424 D7 E0 01 00 	    pop     r1
-010428 BB EF 01 00 	    rts
+0103F4 E7 E0 01 00 		push	r1
+0103F8 67 E1 01 00 		push    r2
+0103FC 67 E2 01 00 		push    r4
+010400 41 10 00 01 		lbu		r1,CursorRow
+010404 8C 10 7E 00 		and		r1,r1,#$3f
+010408 7C DA FF 00 		lbu	r2,TEXTREG+TEXT_COLS+$FFD00000
+01040C 41 20 00 00 
+010410 02 21 02 0E 		mul		r2,r2,r1
+010414 41 10 02 01 		lbu		r1,CursorCol
+010418 8C 10 FE 00 		and		r1,r1,#$7f
+01041C 02 21 02 08 		add		r2,r2,r1
+010420 7C DA FF 00 		sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
+010424 61 20 58 00 
+010428 57 4F 10 00 		pop		r4
+    pop     r2
+    pop     r1
+    rtl
 	
+01042C 57 2F 10 00 
+010430 57 1F 10 00 
+010434 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	CalcScreenLoc:
-01042C E7 EF 01 00 	    push    lr
-010430 67 E1 01 00 		push	r2
-010434 67 E2 01 00 		push    r4
-010438 41 10 00 01 		lbu		r1,CursorRow
-01043C 8C 10 7E 00 		and		r1,r1,#$3f
-010440 7C DA FF 00 		lbu	r2,TEXTREG+TEXT_COLS+$FFD00000
-010444 41 20 00 00 
-010448 02 21 02 0E 		mul		r2,r2,r1
-01044C 41 10 02 01 		lbu		r1,CursorCol
-010450 8C 10 FE 00 		and		r1,r1,#$7f
-010454 02 21 02 08 		add		r2,r2,r1
-010458 7C DA FF 00 		sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
-01045C 61 20 58 00 
-010460 B9 EE FF FF 		bsr		GetScreenLocation
-010464 02 21 04 70 		shl		r2,r2,#2
-010468 82 10 04 08 		add		r1,r1,r2
-01046C 57 E2 01 00 		pop		r4
-010470 57 E1 01 00 	    pop     r2
-010474 D7 EF 01 00 	    pop     lr
-010478 BB EF 01 00 		rts
+010438 E7 EF 01 00 	    push    lr
+01043C 67 E1 01 00 		push	r2
+010440 67 E2 01 00 		push    r4
+010444 41 10 00 01 		lbu		r1,CursorRow
+010448 8C 10 7E 00 		and		r1,r1,#$3f
+01044C 7C DA FF 00 		lbu	r2,TEXTREG+TEXT_COLS+$FFD00000
+010450 41 20 00 00 
+010454 02 21 02 0E 		mul		r2,r2,r1
+010458 41 10 02 01 		lbu		r1,CursorCol
+01045C 8C 10 FE 00 		and		r1,r1,#$7f
+010460 02 21 02 28 		addu	r2,r2,r1
+010464 7C DA FF 00 		sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
+010468 61 20 58 00 
+01046C B9 EE FF FF 		bsr		GetScreenLocation
+010470 02 21 04 70 		shl		r2,r2,#2
+010474 82 10 04 28 		addu	r1,r1,r2
+010478 57 4F 10 00 		pop		r4
+    pop     r2
+    pop     lr
+	rtl
 
+01047C 57 2F 10 00 
+010480 57 FF 11 00 
+010484 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	DisplayChar:
-01047C E7 EF 01 00 	    push    lr
-010480 E7 E0 01 00 		push	r1
-010484 67 E1 01 00 	    push    r2
-010488 E7 E1 01 00 	    push    r3
-01048C 67 E2 01 00 	    push    r4
-010490 8C 10 FE 01 		and		r1,r1,#$FF
-010494 86 20 1A 00 		cmp		r2,r1,#'\r'
-010498 3D 01 42 00 		beq		r2,.docr
-01049C 86 20 22 01 		cmp		r2,r1,#$91		; cursor right ?
-0104A0 3D 01 44 00 		beq		r2,.doCursorRight
-0104A4 86 20 20 01 		cmp		r2,r1,#$90		; cursor up ?
-0104A8 3D 01 4E 00 		beq		r2,.doCursorUp
-0104AC 86 20 26 01 		cmp		r2,r1,#$93		; cursor left ?
-0104B0 3D 01 54 00 		beq		r2,.doCursorLeft
-0104B4 86 20 24 01 		cmp		r2,r1,#$92		; cursor down ?
-0104B8 3D 01 5A 00 		beq		r2,.doCursorDown
-0104BC 86 20 28 01 		cmp		r2,r1,#$94		; cursor home ?
-0104C0 3D 01 62 00 		beq		r2,.doCursorHome
-0104C4 86 20 32 01 		cmp		r2,r1,#$99		; delete ?
-0104C8 3D 01 6A 00 		beq		r2,.doDelete
-0104CC 86 20 10 00 		cmp		r2,r1,#CTRLH	; backspace ?
-0104D0 3D 01 6E 00 		beq		r2,.doBackspace
-0104D4 86 20 14 00 		cmp		r2,r1,#'\n'	; line feed ?
-0104D8 3D 01 92 00 		beq		r2,.doLinefeed
-0104DC 82 20 00 1A 		mov		r2,r1
-0104E0 B9 E9 FF FF 		bsr		CalcScreenLoc
-0104E4 82 30 00 1A 		mov		r3,r1
-0104E8 02 11 00 1A 		mov		r1,r2
-0104EC 39 99 FF FF 		bsr		AsciiToScreen
-0104F0 82 20 00 1A 		mov		r2,r1
-0104F4 B9 DD FF FF 		bsr		GetCurrAttr
-0104F8 82 10 04 1A 		or		r1,r1,r2
-0104FC E2 11 00 00 		sh	    r1,[r3]
-010500 B9 20 00 00 		bsr		IncCursorPos
+010488 E7 EF 01 00 	    push    lr
+01048C E7 E0 01 00 		push	r1
+010490 67 E1 01 00 	    push    r2
+010494 E7 E1 01 00 	    push    r3
+010498 67 E2 01 00 	    push    r4
+01049C 8C 10 FE 01 		and		r1,r1,#$FF
+0104A0 86 20 1A 00 		cmp		r2,r1,#'\r'
+0104A4 3D 01 42 00 		beq		r2,.docr
+0104A8 86 20 22 01 		cmp		r2,r1,#$91		; cursor right ?
+0104AC 3D 01 44 00 		beq		r2,.doCursorRight
+0104B0 86 20 20 01 		cmp		r2,r1,#$90		; cursor up ?
+0104B4 3D 01 4E 00 		beq		r2,.doCursorUp
+0104B8 86 20 26 01 		cmp		r2,r1,#$93		; cursor left ?
+0104BC 3D 01 54 00 		beq		r2,.doCursorLeft
+0104C0 86 20 24 01 		cmp		r2,r1,#$92		; cursor down ?
+0104C4 3D 01 5A 00 		beq		r2,.doCursorDown
+0104C8 86 20 28 01 		cmp		r2,r1,#$94		; cursor home ?
+0104CC 3D 01 62 00 		beq		r2,.doCursorHome
+0104D0 86 20 32 01 		cmp		r2,r1,#$99		; delete ?
+0104D4 3D 01 6A 00 		beq		r2,.doDelete
+0104D8 86 20 10 00 		cmp		r2,r1,#CTRLH	; backspace ?
+0104DC 3D 01 6E 00 		beq		r2,.doBackspace
+0104E0 86 20 14 00 		cmp		r2,r1,#'\n'	; line feed ?
+0104E4 3D 01 92 00 		beq		r2,.doLinefeed
+0104E8 82 20 00 1A 		mov		r2,r1
+0104EC B9 E9 FF FF 		bsr		CalcScreenLoc
+0104F0 82 30 00 1A 		mov		r3,r1
+0104F4 02 11 00 1A 		mov		r1,r2
+0104F8 B9 99 FF FF 		bsr		AsciiToScreen
+0104FC 82 20 00 1A 		mov		r2,r1
+010500 B9 DD FF FF 		bsr		GetCurrAttr
+010504 82 10 04 1A 		or		r1,r1,r2
+010508 E2 11 00 00 		sh	    r1,[r3]
+01050C B9 20 00 00 		bsr		IncCursorPos
                 	.dcx4:
-010504 57 E2 01 00 		pop		r4
-010508 D7 E1 01 00 	    pop     r3
-01050C 57 E1 01 00 	    pop     r2
-010510 D7 E0 01 00 	    pop     r1
-010514 D7 EF 01 00 	    pop     lr
-010518 BB EF 01 00 		rts
+010510 57 4F 10 00 		pop		r4
+    pop     r3
+    pop     r2
+    pop     r1
+    pop     lr
+	rtl
 .docr:
-01051C 60 00 02 01 		sb		r0,CursorCol
-010520 39 D9 FF FF 		bsr		UpdateCursorPos
-010524 3A FC FF FF 		bra     .dcx4
+010514 57 3F 10 00 
+010518 57 2F 10 00 
+01051C 57 1F 10 00 
+010520 57 FF 11 00 
+010524 37 FF 01 00 
+010528 60 00 02 01 		sb		r0,CursorCol
+01052C 39 D9 FF FF 		bsr		UpdateCursorPos
+010530 3A FC FF FF 		bra     .dcx4
                 	.doCursorRight:
-010528 41 10 02 01 		lbu		r1,CursorCol
-01052C 84 10 02 00 		add		r1,r1,#1
-010530 96 20 A8 00 		cmpu	r2,r1,#TXTCOLS
-010534 3D 31 04 00 		bge		r2,.dcx7
-010538 60 10 02 01 		sb		r1,CursorCol
+010534 41 10 02 01 		lbu		r1,CursorCol
+010538 84 10 02 00 		add		r1,r1,#1
+01053C 96 20 A8 00 		cmpu	r2,r1,#TXTCOLS
+010540 3D 31 04 00 		bge		r2,.dcx7
+010544 60 10 02 01 		sb		r1,CursorCol
                 	.dcx7:
-01053C B9 D5 FF FF 		bsr		UpdateCursorPos
-010540 BA F8 FF FF 		bra     .dcx4
+010548 B9 D5 FF FF 		bsr		UpdateCursorPos
+01054C BA F8 FF FF 		bra     .dcx4
                 	.doCursorUp:
-010544 41 10 00 01 		lbu		r1,CursorRow
-010548 BD 00 FA FF 		beq		r1,.dcx7
-01054C 85 10 02 00 		sub		r1,r1,#1
-010550 60 10 00 01 		sb		r1,CursorRow
-010554 3A FD FF FF 		bra		.dcx7
+010550 41 10 00 01 		lbu		r1,CursorRow
+010554 BD 00 FA FF 		beq		r1,.dcx7
+010558 85 10 02 00 		sub		r1,r1,#1
+01055C 60 10 00 01 		sb		r1,CursorRow
+010560 3A FD FF FF 		bra		.dcx7
                 	.doCursorLeft:
-010558 41 10 02 01 		lbu		r1,CursorCol
-01055C BD 00 F0 FF 		beq		r1,.dcx7
-010560 85 10 02 00 		sub		r1,r1,#1
-010564 60 10 02 01 		sb		r1,CursorCol
-010568 BA FA FF FF 		bra		.dcx7
+010564 41 10 02 01 		lbu		r1,CursorCol
+010568 BD 00 F0 FF 		beq		r1,.dcx7
+01056C 85 10 02 00 		sub		r1,r1,#1
+010570 60 10 02 01 		sb		r1,CursorCol
+010574 BA FA FF FF 		bra		.dcx7
                 	.doCursorDown:
-01056C 41 10 00 01 		lbu		r1,CursorRow
-010570 84 10 02 00 		add		r1,r1,#1
-010574 96 20 3E 00 		cmpu	r2,r1,#TXTROWS
-010578 3D 31 E2 FF 		bge		r2,.dcx7
-01057C 60 10 00 01 		sb		r1,CursorRow
-010580 BA F7 FF FF 		bra		.dcx7
+010578 41 10 00 01 		lbu		r1,CursorRow
+01057C 84 10 02 00 		add		r1,r1,#1
+010580 96 20 3E 00 		cmpu	r2,r1,#TXTROWS
+010584 3D 31 E2 FF 		bge		r2,.dcx7
+010588 60 10 00 01 		sb		r1,CursorRow
+01058C BA F7 FF FF 		bra		.dcx7
                 	.doCursorHome:
-010584 41 10 02 01 		lbu		r1,CursorCol
-010588 BD 00 06 00 		beq		r1,.dcx12
-01058C 60 00 02 01 		sb		r0,CursorCol
-010590 BA F5 FF FF 		bra		.dcx7
+010590 41 10 02 01 		lbu		r1,CursorCol
+010594 BD 00 06 00 		beq		r1,.dcx12
+010598 60 00 02 01 		sb		r0,CursorCol
+01059C BA F5 FF FF 		bra		.dcx7
                 	.dcx12:
-010594 60 00 00 01 		sb		r0,CursorRow
-010598 BA F4 FF FF 		bra		.dcx7
+0105A0 60 00 00 01 		sb		r0,CursorRow
+0105A4 BA F4 FF FF 		bra		.dcx7
                 	.doDelete:
-01059C 39 D2 FF FF 		bsr		CalcScreenLoc
-0105A0 82 30 00 1A 		mov		r3,r1
-0105A4 41 10 02 01 		lbu		r1,CursorCol
-0105A8 3A 04 00 00 		bra		.dcx5
+0105A8 39 D2 FF FF 		bsr		CalcScreenLoc
+0105AC 82 30 00 1A 		mov		r3,r1
+0105B0 41 10 02 01 		lbu		r1,CursorCol
+0105B4 3A 04 00 00 		bra		.dcx5
                 	.doBackspace:
-0105AC 41 10 02 01 		lbu		r1,CursorCol
-0105B0 BD 00 AA FF 		beq		r1,.dcx4
-0105B4 85 10 02 00 		sub		r1,r1,#1
-0105B8 60 10 02 01 		sb		r1,CursorCol
-0105BC 39 CE FF FF 		bsr		CalcScreenLoc
-0105C0 82 30 00 1A 		mov		r3,r1
-0105C4 41 10 02 01 		lbu		r1,CursorCol
+0105B8 41 10 02 01 		lbu		r1,CursorCol
+0105BC BD 00 AA FF 		beq		r1,.dcx4
+0105C0 85 10 02 00 		sub		r1,r1,#1
+0105C4 60 10 02 01 		sb		r1,CursorCol
+0105C8 39 CE FF FF 		bsr		CalcScreenLoc
+0105CC 82 30 00 1A 		mov		r3,r1
+0105D0 41 10 02 01 		lbu		r1,CursorCol
                 	.dcx5:
-0105C8 C5 21 08 00 		lhu	    r2,4[r3]
-0105CC E2 21 00 00 		sh	    r2,[r3]
-0105D0 84 31 08 00 		add		r3,r3,#4
-0105D4 84 10 02 00 		add		r1,r1,#1
-0105D8 96 20 A8 00 		cmpu	r2,r1,#TXTCOLS
-0105DC 3D 41 F6 FF 		blt		r2,.dcx5
-0105E0 0A 10 40 00 		ldi		r1,#' '
-0105E4 39 7A FF FF 		bsr		AsciiToScreen
-0105E8 45 20 F0 00 		lhu		r2,NormAttr
-0105EC 82 10 04 1A 		or		r1,r1,r2
-0105F0 85 31 08 00 		sub		r3,r3,#4
-0105F4 E2 11 00 00 		sh	    r1,[r3]
-0105F8 BA E1 FF FF 		bra		.dcx4
+0105D4 C5 21 08 00 		lhu	    r2,4[r3]
+0105D8 E2 21 00 00 		sh	    r2,[r3]
+0105DC 84 31 08 00 		add		r3,r3,#4
+0105E0 84 10 02 00 		add		r1,r1,#1
+0105E4 96 20 A8 00 		cmpu	r2,r1,#TXTCOLS
+0105E8 3D 41 F6 FF 		blt		r2,.dcx5
+0105EC 0A 10 40 00 		ldi		r1,#' '
+0105F0 B9 7A FF FF 		bsr		AsciiToScreen
+0105F4 45 20 F0 00 		lhu		r2,NormAttr
+0105F8 82 10 04 1A 		or		r1,r1,r2
+0105FC 85 31 08 00 		sub		r3,r3,#4
+010600 E2 11 00 00 		sh	    r1,[r3]
+010604 BA E1 FF FF 		bra		.dcx4
                 	.doLinefeed:
-0105FC B9 06 00 00 		bsr		IncCursorRow
-010600 BA E0 FF FF 		bra		.dcx4
+010608 B9 06 00 00 		bsr		IncCursorRow
+01060C BA E0 FF FF 		bra		.dcx4
                 	
                 	
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	IncCursorPos:
-010604 E7 EF 01 00 	    push    lr
-010608 E7 E0 01 00 		push	r1
-01060C 67 E1 01 00 	    push    r2
-010610 67 E2 01 00 	    push    r4
-010614 41 10 02 01 		lbu		r1,CursorCol
-010618 94 10 02 00 		addui	r1,r1,#1
-01061C 60 10 02 01 		sb		r1,CursorCol
-010620 96 20 A8 00 		cmpu	r2,r1,#TXTCOLS
-010624 3D 41 1E 00 		blt		r2,icc1
-010628 60 00 02 01 		sb		r0,CursorCol
-01062C BA 02 00 00 		bra		icr1
+010610 E7 EF 01 00 	    push    lr
+010614 E7 E0 01 00 		push	r1
+010618 67 E1 01 00 	    push    r2
+01061C 67 E2 01 00 	    push    r4
+010620 41 10 02 01 		lbu		r1,CursorCol
+010624 94 10 02 00 		addui	r1,r1,#1
+010628 60 10 02 01 		sb		r1,CursorCol
+01062C 96 20 A8 00 		cmpu	r2,r1,#TXTCOLS
+010630 3D 41 1E 00 		blt		r2,icc1
+010634 60 00 02 01 		sb		r0,CursorCol
+010638 BA 02 00 00 		bra		icr1
                 	IncCursorRow:
-010630 E7 EF 01 00 	    push    lr
-010634 E7 E0 01 00 		push	r1
-010638 67 E1 01 00 	    push    r2
-01063C 67 E2 01 00 	    push    r4
+01063C E7 EF 01 00 	    push    lr
+010640 E7 E0 01 00 		push	r1
+010644 67 E1 01 00 	    push    r2
+010648 67 E2 01 00 	    push    r4
                 	icr1:
-010640 41 10 00 01 		lbu		r1,CursorRow
-010644 94 10 02 00 		addui	r1,r1,#1
-010648 60 10 00 01 		sb		r1,CursorRow
-01064C 96 20 3E 00 		cmpu	r2,r1,#TXTROWS
-010650 3D 41 08 00 		blt		r2,icc1
-010654 0A 20 3C 00 		ldi		r2,#TXTROWS-1
-010658 60 20 00 01 		sb		r2,CursorRow
-01065C B9 03 00 00 		bsr		ScrollUp
+01064C 41 10 00 01 		lbu		r1,CursorRow
+010650 94 10 02 00 		addui	r1,r1,#1
+010654 60 10 00 01 		sb		r1,CursorRow
+010658 96 20 3E 00 		cmpu	r2,r1,#TXTROWS
+01065C 3D 41 08 00 		blt		r2,icc1
+010660 0A 20 3C 00 		ldi		r2,#TXTROWS-1
+010664 60 20 00 01 		sb		r2,CursorRow
+010668 B9 03 00 00 		bsr		ScrollUp
                 	icc1:
-010660 39 B1 FF FF 		bsr		UpdateCursorPos
-010664 57 E2 01 00 		pop		r4
-010668 57 E1 01 00 	    pop     r2
-01066C D7 E0 01 00 	    pop     r1
-010670 D7 EF 01 00 		pop     lr
-010674 BB EF 01 00 		rts
+01066C 39 B1 FF FF 		bsr		UpdateCursorPos
+010670 57 4F 10 00 		pop		r4
+    pop     r2
+    pop     r1
+	pop     lr
+	rtl
 
+010674 57 2F 10 00 
+010678 57 1F 10 00 
+01067C 57 FF 11 00 
+010680 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	ScrollUp:
-010678 E7 EF 01 00 	    push    lr
-01067C E7 E0 01 00 		push	r1
-010680 67 E1 01 00 	    push    r2
-010684 E7 E1 01 00 	    push    r3
-010688 E7 E2 01 00 	    push    r5
-01068C 67 E3 01 00 		push	r6
-010690 7C DA FF 00 		lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
-010694 41 10 00 00 
-010698 7C DA FF 00 		lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
-01069C 41 20 08 00 
-0106A0 05 21 02 00 		sub		r2,r2,#1
-0106A4 82 60 04 0E 		mul		r6,r1,r2
-0106A8 7C D0 FF 00 		ldi		r1,#TEXTSCR+$FFD00000
-0106AC 0A 10 00 00 
-0106B0 7C D0 FF 00 		ldi		r2,#TEXTSCR+TXTCOLS*4+$FFD00000
-0106B4 0A 20 A0 02 
-0106B8 0A 30 00 00 		ldi		r3,#0
+010684 E7 EF 01 00 	    push    lr
+010688 E7 E0 01 00 		push	r1
+01068C 67 E1 01 00 	    push    r2
+010690 E7 E1 01 00 	    push    r3
+010694 E7 E2 01 00 	    push    r5
+010698 67 E3 01 00 		push	r6
+01069C 7C DA FF 00 		lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
+0106A0 41 10 00 00 
+0106A4 7C DA FF 00 		lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
+0106A8 41 20 08 00 
+0106AC 15 21 02 00 		subui	r2,r2,#1
+0106B0 82 60 04 2E 		mulu	r6,r1,r2
+0106B4 7C D0 FF 00 		ldi		r1,#TEXTSCR+$FFD00000
+0106B8 0A 10 00 00 
+0106BC 7C D0 FF 00 		ldi		r2,#TEXTSCR+TXTCOLS*4+$FFD00000
+0106C0 0A 20 A0 02 
+0106C4 0A 30 00 00 		ldi		r3,#0
                 	.0001:
-0106BC 4C 51 86 00 		lh	    r5,[r2+r3*4]
-0106C0 EA 50 86 00 		sh	    r5,[r1+r3*4]
-0106C4 94 31 02 00 		addui	r3,r3,#1
-0106C8 15 63 02 00 		subui   r6,r6,#1
-0106CC 3D 13 F8 FF 		bne	    r6,.0001
-0106D0 7C DA FF 00 		lbu	    r1,TEXTREG+TEXT_ROWS+$FFD00000
-0106D4 41 10 08 00 
-0106D8 85 10 02 00 		sub		r1,r1,#1
-0106DC 39 04 00 00 		bsr		BlankLine
-0106E0 57 E3 01 00 		pop		r6
-0106E4 D7 E2 01 00 		pop		r5
-0106E8 D7 E1 01 00 	    pop     r3
-0106EC 57 E1 01 00 	    pop     r2
-0106F0 D7 E0 01 00 	    pop     r1
-0106F4 D7 EF 01 00 		pop     lr
-0106F8 BB EF 01 00 		rts
+0106C8 4C 51 86 00 		lh	    r5,[r2+r3*4]
+0106CC EA 50 86 00 		sh	    r5,[r1+r3*4]
+0106D0 94 31 02 00 		addui	r3,r3,#1
+0106D4 15 63 02 00 		subui   r6,r6,#1
+0106D8 3D 13 F8 FF 		bne	    r6,.0001
+0106DC 7C DA FF 00 		lbu	    r1,TEXTREG+TEXT_ROWS+$FFD00000
+0106E0 41 10 08 00 
+0106E4 95 10 02 00 		subui	r1,r1,#1
+0106E8 39 04 00 00 		bsr		BlankLine
+0106EC 57 6F 10 00 		pop		r6
+	pop		r5
+    pop     r3
+    pop     r2
+    pop     r1
+	pop     lr
+	rtl
 
+0106F0 57 5F 10 00 
+0106F4 57 3F 10 00 
+0106F8 57 2F 10 00 
+0106FC 57 1F 10 00 
+010700 57 FF 11 00 
+010704 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; Blank out a line on the screen.
                 	;
@@ -820,43 +865,48 @@ GetCurrAttr:
                 	;------------------------------------------------------------------------------
                 	
                 	BlankLine:
-0106FC E7 EF 01 00 	    push    lr
-010700 E7 E0 01 00 		push	r1
-010704 67 E1 01 00 	    push    r2
-010708 E7 E1 01 00 	    push    r3
-01070C 67 E2 01 00 	    push    r4
-010710 7C DA FF 00 	    lbu     r2,TEXTREG+TEXT_COLS+$FFD00000
-010714 41 20 00 00 
-010718 02 31 02 0E 		mul		r3,r2,r1
-01071C 05 21 02 00 		sub		r2,r2,#1		; r2 = #chars to blank - 1
-010720 82 31 04 70 		shl		r3,r3,#2
-010724 7C D0 FF 00 		add		r3,r3,#TEXTSCR+$FFD00000
-010728 84 31 00 00 
-01072C 0A 10 40 00 		ldi		r1,#' '
-010730 B9 50 FF FF 		bsr		AsciiToScreen
-010734 45 40 F0 00 		lhu		r4,NormAttr
-010738 82 10 08 1A 		or		r1,r1,r4
+010708 E7 EF 01 00 	    push    lr
+01070C E7 E0 01 00 		push	r1
+010710 67 E1 01 00 	    push    r2
+010714 E7 E1 01 00 	    push    r3
+010718 67 E2 01 00 	    push    r4
+01071C 7C DA FF 00 	    lbu     r2,TEXTREG+TEXT_COLS+$FFD00000
+010720 41 20 00 00 
+010724 02 31 02 2E 		mulu	r3,r2,r1
+                	;	subui	r2,r2,#1		; r2 = #chars to blank - 1
+010728 82 31 04 70 		shl		r3,r3,#2
+01072C 7C D0 FF 00 		addui	r3,r3,#TEXTSCR+$FFD00000
+010730 94 31 00 00 
+010734 0A 10 40 00 		ldi		r1,#' '
+010738 B9 51 FF FF 		bsr		AsciiToScreen
+01073C 45 40 F0 00 		lhu		r4,NormAttr
+010740 82 10 08 1A 		or		r1,r1,r4
                 	.0001:
-01073C EA 11 84 00 		sh	    r1,[r3+r2*4]
-010740 15 21 02 00 		subui   r2,r2,#1
-010744 3D 11 FC FF 		bne	    r2,.0001
-010748 57 E2 01 00 		pop		r4
-01074C D7 E1 01 00 	    pop     r3
-010750 57 E1 01 00 	    pop     r2
-010754 D7 E0 01 00 	    pop     r1
-010758 D7 EF 01 00 		pop     lr
-01075C BB EF 01 00 		rts
+010744 EA 11 84 00 		sh	    r1,[r3+r2*4]
+010748 15 21 02 00 		subui   r2,r2,#1
+01074C 3D 11 FC FF 		bne	    r2,.0001
+010750 57 4F 10 00 		pop		r4
+    pop     r3
+    pop     r2
+    pop     r1
+	pop     lr
+	rtl
 
-010760 00          		db	0
+010754 57 3F 10 00 
+010758 57 2F 10 00 
+01075C 57 1F 10 00 
+010760 57 FF 11 00 
+010764 37 FF 01 00 
+010768 00          		db	0
                 	msgStart:
-010761 46 49 53 41 		db	"FISA64 test system starting.",0
-010765 36 34 20 74 
-010769 65 73 74 20 
-01076D 73 79 73 74 
-010771 65 6D 20 73 
-010775 74 61 72 74 
-010779 69 6E 67 2E 
-01077D 00          
+010769 46 49 53 41 		db	"FISA64 test system starting.",0
+01076D 36 34 20 74 
+010771 65 73 74 20 
+010775 73 79 73 74 
+010779 65 6D 20 73 
+01077D 74 61 72 74 
+010781 69 6E 67 2E 
+010785 00          
                 	
                 	
                 	; ============================================================================
@@ -864,16 +914,16 @@ GetCurrAttr:
                 	; ============================================================================
                 	
                 	Monitor:
-01077E 00 00 0A 10 		ldi		r1,#49
-010782 62 00       
-010784 7C DC FF 00 		sc		r1,LEDS
-010788 61 10 00 0C 
+010786 00 00 0A 10 		ldi		r1,#49
+01078A 62 00       
+01078C 7C DC FF 00 		sc		r1,LEDS
+010790 61 10 00 0C 
                 	;	bsr		ClearScreen
                 	;	bsr		HomeCursor
-01078C 7C 01 00 00 		ldi		r1,#msgMonitorStarted
-010790 0A 10 C8 16 
-010794 39 74 FF FF 		bsr		DisplayStringCRLF
-010798 60 00 08 01 		sb		r0,KeybdEcho
+010794 7C 01 00 00 		ldi		r1,#msgMonitorStarted
+010798 0A 10 D8 16 
+01079C B9 74 FF FF 		bsr		DisplayStringCRLF
+0107A0 60 00 08 01 		sb		r0,KeybdEcho
                 		;ldi		r1,#7
                 		;ldi		r2,#0
                 		;ldi		r3,#IdleTask
@@ -881,66 +931,67 @@ GetCurrAttr:
                 		;ldi		r5,#0
                 		;bsr		StartTask
                 	mon1:
-01079C 0A 10 64 00 		ldi		r1,#50
-0107A0 7C DC FF 00 		sc		r1,LEDS
-0107A4 61 10 00 0C 
+0107A4 0A 10 64 00 		ldi		r1,#50
+0107A8 7C DC FF 00 		sc		r1,LEDS
+0107AC 61 10 00 0C 
                 	;	ldi		sp,#TCBs+TCB_Size-8		; reload the stack pointer, it may have been trashed
-0107A8 FC 3F 00 00 		ldi		sp,#$3FFFF8
-0107AC 0A E0 F1 FF 
-0107B0 02 00 00 6E 		cli
+0107B0 FC 3F 00 00 		ldi		sp,#$3FFFF8
+0107B4 0A E0 F1 FF 
+0107B8 02 00 00 6E 		cli
                 	.PromptLn:
-0107B4 39 71 FF FF 		bsr		CRLF
-0107B8 0A 10 48 00 		ldi		r1,#'$'
-0107BC 39 2A 00 00 		bsr		OutChar
+0107BC B9 71 FF FF 		bsr		CRLF
+0107C0 0A 10 48 00 		ldi		r1,#'$'
+0107C4 39 2A 00 00 		bsr		OutChar
                 	.Prompt3:
-0107C0 B9 C1 00 00 		bsr		KeybdGetCharNoWait		; KeybdGetCharDirectNB
-0107C4 BD 40 FE FF 		blt	    r1,.Prompt3
-0107C8 86 20 1A 00 		cmp		r2,r1,#CR
-0107CC 3D 01 06 00 		beq		r2,.Prompt1
-0107D0 B9 27 00 00 		bsr		OutChar
-0107D4 BA FD FF FF 		bra		.Prompt3
+0107C8 B9 C1 00 00 		bsr		KeybdGetCharNoWait		; KeybdGetCharDirectNB
+0107CC BD 40 FE FF 		blt	    r1,.Prompt3
+0107D0 86 20 1A 00 		cmp		r2,r1,#CR
+0107D4 3D 01 06 00 		beq		r2,.Prompt1
+0107D8 B9 27 00 00 		bsr		OutChar
+0107DC BA FD FF FF 		bra		.Prompt3
                 	.Prompt1:
-0107D8 60 00 02 01 		sb		r0,CursorCol
-0107DC 39 8A FF FF 		bsr		CalcScreenLoc
-0107E0 82 30 00 1A 		mov		r3,r1
-0107E4 B9 0C 00 00 		bsr		MonGetch
-0107E8 86 20 48 00 		cmp		r2,r1,#'$'
-0107EC 3D 11 04 00 		bne		r2,.Prompt2
-0107F0 39 0B 00 00 		bsr		MonGetch
+0107E0 60 00 02 01 		sb		r0,CursorCol
+0107E4 B9 8A FF FF 		bsr		CalcScreenLoc
+0107E8 82 30 00 1A 		mov		r3,r1
+0107EC B9 0C 00 00 		bsr		MonGetch
+0107F0 86 20 48 00 		cmp		r2,r1,#'$'
+0107F4 3D 11 04 00 		bne		r2,.Prompt2
+0107F8 39 0B 00 00 		bsr		MonGetch
                 	.Prompt2:
-0107F4 86 20 7E 00 		cmp		r2,r1,#'?'
-0107F8 3D 01 20 00 		beq		r2,.doHelp
-0107FC 86 20 86 00 		cmp		r2,r1,#'C'
-010800 3D 01 BA 01 		beq		r2,doCLS
-010804 86 20 C6 00 		cmp     r2,r1,#'c'
-010808 3D 01 80 7C 		beq     r2,doCS
-01080C 86 20 9A 00 		cmp		r2,r1,#'M'
-010810 3D 01 5C 00 		beq		r2,doDumpmem
-010814 86 20 DA 00 		cmp		r2,r1,#'m'
-010818 3D 01 7A 7C 		beq		r2,MRTest
-01081C 86 20 A6 00 		cmp		r2,r1,#'S'
-010820 3D 01 64 00 		beq		r2,doSDBoot
-010824 86 20 CE 00 		cmp		r2,r1,#'g'
-010828 3D 01 72 7C 		beq		r2,doRand
-01082C 86 20 CA 00 		cmp		r2,r1,#'e'
-010830 3D 01 6E 7C 		beq		r2,eval
-010834 3A ED FF FF 		bra     mon1
+0107FC 86 20 7E 00 		cmp		r2,r1,#'?'
+010800 3D 01 20 00 		beq		r2,.doHelp
+010804 86 20 86 00 		cmp		r2,r1,#'C'
+010808 3D 01 BA 01 		beq		r2,doCLS
+01080C 86 20 C6 00 		cmp     r2,r1,#'c'
+010810 3D 01 7C 7C 		beq     r2,doCS
+010814 86 20 9A 00 		cmp		r2,r1,#'M'
+010818 3D 01 5C 00 		beq		r2,doDumpmem
+01081C 86 20 DA 00 		cmp		r2,r1,#'m'
+010820 3D 01 76 7C 		beq		r2,MRTest
+010824 86 20 A6 00 		cmp		r2,r1,#'S'
+010828 3D 01 64 00 		beq		r2,doSDBoot
+01082C 86 20 CE 00 		cmp		r2,r1,#'g'
+010830 3D 01 6E 7C 		beq		r2,doRand
+010834 86 20 CA 00 		cmp		r2,r1,#'e'
+010838 3D 01 6C 7C 		beq		r2,eval
+01083C 3A ED FF FF 		bra     mon1
                 	
                 	.doHelp:
-010838 7C 01 00 00 		ldi		r1,#msgHelp
-01083C 0A 10 28 16 
-010840 39 58 FF FF 		bsr		DisplayString
-010844 3A EB FF FF 		bra     mon1
+010840 7C 01 00 00 		ldi		r1,#msgHelp
+010844 0A 10 38 16 
+010848 B9 58 FF FF 		bsr		DisplayString
+01084C 3A EB FF FF 		bra     mon1
                 	
                 	MonGetch:
-010848 E7 EF 01 00 	    push    lr
-01084C C5 11 00 00 		lhu	    r1,[r3]
-010850 8C 10 FE 03 		andi	r1,r1,#$1FF
-010854 84 31 08 00 		add		r3,r3,#4
-010858 B9 30 FF FF 		bsr		ScreenToAscii
-01085C D7 EF 01 00 		pop     lr
-010860 BB EF 01 00 		rts
+010850 E7 EF 01 00 	    push    lr
+010854 C5 11 00 00 		lhu	    r1,[r3]
+010858 8C 10 FE 03 		andi	r1,r1,#$1FF
+01085C 84 31 08 00 		add		r3,r3,#4
+010860 B9 31 FF FF 		bsr		ScreenToAscii
+010864 57 FF 11 00 		pop     lr
+	rtl
 
+010868 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; Ignore blanks in the input
                 	; r3 = text pointer
@@ -949,68 +1000,73 @@ GetCurrAttr:
                 	
                 	ignBlanks:
                 	ignBlanks1:
-010864 E7 EF 01 00 	    push    lr
-010868 67 E1 01 00 	    push    r2
-01086C B9 FB FF FF 		bsr		MonGetch
-010870 86 20 40 00 		cmp		r2,r1,#' '
-010874 3D 01 F8 FF 		beq		r2,ignBlanks1
-010878 85 31 08 00 		sub		r3,r3,#4
-01087C 57 E1 01 00 		pop     r2
-010880 D7 EF 01 00 		pop     lr
-010884 BB EF 01 00 		rts
+01086C E7 EF 01 00 	    push    lr
+010870 67 E1 01 00 	    push    r2
+010874 B9 FB FF FF 		bsr		MonGetch
+010878 86 20 40 00 		cmp		r2,r1,#' '
+01087C 3D 01 F8 FF 		beq		r2,ignBlanks1
+010880 85 31 08 00 		sub		r3,r3,#4
+010884 57 2F 10 00 		pop     r2
+	pop     lr
+	rtl
 
+010888 57 FF 11 00 
+01088C 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
                 	
                 	GetTwoParams:
-010888 E7 EF 01 00 	    push    lr
-01088C 39 FB FF FF 		bsr		ignBlanks
-010890 B9 35 00 00 		bsr		GetHexNumber	; get start address of dump
-010894 82 20 00 1A 		mov		r2,r1
-010898 B9 F9 FF FF 		bsr		ignBlanks
-01089C 39 34 00 00 		bsr		GetHexNumber	; get end address of dump
-0108A0 D7 EF 01 00 		pop     lr
-0108A4 BB EF 01 00 		rts
+010890 E7 EF 01 00 	    push    lr
+010894 39 FB FF FF 		bsr		ignBlanks
+010898 B9 35 00 00 		bsr		GetHexNumber	; get start address of dump
+01089C 82 20 00 1A 		mov		r2,r1
+0108A0 B9 F9 FF FF 		bsr		ignBlanks
+0108A4 39 34 00 00 		bsr		GetHexNumber	; get end address of dump
+0108A8 57 FF 11 00 		pop     lr
+	rtl
 
+0108AC 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; Get a range, the end must be greater or equal to the start.
                 	;------------------------------------------------------------------------------
                 	
                 	GetRange:
-0108A8 E7 EF 01 00 	    push    lr
-0108AC 67 E2 01 00 	    push    r4
-0108B0 39 FB FF FF 		bsr		GetTwoParams
-0108B4 02 41 02 2C 		cmpu	r4,r2,r1
-0108B8 3D 22 22 01 		bgt		r4,DisplayErr
-0108BC 57 E2 01 00 		pop     r4
-0108C0 D7 EF 01 00 		pop     lr
-0108C4 BB EF 01 00 		rts
+0108B0 E7 EF 01 00 	    push    lr
+0108B4 67 E2 01 00 	    push    r4
+0108B8 39 FB FF FF 		bsr		GetTwoParams
+0108BC 02 41 02 2C 		cmpu	r4,r2,r1
+0108C0 3D 22 22 01 		bgt		r4,DisplayErr
+0108C4 57 4F 10 00 		pop     r4
+	pop     lr
+	rtl
 
+0108C8 57 FF 11 00 
+0108CC 37 FF 01 00 
                 	doDumpmem:
-0108C8 39 26 FF FF 		bsr		CursorOff
-0108CC B9 FB FF FF 		bsr		GetRange
-0108D0 B9 4D FF FF 		bsr		CRLF
+0108D0 39 27 FF FF 		bsr		CursorOff
+0108D4 B9 FB FF FF 		bsr		GetRange
+0108D8 39 4E FF FF 		bsr		CRLF
                 	.001:
-0108D4 39 20 00 00 		bsr		CheckKeys
-0108D8 39 07 00 00 		bsr		DisplayMemBytes
-0108DC 02 41 02 2C 		cmpu	r4,r2,r1
-0108E0 3D 52 FA FF 		ble		r4,.001
-0108E4 3A D7 FF FF 		bra     mon1
+0108DC 39 20 00 00 		bsr		CheckKeys
+0108E0 39 07 00 00 		bsr		DisplayMemBytes
+0108E4 02 41 02 2C 		cmpu	r4,r2,r1
+0108E8 3D 52 FA FF 		ble		r4,.001
+0108EC 3A D7 FF FF 		bra     mon1
                 	
                 	doSDBoot:
                 	;	sub		r3,r3,#4
-0108E8 B9 F9 DE FF 		bsr		SDInit
-0108EC BD 10 58 FF 		bne	    r1,mon1
-0108F0 39 F9 DE FF 		bsr		SDReadPart
-0108F4 BD 10 54 FF 		bne	    r1,mon1
-0108F8 39 04 DF FF 		bsr		SDReadBoot
-0108FC BD 10 50 FF 		bne	    r1,mon1
-010900 39 03 DF FF 		bsr		loadBootFile
-010904 7C 01 00 00 		jmp		mon1
-010908 3C 00 38 0F 
+0108F0 B9 F8 DE FF 		bsr		SDInit
+0108F4 BD 10 58 FF 		bne	    r1,mon1
+0108F8 39 F8 DE FF 		bsr		SDReadPart
+0108FC BD 10 54 FF 		bne	    r1,mon1
+010900 39 03 DF FF 		bsr		SDReadBoot
+010904 BD 10 50 FF 		bne	    r1,mon1
+010908 B9 02 DF FF 		bsr		loadBootFile
+01090C 7C 01 00 00 		jmp		mon1
+010910 3C 00 48 0F 
                 	
                 	OutChar:
-01090C 3E 00 30 00 	    jmp     (OutputVec)
+010914 3E 00 30 00 	    jmp     (OutputVec)
                 	
                 	;------------------------------------------------------------------------------
                 	; Display memory pointed to by r2.
@@ -1018,69 +1074,73 @@ GetCurrAttr:
                 	;------------------------------------------------------------------------------
                 	;
                 	DisplayMemBytes:
-010910 E7 EF 01 00 	    push    lr
-010914 E7 E0 01 00 		push	r1
-010918 E7 E1 01 00 	    push    r3
-01091C 67 E2 01 00 	    push    r4
-010920 0A 10 7C 00 		ldi		r1,#'>'
-010924 39 FD FF FF 		bsr		OutChar
-010928 0A 10 84 00 		ldi		r1,#'B'
-01092C 39 FC FF FF 		bsr		OutChar
-010930 0A 10 40 00 		ldi		r1,#' '
-010934 39 FB FF FF 		bsr		OutChar
-010938 02 11 00 1A 		mov		r1,r2
-01093C B9 2A FF FF 		bsr		DisplayHalf
-010940 0A 30 0E 00 		ldi		r3,#7
+010918 E7 EF 01 00 	    push    lr
+01091C E7 E0 01 00 		push	r1
+010920 E7 E1 01 00 	    push    r3
+010924 67 E2 01 00 	    push    r4
+010928 0A 10 7C 00 		ldi		r1,#'>'
+01092C 39 FD FF FF 		bsr		OutChar
+010930 0A 10 84 00 		ldi		r1,#'B'
+010934 39 FC FF FF 		bsr		OutChar
+010938 0A 10 40 00 		ldi		r1,#' '
+01093C 39 FB FF FF 		bsr		OutChar
+010940 02 11 00 1A 		mov		r1,r2
+010944 39 2B FF FF 		bsr		DisplayHalf
+010948 0A 30 0E 00 		ldi		r3,#7
                 	.001:
-010944 0A 10 40 00 		ldi		r1,#' '
-010948 B9 F8 FF FF 		bsr		OutChar
-01094C 41 11 00 00 		lbu		r1,[r2]
-010950 7C 01 00 00 		jsr		DisplayByte
-010954 3C F0 71 05 
-010958 04 21 02 00 		add		r2,r2,#1
-01095C 95 31 02 00 		subui   r3,r3,#1
-010960 BD 11 F2 FF 		bne	    r3,.001
-010964 0A 10 74 00 		ldi		r1,#':'
-010968 B9 F4 FF FF 		bsr		OutChar
-01096C 7C 70 0D 00 		ldi		r1,#%110101110_000000100_0000000000	; reverse video
-010970 0A 10 00 20 
-010974 62 10 F0 00 		sh		r1,NormAttr
-010978 0A 30 0E 00 		ldi		r3,#7
-01097C 05 21 10 00 		sub		r2,r2,#8
+01094C 0A 10 40 00 		ldi		r1,#' '
+010950 B9 F8 FF FF 		bsr		OutChar
+010954 41 11 00 00 		lbu		r1,[r2]
+010958 7C 01 00 00 		jsr		DisplayByte
+01095C 3C F0 89 05 
+010960 04 21 02 00 		add		r2,r2,#1
+010964 95 31 02 00 		subui   r3,r3,#1
+010968 BD 11 F2 FF 		bne	    r3,.001
+01096C 0A 10 74 00 		ldi		r1,#':'
+010970 B9 F4 FF FF 		bsr		OutChar
+010974 7C 70 0D 00 		ldi		r1,#%110101110_000000100_0000000000	; reverse video
+010978 0A 10 00 20 
+01097C 62 10 F0 00 		sh		r1,NormAttr
+010980 0A 30 0E 00 		ldi		r3,#7
+010984 05 21 10 00 		sub		r2,r2,#8
                 	.002
-010980 41 11 00 00 		lbu		r1,[r2]
-010984 96 40 34 00 		cmpu	r4,r1,#26				; convert control characters to '.'
-010988 3D 32 06 00 		bge		r4,.004
-01098C 0A 10 5C 00 		ldi		r1,#'.'
-010990 3A 02 00 00 		bra     .003
+010988 41 11 00 00 		lbu		r1,[r2]
+01098C 96 40 34 00 		cmpu	r4,r1,#26				; convert control characters to '.'
+010990 3D 32 06 00 		bge		r4,.004
+010994 0A 10 5C 00 		ldi		r1,#'.'
+010998 3A 02 00 00 		bra     .003
                 	.004:
-010994 96 40 00 01 		cmpu	r4,r1,#$80				; convert other non-ascii to '.'
-010998 3D 42 04 00 		blt		r4,.003
-01099C 0A 10 5C 00 		ldi		r1,#'.'
+01099C 96 40 00 01 		cmpu	r4,r1,#$80				; convert other non-ascii to '.'
+0109A0 3D 42 04 00 		blt		r4,.003
+0109A4 0A 10 5C 00 		ldi		r1,#'.'
                 	.003:
-0109A0 B9 ED FF FF 		bsr		OutChar
-0109A4 04 21 02 00 		add		r2,r2,#1
-0109A8 95 31 02 00 		subui   r3,r3,#1
-0109AC BD 11 EA FF 		bne	    r3,.002
-0109B0 FC 26 00 00 		ldi		r1,#%000000100_110101110_0000000000	; normal video
-0109B4 0A 10 00 70 
-0109B8 62 10 F0 00 		sh		r1,NormAttr
-0109BC 39 30 FF FF 		bsr		CRLF
-0109C0 57 E2 01 00 		pop     r4
-0109C4 D7 E1 01 00 		pop		r3
-0109C8 D7 E0 01 00 	    pop     r1
-0109CC D7 EF 01 00 	    pop     lr
-0109D0 BB EF 01 00 		rts
+0109A8 B9 ED FF FF 		bsr		OutChar
+0109AC 04 21 02 00 		add		r2,r2,#1
+0109B0 95 31 02 00 		subui   r3,r3,#1
+0109B4 BD 11 EA FF 		bne	    r3,.002
+0109B8 FC 26 00 00 		ldi		r1,#%000000100_110101110_0000000000	; normal video
+0109BC 0A 10 00 70 
+0109C0 62 10 F0 00 		sh		r1,NormAttr
+0109C4 B9 30 FF FF 		bsr		CRLF
+0109C8 57 4F 10 00 		pop     r4
+	pop		r3
+    pop     r1
+    pop     lr
+	rtl
 
+0109CC 57 3F 10 00 
+0109D0 57 1F 10 00 
+0109D4 57 FF 11 00 
+0109D8 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; CheckKeys:
                 	;	Checks for a CTRLC or a scroll lock during long running dumps.
                 	;------------------------------------------------------------------------------
                 	
                 	CheckKeys:
-0109D4 E7 EF 01 00 	    push    lr
-0109D8 39 01 00 00 		bsr	    CTRLCCheck
-0109DC BA 06 00 00 		bra     CheckScrollLock
+0109DC E7 EF 01 00 	    push    lr
+0109E0 39 01 00 00 		bsr	    CTRLCCheck
+0109E4 BA 06 00 00 		bra     CheckScrollLock
                 	
                 	;------------------------------------------------------------------------------
                 	; CTRLCCheck
@@ -1089,19 +1149,22 @@ GetCurrAttr:
                 	;------------------------------------------------------------------------------
                 	
                 	CTRLCCheck:
-0109E0 E7 EF 01 00 	    push    lr
-0109E4 E7 E0 01 00 		push	r1
-0109E8 67 E1 01 00 		push    r2
-0109EC 39 7C 00 00 		bsr		KeybdGetCharNoWait
-0109F0 86 20 06 00 		cmp		r2,r1,#CTRLC
-0109F4 3D 01 0A 00 		beq		r2,.0001
-0109F8 57 E1 01 00 		pop     r2
-0109FC D7 E0 01 00 		pop		r1
-010A00 D7 EF 01 00 		pop     lr
-010A04 BB EF 01 00 		rts
+0109E8 E7 EF 01 00 	    push    lr
+0109EC E7 E0 01 00 		push	r1
+0109F0 67 E1 01 00 		push    r2
+0109F4 39 7C 00 00 		bsr		KeybdGetCharNoWait
+0109F8 86 20 06 00 		cmp		r2,r1,#CTRLC
+0109FC 3D 01 0A 00 		beq		r2,.0001
+010A00 57 2F 10 00 		pop     r2
+	pop		r1
+	pop     lr
+	rtl
 .0001:
-010A08 14 EF 31 00 		addui	sp,sp,#24
-010A0C 3A B2 FF FF 		bra     mon1
+010A04 57 1F 10 00 
+010A08 57 FF 11 00 
+010A0C 37 FF 01 00 
+010A10 14 EF 31 00 		addui	sp,sp,#24
+010A14 3A B2 FF FF 		bra     mon1
                 	
                 	;------------------------------------------------------------------------------
                 	; CheckScrollLock:
@@ -1110,21 +1173,24 @@ GetCurrAttr:
                 	;------------------------------------------------------------------------------
                 	
                 	CheckScrollLock:
-010A10 E7 E0 01 00 		push	r1
-010A14 67 E1 01 00 		push    r2
+010A18 E7 E0 01 00 		push	r1
+010A1C 67 E1 01 00 		push    r2
                 	.0002:
-010A18 43 10 0C 01 		lcu		r1,KeybdLocks
-010A1C 7C 00 00 00 		and		r2,r1,#$4000		; is scroll lock active ?
-010A20 8C 20 00 80 
-010A24 3D 01 04 00 		beq		r2,.0001
+010A20 43 10 0C 01 		lcu		r1,KeybdLocks
+010A24 7C 00 00 00 		and		r2,r1,#$4000		; is scroll lock active ?
+010A28 8C 20 00 80 
+010A2C 3D 01 04 00 		beq		r2,.0001
                 		brk		#2*16				; reschedule tasks
-010A28 3A FE FF FF 		bra     .0002
+010A30 3A FE FF FF 		bra     .0002
                 	.0001:
-010A2C 57 E1 01 00 	    pop     r2
-010A30 D7 E0 01 00 		pop		r1
-010A34 D7 EF 01 00 		pop     lr
-010A38 BB EF 01 00 		rts
+010A34 57 2F 10 00 	    pop     r2
+	pop		r1
+	pop     lr
+	rtl
 
+010A38 57 1F 10 00 
+010A3C 57 FF 11 00 
+010A40 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; Get a hexidecimal number. Maximum of eight digits.
                 	; R3 = text pointer (updated)
@@ -1132,113 +1198,121 @@ GetCurrAttr:
                 	;------------------------------------------------------------------------------
                 	;
                 	GetHexNumber:
-010A3C E7 EF 01 00 	    push    lr
-010A40 67 E1 01 00 		push	r2
-010A44 67 E2 01 00 	    push    r4
-010A48 E7 E2 01 00 	    push    r5
-010A4C 0A 20 00 00 		ldi		r2,#0
-010A50 0A 40 20 00 		ldi		r4,#16
+010A44 E7 EF 01 00 	    push    lr
+010A48 67 E1 01 00 		push	r2
+010A4C 67 E2 01 00 	    push    r4
+010A50 E7 E2 01 00 	    push    r5
+010A54 0A 20 00 00 		ldi		r2,#0
+010A58 0A 40 20 00 		ldi		r4,#16
                 	.gthxn2:
-010A54 B9 BE FF FF 		bsr		MonGetch
-010A58 39 07 00 00 		bsr		AsciiToHexNybble
-010A5C 86 50 FE FF 		cmp		r5,r1,#-1
-010A60 BD 02 0C 00 		beq		r5,.gthxn1
-010A64 02 21 08 70 		shl		r2,r2,#4
-010A68 8C 10 1E 00 		and		r1,r1,#$0f
-010A6C 02 21 02 1A 		or		r2,r2,r1
-010A70 15 42 02 00 		subui   r4,r4,#1
-010A74 3D 12 F0 FF 	    bne	    r4,.gthxn2
+010A5C B9 BE FF FF 		bsr		MonGetch
+010A60 39 07 00 00 		bsr		AsciiToHexNybble
+010A64 86 50 FE FF 		cmp		r5,r1,#-1
+010A68 BD 02 0C 00 		beq		r5,.gthxn1
+010A6C 02 21 08 70 		shl		r2,r2,#4
+010A70 8C 10 1E 00 		and		r1,r1,#$0f
+010A74 02 21 02 1A 		or		r2,r2,r1
+010A78 15 42 02 00 		subui   r4,r4,#1
+010A7C 3D 12 F0 FF 	    bne	    r4,.gthxn2
                 	.gthxn1:
-010A78 02 11 00 1A 		mov		r1,r2
-010A7C D7 E2 01 00 		pop     r5
-010A80 57 E2 01 00 		pop		r4
-010A84 57 E1 01 00 	    pop     r2
-010A88 D7 EF 01 00 	    pop     lr
-010A8C BB EF 01 00 		rts
+010A80 02 11 00 1A 		mov		r1,r2
+010A84 57 5F 10 00 		pop     r5
+	pop		r4
+    pop     r2
+    pop     lr
+	rtl
 
+010A88 57 4F 10 00 
+010A8C 57 2F 10 00 
+010A90 57 FF 11 00 
+010A94 37 FF 01 00 
                 	;------------------------------------------------------------------------------
                 	; Convert ASCII character in the range '0' to '9', 'a' to 'f' or 'A' to 'F'
                 	; to a hex nybble.
                 	;------------------------------------------------------------------------------
                 	;
                 	AsciiToHexNybble:
-010A90 67 E1 01 00 	    push    r2
-010A94 96 20 60 00 		cmpu	r2,r1,#'0'
-010A98 3D 41 2C 00 		blt		r2,.gthx3
-010A9C 96 20 74 00 		cmpu	r2,r1,#'9'+1
-010AA0 3D 31 08 00 		bge		r2,.gthx5
-010AA4 85 10 60 00 		sub		r1,r1,#'0'
-010AA8 57 E1 01 00 		pop     r2
-010AAC BB EF 01 00 		rts
+010A98 67 E1 01 00 	    push    r2
+010A9C 96 20 60 00 		cmpu	r2,r1,#'0'
+010AA0 3D 41 2C 00 		blt		r2,.gthx3
+010AA4 96 20 74 00 		cmpu	r2,r1,#'9'+1
+010AA8 3D 31 08 00 		bge		r2,.gthx5
+010AAC 85 10 60 00 		sub		r1,r1,#'0'
+010AB0 57 2F 10 00 		pop     r2
+	rtl
 .gthx5:
-010AB0 96 20 82 00 		cmpu	r2,r1,#'A'
-010AB4 3D 41 1E 00 		blt		r2,.gthx3
-010AB8 96 20 8E 00 		cmpu	r2,r1,#'F'+1
-010ABC 3D 31 0A 00 		bge		r2,.gthx6
-010AC0 85 10 82 00 		sub		r1,r1,#'A'
-010AC4 84 10 14 00 		add		r1,r1,#10
-010AC8 57 E1 01 00 		pop     r2
-010ACC BB EF 01 00 		rts
+010AB4 37 FF 01 00 
+010AB8 96 20 82 00 		cmpu	r2,r1,#'A'
+010ABC 3D 41 1E 00 		blt		r2,.gthx3
+010AC0 96 20 8E 00 		cmpu	r2,r1,#'F'+1
+010AC4 3D 31 0A 00 		bge		r2,.gthx6
+010AC8 85 10 82 00 		sub		r1,r1,#'A'
+010ACC 84 10 14 00 		add		r1,r1,#10
+010AD0 57 2F 10 00 		pop     r2
+	rtl
 .gthx6:
-010AD0 96 20 C2 00 		cmpu	r2,r1,#'a'
-010AD4 3D 41 0E 00 		blt		r2,.gthx3
-010AD8 96 20 F6 00 		cmpu	r2,r1,#'z'+1
-010ADC 3D 31 0A 00 		bge		r2,.gthx3
-010AE0 85 10 C2 00 		sub		r1,r1,#'a'
-010AE4 84 10 14 00 		add		r1,r1,#10
-010AE8 57 E1 01 00 		pop     r2
-010AEC BB EF 01 00 		rts
+010AD4 37 FF 01 00 
+010AD8 96 20 C2 00 		cmpu	r2,r1,#'a'
+010ADC 3D 41 0E 00 		blt		r2,.gthx3
+010AE0 96 20 F6 00 		cmpu	r2,r1,#'z'+1
+010AE4 3D 31 0A 00 		bge		r2,.gthx3
+010AE8 85 10 C2 00 		sub		r1,r1,#'a'
+010AEC 84 10 14 00 		add		r1,r1,#10
+010AF0 57 2F 10 00 		pop     r2
+	rtl
 .gthx3:
-010AF0 57 E1 01 00 	    pop     r2
-010AF4 0A 10 FE FF 		ldi		r1,#-1		; not a hex number
-010AF8 BB EF 01 00 		rts
+010AF4 37 FF 01 00 
+010AF8 57 2F 10 00 	    pop     r2
+	ldi		r1,#-1		; not a hex number
+010AFC 0A 10 FE FF 
+010B00 37 FF 01 00 		rtl
 
                 	DisplayErr:
-010AFC 7C 01 00 00 		ldi		r1,#msgErr
-010B00 0A 10 18 16 
-010B04 B9 FF FE FF 		bsr		DisplayString
-010B08 BA 92 FF FF 		bra mon1
+010B04 7C 01 00 00 		ldi		r1,#msgErr
+010B08 0A 10 28 16 
+010B0C 39 00 FF FF 		bsr		DisplayString
+010B10 BA 92 FF FF 		bra mon1
                 	
                 	msgErr:
-010B0C 2A 2A 45 72 		db	"**Err",CR,LF,0
-010B10 72 0D 0A 00 
+010B14 2A 2A 45 72 		db	"**Err",CR,LF,0
+010B18 72 0D 0A 00 
                 	
                 	msgHelp:
-010B14 3F 20 3D 20 		db		"? = Display Help",CR,LF
-010B18 44 69 73 70 
-010B1C 6C 61 79 20 
-010B20 48 65 6C 70 
-010B24 0D 0A       
-010B26 43 4C 53 20 		db		"CLS = clear screen",CR,LF
-010B2A 3D 20 63 6C 
-010B2E 65 61 72 20 
-010B32 73 63 72 65 
-010B36 65 6E 0D 0A 
-010B3A 4D 42 20 3D 		db		"MB = dump memory",CR,LF
-010B3E 20 64 75 6D 
-010B42 70 20 6D 65 
-010B46 6D 6F 72 79 
-010B4A 0D 0A       
-010B4C 53 20 3D 20 		db		"S = boot from SD card",CR,LF
-010B50 62 6F 6F 74 
-010B54 20 66 72 6F 
-010B58 6D 20 53 44 
-010B5C 20 63 61 72 
-010B60 64 0D 0A    
-010B63 00          		db		0
+010B1C 3F 20 3D 20 		db		"? = Display Help",CR,LF
+010B20 44 69 73 70 
+010B24 6C 61 79 20 
+010B28 48 65 6C 70 
+010B2C 0D 0A       
+010B2E 43 4C 53 20 		db		"CLS = clear screen",CR,LF
+010B32 3D 20 63 6C 
+010B36 65 61 72 20 
+010B3A 73 63 72 65 
+010B3E 65 6E 0D 0A 
+010B42 4D 42 20 3D 		db		"MB = dump memory",CR,LF
+010B46 20 64 75 6D 
+010B4A 70 20 6D 65 
+010B4E 6D 6F 72 79 
+010B52 0D 0A       
+010B54 53 20 3D 20 		db		"S = boot from SD card",CR,LF
+010B58 62 6F 6F 74 
+010B5C 20 66 72 6F 
+010B60 6D 20 53 44 
+010B64 20 63 61 72 
+010B68 64 0D 0A    
+010B6B 00          		db		0
                 	
                 	msgMonitorStarted
-010B64 4D 6F 6E 69 		db		"Monitor started.",0
-010B68 74 6F 72 20 
-010B6C 73 74 61 72 
-010B70 74 65 64 2E 
-010B74 00          
+010B6C 4D 6F 6E 69 		db		"Monitor started.",0
+010B70 74 6F 72 20 
+010B74 73 74 61 72 
+010B78 74 65 64 2E 
+010B7C 00          
                 	
                 	doCLS:
-010B75 00 00 00 B9 		bsr		ClearScreen
-010B79 D3 FE FF    
-010B7C B9 D0 FE FF 		bsr		HomeCursor
-010B80 BA 83 FF FF 		bra     mon1
+010B7D 00 00 00 B9 		bsr		ClearScreen
+010B81 D4 FE FF    
+010B84 B9 D1 FE FF 		bsr		HomeCursor
+010B88 BA 83 FF FF 		bra     mon1
                 	
                 	;------------------------------------------------------------------------------
                 	;------------------------------------------------------------------------------
@@ -1249,66 +1323,72 @@ GetCurrAttr:
                 	KEYBD_DELAY		EQU		1000
                 	
                 	KeybdGetCharDirectNB:
-010B84 E7 EF 01 00 	    push    lr
-010B88 67 E1 01 00 		push	r2
-010B8C 02 00 02 6E 		sei
-010B90 7C DC FF 00 		lcu		r1,KEYBD
-010B94 43 10 00 00 
-010B98 FC 00 00 00 		and		r2,r1,#$8000
-010B9C 8C 20 00 00 
-010BA0 3D 01 22 00 		beq		r2,.0001
-010BA4 7C DC FF 00 		lbu		r0,KEYBD+4		; clear keyboard strobe
-010BA8 41 00 08 00 
-010BAC 02 00 00 6E 		cli
-010BB0 8C 20 00 10 		and		r2,r1,#$800	; is it keydown ?
-010BB4 3D 11 18 00 		bne	    r2,.0001
-010BB8 8C 10 FE 01 		and		r1,r1,#$FF
-010BBC 41 20 08 01 		lbu		r2,KeybdEcho
-010BC0 3D 01 0C 00 		beq		r2,.0002
-010BC4 86 20 1A 00 		cmp		r2,r1,#CR
-010BC8 3D 11 06 00 		bne		r2,.0003
-010BCC 39 EE FE FF 		bsr		CRLF
-010BD0 3A 01 00 00 		bra     .0002
+010B8C E7 EF 01 00 	    push    lr
+010B90 67 E1 01 00 		push	r2
+010B94 02 00 02 6E 		sei
+010B98 7C DC FF 00 		lcu		r1,KEYBD
+010B9C 43 10 00 00 
+010BA0 FC 00 00 00 		and		r2,r1,#$8000
+010BA4 8C 20 00 00 
+010BA8 3D 01 22 00 		beq		r2,.0001
+010BAC 7C DC FF 00 		lbu		r0,KEYBD+4		; clear keyboard strobe
+010BB0 41 00 08 00 
+010BB4 02 00 00 6E 		cli
+010BB8 8C 20 00 10 		and		r2,r1,#$800	; is it keydown ?
+010BBC 3D 11 18 00 		bne	    r2,.0001
+010BC0 8C 10 FE 01 		and		r1,r1,#$FF
+010BC4 41 20 08 01 		lbu		r2,KeybdEcho
+010BC8 3D 01 0C 00 		beq		r2,.0002
+010BCC 86 20 1A 00 		cmp		r2,r1,#CR
+010BD0 3D 11 06 00 		bne		r2,.0003
+010BD4 B9 EE FE FF 		bsr		CRLF
+010BD8 3A 01 00 00 		bra     .0002
                 	.0003:
-010BD4 3E F0 31 00 		jsr		(OutputVec)
+010BDC 3E F0 31 00 		jsr		(OutputVec)
                 	.0002:
-010BD8 57 E1 01 00 		pop		r2
-010BDC D7 EF 01 00 		pop     lr
-010BE0 BB EF 01 00 		rts
+010BE0 57 2F 10 00 		pop		r2
+	pop     lr
+	rtl
 .0001:
-010BE4 02 00 00 6E 		cli
-010BE8 0A 10 FE FF 		ldi		r1,#-1
-010BEC 57 E1 01 00 		pop		r2
-010BF0 D7 EF 01 00 		pop     lr
-010BF4 BB EF 01 00 		rts
+010BE4 57 FF 11 00 
+010BE8 37 FF 01 00 
+010BEC 02 00 00 6E 		cli
+010BF0 0A 10 FE FF 		ldi		r1,#-1
+010BF4 57 2F 10 00 		pop		r2
+	pop     lr
+	rtl
 
+010BF8 57 FF 11 00 
+010BFC 37 FF 01 00 
                 	KeybdGetCharDirect:
-010BF8 E7 EF 01 00 	    push    lr
-010BFC 67 E1 01 00 		push	r2
+010C00 E7 EF 01 00 	    push    lr
+010C04 67 E1 01 00 		push	r2
                 	.0001:
-010C00 7C DC FF 00 		lc		r1,KEYBD
-010C04 42 10 00 00 
-010C08 FC 00 00 00 		and		r2,r1,#$8000
-010C0C 8C 20 00 00 
-010C10 3D 01 F8 FF 		beq		r2,.0001
-010C14 7C DC FF 00 		lbu		r0,KEYBD+4		; clear keyboard strobe
-010C18 41 00 08 00 
-010C1C 8C 20 00 10 		and		r2,r1,#$800	; is it keydown ?
-010C20 3D 11 F0 FF 		bne	    r2,.0001
-010C24 8C 10 FE 01 		and		r1,r1,#$FF
-010C28 41 20 08 01 		lbu		r2,KeybdEcho
-010C2C 3D 01 0C 00 		beq		r2,.gk1
-010C30 86 20 1A 00 		cmp		r2,r1,#CR
-010C34 3D 11 06 00 		bne		r2,.gk2
-010C38 B9 E0 FE FF 		bsr		CRLF
-010C3C 3A 01 00 00 		bra     .gk1
+010C08 7C DC FF 00 		lc		r1,KEYBD
+010C0C 42 10 00 00 
+010C10 FC 00 00 00 		and		r2,r1,#$8000
+010C14 8C 20 00 00 
+010C18 3D 01 F8 FF 		beq		r2,.0001
+010C1C 7C DC FF 00 		lbu		r0,KEYBD+4		; clear keyboard strobe
+010C20 41 00 08 00 
+010C24 8C 20 00 10 		and		r2,r1,#$800	; is it keydown ?
+010C28 3D 11 F0 FF 		bne	    r2,.0001
+010C2C 8C 10 FE 01 		and		r1,r1,#$FF
+010C30 41 20 08 01 		lbu		r2,KeybdEcho
+010C34 3D 01 0C 00 		beq		r2,.gk1
+010C38 86 20 1A 00 		cmp		r2,r1,#CR
+010C3C 3D 11 06 00 		bne		r2,.gk2
+010C40 39 E1 FE FF 		bsr		CRLF
+010C44 3A 01 00 00 		bra     .gk1
                 	.gk2:
-010C40 3E F0 31 00 		jsr		(OutputVec)
+010C48 3E F0 31 00 		jsr		(OutputVec)
                 	.gk1:
-010C44 57 E1 01 00 		pop		r2
-010C48 D7 EF 01 00 		pop     lr
-010C4C BB EF 01 00 		rts
+010C4C 57 2F 10 00 		pop		r2
+	pop     lr
+	rtl
 
+010C50 57 FF 11 00 
+010C54 37 FF 01 00 
                 	;KeybdInit:
                 	;	mfspr	r1,cr0		; turn off tmr mode
                 	;	push	r1
@@ -1349,16 +1429,16 @@ GetCurrAttr:
                 	;	sb		r1,LEDS
                 	;	pop		r1				; turn back on tmr mode
                 	;	mtspr	cr0,r1
-                	;	rts
+                	;	rtl
                 	
                 	msgBadKeybd:
-010C50 4B 65 79 62 		db		"Keyboard not responding.",0
-010C54 6F 61 72 64 
-010C58 20 6E 6F 74 
-010C5C 20 72 65 73 
-010C60 70 6F 6E 64 
-010C64 69 6E 67 2E 
-010C68 00          
+010C58 4B 65 79 62 		db		"Keyboard not responding.",0
+010C5C 6F 61 72 64 
+010C60 20 6E 6F 74 
+010C64 20 72 65 73 
+010C68 70 6F 6E 64 
+010C6C 69 6E 67 2E 
+010C70 00          
                 	
                 	;SendByteToKeybd:
                 	;	push	r2
@@ -1392,7 +1472,7 @@ GetCurrAttr:
                 	;	ldi		r1,#44
                 	;	sb		r1,LEDS
                 	;	pop		r2
-                	;	rts
+                	;	rtl
                 	;sbtk2:
                 	;	bra sbtk1
                 	
@@ -1414,336 +1494,357 @@ GetCurrAttr:
                 	;	lbu		r1,KEYBD				; get the scan code
                 	;	sb		r0,KEYBD+1				; clear recieve register
                 	;wkbdbad:
-                	;	rts
+                	;	rtl
                 	
                 	KeybdInit:
-010C69 00 00 00 E7 	    push    lr
-010C6D EF 01 00    
-010C70 0A 30 0A 00 		ldi		r3,#5
+010C71 00 00 00 E7 	    push    lr
+010C75 EF 01 00    
+010C78 0A 30 0A 00 		ldi		r3,#5
                 	.0001:
-010C74 39 19 00 00 		bsr		KeybdRecvByte	; Look for $AA
-010C78 BD 40 06 00 		bmi		r1,.0002
-010C7C 86 20 54 01 		cmp		r2,r1,#$AA		;
-010C80 3D 01 20 00 		beq		r2,.config
+010C7C 39 19 00 00 		bsr		KeybdRecvByte	; Look for $AA
+010C80 BD 40 06 00 		bmi		r1,.0002
+010C84 86 20 54 01 		cmp		r2,r1,#$AA		;
+010C88 3D 01 20 00 		beq		r2,.config
                 	.0002:
-010C84 B9 76 00 00 		bsr		Wait10ms
-010C88 0A 10 FE FF 		ldi		r1,#-1			; send reset code to keyboard
-010C8C 7C DC FF 00 		sb		r1,KEYBD+1		; write to status reg to clear TX state
-010C90 60 10 02 00 
-010C94 B9 74 00 00 		bsr		Wait10ms
-010C98 0A 10 FE 01 		ldi		r1,#$FF
-010C9C 39 72 00 00 		bsr		KeybdSendByte	; now write to transmit register
-010CA0 B9 1B 00 00 		bsr		KeybdWaitTx		; wait until no longer busy
-010CA4 39 13 00 00 		bsr		KeybdRecvByte	; look for an ACK ($FA)
-010CA8 86 20 F4 01 		cmp		r2,r1,#$FA
-010CAC 39 12 00 00 		bsr		KeybdRecvByte
-010CB0 86 20 F8 01 		cmp		r2,r1,#$FC		; reset error ?
-010CB4 3D 01 1A 00 		beq		r2,.tryAgain
-010CB8 86 20 54 01 		cmp		r2,r1,#$AA		; reset complete okay ?
-010CBC 3D 11 16 00 		bne		r2,.tryAgain
+010C8C B9 76 00 00 		bsr		Wait10ms
+010C90 0A 10 FE FF 		ldi		r1,#-1			; send reset code to keyboard
+010C94 7C DC FF 00 		sb		r1,KEYBD+1		; write to status reg to clear TX state
+010C98 60 10 02 00 
+010C9C B9 74 00 00 		bsr		Wait10ms
+010CA0 0A 10 FE 01 		ldi		r1,#$FF
+010CA4 39 72 00 00 		bsr		KeybdSendByte	; now write to transmit register
+010CA8 B9 1B 00 00 		bsr		KeybdWaitTx		; wait until no longer busy
+010CAC 39 13 00 00 		bsr		KeybdRecvByte	; look for an ACK ($FA)
+010CB0 86 20 F4 01 		cmp		r2,r1,#$FA
+010CB4 39 12 00 00 		bsr		KeybdRecvByte
+010CB8 86 20 F8 01 		cmp		r2,r1,#$FC		; reset error ?
+010CBC 3D 01 1A 00 		beq		r2,.tryAgain
+010CC0 86 20 54 01 		cmp		r2,r1,#$AA		; reset complete okay ?
+010CC4 3D 11 16 00 		bne		r2,.tryAgain
                 	.config:
-010CC0 0A 10 E0 01 		ldi		r1,#$F0			; send scan code select
-010CC4 7C DC FF 00 		sc		r1,LEDS
-010CC8 61 10 00 0C 
-010CCC 39 6C 00 00 		bsr		KeybdSendByte
-010CD0 B9 15 00 00 		bsr		KeybdWaitTx
-010CD4 BD 40 0A 00 		bmi		r1,.tryAgain
-010CD8 B9 0C 00 00 		bsr		KeybdRecvByte	; wait for response from keyboard
-010CDC BD 40 06 00 		bmi		r1,.tryAgain
-010CE0 86 20 F4 01 		cmp		r2,r1,#$FA
-010CE4 3D 01 10 00 		beq		r2,.0004
+010CC8 0A 10 E0 01 		ldi		r1,#$F0			; send scan code select
+010CCC 7C DC FF 00 		sc		r1,LEDS
+010CD0 61 10 00 0C 
+010CD4 39 6C 00 00 		bsr		KeybdSendByte
+010CD8 B9 15 00 00 		bsr		KeybdWaitTx
+010CDC BD 40 0A 00 		bmi		r1,.tryAgain
+010CE0 B9 0C 00 00 		bsr		KeybdRecvByte	; wait for response from keyboard
+010CE4 BD 40 06 00 		bmi		r1,.tryAgain
+010CE8 86 20 F4 01 		cmp		r2,r1,#$FA
+010CEC 3D 01 10 00 		beq		r2,.0004
                 	.tryAgain:
-010CE8 95 31 02 00 	    subui   r3,r3,#1
-010CEC BD 11 C4 FF 		bne	    r3,.0001
+010CF0 95 31 02 00 	    subui   r3,r3,#1
+010CF4 BD 11 C4 FF 		bne	    r3,.0001
                 	.keybdErr:
-010CF0 7C 01 00 00 		ldi		r1,#msgBadKeybd
-010CF4 0A 10 A0 18 
-010CF8 39 C1 FE FF 		bsr		DisplayString
-010CFC D7 EF 01 00 		pop     lr
-010D00 BB EF 01 00 		rts
+010CF8 7C 01 00 00 		ldi		r1,#msgBadKeybd
+010CFC 0A 10 B0 18 
+010D00 B9 C1 FE FF 		bsr		DisplayString
+010D04 57 FF 11 00 		pop     lr
+	rtl
 .0004:
-010D04 0A 10 04 00 		ldi		r1,#2			; select scan code set #2
-010D08 B9 64 00 00 		bsr		KeybdSendByte
-010D0C 39 0E 00 00 		bsr		KeybdWaitTx
-010D10 BD 40 EC FF 		bmi		r1,.tryAgain
-010D14 D7 EF 01 00 		pop     lr
-010D18 BB EF 01 00 		rts
+010D08 37 FF 01 00 
+010D0C 0A 10 04 00 		ldi		r1,#2			; select scan code set #2
+010D10 B9 64 00 00 		bsr		KeybdSendByte
+010D14 39 0E 00 00 		bsr		KeybdWaitTx
+010D18 BD 40 EC FF 		bmi		r1,.tryAgain
+010D1C 57 FF 11 00 		pop     lr
+	rtl
 
+010D20 37 FF 01 00 
                 	; Get the keyboard status
                 	;
                 	KeybdGetStatus:
-010D1C 7C DC FF 00 		lb		r1,KEYBD+1
-010D20 40 10 02 00 
-010D24 BB EF 01 00 		rts
+010D24 7C DC FF 00 		lb		r1,KEYBD+1
+010D28 40 10 02 00 
+010D2C 37 FF 01 00 		rtl
 
                 	; Get the scancode from the keyboard port
                 	;
                 	KeybdGetScancode:
-010D28 7C DC FF 00 		lbu		r1,KEYBD				; get the scan code
-010D2C 41 10 00 00 
-010D30 7C DC FF 00 		sb		r0,KEYBD+1				; clear receive register
-010D34 60 00 02 00 
-010D38 BB EF 01 00 		rts
+010D30 7C DC FF 00 		lbu		r1,KEYBD				; get the scan code
+010D34 41 10 00 00 
+010D38 7C DC FF 00 		sb		r0,KEYBD+1				; clear receive register
+010D3C 60 00 02 00 
+010D40 37 FF 01 00 		rtl
 
                 	; Recieve a byte from the keyboard, used after a command is sent to the
                 	; keyboard in order to wait for a response.
                 	;
                 	KeybdRecvByte:
-010D3C E7 EF 01 00 	    push    lr
-010D40 E7 E1 01 00 		push	r3
-010D44 0A 30 C8 00 		ldi		r3,#100			; wait up to 1s
+010D44 E7 EF 01 00 	    push    lr
+010D48 E7 E1 01 00 		push	r3
+010D4C 0A 30 C8 00 		ldi		r3,#100			; wait up to 1s
                 	.0003:
-010D48 B9 FA FF FF 		bsr		KeybdGetStatus	; wait for response from keyboard
-010D4C BD 40 10 00 		bmi		r1,.0004		; is input buffer full ? yes, branch
-010D50 39 5D 00 00 		bsr		Wait10ms		; wait a bit
-010D54 95 31 02 00 		subui   r3,r3,#1
-010D58 BD 11 F8 FF 		bne     r3,.0003		; go back and try again
-010D5C D7 E1 01 00 		pop		r3				; timeout
-010D60 0A 10 FE FF 		ldi		r1,#-1			; return -1
-010D64 D7 EF 01 00 		pop     lr
-010D68 BB EF 01 00 		rts
+010D50 B9 FA FF FF 		bsr		KeybdGetStatus	; wait for response from keyboard
+010D54 BD 40 10 00 		bmi		r1,.0004		; is input buffer full ? yes, branch
+010D58 39 5D 00 00 		bsr		Wait10ms		; wait a bit
+010D5C 95 31 02 00 		subui   r3,r3,#1
+010D60 BD 11 F8 FF 		bne     r3,.0003		; go back and try again
+010D64 57 3F 10 00 		pop		r3				; timeout
+	ldi		r1,#-1			; return -1
+010D68 0A 10 FE FF 
+010D6C 57 FF 11 00 		pop     lr
+	rtl
 .0004:
-010D6C B9 F7 FF FF 		bsr		KeybdGetScancode
-010D70 D7 E1 01 00 		pop		r3
-010D74 D7 EF 01 00 		pop     lr
-010D78 BB EF 01 00 		rts
+010D70 37 FF 01 00 
+010D74 B9 F7 FF FF 		bsr		KeybdGetScancode
+010D78 57 3F 10 00 		pop		r3
+	pop     lr
+	rtl
 
+010D7C 57 FF 11 00 
+010D80 37 FF 01 00 
                 	
                 	; Wait until the keyboard transmit is complete
                 	; Returns .CF = 1 if successful, .CF=0 timeout
                 	;
                 	KeybdWaitTx:
-010D7C E7 EF 01 00 	    push    lr
-010D80 67 E1 01 00 		push	r2
-010D84 E7 E1 01 00 	    push    r3
-010D88 0A 30 C8 00 		ldi		r3,#100			; wait a max of 1s
+010D84 E7 EF 01 00 	    push    lr
+010D88 67 E1 01 00 		push	r2
+010D8C E7 E1 01 00 	    push    r3
+010D90 0A 30 C8 00 		ldi		r3,#100			; wait a max of 1s
                 	.0001:
-010D8C 39 F2 FF FF 		bsr		KeybdGetStatus
-010D90 8C 10 80 00 		and		r1,r1,#$40		; check for transmit complete bit
-010D94 BD 10 12 00 		bne	    r1,.0002		; branch if bit set
-010D98 39 54 00 00 		bsr		Wait10ms		; delay a little bit
-010D9C 95 31 02 00 		subui   r3,r3,#1
-010DA0 BD 11 F6 FF 		bne	    r3,.0001		; go back and try again
-010DA4 D7 E1 01 00 		pop		r3
-010DA8 57 E1 01 00 	    pop     r2			    ; timed out
-010DAC 0A 10 FE FF 		ldi		r1,#-1			; return -1
-010DB0 D7 EF 01 00 		pop     lr
-010DB4 BB EF 01 00 		rts
+010D94 39 F2 FF FF 		bsr		KeybdGetStatus
+010D98 8C 10 80 00 		and		r1,r1,#$40		; check for transmit complete bit
+010D9C BD 10 12 00 		bne	    r1,.0002		; branch if bit set
+010DA0 39 54 00 00 		bsr		Wait10ms		; delay a little bit
+010DA4 95 31 02 00 		subui   r3,r3,#1
+010DA8 BD 11 F6 FF 		bne	    r3,.0001		; go back and try again
+010DAC 57 3F 10 00 		pop		r3
+    pop     r2			    ; timed out
+	ldi		r1,#-1			; return -1
+010DB0 57 2F 10 00 
+010DB4 0A 10 FE FF 
+010DB8 57 FF 11 00 		pop     lr
+	rtl
 .0002:
-010DB8 D7 E1 01 00 		pop		r3
-010DBC 57 E1 01 00 	    pop     r2			    ; wait complete, return 
-010DC0 0A 10 00 00 		ldi		r1,#0			; return 0
-010DC4 D7 EF 01 00 		pop     lr
-010DC8 BB EF 01 00 		rts
+010DBC 37 FF 01 00 
+010DC0 57 3F 10 00 		pop		r3
+    pop     r2			    ; wait complete, return 
+	ldi		r1,#0			; return 0
+010DC4 57 2F 10 00 
+010DC8 0A 10 00 00 
+010DCC 57 FF 11 00 		pop     lr
+	rtl
 
+010DD0 37 FF 01 00 
                 	KeybdGetCharNoWait:
-010DCC 60 00 14 01 		sb		r0,KeybdWaitFlag
-010DD0 BA 01 00 00 		bra		KeybdGetChar
+010DD4 60 00 14 01 		sb		r0,KeybdWaitFlag
+010DD8 BA 01 00 00 		bra		KeybdGetChar
                 	
                 	KeybdGetCharWait:
-010DD4 0A 10 FE FF 		ldi		r1,#-1
-010DD8 60 10 14 01 		sb		r1,KeybdWaitFlag
+010DDC 0A 10 FE FF 		ldi		r1,#-1
+010DE0 60 10 14 01 		sb		r1,KeybdWaitFlag
                 		
                 	KeybdGetChar:
-010DDC E7 EF 01 00 	    push    lr
-010DE0 67 E1 01 00 		push	r2
-010DE4 E7 E1 01 00 	    push    r3
+010DE4 E7 EF 01 00 	    push    lr
+010DE8 67 E1 01 00 		push	r2
+010DEC E7 E1 01 00 	    push    r3
                 	.0003:
-010DE8 B9 E6 FF FF 		bsr		KeybdGetStatus			; check keyboard status for key available
-010DEC BD 40 10 00 		bmi		r1,.0006				; yes, go process
-010DF0 40 10 14 01 		lb		r1,KeybdWaitFlag		; are we willing to wait for a key ?
-010DF4 BD 40 FA FF 		bmi		r1,.0003				; yes, branch back
-010DF8 0A 10 FE FF 		ldi		r1,#-1					; flag no char available
-010DFC D7 E1 01 00 		pop		r3
-010E00 57 E1 01 00 	    pop     r2
-010E04 D7 EF 01 00 	    pop     lr
-010E08 BB EF 01 00 		rts
+010DF0 B9 E6 FF FF 		bsr		KeybdGetStatus			; check keyboard status for key available
+010DF4 BD 40 10 00 		bmi		r1,.0006				; yes, go process
+010DF8 40 10 14 01 		lb		r1,KeybdWaitFlag		; are we willing to wait for a key ?
+010DFC BD 40 FA FF 		bmi		r1,.0003				; yes, branch back
+010E00 0A 10 FE FF 		ldi		r1,#-1					; flag no char available
+010E04 57 3F 10 00 		pop		r3
+    pop     r2
+    pop     lr
+	rtl
 .0006:
-010E0C B9 E3 FF FF 		bsr		KeybdGetScancode
+010E08 57 2F 10 00 
+010E0C 57 FF 11 00 
+010E10 37 FF 01 00 
+010E14 B9 E3 FF FF 		bsr		KeybdGetScancode
                 	.0001:
-010E10 0A 20 02 00 		ldi		r2,#1
-010E14 7C DC FF 00 		sb		r2,LEDS
-010E18 60 20 00 0C 
-010E1C 86 20 E0 01 		cmp		r2,r1,#SC_KEYUP
-010E20 3D 01 68 00 		beq		r2,.doKeyup
-010E24 86 20 C0 01 		cmp		r2,r1,#SC_EXTEND
-010E28 3D 01 6A 00 		beq		r2,.doExtend
-010E2C 86 20 28 00 		cmp		r2,r1,#$14				; code for CTRL
-010E30 3D 01 6E 00 		beq		r2,.doCtrl
-010E34 86 20 24 00 		cmp		r2,r1,#$12				; code for left shift
-010E38 3D 01 80 00 		beq		r2,.doShift
-010E3C 86 20 B2 00 		cmp		r2,r1,#$59				; code for right-shift
-010E40 3D 01 7C 00 		beq		r2,.doShift
-010E44 86 20 EE 00 		cmp		r2,r1,#SC_NUMLOCK
-010E48 3D 01 8E 00 		beq		r2,.doNumLock
-010E4C 86 20 B0 00 		cmp		r2,r1,#SC_CAPSLOCK
-010E50 3D 01 98 00 		beq		r2,.doCapsLock
-010E54 86 20 FC 00 		cmp		r2,r1,#SC_SCROLLLOCK
-010E58 3D 01 7E 79 		beq		r2,.doScrolllock
-010E5C 40 20 10 01 		lb		r2,KeyState1			; check key up/down
-010E60 60 00 10 01 		sb		r0,KeyState1			; clear keyup status
-010E64 3D 11 C2 FF 		bne	    r2,.0003				; ignore key up
-010E68 40 20 12 01 		lb		r2,KeyState2
-010E6C 0C 31 00 01 		and		r3,r2,#$80				; is it extended code ?
-010E70 BD 01 0E 00 		beq		r3,.0010
-010E74 0C 31 FE 00 		and		r3,r2,#$7f				; clear extended bit
-010E78 60 30 12 01 		sb		r3,KeyState2
-010E7C 60 00 10 01 		sb		r0,KeyState1			; clear keyup
-010E80 7C 01 00 00 		lbu		r1,keybdExtendedCodes[r1]
-010E84 C1 10 E0 25 
-010E88 BA 09 00 00 		bra		.0008
+010E18 0A 20 02 00 		ldi		r2,#1
+010E1C 7C DC FF 00 		sb		r2,LEDS
+010E20 60 20 00 0C 
+010E24 86 20 E0 01 		cmp		r2,r1,#SC_KEYUP
+010E28 3D 01 68 00 		beq		r2,.doKeyup
+010E2C 86 20 C0 01 		cmp		r2,r1,#SC_EXTEND
+010E30 3D 01 6A 00 		beq		r2,.doExtend
+010E34 86 20 28 00 		cmp		r2,r1,#$14				; code for CTRL
+010E38 3D 01 6E 00 		beq		r2,.doCtrl
+010E3C 86 20 24 00 		cmp		r2,r1,#$12				; code for left shift
+010E40 3D 01 80 00 		beq		r2,.doShift
+010E44 86 20 B2 00 		cmp		r2,r1,#$59				; code for right-shift
+010E48 3D 01 7C 00 		beq		r2,.doShift
+010E4C 86 20 EE 00 		cmp		r2,r1,#SC_NUMLOCK
+010E50 3D 01 8E 00 		beq		r2,.doNumLock
+010E54 86 20 B0 00 		cmp		r2,r1,#SC_CAPSLOCK
+010E58 3D 01 98 00 		beq		r2,.doCapsLock
+010E5C 86 20 FC 00 		cmp		r2,r1,#SC_SCROLLLOCK
+010E60 3D 01 7A 79 		beq		r2,.doScrolllock
+010E64 40 20 10 01 		lb		r2,KeyState1			; check key up/down
+010E68 60 00 10 01 		sb		r0,KeyState1			; clear keyup status
+010E6C 3D 11 C2 FF 		bne	    r2,.0003				; ignore key up
+010E70 40 20 12 01 		lb		r2,KeyState2
+010E74 0C 31 00 01 		and		r3,r2,#$80				; is it extended code ?
+010E78 BD 01 0E 00 		beq		r3,.0010
+010E7C 0C 31 FE 00 		and		r3,r2,#$7f				; clear extended bit
+010E80 60 30 12 01 		sb		r3,KeyState2
+010E84 60 00 10 01 		sb		r0,KeyState1			; clear keyup
+010E88 7C 01 00 00 		lbu		r1,keybdExtendedCodes[r1]
+010E8C C1 10 E0 25 
+010E90 BA 09 00 00 		bra		.0008
                 	.0010:
-010E8C 40 20 12 01 		lb		r2,KeyState2
-010E90 0C 31 08 00 		and		r3,r2,#$04				; is it CTRL code ?
-010E94 BD 01 0A 00 		beq		r3,.0009
-010E98 8C 10 FE 00 		and		r1,r1,#$7F
-010E9C 7C 01 00 00 		lbu		r1,keybdControlCodes[r1]
-010EA0 C1 10 E0 24 
-010EA4 3A 06 00 00 		bra		.0008
+010E94 40 20 12 01 		lb		r2,KeyState2
+010E98 0C 31 08 00 		and		r3,r2,#$04				; is it CTRL code ?
+010E9C BD 01 0A 00 		beq		r3,.0009
+010EA0 8C 10 FE 00 		and		r1,r1,#$7F
+010EA4 7C 01 00 00 		lbu		r1,keybdControlCodes[r1]
+010EA8 C1 10 E0 24 
+010EAC 3A 06 00 00 		bra		.0008
                 	.0009:
-010EA8 40 20 12 01 		lb		r2,KeyState2
-010EAC 0C 31 02 00 		and		r3,r2,#$01				; is it shift down ?
-010EB0 BD 01 08 00 		beq  	r3,.0007
-010EB4 7C 01 00 00 		lbu		r1,shiftedScanCodes[r1]
-010EB8 C1 10 E0 22 
-010EBC 3A 03 00 00 		bra		.0008
+010EB0 40 20 12 01 		lb		r2,KeyState2
+010EB4 0C 31 02 00 		and		r3,r2,#$01				; is it shift down ?
+010EB8 BD 01 08 00 		beq  	r3,.0007
+010EBC 7C 01 00 00 		lbu		r1,shiftedScanCodes[r1]
+010EC0 C1 10 E0 22 
+010EC4 3A 03 00 00 		bra		.0008
                 	.0007:
-010EC0 7C 01 00 00 		lbu		r1,unshiftedScanCodes[r1]
-010EC4 C1 10 E0 20 
-010EC8 0A 20 04 00 		ldi		r2,#2
-010ECC 7C DC FF 00 		sb		r2,LEDS
-010ED0 60 20 00 0C 
+010EC8 7C 01 00 00 		lbu		r1,unshiftedScanCodes[r1]
+010ECC C1 10 E0 20 
+010ED0 0A 20 04 00 		ldi		r2,#2
+010ED4 7C DC FF 00 		sb		r2,LEDS
+010ED8 60 20 00 0C 
                 	.0008:
-010ED4 0A 20 06 00 		ldi		r2,#3
-010ED8 7C DC FF 00 		sb		r2,LEDS
-010EDC 60 20 00 0C 
-010EE0 D7 E1 01 00 		pop		r3
-010EE4 57 E1 01 00 	    pop     r2
-010EE8 D7 EF 01 00 	    pop     lr
-010EEC BB EF 01 00 		rts
+010EDC 0A 20 06 00 		ldi		r2,#3
+010EE0 7C DC FF 00 		sb		r2,LEDS
+010EE4 60 20 00 0C 
+010EE8 57 3F 10 00 		pop		r3
+    pop     r2
+    pop     lr
+	rtl
 .doKeyup:
-010EF0 0A 10 FE FF 		ldi		r1,#-1
-010EF4 60 10 10 01 		sb		r1,KeyState1
-010EF8 3A DE FF FF 		bra		.0003
+010EEC 57 2F 10 00 
+010EF0 57 FF 11 00 
+010EF4 37 FF 01 00 
+010EF8 0A 10 FE FF 		ldi		r1,#-1
+010EFC 60 10 10 01 		sb		r1,KeyState1
+010F00 3A DE FF FF 		bra		.0003
                 	.doExtend:
-010EFC 41 10 12 01 		lbu		r1,KeyState2
-010F00 8D 10 00 01 		or		r1,r1,#$80
-010F04 60 10 12 01 		sb		r1,KeyState2
-010F08 3A DC FF FF 		bra		.0003
+010F04 41 10 12 01 		lbu		r1,KeyState2
+010F08 8D 10 00 01 		or		r1,r1,#$80
+010F0C 60 10 12 01 		sb		r1,KeyState2
+010F10 3A DC FF FF 		bra		.0003
                 	.doCtrl:
-010F0C 40 10 10 01 		lb		r1,KeyState1
-010F10 60 00 10 01 		sb		r0,KeyState1
-010F14 BD 30 0A 00 		bpl		r1,.0004
-010F18 40 10 12 01 		lb		r1,KeyState2
-010F1C 8C 10 F6 FF 		and		r1,r1,#-5
-010F20 60 10 12 01 		sb		r1,KeyState2
-010F24 BA D8 FF FF 		bra		.0003
+010F14 40 10 10 01 		lb		r1,KeyState1
+010F18 60 00 10 01 		sb		r0,KeyState1
+010F1C BD 30 0A 00 		bpl		r1,.0004
+010F20 40 10 12 01 		lb		r1,KeyState2
+010F24 8C 10 F6 FF 		and		r1,r1,#-5
+010F28 60 10 12 01 		sb		r1,KeyState2
+010F2C BA D8 FF FF 		bra		.0003
                 	.0004:
-010F28 40 10 12 01 		lb		r1,KeyState2
-010F2C 8D 10 08 00 		or		r1,r1,#4
-010F30 60 10 12 01 		sb		r1,KeyState2
-010F34 BA D6 FF FF 		bra		.0003
+010F30 40 10 12 01 		lb		r1,KeyState2
+010F34 8D 10 08 00 		or		r1,r1,#4
+010F38 60 10 12 01 		sb		r1,KeyState2
+010F3C BA D6 FF FF 		bra		.0003
                 	.doShift:
-010F38 40 10 10 01 		lb		r1,KeyState1
-010F3C 60 00 10 01 		sb		r0,KeyState1
-010F40 BD 30 0A 00 		bpl		r1,.0005
-010F44 40 10 12 01 		lb		r1,KeyState2
-010F48 8C 10 FC FF 		and		r1,r1,#-2
-010F4C 60 10 12 01 		sb		r1,KeyState2
-010F50 3A D3 FF FF 		bra		.0003
+010F40 40 10 10 01 		lb		r1,KeyState1
+010F44 60 00 10 01 		sb		r0,KeyState1
+010F48 BD 30 0A 00 		bpl		r1,.0005
+010F4C 40 10 12 01 		lb		r1,KeyState2
+010F50 8C 10 FC FF 		and		r1,r1,#-2
+010F54 60 10 12 01 		sb		r1,KeyState2
+010F58 3A D3 FF FF 		bra		.0003
                 	.0005:
-010F54 40 10 12 01 		lb		r1,KeyState2
-010F58 8D 10 02 00 		or		r1,r1,#1
-010F5C 60 10 12 01 		sb		r1,KeyState2
-010F60 3A D1 FF FF 		bra		.0003
+010F5C 40 10 12 01 		lb		r1,KeyState2
+010F60 8D 10 02 00 		or		r1,r1,#1
+010F64 60 10 12 01 		sb		r1,KeyState2
+010F68 3A D1 FF FF 		bra		.0003
                 	.doNumLock:
-010F64 7C 00 00 00 		lb		r1,KeySTate2
-010F68 7C 00 00 00 
-010F6C 40 10 C2 02 
-010F70 8E 10 20 00 		eor		r1,r1,#16
-010F74 60 10 12 01 		sb		r1,KeyState2
-010F78 39 06 00 00 		bsr		KeybdSetLEDStatus
-010F7C BA CD FF FF 		bra		.0003
+010F6C 7C 00 00 00 		lb		r1,KeySTate2
+010F70 7C 00 00 00 
+010F74 40 10 C4 02 
+010F78 8E 10 20 00 		eor		r1,r1,#16
+010F7C 60 10 12 01 		sb		r1,KeyState2
+010F80 39 06 00 00 		bsr		KeybdSetLEDStatus
+010F84 BA CD FF FF 		bra		.0003
                 	.doCapsLock:
-010F80 40 10 12 01 		lb		r1,KeyState2
-010F84 8E 10 40 00 		eor		r1,r1,#32
-010F88 60 10 12 01 		sb		r1,KeyState2
-010F8C B9 03 00 00 		bsr		KeybdSetLEDStatus
-010F90 3A CB FF FF 		bra		.0003
+010F88 40 10 12 01 		lb		r1,KeyState2
+010F8C 8E 10 40 00 		eor		r1,r1,#32
+010F90 60 10 12 01 		sb		r1,KeyState2
+010F94 B9 03 00 00 		bsr		KeybdSetLEDStatus
+010F98 3A CB FF FF 		bra		.0003
                 	.doScrollLock:
-010F94 40 10 12 01 		lb		r1,KeyState2
-010F98 8E 10 80 00 		eor		r1,r1,#64
-010F9C 60 10 12 01 		sb		r1,KeyState2
-010FA0 39 01 00 00 		bsr		KeybdSetLEDStatus
-010FA4 BA C8 FF FF 		bra		.0003
+010F9C 40 10 12 01 		lb		r1,KeyState2
+010FA0 8E 10 80 00 		eor		r1,r1,#64
+010FA4 60 10 12 01 		sb		r1,KeyState2
+010FA8 39 01 00 00 		bsr		KeybdSetLEDStatus
+010FAC BA C8 FF FF 		bra		.0003
                 	
                 	KeybdSetLEDStatus:
-010FA8 E7 EF 01 00 	    push    lr
-010FAC 67 E1 01 00 		push	r2
-010FB0 E7 E1 01 00 	    push    r3
-010FB4 60 00 16 01 		sb		r0,KeybdLEDs
-010FB8 40 10 12 01 		lb		r1,KeyState2
-010FBC 8C 20 20 00 		and		r2,r1,#16
-010FC0 3D 01 06 00 		beq		r2,.0002
-010FC4 0A 30 04 00 		ldi		r3,#2
-010FC8 60 30 16 01 		sb		r3,KeybdLEDs
+010FB0 E7 EF 01 00 	    push    lr
+010FB4 67 E1 01 00 		push	r2
+010FB8 E7 E1 01 00 	    push    r3
+010FBC 60 00 16 01 		sb		r0,KeybdLEDs
+010FC0 40 10 12 01 		lb		r1,KeyState2
+010FC4 8C 20 20 00 		and		r2,r1,#16
+010FC8 3D 01 06 00 		beq		r2,.0002
+010FCC 0A 30 04 00 		ldi		r3,#2
+010FD0 60 30 16 01 		sb		r3,KeybdLEDs
                 	.0002:
-010FCC 8C 20 40 00 		and		r2,r1,#32
-010FD0 3D 01 08 00 		beq		r2,.0003
-010FD4 40 30 16 01 		lb		r3,KeybdLEDs
-010FD8 8D 31 08 00 		or		r3,r3,#4
-010FDC 60 30 16 01 		sb		r3,KeybdLEDs
+010FD4 8C 20 40 00 		and		r2,r1,#32
+010FD8 3D 01 08 00 		beq		r2,.0003
+010FDC 40 30 16 01 		lb		r3,KeybdLEDs
+010FE0 8D 31 08 00 		or		r3,r3,#4
+010FE4 60 30 16 01 		sb		r3,KeybdLEDs
                 	.0003:
-010FE0 8C 20 80 00 		and		r2,r1,#64
-010FE4 3D 01 08 00 		beq		r2,.0004
-010FE8 40 30 16 01 		lb		r3,KeybdLEDs
-010FEC 8D 31 02 00 		or		r3,r3,#1
-010FF0 60 30 16 01 		sb		r3,KeybdLEDs
+010FE8 8C 20 80 00 		and		r2,r1,#64
+010FEC 3D 01 08 00 		beq		r2,.0004
+010FF0 40 30 16 01 		lb		r3,KeybdLEDs
+010FF4 8D 31 02 00 		or		r3,r3,#1
+010FF8 60 30 16 01 		sb		r3,KeybdLEDs
                 	.0004:
-010FF4 0A 10 DA 01 		ldi		r1,#$ED
-010FF8 B9 06 00 00 		bsr		KeybdSendByte
-010FFC 39 B0 FF FF 		bsr		KeybdWaitTx
-011000 B9 A7 FF FF 		bsr		KeybdRecvByte
-011004 BD 40 0C 00 		bmi		r1,.0001
-011008 86 20 F4 01 		cmp		r2,r1,#$FA
-01100C 40 10 16 01 		lb		r1,KeybdLEDs
-011010 B9 03 00 00 		bsr		KeybdSendByte
-011014 39 AD FF FF 		bsr		KeybdWaitTx
-011018 B9 A4 FF FF 		bsr		KeybdRecvByte
+010FFC 0A 10 DA 01 		ldi		r1,#$ED
+011000 B9 06 00 00 		bsr		KeybdSendByte
+011004 39 B0 FF FF 		bsr		KeybdWaitTx
+011008 B9 A7 FF FF 		bsr		KeybdRecvByte
+01100C BD 40 0C 00 		bmi		r1,.0001
+011010 86 20 F4 01 		cmp		r2,r1,#$FA
+011014 40 10 16 01 		lb		r1,KeybdLEDs
+011018 B9 03 00 00 		bsr		KeybdSendByte
+01101C 39 AD FF FF 		bsr		KeybdWaitTx
+011020 B9 A4 FF FF 		bsr		KeybdRecvByte
                 	.0001:
-01101C D7 E1 01 00 		pop		r3
-011020 57 E1 01 00 	    pop     r2
-011024 D7 EF 01 00 	    pop     lr
-011028 BB EF 01 00 		rts
+011024 57 3F 10 00 		pop		r3
+    pop     r2
+    pop     lr
+	rtl
 
+011028 57 2F 10 00 
+01102C 57 FF 11 00 
+011030 37 FF 01 00 
                 	KeybdSendByte:
-01102C 7C DC FF 00 		sb		r1,KEYBD
-011030 60 10 00 00 
-011034 BB EF 01 00 		rts
+011034 7C DC FF 00 		sb		r1,KEYBD
+011038 60 10 00 00 
+01103C 37 FF 01 00 		rtl
 	
                 	Wait10ms:
-011038 E7 E1 01 00 		push	r3
-01103C 67 E2 01 00 	    push    r4
-011040 02 30 08 3E 		mfspr	r3,tick					; get orginal count
+011040 E7 E1 01 00 		push	r3
+011044 67 E2 01 00 	    push    r4
+011048 02 30 08 3E 		mfspr	r3,tick					; get orginal count
                 	.0001:
-011044 02 40 08 3E 		mfspr	r4,tick
-011048 02 42 06 0A 		sub		r4,r4,r3
-01104C 3D 42 08 00 		blt  	r4,.0002				; shouldn't be -ve unless counter overflowed
-011050 FC 03 00 00 		cmpu	r4,r4,#250000			; about 10ms at 25 MHz
-011054 16 42 20 A1 
-011058 3D 42 F6 FF 		blt		r4,.0001
+01104C 02 40 08 3E 		mfspr	r4,tick
+011050 02 42 06 0A 		sub		r4,r4,r3
+011054 3D 42 08 00 		blt  	r4,.0002				; shouldn't be -ve unless counter overflowed
+011058 FC 03 00 00 		cmpu	r4,r4,#250000			; about 10ms at 25 MHz
+01105C 16 42 20 A1 
+011060 3D 42 F6 FF 		blt		r4,.0001
                 	.0002:
-01105C 57 E2 01 00 		pop		r4
-011060 D7 E1 01 00 	    pop     r3
-011064 BB EF 01 00 		rts
+011064 57 4F 10 00 		pop		r4
+    pop     r3
+	rtl
 
+011068 57 3F 10 00 
+01106C 37 FF 01 00 
                 		;--------------------------------------------------------------------------
                 		; PS2 scan codes to ascii conversion tables.
                 		;--------------------------------------------------------------------------
                 		;
-011068 00 00 00 00 		align	1
-01106C 00 00 00 00 
-                	
+                		align	16                	
                 	unshiftedScanCodes:
 011070 2E A9 2E A5 		.byte	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
 011074 A3 A1 A2 AC 
@@ -1985,7 +2086,7 @@ GetCurrAttr:
 0113E0 02 01 52 3C 	    mtspr   tag,r2
 0113E4 95 31 02 00 	    subui   r3,r3,#1
 0113E8 BD 11 F4 FF 	    bne     r3,.0001
-0113EC BB EF 01 00 	    rts
+0113EC 37 FF 01 00 	    rtl
 
                 	; Delay for a short time for at least the specified number of clock cycles
                 	;
@@ -2003,10 +2104,12 @@ GetCurrAttr:
 011414 02 21 02 0C 	    cmp     r2,r2,r1
 011418 3D 41 FA FF 	    blt     r2,.0001
 01141C 14 EF 21 00 	    addui   sp,sp,#16
-011420 D7 E1 01 00 	    pop     r3
-011424 57 E1 01 00 	    pop     r2
-011428 BB EF 01 00 	    rts
+011420 57 3F 10 00 	    pop     r3
+    pop     r2
+    rtl
 ;
+011424 57 2F 10 00 
+011428 37 FF 01 00 
 01142C 3F 00 00 00 	    nop
 011430 3F 00 00 00 	    nop
                 	
@@ -2021,7 +2124,7 @@ GetCurrAttr:
 01143C 61 10 00 0C 
 011440 7C 01 00 00 		ldi		r1,#msgexf
 011444 0A 10 48 29 
-011448 B9 DD FD FF 		bsr		DisplayStringCRLF
+011448 39 DF FD FF 		bsr		DisplayStringCRLF
                 	.0001:
 01144C 3A 00 00 00 		bra .0001
                 	
@@ -2036,7 +2139,7 @@ GetCurrAttr:
 011458 61 10 00 0C 
 01145C 7C 01 00 00 		ldi		r1,#msgdrf
 011460 0A 10 52 29 
-011464 39 DA FD FF 		bsr		DisplayStringCRLF
+011464 B9 DB FD FF 		bsr		DisplayStringCRLF
                 	.0001:
 011468 3A 00 00 00 		bra .0001
                 	
@@ -2051,7 +2154,7 @@ GetCurrAttr:
 011474 61 10 00 0C 
 011478 7C 01 00 00 		ldi		r1,#msgdwf
 01147C 0A 10 5C 29 
-011480 B9 D6 FD FF 		bsr		DisplayStringCRLF
+011480 39 D8 FD FF 		bsr		DisplayStringCRLF
                 	.0001:
 011484 3A 00 00 00 		bra .0001
                 	
@@ -2066,7 +2169,7 @@ GetCurrAttr:
 011490 61 10 00 0C 
 011494 7C 01 00 00 		ldi		r1,#msgPriv
 011498 0A 10 66 29 
-01149C 39 D3 FD FF 		bsr		DisplayStringCRLF
+01149C B9 D4 FD FF 		bsr		DisplayStringCRLF
                 	.0001:
 0114A0 3A 00 00 00 		bra .0001
                 	
@@ -2121,14 +2224,14 @@ GetCurrAttr:
 0114EC 3F 00 00 00 	    nop
                 	
                 	
-411 symbols
+412 symbols
   Symbol Name                              seg     address
-  AsciiToHexNybble                           code  010a90
-  AsciiToHexNybble.gthx3                     code  010af0
-  AsciiToHexNybble.gthx5                     code  010ab0
-  AsciiToHexNybble.gthx6                     code  010ad0
-  AsciiToScreen                              code  0101b4
-  AsciiToScreen.00001                        code  0101d4
+  AsciiToHexNybble                           code  010a98
+  AsciiToHexNybble.gthx3                     code  010af8
+  AsciiToHexNybble.gthx5                     code  010ab8
+  AsciiToHexNybble.gthx6                     code  010ad8
+  AsciiToScreen                              code  0101c4
+  AsciiToScreen.00001                        code  0101e4
   BMP_CLUT                                  const  0c5800
   BSI_BootSig                               const  000026
   BSI_DriveNum                              const  000024
@@ -2151,13 +2254,13 @@ GetCurrAttr:
   BSI_VolLabel                              const  00002b
   BSI_bps                                   const  00000b
   BYTE_SECTOR_BUF                           const  070000
-  BlankLine                                  code  0106fc
-  BlankLine.0001                             code  01073c
+  BlankLine                                  code  010708
+  BlankLine.0001                             code  010744
   CR                                        const  00000d
-  CRLF                                       code  01033c
+  CRLF                                       code  010348
   CTRLC                                     const  000003
-  CTRLCCheck                                 code  0109e0
-  CTRLCCheck.0001                            code  010a08
+  CTRLCCheck                                 code  0109e8
+  CTRLCCheck.0001                            code  010a10
   CTRLH                                     const  000008
   CTRLI                                     const  000009
   CTRLJ                                     const  00000a
@@ -2165,50 +2268,50 @@ GetCurrAttr:
   CTRLM                                     const  00000d
   CTRLS                                     const  000013
   CTRLX                                     const  000018
-  CalcScreenLoc                              code  01042c
-  CheckKeys                                  code  0109d4
-  CheckScrollLock                            code  010a10
-  CheckScrollLock.0001                       code  010a2c
-  CheckScrollLock.0002                       code  010a18
+  CalcScreenLoc                              code  010438
+  CheckKeys                                  code  0109dc
+  CheckScrollLock                            code  010a18
+  CheckScrollLock.0001                       code  010a34
+  CheckScrollLock.0002                       code  010a20
   ClearBmpScreen                             code  80000000000000b5
-  ClearScreen                                code  010214
-  ClearScreen.cs1                            code  010258
+  ClearScreen                                code  010224
+  ClearScreen.cs1                            code  010268
   CursorCol                                   bss  000081
-  CursorOff                                  code  0101f8
-  CursorOn                                   code  0101fc
+  CursorOff                                  code  010208
+  CursorOn                                   code  01020c
   CursorRow                                   bss  000080
-  DispCharQ                                  code  01035c
-  DispStartMsg                               code  010374
-  DisplayByte                                code  0102b8
-  DisplayChar                                code  01047c
-  DisplayChar.dcx12                          code  010594
-  DisplayChar.dcx4                           code  010504
-  DisplayChar.dcx5                           code  0105c8
-  DisplayChar.dcx7                           code  01053c
-  DisplayChar.doBackspace                    code  0105ac
-  DisplayChar.doCursorDown                   code  01056c
-  DisplayChar.doCursorHome                   code  010584
-  DisplayChar.doCursorLeft                   code  010558
-  DisplayChar.doCursorRight                  code  010528
-  DisplayChar.doCursorUp                     code  010544
-  DisplayChar.doDelete                       code  01059c
-  DisplayChar.doLinefeed                     code  0105fc
-  DisplayChar.docr                           code  01051c
-  DisplayCharHex                             code  0102a4
-  DisplayErr                                 code  010afc
-  DisplayHalf                                code  010290
-  DisplayMemBytes                            code  010910
-  DisplayMemBytes.001                        code  010944
-  DisplayMemBytes.002                        code  010980
-  DisplayMemBytes.003                        code  0109a0
-  DisplayMemBytes.004                        code  010994
-  DisplayNybble                              code  0102cc
-  DisplayNybble.0001                         code  0102ec
-  DisplayString                              code  010300
-  DisplayString.dm1                          code  010324
-  DisplayString.dm2                          code  010310
-  DisplayStringCRLF                          code  010334
-  DisplayWord                                code  01027c
+  DispCharQ                                  code  010368
+  DispStartMsg                               code  010380
+  DisplayByte                                code  0102c4
+  DisplayChar                                code  010488
+  DisplayChar.dcx12                          code  0105a0
+  DisplayChar.dcx4                           code  010510
+  DisplayChar.dcx5                           code  0105d4
+  DisplayChar.dcx7                           code  010548
+  DisplayChar.doBackspace                    code  0105b8
+  DisplayChar.doCursorDown                   code  010578
+  DisplayChar.doCursorHome                   code  010590
+  DisplayChar.doCursorLeft                   code  010564
+  DisplayChar.doCursorRight                  code  010534
+  DisplayChar.doCursorUp                     code  010550
+  DisplayChar.doDelete                       code  0105a8
+  DisplayChar.doLinefeed                     code  010608
+  DisplayChar.docr                           code  010528
+  DisplayCharHex                             code  0102b0
+  DisplayErr                                 code  010b04
+  DisplayHalf                                code  01029c
+  DisplayMemBytes                            code  010918
+  DisplayMemBytes.001                        code  01094c
+  DisplayMemBytes.002                        code  010988
+  DisplayMemBytes.003                        code  0109a8
+  DisplayMemBytes.004                        code  01099c
+  DisplayNybble                              code  0102d8
+  DisplayNybble.0001                         code  0102f8
+  DisplayString                              code  01030c
+  DisplayString.dm1                          code  010330
+  DisplayString.dm2                          code  01031c
+  DisplayStringCRLF                          code  010340
+  DisplayWord                                code  010288
   Dummy1                                      bss  000082
   E_Arg                                     const  000001
   E_BadAlarm                                const  000011
@@ -2235,98 +2338,98 @@ GetCurrAttr:
   E_TooManyBlocks                           const  000026
   E_WriteError                              const  000024
   EndStaticAllocations                        bss  075000
-  FMTKInitialize                             code  80000000000000cb
+  FMTKInitialize                             code  80000000000000ce
   FreeTCB                                     bss  000030
   GDTBaseAddress                              bss  012000
-  GetCurrAttr                                code  0103e0
-  GetHexNumber                               code  010a3c
-  GetHexNumber.gthxn1                        code  010a78
-  GetHexNumber.gthxn2                        code  010a54
-  GetRange                                   code  0108a8
-  GetScreenLocation                          code  0103d4
-  GetTwoParams                               code  010888
-  HomeCursor                                 code  010200
+  GetCurrAttr                                code  0103ec
+  GetHexNumber                               code  010a44
+  GetHexNumber.gthxn1                        code  010a80
+  GetHexNumber.gthxn2                        code  010a5c
+  GetRange                                   code  0108b0
+  GetScreenLocation                          code  0103e0
+  GetTwoParams                               code  010890
+  HomeCursor                                 code  010210
   IBPT_ISR                                   code  0114e0
   IBPT_ISR.0001                              code  0114e4
   IOPgTbl                                     bss  04c000
   IVTBaseAddress                              bss  010000
-  IncCursorPos                               code  010604
-  IncCursorRow                               code  010630
-  InitPIC                                    code  010198
+  IncCursorPos                               code  010610
+  IncCursorRow                               code  01063c
+  InitPIC                                    code  0101a8
   KEYBD                                     const  ffdc0000
   KEYBDCLR                                  const  ffdc0004
   KEYBD_DELAY                               const  0003e8
-  KeySTate2                                  code  8000000000000161
+  KeySTate2                                  code  8000000000000162
   KeyState1                                   bss  000088
   KeyState2                                   bss  000089
   KeybdBad                                    bss  000085
   KeybdEcho                                   bss  000084
-  KeybdGetChar                               code  010ddc
-  KeybdGetChar.0001                          code  010e10
-  KeybdGetChar.0003                          code  010de8
-  KeybdGetChar.0004                          code  010f28
-  KeybdGetChar.0005                          code  010f54
-  KeybdGetChar.0006                          code  010e0c
-  KeybdGetChar.0007                          code  010ec0
-  KeybdGetChar.0008                          code  010ed4
-  KeybdGetChar.0009                          code  010ea8
-  KeybdGetChar.0010                          code  010e8c
-  KeybdGetChar.doCapsLock                    code  010f80
-  KeybdGetChar.doCtrl                        code  010f0c
-  KeybdGetChar.doExtend                      code  010efc
-  KeybdGetChar.doKeyup                       code  010ef0
-  KeybdGetChar.doNumLock                     code  010f64
-  KeybdGetChar.doScrollLock                  code  010f94
-  KeybdGetChar.doScrolllock                  code  8000000000000154
-  KeybdGetChar.doShift                       code  010f38
-  KeybdGetCharDirect                         code  010bf8
-  KeybdGetCharDirect.0001                    code  010c00
-  KeybdGetCharDirect.gk1                     code  010c44
-  KeybdGetCharDirect.gk2                     code  010c40
-  KeybdGetCharDirectNB                       code  010b84
-  KeybdGetCharDirectNB.0001                  code  010be4
-  KeybdGetCharDirectNB.0002                  code  010bd8
-  KeybdGetCharDirectNB.0003                  code  010bd4
-  KeybdGetCharNoWait                         code  010dcc
-  KeybdGetCharWait                           code  010dd4
-  KeybdGetScancode                           code  010d28
-  KeybdGetStatus                             code  010d1c
-  KeybdIRQ                                   code  01038c
-  KeybdInit                                  code  010c69
-  KeybdInit.0001                             code  010c74
-  KeybdInit.0002                             code  010c84
-  KeybdInit.0004                             code  010d04
-  KeybdInit.config                           code  010cc0
-  KeybdInit.keybdErr                         code  010cf0
-  KeybdInit.tryAgain                         code  010ce8
+  KeybdGetChar                               code  010de4
+  KeybdGetChar.0001                          code  010e18
+  KeybdGetChar.0003                          code  010df0
+  KeybdGetChar.0004                          code  010f30
+  KeybdGetChar.0005                          code  010f5c
+  KeybdGetChar.0006                          code  010e14
+  KeybdGetChar.0007                          code  010ec8
+  KeybdGetChar.0008                          code  010edc
+  KeybdGetChar.0009                          code  010eb0
+  KeybdGetChar.0010                          code  010e94
+  KeybdGetChar.doCapsLock                    code  010f88
+  KeybdGetChar.doCtrl                        code  010f14
+  KeybdGetChar.doExtend                      code  010f04
+  KeybdGetChar.doKeyup                       code  010ef8
+  KeybdGetChar.doNumLock                     code  010f6c
+  KeybdGetChar.doScrollLock                  code  010f9c
+  KeybdGetChar.doScrolllock                  code  8000000000000155
+  KeybdGetChar.doShift                       code  010f40
+  KeybdGetCharDirect                         code  010c00
+  KeybdGetCharDirect.0001                    code  010c08
+  KeybdGetCharDirect.gk1                     code  010c4c
+  KeybdGetCharDirect.gk2                     code  010c48
+  KeybdGetCharDirectNB                       code  010b8c
+  KeybdGetCharDirectNB.0001                  code  010bec
+  KeybdGetCharDirectNB.0002                  code  010be0
+  KeybdGetCharDirectNB.0003                  code  010bdc
+  KeybdGetCharNoWait                         code  010dd4
+  KeybdGetCharWait                           code  010ddc
+  KeybdGetScancode                           code  010d30
+  KeybdGetStatus                             code  010d24
+  KeybdIRQ                                   code  010398
+  KeybdInit                                  code  010c71
+  KeybdInit.0001                             code  010c7c
+  KeybdInit.0002                             code  010c8c
+  KeybdInit.0004                             code  010d0c
+  KeybdInit.config                           code  010cc8
+  KeybdInit.keybdErr                         code  010cf8
+  KeybdInit.tryAgain                         code  010cf0
   KeybdLEDs                                   bss  00008b
   KeybdLocks                                  bss  000086
-  KeybdRecvByte                              code  010d3c
-  KeybdRecvByte.0003                         code  010d48
-  KeybdRecvByte.0004                         code  010d6c
-  KeybdSendByte                              code  01102c
-  KeybdSetLEDStatus                          code  010fa8
-  KeybdSetLEDStatus.0001                     code  01101c
-  KeybdSetLEDStatus.0002                     code  010fcc
-  KeybdSetLEDStatus.0003                     code  010fe0
-  KeybdSetLEDStatus.0004                     code  010ff4
+  KeybdRecvByte                              code  010d44
+  KeybdRecvByte.0003                         code  010d50
+  KeybdRecvByte.0004                         code  010d74
+  KeybdSendByte                              code  011034
+  KeybdSetLEDStatus                          code  010fb0
+  KeybdSetLEDStatus.0001                     code  011024
+  KeybdSetLEDStatus.0002                     code  010fd4
+  KeybdSetLEDStatus.0003                     code  010fe8
+  KeybdSetLEDStatus.0004                     code  010ffc
   KeybdWaitFlag                               bss  00008a
-  KeybdWaitTx                                code  010d7c
-  KeybdWaitTx.0001                           code  010d8c
-  KeybdWaitTx.0002                           code  010db8
+  KeybdWaitTx                                code  010d84
+  KeybdWaitTx.0001                           code  010d94
+  KeybdWaitTx.0002                           code  010dc0
   LEDS                                      const  ffdc0600
   LF                                        const  00000a
-  MRTest                                     code  800000000000010c
+  MRTest                                     code  800000000000010d
   MicroDelay                                 code  0113f0
   MicroDelay.0001                            code  01140c
   Milliseconds                                bss  000010
-  MonGetch                                   code  010848
-  Monitor                                    code  01077e
+  MonGetch                                   code  010850
+  Monitor                                    code  010786
   NR_PTBL                                   const  000020
   NR_TCB                                    const  000010
   NormAttr                                    bss  000078
-  OutCRLF                                    code  01033c
-  OutChar                                    code  01090c
+  OutCRLF                                    code  010348
+  OutChar                                    code  010914
   OutputVec                                   bss  000018
   PAM1                                        bss  022000
   PAM2                                        bss  023000
@@ -2362,7 +2465,7 @@ GetCurrAttr:
   SC_SCROLLLOCK                             const  00007e
   SDDiskSize                                 code  80000000000000bb
   SDInit                                     code  80000000000000b7
-  SDReadBoot                                 code  800000000000011a
+  SDReadBoot                                 code  800000000000011b
   SDReadMultiple                             code  80000000000000b8
   SDReadPart                                 code  80000000000000ba
   SDWriteMultiple                            code  80000000000000b9
@@ -2396,11 +2499,11 @@ GetCurrAttr:
   SPI_TX_FIFO_DATA_REG                      const  000080
   SPI_WRITE_NO_ERROR                        const  000000
   SSM_ISR                                    code  0114dc
-  ScreenToAscii                              code  0101dc
-  ScreenToAscii.stasc1                       code  0101f0
-  ScrollUp                                   code  010678
-  ScrollUp.0001                              code  0106bc
-  SetupIntVectors                            code  0100f4
+  ScreenToAscii                              code  0101ec
+  ScreenToAscii.stasc1                       code  010200
+  ScrollUp                                   code  010684
+  ScrollUp.0001                              code  0106c8
+  SetupIntVectors                            code  010104
   SetupMemtags                               code  0113ac
   TAB                                       const  000009
   TCB_BackLink                              const  000000
@@ -2475,14 +2578,14 @@ GetCurrAttr:
   TXTCOLS                                   const  000054
   TXTROWS                                   const  00001f
   TempTCB                                     bss  04d000
-  Tick1000Rout                               code  0103b8
-  TickRout                                   code  010398
+  Tick1000Rout                               code  0103c4
+  TickRout                                   code  0103a4
   TickVec                                     bss  000020
   Ticks                                       bss  000008
-  UpdateCursorPos                            code  0103e8
-  Wait10ms                                   code  011038
-  Wait10ms.0001                              code  011044
-  Wait10ms.0002                              code  01105c
+  UpdateCursorPos                            code  0103f4
+  Wait10ms                                   code  011040
+  Wait10ms.0001                              code  01104c
+  Wait10ms.0002                              code  011064
   XOFF                                      const  000013
   XON                                       const  000011
   berr_rout                                  code  0114ca
@@ -2490,40 +2593,40 @@ GetCurrAttr:
   brkpt1                                     code  0113b4
   brkpt1.0001                                code  0113d0
   disk_size                                   bss  000090
-  doCLS                                      code  010b75
-  doCS                                       code  800000000000010a
-  doDumpmem                                  code  0108c8
-  doDumpmem.001                              code  0108d4
-  doRand                                     code  800000000000010e
-  doSDBoot                                   code  0108e8
+  doCLS                                      code  010b7d
+  doCS                                       code  800000000000010b
+  doDumpmem                                  code  0108d0
+  doDumpmem.001                              code  0108dc
+  doRand                                     code  800000000000010f
+  doSDBoot                                   code  0108f0
   drf_rout                                   code  011450
   drf_rout.0001                              code  011468
   dwf_rout                                   code  01146c
   dwf_rout.0001                              code  011484
-  eval                                       code  800000000000010f
+  eval                                       code  8000000000000110
   exf_rout                                   code  011434
   exf_rout.0001                              code  01144c
   hangprg                                    code  01139c
-  icc1                                       code  010660
-  icr1                                       code  010640
-  ignBlanks                                  code  010864
-  ignBlanks1                                 code  010864
-  kbdi5                                      code  010c50
+  icc1                                       code  01066c
+  icr1                                       code  01064c
+  ignBlanks                                  code  01086c
+  ignBlanks1                                 code  01086c
+  kbdi5                                      code  010c58
   keybdControlCodes                          code  011270
   keybdExtendedCodes                         code  0112f0
-  loadBootFile                               code  800000000000011b
-  mon1                                       code  01079c
-  mon1.Prompt1                               code  0107d8
-  mon1.Prompt2                               code  0107f4
-  mon1.Prompt3                               code  0107c0
-  mon1.PromptLn                              code  0107b4
-  mon1.doHelp                                code  010838
-  msgBadKeybd                                code  010c50
-  msgErr                                     code  010b0c
-  msgHelp                                    code  010b14
-  msgMonitorStarted                          code  010b64
+  loadBootFile                               code  800000000000011c
+  mon1                                       code  0107a4
+  mon1.Prompt1                               code  0107e0
+  mon1.Prompt2                               code  0107fc
+  mon1.Prompt3                               code  0107c8
+  mon1.PromptLn                              code  0107bc
+  mon1.doHelp                                code  010840
+  msgBadKeybd                                code  010c58
+  msgErr                                     code  010b14
+  msgHelp                                    code  010b1c
+  msgMonitorStarted                          code  010b6c
   msgPriv                                    code  0114b3
-  msgStart                                   code  010761
+  msgStart                                   code  010769
   msgUninit                                  code  0114be
   msgdrf                                     code  0114a9
   msgdwf                                     code  0114ae
@@ -2532,5 +2635,6 @@ GetCurrAttr:
   priv_rout.0001                             code  0114a0
   shiftedScanCodes                           code  011170
   start                                      code  010080
+  start.0001                                 code  010094
   startSector                                 bss  00008c
   unshiftedScanCodes                         code  011070

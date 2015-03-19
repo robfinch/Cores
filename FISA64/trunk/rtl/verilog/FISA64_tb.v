@@ -92,8 +92,22 @@ assign cpu_dati = rom_dato | {2{tc_dato}} | scm_dato;
 
 always @(posedge clk)
 begin
-	$display("%d %h %h c=%h sp=%h %s", $time, u1.pc, u1.ir, u1.c, u1.sp, u1.fnStateName(u1.state));
+	$display(" ");
+	$display(" ");
+	$display("TIME: %d sp=%h %s", $time, u1.sp, u1.fnStateName(u1.state));
+	$display("IFETCH");
+	$display("    pc=%h insn=%h", u1.pc, u1.ice ? u1.insn : u1.ibuf);
+	$display("REGFETCH");
+	$display("    Ra=r%d, Rb=r%d Rc=r%d ir=%h", u1.Ra, u1.Rb, u1.Rc, u1.ir);
+	$display("EXECUTE");
+	$display("    a=%h b=%h c=%h imm=%h xir=%h", u1.a, u1.b, u1.c, u1.imm, u1.xir);
 	$display("%cres2=%h wres2=%h", (u1.xRt2==1'b1)?"S":" ",u1.res2, u1.wres2);
+	if (u1.wRt != 0 || u1.wRt2 != 0) begin
+		$display("WRITEBACK");
+		$display("    r%d = %h", u1.wRt, u1.wres);
+		if (u1.wRt2 != 0)
+			$display("    sp = %h", u1.wres2);
+	end
 end
 endmodule
 

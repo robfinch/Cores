@@ -572,7 +572,6 @@ case(x1opcode)
 `BSR:	res <= xpc + 64'd4;
 `JAL:	res <= xpc + 64'd4;
 `JALI:	res <= xpc + 64'd4;
-`RTL:	res <= c + imm;
 `ADD:	res <= a + imm;
 `ADDU:	res <= a + imm;
 `SUB:	res <= a - imm;
@@ -694,11 +693,11 @@ case(x1opcode)
 default:	res <= 64'd0;
 endcase
 
-always @(x1opcode,c,imm)
+always @(x1opcode,a,c,imm)
 case(x1opcode)
-`POP:	res2 <= c + 64'd8;
-`RTS:	res2 <= c + 64'd8 + imm;
-`RTL:	res2 <= c + imm;
+`POP:	res2 <= a + imm;
+`RTS:	res2 <= a + imm;
+`RTL:	res2 <= a + imm;
 `PUSH:	res2 <= c - 64'd8;
 `PMW:	res2 <= c - 64'd8;
 `PEA:	res2 <= c - 64'd8;
@@ -767,7 +766,7 @@ if (rst_i) begin
 	dbctrl <= 64'd0;
 	dbstat <= 64'd0;
 	mc_done <= TRUE;
-	ice <= FALSE;
+	ice <= TRUE;
 end
 else begin
 tick <= tick + 64'd1;
@@ -896,13 +895,12 @@ begin
 				xRt <= 5'd0;
 			default:	xRt <= ir[16:12];
 			endcase
-		`POP,`RTS:	xRt <= ir[11:7];
 		`BRA,`Bcc,`BRK,`IMM:
 			xRt <= 5'd0;
 		`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`INC,
-		`PUSH,`PEA,`PMW:
+		`RTL,`PUSH,`PEA,`PMW:
 			xRt <= 5'd0;
-		`BSR:	xRt <= 5'h1F;
+		`BSR,`RTS:	xRt <= 5'h1F;
 		default:	xRt <= ir[16:12];
 		endcase
 		
@@ -1025,7 +1023,7 @@ begin
 		`BSR,`BRA:	;//update_pc(xpc + imm); done already in IF
 		`JAL:		update_pc(a + {imm,2'b00});
 		`RTL:	begin
-					update_pc(a);
+					update_pc(c);
 					$display("RTL: pc<=%h", a);
 				end
 		// Correct a mispredicted branch.
@@ -1161,7 +1159,7 @@ begin
 				next_state(LOAD1);
 				mopcode <= xopcode;
 				mir <= xir;
-				ea <= c;
+				ea <= a;
 				ld_size <= word;
 				end
 		`SB,`SC,`SH,`SW:

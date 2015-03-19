@@ -320,9 +320,14 @@ EndStaticAllocations:
 
 start:
     sei     ; interrupts off
-    ldi     r1,#$FFFF
-    sc      r1,LEDS
     ldi     sp,#32760            ; set stack pointer to top of 32k Area
+    ldi     r5,#$0000
+    ldi     r1,#20
+.0001:
+    sc      r5,LEDS
+    addui   r5,r5,#1
+;    bsr     MicroDelay
+;    bra     .0001
 	sw		r0,Milliseconds
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
@@ -330,10 +335,12 @@ start:
 	sh		r1,NormAttr
 	sb		r0,CursorRow
 	sb		r0,CursorCol
-	ldi		r1,#DisplayChar & 0xFFFFFFFFFC
+	ldi		r1,#DisplayChar
 	sw		r1,OutputVec
 	bsr		ClearScreen
 	bsr		HomeCursor
+	ldi     r1,#msgStart
+	bsr     DisplayStringCRLF
 	ldi     r1,#8
 	sb      r1,LEDS
 	bsr		SetupIntVectors
@@ -372,7 +379,7 @@ SetupIntVectors:
 	sw		r1,508*16[r2]
 	ldi     r1,#$00AA
 	sc      r1,LEDS
-    rts
+    rtl
  
 ;------------------------------------------------------------------------------
 ; Initialize the interrupt controller.
@@ -383,7 +390,7 @@ InitPIC:
 	sh		r1,PIC_ES
 	ldi		r1,#$000F		; enable keyboard reset, timer interrupts
 	sh		r1,PIC_IE
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character to screen display character.
@@ -400,7 +407,7 @@ AsciiToScreen:
 	and		r1,r1,#%110011111
 .00001:
     pop     r2
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Convert screen display character to ascii.
@@ -414,17 +421,17 @@ ScreenToAscii:
 	add		r1,r1,#$60
 .stasc1:
     pop     r2
-	rts
+	rtl
 
 CursorOff:
-	rts
+	rtl
 CursorOn:
-	rts
+	rtl
 HomeCursor:
 	sb		r0,CursorRow
 	sb		r0,CursorCol
 	sc	    r0,TEXTREG+TEXT_CURPOS+$FFD00000
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -452,8 +459,7 @@ ClearScreen:
 	pop     r3
 	pop     r2
 	pop     r1
-    pop     lr
-	rts
+    rts
 
 ;------------------------------------------------------------------------------
 ; Display the word in r1
@@ -517,7 +523,7 @@ DisplayNybble:
 	pop     r2
 	pop		r1
 	pop     lr
-	rts
+	rtl
 
 DisplayString:
     push    lr
@@ -534,7 +540,7 @@ DisplayString:
 	pop		r2
     pop     r1
 	pop     lr
-	rts
+	rtl
 
 DisplayStringCRLF:
     push    lr
@@ -548,7 +554,7 @@ CRLF:
 	bsr		OutChar
 	pop		r1
 	pop     lr
-	rts
+	rtl
 
 
 DispCharQ:
@@ -557,14 +563,14 @@ DispCharQ:
 	sc		r1,[r3]
 	add		r3,r3,#4
     pop     lr
-	rts
+	rtl
 
 DispStartMsg:
     push    lr
 	ldi		r1,#msgStart
 	bsr		DisplayString
     pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -582,7 +588,7 @@ TickRout:
 	add		r1,r1,#1
 	sh	    r1,TEXTSCR+220+$FFD00000
 	pop     r1
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -600,10 +606,10 @@ Tick1000Rout:
 
 GetScreenLocation:
 	ldi		r1,#TEXTSCR+$FFD00000
-	rts
+	rtl
 GetCurrAttr:
 	lhu		r1,NormAttr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -623,7 +629,7 @@ UpdateCursorPos:
 	pop		r4
     pop     r2
     pop     r1
-    rts
+    rtl
 	
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -638,15 +644,15 @@ CalcScreenLoc:
 	mul		r2,r2,r1
 	lbu		r1,CursorCol
 	and		r1,r1,#$7f
-	add		r2,r2,r1
+	addu	r2,r2,r1
 	sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
 	bsr		GetScreenLocation
 	shl		r2,r2,#2
-	add		r1,r1,r2
+	addu	r1,r1,r2
 	pop		r4
     pop     r2
     pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -692,7 +698,7 @@ DisplayChar:
     pop     r2
     pop     r1
     pop     lr
-	rts
+	rtl
 .docr:
 	sb		r0,CursorCol
 	bsr		UpdateCursorPos
@@ -800,7 +806,7 @@ icc1:
     pop     r2
     pop     r1
 	pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -814,8 +820,8 @@ ScrollUp:
 	push	r6
 	lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
 	lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
-	sub		r2,r2,#1
-	mul		r6,r1,r2
+	subui	r2,r2,#1
+	mulu	r6,r1,r2
 	ldi		r1,#TEXTSCR+$FFD00000
 	ldi		r2,#TEXTSCR+TXTCOLS*4+$FFD00000
 	ldi		r3,#0
@@ -826,7 +832,7 @@ ScrollUp:
 	subui   r6,r6,#1
 	bne	    r6,.0001
 	lbu	    r1,TEXTREG+TEXT_ROWS+$FFD00000
-	sub		r1,r1,#1
+	subui	r1,r1,#1
 	bsr		BlankLine
 	pop		r6
 	pop		r5
@@ -834,7 +840,7 @@ ScrollUp:
     pop     r2
     pop     r1
 	pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Blank out a line on the screen.
@@ -850,10 +856,10 @@ BlankLine:
     push    r3
     push    r4
     lbu     r2,TEXTREG+TEXT_COLS+$FFD00000
-	mul		r3,r2,r1
-	sub		r2,r2,#1		; r2 = #chars to blank - 1
+	mulu	r3,r2,r1
+;	subui	r2,r2,#1		; r2 = #chars to blank - 1
 	shl		r3,r3,#2
-	add		r3,r3,#TEXTSCR+$FFD00000
+	addui	r3,r3,#TEXTSCR+$FFD00000
 	ldi		r1,#' '
 	bsr		AsciiToScreen
 	lhu		r4,NormAttr
@@ -867,7 +873,7 @@ BlankLine:
     pop     r2
     pop     r1
 	pop     lr
-	rts
+	rtl
 
 	db	0
 msgStart:
@@ -948,7 +954,7 @@ MonGetch:
 	add		r3,r3,#4
 	bsr		ScreenToAscii
 	pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Ignore blanks in the input
@@ -966,7 +972,7 @@ ignBlanks1:
 	sub		r3,r3,#4
 	pop     r2
 	pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -979,7 +985,7 @@ GetTwoParams:
 	bsr		ignBlanks
 	bsr		GetHexNumber	; get end address of dump
 	pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Get a range, the end must be greater or equal to the start.
@@ -993,7 +999,7 @@ GetRange:
 	bgt		r4,DisplayErr
 	pop     r4
 	pop     lr
-	rts
+	rtl
 
 doDumpmem:
 	bsr		CursorOff
@@ -1075,7 +1081,7 @@ DisplayMemBytes:
 	pop		r3
     pop     r1
     pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; CheckKeys:
@@ -1103,7 +1109,7 @@ CTRLCCheck:
 	pop     r2
 	pop		r1
 	pop     lr
-	rts
+	rtl
 .0001:
 	addui	sp,sp,#24
 	bra     mon1
@@ -1127,7 +1133,7 @@ CheckScrollLock:
     pop     r2
 	pop		r1
 	pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Get a hexidecimal number. Maximum of eight digits.
@@ -1158,7 +1164,7 @@ GetHexNumber:
 	pop		r4
     pop     r2
     pop     lr
-	rts
+	rtl
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character in the range '0' to '9', 'a' to 'f' or 'A' to 'F'
@@ -1173,7 +1179,7 @@ AsciiToHexNybble:
 	bge		r2,.gthx5
 	sub		r1,r1,#'0'
 	pop     r2
-	rts
+	rtl
 .gthx5:
 	cmpu	r2,r1,#'A'
 	blt		r2,.gthx3
@@ -1182,7 +1188,7 @@ AsciiToHexNybble:
 	sub		r1,r1,#'A'
 	add		r1,r1,#10
 	pop     r2
-	rts
+	rtl
 .gthx6:
 	cmpu	r2,r1,#'a'
 	blt		r2,.gthx3
@@ -1191,11 +1197,11 @@ AsciiToHexNybble:
 	sub		r1,r1,#'a'
 	add		r1,r1,#10
 	pop     r2
-	rts
+	rtl
 .gthx3:
     pop     r2
 	ldi		r1,#-1		; not a hex number
-	rts
+	rtl
 
 DisplayErr:
 	ldi		r1,#msgErr
@@ -1251,13 +1257,13 @@ KeybdGetCharDirectNB:
 .0002:
 	pop		r2
 	pop     lr
-	rts
+	rtl
 .0001:
 	cli
 	ldi		r1,#-1
 	pop		r2
 	pop     lr
-	rts
+	rtl
 
 KeybdGetCharDirect:
     push    lr
@@ -1281,7 +1287,7 @@ KeybdGetCharDirect:
 .gk1:
 	pop		r2
 	pop     lr
-	rts
+	rtl
 
 ;KeybdInit:
 ;	mfspr	r1,cr0		; turn off tmr mode
@@ -1323,7 +1329,7 @@ kbdi5:
 ;	sb		r1,LEDS
 ;	pop		r1				; turn back on tmr mode
 ;	mtspr	cr0,r1
-;	rts
+;	rtl
 
 msgBadKeybd:
 	db		"Keyboard not responding.",0
@@ -1360,7 +1366,7 @@ msgBadKeybd:
 ;	ldi		r1,#44
 ;	sb		r1,LEDS
 ;	pop		r2
-;	rts
+;	rtl
 ;sbtk2:
 ;	bra sbtk1
 
@@ -1382,7 +1388,7 @@ msgBadKeybd:
 ;	lbu		r1,KEYBD				; get the scan code
 ;	sb		r0,KEYBD+1				; clear recieve register
 ;wkbdbad:
-;	rts
+;	rtl
 
 KeybdInit:
     push    lr
@@ -1424,27 +1430,27 @@ KeybdInit:
 	ldi		r1,#msgBadKeybd
 	bsr		DisplayString
 	pop     lr
-	rts
+	rtl
 .0004:
 	ldi		r1,#2			; select scan code set #2
 	bsr		KeybdSendByte
 	bsr		KeybdWaitTx
 	bmi		r1,.tryAgain
 	pop     lr
-	rts
+	rtl
 
 ; Get the keyboard status
 ;
 KeybdGetStatus:
 	lb		r1,KEYBD+1
-	rts
+	rtl
 
 ; Get the scancode from the keyboard port
 ;
 KeybdGetScancode:
 	lbu		r1,KEYBD				; get the scan code
 	sb		r0,KEYBD+1				; clear receive register
-	rts
+	rtl
 
 ; Recieve a byte from the keyboard, used after a command is sent to the
 ; keyboard in order to wait for a response.
@@ -1462,12 +1468,12 @@ KeybdRecvByte:
 	pop		r3				; timeout
 	ldi		r1,#-1			; return -1
 	pop     lr
-	rts
+	rtl
 .0004:
 	bsr		KeybdGetScancode
 	pop		r3
 	pop     lr
-	rts
+	rtl
 
 
 ; Wait until the keyboard transmit is complete
@@ -1489,13 +1495,13 @@ KeybdWaitTx:
     pop     r2			    ; timed out
 	ldi		r1,#-1			; return -1
 	pop     lr
-	rts
+	rtl
 .0002:
 	pop		r3
     pop     r2			    ; wait complete, return 
 	ldi		r1,#0			; return 0
 	pop     lr
-	rts
+	rtl
 
 KeybdGetCharNoWait:
 	sb		r0,KeybdWaitFlag
@@ -1518,7 +1524,7 @@ KeybdGetChar:
 	pop		r3
     pop     r2
     pop     lr
-	rts
+	rtl
 .0006:
 	bsr		KeybdGetScancode
 .0001:
@@ -1574,7 +1580,7 @@ KeybdGetChar:
 	pop		r3
     pop     r2
     pop     lr
-	rts
+	rtl
 .doKeyup:
 	ldi		r1,#-1
 	sb		r1,KeyState1
@@ -1666,11 +1672,11 @@ KeybdSetLEDStatus:
 	pop		r3
     pop     r2
     pop     lr
-	rts
+	rtl
 
 KeybdSendByte:
 	sb		r1,KEYBD
-	rts
+	rtl
 	
 Wait10ms:
 	push	r3
@@ -1685,7 +1691,7 @@ Wait10ms:
 .0002:
 	pop		r4
     pop     r3
-	rts
+	rtl
 
 	;--------------------------------------------------------------------------
 	; PS2 scan codes to ascii conversion tables.
@@ -1834,7 +1840,7 @@ brkpt1:
     mtspr   tag,r2
     subui   r3,r3,#1
     bne     r3,.0001
-    rts
+    rtl
 
 ; Delay for a short time for at least the specified number of clock cycles
 ;
@@ -1852,7 +1858,7 @@ MicroDelay:
     addui   sp,sp,#16
     pop     r3
     pop     r2
-    rts
+    rtl
 ;
     nop
     nop
