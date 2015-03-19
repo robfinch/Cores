@@ -6,7 +6,7 @@ wire stb;
 wire we;
 wire [7:0] sel;
 wire [31:0] adr;
-wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato;
+wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato,scm_dato;
 wire [31:0] tc_dato;
 wire br_ack, tc_ack;
 
@@ -35,7 +35,7 @@ FISA64 u1 (
 	.bl_o(),
 	.cyc_o(cyc),
 	.stb_o(stb),
-	.ack_i(cs_ram|cs_tc ? cyc&stb : br_ack | cs_leds | tc_ack),
+	.ack_i(br_ack | cs_leds | tc_ack | scm_ack),
 	.err_i(0),
 	.we_o(we),
 	.sel_o(sel),
@@ -66,6 +66,19 @@ RAM u3 (
 	.dat_i(cpu_dato)
 );
 
+scratchmem u4 (
+	.rst_i(rst),
+	.clk_i(clk),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(scm_ack),
+	.we_i(we),
+	.sel_i(sel),
+	.adr_i(adr),
+	.dat_i(cpu_dato),
+	.dat_o(scm_dato)
+);
+
 rtfTextController3 utc3
 (
 	.rst_i(rst), .clk_i(clk),
@@ -75,11 +88,13 @@ rtfTextController3 utc3
 );
 
 
-assign cpu_dati = cs_ram ? ram_dato : rom_dato | {2{tc_dato}};
+assign cpu_dati = rom_dato | {2{tc_dato}} | scm_dato;
 
 always @(posedge clk)
-	$display("%d %h %h %s", $time, u1.pc, u1.ir, u1.fnStateName(u1.state));
-
+begin
+	$display("%d %h %h c=%h sp=%h %s", $time, u1.pc, u1.ir, u1.c, u1.sp, u1.fnStateName(u1.state));
+	$display("%cres2=%h wres2=%h", (u1.xRt2==1'b1)?"S":" ",u1.res2, u1.wres2);
+end
 endmodule
 
 module ROM(adr,dat_o);
