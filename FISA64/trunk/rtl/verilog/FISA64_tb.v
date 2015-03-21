@@ -8,6 +8,7 @@ wire we;
 wire [7:0] sel;
 wire [31:0] adr;
 wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato,scm_dato;
+wire cpu_irq;
 wire [31:0] tc_dato;
 wire br_ack, tc_ack;
 wire io3_cyc,io3_stb,io3_we;
@@ -18,12 +19,16 @@ wire [31:0] io3_dato,iob3_dato;
 wire kbd_ack,pic_ack;
 wire [7:0] kbd_dato;
 wire [31:0] pic_dato;
+reg pulse1024;
 
 initial begin
 	#0 clk = 1'b0;
 	#0 rst = 0;
+	#0 pulse1024 = 0;
 	#100 rst = 1;
 	#200 rst = 0;
+	#500000 pulse1024 = 1;
+	#500100 pulse1024 = 0;
 end
 
 always #5 clk = ~clk;
@@ -37,7 +42,7 @@ FISA64 u1 (
 	.clk_i(clk),
 	.clk_o(),
 	.nmi_i(0),
-	.irq_i(0),
+	.irq_i(cpu_irq),
 	.vect_i(vecno),
 	.bte_o(),
 	.cti_o(),
@@ -66,7 +71,7 @@ FISA64_pic u_pic
 	.dat_o(pic_dato),
 	.vol_o(),			// volatile register selected
 	.i1(),
-	.i2(),
+	.i2(pulse1024),
 	.i3(),
 	.i4(),
 	.i5(),
@@ -80,7 +85,7 @@ FISA64_pic u_pic
 	.i13(),
 	.i14(),
 	.i15(),
-	.irqo(),	// normally connected to the processor irq
+	.irqo(cpu_irq),	// normally connected to the processor irq
 	.nmii(),	// nmi input connected to nmi requester
 	.nmio(),	// normally connected to the nmi of cpu
 	.vecno(vecno)
@@ -180,9 +185,9 @@ begin
 	$display("IFETCH");
 	$display("    pc=%h insn=%h", u1.pc, u1.ice ? u1.insn : u1.ibuf);
 	$display("REGFETCH");
-	$display("    Ra=r%d, Rb=r%d Rc=r%d ir=%h", u1.Ra, u1.Rb, u1.Rc, u1.ir);
+	$display("    dpc=%h ir=%h Ra=r%d, Rb=r%d Rc=r%d", u1.dpc, u1.ir, u1.Ra, u1.Rb, u1.Rc);
 	$display("EXECUTE");
-	$display("    a=%h b=%h c=%h imm=%h xir=%h", u1.a, u1.b, u1.c, u1.imm, u1.xir);
+	$display("    xpc=%h xir=%h a=%h b=%h c=%h imm=%h", u1.xpc, u1.xir, u1.a, u1.b, u1.c, u1.imm);
 	$display("MULTI-CYCLE");
 	$display("    ea=%h xb=%h",u1.ea,u1.xb);
 	$display("%cres2=%h wres2=%h", (u1.xRt2==1'b1)?"S":" ",u1.res2, u1.wres2);
