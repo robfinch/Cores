@@ -779,7 +779,7 @@ if (rst_i) begin
 	tagadr <= 64'd0;
 	regSP <= 5'd30;
 	cr0[0] <= FALSE;	// protected mode enable
-	cr0[30] <= FALSE;	// instruction cache enable
+	cr0[30] <= TRUE;	// instruction cache enable
 	cr0[32] <= TRUE;	// branch predictor enable
 end
 else begin
@@ -1090,7 +1090,8 @@ begin
 		// following instructions.
 		`BRK,`RTS,`JALI:
 				begin
-					nop_ir();
+					// Don't need to flush the ir. The PC was set correctly
+					// a cycle sooner in the multi-cycle code.
 					if (!ssm)
 						nop_xir();
 				end
@@ -1221,7 +1222,7 @@ begin
 				begin
 				next_state(STORE1);
 				mopcode <= xopcode;
-				ea <= c - 64'd8;
+				ea <= res2;
 				xb <= a + imm;
 				st_size <= word;
 				end
