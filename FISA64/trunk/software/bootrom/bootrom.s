@@ -326,8 +326,6 @@ start:
 .0001:
     sc      r5,LEDS
     addui   r5,r5,#1
-;    bsr     MicroDelay
-;    bra     .0001
 	sw		r0,Milliseconds
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
@@ -344,7 +342,7 @@ start:
 	ldi     r1,#8
 	sb      r1,LEDS
 	bsr		SetupIntVectors
-	bsr		KeybdInit
+;	bsr		KeybdInit
 	bsr		InitPIC
 	bra		Monitor
 	bsr		FMTKInitialize
@@ -357,7 +355,7 @@ SetupIntVectors:
 	nop
 	nop
 	mfspr   r2,vbr
-	ldi		r1,#Tick1000Rout
+	ldi		r1,#Tick1024Rout
 	sw		r1,450*16[r2]
 	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
 	sw		r1,451*16[r2]
@@ -445,7 +443,6 @@ ClearScreen:
 	lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
 	lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
 	mulu	r4,r2,r1
-	subui   r4,r4,#1
 	ldi		r3,#TEXTSCR+$FFD00000
 	ldi		r1,#' '
 	bsr		AsciiToScreen
@@ -481,7 +478,9 @@ DisplayHalf:
 	ror		r1,r1,#16
 	bsr		DisplayCharHex
 	rol		r1,r1,#16
-    pop     lr
+	bsr		DisplayCharHex
+	pop     lr
+    rtl
 
 ;------------------------------------------------------------------------------
 ; Display the char in r1
@@ -492,7 +491,9 @@ DisplayCharHex:
 	ror		r1,r1,#8
 	bsr		DisplayByte
 	rol		r1,r1,#8
+	bsr		DisplayByte
     pop     lr
+    rtl
 
 ;------------------------------------------------------------------------------
 ; Display the byte in r1
@@ -503,8 +504,10 @@ DisplayByte:
 	ror		r1,r1,#4
 	bsr		DisplayNybble
 	rol		r1,r1,#4
+	bsr		DisplayNybble
     pop     lr
-
+    rtl
+ 
 ;------------------------------------------------------------------------------
 ; Display nybble in r1
 ;------------------------------------------------------------------------------
@@ -519,11 +522,15 @@ DisplayNybble:
 	blt		r2,.0001
 	add		r1,r1,#7
 .0001:
-	jsr		(OutputVec)
+	bsr		OutChar
 	pop     r2
 	pop		r1
 	pop     lr
 	rtl
+
+;------------------------------------------------------------------------------
+; Display a string pointer to string in r1.
+;------------------------------------------------------------------------------
 
 DisplayString:
     push    lr
@@ -539,22 +546,23 @@ DisplayString:
 .dm1:
 	pop		r2
     pop     r1
-	pop     lr
-	rtl
+	rts
 
 DisplayStringCRLF:
     push    lr
 	bsr		DisplayString
+	bra     CRLF1
 OutCRLF:
 CRLF:
+    push    lr
+CRLF1:
 	push	r1
 	ldi		r1,#CR
 	bsr		OutChar
 	ldi		r1,#LF
 	bsr		OutChar
 	pop		r1
-	pop     lr
-	rtl
+	rts
 
 
 DispCharQ:
@@ -562,15 +570,13 @@ DispCharQ:
 	bsr		AsciiToScreen
 	sc		r1,[r3]
 	add		r3,r3,#4
-    pop     lr
-	rtl
+    rts
 
 DispStartMsg:
     push    lr
 	ldi		r1,#msgStart
 	bsr		DisplayString
-    pop     lr
-	rtl
+    rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -588,18 +594,32 @@ TickRout:
 	add		r1,r1,#1
 	sh	    r1,TEXTSCR+220+$FFD00000
 	pop     r1
-	rtl
+	rti
 
 ;------------------------------------------------------------------------------
+; 1024Hz interupt routine. This must be fast. Allows the system time to be
+; gotten by right shifting by 10 bits.
 ;------------------------------------------------------------------------------
 
-Tick1000Rout:
+Tick1024Rout:
 	push	r1
 	ldi		r1,#2				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
 	inc     Milliseconds
 	pop		r1
 	rti
+
+;------------------------------------------------------------------------------
+; GetSystemTime
+;
+; Returns 
+;    r1 = the system time in seconds.
+;------------------------------------------------------------------------------
+
+GetSystemTime:
+    lw      r1,Milliseconds
+    lsr     r1,r1,#10
+    rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -615,21 +635,22 @@ GetCurrAttr:
 ;------------------------------------------------------------------------------
 
 UpdateCursorPos:
+    push    lr
 	push	r1
 	push    r2
 	push    r4
 	lbu		r1,CursorRow
 	and		r1,r1,#$3f
-	lbu	r2,TEXTREG+TEXT_COLS+$FFD00000
-	mul		r2,r2,r1
+	lbu	    r2,TEXTREG+TEXT_COLS+$FFD00000
+	mulu	r2,r2,r1
 	lbu		r1,CursorCol
 	and		r1,r1,#$7f
-	add		r2,r2,r1
-	sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
+	addu	r2,r2,r1
+	sc	    r2,TEXTREG+TEXT_CURPOS+$FFD00000
 	pop		r4
     pop     r2
     pop     r1
-    rtl
+    rts
 	
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -640,19 +661,18 @@ CalcScreenLoc:
 	push    r4
 	lbu		r1,CursorRow
 	and		r1,r1,#$3f
-	lbu	r2,TEXTREG+TEXT_COLS+$FFD00000
-	mul		r2,r2,r1
+	lbu	    r2,TEXTREG+TEXT_COLS+$FFD00000
+	mulu	r2,r2,r1
 	lbu		r1,CursorCol
 	and		r1,r1,#$7f
 	addu	r2,r2,r1
-	sc	r2,TEXTREG+TEXT_CURPOS+$FFD00000
+	sc	    r2,TEXTREG+TEXT_CURPOS+$FFD00000
 	bsr		GetScreenLocation
 	shl		r2,r2,#2
 	addu	r1,r1,r2
 	pop		r4
     pop     r2
-    pop     lr
-	rtl
+	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -801,6 +821,8 @@ icr1:
 	sb		r2,CursorRow
 	bsr		ScrollUp
 icc1:
+    nop
+    nop
 	bsr		UpdateCursorPos
 	pop		r4
     pop     r2
@@ -902,7 +924,7 @@ mon1:
 	ldi		r1,#50
 	sc		r1,LEDS
 ;	ldi		sp,#TCBs+TCB_Size-8		; reload the stack pointer, it may have been trashed
-	ldi		sp,#$3FFFF8
+	ldi		sp,#$8000
 	cli
 .PromptLn:
 	bsr		CRLF
@@ -963,16 +985,15 @@ MonGetch:
 ;------------------------------------------------------------------------------
 
 ignBlanks:
-ignBlanks1:
     push    lr
     push    r2
+ignBlanks1:
 	bsr		MonGetch
 	cmp		r2,r1,#' '
 	beq		r2,ignBlanks1
 	sub		r3,r3,#4
 	pop     r2
-	pop     lr
-	rtl
+	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -984,8 +1005,7 @@ GetTwoParams:
 	mov		r2,r1
 	bsr		ignBlanks
 	bsr		GetHexNumber	; get end address of dump
-	pop     lr
-	rtl
+	rts
 
 ;------------------------------------------------------------------------------
 ; Get a range, the end must be greater or equal to the start.
@@ -1044,21 +1064,21 @@ DisplayMemBytes:
 	bsr		OutChar
 	mov		r1,r2
 	bsr		DisplayHalf
-	ldi		r3,#7
+	ldi		r3,#8
 .001:
 	ldi		r1,#' '
 	bsr		OutChar
 	lbu		r1,[r2]
-	jsr		DisplayByte
-	add		r2,r2,#1
+	bsr		DisplayByte
+	addui	r2,r2,#1
 	subui   r3,r3,#1
 	bne	    r3,.001
 	ldi		r1,#':'
 	bsr		OutChar
 	ldi		r1,#%110101110_000000100_0000000000	; reverse video
 	sh		r1,NormAttr
-	ldi		r3,#7
-	sub		r2,r2,#8
+	ldi		r3,#8
+	subui	r2,r2,#8
 .002
 	lbu		r1,[r2]
 	cmpu	r4,r1,#26				; convert control characters to '.'
@@ -1071,7 +1091,7 @@ DisplayMemBytes:
 	ldi		r1,#'.'
 .003:
 	bsr		OutChar
-	add		r2,r2,#1
+	addui	r2,r2,#1
 	subui   r3,r3,#1
 	bne	    r3,.002
 	ldi		r1,#%000000100_110101110_0000000000	; normal video
@@ -1145,26 +1165,21 @@ GetHexNumber:
     push    lr
 	push	r2
     push    r4
-    push    r5
 	ldi		r2,#0
 	ldi		r4,#16
 .gthxn2:
 	bsr		MonGetch
 	bsr		AsciiToHexNybble
-	cmp		r5,r1,#-1
-	beq		r5,.gthxn1
-	shl		r2,r2,#4
-	and		r1,r1,#$0f
+	bmi		r1,.gthxn1
+	asl		r2,r2,#4
 	or		r2,r2,r1
 	subui   r4,r4,#1
     bne	    r4,.gthxn2
 .gthxn1:
 	mov		r1,r2
-	pop     r5
 	pop		r4
     pop     r2
-    pop     lr
-	rtl
+    rts
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character in the range '0' to '9', 'a' to 'f' or 'A' to 'F'
@@ -1177,7 +1192,7 @@ AsciiToHexNybble:
 	blt		r2,.gthx3
 	cmpu	r2,r1,#'9'+1
 	bge		r2,.gthx5
-	sub		r1,r1,#'0'
+	subui	r1,r1,#'0'
 	pop     r2
 	rtl
 .gthx5:
@@ -1185,8 +1200,8 @@ AsciiToHexNybble:
 	blt		r2,.gthx3
 	cmpu	r2,r1,#'F'+1
 	bge		r2,.gthx6
-	sub		r1,r1,#'A'
-	add		r1,r1,#10
+	subui	r1,r1,#'A'
+	addui	r1,r1,#10
 	pop     r2
 	rtl
 .gthx6:
@@ -1194,8 +1209,8 @@ AsciiToHexNybble:
 	blt		r2,.gthx3
 	cmpu	r2,r1,#'z'+1
 	bge		r2,.gthx3
-	sub		r1,r1,#'a'
-	add		r1,r1,#10
+	subui	r1,r1,#'a'
+	addui	r1,r1,#10
 	pop     r2
 	rtl
 .gthx3:

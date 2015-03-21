@@ -1,6 +1,7 @@
 module FISA64_tb();
 reg rst;
 reg clk;
+wire [8:0] vecno;
 wire cyc;
 wire stb;
 wire we;
@@ -9,6 +10,14 @@ wire [31:0] adr;
 wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato,scm_dato;
 wire [31:0] tc_dato;
 wire br_ack, tc_ack;
+wire io3_cyc,io3_stb,io3_we;
+wire [3:0] io3_sel;
+wire iob3_ack;
+wire [31:0] io3_adr;
+wire [31:0] io3_dato,iob3_dato;
+wire kbd_ack,pic_ack;
+wire [7:0] kbd_dato;
+wire [31:0] pic_dato;
 
 initial begin
 	#0 clk = 1'b0;
@@ -29,19 +38,52 @@ FISA64 u1 (
 	.clk_o(),
 	.nmi_i(0),
 	.irq_i(0),
-	.vect_i(0),
+	.vect_i(vecno),
 	.bte_o(),
 	.cti_o(),
 	.bl_o(),
 	.cyc_o(cyc),
 	.stb_o(stb),
-	.ack_i(br_ack | cs_leds | tc_ack | scm_ack),
+	.ack_i(br_ack | cs_leds | iob3_ack | scm_ack | kbd_ack | pic_ack),
 	.err_i(0),
 	.we_o(we),
 	.sel_o(sel),
 	.adr_o(adr),
 	.dat_i(cpu_dati),
 	.dat_o(cpu_dato)
+);
+
+FISA64_pic u_pic
+(
+	.rst_i(rst),		// reset
+	.clk_i(clk),		// system clock
+	.cyc_i(cyc),	// cycle valid
+	.stb_i(stb),	// strobe
+	.ack_o(pic_ack),	// transfer acknowledge
+	.we_i(we),		// write
+	.adr_i(adr),	// address
+	.dat_i(cpu_dato),
+	.dat_o(pic_dato),
+	.vol_o(),			// volatile register selected
+	.i1(),
+	.i2(),
+	.i3(),
+	.i4(),
+	.i5(),
+	.i6(),
+	.i7(),
+	.i8(),
+	.i9(),
+	.i10(),
+	.i11(),
+	.i12(),
+	.i13(),
+	.i14(),
+	.i15(),
+	.irqo(),	// normally connected to the processor irq
+	.nmii(),	// nmi input connected to nmi requester
+	.nmio(),	// normally connected to the nmi of cpu
+	.vecno(vecno)
 );
 
 bootrom u2 (
@@ -79,16 +121,56 @@ scratchmem u4 (
 	.dat_o(scm_dato)
 );
 
+Ps2Keyboard ukbd1
+(
+	// WISHBONE/SoC bus interface 
+	.rst_i(rst),
+	.clk_i(clk),	// system clock
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(kbd_ack),
+	.we_i(we),
+	.adr_i(adr),
+	.dat_i(cpu_dato[7:0]),
+	.dat_o(kbd_dato),
+	//-------------
+	.kclk(),
+	.kd(),
+	.irq_o()
+);
+
 rtfTextController3 utc3
 (
 	.rst_i(rst), .clk_i(clk),
-	.cyc_i(cyc), .stb_i(stb), .ack_o(tc_ack), .we_i(we), .adr_i(adr), .dat_i(cpu_dato), .dat_o(tc_dato),
+	.cyc_i(io3_cyc), .stb_i(io3_stb), .ack_o(tc_ack),
+	.we_i(io3_we), .adr_i(io3_adr), .dat_i(io3_dato), .dat_o(tc_dato),
 	.lp(), .curpos(),
 	.vclk(), .hsync(), .vsync(), .blank(), .border(), .rgbIn(), .rgbOut()
 );
 
+IOBridge uio3 
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.s_cyc_i(cyc),
+	.s_stb_i(stb),
+	.s_ack_o(iob3_ack),
+	.s_sel_i(sel[7:4]|sel[3:0]),
+	.s_we_i(we),
+	.s_adr_i(adr),
+	.s_dat_i(cpu_dato),
+	.s_dat_o(iob3_dato),
+	.m_cyc_o(io3_cyc),
+	.m_stb_o(io3_stb),
+	.m_ack_i(tc_ack),
+	.m_we_o(io3_we),
+	.m_sel_o(io3_sel),
+	.m_adr_o(io3_adr),
+	.m_dat_i(tc_dato),
+	.m_dat_o(io3_dato)
+);
 
-assign cpu_dati = rom_dato | {2{tc_dato}} | scm_dato;
+assign cpu_dati = rom_dato | {2{iob3_dato}} | scm_dato | {8{kbd_dato}} | {2{pic_dato}};
 
 always @(posedge clk)
 begin
@@ -101,6 +183,8 @@ begin
 	$display("    Ra=r%d, Rb=r%d Rc=r%d ir=%h", u1.Ra, u1.Rb, u1.Rc, u1.ir);
 	$display("EXECUTE");
 	$display("    a=%h b=%h c=%h imm=%h xir=%h", u1.a, u1.b, u1.c, u1.imm, u1.xir);
+	$display("MULTI-CYCLE");
+	$display("    ea=%h xb=%h",u1.ea,u1.xb);
 	$display("%cres2=%h wres2=%h", (u1.xRt2==1'b1)?"S":" ",u1.res2, u1.wres2);
 	if (u1.wRt != 0 || u1.wRt2 != 0) begin
 		$display("WRITEBACK");
