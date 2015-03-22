@@ -148,6 +148,7 @@
 `define EPC			8'd09
 `define VBR			8'd10
 `define MULH		8'd14
+`define USP			8'd15
 `define EA			8'd40
 `define TAGS		8'd41
 `define LOTGRP		8'd42
@@ -255,7 +256,7 @@ reg [AMSB:0] ibufadr;
 reg [31:0] ibuf;
 wire ibufhit = pc[AMSB:2]==ibufadr[AMSB:2];
 reg [63:0] regfile [31:0];
-reg [63:0] sp;
+reg [63:0] sp,usp;
 reg [4:0] regSP;
 reg [63:0] sp_inc;
 reg [31:0] ir,xir,mir,wir;
@@ -286,7 +287,7 @@ uRt:	rfoa <= ures;
 		else if (wRt2)
 			rfoa <= wres2;
 		else
-			rfoa <= sp;
+			rfoa <= km ? sp : usp;
 default:	rfoa <= regfile[Ra];
 endcase
 always @*
@@ -301,7 +302,7 @@ uRt:	rfob <= ures;
 		else if (wRt2)
 			rfob <= wres2;
 		else
-			rfob <= sp;
+			rfob <= km ? sp : usp;
 default:	rfob <= regfile[Rb];
 endcase
 always @*
@@ -316,7 +317,7 @@ uRt:	rfoc <= ures;
 		else if (wRt2)
 			rfoc <= wres2;
 		else
-			rfoc <= sp;
+			rfoc <= km ? sp : usp;
 default:	rfoc <= regfile[Rc];
 endcase
 reg [63:0] a,b,c,imm,xb;
@@ -641,6 +642,7 @@ case(x1opcode)
 			`IPC:		res <= ipc;
 			`VBR:		res <= vbr;
 			`MULH:		res <= p[127:64];
+			`USP:		res <= usp;
 			`EA:		res <= ea;
 			`TAGS:		res <= lottag;
 			`LOTGRP:	res <= {lotgrp[5],lotgrp[4],lotgrp[3],lotgrp[2],lotgrp[1],lotgrp[0]};
@@ -659,6 +661,7 @@ case(x1opcode)
 			case(xir[24:17])
 			`MYSTREG:	res <= mystreg;
 			`MULH:		res <= p[127:64];
+			`USP:		res <= usp;
 			default:	res <= 64'd0;
 			endcase
 		end
@@ -1011,6 +1014,7 @@ begin
 					`IPC:		ipc <= {a[AMSB:2],2'b00};
 					`VBR:		begin vbr <= a[AMSB:0]; vbr[12:0] <= 13'h000; end
 					`MULH:		p[127:64] <= a;
+					`USP:		usp <= a;
 					`EA:		ea <= a;
 					`LOTGRP:
 						begin
@@ -1034,11 +1038,15 @@ begin
 				else begin
 					case(xir[24:17])
 					`MYSTREG:	mystreg <= a;
+					`USP:		usp <= a;
 					default:	privilege_violation();
 					endcase
 				end
 				
-			`MFSPR:	if (!km && xir[24:17]!=`MULH && xir[24:17] != `MYSTREG)
+			`MFSPR:	if (!km &&
+							xir[24:17]!=`MULH &&
+							xir[24:17] != `MYSTREG &&
+							xir[24:17] != `USP)
 						privilege_violation();
 			`PCTRL:
 				if (km)
@@ -1113,11 +1121,19 @@ begin
 			tres <= wres;
 		end
 		regfile[wRt] <= wres;
-		if (wRt2)
-			sp <= wres2;
+		if (wRt2) begin
+			gie <= TRUE;
+			if (km)
+				sp <= wres2;
+			else
+				usp <= wres2;
+		end
 		if (wRt==regSP)	begin // write to SP globally enables interrupts
-			gie <= `TRUE;
-			sp <= wres;
+			gie <= TRUE;
+			if (km)
+				sp <= wres;
+			else
+				usp <= wres;
 		end
 	end
 	// If advanceTL (= TRUE)
