@@ -159,6 +159,19 @@ SPI_WRITE_NO_ERROR	EQU		0x00
 RW_READ_SD_BLOCK	EQU		0x02
 RW_WRITE_SD_BLOCK	EQU		0x03
 
+I2C_MASTER		EQU		0xFFDC0E00
+I2C_PRESCALE_LO	EQU		0x00
+I2C_PRESCALE_HI	EQU		0x01
+I2C_CONTROL		EQU		0x02
+I2C_TX			EQU		0x03
+I2C_RX			EQU		0x03
+I2C_CMD			EQU		0x04
+I2C_STAT		EQU		0x04
+
+SD_MASTER		EQU		0xFFDC0B00
+
+RANDOM_NUM      EQU     0xFFDC0C00
+
 NR_TCB		EQU		16
 TCB_BackLink    EQU     0
 TCB_Regs		EQU		8
@@ -241,6 +254,10 @@ KeybdWaitFlag	db		0
 KeybdLEDs		db		0
 startSector		dh		0
 disk_size		dh		0
+
+	align	16
+	org $A0
+RTCC_BUF		fill.b	96,0
 
 ; Just past the Bootrom
 	org		$00010000
@@ -356,25 +373,25 @@ SetupIntVectors:
 	nop
 	mfspr   r2,vbr
 	ldi		r1,#Tick1024Rout
-	sw		r1,450*16[r2]
+	sw		r1,450*8[r2]
 	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
-	sw		r1,451*16[r2]
+	sw		r1,451*8[r2]
 	ldi		r1,#KeybdIRQ
-	sw		r1,463*16[r2]
+	sw		r1,463*8[r2]
     ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
     sw      r1,495*8[r2]
     ldi     r1,#IBPT_ISR         ; set ISR vector for instruction breakpoint routine
     sw      r1,496*8[r2]
 	ldi		r1,#exf_rout
-	sw		r1,497*16[r2]
+	sw		r1,497*8[r2]
 	ldi		r1,#dwf_rout
-	sw		r1,498*16[r2]
+	sw		r1,498*8[r2]
 	ldi		r1,#drf_rout
-	sw		r1,499*16[r2]
+	sw		r1,499*8[r2]
 	ldi		r1,#priv_rout
-	sw		r1,501*16[r2]
+	sw		r1,501*8[r2]
 	ldi		r1,#berr_rout
-	sw		r1,508*16[r2]
+	sw		r1,508*8[r2]
 	ldi     r1,#$00AA
 	sc      r1,LEDS
     rtl
@@ -386,7 +403,7 @@ SetupIntVectors:
 InitPIC:
 	ldi		r1,#$0C			; timer interrupt(s) are edge sensitive
 	sh		r1,PIC_ES
-	ldi		r1,#$000F		; enable keyboard reset, timer interrupts
+	ldi		r1,#$000B		; enable keyboard reset, timer interrupts
 	sh		r1,PIC_IE
 	rtl
 
@@ -478,9 +495,7 @@ DisplayHalf:
 	ror		r1,r1,#16
 	bsr		DisplayCharHex
 	rol		r1,r1,#16
-	bsr		DisplayCharHex
-	pop     lr
-    rtl
+    pop     lr
 
 ;------------------------------------------------------------------------------
 ; Display the char in r1
@@ -491,9 +506,7 @@ DisplayCharHex:
 	ror		r1,r1,#8
 	bsr		DisplayByte
 	rol		r1,r1,#8
-	bsr		DisplayByte
     pop     lr
-    rtl
 
 ;------------------------------------------------------------------------------
 ; Display the byte in r1
@@ -504,9 +517,7 @@ DisplayByte:
 	ror		r1,r1,#4
 	bsr		DisplayNybble
 	rol		r1,r1,#4
-	bsr		DisplayNybble
-    pop     lr
-    rtl
+	pop     lr
  
 ;------------------------------------------------------------------------------
 ; Display nybble in r1
@@ -517,16 +528,15 @@ DisplayNybble:
 	push	r1
 	push    r2
 	and		r1,r1,#$0F
-	add		r1,r1,#'0'
+	addui	r1,r1,#'0'
 	cmpu	r2,r1,#'9'+1
 	blt		r2,.0001
-	add		r1,r1,#7
+	addui	r1,r1,#7
 .0001:
 	bsr		OutChar
 	pop     r2
 	pop		r1
-	pop     lr
-	rtl
+	rts
 
 ;------------------------------------------------------------------------------
 ; Display a string pointer to string in r1.
@@ -586,13 +596,16 @@ KeybdIRQ:
 	rti
 
 ;------------------------------------------------------------------------------
+; 60 Hz interrupt routine.
 ;------------------------------------------------------------------------------
 
 TickRout:
     push    r1
-	lh	    r1,TEXTSCR+220+$FFD00000
-	add		r1,r1,#1
-	sh	    r1,TEXTSCR+220+$FFD00000
+	ldi		r1,#3				; reset the edge sense circuit
+	sh		r1,PIC_RSTE
+	lh	    r1,TEXTSCR+332+$FFD00000
+	addui	r1,r1,#1
+	sh	    r1,TEXTSCR+332+$FFD00000
 	pop     r1
 	rti
 
@@ -954,6 +967,8 @@ mon1:
 	beq     r2,doCS
 	cmp		r2,r1,#'M'
 	beq		r2,doDumpmem
+	cmp		r2,r1,#'F'
+	beq		r2,doFillmem
 	cmp		r2,r1,#'m'
 	beq		r2,MRTest
 	cmp		r2,r1,#'S'
@@ -962,6 +977,10 @@ mon1:
 	beq		r2,doRand
 	cmp		r2,r1,#'e'
 	beq		r2,eval
+	cmp		r2,r1,#'J'
+	beq		r2,doJump
+	cmp		r2,r1,#'D'
+	beq		r2,doDate
 	bra     mon1
 
 .doHelp:
@@ -1025,12 +1044,60 @@ doDumpmem:
 	bsr		CursorOff
 	bsr		GetRange
 	bsr		CRLF
+;	bra     mon1
 .001:
 	bsr		CheckKeys
 	bsr		DisplayMemBytes
 	cmpu	r4,r2,r1
 	ble		r4,.001
 	bra     mon1
+
+;------------------------------------------------------------------------------
+; Fill memory
+;
+; FB FFD80000 FFD8FFFF r	; fill sprite memory with random bytes
+;------------------------------------------------------------------------------
+
+doFillmem:
+	bsr		CursorOff
+	bsr		MonGetch		; skip over 'B' of "FB"
+	cmp		r2,r1,#'B'
+	beq		r2,.0004
+	subui	r3,r3,#4		; backup text pointer
+.0004:
+	bsr		GetRange
+	push	r1
+    push    r2
+	bsr		ignBlanks
+	bsr		MonGetch		; check for random fill
+	cmp		r2,r1,#'r'
+	beq		r2,.0001
+	subui   r3,r3,#4
+	bsr		GetHexNumber
+	mov		r3,r1
+	pop		r2
+    pop     r1
+.0002:
+	bsr		CheckKeys
+	sb		r3,[r2]
+	addui	r2,r2,#1
+	cmpu	r5,r2,r1
+	blt		r5,.0002
+	bra		mon1
+.0001:
+	pop		r2
+    pop     r1
+.0003:
+	bsr		CheckKeys
+	lw	    r3,RANDOM_NUM
+	sb		r3,[r2]
+	addui	r2,r2,#1
+	cmpu	r5,r2,r1
+	blt		r5,.0003
+	bra		mon1
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 doSDBoot:
 ;	sub		r3,r3,#4
@@ -1045,6 +1112,64 @@ doSDBoot:
 
 OutChar:
     jmp     (OutputVec)
+
+;------------------------------------------------------------------------------
+; Jump to subroutine
+;
+; J 10000     ; restart system
+;------------------------------------------------------------------------------
+
+doJump:
+	bsr		MonGetch		; skip over 'S'
+	bsr		ignBlanks
+	bsr		GetHexNumber
+	jsr		[r1]
+	bra		mon1
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+doDate:
+	bsr		MonGetch		; skip over 'T'
+	cmp		r5,r1,#'A'		; look for DAY
+	beq		r5,doDay
+	bsr		ignBlanks
+	bsr		MonGetch
+	cmp		r5,r1,#'?'
+	beq		r5,.0001
+	subui	r3,r3,#4
+	bsr		GetHexNumber
+	sb		r1,RTCC_BUF+5	; update month
+	bsr		GetHexNumber
+	sb		r1,RTCC_BUF+4	; update day
+	bsr		GetHexNumber
+	sb		r1,RTCC_BUF+6	; update year
+	bsr		RTCCWritebuf
+	bra		mon1
+.0001:
+	bsr		RTCCReadbuf
+	bsr		CRLF
+	lbu		r1,RTCC_BUF+5
+	bsr		DisplayByte
+	ldi		r1,#'/'
+	bsr		OutChar
+	lbu		r1,RTCC_BUF+4
+	bsr		DisplayByte
+	ldi		r1,#'/'
+	bsr		OutChar
+	lbu		r1,RTCC_BUF+6
+	bsr		DisplayByte
+	bsr		CRLF
+	bra		mon1
+
+doDay:
+	bsr		ignBlanks
+	bsr		GetHexNumber
+	mov		r3,r1			; value to write
+	ldi		r1,#$6F			; device $6F
+	ldi		r2,#$03			; register 3
+	bsr		I2C_WRITE
+	bra		mon1
 
 ;------------------------------------------------------------------------------
 ; Display memory pointed to by r2.
@@ -1111,7 +1236,9 @@ DisplayMemBytes:
 CheckKeys:
     push    lr
 	bsr	    CTRLCCheck
-	bra     CheckScrollLock
+	bsr     CheckScrollLock
+	pop     lr
+	rtl
 
 ;------------------------------------------------------------------------------
 ; CTRLCCheck
@@ -1141,6 +1268,7 @@ CTRLCCheck:
 ;------------------------------------------------------------------------------
 
 CheckScrollLock:
+    push    lr
 	push	r1
 	push    r2
 .0002:
@@ -1229,7 +1357,10 @@ msgErr:
 msgHelp:
 	db		"? = Display Help",CR,LF
 	db		"CLS = clear screen",CR,LF
+	db		"DT = set/read date",CR,LF
+	db		"FB = fill memory",CR,LF
 	db		"MB = dump memory",CR,LF
+	db		"JS = jump to code",CR,LF
 	db		"S = boot from SD card",CR,LF
 	db		0
 
@@ -1241,6 +1372,14 @@ doCLS:
 	bsr		HomeCursor
 	bra     mon1
 
+;------------------------------------------------------------------------------
+; Get a random number from peripheral device.
+;------------------------------------------------------------------------------
+
+GetRandomNumber:
+    lw      r1,$FFDC0C00
+    rtl
+                
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; Keyboard processing routines follow.
@@ -1821,6 +1960,314 @@ keybdExtendedCodes:
 	.byte	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
 
 
+; ============================================================================
+; I2C interface to RTCC
+; ============================================================================
+
+I2C_INIT:
+    push    r1
+    push    r2
+	ldi		r2,#I2C_MASTER
+	sb		r0,I2C_CONTROL[r2]		; disable the contoller
+	sb		r0,I2C_PRESCALE_HI[r2]	; set clock divisor for 100kHz
+	ldi		r1,#99					; 24=400kHz, 99=100KHz
+	sb		r1,I2C_PRESCALE_LO[r2]
+	ldi		r1,#$80					; controller enable bit
+	sb		r1,I2C_CONTROL[r2]
+	pop		r2
+    pop     r1
+	rtl
+
+;------------------------------------------------------------------------------
+; I2C Read
+;
+; Parameters:
+; 	r1 = device ($6F for RTCC)
+; 	r2 = register to read
+; Returns
+; 	r1 = register value $00 to $FF if successful, else r1 = -1 on error
+;------------------------------------------------------------------------------
+;
+I2C_READ:
+    push    lr
+	push	r2
+    push    r3
+    push    r4
+	asl		r1,r1,#1				; clear rw bit for write
+;	or		r1,r1,#1				; set rw bit for a read
+	mov		r4,r1					; save device address in r4
+	mov		r3,r2
+	; transmit device #
+	ldi		r2,#I2C_MASTER
+	sb		r1,I2C_TX[r2]
+	ldi		r1,#$90					; STA($80) and WR($10) bits set
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC				; wait for transmit to complete
+	; transmit register #
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	bne	    r1,I2C_ERR
+	sb		r3,I2C_TX[r2]			; select register r3
+	ldi		r1,#$10					; set WR bit
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+
+	; transmit device #
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	bne	    r1,I2C_ERR
+	or		r4,r4,#1				; set read flag
+	sb		r4,I2C_TX[r2]
+	ldi		r1,#$90					; STA($80) and WR($10) bits set
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC				; wait for transmit to complete
+
+	; receive data byte
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	bne	    r1,I2C_ERR
+	ldi		r1,#$68					; STO($40), RD($20), and NACK($08)
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+	lbu		r1,I2C_RX[r2]			; $00 to $FF = byte read, -1=err
+	pop		r4
+    pop     r3
+    pop     r2
+	rts
+
+I2C_ERR:
+	ldi		r1,#-1
+	mtspr	cr0,r5					; restore TMR
+	pop		r4/r3/r2/r5
+	rts
+
+;------------------------------------------------------------------------------
+; I2C Write
+;
+; Parameters:
+; 	r1 = device ($6F)
+; 	r2 = register to write
+; 	r3 = value for register
+; Returns
+; 	r1 = 0 if successful, else r1 = -1 on error
+;------------------------------------------------------------------------------
+;
+I2C_WRITE:
+	push	lr
+    push    r2
+    push    r3
+    push    r4
+	asl		r1,r1,#1				; clear rw bit for write
+	mov		r4,r3					; save value r4
+	mov		r3,r2
+	; transmit device #
+	ldi		r2,#I2C_MASTER			; r2 = I/O base address of controller
+	sb		r1,I2C_TX[r2]
+	ldi		r1,#$90					; STA($80) and WR($10) bits set
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC				; wait for transmit to complete
+	; transmit register #
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	bne  	r1,I2C_ERR
+	sb		r3,I2C_TX[r2]			; select register r3
+	ldi		r1,#$10					; set WR bit
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+	; transmit value
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#$80				; test RxACK bit
+	bne  	r1,I2C_ERR
+	sb		r4,I2C_TX[r2]			; select value in r4
+	ldi		r1,#$50					; set STO, WR bit
+	sb		r1,I2C_CMD[r2]
+	bsr		I2C_WAIT_TC
+	ldi		r1,#0					; everything okay
+	pop		r4
+    pop     r3
+    pop     r2
+	rts
+
+; Wait for I2C controller transmit complete
+
+I2C_WAIT_TC:
+.0001:
+	lb		r1,I2C_STAT[r2]
+	and		r1,r1,#2
+	bne 	r1,.0001
+	rtl
+
+; Read the entire contents of the RTCC including 64 SRAM bytes
+
+RTCCReadbuf:
+    push    lr
+	bsr		I2C_INIT
+	ldi		r2,#$00
+.0001:
+	ldi		r1,#$6F
+	bsr		I2C_READ
+	sb		r1,RTCC_BUF[r2]
+	add		r2,r2,#1
+	cmpu	r1,r2,#$60
+	blt		r1,.0001
+	rts
+
+; Write the entire contents of the RTCC including 64 SRAM bytes
+
+RTCCWritebuf:
+    push    lr
+	bsr		I2C_INIT
+	ldi		r2,#$00
+.0001:
+	ldi		r1,#$6F
+	lbu		r3,RTCC_BUF[r2]
+	bsr		I2C_WRITE
+	add		r2,r2,#1
+	cmpu	r1,r2,#$60
+	blt		r1,.0001
+	rts
+
+RTCCOscOn:
+    push    lr
+	bsr		I2C_INIT
+	ldi		r1,#$6F
+	ldi		r2,#$00			; register zero
+	bsr		I2C_READ		; read register zero
+	or		r3,r1,#$80		; set start osc bit
+	ldi		r1,#$6F
+	bsr		I2C_WRITE
+	rts
+
+; ============================================================================
+; SD/MMC Card interface
+; ============================================================================
+SD_INIT:
+    push    lr
+	ldi		r3,#SD_MASTER
+	ldi		r2,#25000
+	sc		r2,0x2c[r3]		; timeout register
+	; Software reset should be held active for several cycles to allow
+	; reset to be detected on the sd_clk domain.
+	ldi		r2,#1
+	sb		r2,0x28[r3]		; software reset reg
+	ldi		r2,#2
+	sb		r2,0x4c[r3]		; prog /6 for clock divider
+	ldi		r1,#100			; software reset delay
+	bsr     MicroDelay
+	sb		r0,0x28[r3]		; clear software reset
+	sc		r0,0x04[r3]		; command 0
+	sh		r0,0x00[r3]		; arg 0
+	bsr		SD_WAIT_RESP
+	lh		r1,0x0C[r3]		; read response register
+	bsr		DisplayHalf
+	rts
+
+SD_CMD8:
+    push    lr
+	ldi		r3,#SD_MASTER
+	ldi		r2,#$81A
+	sc		r2,0x04[r3]		; set command register
+	ldi		r2,#$1AA
+	sh		r2,0x00[r3]		; set command argument x1AA
+	bsr		SD_WAIT_RESP
+	sb		r1,SD_2_0
+	lh		r1,0x0C[r3]		; read response register
+	bsr		DisplayHalf
+	; send command zero
+	sc		r0,0x04[r3]
+	sh		r0,0x00[r3]
+	bsr		SD_WAIT_RESP
+	lbu		r1,SD_2_0
+	beq		r1,.0001
+	ldi		r1,#'2'
+	bsr		OutChar
+	ldi		r1,#'.'
+	bsr		OutChar
+	ldi		r1,#'0'
+	bsr		OutChar
+	bsr		CRLF
+	rts
+.0001:
+	sc		r0,0x04[r3]		; send CMD0
+	sh		r0,0x00[r3]
+.0002:
+	lcu		r1,0x08[r3]
+	and		r1,r1,#1
+	bne  	r1,.0002
+	mov		r4,r0			; ret_reg = r4 = 0
+.0004:
+	mov		r5,r4
+	and		r4,r4,#$80000000
+	bne  	r4,.0003
+	ldi		r1,#$3702		; CMD55|RSP48
+	sc		r1,0x04[r3]
+	sh		r0,0x00[r3]
+	bsr		SD_WAIT_RESP
+	bne  	r1,.respOk
+	ldi		r1,#$2902		; ACMD41|RSP48
+	sc		r1,0x04[r3]
+	sh		r0,0x00[r3]
+	bsr		SD_WAIT_RESP
+	bne  	r1,.respOk
+	lh		r4,0x0c[r3]		; ret_reg = RESP1
+	mov		r1,r4
+	bsr		DisplayHalf
+	bsr		CRLF
+	bra		.0004
+.0003:
+	and		r1,r5,#$FFFFFF	; voltage mask
+	bsr		DisplayHalf
+	bsr		CRLF
+	; GetCID
+	ldi		r1,#$201		; CMD2 + RSP146
+	sc		r1,0x04[r3]
+	sh		r0,0x00[r3]
+	bsr		SD_WAIT_RESP
+	; GetRCA
+	ldi		r1,#$31A		; CMD3 + CICE + CRCE + RSP48
+	sc		r1,0x04[r3]
+	sh		r0,0x00[r3]
+	bsr		SD_WAIT_RESP
+	lh		r4,0x0c[r3]			; r4 = RESP1
+	and		r1,r4,#$FFFF0000	; r4 & RCA_MASK
+	bsr		DisplayHalf
+	bsr		CRLF
+.respOk:
+	ldi		r1,#'O'
+	bsr		OutChar
+	ldi		r1,#'k'
+	bsr		OutChar
+	bsr		CRLF
+	rts
+
+SD_WAIT_RESP:
+	push	r2
+    push    r3
+	ldi		r2,#SD_MASTER
+.0001:
+	lc		r3,0x34[r2]		; read error interrupt status reg
+	lc		r1,0x30[r2]		; read normal interrupt status reg
+	and		r3,r3,#1		; get command timeout indicator
+	bne  	r3,.0002
+	and		r1,r1,#1		; wait for command complete bit to set
+	beq		r1,.0001
+	ldi		r1,#1
+	pop		r3
+    pop     r2
+	rtl
+.0002:
+	ldi		r1,#'T'
+	bsr		OutChar
+	ldi		r1,#'O'
+	bsr		OutChar
+	bsr		CRLF
+	ldi		r1,#0
+	pop		r3
+    pop     r2
+	rtl
+
+; ============================================================================
+; ============================================================================
 
     ldi     r1,#brkpt1           ; set breakpoint address
     mtspr   dbad0,r1
@@ -1857,20 +2304,23 @@ brkpt1:
     bne     r3,.0001
     rtl
 
-; Delay for a short time for at least the specified number of clock cycles
+;------------------------------------------------------------------------------
+; MicroDelay
+;     Delay for a short time for at least the specified number of clock cycles
+;
+; Parameters:
+;     r1 = required delay in clock ticks
+;------------------------------------------------------------------------------
 ;
 MicroDelay:
     push    r2
     push    r3
-    push    $10000              ; test push memory
-    push    $10008
     mfspr   r3,tick             ; get starting tick
 .0001:
     mfspr   r2,tick
     subu    r2,r2,r3
     cmp     r2,r2,r1
     blt     r2,.0001
-    addui   sp,sp,#16
     pop     r3
     pop     r2
     rtl
