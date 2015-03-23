@@ -1,0 +1,57 @@
+# Project: a64
+# Makefile created by Dev-C++ 5.1.0.0
+
+CPP      = g++.exe
+CC       = gcc.exe
+WINDRES  = windres.exe
+RES      = a64_private.res
+OBJ      = a64/source/main.o a64/source/SEARCHEN.o a64/source/expr.o a64/source/symbol.o a64/source/token.o a64/source/Table888.o a64/source/friscv.o a64/source/Table888mmu.o a64/source/FISA64.o $(RES)
+LINKOBJ  = a64/source/main.o a64/source/SEARCHEN.o a64/source/expr.o a64/source/symbol.o a64/source/token.o a64/source/Table888.o a64/source/friscv.o a64/source/Table888mmu.o a64/source/FISA64.o $(RES)
+LIBS     = -L"" -L"C:/Program Files (x86)/Dev-Cpp/MinGW32/lib"  
+INCS     = -I""  -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include" 
+CXXINCS  = -I""  -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include" 
+BIN      = FatFs/ff10a/src/a64.exe
+CXXFLAGS = $(CXXINCS)  
+CFLAGS   = $(INCS)  
+RM       = rm -f
+
+.PHONY: all all-before all-after clean clean-custom
+
+all: all-before FatFs/ff10a/src/a64.exe all-after
+
+
+clean: clean-custom
+	${RM} $(OBJ) $(BIN)
+
+$(BIN): $(OBJ)
+	$(CC) $(LINKOBJ) -o "FatFs\ff10a\src\a64.exe" $(LIBS)
+
+a64/source/main.o: a64/source/main.c
+	$(CPP) -c a64/source/main.c -o a64/source/main.o $(CXXFLAGS)
+
+a64/source/SEARCHEN.o: a64/source/SEARCHEN.C
+	$(CC) -c a64/source/SEARCHEN.C -o a64/source/SEARCHEN.o $(CFLAGS)
+
+a64/source/expr.o: a64/source/expr.c
+	$(CPP) -c a64/source/expr.c -o a64/source/expr.o $(CXXFLAGS)
+
+a64/source/symbol.o: a64/source/symbol.c
+	$(CPP) -c a64/source/symbol.c -o a64/source/symbol.o $(CXXFLAGS)
+
+a64/source/token.o: a64/source/token.c
+	$(CPP) -c a64/source/token.c -o a64/source/token.o $(CXXFLAGS)
+
+a64/source/Table888.o: a64/source/Table888.c
+	$(CPP) -c a64/source/Table888.c -o a64/source/Table888.o $(CXXFLAGS)
+
+a64/source/friscv.o: a64/source/friscv.c
+	$(CPP) -c a64/source/friscv.c -o a64/source/friscv.o $(CXXFLAGS)
+
+a64/source/Table888mmu.o: a64/source/Table888mmu.c
+	$(CPP) -c a64/source/Table888mmu.c -o a64/source/Table888mmu.o $(CXXFLAGS)
+
+a64/source/FISA64.o: a64/source/FISA64.c
+	$(CPP) -c a64/source/FISA64.c -o a64/source/FISA64.o $(CXXFLAGS)
+
+a64_private.res: a64_private.rc 
+	$(WINDRES) -i a64_private.rc --input-format=rc -o a64_private.res -O coff 
