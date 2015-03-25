@@ -921,6 +921,7 @@ void processLine(char *line)
     static char fnm[300];
     char *fname;
     int nn;
+    int lb;
 
     p = line;
     while(isspace(*p)) p++;
@@ -945,7 +946,10 @@ void processLine(char *line)
         } while(nn < sizeof(fnm)/sizeof(char));
         fnm[nn] = '\0';
         fname = strdup(fnm);
+        lb = lineno;
+        lineno = 1;
         processFile(fname,1);
+        lineno = lb;
         free(fname);
         return;
     }

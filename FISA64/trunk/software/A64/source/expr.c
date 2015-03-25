@@ -67,6 +67,7 @@ int64_t primary()
             prevToken();
          break;
     case '(':
+         NextToken();
          val = expr();
          expect(')');
          break;

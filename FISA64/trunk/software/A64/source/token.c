@@ -623,7 +623,7 @@ int NextToken()
             }
             break;
 
-        // cmp cmpu code cli com
+        // cas cmp cmpu code cli com
         case 'c': case 'C':
              if ((inptr[1]=='m' || inptr[1]=='M') &&
                  (inptr[2]=='p' || inptr[2]=='P') &&
@@ -661,6 +661,20 @@ int NextToken()
                  (inptr[2]==':')) {
                  inptr+=3;
                  return token = tk_cs;
+             }
+             if ((inptr[1]=='p' || inptr[1]=='P') &&
+                 (inptr[2]=='u' || inptr[2]=='U') &&
+                 (inptr[3]=='i' || inptr[3]=='I') &&
+                 (inptr[4]=='d' || inptr[4]=='D') &&
+                 isspace(inptr[5])) {
+                 inptr += 5;
+                 return token = tk_cpuid;
+             }
+             if ((inptr[1]=='a' || inptr[1]=='A') &&
+                 (inptr[2]=='s' || inptr[2]=='S') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_cas;
              }
              break;
 
@@ -973,7 +987,7 @@ int NextToken()
              }
              break;
 
-        // lb lbu lc lcu lh lhu lw ldi lea lsr lsri
+        // lb lbu lc lcu lh lhu lw ldi lea lsr lsri lwar
         case 'l':
         case 'L':
             if ((inptr[1]=='b' || inptr[1]=='B') && isspace(inptr[2])) {
@@ -1024,9 +1038,13 @@ int NextToken()
                 inptr += 3;
                 return token = tk_lsr;
             }
+            if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='a' || inptr[2]=='A') && (inptr[3]=='r' || inptr[3]=='R') && isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_lwar;
+            }
             break;
 
-        // mod modu mov mul muli mulu mului mtspr mfspr mtfp mffp
+        // mod modu mov mul muli mulu mului mtspr mfspr mtfp mffp message
         case 'm': case 'M':
             if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
                 inptr += 3;
@@ -1100,6 +1118,16 @@ int NextToken()
                 isspace(inptr[4])) {
                 inptr += 4;
                 return token = tk_mffp;
+            }
+            if ((inptr[1]=='e' || inptr[1]=='E') &&
+                (inptr[2]=='s' || inptr[2]=='S') &&
+                (inptr[3]=='s' || inptr[3]=='S') &&
+                (inptr[4]=='a' || inptr[4]=='A') &&
+                (inptr[5]=='g' || inptr[5]=='G') &&
+                (inptr[6]=='e' || inptr[6]=='E') &&
+                isspace(inptr[7])) {
+                inptr += 7;
+                return token = tk_message;
             }
             break;
 
@@ -1230,6 +1258,7 @@ int NextToken()
         
         // sb sc sh sw sxb sxc sxh sub subi subu subui shl shli shr shru shrui sei smr ss:
         // seq seqi sne snei sge sgei sgt sgti slt slti sle slei sgeu sgeui sgtu sgtui sltu sltui sleu sleui
+        // swcr
         case 's': case 'S':
             if ((inptr[1]=='w' || inptr[1]=='W') && isspace(inptr[2])) {
                 inptr += 2;
@@ -1441,6 +1470,16 @@ int NextToken()
                 inptr += 2;
                 return token = tk_sw;
             }  
+            if ((inptr[1]=='y' || inptr[1]=='Y') && 
+                (inptr[2]=='s' || inptr[2]=='S') && 
+                isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_sys;
+            }
+            if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='c' || inptr[2]=='C') && (inptr[3]=='r' || inptr[3]=='R') && isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_swcr;
+            }
             break;
 
         // to

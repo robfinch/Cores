@@ -137,6 +137,11 @@ static int getRegisterX()
             NextToken();
             return 25;
         }
+        if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 24;
+        }
         break;
     case 'p': case 'P':
         if ((inptr[1]=='c' || inptr[1]=='C') && !isIdentChar(inptr[2])) {
@@ -179,8 +184,26 @@ static int FISA64_getSprRegister()
     switch(*inptr) {
 
 
-    // clk cr0 cr3
+    // bear
+    case 'b': case 'B':
+         if ((inptr[1]=='e' || inptr[1]=='E') &&
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='r' || inptr[3]=='R') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 11;
+         }
+         break;
+    // cas clk cr0 cr3
     case 'c': case 'C':
+         if ((inptr[1]=='a' || inptr[1]=='A') &&
+             (inptr[2]=='s' || inptr[2]=='S') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 44;
+         }
          if ((inptr[1]=='l' || inptr[1]=='L') &&
              (inptr[2]=='k' || inptr[2]=='K') &&
              !isIdentChar(inptr[3])) {
@@ -295,8 +318,15 @@ static int FISA64_getSprRegister()
          }
          break;
 
-    // isp ivno
+    // ipc isp ivno
     case 'i': case 'I':
+         if ((inptr[1]=='p' || inptr[1]=='P') &&
+             (inptr[2]=='c' || inptr[2]=='C') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 8;
+         }
          if ((inptr[1]=='s' || inptr[1]=='S') &&
              (inptr[2]=='p' || inptr[2]=='P') &&
              !isIdentChar(inptr[3])) {
@@ -381,7 +411,7 @@ static int FISA64_getSprRegister()
          }
          break;
 
-    // tag tick
+    // tag tick 
     case 't': case 'T':
          if ((inptr[1]=='i' || inptr[1]=='I') &&
              (inptr[2]=='c' || inptr[2]=='C') &&
@@ -481,6 +511,26 @@ static int emitImm15(int64_t v, int force)
 }
 
 // ---------------------------------------------------------------------------
+// sys 4
+// ---------------------------------------------------------------------------
+
+static void process_brk(int oc)
+{
+    int Ra;
+    int Rt;
+    int val;
+
+    NextToken();
+    val = expr();
+    emit_insn(
+        (oc << 30) |
+        ((val & 0x1ff) << 17) |
+        (30 << 7) |
+        0x38
+    );
+}
+
+// ---------------------------------------------------------------------------
 // COM is an alternate mnemonic for EOR Rt,Ra,#-1
 // com r3,r3
 // ---------------------------------------------------------------------------
@@ -500,6 +550,32 @@ static void process_com()
         (Ra << 7) |
         0x0e           // EOR
     );
+}
+
+// ----------------------------------------------------------------------------
+// cpuid r1,r2,#0
+// ----------------------------------------------------------------------------
+
+static void process_cpuid(int oc)
+{
+     int Ra;
+     int Rt;
+     int val;
+
+     Rt = getRegisterX();
+     need(',');
+     Ra = getRegisterX();
+     need(',');
+     NextToken();
+     val = expr();
+     emit_insn(
+         (oc << 25) | 
+         ((val & 15) << 17) |
+         (Rt << 12) |
+         (Ra << 7) |
+         0x02
+     );
+     prevToken();
 }
 
 // ---------------------------------------------------------------------------
@@ -889,7 +965,28 @@ static void getIndexScale(int *sc)
       }
 }
 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+static void process_message()
+{
+    char buf[200];
+    int nn;
 
+    while(*inptr != '"' && *inptr != '\n') inptr++;
+    if (*inptr=='\n') { NextToken(); return; }
+    nn = 0;
+    inptr++;
+    while (*inptr != '"' && *inptr != '\n' && nn < 197) {
+        buf[nn] = *inptr;
+        inptr++;
+        nn++;
+    }
+    buf[nn] = '\0';
+    strcat(buf, "\r\n");
+    printf(buf);
+    ScanToEOL();
+}
+       
 // ---------------------------------------------------------------------------
 // expr
 // expr[Reg]
@@ -1069,6 +1166,7 @@ static void process_ldi(int oc)
 // ----------------------------------------------------------------------------
 // lw r1,disp[r2]
 // lw r1,[r2+r3]
+// cas r2,disp[r1]
 // ----------------------------------------------------------------------------
 
 static void process_load(int oc)
@@ -1100,7 +1198,7 @@ static void process_load(int oc)
        if (disp > 255LL)
            printf("load offset too large.\r\n");
        fixup = 11;
-       if (oc==0x87) {  //LWS
+       if (oc==0x87 || oc==0x6c) {  //LWS CAS
           printf("Address mode not supported.\r\n");
           return;
        }
@@ -1414,7 +1512,10 @@ static void process_mtspr(int oc)
     int Ra;
     
     spr = FISA64_getSprRegister();
-    printf("spr=%d\r\n",spr);
+    if (spr==-1) {
+        printf("Line %d: An SPR is needed.\r\n", lineno);
+        return;
+    }  
     need(',');
     Ra = getRegisterX();
     emit_insn(
@@ -1458,6 +1559,10 @@ static void process_mfspr(int oc)
     Rt = getRegisterX();
     need(',');
     spr = FISA64_getSprRegister();
+    if (spr==-1) {
+        printf("An SPR is needed.\r\n");
+        return;
+    }  
     emit_insn(
         (oc << 25) |
         (spr << 17) |
@@ -1596,6 +1701,7 @@ static void ProcessEOL(int opt)
        stptr = inptr;
        lineno++;
     }
+    printf("line:%d\r",lineno);
     binstart = sections[segment].index;
     ca = sections[segment].address;
 }
@@ -1673,11 +1779,13 @@ void FISA64_processMaster()
             }
             segment = bssseg;
             break;
+        case tk_cas: process_load(0x6C); break;
         case tk_cli: process_pctrl(0); break;
         case tk_cmp: process_rrop(0x06); break;
         case tk_cmpu: process_rrop(0x16); break;
         case tk_code: process_code(); break;
         case tk_com: process_com(); break;
+        case tk_cpuid: process_cpuid(0x36); break;
         case tk_data:
             if (first_data) {
                 while(sections[segment].address & 4095)
@@ -1741,6 +1849,8 @@ void FISA64_processMaster()
         case tk_lsr: process_rrop(0x31); break;
         case tk_lsri: process_shifti(0x39); break;
         case tk_lw:  process_load(0x46); break;
+        case tk_lwar:  process_load(0x5C); break;
+        case tk_message: process_message(); break;
         case tk_mffp: process_mffp(0x4B); break;
         case tk_mfspr: process_mfspr(0x1F); break;
         case tk_mod: process_rrop(0x09); break;
@@ -1797,7 +1907,9 @@ void FISA64_processMaster()
         case tk_sxb: process_rop(0x10); break;
         case tk_sxc: process_rop(0x11); break;
         case tk_sxh: process_rop(0x12); break;
+        case tk_sys: process_brk(0); break;
         case tk_sw:  process_store(0x63); break;
+        case tk_swcr:  process_store(0x6E); break;
         case tk_xor: process_rrop(0x0E); break;
         case tk_xori: process_riop(0x0E); break;
         case tk_id:  process_label(); break;
