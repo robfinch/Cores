@@ -103,9 +103,25 @@ E_NoMoreAlarmBlks	= 0x44
 E_NoMoreTCBs	=	0x45
 E_NoMem		= 12
 
-TS_READY	EQU		1
-TS_RUNNING	EQU		2
-TS_PREEMPT	EQU		4
+CPU1_IRQ_STACK  EQU     $20800
+IRQ_STACK   EQU     $8000
+DBG_STACK   EQU     $7000
+BIOS_STACK  EQU     $6800
+MON_STACK   EQU     $6000
+
+; task status
+TS_NONE     EQU     0
+TS_TIMEOUT	EQU     1
+TS_WAITMSG	EQU     2
+TS_PREEMPT	EQU     4
+TS_RUNNING	EQU     8
+TS_READY	EQU     16
+TS_SLEEP	EQU     32
+
+TS_TIMEOUT_BIT	EQU 0
+TS_WAITMSG_BIT	EQU 1
+TS_RUNNING_BIT	EQU 3
+TS_READY_BIT	EQU 4
 
 LEDS	equ		$FFDC0600
 
@@ -188,8 +204,63 @@ UART_CM2        EQU     10
 UART_CM3        EQU     11
 UART_SPR        EQU     15
 
+TCB_BASE       EQU     $0C00000
+TCB_TOP        EQU     $1C00000
+
+; BIOS request structure
+BIOS_op        EQU     $00
+BIOS_arg1      EQU     $08
+BIOS_arg2      EQU     $10
+BIOS_arg3      EQU     $18
+BIOS_arg4      EQU     $20
+BIOS_arg5      EQU     $28
+BIOS_resp      EQU     $30
+BIOS_done      EQU     $38
+
 NR_TCB		EQU		16
 TCB_BackLink    EQU     0
+TCB_r1          EQU     8
+TCB_r2          EQU     $10
+TCB_r3          EQU     $18
+TCB_r4          EQU     $20
+TCB_r5          EQU     $28
+TCB_r6          EQU     $30
+TCB_r7          EQU     $38
+TCB_r8          EQU     $40
+TCB_r9          EQU     $48
+TCB_r10         EQU     $50
+TCB_r11         EQU     $58
+TCB_r12         EQU     $60
+TCB_r13         EQU     $68
+TCB_r14         EQU     $70
+TCB_r15         EQU     $78
+TCB_r16         EQU     $80
+TCB_r17         EQU     $88
+TCB_r18         EQU     $90
+TCB_r19         EQU     $98
+TCB_r20         EQU     $A0
+TCB_r21         EQU     $A8
+TCB_r22         EQU     $B0
+TCB_r23         EQU     $B8
+TCB_r24         EQU     $C0
+TCB_r25         EQU     $C8
+TCB_r26         EQU     $D0
+TCB_r27         EQU     $D8
+TCB_r28         EQU     $E0
+TCB_r29         EQU     $E8
+TCB_r30         EQU     $F0
+TCB_r31         EQU     $F8
+TCB_IPC         EQU     $100
+TCB_NextRdy     EQU     $200
+TCB_PrevRdy     EQU     $208
+TCB_Status      EQU     $210
+TCB_Priority    EQU     $212
+TCB_hJCB        EQU     $214
+TCB_NextFree    EQU     $218
+TCB_PrevFree    EQU     $220
+TCB_NextTo      EQU     $228
+TCB_PrevTo      EQU     $230
+
 TCB_Regs		EQU		8
 TCB_SP0Save		EQU		0x800
 TCB_SS0Save     EQU     0x808
@@ -243,10 +314,9 @@ TCB_PCSave      EQU     0x980
 TCB_SPSave		EQU		0x988
 TCB_Next		EQU		0xA00
 TCB_Prev		EQU		0xA08
-TCB_Status		EQU		0xA18
-TCB_Priority	EQU		0xA20
-TCB_hJob		EQU		0xA28
-TCB_Size	EQU		8192
+
+
+TCB_Size	EQU		1024
 
 	bss
 	org		$8
@@ -283,10 +353,21 @@ Uart_fon        dc      0
 Uart_txrts      db      0
 Uart_txdtr      db      0
 Uart_txxon      db      0
-
+                align 2
+API_head        dc      0
+API_tail        dc      0
+                align 8
+API_sema        dw      0
+StartCPU1Flag   dw      0
+StartCPU1Addr   dw      0
+CPUIdleTick     dw      0
+                dw      0
+                dw      0
+                dw      0
 	align	16
 	org $A0
 RTCC_BUF		fill.b	96,0
+API_AREA        fill.b  2048,0
 
 ; Just past the Bootrom
 	org		$00010000
@@ -369,13 +450,26 @@ EndStaticAllocations:
 
 start:
     sei     ; interrupts off
-    ldi     sp,#32760            ; set stack pointer to top of 32k Area
+    cpuid   r1,r0,#0
+    beq     r1,.0002
+    ldi     tr,#$C10000          ; IDLE task for CPU #1
+.0003:
+    inc     $20000
+    lw      r1,StartCPU1Flag
+    cmp     r1,r1,#$12345678
+    bne     r1,.0003
+    jmp     (StartCPU1Addr)
+.0002:
+    ldi     sp,#MON_STACK        ; set stack pointer to top of 32k Area
+	ldi     tr,#$C00000          ; load task register with IDLE task
     ldi     r5,#$0000
     ldi     r1,#20
 .0001:
     sc      r5,LEDS
     addui   r5,r5,#1
 	sw		r0,Milliseconds
+	ldi     r1,#-1
+	sw      r1,API_sema
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
 	sb		r0,KeybdBad
@@ -392,6 +486,7 @@ start:
 	sb      r1,LEDS
 	bsr		SetupIntVectors
 ;	bsr		KeybdInit
+    bsr     InitFMTK
 	bsr		InitPIC
 	bsr     InitUart
 	bsr     RTCCReadbuf          ; read the real-time clock
@@ -423,6 +518,8 @@ SetupIntVectors:
 	sw		r1,451*8[r2]
 	ldi     r1,#SerialIRQ
 	sw      r1,456*8[r2]
+	ldi     r1,#ServiceRequestIRQ
+	sw      r1,457*8[r2]
 	ldi		r1,#KeybdIRQ
 	sw		r1,463*8[r2]
     ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
@@ -439,6 +536,8 @@ SetupIntVectors:
 	sw		r1,501*8[r2]
 	ldi		r1,#berr_rout
 	sw		r1,508*8[r2]
+	ldi		r1,#berr_rout
+	sw		r1,509*8[r2]
 	ldi     r1,#$00AA
 	sc      r1,LEDS
     rtl
@@ -448,9 +547,9 @@ SetupIntVectors:
 ;------------------------------------------------------------------------------
 
 InitPIC:
-	ldi		r1,#$0C			; timer interrupt(s) are edge sensitive
+	ldi		r1,#$020C		; timer interrupt(s) are edge sensitive
 	sh		r1,PIC_ES
-	ldi		r1,#$000F		; enable keyboard reset, timer interrupts
+	ldi		r1,#$020F		; enable keyboard reset, timer interrupts
 	sh		r1,PIC_IE
 	rtl
 
@@ -644,20 +743,621 @@ KeybdIRQ:
 	sb		r0,KEYBD+1
 	rti
 
+BranchToSelf:
+    bra      BranchToSelf
+
+;==============================================================================
+; Finitron Multi-Tasking Kernel (FMTK)
+;        __
+;   \\__/ o\    (C) 2013, 2014, 2015  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;==============================================================================
+
+InitFMTK:
+    ldi     r2,#$0C00000
+.nextTCB:
+    addui   r3,r2,#$400       ; 1kb TCB size
+    sw      r3,TCB_IPC[r2]    ; set startup address
+    lw      r3,BranchToSelf
+    sw      r3,$400[r2]
+    addui   r3,r2,#$FFF8
+    sw      r3,TCB_r30[r2]    ; set the stack pointer to the end of the base lot
+    addui   r2,r3,#8
+    cmpu    r1,r2,#$1C00000
+    blt     r1,.nextTCB
+
+    ; Initialize the free TCB list
+    ldi     r2,#$C20000
+    sw      r2,FreeTCB
+    sw      r0,TCB_PrevFree[r2]
+.0001:
+    addui   r3,r2,#$10000
+    sw      r3,TCB_NextFree[r2]
+    sw      r2,TCB_PrevFree[r3]
+    addui   r2,r2,#$10000
+    cmpu    r4,r2,#$1BF0000
+    blt     r4,.0001
+    sw      r0,TCB_NextFree[r2]
+
+    rtl
+
+;------------------------------------------------------------------------------
+; AddTaskToReadyList
+;
+; The ready list is a group of eight ready lists, one for each priority
+; level. Each ready list is organized as a doubly linked list to allow fast
+; insertions and removals. The list is organized as a ring (or bubble) with
+; the last entry pointing back to the first. This allows a fast task switch
+; to the next task. Which task is at the head of the list is maintained
+; in the variable QNdx for the priority level.
+;
+; Registers Affected: none
+; Parameters:
+;	r1 = pointer to task control block
+; Returns:
+;	none
+;------------------------------------------------------------------------------
+
+AddTaskToReadyList:
+    push    r2
+    push    r3
+    push    r4
+	ldi     r2,#TS_READY
+	sb		r2,TCB_Status[r1]
+	sw		r0,TCB_NextRdy[r1]
+	sw		r0,TCB_PrevRdy[r1]
+	lb		r3,TCB_Priority[r1]
+	cmp		r4,r3,#8
+	blt		r4,arl1
+	ldi		r3,#PRI_LOWEST
+arl1:
+    asl     r3,r3,#3
+	lw		r2,QNdx0[r3]
+	beq		r2,arl5
+	lw		r3,TCB_PrevRdy[r2]
+	sw		r2,TCB_NextRdy[r3]
+	sw		r3,TCB_PrevRdy[r1]
+	sw		r1,TCB_PrevRdy[r2]
+	sw		r2,TCB_NextRdy[r1]
+	pop     r4
+	pop     r3
+	pop     r2
+	rtl
+
+	; Here the ready list was empty, so add at head
+arl5:
+	sw		r1,QNdx0[r3]
+	sw		r1,TCB_NextRdy[r1]
+	sw		r1,TCB_PrevRdy[r1]
+	pop     r4
+	pop     r3
+	pop     r2
+	rtl
+	
+
+;------------------------------------------------------------------------------
+; RemoveTaskFromReadyList
+;
+; This subroutine removes a task from the ready list.
+;
+; Registers Affected: none
+; Parameters:
+;	r1 = pointer to task control block
+; Returns:
+;   r1 = pointer to task control block
+;------------------------------------------------------------------------------
+
+RemoveTaskFromReadyList:
+    push    r2
+    push    r3
+	push	r4
+	push	r5
+
+	lb		r3,TCB_Status[r1]	; is the task on the ready list ?
+	and		r4,r3,#TS_READY|TS_RUNNING
+	beq		r4,rfr2
+	and		r3,r3,#~(TS_READY|TS_RUNNING)
+	sb		r3,TCB_Status[r1]	; task status no longer running or ready
+	lw		r4,TCB_NextRdy[r1]	; Get previous and next fields.
+	lw		r5,TCB_PrevRdy[r1]
+	sw		r4,TCB_NextRdy[r5]
+	sw		r5,TCB_PrevRdy[r4]
+	lb		r3,TCB_Priority[r1]
+	asl     r3,r3,#3
+	lw      r5,QNdx0[r3]
+	cmp		r5,r1,r5			; Are we removing the QNdx task ?
+	bne		r5,rfr2
+	sw		r4,QNdx0[r3]
+	; Now we test for the case where the task being removed was the only one
+	; on the ready list of that priority level. We can tell because the
+	; NxtRdy would point to the task itself.
+	cmp		r5,r4,r1				
+	bne		r5,rfr2
+	sw		r0,QNdx0[r3]        ; Make QNdx NULL
+	sw		r0,TCB_NextRdy[r1]
+	sw		r0,TCB_PrevRdy[r1]
+rfr2:
+	pop		r5
+	pop		r4
+	pop     r3
+	pop     r2
+	rtl
+
+;------------------------------------------------------------------------------
+; AddToTimeoutList
+; AddToTimeoutList adds a task to the timeout list. The task is placed in the
+; list depending on it's timeout value.
+;
+; Registers Affected: none
+; Parameters:
+;	r1 = task
+;	r2 = timeout value
+;------------------------------------------------------------------------------
+
+AddToTimeoutList:
+	push    r2
+	push    r3
+	push	r4
+	push	r5
+
+    ldi     r5,#0
+	sw		r0,TCB_NextTo[r1]   ; these fields should already be NULL
+	sw		r0,TCB_PrevTo[r1]
+	lw		r4,TimeoutList		; are there any tasks on the timeout list ?
+	beq		r4,attl_add_at_head	; If not, update head of list
+attl_check_next:
+    lw      r3,TCB_Timeout[r4]            
+	subu	r2,r2,r3	        ; is this timeout > next
+	blt		r2,attl_insert_before
+	mov		r5,r4
+	lw		r4,TCB_NextTo[r4]
+	bne		r4,attl_check_next
+
+	; Here we scanned until the end of the timeout list and didn't find a 
+	; timeout of a greater value. So we add the task to the end of the list.
+attl_add_at_end:
+	sw		r0,TCB_NextTo[r1]		; 
+	sw		r1,TCB_NextTo[r5]
+	sw		r5,TCB_PrevTo[r1]
+	sw		r2,TCB_Timeout[r1]
+	bra		attl_exit
+
+attl_insert_before:
+	beq		r5,attl_insert_before_head
+	sw		r4,TCB_NextTo[r1]	; next on list goes after this task
+	sw		r5,TCB_PrevTo[r1]	; set previous link
+	sw		r1,TCB_NextTo[r5]
+	sw		r1,TCB_PrevTo[r4]
+	bra		attl_adjust_timeout
+
+	; Here there is no previous entry in the timeout list
+	; Add at start
+attl_insert_before_head:
+	sw		r1,TCB_PrevTo[r4]
+	sw		r0,TCB_PrevTo[r1]	;
+	sw		r4,TCB_NextTo[r1]
+	sw		r1,TimeoutList			; update the head pointer
+attl_adjust_timeout:
+	addu	r2,r2,r3	       ; get back timeout
+	sw		r2,TCB_Timeout[r1]
+	lw		r5,TCB_Timeout[r4]	; adjust the timeout of the next task
+	subu	r5,r5,r2
+	sw		r5,TCB_Timeout[r4]
+	bra		attl_exit
+
+	; Here there were no tasks on the timeout list, so we add at the
+	; head of the list.
+attl_add_at_head:
+	sw		r1,TimeoutList		; set the head of the timeout list
+	sw		r2,TCB_Timeout[r1]
+	; flag no more entries in timeout list
+	sw		r0,TCB_NextTo[r1]	; no next entries
+	sw		r0,TCB_PrevTo[r1]	; and no prev entries
+attl_exit:
+	lb		r2,TCB_Status[r1]	; set the task's status as timing out
+	or		r2,r2,#TS_TIMEOUT
+	sb		r2,TCB_Status[r1]
+	pop		r5
+	pop		r4
+	pop     r3
+	pop     r2
+	rtl
+	
+;------------------------------------------------------------------------------
+; RemoveFromTimeoutList
+;
+; This routine is called when a task is killed. The task may need to be
+; removed from the middle of the timeout list.
+;
+; On entry: the timeout list semaphore must be already set.
+; Registers Affected: none
+; Parameters:
+;	 r1 = pointer to task control block
+;------------------------------------------------------------------------------
+
+RemoveFromTimeoutList:
+	push    r2
+	push    r3
+	push	r4
+	push	r5
+
+	lb		r4,TCB_Status[r1]		; Is the task even on the timeout list ?
+	and		r4,r4,#TS_TIMEOUT
+	beq		r4,rftl_not_on_list
+	cmp		r4,r1,TimeoutList		; Are we removing the head of the list ?
+	beq		r4,rftl_remove_from_head
+	lw		r4,TCB_PrevTo[r1]		; adjust the links of the next and previous
+	beq		r4,rftl_empty_list		; no previous link - list corrupt?
+	lw		r5,TCB_NextTo[r1]		; tasks on the list to point around the task
+	sw		r5,TCB_NextTo[r4]
+	beq		r5,rftl_empty_list
+	sw		r4,TCB_PrevTo[r5]
+	lw		r2,TCB_Timeout[r1]		; update the timeout of the next on list
+	lw      r3,TCB_Timeout[r5]
+	add		r2,r2,r3            	; with any remaining timeout in the task
+	sw		r2,TCB_Timeout[r5]		; removed from the list
+	bra		rftl_empty_list
+
+	; Update the head of the list.
+rftl_remove_from_head:
+	lw		r5,TCB_NextTo[r1]
+	sw		r5,TimeoutList			; store next field into list head
+	beq		r5,rftl_empty_list
+	lw		r4,TCB_Timeout[r1]		; add any remaining timeout to the timeout
+	lw      r3,TCB_Timeout[r5]
+	add		r4,r4,r3            	; of the next task on the list.
+	sw		r4,TCB_Timeout[r5]
+	sw		r0,TCB_PrevTo[r5]       ; there is no previous item to the head
+	
+	; Here there is no previous or next items in the list, so the list
+	; will be empty once this task is removed from it.
+rftl_empty_list:
+	mov     r2,r1
+	lb		r3,TCB_Status[r2]	; clear timeout status (bit #0)
+	and     r3,r3,#$FE
+	sb      r3,TCB_Status[r2]
+	sw		r0,TCB_NextTo[r2]	; make sure the next and prev fields indicate	
+	sw	    r0,TCB_PrevTo[r2]   ; the task is not on a list.
+	mov     r1,r2
+rftl_not_on_list:
+	pop		r5
+	pop		r4
+	pop     r3
+	pop     r2
+rftl_not_on_list2:
+	rtl
+
+;------------------------------------------------------------------------------
+; PopTimeoutList
+;
+; This subroutine is called from within the timer ISR when the task's 
+; timeout expires. It's always the head of the list that's being removed in
+; the timer ISR so the removal from the timeout list is optimized. We know
+; the timeout expired, so the amount of time to add to the next task is zero.
+;
+; Registers Affected: 
+; Parameters:
+;	r2: head of timeout list
+; Returns:
+;	r1 = task id of task popped from timeout list
+;------------------------------------------------------------------------------
+
+PopTimeoutList:
+	lw		r1,TCB_NextTo[r2]
+	sw		r1,TimeoutList  ; store next field into list head
+	beq		r1,ptl1
+	sw		r0,TCB_PrevTo[r1]; previous link = NULL
+ptl1:
+    lb      r1,TCB_Status[r2]
+    and     r1,r1,#$FE       ; clear timeout status
+    sb      r1,TCB_Status[r2]
+	sw		r0,TCB_NextTo[r2]	; make sure the next and prev fields indicate
+	sw		r0,TCB_PrevTo[r2]		; the task is not on a list.
+	mov     r1,r2
+    rtl
+
+;------------------------------------------------------------------------------
+; Sleep
+;
+; Put the currently running task to sleep for a specified time.
+;
+; Registers Affected: none
+; Parameters:
+;	r1 = time duration in jiffies (1/60 second).
+; Returns: none
+;------------------------------------------------------------------------------
+
+Sleep:
+    push    lr
+    push    r1
+    push    r2
+	mov     r2,r1
+;	spl		tcb_sema + 4
+	lw		r1,RunningTCB
+	bsr		RemoveTaskFromReadyList
+	bsr		AddToTimeoutList	; The scheduler will be returning to this
+	ldi		r1,#1
+;	sb		r1,tcb_sema
+	sys		2				; task eventually, once the timeout expires,
+	pop     r2
+	pop     r1
+	rts
+
+;------------------------------------------------------------------------------
+; Perform a synchronous BIOS call. Waits until the BIOS is finished before
+; returning.
+; Returns:
+; r1 = response result from BIOS
+;------------------------------------------------------------------------------
+;
+Sync_BIOS_Call:
+    ldi     sp,#BIOS_STACK
+    push    r7
+    push    r8
+    push    r9
+.0001:
+    mov     r7,tr
+    mtspr   cas,r7
+    cas     r7,BIOS_sema
+    beq     r7,.0001
+
+    lc      r9,BIOS_tail
+    lc      r7,BIOS_tail
+    lc      r8,BIOS_head       ; check for space available
+    cmp     r8,r7,r7
+    beq     r8,.0001          ; no space, go back and wait
+    ldi     r8,#BIOS_AREA
+    sw      r1,BIOS_op[r7+r8]
+    sw      r2,BIOS_arg1[r7+r8]
+    sw      r3,BIOS_arg2[r7+r8]
+    sw      r4,BIOS_arg3[r7+r8]
+    sw      r5,BIOS_arg4[r7+r8]
+    sw      r6,BIOS_arg5[r7+r8]
+    sw      r0,BIOS_resp[r7+r8]
+    sw      r0,BIOS_done[r7+r8]
+    addui   r7,r7,#64
+    and     r7,r7,#$7c0
+    sc      r7,BIOS_tail
+    ldi     r7,#-1            ; unlock the semaphore
+    sw      r7,BIOS_sema
+.0003:
+    lw      r7,BIOS_done[r9+r8]
+    bne     r7,.0002
+;    hwi     2                 ; reschedule tasks
+    bra     .0003
+.0002:
+    lw      r1,BIOS_resp[r9+r8]
+    pop     r9
+    pop     r8
+    pop     r7
+    rte
+
+;------------------------------------------------------------------------------
+; Perform an asynchronous BIOS call. Returns as soon as the BIOS information
+; can be registered.
+; Returns:
+; r1 = handle for BIOS call
+;------------------------------------------------------------------------------
+
+BIOS_Call:
+    ldi     sp,#BIOS_STACK
+    push    r7
+    push    r8
+.0001:
+    mov     r7,tr
+    mtspr   cas,r7
+    cas     r7,BIOS_sema
+    beq     r7,.0001
+
+    lc      r7,BIOS_tail
+    lc      r8,BIOS_head       ; check for space available
+    cmp     r8,r7,r7
+    beq     r8,.0001          ; no space, go back and wait
+    ldi     r8,#BIOS_AREA
+    sw      r1,BIOS_op[r7+r8]
+    sw      r2,BIOS_arg1[r7+r8]
+    sw      r3,BIOS_arg2[r7+r8]
+    sw      r4,BIOS_arg3[r7+r8]
+    sw      r5,BIOS_arg4[r7+r8]
+    sw      r6,BIOS_arg5[r7+r8]
+    sw      r0,BIOS_resp[r7+r8]
+    sw      r0,BIOS_done[r7+r8]
+    mov     r1,r7             ; record BIOS handle in r1
+    addui   r7,r7,#64
+    and     r7,r7,#$7c0
+    sc      r7,BIOS_tail
+    ldi     r7,#-1            ; unlock the semaphore
+    sw      r7,BIOS_sema
+    pop     r8
+    pop     r7
+    rte
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+BIOS_Dispatcher:
+;    lw      sp,#BIOS_STACK
+.0001:
+;    ldi     r3,#BIOS_AREA
+;    lc      r1,BIOS_head
+;    lc      r2,BIOS_tail
+;    cmp     r2,r1,r2
+;    beq     r2,.sleep
+;    addu    r1,r1,r3
+;    push    BIOS_arg5[r1]
+;    push    BIOS_arg4[r1]
+;    push    BIOS_arg3[r1]
+;    push    BIOS_arg2[r1]
+;    push    BIOS_arg1[r1]
+;    push    BIOS_op[r1]
+;    lw      r1,BIOS_op[r7]
+;    lw      r2,BIOS_arg1[r7]
+;    lw      r3,BIOS_arg2[r7]
+;    lw      r4,BIOS_arg3[r7]
+;    lw      r5,BIOS_arg4[r7]
+;    lw      r6,BIOS_arg5[r7]
+;    cmp     r10,r1,#0
+;    bne     r10,.0001
+;    mov     r1,r2
+;    bsr     DisplayString
+;    bra     BIOS_dx
+.0001:
+;    addui   sp,sp,#48
+;    lc      r3,BIOS_head
+;    ldi     r2,#1
+;    sw      r1,BIOS_resp[r3]
+;    sw      r2,BIOS_done[r3]
+;    addui   r1,r3,#64
+;    and     r1,r1,#$7FF
+;    sc      r1,BIOS_head
+;    bra     .0001          ; check for another BIOS call
+.sleep:
+;   bra     .0001
+BIOS_dx:
+;    rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+ServiceRequestIRQ:
+;    rti
+;    cpuid   sp,r0,#0
+;    beq     sp,.0001
+;    rti
+.0001:
+;    ldi     sp,#$8000
+;    push    r1
+;    push    r2
+;    mfspr   r1,ipc
+;    push    r1
+;    ldi     r1,#9
+;    sh      r1,PIC_RSTE
+;    lw      r1,SRI_head
+;    push    SRI_op[r1]
+;    push    SRI_arg1[r1]
+;    push    SRI_arg2[r1]
+;    push    SRI_arg3[r1]
+;    push    SRI_arg4[r1]
+;    push    SRI_arg5[r1]
+;    sys     4
+;    addui   sp,sp,#48
+;    lw      r2,SRI_head
+;    sw      r1,SRI_resp[r2]
+;    ldi     r1,#1
+;    sw      r1,SRI_done[r2]
+;    addui   r2,r2,#64
+;    and     r2,r2,#$7FF
+;    sw      r2,SRI_head
+;    pop     r2
+;    pop     r1
+;    rti
+
 ;------------------------------------------------------------------------------
 ; 60 Hz interrupt routine.
+; Both cpu's will execute this interrupt (necessary for multi-tasking).
+; Only cpu#0 needs to reset the I/O hardware.
 ;------------------------------------------------------------------------------
 
 TickRout:
-    ldi     sp,#$8000           ; set stack pointer to interrupt processing stack
+    cpuid   sp,r0,#0
+    beq     sp,.acknowledgeInterrupt
+    ; The stacks for the CPUs' must not overlap
+    ldi     sp,#CPU1_IRQ_STACK
+.SaveContext:
+    ; Do something here that takes a few cycles in order to allow cpu#0 to
+    ; reset the PIC. Otherwise the IRQ line going high will cause a bounce back
+    ; to here.
+    sw      r1,TCB_r1[tr]
+    sw      r2,TCB_r2[tr]
+    sw      r3,TCB_r3[tr]
+    sw      r4,TCB_r4[tr]
+    sw      r5,TCB_r5[tr]
+    sw      r6,TCB_r6[tr]
+    sw      r7,TCB_r7[tr]
+    sw      r8,TCB_r8[tr]
+    sw      r9,TCB_r9[tr]
+    sw      r10,TCB_r10[tr]
+    sw      r11,TCB_r11[tr]
+    sw      r12,TCB_r12[tr]
+    sw      r13,TCB_r13[tr]
+    sw      r14,TCB_r14[tr]
+    sw      r15,TCB_r15[tr]
+    sw      r16,TCB_r16[tr]
+    sw      r17,TCB_r17[tr]
+    sw      r18,TCB_r18[tr]
+    sw      r19,TCB_r19[tr]
+    sw      r20,TCB_r20[tr]
+    sw      r21,TCB_r21[tr]
+    sw      r22,TCB_r22[tr]
+    sw      r23,TCB_r23[tr]
+    sw      r24,TCB_r24[tr]
+    sw      r25,TCB_r25[tr]
+    sw      r26,TCB_r26[tr]
+    sw      r27,TCB_r27[tr]
+    sw      r28,TCB_r28[tr]
+    sw      r29,TCB_r29[tr]
+    mfspr   r1,isp
+    sw      r1,TCB_r30[tr]
+    sw      r31,TCB_r31[tr]
+    mfspr   r1,ipc
+    sw      r1,TCB_IPC[tr]
+    lw      r1,TCB_r1[tr]
+
+    bsr     SelectTaskToRun
+    mov     tr,r1
+
+    ; Restore the context of the selected task
+    lw      r1,TCB_IPC[tr]
+    mtspr   ipc,r1
+    lw      r31,TCB_r31[tr]
+    lw      r1,TCB_r30[tr]
+    mtspr   isp,r1
+    lw      r29,TCB_r29[tr]
+    lw      r28,TCB_r28[tr]
+    lw      r27,TCB_r27[tr]
+    lw      r26,TCB_r26[tr]
+    lw      r25,TCB_r25[tr]
+;   lw      r24,TCB_r24[tr]    ; r24 is the task register - no need to load
+    lw      r23,TCB_r23[tr]
+    lw      r22,TCB_r22[tr]
+    lw      r21,TCB_r21[tr]
+    lw      r20,TCB_r20[tr]
+    lw      r19,TCB_r19[tr]
+    lw      r18,TCB_r18[tr]
+    lw      r17,TCB_r17[tr]
+    lw      r16,TCB_r16[tr]
+    lw      r15,TCB_r15[tr]
+    lw      r14,TCB_r14[tr]
+    lw      r13,TCB_r13[tr]
+    lw      r12,TCB_r12[tr]
+    lw      r11,TCB_r11[tr]
+    lw      r10,TCB_r10[tr]
+    lw      r9,TCB_r9[tr]
+    lw      r8,TCB_r8[tr]
+    lw      r7,TCB_r7[tr]
+    lw      r6,TCB_r6[tr]
+    lw      r5,TCB_r5[tr]
+    lw      r4,TCB_r4[tr]
+    lw      r3,TCB_r3[tr]
+    lw      r2,TCB_r2[tr]
+    lw      r1,TCB_r1[tr]
+    rti
+    nop
+    nop
+    
+.acknowledgeInterrupt:
+    ldi     sp,#IRQ_STACK       ; set stack pointer to interrupt processing stack
     push    r1
 	ldi		r1,#3				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
 	lh	    r1,TEXTSCR+220+$FFD00000
 	addui	r1,r1,#1
 	sh	    r1,TEXTSCR+220+$FFD00000
+	lw      r1,$20000
+	sh      r1,TEXTSCR+224+$FFD00000
 	pop     r1
-	rti                         ; restore stack pointer and return
+	bra     .SaveContext
 
 ;------------------------------------------------------------------------------
 ; 1024Hz interupt routine. This must be fast. Allows the system time to be
@@ -665,6 +1365,10 @@ TickRout:
 ;------------------------------------------------------------------------------
 
 Tick1024Rout:
+    cpuid   sp,r0,#0
+    beq     sp,.0001
+    rti                         ; nothing for cpu >0 to do here
+.0001:
     ldi     sp,#$8000           ; set stack pointer to interrupt processing stack
 	push	r1
 	ldi		r1,#2				; reset the edge sense circuit
@@ -672,6 +1376,26 @@ Tick1024Rout:
 	inc     Milliseconds
 	pop		r1
 	rti                         ; restore stack pointer and return
+
+;------------------------------------------------------------------------------
+; For now, just pick one at random.
+;------------------------------------------------------------------------------
+SelectTaskToRun:
+    mov     r1,tr             ; stay in the same task for now
+    rtl
+    lw      r1,RANDOM_NUM
+    cpuid   r2,r0,#0
+    beq     r2,.0001
+    and     r1,r1,#$1F
+    or      r1,r1,#1         ; make sure it's an odd task for CPU1
+    asl     r1,r1,#16
+    addui   r1,r1,#$C00000
+    rtl    
+.0001:
+    and     r1,r1,#$1E       ; make sure it's an even task for CPU0
+    asl     r1,r1,#16
+    addui   r1,r1,#$C00000
+    rtl
 
 ;------------------------------------------------------------------------------
 ; GetSystemTime
@@ -988,7 +1712,7 @@ mon1:
 	ldi		r1,#50
 	sc		r1,LEDS
 ;	ldi		sp,#TCBs+TCB_Size-8		; reload the stack pointer, it may have been trashed
-	ldi		sp,#$6000
+	ldi		sp,#MON_STACK
 	cli
 .PromptLn:
 	bsr		CRLF
@@ -2383,6 +3107,21 @@ MicroDelay:
     nop
 
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+LoadFromSerial:
+    push    lr
+    ldi     r3,#16384
+    ldi     r2,#$20000          ; target store address
+.0001:
+    bsr     SerialGetCharDirect
+    sb      r1,[r2]
+    addui   r2,r2,#1
+    subui   r3,r3,#1
+    bne     r3,.0001
+    rts
+
+;------------------------------------------------------------------------------
 ; Execution fault. Occurs when an attempt is made to execute code from a
 ; page marked as non-executable.
 ;------------------------------------------------------------------------------
@@ -2448,20 +3187,44 @@ msgPriv:
 	db	"priv fault",0
 msgUninit:
 	db	"uninit int.",0
+msgBusErr:
+    db  CR,LF,"Bus error PC=",0
+msgEA:
+    db  " EA=",0
 
 ;------------------------------------------------------------------------------
 ; Bus error routine.
 ;------------------------------------------------------------------------------
 
 berr_rout:
-	ldi		r1,#$AA
+    ldi     sp,#$7800
+	ldi		r1,#$bebe
 	sc		r1,LEDS
-;	mfspr	r1,bear
-;	bsr		DisplayWord
-.be1:
-	bra .be1
+	ldi     r1,#msgBusErr
+	bsr     DisplayString
+	mfspr   r1,ipc
+	bsr		DisplayWord
+	ldi     r1,#msgEA
+	bsr     DisplayString
+    mfspr   r1,bear
+	bsr     DisplayWord
+	bsr     CRLF
+	bsr		KeybdGetCharWait
 
+	; In order to return an RTI must be used to exit the routine (or interrupts
+	; will permanently disabled). The RTI instruction clears an internal
+	; processor flag used to prevent nested interrupts.
+	; Since this is a serious error the system is just restarted. So the IPC
+	; is set to point to the restart address.
 
+	ldi     r1,#start
+	mtspr   ipc,r1
+	
+	; Allow pipeline time for IPC to update before RTI (there's no results
+	; forwarding on SPR's).
+	nop     
+	nop
+	rti
 
 
 SSM_ISR:
@@ -2473,6 +3236,7 @@ IBPT_ISR:
     bra     .0001
 
 include "set_time_serial.s"
+        code
 
 pSpriteController:
 	dw	-2437120
