@@ -125,6 +125,10 @@ TS_READY_BIT	EQU 4
 
 LEDS	equ		$FFDC0600
 
+BIOS_FREE      EQU       0
+BIOS_DONE      EQU       1
+BIOS_INSERVICE EQU       2
+
 ; The following offsets in the I/O segment
 TEXTSCR	equ		$00000
 TEXTREG		EQU		$A0000
@@ -215,7 +219,7 @@ BIOS_arg3      EQU     $18
 BIOS_arg4      EQU     $20
 BIOS_arg5      EQU     $28
 BIOS_resp      EQU     $30
-BIOS_done      EQU     $38
+BIOS_stat      EQU     $38
 
 NR_TCB		EQU		16
 TCB_BackLink    EQU     0
@@ -338,6 +342,7 @@ KeyState1		db		0
 KeyState2		db		0
 KeybdWaitFlag	db		0
 KeybdLEDs		db		0
+NUMWKA          fill.b  32,0
 startSector		dh		0
 disk_size		dh		0
 Uart_ms         db      0
@@ -358,12 +363,14 @@ API_head        dc      0
 API_tail        dc      0
                 align 8
 API_sema        dw      0
+BIOS_sema       dw      0
 StartCPU1Flag   dw      0
 StartCPU1Addr   dw      0
 CPUIdleTick     dw      0
                 dw      0
                 dw      0
                 dw      0
+
 	align	16
 	org $A0
 RTCC_BUF		fill.b	96,0
@@ -447,7 +454,7 @@ EndStaticAllocations:
 	dw		DisplayHalf		; $8060
 	dw		DisplayCharHex	; $8068
 	dw		DisplayByte		; $8070
-
+message "start"
 start:
     sei     ; interrupts off
     cpuid   r1,r0,#0
@@ -470,6 +477,7 @@ start:
 	sw		r0,Milliseconds
 	ldi     r1,#-1
 	sw      r1,API_sema
+	sw      r0,BIOS_sema
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
 	sb		r0,KeybdBad
@@ -754,7 +762,7 @@ BranchToSelf:
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
 ;==============================================================================
-
+message "InitFMTK"
 InitFMTK:
     ldi     r2,#$0C00000
 .nextTCB:
@@ -784,6 +792,143 @@ InitFMTK:
     rtl
 
 ;------------------------------------------------------------------------------
+; Display a space on the output device.
+;------------------------------------------------------------------------------
+
+DisplaySpace:
+    push     lr
+    push     r1
+    ldi      r1,#' '
+    bsr      OutChar
+    pop      r1
+    rts
+
+;------------------------------------------------------------------------------
+; 'PRTNUM' prints the 64 bit number in r1, leading blanks are added if
+; needed to pad the number of spaces to the number in r2.
+; However, if the number of digits is larger than the no. in
+; r2, all digits are printed anyway. Negative sign is also
+; printed and counted in, positive sign is not.
+;
+; r1 = number to print
+; r2 = number of digits
+; Register Usage
+;	r5 = number of padding spaces
+;------------------------------------------------------------------------------
+PRTNUM:
+    push    lr
+	push	r3
+	push	r5
+	push	r6
+	push	r7
+	ldi		r7,#NUMWKA	; r7 = pointer to numeric work area
+	mov		r6,r1		; save number for later
+	mov		r5,r2		; r5 = min number of chars
+	bge		r1,PN2			; is it negative? if not
+	subu	r1,r0,r1	; else make it positive
+	subui   r5,r5,#1	; one less for width count
+PN2:
+;	ldi		r3,#10
+PN1:
+	mod		r2,r1,#10	; r2 = r1 mod 10
+	div		r1,r1,#10	; r1 /= 10 divide by 10
+	add		r2,r2,#'0'	; convert remainder to ascii
+	sb		r2,[r7]		; and store in buffer
+	addui   r7,r7,#1
+	subui   r5,r5,#1	; decrement width
+	bne		r1,PN1
+PN6:
+	ble		r5,PN4		; test pad count, skip padding if not needed
+PN3:
+	bsr     DisplaySpace	; display the required leading spaces
+	subui   r5,r5,#1
+	bne		r5,PN3
+PN4:
+	bge		r6,PN5		; is number negative?
+	ldi		r1,#'-'		; if so, display the sign
+	bsr		OutChar
+PN5:
+    subui   r7,r7,#1
+	lb		r1,[r7]		; now unstack the digits and display
+	bsr		OutChar
+	cmp		r1,r7,#NUMWKA
+	bgt		r1,PN5
+PNRET:
+	pop		r7
+	pop		r6
+	pop		r5
+	pop		r3
+	rts
+
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+message "DumpTaskList"
+DumpTaskList:
+    push    lr
+	push    r1
+	push    r2
+	push    r3
+	push	r4
+	ldi		r1,#msgTaskList
+	bsr		DisplayString
+	ldi		r3,#0
+.0001:
+    lwar    r4,tcb_sema
+    bne     r4,.0001
+    swcr    tr,tcb_sema
+    mfspr   r4,cr0
+    and     r4,r4,#$1000000000
+    beq     r4,.0001
+dtl2:
+	lw		r1,QNdx0[r3]
+	mov		r4,r1
+	beq		r4,dtl1
+dtl3:
+	ldi	    r2,#3
+	lsr     r1,r3,#3
+	bsr		PRTNUM
+	bsr		DisplaySpace
+	mov		r1,r4
+	bsr		DisplayHalf
+	bsr		DisplaySpace
+	bsr		DisplaySpace
+	mov		r1,r4
+	lb		r1,TCB_Status[r1]
+	bsr		DisplayByte
+	bsr		DisplaySpace
+	ldi		r2,#3
+	lw		r1,TCB_PrevRdy[r4]
+	bsr		DisplayHalf
+	bsr		DisplaySpace
+	ldi		r2,#3
+	lw		r1,TCB_NextRdy[r4]
+	bsr		DisplayHalf
+	bsr		DisplaySpace
+	lw		r1,TCB_Timeout[r4]
+	bsr		DisplayWord
+	bsr		CRLF
+	lw		r4,TCB_NextRdy[r4]
+	lw      r1,QNdx0[r3]
+	cmp		r1,r4,r1
+	bne		r1,dtl3
+dtl1:
+	addui   r3,r3,#8
+	cmp     r4,r3,#64
+	blt		r4,dtl2
+	sw		r0,tcb_sema       ; release semaphore
+	pop		r4
+	pop     r3
+	pop     r2
+	pop     r1
+	rts
+
+msgTaskList:
+	db	CR,LF,"Pri Task Stat    Prv     Nxt     Timeout",CR,LF,0
+
+
+;------------------------------------------------------------------------------
 ; AddTaskToReadyList
 ;
 ; The ready list is a group of eight ready lists, one for each priority
@@ -799,7 +944,7 @@ InitFMTK:
 ; Returns:
 ;	none
 ;------------------------------------------------------------------------------
-
+message "AddToReadyList"
 AddTaskToReadyList:
     push    r2
     push    r3
@@ -848,7 +993,7 @@ arl5:
 ; Returns:
 ;   r1 = pointer to task control block
 ;------------------------------------------------------------------------------
-
+message "RemoveFromReadyList"
 RemoveTaskFromReadyList:
     push    r2
     push    r3
@@ -895,7 +1040,7 @@ rfr2:
 ;	r1 = task
 ;	r2 = timeout value
 ;------------------------------------------------------------------------------
-
+message "AddToTimeoutList"
 AddToTimeoutList:
 	push    r2
 	push    r3
@@ -1068,6 +1213,7 @@ ptl1:
 ;	r1 = time duration in jiffies (1/60 second).
 ; Returns: none
 ;------------------------------------------------------------------------------
+message "sleep"
 
 Sleep:
     push    lr
@@ -1098,10 +1244,12 @@ Sync_BIOS_Call:
     push    r8
     push    r9
 .0001:
-    mov     r7,tr
-    mtspr   cas,r7
-    cas     r7,BIOS_sema
-    beq     r7,.0001
+    lwar    r7,BIOS_sema
+    bne     r7,.0001          ; free ?
+    swcr    tr,BIOS_sema
+    mfspr   r8,cr0            ; check if store succeeded
+    and     r8,r8,#$1000000000
+    beq     r8,.0001
 
     lc      r9,BIOS_tail
     lc      r7,BIOS_tail
@@ -1116,14 +1264,13 @@ Sync_BIOS_Call:
     sw      r5,BIOS_arg4[r7+r8]
     sw      r6,BIOS_arg5[r7+r8]
     sw      r0,BIOS_resp[r7+r8]
-    sw      r0,BIOS_done[r7+r8]
+    sw      r0,BIOS_stat[r7+r8]
     addui   r7,r7,#64
     and     r7,r7,#$7c0
     sc      r7,BIOS_tail
-    ldi     r7,#-1            ; unlock the semaphore
-    sw      r7,BIOS_sema
+    sw      r0,BIOS_sema      ; unlock the semaphore
 .0003:
-    lw      r7,BIOS_done[r9+r8]
+    lw      r7,BIOS_stat[r9+r8]
     bne     r7,.0002
 ;    hwi     2                 ; reschedule tasks
     bra     .0003
@@ -1145,17 +1292,20 @@ BIOS_Call:
     ldi     sp,#BIOS_STACK
     push    r7
     push    r8
+    push    r9
 .0001:
-    mov     r7,tr
-    mtspr   cas,r7
-    cas     r7,BIOS_sema
-    beq     r7,.0001
+    lwar    r7,BIOS_sema
+    bne     r7,.0001          ; free ?
+    swcr    tr,BIOS_sema
+    mfspr   r8,cr0            ; check if store succeeded
+    and     r8,r8,#$1000000000
+    beq     r8,.0001
 
     lc      r7,BIOS_tail
-    lc      r8,BIOS_head       ; check for space available
-    cmp     r8,r7,r7
-    beq     r8,.0001          ; no space, go back and wait
     ldi     r8,#BIOS_AREA
+    lw      r9,BIOS_stat[r7+r8]
+    cmp     r9,r9,#BIOS_FREE
+    bne     r9,.0002
     sw      r1,BIOS_op[r7+r8]
     sw      r2,BIOS_arg1[r7+r8]
     sw      r3,BIOS_arg2[r7+r8]
@@ -1163,47 +1313,66 @@ BIOS_Call:
     sw      r5,BIOS_arg4[r7+r8]
     sw      r6,BIOS_arg5[r7+r8]
     sw      r0,BIOS_resp[r7+r8]
-    sw      r0,BIOS_done[r7+r8]
+    ldi     r9,#BIOS_WAIT_SVC
+    sw      r9,BIOS_stat[r7+r8]
     mov     r1,r7             ; record BIOS handle in r1
     addui   r7,r7,#64
     and     r7,r7,#$7c0
     sc      r7,BIOS_tail
-    ldi     r7,#-1            ; unlock the semaphore
-    sw      r7,BIOS_sema
+    sw      r0,BIOS_sema      ; unlock the semaphore
+    pop     r9
     pop     r8
     pop     r7
     rte
+.0002:
+    sw      r0,BIOS_sema
+    bra     .0001
 
 ;------------------------------------------------------------------------------
+; BIOS Dispatcher
+;    Dispatch a BIOS request.
 ;------------------------------------------------------------------------------
 
 BIOS_Dispatcher:
-;    lw      sp,#BIOS_STACK
+    push    r1
+    push    r2
+    push    r3
+    push    r4
+    push    r5
+    push    r6
+    push    r7
+    push    r8
+    push    r9
 .0001:
-;    ldi     r3,#BIOS_AREA
-;    lc      r1,BIOS_head
-;    lc      r2,BIOS_tail
-;    cmp     r2,r1,r2
-;    beq     r2,.sleep
-;    addu    r1,r1,r3
-;    push    BIOS_arg5[r1]
-;    push    BIOS_arg4[r1]
-;    push    BIOS_arg3[r1]
-;    push    BIOS_arg2[r1]
-;    push    BIOS_arg1[r1]
-;    push    BIOS_op[r1]
-;    lw      r1,BIOS_op[r7]
-;    lw      r2,BIOS_arg1[r7]
-;    lw      r3,BIOS_arg2[r7]
-;    lw      r4,BIOS_arg3[r7]
-;    lw      r5,BIOS_arg4[r7]
-;    lw      r6,BIOS_arg5[r7]
-;    cmp     r10,r1,#0
-;    bne     r10,.0001
-;    mov     r1,r2
-;    bsr     DisplayString
-;    bra     BIOS_dx
-.0001:
+    lwar    r7,BIOS_sema
+    bne     r7,.0001          ; free ?
+    swcr    tr,BIOS_sema
+    mfspr   r8,cr0            ; check if store succeeded
+    and     r8,r8,#$1000000000
+    beq     r8,.0001
+    ldi     r7,#BIOS_AREA
+    lc      r8,BIOS_head
+    lw      r9,BIOS_stat[r7+r8]
+    cmp     r9,r9,#BIOS_WAIT_SVC
+    bne     r9,.advanceHead
+    ldi     r9,#BIOS_INSERVICE
+    sw      r9,BIOS_stat[r7+r8]
+    lw      r1,BIOS_op[r7+r8]
+    lw      r2,BIOS_arg1[r7+r8]
+    lw      r3,BIOS_arg2[r7+r8]
+    lw      r4,BIOS_arg3[r7+r8]
+    lw      r5,BIOS_arg4[r7+r8]
+    lw      r6,BIOS_arg5[r7+r8]
+    cmp     r10,r1,#0
+    bne     r10,.0002
+    mov     r1,r2
+    bsr     DisplayString
+    ldi     r1,#BIOS_DONE
+    sw      r0,BIOS_resp[r7+r8]
+    sw      r1,BIOS_stat[r7+r8]
+    bra     BIOS_dx
+.0002:
+;.0001:
 ;    addui   sp,sp,#48
 ;    lc      r3,BIOS_head
 ;    ldi     r2,#1
@@ -1214,9 +1383,26 @@ BIOS_Dispatcher:
 ;    sc      r1,BIOS_head
 ;    bra     .0001          ; check for another BIOS call
 .sleep:
-;   bra     .0001
+    sw     r0,BIOS_sema
+;    hwi    2
+    bra     .0001
 BIOS_dx:
-;    rts
+.advanceHead:
+    addui    r8,r8,#64
+    and      r8,r8,#$7C0
+    sc       r8,BIOS_head
+.x1:
+    sw       r0,BIOS_sema
+    pop      r9
+    pop      r8
+    pop      r7
+    pop      r6
+    pop      r5
+    pop      r4
+    pop      r3
+    pop      r2
+    pop      r1
+    rtl
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
