@@ -1,0 +1,125 @@
+     1	
+     2	extern byte RTCC_BUF[60];
+     3	extern int Milliseconds;
+     4	
+     5	// Get date from RTCC
+     6	private void get_datetime(int *year, int *month, int *day, int *hour, int *minute, int *second)
+     7	{
+     8	    int nn;
+     9	
+    10	    if (year) {
+    11	        nn = RTCC_BUF[6];
+    12	        nn = 2000 + (nn & 15) + ((nn & 0xf0) >> 4) * 10;   // BCD to binary
+    13	        *year = nn;
+    14	    }
+    15	    if (month) {
+    16	        nn = RTCC_BUF[4];
+    17	        nn = (nn & 15) + ((nn & 0x10) >> 4) * 10;   // BCD to binary
+    18	        *month = nn;
+    19	    }
+    20	    if (day) {
+    21	        nn = RTCC_BUF[5];
+    22	        nn = (nn & 15) + ((nn & 0x30) >> 4) * 10;   // BCD to binary
+    23	        *day = nn;
+    24	    }
+    25	    if (hour) {
+    26	        nn = RTCC_BUF[2];
+    27	        nn = (nn & 0x0f) + ((nn & 0x30) >> 4) * 10;   // BCD to binary
+    28	        nn = nn & 0x3f;
+    29	        *hour = nn;
+    30	    }
+    31	    if (minute) {
+    32	        nn = RTCC_BUF[1];
+    33	        nn = (nn & 0x0F) + ((nn & 0x70) >> 4) * 10;   // BCD to binary
+    34	        *minute = nn;
+    35	    }
+    36	    if (second) {
+    37	        nn = RTCC_BUF[0];
+    38	        nn = (nn & 0x0F) + ((nn & 0x70) >> 4) * 10;   // BCD to binary
+    39	        *second = nn;
+    40	    }
+    41	}
+    42	
+
+
+*** local symbol table ***
+
+year       =000028    -    Auto        Pointer to Long
+month      =000030    -    Auto        Pointer to Long
+day        =000038    -    Auto        Pointer to Long
+hour       =000040    -    Auto        Pointer to Long
+minute     =000048    -    Auto        Pointer to Long
+second     =000050    -    Auto        Pointer to Long
+nn         =fffffff8    -    Auto        Long
+
+
+
+    43	private int ToJul(int year, int month, int day)
+    44	{
+    45	   int
+    46	      JulDay,
+    47	      LYear = year,
+    48	      LMonth = month,
+    49	      LDay = day;
+    50	
+    51	   JulDay = LDay - 32075L + 1461L * (LYear + 4800 + (LMonth - 14L) / 12L) /
+    52	      4L + 367L * (LMonth - 2L - (LMonth - 14L) / 12L * 12L) /
+    53	      12L - 3L * ((LYear + 4900L + (LMonth - 14L) / 12L) / 100L) / 4L;
+    54	   return(JulDay);
+    55	}
+    56	
+    57	// Get a 64 bit datetime serial number for the system time variable
+    58	
+
+
+*** local symbol table ***
+
+year       =000028    -    Auto        Long
+month      =000030    -    Auto        Long
+day        =000038    -    Auto        Long
+JulDay     =fffffff8    -    Auto        Long
+LYear      =fffffff0    -    Auto        Long
+LMonth     =ffffffe8    -    Auto        Long
+LDay       =ffffffe0    -    Auto        Long
+
+
+
+    59	private int set_time_serial()
+    60	{
+    61		int ii,nn;
+    62		int year, month, day;
+    63		int hours, minutes, seconds, centiseconds;
+    64	
+    65	    get_datetime(&year, &month, &day, &hours, &minutes, &seconds);
+    66		Milliseconds = seconds * 1024 + minutes * 61440 + hours * 3686400 +
+    67			ToJul(year,month,day) * 88473600L;
+    68		return nn;
+    69	}
+    70	
+
+
+*** local symbol table ***
+
+ii         =fffffff8    -    Auto        Long
+nn         =fffffff0    -    Auto        Long
+year       =ffffffe8    -    Auto        Long
+month      =ffffffe0    -    Auto        Long
+day        =ffffffd8    -    Auto        Long
+hours      =ffffffd0    -    Auto        Long
+minutes    =ffffffc8    -    Auto        Long
+seconds    =ffffffc0    -    Auto        Long
+centiseconds =ffffffb8    -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+set_time_serial =000012    -    Static      Function returning Long
+RTCC_BUF   =000000    -    External    Array of Byte
+Milliseconds =000000    -    External    Long
+get_datetime =000000    -    Static      Function returning 
+ToJul      =00000f    -    Static      Function returning Long
+
+ *** structures and unions ***
+

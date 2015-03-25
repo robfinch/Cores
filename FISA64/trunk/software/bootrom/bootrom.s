@@ -172,6 +172,22 @@ SD_MASTER		EQU		0xFFDC0B00
 
 RANDOM_NUM      EQU     0xFFDC0C00
 
+UART            EQU     0xFFDC0A00
+UART_TX         EQU     0
+UART_RX         EQU     0
+UART_LS         EQU     1
+UART_MS         EQU     2
+UART_IS         EQU     3
+UART_IE         EQU     4
+UART_FF         EQU     5
+UART_MC         EQU     6
+UART_CTRL       EQU     7
+UART_CM0        EQU     8
+UART_CM1        EQU     9
+UART_CM2        EQU     10
+UART_CM3        EQU     11
+UART_SPR        EQU     15
+
 NR_TCB		EQU		16
 TCB_BackLink    EQU     0
 TCB_Regs		EQU		8
@@ -254,6 +270,19 @@ KeybdWaitFlag	db		0
 KeybdLEDs		db		0
 startSector		dh		0
 disk_size		dh		0
+Uart_ms         db      0
+Uart_txxonoff   db      0
+Uart_rxhead     dc      0
+Uart_rxtail     dc      0
+Uart_rxflow     db      0
+Uart_rxrts      db      0
+Uart_rxdtr      db      0
+Uart_rxxon      db      0
+Uart_foff       dc      0
+Uart_fon        dc      0
+Uart_txrts      db      0
+Uart_txdtr      db      0
+Uart_txxon      db      0
 
 	align	16
 	org $A0
@@ -311,6 +340,9 @@ BYTE_SECTOR_BUF	EQU	SECTOR_BUF
 ROOTDIR_BUF fill.b  16384,0
 PROG_LOAD_AREA	EQU ROOTDIR_BUF
 
+sprites:
+	dcb.b	1024,0x00
+
 EndStaticAllocations:
 	dw		0
 
@@ -361,10 +393,23 @@ start:
 	bsr		SetupIntVectors
 ;	bsr		KeybdInit
 	bsr		InitPIC
+	bsr     InitUart
+	bsr     RTCCReadbuf          ; read the real-time clock
+	bsr     set_time_serial      ; set the system time serial
 	bra		Monitor
 	bsr		FMTKInitialize
 	cli
 
+SerialStartMsg:
+    push    lr
+	ldi     r1,#SerialPutChar
+	sw      r1,OutputVec
+	ldi     r1,#msgStart
+	bsr     DisplayStringCRLF
+	ldi		r1,#DisplayChar
+	sw		r1,OutputVec
+    rts
+ 
 SetupIntVectors:
 	ldi     r1,#$00A7
 	sc      r1,LEDS
@@ -376,6 +421,8 @@ SetupIntVectors:
 	sw		r1,450*8[r2]
 	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
 	sw		r1,451*8[r2]
+	ldi     r1,#SerialIRQ
+	sw      r1,456*8[r2]
 	ldi		r1,#KeybdIRQ
 	sw		r1,463*8[r2]
     ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
@@ -403,9 +450,11 @@ SetupIntVectors:
 InitPIC:
 	ldi		r1,#$0C			; timer interrupt(s) are edge sensitive
 	sh		r1,PIC_ES
-	ldi		r1,#$000B		; enable keyboard reset, timer interrupts
+	ldi		r1,#$000F		; enable keyboard reset, timer interrupts
 	sh		r1,PIC_IE
 	rtl
+
+include "serial.s"
 
 ;------------------------------------------------------------------------------
 ; Convert ASCII character to screen display character.
@@ -600,14 +649,15 @@ KeybdIRQ:
 ;------------------------------------------------------------------------------
 
 TickRout:
+    ldi     sp,#$8000           ; set stack pointer to interrupt processing stack
     push    r1
 	ldi		r1,#3				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
-	lh	    r1,TEXTSCR+332+$FFD00000
+	lh	    r1,TEXTSCR+220+$FFD00000
 	addui	r1,r1,#1
-	sh	    r1,TEXTSCR+332+$FFD00000
+	sh	    r1,TEXTSCR+220+$FFD00000
 	pop     r1
-	rti
+	rti                         ; restore stack pointer and return
 
 ;------------------------------------------------------------------------------
 ; 1024Hz interupt routine. This must be fast. Allows the system time to be
@@ -615,12 +665,13 @@ TickRout:
 ;------------------------------------------------------------------------------
 
 Tick1024Rout:
+    ldi     sp,#$8000           ; set stack pointer to interrupt processing stack
 	push	r1
 	ldi		r1,#2				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
 	inc     Milliseconds
 	pop		r1
-	rti
+	rti                         ; restore stack pointer and return
 
 ;------------------------------------------------------------------------------
 ; GetSystemTime
@@ -937,7 +988,7 @@ mon1:
 	ldi		r1,#50
 	sc		r1,LEDS
 ;	ldi		sp,#TCBs+TCB_Size-8		; reload the stack pointer, it may have been trashed
-	ldi		sp,#$8000
+	ldi		sp,#$6000
 	cli
 .PromptLn:
 	bsr		CRLF
@@ -2241,6 +2292,7 @@ SD_CMD8:
 	rts
 
 SD_WAIT_RESP:
+    push    lr
 	push	r2
     push    r3
 	ldi		r2,#SD_MASTER
@@ -2254,6 +2306,7 @@ SD_WAIT_RESP:
 	ldi		r1,#1
 	pop		r3
     pop     r2
+    pop     lr
 	rtl
 .0002:
 	ldi		r1,#'T'
@@ -2264,6 +2317,7 @@ SD_WAIT_RESP:
 	ldi		r1,#0
 	pop		r3
     pop     r2
+    pop     lr
 	rtl
 
 ; ============================================================================
@@ -2417,6 +2471,151 @@ IBPT_ISR:
     rtd
 .0001:
     bra     .0001
+
+include "set_time_serial.s"
+
+pSpriteController:
+	dw	-2437120
+
+sprite_demo:
+	      	subui	sp,sp,#16
+	      	push 	bp
+	      	mov  	bp,sp
+	      	subui	sp,sp,#24
+	      	push 	r11
+	      	push 	r12
+	      	push 	r13
+	      	ldi  	r11,#sprites
+	      	ldi  	r12,#-2356224
+	      	ldi  	r13,#-2621440
+	      	sw   	r0,-8[bp]
+sprite_demo_4:
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#32
+	      	bge  	r3,sprite_demo_5
+	      	lw   	r3,-8[bp]
+	      	asli 	r3,r3,#2
+	      	asli 	r3,r3,#2
+	      	lw   	r4,pSpriteController
+	      	addu 	r3,r3,r4
+	      	lhu  	r4,4[r3]
+	      	ori  	r4,r4,#204
+	      	sh   	r4,4[r3]
+sprite_demo_6:
+	      	inc  	-8[bp],#1
+	      	bra  	sprite_demo_4
+sprite_demo_5:
+	      	sw   	r0,-8[bp]
+sprite_demo_7:
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#16384
+	      	bge  	r3,sprite_demo_8
+	      	lw   	r3,-8[bp]
+	      	asli 	r3,r3,#2
+	      	lhu  	r4,[r12]
+	      	sh   	r4,0[r13+r3]
+sprite_demo_9:
+	      	inc  	-8[bp],#1
+	      	bra  	sprite_demo_7
+sprite_demo_8:
+	      	sw   	r0,-8[bp]
+sprite_demo_10:
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#32
+	      	bge  	r3,sprite_demo_11
+	      	lw   	r3,[r12]
+	      	mod  	r3,r3,#1364
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	sw   	r3,0[r11+r4]
+	      	lw   	r3,[r12]
+	      	mod  	r3,r3,#768
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	sw   	r3,8[r4]
+	      	lw   	r3,[r12]
+	      	and  	r3,r3,#7
+	      	subu 	r3,r3,#4
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	sw   	r3,16[r4]
+	      	lw   	r3,[r12]
+	      	and  	r3,r3,#7
+	      	subu 	r3,r3,#4
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	sw   	r3,24[r4]
+sprite_demo_12:
+	      	inc  	-8[bp],#1
+	      	bra  	sprite_demo_10
+sprite_demo_11:
+sprite_demo_13:
+	      	ldi  	r3,#1
+	      	beq  	r3,sprite_demo_14
+	      	sw   	r0,-8[bp]
+sprite_demo_15:
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#32
+	      	bge  	r3,sprite_demo_16
+	      	lw   	r3,-8[bp]
+	      	asli 	r3,r3,#5
+	      	lw   	r3,0[r11+r3]
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	lw   	r4,16[r4]
+	      	addu 	r3,r3,r4
+	      	and  	r3,r3,#1023
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	sw   	r3,0[r11+r4]
+	      	lw   	r3,-8[bp]
+	      	asli 	r3,r3,#5
+	      	addu 	r3,r3,r11
+	      	lw   	r3,8[r3]
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	lw   	r4,24[r4]
+	      	addu 	r3,r3,r4
+	      	and  	r3,r3,#511
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	sw   	r3,8[r4]
+	      	lw   	r3,-8[bp]
+	      	asli 	r3,r3,#5
+	      	lw   	r3,0[r11+r3]
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r11
+	      	lw   	r4,8[r4]
+	      	asli 	r4,r4,#16
+	      	addu 	r3,r3,r4
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#2
+	      	asli 	r4,r4,#2
+	      	lw   	r5,pSpriteController
+	      	sh   	r3,0[r5+r4]
+sprite_demo_17:
+	      	inc  	-8[bp],#1
+	      	bra  	sprite_demo_15
+sprite_demo_16:
+	      	     	            ldi  r1,#1000000
+            bsr  MicroDelay
+        
+	      	bra  	sprite_demo_13
+sprite_demo_14:
+sprite_demo_18:
+	      	pop  	r13
+	      	pop  	r12
+	      	pop  	r11
+	      	mov  	sp,bp
+	      	pop  	bp
+	      	rtl  	#16
          
     nop
     nop

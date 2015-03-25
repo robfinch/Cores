@@ -295,8 +295,15 @@ static int FISA64_getSprRegister()
          }
          break;
 
-    // ivno
+    // isp ivno
     case 'i': case 'I':
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             (inptr[2]=='p' || inptr[2]=='P') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 15;
+         }
          if ((inptr[1]=='v' || inptr[1]=='V') &&
              (inptr[2]=='n' || inptr[2]=='N') &&
              (inptr[3]=='o' || inptr[3]=='O') &&
@@ -306,6 +313,7 @@ static int FISA64_getSprRegister()
              return 0x0C;
          }
          break;
+
 
     // LOTGRP
     case 'l': case 'L':
@@ -519,7 +527,6 @@ static void process_jal(int oc, int Rt)
     // Memory indirect ?
     if (token=='(' || token=='[') {
        Ra = getRegisterX();
-       // This memory indirect code isn't supported by the processor.
        if (Ra==-1) {
            Ra = 0;
            NextToken();
@@ -552,7 +559,7 @@ static void process_jal(int oc, int Rt)
             return;
        }
     }
-    addr = expr();
+    addr = expr() >> 2;
     prevToken();
     // d(Rn)? 
     if (token=='(' || token=='[') {
@@ -571,7 +578,6 @@ static void process_jal(int oc, int Rt)
         );
         return;
     }
-
     emitImm15(addr, code_bits > 32);
     emit_insn(
         ((addr & 0x7fffLL) << 17) |
@@ -1278,6 +1284,7 @@ static void process_pushpop(int oc)
             (0x1E << 7) |
             oc
         );
+        prevToken();
         return;
     }
     emit_insn(
@@ -1319,9 +1326,16 @@ static void process_mov()
 
 static void process_pctrl(int oc)
 {
+     int Rt;
+
+     if (oc==29 || oc==30 || oc==31)
+         Rt = 30;
+     else
+         Rt = 0;
      emit_insn(
          (0x37 << 25) |
          (oc << 17) |
+         (Rt << 12) |
          0x02
      );
 }
@@ -1724,7 +1738,7 @@ void FISA64_processMaster()
         case tk_lea: process_load(0x47); break;
         case tk_lh:  process_load(0x44); break;
         case tk_lhu: process_load(0x45); break;
-        case tk_lsr: process_rrop(0x39); break;
+        case tk_lsr: process_rrop(0x31); break;
         case tk_lsri: process_shifti(0x39); break;
         case tk_lw:  process_load(0x46); break;
         case tk_mffp: process_mffp(0x4B); break;
