@@ -91,12 +91,16 @@
 `define ROL			7'h32
 `define ROR			7'h33
 `define SRA			7'h34
+`define CPUID		7'h36
 `define PCTRL		7'h37
 `define CLI				5'd0
 `define SEI				5'd1
 `define STP				5'd2
+`define WAI             5'd3
 `define EIC				5'd4
 `define DIC				5'd5
+`define SRI				5'd8
+`define FIP				5'd10
 `define RTD				5'd29
 `define RTE				5'd30
 `define RTI				5'd31
@@ -113,6 +117,7 @@
 `define LH		7'h44
 `define LHU		7'h45
 `define LW		7'h46
+`define LEA		7'h47
 `define LBX		7'h48
 `define LBUX	7'h49
 `define LCX		7'h4A
@@ -122,6 +127,7 @@
 `define LWX		7'h4E
 `define LEAX	7'h4F
 `define POP		7'h57
+`define LWAR	7'h5C
 `define SUI		7'h5F
 `define SB		7'h60
 `define SC		7'h61
@@ -136,6 +142,7 @@
 `define SHX		7'h6A
 `define SWX		7'h6B
 `define CAS		7'h6C
+`define SWCR	7'h6E
 
 `define IMM		7'h7C
 
@@ -147,8 +154,11 @@
 `define IPC			8'd08
 `define EPC			8'd09
 `define VBR			8'd10
+`define BEAR		8'd11
 `define MULH		8'd14
-`define USP			8'd15
+`define ISP			8'd15
+`define DSP			8'd16
+`define ESP			8'd17
 `define EA			8'd40
 `define TAGS		8'd41
 `define LOTGRP		8'd42
@@ -161,22 +171,35 @@
 `define DBCTRL		8'd54
 `define DBSTAT		8'd55
 
-`define BRK_NMI	{1'b1,5'd0,9'd510,10'd0,`BRK}
-`define BRK_IRQ	{1'b1,5'd0,vect_i,10'd0,`BRK}
-`define BRK_EXF	{6'd0,9'd497,10'd0,`BRK}
-`define BRK_IBPT	{2'b01,4'd0,9'd496,10'd0,`BRK}
-`define BRK_SSM	{2'b01,4'd0,9'd495,10'd0,`BRK}
-`define BRK_IBE	{1'b1,5'd0,9'd509,10'd0,`BRK}
+`define BRK_DBZ	{6'd0,9'd488,5'd0,5'h1E,`BRK}
+`define BRK_OFL	{6'd0,9'd489,5'd0,5'h1E,`BRK}
+`define BRK_SSM	{2'b01,4'd0,9'd495,5'd0,5'h1E,`BRK}
+`define BRK_BPT	{2'b01,4'd0,9'd496,5'd0,5'h1E,`BRK}
+`define BRK_EXF	{6'd0,9'd497,5'd0,5'h1E,`BRK}
+`define BRK_DWF	{6'd0,9'd498,5'd0,5'h1E,`BRK}
+`define BRK_DRF	{6'd0,9'd499,5'd0,5'h1E,`BRK}
+`define BRK_PRV	{6'd0,9'd501,5'd0,5'h1E,`BRK}
+`define BRK_DBE	{1'b1,5'd0,9'd508,5'd0,5'h1E,`BRK}
+`define BRK_IBE	{1'b1,5'd0,9'd509,5'd0,5'h1E,`BRK}
+`define BRK_NMI	{1'b1,5'd0,9'd510,5'd0,5'h1E,`BRK}
+`define BRK_IRQ	{1'b1,5'd0,vect_i,5'd0,5'h1E,`BRK}
 
-module FISA64(rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, bte_o, cti_o, bl_o,
-	cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module FISA64(rack_num,box_num,board_num,chip_num,core_num,
+	rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, sri_o, bte_o, cti_o, bl_o,
+	cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
 parameter AMSB = 31;		// most significant address bit
+input [15:0] rack_num;
+input [7:0] box_num;
+input [7:0] board_num;
+input [7:0] chip_num;
+input [15:0] core_num;
 input rst_i;
 input clk_i;
 output clk_o;				// gated clock output
 input nmi_i;
 input irq_i;
 input [8:0] vect_i;
+output reg sri_o;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg [5:0] bl_o;
@@ -189,6 +212,9 @@ output reg [7:0] sel_o;
 output reg [AMSB:0] adr_o;
 input [63:0] dat_i;
 output reg [63:0] dat_o;
+output reg sr_o;
+output reg cr_o;
+input rb_i;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -239,6 +265,7 @@ reg [6:0] mystreg;
 reg [49:0] clk_throttle_new;
 reg [63:0] dbctrl,dbstat;	// debug control, debug status
 reg [AMSB:0] dbad0,dbad1,dbad2,dbad3;	// debug address
+reg [AMSB:0] bear;			// bus error address register
 wire ssm = dbctrl[63];		// single step mode
 reg km;						// kernel mode
 reg [7:0] kmb;				// backup kernel mode flag
@@ -246,10 +273,12 @@ reg [63:0] cr0;
 wire pe = cr0[0];			// protected mode enabled
 wire bpe = cr0[32];			// branch predictor enable
 wire ice = cr0[30];			// instruction cache enable
+wire rb = cr0[36];
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
 reg [AMSB:0] pc,dpc,xpc,wpc;
 reg [AMSB:0] epc,ipc,dbpc;	// exception, interrupt PC's, debug PC
+reg [AMSB:0] isp,dsp,esp;	// stack pointer save areas
 reg gie;					// global interrupt enable
 reg StatusHWI;
 reg [AMSB:0] ibufadr;
@@ -257,7 +286,7 @@ reg [31:0] ibuf;
 wire ibufhit = pc[AMSB:2]==ibufadr[AMSB:2];
 reg [63:0] regfile [31:0];
 reg [63:0] sp,usp;
-reg [4:0] regSP;
+reg [4:0] regSP,regTR;
 reg [63:0] sp_inc;
 reg [31:0] ir,xir,mir,wir;
 wire [31:0] iir = ice ? insn : ibuf;
@@ -287,7 +316,7 @@ uRt:	rfoa <= ures;
 		else if (wRt2)
 			rfoa <= wres2;
 		else
-			rfoa <= km ? sp : usp;
+			rfoa <= sp;
 default:	rfoa <= regfile[Ra];
 endcase
 always @*
@@ -302,7 +331,7 @@ uRt:	rfob <= ures;
 		else if (wRt2)
 			rfob <= wres2;
 		else
-			rfob <= km ? sp : usp;
+			rfob <= sp;
 default:	rfob <= regfile[Rb];
 endcase
 always @*
@@ -317,7 +346,7 @@ uRt:	rfoc <= ures;
 		else if (wRt2)
 			rfoc <= wres2;
 		else
-			rfoc <= km ? sp : usp;
+			rfoc <= sp;
 default:	rfoc <= regfile[Rc];
 endcase
 reg [63:0] a,b,c,imm,xb;
@@ -331,6 +360,7 @@ reg [6:0] cnt;
 reg res_sgn;
 reg [1:0] ld_size, st_size;
 reg [31:0] insncnt;
+reg [3:0] sri_cnt;
 
 // Detect multi-cycle operation.
 function fnIsMC;
@@ -345,9 +375,9 @@ case(opcode)
 `BRK,
 `MUL,`MULU,`DIV,`DIVU,`MOD,`MODU,
 `PUSH,`PMW,`PEA,`POP,`RTS,
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC,`CAS,`JALI,
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI,
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
-`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX:
+`SB,`SC,`SH,`SW,`SWCR,`SBX,`SCX,`SHX,`SWX:
 	fnIsMC = TRUE;
 default:	fnIsMC = FALSE;
 endcase
@@ -521,19 +551,6 @@ fnASOverflow = (op ^ s ^ b) & (~op ^ a ^ b);
 end
 endfunction
 
-wire [63:0] btfldo;
-
-FISA64_bitfield u3
-(
-	.op(xir[31:29]),
-	.a(a),
-	.b(c),
-	.imm(xir[11:7]),
-	.m(xir[28:17]),
-	.o(btfldo),
-	.masko()
-);
-
 //-----------------------------------------------------------------------------
 // Evaluate branch condition, compare to zero.
 //-----------------------------------------------------------------------------
@@ -581,8 +598,13 @@ wire eq = a==b;
 wire lt = $signed(a) < $signed(b);
 wire ltu = a < b;
 
+// Rather than have a giant 50+ to 1 multiplexer for results, some instruction
+// groups have been moved into submodules. This allows better optimization.
+
 wire [63:0] logico;
 wire [63:0] shifto;
+wire [63:0] seto;
+wire [63:0] btfldo;
 
 FISA64_logic u5
 (
@@ -602,6 +624,26 @@ FISA64_shift u6
 	.rolo()
 );
 
+FISA64_setcc u7
+(
+	.xir({x1funct,xir[24:7],x1opcode}),
+	.a(a),
+	.b(b),
+	.imm(imm),
+	.res(seto)
+);
+
+FISA64_bitfield u3
+(
+	.op(x1funct[6:4]),
+	.a(a),
+	.b(c),
+	.imm(xir[11:7]),
+	.m(xir[28:17]),
+	.o(btfldo),
+	.masko()
+);
+
 always @*
 case(x1opcode)
 `BSR:	res <= xpc + 64'd4;
@@ -619,16 +661,8 @@ case(x1opcode)
 `AND,`OR,`EOR:	
 		res <= logico;
 `LDI:	res <= imm;
-`SEQ:	res <= eqi;
-`SNE:	res <= !eqi;
-`SGT:	res <= !(lti|eqi);
-`SGE:	res <= !lti;
-`SLT:	res <= lti;
-`SLE:	res <= lti|eqi;
-`SHI:	res <= !(ltui|eqi);
-`SHS:	res <= !ltui;
-`SLO:	res <= ltui;
-`SLS:	res <= ltui|eqi;
+`SEQ,`SNE,`SGT,`SGE,`SLT,`SLE,`SHI,`SHS,`SLO,`SLS:
+		res <= seto;
 `RR:
 	case(x1funct)
 	`MFSPR:
@@ -641,8 +675,11 @@ case(x1opcode)
 			`EPC:		res <= epc;
 			`IPC:		res <= ipc;
 			`VBR:		res <= vbr;
+			`BEAR:		res <= bear;
 			`MULH:		res <= p[127:64];
-			`USP:		res <= usp;
+			`ISP:		res <= isp;
+			`ESP:		res <= esp;
+			`DSP:		res <= dsp;
 			`EA:		res <= ea;
 			`TAGS:		res <= lottag;
 			`LOTGRP:	res <= {lotgrp[5],lotgrp[4],lotgrp[3],lotgrp[2],lotgrp[1],lotgrp[0]};
@@ -661,10 +698,16 @@ case(x1opcode)
 			case(xir[24:17])
 			`MYSTREG:	res <= mystreg;
 			`MULH:		res <= p[127:64];
-			`USP:		res <= usp;
 			default:	res <= 64'd0;
 			endcase
 		end
+	`PCTRL:
+		case(xir[21:17])
+		`RTI:	res <= isp;
+		`RTE:	res <= esp;
+		`RTD:	res <= dsp;
+		default:	res <= 64'd0;
+		endcase
 	`ADD:	res <= a + b;
 	`ADDU:	res <= a + b;
 	`SUB:	res <= a - b;
@@ -679,29 +722,32 @@ case(x1opcode)
 	`MODU:	res <= lres;
 	`NOT,`AND,`OR,`EOR,`NAND,`NOR,`ENOR:
 			res <= logico;
-	`SEQ:	res <= eq;
-	`SNE:	res <= !eq;
-	`SGT:	res <= !(lt|eq);
-	`SGE:	res <= !lt;
-	`SLT:	res <= lt;
-	`SLE:	res <= lt|eq;
-	`SHI:	res <= !(ltu|eq);
-	`SHS:	res <= !ltu;
-	`SLO:	res <= ltu;
-	`SLS:	res <= ltu|eq;
+	`SEQ,`SNE,`SGT,`SGE,`SLT,`SLE,`SHI,`SHS,`SLO,`SLS:
+			res <= seto;
 	`SLLI,`SLL,`SRLI,`SRL,`SRAI,`SRA,`ROL,`ROLI,`ROR,`RORI:	
 			res <= shifto;
 	`SXB:	res <= {{56{a[7]}},a[7:0]};
 	`SXC:	res <= {{48{a[15]}},a[15:0]};
 	`SXH:	res <= {{32{a[31]}},a[31:0]};
+	`CPUID:
+		case(a[3:0]|xir[20:17])
+		4'd0:	res <= {rack_num,box_num,board_num,chip_num,core_num};
+		4'd2:	res <= "Finitron";
+		4'd3:	res <= "";
+		4'd4:	res <= "FISA64  ";
+		4'd5:	res <= "";
+		4'd8:	res <= 1;
+		default:	res <= 64'h0;
+		endcase
 	default:	res <= 64'd0;
 	endcase
 `BTFLD:	res <= btfldo;
+`LEA:	res <= a + imm;
 `LEAX:	res <= a + (b << xir[23:22]) + imm;
 `PMW:	res <= lres;
 `POP:	res <= lres;
 `RTS:	res <= lres;
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC,`CAS,`JALI,
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI,
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX:
 		res <= lres;
 default:	res <= 64'd0;
@@ -718,6 +764,7 @@ case(x1opcode)
 default:	res2 <= 64'd0;
 endcase
 
+reg hwi;
 reg nmi1;
 reg nmi_edge;
 reg ld_clk_throttle;
@@ -781,6 +828,7 @@ if (rst_i) begin
 	mc_done <= TRUE;
 	tagadr <= 64'd0;
 	regSP <= 5'd30;
+	regTR <= 5'd24;
 	cr0[0] <= FALSE;	// protected mode enable
 	cr0[30] <= TRUE;	// instruction cache enable
 	cr0[32] <= TRUE;	// branch predictor enable
@@ -796,6 +844,9 @@ if (db_stat0) dbstat[0] <= TRUE;
 if (db_stat1) dbstat[1] <= TRUE;
 if (db_stat2) dbstat[2] <= TRUE;
 if (db_stat3) dbstat[3] <= TRUE;
+if (sri_cnt != 4'd0)
+	sri_cnt <= sri_cnt - 4'd1;
+sri_o <= |sri_cnt;
 case (state)
 RESET:
 begin
@@ -822,8 +873,10 @@ begin
 				im <= `FALSE;
 		end
 		insncnt <= insncnt + 32'd1;
-		if (!StatusHWI & gie & nmi_edge)
+		if (!StatusHWI & gie & nmi_edge) begin
 			ir <= `BRK_NMI;
+			hwi = TRUE;
+		end
 		else if (!StatusHWI & gie & !im & irq_i) begin
 			$display("*****************************");
 			$display("*****************************");
@@ -833,15 +886,24 @@ begin
 			$display("*****************************");
 			$display("*****************************");
 			ir <= `BRK_IRQ;
+			hwi = TRUE;
 		end
-		else if (db_imatch)
-			ir <= `BRK_IBPT;
-		else if (!((isLotOwnerX && (km ? lottagX[0] : lottagX[3])) || !pe))
+		else if (db_imatch) begin
+			ir <= `BRK_BPT;
+			hwi = TRUE;
+		end
+		else if (!((isLotOwnerX && (km ? lottagX[0] : lottagX[3])) || !pe)) begin
 			ir <= `BRK_EXF;
-		else if (ice)
+			hwi = TRUE;
+		end
+		else if (ice) begin
 			ir <= insn;
-		else
+			hwi = FALSE;
+		end
+		else begin
 			ir <= ibuf;
+			hwi = FALSE;
+		end
 		disassem(iir);
 		$display("%h: %h", pc, iir);
 		dpc <= pc;
@@ -857,6 +919,7 @@ begin
 		end
 		else if (iopcode==`RR && ifunct==`PCTRL) begin
 			case(iir[21:17])
+			`WAI:	if (!hwi) pc <= pc; else dpc <= pc + 64'd4;
 			`RTD:	pc <= dbpc;
 			`RTE:	pc <= epc;
 			`RTI:	pc <= ipc;
@@ -932,22 +995,26 @@ begin
 		// Set the target register field. Some op's need this set to zero in
 		// order to prevent a register from being updated. Other op's use the
 		// target register field from the instruction.
+		// If in user mode then don't allow updating register #24 (the task
+		// register). This check must be done in the RF stage so that bypass
+		// multiplexers are affected as well. It cannot be done at the WB
+		// stage.
 		case(opcode)
 		`RR:
 			case(funct)
 			`MTSPR,`FENCE:
 				xRt <= 5'd0;
 			`PCTRL:
-				xRt <= 5'd0;
-			default:	xRt <= ir[16:12];
+				xRt <= (km || ir[16:12]!=regTR) ? ir[16:12] : 5'd0;
+			default:	xRt <= (km || ir[16:12]!=regTR) ? ir[16:12] : 5'd0;
 			endcase
 		`BRA,`Bcc,`BRK,`IMM,`NOP:
 			xRt <= 5'd0;
-		`SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`INC,
+		`SB,`SC,`SH,`SW,`SWCR,`SBX,`SCX,`SHX,`SWX,`INC,
 		`RTL,`PUSH,`PEA,`PMW:
 			xRt <= 5'd0;
 		`BSR,`RTS:	xRt <= 5'h1F;
-		default:	xRt <= ir[16:12];
+		default:	xRt <= (km || ir[16:12]!=regTR) ? ir[16:12] : 5'd0;
 		endcase
 		
 		// Set the SP target register flag. This flag indicates an update to
@@ -994,10 +1061,10 @@ begin
 		// off so that the debug routine may run full speed.
 		if (ssm) begin
 			if (xopcode != `IMM) begin
-				xRt <= 5'd0;				// Inject appropriate BRK instruction
-				xopcode <= `BRK;			// into instruction stream.
-				x1opcode <= `BRK;
-				xir <= `BRK_SSM;
+				nop_xir();
+				ir <= `BRK_SSM;
+				dpc <= xpc;
+				pc <= 32'h10000;
 				dbctrl[62] <= dbctrl[63];	// record that SSM was on
 				dbctrl[63] <= FALSE;		// turn off SSM
 			end
@@ -1014,7 +1081,9 @@ begin
 					`IPC:		ipc <= {a[AMSB:2],2'b00};
 					`VBR:		begin vbr <= a[AMSB:0]; vbr[12:0] <= 13'h000; end
 					`MULH:		p[127:64] <= a;
-					`USP:		usp <= a;
+					`ISP:		isp <= a;
+					`DSP:		dsp <= a;
+					`ESP:		esp <= a;
 					`EA:		ea <= a;
 					`LOTGRP:
 						begin
@@ -1038,15 +1107,13 @@ begin
 				else begin
 					case(xir[24:17])
 					`MYSTREG:	mystreg <= a;
-					`USP:		usp <= a;
 					default:	privilege_violation();
 					endcase
 				end
 				
 			`MFSPR:	if (!km &&
 							xir[24:17]!=`MULH &&
-							xir[24:17] != `MYSTREG &&
-							xir[24:17] != `USP)
+							xir[24:17] != `MYSTREG)
 						privilege_violation();
 			`PCTRL:
 				if (km)
@@ -1056,7 +1123,8 @@ begin
 					`STP:	begin clk_throttle_new <= 50'd0; ld_clk_throttle <= `TRUE; end
 					`EIC:	cr0[30] <= TRUE;
 					`DIC:	cr0[30] <= FALSE;
-					
+					`FIP:	update_pc(xpc+64'd4);
+					`SRI:	sri_cnt <= 4'd10;
 					`RTD:
 						begin
 							km <= kmb[0];
@@ -1096,18 +1164,21 @@ begin
 		// For these instructions, the PC was already modified as part of the
 		// multi-cycle operation. But we still need to flush the pipeline of
 		// following instructions.
+		// Don't need to flush the ir. The PC was set correctly
+		// a cycle sooner in the multi-cycle code.
 		`BRK,`RTS,`JALI:
 				begin
-					// Don't need to flush the ir. The PC was set correctly
-					// a cycle sooner in the multi-cycle code.
-					if (!ssm)
-						nop_xir();
+					nop_xir();
 				end
 		// Correct a mispredicted branch.
 		`Bcc:	if (takb & !xbranch_taken)
 					update_pc(xpc + {imm,2'b00});
 				else if (!takb & xbranch_taken)
 					update_pc(xpc + 64'd4);
+		// CR0 is updated by SWCR but there is no result forwarding on the
+		// update. So that the next instruction may have the correct value
+		// the pipeline is flushed.
+		`SWCR:	update_pc(xpc+64'd4);
 		endcase
 	end
 
@@ -1123,17 +1194,11 @@ begin
 		regfile[wRt] <= wres;
 		if (wRt2) begin
 			gie <= TRUE;
-			if (km)
-				sp <= wres2;
-			else
-				usp <= wres2;
+			sp <= wres2;
 		end
 		if (wRt==regSP)	begin // write to SP globally enables interrupts
 			gie <= TRUE;
-			if (km)
-				sp <= wres;
-			else
-				usp <= wres;
+			sp <= wres;
 		end
 	end
 	// If advanceTL (= TRUE)
@@ -1166,10 +1231,15 @@ begin
 			end
 		`BRK:	begin
 				case(xir[31:30])
-				2'b00:	epc <= xpc;
+				2'b00:	
+					begin
+						epc <= xpc;
+						esp <= a;
+					end
 				2'b01:
 					begin
 						dbpc <= xpc;
+						dsp <= a;
 						//dbctrl[62] <= dbctrl[63];
 						//dbctrl[63] <= FALSE;	// clear SSM
 					end
@@ -1177,6 +1247,7 @@ begin
 					begin
 						StatusHWI <= `TRUE;
 						ipc <= xpc;
+						isp <= a;
 						if (xir[25:17]==9'd510)
 							nmi_edge <= FALSE;
 						else
@@ -1189,7 +1260,7 @@ begin
 				ld_size <= word;
 				next_state(LOAD1);
 				end
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`INC,`CAS,`JALI:
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI:
 			begin
 				next_state(LOAD1);
 				mopcode <= xopcode;
@@ -1200,6 +1271,7 @@ begin
 				`LC,`LCU:	ld_size <= char;
 				`LH,`LHU:	ld_size <= half;
 				`LW,`INC:	ld_size <= word;
+				`LWAR:	ld_size <= word;
 				`CAS,`JALI:	ld_size <= word;
 				endcase
 				st_size <= word;
@@ -1250,7 +1322,7 @@ begin
 				ea <= a;
 				ld_size <= word;
 				end
-		`SB,`SC,`SH,`SW:
+		`SB,`SC,`SH,`SW,`SWCR:
 				begin
 				next_state(STORE1);
 				mopcode <= xopcode;
@@ -1261,6 +1333,7 @@ begin
 				`SC:	st_size <= char;
 				`SH:	st_size <= half;
 				`SW:	st_size <= word;
+				`SWCR:	st_size <= word;
 				endcase
 				end
 		`SBX,`SCX,`SHX,`SWX:
@@ -1427,24 +1500,26 @@ LOAD2:
 	begin
 		// Check for a breakpoint
 		if (db_lmatch) begin
-			wb_read1(word,{vbr[AMSB:12],9'd496,3'b000});	// Breakpoint
-			mopcode <= `BRK;
-			dbpc <= xpc;
-			dbctrl[62] <= dbctrl[63];
-			dbctrl[63] <= FALSE;	// clear SSM
-			next_state(LOAD3);
+			nop_xir();
+			ir <= `BRK_BPT;
+			dpc <= xpc;
+			pc <= 32'h10000;
+			next_state(RUN);
 		end
 		// Check for read attribute on lot
 		else if ((isLotOwner && (km ? lottag[2] : lottag[5])) || !pe) begin
 			$display("LOAD: %h",ea);
 			wb_read1(ld_size,ea);
+			if (mopcode==`LWAR)
+				sr_o <= TRUE;
 			next_state(LOAD3);
 		end
 		else begin
-			wb_read1(word,{vbr[AMSB:12],9'd499,3'b000});	// Data read fault
-			mopcode <= `BRK;
-			epc <= xpc;
-			next_state(LOAD3);
+			nop_xir();
+			ir <= `BRK_DRF;
+			dpc <= xpc;
+			pc <= 32'h10000;
+			next_state(RUN);
 		end
 	end
 LOAD3:
@@ -1530,7 +1605,7 @@ LOAD3:
 			3'd6:	begin lres[15:0] <= dat_i[63:48]; next_state(LOAD4); wb_half_nack(); end
 			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
-		`LW,`LWX:
+		`LW,`LWX,`LWAR:
 			case(ea[2:0])
 			3'd0:	begin lres <= dat_i[63:0]; next_state(iihit ? RUN : LOAD_ICACHE); wb_nack(); mc_done <= TRUE; xopcode <= `NOP;end
 			3'd1:	begin lres[55:0] <= dat_i[63:8]; next_state(LOAD4); wb_half_nack(); end
@@ -1652,7 +1727,7 @@ LOAD5:
 			3'd7:	lres[63: 8] <= dat_i[23:0];
 			default:	;
 			endcase
-		`LW,`LWX:
+		`LW,`LWX,`LWAR:
 			case(ea[2:0])
 			3'd0:	;
 			3'd1:	lres[63:56] <= dat_i[7:0];
@@ -1739,24 +1814,26 @@ STORE2:
 	begin
 		// Check for a breakpoint
 		if (db_smatch|db_lmatch) begin
-			wb_read1(word,{vbr[AMSB:12],9'd496,3'b000});	// Breakpoint
-			mopcode <= `BRK;
-			dbpc <= xpc;
-			dbctrl[62] <= dbctrl[63];
-			dbctrl[63] <= FALSE;	// clear SSM
-			next_state(LOAD3);
+			nop_xir();
+			ir <= `BRK_BPT;
+			dpc <= xpc;
+			pc <= 32'h10000;
+			next_state(RUN);
 		end
 		// check for write attribute on lot
 		else if ((isLotOwner && (km ? lottag[1] : lottag[4])) || !pe) begin
 			wb_write1(st_size,ea,xb);
 			$display("STORE: %h=%h",ea,xb);
+			if (mopcode==`SWCR)
+				cr_o <= TRUE;
 			next_state(STORE3);
 		end
 		else begin
-			wb_read1(word,{vbr[AMSB:12],9'd498,3'b000});	// Data write fault
-			mopcode <= `BRK;
-			epc <= xpc;
-			next_state(LOAD3);
+			nop_xir();
+			ir <= `BRK_DWF;
+			dpc <= xpc;
+			pc <= 32'h10000;
+			next_state(RUN);
 		end
 	end
 STORE3:
@@ -1775,6 +1852,8 @@ STORE3:
 			xopcode <= `NOP;
 			next_state(iihit ? RUN : LOAD_ICACHE);
 		end
+		if (mopcode==`SWCR)
+			cr0[36] <= rb_i;
 	end
 STORE4:
 	begin
@@ -2031,6 +2110,8 @@ begin
 	cyc_o <= 1'b0;
 	stb_o <= 1'b0;
 	we_o <= 1'b0;
+	sr_o <= 1'b0;
+	cr_o <= 1'b0;
 end
 endtask
 
@@ -2101,48 +2182,46 @@ endtask
 task databus_error;
 begin
 	wb_nack();
-	ea <= {vbr[AMSB:12],9'd508,3'b000};	// Databus error
-	mopcode <= `BRK;
-	ipc <= xpc;
-	ld_size <= word;
-	next_state(LOAD1);
+	nop_xir();
+	ir <= `BRK_DBE;
+	dpc <= xpc;
+	pc <= 32'h10000;
+	bear <= ea;
+	next_state(RUN);
 end
 endtask
 
 task privilege_violation;
 begin
-	epc <= xpc;
-	xopcode <= `BRK;
-	mopcode <= `BRK;
-	mir <= xir;
-	ea <= {vbr[AMSB:12],9'd501,3'b000};	// privilege violation
-	ld_size <= word;
-	next_state(LOAD1);
+	wb_nack();
+	nop_xir();
+	ir <= `BRK_PRV;
+	dpc <= xpc;
+	pc <= 32'h10000;
+	next_state(RUN);
 end
 endtask
 
 task overflow;
 begin
-	epc <= xpc;
-	xopcode <= `BRK;
-	mopcode <= `BRK;
-	mir <= xir;
-	ea <= {vbr[AMSB:12],9'd489,3'b000};	// overflow violation
-	ld_size <= word;
-	next_state(LOAD1);
+	wb_nack();
+	nop_xir();
+	ir <= `BRK_OFL;
+	dpc <= xpc;
+	pc <= 32'h10000;
+	next_state(RUN);
 end
 endtask
 
 // function argument bad
 task divide_by_zero;
 begin
-	epc <= xpc;
-	xopcode <= `BRK;
-	mopcode <= `BRK;
-	mir <= xir;
-	ea <= {vbr[AMSB:12],9'd488,3'b000};	// divide_by_zero
-	ld_size <= word;
-	next_state(LOAD1);
+	wb_nack();
+	nop_xir();
+	ir <= `BRK_DBZ;
+	dpc <= xpc;
+	pc <= 32'h10000;
+	next_state(RUN);
 end
 endtask
 
@@ -2188,6 +2267,15 @@ input [31:0] insn;
 begin
 	case(insn[6:0])
 	`LDI:	$display("LDI r%d,#%h", insn[16:12], insn[31:17]);
+	`RR:
+		case(insn[31:25])
+		`PCTRL:
+			case(insn[21:17])
+			`RTI:	$display("RTI");
+			`RTE:	$display("RTE");
+			`RTD:	$display("RTD");
+			endcase
+		endcase
 	`BRA:	$display("BRA %h" , pc + {{37{insn[31]}},insn[31:7],2'b00});
 	`BSR:	$display("BSR %h" , pc + {{37{insn[31]}},insn[31:7],2'b00});
 	`Bcc:
@@ -2196,7 +2284,17 @@ begin
 		`BNE:	$display("BNE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
 		`BLT:	$display("BLT r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
 		endcase
+	`BRK:	$display("BRK %d %s", insn[25:17], insn[31:30]==2'b00 ? "SWE" : insn[31:30]==2'b01 ? "DBG" : "HWI");
+	`LB:	$display("LB r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`LBU:	$display("LBU r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`LC:	$display("LC r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`LCU:	$display("LCU r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`LH:	$display("LH r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`LHU:	$display("LHU r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
 	`LW:	$display("LW r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`SB:	$display("SB r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`SC:	$display("SC r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
+	`SH:	$display("SH r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
 	`SW:	$display("SW r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
 	`PUSH:	$display("PUSH r%d", insn[11:7]);
 	`POP:	$display("POP r%d", insn[16:12]);
@@ -2439,6 +2537,55 @@ case(xopcode)
 `AND:	res <= a & imm;
 `OR:	res <= a | imm;
 `EOR:	res <= a ^ imm;
+default:	res <= 64'd0;
+endcase
+
+endmodule
+
+module FISA64_setcc(xir, a, b, imm, res);
+input [31:0] xir;
+input [63:0] a;
+input [63:0] b;
+input [63:0] imm;
+output [63:0] res;
+reg [63:0] res;
+
+wire [6:0] xopcode = xir[6:0];
+wire [6:0] xfunc = xir[31:25];
+
+wire lti = $signed(a) < $signed(imm);
+wire ltui = a < imm;
+wire eqi = a==imm;
+wire eq = a==b;
+wire lt = $signed(a) < $signed(b);
+wire ltu = a < b;
+
+always @*
+case(xopcode)
+`RR:
+	case(xfunc)
+	`SEQ:	res <= eq;
+	`SNE:	res <= !eq;
+	`SGT:	res <= !(lt|eq);
+	`SGE:	res <= !lt;
+	`SLT:	res <= lt;
+	`SLE:	res <= lt|eq;
+	`SHI:	res <= !(ltu|eq);
+	`SHS:	res <= !ltu;
+	`SLO:	res <= ltu;
+	`SLS:	res <= ltu|eq;
+	default:	res <= 64'd0;
+	endcase
+`SEQ:	res <= eqi;
+`SNE:	res <= !eqi;
+`SGT:	res <= !(lti|eqi);
+`SGE:	res <= !lti;
+`SLT:	res <= lti;
+`SLE:	res <= lti|eqi;
+`SHI:	res <= !(ltui|eqi);
+`SHS:	res <= !ltui;
+`SLO:	res <= ltui;
+`SLS:	res <= ltui|eqi;
 default:	res <= 64'd0;
 endcase
 
