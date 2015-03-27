@@ -6,22 +6,23 @@
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
 ;==============================================================================
-include "FMTK_Equates.inc"
-
-	org		$1E000
+    code
+	org		$14000
+	; Compress vector table by storing only the low order 16 bits of the
+	; vector. The high order bits are always the same.
 syscall_vectors:
-	dw		FMTKInitialize
-	dw		StartTask
-	dw		ExitTask
-	dw		KillTask
-	dw		SetTaskPriority
-	dw		Sleep
-	dw		AllocMbx
-	dw		FreeMbx
-	dw		PostMsg
-	dw		SendMsg
-	dw		WaitMsg
-	dw		CheckMsg
+	dc		FMTKInitialize
+	dc		StartTask
+	dc		ExitTask
+	dc   	KillTask
+	dc		SetTaskPriority
+	dc		Sleep
+	dc		AllocMbx
+	dc		FreeMbx
+	dc		PostMsg
+	dc		SendMsg
+	dc		WaitMsg
+	dc		CheckMsg
 
 message "InitFMTK"
 BranchToSelf:
@@ -43,7 +44,7 @@ InitFMTK:
 	mfspr	r2,vbr
 	ldi		r1,#reschedule
 	sw		r1,16[r2]
-	ldi		r1,#syscall_int
+	ldi		r1,#syscall_exception
 	sw		r1,32[r2]
 	ldi		r1,#FMTKTick
 	sw		r1,(448+3)<<3[r2]
@@ -98,10 +99,10 @@ ijcb1:
 	ldi		r1,#%010010010_111111111_0000000000	; white on grey
 	sh		r1,JCB_NormAttr[r4]
 	sh		r1,JCB_CurrAttr[r4]
-	mulu	r5,r3,#16284		; 8192 words per screen
+	mulu	r5,r3,#16384		; 8192 words per screen
 	addui   r5,r5,#SCREEN_Array
-	sw		r5,JCB_pVirtVid[r4]
-	sw		r5,JCB_pVidMem[r4]
+	sh		r5,JCB_pVirtVid[r4]
+	sh		r5,JCB_pVidMem[r4]
 	bne		r3,ijcb2
 	ldi		r1,#%001000110_010010010_0000000000	; grey on blue
 	sh		r1,JCB_NormAttr[r4]
@@ -122,9 +123,12 @@ ijcb2:
 	addui   r2,r1,MSG_Size
 st4:
 	sw		r2,MSG_LINK[r1]
+	sw      r0,MSG_D1[r1]
+	sw      r0,MSG_D2[r1]
+	sw      r0,MSG_TYPE[r1]
 	addui	r1,r1,#MSG_Size
 	addui   r2,r2,#MSG_Size
-	cmp     r3,r2,#MSG_ArrayEnd
+	cmp     r3,r2,#MSG_ArrayEnd-MSG_Size
 	blt     r3,st4
 	sw      r0,MSG_LINK[r1]
 
@@ -163,7 +167,7 @@ st5:
 
     ; Initialize the free TCB list
     ; The first two TCB's are pre-allocated and so aren't part of the list
-    ldi     r2,#$TCB_Array+2*TCB_Size
+    ldi     r2,#TCB_Array+2*TCB_Size
     sw      r2,FreeTCB
     sw      r0,TCB_PrevFree[r2]
 .0001:
@@ -185,18 +189,18 @@ st5:
     mulu    r3,r4,#4096       ; initial stack size=4096
     addui   r3,r3,#STACKS_Array+4088
     sw      r3,TCB_r30[r2]    ; set the stack pointer to the default stack
-    addui   r2,r2,#TCB_size   ; move to next TCB 768B TCB size
+    addui   r2,r2,#TCB_Size   ; move to next TCB 768B TCB size
     addui   r4,r4,#1
     cmpu    r1,r4,#NR_TCB
     blt     r1,.nextTCB
 
 	; Manually setup the BIOS task
 	ldi     tr,#TCB_Array
-	sw		tr,RunningTCB	; BIOS is task #0
-	sw		tr,TCB_NextRdy	; manually build the ready list
-	sw		tr,TCB_PrevRdy
-	sw		r0,TCB_NextTo
-	sw		r0,TCB_PrevTo
+;	sw		tr,RunningTCB	; BIOS is task #0
+	sw		tr,TCB_NextRdy[tr]	; manually build the ready list
+	sw		tr,TCB_PrevRdy[tr]
+	sw		r0,TCB_NextTo[tr]
+	sw		r0,TCB_PrevTo[tr]
 	sw		tr,QNdx3		; insert at priority 3
 	; manually build the IO focus list
 	ldi		r1,#JCB_Array
@@ -211,8 +215,6 @@ st5:
 	sw		r0,TCB_Timeout[tr]
 	ldi		r1,#TS_RUNNING|TS_READY
 	sb		r1,TCB_Status[tr]
-	sb		r0,TCB_CursorRow[tr]
-	sb		r0,TCB_CursorCol[tr]
 	ldi     r1,#STACKS_Array+$FF8   ; setup stack pointer top of memory
 	sw		r1,TCB_r31[tr]
 
@@ -248,14 +250,13 @@ it2:
 	mov     r1,r2
 	sys		#4				; KillTask function
 	dh		3
-;	jsr		KillTask
 it1:
     addui   r2,r2,#TCB_Size
     cmpu    r1,r2,#TCB_ArrayEnd-TCB_Size
     blt     r1,it2
     bra     it3
 	cli						; enable interrupts
-	wai						; wait for one to happen
+;	wai						; wait for one to happen
 	bra		it2
 
 ;------------------------------------------------------------------------------
@@ -293,7 +294,7 @@ sjob3:
 	addui   r7,r7,#1
 	addui   r8,r8,#1
 	cmpu	r5,r8,#31   		; max number of chars ?
-	blt		sjob3
+	blt		r5,sjob3
 sjob2:
 	sb		r8,[r9]				; save name length
 
@@ -338,10 +339,6 @@ LockFreeTCB:
     pop     r1
     rts
 
-;------------------------------------------------------------------------------
-; Lock the task control blocks semaphore.
-;------------------------------------------------------------------------------
-
 LockTCB:
     push    lr
     push    r1
@@ -378,13 +375,7 @@ LockSema:
     mfspr   r3,cr0
     and     r3,r3,#$1000000000
     beq     r3,.0001            ; lock failed, go try again
-    pop     r3
-    pop     r2
-    rtl
-    ; Here we don't care if the store works, but we need to clear the
-    ; address reservation.
 .0002:
-    swcr    tr,[r1]
     pop     r3
     pop     r2
     rtl
@@ -393,8 +384,7 @@ LockSema:
 ; StartTask
 ;
 ; Startup a task. The task is automatically allocated a 1kW stack from the BIOS
-; stacks area. The scheduler is invoked after the task is added to the ready
-; list.
+; stacks area. 
 ;
 ; Parameters:
 ;	r1 = task priority
@@ -473,8 +463,6 @@ StartTask:
 	mov     r1,r7
 	bsr		AddTaskToReadyList
 	sw		r0,tcb_sema       ; unlock TCB semaphore
-	sys		#2			; invoke the scheduler
-;	GoReschedule		; invoke the scheduler
 stask2:
 	pop     r8
 	pop     r7
@@ -496,8 +484,7 @@ stask1:
 ;
 ; This routine is called when the task exits with an rts instruction. OR
 ; it may be invoked with a JMP ExitTask. In either case the task must be
-; running so it can't be on the timeout list. The scheduler is invoked
-; after the task is removed from the ready list.
+; running so it can't be on the timeout list.
 ;------------------------------------------------------------------------------
 message "ExitTask"
 ExitTask:
@@ -525,12 +512,67 @@ xtsk6:
 	sc		r2,LEDS
 	bsr     LockFreeTCB
 	lw		r2,FreeTCB						; add the task control block to the free list
-	sw		r2,TCB_NextTCB[r1]
+	sw		r2,TCB_NextFree[r1]
 	sw		r1,FreeTCB
 	sw		r0,freetcb_sema
 	sw      r0,tcb_sema
+	; This loop will eventually be interrupted, the interrupt return will not
+	; return to here.
 xtsk1:
-	jmp		SelectTaskToRun
+	bra     xtsk1
+
+;------------------------------------------------------------------------------
+; KillTask
+;
+; "Kills" a task, removing it from all system lists. If the task has the 
+; IO focus, the IO focus is switched. Task #0 is immortal and cannot be
+; killed. Task #1 is immortal and cannot be killed.
+;
+; Registers Affected: none
+; Parameters:
+;	r1 = task number
+;------------------------------------------------------------------------------
+;
+KillTask:
+    push    lr
+	push    r2
+	cmpu    r2,r1,#TCB_Array+TCB_Size  ; BIOS task and IDLE task are immortal
+	ble		r2,kt1
+	cmpu    r2,r1,#TCB_ArrayEnd-TCB_Size
+	bgt		r2,kt1
+	mov     r2,r1
+	lw		r1,TCB_hJCB[r1]
+	bsr		ForceReleaseIOFocus
+	mov     r1,r2
+	bsr     LockTCB
+	jsr		RemoveTaskFromReadyList
+	jsr		RemoveFromTimeoutList
+	sb		r0,TCB_Status[r1]    		; set task status to TS_NONE
+
+	; Free up all the mailboxes associated with the task.
+kt7:
+	push    r1
+	mov     r2,r1
+	lw		r1,TCB_MbxList[r1]
+	beq		r1,kt6
+	bsr		FreeMbx2
+	pop     r1
+	bra		kt7
+kt6:
+    sw      r0,tcb_sema
+    pop     r1
+    bsr     LockFreeTCB
+	lw		r2,FreeTCB					; add the task control block to the free list
+	sw		r2,TCB_NextFree[r1]
+	sw		r1,FreeTCB
+	sw		r0,freetcb_sema
+	cmp     r2,r1,tr                    ; keep running the current task as long as
+	bne		r2,kt1						; the task didn't kill itself.
+.self:
+	bra     .self
+kt1:
+	pop     r2
+	rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -546,12 +588,12 @@ DumpTaskList:
 	bsr		DisplayString
 	ldi		r3,#0
 .0001:
-    lwar    r4,tcb_sema
-    bne     r4,.0001
-    swcr    tr,tcb_sema
-    mfspr   r4,cr0
-    and     r4,r4,#$1000000000
-    beq     r4,.0001
+;    lwar    r4,tcb_sema
+;    bne     r4,.0001
+;    swcr    tr,tcb_sema
+;    mfspr   r4,cr0
+;    and     r4,r4,#$1000000000
+;    beq     r4,.0001
 dtl2:
 	lw		r1,QNdx0[r3]
 	mov		r4,r1
@@ -596,7 +638,7 @@ dtl1:
 	rts
 
 msgTaskList:
-	db	CR,LF,"Pri Task Stat    Prv     Nxt     Timeout",CR,LF,0
+	db	CR,LF,"Pri   Task   Stat    Prv     Nxt     Timeout",CR,LF,0
 
 
 ;------------------------------------------------------------------------------
@@ -619,7 +661,6 @@ SetTaskPriority:
 	sb		r3,TCB_Priority[r1]
 .stp3:
 	sw		r0,tcb_sema
-	sys		#2
 	pop     r3
 	rts
 
@@ -826,7 +867,8 @@ RemoveFromTimeoutList:
 	lb		r4,TCB_Status[r1]		; Is the task even on the timeout list ?
 	and		r4,r4,#TS_TIMEOUT
 	beq		r4,rftl_not_on_list
-	cmp		r4,r1,TimeoutList		; Are we removing the head of the list ?
+	lw      r5,TimeoutList
+	cmp		r4,r1,r5         		; Are we removing the head of the list ?
 	beq		r4,rftl_remove_from_head
 	lw		r4,TCB_PrevTo[r1]		; adjust the links of the next and previous
 	beq		r4,rftl_empty_list		; no previous link - list corrupt?
@@ -916,11 +958,11 @@ Sleep:
     push    r2
 	mov     r2,r1
 	bsr     LockTCB
-	lw		r1,RunningTCB
+	mov		r1,tr
 	bsr		RemoveTaskFromReadyList
 	bsr		AddToTimeoutList	; The scheduler will be returning to this
 	sw		r0,tcb_sema
-	sys		2				; task eventually, once the timeout expires,
+	int		#2				; task eventually, once the timeout expires,
 	pop     r2
 	pop     r1
 	rts
@@ -962,7 +1004,6 @@ AllocMbx:
 
 	bsr     LockMBX
 	sw		tr,MBX_OWNER[r2]
-	lda		#-1				
 	sw		r0,MBX_TQ_HEAD[r2] ; initialize the head and tail of the queues
 	sw		r0,MBX_TQ_TAIL[r2]
 	sw		r0,MBX_MQ_HEAD[r2]
@@ -1066,7 +1107,7 @@ fmbx10:
 	beq		r4,fmbx9
 	mov     r2,r3
 	lw		r3,MBX_LINK[r3]
-	bne		fmbx10
+	bne		r3,fmbx10
 	; ?The mailbox was not in the list managed by the task.
 	pop     r2
 	bra		fmbx2
@@ -1094,10 +1135,356 @@ fmbx2:
 	pop     r4
 	pop     r3
 	pop     r2
-	lda		#E_Ok
+	ldi		r1,#E_Ok
 	rts
 fmbx1:
-	lda		#E_Arg
+	ldi		r1,#E_Arg
+	rts
+
+;------------------------------------------------------------------------------
+; Queue a message at a mailbox.
+; On entry the mailbox semaphore is already activated.
+;
+; Parameters:
+;	r1 = message
+;	r2 = mailbox
+;------------------------------------------------------------------------------
+
+QueueMsgAtMbx:
+	beq		r1,qmam_bad_msg
+	push    lr
+	push    r1
+	push    r2
+	push    r3
+	push	r4
+	lw		r4,MBX_MQ_STRATEGY[r2]
+	cmp		r3,r4,#MQS_UNLIMITED
+	beq		r3,qmam_unlimited
+	cmp		r3,r4,#MQS_NEWEST
+	beq		r3,qmam_newest
+	cmp		r3,r4,#MQS_OLDEST
+	beq		r3,qmam_oldest
+	bsr		kernel_panic
+	db		"Illegal message queue strategy",0
+	bra		qmam8
+	; Here we assumed "unlimited" message storage. Just add the new message at
+	; the tail of the queue.
+qmam_unlimited:
+	lw		r3,MBX_MQ_TAIL[r2]
+	beq		r3,qmam_add_at_head
+	sw		r1,MSG_LINK[r3]
+	bra		qmam2
+qmam_add_at_head:
+	sw		r1,MBX_MQ_HEAD[r2]
+qmam2:
+	sw		r1,MBX_MQ_TAIL[r2]
+qmam6:
+	inc		MBX_MQ_COUNT[r2]		; increase the queued message count
+	sw		r0,MSG_LINK[r1]
+	pop		r4
+	pop     r3
+	pop     r2
+	pop     r1
+	rts
+qmam_bad_msg:
+	rtl
+	; Here we are queueing a limited number of messages. As new messages are
+	; added at the tail of the queue, messages drop off the head of the queue.
+qmam_newest:
+	lw		r3,MBX_MQ_TAIL[r2]
+	beq		r3,qmam3
+	sw		r1,MSG_LINK[r3]
+	bra		qmam4
+qmam3:
+	sw		r1,MBX_MQ_HEAD[r2]
+qmam4:
+	sw		r1,MBX_MQ_TAIL[r2]
+	lw		r3,MBX_MQ_COUNT[r2]
+	addui   r3,r3,#1
+	lw      r4,MBX_MQ_SIZE[r2]
+	cmpu    r3,r3,r4
+	ble		r3,qmam6
+	sw		r0,MSG_LINK[r1]
+	; Remove the oldest message which is the one at the head of the mailbox queue.
+	; Add the message back to the pool of free messages.
+	lw		r1,MBX_MQ_HEAD[r2]
+	lw		r3,MSG_LINK[r1]		; move next in queue
+	sw		r3,MBX_MQ_HEAD[r2]	; to head of list
+qmam8:
+	inc		MBX_MQ_MISSED[r2]
+qmam1:
+    bsr     LockFreeMSG
+	lw		r3,FreeMsg				; put old message back into free message list
+	sw		r3,MSG_LINK[r1]
+	sw		r1,FreeMsg
+	inc		nMsgBlk
+	sw		r0,freemsg_sema
+	;GoReschedule
+	pop		r4
+	pop     r3
+	pop     r2
+	pop     r1
+	rts
+	; Here we are buffering the oldest messages. So if there are too many messages
+	; in the queue already, then the queue doesn't change and the new message is
+	; lost.
+qmam_oldest:
+	lw		r3,MBX_MQ_COUNT[r2]		; Check if the queue is full
+	lw      r4,MBX_MQ_SIZE[r2]
+	cmpu	r3,r3,r4
+	bge		r3,qmam8			; If the queue is full, then lose the current message
+	bra		qmam_unlimited		; Otherwise add message to queue
+
+;------------------------------------------------------------------------------
+; Dequeue a message from a mailbox.
+;
+; Returns
+;	r1 = message pointer (NULL if there are no messages)
+;------------------------------------------------------------------------------
+
+DequeueMsgFromMbx:
+    push    r2
+    push    r3
+	mov     r2,r1				; x = mailbox index
+	lw		r1,MBX_MQ_COUNT[r2]		; are there any messages available ?
+	beq		r1,dmfm3
+	subui   r1,r1,#1
+	sw		r1,MBX_MQ_COUNT[r2]		; update the message count
+	lw		r1,MBX_MQ_HEAD[r2]		; Get the head of the list, this should not be NULL
+	beq		r1,dmfm3			; since the message count > 0
+	lw		r3,MSG_LINK[r1]		; get the link to the next message
+	sw		r3,MBX_MQ_HEAD[r2]		; update the head of the list
+	bne		r3,dmfm2			; if there was no more messages then update the
+	sw		r3,MBX_MQ_TAIL[r2]	; tail of the list as well.
+dmfm2:
+	sw		r1,MSG_LINK[r1]		; point the link to the message itself to indicate it's dequeued
+dmfm1:
+    pop     r3
+    pop     r2
+	rts
+dmfm3:
+    pop     r3
+    pop     r2
+	ldi		r1,#0
+	rtl
+
+;------------------------------------------------------------------------------
+; Parameters:
+;	r1 = mailbox handle
+; Returns:
+;	r1 = E_arg		means pointer is invalid
+;	r1 = E_NoThread	means no thread was queued at the mailbox
+;	r2 = thead handle
+;------------------------------------------------------------------------------
+
+DequeueThreadFromMbx:
+	push	r4
+	lw		r4,MBX_TQ_HEAD[r1]
+	bne		r4,dtfm2
+	pop		r4
+	ldi		r2,#0
+	ldi		r1,#E_NoThread
+	rtl
+dtfm2:
+	push	r5
+	dec		MBX_TQ_COUNT[r1]
+	mov		r2,r4
+	lw		r4,TCB_mbq_next[r4]
+	sw		r4,MBX_TQ_HEAD[r1]
+	beq		r4,dtfm3
+		sw		r0,TCB_mbq_prev[r4]
+		bra		dtfm4
+dtfm3:
+		sw		r0,MBX_TQ_TAIL[r1]
+dtfm4:
+	mov		r5,r2
+	lb		r1,TCB_Status[r5]
+	and		r1,r1,#TS_TIMEOUT
+	beq		r1,dtfm5
+	mov		r1,r5
+	push    lr
+	jsr		RemoveFromTimeoutList
+	pop     lr
+dtfm5:
+	sw		r0,TCB_mbq_next[r5]
+	sw		r0,TCB_mbq_prev[r5]
+	sw		r0,TCB_hWaitMbx[r5]
+	sb		r0,TCB_Status[r5]		; set task status = TS_NONE
+	pop		r5
+	pop		r4
+	ldi		r1,#E_Ok
+	rtl
+
+;------------------------------------------------------------------------------
+;	This function is called from FreeMbx(). It dequeues threads from the
+; mailbox without removing the thread from the timeout list. The thread will
+; then timeout waiting for a message that can never be delivered.
+;
+; Parameters:
+;	r1 = mailbox handle
+; Returns:
+;	r1 = E_arg		means pointer is invalid
+;	r1 = E_NoThread	means no thread was queued at the mailbox
+;	r2 = thead handle
+;------------------------------------------------------------------------------
+
+DequeueThreadFromMbx2:
+	push	r4
+	lw		r4,MBX_TQ_HEAD[r1]
+	bne		r4,dtfm2a
+	pop		r4
+	ldi		r2,#0
+	ldi		r1,#E_NoThread
+	rtl
+dtfm2a:
+	push	r5
+	dec		MBX_TQ_COUNT[r1]
+	mov		r2,r4
+	lw		r4,TCB_mbq_next[r4]
+	sw		r4,MBX_TQ_HEAD[r1]
+	beq		r4,dtfm3a
+		sw		r0,TCB_mbq_prev[r4]
+		bra		dtfm4a
+dtfm3a:
+		sw		r0,MBX_TQ_TAIL[r1]
+dtfm4a:
+	sw	    r0,TCB_mbq_next[r2]
+	sw		r0,TCB_mbq_prev[r2]
+	sw		r0,TCB_hWaitMbx[r2]
+;	sei
+    lb      r1,TCB_Status[r2]
+    and     r1,r1,#~TS_WAITMSG
+    sb      r1,TCB_Status[r2]
+;	cli
+	pop		r5
+	pop		r4
+	ldi		r1,#E_Ok
+	rtl
+
+;------------------------------------------------------------------------------
+; PostMsg and SendMsg are the same operation except that PostMsg doesn't
+; invoke rescheduling while SendMsg does. So they both call the same
+; SendMsgPrim primitive routine. This two wrapper functions for convenience.
+;------------------------------------------------------------------------------
+
+PostMsg:
+    push    lr
+	push	r4
+	ldi		r4,#0			; Don't invoke scheduler
+	bsr		SendMsgPrim
+	pop		r4
+	rts
+
+SendMsg:
+    push    lr
+	push	r4
+	ldi		r4,#1			; Do invoke scheduler
+	jsr		SendMsgPrim
+	pop		r4
+	rts
+
+;------------------------------------------------------------------------------
+; SendMsgPrim
+; Send a message to a mailbox
+;
+; Parameters
+;	r1 = handle to mailbox
+;	r2 = message D1
+;	r3 = message D2
+;	r4 = scheduler flag		1=invoke,0=don't invoke
+;
+; Returns
+;	r1=E_Ok			everything is ok
+;	r1=E_BadMbx		for a bad mailbox number
+;	r1=E_NotAlloc	for a mailbox that isn't allocated
+;	r1=E_NoMsg		if there are no more message blocks available
+;------------------------------------------------------------------------------
+message "SendMsgPrim"
+SendMsgPrim:
+    push    lr
+	push	r5
+	push	r6
+	push	r7
+
+    bsr     LockMBX
+	lw		r7,MBX_OWNER[r1]
+	beq		r7,smsg2				; error: no owner
+	push    r1
+	push    r2
+	bsr		DequeueThreadFromMbx	; r1=mbx
+	mov		r6,r2					; r6 = thread
+	pop     r2
+	pop     r1
+	bne		r6,smsg3
+		; Here there was no thread waiting at the mailbox, so a message needs to
+		; be allocated
+smp2:
+        bsr     LockFreeMSG
+		lw		r7,FreeMsg
+		beq		r7,smsg4		; no more messages available
+		lw		r5,MSG_LINK[r7]
+		sw		r5,FreeMsg
+		dec		nMsgBlk		; decrement the number of available messages
+		sw		r0,freemsg_sema
+		sw		r2,MSG_D1[r7]
+		sw		r3,MSG_D2[r7]
+		push    r1
+		push    r2
+		mov     r2,r1			; r2 = mailbox
+		mov		r1,r7			; r1 = message
+		bsr		QueueMsgAtMbx
+		pop     r2
+		pop     r1
+		beq		r6,smsg5    ; check if there is a thread waiting for a message
+smsg3:
+	sw		r2,TCB_MSG_D1[r6]
+	sw		r3,TCB_MSG_D2[r6]
+smsg7:
+    bsr     LockTCB
+	lb		r5,TCB_Status[r6]
+	and		r5,r5,#TS_TIMEOUT
+	beq		r5,smsg8
+	mov		r1,r6
+	bsr		RemoveFromTimeoutList
+smsg8:
+    lb      r1,TCB_Status[r6]
+    and     r1,r1,#~TS_WAITMSG
+    sb      r1,TCB_Status[r6]
+	sw		r0,tcb_sema
+	mov		r1,r6
+	bsr     LockTCB
+	bsr		AddTaskToReadyList
+	sw		r0,tcb_sema
+	beq		r4,smsg5
+	sw		r0,mbx_sema
+	int		#2
+	;GoReschedule
+	bra		smsg9
+smsg5:
+	sw		r0,mbx_sema
+smsg9:
+	pop		r7
+	pop		r6
+	pop		r5
+	ldi		r1,#E_Ok
+	rts
+smsg1:
+	ldi		r1,#E_BadMbx
+	rtl
+smsg2:
+	sw		r0,mbx_sema
+	pop		r7
+	pop		r6
+	pop		r5
+	ldi		r1,#E_NotAlloc
+	rts
+smsg4:
+	sw		r0,freemsg_sema
+	sw		r0,mbx_sema
+	pop		r7
+	pop		r6
+	pop		r5
+	ldi		r1,#E_NoMsg
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1116,10 +1503,10 @@ fmbx1:
 ;	r2=message D1
 ;	r3=message D2
 ;------------------------------------------------------------------------------
-
+message "WaitMsg"
 WaitMsg:
-	cmp		r3,r1,#NR_MBX			; check the mailbox number to make sure
-	bge		r3,wmsg1				; that it's sensible
+;	cmp		r3,r1,#NR_MBX			; check the mailbox number to make sure
+;	bge		r3,wmsg1				; that it's sensible
 	push    lr
 	push	r4
 	push	r5
@@ -1127,13 +1514,7 @@ WaitMsg:
 	push	r7
 	mov		r6,r1
 wmsg11:
-    lwar    r3,mbx_sema
-    bne     r3,wmsg11
-    swcr    tr,mbx_sema
-    mfspr   r3,cr0
-    and     r3,r3,#$1000000000
-    beq     r3,wmsg11
-
+    bsr     LockMBX
 	lw		r5,MBX_OWNER[r1]
 	cmp		r3,r5,#MAX_TASKNO
 	bgt		r3,wmsg2				; error: no owner
@@ -1144,22 +1525,12 @@ wmsg11:
 	; the ready list, and optionally add it to the timeout list.
 	; Queue the task at the mailbox.
 wmsg12:
-    lwar    r1,tcb_sema
-    bne     r1,wmsg12
-    swcr    tr,tcb_sema
-    mfspr   r1,cr0
-    and     r1,r1,#$1000000000
-    beq     r1,wmsg12
-	lw		r1,RunningTCB				; remove the task from the ready list
+    bsr     LockTCB
+	mov		r1,tr				; remove the task from the ready list
 	bsr		RemoveTaskFromReadyList
 	sw		r0,tcb_sema
 wmsg13:
-	lwar    r7,tcb_sema
-	bne     r7,wmsg13
-	swcr    tr,tcb_sema
-	mfspr   r7,cr0
-	and     r7,r7,#$1000000000
-	beq     r7,wmsg13
+    bsr     LockTCB
 	lb		r7,TCB_Status[r1]
 	or		r7,r7,#TS_WAITMSG			; set task status to waiting
 	sb		r7,TCB_Status[r1]
@@ -1172,20 +1543,17 @@ wmsg13:
 	sw		r1,TCB_mbq_next[r7]
 	sw		r1,MBX_TQ_TAIL[r6]
 	inc		MBX_TQ_COUNT[r6]			; increment number of tasks queued
+	
+
 wmsg7:
 	sw		r0,tcb_sema
 	sw		r0,mbx_sema
 	beq		r2,wmsg10                   ; check for a timeout
 wmsg14:
-    lwar    r7,tcb_sema
-    bne     r7,wmsg14
-    swcr    tr,tcb_sema
-    mfspr   r7,cr0
-    and     r7,r7,#$1000000000
-    beq     r7,wmsg14
+    bsr     LockTCB
 	bsr		AddToTimeoutList
 	sw		r0,tcb_sema
-;	hwi		#2	;	GoReschedule			; invoke the scheduler
+	int		#2	;	GoReschedule			; invoke the scheduler
 wmsg10:
 	; At this point either a message was sent to the task, or the task
 	; timed out. If a message is still not available then the task must
@@ -1287,28 +1655,20 @@ PeekMsg:
 ;	r2=message D1
 ;	r3=message D2
 ;------------------------------------------------------------------------------
-
+message "CheckMsg"
 CheckMsg:
     push    lr
     push    r6
-	cmp		r3,r1,#NR_MBX			; check the mailbox number to make sure
-	bge		r3,cmsg1				; that it's sensible
+;	cmp		r3,r1,#NR_MBX			; check the mailbox number to make sure
+;	bge		r3,cmsg1				; that it's sensible
 	push	r4
 	push	r5
 
-.0001:
-    lwar    r3,mbx_sema
-    bne     r3,.0001
-    swcr    tr,mbx_sema
-    mfspr   r3,cr0
-    and     r3,r3,#$1000000000
-    beq     r3,.0001
+    bsr     LockMBX
 
 	lw		r5,MBX_OWNER[r1]
 	beq		r5,cmsg2				; error: no owner
-	cmp		#0						; are we to dequeue the message ?
-	php
-	beq		r2,cmsg3
+	beq		r2,cmsg3                ; are we to dequeue the message ?
 	bsr		DequeueMsgFromMbx
 	bra		cmsg4
 cmsg3:
@@ -1320,13 +1680,7 @@ cmsg4:
 	lw		r3,MSG_D2[r1]
 	beq		r4,cmsg8
 cmsg10:
-    lwar    r6,freemsg_sema
-    bne     r6,cmsg10
-    swcr    tr,freemsg_sema
-    mfspr   r6,cr0
-    and     r6,r6,#$1000000000
-    beq     r6,cmsg10
-
+    bsr     LockFreeMSG
 	lw		r5,FreeMsg
 	sw		r5,MSG_LINK[r1]
 	sw		r1,FreeMsg
@@ -1357,4 +1711,386 @@ cmsg5:
 	pop     r6
 	ldi		r1,#E_NoMsg
 	rts
+
+;------------------------------------------------------------------------------
+; System Call Exception
+;
+;------------------------------------------------------------------------------
+;
+syscall_exception:
+    cpuid   sp,r0,#0
+    beq     sp,.0001
+    ldi     sp,#CPU1_SYS_STACK
+    bra     .0002
+.0001:
+    ldi     sp,#CPU0_SYS_STACK
+.0002:
+	push	r6					; save off some working registers
+	push	r7
+	mfspr   r6,epc              ; get return address into r6
+	lh	    r7,4[r6]			; get static call number parameter into r7
+	addui   r6,r6,#8			; update return address
+	mtspr   epc,r6
+	lcu     r6,syscall_vectors[r7]       ; load the vector into r6
+	or      r6,r6,#syscall_exception & 0xFFFFFFFFFFFF0000
+	push    lr
+	jsr		[r6]				; do the system function
+	pop     lr
+	pop		r7
+	pop		r6
+	rte
+
+;------------------------------------------------------------------------------
+; Reschedule tasks to run without affecting the timeout list timing.
+;------------------------------------------------------------------------------
+
+reschedule:
+    cpuid   sp,r0,#0
+    beq     sp,.0001
+    ldi     sp,#CPU1_IRQ_STACK
+    bra     .0003
+.0001:
+    ldi     sp,#IRQ_STACK
+.0003:
+    push    r1
+	push    r2
+	lwar    r1,tcb_sema
+	bne     r1,.0004
+	swcr    tr,tcb_sema
+	mfspr   r1,cr0
+	and     r1,r1,#$1000000000
+	bne     r1,.0005
+	bra     .0006
+.0004:
+    swcr    r1,tcb_sema
+.0006:
+	pop     r2
+	pop     r1
+	rti
+.0005:
+    pop     r2
+    pop     r1
+    sw      r1,TCB_r1[tr]
+    sw      r2,TCB_r2[tr]
+    sw      r3,TCB_r3[tr]
+    sw      r4,TCB_r4[tr]
+    sw      r5,TCB_r5[tr]
+    sw      r6,TCB_r6[tr]
+    sw      r7,TCB_r7[tr]
+    sw      r8,TCB_r8[tr]
+    sw      r9,TCB_r9[tr]
+    sw      r10,TCB_r10[tr]
+    sw      r11,TCB_r11[tr]
+    sw      r12,TCB_r12[tr]
+    sw      r13,TCB_r13[tr]
+    sw      r14,TCB_r14[tr]
+    sw      r15,TCB_r15[tr]
+    sw      r16,TCB_r16[tr]
+    sw      r17,TCB_r17[tr]
+    sw      r18,TCB_r18[tr]
+    sw      r19,TCB_r19[tr]
+    sw      r20,TCB_r20[tr]
+    sw      r21,TCB_r21[tr]
+    sw      r22,TCB_r22[tr]
+    sw      r23,TCB_r23[tr]
+    sw      r24,TCB_r24[tr]
+    sw      r25,TCB_r25[tr]
+    sw      r26,TCB_r26[tr]
+    sw      r27,TCB_r27[tr]
+    sw      r28,TCB_r28[tr]
+    sw      r29,TCB_r29[tr]
+    mfspr   r1,isp
+    sw      r1,TCB_r30[tr]
+    sw      r31,TCB_r31[tr]
+    mfspr   r1,ipc
+    sw      r1,TCB_IPC[tr]
+    mfspr   r1,dpc
+    sw      r1,TCB_DPC[tr]
+    mfspr   r1,epc
+    sw      r1,TCB_EPC[tr]
+resched1:
+    lb      r1,TCB_Status[tr]  ; clear RUNNING status (bit #3)
+    and     r1,r1,#~TS_RUNNING
+    sb      r1,TCB_Status[tr]
+	jmp		SelectTaskToRun
+
+strStartQue:
+	db		0,0,0,1,0,0,0,2,0,1,0,3,0,0,0,4,0,1,0,5,0,0,0,6,0,1,0,7
+;	db		0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+;------------------------------------------------------------------------------
+; 60 Hz interrupt
+; - takes care of "flashing" the cursor
+; - decrements timeouts for tasks on timeout list
+; - switching tasks
+;------------------------------------------------------------------------------
+
+FMTKTick:
+    cpuid   sp,r0,#0
+    beq     sp,.0001
+    rti
+    ldi     sp,#CPU1_IRQ_STACK
+    push    r1
+    bra     .0003
+.0001:
+    ldi     sp,#IRQ_STACK
+	push    r1
+	ldi		r1,#3				; reset the edge sense circuit
+	sh		r1,PIC_RSTE
+	inc		IRQFlag
+.0003:
+	; Try and aquire the ready list and tcb. If unsuccessful it means there is
+	; a system function in the process of updating the list. All we can do is
+	; return to the system function and let it complete whatever it was doing.
+	; As if we don't return to the system function we will be deadlocked.
+	; The tick will be deferred; however if the system function was busy updating
+	; the ready list, in all likelyhood it's about to call the reschedule
+	; interrupt.
+	push    r2
+	lwar    r1,tcb_sema
+	bne     r1,.0006
+	swcr    tr,tcb_sema
+	mfspr   r1,cr0
+	and     r1,r1,#$1000000000
+	bne     r1,.0005
+.0006:
+	inc		missed_ticks
+	pop     r2
+	pop     r1
+	rti
+.0005:
+    pop     r2
+    pop     r1
+p100Hz11:
+    sw      r1,TCB_r1[tr]
+    sw      r2,TCB_r2[tr]
+    sw      r3,TCB_r3[tr]
+    sw      r4,TCB_r4[tr]
+    sw      r5,TCB_r5[tr]
+    sw      r6,TCB_r6[tr]
+    sw      r7,TCB_r7[tr]
+    sw      r8,TCB_r8[tr]
+    sw      r9,TCB_r9[tr]
+    sw      r10,TCB_r10[tr]
+    sw      r11,TCB_r11[tr]
+    sw      r12,TCB_r12[tr]
+    sw      r13,TCB_r13[tr]
+    sw      r14,TCB_r14[tr]
+    sw      r15,TCB_r15[tr]
+    sw      r16,TCB_r16[tr]
+    sw      r17,TCB_r17[tr]
+    sw      r18,TCB_r18[tr]
+    sw      r19,TCB_r19[tr]
+    sw      r20,TCB_r20[tr]
+    sw      r21,TCB_r21[tr]
+    sw      r22,TCB_r22[tr]
+    sw      r23,TCB_r23[tr]
+    sw      r24,TCB_r24[tr]
+    sw      r25,TCB_r25[tr]
+    sw      r26,TCB_r26[tr]
+    sw      r27,TCB_r27[tr]
+    sw      r28,TCB_r28[tr]
+    sw      r29,TCB_r29[tr]
+    mfspr   r1,isp
+    sw      r1,TCB_r30[tr]
+    sw      r31,TCB_r31[tr]
+    mfspr   r1,ipc
+    sw      r1,TCB_IPC[tr]
+    mfspr   r1,dpc
+    sw      r1,TCB_DPC[tr]
+    mfspr   r1,epc
+    sw      r1,TCB_EPC[tr]
+	ldi		r1,#96
+	sc		r1,LEDS
+	lw		r1,UserTick
+	beq		r1,p100Hz4
+	push    lr
+	jsr		[r1]
+	pop     lr
+p100Hz4:
+    lb      r1,TCB_Status[tr]
+    and     r1,r1,#~TS_RUNNING
+    sb      r1,TCB_Status[tr]
+	ldi		r1,#97
+	sc		r1,LEDS
+
+	; Check the timeout list to see if there are items ready to be removed from
+	; the list. Also decrement the timeout of the item at the head of the list.
+p100Hz15:
+	lw		r2,TimeoutList
+	beq		r2,p100Hz12				; are there any entries in the timeout list ?
+	lw		r1,TCB_Timeout[r2]
+	bne		r1,p100Hz14				; has this entry timed out ?
+	push    lr
+	bsr     PopTimeoutList
+	bsr		AddTaskToReadyList
+	pop     lr
+	bra		p100Hz15				; go back and see if there's another task to be removed
+									; there could be a string of tasks to make ready.
+p100Hz14:
+	subui   r1,r1,#1				; decrement the entry's timeout
+	lw      r3,missed_ticks
+	subu	r1,r1,r3        		; account for any missed ticks
+	sw		r0,missed_ticks
+	sw		r1,TCB_Timeout[r2]
+	
+p100Hz12:
+	; Falls through into selecting a task to run
+tck3:
+	ldi		r1,#98
+	sc		r1,LEDS
+
+;------------------------------------------------------------------------------
+; Search the ready queues for a ready task.
+; The search is occasionally started at a lower priority queue in order
+; to prevent starvation of lower priority tasks. This is managed by 
+; using a tick count as an index to a string containing the start que.
+;------------------------------------------------------------------------------
+;
+SelectTaskToRun:
+	ldi		r6,#8			; number of queues to search
+	lw		r3,IRQFlag		; use the IRQFlag as a buffer index
+;	lsr		r3,r3,#1		; the LSB is always the same
+	and		r3,r3,#$1F		; counts from 0 to 31
+	lb	    r3,strStartQue[r3]	; get the queue to start search at
+	and     r3,r3,#7
+sttr2:
+    asl     r4,r3,#3
+	lw		r1,QNdx0[r4]
+	beq		r1,sttr1
+	lw		r1,TCB_NextRdy[r1]		; Advance the queue index
+	and     r7,r1,#$FF
+	bne     r7,sttr_badtask
+	cmpu    r7,r1,#TCB_Array
+	blt     r7,sttr_badtask
+	cmpu    r7,r1,#TCB_ArrayEnd-TCB_Size
+	bgt     r7,sttr_badtask
+	sw		r1,QNdx0[r4]
+	cpuid   r7,r0,#0
+	beq     r7,sttr5
+	lc      r8,TCB_Affinity[r1]
+	cmp     r7,r7,r8
+	bne     r7,sttr1
+sttr5:
+	; This is the only place the RunningTCB is set (except for initialization).
+	mov     tr,r1
+	nop
+	nop
+	lb      r1,TCB_Status[tr]
+	or      r1,r1,#TS_RUNNING    ; flag the task as the running task
+	sb      r1,TCB_Status[tr]
+	ldi		r1,#99
+	sc		r1,LEDS
+	lw		r1,iof_switch		
+	beq		r1,sttr6				
+	lwar	r1,iof_sema		; just ignore the request to switch
+	bne		r1,sttr7		; I/O focus if the semaphore can't be aquired
+	swcr    tr,iof_sema
+	mfspr   r1,cr0
+	and     r1,r1,#$1000000000
+	beq     r1,sttr6
+	sw		r0,iof_switch
+	push    lr
+	bsr		SwitchIOFocus
+	pop     lr
+	sw		r0,iof_sema
+sttr6:
+    lw      r1,TCB_EPC[tr]
+    mtspr   epc,r1
+    lw      r1,TCB_DPC[tr]
+    mtspr   dpc,r1
+    lw      r1,TCB_IPC[tr]
+    mtspr   ipc,r1
+    lw      r31,TCB_r31[tr]
+    lw      r1,TCB_r30[tr]
+    mtspr   isp,r1
+    lw      r29,TCB_r29[tr]
+    lw      r28,TCB_r28[tr]
+    lw      r27,TCB_r27[tr]
+    lw      r26,TCB_r26[tr]
+    lw      r25,TCB_r25[tr]
+;   lw      r24,TCB_r24[tr]    ; r24 is the task register - no need to load
+    lw      r23,TCB_r23[tr]
+    lw      r22,TCB_r22[tr]
+    lw      r21,TCB_r21[tr]
+    lw      r20,TCB_r20[tr]
+    lw      r19,TCB_r19[tr]
+    lw      r18,TCB_r18[tr]
+    lw      r17,TCB_r17[tr]
+    lw      r16,TCB_r16[tr]
+    lw      r15,TCB_r15[tr]
+    lw      r14,TCB_r14[tr]
+    lw      r13,TCB_r13[tr]
+    lw      r12,TCB_r12[tr]
+    lw      r11,TCB_r11[tr]
+    lw      r10,TCB_r10[tr]
+    lw      r9,TCB_r9[tr]
+    lw      r8,TCB_r8[tr]
+    lw      r7,TCB_r7[tr]
+    lw      r6,TCB_r6[tr]
+    lw      r5,TCB_r5[tr]
+    lw      r4,TCB_r4[tr]
+    lw      r3,TCB_r3[tr]
+    lw      r2,TCB_r2[tr]
+    lw      r1,TCB_r1[tr]
+	sw		r0,tcb_sema
+	rti
+sttr7:
+    swcr    r1,iof_sema
+    bra     sttr6
+
+	; Set index to check the next ready list for a task to run
+sttr1:
+	addui   r3,r3,#1
+	and     r3,r3,#7
+	subui   r6,r6,#1
+	bge		r6,sttr2
+
+	; Here there were no tasks ready
+	; This should not be able to happen, so hang the machine (in a lower
+	; power mode).
+sttr3:
+	ldi     r2,#94
+	sc		r2,LEDS
+	push    lr
+	bsr		kernel_panic
+	db		"No tasks in ready queue.",0
+	bsr     DumpTaskList
+	pop     lr
+	; Might as well power down the clock and wait for a reset or
+	; NMI. In the case of an NMI the kernel is reinitialized without
+	; doing the boot reset.
+	stp								
+	jmp		FMTKInitialize
+
+sttr_badtask:
+    bsr     kernel_panic
+    db      "Bad task on ready list.",0
+    bra     sttr1
+
+;------------------------------------------------------------------------------
+; kernal_panic:
+;	All this does right now is display the panic message on the screen.
+; Parameters:
+;	inline: string
+;------------------------------------------------------------------------------
+;
+kernel_panic:
+    push    r1
+kpan2:
+	lbu	    r1,[lr]		; get a byte from the code space
+	beq		r1,kpan1		; is it end of string ?
+	addui	lr,lr,#1	; increment pointer
+	push    lr
+	bsr		OutChar
+	pop     lr
+	bra		kpan2
+kpan1:
+    push    lr   		; must update the return address !
+	bsr		CRLF
+	pop     lr
+	pop     r1
+	addui   lr,lr,#3    ; round the link register to the next instruction address
+	and     lr,lr,#-4
+	rtl
 

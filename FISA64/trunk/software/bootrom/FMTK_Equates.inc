@@ -115,12 +115,14 @@ TCB_NextTo      EQU     $228
 TCB_PrevTo      EQU     $230
 TCB_mbq_next    EQU     $238
 TCB_mbq_prev    EQU     $240
-TCB_MsgD1       EQU     $248
-TCB_MsgD2       EQU     $250
+TCB_MSG_D1      EQU     $248
+TCB_MSG_D2      EQU     $250
 TCB_hWaitMbx    EQU     $258
 TCB_MbxList     EQU     $260
 TCB_StackTop    EQU     $268
 TCB_errno       EQU     $270
+TCB_Timeout     EQU     $278
+TCB_Affinity    EQU     $280
 TCB_Size	    EQU	    $300
 
 ; Mailboxes, room for 2048
@@ -140,6 +142,10 @@ MBX_OWNER		EQU     $50	      ; job handle of mailbox owner
 MBX_MQ_STRATEGY	EQU     $58	      ; message queueing strategy
 MBX_Size        EQU     $60
 
+MQ_UNLIMITED    EQU     0
+MQ_OLDEST       EQU     1
+MQ_NEWEST       EQU     2
+
 ; Messages, room for 64kW (16,384) messages
 ;			.bss
 ;			.org		0x07E80000
@@ -148,7 +154,7 @@ MSG_LINK	EQU     $00	        ; link to next message in queue or free list
 MSG_D1		EQU     $08         ; message data 1
 MSG_D2		EQU     $10	        ; message data 2
 MSG_TYPE	EQU     $18	        ; message type
-MSG_SIZE    EQU     $20
+MSG_Size    EQU     $20
 
 MT_SEMA		EQU		-1
 MT_IRQ		EQU		-16
@@ -227,6 +233,8 @@ MEM_END         EQU    $8000000
     .bss
     org         VAR_Area
 UserTick    dw      0
+IRQFlag     dw      0
+IOFocusNdx  dw      0
 IOFocusTbl      fill.w   4,0        ; tasks requesting I/O focus
 QNdx0		dw		0
 QNdx1		dw		0
@@ -236,6 +244,7 @@ QNdx4		dw		0
 QNdx5		dw		0
 QNdx6		dw		0
 QNdx7		dw		0
+FreeJCB     dw      0
 FreeTCB		dw		0
 TimeoutList	dw		0
 RunningTCB	dw		0
@@ -258,12 +267,14 @@ tcbsema_d1		dw		0
 tcbsema_d2		dw		0
 mmu_acc_save	dw		0
 
+freejcb_sema   dw   0
 freetcb_sema   dw   0
 freembx_sema   dw   0
 freemsg_sema   dw   0
 tcb_sema       dw   0
 readylist_sema dw   0
 tolist_sema    dw   0
+iof_sema       dw   0
 mbx_sema       dw   0
 msg_sema       dw   0
 jcb_sema       dw   0

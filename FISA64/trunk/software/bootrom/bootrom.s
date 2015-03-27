@@ -74,60 +74,24 @@ BSI_VolID		= 0x27
 BSI_VolLabel	= 0x2B
 BSI_FileSysType = 0x36
 
-; error codes
-E_Ok		=		0x00
-E_Arg		=		0x01
-E_BadMbx	=		0x04
-E_QueFull	=		0x05
-E_NoThread	=		0x06
-E_NotAlloc	=		0x09
-E_NoMsg		=		0x0b
-E_Timeout	=		0x10
-E_BadAlarm	=		0x11
-E_NotOwner	=		0x12
-E_QueStrategy =		0x13
-E_DCBInUse	=		0x19
-; Device driver errors
-E_BadDevNum	=		0x20
-E_NoDev		=		0x21
-E_BadDevOp	=		0x22
-E_ReadError	=		0x23
-E_WriteError =		0x24
-E_BadBlockNum	=	0x25
-E_TooManyBlocks	=	0x26
-
-; resource errors
-E_NoMoreMbx	=		0x40
-E_NoMoreMsgBlks	=	0x41
-E_NoMoreAlarmBlks	= 0x44
-E_NoMoreTCBs	=	0x45
-E_NoMem		= 12
-
-CPU1_IRQ_STACK  EQU     $20800
 IRQ_STACK   EQU     $8000
 DBG_STACK   EQU     $7000
-BIOS_STACK  EQU     $6800
+CPU0_BIOS_STACK  EQU     $6800
 MON_STACK   EQU     $6000
-
-; task status
-TS_NONE     EQU     0
-TS_TIMEOUT	EQU     1
-TS_WAITMSG	EQU     2
-TS_PREEMPT	EQU     4
-TS_RUNNING	EQU     8
-TS_READY	EQU     16
-TS_SLEEP	EQU     32
-
-TS_TIMEOUT_BIT	EQU 0
-TS_WAITMSG_BIT	EQU 1
-TS_RUNNING_BIT	EQU 3
-TS_READY_BIT	EQU 4
+; CPU1 Ram allocations must be to the dram area.
+CPU1_IRQ_STACK  EQU     $20800
+CPU1_SYS_STACK      EQU  $21000
+CPU1_BIOS_STACK     EQU  $21800
+CPU0_SYS_STACK      EQU  $5000
 
 LEDS	equ		$FFDC0600
 
 BIOS_FREE      EQU       0
 BIOS_DONE      EQU       1
 BIOS_INSERVICE EQU       2
+
+MAX_BIOS_CALL  EQU       100
+E_BadFuncno    EQU       1
 
 ; The following offsets in the I/O segment
 TEXTSCR	equ		$00000
@@ -221,116 +185,49 @@ BIOS_arg5      EQU     $28
 BIOS_resp      EQU     $30
 BIOS_stat      EQU     $38
 
-NR_TCB		EQU		16
-TCB_BackLink    EQU     0
-TCB_r1          EQU     8
-TCB_r2          EQU     $10
-TCB_r3          EQU     $18
-TCB_r4          EQU     $20
-TCB_r5          EQU     $28
-TCB_r6          EQU     $30
-TCB_r7          EQU     $38
-TCB_r8          EQU     $40
-TCB_r9          EQU     $48
-TCB_r10         EQU     $50
-TCB_r11         EQU     $58
-TCB_r12         EQU     $60
-TCB_r13         EQU     $68
-TCB_r14         EQU     $70
-TCB_r15         EQU     $78
-TCB_r16         EQU     $80
-TCB_r17         EQU     $88
-TCB_r18         EQU     $90
-TCB_r19         EQU     $98
-TCB_r20         EQU     $A0
-TCB_r21         EQU     $A8
-TCB_r22         EQU     $B0
-TCB_r23         EQU     $B8
-TCB_r24         EQU     $C0
-TCB_r25         EQU     $C8
-TCB_r26         EQU     $D0
-TCB_r27         EQU     $D8
-TCB_r28         EQU     $E0
-TCB_r29         EQU     $E8
-TCB_r30         EQU     $F0
-TCB_r31         EQU     $F8
-TCB_IPC         EQU     $100
-TCB_NextRdy     EQU     $200
-TCB_PrevRdy     EQU     $208
-TCB_Status      EQU     $210
-TCB_Priority    EQU     $212
-TCB_hJCB        EQU     $214
-TCB_NextFree    EQU     $218
-TCB_PrevFree    EQU     $220
-TCB_NextTo      EQU     $228
-TCB_PrevTo      EQU     $230
-
-TCB_Regs		EQU		8
-TCB_SP0Save		EQU		0x800
-TCB_SS0Save     EQU     0x808
-TCB_SP1Save		EQU		0x810
-TCB_SS1Save     EQU     0x818
-TCB_SP2Save		EQU		0x820
-TCB_SS2Save     EQU     0x828
-TCB_SP3Save		EQU		0x830
-TCB_SS3Save     EQU     0x838
-TCB_SP4Save		EQU		0x840
-TCB_SS4Save     EQU     0x848
-TCB_SP5Save		EQU		0x850
-TCB_SS5Save     EQU     0x858
-TCB_SP6Save		EQU		0x860
-TCB_SS6Save     EQU     0x868
-TCB_SP7Save		EQU		0x870
-TCB_SS7Save     EQU     0x878
-TCB_SP8Save		EQU		0x880
-TCB_SS8Save     EQU     0x888
-TCB_SP9Save		EQU		0x890
-TCB_SS9Save     EQU     0x898
-TCB_SP10Save	EQU		0x8A0
-TCB_SS10Save    EQU     0x8A8
-TCB_SP11Save	EQU		0x8B0
-TCB_SS11Save    EQU     0x8B8
-TCB_SP12Save	EQU		0x8C0
-TCB_SS12Save    EQU     0x8C8
-TCB_SP13Save	EQU		0x8D0
-TCB_SS13Save    EQU     0x8D8
-TCB_SP14Save	EQU		0x8E0
-TCB_SS14Save    EQU     0x8E8
-TCB_SP15Save	EQU		0x8F0
-TCB_SS15Save    EQU     0x8F8
-TCB_Seg0Save    EQU     0x900
-TCB_Seg1Save	EQU		0x908
-TCB_Seg2Save	EQU		0x910
-TCB_Seg3Save	EQU		0x918
-TCB_Seg4Save	EQU		0x920
-TCB_Seg5Save	EQU		0x928
-TCB_Seg6Save	EQU		0x930
-TCB_Seg7Save	EQU		0x938
-TCB_Seg8Save	EQU		0x940
-TCB_Seg9Save	EQU		0x948
-TCB_Seg10Save	EQU		0x950
-TCB_Seg11Save	EQU		0x958
-TCB_Seg12Save	EQU		0x960
-TCB_Seg13Save	EQU		0x968
-TCB_Seg14Save	EQU		0x970
-TCB_Seg15Save	EQU		0x978
-TCB_PCSave      EQU     0x980
-TCB_SPSave		EQU		0x988
-TCB_Next		EQU		0xA00
-TCB_Prev		EQU		0xA08
-
-
-TCB_Size	EQU		1024
+;include "FMTK_Equates.inc"
 
 	bss
 	org		$8
 Ticks			dw		0
+; Monitor register storage
+MON_r1          dw      0
+MON_r2          dw      0
+MON_r3          dw      0
+MON_r4          dw      0
+MON_r5          dw      0
+MON_r6          dw      0
+MON_r7          dw      0
+MON_r8          dw      0
+MON_r9          dw      0
+MON_r10         dw      0
+MON_r11         dw      0
+MON_r12         dw      0
+MON_r13         dw      0
+MON_r14         dw      0
+MON_r15         dw      0
+MON_r16         dw      0
+MON_r17         dw      0
+MON_r18         dw      0
+MON_r19         dw      0
+MON_r20         dw      0
+MON_r21         dw      0
+MON_r22         dw      0
+MON_r23         dw      0
+MON_r24         dw      0
+MON_r25         dw      0
+MON_r26         dw      0
+MON_r27         dw      0
+MON_r28         dw      0
+MON_r29         dw      0
+MON_r30         dw      0
+MON_r31         dw      0
+
 Milliseconds	dw		0
 OutputVec		dw		0
+InputVec        dw      0
+jmp_vector      dw      0
 TickVec			dw		0
-RunningTCB		dw		0
-FreeTCB			dw		0
-QNdx0			fill.w	8,0
 NormAttr		dw		0
 CursorRow		db		0
 CursorCol		db		0
@@ -345,6 +242,7 @@ KeybdLEDs		db		0
 NUMWKA          fill.b  32,0
 startSector		dh		0
 disk_size		dh		0
+rxfull     EQU      1
 Uart_ms         db      0
 Uart_txxonoff   db      0
 Uart_rxhead     dc      0
@@ -358,6 +256,7 @@ Uart_fon        dc      0
 Uart_txrts      db      0
 Uart_txdtr      db      0
 Uart_txxon      db      0
+Uart_rxfifo     fill.b  512,0
                 align 2
 API_head        dc      0
 API_tail        dc      0
@@ -372,46 +271,12 @@ CPUIdleTick     dw      0
                 dw      0
 
 	align	16
-	org $A0
 RTCC_BUF		fill.b	96,0
 API_AREA        fill.b  2048,0
 
-; Just past the Bootrom
-	org		$00010000
+; Just past the 
+	org		$0008000
 NR_PTBL		EQU		32
-
-IVTBaseAddress:
-	fill.w	512*2,0      ; 2 words per vector, 512 vectors
-
-    align 4096
-GDTBaseAddress:
-    fill.w  256*16*2,0   ; 2 words per descriptor, 16 descriptors per task, 256 tasks
-
-; Memory Page Allocation Map
-
-PAM1			fill.w	512,0
-PAM2			fill.w	512,0
-
-RootPageTbl:
-	fill.b	4096*NR_PTBL,0
-PgSD0:
-	fill.w	512,0
-PgSD3:
-	fill.w	512,0
-PgTbl0:
-	fill.w	512,0
-PgTbl1:
-	fill.w	512,0
-PgTbl2:
-	fill.w	512,0
-PgTbl3:
-	fill.w	512,0
-PgTbl4:
-	fill.w	512,0
-PgTbl5:
-	fill.w	512,0
-IOPgTbl:
-	fill.w	512,0
 
 TempTCB:
 	fill.b	TCB_Size,0
@@ -438,6 +303,7 @@ EndStaticAllocations:
 	code
 	org		$00010000
 	bra     start
+BIOS_FuncTable:
 	align   8
 	dw		ClearScreen		; $8000
 	dw		HomeCursor		; $8008
@@ -494,7 +360,9 @@ start:
 	sb      r1,LEDS
 	bsr		SetupIntVectors
 ;	bsr		KeybdInit
-    bsr     InitFMTK
+    bsr     FMTKInitialize
+    ldi     r1,#UserTickRout     ; set user tick vector
+    sw      r1,$C00000
 	bsr		InitPIC
 	bsr     InitUart
 	bsr     RTCCReadbuf          ; read the real-time clock
@@ -751,45 +619,8 @@ KeybdIRQ:
 	sb		r0,KEYBD+1
 	rti
 
-BranchToSelf:
-    bra      BranchToSelf
-
-;==============================================================================
-; Finitron Multi-Tasking Kernel (FMTK)
-;        __
-;   \\__/ o\    (C) 2013, 2014, 2015  Robert Finch, Stratford
-;    \  __ /    All rights reserved.
-;     \/_//     robfinch<remove>@finitron.ca
-;       ||
-;==============================================================================
-message "InitFMTK"
-InitFMTK:
-    ldi     r2,#$0C00000
-.nextTCB:
-    addui   r3,r2,#$400       ; 1kb TCB size
-    sw      r3,TCB_IPC[r2]    ; set startup address
-    lw      r3,BranchToSelf
-    sw      r3,$400[r2]
-    addui   r3,r2,#$FFF8
-    sw      r3,TCB_r30[r2]    ; set the stack pointer to the end of the base lot
-    addui   r2,r3,#8
-    cmpu    r1,r2,#$1C00000
-    blt     r1,.nextTCB
-
-    ; Initialize the free TCB list
-    ldi     r2,#$C20000
-    sw      r2,FreeTCB
-    sw      r0,TCB_PrevFree[r2]
-.0001:
-    addui   r3,r2,#$10000
-    sw      r3,TCB_NextFree[r2]
-    sw      r2,TCB_PrevFree[r3]
-    addui   r2,r2,#$10000
-    cmpu    r4,r2,#$1BF0000
-    blt     r4,.0001
-    sw      r0,TCB_NextFree[r2]
-
-    rtl
+BranchToSelf2:
+    bra      BranchToSelf2
 
 ;------------------------------------------------------------------------------
 ; Display a space on the output device.
@@ -864,580 +695,53 @@ PNRET:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
-message "DumpTaskList"
-DumpTaskList:
-    push    lr
-	push    r1
-	push    r2
-	push    r3
-	push	r4
-	ldi		r1,#msgTaskList
-	bsr		DisplayString
-	ldi		r3,#0
-.0001:
-    lwar    r4,tcb_sema
-    bne     r4,.0001
-    swcr    tr,tcb_sema
-    mfspr   r4,cr0
-    and     r4,r4,#$1000000000
-    beq     r4,.0001
-dtl2:
-	lw		r1,QNdx0[r3]
-	mov		r4,r1
-	beq		r4,dtl1
-dtl3:
-	ldi	    r2,#3
-	lsr     r1,r3,#3
-	bsr		PRTNUM
-	bsr		DisplaySpace
-	mov		r1,r4
-	bsr		DisplayHalf
-	bsr		DisplaySpace
-	bsr		DisplaySpace
-	mov		r1,r4
-	lb		r1,TCB_Status[r1]
-	bsr		DisplayByte
-	bsr		DisplaySpace
-	ldi		r2,#3
-	lw		r1,TCB_PrevRdy[r4]
-	bsr		DisplayHalf
-	bsr		DisplaySpace
-	ldi		r2,#3
-	lw		r1,TCB_NextRdy[r4]
-	bsr		DisplayHalf
-	bsr		DisplaySpace
-	lw		r1,TCB_Timeout[r4]
-	bsr		DisplayWord
-	bsr		CRLF
-	lw		r4,TCB_NextRdy[r4]
-	lw      r1,QNdx0[r3]
-	cmp		r1,r4,r1
-	bne		r1,dtl3
-dtl1:
-	addui   r3,r3,#8
-	cmp     r4,r3,#64
-	blt		r4,dtl2
-	sw		r0,tcb_sema       ; release semaphore
-	pop		r4
-	pop     r3
-	pop     r2
-	pop     r1
-	rts
-
-msgTaskList:
-	db	CR,LF,"Pri Task Stat    Prv     Nxt     Timeout",CR,LF,0
-
-
-;------------------------------------------------------------------------------
-; AddTaskToReadyList
-;
-; The ready list is a group of eight ready lists, one for each priority
-; level. Each ready list is organized as a doubly linked list to allow fast
-; insertions and removals. The list is organized as a ring (or bubble) with
-; the last entry pointing back to the first. This allows a fast task switch
-; to the next task. Which task is at the head of the list is maintained
-; in the variable QNdx for the priority level.
-;
-; Registers Affected: none
-; Parameters:
-;	r1 = pointer to task control block
-; Returns:
-;	none
-;------------------------------------------------------------------------------
-message "AddToReadyList"
-AddTaskToReadyList:
-    push    r2
-    push    r3
-    push    r4
-	ldi     r2,#TS_READY
-	sb		r2,TCB_Status[r1]
-	sw		r0,TCB_NextRdy[r1]
-	sw		r0,TCB_PrevRdy[r1]
-	lb		r3,TCB_Priority[r1]
-	cmp		r4,r3,#8
-	blt		r4,arl1
-	ldi		r3,#PRI_LOWEST
-arl1:
-    asl     r3,r3,#3
-	lw		r2,QNdx0[r3]
-	beq		r2,arl5
-	lw		r3,TCB_PrevRdy[r2]
-	sw		r2,TCB_NextRdy[r3]
-	sw		r3,TCB_PrevRdy[r1]
-	sw		r1,TCB_PrevRdy[r2]
-	sw		r2,TCB_NextRdy[r1]
-	pop     r4
-	pop     r3
-	pop     r2
-	rtl
-
-	; Here the ready list was empty, so add at head
-arl5:
-	sw		r1,QNdx0[r3]
-	sw		r1,TCB_NextRdy[r1]
-	sw		r1,TCB_PrevRdy[r1]
-	pop     r4
-	pop     r3
-	pop     r2
-	rtl
-	
-
-;------------------------------------------------------------------------------
-; RemoveTaskFromReadyList
-;
-; This subroutine removes a task from the ready list.
-;
-; Registers Affected: none
-; Parameters:
-;	r1 = pointer to task control block
-; Returns:
-;   r1 = pointer to task control block
-;------------------------------------------------------------------------------
-message "RemoveFromReadyList"
-RemoveTaskFromReadyList:
-    push    r2
-    push    r3
-	push	r4
-	push	r5
-
-	lb		r3,TCB_Status[r1]	; is the task on the ready list ?
-	and		r4,r3,#TS_READY|TS_RUNNING
-	beq		r4,rfr2
-	and		r3,r3,#~(TS_READY|TS_RUNNING)
-	sb		r3,TCB_Status[r1]	; task status no longer running or ready
-	lw		r4,TCB_NextRdy[r1]	; Get previous and next fields.
-	lw		r5,TCB_PrevRdy[r1]
-	sw		r4,TCB_NextRdy[r5]
-	sw		r5,TCB_PrevRdy[r4]
-	lb		r3,TCB_Priority[r1]
-	asl     r3,r3,#3
-	lw      r5,QNdx0[r3]
-	cmp		r5,r1,r5			; Are we removing the QNdx task ?
-	bne		r5,rfr2
-	sw		r4,QNdx0[r3]
-	; Now we test for the case where the task being removed was the only one
-	; on the ready list of that priority level. We can tell because the
-	; NxtRdy would point to the task itself.
-	cmp		r5,r4,r1				
-	bne		r5,rfr2
-	sw		r0,QNdx0[r3]        ; Make QNdx NULL
-	sw		r0,TCB_NextRdy[r1]
-	sw		r0,TCB_PrevRdy[r1]
-rfr2:
-	pop		r5
-	pop		r4
-	pop     r3
-	pop     r2
-	rtl
-
-;------------------------------------------------------------------------------
-; AddToTimeoutList
-; AddToTimeoutList adds a task to the timeout list. The task is placed in the
-; list depending on it's timeout value.
-;
-; Registers Affected: none
-; Parameters:
-;	r1 = task
-;	r2 = timeout value
-;------------------------------------------------------------------------------
-message "AddToTimeoutList"
-AddToTimeoutList:
-	push    r2
-	push    r3
-	push	r4
-	push	r5
-
-    ldi     r5,#0
-	sw		r0,TCB_NextTo[r1]   ; these fields should already be NULL
-	sw		r0,TCB_PrevTo[r1]
-	lw		r4,TimeoutList		; are there any tasks on the timeout list ?
-	beq		r4,attl_add_at_head	; If not, update head of list
-attl_check_next:
-    lw      r3,TCB_Timeout[r4]            
-	subu	r2,r2,r3	        ; is this timeout > next
-	blt		r2,attl_insert_before
-	mov		r5,r4
-	lw		r4,TCB_NextTo[r4]
-	bne		r4,attl_check_next
-
-	; Here we scanned until the end of the timeout list and didn't find a 
-	; timeout of a greater value. So we add the task to the end of the list.
-attl_add_at_end:
-	sw		r0,TCB_NextTo[r1]		; 
-	sw		r1,TCB_NextTo[r5]
-	sw		r5,TCB_PrevTo[r1]
-	sw		r2,TCB_Timeout[r1]
-	bra		attl_exit
-
-attl_insert_before:
-	beq		r5,attl_insert_before_head
-	sw		r4,TCB_NextTo[r1]	; next on list goes after this task
-	sw		r5,TCB_PrevTo[r1]	; set previous link
-	sw		r1,TCB_NextTo[r5]
-	sw		r1,TCB_PrevTo[r4]
-	bra		attl_adjust_timeout
-
-	; Here there is no previous entry in the timeout list
-	; Add at start
-attl_insert_before_head:
-	sw		r1,TCB_PrevTo[r4]
-	sw		r0,TCB_PrevTo[r1]	;
-	sw		r4,TCB_NextTo[r1]
-	sw		r1,TimeoutList			; update the head pointer
-attl_adjust_timeout:
-	addu	r2,r2,r3	       ; get back timeout
-	sw		r2,TCB_Timeout[r1]
-	lw		r5,TCB_Timeout[r4]	; adjust the timeout of the next task
-	subu	r5,r5,r2
-	sw		r5,TCB_Timeout[r4]
-	bra		attl_exit
-
-	; Here there were no tasks on the timeout list, so we add at the
-	; head of the list.
-attl_add_at_head:
-	sw		r1,TimeoutList		; set the head of the timeout list
-	sw		r2,TCB_Timeout[r1]
-	; flag no more entries in timeout list
-	sw		r0,TCB_NextTo[r1]	; no next entries
-	sw		r0,TCB_PrevTo[r1]	; and no prev entries
-attl_exit:
-	lb		r2,TCB_Status[r1]	; set the task's status as timing out
-	or		r2,r2,#TS_TIMEOUT
-	sb		r2,TCB_Status[r1]
-	pop		r5
-	pop		r4
-	pop     r3
-	pop     r2
-	rtl
-	
-;------------------------------------------------------------------------------
-; RemoveFromTimeoutList
-;
-; This routine is called when a task is killed. The task may need to be
-; removed from the middle of the timeout list.
-;
-; On entry: the timeout list semaphore must be already set.
-; Registers Affected: none
-; Parameters:
-;	 r1 = pointer to task control block
-;------------------------------------------------------------------------------
-
-RemoveFromTimeoutList:
-	push    r2
-	push    r3
-	push	r4
-	push	r5
-
-	lb		r4,TCB_Status[r1]		; Is the task even on the timeout list ?
-	and		r4,r4,#TS_TIMEOUT
-	beq		r4,rftl_not_on_list
-	cmp		r4,r1,TimeoutList		; Are we removing the head of the list ?
-	beq		r4,rftl_remove_from_head
-	lw		r4,TCB_PrevTo[r1]		; adjust the links of the next and previous
-	beq		r4,rftl_empty_list		; no previous link - list corrupt?
-	lw		r5,TCB_NextTo[r1]		; tasks on the list to point around the task
-	sw		r5,TCB_NextTo[r4]
-	beq		r5,rftl_empty_list
-	sw		r4,TCB_PrevTo[r5]
-	lw		r2,TCB_Timeout[r1]		; update the timeout of the next on list
-	lw      r3,TCB_Timeout[r5]
-	add		r2,r2,r3            	; with any remaining timeout in the task
-	sw		r2,TCB_Timeout[r5]		; removed from the list
-	bra		rftl_empty_list
-
-	; Update the head of the list.
-rftl_remove_from_head:
-	lw		r5,TCB_NextTo[r1]
-	sw		r5,TimeoutList			; store next field into list head
-	beq		r5,rftl_empty_list
-	lw		r4,TCB_Timeout[r1]		; add any remaining timeout to the timeout
-	lw      r3,TCB_Timeout[r5]
-	add		r4,r4,r3            	; of the next task on the list.
-	sw		r4,TCB_Timeout[r5]
-	sw		r0,TCB_PrevTo[r5]       ; there is no previous item to the head
-	
-	; Here there is no previous or next items in the list, so the list
-	; will be empty once this task is removed from it.
-rftl_empty_list:
-	mov     r2,r1
-	lb		r3,TCB_Status[r2]	; clear timeout status (bit #0)
-	and     r3,r3,#$FE
-	sb      r3,TCB_Status[r2]
-	sw		r0,TCB_NextTo[r2]	; make sure the next and prev fields indicate	
-	sw	    r0,TCB_PrevTo[r2]   ; the task is not on a list.
-	mov     r1,r2
-rftl_not_on_list:
-	pop		r5
-	pop		r4
-	pop     r3
-	pop     r2
-rftl_not_on_list2:
-	rtl
-
-;------------------------------------------------------------------------------
-; PopTimeoutList
-;
-; This subroutine is called from within the timer ISR when the task's 
-; timeout expires. It's always the head of the list that's being removed in
-; the timer ISR so the removal from the timeout list is optimized. We know
-; the timeout expired, so the amount of time to add to the next task is zero.
-;
-; Registers Affected: 
-; Parameters:
-;	r2: head of timeout list
-; Returns:
-;	r1 = task id of task popped from timeout list
-;------------------------------------------------------------------------------
-
-PopTimeoutList:
-	lw		r1,TCB_NextTo[r2]
-	sw		r1,TimeoutList  ; store next field into list head
-	beq		r1,ptl1
-	sw		r0,TCB_PrevTo[r1]; previous link = NULL
-ptl1:
-    lb      r1,TCB_Status[r2]
-    and     r1,r1,#$FE       ; clear timeout status
-    sb      r1,TCB_Status[r2]
-	sw		r0,TCB_NextTo[r2]	; make sure the next and prev fields indicate
-	sw		r0,TCB_PrevTo[r2]		; the task is not on a list.
-	mov     r1,r2
-    rtl
-
-;------------------------------------------------------------------------------
-; Sleep
-;
-; Put the currently running task to sleep for a specified time.
-;
-; Registers Affected: none
-; Parameters:
-;	r1 = time duration in jiffies (1/60 second).
-; Returns: none
-;------------------------------------------------------------------------------
-message "sleep"
-
-Sleep:
-    push    lr
-    push    r1
-    push    r2
-	mov     r2,r1
-;	spl		tcb_sema + 4
-	lw		r1,RunningTCB
-	bsr		RemoveTaskFromReadyList
-	bsr		AddToTimeoutList	; The scheduler will be returning to this
-	ldi		r1,#1
-;	sb		r1,tcb_sema
-	sys		2				; task eventually, once the timeout expires,
-	pop     r2
-	pop     r1
-	rts
-
-;------------------------------------------------------------------------------
-; Perform a synchronous BIOS call. Waits until the BIOS is finished before
-; returning.
-; Returns:
-; r1 = response result from BIOS
-;------------------------------------------------------------------------------
-;
-Sync_BIOS_Call:
-    ldi     sp,#BIOS_STACK
-    push    r7
-    push    r8
-    push    r9
-.0001:
-    lwar    r7,BIOS_sema
-    bne     r7,.0001          ; free ?
-    swcr    tr,BIOS_sema
-    mfspr   r8,cr0            ; check if store succeeded
-    and     r8,r8,#$1000000000
-    beq     r8,.0001
-
-    lc      r9,BIOS_tail
-    lc      r7,BIOS_tail
-    lc      r8,BIOS_head       ; check for space available
-    cmp     r8,r7,r7
-    beq     r8,.0001          ; no space, go back and wait
-    ldi     r8,#BIOS_AREA
-    sw      r1,BIOS_op[r7+r8]
-    sw      r2,BIOS_arg1[r7+r8]
-    sw      r3,BIOS_arg2[r7+r8]
-    sw      r4,BIOS_arg3[r7+r8]
-    sw      r5,BIOS_arg4[r7+r8]
-    sw      r6,BIOS_arg5[r7+r8]
-    sw      r0,BIOS_resp[r7+r8]
-    sw      r0,BIOS_stat[r7+r8]
-    addui   r7,r7,#64
-    and     r7,r7,#$7c0
-    sc      r7,BIOS_tail
-    sw      r0,BIOS_sema      ; unlock the semaphore
-.0003:
-    lw      r7,BIOS_stat[r9+r8]
-    bne     r7,.0002
-;    hwi     2                 ; reschedule tasks
-    bra     .0003
+BIOSCall:
+    cpuid   sp,r0,#0
+    beq     sp,.0005
+    ldi     sp,#CPU1_BIOS_STACK
+    push    r10
+    push    r11
+    push    r12
+    ldi     r12,#1             ; remember the original affinity
 .0002:
-    lw      r1,BIOS_resp[r9+r8]
-    pop     r9
-    pop     r8
-    pop     r7
-    rte
+    sc      r0,TCB_Affinity[tr]
+    ; Now wait for an interrupt. After the task switch interrupt, CPU#0 is
+    ; the one that would be returning here because of the affinity setting.
+    ; The BIOS call can be completed then.
+    wai
 
-;------------------------------------------------------------------------------
-; Perform an asynchronous BIOS call. Returns as soon as the BIOS information
-; can be registered.
-; Returns:
-; r1 = handle for BIOS call
-;------------------------------------------------------------------------------
-
-BIOS_Call:
-    ldi     sp,#BIOS_STACK
-    push    r7
-    push    r8
-    push    r9
-.0001:
-    lwar    r7,BIOS_sema
-    bne     r7,.0001          ; free ?
-    swcr    tr,BIOS_sema
-    mfspr   r8,cr0            ; check if store succeeded
-    and     r8,r8,#$1000000000
-    beq     r8,.0001
-
-    lc      r7,BIOS_tail
-    ldi     r8,#BIOS_AREA
-    lw      r9,BIOS_stat[r7+r8]
-    cmp     r9,r9,#BIOS_FREE
-    bne     r9,.0002
-    sw      r1,BIOS_op[r7+r8]
-    sw      r2,BIOS_arg1[r7+r8]
-    sw      r3,BIOS_arg2[r7+r8]
-    sw      r4,BIOS_arg3[r7+r8]
-    sw      r5,BIOS_arg4[r7+r8]
-    sw      r6,BIOS_arg5[r7+r8]
-    sw      r0,BIOS_resp[r7+r8]
-    ldi     r9,#BIOS_WAIT_SVC
-    sw      r9,BIOS_stat[r7+r8]
-    mov     r1,r7             ; record BIOS handle in r1
-    addui   r7,r7,#64
-    and     r7,r7,#$7c0
-    sc      r7,BIOS_tail
-    sw      r0,BIOS_sema      ; unlock the semaphore
-    pop     r9
-    pop     r8
-    pop     r7
-    rte
-.0002:
-    sw      r0,BIOS_sema
-    bra     .0001
-
-;------------------------------------------------------------------------------
-; BIOS Dispatcher
-;    Dispatch a BIOS request.
-;------------------------------------------------------------------------------
-
-BIOS_Dispatcher:
-    push    r1
-    push    r2
-    push    r3
-    push    r4
-    push    r5
-    push    r6
-    push    r7
-    push    r8
-    push    r9
-.0001:
-    lwar    r7,BIOS_sema
-    bne     r7,.0001          ; free ?
-    swcr    tr,BIOS_sema
-    mfspr   r8,cr0            ; check if store succeeded
-    and     r8,r8,#$1000000000
-    beq     r8,.0001
-    ldi     r7,#BIOS_AREA
-    lc      r8,BIOS_head
-    lw      r9,BIOS_stat[r7+r8]
-    cmp     r9,r9,#BIOS_WAIT_SVC
-    bne     r9,.advanceHead
-    ldi     r9,#BIOS_INSERVICE
-    sw      r9,BIOS_stat[r7+r8]
-    lw      r1,BIOS_op[r7+r8]
-    lw      r2,BIOS_arg1[r7+r8]
-    lw      r3,BIOS_arg2[r7+r8]
-    lw      r4,BIOS_arg3[r7+r8]
-    lw      r5,BIOS_arg4[r7+r8]
-    lw      r6,BIOS_arg5[r7+r8]
-    cmp     r10,r1,#0
+    ; Some other interrupt besides a task switch might have happened, so
+    ; we check if the CPU switched.
+    cpuid   r10,r0,#0
     bne     r10,.0002
-    mov     r1,r2
-    bsr     DisplayString
-    ldi     r1,#BIOS_DONE
-    sw      r0,BIOS_resp[r7+r8]
-    sw      r1,BIOS_stat[r7+r8]
-    bra     BIOS_dx
-.0002:
-;.0001:
-;    addui   sp,sp,#48
-;    lc      r3,BIOS_head
-;    ldi     r2,#1
-;    sw      r1,BIOS_resp[r3]
-;    sw      r2,BIOS_done[r3]
-;    addui   r1,r3,#64
-;    and     r1,r1,#$7FF
-;    sc      r1,BIOS_head
-;    bra     .0001          ; check for another BIOS call
-.sleep:
-    sw     r0,BIOS_sema
-;    hwi    2
-    bra     .0001
-BIOS_dx:
-.advanceHead:
-    addui    r8,r8,#64
-    and      r8,r8,#$7C0
-    sc       r8,BIOS_head
-.x1:
-    sw       r0,BIOS_sema
-    pop      r9
-    pop      r8
-    pop      r7
-    pop      r6
-    pop      r5
-    pop      r4
-    pop      r3
-    pop      r2
-    pop      r1
-    rtl
+    bra     .0006
+.0005:
+    ldi     sp,#CPU0_BIOS_STACK
+    push    r10
+    push    r11
+    push    r12
+    ldi     r12,#0
+.0006:
+    mfspr   r10,epc             ;
+    lh      r11,4[r10]           ; get the function #
+    addui   r10,r10,#8
+    mtspr   epc,r10
+    cmp     r10,r11,#MAX_BIOS_CALL
+    bgt     r10,.0003
+    asl     r11,r11,#3
+    push    lr
+    jsr     (BIOS_FuncTable[r11])
+    pop     lr
+.0004:
+    sc      r12,TCB_Affinity[tr]
+    pop     r12
+    pop     r11
+    pop     r10
+    rte
+.0003:
+    ldi     r1,#E_BadFuncno
+    bra     .0004
 
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-ServiceRequestIRQ:
-;    rti
-;    cpuid   sp,r0,#0
-;    beq     sp,.0001
-;    rti
-.0001:
-;    ldi     sp,#$8000
-;    push    r1
-;    push    r2
-;    mfspr   r1,ipc
-;    push    r1
-;    ldi     r1,#9
-;    sh      r1,PIC_RSTE
-;    lw      r1,SRI_head
-;    push    SRI_op[r1]
-;    push    SRI_arg1[r1]
-;    push    SRI_arg2[r1]
-;    push    SRI_arg3[r1]
-;    push    SRI_arg4[r1]
-;    push    SRI_arg5[r1]
-;    sys     4
-;    addui   sp,sp,#48
-;    lw      r2,SRI_head
-;    sw      r1,SRI_resp[r2]
-;    ldi     r1,#1
-;    sw      r1,SRI_done[r2]
-;    addui   r2,r2,#64
-;    and     r2,r2,#$7FF
-;    sw      r2,SRI_head
-;    pop     r2
-;    pop     r1
-;    rti
 
 ;------------------------------------------------------------------------------
 ; 60 Hz interrupt routine.
@@ -1490,7 +794,7 @@ TickRout:
     sw      r1,TCB_IPC[tr]
     lw      r1,TCB_r1[tr]
 
-    bsr     SelectTaskToRun
+    bsr     SelectTaskToRun2
     mov     tr,r1
 
     ; Restore the context of the selected task
@@ -1545,6 +849,16 @@ TickRout:
 	pop     r1
 	bra     .SaveContext
 
+UserTickRout:
+    push    r1
+	lh	    r1,TEXTSCR+220+$FFD00000
+	addui	r1,r1,#1
+	sh	    r1,TEXTSCR+220+$FFD00000
+	lw      r1,$20000
+	sh      r1,TEXTSCR+224+$FFD00000
+	pop     r1
+    rtl
+
 ;------------------------------------------------------------------------------
 ; 1024Hz interupt routine. This must be fast. Allows the system time to be
 ; gotten by right shifting by 10 bits.
@@ -1566,7 +880,7 @@ Tick1024Rout:
 ;------------------------------------------------------------------------------
 ; For now, just pick one at random.
 ;------------------------------------------------------------------------------
-SelectTaskToRun:
+SelectTaskToRun2:
     mov     r1,tr             ; stay in the same task for now
     rtl
     lw      r1,RANDOM_NUM
@@ -2084,7 +1398,70 @@ doJump:
 	bsr		MonGetch		; skip over 'S'
 	bsr		ignBlanks
 	bsr		GetHexNumber
-	jsr		[r1]
+	sw      r1,jmp_vector
+    lw      r31,MON_r31
+    lw      r30,MON_r30
+    lw      r29,MON_r29
+    lw      r28,MON_r28
+    lw      r27,MON_r27
+    lw      r26,MON_r26
+    lw      r25,MON_r25
+;   lw      r24,MON_r24    ; r24 is the task register - no need to load
+    lw      r23,MON_r23
+    lw      r22,MON_r22
+    lw      r21,MON_r21
+    lw      r20,MON_r20
+    lw      r19,MON_r19
+    lw      r18,MON_r18
+    lw      r17,MON_r17
+    lw      r16,MON_r16
+    lw      r15,MON_r15
+    lw      r14,MON_r14
+    lw      r13,MON_r13
+    lw      r12,MON_r12
+    lw      r11,MON_r11
+    lw      r10,MON_r10
+    lw      r9,MON_r9
+    lw      r8,MON_r8
+    lw      r7,MON_r7
+    lw      r6,MON_r6
+    lw      r5,MON_r5
+    lw      r4,MON_r4
+    lw      r3,MON_r3
+    lw      r2,MON_r2
+    lw      r1,MON_r1
+    jsr		(jmp_vector)
+    sw      r1,MON_r1
+    sw      r2,MON_r2
+    sw      r3,MON_r3
+    sw      r4,MON_r4
+    sw      r5,MON_r5
+    sw      r6,MON_r6
+    sw      r7,MON_r7
+    sw      r8,MON_r8
+    sw      r9,MON_r9
+    sw      r10,MON_r10
+    sw      r11,MON_r11
+    sw      r12,MON_r12
+    sw      r13,MON_r13
+    sw      r14,MON_r14
+    sw      r15,MON_r15
+    sw      r16,MON_r16
+    sw      r17,MON_r17
+    sw      r18,MON_r18
+    sw      r19,MON_r19
+    sw      r20,MON_r20
+    sw      r21,MON_r21
+    sw      r22,MON_r22
+    sw      r23,MON_r23
+    sw      r24,MON_r24
+    sw      r25,MON_r25
+    sw      r26,MON_r26
+    sw      r27,MON_r27
+    sw      r28,MON_r28
+    sw      r29,MON_r29
+    sw      r30,MON_r30
+    sw      r31,MON_r31
 	bra		mon1
 
 ;------------------------------------------------------------------------------
@@ -2236,7 +1613,7 @@ CheckScrollLock:
 	lcu		r1,KeybdLocks
 	and		r2,r1,#$4000		; is scroll lock active ?
 	beq		r2,.0001
-	brk		#2*16				; reschedule tasks
+;	brk		#2*16				; reschedule tasks
 	bra     .0002
 .0001:
     pop     r2
@@ -2660,7 +2037,7 @@ KeybdGetChar:
 	cmp		r2,r1,#SC_CAPSLOCK
 	beq		r2,.doCapsLock
 	cmp		r2,r1,#SC_SCROLLLOCK
-	beq		r2,.doScrolllock
+	beq		r2,.doScrollLock
 	lb		r2,KeyState1			; check key up/down
 	sb		r0,KeyState1			; clear keyup status
 	bne	    r2,.0003				; ignore key up
@@ -2732,7 +2109,7 @@ KeybdGetChar:
 	sb		r1,KeyState2
 	bra		.0003
 .doNumLock:
-	lb		r1,KeySTate2
+	lb		r1,KeyState2
 	eor		r1,r1,#16
 	sb		r1,KeyState2
 	bsr		KeybdSetLEDStatus
@@ -3298,7 +2675,7 @@ MicroDelay:
 LoadFromSerial:
     push    lr
     ldi     r3,#16384
-    ldi     r2,#$20000          ; target store address
+    ldi     r2,#$24000          ; target store address
 .0001:
     bsr     SerialGetCharDirect
     sb      r1,[r2]
@@ -3566,6 +2943,9 @@ sprite_demo_18:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
+
+include "FMTK_Equates.inc"
+include "FMTK.s"
          
     nop
     nop
