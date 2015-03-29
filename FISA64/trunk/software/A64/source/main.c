@@ -243,6 +243,8 @@ void process_public()
     else if (token==tk_bss) {
          segment = bssseg;
     }
+    else
+        prevToken();
     bump_address();
 //    if (segment==bssseg)
 //        ca = bss_address;

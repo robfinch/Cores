@@ -8,6 +8,7 @@ wire we;
 wire [7:0] sel;
 wire [31:0] adr;
 wire [63:0] cpu_dati,cpu_dato,rom_dato,ram_dato,scm_dato;
+wire sr_o;
 wire cpu_irq;
 wire [31:0] tc_dato;
 wire br_ack, tc_ack;
@@ -19,7 +20,7 @@ wire [31:0] io3_dato,iob3_dato;
 wire kbd_ack,pic_ack;
 wire [7:0] kbd_dato;
 wire [31:0] pic_dato;
-reg pulse1024;
+reg pulse1024,pulse60;
 
 initial begin
 	#0 clk = 1'b0;
@@ -28,7 +29,9 @@ initial begin
 	#100 rst = 1;
 	#200 rst = 0;
 	#500000 pulse1024 = 1;
-	#500100 pulse1024 = 0;
+	#100 pulse1024 = 0;
+	#1000000 pulse60 = 1;
+	#100 pulse60 = 0;
 end
 
 always #5 clk = ~clk;
@@ -55,7 +58,8 @@ FISA64 u1 (
 	.sel_o(sel),
 	.adr_o(adr),
 	.dat_i(cpu_dati),
-	.dat_o(cpu_dato)
+	.dat_o(cpu_dato),
+	.sr_o(sr_o)
 );
 
 FISA64_pic u_pic
@@ -72,7 +76,7 @@ FISA64_pic u_pic
 	.vol_o(),			// volatile register selected
 	.i1(),
 	.i2(pulse1024),
-	.i3(),
+	.i3(pulse60),
 	.i4(),
 	.i5(),
 	.i6(),
@@ -196,6 +200,14 @@ begin
 		$display("    r%d = %h", u1.wRt, u1.wres);
 		if (u1.wRt2 != 0)
 			$display("    sp = %h", u1.wres2);
+	end
+	if (u1.tRt != 0) begin
+		$display("TAIL1");
+		$display("    r%d = %h", u1.tRt, u1.tres);
+	end
+	if (u1.uRt != 0) begin
+		$display("TAIL2");
+		$display("    r%d = %h", u1.uRt, u1.ures);
 	end
 end
 endmodule

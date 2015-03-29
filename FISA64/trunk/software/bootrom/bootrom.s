@@ -50,6 +50,7 @@ SC_LCTRL	EQU		$58
 SC_NUMLOCK	EQU		$77
 SC_SCROLLLOCK	EQU	$7E
 SC_CAPSLOCK	EQU		$58
+SC_TAB      EQU     $0D
 
 ; Boot sector info (62 byte structure) */
 BSI_JMP		= 0x00
@@ -185,6 +186,7 @@ BIOS_arg5      EQU     $28
 BIOS_resp      EQU     $30
 BIOS_stat      EQU     $38
 
+include "DeviceDriver.inc"
 ;include "FMTK_Equates.inc"
 
 	bss
@@ -334,7 +336,7 @@ start:
     jmp     (StartCPU1Addr)
 .0002:
     ldi     sp,#MON_STACK        ; set stack pointer to top of 32k Area
-	ldi     tr,#$C00000          ; load task register with IDLE task
+	ldi     tr,#$C10000          ; load task register with IDLE task
     ldi     r5,#$0000
     ldi     r1,#20
 .0001:
@@ -1256,6 +1258,8 @@ mon1:
 	beq		r2,doJump
 	cmp		r2,r1,#'D'
 	beq		r2,doDate
+	cmp     r2,r1,#'T'
+	beq     r2,doDumpTL
 	bra     mon1
 
 .doHelp:
@@ -1326,6 +1330,10 @@ doDumpmem:
 	cmpu	r4,r2,r1
 	ble		r4,.001
 	bra     mon1
+
+doDumpTL:
+    bsr     DumpTaskList
+    bra     mon1
 
 ;------------------------------------------------------------------------------
 ; Fill memory
@@ -1699,6 +1707,7 @@ msgHelp:
 	db		"FB = fill memory",CR,LF
 	db		"MB = dump memory",CR,LF
 	db		"JS = jump to code",CR,LF
+	db	    "T = Dump task list",CR,LF
 	db		"S = boot from SD card",CR,LF
 	db		0
 
@@ -2002,7 +2011,20 @@ KeybdGetCharNoWait:
 KeybdGetCharWait:
 	ldi		r1,#-1
 	sb		r1,KeybdWaitFlag
-	
+
+;
+; Keystate2
+; 876543210
+; ||||||||+ = alt
+; |||||||+- =
+; ||||||+-- = control
+; |||||+--- = numlock
+; ||||+---- = capslock
+; |||+----- = scrolllock
+; ||+------ =
+; |+------- = 
+; +-------- = extended
+;
 KeybdGetChar:
     push    lr
 	push	r2
@@ -2038,9 +2060,14 @@ KeybdGetChar:
 	beq		r2,.doCapsLock
 	cmp		r2,r1,#SC_SCROLLLOCK
 	beq		r2,.doScrollLock
+	cmp     r2,r1,#SC_ALT
+	beq     r2,.doAlt
 	lb		r2,KeyState1			; check key up/down
 	sb		r0,KeyState1			; clear keyup status
 	bne	    r2,.0003				; ignore key up
+	cmp     r2,r1,#SC_TAB
+	beq     r2,.doTab
+.0013:
 	lb		r2,KeyState2
 	and		r3,r2,#$80				; is it extended code ?
 	beq		r3,.0010
@@ -2095,6 +2122,31 @@ KeybdGetChar:
 	or		r1,r1,#4
 	sb		r1,KeyState2
 	bra		.0003
+.doAlt:
+	lb		r1,KeyState1
+	sb		r0,KeyState1
+	bpl		r1,.0011
+    lb      r1,KeyState2
+	lb		r1,KeyState2
+	and		r1,r1,#-2
+	sb		r1,KeyState2
+	bra		.0003
+.0011:
+	lb		r1,KeyState2
+	or		r1,r1,#1
+	sb		r1,KeyState2
+	bra		.0003
+.doTab:
+    push    r1
+    lb      r1,KeyState2
+    and     r1,r1,#1                 ; is ALT down ?
+    beq     r1,.0012
+    inc     iof_switch
+    pop     r1
+    bra     .0003
+.0012:
+    pop     r1
+    bra     .0013
 .doShift:
 	lb		r1,KeyState1
 	sb		r0,KeyState1
@@ -2946,6 +2998,7 @@ sprite_demo_18:
 
 include "FMTK_Equates.inc"
 include "FMTK.s"
+include "iofocus.s"
          
     nop
     nop

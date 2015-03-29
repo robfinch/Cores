@@ -951,6 +951,12 @@ int NextToken()
                  inptr += 3;
                  return token = tk_inc;
              }
+             if ((inptr[1]=='n' || inptr[1]=='N') &&
+                 (inptr[2]=='t' || inptr[2]=='T') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_int;
+             }
              break;
 
         // jal jgr jmp jsr jsp
@@ -1476,6 +1482,12 @@ int NextToken()
                 inptr += 3;
                 return token = tk_sys;
             }
+            if ((inptr[1]=='t' || inptr[1]=='T') && 
+                (inptr[2]=='p' || inptr[2]=='P') && 
+                isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_stp;
+            }
             if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='c' || inptr[2]=='C') && (inptr[3]=='r' || inptr[3]=='R') && isspace(inptr[4])) {
                 inptr += 4;
                 return token = tk_swcr;
@@ -1488,6 +1500,16 @@ int NextToken()
                  isspace(inptr[2])) {
                  inptr += 2;
                  return token = tk_to;
+             }
+             break;
+
+        // wai
+        case 'w': case 'W':
+             if ((inptr[1]=='a' || inptr[1]=='A') &&
+                 (inptr[2]=='i' || inptr[2]=='I') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_wai;
              }
              break;
 

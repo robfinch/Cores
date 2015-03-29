@@ -122,6 +122,7 @@ enum {
      tk_icon,
      tk_id,
      tk_inc,
+     tk_int,
      tk_ios,
      tk_jal,
      tk_jgr,
@@ -215,6 +216,7 @@ enum {
      tk_sne,
      tk_snei,
      tk_ss,
+     tk_stp,
      tk_sub,
      tk_subi,
      tk_subu,
@@ -228,6 +230,7 @@ enum {
      tk_sys,
      tk_tls,
      tk_to,
+     tk_wai,
      tk_xnor,
      tk_xor,
      tk_xori

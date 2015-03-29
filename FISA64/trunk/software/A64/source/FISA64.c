@@ -227,7 +227,7 @@ static int FISA64_getSprRegister()
          }
          break;
 
-    // dbad0 dbad1 dbctrl
+    // dbad0 dbad1 dbctrl dpc dsp
     case 'd': case 'D':
          if ((inptr[1]=='b' || inptr[1]=='B') &&
              (inptr[2]=='a' || inptr[2]=='A') &&
@@ -275,15 +275,52 @@ static int FISA64_getSprRegister()
              NextToken();
              return 54;
          }
+         if ((inptr[1]=='p' || inptr[1]=='P') &&
+             (inptr[2]=='c' || inptr[2]=='C') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 7;
+         }
+         if (
+             (inptr[1]=='b' || inptr[1]=='B') &&
+             (inptr[2]=='p' || inptr[2]=='P') &&
+             (inptr[3]=='c' || inptr[3]=='C') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 7;
+         }
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             (inptr[2]=='p' || inptr[2]=='P') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 16;
+         }
          break;
 
-    // ea
+    // ea epc esp
     case 'e': case 'E':
          if ((inptr[1]=='a' || inptr[1]=='A') &&
              !isIdentChar(inptr[2])) {
              inptr += 2;
              NextToken();
              return 40;
+         }
+         if ((inptr[1]=='p' || inptr[1]=='P') &&
+             (inptr[2]=='c' || inptr[2]=='C') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 9;
+         }
+         if ((inptr[1]=='s' || inptr[1]=='S') &&
+             (inptr[2]=='p' || inptr[2]=='P') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 17;
          }
          break;
 
@@ -609,8 +646,16 @@ static void process_jal(int oc, int Rt)
            addr = expr();
            prevToken();
            if (token==',') {
+               NextToken();
                Ra = getRegisterX();
                if (Ra==-1) Ra = 0;
+           }
+           else if (token=='[') {
+                NextToken();
+               Ra = getRegisterX();
+               if (Ra==-1) Ra = 0;
+               need(']');
+               NextToken();
            }
            if (token!=')' && token != ']')
                printf("Missing close bracket.\r\n");
@@ -1415,6 +1460,30 @@ static void process_mov()
 }
 
 // ----------------------------------------------------------------------------
+// neg r1,r2
+// ----------------------------------------------------------------------------
+
+static void process_neg(int oc)
+{
+     int Ra;
+     int Rb;
+     int Rt;
+     
+     Ra = 0;
+     Rt = getRegisterX();
+     need(',');
+     Rb = getRegisterX();
+     emit_insn(
+         (oc << 25) | // SUBU
+         (Rb << 17) |
+         (Rt << 12) |
+         (Ra << 7) |
+         0x02
+     );
+     prevToken();
+}
+
+// ----------------------------------------------------------------------------
 // sei
 // cli
 // rtd
@@ -1833,6 +1902,7 @@ void FISA64_processMaster()
 */
         case tk_gran: process_gran(0x14); break;
         case tk_inc: process_inc(0x64); break;
+        case tk_int: process_brk(2); break;
   
         case tk_jal: process_jal(0x3C,-1); break;
         case tk_jmp: process_jal(0x3C,0); break;
@@ -1862,7 +1932,7 @@ void FISA64_processMaster()
         case tk_muli: process_riop(0x07); break;
         case tk_mulu: process_rrop(0x17); break;
         case tk_mului: process_riop(0x17); break;
-//        case tk_neg: process_rop(0x05); break;
+        case tk_neg: process_neg(0x15); break;
         case tk_nop: emit_insn(0x0000003F); break;
         case tk_not: process_rop(0x0A); break;
         case tk_or:  process_rrop(0x0D); break;
@@ -1900,6 +1970,7 @@ void FISA64_processMaster()
         case tk_shl:  process_rrop(0x30); break;
         case tk_shli: process_shifti(0x38); break;
         case tk_sne:  process_rrop(0x21); break;
+        case tk_stp: process_pctrl(2); break;
         case tk_sub:  process_rrop(0x05); break;
         case tk_subi: process_riop(0x05); break;
         case tk_subu:  process_rrop(0x15); break;
@@ -1912,6 +1983,7 @@ void FISA64_processMaster()
         case tk_swcr:  process_store(0x6E); break;
         case tk_xor: process_rrop(0x0E); break;
         case tk_xori: process_riop(0x0E); break;
+        case tk_wai: process_pctrl(3); break;
         case tk_id:  process_label(); break;
         }
         NextToken();

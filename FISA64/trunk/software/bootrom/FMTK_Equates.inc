@@ -103,6 +103,9 @@ TCB_SP15Save	EQU		0x178
 TCB_IPC         EQU     0x180
 TCB_DPC         EQU     0x188
 TCB_EPC         EQU     0x190
+TCB_ISP         EQU     0x198
+TCB_DSP         EQU     0x1A0
+TCB_ESP         EQU     0x1A8
 
 TCB_NextRdy     EQU     $200
 TCB_PrevRdy     EQU     $208
@@ -123,6 +126,8 @@ TCB_StackTop    EQU     $268
 TCB_errno       EQU     $270
 TCB_Timeout     EQU     $278
 TCB_Affinity    EQU     $280
+TCB_BIOS_Stack  EQU     $288
+TCB_SYS_Stack   EQU     $290
 TCB_Size	    EQU	    $300
 
 ; Mailboxes, room for 2048
@@ -226,13 +231,22 @@ MSG_Array       EQU     $C90000     ; room for 32,768 messages (1MB)
 MSG_ArrayEnd    EQU     $D90000
 SCREEN_Array    EQU     $D90000     ; room for 51 16kB screens
 SCREEN_ArrayEnd EQU     $E90000
-STACKS_Array    EQU    $7F00000     ; room for 256 TCB stacks of 4kB each
+DCB_Array       EQU     $E90000     ; room for 32 DCB's
+DCB_ArrayEnd    EQU     $E90880
+
+CPU0_DBG_STACK  EQU     $7CF000
+CPU1_STACK      EQU     $7CF800
+SYS_STACKS_Array    EQU    $7D00000
+BIOS_STACKS_Array   EQU    $7E00000
+STACKS_Array   EQU     $7F00000     ; room for 256 TCB stacks of 4kB each
 STACKS_ArrayEnd EQU    $8000000
 MEM_END         EQU    $8000000
 
     .bss
     org         VAR_Area
 UserTick    dw      0
+            dw      0               ; BIOS Mailbox handle storage
+BIOS_RespMbx        dw      0
 IRQFlag     dw      0
 IOFocusNdx  dw      0
 IOFocusTbl      fill.w   4,0        ; tasks requesting I/O focus
@@ -278,5 +292,5 @@ iof_sema       dw   0
 mbx_sema       dw   0
 msg_sema       dw   0
 jcb_sema       dw   0
-
+BIOS1_sema     dw   0
 

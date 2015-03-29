@@ -30,6 +30,16 @@ BranchToSelf:
 
 FMTKInitialize:
 InitFMTK:
+    push    lr
+
+    ; Clear memory used by FMTK
+    ldi     r1,#VAR_Area
+zap1:
+    sw      r0,[r1]
+    addui   r1,r1,#8
+    cmpu    r2,r1,#DCB_ArrayEnd
+    blt     r2,zap1
+
 	; Initialize semaphores
 	sw		r0,freetcb_sema
 	sw		r0,freembx_sema
@@ -41,6 +51,7 @@ InitFMTK:
 	sw		r0,msg_sema
 	sw		r0,jcb_sema
 
+    ; Set interrupt vectors
 	mfspr	r2,vbr
 	ldi		r1,#reschedule
 	sw		r1,16[r2]
@@ -69,14 +80,19 @@ InitFMTK:
 	sw      r0,IOFocusTbl+16
 	sw      r0,IOFocusTbl+32
 
-	; zero out JCB's
-	; This will NULL out the I/O focus list pointers
-	ldi     r1,#NR_JCB * JCB_Size / 8 - 8
-	ldi     r2,#JCB_Array
-.0001:
-	sw      r0,[r2+r1*8]
-	subui   r1,r1,#1
-	bge     r1,.0001
+	; Initialize the FreeJCB list
+	ldi		r1,#JCB_Array+JCB_Size		; the next available JCB
+	sw		r1,FreeJCB
+	mov     r2,r1
+	addui	r1,r1,#JCB_Size
+	ldi		r3,#NR_JCB-1
+st5:
+	sw		r1,JCB_Next[r2]
+	addui	r1,r1,#JCB_Size
+	addui	r2,r2,#JCB_Size
+	subui   r3,r3,#1
+	bne		r3,st5
+	sw      r0,JCB_Next[r2]
 
 	; Setup default values in the JCB's
 	ldi		r3,#0
@@ -151,23 +167,9 @@ st4:
     subui   r5,r5,#1
     bgt     r5,.imbxl1
 
-	; Initialize the FreeJCB list
-	ldi		r1,#JCB_Array+JCB_Size		; the next available JCB
-	sw		r1,FreeJCB
-	mov     r2,r1
-	addui	r1,r1,#JCB_Size
-	ldi		r3,#NR_JCB-1
-st5:
-	sw		r1,JCB_Next[r2]
-	addui	r1,r1,#JCB_Size
-	addui	r2,r2,#JCB_Size
-	subui   r3,r3,#1
-	bne		r3,st5
-	sw      r0,JCB_Next[r2]
-
     ; Initialize the free TCB list
     ; The first two TCB's are pre-allocated and so aren't part of the list
-    ldi     r2,#TCB_Array+2*TCB_Size
+    ldi     r2,#TCB_Array+TCB_Size
     sw      r2,FreeTCB
     sw      r0,TCB_PrevFree[r2]
 .0001:
@@ -195,13 +197,27 @@ st5:
     blt     r1,.nextTCB
 
 	; Manually setup the BIOS task
+	; FMTK can't be called to setup the first task because it uses the
+	; SYS_STACK associated with the running task which hasn't been set yet.
 	ldi     tr,#TCB_Array
-;	sw		tr,RunningTCB	; BIOS is task #0
 	sw		tr,TCB_NextRdy[tr]	; manually build the ready list
 	sw		tr,TCB_PrevRdy[tr]
 	sw		r0,TCB_NextTo[tr]
 	sw		r0,TCB_PrevTo[tr]
+	ldi     r1,#SYS_STACKS_Array + 4088
+	sw      r1,TCB_SYS_Stack[tr]
+	ldi     r1,#BIOS_STACKS_Array + 4088
+	sw      r1,TCB_BIOS_Stack[tr]
+	ldi		r1,#3
+	sc		r1,TCB_Priority[tr]
+	sb      r0,TCB_Affinity[tr]
+	sw		r0,TCB_Timeout[tr]
+	ldi		r1,#TS_RUNNING|TS_READY
+	sb		r1,TCB_Status[tr]
+	ldi     r1,#STACKS_Array+$FF8   ; setup stack pointer top of memory
+	sw		r1,TCB_r31[tr]
 	sw		tr,QNdx3		; insert at priority 3
+
 	; manually build the IO focus list
 	ldi		r1,#JCB_Array
 	sw	    r1,IOFocusNdx		; Job #0 (Monitor) has the focus
@@ -209,24 +225,34 @@ st5:
 	sw		r1,JCB_iof_prev[r1]
 	ldi		r1,#1
 	sw		r1,IOFocusTbl		; set the job #0 request bit
+ 
+	ldi		r1,#7          ; priority
+	ldi		r2,#0          ; processor #0
+	ldi		r3,#IdleTask   ; start address
+	ldi     r4,#0          ; start parameter (NULL)
+	ldi     r5,#JCB_Array  ; r5 = job handle of owning job
+	sys     #4
+	dh      1              ; start task
 
-	ldi		r1,#3
-	sc		r1,TCB_Priority[tr]
-	sw		r0,TCB_Timeout[tr]
-	ldi		r1,#TS_RUNNING|TS_READY
-	sb		r1,TCB_Status[tr]
-	ldi     r1,#STACKS_Array+$FF8   ; setup stack pointer top of memory
-	sw		r1,TCB_r31[tr]
+	ldi		r1,#7          ; priority
+	ldi		r2,#1          ; processor #1
+	ldi		r3,#IdleTask   ; start address
+	ldi     r4,#0          ; start parameter (NULL)
+	ldi     r5,#JCB_Array  ; r5 = job handle of owning job
+	sys     #4
+	dh      1              ; start task
 
-    rtl
+    rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 StartIdleTask:
     push    lr
-	ldi		r1,#7
+	ldi		r1,#7          ; priority
 	ldi		r2,#0
-	ldi		r3,#IdleTask
+	ldi		r3,#IdleTask   ; start address
+	ldi     r4,#0          ; start parameter (NULL)
+	ldi     r5,#JCB_Array  ; r5 = job handle of owning job
 	bsr		StartTask
 	rts
 
@@ -255,7 +281,7 @@ it1:
     cmpu    r1,r2,#TCB_ArrayEnd-TCB_Size
     blt     r1,it2
     bra     it3
-	cli						; enable interrupts
+;	cli						; enable interrupts
 ;	wai						; wait for one to happen
 	bra		it2
 
@@ -304,7 +330,7 @@ sjob1:
 	rtl
 
 ;------------------------------------------------------------------------------
-; Lock the task control blocks semaphore.
+; Lock routines.
 ;------------------------------------------------------------------------------
 
 LockFreeMBX:
@@ -355,6 +381,7 @@ LockTCB:
 ; OS. If an attempt is made to lock the semaphore twice (or more) by the same
 ; task, the OS would lock up waiting for the semaphore. Checking if it's
 ; already owned prevents this lockup.
+;
 ; Parameters:
 ; r1 = address of semaphore to lock
 ;------------------------------------------------------------------------------
@@ -404,21 +431,35 @@ StartTask:
 	push    r6
 	push    r7
 	push    r8
+	push    r9
+	push    r10
+	push    r11
 	mov		r6,r1				; r6 = task priority
-	mov		r8,r2				; r8 = flag register value on startup
+	mov		r9,r2				; r9 = flag register value on startup
 	
 	; get a free TCB
 	;
     bsr     LockFreeTCB
-	lw		r1,FreeTCB			; get free tcb list pointer
-	beq		r1,stask1
-	mov     r2,r1
-	lw		r1,TCB_NextFree[r2]
-	sw		r1,FreeTCB			; update the FreeTCB list pointer
+;	lw		r1,FreeTCB			; get free tcb list pointer
+    ldi     r1,#TCB_Array
+.0002:
+	lb      r2,TCB_Status[r1]
+	beq     r2,.0001
+	addui   r1,r1,#TCB_Size
+	cmpu    r2,r1,#TCB_ArrayEnd-TCB_Size
+	blt     r2,.0002
+	bra     stask1
+;	bsr     DisplayHalf
+;	bsr     CRLF
+;	beq		r1,stask1
+;	mov     r2,r1
+;	lw		r1,TCB_NextFree[r2]
+;	sw		r1,FreeTCB			; update the FreeTCB list pointer
+;	sw      r0,TCB_PrevFree[r1]
+.0001:
 	sw		r0,freetcb_sema
-	ldi		r1,#81
-	sc		r1,LEDS
-	mov     r1,r2				; r1 = TCB pointer
+	mov     r2,r1
+;	mov     r1,r2				; r1 = TCB pointer
 
 ;	sw		r1,TCB_mbx[r2]???
 	
@@ -429,10 +470,28 @@ StartTask:
 	divu    r2,r2,#TCB_Size     ; r2 = index number of TCB
 	asl		r2,r2,#12			; 4kB stack per task
 	addui	r8,r2,#STACKS_Array	; add in stack base
-	mov     r2,r8
-	addui   r2,r2,#4088
+	addui   r10,r2,#BIOS_STACKS_Array
+	addui   r11,r2,#SYS_STACKS_Array
+
+	; It's safe to update the TCB here without checking the semaphore because
+	; the TCB isn't on any list. It's in no-man's land at this point.
+	addui   r2,r8,#4088
 	sw      r2,TCB_StackTop[r7]
 	sw      r2,TCB_r31[r7]
+	addui   r8,r10,#4088
+	sw      r8,TCB_BIOS_Stack[r7]
+	addui   r8,r11,#4088
+	sw      r8,TCB_SYS_Stack[r7]
+	sw      r4,TCB_r1[r7]
+	sb      r9,TCB_Affinity[r7]
+	sb		r6,TCB_Priority[r7]
+	sb		r0,TCB_Status[r7]
+	sw		r0,TCB_Timeout[r7]
+	sw		r5,TCB_hJCB[r7]		; save job handle
+	sw		r0,TCB_MbxList[r7]
+	sw      r3,TCB_IPC[r7];     ; set starting address
+	sw      r3,TCB_DPC[r7];
+	sw      r3,TCB_EPC[r7];
 	
 	; Fill the stack with the ExitTask address. This will cause a return
 	; to the ExitTask routine when the task finishes.
@@ -449,21 +508,15 @@ StartTask:
 	pop     r2
 	pop     r1
 
-    bsr     LockTCB
-    	
-	sb		r6,TCB_Priority[r7]
-	sb		r0,TCB_Status[r7]
-	sw		r0,TCB_Timeout[r7]
-	sw		r5,TCB_hJCB[r7]		; save job handle
-	ldi		r1,#82
-	sc		r1,LEDS
-	sw		r0,TCB_MbxList[r7]
-
 	; Insert the task into the ready list
 	mov     r1,r7
+    bsr     LockTCB
 	bsr		AddTaskToReadyList
 	sw		r0,tcb_sema       ; unlock TCB semaphore
 stask2:
+    pop     r11
+    pop     r10
+    pop     r9
 	pop     r8
 	pop     r7
 	pop     r6
@@ -493,27 +546,21 @@ ExitTask:
 	; - messages
 ;	hoff
     bsr     LockTCB
-    mov     r1,tr
 	bsr		RemoveTaskFromReadyList
 	bsr		RemoveFromTimeoutList
-	sw		r0,TCB_Status[r1]				; set task status to TS_NONE
+	sw		r0,TCB_Status[tr]				; set task status to TS_NONE
 	bsr		ReleaseIOFocus
 	; Free up all the mailboxes associated with the task.
 xtsk7:
-	push    r1
-	lw		r1,TCB_MbxList[r1]
+	lw		r1,TCB_MbxList[tr]
 	beq		r1,xtsk6
 	bsr		FreeMbx
-	pop     r1
 	bra		xtsk7
 xtsk6:
-	pop     r1
-	ldi		r2,#86
-	sc		r2,LEDS
 	bsr     LockFreeTCB
-	lw		r2,FreeTCB						; add the task control block to the free list
-	sw		r2,TCB_NextFree[r1]
-	sw		r1,FreeTCB
+	lw		r1,FreeTCB						; add the task control block to the free list
+	sw		r1,TCB_NextFree[tr]
+	sw		tr,FreeTCB
 	sw		r0,freetcb_sema
 	sw      r0,tcb_sema
 	; This loop will eventually be interrupted, the interrupt return will not
@@ -536,6 +583,7 @@ xtsk1:
 KillTask:
     push    lr
 	push    r2
+	push    r3
 	cmpu    r2,r1,#TCB_Array+TCB_Size  ; BIOS task and IDLE task are immortal
 	ble		r2,kt1
 	cmpu    r2,r1,#TCB_ArrayEnd-TCB_Size
@@ -550,13 +598,15 @@ KillTask:
 	sb		r0,TCB_Status[r1]    		; set task status to TS_NONE
 
 	; Free up all the mailboxes associated with the task.
-kt7:
 	push    r1
 	mov     r2,r1
-	lw		r1,TCB_MbxList[r1]
+	mov     r3,r1
+	lw		r1,TCB_MbxList[r3]
+kt7:
 	beq		r1,kt6
+	lw      r3,MBX_LINK[r1]
 	bsr		FreeMbx2
-	pop     r1
+	mov     r1,r3
 	bra		kt7
 kt6:
     sw      r0,tcb_sema
@@ -571,6 +621,7 @@ kt6:
 .self:
 	bra     .self
 kt1:
+    pop     r3
 	pop     r2
 	rts
 
@@ -599,7 +650,12 @@ dtl2:
 	mov		r4,r1
 	beq		r4,dtl1
 dtl3:
-	ldi	    r2,#3
+    ldi     r2,#3
+    mov     r4,r1
+    lb      r1,TCB_Affinity[r1]
+    bsr     PRTNUM
+    mov     r1,r4
+	ldi	    r2,#4
 	lsr     r1,r3,#3
 	bsr		PRTNUM
 	bsr		DisplaySpace
@@ -638,7 +694,7 @@ dtl1:
 	rts
 
 msgTaskList:
-	db	CR,LF,"Pri   Task   Stat    Prv     Nxt     Timeout",CR,LF,0
+	db	CR,LF,"CPU Pri   Task   Stat    Prv     Nxt     Timeout",CR,LF,0
 
 
 ;------------------------------------------------------------------------------
@@ -984,7 +1040,7 @@ AllocMbx:
 	push    r2
 	push    r3
 	push	r4
-	ld		r4,r1			; r4 = pointer to returned handle
+	mov		r4,r1			; r4 = pointer to returned handle
 	bsr     LockFreeMBX
 	lw		r1,FreeMbxHandle			; Get mailbox off of free mailbox list
 	sw		r1,[r4]			; store off the mailbox number
@@ -1718,24 +1774,23 @@ cmsg5:
 ;------------------------------------------------------------------------------
 ;
 syscall_exception:
-    cpuid   sp,r0,#0
-    beq     sp,.0001
-    ldi     sp,#CPU1_SYS_STACK
-    bra     .0002
-.0001:
-    ldi     sp,#CPU0_SYS_STACK
-.0002:
+    ldi     sp,TCB_SYS_Stack[tr]
 	push	r6					; save off some working registers
 	push	r7
 	mfspr   r6,epc              ; get return address into r6
-	lh	    r7,4[r6]			; get static call number parameter into r7
+	and     r7,r6,#-2           ; clear LSB
+	lh	    r7,4[r7]			; get static call number parameter into r7
 	addui   r6,r6,#8			; update return address
 	mtspr   epc,r6
+	cmpu    r6,r7,#20
+	bgt     r6,.bad_callno
+	asl     r7,r7,#1
 	lcu     r6,syscall_vectors[r7]       ; load the vector into r6
 	or      r6,r6,#syscall_exception & 0xFFFFFFFFFFFF0000
 	push    lr
 	jsr		[r6]				; do the system function
 	pop     lr
+.bad_callno:
 	pop		r7
 	pop		r6
 	rte
@@ -1800,7 +1855,11 @@ reschedule:
     sw      r28,TCB_r28[tr]
     sw      r29,TCB_r29[tr]
     mfspr   r1,isp
-    sw      r1,TCB_r30[tr]
+    sw      r1,TCB_ISP[tr]
+    mfspr   r1,dsp
+    sw      r1,TCB_DSP[tr]
+    mfspr   r1,esp
+    sw      r1,TCB_ESP[tr]
     sw      r31,TCB_r31[tr]
     mfspr   r1,ipc
     sw      r1,TCB_IPC[tr]
@@ -1826,19 +1885,17 @@ strStartQue:
 ;------------------------------------------------------------------------------
 
 FMTKTick:
-    cpuid   sp,r0,#0
-    beq     sp,.0001
-    rti
-    ldi     sp,#CPU1_IRQ_STACK
-    push    r1
-    bra     .0003
-.0001:
+    ; Both processor's can share the same IRQ stack address because there are
+    ; two separate memories in the IRQ stack region. CPU #0 uses a scratchpad
+    ; RAM, while CPU #1 uses the dram.
     ldi     sp,#IRQ_STACK
-	push    r1
+    push    r1
+    
+    ; Each CPU has it's own PIC mapped at the same address.
 	ldi		r1,#3				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
 	inc		IRQFlag
-.0003:
+
 	; Try and aquire the ready list and tcb. If unsuccessful it means there is
 	; a system function in the process of updating the list. All we can do is
 	; return to the system function and let it complete whatever it was doing.
@@ -1892,7 +1949,11 @@ p100Hz11:
     sw      r28,TCB_r28[tr]
     sw      r29,TCB_r29[tr]
     mfspr   r1,isp
-    sw      r1,TCB_r30[tr]
+    sw      r1,TCB_ISP[tr]
+    mfspr   r1,dsp
+    sw      r1,TCB_DSP[tr]
+    mfspr   r1,esp
+    sw      r1,TCB_ESP[tr]
     sw      r31,TCB_r31[tr]
     mfspr   r1,ipc
     sw      r1,TCB_IPC[tr]
@@ -1900,8 +1961,8 @@ p100Hz11:
     sw      r1,TCB_DPC[tr]
     mfspr   r1,epc
     sw      r1,TCB_EPC[tr]
-	ldi		r1,#96
-	sc		r1,LEDS
+	cpuid   r1,r0,#0
+	bne     r1,p100Hz4
 	lw		r1,UserTick
 	beq		r1,p100Hz4
 	push    lr
@@ -1911,16 +1972,18 @@ p100Hz4:
     lb      r1,TCB_Status[tr]
     and     r1,r1,#~TS_RUNNING
     sb      r1,TCB_Status[tr]
-	ldi		r1,#97
-	sc		r1,LEDS
 
 	; Check the timeout list to see if there are items ready to be removed from
 	; the list. Also decrement the timeout of the item at the head of the list.
+	; Note the timeout list is checked by each CPU which decrements timeouts,
+	; the resulting decrement rate is 60Hz as each CPU services the interrupt
+	; at a 30Hz rate.
 p100Hz15:
 	lw		r2,TimeoutList
 	beq		r2,p100Hz12				; are there any entries in the timeout list ?
 	lw		r1,TCB_Timeout[r2]
 	bne		r1,p100Hz14				; has this entry timed out ?
+p100Hz1:
 	push    lr
 	bsr     PopTimeoutList
 	bsr		AddTaskToReadyList
@@ -1933,12 +1996,11 @@ p100Hz14:
 	subu	r1,r1,r3        		; account for any missed ticks
 	sw		r0,missed_ticks
 	sw		r1,TCB_Timeout[r2]
+	bmi     r1,p100Hz1
 	
 p100Hz12:
 	; Falls through into selecting a task to run
 tck3:
-	ldi		r1,#98
-	sc		r1,LEDS
 
 ;------------------------------------------------------------------------------
 ; Search the ready queues for a ready task.
@@ -1958,29 +2020,41 @@ sttr2:
     asl     r4,r3,#3
 	lw		r1,QNdx0[r4]
 	beq		r1,sttr1
+	; The task could already be running on the other CPU, don't run a running
+	; task.
+	lb      r5,TCB_Status[r1]
+	and     r7,r5,#TS_RUNNING
+	bne     r7,sttr9
+sttr10:
 	lw		r1,TCB_NextRdy[r1]		; Advance the queue index
+	; Task control blocks are aligned on 256B boundaries. Address ends in "$00"
+    ; Check and make sure this is the case. This should catch most bad pointers.
 	and     r7,r1,#$FF
 	bne     r7,sttr_badtask
+	; Now make sure the pointer is within the Task Control Block memory range.
 	cmpu    r7,r1,#TCB_Array
 	blt     r7,sttr_badtask
 	cmpu    r7,r1,#TCB_ArrayEnd-TCB_Size
 	bgt     r7,sttr_badtask
-	sw		r1,QNdx0[r4]
+	; Probably got a valid pointer...
+	; CPU #0 can run any task, CPU #1 can only run tasks associated with it as
+	; it has no I/O. -- for the moment
 	cpuid   r7,r0,#0
 	beq     r7,sttr5
-	lc      r8,TCB_Affinity[r1]
+	lbu     r8,TCB_Affinity[r1]
 	cmp     r7,r7,r8
 	bne     r7,sttr1
 sttr5:
 	; This is the only place the RunningTCB is set (except for initialization).
+	sw		r1,QNdx0[r4]
 	mov     tr,r1
-	nop
-	nop
 	lb      r1,TCB_Status[tr]
 	or      r1,r1,#TS_RUNNING    ; flag the task as the running task
 	sb      r1,TCB_Status[tr]
-	ldi		r1,#99
-	sc		r1,LEDS
+	; Only CPU #0 has access to I/O, so check for an I/O focus switch only
+	; on CPU #0.
+	cpuid   r1,r0,#0
+	bne     r1,sttr6
 	lw		r1,iof_switch		
 	beq		r1,sttr6				
 	lwar	r1,iof_sema		; just ignore the request to switch
@@ -1994,6 +2068,7 @@ sttr5:
 	bsr		SwitchIOFocus
 	pop     lr
 	sw		r0,iof_sema
+	; Restore the task context
 sttr6:
     lw      r1,TCB_EPC[tr]
     mtspr   epc,r1
@@ -2002,7 +2077,11 @@ sttr6:
     lw      r1,TCB_IPC[tr]
     mtspr   ipc,r1
     lw      r31,TCB_r31[tr]
-    lw      r1,TCB_r30[tr]
+    lw      r1,TCB_ESP[tr]
+    mtspr   esp,r1
+    lw      r1,TCB_DSP[tr]
+    mtspr   dsp,r1
+    lw      r1,TCB_ISP[tr]
     mtspr   isp,r1
     lw      r29,TCB_r29[tr]
     lw      r28,TCB_r28[tr]
@@ -2033,7 +2112,7 @@ sttr6:
     lw      r3,TCB_r3[tr]
     lw      r2,TCB_r2[tr]
     lw      r1,TCB_r1[tr]
-	sw		r0,tcb_sema
+	sw		r0,tcb_sema        ; release the TCB semaphore
 	rti
 sttr7:
     swcr    r1,iof_sema
@@ -2042,16 +2121,21 @@ sttr7:
 	; Set index to check the next ready list for a task to run
 sttr1:
 	addui   r3,r3,#1
-	and     r3,r3,#7
+	and     r3,r3,#7     ; count moduluo 8
 	subui   r6,r6,#1
 	bge		r6,sttr2
-
+ 
 	; Here there were no tasks ready
 	; This should not be able to happen, so hang the machine (in a lower
 	; power mode).
+	; For now just go back to running whatever was running in the first place.
+	; Something had to be running sucessfully before the interrupt; return to
+    ; it.
+    bra     sttr6
 sttr3:
-	ldi     r2,#94
-	sc		r2,LEDS
+	cpuid   r1,r0,#0
+sttr8:
+	bne     r1,sttr8
 	push    lr
 	bsr		kernel_panic
 	db		"No tasks in ready queue.",0
@@ -2063,7 +2147,27 @@ sttr3:
 	stp								
 	jmp		FMTKInitialize
 
+    ; We found a running task at the head of a ready queue. Check for a next
+    ; ready task.
+sttr9:
+    ; If the next ready task is just the running one, then go check the next
+    ; queue.
+    lw      r7,TCB_NextRdy[r1]
+    beq     r7,sttr1            ; NULL pointer ?
+    cmp     r7,r1,r7
+    beq     r7,sttr1            ; Running = next
+    ; Assume there aren't two running tasks (there shouldn't be)
+    cmp     r7,r1,tr            ; skip over outgoing task
+    beq     r7,sttr1    
+    bra     sttr10
+    ;
+    
+    
+    
+    
 sttr_badtask:
+	cpuid   r1,r0,#0
+	bne     r1,sttr1
     bsr     kernel_panic
     db      "Bad task on ready list.",0
     bra     sttr1

@@ -201,6 +201,8 @@ wire kbd_ack;
 wire [7:0] kbd_dato;
 wire pic_ack;
 wire [31:0] pic_dato;
+wire pic2_ack;
+wire [31:0] pic2_dato;
 
 wire tc_ack;
 wire [31:0] tc_dato;
@@ -432,10 +434,12 @@ wire [63:0] cpu_dati =
 	flt_dato
 	;
 wire p1_cpu_ack =
+    pic2_ack |
 	p1_btrm_ack |
 	p1_dram_ack
 	;
 wire [63:0] p1_cpu_dati =
+    {2{pic2_dato}} |
 	p1_btrm_dato |
 	p1_dram_dato
 	;
@@ -531,7 +535,8 @@ sys_pulse #(.pClkFreq(25000000)) upulse1
 	.rst(rst),
 	.clk50(clk25),
 	.pulse1024Hz(pulse1024Hz),
-	.pulse60Hz(pulse60Hz)
+	.pulse30Hza(pulse30Hza),
+	.pulse30Hzb(pulse30Hzb)
 );
 
 `ifdef LEDS
@@ -1652,7 +1657,7 @@ FISA64_pic u_pic
 	.vol_o(),			// volatile register selected
 	.i1(kbd_rst),
 	.i2(pulse1024Hz),
-	.i3(pulse60Hz),
+	.i3(pulse30Hza),
 	.i4(em_int),
 	.i5(),
 	.i6(),
@@ -1669,6 +1674,42 @@ FISA64_pic u_pic
 	.nmii(perr),	// nmi input connected to nmi requester
 	.nmio(cpu_nmi),	// normally connected to the nmi of cpu
 	.vecno(vecno)
+);
+
+wire [8:0] p1_vecno;
+wire p1_cpu_irq;
+
+FISA64_pic u_pic2
+(
+	.rst_i(rst),		// reset
+	.clk_i(ub_clk50),		// system clock
+	.cyc_i(p1_cpu_cyc),	// cycle valid
+	.stb_i(p1_cpu_stb),	// strobe
+	.ack_o(pic2_ack),	// transfer acknowledge
+	.we_i(p1_cpu_we),		// write
+	.adr_i(p1_cpu_adr),	// address
+	.dat_i(p1_cpu_dato),
+	.dat_o(pic2_dato),
+	.vol_o(),			// volatile register selected
+	.i1(kbd_rst),
+	.i2(),
+	.i3(pulse30Hzb),
+	.i4(),
+	.i5(),
+	.i6(),
+	.i7(),
+	.i8(),
+	.i9(),
+	.i10(),
+	.i11(),
+	.i12(),
+	.i13(),
+	.i14(),
+	.i15(),
+	.irqo(p1_cpu_irq),	// normally connected to the processor irq
+	.nmii(),	// nmi input connected to nmi requester
+	.nmio(),	// normally connected to the nmi of cpu
+	.vecno(p1_vecno)
 );
 
 assign cpu_irq = cpu_irq1 & sw[7];
@@ -1706,8 +1747,8 @@ FISA64 ucpu1 (
 	.clk_i(ub_clk50),
 	.clk_o(p1_clk50),
 //	.nmi_i(cpu_nmi),
-	.irq_i(cpu_irq),
-	.vect_i(vecno),
+	.irq_i(p1_cpu_irq),
+	.vect_i(p1_vecno),
 	.sri_o(p1_sri),
 	.bte_o(), 
 	.cti_o(),
@@ -1732,6 +1773,8 @@ assign p1_cpu_stb = 1'b0;
 assign p1_cpu_we = 1'b0;
 assign p1_cpu_adr = 32'd0;
 assign p1_cpu_dato = 32'd0;
+assign p1_sr = 1'b0;
+assign p1_cr = 1'b0;
 `endif
 
 /*

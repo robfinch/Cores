@@ -268,7 +268,6 @@ reg [AMSB:0] dbad0,dbad1,dbad2,dbad3;	// debug address
 reg [AMSB:0] bear;			// bus error address register
 wire ssm = dbctrl[63];		// single step mode
 reg km;						// kernel mode
-reg [7:0] kmb;				// backup kernel mode flag
 reg [63:0] cr0;
 wire pe = cr0[0];			// protected mode enabled
 wire bpe = cr0[32];			// branch predictor enable
@@ -920,9 +919,9 @@ begin
 		else if (iopcode==`RR && ifunct==`PCTRL) begin
 			case(iir[21:17])
 			`WAI:	if (!hwi) pc <= pc; else dpc <= pc + 64'd4;
-			`RTD:	pc <= dbpc;
-			`RTE:	pc <= epc;
-			`RTI:	pc <= ipc;
+			`RTD:	begin pc <= dbpc; pc[1:0] <= 2'b00; end
+			`RTE:	begin pc <= epc; pc[1:0] <= 2'b00; end
+			`RTI:	begin pc <= ipc; pc[1:0] <= 2'b00; end
 			default:	pc <= pc + 64'd4;
 			endcase
 		end
@@ -1073,7 +1072,7 @@ begin
 		`RR:
 			case(xfunct)
 			`MTSPR:
-				if (km) begin
+				if (km|TRUE) begin
 					case(xir[24:17])
 					`CR0:		cr0 <= a;
 					`DBPC:		dbpc <= {a[AMSB:2],2'b00};
@@ -1111,12 +1110,13 @@ begin
 					endcase
 				end
 				
-			`MFSPR:	if (!km &&
+			`MFSPR:	;/*
+						if (!km &&
 							xir[24:17]!=`MULH &&
 							xir[24:17] != `MYSTREG)
-						privilege_violation();
+						privilege_violation();*/
 			`PCTRL:
-				if (km)
+				if (km|TRUE)
 					case(xir[21:17])
 					`CLI:	imcd <= 3'b111;
 					`SEI:	im <= `TRUE;
@@ -1125,23 +1125,17 @@ begin
 					`DIC:	cr0[30] <= FALSE;
 					`FIP:	update_pc(xpc+64'd4);
 					`SRI:	sri_cnt <= 4'd10;
+					`RTE:	km <= epc[0];
 					`RTD:
 						begin
-							km <= kmb[0];
-							kmb <= {1'b1,kmb[7:1]};
+						    km <= dbpc[0];
 							dbctrl[63] <= dbctrl[62];	// maybe turn SSM back on
-						end
-					`RTE:
-						begin
-							km <= kmb[0];
-							kmb <= {1'b1,kmb[7:1]};
 						end
 					`RTI:
 						begin
 							StatusHWI <= FALSE;
 							imcd <= 3'b111;
-							km <= kmb[0];
-							kmb <= {1'b1,kmb[7:1]};
+							km <= ipc[0];
 						end
 					endcase
 				else
@@ -1233,12 +1227,16 @@ begin
 				case(xir[31:30])
 				2'b00:	
 					begin
-						epc <= xpc;
+						epc[AMSB:2] <= xpc[AMSB:2];
+						epc[1] <= 1'b0;
+						epc[0] <= km;
 						esp <= a;
 					end
 				2'b01:
 					begin
-						dbpc <= xpc;
+						dbpc[AMSB:2] <= xpc[AMSB:2];
+						dbpc[1] <= 1'b0;
+						dbpc[0] <= km;
 						dsp <= a;
 						//dbctrl[62] <= dbctrl[63];
 						//dbctrl[63] <= FALSE;	// clear SSM
@@ -1246,7 +1244,9 @@ begin
 				2'b10:
 					begin
 						StatusHWI <= `TRUE;
-						ipc <= xpc;
+						ipc[AMSB:2] <= xpc[AMSB:2];
+						ipc[1] <= 1'b0;
+						ipc[0] <= km;
 						isp <= a;
 						if (xir[25:17]==9'd510)
 							nmi_edge <= FALSE;
@@ -1254,6 +1254,7 @@ begin
 							im <= TRUE;
 					end
 				endcase
+				km <= TRUE;
 				mopcode <= xopcode;
 				mir <= xir;
 				ea <= {vbr[AMSB:12],xir[25:17],3'b000};
@@ -1649,8 +1650,6 @@ LOAD3:
 					xopcode <= `NOP;
 					wb_nack();
 					mc_done <= TRUE;
-					km <= `TRUE;
-					kmb <= {kmb[6:0],km};
 				end
 		`RTS:
 				begin
@@ -2127,6 +2126,7 @@ endtask
 task nop_ir;
 begin
 	ir[6:0] <= `NOP;	// NOP
+	dbranch_taken <= FALSE;
 end
 endtask
 

@@ -219,7 +219,11 @@ sgcfifo1:
 ;-----------------------------------------
 ;
 SerialIRQ:
-    ldi     sp,#$8000
+    cpuid   sp,r0,#0
+    beq     sp,.0001
+    rti
+.0001:
+    ldi     sp,#IRQ_STACK
 	push    r1
 	push    r2
 	push    r3
