@@ -109,7 +109,7 @@ naked int getcharNoWait()
 {
 	asm {
         push    r6
-        ld      r6,#3    ; KeybdGetCharNoWair
+        ld      r6,#3    ; KeybdGetCharNoWait
         sys     #10
         pop     r6
         rtl

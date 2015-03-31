@@ -105,6 +105,7 @@ static void DispSpr(int ir)
     switch(nn) {
     case 0: printf("CR0"); break;
     case 3: printf("CR3"); break;
+    case 4: printf("TICK"); break;
     case 6: printf("CLK"); break;
     case 7: printf("DPC"); break;
     case 8: printf("IPC"); break;
@@ -129,7 +130,7 @@ static void DispMemAddress(hasPrefix, prefix, ir)
         printf("$%X", (prefix << 15)|(ir>>17));
     }
     else
-        printf("$%x", (sir >> 17));
+        printf("$%X", (sir >> 17));
     if (((ir >> 7) & 0x1F) != 0)
         printf("[R%d]\r\n",((ir >> 7) & 0x1F));
     else
@@ -239,19 +240,19 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
                   default:   DumpInsnBytes(*ad,ir); printf("???\r\n"); break;
                   }
                   break;
-             case ADD: DispRR(*ad, "ADD   ", ir); break;
-             case ADDU: DispRR(*ad, "ADDU  ", ir); break; 
-             case SUB: DispRR(*ad, "SUB   ", ir); break;
-             case SUBU: DispRR(*ad, "SUBU  ", ir); break; 
-             case CMP: DispRR(*ad, "CMP   ", ir); break;
-             case CMPU: DispRR(*ad, "CMPU  ", ir); break; 
-             case MUL: DispRR(*ad, "MUL   ", ir); break;
-             case MULU: DispRR(*ad, "MULU  ", ir); break; 
-             case DIV: DispRR(*ad, "DIV   ", ir); break;
-             case DIVU: DispRR(*ad, "DIVU  ", ir); break; 
-             case AND: DispRR(*ad, "AND   ", ir); break;
-             case OR: DispRR(*ad, "OR    ", ir); break;
-             case EOR: DispRR(*ad, "EOR   ", ir); break;
+             case ADD: DispRR(*ad, "ADD  ", ir); break;
+             case ADDU: DispRR(*ad, "ADDU ", ir); break; 
+             case SUB: DispRR(*ad, "SUB  ", ir); break;
+             case SUBU: DispRR(*ad, "SUBU ", ir); break; 
+             case CMP: DispRR(*ad, "CMP  ", ir); break;
+             case CMPU: DispRR(*ad, "CMPU ", ir); break; 
+             case MUL: DispRR(*ad, "MUL  ", ir); break;
+             case MULU: DispRR(*ad, "MULU ", ir); break; 
+             case DIV: DispRR(*ad, "DIV  ", ir); break;
+             case DIVU: DispRR(*ad, "DIVU ", ir); break; 
+             case AND: DispRR(*ad, "AND  ", ir); break;
+             case OR: DispRR(*ad, "OR   ", ir); break;
+             case EOR: DispRR(*ad, "EOR  ", ir); break;
              case MFSPR:
                   DumpInsnBytes(*ad, ir);
                   printf("MFSPR ");
@@ -269,43 +270,43 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
                   break;
              }
              break;
-        case ADD:  DispRI(*ad, "ADD   ", hasPrefix, prefix, ir); break;
-        case ADDU:  DispRI(*ad, "ADDU  ", hasPrefix, prefix, ir); break;
-        case SUB:  DispRI(*ad, "SUB   ", hasPrefix, prefix, ir); break;
-        case SUBU:  DispRI(*ad, "SUBU  ", hasPrefix, prefix, ir); break;
-        case CMP:  DispRI(*ad, "CMP   ", hasPrefix, prefix, ir); break;
-        case CMPU:  DispRI(*ad, "CMPU  ", hasPrefix, prefix, ir); break;
-        case MUL:  DispRI(*ad, "MUL   ", hasPrefix, prefix, ir); break;
-        case MULU:  DispRI(*ad, "MULU  ", hasPrefix, prefix, ir); break;
-        case DIV:  DispRI(*ad, "DIV   ", hasPrefix, prefix, ir); break;
-        case DIVU:  DispRI(*ad, "DIVU  ", hasPrefix, prefix, ir); break;
-        case AND:  DispRI(*ad, "AND   ", hasPrefix, prefix, ir); break;
-        case OR:  DispRI(*ad, "OR    ", hasPrefix, prefix, ir); break;
-        case EOR:  DispRI(*ad, "EOR   ", hasPrefix, prefix, ir); break;
+        case ADD:  DispRI(*ad, "ADD  ", hasPrefix, prefix, ir); break;
+        case ADDU:  DispRI(*ad, "ADDU ", hasPrefix, prefix, ir); break;
+        case SUB:  DispRI(*ad, "SUB  ", hasPrefix, prefix, ir); break;
+        case SUBU:  DispRI(*ad, "SUBU ", hasPrefix, prefix, ir); break;
+        case CMP:  DispRI(*ad, "CMP  ", hasPrefix, prefix, ir); break;
+        case CMPU:  DispRI(*ad, "CMPU ", hasPrefix, prefix, ir); break;
+        case MUL:  DispRI(*ad, "MUL  ", hasPrefix, prefix, ir); break;
+        case MULU:  DispRI(*ad, "MULU ", hasPrefix, prefix, ir); break;
+        case DIV:  DispRI(*ad, "DIV  ", hasPrefix, prefix, ir); break;
+        case DIVU:  DispRI(*ad, "DIVU ", hasPrefix, prefix, ir); break;
+        case AND:  DispRI(*ad, "AND  ", hasPrefix, prefix, ir); break;
+        case OR:  DispRI(*ad, "OR   ", hasPrefix, prefix, ir); break;
+        case EOR:  DispRI(*ad, "EOR  ", hasPrefix, prefix, ir); break;
         case Bcc:
              switch((ir >> 12) & 7) {
-             case BEQ:  DispBcc(*ad, "BEQ   ", ir); break;
-             case BNE:  DispBcc(*ad, "BNE   ", ir); break;
-             case BLT:  DispBcc(*ad, "BLT   ", ir); break;
-             case BLE:  DispBcc(*ad, "BLE   ", ir); break;
-             case BGT:  DispBcc(*ad, "BGT   ", ir); break;
-             case BGE:  DispBcc(*ad, "BGE   ", ir); break;
+             case BEQ:  DispBcc(*ad, "BEQ  ", ir); break;
+             case BNE:  DispBcc(*ad, "BNE  ", ir); break;
+             case BLT:  DispBcc(*ad, "BLT  ", ir); break;
+             case BLE:  DispBcc(*ad, "BLE  ", ir); break;
+             case BGT:  DispBcc(*ad, "BGT  ", ir); break;
+             case BGE:  DispBcc(*ad, "BGE  ", ir); break;
              case 6:
-             case 7:    DispBcc(*ad, "???   ", ir); break;
+             case 7:    DispBcc(*ad, "???  ", ir); break;
              }
              break;
         case BSR:
              DumpInsnBytes(*ad, ir);
              disp = ir >> 7;
              if (ir & 0x80000000) disp |= 0xFFFFFFFFFF000000L;
-             nn = ad + (disp << 2);
+             nn = (*ad) + (disp << 2);
              printf("BSR   $%X\r\n", nn);
              break;
         case BRA:
              DumpInsnBytes(*ad, ir);
              disp = ir >> 7;
              if (ir & 0x80000000) disp |= 0xFFFFFFFFFF000000L;
-             nn = ad + (disp << 2);
+             nn = (*ad) + (disp << 2);
              printf("BRA   $%X\r\n", nn);
              break;
         case RTL:
@@ -318,22 +319,22 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
              nn = ir >> 17;
              printf("RTS   #%X\r\n",nn);
              break;
-        case LB: DispLS(*ad, "LB    ", hasPrefix, prefix, ir); break;
-        case LBU: DispLS(*ad, "LBU   ", hasPrefix, prefix, ir); break;
-        case LC: DispLS(*ad, "LC    ", hasPrefix, prefix, ir); break;
-        case LCU: DispLS(*ad, "LCU   ", hasPrefix, prefix, ir); break;
-        case LH: DispLS(*ad, "LH    ", hasPrefix, prefix, ir); break;
-        case LHU: DispLS(*ad, "LHU   ", hasPrefix, prefix, ir); break;
-        case LW: DispLS(*ad, "LW    ", hasPrefix, prefix, ir); break;
-        case SB: DispLS(*ad, "SB    ", hasPrefix, prefix, ir); break;
-        case SC: DispLS(*ad, "SC    ", hasPrefix, prefix, ir); break;
-        case SH: DispLS(*ad, "SH    ", hasPrefix, prefix, ir); break;
-        case SW: DispLS(*ad, "SW    ", hasPrefix, prefix, ir); break;
-        case LWAR: DispLS(*ad, "LWAR  ", hasPrefix, prefix, ir); break;
-        case SWCR: DispLS(*ad, "SWCR  ", hasPrefix, prefix, ir); break;
+        case LB: DispLS(*ad, "LB   ", hasPrefix, prefix, ir); break;
+        case LBU: DispLS(*ad, "LBU  ", hasPrefix, prefix, ir); break;
+        case LC: DispLS(*ad, "LC   ", hasPrefix, prefix, ir); break;
+        case LCU: DispLS(*ad, "LCU  ", hasPrefix, prefix, ir); break;
+        case LH: DispLS(*ad, "LH   ", hasPrefix, prefix, ir); break;
+        case LHU: DispLS(*ad, "LHU  ", hasPrefix, prefix, ir); break;
+        case LW: DispLS(*ad, "LW   ", hasPrefix, prefix, ir); break;
+        case SB: DispLS(*ad, "SB   ", hasPrefix, prefix, ir); break;
+        case SC: DispLS(*ad, "SC   ", hasPrefix, prefix, ir); break;
+        case SH: DispLS(*ad, "SH   ", hasPrefix, prefix, ir); break;
+        case SW: DispLS(*ad, "SW   ", hasPrefix, prefix, ir); break;
+        case LWAR: DispLS(*ad, "LWAR ", hasPrefix, prefix, ir); break;
+        case SWCR: DispLS(*ad, "SWCR ", hasPrefix, prefix, ir); break;
         case PUSH: DumpInsnBytes(*ad, ir); printf("PUSH  "); DispRa(ir); printf("\r\n"); break;
         case POP:  DumpInsnBytes(*ad, ir); printf("POP   "); DispRst(ir); printf("\r\n"); break;
-        case NOP: DumpInsnBytes(*ad, ir); printf("NOP   \r\n"); break;
+        case NOP: DumpInsnBytes(*ad, ir); printf("NOP\r\n"); break;
         case LDI:
              DumpInsnBytes(*ad, ir); 
              printf("LDI   ");
@@ -344,7 +345,7 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
                  printf("#$%X\r\n", (sir >> 17));
              break;
              
-        default: DumpInsnBytes(*ad, ir); printf("????? \r\n"); break;
+        default: DumpInsnBytes(*ad, ir); printf("?????\r\n"); break;
         }
         *ad = *ad + 4;
         if (isRV) {

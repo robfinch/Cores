@@ -205,7 +205,7 @@ DispSpr:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_42
+	      	ldi  	xlr,#disassem_43
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	lw   	r3,24[bp]
@@ -214,183 +214,190 @@ DispSpr:
 	      	sw   	r3,-8[bp]
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#0
-	      	beq  	r4,disassem_44
-	      	cmp  	r4,r3,#3
 	      	beq  	r4,disassem_45
-	      	cmp  	r4,r3,#6
+	      	cmp  	r4,r3,#3
 	      	beq  	r4,disassem_46
-	      	cmp  	r4,r3,#7
+	      	cmp  	r4,r3,#4
 	      	beq  	r4,disassem_47
-	      	cmp  	r4,r3,#8
+	      	cmp  	r4,r3,#6
 	      	beq  	r4,disassem_48
-	      	cmp  	r4,r3,#9
+	      	cmp  	r4,r3,#7
 	      	beq  	r4,disassem_49
-	      	cmp  	r4,r3,#10
+	      	cmp  	r4,r3,#8
 	      	beq  	r4,disassem_50
-	      	cmp  	r4,r3,#50
+	      	cmp  	r4,r3,#9
 	      	beq  	r4,disassem_51
-	      	cmp  	r4,r3,#51
+	      	cmp  	r4,r3,#10
 	      	beq  	r4,disassem_52
-	      	cmp  	r4,r3,#52
+	      	cmp  	r4,r3,#50
 	      	beq  	r4,disassem_53
-	      	cmp  	r4,r3,#53
+	      	cmp  	r4,r3,#51
 	      	beq  	r4,disassem_54
-	      	cmp  	r4,r3,#54
+	      	cmp  	r4,r3,#52
 	      	beq  	r4,disassem_55
-	      	cmp  	r4,r3,#55
+	      	cmp  	r4,r3,#53
 	      	beq  	r4,disassem_56
-	      	bra  	disassem_57
-disassem_44:
+	      	cmp  	r4,r3,#54
+	      	beq  	r4,disassem_57
+	      	cmp  	r4,r3,#55
+	      	beq  	r4,disassem_58
+	      	bra  	disassem_59
+disassem_45:
 	      	push 	#disassem_28
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_45:
+	      	bra  	disassem_44
+disassem_46:
 	      	push 	#disassem_29
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_46:
+	      	bra  	disassem_44
+disassem_47:
 	      	push 	#disassem_30
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_47:
+	      	bra  	disassem_44
+disassem_48:
 	      	push 	#disassem_31
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_48:
+	      	bra  	disassem_44
+disassem_49:
 	      	push 	#disassem_32
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_49:
+	      	bra  	disassem_44
+disassem_50:
 	      	push 	#disassem_33
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_50:
+	      	bra  	disassem_44
+disassem_51:
 	      	push 	#disassem_34
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_51:
+	      	bra  	disassem_44
+disassem_52:
 	      	push 	#disassem_35
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_52:
+	      	bra  	disassem_44
+disassem_53:
 	      	push 	#disassem_36
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_53:
+	      	bra  	disassem_44
+disassem_54:
 	      	push 	#disassem_37
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_54:
+	      	bra  	disassem_44
+disassem_55:
 	      	push 	#disassem_38
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_55:
+	      	bra  	disassem_44
+disassem_56:
 	      	push 	#disassem_39
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_56:
+	      	bra  	disassem_44
+disassem_57:
 	      	push 	#disassem_40
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_43
-disassem_57:
-	      	push 	-8[bp]
+	      	bra  	disassem_44
+disassem_58:
 	      	push 	#disassem_41
 	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	bra  	disassem_44
+disassem_59:
+	      	push 	-8[bp]
+	      	push 	#disassem_42
+	      	bsr  	printf
 	      	addui	sp,sp,#16
-disassem_43:
-disassem_58:
+disassem_44:
+disassem_60:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_42:
+disassem_43:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_58
+	      	bra  	disassem_60
 DispMemAddress:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_64
+	      	ldi  	xlr,#disassem_66
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	lw   	r3,40[bp]
 	      	sh   	r3,-4[bp]
 	      	lw   	r3,24[bp]
-	      	beq  	r3,disassem_65
+	      	beq  	r3,disassem_67
 	      	lw   	r3,32[bp]
 	      	asli 	r3,r3,#15
 	      	lw   	r4,40[bp]
 	      	asri 	r4,r4,#17
 	      	or   	r3,r3,r4
 	      	push 	r3
-	      	push 	#disassem_60
-	      	bsr  	printf
-	      	addui	sp,sp,#16
-	      	bra  	disassem_66
-disassem_65:
-	      	lh   	r3,-4[bp]
-	      	sxh  	r3,r3
-	      	sxh  	r3,r3
-	      	asri 	r3,r3,#17
-	      	push 	r3
-	      	push 	#disassem_61
-	      	bsr  	printf
-	      	addui	sp,sp,#16
-disassem_66:
-	      	lw   	r3,40[bp]
-	      	asri 	r3,r3,#7
-	      	and  	r3,r3,#31
-	      	beq  	r3,disassem_67
-	      	lw   	r3,40[bp]
-	      	asri 	r3,r3,#7
-	      	and  	r3,r3,#31
-	      	push 	r3
 	      	push 	#disassem_62
 	      	bsr  	printf
 	      	addui	sp,sp,#16
 	      	bra  	disassem_68
 disassem_67:
+	      	lh   	r3,-4[bp]
+	      	sxh  	r3,r3
+	      	sxh  	r3,r3
+	      	asri 	r3,r3,#17
+	      	push 	r3
 	      	push 	#disassem_63
 	      	bsr  	printf
-	      	addui	sp,sp,#8
+	      	addui	sp,sp,#16
 disassem_68:
+	      	lw   	r3,40[bp]
+	      	asri 	r3,r3,#7
+	      	and  	r3,r3,#31
+	      	beq  	r3,disassem_69
+	      	lw   	r3,40[bp]
+	      	asri 	r3,r3,#7
+	      	and  	r3,r3,#31
+	      	push 	r3
+	      	push 	#disassem_64
+	      	bsr  	printf
+	      	addui	sp,sp,#16
+	      	bra  	disassem_70
 disassem_69:
+	      	push 	#disassem_65
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+disassem_70:
+disassem_71:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_64:
+disassem_66:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_69
+	      	bra  	disassem_71
 DispLS:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_72
+	      	ldi  	xlr,#disassem_74
 	      	mov  	bp,sp
 	      	push 	56[bp]
 	      	push 	24[bp]
 	      	bsr  	DumpInsnBytes
 	      	addui	sp,sp,#16
 	      	push 	32[bp]
-	      	push 	#disassem_71
+	      	push 	#disassem_73
 	      	bsr  	printf
 	      	addui	sp,sp,#16
 	      	push 	56[bp]
@@ -401,21 +408,21 @@ DispLS:
 	      	push 	40[bp]
 	      	bsr  	DispMemAddress
 	      	addui	sp,sp,#24
-disassem_73:
+disassem_75:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_72:
+disassem_74:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_73
+	      	bra  	disassem_75
 DispRI:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_78
+	      	ldi  	xlr,#disassem_80
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	lw   	r3,56[bp]
@@ -425,7 +432,7 @@ DispRI:
 	      	bsr  	DumpInsnBytes
 	      	addui	sp,sp,#16
 	      	push 	32[bp]
-	      	push 	#disassem_75
+	      	push 	#disassem_77
 	      	bsr  	printf
 	      	addui	sp,sp,#16
 	      	push 	56[bp]
@@ -435,42 +442,42 @@ DispRI:
 	      	bsr  	DispRac
 	      	addui	sp,sp,#8
 	      	lw   	r3,40[bp]
-	      	beq  	r3,disassem_79
+	      	beq  	r3,disassem_81
 	      	lw   	r3,48[bp]
 	      	asli 	r3,r3,#15
 	      	lw   	r4,56[bp]
 	      	asri 	r4,r4,#17
 	      	or   	r3,r3,r4
 	      	push 	r3
-	      	push 	#disassem_76
+	      	push 	#disassem_78
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	disassem_80
-disassem_79:
+	      	bra  	disassem_82
+disassem_81:
 	      	lh   	r3,-4[bp]
 	      	sxh  	r3,r3
 	      	sxh  	r3,r3
 	      	asri 	r3,r3,#17
 	      	push 	r3
-	      	push 	#disassem_77
+	      	push 	#disassem_79
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-disassem_80:
-disassem_81:
+disassem_82:
+disassem_83:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_78:
+disassem_80:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_81
+	      	bra  	disassem_83
 public code DispBcc:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_84
+	      	ldi  	xlr,#disassem_86
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	lw   	r3,40[bp]
@@ -480,17 +487,17 @@ public code DispBcc:
 	      	sw   	r3,-16[bp]
 	      	lw   	r3,40[bp]
 	      	and  	r3,r3,#-2147483648
-	      	beq  	r3,disassem_85
+	      	beq  	r3,disassem_87
 	      	lw   	r3,-16[bp]
 	      	ori  	r3,r3,#-65536
 	      	sw   	r3,-16[bp]
-disassem_85:
+disassem_87:
 	      	push 	40[bp]
 	      	push 	24[bp]
 	      	bsr  	DumpInsnBytes
 	      	addui	sp,sp,#16
 	      	push 	32[bp]
-	      	push 	#disassem_82
+	      	push 	#disassem_84
 	      	bsr  	printf
 	      	addui	sp,sp,#16
 	      	push 	40[bp]
@@ -500,33 +507,33 @@ disassem_85:
 	      	lw   	r4,-16[bp]
 	      	addu 	r3,r3,r4
 	      	push 	r3
-	      	push 	#disassem_83
+	      	push 	#disassem_85
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-disassem_87:
+disassem_89:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_84:
+disassem_86:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_87
+	      	bra  	disassem_89
 endpublic
 
 public code DispRR:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_89
+	      	ldi  	xlr,#disassem_91
 	      	mov  	bp,sp
 	      	push 	40[bp]
 	      	push 	24[bp]
 	      	bsr  	DumpInsnBytes
 	      	addui	sp,sp,#16
 	      	push 	32[bp]
-	      	push 	#disassem_88
+	      	push 	#disassem_90
 	      	bsr  	printf
 	      	addui	sp,sp,#16
 	      	push 	40[bp]
@@ -538,23 +545,23 @@ public code DispRR:
 	      	push 	40[bp]
 	      	bsr  	DispRb
 	      	addui	sp,sp,#8
-disassem_90:
+disassem_92:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_89:
+disassem_91:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_90
+	      	bra  	disassem_92
 endpublic
 
 public code disassem:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_163
+	      	ldi  	xlr,#disassem_165
 	      	mov  	bp,sp
 	      	subui	sp,sp,#96
 	      	push 	r11
@@ -566,15 +573,15 @@ public code disassem:
 	      	ldi  	r3,#1
 	      	sw   	r3,-88[bp]
 	      	sw   	r0,-96[bp]
-disassem_164:
+disassem_166:
 	      	lw   	r3,[r11]
 	      	lw   	r4,32[bp]
 	      	cmp  	r3,r3,r4
-	      	bne  	r3,disassem_166
+	      	bne  	r3,disassem_168
 	      	bsr  	reverse_video
 	      	ldi  	r3,#1
 	      	sw   	r3,-96[bp]
-disassem_166:
+disassem_168:
 	      	lw   	r3,[r11]
 	      	asri 	r3,r3,#2
 	      	sw   	r3,-72[bp]
@@ -594,85 +601,85 @@ disassem_166:
 	      	sw   	r3,-32[bp]
 	      	lw   	r3,-24[bp]
 	      	cmp  	r4,r3,#124
-	      	beq  	r4,disassem_169
-	      	cmp  	r4,r3,#2
-	      	beq  	r4,disassem_170
-	      	cmp  	r4,r3,#4
 	      	beq  	r4,disassem_171
-	      	cmp  	r4,r3,#20
+	      	cmp  	r4,r3,#2
 	      	beq  	r4,disassem_172
-	      	cmp  	r4,r3,#5
+	      	cmp  	r4,r3,#4
 	      	beq  	r4,disassem_173
-	      	cmp  	r4,r3,#21
+	      	cmp  	r4,r3,#20
 	      	beq  	r4,disassem_174
-	      	cmp  	r4,r3,#6
+	      	cmp  	r4,r3,#5
 	      	beq  	r4,disassem_175
-	      	cmp  	r4,r3,#22
+	      	cmp  	r4,r3,#21
 	      	beq  	r4,disassem_176
-	      	cmp  	r4,r3,#7
+	      	cmp  	r4,r3,#6
 	      	beq  	r4,disassem_177
-	      	cmp  	r4,r3,#23
+	      	cmp  	r4,r3,#22
 	      	beq  	r4,disassem_178
-	      	cmp  	r4,r3,#8
+	      	cmp  	r4,r3,#7
 	      	beq  	r4,disassem_179
-	      	cmp  	r4,r3,#24
+	      	cmp  	r4,r3,#23
 	      	beq  	r4,disassem_180
-	      	cmp  	r4,r3,#12
+	      	cmp  	r4,r3,#8
 	      	beq  	r4,disassem_181
-	      	cmp  	r4,r3,#13
+	      	cmp  	r4,r3,#24
 	      	beq  	r4,disassem_182
-	      	cmp  	r4,r3,#14
+	      	cmp  	r4,r3,#12
 	      	beq  	r4,disassem_183
-	      	cmp  	r4,r3,#61
+	      	cmp  	r4,r3,#13
 	      	beq  	r4,disassem_184
-	      	cmp  	r4,r3,#57
+	      	cmp  	r4,r3,#14
 	      	beq  	r4,disassem_185
-	      	cmp  	r4,r3,#58
+	      	cmp  	r4,r3,#61
 	      	beq  	r4,disassem_186
-	      	cmp  	r4,r3,#55
+	      	cmp  	r4,r3,#57
 	      	beq  	r4,disassem_187
-	      	cmp  	r4,r3,#59
+	      	cmp  	r4,r3,#58
 	      	beq  	r4,disassem_188
-	      	cmp  	r4,r3,#64
+	      	cmp  	r4,r3,#55
 	      	beq  	r4,disassem_189
-	      	cmp  	r4,r3,#65
+	      	cmp  	r4,r3,#59
 	      	beq  	r4,disassem_190
-	      	cmp  	r4,r3,#66
+	      	cmp  	r4,r3,#64
 	      	beq  	r4,disassem_191
-	      	cmp  	r4,r3,#67
+	      	cmp  	r4,r3,#65
 	      	beq  	r4,disassem_192
-	      	cmp  	r4,r3,#68
+	      	cmp  	r4,r3,#66
 	      	beq  	r4,disassem_193
-	      	cmp  	r4,r3,#69
+	      	cmp  	r4,r3,#67
 	      	beq  	r4,disassem_194
-	      	cmp  	r4,r3,#70
+	      	cmp  	r4,r3,#68
 	      	beq  	r4,disassem_195
-	      	cmp  	r4,r3,#96
+	      	cmp  	r4,r3,#69
 	      	beq  	r4,disassem_196
-	      	cmp  	r4,r3,#97
+	      	cmp  	r4,r3,#70
 	      	beq  	r4,disassem_197
-	      	cmp  	r4,r3,#98
+	      	cmp  	r4,r3,#96
 	      	beq  	r4,disassem_198
-	      	cmp  	r4,r3,#99
+	      	cmp  	r4,r3,#97
 	      	beq  	r4,disassem_199
-	      	cmp  	r4,r3,#92
+	      	cmp  	r4,r3,#98
 	      	beq  	r4,disassem_200
-	      	cmp  	r4,r3,#110
+	      	cmp  	r4,r3,#99
 	      	beq  	r4,disassem_201
-	      	cmp  	r4,r3,#103
+	      	cmp  	r4,r3,#92
 	      	beq  	r4,disassem_202
-	      	cmp  	r4,r3,#87
+	      	cmp  	r4,r3,#110
 	      	beq  	r4,disassem_203
-	      	cmp  	r4,r3,#63
+	      	cmp  	r4,r3,#103
 	      	beq  	r4,disassem_204
-	      	cmp  	r4,r3,#10
+	      	cmp  	r4,r3,#87
 	      	beq  	r4,disassem_205
-	      	bra  	disassem_206
-disassem_169:
+	      	cmp  	r4,r3,#63
+	      	beq  	r4,disassem_206
+	      	cmp  	r4,r3,#10
+	      	beq  	r4,disassem_207
+	      	bra  	disassem_208
+disassem_171:
 	      	ldi  	r3,#1
 	      	sw   	r3,-40[bp]
 	      	lw   	r3,-88[bp]
-	      	beq  	r3,disassem_207
+	      	beq  	r3,disassem_209
 	      	lh   	r3,-76[bp]
 	      	sxh  	r3,r3
 	      	sxh  	r3,r3
@@ -680,13 +687,13 @@ disassem_169:
 	      	sw   	r3,-48[bp]
 	      	lw   	r3,-48[bp]
 	      	and  	r3,r3,#16777216
-	      	beq  	r3,disassem_209
+	      	beq  	r3,disassem_211
 	      	lw   	r3,-48[bp]
 	      	ori  	r3,r3,#-16777216
 	      	sw   	r3,-48[bp]
+disassem_211:
+	      	bra  	disassem_210
 disassem_209:
-	      	bra  	disassem_208
-disassem_207:
 	      	lw   	r3,-48[bp]
 	      	asli 	r3,r3,#25
 	      	lhu  	r4,-12[bp]
@@ -694,81 +701,7 @@ disassem_207:
 	      	asri 	r4,r4,#7
 	      	or   	r3,r3,r4
 	      	sw   	r3,-48[bp]
-disassem_208:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	[r11]
-	      	bsr  	DumpInsnBytes
-	      	addui	sp,sp,#16
-	      	push 	#disassem_91
-	      	bsr  	printf
-	      	addui	sp,sp,#8
-	      	sw   	r0,-88[bp]
-	      	bra  	disassem_168
-disassem_170:
-	      	lw   	r3,-32[bp]
-	      	cmp  	r4,r3,#55
-	      	beq  	r4,disassem_212
-	      	cmp  	r4,r3,#4
-	      	beq  	r4,disassem_213
-	      	cmp  	r4,r3,#20
-	      	beq  	r4,disassem_214
-	      	cmp  	r4,r3,#5
-	      	beq  	r4,disassem_215
-	      	cmp  	r4,r3,#21
-	      	beq  	r4,disassem_216
-	      	cmp  	r4,r3,#6
-	      	beq  	r4,disassem_217
-	      	cmp  	r4,r3,#22
-	      	beq  	r4,disassem_218
-	      	cmp  	r4,r3,#7
-	      	beq  	r4,disassem_219
-	      	cmp  	r4,r3,#23
-	      	beq  	r4,disassem_220
-	      	cmp  	r4,r3,#8
-	      	beq  	r4,disassem_221
-	      	cmp  	r4,r3,#24
-	      	beq  	r4,disassem_222
-	      	cmp  	r4,r3,#12
-	      	beq  	r4,disassem_223
-	      	cmp  	r4,r3,#13
-	      	beq  	r4,disassem_224
-	      	cmp  	r4,r3,#14
-	      	beq  	r4,disassem_225
-	      	cmp  	r4,r3,#31
-	      	beq  	r4,disassem_226
-	      	cmp  	r4,r3,#30
-	      	beq  	r4,disassem_227
-	      	bra  	disassem_211
-disassem_212:
-	      	lhu  	r3,-12[bp]
-	      	andi 	r3,r3,#-1
-	      	asri 	r3,r3,#17
-	      	and  	r3,r3,#31
-	      	cmp  	r4,r3,#0
-	      	beq  	r4,disassem_229
-	      	cmp  	r4,r3,#1
-	      	beq  	r4,disassem_230
-	      	cmp  	r4,r3,#3
-	      	beq  	r4,disassem_231
-	      	cmp  	r4,r3,#29
-	      	beq  	r4,disassem_232
-	      	cmp  	r4,r3,#30
-	      	beq  	r4,disassem_233
-	      	cmp  	r4,r3,#31
-	      	beq  	r4,disassem_234
-	      	bra  	disassem_235
-disassem_229:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	[r11]
-	      	bsr  	DumpInsnBytes
-	      	addui	sp,sp,#16
-	      	push 	#disassem_92
-	      	bsr  	printf
-	      	addui	sp,sp,#8
-	      	bra  	disassem_228
-disassem_230:
+disassem_210:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
@@ -777,7 +710,61 @@ disassem_230:
 	      	push 	#disassem_93
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_228
+	      	sw   	r0,-88[bp]
+	      	bra  	disassem_170
+disassem_172:
+	      	lw   	r3,-32[bp]
+	      	cmp  	r4,r3,#55
+	      	beq  	r4,disassem_214
+	      	cmp  	r4,r3,#4
+	      	beq  	r4,disassem_215
+	      	cmp  	r4,r3,#20
+	      	beq  	r4,disassem_216
+	      	cmp  	r4,r3,#5
+	      	beq  	r4,disassem_217
+	      	cmp  	r4,r3,#21
+	      	beq  	r4,disassem_218
+	      	cmp  	r4,r3,#6
+	      	beq  	r4,disassem_219
+	      	cmp  	r4,r3,#22
+	      	beq  	r4,disassem_220
+	      	cmp  	r4,r3,#7
+	      	beq  	r4,disassem_221
+	      	cmp  	r4,r3,#23
+	      	beq  	r4,disassem_222
+	      	cmp  	r4,r3,#8
+	      	beq  	r4,disassem_223
+	      	cmp  	r4,r3,#24
+	      	beq  	r4,disassem_224
+	      	cmp  	r4,r3,#12
+	      	beq  	r4,disassem_225
+	      	cmp  	r4,r3,#13
+	      	beq  	r4,disassem_226
+	      	cmp  	r4,r3,#14
+	      	beq  	r4,disassem_227
+	      	cmp  	r4,r3,#31
+	      	beq  	r4,disassem_228
+	      	cmp  	r4,r3,#30
+	      	beq  	r4,disassem_229
+	      	bra  	disassem_213
+disassem_214:
+	      	lhu  	r3,-12[bp]
+	      	andi 	r3,r3,#-1
+	      	asri 	r3,r3,#17
+	      	and  	r3,r3,#31
+	      	cmp  	r4,r3,#0
+	      	beq  	r4,disassem_231
+	      	cmp  	r4,r3,#1
+	      	beq  	r4,disassem_232
+	      	cmp  	r4,r3,#3
+	      	beq  	r4,disassem_233
+	      	cmp  	r4,r3,#29
+	      	beq  	r4,disassem_234
+	      	cmp  	r4,r3,#30
+	      	beq  	r4,disassem_235
+	      	cmp  	r4,r3,#31
+	      	beq  	r4,disassem_236
+	      	bra  	disassem_237
 disassem_231:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -787,7 +774,7 @@ disassem_231:
 	      	push 	#disassem_94
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_228
+	      	bra  	disassem_230
 disassem_232:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -797,7 +784,7 @@ disassem_232:
 	      	push 	#disassem_95
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_228
+	      	bra  	disassem_230
 disassem_233:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -807,7 +794,7 @@ disassem_233:
 	      	push 	#disassem_96
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_228
+	      	bra  	disassem_230
 disassem_234:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -817,7 +804,7 @@ disassem_234:
 	      	push 	#disassem_97
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_228
+	      	bra  	disassem_230
 disassem_235:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -827,25 +814,29 @@ disassem_235:
 	      	push 	#disassem_98
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_228
-disassem_228:
-	      	bra  	disassem_211
-disassem_213:
+	      	bra  	disassem_230
+disassem_236:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
+	      	push 	[r11]
+	      	bsr  	DumpInsnBytes
+	      	addui	sp,sp,#16
 	      	push 	#disassem_99
-	      	push 	[r11]
-	      	bsr  	DispRR
-	      	addui	sp,sp,#24
-	      	bra  	disassem_211
-disassem_214:
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	bra  	disassem_230
+disassem_237:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	push 	#disassem_100
 	      	push 	[r11]
-	      	bsr  	DispRR
-	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bsr  	DumpInsnBytes
+	      	addui	sp,sp,#16
+	      	push 	#disassem_100
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	bra  	disassem_230
+disassem_230:
+	      	bra  	disassem_213
 disassem_215:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -853,7 +844,7 @@ disassem_215:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_216:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -861,7 +852,7 @@ disassem_216:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_217:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -869,7 +860,7 @@ disassem_217:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_218:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -877,7 +868,7 @@ disassem_218:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_219:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -885,7 +876,7 @@ disassem_219:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_220:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -893,7 +884,7 @@ disassem_220:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_221:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -901,7 +892,7 @@ disassem_221:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_222:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -909,7 +900,7 @@ disassem_222:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_223:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -917,7 +908,7 @@ disassem_223:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_224:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -925,7 +916,7 @@ disassem_224:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_225:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -933,29 +924,24 @@ disassem_225:
 	      	push 	[r11]
 	      	bsr  	DispRR
 	      	addui	sp,sp,#24
-	      	bra  	disassem_211
+	      	bra  	disassem_213
 disassem_226:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	push 	[r11]
-	      	bsr  	DumpInsnBytes
-	      	addui	sp,sp,#16
 	      	push 	#disassem_112
-	      	bsr  	printf
-	      	addui	sp,sp,#8
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	bsr  	DispRstc
-	      	addui	sp,sp,#8
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	bsr  	DispSpr
-	      	addui	sp,sp,#8
-	      	push 	#disassem_113
-	      	bsr  	printf
-	      	addui	sp,sp,#8
-	      	bra  	disassem_211
+	      	push 	[r11]
+	      	bsr  	DispRR
+	      	addui	sp,sp,#24
+	      	bra  	disassem_213
 disassem_227:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	push 	#disassem_113
+	      	push 	[r11]
+	      	bsr  	DispRR
+	      	addui	sp,sp,#24
+	      	bra  	disassem_213
+disassem_228:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
@@ -966,41 +952,42 @@ disassem_227:
 	      	addui	sp,sp,#8
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
+	      	bsr  	DispRstc
+	      	addui	sp,sp,#8
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
 	      	bsr  	DispSpr
 	      	addui	sp,sp,#8
 	      	push 	#disassem_115
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	bra  	disassem_213
+disassem_229:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	push 	[r11]
+	      	bsr  	DumpInsnBytes
+	      	addui	sp,sp,#16
+	      	push 	#disassem_116
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	bsr  	DispSpr
+	      	addui	sp,sp,#8
+	      	push 	#disassem_117
 	      	bsr  	printf
 	      	addui	sp,sp,#8
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	bsr  	DispRa
 	      	addui	sp,sp,#8
-	      	push 	#disassem_116
+	      	push 	#disassem_118
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_211
-disassem_211:
-	      	bra  	disassem_168
-disassem_171:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	-48[bp]
-	      	push 	-40[bp]
-	      	push 	#disassem_117
-	      	push 	[r11]
-	      	bsr  	DispRI
-	      	addui	sp,sp,#40
-	      	bra  	disassem_168
-disassem_172:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	-48[bp]
-	      	push 	-40[bp]
-	      	push 	#disassem_118
-	      	push 	[r11]
-	      	bsr  	DispRI
-	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_213
+disassem_213:
+	      	bra  	disassem_170
 disassem_173:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1010,7 +997,7 @@ disassem_173:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_174:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1020,7 +1007,7 @@ disassem_174:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_175:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1030,7 +1017,7 @@ disassem_175:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_176:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1040,7 +1027,7 @@ disassem_176:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_177:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1050,7 +1037,7 @@ disassem_177:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_178:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1060,7 +1047,7 @@ disassem_178:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_179:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1070,7 +1057,7 @@ disassem_179:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_180:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1080,7 +1067,7 @@ disassem_180:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_181:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1090,7 +1077,7 @@ disassem_181:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_182:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1100,7 +1087,7 @@ disassem_182:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_183:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1110,45 +1097,49 @@ disassem_183:
 	      	push 	[r11]
 	      	bsr  	DispRI
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_184:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	push 	-48[bp]
+	      	push 	-40[bp]
+	      	push 	#disassem_130
+	      	push 	[r11]
+	      	bsr  	DispRI
+	      	addui	sp,sp,#40
+	      	bra  	disassem_170
+disassem_185:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	push 	-48[bp]
+	      	push 	-40[bp]
+	      	push 	#disassem_131
+	      	push 	[r11]
+	      	bsr  	DispRI
+	      	addui	sp,sp,#40
+	      	bra  	disassem_170
+disassem_186:
 	      	lhu  	r3,-12[bp]
 	      	andi 	r3,r3,#-1
 	      	asri 	r3,r3,#12
 	      	and  	r3,r3,#7
 	      	cmp  	r4,r3,#0
-	      	beq  	r4,disassem_237
-	      	cmp  	r4,r3,#1
-	      	beq  	r4,disassem_238
-	      	cmp  	r4,r3,#4
 	      	beq  	r4,disassem_239
-	      	cmp  	r4,r3,#5
+	      	cmp  	r4,r3,#1
 	      	beq  	r4,disassem_240
-	      	cmp  	r4,r3,#2
+	      	cmp  	r4,r3,#4
 	      	beq  	r4,disassem_241
-	      	cmp  	r4,r3,#3
+	      	cmp  	r4,r3,#5
 	      	beq  	r4,disassem_242
+	      	cmp  	r4,r3,#2
+	      	beq  	r4,disassem_243
+	      	cmp  	r4,r3,#3
+	      	beq  	r4,disassem_244
 	      	cmp  	r4,r3,#6
-	      	beq  	r4,disassem_243
+	      	beq  	r4,disassem_245
 	      	cmp  	r4,r3,#7
-	      	beq  	r4,disassem_243
-	      	bra  	disassem_236
-disassem_237:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	#disassem_130
-	      	push 	[r11]
-	      	bsr  	DispBcc
-	      	addui	sp,sp,#24
-	      	bra  	disassem_236
-disassem_238:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	#disassem_131
-	      	push 	[r11]
-	      	bsr  	DispBcc
-	      	addui	sp,sp,#24
-	      	bra  	disassem_236
+	      	beq  	r4,disassem_245
+	      	bra  	disassem_238
 disassem_239:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1156,7 +1147,7 @@ disassem_239:
 	      	push 	[r11]
 	      	bsr  	DispBcc
 	      	addui	sp,sp,#24
-	      	bra  	disassem_236
+	      	bra  	disassem_238
 disassem_240:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1164,7 +1155,7 @@ disassem_240:
 	      	push 	[r11]
 	      	bsr  	DispBcc
 	      	addui	sp,sp,#24
-	      	bra  	disassem_236
+	      	bra  	disassem_238
 disassem_241:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1172,7 +1163,7 @@ disassem_241:
 	      	push 	[r11]
 	      	bsr  	DispBcc
 	      	addui	sp,sp,#24
-	      	bra  	disassem_236
+	      	bra  	disassem_238
 disassem_242:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1180,7 +1171,7 @@ disassem_242:
 	      	push 	[r11]
 	      	bsr  	DispBcc
 	      	addui	sp,sp,#24
-	      	bra  	disassem_236
+	      	bra  	disassem_238
 disassem_243:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1188,37 +1179,26 @@ disassem_243:
 	      	push 	[r11]
 	      	bsr  	DispBcc
 	      	addui	sp,sp,#24
-	      	bra  	disassem_236
-disassem_236:
-	      	bra  	disassem_168
-disassem_185:
+	      	bra  	disassem_238
+disassem_244:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	push 	[r11]
-	      	bsr  	DumpInsnBytes
-	      	addui	sp,sp,#16
-	      	lhu  	r3,-12[bp]
-	      	andi 	r3,r3,#-1
-	      	asri 	r3,r3,#7
-	      	sw   	r3,-64[bp]
-	      	lhu  	r3,-12[bp]
-	      	and  	r3,r3,#-2147483648
-	      	beq  	r3,disassem_244
-	      	lw   	r3,-64[bp]
-	      	ori  	r3,r3,#-16777216
-	      	sw   	r3,-64[bp]
-disassem_244:
-	      	lw   	r3,-64[bp]
-	      	asli 	r3,r3,#2
-	      	asli 	r3,r3,#3
-	      	addu 	r11,r11,r3
-	      	sw   	r11,-56[bp]
-	      	push 	-56[bp]
 	      	push 	#disassem_137
-	      	bsr  	printf
-	      	addui	sp,sp,#16
-	      	bra  	disassem_168
-disassem_186:
+	      	push 	[r11]
+	      	bsr  	DispBcc
+	      	addui	sp,sp,#24
+	      	bra  	disassem_238
+disassem_245:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	push 	#disassem_138
+	      	push 	[r11]
+	      	bsr  	DispBcc
+	      	addui	sp,sp,#24
+	      	bra  	disassem_238
+disassem_238:
+	      	bra  	disassem_170
+disassem_187:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
@@ -1235,31 +1215,16 @@ disassem_186:
 	      	ori  	r3,r3,#-16777216
 	      	sw   	r3,-64[bp]
 disassem_246:
-	      	lw   	r3,-64[bp]
-	      	asli 	r3,r3,#2
-	      	asli 	r3,r3,#3
-	      	addu 	r11,r11,r3
-	      	sw   	r11,-56[bp]
-	      	push 	-56[bp]
-	      	push 	#disassem_138
-	      	bsr  	printf
-	      	addui	sp,sp,#16
-	      	bra  	disassem_168
-disassem_187:
-	      	lhu  	r3,-12[bp]
-	      	push 	r3
-	      	push 	[r11]
-	      	bsr  	DumpInsnBytes
-	      	addui	sp,sp,#16
-	      	lhu  	r3,-12[bp]
-	      	andi 	r3,r3,#-1
-	      	asri 	r3,r3,#17
+	      	lw   	r3,[r11]
+	      	lw   	r4,-64[bp]
+	      	asli 	r4,r4,#2
+	      	addu 	r3,r3,r4
 	      	sw   	r3,-56[bp]
 	      	push 	-56[bp]
 	      	push 	#disassem_139
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_188:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1268,33 +1233,55 @@ disassem_188:
 	      	addui	sp,sp,#16
 	      	lhu  	r3,-12[bp]
 	      	andi 	r3,r3,#-1
-	      	asri 	r3,r3,#17
+	      	asri 	r3,r3,#7
+	      	sw   	r3,-64[bp]
+	      	lhu  	r3,-12[bp]
+	      	and  	r3,r3,#-2147483648
+	      	beq  	r3,disassem_248
+	      	lw   	r3,-64[bp]
+	      	ori  	r3,r3,#-16777216
+	      	sw   	r3,-64[bp]
+disassem_248:
+	      	lw   	r3,[r11]
+	      	lw   	r4,-64[bp]
+	      	asli 	r4,r4,#2
+	      	addu 	r3,r3,r4
 	      	sw   	r3,-56[bp]
 	      	push 	-56[bp]
 	      	push 	#disassem_140
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_189:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	push 	-48[bp]
-	      	push 	-40[bp]
-	      	push 	#disassem_141
 	      	push 	[r11]
-	      	bsr  	DispLS
-	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bsr  	DumpInsnBytes
+	      	addui	sp,sp,#16
+	      	lhu  	r3,-12[bp]
+	      	andi 	r3,r3,#-1
+	      	asri 	r3,r3,#17
+	      	sw   	r3,-56[bp]
+	      	push 	-56[bp]
+	      	push 	#disassem_141
+	      	bsr  	printf
+	      	addui	sp,sp,#16
+	      	bra  	disassem_170
 disassem_190:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	push 	-48[bp]
-	      	push 	-40[bp]
-	      	push 	#disassem_142
 	      	push 	[r11]
-	      	bsr  	DispLS
-	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bsr  	DumpInsnBytes
+	      	addui	sp,sp,#16
+	      	lhu  	r3,-12[bp]
+	      	andi 	r3,r3,#-1
+	      	asri 	r3,r3,#17
+	      	sw   	r3,-56[bp]
+	      	push 	-56[bp]
+	      	push 	#disassem_142
+	      	bsr  	printf
+	      	addui	sp,sp,#16
+	      	bra  	disassem_170
 disassem_191:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1304,7 +1291,7 @@ disassem_191:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_192:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1314,7 +1301,7 @@ disassem_192:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_193:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1324,7 +1311,7 @@ disassem_193:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_194:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1334,7 +1321,7 @@ disassem_194:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_195:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1344,7 +1331,7 @@ disassem_195:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_196:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1354,7 +1341,7 @@ disassem_196:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_197:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1364,7 +1351,7 @@ disassem_197:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_198:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1374,7 +1361,7 @@ disassem_198:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_199:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1384,7 +1371,7 @@ disassem_199:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_200:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1394,7 +1381,7 @@ disassem_200:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_201:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
@@ -1404,25 +1391,28 @@ disassem_201:
 	      	push 	[r11]
 	      	bsr  	DispLS
 	      	addui	sp,sp,#40
-	      	bra  	disassem_168
+	      	bra  	disassem_170
 disassem_202:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	push 	[r11]
-	      	bsr  	DumpInsnBytes
-	      	addui	sp,sp,#16
+	      	push 	-48[bp]
+	      	push 	-40[bp]
 	      	push 	#disassem_154
-	      	bsr  	printf
-	      	addui	sp,sp,#8
+	      	push 	[r11]
+	      	bsr  	DispLS
+	      	addui	sp,sp,#40
+	      	bra  	disassem_170
+disassem_203:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	bsr  	DispRa
-	      	addui	sp,sp,#8
+	      	push 	-48[bp]
+	      	push 	-40[bp]
 	      	push 	#disassem_155
-	      	bsr  	printf
-	      	addui	sp,sp,#8
-	      	bra  	disassem_168
-disassem_203:
+	      	push 	[r11]
+	      	bsr  	DispLS
+	      	addui	sp,sp,#40
+	      	bra  	disassem_170
+disassem_204:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
@@ -1433,13 +1423,13 @@ disassem_203:
 	      	addui	sp,sp,#8
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
-	      	bsr  	DispRst
+	      	bsr  	DispRa
 	      	addui	sp,sp,#8
 	      	push 	#disassem_157
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_168
-disassem_204:
+	      	bra  	disassem_170
+disassem_205:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
@@ -1448,14 +1438,31 @@ disassem_204:
 	      	push 	#disassem_158
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_168
-disassem_205:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	bsr  	DispRst
+	      	addui	sp,sp,#8
+	      	push 	#disassem_159
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	bra  	disassem_170
+disassem_206:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
 	      	bsr  	DumpInsnBytes
 	      	addui	sp,sp,#16
-	      	push 	#disassem_159
+	      	push 	#disassem_160
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+	      	bra  	disassem_170
+disassem_207:
+	      	lhu  	r3,-12[bp]
+	      	push 	r3
+	      	push 	[r11]
+	      	bsr  	DumpInsnBytes
+	      	addui	sp,sp,#16
+	      	push 	#disassem_161
 	      	bsr  	printf
 	      	addui	sp,sp,#8
 	      	lhu  	r3,-12[bp]
@@ -1463,7 +1470,7 @@ disassem_205:
 	      	bsr  	DispRstc
 	      	addui	sp,sp,#8
 	      	lw   	r3,-40[bp]
-	      	beq  	r3,disassem_248
+	      	beq  	r3,disassem_250
 	      	lw   	r3,-48[bp]
 	      	asli 	r3,r3,#15
 	      	lhu  	r4,-12[bp]
@@ -1471,45 +1478,45 @@ disassem_205:
 	      	asri 	r4,r4,#17
 	      	or   	r3,r3,r4
 	      	push 	r3
-	      	push 	#disassem_160
+	      	push 	#disassem_162
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	disassem_249
-disassem_248:
+	      	bra  	disassem_251
+disassem_250:
 	      	lh   	r3,-76[bp]
 	      	sxh  	r3,r3
 	      	sxh  	r3,r3
 	      	asri 	r3,r3,#17
 	      	push 	r3
-	      	push 	#disassem_161
+	      	push 	#disassem_163
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-disassem_249:
-	      	bra  	disassem_168
-disassem_206:
+disassem_251:
+	      	bra  	disassem_170
+disassem_208:
 	      	lhu  	r3,-12[bp]
 	      	push 	r3
 	      	push 	[r11]
 	      	bsr  	DumpInsnBytes
 	      	addui	sp,sp,#16
-	      	push 	#disassem_162
+	      	push 	#disassem_164
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	disassem_168
-disassem_168:
+	      	bra  	disassem_170
+disassem_170:
 	      	lw   	r3,[r11]
 	      	addu 	r3,r3,#4
 	      	sw   	r3,[r11]
 	      	lw   	r3,-96[bp]
-	      	beq  	r3,disassem_250
+	      	beq  	r3,disassem_252
 	      	bsr  	reverse_video
 	      	sw   	r0,-96[bp]
-disassem_250:
+disassem_252:
 	      	lw   	r3,-24[bp]
 	      	cmp  	r3,r3,#124
-	      	beq  	r3,disassem_164
-disassem_165:
-disassem_252:
+	      	beq  	r3,disassem_166
+disassem_167:
+disassem_254:
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -1517,275 +1524,275 @@ disassem_252:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_163:
+disassem_165:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_252
+	      	bra  	disassem_254
 endpublic
 
 public code disassem20:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#disassem_254
+	      	ldi  	xlr,#disassem_256
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
-	      	push 	#disassem_253
+	      	push 	#disassem_255
 	      	bsr  	printf
 	      	addui	sp,sp,#8
 	      	sw   	r0,-8[bp]
-disassem_255:
+disassem_257:
 	      	lw   	r3,-8[bp]
 	      	cmp  	r3,r3,#16
-	      	bge  	r3,disassem_256
+	      	bge  	r3,disassem_258
 	      	push 	32[bp]
 	      	pea  	24[bp]
 	      	bsr  	disassem
 	      	addui	sp,sp,#16
-disassem_257:
+disassem_259:
 	      	inc  	-8[bp],#1
-	      	bra  	disassem_255
-disassem_256:
+	      	bra  	disassem_257
 disassem_258:
+disassem_260:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-disassem_254:
+disassem_256:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	disassem_258
+	      	bra  	disassem_260
 endpublic
 
 	rodata
 	align	16
 	align	8
-disassem_253:	; Disassem:
+disassem_255:	; Disassem:
 
 	dc	68,105,115,97,115,115,101,109
 	dc	58,13,10,0
-disassem_162:	; ????? 
+disassem_164:	; ?????
 
-	dc	63,63,63,63,63,32,13,10
-	dc	0
-disassem_161:	; #$%X
-
-	dc	35,36,37,88,13,10,0
-disassem_160:	; #$%X
+	dc	63,63,63,63,63,13,10,0
+disassem_163:	; #$%X
 
 	dc	35,36,37,88,13,10,0
-disassem_159:	; LDI   
+disassem_162:	; #$%X
+
+	dc	35,36,37,88,13,10,0
+disassem_161:	; LDI   
 	dc	76,68,73,32,32,32,0
-disassem_158:	; NOP   
+disassem_160:	; NOP
 
-	dc	78,79,80,32,32,32,13,10
-	dc	0
+	dc	78,79,80,13,10,0
+disassem_159:	; 
+
+	dc	13,10,0
+disassem_158:	; POP   
+	dc	80,79,80,32,32,32,0
 disassem_157:	; 
 
 	dc	13,10,0
-disassem_156:	; POP   
-	dc	80,79,80,32,32,32,0
-disassem_155:	; 
-
-	dc	13,10,0
-disassem_154:	; PUSH  
+disassem_156:	; PUSH  
 	dc	80,85,83,72,32,32,0
-disassem_153:	; SWCR  
-	dc	83,87,67,82,32,32,0
-disassem_152:	; LWAR  
-	dc	76,87,65,82,32,32,0
-disassem_151:	; SW    
-	dc	83,87,32,32,32,32,0
-disassem_150:	; SH    
-	dc	83,72,32,32,32,32,0
-disassem_149:	; SC    
-	dc	83,67,32,32,32,32,0
-disassem_148:	; SB    
-	dc	83,66,32,32,32,32,0
-disassem_147:	; LW    
-	dc	76,87,32,32,32,32,0
-disassem_146:	; LHU   
-	dc	76,72,85,32,32,32,0
-disassem_145:	; LH    
-	dc	76,72,32,32,32,32,0
-disassem_144:	; LCU   
-	dc	76,67,85,32,32,32,0
-disassem_143:	; LC    
-	dc	76,67,32,32,32,32,0
-disassem_142:	; LBU   
-	dc	76,66,85,32,32,32,0
-disassem_141:	; LB    
-	dc	76,66,32,32,32,32,0
-disassem_140:	; RTS   #%X
+disassem_155:	; SWCR 
+	dc	83,87,67,82,32,0
+disassem_154:	; LWAR 
+	dc	76,87,65,82,32,0
+disassem_153:	; SW   
+	dc	83,87,32,32,32,0
+disassem_152:	; SH   
+	dc	83,72,32,32,32,0
+disassem_151:	; SC   
+	dc	83,67,32,32,32,0
+disassem_150:	; SB   
+	dc	83,66,32,32,32,0
+disassem_149:	; LW   
+	dc	76,87,32,32,32,0
+disassem_148:	; LHU  
+	dc	76,72,85,32,32,0
+disassem_147:	; LH   
+	dc	76,72,32,32,32,0
+disassem_146:	; LCU  
+	dc	76,67,85,32,32,0
+disassem_145:	; LC   
+	dc	76,67,32,32,32,0
+disassem_144:	; LBU  
+	dc	76,66,85,32,32,0
+disassem_143:	; LB   
+	dc	76,66,32,32,32,0
+disassem_142:	; RTS   #%X
 
 	dc	82,84,83,32,32,32,35,37
 	dc	88,13,10,0
-disassem_139:	; RTL   #%X
+disassem_141:	; RTL   #%X
 
 	dc	82,84,76,32,32,32,35,37
 	dc	88,13,10,0
-disassem_138:	; BRA   $%X
+disassem_140:	; BRA   $%X
 
 	dc	66,82,65,32,32,32,36,37
 	dc	88,13,10,0
-disassem_137:	; BSR   $%X
+disassem_139:	; BSR   $%X
 
 	dc	66,83,82,32,32,32,36,37
 	dc	88,13,10,0
-disassem_136:	; ???   
-	dc	63,63,63,32,32,32,0
-disassem_135:	; BGE   
-	dc	66,71,69,32,32,32,0
-disassem_134:	; BGT   
-	dc	66,71,84,32,32,32,0
-disassem_133:	; BLE   
-	dc	66,76,69,32,32,32,0
-disassem_132:	; BLT   
-	dc	66,76,84,32,32,32,0
-disassem_131:	; BNE   
-	dc	66,78,69,32,32,32,0
-disassem_130:	; BEQ   
-	dc	66,69,81,32,32,32,0
-disassem_129:	; EOR   
-	dc	69,79,82,32,32,32,0
-disassem_128:	; OR    
-	dc	79,82,32,32,32,32,0
-disassem_127:	; AND   
-	dc	65,78,68,32,32,32,0
-disassem_126:	; DIVU  
-	dc	68,73,86,85,32,32,0
-disassem_125:	; DIV   
-	dc	68,73,86,32,32,32,0
-disassem_124:	; MULU  
-	dc	77,85,76,85,32,32,0
-disassem_123:	; MUL   
-	dc	77,85,76,32,32,32,0
-disassem_122:	; CMPU  
-	dc	67,77,80,85,32,32,0
-disassem_121:	; CMP   
-	dc	67,77,80,32,32,32,0
-disassem_120:	; SUBU  
-	dc	83,85,66,85,32,32,0
-disassem_119:	; SUB   
-	dc	83,85,66,32,32,32,0
-disassem_118:	; ADDU  
-	dc	65,68,68,85,32,32,0
-disassem_117:	; ADD   
-	dc	65,68,68,32,32,32,0
-disassem_116:	; 
+disassem_138:	; ???  
+	dc	63,63,63,32,32,0
+disassem_137:	; BGE  
+	dc	66,71,69,32,32,0
+disassem_136:	; BGT  
+	dc	66,71,84,32,32,0
+disassem_135:	; BLE  
+	dc	66,76,69,32,32,0
+disassem_134:	; BLT  
+	dc	66,76,84,32,32,0
+disassem_133:	; BNE  
+	dc	66,78,69,32,32,0
+disassem_132:	; BEQ  
+	dc	66,69,81,32,32,0
+disassem_131:	; EOR  
+	dc	69,79,82,32,32,0
+disassem_130:	; OR   
+	dc	79,82,32,32,32,0
+disassem_129:	; AND  
+	dc	65,78,68,32,32,0
+disassem_128:	; DIVU 
+	dc	68,73,86,85,32,0
+disassem_127:	; DIV  
+	dc	68,73,86,32,32,0
+disassem_126:	; MULU 
+	dc	77,85,76,85,32,0
+disassem_125:	; MUL  
+	dc	77,85,76,32,32,0
+disassem_124:	; CMPU 
+	dc	67,77,80,85,32,0
+disassem_123:	; CMP  
+	dc	67,77,80,32,32,0
+disassem_122:	; SUBU 
+	dc	83,85,66,85,32,0
+disassem_121:	; SUB  
+	dc	83,85,66,32,32,0
+disassem_120:	; ADDU 
+	dc	65,68,68,85,32,0
+disassem_119:	; ADD  
+	dc	65,68,68,32,32,0
+disassem_118:	; 
 
 	dc	13,10,0
-disassem_115:	; ,
+disassem_117:	; ,
 	dc	44,0
-disassem_114:	; MTSPR 
+disassem_116:	; MTSPR 
 	dc	77,84,83,80,82,32,0
-disassem_113:	; 
+disassem_115:	; 
 
 	dc	13,10,0
-disassem_112:	; MFSPR 
+disassem_114:	; MFSPR 
 	dc	77,70,83,80,82,32,0
-disassem_111:	; EOR   
-	dc	69,79,82,32,32,32,0
-disassem_110:	; OR    
-	dc	79,82,32,32,32,32,0
-disassem_109:	; AND   
-	dc	65,78,68,32,32,32,0
-disassem_108:	; DIVU  
-	dc	68,73,86,85,32,32,0
-disassem_107:	; DIV   
-	dc	68,73,86,32,32,32,0
-disassem_106:	; MULU  
-	dc	77,85,76,85,32,32,0
-disassem_105:	; MUL   
-	dc	77,85,76,32,32,32,0
-disassem_104:	; CMPU  
-	dc	67,77,80,85,32,32,0
-disassem_103:	; CMP   
-	dc	67,77,80,32,32,32,0
-disassem_102:	; SUBU  
-	dc	83,85,66,85,32,32,0
-disassem_101:	; SUB   
-	dc	83,85,66,32,32,32,0
-disassem_100:	; ADDU  
-	dc	65,68,68,85,32,32,0
-disassem_99:	; ADD   
-	dc	65,68,68,32,32,32,0
-disassem_98:	; ???
+disassem_113:	; EOR  
+	dc	69,79,82,32,32,0
+disassem_112:	; OR   
+	dc	79,82,32,32,32,0
+disassem_111:	; AND  
+	dc	65,78,68,32,32,0
+disassem_110:	; DIVU 
+	dc	68,73,86,85,32,0
+disassem_109:	; DIV  
+	dc	68,73,86,32,32,0
+disassem_108:	; MULU 
+	dc	77,85,76,85,32,0
+disassem_107:	; MUL  
+	dc	77,85,76,32,32,0
+disassem_106:	; CMPU 
+	dc	67,77,80,85,32,0
+disassem_105:	; CMP  
+	dc	67,77,80,32,32,0
+disassem_104:	; SUBU 
+	dc	83,85,66,85,32,0
+disassem_103:	; SUB  
+	dc	83,85,66,32,32,0
+disassem_102:	; ADDU 
+	dc	65,68,68,85,32,0
+disassem_101:	; ADD  
+	dc	65,68,68,32,32,0
+disassem_100:	; ???
 
 	dc	63,63,63,13,10,0
-disassem_97:	; RTI
+disassem_99:	; RTI
 
 	dc	82,84,73,13,10,0
-disassem_96:	; RTE
+disassem_98:	; RTE
 
 	dc	82,84,69,13,10,0
-disassem_95:	; RTD
+disassem_97:	; RTD
 
 	dc	82,84,68,13,10,0
-disassem_94:	; WAI
+disassem_96:	; WAI
 
 	dc	87,65,73,13,10,0
-disassem_93:	; SEI
+disassem_95:	; SEI
 
 	dc	83,69,73,13,10,0
-disassem_92:	; CLI
+disassem_94:	; CLI
 
 	dc	67,76,73,13,10,0
-disassem_91:	; IMM
+disassem_93:	; IMM
 
 	dc	73,77,77,13,10,0
-disassem_88:	; %s 
+disassem_90:	; %s 
 	dc	37,115,32,0
-disassem_83:	; %06X
+disassem_85:	; %06X
 
 	dc	37,48,54,88,13,10,0
-disassem_82:	; %s 
+disassem_84:	; %s 
 	dc	37,115,32,0
-disassem_77:	; #$%X
+disassem_79:	; #$%X
 
 	dc	35,36,37,88,13,10,0
-disassem_76:	; #$%X
+disassem_78:	; #$%X
 
 	dc	35,36,37,88,13,10,0
-disassem_75:	; %s 
+disassem_77:	; %s 
 	dc	37,115,32,0
-disassem_71:	; %s 
+disassem_73:	; %s 
 	dc	37,115,32,0
-disassem_63:	; 
+disassem_65:	; 
 
 	dc	13,10,0
-disassem_62:	; [R%d]
+disassem_64:	; [R%d]
 
 	dc	91,82,37,100,93,13,10,0
-disassem_61:	; $%x
-	dc	36,37,120,0
-disassem_60:	; $%X
+disassem_63:	; $%X
 	dc	36,37,88,0
-disassem_41:	; SPR%d
+disassem_62:	; $%X
+	dc	36,37,88,0
+disassem_42:	; SPR%d
 	dc	83,80,82,37,100,0
-disassem_40:	; DBSTAT
+disassem_41:	; DBSTAT
 	dc	68,66,83,84,65,84,0
-disassem_39:	; DBCTRL
+disassem_40:	; DBCTRL
 	dc	68,66,67,84,82,76,0
-disassem_38:	; DBAD3
+disassem_39:	; DBAD3
 	dc	68,66,65,68,51,0
-disassem_37:	; DBAD2
+disassem_38:	; DBAD2
 	dc	68,66,65,68,50,0
-disassem_36:	; DBAD1
+disassem_37:	; DBAD1
 	dc	68,66,65,68,49,0
-disassem_35:	; DBAD0
+disassem_36:	; DBAD0
 	dc	68,66,65,68,48,0
-disassem_34:	; VBR
+disassem_35:	; VBR
 	dc	86,66,82,0
-disassem_33:	; EPC
+disassem_34:	; EPC
 	dc	69,80,67,0
-disassem_32:	; IPC
+disassem_33:	; IPC
 	dc	73,80,67,0
-disassem_31:	; DPC
+disassem_32:	; DPC
 	dc	68,80,67,0
-disassem_30:	; CLK
+disassem_31:	; CLK
 	dc	67,76,75,0
+disassem_30:	; TICK
+	dc	84,73,67,75,0
 disassem_29:	; CR3
 	dc	67,82,51,0
 disassem_28:	; CR0

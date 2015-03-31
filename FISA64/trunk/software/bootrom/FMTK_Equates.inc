@@ -106,6 +106,7 @@ TCB_EPC         EQU     0x190
 TCB_ISP         EQU     0x198
 TCB_DSP         EQU     0x1A0
 TCB_ESP         EQU     0x1A8
+TCB_CR0         EQU     0x1B0
 
 TCB_NextRdy     EQU     $200
 TCB_PrevRdy     EQU     $208
@@ -113,7 +114,6 @@ TCB_Status      EQU     $210
 TCB_Priority    EQU     $212
 TCB_hJCB        EQU     $214
 TCB_NextFree    EQU     $218
-TCB_PrevFree    EQU     $220
 TCB_NextTo      EQU     $228
 TCB_PrevTo      EQU     $230
 TCB_mbq_next    EQU     $238
@@ -128,7 +128,8 @@ TCB_Timeout     EQU     $278
 TCB_Affinity    EQU     $280
 TCB_BIOS_Stack  EQU     $288
 TCB_SYS_Stack   EQU     $290
-TCB_Size	    EQU	    $300
+TCB_Size	    EQU	    $400
+TCB_LogSize     EQU     10
 
 ; Mailboxes, room for 2048
 ;			.bss
@@ -216,23 +217,23 @@ JCB_KeybdLocks	EQU		0x44C
 JCB_KeybdBuffer	EQU		0x450		; buffer is 16 words (chars = words)
 JCB_esc			EQU		0x470		; escape flag for DisplayChar processing
 JCB_Size		EQU		0x500
-JCB_LogSize		EQU		10
+JCB_LogSize		EQU		11
 
 BITMAP_SCREEN1  EQU     $400000     ; bitmap graphics screen area (4MB)
 BITMAP_SCREEN2  EQU     $800000     ; bitmap graphics screen area (4MB)
 VAR_Area        EQU     $C00000     ; 64k block for OS vars
 TCB_Array       EQU     $C10000     ; room for 256 TCB's (192kB)
-TCB_ArrayEnd    EQU     $C40000
-JCB_Array       EQU     $C40000
-JCB_ArrayEnd    EQU     $C50000     ; room for 51 JCB's  (64kB)
-MBX_Array       EQU     $C60000     ; room for 2048 mailboxes (192kB)
-MBX_ArrayEnd    EQU     $C90000
-MSG_Array       EQU     $C90000     ; room for 32,768 messages (1MB)
-MSG_ArrayEnd    EQU     $D90000
-SCREEN_Array    EQU     $D90000     ; room for 51 16kB screens
-SCREEN_ArrayEnd EQU     $E90000
-DCB_Array       EQU     $E90000     ; room for 32 DCB's
-DCB_ArrayEnd    EQU     $E90880
+TCB_ArrayEnd    EQU     $C50000
+JCB_Array       EQU     $C50000
+JCB_ArrayEnd    EQU     $C60000     ; room for 51 JCB's  (64kB)
+MBX_Array       EQU     $C70000     ; room for 2048 mailboxes (192kB)
+MBX_ArrayEnd    EQU     $CA0000
+MSG_Array       EQU     $CA0000     ; room for 32,768 messages (1MB)
+MSG_ArrayEnd    EQU     $DA0000
+SCREEN_Array    EQU     $DA0000     ; room for 51 16kB screens
+SCREEN_ArrayEnd EQU     $EA0000
+DCB_Array       EQU     $EA0000     ; room for 32 DCB's
+DCB_ArrayEnd    EQU     $EA0880
 
 CPU0_DBG_STACK  EQU     $7CF000
 CPU1_STACK      EQU     $7CF800
@@ -248,6 +249,7 @@ UserTick    dw      0
             dw      0               ; BIOS Mailbox handle storage
 BIOS_RespMbx        dw      0
 IRQFlag     dw      0
+sys_ticks   dw      0
 IOFocusNdx  dw      0
 IOFocusTbl      fill.w   4,0        ; tasks requesting I/O focus
 QNdx0		dw		0
@@ -285,9 +287,10 @@ freejcb_sema   dw   0
 freetcb_sema   dw   0
 freembx_sema   dw   0
 freemsg_sema   dw   0
+sys_sema       dw   0
 tcb_sema       dw   0
-readylist_sema dw   0
-tolist_sema    dw   0
+rdy_sema       dw   0
+tol_sema       dw   0
 iof_sema       dw   0
 mbx_sema       dw   0
 msg_sema       dw   0

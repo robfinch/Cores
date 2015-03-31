@@ -24,6 +24,7 @@
 //
 `define TRUE	1'b1
 `define FALSE	1'b0
+//`define DEBUG_COP	1'b1
 
 `define RR		7'h02
 `define BTFLD	7'h03
@@ -173,6 +174,7 @@
 
 `define BRK_DBZ	{6'd0,9'd488,5'd0,5'h1E,`BRK}
 `define BRK_OFL	{6'd0,9'd489,5'd0,5'h1E,`BRK}
+`define BRK_TAP	{2'b01,4'd0,9'd494,5'd0,5'h1E,`BRK}
 `define BRK_SSM	{2'b01,4'd0,9'd495,5'd0,5'h1E,`BRK}
 `define BRK_BPT	{2'b01,4'd0,9'd496,5'd0,5'h1E,`BRK}
 `define BRK_EXF	{6'd0,9'd497,5'd0,5'h1E,`BRK}
@@ -185,8 +187,9 @@
 `define BRK_IRQ	{1'b1,5'd0,vect_i,5'd0,5'h1E,`BRK}
 
 module FISA64(rack_num,box_num,board_num,chip_num,core_num,
-	rst_i, clk_i, clk_o, nmi_i, irq_i, vect_i, sri_o, bte_o, cti_o, bl_o,
-	cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i);
+	rst_i, clk_i, clk3x_i, clk_o, nmi_i, irq_i, vect_i, sri_o, bte_o, cti_o, bl_o,
+	cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
+	tap_i, tap_o);
 parameter AMSB = 31;		// most significant address bit
 input [15:0] rack_num;
 input [7:0] box_num;
@@ -195,6 +198,7 @@ input [7:0] chip_num;
 input [15:0] core_num;
 input rst_i;
 input clk_i;
+input clk3x_i;
 output clk_o;				// gated clock output
 input nmi_i;
 input irq_i;
@@ -215,6 +219,8 @@ output reg [63:0] dat_o;
 output reg sr_o;
 output reg cr_o;
 input rb_i;
+input tap_i;
+output tap_o;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -275,6 +281,9 @@ wire ice = cr0[30];			// instruction cache enable
 wire rb = cr0[36];
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
+reg tapi1;
+reg tap_nmi_edge;
+reg tam;					// test access mode
 reg [AMSB:0] pc,dpc,xpc,wpc;
 reg [AMSB:0] epc,ipc,dbpc;	// exception, interrupt PC's, debug PC
 reg [AMSB:0] isp,dsp,esp;	// stack pointer save areas
@@ -389,7 +398,7 @@ wire stallRF =
 	 (opcode==`IMM)) && !iihit;
 
 wire advanceWB = TRUE;
-wire advanceEX = !fnIsMC(xopcode,xfunct);
+wire advanceEX = !fnIsMC(xopcode,xfunct) & !stallRF;
 wire advanceRF = !stallRF & advanceEX;
 wire advanceIF = advanceRF & iihit;
 
@@ -400,6 +409,7 @@ wire advanceIF = advanceRF & iihit;
 reg isICacheReset;
 reg isICacheLoad;
 wire [31:0] insn;
+wire [31:0] dbg_insn;
 wire ihit;
 assign iihit = (ice ? ihit : ibufhit);
 reg utg;			// update cache tag
@@ -411,7 +421,7 @@ FISA64_icache_ram u1
 	.wa(adr_o[12:0]),
 	.wr(isICacheLoad & (ack_i|err_i)),
 	.i(err_i ? {2{`BRK_IBE}} : dat_i),
-	.rclk(~clk),
+	.rclk(clk3x_i),
 	.pc(pc[12:0]),
 	.insn(insn)
 );
@@ -422,10 +432,134 @@ FISA64_itag_ram u2
 	.wa(tagadr),
 	.v(!isICacheReset),
 	.wr(utg|isICacheReset),
-	.rclk(~clk),
+	.rclk(clk3x_i),
 	.pc(pc),
 	.hit(ihit)
 );
+
+
+//-----------------------------------------------------------------------------
+// Debug (not working yet)
+// The debug system is a processor on it's own.
+// It's capable of loading a program via the test access point port into the
+// debug sandbox. It can then generate a tap interrupt to the cpu. The master
+// cpu will then execute the code in the debug sandbox. The sandbox is
+// exited with a RTD instruction.
+// ToDo: add a PIO port so the debug processor can control things.
+//-----------------------------------------------------------------------------
+reg tap_nmi;
+`ifdef DEBUG_COP
+reg dbg_ram_ack,dbg_rom_ack,dbg_ser_ack;
+wire dbg16_cyc,dbg16_stb,dbg16_we;
+wire [23:0] dbg16_adr;
+wire [15:0] dbg16_dato;
+reg [15:0] dbg16_dati;
+wire [15:0] dbg_ramoL,dbg_ramoH,dbg16_insn;
+wire [7:0] dbg_ser_dato;
+wire cs_dbg_iram = dbg16_cyc && dbg16_stb && dbg16_adr[15:12]==4'hF;	// places ram at $F000
+wire cs_dbg_irom = dbg16_cyc && dbg16_stb && dbg16_adr[23:16]==8'h1;	// places rom at $10000
+wire cs_dbg_pio =  dbg16_cyc && dbg16_stb && dbg16_adr[15:8]==4'hD0;	// Uart is at $E000
+
+always @(posedge clk_i)
+if (rst)
+	dbg_ram_ack <= 1'b0;
+else
+	dbg_ram_ack <= cs_dbg_iram & ~dbg_ram_ack;
+always @(posedge clk_i)
+if (rst)
+	dbg_rom_ack <= 1'b0;
+else
+	dbg_rom_ack <= cs_dbg_irom & ~dbg_rom_ack;
+
+always @*
+	if (cs_dbg_iram && ~dbg16_adr[1])
+		dbg16_dati <= dbg_ramoL;
+	else if (cs_dbg_iram && dbg16_adr[1])
+		dbg16_dati <= dbg_ramoH;
+	else if (cs_dbg_irom)
+		dbg16_dati <= dbg16_insn;
+	else
+		dbg16_dati <= dbg_ser_dato;
+
+always @(posedge clk_i)
+if (rst)
+	tap_nmi <= FALSE;
+else begin
+	if (cs_dbg_pio) begin
+		tap_nmi <= dbg16_dato[0];
+	end
+end
+
+assign dbg16_acki = dbg_ram_ack|dbg_rom_ack|dbg_ser_ack;
+
+FISA64_debug_iram u8
+(
+	.wclk(clk_i),
+	.rwa(dbg16_adr[11:0]),
+	.wr(cs_dbg_ram && dbg16_we && ~dbg16_adr[1]),
+	.i(dbg16_dato),
+	.o(dbg_ramoL),
+	.rclk(clk3x_i),
+	.pc(pc),
+	.insn(dbg_insn[15:0])
+);
+
+FISA64_debug_iram u9
+(
+	.wclk(clk_i),
+	.rwa(dbg16_adr[11:0]),
+	.wr(cs_dbg_ram && dbg16_we && dbg16_adr[1]),
+	.i(dbg16_dato),
+	.o(dbg_ramoH),
+	.rclk(clk3x_i),
+	.pc(pc),
+	.insn(dbg_insn[31:16])
+);
+
+FISA64_debug_rom u10
+(
+	.clk(clk3x_i),
+	.pc(dbg16_adr[11:0]),
+	.insn(dbg16_insn)
+);
+
+dbg16 u11
+(
+	.rst_i(rst),
+	.clk_i(clk_i),
+	.cyc_o(dbg16_cyc),
+	.stb_o(dbg16_stb),
+	.ack_i(dbg16_acki),
+	.we_o(dbg16_we),
+	.adr_o(dbg16_adr),
+	.dat_i(dbg16_dati),
+	.dat_o(dbg16_dato)
+);
+
+rtfSimpleUart #(.pIOAddress(32'hFFDCE000)) u12
+(
+	.rst_i(rst),		// reset
+	.clk_i(clk_i),		// eg 100.7MHz
+	.cyc_i(dbg16_cyc),	// cycle valid
+	.stb_i(dbg16_stb),	// strobe
+	.we_i(dbg16_we),		// 1 = write
+	.adr_i({16'hFFDC,dbg16_adr[15:0]}),		// register address
+	.dat_i(dbg16_dato[7:0]),	// data input bus
+	.dat_o(dbg_ser_dato),	// data output bus
+	.ack_o(dbg_ser_ack),	// transfer acknowledge
+	.vol_o(),		// volatile register selected
+	.irq_o(),		// interrupt request
+	//----------------
+	.cts_ni(),		// clear to send - active low - (flow control)
+	.rts_no(),	// request to send - active low - (flow control)
+	.dsr_ni(),		// data set ready - active low
+	.dcd_ni(),		// data carrier detect - active low
+	.dtr_no(),	// data terminal ready - active low
+	.rxd_i(tap_i),			// serial data in
+	.txd_o(tap_o),			// serial data out
+	.data_present_o()
+);
+`endif
 
 //-----------------------------------------------------------------------------
 // Memory management stuff.
@@ -821,6 +955,9 @@ if (rst_i) begin
 	StatusHWI <= `FALSE;
 	nmi1 <= `FALSE;
 	nmi_edge <= `FALSE;
+	tapi1 <= FALSE;
+	tap_nmi_edge <= FALSE;
+	tam <= FALSE;
 	ld_clk_throttle <= `FALSE;
 	dbctrl <= 64'd0;
 	dbstat <= 64'd0;
@@ -831,6 +968,7 @@ if (rst_i) begin
 	cr0[0] <= FALSE;	// protected mode enable
 	cr0[30] <= TRUE;	// instruction cache enable
 	cr0[32] <= TRUE;	// branch predictor enable
+	cr0[36] <= FALSE;	// store successful bit
 end
 else begin
 utg <= FALSE;
@@ -838,6 +976,9 @@ tick <= tick + 64'd1;
 nmi1 <= nmi_i;
 if (nmi_i & ~nmi1)
 	nmi_edge <= `TRUE;
+tapi1 <= tap_nmi;
+if (tap_nmi & !tapi1)
+	tap_nmi_edge <= TRUE;
 ld_clk_throttle <= `FALSE;
 if (db_stat0) dbstat[0] <= TRUE;
 if (db_stat1) dbstat[1] <= TRUE;
@@ -872,6 +1013,20 @@ begin
 				im <= `FALSE;
 		end
 		insncnt <= insncnt + 32'd1;
+		// We want the debug co-processor to be able to "break-in" to anything
+		// the processor might be doing. So we ignore the fact another interrupt
+		// might be in progress.
+
+		if (tap_nmi_edge) begin
+			ir <= `BRK_TAP;
+			hwi = TRUE;
+		end
+		else if (tam) begin
+			ir <= dbg_insn;
+			hwi = FALSE;
+		end
+		else
+
 		if (!StatusHWI & gie & nmi_edge) begin
 			ir <= `BRK_NMI;
 			hwi = TRUE;
@@ -918,7 +1073,7 @@ begin
 		end
 		else if (iopcode==`RR && ifunct==`PCTRL) begin
 			case(iir[21:17])
-			`WAI:	if (!hwi) pc <= pc; else dpc <= pc + 64'd4;
+			`WAI:	if (!hwi) pc <= pc; else begin dpc <= pc + 64'd4; pc <= pc + 64'd4; end
 			`RTD:	begin pc <= dbpc; pc[1:0] <= 2'b00; end
 			`RTE:	begin pc <= epc; pc[1:0] <= 2'b00; end
 			`RTI:	begin pc <= ipc; pc[1:0] <= 2'b00; end
@@ -1072,17 +1227,17 @@ begin
 		`RR:
 			case(xfunct)
 			`MTSPR:
-				if (km|TRUE) begin
+				if (km) begin
 					case(xir[24:17])
 					`CR0:		cr0 <= a;
-					`DBPC:		dbpc <= {a[AMSB:2],2'b00};
-					`EPC:		epc <= {a[AMSB:2],2'b00};
-					`IPC:		ipc <= {a[AMSB:2],2'b00};
+					`DBPC:		dbpc <= a;	// need the LSB's !!!
+					`EPC:		epc <= a;
+					`IPC:		ipc <= a;
 					`VBR:		begin vbr <= a[AMSB:0]; vbr[12:0] <= 13'h000; end
 					`MULH:		p[127:64] <= a;
-					`ISP:		isp <= a;
-					`DSP:		dsp <= a;
-					`ESP:		esp <= a;
+					`ISP:		isp <= {a[AMSB:3],3'b000};
+					`DSP:		dsp <= {a[AMSB:3],3'b000};
+					`ESP:		esp <= {a[AMSB:3],3'b000};
 					`EA:		ea <= a;
 					`LOTGRP:
 						begin
@@ -1116,7 +1271,7 @@ begin
 							xir[24:17] != `MYSTREG)
 						privilege_violation();*/
 			`PCTRL:
-				if (km|TRUE)
+				if (km)
 					case(xir[21:17])
 					`CLI:	imcd <= 3'b111;
 					`SEI:	im <= `TRUE;
@@ -1130,6 +1285,10 @@ begin
 						begin
 						    km <= dbpc[0];
 							dbctrl[63] <= dbctrl[62];	// maybe turn SSM back on
+							if (tam) begin
+								tam <= FALSE;
+								update_pc(dbpc);
+							end
 						end
 					`RTI:
 						begin
@@ -1230,14 +1389,16 @@ begin
 						epc[AMSB:2] <= xpc[AMSB:2];
 						epc[1] <= 1'b0;
 						epc[0] <= km;
-						esp <= a;
+						esp[AMSB:3] <= a[AMSB:3];
+						esp[2:0] <= 3'b000;
 					end
 				2'b01:
 					begin
 						dbpc[AMSB:2] <= xpc[AMSB:2];
 						dbpc[1] <= 1'b0;
 						dbpc[0] <= km;
-						dsp <= a;
+						dsp[AMSB:3] <= a[AMSB:3];
+						dsp[2:0] <= 3'b000;
 						//dbctrl[62] <= dbctrl[63];
 						//dbctrl[63] <= FALSE;	// clear SSM
 					end
@@ -1247,7 +1408,8 @@ begin
 						ipc[AMSB:2] <= xpc[AMSB:2];
 						ipc[1] <= 1'b0;
 						ipc[0] <= km;
-						isp <= a;
+						isp[AMSB:3] <= a[AMSB:3];
+						isp[2:0] <= 3'b000;
 						if (xir[25:17]==9'd510)
 							nmi_edge <= FALSE;
 						else
@@ -1257,9 +1419,17 @@ begin
 				km <= TRUE;
 				mopcode <= xopcode;
 				mir <= xir;
-				ea <= {vbr[AMSB:12],xir[25:17],3'b000};
-				ld_size <= word;
-				next_state(LOAD1);
+				// Test access mode is special, it just starts running the
+				// processor from the debug sandbox. It doesn't vector !
+				if (xir[25:17]==9'd494) begin
+					update_pc(32'hFFFFE000);	// Debug sandbox address
+					tam <= TRUE;
+				end
+				else begin
+					ea <= {vbr[AMSB:12],xir[25:17],3'b000};
+					ld_size <= word;
+					next_state(LOAD1);
+					end
 				end
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI:
 			begin
@@ -1867,6 +2037,8 @@ STORE5:
 		mc_done <= TRUE;
 		xopcode <= `NOP;
 		next_state(iihit ? RUN : LOAD_ICACHE);
+		if (mopcode==`SWCR)
+			cr0[36] <= rb_i;
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1875,7 +2047,6 @@ STORE5:
 
 LOAD_ICACHE:
 	begin
-		tagadr <= pc;
 		if (ice) begin
 			isICacheLoad <= TRUE;
 			wb_read1(word,{pc[AMSB:4],4'h0});
@@ -1908,6 +2079,7 @@ LOAD_ICACHE4:
 	if (ack_i|err_i) begin
 		wb_nack();
 		utg <= TRUE;
+		tagadr <= pc;
 		isICacheLoad <= FALSE;
 		next_state(RUN);
 	end
@@ -2309,6 +2481,50 @@ endmodule
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+module FISA64_debug_iram(wclk, rwa, wr, i, o, rclk, pc, insn);
+input wclk;
+input [11:0] rwa;
+input wr;
+input [15:0] i;
+output [15:0] o;
+input rclk;
+input [11:0] pc;
+output [15:0] insn;
+
+reg [11:0] rpc;
+reg [11:0] rrwa;
+reg [31:0] iram [511:0];
+always @(posedge wclk)
+begin
+	if (wr) iram [rwa[11:1]] <= i;
+end
+always @(posedge rclk)
+	rrwa <= rwa;
+assign o = iram[rrwa[11:1]];
+always @(posedge rclk)
+	rpc <= pc;
+assign insn = iram[rpc[11:1]];
+
+endmodule
+
+module FISA64_debug_rom(clk, pc, insn);
+input clk;
+input [11:0] pc;
+output [15:0] insn;
+
+reg [11:0] rpc;
+reg [15:0] rommem [2047:0];
+
+//initial begin
+// Include instruction ROM data here.
+//end
+
+always @(posedge clk)
+	rpc <= pc;
+assign insn = rommem[rpc];
+
+endmodule
+
 module FISA64_icache_ram(wclk, wa, wr, i, rclk, pc, insn);
 input wclk;
 input [12:0] wa;
@@ -2590,4 +2806,47 @@ default:	res <= 64'd0;
 endcase
 
 endmodule
+/*
+module FISA64_bypass_mux(Rn, xRt, wRt, tRt, uRt, regSP, xres, wres, tres, ures, rfo, o);
+input [4:0] Rn;
+input [4:0] xRt;
+input [4:0] wRt;
+input [4:0] tRt;
+input [4:0] uRt;
+input [4:0] regSP;
+input [63:0] xres;
+input [63:0] wres;
+input [63:0] tres;
+input [63:0] ures;
+input [63:0] rfo;
+output reg [63:0] o;
 
+always @*
+if (Rn==5'd0)
+	o <= 64'd0;
+else if (Rn==xRt)
+	o <= xres;
+else if (Rn==wRt)
+	o <= wres;
+else if (Rn==tRt)
+	o <= tres;
+else if (Rn==uRt)
+	o <= ures;
+else if (Rn==regSP)
+case(Rn)
+5'd0:	rfoa <= 64'd0;
+xRt:	rfoa <= res;
+wRt:	rfoa <= wres;
+tRt:	rfoa <= tres;
+uRt:	rfoa <= ures;
+5'd30:	if (xRt2)
+			rfoa <= res2;
+		else if (wRt2)
+			rfoa <= wres2;
+		else
+			rfoa <= sp;
+default:	rfoa <= regfile[Ra];
+endcase
+endmodule
+
+*/
