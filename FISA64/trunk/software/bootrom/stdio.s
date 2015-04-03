@@ -6,10 +6,8 @@ public code putch:
 	      	mov  	bp,sp
 	      	     	        push    r6
 		lw		r1,24[bp]
-		ldi     r6,#5    ; OutChar function
-        sys     #10
-        ldi     r1,#$1234
-        sc      r1,LEDS
+		ldi     r6,#14    ; Teletype output function
+        sys     #410      ; Video BIOS call
         pop     r6
 	
 stdio_1:
@@ -302,8 +300,8 @@ public code putstr2:
 	      	mov  	bp,sp
 	      	     	        push    r6
         lw      r1,24[bp]
-        ldi     r6,#15   ; BIOS DisplayString16 function
-        sys     #10
+        ldi     r6,#$1B   ; Video BIOS DisplayString16 function
+        sys     #410
         pop     r6
     
 stdio_54:
@@ -314,7 +312,7 @@ endpublic
 
 public code getcharNoWait:
 	      	     	        push    r6
-        ld      r6,#3    ; KeybdGetCharNoWair
+        ld      r6,#3    ; KeybdGetCharNoWait
         sys     #10
         pop     r6
         rtl

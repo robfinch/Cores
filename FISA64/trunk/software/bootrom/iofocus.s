@@ -30,7 +30,14 @@ LockIOF:
     bsr     LockSema
     pop     r1
     rts
-    
+UnlockIOF:
+     push   lr
+     push   r1
+     lea    r1,iof_sema
+     bsr    UnlockSema
+     pop    r1
+     rts
+
 ;------------------------------------------------------------------------------
 ; ForceIOFocus
 ;
@@ -55,7 +62,7 @@ ForceIOFocus:
 	sw		r1,JCB_pVidMem[r2]
 	bsr		CopyVirtualScreenToScreen
 fif1:
-	sw		r0,iof_sema
+	bsr     UnlockIOF
 	pop     r3
 	pop     r2
 	pop     r1
@@ -99,7 +106,7 @@ SwitchIOFocus:
 	; text screen.
 	bsr		CopyVirtualScreenToScreen
 siof3:
-    sw      r0,iof_sema
+    bsr     UnlockIOF
 	pop     r3
 	pop     r2
 	pop     r1
@@ -119,10 +126,10 @@ RequestIOFocus:
 	push	r4
 	push    r5
 ;	DisTmrKbd
-	lw	    r2,TCB_hJCB[tr]
+	lb	    r2,TCB_hJCB[tr]
 	mov     r1,r2
-	subui   r1,r1,#JCB_Array
-	divu    r1,r1,#JCB_Size
+	mulu    r2,r2,#JCB_Size
+    addui   r1,r1,#JCB_Array
 	lsr     r3,r1,#6           ; r3 = word index into IO focus table
 	bsr     LockIOF
 	lw      r4,IOFocusTbl[r3]  ; r4 = word from IO focus table
@@ -151,7 +158,7 @@ riof3:
 	sw      r5,IOFocusTbl[r3]  ; store word back to IO focus table
 riof1:
 ;	EnTmrKbd4
-    sw      r0,iof_sema
+    bsr     UnlockIOF
     pop     r5
 	pop		r4
 	pop     r3
@@ -205,16 +212,18 @@ ReleaseIOFocus:
 	push	r4
 	push    r5
 ;	DisTmrKbd
-	lw	    r2,TCB_hJCB[tr]
+	lbu	    r2,TCB_hJCB[tr]
+	cmpu    r1,r2,#NR_JCB
+	bge     r1,rliof6
 rliof4:
 	mov     r1,r2
-	subui   r1,r1,#JCB_Array
-	divu    r1,r1,#JCB_Size
+	mulu    r2,r2,#JCB_Size
+	addui   r1,r1,#JCB_Array   ; r2 = pointer to JCB
 	lsr     r3,r1,#6           ; r3 = word index into IO focus table
 	bsr     LockIOF
 	lw      r4,IOFocusTbl[r3]  ; r4 = word from IO focus table
 	and     r3,r1,#$3F         ; r3 = bit number in word
-	lsr     r5,r1,r3           ; extract bit into r5
+	lsr     r5,r4,r3           ; extract bit into r5
 	and     r5,r5,#1           ; mask off extra bits
 	beq		r5,rliof3          ; nothing to do (not in table)
 	ror     r4,r4,r3
@@ -239,7 +248,8 @@ rliof2:
 	sw		r0,JCB_iof_prev[r2]	; the job is no longer on the list.
 rliof3:
 ;	EnTmrKbd
-    sw      r0,iof_sema
+    bsr     UnlockIOF
+rliof6:
     pop     r5
 	pop		r4
 	pop     r3

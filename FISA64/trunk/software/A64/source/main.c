@@ -1230,6 +1230,7 @@ int main(int argc, char *argv[])
     int nn,qq;
     static char fname[500];
     char *p;
+    int chksum;
 
     ofp = stdout;
     nn = processOptions(argc, argv);
@@ -1293,6 +1294,19 @@ int main(int argc, char *argv[])
     }
     processMaster();
     DumpSymbols();
+
+/*
+    chksum = 0;
+    for (nn = 0; nn < binndx; nn+=4) {
+        chksum += binfile[nn] +
+                  (binfile[nn+1] << 8) + 
+                  (binfile[nn+2] << 16) + 
+                  (binfile[nn+3] << 24) 
+                  ;
+    }
+
+    fprintf(ofp, "\r\nChecksum: %08X\r\n", chksum);
+*/
     if (listing)
         fclose(ofp);
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

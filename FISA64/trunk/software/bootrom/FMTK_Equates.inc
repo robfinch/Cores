@@ -141,16 +141,16 @@ MBX_TQ_TAIL		EQU     $18
 MBX_MQ_HEAD		EQU     $20	      ; head of message queue
 MBX_MQ_TAIL		EQU     $28
 MBX_TQ_COUNT	EQU     $30	      ; count of queued threads
-MBX_MQ_SIZE		EQU     $38       ; number of messages that may be queued
-MBX_MQ_COUNT	EQU     $40       ; count of messages that are queued
-MBX_MQ_MISSED	EQU     $48	      ; number of messages dropped from queue
-MBX_OWNER		EQU     $50	      ; job handle of mailbox owner
-MBX_MQ_STRATEGY	EQU     $58	      ; message queueing strategy
-MBX_Size        EQU     $60
+MBX_MQ_SIZE		EQU     $32       ; number of messages that may be queued
+MBX_MQ_COUNT	EQU     $34       ; count of messages that are queued
+MBX_OWNER		EQU     $36	      ; job handle of mailbox owner
+MBX_MQ_STRATEGY	EQU     $37	      ; message queueing strategy
+MBX_MQ_MISSED	EQU     $38	      ; number of messages dropped from queue
+MBX_Size        EQU     $40
 
-MQ_UNLIMITED    EQU     0
-MQ_OLDEST       EQU     1
-MQ_NEWEST       EQU     2
+MQS_UNLIMITED    EQU     0
+MQS_OLDEST       EQU     1
+MQS_NEWEST       EQU     2
 
 ; Messages, room for 64kW (16,384) messages
 ;			.bss
@@ -190,9 +190,7 @@ JCB_SysIn		EQU		0x380	; 48 chars
 JCB_SysOut		EQU		0x3B0	; 48 chars
 JCB_ExitError	EQU		0x3E0
 JCB_pVidMem		EQU		0x3E8		; pointer to video memory
-JCB_pVidMemAttr	EQU		0x3F0
 JCB_pVirtVid	EQU		0x3F8		; pointer to virtual video buffer
-JCB_pVirtVidAttr	EQU		0x400
 JCB_VideoMode	EQU		0x408
 JCB_VideoRows	EQU		0x40A
 JCB_VideoCols	EQU		0x40B
@@ -222,18 +220,25 @@ JCB_LogSize		EQU		11
 BITMAP_SCREEN1  EQU     $400000     ; bitmap graphics screen area (4MB)
 BITMAP_SCREEN2  EQU     $800000     ; bitmap graphics screen area (4MB)
 VAR_Area        EQU     $C00000     ; 64k block for OS vars
-TCB_Array       EQU     $C10000     ; room for 256 TCB's (192kB)
-TCB_ArrayEnd    EQU     $C50000
-JCB_Array       EQU     $C50000
-JCB_ArrayEnd    EQU     $C60000     ; room for 51 JCB's  (64kB)
-MBX_Array       EQU     $C70000     ; room for 2048 mailboxes (192kB)
-MBX_ArrayEnd    EQU     $CA0000
-MSG_Array       EQU     $CA0000     ; room for 32,768 messages (1MB)
-MSG_ArrayEnd    EQU     $DA0000
-SCREEN_Array    EQU     $DA0000     ; room for 51 16kB screens
-SCREEN_ArrayEnd EQU     $EA0000
-DCB_Array       EQU     $EA0000     ; room for 32 DCB's
-DCB_ArrayEnd    EQU     $EA0880
+                bss
+                org     $C10000
+TCB_Array       fill.b  NR_TCB*TCB_Size,0 ; room for 256 TCB's (192kB)
+TCB_ArrayEnd:
+                align   65536
+JCB_Array       fill.b  NR_JCB*JCB_Size,0 ; room for 51 JCB's  (64kB)
+JCB_ArrayEnd:
+                align   64
+MBX_Array       fill.b  NR_MBX*MBX_Size,0 ; room for 2048 mailboxes (192kB)
+MBX_ArrayEnd:
+                align   65536
+MSG_Array       fill.b  NR_MSG*MSG_Size,0 ; room for 32,768 messages (1MB)
+MSG_ArrayEnd:
+                align   65536
+SCREEN_Array    fill.b  NR_JCB * 16384,0  ; room for 51 16kB screens
+SCREEN_ArrayEnd:
+                align   65536
+DCB_Array       fill.b  NR_DCB * DCB_Size,0 ; room for 32 DCB's
+DCB_ArrayEnd:
 
 CPU0_DBG_STACK  EQU     $7CF000
 CPU1_STACK      EQU     $7CF800
@@ -251,7 +256,7 @@ BIOS_RespMbx        dw      0
 IRQFlag     dw      0
 sys_ticks   dw      0
 IOFocusNdx  dw      0
-IOFocusTbl      fill.w   4,0        ; tasks requesting I/O focus
+IOFocusTbl      fill.w   4,0        ; jobs requesting I/O focus
 QNdx0		dw		0
 QNdx1		dw		0
 QNdx2		dw		0
@@ -260,6 +265,7 @@ QNdx4		dw		0
 QNdx5		dw		0
 QNdx6		dw		0
 QNdx7		dw		0
+            align   256
 FreeJCB     dw      0
 FreeTCB		dw		0
 TimeoutList	dw		0
@@ -282,7 +288,7 @@ clockmsg_d2		dw		0
 tcbsema_d1		dw		0
 tcbsema_d2		dw		0
 mmu_acc_save	dw		0
-
+FMTK_Inited    dw   0
 freejcb_sema   dw   0
 freetcb_sema   dw   0
 freembx_sema   dw   0

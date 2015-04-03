@@ -34,6 +34,7 @@
 #define BLT         4
 #define BLE         5
 #define RTL     0x37
+#define BRK     0x38
 #define BSR     0x39
 #define BRA     0x3A
 #define RTS     0x3B
@@ -45,13 +46,26 @@
 #define LH      0x44
 #define LHU     0x45
 #define LW      0x46
+#define LEA     0x47
+#define LBX     0x48
+#define LBUX    0x49
+#define LCX     0x4A
+#define LCUX    0x4B
+#define LHX     0x4C
+#define LHUX    0x4D
+#define LWX     0x4E
+#define LEAX    0x4F
+#define POP     0x57
 #define LWAR    0x5C
 #define SB      0x60
 #define SC      0x61
 #define SH      0x62
 #define SW      0x63
 #define PUSH    0x67
-#define POP     0x57
+#define SBX     0x68
+#define SCX     0x69
+#define SHX     0x6A
+#define SWX     0x6B
 #define SWCR    0x6E
 #define IMM     0x7C
 
@@ -94,7 +108,7 @@ static void DispRa(ir) {
 }
 
 static void DispRb(ir) {
-    printf("R%d,", ((ir >> 17) & 0x1F));
+    printf("R%d", ((ir >> 17) & 0x1F));
 }
 
 static void DispSpr(int ir)
@@ -137,6 +151,59 @@ static void DispMemAddress(hasPrefix, prefix, ir)
         printf("\r\n");
 }
 
+static void PrintSc(sc)
+{
+    if (sc > 1)
+       printf("*%d]\r\n", sc);
+    else
+        printf("]\r\n");
+}
+
+static DispBrk(unsigned short int ir)
+{
+    int type;
+    int vecno;
+
+    type = (ir >> 30) & 3;
+    vecno = (ir >> 17) & 0x1ff;
+    switch(type) {
+    case 0: printf("SYS   #%X\r\n", vecno);
+    case 1: printf("DBG   #%X\r\n", vecno);
+    case 2: printf("INT   #%X\r\n", vecno);
+    case 3: printf("BRK?  #%X\r\n", vecno);
+    }
+}
+
+static void DispIndexedAddr(unsigned int ad, char *mne, unsigned short int ir)
+{
+    int offset;
+    int Ra, Rb, Rst;
+    int sc;
+    
+    offset = ir >> 24;
+    Ra = (ir >> 7) & 0x1F;
+    Rst = (ir >> 12) & 0x1F;
+    Rb = (ir >> 17) & 0x1F;
+    sc = (ir >> 22) & 3;
+    sc = 1 << sc;
+
+    DumpInsnBytes(ad, ir);
+    printf("%s R%d,", mne, Rst);
+    if (offset != 0)
+        printf("$%X", offset); 
+    if (Ra != 0 && Rb != 0) {
+        printf("[R%d+R%d");
+        PrintSc(sc);
+    }
+    else if (Ra==0) {
+         printf("[R%d",Rb);
+         PrintSc(sc);
+    }
+    else if (Rb==0) {
+         printf("[R%d]\r\n");
+    }
+}
+
 static void DispLS(int ad, char *mne, int hasPrefix, int prefix, int ir)
 {
     DumpInsnBytes(ad, ir);
@@ -172,13 +239,26 @@ void DispBcc(int ad, char *mne, int ir)
      DispRac(ir);
      printf("%06X\r\n", ad + disp);
 }
-void DispRR(int ad, char *mne, int ir)
+void DispRR(int ad, char *mne, unsigned short int ir)
 {
+     int oc;
+     int Rb;
+     
+     oc = ir >> 25;
+     Rb = (ir >> 17) & 0x1F;
      DumpInsnBytes(ad, ir);
+     if (oc==0x0E && Rb==0) {
+         printf("MOV   ");
+         DispRstc(ir);
+         DispRa(ir);
+         printf("\r\n");
+         return;
+     }
      printf("%s ", mne);
      DispRstc(ir);
      DispRac(ir);
      DispRb(ir);
+     printf("\r\n");
 }
  
 
@@ -295,6 +375,7 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
              case 7:    DispBcc(*ad, "???  ", ir); break;
              }
              break;
+        case BRK:  DispBrk(ir); break;
         case BSR:
              DumpInsnBytes(*ad, ir);
              disp = ir >> 7;
@@ -326,10 +407,23 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
         case LH: DispLS(*ad, "LH   ", hasPrefix, prefix, ir); break;
         case LHU: DispLS(*ad, "LHU  ", hasPrefix, prefix, ir); break;
         case LW: DispLS(*ad, "LW   ", hasPrefix, prefix, ir); break;
+        case LEA: DispLS(*ad, "LEA  ", hasPrefix, prefix, ir); break;
+        case LBX: DispIndexedAddr(*ad, "LB   ", ir); break;
+        case LBUX: DispIndexedAddr(*ad, "LBU  ", ir); break;
+        case LCX: DispIndexedAddr(*ad, "LC   ", ir); break;
+        case LCUX: DispIndexedAddr(*ad, "LCU  ", ir); break;
+        case LHX: DispIndexedAddr(*ad, "LH   ", ir); break;
+        case LHUX: DispIndexedAddr(*ad, "LHU  ", ir); break;
+        case LWX: DispIndexedAddr(*ad, "LW   ", ir); break;
+        case LEAX: DispIndexedAddr(*ad, "LEA  ", ir); break;
         case SB: DispLS(*ad, "SB   ", hasPrefix, prefix, ir); break;
         case SC: DispLS(*ad, "SC   ", hasPrefix, prefix, ir); break;
         case SH: DispLS(*ad, "SH   ", hasPrefix, prefix, ir); break;
         case SW: DispLS(*ad, "SW   ", hasPrefix, prefix, ir); break;
+        case SBX: DispIndexedAddr(*ad, "SB   ", ir); break;
+        case SCX: DispIndexedAddr(*ad, "SC   ", ir); break;
+        case SHX: DispIndexedAddr(*ad, "SH   ", ir); break;
+        case SWX: DispIndexedAddr(*ad, "SW   ", ir); break;
         case LWAR: DispLS(*ad, "LWAR ", hasPrefix, prefix, ir); break;
         case SWCR: DispLS(*ad, "SWCR ", hasPrefix, prefix, ir); break;
         case PUSH: DumpInsnBytes(*ad, ir); printf("PUSH  "); DispRa(ir); printf("\r\n"); break;

@@ -75,11 +75,11 @@ BSI_VolID		= 0x27
 BSI_VolLabel	= 0x2B
 BSI_FileSysType = 0x36
 
-IRQ_STACK   EQU     $8000
 DBG_STACK   EQU     $7000
 CPU0_BIOS_STACK  EQU     $6800
 MON_STACK   EQU     $6000
 ; CPU1 Ram allocations must be to the dram area.
+CPU0_IRQ_STACK   EQU    $8800
 CPU1_IRQ_STACK  EQU     $20800
 CPU1_SYS_STACK      EQU  $21000
 CPU1_BIOS_STACK     EQU  $21800
@@ -93,9 +93,11 @@ BIOS_INSERVICE EQU       2
 
 MAX_BIOS_CALL  EQU       100
 E_BadFuncno    EQU       1
+BIOS_E_Timeout EQU       2
+E_Unsupported  EQU       3
 
 ; The following offsets in the I/O segment
-TEXTSCR	equ		$00000
+TEXTSCR	equ		$FFD00000
 TEXTREG		EQU		$A0000
 TEXT_COLS	EQU		0x00
 TEXT_ROWS	EQU		0x04
@@ -190,7 +192,7 @@ include "DeviceDriver.inc"
 ;include "FMTK_Equates.inc"
 
 	bss
-	org		$8
+	org		4096
 Ticks			dw		0
 ; Monitor register storage
 MON_r1          dw      0
@@ -224,6 +226,9 @@ MON_r28         dw      0
 MON_r29         dw      0
 MON_r30         dw      0
 MON_r31         dw      0
+
+BIOS_CALL       EQU     10
+FMTK_CALL       EQU     4
 
 Milliseconds	dw		0
 OutputVec		dw		0
@@ -265,12 +270,14 @@ API_tail        dc      0
                 align 8
 API_sema        dw      0
 BIOS_sema       dw      0
+BIOS_MbxHandle  EQU     $C00008
 StartCPU1Flag   dw      0
 StartCPU1Addr   dw      0
 CPUIdleTick     dw      0
                 dw      0
                 dw      0
                 dw      0
+JCB0            fill.b  2048,0
 
 	align	16
 RTCC_BUF		fill.b	96,0
@@ -278,16 +285,9 @@ API_AREA        fill.b  2048,0
 
 ; Just past the 
 	org		$0008000
-NR_PTBL		EQU		32
-
-TempTCB:
-	fill.b	TCB_Size,0
 
 	; 2MB for TSS space
 	align 8192
-TSSBaseAddress:
-TCBs:
-	fill.b	TCB_Size*NR_TCB,0
 
 SECTOR_BUF	fill.b	512,0
     align 4096
@@ -305,7 +305,6 @@ EndStaticAllocations:
 	code
 	org		$00010000
 	bra     start
-BIOS_FuncTable:
 	align   8
 	dw		ClearScreen		; $8000
 	dw		HomeCursor		; $8008
@@ -322,21 +321,70 @@ BIOS_FuncTable:
 	dw		DisplayHalf		; $8060
 	dw		DisplayCharHex	; $8068
 	dw		DisplayByte		; $8070
+BIOS_FuncTable:
+    dc      ClearScreen
+    dc      HomeCursor
+    dc      DisplayString
+    dc      KeybdGetCharNoWait
+    dc      0
+    dc      OutChar
+    dc      0
+    dc      0
+    dc      0
+    dc      0
+    dc      0
+    dc      DisplayWord
+    dc      DisplayHalf
+    dc      DisplayCharHex
+    dc      DisplayByte
+    dc      DisplayString16
+    dc      0
+    dc      0
+    dc      0
+    
+    align   4
 message "start"
 start:
-    sei     ; interrupts off
+    sw      r0,FMTK_Inited
     cpuid   r1,r0,#0
-    beq     r1,.0002
-    ldi     tr,#$C10000          ; IDLE task for CPU #1
+    beq     r1,CPU0_Start
+CPU1_Start:
+    ldi     sp,#CPU1_STACK
+    bsr     SetupIntVectors1
+	bsr		InitPIC1
+	; Wait for CPU #0 to complete FMTK initialization before proceeding.
+.0001:
+    nop
+    nop
+	lw      r1,FMTK_Inited
+	cmpu    r1,r1,#$12345678
+	bne     r1,.0001
+	bsr     FMTKInitialize        ;  Initialize for CPU #1
 .0003:
+    cli
     inc     $20000
     lw      r1,StartCPU1Flag
     cmp     r1,r1,#$12345678
     bne     r1,.0003
     jmp     (StartCPU1Addr)
+    ; This is a little bit kludgy, we setup just enough of the FMTK vars
+    ; in order to be able to get display output.
+CPU0_Start:
 .0002:
-    ldi     sp,#MON_STACK        ; set stack pointer to top of 32k Area
-	ldi     tr,#$C10000          ; load task register with IDLE task
+	ldi     sp,#STACKS_Array+4088
+	ldi     tr,#TCB_Array               ; load task register with BIOS task
+	sw      sp,TCB_ISP[tr]
+	sw      sp,TCB_r30[tr]
+	ldi     r1,#CPU0_BIOS_STACK         ;BIOS_STACKS_Array+4088  ; so we can call the BIOS during startup
+	sw      r1,TCB_BIOS_Stack[tr]
+	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
+	bsr     GetJCBPtr
+	sw      r1,IOFocusNdx               ; The screen routines check this var
+	ldi     r2,#$FFD00000
+	sw      r2,JCB_pVidMem[r1]          ; point JCB#0 to real screen
+	ldi		r4,#%000000100_110101110_0000000000	; grey on blue
+	sh		r4,JCB_NormAttr[r1]
+	sh		r4,JCB_CurrAttr[r1]
     ldi     r5,#$0000
     ldi     r1,#20
 .0001:
@@ -346,22 +394,26 @@ start:
 	ldi     r1,#-1
 	sw      r1,API_sema
 	sw      r0,BIOS_sema
+	sw      r0,BIOS1_sema
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
 	sb		r0,KeybdBad
 	sh		r1,NormAttr
-	sb		r0,CursorRow
-	sb		r0,CursorCol
 	ldi		r1,#DisplayChar
 	sw		r1,OutputVec
 	bsr		ClearScreen
 	bsr		HomeCursor
 	ldi     r1,#msgStart
 	bsr     DisplayStringCRLF
-	ldi     r1,#8
-	sb      r1,LEDS
 	bsr		SetupIntVectors
+	bsr     ROMChecksum
+	bsr     dbg_init
 ;	bsr		KeybdInit
+    ; set data breakpoint at FreeTCB address
+;    ldi     r1,#$C00098
+;    mtspr   dbad0,r1
+;    ldi     r1,#$D0001
+;    mtspr   dbctrl,r1
     bsr     FMTKInitialize
     ldi     r1,#UserTickRout     ; set user tick vector
     sw      r1,$C00000
@@ -369,9 +421,17 @@ start:
 	bsr     InitUart
 	bsr     RTCCReadbuf          ; read the real-time clock
 	bsr     set_time_serial      ; set the system time serial
+
+	; Startup BIOS call task so that CPU#1 may make BIOS calls
+	ldi     r1,#0                ; task priority
+	ldi     r2,#0                ; cpu affinity
+	ldi     r3,#BIOSCallTask|1   ; start address (start in kernel mode)
+	ldi     r4,#0                ; start parameter
+	ldi     r5,#0                ; owning job
+;	sys     #FMTK_CALL
+;	dh      1                    ; start task function
+    bsr     DumpTaskList
 	bra		Monitor
-	bsr		FMTKInitialize
-	cli
 
 SerialStartMsg:
     push    lr
@@ -384,12 +444,20 @@ SerialStartMsg:
     rts
  
 SetupIntVectors:
-	ldi     r1,#$00A7
-	sc      r1,LEDS
 	mtspr   vbr,r0               ; place vector table at $0000
 	nop
 	nop
 	mfspr   r2,vbr
+	ldi     r1,#UninitIRQ
+	ldi     r3,#511
+.0001:
+	sw      r1,[r2+r3*8]
+	subui   r3,r3,#1
+	bge     r3,.0001
+	ldi     r1,#BIOSCall
+	sw      r1,10*8[r2]
+	ldi     r1,#VideoBIOSCall
+	sw      r1,410*8[r2]
 	ldi		r1,#Tick1024Rout
 	sw		r1,450*8[r2]
 	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
@@ -402,7 +470,7 @@ SetupIntVectors:
 	sw		r1,463*8[r2]
     ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
     sw      r1,495*8[r2]
-    ldi     r1,#IBPT_ISR         ; set ISR vector for instruction breakpoint routine
+    ldi     r1,#BPT_ISR          ; set ISR vector for breakpoint routine
     sw      r1,496*8[r2]
 	ldi		r1,#exf_rout
 	sw		r1,497*8[r2]
@@ -416,8 +484,46 @@ SetupIntVectors:
 	sw		r1,508*8[r2]
 	ldi		r1,#berr_rout
 	sw		r1,509*8[r2]
-	ldi     r1,#$00AA
-	sc      r1,LEDS
+	ldi		r1,#nmi_rout
+	sw		r1,510*8[r2]
+    rtl
+ 
+; Setup interrupt vector table for processor #1
+SetupIntVectors1:
+	mtspr   vbr,r0               ; place vector table at $0000
+	nop
+	nop
+	mfspr   r2,vbr
+	ldi     r1,#UninitIRQ
+	ldi     r3,#511
+.0001:
+	sw      r1,[r2+r3*8]
+	subui   r3,r3,#1
+	bge     r3,.0001
+	ldi     r1,#BIOSCall1
+	sw      r1,10*8[r2]
+	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
+	sw		r1,451*8[r2]
+	ldi     r1,#ServiceRequestIRQ
+	sw      r1,457*8[r2]
+    ldi     r1,#SSM_ISR          ; set ISR vector for single step routine
+    sw      r1,495*8[r2]
+    ldi     r1,#BPT_ISR          ; set ISR vector for instruction breakpoint routine
+    sw      r1,496*8[r2]
+	ldi		r1,#exf_rout
+	sw		r1,497*8[r2]
+	ldi		r1,#dwf_rout
+	sw		r1,498*8[r2]
+	ldi		r1,#drf_rout
+	sw		r1,499*8[r2]
+	ldi		r1,#priv_rout
+	sw		r1,501*8[r2]
+	ldi		r1,#berr_rout
+	sw		r1,508*8[r2]
+	ldi		r1,#berr_rout
+	sw		r1,509*8[r2]
+	ldi		r1,#nmi_rout1
+	sw		r1,510*8[r2]
     rtl
  
 ;------------------------------------------------------------------------------
@@ -425,188 +531,24 @@ SetupIntVectors:
 ;------------------------------------------------------------------------------
 
 InitPIC:
-	ldi		r1,#$020C		; timer interrupt(s) are edge sensitive
+	ldi		r1,#$000C		; timer interrupt(s) are edge sensitive
 	sh		r1,PIC_ES
-	ldi		r1,#$020F		; enable keyboard reset, timer interrupts
+	ldi		r1,#$000F		; enable keyboard reset, timer interrupts
+	sh		r1,PIC_IE
+	rtl
+
+; For CPU #1 the only interrupt to be serviced is the 30Hz time slice.
+
+InitPIC1:
+	ldi		r1,#$000C		; timer interrupt(s) are edge sensitive
+	sh		r1,PIC_ES
+	ldi		r1,#$000B		; enable keyboard reset, timer interrupts
 	sh		r1,PIC_IE
 	rtl
 
 include "serial.s"
+include "Video.s"
 
-;------------------------------------------------------------------------------
-; Convert ASCII character to screen display character.
-;------------------------------------------------------------------------------
-
-AsciiToScreen:
-    push    r2
-	and		r1,r1,#$FF
-	or		r1,r1,#$100
-	and		r2,r1,#%00100000	; if bit 5 or 6 isn't set
-	beq		r2,.00001
-	and		r2,r1,#%01000000
-	beq		r2,.00001
-	and		r1,r1,#%110011111
-.00001:
-    pop     r2
-	rtl
-
-;------------------------------------------------------------------------------
-; Convert screen display character to ascii.
-;------------------------------------------------------------------------------
-
-ScreenToAscii:
-    push    r2
-	and		r1,r1,#$FF
-	cmpu	r2,r1,#26+1
-	bge		r2,.stasc1
-	add		r1,r1,#$60
-.stasc1:
-    pop     r2
-	rtl
-
-CursorOff:
-	rtl
-CursorOn:
-	rtl
-HomeCursor:
-	sb		r0,CursorRow
-	sb		r0,CursorCol
-	sc	    r0,TEXTREG+TEXT_CURPOS+$FFD00000
-	rtl
-
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-                                                                               
-ClearScreen:
-    push    lr
-    push	r1
-    push    r2
-    push    r3
-    push    r4
-	lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
-	lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
-	mulu	r4,r2,r1
-	ldi		r3,#TEXTSCR+$FFD00000
-	ldi		r1,#' '
-	bsr		AsciiToScreen
-	lhu		r2,NormAttr
-	or		r1,r1,r2
-.cs1:
-    sh	    r1,[r3+r4*4]
-    subui   r4,r4,#1
-	bne	    r4,.cs1
-	pop     r4
-	pop     r3
-	pop     r2
-	pop     r1
-    rts
-
-;------------------------------------------------------------------------------
-; Display the word in r1
-;------------------------------------------------------------------------------
-
-DisplayWord:
-    push    lr
-	rol	    r1,r1,#32
-	bsr		DisplayHalf
-	rol	    r1,r1,#32
-    pop     lr
-
-;------------------------------------------------------------------------------
-; Display the half-word in r1
-;------------------------------------------------------------------------------
-
-DisplayHalf:
-    push    lr
-	ror		r1,r1,#16
-	bsr		DisplayCharHex
-	rol		r1,r1,#16
-    pop     lr
-
-;------------------------------------------------------------------------------
-; Display the char in r1
-;------------------------------------------------------------------------------
-
-DisplayCharHex:
-    push    lr
-	ror		r1,r1,#8
-	bsr		DisplayByte
-	rol		r1,r1,#8
-    pop     lr
-
-;------------------------------------------------------------------------------
-; Display the byte in r1
-;------------------------------------------------------------------------------
-
-DisplayByte:
-    push    lr
-	ror		r1,r1,#4
-	bsr		DisplayNybble
-	rol		r1,r1,#4
-	pop     lr
- 
-;------------------------------------------------------------------------------
-; Display nybble in r1
-;------------------------------------------------------------------------------
-
-DisplayNybble:
-    push    lr
-	push	r1
-	push    r2
-	and		r1,r1,#$0F
-	addui	r1,r1,#'0'
-	cmpu	r2,r1,#'9'+1
-	blt		r2,.0001
-	addui	r1,r1,#7
-.0001:
-	bsr		OutChar
-	pop     r2
-	pop		r1
-	rts
-
-;------------------------------------------------------------------------------
-; Display a string pointer to string in r1.
-;------------------------------------------------------------------------------
-
-DisplayString:
-    push    lr
-	push	r1
-	push    r2
-	mov		r2,r1
-.dm2:
-	lbu		r1,[r2]
-	addui   r2,r2,#1	; increment text pointer
-	beq		r1,.dm1
-	bsr		OutChar
-	bra		.dm2
-.dm1:
-	pop		r2
-    pop     r1
-	rts
-
-DisplayStringCRLF:
-    push    lr
-	bsr		DisplayString
-	bra     CRLF1
-OutCRLF:
-CRLF:
-    push    lr
-CRLF1:
-	push	r1
-	ldi		r1,#CR
-	bsr		OutChar
-	ldi		r1,#LF
-	bsr		OutChar
-	pop		r1
-	rts
-
-
-DispCharQ:
-    push    lr
-	bsr		AsciiToScreen
-	sc		r1,[r3]
-	add		r3,r3,#4
-    rts
 
 DispStartMsg:
     push    lr
@@ -614,16 +556,36 @@ DispStartMsg:
 	bsr		DisplayString
     rts
 
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-KeybdIRQ:
-	sb		r0,KEYBD+1
-	rti
-
+   
 BranchToSelf2:
     bra      BranchToSelf2
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ROMChecksum:
+    push     lr
+    ldi      r2,#$10000
+    ldi      r4,#0
+    ldi      r3,#0
+    ldi      r5,#0
+.0001:
+    lhu      r3,[r2+r4]
+    addu     r5,r5,r3
+    addui    r4,r4,#4
+    cmp      r3,r4,#$10000
+    blt      r3,.0001
+    lea      r1,msgROMChecksum
+    bsr      DisplayString
+    mov      r1,r5
+    bsr      DisplayHalf
+    bsr      CRLF
+    rts
+
+msgROMChecksum:
+    db    CR,LF,"ROM Checksum: ",0
+
+    align 4 
 ;------------------------------------------------------------------------------
 ; Display a space on the output device.
 ;------------------------------------------------------------------------------
@@ -636,228 +598,203 @@ DisplaySpace:
     pop      r1
     rts
 
+GetJCBPtr:
+    push    r2
+	lbu     r1,TCB_hJCB[tr]
+    beq     r1,.0001
+    cmpu    r2,r1,#NR_JCB
+    bge     r2,.0001
+	mulu    r1,r1,#JCB_Size
+	addui   r1,r1,#JCB_Array
+	pop     r2
+    rtl
+.0001:
+    pop     r2
+    ldi     r1,#JCB0
+    rtl 
+
 ;------------------------------------------------------------------------------
-; 'PRTNUM' prints the 64 bit number in r1, leading blanks are added if
-; needed to pad the number of spaces to the number in r2.
-; However, if the number of digits is larger than the no. in
-; r2, all digits are printed anyway. Negative sign is also
-; printed and counted in, positive sign is not.
-;
-; r1 = number to print
-; r2 = number of digits
-; Register Usage
-;	r5 = number of padding spaces
 ;------------------------------------------------------------------------------
-PRTNUM:
+
+LockBIOS:
     push    lr
-	push	r3
-	push	r5
-	push	r6
-	push	r7
-	ldi		r7,#NUMWKA	; r7 = pointer to numeric work area
-	mov		r6,r1		; save number for later
-	mov		r5,r2		; r5 = min number of chars
-	bge		r1,PN2			; is it negative? if not
-	subu	r1,r0,r1	; else make it positive
-	subui   r5,r5,#1	; one less for width count
-PN2:
-;	ldi		r3,#10
-PN1:
-	mod		r2,r1,#10	; r2 = r1 mod 10
-	div		r1,r1,#10	; r1 /= 10 divide by 10
-	add		r2,r2,#'0'	; convert remainder to ascii
-	sb		r2,[r7]		; and store in buffer
-	addui   r7,r7,#1
-	subui   r5,r5,#1	; decrement width
-	bne		r1,PN1
-PN6:
-	ble		r5,PN4		; test pad count, skip padding if not needed
-PN3:
-	bsr     DisplaySpace	; display the required leading spaces
-	subui   r5,r5,#1
-	bne		r5,PN3
-PN4:
-	bge		r6,PN5		; is number negative?
-	ldi		r1,#'-'		; if so, display the sign
-	bsr		OutChar
-PN5:
-    subui   r7,r7,#1
-	lb		r1,[r7]		; now unstack the digits and display
-	bsr		OutChar
-	cmp		r1,r7,#NUMWKA
-	bgt		r1,PN5
-PNRET:
-	pop		r7
-	pop		r6
-	pop		r5
-	pop		r3
-	rts
+    push    r1
+    ldi     r1,#BIOS_sema
+    bsr     LockSema
+    pop     r1
+    rts
+UnlockBIOS:
+    push    lr
+    push    r1
+    lea     r1,BIOS_sema
+    bsr     UnlockSema
+    pop     r1
+    rtl
 
+LockBIOS1:
+    push    lr
+    push    r1
+    ldi     r1,#BIOS1_sema
+    bsr     LockSema
+    pop     r1
+    rts
 
 ;------------------------------------------------------------------------------
+; Perform a BIOS call from CPU #1
+; This routine sets up a structure variable in memory for the primary CPU
+; to process.
+;------------------------------------------------------------------------------
+
+BIOSCall1:
+    lw      sp,TCB_BIOS_Stack[tr]
+    push    lr
+    push    r10
+    push    r11
+    mfspr   r10,epc             ;
+    addui   r10,r10,#4
+    mtspr   epc,r10
+    cmp     r10,r6,#MAX_BIOS_CALL
+    bgt     r10,.0003
+    bsr     LockBIOS1
+    sw      r6,BIOS_op
+    sw      r1,BIOS_arg1
+    sw      r2,BIOS_arg2
+    sw      r3,BIOS_arg3
+    sw      r4,BIOS_arg4
+    sw      r5,BIOS_arg5
+    sw      r0,BIOS_resp
+    sw      r0,BIOS_stat
+    lw      r1,BIOS_MbxHandle
+    ldi     r2,#BIOS_op          ;
+    lw      r3,BIOS_RespMbx      ; response mailbox handle
+    sys     #FMTK_CALL
+    dh      9                    ; SendMsg
+    lw      r1,BIOS_RespMbx
+    ldi     r2,#-1
+    sys     #FMTK_CALL
+    dh      10                   ; WaitMsg
+    cmp     r7,r1,#E_Timeout
+    bne     r7,.0004
+    ldi     r2,#BIOS_E_Timeout
+    bra     .0002
+.0004:
+    mov     r1,r2
+.0002:
+    sw      r0,BIOS1_sema
+    pop     r11
+    pop     r10
+    pop     lr
+    rte
+.0003:
+    ldi     r2,#E_BadFuncno
+    pop     r11
+    pop     r10
+    pop     lr
+    rte
+
+;------------------------------------------------------------------------------
+; BIOSCall
+;
+; Peform a BIOS function for CPU #0
+;
+; Parameters:
+; r1 = first function argument
+; r2 = second function argument
+; r3 = third function argument
+; r4 = fourth function argument
+; r5 = fifth function argument
+; r6 = function
+;
+; Returns:
+; r1 = response from BIOS routine
 ;------------------------------------------------------------------------------
 
 BIOSCall:
-    cpuid   sp,r0,#0
-    beq     sp,.0005
-    ldi     sp,#CPU1_BIOS_STACK
-    push    r10
-    push    r11
-    push    r12
-    ldi     r12,#1             ; remember the original affinity
-.0002:
-    sc      r0,TCB_Affinity[tr]
-    ; Now wait for an interrupt. After the task switch interrupt, CPU#0 is
-    ; the one that would be returning here because of the affinity setting.
-    ; The BIOS call can be completed then.
-    wai
-
-    ; Some other interrupt besides a task switch might have happened, so
-    ; we check if the CPU switched.
-    cpuid   r10,r0,#0
-    bne     r10,.0002
-    bra     .0006
-.0005:
-    ldi     sp,#CPU0_BIOS_STACK
-    push    r10
-    push    r11
-    push    r12
-    ldi     r12,#0
-.0006:
-    mfspr   r10,epc             ;
-    lh      r11,4[r10]           ; get the function #
-    addui   r10,r10,#8
-    mtspr   epc,r10
-    cmp     r10,r11,#MAX_BIOS_CALL
-    bgt     r10,.0003
-    asl     r11,r11,#3
+    lw      sp,TCB_BIOS_Stack[tr]
     push    lr
-    jsr     (BIOS_FuncTable[r11])
-    pop     lr
+    bsr     LockBIOS
+    push    r10
+    mfspr   r10,epc             ; update the return address
+    addui   r10,r10,#4
+    mtspr   epc,r10
+    cmp     r10,r6,#MAX_BIOS_CALL
+    bgt     r10,.0003
+    ldi     r10,#BIOS_FuncTable
+    lcu     r10,[r10+r6*2]
+    or      r10,r10,#BIOSCall & 0xFFFFFFFFFFFF0000
+    jsr     [r10]
+    ldi     r1,#$5678
+    sc      r1,LEDS
 .0004:
-    sc      r12,TCB_Affinity[tr]
-    pop     r12
-    pop     r11
+    bsr     UnlockBIOS
     pop     r10
+    pop     lr
     rte
 .0003:
-    ldi     r1,#E_BadFuncno
+    ldi     r2,#E_BadFuncno
     bra     .0004
 
+;------------------------------------------------------------------------------
+; This task is a BIOS service task.
+;------------------------------------------------------------------------------
+
+BIOSCallTask:
+    ; Get a mailbox for BIOS calls
+    ldi     r1,#BIOS_MbxHandle
+    sys     #FMTK_CALL            ; call FMTK AllocMbx function
+    dh      6
+.0001:
+    lw      r1,BIOS_MbxHandle
+    ldi     r2,#-1                ; infinite timeout
+    sys     #FMTK_CALL
+    dh      10                    ; call FMTK Waitmsg Function
+    cmp     r11,r1,#E_Ok          ; ignore bad reponses
+    bne     r11,.0001
+    mov     r11,r2
+    mov     r12,r3
+    mov     r11,r0   ; for now
+    lw      r6,BIOS_op[r11]
+    lw      r1,BIOS_arg1[r11]
+    lw      r2,BIOS_arg2[r11]
+    lw      r3,BIOS_arg3[r11]
+    lw      r4,BIOS_arg4[r11]
+    lw      r5,BIOS_arg5[r11]
+;    sys     #BIOS_CALL
+    beq     r12,.0001
+    sw      r1,BIOS_resp[r11]
+    mov     r2,r1                ; r2 = return value from BIOS
+    mov     r1,r12               ; r1 = mailbox to respond to
+    ldi     r3,#0                ; r3 = not used
+    sys     #FMTK_CALL
+    dh      8                    ; PostMsg
+    bra     .0001        
 
 ;------------------------------------------------------------------------------
 ; 60 Hz interrupt routine.
-; Both cpu's will execute this interrupt (necessary for multi-tasking).
-; Only cpu#0 needs to reset the I/O hardware.
+; Both cpu's will execute this interrupt.
 ;------------------------------------------------------------------------------
 
 TickRout:
-    cpuid   sp,r0,#0
-    beq     sp,.acknowledgeInterrupt
-    ; The stacks for the CPUs' must not overlap
-    ldi     sp,#CPU1_IRQ_STACK
-.SaveContext:
-    ; Do something here that takes a few cycles in order to allow cpu#0 to
-    ; reset the PIC. Otherwise the IRQ line going high will cause a bounce back
-    ; to here.
-    sw      r1,TCB_r1[tr]
-    sw      r2,TCB_r2[tr]
-    sw      r3,TCB_r3[tr]
-    sw      r4,TCB_r4[tr]
-    sw      r5,TCB_r5[tr]
-    sw      r6,TCB_r6[tr]
-    sw      r7,TCB_r7[tr]
-    sw      r8,TCB_r8[tr]
-    sw      r9,TCB_r9[tr]
-    sw      r10,TCB_r10[tr]
-    sw      r11,TCB_r11[tr]
-    sw      r12,TCB_r12[tr]
-    sw      r13,TCB_r13[tr]
-    sw      r14,TCB_r14[tr]
-    sw      r15,TCB_r15[tr]
-    sw      r16,TCB_r16[tr]
-    sw      r17,TCB_r17[tr]
-    sw      r18,TCB_r18[tr]
-    sw      r19,TCB_r19[tr]
-    sw      r20,TCB_r20[tr]
-    sw      r21,TCB_r21[tr]
-    sw      r22,TCB_r22[tr]
-    sw      r23,TCB_r23[tr]
-    sw      r24,TCB_r24[tr]
-    sw      r25,TCB_r25[tr]
-    sw      r26,TCB_r26[tr]
-    sw      r27,TCB_r27[tr]
-    sw      r28,TCB_r28[tr]
-    sw      r29,TCB_r29[tr]
-    mfspr   r1,isp
-    sw      r1,TCB_r30[tr]
-    sw      r31,TCB_r31[tr]
-    mfspr   r1,ipc
-    sw      r1,TCB_IPC[tr]
-    lw      r1,TCB_r1[tr]
-
-    bsr     SelectTaskToRun2
-    mov     tr,r1
-
-    ; Restore the context of the selected task
-    lw      r1,TCB_IPC[tr]
-    mtspr   ipc,r1
-    lw      r31,TCB_r31[tr]
-    lw      r1,TCB_r30[tr]
-    mtspr   isp,r1
-    lw      r29,TCB_r29[tr]
-    lw      r28,TCB_r28[tr]
-    lw      r27,TCB_r27[tr]
-    lw      r26,TCB_r26[tr]
-    lw      r25,TCB_r25[tr]
-;   lw      r24,TCB_r24[tr]    ; r24 is the task register - no need to load
-    lw      r23,TCB_r23[tr]
-    lw      r22,TCB_r22[tr]
-    lw      r21,TCB_r21[tr]
-    lw      r20,TCB_r20[tr]
-    lw      r19,TCB_r19[tr]
-    lw      r18,TCB_r18[tr]
-    lw      r17,TCB_r17[tr]
-    lw      r16,TCB_r16[tr]
-    lw      r15,TCB_r15[tr]
-    lw      r14,TCB_r14[tr]
-    lw      r13,TCB_r13[tr]
-    lw      r12,TCB_r12[tr]
-    lw      r11,TCB_r11[tr]
-    lw      r10,TCB_r10[tr]
-    lw      r9,TCB_r9[tr]
-    lw      r8,TCB_r8[tr]
-    lw      r7,TCB_r7[tr]
-    lw      r6,TCB_r6[tr]
-    lw      r5,TCB_r5[tr]
-    lw      r4,TCB_r4[tr]
-    lw      r3,TCB_r3[tr]
-    lw      r2,TCB_r2[tr]
-    lw      r1,TCB_r1[tr]
-    rti
-    nop
-    nop
-    
-.acknowledgeInterrupt:
-    ldi     sp,#IRQ_STACK       ; set stack pointer to interrupt processing stack
+    ldi     sp,#CPU0_IRQ_STACK       ; set stack pointer to interrupt processing stack
+    push    lr
     push    r1
 	ldi		r1,#3				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
-	lh	    r1,TEXTSCR+220+$FFD00000
-	addui	r1,r1,#1
-	sh	    r1,TEXTSCR+220+$FFD00000
-	lw      r1,$20000
-	sh      r1,TEXTSCR+224+$FFD00000
+	cpuid   r1,r0,#0
+	bne     r1,.0001
+	bsr     UserTickRout
+.0001:
 	pop     r1
-	bra     .SaveContext
+	pop     lr
+	rti
 
 UserTickRout:
     push    r1
-	lh	    r1,TEXTSCR+220+$FFD00000
+	lh	    r1,TEXTSCR+220
 	addui	r1,r1,#1
-	sh	    r1,TEXTSCR+220+$FFD00000
+	sh	    r1,TEXTSCR+220
 	lw      r1,$20000
-	sh      r1,TEXTSCR+224+$FFD00000
+	sh      r1,TEXTSCR+224
 	pop     r1
     rtl
 
@@ -867,37 +804,13 @@ UserTickRout:
 ;------------------------------------------------------------------------------
 
 Tick1024Rout:
-    cpuid   sp,r0,#0
-    beq     sp,.0001
-    rti                         ; nothing for cpu >0 to do here
-.0001:
-    ldi     sp,#$8000           ; set stack pointer to interrupt processing stack
+    ldi     sp,#CPU0_IRQ_STACK  ; set stack pointer to interrupt processing stack
 	push	r1
 	ldi		r1,#2				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
 	inc     Milliseconds
 	pop		r1
 	rti                         ; restore stack pointer and return
-
-;------------------------------------------------------------------------------
-; For now, just pick one at random.
-;------------------------------------------------------------------------------
-SelectTaskToRun2:
-    mov     r1,tr             ; stay in the same task for now
-    rtl
-    lw      r1,RANDOM_NUM
-    cpuid   r2,r0,#0
-    beq     r2,.0001
-    and     r1,r1,#$1F
-    or      r1,r1,#1         ; make sure it's an odd task for CPU1
-    asl     r1,r1,#16
-    addui   r1,r1,#$C00000
-    rtl    
-.0001:
-    and     r1,r1,#$1E       ; make sure it's an even task for CPU0
-    asl     r1,r1,#16
-    addui   r1,r1,#$C00000
-    rtl
 
 ;------------------------------------------------------------------------------
 ; GetSystemTime
@@ -911,281 +824,6 @@ GetSystemTime:
     lsr     r1,r1,#10
     rtl
 
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-GetScreenLocation:
-	ldi		r1,#TEXTSCR+$FFD00000
-	rtl
-GetCurrAttr:
-	lhu		r1,NormAttr
-	rtl
-
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-UpdateCursorPos:
-    push    lr
-	push	r1
-	push    r2
-	push    r4
-	lbu		r1,CursorRow
-	and		r1,r1,#$3f
-	lbu	    r2,TEXTREG+TEXT_COLS+$FFD00000
-	mulu	r2,r2,r1
-	lbu		r1,CursorCol
-	and		r1,r1,#$7f
-	addu	r2,r2,r1
-	sc	    r2,TEXTREG+TEXT_CURPOS+$FFD00000
-	pop		r4
-    pop     r2
-    pop     r1
-    rts
-	
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-CalcScreenLoc:
-    push    lr
-	push	r2
-	push    r4
-	lbu		r1,CursorRow
-	and		r1,r1,#$3f
-	lbu	    r2,TEXTREG+TEXT_COLS+$FFD00000
-	mulu	r2,r2,r1
-	lbu		r1,CursorCol
-	and		r1,r1,#$7f
-	addu	r2,r2,r1
-	sc	    r2,TEXTREG+TEXT_CURPOS+$FFD00000
-	bsr		GetScreenLocation
-	shl		r2,r2,#2
-	addu	r1,r1,r2
-	pop		r4
-    pop     r2
-	rts
-
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-DisplayChar:
-    push    lr
-	push	r1
-    push    r2
-    push    r3
-    push    r4
-	and		r1,r1,#$FF
-	cmp		r2,r1,#'\r'
-	beq		r2,.docr
-	cmp		r2,r1,#$91		; cursor right ?
-	beq		r2,.doCursorRight
-	cmp		r2,r1,#$90		; cursor up ?
-	beq		r2,.doCursorUp
-	cmp		r2,r1,#$93		; cursor left ?
-	beq		r2,.doCursorLeft
-	cmp		r2,r1,#$92		; cursor down ?
-	beq		r2,.doCursorDown
-	cmp		r2,r1,#$94		; cursor home ?
-	beq		r2,.doCursorHome
-	cmp		r2,r1,#$99		; delete ?
-	beq		r2,.doDelete
-	cmp		r2,r1,#CTRLH	; backspace ?
-	beq		r2,.doBackspace
-	cmp		r2,r1,#'\n'	; line feed ?
-	beq		r2,.doLinefeed
-	mov		r2,r1
-	bsr		CalcScreenLoc
-	mov		r3,r1
-	mov		r1,r2
-	bsr		AsciiToScreen
-	mov		r2,r1
-	bsr		GetCurrAttr
-	or		r1,r1,r2
-	sh	    r1,[r3]
-	bsr		IncCursorPos
-.dcx4:
-	pop		r4
-    pop     r3
-    pop     r2
-    pop     r1
-    pop     lr
-	rtl
-.docr:
-	sb		r0,CursorCol
-	bsr		UpdateCursorPos
-	bra     .dcx4
-.doCursorRight:
-	lbu		r1,CursorCol
-	add		r1,r1,#1
-	cmpu	r2,r1,#TXTCOLS
-	bge		r2,.dcx7
-	sb		r1,CursorCol
-.dcx7:
-	bsr		UpdateCursorPos
-	bra     .dcx4
-.doCursorUp:
-	lbu		r1,CursorRow
-	beq		r1,.dcx7
-	sub		r1,r1,#1
-	sb		r1,CursorRow
-	bra		.dcx7
-.doCursorLeft:
-	lbu		r1,CursorCol
-	beq		r1,.dcx7
-	sub		r1,r1,#1
-	sb		r1,CursorCol
-	bra		.dcx7
-.doCursorDown:
-	lbu		r1,CursorRow
-	add		r1,r1,#1
-	cmpu	r2,r1,#TXTROWS
-	bge		r2,.dcx7
-	sb		r1,CursorRow
-	bra		.dcx7
-.doCursorHome:
-	lbu		r1,CursorCol
-	beq		r1,.dcx12
-	sb		r0,CursorCol
-	bra		.dcx7
-.dcx12:
-	sb		r0,CursorRow
-	bra		.dcx7
-.doDelete:
-	bsr		CalcScreenLoc
-	mov		r3,r1
-	lbu		r1,CursorCol
-	bra		.dcx5
-.doBackspace:
-	lbu		r1,CursorCol
-	beq		r1,.dcx4
-	sub		r1,r1,#1
-	sb		r1,CursorCol
-	bsr		CalcScreenLoc
-	mov		r3,r1
-	lbu		r1,CursorCol
-.dcx5:
-	lhu	    r2,4[r3]
-	sh	    r2,[r3]
-	add		r3,r3,#4
-	add		r1,r1,#1
-	cmpu	r2,r1,#TXTCOLS
-	blt		r2,.dcx5
-	ldi		r1,#' '
-	bsr		AsciiToScreen
-	lhu		r2,NormAttr
-	or		r1,r1,r2
-	sub		r3,r3,#4
-	sh	    r1,[r3]
-	bra		.dcx4
-.doLinefeed:
-	bsr		IncCursorRow
-	bra		.dcx4
-
-
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-IncCursorPos:
-    push    lr
-	push	r1
-    push    r2
-    push    r4
-	lbu		r1,CursorCol
-	addui	r1,r1,#1
-	sb		r1,CursorCol
-	cmpu	r2,r1,#TXTCOLS
-	blt		r2,icc1
-	sb		r0,CursorCol
-	bra		icr1
-IncCursorRow:
-    push    lr
-	push	r1
-    push    r2
-    push    r4
-icr1:
-	lbu		r1,CursorRow
-	addui	r1,r1,#1
-	sb		r1,CursorRow
-	cmpu	r2,r1,#TXTROWS
-	blt		r2,icc1
-	ldi		r2,#TXTROWS-1
-	sb		r2,CursorRow
-	bsr		ScrollUp
-icc1:
-    nop
-    nop
-	bsr		UpdateCursorPos
-	pop		r4
-    pop     r2
-    pop     r1
-	pop     lr
-	rtl
-
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-
-ScrollUp:
-    push    lr
-	push	r1
-    push    r2
-    push    r3
-    push    r5
-	push	r6
-	lbu	    r1,TEXTREG+TEXT_COLS+$FFD00000
-	lbu	    r2,TEXTREG+TEXT_ROWS+$FFD00000
-	subui	r2,r2,#1
-	mulu	r6,r1,r2
-	ldi		r1,#TEXTSCR+$FFD00000
-	ldi		r2,#TEXTSCR+TXTCOLS*4+$FFD00000
-	ldi		r3,#0
-.0001:
-	lh	    r5,[r2+r3*4]
-	sh	    r5,[r1+r3*4]
-	addui	r3,r3,#1
-	subui   r6,r6,#1
-	bne	    r6,.0001
-	lbu	    r1,TEXTREG+TEXT_ROWS+$FFD00000
-	subui	r1,r1,#1
-	bsr		BlankLine
-	pop		r6
-	pop		r5
-    pop     r3
-    pop     r2
-    pop     r1
-	pop     lr
-	rtl
-
-;------------------------------------------------------------------------------
-; Blank out a line on the screen.
-;
-; Parameters:
-;	r1 = line number to blank out
-;------------------------------------------------------------------------------
-
-BlankLine:
-    push    lr
-	push	r1
-    push    r2
-    push    r3
-    push    r4
-    lbu     r2,TEXTREG+TEXT_COLS+$FFD00000
-	mulu	r3,r2,r1
-;	subui	r2,r2,#1		; r2 = #chars to blank - 1
-	shl		r3,r3,#2
-	addui	r3,r3,#TEXTSCR+$FFD00000
-	ldi		r1,#' '
-	bsr		AsciiToScreen
-	lhu		r4,NormAttr
-	or		r1,r1,r4
-.0001:
-	sh	    r1,[r3+r2*4]
-	subui   r2,r2,#1
-	bne	    r2,.0001
-	pop		r4
-    pop     r3
-    pop     r2
-    pop     r1
-	pop     lr
-	rtl
 
 	db	0
 msgStart:
@@ -1203,7 +841,11 @@ Monitor:
 ;	bsr		HomeCursor
 	ldi		r1,#msgMonitorStarted
 	bsr		DisplayStringCRLF
+	ldi		r1,#51
+	sc		r1,LEDS
 	sb		r0,KeybdEcho
+	ldi     r1,#JCB0
+	sb      r0,JCB_KeybdEcho[r1]
 	;ldi		r1,#7
 	;ldi		r2,#0
 	;ldi		r3,#IdleTask
@@ -1228,7 +870,8 @@ mon1:
 	bsr		OutChar
 	bra		.Prompt3
 .Prompt1:
-	sb		r0,CursorCol
+    bsr     GetJCBPtr
+	sb		r0,JCB_CursorCol[r1]
 	bsr		CalcScreenLoc
 	mov		r3,r1
 	bsr		MonGetch
@@ -1477,8 +1120,12 @@ doJump:
 
 doDate:
 	bsr		MonGetch		; skip over 'T'
+	cmp     r5,r1,#'B'
+	beq     r5,doDebug
 	cmp		r5,r1,#'A'		; look for DAY
 	beq		r5,doDay
+	cmp     r5,r1,#'T'
+	bne     r5,doDisassem
 	bsr		ignBlanks
 	bsr		MonGetch
 	cmp		r5,r1,#'?'
@@ -1516,6 +1163,27 @@ doDay:
 	ldi		r2,#$03			; register 3
 	bsr		I2C_WRITE
 	bra		mon1
+
+doDisassem:
+    subui   r3,r3,#4
+    bsr     ignBlanks
+    bsr     GetHexNumber
+    subu    r1,r1,#32
+    push    r1
+    addu    r1,r1,#32
+    push    r1
+    bsr     disassem20
+    addui   sp,sp,#16
+    bra     mon1
+
+doDebug:
+   bsr   ignBlanks
+   bsr   GetHexNumber
+   push  #0
+   push  r1
+   bsr   debugger
+   addui sp,sp,#16
+   bra   mon1
 
 ;------------------------------------------------------------------------------
 ; Display memory pointed to by r2.
@@ -1703,6 +1371,8 @@ msgErr:
 msgHelp:
 	db		"? = Display Help",CR,LF
 	db		"CLS = clear screen",CR,LF
+	db      "D = disassemble",CR,LF
+	db      "DB = start debugger",CR,LF
 	db		"DT = set/read date",CR,LF
 	db		"FB = fill memory",CR,LF
 	db		"MB = dump memory",CR,LF
@@ -1945,6 +1615,35 @@ KeybdInit:
 KeybdGetStatus:
 	lb		r1,KEYBD+1
 	rtl
+    push    r2
+    lbu     r2,TCB_hJCB[tr]
+    cmp     r1,r2,#NR_JCB
+    bge     r1,.0001
+    mulu    r2,#JCB_Size
+    addui   r2,r2,#JCB_Array
+    push    r3
+    push    r4
+    push    lr
+    bsr     LockSYS
+    lbu     r1,JCB_KeybdHead[r2]
+    lbu     r3,JCB_KeybdTail[r2]
+    bsr     UnlockSYS
+    cmpu    r4,r1,r3
+    beq     r4,.0002
+    ldi     r1,#-1
+    pop     lr
+    pop     r4
+    pop     r3
+    pop     r2
+    rtl
+.0002:
+    pop     lr
+    pop     r4
+    pop     r3
+.0001:
+    ldi     r1,#0   ; no scancode available
+    pop     r2
+    rtl
 
 ; Get the scancode from the keyboard port
 ;
@@ -1952,6 +1651,41 @@ KeybdGetScancode:
 	lbu		r1,KEYBD				; get the scan code
 	sb		r0,KEYBD+1				; clear receive register
 	rtl
+    push    r2
+    lbu     r2,TCB_hJCB[tr]
+    cmp     r1,r2,#NR_JCB
+    bge     r1,.0001
+    mulu    r2,#JCB_Size
+    addui   r2,r2,#JCB_Array
+    push    r3
+    push    r4
+    push    lr
+    bsr     LockSYS
+    lbu     r1,JCB_KeybdHead[r2]
+    lbu     r3,JCB_KeybdTail[r2]
+    cmpu    r4,r1,r3
+    beq     r4,.0002
+    lea     r4,JCB_KeybdBuffer[r2]
+    lbu     r1,[r4+r3]
+    addui   r3,r3,#1
+    and     r3,r3,#31 ; mod 32
+    sb      r3,JCB_KeybdTail[r2]
+    bsr     UnlockSYS
+    pop     lr
+    pop     r4
+    pop     r3
+    pop     r2
+    rtl
+.0002:
+    bsr     UnlockSYS
+    pop     lr
+    pop     r4
+    pop     r3
+.0001:
+    ldi     r1,#0   ; no scancode available
+    pop     r2
+    rtl
+
 
 ; Recieve a byte from the keyboard, used after a command is sent to the
 ; keyboard in order to wait for a response.
@@ -2013,7 +1747,7 @@ KeybdGetCharWait:
 	sb		r1,KeybdWaitFlag
 
 ;
-; Keystate2
+; KeyState2
 ; 876543210
 ; ||||||||+ = alt
 ; |||||||+- =
@@ -2236,6 +1970,62 @@ Wait10ms:
 	pop		r4
     pop     r3
 	rtl
+
+;------------------------------------------------------------------------------
+; KeybdIRQ
+;     Keyboard interrupt processing routine. Must be short.
+; Grab a scancode from the keyboard and place it into the keyboard buffer
+; for the job with the I/O focus.
+;------------------------------------------------------------------------------
+
+KeybdIRQ:
+    ldi     sp,#CPU0_IRQ_STACK
+    push    lr
+    push    r1
+    push    r2
+    push    r3
+    push    r4
+    lb      r1,KEYBD+1      ; get the keyboard status
+    bgt     r1,.0001        ; is there a scancode present ?
+	lbu		r1,KEYBD		; get the scan code
+	sb		r0,KEYBD+1		; clear receive register (acknowledges interrupt)
+	lw      r2,IOFocusNdx   ; get task with I/O focus
+	beq     r2,.0001
+    lb      r2,TCB_hJCB[r2] ; get JCB handle
+    cmpu    r3,r3,#NR_JCB   ; make sure valid handle
+    bge     r3,.0001
+    mulu    r2,r2,#JCB_Size ; and convert it to a pointer
+    addui   r2,r2,#JCB_Array
+    bsr     LockSYS
+    lbu     r3,JCB_KeybdHead[r2]  ; get head index of keyboard buffer
+    lbu     r4,JCB_KeybdTail[r2]  ; get tail index of keyboard buffer
+    addui   r3,r3,#1        ; advance head      
+    and     r3,r3,#31       ; mod 32
+    cmp     r5,r3,r4        ; is there room in the buffer ?
+    beq     r5,.0002        ; if not, newest chars will be lost
+    sb      r3,JCB_KeybdHead[r2]
+    lea     r2,JCB_KeybdBuffer[r2]
+    sb      r1,[r2+r3]      ; save off the scan code
+    bsr     UnlockSYS
+    lb      r2,KeyState2    ; check for ALT-tab
+    and     r2,r2,#1        ; is ALT down ?
+    beq     r2,.0001        
+    cmp     r2,r1,#SC_TAB
+    bne     r2,.0001
+    inc     iof_switch      ; flag an I/O focus switch
+.0001:
+    pop     r4
+    pop     r3
+    pop     r2
+	pop     r1
+	pop     lr
+    rti
+.0002:
+    bsr     UnlockSYS
+    bra     .0001
+KeybdIRQ1:
+    rti
+
 
 	;--------------------------------------------------------------------------
 	; PS2 scan codes to ascii conversion tables.
@@ -2736,6 +2526,22 @@ LoadFromSerial:
     bne     r3,.0001
     rts
 
+nmi_rout:
+    ldi    sp,#CPU0_IRQ_STACK
+    push   r1
+    lea    r1,msgParErr
+    bsr    DisplayStringCRLF
+    bsr    KeybdGetCharWait
+    pop    r1
+    rti
+
+nmi_rout1:
+    rti
+
+msgParErr:
+    db "Parity error",0
+    
+    align  4
 ;------------------------------------------------------------------------------
 ; Execution fault. Occurs when an attempt is made to execute code from a
 ; page marked as non-executable.
@@ -2781,10 +2587,20 @@ dwf_rout:
 ;------------------------------------------------------------------------------
 
 priv_rout:
+    lw      sp,TCB_SYS_Stack[tr]
 	ldi		r1,#$bc
 	sc		r1,LEDS
 	ldi		r1,#msgPriv
-	bsr		DisplayStringCRLF
+	bsr		DisplayString
+	mfspr   r1,epc
+	bsr     DisplayHalf
+	bsr     CRLF
+	bsr		KeybdGetCharWait
+	ldi     r1,#Monitor|1
+	mtspr   epc,r1
+	nop
+	nop
+	rte
 .0001:
 	bra .0001
 
@@ -2799,13 +2615,22 @@ msgdrf:
 msgdwf:
 	db	"dwf ",0
 msgPriv:
-	db	"priv fault",0
+	db	"priv fault: PC=",0
 msgUninit:
 	db	"uninit int.",0
 msgBusErr:
     db  CR,LF,"Bus error PC=",0
 msgEA:
     db  " EA=",0
+msgUninitIRQ:
+    db  "Uninitialized IRQ",0
+
+    align 4
+UninitIRQ:
+    ldi   r1,msgUninitIRQ
+    bsr   DisplayString
+.0001:
+    bra   .0001
 
 ;------------------------------------------------------------------------------
 ; Bus error routine.
@@ -2832,7 +2657,7 @@ berr_rout:
 	; Since this is a serious error the system is just restarted. So the IPC
 	; is set to point to the restart address.
 
-	ldi     r1,#start
+	ldi     r1,#start|1
 	mtspr   ipc,r1
 	
 	; Allow pipeline time for IPC to update before RTI (there's no results
@@ -2845,7 +2670,20 @@ berr_rout:
 SSM_ISR:
     rtd
 
-IBPT_ISR:
+; -----------------------------------------------------------------------------
+; Breakpoint routine.
+; -----------------------------------------------------------------------------
+
+BPT_ISR:
+    ldi      sp,#CPU0_DBG_STACK
+    mtspr    dbctrl,r0
+    mfspr    r1,dpc
+    and      r1,r1,#-2        ; clear LSB
+    push     r1
+    subui    r1,r1,#32
+    push     r1
+    bsr      disassem20
+	bsr		 KeybdGetCharWait
     rtd
 .0001:
     bra     .0001
@@ -2999,7 +2837,11 @@ sprite_demo_18:
 include "FMTK_Equates.inc"
 include "FMTK.s"
 include "iofocus.s"
-         
+include "stdio.s"
+include "ctype.s"
+include "disassem.s"
+include "debugger.s"
+
     nop
     nop
 

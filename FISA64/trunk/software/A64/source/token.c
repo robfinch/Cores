@@ -621,9 +621,26 @@ int NextToken()
                 inptr += 4;
                 return token = tk_db;
             }
+            if ((inptr[1]=='f' || inptr[1]=='F') && 
+                (inptr[2]=='e' || inptr[2]=='E') &&
+                (inptr[3]=='x' || inptr[3]=='X') &&
+                (inptr[4]=='t' || inptr[4]=='T') &&
+                 isspace(inptr[5])) {
+                inptr += 5;
+                return token = tk_bfext;
+            }
+            if ((inptr[1]=='f' || inptr[1]=='F') && 
+                (inptr[2]=='e' || inptr[2]=='E') &&
+                (inptr[3]=='x' || inptr[3]=='X') &&
+                (inptr[4]=='t' || inptr[4]=='T') &&
+                (inptr[5]=='u' || inptr[5]=='U') &&
+                 isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_bfextu;
+            }
             break;
 
-        // cas cmp cmpu code cli com
+        // cas chk cmp cmpu code cli com
         case 'c': case 'C':
              if ((inptr[1]=='m' || inptr[1]=='M') &&
                  (inptr[2]=='p' || inptr[2]=='P') &&
@@ -675,6 +692,12 @@ int NextToken()
                  isspace(inptr[3])) {
                  inptr += 3;
                  return token = tk_cas;
+             }
+             if ((inptr[1]=='h' || inptr[1]=='H') &&
+                 (inptr[2]=='k' || inptr[2]=='K') &&
+                 isspace(inptr[3])) {
+                 inptr += 3;
+                 return token = tk_chk;
              }
              break;
 

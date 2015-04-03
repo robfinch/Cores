@@ -5,10 +5,8 @@ pascal void putch(char ch)
 	asm {
         push    r6
 		lw		r1,24[bp]
-		ldi     r6,#5    ; OutChar function
-        sys     #10
-        ldi     r1,#$1234
-        sc      r1,LEDS
+		ldi     r6,#14    ; Teletype output function
+        sys     #410      ; Video BIOS call
         pop     r6
 	}
 }
@@ -99,8 +97,8 @@ pascal void putstr2(char *p)
     asm {
         push    r6
         lw      r1,24[bp]
-        ldi     r6,#15   ; BIOS DisplayString16 function
-        sys     #10
+        ldi     r6,#$1B   ; Video BIOS DisplayString16 function
+        sys     #410
         pop     r6
     }
 }

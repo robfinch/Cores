@@ -172,6 +172,47 @@ static int getRegisterX()
 }
 
 
+static int getBoundsRegister()
+{
+    int reg;
+
+    while(isspace(*inptr)) inptr++;
+    switch(*inptr) {
+    case 'b': case 'B':
+         if (isdigit(inptr[1])) {
+             reg = inptr[1]-'0';
+             if (isdigit(inptr[2])) {
+                 reg = 10 * reg + (inptr[2]-'0');
+                 if (isdigit(inptr[3])) {
+                     reg = 10 * reg + (inptr[3]-'0');
+                     if (isIdentChar(inptr[4]))
+                         return -1;
+                     inptr += 4;
+                     NextToken();
+                     return reg;
+                 }
+                 else if (isIdentChar(inptr[3]))
+                     return -1;
+                 else {
+                     inptr += 3;
+                     NextToken();
+                     return reg;
+                 }
+             }
+             else if (isIdentChar(inptr[2]))
+                 return -1;
+             else {
+                 inptr += 2;
+                 NextToken();
+                 return reg;
+             }
+         }
+         else return -1;
+    }
+    return -1;
+}
+
+
 // ----------------------------------------------------------------------------
 // Get the friendly name of a special purpose register.
 // ----------------------------------------------------------------------------
@@ -183,6 +224,19 @@ static int FISA64_getSprRegister()
     while(isspace(*inptr)) inptr++;
     switch(*inptr) {
 
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+         NextToken();
+         NextToken();
+         return ival;
 
     // bear
     case 'b': case 'B':
@@ -548,6 +602,36 @@ static int emitImm15(int64_t v, int force)
 }
 
 // ---------------------------------------------------------------------------
+// bfextu r1,r2,#1,#63
+// ---------------------------------------------------------------------------
+
+static void process_bitfield(int oc)
+{
+    int Ra;
+    int Rt;
+    int mb;
+    int me;
+
+    Rt = getRegisterX();
+    need(',');
+    Ra = getRegisterX();
+    need(',');
+    NextToken();
+    mb = expr();
+    need(',');
+    NextToken();
+    me = expr();
+    emit_insn(
+        (oc << 29) |
+        (me << 23) |
+        (mb << 17) |
+        (Rt << 12) |
+        (Ra << 7) |
+        0x03          // bitfield
+    );
+}
+
+// ---------------------------------------------------------------------------
 // sys 4
 // ---------------------------------------------------------------------------
 
@@ -565,6 +649,31 @@ static void process_brk(int oc)
         (30 << 7) |
         0x38
     );
+}
+
+// ----------------------------------------------------------------------------
+// chk r1,r2,b32
+// ----------------------------------------------------------------------------
+
+static void process_chk(int oc)
+{
+     int Ra;
+     int Br;
+     int Rt;
+     
+     Rt = getRegisterX();
+     need(',');
+     Ra = getRegisterX();
+     need(',');
+     Br = getBoundsRegister();
+     emit_insn(
+         (oc << 25) |
+         (Br << 17) |
+         (Rt << 12) |
+         (Ra << 7) |
+         0x02
+     );
+     prevToken();
 }
 
 // ---------------------------------------------------------------------------
@@ -1827,6 +1936,7 @@ void FISA64_processMaster()
         case tk_asr:  process_rrop(0x34); break;
         case tk_asri: process_shifti(0x3C); break;
         case tk_beq: process_bcc(BCC(0)); break;
+        case tk_bfextu: process_bitfield(6); break;
         case tk_bge: process_bcc(BCC(3)); break;
         case tk_bgt: process_bcc(BCC(2)); break;
         case tk_ble: process_bcc(BCC(5)); break;
@@ -1849,6 +1959,7 @@ void FISA64_processMaster()
             segment = bssseg;
             break;
         case tk_cas: process_load(0x6C); break;
+        case tk_chk: process_chk(0x1A); break;
         case tk_cli: process_pctrl(0); break;
         case tk_cmp: process_rrop(0x06); break;
         case tk_cmpu: process_rrop(0x16); break;

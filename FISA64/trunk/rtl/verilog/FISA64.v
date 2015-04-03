@@ -59,6 +59,7 @@
 `define MULU	7'h17
 `define DIVU	7'h18
 `define MODU	7'h19
+`define CHK			7'h1A
 `define MTSPR		7'h1E
 `define MFSPR		7'h1F
 `define SEQ		7'h20
@@ -171,7 +172,9 @@
 `define DBAD3		8'd53
 `define DBCTRL		8'd54
 `define DBSTAT		8'd55
-
+`define LBOUND		8'b01xxxxxx
+`define UBOUND		8'b10xxxxxx
+`define MMASK		8'b11xxxxxx
 `define BRK_DBZ	{6'd0,9'd488,5'd0,5'h1E,`BRK}
 `define BRK_OFL	{6'd0,9'd489,5'd0,5'h1E,`BRK}
 `define BRK_TAP	{2'b01,4'd0,9'd494,5'd0,5'h1E,`BRK}
@@ -272,6 +275,9 @@ reg [49:0] clk_throttle_new;
 reg [63:0] dbctrl,dbstat;	// debug control, debug status
 reg [AMSB:0] dbad0,dbad1,dbad2,dbad3;	// debug address
 reg [AMSB:0] bear;			// bus error address register
+reg [63:0] lbound [31:0];	// lower bound register
+reg [63:0] ubound [31:0];	// upper bound register
+reg [63:0] mmask [31:0];	// modulo mask register
 wire ssm = dbctrl[63];		// single step mode
 reg km;						// kernel mode
 reg [63:0] cr0;
@@ -279,6 +285,8 @@ wire pe = cr0[0];			// protected mode enabled
 wire bpe = cr0[32];			// branch predictor enable
 wire ice = cr0[30];			// instruction cache enable
 wire rb = cr0[36];
+wire ovf_xe = cr0[40];		// overflow exception enable
+wire dbz_xe = cr0[41];		// divide by zero exception enable
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
 reg tapi1;
@@ -310,7 +318,7 @@ wire [4:0] Rc = ir[16:12];
 reg [4:0] xRt,mRt,wRt,tRt,uRt;
 reg xRt2,wRt2,tRt2;
 reg [63:0] rfoa,rfob,rfoc;
-reg [63:0] res,res2,ea,xres,mres,wres,lres,md_res,wres2,tres,ures;
+reg [63:0] res,res2,ea,xres,mres,wres,lres,md_res,wres2,tres,tres2,ures;
 reg mc_done;
 always @*
 case(Ra)
@@ -323,7 +331,9 @@ uRt:	rfoa <= ures;
 			rfoa <= res2;
 		else if (wRt2)
 			rfoa <= wres2;
-		else
+		else if (tRt2)
+			rfoa <= tres2;
+		else 
 			rfoa <= sp;
 default:	rfoa <= regfile[Ra];
 endcase
@@ -338,6 +348,8 @@ uRt:	rfob <= ures;
 			rfob <= res2;
 		else if (wRt2)
 			rfob <= wres2;
+		else if (tRt2)
+			rfob <= tres2;
 		else
 			rfob <= sp;
 default:	rfob <= regfile[Rb];
@@ -353,6 +365,8 @@ uRt:	rfoc <= ures;
 			rfoc <= res2;
 		else if (wRt2)
 			rfoc <= wres2;
+		else if (tRt2)
+			rfoc <= tres2;
 		else
 			rfoc <= sp;
 default:	rfoc <= regfile[Rc];
@@ -454,11 +468,13 @@ wire dbg16_cyc,dbg16_stb,dbg16_we;
 wire [23:0] dbg16_adr;
 wire [15:0] dbg16_dato;
 reg [15:0] dbg16_dati;
-wire [15:0] dbg_ramoL,dbg_ramoH,dbg16_insn;
+wire [15:0] dbg_ramoL,dbg_ramoH,dbg16_insn,dr16_dato;
 wire [7:0] dbg_ser_dato;
-wire cs_dbg_iram = dbg16_cyc && dbg16_stb && dbg16_adr[15:12]==4'hF;	// places ram at $F000
+wire cs_dbg_iram = dbg16_cyc && dbg16_stb && dbg16_adr[23:12]==12'h00F;	// places ram at $F000
 wire cs_dbg_irom = dbg16_cyc && dbg16_stb && dbg16_adr[23:16]==8'h1;	// places rom at $10000
-wire cs_dbg_pio =  dbg16_cyc && dbg16_stb && dbg16_adr[15:8]==4'hD0;	// Uart is at $E000
+wire cs_dbg_pio =  dbg16_cyc && dbg16_stb && dbg16_adr[23:8]==16'h00D0;	// Uart is at $E000
+wire cs_dbg_dram = dbg16_cyc && dbg16_stb && dbg16_adr[23:15]==9'h000;	// readback ram at $0000 to $3FFF
+wire cs_cpu_dram = cyc_o && stb_o && adr_o[AMSB:16]==16'hFFE0;
 
 always @(posedge clk_i)
 if (rst)
@@ -478,6 +494,8 @@ always @*
 		dbg16_dati <= dbg_ramoH;
 	else if (cs_dbg_irom)
 		dbg16_dati <= dbg16_insn;
+	else if (cs_dbg_dram)
+		dbg16_dati <= dr16_dato;
 	else
 		dbg16_dati <= dbg_ser_dato;
 
@@ -490,7 +508,7 @@ else begin
 	end
 end
 
-assign dbg16_acki = dbg_ram_ack|dbg_rom_ack|dbg_ser_ack;
+assign dbg16_acki = dbg_ram_ack|dbg_rom_ack|dbg_ser_ack|cs_dbg_dram;
 
 FISA64_debug_iram u8
 (
@@ -515,6 +533,20 @@ FISA64_debug_iram u9
 	.pc(pc),
 	.insn(dbg_insn[31:16])
 );
+
+FISA64_debug_dram
+(
+	.wclk(clk),
+	.rwa(adr_o[13:0]),
+	.wr(we_o && cs_cpu_dram),
+	.sel(sel_o),
+	.i(dat_o),
+	.o(),
+	.rclk(clk3x_i),
+	.ea(dbg16_adr[13:0]),
+	.dat(dr16_dato)
+);
+
 
 FISA64_debug_rom u10
 (
@@ -777,6 +809,23 @@ FISA64_bitfield u3
 	.masko()
 );
 
+wire [63:0] lb;
+wire [63:0] ub;
+wire [63:0] mm;
+wire isMtBounds = x1opcode==`RR && x1funct==`MTSPR;
+
+bounds_reg u8
+(
+	.clk(clk),
+	.a({xir[24:23],km&xir[22],xir[21:17]}),
+	.wr(advanceEX && isMtBounds),
+	.i(a),
+	.lb(lb),
+	.ub(ub),
+	.mm(mm)
+);
+
+
 always @*
 case(x1opcode)
 `BSR:	res <= xpc + 64'd4;
@@ -800,7 +849,7 @@ case(x1opcode)
 	case(x1funct)
 	`MFSPR:
 		if (km) begin
-			case(xir[24:17])
+			casex(xir[24:17])
 			`CR0:		res <= cr0;
 			`TICK:		res <= tick;
 			`CLK:		res <= clk_throttle_new;
@@ -824,13 +873,19 @@ case(x1opcode)
 			`DBAD2:		res <= dbad2;
 			`DBAD3:		res <= dbad3;
 			`DBSTAT:	res <= dbstat;
+			`LBOUND:	res <= lbound[xir[21:17]];
+			`UBOUND:	res <= ubound[xir[21:17]];
+			`MMASK:		res <= mmask[xir[21:17]];
 			default:	res <= 64'd0;
 			endcase
 		end
 		else begin
-			case(xir[24:17])
+			casex(xir[24:17])
 			`MYSTREG:	res <= mystreg;
 			`MULH:		res <= p[127:64];
+			`LBOUND:	res <= lbound[{1'b0,xir[20:17]}];
+			`UBOUND:	res <= ubound[{1'b0,xir[20:17]}];
+			`MMASK:		res <= mmask[{1'b0,xir[20:17]}];
 			default:	res <= 64'd0;
 			endcase
 		end
@@ -872,6 +927,7 @@ case(x1opcode)
 		4'd8:	res <= 1;
 		default:	res <= 64'h0;
 		endcase
+	`CHK:	res <= (a >= lb && a < ub && (a & mm)==64'd0);
 	default:	res <= 64'd0;
 	endcase
 `BTFLD:	res <= btfldo;
@@ -969,6 +1025,8 @@ if (rst_i) begin
 	cr0[30] <= TRUE;	// instruction cache enable
 	cr0[32] <= TRUE;	// branch predictor enable
 	cr0[36] <= FALSE;	// store successful bit
+	cr0[40] <= FALSE;	// overflow exception enable
+	cr0[41] <= FALSE;	// divide by zero exception enable
 end
 else begin
 utg <= FALSE;
@@ -1228,7 +1286,7 @@ begin
 			case(xfunct)
 			`MTSPR:
 				if (km) begin
-					case(xir[24:17])
+					casex(xir[24:17])
 					`CR0:		cr0 <= a;
 					`DBPC:		dbpc <= a;	// need the LSB's !!!
 					`EPC:		epc <= a;
@@ -1256,11 +1314,17 @@ begin
 					`DBAD1:		dbad1 <= a;
 					`DBAD2:		dbad2 <= a;
 					`DBAD3:		dbad3 <= a;
+					`LBOUND:	lbound[xir[21:17]] <= a;
+					`UBOUND:	ubound[xir[21:17]] <= a;
+					`MMASK:		mmask[xir[21:17]] <= a;
 					endcase
 				end
 				else begin
-					case(xir[24:17])
+					casex(xir[24:17])
 					`MYSTREG:	mystreg <= a;
+					`LBOUND:	lbound[{1'b0,xir[20:17]}] <= a;
+					`UBOUND:	ubound[{1'b0,xir[20:17]}] <= a;
+					`MMASK:		mmask[{1'b0,xir[20:17]}] <= a;
 					default:	privilege_violation();
 					endcase
 				end
@@ -1299,14 +1363,14 @@ begin
 					endcase
 				else
 					privilege_violation();
-			`ADD:	if (fnASOverflow(0,a[63],b[63],res[63]))
+			`ADD:	if (fnASOverflow(0,a[63],b[63],res[63]) && ovf_xe)
 						overflow();
-			`SUB:	if (fnASOverflow(1,a[63],b[63],res[63]))
+			`SUB:	if (fnASOverflow(1,a[63],b[63],res[63]) && ovf_xe)
 						overflow();
 			endcase
-		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]))
+		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]) && ovf_xe)
 					overflow();
-		`SUB:	if (fnASOverflow(1,a[63],imm[63],res[63]))
+		`SUB:	if (fnASOverflow(1,a[63],imm[63],res[63]) && ovf_xe)
 					overflow();
 		`BSR,`BRA:	;//update_pc(xpc + imm); done already in IF
 		`JAL:		update_pc(a + {imm,2'b00});
@@ -1348,6 +1412,8 @@ begin
 		if (wRt2) begin
 			gie <= TRUE;
 			sp <= wres2;
+			tRt2 <= wRt2;
+			tres2 <= wres2;
 		end
 		if (wRt==regSP)	begin // write to SP globally enables interrupts
 			gie <= TRUE;
@@ -1597,7 +1663,7 @@ MULDIV:
 					q <= pa[62:0];
 					r <= pa[63];
 					res_sgn <= a[63] ^ b[63];
-					if (b==64'd0)
+					if (b==64'd0 && dbz_xe)
 						divide_by_zero();
 					else
 						next_state(DIV);
@@ -1613,7 +1679,7 @@ MULDIV:
 // Three wait states for the multiply to take effect. These are needed at
 // higher clock frequencies. The multipler is a multi-cycle path that
 // requires a timing constraint.
-MULT1:	state <= MULT2;
+MULT1:	state <= MULT3;
 MULT2:	state <= MULT3;
 MULT3:	begin
 			p <= p1;
@@ -2443,6 +2509,9 @@ begin
 		case(insn[31:25])
 		`PCTRL:
 			case(insn[21:17])
+			`CLI:	$display("CLI");
+			`SEI:	$display("SEI");
+			`WAI:	$display("WAI");
 			`RTI:	$display("RTI");
 			`RTE:	$display("RTE");
 			`RTD:	$display("RTD");
@@ -2455,6 +2524,9 @@ begin
 		`BEQ:	$display("BEQ r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
 		`BNE:	$display("BNE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
 		`BLT:	$display("BLT r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
+		`BGT:	$display("BGT r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
+		`BLE:	$display("BLE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
+		`BGE:	$display("BGE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
 		endcase
 	`BRK:	$display("BRK %d %s", insn[25:17], insn[31:30]==2'b00 ? "SWE" : insn[31:30]==2'b01 ? "DBG" : "HWI");
 	`LB:	$display("LB r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
@@ -2504,6 +2576,55 @@ assign o = iram[rrwa[11:1]];
 always @(posedge rclk)
 	rpc <= pc;
 assign insn = iram[rpc[11:1]];
+
+endmodule
+
+module FISA64_debug_dram(wclk, rwa, wr, sel, i, o, rclk, ea, dat);
+input wclk;
+input [13:0] rwa;
+input wr;
+input [7:0] sel;
+input [63:0] i;
+output [63:0] o;
+input rclk;
+input [13:0] ea;
+output reg [15:0] dat;
+
+reg [7:0] mem0 [2047:0];
+reg [7:0] mem1 [2047:0];
+reg [7:0] mem2 [2047:0];
+reg [7:0] mem3 [2047:0];
+reg [7:0] mem4 [2047:0];
+reg [7:0] mem5 [2047:0];
+reg [7:0] mem6 [2047:0];
+reg [7:0] mem7 [2047:0];
+
+always @(posedge wclk)
+begin
+	if (wr & sel[0]) mem0[rwa[13:3]] <= i[ 7: 0];
+	if (wr & sel[1]) mem0[rwa[13:3]] <= i[15: 8];
+	if (wr & sel[2]) mem0[rwa[13:3]] <= i[23:16];
+	if (wr & sel[3]) mem0[rwa[13:3]] <= i[31:24];
+	if (wr & sel[4]) mem0[rwa[13:3]] <= i[39:32];
+	if (wr & sel[5]) mem0[rwa[13:3]] <= i[47:40];
+	if (wr & sel[6]) mem0[rwa[13:3]] <= i[55:48];
+	if (wr & sel[7]) mem0[rwa[13:3]] <= i[63:56];
+end
+reg [13:0] rrwa;
+always @(posedge wclk)
+	rrwa <= rwa;
+assign o = {mem7[rrwa[13:3]],mem6[rrwa[13:3]],mem5[rrwa[13:3]],mem4[rrwa[13:3]],mem3[rrwa[13:3]],mem2[rrwa[13:3]],mem1[rrwa[13:3]],mem0[rrwa[13:3]]};
+reg [12:0] rea;
+always @(posedge rclk)
+	rea <= ea;
+wire [63:0] dat1 = {mem7[rea[13:3]],mem6[rea[13:3]],mem5[rea[13:3]],mem4[rea[13:3]],mem3[rea[13:3]],mem2[rea[13:3]],mem1[rea[13:3]],mem0[rea[13:3]]};
+always @(rea,dat1)
+case(rea[2:1])
+2'd0:	dat <= dat1[15: 0];
+2'd1:	dat <= dat1[31:16];
+2'd2:	dat <= dat1[47:32];
+2'd3:	dat <= dat1[63:48];
+endcase
 
 endmodule
 
@@ -2806,6 +2927,32 @@ default:	res <= 64'd0;
 endcase
 
 endmodule
+
+module bounds_reg(clk, a, wr, i, lb, ub, mm);
+input clk;
+input [7:0] a;
+input wr;
+input [63:0] i;
+output [63:0] lb;
+output [63:0] ub;
+output [63:0] mm;
+
+reg [63:0] lbound [63:0];
+reg [63:0] ubound [63:0];
+reg [63:0] mmask [63:0];
+
+always @(posedge clk)
+begin
+	if (wr && a[7:6]==2'b01) lbound [a[5:0]] <= i;
+	if (wr && a[7:6]==2'b10) ubound [a[5:0]] <= i;
+	if (wr && a[7:6]==2'b11) mmask [a[5:0]] <= i;
+end
+assign lb = lbound[a[5:0]];
+assign ub = ubound[a[5:0]];
+assign mm = mmask[a[5:0]];
+
+endmodule
+
 /*
 module FISA64_bypass_mux(Rn, xRt, wRt, tRt, uRt, regSP, xres, wres, tres, ures, rfo, o);
 input [4:0] Rn;

@@ -106,7 +106,8 @@ char CvtScreenToAscii(unsigned short int sc)
 {
      asm {
          lw    r1,24[bp]
-         bsr   ScreenToAscii
+         ldi   r6,#$21         ; screen to ascii
+         sys   #410
      }
 }
 

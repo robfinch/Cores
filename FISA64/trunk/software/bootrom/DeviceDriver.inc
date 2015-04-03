@@ -41,7 +41,7 @@ DCB_Mbx				EQU		0x48
 DCB_pSema			EQU		0x50		; pointer to device semaphore
 DCB_Resv1			EQU		0x58		; reserved
 DCB_Resv2			EQU		0x60		; reserved
-DCB_SIZE			EQU		0x68
+DCB_Size			EQU		0x68
 
 ; Device command opcodes
 ;
