@@ -349,7 +349,15 @@ start:
     cpuid   r1,r0,#0
     beq     r1,CPU0_Start
 CPU1_Start:
-    ldi     sp,#CPU1_STACK
+    ldi     sp,#STACKS_Array+4096+4088
+    ldi     tr,#TCB_Array+TCB_Size
+	sw      sp,TCB_ISP[tr]
+	sw      sp,TCB_r30[tr]
+	ldi     r1,#BIOS_STACKS_Array+4096+4088  ; so we can call the BIOS during startup
+	sw      r1,TCB_BIOS_Stack[tr]
+	ldi     r1,#SYS_STACKS_Array+4096+4088  ; so we can call the BIOS during startup
+	sw      r1,TCB_SYS_Stack[tr]
+	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
     bsr     SetupIntVectors1
 	bsr		InitPIC1
 	; Wait for CPU #0 to complete FMTK initialization before proceeding.
@@ -375,12 +383,14 @@ CPU0_Start:
 	ldi     tr,#TCB_Array               ; load task register with BIOS task
 	sw      sp,TCB_ISP[tr]
 	sw      sp,TCB_r30[tr]
-	ldi     r1,#CPU0_BIOS_STACK         ;BIOS_STACKS_Array+4088  ; so we can call the BIOS during startup
+	ldi     r1,#BIOS_STACKS_Array+4088  ; so we can call the BIOS during startup
 	sw      r1,TCB_BIOS_Stack[tr]
+	ldi     r1,#SYS_STACKS_Array+4088  ; so we can System Call during startup
+	sw      r1,TCB_SYS_Stack[tr]
 	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
 	bsr     GetJCBPtr
 	sw      r1,IOFocusNdx               ; The screen routines check this var
-	ldi     r2,#$FFD00000
+	ldi     r2,#TEXTSCR
 	sw      r2,JCB_pVidMem[r1]          ; point JCB#0 to real screen
 	ldi		r4,#%000000100_110101110_0000000000	; grey on blue
 	sh		r4,JCB_NormAttr[r1]
@@ -393,8 +403,9 @@ CPU0_Start:
 	sw		r0,Milliseconds
 	ldi     r1,#-1
 	sw      r1,API_sema
-	sw      r0,BIOS_sema
 	sw      r0,BIOS1_sema
+	bsr     UnlockBIOS
+	bsr     UnlockVideoBIOS
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
 	sb		r0,KeybdBad
@@ -428,8 +439,8 @@ CPU0_Start:
 	ldi     r3,#BIOSCallTask|1   ; start address (start in kernel mode)
 	ldi     r4,#0                ; start parameter
 	ldi     r5,#0                ; owning job
-;	sys     #FMTK_CALL
-;	dh      1                    ; start task function
+	sys     #FMTK_CALL
+	dh      1                    ; start task function
     bsr     DumpTaskList
 	bra		Monitor
 
@@ -629,7 +640,7 @@ UnlockBIOS:
     lea     r1,BIOS_sema
     bsr     UnlockSema
     pop     r1
-    rtl
+    rts
 
 LockBIOS1:
     push    lr

@@ -27,11 +27,14 @@ support this resolution in order to display correctly.</p>
 <p>There are two indicators on-screen that flash. The first one indicates that 
 timer IRQ's are happening. The second one indicates that CPU#1 is running in 
 addition to CPU#0.</p>
+<p><font color="#FFFF00">It may be necessary to press the reset switch several 
+times in order to get the core to reset properly. There is something flaky about 
+the reset process.</font></p>
 <p><font size="4">Boot Strapping</font></p>
 <p>The LoadFromSerial port routine can be invoked by typing:</p>
-<p>&nbsp;&nbsp;&nbsp; J 12568</p>
+<p>&nbsp;&nbsp;&nbsp; J 12568 (this has changed)</p>
 <p>in the monitor.</p>
-<p>It will then load a 16k program into the system's memory at address $20000. 
+<p>It will then load a 16k program into the system's memory at address $24000. 
 Note address $20000 to $20007 cannot be used for code at the moment as that's 
 also the variable for the flashing display. So any file will need eight bytes 
 padding.</p>

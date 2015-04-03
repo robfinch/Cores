@@ -72,15 +72,18 @@ InitFMTK:
 	; Manually setup the BIOS task
 	; FMTK can't be called to setup the first task because it uses the
 	; SYS_STACK associated with the running task which hasn't been set yet.
-	cpuid   tr,r0,#0
-	asli    tr,tr,#TCB_LogSize
+	cpuid   r2,r0,#0
+	asli    tr,r2,#TCB_LogSize
 	addui   tr,tr,#TCB_Array
 	sw		r0,TCB_NextTo[tr]
 	sw		r0,TCB_PrevTo[tr]
 	sb      r0,TCB_hJCB[tr]         ; system JOB owns this TCB
+	asl     r2,r2,#12               ; size of stack
 	ldi     r1,#SYS_STACKS_Array + 4088
+	addu    r1,r1,r2
 	sw      r1,TCB_SYS_Stack[tr]
 	ldi     r1,#BIOS_STACKS_Array + 4088
+	addu    r1,r1,r2
 	sw      r1,TCB_BIOS_Stack[tr]
 	ldi		r1,#3
 	sc		r1,TCB_Priority[tr]
@@ -88,7 +91,8 @@ InitFMTK:
 	sb      r1,TCB_Affinity[tr]
 	sw		r0,TCB_Timeout[tr]
 	ldi     r1,#STACKS_Array+$FF8   ; setup stack pointer top of memory
-	sw		r1,TCB_r31[tr]
+	addu    r1,r1,r2
+	sw		r1,TCB_r30[tr]
 
     lw      r1,FMTK_Inited
     cmp     r1,r1,#$12345678
@@ -281,14 +285,6 @@ st4:
 
     bsr     UnlockSYS
  
-	ldi		r1,#0          ; priority
-	ldi		r2,#1          ; processor #1
-	ldi		r3,#CPU1_Start|1 ; start address
-	ldi     r4,#0          ; start parameter (NULL)
-	ldi     r5,#0          ; r5 = job handle of owning job
-	sys     #FMTK_CALL
-	dh      1              ; start task
-
 	ldi		r1,#7          ; priority
 	ldi		r2,#0          ; processor #0
 	ldi		r3,#IdleTask|1 ; start address (start in kernel mode)
@@ -304,18 +300,6 @@ st4:
     rts
 
 ;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
-StartIdleTask:
-    push    lr
-	ldi		r1,#7          ; priority
-	ldi		r2,#0
-	ldi		r3,#IdleTask   ; start address
-	ldi     r4,#0          ; start parameter (NULL)
-	ldi     r5,#0          ; r5 = job handle of owning job
-	bsr		StartTask
-	rts
-
-;------------------------------------------------------------------------------
 ; IdleTask
 ;
 ; IdleTask is a low priority task that is always running. It runs when there
@@ -326,7 +310,7 @@ IdleTask:
 it3:
     ldi     r2,#TCB_Array
 it2:
-;	inc		TEXTSCR+444		; increment IDLE active flag
+	inc		TEXTSCR+228,#1	; increment IDLE active flag
 	cmpu    r1,r2,#TCB_Array
 	beq		r1,it1
 	lb		r1,TCB_Status[r2]
@@ -336,12 +320,12 @@ it2:
 ;	sys		#4				; KillTask function
 ;	dh		3
 it1:
+	wai						; wait for interrupt to happen
     addui   r2,r2,#TCB_Size
     cmpu    r1,r2,#TCB_ArrayEnd-TCB_Size
     blt     r1,it2
     bra     it3
 	cli						; enable interrupts
-	wai						; wait for one to happen
 	bra		it2
 
 ;------------------------------------------------------------------------------
@@ -404,6 +388,16 @@ UnlockSYS:
 ;------------------------------------------------------------------------------
 ; Lock the semaphore.
 ;
+; Occasionally the semaphore fails to lock correctly and the system hangs up
+; waiting for the semaphore lock. This could be because the SWCR works but
+; cr0 doesn't get updated, or the bfextu instruction fails?? So the lock is
+; tested to see if the current task is the one holding the lock. If same task
+; that holds the lock is attempting a new lock, then we just return and assume
+; a successful lock. The problem with this approach is if the task attempts a
+; lock both while running and during an interrupt routine. The resource wouldn't
+; be corectly protected in that case. So no BIOS calls during interrupt
+; routines! The BIOS isn't re-entrant.
+;
 ; Parameters:
 ; r1 = address of semaphore to lock
 ;------------------------------------------------------------------------------
@@ -418,10 +412,14 @@ LockSema:
 .0001:
     lwar    r3,[r1]
     beq     r3,.0003            ; branch if free
+    cmpu    r2,r3,tr            ; test if already locked by this task
+    beq     r2,.0002
     chk     r2,r3,b48           ; check if locked by a valid task
     bne     r2,.0001
 .0003:
     swcr    tr,[r1]             ; try and lock it
+    nop                         ; cr0 needs time to update???
+    nop
     mfspr   r3,cr0
     bfextu  r3,r3,#36,#36       ; status is bit 36 of cr0
     beq     r3,.0001            ; lock failed, go try again
@@ -575,6 +573,9 @@ ExitTask:
 	; - mailboxes
 	; - messages
 ;	hoff
+    lea     r1,msgExitingTask
+    bsr     DisplayString
+    mov     r1,tr
     bsr     LockSYS
 	bsr		RemoveTaskFromReadyList
 	sb		r0,TCB_Status[tr]				; set task status to TS_NONE
@@ -596,6 +597,9 @@ xtsk6:
 	wai
 xtsk1:
 	bra     xtsk1
+
+msgExitingTask:
+    db    "Exiting task", CR,LF,0
 
 ;------------------------------------------------------------------------------
 ; KillTask
@@ -795,20 +799,18 @@ AddTaskToReadyList:
     push    r2
     push    r3
     push    r4
-;    bsr     ValidateTCBPtr
-    chk     r2,r1,b48
+    chk     r2,r1,b48             ; validate TCB pointer
     beq     r2,.0001
 	ldi     r2,#TS_READY
 	sb		r2,TCB_Status[r1]
 	lb		r3,TCB_Priority[r1]
-	cmp		r4,r3,#8
+	cmpu	r4,r3,#8
 	blt		r4,.0002
 	ldi		r3,#PRI_LOWEST
 .0002:
     mov     r4,r1
     asl     r3,r3,#3
 	lw		r1,QNdx0[r3]
-;	bsr     ValidateTCBPtr
 	chk     r3,r1,b48
 	beq		r3,.0003
 	lw		r3,TCB_PrevRdy[r1]
@@ -816,17 +818,14 @@ AddTaskToReadyList:
 	sw		r3,TCB_PrevRdy[r4]
 	sw		r4,TCB_PrevRdy[r1]
 	sw		r1,TCB_NextRdy[r4]
-.0001:
-	pop     r4
-	pop     r3
-	pop     r2
-	rts
+	bra     .0001
 
 	; Here the ready list was empty, so add at head
 .0003:
 	sw		r4,QNdx0[r3]
 	sw		r4,TCB_NextRdy[r4]
 	sw		r4,TCB_PrevRdy[r4]
+.0001:
 	pop     r4
 	pop     r3
 	pop     r2
@@ -851,9 +850,7 @@ RemoveTaskFromReadyList:
     push    r3
 	push	r4
 	push	r5
-
-;    bsr     ValidateTCBPtr
-    chk     r2,r1,b48
+    chk     r2,r1,b48           ; validate TCB pointer
     beq     r2,rfr2
 	lb		r3,TCB_Status[r1]	; is the task on the ready list ?
 	and		r4,r3,#TS_READY|TS_RUNNING
@@ -865,6 +862,7 @@ RemoveTaskFromReadyList:
 	sw		r4,TCB_NextRdy[r5]
 	sw		r5,TCB_PrevRdy[r4]
 	lb		r3,TCB_Priority[r1]
+	and     r3,r3,#7            ; 0-7
 	asl     r3,r3,#3
 	lw      r5,QNdx0[r3]
 	cmp		r5,r1,r5			; Are we removing the QNdx task ?
@@ -872,10 +870,11 @@ RemoveTaskFromReadyList:
 	sw		r4,QNdx0[r3]
 	; Now we test for the case where the task being removed was the only one
 	; on the ready list of that priority level. We can tell because the
-	; NxtRdy would point to the task itself.
+	; NextRdy would point to the task itself.
 	cmp		r5,r4,r1				
-	bne		r5,rfr2
+	bne		r5,rfr1
 	sw		r0,QNdx0[r3]        ; Make QNdx NULL
+rfr1:
 	sw		r0,TCB_NextRdy[r1]
 	sw		r0,TCB_PrevRdy[r1]
 rfr2:
@@ -883,7 +882,6 @@ rfr2:
 	pop		r4
 	pop     r3
 	pop     r2
-rfr1:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -1988,8 +1986,10 @@ FMTKTick:
     chk     r2,r1,b48
     bne     r2,.cantLockSYS
     swcr    tr,sys_sema
+    nop
+    nop
     mfspr   r1,cr0
-    and     r1,r1,#1000000000
+    bfextu  r1,r1,#36,#36
     bne     r1,.SYSLocked
 .cantLockSYS:
     subui   r3,r3,#1
@@ -2088,7 +2088,7 @@ p100Hz1:
 	bra		p100Hz15				; go back and see if there's another task to be removed
 									; there could be a string of tasks to make ready.
 p100Hz_missed_tick:
-    inc     missed_ticks
+    inc     missed_ticks,#1
     bra     p100Hz12
 
 p100Hz14:
@@ -2121,14 +2121,19 @@ sttr2:
     asl     r4,r3,#3
 	lw		r1,QNdx0[r4]
 	chk     r5,r1,b48
-	beq		r5,sttr1
+	beq		r5,sttr_nextList
+	mov     r8,r1              ; remember original list head
+	lw      r1,TCB_NextRdy[r1] ; advance list head
+	sw      r1,QNdx0[r4]
+	cmp     r5,r1,tr           ; skip over running task
+	beq     r5,sttr_nextInList
+sttr11:
 	; The task could already be running on the other CPU, don't run a running
 	; task.
 	lb      r5,TCB_Status[r1]
 	and     r7,r5,#TS_RUNNING
-	bne     r7,sttr9
+	bne     r7,sttr_nextInList
 sttr10:
-	lw		r1,TCB_NextRdy[r1]		; Advance the queue index
 	; Task control blocks are aligned on 1kB boundaries. Address ends in "$00"
     ; Check and make sure this is the case. This should catch most bad pointers.
     chk     r7,r1,b48
@@ -2140,10 +2145,9 @@ sttr10:
 ;	beq     r7,sttr5
 	lbu     r8,TCB_Affinity[r1]
 	cmp     r7,r7,r8
-	bne     r7,sttr1
+	bne     r7,sttr_nextInList
 sttr5:
 	; This is the only place the RunningTCB is set (except for initialization).
-	sw		r1,QNdx0[r4]
 	mov     tr,r1
 	lb      r1,TCB_Status[tr]
 	or      r1,r1,#TS_RUNNING    ; flag the task as the running task
@@ -2157,8 +2161,10 @@ sttr5:
 	lwar	r1,iof_sema		; just ignore the request to switch
 	bne		r1,sttr7		; I/O focus if the semaphore can't be aquired
 	swcr    tr,iof_sema
+	nop
+	nop
 	mfspr   r1,cr0
-	and     r1,r1,#$1000000000
+	bfextu  r1,r1,#36,#36
 	beq     r1,sttr6
 	sw		r0,iof_switch
 	push    lr
@@ -2217,8 +2223,15 @@ sttr7:
     swcr    r1,iof_sema
     bra     sttr6
 
+sttr_nextInList:
+    lw      r7,TCB_NextRdy[r1]
+    cmp     r5,r8,r7           ; are we back to the start of the list ?
+    beq     r5,sttr_nextList   ; if so, go to the next list
+    mov     r1,r7
+    bra     sttr11
+
 	; Set index to check the next ready list for a task to run
-sttr1:
+sttr_nextList:
 	addui   r3,r3,#1
 	and     r3,r3,#7     ; count moduluo 8
 	subui   r6,r6,#1
@@ -2246,27 +2259,12 @@ sttr8:
 	stp								
 	jmp		FMTKInitialize
 
-    ; We found a running task at the head of a ready queue. Check for a next
-    ; ready task.
-sttr9:
-    ; If the next ready task is just the running one, then go check the next
-    ; queue.
-    lw      r7,TCB_NextRdy[r1]
-    beq     r7,sttr1            ; NULL pointer ?
-    cmp     r7,r1,r7
-    beq     r7,sttr1            ; Running = next
-    ; Assume there aren't two running tasks (there shouldn't be)
-    cmp     r7,r1,tr            ; skip over outgoing task
-    beq     r7,sttr1    
-    bra     sttr10
-    ;
-    
 sttr_badtask:
 	cpuid   r1,r0,#0
-	bne     r1,sttr1
+	bne     r1,sttr_nextList
     bsr     kernel_panic
     db      "Bad task on ready list.",0
-    bra     sttr1
+    bra     sttr_nextList
 
 ;------------------------------------------------------------------------------
 ; kernal_panic:

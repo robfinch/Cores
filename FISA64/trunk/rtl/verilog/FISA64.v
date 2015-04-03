@@ -60,6 +60,7 @@
 `define DIVU	7'h18
 `define MODU	7'h19
 `define CHK			7'h1A
+`define CHKX		7'h1B
 `define MTSPR		7'h1E
 `define MFSPR		7'h1F
 `define SEQ		7'h20
@@ -175,6 +176,7 @@
 `define LBOUND		8'b01xxxxxx
 `define UBOUND		8'b10xxxxxx
 `define MMASK		8'b11xxxxxx
+`define BRK_BND	{6'd0,9'd487,5'd0,5'h1E,`BRK}
 `define BRK_DBZ	{6'd0,9'd488,5'd0,5'h1E,`BRK}
 `define BRK_OFL	{6'd0,9'd489,5'd0,5'h1E,`BRK}
 `define BRK_TAP	{2'b01,4'd0,9'd494,5'd0,5'h1E,`BRK}
@@ -411,8 +413,9 @@ wire stallRF =
 	((opcode==`IMM && xopcode==`IMM) ||
 	 (opcode==`IMM)) && !iihit;
 
-wire advanceWB = TRUE;
 wire advanceEX = !fnIsMC(xopcode,xfunct) & !stallRF;
+wire advanceWB = (xRt!=5'd0 || xRt2) && advanceEX;
+wire advanceTL = advanceWB;
 wire advanceRF = !stallRF & advanceEX;
 wire advanceIF = advanceRF & iihit;
 
@@ -927,7 +930,7 @@ case(x1opcode)
 		4'd8:	res <= 1;
 		default:	res <= 64'h0;
 		endcase
-	`CHK:	res <= (a >= lb && a < ub && (a & mm)==64'd0);
+	`CHK:	res <= (a >= lb && a < ub && ((a & mm)==64'd0)) ? 64'd1 : 64'd0;
 	default:	res <= 64'd0;
 	endcase
 `BTFLD:	res <= btfldo;
@@ -1367,6 +1370,8 @@ begin
 						overflow();
 			`SUB:	if (fnASOverflow(1,a[63],b[63],res[63]) && ovf_xe)
 						overflow();
+			`CHKX:	 if (res[0])
+			            bounds_violation();
 			endcase
 		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]) && ovf_xe)
 					overflow();
@@ -1421,7 +1426,7 @@ begin
 		end
 	end
 	// If advanceTL (= TRUE)
-	if (tRt != 5'd0) begin
+	if (advanceTL) begin
 		uRt <= tRt;
 		ures <= tres;
 	end
@@ -2457,6 +2462,17 @@ begin
 	wb_nack();
 	nop_xir();
 	ir <= `BRK_DBZ;
+	dpc <= xpc;
+	pc <= 32'h10000;
+	next_state(RUN);
+end
+endtask
+
+task bounds_violation;
+begin
+	wb_nack();
+	nop_xir();
+	ir <= `BRK_BND;
 	dpc <= xpc;
 	pc <= 32'h10000;
 	next_state(RUN);
