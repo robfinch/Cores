@@ -421,7 +421,7 @@ CPU0_Start:
 	bsr     dbg_init
 ;	bsr		KeybdInit
     ; set data breakpoint at FreeTCB address
-;    ldi     r1,#$C00098
+;    ldi     r1,#$C00108
 ;    mtspr   dbad0,r1
 ;    ldi     r1,#$D0001
 ;    mtspr   dbctrl,r1

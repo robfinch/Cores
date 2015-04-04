@@ -662,6 +662,8 @@ void PeepoptLdi(struct ocode *ip)
 	   return;
     if (ip2->opcode != op_push)
        return;
+    if (ip2->oper1->mode != am_reg)
+       return;
     if (ip2->oper1->preg != ip->oper1->preg)
        return;
     ip->opcode = op_push;

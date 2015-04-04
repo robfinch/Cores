@@ -61,6 +61,7 @@
 #define SC      0x61
 #define SH      0x62
 #define SW      0x63
+#define INC     0x64
 #define PUSH    0x67
 #define SBX     0x68
 #define SCX     0x69
@@ -71,19 +72,32 @@
 
 extern pascal putstr2(char *);
 
-void SetCurAttr(unsigned short int attr)
+void SetNormAttr(unsigned short int attr)
 {
      asm {
+         push  r6
          lw    r1,24[bp]
-         bsr   SetCurrAttr
+         ldi   r6,#$22
+         sys   #410
+         pop   r6
+     }
+}
+
+unsigned short int GetNormAttr()
+{
+     asm {
+         push  r6
+         ldi   r6,#$23
+         sys   #410
+         pop   r6
      }
 }
 
 void reverse_video() {
     unsigned short int attr;
-    attr = GetCurrAttr();
+    attr = GetNormAttr();
     attr = ((attr >> 10) << 19) | ((attr >> 19) << 10);
-    SetCurAttr(attr);
+    SetNormAttr(attr);
 }
 
 void DumpInsnBytes(unsigned int ad, unsigned int ir)
@@ -149,6 +163,34 @@ static void DispMemAddress(hasPrefix, prefix, ir)
         printf("[R%d]\r\n",((ir >> 7) & 0x1F));
     else
         printf("\r\n");
+}
+
+static void DispInc(hasPrefix, prefix, ir)
+{
+    short int sir;
+    int Ra;
+    int imm;
+    
+    sir = ir;
+    Ra = (ir >> 7) & 0x1F;
+    imm = (ir >> 12) & 0x1f;
+    if ((imm & 0x10)==0x10) {
+       imm |= 0xFFFFFFFFFFFFFFF0L;
+       imm = -imm;
+       printf("DEC   ");
+    }
+    else
+       printf("INC   ");
+    if (hasPrefix) {
+        printf("$%X", (prefix << 15)|(ir>>17));
+    }
+    else
+        printf("$%X", (sir >> 17));
+    if (Ra == 0)
+        printf(",");
+    else
+        printf("[R%d],",Ra);
+    printf("#%d\r\n", imm);
 }
 
 static void PrintSc(sc)
@@ -247,7 +289,7 @@ void DispRR(int ad, char *mne, unsigned short int ir)
      oc = ir >> 25;
      Rb = (ir >> 17) & 0x1F;
      DumpInsnBytes(ad, ir);
-     if (oc==0x0E && Rb==0) {
+     if (oc==0x0D && Rb==0) {
          printf("MOV   ");
          DispRstc(ir);
          DispRa(ir);
@@ -416,6 +458,7 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
         case LHUX: DispIndexedAddr(*ad, "LHU  ", ir); break;
         case LWX: DispIndexedAddr(*ad, "LW   ", ir); break;
         case LEAX: DispIndexedAddr(*ad, "LEA  ", ir); break;
+        case INC: DumpInsnBytes(*ad, ir); DispInc(hasPrefix, prefix, ir); break;
         case SB: DispLS(*ad, "SB   ", hasPrefix, prefix, ir); break;
         case SC: DispLS(*ad, "SC   ", hasPrefix, prefix, ir); break;
         case SH: DispLS(*ad, "SH   ", hasPrefix, prefix, ir); break;
