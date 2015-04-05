@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -220,30 +220,30 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 	switch( offset->nodetype )
 	{
 	case en_autofcon:
-			fprintf(output,"%ld",offset->i);
+			fprintf(output,"%lld",offset->i);
 			break;
 	case en_fcon:
-			fprintf(output,"0x%lx",offset->f);
+			fprintf(output,"0x%llx",offset->f);
 			break;
 	case en_autocon:
 	case en_icon:
             if (lowhigh==2)
-	            fprintf(output,"%ld",offset->i & 0xffff);
+	            fprintf(output,"%lld",offset->i & 0xffff);
             else if (lowhigh==3)
-	            fprintf(output,"%ld",(offset->i >> 16) & 0xffff);
+	            fprintf(output,"%lld",(offset->i >> 16) & 0xffff);
             else
-            	fprintf(output,"%ld",offset->i);
+            	fprintf(output,"%lld",offset->i);
            	if (rshift > 0)
            	    fprintf(output, ">>%d", rshift);
 			break;
 	case en_labcon:
-			sprintf(buf, "%s_%ld",GetNamespace(),offset->i);
+			sprintf(buf, "%s_%lld",GetNamespace(),offset->i);
 			fprintf(output,buf);
             if (rshift > 0)
                 fprintf(output, ">>%d", rshift);
 			break;
 	case en_clabcon:
-			sprintf(buf,"%s_%ld",GetNamespace(),offset->i);
+			sprintf(buf,"%s_%lld",GetNamespace(),offset->i);
 			fprintf(output,buf);
             if (rshift > 0)
                 fprintf(output, ">>%d", rshift);
@@ -748,7 +748,7 @@ void GenerateReference(SYM *sp,int offset)
 
 void genstorage(int nbytes)
 {       nl();
-        fprintf(output,"\tdcb.b\t%d,0x00\n",nbytes);
+        fprintf(output,"\tfill.b\t%d,0x00\n",nbytes);
 }
 
 void GenerateLabelReference(int n)
@@ -783,6 +783,20 @@ int stringlit(char *s)
     return lp->label;
 }
 
+char *strip_crlf(char *p)
+{
+     static char buf[2000];
+     int nn;
+
+     for (nn = 0; *p && nn < 1998; p++) {
+         if (*p != '\r' && *p!='\n') {
+            buf[nn] = *p;
+            nn++;
+         }
+     }
+     buf[nn] = '\0';
+}
+
 /*
  *      Dump the string literal pool.
  */
@@ -796,7 +810,7 @@ void dumplits()
     nl();
 	while( strtab != NULL) {
 	    nl();
-        put_label(strtab->label,strtab->str,strtab->nmspace,'D');
+        put_label(strtab->label,strip_crlf(strtab->str),strtab->nmspace,'D');
         cp = strtab->str;
         while(*cp)
             GenerateChar(*cp++);

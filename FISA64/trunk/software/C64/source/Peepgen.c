@@ -562,7 +562,8 @@ void PeepoptLw(struct ocode *ip)
 	   return;
     if (ip2->opcode != op_push)
        return;
-         
+    if (ip->oper2->mode != am_ind && ip->oper2->mode != am_indx)
+       return;     
     ip->opcode = op_push;
     ip->oper1 = copy_addr(ip->oper2);
     ip->oper2 = NULL;

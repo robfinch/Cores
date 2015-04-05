@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -144,7 +144,7 @@ extern void initsym();
 extern void NextToken();
 extern int getch();
 extern int my_isspace(char c);
-extern void getbase(int);
+extern void getbase(int64_t);
 extern void SkipSpaces();
 
 // Stmt.c

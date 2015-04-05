@@ -66,6 +66,8 @@ extern int      incldepth;      /* shared with preproc */
 char            *linstack[20];  /* stack for substitutions */
 char            chstack[20];    /* place to save lastch */
 int             lstackptr = 0;  /* substitution stack pointer */
+static char numstr[100];
+static char *numstrptr;
 
 int isalnum(char c)
 {       return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
@@ -125,10 +127,15 @@ int getch()
         if( lstackptr > 0 ) {
             lptr = linstack[--lstackptr];
             lastch = chstack[lstackptr];
-            return lastch;
+            goto j1;
         }
         if(getline(incldepth == 0))
             return lastch = -1;
+    }
+ j1:
+    if (numstrptr >= &numstr[0] && numstrptr < &numstr[98]) {
+       *numstrptr = lastch;
+       numstrptr++;
     }
     return lastch;
 }
@@ -236,12 +243,31 @@ int64_t radix36(char c)
 /*
  *      getbase - get an integer in any base.
  */
-void getbase(int b)
-{       register int64_t i, j;
+void getbase(int64_t b)
+{       
+        register int64_t i0, i1, i2;
+        register int64_t i, j;
+        int k;
+
         i = 0;
+        i0 = 0;
+        i1 = 0;
         while(isalnum(lastch)) {
                 if((j = radix36(lastch)) < b) {
                         i = i * b + j;
+                        i2 = i0;
+                        for (k = 0; k < b; k++) {
+                            i0 = i0 + i2;
+                            if (i0 & 0x100000000L) {
+                               i0 = i0 - 0x100000000L;
+                               i1 = i1 + 1;
+                            }
+                        }
+                        i0 = i0 + j;
+                        if (i0 & 0x100000000L) {
+                            i0 = i0 - 0x100000000L;
+                            i1 = i1 + 1;
+                        }
                         getch();
                         }
                 else break;
@@ -249,6 +275,23 @@ void getbase(int b)
 		if (lastch=='L' || lastch=='U')	// ignore a 'L'ong suffix and 'U'nsigned
 			getch();
         ival = i;
+/*
+        rval.exp = 0x804E;
+        rval.man1 = (i1 >> 32) & 0xffffL;
+        rval.man2 = (i1 >> 16) & 0xffffL;
+        rval.man3 = i1 & 0xffffL;
+        rval.man4 = (i0 >> 16) & 0ffffL;
+        rval.man5 = i0 & 0xffffL;
+        // normalize the number
+        while (!(rval.man1 & 0x8000)) {
+             rval.exp--;
+             rval.man1 = (rval.man1 << 1) | (rval.man2 & 0x8000) ? 1 : 0;
+             rval.man2 = (rval.man2 << 1) | (rval.man3 & 0x8000) ? 1 : 0;
+             rval.man3 = (rval.man3 << 1) | (rval.man4 & 0x8000) ? 1 : 0;
+             rval.man4 = (rval.man4 << 1) | (rval.man5 & 0x8000) ? 1 : 0;
+             rval.man5 = (rval.man5 << 1);
+        }
+*/
         lastst = iconst;
 }
  
@@ -256,14 +299,16 @@ void getbase(int b)
  *      getfrac - get fraction part of a floating number.
  */
 void getfrac()
-{       
-	double  frmul;
+{
+	__float128  frmul;
+	printf("Get fract\r\n");
     frmul = 0.1;
     while(isdigit(lastch)) {
         rval += frmul * (lastch - '0');
         getch();
         frmul *= 0.1;
     }
+	printf("leave Get fract\r\n");
 }
  
 /*
@@ -274,7 +319,7 @@ void getfrac()
  *      won't support more anyway.
  */
 void getexp()
-{       double  expo, exmul;
+{       __float128  expo, exmul;
         expo = 1.0;
         if(lastst != rconst)
                 rval = ival;
@@ -285,7 +330,7 @@ void getexp()
         else
                 exmul = 10.0;
         getbase(10);
-        if(ival > 255)
+        if(ival > 32767)
                 error(ERR_FPCON);
         else
                 while(ival--)
@@ -302,8 +347,14 @@ void getexp()
 void getnum()
 {       register int    i;
         i = 0;
+
+        numstrptr = &numstr[0];
+         *numstrptr = lastch;
+         numstrptr++; 
         if(lastch == '0') {
                 getch();
+                if (lastch=='.')
+                     goto j1;
                 if(lastch == 'x' || lastch == 'X') {
                         getch();
                         getbase(16);
@@ -312,6 +363,7 @@ void getnum()
                 }
         else    {
                 getbase(10);
+j1:
                 if(lastch == '.') {
                         getch();
                         rval = ival;    /* float the integer part */
@@ -327,6 +379,10 @@ void getnum()
 					getch();
 				}
 				}
+    numstrptr[-1]='\0';
+    numstrptr = NULL;
+//    dd_real::read(numstr,rval);
+//    printf("leave getnum=%s\r\n", numstr);
 				
 }
 
