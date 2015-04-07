@@ -36,9 +36,10 @@ static int isscalar(TYP *tp);
 static unsigned char sizeof_flag = 0;
 static TYP *ParseCastExpression(ENODE **node);
 TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
+extern void backup();
 
 // Tells subsequent levels that ParseCastExpression already fetched a token.
-static unsigned char expr_flag = 0;
+//static unsigned char expr_flag = 0;
 
 /*
  *	68000 C compiler
@@ -98,6 +99,31 @@ extern TYP	*tail;
 TYP     *expression();  /* forward ParseSpecifieraration */
 TYP     *NonCommaExpression();      /* forward ParseSpecifieraration */
 TYP     *ParseUnaryExpression();       /* forward ParseSpecifieraration */
+
+int nest_level = 0;
+
+void Enter(char *p)
+{
+/*
+     int nn;
+     
+     for (nn = 0; nn < nest_level; nn++)
+         printf("   ");
+     printf("%s\r\n", p);
+     nest_level++;
+*/
+}
+void Leave(char *p, int n)
+{
+/*
+     int nn;
+     
+     nest_level--;
+     for (nn = 0; nn < nest_level; nn++)
+         printf("   ");
+     printf("%s (%d)\r\n", p, n);
+*/
+}
 
 /*
  *      build an expression node with a node type of nt and values
@@ -314,13 +340,13 @@ TYP *deref(ENODE **node, TYP *tp)
 		//	(*node)->isUnsigned = TRUE;
 		//	*node = makenode(en_uw_ref,*node,NULL);
   //          break;
-		//case bt_struct:
-		//case bt_union:
-		//	(*node)->esize = tp->size;
-		//	(*node)->etype = tp->type;
-  //          *node = makenode(en_struct_ref,*node,NULL);
-		//	(*node)->isUnsigned = TRUE;
-  //          break;
+		case bt_struct:
+		case bt_union:
+			(*node)->esize = tp->size;
+			(*node)->etype = tp->type;
+            *node = makenode(en_struct_ref,*node,NULL);
+			(*node)->isUnsigned = TRUE;
+            break;
 		default:
 			error(ERR_DEREF);
 			break;
@@ -519,7 +545,7 @@ int IsBeginningOfTypecast(int st)
 //                      string
 //                      ( expression )
 // ----------------------------------------------------------------------------
-TYP *ParsePrimaryExpression(ENODE **node)
+TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 {
 	ENODE    *pnode, *qnode, *rnode, *snode, *rnode1, *pnode1, *qnode1, *qnode2;
 	int64_t i ;
@@ -528,8 +554,17 @@ TYP *ParsePrimaryExpression(ENODE **node)
 
 	qnode1 = (ENODE *)NULL;
 	qnode2 = (ENODE *)NULL;
-	if (expr_flag)
-		goto processExpression;
+    Enter("ParsePrimary ");
+    if (got_pa) {
+        tptr = expression(&pnode);
+        needpunc(closepa);
+        *node = pnode;
+        if (tptr)
+        Leave("ParsePrimary", tptr->type);
+        else
+        Leave("ParsePrimary", 0);
+        return tptr;
+    }
     switch( lastst ) {
 	case ellipsis:
     case id:
@@ -577,9 +612,9 @@ TYP *ParsePrimaryExpression(ENODE **node)
 
     case openpa:
         NextToken();
-processExpression:
+j1:
 //        if( !IsBeginningOfTypecast(lastst) ) {
-		expr_flag = 0;
+//		expr_flag = 0;
         tptr = expression(&pnode);
         needpunc(closepa);
 //        }
@@ -596,9 +631,14 @@ processExpression:
         break;
 
     default:
+        Leave("ParsePrimary", 0);
         return (TYP *)NULL;
     }
 fini:   *node = pnode;
+    if (tptr)
+    Leave("ParsePrimary", tptr->type);
+    else
+    Leave("ParsePrimary", 0);
     return tptr;
 }
 
@@ -629,7 +669,7 @@ int IsLValue(ENODE *node)
     case en_triple_ref:
 	case en_dbl_ref:
 	case en_flt_ref:
-	//case en_struct_ref:
+	case en_struct_ref:
             return TRUE;
 	case en_cbc:
 	case en_cbh:
@@ -694,7 +734,7 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 //		postfix_expression--
 // ----------------------------------------------------------------------------
 
-TYP *ParsePostfixExpression(ENODE **node)
+TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 {
 	TYP *tp1;
 	ENODE *ep1;
@@ -702,9 +742,12 @@ TYP *ParsePostfixExpression(ENODE **node)
 	SYM *sp;
 	int iu;
 
-	tp1 = ParsePrimaryExpression(&ep1);
-	if (tp1 == NULL)
+    Enter("ParsePostfix ");
+	tp1 = ParsePrimaryExpression(&ep1, got_pa);
+	if (tp1 == NULL) {
+        Leave("ParsePostfix",0);
 		return (TYP *)NULL;
+    }
 	while(1) {
 		switch(lastst) {
 		case openbr:
@@ -776,8 +819,16 @@ TYP *ParsePostfixExpression(ENODE **node)
 				error(ERR_UNDEFINED);
 				goto j1;
 			}
-            if( tp1->type != bt_pointer )
+            if( tp1->type != bt_pointer ) {
+                /*
+                printf("\r\n **********");
+                printf("\r\n **********");
+                printf("NO pointer (%d)\r\n", tp1->type);
+                printf("\r\n **********");
+                printf("\r\n **********"); 
+                */
                 error(ERR_NOPOINTER);
+            }
             else
                 tp1 = tp1->btp;
             if( tp1->val_flag == FALSE )
@@ -793,8 +844,9 @@ TYP *ParsePostfixExpression(ENODE **node)
                 error(ERR_IDEXPECT);
             else {
                 sp = search(lastid,&tp1->lst);
-                if( sp == NULL )
+                if( sp == NULL ) {
                     error(ERR_NOMEMBER);
+                }
                 else {
                     tp1 = sp->tp;
                     qnode = makeinode(en_icon,sp->value.i);
@@ -804,7 +856,7 @@ TYP *ParsePostfixExpression(ENODE **node)
                     ep1->constflag = ep1->p[0]->constflag;
 					ep1->isUnsigned = iu;
 					ep1->esize = 8;
-                    tp1 = CondDeref(&ep1,tp1);
+                   tp1 = CondDeref(&ep1,tp1);
                 }
                 NextToken();       /* past id */
             }
@@ -822,6 +874,10 @@ TYP *ParsePostfixExpression(ENODE **node)
 	}
 j1:
 	*node = ep1;
+	if (tp1)
+	Leave("ParsePostfix", tp1->type);
+	else
+	Leave("ParsePostfix", 0);
 	return tp1;
 }
 
@@ -843,28 +899,34 @@ j1:
  *                      typenum(typecast)
  *
  */
-TYP *ParseUnaryExpression(ENODE **node)
+TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 {
 	TYP *tp, *tp1;
     ENODE *ep1, *ep2;
     int flag2;
 	SYM *sp;
 
+    Enter("ParseUnary");
 	flag2 = FALSE;
-	if (expr_flag) {
-        tp = ParsePostfixExpression(&ep1);
+
+	if (got_pa) {
+        tp = ParsePostfixExpression(&ep1, got_pa);
 		*node = ep1;
+        if (tp)
+        Leave("ParseUnary", tp->type);
+        else
+        Leave("ParseUnary", 0);
 		return tp;
 	}
     switch( lastst ) {
     case autodec:
 		NextToken();
-		tp = ParseUnaryExpression(&ep1);
+		tp = ParseUnaryExpression(&ep1, got_pa);
 		Autoincdec(tp,&ep1,1);
 		break;
     case autoinc:
 		NextToken();
-		tp = ParseUnaryExpression(&ep1);
+		tp = ParseUnaryExpression(&ep1, got_pa);
 		Autoincdec(tp,&ep1,0);
 		break;
 	case plus:
@@ -943,10 +1005,12 @@ TYP *ParseUnaryExpression(ENODE **node)
         tp1->lst.head = (SYM *)NULL;
         tp1->sname = (char *)NULL;
         tp = tp1;
+/*
 		sp = search("ta_int",&tp->btp->lst);
 		if (sp) {
-			printf("ta_int\r\n");
+			printf("bitandd: ta_int\r\n");
 		}
+*/
         break;
     case kw_sizeof:
         NextToken();
@@ -970,7 +1034,7 @@ TYP *ParseUnaryExpression(ENODE **node)
 		}
 		else {
 			sizeof_flag++;
-			tp = ParseUnaryExpression(&ep1);
+			tp = ParseUnaryExpression(&ep1, got_pa);
 			sizeof_flag--;
 			if (tp == 0) {
 				error(ERR_SYNTAX);
@@ -1005,10 +1069,14 @@ TYP *ParseUnaryExpression(ENODE **node)
         needpunc(closepa);
         break;
     default:
-        tp = ParsePostfixExpression(&ep1);
+        tp = ParsePostfixExpression(&ep1, got_pa);
         break;
     }
     *node = ep1;
+    if (tp)
+    Leave("ParseUnary", tp->type);
+    else
+    Leave("ParseUnary", 0);
     return tp;
 }
 
@@ -1022,6 +1090,7 @@ static TYP *ParseCastExpression(ENODE **node)
 	TYP *tp, *tp1, *tp2;
 	ENODE *ep1, *ep2;
 
+    Enter("ParseCast ");
 	switch(lastst) {
 	case openpa:
 		NextToken();
@@ -1045,15 +1114,18 @@ static TYP *ParseCastExpression(ENODE **node)
 			tail = tp1;
         }
 		else {
-			expr_flag = 1;
-			tp = ParseUnaryExpression(&ep1);
+			tp = ParseUnaryExpression(&ep1,1);
 		}
 		break;
 	default:
-		tp = ParseUnaryExpression(&ep1);
+		tp = ParseUnaryExpression(&ep1,0);
 		break;
 	}
 	*node = ep1;
+	if (tp)
+	Leave("ParseCast", tp->type);
+	else
+	Leave("ParseCast", 0);
 	return tp;
 }
 
@@ -1732,9 +1804,14 @@ TYP *commaop(ENODE **node)
 TYP *expression(ENODE **node)
 {
 	TYP *tp;
+	Enter("expresison");
     tp = commaop(node);
     if( tp == (TYP *)NULL )
         *node = (ENODE *)NULL;
     TRACE(printf("leave exp\r\n"));
+    if (tp)
+    Leave("Expression",tp->type);
+    else
+    Leave("Expression",0);
     return tp;
 }

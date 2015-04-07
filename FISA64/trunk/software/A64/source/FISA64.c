@@ -45,7 +45,7 @@ extern int first_rodata;
 extern int first_data;
 extern int first_bss;
 static int64_t ca;
-
+extern int isInitializationData;
 extern int use_gp;
 
 // This structure not used.
@@ -1688,17 +1688,25 @@ static void process_mtspr(int oc)
 {
     int spr;
     int Ra;
+    int Rc;
     
-    spr = FISA64_getSprRegister();
-    if (spr==-1) {
-        printf("Line %d: An SPR is needed.\r\n", lineno);
-        return;
-    }  
+    Rc = getRegisterX();
+    if (Rc==-1) {
+        Rc = 0;
+        spr = FISA64_getSprRegister();
+        if (spr==-1) {
+            printf("Line %d: An SPR is needed.\r\n", lineno);
+            return;
+        }  
+    }
+    else
+       spr = 0;
     need(',');
     Ra = getRegisterX();
     emit_insn(
         (oc << 25) |
         (spr << 17) |
+        (Rc << 12) |
         (Ra << 7) |
         0x02
     );
@@ -1733,18 +1741,26 @@ static void process_mfspr(int oc)
 {
     int spr;
     int Rt;
+    int Ra;
     
     Rt = getRegisterX();
     need(',');
-    spr = FISA64_getSprRegister();
-    if (spr==-1) {
-        printf("An SPR is needed.\r\n");
-        return;
-    }  
+    Ra = getRegisterX();
+    if (Ra==-1) {
+        Ra = 0;
+        spr = FISA64_getSprRegister();
+        if (spr==-1) {
+            printf("An SPR is needed.\r\n");
+            return;
+        }  
+    }
+    else
+        spr = 0;
     emit_insn(
         (oc << 25) |
         (spr << 17) |
         (Rt << 12) |
+        (Ra << 7) |
         0x02
     );
     if (spr >= 0)
@@ -1902,6 +1918,7 @@ void FISA64_processMaster()
     code_address = 0;
     bss_address = 0;
     start_address = 0;
+    data_address = 0;
     first_org = 1;
     first_rodata = 1;
     first_data = 1;
@@ -1922,6 +1939,7 @@ void FISA64_processMaster()
     while (token != tk_eof) {
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
 //        printf("token=%d\r", token);
+j_processToken:
         switch(token) {
         case tk_eol: ProcessEOL(1); break;
         case tk_add:  process_rrop(0x04); break;
@@ -1967,6 +1985,12 @@ void FISA64_processMaster()
         case tk_com: process_com(); break;
         case tk_cpuid: process_cpuid(0x36); break;
         case tk_data:
+             // Process data declarations as if we are in the rodata segment
+             // for initialization data.
+             if (isInitializationData) {
+                 token = tk_rodata;
+                 goto j_processToken;
+             }
             if (first_data) {
                 while(sections[segment].address & 4095)
                     emitByte(0x00);

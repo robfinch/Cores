@@ -39,6 +39,9 @@ CTRLX	EQU	0x18
 XON		EQU	0x11
 XOFF	EQU	0x13
 
+E_Ok        EQU     $00
+E_Timeout   EQU     $10
+
 SC_LSHIFT	EQU		$12
 SC_RSHIFT	EQU		$59
 SC_KEYUP	EQU		$F0
@@ -76,11 +79,10 @@ BSI_VolLabel	= 0x2B
 BSI_FileSysType = 0x36
 
 DBG_STACK   EQU     $7000
+CPU0_DBG_STACK  EQU     $7CF000
 CPU0_BIOS_STACK  EQU     $6800
 MON_STACK   EQU     $6000
 ; CPU1 Ram allocations must be to the dram area.
-CPU0_IRQ_STACK   EQU    $8800
-CPU1_IRQ_STACK  EQU     $20800
 CPU1_SYS_STACK      EQU  $21000
 CPU1_BIOS_STACK     EQU  $21800
 CPU0_SYS_STACK      EQU  $5000
@@ -191,8 +193,10 @@ BIOS_stat      EQU     $38
 include "DeviceDriver.inc"
 ;include "FMTK_Equates.inc"
 
+    data
+    org     $C10000
 	bss
-	org		4096
+	org		$C20000
 Ticks			dw		0
 ; Monitor register storage
 MON_r1          dw      0
@@ -229,6 +233,9 @@ MON_r31         dw      0
 
 BIOS_CALL       EQU     10
 FMTK_CALL       EQU     4
+    align   16
+VideoBIOS_sema    dw    0
+
 
 Milliseconds	dw		0
 OutputVec		dw		0
@@ -284,7 +291,6 @@ RTCC_BUF		fill.b	96,0
 API_AREA        fill.b  2048,0
 
 ; Just past the 
-	org		$0008000
 
 	; 2MB for TSS space
 	align 8192
@@ -295,11 +301,11 @@ BYTE_SECTOR_BUF	EQU	SECTOR_BUF
 ROOTDIR_BUF fill.b  16384,0
 PROG_LOAD_AREA	EQU ROOTDIR_BUF
 
-sprites:
-	dcb.b	1024,0x00
-
 EndStaticAllocations:
 	dw		0
+
+VideoBIOSSema   EQU $FFDB0000
+BIOSSema        EQU $FFDB0010
 
 ;
 	code
@@ -349,17 +355,17 @@ start:
     cpuid   r1,r0,#0
     beq     r1,CPU0_Start
 CPU1_Start:
-    ldi     sp,#STACKS_Array+4096+4088
-    ldi     tr,#TCB_Array+TCB_Size
-	sw      sp,TCB_ISP[tr]
-	sw      sp,TCB_r30[tr]
-	ldi     r1,#BIOS_STACKS_Array+4096+4088  ; so we can call the BIOS during startup
-	sw      r1,TCB_BIOS_Stack[tr]
-	ldi     r1,#SYS_STACKS_Array+4096+4088  ; so we can call the BIOS during startup
-	sw      r1,TCB_SYS_Stack[tr]
-	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
-    bsr     SetupIntVectors1
-	bsr		InitPIC1
+    ldi     sp,#stacks+4096+4088
+;    ldi     tr,#tcbs+TCB_Size
+;	sw      sp,TCB_ISP[tr]
+;	sw      sp,TCB_r30[tr]
+;	ldi     r1,#BIOS_STACKS_Array+4096+4088  ; so we can call the BIOS during startup
+;	sw      r1,TCB_BIOS_Stack[tr]
+;	ldi     r1,#SYS_STACKS_Array+4096+4088  ; so we can call the BIOS during startup
+;	sw      r1,TCB_SYS_Stack[tr]
+;	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
+;    bsr     SetupIntVectors1
+;	bsr		InitPIC1
 	; Wait for CPU #0 to complete FMTK initialization before proceeding.
 .0001:
     nop
@@ -379,22 +385,41 @@ CPU1_Start:
     ; in order to be able to get display output.
 CPU0_Start:
 .0002:
-	ldi     sp,#STACKS_Array+4088
-	ldi     tr,#TCB_Array               ; load task register with BIOS task
-	sw      sp,TCB_ISP[tr]
-	sw      sp,TCB_r30[tr]
-	ldi     r1,#BIOS_STACKS_Array+4088  ; so we can call the BIOS during startup
-	sw      r1,TCB_BIOS_Stack[tr]
-	ldi     r1,#SYS_STACKS_Array+4088  ; so we can System Call during startup
-	sw      r1,TCB_SYS_Stack[tr]
-	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
-	bsr     GetJCBPtr
-	sw      r1,IOFocusNdx               ; The screen routines check this var
-	ldi     r2,#TEXTSCR
-	sw      r2,JCB_pVidMem[r1]          ; point JCB#0 to real screen
-	ldi		r4,#%000000100_110101110_0000000000	; grey on blue
-	sh		r4,JCB_NormAttr[r1]
-	sh		r4,JCB_CurrAttr[r1]
+	ldi     sp,#stacks+4088
+    ldi     r1,#1
+    sc      r1,LEDS
+	; Copy initialized data to data area
+	lea     r1,begin_init_data
+	lea     r2,$C10000
+.cpy_loop:
+	lw      r3,[r1]
+	sw      r3,[r2]
+	addui   r1,r1,#8
+	addui   r2,r2,#8
+	cmpu    r3,r1,#end_init_data
+	blt     r3,.cpy_loop
+    ldi     r1,#10
+    sc      r1,LEDS
+
+	bsr     FMTKInitialize
+    ldi     r1,#15
+    sc      r1,LEDS
+
+;	ldi     tr,#tcbs                   ; load task register with BIOS task
+;	sw      sp,TCB_ISP[tr]
+;	sw      sp,TCB_r30[tr]
+;	ldi     r1,#bios_stacks+4088  ; so we can call the BIOS during startup
+;	sw      r1,TCB_BIOS_Stack[tr]
+;	ldi     r1,#SYS_STACKS_Array+4088  ; so we can System Call during startup
+;	sw      r1,TCB_SYS_Stack[tr]
+;	sb      r0,TCB_hJCB[tr]             ; JCB#0 is the system JCB
+;	bsr     GetJCBPtr
+;	sw      r1,IOFocusNdx               ; The screen routines check this var
+;	ldi     r2,#TEXTSCR
+;	sw      r2,JCB_pVidMem[r1]          ; point JCB#0 to real screen
+;	ldi		r4,#%000000100_110101110_0000000000	; grey on blue
+;	sh		r4,JCB_NormAttr[r1]
+;	sh		r4,JCB_CurrAttr[r1]
     ldi     r5,#$0000
     ldi     r1,#20
 .0001:
@@ -410,12 +435,13 @@ CPU0_Start:
 	sb		r1,KeybdEcho
 	sb		r0,KeybdBad
 	sh		r1,NormAttr
-	ldi		r1,#DisplayChar
+	ldi		r1,#VBDisplayChar
 	sw		r1,OutputVec
 	bsr		ClearScreen
 	bsr		HomeCursor
-	ldi     r1,#msgStart
+	pea     msgStart
 	bsr     DisplayStringCRLF
+	addui   sp,sp,#8
 	bsr		SetupIntVectors
 	bsr     ROMChecksum
 	bsr     dbg_init
@@ -425,7 +451,13 @@ CPU0_Start:
 ;    mtspr   dbad0,r1
 ;    ldi     r1,#$D0001
 ;    mtspr   dbctrl,r1
-    bsr     FMTKInitialize
+     lea     r1,sprite_main
+     mtspr   dbad0,r1
+     ldi     r1,#$80001
+     mtspr   dbctrl,r1
+;    ldi     sp,#$8000
+;    bsr     ramtest
+;    bsr     FMTKInitialize
     ldi     r1,#UserTickRout     ; set user tick vector
     sw      r1,$C00000
 	bsr		InitPIC
@@ -439,8 +471,8 @@ CPU0_Start:
 	ldi     r3,#BIOSCallTask|1   ; start address (start in kernel mode)
 	ldi     r4,#0                ; start parameter
 	ldi     r5,#0                ; owning job
-	sys     #FMTK_CALL
-	dh      1                    ; start task function
+;	sys     #FMTK_CALL
+;	dh      1                    ; start task function
     bsr     DumpTaskList
 	bra		Monitor
 
@@ -471,8 +503,8 @@ SetupIntVectors:
 	sw      r1,410*8[r2]
 	ldi		r1,#Tick1024Rout
 	sw		r1,450*8[r2]
-	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
-	sw		r1,451*8[r2]
+;	ldi		r1,#TickRout         ; This vector will be taken over by FMTK
+;	sw		r1,451*8[r2]
 	ldi     r1,#SerialIRQ
 	sw      r1,456*8[r2]
 	ldi     r1,#ServiceRequestIRQ
@@ -586,15 +618,16 @@ ROMChecksum:
     addui    r4,r4,#4
     cmp      r3,r4,#$10000
     blt      r3,.0001
-    lea      r1,msgROMChecksum
+    pea      msgROMChecksum
     bsr      DisplayString
+    addui    sp,sp,#8
     mov      r1,r5
     bsr      DisplayHalf
     bsr      CRLF
     rts
 
 msgROMChecksum:
-    db    CR,LF,"ROM Checksum: ",0
+    dc    CR,LF,"ROM Checksum: ",0
 
     align 4 
 ;------------------------------------------------------------------------------
@@ -609,20 +642,20 @@ DisplaySpace:
     pop      r1
     rts
 
-GetJCBPtr:
-    push    r2
-	lbu     r1,TCB_hJCB[tr]
-    beq     r1,.0001
-    cmpu    r2,r1,#NR_JCB
-    bge     r2,.0001
-	mulu    r1,r1,#JCB_Size
-	addui   r1,r1,#JCB_Array
-	pop     r2
-    rtl
-.0001:
-    pop     r2
-    ldi     r1,#JCB0
-    rtl 
+;GetJCBPtr:
+;    push    r2
+;	lbu     r1,TCB_hJCB[tr]
+;    beq     r1,.0001
+;    cmpu    r2,r1,#NR_JCB
+;    bge     r2,.0001
+;	mulu    r1,r1,#JCB_Size
+;	addui   r1,r1,#JCB_Array
+;	pop     r2
+;    rtl
+;.0001:
+;    pop     r2
+;    ldi     r1,#JCB0
+;    rtl 
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -721,7 +754,7 @@ BIOSCall1:
 ;------------------------------------------------------------------------------
 
 BIOSCall:
-    lw      sp,TCB_BIOS_Stack[tr]
+    lw      sp,352[tr]
     push    lr
     bsr     LockBIOS
     push    r10
@@ -786,7 +819,7 @@ BIOSCallTask:
 ;------------------------------------------------------------------------------
 
 TickRout:
-    ldi     sp,#CPU0_IRQ_STACK       ; set stack pointer to interrupt processing stack
+    ldi     sp,#irq_stack       ; set stack pointer to interrupt processing stack
     push    lr
     push    r1
 	ldi		r1,#3				; reset the edge sense circuit
@@ -815,7 +848,7 @@ UserTickRout:
 ;------------------------------------------------------------------------------
 
 Tick1024Rout:
-    ldi     sp,#CPU0_IRQ_STACK  ; set stack pointer to interrupt processing stack
+    ldi     sp,#irq_stack  ; set stack pointer to interrupt processing stack
 	push	r1
 	ldi		r1,#2				; reset the edge sense circuit
 	sh		r1,PIC_RSTE
@@ -836,36 +869,30 @@ GetSystemTime:
     rtl
 
 
-	db	0
+	dc	0
 msgStart:
-	db	"FISA64 test system starting.",0
+	dc	"FISA64 test system starting.",0
 
 
 ; ============================================================================
 ; Monitor Task
 ; ============================================================================
-
+    align   4
 Monitor:
-	ldi		r1,#49
-	sc		r1,LEDS
-;	bsr		ClearScreen
-;	bsr		HomeCursor
-	ldi		r1,#msgMonitorStarted
+	pea		msgMonitorStarted
 	bsr		DisplayStringCRLF
-	ldi		r1,#51
-	sc		r1,LEDS
+	addui   sp,sp,#8
 	sb		r0,KeybdEcho
 	ldi     r1,#JCB0
 	sb      r0,JCB_KeybdEcho[r1]
-	;ldi		r1,#7
-	;ldi		r2,#0
-	;ldi		r3,#IdleTask
-	;ldi		r4,#0
-	;ldi		r5,#0
-	;bsr		StartTask
+	ldi		r1,#7
+	ldi		r2,#0
+	ldi		r3,#IdleTask|1
+	ldi		r4,#0
+	ldi		r5,#0
+;	sys     #4                  ; start task
+;	dh      1
 mon1:
-	ldi		r1,#50
-	sc		r1,LEDS
 ;	ldi		sp,#TCBs+TCB_Size-8		; reload the stack pointer, it may have been trashed
 	ldi		sp,#MON_STACK
 	cli
@@ -881,9 +908,10 @@ mon1:
 	bsr		OutChar
 	bra		.Prompt3
 .Prompt1:
-    bsr     GetJCBPtr
-	sb		r0,JCB_CursorCol[r1]
-	bsr		CalcScreenLoc
+	push    r0
+	bsr     SetCursorCol
+	addui   sp,sp,#8
+	bsr		CalcScreenLocation
 	mov		r3,r1
 	bsr		MonGetch
 	cmp		r2,r1,#'$'
@@ -917,8 +945,9 @@ mon1:
 	bra     mon1
 
 .doHelp:
-	ldi		r1,#msgHelp
+	pea		msgHelp
 	bsr		DisplayString
+	addui   sp,sp,#8
 	bra     mon1
 
 MonGetch:
@@ -926,7 +955,11 @@ MonGetch:
 	lhu	    r1,[r3]
 	andi	r1,r1,#$1FF
 	add		r3,r3,#4
+	push    r3
+	push    r1
 	bsr		ScreenToAscii
+	addui   sp,sp,#8
+	pop     r3
 	pop     lr
 	rtl
 
@@ -1377,23 +1410,23 @@ DisplayErr:
 	bra mon1
 
 msgErr:
-	db	"**Err",CR,LF,0
+	dc	"**Err",CR,LF,0
 
 msgHelp:
-	db		"? = Display Help",CR,LF
-	db		"CLS = clear screen",CR,LF
-	db      "D = disassemble",CR,LF
-	db      "DB = start debugger",CR,LF
-	db		"DT = set/read date",CR,LF
-	db		"FB = fill memory",CR,LF
-	db		"MB = dump memory",CR,LF
-	db		"JS = jump to code",CR,LF
-	db	    "T = Dump task list",CR,LF
-	db		"S = boot from SD card",CR,LF
-	db		0
+	dc		"? = Display Help",CR,LF
+	dc		"CLS = clear screen",CR,LF
+	dc      "D = disassemble",CR,LF
+	dc      "DB = start debugger",CR,LF
+	dc		"DT = set/read date",CR,LF
+	dc		"FB = fill memory",CR,LF
+	dc		"MB = dump memory",CR,LF
+	dc		"JS = jump to code",CR,LF
+	dc	    "T = Dump task list",CR,LF
+	dc		"S = boot from SD card",CR,LF
+	dc		0
 
 msgMonitorStarted
-	db		"Monitor started.",0
+	dc		"Monitor started.",0
 
 doCLS:
 	bsr		ClearScreen
@@ -1514,7 +1547,7 @@ kbdi5:
 ;	rtl
 
 msgBadKeybd:
-	db		"Keyboard not responding.",0
+	dc		"Keyboard not responding.",0
 
 ;SendByteToKeybd:
 ;	push	r2
@@ -1990,7 +2023,7 @@ Wait10ms:
 ;------------------------------------------------------------------------------
 
 KeybdIRQ:
-    ldi     sp,#CPU0_IRQ_STACK
+    ldi     sp,#irq_stack
     push    lr
     push    r1
     push    r2
@@ -2229,7 +2262,9 @@ I2C_READ:
 I2C_ERR:
 	ldi		r1,#-1
 	mtspr	cr0,r5					; restore TMR
-	pop		r4/r3/r2/r5
+	pop     r4
+	pop     r3
+	pop     r2
 	rts
 
 ;------------------------------------------------------------------------------
@@ -2538,10 +2573,11 @@ LoadFromSerial:
     rts
 
 nmi_rout:
-    ldi    sp,#CPU0_IRQ_STACK
+    ldi    sp,#irq_stack
     push   r1
-    lea    r1,msgParErr
+    pea    msgParErr
     bsr    DisplayStringCRLF
+    addui  sp,sp,#8
     bsr    KeybdGetCharWait
     pop    r1
     rti
@@ -2550,7 +2586,7 @@ nmi_rout1:
     rti
 
 msgParErr:
-    db "Parity error",0
+    dc "Parity error",0
     
     align  4
 ;------------------------------------------------------------------------------
@@ -2601,8 +2637,9 @@ priv_rout:
     lw      sp,TCB_SYS_Stack[tr]
 	ldi		r1,#$bc
 	sc		r1,LEDS
-	ldi		r1,#msgPriv
+	pea		msgPriv
 	bsr		DisplayString
+	addui   sp,sp,#8
 	mfspr   r1,epc
 	bsr     DisplayHalf
 	bsr     CRLF
@@ -2620,26 +2657,32 @@ priv_rout:
 ;------------------------------------------------------------------------------
 
 msgexf:
-	db	"exf ",0
+	dc	"exf ",0
 msgdrf:
-	db	"drf ",0
+	dc	"drf ",0
 msgdwf:
-	db	"dwf ",0
+	dc	"dwf ",0
 msgPriv:
-	db	"priv fault: PC=",0
+	dc	"priv fault: PC=",0
 msgUninit:
-	db	"uninit int.",0
+	dc	"uninit int.",0
 msgBusErr:
-    db  CR,LF,"Bus error PC=",0
+    dc  CR,LF,"Bus error PC=",0
 msgEA:
-    db  " EA=",0
+    dc  " EA=",0
 msgUninitIRQ:
-    db  "Uninitialized IRQ",0
+    dc  "Uninitialized IRQ: ",0
 
     align 4
 UninitIRQ:
-    ldi   r1,msgUninitIRQ
+    pea   msgUninitIRQ
     bsr   DisplayString
+    addui sp,sp,#8
+    mfspr r1,12          ; vecno
+    bsr   DisplayCharHex
+	bsr     CRLF
+	bsr		KeybdGetCharWait
+	bra   start
 .0001:
     bra   .0001
 
@@ -2651,12 +2694,14 @@ berr_rout:
     ldi     sp,#$7800
 	ldi		r1,#$bebe
 	sc		r1,LEDS
-	ldi     r1,#msgBusErr
+	pea     msgBusErr
 	bsr     DisplayString
+	addui   sp,sp,#8
 	mfspr   r1,ipc
 	bsr		DisplayWord
-	ldi     r1,#msgEA
+	pea     msgEA
 	bsr     DisplayString
+	addui   sp,sp,#8
     mfspr   r1,bear
 	bsr     DisplayWord
 	bsr     CRLF
@@ -2700,159 +2745,18 @@ BPT_ISR:
     bra     .0001
 
 include "set_time_serial.s"
-        code
-
-pSpriteController:
-	dw	-2437120
-
-sprite_demo:
-	      	subui	sp,sp,#16
-	      	push 	bp
-	      	mov  	bp,sp
-	      	subui	sp,sp,#24
-	      	push 	r11
-	      	push 	r12
-	      	push 	r13
-	      	ldi  	r11,#sprites
-	      	ldi  	r12,#-2356224
-	      	ldi  	r13,#-2621440
-	      	sw   	r0,-8[bp]
-sprite_demo_4:
-	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#32
-	      	bge  	r3,sprite_demo_5
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#2
-	      	asli 	r3,r3,#2
-	      	lw   	r4,pSpriteController
-	      	addu 	r3,r3,r4
-	      	lhu  	r4,4[r3]
-	      	ori  	r4,r4,#204
-	      	sh   	r4,4[r3]
-sprite_demo_6:
-	      	inc  	-8[bp],#1
-	      	bra  	sprite_demo_4
-sprite_demo_5:
-	      	sw   	r0,-8[bp]
-sprite_demo_7:
-	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#16384
-	      	bge  	r3,sprite_demo_8
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#2
-	      	lhu  	r4,[r12]
-	      	sh   	r4,0[r13+r3]
-sprite_demo_9:
-	      	inc  	-8[bp],#1
-	      	bra  	sprite_demo_7
-sprite_demo_8:
-	      	sw   	r0,-8[bp]
-sprite_demo_10:
-	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#32
-	      	bge  	r3,sprite_demo_11
-	      	lw   	r3,[r12]
-	      	mod  	r3,r3,#1364
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	sw   	r3,0[r11+r4]
-	      	lw   	r3,[r12]
-	      	mod  	r3,r3,#768
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	sw   	r3,8[r4]
-	      	lw   	r3,[r12]
-	      	and  	r3,r3,#7
-	      	subu 	r3,r3,#4
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	sw   	r3,16[r4]
-	      	lw   	r3,[r12]
-	      	and  	r3,r3,#7
-	      	subu 	r3,r3,#4
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	sw   	r3,24[r4]
-sprite_demo_12:
-	      	inc  	-8[bp],#1
-	      	bra  	sprite_demo_10
-sprite_demo_11:
-sprite_demo_13:
-	      	ldi  	r3,#1
-	      	beq  	r3,sprite_demo_14
-	      	sw   	r0,-8[bp]
-sprite_demo_15:
-	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#32
-	      	bge  	r3,sprite_demo_16
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#5
-	      	lw   	r3,0[r11+r3]
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	lw   	r4,16[r4]
-	      	addu 	r3,r3,r4
-	      	and  	r3,r3,#1023
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	sw   	r3,0[r11+r4]
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#5
-	      	addu 	r3,r3,r11
-	      	lw   	r3,8[r3]
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	lw   	r4,24[r4]
-	      	addu 	r3,r3,r4
-	      	and  	r3,r3,#511
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	sw   	r3,8[r4]
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#5
-	      	lw   	r3,0[r11+r3]
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#5
-	      	addu 	r4,r4,r11
-	      	lw   	r4,8[r4]
-	      	asli 	r4,r4,#16
-	      	addu 	r3,r3,r4
-	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#2
-	      	asli 	r4,r4,#2
-	      	lw   	r5,pSpriteController
-	      	sh   	r3,0[r5+r4]
-sprite_demo_17:
-	      	inc  	-8[bp],#1
-	      	bra  	sprite_demo_15
-sprite_demo_16:
-	      	     	            ldi  r1,#1000000
-            bsr  MicroDelay
-        
-	      	bra  	sprite_demo_13
-sprite_demo_14:
-sprite_demo_18:
-	      	pop  	r13
-	      	pop  	r12
-	      	pop  	r11
-	      	mov  	sp,bp
-	      	pop  	bp
-	      	rtl  	#16
-
-include "FMTK_Equates.inc"
-include "FMTK.s"
-include "iofocus.s"
+include "sprite_demo.s"
+;include "FMTK_Equates.inc"
+include "FMTKc.s"
+include "console.s"
+include "Semaphore.s"
+include "IOFocusc.s"
 include "stdio.s"
 include "ctype.s"
 include "disassem.s"
 include "debugger.s"
-
+include "ramtest.s"
+message "hit end"
     nop
     nop
 

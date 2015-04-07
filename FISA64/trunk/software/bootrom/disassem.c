@@ -38,6 +38,7 @@
 #define BSR     0x39
 #define BRA     0x3A
 #define RTS     0x3B
+#define JALI    0x3E
 #define NOP     0x3F
 #define LB      0x40
 #define LBU     0x41
@@ -303,6 +304,37 @@ void DispRR(int ad, char *mne, unsigned short int ir)
      printf("\r\n");
 }
  
+void DispJALI(int ad, unsigned short int ir, int hasPrefix, int prefix)
+{
+     int Rt;
+     int Ra;
+     short int sir;
+
+     sir = ir;     
+     Rt = (ir >> 12) & 0x1F;
+     Ra = (ir >> 7) & 0x1F;
+     DumpInsnBytes(ad, ir);
+     if (Rt != 0) {
+         if (Rt != 31) {
+             printf("JAL   ");
+             DispRstc(ir);
+             printf("(");
+         }
+         else
+             printf("JSR   (");
+     }
+     else
+         printf("JMP   (");
+     if (hasPrefix)
+         printf("$%X", (prefix << 15)|(ir>>17));
+     else {
+         if ((sir >> 17) != 0)
+             printf("$%X", (sir >> 17));
+     }
+     if (Ra != 0)
+         printf("[R%d]", Ra);
+     printf(")\r\n");
+}
 
 void disassem(unsigned int *ad, unsigned int hilite_ad)
 {
@@ -417,6 +449,7 @@ void disassem(unsigned int *ad, unsigned int hilite_ad)
              case 7:    DispBcc(*ad, "???  ", ir); break;
              }
              break;
+        case JALI: DispJALI(*ad, ir, hasPrefix, prefix); break;
         case BRK:  DispBrk(ir); break;
         case BSR:
              DumpInsnBytes(*ad, ir);

@@ -12,7 +12,7 @@ public bss linebuf:
 endpublic
 	align	8
 public bss dbg_stack:
-	fill.b	32768,0x00
+	fill.b	4096,0x00
 
 endpublic
 	align	8
@@ -106,70 +106,70 @@ dbg_DisplayHelp:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_16
+	      	ldi  	xlr,#debugger_252
 	      	mov  	bp,sp
-	      	push 	#debugger_1
+	      	push 	#debugger_237
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_2
+	      	push 	#debugger_238
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_3
+	      	push 	#debugger_239
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_4
+	      	push 	#debugger_240
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_5
+	      	push 	#debugger_241
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_6
+	      	push 	#debugger_242
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_7
+	      	push 	#debugger_243
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_8
+	      	push 	#debugger_244
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_9
+	      	push 	#debugger_245
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_10
+	      	push 	#debugger_246
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_11
+	      	push 	#debugger_247
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_12
+	      	push 	#debugger_248
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_13
+	      	push 	#debugger_249
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_14
+	      	push 	#debugger_250
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	push 	#debugger_15
+	      	push 	#debugger_251
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-debugger_17:
+debugger_253:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_16:
+debugger_252:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_17
+	      	bra  	debugger_253
 public code GetVBR:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	     	        mfspr r1,vbr
     
-debugger_19:
+debugger_255:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -179,26 +179,26 @@ public code set_vector:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_20
+	      	ldi  	xlr,#debugger_256
 	      	mov  	bp,sp
 	      	lw   	r3,24[bp]
 	      	cmpu 	r3,r3,#511
-	      	ble  	r3,debugger_21
-debugger_23:
+	      	ble  	r3,debugger_257
+debugger_259:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_21:
+debugger_257:
 	      	lw   	r3,32[bp]
-	      	beq  	r3,debugger_26
+	      	beq  	r3,debugger_262
 	      	lw   	r3,32[bp]
 	      	and  	r3,r3,#3
-	      	beq  	r3,debugger_24
-debugger_26:
-	      	bra  	debugger_23
-debugger_24:
+	      	beq  	r3,debugger_260
+debugger_262:
+	      	bra  	debugger_259
+debugger_260:
 	      	lw   	r3,24[bp]
 	      	asli 	r3,r3,#3
 	      	push 	r3
@@ -207,11 +207,11 @@ debugger_24:
 	      	mov  	r4,r1
 	      	lw   	r5,32[bp]
 	      	sw   	r5,0[r4+r3]
-	      	bra  	debugger_23
-debugger_20:
+	      	bra  	debugger_259
+debugger_256:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_23
+	      	bra  	debugger_259
 endpublic
 
 public code dbg_GetCursorRow:
@@ -220,8 +220,9 @@ public code dbg_GetCursorRow:
 	      	mov  	bp,sp
 	      	     	        ldi    r6,#3   ; Get cursor position
         sys    #410
+        lsr    r1,r1,#8
     
-debugger_28:
+debugger_264:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -233,9 +234,9 @@ public code dbg_GetCursorCol:
 	      	mov  	bp,sp
 	      	     	        ldi    r6,#3
         sys    #410
-        mov    r1,r2
+        and    r1,r1,#$FF
     
-debugger_30:
+debugger_266:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -250,7 +251,7 @@ public code dbg_HomeCursor:
          ldi   r2,#0
          sys   #410
      
-debugger_32:
+debugger_268:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -262,32 +263,32 @@ public code dbg_GetDBAD:
 	      	mov  	bp,sp
 	      	lw   	r3,24[bp]
 	      	cmp  	r4,r3,#0
-	      	beq  	r4,debugger_35
+	      	beq  	r4,debugger_271
 	      	cmp  	r4,r3,#1
-	      	beq  	r4,debugger_36
+	      	beq  	r4,debugger_272
 	      	cmp  	r4,r3,#2
-	      	beq  	r4,debugger_37
+	      	beq  	r4,debugger_273
 	      	cmp  	r4,r3,#3
-	      	beq  	r4,debugger_38
-	      	bra  	debugger_34
-debugger_35:
+	      	beq  	r4,debugger_274
+	      	bra  	debugger_270
+debugger_271:
 	      	     	mfspr  r1,dbad0  
-	      	bra  	debugger_34
-debugger_36:
+	      	bra  	debugger_270
+debugger_272:
 	      	     	mfspr  r1,dbad1  
-	      	bra  	debugger_34
-debugger_37:
+	      	bra  	debugger_270
+debugger_273:
 	      	     	mfspr  r1,dbad2  
-	      	bra  	debugger_34
-debugger_38:
+	      	bra  	debugger_270
+debugger_274:
 	      	     	mfspr  r1,dbad3  
-	      	bra  	debugger_34
-debugger_39:
+	      	bra  	debugger_270
+debugger_275:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
-debugger_34:
-	      	bra  	debugger_39
+debugger_270:
+	      	bra  	debugger_275
 endpublic
 
 public code dbg_SetDBAD:
@@ -296,36 +297,36 @@ public code dbg_SetDBAD:
 	      	mov  	bp,sp
 	      	lw   	r3,24[bp]
 	      	cmp  	r4,r3,#0
-	      	beq  	r4,debugger_42
+	      	beq  	r4,debugger_278
 	      	cmp  	r4,r3,#1
-	      	beq  	r4,debugger_43
+	      	beq  	r4,debugger_279
 	      	cmp  	r4,r3,#2
-	      	beq  	r4,debugger_44
+	      	beq  	r4,debugger_280
 	      	cmp  	r4,r3,#3
-	      	beq  	r4,debugger_45
-	      	bra  	debugger_41
-debugger_42:
+	      	beq  	r4,debugger_281
+	      	bra  	debugger_277
+debugger_278:
 	      	     	          lw    r1,32[bp]
           mtspr dbad0,r1
           
-	      	bra  	debugger_41
-debugger_43:
+	      	bra  	debugger_277
+debugger_279:
 	      	     	          lw    r1,32[bp]
           mtspr dbad1,r1
           
-	      	bra  	debugger_41
-debugger_44:
+	      	bra  	debugger_277
+debugger_280:
 	      	     	          lw    r1,32[bp]
           mtspr dbad2,r1
           
-	      	bra  	debugger_41
-debugger_45:
+	      	bra  	debugger_277
+debugger_281:
 	      	     	          lw    r1,32[bp]
           mtspr dbad3,r1
           
-	      	bra  	debugger_41
-debugger_41:
-debugger_46:
+	      	bra  	debugger_277
+debugger_277:
+debugger_282:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -338,7 +339,7 @@ public code dbg_arm:
 	      	     	         lw    r1,24[bp]
          mtspr dbctrl,r1
      
-debugger_48:
+debugger_284:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -352,7 +353,7 @@ public code CvtScreenToAscii:
          ldi   r6,#$21         ; screen to ascii
          sys   #410
      
-debugger_50:
+debugger_286:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -369,16 +370,16 @@ public code dbg_getchar:
 	      	sc   	r3,-2[bp]
 	      	lw   	r3,[r11]
 	      	cmp  	r3,r3,#84
-	      	bge  	r3,debugger_52
+	      	bge  	r3,debugger_288
 	      	lw   	r3,[r11]
 	      	asli 	r3,r3,#1
 	      	lcu  	r4,linebuf[r3]
 	      	sc   	r4,-2[bp]
 	      	inc  	[r11],#1
-debugger_52:
+debugger_288:
 	      	lcu  	r3,-2[bp]
 	      	mov  	r1,r3
-debugger_54:
+debugger_290:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
@@ -390,7 +391,7 @@ public code ignore_blanks:
 	      	push 	bp
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
-debugger_56:
+debugger_292:
 	      	lw   	r3,linendx
 	      	asli 	r3,r3,#1
 	      	lcu  	r4,linebuf[r3]
@@ -398,9 +399,9 @@ debugger_56:
 	      	inc  	linendx,#1
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#32
-	      	beq  	r3,debugger_56
-debugger_57:
-debugger_58:
+	      	beq  	r3,debugger_292
+debugger_293:
+debugger_294:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -411,10 +412,10 @@ public code dbg_ungetch:
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lw   	r3,linendx
-	      	ble  	r3,debugger_60
+	      	ble  	r3,debugger_296
 	      	dec  	linendx,#1
-debugger_60:
-debugger_62:
+debugger_296:
+debugger_298:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -424,161 +425,196 @@ public code dbg_nextNonSpace:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_63
+	      	ldi  	xlr,#debugger_299
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
-debugger_64:
+debugger_300:
 	      	lw   	r3,linendx
 	      	cmp  	r3,r3,#84
-	      	bge  	r3,debugger_65
+	      	bge  	r3,debugger_301
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#32
-	      	bne  	r3,debugger_68
+	      	bne  	r3,debugger_304
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#-1
-	      	bne  	r3,debugger_66
-debugger_68:
+	      	bne  	r3,debugger_302
+debugger_304:
 	      	lcu  	r3,-2[bp]
 	      	mov  	r1,r3
-debugger_69:
+debugger_305:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_66:
-	      	bra  	debugger_64
-debugger_65:
+debugger_302:
+	      	bra  	debugger_300
+debugger_301:
 	      	ldi  	r1,#-1
-	      	bra  	debugger_69
-debugger_63:
+	      	bra  	debugger_305
+debugger_299:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_69
+	      	bra  	debugger_305
+endpublic
+
+public code dbg_nextSpace:
+	      	push 	lr
+	      	push 	xlr
+	      	push 	bp
+	      	ldi  	xlr,#debugger_306
+	      	mov  	bp,sp
+	      	subui	sp,sp,#8
+debugger_307:
+	      	bsr  	dbg_getchar
+	      	mov  	r3,r1
+	      	sxc  	r3,r3
+	      	sc   	r3,-2[bp]
+	      	lcu  	r3,-2[bp]
+	      	cmp  	r3,r3,#-1
+	      	bne  	r3,debugger_309
+	      	bra  	debugger_308
+debugger_309:
+	      	lcu  	r3,-2[bp]
+	      	cmp  	r3,r3,#32
+	      	bne  	r3,debugger_307
+debugger_308:
+	      	lcu  	r3,-2[bp]
+	      	mov  	r1,r3
+debugger_311:
+	      	mov  	sp,bp
+	      	pop  	bp
+	      	pop  	xlr
+	      	pop  	lr
+	      	rtl  	#0
+debugger_306:
+	      	lw   	lr,8[bp]
+	      	sw   	lr,16[bp]
+	      	bra  	debugger_311
 endpublic
 
 public code dbg_getHexNumber:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_70
+	      	ldi  	xlr,#debugger_312
 	      	mov  	bp,sp
 	      	subui	sp,sp,#24
 	      	sw   	r0,-16[bp]
 	      	sw   	r0,-24[bp]
 	      	bsr  	dbg_nextNonSpace
 	      	dec  	linendx,#1
-debugger_71:
+debugger_313:
 	      	ldi  	r3,#1
-	      	beq  	r3,debugger_72
+	      	beq  	r3,debugger_314
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmpu 	r3,r3,#48
-	      	blt  	r3,debugger_73
+	      	blt  	r3,debugger_315
 	      	lcu  	r3,-2[bp]
 	      	cmpu 	r3,r3,#57
-	      	bgt  	r3,debugger_73
+	      	bgt  	r3,debugger_315
 	      	lw   	r3,-16[bp]
 	      	asli 	r3,r3,#4
 	      	lcu  	r4,-2[bp]
 	      	subu 	r4,r4,#48
 	      	or   	r3,r3,r4
 	      	sw   	r3,-16[bp]
-	      	bra  	debugger_74
-debugger_73:
+	      	bra  	debugger_316
+debugger_315:
 	      	lcu  	r3,-2[bp]
 	      	cmpu 	r3,r3,#65
-	      	blt  	r3,debugger_75
+	      	blt  	r3,debugger_317
 	      	lcu  	r3,-2[bp]
 	      	cmpu 	r3,r3,#70
-	      	bgt  	r3,debugger_75
+	      	bgt  	r3,debugger_317
 	      	lw   	r3,-16[bp]
 	      	asli 	r3,r3,#4
 	      	lcu  	r4,-2[bp]
 	      	addu 	r4,r4,#-55
 	      	or   	r3,r3,r4
 	      	sw   	r3,-16[bp]
-	      	bra  	debugger_76
-debugger_75:
+	      	bra  	debugger_318
+debugger_317:
 	      	lcu  	r3,-2[bp]
 	      	cmpu 	r3,r3,#97
-	      	blt  	r3,debugger_77
+	      	blt  	r3,debugger_319
 	      	lcu  	r3,-2[bp]
 	      	cmpu 	r3,r3,#102
-	      	bgt  	r3,debugger_77
+	      	bgt  	r3,debugger_319
 	      	lw   	r3,-16[bp]
 	      	asli 	r3,r3,#4
 	      	lcu  	r4,-2[bp]
 	      	addu 	r4,r4,#-87
 	      	or   	r3,r3,r4
 	      	sw   	r3,-16[bp]
-	      	bra  	debugger_78
-debugger_77:
+	      	bra  	debugger_320
+debugger_319:
 	      	lw   	r3,24[bp]
 	      	lw   	r4,-16[bp]
 	      	sw   	r4,[r3]
 	      	lw   	r3,-24[bp]
 	      	mov  	r1,r3
-debugger_79:
+debugger_321:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_78:
-debugger_76:
-debugger_74:
+debugger_320:
+debugger_318:
+debugger_316:
 	      	lw   	r3,-24[bp]
 	      	addu 	r3,r3,#1
 	      	sw   	r3,-24[bp]
-	      	bra  	debugger_71
-debugger_72:
-	      	bra  	debugger_79
-debugger_70:
+	      	bra  	debugger_313
+debugger_314:
+	      	bra  	debugger_321
+debugger_312:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_79
+	      	bra  	debugger_321
 endpublic
 
 public code dbg_ReadSetIB:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_82
+	      	ldi  	xlr,#debugger_324
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
 	      	ldi  	r11,#dbg_dbctrl
 	      	lw   	r3,24[bp]
 	      	cmpu 	r3,r3,#3
-	      	ble  	r3,debugger_83
-debugger_85:
+	      	ble  	r3,debugger_325
+debugger_327:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_83:
+debugger_325:
 	      	bsr  	dbg_nextNonSpace
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#61
-	      	bne  	r3,debugger_86
+	      	bne  	r3,debugger_328
 	      	pea  	-16[bp]
 	      	bsr  	dbg_GetHexNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	ble  	r3,debugger_88
+	      	ble  	r3,debugger_330
 	      	push 	-16[bp]
 	      	push 	24[bp]
 	      	bsr  	dbg_SetDBAD
@@ -597,19 +633,40 @@ debugger_83:
 	      	lw   	r4,[r11]
 	      	and  	r4,r4,r3
 	      	sw   	r4,[r11]
-debugger_88:
-	      	bra  	debugger_87
-debugger_86:
+	      	bra  	debugger_331
+debugger_330:
+	      	push 	#0
+	      	push 	24[bp]
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	ldi  	r3,#1
+	      	lw   	r4,24[bp]
+	      	asl  	r3,r3,r4
+	      	com  	r3,r3
+	      	lw   	r4,[r11]
+	      	and  	r4,r4,r3
+	      	sw   	r4,[r11]
+	      	ldi  	r3,#196608
+	      	lw   	r4,24[bp]
+	      	asli 	r4,r4,#1
+	      	asl  	r3,r3,r4
+	      	com  	r3,r3
+	      	lw   	r4,[r11]
+	      	and  	r4,r4,r3
+	      	sw   	r4,[r11]
+debugger_331:
+	      	bra  	debugger_329
+debugger_328:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#63
-	      	bne  	r3,debugger_90
+	      	bne  	r3,debugger_332
 	      	lw   	r3,[r11]
 	      	ldi  	r4,#196608
 	      	lw   	r5,24[bp]
 	      	asli 	r5,r5,#1
 	      	asl  	r4,r4,r5
 	      	and  	r3,r3,r4
-	      	bne  	r3,debugger_92
+	      	bne  	r3,debugger_334
 	      	lw   	r3,[r11]
 	      	ldi  	r4,#1
 	      	lw   	r5,24[bp]
@@ -619,64 +676,64 @@ debugger_86:
 	      	asl  	r5,r5,r6
 	      	seq  	r4,r4,r5
 	      	and  	r3,r3,r4
-	      	beq  	r3,debugger_92
+	      	beq  	r3,debugger_334
 	      	push 	24[bp]
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
 	      	push 	24[bp]
-	      	push 	#debugger_80
+	      	push 	#debugger_322
 	      	bsr  	printf
 	      	addui	sp,sp,#24
-	      	bra  	debugger_93
-debugger_92:
+	      	bra  	debugger_335
+debugger_334:
 	      	push 	24[bp]
-	      	push 	#debugger_81
+	      	push 	#debugger_323
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_93:
-debugger_90:
-debugger_87:
-	      	bra  	debugger_85
-debugger_82:
+debugger_335:
+debugger_332:
+debugger_329:
+	      	bra  	debugger_327
+debugger_324:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_85
+	      	bra  	debugger_327
 endpublic
 
 public code dbg_ReadSetDB:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_98
+	      	ldi  	xlr,#debugger_340
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
 	      	ldi  	r11,#dbg_dbctrl
 	      	lw   	r3,24[bp]
 	      	cmpu 	r3,r3,#3
-	      	ble  	r3,debugger_99
-debugger_101:
+	      	ble  	r3,debugger_341
+debugger_343:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_99:
+debugger_341:
 	      	bsr  	dbg_nextNonSpace
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#61
-	      	bne  	r3,debugger_102
+	      	bne  	r3,debugger_344
 	      	pea  	-16[bp]
 	      	bsr  	dbg_GetHexNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	ble  	r3,debugger_104
+	      	ble  	r3,debugger_346
 	      	push 	-16[bp]
 	      	push 	24[bp]
 	      	bsr  	dbg_SetDBAD
@@ -702,12 +759,33 @@ debugger_99:
 	      	lw   	r4,[r11]
 	      	or   	r4,r4,r3
 	      	sw   	r4,[r11]
-debugger_104:
-	      	bra  	debugger_103
-debugger_102:
+	      	bra  	debugger_347
+debugger_346:
+	      	push 	#0
+	      	push 	24[bp]
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	ldi  	r3,#1
+	      	lw   	r4,24[bp]
+	      	asl  	r3,r3,r4
+	      	com  	r3,r3
+	      	lw   	r4,[r11]
+	      	and  	r4,r4,r3
+	      	sw   	r4,[r11]
+	      	ldi  	r3,#196608
+	      	lw   	r4,24[bp]
+	      	asli 	r4,r4,#1
+	      	asl  	r3,r3,r4
+	      	com  	r3,r3
+	      	lw   	r4,[r11]
+	      	and  	r4,r4,r3
+	      	sw   	r4,[r11]
+debugger_347:
+	      	bra  	debugger_345
+debugger_344:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#63
-	      	bne  	r3,debugger_106
+	      	bne  	r3,debugger_348
 	      	lw   	r3,[r11]
 	      	ldi  	r4,#196608
 	      	lw   	r5,24[bp]
@@ -719,7 +797,7 @@ debugger_102:
 	      	asli 	r5,r5,#1
 	      	asl  	r4,r4,r5
 	      	cmp  	r3,r3,r4
-	      	bne  	r3,debugger_108
+	      	bne  	r3,debugger_350
 	      	lw   	r3,[r11]
 	      	ldi  	r4,#1
 	      	lw   	r5,24[bp]
@@ -729,64 +807,64 @@ debugger_102:
 	      	asl  	r5,r5,r6
 	      	seq  	r4,r4,r5
 	      	and  	r3,r3,r4
-	      	beq  	r3,debugger_108
+	      	beq  	r3,debugger_350
 	      	push 	24[bp]
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
 	      	push 	24[bp]
-	      	push 	#debugger_96
+	      	push 	#debugger_338
 	      	bsr  	printf
 	      	addui	sp,sp,#24
-	      	bra  	debugger_109
-debugger_108:
+	      	bra  	debugger_351
+debugger_350:
 	      	push 	24[bp]
-	      	push 	#debugger_97
+	      	push 	#debugger_339
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_109:
-debugger_106:
-debugger_103:
-	      	bra  	debugger_101
-debugger_98:
+debugger_351:
+debugger_348:
+debugger_345:
+	      	bra  	debugger_343
+debugger_340:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_101
+	      	bra  	debugger_343
 endpublic
 
 public code dbg_ReadSetDSB:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_114
+	      	ldi  	xlr,#debugger_356
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
 	      	ldi  	r11,#dbg_dbctrl
 	      	lw   	r3,24[bp]
 	      	cmpu 	r3,r3,#3
-	      	ble  	r3,debugger_115
-debugger_117:
+	      	ble  	r3,debugger_357
+debugger_359:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_115:
+debugger_357:
 	      	bsr  	dbg_nextNonSpace
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#61
-	      	bne  	r3,debugger_118
+	      	bne  	r3,debugger_360
 	      	pea  	-16[bp]
 	      	bsr  	dbg_GetHexNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	ble  	r3,debugger_120
+	      	ble  	r3,debugger_362
 	      	push 	-16[bp]
 	      	push 	24[bp]
 	      	bsr  	dbg_SetDBAD
@@ -812,12 +890,33 @@ debugger_115:
 	      	lw   	r4,[r11]
 	      	or   	r4,r4,r3
 	      	sw   	r4,[r11]
-debugger_120:
-	      	bra  	debugger_119
-debugger_118:
+	      	bra  	debugger_363
+debugger_362:
+	      	push 	#0
+	      	push 	24[bp]
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	ldi  	r3,#1
+	      	lw   	r4,24[bp]
+	      	asl  	r3,r3,r4
+	      	com  	r3,r3
+	      	lw   	r4,[r11]
+	      	and  	r4,r4,r3
+	      	sw   	r4,[r11]
+	      	ldi  	r3,#196608
+	      	lw   	r4,24[bp]
+	      	asli 	r4,r4,#1
+	      	asl  	r3,r3,r4
+	      	com  	r3,r3
+	      	lw   	r4,[r11]
+	      	and  	r4,r4,r3
+	      	sw   	r4,[r11]
+debugger_363:
+	      	bra  	debugger_361
+debugger_360:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#63
-	      	bne  	r3,debugger_122
+	      	bne  	r3,debugger_364
 	      	lw   	r3,[r11]
 	      	ldi  	r4,#196608
 	      	lw   	r5,24[bp]
@@ -829,7 +928,7 @@ debugger_118:
 	      	asli 	r5,r5,#1
 	      	asl  	r4,r4,r5
 	      	cmp  	r3,r3,r4
-	      	bne  	r3,debugger_124
+	      	bne  	r3,debugger_366
 	      	lw   	r3,[r11]
 	      	ldi  	r4,#1
 	      	lw   	r5,24[bp]
@@ -839,37 +938,37 @@ debugger_118:
 	      	asl  	r5,r5,r6
 	      	seq  	r4,r4,r5
 	      	and  	r3,r3,r4
-	      	beq  	r3,debugger_124
+	      	beq  	r3,debugger_366
 	      	push 	24[bp]
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
 	      	push 	24[bp]
-	      	push 	#debugger_112
+	      	push 	#debugger_354
 	      	bsr  	printf
 	      	addui	sp,sp,#24
-	      	bra  	debugger_125
-debugger_124:
+	      	bra  	debugger_367
+debugger_366:
 	      	push 	24[bp]
-	      	push 	#debugger_113
+	      	push 	#debugger_355
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_125:
-debugger_122:
-debugger_119:
-	      	bra  	debugger_117
-debugger_114:
+debugger_367:
+debugger_364:
+debugger_361:
+	      	bra  	debugger_359
+debugger_356:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_117
+	      	bra  	debugger_359
 endpublic
 
 DispRegs:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_137
+	      	ldi  	xlr,#debugger_379
 	      	mov  	bp,sp
 	      	push 	r11
 	      	ldi  	r11,#regs
@@ -877,134 +976,134 @@ DispRegs:
 	      	push 	24[r11]
 	      	push 	16[r11]
 	      	push 	8[r11]
-	      	push 	#debugger_129
+	      	push 	#debugger_371
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	64[r11]
 	      	push 	56[r11]
 	      	push 	48[r11]
 	      	push 	40[r11]
-	      	push 	#debugger_130
+	      	push 	#debugger_372
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	96[r11]
 	      	push 	88[r11]
 	      	push 	80[r11]
 	      	push 	72[r11]
-	      	push 	#debugger_131
+	      	push 	#debugger_373
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	128[r11]
 	      	push 	120[r11]
 	      	push 	112[r11]
 	      	push 	104[r11]
-	      	push 	#debugger_132
+	      	push 	#debugger_374
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	160[r11]
 	      	push 	152[r11]
 	      	push 	144[r11]
 	      	push 	136[r11]
-	      	push 	#debugger_133
+	      	push 	#debugger_375
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	192[r11]
 	      	push 	184[r11]
 	      	push 	176[r11]
 	      	push 	168[r11]
-	      	push 	#debugger_134
+	      	push 	#debugger_376
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	224[r11]
 	      	push 	216[r11]
 	      	push 	208[r11]
 	      	push 	200[r11]
-	      	push 	#debugger_135
+	      	push 	#debugger_377
 	      	bsr  	printf
 	      	addui	sp,sp,#40
 	      	push 	248[r11]
 	      	push 	240[r11]
 	      	push 	232[r11]
-	      	push 	#debugger_136
+	      	push 	#debugger_378
 	      	bsr  	printf
 	      	addui	sp,sp,#32
-debugger_138:
+debugger_380:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_137:
+debugger_379:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_138
+	      	bra  	debugger_380
 DispReg:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_141
+	      	ldi  	xlr,#debugger_383
 	      	mov  	bp,sp
 	      	lw   	r3,24[bp]
 	      	asli 	r3,r3,#3
 	      	push 	regs[r3]
 	      	push 	24[bp]
-	      	push 	#debugger_140
+	      	push 	#debugger_382
 	      	bsr  	printf
 	      	addui	sp,sp,#24
-debugger_142:
+debugger_384:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_141:
+debugger_383:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_142
+	      	bra  	debugger_384
 public code dbg_prompt:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_144
+	      	ldi  	xlr,#debugger_386
 	      	mov  	bp,sp
-	      	push 	#debugger_143
+	      	push 	#debugger_385
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-debugger_145:
+debugger_387:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_144:
+debugger_386:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_145
+	      	bra  	debugger_387
 endpublic
 
 public code dbg_getDecNumber:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_146
+	      	ldi  	xlr,#debugger_388
 	      	mov  	bp,sp
 	      	subui	sp,sp,#24
 	      	push 	r11
 	      	lw   	r11,24[bp]
-	      	bne  	r11,debugger_147
+	      	bne  	r11,debugger_389
 	      	ldi  	r1,#0
-debugger_149:
+debugger_391:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_147:
+debugger_389:
 	      	sw   	r0,-8[bp]
 	      	sw   	r0,-24[bp]
-debugger_150:
+debugger_392:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
@@ -1013,7 +1112,7 @@ debugger_150:
 	      	bsr  	isdigit
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	beq  	r3,debugger_151
+	      	beq  	r3,debugger_393
 	      	ldi  	r3,#-48
 	      	lw   	r4,-8[bp]
 	      	mul  	r4,r4,#10
@@ -1022,25 +1121,25 @@ debugger_150:
 	      	addu 	r3,r3,r4
 	      	sw   	r3,-8[bp]
 	      	inc  	-24[bp],#1
-	      	bra  	debugger_150
-debugger_151:
+	      	bra  	debugger_392
+debugger_393:
 	      	dec  	linendx,#1
 	      	lw   	r3,-8[bp]
 	      	sw   	r3,[r11]
 	      	lw   	r3,-24[bp]
 	      	mov  	r1,r3
-	      	bra  	debugger_149
-debugger_146:
+	      	bra  	debugger_391
+debugger_388:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_149
+	      	bra  	debugger_391
 endpublic
 
 public code dbg_processReg:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_152
+	      	ldi  	xlr,#debugger_394
 	      	mov  	bp,sp
 	      	subui	sp,sp,#32
 	      	bsr  	dbg_getchar
@@ -1049,18 +1148,18 @@ public code dbg_processReg:
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#63
-	      	beq  	r4,debugger_154
-	      	bra  	debugger_155
-debugger_154:
+	      	beq  	r4,debugger_396
+	      	bra  	debugger_397
+debugger_396:
 	      	bsr  	DispRegs
-	      	bra  	debugger_153
-debugger_155:
+	      	bra  	debugger_395
+debugger_397:
 	      	lcu  	r3,-2[bp]
 	      	push 	r3
 	      	bsr  	isdigit
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	beq  	r3,debugger_156
+	      	beq  	r3,debugger_398
 	      	dec  	linendx,#1
 	      	bsr  	dbg_getDecNumber
 	      	mov  	r3,r1
@@ -1071,92 +1170,92 @@ debugger_155:
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#63
-	      	beq  	r4,debugger_159
+	      	beq  	r4,debugger_401
 	      	cmp  	r4,r3,#61
-	      	beq  	r4,debugger_160
-	      	bra  	debugger_161
-debugger_159:
+	      	beq  	r4,debugger_402
+	      	bra  	debugger_403
+debugger_401:
 	      	push 	-16[bp]
 	      	bsr  	DispReg
 	      	addui	sp,sp,#8
-debugger_162:
+debugger_404:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_160:
+debugger_402:
 	      	pea  	-24[bp]
 	      	bsr  	dbg_getHexNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	sw   	r3,-32[bp]
 	      	lw   	r3,-32[bp]
-	      	ble  	r3,debugger_163
+	      	ble  	r3,debugger_405
 	      	lw   	r3,-16[bp]
 	      	asli 	r3,r3,#3
 	      	lw   	r4,-24[bp]
 	      	sw   	r4,regs[r3]
-debugger_163:
-	      	bra  	debugger_162
-debugger_161:
-	      	bra  	debugger_162
-debugger_158:
-debugger_156:
-	      	bra  	debugger_162
-debugger_153:
-	      	bra  	debugger_162
-debugger_152:
+debugger_405:
+	      	bra  	debugger_404
+debugger_403:
+	      	bra  	debugger_404
+debugger_400:
+debugger_398:
+	      	bra  	debugger_404
+debugger_395:
+	      	bra  	debugger_404
+debugger_394:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_162
+	      	bra  	debugger_404
 endpublic
 
 public code dbg_parse_begin:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_165
+	      	ldi  	xlr,#debugger_407
 	      	mov  	bp,sp
 	      	push 	r11
 	      	ldi  	r11,#linebuf
 	      	sw   	r0,linendx
 	      	lcu  	r3,[r11]
 	      	cmp  	r3,r3,#68
-	      	bne  	r3,debugger_166
+	      	bne  	r3,debugger_408
 	      	lcu  	r3,2[r11]
 	      	cmp  	r3,r3,#66
-	      	bne  	r3,debugger_166
+	      	bne  	r3,debugger_408
 	      	lcu  	r3,4[r11]
 	      	cmp  	r3,r3,#71
-	      	bne  	r3,debugger_166
+	      	bne  	r3,debugger_408
 	      	lcu  	r3,6[r11]
 	      	cmp  	r3,r3,#62
-	      	bne  	r3,debugger_166
+	      	bne  	r3,debugger_408
 	      	ldi  	r3,#4
 	      	sw   	r3,linendx
-debugger_166:
+debugger_408:
 	      	bsr  	dbg_parse_line
 	      	mov  	r3,r1
 	      	mov  	r1,r3
-debugger_168:
+debugger_410:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_165:
+debugger_407:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_168
+	      	bra  	debugger_410
 endpublic
 
 public code dbg_parse_line:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_189
+	      	ldi  	xlr,#debugger_435
 	      	mov  	bp,sp
 	      	subui	sp,sp,#56
 	      	push 	r11
@@ -1174,38 +1273,38 @@ public code dbg_parse_line:
 	      	lea  	r3,-16[bp]
 	      	mov  	r16,r3
 	      	ldi  	r17,#dbg_dbctrl
-debugger_190:
+debugger_436:
 	      	lw   	r3,linendx
 	      	cmp  	r3,r3,#84
-	      	bge  	r3,debugger_191
+	      	bge  	r3,debugger_437
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#-1
-	      	beq  	r4,debugger_193
+	      	beq  	r4,debugger_439
 	      	cmp  	r4,r3,#32
-	      	beq  	r4,debugger_194
+	      	beq  	r4,debugger_440
 	      	cmp  	r4,r3,#63
-	      	beq  	r4,debugger_195
+	      	beq  	r4,debugger_441
 	      	cmp  	r4,r3,#113
-	      	beq  	r4,debugger_196
+	      	beq  	r4,debugger_442
 	      	cmp  	r4,r3,#97
-	      	beq  	r4,debugger_197
+	      	beq  	r4,debugger_443
 	      	cmp  	r4,r3,#105
-	      	beq  	r4,debugger_198
+	      	beq  	r4,debugger_444
 	      	cmp  	r4,r3,#100
-	      	beq  	r4,debugger_199
+	      	beq  	r4,debugger_445
 	      	cmp  	r4,r3,#114
-	      	beq  	r4,debugger_200
+	      	beq  	r4,debugger_446
 	      	cmp  	r4,r3,#115
-	      	beq  	r4,debugger_201
+	      	beq  	r4,debugger_447
 	      	cmp  	r4,r3,#120
-	      	beq  	r4,debugger_202
-	      	bra  	debugger_192
-debugger_193:
-debugger_203:
+	      	beq  	r4,debugger_448
+	      	bra  	debugger_438
+debugger_439:
+debugger_449:
 	      	pop  	r17
 	      	pop  	r16
 	      	pop  	r15
@@ -1218,468 +1317,486 @@ debugger_203:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_194:
-	      	bra  	debugger_192
-debugger_195:
+debugger_440:
+	      	bra  	debugger_438
+debugger_441:
 	      	bsr  	dbg_DisplayHelp
-	      	bra  	debugger_192
-debugger_196:
+	      	bra  	debugger_438
+debugger_442:
 	      	ldi  	r1,#1
-	      	bra  	debugger_203
-debugger_197:
+	      	bra  	debugger_449
+debugger_443:
 	      	push 	[r17]
 	      	bsr  	dbg_arm
 	      	addui	sp,sp,#8
-	      	bra  	debugger_192
-debugger_198:
+	      	bra  	debugger_438
+debugger_444:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#63
-	      	beq  	r4,debugger_205
+	      	beq  	r4,debugger_451
 	      	cmp  	r4,r3,#48
-	      	beq  	r4,debugger_206
+	      	beq  	r4,debugger_452
 	      	cmp  	r4,r3,#49
-	      	beq  	r4,debugger_207
+	      	beq  	r4,debugger_453
 	      	cmp  	r4,r3,#50
-	      	beq  	r4,debugger_208
+	      	beq  	r4,debugger_454
 	      	cmp  	r4,r3,#51
-	      	beq  	r4,debugger_209
-	      	bra  	debugger_204
-debugger_205:
+	      	beq  	r4,debugger_455
+	      	bra  	debugger_450
+debugger_451:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#196608
-	      	bne  	r3,debugger_210
+	      	bne  	r3,debugger_456
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#1
 	      	cmp  	r3,r3,#1
-	      	bne  	r3,debugger_210
+	      	bne  	r3,debugger_456
 	      	push 	#0
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_169
+	      	push 	#debugger_411
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_210:
+debugger_456:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#3145728
-	      	bne  	r3,debugger_212
+	      	bne  	r3,debugger_458
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#2
 	      	cmp  	r3,r3,#2
-	      	bne  	r3,debugger_212
+	      	bne  	r3,debugger_458
 	      	push 	#1
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_170
+	      	push 	#debugger_412
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_212:
+debugger_458:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#50331648
-	      	bne  	r3,debugger_214
+	      	bne  	r3,debugger_460
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#4
 	      	cmp  	r3,r3,#4
-	      	bne  	r3,debugger_214
+	      	bne  	r3,debugger_460
 	      	push 	#2
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_171
+	      	push 	#debugger_413
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_214:
+debugger_460:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#805306368
-	      	bne  	r3,debugger_216
+	      	bne  	r3,debugger_462
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#8
 	      	cmp  	r3,r3,#8
-	      	bne  	r3,debugger_216
+	      	bne  	r3,debugger_462
 	      	push 	#3
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_172
+	      	push 	#debugger_414
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_216:
-	      	bra  	debugger_204
-debugger_206:
+debugger_462:
+	      	bra  	debugger_450
+debugger_452:
 	      	push 	#0
 	      	bsr  	dbg_ReadSetIB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_204
-debugger_207:
+	      	bra  	debugger_450
+debugger_453:
 	      	push 	#1
 	      	bsr  	dbg_ReadSetIB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_204
-debugger_208:
+	      	bra  	debugger_450
+debugger_454:
 	      	push 	#2
 	      	bsr  	dbg_ReadSetIB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_204
-debugger_209:
+	      	bra  	debugger_450
+debugger_455:
 	      	push 	#3
 	      	bsr  	dbg_ReadSetIB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_204
-debugger_204:
-	      	bra  	debugger_192
-debugger_199:
+	      	bra  	debugger_450
+debugger_450:
+	      	bra  	debugger_438
+debugger_445:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#105
-	      	beq  	r4,debugger_219
+	      	beq  	r4,debugger_465
 	      	cmp  	r4,r3,#63
-	      	beq  	r4,debugger_220
+	      	beq  	r4,debugger_466
 	      	cmp  	r4,r3,#48
-	      	beq  	r4,debugger_221
+	      	beq  	r4,debugger_467
 	      	cmp  	r4,r3,#49
-	      	beq  	r4,debugger_222
+	      	beq  	r4,debugger_468
 	      	cmp  	r4,r3,#50
-	      	beq  	r4,debugger_223
+	      	beq  	r4,debugger_469
 	      	cmp  	r4,r3,#51
-	      	beq  	r4,debugger_224
+	      	beq  	r4,debugger_470
 	      	cmp  	r4,r3,#115
-	      	beq  	r4,debugger_225
-	      	bra  	debugger_218
-debugger_219:
-debugger_226:
-	      	bsr  	dbg_getchar
-	      	mov  	r3,r1
-	      	sxc  	r3,r3
-	      	sc   	r3,-2[bp]
-	      	lcu  	r3,-2[bp]
-	      	cmp  	r3,r3,#-1
-	      	bne  	r3,debugger_228
-	      	bra  	debugger_227
-debugger_228:
-	      	lcu  	r3,-2[bp]
-	      	cmp  	r3,r3,#32
-	      	bne  	r3,debugger_226
-debugger_227:
+	      	beq  	r4,debugger_471
+	      	bra  	debugger_472
+debugger_465:
+	      	bsr  	dbg_nextSpace
 	      	push 	r16
 	      	bsr  	dbg_getHexNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	sw   	r3,-48[bp]
 	      	lw   	r3,-48[bp]
-	      	ble  	r3,debugger_230
+	      	ble  	r3,debugger_473
 	      	pea  	-24[bp]
 	      	bsr  	dbg_getDecNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	sw   	r3,-56[bp]
 	      	lw   	r3,-56[bp]
-	      	ble  	r3,debugger_232
-debugger_234:
+	      	ble  	r3,debugger_475
+debugger_477:
 	      	lw   	r3,-56[bp]
-	      	ble  	r3,debugger_235
+	      	ble  	r3,debugger_478
 	      	push 	#0
 	      	push 	r16
 	      	bsr  	disassem
 	      	addui	sp,sp,#16
-debugger_236:
+debugger_479:
 	      	dec  	-56[bp],#1
-	      	bra  	debugger_234
-debugger_235:
-	      	bra  	debugger_233
-debugger_232:
+	      	bra  	debugger_477
+debugger_478:
+	      	bra  	debugger_476
+debugger_475:
 	      	push 	#0
 	      	push 	[r16]
 	      	bsr  	disassem20
 	      	addui	sp,sp,#16
-debugger_233:
-debugger_230:
-	      	bra  	debugger_218
-debugger_220:
-	      	push 	#debugger_173
+debugger_476:
+debugger_473:
+	      	bra  	debugger_464
+debugger_466:
+	      	push 	#debugger_415
 	      	bsr  	printf
 	      	addui	sp,sp,#8
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#196608
 	      	cmp  	r3,r3,#196608
-	      	bne  	r3,debugger_237
+	      	bne  	r3,debugger_480
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#1
 	      	cmp  	r3,r3,#1
-	      	bne  	r3,debugger_237
+	      	bne  	r3,debugger_480
 	      	push 	#0
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_174
+	      	push 	#debugger_416
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_237:
+debugger_480:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#3145728
 	      	cmp  	r3,r3,#3145728
-	      	bne  	r3,debugger_239
+	      	bne  	r3,debugger_482
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#2
 	      	cmp  	r3,r3,#2
-	      	bne  	r3,debugger_239
+	      	bne  	r3,debugger_482
 	      	push 	#1
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_175
+	      	push 	#debugger_417
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_239:
+debugger_482:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#50331648
 	      	cmp  	r3,r3,#50331648
-	      	bne  	r3,debugger_241
+	      	bne  	r3,debugger_484
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#4
 	      	cmp  	r3,r3,#4
-	      	bne  	r3,debugger_241
+	      	bne  	r3,debugger_484
 	      	push 	#2
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_176
+	      	push 	#debugger_418
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_241:
+debugger_484:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#805306368
 	      	cmp  	r3,r3,#805306368
-	      	bne  	r3,debugger_243
+	      	bne  	r3,debugger_486
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#8
 	      	cmp  	r3,r3,#8
-	      	bne  	r3,debugger_243
+	      	bne  	r3,debugger_486
 	      	push 	#3
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_177
+	      	push 	#debugger_419
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_243:
-	      	bra  	debugger_218
-debugger_221:
+debugger_486:
+	      	bra  	debugger_464
+debugger_467:
 	      	push 	#0
 	      	bsr  	dbg_ReadSetDB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_218
-debugger_222:
+	      	bra  	debugger_464
+debugger_468:
 	      	push 	#1
 	      	bsr  	dbg_ReadSetDB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_218
-debugger_223:
+	      	bra  	debugger_464
+debugger_469:
 	      	push 	#2
 	      	bsr  	dbg_ReadSetDB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_218
-debugger_224:
+	      	bra  	debugger_464
+debugger_470:
 	      	push 	#3
 	      	bsr  	dbg_ReadSetDB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_218
-debugger_225:
+	      	bra  	debugger_464
+debugger_471:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#63
-	      	beq  	r4,debugger_246
+	      	beq  	r4,debugger_489
 	      	cmp  	r4,r3,#48
-	      	beq  	r4,debugger_247
+	      	beq  	r4,debugger_490
 	      	cmp  	r4,r3,#49
-	      	beq  	r4,debugger_248
+	      	beq  	r4,debugger_491
 	      	cmp  	r4,r3,#50
-	      	beq  	r4,debugger_249
+	      	beq  	r4,debugger_492
 	      	cmp  	r4,r3,#51
-	      	beq  	r4,debugger_250
-	      	bra  	debugger_245
-debugger_246:
+	      	beq  	r4,debugger_493
+	      	bra  	debugger_488
+debugger_489:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#196608
 	      	cmp  	r3,r3,#65536
-	      	bne  	r3,debugger_251
+	      	bne  	r3,debugger_494
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#1
 	      	cmp  	r3,r3,#1
-	      	bne  	r3,debugger_251
+	      	bne  	r3,debugger_494
 	      	push 	#0
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_178
+	      	push 	#debugger_420
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_251:
+debugger_494:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#3145728
 	      	cmp  	r3,r3,#1048576
-	      	bne  	r3,debugger_253
+	      	bne  	r3,debugger_496
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#2
 	      	cmp  	r3,r3,#2
-	      	bne  	r3,debugger_253
+	      	bne  	r3,debugger_496
 	      	push 	#1
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_179
+	      	push 	#debugger_421
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_253:
+debugger_496:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#50331648
 	      	cmp  	r3,r3,#16777216
-	      	bne  	r3,debugger_255
+	      	bne  	r3,debugger_498
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#4
 	      	cmp  	r3,r3,#4
-	      	bne  	r3,debugger_255
+	      	bne  	r3,debugger_498
 	      	push 	#2
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_180
+	      	push 	#debugger_422
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_255:
+debugger_498:
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#805306368
 	      	cmp  	r3,r3,#268435456
-	      	bne  	r3,debugger_257
+	      	bne  	r3,debugger_500
 	      	lw   	r3,[r17]
 	      	and  	r3,r3,#8
 	      	cmp  	r3,r3,#8
-	      	bne  	r3,debugger_257
+	      	bne  	r3,debugger_500
 	      	push 	#3
 	      	bsr  	dbg_GetDBAD
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	push 	r3
-	      	push 	#debugger_181
+	      	push 	#debugger_423
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_257:
-	      	bra  	debugger_245
-debugger_247:
+debugger_500:
+	      	bra  	debugger_488
+debugger_490:
 	      	push 	#0
 	      	bsr  	dbg_ReadSetDSB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_245
-debugger_248:
+	      	bra  	debugger_488
+debugger_491:
 	      	push 	#1
 	      	bsr  	dbg_ReadSetDSB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_245
-debugger_249:
+	      	bra  	debugger_488
+debugger_492:
 	      	push 	#2
 	      	bsr  	dbg_ReadSetDSB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_245
-debugger_250:
+	      	bra  	debugger_488
+debugger_493:
 	      	push 	#3
 	      	bsr  	dbg_ReadSetDSB
 	      	addui	sp,sp,#8
-	      	bra  	debugger_245
-debugger_245:
-	      	bra  	debugger_218
-debugger_218:
-	      	bra  	debugger_192
-debugger_200:
+	      	bra  	debugger_488
+debugger_488:
+	      	bra  	debugger_464
+debugger_472:
+	      	bsr  	dbg_nextSpace
+	      	push 	#0
+	      	push 	#0
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	push 	#0
+	      	push 	#1
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	push 	#0
+	      	push 	#2
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	push 	#0
+	      	push 	#3
+	      	bsr  	dbg_SetDBAD
+	      	addui	sp,sp,#16
+	      	push 	#0
+	      	bsr  	dbg_arm
+	      	addui	sp,sp,#8
+	      	bra  	debugger_464
+debugger_464:
+	      	bra  	debugger_438
+debugger_446:
 	      	bsr  	dbg_processReg
-	      	bra  	debugger_192
-debugger_201:
+	      	bra  	debugger_438
+debugger_447:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#115
-	      	bne  	r3,debugger_259
+	      	bne  	r3,debugger_502
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#45
-	      	bne  	r3,debugger_261
+	      	bne  	r3,debugger_504
 	      	lw   	r3,[r17]
-	      	andi 	r3,r3,#-1
+	      	andi 	r3,r3,#4611686018427387903
 	      	sw   	r3,[r17]
-	      	bra  	debugger_262
-debugger_261:
+	      	push 	[r17]
+	      	bsr  	dbg_arm
+	      	addui	sp,sp,#8
+	      	sw   	r0,ssm
+	      	bra  	debugger_505
+debugger_504:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#43
-	      	beq  	r3,debugger_265
+	      	beq  	r3,debugger_508
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#109
-	      	bne  	r3,debugger_263
-debugger_265:
+	      	bne  	r3,debugger_506
+debugger_508:
 	      	lw   	r3,[r17]
-	      	ori  	r3,r3,#0
+	      	ori  	r3,r3,#4611686018427387904
 	      	sw   	r3,[r17]
+	      	push 	[r17]
+	      	bsr  	dbg_arm
+	      	addui	sp,sp,#8
 	      	ldi  	r3,#1
 	      	sw   	r3,ssm
-debugger_263:
-debugger_262:
-debugger_259:
-	      	bra  	debugger_192
-debugger_202:
+	      	ldi  	r1,#1
+	      	bra  	debugger_449
+debugger_506:
+debugger_505:
+debugger_502:
+	      	bra  	debugger_438
+debugger_448:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#47
-	      	bne  	r3,debugger_266
+	      	bne  	r3,debugger_509
 	      	pea  	-40[bp]
 	      	bsr  	dbg_getDecNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	sw   	r3,-48[bp]
 	      	lw   	r3,-48[bp]
-	      	ble  	r3,debugger_268
+	      	ble  	r3,debugger_511
 	      	lw   	r3,-40[bp]
 	      	sw   	r3,[r15]
-debugger_268:
+debugger_511:
 	      	bsr  	dbg_getchar
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#105
-	      	beq  	r4,debugger_271
+	      	beq  	r4,debugger_514
 	      	cmp  	r4,r3,#115
-	      	beq  	r4,debugger_272
+	      	beq  	r4,debugger_515
 	      	cmp  	r4,r3,#120
-	      	beq  	r4,debugger_273
-	      	bra  	debugger_270
-debugger_271:
+	      	beq  	r4,debugger_516
+	      	bra  	debugger_513
+debugger_514:
 	      	ldi  	r3,#105
 	      	sc   	r3,[r14]
 	      	push 	r16
@@ -1688,12 +1805,12 @@ debugger_271:
 	      	mov  	r3,r1
 	      	sw   	r3,-48[bp]
 	      	lw   	r3,-48[bp]
-	      	ble  	r3,debugger_274
+	      	ble  	r3,debugger_517
 	      	lw   	r3,[r16]
 	      	sw   	r3,[r13]
-debugger_274:
-	      	bra  	debugger_270
-debugger_272:
+debugger_517:
+	      	bra  	debugger_513
+debugger_515:
 	      	ldi  	r3,#115
 	      	sc   	r3,[r14]
 	      	push 	r16
@@ -1702,12 +1819,12 @@ debugger_272:
 	      	mov  	r3,r1
 	      	sw   	r3,-48[bp]
 	      	lw   	r3,-48[bp]
-	      	ble  	r3,debugger_276
+	      	ble  	r3,debugger_519
 	      	lw   	r3,[r16]
 	      	sw   	r3,[r13]
-debugger_276:
-	      	bra  	debugger_270
-debugger_273:
+debugger_519:
+	      	bra  	debugger_513
+debugger_516:
 	      	ldi  	r3,#120
 	      	sc   	r3,[r14]
 	      	bsr  	dbg_getchar
@@ -1716,136 +1833,213 @@ debugger_273:
 	      	sc   	r3,-2[bp]
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r4,r3,#98
-	      	beq  	r4,debugger_279
+	      	beq  	r4,debugger_522
 	      	cmp  	r4,r3,#99
-	      	beq  	r4,debugger_280
+	      	beq  	r4,debugger_523
 	      	cmp  	r4,r3,#104
-	      	beq  	r4,debugger_281
+	      	beq  	r4,debugger_524
 	      	cmp  	r4,r3,#119
-	      	beq  	r4,debugger_282
-	      	bra  	debugger_283
-debugger_279:
+	      	beq  	r4,debugger_525
+	      	bra  	debugger_526
+debugger_522:
 	      	ldi  	r3,#98
 	      	sw   	r3,[r12]
 	      	ldi  	r3,#16
 	      	sw   	r3,[r11]
-	      	bra  	debugger_278
-debugger_280:
+	      	bra  	debugger_521
+debugger_523:
 	      	ldi  	r3,#99
 	      	sw   	r3,[r12]
 	      	ldi  	r3,#8
 	      	sw   	r3,[r11]
-	      	bra  	debugger_278
-debugger_281:
+	      	bra  	debugger_521
+debugger_524:
 	      	ldi  	r3,#104
 	      	sw   	r3,[r12]
 	      	ldi  	r3,#4
 	      	sw   	r3,[r11]
-	      	bra  	debugger_278
-debugger_282:
+	      	bra  	debugger_521
+debugger_525:
 	      	ldi  	r3,#119
 	      	sw   	r3,[r12]
 	      	ldi  	r3,#2
 	      	sw   	r3,[r11]
-	      	bra  	debugger_278
-debugger_283:
+	      	bra  	debugger_521
+debugger_526:
 	      	dec  	linendx,#1
-debugger_278:
+debugger_521:
 	      	push 	r16
 	      	bsr  	dbg_getHexNumber
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	sw   	r3,-48[bp]
 	      	lw   	r3,-48[bp]
-	      	ble  	r3,debugger_284
+	      	ble  	r3,debugger_527
 	      	lw   	r3,[r16]
 	      	sw   	r3,[r13]
-debugger_284:
-	      	bra  	debugger_270
-debugger_270:
-debugger_266:
+debugger_527:
+	      	bra  	debugger_513
+debugger_513:
+debugger_509:
 	      	lcu  	r3,[r14]
 	      	cmp  	r4,r3,#105
-	      	beq  	r4,debugger_287
+	      	beq  	r4,debugger_530
 	      	cmp  	r4,r3,#115
-	      	beq  	r4,debugger_288
+	      	beq  	r4,debugger_531
 	      	cmp  	r4,r3,#120
-	      	beq  	r4,debugger_289
-	      	bra  	debugger_286
-debugger_287:
-	      	push 	#debugger_182
+	      	beq  	r4,debugger_532
+	      	bra  	debugger_529
+debugger_530:
+	      	push 	#debugger_424
 	      	bsr  	printf
 	      	addui	sp,sp,#8
 	      	sw   	r0,-48[bp]
-debugger_290:
+debugger_533:
 	      	lw   	r3,-48[bp]
 	      	lw   	r4,[r15]
 	      	cmp  	r3,r3,r4
-	      	bge  	r3,debugger_291
+	      	bge  	r3,debugger_534
 	      	bsr  	getcharNoWait
 	      	mov  	r3,r1
 	      	cmp  	r3,r3,#3
-	      	bne  	r3,debugger_293
-	      	bra  	debugger_291
-debugger_293:
+	      	bne  	r3,debugger_536
+	      	bra  	debugger_534
+debugger_536:
 	      	push 	#0
 	      	push 	r13
 	      	bsr  	disassem
 	      	addui	sp,sp,#16
-debugger_292:
+debugger_535:
 	      	inc  	-48[bp],#1
-	      	bra  	debugger_290
-debugger_291:
-	      	bra  	debugger_286
-debugger_288:
-	      	bra  	debugger_286
-debugger_289:
+	      	bra  	debugger_533
+debugger_534:
+	      	bra  	debugger_529
+debugger_531:
 	      	sw   	r0,-48[bp]
-debugger_295:
+debugger_538:
 	      	lw   	r3,-48[bp]
 	      	lw   	r4,[r15]
 	      	cmp  	r3,r3,r4
-	      	bge  	r3,debugger_296
+	      	bge  	r3,debugger_539
 	      	bsr  	getcharNoWait
 	      	mov  	r3,r1
 	      	cmp  	r3,r3,#3
-	      	bne  	r3,debugger_298
-	      	bra  	debugger_296
-debugger_298:
+	      	bne  	r3,debugger_541
+	      	bra  	debugger_539
+debugger_541:
+	      	push 	#84
+	      	lw   	r3,[r13]
+	      	asri 	r3,r3,#1
+	      	asli 	r3,r3,#1
+	      	lw   	r4,cmem
+	      	addu 	r3,r3,r4
+	      	push 	r3
+	      	bsr  	putstr
+	      	addui	sp,sp,#16
+	      	mov  	r3,r1
+	      	asli 	r3,r3,#1
+	      	lw   	r4,[r13]
+	      	addu 	r4,r4,r3
+	      	sw   	r4,[r13]
+	      	push 	#debugger_425
+	      	bsr  	printf
+	      	addui	sp,sp,#8
+debugger_540:
+	      	inc  	-48[bp],#1
+	      	bra  	debugger_538
+debugger_539:
+	      	bra  	debugger_529
+debugger_532:
+	      	sw   	r0,-48[bp]
+debugger_543:
+	      	lw   	r3,-48[bp]
+	      	lw   	r4,[r15]
+	      	cmp  	r3,r3,r4
+	      	bge  	r3,debugger_544
+	      	bsr  	getcharNoWait
+	      	mov  	r3,r1
+	      	cmp  	r3,r3,#3
+	      	bne  	r3,debugger_546
+	      	bra  	debugger_544
+debugger_546:
 	      	lw   	r3,-48[bp]
 	      	lw   	r4,muol
 	      	modu 	r3,r3,r4
-	      	bne  	r3,debugger_300
+	      	bne  	r3,debugger_548
+	      	lw   	r3,[r12]
+	      	cmp  	r4,r3,#98
+	      	beq  	r4,debugger_551
+	      	cmp  	r4,r3,#99
+	      	beq  	r4,debugger_552
+	      	cmp  	r4,r3,#104
+	      	beq  	r4,debugger_553
+	      	cmp  	r4,r3,#119
+	      	beq  	r4,debugger_554
+	      	bra  	debugger_550
+debugger_551:
 	      	lw   	r3,[r13]
 	      	lw   	r4,-48[bp]
 	      	addu 	r3,r3,r4
 	      	push 	r3
-	      	push 	#debugger_183
+	      	push 	#debugger_426
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-debugger_300:
+	      	bra  	debugger_550
+debugger_552:
+	      	lw   	r3,[r13]
+	      	lw   	r4,-48[bp]
+	      	asli 	r4,r4,#1
+	      	addu 	r3,r3,r4
+	      	push 	r3
+	      	push 	#debugger_427
+	      	bsr  	printf
+	      	addui	sp,sp,#16
+	      	bra  	debugger_550
+debugger_553:
+	      	lw   	r3,[r13]
+	      	lw   	r4,-48[bp]
+	      	asli 	r4,r4,#2
+	      	addu 	r3,r3,r4
+	      	push 	r3
+	      	push 	#debugger_428
+	      	bsr  	printf
+	      	addui	sp,sp,#16
+	      	bra  	debugger_550
+debugger_554:
+	      	lw   	r3,[r13]
+	      	lw   	r4,-48[bp]
+	      	asli 	r4,r4,#3
+	      	addu 	r3,r3,r4
+	      	push 	r3
+	      	push 	#debugger_429
+	      	bsr  	printf
+	      	addui	sp,sp,#16
+	      	bra  	debugger_550
+debugger_550:
+debugger_548:
+	      	     	 right here ; 
 	      	lw   	r3,[r12]
 	      	cmp  	r4,r3,#98
-	      	beq  	r4,debugger_303
+	      	beq  	r4,debugger_556
 	      	cmp  	r4,r3,#99
-	      	beq  	r4,debugger_304
+	      	beq  	r4,debugger_557
 	      	cmp  	r4,r3,#104
-	      	beq  	r4,debugger_305
+	      	beq  	r4,debugger_558
 	      	cmp  	r4,r3,#119
-	      	beq  	r4,debugger_306
-	      	bra  	debugger_302
-debugger_303:
+	      	beq  	r4,debugger_559
+	      	bra  	debugger_555
+debugger_556:
 	      	lw   	r3,[r13]
 	      	lw   	r4,-48[bp]
 	      	addu 	r3,r3,r4
 	      	lw   	r4,bmem
 	      	lbu  	r3,0[r4+r3]
 	      	push 	r3
-	      	push 	#debugger_184
+	      	push 	#debugger_430
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	debugger_302
-debugger_304:
+	      	bra  	debugger_555
+debugger_557:
 	      	lw   	r3,[r13]
 	      	asri 	r3,r3,#1
 	      	lw   	r4,-48[bp]
@@ -1854,11 +2048,11 @@ debugger_304:
 	      	lw   	r4,cmem
 	      	lcu  	r3,0[r4+r3]
 	      	push 	r3
-	      	push 	#debugger_185
+	      	push 	#debugger_431
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	debugger_302
-debugger_305:
+	      	bra  	debugger_555
+debugger_558:
 	      	lw   	r3,[r13]
 	      	asri 	r3,r3,#2
 	      	lw   	r4,-48[bp]
@@ -1867,40 +2061,76 @@ debugger_305:
 	      	lw   	r4,hmem
 	      	lhu  	r3,0[r4+r3]
 	      	push 	r3
-	      	push 	#debugger_186
+	      	push 	#debugger_432
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	debugger_302
-debugger_306:
+	      	bra  	debugger_555
+debugger_559:
 	      	lw   	r3,[r13]
 	      	asri 	r3,r3,#3
 	      	lw   	r4,-48[bp]
 	      	addu 	r3,r3,r4
 	      	asli 	r3,r3,#3
-	      	push 	wmem
-	      	push 	#debugger_187
+	      	lw   	r4,wmem
+	      	lw   	r3,0[r4+r3]
+	      	push 	r3
+	      	push 	#debugger_433
 	      	bsr  	printf
 	      	addui	sp,sp,#16
-	      	bra  	debugger_302
-debugger_302:
-debugger_297:
+	      	bra  	debugger_555
+debugger_555:
+debugger_545:
 	      	inc  	-48[bp],#1
-	      	bra  	debugger_295
-debugger_296:
-	      	push 	#debugger_188
+	      	bra  	debugger_543
+debugger_544:
+	      	lw   	r3,[r12]
+	      	cmp  	r4,r3,#98
+	      	beq  	r4,debugger_561
+	      	cmp  	r4,r3,#99
+	      	beq  	r4,debugger_562
+	      	cmp  	r4,r3,#104
+	      	beq  	r4,debugger_563
+	      	cmp  	r4,r3,#119
+	      	beq  	r4,debugger_564
+	      	bra  	debugger_560
+debugger_561:
+	      	lw   	r3,-48[bp]
+	      	lw   	r4,[r13]
+	      	addu 	r4,r4,r3
+	      	sw   	r4,[r13]
+debugger_562:
+	      	lw   	r3,-48[bp]
+	      	asli 	r3,r3,#1
+	      	lw   	r4,[r13]
+	      	addu 	r4,r4,r3
+	      	sw   	r4,[r13]
+debugger_563:
+	      	lw   	r3,-48[bp]
+	      	asli 	r3,r3,#2
+	      	lw   	r4,[r13]
+	      	addu 	r4,r4,r3
+	      	sw   	r4,[r13]
+debugger_564:
+	      	lw   	r3,-48[bp]
+	      	asli 	r3,r3,#3
+	      	lw   	r4,[r13]
+	      	addu 	r4,r4,r3
+	      	sw   	r4,[r13]
+debugger_560:
+	      	push 	#debugger_434
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-	      	bra  	debugger_286
-debugger_286:
-debugger_192:
-	      	bra  	debugger_190
-debugger_191:
+	      	bra  	debugger_529
+debugger_529:
+debugger_438:
+	      	bra  	debugger_436
+debugger_437:
 	      	ldi  	r1,#0
-	      	bra  	debugger_203
-debugger_189:
+	      	bra  	debugger_449
+debugger_435:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_203
+	      	bra  	debugger_449
 endpublic
 
 public code dbg_irq:
@@ -1972,88 +2202,7 @@ public code dbg_irq:
          lw    r21,regs+168
          lw    r22,regs+176
          lw    r23,regs+184
-;         lw    r24,regs+192
-         lw    r25,regs+200
-         lw    r26,regs+208
-         lw    r27,regs+216
-         lw    r28,regs+224
-         lw    r29,regs+232
-         lw    r30,regs+240
-         lw    r31,regs+248
-         rtd
-     
-endpublic
-
-public code dbg_ssm:
-	      	     	         lea   sp,dbg_stack+4088
-         sw    r1,regs+8
-         sw    r2,regs+16
-         sw    r3,regs+24
-         sw    r4,regs+32
-         sw    r5,regs+40
-         sw    r6,regs+48
-         sw    r7,regs+56
-         sw    r8,regs+64
-         sw    r9,regs+72
-         sw    r10,regs+80
-         sw    r11,regs+88
-         sw    r12,regs+96
-         sw    r13,regs+104
-         sw    r14,regs+112
-         sw    r15,regs+120
-         sw    r16,regs+128
-         sw    r17,regs+136
-         sw    r18,regs+144
-         sw    r19,regs+152
-         sw    r20,regs+160
-         sw    r21,regs+168
-         sw    r22,regs+176
-         sw    r23,regs+184
-         sw    r24,regs+192
-         sw    r25,regs+200
-         sw    r26,regs+208
-         sw    r27,regs+216
-         sw    r28,regs+224
-         sw    r29,regs+232
-         sw    r30,regs+240
-         sw    r31,regs+248
-         mfspr r1,cr0
-         sw    r1,cr0save
-
-         mfspr r1,dbctrl
-         push  r1
-         mtspr dbctrl,r0
-         mfspr r1,dpc
-         push  r1
-         bsr   debugger
-         addui sp,sp,#16
-         
-         lw    r1,cr0save
-         mtspr cr0,r1
-         lw    r1,regs+8
-         lw    r2,regs+16
-         lw    r3,regs+24
-         lw    r4,regs+32
-         lw    r5,regs+40
-         lw    r6,regs+48
-         lw    r7,regs+56
-         lw    r8,regs+64
-         lw    r9,regs+72
-         lw    r10,regs+80
-         lw    r11,regs+88
-         lw    r12,regs+96
-         lw    r13,regs+104
-         lw    r14,regs+112
-         lw    r15,regs+120
-         lw    r16,regs+128
-         lw    r17,regs+136
-         lw    r18,regs+144
-         lw    r19,regs+152
-         lw    r20,regs+160
-         lw    r21,regs+168
-         lw    r22,regs+176
-         lw    r23,regs+184
-;         lw    r24,regs+192
+         lw    r24,regs+192
          lw    r25,regs+200
          lw    r26,regs+208
          lw    r27,regs+216
@@ -2069,47 +2218,55 @@ public code debugger:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_312
+	      	ldi  	xlr,#debugger_568
 	      	mov  	bp,sp
 	      	subui	sp,sp,#40
 	      	push 	r11
 	      	push 	r12
 	      	push 	r13
-	      	ldi  	r11,#ssm
-	      	ldi  	r12,#dbg_dbctrl
+	      	push 	r14
+	      	ldi  	r11,#bmem
+	      	ldi  	r12,#ssm
+	      	ldi  	r13,#dbg_dbctrl
 	      	lw   	r3,32[bp]
-	      	sw   	r3,[r12]
-	      	ldi  	r13,#-3145728
+	      	sw   	r3,[r13]
+	      	ldi  	r14,#4291821568
 	      	lw   	r3,24[bp]
 	      	and  	r3,r3,#-4
 	      	sw   	r3,24[bp]
 	      	lw   	r3,24[bp]
-	      	beq  	r3,debugger_313
+	      	beq  	r3,debugger_569
 	      	push 	24[bp]
-	      	push 	24[bp]
+	      	lw   	r3,24[bp]
+	      	subu 	r3,r3,#16
+	      	push 	r3
 	      	bsr  	disassem20
 	      	addui	sp,sp,#16
-debugger_313:
-debugger_315:
-	      	push 	#debugger_311
+debugger_569:
+debugger_571:
+	      	push 	#debugger_567
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-debugger_317:
+debugger_573:
 	      	bsr  	getchar
 	      	mov  	r3,r1
 	      	sc   	r3,-2[bp]
-	      	lw   	r3,[r11]
-	      	beq  	r3,debugger_319
+	      	lw   	r3,[r12]
+	      	beq  	r3,debugger_575
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#115
-	      	bne  	r3,debugger_321
-	      	lw   	r3,[r12]
-	      	ori  	r3,r3,#0
-	      	sw   	r3,[r12]
-	      	push 	[r12]
+	      	bne  	r3,debugger_577
+	      	lw   	r3,[r13]
+	      	andi 	r3,r3,#4611686018426404862
+	      	sw   	r3,[r13]
+	      	lw   	r3,[r13]
+	      	ori  	r3,r3,#4611686018427387904
+	      	sw   	r3,[r13]
+	      	push 	[r13]
 	      	bsr  	dbg_arm
 	      	addui	sp,sp,#8
-debugger_323:
+debugger_579:
+	      	pop  	r14
 	      	pop  	r13
 	      	pop  	r12
 	      	pop  	r11
@@ -2118,68 +2275,91 @@ debugger_323:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_321:
+debugger_577:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#45
-	      	beq  	r3,debugger_326
+	      	beq  	r3,debugger_582
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#3
-	      	bne  	r3,debugger_324
-debugger_326:
-	      	sw   	r0,[r11]
-	      	lw   	r3,[r12]
-	      	andi 	r3,r3,#-1
-	      	sw   	r3,[r12]
-	      	push 	[r12]
+	      	bne  	r3,debugger_580
+debugger_582:
+	      	sw   	r0,[r12]
+	      	lw   	r3,[r13]
+	      	andi 	r3,r3,#4611686018427387903
+	      	sw   	r3,[r13]
+	      	push 	[r13]
 	      	bsr  	dbg_arm
 	      	addui	sp,sp,#8
-	      	bra  	debugger_323
-debugger_324:
+	      	bra  	debugger_579
+debugger_580:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#110
-	      	bne  	r3,debugger_327
+	      	bne  	r3,debugger_583
 	      	ldi  	r3,#2
-	      	sw   	r3,[r11]
-	      	lw   	r3,[r12]
-	      	andi 	r3,r3,#-983041
 	      	sw   	r3,[r12]
-	      	lw   	r3,[r12]
+	      	lw   	r3,[r13]
+	      	andi 	r3,r3,#4611686018426404863
+	      	sw   	r3,[r13]
+	      	lw   	r3,[r13]
 	      	ori  	r3,r3,#524289
-	      	sw   	r3,[r12]
+	      	sw   	r3,[r13]
+	      	lw   	r3,24[bp]
+	      	lbu  	r3,[r3+r11]
+	      	and  	r3,r3,#127
+	      	cmp  	r3,r3,#124
+	      	bne  	r3,debugger_585
 	      	lw   	r3,24[bp]
 	      	addu 	r3,r3,#4
-	      	push 	r3
+	      	lbu  	r3,[r3+r11]
+	      	and  	r3,r3,#127
+	      	cmp  	r3,r3,#124
+	      	bne  	r3,debugger_585
+	      	inc  	24[bp],#12
+	      	bra  	debugger_586
+debugger_585:
+	      	lw   	r3,24[bp]
+	      	lbu  	r3,[r3+r11]
+	      	and  	r3,r3,#127
+	      	cmp  	r3,r3,#124
+	      	bne  	r3,debugger_587
+	      	inc  	24[bp],#8
+	      	bra  	debugger_588
+debugger_587:
+	      	inc  	24[bp],#4
+debugger_588:
+debugger_586:
+	      	push 	24[bp]
 	      	push 	#0
 	      	bsr  	dbg_SetDBAD
 	      	addui	sp,sp,#16
-	      	push 	[r12]
+	      	push 	[r13]
 	      	bsr  	dbg_arm
 	      	addui	sp,sp,#8
-	      	bra  	debugger_323
-debugger_327:
-	      	bra  	debugger_320
-debugger_319:
+	      	bra  	debugger_579
+debugger_583:
+	      	bra  	debugger_576
+debugger_575:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#13
-	      	bne  	r3,debugger_329
-	      	bra  	debugger_318
-debugger_329:
+	      	bne  	r3,debugger_589
+	      	bra  	debugger_574
+debugger_589:
 	      	lcu  	r3,-2[bp]
 	      	cmp  	r3,r3,#12
-	      	bne  	r3,debugger_331
+	      	bne  	r3,debugger_591
 	      	     	                           bsr ClearScreen
                        
 	      	bsr  	dbg_HomeCursor
-	      	bra  	debugger_318
-debugger_331:
+	      	bra  	debugger_574
+debugger_591:
 	      	lcu  	r3,-2[bp]
 	      	push 	r3
 	      	bsr  	putch
 	      	addui	sp,sp,#8
-debugger_320:
+debugger_576:
 	      	ldi  	r3,#1
-	      	bne  	r3,debugger_317
-debugger_318:
+	      	bne  	r3,debugger_573
+debugger_574:
 	      	bsr  	dbg_GetCursorRow
 	      	mov  	r3,r1
 	      	sxb  	r3,r3
@@ -2189,16 +2369,16 @@ debugger_318:
 	      	sxb  	r3,r3
 	      	sw   	r3,-24[bp]
 	      	sw   	r0,-40[bp]
-debugger_333:
+debugger_593:
 	      	lw   	r3,-40[bp]
 	      	cmp  	r3,r3,#84
-	      	bge  	r3,debugger_334
+	      	bge  	r3,debugger_594
 	      	lw   	r3,-16[bp]
 	      	mul  	r3,r3,#84
 	      	lw   	r4,-40[bp]
 	      	addu 	r3,r3,r4
 	      	asli 	r3,r3,#2
-	      	lhu  	r3,0[r13+r3]
+	      	lhu  	r3,0[r14+r3]
 	      	and  	r3,r3,#1023
 	      	push 	r3
 	      	bsr  	CvtScreenToAscii
@@ -2208,36 +2388,36 @@ debugger_333:
 	      	lw   	r4,-40[bp]
 	      	asli 	r4,r4,#1
 	      	sc   	r3,linebuf[r4]
-debugger_335:
+debugger_595:
 	      	inc  	-40[bp],#1
-	      	bra  	debugger_333
-debugger_334:
+	      	bra  	debugger_593
+debugger_594:
 	      	bsr  	dbg_parse_begin
 	      	mov  	r3,r1
 	      	cmp  	r3,r3,#1
-	      	bne  	r3,debugger_336
-	      	bra  	debugger_316
-debugger_336:
-	      	bra  	debugger_315
-debugger_316:
-	      	bra  	debugger_323
-debugger_312:
+	      	bne  	r3,debugger_596
+	      	bra  	debugger_572
+debugger_596:
+	      	bra  	debugger_571
+debugger_572:
+	      	bra  	debugger_579
+debugger_568:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_323
+	      	bra  	debugger_579
 endpublic
 
 public code dbg_init:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#debugger_338
+	      	ldi  	xlr,#debugger_598
 	      	mov  	bp,sp
 	      	push 	#dbg_irq
 	      	push 	#496
 	      	bsr  	set_vector
 	      	addui	sp,sp,#16
-	      	push 	#dbg_ssm
+	      	push 	#dbg_irq
 	      	push 	#495
 	      	bsr  	set_vector
 	      	addui	sp,sp,#16
@@ -2257,157 +2437,165 @@ public code dbg_init:
 	      	ldi  	r3,#1
 	      	sw   	r3,currep
 	      	sw   	r0,dbg_dbctrl
-debugger_339:
+debugger_599:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-debugger_338:
+debugger_598:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	debugger_339
+	      	bra  	debugger_599
 endpublic
 
 	rodata
 	align	16
 	align	8
-debugger_311:	; DBG>
+debugger_567:
 	dc	13,10,68,66,71,62,0
-debugger_188:
+debugger_434:
 	dc	13,10,0
-debugger_187:	; %016X 
+debugger_433:
 	dc	37,48,49,54,88,32,0
-debugger_186:	; %08X 
+debugger_432:
 	dc	37,48,56,88,32,0
-debugger_185:	; %04X 
+debugger_431:
 	dc	37,48,52,88,32,0
-debugger_184:	; %02X 
+debugger_430:
 	dc	37,48,50,88,32,0
-debugger_183:	; %06X 
+debugger_429:
 	dc	13,10,37,48,54,88,32,0
-debugger_182:
+debugger_428:
+	dc	13,10,37,48,54,88,32,0
+debugger_427:
+	dc	13,10,37,48,54,88,32,0
+debugger_426:
+	dc	13,10,37,48,54,88,32,0
+debugger_425:
 	dc	13,10,0
-debugger_181:	; ds2=%08X
+debugger_424:
+	dc	13,10,0
+debugger_423:
 	dc	100,115,50,61,37,48,56,88
 	dc	13,10,0
-debugger_180:	; ds2=%08X
+debugger_422:
 	dc	100,115,50,61,37,48,56,88
 	dc	13,10,0
-debugger_179:	; ds1=%08X
+debugger_421:
 	dc	100,115,49,61,37,48,56,88
 	dc	13,10,0
-debugger_178:	; ds0=%08X
+debugger_420:
 	dc	100,115,48,61,37,48,56,88
 	dc	13,10,0
-debugger_177:	; d2=%08X
+debugger_419:
 	dc	100,50,61,37,48,56,88,13
 	dc	10,0
-debugger_176:	; d2=%08X
+debugger_418:
 	dc	100,50,61,37,48,56,88,13
 	dc	10,0
-debugger_175:	; d1=%08X
+debugger_417:
 	dc	100,49,61,37,48,56,88,13
 	dc	10,0
-debugger_174:	; d0=%08X
+debugger_416:
 	dc	100,48,61,37,48,56,88,13
 	dc	10,0
-debugger_173:
+debugger_415:
 	dc	13,10,0
-debugger_172:	; i2=%08X
+debugger_414:
 	dc	105,50,61,37,48,56,88,13
 	dc	10,0
-debugger_171:	; i2=%08X
+debugger_413:
 	dc	105,50,61,37,48,56,88,13
 	dc	10,0
-debugger_170:	; i1=%08X
+debugger_412:
 	dc	105,49,61,37,48,56,88,13
 	dc	10,0
-debugger_169:	; i0=%08X
+debugger_411:
 	dc	105,48,61,37,48,56,88,13
 	dc	10,0
-debugger_143:	; DBG>
+debugger_385:
 	dc	13,10,68,66,71,62,0
-debugger_140:	; r%d=%X
+debugger_382:
 	dc	114,37,100,61,37,88,13,10
 	dc	0
-debugger_136:	; r29=%X sp=%X lr=%X
+debugger_378:
 	dc	114,50,57,61,37,88,32,115
 	dc	112,61,37,88,32,108,114,61
 	dc	37,88,13,10,0
-debugger_135:	; r25=%X r26=%X r27=%X r28=%X
+debugger_377:
 	dc	114,50,53,61,37,88,32,114
 	dc	50,54,61,37,88,32,114,50
 	dc	55,61,37,88,32,114,50,56
 	dc	61,37,88,13,10,0
-debugger_134:	; r21=%X r22=%X r23=%X tr=%X
+debugger_376:
 	dc	114,50,49,61,37,88,32,114
 	dc	50,50,61,37,88,32,114,50
 	dc	51,61,37,88,32,116,114,61
 	dc	37,88,13,10,0
-debugger_133:	; r17=%X r18=%X r19=%X r20=%X
+debugger_375:
 	dc	114,49,55,61,37,88,32,114
 	dc	49,56,61,37,88,32,114,49
 	dc	57,61,37,88,32,114,50,48
 	dc	61,37,88,13,10,0
-debugger_132:	; r13=%X r14=%X r15=%X r16=%X
+debugger_374:
 	dc	114,49,51,61,37,88,32,114
 	dc	49,52,61,37,88,32,114,49
 	dc	53,61,37,88,32,114,49,54
 	dc	61,37,88,13,10,0
-debugger_131:	; r9=%X r10=%X r11=%X r12=%X
+debugger_373:
 	dc	114,57,61,37,88,32,114,49
 	dc	48,61,37,88,32,114,49,49
 	dc	61,37,88,32,114,49,50,61
 	dc	37,88,13,10,0
-debugger_130:	; r5=%X r6=%X r7=%X r8=%X
+debugger_372:
 	dc	114,53,61,37,88,32,114,54
 	dc	61,37,88,32,114,55,61,37
 	dc	88,32,114,56,61,37,88,13
 	dc	10,0
-debugger_129:	; r1=%X r2=%X r3=%X r4=%X
+debugger_371:
 	dc	13,10,114,49,61,37,88,32
 	dc	114,50,61,37,88,32,114,51
 	dc	61,37,88,32,114,52,61,37
 	dc	88,13,10,0
-debugger_113:	; DBG>ds%d <not set>
+debugger_355:
 	dc	13,10,68,66,71,62,100,115
 	dc	37,100,32,60,110,111,116,32
 	dc	115,101,116,62,0
-debugger_112:	; DBG>ds%d=%08X
+debugger_354:
 	dc	13,10,68,66,71,62,100,115
 	dc	37,100,61,37,48,56,88,13
 	dc	10,0
-debugger_97:	; DBG>d%d <not set>
+debugger_339:
 	dc	13,10,68,66,71,62,100,37
 	dc	100,32,60,110,111,116,32,115
 	dc	101,116,62,0
-debugger_96:	; DBG>d%d=%08X
+debugger_338:
 	dc	13,10,68,66,71,62,100,37
 	dc	100,61,37,48,56,88,13,10
 	dc	0
-debugger_81:	; DBG>ib%d <not set>
-	dc	13,10,68,66,71,62,105,98
-	dc	37,100,32,60,110,111,116,32
-	dc	115,101,116,62,0
-debugger_80:	; DBG>ib%d=%08X
-	dc	13,10,68,66,71,62,105,98
-	dc	37,100,61,37,48,56,88,13
-	dc	10,0
-debugger_15:	; DBG>
+debugger_323:
+	dc	13,10,68,66,71,62,105,37
+	dc	100,32,60,110,111,116,32,115
+	dc	101,116,62,0
+debugger_322:
+	dc	13,10,68,66,71,62,105,37
+	dc	100,61,37,48,56,88,13,10
+	dc	0
+debugger_251:
 	dc	13,10,68,66,71,62,0
-debugger_14:	; Type 'q' to quit.
+debugger_250:
 	dc	13,10,84,121,112,101,32,39
 	dc	113,39,32,116,111,32,113,117
 	dc	105,116,46,0
-debugger_13:	; arm debugging mode using the 'a' command.
+debugger_249:
 	dc	13,10,97,114,109,32,100,101
 	dc	98,117,103,103,105,110,103,32
 	dc	109,111,100,101,32,117,115,105
 	dc	110,103,32,116,104,101,32,39
 	dc	97,39,32,99,111,109,109,97
 	dc	110,100,46,0
-debugger_12:	; Once the debug registers are set it is necessary to 
+debugger_248:
 	dc	13,10,79,110,99,101,32,116
 	dc	104,101,32,100,101,98,117,103
 	dc	32,114,101,103,105,115,116,101
@@ -2415,7 +2603,7 @@ debugger_12:	; Once the debug registers are set it is necessary to
 	dc	101,116,32,105,116,32,105,115
 	dc	32,110,101,99,101,115,115,97
 	dc	114,121,32,116,111,32,0
-debugger_11:	; Setting a register to zero will clear the breakpoint.
+debugger_247:
 	dc	13,10,83,101,116,116,105,110
 	dc	103,32,97,32,114,101,103,105
 	dc	115,116,101,114,32,116,111,32
@@ -2423,14 +2611,14 @@ debugger_11:	; Setting a register to zero will clear the breakpoint.
 	dc	108,32,99,108,101,97,114,32
 	dc	116,104,101,32,98,114,101,97
 	dc	107,112,111,105,110,116,46,0
-debugger_10:	; indicate a data store only breakpoint.
+debugger_246:
 	dc	13,10,105,110,100,105,99,97
 	dc	116,101,32,97,32,100,97,116
 	dc	97,32,115,116,111,114,101,32
 	dc	111,110,108,121,32,98,114,101
 	dc	97,107,112,111,105,110,116,46
 	dc	0
-debugger_9:	; breakpoint. Prefix the register number with 'ds' to
+debugger_245:
 	dc	13,10,98,114,101,97,107,112
 	dc	111,105,110,116,46,32,80,114
 	dc	101,102,105,120,32,116,104,101
@@ -2438,7 +2626,7 @@ debugger_9:	; breakpoint. Prefix the register number with 'ds' to
 	dc	114,32,110,117,109,98,101,114
 	dc	32,119,105,116,104,32,39,100
 	dc	115,39,32,116,111,0
-debugger_8:	; instruction breakpoint or a 'd' to indicate a data
+debugger_244:
 	dc	13,10,105,110,115,116,114,117
 	dc	99,116,105,111,110,32,98,114
 	dc	101,97,107,112,111,105,110,116
@@ -2446,7 +2634,7 @@ debugger_8:	; instruction breakpoint or a 'd' to indicate a data
 	dc	39,32,116,111,32,105,110,100
 	dc	105,99,97,116,101,32,97,32
 	dc	100,97,116,97,0
-debugger_7:	; Prefix the register number with an 'i' to indicate an
+debugger_243:
 	dc	13,10,80,114,101,102,105,120
 	dc	32,116,104,101,32,114,101,103
 	dc	105,115,116,101,114,32,110,117
@@ -2454,7 +2642,7 @@ debugger_7:	; Prefix the register number with an 'i' to indicate an
 	dc	104,32,97,110,32,39,105,39
 	dc	32,116,111,32,105,110,100,105
 	dc	99,97,116,101,32,97,110,0
-debugger_6:	; There are a total of four breakpoint registers (0-3).
+debugger_242:
 	dc	13,10,84,104,101,114,101,32
 	dc	97,114,101,32,97,32,116,111
 	dc	116,97,108,32,111,102,32,102
@@ -2462,7 +2650,7 @@ debugger_6:	; There are a total of four breakpoint registers (0-3).
 	dc	107,112,111,105,110,116,32,114
 	dc	101,103,105,115,116,101,114,115
 	dc	32,40,48,45,51,41,46,0
-debugger_5:	; DBG>i1=12345678     will assign 12345678 to i1
+debugger_241:
 	dc	13,10,68,66,71,62,105,49
 	dc	61,49,50,51,52,53,54,55
 	dc	56,32,32,32,32,32,119,105
@@ -2470,11 +2658,11 @@ debugger_5:	; DBG>i1=12345678     will assign 12345678 to i1
 	dc	110,32,49,50,51,52,53,54
 	dc	55,56,32,116,111,32,105,49
 	dc	0
-debugger_4:	; an address to it.
+debugger_240:
 	dc	13,10,97,110,32,97,100,100
 	dc	114,101,115,115,32,116,111,32
 	dc	105,116,46,0
-debugger_3:	; Following a breakpoint register with an '=' assigns 
+debugger_239:
 	dc	13,10,70,111,108,108,111,119
 	dc	105,110,103,32,97,32,98,114
 	dc	101,97,107,112,111,105,110,116
@@ -2482,10 +2670,10 @@ debugger_3:	; Following a breakpoint register with an '=' assigns
 	dc	114,32,119,105,116,104,32,97
 	dc	110,32,39,61,39,32,97,115
 	dc	115,105,103,110,115,32,0
-debugger_2:	; DBG>i2?
+debugger_238:
 	dc	13,10,68,66,71,62,105,50
 	dc	63,0
-debugger_1:	; '?' queries the status of a breakpoint register as in:
+debugger_237:
 	dc	13,10,39,63,39,32,113,117
 	dc	101,114,105,101,115,32,116,104
 	dc	101,32,115,116,97,116,117,115
@@ -2502,6 +2690,7 @@ debugger_1:	; '?' queries the status of a breakpoint register as in:
 ;	global	dbg_prompt
 	extern	getcharNoWait
 ;	global	cursz
+;	global	dbg_nextSpace
 ;	global	CvtScreenToAscii
 	extern	dbg_GetHexNumber
 ;	global	set_vector
@@ -2529,6 +2718,7 @@ debugger_1:	; '?' queries the status of a breakpoint register as in:
 ;	global	dbg_processReg
 ;	global	dbg_parse_line
 ;	global	regs
+	extern	putstr
 ;	global	cr0save
 ;	global	wmem
 ;	global	dbg_GetDBAD
@@ -2540,7 +2730,6 @@ debugger_1:	; '?' queries the status of a breakpoint register as in:
 ;	global	dbg_arm
 ;	global	dbg_irq
 	extern	getchar
-;	global	dbg_ssm
 ;	global	linebuf
 ;	global	curaddr
 	extern	isdigit

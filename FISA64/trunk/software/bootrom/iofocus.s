@@ -24,12 +24,12 @@
 ; ============================================================================
 
 LockIOF:
-    push    lr
-    push    r1
-    ldi     r1,#iof_sema
-    bsr     LockSema
-    pop     r1
-    rts
+     push    lr
+     push    r1
+     ldi     r1,#iof_sema
+     bsr     LockSema
+     pop     r1
+     rts
 UnlockIOF:
      push   lr
      push   r1

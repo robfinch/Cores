@@ -1,6 +1,6 @@
 int linendx;
 char linebuf[100];
-unsigned int dbg_stack[4096];
+unsigned int dbg_stack[512];
 unsigned int dbg_dbctrl;
 unsigned int regs[32];
 unsigned int cr0save;
@@ -54,6 +54,7 @@ byte dbg_GetCursorRow()
     asm {
         ldi    r6,#3   ; Get cursor position
         sys    #410
+        lsr    r1,r1,#8
     }
 }
 
@@ -62,7 +63,7 @@ byte dbg_GetCursorCol()
     asm {
         ldi    r6,#3
         sys    #410
-        mov    r1,r2
+        and    r1,r1,#$FF
     }
 }
 
@@ -170,6 +171,18 @@ char dbg_nextNonSpace()
      return -1;
 }
 
+char dbg_nextSpace()
+{
+    char ch;
+
+    do {
+      ch = dbg_getchar();
+      if (ch==-1)
+           break;
+    } while (ch != ' ');
+    return ch;
+}
+
 int dbg_getHexNumber(unsigned int *ad)
 {
      char ch;
@@ -212,12 +225,17 @@ void dbg_ReadSetIB(unsigned int n)
            dbg_dbctrl |= (1 << n);
            dbg_dbctrl &= ~(0x30000 << (n << 1));
        }
+       else {
+           dbg_SetDBAD(n,0);
+           dbg_dbctrl &= ~(1 << n);
+           dbg_dbctrl &= ~(0x30000 << (n << 1));
+       }
    }
    else if (ch=='?') {
       if (((dbg_dbctrl & (0x030000 << (n << 1)))==0) && (dbg_dbctrl & (1 << n) == (1 << n)))
-          printf("\r\nDBG>ib%d=%08X\r\n", n, dbg_GetDBAD(n));
+          printf("\r\nDBG>i%d=%08X\r\n", n, dbg_GetDBAD(n));
       else
-          printf("\r\nDBG>ib%d <not set>", n);
+          printf("\r\nDBG>i%d <not set>", n);
    }
 }
 
@@ -237,6 +255,11 @@ void dbg_ReadSetDB(unsigned int n)
            dbg_dbctrl |= (1 << n);
            dbg_dbctrl &= ~(0x30000 << (n << 1));
            dbg_dbctrl |= 0x30000 << (n << 1);
+       }
+       else {
+           dbg_SetDBAD(n,0);
+           dbg_dbctrl &= ~(1 << n);
+           dbg_dbctrl &= ~(0x30000 << (n << 1));
        }
    }
    else if (ch=='?') {
@@ -262,6 +285,11 @@ void dbg_ReadSetDSB(unsigned int n)
            dbg_dbctrl |= (1 << n);
            dbg_dbctrl &= ~(0x30000 << (n << 1));
            dbg_dbctrl |= 0x10000 << (n << 1);
+       }
+       else {
+           dbg_SetDBAD(n,0);
+           dbg_dbctrl &= ~(1 << n);
+           dbg_dbctrl &= ~(0x30000 << (n << 1));
        }
    }
    else if (ch=='?') {
@@ -394,11 +422,7 @@ int dbg_parse_line()
              ch = dbg_getchar();
              switch(ch) {
              case 'i':
-                  do {
-                      ch = dbg_getchar();
-                      if (ch==-1)
-                           break;
-                  } while (ch != ' ');
+                  dbg_nextSpace();
                   nn = dbg_getHexNumber(&ad);
                   if (nn > 0) {
                       n2 = dbg_getDecNumber(&ln);
@@ -444,6 +468,14 @@ int dbg_parse_line()
                   case '3':  dbg_ReadSetDSB(3); break;
                   }
                   break;
+              default:
+                  dbg_nextSpace();
+                  dbg_SetDBAD(0,0);
+                  dbg_SetDBAD(1,0);
+                  dbg_SetDBAD(2,0);
+                  dbg_SetDBAD(3,0);
+                  dbg_arm(0);
+                  break;
              }
              break;
         case 'r': dbg_processReg(); break;
@@ -451,11 +483,16 @@ int dbg_parse_line()
              ch = dbg_getchar();
              if (ch=='s') {
                   ch = dbg_getchar();
-                  if (ch=='-')
+                  if (ch=='-') {
                       dbg_dbctrl &= 0x3FFFFFFFFFFFFFFFL;
+                      dbg_arm(dbg_dbctrl);
+                      ssm = 0;
+                  }
                   else if (ch=='+' || ch=='m') {
                       dbg_dbctrl |= 0x4000000000000000L;                 
+                      dbg_arm(dbg_dbctrl);
                       ssm = 1;
+                      return 1;
                   }
              }
              break;
@@ -503,19 +540,38 @@ int dbg_parse_line()
                   }
                   break;
              case 's':
+                  for (nn = 0; nn < currep; nn++) {
+                      if (getcharNoWait()==3)
+                         break;
+                      curaddr += putstr(&cmem[curaddr/2],84) * 2;
+                      printf("\r\n");
+                  }
                   break;
              case 'x':
                   for (nn = 0; nn < currep; nn++) {
                       if (getcharNoWait()==3)
                          break;
-                      if ((nn % muol)==0)
-                          printf("\r\n%06X ", curaddr+nn);
+                      if ((nn % muol)==0) {
+                          switch(cursz) {
+                          case 'b': printf("\r\n%06X ", curaddr+nn); break;
+                          case 'c': printf("\r\n%06X ", curaddr+nn*2); break;
+                          case 'h': printf("\r\n%06X ", curaddr+nn*4); break;
+                          case 'w': printf("\r\n%06X ", curaddr+nn*8); break;
+                          }
+                      }
+                      asm {; right here ; };
                       switch(cursz) {
                       case 'b': printf("%02X ", bmem[curaddr+nn]); break;
                       case 'c': printf("%04X ", cmem[curaddr/2+nn]); break;
                       case 'h': printf("%08X ", hmem[curaddr/4+nn]); break;
                       case 'w': printf("%016X ", wmem[curaddr/8+nn]); break;
                       }
+                  }
+                  switch(cursz) {
+                  case 'b': curaddr += nn;
+                  case 'c': curaddr += nn * 2;
+                  case 'h': curaddr += nn * 4;
+                  case 'w': curaddr += nn * 8;
                   }
                   printf("\r\n");
                   break;
@@ -603,7 +659,7 @@ naked dbg_irq()
          lw    r21,regs+168
          lw    r22,regs+176
          lw    r23,regs+184
-;         lw    r24,regs+192
+         lw    r24,regs+192
          lw    r25,regs+200
          lw    r26,regs+208
          lw    r27,regs+216
@@ -615,95 +671,6 @@ naked dbg_irq()
      }
 }
 
-// ----------------------------------------------------------------------------
-// Debug IRQ
-//    Saves all the registers in debug reg area, then calls the debugger()
-// routine. When the user is finished with the debugger routine all the
-// registers are restored then an RTD executed.
-// ----------------------------------------------------------------------------
-
-naked dbg_ssm()
-{
-     asm {
-         lea   sp,dbg_stack+4088
-         sw    r1,regs+8
-         sw    r2,regs+16
-         sw    r3,regs+24
-         sw    r4,regs+32
-         sw    r5,regs+40
-         sw    r6,regs+48
-         sw    r7,regs+56
-         sw    r8,regs+64
-         sw    r9,regs+72
-         sw    r10,regs+80
-         sw    r11,regs+88
-         sw    r12,regs+96
-         sw    r13,regs+104
-         sw    r14,regs+112
-         sw    r15,regs+120
-         sw    r16,regs+128
-         sw    r17,regs+136
-         sw    r18,regs+144
-         sw    r19,regs+152
-         sw    r20,regs+160
-         sw    r21,regs+168
-         sw    r22,regs+176
-         sw    r23,regs+184
-         sw    r24,regs+192
-         sw    r25,regs+200
-         sw    r26,regs+208
-         sw    r27,regs+216
-         sw    r28,regs+224
-         sw    r29,regs+232
-         sw    r30,regs+240
-         sw    r31,regs+248
-         mfspr r1,cr0
-         sw    r1,cr0save
-
-         mfspr r1,dbctrl
-         push  r1
-         mtspr dbctrl,r0
-         mfspr r1,dpc
-         push  r1
-         bsr   debugger
-         addui sp,sp,#16
-         
-         lw    r1,cr0save
-         mtspr cr0,r1
-         lw    r1,regs+8
-         lw    r2,regs+16
-         lw    r3,regs+24
-         lw    r4,regs+32
-         lw    r5,regs+40
-         lw    r6,regs+48
-         lw    r7,regs+56
-         lw    r8,regs+64
-         lw    r9,regs+72
-         lw    r10,regs+80
-         lw    r11,regs+88
-         lw    r12,regs+96
-         lw    r13,regs+104
-         lw    r14,regs+112
-         lw    r15,regs+120
-         lw    r16,regs+128
-         lw    r17,regs+136
-         lw    r18,regs+144
-         lw    r19,regs+152
-         lw    r20,regs+160
-         lw    r21,regs+168
-         lw    r22,regs+176
-         lw    r23,regs+184
-;         lw    r24,regs+192
-         lw    r25,regs+200
-         lw    r26,regs+208
-         lw    r27,regs+216
-         lw    r28,regs+224
-         lw    r29,regs+232
-         lw    r30,regs+240
-         lw    r31,regs+248
-         rtd
-     }
-}
 
 void debugger(unsigned int ad, unsigned int ctrlreg)
 {
@@ -716,13 +683,14 @@ void debugger(unsigned int ad, unsigned int ctrlreg)
      screen = (unsigned short int *)0xFFD00000;
      ad = ad & 0xFFFFFFFFFFFFFFFCL;
      if (ad)
-        disassem20(ad,ad);
+        disassem20(ad-16,ad);
      forever {
          printf("\r\nDBG>");
          do {
               ch = getchar();
               if (ssm) {
                   if (ch=='s') {
+                     dbg_dbctrl &= 0x3FFFFFFFFFF0FFFEL;  // turn off a breakpoint
                      dbg_dbctrl |= 0x4000000000000000L;   // turn single step mode back
                      dbg_arm(dbg_dbctrl);                 // on on return
                      return;
@@ -737,7 +705,13 @@ void debugger(unsigned int ad, unsigned int ctrlreg)
                       ssm = 2;
                       dbg_dbctrl &= 0x3FFFFFFFFFF0FFFFL;  // turn off single step mode
                       dbg_dbctrl |= 0x80001;              // and set a breakpoint
-                      dbg_SetDBAD(0,ad+4);            // for the next address
+                      if (((bmem[ad] & 0x7f)==0x7c) and ((bmem[ad+4] & 0x7f)==0x7c))
+                          ad += 12;
+                      else if ((bmem[ad] & 0x7f)==0x7c)
+                          ad += 8;
+                      else
+                          ad += 4;
+                      dbg_SetDBAD(0,ad);            // for the next address
                       dbg_arm(dbg_dbctrl);
                       return;
                   }
@@ -766,8 +740,8 @@ void debugger(unsigned int ad, unsigned int ctrlreg)
 }
 
 void dbg_init() {
-     set_vector(496,dbg_irq);
-     set_vector(495,dbg_ssm);
+     set_vector(496,dbg_irq);     // breakpoint interrupt
+     set_vector(495,dbg_irq);     // single step interrupt
      ssm = 0;
      bmem = (unsigned byte *)0;
      cmem = (unsigned char *)0;

@@ -15,7 +15,7 @@ pascal void putnum(int num, int wid, char sep, char padchar)
 {
 	int n, m10;
 	char sign;
-	char numwka[20];
+	char numwka[200];
 
 	if (wid < 0 or wid > 200)	// take care of nutty parameter
 		wid = 0;
@@ -50,7 +50,7 @@ pascal void puthexnum(int num, int wid, int ul, char padchar)
 {
 	int n, m;
 	char sign;
-	char numwka[20];
+	char numwka[200];
 
 	if (wid < 0 or wid > 200)	// take care of nutty parameter
 		wid = 0;
@@ -68,13 +68,13 @@ pascal void puthexnum(int num, int wid, int ul, char padchar)
 		num = num >> 4;
 		n++;
 	}
-	while (num != 0);
+	while (num != 0 && n < 18);
 	if (sign=='-') {
 		numwka[n] = sign;
 		n++;
 	}
 	while (n < wid) {
-		putch(padchar);
+		putch(sign=='-' ? ' ' : padchar);
 		wid--;
 	}
 	while (n > 0) {
@@ -106,6 +106,10 @@ pascal void putstr2(char *p)
 naked int getcharNoWait()
 {
 	asm {
+        push    lr
+        bsr     KeybdGetCharNoWait
+        pop     lr
+        rtl
         push    r6
         ld      r6,#3    ; KeybdGetCharNoWait
         sys     #10

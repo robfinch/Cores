@@ -87,6 +87,7 @@ int rodatandx;
 int tlsndx;
 int bssndx;
 SYM *lastsym;
+int isInitializationData;
 
 void emitCode(int cd);
 void emitAlignedCode(int cd);
@@ -174,13 +175,15 @@ void emitByte(int64_t cd)
 {
      if (segment < 5)
         sections[segment].AddByte(cd);
-    if (segment == codeseg || segment == dataseg || segment == rodataseg) {
+    if (segment == codeseg || segment == rodataseg) {
         binfile[binndx] = cd & 255LL;
         binndx++;
     }
     if (segment==bssseg) {
        bss_address++;
     }
+    else if (segment==dataseg)
+         data_address++;
     else
         code_address++;
 }
@@ -238,7 +241,10 @@ void process_public()
          segment = rodataseg;
     }
     else if (token==tk_data) {
-         segment = dataseg;
+         if (isInitializationData)
+             segment = rodataseg;
+         else
+             segment = dataseg;
     }
     else if (token==tk_bss) {
          segment = bssseg;
@@ -274,11 +280,15 @@ void process_public()
         printf("Line:%.60s", stptr);
     }
     else {
+         if (isInitializationData) {
+             ScanToEOL();
+             return;
+         }
         sym = find_symbol(lastid);
         if (pass == 3) {
             if (sym) {
                 if (sym->defined)
-                    printf("Symbol already defined.\r\n");
+                    printf("Symbol (%s) already defined.\r\n", lastid);
             }
             else {
                 sym = new_symbol(lastid);
@@ -350,7 +360,11 @@ void process_org()
     NextToken();
     new_address = expr();
     if (!rel_out) {
-        if (segment==bssseg || segment==tlsseg) {
+        if (segment==dataseg) {
+            data_address = new_address;
+            sections[segment].address = new_address;
+        }
+        else if (segment==bssseg || segment==tlsseg) {
             bss_address = new_address;
             sections[segment].address = new_address;
         }
@@ -362,6 +376,8 @@ void process_org()
                first_org = 0;
             }
             else {
+                 // Ignore the org directive in initialized data area of rodata
+                 if (!isInitializationData)
                 while(sections[0].address < new_address)
                     emitByte(0x00);
             }
@@ -758,6 +774,8 @@ void process_label()
         strcpy(current_label, lastid);
         strcpy(nm, lastid);
     }
+    if (strcmp("end_init_data", nm)==0)
+       isInitializationData = 0;
     NextToken();
 //    SkipSpaces();
     if (token==tk_equ || token==tk_eq) {
@@ -769,6 +787,9 @@ void process_label()
 //    if (token==tk_eol)
 //       prevToken();
     //else if (token==':') inptr++;
+    // ignore the labels in initialization data
+    if (isInitializationData)
+       return;
     sym = find_symbol(nm);
     if (pass==3) {
         if (sym) {
@@ -822,6 +843,8 @@ void process_label()
              }
          }
     }
+    if (strcmp("begin_init_data", nm)==0)
+       isInitializationData = 1;
 }
 
 // ----------------------------------------------------------------------------
@@ -897,8 +920,15 @@ void processSegments()
         pinptr = inptr;
     }
     memset(masterFile,0,sizeof(masterFile));
-    strcpy(masterFile, codebuf);
+    strcat(masterFile, codebuf);
     strcat(masterFile, rodatabuf);
+    strcat(masterFile, "\r\n\trodata\r\n");
+    strcat(masterFile, "\talign 8\r\n");
+    strcat(masterFile, "begin_init_data:\r\n");
+    strcat(masterFile, databuf);
+    strcat(masterFile, "\r\n\trodata\r\n");
+    strcat(masterFile, "\talign 8\r\n");
+    strcat(masterFile, "end_init_data:\r\n");
     strcat(masterFile, databuf);
     strcat(masterFile, bssbuf);
     strcat(masterFile, tlsbuf);
@@ -1243,6 +1273,8 @@ int main(int argc, char *argv[])
     start_address = 0;
     code_address = 0;
     bss_address = 0;
+    data_address = 0;
+    isInitializationData = 0;
     for (qq = 0; qq < 12; qq++)
         sections[qq].Clear();
     nmTable.Clear();
@@ -1324,7 +1356,7 @@ int main(int argc, char *argv[])
         if (ofp) {
             fwrite((void*)sections[0].bytes,sections[0].index,1,ofp);
             fwrite((void*)sections[1].bytes,sections[1].index,1,ofp);
-            fwrite((void*)sections[2].bytes,sections[2].index,1,ofp);
+            //fwrite((void*)sections[2].bytes,sections[2].index,1,ofp);
             //fwrite(binfile,binndx,1,ofp);
             fclose(ofp);    
         }

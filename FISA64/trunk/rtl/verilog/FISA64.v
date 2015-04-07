@@ -158,6 +158,7 @@
 `define EPC			8'd09
 `define VBR			8'd10
 `define BEAR		8'd11
+`define VECNO		8'd12
 `define MULH		8'd14
 `define ISP			8'd15
 `define DSP			8'd16
@@ -280,7 +281,7 @@ reg [AMSB:0] bear;			// bus error address register
 reg [63:0] lbound [31:0];	// lower bound register
 reg [63:0] ubound [31:0];	// upper bound register
 reg [63:0] mmask [31:0];	// modulo mask register
-wire ssm = dbctrl[63];		// single step mode
+reg ssm;					// single step mode
 reg km;						// kernel mode
 reg [63:0] cr0;
 wire pe = cr0[0];			// protected mode enabled
@@ -291,6 +292,8 @@ wire ovf_xe = cr0[40];		// overflow exception enable
 wire dbz_xe = cr0[41];		// divide by zero exception enable
 reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
+reg [1:0] sscd;				// single step count down
+reg [8:0] vecno;
 reg tapi1;
 reg tap_nmi_edge;
 reg tam;					// test access mode
@@ -386,6 +389,9 @@ reg [1:0] ld_size, st_size;
 reg [31:0] insncnt;
 reg [3:0] sri_cnt;
 
+wire dimm = opcode==`IMM;
+wire ximm = xopcode==`IMM;
+
 // Detect multi-cycle operation.
 function fnIsMC;
 input [6:0] opcode;
@@ -464,6 +470,7 @@ FISA64_itag_ram u2
 // exited with a RTD instruction.
 // ToDo: add a PIO port so the debug processor can control things.
 //-----------------------------------------------------------------------------
+reg d63,x63,w63;
 reg tap_nmi;
 `ifdef DEBUG_COP
 reg dbg_ram_ack,dbg_rom_ack,dbg_ser_ack;
@@ -759,11 +766,14 @@ FISA64_BranchHistory u4
 //-----------------------------------------------------------------------------
 // Datapath
 //-----------------------------------------------------------------------------
-wire lti = $signed(a) < $signed(imm);
+wire signed [63:0] as = a;
+wire signed [63:0] bs = b;
+wire signed [63:0] imms = imm;
+wire lti = as < imms;
 wire ltui = a < imm;
 wire eqi = a==imm;
 wire eq = a==b;
-wire lt = $signed(a) < $signed(b);
+wire lt = as < bs;
 wire ltu = a < b;
 
 // Rather than have a giant 50+ to 1 multiplexer for results, some instruction
@@ -852,7 +862,7 @@ case(x1opcode)
 	case(x1funct)
 	`MFSPR:
 		if (km) begin
-			casex(xir[24:17])
+			casex(xir[24:17]|a[7:0])
 			`CR0:		res <= cr0;
 			`TICK:		res <= tick;
 			`CLK:		res <= clk_throttle_new;
@@ -861,6 +871,7 @@ case(x1opcode)
 			`IPC:		res <= ipc;
 			`VBR:		res <= vbr;
 			`BEAR:		res <= bear;
+			`VECNO:		res <= vecno;
 			`MULH:		res <= p[127:64];
 			`ISP:		res <= isp;
 			`ESP:		res <= esp;
@@ -883,7 +894,7 @@ case(x1opcode)
 			endcase
 		end
 		else begin
-			casex(xir[24:17])
+			casex(xir[24:17]|a[7:0])
 			`MYSTREG:	res <= mystreg;
 			`MULH:		res <= p[127:64];
 			`LBOUND:	res <= lbound[{1'b0,xir[20:17]}];
@@ -955,6 +966,8 @@ case(x1opcode)
 `PEA:	res2 <= c - 64'd8;
 default:	res2 <= 64'd0;
 endcase
+
+wire iselect_ssm = ((dimm&ximm) ? x63 : dimm ? d63 : dbctrl[63]) && iopcode!=`IMM;
 
 reg hwi;
 reg nmi1;
@@ -1030,6 +1043,11 @@ if (rst_i) begin
 	cr0[36] <= FALSE;	// store successful bit
 	cr0[40] <= FALSE;	// overflow exception enable
 	cr0[41] <= FALSE;	// divide by zero exception enable
+	ssm <= FALSE;
+	sscd <= 2'b11;
+	d63 <= FALSE;
+	x63 <= FALSE;
+	w63 <= FALSE;
 end
 else begin
 utg <= FALSE;
@@ -1068,6 +1086,10 @@ begin
 	// IFETCH stage
 	//-----------------------------------------------------------------------------
 	if (advanceIF) begin
+		if (sscd[0] != 1'b1) begin
+			sscd[0] <= 1'b1;
+			dbctrl[63] <= dbctrl[62];
+		end
 		if (imcd != 3'd000) begin
 			imcd <= {imcd[1:0],1'b0};
 			if (imcd==3'b100)
@@ -1111,6 +1133,15 @@ begin
 			ir <= `BRK_EXF;
 			hwi = TRUE;
 		end
+		// Ugh, we need to remember the dbctrl[63] status at the time of an
+		// immediate prefix and use that as the status to control single
+		// stepping. Need to do this in order to be able to skip over 
+		// immediate prefixes.
+//		else if (((dimm&ximm) ? x63 : dimm ? d63 : dbctrl[63]) && iopcode!=`IMM) begin
+		else if (iselect_ssm) begin
+			ir <= `BRK_SSM;
+			hwi = TRUE;
+		end
 		else if (ice) begin
 			ir <= insn;
 			hwi = FALSE;
@@ -1122,6 +1153,7 @@ begin
 		disassem(iir);
 		$display("%h: %h", pc, iir);
 		dpc <= pc;
+		d63 <= dbctrl[63];
 		dbranch_taken <= FALSE;
 		// We take the following control transfers immediately in the IF stage,
 		// that makes them single cycle operations.
@@ -1135,7 +1167,7 @@ begin
 		else if (iopcode==`RR && ifunct==`PCTRL) begin
 			case(iir[21:17])
 			`WAI:	if (!hwi) pc <= pc; else begin dpc <= pc + 64'd4; pc <= pc + 64'd4; end
-			`RTD:	begin pc <= dbpc; pc[1:0] <= 2'b00; end
+			`RTD:	begin pc <= dpc; pc[1:0] <= 2'b00; end
 			`RTE:	begin pc <= epc; pc[1:0] <= 2'b00; end
 			`RTI:	begin pc <= ipc; pc[1:0] <= 2'b00; end
 			default:	pc <= pc + 64'd4;
@@ -1151,6 +1183,7 @@ begin
 			nop_ir();
 			dpc <= pc;
 			pc <= pc;
+			d63 <= dbctrl[63];
 		end
 	end
 	
@@ -1174,12 +1207,18 @@ begin
 		// return to a prior instruction prefix in th event of an interrupt,
 		// so we make the current instruction inherit the address of the
 		// prefix.
-		if (wopcode==`IMM && xopcode==`IMM)
+		if (wopcode==`IMM && xopcode==`IMM) begin
 			xpc <= wpc;	// in case of interrupt
-		else if (xopcode==`IMM)
+			x63 <= w63;
+		end
+		else if (xopcode==`IMM) begin
 			xpc <= xpc;
-		else
+			x63 <= x63;
+		end
+		else begin
 			xpc <= dpc;
+			x63 <= d63;
+		end
 
 		// And... register the register operands of the instruction.
 		a <= rfoa;
@@ -1252,6 +1291,7 @@ begin
 		// The following lines needed for code above for immediate prefixes.
 		wopcode <= x1opcode;
 		wpc <= xpc;
+		w63 <= x63;
 		wir <= xir;
 		// Make the last register update "sticky" in the WB stage.
 		if (xRt != 5'd0 && xRt != regSP) begin
@@ -1270,26 +1310,12 @@ begin
 			wRt2 <= xRt2;
 			wres2 <= res2;
 		end
-		// The following ssm conditional places a BRK instruction in the 
-		// instruction stream immediately after an instruction. Immediate prefixes
-		// are not single-stepped. As soon as the SSM condition passes we turn it
-		// off so that the debug routine may run full speed.
-		if (ssm) begin
-			if (xopcode != `IMM) begin
-				nop_xir();
-				ir <= `BRK_SSM;
-				dpc <= xpc;
-				pc <= 32'h10000;
-				dbctrl[62] <= dbctrl[63];	// record that SSM was on
-				dbctrl[63] <= FALSE;		// turn off SSM
-			end
-		end
 		case(x1opcode)
 		`RR:
 			case(xfunct)
 			`MTSPR:
 				if (km) begin
-					casex(xir[24:17])
+					casex(xir[24:17]|c[7:0])
 					`CR0:		cr0 <= a;
 					`DBPC:		dbpc <= a;	// need the LSB's !!!
 					`EPC:		epc <= a;
@@ -1323,7 +1349,7 @@ begin
 					endcase
 				end
 				else begin
-					casex(xir[24:17])
+					casex(xir[24:17]|c[7:0])
 					`MYSTREG:	mystreg <= a;
 					`LBOUND:	lbound[{1'b0,xir[20:17]}] <= a;
 					`UBOUND:	ubound[{1'b0,xir[20:17]}] <= a;
@@ -1348,20 +1374,33 @@ begin
 					`FIP:	update_pc(xpc+64'd4);
 					`SRI:	sri_cnt <= 4'd10;
 					`RTE:	km <= epc[0];
+					// Single step mode can't be enabled until we are sure the
+					// RTD instruction will execute. Also a countdown flag has 
+					// to be used because the first instruction after the RTD
+					// should execute not in single step mode.
 					`RTD:
 						begin
 						    km <= dbpc[0];
-							dbctrl[63] <= dbctrl[62];	// maybe turn SSM back on
+							if (dbctrl[62]) begin
+								sscd <= 2'b00;	// single step countdown flag
+								update_pc(dbpc);// flush instruction pipe
+							end
 							if (tam) begin
 								tam <= FALSE;
-								update_pc(dbpc);
 							end
 						end
+					// A normal interrupt (eg timer) might occur during 
+					// single step mode. On an RTI instruction return to
+					// single step mode. In this case we want to activate
+					// single step mode without a delay.
 					`RTI:
 						begin
 							StatusHWI <= FALSE;
 							imcd <= 3'b111;
 							km <= ipc[0];
+							dbctrl[63] <= ipc[1];
+							if (ipc[1])	// flush the instruction pipe
+								update_pc(ipc);	
 						end
 					endcase
 				else
@@ -1470,14 +1509,15 @@ begin
 						dbpc[0] <= km;
 						dsp[AMSB:3] <= a[AMSB:3];
 						dsp[2:0] <= 3'b000;
-						//dbctrl[62] <= dbctrl[63];
-						//dbctrl[63] <= FALSE;	// clear SSM
+						dbctrl[63] <= FALSE;	// clear SSM
+						ssm <= FALSE;
 					end
 				2'b10:
 					begin
 						StatusHWI <= `TRUE;
 						ipc[AMSB:2] <= xpc[AMSB:2];
-						ipc[1] <= 1'b0;
+						dbctrl[63] <= FALSE;
+						ipc[1] <= dbctrl[63];
 						ipc[0] <= km;
 						isp[AMSB:3] <= a[AMSB:3];
 						isp[2:0] <= 3'b000;
@@ -1500,7 +1540,8 @@ begin
 					ea <= {vbr[AMSB:12],xir[25:17],3'b000};
 					ld_size <= word;
 					next_state(LOAD1);
-					end
+				end
+				vecno <= xir[25:17];
 				end
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI:
 			begin
@@ -2377,13 +2418,11 @@ endtask
 
 task nop_xir;
 begin
-	if (xir!=`BRK_SSM) begin
-		x1opcode <= `NOP;
-		xopcode <= `NOP;
-		xRt <= 5'b0;
-		xRt2 <= 1'b0;
-		xir[6:0] <= `NOP;	// NOP
-	end
+	x1opcode <= `NOP;
+	xopcode <= `NOP;
+	xRt <= 5'b0;
+	xRt2 <= 1'b0;
+	xir[6:0] <= `NOP;	// NOP
 end
 endtask 
 
@@ -2397,8 +2436,7 @@ begin
 	pc <= npc;
 	pc[1:0] <= 2'b00;
 	nop_ir();
-	if (!ssm)			// If in SSM the xir will be setup appropriately.
-		nop_xir();
+	nop_xir();
 end
 endtask
 
@@ -2410,7 +2448,7 @@ input [63:0] npc;
 begin
 	pc <= npc;
 	pc[1:0] <= 2'b00;
-	if (!ssm)			// If in SSM the xir will be setup appropriately.
+//	if (!ssm)			// If in SSM the xir will be setup appropriately.
 		nop_ir();
 end
 endtask

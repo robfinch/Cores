@@ -114,6 +114,7 @@ int doinclude()
     inclline[incldepth] = lineno;
     inclfile[incldepth++] = input;  /* push current input file */
     input = fopen(pathname,"r");
+    printf("%s\r\n", pathname);
     if( input == 0 ) {
             input = inclfile[--incldepth];
             error(ERR_CANTOPEN);

@@ -68,6 +68,7 @@ char            chstack[20];    /* place to save lastch */
 int             lstackptr = 0;  /* substitution stack pointer */
 static char numstr[100];
 static char *numstrptr;
+static char backup_token = 0;
 
 int isalnum(char c)
 {       return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
@@ -412,6 +413,12 @@ void NextToken()
         SYM             *sp;
 		int tch;
 restart:        /* we come back here after comments */
+        if (backup_token) {
+           backup_token = 0;
+           lastch = '(';
+           lastst = openpa;
+           return;
+        }
 		SkipSpaces();
         if( lastch == -1)
                 lastst = my_eof;
@@ -681,6 +688,9 @@ restart:        /* we come back here after comments */
                         getch();
                         lastst = hook;
                         break;
+                case '\\':
+                        getch();
+                        goto restart;
                 default:
                         getch();
                         error(ERR_ILLCHAR);
@@ -698,4 +708,8 @@ void needpunc(enum e_sym p)
 		//printf("%d %s\r\n", lineno, inpline);
         error(ERR_PUNCT);
 	}
+}
+
+void backup() {
+    backup_token = 1;
 }

@@ -62,6 +62,7 @@ extern char *stptr;
 extern int lineno;
 extern int64_t code_address;
 extern int64_t bss_address;
+extern int64_t data_address;
 extern int segprefix;
 extern char masterFile[10000000];
 extern uint8_t binfile[10000000];

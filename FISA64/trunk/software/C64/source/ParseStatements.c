@@ -742,6 +742,7 @@ Statement *ParseCompoundStatement()
 		TRACE(printf("Compound <%s>\r\n",lastid);)
 		if (strcmp(lastid,"clockbug")==0)
 			printf("clockbug\r\n");
+		NextToken();
 	}
 	ParseAutoDeclarations(&snp->ssyms);
 	cseg();

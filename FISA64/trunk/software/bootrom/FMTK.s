@@ -6,6 +6,10 @@
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
 ;==============================================================================
+    bss
+freeTCBStack  fill.w 256,0
+freeTCBSp     db     0
+
     code
 	org		$14000
 	; Compress vector table by storing only the low order 16 bits of the
@@ -68,7 +72,18 @@ InitFMTK:
 	sw		r1,(448+3)<<3[r2]
 
     bsr     LockSYS
-    
+
+    ldi     r1,#0
+    ldi     r3,#TCB_Array
+.setupFreeTCB1:
+    asl     r4,r1,#3
+    sw      r3,freeTCBStack[r4]
+    addui   r3,r3,#TCB_Size
+    addui   r1,r1,#1
+    cmpu    r2,r1,#256
+    blt     r2,.setupFreeTCB1
+    sb      r0,freeTCBSp
+
 	; Manually setup the BIOS task
 	; FMTK can't be called to setup the first task because it uses the
 	; SYS_STACK associated with the running task which hasn't been set yet.
@@ -256,23 +271,6 @@ st4:
     nop
     sw      r0,TCB_NextFree[r2]
 
-    ldi     r2,#TCB_Array+TCB_Size*2
-    ldi     r4,#2
-.nextTCB:
-    ldi     r5,#0
-    sw      r5,TCB_hJCB[r2]   ; owning JOB = monitor
-    ldi     r3,#BranchToSelf
-    sw      r3,TCB_IPC[r2]    ; set startup address
-    sw      r3,TCB_EPC[r2]
-    sw      r3,TCB_DPC[r2]
-    mulu    r3,r4,#4096       ; initial stack size=4096
-    addui   r3,r3,#STACKS_Array+4088
-    sw      r3,TCB_r30[r2]    ; set the stack pointer to the default stack
-    addui   r2,r2,#TCB_Size   ; move to next TCB 768B TCB size
-    addui   r4,r4,#1
-    cmpu    r1,r4,#NR_TCB
-    blt     r1,.nextTCB
-
 	; manually build the IO focus list
 	lea		r1,JCB0
 	sw	    r1,IOFocusNdx		; Job #0 (Monitor) has the focus
@@ -458,7 +456,42 @@ UnlockSema:
     pop     r3
     pop     r2
     rtl
-    
+
+;------------------------------------------------------------------------------
+; Pop a free TCB off the free TCB stack.
+;------------------------------------------------------------------------------
+
+PopFreeTCB:
+    push    r2
+    push    r3
+    lbu     r1,freeTCBSp
+    asl     r2,r1,#3
+    addui   r1,r1,#1
+    cmp     r3,r1,#255
+    bgt     r3,.0001
+    sb      r1,freeTCBSp
+    lw      r1,freeTCBStack[r2]
+    pop     r3
+    pop     r2
+    rtl
+.0001:
+    pop     r3
+    pop     r2
+    ldi     r1,#-1
+    rtl
+
+PushFreeTCB:
+    push    r2
+    lbu     r2,freeTCBSp
+    beq     r2,.0001
+    subui   r2,r2,#1
+    sb      r2,freeTCBSp
+    asl     r2,r2,#3
+    sw      r1,freeTCBStack[r2]
+.0001:
+    pop     r2
+    rtl
+           
 ;------------------------------------------------------------------------------
 ; StartTask
 ;
@@ -491,20 +524,17 @@ StartTask:
 	
 	; get a free TCB
 	;
+.0001:
     bsr     LockSYS
-	lw		r1,FreeTCB			; get free tcb list pointer
-	chk     r2,r1,b48           ; check and make sure it's a valid pointer
-	beq		r2,stask1           ; branch if NULL or some other garbage
-	mov     r2,r1
-	lw		r1,TCB_NextFree[r2]
-	sw		r1,FreeTCB			; update the FreeTCB list pointer
-
+    bsr     PopFreeTCB
 	bsr     UnlockSYS
-	mov     r1,r2				; r1 = TCB pointer
+	bmi     r1,stask1
+	chk     r2,r1,b48           ; check and make sure it's a valid pointer
+	beq		r2,.0001            ; branch if NULL or some other garbage
+	mov     r7,r1
+    mov     r2,r1
 
-	; setup the stack for the task
-	; Zap the stack memory.
-	mov		r7,r2
+	; setup the stacks for the task
 	subui   r2,r2,#TCB_Array
 	lsr     r2,r2,#TCB_LogSize  ; r2 = index number of TCB
 	asl		r2,r2,#12			; 4kB stack per task
@@ -555,7 +585,6 @@ stask2:
 	pop     r1
 	rts
 stask1:
-	bsr     UnlockSYS
 	bsr		kernel_panic
 	db		"No more task control blocks available.",0
 	bra		stask2
@@ -588,9 +617,8 @@ xtsk7:
 	bsr		FreeMbx
 	bra		xtsk7
 xtsk6:
-	lw		r1,FreeTCB						; add the task control block to the free list
-	sw		r1,TCB_NextFree[tr]
-	sw		tr,FreeTCB
+    mov     r1,tr
+    bsr     PushFreeTCB         ; add the task control block to the free list
 	bsr     UnlockSYS
 	; This loop will eventually be interrupted, the interrupt return will not
 	; return to here.
@@ -642,9 +670,7 @@ kt7:
 	bra		kt7
 kt6:
     pop     r1
-	lw		r2,FreeTCB					; add the task control block to the free list
-	sw		r2,TCB_NextFree[r1]
-	sw		r1,FreeTCB
+    bsr     PushFreeTCB                 ; add the task control block to the free list
 	bsr     UnlockSYS
 	cmp     r2,r1,tr                    ; keep running the current task as long as
 	bne		r2,kt1						; the task didn't kill itself.
@@ -684,8 +710,8 @@ DumpTaskList:
 dtl2:
 	lw		r1,QNdx0[r3]
 	mov		r4,r1
-	beq		r4,dtl1
-dtl3:
+	beq		r4,dtl_nextList
+dtl_nextTask:
     ldi     r2,#3
     mov     r4,r1
     lb      r1,TCB_Affinity[r1]
@@ -715,10 +741,12 @@ dtl3:
 	bsr		DisplayWord
 	bsr		CRLF
 	lw		r4,TCB_NextRdy[r4]
+	chk     r1,r4,b48
+	beq     r1,dtl_nextList
 	lw      r1,QNdx0[r3]
 	cmp		r1,r4,r1
-	bne		r1,dtl3
-dtl1:
+	bne		r1,dtl_nextTask
+dtl_nextList:
 	addui   r3,r3,#8
 	cmp     r4,r3,#64
 	blt		r4,dtl2
@@ -814,7 +842,7 @@ AddTaskToReadyList:
 	chk     r3,r1,b48
 	beq		r3,.0003
 	lw		r3,TCB_PrevRdy[r1]
-	sw		r1,TCB_NextRdy[r3]
+	sw		r4,TCB_NextRdy[r3]
 	sw		r3,TCB_PrevRdy[r4]
 	sw		r4,TCB_PrevRdy[r1]
 	sw		r1,TCB_NextRdy[r4]
@@ -866,7 +894,7 @@ RemoveTaskFromReadyList:
 	asl     r3,r3,#3
 	lw      r5,QNdx0[r3]
 	cmp		r5,r1,r5			; Are we removing the QNdx task ?
-	bne		r5,rfr2
+	bne		r5,rfr1
 	sw		r4,QNdx0[r3]
 	; Now we test for the case where the task being removed was the only one
 	; on the ready list of that priority level. We can tell because the
@@ -988,8 +1016,7 @@ RemoveFromTimeoutList:
 	push	r4
 	push	r5
 
-;    bsr     ValidateTCBPtr
-    chk     r2,r1,b48
+    chk     r2,r1,b48               ; validate TCB pointer
     beq     r2,rftBadPtr
 	lb		r4,TCB_Status[r1]		; Is the task even on the timeout list ?
 	and		r4,r4,#TS_TIMEOUT
@@ -1067,6 +1094,44 @@ ptl1:
 	sw		r0,TCB_PrevTo[r2]		; the task is not on a list.
 	mov     r1,r2
     rtl
+
+DumpTimeoutList:
+    push    lr
+    push    r1
+    push    r2
+    push    r4
+    lea     r1,msgTimeoutList
+    bsr     DisplayStringCRLF
+    lw      r4,TimeoutList
+.0001:
+    chk     r2,r4,b48
+    beq     r2,.xit
+    ldi     r2,#3
+    lb      r1,TCB_Affinity[r4]
+    bsr     PRTNUM
+    bsr     DisplaySpace
+    mov     r1,r4
+    bsr     DisplayHalf
+    bsr     DisplaySpace
+    lw      r1,TCB_PrevTo[r4]
+    bsr     DisplayHalf
+    bsr     DisplaySpace
+    lw      r1,TCB_NextTo[r4]
+    bsr     DisplayHalf
+    bsr     DisplaySpace
+    lw      r1,TCB_Timeout[r4]
+    bsr     DisplayWord
+    bsr     CRLF
+    lw      r4,TCB_NextTo[r4]
+    bra     .0001
+.xit:
+    pop     r4
+    pop     r2
+    pop     r1
+    rts
+
+msgTimeoutList  db "CPU   Task     Prv      Nxt     Timeout",0
+    align   4
 
 ;------------------------------------------------------------------------------
 ; Sleep
@@ -1870,6 +1935,13 @@ syscall_exception:
 	pop		r6
 	rte
 
+    bss
+    align  8
+CPU0_IRQ_STACK      fill.w  512,0
+CPU1_IRQ_STACK      fill.w  512,0
+
+    code
+    align  4
 ;------------------------------------------------------------------------------
 ; Reschedule tasks to run without affecting the timeout list timing.
 ;------------------------------------------------------------------------------

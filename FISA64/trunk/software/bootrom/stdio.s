@@ -10,7 +10,7 @@ public code putch:
         sys     #410      ; Video BIOS call
         pop     r6
 	
-stdio_1:
+stdio_969:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#24
@@ -20,63 +20,63 @@ public code putnum:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#stdio_3
+	      	ldi  	xlr,#stdio_971
 	      	mov  	bp,sp
-	      	subui	sp,sp,#64
+	      	subui	sp,sp,#424
 	      	push 	r11
-	      	lea  	r3,-58[bp]
+	      	lea  	r3,-418[bp]
 	      	mov  	r11,r3
 	      	lw   	r3,32[bp]
-	      	blt  	r3,stdio_6
+	      	blt  	r3,stdio_974
 	      	lw   	r3,32[bp]
 	      	cmp  	r3,r3,#200
-	      	ble  	r3,stdio_4
-stdio_6:
+	      	ble  	r3,stdio_972
+stdio_974:
 	      	sw   	r0,32[bp]
-stdio_4:
+stdio_972:
 	      	lw   	r3,24[bp]
-	      	bge  	r3,stdio_7
+	      	bge  	r3,stdio_975
 	      	ldi  	r3,#45
-	      	bra  	stdio_8
-stdio_7:
+	      	bra  	stdio_976
+stdio_975:
 	      	ldi  	r4,#43
 	      	mov  	r3,r4
-stdio_8:
+stdio_976:
 	      	sc   	r3,-18[bp]
 	      	lw   	r3,24[bp]
-	      	bge  	r3,stdio_9
+	      	bge  	r3,stdio_977
 	      	lw   	r3,24[bp]
 	      	neg  	r3,r3
 	      	sw   	r3,24[bp]
-stdio_9:
+stdio_977:
 	      	sw   	r0,-8[bp]
-stdio_11:
+stdio_979:
 	      	lw   	r3,-8[bp]
 	      	and  	r3,r3,#3
 	      	cmp  	r3,r3,#3
-	      	bne  	r3,stdio_13
+	      	bne  	r3,stdio_981
 	      	lcu  	r3,40[bp]
 	      	sxc  	r3,r3
-	      	beq  	r3,stdio_13
+	      	beq  	r3,stdio_981
 	      	lw   	r3,-8[bp]
 	      	asli 	r3,r3,#1
 	      	lcu  	r4,40[bp]
 	      	sc   	r4,0[r11+r3]
 	      	inc  	-8[bp],#1
-stdio_13:
+stdio_981:
 	      	lw   	r3,24[bp]
 	      	mod  	r3,r3,#10
 	      	sw   	r3,-16[bp]
 	      	lw   	r3,-16[bp]
 	      	cmp  	r3,r3,#9
-	      	bgt  	r3,stdio_17
+	      	bgt  	r3,stdio_985
 	      	lw   	r3,-16[bp]
-	      	bge  	r3,stdio_15
-stdio_17:
-	      	push 	#stdio_2
+	      	bge  	r3,stdio_983
+stdio_985:
+	      	push 	#stdio_970
 	      	bsr  	printf
 	      	addui	sp,sp,#8
-stdio_15:
+stdio_983:
 	      	lw   	r3,-16[bp]
 	      	addu 	r3,r3,#48
 	      	lw   	r4,-8[bp]
@@ -87,211 +87,224 @@ stdio_15:
 	      	sw   	r3,24[bp]
 	      	inc  	-8[bp],#1
 	      	lw   	r3,24[bp]
-	      	beq  	r3,stdio_18
+	      	beq  	r3,stdio_986
 	      	lw   	r3,-8[bp]
 	      	cmp  	r3,r3,#18
-	      	ble  	r3,stdio_11
-stdio_18:
-stdio_12:
+	      	ble  	r3,stdio_979
+stdio_986:
+stdio_980:
 	      	lcu  	r3,-18[bp]
 	      	cmp  	r3,r3,#45
-	      	bne  	r3,stdio_19
+	      	bne  	r3,stdio_987
 	      	lw   	r3,-8[bp]
 	      	asli 	r3,r3,#1
 	      	lcu  	r4,-18[bp]
 	      	sc   	r4,0[r11+r3]
 	      	inc  	-8[bp],#1
-stdio_19:
-stdio_21:
+stdio_987:
+stdio_989:
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,32[bp]
 	      	cmp  	r3,r3,r4
-	      	bge  	r3,stdio_22
+	      	bge  	r3,stdio_990
 	      	lcu  	r3,48[bp]
 	      	push 	r3
 	      	bsr  	putch
-stdio_23:
+stdio_991:
 	      	dec  	32[bp],#1
-	      	bra  	stdio_21
-stdio_22:
-stdio_24:
+	      	bra  	stdio_989
+stdio_990:
+stdio_992:
 	      	lw   	r3,-8[bp]
-	      	ble  	r3,stdio_25
+	      	ble  	r3,stdio_993
 	      	dec  	-8[bp],#1
 	      	lw   	r3,-8[bp]
 	      	asli 	r3,r3,#1
 	      	lcu  	r3,0[r11+r3]
 	      	push 	r3
 	      	bsr  	putch
-	      	bra  	stdio_24
-stdio_25:
-stdio_26:
+	      	bra  	stdio_992
+stdio_993:
+stdio_994:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#32
-stdio_3:
+stdio_971:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	stdio_26
+	      	bra  	stdio_994
 endpublic
 
 public code puthexnum:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#stdio_27
+	      	ldi  	xlr,#stdio_995
 	      	mov  	bp,sp
-	      	subui	sp,sp,#64
+	      	subui	sp,sp,#424
 	      	push 	r11
-	      	lea  	r3,-58[bp]
+	      	lea  	r3,-418[bp]
 	      	mov  	r11,r3
 	      	lw   	r3,32[bp]
-	      	blt  	r3,stdio_30
+	      	blt  	r3,stdio_998
 	      	lw   	r3,32[bp]
 	      	cmp  	r3,r3,#200
-	      	ble  	r3,stdio_28
-stdio_30:
+	      	ble  	r3,stdio_996
+stdio_998:
 	      	sw   	r0,32[bp]
-stdio_28:
+stdio_996:
 	      	sw   	r0,-8[bp]
 	      	lw   	r3,24[bp]
-	      	bge  	r3,stdio_31
+	      	bge  	r3,stdio_999
 	      	ldi  	r3,#45
-	      	bra  	stdio_32
-stdio_31:
+	      	bra  	stdio_1000
+stdio_999:
 	      	ldi  	r4,#43
 	      	mov  	r3,r4
-stdio_32:
+stdio_1000:
 	      	sc   	r3,-18[bp]
 	      	lw   	r3,24[bp]
-	      	bge  	r3,stdio_33
+	      	bge  	r3,stdio_1001
 	      	lw   	r3,24[bp]
 	      	neg  	r3,r3
 	      	sw   	r3,24[bp]
-stdio_33:
-stdio_35:
+stdio_1001:
+stdio_1003:
 	      	lw   	r3,24[bp]
 	      	and  	r3,r3,#15
 	      	sw   	r3,-16[bp]
 	      	lw   	r3,-16[bp]
 	      	cmp  	r3,r3,#10
-	      	bge  	r3,stdio_37
+	      	bge  	r3,stdio_1005
 	      	lw   	r3,-16[bp]
 	      	addu 	r3,r3,#48
 	      	lw   	r4,-8[bp]
 	      	asli 	r4,r4,#1
 	      	sc   	r3,0[r11+r4]
-	      	bra  	stdio_38
-stdio_37:
+	      	bra  	stdio_1006
+stdio_1005:
 	      	lw   	r3,40[bp]
-	      	beq  	r3,stdio_39
+	      	beq  	r3,stdio_1007
 	      	lw   	r3,-16[bp]
 	      	subu 	r3,r3,#-55
 	      	lw   	r4,-8[bp]
 	      	asli 	r4,r4,#1
 	      	sc   	r3,0[r11+r4]
-	      	bra  	stdio_40
-stdio_39:
+	      	bra  	stdio_1008
+stdio_1007:
 	      	lw   	r3,-16[bp]
 	      	subu 	r3,r3,#-87
 	      	lw   	r4,-8[bp]
 	      	asli 	r4,r4,#1
 	      	sc   	r3,0[r11+r4]
-stdio_40:
-stdio_38:
+stdio_1008:
+stdio_1006:
 	      	lw   	r3,24[bp]
 	      	asri 	r3,r3,#4
 	      	sw   	r3,24[bp]
 	      	inc  	-8[bp],#1
 	      	lw   	r3,24[bp]
-	      	bne  	r3,stdio_35
-stdio_36:
+	      	beq  	r3,stdio_1009
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#18
+	      	blt  	r3,stdio_1003
+stdio_1009:
+stdio_1004:
 	      	lcu  	r3,-18[bp]
 	      	cmp  	r3,r3,#45
-	      	bne  	r3,stdio_41
+	      	bne  	r3,stdio_1010
 	      	lw   	r3,-8[bp]
 	      	asli 	r3,r3,#1
 	      	lcu  	r4,-18[bp]
 	      	sc   	r4,0[r11+r3]
 	      	inc  	-8[bp],#1
-stdio_41:
-stdio_43:
+stdio_1010:
+stdio_1012:
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,32[bp]
 	      	cmp  	r3,r3,r4
-	      	bge  	r3,stdio_44
-	      	lcu  	r3,48[bp]
+	      	bge  	r3,stdio_1013
+	      	lcu  	r3,-18[bp]
+	      	cmp  	r3,r3,#45
+	      	bne  	r3,stdio_1014
+	      	ldi  	r3,#32
+	      	bra  	stdio_1015
+stdio_1014:
+	      	lcu  	r4,48[bp]
+	      	sxc  	r4,r4
+	      	mov  	r3,r4
+stdio_1015:
 	      	push 	r3
 	      	bsr  	putch
 	      	dec  	32[bp],#1
-	      	bra  	stdio_43
-stdio_44:
-stdio_45:
+	      	bra  	stdio_1012
+stdio_1013:
+stdio_1016:
 	      	lw   	r3,-8[bp]
-	      	ble  	r3,stdio_46
+	      	ble  	r3,stdio_1017
 	      	dec  	-8[bp],#1
 	      	lw   	r3,-8[bp]
 	      	asli 	r3,r3,#1
 	      	lcu  	r3,0[r11+r3]
 	      	push 	r3
 	      	bsr  	putch
-	      	bra  	stdio_45
-stdio_46:
-stdio_47:
+	      	bra  	stdio_1016
+stdio_1017:
+stdio_1018:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#32
-stdio_27:
+stdio_995:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	stdio_47
+	      	bra  	stdio_1018
 endpublic
 
 public code putstr:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#stdio_48
+	      	ldi  	xlr,#stdio_1019
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
 	      	lw   	r11,24[bp]
 	      	sw   	r11,-8[bp]
-stdio_49:
+stdio_1020:
 	      	lcu  	r3,[r11]
-	      	beq  	r3,stdio_50
+	      	beq  	r3,stdio_1021
 	      	lw   	r3,32[bp]
-	      	ble  	r3,stdio_50
+	      	ble  	r3,stdio_1021
 	      	lcu  	r3,[r11]
 	      	push 	r3
 	      	bsr  	putch
-stdio_51:
+stdio_1022:
 	      	addui	r11,r11,#2
 	      	dec  	32[bp],#1
-	      	bra  	stdio_49
-stdio_50:
+	      	bra  	stdio_1020
+stdio_1021:
 	      	lw   	r3,-8[bp]
 	      	asli 	r3,r3,#1
 	      	subu 	r11,r11,r3
 	      	lsri 	r11,r11,#1
 	      	mov  	r1,r11
-stdio_52:
+stdio_1023:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#16
-stdio_48:
+stdio_1019:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	stdio_52
+	      	bra  	stdio_1023
 endpublic
 
 public code putstr2:
@@ -304,14 +317,18 @@ public code putstr2:
         sys     #410
         pop     r6
     
-stdio_54:
+stdio_1025:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#24
 endpublic
 
 public code getcharNoWait:
-	      	     	        push    r6
+	      	     	        push    lr
+        bsr     KeybdGetCharNoWait
+        pop     lr
+        rtl
+        push    r6
         ld      r6,#3    ; KeybdGetCharNoWait
         sys     #10
         pop     r6
@@ -323,37 +340,37 @@ public code getchar:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#stdio_57
+	      	ldi  	xlr,#stdio_1028
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
-stdio_58:
+stdio_1029:
 	      	bsr  	getcharNoWait
 	      	mov  	r3,r1
 	      	sw   	r3,-8[bp]
 	      	lw   	r3,-8[bp]
 	      	cmp  	r3,r3,#-1
-	      	beq  	r3,stdio_58
-stdio_59:
+	      	beq  	r3,stdio_1029
+stdio_1030:
 	      	lw   	r3,-8[bp]
 	      	and  	r3,r3,#255
 	      	mov  	r1,r3
-stdio_60:
+stdio_1031:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-stdio_57:
+stdio_1028:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	stdio_60
+	      	bra  	stdio_1031
 endpublic
 
 public code printf:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#stdio_62
+	      	ldi  	xlr,#stdio_1033
 	      	mov  	bp,sp
 	      	subui	sp,sp,#40
 	      	push 	r11
@@ -361,68 +378,68 @@ public code printf:
 	      	lea  	r3,24[bp]
 	      	mov  	r11,r3
 	      	mov  	r12,r11
-stdio_63:
+stdio_1034:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
-	      	beq  	r3,stdio_64
+	      	beq  	r3,stdio_1035
 	      	ldi  	r3,#32
 	      	sc   	r3,-34[bp]
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	cmp  	r3,r3,#37
-	      	bne  	r3,stdio_66
+	      	bne  	r3,stdio_1037
 	      	sw   	r0,-16[bp]
 	      	ldi  	r3,#65535
 	      	sw   	r3,-24[bp]
 	      	inc  	[r11],#2
-stdio_61:
+stdio_1032:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	cmp  	r4,r3,#37
-	      	beq  	r4,stdio_69
+	      	beq  	r4,stdio_1040
 	      	cmp  	r4,r3,#99
-	      	beq  	r4,stdio_70
+	      	beq  	r4,stdio_1041
 	      	cmp  	r4,r3,#100
-	      	beq  	r4,stdio_71
+	      	beq  	r4,stdio_1042
 	      	cmp  	r4,r3,#120
-	      	beq  	r4,stdio_72
+	      	beq  	r4,stdio_1043
 	      	cmp  	r4,r3,#88
-	      	beq  	r4,stdio_73
+	      	beq  	r4,stdio_1044
 	      	cmp  	r4,r3,#115
-	      	beq  	r4,stdio_74
+	      	beq  	r4,stdio_1045
 	      	cmp  	r4,r3,#48
-	      	beq  	r4,stdio_75
+	      	beq  	r4,stdio_1046
 	      	cmp  	r4,r3,#57
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#56
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#55
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#54
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#53
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#52
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#51
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#50
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#49
-	      	beq  	r4,stdio_76
+	      	beq  	r4,stdio_1047
 	      	cmp  	r4,r3,#46
-	      	beq  	r4,stdio_77
-	      	bra  	stdio_68
-stdio_69:
+	      	beq  	r4,stdio_1048
+	      	bra  	stdio_1039
+stdio_1040:
 	      	push 	#37
 	      	bsr  	putch
-	      	bra  	stdio_68
-stdio_70:
+	      	bra  	stdio_1039
+stdio_1041:
 	      	addui	r12,r12,#8
 	      	push 	[r12]
 	      	bsr  	putch
-	      	bra  	stdio_68
-stdio_71:
+	      	bra  	stdio_1039
+stdio_1042:
 	      	addui	r12,r12,#8
 	      	lcu  	r3,-34[bp]
 	      	push 	r3
@@ -430,8 +447,8 @@ stdio_71:
 	      	push 	-16[bp]
 	      	push 	[r12]
 	      	bsr  	putnum
-	      	bra  	stdio_68
-stdio_72:
+	      	bra  	stdio_1039
+stdio_1043:
 	      	addui	r12,r12,#8
 	      	lcu  	r3,-34[bp]
 	      	push 	r3
@@ -439,8 +456,8 @@ stdio_72:
 	      	push 	-16[bp]
 	      	push 	[r12]
 	      	bsr  	puthexnum
-	      	bra  	stdio_68
-stdio_73:
+	      	bra  	stdio_1039
+stdio_1044:
 	      	addui	r12,r12,#8
 	      	lcu  	r3,-34[bp]
 	      	push 	r3
@@ -448,32 +465,32 @@ stdio_73:
 	      	push 	-16[bp]
 	      	push 	[r12]
 	      	bsr  	puthexnum
-	      	bra  	stdio_68
-stdio_74:
+	      	bra  	stdio_1039
+stdio_1045:
 	      	addui	r12,r12,#8
 	      	push 	-24[bp]
 	      	push 	[r12]
 	      	bsr  	putstr
 	      	mov  	r3,r1
 	      	sw   	r3,-32[bp]
-	      	bra  	stdio_68
-stdio_75:
+	      	bra  	stdio_1039
+stdio_1046:
 	      	ldi  	r3,#48
 	      	sc   	r3,-34[bp]
-stdio_76:
+stdio_1047:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	subu 	r3,r3,#48
 	      	sw   	r3,-16[bp]
 	      	inc  	[r11],#2
-stdio_78:
+stdio_1049:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	push 	r3
 	      	bsr  	isdigit
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	beq  	r3,stdio_79
+	      	beq  	r3,stdio_1050
 	      	lw   	r3,-16[bp]
 	      	muli 	r3,r3,#10
 	      	sw   	r3,-16[bp]
@@ -484,15 +501,15 @@ stdio_78:
 	      	addu 	r4,r4,r3
 	      	sw   	r4,-16[bp]
 	      	inc  	[r11],#2
-	      	bra  	stdio_78
-stdio_79:
+	      	bra  	stdio_1049
+stdio_1050:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	cmp  	r3,r3,#46
-	      	beq  	r3,stdio_80
-	      	bra  	stdio_61
-stdio_80:
-stdio_77:
+	      	beq  	r3,stdio_1051
+	      	bra  	stdio_1032
+stdio_1051:
+stdio_1048:
 	      	inc  	[r11],#2
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
@@ -500,22 +517,22 @@ stdio_77:
 	      	bsr  	isdigit
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	bne  	r3,stdio_82
-	      	bra  	stdio_61
-stdio_82:
+	      	bne  	r3,stdio_1053
+	      	bra  	stdio_1032
+stdio_1053:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	subu 	r3,r3,#48
 	      	sw   	r3,-24[bp]
 	      	inc  	[r11],#2
-stdio_84:
+stdio_1055:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	push 	r3
 	      	bsr  	isdigit
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
-	      	beq  	r3,stdio_85
+	      	beq  	r3,stdio_1056
 	      	lw   	r3,-24[bp]
 	      	muli 	r3,r3,#10
 	      	sw   	r3,-24[bp]
@@ -526,22 +543,22 @@ stdio_84:
 	      	addu 	r4,r4,r3
 	      	sw   	r4,-24[bp]
 	      	inc  	[r11],#2
-	      	bra  	stdio_84
-stdio_85:
-	      	bra  	stdio_61
-stdio_68:
-	      	bra  	stdio_67
-stdio_66:
+	      	bra  	stdio_1055
+stdio_1056:
+	      	bra  	stdio_1032
+stdio_1039:
+	      	bra  	stdio_1038
+stdio_1037:
 	      	lw   	r3,[r11]
 	      	lcu  	r3,[r3]
 	      	push 	r3
 	      	bsr  	putch
-stdio_67:
-stdio_65:
+stdio_1038:
+stdio_1036:
 	      	inc  	[r11],#2
-	      	bra  	stdio_63
-stdio_64:
-stdio_86:
+	      	bra  	stdio_1034
+stdio_1035:
+stdio_1057:
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -549,16 +566,16 @@ stdio_86:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-stdio_62:
+stdio_1033:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	stdio_86
+	      	bra  	stdio_1057
 endpublic
 
 	rodata
 	align	16
 	align	8
-stdio_2:	; moderr 
+stdio_970:
 	dc	109,111,100,101,114,114,32,0
 ;	global	putch
 ;	global	getcharNoWait
