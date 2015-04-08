@@ -60,6 +60,7 @@ typedef struct _tagTCB {
 } TCB;
 
 typedef struct tagMBX {
+    struct tagMBX *next;
 	TCB *tq_head;
 	TCB *tq_tail;
 	MSG *mq_head;

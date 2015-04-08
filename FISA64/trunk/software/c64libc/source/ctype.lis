@@ -1,0 +1,222 @@
+     1	
+     2	int isxdigit(char ch)
+     3	{
+     4		if (ch >= 'A' and ch <= 'F') return true;
+     5		if (ch >= 'a' and ch <= 'f') return true;
+     6		if (ch >= '0' and ch <= '9') return true;
+     7		return false;
+     8	}
+     9	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    10	int isdigit(char ch)
+    11	{
+    12		if (ch >= '0' and ch <= '9')
+    13			return true;
+    14		return false;
+    15	}
+    16	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    17	int isalpha(char ch)
+    18	{
+    19		if (ch >= 'a' and ch <= 'z')
+    20			return true;
+    21		if (ch >= 'A' and ch <= 'Z')
+    22			return true;
+    23		return false;
+    24	}
+    25	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    26	int isalnum(char ch)
+    27	{
+    28		if (ch >= '0' and ch <= '9')
+    29			return true;
+    30		if (ch >= 'a' and ch <= 'z')
+    31			return true;
+    32		if (ch >= 'A' and ch <= 'Z')
+    33			return true;
+    34		return false;
+    35	}
+    36	
+    37	// ToDo: add vertical tab
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    38	int isspace(char ch)
+    39	{
+    40		if (ch==' ') return true;
+    41		if (ch=='\t') return true;
+    42		if (ch=='\n') return true;
+    43		if (ch=='\r') return true;
+    44		if (ch=='\f') return true;
+    45		return false;
+    46	}
+    47	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    48	int tolower(char ch)
+    49	{
+    50		if (ch >= 'A' and ch <= 'Z')
+    51			ch = ch - 'A' + 'a';
+    52		return ch;
+    53	}
+    54	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    55	int toupper(char ch)
+    56	{
+    57		if (ch >= 'a' and ch <= 'a')
+    58			ch = ch - 'a' + 'A';
+    59		return ch;
+    60	}
+    61	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    62	int isupper(char ch)
+    63	{
+    64		return ch >= 'A' and ch <= 'Z';
+    65	}
+    66	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    67	int islower(char ch)
+    68	{
+    69		return ch >= 'a' and ch <= 'z';
+    70	}
+    71	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    72	int ispunct(char ch)
+    73	{
+    74		switch(ch) {
+    75			case '!','"','#','%','&','\'','(',')',';','<','=','>','?',
+    76				'[','\\',']','*','+',',','-','.','/',':','^':
+    77				return true;
+    78			default:	return false;
+    79		}
+    80	}
+    81	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    82	int isgraph(char ch)
+    83	{
+    84		return ispunct(ch) || isalnum(ch);
+    85	}
+    86	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    87	int isprint(char ch)
+    88	{
+    89		return isgraph(ch) || ch==' ';
+    90	}
+    91	
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+    92	int iscntrl(char ch)
+    93	{
+    94		switch(ch) {
+    95			// ToDo: add VT
+    96			case '\t','\f','\r','\n','\b','\007': return true;
+    97			default:	return false;
+    98		}
+    99	}
+
+
+*** local symbol table ***
+
+ch         =000018    -    Auto        Char
+
+
+
+
+ *** global scope typedef symbol table ***
+
+islower    =000000    -    Global      Function returning Long
+ispunct    =000000    -    Global      Function returning Long
+isupper    =000000    -    Global      Function returning Long
+isprint    =000000    -    Global      Function returning Long
+tolower    =000000    -    Global      Function returning Long
+toupper    =000000    -    Global      Function returning Long
+isxdigit   =000000    -    Global      Function returning Long
+isalpha    =000000    -    Global      Function returning Long
+isspace    =000000    -    Global      Function returning Long
+isdigit    =000000    -    Global      Function returning Long
+isgraph    =000000    -    Global      Function returning Long
+isalnum    =000000    -    Global      Function returning Long
+iscntrl    =000000    -    Global      Function returning Long
+
+ *** structures and unions ***
+

@@ -67,12 +67,22 @@ public bss fmtk_irq_stack:
 endpublic
 	align	8
 public bss mailbox:
-	fill.b	165888,0x00
+	fill.b	182272,0x00
 
 endpublic
 	align	8
 public bss message:
 	fill.b	1048576,0x00
+
+endpublic
+	align	8
+public bss freeMSG:
+	fill.b	8,0x00
+
+endpublic
+	align	8
+public bss freeMBX:
+	fill.b	8,0x00
 
 endpublic
 	align	8
@@ -364,8 +374,10 @@ FMTKc_38:
 	      	lw   	r3,0[r12+r3]
 	      	cmp  	r11,r11,r3
 	      	bne  	r11,FMTKc_40
-	      	asli 	r11,r11,#3
-	      	sw   	r0,0[r12+r11]
+	      	lb   	r3,392[r11]
+	      	sxb  	r3,r3
+	      	asli 	r3,r3,#3
+	      	sw   	r0,0[r12+r3]
 FMTKc_40:
 	      	lw   	r3,312[r11]
 	      	lw   	r4,320[r11]
@@ -670,7 +682,7 @@ FMTKc_85:
 FMTKc_86:
 	      	bra  	FMTKc_83
 FMTKc_84:
-	      	bsr  	SelectTasktoRun
+	      	bsr  	SelectTaskToRun
 	      	mov  	r3,r1
 	      	push 	r3
 	      	bsr  	SetRunningTCB
@@ -761,8 +773,8 @@ public code RescheduleIRQ:
          sw    r24,192[tr]
          sw    r25,200[tr]
          sw    r26,208[tr]
-         sw    r27,216[tr]
          sw    r28,224[tr]
+         sw    r27,216[tr]
          sw    r29,232[tr]
          sw    r30,240[tr]
          sw    r31,248[tr]
@@ -785,7 +797,7 @@ public code RescheduleIRQ:
 	      	mov  	r3,r1
 	      	ldi  	r4,#4
 	      	sb   	r4,393[r3]
-	      	bsr  	SelectTasktoRun
+	      	bsr  	SelectTaskToRun
 	      	mov  	r3,r1
 	      	push 	r3
 	      	bsr  	SetRunningTCB
@@ -934,7 +946,8 @@ FMTKc_113:
 	      	lw   	r3,-16[bp]
 	      	beq  	r3,FMTKc_114
 	      	lw   	r3,-16[bp]
-	      	sw   	r3,-24[bp]
+	      	lw   	r4,[r3]
+	      	sw   	r4,-24[bp]
 	      	push 	-16[bp]
 	      	bsr  	FreeMbx
 	      	addui	sp,sp,#8
@@ -1012,8 +1025,10 @@ public code FMTKInitialize:
 	      	subui	sp,sp,#8
 	      	push 	r11
 	      	push 	r12
+	      	push 	r13
 	      	ldi  	r11,#tcbs
 	      	ldi  	r12,#jcbs
+	      	ldi  	r13,#message
 	      	lw   	r3,FMTK_Inited
 	      	cmp  	r3,r3,#305419896
 	      	beq  	r3,FMTKc_119
@@ -1022,18 +1037,63 @@ public code FMTKInitialize:
         
 	      	bsr  	UnlockSYS
 	      	bsr  	UnlockIOF
+	      	sw   	r0,IOFocusTbl
+	      	sw   	r0,IOFocusNdx
+	      	ldi  	r3,#101888
+	      	addu 	r3,r3,r11
+	      	push 	r3
+	      	push 	r11
+	      	bsr  	SetBound48
+	      	addui	sp,sp,#16
+	      	ldi  	r3,#85680
+	      	addu 	r3,r3,r12
+	      	push 	r3
+	      	push 	r12
+	      	bsr  	SetBound49
+	      	addui	sp,sp,#16
+	      	ldi  	r3,#182272
+	      	addu 	r3,r3,#mailbox
+	      	push 	r3
+	      	push 	#mailbox
+	      	bsr  	SetBound50
+	      	addui	sp,sp,#16
+	      	ldi  	r3,#1048576
+	      	addu 	r3,r3,r13
+	      	push 	r3
+	      	push 	r13
+	      	bsr  	SetBound51
+	      	addui	sp,sp,#16
 	      	sw   	r0,-8[bp]
 FMTKc_121:
 	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#51
+	      	cmp  	r3,r3,#32768
 	      	bge  	r3,FMTKc_122
+	      	ldi  	r3,#32
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	addu 	r4,r4,r13
+	      	addu 	r3,r3,r4
+	      	lw   	r4,-8[bp]
+	      	asli 	r4,r4,#5
+	      	sw   	r3,0[r13+r4]
+FMTKc_123:
+	      	inc  	-8[bp],#1
+	      	bra  	FMTKc_121
+FMTKc_122:
+	      	sw   	r0,1048544[r13]
+	      	sw   	r13,freeMSG
+	      	sw   	r0,-8[bp]
+FMTKc_124:
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#51
+	      	bge  	r3,FMTKc_125
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,-8[bp]
 	      	mulu 	r4,r4,#1680
 	      	addu 	r4,r4,r12
 	      	sc   	r3,1678[r4]
 	      	lw   	r3,-8[bp]
-	      	bne  	r3,FMTKc_124
+	      	bne  	r3,FMTKc_127
 	      	lw   	r3,-8[bp]
 	      	mulu 	r3,r3,#1680
 	      	addu 	r3,r3,r12
@@ -1054,8 +1114,8 @@ FMTKc_121:
 	      	push 	r12
 	      	bsr  	RequestIOFocus
 	      	addui	sp,sp,#8
-	      	bra  	FMTKc_125
-FMTKc_124:
+	      	bra  	FMTKc_128
+FMTKc_127:
 	      	lw   	r3,-8[bp]
 	      	mulu 	r3,r3,#204
 	      	addu 	r3,r3,#video_bufs
@@ -1075,7 +1135,7 @@ FMTKc_124:
 	      	addu 	r3,r3,r12
 	      	ldi  	r4,#2537472
 	      	sh   	r4,1640[r3]
-FMTKc_125:
+FMTKc_128:
 	      	lw   	r3,-8[bp]
 	      	mulu 	r3,r3,#1680
 	      	addu 	r3,r3,r12
@@ -1094,49 +1154,27 @@ FMTKc_125:
 	      	mulu 	r3,r3,#1680
 	      	addu 	r3,r3,r12
 	      	sc   	r0,1638[r3]
-FMTKc_123:
-	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_121
-FMTKc_122:
-	      	ldi  	r3,#101888
-	      	addu 	r3,r3,r11
-	      	push 	r3
-	      	push 	r11
-	      	bsr  	SetBound48
-	      	addui	sp,sp,#16
-	      	ldi  	r3,#85680
-	      	addu 	r3,r3,r12
-	      	push 	r3
-	      	push 	r12
-	      	bsr  	SetBound49
-	      	addui	sp,sp,#16
-	      	push 	#mailbox
-	      	push 	#mailbox
-	      	bsr  	SetBound50
-	      	addui	sp,sp,#16
-	      	ldi  	r3,#1048576
-	      	addu 	r3,r3,#message
-	      	push 	r3
-	      	push 	#message
-	      	bsr  	SetBound51
-	      	addui	sp,sp,#16
-	      	sw   	r0,-8[bp]
 FMTKc_126:
-	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#8
-	      	bge  	r3,FMTKc_127
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#3
-	      	sw   	r0,readyQ[r3]
-FMTKc_128:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_126
-FMTKc_127:
+	      	bra  	FMTKc_124
+FMTKc_125:
 	      	sw   	r0,-8[bp]
 FMTKc_129:
 	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,#256
+	      	cmp  	r3,r3,#8
 	      	bge  	r3,FMTKc_130
+	      	lw   	r3,-8[bp]
+	      	asli 	r3,r3,#3
+	      	sw   	r0,readyQ[r3]
+FMTKc_131:
+	      	inc  	-8[bp],#1
+	      	bra  	FMTKc_129
+FMTKc_130:
+	      	sw   	r0,-8[bp]
+FMTKc_132:
+	      	lw   	r3,-8[bp]
+	      	cmp  	r3,r3,#256
+	      	bge  	r3,FMTKc_133
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,-8[bp]
 	      	mulu 	r4,r4,#398
@@ -1205,17 +1243,17 @@ FMTKc_129:
 	      	addu 	r3,r3,r11
 	      	sw   	r0,384[r3]
 	      	lw   	r3,-8[bp]
-	      	bne  	r3,FMTKc_132
+	      	bne  	r3,FMTKc_135
 	      	lw   	r3,-8[bp]
 	      	mulu 	r3,r3,#398
 	      	addu 	r3,r3,r11
 	      	ldi  	r4,#3
 	      	sb   	r4,392[r3]
-FMTKc_132:
-FMTKc_131:
+FMTKc_135:
+FMTKc_134:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_129
-FMTKc_130:
+	      	bra  	FMTKc_132
+FMTKc_133:
 	      	sw   	r0,101802[r11]
 	      	ldi  	r3,#398
 	      	addu 	r3,r3,r11
@@ -1227,9 +1265,6 @@ FMTKc_130:
 	      	bsr  	SetRunningTCB
 	      	addui	sp,sp,#8
 	      	sw   	r0,TimeoutList
-	      	sw   	r12,IOFocusNdx
-	      	ldi  	r3,#1
-	      	sw   	r3,IOFocusTbl
 	      	push 	#RescheduleIRQ
 	      	push 	#2
 	      	bsr  	set_vector
@@ -1238,13 +1273,6 @@ FMTKc_130:
 	      	push 	#451
 	      	bsr  	set_vector
 	      	addui	sp,sp,#16
-	      	push 	r12
-	      	push 	#0
-	      	push 	#IdleTask
-	      	push 	#0
-	      	push 	#7
-	      	bsr  	StartTask
-	      	addui	sp,sp,#40
 	      	push 	r12
 	      	push 	#0
 	      	push 	#IdleTask
@@ -1258,7 +1286,8 @@ FMTKc_130:
             sc    r1,LEDS
         
 FMTKc_119:
-FMTKc_134:
+FMTKc_137:
+	      	pop  	r13
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -1269,7 +1298,7 @@ FMTKc_134:
 FMTKc_118:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_134
+	      	bra  	FMTKc_137
 endpublic
 
 	rodata
@@ -1293,7 +1322,6 @@ FMTKc_68:
 	dc	97,100,121,32,113,117,101,117
 	dc	101,46,0
 ;	global	panic
-	extern	SelectTasktoRun
 ;	global	chkTCB
 ;	global	IdleTask
 ;	global	GetJCBPtr
@@ -1319,6 +1347,8 @@ FMTKc_68:
 ;	global	TimeoutList
 	extern	LockSYS
 ;	global	stacks
+;	global	freeMSG
+;	global	freeMBX
 ;	global	SetBound50
 ;	global	SetBound51
 ;	global	tempTCB

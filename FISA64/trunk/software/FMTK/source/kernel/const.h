@@ -5,7 +5,7 @@
 #define FALSE       0
 
 #define null        (void *)0
-
+#define MAX_UINT    0xFFFFFFFFFFFFFFFFL
 #define TS_NONE     0
 #define TS_TIMEOUT  1
 #define TS_WAITMSG  2

@@ -1,24 +1,118 @@
-#include "config.h"
-#include "const.h"
-#include "types.h"
+
+
+
+
+
+enum {
+     E_Ok = 0,
+     E_BadTCBHandle,
+     E_BadPriority
+};
+
+
+typedef unsigned int uint;
+
+typedef struct tagMSG {
+	struct tagMSG *link;
+	uint d1;
+	uint d2;
+	byte type;
+	byte resv[7];
+} MSG;
+
+typedef struct _tagJCB
+{
+    struct _tagJCB *iof_next;
+    struct _tagJCB *iof_prev;
+    char UserName[32];
+    char path[256];
+    char exitRunFile[256];
+    char commandLine[256];
+    unsigned __int32 *pVidMem;
+    unsigned __int32 *pVirtVidMem;
+    unsigned __int16 VideoRows;
+    unsigned __int16 VideoCols;
+    unsigned __int16 CursorRow;
+    unsigned __int16 CursorCol;
+    unsigned __int32 NormAttr;
+    __int8 KeybdHead;
+    __int8 KeybdTail;
+    unsigned __int16 KeybdBuffer[16];
+    __int16 number;
+} JCB;
+
+struct tagMBX;
+
+typedef struct _tagTCB {
+	int regs[32];
+	int isp;
+	int dsp;
+	int esp;
+	int ipc;
+	int dpc;
+	int epc;
+	int cr0;
+	struct _tagTCB *next;
+	struct _tagTCB *prev;
+	struct _tagTCB *mbq_next;
+	struct _tagTCB *mbq_prev;
+	int *sys_stack;
+	int *bios_stack;
+	int *stack;
+	__int64 timeout;
+	JCB *hJob;
+	struct tagMBX *mailboxes;
+	__int8 priority;
+	__int8 status;
+	__int8 affinity;
+	__int16 number;
+} TCB;
+
+typedef struct tagMBX {
+    struct tagMBX *next;
+	TCB *tq_head;
+	TCB *tq_tail;
+	MSG *mq_head;
+	MSG *mq_tail;
+	uint tq_count;
+	uint mq_size;
+	uint mq_count;
+	uint mq_missed;
+	uint owner;		// hJcb of owner
+	char mq_strategy;
+	byte resv[7];
+} MBX;
+
+typedef struct tagALARM {
+	struct tagALARM *next;
+	struct tagALARM *prev;
+	MBX *mbx;
+	MSG *msg;
+	uint BaseTimeout;
+	uint timeout;
+	uint repeat;
+	byte resv[8];		// padding to 64 bytes
+} ALARM;
+
 
 int irq_stack[512];
 
 int FMTK_Inited;
 TCB tempTCB;
-JCB jcbs[NR_JCB];
-TCB tcbs[NR_TCB];
+JCB jcbs[51];
+TCB tcbs[256];
 TCB *readyQ[8];
 TCB *runningTCB;
 TCB *freeTCB;
 int sysstack[1024];
-int stacks[NR_TCB][512];
-int sys_stacks[NR_TCB][512];
-int bios_stacks[NR_TCB][512];
+int stacks[256][512];
+int sys_stacks[256][512];
+int bios_stacks[256][512];
 int fmtk_irq_stack[512];
-MBX mailbox[NR_MBX];
-MSG message[NR_MSG];
-
+MBX mailbox[2048];
+MSG message[32768];
+MSG *freeMSG;
+MBX *freeMBX;
 JCB *IOFocusNdx;
 int IOFocusTbl[4];
 int iof_switch;
@@ -27,7 +121,7 @@ int iof_sema;
 int sys_sema;
 int BIOS_RespMbx;
 
-short int video_bufs[NR_JCB][4096];
+short int video_bufs[51][4096];
 TCB *TimeoutList;
 
 naked int getCPU()
@@ -131,7 +225,7 @@ private int InsertIntoReadyList(TCB *p)
         return E_BadTCBHandle;
 	if (p->priority > 7 || p->priority < 0)
 		return E_BadPriority;
-	p->status = TS_READY;
+	p->status = 16;
 	q = readyQ[p->priority];
 	// Ready list empty ?
 	if (q==0) {
@@ -160,12 +254,12 @@ private int RemoveFromReadyList(TCB *t)
     if (t==readyQ[t->priority])
        readyQ[t->priority] = t->next;
     if (t==readyQ[t->priority])
-       readyQ[t->prioriiy] = null;
+       readyQ[t->priority] = (void *)0;
     t->next->prev = t->prev;
     t->prev->next = t->next;
-    t->next = null;
-    t->prev = null;
-    t->status = TS_NONE;
+    t->next = (void *)0;
+    t->prev = (void *)0;
+    t->status = 0;
     return E_Ok;
 }
 
@@ -177,14 +271,14 @@ private int InsertIntoTimeoutList(TCB *t, int to)
 {
     TCB *p, *q;
 
-    if (TimeoutList==null) {
+    if (TimeoutList==(void *)0) {
         t->timeout = to;
         TimeoutList = t;
-        t->next = null;
-        t->prev = null;
+        t->next = (void *)0;
+        t->prev = (void *)0;
         return E_Ok;
     }
-    q = null;
+    q = (void *)0;
     p = TimeoutList;
     while (to > p->timeout) {
         to -= p->timeout;
@@ -201,7 +295,7 @@ private int InsertIntoTimeoutList(TCB *t, int to)
         q->next = t;
     else
         TimeoutList = t;
-    t->status |= TS_TIMEOUT;
+    t->status |= 1;
     return E_Ok;
 };
 
@@ -216,9 +310,9 @@ private int RemoveFromTimeoutList(TCB *t)
     }
     if (t->prev)
        t->prev->next = t->next;
-    t->status = TS_NONE;
-    t->next = null;
-    t->prev = null;
+    t->status = 0;
+    t->next = (void *)0;
+    t->prev = (void *)0;
 }
 
 // ----------------------------------------------------------------------------
@@ -255,7 +349,7 @@ private TCB *SelectTaskToRun()
 		if (p) {
      		q = p->next;
             do {  
-                if (!(q->status & TS_RUNNING)) {
+                if (!(q->status & 8)) {
                     if (q->affinity == getCPU()) {
         			   readyQ[qToCheck] = q;
         			   return q;
@@ -325,7 +419,7 @@ naked TimerIRQ()
          sw    r1,304[tr]
      }
      DisplayIRQLive();
-     GetRunningTCB()->status = TS_PREEMPT;
+     GetRunningTCB()->status = 4;
      while (TimeoutList) {
          if (TimeoutList->timeout==0)
              InsertIntoReadyList(PopTimeoutList());
@@ -334,8 +428,8 @@ naked TimerIRQ()
               break;
          }
      }
-     SetRunningTCB(SelectTasktoRun());
-     GetRunningTCB()->status = TS_RUNNING;
+     SetRunningTCB(SelectTaskToRun());
+     GetRunningTCB()->status = 8;
      asm {
 RestoreContext:
          lw    r1,256[tr]
@@ -419,8 +513,8 @@ naked RescheduleIRQ()
          sw    r24,192[tr]
          sw    r25,200[tr]
          sw    r26,208[tr]
-         sw    r27,216[tr]
          sw    r28,224[tr]
+         sw    r27,216[tr]
          sw    r29,232[tr]
          sw    r30,240[tr]
          sw    r31,248[tr]
@@ -439,9 +533,9 @@ naked RescheduleIRQ()
          mfspr r1,cr0
          sw    r1,304[tr]
      }
-     GetRunningTCB()->status = TS_PREEMPT;
-     SetRunningTCB(SelectTasktoRun());
-     GetRunningTCB()->status = TS_RUNNING;
+     GetRunningTCB()->status = 4;
+     SetRunningTCB(SelectTaskToRun());
+     GetRunningTCB()->status = 8;
      asm {
          bra   RestoreContext
      }
@@ -549,7 +643,22 @@ void FMTKInitialize()
         }
         UnlockSYS();
         UnlockIOF();
-        for (nn = 0; nn < NR_JCB; nn++) {
+
+        IOFocusTbl[0] = 0;
+        IOFocusNdx = (void *)0;
+
+        SetBound48(tcbs, &tcbs[256]);
+        SetBound49(jcbs, &jcbs[51]);
+        SetBound50(mailbox, &mailbox[2048]);
+        SetBound51(message, &message[32768]);
+
+        for (nn = 0; nn < 32768; nn++) {
+            message[nn].link = &message[nn+1];
+        }
+        message[32768-1].link = (void *)0;
+        freeMSG = &message[0];
+
+        for (nn = 0; nn < 51; nn++) {
             jcbs[nn].number = nn;
             if (nn == 0 ) {
                 jcbs[nn].pVidMem = 0xFFD00000;
@@ -568,14 +677,9 @@ void FMTKInitialize()
             jcbs[nn].CursorCol = 0;
         }
 
-        SetBound48(tcbs, &tcbs[NR_TCB]);
-        SetBound49(jcbs, &jcbs[NR_JCB]);
-        SetBound50(mailbox, &mailbox[MR_MBX]);
-        SetBound51(message, &message[NR_MSG]);
-
     	for (nn = 0; nn < 8; nn++)
     		readyQ[nn] = 0;
-    	for (nn = 0; nn < NR_TCB; nn++) {
+    	for (nn = 0; nn < 256; nn++) {
             tcbs[nn].number = nn;
     		tcbs[nn].next = &tcbs[nn+1];
     		tcbs[nn].prev = 0;
@@ -592,16 +696,14 @@ void FMTKInitialize()
                 tcbs[nn].priority = 3;
             }
     	}
-    	tcbs[NR_TCB-1].next = (TCB *)0;
+    	tcbs[256-1].next = (TCB *)0;
     	freeTCB = &tcbs[1];
     	InsertIntoReadyList(&tcbs[0]);
     	SetRunningTCB(&tcbs[0]);
     	TimeoutList = (TCB *)0;
-    	IOFocusNdx = &jcbs[0];
-    	IOFocusTbl[0] = 1;
     	set_vector(2,RescheduleIRQ);
     	set_vector(451,TimerIRQ);
-        StartTask(7, 0, IdleTask, 0, jcbs);
+//        StartTask(7, 0, IdleTask, 0, jcbs);
         StartTask(7, 1, IdleTask, 0, jcbs);
     	FMTK_Inited = 0x12345678;
         asm {

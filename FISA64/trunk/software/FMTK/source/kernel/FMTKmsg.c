@@ -8,6 +8,13 @@ int chkMBX(int hMBX) {
     }
 }
 
+int chkMSG(int msg) {
+    asm {
+        lw    r1,24[bp]
+        chk   r1,r1,b51
+    }
+}
+
 /* ---------------------------------------------------------------
 	Description:
 		Queue a message at a mailbox.
@@ -19,93 +26,91 @@ int chkMBX(int hMBX) {
 		SendMsg
 		PostMsg
 --------------------------------------------------------------- */
-static int QueueMsg(MBX *mbx, MSG *msg)
+private int QueueMsg(MBX *mbx, MSG *msg)
 {
     MSG *tmpmsg;
 	int rr = E_Ok;
 
-    if (msg == null)
+    if (!chkMSG(msg))
         return E_Ok;
 
-	critical (mbx->sf) {
+	LockSYS();
 		mbx->mq_count++;
 	
 		// handle potential queue overflows
-	    select mbx->mq_strategy {
+	    switch (mbx->mq_strategy) {
 	    
 	    	// unlimited queing (do nothing)
 			case MQS_UNLIMITED:
-				;
+				break;
 				
 			// buffer newest
 			// if the queue is full then old messages are lost
+			// Older messages are at the head of the queue.
 			// loop incase message queing strategy was changed
 		    case MQS_NEWEST:
-		        while mbx->mq_count > mbx->mq_size do {
+		        while (mbx->mq_count > mbx->mq_size) {
 		            // return outdated message to message pool
-		            tmpmsg = mbx->mq_head->link
-		            critical sfFreeMsg {
-			            mbx->mq_head->link = FreeMsg
-			            FreeMsg = mbx->mq_head
-						nMsgBlk++
-					}
-					mbx->mq_count--
-		            mbx->mq_head = tmpmsg
-					if mbx->mq_missed < MAX_UINT then
-						mbx->mq_missed++
-					rr = E_QueFull
+		            tmpmsg = mbx->mq_head->link;
+		            mbx->mq_head->link = FreeMSG;
+		            FreeMSG = mbx->mq_head;
+					nMsgBlk++;
+					mbx->mq_count--;
+		            mbx->mq_head = tmpmsg;
+					if (mbx->mq_missed < MAX_UINT)
+						mbx->mq_missed++;
+					rr = E_QueFull;
 				}
-		           
+		        break;
+   
 			// buffer oldest
 			// if the queue is full then new messages are lost
 			// loop incase message queing strategy was changed
 			case MQS_OLDEST:
 				// first return the passed message to free pool
-				if mbx->mq_count > mbx->mq_size then {
+				if (mbx->mq_count > mbx->mq_size) {
 					// return new message to pool
-					critical sfFreeMsg {
-						msg->link = FreeMsg
-						FreeMsg = msg
-						nMsgBlk++
-					}
-					if mbx->mq_missed < MAX_UINT then
-						mbx->mq_missed++
-					rr = E_QueFull
-					mbx->mq_count--
+					msg->link = FreeMSG;
+					FreeMSG = msg;
+					nMsgBlk++;
+					if (mbx->mq_missed < MAX_UINT)
+						mbx->mq_missed++;
+					rr = E_QueFull;
+					mbx->mq_count--;
 				}
 				// next if still over the message limit (which
 				// might happen if que strategy was changed), return
 				// messages to free pool
-				while mbx->mq_count > mbx->mq_size do {
+				while (mbx->mq_count > mbx->mq_size) {
 					// locate the second last message on the que
-					tmpmsg = mbx->mq_head
-					while tmpmsg <> mbx->mq_tail do {
-						msg = tmpmsg
-						tmpmsg = tmpmsg->link
+					tmpmsg = mbx->mq_head;
+					while (tmpmsg <> mbx->mq_tail) {
+						msg = tmpmsg;
+						tmpmsg = tmpmsg->link;
 					}
-					mbx->mq_tail = msg
-					critical sfFreeMsg {
-						tmpmsg->link = FreeMsg
-						FreeMsg = tmpmsg
-						nMsgBlk++
-					}
-					if mbx->mq_missed < MAX_UINT then
-						mbx->mq_missed++
-					mbx->mq_count--
-					rr = E_QueFull
+					mbx->mq_tail = msg;
+					tmpmsg->link = FreeMSG;
+					FreeMSG = tmpmsg;
+					nMsgBlk++;
+					if (mbx->mq_missed < MAX_UINT)
+						mbx->mq_missed++;
+					mbx->mq_count--;
+					rr = E_QueFull;
 				}
-				if rr == E_QueFull then
-					return rr
+				if (rr == E_QueFull) {
+                    UnlockSYS(); 
+					return rr;
+                }
 			}
 		}
 		// if there is a message in the queue
-		if mbx->mq_tail then
-			mbx->mq_tail->link = msg
+		if (mbx->mq_tail)
+			mbx->mq_tail->link = msg;
 		else
-			mbx->mq_head = msg
-		mbx->mq_tail = msg
-		msg->link = null
-	}
+			mbx->mq_head = msg;
+		mbx->mq_tail = msg;
+		msg->link = null;
+	UnlockSYS();
 	return rr
 }
 
@@ -116,6 +121,7 @@ static int QueueMsg(MBX *mbx, MSG *msg)
 
 	Assumptions:
 		Mailbox parameter is valid.
+		System semaphore is locked already.
 
 	Called from:
 		FreeMbx - (locks mailbox)
@@ -125,19 +131,19 @@ static int QueueMsg(MBX *mbx, MSG *msg)
 
 private MSG *DequeueMsg(MBX *mbx)
 {
-	MSG *tmpmsg = null
+	MSG *tmpmsg = null;
 
-	if mbx->mq_count then {
-		mbx->mq_count--
-		tmpmsg = mbx->mq_head
-		if tmpmsg then {	// should not be null
-			mbx->mq_head = tmpmsg->link
-			if mbx->mq_head == null then
-				mbx->mq_tail = null
-			tmpmsg->link = tmpmsg
+	if (mbx->mq_count) {
+		mbx->mq_count--;
+		tmpmsg = mbx->mq_head;
+		if (tmpmsg) {	// should not be null
+			mbx->mq_head = tmpmsg->link;
+			if (mbx->mq_head == null)
+				mbx->mq_tail = null;
+			tmpmsg->link = tmpmsg;
 		}
 	}
-	return tmpmsg
+	return tmpmsg;
 }
 
 
@@ -146,32 +152,33 @@ private MSG *DequeueMsg(MBX *mbx)
 		Allocate a mailbox. The default queue strategy is to
 	queue the eight most recent messages.
 --------------------------------------------------------------- */
-public oscall int _AllocMbx(uint *hMbx)
+public int FMTK_AllocMbx(uint *phMbx)
 {
-	MBX *mbx
+	MBX *mbx;
 
-	if hMbx == null then
-		return E_Arg
-	critical sfFreeMbx {
-		if FreeMBX == null then
-			return E_NoMoreMbx
-		mbx = FreeMBX
-		FreeMBX = mbx->link
-		nMailbox--
-	}
-	*hMbx = mbx - mailbox
-	mbx->owner = Running->jcb
-	mbx->tq_head = null
-	mbx->tq_tail = null
-	mbx->mq_head = null
-	mbx->mq_tail = null
-	mbx->tq_count = 0
-	mbx->mq_count = 0
-	mbx->mq_missed = 0
-	mbx->mq_size = 8
-	mbx->mq_strategy = MQS_NEWEST
-	mbx->sf = true
-	return E_Ok
+	if (phMBX==null)
+    	return E_Arg;
+	LockSYS();
+		if (FreeMBX == null) {
+            UnlockSYS();
+			return E_NoMoreMbx;
+        }
+		mbx = FreeMBX;
+		FreeMBX = mbx->link;
+		nMailbox--;
+	UnlockSYS();
+	*phMbx = mbx - mailbox;
+	mbx->owner = GetJCBPtr();
+	mbx->tq_head = null;
+	mbx->tq_tail = null;
+	mbx->mq_head = null;
+	mbx->mq_tail = null;
+	mbx->tq_count = 0;
+	mbx->mq_count = 0;
+	mbx->mq_missed = 0;
+	mbx->mq_size = 8;
+	mbx->mq_strategy = MQS_NEWEST;
+	return E_Ok;
 }
 
 
@@ -179,50 +186,43 @@ public oscall int _AllocMbx(uint *hMbx)
 	Description:
 		Free up a mailbox. When the mailbox is freed any queued
 	messages must be freed. Any queued threads must also be
-	dequeued. Since threads are being made ready a call to
-	SwitchThread() is performed at the end of this routine.
+	dequeued. 
 --------------------------------------------------------------- */
-public oscall int _FreeMbx(uint hMbx) 
+public int FMTK_FreeMbx(uint hMbx) 
 {
-	MBX *mbx
-	MSG *msg
-	TCB *thread
+	MBX *mbx;
+	MSG *msg;
+	TCB *thread;
 	
-	if hMbx >= MaxMailbox then
-		return E_BadMbx
-	mbx = &mailbox[hMbx]
-	critical mbx->sf {
-		if mbx->owner <> Running->jcb and
-			Running->jcb <> &MonJCB then
-				return E_NotOwner
+	if (hMbx >= NR_MBX)
+		return E_BadMbx;
+	mbx = &mailbox[hMbx];
+	LockSYS();
+		if ((mbx->owner <> GetJCBPtr()) and (GetJCBPtr() <> &jcbs))
+				return E_NotOwner;
 		// Free up any queued messages
-		while msg = DequeueMsg(mbx) do {
-			critical sfFreeMsg {
-				msg->link = FreeMsg
-				FreeMsg = msg
-				nMsgBlk++
-			}
+		while (msg = DequeueMsg(mbx)) {
+			msg->link = FreeMSG;
+			FreeMSG = msg;
+			nMsgBlk++;
 		}
 		// Send an indicator to any queued threads that the mailbox
 		// is now defunct Setting MsgPtr = null will cause any
 		// outstanding WaitMsg() to return E_NoMsg.
-		forever do {
+		forever {
 			DequeThreadFromMbx(mbx, &thread);
-			if thread == null then
-				break
-			thread->MsgPtr = null
-			if thread->status & TS_TIMEOUT then
-				RmvFromTimeoutList(thread)
-			AddToReadyQue(thread)
+			if (thread == null)
+				break;
+			thread->MsgPtr = null;
+			if (thread->status & TS_TIMEOUT)
+				RemoveFromTimeoutList(thread);
+			InsertIntoReadyList(thread);
 		}
-		critical sfFreeMbx {
-			mbx->link = FreeMBX
-			FreeMBX = mbx
-			nMailbox++
-		}
-	}
-	SwitchThread()
-	return E_Ok
+		mbx->link = FreeMBX;
+		FreeMBX = mbx;
+		nMailbox++;
+	UnlockSYS();
+	return E_Ok;
 }
 
 
@@ -230,24 +230,22 @@ public oscall int _FreeMbx(uint hMbx)
 	Description:
 		Set the mailbox message queueing strategy.
 --------------------------------------------------------------- */
-public oscall int _SetMbxMsgQueStrategy(
-	uint hMbx, qStrategy, qSize)
+public SetMbxMsgQueStrategy(uint hMbx, int qStrategy, int qSize)
 {
-	MBX *mbx
+	MBX *mbx;
 
-	if hMbx >= MaxMailbox then
-		return E_BadMbx
-	if qStrategy > 2 then
-		return E_Arg
-	mbx = &mailbox[hMbx]
-	critical mbx->sf {
-		if mbx->owner <> Running->jcb and
-			Running->jcb <> &MonJCB then
-				return E_NotOwner
-		mbx->mq_strategy = qStrategy
-		mbx->mq_size = qSize
-	}
-	return E_Ok
+	if (hMbx >= NR_MBX)
+		return E_BadMbx;
+	if (qStrategy > 2)
+		return E_Arg;
+	mbx = &mailbox[hMbx];
+	LockSYS();
+		if ((mbx->owner <> GetJCBPtr()) and GetJCBPtr() <> &jcbs[0])
+				return E_NotOwner;
+		mbx->mq_strategy = qStrategy;
+		mbx->mq_size = qSize;
+	UnlockSYS();
+	return E_Ok;
 }
 
 
@@ -256,38 +254,43 @@ public oscall int _SetMbxMsgQueStrategy(
 		Send a message. This will cause the thread to switch if
 	another thread of equal or higher priority is made ready.
 --------------------------------------------------------------- */
-public int SendMsg(int hMbx, int d1, int d2)
+public int SendMsg(uint hMbx, int d1, int d2)
 {
 	MBX *mbx;
 	MSG *msg;
 	TCB *thread;
 
-	if (hMbx >= MaxMailbox)
+	if (hMbx >= NR_MBX)
 		return E_BadMbx;
 
 	mbx = &mailbox[hMbx];
-	critical mbx->sf {
+	LockSYS();
 		// check for a mailbox owner which indicates the mailbox
 		// is active.
-		if mbx->owner == null then return E_NotAlloc
-		critical sfFreeMsg {
-			msg = FreeMsg
-			if msg == null then
-				return E_NoMoreMsgBlks
-			FreeMsg = msg->link
-			--nMsgBlk
-		}
-		msg->msgtype = MBT_DATA
-		msg->d1 = d1
-		msg->d2 = d2
-		DequeThreadFromMbx(mbx, &thread)
-	}
-	if thread == null then
-		return QueueMsg(mbx, msg)
-	thread->MsgPtr = msg
-	if thread->status & TS_TIMEOUT then
-		RmvFromTimeoutList(thread)
-	AddToReadyQue(thread)
+		if (mbx->owner == null) {
+           UnlockSYS();
+           return E_NotAlloc;
+        }
+		msg = FreeMsg;
+		if (msg == null) {
+		    UnlockSYS();
+			return E_NoMoreMsgBlks;
+        }
+		FreeMsg = msg->link;
+		--nMsgBlk;
+		msg->msgtype = MBT_DATA;
+		msg->d1 = d1;
+		msg->d2 = d2;
+		DequeThreadFromMbx(mbx, &thread);
+	UnlockSYS();
+	if (thread == null)
+		return QueueMsg(mbx, msg);
+	LockSYS();
+    	thread->MsgPtr = msg;
+    	if (thread->status & TS_TIMEOUT)
+    		RemoveFromTimeoutList(thread);
+    	InsertIntoReadyList(thread);
+	UnlockSYS();
 	// Don't allow a thread switch to occur for the top three
 	// priorities. These threads must be allowed to continue
 	// until they intentionally surrender execution by calling
@@ -337,9 +340,7 @@ public int PostMsg(int hMbx, int d1, int d2)
 		DequeueThreadFromMbx(mbx, &thread);
 	UnlockSYS();
 	if (thread == null) {
-        LockSYS();
-            ret = QueueMsg(mbx, msg);
-        UnlockSYS();
+        ret = QueueMsg(mbx, msg);
 		return ret;
     }
     LockSYS();
