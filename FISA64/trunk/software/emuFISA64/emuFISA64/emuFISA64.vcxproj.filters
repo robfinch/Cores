@@ -39,6 +39,12 @@
     <ClCompile Include="Disassem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="frmBreakpoint.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="frmScreen.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -62,6 +68,15 @@
     <ClInclude Include="clsSystem.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="frmBreakpoint.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="frmScreen.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Instructions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="app.rc">
@@ -73,6 +88,12 @@
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
     <EmbeddedResource Include="frmMain.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmBreakpoint.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmScreen.resx">
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
   </ItemGroup>

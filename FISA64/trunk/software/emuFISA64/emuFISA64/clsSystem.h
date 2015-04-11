@@ -1,11 +1,23 @@
 #pragma once
 
+extern char refscreen;
+
 class clsSystem
 {
 public:
 	unsigned int memory[33554432];
+	unsigned long VideoMem[4096];
 	unsigned int leds;
+	int m_z;
+	int m_w;
 
+	clsSystem() {
+		int nn;
+		m_z = 88888888;
+		m_w = 12345678;
+		for (nn = 0; nn < 4096; nn++)
+			VideoMem[nn] = random();
+	};
 	unsigned int Read(unsigned int ad) {
 		if (ad < 134217728) {
 			return memory[ad >> 2];
@@ -50,5 +62,14 @@ public:
 		else if ((ad & 0xFFFFFF00)==0xFFDC0600) {
 			leds = dat;
 		}
-	}
+		else if ((ad & 0xFFFF0000)==0xFFD00000) {
+			VideoMem[(ad>>2)& 0xFFF] = dat;
+			refscreen = true;
+		}
+	};
+ 	int random() {
+		m_z = 36969 * (m_z & 65535) + (m_z >> 16);
+		m_w = 18000 * (m_w & 65535) + (m_w >> 16);
+		return (m_z << 16) + m_w;
+	};
 };

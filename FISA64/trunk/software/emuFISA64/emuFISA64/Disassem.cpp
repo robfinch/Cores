@@ -32,6 +32,36 @@ std::string Rt()
 	return str;
 }
 
+std::string Spr()
+{
+	char buf[40];
+	int spr;
+
+	std::string str;
+	spr = (insn >> 17) & 0xFf;
+	switch(spr) {
+	case 0: str = "CR0"; break;
+	case 4: str = "TICK"; break;
+	case 7: str = "DPC"; break;
+	case 8: str = "IPC"; break;
+	case 9: str = "EPC"; break;
+	case 10: str = "VBR"; break;
+	case 11: str = "BEAR"; break;
+	case 12: str = "VECNO"; break;
+	case 15: str = "ISP"; break;
+	case 16: str = "DSP"; break;
+	case 17: str = "ESP"; break;
+	case 50: str = "DBAD0"; break;
+	case 51: str = "DBAD1"; break;
+	case 52: str = "DBAD2"; break;
+	case 53: str = "DBAD3"; break;
+	case 54: str = "DBCTRL"; break;
+	case 55: str = "DBSTAT"; break;
+	default:	str = std::string(_itoa(spr,buf,10));
+	}
+	return str;
+}
+
 static std::string DisassemConstant()
 {
     static char buf[50];
@@ -84,6 +114,44 @@ static std::string DisassemMemAddress()
     return str+std::string(buf);
 }
 
+static std::string DisassemIndexedAddress()
+{
+    static char buf[50];
+    int sir;
+	std::string str;
+	int Ra = (insn >> 7) & 0x1f;
+	int Rb = (insn >> 17) & 0x1f;
+	int sc = (insn >> 22) & 3;
+	int offs = (insn >> 24);
+
+	sc = 1 << sc;
+
+    sir = insn;
+	if (offs != 0) {
+		sprintf(buf,"$%X",offs);
+		str = std::string(buf);
+	}
+	else
+		str = std::string("");
+	if (Rb && Ra)
+		sprintf(buf,"[R%d+R%d", Ra, Rb);
+	else if (Ra) {
+		sprintf(buf,"[R%d]", Ra);
+		str += std::string(buf);
+		return str;
+	}
+	else if (Rb)
+		sprintf(buf,"[R%d", Rb);
+	str += std::string(buf);
+
+	if (sc > 1)
+		sprintf(buf, "*%d]", sc);
+	else
+		sprintf(buf,"]");
+	str += std::string(buf);
+    return str;
+}
+
 
 std::string Disassem(std::string sad, std::string sinsn)
 {
@@ -131,6 +199,22 @@ std::string Disassem(std::string sad, std::string sinsn)
 			str = "CMPU  " + Rt() + "," + Ra() + "," + Rb();
 			immcnt = 0;
 			return str;
+		case MUL:
+			str = "MUL   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case MULU:
+			str = "MULU  " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case MTSPR:
+			str = "MTSPR " + Spr() + "," + Ra();
+			immcnt = 0;
+			return str;
+		case MFSPR:
+			str = "MFSPR " + Rt() + "," + Spr();
+			immcnt = 0;
+			return str;
 		}
 		immcnt = 0;
 		return "?????";
@@ -158,6 +242,15 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "CMPU  " + Rt() +"," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
+	case MUL:
+		str = "MUL   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case MULU:
+		str = "MULU  " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+
 	case IMM:
 		imm2 = imm1;
 		imm1 = (insn >> 7);
@@ -198,6 +291,14 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case BSR:
 		str = "BSR   " + DisassemBraDisplacement();
+		immcnt = 0;
+		return str;
+	case RTL:
+		str = "RTL   #" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case RTS:
+		str = "RTS   #" + DisassemConstant();
 		immcnt = 0;
 		return str;
 	case NOP:
@@ -246,6 +347,34 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "LEA   " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
 		return str;
+	case LBX:
+		str = "LBX   " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case LBUX:
+		str = "LBUX  " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case LCX:
+		str = "LCX   " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case LCUX:
+		str = "LCUX  " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case LHX:
+		str = "LHX   " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case LHUX:
+		str = "LHUX   " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case LWX:
+		str = "LWX   " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
 	case SB:
 		str = "SB    " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
@@ -260,6 +389,22 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case SW:
 		str = "SW    " + Rt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
+	case SBX:
+		str = "SB    " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case SCX:
+		str = "SC    " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case SHX:
+		str = "SH    " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case SWX:
+		str = "SW    " + Rt() + "," + DisassemIndexedAddress();
 		immcnt = 0;
 		return str;
 	}

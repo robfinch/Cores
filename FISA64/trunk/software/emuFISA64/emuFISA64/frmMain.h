@@ -7,11 +7,14 @@
 #include <vcclr.h>
 #include <string.h>
 #include "frmRegisters.h"
+#include "frmBreakpoint.h"
+#include "frmScreen.h"
 #include "Disassem.h"
 #include "clsCPU.h"
 
 extern clsCPU cpu1;
 extern clsSystem system1;
+extern unsigned int breakpoints[30];
 
 namespace emuFISA64 {
 	using namespace std;
@@ -28,6 +31,7 @@ namespace emuFISA64 {
 	/// </summary>
 	public ref class frmMain : public System::Windows::Forms::Form
 	{
+		int fullspeed;
 	public:
 		frmMain(void)
 		{
@@ -35,6 +39,9 @@ namespace emuFISA64 {
 			//
 			//TODO: Add the constructor code here
 			//
+			fullspeed = false;
+			frmScreen^ Screenform = gcnew frmScreen();
+				 Screenform->Show();
 		}
 
 	protected:
@@ -158,6 +165,8 @@ private: System::Windows::Forms::Label^  label39;
 private: System::Windows::Forms::TextBox^  textESP;
 private: System::Windows::Forms::TextBox^  textDSP;
 private: System::Windows::Forms::TextBox^  textISP;
+private: System::Windows::Forms::ToolStripMenuItem^  freeRunFastToolStripMenuItem;
+private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 	private: System::ComponentModel::IContainer^  components;
 
 
@@ -189,6 +198,7 @@ private: System::Windows::Forms::TextBox^  textISP;
 			this->stopToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->interruptToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->breakpointToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->freeRunFastToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->viewToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->registersToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->aboutToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
@@ -284,6 +294,7 @@ private: System::Windows::Forms::TextBox^  textISP;
 			this->textESP = (gcnew System::Windows::Forms::TextBox());
 			this->textDSP = (gcnew System::Windows::Forms::TextBox());
 			this->textISP = (gcnew System::Windows::Forms::TextBox());
+			this->fullSpeedToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -314,61 +325,70 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// runToolStripMenuItem
 			// 
-			this->runToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(8) {this->resetToolStripMenuItem, 
+			this->runToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(10) {this->resetToolStripMenuItem, 
 				this->stepIntoToolStripMenuItem, this->stepOverToolStripMenuItem, this->stepOutToolStripMenuItem, this->freeRunToolStripMenuItem, 
-				this->stopToolStripMenuItem, this->interruptToolStripMenuItem, this->breakpointToolStripMenuItem});
+				this->stopToolStripMenuItem, this->interruptToolStripMenuItem, this->breakpointToolStripMenuItem, this->freeRunFastToolStripMenuItem, 
+				this->fullSpeedToolStripMenuItem});
 			this->runToolStripMenuItem->Name = L"runToolStripMenuItem";
 			this->runToolStripMenuItem->Size = System::Drawing::Size(40, 20);
 			this->runToolStripMenuItem->Text = L"&Run";
+			this->runToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::runToolStripMenuItem_Click);
 			// 
 			// resetToolStripMenuItem
 			// 
 			this->resetToolStripMenuItem->Name = L"resetToolStripMenuItem";
-			this->resetToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->resetToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->resetToolStripMenuItem->Text = L"Reset";
 			this->resetToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::resetToolStripMenuItem_Click);
 			// 
 			// stepIntoToolStripMenuItem
 			// 
 			this->stepIntoToolStripMenuItem->Name = L"stepIntoToolStripMenuItem";
-			this->stepIntoToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->stepIntoToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->stepIntoToolStripMenuItem->Text = L"Step Into";
 			// 
 			// stepOverToolStripMenuItem
 			// 
 			this->stepOverToolStripMenuItem->Name = L"stepOverToolStripMenuItem";
-			this->stepOverToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->stepOverToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->stepOverToolStripMenuItem->Text = L"Step Over";
 			// 
 			// stepOutToolStripMenuItem
 			// 
 			this->stepOutToolStripMenuItem->Name = L"stepOutToolStripMenuItem";
-			this->stepOutToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->stepOutToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->stepOutToolStripMenuItem->Text = L"Step Out";
 			// 
 			// freeRunToolStripMenuItem
 			// 
 			this->freeRunToolStripMenuItem->Name = L"freeRunToolStripMenuItem";
-			this->freeRunToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->freeRunToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->freeRunToolStripMenuItem->Text = L"Free &Run";
 			// 
 			// stopToolStripMenuItem
 			// 
 			this->stopToolStripMenuItem->Name = L"stopToolStripMenuItem";
-			this->stopToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->stopToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->stopToolStripMenuItem->Text = L"&Stop";
 			// 
 			// interruptToolStripMenuItem
 			// 
 			this->interruptToolStripMenuItem->Name = L"interruptToolStripMenuItem";
-			this->interruptToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->interruptToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->interruptToolStripMenuItem->Text = L"&Interrupt";
 			// 
 			// breakpointToolStripMenuItem
 			// 
 			this->breakpointToolStripMenuItem->Name = L"breakpointToolStripMenuItem";
-			this->breakpointToolStripMenuItem->Size = System::Drawing::Size(131, 22);
+			this->breakpointToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->breakpointToolStripMenuItem->Text = L"&Breakpoint";
+			// 
+			// freeRunFastToolStripMenuItem
+			// 
+			this->freeRunFastToolStripMenuItem->Name = L"freeRunFastToolStripMenuItem";
+			this->freeRunFastToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->freeRunFastToolStripMenuItem->Text = L"Free Run Fast";
+			this->freeRunFastToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::freeRunFastToolStripMenuItem_Click);
 			// 
 			// viewToolStripMenuItem
 			// 
@@ -485,6 +505,7 @@ private: System::Windows::Forms::TextBox^  textISP;
 			this->toolStripButton7->Size = System::Drawing::Size(23, 22);
 			this->toolStripButton7->Text = L"toolStripButton7";
 			this->toolStripButton7->ToolTipText = L"Breakpoint";
+			this->toolStripButton7->Click += gcnew System::EventHandler(this, &frmMain::toolStripButton7_Click);
 			// 
 			// listBoxAdr
 			// 
@@ -589,66 +610,82 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// textR7
 			// 
+			this->textR7->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR7->Location = System::Drawing::Point(429, 232);
 			this->textR7->Name = L"textR7";
-			this->textR7->Size = System::Drawing::Size(82, 20);
+			this->textR7->Size = System::Drawing::Size(82, 17);
 			this->textR7->TabIndex = 47;
 			this->textR7->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR6
 			// 
+			this->textR6->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR6->Location = System::Drawing::Point(429, 206);
 			this->textR6->Name = L"textR6";
-			this->textR6->Size = System::Drawing::Size(82, 20);
+			this->textR6->Size = System::Drawing::Size(82, 17);
 			this->textR6->TabIndex = 46;
 			this->textR6->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR5
 			// 
+			this->textR5->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR5->Location = System::Drawing::Point(429, 180);
 			this->textR5->Name = L"textR5";
-			this->textR5->Size = System::Drawing::Size(82, 20);
+			this->textR5->Size = System::Drawing::Size(82, 17);
 			this->textR5->TabIndex = 45;
 			this->textR5->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR4
 			// 
+			this->textR4->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR4->Location = System::Drawing::Point(429, 154);
 			this->textR4->Name = L"textR4";
-			this->textR4->Size = System::Drawing::Size(82, 20);
+			this->textR4->Size = System::Drawing::Size(82, 17);
 			this->textR4->TabIndex = 44;
 			this->textR4->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR3
 			// 
+			this->textR3->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR3->Location = System::Drawing::Point(429, 128);
 			this->textR3->Name = L"textR3";
-			this->textR3->Size = System::Drawing::Size(82, 20);
+			this->textR3->Size = System::Drawing::Size(82, 17);
 			this->textR3->TabIndex = 43;
 			this->textR3->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR2
 			// 
+			this->textR2->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR2->Location = System::Drawing::Point(429, 102);
 			this->textR2->Name = L"textR2";
-			this->textR2->Size = System::Drawing::Size(82, 20);
+			this->textR2->Size = System::Drawing::Size(82, 17);
 			this->textR2->TabIndex = 42;
 			this->textR2->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR1
 			// 
+			this->textR1->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR1->Location = System::Drawing::Point(429, 76);
 			this->textR1->Name = L"textR1";
-			this->textR1->Size = System::Drawing::Size(82, 20);
+			this->textR1->Size = System::Drawing::Size(82, 17);
 			this->textR1->TabIndex = 41;
 			this->textR1->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR0
 			// 
+			this->textR0->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR0->Location = System::Drawing::Point(429, 50);
 			this->textR0->Name = L"textR0";
 			this->textR0->ReadOnly = true;
-			this->textR0->Size = System::Drawing::Size(82, 20);
+			this->textR0->Size = System::Drawing::Size(82, 17);
 			this->textR0->TabIndex = 40;
 			this->textR0->TabStop = false;
 			this->textR0->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
@@ -727,65 +764,81 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// textR15
 			// 
+			this->textR15->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR15->Location = System::Drawing::Point(429, 442);
 			this->textR15->Name = L"textR15";
-			this->textR15->Size = System::Drawing::Size(82, 20);
+			this->textR15->Size = System::Drawing::Size(82, 17);
 			this->textR15->TabIndex = 63;
 			this->textR15->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR14
 			// 
+			this->textR14->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR14->Location = System::Drawing::Point(429, 416);
 			this->textR14->Name = L"textR14";
-			this->textR14->Size = System::Drawing::Size(82, 20);
+			this->textR14->Size = System::Drawing::Size(82, 17);
 			this->textR14->TabIndex = 62;
 			this->textR14->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR13
 			// 
+			this->textR13->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR13->Location = System::Drawing::Point(429, 390);
 			this->textR13->Name = L"textR13";
-			this->textR13->Size = System::Drawing::Size(82, 20);
+			this->textR13->Size = System::Drawing::Size(82, 17);
 			this->textR13->TabIndex = 61;
 			this->textR13->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR12
 			// 
+			this->textR12->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR12->Location = System::Drawing::Point(429, 364);
 			this->textR12->Name = L"textR12";
-			this->textR12->Size = System::Drawing::Size(82, 20);
+			this->textR12->Size = System::Drawing::Size(82, 17);
 			this->textR12->TabIndex = 60;
 			this->textR12->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR11
 			// 
+			this->textR11->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR11->Location = System::Drawing::Point(429, 338);
 			this->textR11->Name = L"textR11";
-			this->textR11->Size = System::Drawing::Size(82, 20);
+			this->textR11->Size = System::Drawing::Size(82, 17);
 			this->textR11->TabIndex = 59;
 			this->textR11->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR10
 			// 
+			this->textR10->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR10->Location = System::Drawing::Point(429, 312);
 			this->textR10->Name = L"textR10";
-			this->textR10->Size = System::Drawing::Size(82, 20);
+			this->textR10->Size = System::Drawing::Size(82, 17);
 			this->textR10->TabIndex = 58;
 			this->textR10->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR9
 			// 
+			this->textR9->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR9->Location = System::Drawing::Point(429, 286);
 			this->textR9->Name = L"textR9";
-			this->textR9->Size = System::Drawing::Size(82, 20);
+			this->textR9->Size = System::Drawing::Size(82, 17);
 			this->textR9->TabIndex = 57;
 			this->textR9->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR8
 			// 
+			this->textR8->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR8->Location = System::Drawing::Point(429, 260);
 			this->textR8->Name = L"textR8";
-			this->textR8->Size = System::Drawing::Size(82, 20);
+			this->textR8->Size = System::Drawing::Size(82, 17);
 			this->textR8->TabIndex = 56;
 			this->textR8->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
@@ -863,65 +916,81 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// textR23
 			// 
+			this->textR23->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR23->Location = System::Drawing::Point(584, 232);
 			this->textR23->Name = L"textR23";
-			this->textR23->Size = System::Drawing::Size(82, 20);
+			this->textR23->Size = System::Drawing::Size(82, 17);
 			this->textR23->TabIndex = 79;
 			this->textR23->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR22
 			// 
+			this->textR22->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR22->Location = System::Drawing::Point(584, 206);
 			this->textR22->Name = L"textR22";
-			this->textR22->Size = System::Drawing::Size(82, 20);
+			this->textR22->Size = System::Drawing::Size(82, 17);
 			this->textR22->TabIndex = 78;
 			this->textR22->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR21
 			// 
+			this->textR21->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR21->Location = System::Drawing::Point(584, 180);
 			this->textR21->Name = L"textR21";
-			this->textR21->Size = System::Drawing::Size(82, 20);
+			this->textR21->Size = System::Drawing::Size(82, 17);
 			this->textR21->TabIndex = 77;
 			this->textR21->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR20
 			// 
+			this->textR20->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR20->Location = System::Drawing::Point(584, 154);
 			this->textR20->Name = L"textR20";
-			this->textR20->Size = System::Drawing::Size(82, 20);
+			this->textR20->Size = System::Drawing::Size(82, 17);
 			this->textR20->TabIndex = 76;
 			this->textR20->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR19
 			// 
+			this->textR19->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR19->Location = System::Drawing::Point(584, 128);
 			this->textR19->Name = L"textR19";
-			this->textR19->Size = System::Drawing::Size(82, 20);
+			this->textR19->Size = System::Drawing::Size(82, 17);
 			this->textR19->TabIndex = 75;
 			this->textR19->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR18
 			// 
+			this->textR18->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR18->Location = System::Drawing::Point(584, 102);
 			this->textR18->Name = L"textR18";
-			this->textR18->Size = System::Drawing::Size(82, 20);
+			this->textR18->Size = System::Drawing::Size(82, 17);
 			this->textR18->TabIndex = 74;
 			this->textR18->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR17
 			// 
+			this->textR17->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR17->Location = System::Drawing::Point(584, 76);
 			this->textR17->Name = L"textR17";
-			this->textR17->Size = System::Drawing::Size(82, 20);
+			this->textR17->Size = System::Drawing::Size(82, 17);
 			this->textR17->TabIndex = 73;
 			this->textR17->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR16
 			// 
+			this->textR16->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR16->Location = System::Drawing::Point(584, 50);
 			this->textR16->Name = L"textR16";
-			this->textR16->Size = System::Drawing::Size(82, 20);
+			this->textR16->Size = System::Drawing::Size(82, 17);
 			this->textR16->TabIndex = 72;
 			this->textR16->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
@@ -999,65 +1068,81 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// textR31
 			// 
+			this->textR31->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR31->Location = System::Drawing::Point(584, 440);
 			this->textR31->Name = L"textR31";
-			this->textR31->Size = System::Drawing::Size(82, 20);
+			this->textR31->Size = System::Drawing::Size(82, 17);
 			this->textR31->TabIndex = 95;
 			this->textR31->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR30
 			// 
+			this->textR30->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR30->Location = System::Drawing::Point(584, 414);
 			this->textR30->Name = L"textR30";
-			this->textR30->Size = System::Drawing::Size(82, 20);
+			this->textR30->Size = System::Drawing::Size(82, 17);
 			this->textR30->TabIndex = 94;
 			this->textR30->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR29
 			// 
+			this->textR29->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR29->Location = System::Drawing::Point(584, 388);
 			this->textR29->Name = L"textR29";
-			this->textR29->Size = System::Drawing::Size(82, 20);
+			this->textR29->Size = System::Drawing::Size(82, 17);
 			this->textR29->TabIndex = 93;
 			this->textR29->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR28
 			// 
+			this->textR28->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR28->Location = System::Drawing::Point(584, 362);
 			this->textR28->Name = L"textR28";
-			this->textR28->Size = System::Drawing::Size(82, 20);
+			this->textR28->Size = System::Drawing::Size(82, 17);
 			this->textR28->TabIndex = 92;
 			this->textR28->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR27
 			// 
+			this->textR27->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR27->Location = System::Drawing::Point(584, 336);
 			this->textR27->Name = L"textR27";
-			this->textR27->Size = System::Drawing::Size(82, 20);
+			this->textR27->Size = System::Drawing::Size(82, 17);
 			this->textR27->TabIndex = 91;
 			this->textR27->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR26
 			// 
+			this->textR26->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR26->Location = System::Drawing::Point(584, 310);
 			this->textR26->Name = L"textR26";
-			this->textR26->Size = System::Drawing::Size(82, 20);
+			this->textR26->Size = System::Drawing::Size(82, 17);
 			this->textR26->TabIndex = 90;
 			this->textR26->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR25
 			// 
+			this->textR25->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR25->Location = System::Drawing::Point(584, 284);
 			this->textR25->Name = L"textR25";
-			this->textR25->Size = System::Drawing::Size(82, 20);
+			this->textR25->Size = System::Drawing::Size(82, 17);
 			this->textR25->TabIndex = 89;
 			this->textR25->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textR24
 			// 
+			this->textR24->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textR24->Location = System::Drawing::Point(584, 258);
 			this->textR24->Name = L"textR24";
-			this->textR24->Size = System::Drawing::Size(82, 20);
+			this->textR24->Size = System::Drawing::Size(82, 17);
 			this->textR24->TabIndex = 88;
 			this->textR24->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
@@ -1099,30 +1184,38 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// textEPC
 			// 
+			this->textEPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textEPC->Location = System::Drawing::Point(727, 128);
 			this->textEPC->Name = L"textEPC";
-			this->textEPC->Size = System::Drawing::Size(82, 20);
+			this->textEPC->Size = System::Drawing::Size(82, 17);
 			this->textEPC->TabIndex = 107;
 			// 
 			// textDPC
 			// 
+			this->textDPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textDPC->Location = System::Drawing::Point(727, 102);
 			this->textDPC->Name = L"textDPC";
-			this->textDPC->Size = System::Drawing::Size(82, 20);
+			this->textDPC->Size = System::Drawing::Size(82, 17);
 			this->textDPC->TabIndex = 106;
 			// 
 			// textIPC
 			// 
+			this->textIPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textIPC->Location = System::Drawing::Point(727, 76);
 			this->textIPC->Name = L"textIPC";
-			this->textIPC->Size = System::Drawing::Size(82, 20);
+			this->textIPC->Size = System::Drawing::Size(82, 17);
 			this->textIPC->TabIndex = 105;
 			// 
 			// textPC
 			// 
+			this->textPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textPC->Location = System::Drawing::Point(727, 50);
 			this->textPC->Name = L"textPC";
-			this->textPC->Size = System::Drawing::Size(82, 20);
+			this->textPC->Size = System::Drawing::Size(82, 17);
 			this->textPC->TabIndex = 104;
 			// 
 			// label38
@@ -1154,24 +1247,37 @@ private: System::Windows::Forms::TextBox^  textISP;
 			// 
 			// textESP
 			// 
+			this->textESP->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textESP->Location = System::Drawing::Point(727, 232);
 			this->textESP->Name = L"textESP";
-			this->textESP->Size = System::Drawing::Size(82, 20);
+			this->textESP->Size = System::Drawing::Size(82, 17);
 			this->textESP->TabIndex = 114;
 			// 
 			// textDSP
 			// 
+			this->textDSP->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textDSP->Location = System::Drawing::Point(727, 206);
 			this->textDSP->Name = L"textDSP";
-			this->textDSP->Size = System::Drawing::Size(82, 20);
+			this->textDSP->Size = System::Drawing::Size(82, 17);
 			this->textDSP->TabIndex = 113;
 			// 
 			// textISP
 			// 
+			this->textISP->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
 			this->textISP->Location = System::Drawing::Point(727, 180);
 			this->textISP->Name = L"textISP";
-			this->textISP->Size = System::Drawing::Size(82, 20);
+			this->textISP->Size = System::Drawing::Size(82, 17);
 			this->textISP->TabIndex = 112;
+			// 
+			// fullSpeedToolStripMenuItem
+			// 
+			this->fullSpeedToolStripMenuItem->Name = L"fullSpeedToolStripMenuItem";
+			this->fullSpeedToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->fullSpeedToolStripMenuItem->Text = L"Full Speed";
+			this->fullSpeedToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::fullSpeedToolStripMenuItem_Click);
 			// 
 			// frmMain
 			// 
@@ -1354,100 +1460,100 @@ public: void UpdateListBox(unsigned int ad) {
 		}
 		ad = ad + 4;
 	}
-	sprintf(buf2, "%08X%08X", cpu1.regsH[0], cpu1.regsL[0]);
+	sprintf(buf2, "%016I64X", cpu1.regs[0]);
 	buf = std::string(buf2);
 	this->textR0->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[1], cpu1.regsL[1]);
+	sprintf(buf2, "%016I64X", cpu1.regs[1]);
 	buf = std::string(buf2);
 	this->textR1->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[2], cpu1.regsL[2]);
+	sprintf(buf2, "%016I64X", cpu1.regs[2]);
 	buf = std::string(buf2);
 	this->textR2->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[3], cpu1.regsL[3]);
+	sprintf(buf2, "%016I64X", cpu1.regs[3]);
 	buf = std::string(buf2);
 	this->textR3->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[4], cpu1.regsL[4]);
+	sprintf(buf2, "%016I64X", cpu1.regs[4]);
 	buf = std::string(buf2);
 	this->textR4->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[5], cpu1.regsL[5]);
+	sprintf(buf2, "%016I64X", cpu1.regs[5]);
 	buf = std::string(buf2);
 	this->textR5->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[6], cpu1.regsL[6]);
+	sprintf(buf2, "%016I64X", cpu1.regs[6]);
 	buf = std::string(buf2);
 	this->textR6->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[7], cpu1.regsL[7]);
+	sprintf(buf2, "%016I64X", cpu1.regs[7]);
 	buf = std::string(buf2);
 	this->textR7->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[8], cpu1.regsL[8]);
+	sprintf(buf2, "%016I64X", cpu1.regs[8]);
 	buf = std::string(buf2);
 	this->textR8->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[9], cpu1.regsL[9]);
+	sprintf(buf2, "%016I64X", cpu1.regs[9]);
 	buf = std::string(buf2);
 	this->textR9->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[10], cpu1.regsL[10]);
+	sprintf(buf2, "%016I64X", cpu1.regs[10]);
 	buf = std::string(buf2);
 	this->textR10->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[11], cpu1.regsL[11]);
+	sprintf(buf2, "%016I64X", cpu1.regs[11]);
 	buf = std::string(buf2);
 	this->textR11->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[12], cpu1.regsL[12]);
+	sprintf(buf2, "%016I64X", cpu1.regs[12]);
 	buf = std::string(buf2);
 	this->textR12->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[13], cpu1.regsL[13]);
+	sprintf(buf2, "%016I64X", cpu1.regs[13]);
 	buf = std::string(buf2);
 	this->textR13->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[14], cpu1.regsL[14]);
+	sprintf(buf2, "%016I64X", cpu1.regs[14]);
 	buf = std::string(buf2);
 	this->textR14->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[15], cpu1.regsL[15]);
+	sprintf(buf2, "%016I64X", cpu1.regs[15]);
 	buf = std::string(buf2);
 	this->textR15->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[16], cpu1.regsL[16]);
+	sprintf(buf2, "%016I64X", cpu1.regs[16]);
 	buf = std::string(buf2);
 	this->textR16->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[17], cpu1.regsL[17]);
+	sprintf(buf2, "%016I64X", cpu1.regs[17]);
 	buf = std::string(buf2);
 	this->textR17->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[18], cpu1.regsL[18]);
+	sprintf(buf2, "%016I64X", cpu1.regs[18]);
 	buf = std::string(buf2);
 	this->textR18->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[19], cpu1.regsL[19]);
+	sprintf(buf2, "%016I64X", cpu1.regs[19]);
 	buf = std::string(buf2);
 	this->textR19->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[20], cpu1.regsL[20]);
+	sprintf(buf2, "%016I64X", cpu1.regs[20]);
 	buf = std::string(buf2);
 	this->textR20->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[21], cpu1.regsL[21]);
+	sprintf(buf2, "%016I64X", cpu1.regs[21]);
 	buf = std::string(buf2);
 	this->textR21->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[22], cpu1.regsL[22]);
+	sprintf(buf2, "%016I64X", cpu1.regs[22]);
 	buf = std::string(buf2);
 	this->textR22->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[23], cpu1.regsL[23]);
+	sprintf(buf2, "%016I64X", cpu1.regs[23]);
 	buf = std::string(buf2);
 	this->textR23->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[24], cpu1.regsL[24]);
+	sprintf(buf2, "%016I64X", cpu1.regs[24]);
 	buf = std::string(buf2);
 	this->textR24->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[25], cpu1.regsL[25]);
+	sprintf(buf2, "%016I64X", cpu1.regs[25]);
 	buf = std::string(buf2);
 	this->textR25->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[26], cpu1.regsL[26]);
+	sprintf(buf2, "%016I64X", cpu1.regs[26]);
 	buf = std::string(buf2);
 	this->textR26->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[27], cpu1.regsL[27]);
+	sprintf(buf2, "%016I64X", cpu1.regs[27]);
 	buf = std::string(buf2);
 	this->textR27->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[28], cpu1.regsL[28]);
+	sprintf(buf2, "%016I64X", cpu1.regs[28]);
 	buf = std::string(buf2);
 	this->textR28->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[29], cpu1.regsL[29]);
+	sprintf(buf2, "%016I64X", cpu1.regs[29]);
 	buf = std::string(buf2);
 	this->textR29->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[30], cpu1.regsL[30]);
+	sprintf(buf2, "%016I64X", cpu1.regs[30]);
 	buf = std::string(buf2);
 	this->textR30->Text = gcnew String(buf.c_str());
-	sprintf(buf2, "%08X%08X", cpu1.regsH[31], cpu1.regsL[31]);
+	sprintf(buf2, "%016I64X", cpu1.regs[31]);
 	buf = std::string(buf2);
 	this->textR31->Text = gcnew String(buf.c_str());
 	sprintf(buf2, "%06X", cpu1.pc);
@@ -1457,15 +1563,48 @@ public: void UpdateListBox(unsigned int ad) {
 private: System::Void toolStripButton5_Click(System::Object^  sender, System::EventArgs^  e) {
 			 cpu1.brk = true;
 			 cpu1.isRunning = false;
+			 fullspeed = false;
+			 this->timer1->Interval = 100;
 		 }
 private: System::Void toolStripButton4_Click(System::Object^  sender, System::EventArgs^  e) {
 			 cpu1.isRunning = true;
 		 }
 private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
+			 int nn,kk;
 			 if (cpu1.isRunning) {
+				 if (fullspeed) {
+					 for (nn = 0; nn < 10000; nn++) {
+						 for (kk = 0; kk < 30; kk++) {
+							 if (cpu1.pc == breakpoints[kk]) {
+								 cpu1.isRunning = false;
+								 UpdateListBox(cpu1.pc-32);
+								 return;
+						     }
+						 }
+						 cpu1.Step();
+					 }
+				 }
+				for (kk = 0; kk < 30; kk++) {
+					if (cpu1.pc == breakpoints[kk]) {
+						cpu1.isRunning = false;
+						 UpdateListBox(cpu1.pc-32);
+						return;
+					}
+				}
 				 cpu1.Step();
 				 UpdateListBox(cpu1.pc-32);
 			 }
+		 }
+private: System::Void toolStripButton7_Click(System::Object^  sender, System::EventArgs^  e) {
+		frmBreakpoint ^form = gcnew frmBreakpoint();
+				 form->Show();		 }
+private: System::Void freeRunFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 this->timer1->Interval = 1;
+		 }
+private: System::Void runToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 fullspeed = true;
 		 }
 };
 };

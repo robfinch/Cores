@@ -64,6 +64,7 @@
 #define SH      0x62
 #define SW      0x63
 #define INC     0x64
+#define PEA		0x65
 #define PUSH    0x67
 #define SBX     0x68
 #define SCX     0x69
