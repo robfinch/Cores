@@ -70,6 +70,8 @@ int ParseStructDeclaration(int ztype)
 	int gblflag;
 	int ret;
 	int psd;
+	ENODE nd;
+	ENODE *pnd = &nd;
 
 	psd = isStructDecl;
 	isStructDecl = TRUE;
@@ -98,7 +100,13 @@ int ParseStructDeclaration(int ztype)
             sp->tp->lst.head = 0;
             sp->storage_class = sc_type;
             sp->tp->sname = sp->name;
+            sp->tp->alignment = 0;
             NextToken();
+
+			if (lastst == kw_align) {
+                NextToken();
+                sp->tp->alignment = GetIntegerExpression(&pnd);
+            }
 
 			// Could be a forward structure declaration like:
 			// struct buf;
@@ -121,6 +129,10 @@ int ParseStructDeclaration(int ztype)
         }
 		else {
             NextToken();
+            if (lastst==kw_align) {
+	            NextToken();
+                sp->tp->alignment = GetIntegerExpression(&pnd);
+            }
 			if (lastst==begin) {
 	            NextToken();
                 ParseStructMembers(sp->tp,ztype);
@@ -133,6 +145,12 @@ int ParseStructDeclaration(int ztype)
         tp->type = ztype;
         tp->sname = 0;
         tp->lst.head = 0;
+
+        if (lastst==kw_align) {
+            NextToken();
+            tp->alignment = GetIntegerExpression(&pnd);
+        }
+
         if( lastst != begin)
             error(ERR_INCOMPLETE);
         else {
@@ -161,7 +179,7 @@ void ParseStructMembers(TYP *tp, int ztype)
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-    tp->size = slc;
+    tp->size = tp->alignment ? tp->alignment : slc;
     NextToken();
 }
 

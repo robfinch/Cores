@@ -260,7 +260,43 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 	while( lc_auto & 7 )	/* round frame size to word */
 		++lc_auto;
 	if (sym->IsInterrupt) {
+       if (sym->stkname)
+           GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
+       GenerateMonadic(op_push,0,makereg(1));
+       GenerateMonadic(op_push,0,makereg(2));
+       GenerateMonadic(op_push,0,makereg(3));
+       GenerateMonadic(op_push,0,makereg(4));
+       GenerateMonadic(op_push,0,makereg(5));
+       GenerateMonadic(op_push,0,makereg(6));
+       GenerateMonadic(op_push,0,makereg(7));
+       GenerateMonadic(op_push,0,makereg(8));
+       GenerateMonadic(op_push,0,makereg(9));
+       GenerateMonadic(op_push,0,makereg(10));
+       GenerateMonadic(op_push,0,makereg(11));
+       GenerateMonadic(op_push,0,makereg(12));
+       GenerateMonadic(op_push,0,makereg(13));
+       GenerateMonadic(op_push,0,makereg(14));
+       GenerateMonadic(op_push,0,makereg(15));
+       GenerateMonadic(op_push,0,makereg(16));
+       GenerateMonadic(op_push,0,makereg(17));
+       GenerateMonadic(op_push,0,makereg(18));
+       GenerateMonadic(op_push,0,makereg(19));
+       GenerateMonadic(op_push,0,makereg(20));
+       GenerateMonadic(op_push,0,makereg(21));
+       GenerateMonadic(op_push,0,makereg(22));
+       GenerateMonadic(op_push,0,makereg(23));
+       GenerateMonadic(op_push,0,makereg(25));
+       GenerateMonadic(op_push,0,makereg(26));
+       GenerateMonadic(op_push,0,makereg(27));
+       GenerateMonadic(op_push,0,makereg(28));
+       GenerateMonadic(op_push,0,makereg(29));
+       GenerateMonadic(op_push,0,makereg(31));
 	}
+	if (sym->prolog) {
+       if (optimize)
+           opt1(sym->prolog);
+	   GenerateStatement(sym->prolog);
+    }
 	if (!sym->IsNocall) {
 		// For a leaf routine don't bother to store the link register or exception link register.
 		if (sym->IsLeaf) {
@@ -308,6 +344,7 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 	int lab1;
 	int cnt;
 	int toAdd;
+	Statement *s;
 
     // Generate the return expression and force the result into r1.
     if( stmt != NULL && stmt->exp != NULL )
@@ -331,8 +368,10 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 		// Unlock any semaphores that may have been set
 		for (nn = lastsph - 1; nn >= 0; nn--)
 			GenerateDiadic(op_sb,0,makereg(0),make_string(semaphores[nn]));
-		if (sym->IsNocall)	// nothing to do for nocall convention
+		
+        if (sym->IsNocall) {	// nothing to do for nocall convention
 			return;
+        }
 		// Restore registers used as register variables.
 		if( save_mask != 0 ) {
 			cnt = (bitsset(save_mask)-1)*8;
@@ -356,9 +395,45 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 			GenerateMonadic(op_pop,0,makereg(regLR));
 			toAdd = 0;
 		}
+		    if (sym->epilog) {
+               if (optimize)
+                  opt1(sym->epilog);
+		       GenerateStatement(sym->epilog);
+		       return;
+           }
+        
 		// Generate the return instruction. For the Pascal calling convention pop the parameters
 		// from the stack.
 		if (sym->IsInterrupt) {
+            GenerateMonadic(op_pop,0,makereg(31));
+            GenerateMonadic(op_pop,0,makereg(29));
+            GenerateMonadic(op_pop,0,makereg(28));
+            GenerateMonadic(op_pop,0,makereg(27));
+            GenerateMonadic(op_pop,0,makereg(26));
+            GenerateMonadic(op_pop,0,makereg(25));
+            GenerateMonadic(op_pop,0,makereg(23));
+            GenerateMonadic(op_pop,0,makereg(22));
+            GenerateMonadic(op_pop,0,makereg(21));
+            GenerateMonadic(op_pop,0,makereg(20));
+            GenerateMonadic(op_pop,0,makereg(19));
+            GenerateMonadic(op_pop,0,makereg(18));
+            GenerateMonadic(op_pop,0,makereg(17));
+            GenerateMonadic(op_pop,0,makereg(16));
+            GenerateMonadic(op_pop,0,makereg(15));
+            GenerateMonadic(op_pop,0,makereg(14));
+            GenerateMonadic(op_pop,0,makereg(13));
+            GenerateMonadic(op_pop,0,makereg(12));
+            GenerateMonadic(op_pop,0,makereg(11));
+            GenerateMonadic(op_pop,0,makereg(10));
+            GenerateMonadic(op_pop,0,makereg(9));
+            GenerateMonadic(op_pop,0,makereg(8));
+            GenerateMonadic(op_pop,0,makereg(7));
+            GenerateMonadic(op_pop,0,makereg(6));
+            GenerateMonadic(op_pop,0,makereg(5));
+            GenerateMonadic(op_pop,0,makereg(4));
+            GenerateMonadic(op_pop,0,makereg(3));
+            GenerateMonadic(op_pop,0,makereg(2));
+            GenerateMonadic(op_pop,0,makereg(1));
 			GenerateMonadic(op_rti,0,NULL);
 			return;
 		}

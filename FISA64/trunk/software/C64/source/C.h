@@ -1,3 +1,6 @@
+#ifndef C_H
+#define C_H
+
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
@@ -57,7 +60,7 @@ enum e_sym {
 
 		kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int64,
 		kw_icache, kw_dcache, kw_thread,
-        kw_void, kw_char, kw_float, kw_double, kw_struct, kw_union,
+        kw_void, kw_char, kw_float, kw_double, kw_triple, kw_struct, kw_union,
         kw_long, kw_short, kw_unsigned, kw_auto, kw_extern,
         kw_register, kw_typedef, kw_static, kw_goto, kw_return,
         kw_sizeof, kw_break, kw_continue, kw_if, kw_else, kw_elsif,
@@ -68,7 +71,7 @@ enum e_sym {
 		kw_interrupt, kw_vortex, kw_pascal, kw_oscall, kw_nocall, kw_naked,
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
-		kw_cdecl,
+		kw_cdecl, kw_align, kw_prolog, kw_epilog,
         my_eof };
 
 enum e_sc {
@@ -77,7 +80,7 @@ enum e_sc {
 
 enum e_bt {
 		bt_byte, bt_ubyte,
-        bt_char, bt_short, bt_long, bt_float, bt_double, bt_pointer,
+        bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
         bt_unsigned, bt_struct, bt_union, bt_enum, bt_void, bt_func, bt_ifunc,
 		bt_interrupt, bt_oscall, bt_pascal, bt_bitfield, bt_ubitfield, bt_last};
@@ -90,10 +93,12 @@ struct slit {
 };
 
 struct typ;
+struct snode;
 
 struct sym {
     struct sym *next;
     char *name;
+    char *stkname;
     int8_t storage_class;
 	// Function attributes
 	uint8_t NumRegisterVars;
@@ -111,10 +116,13 @@ struct sym {
     union {
         int64_t i;
         uint64_t u;
-        double f;
+        __float128 f;
+        uint16_t wa[8];
         char *s;
     } value;
     struct typ *tp;
+    struct snode *prolog;
+    struct snode *epilog;
 };
 
 typedef struct stab {
@@ -135,6 +143,7 @@ typedef struct typ {
     TABLE       lst;
     struct typ      *btp;
     char            *sname;
+	unsigned int alignment;
 } TYP;
 
 #define SYM     struct sym
@@ -195,7 +204,10 @@ typedef struct typ {
 #define AL_FLOAT        4
 #define AL_DOUBLE       8
 #define AL_STRUCT       8
+#define AL_TRIPLE       4
 
 #define TRUE	1
 #define FALSE	0
 //#define NULL	((void *)0)
+
+#endif

@@ -54,6 +54,7 @@ SYM *makeint(char *name);
 extern int funcdecl;
 extern char *names[20];
 extern int nparms;
+extern char *stkname;
 
 static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
@@ -78,6 +79,7 @@ int ParseFunction(SYM *sp)
 	if (sp==NULL) {
 		fatal("Compiler error: ParseFunction: SYM is NULL\r\n");
 	}
+	sp->stkname = stkname;
 	if (verbose) printf("Parsing function: %s\r\n", sp->name);
 		oldglobal = global_flag;
         global_flag = 0;
@@ -257,6 +259,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 {    
 	char lbl[200];
 	Statement *stmt;
+	Statement *plg;
+	Statement *eplg;
 
 	lbl[0] = 0;
 	needpunc(begin);
@@ -287,6 +291,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
 	stmt = ParseCompoundStatement();
+//	stmt->stype = st_funcbody;
 	if (isThor)
 		GenerateFunction(sp, stmt);
 	else if (isTable888)

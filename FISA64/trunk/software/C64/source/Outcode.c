@@ -873,37 +873,31 @@ void roseg()
     }
 }
 
-void seg(int sg)
+void seg(int sg, int algn)
 {    
 	nl();
 	if( curseg != sg) {
 		switch(sg) {
 		case bssseg:
 			fprintf(output,"\tbss\n");
-			fprintf(output,"\talign\t8\n");
 			break;
 		case dataseg:
 			fprintf(output,"\tdata\n");
-			fprintf(output,"\talign\t8\n");
 			break;
 		case tlsseg:
 			fprintf(output,"\ttls\n");
-			fprintf(output,"\talign\t8\n");
 			break;
 		case idataseg:
 			fprintf(output,"\tidata\n");
-			fprintf(output,"\talign\t8\n");
 			break;
 		case codeseg:
 			fprintf(output,"\tcode\n");
-			fprintf(output,"\talign\t16\n");
 			break;
 		case rodataseg:
 			fprintf(output,"\trodata\n");
-			fprintf(output,"\talign\t16\n");
 			break;
 		}
 		curseg = sg;
     }
-	fprintf(output,"\talign\t8\n");
+ 	fprintf(output,"\talign\t%d\n", algn);
 }

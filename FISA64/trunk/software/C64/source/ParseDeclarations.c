@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -71,6 +71,7 @@ int unnamedCnt = 0;
 int needParseFunction = FALSE;
 int isStructDecl = FALSE;
 int worstAlignment = 0;
+char *stkname = 0;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -156,6 +157,13 @@ int ParseSpecifier(TABLE *table)
 				isInterrupt = TRUE;
 				head = tail = maketype(bt_interrupt,8);
 				NextToken();
+				if (lastst==openpa) {
+                    NextToken();
+                    if (lastst!=id) 
+                       error(ERR_IDEXPECT);
+                    needpunc(closepa);
+                    stkname = litlate(lastid);
+                }
 				goto lxit;
 
 			case kw_pascal:
@@ -333,6 +341,13 @@ int ParseSpecifier(TABLE *table)
 				head->isVolatile = isVolatile;
 				NextToken();
 				bit_max = 64;
+				goto lxit;
+
+			case kw_triple:
+				head = tail = maketype(bt_triple,12);
+				head->isVolatile = isVolatile;
+				NextToken();
+				bit_max = 96;
 				goto lxit;
 
 			case kw_void:
@@ -516,6 +531,7 @@ void ParseDeclarationSuffix()
         }
         else if(head != NULL) {
 			temp1->size = GetIntegerExpression((ENODE **)NULL) * head->size;
+			temp1->alignment = head->alignment;
 			needpunc(closebr);
 		}
         else {
@@ -593,8 +609,10 @@ int alignment(TYP *tp)
 				return AL_POINTER;
     case bt_float:          return AL_FLOAT;
     case bt_double:         return AL_DOUBLE;
+    case bt_triple:         return AL_TRIPLE;
     case bt_struct:
-    case bt_union:          return AL_STRUCT;
+    case bt_union:          
+         return (tp->alignment) ?  tp->alignment : AL_STRUCT;
     default:                return AL_CHAR;
     }
 }
@@ -620,11 +638,17 @@ int walignment(TYP *tp)
 				return imax(AL_POINTER,worstAlignment);
     case bt_float:          return imax(AL_FLOAT,worstAlignment);
     case bt_double:         return imax(AL_DOUBLE,worstAlignment);
+    case bt_triple:         return imax(AL_TRIPLE,worstAlignment);
     case bt_struct:
     case bt_union:          
 		sp = tp->lst.head;
+        worstAlignment = tp->alignment;
 		while(sp != NULL) {
-			worstAlignment = imax(worstAlignment,walignment(sp->tp));
+            if (sp->tp && sp->tp->alignment) {
+                worstAlignment = imax(worstAlignment,sp->tp->alignment);
+            }
+            else
+     			worstAlignment = imax(worstAlignment,walignment(sp->tp));
 			sp = sp->next;
         }
 		return worstAlignment;
@@ -678,6 +702,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 	int op;
 	int fd;
 	int fn_doneinit = 0;
+	int bcnt;
 
     static long old_nbytes;
     int nbytes;
@@ -714,15 +739,20 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 					sp->storage_class = sc_typedef;
 				isTypedef = FALSE;
 			}
+			if ((ilc + nbytes) % roundAlignment(head)) {
+				if (al==sc_thread)
+					tseg();
+				else
+					dseg();
+            }
+            bcnt = 0;
             while( (ilc + nbytes) % roundAlignment(head)) {
-                if( al != sc_member && al != sc_external && al != sc_auto) {
-					if (al==sc_thread)
-						tseg();
-					else
-						dseg();
-					GenerateByte(0);
-                }
                 ++nbytes;
+                bcnt++;
+            }
+            if( al != sc_member && al != sc_external && al != sc_auto) {
+                if (bcnt > 0)
+                    genstorage(bcnt);
             }
 
 			// Set the struct member storage offset.
@@ -759,7 +789,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
 
 			// Increase the storage allocation by the type size.
             if(ztype == bt_union)
-                nbytes = imax(nbytes,sp->tp->size);
+                nbytes = imax(nbytes,roundSize(sp->tp));
 			else if(al != sc_external) {
 				// If a pointer to a function is defined in a struct.
 				if (isStructDecl && (sp->tp->type==bt_func || sp->tp->type==bt_ifunc))

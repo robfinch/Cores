@@ -1,0 +1,33 @@
+# Project: emuFISA64
+# Makefile created by Dev-C++ 5.1.0.0
+
+CPP      = g++.exe
+CC       = gcc.exe
+WINDRES  = windres.exe
+RES      = obj/emuFISA64_private.res
+OBJ      = obj/main.o $(RES)
+LINKOBJ  = obj/main.o $(RES)
+LIBS     = -L"" -L"C:/Program Files (x86)/Dev-Cpp/MinGW32/lib" -mwindows  
+INCS     = -I""  -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include" 
+CXXINCS  = -I""  -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include" 
+BIN      = emuFISA64.exe
+CXXFLAGS = $(CXXINCS)   -fexceptions -fverbose-asm -w
+CFLAGS   = $(INCS)   -fexceptions -fverbose-asm -w
+RM       = rm -f
+
+.PHONY: all all-before all-after clean clean-custom
+
+all: all-before emuFISA64.exe all-after
+
+
+clean: clean-custom
+	${RM} $(OBJ) $(BIN)
+
+$(BIN): $(OBJ)
+	$(CPP) $(LINKOBJ) -o "emuFISA64.exe" $(LIBS)
+
+obj/main.o: source/main.cpp
+	$(CPP) -c source/main.cpp -o obj/main.o $(CXXFLAGS)
+
+obj/emuFISA64_private.res: emuFISA64_private.rc source/emuFISA64.rc 
+	$(WINDRES) -i emuFISA64_private.rc --input-format=rc -o obj/emuFISA64_private.res -O coff 

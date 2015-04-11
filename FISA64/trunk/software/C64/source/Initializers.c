@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -62,18 +62,37 @@ extern int curseg;
 void doinit(SYM *sp)
 {
 	char lbl[200];
-
+    int algn;
+ 
 	lbl[0] = 0;
 	if (sp->storage_class == sc_thread) {
-		seg(tlsseg);
+        if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
+           algn = imax(sp->tp->alignment,8);
+        else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
+           algn = imax(sp->tp->btp->alignment,8);
+        else
+            algn = 8;
+		seg(tlsseg,algn);
 		nl();
 	}
 	else if (sp->storage_class == sc_static || lastst==assign) {
-		seg(dataseg);          /* initialize into data segment */
+        if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
+           algn = imax(sp->tp->alignment,8);
+        else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
+           algn = imax(sp->tp->btp->alignment,8);
+        else
+            algn = 8;
+		seg(dataseg,algn);          /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
 	else {
-		seg(bssseg);            /* initialize into data segment */
+        if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
+           algn = imax(sp->tp->alignment,8);
+        else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
+           algn = imax(sp->tp->btp->alignment,8);
+        else
+            algn = 8;
+		seg(bssseg,algn);            /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
 	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
@@ -90,7 +109,7 @@ void doinit(SYM *sp)
 				strcat(lbl, "tls ");
 		}
 		strcat(lbl, sp->name);
-		//gen_strlab(lbl);
+		gen_strlab(lbl);
 	}
 	if( lastst != assign) {
 		genstorage(sp->tp->size);

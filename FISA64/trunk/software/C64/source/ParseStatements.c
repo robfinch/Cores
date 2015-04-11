@@ -301,13 +301,13 @@ Statement *ParseSpinlockStatement()
 	//		return 0;
  //           }
 //	NextToken();
-	if (lastst==comma) {
-		NextToken();
-		snp->incrExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
-		if ((int64_t)snp->incrExpr < 1 || (int64_t)snp->incrExpr > 15)
-			error(ERR_SEMA_INCR);
-		snp->incrExpr = (ENODE *)((int64_t)snp->incrExpr & 15);
-	}
+//	if (lastst==comma) {
+//		NextToken();
+//		snp->incrExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
+//		if ((int64_t)snp->incrExpr < 1 || (int64_t)snp->incrExpr > 15)
+//			error(ERR_SEMA_INCR);
+//		snp->incrExpr = (ENODE *)((int64_t)snp->incrExpr);
+//	}
 	if (lastst==comma) {
 		NextToken();
 		snp->initExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
@@ -736,7 +736,7 @@ Statement *ParseCompoundStatement()
 
     snp = NewStatement(st_compound, FALSE); 
 	currentStmt = snp;
-	head = 0; 
+	head = 0;
 	if (lastst==colon) {
 		NextToken();
 		TRACE(printf("Compound <%s>\r\n",lastid);)
@@ -758,7 +758,7 @@ Statement *ParseCompoundStatement()
 	//		head->outer = snp;
 	//}
 	// Add remaining statements onto the tail of the list.
-	while( lastst != end ) {
+	while( lastst != end) {
 		tail->next = ParseStatement(); 
 		if( tail->next != NULL ) {
 			tail->next->outer = snp;
@@ -844,6 +844,12 @@ Statement *ParseStatement()
 		NextToken(); 
         snp = ParseCompoundStatement();
         return snp; 
+    case kw_prolog:
+         snp = NewStatement(st_empty,1);
+         currentFn->prolog = ParseStatement(); break;
+    case kw_epilog:
+         snp = NewStatement(st_empty,1);
+         currentFn->epilog = ParseStatement(); break;
     case kw_if: snp = ParseIfStatement(); break; 
     case kw_while: snp = ParseWhileStatement(); break; 
     case kw_until: snp = ParseUntilStatement(); break; 

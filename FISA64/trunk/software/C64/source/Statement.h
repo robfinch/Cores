@@ -4,7 +4,7 @@
 /*      statement node descriptions     */
 
 enum e_stmt {
-		st_empty,
+		st_empty, st_funcbody,
         st_expr, st_compound, st_while, 
 		st_until, st_forever, st_firstcall, st_asm,
 		st_dountil, st_doloop,

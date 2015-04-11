@@ -225,7 +225,7 @@ extern void gen_strlab(char *s);
 extern void dumplits();
 extern int  stringlit(char *s);
 extern void nl();
-extern void seg(int sg);
+extern void seg(int sg, int algn);
 extern void cseg();
 extern void dseg();
 extern void tseg();
