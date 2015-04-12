@@ -9,6 +9,7 @@
 #include "frmRegisters.h"
 #include "frmBreakpoint.h"
 #include "frmScreen.h"
+#include "frmAbout.h"
 #include "Disassem.h"
 #include "clsCPU.h"
 
@@ -32,6 +33,20 @@ namespace emuFISA64 {
 	public ref class frmMain : public System::Windows::Forms::Form
 	{
 		int fullspeed;
+		int stepout;
+	private: System::Windows::Forms::Label^  label42;
+	private: System::Windows::Forms::Label^  label43;
+	private: System::Windows::Forms::Label^  label44;
+	private: System::Windows::Forms::Label^  label45;
+	private: System::Windows::Forms::TextBox^  textBoxDBAD3;
+	private: System::Windows::Forms::TextBox^  textBoxDBAD2;
+	private: System::Windows::Forms::TextBox^  textBoxDBAD1;
+	private: System::Windows::Forms::TextBox^  textBoxDBAD0;
+	private: System::Windows::Forms::Label^  label46;
+	private: System::Windows::Forms::TextBox^  textBoxDBCTRL;
+	private: System::Windows::Forms::Label^  label47;
+	private: System::Windows::Forms::TextBox^  textBoxDBSTAT;
+			 int depth;
 	public:
 		frmMain(void)
 		{
@@ -40,6 +55,8 @@ namespace emuFISA64 {
 			//TODO: Add the constructor code here
 			//
 			fullspeed = false;
+			stepout = false;
+			depth = 0;
 			frmScreen^ Screenform = gcnew frmScreen();
 				 Screenform->Show();
 		}
@@ -167,6 +184,17 @@ private: System::Windows::Forms::TextBox^  textDSP;
 private: System::Windows::Forms::TextBox^  textISP;
 private: System::Windows::Forms::ToolStripMenuItem^  freeRunFastToolStripMenuItem;
 private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
+private: System::Windows::Forms::Label^  label40;
+private: System::Windows::Forms::TextBox^  textBoxVBR;
+private: System::Windows::Forms::CheckBox^  checkBoxLED0;
+private: System::Windows::Forms::CheckBox^  checkBoxLED1;
+private: System::Windows::Forms::CheckBox^  checkBoxLED2;
+private: System::Windows::Forms::CheckBox^  checkBoxLED3;
+private: System::Windows::Forms::CheckBox^  checkBoxLED4;
+private: System::Windows::Forms::CheckBox^  checkBoxLED5;
+private: System::Windows::Forms::CheckBox^  checkBoxLED6;
+private: System::Windows::Forms::CheckBox^  checkBoxLED7;
+private: System::Windows::Forms::Label^  label41;
 	private: System::ComponentModel::IContainer^  components;
 
 
@@ -199,6 +227,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			this->interruptToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->breakpointToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->freeRunFastToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->fullSpeedToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->viewToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->registersToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->aboutToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
@@ -294,7 +323,29 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			this->textESP = (gcnew System::Windows::Forms::TextBox());
 			this->textDSP = (gcnew System::Windows::Forms::TextBox());
 			this->textISP = (gcnew System::Windows::Forms::TextBox());
-			this->fullSpeedToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->label40 = (gcnew System::Windows::Forms::Label());
+			this->textBoxVBR = (gcnew System::Windows::Forms::TextBox());
+			this->checkBoxLED0 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED1 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED2 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED3 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED4 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED5 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED6 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBoxLED7 = (gcnew System::Windows::Forms::CheckBox());
+			this->label41 = (gcnew System::Windows::Forms::Label());
+			this->label42 = (gcnew System::Windows::Forms::Label());
+			this->label43 = (gcnew System::Windows::Forms::Label());
+			this->label44 = (gcnew System::Windows::Forms::Label());
+			this->label45 = (gcnew System::Windows::Forms::Label());
+			this->textBoxDBAD3 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxDBAD2 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxDBAD1 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxDBAD0 = (gcnew System::Windows::Forms::TextBox());
+			this->label46 = (gcnew System::Windows::Forms::Label());
+			this->textBoxDBCTRL = (gcnew System::Windows::Forms::TextBox());
+			this->label47 = (gcnew System::Windows::Forms::Label());
+			this->textBoxDBSTAT = (gcnew System::Windows::Forms::TextBox());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -305,7 +356,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 				this->runToolStripMenuItem, this->viewToolStripMenuItem, this->aboutToolStripMenuItem});
 			this->menuStrip1->Location = System::Drawing::Point(0, 0);
 			this->menuStrip1->Name = L"menuStrip1";
-			this->menuStrip1->Size = System::Drawing::Size(882, 24);
+			this->menuStrip1->Size = System::Drawing::Size(1032, 24);
 			this->menuStrip1->TabIndex = 1;
 			this->menuStrip1->Text = L"menuStrip1";
 			// 
@@ -337,58 +388,71 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			// resetToolStripMenuItem
 			// 
 			this->resetToolStripMenuItem->Name = L"resetToolStripMenuItem";
-			this->resetToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->resetToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->resetToolStripMenuItem->Text = L"Reset";
 			this->resetToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::resetToolStripMenuItem_Click);
 			// 
 			// stepIntoToolStripMenuItem
 			// 
+			this->stepIntoToolStripMenuItem->Image = (cli::safe_cast<System::Drawing::Image^  >(resources->GetObject(L"stepIntoToolStripMenuItem.Image")));
 			this->stepIntoToolStripMenuItem->Name = L"stepIntoToolStripMenuItem";
-			this->stepIntoToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->stepIntoToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stepIntoToolStripMenuItem->Text = L"Step Into";
 			// 
 			// stepOverToolStripMenuItem
 			// 
+			this->stepOverToolStripMenuItem->Image = (cli::safe_cast<System::Drawing::Image^  >(resources->GetObject(L"stepOverToolStripMenuItem.Image")));
 			this->stepOverToolStripMenuItem->Name = L"stepOverToolStripMenuItem";
-			this->stepOverToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->stepOverToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stepOverToolStripMenuItem->Text = L"Step Over";
 			// 
 			// stepOutToolStripMenuItem
 			// 
+			this->stepOutToolStripMenuItem->Image = (cli::safe_cast<System::Drawing::Image^  >(resources->GetObject(L"stepOutToolStripMenuItem.Image")));
 			this->stepOutToolStripMenuItem->Name = L"stepOutToolStripMenuItem";
-			this->stepOutToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->stepOutToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stepOutToolStripMenuItem->Text = L"Step Out";
 			// 
 			// freeRunToolStripMenuItem
 			// 
 			this->freeRunToolStripMenuItem->Name = L"freeRunToolStripMenuItem";
-			this->freeRunToolStripMenuItem->Size = System::Drawing::Size(152, 22);
-			this->freeRunToolStripMenuItem->Text = L"Free &Run";
+			this->freeRunToolStripMenuItem->Size = System::Drawing::Size(143, 22);
+			this->freeRunToolStripMenuItem->Text = L"&Animate";
 			// 
 			// stopToolStripMenuItem
 			// 
+			this->stopToolStripMenuItem->Image = (cli::safe_cast<System::Drawing::Image^  >(resources->GetObject(L"stopToolStripMenuItem.Image")));
 			this->stopToolStripMenuItem->Name = L"stopToolStripMenuItem";
-			this->stopToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->stopToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stopToolStripMenuItem->Text = L"&Stop";
 			// 
 			// interruptToolStripMenuItem
 			// 
+			this->interruptToolStripMenuItem->Image = (cli::safe_cast<System::Drawing::Image^  >(resources->GetObject(L"interruptToolStripMenuItem.Image")));
 			this->interruptToolStripMenuItem->Name = L"interruptToolStripMenuItem";
-			this->interruptToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->interruptToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->interruptToolStripMenuItem->Text = L"&Interrupt";
 			// 
 			// breakpointToolStripMenuItem
 			// 
+			this->breakpointToolStripMenuItem->Image = (cli::safe_cast<System::Drawing::Image^  >(resources->GetObject(L"breakpointToolStripMenuItem.Image")));
 			this->breakpointToolStripMenuItem->Name = L"breakpointToolStripMenuItem";
-			this->breakpointToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->breakpointToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->breakpointToolStripMenuItem->Text = L"&Breakpoint";
 			// 
 			// freeRunFastToolStripMenuItem
 			// 
 			this->freeRunFastToolStripMenuItem->Name = L"freeRunFastToolStripMenuItem";
-			this->freeRunFastToolStripMenuItem->Size = System::Drawing::Size(152, 22);
-			this->freeRunFastToolStripMenuItem->Text = L"Free Run Fast";
+			this->freeRunFastToolStripMenuItem->Size = System::Drawing::Size(143, 22);
+			this->freeRunFastToolStripMenuItem->Text = L"Animate Fast";
 			this->freeRunFastToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::freeRunFastToolStripMenuItem_Click);
+			// 
+			// fullSpeedToolStripMenuItem
+			// 
+			this->fullSpeedToolStripMenuItem->Name = L"fullSpeedToolStripMenuItem";
+			this->fullSpeedToolStripMenuItem->Size = System::Drawing::Size(143, 22);
+			this->fullSpeedToolStripMenuItem->Text = L"Full Speed";
+			this->fullSpeedToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::fullSpeedToolStripMenuItem_Click);
 			// 
 			// viewToolStripMenuItem
 			// 
@@ -409,6 +473,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			this->aboutToolStripMenuItem->Name = L"aboutToolStripMenuItem";
 			this->aboutToolStripMenuItem->Size = System::Drawing::Size(52, 20);
 			this->aboutToolStripMenuItem->Text = L"&About";
+			this->aboutToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::aboutToolStripMenuItem_Click);
 			// 
 			// openFileDialog1
 			// 
@@ -429,7 +494,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 				this->toolStripButton2, this->toolStripButton3, this->toolStripButton4, this->toolStripButton5, this->toolStripButton6, this->toolStripButton7});
 			this->toolStrip1->Location = System::Drawing::Point(0, 24);
 			this->toolStrip1->Name = L"toolStrip1";
-			this->toolStrip1->Size = System::Drawing::Size(882, 25);
+			this->toolStrip1->Size = System::Drawing::Size(1032, 25);
 			this->toolStrip1->TabIndex = 3;
 			this->toolStrip1->Text = L"toolStripExec";
 			// 
@@ -463,6 +528,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			this->toolStripButton3->Size = System::Drawing::Size(23, 22);
 			this->toolStripButton3->Text = L"toolStripButton3";
 			this->toolStripButton3->ToolTipText = L"Step Out";
+			this->toolStripButton3->Click += gcnew System::EventHandler(this, &frmMain::toolStripButton3_Click);
 			// 
 			// toolStripButton4
 			// 
@@ -1044,9 +1110,9 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			this->label26->AutoSize = true;
 			this->label26->Location = System::Drawing::Point(528, 313);
 			this->label26->Name = L"label26";
-			this->label26->Size = System::Drawing::Size(27, 13);
+			this->label26->Size = System::Drawing::Size(47, 13);
 			this->label26->TabIndex = 98;
-			this->label26->Text = L"R26";
+			this->label26->Text = L"R26/GP";
 			// 
 			// label25
 			// 
@@ -1211,11 +1277,11 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			// 
 			// textPC
 			// 
-			this->textPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+			this->textPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 8.25F, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
 			this->textPC->Location = System::Drawing::Point(727, 50);
 			this->textPC->Name = L"textPC";
-			this->textPC->Size = System::Drawing::Size(82, 17);
+			this->textPC->Size = System::Drawing::Size(82, 20);
 			this->textPC->TabIndex = 104;
 			// 
 			// label38
@@ -1272,18 +1338,247 @@ private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 			this->textISP->Size = System::Drawing::Size(82, 17);
 			this->textISP->TabIndex = 112;
 			// 
-			// fullSpeedToolStripMenuItem
+			// label40
 			// 
-			this->fullSpeedToolStripMenuItem->Name = L"fullSpeedToolStripMenuItem";
-			this->fullSpeedToolStripMenuItem->Size = System::Drawing::Size(152, 22);
-			this->fullSpeedToolStripMenuItem->Text = L"Full Speed";
-			this->fullSpeedToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::fullSpeedToolStripMenuItem_Click);
+			this->label40->AutoSize = true;
+			this->label40->Location = System::Drawing::Point(700, 287);
+			this->label40->Name = L"label40";
+			this->label40->Size = System::Drawing::Size(29, 13);
+			this->label40->TabIndex = 119;
+			this->label40->Text = L"VBR";
+			// 
+			// textBoxVBR
+			// 
+			this->textBoxVBR->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxVBR->Location = System::Drawing::Point(727, 284);
+			this->textBoxVBR->Name = L"textBoxVBR";
+			this->textBoxVBR->Size = System::Drawing::Size(82, 17);
+			this->textBoxVBR->TabIndex = 118;
+			// 
+			// checkBoxLED0
+			// 
+			this->checkBoxLED0->AutoSize = true;
+			this->checkBoxLED0->Location = System::Drawing::Point(361, 509);
+			this->checkBoxLED0->Name = L"checkBoxLED0";
+			this->checkBoxLED0->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED0->TabIndex = 120;
+			this->checkBoxLED0->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED1
+			// 
+			this->checkBoxLED1->AutoSize = true;
+			this->checkBoxLED1->Location = System::Drawing::Point(340, 509);
+			this->checkBoxLED1->Name = L"checkBoxLED1";
+			this->checkBoxLED1->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED1->TabIndex = 121;
+			this->checkBoxLED1->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED2
+			// 
+			this->checkBoxLED2->AutoSize = true;
+			this->checkBoxLED2->Location = System::Drawing::Point(319, 509);
+			this->checkBoxLED2->Name = L"checkBoxLED2";
+			this->checkBoxLED2->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED2->TabIndex = 122;
+			this->checkBoxLED2->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED3
+			// 
+			this->checkBoxLED3->AutoSize = true;
+			this->checkBoxLED3->Location = System::Drawing::Point(298, 509);
+			this->checkBoxLED3->Name = L"checkBoxLED3";
+			this->checkBoxLED3->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED3->TabIndex = 123;
+			this->checkBoxLED3->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED4
+			// 
+			this->checkBoxLED4->AutoSize = true;
+			this->checkBoxLED4->Location = System::Drawing::Point(277, 509);
+			this->checkBoxLED4->Name = L"checkBoxLED4";
+			this->checkBoxLED4->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED4->TabIndex = 124;
+			this->checkBoxLED4->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED5
+			// 
+			this->checkBoxLED5->AutoSize = true;
+			this->checkBoxLED5->Location = System::Drawing::Point(256, 509);
+			this->checkBoxLED5->Name = L"checkBoxLED5";
+			this->checkBoxLED5->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED5->TabIndex = 125;
+			this->checkBoxLED5->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED6
+			// 
+			this->checkBoxLED6->AutoSize = true;
+			this->checkBoxLED6->Location = System::Drawing::Point(235, 509);
+			this->checkBoxLED6->Name = L"checkBoxLED6";
+			this->checkBoxLED6->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED6->TabIndex = 126;
+			this->checkBoxLED6->UseVisualStyleBackColor = true;
+			// 
+			// checkBoxLED7
+			// 
+			this->checkBoxLED7->AutoSize = true;
+			this->checkBoxLED7->Location = System::Drawing::Point(214, 509);
+			this->checkBoxLED7->Name = L"checkBoxLED7";
+			this->checkBoxLED7->Size = System::Drawing::Size(15, 14);
+			this->checkBoxLED7->TabIndex = 127;
+			this->checkBoxLED7->UseVisualStyleBackColor = true;
+			// 
+			// label41
+			// 
+			this->label41->AutoSize = true;
+			this->label41->Location = System::Drawing::Point(173, 509);
+			this->label41->Name = L"label41";
+			this->label41->Size = System::Drawing::Size(35, 13);
+			this->label41->TabIndex = 128;
+			this->label41->Text = L"LEDS";
+			// 
+			// label42
+			// 
+			this->label42->AutoSize = true;
+			this->label42->Location = System::Drawing::Point(671, 416);
+			this->label42->Name = L"label42";
+			this->label42->Size = System::Drawing::Size(43, 13);
+			this->label42->TabIndex = 136;
+			this->label42->Text = L"DBAD3";
+			// 
+			// label43
+			// 
+			this->label43->AutoSize = true;
+			this->label43->Location = System::Drawing::Point(671, 390);
+			this->label43->Name = L"label43";
+			this->label43->Size = System::Drawing::Size(43, 13);
+			this->label43->TabIndex = 135;
+			this->label43->Text = L"DBAD2";
+			// 
+			// label44
+			// 
+			this->label44->AutoSize = true;
+			this->label44->Location = System::Drawing::Point(671, 364);
+			this->label44->Name = L"label44";
+			this->label44->Size = System::Drawing::Size(43, 13);
+			this->label44->TabIndex = 134;
+			this->label44->Text = L"DBAD1";
+			// 
+			// label45
+			// 
+			this->label45->AutoSize = true;
+			this->label45->Location = System::Drawing::Point(671, 338);
+			this->label45->Name = L"label45";
+			this->label45->Size = System::Drawing::Size(43, 13);
+			this->label45->TabIndex = 133;
+			this->label45->Text = L"DBAD0";
+			// 
+			// textBoxDBAD3
+			// 
+			this->textBoxDBAD3->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxDBAD3->Location = System::Drawing::Point(727, 413);
+			this->textBoxDBAD3->Name = L"textBoxDBAD3";
+			this->textBoxDBAD3->Size = System::Drawing::Size(82, 17);
+			this->textBoxDBAD3->TabIndex = 132;
+			this->textBoxDBAD3->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxDBAD2
+			// 
+			this->textBoxDBAD2->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxDBAD2->Location = System::Drawing::Point(727, 387);
+			this->textBoxDBAD2->Name = L"textBoxDBAD2";
+			this->textBoxDBAD2->Size = System::Drawing::Size(82, 17);
+			this->textBoxDBAD2->TabIndex = 131;
+			this->textBoxDBAD2->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxDBAD1
+			// 
+			this->textBoxDBAD1->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxDBAD1->Location = System::Drawing::Point(727, 361);
+			this->textBoxDBAD1->Name = L"textBoxDBAD1";
+			this->textBoxDBAD1->Size = System::Drawing::Size(82, 17);
+			this->textBoxDBAD1->TabIndex = 130;
+			this->textBoxDBAD1->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxDBAD0
+			// 
+			this->textBoxDBAD0->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxDBAD0->Location = System::Drawing::Point(727, 335);
+			this->textBoxDBAD0->Name = L"textBoxDBAD0";
+			this->textBoxDBAD0->Size = System::Drawing::Size(82, 17);
+			this->textBoxDBAD0->TabIndex = 129;
+			this->textBoxDBAD0->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// label46
+			// 
+			this->label46->AutoSize = true;
+			this->label46->Location = System::Drawing::Point(671, 442);
+			this->label46->Name = L"label46";
+			this->label46->Size = System::Drawing::Size(50, 13);
+			this->label46->TabIndex = 138;
+			this->label46->Text = L"DBCTRL";
+			// 
+			// textBoxDBCTRL
+			// 
+			this->textBoxDBCTRL->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxDBCTRL->Location = System::Drawing::Point(727, 439);
+			this->textBoxDBCTRL->Name = L"textBoxDBCTRL";
+			this->textBoxDBCTRL->Size = System::Drawing::Size(82, 17);
+			this->textBoxDBCTRL->TabIndex = 137;
+			this->textBoxDBCTRL->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// label47
+			// 
+			this->label47->AutoSize = true;
+			this->label47->Location = System::Drawing::Point(671, 465);
+			this->label47->Name = L"label47";
+			this->label47->Size = System::Drawing::Size(50, 13);
+			this->label47->TabIndex = 140;
+			this->label47->Text = L"DBSTAT";
+			// 
+			// textBoxDBSTAT
+			// 
+			this->textBoxDBSTAT->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxDBSTAT->Location = System::Drawing::Point(727, 462);
+			this->textBoxDBSTAT->Name = L"textBoxDBSTAT";
+			this->textBoxDBSTAT->Size = System::Drawing::Size(82, 17);
+			this->textBoxDBSTAT->TabIndex = 139;
+			this->textBoxDBSTAT->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(882, 549);
+			this->ClientSize = System::Drawing::Size(1032, 549);
+			this->Controls->Add(this->label47);
+			this->Controls->Add(this->textBoxDBSTAT);
+			this->Controls->Add(this->label46);
+			this->Controls->Add(this->textBoxDBCTRL);
+			this->Controls->Add(this->label42);
+			this->Controls->Add(this->label43);
+			this->Controls->Add(this->label44);
+			this->Controls->Add(this->label45);
+			this->Controls->Add(this->textBoxDBAD3);
+			this->Controls->Add(this->textBoxDBAD2);
+			this->Controls->Add(this->textBoxDBAD1);
+			this->Controls->Add(this->textBoxDBAD0);
+			this->Controls->Add(this->label41);
+			this->Controls->Add(this->checkBoxLED7);
+			this->Controls->Add(this->checkBoxLED6);
+			this->Controls->Add(this->checkBoxLED5);
+			this->Controls->Add(this->checkBoxLED4);
+			this->Controls->Add(this->checkBoxLED3);
+			this->Controls->Add(this->checkBoxLED2);
+			this->Controls->Add(this->checkBoxLED1);
+			this->Controls->Add(this->checkBoxLED0);
+			this->Controls->Add(this->label40);
+			this->Controls->Add(this->textBoxVBR);
 			this->Controls->Add(this->label38);
 			this->Controls->Add(this->label37);
 			this->Controls->Add(this->label39);
@@ -1559,6 +1854,14 @@ public: void UpdateListBox(unsigned int ad) {
 	sprintf(buf2, "%06X", cpu1.pc);
 	buf = std::string(buf2);
 	this->textPC->Text = gcnew String(buf.c_str());
+	this->checkBoxLED0->Checked = (system1.leds & 1) ;
+	this->checkBoxLED1->Checked = (system1.leds & 2) >> 1;
+	this->checkBoxLED2->Checked = (system1.leds & 4) >> 2;
+	this->checkBoxLED3->Checked = (system1.leds & 8) >> 3;
+	this->checkBoxLED4->Checked = (system1.leds & 16) >> 4;
+	this->checkBoxLED5->Checked = (system1.leds & 32) >> 5;
+	this->checkBoxLED6->Checked = (system1.leds & 64) >> 6;
+	this->checkBoxLED7->Checked = (system1.leds & 128) >> 7;
 };
 private: System::Void toolStripButton5_Click(System::Object^  sender, System::EventArgs^  e) {
 			 cpu1.brk = true;
@@ -1570,6 +1873,25 @@ private: System::Void toolStripButton4_Click(System::Object^  sender, System::Ev
 			 cpu1.isRunning = true;
 		 }
 private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
+			 RunCPU();
+		 }
+private: System::Void toolStripButton7_Click(System::Object^  sender, System::EventArgs^  e) {
+		frmBreakpoint ^form = gcnew frmBreakpoint();
+				 form->Show();		 }
+private: System::Void freeRunFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 this->timer1->Interval = 1;
+		 }
+private: System::Void runToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 fullspeed = true;
+		 }
+private: System::Void toolStripButton3_Click(System::Object^  sender, System::EventArgs^  e) {
+			 stepout = true;
+			 fullspeed = true;
+			 cpu1.isRunning = true;
+		 }
+private: void RunCPU() {
 			 int nn,kk;
 			 if (cpu1.isRunning) {
 				 if (fullspeed) {
@@ -1581,7 +1903,31 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 								 return;
 						     }
 						 }
+						if (system1.write_error==true) {
+							cpu1.isRunning = false;
+							UpdateListBox(cpu1.pc-32);
+							return;
+						}
+						if (runstop) {
+							cpu1.isRunning = false;
+							runstop = false;
+							UpdateListBox(cpu1.pc-32);
+							return;
+						}
 						 cpu1.Step();
+						 if (stepout) {
+							 if ((cpu1.ir & 0x7f)==BSR)
+								 depth++;
+							 if (((cpu1.ir & 0x7f)==RTL) || ((cpu1.ir & 0x7f)==RTS)) {
+								 depth--;
+								 if (depth==-1) {
+									 cpu1.isRunning = false;
+									 stepout = false;
+									 UpdateListBox(cpu1.pc-32);
+									 return;
+								 }
+							 }
+						 }
 					 }
 				 }
 				for (kk = 0; kk < 30; kk++) {
@@ -1595,16 +1941,9 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 				 UpdateListBox(cpu1.pc-32);
 			 }
 		 }
-private: System::Void toolStripButton7_Click(System::Object^  sender, System::EventArgs^  e) {
-		frmBreakpoint ^form = gcnew frmBreakpoint();
-				 form->Show();		 }
-private: System::Void freeRunFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-			 this->timer1->Interval = 1;
-		 }
-private: System::Void runToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-		 }
-private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-			 fullspeed = true;
+private: System::Void aboutToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 frmAbout^ aboutFrm = gcnew frmAbout;
+			 aboutFrm->Show();
 		 }
 };
 };

@@ -1,6 +1,9 @@
 #pragma once
-
 extern char refscreen;
+extern unsigned int dataBreakpoints[30];
+extern int numDataBreakpoints;
+class clsCPU;
+extern int runstop;
 
 class clsSystem
 {
@@ -10,6 +13,9 @@ public:
 	unsigned int leds;
 	int m_z;
 	int m_w;
+	char write_error;
+	unsigned int radr1;
+	unsigned int radr2;
 
 	clsSystem() {
 		int nn;
@@ -17,14 +23,49 @@ public:
 		m_w = 12345678;
 		for (nn = 0; nn < 4096; nn++)
 			VideoMem[nn] = random();
+		write_error = false;
+		runstop = false;
 	};
-	unsigned int Read(unsigned int ad) {
+	unsigned int Read(unsigned int ad, int sr=0) {
+		if (sr) {
+			if (radr1 == 0)
+				radr1 = ad;
+			else if (radr2 == 0)
+				radr2 = ad;
+			else {
+				if (random()&1)
+					radr2 = ad;
+				else
+					radr1 = ad;
+			}
+		}
 		if (ad < 134217728) {
 			return memory[ad >> 2];
 		}
+		else if ((ad & 0xFFFF0000)==0xFFD00000) {
+			return VideoMem[(ad>>2)& 0xFFF];
+		}
+		return 0;
 	};
-	void Write(unsigned int ad, unsigned int dat, unsigned int mask) {
+	int Write(unsigned int ad, unsigned int dat, unsigned int mask, int cr=0) {
+		int nn;
+		int ret;
+		if (cr && (ad!=radr1 && ad!=radr2)) {
+			ret = false;
+			goto j1;
+		}
+		if (cr) {
+			if (ad==radr1)
+				radr1 = 0x00000000;
+			if (ad==radr2)
+				radr2 = 0x00000000;
+		}
 		if (ad < 134217728) {
+			if (ad >= 0x10000 && ad < 0x20000) {
+				write_error = true;
+				ret = true;
+				goto j1;
+			}
 			switch(mask) {
 			case 0xFFFFFFFF:
 				memory[ad>>2] = dat;
@@ -66,6 +107,14 @@ public:
 			VideoMem[(ad>>2)& 0xFFF] = dat;
 			refscreen = true;
 		}
+		ret = true;
+j1:
+		for (nn = 0; nn < numDataBreakpoints; nn++) {
+			if (ad==dataBreakpoints[nn]) {
+				runstop = true;
+			}
+		}
+		return ret;
 	};
  	int random() {
 		m_z = 36969 * (m_z & 65535) + (m_z >> 16);

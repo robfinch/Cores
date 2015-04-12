@@ -5,6 +5,9 @@
 
 extern unsigned int breakpoints[30];
 extern int numBreakpoints;
+extern unsigned int dataBreakpoints[30];
+extern int numDataBreakpoints;
+extern int runstop;
 
 namespace emuFISA64 {
 
@@ -49,6 +52,10 @@ namespace emuFISA64 {
 
 
 	private: System::Windows::Forms::Button^  button3;
+	private: System::Windows::Forms::TextBox^  textBoxDataBrkpt;
+	private: System::Windows::Forms::ListBox^  listBoxDataBrkpts;
+	private: System::Windows::Forms::Label^  label1;
+	private: System::Windows::Forms::Label^  label2;
 
 	private:
 		/// <summary>
@@ -68,11 +75,15 @@ namespace emuFISA64 {
 			this->btnAdd = (gcnew System::Windows::Forms::Button());
 			this->btnRemove = (gcnew System::Windows::Forms::Button());
 			this->button3 = (gcnew System::Windows::Forms::Button());
+			this->textBoxDataBrkpt = (gcnew System::Windows::Forms::TextBox());
+			this->listBoxDataBrkpts = (gcnew System::Windows::Forms::ListBox());
+			this->label1 = (gcnew System::Windows::Forms::Label());
+			this->label2 = (gcnew System::Windows::Forms::Label());
 			this->SuspendLayout();
 			// 
 			// textBoxBrkpt
 			// 
-			this->textBoxBrkpt->Location = System::Drawing::Point(12, 22);
+			this->textBoxBrkpt->Location = System::Drawing::Point(12, 37);
 			this->textBoxBrkpt->Name = L"textBoxBrkpt";
 			this->textBoxBrkpt->Size = System::Drawing::Size(100, 20);
 			this->textBoxBrkpt->TabIndex = 0;
@@ -87,7 +98,7 @@ namespace emuFISA64 {
 			// 
 			// btnAdd
 			// 
-			this->btnAdd->Location = System::Drawing::Point(140, 18);
+			this->btnAdd->Location = System::Drawing::Point(253, 20);
 			this->btnAdd->Name = L"btnAdd";
 			this->btnAdd->Size = System::Drawing::Size(75, 23);
 			this->btnAdd->TabIndex = 2;
@@ -97,7 +108,7 @@ namespace emuFISA64 {
 			// 
 			// btnRemove
 			// 
-			this->btnRemove->Location = System::Drawing::Point(140, 47);
+			this->btnRemove->Location = System::Drawing::Point(253, 49);
 			this->btnRemove->Name = L"btnRemove";
 			this->btnRemove->Size = System::Drawing::Size(75, 23);
 			this->btnRemove->TabIndex = 3;
@@ -108,7 +119,7 @@ namespace emuFISA64 {
 			// button3
 			// 
 			this->button3->DialogResult = System::Windows::Forms::DialogResult::OK;
-			this->button3->Location = System::Drawing::Point(140, 252);
+			this->button3->Location = System::Drawing::Point(253, 254);
 			this->button3->Name = L"button3";
 			this->button3->Size = System::Drawing::Size(75, 23);
 			this->button3->TabIndex = 4;
@@ -116,11 +127,49 @@ namespace emuFISA64 {
 			this->button3->UseVisualStyleBackColor = true;
 			this->button3->Click += gcnew System::EventHandler(this, &frmBreakpoint::button3_Click);
 			// 
+			// textBoxDataBrkpt
+			// 
+			this->textBoxDataBrkpt->Location = System::Drawing::Point(133, 37);
+			this->textBoxDataBrkpt->Name = L"textBoxDataBrkpt";
+			this->textBoxDataBrkpt->Size = System::Drawing::Size(100, 20);
+			this->textBoxDataBrkpt->TabIndex = 5;
+			// 
+			// listBoxDataBrkpts
+			// 
+			this->listBoxDataBrkpts->FormattingEnabled = true;
+			this->listBoxDataBrkpts->Location = System::Drawing::Point(133, 63);
+			this->listBoxDataBrkpts->Name = L"listBoxDataBrkpts";
+			this->listBoxDataBrkpts->Size = System::Drawing::Size(100, 212);
+			this->listBoxDataBrkpts->TabIndex = 6;
+			// 
+			// label1
+			// 
+			this->label1->AutoSize = true;
+			this->label1->Location = System::Drawing::Point(12, 20);
+			this->label1->Name = L"label1";
+			this->label1->Size = System::Drawing::Size(61, 13);
+			this->label1->TabIndex = 7;
+			this->label1->Text = L"Instructions";
+			// 
+			// label2
+			// 
+			this->label2->AutoSize = true;
+			this->label2->Location = System::Drawing::Point(130, 20);
+			this->label2->Name = L"label2";
+			this->label2->Size = System::Drawing::Size(30, 13);
+			this->label2->TabIndex = 8;
+			this->label2->Text = L"Data";
+			this->label2->Click += gcnew System::EventHandler(this, &frmBreakpoint::label2_Click);
+			// 
 			// frmBreakpoint
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(229, 296);
+			this->ClientSize = System::Drawing::Size(340, 296);
+			this->Controls->Add(this->label2);
+			this->Controls->Add(this->label1);
+			this->Controls->Add(this->listBoxDataBrkpts);
+			this->Controls->Add(this->textBoxDataBrkpt);
 			this->Controls->Add(this->button3);
 			this->Controls->Add(this->btnRemove);
 			this->Controls->Add(this->btnAdd);
@@ -138,16 +187,35 @@ namespace emuFISA64 {
 				 char* str2 = (char*)(void*)Marshal::StringToHGlobalAnsi(this->textBoxBrkpt->Text);
 				 char buf[20];
 				 int kk;
+				 long bp;
+
 				 std::string str;
-				 if (numBreakpoints < 30) {
-					 breakpoints[numBreakpoints] = strtoul(str2,0,16);
-					 numBreakpoints++;
+				 bp = strtoul(str2,0,16);
+				 if (bp > 0) {
+					 if (numBreakpoints < 30) {
+						 breakpoints[numBreakpoints] = bp;
+						 numBreakpoints++;
+					 }
+					 this->listBoxBrkpts->Items->Clear();
+					 for (kk = 0; kk < numBreakpoints; kk++) {
+						 sprintf(buf, "%06X", breakpoints[kk]);
+						 str = std::string(buf);
+						 this->listBoxBrkpts->Items->Add(gcnew String(str.c_str()));
+					 }
 				 }
-				 this->listBoxBrkpts->Items->Clear();
-				 for (kk = 0; kk < numBreakpoints; kk++) {
-					 sprintf(buf, "%06X", breakpoints[kk]);
-					 str = std::string(buf);
-					 this->listBoxBrkpts->Items->Add(gcnew String(str.c_str()));
+				 str2 = (char*)(void*)Marshal::StringToHGlobalAnsi(this->textBoxDataBrkpt->Text);
+				 bp = strtoul(str2,0,16);
+				 if (bp > 0) {
+					 if (numDataBreakpoints < 30) {
+						 dataBreakpoints[numDataBreakpoints] = bp;
+						 numDataBreakpoints++;
+					 }
+					 this->listBoxBrkpts->Items->Clear();
+					 for (kk = 0; kk < numDataBreakpoints; kk++) {
+						 sprintf(buf, "%06X", dataBreakpoints[kk]);
+						 str = std::string(buf);
+						 this->listBoxDataBrkpts->Items->Add(gcnew String(str.c_str()));
+					 }
 				 }
 			 }
 private: System::Void frmBreakpoint_Load(System::Object^  sender, System::EventArgs^  e) {
@@ -160,6 +228,12 @@ private: System::Void frmBreakpoint_Load(System::Object^  sender, System::EventA
 				 sprintf(buf, "%06X", breakpoints[kk]);
 				 str = std::string(buf);
 				 this->listBoxBrkpts->Items->Add(gcnew String(str.c_str()));
+			 }
+			 this->listBoxDataBrkpts->Items->Clear();
+			 for (kk = 0; kk < numDataBreakpoints; kk++) {
+				 sprintf(buf, "%06X", dataBreakpoints[kk]);
+				 str = std::string(buf);
+				 this->listBoxDataBrkpts->Items->Add(gcnew String(str.c_str()));
 			 }
 			 
 		 }
@@ -185,9 +259,30 @@ private: System::Void btnRemove_Click(System::Object^  sender, System::EventArgs
 				 str = std::string(buf);
 				 this->listBoxBrkpts->Items->Add(gcnew String(str.c_str()));
 			 }
+
+			 str2 = (char*)(void*)Marshal::StringToHGlobalAnsi(this->textBoxDataBrkpt->Text);
+			 bkp = strtoul(str2,0,16);
+			 for (kk = 0; kk < numDataBreakpoints; kk++) {
+				 if (bkp==dataBreakpoints[kk]) {
+					 for (jj = kk +1; jj < 30; jj++)
+						 dataBreakpoints[jj-1] = dataBreakpoints[jj];
+					 break;
+				 }
+			 }
+			 dataBreakpoints[29] = 0;
+			 numDataBreakpoints--;
+			 this->listBoxDataBrkpts->Items->Clear();
+			 for (kk = 0; kk < numDataBreakpoints; kk++) {
+				 sprintf(buf, "%06X", dataBreakpoints[kk]);
+				 str = std::string(buf);
+				 this->listBoxDataBrkpts->Items->Add(gcnew String(str.c_str()));
+			 }
+
 		 }
 private: System::Void button3_Click(System::Object^  sender, System::EventArgs^  e) {
 			 this->Hide();
+		 }
+private: System::Void label2_Click(System::Object^  sender, System::EventArgs^  e) {
 		 }
 };
 }

@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include <string>
+#include "Instructions.h"
 #include "Disassem.h"
 
 
@@ -29,6 +30,30 @@ std::string Rt()
 	char buf[40];
 	std::string str;
 	str = "R" + std::string(_itoa((insn >> 12) & 0x1f,buf,10));
+	return str;
+}
+
+std::string Bn()
+{
+	char buf[40];
+	std::string str;
+	str = "B" + std::string(_itoa((insn >> 17) & 0x3f,buf,10));
+	return str;
+}
+
+std::string Sa()
+{
+	char buf[40];
+	std::string str;
+	str = std::string(_itoa((insn >> 17) & 0x3f,buf,16));
+	return str;
+}
+
+std::string IncAmt()
+{
+	char buf[40];
+	std::string str;
+	str = std::string(_itoa((insn >> 12) & 0x1f,buf,16));
 	return str;
 }
 
@@ -108,10 +133,18 @@ static std::string DisassemMemAddress()
     sir = insn;
 	str = DisassemConstant();
     if (((insn >> 7) & 0x1F) != 0)
-        sprintf(buf,"[R%d]\r\n",((insn >> 7) & 0x1F));
+        sprintf(buf,"[R%d]",((insn >> 7) & 0x1F));
     else
-        sprintf(buf,"\r\n");
+        sprintf(buf,"");
     return str+std::string(buf);
+}
+
+static std::string DisassemMbMe()
+{
+	static char buf[50];
+
+	sprintf(buf, "#%d,#%d", (insn>>17) & 0x3f,(insn>>23) &0x3f);
+	return std::string(buf);
 }
 
 static std::string DisassemIndexedAddress()
@@ -152,12 +185,31 @@ static std::string DisassemIndexedAddress()
     return str;
 }
 
+static std::string DisassemJali()
+{
+	char buf[50];
+	int Ra = (insn >> 7) & 0x1f;
+	int Rb = (insn >> 17) & 0x1f;
+	int Rt = (insn >> 12) & 0x1f;
+
+	if (Rt==0) {
+		sprintf(buf, "JMP   (%s)", DisassemMemAddress().c_str());
+	}
+	else if (Rt==31) {
+		sprintf(buf, "JSR   (%s)", DisassemMemAddress().c_str());
+	}
+	else {
+		sprintf(buf, "JAL   R%d,(%s)",Rt, DisassemMemAddress().c_str());
+	}
+	return std::string(buf);
+}
 
 std::string Disassem(std::string sad, std::string sinsn)
 {
 	char buf[20];
 	std::string str;
 	static int first = 1;
+	int Rbb = (insn >> 17) & 0x1f;
 
 	if (first) {
 		immcnt = 0;
@@ -171,6 +223,20 @@ std::string Disassem(std::string sad, std::string sinsn)
 	case RR:
 		switch((insn >> 25) & 0x7f)
 		{
+		case PCTRL:
+			switch((insn >> 17) & 0x1f) {
+			case SEI:	str = "SEI"; break;
+			case CLI:	str = "CLI"; break;
+			case WAI:	str = "WAI"; break;
+			case STP:	str = "STP"; break;
+			case RTI:	str = "RTI"; break;
+			case RTD:	str = "RTD"; break;
+			case RTE:	str = "RTE"; break;
+			default:	str = "P????"; break;
+			}
+			immcnt = 0;
+			return str;
+			break;
 		case CPUID:
 			str = "CPUID " + Rt() + "," + Ra() + ",#" + _itoa((insn>>17) & 0x0f, buf, 16);
 			immcnt = 0;
@@ -207,6 +273,61 @@ std::string Disassem(std::string sad, std::string sinsn)
 			str = "MULU  " + Rt() +"," + Ra() + "," + Rb();
 			immcnt = 0;
 			return str;
+		case AND:
+			str = "AND   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case OR:
+			if (Rbb==0)
+				str = "MOV   " + Rt() +"," + Ra();
+			else
+				str = "OR    " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case EOR:
+			str = "EOR   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case ASL:
+			str = "ASL   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case LSR:
+			str = "LSR   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case ROL:
+			str = "ROL   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case ROR:
+			str = "ROR   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case ASR:
+			str = "ASR   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case ASLI:
+			str = "ASL   " + Rt() +"," + Ra() + ",#" + Sa();
+			immcnt = 0;
+			return str;
+		case LSRI:
+			str = "LSR   " + Rt() +"," + Ra() + ",#" + Sa();
+			immcnt = 0;
+			return str;
+		case ROLI:
+			str = "ROL   " + Rt() +"," + Ra() + ",#" + Sa();
+			immcnt = 0;
+			return str;
+		case RORI:
+			str = "ROR   " + Rt() +"," + Ra() + ",#" + Sa();
+			immcnt = 0;
+			return str;
+		case ASRI:
+			str = "ASR   " + Rt() +"," + Ra() + ",#" + Sa();
+			immcnt = 0;
+			return str;
 		case MTSPR:
 			str = "MTSPR " + Spr() + "," + Ra();
 			immcnt = 0;
@@ -215,9 +336,65 @@ std::string Disassem(std::string sad, std::string sinsn)
 			str = "MFSPR " + Rt() + "," + Spr();
 			immcnt = 0;
 			return str;
+		case CHK:
+			str = "CHK   " + Rt() +"," + Ra() + "," + Bn();
+			immcnt = 0;
+			return str;
+		case SEQ:
+			str = "SEQ   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SNE:
+			str = "SNE   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SGT:
+			str = "SGT   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SLE:
+			str = "SLE   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SGE:
+			str = "SGE   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SLT:
+			str = "SLT   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SHI:
+			str = "SHI   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SLS:
+			str = "SLS   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SHS:
+			str = "SHS   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case SLO:
+			str = "SLO   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
 		}
 		immcnt = 0;
 		return "?????";
+	case BTFLD:
+		switch((insn >> 29)&7) {
+		case BFSET:	str = "BFSET  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case BFCLR:	str = "BFCLR  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case BFCHG:	str = "BFCHG  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case BFINS:	str = "BFINS  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+//		case BFINSI:	str = "BFINSI " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case BFEXT:	str = "BFEXT  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case BFEXTU:	str = "BFEXTU " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		}
+		immcnt = 0;
+		return str;
 	case ADD:
 		str = "ADD   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
@@ -248,6 +425,58 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case MULU:
 		str = "MULU  " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case AND:
+		str = "AND   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case OR:
+		str = "OR    " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case EOR:
+		str = "EOR   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SEQ:
+		str = "SEQ   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SNE:
+		str = "SNE   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SGT:
+		str = "SGT   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SLE:
+		str = "SLE   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SGE:
+		str = "SGE   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SLT:
+		str = "SLT   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SHI:
+		str = "SHI   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SLS:
+		str = "SLS   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SHS:
+		str = "SHS   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case SLO:
+		str = "SLO   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
 
@@ -291,6 +520,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case BSR:
 		str = "BSR   " + DisassemBraDisplacement();
+		immcnt = 0;
+		return str;
+	case JALI:
+		str = DisassemJali();
 		immcnt = 0;
 		return str;
 	case RTL:
@@ -343,6 +576,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "LW    " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
 		return str;
+	case LWAR:
+		str = "LWAR  " + Rt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
 	case LEA:
 		str = "LEA   " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
@@ -391,6 +628,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "SW    " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
 		return str;
+	case SWCR:
+		str = "SWCR  " + Rt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
 	case SBX:
 		str = "SB    " + Rt() + "," + DisassemIndexedAddress();
 		immcnt = 0;
@@ -405,6 +646,18 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case SWX:
 		str = "SW    " + Rt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
+	case PEA:
+		str = "PEA   " + Rt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
+	case PMW:
+		str = "PUSH  " + Rt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
+	case INC:
+		str = "INC   " + DisassemMemAddress() + ",#" + IncAmt();
 		immcnt = 0;
 		return str;
 	}

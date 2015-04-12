@@ -11,7 +11,10 @@ clsCPU cpu1;
 clsSystem system1;
 char refscreen;
 unsigned int breakpoints[30];
+unsigned int dataBreakpoints[30];
 int numBreakpoints;
+int numDataBreakpoints;
+int runstop;
 
 using namespace emuFISA64;
 

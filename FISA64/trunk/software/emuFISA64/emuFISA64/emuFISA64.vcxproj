@@ -90,6 +90,7 @@
     <ClCompile Include="AssemblyInfo.cpp" />
     <ClCompile Include="Disassem.cpp" />
     <ClCompile Include="emuFISA64.cpp" />
+    <ClCompile Include="frmAbout.cpp" />
     <ClCompile Include="frmBreakpoint.cpp" />
     <ClCompile Include="frmMain.cpp" />
     <ClCompile Include="frmScreen.cpp" />
@@ -102,6 +103,9 @@
     <ClInclude Include="clsCPU.h" />
     <ClInclude Include="clsSystem.h" />
     <ClInclude Include="Disassem.h" />
+    <ClInclude Include="frmAbout.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
     <ClInclude Include="frmBreakpoint.h">
       <FileType>CppForm</FileType>
     </ClInclude>
@@ -122,6 +126,9 @@
     <ResourceCompile Include="app.rc" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="frmAbout.resx">
+      <DependentUpon>frmAbout.h</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmBreakpoint.resx">
       <DependentUpon>frmBreakpoint.h</DependentUpon>
     </EmbeddedResource>
