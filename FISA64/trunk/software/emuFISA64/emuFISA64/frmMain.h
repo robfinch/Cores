@@ -9,7 +9,9 @@
 #include "frmRegisters.h"
 #include "frmBreakpoint.h"
 #include "frmScreen.h"
+#include "frmKeyboard.h"
 #include "frmAbout.h"
+#include "fmrPCS.h"
 #include "Disassem.h"
 #include "clsCPU.h"
 
@@ -46,6 +48,9 @@ namespace emuFISA64 {
 	private: System::Windows::Forms::TextBox^  textBoxDBCTRL;
 	private: System::Windows::Forms::Label^  label47;
 	private: System::Windows::Forms::TextBox^  textBoxDBSTAT;
+	private: System::Windows::Forms::Label^  lblChecksumErr;
+	private: System::Windows::Forms::Label^  lblChecksumError;
+	private: System::Windows::Forms::ToolStripMenuItem^  pCHistoryToolStripMenuItem;
 			 int depth;
 	public:
 		frmMain(void)
@@ -59,6 +64,8 @@ namespace emuFISA64 {
 			depth = 0;
 			frmScreen^ Screenform = gcnew frmScreen();
 				 Screenform->Show();
+			frmKeyboard^ keyboardFrm = gcnew frmKeyboard();
+			     keyboardFrm->Show();
 		}
 
 	protected:
@@ -346,6 +353,9 @@ private: System::Windows::Forms::Label^  label41;
 			this->textBoxDBCTRL = (gcnew System::Windows::Forms::TextBox());
 			this->label47 = (gcnew System::Windows::Forms::Label());
 			this->textBoxDBSTAT = (gcnew System::Windows::Forms::TextBox());
+			this->lblChecksumErr = (gcnew System::Windows::Forms::Label());
+			this->lblChecksumError = (gcnew System::Windows::Forms::Label());
+			this->pCHistoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -456,7 +466,8 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			// viewToolStripMenuItem
 			// 
-			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(1) {this->registersToolStripMenuItem});
+			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(2) {this->registersToolStripMenuItem, 
+				this->pCHistoryToolStripMenuItem});
 			this->viewToolStripMenuItem->Name = L"viewToolStripMenuItem";
 			this->viewToolStripMenuItem->Size = System::Drawing::Size(44, 20);
 			this->viewToolStripMenuItem->Text = L"&View";
@@ -464,7 +475,7 @@ private: System::Windows::Forms::Label^  label41;
 			// registersToolStripMenuItem
 			// 
 			this->registersToolStripMenuItem->Name = L"registersToolStripMenuItem";
-			this->registersToolStripMenuItem->Size = System::Drawing::Size(121, 22);
+			this->registersToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->registersToolStripMenuItem->Text = L"&Registers";
 			this->registersToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::registersToolStripMenuItem_Click);
 			// 
@@ -1355,6 +1366,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->textBoxVBR->Name = L"textBoxVBR";
 			this->textBoxVBR->Size = System::Drawing::Size(82, 17);
 			this->textBoxVBR->TabIndex = 118;
+			this->textBoxVBR->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// checkBoxLED0
 			// 
@@ -1551,11 +1563,38 @@ private: System::Windows::Forms::Label^  label41;
 			this->textBoxDBSTAT->TabIndex = 139;
 			this->textBoxDBSTAT->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
+			// lblChecksumErr
+			// 
+			this->lblChecksumErr->AutoSize = true;
+			this->lblChecksumErr->ForeColor = System::Drawing::Color::Red;
+			this->lblChecksumErr->Location = System::Drawing::Point(209, 32);
+			this->lblChecksumErr->Name = L"lblChecksumErr";
+			this->lblChecksumErr->Size = System::Drawing::Size(0, 13);
+			this->lblChecksumErr->TabIndex = 141;
+			// 
+			// lblChecksumError
+			// 
+			this->lblChecksumError->AutoSize = true;
+			this->lblChecksumError->Location = System::Drawing::Point(24, 509);
+			this->lblChecksumError->Name = L"lblChecksumError";
+			this->lblChecksumError->Size = System::Drawing::Size(75, 13);
+			this->lblChecksumError->TabIndex = 142;
+			this->lblChecksumError->Text = L"Checksum OK";
+			// 
+			// pCHistoryToolStripMenuItem
+			// 
+			this->pCHistoryToolStripMenuItem->Name = L"pCHistoryToolStripMenuItem";
+			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->pCHistoryToolStripMenuItem->Text = L"PC History";
+			this->pCHistoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::pCHistoryToolStripMenuItem_Click);
+			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(1032, 549);
+			this->Controls->Add(this->lblChecksumError);
+			this->Controls->Add(this->lblChecksumErr);
 			this->Controls->Add(this->label47);
 			this->Controls->Add(this->textBoxDBSTAT);
 			this->Controls->Add(this->label46);
@@ -1693,6 +1732,8 @@ private: System::Void loadToolStripMenuItem_Click(System::Object^  sender, Syste
 			 char buf2[20];
 
 			this->openFileDialog1->ShowDialog();
+			 LoadIntelHexFile();
+			 return;
 			char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->openFileDialog1->FileName);
 			std::ifstream fp_in;
 			fp_in.open(str,std::ios::in);
@@ -1734,6 +1775,8 @@ public: void UpdateListBox(unsigned int ad) {
 	char buf2[20];
 	std::string buf;
 
+	if (ad > 134217727)
+		ad = 0;
 	this->listBoxCode->Items->Clear();
 	this->listBoxAdr->Items->Clear();
 	this->listBoxBytes->Items->Clear();
@@ -1854,6 +1897,21 @@ public: void UpdateListBox(unsigned int ad) {
 	sprintf(buf2, "%06X", cpu1.pc);
 	buf = std::string(buf2);
 	this->textPC->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.dbad0);
+	buf = std::string(buf2);
+	this->textBoxDBAD0->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.dbad1);
+	buf = std::string(buf2);
+	this->textBoxDBAD1->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.dbad2);
+	buf = std::string(buf2);
+	this->textBoxDBAD2->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.dbad3);
+	buf = std::string(buf2);
+	this->textBoxDBAD3->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.vbr);
+	buf = std::string(buf2);
+	this->textBoxVBR->Text = gcnew String(buf.c_str());
 	this->checkBoxLED0->Checked = (system1.leds & 1) ;
 	this->checkBoxLED1->Checked = (system1.leds & 2) >> 1;
 	this->checkBoxLED2->Checked = (system1.leds & 4) >> 2;
@@ -1896,7 +1954,12 @@ private: void RunCPU() {
 			 if (cpu1.isRunning) {
 				 if (fullspeed) {
 					 for (nn = 0; nn < 10000; nn++) {
-						 for (kk = 0; kk < 30; kk++) {
+						 if (cpu1.pc > 134217727) {
+							 cpu1.isRunning = false;
+							 UpdateListBox(0);
+							 return;
+						 }
+						 for (kk = 0; kk < numBreakpoints; kk++) {
 							 if (cpu1.pc == breakpoints[kk]) {
 								 cpu1.isRunning = false;
 								 UpdateListBox(cpu1.pc-32);
@@ -1908,6 +1971,7 @@ private: void RunCPU() {
 							UpdateListBox(cpu1.pc-32);
 							return;
 						}
+						// Runstop becomes active when a data breakpoint is hit.
 						if (runstop) {
 							cpu1.isRunning = false;
 							runstop = false;
@@ -1930,7 +1994,7 @@ private: void RunCPU() {
 						 }
 					 }
 				 }
-				for (kk = 0; kk < 30; kk++) {
+				for (kk = 0; kk < numBreakpoints; kk++) {
 					if (cpu1.pc == breakpoints[kk]) {
 						cpu1.isRunning = false;
 						 UpdateListBox(cpu1.pc-32);
@@ -1944,6 +2008,86 @@ private: void RunCPU() {
 private: System::Void aboutToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 			 frmAbout^ aboutFrm = gcnew frmAbout;
 			 aboutFrm->Show();
+		 }
+private: int IHChecksumCheck(const char *buf) {
+	int nn;
+	int sum;
+	std::string str;
+	std::string str1;
+	str = std::string(buf);
+	sum = 0;
+	for (nn = 1; nn < str.length(); nn+=2) {
+		str1 = str.substr(nn,2);
+		sum += strtoul(str1.c_str(),NULL,16);
+	}
+	sum &= 0xff;
+	return sum;
+}
+
+private: void LoadIntelHexFile() {
+			 int nc,nn;
+			 std::string buf;
+			 std::string str_ad;
+			 std::string str_insn;
+			 std::string str_ad_insn;
+			 std::string str_disassem;
+			 unsigned int ad;
+			 unsigned int dat;
+			 unsigned int firstAdr;
+			 char buf2[40];
+			 unsigned int ad_msbs;
+			 int chksum;
+
+			char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->openFileDialog1->FileName);
+			std::ifstream fp_in;
+			fp_in.open(str,std::ios::in);
+			firstAdr = 0;
+			ad_msbs = 0;
+			chksum = 0;
+			while (!fp_in.eof()) {
+				std::getline(fp_in, buf);
+				chksum += IHChecksumCheck(buf.c_str());
+				if (buf.c_str()[0]!=':') continue;
+				if (buf.c_str()[8]=='4') {
+					strncpy(buf2,&((buf.c_str())[9]),4);
+					buf2[4] = '\0';
+					ad_msbs = strtoul(buf2,NULL,16);
+					continue;
+				}
+				// Process record type #'00'
+				if (buf.c_str()[8]=='0') {
+					ad = strtoul(buf.substr(3,4).c_str(),NULL,16) | (ad_msbs << 16);
+					dat = strtoul(buf.substr(9,2).c_str(),NULL,16) |
+						(strtoul(buf.substr(11,2).c_str(),NULL,16) << 8) |
+						(strtoul(buf.substr(13,2).c_str(),NULL,16) << 16) |
+						(strtoul(buf.substr(15,2).c_str(),NULL,16) << 24)
+						;
+				}
+				if (!firstAdr)
+					firstAdr = ad;
+				system1.memory[ad>>2] = dat;
+				sprintf(buf2,"%06X", ad);
+				str_ad = std::string(buf2);
+				sprintf(buf2,"%08X", dat);
+				str_insn = std::string(buf2);
+				str_disassem = Disassem(str_ad,str_insn);
+				str_ad_insn = str_ad + "   " + str_insn + "    " + str_disassem;
+				label1->Text = gcnew String(str_ad_insn.c_str());
+				//this->checkedListBox1->Items->Add(gcnew String(str_ad_insn.c_str()));
+			}
+     		fp_in.close();
+			ad = firstAdr;
+			UpdateListBox(ad);
+			if (chksum != 0) {
+				sprintf(buf2, "Checksum Error: %d", chksum);
+				this->lblChecksumError->Text = gcnew String(buf2);
+			}
+			else
+				this->lblChecksumError->Text = "Checksum OK";
+		 }
+private: System::Void pCHistoryToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 fmrPCS^ pcsFrm = gcnew fmrPCS;
+			 pcsFrm->Show();
 		 }
 };
 };

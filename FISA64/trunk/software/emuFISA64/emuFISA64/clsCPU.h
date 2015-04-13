@@ -17,6 +17,7 @@ public:
 	int sir;
 	unsigned __int64 regs[32];
 	unsigned int pc;
+	unsigned int pcs[40];
 	unsigned int dpc;
 	unsigned int epc;
 	unsigned int ipc;
@@ -100,6 +101,7 @@ public:
 	void Step()
 	{
 		unsigned int ad;
+		int nn;
 		int sc;
 		tick = tick + 1;
 		//---------------------------------------------------------------------------
@@ -113,6 +115,9 @@ public:
 			sir = ir = 0x38 + (0x1E << 7) + (vecno << 17) + 0x80000000L;
 		else
 			sir = ir = system1.Read(pc);
+		for (nn = 39; nn >= 0; nn--)
+			pcs[nn] = pcs[nn-1];
+		pcs[0] = pc;
 		//---------------------------------------------------------------------------
 		// Decode stage
 		//---------------------------------------------------------------------------
@@ -166,19 +171,20 @@ public:
 			case MTSPR:
 				Rt = 0;
 				switch(spr) {
-				case 0: cr0 = a;
-				case 7: dpc = a;
-				case 8: ipc = a;
-				case 9: epc = a;
-				case 10: vbr = a;
-				case 15: isp = a;
-				case 16: dsp = a;
-				case 17: esp = a;
-				case 50: dbad0 = a;
-				case 51: dbad1 = a;
-				case 52: dbad2 = a;
-				case 53: dbad3 = a;
-				case 54: dbctrl = a;
+				case 0: cr0 = a; break;
+				case 7: dpc = a; break;
+				case 8: ipc = a; break;
+				case 9: epc = a; break;
+				case 10: vbr = a; break;
+				case 15: isp = a; break;
+				case 16: dsp = a; break;
+				case 17: esp = a; break;
+				case 50: dbad0 = a; break;
+				case 51: dbad1 = a; break;
+				case 52: dbad2 = a; break;
+				case 53: dbad3 = a; break;
+				case 54: dbctrl = a; break;
+				case 55: dbstat = a; break;
 				default:
 					if (spr >= 64 && spr < 128)
 						lbound[spr-64] = a;
@@ -214,6 +220,18 @@ public:
 					else if (spr >= 192 && spr < 256)
 						res = mmask[spr-192];
 				}
+				pc = pc + 4;
+				break;
+			case SXB:
+				res = (a & 0xff) | ((a & 0x80) ? 0xFFFFFFFFFFFFFF00LL : 0x0);
+				pc = pc + 4;
+				break;
+			case SXC:
+				res = (a & 0xFFFF) | ((a & 0x8000) ? 0xFFFFFFFFFFFF0000LL : 0x0);
+				pc = pc + 4;
+				break;
+			case SXH:
+				res = (a & 0xFFFFFFFF) | ((a & 0x80000000) ? 0xFFFFFFFF00000000LL : 0x0);
 				pc = pc + 4;
 				break;
 			case ADD:
@@ -401,62 +419,77 @@ public:
 			pc = pc + 4;
 			break;
 		case MUL:
+			BuildConstant();
 			res = a * imm;
 			pc = pc + 4;
 			break;
 		case MULU:
+			BuildConstant();
 			res = ua * (unsigned __int64)imm;
 			pc = pc + 4;
 			break;
 		case AND:
+			BuildConstant();
 			res = a & imm;
 			pc = pc + 4;
 			break;
 		case OR:
+			BuildConstant();
 			res = a | imm;
 			pc = pc + 4;
 			break;
 		case EOR:
+			BuildConstant();
 			res = a ^ imm;
 			pc = pc + 4;
 			break;
 		case SEQ:
+			BuildConstant();
 			res = a == imm;
 			pc = pc + 4;
 			break;
 		case SNE:
+			BuildConstant();
 			res = a != imm;
 			pc = pc + 4;
 			break;
 		case SGT:
+			BuildConstant();
 			res = a > imm;
 			pc = pc + 4;
 			break;
 		case SLE:
+			BuildConstant();
 			res = a <= imm;
 			pc = pc + 4;
 			break;
 		case SGE:
+			BuildConstant();
 			res = a >= imm;
 			pc = pc + 4;
 			break;
 		case SLT:
+			BuildConstant();
 			res = a <= imm;
 			pc = pc + 4;
 			break;
 		case SHI:
+			BuildConstant();
 			res = ua > (unsigned __int64)imm;
 			pc = pc + 4;
 			break;
 		case SLS:
+			BuildConstant();
 			res = ua <= (unsigned __int64)imm;
 			pc = pc + 4;
 			break;
 		case SHS:
+			BuildConstant();
 			res = ua >= (unsigned __int64)imm;
 			pc = pc + 4;
 			break;
 		case SLO:
+			BuildConstant();
 			res = ua <= (unsigned __int64)imm;
 			pc = pc + 4;
 			break;
@@ -464,7 +497,7 @@ public:
 			BuildConstant();
 			ad = a + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3)) & 0xFF;
-			if (res & 0x80) res |= 0xFFFFFF00;
+			if (res & 0x80) res |= 0xFFFFFFFFFFFFFF00LL;
 			pc = pc + 4;
 			break;
 		case LBU:
@@ -474,14 +507,14 @@ public:
 			pc = pc + 4;
 			break;
 		case LBX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3)) & 0xFF;
-			if (res & 0x80) res |= 0xFFFFFF00;
+			if (res & 0x80) res |= 0xFFFFFFFFFFFFFF00LL;
 			pc = pc + 4;
 			break;
 		case LBUX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3)) & 0xFF;
 			pc = pc + 4;
@@ -490,7 +523,7 @@ public:
 			BuildConstant();
 			ad = a + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3)) & 0xFFFF;
-			if (res & 0x8000) res |= 0xFFFF0000;
+			if (res & 0x8000) res |= 0xFFFFFFFFFFFF0000LL;
 			pc = pc + 4;
 			break;
 		case LCU:
@@ -501,14 +534,14 @@ public:
 			pc = pc + 4;
 			break;
 		case LCX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3)) & 0xFFFF;
-			if (res & 0x8000) res |= 0xFFFF0000;
+			if (res & 0x8000) res |= 0xFFFFFFFFFFFF0000LL;
 			pc = pc + 4;
 			break;
 		case LCUX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3)) & 0xFFFF;
 			pc = pc + 4;
@@ -528,14 +561,14 @@ public:
 			pc = pc + 4;
 			break;
 		case LHX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3));
 			if (res & 0x80000000LL) res |= 0xFFFFFFFF00000000LL;
 			pc = pc + 4;
 			break;
 		case LHUX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = (system1.Read(ad) >> ((ad & 3)<<3));
 			res &= 0x00000000FFFFFFFFLL;
@@ -556,7 +589,7 @@ public:
 			pc = pc + 4;
 			break;
 		case LWX:
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			res = system1.Read(ad);
 			res |= ((unsigned __int64)system1.Read(ad+4)) << 32;
@@ -579,7 +612,7 @@ public:
 			pc = pc + 4;
 			break;
 		case LEAX:
-			BuildConstant();
+			imm = (ir >> 24);
 			res = a + (b << sc) + imm;
 			pc = pc + 4;
 			break;
@@ -601,23 +634,23 @@ public:
 				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			case 4:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x000000FF);
+				system1.Write(ad,(int)regs[Rc],0x000000FF);
 				break;
 			case 5:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x0000FF00);
+				system1.Write(ad,(int)regs[Rc],0x0000FF00);
 				break;
 			case 6:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x00FF0000);
+				system1.Write(ad,(int)regs[Rc],0x00FF0000);
 				break;
 			case 7:
-				system1.Write(ad,(int)(regs[Rc]>>32),0xFF000000);
+				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			}
 			pc = pc + 4;
 			break;
 		case SBX:
 			Rt = 0;
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			switch(ad & 7) {
 			case 0:
@@ -633,16 +666,16 @@ public:
 				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			case 4:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x000000FF);
+				system1.Write(ad,(int)regs[Rc],0x000000FF);
 				break;
 			case 5:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x0000FF00);
+				system1.Write(ad,(int)regs[Rc],0x0000FF00);
 				break;
 			case 6:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x00FF0000);
+				system1.Write(ad,(int)regs[Rc],0x00FF0000);
 				break;
 			case 7:
-				system1.Write(ad,(int)(regs[Rc]>>32),0xFF000000);
+				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			}
 			pc = pc + 4;
@@ -665,23 +698,23 @@ public:
 				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			case 4:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x0000FFFF);
+				system1.Write(ad,(int)regs[Rc],0x0000FFFF);
 				break;
 			case 5:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x00FFFF00);
+				system1.Write(ad,(int)regs[Rc],0x00FFFF00);
 				break;
 			case 6:
-				system1.Write(ad,(int)(regs[Rc]>>32),0xFFFF0000);
+				system1.Write(ad,(int)regs[Rc],0xFFFF0000);
 				break;
 			case 7:
-				system1.Write(ad,(int)(regs[Rc]>>32),0xFF000000);
+				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			}
 			pc = pc + 4;
 			break;
 		case SCX:
 			Rt = 0;
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			switch(ad & 7) {
 			case 0:
@@ -697,16 +730,16 @@ public:
 				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			case 4:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x0000FFFF);
+				system1.Write(ad,(int)regs[Rc],0x0000FFFF);
 				break;
 			case 5:
-				system1.Write(ad,(int)(regs[Rc]>>32),0x00FFFF00);
+				system1.Write(ad,(int)regs[Rc],0x00FFFF00);
 				break;
 			case 6:
-				system1.Write(ad,(int)(regs[Rc]>>32),0xFFFF0000);
+				system1.Write(ad,(int)regs[Rc],0xFFFF0000);
 				break;
 			case 7:
-				system1.Write(ad,(int)(regs[Rc]>>32),0xFF000000);
+				system1.Write(ad,(int)regs[Rc],0xFF000000);
 				break;
 			}
 			pc = pc + 4;
@@ -720,7 +753,7 @@ public:
 			break;
 		case SHX:
 			Rt = 0;
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			system1.Write(ad,(int)regs[Rc],0xFFFFFFFF);
 			pc = pc + 4;
@@ -745,7 +778,7 @@ public:
 			break;
 		case SWX:
 			Rt = 0;
-			BuildConstant();
+			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
 			system1.Write(ad,(int)regs[Rc],0xFFFFFFFF);
 			system1.Write(ad+4,(int)(regs[Rc]>>32),0xFFFFFFFF);
@@ -805,8 +838,34 @@ public:
 			regs[30] = regs[30] + (ir >> 17);
 			break;
 		case JALI:
+			BuildConstant();
 			ad = a + imm;
-			res = pc;
+			res = pc + 4;
+			pc = system1.Read(ad);
+			break;
+		case JAL:
+			BuildConstant();
+			ad = a + imm;
+			res = pc + 4;
+			pc = ad;
+			break;
+		case BRK:
+			switch((ir >> 30)&3) {
+			case 0:	
+				epc = pc;
+				esp = regs[30];
+				break;
+			case 1:
+				dpc = pc;
+				dsp = regs[30];
+				break;
+			case 2:
+				ipc = pc;
+				isp = regs[30];
+				break;
+			}
+			km = true;
+			ad = vbr + (((ir >> 17) & 0x1ff) << 3);
 			pc = system1.Read(ad);
 			break;
 		case Bcc:

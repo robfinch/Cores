@@ -204,6 +204,37 @@ static std::string DisassemJali()
 	return std::string(buf);
 }
 
+static std::string DisassemJal()
+{
+	char buf[50];
+	int Ra = (insn >> 7) & 0x1f;
+	int Rb = (insn >> 17) & 0x1f;
+	int Rt = (insn >> 12) & 0x1f;
+
+	if (Rt==0) {
+		sprintf(buf, "JMP   %s", DisassemMemAddress().c_str());
+	}
+	else if (Rt==31) {
+		sprintf(buf, "JSR   %s", DisassemMemAddress().c_str());
+	}
+	else {
+		sprintf(buf, "JAL   R%d,%s",Rt, DisassemMemAddress().c_str());
+	}
+	return std::string(buf);
+}
+
+static std::string DisassemBrk()
+{
+	char buf[50];
+	switch((insn >> 30) & 3) {
+	case 0:	sprintf(buf, "SYS   #%d", (insn>>17) & 0x1ff); break;
+	case 1:	sprintf(buf, "DBG   #%d", (insn>>17) & 0x1ff); break;
+	case 2:	sprintf(buf, "INT   #%d", (insn>>17) & 0x1ff); break;
+	}
+	return std::string(buf);
+}
+
+
 std::string Disassem(std::string sad, std::string sinsn)
 {
 	char buf[20];
@@ -239,6 +270,18 @@ std::string Disassem(std::string sad, std::string sinsn)
 			break;
 		case CPUID:
 			str = "CPUID " + Rt() + "," + Ra() + ",#" + _itoa((insn>>17) & 0x0f, buf, 16);
+			immcnt = 0;
+			return str;
+		case SXB:
+			str = "SXB   " + Rt() + "," + Ra();
+			immcnt = 0;
+			return str;
+		case SXH:
+			str = "SXH   " + Rt() + "," + Ra();
+			immcnt = 0;
+			return str;
+		case SXC:
+			str = "SXC   " + Rt() + "," + Ra();
 			immcnt = 0;
 			return str;
 		case ADD:
@@ -526,12 +569,20 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = DisassemJali();
 		immcnt = 0;
 		return str;
+	case JAL:
+		str = DisassemJal();
+		immcnt = 0;
+		return str;
 	case RTL:
 		str = "RTL   #" + DisassemConstant();
 		immcnt = 0;
 		return str;
 	case RTS:
 		str = "RTS   #" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case BRK:
+		str = DisassemBrk();
 		immcnt = 0;
 		return str;
 	case NOP:

@@ -1,9 +1,13 @@
 #pragma once
+#include "clsKeyboard.h"
 extern char refscreen;
 extern unsigned int dataBreakpoints[30];
 extern int numDataBreakpoints;
 class clsCPU;
 extern int runstop;
+extern clsKeyboard keybd;
+extern volatile unsigned __int8 keybd_status;
+extern volatile unsigned __int8 keybd_scancode;
 
 class clsSystem
 {
@@ -27,6 +31,9 @@ public:
 		runstop = false;
 	};
 	unsigned int Read(unsigned int ad, int sr=0) {
+		int rr;
+		unsigned __int8 sc;
+		unsigned __int8 st;
 		if (sr) {
 			if (radr1 == 0)
 				radr1 = ad;
@@ -44,6 +51,20 @@ public:
 		}
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
 			return VideoMem[(ad>>2)& 0xFFF];
+		}
+		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
+			switch(ad & 0x1) {
+			case 0:
+				sc = keybd.Pop();
+				rr = ((int)sc<<24)|((int)sc << 16)|((int)sc<<8)|sc;
+				break;
+			case 1:
+				st = keybd.GetStatus();
+				rr = ((int)st<<24)|((int)st<<16)|((int)st<<8)|st;
+				keybd_status = st;
+				break;
+			}
+			return rr;
 		}
 		return 0;
 	};
@@ -106,6 +127,11 @@ public:
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
 			VideoMem[(ad>>2)& 0xFFF] = dat;
 			refscreen = true;
+		}
+		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
+			switch(ad & 1) {
+			case 1:	keybd_status = 0;
+			}
 		}
 		ret = true;
 j1:

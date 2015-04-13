@@ -70,13 +70,27 @@ namespace emuFISA64 {
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(684, 262);
+			this->ControlBox = false;
+			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
 			this->Name = L"frmScreen";
-			this->Text = L"frmScreen";
+			this->Text = L"emuFISA64 Test System Screen";
 			this->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmScreen::frmScreen_Paint);
 			this->ResumeLayout(false);
 
 		}
 #pragma endregion
+	private: char ScreenToAscii(char ch)
+{
+     ch &= 0xFF;
+     if (ch==0x1B)
+        return 0x5B;
+     if (ch==0x1D)
+        return 0x5D;
+     if (ch < 27)
+        ch += 0x60;
+     return ch;
+}
+  
 	private: System::Void frmScreen_Paint(System::Object^  sender, System::Windows::Forms::PaintEventArgs^  e) {
 				 char buf[10];
 				 unsigned int ndx;
@@ -105,7 +119,7 @@ namespace emuFISA64 {
 						 g = ((((v >> 10)) >> 3) & 7)<< 5;
 						 b = ((((v >> 10)) >> 0) & 7)<< 5;
 						 fgbr->Color = col->FromArgb(255,r,g,b);
-						 sprintf(buf,"%c",system1.VideoMem[ndx]);
+						 sprintf(buf,"%c",ScreenToAscii(system1.VideoMem[ndx]&0xff));
 						 str = std::string(buf);
 						 gr->FillRectangle(bkbr,xx,yy,8,8);
 						 gr->DrawString(gcnew String(str.c_str()),myfont,fgbr,xx,yy);

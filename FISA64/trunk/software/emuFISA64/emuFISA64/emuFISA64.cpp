@@ -6,9 +6,14 @@
 #include "frmScreen.h"
 #include "clsCPU.h"
 #include "clsSystem.h"
+#include "clsKeyboard.h"
 
 clsCPU cpu1;
 clsSystem system1;
+clsKeyboard keybd;
+volatile unsigned __int8 keybd_scancode;
+volatile unsigned __int8 keybd_status;
+
 char refscreen;
 unsigned int breakpoints[30];
 unsigned int dataBreakpoints[30];
@@ -25,6 +30,8 @@ int main(array<System::String ^> ^args)
 	Application::EnableVisualStyles();
 	Application::SetCompatibleTextRenderingDefault(false); 
 	numBreakpoints = 0;
+	keybd_scancode = 0;
+	keybd_status = 0;
 	// Create the main window and run it
 	Application::Run(gcnew frmMain());
 	return 0;

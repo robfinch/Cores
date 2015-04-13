@@ -48,6 +48,15 @@
     <ClCompile Include="frmAbout.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fmrPCS.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="frmKeyboard.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="clsKeyboard.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -83,6 +92,15 @@
     <ClInclude Include="frmAbout.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="fmrPCS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="frmKeyboard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="clsKeyboard.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="app.rc">
@@ -100,6 +118,9 @@
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
     <EmbeddedResource Include="frmScreen.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmAbout.resx">
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
   </ItemGroup>

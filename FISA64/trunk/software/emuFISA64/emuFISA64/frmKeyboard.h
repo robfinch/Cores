@@ -1,0 +1,923 @@
+#pragma once
+
+#include "clsKeyboard.h"
+
+extern clsKeyboard keybd;
+extern volatile unsigned __int8 keybd_status;
+extern volatile unsigned __int8 keybd_scancode;
+
+namespace emuFISA64 {
+
+	using namespace System;
+	using namespace System::ComponentModel;
+	using namespace System::Collections;
+	using namespace System::Windows::Forms;
+	using namespace System::Data;
+	using namespace System::Drawing;
+
+	/// <summary>
+	/// Summary for frmKeyboard
+	/// </summary>
+	public ref class frmKeyboard : public System::Windows::Forms::Form
+	{
+
+	public:
+		frmKeyboard(void)
+		{
+			InitializeComponent();
+			//
+			//TODO: Add the constructor code here
+			//
+		}
+
+	protected:
+		/// <summary>
+		/// Clean up any resources being used.
+		/// </summary>
+		~frmKeyboard()
+		{
+			if (components)
+			{
+				delete components;
+			}
+		}
+	private: System::Windows::Forms::Button^  btnQ;
+	protected: 
+	private: System::Windows::Forms::Button^  btnW;
+	private: System::Windows::Forms::Button^  btnE;
+	private: System::Windows::Forms::Button^  btnQuest;
+	private: System::Windows::Forms::Button^  btnEnter;
+	private: System::Windows::Forms::Button^  btnR;
+	private: System::Windows::Forms::Button^  btnT;
+	private: System::Windows::Forms::Button^  btnY;
+	private: System::Windows::Forms::Button^  btnU;
+	private: System::Windows::Forms::Button^  btnI;
+	private: System::Windows::Forms::Button^  btnRshift;
+	private: System::Windows::Forms::Button^  btnO;
+	private: System::Windows::Forms::Button^  btnLshift;
+	private: System::Windows::Forms::Button^  btnP;
+	private: System::Windows::Forms::Button^  btnA;
+	private: System::Windows::Forms::Button^  btnS;
+	private: System::Windows::Forms::Button^  btnD;
+	private: System::Windows::Forms::Button^  btnF;
+	private: System::Windows::Forms::Button^  btnG;
+	private: System::Windows::Forms::Button^  btnZ;
+	private: System::Windows::Forms::Button^  btnH;
+	private: System::Windows::Forms::Button^  btnJ;
+	private: System::Windows::Forms::Button^  btnK;
+	private: System::Windows::Forms::Button^  btnL;
+	private: System::Windows::Forms::Button^  btnX;
+	private: System::Windows::Forms::Button^  btnC;
+	private: System::Windows::Forms::Button^  btnV;
+	private: System::Windows::Forms::Button^  btnB;
+	private: System::Windows::Forms::Button^  btnN;
+	private: System::Windows::Forms::Button^  btnM;
+	private: System::Windows::Forms::Button^  btn1;
+	private: System::Windows::Forms::Button^  btn2;
+	private: System::Windows::Forms::Button^  btn3;
+	private: System::Windows::Forms::Button^  btn4;
+	private: System::Windows::Forms::Button^  btn5;
+	private: System::Windows::Forms::Button^  btn6;
+	private: System::Windows::Forms::Button^  btn7;
+	private: System::Windows::Forms::Button^  btn8;
+	private: System::Windows::Forms::Button^  btn9;
+	private: System::Windows::Forms::Button^  btn0;
+	private: System::Windows::Forms::Button^  btnSpace;
+	private: System::Windows::Forms::Button^  button1;
+	private: System::Windows::Forms::Button^  button2;
+	private: System::Windows::Forms::Button^  button3;
+	private: System::Windows::Forms::Button^  button4;
+	private: System::Windows::Forms::Button^  button5;
+	private: System::Windows::Forms::Button^  button6;
+	private: System::Windows::Forms::Button^  button7;
+	private: System::Windows::Forms::Button^  btnMinus;
+
+	private: System::Windows::Forms::Button^  button9;
+	private: System::Windows::Forms::Button^  btnBackspace;
+	private: System::Windows::Forms::Button^  btnRctrl;
+	private: System::Windows::Forms::Button^  btnLalt;
+	private: System::Windows::Forms::Button^  button10;
+	private: System::Windows::Forms::Button^  button11;
+	private: System::Windows::Forms::Button^  button12;
+	private: System::Windows::Forms::Button^  button13;
+	private: System::Windows::Forms::Button^  button14;
+	private: System::Windows::Forms::Button^  button15;
+	private: System::Windows::Forms::Button^  button16;
+	private: System::Windows::Forms::Button^  button17;
+	private: System::Windows::Forms::Button^  button18;
+	private: System::Windows::Forms::Button^  button19;
+
+	private:
+		/// <summary>
+		/// Required designer variable.
+		/// </summary>
+		System::ComponentModel::Container ^components;
+
+#pragma region Windows Form Designer generated code
+		/// <summary>
+		/// Required method for Designer support - do not modify
+		/// the contents of this method with the code editor.
+		/// </summary>
+		void InitializeComponent(void)
+		{
+			this->btnQ = (gcnew System::Windows::Forms::Button());
+			this->btnW = (gcnew System::Windows::Forms::Button());
+			this->btnE = (gcnew System::Windows::Forms::Button());
+			this->btnQuest = (gcnew System::Windows::Forms::Button());
+			this->btnEnter = (gcnew System::Windows::Forms::Button());
+			this->btnR = (gcnew System::Windows::Forms::Button());
+			this->btnT = (gcnew System::Windows::Forms::Button());
+			this->btnY = (gcnew System::Windows::Forms::Button());
+			this->btnU = (gcnew System::Windows::Forms::Button());
+			this->btnI = (gcnew System::Windows::Forms::Button());
+			this->btnRshift = (gcnew System::Windows::Forms::Button());
+			this->btnO = (gcnew System::Windows::Forms::Button());
+			this->btnLshift = (gcnew System::Windows::Forms::Button());
+			this->btnP = (gcnew System::Windows::Forms::Button());
+			this->btnA = (gcnew System::Windows::Forms::Button());
+			this->btnS = (gcnew System::Windows::Forms::Button());
+			this->btnD = (gcnew System::Windows::Forms::Button());
+			this->btnF = (gcnew System::Windows::Forms::Button());
+			this->btnG = (gcnew System::Windows::Forms::Button());
+			this->btnZ = (gcnew System::Windows::Forms::Button());
+			this->btnH = (gcnew System::Windows::Forms::Button());
+			this->btnJ = (gcnew System::Windows::Forms::Button());
+			this->btnK = (gcnew System::Windows::Forms::Button());
+			this->btnL = (gcnew System::Windows::Forms::Button());
+			this->btnX = (gcnew System::Windows::Forms::Button());
+			this->btnC = (gcnew System::Windows::Forms::Button());
+			this->btnV = (gcnew System::Windows::Forms::Button());
+			this->btnB = (gcnew System::Windows::Forms::Button());
+			this->btnN = (gcnew System::Windows::Forms::Button());
+			this->btnM = (gcnew System::Windows::Forms::Button());
+			this->btn1 = (gcnew System::Windows::Forms::Button());
+			this->btn2 = (gcnew System::Windows::Forms::Button());
+			this->btn3 = (gcnew System::Windows::Forms::Button());
+			this->btn4 = (gcnew System::Windows::Forms::Button());
+			this->btn5 = (gcnew System::Windows::Forms::Button());
+			this->btn6 = (gcnew System::Windows::Forms::Button());
+			this->btn7 = (gcnew System::Windows::Forms::Button());
+			this->btn8 = (gcnew System::Windows::Forms::Button());
+			this->btn9 = (gcnew System::Windows::Forms::Button());
+			this->btn0 = (gcnew System::Windows::Forms::Button());
+			this->btnSpace = (gcnew System::Windows::Forms::Button());
+			this->button1 = (gcnew System::Windows::Forms::Button());
+			this->button2 = (gcnew System::Windows::Forms::Button());
+			this->button3 = (gcnew System::Windows::Forms::Button());
+			this->button4 = (gcnew System::Windows::Forms::Button());
+			this->button5 = (gcnew System::Windows::Forms::Button());
+			this->button6 = (gcnew System::Windows::Forms::Button());
+			this->button7 = (gcnew System::Windows::Forms::Button());
+			this->btnMinus = (gcnew System::Windows::Forms::Button());
+			this->button9 = (gcnew System::Windows::Forms::Button());
+			this->btnBackspace = (gcnew System::Windows::Forms::Button());
+			this->btnRctrl = (gcnew System::Windows::Forms::Button());
+			this->btnLalt = (gcnew System::Windows::Forms::Button());
+			this->button10 = (gcnew System::Windows::Forms::Button());
+			this->button11 = (gcnew System::Windows::Forms::Button());
+			this->button12 = (gcnew System::Windows::Forms::Button());
+			this->button13 = (gcnew System::Windows::Forms::Button());
+			this->button14 = (gcnew System::Windows::Forms::Button());
+			this->button15 = (gcnew System::Windows::Forms::Button());
+			this->button16 = (gcnew System::Windows::Forms::Button());
+			this->button17 = (gcnew System::Windows::Forms::Button());
+			this->button18 = (gcnew System::Windows::Forms::Button());
+			this->button19 = (gcnew System::Windows::Forms::Button());
+			this->SuspendLayout();
+			// 
+			// btnQ
+			// 
+			this->btnQ->Location = System::Drawing::Point(83, 54);
+			this->btnQ->Name = L"btnQ";
+			this->btnQ->Size = System::Drawing::Size(36, 34);
+			this->btnQ->TabIndex = 0;
+			this->btnQ->Text = L"Q";
+			this->btnQ->UseVisualStyleBackColor = true;
+			this->btnQ->Click += gcnew System::EventHandler(this, &frmKeyboard::btnQ_Click);
+			// 
+			// btnW
+			// 
+			this->btnW->Location = System::Drawing::Point(125, 54);
+			this->btnW->Name = L"btnW";
+			this->btnW->Size = System::Drawing::Size(35, 34);
+			this->btnW->TabIndex = 1;
+			this->btnW->Text = L"W";
+			this->btnW->UseVisualStyleBackColor = true;
+			// 
+			// btnE
+			// 
+			this->btnE->Location = System::Drawing::Point(166, 54);
+			this->btnE->Name = L"btnE";
+			this->btnE->Size = System::Drawing::Size(35, 34);
+			this->btnE->TabIndex = 2;
+			this->btnE->Text = L"E";
+			this->btnE->UseVisualStyleBackColor = true;
+			// 
+			// btnQuest
+			// 
+			this->btnQuest->Location = System::Drawing::Point(474, 134);
+			this->btnQuest->Name = L"btnQuest";
+			this->btnQuest->Size = System::Drawing::Size(39, 33);
+			this->btnQuest->TabIndex = 3;
+			this->btnQuest->Text = L"\?";
+			this->btnQuest->UseVisualStyleBackColor = true;
+			this->btnQuest->Click += gcnew System::EventHandler(this, &frmKeyboard::btnQuest_Click);
+			// 
+			// btnEnter
+			// 
+			this->btnEnter->Location = System::Drawing::Point(580, 54);
+			this->btnEnter->Name = L"btnEnter";
+			this->btnEnter->Size = System::Drawing::Size(46, 74);
+			this->btnEnter->TabIndex = 4;
+			this->btnEnter->Text = L"Enter";
+			this->btnEnter->UseVisualStyleBackColor = true;
+			this->btnEnter->Click += gcnew System::EventHandler(this, &frmKeyboard::btnEnter_Click);
+			// 
+			// btnR
+			// 
+			this->btnR->Location = System::Drawing::Point(206, 54);
+			this->btnR->Name = L"btnR";
+			this->btnR->Size = System::Drawing::Size(34, 34);
+			this->btnR->TabIndex = 5;
+			this->btnR->Text = L"R";
+			this->btnR->UseVisualStyleBackColor = true;
+			// 
+			// btnT
+			// 
+			this->btnT->Location = System::Drawing::Point(246, 54);
+			this->btnT->Name = L"btnT";
+			this->btnT->Size = System::Drawing::Size(35, 34);
+			this->btnT->TabIndex = 6;
+			this->btnT->Text = L"T";
+			this->btnT->UseVisualStyleBackColor = true;
+			this->btnT->Click += gcnew System::EventHandler(this, &frmKeyboard::btnT_Click);
+			// 
+			// btnY
+			// 
+			this->btnY->Location = System::Drawing::Point(287, 54);
+			this->btnY->Name = L"btnY";
+			this->btnY->Size = System::Drawing::Size(34, 34);
+			this->btnY->TabIndex = 7;
+			this->btnY->Text = L"Y";
+			this->btnY->UseVisualStyleBackColor = true;
+			// 
+			// btnU
+			// 
+			this->btnU->Location = System::Drawing::Point(327, 54);
+			this->btnU->Name = L"btnU";
+			this->btnU->Size = System::Drawing::Size(35, 34);
+			this->btnU->TabIndex = 8;
+			this->btnU->Text = L"U";
+			this->btnU->UseVisualStyleBackColor = true;
+			// 
+			// btnI
+			// 
+			this->btnI->Location = System::Drawing::Point(368, 54);
+			this->btnI->Name = L"btnI";
+			this->btnI->Size = System::Drawing::Size(34, 34);
+			this->btnI->TabIndex = 9;
+			this->btnI->Text = L"I";
+			this->btnI->UseVisualStyleBackColor = true;
+			// 
+			// btnRshift
+			// 
+			this->btnRshift->Location = System::Drawing::Point(519, 134);
+			this->btnRshift->Name = L"btnRshift";
+			this->btnRshift->Size = System::Drawing::Size(107, 33);
+			this->btnRshift->TabIndex = 10;
+			this->btnRshift->Text = L"shift";
+			this->btnRshift->UseVisualStyleBackColor = true;
+			this->btnRshift->Click += gcnew System::EventHandler(this, &frmKeyboard::btnRshift_Click);
+			// 
+			// btnO
+			// 
+			this->btnO->Location = System::Drawing::Point(408, 54);
+			this->btnO->Name = L"btnO";
+			this->btnO->Size = System::Drawing::Size(34, 34);
+			this->btnO->TabIndex = 11;
+			this->btnO->Text = L"O";
+			this->btnO->UseVisualStyleBackColor = true;
+			// 
+			// btnLshift
+			// 
+			this->btnLshift->Location = System::Drawing::Point(9, 134);
+			this->btnLshift->Name = L"btnLshift";
+			this->btnLshift->Size = System::Drawing::Size(53, 33);
+			this->btnLshift->TabIndex = 12;
+			this->btnLshift->Text = L"shift";
+			this->btnLshift->UseVisualStyleBackColor = true;
+			// 
+			// btnP
+			// 
+			this->btnP->Location = System::Drawing::Point(448, 54);
+			this->btnP->Name = L"btnP";
+			this->btnP->Size = System::Drawing::Size(38, 34);
+			this->btnP->TabIndex = 13;
+			this->btnP->Text = L"P";
+			this->btnP->UseVisualStyleBackColor = true;
+			// 
+			// btnA
+			// 
+			this->btnA->Location = System::Drawing::Point(94, 94);
+			this->btnA->Name = L"btnA";
+			this->btnA->Size = System::Drawing::Size(33, 34);
+			this->btnA->TabIndex = 14;
+			this->btnA->Text = L"A";
+			this->btnA->UseVisualStyleBackColor = true;
+			// 
+			// btnS
+			// 
+			this->btnS->Location = System::Drawing::Point(133, 94);
+			this->btnS->Name = L"btnS";
+			this->btnS->Size = System::Drawing::Size(36, 34);
+			this->btnS->TabIndex = 15;
+			this->btnS->Text = L"S";
+			this->btnS->UseVisualStyleBackColor = true;
+			this->btnS->Click += gcnew System::EventHandler(this, &frmKeyboard::btnS_Click);
+			// 
+			// btnD
+			// 
+			this->btnD->Location = System::Drawing::Point(175, 94);
+			this->btnD->Name = L"btnD";
+			this->btnD->Size = System::Drawing::Size(35, 34);
+			this->btnD->TabIndex = 16;
+			this->btnD->Text = L"D";
+			this->btnD->UseVisualStyleBackColor = true;
+			this->btnD->Click += gcnew System::EventHandler(this, &frmKeyboard::btnD_Click);
+			// 
+			// btnF
+			// 
+			this->btnF->Location = System::Drawing::Point(216, 94);
+			this->btnF->Name = L"btnF";
+			this->btnF->Size = System::Drawing::Size(33, 34);
+			this->btnF->TabIndex = 17;
+			this->btnF->Text = L"F";
+			this->btnF->UseVisualStyleBackColor = true;
+			// 
+			// btnG
+			// 
+			this->btnG->Location = System::Drawing::Point(256, 94);
+			this->btnG->Name = L"btnG";
+			this->btnG->Size = System::Drawing::Size(36, 34);
+			this->btnG->TabIndex = 18;
+			this->btnG->Text = L"G";
+			this->btnG->UseVisualStyleBackColor = true;
+			this->btnG->Click += gcnew System::EventHandler(this, &frmKeyboard::btnG_Click);
+			// 
+			// btnZ
+			// 
+			this->btnZ->Location = System::Drawing::Point(102, 134);
+			this->btnZ->Name = L"btnZ";
+			this->btnZ->Size = System::Drawing::Size(34, 33);
+			this->btnZ->TabIndex = 19;
+			this->btnZ->Text = L"Z";
+			this->btnZ->UseVisualStyleBackColor = true;
+			// 
+			// btnH
+			// 
+			this->btnH->Location = System::Drawing::Point(298, 94);
+			this->btnH->Name = L"btnH";
+			this->btnH->Size = System::Drawing::Size(33, 34);
+			this->btnH->TabIndex = 21;
+			this->btnH->Text = L"H";
+			this->btnH->UseVisualStyleBackColor = true;
+			// 
+			// btnJ
+			// 
+			this->btnJ->Location = System::Drawing::Point(339, 94);
+			this->btnJ->Name = L"btnJ";
+			this->btnJ->Size = System::Drawing::Size(32, 34);
+			this->btnJ->TabIndex = 22;
+			this->btnJ->Text = L"J";
+			this->btnJ->UseVisualStyleBackColor = true;
+			this->btnJ->Click += gcnew System::EventHandler(this, &frmKeyboard::btnJ_Click);
+			// 
+			// btnK
+			// 
+			this->btnK->Location = System::Drawing::Point(377, 94);
+			this->btnK->Name = L"btnK";
+			this->btnK->Size = System::Drawing::Size(34, 34);
+			this->btnK->TabIndex = 23;
+			this->btnK->Text = L"K";
+			this->btnK->UseVisualStyleBackColor = true;
+			// 
+			// btnL
+			// 
+			this->btnL->Location = System::Drawing::Point(417, 94);
+			this->btnL->Name = L"btnL";
+			this->btnL->Size = System::Drawing::Size(39, 34);
+			this->btnL->TabIndex = 24;
+			this->btnL->Text = L"L";
+			this->btnL->UseVisualStyleBackColor = true;
+			// 
+			// btnX
+			// 
+			this->btnX->Location = System::Drawing::Point(142, 134);
+			this->btnX->Name = L"btnX";
+			this->btnX->Size = System::Drawing::Size(42, 33);
+			this->btnX->TabIndex = 20;
+			this->btnX->Text = L"X";
+			this->btnX->UseVisualStyleBackColor = true;
+			// 
+			// btnC
+			// 
+			this->btnC->Location = System::Drawing::Point(190, 134);
+			this->btnC->Name = L"btnC";
+			this->btnC->Size = System::Drawing::Size(32, 33);
+			this->btnC->TabIndex = 25;
+			this->btnC->Text = L"C";
+			this->btnC->UseVisualStyleBackColor = true;
+			// 
+			// btnV
+			// 
+			this->btnV->Location = System::Drawing::Point(228, 134);
+			this->btnV->Name = L"btnV";
+			this->btnV->Size = System::Drawing::Size(34, 33);
+			this->btnV->TabIndex = 26;
+			this->btnV->Text = L"V";
+			this->btnV->UseVisualStyleBackColor = true;
+			// 
+			// btnB
+			// 
+			this->btnB->Location = System::Drawing::Point(267, 134);
+			this->btnB->Name = L"btnB";
+			this->btnB->Size = System::Drawing::Size(35, 33);
+			this->btnB->TabIndex = 27;
+			this->btnB->Text = L"B";
+			this->btnB->UseVisualStyleBackColor = true;
+			this->btnB->Click += gcnew System::EventHandler(this, &frmKeyboard::btnB_Click);
+			// 
+			// btnN
+			// 
+			this->btnN->Location = System::Drawing::Point(308, 134);
+			this->btnN->Name = L"btnN";
+			this->btnN->Size = System::Drawing::Size(34, 33);
+			this->btnN->TabIndex = 28;
+			this->btnN->Text = L"N";
+			this->btnN->UseVisualStyleBackColor = true;
+			// 
+			// btnM
+			// 
+			this->btnM->Location = System::Drawing::Point(348, 134);
+			this->btnM->Name = L"btnM";
+			this->btnM->Size = System::Drawing::Size(36, 33);
+			this->btnM->TabIndex = 29;
+			this->btnM->Text = L"M";
+			this->btnM->UseVisualStyleBackColor = true;
+			this->btnM->Click += gcnew System::EventHandler(this, &frmKeyboard::btnM_Click);
+			// 
+			// btn1
+			// 
+			this->btn1->Location = System::Drawing::Point(69, 12);
+			this->btn1->Name = L"btn1";
+			this->btn1->Size = System::Drawing::Size(39, 36);
+			this->btn1->TabIndex = 30;
+			this->btn1->Text = L"!1";
+			this->btn1->UseVisualStyleBackColor = true;
+			this->btn1->Click += gcnew System::EventHandler(this, &frmKeyboard::btn1_Click);
+			// 
+			// btn2
+			// 
+			this->btn2->Location = System::Drawing::Point(114, 12);
+			this->btn2->Name = L"btn2";
+			this->btn2->Size = System::Drawing::Size(37, 36);
+			this->btn2->TabIndex = 31;
+			this->btn2->Text = L"@2";
+			this->btn2->UseVisualStyleBackColor = true;
+			// 
+			// btn3
+			// 
+			this->btn3->Location = System::Drawing::Point(159, 12);
+			this->btn3->Name = L"btn3";
+			this->btn3->Size = System::Drawing::Size(34, 36);
+			this->btn3->TabIndex = 32;
+			this->btn3->Text = L"#3";
+			this->btn3->UseVisualStyleBackColor = true;
+			// 
+			// btn4
+			// 
+			this->btn4->Location = System::Drawing::Point(199, 12);
+			this->btn4->Name = L"btn4";
+			this->btn4->Size = System::Drawing::Size(32, 36);
+			this->btn4->TabIndex = 33;
+			this->btn4->Text = L"$4";
+			this->btn4->UseVisualStyleBackColor = true;
+			// 
+			// btn5
+			// 
+			this->btn5->Location = System::Drawing::Point(235, 12);
+			this->btn5->Name = L"btn5";
+			this->btn5->Size = System::Drawing::Size(36, 36);
+			this->btn5->TabIndex = 34;
+			this->btn5->Text = L"%5";
+			this->btn5->UseVisualStyleBackColor = true;
+			// 
+			// btn6
+			// 
+			this->btn6->Location = System::Drawing::Point(277, 12);
+			this->btn6->Name = L"btn6";
+			this->btn6->Size = System::Drawing::Size(35, 36);
+			this->btn6->TabIndex = 35;
+			this->btn6->Text = L"^6";
+			this->btn6->UseVisualStyleBackColor = true;
+			// 
+			// btn7
+			// 
+			this->btn7->Location = System::Drawing::Point(317, 12);
+			this->btn7->Name = L"btn7";
+			this->btn7->Size = System::Drawing::Size(35, 36);
+			this->btn7->TabIndex = 36;
+			this->btn7->Text = L"&&7";
+			this->btn7->UseVisualStyleBackColor = true;
+			// 
+			// btn8
+			// 
+			this->btn8->Location = System::Drawing::Point(358, 12);
+			this->btn8->Name = L"btn8";
+			this->btn8->Size = System::Drawing::Size(35, 36);
+			this->btn8->TabIndex = 37;
+			this->btn8->Text = L"*8";
+			this->btn8->UseVisualStyleBackColor = true;
+			// 
+			// btn9
+			// 
+			this->btn9->Location = System::Drawing::Point(399, 12);
+			this->btn9->Name = L"btn9";
+			this->btn9->Size = System::Drawing::Size(32, 36);
+			this->btn9->TabIndex = 38;
+			this->btn9->Text = L"(9";
+			this->btn9->UseVisualStyleBackColor = true;
+			// 
+			// btn0
+			// 
+			this->btn0->Location = System::Drawing::Point(437, 12);
+			this->btn0->Name = L"btn0";
+			this->btn0->Size = System::Drawing::Size(34, 36);
+			this->btn0->TabIndex = 39;
+			this->btn0->Text = L")0";
+			this->btn0->UseVisualStyleBackColor = true;
+			// 
+			// btnSpace
+			// 
+			this->btnSpace->Location = System::Drawing::Point(206, 173);
+			this->btnSpace->Name = L"btnSpace";
+			this->btnSpace->Size = System::Drawing::Size(250, 33);
+			this->btnSpace->TabIndex = 40;
+			this->btnSpace->UseVisualStyleBackColor = true;
+			this->btnSpace->Click += gcnew System::EventHandler(this, &frmKeyboard::btnSpace_Click);
+			// 
+			// button1
+			// 
+			this->button1->Location = System::Drawing::Point(390, 134);
+			this->button1->Name = L"button1";
+			this->button1->Size = System::Drawing::Size(36, 33);
+			this->button1->TabIndex = 41;
+			this->button1->Text = L"<,";
+			this->button1->UseVisualStyleBackColor = true;
+			// 
+			// button2
+			// 
+			this->button2->Location = System::Drawing::Point(432, 134);
+			this->button2->Name = L"button2";
+			this->button2->Size = System::Drawing::Size(36, 33);
+			this->button2->TabIndex = 42;
+			this->button2->Text = L">.";
+			this->button2->UseVisualStyleBackColor = true;
+			// 
+			// button3
+			// 
+			this->button3->Location = System::Drawing::Point(462, 94);
+			this->button3->Name = L"button3";
+			this->button3->Size = System::Drawing::Size(39, 34);
+			this->button3->TabIndex = 43;
+			this->button3->Text = L":;";
+			this->button3->UseVisualStyleBackColor = true;
+			// 
+			// button4
+			// 
+			this->button4->Location = System::Drawing::Point(506, 94);
+			this->button4->Name = L"button4";
+			this->button4->Size = System::Drawing::Size(39, 34);
+			this->button4->TabIndex = 44;
+			this->button4->Text = L"\"\'";
+			this->button4->UseVisualStyleBackColor = true;
+			// 
+			// button5
+			// 
+			this->button5->Location = System::Drawing::Point(551, 94);
+			this->button5->Name = L"button5";
+			this->button5->Size = System::Drawing::Size(39, 34);
+			this->button5->TabIndex = 45;
+			this->button5->Text = L"|\\";
+			this->button5->UseVisualStyleBackColor = true;
+			// 
+			// button6
+			// 
+			this->button6->Location = System::Drawing::Point(492, 54);
+			this->button6->Name = L"button6";
+			this->button6->Size = System::Drawing::Size(38, 34);
+			this->button6->TabIndex = 46;
+			this->button6->Text = L"{[";
+			this->button6->UseVisualStyleBackColor = true;
+			// 
+			// button7
+			// 
+			this->button7->Location = System::Drawing::Point(536, 54);
+			this->button7->Name = L"button7";
+			this->button7->Size = System::Drawing::Size(38, 34);
+			this->button7->TabIndex = 47;
+			this->button7->Text = L"}]";
+			this->button7->UseVisualStyleBackColor = true;
+			// 
+			// btnMinus
+			// 
+			this->btnMinus->Location = System::Drawing::Point(474, 12);
+			this->btnMinus->Name = L"btnMinus";
+			this->btnMinus->Size = System::Drawing::Size(34, 36);
+			this->btnMinus->TabIndex = 48;
+			this->btnMinus->Text = L"_-";
+			this->btnMinus->UseVisualStyleBackColor = true;
+			this->btnMinus->Click += gcnew System::EventHandler(this, &frmKeyboard::btnMinus_Click);
+			// 
+			// button9
+			// 
+			this->button9->Location = System::Drawing::Point(514, 12);
+			this->button9->Name = L"button9";
+			this->button9->Size = System::Drawing::Size(34, 36);
+			this->button9->TabIndex = 49;
+			this->button9->Text = L"+=";
+			this->button9->UseVisualStyleBackColor = true;
+			// 
+			// btnBackspace
+			// 
+			this->btnBackspace->Location = System::Drawing::Point(554, 12);
+			this->btnBackspace->Name = L"btnBackspace";
+			this->btnBackspace->Size = System::Drawing::Size(72, 36);
+			this->btnBackspace->TabIndex = 50;
+			this->btnBackspace->Text = L"<--";
+			this->btnBackspace->UseVisualStyleBackColor = true;
+			this->btnBackspace->Click += gcnew System::EventHandler(this, &frmKeyboard::btnBackspace_Click);
+			// 
+			// btnRctrl
+			// 
+			this->btnRctrl->Location = System::Drawing::Point(568, 176);
+			this->btnRctrl->Name = L"btnRctrl";
+			this->btnRctrl->Size = System::Drawing::Size(58, 33);
+			this->btnRctrl->TabIndex = 51;
+			this->btnRctrl->Text = L"Ctrl";
+			this->btnRctrl->UseVisualStyleBackColor = true;
+			// 
+			// btnLalt
+			// 
+			this->btnLalt->Location = System::Drawing::Point(142, 173);
+			this->btnLalt->Name = L"btnLalt";
+			this->btnLalt->Size = System::Drawing::Size(58, 33);
+			this->btnLalt->TabIndex = 52;
+			this->btnLalt->Text = L"Alt";
+			this->btnLalt->UseVisualStyleBackColor = true;
+			// 
+			// button10
+			// 
+			this->button10->Location = System::Drawing::Point(643, 176);
+			this->button10->Name = L"button10";
+			this->button10->Size = System::Drawing::Size(36, 33);
+			this->button10->TabIndex = 53;
+			this->button10->Text = L"<";
+			this->button10->UseVisualStyleBackColor = true;
+			this->button10->Click += gcnew System::EventHandler(this, &frmKeyboard::button10_Click);
+			// 
+			// button11
+			// 
+			this->button11->Location = System::Drawing::Point(685, 176);
+			this->button11->Name = L"button11";
+			this->button11->Size = System::Drawing::Size(36, 33);
+			this->button11->TabIndex = 54;
+			this->button11->Text = L"V";
+			this->button11->UseVisualStyleBackColor = true;
+			// 
+			// button12
+			// 
+			this->button12->Location = System::Drawing::Point(727, 176);
+			this->button12->Name = L"button12";
+			this->button12->Size = System::Drawing::Size(36, 33);
+			this->button12->TabIndex = 55;
+			this->button12->Text = L">";
+			this->button12->UseVisualStyleBackColor = true;
+			// 
+			// button13
+			// 
+			this->button13->Location = System::Drawing::Point(685, 137);
+			this->button13->Name = L"button13";
+			this->button13->Size = System::Drawing::Size(36, 33);
+			this->button13->TabIndex = 56;
+			this->button13->Text = L"^";
+			this->button13->UseVisualStyleBackColor = true;
+			// 
+			// button14
+			// 
+			this->button14->Location = System::Drawing::Point(641, 54);
+			this->button14->Name = L"button14";
+			this->button14->Size = System::Drawing::Size(38, 34);
+			this->button14->TabIndex = 57;
+			this->button14->Text = L"Del";
+			this->button14->UseVisualStyleBackColor = true;
+			this->button14->Click += gcnew System::EventHandler(this, &frmKeyboard::button14_Click);
+			// 
+			// button15
+			// 
+			this->button15->Location = System::Drawing::Point(683, 54);
+			this->button15->Name = L"button15";
+			this->button15->Size = System::Drawing::Size(38, 34);
+			this->button15->TabIndex = 58;
+			this->button15->Text = L"End";
+			this->button15->UseVisualStyleBackColor = true;
+			// 
+			// button16
+			// 
+			this->button16->Location = System::Drawing::Point(641, 14);
+			this->button16->Name = L"button16";
+			this->button16->Size = System::Drawing::Size(38, 34);
+			this->button16->TabIndex = 59;
+			this->button16->Text = L"Ins";
+			this->button16->UseVisualStyleBackColor = true;
+			// 
+			// button17
+			// 
+			this->button17->Location = System::Drawing::Point(683, 14);
+			this->button17->Name = L"button17";
+			this->button17->Size = System::Drawing::Size(38, 34);
+			this->button17->TabIndex = 60;
+			this->button17->Text = L"Home";
+			this->button17->UseVisualStyleBackColor = true;
+			// 
+			// button18
+			// 
+			this->button18->Location = System::Drawing::Point(727, 54);
+			this->button18->Name = L"button18";
+			this->button18->Size = System::Drawing::Size(38, 34);
+			this->button18->TabIndex = 61;
+			this->button18->Text = L"PgDn";
+			this->button18->UseVisualStyleBackColor = true;
+			// 
+			// button19
+			// 
+			this->button19->Location = System::Drawing::Point(727, 14);
+			this->button19->Name = L"button19";
+			this->button19->Size = System::Drawing::Size(38, 34);
+			this->button19->TabIndex = 62;
+			this->button19->Text = L"PgUp";
+			this->button19->UseVisualStyleBackColor = true;
+			// 
+			// frmKeyboard
+			// 
+			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
+			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
+			this->ClientSize = System::Drawing::Size(819, 221);
+			this->ControlBox = false;
+			this->Controls->Add(this->button19);
+			this->Controls->Add(this->button18);
+			this->Controls->Add(this->button17);
+			this->Controls->Add(this->button16);
+			this->Controls->Add(this->button15);
+			this->Controls->Add(this->button14);
+			this->Controls->Add(this->button13);
+			this->Controls->Add(this->button12);
+			this->Controls->Add(this->button11);
+			this->Controls->Add(this->button10);
+			this->Controls->Add(this->btnLalt);
+			this->Controls->Add(this->btnRctrl);
+			this->Controls->Add(this->btnBackspace);
+			this->Controls->Add(this->button9);
+			this->Controls->Add(this->btnMinus);
+			this->Controls->Add(this->button7);
+			this->Controls->Add(this->button6);
+			this->Controls->Add(this->button5);
+			this->Controls->Add(this->button4);
+			this->Controls->Add(this->button3);
+			this->Controls->Add(this->button2);
+			this->Controls->Add(this->button1);
+			this->Controls->Add(this->btnSpace);
+			this->Controls->Add(this->btn0);
+			this->Controls->Add(this->btn9);
+			this->Controls->Add(this->btn8);
+			this->Controls->Add(this->btn7);
+			this->Controls->Add(this->btn6);
+			this->Controls->Add(this->btn5);
+			this->Controls->Add(this->btn4);
+			this->Controls->Add(this->btn3);
+			this->Controls->Add(this->btn2);
+			this->Controls->Add(this->btn1);
+			this->Controls->Add(this->btnM);
+			this->Controls->Add(this->btnN);
+			this->Controls->Add(this->btnB);
+			this->Controls->Add(this->btnV);
+			this->Controls->Add(this->btnC);
+			this->Controls->Add(this->btnL);
+			this->Controls->Add(this->btnK);
+			this->Controls->Add(this->btnJ);
+			this->Controls->Add(this->btnH);
+			this->Controls->Add(this->btnX);
+			this->Controls->Add(this->btnZ);
+			this->Controls->Add(this->btnG);
+			this->Controls->Add(this->btnF);
+			this->Controls->Add(this->btnD);
+			this->Controls->Add(this->btnS);
+			this->Controls->Add(this->btnA);
+			this->Controls->Add(this->btnP);
+			this->Controls->Add(this->btnLshift);
+			this->Controls->Add(this->btnO);
+			this->Controls->Add(this->btnRshift);
+			this->Controls->Add(this->btnI);
+			this->Controls->Add(this->btnU);
+			this->Controls->Add(this->btnY);
+			this->Controls->Add(this->btnT);
+			this->Controls->Add(this->btnR);
+			this->Controls->Add(this->btnEnter);
+			this->Controls->Add(this->btnQuest);
+			this->Controls->Add(this->btnE);
+			this->Controls->Add(this->btnW);
+			this->Controls->Add(this->btnQ);
+			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
+			this->Name = L"frmKeyboard";
+			this->Text = L"emuFISA64 Keyboard";
+			this->ResumeLayout(false);
+
+		}
+#pragma endregion
+	private: System::Void btnQuest_Click(System::Object^  sender, System::EventArgs^  e) {
+				 keybd.Push(0x4A);
+				 keybd_status = 0x80;
+			 }
+private: System::Void btnEnter_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x5A);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnRshift_Click(System::Object^  sender, System::EventArgs^  e) {
+			 static bool sh = false;
+
+			 keybd.Push(0x59);
+			 if (sh!=0)
+			     keybd.Push(0xF0);
+			 sh = !sh;
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn1_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x16);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnD_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x23);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnB_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x32);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnG_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x34);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnQ_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x15);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnT_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x2C);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnS_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x1B);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnM_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x3A);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnMinus_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x4E);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnBackspace_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x66);
+			 keybd_status = 0x80;
+		 }
+private: System::Void button14_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x71);
+			 keybd.Push(0xE0);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnJ_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x3B);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnSpace_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x29);
+			 keybd_status = 0x80;
+		 }
+private: System::Void button10_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x6B);
+			 keybd.Push(0xE0);
+			 keybd_status = 0x80;
+		 }
+};
+}

@@ -1,6 +1,9 @@
 #pragma once
 
 #define RR      2
+#define SXB			0x10
+#define SXC			0x11
+#define SXH			0x12
 #define MTSPR       0x1E
 #define MFSPR       0x1F
 #define CPUID       0x36
@@ -69,6 +72,7 @@
 #define BSR     0x39
 #define BRA     0x3A
 #define RTS     0x3B
+#define JAL		0x3C
 #define JALI    0x3E
 #define NOP     0x3F
 #define LB      0x40
