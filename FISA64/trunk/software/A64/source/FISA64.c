@@ -1976,6 +1976,7 @@ j_processToken:
             }
             segment = bssseg;
             break;
+        case tk_byte:  process_db(); break;
         case tk_cas: process_load(0x6C); break;
         case tk_chk: process_chk(0x1A); break;
         case tk_cli: process_pctrl(0); break;

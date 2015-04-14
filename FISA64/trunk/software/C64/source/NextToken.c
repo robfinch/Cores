@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -153,11 +153,15 @@ void getid()
 	register int    i;
     i = 0;
     while(isidch(lastch)) {
-		if(i < 32)
+		if(i < 62) {
+			lastkw[i] = lastch;
 			lastid[i++] = lastch;
+        }
 		getch();
     }
-    lastid[i] = '\0';
+    lastkw[i] = '\0';
+    lastid[i] = '_';
+    lastid[i+1] = '\0';
     lastst = id;
 }
  

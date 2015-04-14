@@ -3,24 +3,52 @@
 
 
 
+
+
 enum {
      E_Ok = 0,
      E_BadTCBHandle,
-     E_BadPriority
+     E_BadPriority,
+     E_BadCallno,
+     E_Arg,
+     E_BadMbx,
+     E_QueFull,
+     E_NoThread,
+     E_NotAlloc,
+     E_NoMsg,
+     E_Timeout,
+     E_BadAlarm,
+     E_NotOwner,
+     E_QueStrategy,
+     E_DCBInUse,
+     //; Device driver errors
+     E_BadDevNum =	0x20,
+     E_NoDev,
+     E_BadDevOp,
+     E_ReadError,
+     E_WriteError,
+     E_BadBlockNum,
+     E_TooManyBlocks,
+
+     // resource errors
+     E_NoMoreMbx =	0x40,
+     E_NoMoreMsgBlks,
+     E_NoMoreAlarmBlks,
+     E_NoMoreTCBs,
+     E_NoMem
 };
 
 
 typedef unsigned int uint;
 
-typedef struct tagMSG {
+typedef struct tagMSG align(32) {
 	struct tagMSG *link;
 	uint d1;
 	uint d2;
-	byte type;
-	byte resv[7];
+	uint type;
 } MSG;
 
-typedef struct _tagJCB
+typedef struct _tagJCB align(2048)
 {
     struct _tagJCB *iof_next;
     struct _tagJCB *iof_prev;
@@ -43,7 +71,7 @@ typedef struct _tagJCB
 
 struct tagMBX;
 
-typedef struct _tagTCB {
+typedef struct _tagTCB align(512) {
 	int regs[32];
 	int isp;
 	int dsp;
@@ -61,6 +89,10 @@ typedef struct _tagTCB {
 	int *stack;
 	__int64 timeout;
 	JCB *hJob;
+	int msgD1;
+	int msgD2;
+	MSG *MsgPtr;
+	uint hWaitMbx;
 	struct tagMBX *mailboxes;
 	__int8 priority;
 	__int8 status;
@@ -68,8 +100,8 @@ typedef struct _tagTCB {
 	__int16 number;
 } TCB;
 
-typedef struct tagMBX {
-    struct tagMBX *next;
+typedef struct tagMBX align(128) {
+    struct tagMBX *link;
 	TCB *tq_head;
 	TCB *tq_tail;
 	MSG *mq_head;
@@ -95,22 +127,66 @@ typedef struct tagALARM {
 } ALARM;
 
 
+TCB *GetRunningTCB();
+JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+void set_vector(unsigned int, unsigned int);
+int getCPU();
+void outb(unsigned int, int);
+void outc(unsigned int, int);
+void outh(unsigned int, int);
+void outw(unsigned int, int);
+
+
+extern int irq_stack[];
+extern int FMTK_Inited;
+extern JCB jcbs[];
+extern TCB tcbs[];
+extern TCB *readyQ[];
+extern TCB *runningTCB;
+extern TCB *freeTCB;
+extern int sysstack[];
+extern int stacks[][];
+extern int sys_stacks[][];
+extern int bios_stacks[][];
+extern int fmtk_irq_stack[];
+extern int fmtk_sys_stack[];
+extern MBX mailbox[];
+extern MSG message[];
+extern int nMsgBlk;
+extern int nMailbox;
+extern MSG *freeMSG;
+extern MBX *freeMBX;
+extern JCB *IOFocusNdx;
+extern int IOFocusTbl[];
+extern int iof_switch;
+extern int BIOS1_sema;
+extern int iof_sema;
+extern int sys_sema;
+extern int BIOS_RespMbx;
+extern char hasUltraHighPriorityTasks;
+extern int missed_ticks;
+extern short int video_bufs[][];
+extern TCB *TimeoutList;
+
+
 int irq_stack[512];
 
 int FMTK_Inited;
 TCB tempTCB;
 JCB jcbs[51];
 TCB tcbs[256];
-TCB *readyQ[8];
-TCB *runningTCB;
+unsigned int readyQ[8];
 TCB *freeTCB;
 int sysstack[1024];
-int stacks[256][512];
+int stacks[256][1024];
 int sys_stacks[256][512];
 int bios_stacks[256][512];
 int fmtk_irq_stack[512];
+int fmtk_sys_stack[512];
 MBX mailbox[2048];
 MSG message[32768];
+int nMsgBlk;
+int nMailbox;
 MSG *freeMSG;
 MBX *freeMBX;
 JCB *IOFocusNdx;
@@ -120,60 +196,57 @@ int BIOS1_sema;
 int iof_sema;
 int sys_sema;
 int BIOS_RespMbx;
+char hasUltraHighPriorityTasks;
+int missed_ticks;
 
 short int video_bufs[51][4096];
 TCB *TimeoutList;
 
-naked int getCPU()
-{
-     asm {
-         cpuid r1,r0,#0
-         rtl
-     };
-     
-}
-
-void SetBound48(TCB *ps, TCB *pe)
+void SetBound48(TCB *ps, TCB *pe, int algn)
 {
      asm {
      lw      r1,24[bp]
      mtspr   112,r1      ; set lower bound
-     lea     r1,32[bp]
+     lw      r1,32[bp]
      mtspr   176,r1      ; set upper bound
-     mtspr   240,r0      ; modulo mask not used
+     lw      r1,40[bp]
+     mtspr   240,r1      ; modulo mask not used
      }
 }
 
-void SetBound49(JCB *ps, JCB *pe)
+void SetBound49(JCB *ps, JCB *pe, int algn)
 {
      asm {
      lw      r1,24[bp]
      mtspr   113,r1      ; set lower bound
-     lea     r1,32[bp]
+     lw      r1,32[bp]
      mtspr   177,r1      ; set upper bound
-     mtspr   241,r0      ; modulo mask not used
+     lw      r1,40[bp]
+     mtspr   241,r1      ; modulo mask not used
      }
 }
 
-void SetBound50(MBX *ps, MBX *pe)
+void SetBound50(MBX *ps, MBX *pe, int algn)
 {
      asm {
      lw      r1,24[bp]
      mtspr   114,r1      ; set lower bound
-     lea     r1,32[bp]
+     lw      r1,32[bp]
      mtspr   178,r1      ; set upper bound
-     mtspr   242,r0      ; modulo mask not used
+     lw      r1,40[bp]
+     mtspr   242,r1      ; modulo mask not used
      }
 }
 
-void SetBound51(MSG *ps, MSG *pe)
+void SetBound51(MSG *ps, MSG *pe, int algn)
 {
      asm {
      lw      r1,24[bp]
      mtspr   115,r1      ; set lower bound
-     lea     r1,32[bp]
+     lw      r1,32[bp]
      mtspr   179,r1      ; set upper bound
-     mtspr   243,r0      ; modulo mask not used
+     lw      r1,40[bp]
+     mtspr   243,r1      ; modulo mask not used
      }
 }
 
@@ -200,6 +273,14 @@ void SetRunningTCB(TCB *p)
      }
 }
 
+naked int GetVecno()
+{
+    asm {
+        mfspr  r1,12
+        rtl
+    }
+}
+
 naked void DisplayIRQLive()
 {
      asm {
@@ -223,15 +304,17 @@ private int InsertIntoReadyList(TCB *p)
 
     if (!chkTCB(p))
         return E_BadTCBHandle;
-	if (p->priority > 7 || p->priority < 0)
+	if (p->priority > 077 || p->priority < 000)
 		return E_BadPriority;
+	if (p->priority < 003)
+	   hasUltraHighPriorityTasks |= (1 << p->priority);
 	p->status = 16;
-	q = readyQ[p->priority];
+	q = readyQ[p->priority>>3];
 	// Ready list empty ?
 	if (q==0) {
 		p->next = p;
 		p->prev = p;
-		readyQ[p->priority] = p;
+		readyQ[p->priority>>3] = p;
 		return E_Ok;
 	}
 	// Insert at tail of list
@@ -249,12 +332,12 @@ private int RemoveFromReadyList(TCB *t)
 {
     if (!chkTCB(t))
         return E_BadTCBHandle;
-	if (t->priority > 7 || t->priority < 0)
+	if (t->priority > 077 || t->priority < 000)
 		return E_BadPriority;
-    if (t==readyQ[t->priority])
-       readyQ[t->priority] = t->next;
-    if (t==readyQ[t->priority])
-       readyQ[t->priority] = (void *)0;
+    if (t==readyQ[t->priority>>3])
+       readyQ[t->priority>>3] = t->next;
+    if (t==readyQ[t->priority>>3])
+       readyQ[t->priority>>3] = (void *)0;
     t->next->prev = t->prev;
     t->prev->next = t->next;
     t->next = (void *)0;
@@ -316,6 +399,7 @@ private int RemoveFromTimeoutList(TCB *t)
 }
 
 // ----------------------------------------------------------------------------
+// Pop the top entry from the timeout list.
 // ----------------------------------------------------------------------------
 
 private TCB *PopTimeoutList()
@@ -323,8 +407,11 @@ private TCB *PopTimeoutList()
     TCB *p;
     
     p = TimeoutList;
-    if (TimeoutList)
+    if (TimeoutList) {
         TimeoutList = TimeoutList->next;
+        if (TimeoutList)
+            TimeoutList->prev = (void *)0;
+    }
     return p;
 }
 
@@ -337,7 +424,7 @@ private __int8 startQNdx;
 
 private TCB *SelectTaskToRun()
 {
-	int nn;
+	int nn,kk;
 	TCB *p, *q;
 	int qToCheck;
 
@@ -347,6 +434,7 @@ private TCB *SelectTaskToRun()
 	for (nn = 0; nn < 8; nn++) {
 		p = readyQ[qToCheck];
 		if (p) {
+            kk = 0;
      		q = p->next;
             do {  
                 if (!(q->status & 8)) {
@@ -356,7 +444,8 @@ private TCB *SelectTaskToRun()
                     }
                 }
                 q = q->next;
-            } while (q != p);
+                kk = kk + 1;
+            } while (q != p && kk < 256);
         }
 		qToCheck++;
 		qToCheck &= 7;
@@ -366,12 +455,14 @@ private TCB *SelectTaskToRun()
 }
 
 // ----------------------------------------------------------------------------
+// There isn't any 'C' code in the SystemCall() function. If there were it
+// would have to be arranged like the TimerIRQ() or RescheduleIRQ() functions.
 // ----------------------------------------------------------------------------
 
-naked TimerIRQ()
+naked FMTK_SystemCall()
 {
-     asm {
-         lea   sp,fmtk_irq_stack+4088
+    asm {
+         lea   sp,sys_stacks_[tr]
          sw    r1,8[tr]
          sw    r2,16[tr]
          sw    r3,24[tr]
@@ -417,26 +508,25 @@ naked TimerIRQ()
          sw    r1,296[tr]
          mfspr r1,cr0
          sw    r1,304[tr]
-     }
-     DisplayIRQLive();
-     GetRunningTCB()->status = 4;
-     while (TimeoutList) {
-         if (TimeoutList->timeout==0)
-             InsertIntoReadyList(PopTimeoutList());
-         else {
-              TimeoutList->timeout--;
-              break;
-         }
-     }
-     SetRunningTCB(SelectTaskToRun());
-     GetRunningTCB()->status = 8;
-     asm {
-RestoreContext:
+
+    	 mfspr r6,epc           ; get return address into r6
+    	 and   r7,r6,#-4        ; clear LSB's
+    	 lh	   r7,4[r7]			; get static call number parameter into r7
+    	 addui r6,r6,#8		    ; update return address
+    	 sw    r6,296[tr]
+    	 cmpu  r6,r7,#20
+    	 bgt   r6,.bad_callno
+    	 asl   r7,r7,#1
+    	 lcu   r6,syscall_vectors[r7]       ; load the vector into r6
+    	 or    r6,r6,#FMTK_SystemCall_ & 0xFFFFFFFFFFFF0000
+    	 jsr   [r6]				; do the system function
+    	 sw    r1,8[tr]
+.0001:
          lw    r1,256[tr]
          mtspr isp,r1
          lw    r1,264[tr]
          mtspr dsp,r1
-         sl    r1,272[tr]
+         lw    r1,272[tr]
          mtspr esp,r1
          lw    r1,280[tr]
          mtspr ipc,r1
@@ -474,19 +564,40 @@ RestoreContext:
          lw    r27,216[tr]
          lw    r28,224[tr]
          lw    r29,232[tr]
-         lw    r30,240[tr]
          lw    r31,248[tr]
-         rti
-     }
+         rte
+.bad_callno:
+         ldi   r1,#E_BadFuncno
+         sw    r1,8[tr]
+         bra   .0001   
+syscall_vectors:
+        dc    FMTKInitialize_
+        dc    FMTK_StartTask_
+        dc    FMTK_ExitTask_
+        dc    FMTK_KillTask_
+        dc    FMTK_SetTaskPriority_
+        dc    FMTK_Sleep_
+        dc    FMTK_AllocMbx_
+        dc    FMTK_FreeMbx_
+        dc    FMTK_PostMsg_
+        dc    FMTK_SendMsg_
+        dc    FMTK_WaitMsg_
+        dc    FMTK_CheckMsg_
+        align  4
+    }
 }
 
 // ----------------------------------------------------------------------------
+// If timer interrupts are enabled during a priority #0 task, this routine
+// only updates the missed ticks and remains in the same task. No timeouts
+// are updated and no task switches will occur. The timer tick routine
+// basically has a fixed latency when priority #0 is present.
 // ----------------------------------------------------------------------------
 
-naked RescheduleIRQ()
+void FMTK_SchedulerIRQ()
 {
-     asm {
-         lea   sp,fmtk_irq_stack+4088
+     prolog asm {
+         lea   sp,fmtk_irq_stack_+4088
          sw    r1,8[tr]
          sw    r2,16[tr]
          sw    r3,24[tr]
@@ -513,8 +624,8 @@ naked RescheduleIRQ()
          sw    r24,192[tr]
          sw    r25,200[tr]
          sw    r26,208[tr]
-         sw    r28,224[tr]
          sw    r27,216[tr]
+         sw    r28,224[tr]
          sw    r29,232[tr]
          sw    r30,240[tr]
          sw    r31,248[tr]
@@ -533,11 +644,92 @@ naked RescheduleIRQ()
          mfspr r1,cr0
          sw    r1,304[tr]
      }
-     GetRunningTCB()->status = 4;
-     SetRunningTCB(SelectTaskToRun());
-     GetRunningTCB()->status = 8;
-     asm {
-         bra   RestoreContext
+     switch(GetVecno()) {
+     // Timer tick interrupt
+     case 451:
+          asm {
+             ldi   r1,#3				; reset the edge sense circuit
+             sh	   r1,PIC_RSTE
+         }
+         DisplayIRQLive();
+         spinlock(&sys_sema,10) {
+             if (GetRunningTCB()->priority != 000) {
+                 GetRunningTCB()->status = 4;
+                 while (TimeoutList) {
+                     if (TimeoutList->timeout<=0)
+                         InsertIntoReadyList(PopTimeoutList());
+                     else {
+                          TimeoutList->timeout = TimeoutList->timeout - missed_ticks - 1;
+                          missed_ticks = 0;
+                          break;
+                     }
+                 }
+                 if (GetRunningTCB()->priority > 002)
+                    SetRunningTCB(SelectTaskToRun());
+                 GetRunningTCB()->status = 8;
+             }
+             else
+                 missed_ticks++;
+         }
+         lockfail {
+             missed_ticks++;
+         }
+         break;
+     // Explicit rescheduling request.
+     case 2:
+         GetRunningTCB()->status = 4;
+         SetRunningTCB(SelectTaskToRun());
+         GetRunningTCB()->status = 8;
+         break;
+     default:  ;
+     }
+     // Restore the processor registers and return using an RTI.
+     epilog asm {
+RestoreContext:
+         lw    r1,256[tr]
+         mtspr isp,r1
+         lw    r1,264[tr]
+         mtspr dsp,r1
+         lw    r1,272[tr]
+         mtspr esp,r1
+         lw    r1,280[tr]
+         mtspr ipc,r1
+         lw    r1,288[tr]
+         mtspr dpc,r1
+         lw    r1,296[tr]
+         mtspr epc,r1
+         lw    r1,304[tr]
+         mtspr cr0,r1
+         lw    r1,8[tr]
+         lw    r2,16[tr]
+         lw    r3,24[tr]
+         lw    r4,32[tr]
+         lw    r5,40[tr]
+         lw    r6,48[tr]
+         lw    r7,56[tr]
+         lw    r8,64[tr]
+         lw    r9,72[tr]
+         lw    r10,80[tr]
+         lw    r11,88[tr]
+         lw    r12,96[tr]
+         lw    r13,104[tr]
+         lw    r14,112[tr]
+         lw    r15,120[tr]
+         lw    r16,128[tr]
+         lw    r17,136[tr]
+         lw    r18,144[tr]
+         lw    r19,152[tr]
+         lw    r20,160[tr]
+         lw    r21,168[tr]
+         lw    r22,176[tr]
+         lw    r23,184[tr]
+         lw    r25,200[tr]
+         lw    r26,208[tr]
+         lw    r27,216[tr]
+         lw    r28,224[tr]
+         lw    r29,232[tr]
+         lw    r31,248[tr]
+         rti
      }
 }
 
@@ -554,18 +746,23 @@ void DumpTaskList()
 {
      TCB *p, *q;
      int n;
+     int kk;
      
-     printf("CPU Pri   Task     Prev     Next   Timeout\r\n");
+     printf("CPU Pri Stat   Task     Prev     Next   Timeout\r\n");
      for (n = 0; n < 8; n++) {
          q = readyQ[n];
          p = q;
          if (q) {
+             kk = 0;
              do {
-                 printf("%3d %3d %08X %08X %08X %08X\r\n", p->affinity, p->priority, p, p->prev, p->next, p->timeout);
+                 if (!chkTCB(p))
+                     break;
+                 printf("%3d %3d %02X %08X %08X %08X %08X\r\n", p->affinity, p->priority, p->status, p, p->prev, p->next, p->timeout);
                  p = p->next;
                  if (getcharNoWait()==3)
                     goto j1;
-             } while (p != q);
+                 kk = kk + 1;
+             } while (p != q && kk < 256);
          }
      }
 j1:  ;
@@ -586,22 +783,22 @@ void IdleTask()
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-int ExitTask()
+int FMTK_ExitTask()
 {
     TCB *t;
     MBX *m, *n;
 
-    LockSYS();
+    spinlock(&sys_sema) {
         RemoveFromReadyList(t);
         RemoveFromTimeoutList(t);
         t = GetRunningTCB();
         m = t->mailboxes;
         while (m) {
-            n = m->next;
-            FreeMbx(m);
+            n = m->link;
+            FMTK_FreeMbx(m);
             m = n;
         }
-    UnlockSYS();
+    }
     asm { int #2 }     // reschedule
 j1: goto j1;
 }
@@ -609,23 +806,58 @@ j1: goto j1;
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-int StartTask(int priority, int affinity, int adr, int parm, int job)
+int FMTK_StartTask(int priority, int affinity, int adr, int parm, int job)
 {
     TCB *t;
 
-    LockSYS();
+    spinlock(&sys_sema) {
         t = freeTCB;
         freeTCB = t->next;
-    UnlockSYS();
-        t->affinity = affinity;
-        t->ipc = adr;
-        t->isp = t->stack + 511;
-        t->hJob = job;
-        t->regs[1] = parm;
-        t->regs[31] = ExitTask;
-    LockSYS();
-        InsertIntoReadyList(t);
-    UnlockSYS();
+    }
+    t->affinity = affinity;
+    t->priority = priority;
+    t->ipc = adr;
+    t->isp = t->stack + 1023;
+    t->hJob = job;
+    t->regs[1] = parm;
+    t->regs[31] = FMTK_ExitTask;
+    spinlock(&sys_sema) {
+        InsertIntoReadyList(t); }
+    return E_Ok;
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+int FMTK_Sleep(int timeout)
+{
+    TCB *t;
+
+    spinlock(&sys_sema) {
+        t = GetRunningTCB();
+        RemoveFromReadyList(t);
+        InsertIntoTimeoutList(t, timeout);
+    }
+    asm { int #2 }      // reschedule
+    return E_Ok;
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+int FMTK_SetTaskPriority(TCB* t, int priority)
+{
+    if (priority > 077 || priority < 000)
+       return E_Arg;
+    spinlock(&sys_sema) {
+        if (t->status & (8 | 16)) {
+            RemoveFromReadyList(t);
+            t->priority = priority;
+            InsertIntoReadyList(t);
+        }
+        else
+            t->priority = priority;
+    }
     return E_Ok;
 }
 
@@ -641,22 +873,30 @@ void FMTKInitialize()
             ldi   r1,#20
             sc    r1,LEDS
         }
-        UnlockSYS();
-        UnlockIOF();
+        spinunlock(&sys_sema);
+        spinunlock(&iof_sema);
+
+        hasUltraHighPriorityTasks = 0;
+        missed_ticks = 0;
 
         IOFocusTbl[0] = 0;
         IOFocusNdx = (void *)0;
 
-        SetBound48(tcbs, &tcbs[256]);
-        SetBound49(jcbs, &jcbs[51]);
-        SetBound50(mailbox, &mailbox[2048]);
-        SetBound51(message, &message[32768]);
+        SetBound48(tcbs, &tcbs[256], 511);
+        SetBound49(jcbs, &jcbs[51], 2047);
+        SetBound50(mailbox, &mailbox[2048],127);
+        SetBound51(message, &message[32768],31);
 
         for (nn = 0; nn < 32768; nn++) {
             message[nn].link = &message[nn+1];
         }
         message[32768-1].link = (void *)0;
         freeMSG = &message[0];
+
+        asm {
+            ldi   r1,#30
+            sc    r1,LEDS
+        }
 
         for (nn = 0; nn < 51; nn++) {
             jcbs[nn].number = nn;
@@ -665,7 +905,7 @@ void FMTKInitialize()
                 jcbs[nn].pVirtVidMem = video_bufs[nn];
                 jcbs[nn].NormAttr = 0x0026B800;
                 RequestIOFocus(&jcbs[0]);
-            }
+           }
             else {
                  jcbs[nn].pVidMem = video_bufs[nn];
                  jcbs[nn].pVirtVidMem = video_bufs[nn];
@@ -677,6 +917,11 @@ void FMTKInitialize()
             jcbs[nn].CursorCol = 0;
         }
 
+        asm {
+            ldi   r1,#40
+            sc    r1,LEDS
+        }
+
     	for (nn = 0; nn < 8; nn++)
     		readyQ[nn] = 0;
     	for (nn = 0; nn < 256; nn++) {
@@ -684,27 +929,40 @@ void FMTKInitialize()
     		tcbs[nn].next = &tcbs[nn+1];
     		tcbs[nn].prev = 0;
     		tcbs[nn].status = 0;
-    		tcbs[nn].priority = 7;
+    		tcbs[nn].priority = 070;
     		tcbs[nn].affinity = 0;
     		tcbs[nn].sys_stack = &sys_stacks[nn] + 511;
     		tcbs[nn].bios_stack = &bios_stacks[nn] + 511;
-    		tcbs[nn].stack = &stacks[nn] + 511;
+    		tcbs[nn].stack = &stacks[nn] + 1023;
     		tcbs[nn].hJob = &jcbs[0];
     		tcbs[nn].timeout = 0;
     		tcbs[nn].mailboxes = 0;
-    		if (nn==0) {
-                tcbs[nn].priority = 3;
+    		if (nn<2) {
+                tcbs[nn].affinity = nn;
+                tcbs[nn].priority = 030;
             }
     	}
     	tcbs[256-1].next = (TCB *)0;
-    	freeTCB = &tcbs[1];
+    	freeTCB = &tcbs[2];
+        asm {
+            ldi   r1,#42
+            sc    r1,LEDS
+        }
     	InsertIntoReadyList(&tcbs[0]);
+    	InsertIntoReadyList(&tcbs[1]);
+    	tcbs[0].status = 8;
+    	tcbs[1].status = 8;
+        asm {
+            ldi   r1,#44
+            sc    r1,LEDS
+        }
     	SetRunningTCB(&tcbs[0]);
     	TimeoutList = (TCB *)0;
-    	set_vector(2,RescheduleIRQ);
-    	set_vector(451,TimerIRQ);
-//        StartTask(7, 0, IdleTask, 0, jcbs);
-        StartTask(7, 1, IdleTask, 0, jcbs);
+    	set_vector(4,FMTK_SystemCall);
+    	set_vector(2,FMTK_SchedulerIRQ);
+    	set_vector(451,FMTK_SchedulerIRQ);
+        FMTK_StartTask(070, 0, IdleTask, 0, jcbs);
+        FMTK_StartTask(070, 1, IdleTask, 0, jcbs);
     	FMTK_Inited = 0x12345678;
         asm {
             ldi   r1,#50

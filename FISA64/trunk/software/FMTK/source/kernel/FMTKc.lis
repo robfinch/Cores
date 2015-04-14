@@ -3,293 +3,317 @@
      3	
      4	
      5	
-     6	enum {
-     7	     E_Ok = 0,
-     8	     E_BadTCBHandle,
-     9	     E_BadPriority
-    10	};
-    11	
-    12	
-    13	typedef unsigned int uint;
-    14	
-    15	typedef struct tagMSG {
-    16		struct tagMSG *link;
-    17		uint d1;
-    18		uint d2;
-    19		byte type;
-    20		byte resv[7];
-    21	} MSG;
-    22	
-    23	typedef struct _tagJCB
-    24	{
-    25	    struct _tagJCB *iof_next;
-    26	    struct _tagJCB *iof_prev;
-    27	    char UserName[32];
-    28	    char path[256];
-    29	    char exitRunFile[256];
-    30	    char commandLine[256];
-    31	    unsigned __int32 *pVidMem;
-    32	    unsigned __int32 *pVirtVidMem;
-    33	    unsigned __int16 VideoRows;
-    34	    unsigned __int16 VideoCols;
-    35	    unsigned __int16 CursorRow;
-    36	    unsigned __int16 CursorCol;
-    37	    unsigned __int32 NormAttr;
-    38	    __int8 KeybdHead;
-    39	    __int8 KeybdTail;
-    40	    unsigned __int16 KeybdBuffer[16];
-    41	    __int16 number;
-    42	} JCB;
+     6	
+     7	
+     8	enum {
+     9	     E_Ok = 0,
+    10	     E_BadTCBHandle,
+    11	     E_BadPriority,
+    12	     E_BadCallno,
+    13	     E_Arg,
+    14	     E_BadMbx,
+    15	     E_QueFull,
+    16	     E_NoThread,
+    17	     E_NotAlloc,
+    18	     E_NoMsg,
+    19	     E_Timeout,
+    20	     E_BadAlarm,
+    21	     E_NotOwner,
+    22	     E_QueStrategy,
+    23	     E_DCBInUse,
+    24	     //; Device driver errors
+    25	     E_BadDevNum =	0x20,
+    26	     E_NoDev,
+    27	     E_BadDevOp,
+    28	     E_ReadError,
+    29	     E_WriteError,
+    30	     E_BadBlockNum,
+    31	     E_TooManyBlocks,
+    32	
+    33	     // resource errors
+    34	     E_NoMoreMbx =	0x40,
+    35	     E_NoMoreMsgBlks,
+    36	     E_NoMoreAlarmBlks,
+    37	     E_NoMoreTCBs,
+    38	     E_NoMem
+    39	};
+    40	
+    41	
+    42	typedef unsigned int uint;
     43	
-    44	struct tagMBX;
-    45	
-    46	typedef struct _tagTCB {
-    47		int regs[32];
-    48		int isp;
-    49		int dsp;
-    50		int esp;
-    51		int ipc;
-    52		int dpc;
-    53		int epc;
-    54		int cr0;
-    55		struct _tagTCB *next;
-    56		struct _tagTCB *prev;
-    57		struct _tagTCB *mbq_next;
-    58		struct _tagTCB *mbq_prev;
-    59		int *sys_stack;
-    60		int *bios_stack;
-    61		int *stack;
-    62		__int64 timeout;
-    63		JCB *hJob;
-    64		struct tagMBX *mailboxes;
-    65		__int8 priority;
-    66		__int8 status;
-    67		__int8 affinity;
-    68		__int16 number;
-    69	} TCB;
-    70	
-    71	typedef struct tagMBX {
-    72	    struct tagMBX *next;
-    73		TCB *tq_head;
-    74		TCB *tq_tail;
-    75		MSG *mq_head;
-    76		MSG *mq_tail;
-    77		uint tq_count;
-    78		uint mq_size;
-    79		uint mq_count;
-    80		uint mq_missed;
-    81		uint owner;		// hJcb of owner
-    82		char mq_strategy;
-    83		byte resv[7];
-    84	} MBX;
-    85	
-    86	typedef struct tagALARM {
-    87		struct tagALARM *next;
-    88		struct tagALARM *prev;
-    89		MBX *mbx;
-    90		MSG *msg;
-    91		uint BaseTimeout;
-    92		uint timeout;
-    93		uint repeat;
-    94		byte resv[8];		// padding to 64 bytes
-    95	} ALARM;
-    96	
-    97	
-    98	int irq_stack[512];
-    99	
-   100	int FMTK_Inited;
-   101	TCB tempTCB;
-   102	JCB jcbs[51];
-   103	TCB tcbs[256];
-   104	TCB *readyQ[8];
-   105	TCB *runningTCB;
-   106	TCB *freeTCB;
-   107	int sysstack[1024];
-   108	int stacks[256][512];
-   109	int sys_stacks[256][512];
-   110	int bios_stacks[256][512];
-   111	int fmtk_irq_stack[512];
-   112	MBX mailbox[2048];
-   113	MSG message[32768];
-   114	MSG *freeMSG;
-   115	MBX *freeMBX;
-   116	JCB *IOFocusNdx;
-   117	int IOFocusTbl[4];
-   118	int iof_switch;
-   119	int BIOS1_sema;
-   120	int iof_sema;
-   121	int sys_sema;
-   122	int BIOS_RespMbx;
-   123	
-   124	short int video_bufs[51][4096];
-   125	TCB *TimeoutList;
-   126	
-   127	naked int getCPU()
-   128	{
-   129	     asm {
-   130	         cpuid r1,r0,#0
-   131	         rtl
-   132	     };
-   133	     
-   134	}
-   135	
-
-
-*** local symbol table ***
-
-
-
-
-   136	void SetBound48(TCB *ps, TCB *pe)
-   137	{
-   138	     asm {
-   139	     lw      r1,24[bp]
-   140	     mtspr   112,r1      ; set lower bound
-   141	     lea     r1,32[bp]
-   142	     mtspr   176,r1      ; set upper bound
-   143	     mtspr   240,r0      ; modulo mask not used
-   144	     }
-   145	}
-   146	
-
-
-*** local symbol table ***
-
-ps         =000018    -    Auto        Pointer to struct _tagTCB 
-pe         =000020    -    Auto        Pointer to struct _tagTCB 
-
-
-
-   147	void SetBound49(JCB *ps, JCB *pe)
-   148	{
-   149	     asm {
-   150	     lw      r1,24[bp]
-   151	     mtspr   113,r1      ; set lower bound
-   152	     lea     r1,32[bp]
-   153	     mtspr   177,r1      ; set upper bound
-   154	     mtspr   241,r0      ; modulo mask not used
-   155	     }
-   156	}
-   157	
-
-
-*** local symbol table ***
-
-ps         =000018    -    Auto        Pointer to struct _tagJCB 
-pe         =000020    -    Auto        Pointer to struct _tagJCB 
-
-
-
-   158	void SetBound50(MBX *ps, MBX *pe)
-   159	{
-   160	     asm {
-   161	     lw      r1,24[bp]
-   162	     mtspr   114,r1      ; set lower bound
-   163	     lea     r1,32[bp]
-   164	     mtspr   178,r1      ; set upper bound
-   165	     mtspr   242,r0      ; modulo mask not used
-   166	     }
-   167	}
-   168	
-
-
-*** local symbol table ***
-
-ps         =000018    -    Auto        Pointer to struct tagMBX 
-pe         =000020    -    Auto        Pointer to struct tagMBX 
-
-
-
-   169	void SetBound51(MSG *ps, MSG *pe)
-   170	{
-   171	     asm {
-   172	     lw      r1,24[bp]
-   173	     mtspr   115,r1      ; set lower bound
-   174	     lea     r1,32[bp]
-   175	     mtspr   179,r1      ; set upper bound
-   176	     mtspr   243,r0      ; modulo mask not used
-   177	     }
-   178	}
-   179	
-
-
-*** local symbol table ***
-
-ps         =000018    -    Auto        Pointer to struct tagMSG 
-pe         =000020    -    Auto        Pointer to struct tagMSG 
-
-
-
-   180	int chkTCB(TCB *p)
-   181	{
-   182	    asm {
-   183	        lw    r1,24[bp]
-   184	        chk   r1,r1,b48
-   185	    }
-   186	}
-   187	
-
-
-*** local symbol table ***
-
-p          =000018    -    Auto        Pointer to struct _tagTCB 
-
-
-
-   188	naked TCB *GetRunningTCB()
-   189	{
-   190	    asm {
-   191	        mov r1,tr
-   192	        rtl
-   193	    }
-   194	}
-   195	
-
-
-*** local symbol table ***
-
-
-
-
-   196	void SetRunningTCB(TCB *p)
-   197	{
-   198	     asm {
-   199	         lw  tr,24[bp]
-   200	     }
-   201	}
-   202	
-
-
-*** local symbol table ***
-
-p          =000018    -    Auto        Pointer to struct _tagTCB 
-
-
-
-   203	naked void DisplayIRQLive()
-   204	{
-   205	     asm {
-   206	         inc  $FFD00000+220,#1
-   207	         rtl
-   208	     }
-   209	}
-   210	
-
-
-*** local symbol table ***
-
-
-
-
-   211	JCB *GetJCBPtr()
-   212	{
-   213	    return GetRunningTCB()->hJob;
-   214	}
-   215	
+    44	typedef struct tagMSG align(32) {
+    45		struct tagMSG *link;
+    46		uint d1;
+    47		uint d2;
+    48		uint type;
+    49	} MSG;
+    50	
+    51	typedef struct _tagJCB align(2048)
+    52	{
+    53	    struct _tagJCB *iof_next;
+    54	    struct _tagJCB *iof_prev;
+    55	    char UserName[32];
+    56	    char path[256];
+    57	    char exitRunFile[256];
+    58	    char commandLine[256];
+    59	    unsigned __int32 *pVidMem;
+    60	    unsigned __int32 *pVirtVidMem;
+    61	    unsigned __int16 VideoRows;
+    62	    unsigned __int16 VideoCols;
+    63	    unsigned __int16 CursorRow;
+    64	    unsigned __int16 CursorCol;
+    65	    unsigned __int32 NormAttr;
+    66	    __int8 KeybdHead;
+    67	    __int8 KeybdTail;
+    68	    unsigned __int16 KeybdBuffer[16];
+    69	    __int16 number;
+    70	} JCB;
+    71	
+    72	struct tagMBX;
+    73	
+    74	typedef struct _tagTCB align(512) {
+    75		int regs[32];
+    76		int isp;
+    77		int dsp;
+    78		int esp;
+    79		int ipc;
+    80		int dpc;
+    81		int epc;
+    82		int cr0;
+    83		struct _tagTCB *next;
+    84		struct _tagTCB *prev;
+    85		struct _tagTCB *mbq_next;
+    86		struct _tagTCB *mbq_prev;
+    87		int *sys_stack;
+    88		int *bios_stack;
+    89		int *stack;
+    90		__int64 timeout;
+    91		JCB *hJob;
+    92		int msgD1;
+    93		int msgD2;
+    94		MSG *MsgPtr;
+    95		uint hWaitMbx;
+    96		struct tagMBX *mailboxes;
+    97		__int8 priority;
+    98		__int8 status;
+    99		__int8 affinity;
+   100		__int16 number;
+   101	} TCB;
+   102	
+   103	typedef struct tagMBX align(128) {
+   104	    struct tagMBX *link;
+   105		TCB *tq_head;
+   106		TCB *tq_tail;
+   107		MSG *mq_head;
+   108		MSG *mq_tail;
+   109		uint tq_count;
+   110		uint mq_size;
+   111		uint mq_count;
+   112		uint mq_missed;
+   113		uint owner;		// hJcb of owner
+   114		char mq_strategy;
+   115		byte resv[7];
+   116	} MBX;
+   117	
+   118	typedef struct tagALARM {
+   119		struct tagALARM *next;
+   120		struct tagALARM *prev;
+   121		MBX *mbx;
+   122		MSG *msg;
+   123		uint BaseTimeout;
+   124		uint timeout;
+   125		uint repeat;
+   126		byte resv[8];		// padding to 64 bytes
+   127	} ALARM;
+   128	
+   129	
+   130	TCB *GetRunningTCB();
+   131	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+   132	void set_vector(unsigned int, unsigned int);
+   133	int getCPU();
+   134	void outb(unsigned int, int);
+   135	void outc(unsigned int, int);
+   136	void outh(unsigned int, int);
+   137	void outw(unsigned int, int);
+   138	
+   139	
+   140	extern int irq_stack[];
+   141	extern int FMTK_Inited;
+   142	extern JCB jcbs[];
+   143	extern TCB tcbs[];
+   144	extern TCB *readyQ[];
+   145	extern TCB *runningTCB;
+   146	extern TCB *freeTCB;
+   147	extern int sysstack[];
+   148	extern int stacks[][];
+   149	extern int sys_stacks[][];
+   150	extern int bios_stacks[][];
+   151	extern int fmtk_irq_stack[];
+   152	extern int fmtk_sys_stack[];
+   153	extern MBX mailbox[];
+   154	extern MSG message[];
+   155	extern int nMsgBlk;
+   156	extern int nMailbox;
+   157	extern MSG *freeMSG;
+   158	extern MBX *freeMBX;
+   159	extern JCB *IOFocusNdx;
+   160	extern int IOFocusTbl[];
+   161	extern int iof_switch;
+   162	extern int BIOS1_sema;
+   163	extern int iof_sema;
+   164	extern int sys_sema;
+   165	extern int BIOS_RespMbx;
+   166	extern char hasUltraHighPriorityTasks;
+   167	extern int missed_ticks;
+   168	extern short int video_bufs[][];
+   169	extern TCB *TimeoutList;
+   170	
+   171	
+   172	int irq_stack[512];
+   173	
+   174	int FMTK_Inited;
+   175	TCB tempTCB;
+   176	JCB jcbs[51];
+   177	TCB tcbs[256];
+   178	unsigned int readyQ[8];
+   179	TCB *freeTCB;
+   180	int sysstack[1024];
+   181	int stacks[256][1024];
+   182	int sys_stacks[256][512];
+   183	int bios_stacks[256][512];
+   184	int fmtk_irq_stack[512];
+   185	int fmtk_sys_stack[512];
+   186	MBX mailbox[2048];
+   187	MSG message[32768];
+   188	int nMsgBlk;
+   189	int nMailbox;
+   190	MSG *freeMSG;
+   191	MBX *freeMBX;
+   192	JCB *IOFocusNdx;
+   193	int IOFocusTbl[4];
+   194	int iof_switch;
+   195	int BIOS1_sema;
+   196	int iof_sema;
+   197	int sys_sema;
+   198	int BIOS_RespMbx;
+   199	char hasUltraHighPriorityTasks;
+   200	int missed_ticks;
+   201	
+   202	short int video_bufs[51][4096];
+   203	TCB *TimeoutList;
+   204	
+   205	void SetBound48(TCB *ps, TCB *pe, int algn)
+   206	{
+   207	     asm {
+   208	     lw      r1,24[bp]
+   209	     mtspr   112,r1      ; set lower bound
+   210	     lw      r1,32[bp]
+   211	     mtspr   176,r1      ; set upper bound
+   212	     lw      r1,40[bp]
+   213	     mtspr   240,r1      ; modulo mask not used
+   214	     }
+   215	}
    216	
-   217	// ----------------------------------------------------------------------------
-   218	// ----------------------------------------------------------------------------
-   219	
+
+
+*** local symbol table ***
+
+ps_        =000018    -    Auto        Pointer to struct _tagTCB_ 
+pe_        =000020    -    Auto        Pointer to struct _tagTCB_ 
+algn_      =000028    -    Auto        Long
+
+
+
+   217	void SetBound49(JCB *ps, JCB *pe, int algn)
+   218	{
+   219	     asm {
+   220	     lw      r1,24[bp]
+   221	     mtspr   113,r1      ; set lower bound
+   222	     lw      r1,32[bp]
+   223	     mtspr   177,r1      ; set upper bound
+   224	     lw      r1,40[bp]
+   225	     mtspr   241,r1      ; modulo mask not used
+   226	     }
+   227	}
+   228	
+
+
+*** local symbol table ***
+
+ps_        =000018    -    Auto        Pointer to struct _tagJCB_ 
+pe_        =000020    -    Auto        Pointer to struct _tagJCB_ 
+algn_      =000028    -    Auto        Long
+
+
+
+   229	void SetBound50(MBX *ps, MBX *pe, int algn)
+   230	{
+   231	     asm {
+   232	     lw      r1,24[bp]
+   233	     mtspr   114,r1      ; set lower bound
+   234	     lw      r1,32[bp]
+   235	     mtspr   178,r1      ; set upper bound
+   236	     lw      r1,40[bp]
+   237	     mtspr   242,r1      ; modulo mask not used
+   238	     }
+   239	}
+   240	
+
+
+*** local symbol table ***
+
+ps_        =000018    -    Auto        Pointer to struct tagMBX_ 
+pe_        =000020    -    Auto        Pointer to struct tagMBX_ 
+algn_      =000028    -    Auto        Long
+
+
+
+   241	void SetBound51(MSG *ps, MSG *pe, int algn)
+   242	{
+   243	     asm {
+   244	     lw      r1,24[bp]
+   245	     mtspr   115,r1      ; set lower bound
+   246	     lw      r1,32[bp]
+   247	     mtspr   179,r1      ; set upper bound
+   248	     lw      r1,40[bp]
+   249	     mtspr   243,r1      ; modulo mask not used
+   250	     }
+   251	}
+   252	
+
+
+*** local symbol table ***
+
+ps_        =000018    -    Auto        Pointer to struct tagMSG_ 
+pe_        =000020    -    Auto        Pointer to struct tagMSG_ 
+algn_      =000028    -    Auto        Long
+
+
+
+   253	int chkTCB(TCB *p)
+   254	{
+   255	    asm {
+   256	        lw    r1,24[bp]
+   257	        chk   r1,r1,b48
+   258	    }
+   259	}
+   260	
+
+
+*** local symbol table ***
+
+p_         =000018    -    Auto        Pointer to struct _tagTCB_ 
+
+
+
+   261	naked TCB *GetRunningTCB()
+   262	{
+   263	    asm {
+   264	        mov r1,tr
+   265	        rtl
+   266	    }
+   267	}
+   268	
 
 
 *** local symbol table ***
@@ -297,327 +321,419 @@ p          =000018    -    Auto        Pointer to struct _tagTCB
 
 
 
-   220	private int InsertIntoReadyList(TCB *p)
-   221	{
-   222	    TCB *q;
-   223	
-   224	    if (!chkTCB(p))
-   225	        return E_BadTCBHandle;
-   226		if (p->priority > 7 || p->priority < 0)
-   227			return E_BadPriority;
-   228		p->status = 16;
-   229		q = readyQ[p->priority];
-   230		// Ready list empty ?
-   231		if (q==0) {
-   232			p->next = p;
-   233			p->prev = p;
-   234			readyQ[p->priority] = p;
-   235			return E_Ok;
-   236		}
-   237		// Insert at tail of list
-   238		p->next = q;
-   239		p->prev = q->prev;
-   240		q->prev->next = p;
-   241		q->prev = p;
-   242		return E_Ok;
-   243	}
-   244	
-   245	// ----------------------------------------------------------------------------
-   246	// ----------------------------------------------------------------------------
-   247	
+   269	void SetRunningTCB(TCB *p)
+   270	{
+   271	     asm {
+   272	         lw  tr,24[bp]
+   273	     }
+   274	}
+   275	
 
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to struct _tagTCB 
-q          =fffffff8    -    Auto        Pointer to struct _tagTCB 
+p_         =000018    -    Auto        Pointer to struct _tagTCB_ 
 
 
 
-   248	private int RemoveFromReadyList(TCB *t)
-   249	{
-   250	    if (!chkTCB(t))
-   251	        return E_BadTCBHandle;
-   252		if (t->priority > 7 || t->priority < 0)
-   253			return E_BadPriority;
-   254	    if (t==readyQ[t->priority])
-   255	       readyQ[t->priority] = t->next;
-   256	    if (t==readyQ[t->priority])
-   257	       readyQ[t->priority] = (void *)0;
-   258	    t->next->prev = t->prev;
-   259	    t->prev->next = t->next;
-   260	    t->next = (void *)0;
-   261	    t->prev = (void *)0;
-   262	    t->status = 0;
-   263	    return E_Ok;
-   264	}
-   265	
-   266	
-   267	// ----------------------------------------------------------------------------
-   268	// ----------------------------------------------------------------------------
-   269	
+   276	naked int GetVecno()
+   277	{
+   278	    asm {
+   279	        mfspr  r1,12
+   280	        rtl
+   281	    }
+   282	}
+   283	
 
 
 *** local symbol table ***
 
-t          =000018    -    Auto        Pointer to struct _tagTCB 
 
 
 
-   270	private int InsertIntoTimeoutList(TCB *t, int to)
-   271	{
-   272	    TCB *p, *q;
-   273	
-   274	    if (TimeoutList==(void *)0) {
-   275	        t->timeout = to;
-   276	        TimeoutList = t;
-   277	        t->next = (void *)0;
-   278	        t->prev = (void *)0;
-   279	        return E_Ok;
-   280	    }
-   281	    q = (void *)0;
-   282	    p = TimeoutList;
-   283	    while (to > p->timeout) {
-   284	        to -= p->timeout;
-   285	        q = p;
-   286	        p = p->next;
-   287	    }
-   288	    t->next = p;
-   289	    t->prev = q;
-   290	    if (p) {
-   291	        p->timeout -= to;
-   292	        p->prev = t;
-   293	    }
-   294	    if (q)
-   295	        q->next = t;
-   296	    else
-   297	        TimeoutList = t;
-   298	    t->status |= 1;
-   299	    return E_Ok;
+   284	naked void DisplayIRQLive()
+   285	{
+   286	     asm {
+   287	         inc  $FFD00000+220,#1
+   288	         rtl
+   289	     }
+   290	}
+   291	
 
 
 *** local symbol table ***
 
-t          =000018    -    Auto        Pointer to struct _tagTCB 
-to         =000020    -    Auto        Long
-p          =fffffff8    -    Auto        Pointer to struct _tagTCB 
-q          =fffffff0    -    Auto        Pointer to struct _tagTCB 
 
 
 
-   300	};
-   301	
-   302	// ----------------------------------------------------------------------------
-   303	// ----------------------------------------------------------------------------
+   292	JCB *GetJCBPtr()
+   293	{
+   294	    return GetRunningTCB()->hJob;
+   295	}
+   296	
+   297	
+   298	// ----------------------------------------------------------------------------
+   299	// ----------------------------------------------------------------------------
+   300	
+
+
+*** local symbol table ***
+
+
+
+
+   301	private int InsertIntoReadyList(TCB *p)
+   302	{
+   303	    TCB *q;
    304	
-   305	private int RemoveFromTimeoutList(TCB *t)
-   306	{
-   307	    if (t->next) {
-   308	       t->next->prev = t->prev;
-   309	       t->next->timeout += t->timeout;
-   310	    }
-   311	    if (t->prev)
-   312	       t->prev->next = t->next;
-   313	    t->status = 0;
-   314	    t->next = (void *)0;
-   315	    t->prev = (void *)0;
-   316	}
-   317	
-   318	// ----------------------------------------------------------------------------
-   319	// ----------------------------------------------------------------------------
-   320	
-
-
-*** local symbol table ***
-
-t          =000018    -    Auto        Pointer to struct _tagTCB 
-
-
-
-   321	private TCB *PopTimeoutList()
-   322	{
-   323	    TCB *p;
-   324	    
-   325	    p = TimeoutList;
-   326	    if (TimeoutList)
-   327	        TimeoutList = TimeoutList->next;
-   328	    return p;
-   329	}
+   305	    if (!chkTCB(p))
+   306	        return E_BadTCBHandle;
+   307		if (p->priority > 077 || p->priority < 000)
+   308			return E_BadPriority;
+   309		if (p->priority < 003)
+   310		   hasUltraHighPriorityTasks |= (1 << p->priority);
+   311		p->status = 16;
+   312		q = readyQ[p->priority>>3];
+   313		// Ready list empty ?
+   314		if (q==0) {
+   315			p->next = p;
+   316			p->prev = p;
+   317			readyQ[p->priority>>3] = p;
+   318			return E_Ok;
+   319		}
+   320		// Insert at tail of list
+   321		p->next = q;
+   322		p->prev = q->prev;
+   323		q->prev->next = p;
+   324		q->prev = p;
+   325		return E_Ok;
+   326	}
+   327	
+   328	// ----------------------------------------------------------------------------
+   329	// ----------------------------------------------------------------------------
    330	
-   331	// ----------------------------------------------------------------------------
-   332	// Select a task to run.
-   333	// ----------------------------------------------------------------------------
-   334	
 
 
 *** local symbol table ***
 
-p          =fffffff8    -    Auto        Pointer to struct _tagTCB 
+p_         =000018    -    Auto        Pointer to struct _tagTCB_ 
+q_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
 
 
 
-   335	private __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 1, 0, 7, 0, 0, 0, 0 };
-   336	private __int8 startQNdx;
-   337	
-   338	private TCB *SelectTaskToRun()
-   339	{
-   340		int nn;
-   341		TCB *p, *q;
-   342		int qToCheck;
-   343	
-   344		startQNdx++;
-   345		startQNdx &= 31;
-   346		qToCheck = startQ[startQNdx];
-   347		for (nn = 0; nn < 8; nn++) {
-   348			p = readyQ[qToCheck];
-   349			if (p) {
-   350	     		q = p->next;
-   351	            do {  
-   352	                if (!(q->status & 8)) {
-   353	                    if (q->affinity == getCPU()) {
-   354	        			   readyQ[qToCheck] = q;
-   355	        			   return q;
-   356	                    }
-   357	                }
-   358	                q = q->next;
-   359	            } while (q != p);
-   360	        }
-   361			qToCheck++;
-   362			qToCheck &= 7;
-   363		}
-   364		return GetRunningTCB();
-   365		panic("No entries in ready queue.");
-   366	}
-   367	
-   368	// ----------------------------------------------------------------------------
-   369	// ----------------------------------------------------------------------------
-   370	
+   331	private int RemoveFromReadyList(TCB *t)
+   332	{
+   333	    if (!chkTCB(t))
+   334	        return E_BadTCBHandle;
+   335		if (t->priority > 077 || t->priority < 000)
+   336			return E_BadPriority;
+   337	    if (t==readyQ[t->priority>>3])
+   338	       readyQ[t->priority>>3] = t->next;
+   339	    if (t==readyQ[t->priority>>3])
+   340	       readyQ[t->priority>>3] = (void *)0;
+   341	    t->next->prev = t->prev;
+   342	    t->prev->next = t->next;
+   343	    t->next = (void *)0;
+   344	    t->prev = (void *)0;
+   345	    t->status = 0;
+   346	    return E_Ok;
+   347	}
+   348	
+   349	
+   350	// ----------------------------------------------------------------------------
+   351	// ----------------------------------------------------------------------------
+   352	
 
 
 *** local symbol table ***
 
-nn         =fffffff8    -    Auto        Long
-p          =fffffff0    -    Auto        Pointer to struct _tagTCB 
-q          =ffffffe8    -    Auto        Pointer to struct _tagTCB 
-qToCheck   =ffffffe0    -    Auto        Long
+t_         =000018    -    Auto        Pointer to struct _tagTCB_ 
 
 
 
-   371	naked TimerIRQ()
-   372	{
-   373	     asm {
-   374	         lea   sp,fmtk_irq_stack+4088
-   375	         sw    r1,8[tr]
-   376	         sw    r2,16[tr]
-   377	         sw    r3,24[tr]
-   378	         sw    r4,32[tr]
-   379	         sw    r5,40[tr]
-   380	         sw    r6,48[tr]
-   381	         sw    r7,56[tr]
-   382	         sw    r8,64[tr]
-   383	         sw    r9,72[tr]
-   384	         sw    r10,80[tr]
-   385	         sw    r11,88[tr]
-   386	         sw    r12,96[tr]
-   387	         sw    r13,104[tr]
-   388	         sw    r14,112[tr]
-   389	         sw    r15,120[tr]
-   390	         sw    r16,128[tr]
-   391	         sw    r17,136[tr]
-   392	         sw    r18,144[tr]
-   393	         sw    r19,152[tr]
-   394	         sw    r20,160[tr]
-   395	         sw    r21,168[tr]
-   396	         sw    r22,176[tr]
-   397	         sw    r23,184[tr]
-   398	         sw    r24,192[tr]
-   399	         sw    r25,200[tr]
-   400	         sw    r26,208[tr]
-   401	         sw    r27,216[tr]
-   402	         sw    r28,224[tr]
-   403	         sw    r29,232[tr]
-   404	         sw    r30,240[tr]
-   405	         sw    r31,248[tr]
-   406	         mfspr r1,isp
-   407	         sw    r1,256[tr]
-   408	         mfspr r1,dsp
-   409	         sw    r1,264[tr]
-   410	         mfspr r1,esp
-   411	         sw    r1,272[tr]
-   412	         mfspr r1,ipc
-   413	         sw    r1,280[tr]
-   414	         mfspr r1,dpc
-   415	         sw    r1,288[tr]
-   416	         mfspr r1,epc
-   417	         sw    r1,296[tr]
-   418	         mfspr r1,cr0
-   419	         sw    r1,304[tr]
-   420	     }
-   421	     DisplayIRQLive();
-   422	     GetRunningTCB()->status = 4;
-   423	     while (TimeoutList) {
-   424	         if (TimeoutList->timeout==0)
-   425	             InsertIntoReadyList(PopTimeoutList());
-   426	         else {
-   427	              TimeoutList->timeout--;
-   428	              break;
-   429	         }
-   430	     }
-   431	     SetRunningTCB(SelectTaskToRun());
-   432	     GetRunningTCB()->status = 8;
-   433	     asm {
-   434	RestoreContext:
-   435	         lw    r1,256[tr]
-   436	         mtspr isp,r1
-   437	         lw    r1,264[tr]
-   438	         mtspr dsp,r1
-   439	         sl    r1,272[tr]
-   440	         mtspr esp,r1
-   441	         lw    r1,280[tr]
-   442	         mtspr ipc,r1
-   443	         lw    r1,288[tr]
-   444	         mtspr dpc,r1
-   445	         lw    r1,296[tr]
-   446	         mtspr epc,r1
-   447	         lw    r1,304[tr]
-   448	         mtspr cr0,r1
-   449	         lw    r1,8[tr]
-   450	         lw    r2,16[tr]
-   451	         lw    r3,24[tr]
-   452	         lw    r4,32[tr]
-   453	         lw    r5,40[tr]
-   454	         lw    r6,48[tr]
-   455	         lw    r7,56[tr]
-   456	         lw    r8,64[tr]
-   457	         lw    r9,72[tr]
-   458	         lw    r10,80[tr]
-   459	         lw    r11,88[tr]
-   460	         lw    r12,96[tr]
-   461	         lw    r13,104[tr]
-   462	         lw    r14,112[tr]
-   463	         lw    r15,120[tr]
-   464	         lw    r16,128[tr]
-   465	         lw    r17,136[tr]
-   466	         lw    r18,144[tr]
-   467	         lw    r19,152[tr]
-   468	         lw    r20,160[tr]
-   469	         lw    r21,168[tr]
-   470	         lw    r22,176[tr]
-   471	         lw    r23,184[tr]
-   472	         lw    r25,200[tr]
-   473	         lw    r26,208[tr]
-   474	         lw    r27,216[tr]
-   475	         lw    r28,224[tr]
-   476	         lw    r29,232[tr]
-   477	         lw    r30,240[tr]
-   478	         lw    r31,248[tr]
-   479	         rti
-   480	     }
-   481	}
-   482	
-   483	// ----------------------------------------------------------------------------
-   484	// ----------------------------------------------------------------------------
-   485	
+   353	private int InsertIntoTimeoutList(TCB *t, int to)
+   354	{
+   355	    TCB *p, *q;
+   356	
+   357	    if (TimeoutList==(void *)0) {
+   358	        t->timeout = to;
+   359	        TimeoutList = t;
+   360	        t->next = (void *)0;
+   361	        t->prev = (void *)0;
+   362	        return E_Ok;
+   363	    }
+   364	    q = (void *)0;
+   365	    p = TimeoutList;
+   366	    while (to > p->timeout) {
+   367	        to -= p->timeout;
+   368	        q = p;
+   369	        p = p->next;
+   370	    }
+   371	    t->next = p;
+   372	    t->prev = q;
+   373	    if (p) {
+   374	        p->timeout -= to;
+   375	        p->prev = t;
+   376	    }
+   377	    if (q)
+   378	        q->next = t;
+   379	    else
+   380	        TimeoutList = t;
+   381	    t->status |= 1;
+   382	    return E_Ok;
+
+
+*** local symbol table ***
+
+t_         =000018    -    Auto        Pointer to struct _tagTCB_ 
+to_        =000020    -    Auto        Long
+p_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
+q_         =fffffff0    -    Auto        Pointer to struct _tagTCB_ 
+
+
+
+   383	};
+   384	
+   385	// ----------------------------------------------------------------------------
+   386	// ----------------------------------------------------------------------------
+   387	
+   388	private int RemoveFromTimeoutList(TCB *t)
+   389	{
+   390	    if (t->next) {
+   391	       t->next->prev = t->prev;
+   392	       t->next->timeout += t->timeout;
+   393	    }
+   394	    if (t->prev)
+   395	       t->prev->next = t->next;
+   396	    t->status = 0;
+   397	    t->next = (void *)0;
+   398	    t->prev = (void *)0;
+   399	}
+   400	
+   401	// ----------------------------------------------------------------------------
+   402	// Pop the top entry from the timeout list.
+   403	// ----------------------------------------------------------------------------
+   404	
+
+
+*** local symbol table ***
+
+t_         =000018    -    Auto        Pointer to struct _tagTCB_ 
+
+
+
+   405	private TCB *PopTimeoutList()
+   406	{
+   407	    TCB *p;
+   408	    
+   409	    p = TimeoutList;
+   410	    if (TimeoutList) {
+   411	        TimeoutList = TimeoutList->next;
+   412	        if (TimeoutList)
+   413	            TimeoutList->prev = (void *)0;
+   414	    }
+   415	    return p;
+   416	}
+   417	
+   418	// ----------------------------------------------------------------------------
+   419	// Select a task to run.
+   420	// ----------------------------------------------------------------------------
+   421	
+
+
+*** local symbol table ***
+
+p_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
+
+
+
+   422	private __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 1, 0, 7, 0, 0, 0, 0 };
+   423	private __int8 startQNdx;
+   424	
+   425	private TCB *SelectTaskToRun()
+   426	{
+   427		int nn,kk;
+   428		TCB *p, *q;
+   429		int qToCheck;
+   430	
+   431		startQNdx++;
+   432		startQNdx &= 31;
+   433		qToCheck = startQ[startQNdx];
+   434		for (nn = 0; nn < 8; nn++) {
+   435			p = readyQ[qToCheck];
+   436			if (p) {
+   437	            kk = 0;
+   438	     		q = p->next;
+   439	            do {  
+   440	                if (!(q->status & 8)) {
+   441	                    if (q->affinity == getCPU()) {
+   442	        			   readyQ[qToCheck] = q;
+   443	        			   return q;
+   444	                    }
+   445	                }
+   446	                q = q->next;
+   447	                kk = kk + 1;
+   448	            } while (q != p && kk < 256);
+   449	        }
+   450			qToCheck++;
+   451			qToCheck &= 7;
+   452		}
+   453		return GetRunningTCB();
+   454		panic("No entries in ready queue.");
+   455	}
+   456	
+   457	// ----------------------------------------------------------------------------
+   458	// There isn't any 'C' code in the SystemCall() function. If there were it
+   459	// would have to be arranged like the TimerIRQ() or RescheduleIRQ() functions.
+   460	// ----------------------------------------------------------------------------
+   461	
+
+
+*** local symbol table ***
+
+nn_        =fffffff8    -    Auto        Long
+kk_        =fffffff0    -    Auto        Long
+p_         =ffffffe8    -    Auto        Pointer to struct _tagTCB_ 
+q_         =ffffffe0    -    Auto        Pointer to struct _tagTCB_ 
+qToCheck_  =ffffffd8    -    Auto        Long
+
+
+
+   462	naked FMTK_SystemCall()
+   463	{
+   464	    asm {
+   465	         lea   sp,sys_stacks_[tr]
+   466	         sw    r1,8[tr]
+   467	         sw    r2,16[tr]
+   468	         sw    r3,24[tr]
+   469	         sw    r4,32[tr]
+   470	         sw    r5,40[tr]
+   471	         sw    r6,48[tr]
+   472	         sw    r7,56[tr]
+   473	         sw    r8,64[tr]
+   474	         sw    r9,72[tr]
+   475	         sw    r10,80[tr]
+   476	         sw    r11,88[tr]
+   477	         sw    r12,96[tr]
+   478	         sw    r13,104[tr]
+   479	         sw    r14,112[tr]
+   480	         sw    r15,120[tr]
+   481	         sw    r16,128[tr]
+   482	         sw    r17,136[tr]
+   483	         sw    r18,144[tr]
+   484	         sw    r19,152[tr]
+   485	         sw    r20,160[tr]
+   486	         sw    r21,168[tr]
+   487	         sw    r22,176[tr]
+   488	         sw    r23,184[tr]
+   489	         sw    r24,192[tr]
+   490	         sw    r25,200[tr]
+   491	         sw    r26,208[tr]
+   492	         sw    r27,216[tr]
+   493	         sw    r28,224[tr]
+   494	         sw    r29,232[tr]
+   495	         sw    r30,240[tr]
+   496	         sw    r31,248[tr]
+   497	         mfspr r1,isp
+   498	         sw    r1,256[tr]
+   499	         mfspr r1,dsp
+   500	         sw    r1,264[tr]
+   501	         mfspr r1,esp
+   502	         sw    r1,272[tr]
+   503	         mfspr r1,ipc
+   504	         sw    r1,280[tr]
+   505	         mfspr r1,dpc
+   506	         sw    r1,288[tr]
+   507	         mfspr r1,epc
+   508	         sw    r1,296[tr]
+   509	         mfspr r1,cr0
+   510	         sw    r1,304[tr]
+   511	
+   512	    	 mfspr r6,epc           ; get return address into r6
+   513	    	 and   r7,r6,#-4        ; clear LSB's
+   514	    	 lh	   r7,4[r7]			; get static call number parameter into r7
+   515	    	 addui r6,r6,#8		    ; update return address
+   516	    	 sw    r6,296[tr]
+   517	    	 cmpu  r6,r7,#20
+   518	    	 bgt   r6,.bad_callno
+   519	    	 asl   r7,r7,#1
+   520	    	 lcu   r6,syscall_vectors[r7]       ; load the vector into r6
+   521	    	 or    r6,r6,#FMTK_SystemCall_ & 0xFFFFFFFFFFFF0000
+   522	    	 jsr   [r6]				; do the system function
+   523	    	 sw    r1,8[tr]
+   524	.0001:
+   525	         lw    r1,256[tr]
+   526	         mtspr isp,r1
+   527	         lw    r1,264[tr]
+   528	         mtspr dsp,r1
+   529	         lw    r1,272[tr]
+   530	         mtspr esp,r1
+   531	         lw    r1,280[tr]
+   532	         mtspr ipc,r1
+   533	         lw    r1,288[tr]
+   534	         mtspr dpc,r1
+   535	         lw    r1,296[tr]
+   536	         mtspr epc,r1
+   537	         lw    r1,304[tr]
+   538	         mtspr cr0,r1
+   539	         lw    r1,8[tr]
+   540	         lw    r2,16[tr]
+   541	         lw    r3,24[tr]
+   542	         lw    r4,32[tr]
+   543	         lw    r5,40[tr]
+   544	         lw    r6,48[tr]
+   545	         lw    r7,56[tr]
+   546	         lw    r8,64[tr]
+   547	         lw    r9,72[tr]
+   548	         lw    r10,80[tr]
+   549	         lw    r11,88[tr]
+   550	         lw    r12,96[tr]
+   551	         lw    r13,104[tr]
+   552	         lw    r14,112[tr]
+   553	         lw    r15,120[tr]
+   554	         lw    r16,128[tr]
+   555	         lw    r17,136[tr]
+   556	         lw    r18,144[tr]
+   557	         lw    r19,152[tr]
+   558	         lw    r20,160[tr]
+   559	         lw    r21,168[tr]
+   560	         lw    r22,176[tr]
+   561	         lw    r23,184[tr]
+   562	         lw    r25,200[tr]
+   563	         lw    r26,208[tr]
+   564	         lw    r27,216[tr]
+   565	         lw    r28,224[tr]
+   566	         lw    r29,232[tr]
+   567	         lw    r31,248[tr]
+   568	         rte
+   569	.bad_callno:
+   570	         ldi   r1,#E_BadFuncno
+   571	         sw    r1,8[tr]
+   572	         bra   .0001   
+   573	syscall_vectors:
+   574	        dc    FMTKInitialize_
+   575	        dc    FMTK_StartTask_
+   576	        dc    FMTK_ExitTask_
+   577	        dc    FMTK_KillTask_
+   578	        dc    FMTK_SetTaskPriority_
+   579	        dc    FMTK_Sleep_
+   580	        dc    FMTK_AllocMbx_
+   581	        dc    FMTK_FreeMbx_
+   582	        dc    FMTK_PostMsg_
+   583	        dc    FMTK_SendMsg_
+   584	        dc    FMTK_WaitMsg_
+   585	        dc    FMTK_CheckMsg_
+   586	        align  4
+   587	    }
+   588	}
+   589	
+   590	// ----------------------------------------------------------------------------
+   591	// If timer interrupts are enabled during a priority #0 task, this routine
+   592	// only updates the missed ticks and remains in the same task. No timeouts
+   593	// are updated and no task switches will occur. The timer tick routine
+   594	// basically has a fixed latency when priority #0 is present.
+   595	// ----------------------------------------------------------------------------
+   596	
 
 
 *** local symbol table ***
@@ -625,64 +741,145 @@ qToCheck   =ffffffe0    -    Auto        Long
 
 
 
-   486	naked RescheduleIRQ()
-   487	{
-   488	     asm {
-   489	         lea   sp,fmtk_irq_stack+4088
-   490	         sw    r1,8[tr]
-   491	         sw    r2,16[tr]
-   492	         sw    r3,24[tr]
-   493	         sw    r4,32[tr]
-   494	         sw    r5,40[tr]
-   495	         sw    r6,48[tr]
-   496	         sw    r7,56[tr]
-   497	         sw    r8,64[tr]
-   498	         sw    r9,72[tr]
-   499	         sw    r10,80[tr]
-   500	         sw    r11,88[tr]
-   501	         sw    r12,96[tr]
-   502	         sw    r13,104[tr]
-   503	         sw    r14,112[tr]
-   504	         sw    r15,120[tr]
-   505	         sw    r16,128[tr]
-   506	         sw    r17,136[tr]
-   507	         sw    r18,144[tr]
-   508	         sw    r19,152[tr]
-   509	         sw    r20,160[tr]
-   510	         sw    r21,168[tr]
-   511	         sw    r22,176[tr]
-   512	         sw    r23,184[tr]
-   513	         sw    r24,192[tr]
-   514	         sw    r25,200[tr]
-   515	         sw    r26,208[tr]
-   516	         sw    r28,224[tr]
-   517	         sw    r27,216[tr]
-   518	         sw    r29,232[tr]
-   519	         sw    r30,240[tr]
-   520	         sw    r31,248[tr]
-   521	         mfspr r1,isp
-   522	         sw    r1,256[tr]
-   523	         mfspr r1,dsp
-   524	         sw    r1,264[tr]
-   525	         mfspr r1,esp
-   526	         sw    r1,272[tr]
-   527	         mfspr r1,ipc
-   528	         sw    r1,280[tr]
-   529	         mfspr r1,dpc
-   530	         sw    r1,288[tr]
-   531	         mfspr r1,epc
-   532	         sw    r1,296[tr]
-   533	         mfspr r1,cr0
-   534	         sw    r1,304[tr]
-   535	     }
-   536	     GetRunningTCB()->status = 4;
-   537	     SetRunningTCB(SelectTaskToRun());
-   538	     GetRunningTCB()->status = 8;
-   539	     asm {
-   540	         bra   RestoreContext
-   541	     }
-   542	}
-   543	
+   597	void FMTK_SchedulerIRQ()
+   598	{
+   599	     prolog asm {
+   600	         lea   sp,fmtk_irq_stack_+4088
+   601	         sw    r1,8[tr]
+   602	         sw    r2,16[tr]
+   603	         sw    r3,24[tr]
+   604	         sw    r4,32[tr]
+   605	         sw    r5,40[tr]
+   606	         sw    r6,48[tr]
+   607	         sw    r7,56[tr]
+   608	         sw    r8,64[tr]
+   609	         sw    r9,72[tr]
+   610	         sw    r10,80[tr]
+   611	         sw    r11,88[tr]
+   612	         sw    r12,96[tr]
+   613	         sw    r13,104[tr]
+   614	         sw    r14,112[tr]
+   615	         sw    r15,120[tr]
+   616	         sw    r16,128[tr]
+   617	         sw    r17,136[tr]
+   618	         sw    r18,144[tr]
+   619	         sw    r19,152[tr]
+   620	         sw    r20,160[tr]
+   621	         sw    r21,168[tr]
+   622	         sw    r22,176[tr]
+   623	         sw    r23,184[tr]
+   624	         sw    r24,192[tr]
+   625	         sw    r25,200[tr]
+   626	         sw    r26,208[tr]
+   627	         sw    r27,216[tr]
+   628	         sw    r28,224[tr]
+   629	         sw    r29,232[tr]
+   630	         sw    r30,240[tr]
+   631	         sw    r31,248[tr]
+   632	         mfspr r1,isp
+   633	         sw    r1,256[tr]
+   634	         mfspr r1,dsp
+   635	         sw    r1,264[tr]
+   636	         mfspr r1,esp
+   637	         sw    r1,272[tr]
+   638	         mfspr r1,ipc
+   639	         sw    r1,280[tr]
+   640	         mfspr r1,dpc
+   641	         sw    r1,288[tr]
+   642	         mfspr r1,epc
+   643	         sw    r1,296[tr]
+   644	         mfspr r1,cr0
+   645	         sw    r1,304[tr]
+   646	     }
+   647	     switch(GetVecno()) {
+   648	     // Timer tick interrupt
+   649	     case 451:
+   650	          asm {
+   651	             ldi   r1,#3				; reset the edge sense circuit
+   652	             sh	   r1,PIC_RSTE
+   653	         }
+   654	         DisplayIRQLive();
+   655	         spinlock(&sys_sema,10) {
+   656	             if (GetRunningTCB()->priority != 000) {
+   657	                 GetRunningTCB()->status = 4;
+   658	                 while (TimeoutList) {
+   659	                     if (TimeoutList->timeout<=0)
+   660	                         InsertIntoReadyList(PopTimeoutList());
+   661	                     else {
+   662	                          TimeoutList->timeout = TimeoutList->timeout - missed_ticks - 1;
+   663	                          missed_ticks = 0;
+   664	                          break;
+   665	                     }
+   666	                 }
+   667	                 if (GetRunningTCB()->priority > 002)
+   668	                    SetRunningTCB(SelectTaskToRun());
+   669	                 GetRunningTCB()->status = 8;
+   670	             }
+   671	             else
+   672	                 missed_ticks++;
+   673	         }
+   674	         lockfail {
+   675	             missed_ticks++;
+   676	         }
+   677	         break;
+   678	     // Explicit rescheduling request.
+   679	     case 2:
+   680	         GetRunningTCB()->status = 4;
+   681	         SetRunningTCB(SelectTaskToRun());
+   682	         GetRunningTCB()->status = 8;
+   683	         break;
+   684	     default:  ;
+   685	     }
+   686	     // Restore the processor registers and return using an RTI.
+   687	     epilog asm {
+   688	RestoreContext:
+   689	         lw    r1,256[tr]
+   690	         mtspr isp,r1
+   691	         lw    r1,264[tr]
+   692	         mtspr dsp,r1
+   693	         lw    r1,272[tr]
+   694	         mtspr esp,r1
+   695	         lw    r1,280[tr]
+   696	         mtspr ipc,r1
+   697	         lw    r1,288[tr]
+   698	         mtspr dpc,r1
+   699	         lw    r1,296[tr]
+   700	         mtspr epc,r1
+   701	         lw    r1,304[tr]
+   702	         mtspr cr0,r1
+   703	         lw    r1,8[tr]
+   704	         lw    r2,16[tr]
+   705	         lw    r3,24[tr]
+   706	         lw    r4,32[tr]
+   707	         lw    r5,40[tr]
+   708	         lw    r6,48[tr]
+   709	         lw    r7,56[tr]
+   710	         lw    r8,64[tr]
+   711	         lw    r9,72[tr]
+   712	         lw    r10,80[tr]
+   713	         lw    r11,88[tr]
+   714	         lw    r12,96[tr]
+   715	         lw    r13,104[tr]
+   716	         lw    r14,112[tr]
+   717	         lw    r15,120[tr]
+   718	         lw    r16,128[tr]
+   719	         lw    r17,136[tr]
+   720	         lw    r18,144[tr]
+   721	         lw    r19,152[tr]
+   722	         lw    r20,160[tr]
+   723	         lw    r21,168[tr]
+   724	         lw    r22,176[tr]
+   725	         lw    r23,184[tr]
+   726	         lw    r25,200[tr]
+   727	         lw    r26,208[tr]
+   728	         lw    r27,216[tr]
+   729	         lw    r28,224[tr]
+   730	         lw    r29,232[tr]
+   731	         lw    r31,248[tr]
+   732	         rti
+   733	     }
+   734	}
+   735	
 
 
 *** local symbol table ***
@@ -690,379 +887,500 @@ qToCheck   =ffffffe0    -    Auto        Long
 
 
 
-   544	void panic(char *msg)
-   545	{
-   546	     putstr(msg);
-   547	j1:  goto j1;
-   548	}
-   549	
-   550	// ----------------------------------------------------------------------------
-   551	// ----------------------------------------------------------------------------
-   552	
+   736	void panic(char *msg)
+   737	{
+   738	     putstr(msg);
+   739	j1:  goto j1;
+   740	}
+   741	
+   742	// ----------------------------------------------------------------------------
+   743	// ----------------------------------------------------------------------------
+   744	
 
 
 *** local symbol table ***
 
-msg        =000018    -    Auto        Pointer to Char
-j1         =00005a    -    Label
+msg_       =000018    -    Auto        Pointer to Char
+j1_        =00006a    -    Label
 
 
 
-   553	void DumpTaskList()
-   554	{
-   555	     TCB *p, *q;
-   556	     int n;
-   557	     
-   558	     printf("CPU Pri   Task     Prev     Next   Timeout\r\n");
-   559	     for (n = 0; n < 8; n++) {
-   560	         q = readyQ[n];
-   561	         p = q;
-   562	         if (q) {
-   563	             do {
-   564	                 printf("%3d %3d %08X %08X %08X %08X\r\n", p->affinity, p->priority, p, p->prev, p->next, p->timeout);
-   565	                 p = p->next;
-   566	                 if (getcharNoWait()==3)
-   567	                    goto j1;
-   568	             } while (p != q);
-   569	         }
-   570	     }
-   571	j1:  ;
-   572	}
-   573	
-   574	// ----------------------------------------------------------------------------
-   575	// ----------------------------------------------------------------------------
-   576	
-
-
-*** local symbol table ***
-
-j1         =00005f    -    Label
-p          =fffffff8    -    Auto        Pointer to struct _tagTCB 
-q          =fffffff0    -    Auto        Pointer to struct _tagTCB 
-n          =ffffffe8    -    Auto        Long
-
-
-
-   577	void IdleTask()
-   578	{
-   579	     while(1) {
-   580	         asm {
-   581	             inc  $FFD00000+228
-   582	         }
-   583	     }
-   584	}
-   585	
-   586	// ----------------------------------------------------------------------------
-   587	// ----------------------------------------------------------------------------
-   588	
+   745	void DumpTaskList()
+   746	{
+   747	     TCB *p, *q;
+   748	     int n;
+   749	     int kk;
+   750	     
+   751	     printf("CPU Pri Stat   Task     Prev     Next   Timeout\r\n");
+   752	     for (n = 0; n < 8; n++) {
+   753	         q = readyQ[n];
+   754	         p = q;
+   755	         if (q) {
+   756	             kk = 0;
+   757	             do {
+   758	                 if (!chkTCB(p))
+   759	                     break;
+   760	                 printf("%3d %3d %02X %08X %08X %08X %08X\r\n", p->affinity, p->priority, p->status, p, p->prev, p->next, p->timeo   761	ut);
+   762	                 p = p->next;
+   763	                 if (getcharNoWait()==3)
+   764	                    goto j1;
+   765	                 kk = kk + 1;
+   766	             } while (p != q && kk < 256);
+   767	         }
+   768	     }
+   769	j1:  ;
+   770	}
+   771	
+   772	// ----------------------------------------------------------------------------
+   773	// ----------------------------------------------------------------------------
+   774	
 
 
 *** local symbol table ***
 
+j1_        =00006f    -    Label
+p_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
+q_         =fffffff0    -    Auto        Pointer to struct _tagTCB_ 
+n_         =ffffffe8    -    Auto        Long
+kk_        =ffffffe0    -    Auto        Long
 
 
 
-   589	int ExitTask()
-   590	{
-   591	    TCB *t;
-   592	    MBX *m, *n;
-   593	
-   594	    LockSYS();
-   595	        RemoveFromReadyList(t);
-   596	        RemoveFromTimeoutList(t);
-   597	        t = GetRunningTCB();
-   598	        m = t->mailboxes;
-   599	        while (m) {
-   600	            n = m->next;
-   601	            FreeMbx(m);
-   602	            m = n;
-   603	        }
-   604	    UnlockSYS();
-   605	    asm { int #2 }     // reschedule
-   606	j1: goto j1;
-   607	}
-   608	
-   609	// ----------------------------------------------------------------------------
-   610	// ----------------------------------------------------------------------------
-   611	
+   775	void IdleTask()
+   776	{
+   777	     while(1) {
+   778	         asm {
+   779	             inc  $FFD00000+228
+   780	         }
+   781	     }
+   782	}
+   783	
+   784	// ----------------------------------------------------------------------------
+   785	// ----------------------------------------------------------------------------
+   786	
 
 
 *** local symbol table ***
 
-j1         =00006f    -    Label
-t          =fffffff8    -    Auto        Pointer to struct _tagTCB 
-m          =fffffff0    -    Auto        Pointer to struct tagMBX 
-n          =ffffffe8    -    Auto        Pointer to struct tagMBX 
 
 
 
-   612	int StartTask(int priority, int affinity, int adr, int parm, int job)
-   613	{
-   614	    TCB *t;
-   615	
-   616	    LockSYS();
-   617	        t = freeTCB;
-   618	        freeTCB = t->next;
-   619	    UnlockSYS();
-   620	        t->affinity = affinity;
-   621	        t->ipc = adr;
-   622	        t->isp = t->stack + 511;
-   623	        t->hJob = job;
-   624	        t->regs[1] = parm;
-   625	        t->regs[31] = ExitTask;
-   626	    LockSYS();
-   627	        InsertIntoReadyList(t);
-   628	    UnlockSYS();
-   629	    return E_Ok;
-   630	}
-   631	
-   632	// ----------------------------------------------------------------------------
-   633	// ----------------------------------------------------------------------------
-   634	
+   787	int FMTK_ExitTask()
+   788	{
+   789	    TCB *t;
+   790	    MBX *m, *n;
+   791	
+   792	    spinlock(&sys_sema) {
+   793	        RemoveFromReadyList(t);
+   794	        RemoveFromTimeoutList(t);
+   795	        t = GetRunningTCB();
+   796	        m = t->mailboxes;
+   797	        while (m) {
+   798	            n = m->link;
+   799	            FMTK_FreeMbx(m);
+   800	            m = n;
+   801	        }
+   802	    }
+   803	    asm { int #2 }     // reschedule
+   804	j1: goto j1;
+   805	}
+   806	
+   807	// ----------------------------------------------------------------------------
+   808	// ----------------------------------------------------------------------------
+   809	
 
 
 *** local symbol table ***
 
-priority   =000018    -    Auto        Long
-affinity   =000020    -    Auto        Long
-adr        =000028    -    Auto        Long
-parm       =000030    -    Auto        Long
-job        =000038    -    Auto        Long
-t          =fffffff8    -    Auto        Pointer to struct _tagTCB 
+j1_        =000082    -    Label
+t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
+m_         =fffffff0    -    Auto        Pointer to struct tagMBX_ 
+n_         =ffffffe8    -    Auto        Pointer to struct tagMBX_ 
 
 
 
-   635	void FMTKInitialize()
-   636	{
-   637		int nn;
-   638	
-   639	    if (FMTK_Inited!=0x12345678) {
-   640	        asm {
-   641	            ldi   r1,#20
-   642	            sc    r1,LEDS
-   643	        }
-   644	        UnlockSYS();
-   645	        UnlockIOF();
-   646	
-   647	        IOFocusTbl[0] = 0;
-   648	        IOFocusNdx = (void *)0;
-   649	
-   650	        SetBound48(tcbs, &tcbs[256]);
-   651	        SetBound49(jcbs, &jcbs[51]);
-   652	        SetBound50(mailbox, &mailbox[2048]);
-   653	        SetBound51(message, &message[32768]);
-   654	
-   655	        for (nn = 0; nn < 32768; nn++) {
-   656	            message[nn].link = &message[nn+1];
-   657	        }
-   658	        message[32768-1].link = (void *)0;
-   659	        freeMSG = &message[0];
-   660	
-   661	        for (nn = 0; nn < 51; nn++) {
-   662	            jcbs[nn].number = nn;
-   663	            if (nn == 0 ) {
-   664	                jcbs[nn].pVidMem = 0xFFD00000;
-   665	                jcbs[nn].pVirtVidMem = video_bufs[nn];
-   666	                jcbs[nn].NormAttr = 0x0026B800;
-   667	                RequestIOFocus(&jcbs[0]);
-   668	            }
-   669	            else {
-   670	                 jcbs[nn].pVidMem = video_bufs[nn];
-   671	                 jcbs[nn].pVirtVidMem = video_bufs[nn];
-   672	                 jcbs[nn].NormAttr = 0x0026B800;
-   673	            }
-   674	            jcbs[nn].VideoRows = 31;
-   675	            jcbs[nn].VideoCols = 84;
-   676	            jcbs[nn].CursorRow = 0;
-   677	            jcbs[nn].CursorCol = 0;
-   678	        }
-   679	
-   680	    	for (nn = 0; nn < 8; nn++)
-   681	    		readyQ[nn] = 0;
-   682	    	for (nn = 0; nn < 256; nn++) {
-   683	            tcbs[nn].number = nn;
-   684	    		tcbs[nn].next = &tcbs[nn+1];
-   685	    		tcbs[nn].prev = 0;
-   686	    		tcbs[nn].status = 0;
-   687	    		tcbs[nn].priority = 7;
-   688	    		tcbs[nn].affinity = 0;
-   689	    		tcbs[nn].sys_stack = &sys_stacks[nn] + 511;
-   690	    		tcbs[nn].bios_stack = &bios_stacks[nn] + 511;
-   691	    		tcbs[nn].stack = &stacks[nn] + 511;
-   692	    		tcbs[nn].hJob = &jcbs[0];
-   693	    		tcbs[nn].timeout = 0;
-   694	    		tcbs[nn].mailboxes = 0;
-   695	    		if (nn==0) {
-   696	                tcbs[nn].priority = 3;
-   697	            }
-   698	    	}
-   699	    	tcbs[256-1].next = (TCB *)0;
-   700	    	freeTCB = &tcbs[1];
-   701	    	InsertIntoReadyList(&tcbs[0]);
-   702	    	SetRunningTCB(&tcbs[0]);
-   703	    	TimeoutList = (TCB *)0;
-   704	    	set_vector(2,RescheduleIRQ);
-   705	    	set_vector(451,TimerIRQ);
-   706	//        StartTask(7, 0, IdleTask, 0, jcbs);
-   707	        StartTask(7, 1, IdleTask, 0, jcbs);
-   708	    	FMTK_Inited = 0x12345678;
-   709	        asm {
-   710	            ldi   r1,#50
-   711	            sc    r1,LEDS
-   712	        }
-   713	    }
-   714	}
-   715	
+   810	int FMTK_StartTask(int priority, int affinity, int adr, int parm, int job)
+   811	{
+   812	    TCB *t;
+   813	
+   814	    spinlock(&sys_sema) {
+   815	        t = freeTCB;
+   816	        freeTCB = t->next;
+   817	    }
+   818	    t->affinity = affinity;
+   819	    t->priority = priority;
+   820	    t->ipc = adr;
+   821	    t->isp = t->stack + 1023;
+   822	    t->hJob = job;
+   823	    t->regs[1] = parm;
+   824	    t->regs[31] = FMTK_ExitTask;
+   825	    spinlock(&sys_sema) {
+   826	        InsertIntoReadyList(t); }
+   827	    return E_Ok;
+   828	}
+   829	
+   830	// ----------------------------------------------------------------------------
+   831	// ----------------------------------------------------------------------------
+   832	
 
 
 *** local symbol table ***
 
-nn         =fffffff8    -    Auto        Long
+priority_  =000018    -    Auto        Long
+affinity_  =000020    -    Auto        Long
+adr_       =000028    -    Auto        Long
+parm_      =000030    -    Auto        Long
+job_       =000038    -    Auto        Long
+t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
+
+
+
+   833	int FMTK_Sleep(int timeout)
+   834	{
+   835	    TCB *t;
+   836	
+   837	    spinlock(&sys_sema) {
+   838	        t = GetRunningTCB();
+   839	        RemoveFromReadyList(t);
+   840	        InsertIntoTimeoutList(t, timeout);
+   841	    }
+   842	    asm { int #2 }      // reschedule
+   843	    return E_Ok;
+   844	}
+   845	
+   846	// ----------------------------------------------------------------------------
+   847	// ----------------------------------------------------------------------------
+   848	
+
+
+*** local symbol table ***
+
+timeout_   =000018    -    Auto        Long
+t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
+
+
+
+   849	int FMTK_SetTaskPriority(TCB* t, int priority)
+   850	{
+   851	    if (priority > 077 || priority < 000)
+   852	       return E_Arg;
+   853	    spinlock(&sys_sema) {
+   854	        if (t->status & (8 | 16)) {
+   855	            RemoveFromReadyList(t);
+   856	            t->priority = priority;
+   857	            InsertIntoReadyList(t);
+   858	        }
+   859	        else
+   860	            t->priority = priority;
+   861	    }
+   862	    return E_Ok;
+   863	}
+   864	
+   865	// ----------------------------------------------------------------------------
+   866	// ----------------------------------------------------------------------------
+   867	
+
+
+*** local symbol table ***
+
+t_         =000018    -    Auto        Pointer to struct _tagTCB_ 
+priority_  =000020    -    Auto        Long
+
+
+
+   868	void FMTKInitialize()
+   869	{
+   870		int nn;
+   871	
+   872	    if (FMTK_Inited!=0x12345678) {
+   873	        asm {
+   874	            ldi   r1,#20
+   875	            sc    r1,LEDS
+   876	        }
+   877	        spinunlock(&sys_sema);
+   878	        spinunlock(&iof_sema);
+   879	
+   880	        hasUltraHighPriorityTasks = 0;
+   881	        missed_ticks = 0;
+   882	
+   883	        IOFocusTbl[0] = 0;
+   884	        IOFocusNdx = (void *)0;
+   885	
+   886	        SetBound48(tcbs, &tcbs[256], 511);
+   887	        SetBound49(jcbs, &jcbs[51], 2047);
+   888	        SetBound50(mailbox, &mailbox[2048],127);
+   889	        SetBound51(message, &message[32768],31);
+   890	
+   891	        for (nn = 0; nn < 32768; nn++) {
+   892	            message[nn].link = &message[nn+1];
+   893	        }
+   894	        message[32768-1].link = (void *)0;
+   895	        freeMSG = &message[0];
+   896	
+   897	        asm {
+   898	            ldi   r1,#30
+   899	            sc    r1,LEDS
+   900	        }
+   901	
+   902	        for (nn = 0; nn < 51; nn++) {
+   903	            jcbs[nn].number = nn;
+   904	            if (nn == 0 ) {
+   905	                jcbs[nn].pVidMem = 0xFFD00000;
+   906	                jcbs[nn].pVirtVidMem = video_bufs[nn];
+   907	                jcbs[nn].NormAttr = 0x0026B800;
+   908	                RequestIOFocus(&jcbs[0]);
+   909	           }
+   910	            else {
+   911	                 jcbs[nn].pVidMem = video_bufs[nn];
+   912	                 jcbs[nn].pVirtVidMem = video_bufs[nn];
+   913	                 jcbs[nn].NormAttr = 0x0026B800;
+   914	            }
+   915	            jcbs[nn].VideoRows = 31;
+   916	            jcbs[nn].VideoCols = 84;
+   917	            jcbs[nn].CursorRow = 0;
+   918	            jcbs[nn].CursorCol = 0;
+   919	        }
+   920	
+   921	        asm {
+   922	            ldi   r1,#40
+   923	            sc    r1,LEDS
+   924	        }
+   925	
+   926	    	for (nn = 0; nn < 8; nn++)
+   927	    		readyQ[nn] = 0;
+   928	    	for (nn = 0; nn < 256; nn++) {
+   929	            tcbs[nn].number = nn;
+   930	    		tcbs[nn].next = &tcbs[nn+1];
+   931	    		tcbs[nn].prev = 0;
+   932	    		tcbs[nn].status = 0;
+   933	    		tcbs[nn].priority = 070;
+   934	    		tcbs[nn].affinity = 0;
+   935	    		tcbs[nn].sys_stack = &sys_stacks[nn] + 511;
+   936	    		tcbs[nn].bios_stack = &bios_stacks[nn] + 511;
+   937	    		tcbs[nn].stack = &stacks[nn] + 1023;
+   938	    		tcbs[nn].hJob = &jcbs[0];
+   939	    		tcbs[nn].timeout = 0;
+   940	    		tcbs[nn].mailboxes = 0;
+   941	    		if (nn<2) {
+   942	                tcbs[nn].affinity = nn;
+   943	                tcbs[nn].priority = 030;
+   944	            }
+   945	    	}
+   946	    	tcbs[256-1].next = (TCB *)0;
+   947	    	freeTCB = &tcbs[2];
+   948	        asm {
+   949	            ldi   r1,#42
+   950	            sc    r1,LEDS
+   951	        }
+   952	    	InsertIntoReadyList(&tcbs[0]);
+   953	    	InsertIntoReadyList(&tcbs[1]);
+   954	    	tcbs[0].status = 8;
+   955	    	tcbs[1].status = 8;
+   956	        asm {
+   957	            ldi   r1,#44
+   958	            sc    r1,LEDS
+   959	        }
+   960	    	SetRunningTCB(&tcbs[0]);
+   961	    	TimeoutList = (TCB *)0;
+   962	    	set_vector(4,FMTK_SystemCall);
+   963	    	set_vector(2,FMTK_SchedulerIRQ);
+   964	    	set_vector(451,FMTK_SchedulerIRQ);
+   965	        FMTK_StartTask(070, 0, IdleTask, 0, jcbs);
+   966	        FMTK_StartTask(070, 1, IdleTask, 0, jcbs);
+   967	    	FMTK_Inited = 0x12345678;
+   968	        asm {
+   969	            ldi   r1,#50
+   970	            sc    r1,LEDS
+   971	        }
+   972	    }
+   973	}
+   974	
+
+
+*** local symbol table ***
+
+nn_        =fffffff8    -    Auto        Long
 
 
 
 
  *** global scope typedef symbol table ***
 
-panic      =52b00a    -    Global      Function returning 
-E_BadPriority =000002    -    Constant    Long
-chkTCB     =52afe8    -    Global      Function returning Long
-IdleTask   =52b00a    -    Global      Function returning 
-GetJCBPtr  =52afe8    -    Global      Function returning Pointer to struct _tagJCB 
-video_bufs =45efe0    -    Global      Array of Array of Short
-getCPU     =52afe8    -    Global      Function returning Long
-ExitTask   =52b00a    -    Global      Function returning Long
-iof_switch =45efb8    -    Global      Long
-getcharNoWait =000000    -    External    Function returning Long
-set_vector =000000    -    External    Function returning Long
-iof_sema   =45efc8    -    Global      Long
-FMTKInitialize =52b00a    -    Global      Function returning 
-sys_stacks =131780    -    Global      Array of Array of Long
-UnlockIOF  =000000    -    External    Function returning Long
-BIOS_RespMbx =45efd8    -    Global      Long
-DisplayIRQLive =52afe8    -    Global      Function returning 
-E_Ok       =000000    -    Constant    Long
-BIOS1_sema =45efc0    -    Global      Long
-sys_sema   =45efd0    -    Global      Long
-readyQ     =02f730    -    Global      Array of Pointer to struct _tagTCB 
-UnlockSYS  =000000    -    External    Function returning Long
-ALARM      =0008a8    1   struct tagALARM 
-sysstack   =02f780    -    Global      Array of Long
-freeTCB    =02f778    -    Global      Pointer to struct _tagTCB 
-startQ     =000041    -    Static      Array of Byte
-RequestIOFocus =000000    -    External    Function returning Long
-TimeoutList =52afe0    -    Global      Pointer to struct _tagTCB 
-RemoveFromTimeoutList =000035    -    Static      Function returning Long
-LockSYS    =000000    -    External    Function returning Long
-stacks     =031780    -    Global      Array of Array of Long
-freeMSG    =45ef80    -    Global      Pointer to struct tagMSG 
-freeMBX    =45ef88    -    Global      Pointer to struct tagMBX 
-SetBound50 =52afe8    -    Global      Function returning 
-SetBound51 =52afe8    -    Global      Function returning 
-tempTCB    =0018f0    -    Global      struct _tagTCB 
-SetBound48 =52afe8    -    Global      Function returning 
-SetBound49 =52afe8    -    Global      Function returning 
-InsertIntoTimeoutList =00002a    -    Static      Function returning Long
-RemoveFromReadyList =00001e    -    Static      Function returning Long
-printf     =000000    -    External    Function returning Long
-bios_stacks =231780    -    Global      Array of Array of Long
-InsertIntoReadyList =000014    -    Static      Function returning Long
-StartTask  =52b00a    -    Global      Function returning Long
-jcbs       =001a80    -    Global      Array of struct _tagJCB 
-startQNdx  =000042    -    Static      Byte
-FreeMbx    =000000    -    External    Function returning Long
-tcbs       =016930    -    Global      Array of struct _tagTCB 
-PopTimeoutList =00003c    -    Static      Function returning Pointer to struct _tagTCB 
-putstr     =000000    -    External    Function returning Long
-IOFocusTbl =45ef98    -    Global      Array of Long
-uint       =000000    1   
-irq_stack  =0008e8    -    Global      Array of Long
-IOFocusNdx =45ef90    -    Global      Pointer to struct _tagJCB 
-DumpTaskList =52b00a    -    Global      Function returning 
-JCB        =000028    1   struct _tagJCB 
-E_BadTCBHandle =000001    -    Constant    Long
-fmtk_irq_stack =331780    -    Global      Array of Long
-TCB        =0006b8    1   struct _tagTCB 
-runningTCB =02f770    -    Global      Pointer to struct _tagTCB 
-GetRunningTCB =52afe8    -    Global      Function returning Pointer to struct _tagTCB 
-message    =35ef80    -    Global      Array of struct tagMSG 
-SetRunningTCB =52afe8    -    Global      Function returning 
-MSG        =000008    1   struct tagMSG 
-MBX        =000848    1   struct tagMBX 
-SelectTaskToRun =000043    -    Static      Function returning Pointer to struct _tagTCB 
-mailbox    =332780    -    Global      Array of struct tagMBX 
-TimerIRQ   =52b00a    -    Global      Function returning Long
-FMTK_Inited =0018e8    -    Global      Long
-RescheduleIRQ =52b00a    -    Global      Function returning Long
+jcbs_      =000000    -    External    Array of struct _tagJCB_ 
+E_NoMoreMsgBlks_ =000041    -    Constant    Long
+startQNdx_ =000046    -    Static      Byte
+tcbs_      =000000    -    External    Array of struct _tagTCB_ 
+nMsgBlk_   =000000    -    External    Long
+PopTimeoutList_ =00003e    -    Static      Function returning Pointer to struct _tagTCB_ 
+putstr_    =000000    -    External    Function returning Long
+FMTK_SetTaskPriority_ =64c12a    -    Global      Function returning Long
+E_NoThread_ =000007    -    Constant    Long
+E_WriteError_ =000024    -    Constant    Long
+outb_      =0012c0    -    Global      Function returning 
+IOFocusTbl_ =000000    -    External    Array of Long
+outc_      =0012c0    -    Global      Function returning 
+E_Arg_     =000004    -    Constant    Long
+FMTK_ExitTask_ =64c12a    -    Global      Function returning Long
+E_NotAlloc_ =000008    -    Constant    Long
+uint_      =000000    1   
+outh_      =0012c0    -    Global      Function returning 
+irq_stack_ =000000    -    External    Array of Long
+IOFocusNdx_ =000000    -    External    Pointer to struct _tagJCB_ 
+DumpTaskList_ =64c12a    -    Global      Function returning 
+E_BadBlockNum_ =000025    -    Constant    Long
+E_TooManyBlocks_ =000026    -    Constant    Long
+JCB_       =000800    1   struct _tagJCB_ 
+outw_      =0012c0    -    Global      Function returning 
+E_BadTCBHandle_ =000001    -    Constant    Long
+E_BadMbx_  =000005    -    Constant    Long
+fmtk_irq_stack_ =000000    -    External    Array of Long
+TCB_       =001000    1   struct _tagTCB_ 
+GetRunningTCB_ =64c108    -    Global      Function returning Pointer to struct _tagTCB_ 
+runningTCB_ =000000    -    External    Pointer to struct _tagTCB_ 
+E_NotOwner_ =00000c    -    Constant    Long
+fmtk_sys_stack_ =000000    -    External    Array of Long
+message_   =000000    -    External    Array of struct tagMSG_ 
+SetRunningTCB_ =64c108    -    Global      Function returning 
+MSG_       =000020    1   struct tagMSG_ 
+MBX_       =001200    1   struct tagMBX_ 
+SelectTaskToRun_ =000047    -    Static      Function returning Pointer to struct _tagTCB_ 
+mailbox_   =000000    -    External    Array of struct tagMBX_ 
+FMTK_Inited_ =000000    -    External    Long
+E_BadDevNum_ =000020    -    Constant    Long
+missed_ticks_ =000000    -    External    Long
+E_BadCallno_ =000003    -    Constant    Long
+panic_     =64c12a    -    Global      Function returning 
+E_BadPriority_ =000002    -    Constant    Long
+chkTCB_    =64c108    -    Global      Function returning Long
+IdleTask_  =64c12a    -    Global      Function returning 
+E_NoMoreMbx_ =000040    -    Constant    Long
+GetVecno_  =64c108    -    Global      Function returning Long
+FMTK_SchedulerIRQ_ =64c12a    -    Global      Function returning 
+E_QueStrategy_ =00000d    -    Constant    Long
+GetJCBPtr_ =64c108    -    Global      Function returning Pointer to struct _tagJCB_ 
+video_bufs_ =000000    -    External    Array of Array of Short
+getCPU_    =0012c0    -    External    Function returning Long
+E_ReadError_ =000023    -    Constant    Long
+hasUltraHighPriorityTasks_ =000000    -    External    Char
+iof_switch_ =000000    -    External    Long
+getcharNoWait_ =000000    -    External    Function returning Long
+FMTK_StartTask_ =64c12a    -    Global      Function returning Long
+nMailbox_  =000000    -    External    Long
+FMTK_FreeMbx_ =000000    -    External    Function returning Long
+set_vector_ =0012c0    -    Global      Function returning 
+E_NoMoreTCBs_ =000043    -    Constant    Long
+iof_sema_  =000000    -    External    Long
+FMTKInitialize_ =64c12a    -    Global      Function returning 
+sys_stacks_ =000000    -    External    Array of Array of Long
+BIOS_RespMbx_ =000000    -    External    Long
+E_DCBInUse_ =00000e    -    Constant    Long
+DisplayIRQLive_ =64c108    -    Global      Function returning 
+E_Ok_      =000000    -    Constant    Long
+E_QueFull_ =000006    -    Constant    Long
+BIOS1_sema_ =000000    -    External    Long
+sys_sema_  =000000    -    External    Long
+readyQ_    =000000    -    External    Array of Pointer to struct _tagTCB_ 
+E_NoMoreAlarmBlks_ =000042    -    Constant    Long
+ALARM_     =001280    1   struct tagALARM_ 
+sysstack_  =000000    -    External    Array of Long
+freeTCB_   =000000    -    External    Pointer to struct _tagTCB_ 
+startQ_    =000045    -    Static      Array of Byte
+E_NoDev_   =000021    -    Constant    Long
+E_NoMem_   =000044    -    Constant    Long
+RequestIOFocus_ =000000    -    External    Function returning Long
+TimeoutList_ =000000    -    External    Pointer to struct _tagTCB_ 
+RemoveFromTimeoutList_ =000037    -    Static      Function returning Long
+E_NoMsg_   =000009    -    Constant    Long
+E_BadDevOp_ =000022    -    Constant    Long
+stacks_    =000000    -    External    Array of Array of Long
+freeMSG_   =000000    -    External    Pointer to struct tagMSG_ 
+freeMBX_   =000000    -    External    Pointer to struct tagMBX_ 
+SetBound50_ =64c108    -    Global      Function returning 
+SetBound51_ =64c108    -    Global      Function returning 
+FMTK_Sleep_ =64c12a    -    Global      Function returning Long
+E_Timeout_ =00000a    -    Constant    Long
+tempTCB_   =002400    -    Global      struct _tagTCB_ 
+SetBound48_ =64c108    -    Global      Function returning 
+SetBound49_ =64c108    -    Global      Function returning 
+InsertIntoTimeoutList_ =00002c    -    Static      Function returning Long
+FMTK_SystemCall_ =64c12a    -    Global      Function returning Long
+RemoveFromReadyList_ =000020    -    Static      Function returning Long
+printf_    =000000    -    External    Function returning Long
+bios_stacks_ =000000    -    External    Array of Array of Long
+E_BadAlarm_ =00000b    -    Constant    Long
+InsertIntoReadyList_ =000014    -    Static      Function returning Long
 
  *** structures and unions ***
 
-tagMSG     =000000    -    Type        struct tagMSG 
-    link       =000000    -    Member      Pointer to struct tagMSG 
-    d1         =000008    -    Member      
-    d2         =000010    -    Member      
-    type       =000018    -    Member      Byte
-    resv       =000019    -    Member      Array of Byte
-_tagJCB    =000000    -    Type        struct _tagJCB 
-    iof_next   =000000    -    Member      Pointer to struct _tagJCB 
-    iof_prev   =000008    -    Member      Pointer to struct _tagJCB 
-    UserName   =000010    -    Member      Array of Char
-    path       =000050    -    Member      Array of Char
-    exitRunFile =000250    -    Member      Array of Char
-    commandLine =000450    -    Member      Array of Char
-    pVidMem    =000650    -    Member      Pointer to 
-    pVirtVidMem =000658    -    Member      Pointer to 
-    VideoRows  =000660    -    Member      
-    VideoCols  =000662    -    Member      
-    CursorRow  =000664    -    Member      
-    CursorCol  =000666    -    Member      
-    NormAttr   =000668    -    Member      
-    KeybdHead  =00066c    -    Member      Byte
-    KeybdTail  =00066d    -    Member      Byte
-    KeybdBuffer =00066e    -    Member      Array of 
-    number     =00068e    -    Member      Char
-tagMBX     =000000    -    Type        struct tagMBX 
-    next       =000000    -    Member      Pointer to struct tagMBX 
-    tq_head    =000008    -    Member      Pointer to struct _tagTCB 
-    tq_tail    =000010    -    Member      Pointer to struct _tagTCB 
-    mq_head    =000018    -    Member      Pointer to struct tagMSG 
-    mq_tail    =000020    -    Member      Pointer to struct tagMSG 
-    tq_count   =000028    -    Member      
-    mq_size    =000030    -    Member      
-    mq_count   =000038    -    Member      
-    mq_missed  =000040    -    Member      
-    owner      =000048    -    Member      
-    mq_strategy =000050    -    Member      Char
-    resv       =000052    -    Member      Array of Byte
-_tagTCB    =000000    -    Type        struct _tagTCB 
-    regs       =000000    -    Member      Array of Long
-    isp        =000100    -    Member      Long
-    dsp        =000108    -    Member      Long
-    esp        =000110    -    Member      Long
-    ipc        =000118    -    Member      Long
-    dpc        =000120    -    Member      Long
-    epc        =000128    -    Member      Long
-    cr0        =000130    -    Member      Long
-    next       =000138    -    Member      Pointer to struct _tagTCB 
-    prev       =000140    -    Member      Pointer to struct _tagTCB 
-    mbq_next   =000148    -    Member      Pointer to struct _tagTCB 
-    mbq_prev   =000150    -    Member      Pointer to struct _tagTCB 
-    sys_stack  =000158    -    Member      Pointer to Long
-    bios_stack =000160    -    Member      Pointer to Long
-    stack      =000168    -    Member      Pointer to Long
-    timeout    =000170    -    Member      Long
-    hJob       =000178    -    Member      Pointer to struct _tagJCB 
-    mailboxes  =000180    -    Member      Pointer to struct tagMBX 
-    priority   =000188    -    Member      Byte
-    status     =000189    -    Member      Byte
-    affinity   =00018a    -    Member      Byte
-    number     =00018c    -    Member      Char
-tagALARM   =000000    -    Type        struct tagALARM 
-    next       =000000    -    Member      Pointer to struct tagALARM 
-    prev       =000008    -    Member      Pointer to struct tagALARM 
-    mbx        =000010    -    Member      Pointer to struct tagMBX 
-    msg        =000018    -    Member      Pointer to struct tagMSG 
-    BaseTimeout =000020    -    Member      
-    timeout    =000028    -    Member      
-    repeat     =000030    -    Member      
-    resv       =000038    -    Member      Array of Byte
+tagMSG_    =000000    -    Type        struct tagMSG_ 
+    link_      =000000    -    Member      Pointer to struct tagMSG_ 
+    d1_        =000008    -    Member      
+    d2_        =000010    -    Member      
+    type_      =000018    -    Member      
+_tagJCB_   =000000    -    Type        struct _tagJCB_ 
+    iof_next_  =000000    -    Member      Pointer to struct _tagJCB_ 
+    iof_prev_  =000008    -    Member      Pointer to struct _tagJCB_ 
+    UserName_  =000010    -    Member      Array of Char
+    path_      =000050    -    Member      Array of Char
+    exitRunFile_ =000250    -    Member      Array of Char
+    commandLine_ =000450    -    Member      Array of Char
+    pVidMem_   =000650    -    Member      Pointer to 
+    pVirtVidMem_ =000658    -    Member      Pointer to 
+    VideoRows_ =000660    -    Member      
+    VideoCols_ =000662    -    Member      
+    CursorRow_ =000664    -    Member      
+    CursorCol_ =000666    -    Member      
+    NormAttr_  =000668    -    Member      
+    KeybdHead_ =00066c    -    Member      Byte
+    KeybdTail_ =00066d    -    Member      Byte
+    KeybdBuffer_ =00066e    -    Member      Array of 
+    number_    =00068e    -    Member      Char
+tagMBX_    =000000    -    Type        struct tagMBX_ 
+    link_      =000000    -    Member      Pointer to struct tagMBX_ 
+    tq_head_   =000008    -    Member      Pointer to struct _tagTCB_ 
+    tq_tail_   =000010    -    Member      Pointer to struct _tagTCB_ 
+    mq_head_   =000018    -    Member      Pointer to struct tagMSG_ 
+    mq_tail_   =000020    -    Member      Pointer to struct tagMSG_ 
+    tq_count_  =000028    -    Member      
+    mq_size_   =000030    -    Member      
+    mq_count_  =000038    -    Member      
+    mq_missed_ =000040    -    Member      
+    owner_     =000048    -    Member      
+    mq_strategy_ =000050    -    Member      Char
+    resv_      =000052    -    Member      Array of Byte
+_tagTCB_   =000000    -    Type        struct _tagTCB_ 
+    regs_      =000000    -    Member      Array of Long
+    isp_       =000100    -    Member      Long
+    dsp_       =000108    -    Member      Long
+    esp_       =000110    -    Member      Long
+    ipc_       =000118    -    Member      Long
+    dpc_       =000120    -    Member      Long
+    epc_       =000128    -    Member      Long
+    cr0_       =000130    -    Member      Long
+    next_      =000138    -    Member      Pointer to struct _tagTCB_ 
+    prev_      =000140    -    Member      Pointer to struct _tagTCB_ 
+    mbq_next_  =000148    -    Member      Pointer to struct _tagTCB_ 
+    mbq_prev_  =000150    -    Member      Pointer to struct _tagTCB_ 
+    sys_stack_ =000158    -    Member      Pointer to Long
+    bios_stack_ =000160    -    Member      Pointer to Long
+    stack_     =000168    -    Member      Pointer to Long
+    timeout_   =000170    -    Member      Long
+    hJob_      =000178    -    Member      Pointer to struct _tagJCB_ 
+    msgD1_     =000180    -    Member      Long
+    msgD2_     =000188    -    Member      Long
+    MsgPtr_    =000190    -    Member      Pointer to struct tagMSG_ 
+    hWaitMbx_  =000198    -    Member      
+    mailboxes_ =0001a0    -    Member      Pointer to struct tagMBX_ 
+    priority_  =0001a8    -    Member      Byte
+    status_    =0001a9    -    Member      Byte
+    affinity_  =0001aa    -    Member      Byte
+    number_    =0001ac    -    Member      Char
+tagALARM_  =000000    -    Type        struct tagALARM_ 
+    next_      =000000    -    Member      Pointer to struct tagALARM_ 
+    prev_      =000008    -    Member      Pointer to struct tagALARM_ 
+    mbx_       =000010    -    Member      Pointer to struct tagMBX_ 
+    msg_       =000018    -    Member      Pointer to struct tagMSG_ 
+    BaseTimeout_ =000020    -    Member      
+    timeout_   =000028    -    Member      
+    repeat_    =000030    -    Member      
+    resv_      =000038    -    Member      Array of Byte

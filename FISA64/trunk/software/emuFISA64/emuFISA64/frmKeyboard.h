@@ -106,6 +106,7 @@ namespace emuFISA64 {
 	private: System::Windows::Forms::Button^  button17;
 	private: System::Windows::Forms::Button^  button18;
 	private: System::Windows::Forms::Button^  button19;
+	private: System::Windows::Forms::Button^  button8;
 
 	private:
 		/// <summary>
@@ -183,6 +184,7 @@ namespace emuFISA64 {
 			this->button17 = (gcnew System::Windows::Forms::Button());
 			this->button18 = (gcnew System::Windows::Forms::Button());
 			this->button19 = (gcnew System::Windows::Forms::Button());
+			this->button8 = (gcnew System::Windows::Forms::Button());
 			this->SuspendLayout();
 			// 
 			// btnQ
@@ -203,6 +205,7 @@ namespace emuFISA64 {
 			this->btnW->TabIndex = 1;
 			this->btnW->Text = L"W";
 			this->btnW->UseVisualStyleBackColor = true;
+			this->btnW->Click += gcnew System::EventHandler(this, &frmKeyboard::btnW_Click);
 			// 
 			// btnE
 			// 
@@ -212,6 +215,7 @@ namespace emuFISA64 {
 			this->btnE->TabIndex = 2;
 			this->btnE->Text = L"E";
 			this->btnE->UseVisualStyleBackColor = true;
+			this->btnE->Click += gcnew System::EventHandler(this, &frmKeyboard::btnE_Click);
 			// 
 			// btnQuest
 			// 
@@ -241,6 +245,7 @@ namespace emuFISA64 {
 			this->btnR->TabIndex = 5;
 			this->btnR->Text = L"R";
 			this->btnR->UseVisualStyleBackColor = true;
+			this->btnR->Click += gcnew System::EventHandler(this, &frmKeyboard::btnR_Click);
 			// 
 			// btnT
 			// 
@@ -260,6 +265,7 @@ namespace emuFISA64 {
 			this->btnY->TabIndex = 7;
 			this->btnY->Text = L"Y";
 			this->btnY->UseVisualStyleBackColor = true;
+			this->btnY->Click += gcnew System::EventHandler(this, &frmKeyboard::btnY_Click);
 			// 
 			// btnU
 			// 
@@ -269,6 +275,7 @@ namespace emuFISA64 {
 			this->btnU->TabIndex = 8;
 			this->btnU->Text = L"U";
 			this->btnU->UseVisualStyleBackColor = true;
+			this->btnU->Click += gcnew System::EventHandler(this, &frmKeyboard::btnU_Click);
 			// 
 			// btnI
 			// 
@@ -324,6 +331,7 @@ namespace emuFISA64 {
 			this->btnA->TabIndex = 14;
 			this->btnA->Text = L"A";
 			this->btnA->UseVisualStyleBackColor = true;
+			this->btnA->Click += gcnew System::EventHandler(this, &frmKeyboard::btnA_Click);
 			// 
 			// btnS
 			// 
@@ -353,6 +361,7 @@ namespace emuFISA64 {
 			this->btnF->TabIndex = 17;
 			this->btnF->Text = L"F";
 			this->btnF->UseVisualStyleBackColor = true;
+			this->btnF->Click += gcnew System::EventHandler(this, &frmKeyboard::btnF_Click);
 			// 
 			// btnG
 			// 
@@ -418,6 +427,7 @@ namespace emuFISA64 {
 			this->btnX->TabIndex = 20;
 			this->btnX->Text = L"X";
 			this->btnX->UseVisualStyleBackColor = true;
+			this->btnX->Click += gcnew System::EventHandler(this, &frmKeyboard::btnX_Click);
 			// 
 			// btnC
 			// 
@@ -427,6 +437,7 @@ namespace emuFISA64 {
 			this->btnC->TabIndex = 25;
 			this->btnC->Text = L"C";
 			this->btnC->UseVisualStyleBackColor = true;
+			this->btnC->Click += gcnew System::EventHandler(this, &frmKeyboard::btnC_Click);
 			// 
 			// btnV
 			// 
@@ -484,6 +495,7 @@ namespace emuFISA64 {
 			this->btn2->TabIndex = 31;
 			this->btn2->Text = L"@2";
 			this->btn2->UseVisualStyleBackColor = true;
+			this->btn2->Click += gcnew System::EventHandler(this, &frmKeyboard::btn2_Click);
 			// 
 			// btn3
 			// 
@@ -493,6 +505,7 @@ namespace emuFISA64 {
 			this->btn3->TabIndex = 32;
 			this->btn3->Text = L"#3";
 			this->btn3->UseVisualStyleBackColor = true;
+			this->btn3->Click += gcnew System::EventHandler(this, &frmKeyboard::btn3_Click);
 			// 
 			// btn4
 			// 
@@ -502,6 +515,7 @@ namespace emuFISA64 {
 			this->btn4->TabIndex = 33;
 			this->btn4->Text = L"$4";
 			this->btn4->UseVisualStyleBackColor = true;
+			this->btn4->Click += gcnew System::EventHandler(this, &frmKeyboard::btn4_Click);
 			// 
 			// btn5
 			// 
@@ -511,6 +525,7 @@ namespace emuFISA64 {
 			this->btn5->TabIndex = 34;
 			this->btn5->Text = L"%5";
 			this->btn5->UseVisualStyleBackColor = true;
+			this->btn5->Click += gcnew System::EventHandler(this, &frmKeyboard::btn5_Click);
 			// 
 			// btn6
 			// 
@@ -520,6 +535,7 @@ namespace emuFISA64 {
 			this->btn6->TabIndex = 35;
 			this->btn6->Text = L"^6";
 			this->btn6->UseVisualStyleBackColor = true;
+			this->btn6->Click += gcnew System::EventHandler(this, &frmKeyboard::btn6_Click);
 			// 
 			// btn7
 			// 
@@ -529,6 +545,7 @@ namespace emuFISA64 {
 			this->btn7->TabIndex = 36;
 			this->btn7->Text = L"&&7";
 			this->btn7->UseVisualStyleBackColor = true;
+			this->btn7->Click += gcnew System::EventHandler(this, &frmKeyboard::btn7_Click);
 			// 
 			// btn8
 			// 
@@ -538,6 +555,7 @@ namespace emuFISA64 {
 			this->btn8->TabIndex = 37;
 			this->btn8->Text = L"*8";
 			this->btn8->UseVisualStyleBackColor = true;
+			this->btn8->Click += gcnew System::EventHandler(this, &frmKeyboard::btn8_Click);
 			// 
 			// btn9
 			// 
@@ -547,6 +565,7 @@ namespace emuFISA64 {
 			this->btn9->TabIndex = 38;
 			this->btn9->Text = L"(9";
 			this->btn9->UseVisualStyleBackColor = true;
+			this->btn9->Click += gcnew System::EventHandler(this, &frmKeyboard::btn9_Click);
 			// 
 			// btn0
 			// 
@@ -556,6 +575,7 @@ namespace emuFISA64 {
 			this->btn0->TabIndex = 39;
 			this->btn0->Text = L")0";
 			this->btn0->UseVisualStyleBackColor = true;
+			this->btn0->Click += gcnew System::EventHandler(this, &frmKeyboard::btn0_Click);
 			// 
 			// btnSpace
 			// 
@@ -647,6 +667,7 @@ namespace emuFISA64 {
 			this->button9->TabIndex = 49;
 			this->button9->Text = L"+=";
 			this->button9->UseVisualStyleBackColor = true;
+			this->button9->Click += gcnew System::EventHandler(this, &frmKeyboard::button9_Click);
 			// 
 			// btnBackspace
 			// 
@@ -666,6 +687,7 @@ namespace emuFISA64 {
 			this->btnRctrl->TabIndex = 51;
 			this->btnRctrl->Text = L"Ctrl";
 			this->btnRctrl->UseVisualStyleBackColor = true;
+			this->btnRctrl->Click += gcnew System::EventHandler(this, &frmKeyboard::btnRctrl_Click);
 			// 
 			// btnLalt
 			// 
@@ -768,12 +790,23 @@ namespace emuFISA64 {
 			this->button19->Text = L"PgUp";
 			this->button19->UseVisualStyleBackColor = true;
 			// 
+			// button8
+			// 
+			this->button8->Location = System::Drawing::Point(24, 12);
+			this->button8->Name = L"button8";
+			this->button8->Size = System::Drawing::Size(39, 36);
+			this->button8->TabIndex = 63;
+			this->button8->Text = L"~`";
+			this->button8->UseVisualStyleBackColor = true;
+			this->button8->Click += gcnew System::EventHandler(this, &frmKeyboard::button8_Click);
+			// 
 			// frmKeyboard
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(819, 221);
+			this->ClientSize = System::Drawing::Size(785, 221);
 			this->ControlBox = false;
+			this->Controls->Add(this->button8);
 			this->Controls->Add(this->button19);
 			this->Controls->Add(this->button18);
 			this->Controls->Add(this->button17);
@@ -917,6 +950,96 @@ private: System::Void btnSpace_Click(System::Object^  sender, System::EventArgs^
 private: System::Void button10_Click(System::Object^  sender, System::EventArgs^  e) {
 			 keybd.Push(0x6B);
 			 keybd.Push(0xE0);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn2_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x1E);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn3_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x26);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn4_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x25);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn5_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x2E);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn6_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x36);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn7_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x3D);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn8_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x3E);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn9_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x46);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btn0_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x45);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnA_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x1C);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnC_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x21);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnE_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x24);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnF_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x2B);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnX_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x22);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnRctrl_Click(System::Object^  sender, System::EventArgs^  e) {
+			 static bool sh = false;
+			 keybd.Push(0x14);
+			 keybd.Push(0xE0);
+			 if (sh!=0)
+			     keybd.Push(0xF0);
+			 sh = !sh;
+			 keybd_status = 0x80;
+			 keybd_status = 0x80;
+		 }
+private: System::Void button9_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x55);
+			 keybd_status = 0x80;
+		 }
+private: System::Void button8_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x0E);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnW_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x1D);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnR_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x2D);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnY_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x35);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnU_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x3C);
 			 keybd_status = 0x80;
 		 }
 };

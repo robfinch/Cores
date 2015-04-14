@@ -3,15 +3,14 @@
 
 typedef unsigned int uint;
 
-typedef struct tagMSG {
+typedef struct tagMSG align(32) {
 	struct tagMSG *link;
 	uint d1;
 	uint d2;
-	byte type;
-	byte resv[7];
+	uint type;
 } MSG;
 
-typedef struct _tagJCB
+typedef struct _tagJCB align(2048)
 {
     struct _tagJCB *iof_next;
     struct _tagJCB *iof_prev;
@@ -34,7 +33,7 @@ typedef struct _tagJCB
 
 struct tagMBX;
 
-typedef struct _tagTCB {
+typedef struct _tagTCB align(512) {
 	int regs[32];
 	int isp;
 	int dsp;
@@ -52,6 +51,10 @@ typedef struct _tagTCB {
 	int *stack;
 	__int64 timeout;
 	JCB *hJob;
+	int msgD1;
+	int msgD2;
+	MSG *MsgPtr;
+	uint hWaitMbx;
 	struct tagMBX *mailboxes;
 	__int8 priority;
 	__int8 status;
@@ -59,8 +62,8 @@ typedef struct _tagTCB {
 	__int16 number;
 } TCB;
 
-typedef struct tagMBX {
-    struct tagMBX *next;
+typedef struct tagMBX align(128) {
+    struct tagMBX *link;
 	TCB *tq_head;
 	TCB *tq_tail;
 	MSG *mq_head;

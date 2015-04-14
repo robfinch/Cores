@@ -434,7 +434,7 @@ int ischar(ENODE *node)
 AMODE *GenerateIndex(ENODE *node)
 {       
 	AMODE *ap1, *ap2, *ap3;
-
+	
     if( (node->p[0]->nodetype == en_tempref || node->p[0]->nodetype==en_regvar) && (node->p[1]->nodetype == en_tempref || node->p[1]->nodetype==en_regvar))
     {       /* both nodes are registers */
         ap1 = GenerateExpression(node->p[0],F_REG,8);
@@ -469,6 +469,12 @@ AMODE *GenerateIndex(ENODE *node)
 		ap2->deep2 = ap1->deep;
         return ap2;
 	}
+	if (ap2->mode == am_direct && ap1->mode==am_reg) {
+        ap2->mode = am_indx;
+        ap2->preg = ap1->preg;
+        ap2->deep = ap1->deep;
+        return ap2;
+    }
 	// ap1->mode must be F_REG
 	MakeLegalAmode(ap2,F_REG,8);
     ap1->mode = am_indx2;            /* make indexed */

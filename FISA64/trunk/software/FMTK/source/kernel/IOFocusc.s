@@ -1,6 +1,12 @@
+	data
+	align	8
+	fill.b	24,0x00
+	align	8
+	fill.b	1984,0x00
+	align	8
 	code
 	align	16
-public code ForceIOFocus:
+public code ForceIOFocus_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -8,21 +14,21 @@ public code ForceIOFocus:
 	      	mov  	bp,sp
 	      	push 	r11
 	      	push 	24[bp]
-	      	bsr  	RequestIOFocus
+	      	bsr  	RequestIOFocus_
 	      	addui	sp,sp,#8
-	      	bsr  	LockIOF
-	      	lw   	r3,IOFocusNdx
+	      	bsr  	LockIOF_
+	      	lw   	r3,IOFocusNdx_
 	      	cmp  	r11,r11,r3
 	      	beq  	r11,IOFocusc_1
-	      	bsr  	CopyScreenToVirtualScreen
+	      	bsr  	CopyScreenToVirtualScreen_
 	      	lw   	r3,1624[r11]
 	      	sw   	r3,1616[r11]
-	      	sw   	r11,IOFocusNdx
+	      	sw   	r11,IOFocusNdx_
 	      	ldi  	r3,#4291821568
 	      	sw   	r3,1616[r11]
-	      	bsr  	CopyVirtualScreenToScreen
+	      	bsr  	CopyVirtualScreenToScreen_
 IOFocusc_1:
-	      	bsr  	UnlockIOF
+	      	bsr  	UnlockIOF_
 IOFocusc_3:
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -36,7 +42,7 @@ IOFocusc_0:
 	      	bra  	IOFocusc_3
 endpublic
 
-public code SwitchIOFocus:
+public code SwitchIOFocus_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -45,8 +51,8 @@ public code SwitchIOFocus:
 	      	subui	sp,sp,#16
 	      	push 	r11
 	      	push 	r12
-	      	ldi  	r12,#IOFocusNdx
-	      	bsr  	LockIOF
+	      	ldi  	r12,#IOFocusNdx_
+	      	bsr  	LockIOF_
 	      	lw   	r11,[r12]
 	      	beq  	r11,IOFocusc_5
 	      	lw   	r3,[r12]
@@ -58,7 +64,7 @@ public code SwitchIOFocus:
 	      	beq  	r3,IOFocusc_7
 	      	lw   	r3,-16[bp]
 	      	beq  	r3,IOFocusc_9
-	      	bsr  	CopyScreenToVirtualScreen
+	      	bsr  	CopyScreenToVirtualScreen_
 	      	lw   	r3,1624[r11]
 	      	sw   	r3,1616[r11]
 	      	lw   	r3,-16[bp]
@@ -66,11 +72,11 @@ public code SwitchIOFocus:
 	      	lw   	r3,-16[bp]
 	      	ldi  	r4,#4291821568
 	      	sw   	r4,1616[r3]
-	      	bsr  	CopyVirtualScreenToScreen
+	      	bsr  	CopyVirtualScreenToScreen_
 IOFocusc_9:
 IOFocusc_7:
 IOFocusc_5:
-	      	bsr  	UnlockIOF
+	      	bsr  	UnlockIOF_
 IOFocusc_11:
 	      	pop  	r12
 	      	pop  	r11
@@ -85,7 +91,7 @@ IOFocusc_4:
 	      	bra  	IOFocusc_11
 endpublic
 
-public code RequestIOFocus:
+public code RequestIOFocus_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -95,11 +101,11 @@ public code RequestIOFocus:
 	      	push 	r11
 	      	push 	r12
 	      	lw   	r11,24[bp]
-	      	ldi  	r12,#IOFocusNdx
+	      	ldi  	r12,#IOFocusNdx_
 	      	lc   	r3,1678[r11]
 	      	sw   	r3,-8[bp]
-	      	bsr  	LockIOF
-	      	lw   	r3,IOFocusTbl
+	      	bsr  	LockIOF_
+	      	lw   	r3,IOFocusTbl_
 	      	lw   	r4,-8[bp]
 	      	asr  	r3,r3,r4
 	      	and  	r3,r3,#1
@@ -127,11 +133,11 @@ IOFocusc_16:
 	      	ldi  	r3,#1
 	      	lw   	r4,-8[bp]
 	      	asl  	r3,r3,r4
-	      	lw   	r4,IOFocusTbl
+	      	lw   	r4,IOFocusTbl_
 	      	or   	r4,r4,r3
-	      	sw   	r4,IOFocusTbl
+	      	sw   	r4,IOFocusTbl_
 IOFocusc_13:
-	      	bsr  	UnlockIOF
+	      	bsr  	UnlockIOF_
 IOFocusc_17:
 	      	pop  	r12
 	      	pop  	r11
@@ -146,16 +152,16 @@ IOFocusc_12:
 	      	bra  	IOFocusc_17
 endpublic
 
-public code ReleaseIOFocus:
+public code ReleaseIOFocus_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
 	      	ldi  	xlr,#IOFocusc_18
 	      	mov  	bp,sp
-	      	bsr  	GetJCBPtr
+	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	push 	r3
-	      	bsr  	ForceReleaseIOFocus
+	      	bsr  	ForceReleaseIOFocus_
 	      	addui	sp,sp,#8
 IOFocusc_19:
 	      	mov  	sp,bp
@@ -169,7 +175,7 @@ IOFocusc_18:
 	      	bra  	IOFocusc_19
 endpublic
 
-public code ForceReleaseIOFocus:
+public code ForceReleaseIOFocus_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -178,8 +184,8 @@ public code ForceReleaseIOFocus:
 	      	subui	sp,sp,#8
 	      	push 	r11
 	      	lw   	r11,24[bp]
-	      	bsr  	LockIOF
-	      	lw   	r3,IOFocusTbl
+	      	bsr  	LockIOF_
+	      	lw   	r3,IOFocusTbl_
 	      	ldi  	r4,#1
 	      	lc   	r5,1678[r11]
 	      	asl  	r4,r4,r5
@@ -189,13 +195,13 @@ public code ForceReleaseIOFocus:
 	      	lc   	r4,1678[r11]
 	      	asl  	r3,r3,r4
 	      	com  	r3,r3
-	      	lw   	r4,IOFocusTbl
+	      	lw   	r4,IOFocusTbl_
 	      	and  	r4,r4,r3
-	      	sw   	r4,IOFocusTbl
-	      	lw   	r3,IOFocusNdx
+	      	sw   	r4,IOFocusTbl_
+	      	lw   	r3,IOFocusNdx_
 	      	cmp  	r11,r11,r3
 	      	bne  	r11,IOFocusc_23
-	      	bsr  	SwitchIOFocus
+	      	bsr  	SwitchIOFocus_
 IOFocusc_23:
 	      	lw   	r3,[r11]
 	      	sw   	r3,-8[bp]
@@ -212,13 +218,13 @@ IOFocusc_23:
 	      	sw   	r4,[r3]
 	      	bra  	IOFocusc_28
 IOFocusc_27:
-	      	sw   	r0,IOFocusNdx
+	      	sw   	r0,IOFocusNdx_
 IOFocusc_28:
 	      	sw   	r0,[r11]
 	      	sw   	r0,8[r11]
 IOFocusc_25:
 IOFocusc_21:
-	      	bsr  	UnlockIOF
+	      	bsr  	UnlockIOF_
 IOFocusc_29:
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -232,7 +238,7 @@ IOFocusc_20:
 	      	bra  	IOFocusc_29
 endpublic
 
-public code CopyVirtualScreenToScreen:
+public code CopyVirtualScreenToScreen_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -242,7 +248,7 @@ public code CopyVirtualScreenToScreen:
 	      	push 	r11
 	      	push 	r12
 	      	push 	r13
-	      	lw   	r11,IOFocusNdx
+	      	lw   	r11,IOFocusNdx_
 	      	lw   	r13,1616[r11]
 	      	lw   	r12,1624[r11]
 	      	lcu  	r3,1632[r11]
@@ -272,7 +278,7 @@ IOFocusc_32:
 	      	sw   	r3,-40[bp]
 	      	push 	-40[bp]
 	      	push 	#11
-	      	bsr  	SetVideoReg
+	      	bsr  	SetVideoReg_
 	      	addui	sp,sp,#16
 IOFocusc_34:
 	      	pop  	r13
@@ -289,7 +295,7 @@ IOFocusc_30:
 	      	bra  	IOFocusc_34
 endpublic
 
-public code CopyScreenToVirtualScreen:
+public code CopyScreenToVirtualScreen_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -297,7 +303,7 @@ public code CopyScreenToVirtualScreen:
 	      	push 	r11
 	      	push 	r12
 	      	push 	r13
-	      	lw   	r11,IOFocusNdx
+	      	lw   	r11,IOFocusNdx_
 	      	lw   	r13,1616[r11]
 	      	lw   	r12,1624[r11]
 	      	lcu  	r3,1632[r11]
@@ -330,18 +336,23 @@ endpublic
 	rodata
 	align	16
 	align	8
-;	global	CopyScreenToVirtualScreen
-;	global	CopyVirtualScreenToScreen
-;	global	SwitchIOFocus
-	extern	GetJCBPtr
-;	global	set_vector
-	extern	SetVideoReg
-;	global	ForceReleaseIOFocus
-	extern	UnlockIOF
-;	global	ReleaseIOFocus
-	extern	LockIOF
-;	global	RequestIOFocus
-;	global	ForceIOFocus
-	extern	IOFocusTbl
-	extern	IOFocusNdx
-	extern	GetRunningTCB
+;	global	outb_
+	extern	IOFocusTbl_
+;	global	outc_
+;	global	outh_
+	extern	IOFocusNdx_
+;	global	outw_
+	extern	GetRunningTCB_
+;	global	CopyScreenToVirtualScreen_
+;	global	CopyVirtualScreenToScreen_
+;	global	SwitchIOFocus_
+	extern	GetJCBPtr_
+	extern	getCPU_
+;	global	set_vector_
+	extern	SetVideoReg_
+;	global	ForceReleaseIOFocus_
+	extern	UnlockIOF_
+;	global	ReleaseIOFocus_
+	extern	LockIOF_
+;	global	RequestIOFocus_
+;	global	ForceIOFocus_

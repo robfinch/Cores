@@ -76,31 +76,31 @@ UnlockSema:
 ; Lock/unlock routines.
 ;------------------------------------------------------------------------------
 
-LockSYS:
+LockSYS_:
     push    lr
     push    r1
-    lea     r1,sys_sema
+    lea     r1,sys_sema_
     bsr     LockSema
     pop     r1
     rts
-UnlockSYS:
+UnlockSYS_:
     push    lr
     push    r1
-    lea     r1,sys_sema
+    lea     r1,sys_sema_
     bsr     UnlockSema
     pop     r1
     rts
-LockIOF:
+LockIOF_:
      push    lr
      push    r1
-     ldi     r1,#iof_sema
+     ldi     r1,#iof_sema_
      bsr     LockSema
      pop     r1
      rts
-UnlockIOF:
+UnlockIOF_:
      push   lr
      push   r1
-     lea    r1,iof_sema
+     lea    r1,iof_sema_
      bsr    UnlockSema
      pop    r1
      rts

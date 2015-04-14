@@ -74,6 +74,7 @@ enum {
      tk_bss,
      tk_bvc,
      tk_bvs,
+     tk_byte,
      tk_cas,
      tk_chk,
      tk_cli,

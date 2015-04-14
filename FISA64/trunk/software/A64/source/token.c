@@ -288,7 +288,11 @@ int getIdentifier()
 
 static char *pseudos[] = {
     "align", "code", "data", "tls", "rodata",
-    "fill", "org", "byte", (char *)NULL
+    "fill", "org", "byte", "message",(char *)NULL
+};
+static char pseudoTokens[] = {
+    tk_align, tk_code, tk_data, tk_tls, tk_rodata,
+    tk_fill, tk_org, tk_db, tk_message, tk_none
 };
 
 int isPseudoOp()
@@ -307,8 +311,11 @@ int isPseudoOp()
     }
     buf[nn] = '\0';
     for (nn = 0; nn < 8; nn++) {
-        if (strcmp(buf, pseudos[nn])==0)
+        if (strcmp(buf, pseudos[nn])==0) {
+            //inptr = p;
+            //token = pseudoTokens[nn];
             return 1;
+        }
     }
     return 0;
 }

@@ -31,7 +31,7 @@
 
 int IdentifyKeyword()
 {
-	char *p = lastid;
+	char *p = lastkw;
 
 	if (p[0]=='i') { // if,int,inton,intoff,interrupt,icache
 		if (p[1]=='f' && p[2]=='\0')

@@ -1,18 +1,23 @@
      1	
-     2	// Get the vector base register
-     3	
-     4	unsigned int *GetVBR()
-     5	{
-     6	    asm {
-     7	        mfspr r1,vbr
-     8	    }
-     9	}
-    10	
-    11	
-    12	// Set an IRQ vector
-    13	// The vector is checked for the two LSB's begin zero which is necessary
-    14	// for a code address.
-    15	
+     2	
+     3	// ----------------------------------------------------------------------------
+     4	// Get the vector base register
+     5	// ----------------------------------------------------------------------------
+     6	
+     7	unsigned int *GetVBR()
+     8	{
+     9	    asm {
+    10	        mfspr r1,vbr
+    11	    }
+    12	}
+    13	
+    14	
+    15	// ----------------------------------------------------------------------------
+    16	// Set an IRQ vector
+    17	// The vector is checked for the two LSB's begin zero which is necessary
+    18	// for a code address.
+    19	// ----------------------------------------------------------------------------
+    20	
 
 
 *** local symbol table ***
@@ -20,26 +25,59 @@
 
 
 
-    16	void set_vector(unsigned int vecno, unsigned int rout)
-    17	{
-    18	     if (vecno > 511) return;
-    19	     if ((rout == 0) || ((rout & 3) != 0)) return;
-    20	     GetVBR()[vecno] = rout;
-    21	}
+    21	void set_vector(unsigned int vecno, unsigned int rout)
+    22	{
+    23	     if (vecno > 511) return;
+    24	     if ((rout == 0) || ((rout & 3) != 0)) return;
+    25	     GetVBR()[vecno] = rout;
+    26	}
+    27	
+    28	// ----------------------------------------------------------------------------
+    29	// 0 is highest priority, 15 is lowest
+    30	// 0    NMI (parity error)
+    31	// 1    Keyboard reset button
+    32	// 2    1024 Hz timer interrupt
+    33	// 3    30Hz timer interrupt
+    34	// ...
+    35	// 15   keyboard interrupt 
+    36	// 
+    37	// CPU #1 isn't wired to most IRQ's. There is no 1024Hz interrupt support.
+    38	// In fact the only interrupts supported on CPU #1 is the 30Hz time slice,
+    39	// parity NMI, and keyboard reset button.
+    40	// ----------------------------------------------------------------------------
 
 
 *** local symbol table ***
 
-vecno      =000018    -    Auto        
-rout       =000020    -    Auto        
+vecno_     =000018    -    Auto        
+rout_      =000020    -    Auto        
+
+
+
+    41	void InitPIC()
+    42	{
+    43	     outh(0xFFDC0FD0, 0x000C);  //timer interrupt(s) are edge sensitive
+    44	     if (getCPU()==0)
+    45	          outh(0xFFDC0FC4, 0x000F);  //enable keyboard reset, timer interrupts
+    46	     else
+    47	          outh(0xFFDC0FC4, 0x000B);  //enable keyboard reset, timer interrupts
+    48	}
+    49	
+
+
+*** local symbol table ***
+
 
 
 
 
  *** global scope typedef symbol table ***
 
-GetVBR     =000000    -    Global      Function returning Pointer to 
-set_vector =000000    -    Global      Function returning 
+outh_      =000000    -    External    Function returning Long
+GetVBR_    =000000    -    Global      Function returning Pointer to 
+getCPU_    =000000    -    External    Function returning Long
+set_vector_ =000000    -    Global      Function returning 
+InitPIC_   =000000    -    Global      Function returning 
 
  *** structures and unions ***
 

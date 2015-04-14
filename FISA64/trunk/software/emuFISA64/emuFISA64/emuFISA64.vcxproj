@@ -88,12 +88,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp" />
+    <ClCompile Include="clsCPU.cpp" />
     <ClCompile Include="clsKeyboard.cpp" />
+    <ClCompile Include="clsPIC.cpp" />
+    <ClCompile Include="clsSystem.cpp" />
     <ClCompile Include="Disassem.cpp" />
     <ClCompile Include="emuFISA64.cpp" />
     <ClCompile Include="fmrPCS.cpp" />
     <ClCompile Include="frmAbout.cpp" />
     <ClCompile Include="frmBreakpoint.cpp" />
+    <ClCompile Include="frmInterrupts.cpp" />
     <ClCompile Include="frmKeyboard.cpp" />
     <ClCompile Include="frmMain.cpp" />
     <ClCompile Include="frmScreen.cpp" />
@@ -105,6 +109,7 @@
   <ItemGroup>
     <ClInclude Include="clsCPU.h" />
     <ClInclude Include="clsKeyboard.h" />
+    <ClInclude Include="clsPIC.h" />
     <ClInclude Include="clsSystem.h" />
     <ClInclude Include="Disassem.h" />
     <ClInclude Include="fmrPCS.h">
@@ -114,6 +119,9 @@
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmBreakpoint.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
+    <ClInclude Include="frmInterrupts.h">
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmKeyboard.h">
@@ -144,6 +152,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="frmBreakpoint.resx">
       <DependentUpon>frmBreakpoint.h</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmInterrupts.resx">
+      <DependentUpon>frmInterrupts.h</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmKeyboard.resx">
       <DependentUpon>frmKeyboard.h</DependentUpon>

@@ -760,7 +760,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
             else
                 tp1 = tp1->btp;
             NextToken();
-			if (tp1->val_flag && (tp1->size==1 || tp1->size==2 || tp1->size==4 || tp1->size==8)) {
+			if ((tp1->val_flag && (tp1->size==1 || tp1->size==2 || tp1->size==4 || tp1->size==8))) {
 				expression(&rnode);
 				ep1 = makenode(en_add,rnode,ep1);
 				ep1->constflag = rnode->constflag && ep1->p[1]->constflag;

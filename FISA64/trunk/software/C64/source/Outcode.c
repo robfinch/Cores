@@ -459,7 +459,7 @@ void PutAddressMode(AMODE *ap)
 			//}
 			//else
 			if (ap->offset != NULL && !is816) {
-                if (ap->offset->i)
+//                if (ap->offset->i)
                 	PutConstant(ap->offset,0,0);
            }
 //				if (ap->offset->i)

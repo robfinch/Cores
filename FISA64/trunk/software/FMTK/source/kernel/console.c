@@ -18,7 +18,7 @@ short int GetCurrAttr()
 
 void SetCurrAttr(short int attr)
 {
-     GetJCBPtr()->NormAttr = attr;
+     GetJCBPtr()->NormAttr = attr & 0xFFFFFC00;
 }
 
 void SetVideoReg(int regno, int val)
@@ -58,6 +58,15 @@ int GetCursorPos()
     return j->CursorCol | (j->CursorRow << 8);
 }
 
+int GetTextCols()
+{
+    return GetJCBPtr()->VideoCols;
+}
+
+int GetTextRows()
+{
+    return GetJCBPtr()->VideoRows;
+}
 
 char AsciiToScreen(char ch)
 {
@@ -141,6 +150,11 @@ void ClearScreen()
      memsetH(p, vc, mx);
 }
 
+void ClearBmpScreen()
+{
+     memsetW(0x400000, 0, 0x80000);
+}
+
 void BlankLine(int row)
 {
      short int *p;
@@ -151,23 +165,37 @@ void BlankLine(int row)
      
      j = GetJCBPtr();
      p = GetScreenLocation();
-     p = p + j->VideoCols * row;
+     p = p + (int)j->VideoCols * row;
      vc = GetCurrAttr() | AsciiToScreen(' ');
      memsetH(p, vc, j->VideoCols);
 }
 
-void ScrollUp()
+// ScrollUp will call BlankLine. Scrollup is written in assembler for
+// performance reasons and is included as part of the video BIOS. Note the
+// BIOS cannot be called with SYS #10 because the bios isn't re-entrant and
+// the bios is already active from putch().
+naked ScrollUp()
 {
-     short int *p;
-     int nn;
-     int mx;
+     asm {
+         push  lr
+         bsr   VBScrollUp
+         rts
+     }
+}
+
+void IncrementCursorRow()
+{
      JCB *j;
      
      j = GetJCBPtr();
-     p = GetScreenLocation();
-     mx = (j->VideoRows-1) * j->VideoCols;
-     memcpyH(p, &p[j->VideoCols], mx);
-     BlankLine(j->VideoRows-1);
+     j->CursorRow++;
+     if (j->CursorRow < j->VideoRows) {
+         UpdateCursorPos();
+         return;
+     }
+     j->CursorRow--;
+     UpdateCursorPos();
+     ScrollUp();
 }
 
 void IncrementCursorPos()
@@ -181,13 +209,7 @@ void IncrementCursorPos()
          return;
      }
      j->CursorCol = 0;
-     j->CursorRow++;
-     if (j->CursorRow < j->VideoRows) {
-         UpdateCursorPos();
-         return;
-     }
-     j->CursorRow--;
-     ScrollUp();
+     IncrementCursorRow();
 }
 
 void DisplayChar(char ch)
@@ -199,9 +221,9 @@ void DisplayChar(char ch)
      j = GetJCBPtr();
      switch(ch) {
      case '\r':  j->CursorCol = 0; UpdateCursorPos(); break;
-     case '\n':  if (j->CursorRow < j->VideoRows) { j->CursorRow++; UpdateCursorPos(); } else ScrollUp(); break;
+     case '\n':  IncrementCursorRow(); break;
      case 0x91:
-          if (j->CursorCol < j->VideoCols) {
+          if (j->CursorCol < j->VideoCols-1) {
              j->CursorCol++;
              UpdateCursorPos();
           }
@@ -219,7 +241,7 @@ void DisplayChar(char ch)
           }
           break;
      case 0x92:
-          if (j->CursorRow < j->VideoRows) {
+          if (j->CursorRow < j->VideoRows-1) {
              j->CursorRow++;
              UpdateCursorPos();
           }
@@ -233,19 +255,23 @@ void DisplayChar(char ch)
      case 0x99:  // delete
           p = CalcScreenLocation();
           for (nn = j->CursorCol; nn < j->VideoCols-1; nn++) {
-              p[nn] = p[nn+1];
+              p[nn-j->CursorCol] = p[nn+1-j->CursorCol];
           }
-          p[nn] = GetCurrAttr() | AsciiToScreen(' ');
+          p[nn-j->CursorCol] = GetCurrAttr() | AsciiToScreen(' ');
           break;
      case 0x08: // backspace
           if (j->CursorCol > 0) {
               j->CursorCol--;
               p = CalcScreenLocation();
               for (nn = j->CursorCol; nn < j->VideoCols-1; nn++) {
-                  p[nn] = p[nn+1];
+                  p[nn-j->CursorCol] = p[nn+1-j->CursorCol];
               }
-              p[nn] = GetCurrAttr() | AsciiToScreen(' ');
+              p[nn-j->CursorCol] = GetCurrAttr() | AsciiToScreen(' ');
           }
+          break;
+     case 0x0C:   // CTRL-L
+          ClearScreen();
+          HomeCursor();
           break;
      case '\t':
           DisplayChar(' ');

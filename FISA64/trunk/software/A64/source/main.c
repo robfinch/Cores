@@ -1251,16 +1251,36 @@ void WriteELFFile(FILE *fp)
 
 }
 
+int IHChecksum(char *ibuf, int payloadCount)
+{
+    char buf[20];
+    int nn;
+    int ii;
+    int sum;
+
+    sum = 0;
+    for (nn = 0; nn < payloadCount +4; nn++) {
+        buf[0] = ibuf[nn*2+1];
+        buf[1] = ibuf[nn*2+2];
+        buf[2] = '\0';        
+        ii = strtoul(buf,NULL,16);
+        sum = sum + ii;
+    }
+    sum = -sum;
+    sprintf(&ibuf[(payloadCount+4) * 2+1],"%02X\n", sum & 0xFF);
+}
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
 int main(int argc, char *argv[])
 {
-    int nn,qq;
+    int nn,qq,kk;
     static char fname[500];
+    static char hexbuf[500];
     char *p;
     int chksum;
+    unsigned long lsa;      // last start address
 
     ofp = stdout;
     nn = processOptions(argc, argv);
@@ -1399,17 +1419,17 @@ int main(int argc, char *argv[])
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
-                for (nn = 0; nn < binndx; nn+=8) {
+                for (kk = 0; kk < binndx; kk+=8) {
                     fprintf(vfp, "\trommem[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
-                        (((start_address+nn)/8)%8192), checksum64((int64_t *)&binfile[nn]),
-                        binfile[nn+7], binfile[nn+6], binfile[nn+5], binfile[nn+4], 
-                        binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+                        (((0+kk)/8)%16384), checksum64((int64_t *)&binfile[kk]),
+                        binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
             else {
-                for (nn = 0; nn < binndx; nn+=4) {
+                for (kk = 0;kk < binndx; kk+=4) {
                     fprintf(vfp, "\trommem[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
-                        (((start_address+nn)/4)%8192), checksum((int32_t *)&binfile[nn]), binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+                        (((start_address+kk)/4)%8192), checksum((int32_t *)&binfile[kk]), binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
             fclose(vfp);
@@ -1417,5 +1437,64 @@ int main(int argc, char *argv[])
         else
             printf("Can't create .ver file.\r\n");
     }
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Output Verilog memory declaration
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if (verbose) printf("Generating Text file.\r\n");
+        strcpy(fname, argv[nn]);
+        p = strrchr(fname,'.');
+        if (p) {
+            *p = '\0';
+        }
+        strcat(fname, ".txt");
+        printf("fname:%s\r\n", fname);
+        vfp = fopen(fname, "w");
+        if (vfp) {
+            if (gCpu==64) {
+                for (kk = 0; kk < binndx; kk+=4) {
+                    fprintf(vfp, "%06X,%02X%02X%02X%02X\n", 
+                        (((start_address+kk))),
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                }
+            }
+            fclose(vfp);
+        }
+        else
+            printf("Can't create .txt file.\r\n");
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Output Intel hex file
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if (verbose) printf("Generating Hex file.\r\n");
+        strcpy(fname, argv[nn]);
+        p = strrchr(fname,'.');
+        if (p) {
+            *p = '\0';
+        }
+        lsa = 0;
+        strcat(fname, ".hex");
+        printf("fname:%s\r\n", fname);
+        vfp = fopen(fname, "w");
+        if (vfp) {
+            if (gCpu==64) {
+                for (kk = 0; kk < binndx; kk+=4) {
+                    if (lsa != start_address >> 16) {
+                        sprintf(hexbuf, ":02000004%04X00\n", (start_address >> 16));
+                        IHChecksum(hexbuf, 2);
+                        fprintf(vfp, hexbuf);
+                        lsa = start_address >> 16;
+                    }
+                    sprintf(hexbuf, ":%02X%04X00%02X%02X%02X%02X%02X\n",
+                        4, (start_address + kk) & 0xFFFF,
+                        binfile[kk], binfile[kk+1], binfile[kk+2], binfile[kk+3]
+                    );
+                    IHChecksum(hexbuf, 4);
+                    fprintf(vfp, hexbuf);
+                }
+            }
+            fprintf(vfp, ":00000001FF\n%c",26);        // end of file record
+            fclose(vfp);
+        }
+        else
+            printf("Can't create .txt file.\r\n");
     return 0;
 }

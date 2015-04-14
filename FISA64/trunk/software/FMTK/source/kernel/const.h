@@ -13,10 +13,43 @@
 #define TS_RUNNING  8
 #define TS_READY   16
 
+#define MQS_UNLIMITED    0
+#define MQS_OLDEST       1
+#define MQS_NEWEST       2
+
+#define MBT_DATA         0
+
 enum {
      E_Ok = 0,
      E_BadTCBHandle,
-     E_BadPriority
+     E_BadPriority,
+     E_BadCallno,
+     E_Arg,
+     E_BadMbx,
+     E_QueFull,
+     E_NoThread,
+     E_NotAlloc,
+     E_NoMsg,
+     E_Timeout,
+     E_BadAlarm,
+     E_NotOwner,
+     E_QueStrategy,
+     E_DCBInUse,
+     //; Device driver errors
+     E_BadDevNum =	0x20,
+     E_NoDev,
+     E_BadDevOp,
+     E_ReadError,
+     E_WriteError,
+     E_BadBlockNum,
+     E_TooManyBlocks,
+
+     // resource errors
+     E_NoMoreMbx =	0x40,
+     E_NoMoreMsgBlks,
+     E_NoMoreAlarmBlks,
+     E_NoMoreTCBs,
+     E_NoMem
 };
 
 #endif

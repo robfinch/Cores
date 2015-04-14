@@ -75,15 +75,15 @@ int preprocess()
             error(ERR_PREPROC);
             return getline(incldepth == 0);
             }
-    if( strcmp(lastid,"include") == 0 )
+    if( strcmp(lastkw,"include") == 0 )
             return doinclude();
-    else if( strcmp(lastid,"define") == 0 )
+    else if( strcmp(lastkw,"define") == 0 )
             return dodefine();
-    else if (strcmp(lastid,"ifdef")==0)
+    else if (strcmp(lastkw,"ifdef")==0)
 			return doifdef();
-    else if (strcmp(lastid,"ifndef")==0)
+    else if (strcmp(lastkw,"ifndef")==0)
 			return doifndef();
-    else if (strcmp(lastid,"endif")==0)
+    else if (strcmp(lastkw,"endif")==0)
 			return doendif();
 	else
 	{

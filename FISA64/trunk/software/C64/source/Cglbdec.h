@@ -86,6 +86,7 @@ extern int              nextlabel;
 extern int              lastch;
 extern int              lastst;
 extern char             lastid[63];
+extern char             lastkw[63];
 extern char             laststr[MAX_STLP1];
 extern int64_t	ival;
 extern double           rval;

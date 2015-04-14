@@ -12,12 +12,22 @@
 #include "frmKeyboard.h"
 #include "frmAbout.h"
 #include "fmrPCS.h"
+#include "frmInterrupts.h"
 #include "Disassem.h"
 #include "clsCPU.h"
+#include "clsPIC.h"
 
 extern clsCPU cpu1;
+extern clsPIC pic1;
 extern clsSystem system1;
 extern unsigned int breakpoints[30];
+extern volatile unsigned int interval1024;
+extern volatile unsigned int interval30;
+extern bool irq1024Hz;
+extern bool irq30Hz;
+extern bool irqKeyboard;
+extern bool trigger30;
+extern bool trigger1024;
 
 namespace emuFISA64 {
 	using namespace std;
@@ -51,6 +61,8 @@ namespace emuFISA64 {
 	private: System::Windows::Forms::Label^  lblChecksumErr;
 	private: System::Windows::Forms::Label^  lblChecksumError;
 	private: System::Windows::Forms::ToolStripMenuItem^  pCHistoryToolStripMenuItem;
+	private: System::Windows::Forms::Timer^  timer1024;
+	private: System::Windows::Forms::Timer^  timer30;
 			 int depth;
 	public:
 		frmMain(void)
@@ -66,6 +78,9 @@ namespace emuFISA64 {
 				 Screenform->Show();
 			frmKeyboard^ keyboardFrm = gcnew frmKeyboard();
 			     keyboardFrm->Show();
+			irq1024Hz = false;
+			irq30Hz = false;
+			irqKeyboard = false;
 		}
 
 	protected:
@@ -237,6 +252,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->fullSpeedToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->viewToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->registersToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->pCHistoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->aboutToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->openFileDialog1 = (gcnew System::Windows::Forms::OpenFileDialog());
 			this->label1 = (gcnew System::Windows::Forms::Label());
@@ -355,7 +371,8 @@ private: System::Windows::Forms::Label^  label41;
 			this->textBoxDBSTAT = (gcnew System::Windows::Forms::TextBox());
 			this->lblChecksumErr = (gcnew System::Windows::Forms::Label());
 			this->lblChecksumError = (gcnew System::Windows::Forms::Label());
-			this->pCHistoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->timer1024 = (gcnew System::Windows::Forms::Timer(this->components));
+			this->timer30 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -449,6 +466,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->breakpointToolStripMenuItem->Name = L"breakpointToolStripMenuItem";
 			this->breakpointToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->breakpointToolStripMenuItem->Text = L"&Breakpoint";
+			this->breakpointToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::breakpointToolStripMenuItem_Click);
 			// 
 			// freeRunFastToolStripMenuItem
 			// 
@@ -475,9 +493,16 @@ private: System::Windows::Forms::Label^  label41;
 			// registersToolStripMenuItem
 			// 
 			this->registersToolStripMenuItem->Name = L"registersToolStripMenuItem";
-			this->registersToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->registersToolStripMenuItem->Size = System::Drawing::Size(130, 22);
 			this->registersToolStripMenuItem->Text = L"&Registers";
 			this->registersToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::registersToolStripMenuItem_Click);
+			// 
+			// pCHistoryToolStripMenuItem
+			// 
+			this->pCHistoryToolStripMenuItem->Name = L"pCHistoryToolStripMenuItem";
+			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(130, 22);
+			this->pCHistoryToolStripMenuItem->Text = L"PC History";
+			this->pCHistoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::pCHistoryToolStripMenuItem_Click);
 			// 
 			// aboutToolStripMenuItem
 			// 
@@ -572,6 +597,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->toolStripButton6->Size = System::Drawing::Size(23, 22);
 			this->toolStripButton6->Text = L"toolStripButton6";
 			this->toolStripButton6->ToolTipText = L"Interrupt";
+			this->toolStripButton6->Click += gcnew System::EventHandler(this, &frmMain::toolStripButton6_Click);
 			// 
 			// toolStripButton7
 			// 
@@ -1581,12 +1607,15 @@ private: System::Windows::Forms::Label^  label41;
 			this->lblChecksumError->TabIndex = 142;
 			this->lblChecksumError->Text = L"Checksum OK";
 			// 
-			// pCHistoryToolStripMenuItem
+			// timer1024
 			// 
-			this->pCHistoryToolStripMenuItem->Name = L"pCHistoryToolStripMenuItem";
-			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
-			this->pCHistoryToolStripMenuItem->Text = L"PC History";
-			this->pCHistoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::pCHistoryToolStripMenuItem_Click);
+			this->timer1024->Interval = 98;
+			this->timer1024->Tick += gcnew System::EventHandler(this, &frmMain::timer1024_Tick);
+			// 
+			// timer30
+			// 
+			this->timer30->Interval = 333;
+			this->timer30->Tick += gcnew System::EventHandler(this, &frmMain::timer30_Tick);
 			// 
 			// frmMain
 			// 
@@ -1951,6 +1980,25 @@ private: System::Void toolStripButton3_Click(System::Object^  sender, System::Ev
 		 }
 private: void RunCPU() {
 			 int nn,kk;
+			 if (trigger30) {
+				 trigger30 = false;
+				 if (interval30==-1) {
+					 pic1.irq30Hz = true;
+				 }
+				 else {
+					 this->timer30->Interval = interval30;
+					 this->timer30->Enabled = true;
+				 }
+			 }
+			 if (trigger1024) {
+				 trigger1024 = false;
+				 if (interval1024==-1)
+					 pic1.irq1024Hz = true;
+				 else {
+					 this->timer1024->Interval = interval1024;
+					 this->timer1024->Enabled = true;
+				 }
+			 }
 			 if (cpu1.isRunning) {
 				 if (fullspeed) {
 					 for (nn = 0; nn < 10000; nn++) {
@@ -1979,6 +2027,7 @@ private: void RunCPU() {
 							return;
 						}
 						 cpu1.Step();
+						 pic1.Step();
 						 if (stepout) {
 							 if ((cpu1.ir & 0x7f)==BSR)
 								 depth++;
@@ -2002,6 +2051,7 @@ private: void RunCPU() {
 					}
 				}
 				 cpu1.Step();
+     			 pic1.Step();
 				 UpdateListBox(cpu1.pc-32);
 			 }
 		 }
@@ -2089,5 +2139,21 @@ private: System::Void pCHistoryToolStripMenuItem_Click(System::Object^  sender, 
 			 fmrPCS^ pcsFrm = gcnew fmrPCS;
 			 pcsFrm->Show();
 		 }
+private: System::Void breakpointToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+		frmBreakpoint ^form = gcnew frmBreakpoint();
+				 form->Show();		 }
+		 private: System::Void timer1024_Tick(System::Object^  sender, System::EventArgs^  e) {
+					  pic1.irq1024Hz = true;
+					  this->timer1024->Enabled = false;
+				  }
+private: System::Void toolStripButton6_Click(System::Object^  sender, System::EventArgs^  e) {
+		frmInterrupts^ form = gcnew frmInterrupts();
+		form->Show();
+		 }
+private: System::Void timer30_Tick(System::Object^  sender, System::EventArgs^  e) {
+			 pic1.irq30Hz = true;
+			 this->timer30->Enabled = false;
+		 }
 };
 };
+
