@@ -19,6 +19,7 @@ namespace emuFISA64 {
 	/// </summary>
 	public ref class frmScreen : public System::Windows::Forms::Form
 	{
+		 System::Drawing::Rectangle ur;
 	public:
 		frmScreen(void)
 		{
@@ -40,6 +41,7 @@ namespace emuFISA64 {
 			}
 		}
 	private: System::Windows::Forms::Timer^  timer1;
+	private: System::Windows::Forms::PictureBox^  pictureBox1;
 	protected: 
 	private: System::ComponentModel::IContainer^  components;
 
@@ -58,6 +60,8 @@ namespace emuFISA64 {
 		{
 			this->components = (gcnew System::ComponentModel::Container());
 			this->timer1 = (gcnew System::Windows::Forms::Timer(this->components));
+			this->pictureBox1 = (gcnew System::Windows::Forms::PictureBox());
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->BeginInit();
 			this->SuspendLayout();
 			// 
 			// timer1
@@ -65,16 +69,30 @@ namespace emuFISA64 {
 			this->timer1->Enabled = true;
 			this->timer1->Tick += gcnew System::EventHandler(this, &frmScreen::timer1_Tick);
 			// 
+			// pictureBox1
+			// 
+			this->pictureBox1->BackgroundImageLayout = System::Windows::Forms::ImageLayout::None;
+			this->pictureBox1->Location = System::Drawing::Point(2, 0);
+			this->pictureBox1->Name = L"pictureBox1";
+			this->pictureBox1->Size = System::Drawing::Size(681, 266);
+			this->pictureBox1->TabIndex = 0;
+			this->pictureBox1->TabStop = false;
+			this->pictureBox1->Click += gcnew System::EventHandler(this, &frmScreen::pictureBox1_Click);
+			this->pictureBox1->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmScreen::pictureBox1_Paint);
+			// 
 			// frmScreen
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
+			this->BackgroundImageLayout = System::Windows::Forms::ImageLayout::None;
 			this->ClientSize = System::Drawing::Size(684, 262);
 			this->ControlBox = false;
+			this->Controls->Add(this->pictureBox1);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
 			this->Name = L"frmScreen";
 			this->Text = L"emuFISA64 Test System Screen";
 			this->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmScreen::frmScreen_Paint);
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->EndInit();
 			this->ResumeLayout(false);
 
 		}
@@ -91,7 +109,39 @@ namespace emuFISA64 {
      return ch;
 }
   
+	private: System::Void frmScreen_OnPaintBackground(System::Object^  sender, System::Windows::Forms::PaintEventArgs^  e) {
+			 }
 	private: System::Void frmScreen_Paint(System::Object^  sender, System::Windows::Forms::PaintEventArgs^  e) {
+			 }
+	private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
+				 int nn;
+				 int xx,yy;
+				 int maxx,maxy,minx,miny;
+				 maxx = 0; maxy = 0;
+				 minx = 1000; miny = 1000;
+				 if (refscreen) {
+					 for (nn = 0; nn < 4096; nn++) {
+						 if (system1.VideoMemDirty[nn]) {
+							 xx = nn % 84;
+							 yy = nn / 84;
+							 maxx = max(xx,maxx);
+							 maxy = max(yy,maxy);
+							 minx = min(xx,minx);
+							 miny = min(yy,miny);
+						 }
+					 }
+					ur.X = minx<<3;
+					ur.Y = miny<<3;
+					ur.Width = (maxx - minx)<<3;
+					ur.Height = (maxy - miny)<<3;
+					this->pictureBox1->Invalidate(ur);
+					refscreen = false;
+//					this->Refresh();
+				 }
+			 }
+	private: System::Void pictureBox1_Click(System::Object^  sender, System::EventArgs^  e) {
+			 }
+private: System::Void pictureBox1_Paint(System::Object^  sender, System::Windows::Forms::PaintEventArgs^  e) {
 				 char buf[10];
 				 unsigned int ndx;
 				 int r,g,b;
@@ -107,30 +157,27 @@ namespace emuFISA64 {
 				 bkbr = gcnew System::Drawing::SolidBrush(System::Drawing::Color::Blue);
 				 fgbr = gcnew System::Drawing::SolidBrush(System::Drawing::Color::White);
 				 int xx, yy;
-				 for (xx = 0; xx < 672; xx += 8) {
-					 for (yy = 0; yy < 248; yy += 8) {
+				 for (xx = ur.X; xx < ur.X + ur.Width; xx += 8) {
+					 for (yy = ur.Y; yy < ur.Y + ur.Height; yy += 8) {
 						 ndx = (xx/8 + yy/8 * 84);
-						 v = system1.VideoMem[ndx];
-						 r = ((((v >> 10) >> 9) >> 6) & 7) << 5;
-						 g = ((((v >> 10) >> 9) >> 3) & 7) << 5;
-						 b = ((((v >> 10) >> 9) >> 0) & 7) << 5;
-						 bkbr->Color = col->FromArgb(255,r,g,b);
-						 r = ((((v >> 10)) >> 6) & 7) << 5;
-						 g = ((((v >> 10)) >> 3) & 7)<< 5;
-						 b = ((((v >> 10)) >> 0) & 7)<< 5;
-						 fgbr->Color = col->FromArgb(255,r,g,b);
-						 sprintf(buf,"%c",ScreenToAscii(system1.VideoMem[ndx]&0xff));
-						 str = std::string(buf);
-						 gr->FillRectangle(bkbr,xx,yy,8,8);
-						 gr->DrawString(gcnew String(str.c_str()),myfont,fgbr,xx,yy);
+//						 if (system1.VideoMemDirty[ndx]) {
+							v = system1.VideoMem[ndx];
+							r = ((((v >> 10) >> 9) >> 6) & 7) << 5;
+							g = ((((v >> 10) >> 9) >> 3) & 7) << 5;
+							b = ((((v >> 10) >> 9) >> 0) & 7) << 5;
+							bkbr->Color = col->FromArgb(255,r,g,b);
+							gr->FillRectangle(bkbr,xx,yy,8,8);
+							r = ((((v >> 10)) >> 6) & 7) << 5;
+							g = ((((v >> 10)) >> 3) & 7)<< 5;
+							b = ((((v >> 10)) >> 0) & 7)<< 5;
+							fgbr->Color = col->FromArgb(255,r,g,b);
+							sprintf(buf,"%c",ScreenToAscii(system1.VideoMem[ndx]&0xff));
+							str = std::string(buf);
+							gr->DrawString(gcnew String(str.c_str()),myfont,fgbr,xx,yy);
+							system1.VideoMemDirty[ndx] = false;
+//						 }
 					 }
 				 }
-			 }
-	private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
-				 if (refscreen) {
-					refscreen = false;
-					this->Refresh();
-				 }
-			 }
-	};
+		 }
+};
 }

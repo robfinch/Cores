@@ -13,6 +13,7 @@ class clsSystem
 public:
 	unsigned int memory[33554432];
 	unsigned long VideoMem[4096];
+	bool VideoMemDirty[4096];
 	unsigned int leds;
 	int m_z;
 	int m_w;

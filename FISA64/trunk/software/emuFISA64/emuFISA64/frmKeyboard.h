@@ -285,6 +285,7 @@ namespace emuFISA64 {
 			this->btnI->TabIndex = 9;
 			this->btnI->Text = L"I";
 			this->btnI->UseVisualStyleBackColor = true;
+			this->btnI->Click += gcnew System::EventHandler(this, &frmKeyboard::btnI_Click);
 			// 
 			// btnRshift
 			// 
@@ -304,6 +305,7 @@ namespace emuFISA64 {
 			this->btnO->TabIndex = 11;
 			this->btnO->Text = L"O";
 			this->btnO->UseVisualStyleBackColor = true;
+			this->btnO->Click += gcnew System::EventHandler(this, &frmKeyboard::btnO_Click);
 			// 
 			// btnLshift
 			// 
@@ -322,6 +324,7 @@ namespace emuFISA64 {
 			this->btnP->TabIndex = 13;
 			this->btnP->Text = L"P";
 			this->btnP->UseVisualStyleBackColor = true;
+			this->btnP->Click += gcnew System::EventHandler(this, &frmKeyboard::btnP_Click);
 			// 
 			// btnA
 			// 
@@ -1040,6 +1043,18 @@ private: System::Void btnY_Click(System::Object^  sender, System::EventArgs^  e)
 		 }
 private: System::Void btnU_Click(System::Object^  sender, System::EventArgs^  e) {
 			 keybd.Push(0x3C);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnI_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x43);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnO_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x44);
+			 keybd_status = 0x80;
+		 }
+private: System::Void btnP_Click(System::Object^  sender, System::EventArgs^  e) {
+			 keybd.Push(0x4D);
 			 keybd_status = 0x80;
 		 }
 };

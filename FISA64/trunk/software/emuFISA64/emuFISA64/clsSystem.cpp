@@ -6,11 +6,14 @@ clsSystem::clsSystem() {
 		int nn;
 		m_z = 88888888;
 		m_w = 12345678;
-		for (nn = 0; nn < 4096; nn++)
+		for (nn = 0; nn < 4096; nn++) {
 			VideoMem[nn] = random();
+			VideoMemDirty[nn] = true;
+		}
 		write_error = false;
 		runstop = false;
 		cpu1.system1 = this;
+		refscreen = true;
 	};
 	unsigned int clsSystem::Read(unsigned int ad, int sr) {
 		int rr;
@@ -111,6 +114,7 @@ clsSystem::clsSystem() {
 		}
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
 			VideoMem[(ad>>2)& 0xFFF] = dat;
+			VideoMemDirty[(ad>>2)&0xfff] = true;
 			refscreen = true;
 		}
 		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
