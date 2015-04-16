@@ -316,6 +316,22 @@ std::string Disassem(std::string sad, std::string sinsn)
 			str = "MULU  " + Rt() +"," + Ra() + "," + Rb();
 			immcnt = 0;
 			return str;
+		case DIV:
+			str = "DIV   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case DIVU:
+			str = "DIVU  " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case MOD:
+			str = "MOD   " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case MODU:
+			str = "MODU  " + Rt() +"," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
 		case AND:
 			str = "AND   " + Rt() +"," + Ra() + "," + Rb();
 			immcnt = 0;
@@ -468,6 +484,22 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case MULU:
 		str = "MULU  " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case DIV:
+		str = "DIV   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case DIVU:
+		str = "DIVU  " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case MOD:
+		str = "MOD   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case MODU:
+		str = "MODU  " + Rt() +"," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
 	case AND:

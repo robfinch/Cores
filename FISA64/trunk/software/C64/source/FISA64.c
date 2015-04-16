@@ -65,6 +65,40 @@ static int FISA64OptimizationDesireability(CSE *csp)
     return csp->uses;
 }
 
+/*
+ *      exchange will exchange the order of two expression entries
+ *      following c1 in the linked list.
+ */
+static void exchange(CSE **c1)
+{
+	CSE *csp1, *csp2;
+
+    csp1 = *c1;
+    csp2 = csp1->next;
+    csp1->next = csp2->next;
+    csp2->next = csp1;
+    *c1 = csp2;
+}
+
+/*
+ *      bsort implements a bubble sort on the expression list.
+ */
+static int FISA64_bsort(CSE **list)
+{
+	CSE *csp1, *csp2;
+    int i;
+
+    csp1 = *list;
+    if( csp1 == NULL || csp1->next == NULL )
+        return FALSE;
+    i = bsort( &(csp1->next));
+    csp2 = csp1->next;
+    if( FISA64OptimizationDesireability(csp1) < FISA64OptimizationDesireability(csp2) ) {
+        exchange(list);
+        return TRUE;
+    }
+    return FALSE;
+}
 
 // ----------------------------------------------------------------------------
 // AllocateRegisterVars will allocate registers for the expressions that have
@@ -85,7 +119,7 @@ int AllocateFISA64RegisterVars()
 	reg = 11;
     mask = 0;
 	rmask = 0;
-    while( bsort(&olist) );         /* sort the expression list */
+    while( FISA64_bsort(&olist) );         /* sort the expression list */
     csp = olist;
     while( csp != NULL ) {
         if( FISA64OptimizationDesireability(csp) < 3 )	// was < 3
@@ -205,6 +239,7 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 	size = GetNaturalSize(node);
 	ap1 = GenerateExpression(node->p[0],F_REG, size);
 	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	ap3 = GetTempRegister();
 	// Optimize CMP to zero and branch into plain branch, this works only for
 	// signed relational compares.
 	if (ap2->mode == am_immed && ap2->offset->i==0 && (op==op_eq || op==op_ne || op==op_lt || op==op_le || op==op_gt || op==op_ge)) {
@@ -217,15 +252,16 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
     	case op_gt: op = op_bgt; break;
     	case op_ge: op = op_bge; break;
     	}
+    	ReleaseTempRegister(ap3);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op,0,ap1,make_clabel(label));
 		return;
 	}
 	if (op==op_ltu || op==op_leu || op==op_gtu || op==op_geu)
- 	    GenerateTriadic(op_cmpu,0,ap1,ap1,ap2);
+ 	    GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
 	else
- 	    GenerateTriadic(op_cmp,0,ap1,ap1,ap2);
+ 	    GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 	switch(op)
 	{
 	case op_eq:	op = op_beq; break;
@@ -239,7 +275,8 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 	case op_gtu: op = op_bgt; break;
 	case op_geu: op = op_bge; break;
 	}
-	GenerateDiadic(op,0,ap1,make_clabel(label));
+	GenerateDiadic(op,0,ap3,make_clabel(label));
+	ReleaseTempRegister(ap3);
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 }

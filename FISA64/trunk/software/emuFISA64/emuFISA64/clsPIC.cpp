@@ -14,4 +14,7 @@ void clsPIC::Reset(void)
 	for (nn = 0; nn < 16; nn++) {
 		enables[nn] = false;
 	}
+	irq30Hz = false;
+	irq1024Hz = false;
+	irqKeyboard = false;
 }

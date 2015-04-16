@@ -51,6 +51,7 @@ public:
 	};
 	void Step(void) {
 		vecno = 448;
+		cpu1.irq = false;
 		if (enables[15] & irqKeyboard) {
 			cpu1.irq = true;
 			vecno = 448+15;

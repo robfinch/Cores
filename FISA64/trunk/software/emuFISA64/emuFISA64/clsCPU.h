@@ -52,10 +52,10 @@ public:
 	int immcnt;
 	unsigned int opcode;
 	int i1;
-	__int64 a, b, res, imm, sp_res;
+	__int64 a, b, c, res, imm, sp_res;
 	unsigned __int64 ua, ub;
 	int nn;
-	int bmask;
+	unsigned int bmask;
 	int r1,r2,r3;
 	clsSystem *system1;
 

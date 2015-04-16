@@ -685,6 +685,26 @@ void PeepoptLabel(struct ocode *ip)
     ip->back->fwd = NULL;
 }
  
+// Optimize away duplicate sign extensions that the compiler sometimes
+// generates. This handles sxb, sxcm and sxh.
+
+void PeepoptSxb(struct ocode *ip)
+{
+     if (!ip->fwd)
+         return;
+     if (ip->fwd->opcode != ip->opcode)
+         return;
+     if (ip->fwd->oper1->preg != ip->oper1->preg)
+         return;
+     if (ip->fwd->oper2->preg != ip->oper2->preg)
+         return;
+     // Now we must have the same instruction twice in a row. ELiminate the
+     // duplicate.
+     ip->fwd = ip->fwd->fwd;
+     if (ip->fwd->fwd)
+          ip->fwd->fwd->back = ip;
+}
+
 /*
  *      peephole optimizer. This routine calls the instruction
  *      specific optimization routines above for each instruction
@@ -731,6 +751,11 @@ void opt3()
 					break;
             case op_lw:
                     PeepoptLw(ip);
+                    break;
+            case op_sxb:
+            case op_sxc:
+            case op_sxh:
+                    PeepoptSxb(ip);
                     break;
             case op_bra:
 					if (ip->predop==1 || isTable888)

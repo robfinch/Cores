@@ -1406,41 +1406,44 @@ static TYP *addops(ENODE **node)
                     }
 			if (tp2->type == bt_pointer)
 				sz2 = tp2->btp->size;
-            if( tp1->type == bt_pointer ) {
-                    tp2 = forcefit(&ep2,tp2,0,&stdint);
-                    ep3 = makeinode(en_icon,tp1->btp->size);
-                    ep3->constflag = TRUE;
-					ep3->esize = tp2->size;
-                    ep2 = makenode(en_mulu,ep3,ep2);
-                    ep2->constflag = ep2->p[1]->constflag;
-					ep2->esize = tp2->size;
-                    }
-            else if( tp2->type == bt_pointer ) {
-                    tp1 = forcefit(&ep1,tp1,0,&stdint);
-                    ep3 = makeinode(en_icon,tp2->btp->size);
-                    ep3->constflag = TRUE;
-					ep3->esize = tp2->size;
-                    ep1 = makenode(en_mulu,ep3,ep1);
-                    ep1->constflag = ep1->p[1]->constflag;
-					ep2->esize = tp2->size;
-                    }
-            tp1 = forcefit(&ep2,tp2,&ep1,tp1);
-            if (tp1->type==bt_triple) {
-				ep1 = makenode( oper ? en_ftadd : en_ftsub,ep1,ep2);
-            }
-			else if (tp1->type==bt_double)
-				ep1 = makenode( oper ? en_fdadd : en_fdsub,ep1,ep2);
-			else if (tp1->type==bt_float)
-				ep1 = makenode( oper ? en_fsadd : en_fssub,ep1,ep2);
-			else
-				ep1 = makenode( oper ? en_add : en_sub,ep1,ep2);
 			// Difference of two pointers to the same type of object...
 			// Divide the result by the size of the pointed to object.
 			if (!oper && (tp1->type == bt_pointer) && (tp2->type == bt_pointer) && (sz1==sz2))
 			{
+  				ep1 = makenode( en_sub,ep1,ep2);
 				ep4 = makeinode(en_icon, sz1);
 				ep1 = makenode(en_udiv,ep1,ep4);
 			}
+			else {
+                if( tp1->type == bt_pointer ) {
+                        tp2 = forcefit(&ep2,tp2,0,&stdint);
+                        ep3 = makeinode(en_icon,tp1->btp->size);
+                        ep3->constflag = TRUE;
+    					ep3->esize = tp2->size;
+                        ep2 = makenode(en_mulu,ep3,ep2);
+                        ep2->constflag = ep2->p[1]->constflag;
+    					ep2->esize = tp2->size;
+                        }
+                else if( tp2->type == bt_pointer ) {
+                        tp1 = forcefit(&ep1,tp1,0,&stdint);
+                        ep3 = makeinode(en_icon,tp2->btp->size);
+                        ep3->constflag = TRUE;
+    					ep3->esize = tp2->size;
+                        ep1 = makenode(en_mulu,ep3,ep1);
+                        ep1->constflag = ep1->p[1]->constflag;
+    					ep2->esize = tp2->size;
+                        }
+                tp1 = forcefit(&ep2,tp2,&ep1,tp1);
+                if (tp1->type==bt_triple) {
+    				ep1 = makenode( oper ? en_ftadd : en_ftsub,ep1,ep2);
+                }
+    			else if (tp1->type==bt_double)
+    				ep1 = makenode( oper ? en_fdadd : en_fdsub,ep1,ep2);
+    			else if (tp1->type==bt_float)
+    				ep1 = makenode( oper ? en_fsadd : en_fssub,ep1,ep2);
+    			else
+    				ep1 = makenode( oper ? en_add : en_sub,ep1,ep2);
+            }
             PromoteConstFlag(ep1);
 			ep1->esize = tp1->size;
             }

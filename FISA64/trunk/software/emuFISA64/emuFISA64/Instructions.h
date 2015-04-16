@@ -1,6 +1,10 @@
 #pragma once
 
 #define RR      2
+#define NAND		0x00
+#define NOR			0x01
+#define ENOR		0x02
+#define NOT			0x0A
 #define SXB			0x10
 #define SXC			0x11
 #define SXH			0x12

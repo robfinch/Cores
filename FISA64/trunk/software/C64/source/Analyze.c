@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -85,18 +85,6 @@ CSE *olist;         /* list of optimizable expressions */
  */
 static int equalnode(ENODE *node1, ENODE *node2)
 {
-//	if( node1 == 0 || node2 == 0 )
-//                return 0;
-//        if( node1->nodetype != node2->nodetype )
-//                return 0;
-//        if( (node1->nodetype == en_icon || node1->nodetype == en_labcon ||
-//            node1->nodetype == en_nacon || node1->nodetype == en_autocon) &&
-//            node1->v.i == node2->v.i )
-//                return 1;
-//        if( IsLValue(node1) && equalnode(node1->v.p[0], node2->v.p[0]) )
-//                return 1;
-//        return 0;
-//}
     if (node1 == NULL || node2 == NULL)
 		return FALSE;
     if (node1->nodetype != node2->nodetype)
@@ -104,6 +92,7 @@ static int equalnode(ENODE *node1, ENODE *node2)
     switch (node1->nodetype) {
 	case en_fcon:
 	case en_autofcon:
+			return (node1->f == node2->f);
       case en_icon:
       case en_labcon:
       case en_autocon:
@@ -198,6 +187,31 @@ CSE *voidauto(ENODE *node)
     return (CSE *)NULL;
 }
 
+// voidauto2 searches the entire CSE list for auto dereferenced node which
+// point to the passed node. There might be more than one LValue that matches.
+//      voidauto will void an auto dereference node which points to
+//      the same auto constant as node.
+//
+int voidauto2(ENODE *node)
+{
+	CSE *csp;
+    int uses;
+    int voided;
+ 
+    uses = 0;
+    voided = 0;
+	csp = (CSE *)olist;
+    while( csp != NULL ) {
+        if( IsLValue(csp->exp) && equalnode(node,csp->exp->p[0]) ) {
+            csp->voidf = 1;
+            voided = 1;
+            uses += csp->uses;
+        }
+        csp = csp->next;
+    }
+    return voided ? uses : -1;
+}
+
 /*
  *      scanexpr will scan the expression pointed to by node for optimizable
  *      subexpressions. when an optimizable expression is found it is entered
@@ -209,6 +223,7 @@ static void scanexpr(ENODE *node, int duse)
 {
 	CSE *csp, *csp1;
 	int first;
+	int nn;
 
     if( node == NULL )
         return;
@@ -224,12 +239,12 @@ static void scanexpr(ENODE *node, int duse)
                 break;
 		case en_autofcon:
         case en_autocon:
-                if( (csp = voidauto(node)) != NULL ) {
-                    csp1 = InsertNodeIntoCSEList(node,duse);
-                    csp1->uses = (csp1->duses += csp->uses);
-                    }
-                else
-                    InsertNodeIntoCSEList(node,duse);
+                csp1 = InsertNodeIntoCSEList(node,duse);
+                if ((nn = voidauto2(node)) > 0)
+                    csp1->uses = (csp1->duses += nn);
+//                if( (csp = voidauto(node)) != NULL ) {
+//                    csp1->uses = (csp1->duses += csp->uses);
+//                    }
                 break;
         case en_b_ref:
 		case en_c_ref:
@@ -620,11 +635,7 @@ void repcse(Statement *block)
 			case st_default:
 					repcse(block->s1);
 					break;
-			case st_spinlock:
-					repcse(block->s1);
-					repcse(block->s2);	// lockfail statement
-					break;
-        }
+       }
         block = block->next;
     }
 }
@@ -654,9 +665,10 @@ int opt1(Statement *block)
 {
 	int nn;
 
+    nn = 0;
 	olist = (CSE *)NULL;
     scan(block);            /* collect expressions */
-    if (isFISA64)
+    if (isFISA64 && !opt_noregs)
        nn = AllocateFISA64RegisterVars();
     else if (is816)
        nn = Allocate816RegisterVars();
@@ -666,6 +678,6 @@ int opt1(Statement *block)
 		nn = AllocateRaptor64RegisterVars();
 	else
 		nn = AllocateThorRegisterVars();             /* allocate registers */
-    repcse(block);          /* replace allocated expressions */
+    if (!opt_noregs) repcse(block);          /* replace allocated expressions */
 	return nn;
 }

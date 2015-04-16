@@ -223,23 +223,23 @@ private: System::Void btnOK_Click(System::Object^  sender, System::EventArgs^  e
 		 }
 private: System::Void btnTrigger1024_Click(System::Object^  sender, System::EventArgs^  e) {
 			 if (this->checkBox1024->Checked) {
-			 trigger1024 = true;
 			 switch(this->comboBox30->SelectedIndex) {
 			 case 0: interval1024 = 98; break;
 			 case 1: interval1024 = 977; break;
 			 case 2: interval1024 = -1; break;
 			 }
+			 trigger1024 = true;
 			 }
 		 }
 private: System::Void btnTrigger30_Click(System::Object^  sender, System::EventArgs^  e) {
 			 if (this->checkBox30->Checked) {
-			 trigger30 = true;
 			 switch(this->comboBox30->SelectedIndex) {
 			 case 0: interval30 = 333; break;
 			 case 1: interval30 = 3333; break;
 			 case 2: interval30 = 33333; break;
 			 case 3: interval30 = -1; break;
 			 }
+			 trigger30 = true;
 			 }
 		 }
 private: System::Void comboBox1024_SelectedIndexChanged(System::Object^  sender, System::EventArgs^  e) {

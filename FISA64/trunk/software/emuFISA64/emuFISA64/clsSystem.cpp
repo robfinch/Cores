@@ -10,6 +10,9 @@ clsSystem::clsSystem() {
 			VideoMem[nn] = random();
 			VideoMemDirty[nn] = true;
 		}
+		for (nn = 0; nn < sizeof(memory); nn+=4) {
+			memory[nn>>2] = 0;
+		}
 		write_error = false;
 		runstop = false;
 		cpu1.system1 = this;
@@ -59,6 +62,7 @@ clsSystem::clsSystem() {
 	int clsSystem::Write(unsigned int ad, unsigned int dat, unsigned int mask, int cr) {
 		int nn;
 		int ret;
+
 		if (cr && (ad!=radr1 && ad!=radr2)) {
 			ret = false;
 			goto j1;
@@ -74,6 +78,9 @@ clsSystem::clsSystem() {
 				write_error = true;
 				ret = true;
 				goto j1;
+			}
+			if ((ad & 0xfffffff0)==0x00c431a0) {
+				ret = true;
 			}
 			switch(mask) {
 			case 0xFFFFFFFF:

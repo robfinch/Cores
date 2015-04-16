@@ -97,6 +97,7 @@ int isOscall = FALSE;
 int isInterrupt = FALSE;
 int isNocall = FALSE;
 int optimize = TRUE;
+int opt_noregs = FALSE;
 int exceptions = FALSE;
 SYM *currentFn = (SYM *)NULL;
 int callsFn = FALSE;

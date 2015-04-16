@@ -67,6 +67,7 @@ void clsCPU::Reset()
 
 		a = regs[Ra];
 		b = regs[Rb];
+		c = regs[Rc];
 		ua = a;
 		ub = b;
 		res = 0;
@@ -88,16 +89,16 @@ void clsCPU::Reset()
 				case CLI:  im = false; pc = pc + 4; break;
 				case WAI:	if (irq || nmi) pc = pc + 4; break;
 				case RTI:
-					pc = ipc;
+					pc = ipc & -4;
 					regs[30] = isp;
 					StatusHWI = false;
 					break;
 				case RTD:
-					pc = dpc;
+					pc = dpc & -4;
 					regs[30] = dsp;
 					break;
 				case RTE:
-					pc = epc;
+					pc = epc & -4;
 					regs[30] = esp;
 					break;
 				default: pc = pc + 4;
@@ -206,6 +207,22 @@ void clsCPU::Reset()
 				res = ua * ub;
 				pc = pc + 4;
 				break;
+			case DIV:
+				res = a / b;
+				pc = pc + 4;
+				break;
+			case DIVU:
+				res = ua / ub;
+				pc = pc + 4;
+				break;
+			case MOD:
+				res = a % b;
+				pc = pc + 4;
+				break;
+			case MODU:
+				res = ua % ub;
+				pc = pc + 4;
+				break;
 			case AND:
 				res = a & b;
 				pc = pc + 4;
@@ -216,6 +233,22 @@ void clsCPU::Reset()
 				break;
 			case EOR:
 				res = a ^ b;
+				pc = pc + 4;
+				break;
+			case NOT:
+				res = !a;
+				pc = pc + 4;
+				break;
+			case NAND:
+				res = ~(a & b);
+				pc = pc + 4;
+				break;
+			case NOR:
+				res = ~(a | b);
+				pc = pc + 4;
+				break;
+			case ENOR:
+				res = ~(a ^ b);
 				pc = pc + 4;
 				break;
 			case CHK:
@@ -309,12 +342,38 @@ void clsCPU::Reset()
 			}
 			break;
 		case BTFLD:
+			bmask = 0;
+			for (nn = 0; nn < me-mb+1; nn ++) {
+				bmask = (bmask << 1) | 1;
+			}
 			switch((ir >> 29) & 7) {
+			case BFSET:
+				bmask <<= mb;
+				res = a | bmask << mb;
+				break;
+			case BFCLR:
+				bmask <<= mb;
+				res = a & ~(bmask << mb);
+				break;
+			case BFCHG:
+				bmask <<= mb;
+				res = a ^ (bmask << mb);
+				break;
+			case BFINS:
+				bmask <<= mb;
+				c &= ~(bmask << mb);
+				res = c | ((a & bmask) << mb);
+				break;
+			case BFINSI:
+				bmask <<= mb;
+				c &= ~(bmask << mb);
+				res = c | ((Ra & bmask) << mb);
+				break;
+			case BFEXT:
+				res = (a >> mb) & bmask;
+				if (res & ((bmask + 1) >> 1) != 0) res |= ~bmask;
+				break;
 			case BFEXTU:
-				bmask = 0;
-				for (nn = 0; nn < me-mb+1; nn ++) {
-					bmask = (bmask << 1) | 1;
-				}
 				res = (a >> mb) & bmask;
 				break;
 			}
@@ -365,6 +424,26 @@ void clsCPU::Reset()
 		case MULU:
 			BuildConstant();
 			res = ua * (unsigned __int64)imm;
+			pc = pc + 4;
+			break;
+		case DIV:
+			BuildConstant();
+			res = a / imm;
+			pc = pc + 4;
+			break;
+		case DIVU:
+			BuildConstant();
+			res = ua / (unsigned __int64)imm;
+			pc = pc + 4;
+			break;
+		case MOD:
+			BuildConstant();
+			res = a % imm;
+			pc = pc + 4;
+			break;
+		case MODU:
+			BuildConstant();
+			res = ua % (unsigned __int64)imm;
 			pc = pc + 4;
 			break;
 		case AND:
@@ -725,7 +804,7 @@ void clsCPU::Reset()
 			break;
 		case POP:
 			BuildConstant();
-			ad = regs[30];
+			ad = (unsigned int)regs[30];
 			regs[30] += 8LL;
 			res = system1->Read(ad,0);
 			res |= ((unsigned __int64)system1->Read(ad+4,0)) << 32;
@@ -765,16 +844,18 @@ void clsCPU::Reset()
 		case BRA:	Rt = 0; pc = pc + ((sir >> 7) << 2); break;
 		case BSR:	Rt = 0; regs[31] = pc + 4; pc = pc + ((sir >> 7) << 2); break;
 		case RTL:   
+			BuildConstant();
 			Rt = 0;
 			pc = (unsigned int)regs[31];
-			regs[30] = regs[30] + (ir >> 17);
+			regs[30] = regs[30] + imm;
 			break;
 		case RTS:
+			BuildConstant();
 			Rt = 0;
 			a = system1->Read((unsigned int)regs[30]);
 			regs[31] = a;
 			pc = a;
-			regs[30] = regs[30] + (ir >> 17);
+			regs[30] = regs[30] + imm;
 			break;
 		case JALI:
 			BuildConstant();
@@ -799,7 +880,7 @@ void clsCPU::Reset()
 				dsp = regs[30];
 				break;
 			case 2:
-				ipc = pc;
+				ipc = pc - immcnt * 4;
 				isp = regs[30];
 				StatusHWI = true;
 				break;
@@ -812,37 +893,37 @@ void clsCPU::Reset()
 			Rt = 0;
 			switch((ir >> 12) & 7) {
 			case BEQ:
-				if (regs[Ra]==0)
+				if (a==0)
 					pc = pc + ((sir >> 17) << 2);
 				else
 					pc= pc + 4;
 				break;
 			case BNE:
-				if (regs[Ra]!=0)
+				if (a!=0)
 					pc = pc + ((sir >> 17) << 2);
 				else
 					pc= pc + 4;
 				break;
 			case BLT:
-				if (regs[Ra] & 0x8000000000000000LL)
+				if (a & 0x8000000000000000LL)
 					pc = pc + ((sir >> 17) << 2);
 				else
 					pc= pc + 4;
 				break;
 			case BLE:
-				if ((regs[Ra] & 0x8000000000000000LL) || (regs[Ra]==0))
+				if ((a & 0x8000000000000000LL) || (a==0))
 					pc = pc + ((sir >> 17) << 2);
 				else
 					pc= pc + 4;
 				break;
 			case BGE:
-				if ((regs[Ra] & 0x8000000000000000LL)==0)
+				if ((a & 0x8000000000000000LL)==0)
 					pc = pc + ((sir >> 17) << 2);
 				else
 					pc= pc + 4;
 				break;
 			case BGT:
-				if (((regs[Ra] & 0x8000000000000000LL)==0) && (regs[Ra]!=0))
+				if (((a & 0x8000000000000000LL)==0) && (a!=0))
 					pc = pc + ((sir >> 17) << 2);
 				else
 					pc= pc + 4;

@@ -110,8 +110,12 @@ int	options(char *s)
 {
     int nn;
 
-	if (s[1]=='o')
-		optimize = 0;
+	if (s[1]=='o') {
+        if (s[2]=='r')
+            opt_noregs = TRUE;
+        else
+            optimize = FALSE;
+    }
 	else if (s[1]=='f') {
 		if (strcmp(&s[2],"no-exceptions")==0)
 			exceptions = 0;

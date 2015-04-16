@@ -621,6 +621,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2, *ap3;
 	int op2;
+	ap3 = GetTempRegister();
 	ap1 = GenerateExpression(node->p[0],F_REG,size);
 	if (op==op_ftadd || op==op_ftsub || op==op_ftmul || op==op_ftdiv ||
         op==op_fdadd || op==op_fdsub || op==op_fdmul || op==op_fddiv ||
@@ -653,11 +654,12 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
            default:   ;
            }
        }
-       GenerateTriadic(op,0,ap1,ap1,ap2);
+       GenerateTriadic(op,0,ap3,ap1,ap2);
     }
     ReleaseTempRegister(ap2);
-    MakeLegalAmode(ap1,flags,size);
-    return ap1;
+    ReleaseTempRegister(ap1);
+    MakeLegalAmode(ap3,flags,size);
+    return ap3;
 }
 
 /*

@@ -13,6 +13,7 @@
 #include "frmAbout.h"
 #include "fmrPCS.h"
 #include "frmInterrupts.h"
+#include "frmStack.h"
 #include "Disassem.h"
 #include "clsCPU.h"
 #include "clsPIC.h"
@@ -38,14 +39,20 @@ namespace emuFISA64 {
 	using namespace System::Data;
 	using namespace System::Drawing;
 	using namespace System::Runtime::InteropServices;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmMain
 	/// </summary>
 	public ref class frmMain : public System::Windows::Forms::Form
 	{
+		bool animate;
+		bool isRunning;
 		int fullspeed;
 		int stepout;
+		unsigned int stepoverBkpt;
+		Thread^ runthread;
+
 	private: System::Windows::Forms::Label^  label42;
 	private: System::Windows::Forms::Label^  label43;
 	private: System::Windows::Forms::Label^  label44;
@@ -63,7 +70,14 @@ namespace emuFISA64 {
 	private: System::Windows::Forms::ToolStripMenuItem^  pCHistoryToolStripMenuItem;
 	private: System::Windows::Forms::Timer^  timer1024;
 	private: System::Windows::Forms::Timer^  timer30;
+	private: System::Windows::Forms::ToolStripMenuItem^  machineCodeToolStripMenuItem;
 			 int depth;
+	private: System::Windows::Forms::Label^  lblWriteErr;
+
+
+	private: System::Windows::Forms::ToolStripMenuItem^  stackToolStripMenuItem;
+
+			 bool viewMacCode;
 	public:
 		frmMain(void)
 		{
@@ -81,6 +95,13 @@ namespace emuFISA64 {
 			irq1024Hz = false;
 			irq30Hz = false;
 			irqKeyboard = false;
+			viewMacCode = true;
+			animate = false;
+			isRunning = false;
+			ThreadStart^ myThreadDelegate = gcnew ThreadStart(this, &frmMain::RunCPU2);
+			runthread = gcnew Thread(myThreadDelegate);
+			runthread->IsBackground = true;
+			runthread->Start();
 		}
 
 	protected:
@@ -89,6 +110,8 @@ namespace emuFISA64 {
 		/// </summary>
 		~frmMain()
 		{
+			if (runthread->IsAlive)
+				runthread->Abort();
 			if (components)
 			{
 				delete components;
@@ -253,6 +276,8 @@ private: System::Windows::Forms::Label^  label41;
 			this->viewToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->registersToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->pCHistoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->machineCodeToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->stackToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->aboutToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->openFileDialog1 = (gcnew System::Windows::Forms::OpenFileDialog());
 			this->label1 = (gcnew System::Windows::Forms::Label());
@@ -373,6 +398,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->lblChecksumError = (gcnew System::Windows::Forms::Label());
 			this->timer1024 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->timer30 = (gcnew System::Windows::Forms::Timer(this->components));
+			this->lblWriteErr = (gcnew System::Windows::Forms::Label());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -383,7 +409,7 @@ private: System::Windows::Forms::Label^  label41;
 				this->runToolStripMenuItem, this->viewToolStripMenuItem, this->aboutToolStripMenuItem});
 			this->menuStrip1->Location = System::Drawing::Point(0, 0);
 			this->menuStrip1->Name = L"menuStrip1";
-			this->menuStrip1->Size = System::Drawing::Size(1032, 24);
+			this->menuStrip1->Size = System::Drawing::Size(828, 24);
 			this->menuStrip1->TabIndex = 1;
 			this->menuStrip1->Text = L"menuStrip1";
 			// 
@@ -397,8 +423,8 @@ private: System::Windows::Forms::Label^  label41;
 			// loadToolStripMenuItem
 			// 
 			this->loadToolStripMenuItem->Name = L"loadToolStripMenuItem";
-			this->loadToolStripMenuItem->Size = System::Drawing::Size(100, 22);
-			this->loadToolStripMenuItem->Text = L"&Load";
+			this->loadToolStripMenuItem->Size = System::Drawing::Size(170, 22);
+			this->loadToolStripMenuItem->Text = L"&Load Intel Hex File";
 			this->loadToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::loadToolStripMenuItem_Click);
 			// 
 			// runToolStripMenuItem
@@ -425,6 +451,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->stepIntoToolStripMenuItem->Name = L"stepIntoToolStripMenuItem";
 			this->stepIntoToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stepIntoToolStripMenuItem->Text = L"Step Into";
+			this->stepIntoToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stepIntoToolStripMenuItem_Click);
 			// 
 			// stepOverToolStripMenuItem
 			// 
@@ -432,6 +459,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->stepOverToolStripMenuItem->Name = L"stepOverToolStripMenuItem";
 			this->stepOverToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stepOverToolStripMenuItem->Text = L"Step Over";
+			this->stepOverToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stepOverToolStripMenuItem_Click);
 			// 
 			// stepOutToolStripMenuItem
 			// 
@@ -452,6 +480,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->stopToolStripMenuItem->Name = L"stopToolStripMenuItem";
 			this->stopToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->stopToolStripMenuItem->Text = L"&Stop";
+			this->stopToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stopToolStripMenuItem_Click);
 			// 
 			// interruptToolStripMenuItem
 			// 
@@ -459,6 +488,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->interruptToolStripMenuItem->Name = L"interruptToolStripMenuItem";
 			this->interruptToolStripMenuItem->Size = System::Drawing::Size(143, 22);
 			this->interruptToolStripMenuItem->Text = L"&Interrupt";
+			this->interruptToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::interruptToolStripMenuItem_Click);
 			// 
 			// breakpointToolStripMenuItem
 			// 
@@ -484,8 +514,8 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			// viewToolStripMenuItem
 			// 
-			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(2) {this->registersToolStripMenuItem, 
-				this->pCHistoryToolStripMenuItem});
+			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(4) {this->registersToolStripMenuItem, 
+				this->pCHistoryToolStripMenuItem, this->machineCodeToolStripMenuItem, this->stackToolStripMenuItem});
 			this->viewToolStripMenuItem->Name = L"viewToolStripMenuItem";
 			this->viewToolStripMenuItem->Size = System::Drawing::Size(44, 20);
 			this->viewToolStripMenuItem->Text = L"&View";
@@ -493,16 +523,30 @@ private: System::Windows::Forms::Label^  label41;
 			// registersToolStripMenuItem
 			// 
 			this->registersToolStripMenuItem->Name = L"registersToolStripMenuItem";
-			this->registersToolStripMenuItem->Size = System::Drawing::Size(130, 22);
+			this->registersToolStripMenuItem->Size = System::Drawing::Size(151, 22);
 			this->registersToolStripMenuItem->Text = L"&Registers";
 			this->registersToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::registersToolStripMenuItem_Click);
 			// 
 			// pCHistoryToolStripMenuItem
 			// 
 			this->pCHistoryToolStripMenuItem->Name = L"pCHistoryToolStripMenuItem";
-			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(130, 22);
+			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(151, 22);
 			this->pCHistoryToolStripMenuItem->Text = L"PC History";
 			this->pCHistoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::pCHistoryToolStripMenuItem_Click);
+			// 
+			// machineCodeToolStripMenuItem
+			// 
+			this->machineCodeToolStripMenuItem->Name = L"machineCodeToolStripMenuItem";
+			this->machineCodeToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->machineCodeToolStripMenuItem->Text = L"Machine Code";
+			this->machineCodeToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::machineCodeToolStripMenuItem_Click);
+			// 
+			// stackToolStripMenuItem
+			// 
+			this->stackToolStripMenuItem->Name = L"stackToolStripMenuItem";
+			this->stackToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->stackToolStripMenuItem->Text = L"Stack";
+			this->stackToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stackToolStripMenuItem_Click);
 			// 
 			// aboutToolStripMenuItem
 			// 
@@ -514,15 +558,17 @@ private: System::Windows::Forms::Label^  label41;
 			// openFileDialog1
 			// 
 			this->openFileDialog1->FileName = L"Bootrom";
+			this->openFileDialog1->Filter = L"Intel Hex Files(*.hex)|*.hex|All Files (*.*)|*.*";
 			// 
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(474, 24);
+			this->label1->Location = System::Drawing::Point(679, 310);
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(35, 13);
 			this->label1->TabIndex = 2;
 			this->label1->Text = L"label1";
+			this->label1->Visible = false;
 			// 
 			// toolStrip1
 			// 
@@ -530,7 +576,7 @@ private: System::Windows::Forms::Label^  label41;
 				this->toolStripButton2, this->toolStripButton3, this->toolStripButton4, this->toolStripButton5, this->toolStripButton6, this->toolStripButton7});
 			this->toolStrip1->Location = System::Drawing::Point(0, 24);
 			this->toolStrip1->Name = L"toolStrip1";
-			this->toolStrip1->Size = System::Drawing::Size(1032, 25);
+			this->toolStrip1->Size = System::Drawing::Size(828, 25);
 			this->toolStrip1->TabIndex = 3;
 			this->toolStrip1->Text = L"toolStripExec";
 			// 
@@ -554,6 +600,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->toolStripButton2->Size = System::Drawing::Size(23, 22);
 			this->toolStripButton2->Text = L"toolStripButton2";
 			this->toolStripButton2->ToolTipText = L"Bounce Over";
+			this->toolStripButton2->Click += gcnew System::EventHandler(this, &frmMain::toolStripButton2_Click);
 			// 
 			// toolStripButton3
 			// 
@@ -785,7 +832,7 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			this->textR0->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
-			this->textR0->Location = System::Drawing::Point(429, 50);
+			this->textR0->Location = System::Drawing::Point(429, 51);
 			this->textR0->Name = L"textR0";
 			this->textR0->ReadOnly = true;
 			this->textR0->Size = System::Drawing::Size(82, 17);
@@ -1305,12 +1352,13 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			// textIPC
 			// 
-			this->textIPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+			this->textIPC->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 8.25F, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
 			this->textIPC->Location = System::Drawing::Point(727, 76);
 			this->textIPC->Name = L"textIPC";
-			this->textIPC->Size = System::Drawing::Size(82, 17);
+			this->textIPC->Size = System::Drawing::Size(82, 20);
 			this->textIPC->TabIndex = 105;
+			this->textIPC->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// textPC
 			// 
@@ -1320,6 +1368,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->textPC->Name = L"textPC";
 			this->textPC->Size = System::Drawing::Size(82, 20);
 			this->textPC->TabIndex = 104;
+			this->textPC->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label38
 			// 
@@ -1368,12 +1417,13 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			// textISP
 			// 
-			this->textISP->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+			this->textISP->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 8.25F, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
 			this->textISP->Location = System::Drawing::Point(727, 180);
 			this->textISP->Name = L"textISP";
-			this->textISP->Size = System::Drawing::Size(82, 17);
+			this->textISP->Size = System::Drawing::Size(82, 20);
 			this->textISP->TabIndex = 112;
+			this->textISP->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label40
 			// 
@@ -1386,13 +1436,14 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			// textBoxVBR
 			// 
-			this->textBoxVBR->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+			this->textBoxVBR->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 8.25F, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
 				static_cast<System::Byte>(0)));
 			this->textBoxVBR->Location = System::Drawing::Point(727, 284);
 			this->textBoxVBR->Name = L"textBoxVBR";
-			this->textBoxVBR->Size = System::Drawing::Size(82, 17);
+			this->textBoxVBR->Size = System::Drawing::Size(82, 20);
 			this->textBoxVBR->TabIndex = 118;
 			this->textBoxVBR->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->textBoxVBR->TextChanged += gcnew System::EventHandler(this, &frmMain::textBoxVBR_TextChanged);
 			// 
 			// checkBoxLED0
 			// 
@@ -1617,11 +1668,23 @@ private: System::Windows::Forms::Label^  label41;
 			this->timer30->Interval = 333;
 			this->timer30->Tick += gcnew System::EventHandler(this, &frmMain::timer30_Tick);
 			// 
+			// lblWriteErr
+			// 
+			this->lblWriteErr->AutoSize = true;
+			this->lblWriteErr->ForeColor = System::Drawing::Color::Red;
+			this->lblWriteErr->Location = System::Drawing::Point(24, 527);
+			this->lblWriteErr->Name = L"lblWriteErr";
+			this->lblWriteErr->Size = System::Drawing::Size(101, 13);
+			this->lblWriteErr->TabIndex = 143;
+			this->lblWriteErr->Text = L"Trying to write ROM";
+			this->lblWriteErr->Visible = false;
+			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(1032, 549);
+			this->ClientSize = System::Drawing::Size(828, 549);
+			this->Controls->Add(this->lblWriteErr);
 			this->Controls->Add(this->lblChecksumError);
 			this->Controls->Add(this->lblChecksumErr);
 			this->Controls->Add(this->label47);
@@ -1789,40 +1852,55 @@ private: System::Void loadToolStripMenuItem_Click(System::Object^  sender, Syste
 			ad = firstAdr;
 			UpdateListBox(ad);
 	};
+		 // the step once button
 private: System::Void toolStripButton1_Click(System::Object^  sender, System::EventArgs^  e) {
-			 cpu1.Step();
-			 UpdateListBox(cpu1.pc-32);
+			 DoStepInto();
 		 }
 private: System::Void resetToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 animate = false;
+			 isRunning = false;
 			 cpu1.Reset();
+			 pic1.Reset();
+			 system1.write_error = false;
+			 this->lblWriteErr->Visible = false;
+			 irq30Hz = false;
+			 irq1024Hz = false;
 			 UpdateListBox(cpu1.pc-32);
-			 //checkedListBox1->SetSelection("010000");
-			 //checkedListBox1->Items(0)->Select(0);
 		 }
 public: void UpdateListBox(unsigned int ad) {
 	int nn;
-	char buf2[20];
+	char buf2[50];
 	std::string buf;
+	int chksum;
+	unsigned int dat;
 
 	if (ad > 134217727)
 		ad = 0;
 	this->listBoxCode->Items->Clear();
 	this->listBoxAdr->Items->Clear();
-	this->listBoxBytes->Items->Clear();
-	for (nn = 0; nn < 30; nn++) {
+	if (viewMacCode) this->listBoxBytes->Items->Clear();
+			chksum = 0;
+			for (nn = 0x10000; nn < 0x20000; nn+=4) {
+				chksum += system1.memory[nn>>2];
+			}
+			chksum = 0;
+	for (nn = 0; nn < 32; nn++) {
+		chksum += system1.memory[ad>>2];
 		sprintf(buf2,"%06X", ad);
 		buf = std::string(buf2);
 		this->listBoxAdr->Items->Add(gcnew String(buf.c_str()));
-		sprintf(buf2,"%08X", system1.memory[ad>>2]);
-		buf = std::string(buf2);
-		this->listBoxBytes->Items->Add(gcnew String(buf.c_str()));
-		buf = Disassem(ad,system1.memory[ad>>2]) + "\r\n";
+		if (viewMacCode) {
+			dat = system1.memory[ad>>2];
+			sprintf(buf2,"%08X", system1.memory[ad>>2]);
+			this->listBoxBytes->Items->Add(gcnew String(buf2));
+		}
+		buf = Disassem(ad,system1.memory[ad>>2]);
 		//richTextCode->AppendText(gcnew String(buf.c_str()));
 //				this->checkedListBox1->Items->Add(gcnew String(buf.c_str()));
 		this->listBoxCode->Items->Add(gcnew String(buf.c_str()));
 		if (ad==cpu1.pc) {
 			this->listBoxAdr->SetSelected(nn,true);
-			this->listBoxBytes->SetSelected(nn,true);
+			if (viewMacCode) this->listBoxBytes->SetSelected(nn,true);
 			this->listBoxCode->SetSelected(nn,true);
 		}
 		ad = ad + 4;
@@ -1941,6 +2019,12 @@ public: void UpdateListBox(unsigned int ad) {
 	sprintf(buf2, "%06X", cpu1.vbr);
 	buf = std::string(buf2);
 	this->textBoxVBR->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.ipc);
+	buf = std::string(buf2);
+	this->textIPC->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%06X", cpu1.isp);
+	buf = std::string(buf2);
+	this->textISP->Text = gcnew String(buf.c_str());
 	this->checkBoxLED0->Checked = (system1.leds & 1) ;
 	this->checkBoxLED1->Checked = (system1.leds & 2) >> 1;
 	this->checkBoxLED2->Checked = (system1.leds & 4) >> 2;
@@ -1949,37 +2033,32 @@ public: void UpdateListBox(unsigned int ad) {
 	this->checkBoxLED5->Checked = (system1.leds & 32) >> 5;
 	this->checkBoxLED6->Checked = (system1.leds & 64) >> 6;
 	this->checkBoxLED7->Checked = (system1.leds & 128) >> 7;
+	if (system1.write_error) this->lblWriteErr->Visible = true; else this->lblWriteErr->Visible = false; 
 };
+		// The red stop button.
 private: System::Void toolStripButton5_Click(System::Object^  sender, System::EventArgs^  e) {
-			 cpu1.brk = true;
-			 cpu1.isRunning = false;
-			 fullspeed = false;
-			 this->timer1->Interval = 100;
+			 DoStopButton();
 		 }
+		 // The green run button.
 private: System::Void toolStripButton4_Click(System::Object^  sender, System::EventArgs^  e) {
-			 cpu1.isRunning = true;
+			 if (fullspeed) {
+				 isRunning = true;
+			 }
+			 else animate = true;
 		 }
 private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
-			 RunCPU();
-		 }
-private: System::Void toolStripButton7_Click(System::Object^  sender, System::EventArgs^  e) {
-		frmBreakpoint ^form = gcnew frmBreakpoint();
-				 form->Show();		 }
-private: System::Void freeRunFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-			 this->timer1->Interval = 1;
-		 }
-private: System::Void runToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-		 }
-private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-			 fullspeed = true;
-		 }
-private: System::Void toolStripButton3_Click(System::Object^  sender, System::EventArgs^  e) {
-			 stepout = true;
-			 fullspeed = true;
-			 cpu1.isRunning = true;
-		 }
-private: void RunCPU() {
-			 int nn,kk;
+			 static int tt = 0;
+
+			 if (this->timer1->Interval == 1)
+				 tt += 1;
+				 if (tt == 100) {
+					 tt = 0;
+					 UpdateListBox(cpu1.pc-32);
+				 }
+			 else
+				UpdateListBox(cpu1.pc-32);
+			 if (!cpu1.isRunning && animate)
+				RunCPU();
 			 if (trigger30) {
 				 trigger30 = false;
 				 if (interval30==-1) {
@@ -1999,50 +2078,86 @@ private: void RunCPU() {
 					 this->timer1024->Enabled = true;
 				 }
 			 }
-			 if (cpu1.isRunning) {
-				 if (fullspeed) {
-					 for (nn = 0; nn < 10000; nn++) {
-						 if (cpu1.pc > 134217727) {
-							 cpu1.isRunning = false;
-							 UpdateListBox(0);
-							 return;
-						 }
-						 for (kk = 0; kk < numBreakpoints; kk++) {
-							 if (cpu1.pc == breakpoints[kk]) {
-								 cpu1.isRunning = false;
-								 UpdateListBox(cpu1.pc-32);
-								 return;
-						     }
-						 }
-						if (system1.write_error==true) {
-							cpu1.isRunning = false;
-							UpdateListBox(cpu1.pc-32);
-							return;
-						}
-						// Runstop becomes active when a data breakpoint is hit.
-						if (runstop) {
-							cpu1.isRunning = false;
-							runstop = false;
-							UpdateListBox(cpu1.pc-32);
-							return;
-						}
-						 cpu1.Step();
-						 pic1.Step();
-						 if (stepout) {
-							 if ((cpu1.ir & 0x7f)==BSR)
-								 depth++;
-							 if (((cpu1.ir & 0x7f)==RTL) || ((cpu1.ir & 0x7f)==RTS)) {
-								 depth--;
-								 if (depth==-1) {
-									 cpu1.isRunning = false;
-									 stepout = false;
-									 UpdateListBox(cpu1.pc-32);
-									 return;
-								 }
-							 }
-						 }
-					 }
-				 }
+		 }
+private: System::Void toolStripButton7_Click(System::Object^  sender, System::EventArgs^  e) {
+		frmBreakpoint ^form = gcnew frmBreakpoint();
+				 form->Show();		 }
+private: System::Void freeRunFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 cpu1.isRunning = false;
+			 animate = true;
+			 this->timer1->Interval = 1;
+			 this->fullSpeedToolStripMenuItem->Checked = false;
+			 this->freeRunFastToolStripMenuItem->Checked = true;
+		 }
+private: System::Void runToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 this->fullSpeedToolStripMenuItem->Checked = !this->fullSpeedToolStripMenuItem->Checked;
+			 fullspeed = this->fullSpeedToolStripMenuItem->Checked;
+			 if (this->fullSpeedToolStripMenuItem->Checked)
+				 this->timer1->Interval = 1000;
+			 else {
+				this->timer1->Interval = 100;
+			 }
+			 this->freeRunFastToolStripMenuItem->Checked = false;
+		 }
+			// stepout button.
+private: System::Void toolStripButton3_Click(System::Object^  sender, System::EventArgs^  e) {
+			 animate = false;
+			 stepout = true;
+			 fullspeed = true;
+			 isRunning = true;
+			 this->fullSpeedToolStripMenuItem->Checked = true;
+		 }
+private: void RunCPU() {
+			 int nn,kk;
+			if (cpu1.pc > 134217727) {
+				isRunning = false;
+				return;
+			}
+			if (cpu1.pc == stepoverBkpt) {
+				stepoverBkpt = 0;
+				isRunning = false;
+				return;
+			}
+			for (kk = 0; kk < numBreakpoints; kk++) {
+				if (cpu1.pc == breakpoints[kk]) {
+					isRunning = false;
+					return;
+				}
+			}
+			if (system1.write_error==true) {
+				isRunning = false;
+//				this->lblWriteErr->Visible = true;
+				return;
+			}
+			// Runstop becomes active when a data breakpoint is hit.
+			if (runstop) {
+				isRunning = false;
+				runstop = false;
+				return;
+			}
+			cpu1.Step();
+			pic1.Step();
+			if (stepout) {
+				if ((cpu1.ir & 0x7f)==BSR)
+					depth++;
+				if (((cpu1.ir & 0x7f)==RTL) || ((cpu1.ir & 0x7f)==RTS)) {
+					depth--;
+					if (depth==-1) {
+						isRunning = false;
+						stepout = false;
+						return;
+					}
+				}
+			}
+				 /*
+				if (cpu1.pc == stepoverBkpt) {
+					stepoverBkpt = 0;
+					cpu1.isRunning = false;
+					UpdateListBox(cpu1.pc-32);
+					return;
+				}
 				for (kk = 0; kk < numBreakpoints; kk++) {
 					if (cpu1.pc == breakpoints[kk]) {
 						cpu1.isRunning = false;
@@ -2053,8 +2168,18 @@ private: void RunCPU() {
 				 cpu1.Step();
      			 pic1.Step();
 				 UpdateListBox(cpu1.pc-32);
-			 }
+				 */
+//			 UpdateListBox(cpu1.pc-32);
 		 }
+private: void RunCPU2()
+		 {
+			 while(1) {
+				 if (isRunning)
+					RunCPU();
+				 else
+					 Sleep(100);
+			 }
+		 };
 private: System::Void aboutToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 			 frmAbout^ aboutFrm = gcnew frmAbout;
 			 aboutFrm->Show();
@@ -2089,6 +2214,7 @@ private: void LoadIntelHexFile() {
 			 int chksum;
 
 			char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->openFileDialog1->FileName);
+			System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::WaitCursor; 
 			std::ifstream fp_in;
 			fp_in.open(str,std::ios::in);
 			firstAdr = 0;
@@ -2116,13 +2242,13 @@ private: void LoadIntelHexFile() {
 				if (!firstAdr)
 					firstAdr = ad;
 				system1.memory[ad>>2] = dat;
-				sprintf(buf2,"%06X", ad);
-				str_ad = std::string(buf2);
-				sprintf(buf2,"%08X", dat);
-				str_insn = std::string(buf2);
-				str_disassem = Disassem(str_ad,str_insn);
-				str_ad_insn = str_ad + "   " + str_insn + "    " + str_disassem;
-				label1->Text = gcnew String(str_ad_insn.c_str());
+				//sprintf(buf2,"%06X", ad);
+				//str_ad = std::string(buf2);
+				//sprintf(buf2,"%08X", dat);
+				//str_insn = std::string(buf2);
+				//str_disassem = Disassem(str_ad,str_insn);
+				//str_ad_insn = str_ad + "   " + str_insn + "    " + str_disassem;
+				//label1->Text = gcnew String(str_ad_insn.c_str());
 				//this->checkedListBox1->Items->Add(gcnew String(str_ad_insn.c_str()));
 			}
      		fp_in.close();
@@ -2134,6 +2260,7 @@ private: void LoadIntelHexFile() {
 			}
 			else
 				this->lblChecksumError->Text = "Checksum OK";
+			System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::Default; 
 		 }
 private: System::Void pCHistoryToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 			 fmrPCS^ pcsFrm = gcnew fmrPCS;
@@ -2144,15 +2271,70 @@ private: System::Void breakpointToolStripMenuItem_Click(System::Object^  sender,
 				 form->Show();		 }
 		 private: System::Void timer1024_Tick(System::Object^  sender, System::EventArgs^  e) {
 					  pic1.irq1024Hz = true;
-					  this->timer1024->Enabled = false;
 				  }
 private: System::Void toolStripButton6_Click(System::Object^  sender, System::EventArgs^  e) {
-		frmInterrupts^ form = gcnew frmInterrupts();
-		form->Show();
+			 DoInterruptButton();
 		 }
 private: System::Void timer30_Tick(System::Object^  sender, System::EventArgs^  e) {
 			 pic1.irq30Hz = true;
+		 }
+private: System::Void machineCodeToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 this->machineCodeToolStripMenuItem->Checked = !this->machineCodeToolStripMenuItem->Checked;
+			 viewMacCode = this->machineCodeToolStripMenuItem->Checked;
+			 if (!viewMacCode)
+				 this->listBoxBytes->Visible = false;
+			 else
+				 this->listBoxBytes->Visible = true;
+		 }
+		 // Step over
+private: System::Void toolStripButton2_Click(System::Object^  sender, System::EventArgs^  e) {
+			 DoStepOver();
+		 }
+private: System::Void stopToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 DoStopButton();
+		 }
+private: System::Void stepIntoToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 DoStepInto();
+		 }
+private: void DoStopButton() {
+			 animate = false;
+			 isRunning = false;
+			 cpu1.brk = true;
+			 fullspeed = false;
+			 this->fullSpeedToolStripMenuItem->Checked = false;
+			 this->freeRunFastToolStripMenuItem->Checked = false;
+			 this->timer1->Interval = 100;
+		 }
+private: void DoStepInto() {
+		 	 animate = false;
+			 isRunning = false;
+			 cpu1.Step();
+			 pic1.Step();
+			 UpdateListBox(cpu1.pc-32);
+		 }
+private: void DoStepOver() {
+			 stepoverBkpt = cpu1.pc + 4;
+			 cpu1.isRunning = true;
+			 this->fullSpeedToolStripMenuItem->Checked = true;
+			 fullspeed = true;
+		 }
+private: System::Void stepOverToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 DoStepOver();
+		 }
+private: System::Void interruptToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 DoInterruptButton();
+		 }
+private: void DoInterruptButton() {
 			 this->timer30->Enabled = false;
+			 this->timer1024->Enabled = false;
+			frmInterrupts^ form = gcnew frmInterrupts();
+			form->Show();
+		 }
+private: System::Void stackToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 frmStack^ form = gcnew frmStack();
+			 form->Show();
+		 }
+private: System::Void textBoxVBR_TextChanged(System::Object^  sender, System::EventArgs^  e) {
 		 }
 };
 };

@@ -600,29 +600,13 @@ void GenerateThrow(Statement *stmt)
 	}
 	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
-/*
-void GenerateCritical(struct snode *stmt)
-{
-	int lab1;
-
-	lab1 = nextlabel++;
-	semaphores[lastsph] = stmt->label;
-	lastsph++;
-    GenerateLabel(lab1);
-	GenerateDiadic(op_tas,0,make_string(stmt->label),NULL);
-	GenerateDiadic(op_bmi,0,make_label(lab1),NULL);
-	GenerateStatement(stmt->s1);
-	--lastsph;
-	semaphores[lastsph] = NULL;
-	GenerateDiadic(op_move,0,make_immed(0),make_string(stmt->label));
-}
-*/
 
 void GenerateSpinlock(Statement *stmt)
 {
 	int lab1, lab2, lab3, lab4;
 	AMODE *ap1, *ap2;
 	AMODE *ap;
+	int sp = 0;
 
 	lab1 = nextlabel++;
 	lab2 = nextlabel++;
@@ -647,7 +631,16 @@ void GenerateSpinlock(Statement *stmt)
         GenerateMonadic(op_bsr,0,make_string("_LockSema"));
         if (stmt->initExpr)
             GenerateDiadic(op_beq,0,makereg(1),make_clabel(lab2));
+		ReleaseTempRegister(ap);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+        // We treat this statement generation like a function call and save
+        // the used temporary beforehand.  The statement might reinitialize
+        // the expression vars. There aren't any other cases where temporaries
+        // are needed after statements are generated.
+       	GenerateMonadic(op_push,0,ap);
 		GenerateStatement(stmt->s1);
+    	GenerateMonadic(op_pop,0,ap);
 		// unlock
 		if (isRaptor64)
 			GenerateDiadic(op_outb, 0, makereg(0), make_indexed((int64_t)stmt->incrExpr,ap->preg));
@@ -666,9 +659,6 @@ void GenerateSpinlock(Statement *stmt)
 		else {
 			printf("Warning: The lockfail code is unreachable because spinlock tries are infinite.\r\n");
 		}
-		ReleaseTempRegister(ap);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
 	}
 
 	//ap1 = GetTempRegister();

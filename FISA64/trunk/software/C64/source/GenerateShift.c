@@ -76,8 +76,9 @@ j1:
 
 AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 {
-	AMODE *ap1, *ap2;
+	AMODE *ap1, *ap2, *ap3;
 
+    ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
 	MaskShift(op, ap1, GetNaturalSize(node->p[0]));
@@ -95,14 +96,15 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 		case op_srl:    op = op_srli; break;
 		case op_lsr:    op = op_lsri; break;
 		}
-		GenerateTriadic(op,0,ap1,ap1,make_immed(ap2->offset->i));
+		GenerateTriadic(op,0,ap3,ap1,make_immed(ap2->offset->i));
 	}
 	else
-		GenerateTriadic(op,0,ap1,ap1,ap2);
+		GenerateTriadic(op,0,ap3,ap1,ap2);
 
 	ReleaseTempRegister(ap2);
-    MakeLegalAmode(ap1,flags,size);
-    return ap1;
+	ReleaseTempRegister(ap1);
+    MakeLegalAmode(ap3,flags,size);
+    return ap3;
 }
 
 

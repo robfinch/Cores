@@ -113,6 +113,7 @@ extern int isInterrupt;
 extern int isNocall;
 extern int asmblock;
 extern int optimize;
+extern int opt_noregs;
 extern int exceptions;
 extern SYM *currentFn;
 extern int iflevel;
