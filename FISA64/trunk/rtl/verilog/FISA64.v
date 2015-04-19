@@ -47,6 +47,7 @@
 `define LDI		7'h0A
 `define NOT			7'h0A
 `define MOV			7'h0B
+`define CHKI    7'h0B
 `define AND		7'h0C
 `define OR		7'h0D
 `define EOR		7'h0E
@@ -60,7 +61,6 @@
 `define DIVU	7'h18
 `define MODU	7'h19
 `define CHK			7'h1A
-`define CHKX		7'h1B
 `define MTSPR		7'h1E
 `define MFSPR		7'h1F
 `define SEQ		7'h20
@@ -177,6 +177,8 @@
 `define LBOUND		8'b01xxxxxx
 `define UBOUND		8'b10xxxxxx
 `define MMASK		8'b11xxxxxx
+//0000_0011_1100_1110_00001111_00111000;
+//03cc0f38
 `define BRK_BND	{6'd0,9'd487,5'd0,5'h1E,`BRK}
 `define BRK_DBZ	{6'd0,9'd488,5'd0,5'h1E,`BRK}
 `define BRK_OFL	{6'd0,9'd489,5'd0,5'h1E,`BRK}
@@ -324,6 +326,7 @@ reg [4:0] xRt,mRt,wRt,tRt,uRt;
 reg xRt2,wRt2,tRt2;
 reg [63:0] rfoa,rfob,rfoc;
 reg [63:0] res,res2,ea,xres,mres,wres,lres,md_res,wres2,tres,tres2,ures;
+reg xisImm,wisImm,tisImm;
 reg mc_done;
 always @*
 case(Ra)
@@ -822,28 +825,11 @@ FISA64_bitfield u3
 	.masko()
 );
 
-wire [63:0] lb;
-wire [63:0] ub;
-wire [63:0] mm;
-wire isMtBounds = x1opcode==`RR && x1funct==`MTSPR;
-
-bounds_reg u8
-(
-	.clk(clk),
-	.a({xir[24:23],km&xir[22],xir[21:17]}),
-	.wr(advanceEX && isMtBounds),
-	.i(a),
-	.lb(lb),
-	.ub(ub),
-	.mm(mm)
-);
-
-
 always @*
 case(x1opcode)
 `BSR:	res <= xpc + 64'd4;
-`JAL:	res <= xpc + 64'd4;
-`JALI:	res <= xpc + 64'd4;
+`JAL:	res <= xpc + ((wisImm&&tisImm) ? 64'd12:wisImm ? 64'd8 : 64'd4);
+`JALI:	res <= xpc + ((wisImm&&tisImm) ? 64'd12:wisImm ? 64'd8 : 64'd4);
 `ADD:	res <= a + imm;
 `ADDU:	res <= a + imm;
 `SUB:	res <= a - imm;
@@ -887,9 +873,6 @@ case(x1opcode)
 			`DBAD2:		res <= dbad2;
 			`DBAD3:		res <= dbad3;
 			`DBSTAT:	res <= dbstat;
-			`LBOUND:	res <= lbound[xir[21:17]];
-			`UBOUND:	res <= ubound[xir[21:17]];
-			`MMASK:		res <= mmask[xir[21:17]];
 			default:	res <= 64'd0;
 			endcase
 		end
@@ -897,9 +880,6 @@ case(x1opcode)
 			casex(xir[24:17]|a[7:0])
 			`MYSTREG:	res <= mystreg;
 			`MULH:		res <= p[127:64];
-			`LBOUND:	res <= lbound[{1'b0,xir[20:17]}];
-			`UBOUND:	res <= ubound[{1'b0,xir[20:17]}];
-			`MMASK:		res <= mmask[{1'b0,xir[20:17]}];
 			default:	res <= 64'd0;
 			endcase
 		end
@@ -941,7 +921,6 @@ case(x1opcode)
 		4'd8:	res <= 1;
 		default:	res <= 64'h0;
 		endcase
-	`CHK:	res <= (a >= lb && a < ub && ((a & mm)==64'd0)) ? 64'd1 : 64'd0;
 	default:	res <= 64'd0;
 	endcase
 `BTFLD:	res <= btfldo;
@@ -1256,13 +1235,13 @@ begin
 		case(opcode)
 		`RR:
 			case(funct)
-			`MTSPR,`FENCE:
+			`MTSPR,`FENCE,`CHK:
 				xRt <= 5'd0;
 			`PCTRL:
 				xRt <= (km || ir[16:12]!=regTR) ? ir[16:12] : 5'd0;
 			default:	xRt <= (km || ir[16:12]!=regTR) ? ir[16:12] : 5'd0;
 			endcase
-		`BRA,`Bcc,`BRK,`IMM,`NOP:
+		`BRA,`Bcc,`BRK,`IMM,`NOP,`CHKI:
 			xRt <= 5'd0;
 		`SB,`SC,`SH,`SW,`SWCR,`SBX,`SCX,`SHX,`SWX,`INC,
 		`RTL,`PUSH,`PEA,`PMW:
@@ -1289,6 +1268,7 @@ begin
 	//-----------------------------------------------------------------------------
 	if (advanceEX) begin
 		// The following lines needed for code above for immediate prefixes.
+		wisImm <= ximm;
 		wopcode <= x1opcode;
 		wpc <= xpc;
 		w63 <= x63;
@@ -1343,17 +1323,11 @@ begin
 					`DBAD1:		dbad1 <= a;
 					`DBAD2:		dbad2 <= a;
 					`DBAD3:		dbad3 <= a;
-					`LBOUND:	lbound[xir[21:17]] <= a;
-					`UBOUND:	ubound[xir[21:17]] <= a;
-					`MMASK:		mmask[xir[21:17]] <= a;
 					endcase
 				end
 				else begin
 					casex(xir[24:17]|c[7:0])
 					`MYSTREG:	mystreg <= a;
-					`LBOUND:	lbound[{1'b0,xir[20:17]}] <= a;
-					`UBOUND:	ubound[{1'b0,xir[20:17]}] <= a;
-					`MMASK:		mmask[{1'b0,xir[20:17]}] <= a;
 					default:	privilege_violation();
 					endcase
 				end
@@ -1409,13 +1383,15 @@ begin
 						overflow();
 			`SUB:	if (fnASOverflow(1,a[63],b[63],res[63]) && ovf_xe)
 						overflow();
-			`CHKX:	 if (res[0])
+			`CHK:	 if (!(a >= c && a < b))
 			            bounds_violation();
 			endcase
 		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]) && ovf_xe)
 					overflow();
 		`SUB:	if (fnASOverflow(1,a[63],imm[63],res[63]) && ovf_xe)
 					overflow();
+		`CHKI:	 if (!(a >= c && a < imm))
+					bounds_violation();
 		`BSR,`BRA:	;//update_pc(xpc + imm); done already in IF
 		`JAL:		update_pc(a + {imm,2'b00});
 		`RTL:	begin
@@ -1448,6 +1424,7 @@ begin
 	//-----------------------------------------------------------------------------
 	// wRt2 and wRt==30 are never active together at the same time.
 	if (advanceWB) begin
+		tisImm <= wisImm;
 		if (wRt != 5'd0) begin
 			tRt <= wRt;
 			tres <= wres;
@@ -2979,31 +2956,6 @@ case(xopcode)
 `SLS:	res <= ltui|eqi;
 default:	res <= 64'd0;
 endcase
-
-endmodule
-
-module bounds_reg(clk, a, wr, i, lb, ub, mm);
-input clk;
-input [7:0] a;
-input wr;
-input [63:0] i;
-output [63:0] lb;
-output [63:0] ub;
-output [63:0] mm;
-
-reg [63:0] lbound [63:0];
-reg [63:0] ubound [63:0];
-reg [63:0] mmask [63:0];
-
-always @(posedge clk)
-begin
-	if (wr && a[7:6]==2'b01) lbound [a[5:0]] <= i;
-	if (wr && a[7:6]==2'b10) ubound [a[5:0]] <= i;
-	if (wr && a[7:6]==2'b11) mmask [a[5:0]] <= i;
-end
-assign lb = lbound[a[5:0]];
-assign ub = ubound[a[5:0]];
-assign mm = mmask[a[5:0]];
 
 endmodule
 
