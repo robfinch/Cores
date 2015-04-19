@@ -73,7 +73,8 @@ static char *errtextstr[] = {
 	"Operator is not defined for float/double type.",
 	"Integer constant required.",
 	"Bad switch expression.",
-	"Not in a loop."
+	"Not in a loop.",
+	"Check expression invalid",
 };
 
 char *errtext(int errnum)

@@ -1,15 +1,15 @@
 	code
 	align	16
-public code isxdigit:
+public code isxdigit_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#65
-	      	blt  	r3,ctype_1
+	      	cmpu 	r4,r3,#65
+	      	blt  	r4,ctype_1
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#70
-	      	bgt  	r3,ctype_1
+	      	cmpu 	r4,r3,#70
+	      	bgt  	r4,ctype_1
 	      	ldi  	r1,#1
 ctype_3:
 	      	mov  	sp,bp
@@ -17,20 +17,20 @@ ctype_3:
 	      	rtl  	#16
 ctype_1:
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#97
-	      	blt  	r3,ctype_4
+	      	cmpu 	r4,r3,#97
+	      	blt  	r4,ctype_4
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#102
-	      	bgt  	r3,ctype_4
+	      	cmpu 	r4,r3,#102
+	      	bgt  	r4,ctype_4
 	      	ldi  	r1,#1
 	      	bra  	ctype_3
 ctype_4:
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#48
-	      	blt  	r3,ctype_6
+	      	cmpu 	r4,r3,#48
+	      	blt  	r4,ctype_6
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#57
-	      	bgt  	r3,ctype_6
+	      	cmpu 	r4,r3,#57
+	      	bgt  	r4,ctype_6
 	      	ldi  	r1,#1
 	      	bra  	ctype_3
 ctype_6:
@@ -38,16 +38,16 @@ ctype_6:
 	      	bra  	ctype_3
 endpublic
 
-public code isdigit:
+public code isdigit_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#48
-	      	blt  	r3,ctype_9
+	      	cmpu 	r4,r3,#48
+	      	blt  	r4,ctype_9
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#57
-	      	bgt  	r3,ctype_9
+	      	cmpu 	r4,r3,#57
+	      	bgt  	r4,ctype_9
 	      	ldi  	r1,#1
 ctype_11:
 	      	mov  	sp,bp
@@ -58,16 +58,16 @@ ctype_9:
 	      	bra  	ctype_11
 endpublic
 
-public code isalpha:
+public code isalpha_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#97
-	      	blt  	r3,ctype_13
+	      	cmpu 	r4,r3,#97
+	      	blt  	r4,ctype_13
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#122
-	      	bgt  	r3,ctype_13
+	      	cmpu 	r4,r3,#122
+	      	bgt  	r4,ctype_13
 	      	ldi  	r1,#1
 ctype_15:
 	      	mov  	sp,bp
@@ -75,11 +75,11 @@ ctype_15:
 	      	rtl  	#16
 ctype_13:
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#65
-	      	blt  	r3,ctype_16
+	      	cmpu 	r4,r3,#65
+	      	blt  	r4,ctype_16
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#90
-	      	bgt  	r3,ctype_16
+	      	cmpu 	r4,r3,#90
+	      	bgt  	r4,ctype_16
 	      	ldi  	r1,#1
 	      	bra  	ctype_15
 ctype_16:
@@ -87,16 +87,16 @@ ctype_16:
 	      	bra  	ctype_15
 endpublic
 
-public code isalnum:
+public code isalnum_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#48
-	      	blt  	r3,ctype_19
+	      	cmpu 	r4,r3,#48
+	      	blt  	r4,ctype_19
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#57
-	      	bgt  	r3,ctype_19
+	      	cmpu 	r4,r3,#57
+	      	bgt  	r4,ctype_19
 	      	ldi  	r1,#1
 ctype_21:
 	      	mov  	sp,bp
@@ -104,20 +104,20 @@ ctype_21:
 	      	rtl  	#16
 ctype_19:
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#97
-	      	blt  	r3,ctype_22
+	      	cmpu 	r4,r3,#97
+	      	blt  	r4,ctype_22
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#122
-	      	bgt  	r3,ctype_22
+	      	cmpu 	r4,r3,#122
+	      	bgt  	r4,ctype_22
 	      	ldi  	r1,#1
 	      	bra  	ctype_21
 ctype_22:
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#65
-	      	blt  	r3,ctype_24
+	      	cmpu 	r4,r3,#65
+	      	blt  	r4,ctype_24
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#90
-	      	bgt  	r3,ctype_24
+	      	cmpu 	r4,r3,#90
+	      	bgt  	r4,ctype_24
 	      	ldi  	r1,#1
 	      	bra  	ctype_21
 ctype_24:
@@ -125,13 +125,13 @@ ctype_24:
 	      	bra  	ctype_21
 endpublic
 
-public code isspace:
+public code isspace_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#32
-	      	bne  	r3,ctype_27
+	      	cmp  	r4,r3,#32
+	      	bne  	r4,ctype_27
 	      	ldi  	r1,#1
 ctype_29:
 	      	mov  	sp,bp
@@ -139,26 +139,26 @@ ctype_29:
 	      	rtl  	#16
 ctype_27:
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#9
-	      	bne  	r3,ctype_30
+	      	cmp  	r4,r3,#9
+	      	bne  	r4,ctype_30
 	      	ldi  	r1,#1
 	      	bra  	ctype_29
 ctype_30:
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#10
-	      	bne  	r3,ctype_32
+	      	cmp  	r4,r3,#10
+	      	bne  	r4,ctype_32
 	      	ldi  	r1,#1
 	      	bra  	ctype_29
 ctype_32:
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#13
-	      	bne  	r3,ctype_34
+	      	cmp  	r4,r3,#13
+	      	bne  	r4,ctype_34
 	      	ldi  	r1,#1
 	      	bra  	ctype_29
 ctype_34:
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#12
-	      	bne  	r3,ctype_36
+	      	cmp  	r4,r3,#12
+	      	bne  	r4,ctype_36
 	      	ldi  	r1,#1
 	      	bra  	ctype_29
 ctype_36:
@@ -166,18 +166,18 @@ ctype_36:
 	      	bra  	ctype_29
 endpublic
 
-public code tolower:
+public code tolower_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#65
-	      	blt  	r3,ctype_39
+	      	cmpu 	r4,r3,#65
+	      	blt  	r4,ctype_39
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#90
-	      	bgt  	r3,ctype_39
-	      	lcu  	r3,24[bp]
-	      	addu 	r3,r3,#32
+	      	cmpu 	r4,r3,#90
+	      	bgt  	r4,ctype_39
+	      	lcu  	r4,24[bp]
+	      	addu 	r3,r4,#32
 	      	sc   	r3,24[bp]
 ctype_39:
 	      	lcu  	r3,24[bp]
@@ -188,18 +188,18 @@ ctype_41:
 	      	rtl  	#16
 endpublic
 
-public code toupper:
+public code toupper_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#97
-	      	blt  	r3,ctype_43
+	      	cmpu 	r4,r3,#97
+	      	blt  	r4,ctype_43
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#97
-	      	bgt  	r3,ctype_43
-	      	lcu  	r3,24[bp]
-	      	addu 	r3,r3,#-32
+	      	cmpu 	r4,r3,#97
+	      	bgt  	r4,ctype_43
+	      	lcu  	r4,24[bp]
+	      	addu 	r3,r4,#-32
 	      	sc   	r3,24[bp]
 ctype_43:
 	      	lcu  	r3,24[bp]
@@ -210,16 +210,16 @@ ctype_45:
 	      	rtl  	#16
 endpublic
 
-public code isupper:
+public code isupper_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#65
-	      	blt  	r3,ctype_47
+	      	cmpu 	r4,r3,#65
+	      	blt  	r4,ctype_47
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#90
-	      	bgt  	r3,ctype_47
+	      	cmpu 	r4,r3,#90
+	      	bgt  	r4,ctype_47
 	      	ldi  	r3,#1
 	      	bra  	ctype_48
 ctype_47:
@@ -232,16 +232,16 @@ ctype_49:
 	      	rtl  	#16
 endpublic
 
-public code islower:
+public code islower_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#97
-	      	blt  	r3,ctype_51
+	      	cmpu 	r4,r3,#97
+	      	blt  	r4,ctype_51
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#122
-	      	bgt  	r3,ctype_51
+	      	cmpu 	r4,r3,#122
+	      	bgt  	r4,ctype_51
 	      	ldi  	r3,#1
 	      	bra  	ctype_52
 ctype_51:
@@ -254,7 +254,7 @@ ctype_53:
 	      	rtl  	#16
 endpublic
 
-public code ispunct:
+public code ispunct_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -321,7 +321,7 @@ ctype_55:
 	      	bra  	ctype_58
 endpublic
 
-public code isgraph:
+public code isgraph_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -329,13 +329,13 @@ public code isgraph:
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
 	      	push 	r3
-	      	bsr  	ispunct
+	      	bsr  	ispunct_
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	bne  	r3,ctype_62
 	      	lcu  	r3,24[bp]
 	      	push 	r3
-	      	bsr  	isalnum
+	      	bsr  	isalnum_
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	beq  	r3,ctype_60
@@ -358,7 +358,7 @@ ctype_59:
 	      	bra  	ctype_63
 endpublic
 
-public code isprint:
+public code isprint_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
@@ -366,13 +366,13 @@ public code isprint:
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
 	      	push 	r3
-	      	bsr  	isgraph
+	      	bsr  	isgraph_
 	      	addui	sp,sp,#8
 	      	mov  	r3,r1
 	      	bne  	r3,ctype_67
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#32
-	      	bne  	r3,ctype_65
+	      	cmp  	r4,r3,#32
+	      	bne  	r4,ctype_65
 ctype_67:
 	      	ldi  	r3,#1
 	      	bra  	ctype_66
@@ -392,7 +392,7 @@ ctype_64:
 	      	bra  	ctype_68
 endpublic
 
-public code iscntrl:
+public code iscntrl_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -426,16 +426,16 @@ endpublic
 	rodata
 	align	16
 	align	8
-;	global	islower
-;	global	ispunct
-;	global	isupper
-;	global	isprint
-;	global	tolower
-;	global	toupper
-;	global	isxdigit
-;	global	isalpha
-;	global	isspace
-;	global	isdigit
-;	global	isgraph
-;	global	isalnum
-;	global	iscntrl
+;	global	isalpha_
+;	global	isspace_
+;	global	isdigit_
+;	global	isgraph_
+;	global	isalnum_
+;	global	iscntrl_
+;	global	islower_
+;	global	ispunct_
+;	global	isupper_
+;	global	isprint_
+;	global	tolower_
+;	global	toupper_
+;	global	isxdigit_

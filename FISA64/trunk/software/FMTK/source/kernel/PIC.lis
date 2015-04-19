@@ -58,7 +58,7 @@ rout_      =000020    -    Auto
     42	{
     43	     outh(0xFFDC0FD0, 0x000C);  //timer interrupt(s) are edge sensitive
     44	     if (getCPU()==0)
-    45	          outh(0xFFDC0FC4, 0x000F);  //enable keyboard reset, timer interrupts
+    45	          outh(0xFFDC0FC4, 0x800F);  //enable keyboard reset, timer interrupts
     46	     else
     47	          outh(0xFFDC0FC4, 0x000B);  //enable keyboard reset, timer interrupts
     48	}

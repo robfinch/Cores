@@ -86,9 +86,9 @@ namespace emuFISA64 {
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->BackgroundImageLayout = System::Windows::Forms::ImageLayout::None;
 			this->ClientSize = System::Drawing::Size(684, 262);
-			this->ControlBox = false;
 			this->Controls->Add(this->pictureBox1);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
+			this->MaximizeBox = false;
 			this->Name = L"frmScreen";
 			this->Text = L"emuFISA64 Test System Screen";
 			this->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmScreen::frmScreen_Paint);

@@ -54,7 +54,7 @@ void peep_add(struct ocode *ip);
 static void PeepoptSub(struct ocode *ip);
 void peep_move(struct ocode	*ip);
 void peep_cmp(struct ocode *ip);
-void opt3();
+static void opt_peep();
 void put_ocode(struct ocode *p);
 
 struct ocode    *peep_head = NULL,
@@ -212,8 +212,8 @@ void GenerateLabel(int labno)
  */
 void flush_peep()
 {
-	if (optimize)
-		opt3();         /* do the peephole optimizations */
+	if (opt_nopeep==FALSE)
+		opt_peep();         /* do the peephole optimizations */
     while( peep_head != NULL )
     {
 		if( peep_head->opcode == op_label )
@@ -710,7 +710,7 @@ void PeepoptSxb(struct ocode *ip)
  *      specific optimization routines above for each instruction
  *      in the peep list.
  */
-void opt3()
+static void opt_peep()
 {  
 	struct ocode    *ip;
 	int rep;

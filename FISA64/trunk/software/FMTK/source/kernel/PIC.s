@@ -19,8 +19,8 @@ public code set_vector_:
 	      	ldi  	xlr,#PIC_2
 	      	mov  	bp,sp
 	      	lw   	r3,24[bp]
-	      	cmpu 	r3,r3,#511
-	      	ble  	r3,PIC_3
+	      	cmpu 	r4,r3,#511
+	      	ble  	r4,PIC_3
 PIC_5:
 	      	mov  	sp,bp
 	      	pop  	bp
@@ -30,14 +30,14 @@ PIC_5:
 PIC_3:
 	      	lw   	r3,32[bp]
 	      	beq  	r3,PIC_8
-	      	lw   	r3,32[bp]
-	      	and  	r3,r3,#3
+	      	lw   	r4,32[bp]
+	      	and  	r3,r4,#3
 	      	beq  	r3,PIC_6
 PIC_8:
 	      	bra  	PIC_5
 PIC_6:
-	      	lw   	r3,24[bp]
-	      	asli 	r3,r3,#3
+	      	lw   	r4,24[bp]
+	      	asli 	r3,r4,#3
 	      	push 	r3
 	      	bsr  	GetVBR_
 	      	pop  	r3
@@ -64,7 +64,7 @@ public code InitPIC_:
 	      	bsr  	getCPU_
 	      	mov  	r3,r1
 	      	bne  	r3,PIC_10
-	      	push 	#15
+	      	push 	#32783
 	      	push 	#4292612036
 	      	bsr  	outh_
 	      	addui	sp,sp,#16

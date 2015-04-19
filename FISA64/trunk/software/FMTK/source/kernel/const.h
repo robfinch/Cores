@@ -17,7 +17,10 @@
 #define MQS_OLDEST       1
 #define MQS_NEWEST       2
 
-#define MBT_DATA         0
+#define MBT_DATA         2
+// message types
+#define MT_NONE          0             // not a message
+#define MT_FREE          1
 
 enum {
      E_Ok = 0,

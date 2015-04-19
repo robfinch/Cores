@@ -1,8 +1,12 @@
 	data
 	align	8
-	fill.b	24,0x00
+	fill.b	1,0x00
+	align	8
+	fill.b	16,0x00
+	align	8
 	align	8
 	fill.b	1984,0x00
+	align	8
 	align	8
 	code
 	align	16
@@ -56,8 +60,8 @@ public code SetCurrAttr_:
 	      	push 	bp
 	      	ldi  	xlr,#console_4
 	      	mov  	bp,sp
-	      	lh   	r3,24[bp]
-	      	and  	r3,r3,#4294966272
+	      	lh   	r4,24[bp]
+	      	and  	r3,r4,#4294966272
 	      	push 	r3
 	      	bsr  	GetJCBPtr_
 	      	pop  	r3
@@ -157,10 +161,10 @@ public code GetCursorPos_:
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	lcu  	r3,1638[r11]
-	      	lcu  	r4,1636[r11]
-	      	asli 	r4,r4,#8
-	      	or   	r3,r3,r4
+	      	lcu  	r4,1638[r11]
+	      	lcu  	r6,1636[r11]
+	      	asli 	r5,r6,#8
+	      	or   	r3,r4,r5
 	      	mov  	r1,r3
 console_13:
 	      	pop  	r11
@@ -224,8 +228,8 @@ public code AsciiToScreen_:
 	      	push 	bp
 	      	mov  	bp,sp
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#91
-	      	bne  	r3,console_19
+	      	cmp  	r4,r3,#91
+	      	bne  	r4,console_19
 	      	ldi  	r1,#27
 console_21:
 	      	mov  	sp,bp
@@ -233,8 +237,8 @@ console_21:
 	      	rtl  	#16
 console_19:
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#93
-	      	bne  	r3,console_22
+	      	cmp  	r4,r3,#93
+	      	bne  	r4,console_22
 	      	ldi  	r1,#29
 	      	bra  	console_21
 console_22:
@@ -244,22 +248,22 @@ console_22:
 	      	lcu  	r3,24[bp]
 	      	ori  	r3,r3,#256
 	      	sc   	r3,24[bp]
-	      	lcu  	r3,24[bp]
-	      	and  	r3,r3,#32
+	      	lcu  	r4,24[bp]
+	      	and  	r3,r4,#32
 	      	bne  	r3,console_24
 	      	lcu  	r3,24[bp]
 	      	mov  	r1,r3
 	      	bra  	console_21
 console_24:
-	      	lcu  	r3,24[bp]
-	      	and  	r3,r3,#64
+	      	lcu  	r4,24[bp]
+	      	and  	r3,r4,#64
 	      	bne  	r3,console_26
 	      	lcu  	r3,24[bp]
 	      	mov  	r1,r3
 	      	bra  	console_21
 console_26:
-	      	lcu  	r3,24[bp]
-	      	and  	r3,r3,#415
+	      	lcu  	r4,24[bp]
+	      	and  	r3,r4,#415
 	      	sc   	r3,24[bp]
 	      	lcu  	r3,24[bp]
 	      	mov  	r1,r3
@@ -274,8 +278,8 @@ public code ScreenToAscii_:
 	      	andi 	r3,r3,#255
 	      	sc   	r3,24[bp]
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#27
-	      	bne  	r3,console_29
+	      	cmp  	r4,r3,#27
+	      	bne  	r4,console_29
 	      	ldi  	r1,#91
 console_31:
 	      	mov  	sp,bp
@@ -283,14 +287,14 @@ console_31:
 	      	rtl  	#16
 console_29:
 	      	lcu  	r3,24[bp]
-	      	cmp  	r3,r3,#29
-	      	bne  	r3,console_32
+	      	cmp  	r4,r3,#29
+	      	bne  	r4,console_32
 	      	ldi  	r1,#93
 	      	bra  	console_31
 console_32:
 	      	lcu  	r3,24[bp]
-	      	cmpu 	r3,r3,#27
-	      	bge  	r3,console_34
+	      	cmpu 	r4,r3,#27
+	      	bge  	r4,console_34
 	      	lcu  	r3,24[bp]
 	      	addui	r3,r3,#96
 	      	sc   	r3,24[bp]
@@ -311,11 +315,11 @@ public code UpdateCursorPos_:
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	lcu  	r3,1636[r11]
-	      	lcu  	r4,1634[r11]
-	      	mulu 	r3,r3,r4
-	      	lcu  	r4,1638[r11]
-	      	addu 	r3,r3,r4
+	      	lcu  	r4,1636[r11]
+	      	lcu  	r5,1634[r11]
+	      	mulu 	r4,r4,r5
+	      	lcu  	r5,1638[r11]
+	      	addu 	r3,r4,r5
 	      	sxc  	r3,r3
 	      	sw   	r3,-16[bp]
 	      	push 	-16[bp]
@@ -373,22 +377,24 @@ public code CalcScreenLocation_:
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	lcu  	r3,1636[r11]
-	      	lcu  	r4,1634[r11]
-	      	mulu 	r3,r3,r4
-	      	lcu  	r4,1638[r11]
-	      	addu 	r3,r3,r4
+	      	lcu  	r4,1636[r11]
+	      	lcu  	r5,1634[r11]
+	      	mulu 	r4,r4,r5
+	      	lcu  	r5,1638[r11]
+	      	addu 	r3,r4,r5
 	      	sxc  	r3,r3
 	      	sw   	r3,-16[bp]
 	      	push 	-16[bp]
 	      	push 	#11
 	      	bsr  	SetVideoReg_
 	      	addui	sp,sp,#16
+	      	push 	r3
 	      	bsr  	GetScreenLocation_
-	      	mov  	r3,r1
-	      	lw   	r4,-16[bp]
-	      	asli 	r4,r4,#2
-	      	addu 	r3,r3,r4
+	      	pop  	r3
+	      	mov  	r4,r1
+	      	lw   	r6,-16[bp]
+	      	asli 	r5,r6,#2
+	      	addu 	r3,r4,r5
 	      	mov  	r1,r3
 console_41:
 	      	pop  	r11
@@ -421,16 +427,20 @@ public code ClearScreen_:
 	      	lcu  	r4,1634[r11]
 	      	mul  	r3,r3,r4
 	      	sw   	r3,-24[bp]
-	      	bsr  	GetCurrAttr_
-	      	mov  	r3,r1
 	      	push 	r3
+	      	bsr  	GetCurrAttr_
+	      	pop  	r3
+	      	mov  	r4,r1
+	      	push 	r3
+	      	push 	r4
 	      	push 	#32
 	      	bsr  	AsciiToScreen_
 	      	addui	sp,sp,#8
+	      	pop  	r4
 	      	pop  	r3
-	      	mov  	r4,r1
-	      	sxc  	r4,r4
-	      	or   	r3,r3,r4
+	      	mov  	r5,r1
+	      	sxc  	r5,r5
+	      	or   	r3,r4,r5
 	      	sh   	r3,-36[bp]
 	      	push 	-24[bp]
 	      	lh   	r3,-36[bp]
@@ -489,23 +499,27 @@ public code BlankLine_:
 	      	bsr  	GetScreenLocation_
 	      	mov  	r3,r1
 	      	sw   	r3,-8[bp]
-	      	lw   	r3,-8[bp]
-	      	lcu  	r4,1634[r11]
-	      	lw   	r5,24[bp]
-	      	mul  	r4,r4,r5
-	      	asli 	r4,r4,#2
-	      	addu 	r3,r3,r4
+	      	lw   	r4,-8[bp]
+	      	lcu  	r6,1634[r11]
+	      	lw   	r7,24[bp]
+	      	mul  	r6,r6,r7
+	      	asli 	r5,r6,#2
+	      	addu 	r3,r4,r5
 	      	sw   	r3,-8[bp]
-	      	bsr  	GetCurrAttr_
-	      	mov  	r3,r1
 	      	push 	r3
+	      	bsr  	GetCurrAttr_
+	      	pop  	r3
+	      	mov  	r4,r1
+	      	push 	r3
+	      	push 	r4
 	      	push 	#32
 	      	bsr  	AsciiToScreen_
 	      	addui	sp,sp,#8
+	      	pop  	r4
 	      	pop  	r3
-	      	mov  	r4,r1
-	      	sxc  	r4,r4
-	      	or   	r3,r3,r4
+	      	mov  	r5,r1
+	      	sxc  	r5,r5
+	      	or   	r3,r4,r5
 	      	sh   	r3,-36[bp]
 	      	lcu  	r3,1634[r11]
 	      	push 	r3
@@ -551,8 +565,8 @@ public code IncrementCursorRow_:
 	      	sc   	r3,1636[r11]
 	      	lcu  	r3,1636[r11]
 	      	lcu  	r4,1632[r11]
-	      	cmpu 	r3,r3,r4
-	      	bge  	r3,console_51
+	      	cmpu 	r5,r3,r4
+	      	bge  	r5,console_51
 	      	bsr  	UpdateCursorPos_
 console_53:
 	      	pop  	r11
@@ -590,8 +604,8 @@ public code IncrementCursorPos_:
 	      	sc   	r3,1638[r11]
 	      	lcu  	r3,1638[r11]
 	      	lcu  	r4,1634[r11]
-	      	cmpu 	r3,r3,r4
-	      	bge  	r3,console_55
+	      	cmpu 	r5,r3,r4
+	      	bge  	r5,console_55
 	      	bsr  	UpdateCursorPos_
 console_57:
 	      	pop  	r11
@@ -655,10 +669,10 @@ console_61:
 	      	bra  	console_59
 console_62:
 	      	lcu  	r3,1638[r11]
-	      	lcu  	r4,1634[r11]
-	      	subu 	r4,r4,#1
-	      	cmpu 	r3,r3,r4
-	      	bge  	r3,console_72
+	      	lcu  	r5,1634[r11]
+	      	subu 	r4,r5,#1
+	      	cmpu 	r5,r3,r4
+	      	bge  	r5,console_72
 	      	lcu  	r3,1638[r11]
 	      	addui	r3,r3,#1
 	      	sc   	r3,1638[r11]
@@ -667,8 +681,8 @@ console_72:
 	      	bra  	console_59
 console_63:
 	      	lcu  	r3,1636[r11]
-	      	cmpu 	r3,r3,#0
-	      	ble  	r3,console_74
+	      	cmpu 	r4,r3,#0
+	      	ble  	r4,console_74
 	      	lcu  	r3,1636[r11]
 	      	subui	r3,r3,#1
 	      	sc   	r3,1636[r11]
@@ -677,8 +691,8 @@ console_74:
 	      	bra  	console_59
 console_64:
 	      	lcu  	r3,1638[r11]
-	      	cmpu 	r3,r3,#0
-	      	ble  	r3,console_76
+	      	cmpu 	r4,r3,#0
+	      	ble  	r4,console_76
 	      	lcu  	r3,1638[r11]
 	      	subui	r3,r3,#1
 	      	sc   	r3,1638[r11]
@@ -687,10 +701,10 @@ console_76:
 	      	bra  	console_59
 console_65:
 	      	lcu  	r3,1636[r11]
-	      	lcu  	r4,1632[r11]
-	      	subu 	r4,r4,#1
-	      	cmpu 	r3,r3,r4
-	      	bge  	r3,console_78
+	      	lcu  	r5,1632[r11]
+	      	subu 	r4,r5,#1
+	      	cmpu 	r5,r3,r4
+	      	bge  	r5,console_78
 	      	lcu  	r3,1636[r11]
 	      	addui	r3,r3,#1
 	      	sc   	r3,1636[r11]
@@ -714,48 +728,52 @@ console_67:
 	      	sw   	r3,-16[bp]
 console_82:
 	      	lw   	r3,-16[bp]
-	      	lcu  	r4,1634[r11]
-	      	subu 	r4,r4,#1
-	      	cmp  	r3,r3,r4
-	      	bge  	r3,console_83
-	      	lw   	r3,-16[bp]
-	      	lcu  	r4,1638[r11]
-	      	sxc  	r4,r4
-	      	subu 	r3,r3,r4
-	      	asli 	r3,r3,#2
-	      	addu 	r3,r3,r12
-	      	lw   	r4,-16[bp]
-	      	lcu  	r5,1638[r11]
-	      	sxc  	r5,r5
-	      	subu 	r4,r4,r5
-	      	asli 	r4,r4,#2
+	      	lcu  	r5,1634[r11]
+	      	subu 	r4,r5,#1
+	      	cmp  	r5,r3,r4
+	      	bge  	r5,console_83
+	      	lw   	r6,-16[bp]
+	      	lcu  	r7,1638[r11]
+	      	sxc  	r7,r7
+	      	subu 	r5,r6,r7
+	      	asli 	r4,r5,#2
+	      	addu 	r3,r4,r12
+	      	lw   	r6,-16[bp]
+	      	lcu  	r7,1638[r11]
+	      	sxc  	r7,r7
+	      	subu 	r5,r6,r7
+	      	asli 	r4,r5,#2
 	      	lh   	r5,4[r3]
 	      	sh   	r5,0[r12+r4]
 console_84:
 	      	inc  	-16[bp],#1
 	      	bra  	console_82
 console_83:
-	      	bsr  	GetCurrAttr_
-	      	mov  	r3,r1
 	      	push 	r3
+	      	bsr  	GetCurrAttr_
+	      	pop  	r3
+	      	mov  	r4,r1
+	      	push 	r3
+	      	push 	r4
 	      	push 	#32
 	      	bsr  	AsciiToScreen_
 	      	addui	sp,sp,#8
+	      	pop  	r4
 	      	pop  	r3
-	      	mov  	r4,r1
-	      	sxc  	r4,r4
-	      	or   	r3,r3,r4
-	      	lw   	r4,-16[bp]
-	      	lcu  	r5,1638[r11]
+	      	mov  	r5,r1
 	      	sxc  	r5,r5
-	      	subu 	r4,r4,r5
-	      	asli 	r4,r4,#2
+	      	or   	r3,r4,r5
+	      	lw   	r6,-16[bp]
+	      	lcu  	r7,1638[r11]
+	      	sxc  	r7,r7
+	      	subu 	r5,r6,r7
+	      	asli 	r4,r5,#2
 	      	sh   	r3,0[r12+r4]
 	      	bra  	console_59
 console_68:
 	      	lcu  	r3,1638[r11]
-	      	cmpu 	r3,r3,#0
-	      	ble  	r3,console_85
+	      	cmpu 	r4,r3,#0
+	      	ble  	r4,console_85
 	      	lcu  	r3,1638[r11]
 	      	subui	r3,r3,#1
 	      	sc   	r3,1638[r11]
@@ -767,42 +785,46 @@ console_68:
 	      	sw   	r3,-16[bp]
 console_87:
 	      	lw   	r3,-16[bp]
-	      	lcu  	r4,1634[r11]
-	      	subu 	r4,r4,#1
-	      	cmp  	r3,r3,r4
-	      	bge  	r3,console_88
-	      	lw   	r3,-16[bp]
-	      	lcu  	r4,1638[r11]
-	      	sxc  	r4,r4
-	      	subu 	r3,r3,r4
-	      	asli 	r3,r3,#2
-	      	addu 	r3,r3,r12
-	      	lw   	r4,-16[bp]
-	      	lcu  	r5,1638[r11]
-	      	sxc  	r5,r5
-	      	subu 	r4,r4,r5
-	      	asli 	r4,r4,#2
+	      	lcu  	r5,1634[r11]
+	      	subu 	r4,r5,#1
+	      	cmp  	r5,r3,r4
+	      	bge  	r5,console_88
+	      	lw   	r6,-16[bp]
+	      	lcu  	r7,1638[r11]
+	      	sxc  	r7,r7
+	      	subu 	r5,r6,r7
+	      	asli 	r4,r5,#2
+	      	addu 	r3,r4,r12
+	      	lw   	r6,-16[bp]
+	      	lcu  	r7,1638[r11]
+	      	sxc  	r7,r7
+	      	subu 	r5,r6,r7
+	      	asli 	r4,r5,#2
 	      	lh   	r5,4[r3]
 	      	sh   	r5,0[r12+r4]
 console_89:
 	      	inc  	-16[bp],#1
 	      	bra  	console_87
 console_88:
-	      	bsr  	GetCurrAttr_
-	      	mov  	r3,r1
 	      	push 	r3
+	      	bsr  	GetCurrAttr_
+	      	pop  	r3
+	      	mov  	r4,r1
+	      	push 	r3
+	      	push 	r4
 	      	push 	#32
 	      	bsr  	AsciiToScreen_
 	      	addui	sp,sp,#8
+	      	pop  	r4
 	      	pop  	r3
-	      	mov  	r4,r1
-	      	sxc  	r4,r4
-	      	or   	r3,r3,r4
-	      	lw   	r4,-16[bp]
-	      	lcu  	r5,1638[r11]
+	      	mov  	r5,r1
 	      	sxc  	r5,r5
-	      	subu 	r4,r4,r5
-	      	asli 	r4,r4,#2
+	      	or   	r3,r4,r5
+	      	lw   	r6,-16[bp]
+	      	lcu  	r7,1638[r11]
+	      	sxc  	r7,r7
+	      	subu 	r5,r6,r7
+	      	asli 	r4,r5,#2
 	      	sh   	r3,0[r12+r4]
 console_85:
 	      	bra  	console_59
@@ -828,17 +850,21 @@ console_71:
 	      	bsr  	CalcScreenLocation_
 	      	mov  	r3,r1
 	      	mov  	r12,r3
-	      	bsr  	GetCurrAttr_
-	      	mov  	r3,r1
 	      	push 	r3
-	      	lcu  	r4,24[bp]
-	      	push 	r4
-	      	bsr  	AsciiToScreen_
-	      	addui	sp,sp,#8
+	      	bsr  	GetCurrAttr_
 	      	pop  	r3
 	      	mov  	r4,r1
-	      	sxc  	r4,r4
-	      	or   	r3,r3,r4
+	      	push 	r3
+	      	push 	r4
+	      	lcu  	r5,24[bp]
+	      	push 	r5
+	      	bsr  	AsciiToScreen_
+	      	addui	sp,sp,#8
+	      	pop  	r4
+	      	pop  	r3
+	      	mov  	r5,r1
+	      	sxc  	r5,r5
+	      	or   	r3,r4,r5
 	      	sh   	r3,[r12]
 	      	bsr  	IncrementCursorPos_
 	      	bra  	console_59
@@ -942,6 +968,7 @@ endpublic
 ;	global	outc_
 ;	global	outh_
 	extern	IOFocusNdx_
+	extern	DumpTaskList_
 ;	global	SetCursorCol_
 ;	global	outw_
 ;	global	GetCursorPos_
@@ -949,14 +976,20 @@ endpublic
 	extern	GetRunningTCB_
 ;	global	SetCursorPos_
 	extern	memsetW_
+;	global	SetRunningTCB_
 ;	global	HomeCursor_
 ;	global	AsciiToScreen_
 ;	global	ScreenToAscii_
 ;	global	CalcScreenLocation_
+;	global	chkTCB_
+	extern	GetRunningTCBPtr_
+;	global	UnlockSemaphore_
 ;	global	UpdateCursorPos_
+	extern	GetVecno_
 	extern	GetJCBPtr_
 ;	global	CRLF_
 	extern	getCPU_
+;	global	LockSemaphore_
 ;	global	ScrollUp_
 ;	global	set_vector_
 ;	global	SetVideoReg_
@@ -972,3 +1005,11 @@ endpublic
 ;	global	GetTextRows_
 ;	global	BlankLine_
 ;	global	DisplayStringCRLF_
+;	global	RemoveFromTimeoutList_
+;	global	SetBound50_
+;	global	SetBound51_
+;	global	SetBound48_
+;	global	SetBound49_
+;	global	InsertIntoTimeoutList_
+;	global	RemoveFromReadyList_
+;	global	InsertIntoReadyList_

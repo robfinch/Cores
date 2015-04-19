@@ -1,0 +1,23 @@
+     1	// Return the which CPU is active.
+     2	
+     3	naked int getCPU()
+     4	{
+     5	     asm {
+     6	         cpuid r1,r0,#0
+     7	         rtl
+     8	     };
+     9	}
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+getCPU_    =000000    -    Global      Function returning Long
+
+ *** structures and unions ***
+

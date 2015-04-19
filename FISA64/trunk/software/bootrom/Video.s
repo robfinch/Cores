@@ -28,7 +28,7 @@
 ;------------------------------------------------------------------------------
 
 MAX_VIDEO_BIOS_CALL = 0x23
-TCB_BIOS_Stack      EQU   $160
+TCB_BIOS_Stack      EQU   $280
 
     code
     align   2
@@ -39,7 +39,7 @@ VideoBIOS_FuncTable:
     dc      VBGetCursorPos ; 0x03
     dc      0
     dc      0
-    dc      ScrollUp     ; 0x06
+    dc      VBScrollUp     ; 0x06
     dc      0
     dc      0
     dc      DispCharAttr ; 0x09
@@ -55,7 +55,7 @@ VideoBIOS_FuncTable:
     dc      0
     dc      VBDisplayString  ; 0x14
     dc      PRTNUM         ; 0x15
-    dc      DisplayStringCRLF    ; 0x16
+    dc      DisplayStringCRLF_    ; 0x16
     dc      DisplayWord    ; 0x17
     dc      DisplayHalf    ; 0x18
     dc      DisplayCharHex ; 0x19
@@ -132,7 +132,7 @@ DispCharAttr:
     push    r4
     push    r5
     mov     r4,r1
-    bsr     GetJCBPtr
+    bsr     GetJCBPtr_
     mov     r5,r1
     lh      r3,JCB_NormAttr[r5]
     push    r3
@@ -150,38 +150,38 @@ VBSetCursorPos:
     push    lr
     push    r2
     push    r1
-    bsr     SetCursorPos
+    bsr     SetCursorPos_
     addui   sp,sp,#16
     rts
 
 VBGetCursorPos:
     push    lr
-    bsr     GetCursorPos
+    bsr     GetCursorPos_
     rts
 
 VBDisplayChar:
     push    lr
     push    r1
-    bsr     DisplayChar
+    bsr     DisplayChar_
     addui   sp,sp,#8
     rts
 
-VBASciiToScreen:
+VBAsciiToScreen:
     push    lr
     push    r1
-    bsr     AsciiToScreen
+    bsr     AsciiToScreen_
     addui   sp,sp,#8
     rts
 
 VBSetCurrAttr:
     push    lr
     push    r1
-    bsr     SetCurrAttr
+    bsr     SetCurrAttr_
     addui   sp,sp,#8
     rts
 
 VBGetCurrAttr:
-    bra     GetCurrAttr
+    bra     GetCurrAttr_
 
 ;------------------------------------------------------------------------------
 ; Display the word in r1
@@ -273,7 +273,7 @@ DisplayString16:
 
 DispCharQ:
     push    lr
-	bsr		AsciiToScreen
+	bsr		AsciiToScreen_
 	sc		r1,[r3]
 	add		r3,r3,#4
     rts
@@ -354,11 +354,59 @@ PNRET:
 VBScreenToAscii:
     push    lr
     push    r1
-    bsr     ScreenToAscii
+    bsr     ScreenToAscii_
     addui   sp,sp,#8
     rts
 
 CursorOff:
 	rtl
 CursorOn:
+	rtl
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+VBScrollUp:
+    ; Compiler temporaries have to be saved. These are regs 3-11 which the
+    ; compiled code might use.
+    push    lr
+	push	r1
+    push    r2
+    push    r3
+    push    r4          ; r4 is used by BlankLine
+    push    r5
+	push	r6
+	push    r7
+	bsr     GetTextRows_
+	mov     r2,r1
+	bsr     GetTextCols_
+	asl     r7,r1,#2
+	subui	r2,r2,#1
+	mulu	r6,r1,r2
+	push    r6
+	push    r7
+	bsr     GetScreenLocation_
+	pop     r7
+	pop     r6
+	addu    r2,r1,r7
+	ldi		r3,#0
+.0001:
+	lh	    r5,[r2+r3*4]
+	sh	    r5,[r1+r3*4]
+	addui	r3,r3,#1
+	subui   r6,r6,#1
+	bne	    r6,.0001
+	bsr     GetTextRows_
+	subui	r1,r1,#1
+	push    r1
+	bsr		BlankLine_
+	addui   sp,sp,#8
+	pop     r7
+	pop		r6
+	pop		r5
+	pop     r4
+    pop     r3
+    pop     r2
+    pop     r1
+	pop     lr
 	rtl

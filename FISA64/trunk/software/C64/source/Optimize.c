@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -51,7 +51,7 @@
 	Robert Finch	robfinch<remove>@opencores.org
 */
 
-void fold_const(struct enode **node);
+static void fold_const(struct enode **node);
 
 /*
  *      dooper will execute a constant operation in a node and
@@ -204,7 +204,7 @@ int64_t mod_mask(int i)
  *      combine name and label constants but will combine icon type
  *      nodes.
  */
-void opt0(ENODE **node)
+static void opt0(ENODE **node)
 {
 	ENODE *ep;
     int64_t val, sc;
@@ -396,7 +396,22 @@ void opt0(ENODE **node)
                             ep->p[1]->nodetype == en_icon )
                             dooper(node);
                     break;
-            case en_land:   case en_lor:
+            case en_land:   
+                    opt0(&(ep->p[0]));
+                    opt0(&(ep->p[1]));
+					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon) {
+						dooper(node);
+						break;
+                    }
+                    break;
+            case en_lor:
+                    opt0(&(ep->p[0]));
+                    opt0(&(ep->p[1]));
+					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon) {
+						dooper(node);
+						break;
+                    }
+                    break;
 			case en_ult:	case en_ule:
 			case en_ugt:	case en_uge:
 			case en_lt:		case en_le:
@@ -415,6 +430,11 @@ void opt0(ENODE **node)
 						 (ep->p[1]->p[0]->nodetype==en_icon || ep->p[1]->p[0]->nodetype==en_cnacon) &&
 						 (ep->p[1]->p[1]->nodetype==en_icon || ep->p[1]->p[1]->nodetype==en_cnacon))
 						dooper(node);
+					break;
+            case en_chk:
+                    opt0(&(ep->p[0]));
+					opt0(&(ep->p[1]));
+					opt0(&(ep->p[2]));
 					break;
             case en_asand:  case en_asor:
             case en_asadd:  case en_assub:
@@ -436,7 +456,7 @@ void opt0(ENODE **node)
  *      xfold will remove constant nodes and return the values to
  *      the calling routines.
  */
-int64_t xfold(ENODE *node)
+static int64_t xfold(ENODE *node)
 {
 	int64_t i;
 
@@ -494,7 +514,7 @@ int64_t xfold(ENODE *node)
 /*
  *      reorganize an expression for optimal constant grouping.
  */
-void fold_const(ENODE **node)
+static void fold_const(ENODE **node)
 {       ENODE *ep;
         int64_t i;
         ep = *node;
@@ -535,12 +555,14 @@ void fold_const(ENODE **node)
                 }
 }
 
-/*
- *      apply all constant optimizations.
- */
-void opt4(ENODE **node)
+//
+//      apply all constant optimizations.
+//
+void opt_const(ENODE **node)
 {
-	opt0(node);
-	fold_const(node);
-	opt0(node);
+    if (opt_noexpr==FALSE) {
+    	opt0(node);
+    	fold_const(node);
+    	opt0(node);
+    }
 }

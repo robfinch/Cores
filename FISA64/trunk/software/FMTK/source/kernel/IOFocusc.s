@@ -1,8 +1,12 @@
 	data
 	align	8
-	fill.b	24,0x00
+	fill.b	1,0x00
+	align	8
+	fill.b	16,0x00
+	align	8
 	align	8
 	fill.b	1984,0x00
+	align	8
 	align	8
 	code
 	align	16
@@ -18,8 +22,8 @@ public code ForceIOFocus_:
 	      	addui	sp,sp,#8
 	      	bsr  	LockIOF_
 	      	lw   	r3,IOFocusNdx_
-	      	cmp  	r11,r11,r3
-	      	beq  	r11,IOFocusc_1
+	      	cmp  	r4,r11,r3
+	      	beq  	r4,IOFocusc_1
 	      	bsr  	CopyScreenToVirtualScreen_
 	      	lw   	r3,1624[r11]
 	      	sw   	r3,1616[r11]
@@ -60,8 +64,8 @@ public code SwitchIOFocus_:
 	      	sw   	r4,-16[bp]
 	      	lw   	r3,-16[bp]
 	      	lw   	r4,[r12]
-	      	cmp  	r3,r3,r4
-	      	beq  	r3,IOFocusc_7
+	      	cmp  	r5,r3,r4
+	      	beq  	r5,IOFocusc_7
 	      	lw   	r3,-16[bp]
 	      	beq  	r3,IOFocusc_9
 	      	bsr  	CopyScreenToVirtualScreen_
@@ -102,13 +106,14 @@ public code RequestIOFocus_:
 	      	push 	r12
 	      	lw   	r11,24[bp]
 	      	ldi  	r12,#IOFocusNdx_
-	      	lc   	r3,1678[r11]
+	      	lb   	r3,1682[r11]
+	      	sxb  	r3,r3
 	      	sw   	r3,-8[bp]
 	      	bsr  	LockIOF_
-	      	lw   	r3,IOFocusTbl_
-	      	lw   	r4,-8[bp]
-	      	asr  	r3,r3,r4
-	      	and  	r3,r3,#1
+	      	lw   	r5,IOFocusTbl_
+	      	lw   	r6,-8[bp]
+	      	asr  	r4,r5,r6
+	      	and  	r3,r4,#1
 	      	sw   	r3,-16[bp]
 	      	lw   	r3,-16[bp]
 	      	bne  	r3,IOFocusc_13
@@ -130,9 +135,9 @@ IOFocusc_15:
 	      	lw   	r3,[r12]
 	      	sw   	r11,8[r3]
 IOFocusc_16:
-	      	ldi  	r3,#1
-	      	lw   	r4,-8[bp]
-	      	asl  	r3,r3,r4
+	      	ldi  	r4,#1
+	      	lw   	r5,-8[bp]
+	      	asl  	r3,r4,r5
 	      	lw   	r4,IOFocusTbl_
 	      	or   	r4,r4,r3
 	      	sw   	r4,IOFocusTbl_
@@ -185,22 +190,24 @@ public code ForceReleaseIOFocus_:
 	      	push 	r11
 	      	lw   	r11,24[bp]
 	      	bsr  	LockIOF_
-	      	lw   	r3,IOFocusTbl_
-	      	ldi  	r4,#1
-	      	lc   	r5,1678[r11]
-	      	asl  	r4,r4,r5
-	      	and  	r3,r3,r4
+	      	lw   	r4,IOFocusTbl_
+	      	ldi  	r6,#1
+	      	lb   	r7,1682[r11]
+	      	sxb  	r7,r7
+	      	asl  	r5,r6,r7
+	      	and  	r3,r4,r5
 	      	beq  	r3,IOFocusc_21
-	      	ldi  	r3,#1
-	      	lc   	r4,1678[r11]
-	      	asl  	r3,r3,r4
+	      	ldi  	r4,#1
+	      	lb   	r5,1682[r11]
+	      	sxb  	r5,r5
+	      	asl  	r3,r4,r5
 	      	com  	r3,r3
 	      	lw   	r4,IOFocusTbl_
 	      	and  	r4,r4,r3
 	      	sw   	r4,IOFocusTbl_
 	      	lw   	r3,IOFocusNdx_
-	      	cmp  	r11,r11,r3
-	      	bne  	r11,IOFocusc_23
+	      	cmp  	r4,r11,r3
+	      	bne  	r4,IOFocusc_23
 	      	bsr  	SwitchIOFocus_
 IOFocusc_23:
 	      	lw   	r3,[r11]
@@ -208,8 +215,8 @@ IOFocusc_23:
 	      	lw   	r3,-8[bp]
 	      	beq  	r3,IOFocusc_25
 	      	lw   	r3,-8[bp]
-	      	cmp  	r3,r3,r11
-	      	beq  	r3,IOFocusc_27
+	      	cmp  	r4,r3,r11
+	      	beq  	r4,IOFocusc_27
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,8[r11]
 	      	sw   	r4,8[r3]
@@ -259,21 +266,21 @@ public code CopyVirtualScreenToScreen_:
 IOFocusc_31:
 	      	lw   	r3,-32[bp]
 	      	blt  	r3,IOFocusc_32
-	      	lw   	r3,-32[bp]
-	      	asli 	r3,r3,#2
 	      	lw   	r4,-32[bp]
-	      	asli 	r4,r4,#2
+	      	asli 	r3,r4,#2
+	      	lw   	r5,-32[bp]
+	      	asli 	r4,r5,#2
 	      	lh   	r5,0[r12+r3]
 	      	sh   	r5,0[r13+r4]
 IOFocusc_33:
 	      	dec  	-32[bp],#1
 	      	bra  	IOFocusc_31
 IOFocusc_32:
-	      	lcu  	r3,1636[r11]
-	      	lcu  	r4,1634[r11]
-	      	mulu 	r3,r3,r4
-	      	lcu  	r4,1638[r11]
-	      	addu 	r3,r3,r4
+	      	lcu  	r4,1636[r11]
+	      	lcu  	r5,1634[r11]
+	      	mulu 	r4,r4,r5
+	      	lcu  	r5,1638[r11]
+	      	addu 	r3,r4,r5
 	      	sxc  	r3,r3
 	      	sw   	r3,-40[bp]
 	      	push 	-40[bp]
@@ -314,10 +321,10 @@ public code CopyScreenToVirtualScreen_:
 IOFocusc_36:
 	      	lw   	r3,-32[bp]
 	      	blt  	r3,IOFocusc_37
-	      	lw   	r3,-32[bp]
-	      	asli 	r3,r3,#2
 	      	lw   	r4,-32[bp]
-	      	asli 	r4,r4,#2
+	      	asli 	r3,r4,#2
+	      	lw   	r5,-32[bp]
+	      	asli 	r4,r5,#2
 	      	lh   	r5,0[r13+r3]
 	      	sh   	r5,0[r12+r4]
 IOFocusc_38:
@@ -341,13 +348,20 @@ endpublic
 ;	global	outc_
 ;	global	outh_
 	extern	IOFocusNdx_
+	extern	DumpTaskList_
 ;	global	outw_
 	extern	GetRunningTCB_
+;	global	SetRunningTCB_
 ;	global	CopyScreenToVirtualScreen_
 ;	global	CopyVirtualScreenToScreen_
 ;	global	SwitchIOFocus_
+;	global	chkTCB_
+	extern	GetRunningTCBPtr_
+;	global	UnlockSemaphore_
+	extern	GetVecno_
 	extern	GetJCBPtr_
 	extern	getCPU_
+;	global	LockSemaphore_
 ;	global	set_vector_
 	extern	SetVideoReg_
 ;	global	ForceReleaseIOFocus_
@@ -355,4 +369,12 @@ endpublic
 ;	global	ReleaseIOFocus_
 	extern	LockIOF_
 ;	global	RequestIOFocus_
+;	global	RemoveFromTimeoutList_
 ;	global	ForceIOFocus_
+;	global	SetBound50_
+;	global	SetBound51_
+;	global	SetBound48_
+;	global	SetBound49_
+;	global	InsertIntoTimeoutList_
+;	global	RemoveFromReadyList_
+;	global	InsertIntoReadyList_

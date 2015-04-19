@@ -135,7 +135,7 @@ struct oplst {
 		{"cmpu", op_cmpu},
 		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
 		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
-		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri},
+		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri}, {"chk", op_chk },
                 {0,0} };
 
 static char *pad(char *op)
@@ -627,15 +627,20 @@ void gen_strlab(char *s)
 /*
  *      output a compiler generated label.
  */
-void put_label(int lab, char *nm, char *ns, char d)
+char *put_label(int lab, char *nm, char *ns, char d)
 {
+    static char buf[300];
+
+    sprintf(buf, "%s_%d", ns, lab);
 	if (nm==NULL)
-		fprintf(output,"%s_%d:\n",ns,lab);
+		fprintf(output,"%s:\n",buf);
 	else if (strlen(nm)==0)
-		fprintf(output,"%s_%d:\n",ns,lab);
+		fprintf(output,"%s:\n",buf);
 	else
-		fprintf(output,"%s_%d:	; %s\n",ns,lab,nm);
+		fprintf(output,"%s:	; %s\n",buf,nm);
+	return buf;
 }
+
 
 void GenerateByte(int val)
 {

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -111,10 +111,19 @@ int	options(char *s)
     int nn;
 
 	if (s[1]=='o') {
-        if (s[2]=='r')
+        for (nn = 2; s[nn]; nn++) {
+            switch(s[nn]) {
+            case 'r':     opt_noregs = TRUE; break;
+            case 'p':     opt_nopeep = TRUE; break;
+            case 'x':     opt_noexpr = TRUE; break;
+            }
+        }
+        if (nn==2) {
             opt_noregs = TRUE;
-        else
+            opt_nopeep = TRUE;
+            opt_noexpr = TRUE;
             optimize = FALSE;
+        }
     }
 	else if (s[1]=='f') {
 		if (strcmp(&s[2],"no-exceptions")==0)
@@ -156,8 +165,12 @@ int	options(char *s)
 	}
 	else if (s[1]=='w')
 		wcharSupport = 0;
-	else if (s[1]=='v')
-		verbose = 1;
+	else if (s[1]=='v') {
+         if (s[2]=='0')
+             verbose = 0;
+         else
+             verbose = 1;
+    }
 	return 0;
 }
 
@@ -242,7 +255,8 @@ void makename(char *s, char *e)
 
 void summary()
 {
-	printf("\n -- %d errors found.",total_errors);
+//    if (verbose > 0)
+    	printf("\n -- %d errors found.",total_errors);
     fprintf(list,"\f\n *** global scope typedef symbol table ***\n\n");
     ListTable(&gsyms[0],0);
     fprintf(list,"\n *** structures and unions ***\n\n");

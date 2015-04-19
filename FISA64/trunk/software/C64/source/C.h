@@ -71,7 +71,7 @@ enum e_sym {
 		kw_interrupt, kw_vortex, kw_pascal, kw_oscall, kw_nocall, kw_naked,
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
-		kw_cdecl, kw_align, kw_prolog, kw_epilog,
+		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check,
         my_eof };
 
 enum e_sc {
@@ -98,6 +98,7 @@ struct snode;
 struct sym {
     struct sym *next;
     char *name;
+    char *realname;
     char *stkname;
     int8_t storage_class;
 	// Function attributes
@@ -133,6 +134,7 @@ typedef struct typ {
     int8_t type;
 	int16_t typeno;			// number of the type
 	unsigned int val_flag : 1;       /* is it a value type */
+	unsigned int isArray : 1;
 	unsigned int isUnsigned : 1;
 	unsigned int isShort : 1;
 	unsigned int isVolatile : 1;
@@ -193,6 +195,7 @@ typedef struct typ {
 #define ERR_INT_CONST	38
 #define ERR_BAD_SWITCH_EXPR	39
 #define ERR_NOT_IN_LOOP	40
+#define ERR_CHECK       41
 
 /*      alignment sizes         */
 

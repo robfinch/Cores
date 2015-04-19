@@ -28,8 +28,6 @@ pascal void putnum(int num, int wid, char sep, char padchar)
 			n++;
 		}
 		m10 = num % 10;
-		if (m10 > 9 or m10 < 0)
-			printf("moderr ");
 		numwka[n] = m10 + '0';
 		num = num / 10;
 		n++;
@@ -107,7 +105,7 @@ naked int getcharNoWait()
 {
 	asm {
         push    lr
-        bsr     KeybdGetCharNoWait
+        bsr     KeybdGetBufferedCharNoWait_
         pop     lr
         rtl
         push    r6

@@ -22,6 +22,7 @@ public:
 	unsigned int radr2;
 
 	clsSystem();
+	void Reset();
 	unsigned int Read(unsigned int ad, int sr=0);
 	int Write(unsigned int ad, unsigned int dat, unsigned int mask, int cr=0);
  	int random();

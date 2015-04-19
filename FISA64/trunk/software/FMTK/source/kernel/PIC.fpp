@@ -42,7 +42,7 @@ void InitPIC()
 {
      outh(0xFFDC0FD0, 0x000C);  //timer interrupt(s) are edge sensitive
      if (getCPU()==0)
-          outh(0xFFDC0FC4, 0x000F);  //enable keyboard reset, timer interrupts
+          outh(0xFFDC0FC4, 0x800F);  //enable keyboard reset, timer interrupts
      else
           outh(0xFFDC0FC4, 0x000B);  //enable keyboard reset, timer interrupts
 }

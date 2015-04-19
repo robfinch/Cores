@@ -12,7 +12,7 @@ enum e_stmt {
 		st_for,
 		st_do, st_if, st_switch, st_default,
         st_case, st_goto, st_break, st_continue, st_label,
-        st_return, st_vortex, st_intoff, st_inton, st_stop };
+        st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
 typedef struct snode {
     int8_t stype;
@@ -25,6 +25,7 @@ typedef struct snode {
     struct snode *s1, *s2;       /* internal statements */
     int64_t *label;         /* label number for goto */
 	TABLE ssyms;			/* local symbols associated with statement */
+	char *fcname;       // firstcall block var name
 	char *lptr;
 } Statement;
 

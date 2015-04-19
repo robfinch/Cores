@@ -2,12 +2,19 @@
 #define TYPES_H
 
 typedef unsigned int uint;
+typedef __int16 hTCB;
+typedef __int8 hJCB;
+typedef __int16 hMBX;
+typedef __int16 hMSG;
 
 typedef struct tagMSG align(32) {
-	struct tagMSG *link;
-	uint d1;
-	uint d2;
-	uint type;
+	unsigned __int16 link;
+	unsigned __int16 retadr;    // return address
+	unsigned __int16 tgtadr;    // target address
+	unsigned __int16 type;
+	unsigned int d1;            // payload data 1
+	unsigned int d2;            // payload data 2
+	unsigned int d3;            // payload data 3
 } MSG;
 
 typedef struct _tagJCB align(2048)
@@ -25,15 +32,19 @@ typedef struct _tagJCB align(2048)
     unsigned __int16 CursorRow;
     unsigned __int16 CursorCol;
     unsigned __int32 NormAttr;
+    __int8 KeyState1;
+    __int8 KeyState2;
+    __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
     unsigned __int16 KeybdBuffer[16];
-    __int16 number;
+    hJCB number;
 } JCB;
 
 struct tagMBX;
 
-typedef struct _tagTCB align(512) {
+typedef struct _tagTCB align(1024) {
+    // exception storage area
 	int regs[32];
 	int isp;
 	int dsp;
@@ -42,39 +53,49 @@ typedef struct _tagTCB align(512) {
 	int dpc;
 	int epc;
 	int cr0;
-	struct _tagTCB *next;
-	struct _tagTCB *prev;
-	struct _tagTCB *mbq_next;
-	struct _tagTCB *mbq_prev;
+	// interrupt storage
+	int iregs[32];
+	int iisp;
+	int idsp;
+	int iesp;
+	int iipc;
+	int idpc;
+	int iepc;
+	int icr0;
+	hTCB next;
+	hTCB prev;
+	hTCB mbq_next;
+	hTCB mbq_prev;
 	int *sys_stack;
 	int *bios_stack;
 	int *stack;
 	__int64 timeout;
-	JCB *hJob;
-	int msgD1;
-	int msgD2;
-	MSG *MsgPtr;
-	uint hWaitMbx;
-	struct tagMBX *mailboxes;
+	MSG msg;
+	hMBX hMailboxes[4]; // handles of mailboxes owned by task
+	hMBX hWaitMbx;      // handle of mailbox task is waiting at
+	hTCB number;
 	__int8 priority;
 	__int8 status;
 	__int8 affinity;
-	__int16 number;
+	hJCB hJob;
+	__int64 startTick;
+	__int64 endTick;
+	__int64 ticks;
 } TCB;
 
-typedef struct tagMBX align(128) {
-    struct tagMBX *link;
-	TCB *tq_head;
-	TCB *tq_tail;
-	MSG *mq_head;
-	MSG *mq_tail;
+typedef struct tagMBX align(64) {
+    hMBX link;
+	hJCB owner;		// hJcb of owner
+	hTCB tq_head;
+	hTCB tq_tail;
+	hMSG mq_head;
+	hMSG mq_tail;
+	char mq_strategy;
+	byte resv[2];
 	uint tq_count;
 	uint mq_size;
 	uint mq_count;
 	uint mq_missed;
-	uint owner;		// hJcb of owner
-	char mq_strategy;
-	byte resv[7];
 } MBX;
 
 typedef struct tagALARM {

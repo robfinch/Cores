@@ -39,7 +39,7 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 		error(ERR_SYNTAX);
 		return 0;
 	}
-	opt4(&node);	// This should reduce to a single integer expression
+	opt_const(&node);	// This should reduce to a single integer expression
 	if (node==NULL) {
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
 		return 0;

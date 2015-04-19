@@ -240,7 +240,7 @@ int IdentifyKeyword()
 	}
 
 
-	// __cdecl,__asm,__int64,__int32,__int16,__int8
+	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check
 	if (p[0]=='_' && p[1]=='_') {
 		if (p[2]=='a' && p[3]=='s' && p[4]=='m' && p[5]=='\0')
 			return lastst = kw_asm;
@@ -256,6 +256,8 @@ int IdentifyKeyword()
 			if (p[5]=='8' && p[6]=='\0')
 				return lastst = kw_int8;
 		}
+		if (p[2]=='c' && p[3]=='h' && p[4]=='e' && p[5]=='c' && p[6]=='k' && p[7]=='\0')
+			return lastst = kw_check;
 	}
 
 	return 0;

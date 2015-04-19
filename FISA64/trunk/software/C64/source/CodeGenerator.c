@@ -1431,7 +1431,9 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			GeneratePredicatedDiadic(PredOp(op_eq),15,op_ldi,0,ap1,make_immed(1));
 		}
         return ap1;
-
+    case en_chk:
+        return GenExprFISA64(node);
+         
     case en_eq:     case en_ne:
     case en_lt:     case en_le:
     case en_gt:     case en_ge:
@@ -1619,6 +1621,8 @@ int GetNaturalSize(ENODE *node)
                     return siz0;
         case en_void:   case en_cond:
                 return GetNaturalSize(node->p[1]);
+        case en_chk:
+             return 8;
         default:
                 printf("DIAG - natural size error %d.\n", node->nodetype);
                 break;

@@ -114,12 +114,15 @@ extern int isNocall;
 extern int asmblock;
 extern int optimize;
 extern int opt_noregs;
+extern int opt_nopeep;
+extern int opt_noexpr;
 extern int exceptions;
 extern SYM *currentFn;
 extern int iflevel;
 extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
+
 
 // Analyze.c
 extern int bsort(CSE **list);
@@ -196,7 +199,7 @@ extern int GetNaturalSize(ENODE *node);
 extern TYP *asnop(ENODE **node);
 extern TYP *NonCommaExpression(ENODE **);
 // Optimize.c
-extern void opt4(struct enode **node);
+extern void opt_const(struct enode **node);
 // GenerateStatement.c
 extern void GenerateStatement(struct snode *stmt);
 //extern void GenerateFunction(struct snode *stmt);
@@ -233,7 +236,7 @@ extern void dseg();
 extern void tseg();
 //extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
 extern void put_code(struct ocode *);
-extern void put_label(int lab, char*, char*, char);
+extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
 extern void flush_peep();

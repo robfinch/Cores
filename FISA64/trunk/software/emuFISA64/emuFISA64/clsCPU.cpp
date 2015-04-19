@@ -13,6 +13,7 @@ void clsCPU::Reset()
 		pc = 0x10000;
 		vbr = 0;
 		tick = 0;
+		rvecno = 0;
 	};
 	void clsCPU::BuildConstant() {
 		if (immcnt==2) {
@@ -52,6 +53,7 @@ void clsCPU::Reset()
 		for (nn = 39; nn >= 0; nn--)
 			pcs[nn] = pcs[nn-1];
 		pcs[0] = pc;
+dc:
 		//---------------------------------------------------------------------------
 		// Decode stage
 		//---------------------------------------------------------------------------
@@ -89,15 +91,18 @@ void clsCPU::Reset()
 				case CLI:  im = false; pc = pc + 4; break;
 				case WAI:	if (irq || nmi) pc = pc + 4; break;
 				case RTI:
+					km = ipc & 1;
 					pc = ipc & -4;
 					regs[30] = isp;
 					StatusHWI = false;
 					break;
 				case RTD:
+					km = dpc & 1;
 					pc = dpc & -4;
 					regs[30] = dsp;
 					break;
 				case RTE:
+					km = epc & 1;
 					pc = epc & -4;
 					regs[30] = esp;
 					break;
@@ -121,13 +126,7 @@ void clsCPU::Reset()
 				case 53: dbad3 = a; break;
 				case 54: dbctrl = a; break;
 				case 55: dbstat = a; break;
-				default:
-					if (spr >= 64 && spr < 128)
-						lbound[spr-64] = a;
-					else if (spr >= 128 && spr < 192)
-						ubound[spr-128] = a;
-					else if (spr >= 192 && spr < 256)
-						mmask[spr-192] = a;
+				default: ;
 				}
 				pc = pc + 4;
 				break;
@@ -139,7 +138,7 @@ void clsCPU::Reset()
 				case 8: res = ipc; break;
 				case 9: res = epc; break;
 				case 10: res = vbr; break;
-				case 12: res = vecno; break;
+				case 12: res = rvecno; break;
 				case 15: res = isp; break;
 				case 16: res = dsp; break;
 				case 17: res = esp; break;
@@ -149,13 +148,7 @@ void clsCPU::Reset()
 				case 53: res = dbad3; break;
 				case 54: res = dbctrl; break;
 				case 55: res = dbstat; break;
-				default:
-					if (spr >= 64 && spr < 128)
-						res = lbound[spr-64];
-					else if (spr >= 128 && spr < 192)
-						res = ubound[spr-128];
-					else if (spr >= 192 && spr < 256)
-						res = mmask[spr-192];
+				default: res = 0;
 				}
 				pc = pc + 4;
 				break;
@@ -252,10 +245,14 @@ void clsCPU::Reset()
 				pc = pc + 4;
 				break;
 			case CHK:
-				r1 = a >= lbound[Bn];
-				r2 = a < ubound[Bn];
-				r3 = (a & mmask[Bn])==0;
-				res = r1 && r2 && r3;
+				Rt = 0;
+				r1 = a >= c;
+				r2 = a < b;
+				res = r1 && r2;
+				if (!res) {
+					ir = 0x03cc0f38;
+					goto dc;
+				}
 				pc = pc + 4;
 				break;
 			case ASL:
@@ -414,6 +411,18 @@ void clsCPU::Reset()
 				res = 0LL;
 			else
 				res = 1LL;
+			pc = pc + 4;
+			break;
+		case CHK:
+			BuildConstant();
+			Rt = 0;
+			r1 = a >= c;
+			r2 = a < imm;
+			res = r1 && r2;
+			if (!res) {
+				ir = 0x03cc0f38;
+				goto dc;
+			}
 			pc = pc + 4;
 			break;
 		case MUL:
@@ -865,27 +874,28 @@ void clsCPU::Reset()
 			break;
 		case JAL:
 			BuildConstant();
-			ad = a + imm;
+			ad = a + (imm << 2);
 			res = pc + 4;
 			pc = ad;
 			break;
 		case BRK:
 			switch((ir >> 30)&3) {
 			case 0:	
-				epc = pc;
+				epc = pc|km;
 				esp = regs[30];
 				break;
 			case 1:
-				dpc = pc;
+				dpc = pc|km;
 				dsp = regs[30];
 				break;
 			case 2:
-				ipc = pc - immcnt * 4;
+				ipc = (pc - immcnt * 4)|km;
 				isp = regs[30];
 				StatusHWI = true;
 				break;
 			}
 			km = true;
+			rvecno = (ir >> 17) & 0x1ff;
 			ad = vbr + (((ir >> 17) & 0x1ff) << 3);
 			pc = system1->Read(ad);
 			break;
@@ -945,6 +955,8 @@ void clsCPU::Reset()
 		// Writeback stage
 		//---------------------------------------------------------------------------
 		if (Rt != 0) {
+			if (Rt==32 && (res & 3))
+				regs[Rt] = res;
 			regs[Rt] = res;
 		}
 		if (opcode != IMM)

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -278,6 +278,11 @@ TYP *deref(ENODE **node, TYP *tp)
 			}
             break;
 		case bt_pointer:
+			(*node)->esize = tp->size;
+			(*node)->etype = (enum e_bt)tp->type;
+            *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
+			(*node)->isUnsigned = TRUE;
+            break;
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
@@ -766,7 +771,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				ep1->constflag = rnode->constflag && ep1->p[1]->constflag;
 				ep1->isUnsigned = rnode->isUnsigned && ep1->p[1]->isUnsigned;
 				ep1->scale = tp1->size;
-				ep1->esize = 8;
+				ep1->esize = 8;             // was 8
 			}
 			else {
 				qnode = makeinode(en_icon,tp1->size);

@@ -57,6 +57,8 @@ TYP             stdconst = { bt_long, bt_long, 1, FALSE, FALSE, FALSE, FALSE, 0,
 char *names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
+int nfc = 0;
+int isFirstCall = 0;
 int catchdecl = FALSE;
 int isTypedef = FALSE;
 int isUnion = FALSE;
@@ -105,6 +107,7 @@ TYP *maketype(int bt, int siz)
 	TYP *tp;
     tp = allocTYP();
     tp->val_flag = 0;
+    tp->isArray = FALSE;
     tp->size = siz;
     tp->type = bt;
 	tp->typeno = bt;
@@ -524,6 +527,7 @@ void ParseDeclarationSuffix()
         NextToken();
         temp1 = maketype(bt_pointer,0);
         temp1->val_flag = 1;
+        temp1->isArray = TRUE;
         temp1->btp = head;
         if(lastst == closebr) {
 			temp1->size = 0;

@@ -83,7 +83,7 @@ CSE *olist;         /* list of optimizable expressions */
  *      equalnode will return 1 if the expressions pointed to by
  *      node1 and node2 are equivalent.
  */
-static int equalnode(ENODE *node1, ENODE *node2)
+int equalnode(ENODE *node1, ENODE *node2)
 {
     if (node1 == NULL || node2 == NULL)
 		return FALSE;
@@ -346,6 +346,7 @@ static void scanexpr(ENODE *node, int duse)
         case en_asmod:  case en_aslsh:
 		case en_asrsh:
 		case en_asand:	case en_asxor: case en_asor:
+        case en_chk:
 		case en_cond:
         case en_void:   case en_assign:
                 scanexpr(node->p[0],0);
@@ -369,42 +370,44 @@ static void scan(Statement *block)
 			case st_compound:
 					scan_compound(block);
 					break;
+			case st_check:
             case st_return:
 			case st_throw:
             case st_expr:
-                    opt4(&block->exp);
+                    opt_const(&block->exp);
                     scanexpr(block->exp,0);
                     break;
             case st_while:
 			case st_until:
             case st_do:
 			case st_dountil:
-                    opt4(&block->exp);
+                    opt_const(&block->exp);
                     scanexpr(block->exp,0);
 			case st_doloop:
 			case st_forever:
                     scan(block->s1);
                     break;
             case st_for:
-                    opt4(&block->initExpr);
+                    opt_const(&block->initExpr);
                     scanexpr(block->initExpr,0);
-                    opt4(&block->exp);
+                    opt_const(&block->exp);
                     scanexpr(block->exp,0);
                     scan(block->s1);
-                    opt4(&block->incrExpr);
+                    opt_const(&block->incrExpr);
                     scanexpr(block->incrExpr,0);
                     break;
             case st_if:
-                    opt4(&block->exp);
+                    opt_const(&block->exp);
                     scanexpr(block->exp,0);
                     scan(block->s1);
                     scan(block->s2);
                     break;
             case st_switch:
-                    opt4(&block->exp);
+                    opt_const(&block->exp);
                     scanexpr(block->exp,0);
                     scan(block->s1);
                     break;
+            case st_firstcall:
             case st_case:
 			case st_default:
                     scan(block->s1);
@@ -425,7 +428,7 @@ static void scan_compound(Statement *stmt)
 	sp = stmt->ssyms.head;
 	while (sp) {
 		if (sp->initexp) {
-			opt4(&sp->initexp);
+			opt_const(&sp->initexp);
             scanexpr(sp->initexp,0);
 		}
 		sp = sp->next;
@@ -572,6 +575,7 @@ void repexpr(ENODE *node)
                 case en_gt:     case en_ge:
 				case en_ult:	case en_ule:
 				case en_ugt:	case en_uge:
+                case en_chk:
                 case en_cond:   case en_void:
                 case en_asadd:  case en_assub:
 				case en_asmul:  case en_asmulu:
@@ -601,6 +605,9 @@ void repcse(Statement *block)
 			case st_throw:
 					repexpr(block->exp);
 					break;
+			case st_check:
+                    repexpr(block->exp);
+                    break;
 			case st_expr:
 					repexpr(block->exp);
 					break;
@@ -633,6 +640,7 @@ void repcse(Statement *block)
 			case st_catch:
 			case st_case:
 			case st_default:
+            case st_firstcall:
 					repcse(block->s1);
 					break;
        }
@@ -668,16 +676,18 @@ int opt1(Statement *block)
     nn = 0;
 	olist = (CSE *)NULL;
     scan(block);            /* collect expressions */
-    if (isFISA64 && !opt_noregs)
-       nn = AllocateFISA64RegisterVars();
-    else if (is816)
-       nn = Allocate816RegisterVars();
-	else if (isTable888)
-		nn = AllocateTable888RegisterVars();         /* allocate registers */
-	else if (isRaptor64)
-		nn = AllocateRaptor64RegisterVars();
-	else
-		nn = AllocateThorRegisterVars();             /* allocate registers */
-    if (!opt_noregs) repcse(block);          /* replace allocated expressions */
+    if (opt_noregs==FALSE) {
+        if (isFISA64)
+           nn = AllocateFISA64RegisterVars();
+        else if (is816)
+           nn = Allocate816RegisterVars();
+    	else if (isTable888)
+    		nn = AllocateTable888RegisterVars();         /* allocate registers */
+    	else if (isRaptor64)
+    		nn = AllocateRaptor64RegisterVars();
+    	else
+    		nn = AllocateThorRegisterVars();             /* allocate registers */
+    	repcse(block);          /* replace allocated expressions */
+    }
 	return nn;
 }

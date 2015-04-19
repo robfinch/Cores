@@ -303,8 +303,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	else if (isFISA64)
 		GenerateFISA64Function(sp, stmt);
 
-//	if (optimize)
-		flush_peep();
+	flush_peep();
 	if (sp->storage_class == sc_global) {
 		fprintf(output,"endpublic\r\n\r\n");
 	}

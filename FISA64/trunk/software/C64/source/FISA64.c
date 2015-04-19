@@ -184,7 +184,7 @@ int AllocateFISA64RegisterVars()
 
 AMODE *GenExprFISA64(ENODE *node)
 {
-	AMODE *ap1,*ap2,*ap3;
+	AMODE *ap1,*ap2,*ap3,*ap4;
 	int lab0, lab1;
 	int op;
 	int size;
@@ -220,6 +220,21 @@ AMODE *GenExprFISA64(ENODE *node)
 		GenerateTriadic(op,0,ap1,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		return ap1;
+	case en_chk:
+		size = GetNaturalSize(node);
+        ap4 = GetTempRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		ap3 = GenerateExpression(node->p[2],F_REG|F_IMM0,size);
+		if (ap3->mode == am_immed) {  // must be a zero
+		   ap3->mode = am_reg;
+		   ap3->preg = 0;
+        }
+   		Generate4adic(op_chk,0,ap4,ap1,ap2,ap3);
+        ReleaseTempRegister(ap3);
+        ReleaseTempRegister(ap2);
+        ReleaseTempRegister(ap1);
+        return ap4;
 	}
     GenerateFalseJump(node,lab0,0);
     ap1 = GetTempRegister();

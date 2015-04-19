@@ -1,6 +1,8 @@
+extern pascal void putch(char ch);
+
 int linendx;
 char linebuf[100];
-unsigned int dbg_stack[512];
+unsigned int dbg_stack[1024];
 unsigned int dbg_dbctrl;
 unsigned int regs[32];
 unsigned int cr0save;
@@ -8,6 +10,7 @@ int ssm;
 int repcount;
 unsigned int curaddr;
 unsigned int cursz;
+unsigned int curfill;
 char curfmt;
 unsigned int currep;
 unsigned int muol;    // max units on line
@@ -35,19 +38,6 @@ static void dbg_DisplayHelp()
      printf("\r\nDBG>");
 }
 
-unsigned int *GetVBR()
-{
-    asm {
-        mfspr r1,vbr
-    }
-}
-
-void set_vector(unsigned int vecno, unsigned int rout)
-{
-     if (vecno > 511) return;
-     if ((rout == 0) or ((rout & 3) != 0)) return;
-     GetVBR()[vecno] = rout;
-}
 
 byte dbg_GetCursorRow()
 {
@@ -77,7 +67,7 @@ void dbg_HomeCursor()
      }
 }
 
-unsigned int dbg_GetDBAD(int r)
+pascal unsigned int dbg_GetDBAD(int r)
 {
     switch(r) {
     case 0: asm { mfspr  r1,dbad0  } break;
@@ -88,7 +78,7 @@ unsigned int dbg_GetDBAD(int r)
     }
 }
 
-void dbg_SetDBAD(int r, unsigned int ad)
+pascal void dbg_SetDBAD(int r, unsigned int ad)
 {
      switch(r) {
      case 0: asm {
@@ -114,7 +104,7 @@ void dbg_SetDBAD(int r, unsigned int ad)
      }
 }
 
-void dbg_arm(unsigned int dbg_dbctrl)
+pascal void dbg_arm(unsigned int dbg_dbctrl)
 {
      asm {
          lw    r1,24[bp]
@@ -122,7 +112,7 @@ void dbg_arm(unsigned int dbg_dbctrl)
      }
 }
 
-char CvtScreenToAscii(unsigned short int sc)
+pascal char CvtScreenToAscii(unsigned short int sc)
 {
      asm {
          lw    r1,24[bp]
@@ -183,7 +173,7 @@ char dbg_nextSpace()
     return ch;
 }
 
-int dbg_getHexNumber(unsigned int *ad)
+pascal int dbg_getHexNumber(unsigned int *ad)
 {
      char ch;
      unsigned int num;
@@ -212,7 +202,7 @@ int dbg_getHexNumber(unsigned int *ad)
 
 // Instruction breakpoint
 
-void dbg_ReadSetIB(unsigned int n)
+pascal void dbg_ReadSetIB(unsigned int n)
 {
    char ch;
    unsigned int ad;
@@ -220,7 +210,7 @@ void dbg_ReadSetIB(unsigned int n)
    if (n > 3) return;
    ch = dbg_nextNonSpace();
    if (ch=='=') {
-       if (dbg_GetHexNumber(&ad) > 0) {
+       if (dbg_getHexNumber(&ad) > 0) {
            dbg_SetDBAD(n,ad);
            dbg_dbctrl |= (1 << n);
            dbg_dbctrl &= ~(0x30000 << (n << 1));
@@ -242,7 +232,7 @@ void dbg_ReadSetIB(unsigned int n)
 
 // Data load or store breakpoint
 
-void dbg_ReadSetDB(unsigned int n)
+pascal void dbg_ReadSetDB(unsigned int n)
 {
    char ch;
    unsigned int ad;
@@ -250,7 +240,7 @@ void dbg_ReadSetDB(unsigned int n)
    if (n > 3) return;
    ch = dbg_nextNonSpace();
    if (ch=='=') {
-       if (dbg_GetHexNumber(&ad) > 0) {
+       if (dbg_getHexNumber(&ad) > 0) {
            dbg_SetDBAD(n,ad);
            dbg_dbctrl |= (1 << n);
            dbg_dbctrl &= ~(0x30000 << (n << 1));
@@ -272,7 +262,7 @@ void dbg_ReadSetDB(unsigned int n)
 
 // Data store breakpoint
 
-void dbg_ReadSetDSB(unsigned int n)
+pascal void dbg_ReadSetDSB(unsigned int n)
 {
    char ch;
    unsigned int ad;
@@ -280,7 +270,7 @@ void dbg_ReadSetDSB(unsigned int n)
    if (n > 3) return;
    ch = dbg_nextNonSpace();
    if (ch=='=') {
-       if (dbg_GetHexNumber(&ad) > 0) {
+       if (dbg_getHexNumber(&ad) > 0) {
            dbg_SetDBAD(n,ad);
            dbg_dbctrl |= (1 << n);
            dbg_dbctrl &= ~(0x30000 << (n << 1));
@@ -312,7 +302,7 @@ static void DispRegs()
      printf("r29=%X sp=%X lr=%X\r\n", regs[29], regs[30], regs[31]);
 }
 
-static void DispReg(int r)
+static pascal void DispReg(int r)
 {
      printf("r%d=%X\r\n", r, regs[r]);
 }
@@ -322,7 +312,7 @@ void dbg_prompt()
      printf("\r\nDBG>");
 }
 
-int dbg_getDecNumber(int *n)
+pascal int dbg_getDecNumber(int *n)
 {
     int num;
     char ch;
@@ -379,6 +369,45 @@ int dbg_parse_begin()
     if (linebuf[0]=='D' && linebuf[1]=='B' && linebuf[2]=='G' && linebuf[3]=='>')
         linendx = 4;
     return dbg_parse_line();
+}
+
+void dbg_getDumpFormat()
+{
+     int nn;
+     char ch;
+     unsigned int ui;
+     unsigned int ad;
+
+     nn = dbg_getDecNumber(&ui);
+     if (nn > 0) currep = ui;
+     ch = dbg_getchar();
+     switch(ch) {
+     case 'i':
+          curfmt = 'i';
+          nn = dbg_getHexNumber(&ad);
+          if (nn > 0)
+              curaddr = ad;
+          break;
+     case 's':
+          curfmt = 's';
+          nn = dbg_getHexNumber(&ad);
+          if (nn > 0)
+             curaddr = ad;
+          break;
+     case 'x':
+          curfmt = 'x';
+          ch = dbg_getchar();
+          switch(ch) {
+          case 'b': cursz = 'b'; muol = 16; break;
+          case 'c': cursz = 'c'; muol = 8; break;
+          case 'h': cursz = 'h'; muol = 4; break;
+          case 'w': cursz = 'w'; muol = 2; break;
+          default: linendx--;
+          }
+          nn = dbg_getHexNumber(&ad);
+          if (nn > 0) curaddr = ad;
+          break;
+     }
 }
 
 int dbg_parse_line()
@@ -496,39 +525,45 @@ int dbg_parse_line()
                   }
              }
              break;
+        case 'f':
+             ch = dbg_getchar();
+             if (ch=='/')
+                 dbg_getDumpFormat();
+             ch = dbg_getchar();
+             if (ch==',') {
+                 if (curfmt=='x')
+                     nn = dbg_getHexNumber(&ui);
+                 else
+                     nn = dbg_getDecNumber(&ui);
+                 if (nn > 0)
+                     curfill = ui;
+             }
+             switch(curfmt) {
+             case 'x':
+                  switch(cursz) {
+                  case 'b':
+                       for (nn = 0; nn < currep; nn++)
+                           bmem[ad+nn] = curfill;
+                       break;
+                  case 'c':
+                       for (nn = 0; nn < currep; nn++)
+                           cmem[ad/2+nn] = curfill;
+                       break;
+                  case 'h':
+                       for (nn = 0; nn < currep; nn++)
+                           hmem[ad/4+nn] = curfill;
+                       break;
+                  case 'w':
+                       for (nn = 0; nn < currep; nn++)
+                           wmem[ad/8+nn] = curfill;
+                       break;
+                  }
+             }
+             break;
         case 'x':
              ch = dbg_getchar();
              if (ch=='/') {
-                 nn = dbg_getDecNumber(&ui);
-                 if (nn > 0) currep = ui;
-                 ch = dbg_getchar();
-                 switch(ch) {
-                 case 'i':
-                      curfmt = 'i';
-                      nn = dbg_getHexNumber(&ad);
-                      if (nn > 0)
-                          curaddr = ad;
-                      break;
-                 case 's':
-                      curfmt = 's';
-                      nn = dbg_getHexNumber(&ad);
-                      if (nn > 0)
-                         curaddr = ad;
-                      break;
-                 case 'x':
-                      curfmt = 'x';
-                      ch = dbg_getchar();
-                      switch(ch) {
-                      case 'b': cursz = 'b'; muol = 16; break;
-                      case 'c': cursz = 'c'; muol = 8; break;
-                      case 'h': cursz = 'h'; muol = 4; break;
-                      case 'w': cursz = 'w'; muol = 2; break;
-                      default: linendx--;
-                      }
-                      nn = dbg_getHexNumber(&ad);
-                      if (nn > 0) curaddr = ad;
-                      break;
-                 }
+                 dbg_getDumpFormat();
              }
              switch(curfmt) {
              case 'i':
@@ -568,10 +603,10 @@ int dbg_parse_line()
                       }
                   }
                   switch(cursz) {
-                  case 'b': curaddr += nn;
-                  case 'c': curaddr += nn * 2;
-                  case 'h': curaddr += nn * 4;
-                  case 'w': curaddr += nn * 8;
+                  case 'b': curaddr += nn; break;
+                  case 'c': curaddr += nn * 2; break;
+                  case 'h': curaddr += nn * 4; break;
+                  case 'w': curaddr += nn * 8; break;
                   }
                   printf("\r\n");
                   break;
@@ -591,82 +626,82 @@ int dbg_parse_line()
 naked dbg_irq()
 {
      asm {
-         lea   sp,dbg_stack+4088
-         sw    r1,regs+8
-         sw    r2,regs+16
-         sw    r3,regs+24
-         sw    r4,regs+32
-         sw    r5,regs+40
-         sw    r6,regs+48
-         sw    r7,regs+56
-         sw    r8,regs+64
-         sw    r9,regs+72
-         sw    r10,regs+80
-         sw    r11,regs+88
-         sw    r12,regs+96
-         sw    r13,regs+104
-         sw    r14,regs+112
-         sw    r15,regs+120
-         sw    r16,regs+128
-         sw    r17,regs+136
-         sw    r18,regs+144
-         sw    r19,regs+152
-         sw    r20,regs+160
-         sw    r21,regs+168
-         sw    r22,regs+176
-         sw    r23,regs+184
-         sw    r24,regs+192
-         sw    r25,regs+200
-         sw    r26,regs+208
-         sw    r27,regs+216
-         sw    r28,regs+224
-         sw    r29,regs+232
-         sw    r30,regs+240
-         sw    r31,regs+248
+         lea   sp,dbg_stack_+8192-8
+         sw    r1,regs_+8
+         sw    r2,regs_+16
+         sw    r3,regs_+24
+         sw    r4,regs_+32
+         sw    r5,regs_+40
+         sw    r6,regs_+48
+         sw    r7,regs_+56
+         sw    r8,regs_+64
+         sw    r9,regs_+72
+         sw    r10,regs_+80
+         sw    r11,regs_+88
+         sw    r12,regs_+96
+         sw    r13,regs_+104
+         sw    r14,regs_+112
+         sw    r15,regs_+120
+         sw    r16,regs_+128
+         sw    r17,regs_+136
+         sw    r18,regs_+144
+         sw    r19,regs_+152
+         sw    r20,regs_+160
+         sw    r21,regs_+168
+         sw    r22,regs_+176
+         sw    r23,regs_+184
+         sw    r24,regs_+192
+         sw    r25,regs_+200
+         sw    r26,regs_+208
+         sw    r27,regs_+216
+         sw    r28,regs_+224
+         sw    r29,regs_+232
+         sw    r30,regs_+240
+         sw    r31,regs_+248
          mfspr r1,cr0
-         sw    r1,cr0save
+         sw    r1,cr0save_
 
          mfspr r1,dbctrl
          push  r1
          mtspr dbctrl,r0
          mfspr r1,dpc
          push  r1
-         bsr   debugger
+         bsr   debugger_
          addui sp,sp,#16
          
-         lw    r1,cr0save
+         lw    r1,cr0save_
          mtspr cr0,r1
-         lw    r1,regs+8
-         lw    r2,regs+16
-         lw    r3,regs+24
-         lw    r4,regs+32
-         lw    r5,regs+40
-         lw    r6,regs+48
-         lw    r7,regs+56
-         lw    r8,regs+64
-         lw    r9,regs+72
-         lw    r10,regs+80
-         lw    r11,regs+88
-         lw    r12,regs+96
-         lw    r13,regs+104
-         lw    r14,regs+112
-         lw    r15,regs+120
-         lw    r16,regs+128
-         lw    r17,regs+136
-         lw    r18,regs+144
-         lw    r19,regs+152
-         lw    r20,regs+160
-         lw    r21,regs+168
-         lw    r22,regs+176
-         lw    r23,regs+184
-         lw    r24,regs+192
-         lw    r25,regs+200
-         lw    r26,regs+208
-         lw    r27,regs+216
-         lw    r28,regs+224
-         lw    r29,regs+232
-         lw    r30,regs+240
-         lw    r31,regs+248
+         lw    r1,regs_+8
+         lw    r2,regs_+16
+         lw    r3,regs_+24
+         lw    r4,regs_+32
+         lw    r5,regs_+40
+         lw    r6,regs_+48
+         lw    r7,regs_+56
+         lw    r8,regs_+64
+         lw    r9,regs_+72
+         lw    r10,regs_+80
+         lw    r11,regs_+88
+         lw    r12,regs_+96
+         lw    r13,regs_+104
+         lw    r14,regs_+112
+         lw    r15,regs_+120
+         lw    r16,regs_+128
+         lw    r17,regs_+136
+         lw    r18,regs_+144
+         lw    r19,regs_+152
+         lw    r20,regs_+160
+         lw    r21,regs_+168
+         lw    r22,regs_+176
+         lw    r23,regs_+184
+         lw    r24,regs_+192
+         lw    r25,regs_+200
+         lw    r26,regs_+208
+         lw    r27,regs_+216
+         lw    r28,regs_+224
+         lw    r29,regs_+232
+         lw    r30,regs_+240
+         lw    r31,regs_+248
          rtd
      }
 }
@@ -722,7 +757,7 @@ void debugger(unsigned int ad, unsigned int ctrlreg)
                   if (ch== 0x0C) // CTRL-L
                   {
                        asm {
-                           bsr ClearScreen
+                           bsr ClearScreen_
                        }
                        dbg_HomeCursor();
                        break;

@@ -1,6 +1,6 @@
 	code
 	align	16
-public code memcpy:
+public code memcpy_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -23,7 +23,7 @@ string_1:
 	      	rtl  	#16
 endpublic
 
-public code memcpyH:
+public code memcpyH_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -46,7 +46,7 @@ string_3:
 	      	rtl  	#16
 endpublic
 
-public code memcpyW:
+public code memcpyW_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -69,7 +69,7 @@ string_5:
 	      	rtl  	#16
 endpublic
 
-public code memset:
+public code memset_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -90,7 +90,7 @@ string_7:
 	      	rtl  	#16
 endpublic
 
-public code memsetH:
+public code memsetH_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -111,7 +111,7 @@ string_9:
 	      	rtl  	#16
 endpublic
 
-public code memsetW:
+public code memsetW_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -132,7 +132,7 @@ string_11:
 	      	rtl  	#16
 endpublic
 
-public code memchr:
+public code memchr_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -145,8 +145,8 @@ string_13:
 	      	lw   	r3,-8[bp]
 	      	lbu  	r3,[r3]
 	      	lbu  	r4,32[bp]
-	      	cmp  	r3,r3,r4
-	      	bne  	r3,string_16
+	      	cmp  	r5,r3,r4
+	      	bne  	r5,string_16
 	      	lw   	r3,-8[bp]
 	      	mov  	r1,r3
 string_18:
@@ -163,7 +163,7 @@ string_14:
 	      	bra  	string_18
 endpublic
 
-public code strlen:
+public code strlen_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -180,8 +180,8 @@ string_22:
 string_20:
 	      	sw   	r0,-8[bp]
 string_23:
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
+	      	lw   	r4,-8[bp]
+	      	asli 	r3,r4,#1
 	      	lcu  	r3,0[r11+r3]
 	      	beq  	r3,string_24
 string_25:
@@ -193,7 +193,7 @@ string_24:
 	      	bra  	string_22
 endpublic
 
-public code strcpy:
+public code strcpy_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -204,22 +204,22 @@ public code strcpy:
 	      	lw   	r12,32[bp]
 	      	sw   	r0,-8[bp]
 string_27:
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
+	      	lw   	r4,-8[bp]
+	      	asli 	r3,r4,#1
 	      	lcu  	r3,0[r12+r3]
 	      	beq  	r3,string_28
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
 	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#1
+	      	asli 	r3,r4,#1
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#1
 	      	lcu  	r5,0[r12+r3]
 	      	sc   	r5,0[r11+r4]
 string_29:
 	      	inc  	-8[bp],#1
 	      	bra  	string_27
 string_28:
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
+	      	lw   	r4,-8[bp]
+	      	asli 	r3,r4,#1
 	      	sc   	r0,0[r11+r3]
 	      	mov  	r1,r11
 string_30:
@@ -230,7 +230,7 @@ string_30:
 	      	rtl  	#16
 endpublic
 
-public code strncpy:
+public code strncpy_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -243,16 +243,16 @@ public code strncpy:
 string_32:
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,40[bp]
-	      	cmp  	r3,r3,r4
-	      	bge  	r3,string_33
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
+	      	cmp  	r5,r3,r4
+	      	bge  	r5,string_33
 	      	lw   	r4,-8[bp]
-	      	asli 	r4,r4,#1
+	      	asli 	r3,r4,#1
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#1
 	      	lcu  	r5,0[r12+r3]
 	      	sc   	r5,0[r11+r4]
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
+	      	lw   	r4,-8[bp]
+	      	asli 	r3,r4,#1
 	      	lcu  	r3,0[r12+r3]
 	      	bne  	r3,string_35
 	      	bra  	string_33
@@ -264,10 +264,10 @@ string_33:
 string_37:
 	      	lw   	r3,-8[bp]
 	      	lw   	r4,40[bp]
-	      	cmp  	r3,r3,r4
-	      	bge  	r3,string_38
-	      	lw   	r3,-8[bp]
-	      	asli 	r3,r3,#1
+	      	cmp  	r5,r3,r4
+	      	bge  	r5,string_38
+	      	lw   	r4,-8[bp]
+	      	asli 	r3,r4,#1
 	      	sc   	r0,0[r11+r3]
 string_39:
 	      	inc  	-8[bp],#1
@@ -282,7 +282,7 @@ string_40:
 	      	rtl  	#16
 endpublic
 
-public code strncmp:
+public code strncmp_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -291,8 +291,8 @@ public code strncmp:
 	      	push 	r12
 	      	lw   	r11,24[bp]
 	      	lw   	r12,32[bp]
-	      	cmp  	r11,r11,r12
-	      	bne  	r11,string_42
+	      	cmp  	r3,r11,r12
+	      	bne  	r3,string_42
 	      	ldi  	r1,#0
 string_44:
 	      	pop  	r12
@@ -306,12 +306,12 @@ string_45:
 	      	ble  	r3,string_46
 	      	lcu  	r3,[r11]
 	      	lcu  	r4,[r12]
-	      	cmp  	r3,r3,r4
-	      	beq  	r3,string_48
+	      	cmp  	r5,r3,r4
+	      	beq  	r5,string_48
 	      	lcu  	r3,[r11]
 	      	lcu  	r4,[r12]
-	      	cmpu 	r3,r3,r4
-	      	bge  	r3,string_50
+	      	cmpu 	r5,r3,r4
+	      	bge  	r5,string_50
 	      	ldi  	r3,#-1
 	      	bra  	string_51
 string_50:
@@ -337,7 +337,7 @@ string_46:
 	      	bra  	string_44
 endpublic
 
-public code strchr:
+public code strchr_:
 	      	subui	sp,sp,#16
 	      	push 	bp
 	      	mov  	bp,sp
@@ -350,8 +350,8 @@ string_55:
 	      	lw   	r3,-8[bp]
 	      	lcu  	r3,[r3]
 	      	lcu  	r4,32[bp]
-	      	cmp  	r3,r3,r4
-	      	bne  	r3,string_58
+	      	cmp  	r5,r3,r4
+	      	bne  	r5,string_58
 	      	lw   	r3,-8[bp]
 	      	mov  	r1,r3
 string_60:
@@ -371,15 +371,15 @@ endpublic
 	rodata
 	align	16
 	align	8
-;	global	strncmp
-;	global	strncpy
-;	global	memchr
-;	global	memcpy
-;	global	memset
-;	global	strchr
-;	global	strlen
-;	global	strcpy
-;	global	memcpyH
-;	global	memsetH
-;	global	memcpyW
-;	global	memsetW
+;	global	strcpy_
+;	global	memcpyH_
+;	global	memsetH_
+;	global	memcpyW_
+;	global	memsetW_
+;	global	strncmp_
+;	global	strncpy_
+;	global	memchr_
+;	global	memcpy_
+;	global	memset_
+;	global	strchr_
+;	global	strlen_

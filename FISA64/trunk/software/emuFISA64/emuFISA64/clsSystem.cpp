@@ -3,21 +3,26 @@
 extern clsPIC pic1;
 
 clsSystem::clsSystem() {
-		int nn;
-		m_z = 88888888;
-		m_w = 12345678;
-		for (nn = 0; nn < 4096; nn++) {
-			VideoMem[nn] = random();
-			VideoMemDirty[nn] = true;
-		}
-		for (nn = 0; nn < sizeof(memory); nn+=4) {
-			memory[nn>>2] = 0;
-		}
-		write_error = false;
-		runstop = false;
-		cpu1.system1 = this;
-		refscreen = true;
-	};
+	int nn;
+	for (nn = 0; nn < sizeof(memory); nn+=4) {
+		memory[nn>>2] = 0;
+	}
+	Reset();
+};
+void clsSystem::Reset()
+{
+	int nn;
+	m_z = 88888888;
+	m_w = 12345678;
+	for (nn = 0; nn < 4096; nn++) {
+		VideoMem[nn] = random();
+		VideoMemDirty[nn] = true;
+	}
+	write_error = false;
+	runstop = false;
+	cpu1.system1 = this;
+	refscreen = true;
+};
 	unsigned int clsSystem::Read(unsigned int ad, int sr) {
 		int rr;
 		unsigned __int8 sc;
@@ -126,7 +131,7 @@ clsSystem::clsSystem() {
 		}
 		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
 			switch(ad & 1) {
-			case 1:	keybd_status = 0;
+			case 1:	keybd_status = 0; pic1.irqKeyboard = false; break;
 			}
 		}
 		else if ((ad & 0xFFFFFFC0)==0xFFDC0FC0) {

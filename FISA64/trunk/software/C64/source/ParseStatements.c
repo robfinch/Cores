@@ -32,6 +32,7 @@
 #include "cglbdec.h" 
 
 extern TYP *head, *tail;
+extern TYP stdbyte;
 extern char *declid;
 extern int catchdecl;
 Statement *ParseStatement();   /* forward declararation */ 
@@ -129,6 +130,16 @@ Statement *vortex_stmt()
         snp->next = 0; 
 		snp->s1 = ParseStatement(); 
         return snp; 
+} 
+  
+Statement *ParseCheckStatement() 
+{       
+	Statement *snp;
+    snp = NewStatement(st_check, TRUE);
+    if( expression(&(snp->exp)) == 0 ) 
+        error(ERR_EXPREXPECT); 
+    needpunc( semicolon );
+    return snp; 
 } 
   
 Statement *ParseWhileStatement() 
@@ -367,7 +378,20 @@ Statement *ParseSpinunlockStatement()
 Statement *ParseFirstcallStatement() 
 {
 	Statement *snp; 
+	SYM *sp;
+	int st;
+
     snp = NewStatement(st_firstcall, TRUE); 
+    sp = allocSYM();
+	sp->name = snp->fcname;
+    sp->storage_class = sc_static;
+    sp->value.i = nextlabel++;
+    sp->tp = &stdbyte;
+    st = lastst;
+    lastst = kw_firstcall;       // fake out doinit()
+    doinit(sp);
+    lastst = st;
+    snp->fcname = litlate(sp->realname);
     snp->s1 = ParseStatement(); 
 	// Empty statements return NULL
 	if (snp->s1)
@@ -379,8 +403,11 @@ Statement *ParseIfStatement()
 {
 	Statement *snp; 
 
+	NextToken();
+	if (lastst == kw_firstcall)
+	   return ParseFirstcallStatement();
 	currentFn->UsesPredicate = TRUE;
-    snp = NewStatement(st_if, TRUE);
+    snp = NewStatement(st_if, FALSE);
 	snp->predreg = iflevel;
 	iflevel++;
     if( lastst != openpa ) 
@@ -844,6 +871,9 @@ Statement *ParseStatement()
 		NextToken(); 
         snp = ParseCompoundStatement();
         return snp; 
+    case kw_check:
+         snp = ParseCheckStatement();
+         break;
     case kw_prolog:
          snp = NewStatement(st_empty,1);
          currentFn->prolog = ParseStatement(); break;

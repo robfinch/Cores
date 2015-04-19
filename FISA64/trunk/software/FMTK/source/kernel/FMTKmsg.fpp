@@ -1,11 +1,18 @@
 
 typedef unsigned int uint;
+typedef __int16 hTCB;
+typedef __int8 hJCB;
+typedef __int16 hMBX;
+typedef __int16 hMSG;
 
 typedef struct tagMSG align(32) {
-	struct tagMSG *link;
-	uint d1;
-	uint d2;
-	uint type;
+	unsigned __int16 link;
+	unsigned __int16 retadr;    // return address
+	unsigned __int16 tgtadr;    // target address
+	unsigned __int16 type;
+	unsigned int d1;            // payload data 1
+	unsigned int d2;            // payload data 2
+	unsigned int d3;            // payload data 3
 } MSG;
 
 typedef struct _tagJCB align(2048)
@@ -23,15 +30,19 @@ typedef struct _tagJCB align(2048)
     unsigned __int16 CursorRow;
     unsigned __int16 CursorCol;
     unsigned __int32 NormAttr;
+    __int8 KeyState1;
+    __int8 KeyState2;
+    __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
     unsigned __int16 KeybdBuffer[16];
-    __int16 number;
+    hJCB number;
 } JCB;
 
 struct tagMBX;
 
-typedef struct _tagTCB align(512) {
+typedef struct _tagTCB align(1024) {
+    // exception storage area
 	int regs[32];
 	int isp;
 	int dsp;
@@ -40,39 +51,49 @@ typedef struct _tagTCB align(512) {
 	int dpc;
 	int epc;
 	int cr0;
-	struct _tagTCB *next;
-	struct _tagTCB *prev;
-	struct _tagTCB *mbq_next;
-	struct _tagTCB *mbq_prev;
+	// interrupt storage
+	int iregs[32];
+	int iisp;
+	int idsp;
+	int iesp;
+	int iipc;
+	int idpc;
+	int iepc;
+	int icr0;
+	hTCB next;
+	hTCB prev;
+	hTCB mbq_next;
+	hTCB mbq_prev;
 	int *sys_stack;
 	int *bios_stack;
 	int *stack;
 	__int64 timeout;
-	JCB *hJob;
-	int msgD1;
-	int msgD2;
-	MSG *MsgPtr;
-	uint hWaitMbx;
-	struct tagMBX *mailboxes;
+	MSG msg;
+	hMBX hMailboxes[4]; // handles of mailboxes owned by task
+	hMBX hWaitMbx;      // handle of mailbox task is waiting at
+	hTCB number;
 	__int8 priority;
 	__int8 status;
 	__int8 affinity;
-	__int16 number;
+	hJCB hJob;
+	__int64 startTick;
+	__int64 endTick;
+	__int64 ticks;
 } TCB;
 
-typedef struct tagMBX align(128) {
-    struct tagMBX *link;
-	TCB *tq_head;
-	TCB *tq_tail;
-	MSG *mq_head;
-	MSG *mq_tail;
+typedef struct tagMBX align(64) {
+    hMBX link;
+	hJCB owner;		// hJcb of owner
+	hTCB tq_head;
+	hTCB tq_tail;
+	hMSG mq_head;
+	hMSG mq_tail;
+	char mq_strategy;
+	byte resv[2];
 	uint tq_count;
 	uint mq_size;
 	uint mq_count;
 	uint mq_missed;
-	uint owner;		// hJcb of owner
-	char mq_strategy;
-	byte resv[7];
 } MBX;
 
 typedef struct tagALARM {
@@ -90,6 +111,7 @@ typedef struct tagALARM {
 
 
 
+// message types
 
 enum {
      E_Ok = 0,
@@ -127,23 +149,69 @@ enum {
 
 
 
-TCB *GetRunningTCB();
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// TCB.c
+// Task Control Block related functions.
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
+// JCB functions
 JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+
+// TCB functions
+TCB *GetRunningTCBPtr();
+hTCB GetRunningTCB();
+pascal void SetRunningTCB(hTCB ht);
+pascal int chkTCB(TCB *p);
+pascal int InsertIntoReadyList(hTCB ht);
+pascal int RemoveFromReadyList(hTCB ht);
+pascal int InsertIntoTimeoutList(hTCB ht, int to);
+pascal int RemoveFromTimeoutList(hTCB ht);
+void DumpTaskList();
+
+pascal void SetBound48(TCB *ps, TCB *pe, int algn);
+pascal void SetBound49(JCB *ps, JCB *pe, int algn);
+pascal void SetBound50(MBX *ps, MBX *pe, int algn);
+pascal void SetBound51(MSG *ps, MSG *pe, int algn);
+
 void set_vector(unsigned int, unsigned int);
 int getCPU();
+int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);
 void outc(unsigned int, int);
 void outh(unsigned int, int);
 void outw(unsigned int, int);
+pascal int LockSemaphore(int *sema, int retries);
+pascal void UnlockSemaphore(int *sema);
+
+// The following causes a privilege violation if called from user mode
 
 
 extern int irq_stack[];
 extern int FMTK_Inited;
 extern JCB jcbs[];
 extern TCB tcbs[];
-extern TCB *readyQ[];
-extern TCB *runningTCB;
-extern TCB *freeTCB;
+extern hTCB readyQ[];
+extern hTCB freeTCB;
 extern int sysstack[];
 extern int stacks[][];
 extern int sys_stacks[][];
@@ -154,8 +222,8 @@ extern MBX mailbox[];
 extern MSG message[];
 extern int nMsgBlk;
 extern int nMailbox;
-extern MSG *freeMSG;
-extern MBX *freeMBX;
+extern hMSG freeMSG;
+extern hMBX freeMBX;
 extern JCB *IOFocusNdx;
 extern int IOFocusTbl[];
 extern int iof_switch;
@@ -166,22 +234,10 @@ extern int BIOS_RespMbx;
 extern char hasUltraHighPriorityTasks;
 extern int missed_ticks;
 extern short int video_bufs[][];
-extern TCB *TimeoutList;
+extern hTCB TimeoutList;
 
 
-int chkMBX(int hMBX) {
-    asm {
-        lw    r1,24[bp]
-        chk   r1,r1,b50
-    }
-}
-
-int chkMSG(int msg) {
-    asm {
-        lw    r1,24[bp]
-        chk   r1,r1,b51
-    }
-}
+extern int sys_sema;
 
 /* ---------------------------------------------------------------
 	Description:
@@ -194,15 +250,13 @@ int chkMSG(int msg) {
 		SendMsg
 		PostMsg
 --------------------------------------------------------------- */
-private int QueueMsg(MBX *mbx, MSG *msg)
+private pascal int QueueMsg(MBX *mbx, MSG *msg)
 {
     MSG *tmpmsg;
+    hMSG htmp;
 	int rr = E_Ok;
 
-    if (!chkMSG(msg))
-        return E_Ok;
-
-	LockSYS();
+	if (LockSemaphore(&sys_sema,-1)) {
 		mbx->mq_count++;
 	
 		// handle potential queue overflows
@@ -219,12 +273,13 @@ private int QueueMsg(MBX *mbx, MSG *msg)
 		    case 2:
 		        while (mbx->mq_count > mbx->mq_size) {
 		            // return outdated message to message pool
-		            tmpmsg = mbx->mq_head->link;
-		            mbx->mq_head->link = freeMSG;
+		            htmp = message[mbx->mq_head].link;
+		            tmpmsg = &message[htmp];
+		            message[mbx->mq_head].link = freeMSG;
 		            freeMSG = mbx->mq_head;
 					nMsgBlk++;
 					mbx->mq_count--;
-		            mbx->mq_head = tmpmsg;
+		            mbx->mq_head = htmp;
 					if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
 						mbx->mq_missed++;
 					rr = E_QueFull;
@@ -239,7 +294,7 @@ private int QueueMsg(MBX *mbx, MSG *msg)
 				if (mbx->mq_count > mbx->mq_size) {
 					// return new message to pool
 					msg->link = freeMSG;
-					freeMSG = msg;
+					freeMSG = msg-message;
 					nMsgBlk++;
 					if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
 						mbx->mq_missed++;
@@ -251,14 +306,14 @@ private int QueueMsg(MBX *mbx, MSG *msg)
 				// messages to free pool
 				while (mbx->mq_count > mbx->mq_size) {
 					// locate the second last message on the que
-					tmpmsg = mbx->mq_head;
-					while (tmpmsg <> mbx->mq_tail) {
+					tmpmsg = &message[mbx->mq_head];
+					while (tmpmsg-message <> mbx->mq_tail) {
 						msg = tmpmsg;
-						tmpmsg = tmpmsg->link;
+						tmpmsg = &message[tmpmsg->link];
 					}
-					mbx->mq_tail = msg;
+					mbx->mq_tail = msg-message;
 					tmpmsg->link = freeMSG;
-					freeMSG = tmpmsg;
+					freeMSG = tmpmsg-message;
 					nMsgBlk++;
 					if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
 						mbx->mq_missed++;
@@ -266,19 +321,20 @@ private int QueueMsg(MBX *mbx, MSG *msg)
 					rr = E_QueFull;
 				}
 				if (rr == E_QueFull) {
-                    UnlockSYS(); 
+             	    UnlockSemaphore(&sys_sema);
 					return rr;
                 }
                 break;
 		}
 		// if there is a message in the queue
-		if (mbx->mq_tail)
-			mbx->mq_tail->link = msg;
+		if (mbx->mq_tail >= 0)
+			message[mbx->mq_tail].link = msg-message;
 		else
-			mbx->mq_head = msg;
-		mbx->mq_tail = msg;
-		msg->link = (void *)0;
-	UnlockSYS();
+			mbx->mq_head = msg-message;
+		mbx->mq_tail = msg-message;
+		msg->link = -1;
+	    UnlockSemaphore(&sys_sema);
+    }
 	return rr;
 }
 
@@ -297,18 +353,20 @@ private int QueueMsg(MBX *mbx, MSG *msg)
 		CheckMsg-	"
 --------------------------------------------------------------- */
 
-private MSG *DequeueMsg(MBX *mbx)
+private pascal MSG *DequeueMsg(MBX *mbx)
 {
 	MSG *tmpmsg = (void *)0;
-
+    hMSG hm;
+ 
 	if (mbx->mq_count) {
 		mbx->mq_count--;
-		tmpmsg = mbx->mq_head;
-		if (tmpmsg) {	// should not be null
+		hm = mbx->mq_head;
+		if (hm >= 0) {	// should not be null
+		    tmpmsg = &message[hm];
 			mbx->mq_head = tmpmsg->link;
-			if (mbx->mq_head == (void *)0)
-				mbx->mq_tail = (void *)0;
-			tmpmsg->link = tmpmsg;
+			if (mbx->mq_head < 0)
+				mbx->mq_tail = -1;
+			tmpmsg->link = hm;
 		}
 	}
 	return tmpmsg;
@@ -320,27 +378,29 @@ private MSG *DequeueMsg(MBX *mbx)
 		Allocate a mailbox. The default queue strategy is to
 	queue the eight most recent messages.
 --------------------------------------------------------------- */
-public int FMTK_AllocMbx(uint *phMbx)
+public int FMTK_AllocMbx(hMBX *phMbx)
 {
 	MBX *mbx;
 
+    asm { mfspr r1,ivno };
 	if (phMbx==(void *)0)
     	return E_Arg;
-	LockSYS();
-		if (freeMBX == (void *)0) {
-            UnlockSYS();
+	if (LockSemaphore(&sys_sema,-1)) {
+		if (freeMBX < 0 || freeMBX >= 1024) {
+    	    UnlockSemaphore(&sys_sema);
 			return E_NoMoreMbx;
         }
-		mbx = freeMBX;
+		mbx = &mailbox[freeMBX];
 		freeMBX = mbx->link;
 		nMailbox--;
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	*phMbx = mbx - mailbox;
 	mbx->owner = GetJCBPtr();
-	mbx->tq_head = (void *)0;
-	mbx->tq_tail = (void *)0;
-	mbx->mq_head = (void *)0;
-	mbx->mq_tail = (void *)0;
+	mbx->tq_head = -1;
+	mbx->tq_tail = -1;
+	mbx->mq_head = -1;
+	mbx->mq_tail = -1;
 	mbx->tq_count = 0;
 	mbx->mq_count = 0;
 	mbx->mq_missed = 0;
@@ -356,22 +416,27 @@ public int FMTK_AllocMbx(uint *phMbx)
 	messages must be freed. Any queued threads must also be
 	dequeued. 
 --------------------------------------------------------------- */
-public int FMTK_FreeMbx(uint hMbx) 
+public int FMTK_FreeMbx(hMBX hMbx) 
 {
 	MBX *mbx;
 	MSG *msg;
 	TCB *thrd;
 	
-	if (hMbx >= 2048)
-		return E_BadMbx;
+    asm { mfspr r1,ivno };
+	__check (hMbx >= 0 && hMbx < 1024);
 	mbx = &mailbox[hMbx];
-	LockSYS();
-		if ((mbx->owner <> GetJCBPtr()) and (GetJCBPtr() <> &jcbs))
-				return E_NotOwner;
+	if (LockSemaphore(&sys_sema,-1)) {
+		if ((mbx->owner <> GetJCBPtr()) and (GetJCBPtr() <> &jcbs)) {
+    	    UnlockSemaphore(&sys_sema);
+			return E_NotOwner;
+        }
 		// Free up any queued messages
 		while (msg = DequeueMsg(mbx)) {
+            msg->type = 1;
+            msg->retadr = -1;
+            msg->tgtadr = -1;
 			msg->link = freeMSG;
-			freeMSG = msg;
+			freeMSG = msg - message;
 			nMsgBlk++;
 		}
 		// Send an indicator to any queued threads that the mailbox
@@ -381,15 +446,16 @@ public int FMTK_FreeMbx(uint hMbx)
 			DequeThreadFromMbx(mbx, &thrd);
 			if (thrd == (void *)0)
 				break;
-			thrd->MsgPtr = (void *)0;
+			thrd->msg.type = 0;
 			if (thrd->status & 1)
-				RemoveFromTimeoutList(thrd);
-			InsertIntoReadyList(thrd);
+				RemoveFromTimeoutList(thrd-tcbs);
+			InsertIntoReadyList(thrd-tcbs);
 		}
 		mbx->link = freeMBX;
-		freeMBX = mbx;
+		freeMBX = mbx-mailbox;
 		nMailbox++;
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	return E_Ok;
 }
 
@@ -398,21 +464,24 @@ public int FMTK_FreeMbx(uint hMbx)
 	Description:
 		Set the mailbox message queueing strategy.
 --------------------------------------------------------------- */
-public SetMbxMsgQueStrategy(uint hMbx, int qStrategy, int qSize)
+public int SetMbxMsgQueStrategy(hMBX hMbx, int qStrategy, int qSize)
 {
 	MBX *mbx;
 
-	if (hMbx >= 2048)
-		return E_BadMbx;
+    asm { mfspr r1,ivno };
+	__check (hMbx >= 0 && hMbx < 1024);
 	if (qStrategy > 2)
 		return E_Arg;
 	mbx = &mailbox[hMbx];
-	LockSYS();
-		if ((mbx->owner <> GetJCBPtr()) and GetJCBPtr() <> &jcbs[0])
-				return E_NotOwner;
+	if (LockSemaphore(&sys_sema,-1)) {
+		if ((mbx->owner <> GetJCBPtr()) and GetJCBPtr() <> &jcbs[0]) {
+      	    UnlockSemaphore(&sys_sema);
+			return E_NotOwner;
+        }
 		mbx->mq_strategy = qStrategy;
 		mbx->mq_size = qSize;
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	return E_Ok;
 }
 
@@ -421,43 +490,58 @@ public SetMbxMsgQueStrategy(uint hMbx, int qStrategy, int qSize)
 	Description:
 		Send a message.
 --------------------------------------------------------------- */
-public int FMTK_SendMsg(uint hMbx, int d1, int d2)
+public int FMTK_SendMsg(hMBX hMbx, int d1, int d2, int d3)
 {
 	MBX *mbx;
 	MSG *msg;
 	TCB *thrd;
 
-	if (hMbx >= 2048)
-		return E_BadMbx;
-
+    asm { mfspr r1,ivno };
+	__check (hMbx >= 0 && hMbx < 1024);
 	mbx = &mailbox[hMbx];
-	LockSYS();
+	if (LockSemaphore(&sys_sema,-1)) {
 		// check for a mailbox owner which indicates the mailbox
 		// is active.
-		if (mbx->owner == (void *)0) {
-           UnlockSYS();
-           return E_NotAlloc;
+		if (mbx->owner < 0 || mbx->owner >= 51) {
+    	    UnlockSemaphore(&sys_sema);
+            return E_NotAlloc;
         }
-		msg = freeMSG;
-		if (msg == (void *)0) {
-		    UnlockSYS();
+		if (freeMSG < 0 || freeMSG >= 16384) {
+    	    UnlockSemaphore(&sys_sema);
 			return E_NoMoreMsgBlks;
         }
+		msg = &message[freeMSG];
 		freeMSG = msg->link;
 		--nMsgBlk;
-		msg->type = 0;
+		msg->retadr = GetJCBPtr()-jcbs;
+		msg->tgtadr = hMbx;
+		msg->type = 2;
 		msg->d1 = d1;
 		msg->d2 = d2;
+		msg->d3 = d3;
 		DequeThreadFromMbx(mbx, &thrd);
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	if (thrd == (void *)0)
 		return QueueMsg(mbx, msg);
-	LockSYS();
-    	thrd->MsgPtr = msg;
+	if (LockSemaphore(&sys_sema,-1)) {
+        thrd->msg.retadr = msg->retadr;
+        thrd->msg.tgtadr = msg->tgtadr;
+        thrd->msg.type = msg->type;
+        thrd->msg.d1 = msg->d1;
+        thrd->msg.d2 = msg->d2;
+        thrd->msg.d3 = msg->d3;
+        // free message here
+        msg->type = 1;
+        msg->retadr = -1;
+        msg->tgtadr = -1;
+        msg->link = freeMSG;
+        freeMSG = msg-message;
     	if (thrd->status & 1)
-    		RemoveFromTimeoutList(thrd);
-    	InsertIntoReadyList(thrd);
-	UnlockSYS();
+    		RemoveFromTimeoutList(thrd-tcbs);
+    	InsertIntoReadyList(thrd-tcbs);
+	    UnlockSemaphore(&sys_sema);
+    }
 	return E_Ok;
 }
 
@@ -470,46 +554,61 @@ public int FMTK_SendMsg(uint hMbx, int d1, int d2)
 	require a low latency. Normally SendMsg() will be called,
 	even from an ISR to allow the OS to prioritize events.
 --------------------------------------------------------------- */
-public int FMTK_PostMsg(int hMbx, int d1, int d2)
+public int FMTK_PostMsg(hMBX hMbx, int d1, int d2, int d3)
 {
 	MBX *mbx;
 	MSG *msg;
 	TCB *thrd;
     int ret;
 
-	if (hMbx >= 2048)
-		return E_BadMbx;
-
+    asm { mfspr r1,ivno };
+	__check (hMbx >= 0 && hMbx < 1024);
 	mbx = &mailbox[hMbx];
-	LockSYS();
+	if (LockSemaphore(&sys_sema,-1)) {
 		// check for a mailbox owner which indicates the mailbox
 		// is active.
-		if (mbx->owner == (void *)0) {
-            UnlockSYS();
+		if (mbx->owner < 0 || mbx->owner >= 51) {
+    	    UnlockSemaphore(&sys_sema);
 			return E_NotAlloc;
         }
-		msg = freeMSG;
-		if (msg == (void *)0) {
-            UnlockSYS();
+		if (freeMSG  <0 || freeMSG >= 16384) {
+    	    UnlockSemaphore(&sys_sema);
 			return E_NoMoreMsgBlks;
         }
+		msg = &message[freeMSG];
 		freeMSG = msg->link;
 		--nMsgBlk;
-		msg->type = 0;
+		msg->retadr = GetJCBPtr()-jcbs;
+		msg->tgtadr = hMbx;
+		msg->type = 2;
 		msg->d1 = d1;
 		msg->d2 = d2;
+		msg->d3 = d3;
 		DequeueThreadFromMbx(mbx, &thrd);
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	if (thrd == (void *)0) {
         ret = QueueMsg(mbx, msg);
 		return ret;
     }
-    LockSYS();
-    	thrd->MsgPtr = msg;
+	if (LockSemaphore(&sys_sema,-1)) {
+        thrd->msg.retadr = msg->retadr;
+        thrd->msg.tgtadr = msg->tgtadr;
+        thrd->msg.type = msg->type;
+        thrd->msg.d1 = msg->d1;
+        thrd->msg.d2 = msg->d2;
+        thrd->msg.d3 = msg->d3;
+        // free message here
+        msg->type = 1;
+        msg->retadr = -1;
+        msg->tgtadr = -1;
+        msg->link = freeMSG;
+        freeMSG = msg-message;
     	if (thrd->status & 1)
-    		RemoveFromTimeoutList(thrd);
-    	AddToReadyList(thrd);
-   	UnlockSYS();
+    		RemoveFromTimeoutList(thrd-tcbs);
+    	InsertIntoReadyList(thrd-tcbs);
+	    UnlockSemaphore(&sys_sema);
+    }
 	return E_Ok;
 }
 
@@ -520,64 +619,78 @@ public int FMTK_PostMsg(int hMbx, int d1, int d2)
 	will wait indefinately for a message.
 --------------------------------------------------------------- */
 
-public int FMTK_WaitMsg(uint hMbx, int *d1, int *d2, int timelimit)
+public int FMTK_WaitMsg(hMBX hMbx, int *d1, int *d2, int *d3, int timelimit)
 {
 	MBX *mbx;
 	MSG *msg;
 	TCB *thrd;
+	TCB *rt;
 
-	if (hMbx >= 2048)
-		return E_BadMbx;
-
+    asm { mfspr r1,ivno };
+	__check (hMbx >= 0 && hMbx < 1024);
 	mbx = &mailbox[hMbx];
-	LockSYS();
+	if (LockSemaphore(&sys_sema,-1)) {
     	// check for a mailbox owner which indicates the mailbox
     	// is active.
-    	if (mbx->owner == (void *)0) {
-            UnlockSYS();
+    	if (mbx->owner <0 || mbx->owner >= 51) {
+     	    UnlockSemaphore(&sys_sema);
         	return E_NotAlloc;
         }
     	msg = DequeueMsg(mbx);
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	if (msg == (void *)0) {
-		LockSYS();
-			thrd = GetRunningTCB();
-			RemoveFromReadyList(thrd);
-		UnlockSYS();
+    	if (LockSemaphore(&sys_sema,-1)) {
+			thrd = GetRunningTCBPtr();
+			RemoveFromReadyList(thrd-tcbs);
+    	    UnlockSemaphore(&sys_sema);
+        }
 		//-----------------------
 		// Queue task at mailbox
 		//-----------------------
 		thrd->status |= 2;
 		thrd->hWaitMbx = hMbx;
 		thrd->mbq_next = (void *)0;
-		LockSYS();
-			if (mbx->tq_head == (void *)0) {
-				thrd->mbq_prev = (void *)0;
-				mbx->tq_head = thrd;
-				mbx->tq_tail = thrd;
+    	if (LockSemaphore(&sys_sema,-1)) {
+			if (mbx->tq_head < 0) {
+				thrd->mbq_prev = -1;
+				mbx->tq_head = thrd-tcbs;
+				mbx->tq_tail = thrd-tcbs;
 				mbx->tq_count = 1;
 			}
 			else {
 				thrd->mbq_prev = mbx->tq_tail;
-				mbx->tq_tail->mbq_next = thrd;
-				mbx->tq_tail = thrd;
+				tcbs[mbx->tq_tail].mbq_next = thrd-tcbs;
+				mbx->tq_tail = thrd-tcbs;
 				mbx->tq_count++;
 			}
-		UnlockSYS();
+    	    UnlockSemaphore(&sys_sema);
+        }
 		//---------------------------
 		// Is a timeout specified ?
 		if (timelimit) {
-            LockSYS();
-        	    AddToTimeoutList(thrd, timelimit);
-       	    UnlockSYS();
+        	if (LockSemaphore(&sys_sema,-1)) {
+        	    InsertIntoTimeoutList(thrd-tcbs, timelimit);
+        	    UnlockSemaphore(&sys_sema);
+            }
         }
 		asm { int #2 }     // reschedule
 		// Control will return here as a result of a SendMsg or a
 		// timeout expiring
-		msg = GetRunningTCB()->MsgPtr;
-		if (msg == (void *)0)
+		rt = GetRunningTCBPtr(); 
+		if (rt->msg.type == 0)
 			return E_NoMsg;
-		GetRunningTCB()->MsgPtr = (void *)0;
+		// rip up the envelope
+		rt->msg.type = 0;
+		rt->msg.tgtadr = -1;
+		rt->msg.retadr = -1;
+    	if (d1)
+    		*d1 = rt->msg.d1;
+    	if (d2)
+    		*d2 = rt->msg.d2;
+    	if (d3)
+    		*d3 = rt->msg.d3;
+		return E_Ok;
 	}
 	//-----------------------------------------------------
 	// We get here if there was initially a message
@@ -588,11 +701,17 @@ public int FMTK_WaitMsg(uint hMbx, int *d1, int *d2, int timelimit)
 		*d1 = msg->d1;
 	if (d2)
 		*d2 = msg->d2;
-	LockSYS();
+	if (d3)
+		*d3 = msg->d3;
+   	if (LockSemaphore(&sys_sema,-1)) {
+        msg->type = 1;
+        msg->retadr = -1;
+        msg->tgtadr = -1;
 		msg->link = freeMSG;
-		freeMSG = msg;
+		freeMSG = msg-message;
 		nMsgBlk++;
-	UnlockSYS();
+	    UnlockSemaphore(&sys_sema);
+    }
 	return E_Ok;
 }
 
@@ -615,39 +734,45 @@ int FMTK_PeekMsg(uint hMbx, int *d1, int *d2)
 	mailbox.
 --------------------------------------------------------------- */
 
-int FMTK_CheckMsg(uint hMbx, int *d1, int *d2, int qrmv)
+int FMTK_CheckMsg(hMBX hMbx, int *d1, int *d2, int *d3, int qrmv)
 {
 	MBX *mbx;
 	MSG *msg;
 
-	if (hMbx >= 2048)
-		return E_BadMbx;
-
+    asm { mfspr r1,ivno };
+	__check (hMbx >= 0 && hMbx < 1024);
 	mbx = &mailbox[hMbx];
-	LockSYS();
-	// check for a mailbox owner which indicates the mailbox
-	// is active.
-	if (mbx->owner == (void *)0) {
-        UnlockSYS();
-		return E_NotAlloc;
+   	if (LockSemaphore(&sys_sema,-1)) {
+    	// check for a mailbox owner which indicates the mailbox
+    	// is active.
+    	if (mbx->owner == (void *)0) {
+    	    UnlockSemaphore(&sys_sema);
+    		return E_NotAlloc;
+        }
+    	if (qrmv == true)
+    		msg = DequeueMsg(mbx);
+    	else
+    		msg = mbx->mq_head;
+	    UnlockSemaphore(&sys_sema);
     }
-	if (qrmv == true)
-		msg = DequeueMsg(mbx);
-	else
-		msg = mbx->mq_head;
-	UnlockSYS();
 	if (msg == (void *)0)
 		return E_NoMsg;
 	if (d1)
 		*d1 = msg->d1;
 	if (d2)
 		*d2 = msg->d2;
+	if (d3)
+		*d3 = msg->d3;
 	if (qrmv == true) {
-        LockSYS();
+       	if (LockSemaphore(&sys_sema,-1)) {
+            msg->type = 1;
+            msg->retadr = -1;
+            msg->tgtadr = -1;
     		msg->link = freeMSG;
-    		freeMSG = msg;
+    		freeMSG = msg-message;
     		nMsgBlk++;
-		UnlockSYS();
+    	    UnlockSemaphore(&sys_sema);
+        }
 	}
 	return E_Ok;
 }

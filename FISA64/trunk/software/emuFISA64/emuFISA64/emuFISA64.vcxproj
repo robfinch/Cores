@@ -100,6 +100,7 @@
     <ClCompile Include="frmInterrupts.cpp" />
     <ClCompile Include="frmKeyboard.cpp" />
     <ClCompile Include="frmMain.cpp" />
+    <ClCompile Include="frmMemory.cpp" />
     <ClCompile Include="frmScreen.cpp" />
     <ClCompile Include="frmStack.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -126,6 +127,9 @@
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmKeyboard.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
+    <ClInclude Include="frmMemory.h">
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmRegisters.h">
@@ -162,6 +166,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="frmKeyboard.resx">
       <DependentUpon>frmKeyboard.h</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmMemory.resx">
+      <DependentUpon>frmMemory.h</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmRegisters.resX">
       <DependentUpon>frmRegisters.h</DependentUpon>

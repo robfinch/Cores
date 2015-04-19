@@ -20,9 +20,9 @@
 
 *** local symbol table ***
 
-d          =000018    -    Auto        Pointer to Byte
-s          =000020    -    Auto        Pointer to Byte
-size       =000028    -    Auto        Long
+d_         =000018    -    Auto        Pointer to Byte
+s_         =000020    -    Auto        Pointer to Byte
+size_      =000028    -    Auto        Long
 
 
 
@@ -47,9 +47,9 @@ size       =000028    -    Auto        Long
 
 *** local symbol table ***
 
-d          =000018    -    Auto        Pointer to Short
-s          =000020    -    Auto        Pointer to Short
-size       =000028    -    Auto        Long
+d_         =000018    -    Auto        Pointer to Short
+s_         =000020    -    Auto        Pointer to Short
+size_      =000028    -    Auto        Long
 
 
 
@@ -74,9 +74,9 @@ size       =000028    -    Auto        Long
 
 *** local symbol table ***
 
-d          =000018    -    Auto        Pointer to Long
-s          =000020    -    Auto        Pointer to Long
-size       =000028    -    Auto        Long
+d_         =000018    -    Auto        Pointer to Long
+s_         =000020    -    Auto        Pointer to Long
+size_      =000028    -    Auto        Long
 
 
 
@@ -99,9 +99,9 @@ size       =000028    -    Auto        Long
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to Byte
-val        =000020    -    Auto        Byte
-size       =000028    -    Auto        Long
+p_         =000018    -    Auto        Pointer to Byte
+val_       =000020    -    Auto        Byte
+size_      =000028    -    Auto        Long
 
 
 
@@ -124,9 +124,9 @@ size       =000028    -    Auto        Long
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to Short
-val        =000020    -    Auto        Short
-size       =000028    -    Auto        Long
+p_         =000018    -    Auto        Pointer to Short
+val_       =000020    -    Auto        Short
+size_      =000028    -    Auto        Long
 
 
 
@@ -149,9 +149,9 @@ size       =000028    -    Auto        Long
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to Long
-val        =000020    -    Auto        Long
-size       =000028    -    Auto        Long
+p_         =000018    -    Auto        Pointer to Long
+val_       =000020    -    Auto        Long
+size_      =000028    -    Auto        Long
 
 
 
@@ -169,10 +169,10 @@ size       =000028    -    Auto        Long
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to Byte
-val        =000020    -    Auto        Byte
-n          =000028    -    Auto        Long
-su         =fffffff8    -    Auto        Pointer to Byte
+p_         =000018    -    Auto        Pointer to Byte
+val_       =000020    -    Auto        Byte
+n_         =000028    -    Auto        Long
+su_        =fffffff8    -    Auto        Pointer to Byte
 
 
 
@@ -190,8 +190,8 @@ su         =fffffff8    -    Auto        Pointer to Byte
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to Char
-n          =fffffff8    -    Auto        Long
+p_         =000018    -    Auto        Pointer to Char
+n_         =fffffff8    -    Auto        Long
 
 
 
@@ -209,9 +209,9 @@ n          =fffffff8    -    Auto        Long
 
 *** local symbol table ***
 
-d          =000018    -    Auto        Pointer to Char
-s          =000020    -    Auto        Pointer to Char
-nn         =fffffff8    -    Auto        Long
+d_         =000018    -    Auto        Pointer to Char
+s_         =000020    -    Auto        Pointer to Char
+nn_        =fffffff8    -    Auto        Long
 
 
 
@@ -233,10 +233,10 @@ nn         =fffffff8    -    Auto        Long
 
 *** local symbol table ***
 
-d          =000018    -    Auto        Pointer to Char
-s          =000020    -    Auto        Pointer to Char
-size       =000028    -    Auto        Long
-nn         =fffffff8    -    Auto        Long
+d_         =000018    -    Auto        Pointer to Char
+s_         =000020    -    Auto        Pointer to Char
+size_      =000028    -    Auto        Long
+nn_        =fffffff8    -    Auto        Long
 
 
 
@@ -261,11 +261,11 @@ nn         =fffffff8    -    Auto        Long
 
 *** local symbol table ***
 
-a          =000018    -    Auto        Pointer to 
-b          =000020    -    Auto        Pointer to 
-len        =000028    -    Auto        Long
-ua         =fffffff8    -    Auto        Pointer to 
-ub         =fffffff0    -    Auto        Pointer to 
+a_         =000018    -    Auto        Pointer to 
+b_         =000020    -    Auto        Pointer to 
+len_       =000028    -    Auto        Long
+ua_        =fffffff8    -    Auto        Pointer to 
+ub_        =fffffff0    -    Auto        Pointer to 
 
 
 
@@ -283,28 +283,28 @@ ub         =fffffff0    -    Auto        Pointer to
 
 *** local symbol table ***
 
-p          =000018    -    Auto        Pointer to Char
-val        =000020    -    Auto        Char
-n          =000028    -    Auto        Long
-su         =fffffff8    -    Auto        Pointer to Char
+p_         =000018    -    Auto        Pointer to Char
+val_       =000020    -    Auto        Char
+n_         =000028    -    Auto        Long
+su_        =fffffff8    -    Auto        Pointer to Char
 
 
 
 
  *** global scope typedef symbol table ***
 
-strncmp    =000000    -    Global      Function returning Long
-strncpy    =000000    -    Global      Function returning Pointer to Char
-memchr     =000000    -    Global      Function returning Pointer to Byte
-memcpy     =000000    -    Global      Function returning Pointer to Byte
-memset     =000000    -    Global      Function returning Pointer to Byte
-strchr     =000000    -    Global      Function returning Pointer to Char
-strlen     =000000    -    Global      Function returning Long
-strcpy     =000000    -    Global      Function returning Pointer to Char
-memcpyH    =000000    -    Global      Function returning Pointer to Short
-memsetH    =000000    -    Global      Function returning Pointer to Short
-memcpyW    =000000    -    Global      Function returning Pointer to Long
-memsetW    =000000    -    Global      Function returning Pointer to Long
+strcpy_    =000000    -    Global      Function returning Pointer to Char
+memcpyH_   =000000    -    Global      Function returning Pointer to Short
+memsetH_   =000000    -    Global      Function returning Pointer to Short
+memcpyW_   =000000    -    Global      Function returning Pointer to Long
+memsetW_   =000000    -    Global      Function returning Pointer to Long
+strncmp_   =000000    -    Global      Function returning Long
+strncpy_   =000000    -    Global      Function returning Pointer to Char
+memchr_    =000000    -    Global      Function returning Pointer to Byte
+memcpy_    =000000    -    Global      Function returning Pointer to Byte
+memset_    =000000    -    Global      Function returning Pointer to Byte
+strchr_    =000000    -    Global      Function returning Pointer to Char
+strlen_    =000000    -    Global      Function returning Long
 
  *** structures and unions ***
 

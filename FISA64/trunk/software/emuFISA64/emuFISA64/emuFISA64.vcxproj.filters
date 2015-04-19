@@ -72,6 +72,9 @@
     <ClCompile Include="frmStack.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="frmMemory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -125,6 +128,9 @@
     <ClInclude Include="frmStack.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="frmMemory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="app.rc">
@@ -154,6 +160,9 @@
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
     <EmbeddedResource Include="frmKeyboard.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmStack.resx">
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
   </ItemGroup>

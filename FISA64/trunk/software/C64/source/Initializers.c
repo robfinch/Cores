@@ -96,7 +96,7 @@ void doinit(SYM *sp)
 		nl();                   /* start a new line in object */
 	}
 	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
-		put_label(sp->value.i, sp->name, GetNamespace(), 'D');
+		sp->realname = litlate(put_label(sp->value.i, sp->name, GetNamespace(), 'D'));
 	}
 	else {
 		if (sp->storage_class == sc_global) {
@@ -111,7 +111,11 @@ void doinit(SYM *sp)
 		strcat(lbl, sp->name);
 		gen_strlab(lbl);
 	}
-	if( lastst != assign) {
+	if (lastst == kw_firstcall) {
+        GenerateByte(1);
+        return;
+    }
+	else if( lastst != assign) {
 		genstorage(sp->tp->size);
 	}
 	else {

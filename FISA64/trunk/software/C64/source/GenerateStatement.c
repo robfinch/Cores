@@ -601,6 +601,50 @@ void GenerateThrow(Statement *stmt)
 	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
 
+void GenerateCheck(Statement * stmt)
+{
+     AMODE *ap1, *ap2, *ap3, *ap4;
+     ENODE *node, *ep;
+     int size;
+
+    initstack();
+    ep = node = stmt->exp;
+	if (ep->p[0]->nodetype==en_lt && ep->p[1]->nodetype==en_ge && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
+        ep->nodetype = en_chk;
+        if (ep->p[0])
+            ep->p[2] = ep->p[0]->p[1];
+        else
+            ep->p[2] = NULL;
+        ep->p[1] = ep->p[1]->p[1];
+        ep->p[0] = ep->p[0]->p[0];
+    }
+	else if (ep->p[0]->nodetype==en_ge && ep->p[1]->nodetype==en_lt && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
+       ep->nodetype = en_chk;
+        if (ep->p[1])
+            ep->p[2] = ep->p[1]->p[1];
+        else
+            ep->p[2] = NULL;
+        ep->p[1] = ep->p[0]->p[1];
+        ep->p[0] = ep->p[0]->p[0];
+    }
+    if (ep->nodetype != en_chk) {
+         error(ERR_CHECK);
+         return;
+    }
+	size = GetNaturalSize(node);
+	ap1 = GenerateExpression(node->p[0],F_REG,size);
+	ap2 = GenerateExpression(node->p[1],F_REG|F_IMM0,size);
+    ap3 = GenerateExpression(node->p[2],F_REG|F_IMMED,size);
+	if (ap2->mode == am_immed) {
+	   ap2->mode = am_reg;
+	   ap2->preg = 0;
+    }
+	GenerateTriadic(op_chk,0,ap1,ap2,ap3);
+    ReleaseTempRegister(ap3);
+    ReleaseTempRegister(ap2);
+    ReleaseTempRegister(ap1);
+}
+
 void GenerateSpinlock(Statement *stmt)
 {
 	int lab1, lab2, lab3, lab4;
@@ -821,6 +865,9 @@ void GenerateStatement(Statement *stmt)
 				case st_spinunlock:
 						GenerateSpinUnlock(stmt);
 						break;
+				case st_check:
+                        GenerateCheck(stmt);
+                        break;
                 case st_expr:
                         initstack();
                         ap = GenerateExpression(stmt->exp,F_ALL | F_NOVALUE,
@@ -912,55 +959,21 @@ void GenerateAsm(Statement *stmt)
 
 void GenerateFirstcall(Statement *stmt)
 {
-	int     lab1, lab2, lab3,lab4,lab5,lab6,lab7;
+	int     lab1, lab2;
 	char buf[20];
 	AMODE *ap1,*ap2;
 
     lab1 = contlab;         /* save old continue label */
     lab2 = breaklab;        /* save old break label */
     contlab = nextlabel++;  /* new continue label */
-	lab3 = nextlabel++;
-	lab4 = nextlabel++;
-	lab5 = nextlabel++;
-	lab6 = nextlabel++;
-	lab7 = nextlabel++;
     if( stmt->s1 != NULL )      /* has block */
     {
         breaklab = nextlabel++;
-        GenerateLabel(lab3);	// marks address of brf
-        GenerateMonadic(op_bra,0,make_clabel(lab7));	// branch to the firstcall statement
-        GenerateLabel(lab6);	// prevent optimizer from optimizing move away
-		GenerateMonadic(op_bra,0,make_clabel(breaklab));	// then branch around it
-        GenerateLabel(lab7);	// prevent optimizer from optimizing move away
 		ap1 = GetTempRegister();
-		ap2 = GetTempRegister();
-		GenerateDiadic(op_lea,0,ap2,make_label(lab3));
-		GenerateTriadic(op_andi,0,ap2,ap2,make_immed(0x0c));
-		GenerateTriadic(op_beqi,0,ap2,make_immed(0x08L),make_label(lab4));
-		GenerateTriadic(op_beqi,0,ap2,make_immed(0x04L),make_label(lab5));
-		GenerateDiadic(op_lea,0,ap2,make_label(lab3));
-		GenerateDiadic(op_lw,0,ap1,make_indirect(ap2->preg));
-		GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0xFFFFFC0000000000L));
-		GenerateTriadic(op_ori,0,ap1,ap1,make_immed(0x000037800000000L));	// nop instruction
-		GenerateDiadic(op_sw,0,ap1,make_indirect(ap2->preg));
-		GenerateDiadic(op_cache,0,make_string("invil"),make_indirect(ap2->preg));
-		GenerateMonadic(op_bra,0,make_label(lab6));
-		GenerateLabel(lab4);
-		GenerateDiadic(op_lea,0,ap2,make_label(lab3));
-		GenerateDiadic(op_lw,0,ap1,make_indirect(ap2->preg));
-		GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0x00000000000FFFFFL));
-		GenerateTriadic(op_ori,0,ap1,ap1,make_immed(0x3780000000000000L));	// nop instruction
-		GenerateDiadic(op_sw,0,ap1,make_indirect(ap2->preg));
-		GenerateDiadic(op_cache,0,make_string("invil"),make_indirect(ap2->preg));
-		GenerateMonadic(op_bra,0,make_label(lab6));
-		GenerateLabel(lab5);
-		GenerateDiadic(op_lea,0,ap2,make_label(lab3));
-		GenerateDiadic(op_lw,0,ap1,make_indexed(4,ap2->preg));
-		GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0xFFFFFFFFFFF00000L));
-		GenerateTriadic(op_ori,0,ap1,ap1,make_immed(0x00000000000DE000L));	// nop instruction
-		GenerateDiadic(op_sw,0,ap1,make_indexed(4,ap2->preg));
-		GenerateDiadic(op_cache,0,make_string("invil"),make_indexed(4,ap2->preg));
-		GenerateLabel(lab6);
+		GenerateDiadic(op_lb,0,ap1,make_string(stmt->fcname));
+		GenerateDiadic(op_beq,0,ap1,make_clabel(breaklab));
+		ReleaseTempRegister(ap1);
+		GenerateDiadic(op_sb,0,makereg(0),make_string(stmt->fcname));
 		GenerateStatement(stmt->s1);
         GenerateLabel(breaklab);
         breaklab = lab2;        /* restore old break label */

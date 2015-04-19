@@ -14,6 +14,7 @@
 #include "fmrPCS.h"
 #include "frmInterrupts.h"
 #include "frmStack.h"
+#include "frmMemory.h"
 #include "Disassem.h"
 #include "clsCPU.h"
 #include "clsPIC.h"
@@ -76,6 +77,7 @@ namespace emuFISA64 {
 
 
 	private: System::Windows::Forms::ToolStripMenuItem^  stackToolStripMenuItem;
+	private: System::Windows::Forms::ToolStripMenuItem^  memoryToolStripMenuItem;
 
 			 bool viewMacCode;
 	public:
@@ -399,6 +401,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->timer1024 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->timer30 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->lblWriteErr = (gcnew System::Windows::Forms::Label());
+			this->memoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -514,8 +517,8 @@ private: System::Windows::Forms::Label^  label41;
 			// 
 			// viewToolStripMenuItem
 			// 
-			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(4) {this->registersToolStripMenuItem, 
-				this->pCHistoryToolStripMenuItem, this->machineCodeToolStripMenuItem, this->stackToolStripMenuItem});
+			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(5) {this->registersToolStripMenuItem, 
+				this->pCHistoryToolStripMenuItem, this->machineCodeToolStripMenuItem, this->stackToolStripMenuItem, this->memoryToolStripMenuItem});
 			this->viewToolStripMenuItem->Name = L"viewToolStripMenuItem";
 			this->viewToolStripMenuItem->Size = System::Drawing::Size(44, 20);
 			this->viewToolStripMenuItem->Text = L"&View";
@@ -523,28 +526,28 @@ private: System::Windows::Forms::Label^  label41;
 			// registersToolStripMenuItem
 			// 
 			this->registersToolStripMenuItem->Name = L"registersToolStripMenuItem";
-			this->registersToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->registersToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->registersToolStripMenuItem->Text = L"&Registers";
 			this->registersToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::registersToolStripMenuItem_Click);
 			// 
 			// pCHistoryToolStripMenuItem
 			// 
 			this->pCHistoryToolStripMenuItem->Name = L"pCHistoryToolStripMenuItem";
-			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->pCHistoryToolStripMenuItem->Text = L"PC History";
 			this->pCHistoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::pCHistoryToolStripMenuItem_Click);
 			// 
 			// machineCodeToolStripMenuItem
 			// 
 			this->machineCodeToolStripMenuItem->Name = L"machineCodeToolStripMenuItem";
-			this->machineCodeToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->machineCodeToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->machineCodeToolStripMenuItem->Text = L"Machine Code";
 			this->machineCodeToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::machineCodeToolStripMenuItem_Click);
 			// 
 			// stackToolStripMenuItem
 			// 
 			this->stackToolStripMenuItem->Name = L"stackToolStripMenuItem";
-			this->stackToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->stackToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->stackToolStripMenuItem->Text = L"Stack";
 			this->stackToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stackToolStripMenuItem_Click);
 			// 
@@ -1679,6 +1682,13 @@ private: System::Windows::Forms::Label^  label41;
 			this->lblWriteErr->Text = L"Trying to write ROM";
 			this->lblWriteErr->Visible = false;
 			// 
+			// memoryToolStripMenuItem
+			// 
+			this->memoryToolStripMenuItem->Name = L"memoryToolStripMenuItem";
+			this->memoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->memoryToolStripMenuItem->Text = L"&Memory";
+			this->memoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::memoryToolStripMenuItem_Click);
+			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
@@ -1859,9 +1869,9 @@ private: System::Void toolStripButton1_Click(System::Object^  sender, System::Ev
 private: System::Void resetToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 			 animate = false;
 			 isRunning = false;
+			 system1.Reset();
 			 cpu1.Reset();
 			 pic1.Reset();
-			 system1.write_error = false;
 			 this->lblWriteErr->Visible = false;
 			 irq30Hz = false;
 			 irq1024Hz = false;
@@ -2111,7 +2121,8 @@ private: System::Void toolStripButton3_Click(System::Object^  sender, System::Ev
 		 }
 private: void RunCPU() {
 			 int nn,kk;
-			if (cpu1.pc > 134217727) {
+//			if (cpu1.pc > 134217727) {
+			 if (cpu1.pc < 0x10000 || cpu1.pc >= 0x20000) {
 				isRunning = false;
 				return;
 			}
@@ -2335,6 +2346,10 @@ private: System::Void stackToolStripMenuItem_Click(System::Object^  sender, Syst
 			 form->Show();
 		 }
 private: System::Void textBoxVBR_TextChanged(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void memoryToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 frmMemory^ form = gcnew frmMemory();
+			 form->Show();
 		 }
 };
 };

@@ -152,7 +152,7 @@ namespace emuFISA64 {
 			// 
 			this->comboBox30->DropDownStyle = System::Windows::Forms::ComboBoxStyle::DropDownList;
 			this->comboBox30->FormattingEnabled = true;
-			this->comboBox30->Items->AddRange(gcnew cli::array< System::Object^  >(4) {L"3 Hz", L"Every 3 seconds", L"Every 30 Seconds", 
+			this->comboBox30->Items->AddRange(gcnew cli::array< System::Object^  >(5) {L"30Hz", L"3 Hz", L"Every 3 seconds", L"Every 30 Seconds", 
 				L"One shot"});
 			this->comboBox30->Location = System::Drawing::Point(115, 69);
 			this->comboBox30->Name = L"comboBox30";
@@ -234,10 +234,11 @@ private: System::Void btnTrigger1024_Click(System::Object^  sender, System::Even
 private: System::Void btnTrigger30_Click(System::Object^  sender, System::EventArgs^  e) {
 			 if (this->checkBox30->Checked) {
 			 switch(this->comboBox30->SelectedIndex) {
-			 case 0: interval30 = 333; break;
-			 case 1: interval30 = 3333; break;
-			 case 2: interval30 = 33333; break;
-			 case 3: interval30 = -1; break;
+			 case 0: interval30 = 33; break;
+			 case 1: interval30 = 333; break;
+			 case 2: interval30 = 3333; break;
+			 case 3: interval30 = 33333; break;
+			 case 4: interval30 = -1; break;
 			 }
 			 trigger30 = true;
 			 }

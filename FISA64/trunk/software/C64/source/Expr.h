@@ -77,7 +77,8 @@ enum e_node {
 		en_ref, en_ursh,
 		en_uwfieldref,en_wfieldref,en_bfieldref,en_ubfieldref,
 		en_uhfieldref,en_hfieldref,en_ucfieldref,en_cfieldref,
-		en_dbl_ref, en_flt_ref, en_triple_ref
+		en_dbl_ref, en_flt_ref, en_triple_ref,
+		en_chk
 		};
 
 struct enode {
@@ -87,6 +88,7 @@ struct enode {
     int8_t constflag;
 	unsigned int isVolatile : 1;
 	unsigned int isUnsigned : 1;
+	unsigned int isCheckExpr : 1;
 	int8_t bit_width;
 	int8_t bit_offset;
 	int8_t scale;
@@ -95,7 +97,7 @@ struct enode {
     double f;
     double f1, f2;
     char  *sp;
-    struct enode *p[2];
+    struct enode *p[3];
 };
 
 typedef struct enode ENODE;

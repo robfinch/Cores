@@ -1,318 +1,358 @@
      1	
      2	typedef unsigned int uint;
-     3	
-     4	typedef struct tagMSG align(32) {
-     5		struct tagMSG *link;
-     6		uint d1;
-     7		uint d2;
-     8		uint type;
-     9	} MSG;
-    10	
-    11	typedef struct _tagJCB align(2048)
-    12	{
-    13	    struct _tagJCB *iof_next;
-    14	    struct _tagJCB *iof_prev;
-    15	    char UserName[32];
-    16	    char path[256];
-    17	    char exitRunFile[256];
-    18	    char commandLine[256];
-    19	    unsigned __int32 *pVidMem;
-    20	    unsigned __int32 *pVirtVidMem;
-    21	    unsigned __int16 VideoRows;
-    22	    unsigned __int16 VideoCols;
-    23	    unsigned __int16 CursorRow;
-    24	    unsigned __int16 CursorCol;
-    25	    unsigned __int32 NormAttr;
-    26	    __int8 KeybdHead;
-    27	    __int8 KeybdTail;
-    28	    unsigned __int16 KeybdBuffer[16];
-    29	    __int16 number;
-    30	} JCB;
-    31	
-    32	struct tagMBX;
-    33	
-    34	typedef struct _tagTCB align(512) {
-    35		int regs[32];
-    36		int isp;
-    37		int dsp;
-    38		int esp;
-    39		int ipc;
-    40		int dpc;
-    41		int epc;
-    42		int cr0;
-    43		struct _tagTCB *next;
-    44		struct _tagTCB *prev;
-    45		struct _tagTCB *mbq_next;
-    46		struct _tagTCB *mbq_prev;
-    47		int *sys_stack;
-    48		int *bios_stack;
-    49		int *stack;
-    50		__int64 timeout;
-    51		JCB *hJob;
-    52		int msgD1;
-    53		int msgD2;
-    54		MSG *MsgPtr;
-    55		uint hWaitMbx;
-    56		struct tagMBX *mailboxes;
-    57		__int8 priority;
-    58		__int8 status;
-    59		__int8 affinity;
-    60		__int16 number;
-    61	} TCB;
-    62	
-    63	typedef struct tagMBX align(128) {
-    64	    struct tagMBX *link;
-    65		TCB *tq_head;
-    66		TCB *tq_tail;
-    67		MSG *mq_head;
-    68		MSG *mq_tail;
-    69		uint tq_count;
-    70		uint mq_size;
-    71		uint mq_count;
-    72		uint mq_missed;
-    73		uint owner;		// hJcb of owner
-    74		char mq_strategy;
-    75		byte resv[7];
-    76	} MBX;
-    77	
-    78	typedef struct tagALARM {
-    79		struct tagALARM *next;
-    80		struct tagALARM *prev;
-    81		MBX *mbx;
-    82		MSG *msg;
-    83		uint BaseTimeout;
-    84		uint timeout;
-    85		uint repeat;
-    86		byte resv[8];		// padding to 64 bytes
-    87	} ALARM;
-    88	
-    89	
-    90	
-    91	
-    92	
-    93	
-    94	enum {
-    95	     E_Ok = 0,
-    96	     E_BadTCBHandle,
-    97	     E_BadPriority,
-    98	     E_BadCallno,
-    99	     E_Arg,
-   100	     E_BadMbx,
-   101	     E_QueFull,
-   102	     E_NoThread,
-   103	     E_NotAlloc,
-   104	     E_NoMsg,
-   105	     E_Timeout,
-   106	     E_BadAlarm,
-   107	     E_NotOwner,
-   108	     E_QueStrategy,
-   109	     E_DCBInUse,
-   110	     //; Device driver errors
-   111	     E_BadDevNum =	0x20,
-   112	     E_NoDev,
-   113	     E_BadDevOp,
-   114	     E_ReadError,
-   115	     E_WriteError,
-   116	     E_BadBlockNum,
-   117	     E_TooManyBlocks,
-   118	
-   119	     // resource errors
-   120	     E_NoMoreMbx =	0x40,
-   121	     E_NoMoreMsgBlks,
-   122	     E_NoMoreAlarmBlks,
-   123	     E_NoMoreTCBs,
-   124	     E_NoMem
-   125	};
-   126	
-   127	
-   128	
-   129	
-   130	TCB *GetRunningTCB();
-   131	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
-   132	void set_vector(unsigned int, unsigned int);
-   133	int getCPU();
-   134	void outb(unsigned int, int);
-   135	void outc(unsigned int, int);
-   136	void outh(unsigned int, int);
-   137	void outw(unsigned int, int);
-   138	
-   139	
-   140	extern int irq_stack[];
-   141	extern int FMTK_Inited;
-   142	extern JCB jcbs[];
-   143	extern TCB tcbs[];
-   144	extern TCB *readyQ[];
-   145	extern TCB *runningTCB;
-   146	extern TCB *freeTCB;
-   147	extern int sysstack[];
-   148	extern int stacks[][];
-   149	extern int sys_stacks[][];
-   150	extern int bios_stacks[][];
-   151	extern int fmtk_irq_stack[];
-   152	extern int fmtk_sys_stack[];
-   153	extern MBX mailbox[];
-   154	extern MSG message[];
-   155	extern int nMsgBlk;
-   156	extern int nMailbox;
-   157	extern MSG *freeMSG;
-   158	extern MBX *freeMBX;
-   159	extern JCB *IOFocusNdx;
-   160	extern int IOFocusTbl[];
-   161	extern int iof_switch;
-   162	extern int BIOS1_sema;
-   163	extern int iof_sema;
-   164	extern int sys_sema;
-   165	extern int BIOS_RespMbx;
-   166	extern char hasUltraHighPriorityTasks;
-   167	extern int missed_ticks;
-   168	extern short int video_bufs[][];
-   169	extern TCB *TimeoutList;
-   170	
-   171	
-   172	int chkMBX(int hMBX) {
-   173	    asm {
-   174	        lw    r1,24[bp]
-   175	        chk   r1,r1,b50
-   176	    }
-   177	}
-   178	
-
-
-*** local symbol table ***
-
-hMBX_      =000018    -    Auto        Long
-
-
-
-   179	int chkMSG(int msg) {
-   180	    asm {
-   181	        lw    r1,24[bp]
-   182	        chk   r1,r1,b51
-   183	    }
-   184	}
-   185	
-   186	/* ---------------------------------------------------------------
-   187		Description:
-   188			Queue a message at a mailbox.
-   189	
-   190		Assumptions:
-   191			valid mailbox parameter.
-   192	
-   193		Called from:
-   194			SendMsg
-   195			PostMsg
-   196	--------------------------------------------------------------- */
-
-
-*** local symbol table ***
-
-msg_       =000018    -    Auto        Long
-
-
-
-   197	private int QueueMsg(MBX *mbx, MSG *msg)
-   198	{
-   199	    MSG *tmpmsg;
-   200		int rr = E_Ok;
-   201	
-   202	    if (!chkMSG(msg))
-   203	        return E_Ok;
-   204	
-   205		LockSYS();
-   206			mbx->mq_count++;
-   207		
-   208			// handle potential queue overflows
-   209		    switch (mbx->mq_strategy) {
-   210		    
-   211		    	// unlimited queing (do nothing)
-   212				case 0:
-   213					break;
-   214					
-   215				// buffer newest
-   216				// if the queue is full then old messages are lost
-   217				// Older messages are at the head of the queue.
-   218				// loop incase message queing strategy was changed
-   219			    case 2:
-   220			        while (mbx->mq_count > mbx->mq_size) {
-   221			            // return outdated message to message pool
-   222			            tmpmsg = mbx->mq_head->link;
-   223			            mbx->mq_head->link = freeMSG;
-   224			            freeMSG = mbx->mq_head;
-   225						nMsgBlk++;
-   226						mbx->mq_count--;
-   227			            mbx->mq_head = tmpmsg;
-   228						if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
-   229							mbx->mq_missed++;
-   230						rr = E_QueFull;
-   231					}
-   232			        break;
-   233	   
-   234				// buffer oldest
-   235				// if the queue is full then new messages are lost
-   236				// loop incase message queing strategy was changed
-   237				case 1:
-   238					// first return the passed message to free pool
-   239					if (mbx->mq_count > mbx->mq_size) {
-   240						// return new message to pool
-   241						msg->link = freeMSG;
-   242						freeMSG = msg;
-   243						nMsgBlk++;
-   244						if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
-   245							mbx->mq_missed++;
-   246						rr = E_QueFull;
-   247						mbx->mq_count--;
-   248					}
-   249					// next if still over the message limit (which
-   250					// might happen if que strategy was changed), return
-   251					// messages to free pool
-   252					while (mbx->mq_count > mbx->mq_size) {
-   253						// locate the second last message on the que
-   254						tmpmsg = mbx->mq_head;
-   255						while (tmpmsg <> mbx->mq_tail) {
-   256							msg = tmpmsg;
-   257							tmpmsg = tmpmsg->link;
-   258						}
-   259						mbx->mq_tail = msg;
-   260						tmpmsg->link = freeMSG;
-   261						freeMSG = tmpmsg;
-   262						nMsgBlk++;
-   263						if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
-   264							mbx->mq_missed++;
-   265						mbx->mq_count--;
-   266						rr = E_QueFull;
-   267					}
-   268					if (rr == E_QueFull) {
-   269	                    UnlockSYS(); 
-   270						return rr;
-   271	                }
-   272	                break;
-   273			}
-   274			// if there is a message in the queue
-   275			if (mbx->mq_tail)
-   276				mbx->mq_tail->link = msg;
-   277			else
-   278				mbx->mq_head = msg;
-   279			mbx->mq_tail = msg;
-   280			msg->link = (void *)0;
-   281		UnlockSYS();
-   282		return rr;
-   283	}
-   284	
-   285	
-   286	/* ---------------------------------------------------------------
-   287		Description:
-   288			Dequeues a message from a mailbox.
-   289	
-   290		Assumptions:
-   291			Mailbox parameter is valid.
-   292			System semaphore is locked already.
-   293	
-   294		Called from:
-   295			FreeMbx - (locks mailbox)
-   296			WaitMsg	-	"
-   297			CheckMsg-	"
-   298	--------------------------------------------------------------- */
-   299	
+     3	typedef __int16 hTCB;
+     4	typedef __int8 hJCB;
+     5	typedef __int16 hMBX;
+     6	typedef __int16 hMSG;
+     7	
+     8	typedef struct tagMSG align(32) {
+     9		unsigned __int16 link;
+    10		unsigned __int16 retadr;    // return address
+    11		unsigned __int16 tgtadr;    // target address
+    12		unsigned __int16 type;
+    13		unsigned int d1;            // payload data 1
+    14		unsigned int d2;            // payload data 2
+    15		unsigned int d3;            // payload data 3
+    16	} MSG;
+    17	
+    18	typedef struct _tagJCB align(2048)
+    19	{
+    20	    struct _tagJCB *iof_next;
+    21	    struct _tagJCB *iof_prev;
+    22	    char UserName[32];
+    23	    char path[256];
+    24	    char exitRunFile[256];
+    25	    char commandLine[256];
+    26	    unsigned __int32 *pVidMem;
+    27	    unsigned __int32 *pVirtVidMem;
+    28	    unsigned __int16 VideoRows;
+    29	    unsigned __int16 VideoCols;
+    30	    unsigned __int16 CursorRow;
+    31	    unsigned __int16 CursorCol;
+    32	    unsigned __int32 NormAttr;
+    33	    __int8 KeyState1;
+    34	    __int8 KeyState2;
+    35	    __int8 KeybdWaitFlag;
+    36	    __int8 KeybdHead;
+    37	    __int8 KeybdTail;
+    38	    unsigned __int16 KeybdBuffer[16];
+    39	    hJCB number;
+    40	} JCB;
+    41	
+    42	struct tagMBX;
+    43	
+    44	typedef struct _tagTCB align(1024) {
+    45	    // exception storage area
+    46		int regs[32];
+    47		int isp;
+    48		int dsp;
+    49		int esp;
+    50		int ipc;
+    51		int dpc;
+    52		int epc;
+    53		int cr0;
+    54		// interrupt storage
+    55		int iregs[32];
+    56		int iisp;
+    57		int idsp;
+    58		int iesp;
+    59		int iipc;
+    60		int idpc;
+    61		int iepc;
+    62		int icr0;
+    63		hTCB next;
+    64		hTCB prev;
+    65		hTCB mbq_next;
+    66		hTCB mbq_prev;
+    67		int *sys_stack;
+    68		int *bios_stack;
+    69		int *stack;
+    70		__int64 timeout;
+    71		MSG msg;
+    72		hMBX hMailboxes[4]; // handles of mailboxes owned by task
+    73		hMBX hWaitMbx;      // handle of mailbox task is waiting at
+    74		hTCB number;
+    75		__int8 priority;
+    76		__int8 status;
+    77		__int8 affinity;
+    78		hJCB hJob;
+    79		__int64 startTick;
+    80		__int64 endTick;
+    81		__int64 ticks;
+    82	} TCB;
+    83	
+    84	typedef struct tagMBX align(64) {
+    85	    hMBX link;
+    86		hJCB owner;		// hJcb of owner
+    87		hTCB tq_head;
+    88		hTCB tq_tail;
+    89		hMSG mq_head;
+    90		hMSG mq_tail;
+    91		char mq_strategy;
+    92		byte resv[2];
+    93		uint tq_count;
+    94		uint mq_size;
+    95		uint mq_count;
+    96		uint mq_missed;
+    97	} MBX;
+    98	
+    99	typedef struct tagALARM {
+   100		struct tagALARM *next;
+   101		struct tagALARM *prev;
+   102		MBX *mbx;
+   103		MSG *msg;
+   104		uint BaseTimeout;
+   105		uint timeout;
+   106		uint repeat;
+   107		byte resv[8];		// padding to 64 bytes
+   108	} ALARM;
+   109	
+   110	
+   111	
+   112	
+   113	
+   114	// message types
+   115	
+   116	enum {
+   117	     E_Ok = 0,
+   118	     E_BadTCBHandle,
+   119	     E_BadPriority,
+   120	     E_BadCallno,
+   121	     E_Arg,
+   122	     E_BadMbx,
+   123	     E_QueFull,
+   124	     E_NoThread,
+   125	     E_NotAlloc,
+   126	     E_NoMsg,
+   127	     E_Timeout,
+   128	     E_BadAlarm,
+   129	     E_NotOwner,
+   130	     E_QueStrategy,
+   131	     E_DCBInUse,
+   132	     //; Device driver errors
+   133	     E_BadDevNum =	0x20,
+   134	     E_NoDev,
+   135	     E_BadDevOp,
+   136	     E_ReadError,
+   137	     E_WriteError,
+   138	     E_BadBlockNum,
+   139	     E_TooManyBlocks,
+   140	
+   141	     // resource errors
+   142	     E_NoMoreMbx =	0x40,
+   143	     E_NoMoreMsgBlks,
+   144	     E_NoMoreAlarmBlks,
+   145	     E_NoMoreTCBs,
+   146	     E_NoMem
+   147	};
+   148	
+   149	
+   150	
+   151	
+   152	// ============================================================================
+   153	//        __
+   154	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+   155	//    \  __ /    All rights reserved.
+   156	//     \/_//     robfinch<remove>@finitron.ca
+   157	//       ||
+   158	//
+   159	// TCB.c
+   160	// Task Control Block related functions.
+   161	//
+   162	// This source file is free software: you can redistribute it and/or modify 
+   163	// it under the terms of the GNU Lesser General Public License as published 
+   164	// by the Free Software Foundation, either version 3 of the License, or     
+   165	// (at your option) any later version.                                      
+   166	//                                                                          
+   167	// This source file is distributed in the hope that it will be useful,      
+   168	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+   169	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+   170	// GNU General Public License for more details.                             
+   171	//                                                                          
+   172	// You should have received a copy of the GNU General Public License        
+   173	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   174	//                                                                          
+   175	// ============================================================================
+   176	//
+   177	// JCB functions
+   178	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+   179	
+   180	// TCB functions
+   181	TCB *GetRunningTCBPtr();
+   182	hTCB GetRunningTCB();
+   183	pascal void SetRunningTCB(hTCB ht);
+   184	pascal int chkTCB(TCB *p);
+   185	pascal int InsertIntoReadyList(hTCB ht);
+   186	pascal int RemoveFromReadyList(hTCB ht);
+   187	pascal int InsertIntoTimeoutList(hTCB ht, int to);
+   188	pascal int RemoveFromTimeoutList(hTCB ht);
+   189	void DumpTaskList();
+   190	
+   191	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
+   192	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
+   193	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
+   194	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
+   195	
+   196	void set_vector(unsigned int, unsigned int);
+   197	int getCPU();
+   198	int GetVecno();          // get the last interrupt vector number
+   199	void outb(unsigned int, int);
+   200	void outc(unsigned int, int);
+   201	void outh(unsigned int, int);
+   202	void outw(unsigned int, int);
+   203	pascal int LockSemaphore(int *sema, int retries);
+   204	pascal void UnlockSemaphore(int *sema);
+   205	
+   206	// The following causes a privilege violation if called from user mode
+   207	
+   208	
+   209	extern int irq_stack[];
+   210	extern int FMTK_Inited;
+   211	extern JCB jcbs[];
+   212	extern TCB tcbs[];
+   213	extern hTCB readyQ[];
+   214	extern hTCB freeTCB;
+   215	extern int sysstack[];
+   216	extern int stacks[][];
+   217	extern int sys_stacks[][];
+   218	extern int bios_stacks[][];
+   219	extern int fmtk_irq_stack[];
+   220	extern int fmtk_sys_stack[];
+   221	extern MBX mailbox[];
+   222	extern MSG message[];
+   223	extern int nMsgBlk;
+   224	extern int nMailbox;
+   225	extern hMSG freeMSG;
+   226	extern hMBX freeMBX;
+   227	extern JCB *IOFocusNdx;
+   228	extern int IOFocusTbl[];
+   229	extern int iof_switch;
+   230	extern int BIOS1_sema;
+   231	extern int iof_sema;
+   232	extern int sys_sema;
+   233	extern int BIOS_RespMbx;
+   234	extern char hasUltraHighPriorityTasks;
+   235	extern int missed_ticks;
+   236	extern short int video_bufs[][];
+   237	extern hTCB TimeoutList;
+   238	
+   239	
+   240	extern int sys_sema;
+   241	
+   242	/* ---------------------------------------------------------------
+   243		Description:
+   244			Queue a message at a mailbox.
+   245	
+   246		Assumptions:
+   247			valid mailbox parameter.
+   248	
+   249		Called from:
+   250			SendMsg
+   251			PostMsg
+   252	--------------------------------------------------------------- */
+   253	private pascal int QueueMsg(MBX *mbx, MSG *msg)
+   254	{
+   255	    MSG *tmpmsg;
+   256	    hMSG htmp;
+   257		int rr = E_Ok;
+   258	
+   259		if (LockSemaphore(&sys_sema,-1)) {
+   260			mbx->mq_count++;
+   261		
+   262			// handle potential queue overflows
+   263		    switch (mbx->mq_strategy) {
+   264		    
+   265		    	// unlimited queing (do nothing)
+   266				case 0:
+   267					break;
+   268					
+   269				// buffer newest
+   270				// if the queue is full then old messages are lost
+   271				// Older messages are at the head of the queue.
+   272				// loop incase message queing strategy was changed
+   273			    case 2:
+   274			        while (mbx->mq_count > mbx->mq_size) {
+   275			            // return outdated message to message pool
+   276			            htmp = message[mbx->mq_head].link;
+   277			            tmpmsg = &message[htmp];
+   278			            message[mbx->mq_head].link = freeMSG;
+   279			            freeMSG = mbx->mq_head;
+   280						nMsgBlk++;
+   281						mbx->mq_count--;
+   282			            mbx->mq_head = htmp;
+   283						if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
+   284							mbx->mq_missed++;
+   285						rr = E_QueFull;
+   286					}
+   287			        break;
+   288	   
+   289				// buffer oldest
+   290				// if the queue is full then new messages are lost
+   291				// loop incase message queing strategy was changed
+   292				case 1:
+   293					// first return the passed message to free pool
+   294					if (mbx->mq_count > mbx->mq_size) {
+   295						// return new message to pool
+   296						msg->link = freeMSG;
+   297						freeMSG = msg-message;
+   298						nMsgBlk++;
+   299						if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
+   300							mbx->mq_missed++;
+   301						rr = E_QueFull;
+   302						mbx->mq_count--;
+   303					}
+   304					// next if still over the message limit (which
+   305					// might happen if que strategy was changed), return
+   306					// messages to free pool
+   307					while (mbx->mq_count > mbx->mq_size) {
+   308						// locate the second last message on the que
+   309						tmpmsg = &message[mbx->mq_head];
+   310						while (tmpmsg-message <> mbx->mq_tail) {
+   311							msg = tmpmsg;
+   312							tmpmsg = &message[tmpmsg->link];
+   313						}
+   314						mbx->mq_tail = msg-message;
+   315						tmpmsg->link = freeMSG;
+   316						freeMSG = tmpmsg-message;
+   317						nMsgBlk++;
+   318						if (mbx->mq_missed < 0xFFFFFFFFFFFFFFFFL)
+   319							mbx->mq_missed++;
+   320						mbx->mq_count--;
+   321						rr = E_QueFull;
+   322					}
+   323					if (rr == E_QueFull) {
+   324	             	    UnlockSemaphore(&sys_sema);
+   325						return rr;
+   326	                }
+   327	                break;
+   328			}
+   329			// if there is a message in the queue
+   330			if (mbx->mq_tail >= 0)
+   331				message[mbx->mq_tail].link = msg-message;
+   332			else
+   333				mbx->mq_head = msg-message;
+   334			mbx->mq_tail = msg-message;
+   335			msg->link = -1;
+   336		    UnlockSemaphore(&sys_sema);
+   337	    }
+   338		return rr;
+   339	}
+   340	
+   341	
+   342	/* ---------------------------------------------------------------
+   343		Description:
+   344			Dequeues a message from a mailbox.
+   345	
+   346		Assumptions:
+   347			Mailbox parameter is valid.
+   348			System semaphore is locked already.
+   349	
+   350		Called from:
+   351			FreeMbx - (locks mailbox)
+   352			WaitMsg	-	"
+   353			CheckMsg-	"
+   354	--------------------------------------------------------------- */
+   355	
 
 
 *** local symbol table ***
@@ -320,293 +360,340 @@ msg_       =000018    -    Auto        Long
 mbx_       =000018    -    Auto        Pointer to struct tagMBX_ 
 msg_       =000020    -    Auto        Pointer to struct tagMSG_ 
 tmpmsg_    =fffffff8    -    Auto        Pointer to struct tagMSG_ 
-rr_        =fffffff0    -    Auto        Long
+htmp_      =fffffff6    -    Auto        Char
+rr_        =ffffffe8    -    Auto        Long
 
 
 
-   300	private MSG *DequeueMsg(MBX *mbx)
-   301	{
-   302		MSG *tmpmsg = (void *)0;
-   303	
-   304		if (mbx->mq_count) {
-   305			mbx->mq_count--;
-   306			tmpmsg = mbx->mq_head;
-   307			if (tmpmsg) {	// should not be null
-   308				mbx->mq_head = tmpmsg->link;
-   309				if (mbx->mq_head == (void *)0)
-   310					mbx->mq_tail = (void *)0;
-   311				tmpmsg->link = tmpmsg;
-   312			}
-   313		}
-   314		return tmpmsg;
-   315	}
-   316	
-   317	
-   318	/* ---------------------------------------------------------------
-   319		Description:
-   320			Allocate a mailbox. The default queue strategy is to
-   321		queue the eight most recent messages.
-   322	--------------------------------------------------------------- */
+   356	private pascal MSG *DequeueMsg(MBX *mbx)
+   357	{
+   358		MSG *tmpmsg = (void *)0;
+   359	    hMSG hm;
+   360	 
+   361		if (mbx->mq_count) {
+   362			mbx->mq_count--;
+   363			hm = mbx->mq_head;
+   364			if (hm >= 0) {	// should not be null
+   365			    tmpmsg = &message[hm];
+   366				mbx->mq_head = tmpmsg->link;
+   367				if (mbx->mq_head < 0)
+   368					mbx->mq_tail = -1;
+   369				tmpmsg->link = hm;
+   370			}
+   371		}
+   372		return tmpmsg;
+   373	}
+   374	
+   375	
+   376	/* ---------------------------------------------------------------
+   377		Description:
+   378			Allocate a mailbox. The default queue strategy is to
+   379		queue the eight most recent messages.
+   380	--------------------------------------------------------------- */
 
 
 *** local symbol table ***
 
 mbx_       =000018    -    Auto        Pointer to struct tagMBX_ 
 tmpmsg_    =fffffff8    -    Auto        Pointer to struct tagMSG_ 
+hm_        =fffffff6    -    Auto        Char
 
 
 
-   323	public int FMTK_AllocMbx(uint *phMbx)
-   324	{
-   325		MBX *mbx;
-   326	
-   327		if (phMbx==(void *)0)
-   328	    	return E_Arg;
-   329		LockSYS();
-   330			if (freeMBX == (void *)0) {
-   331	            UnlockSYS();
-   332				return E_NoMoreMbx;
-   333	        }
-   334			mbx = freeMBX;
-   335			freeMBX = mbx->link;
-   336			nMailbox--;
-   337		UnlockSYS();
-   338		*phMbx = mbx - mailbox;
-   339		mbx->owner = GetJCBPtr();
-   340		mbx->tq_head = (void *)0;
-   341		mbx->tq_tail = (void *)0;
-   342		mbx->mq_head = (void *)0;
-   343		mbx->mq_tail = (void *)0;
-   344		mbx->tq_count = 0;
-   345		mbx->mq_count = 0;
-   346		mbx->mq_missed = 0;
-   347		mbx->mq_size = 8;
-   348		mbx->mq_strategy = 2;
-   349		return E_Ok;
-   350	}
-   351	
-   352	
-   353	/* ---------------------------------------------------------------
-   354		Description:
-   355			Free up a mailbox. When the mailbox is freed any queued
-   356		messages must be freed. Any queued threads must also be
-   357		dequeued. 
-   358	--------------------------------------------------------------- */
+   381	public int FMTK_AllocMbx(hMBX *phMbx)
+   382	{
+   383		MBX *mbx;
+   384	
+   385	    asm { mfspr r1,ivno };
+   386		if (phMbx==(void *)0)
+   387	    	return E_Arg;
+   388		if (LockSemaphore(&sys_sema,-1)) {
+   389			if (freeMBX < 0 || freeMBX >= 1024) {
+   390	    	    UnlockSemaphore(&sys_sema);
+   391				return E_NoMoreMbx;
+   392	        }
+   393			mbx = &mailbox[freeMBX];
+   394			freeMBX = mbx->link;
+   395			nMailbox--;
+   396		    UnlockSemaphore(&sys_sema);
+   397	    }
+   398		*phMbx = mbx - mailbox;
+   399		mbx->owner = GetJCBPtr();
+   400		mbx->tq_head = -1;
+   401		mbx->tq_tail = -1;
+   402		mbx->mq_head = -1;
+   403		mbx->mq_tail = -1;
+   404		mbx->tq_count = 0;
+   405		mbx->mq_count = 0;
+   406		mbx->mq_missed = 0;
+   407		mbx->mq_size = 8;
+   408		mbx->mq_strategy = 2;
+   409		return E_Ok;
+   410	}
+   411	
+   412	
+   413	/* ---------------------------------------------------------------
+   414		Description:
+   415			Free up a mailbox. When the mailbox is freed any queued
+   416		messages must be freed. Any queued threads must also be
+   417		dequeued. 
+   418	--------------------------------------------------------------- */
 
 
 *** local symbol table ***
 
-phMbx_     =000018    -    Auto        Pointer to 
+phMbx_     =000018    -    Auto        Pointer to Char
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 
 
 
-   359	public int FMTK_FreeMbx(uint hMbx) 
-   360	{
-   361		MBX *mbx;
-   362		MSG *msg;
-   363		TCB *thrd;
-   364		
-   365		if (hMbx >= 2048)
-   366			return E_BadMbx;
-   367		mbx = &mailbox[hMbx];
-   368		LockSYS();
-   369			if ((mbx->owner <> GetJCBPtr()) and (GetJCBPtr() <> &jcbs))
-   370					return E_NotOwner;
-   371			// Free up any queued messages
-   372			while (msg = DequeueMsg(mbx)) {
-   373				msg->link = freeMSG;
-   374				freeMSG = msg;
-   375				nMsgBlk++;
-   376			}
-   377			// Send an indicator to any queued threads that the mailbox
-   378			// is now defunct Setting MsgPtr = null will cause any
-   379			// outstanding WaitMsg() to return E_NoMsg.
-   380			forever {
-   381				DequeThreadFromMbx(mbx, &thrd);
-   382				if (thrd == (void *)0)
-   383					break;
-   384				thrd->MsgPtr = (void *)0;
-   385				if (thrd->status & 1)
-   386					RemoveFromTimeoutList(thrd);
-   387				InsertIntoReadyList(thrd);
-   388			}
-   389			mbx->link = freeMBX;
-   390			freeMBX = mbx;
-   391			nMailbox++;
-   392		UnlockSYS();
-   393		return E_Ok;
-   394	}
-   395	
-   396	
-   397	/* ---------------------------------------------------------------
-   398		Description:
-   399			Set the mailbox message queueing strategy.
-   400	--------------------------------------------------------------- */
+   419	public int FMTK_FreeMbx(hMBX hMbx) 
+   420	{
+   421		MBX *mbx;
+   422		MSG *msg;
+   423		TCB *thrd;
+   424		
+   425	    asm { mfspr r1,ivno };
+   426		__check (hMbx >= 0 && hMbx < 1024);
+   427		mbx = &mailbox[hMbx];
+   428		if (LockSemaphore(&sys_sema,-1)) {
+   429			if ((mbx->owner <> GetJCBPtr()) and (GetJCBPtr() <> &jcbs)) {
+   430	    	    UnlockSemaphore(&sys_sema);
+   431				return E_NotOwner;
+   432	        }
+   433			// Free up any queued messages
+   434			while (msg = DequeueMsg(mbx)) {
+   435	            msg->type = 1;
+   436	            msg->retadr = -1;
+   437	            msg->tgtadr = -1;
+   438				msg->link = freeMSG;
+   439				freeMSG = msg - message;
+   440				nMsgBlk++;
+   441			}
+   442			// Send an indicator to any queued threads that the mailbox
+   443			// is now defunct Setting MsgPtr = null will cause any
+   444			// outstanding WaitMsg() to return E_NoMsg.
+   445			forever {
+   446				DequeThreadFromMbx(mbx, &thrd);
+   447				if (thrd == (void *)0)
+   448					break;
+   449				thrd->msg.type = 0;
+   450				if (thrd->status & 1)
+   451					RemoveFromTimeoutList(thrd-tcbs);
+   452				InsertIntoReadyList(thrd-tcbs);
+   453			}
+   454			mbx->link = freeMBX;
+   455			freeMBX = mbx-mailbox;
+   456			nMailbox++;
+   457		    UnlockSemaphore(&sys_sema);
+   458	    }
+   459		return E_Ok;
+   460	}
+   461	
+   462	
+   463	/* ---------------------------------------------------------------
+   464		Description:
+   465			Set the mailbox message queueing strategy.
+   466	--------------------------------------------------------------- */
 
 
 *** local symbol table ***
 
-hMbx_      =000018    -    Auto        
+hMbx_      =000018    -    Auto        Char
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 msg_       =fffffff0    -    Auto        Pointer to struct tagMSG_ 
 thrd_      =ffffffe8    -    Auto        Pointer to struct _tagTCB_ 
 
 
 
-   401	public SetMbxMsgQueStrategy(uint hMbx, int qStrategy, int qSize)
-   402	{
-   403		MBX *mbx;
-   404	
-   405		if (hMbx >= 2048)
-   406			return E_BadMbx;
-   407		if (qStrategy > 2)
-   408			return E_Arg;
-   409		mbx = &mailbox[hMbx];
-   410		LockSYS();
-   411			if ((mbx->owner <> GetJCBPtr()) and GetJCBPtr() <> &jcbs[0])
-   412					return E_NotOwner;
-   413			mbx->mq_strategy = qStrategy;
-   414			mbx->mq_size = qSize;
-   415		UnlockSYS();
-   416		return E_Ok;
-   417	}
-   418	
-   419	
-   420	/* ---------------------------------------------------------------
-   421		Description:
-   422			Send a message.
-   423	--------------------------------------------------------------- */
+   467	public int SetMbxMsgQueStrategy(hMBX hMbx, int qStrategy, int qSize)
+   468	{
+   469		MBX *mbx;
+   470	
+   471	    asm { mfspr r1,ivno };
+   472		__check (hMbx >= 0 && hMbx < 1024);
+   473		if (qStrategy > 2)
+   474			return E_Arg;
+   475		mbx = &mailbox[hMbx];
+   476		if (LockSemaphore(&sys_sema,-1)) {
+   477			if ((mbx->owner <> GetJCBPtr()) and GetJCBPtr() <> &jcbs[0]) {
+   478	      	    UnlockSemaphore(&sys_sema);
+   479				return E_NotOwner;
+   480	        }
+   481			mbx->mq_strategy = qStrategy;
+   482			mbx->mq_size = qSize;
+   483		    UnlockSemaphore(&sys_sema);
+   484	    }
+   485		return E_Ok;
+   486	}
+   487	
+   488	
+   489	/* ---------------------------------------------------------------
+   490		Description:
+   491			Send a message.
+   492	--------------------------------------------------------------- */
 
 
 *** local symbol table ***
 
-hMbx_      =000018    -    Auto        
+hMbx_      =000018    -    Auto        Char
 qStrategy_ =000020    -    Auto        Long
 qSize_     =000028    -    Auto        Long
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 
 
 
-   424	public int FMTK_SendMsg(uint hMbx, int d1, int d2)
-   425	{
-   426		MBX *mbx;
-   427		MSG *msg;
-   428		TCB *thrd;
-   429	
-   430		if (hMbx >= 2048)
-   431			return E_BadMbx;
-   432	
-   433		mbx = &mailbox[hMbx];
-   434		LockSYS();
-   435			// check for a mailbox owner which indicates the mailbox
-   436			// is active.
-   437			if (mbx->owner == (void *)0) {
-   438	           UnlockSYS();
-   439	           return E_NotAlloc;
-   440	        }
-   441			msg = freeMSG;
-   442			if (msg == (void *)0) {
-   443			    UnlockSYS();
-   444				return E_NoMoreMsgBlks;
-   445	        }
-   446			freeMSG = msg->link;
-   447			--nMsgBlk;
-   448			msg->type = 0;
-   449			msg->d1 = d1;
-   450			msg->d2 = d2;
-   451			DequeThreadFromMbx(mbx, &thrd);
-   452		UnlockSYS();
-   453		if (thrd == (void *)0)
-   454			return QueueMsg(mbx, msg);
-   455		LockSYS();
-   456	    	thrd->MsgPtr = msg;
-   457	    	if (thrd->status & 1)
-   458	    		RemoveFromTimeoutList(thrd);
-   459	    	InsertIntoReadyList(thrd);
-   460		UnlockSYS();
-   461		return E_Ok;
-   462	}
-   463	
-   464	
-   465	/* ---------------------------------------------------------------
-   466		Description:
-   467			PostMsg() is meant to be called in order to send a
-   468		message without causing the thread to switch. This is
-   469		useful in some cases. For example interrupts that don't
-   470		require a low latency. Normally SendMsg() will be called,
-   471		even from an ISR to allow the OS to prioritize events.
-   472	--------------------------------------------------------------- */
+   493	public int FMTK_SendMsg(hMBX hMbx, int d1, int d2, int d3)
+   494	{
+   495		MBX *mbx;
+   496		MSG *msg;
+   497		TCB *thrd;
+   498	
+   499	    asm { mfspr r1,ivno };
+   500		__check (hMbx >= 0 && hMbx < 1024);
+   501		mbx = &mailbox[hMbx];
+   502		if (LockSemaphore(&sys_sema,-1)) {
+   503			// check for a mailbox owner which indicates the mailbox
+   504			// is active.
+   505			if (mbx->owner < 0 || mbx->owner >= 51) {
+   506	    	    UnlockSemaphore(&sys_sema);
+   507	            return E_NotAlloc;
+   508	        }
+   509			if (freeMSG < 0 || freeMSG >= 16384) {
+   510	    	    UnlockSemaphore(&sys_sema);
+   511				return E_NoMoreMsgBlks;
+   512	        }
+   513			msg = &message[freeMSG];
+   514			freeMSG = msg->link;
+   515			--nMsgBlk;
+   516			msg->retadr = GetJCBPtr()-jcbs;
+   517			msg->tgtadr = hMbx;
+   518			msg->type = 2;
+   519			msg->d1 = d1;
+   520			msg->d2 = d2;
+   521			msg->d3 = d3;
+   522			DequeThreadFromMbx(mbx, &thrd);
+   523		    UnlockSemaphore(&sys_sema);
+   524	    }
+   525		if (thrd == (void *)0)
+   526			return QueueMsg(mbx, msg);
+   527		if (LockSemaphore(&sys_sema,-1)) {
+   528	        thrd->msg.retadr = msg->retadr;
+   529	        thrd->msg.tgtadr = msg->tgtadr;
+   530	        thrd->msg.type = msg->type;
+   531	        thrd->msg.d1 = msg->d1;
+   532	        thrd->msg.d2 = msg->d2;
+   533	        thrd->msg.d3 = msg->d3;
+   534	        // free message here
+   535	        msg->type = 1;
+   536	        msg->retadr = -1;
+   537	        msg->tgtadr = -1;
+   538	        msg->link = freeMSG;
+   539	        freeMSG = msg-message;
+   540	    	if (thrd->status & 1)
+   541	    		RemoveFromTimeoutList(thrd-tcbs);
+   542	    	InsertIntoReadyList(thrd-tcbs);
+   543		    UnlockSemaphore(&sys_sema);
+   544	    }
+   545		return E_Ok;
+   546	}
+   547	
+   548	
+   549	/* ---------------------------------------------------------------
+   550		Description:
+   551			PostMsg() is meant to be called in order to send a
+   552		message without causing the thread to switch. This is
+   553		useful in some cases. For example interrupts that don't
+   554		require a low latency. Normally SendMsg() will be called,
+   555		even from an ISR to allow the OS to prioritize events.
+   556	--------------------------------------------------------------- */
 
 
 *** local symbol table ***
 
-hMbx_      =000018    -    Auto        
+hMbx_      =000018    -    Auto        Char
 d1_        =000020    -    Auto        Long
 d2_        =000028    -    Auto        Long
+d3_        =000030    -    Auto        Long
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 msg_       =fffffff0    -    Auto        Pointer to struct tagMSG_ 
 thrd_      =ffffffe8    -    Auto        Pointer to struct _tagTCB_ 
 
 
 
-   473	public int FMTK_PostMsg(int hMbx, int d1, int d2)
-   474	{
-   475		MBX *mbx;
-   476		MSG *msg;
-   477		TCB *thrd;
-   478	    int ret;
-   479	
-   480		if (hMbx >= 2048)
-   481			return E_BadMbx;
-   482	
-   483		mbx = &mailbox[hMbx];
-   484		LockSYS();
-   485			// check for a mailbox owner which indicates the mailbox
-   486			// is active.
-   487			if (mbx->owner == (void *)0) {
-   488	            UnlockSYS();
-   489				return E_NotAlloc;
-   490	        }
-   491			msg = freeMSG;
-   492			if (msg == (void *)0) {
-   493	            UnlockSYS();
-   494				return E_NoMoreMsgBlks;
-   495	        }
-   496			freeMSG = msg->link;
-   497			--nMsgBlk;
-   498			msg->type = 0;
-   499			msg->d1 = d1;
-   500			msg->d2 = d2;
-   501			DequeueThreadFromMbx(mbx, &thrd);
-   502		UnlockSYS();
-   503		if (thrd == (void *)0) {
-   504	        ret = QueueMsg(mbx, msg);
-   505			return ret;
-   506	    }
-   507	    LockSYS();
-   508	    	thrd->MsgPtr = msg;
-   509	    	if (thrd->status & 1)
-   510	    		RemoveFromTimeoutList(thrd);
-   511	    	AddToReadyList(thrd);
-   512	   	UnlockSYS();
-   513		return E_Ok;
-   514	}
-   515	
-   516	
-   517	/* ---------------------------------------------------------------
-   518		Description:
-   519			Wait for message. If timelimit is zero then the thread
-   520		will wait indefinately for a message.
-   521	--------------------------------------------------------------- */
-   522	
+   557	public int FMTK_PostMsg(hMBX hMbx, int d1, int d2, int d3)
+   558	{
+   559		MBX *mbx;
+   560		MSG *msg;
+   561		TCB *thrd;
+   562	    int ret;
+   563	
+   564	    asm { mfspr r1,ivno };
+   565		__check (hMbx >= 0 && hMbx < 1024);
+   566		mbx = &mailbox[hMbx];
+   567		if (LockSemaphore(&sys_sema,-1)) {
+   568			// check for a mailbox owner which indicates the mailbox
+   569			// is active.
+   570			if (mbx->owner < 0 || mbx->owner >= 51) {
+   571	    	    UnlockSemaphore(&sys_sema);
+   572				return E_NotAlloc;
+   573	        }
+   574			if (freeMSG  <0 || freeMSG >= 16384) {
+   575	    	    UnlockSemaphore(&sys_sema);
+   576				return E_NoMoreMsgBlks;
+   577	        }
+   578			msg = &message[freeMSG];
+   579			freeMSG = msg->link;
+   580			--nMsgBlk;
+   581			msg->retadr = GetJCBPtr()-jcbs;
+   582			msg->tgtadr = hMbx;
+   583			msg->type = 2;
+   584			msg->d1 = d1;
+   585			msg->d2 = d2;
+   586			msg->d3 = d3;
+   587			DequeueThreadFromMbx(mbx, &thrd);
+   588		    UnlockSemaphore(&sys_sema);
+   589	    }
+   590		if (thrd == (void *)0) {
+   591	        ret = QueueMsg(mbx, msg);
+   592			return ret;
+   593	    }
+   594		if (LockSemaphore(&sys_sema,-1)) {
+   595	        thrd->msg.retadr = msg->retadr;
+   596	        thrd->msg.tgtadr = msg->tgtadr;
+   597	        thrd->msg.type = msg->type;
+   598	        thrd->msg.d1 = msg->d1;
+   599	        thrd->msg.d2 = msg->d2;
+   600	        thrd->msg.d3 = msg->d3;
+   601	        // free message here
+   602	        msg->type = 1;
+   603	        msg->retadr = -1;
+   604	        msg->tgtadr = -1;
+   605	        msg->link = freeMSG;
+   606	        freeMSG = msg-message;
+   607	    	if (thrd->status & 1)
+   608	    		RemoveFromTimeoutList(thrd-tcbs);
+   609	    	InsertIntoReadyList(thrd-tcbs);
+   610		    UnlockSemaphore(&sys_sema);
+   611	    }
+   612		return E_Ok;
+   613	}
+   614	
+   615	
+   616	/* ---------------------------------------------------------------
+   617		Description:
+   618			Wait for message. If timelimit is zero then the thread
+   619		will wait indefinately for a message.
+   620	--------------------------------------------------------------- */
+   621	
 
 
 *** local symbol table ***
 
-hMbx_      =000018    -    Auto        Long
+hMbx_      =000018    -    Auto        Char
 d1_        =000020    -    Auto        Long
 d2_        =000028    -    Auto        Long
+d3_        =000030    -    Auto        Long
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 msg_       =fffffff0    -    Auto        Pointer to struct tagMSG_ 
 thrd_      =ffffffe8    -    Auto        Pointer to struct _tagTCB_ 
@@ -614,163 +701,137 @@ ret_       =ffffffe0    -    Auto        Long
 
 
 
-   523	public int FMTK_WaitMsg(uint hMbx, int *d1, int *d2, int timelimit)
-   524	{
-   525		MBX *mbx;
-   526		MSG *msg;
-   527		TCB *thrd;
-   528	
-   529		if (hMbx >= 2048)
-   530			return E_BadMbx;
-   531	
-   532		mbx = &mailbox[hMbx];
-   533		LockSYS();
-   534	    	// check for a mailbox owner which indicates the mailbox
-   535	    	// is active.
-   536	    	if (mbx->owner == (void *)0) {
-   537	            UnlockSYS();
-   538	        	return E_NotAlloc;
-   539	        }
-   540	    	msg = DequeueMsg(mbx);
-   541		UnlockSYS();
-   542		if (msg == (void *)0) {
-   543			LockSYS();
-   544				thrd = GetRunningTCB();
-   545				RemoveFromReadyList(thrd);
-   546			UnlockSYS();
-   547			//-----------------------
-   548			// Queue task at mailbox
-   549			//-----------------------
-   550			thrd->status |= 2;
-   551			thrd->hWaitMbx = hMbx;
-   552			thrd->mbq_next = (void *)0;
-   553			LockSYS();
-   554				if (mbx->tq_head == (void *)0) {
-   555					thrd->mbq_prev = (void *)0;
-   556					mbx->tq_head = thrd;
-   557					mbx->tq_tail = thrd;
-   558					mbx->tq_count = 1;
-   559				}
-   560				else {
-   561					thrd->mbq_prev = mbx->tq_tail;
-   562					mbx->tq_tail->mbq_next = thrd;
-   563					mbx->tq_tail = thrd;
-   564					mbx->tq_count++;
-   565				}
-   566			UnlockSYS();
-   567			//---------------------------
-   568			// Is a timeout specified ?
-   569			if (timelimit) {
-   570	            LockSYS();
-   571	        	    AddToTimeoutList(thrd, timelimit);
-   572	       	    UnlockSYS();
-   573	        }
-   574			asm { int #2 }     // reschedule
-   575			// Control will return here as a result of a SendMsg or a
-   576			// timeout expiring
-   577			msg = GetRunningTCB()->MsgPtr;
-   578			if (msg == (void *)0)
-   579				return E_NoMsg;
-   580			GetRunningTCB()->MsgPtr = (void *)0;
-   581		}
-   582		//-----------------------------------------------------
-   583		// We get here if there was initially a message
-   584		// available in the mailbox, or a message was made
-   585		// available after a task switch.
-   586		//-----------------------------------------------------
-   587		if (d1)
-   588			*d1 = msg->d1;
-   589		if (d2)
-   590			*d2 = msg->d2;
-   591		LockSYS();
-   592			msg->link = freeMSG;
-   593			freeMSG = msg;
-   594			nMsgBlk++;
-   595		UnlockSYS();
-   596		return E_Ok;
-   597	}
-   598	
-   599	// ----------------------------------------------------------------------------
-   600	// PeekMsg()
-   601	//     Look for a message in the queue but don't remove it from the queue.
-   602	//     This is a convenince wrapper for CheckMsg().
-   603	// ----------------------------------------------------------------------------
-   604	
+   622	public int FMTK_WaitMsg(hMBX hMbx, int *d1, int *d2, int *d3, int timelimit)
+   623	{
+   624		MBX *mbx;
+   625		MSG *msg;
+   626		TCB *thrd;
+   627		TCB *rt;
+   628	
+   629	    asm { mfspr r1,ivno };
+   630		__check (hMbx >= 0 && hMbx < 1024);
+   631		mbx = &mailbox[hMbx];
+   632		if (LockSemaphore(&sys_sema,-1)) {
+   633	    	// check for a mailbox owner which indicates the mailbox
+   634	    	// is active.
+   635	    	if (mbx->owner <0 || mbx->owner >= 51) {
+   636	     	    UnlockSemaphore(&sys_sema);
+   637	        	return E_NotAlloc;
+   638	        }
+   639	    	msg = DequeueMsg(mbx);
+   640		    UnlockSemaphore(&sys_sema);
+   641	    }
+   642		if (msg == (void *)0) {
+   643	    	if (LockSemaphore(&sys_sema,-1)) {
+   644				thrd = GetRunningTCBPtr();
+   645				RemoveFromReadyList(thrd-tcbs);
+   646	    	    UnlockSemaphore(&sys_sema);
+   647	        }
+   648			//-----------------------
+   649			// Queue task at mailbox
+   650			//-----------------------
+   651			thrd->status |= 2;
+   652			thrd->hWaitMbx = hMbx;
+   653			thrd->mbq_next = (void *)0;
+   654	    	if (LockSemaphore(&sys_sema,-1)) {
+   655				if (mbx->tq_head < 0) {
+   656					thrd->mbq_prev = -1;
+   657					mbx->tq_head = thrd-tcbs;
+   658					mbx->tq_tail = thrd-tcbs;
+   659					mbx->tq_count = 1;
+   660				}
+   661				else {
+   662					thrd->mbq_prev = mbx->tq_tail;
+   663					tcbs[mbx->tq_tail].mbq_next = thrd-tcbs;
+   664					mbx->tq_tail = thrd-tcbs;
+   665					mbx->tq_count++;
+   666				}
+   667	    	    UnlockSemaphore(&sys_sema);
+   668	        }
+   669			//---------------------------
+   670			// Is a timeout specified ?
+   671			if (timelimit) {
+   672	        	if (LockSemaphore(&sys_sema,-1)) {
+   673	        	    InsertIntoTimeoutList(thrd-tcbs, timelimit);
+   674	        	    UnlockSemaphore(&sys_sema);
+   675	            }
+   676	        }
+   677			asm { int #2 }     // reschedule
+   678			// Control will return here as a result of a SendMsg or a
+   679			// timeout expiring
+   680			rt = GetRunningTCBPtr(); 
+   681			if (rt->msg.type == 0)
+   682				return E_NoMsg;
+   683			// rip up the envelope
+   684			rt->msg.type = 0;
+   685			rt->msg.tgtadr = -1;
+   686			rt->msg.retadr = -1;
+   687	    	if (d1)
+   688	    		*d1 = rt->msg.d1;
+   689	    	if (d2)
+   690	    		*d2 = rt->msg.d2;
+   691	    	if (d3)
+   692	    		*d3 = rt->msg.d3;
+   693			return E_Ok;
+   694		}
+   695		//-----------------------------------------------------
+   696		// We get here if there was initially a message
+   697		// available in the mailbox, or a message was made
+   698		// available after a task switch.
+   699		//-----------------------------------------------------
+   700		if (d1)
+   701			*d1 = msg->d1;
+   702		if (d2)
+   703			*d2 = msg->d2;
+   704		if (d3)
+   705			*d3 = msg->d3;
+   706	   	if (LockSemaphore(&sys_sema,-1)) {
+   707	        msg->type = 1;
+   708	        msg->retadr = -1;
+   709	        msg->tgtadr = -1;
+   710			msg->link = freeMSG;
+   711			freeMSG = msg-message;
+   712			nMsgBlk++;
+   713		    UnlockSemaphore(&sys_sema);
+   714	    }
+   715		return E_Ok;
+   716	}
+   717	
+   718	// ----------------------------------------------------------------------------
+   719	// PeekMsg()
+   720	//     Look for a message in the queue but don't remove it from the queue.
+   721	//     This is a convenince wrapper for CheckMsg().
+   722	// ----------------------------------------------------------------------------
+   723	
 
 
 *** local symbol table ***
 
-hMbx_      =000018    -    Auto        
+hMbx_      =000018    -    Auto        Char
 d1_        =000020    -    Auto        Pointer to Long
 d2_        =000028    -    Auto        Pointer to Long
-timelimit_ =000030    -    Auto        Long
+d3_        =000030    -    Auto        Pointer to Long
+timelimit_ =000038    -    Auto        Long
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 msg_       =fffffff0    -    Auto        Pointer to struct tagMSG_ 
 thrd_      =ffffffe8    -    Auto        Pointer to struct _tagTCB_ 
+rt_        =ffffffe0    -    Auto        Pointer to struct _tagTCB_ 
 
 
 
-   605	int FMTK_PeekMsg(uint hMbx, int *d1, int *d2)
-   606	{
-   607	    return CheckMsg(hMbx, d1, d2, 0);
-   608	}
-   609	
-   610	/* ---------------------------------------------------------------
-   611		Description:
-   612			Check for message at mailbox. If no message is
-   613		available return immediately to the caller (CheckMsg() is
-   614		non blocking). Optionally removes the message from the
-   615		mailbox.
-   616	--------------------------------------------------------------- */
-   617	
-
-
-*** local symbol table ***
-
-hMbx_      =000018    -    Auto        
-d1_        =000020    -    Auto        Pointer to Long
-d2_        =000028    -    Auto        Pointer to Long
-
-
-
-   618	int FMTK_CheckMsg(uint hMbx, int *d1, int *d2, int qrmv)
-   619	{
-   620		MBX *mbx;
-   621		MSG *msg;
-   622	
-   623		if (hMbx >= 2048)
-   624			return E_BadMbx;
-   625	
-   626		mbx = &mailbox[hMbx];
-   627		LockSYS();
-   628		// check for a mailbox owner which indicates the mailbox
-   629		// is active.
-   630		if (mbx->owner == (void *)0) {
-   631	        UnlockSYS();
-   632			return E_NotAlloc;
-   633	    }
-   634		if (qrmv == true)
-   635			msg = DequeueMsg(mbx);
-   636		else
-   637			msg = mbx->mq_head;
-   638		UnlockSYS();
-   639		if (msg == (void *)0)
-   640			return E_NoMsg;
-   641		if (d1)
-   642			*d1 = msg->d1;
-   643		if (d2)
-   644			*d2 = msg->d2;
-   645		if (qrmv == true) {
-   646	        LockSYS();
-   647	    		msg->link = freeMSG;
-   648	    		freeMSG = msg;
-   649	    		nMsgBlk++;
-   650			UnlockSYS();
-   651		}
-   652		return E_Ok;
-   653	}
-   654	
-   655	
+   724	int FMTK_PeekMsg(uint hMbx, int *d1, int *d2)
+   725	{
+   726	    return CheckMsg(hMbx, d1, d2, 0);
+   727	}
+   728	
+   729	/* ---------------------------------------------------------------
+   730		Description:
+   731			Check for message at mailbox. If no message is
+   732		available return immediately to the caller (CheckMsg() is
+   733		non blocking). Optionally removes the message from the
+   734		mailbox.
+   735	--------------------------------------------------------------- */
+   736	
 
 
 *** local symbol table ***
@@ -778,7 +839,62 @@ d2_        =000028    -    Auto        Pointer to Long
 hMbx_      =000018    -    Auto        
 d1_        =000020    -    Auto        Pointer to Long
 d2_        =000028    -    Auto        Pointer to Long
-qrmv_      =000030    -    Auto        Long
+
+
+
+   737	int FMTK_CheckMsg(hMBX hMbx, int *d1, int *d2, int *d3, int qrmv)
+   738	{
+   739		MBX *mbx;
+   740		MSG *msg;
+   741	
+   742	    asm { mfspr r1,ivno };
+   743		__check (hMbx >= 0 && hMbx < 1024);
+   744		mbx = &mailbox[hMbx];
+   745	   	if (LockSemaphore(&sys_sema,-1)) {
+   746	    	// check for a mailbox owner which indicates the mailbox
+   747	    	// is active.
+   748	    	if (mbx->owner == (void *)0) {
+   749	    	    UnlockSemaphore(&sys_sema);
+   750	    		return E_NotAlloc;
+   751	        }
+   752	    	if (qrmv == true)
+   753	    		msg = DequeueMsg(mbx);
+   754	    	else
+   755	    		msg = mbx->mq_head;
+   756		    UnlockSemaphore(&sys_sema);
+   757	    }
+   758		if (msg == (void *)0)
+   759			return E_NoMsg;
+   760		if (d1)
+   761			*d1 = msg->d1;
+   762		if (d2)
+   763			*d2 = msg->d2;
+   764		if (d3)
+   765			*d3 = msg->d3;
+   766		if (qrmv == true) {
+   767	       	if (LockSemaphore(&sys_sema,-1)) {
+   768	            msg->type = 1;
+   769	            msg->retadr = -1;
+   770	            msg->tgtadr = -1;
+   771	    		msg->link = freeMSG;
+   772	    		freeMSG = msg-message;
+   773	    		nMsgBlk++;
+   774	    	    UnlockSemaphore(&sys_sema);
+   775	        }
+   776		}
+   777		return E_Ok;
+   778	}
+   779	
+   780	
+
+
+*** local symbol table ***
+
+hMbx_      =000018    -    Auto        Char
+d1_        =000020    -    Auto        Pointer to Long
+d2_        =000028    -    Auto        Pointer to Long
+d3_        =000030    -    Auto        Pointer to Long
+qrmv_      =000038    -    Auto        Long
 mbx_       =fffffff8    -    Auto        Pointer to struct tagMBX_ 
 msg_       =fffffff0    -    Auto        Pointer to struct tagMSG_ 
 
@@ -788,106 +904,118 @@ msg_       =fffffff0    -    Auto        Pointer to struct tagMSG_
  *** global scope typedef symbol table ***
 
 jcbs_      =000000    -    External    Array of struct _tagJCB_ 
-FMTK_AllocMbx_ =0012c0    -    Global      Function returning Long
+FMTK_AllocMbx_ =001480    -    Global      Function returning Long
 E_NoMoreMsgBlks_ =000041    -    Constant    Long
 tcbs_      =000000    -    External    Array of struct _tagTCB_ 
 nMsgBlk_   =000000    -    External    Long
 E_NoThread_ =000007    -    Constant    Long
 E_WriteError_ =000024    -    Constant    Long
-outb_      =0012c0    -    Global      Function returning 
+outb_      =001480    -    Global      Function returning 
 IOFocusTbl_ =000000    -    External    Array of Long
-outc_      =0012c0    -    Global      Function returning 
+outc_      =001480    -    Global      Function returning 
 E_Arg_     =000004    -    Constant    Long
 uint_      =000000    1   
 E_NotAlloc_ =000008    -    Constant    Long
-outh_      =0012c0    -    Global      Function returning 
+outh_      =001480    -    Global      Function returning 
 irq_stack_ =000000    -    External    Array of Long
 IOFocusNdx_ =000000    -    External    Pointer to struct _tagJCB_ 
+DumpTaskList_ =001480    -    External    Function returning 
 E_BadBlockNum_ =000025    -    Constant    Long
 E_TooManyBlocks_ =000026    -    Constant    Long
 JCB_       =000800    1   struct _tagJCB_ 
-outw_      =0012c0    -    Global      Function returning 
+outw_      =001480    -    Global      Function returning 
 E_BadTCBHandle_ =000001    -    Constant    Long
 E_BadMbx_  =000005    -    Constant    Long
 fmtk_irq_stack_ =000000    -    External    Array of Long
 TCB_       =001000    1   struct _tagTCB_ 
-GetRunningTCB_ =0012c0    -    External    Function returning Pointer to struct _tagTCB_ 
-runningTCB_ =000000    -    External    Pointer to struct _tagTCB_ 
+GetRunningTCB_ =001480    -    External    Function returning Char
 E_NotOwner_ =00000c    -    Constant    Long
 DequeueThreadFromMbx_ =000000    -    External    Function returning Long
 fmtk_sys_stack_ =000000    -    External    Array of Long
 message_   =000000    -    External    Array of struct tagMSG_ 
+SetRunningTCB_ =001480    -    Global      Function returning 
 MSG_       =000020    1   struct tagMSG_ 
-MBX_       =001200    1   struct tagMBX_ 
+MBX_       =001400    1   struct tagMBX_ 
 mailbox_   =000000    -    External    Array of struct tagMBX_ 
 FMTK_Inited_ =000000    -    External    Long
-DequeueMsg_ =00001f    -    Static      Function returning Pointer to struct tagMSG_ 
-SetMbxMsgQueStrategy_ =0012c0    -    Global      Function returning Long
+DequeueMsg_ =00001b    -    Static      Function returning Pointer to struct tagMSG_ 
+SetMbxMsgQueStrategy_ =001480    -    Global      Function returning Long
 E_BadDevNum_ =000020    -    Constant    Long
 missed_ticks_ =000000    -    External    Long
 E_BadCallno_ =000003    -    Constant    Long
 CheckMsg_  =000000    -    External    Function returning Long
 DequeThreadFromMbx_ =000000    -    External    Function returning Long
 E_BadPriority_ =000002    -    Constant    Long
+chkTCB_    =001480    -    Global      Function returning Long
+GetRunningTCBPtr_ =001480    -    External    Function returning Pointer to struct _tagTCB_ 
+UnlockSemaphore_ =001480    -    Global      Function returning 
 E_NoMoreMbx_ =000040    -    Constant    Long
-chkMBX_    =0012c0    -    Global      Function returning Long
-chkMSG_    =0012c0    -    Global      Function returning Long
+GetVecno_  =001480    -    External    Function returning Long
 E_QueStrategy_ =00000d    -    Constant    Long
-GetJCBPtr_ =0012c0    -    External    Function returning Pointer to struct _tagJCB_ 
+GetJCBPtr_ =001480    -    External    Function returning Pointer to struct _tagJCB_ 
 video_bufs_ =000000    -    External    Array of Array of Short
-getCPU_    =0012c0    -    External    Function returning Long
+getCPU_    =001480    -    External    Function returning Long
 E_ReadError_ =000023    -    Constant    Long
 hasUltraHighPriorityTasks_ =000000    -    External    Char
-QueueMsg_  =000004    -    Static      Function returning Long
+QueueMsg_  =000000    -    Static      Function returning Long
+LockSemaphore_ =001480    -    Global      Function returning Long
 iof_switch_ =000000    -    External    Long
+hJCB_      =00000a    1   Byte
 nMailbox_  =000000    -    External    Long
-FMTK_FreeMbx_ =0012c0    -    Global      Function returning Long
-FMTK_PeekMsg_ =0012c0    -    Global      Function returning Long
-set_vector_ =0012c0    -    Global      Function returning 
+FMTK_FreeMbx_ =001480    -    Global      Function returning Long
+FMTK_PeekMsg_ =001480    -    Global      Function returning Long
+set_vector_ =001480    -    Global      Function returning 
 E_NoMoreTCBs_ =000043    -    Constant    Long
-FMTK_SendMsg_ =0012c0    -    Global      Function returning Long
+hTCB_      =000008    1   Char
+FMTK_SendMsg_ =001480    -    Global      Function returning Long
 iof_sema_  =000000    -    External    Long
 sys_stacks_ =000000    -    External    Array of Array of Long
 BIOS_RespMbx_ =000000    -    External    Long
-FMTK_WaitMsg_ =0012c0    -    Global      Function returning Long
-AddToTimeoutList_ =000000    -    External    Function returning Long
+FMTK_WaitMsg_ =001480    -    Global      Function returning Long
+hMBX_      =00000c    1   Char
+hMSG_      =00000e    1   Char
 E_DCBInUse_ =00000e    -    Constant    Long
-AddToReadyList_ =000000    -    External    Function returning Long
 E_Ok_      =000000    -    Constant    Long
-FMTK_PostMsg_ =0012c0    -    Global      Function returning Long
+FMTK_PostMsg_ =001480    -    Global      Function returning Long
 E_QueFull_ =000006    -    Constant    Long
 BIOS1_sema_ =000000    -    External    Long
 sys_sema_  =000000    -    External    Long
-readyQ_    =000000    -    External    Array of Pointer to struct _tagTCB_ 
-UnlockSYS_ =000000    -    External    Function returning Long
-ALARM_     =001280    1   struct tagALARM_ 
+readyQ_    =000000    -    External    Array of Char
+ALARM_     =001440    1   struct tagALARM_ 
 E_NoMoreAlarmBlks_ =000042    -    Constant    Long
 sysstack_  =000000    -    External    Array of Long
-freeTCB_   =000000    -    External    Pointer to struct _tagTCB_ 
+freeTCB_   =000000    -    External    Char
 E_NoDev_   =000021    -    Constant    Long
 E_NoMem_   =000044    -    Constant    Long
-TimeoutList_ =000000    -    External    Pointer to struct _tagTCB_ 
-RemoveFromTimeoutList_ =000000    -    External    Function returning Long
+TimeoutList_ =000000    -    External    Char
+RemoveFromTimeoutList_ =001480    -    Global      Function returning Long
 E_NoMsg_   =000009    -    Constant    Long
-LockSYS_   =000000    -    External    Function returning Long
 E_BadDevOp_ =000022    -    Constant    Long
+SetBound50_ =001480    -    Global      Function returning 
 stacks_    =000000    -    External    Array of Array of Long
-freeMSG_   =000000    -    External    Pointer to struct tagMSG_ 
-freeMBX_   =000000    -    External    Pointer to struct tagMBX_ 
+freeMSG_   =000000    -    External    Char
+freeMBX_   =000000    -    External    Char
+SetBound51_ =001480    -    Global      Function returning 
 E_Timeout_ =00000a    -    Constant    Long
-RemoveFromReadyList_ =000000    -    External    Function returning Long
+SetBound48_ =001480    -    Global      Function returning 
+SetBound49_ =001480    -    Global      Function returning 
+InsertIntoTimeoutList_ =001480    -    Global      Function returning Long
+RemoveFromReadyList_ =001480    -    Global      Function returning Long
 bios_stacks_ =000000    -    External    Array of Array of Long
-FMTK_CheckMsg_ =0012c0    -    Global      Function returning Long
+FMTK_CheckMsg_ =001480    -    Global      Function returning Long
 E_BadAlarm_ =00000b    -    Constant    Long
-InsertIntoReadyList_ =000000    -    External    Function returning Long
+InsertIntoReadyList_ =001480    -    Global      Function returning Long
 
  *** structures and unions ***
 
 tagMSG_    =000000    -    Type        struct tagMSG_ 
-    link_      =000000    -    Member      Pointer to struct tagMSG_ 
+    link_      =000000    -    Member      
+    retadr_    =000002    -    Member      
+    tgtadr_    =000004    -    Member      
+    type_      =000006    -    Member      
     d1_        =000008    -    Member      
     d2_        =000010    -    Member      
-    type_      =000018    -    Member      
+    d3_        =000018    -    Member      
 _tagJCB_   =000000    -    Type        struct _tagJCB_ 
     iof_next_  =000000    -    Member      Pointer to struct _tagJCB_ 
     iof_prev_  =000008    -    Member      Pointer to struct _tagJCB_ 
@@ -902,23 +1030,26 @@ _tagJCB_   =000000    -    Type        struct _tagJCB_
     CursorRow_ =000664    -    Member      
     CursorCol_ =000666    -    Member      
     NormAttr_  =000668    -    Member      
-    KeybdHead_ =00066c    -    Member      Byte
-    KeybdTail_ =00066d    -    Member      Byte
-    KeybdBuffer_ =00066e    -    Member      Array of 
-    number_    =00068e    -    Member      Char
+    KeyState1_ =00066c    -    Member      Byte
+    KeyState2_ =00066d    -    Member      Byte
+    KeybdWaitFlag_ =00066e    -    Member      Byte
+    KeybdHead_ =00066f    -    Member      Byte
+    KeybdTail_ =000670    -    Member      Byte
+    KeybdBuffer_ =000672    -    Member      Array of 
+    number_    =000692    -    Member      Byte
 tagMBX_    =000000    -    Type        struct tagMBX_ 
-    link_      =000000    -    Member      Pointer to struct tagMBX_ 
-    tq_head_   =000008    -    Member      Pointer to struct _tagTCB_ 
-    tq_tail_   =000010    -    Member      Pointer to struct _tagTCB_ 
-    mq_head_   =000018    -    Member      Pointer to struct tagMSG_ 
-    mq_tail_   =000020    -    Member      Pointer to struct tagMSG_ 
-    tq_count_  =000028    -    Member      
-    mq_size_   =000030    -    Member      
-    mq_count_  =000038    -    Member      
-    mq_missed_ =000040    -    Member      
-    owner_     =000048    -    Member      
-    mq_strategy_ =000050    -    Member      Char
-    resv_      =000052    -    Member      Array of Byte
+    link_      =000000    -    Member      Char
+    owner_     =000002    -    Member      Byte
+    tq_head_   =000004    -    Member      Char
+    tq_tail_   =000006    -    Member      Char
+    mq_head_   =000008    -    Member      Char
+    mq_tail_   =00000a    -    Member      Char
+    mq_strategy_ =00000c    -    Member      Char
+    resv_      =00000e    -    Member      Array of Byte
+    tq_count_  =000010    -    Member      
+    mq_size_   =000018    -    Member      
+    mq_count_  =000020    -    Member      
+    mq_missed_ =000028    -    Member      
 _tagTCB_   =000000    -    Type        struct _tagTCB_ 
     regs_      =000000    -    Member      Array of Long
     isp_       =000100    -    Member      Long
@@ -928,24 +1059,33 @@ _tagTCB_   =000000    -    Type        struct _tagTCB_
     dpc_       =000120    -    Member      Long
     epc_       =000128    -    Member      Long
     cr0_       =000130    -    Member      Long
-    next_      =000138    -    Member      Pointer to struct _tagTCB_ 
-    prev_      =000140    -    Member      Pointer to struct _tagTCB_ 
-    mbq_next_  =000148    -    Member      Pointer to struct _tagTCB_ 
-    mbq_prev_  =000150    -    Member      Pointer to struct _tagTCB_ 
-    sys_stack_ =000158    -    Member      Pointer to Long
-    bios_stack_ =000160    -    Member      Pointer to Long
-    stack_     =000168    -    Member      Pointer to Long
-    timeout_   =000170    -    Member      Long
-    hJob_      =000178    -    Member      Pointer to struct _tagJCB_ 
-    msgD1_     =000180    -    Member      Long
-    msgD2_     =000188    -    Member      Long
-    MsgPtr_    =000190    -    Member      Pointer to struct tagMSG_ 
-    hWaitMbx_  =000198    -    Member      
-    mailboxes_ =0001a0    -    Member      Pointer to struct tagMBX_ 
-    priority_  =0001a8    -    Member      Byte
-    status_    =0001a9    -    Member      Byte
-    affinity_  =0001aa    -    Member      Byte
-    number_    =0001ac    -    Member      Char
+    iregs_     =000138    -    Member      Array of Long
+    iisp_      =000238    -    Member      Long
+    idsp_      =000240    -    Member      Long
+    iesp_      =000248    -    Member      Long
+    iipc_      =000250    -    Member      Long
+    idpc_      =000258    -    Member      Long
+    iepc_      =000260    -    Member      Long
+    icr0_      =000268    -    Member      Long
+    next_      =000270    -    Member      Char
+    prev_      =000272    -    Member      Char
+    mbq_next_  =000274    -    Member      Char
+    mbq_prev_  =000276    -    Member      Char
+    sys_stack_ =000278    -    Member      Pointer to Long
+    bios_stack_ =000280    -    Member      Pointer to Long
+    stack_     =000288    -    Member      Pointer to Long
+    timeout_   =000290    -    Member      Long
+    msg_       =0002a0    -    Member      struct tagMSG_ 
+    hMailboxes_ =0002c0    -    Member      Array of Char
+    hWaitMbx_  =0002c8    -    Member      Char
+    number_    =0002ca    -    Member      Char
+    priority_  =0002cc    -    Member      Byte
+    status_    =0002cd    -    Member      Byte
+    affinity_  =0002ce    -    Member      Byte
+    hJob_      =0002cf    -    Member      Byte
+    startTick_ =0002d0    -    Member      Long
+    endTick_   =0002d8    -    Member      Long
+    ticks_     =0002e0    -    Member      Long
 tagALARM_  =000000    -    Type        struct tagALARM_ 
     next_      =000000    -    Member      Pointer to struct tagALARM_ 
     prev_      =000008    -    Member      Pointer to struct tagALARM_ 

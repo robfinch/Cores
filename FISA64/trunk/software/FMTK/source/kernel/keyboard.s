@@ -213,7 +213,7 @@ KeybdInit:
 
 ; Get the keyboard status
 ;
-KeybdGetStatus:
+KeybdGetStatus_:
 	lb		r1,KEYBD+1
 	rtl
     push    r2
@@ -248,7 +248,7 @@ KeybdGetStatus:
 
 ; Get the scancode from the keyboard port
 ;
-KeybdGetScancode:
+KeybdGetScancode_:
 	lbu		r1,KEYBD				; get the scan code
 	sb		r0,KEYBD+1				; clear receive register
 	rtl
@@ -287,7 +287,10 @@ KeybdGetScancode:
     pop     r2
     rtl
 
-
+KeybdClearRcv_:
+	sb		r0,KEYBD+1		; clear receive register (acknowledges interrupt)
+    rtl
+ 
 ; Recieve a byte from the keyboard, used after a command is sent to the
 ; keyboard in order to wait for a response.
 ;
@@ -348,10 +351,10 @@ KeybdGetCharWait:
 	sb		r1,KeybdWaitFlag
 
 ;
-; KeyState2
+; KeyState2_
 ; 876543210
-; ||||||||+ = alt
-; |||||||+- =
+; ||||||||+ = shift
+; |||||||+- = alt
 ; ||||||+-- = control
 ; |||||+--- = numlock
 ; ||||+---- = capslock
@@ -365,7 +368,7 @@ KeybdGetChar:
 	push	r2
     push    r3
 .0003:
-	bsr		KeybdGetStatus			; check keyboard status for key available
+	bsr		KeybdGetStatus_			; check keyboard status for key available
 	bmi		r1,.0006				; yes, go process
 	lb		r1,KeybdWaitFlag		; are we willing to wait for a key ?
 	bmi		r1,.0003				; yes, branch back
@@ -374,7 +377,7 @@ KeybdGetChar:
     pop     r2
 	rts
 .0006:
-	bsr		KeybdGetScancode
+	bsr		KeybdGetScancode_
 .0001:
 	ldi		r2,#1
 	sb		r2,LEDS
@@ -396,35 +399,35 @@ KeybdGetChar:
 	beq		r2,.doScrollLock
 	cmp     r2,r1,#SC_ALT
 	beq     r2,.doAlt
-	lb		r2,KeyState1			; check key up/down
-	sb		r0,KeyState1			; clear keyup status
+	lb		r2,KeyState1_			; check key up/down
+	sb		r0,KeyState1_			; clear keyup status
 	bne	    r2,.0003				; ignore key up
 	cmp     r2,r1,#SC_TAB
 	beq     r2,.doTab
 .0013:
-	lb		r2,KeyState2
+	lb		r2,KeyState2_
 	and		r3,r2,#$80				; is it extended code ?
 	beq		r3,.0010
 	and		r3,r2,#$7f				; clear extended bit
-	sb		r3,KeyState2
-	sb		r0,KeyState1			; clear keyup
-	lbu		r1,keybdExtendedCodes[r1]
+	sb		r3,KeyState2_
+	sb		r0,KeyState1_			; clear keyup
+	lbu		r1,keybdExtendedCodes_[r1]
 	bra		.0008
 .0010:
-	lb		r2,KeyState2
+	lb		r2,KeyState2_
 	and		r3,r2,#$04				; is it CTRL code ?
 	beq		r3,.0009
 	and		r1,r1,#$7F
-	lbu		r1,keybdControlCodes[r1]
+	lbu		r1,keybdControlCodes_[r1]
 	bra		.0008
 .0009:
-	lb		r2,KeyState2
+	lb		r2,KeyState2_
 	and		r3,r2,#$01				; is it shift down ?
 	beq  	r3,.0007
-	lbu		r1,shiftedScanCodes[r1]
+	lbu		r1,shiftedScanCodes_[r1]
 	bra		.0008
 .0007:
-	lbu		r1,unshiftedScanCodes[r1]
+	lbu		r1,unshiftedScanCodes_[r1]
 	ldi		r2,#2
 	sb		r2,LEDS
 .0008:
@@ -436,43 +439,43 @@ KeybdGetChar:
 	rtl
 .doKeyup:
 	ldi		r1,#-1
-	sb		r1,KeyState1
+	sb		r1,KeyState1_
 	bra		.0003
 .doExtend:
-	lbu		r1,KeyState2
+	lbu		r1,KeyState2_
 	or		r1,r1,#$80
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bra		.0003
 .doCtrl:
-	lb		r1,KeyState1
-	sb		r0,KeyState1
+	lb		r1,KeyState1_
+	sb		r0,KeyState1_
 	bpl		r1,.0004
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	and		r1,r1,#-5
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bra		.0003
 .0004:
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	or		r1,r1,#4
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bra		.0003
 .doAlt:
-	lb		r1,KeyState1
-	sb		r0,KeyState1
+	lb		r1,KeyState1_
+	sb		r0,KeyState1_
 	bpl		r1,.0011
-    lb      r1,KeyState2
-	lb		r1,KeyState2
-	and		r1,r1,#-2
-	sb		r1,KeyState2
+    lb      r1,KeyState2_
+	lb		r1,KeyState2_
+	and		r1,r1,#-3
+	sb		r1,KeyState2_
 	bra		.0003
 .0011:
-	lb		r1,KeyState2
-	or		r1,r1,#1
-	sb		r1,KeyState2
+	lb		r1,KeyState2_
+	or		r1,r1,#2
+	sb		r1,KeyState2_
 	bra		.0003
 .doTab:
     push    r1
-    lb      r1,KeyState2
+    lb      r1,KeyState2_
     and     r1,r1,#1                 ; is ALT down ?
     beq     r1,.0012
     inc     iof_switch_
@@ -482,34 +485,34 @@ KeybdGetChar:
     pop     r1
     bra     .0013
 .doShift:
-	lb		r1,KeyState1
-	sb		r0,KeyState1
+	lb		r1,KeyState1_
+	sb		r0,KeyState1_
 	bpl		r1,.0005
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	and		r1,r1,#-2
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bra		.0003
 .0005:
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	or		r1,r1,#1
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bra		.0003
 .doNumLock:
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	eor		r1,r1,#16
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bsr		KeybdSetLEDStatus
 	bra		.0003
 .doCapsLock:
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	eor		r1,r1,#32
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bsr		KeybdSetLEDStatus
 	bra		.0003
 .doScrollLock:
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	eor		r1,r1,#64
-	sb		r1,KeyState2
+	sb		r1,KeyState2_
 	bsr		KeybdSetLEDStatus
 	bra		.0003
 
@@ -518,7 +521,7 @@ KeybdSetLEDStatus:
 	push	r2
     push    r3
 	sb		r0,KeybdLEDs
-	lb		r1,KeyState2
+	lb		r1,KeyState2_
 	and		r2,r1,#16
 	beq		r2,.0002
 	ldi		r3,#2
@@ -607,7 +610,7 @@ KeybdIRQ:
     lea     r2,JCB_KeybdBuffer[r2]
     sb      r1,[r2+r3]      ; save off the scan code
     bsr     UnlockSYS_
-    lb      r2,KeyState2    ; check for ALT-tab
+    lb      r2,KeyState2_   ; check for ALT-tab
     and     r2,r2,#1        ; is ALT down ?
     beq     r2,.0001        
     cmp     r2,r1,#SC_TAB
@@ -632,7 +635,7 @@ KeybdIRQ1:
 	;--------------------------------------------------------------------------
 	;
 	align	16
-unshiftedScanCodes:
+unshiftedScanCodes_:
 	.byte	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
 	.byte	$2e,$aa,$a8,$a6,$a4,$09,$60,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$71,$31,$2e
@@ -667,7 +670,7 @@ unshiftedScanCodes:
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	.byte	$2e,$2e,$fa,$2e,$2e,$2e,$2e,$2e
 
-shiftedScanCodes:
+shiftedScanCodes_:
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$51,$21,$2e
@@ -703,7 +706,7 @@ shiftedScanCodes:
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 
 ; control
-keybdControlCodes:
+keybdControlCodes_:
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$11,$21,$2e
@@ -721,7 +724,7 @@ keybdControlCodes:
 	.byte	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 
-keybdExtendedCodes:
+keybdExtendedCodes_:
 	.byte	$2e,$2e,$2e,$2e,$a3,$a1,$a2,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
 	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
