@@ -71,7 +71,8 @@ enum e_sym {
 		kw_interrupt, kw_vortex, kw_pascal, kw_oscall, kw_nocall, kw_naked,
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
-		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check,
+		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
+		kw_unordered,
         my_eof };
 
 enum e_sc {
@@ -83,7 +84,9 @@ enum e_bt {
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
         bt_unsigned, bt_struct, bt_union, bt_enum, bt_void, bt_func, bt_ifunc,
-		bt_interrupt, bt_oscall, bt_pascal, bt_bitfield, bt_ubitfield, bt_last};
+		bt_interrupt, bt_oscall, bt_pascal, bt_bitfield, bt_ubitfield,
+		bt_exception,
+        bt_last};
 
 struct slit {
     struct slit     *next;
@@ -107,6 +110,7 @@ struct sym {
 	struct sym *parms;
 	struct sym *nextparm;
 	unsigned int IsPrototype : 1;
+	unsigned int IsTask : 1;
 	unsigned int IsInterrupt : 1;
 	unsigned int IsNocall : 1;
 	unsigned int IsPascal : 1;

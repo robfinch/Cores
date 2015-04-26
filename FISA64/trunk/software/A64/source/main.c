@@ -88,6 +88,8 @@ int tlsndx;
 int bssndx;
 SYM *lastsym;
 int isInitializationData;
+int num_bytes;
+int num_insns;
 
 void emitCode(int cd);
 void emitAlignedCode(int cd);
@@ -1281,6 +1283,7 @@ int main(int argc, char *argv[])
     char *p;
     int chksum;
     unsigned long lsa;      // last start address
+    double bpi;
 
     ofp = stdout;
     nn = processOptions(argc, argv);
@@ -1321,8 +1324,10 @@ int main(int argc, char *argv[])
     processMaster();
     if (verbose) printf("Pass 4: phase errors: %d\r\n", phasing_errors);
     pass = 5;
-    while (phasing_errors && pass < 10) {
+    while (phasing_errors && pass < 30) {
         phasing_errors = 0;
+        num_bytes = 0;
+        num_insns = 0;
         processMaster();
         if (verbose) printf("Pass %d: phase errors: %d\r\n", pass, phasing_errors);
         pass++;
@@ -1346,6 +1351,10 @@ int main(int argc, char *argv[])
     }
     processMaster();
     DumpSymbols();
+    fprintf(ofp, "\nnumber of bytes: %d\n", num_bytes);
+    fprintf(ofp, "number of instructions: %d\n", num_insns);
+    bpi = (double)num_bytes/(double)num_insns;
+    fprintf(ofp, "%0.6f bytes (%d bits) per instruction\n", bpi, (int)(bpi*8));
 
 /*
     chksum = 0;
@@ -1477,11 +1486,11 @@ int main(int argc, char *argv[])
         if (vfp) {
             if (gCpu==64) {
                 for (kk = 0; kk < binndx; kk+=4) {
-                    if (lsa != start_address >> 16) {
-                        sprintf(hexbuf, ":02000004%04X00\n", (start_address >> 16));
+                    if (lsa != (start_address + kk) >> 16) {
+                        sprintf(hexbuf, ":02000004%04X00\n", ((start_address+kk) >> 16));
                         IHChecksum(hexbuf, 2);
                         fprintf(vfp, hexbuf);
-                        lsa = start_address >> 16;
+                        lsa = (start_address+kk) >> 16;
                     }
                     sprintf(hexbuf, ":%02X%04X00%02X%02X%02X%02X%02X\n",
                         4, (start_address + kk) & 0xFFFF,

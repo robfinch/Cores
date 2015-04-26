@@ -45,7 +45,7 @@ pascal void SetBound49(JCB *ps, JCB *pe, int algn);
 pascal void SetBound50(MBX *ps, MBX *pe, int algn);
 pascal void SetBound51(MSG *ps, MSG *pe, int algn);
 
-void set_vector(unsigned int, unsigned int);
+pascal void set_vector(unsigned int, unsigned int);
 int getCPU();
 int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);

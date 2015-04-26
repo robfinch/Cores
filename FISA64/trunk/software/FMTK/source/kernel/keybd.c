@@ -1,9 +1,15 @@
+// The keyboard semaphore is locked only for short durations, so the interrupt
+// routine doesn't need to make many attempts to lock the semaphore.
+
 #include "config.h"
 #include "const.h"
 #include "types.h"
 #include "glo.h"
 #include "proto.h"
 
+#define SC_C        0x21
+#define SC_T        0x2C
+#define SC_Z        0x1A
 #define SC_KEYUP	0xF0
 #define SC_EXTEND   0xE0
 #define SC_CTRL		0x14
@@ -23,6 +29,11 @@ extern byte keybdExtendedCodes[];
 extern byte keybdControlCodes[];
 extern byte shiftedScanCodes[];
 extern byte unshiftedScanCodes[];
+extern signed byte KeybdGetStatus();
+extern byte KeybdGetScancode();
+extern void KeybdClearRcv();
+int kbd_sema = 0;
+
 //
 // KeyState2_
 // 876543210
@@ -37,16 +48,19 @@ extern byte unshiftedScanCodes[];
 // +-------- = extended
 //
 
-unsigned int keybd_irq_stack[512];
+unsigned int keybd_irq_stack[256];
 
 void KeybdIRQ()
 {
     __int8 sc;
     __int8 kh, kt;
+    hTCB ht;
+    TCB *t;
     JCB *jcb;
+    int nn;
 
      prolog asm {
-         lea   sp,keybd_irq_stack_+4088
+         lea   sp,keybd_irq_stack_+2040
          sw    r1,8+312[tr]
          sw    r2,16+312[tr]
          sw    r3,24+312[tr]
@@ -81,21 +95,37 @@ void KeybdIRQ()
          mfspr r1,cr0
          sw    r1,304[tr]
      }
-     if (KeybdGetStatus() < 0) {       // Is there actually a scancode available
+     while (KeybdGetStatus() < 0) {    // Is there actually a scancode available ?
          sc = KeybdGetScancode();
          jcb = IOFocusNdx;             // Are there any jobs with focus ?     
          if (jcb) {
-          	 if (LockSemaphore(&sys_sema,10000)) {
+          	 if (ILockSemaphore(&kbd_sema,200)) {
                  KeybdClearRcv();              // clear recieve register
                  kh = jcb->KeybdHead;
                  kt = jcb->KeybdTail;
                  kh++;
-                 kh &= 15;
+                 kh &= 31;
                  if (kh <> kt) {
                      jcb->KeybdHead = kh;   
                      jcb->KeybdBuffer[kh] = sc;
                  }
-                 UnlockSemaphore(&sys_sema);
+                 UnlockSemaphore(&kbd_sema);
+             }
+             // If CTRL-C is pressed, cause the tasks to return to the 
+             // catch handler.
+             if (jcb->KeyState2 & 4) {
+                 if(sc == SC_C) {      // control-c ?
+                     for (nn = 0; nn < 8; nn++) {
+                         if (jcb->tasks[nn]==-1)
+                             break;
+                         t = &tcbs[jcb->tasks[nn]];
+                         t->exception = 512+3;     // CTRL-C type exception
+                     }
+                 }
+                 else if (sc==SC_T || sc==SC_Z) {
+                      t = &tcbs[2];
+                      t->exception = (512 + ((sc==SC_T) ? 20 : 26)) | (GetRunningTCB() << 32);
+                 }
              }
              if ((jcb->KeyState2 & 2) && sc == SC_TAB)    // ALT + TAB ?
                  iof_switch++;       
@@ -146,11 +176,12 @@ int KeybdGetBufferStatus()
     JCB *j;
     __int8 kh, kt;
 
+    kh = kt = 0;
     j = GetJCBPtr();
-    if (LockSemaphore(&sys_sema,-1)) {
+    if (LockSemaphore(&kbd_sema,200)) {
         kh = j->KeybdHead;
         kt = j->KeybdTail;
-        UnlockSemaphore(&sys_sema);
+        UnlockSemaphore(&kbd_sema);
     }
     if (kh<>kt)
         return -1;
@@ -158,24 +189,26 @@ int KeybdGetBufferStatus()
             
 }
 
-int KeybdGetBufferedScancode()
+// Get a scancode from the keyboard buffer.
+
+__int8 KeybdGetBufferedScancode()
 {
     JCB *j;
     __int8 kh, kt;
     __int8 sc;
 
     j = GetJCBPtr();
-    if (LockSemaphore(&sys_sema,-1)) {
+    sc = 0;
+    if (LockSemaphore(&kbd_sema,200)) {
         kh = j->KeybdHead;
         kt = j->KeybdTail;
         if (kh <> kt) {
             sc = j->KeybdBuffer[kt];
             kt++;
-            kt &= 15;
+            kt &= 31;
             j->KeybdTail = kt;
         }
-        else sc = 0;
-        UnlockSemaphore(&sys_sema);
+        UnlockSemaphore(&kbd_sema);
     }
     return sc;
 }
@@ -183,7 +216,7 @@ int KeybdGetBufferedScancode()
 private char KeybdGetBufferedChar()
 {
     JCB *j;
-    __int8 sc;
+    unsigned __int8 sc;
     char ch;
 
     j = GetJCBPtr();
@@ -192,7 +225,10 @@ private char KeybdGetBufferedChar()
             if (j->KeybdWaitFlag==0)
                 return -1;
         }
-        sc = KeybdGetBufferedScancode();
+        // The following typecast is needed to avoid a compiler bug in the
+        // optimizer which removes the conversion from byte to word by zero
+        // extension.
+        sc = (unsigned __int8)KeybdGetBufferedScancode();
         switch(sc) {
         case SC_KEYUP:
             j->KeyState1 = -1;
@@ -236,28 +272,23 @@ private char KeybdGetBufferedChar()
         default:
             if (sc == SC_TAB && (j->KeyState2 & 2) && j->KeyState1==0) {
                 iof_switch++;
-                break;
             }
             else {
                  if (j->KeyState1) {
                      j->KeyState1 = 0;
-                     break;
                  }
                  else {
                       if (j->KeyState2 & 0x80) { // Extended code ?
                           ch = keybdExtendedCodes[sc];
                           j->KeyState1 = 0;
-                          j->KeyState2 &= 0x7F;
                           return ch;
                       }
                       else if (j->KeyState2 & 0x04) { // control ?
                           ch = keybdControlCodes[sc];
-                          j->KeyState2 &= 0xFB;
                           return ch;
                       }
                       else if (j->KeyState2 & 0x01) { // shifted ?
                           ch = shiftedScanCodes[sc];
-                          j->KeyState2 &= 0xFE;
                           return ch;
                       }
                       else {

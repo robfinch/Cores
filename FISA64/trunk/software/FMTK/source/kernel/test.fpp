@@ -30,10 +30,15 @@ typedef struct _tagJCB align(2048)
     unsigned __int16 CursorRow;
     unsigned __int16 CursorCol;
     unsigned __int32 NormAttr;
+    __int8 KeyState1;
+    __int8 KeyState2;
+    __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -76,6 +81,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {
@@ -105,11 +111,37 @@ typedef struct tagALARM {
 } ALARM;
 
 
-__int16 readyQ[8];
-TCB tcbs[256];
+char buf[20];
+__int8 getbyte() { return 1 };
 
 int iirl(int var, TCB *q)
 {
-    
-    readyQ[var] = q - tcbs;
+    unsigned __int8 sc;
+        
+    sc = getbyte();
+    switch(sc) {
+    case 1:
+         printf("hi1",sc);
+         break;
+    case 2:
+         printf("hi2",sc);
+         break;
+    case 3:
+         printf("hi2",sc);
+         break;
+    case 4:
+         printf("hi2",sc);
+         break;
+    case 5:
+         printf("hi2",sc);
+         break;
+    case 6:
+         printf("hi2",sc);
+         printf(buf[sc]);
+         printf(buf[sc]);
+         printf(buf[sc]);
+         printf(buf[sc]);
+         printf(buf[sc]);
+         break;
+    }
 }

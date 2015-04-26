@@ -4,7 +4,6 @@
 	align	8
 	fill.b	16,0x00
 	align	8
-	align	8
 	fill.b	1984,0x00
 	align	8
 	align	8
@@ -25,44 +24,49 @@ QueueMsg_:
 	      	push 	r12
 	      	push 	r13
 	      	lw   	r11,24[bp]
-	      	ldi  	r12,#nMsgBlk_
-	      	ldi  	r13,#freeMSG_
+	      	lea  	r3,nMsgBlk_[gp]
+	      	mov  	r12,r3
+	      	lea  	r3,freeMSG_[gp]
+	      	mov  	r13,r3
 	      	sw   	r0,-24[bp]
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_2
+	      	beq  	r3,FMTKmsg_3
 	      	inc  	32[r11],#1
-	      	lcu  	r3,12[r11]
+	      	lc   	r3,12[r11]
 	      	cmp  	r4,r3,#0
-	      	beq  	r4,FMTKmsg_5
-	      	cmp  	r4,r3,#2
 	      	beq  	r4,FMTKmsg_6
-	      	cmp  	r4,r3,#1
+	      	cmp  	r4,r3,#2
 	      	beq  	r4,FMTKmsg_7
-	      	bra  	FMTKmsg_4
-FMTKmsg_5:
-	      	bra  	FMTKmsg_4
+	      	cmp  	r4,r3,#1
+	      	beq  	r4,FMTKmsg_8
+	      	bra  	FMTKmsg_5
 FMTKmsg_6:
-FMTKmsg_8:
+	      	bra  	FMTKmsg_5
+FMTKmsg_7:
+FMTKmsg_9:
 	      	lw   	r3,32[r11]
 	      	lw   	r4,24[r11]
 	      	cmpu 	r5,r3,r4
-	      	ble  	r5,FMTKmsg_9
+	      	ble  	r5,FMTKmsg_10
 	      	lc   	r4,8[r11]
 	      	asli 	r3,r4,#5
-	      	lcu  	r3,message_[r3]
-	      	sxc  	r3,r3
+	      	lea  	r4,message_[gp]
+	      	lc   	r3,0[r4+r3]
 	      	sc   	r3,-10[bp]
 	      	lc   	r5,-10[bp]
 	      	asli 	r4,r5,#5
-	      	addu 	r3,r4,#message_
+	      	lea  	r5,message_[gp]
+	      	addu 	r3,r4,r5
 	      	sw   	r3,-8[bp]
-	      	lc   	r3,[r13]
-	      	lc   	r5,8[r11]
-	      	asli 	r4,r5,#5
-	      	sc   	r3,message_[r4]
+	      	lc   	r4,8[r11]
+	      	asli 	r3,r4,#5
+	      	lea  	r4,message_[gp]
+	      	lc   	r5,[r13]
+	      	andi 	r5,r5,#65535
+	      	sc   	r5,0[r4+r3]
 	      	lc   	r3,8[r11]
 	      	sc   	r3,[r13]
 	      	inc  	[r12],#1
@@ -71,92 +75,100 @@ FMTKmsg_8:
 	      	sc   	r3,8[r11]
 	      	lw   	r3,40[r11]
 	      	cmpu 	r4,r3,#-1
-	      	bge  	r4,FMTKmsg_10
+	      	bge  	r4,FMTKmsg_11
 	      	inc  	40[r11],#1
-FMTKmsg_10:
+FMTKmsg_11:
 	      	ldi  	r3,#6
 	      	sw   	r3,-24[bp]
-	      	bra  	FMTKmsg_8
-FMTKmsg_9:
-	      	bra  	FMTKmsg_4
-FMTKmsg_7:
+	      	bra  	FMTKmsg_9
+FMTKmsg_10:
+	      	bra  	FMTKmsg_5
+FMTKmsg_8:
 	      	lw   	r3,32[r11]
 	      	lw   	r4,24[r11]
 	      	cmpu 	r5,r3,r4
-	      	ble  	r5,FMTKmsg_12
-	      	lc   	r3,[r13]
-	      	lw   	r4,32[bp]
-	      	sc   	r3,[r4]
+	      	ble  	r5,FMTKmsg_13
+	      	lw   	r3,32[bp]
+	      	lc   	r4,[r13]
+	      	andi 	r4,r4,#65535
+	      	sc   	r4,[r3]
 	      	lw   	r5,32[bp]
-	      	subu 	r4,r5,#message_
+	      	lea  	r6,message_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#5
 	      	sc   	r3,[r13]
 	      	inc  	[r12],#1
 	      	lw   	r3,40[r11]
 	      	cmpu 	r4,r3,#-1
-	      	bge  	r4,FMTKmsg_14
+	      	bge  	r4,FMTKmsg_15
 	      	inc  	40[r11],#1
-FMTKmsg_14:
+FMTKmsg_15:
 	      	ldi  	r3,#6
 	      	sw   	r3,-24[bp]
 	      	dec  	32[r11],#1
-FMTKmsg_12:
-FMTKmsg_16:
+FMTKmsg_13:
+FMTKmsg_17:
 	      	lw   	r3,32[r11]
 	      	lw   	r4,24[r11]
 	      	cmpu 	r5,r3,r4
-	      	ble  	r5,FMTKmsg_17
+	      	ble  	r5,FMTKmsg_18
 	      	lc   	r5,8[r11]
 	      	asli 	r4,r5,#5
-	      	addu 	r3,r4,#message_
+	      	lea  	r5,message_[gp]
+	      	addu 	r3,r4,r5
 	      	sw   	r3,-8[bp]
-FMTKmsg_18:
+FMTKmsg_19:
 	      	lw   	r5,-8[bp]
-	      	subu 	r4,r5,#message_
+	      	lea  	r6,message_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#5
 	      	lc   	r4,10[r11]
 	      	andi 	r4,r4,#65535
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,FMTKmsg_19
+	      	beq  	r5,FMTKmsg_20
 	      	lw   	r3,-8[bp]
 	      	sw   	r3,32[bp]
 	      	lw   	r5,-8[bp]
-	      	lcu  	r5,[r5]
+	      	lc   	r5,[r5]
 	      	asli 	r4,r5,#5
-	      	addu 	r3,r4,#message_
+	      	lea  	r5,message_[gp]
+	      	addu 	r3,r4,r5
 	      	sw   	r3,-8[bp]
-	      	bra  	FMTKmsg_18
-FMTKmsg_19:
+	      	bra  	FMTKmsg_19
+FMTKmsg_20:
 	      	lw   	r5,32[bp]
-	      	subu 	r4,r5,#message_
+	      	lea  	r6,message_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#5
 	      	sc   	r3,10[r11]
-	      	lc   	r3,[r13]
-	      	lw   	r4,-8[bp]
-	      	sc   	r3,[r4]
+	      	lw   	r3,-8[bp]
+	      	lc   	r4,[r13]
+	      	andi 	r4,r4,#65535
+	      	sc   	r4,[r3]
 	      	lw   	r5,-8[bp]
-	      	subu 	r4,r5,#message_
+	      	lea  	r6,message_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#5
 	      	sc   	r3,[r13]
 	      	inc  	[r12],#1
 	      	lw   	r3,40[r11]
 	      	cmpu 	r4,r3,#-1
-	      	bge  	r4,FMTKmsg_20
+	      	bge  	r4,FMTKmsg_21
 	      	inc  	40[r11],#1
-FMTKmsg_20:
+FMTKmsg_21:
 	      	dec  	32[r11],#1
 	      	ldi  	r3,#6
 	      	sw   	r3,-24[bp]
-	      	bra  	FMTKmsg_16
-FMTKmsg_17:
+	      	bra  	FMTKmsg_17
+FMTKmsg_18:
 	      	lw   	r3,-24[bp]
 	      	cmp  	r4,r3,#6
-	      	bne  	r4,FMTKmsg_22
-	      	push 	#sys_sema_
+	      	bne  	r4,FMTKmsg_23
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	lw   	r3,-24[bp]
 	      	mov  	r1,r3
-FMTKmsg_24:
+FMTKmsg_25:
 	      	pop  	r13
 	      	pop  	r12
 	      	pop  	r11
@@ -165,41 +177,47 @@ FMTKmsg_24:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#16
-FMTKmsg_22:
-	      	bra  	FMTKmsg_4
-FMTKmsg_4:
+FMTKmsg_23:
+	      	bra  	FMTKmsg_5
+FMTKmsg_5:
 	      	lc   	r3,10[r11]
-	      	blt  	r3,FMTKmsg_25
-	      	lw   	r5,32[bp]
-	      	subu 	r4,r5,#message_
-	      	lsri 	r3,r4,#5
-	      	lc   	r5,10[r11]
-	      	asli 	r4,r5,#5
-	      	sc   	r3,message_[r4]
-	      	bra  	FMTKmsg_26
-FMTKmsg_25:
-	      	lw   	r5,32[bp]
-	      	subu 	r4,r5,#message_
-	      	lsri 	r3,r4,#5
-	      	sc   	r3,8[r11]
+	      	blt  	r3,FMTKmsg_26
+	      	lc   	r4,10[r11]
+	      	asli 	r3,r4,#5
+	      	lea  	r4,message_[gp]
+	      	lw   	r7,32[bp]
+	      	lea  	r8,message_[gp]
+	      	subu 	r6,r7,r8
+	      	lsri 	r5,r6,#5
+	      	andi 	r5,r5,#65535
+	      	sc   	r5,0[r4+r3]
+	      	bra  	FMTKmsg_27
 FMTKmsg_26:
 	      	lw   	r5,32[bp]
-	      	subu 	r4,r5,#message_
+	      	lea  	r6,message_[gp]
+	      	subu 	r4,r5,r6
+	      	lsri 	r3,r4,#5
+	      	sc   	r3,8[r11]
+FMTKmsg_27:
+	      	lw   	r5,32[bp]
+	      	lea  	r6,message_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#5
 	      	sc   	r3,10[r11]
 	      	lw   	r3,32[bp]
 	      	ldi  	r4,#-1
+	      	andi 	r4,r4,#65535
 	      	sc   	r4,[r3]
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_2:
+FMTKmsg_3:
 	      	lw   	r3,-24[bp]
 	      	mov  	r1,r3
-	      	bra  	FMTKmsg_24
+	      	bra  	FMTKmsg_25
 FMTKmsg_1:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_24
+	      	bra  	FMTKmsg_25
 DequeueMsg_:
 	      	subui	sp,sp,#16
 	      	push 	bp
@@ -208,32 +226,34 @@ DequeueMsg_:
 	      	push 	r11
 	      	push 	r12
 	      	lw   	r11,24[bp]
-	      	ldi  	r12,#0
+	      	ldi  	r3,#0
+	      	mov  	r12,r3
 	      	lw   	r3,32[r11]
-	      	beq  	r3,FMTKmsg_29
+	      	beq  	r3,FMTKmsg_31
 	      	dec  	32[r11],#1
 	      	lc   	r3,8[r11]
 	      	sc   	r3,-10[bp]
 	      	lc   	r3,-10[bp]
-	      	blt  	r3,FMTKmsg_31
+	      	blt  	r3,FMTKmsg_33
 	      	lc   	r5,-10[bp]
 	      	asli 	r4,r5,#5
-	      	addu 	r3,r4,#message_
+	      	lea  	r5,message_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r12,r3
-	      	lcu  	r3,[r12]
-	      	sxc  	r3,r3
+	      	lc   	r3,[r12]
 	      	sc   	r3,8[r11]
 	      	lc   	r3,8[r11]
-	      	bge  	r3,FMTKmsg_33
+	      	bge  	r3,FMTKmsg_35
 	      	ldi  	r3,#-1
 	      	sc   	r3,10[r11]
-FMTKmsg_33:
-	      	lc   	r3,-10[bp]
-	      	sc   	r3,[r12]
-FMTKmsg_31:
-FMTKmsg_29:
-	      	mov  	r1,r12
 FMTKmsg_35:
+	      	lc   	r3,-10[bp]
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,[r12]
+FMTKmsg_33:
+FMTKmsg_31:
+	      	mov  	r1,r12
+FMTKmsg_37:
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -243,18 +263,19 @@ public code FMTK_AllocMbx_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_36
+	      	ldi  	xlr,#FMTKmsg_38
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
 	      	push 	r12
 	      	push 	r13
-	      	ldi  	r12,#freeMBX_
+	      	lea  	r3,freeMBX_[gp]
+	      	mov  	r12,r3
 	      	lw   	r13,24[bp]
 	      	     	mfspr r1,ivno 
-	      	bne  	r13,FMTKmsg_37
+	      	bne  	r13,FMTKmsg_40
 	      	ldi  	r1,#4
-FMTKmsg_39:
+FMTKmsg_42:
 	      	pop  	r13
 	      	pop  	r12
 	      	pop  	r11
@@ -263,34 +284,36 @@ FMTKmsg_39:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_37:
+FMTKmsg_40:
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_40
+	      	beq  	r3,FMTKmsg_43
 	      	lc   	r3,[r12]
-	      	blt  	r3,FMTKmsg_44
+	      	blt  	r3,FMTKmsg_47
 	      	lc   	r3,[r12]
 	      	cmp  	r4,r3,#1024
-	      	blt  	r4,FMTKmsg_42
-FMTKmsg_44:
-	      	push 	#sys_sema_
+	      	blt  	r4,FMTKmsg_45
+FMTKmsg_47:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#64
-	      	bra  	FMTKmsg_39
-FMTKmsg_42:
+	      	bra  	FMTKmsg_42
+FMTKmsg_45:
 	      	lc   	r5,[r12]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r11,r3
 	      	lc   	r3,[r11]
 	      	sc   	r3,[r12]
-	      	dec  	nMailbox_,#1
-	      	push 	#sys_sema_
+	      	dec  	nMailbox_[gp],#1
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_40:
-	      	subu 	r4,r11,#mailbox_
+FMTKmsg_43:
+	      	lea  	r5,mailbox_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#6
 	      	sc   	r3,[r13]
 	      	bsr  	GetJCBPtr_
@@ -310,20 +333,21 @@ FMTKmsg_40:
 	      	ldi  	r3,#8
 	      	sw   	r3,24[r11]
 	      	ldi  	r3,#2
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,12[r11]
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_39
-FMTKmsg_36:
+	      	bra  	FMTKmsg_42
+FMTKmsg_38:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_39
+	      	bra  	FMTKmsg_42
 endpublic
 
 public code FMTK_FreeMbx_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_45
+	      	ldi  	xlr,#FMTKmsg_48
 	      	mov  	bp,sp
 	      	subui	sp,sp,#24
 	      	push 	r11
@@ -336,13 +360,14 @@ public code FMTK_FreeMbx_:
 	      	chk  	r3,r0,#1024
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r13,r3
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_46
+	      	beq  	r3,FMTKmsg_50
 	      	lb   	r3,2[r13]
 	      	sxb  	r3,r3
 	      	push 	r3
@@ -350,14 +375,16 @@ public code FMTK_FreeMbx_:
 	      	pop  	r3
 	      	mov  	r4,r1
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,FMTKmsg_48
+	      	beq  	r5,FMTKmsg_52
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_48
-	      	push 	#sys_sema_
+	      	lea  	r4,jcbs_[gp]
+	      	cmp  	r5,r3,r4
+	      	beq  	r5,FMTKmsg_52
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#12
-FMTKmsg_50:
+FMTKmsg_54:
 	      	pop  	r13
 	      	pop  	r12
 	      	pop  	r11
@@ -366,77 +393,87 @@ FMTKmsg_50:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_48:
-FMTKmsg_51:
+FMTKmsg_52:
+FMTKmsg_55:
 	      	push 	r13
 	      	bsr  	DequeueMsg_
 	      	mov  	r3,r1
 	      	mov  	r12,r3
-	      	beq  	r3,FMTKmsg_52
+	      	beq  	r12,FMTKmsg_56
 	      	ldi  	r3,#1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,6[r12]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,2[r12]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,4[r12]
-	      	lc   	r3,freeMSG_
+	      	lc   	r3,freeMSG_[gp]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,[r12]
-	      	subu 	r4,r12,#message_
+	      	lea  	r5,message_[gp]
+	      	subu 	r4,r12,r5
 	      	lsri 	r3,r4,#5
-	      	sc   	r3,freeMSG_
-	      	inc  	nMsgBlk_,#1
-	      	bra  	FMTKmsg_51
-FMTKmsg_52:
-FMTKmsg_53:
+	      	sc   	r3,freeMSG_[gp]
+	      	inc  	nMsgBlk_[gp],#1
+	      	bra  	FMTKmsg_55
+FMTKmsg_56:
+FMTKmsg_57:
 	      	push 	r11
 	      	push 	r13
 	      	bsr  	DequeThreadFromMbx_
 	      	addui	sp,sp,#16
 	      	lw   	r3,[r11]
-	      	bne  	r3,FMTKmsg_55
-	      	bra  	FMTKmsg_54
-FMTKmsg_55:
+	      	bne  	r3,FMTKmsg_59
+	      	bra  	FMTKmsg_58
+FMTKmsg_59:
 	      	lw   	r3,[r11]
-	      	sc   	r0,678[r3]
+	      	ldi  	r4,#0
+	      	andi 	r4,r4,#65535
+	      	sc   	r4,678[r3]
 	      	lw   	r4,[r11]
 	      	lb   	r4,717[r4]
 	      	and  	r3,r4,#1
-	      	beq  	r3,FMTKmsg_57
+	      	beq  	r3,FMTKmsg_61
 	      	lw   	r5,[r11]
-	      	subu 	r4,r5,#tcbs_
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	RemoveFromTimeoutList_
-FMTKmsg_57:
+FMTKmsg_61:
 	      	lw   	r5,[r11]
-	      	subu 	r4,r5,#tcbs_
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	InsertIntoReadyList_
-	      	bra  	FMTKmsg_53
-FMTKmsg_54:
-	      	lc   	r3,freeMBX_
+	      	bra  	FMTKmsg_57
+FMTKmsg_58:
+	      	lc   	r3,freeMBX_[gp]
 	      	sc   	r3,[r13]
-	      	subu 	r4,r13,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	subu 	r4,r13,r5
 	      	lsri 	r3,r4,#6
-	      	sc   	r3,freeMBX_
-	      	inc  	nMailbox_,#1
-	      	push 	#sys_sema_
+	      	sc   	r3,freeMBX_[gp]
+	      	inc  	nMailbox_[gp],#1
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_46:
+FMTKmsg_50:
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_50
-FMTKmsg_45:
+	      	bra  	FMTKmsg_54
+FMTKmsg_48:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_50
+	      	bra  	FMTKmsg_54
 endpublic
 
 public code SetMbxMsgQueStrategy_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_59
+	      	ldi  	xlr,#FMTKmsg_63
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
@@ -445,25 +482,26 @@ public code SetMbxMsgQueStrategy_:
 	      	chk  	r3,r0,#1024
 	      	lw   	r3,32[bp]
 	      	cmp  	r4,r3,#2
-	      	ble  	r4,FMTKmsg_60
+	      	ble  	r4,FMTKmsg_65
 	      	ldi  	r1,#4
-FMTKmsg_62:
+FMTKmsg_67:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_60:
+FMTKmsg_65:
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r11,r3
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_63
+	      	beq  	r3,FMTKmsg_68
 	      	lb   	r3,2[r11]
 	      	sxb  	r3,r3
 	      	push 	r3
@@ -471,35 +509,38 @@ FMTKmsg_60:
 	      	pop  	r3
 	      	mov  	r4,r1
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,FMTKmsg_65
+	      	beq  	r5,FMTKmsg_70
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_65
-	      	push 	#sys_sema_
+	      	lea  	r4,jcbs_[gp]
+	      	cmp  	r5,r3,r4
+	      	beq  	r5,FMTKmsg_70
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#12
-	      	bra  	FMTKmsg_62
-FMTKmsg_65:
+	      	bra  	FMTKmsg_67
+FMTKmsg_70:
 	      	lw   	r3,32[bp]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,12[r11]
 	      	lw   	r3,40[bp]
 	      	sw   	r3,24[r11]
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_63:
+FMTKmsg_68:
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_62
-FMTKmsg_59:
+	      	bra  	FMTKmsg_67
+FMTKmsg_63:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_62
+	      	bra  	FMTKmsg_67
 endpublic
 
 public code FMTK_SendMsg_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_67
+	      	ldi  	xlr,#FMTKmsg_72
 	      	mov  	bp,sp
 	      	subui	sp,sp,#24
 	      	push 	r11
@@ -508,29 +549,31 @@ public code FMTK_SendMsg_:
 	      	push 	r14
 	      	lea  	r3,-24[bp]
 	      	mov  	r11,r3
-	      	ldi  	r14,#freeMSG_
+	      	lea  	r3,freeMSG_[gp]
+	      	mov  	r14,r3
 	      	     	mfspr r1,ivno 
 	      	lc   	r3,24[bp]
 	      	chk  	r3,r0,#1024
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r13,r3
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_68
+	      	beq  	r3,FMTKmsg_74
 	      	lb   	r3,2[r13]
-	      	blt  	r3,FMTKmsg_72
+	      	blt  	r3,FMTKmsg_78
 	      	lb   	r3,2[r13]
 	      	cmp  	r4,r3,#51
-	      	blt  	r4,FMTKmsg_70
-FMTKmsg_72:
-	      	push 	#sys_sema_
+	      	blt  	r4,FMTKmsg_76
+FMTKmsg_78:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#8
-FMTKmsg_73:
+FMTKmsg_79:
 	      	pop  	r14
 	      	pop  	r13
 	      	pop  	r12
@@ -540,38 +583,42 @@ FMTKmsg_73:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_70:
+FMTKmsg_76:
 	      	lc   	r3,[r14]
-	      	blt  	r3,FMTKmsg_76
+	      	blt  	r3,FMTKmsg_82
 	      	lc   	r3,[r14]
 	      	cmp  	r4,r3,#16384
-	      	blt  	r4,FMTKmsg_74
-FMTKmsg_76:
-	      	push 	#sys_sema_
+	      	blt  	r4,FMTKmsg_80
+FMTKmsg_82:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#65
-	      	bra  	FMTKmsg_73
-FMTKmsg_74:
+	      	bra  	FMTKmsg_79
+FMTKmsg_80:
 	      	lc   	r5,[r14]
 	      	asli 	r4,r5,#5
-	      	addu 	r3,r4,#message_
+	      	lea  	r5,message_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r12,r3
-	      	lcu  	r3,[r12]
-	      	sxc  	r3,r3
+	      	lc   	r3,[r12]
 	      	sc   	r3,[r14]
-	      	dec  	nMsgBlk_,#1
+	      	dec  	nMsgBlk_[gp],#1
 	      	push 	r3
 	      	push 	r4
 	      	bsr  	GetJCBPtr_
 	      	pop  	r4
 	      	pop  	r3
 	      	mov  	r5,r1
-	      	subu 	r4,r5,#jcbs_
+	      	lea  	r6,jcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#11
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,2[r12]
 	      	lc   	r3,24[bp]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,4[r12]
 	      	ldi  	r3,#2
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,6[r12]
 	      	lw   	r3,32[bp]
 	      	sw   	r3,8[r12]
@@ -583,23 +630,23 @@ FMTKmsg_74:
 	      	push 	r13
 	      	bsr  	DequeThreadFromMbx_
 	      	addui	sp,sp,#16
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_68:
+FMTKmsg_74:
 	      	lw   	r3,[r11]
-	      	bne  	r3,FMTKmsg_77
+	      	bne  	r3,FMTKmsg_83
 	      	push 	r12
 	      	push 	r13
 	      	bsr  	QueueMsg_
 	      	mov  	r3,r1
 	      	mov  	r1,r3
-	      	bra  	FMTKmsg_73
-FMTKmsg_77:
+	      	bra  	FMTKmsg_79
+FMTKmsg_83:
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_79
+	      	beq  	r3,FMTKmsg_85
 	      	lw   	r3,[r11]
 	      	lcu  	r4,2[r12]
 	      	sc   	r4,674[r3]
@@ -619,47 +666,54 @@ FMTKmsg_77:
 	      	lw   	r4,24[r12]
 	      	sw   	r4,696[r3]
 	      	ldi  	r3,#1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,6[r12]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,2[r12]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,4[r12]
 	      	lc   	r3,[r14]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,[r12]
-	      	subu 	r4,r12,#message_
+	      	lea  	r5,message_[gp]
+	      	subu 	r4,r12,r5
 	      	lsri 	r3,r4,#5
 	      	sc   	r3,[r14]
 	      	lw   	r4,[r11]
 	      	lb   	r4,717[r4]
 	      	and  	r3,r4,#1
-	      	beq  	r3,FMTKmsg_81
+	      	beq  	r3,FMTKmsg_87
 	      	lw   	r5,[r11]
-	      	subu 	r4,r5,#tcbs_
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	RemoveFromTimeoutList_
-FMTKmsg_81:
+FMTKmsg_87:
 	      	lw   	r5,[r11]
-	      	subu 	r4,r5,#tcbs_
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	InsertIntoReadyList_
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_79:
+FMTKmsg_85:
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_73
-FMTKmsg_67:
+	      	bra  	FMTKmsg_79
+FMTKmsg_72:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_73
+	      	bra  	FMTKmsg_79
 endpublic
 
 public code FMTK_PostMsg_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_83
+	      	ldi  	xlr,#FMTKmsg_89
 	      	mov  	bp,sp
 	      	subui	sp,sp,#32
 	      	push 	r11
@@ -668,29 +722,31 @@ public code FMTK_PostMsg_:
 	      	push 	r14
 	      	lea  	r3,-24[bp]
 	      	mov  	r11,r3
-	      	ldi  	r14,#freeMSG_
+	      	lea  	r3,freeMSG_[gp]
+	      	mov  	r14,r3
 	      	     	mfspr r1,ivno 
 	      	lc   	r3,24[bp]
 	      	chk  	r3,r0,#1024
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r13,r3
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_84
+	      	beq  	r3,FMTKmsg_91
 	      	lb   	r3,2[r13]
-	      	blt  	r3,FMTKmsg_88
+	      	blt  	r3,FMTKmsg_95
 	      	lb   	r3,2[r13]
 	      	cmp  	r4,r3,#51
-	      	blt  	r4,FMTKmsg_86
-FMTKmsg_88:
-	      	push 	#sys_sema_
+	      	blt  	r4,FMTKmsg_93
+FMTKmsg_95:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#8
-FMTKmsg_89:
+FMTKmsg_96:
 	      	pop  	r14
 	      	pop  	r13
 	      	pop  	r12
@@ -700,38 +756,42 @@ FMTKmsg_89:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_86:
+FMTKmsg_93:
 	      	lc   	r3,[r14]
-	      	blt  	r3,FMTKmsg_92
+	      	blt  	r3,FMTKmsg_99
 	      	lc   	r3,[r14]
 	      	cmp  	r4,r3,#16384
-	      	blt  	r4,FMTKmsg_90
-FMTKmsg_92:
-	      	push 	#sys_sema_
+	      	blt  	r4,FMTKmsg_97
+FMTKmsg_99:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#65
-	      	bra  	FMTKmsg_89
-FMTKmsg_90:
+	      	bra  	FMTKmsg_96
+FMTKmsg_97:
 	      	lc   	r5,[r14]
 	      	asli 	r4,r5,#5
-	      	addu 	r3,r4,#message_
+	      	lea  	r5,message_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r12,r3
-	      	lcu  	r3,[r12]
-	      	sxc  	r3,r3
+	      	lc   	r3,[r12]
 	      	sc   	r3,[r14]
-	      	dec  	nMsgBlk_,#1
+	      	dec  	nMsgBlk_[gp],#1
 	      	push 	r3
 	      	push 	r4
 	      	bsr  	GetJCBPtr_
 	      	pop  	r4
 	      	pop  	r3
 	      	mov  	r5,r1
-	      	subu 	r4,r5,#jcbs_
+	      	lea  	r6,jcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#11
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,2[r12]
 	      	lc   	r3,24[bp]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,4[r12]
 	      	ldi  	r3,#2
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,6[r12]
 	      	lw   	r3,32[bp]
 	      	sw   	r3,8[r12]
@@ -743,11 +803,11 @@ FMTKmsg_90:
 	      	push 	r13
 	      	bsr  	DequeueThreadFromMbx_
 	      	addui	sp,sp,#16
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_84:
+FMTKmsg_91:
 	      	lw   	r3,[r11]
-	      	bne  	r3,FMTKmsg_93
+	      	bne  	r3,FMTKmsg_100
 	      	push 	r12
 	      	push 	r13
 	      	bsr  	QueueMsg_
@@ -755,13 +815,13 @@ FMTKmsg_84:
 	      	sw   	r3,-32[bp]
 	      	lw   	r3,-32[bp]
 	      	mov  	r1,r3
-	      	bra  	FMTKmsg_89
-FMTKmsg_93:
+	      	bra  	FMTKmsg_96
+FMTKmsg_100:
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_95
+	      	beq  	r3,FMTKmsg_102
 	      	lw   	r3,[r11]
 	      	lcu  	r4,2[r12]
 	      	sc   	r4,674[r3]
@@ -781,47 +841,54 @@ FMTKmsg_93:
 	      	lw   	r4,24[r12]
 	      	sw   	r4,696[r3]
 	      	ldi  	r3,#1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,6[r12]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,2[r12]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,4[r12]
 	      	lc   	r3,[r14]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,[r12]
-	      	subu 	r4,r12,#message_
+	      	lea  	r5,message_[gp]
+	      	subu 	r4,r12,r5
 	      	lsri 	r3,r4,#5
 	      	sc   	r3,[r14]
 	      	lw   	r4,[r11]
 	      	lb   	r4,717[r4]
 	      	and  	r3,r4,#1
-	      	beq  	r3,FMTKmsg_97
+	      	beq  	r3,FMTKmsg_104
 	      	lw   	r5,[r11]
-	      	subu 	r4,r5,#tcbs_
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	RemoveFromTimeoutList_
-FMTKmsg_97:
+FMTKmsg_104:
 	      	lw   	r5,[r11]
-	      	subu 	r4,r5,#tcbs_
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r4,r5,r6
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	InsertIntoReadyList_
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_95:
+FMTKmsg_102:
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_89
-FMTKmsg_83:
+	      	bra  	FMTKmsg_96
+FMTKmsg_89:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_89
+	      	bra  	FMTKmsg_96
 endpublic
 
 public code FMTK_WaitMsg_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_99
+	      	ldi  	xlr,#FMTKmsg_106
 	      	mov  	bp,sp
 	      	subui	sp,sp,#32
 	      	push 	r11
@@ -839,23 +906,24 @@ public code FMTK_WaitMsg_:
 	      	chk  	r3,r0,#1024
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r12,r3
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_100
+	      	beq  	r3,FMTKmsg_108
 	      	lb   	r3,2[r12]
-	      	blt  	r3,FMTKmsg_104
+	      	blt  	r3,FMTKmsg_112
 	      	lb   	r3,2[r12]
 	      	cmp  	r4,r3,#51
-	      	blt  	r4,FMTKmsg_102
-FMTKmsg_104:
-	      	push 	#sys_sema_
+	      	blt  	r4,FMTKmsg_110
+FMTKmsg_112:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#8
-FMTKmsg_105:
+FMTKmsg_113:
 	      	pop  	r17
 	      	pop  	r16
 	      	pop  	r15
@@ -868,162 +936,180 @@ FMTKmsg_105:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_102:
+FMTKmsg_110:
 	      	push 	r12
 	      	bsr  	DequeueMsg_
 	      	mov  	r3,r1
 	      	mov  	r17,r3
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_100:
-	      	bne  	r17,FMTKmsg_106
+FMTKmsg_108:
+	      	bne  	r17,FMTKmsg_114
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_108
+	      	beq  	r3,FMTKmsg_116
 	      	bsr  	GetRunningTCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	subu 	r4,r11,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	RemoveFromReadyList_
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_108:
+FMTKmsg_116:
 	      	lb   	r3,717[r11]
 	      	ori  	r3,r3,#2
 	      	sb   	r3,717[r11]
 	      	lc   	r3,24[bp]
 	      	sc   	r3,712[r11]
-	      	sc   	r0,628[r11]
+	      	ldi  	r3,#-1
+	      	sc   	r3,628[r11]
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_110
+	      	beq  	r3,FMTKmsg_118
 	      	lc   	r3,4[r12]
-	      	bge  	r3,FMTKmsg_112
+	      	bge  	r3,FMTKmsg_120
 	      	ldi  	r3,#-1
 	      	sc   	r3,630[r11]
-	      	subu 	r4,r11,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#10
 	      	sc   	r3,4[r12]
-	      	subu 	r4,r11,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#10
 	      	sc   	r3,6[r12]
 	      	ldi  	r3,#1
 	      	sw   	r3,16[r12]
-	      	bra  	FMTKmsg_113
-FMTKmsg_112:
+	      	bra  	FMTKmsg_121
+FMTKmsg_120:
 	      	lc   	r3,6[r12]
 	      	sc   	r3,630[r11]
-	      	subu 	r4,r11,#tcbs_
-	      	lsri 	r3,r4,#10
-	      	lc   	r6,6[r12]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,#tcbs_
-	      	sc   	r3,628[r4]
-	      	subu 	r4,r11,#tcbs_
+	      	lc   	r5,6[r12]
+	      	asli 	r4,r5,#10
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
+	      	lea  	r6,tcbs_[gp]
+	      	subu 	r5,r11,r6
+	      	lsri 	r4,r5,#10
+	      	sc   	r4,628[r3]
+	      	lea  	r5,tcbs_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#10
 	      	sc   	r3,6[r12]
 	      	inc  	16[r12],#1
-FMTKmsg_113:
-	      	push 	#sys_sema_
+FMTKmsg_121:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_110:
+FMTKmsg_118:
 	      	lw   	r3,56[bp]
-	      	beq  	r3,FMTKmsg_114
+	      	beq  	r3,FMTKmsg_122
+	      	     	; Waitmsg here; 
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_116
+	      	beq  	r3,FMTKmsg_124
 	      	push 	56[bp]
-	      	subu 	r4,r11,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#10
 	      	push 	r3
 	      	bsr  	InsertIntoTimeoutList_
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_116:
-FMTKmsg_114:
+FMTKmsg_124:
+FMTKmsg_122:
 	      	     	int #2 
 	      	bsr  	GetRunningTCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r16,r3
 	      	addu 	r3,r16,#672
-	      	lcu  	r3,6[r3]
-	      	bne  	r3,FMTKmsg_118
+	      	lc   	r3,6[r3]
+	      	bne  	r3,FMTKmsg_126
 	      	ldi  	r1,#9
-	      	bra  	FMTKmsg_105
-FMTKmsg_118:
-	      	sc   	r0,678[r16]
+	      	bra  	FMTKmsg_113
+FMTKmsg_126:
+	      	ldi  	r3,#0
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,678[r16]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,676[r16]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,674[r16]
-	      	beq  	r15,FMTKmsg_120
+	      	beq  	r15,FMTKmsg_128
 	      	lw   	r3,680[r16]
 	      	sw   	r3,[r15]
-FMTKmsg_120:
-	      	beq  	r14,FMTKmsg_122
+FMTKmsg_128:
+	      	beq  	r14,FMTKmsg_130
 	      	lw   	r3,688[r16]
 	      	sw   	r3,[r14]
-FMTKmsg_122:
-	      	beq  	r13,FMTKmsg_124
+FMTKmsg_130:
+	      	beq  	r13,FMTKmsg_132
 	      	lw   	r3,696[r16]
 	      	sw   	r3,[r13]
-FMTKmsg_124:
-	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_105
-FMTKmsg_106:
-	      	beq  	r15,FMTKmsg_126
-	      	lw   	r3,8[r17]
-	      	sw   	r3,[r15]
-FMTKmsg_126:
-	      	beq  	r14,FMTKmsg_128
-	      	lw   	r3,16[r17]
-	      	sw   	r3,[r14]
-FMTKmsg_128:
-	      	beq  	r13,FMTKmsg_130
-	      	lw   	r3,24[r17]
-	      	sw   	r3,[r13]
-FMTKmsg_130:
-	      	push 	#-1
-	      	push 	#sys_sema_
-	      	bsr  	LockSemaphore_
-	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_132
-	      	ldi  	r3,#1
-	      	sc   	r3,6[r17]
-	      	ldi  	r3,#-1
-	      	sc   	r3,2[r17]
-	      	ldi  	r3,#-1
-	      	sc   	r3,4[r17]
-	      	lc   	r3,freeMSG_
-	      	sc   	r3,[r17]
-	      	subu 	r4,r17,#message_
-	      	lsri 	r3,r4,#5
-	      	sc   	r3,freeMSG_
-	      	inc  	nMsgBlk_,#1
-	      	push 	#sys_sema_
-	      	bsr  	UnlockSemaphore_
 FMTKmsg_132:
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_105
-FMTKmsg_99:
+	      	bra  	FMTKmsg_113
+FMTKmsg_114:
+	      	beq  	r15,FMTKmsg_134
+	      	lw   	r3,8[r17]
+	      	sw   	r3,[r15]
+FMTKmsg_134:
+	      	beq  	r14,FMTKmsg_136
+	      	lw   	r3,16[r17]
+	      	sw   	r3,[r14]
+FMTKmsg_136:
+	      	beq  	r13,FMTKmsg_138
+	      	lw   	r3,24[r17]
+	      	sw   	r3,[r13]
+FMTKmsg_138:
+	      	push 	#-1
+	      	pea  	sys_sema_[gp]
+	      	bsr  	LockSemaphore_
+	      	mov  	r3,r1
+	      	beq  	r3,FMTKmsg_140
+	      	ldi  	r3,#1
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,6[r17]
+	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,2[r17]
+	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,4[r17]
+	      	lc   	r3,freeMSG_[gp]
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,[r17]
+	      	lea  	r5,message_[gp]
+	      	subu 	r4,r17,r5
+	      	lsri 	r3,r4,#5
+	      	sc   	r3,freeMSG_[gp]
+	      	inc  	nMsgBlk_[gp],#1
+	      	pea  	sys_sema_[gp]
+	      	bsr  	UnlockSemaphore_
+FMTKmsg_140:
+	      	ldi  	r1,#0
+	      	bra  	FMTKmsg_113
+FMTKmsg_106:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_105
+	      	bra  	FMTKmsg_113
 endpublic
 
 public code FMTK_PeekMsg_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_134
+	      	ldi  	xlr,#FMTKmsg_142
 	      	mov  	bp,sp
 	      	push 	#0
 	      	push 	40[bp]
@@ -1033,23 +1119,23 @@ public code FMTK_PeekMsg_:
 	      	addui	sp,sp,#32
 	      	mov  	r3,r1
 	      	mov  	r1,r3
-FMTKmsg_135:
+FMTKmsg_144:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_134:
+FMTKmsg_142:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_135
+	      	bra  	FMTKmsg_144
 endpublic
 
 public code FMTK_CheckMsg_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKmsg_136
+	      	ldi  	xlr,#FMTKmsg_145
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
@@ -1065,19 +1151,20 @@ public code FMTK_CheckMsg_:
 	      	chk  	r3,r0,#1024
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#6
-	      	addu 	r3,r4,#mailbox_
+	      	lea  	r5,mailbox_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r12,r3
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_137
+	      	beq  	r3,FMTKmsg_147
 	      	lb   	r3,2[r12]
-	      	bne  	r3,FMTKmsg_139
-	      	push 	#sys_sema_
+	      	bne  	r3,FMTKmsg_149
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	ldi  	r1,#8
-FMTKmsg_141:
+FMTKmsg_151:
 	      	pop  	r15
 	      	pop  	r14
 	      	pop  	r13
@@ -1088,69 +1175,74 @@ FMTKmsg_141:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKmsg_139:
+FMTKmsg_149:
 	      	lw   	r3,56[bp]
 	      	cmp  	r4,r3,#1
-	      	bne  	r4,FMTKmsg_142
+	      	bne  	r4,FMTKmsg_152
 	      	push 	r12
 	      	bsr  	DequeueMsg_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	bra  	FMTKmsg_143
-FMTKmsg_142:
+	      	bra  	FMTKmsg_153
+FMTKmsg_152:
 	      	lc   	r3,8[r12]
 	      	andi 	r3,r3,#65535
 	      	mov  	r11,r3
-FMTKmsg_143:
-	      	push 	#sys_sema_
+FMTKmsg_153:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_137:
-	      	bne  	r11,FMTKmsg_144
+FMTKmsg_147:
+	      	bne  	r11,FMTKmsg_154
 	      	ldi  	r1,#9
-	      	bra  	FMTKmsg_141
-FMTKmsg_144:
-	      	beq  	r15,FMTKmsg_146
+	      	bra  	FMTKmsg_151
+FMTKmsg_154:
+	      	beq  	r15,FMTKmsg_156
 	      	lw   	r3,8[r11]
 	      	sw   	r3,[r15]
-FMTKmsg_146:
-	      	beq  	r14,FMTKmsg_148
+FMTKmsg_156:
+	      	beq  	r14,FMTKmsg_158
 	      	lw   	r3,16[r11]
 	      	sw   	r3,[r14]
-FMTKmsg_148:
-	      	beq  	r13,FMTKmsg_150
+FMTKmsg_158:
+	      	beq  	r13,FMTKmsg_160
 	      	lw   	r3,24[r11]
 	      	sw   	r3,[r13]
-FMTKmsg_150:
+FMTKmsg_160:
 	      	lw   	r3,56[bp]
 	      	cmp  	r4,r3,#1
-	      	bne  	r4,FMTKmsg_152
+	      	bne  	r4,FMTKmsg_162
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKmsg_154
+	      	beq  	r3,FMTKmsg_164
 	      	ldi  	r3,#1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,6[r11]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,2[r11]
 	      	ldi  	r3,#-1
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,4[r11]
-	      	lc   	r3,freeMSG_
+	      	lc   	r3,freeMSG_[gp]
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,[r11]
-	      	subu 	r4,r11,#message_
+	      	lea  	r5,message_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#5
-	      	sc   	r3,freeMSG_
-	      	inc  	nMsgBlk_,#1
-	      	push 	#sys_sema_
+	      	sc   	r3,freeMSG_[gp]
+	      	inc  	nMsgBlk_[gp],#1
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKmsg_154:
-FMTKmsg_152:
+FMTKmsg_164:
+FMTKmsg_162:
 	      	ldi  	r1,#0
-	      	bra  	FMTKmsg_141
-FMTKmsg_136:
+	      	bra  	FMTKmsg_151
+FMTKmsg_145:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKmsg_141
+	      	bra  	FMTKmsg_151
 endpublic
 
 	rodata
@@ -1190,6 +1282,7 @@ endpublic
 	extern	hasUltraHighPriorityTasks_
 ;	global	LockSemaphore_
 	extern	iof_switch_
+	extern	kbd_sema_
 	extern	nMailbox_
 ;	global	FMTK_FreeMbx_
 ;	global	FMTK_PeekMsg_

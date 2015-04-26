@@ -136,10 +136,12 @@ int ParseFunction(SYM *sp)
 			sp->IsNocall = isNocall;
 			sp->IsPascal = isPascal;
 			sp->IsInterrupt = isInterrupt;
+			sp->IsTask = isTask;
 			sp->NumParms = nparms;
 			isPascal = FALSE;
 			isOscall = FALSE;
 			isInterrupt = FALSE;
+			isTask = FALSE;
 			isNocall = FALSE;
 		    ReleaseLocalMemory();        /* release local symbols (parameters)*/
 			global_flag = oldglobal;
@@ -150,10 +152,12 @@ int ParseFunction(SYM *sp)
 			sp->IsNocall = isNocall;
 			sp->IsPascal = isPascal;
 			sp->IsInterrupt = isInterrupt;
+			sp->IsTask = isTask;
 			sp->NumParms = nparms;
 			isPascal = FALSE;
 			isOscall = FALSE;
 			isInterrupt = FALSE;
+			isTask = FALSE;
 			isNocall = FALSE;
 		    ReleaseLocalMemory();        /* release local symbols (parameters)*/
 			goto j1;
@@ -168,10 +172,12 @@ int ParseFunction(SYM *sp)
 				sp->IsNocall = isNocall;
 				sp->IsPascal = isPascal;
 				sp->IsInterrupt = isInterrupt;
+    			sp->IsTask = isTask;
 				sp->NumParms = nparms;
 				isPascal = FALSE;
 				isOscall = FALSE;
 				isInterrupt = FALSE;
+    			isTask = FALSE;
 				isNocall = FALSE;
 				ReleaseLocalMemory();        /* release local symbols (parameters)*/
 			}
@@ -183,6 +189,12 @@ int ParseFunction(SYM *sp)
 				sp->IsNocall = isNocall;
 				sp->IsPascal = isPascal;
 				sp->IsInterrupt = isInterrupt;
+    			sp->IsTask = isTask;
+				isPascal = FALSE;
+				isOscall = FALSE;
+				isInterrupt = FALSE;
+    			isTask = FALSE;
+				isNocall = FALSE;
 				sp->NumParms = nparms;
 				stmt = ParseFunctionBody(sp);
 				funcbottom(stmt);
@@ -193,6 +205,12 @@ int ParseFunction(SYM *sp)
 			sp->IsNocall = isNocall;
 			sp->IsPascal = isPascal;
 			sp->IsInterrupt = isInterrupt;
+			sp->IsTask = isTask;
+			isPascal = FALSE;
+			isOscall = FALSE;
+			isInterrupt = FALSE;
+			isTask = FALSE;
+			isNocall = FALSE;
 			sp->NumParms = nparms;
 			stmt = ParseFunctionBody(sp);
 			funcbottom(stmt);

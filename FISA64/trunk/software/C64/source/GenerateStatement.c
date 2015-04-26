@@ -30,6 +30,8 @@
 #include "gen.h"
 #include "cglbdec.h"
 
+extern char *rtrim(char *);
+
 /*
  *	68000 C compiler
  *
@@ -55,6 +57,7 @@ int		throwlab;
 
 int lastsph;
 char *semaphores[20];
+char last_rem[132];
 
 extern TYP              stdfunc;
 
@@ -73,6 +76,16 @@ AMODE *makereg(int r)
     ap = allocAmode();
     ap->mode = am_reg;
     ap->preg = r;
+    return ap;
+}
+
+AMODE *makefpreg(int r)
+{
+	AMODE *ap;
+    ap = allocAmode();
+    ap->mode = am_fpreg;
+    ap->preg = r;
+    ap->isFloat = TRUE;
     return ap;
 }
 
@@ -133,6 +146,18 @@ AMODE *make_strlab(char *s)
     ap->mode = am_direct;
     ap->offset = makesnode(en_nacon,s,-1);
     return ap;
+}
+
+void GenMixedSource(Statement *stmt)
+{
+    if (mixedSource) {
+        rtrim(stmt->lptr);
+        if (strcmp(stmt->lptr,last_rem)!=0) {
+          	GenerateMonadic(op_rem,0,make_string(stmt->lptr));
+          	strncpy(last_rem,stmt->lptr,131);
+          	last_rem[131] = '\0';
+        }
+    }
 }
 
 /*
@@ -277,6 +302,8 @@ void GenerateIf(Statement *stmt)
     if( stmt->s2 != 0 )             /* else part exists */
     {
         GenerateDiadic(op_bra,0,make_clabel(lab2),0);
+        if (mixedSource)
+          	GenerateMonadic(op_rem,0,make_string("; else"));
         GenerateLabel(lab1);
         //if( stmt->s2 == 0 || stmt->s2->next == 0 )
         //    breaklab = oldbreak;
@@ -510,7 +537,8 @@ void GenerateTry(Statement *stmt)
     int lab1,curlab;
 	int oldthrow;
 	char buf[20];
-	AMODE *ap, *a;
+	AMODE *ap, *a, *ap2;
+	ENODE *node;
 	SYM *sym;
 
     lab1 = nextlabel++;
@@ -530,7 +558,11 @@ void GenerateTry(Statement *stmt)
     GenerateMonadic(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
 	stmt = stmt->s2;
+	// Generate catch statements
+	// r1 holds the value to be assigned to the catch variable
+	// r2 holds the type number
 	while (stmt) {
+        GenMixedSource(stmt);
 		throwlab = oldthrow;
 		curlab = nextlabel++;
 		GenerateLabel(curlab);
@@ -556,9 +588,16 @@ void GenerateTry(Statement *stmt)
 			}
 		}
 		// move the throw expression result in 'r1' into the catch variable.
-		sym = (SYM *)stmt->label;
-		if (sym)
-            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
+		node = (ENODE *)stmt->label;
+        {
+            ap2 = GenerateExpression(node,F_REG|F_MEM,GetNaturalSize(node));
+            if (ap2->mode==am_reg)
+               GenerateDiadic(op_mov,0,ap2,makereg(1));
+            else
+               GenStore(makereg(1),ap2,GetNaturalSize(node));
+            ReleaseTempRegister(ap2);
+        }
+//            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
 		GenerateStatement(stmt->s1);
 		stmt=stmt->next;
 	}
@@ -818,9 +857,10 @@ void GenerateFuncbody(Statement *stmt)
 void GenerateStatement(Statement *stmt)
 {
 	AMODE *ap;
-
+ 
 	while( stmt != NULL )
     {
+        GenMixedSource(stmt);
         switch( stmt->stype )
                 {
 				//case st_vortex:

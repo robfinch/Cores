@@ -386,7 +386,8 @@ static void opt0(ENODE **node)
                                     }
                             }
                     break;
-            case en_and:    case en_or:
+            case en_and: 
+            case en_or:
 			case en_xor:    
 			case en_shr:	case en_shru:	case en_asr:
 			case en_shl:	case en_shlu:
@@ -421,6 +422,12 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
 					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
 						dooper(node);
+                    break;
+                case en_feq:    case en_fne:
+                case en_flt:    case en_fle:
+                case en_fgt:    case en_fge:
+                    opt0(&(ep->p[0]));
+                    opt0(&(ep->p[1]));
                     break;
 			case en_cond:
                     opt0(&(ep->p[0]));

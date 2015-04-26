@@ -25,7 +25,7 @@
 
 
 
-    21	void set_vector(unsigned int vecno, unsigned int rout)
+    21	pascal void set_vector(unsigned int vecno, unsigned int rout)
     22	{
     23	     if (vecno > 511) return;
     24	     if ((rout == 0) || ((rout & 3) != 0)) return;

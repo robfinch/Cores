@@ -4,7 +4,6 @@
 	align	8
 	fill.b	16,0x00
 	align	8
-	align	8
 	fill.b	1984,0x00
 	align	8
 	align	8
@@ -84,6 +83,15 @@ public bss nMailbox_:
 
 endpublic
 	align	8
+public bss freeJCB_:
+	fill.b	1,0x00
+
+endpublic
+	data
+	align	8
+	fill.b	1,0x00
+	bss
+	align	8
 public bss freeMSG_:
 	fill.b	2,0x00
 
@@ -95,7 +103,7 @@ public bss freeMBX_:
 endpublic
 	data
 	align	8
-	fill.b	4,0x00
+	fill.b	2,0x00
 	bss
 	align	8
 public bss IOFocusNdx_:
@@ -176,7 +184,9 @@ public code GetVecno_:
 endpublic
 
 public code DisplayIRQLive_:
-	      	     	         inc  $FFD00000+220,#1
+	      	     	         lh       r1,$FFD00000+220
+         addui    r1,r1,#1
+         sh       r1,$FFD00000+220
          rtl
      
 endpublic
@@ -185,7 +195,7 @@ public code GetJCBPtr_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_6
+	      	ldi  	xlr,#FMTKc_9
 	      	mov  	bp,sp
 	      	push 	r3
 	      	push 	r4
@@ -198,32 +208,34 @@ public code GetJCBPtr_:
 	      	pop  	r3
 	      	mov  	r7,r1
 	      	asli 	r6,r7,#10
-	      	addu 	r5,r6,#tcbs_
+	      	lea  	r7,tcbs_[gp]
+	      	addu 	r5,r6,r7
 	      	lb   	r5,719[r5]
 	      	sxb  	r5,r5
 	      	asli 	r4,r5,#11
-	      	addu 	r3,r4,#jcbs_
+	      	lea  	r5,jcbs_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r1,r3
-FMTKc_7:
+FMTKc_11:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_6:
+FMTKc_9:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_7
+	      	bra  	FMTKc_11
 endpublic
 
 	data
 	align	8
-FMTKc_8:	; startQ_
+FMTKc_12:	; startQ_
 	db	0,0,0,1,0,0,0,2,0,0,0,3
 	db	0,1,0,4,0,0,0,5,0,0,0,6
 	db	0,1,0,7,0,0,0,0
 	align	8
-FMTKc_9:	; startQNdx_
+FMTKc_13:	; startQNdx_
 	fill.b	1,0x00
 	align	8
 	fill.b	1,0x00
@@ -233,12 +245,13 @@ SelectTaskToRun_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_12
+	      	ldi  	xlr,#FMTKc_16
 	      	mov  	bp,sp
 	      	subui	sp,sp,#48
 	      	push 	r11
 	      	push 	r12
-	      	ldi  	r12,#FMTKc_9
+	      	lea  	r3,FMTKc_13[gp]
+	      	mov  	r12,r3
 	      	lb   	r3,[r12]
 	      	addui	r3,r3,#1
 	      	sb   	r3,[r12]
@@ -247,29 +260,32 @@ SelectTaskToRun_:
 	      	sb   	r3,[r12]
 	      	lb   	r3,[r12]
 	      	sxb  	r3,r3
-	      	lb   	r3,FMTKc_8[r3]
+	      	lea  	r4,FMTKc_12[gp]
+	      	lb   	r3,0[r4+r3]
 	      	sxb  	r3,r3
 	      	sw   	r3,-40[bp]
 	      	lw   	r3,-40[bp]
 	      	andi 	r3,r3,#7
 	      	sw   	r3,-40[bp]
 	      	sw   	r0,-8[bp]
-FMTKc_13:
+FMTKc_18:
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#8
-	      	bge  	r4,FMTKc_14
+	      	bge  	r4,FMTKc_19
 	      	lw   	r4,-40[bp]
 	      	asli 	r3,r4,#1
-	      	lc   	r4,readyQ_[r3]
-	      	sc   	r4,-42[bp]
+	      	lea  	r4,readyQ_[gp]
+	      	lc   	r5,0[r4+r3]
+	      	sc   	r5,-42[bp]
 	      	lc   	r3,-42[bp]
-	      	blt  	r3,FMTKc_16
+	      	blt  	r3,FMTKc_21
 	      	lc   	r3,-42[bp]
 	      	cmp  	r4,r3,#256
-	      	bge  	r4,FMTKc_16
+	      	bge  	r4,FMTKc_21
 	      	lc   	r5,-42[bp]
 	      	asli 	r4,r5,#10
-	      	addu 	r3,r4,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
 	      	sw   	r3,-24[bp]
 	      	sw   	r0,-16[bp]
 	      	lc   	r3,-42[bp]
@@ -279,20 +295,21 @@ FMTKc_13:
 	      	mov  	r4,r1
 	      	sxc  	r4,r4
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,FMTKc_18
+	      	beq  	r5,FMTKc_23
 	      	lw   	r11,-24[bp]
-	      	bra  	FMTKc_19
-FMTKc_18:
+	      	bra  	FMTKc_24
+FMTKc_23:
 	      	lw   	r5,-24[bp]
 	      	lc   	r5,624[r5]
 	      	asli 	r4,r5,#10
-	      	addu 	r3,r4,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r11,r3
-FMTKc_19:
-FMTKc_20:
+FMTKc_24:
+FMTKc_25:
 	      	lb   	r4,717[r11]
 	      	and  	r3,r4,#8
-	      	bne  	r3,FMTKc_22
+	      	bne  	r3,FMTKc_27
 	      	lb   	r3,718[r11]
 	      	sxb  	r3,r3
 	      	push 	r3
@@ -300,16 +317,19 @@ FMTKc_20:
 	      	pop  	r3
 	      	mov  	r4,r1
 	      	cmp  	r5,r3,r4
-	      	bne  	r5,FMTKc_24
-	      	subu 	r4,r11,#tcbs_
-	      	lsri 	r3,r4,#10
-	      	lw   	r5,-40[bp]
-	      	asli 	r4,r5,#1
-	      	sc   	r3,readyQ_[r4]
-	      	subu 	r4,r11,#tcbs_
+	      	bne  	r5,FMTKc_29
+	      	lw   	r4,-40[bp]
+	      	asli 	r3,r4,#1
+	      	lea  	r4,readyQ_[gp]
+	      	lea  	r7,tcbs_[gp]
+	      	subu 	r6,r11,r7
+	      	lsri 	r5,r6,#10
+	      	sc   	r5,0[r4+r3]
+	      	lea  	r5,tcbs_[gp]
+	      	subu 	r4,r11,r5
 	      	lsri 	r3,r4,#10
 	      	mov  	r1,r3
-FMTKc_26:
+FMTKc_31:
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -317,40 +337,41 @@ FMTKc_26:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_24:
-FMTKc_22:
+FMTKc_29:
+FMTKc_27:
 	      	lc   	r5,624[r11]
 	      	asli 	r4,r5,#10
-	      	addu 	r3,r4,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r11,r3
 	      	lw   	r4,-16[bp]
 	      	addu 	r3,r4,#1
 	      	sw   	r3,-16[bp]
 	      	lw   	r3,-24[bp]
 	      	cmp  	r4,r11,r3
-	      	beq  	r4,FMTKc_27
+	      	beq  	r4,FMTKc_32
 	      	lw   	r3,-16[bp]
 	      	cmp  	r4,r3,#256
-	      	blt  	r4,FMTKc_20
-FMTKc_27:
+	      	blt  	r4,FMTKc_25
+FMTKc_32:
+FMTKc_26:
 FMTKc_21:
-FMTKc_16:
 	      	inc  	-40[bp],#1
 	      	lw   	r3,-40[bp]
 	      	andi 	r3,r3,#7
 	      	sw   	r3,-40[bp]
-FMTKc_15:
+FMTKc_20:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_13
-FMTKc_14:
+	      	bra  	FMTKc_18
+FMTKc_19:
 	      	bsr  	GetRunningTCB_
 	      	mov  	r3,r1
 	      	mov  	r1,r3
-	      	bra  	FMTKc_26
-FMTKc_12:
+	      	bra  	FMTKc_31
+FMTKc_16:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_26
+	      	bra  	FMTKc_31
 public code FMTK_SystemCall_:
 	      	     	         lea   sp,sys_stacks_[tr]
          sw    r1,8[tr]
@@ -521,33 +542,41 @@ public code FMTK_SchedulerIRQ_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_30
+	      	ldi  	xlr,#FMTKc_36
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
 	      	push 	r12
 	      	push 	r13
 	      	push 	r14
-	      	ldi  	r12,#TimeoutList_
-	      	ldi  	r13,#missed_ticks_
-	      	ldi  	r14,#tcbs_
+	      	lea  	r3,TimeoutList_[gp]
+	      	mov  	r12,r3
+	      	lea  	r3,missed_ticks_[gp]
+	      	mov  	r13,r3
+	      	lea  	r3,tcbs_[gp]
+	      	mov  	r14,r3
 	      	bsr  	GetVecno_
 	      	mov  	r3,r1
 	      	cmp  	r4,r3,#451
-	      	beq  	r4,FMTKc_32
+	      	beq  	r4,FMTKc_39
 	      	cmp  	r4,r3,#2
-	      	beq  	r4,FMTKc_33
-	      	bra  	FMTKc_34
-FMTKc_32:
+	      	beq  	r4,FMTKc_40
+	      	bra  	FMTKc_41
+FMTKc_39:
 	      	     	             ldi   r1,#3				; reset the edge sense circuit
              sh	   r1,PIC_RSTE
          
-	      	bsr  	DisplayIRQLive_
-	      	push 	#10
-	      	push 	#sys_sema_
-	      	bsr  	LockSemaphore_
+	      	bsr  	getCPU_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKc_35
+	      	bne  	r3,FMTKc_42
+	      	bsr  	DisplayIRQLive_
+FMTKc_42:
+	      	push 	#10
+	      	pea  	sys_sema_[gp]
+	      	bsr  	ILockSemaphore_
+	      	addui	sp,sp,#16
+	      	mov  	r3,r1
+	      	beq  	r3,FMTKc_44
 	      	bsr  	GetRunningTCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
@@ -558,66 +587,66 @@ FMTKc_32:
 	      	addu 	r3,r4,r5
 	      	sw   	r3,736[r11]
 	      	lb   	r3,716[r11]
-	      	beq  	r3,FMTKc_37
+	      	beq  	r3,FMTKc_46
 	      	ldi  	r3,#4
 	      	sb   	r3,717[r11]
-FMTKc_39:
+FMTKc_48:
 	      	lc   	r3,[r12]
-	      	blt  	r3,FMTKc_40
+	      	blt  	r3,FMTKc_49
 	      	lc   	r3,[r12]
 	      	cmp  	r4,r3,#256
-	      	bge  	r4,FMTKc_40
+	      	bge  	r4,FMTKc_49
 	      	lc   	r5,[r12]
 	      	asli 	r4,r5,#10
 	      	addu 	r3,r4,r14
 	      	lw   	r3,656[r3]
-	      	bgt  	r3,FMTKc_41
+	      	bgt  	r3,FMTKc_50
 	      	bsr  	PopTimeoutList_
 	      	mov  	r3,r1
 	      	push 	r3
 	      	bsr  	InsertIntoReadyList_
-	      	bra  	FMTKc_42
-FMTKc_41:
-	      	lc   	r7,[r12]
-	      	asli 	r6,r7,#10
-	      	addu 	r5,r6,r14
-	      	lw   	r5,656[r5]
-	      	lw   	r6,[r13]
-	      	subu 	r4,r5,r6
-	      	subu 	r3,r4,#1
-	      	lc   	r6,[r12]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r14
-	      	sw   	r3,656[r4]
+	      	bra  	FMTKc_51
+FMTKc_50:
+	      	lc   	r5,[r12]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r14
+	      	lc   	r8,[r12]
+	      	asli 	r7,r8,#10
+	      	addu 	r6,r7,r14
+	      	lw   	r6,656[r6]
+	      	lw   	r7,[r13]
+	      	subu 	r5,r6,r7
+	      	subu 	r4,r5,#1
+	      	sw   	r4,656[r3]
 	      	sw   	r0,[r13]
-	      	bra  	FMTKc_40
-FMTKc_42:
-	      	bra  	FMTKc_39
-FMTKc_40:
+	      	bra  	FMTKc_49
+FMTKc_51:
+	      	bra  	FMTKc_48
+FMTKc_49:
 	      	lb   	r3,716[r11]
 	      	cmp  	r4,r3,#2
-	      	ble  	r4,FMTKc_43
+	      	ble  	r4,FMTKc_52
 	      	bsr  	SelectTaskToRun_
 	      	mov  	r3,r1
 	      	push 	r3
 	      	bsr  	SetRunningTCB_
-FMTKc_43:
+FMTKc_52:
 	      	bsr  	GetRunningTCBPtr_
 	      	mov  	r3,r1
 	      	ldi  	r4,#8
 	      	sb   	r4,717[r3]
-	      	bra  	FMTKc_38
-FMTKc_37:
+	      	bra  	FMTKc_47
+FMTKc_46:
 	      	inc  	[r13],#1
-FMTKc_38:
-	      	push 	#sys_sema_
+FMTKc_47:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-	      	bra  	FMTKc_36
-FMTKc_35:
+	      	bra  	FMTKc_45
+FMTKc_44:
 	      	inc  	[r13],#1
-FMTKc_36:
-	      	bra  	FMTKc_31
-FMTKc_33:
+FMTKc_45:
+	      	bra  	FMTKc_38
+FMTKc_40:
 	      	bsr  	GetRunningTCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
@@ -640,10 +669,25 @@ FMTKc_33:
 	      	mov  	r3,r1
 	      	ldi  	r4,#8
 	      	sb   	r4,717[r3]
-	      	bra  	FMTKc_31
-FMTKc_34:
-FMTKc_31:
-FMTKc_45:
+	      	bra  	FMTKc_38
+FMTKc_41:
+FMTKc_38:
+	      	bsr  	GetRunningTCBPtr_
+	      	mov  	r3,r1
+	      	mov  	r11,r3
+	      	lw   	r3,744[r11]
+	      	beq  	r3,FMTKc_54
+	      	lw   	r3,536[r11]
+	      	sw   	r3,560[r11]
+	      	lw   	r3,536[r11]
+	      	sw   	r3,592[r11]
+	      	lw   	r3,744[r11]
+	      	sw   	r3,320[r11]
+	      	sw   	r0,744[r11]
+	      	ldi  	r3,#24
+	      	sw   	r3,328[r11]
+FMTKc_54:
+FMTKc_56:
 	      	pop  	r14
 	      	pop  	r13
 	      	pop  	r12
@@ -700,134 +744,279 @@ FMTKc_45:
          lw    r31,248+312[tr]
          rti
      
-FMTKc_30:
+FMTKc_36:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_45
+	      	bra  	FMTKc_56
 endpublic
 
 public code panic_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_47
+	      	ldi  	xlr,#FMTKc_58
 	      	mov  	bp,sp
 	      	push 	24[bp]
 	      	bsr  	putstr_
 	      	addui	sp,sp,#8
-FMTKc_46:
-	      	bra  	FMTKc_46
-FMTKc_48:
+FMTKc_57:
+	      	bra  	FMTKc_57
+FMTKc_60:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_47:
+FMTKc_58:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_48
+	      	bra  	FMTKc_60
 endpublic
 
+	data
+	align	8
+FMTKc_62:	; ex_
+	dw	0
+	code
+	align	16
 public code IdleTask_:
-	      	subui	sp,sp,#16
+	      	push 	lr
+	      	push 	xlr
 	      	push 	bp
+	      	ldi  	xlr,#FMTKc_64
 	      	mov  	bp,sp
-FMTKc_50:
-	      	ldi  	r3,#1
-	      	beq  	r3,FMTKc_51
-	      	     	             inc  $FFD00000+228
-         
-	      	bra  	FMTKc_50
-FMTKc_51:
-FMTKc_52:
+	      	subui	sp,sp,#16
+	      	ldi  	r3,#4291821568
+	      	sw   	r3,-16[bp]
+FMTKc_61:
+FMTKc_66:
+	      	ldi  	xlr,#FMTKc_69
+	      	inc  	-8[bp],#1
+	      	bsr  	getCPU_
+	      	mov  	r3,r1
+	      	bne  	r3,FMTKc_70
+	      	ldi  	r4,#4
+	      	mulu 	r3,r4,#57
+	      	lw   	r4,-16[bp]
+	      	lw   	r5,-8[bp]
+	      	sh   	r5,0[r4+r3]
+FMTKc_70:
+	      	bra  	FMTKc_68
+FMTKc_69:
+FMTKc_72:
+	      	cmp  	r3,r2,#24
+	      	bne  	r3,FMTKc_73
+	      	sw   	r1,FMTKc_62[gp]
+	      	lw   	r4,FMTKc_62[gp]
+	      	ldi  	r5,#4294967295
+	      	cmp  	r6,r5,#515
+	      	bne  	r6,FMTKc_75
+	      	ldi  	r5,#1
+	      	bra  	FMTKc_76
+FMTKc_75:
+	      	ldi  	r5,#0
+FMTKc_76:
+	      	and  	r3,r4,r5
+	      	beq  	r3,FMTKc_73
+	      	pea  	FMTKc_63[gp]
+	      	bsr  	printf_
+	      	addui	sp,sp,#8
+	      	bra  	FMTKc_74
+FMTKc_73:
+	      	lw   	r1,FMTKc_62[gp]
+	      	ldi  	r2,#24
+	      	bra  	FMTKc_64
+FMTKc_74:
+FMTKc_68:
+	      	ldi  	xlr,#FMTKc_64
+	      	bra  	FMTKc_66
+FMTKc_67:
+FMTKc_77:
 	      	mov  	sp,bp
 	      	pop  	bp
-	      	rtl  	#16
+	      	pop  	xlr
+	      	pop  	lr
+	      	rtl  	#0
+FMTKc_64:
+	      	lw   	lr,8[bp]
+	      	sw   	lr,16[bp]
+	      	bra  	FMTKc_77
 endpublic
 
 	data
 	align	8
 	code
 	align	16
-public code FMTK_ExitTask_:
+public code FMTK_KillTask_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_54
+	      	ldi  	xlr,#FMTKc_78
 	      	mov  	bp,sp
-	      	subui	sp,sp,#32
+	      	subui	sp,sp,#24
 	      	push 	r11
-	      	ldi  	r11,#tcbs_
+	      	push 	r12
+	      	lea  	r3,tcbs_[gp]
+	      	mov  	r12,r3
 	      	     	mfspr r1,ivno 
-	      	bsr  	GetRunningTCB_
-	      	mov  	r3,r1
-	      	sxc  	r3,r3
+	      	lw   	r3,24[bp]
 	      	sc   	r3,-2[bp]
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKc_55
+	      	beq  	r3,FMTKc_80
 	      	lc   	r3,-2[bp]
 	      	push 	r3
 	      	bsr  	RemoveFromReadyList_
 	      	lc   	r3,-2[bp]
 	      	push 	r3
 	      	bsr  	RemoveFromTimeoutList_
-	      	sw   	r0,-32[bp]
-FMTKc_57:
-	      	lw   	r3,-32[bp]
+	      	sw   	r0,-16[bp]
+FMTKc_82:
+	      	lw   	r3,-16[bp]
 	      	cmp  	r4,r3,#4
-	      	bge  	r4,FMTKc_58
-	      	lw   	r4,-24[bp]
+	      	bge  	r4,FMTKc_83
+	      	lw   	r4,-16[bp]
 	      	asli 	r3,r4,#1
 	      	lc   	r7,-2[bp]
 	      	asli 	r6,r7,#10
-	      	addu 	r5,r6,r11
+	      	addu 	r5,r6,r12
 	      	addu 	r4,r5,#704
 	      	lc   	r3,0[r4+r3]
-	      	blt  	r3,FMTKc_60
-	      	lw   	r5,-32[bp]
+	      	blt  	r3,FMTKc_85
+	      	lw   	r4,-16[bp]
+	      	asli 	r3,r4,#1
+	      	lc   	r7,-2[bp]
+	      	asli 	r6,r7,#10
+	      	addu 	r5,r6,r12
+	      	addu 	r4,r5,#704
+	      	lc   	r3,0[r4+r3]
+	      	cmp  	r4,r3,#1024
+	      	bge  	r4,FMTKc_85
+	      	lw   	r5,-16[bp]
 	      	asli 	r4,r5,#1
 	      	lc   	r7,-2[bp]
 	      	asli 	r6,r7,#10
-	      	addu 	r5,r6,r11
+	      	addu 	r5,r6,r12
 	      	addu 	r3,r4,r5
 	      	lc   	r3,704[r3]
 	      	push 	r3
 	      	bsr  	FMTK_FreeMbx_
 	      	addui	sp,sp,#8
-	      	lw   	r5,-32[bp]
+	      	lw   	r5,-16[bp]
 	      	asli 	r4,r5,#1
 	      	lc   	r7,-2[bp]
 	      	asli 	r6,r7,#10
-	      	addu 	r5,r6,r11
+	      	addu 	r5,r6,r12
 	      	addu 	r3,r4,r5
 	      	ldi  	r4,#-1
 	      	sc   	r4,704[r3]
-FMTKc_60:
-FMTKc_59:
-	      	inc  	-32[bp],#1
-	      	bra  	FMTKc_57
-FMTKc_58:
-	      	push 	#sys_sema_
+FMTKc_85:
+FMTKc_84:
+	      	inc  	-16[bp],#1
+	      	bra  	FMTKc_82
+FMTKc_83:
+	      	lc   	r7,-2[bp]
+	      	asli 	r6,r7,#10
+	      	addu 	r5,r6,r12
+	      	lb   	r5,719[r5]
+	      	sxb  	r5,r5
+	      	asli 	r4,r5,#11
+	      	lea  	r5,jcbs_[gp]
+	      	addu 	r3,r4,r5
+	      	mov  	r11,r3
+	      	sw   	r0,-16[bp]
+FMTKc_87:
+	      	lw   	r3,-16[bp]
+	      	cmp  	r4,r3,#8
+	      	bge  	r4,FMTKc_88
+	      	lw   	r4,-16[bp]
+	      	asli 	r3,r4,#1
+	      	addu 	r4,r11,#1682
+	      	lc   	r3,0[r4+r3]
+	      	lc   	r4,-2[bp]
+	      	cmp  	r5,r3,r4
+	      	bne  	r5,FMTKc_90
+	      	lw   	r5,-16[bp]
+	      	asli 	r4,r5,#1
+	      	addu 	r3,r4,r11
+	      	ldi  	r4,#-1
+	      	sc   	r4,1682[r3]
+FMTKc_90:
+FMTKc_89:
+	      	inc  	-16[bp],#1
+	      	bra  	FMTKc_87
+FMTKc_88:
+	      	sw   	r0,-16[bp]
+FMTKc_92:
+	      	lw   	r3,-16[bp]
+	      	cmp  	r4,r3,#8
+	      	bge  	r4,FMTKc_93
+	      	lw   	r4,-16[bp]
+	      	asli 	r3,r4,#1
+	      	addu 	r4,r11,#1682
+	      	lc   	r3,0[r4+r3]
+	      	cmp  	r4,r3,#-1
+	      	beq  	r4,FMTKc_95
+	      	bra  	FMTKc_93
+FMTKc_95:
+FMTKc_94:
+	      	inc  	-16[bp],#1
+	      	bra  	FMTKc_92
+FMTKc_93:
+	      	lw   	r3,-16[bp]
+	      	cmp  	r4,r3,#8
+	      	bne  	r4,FMTKc_97
+	      	lb   	r3,freeJCB_[gp]
+	      	sb   	r3,1698[r11]
+	      	lea  	r5,jcbs_[gp]
+	      	subu 	r4,r11,r5
+	      	lsri 	r3,r4,#11
+	      	sb   	r3,freeJCB_[gp]
+FMTKc_97:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKc_55:
-	      	     	int #2 
-FMTKc_53:
-	      	bra  	FMTKc_53
-FMTKc_62:
+FMTKc_80:
+FMTKc_99:
+	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_54:
+FMTKc_78:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_62
+	      	bra  	FMTKc_99
+endpublic
+
+public code FMTK_ExitTask_:
+	      	push 	lr
+	      	push 	xlr
+	      	push 	bp
+	      	ldi  	xlr,#FMTKc_101
+	      	mov  	bp,sp
+	      	     	mfspr r1,ivno 
+	      	bsr  	GetRunningTCB_
+	      	mov  	r3,r1
+	      	push 	r3
+	      	bsr  	KillTask_
+	      	addui	sp,sp,#8
+	      	     	int #2 
+FMTKc_100:
+	      	bra  	FMTKc_100
+FMTKc_103:
+	      	mov  	sp,bp
+	      	pop  	bp
+	      	pop  	xlr
+	      	pop  	lr
+	      	rtl  	#0
+FMTKc_101:
+	      	lw   	lr,8[bp]
+	      	sw   	lr,16[bp]
+	      	bra  	FMTKc_103
 endpublic
 
 	data
@@ -838,29 +1027,35 @@ public code FMTK_StartTask_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_63
+	      	ldi  	xlr,#FMTKc_104
 	      	mov  	bp,sp
 	      	subui	sp,sp,#24
 	      	push 	r11
+	      	push 	r12
+	      	push 	r13
+	      	lea  	r3,tcbs_[gp]
+	      	mov  	r12,r3
+	      	lea  	r3,freeTCB_[gp]
+	      	mov  	r13,r3
 	      	     	mfspr r1,ivno 
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKc_64
-	      	lc   	r3,freeTCB_
+	      	beq  	r3,FMTKc_106
+	      	lc   	r3,[r13]
 	      	sc   	r3,-2[bp]
 	      	lc   	r5,-2[bp]
 	      	asli 	r4,r5,#10
-	      	addu 	r3,r4,#tcbs_
+	      	addu 	r3,r4,r12
 	      	lc   	r4,624[r3]
-	      	sc   	r4,freeTCB_
-	      	push 	#sys_sema_
+	      	sc   	r4,[r13]
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKc_64:
+FMTKc_106:
 	      	lc   	r5,-2[bp]
 	      	asli 	r4,r5,#10
-	      	addu 	r3,r4,#tcbs_
+	      	addu 	r3,r4,r12
 	      	mov  	r11,r3
 	      	lw   	r3,32[bp]
 	      	sb   	r3,718[r11]
@@ -868,42 +1063,100 @@ FMTKc_64:
 	      	sb   	r3,716[r11]
 	      	lb   	r3,56[bp]
 	      	sb   	r3,719[r11]
-	      	lw   	r3,48[bp]
-	      	sw   	r3,320[r11]
-	      	ldi  	r3,#FMTK_ExitTask_
-	      	sw   	r3,560[r11]
-	      	lw   	r4,648[r11]
-	      	addu 	r3,r4,#8184
-	      	sw   	r3,568[r11]
-	      	lw   	r3,40[bp]
-	      	sw   	r3,592[r11]
-	      	ldi  	r3,#5368709120
-	      	sw   	r3,616[r11]
-	      	sw   	r0,720[r11]
-	      	sw   	r0,728[r11]
-	      	sw   	r0,736[r11]
+	      	sw   	r0,-24[bp]
+FMTKc_108:
+	      	lw   	r3,-24[bp]
+	      	cmp  	r4,r3,#8
+	      	bge  	r4,FMTKc_109
+	      	lw   	r4,-24[bp]
+	      	asli 	r3,r4,#1
+	      	lb   	r7,56[bp]
+	      	sxb  	r7,r7
+	      	asli 	r6,r7,#11
+	      	lea  	r7,jcbs_[gp]
+	      	addu 	r5,r6,r7
+	      	addu 	r4,r5,#1682
+	      	lc   	r3,0[r4+r3]
+	      	bge  	r3,FMTKc_111
+	      	lw   	r5,-24[bp]
+	      	asli 	r4,r5,#1
+	      	lb   	r7,56[bp]
+	      	sxb  	r7,r7
+	      	asli 	r6,r7,#11
+	      	lea  	r7,jcbs_[gp]
+	      	addu 	r5,r6,r7
+	      	addu 	r3,r4,r5
+	      	lc   	r4,-2[bp]
+	      	sc   	r4,1682[r3]
+	      	bra  	FMTKc_109
+FMTKc_111:
+FMTKc_110:
+	      	inc  	-24[bp],#1
+	      	bra  	FMTKc_108
+FMTKc_109:
+	      	lw   	r3,-24[bp]
+	      	cmp  	r4,r3,#8
+	      	bne  	r4,FMTKc_113
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKc_66
+	      	beq  	r3,FMTKc_115
+	      	lc   	r5,-2[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r12
+	      	lc   	r4,[r13]
+	      	sc   	r4,624[r3]
 	      	lc   	r3,-2[bp]
-	      	push 	r3
-	      	bsr  	InsertIntoReadyList_
-FMTKc_66:
-	      	push 	#sys_sema_
+	      	sc   	r3,[r13]
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKc_68:
+FMTKc_115:
+	      	ldi  	r1,#69
+FMTKc_117:
+	      	pop  	r13
+	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_63:
+FMTKc_113:
+	      	lw   	r3,48[bp]
+	      	sw   	r3,320[r11]
+	      	ldi  	r3,#FMTK_ExitTask_
+	      	sw   	r3,536[r11]
+	      	ldi  	r3,#FMTK_ExitTask_
+	      	sw   	r3,560[r11]
+	      	lw   	r4,648[r11]
+	      	addu 	r3,r4,#8184
+	      	sw   	r3,568[r11]
+	      	lw   	r4,40[bp]
+	      	or   	r3,r4,#1
+	      	sw   	r3,592[r11]
+	      	ldi  	r3,#5368709120
+	      	sw   	r3,616[r11]
+	      	sw   	r0,720[r11]
+	      	sw   	r0,728[r11]
+	      	sw   	r0,736[r11]
+	      	sw   	r0,744[r11]
+	      	push 	#-1
+	      	pea  	sys_sema_[gp]
+	      	bsr  	LockSemaphore_
+	      	mov  	r3,r1
+	      	beq  	r3,FMTKc_118
+	      	lc   	r3,-2[bp]
+	      	push 	r3
+	      	bsr  	InsertIntoReadyList_
+FMTKc_118:
+	      	pea  	sys_sema_[gp]
+	      	bsr  	UnlockSemaphore_
+	      	bra  	FMTKc_117
+FMTKc_104:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_68
+	      	bra  	FMTKc_117
 endpublic
 
 	data
@@ -921,15 +1174,15 @@ public code FMTK_Sleep_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_69
+	      	ldi  	xlr,#FMTKc_120
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	     	mfspr r1,ivno 
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKc_70
+	      	beq  	r3,FMTKc_122
 	      	bsr  	GetRunningTCB_
 	      	mov  	r3,r1
 	      	sxc  	r3,r3
@@ -941,59 +1194,60 @@ public code FMTK_Sleep_:
 	      	lc   	r3,-2[bp]
 	      	push 	r3
 	      	bsr  	InsertIntoTimeoutList_
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKc_70:
+FMTKc_122:
 	      	     	int #2 
 	      	ldi  	r1,#0
-FMTKc_72:
+FMTKc_124:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_69:
+FMTKc_120:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_72
+	      	bra  	FMTKc_124
 endpublic
 
 public code FMTK_SetTaskPriority_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_73
+	      	ldi  	xlr,#FMTKc_125
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
 	      	     	mfspr r1,ivno 
 	      	lw   	r3,32[bp]
 	      	cmp  	r4,r3,#63
-	      	bgt  	r4,FMTKc_76
+	      	bgt  	r4,FMTKc_129
 	      	lw   	r3,32[bp]
-	      	bge  	r3,FMTKc_74
-FMTKc_76:
+	      	bge  	r3,FMTKc_127
+FMTKc_129:
 	      	ldi  	r1,#4
-FMTKc_77:
+FMTKc_130:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_74:
+FMTKc_127:
 	      	push 	#-1
-	      	push 	#sys_sema_
+	      	pea  	sys_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,FMTKc_78
+	      	beq  	r3,FMTKc_131
 	      	lc   	r5,24[bp]
 	      	asli 	r4,r5,#10
-	      	addu 	r3,r4,#tcbs_
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
 	      	mov  	r11,r3
 	      	lb   	r4,717[r11]
 	      	and  	r3,r4,#24
-	      	beq  	r3,FMTKc_80
+	      	beq  	r3,FMTKc_133
 	      	lc   	r3,24[bp]
 	      	push 	r3
 	      	bsr  	RemoveFromReadyList_
@@ -1002,78 +1256,106 @@ FMTKc_74:
 	      	lc   	r3,24[bp]
 	      	push 	r3
 	      	bsr  	InsertIntoReadyList_
-	      	bra  	FMTKc_81
-FMTKc_80:
+	      	bra  	FMTKc_134
+FMTKc_133:
 	      	lw   	r3,32[bp]
 	      	sb   	r3,716[r11]
-FMTKc_81:
-	      	push 	#sys_sema_
+FMTKc_134:
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-FMTKc_78:
+FMTKc_131:
 	      	ldi  	r1,#0
-	      	bra  	FMTKc_77
-FMTKc_73:
+	      	bra  	FMTKc_130
+FMTKc_125:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_77
+	      	bra  	FMTKc_130
 endpublic
 
 public code FMTKInitialize_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#FMTKc_82
+	      	ldi  	xlr,#FMTKc_135
 	      	mov  	bp,sp
-	      	subui	sp,sp,#8
+	      	subui	sp,sp,#16
 	      	push 	r11
 	      	push 	r12
-	      	ldi  	r11,#tcbs_
-	      	ldi  	r12,#jcbs_
+	      	lea  	r3,tcbs_[gp]
+	      	mov  	r11,r3
+	      	lea  	r3,jcbs_[gp]
+	      	mov  	r12,r3
 	      	     	mfspr r1,ivno 
 	      	     	            ldi   r1,#20
             sc    r1,LEDS
         
-	      	sc   	r0,hasUltraHighPriorityTasks_
-	      	sw   	r0,missed_ticks_
-	      	sw   	r0,IOFocusTbl_
-	      	sw   	r0,IOFocusNdx_
-	      	push 	#sys_sema_
+	      	ldi  	r3,#0
+	      	andi 	r3,r3,#65535
+	      	sc   	r3,hasUltraHighPriorityTasks_[gp]
+	      	sw   	r0,missed_ticks_[gp]
+	      	sw   	r0,IOFocusTbl_[gp]
+	      	ldi  	r3,#0
+	      	sw   	r3,IOFocusNdx_[gp]
+	      	sw   	r0,iof_switch_[gp]
+	      	pea  	sys_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-	      	push 	#iof_sema_
+	      	pea  	iof_sema_[gp]
+	      	bsr  	UnlockSemaphore_
+	      	pea  	kbd_sema_[gp]
 	      	bsr  	UnlockSemaphore_
 	      	sw   	r0,-8[bp]
-FMTKc_83:
+FMTKc_137:
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#16384
-	      	bge  	r4,FMTKc_84
+	      	bge  	r4,FMTKc_138
 	      	lw   	r4,-8[bp]
-	      	addu 	r3,r4,#1
-	      	lw   	r5,-8[bp]
-	      	asli 	r4,r5,#5
-	      	sc   	r3,message_[r4]
-FMTKc_85:
+	      	asli 	r3,r4,#5
+	      	lea  	r4,message_[gp]
+	      	lw   	r6,-8[bp]
+	      	addu 	r5,r6,#1
+	      	andi 	r5,r5,#65535
+	      	sc   	r5,0[r4+r3]
+FMTKc_139:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_83
-FMTKc_84:
-	      	ldi  	r3,#message_
+	      	bra  	FMTKc_137
+FMTKc_138:
+	      	lea  	r3,message_[gp]
 	      	ldi  	r4,#-1
+	      	andi 	r4,r4,#65535
 	      	sc   	r4,524256[r3]
-	      	sc   	r0,freeMSG_
+	      	sc   	r0,freeMSG_[gp]
 	      	     	            ldi   r1,#30
             sc    r1,LEDS
         
 	      	sw   	r0,-8[bp]
-FMTKc_86:
+FMTKc_140:
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#51
-	      	bge  	r4,FMTKc_87
+	      	bge  	r4,FMTKc_141
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#11
+	      	addu 	r3,r4,r12
+	      	lw   	r4,-8[bp]
+	      	sb   	r4,1681[r3]
+	      	sw   	r0,-16[bp]
+FMTKc_143:
+	      	lw   	r3,-16[bp]
+	      	cmp  	r4,r3,#8
+	      	bge  	r4,FMTKc_144
+	      	lw   	r5,-16[bp]
+	      	asli 	r4,r5,#1
+	      	lw   	r7,-8[bp]
+	      	asli 	r6,r7,#11
+	      	addu 	r5,r6,r12
+	      	addu 	r3,r4,r5
+	      	ldi  	r4,#-1
+	      	sc   	r4,1682[r3]
+FMTKc_145:
+	      	inc  	-16[bp],#1
+	      	bra  	FMTKc_143
+FMTKc_144:
 	      	lw   	r3,-8[bp]
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#11
-	      	addu 	r4,r5,r12
-	      	sb   	r3,1682[r4]
-	      	lw   	r3,-8[bp]
-	      	bne  	r3,FMTKc_89
+	      	bne  	r3,FMTKc_146
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
@@ -1082,85 +1364,113 @@ FMTKc_86:
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
-	      	sw   	r0,1624[r3]
+	      	lea  	r4,video_bufs_[gp]
+	      	sw   	r4,1624[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
 	      	ldi  	r4,#2537472
+	      	andi 	r4,r4,#4294967295
 	      	sh   	r4,1640[r3]
 	      	push 	r12
 	      	bsr  	RequestIOFocus_
 	      	addui	sp,sp,#8
-	      	bra  	FMTKc_90
-FMTKc_89:
+	      	bra  	FMTKc_147
+FMTKc_146:
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
-	      	sw   	r0,1616[r3]
+	      	lea  	r4,video_bufs_[gp]
+	      	sw   	r4,1616[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
-	      	sw   	r0,1624[r3]
+	      	lea  	r4,video_bufs_[gp]
+	      	sw   	r4,1624[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
 	      	ldi  	r4,#2537472
+	      	andi 	r4,r4,#4294967295
 	      	sh   	r4,1640[r3]
-FMTKc_90:
+FMTKc_147:
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
 	      	ldi  	r4,#31
+	      	andi 	r4,r4,#65535
 	      	sc   	r4,1632[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
 	      	ldi  	r4,#84
+	      	andi 	r4,r4,#65535
 	      	sc   	r4,1634[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
-	      	sc   	r0,1636[r3]
+	      	ldi  	r4,#0
+	      	andi 	r4,r4,#65535
+	      	sc   	r4,1636[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#11
 	      	addu 	r3,r4,r12
-	      	sc   	r0,1638[r3]
-FMTKc_88:
+	      	ldi  	r4,#0
+	      	andi 	r4,r4,#65535
+	      	sc   	r4,1638[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#11
+	      	addu 	r3,r4,r12
+	      	sb   	r0,1647[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#11
+	      	addu 	r3,r4,r12
+	      	sb   	r0,1648[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#11
+	      	addu 	r3,r4,r12
+	      	sb   	r0,1644[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#11
+	      	addu 	r3,r4,r12
+	      	sb   	r0,1645[r3]
+FMTKc_142:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_86
-FMTKc_87:
+	      	bra  	FMTKc_140
+FMTKc_141:
 	      	     	            ldi   r1,#40
             sc    r1,LEDS
         
 	      	sw   	r0,-8[bp]
-FMTKc_91:
+FMTKc_148:
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#8
-	      	bge  	r4,FMTKc_92
+	      	bge  	r4,FMTKc_149
 	      	lw   	r4,-8[bp]
 	      	asli 	r3,r4,#1
-	      	ldi  	r4,#-1
-	      	sc   	r4,readyQ_[r3]
-FMTKc_93:
+	      	lea  	r4,readyQ_[gp]
+	      	ldi  	r5,#-1
+	      	sc   	r5,0[r4+r3]
+FMTKc_150:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_91
-FMTKc_92:
+	      	bra  	FMTKc_148
+FMTKc_149:
 	      	sw   	r0,-8[bp]
-FMTKc_94:
+FMTKc_151:
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#256
-	      	bge  	r4,FMTKc_95
-	      	lw   	r3,-8[bp]
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r11
-	      	sc   	r3,714[r4]
+	      	bge  	r4,FMTKc_152
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
 	      	lw   	r4,-8[bp]
-	      	addu 	r3,r4,#1
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r11
-	      	sc   	r3,624[r4]
+	      	sc   	r4,714[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
+	      	lw   	r5,-8[bp]
+	      	addu 	r4,r5,#1
+	      	sc   	r4,624[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#10
 	      	addu 	r3,r4,r11
@@ -1179,24 +1489,24 @@ FMTKc_94:
 	      	asli 	r4,r5,#10
 	      	addu 	r3,r4,r11
 	      	sb   	r0,718[r3]
-	      	ldi  	r4,#sys_stacks_
-	      	addu 	r3,r4,#4088
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r11
-	      	sw   	r3,632[r4]
-	      	ldi  	r4,#bios_stacks_
-	      	addu 	r3,r4,#4088
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r11
-	      	sw   	r3,640[r4]
-	      	ldi  	r4,#stacks_
-	      	addu 	r3,r4,#8184
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r11
-	      	sw   	r3,648[r4]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
+	      	lea  	r5,sys_stacks_[gp]
+	      	addu 	r4,r5,#4088
+	      	sw   	r4,632[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
+	      	lea  	r5,bios_stacks_[gp]
+	      	addu 	r4,r5,#4088
+	      	sw   	r4,640[r3]
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
+	      	lea  	r5,stacks_[gp]
+	      	addu 	r4,r5,#8184
+	      	sw   	r4,648[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#10
 	      	addu 	r3,r4,r11
@@ -1227,26 +1537,30 @@ FMTKc_94:
 	      	sc   	r4,710[r3]
 	      	lw   	r3,-8[bp]
 	      	cmp  	r4,r3,#2
-	      	bge  	r4,FMTKc_97
-	      	lw   	r3,-8[bp]
-	      	lw   	r6,-8[bp]
-	      	asli 	r5,r6,#10
-	      	addu 	r4,r5,r11
-	      	sb   	r3,718[r4]
+	      	bge  	r4,FMTKc_154
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
+	      	lw   	r4,-8[bp]
+	      	sb   	r4,718[r3]
 	      	lw   	r5,-8[bp]
 	      	asli 	r4,r5,#10
 	      	addu 	r3,r4,r11
 	      	ldi  	r4,#24
 	      	sb   	r4,716[r3]
-FMTKc_97:
-FMTKc_96:
+FMTKc_154:
+	      	lw   	r5,-8[bp]
+	      	asli 	r4,r5,#10
+	      	addu 	r3,r4,r11
+	      	sw   	r0,744[r3]
+FMTKc_153:
 	      	inc  	-8[bp],#1
-	      	bra  	FMTKc_94
-FMTKc_95:
+	      	bra  	FMTKc_151
+FMTKc_152:
 	      	ldi  	r3,#-1
 	      	sc   	r3,261744[r11]
 	      	ldi  	r3,#2
-	      	sc   	r3,freeTCB_
+	      	sc   	r3,freeTCB_[gp]
 	      	     	            ldi   r1,#42
             sc    r1,LEDS
         
@@ -1264,39 +1578,43 @@ FMTKc_95:
 	      	push 	#0
 	      	bsr  	SetRunningTCB_
 	      	ldi  	r3,#-1
-	      	sc   	r3,TimeoutList_
+	      	sc   	r3,TimeoutList_[gp]
 	      	push 	#FMTK_SystemCall_
 	      	push 	#4
 	      	bsr  	set_vector_
-	      	addui	sp,sp,#16
 	      	push 	#FMTK_SchedulerIRQ_
 	      	push 	#2
 	      	bsr  	set_vector_
-	      	addui	sp,sp,#16
 	      	push 	#FMTK_SchedulerIRQ_
 	      	push 	#451
 	      	bsr  	set_vector_
-	      	addui	sp,sp,#16
+	      	push 	#0
+	      	push 	#0
+	      	push 	#shell_
+	      	push 	#0
+	      	push 	#24
+	      	bsr  	FMTK_StartTask_
+	      	addui	sp,sp,#40
 	      	push 	#0
 	      	push 	#0
 	      	push 	#IdleTask_
 	      	push 	#0
-	      	push 	#56
+	      	push 	#63
 	      	bsr  	FMTK_StartTask_
 	      	addui	sp,sp,#40
 	      	push 	#0
 	      	push 	#0
 	      	push 	#IdleTask_
 	      	push 	#1
-	      	push 	#56
+	      	push 	#63
 	      	bsr  	FMTK_StartTask_
 	      	addui	sp,sp,#40
 	      	ldi  	r3,#305419896
-	      	sw   	r3,FMTK_Inited_
+	      	sw   	r3,FMTK_Inited_[gp]
 	      	     	            ldi   r1,#50
             sc    r1,LEDS
         
-FMTKc_99:
+FMTKc_156:
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -1304,16 +1622,21 @@ FMTKc_99:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-FMTKc_82:
+FMTKc_135:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	FMTKc_99
+	      	bra  	FMTKc_156
 endpublic
 
 	rodata
 	align	16
 	align	8
-FMTKc_11:
+FMTKc_63:
+	dc	73,100,108,101,84,97,115,107
+	dc	58,32,67,84,82,76,45,67
+	dc	32,112,114,101,115,115,101,100
+	dc	46,13,10,0
+FMTKc_15:
 	dc	78,111,32,101,110,116,114,105
 	dc	101,115,32,105,110,32,114,101
 	dc	97,100,121,32,113,117,101,117
@@ -1321,6 +1644,7 @@ FMTKc_11:
 	extern	jcbs_
 	extern	tcbs_
 	extern	nMsgBlk_
+;	global	FMTK_KillTask_
 	extern	PopTimeoutList_
 	extern	putstr_
 ;	global	FMTK_SetTaskPriority_
@@ -1346,8 +1670,10 @@ FMTKc_11:
 	extern	GetRunningTCBPtr_
 ;	global	UnlockSemaphore_
 ;	global	IdleTask_
+	extern	shell_
 ;	global	GetVecno_
 ;	global	FMTK_SchedulerIRQ_
+	extern	KillTask_
 ;	global	GetJCBPtr_
 	extern	video_bufs_
 	extern	getCPU_
@@ -1355,6 +1681,7 @@ FMTKc_11:
 ;	global	LockSemaphore_
 	extern	iof_switch_
 ;	global	FMTK_StartTask_
+	extern	kbd_sema_
 	extern	nMailbox_
 	extern	FMTK_FreeMbx_
 ;	global	set_vector_
@@ -1367,7 +1694,9 @@ FMTKc_11:
 	extern	sys_sema_
 	extern	readyQ_
 ;	global	FMTK_BrTbl_
+;	global	freeJCB_
 	extern	sysstack_
+	extern	ILockSemaphore_
 	extern	freeTCB_
 	extern	RequestIOFocus_
 	extern	TimeoutList_
@@ -1384,5 +1713,6 @@ FMTKc_11:
 ;	global	FMTK_SystemCall_
 ;	global	RemoveFromReadyList_
 ;	global	sp_tmp_
+	extern	printf_
 	extern	bios_stacks_
 ;	global	InsertIntoReadyList_

@@ -306,14 +306,12 @@ void getbase(int64_t b)
 void getfrac()
 {
 	__float128  frmul;
-	printf("Get fract\r\n");
     frmul = 0.1;
     while(isdigit(lastch)) {
         rval += frmul * (lastch - '0');
         getch();
         frmul *= 0.1;
     }
-	printf("leave Get fract\r\n");
 }
  
 /*

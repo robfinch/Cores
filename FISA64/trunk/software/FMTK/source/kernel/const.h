@@ -52,7 +52,8 @@ enum {
      E_NoMoreMsgBlks,
      E_NoMoreAlarmBlks,
      E_NoMoreTCBs,
-     E_NoMem
+     E_NoMem,
+     E_TooManyTasks
 };
 
 #endif

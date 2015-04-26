@@ -8,7 +8,7 @@ public code outb_:
         lw    r2,32[bp]
         sb    r2,[r1]
      
-outb_1:
+outb_2:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16

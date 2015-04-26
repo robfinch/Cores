@@ -90,17 +90,20 @@ struct snode    *bodyptr = 0;
 int             global_flag = 1;
 TABLE           defsyms = {0,0};
 int             save_mask = 0;          /* register save mask */
+int             fpsave_mask = 0;
 TYP             tp_int, tp_econst;
 
 int isPascal = FALSE;
 int isOscall = FALSE;
 int isInterrupt = FALSE;
+int isTask = FALSE;
 int isNocall = FALSE;
 int optimize = TRUE;
 int opt_noregs = FALSE;
 int opt_nopeep = FALSE;
 int opt_noexpr = FALSE;
 int exceptions = FALSE;
+int mixedSource = FALSE;
 SYM *currentFn = (SYM *)NULL;
 int callsFn = FALSE;
 

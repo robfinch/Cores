@@ -35,8 +35,10 @@ typedef struct _tagJCB align(2048)
     __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -79,6 +81,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {
@@ -143,7 +146,8 @@ enum {
      E_NoMoreMsgBlks,
      E_NoMoreAlarmBlks,
      E_NoMoreTCBs,
-     E_NoMem
+     E_NoMem,
+     E_TooManyTasks
 };
 
 
@@ -193,7 +197,7 @@ pascal void SetBound49(JCB *ps, JCB *pe, int algn);
 pascal void SetBound50(MBX *ps, MBX *pe, int algn);
 pascal void SetBound51(MSG *ps, MSG *pe, int algn);
 
-void set_vector(unsigned int, unsigned int);
+pascal void set_vector(unsigned int, unsigned int);
 int getCPU();
 int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);
@@ -230,6 +234,7 @@ extern int iof_switch;
 extern int BIOS1_sema;
 extern int iof_sema;
 extern int sys_sema;
+extern int kbd_sema;
 extern int BIOS_RespMbx;
 extern char hasUltraHighPriorityTasks;
 extern int missed_ticks;
@@ -650,7 +655,7 @@ public int FMTK_WaitMsg(hMBX hMbx, int *d1, int *d2, int *d3, int timelimit)
 		//-----------------------
 		thrd->status |= 2;
 		thrd->hWaitMbx = hMbx;
-		thrd->mbq_next = (void *)0;
+		thrd->mbq_next = -1;
     	if (LockSemaphore(&sys_sema,-1)) {
 			if (mbx->tq_head < 0) {
 				thrd->mbq_prev = -1;
@@ -669,6 +674,7 @@ public int FMTK_WaitMsg(hMBX hMbx, int *d1, int *d2, int *d3, int timelimit)
 		//---------------------------
 		// Is a timeout specified ?
 		if (timelimit) {
+            asm { ; Waitmsg here; }
         	if (LockSemaphore(&sys_sema,-1)) {
         	    InsertIntoTimeoutList(thrd-tcbs, timelimit);
         	    UnlockSemaphore(&sys_sema);

@@ -35,157 +35,163 @@
     35	    __int8 KeybdWaitFlag;
     36	    __int8 KeybdHead;
     37	    __int8 KeybdTail;
-    38	    unsigned __int16 KeybdBuffer[16];
+    38	    unsigned __int8 KeybdBuffer[32];
     39	    hJCB number;
-    40	} JCB;
-    41	
-    42	struct tagMBX;
+    40	    hTCB tasks[8];
+    41	    hJCB next;
+    42	} JCB;
     43	
-    44	typedef struct _tagTCB align(1024) {
-    45	    // exception storage area
-    46		int regs[32];
-    47		int isp;
-    48		int dsp;
-    49		int esp;
-    50		int ipc;
-    51		int dpc;
-    52		int epc;
-    53		int cr0;
-    54		// interrupt storage
-    55		int iregs[32];
-    56		int iisp;
-    57		int idsp;
-    58		int iesp;
-    59		int iipc;
-    60		int idpc;
-    61		int iepc;
-    62		int icr0;
-    63		hTCB next;
-    64		hTCB prev;
-    65		hTCB mbq_next;
-    66		hTCB mbq_prev;
-    67		int *sys_stack;
-    68		int *bios_stack;
-    69		int *stack;
-    70		__int64 timeout;
-    71		MSG msg;
-    72		hMBX hMailboxes[4]; // handles of mailboxes owned by task
-    73		hMBX hWaitMbx;      // handle of mailbox task is waiting at
-    74		hTCB number;
-    75		__int8 priority;
-    76		__int8 status;
-    77		__int8 affinity;
-    78		hJCB hJob;
-    79		__int64 startTick;
-    80		__int64 endTick;
-    81		__int64 ticks;
-    82	} TCB;
-    83	
-    84	typedef struct tagMBX align(64) {
-    85	    hMBX link;
-    86		hJCB owner;		// hJcb of owner
-    87		hTCB tq_head;
-    88		hTCB tq_tail;
-    89		hMSG mq_head;
-    90		hMSG mq_tail;
-    91		char mq_strategy;
-    92		byte resv[2];
-    93		uint tq_count;
-    94		uint mq_size;
-    95		uint mq_count;
-    96		uint mq_missed;
-    97	} MBX;
-    98	
-    99	typedef struct tagALARM {
-   100		struct tagALARM *next;
-   101		struct tagALARM *prev;
-   102		MBX *mbx;
-   103		MSG *msg;
-   104		uint BaseTimeout;
-   105		uint timeout;
-   106		uint repeat;
-   107		byte resv[8];		// padding to 64 bytes
-   108	} ALARM;
-   109	
-   110	
-   111	// ============================================================================
-   112	//        __
-   113	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
-   114	//    \  __ /    All rights reserved.
-   115	//     \/_//     robfinch<remove>@finitron.ca
-   116	//       ||
-   117	//
-   118	// TCB.c
-   119	// Task Control Block related functions.
+    44	struct tagMBX;
+    45	
+    46	typedef struct _tagTCB align(1024) {
+    47	    // exception storage area
+    48		int regs[32];
+    49		int isp;
+    50		int dsp;
+    51		int esp;
+    52		int ipc;
+    53		int dpc;
+    54		int epc;
+    55		int cr0;
+    56		// interrupt storage
+    57		int iregs[32];
+    58		int iisp;
+    59		int idsp;
+    60		int iesp;
+    61		int iipc;
+    62		int idpc;
+    63		int iepc;
+    64		int icr0;
+    65		hTCB next;
+    66		hTCB prev;
+    67		hTCB mbq_next;
+    68		hTCB mbq_prev;
+    69		int *sys_stack;
+    70		int *bios_stack;
+    71		int *stack;
+    72		__int64 timeout;
+    73		MSG msg;
+    74		hMBX hMailboxes[4]; // handles of mailboxes owned by task
+    75		hMBX hWaitMbx;      // handle of mailbox task is waiting at
+    76		hTCB number;
+    77		__int8 priority;
+    78		__int8 status;
+    79		__int8 affinity;
+    80		hJCB hJob;
+    81		__int64 startTick;
+    82		__int64 endTick;
+    83		__int64 ticks;
+    84		int exception;
+    85	} TCB;
+    86	
+    87	typedef struct tagMBX align(64) {
+    88	    hMBX link;
+    89		hJCB owner;		// hJcb of owner
+    90		hTCB tq_head;
+    91		hTCB tq_tail;
+    92		hMSG mq_head;
+    93		hMSG mq_tail;
+    94		char mq_strategy;
+    95		byte resv[2];
+    96		uint tq_count;
+    97		uint mq_size;
+    98		uint mq_count;
+    99		uint mq_missed;
+   100	} MBX;
+   101	
+   102	typedef struct tagALARM {
+   103		struct tagALARM *next;
+   104		struct tagALARM *prev;
+   105		MBX *mbx;
+   106		MSG *msg;
+   107		uint BaseTimeout;
+   108		uint timeout;
+   109		uint repeat;
+   110		byte resv[8];		// padding to 64 bytes
+   111	} ALARM;
+   112	
+   113	
+   114	// ============================================================================
+   115	//        __
+   116	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+   117	//    \  __ /    All rights reserved.
+   118	//     \/_//     robfinch<remove>@finitron.ca
+   119	//       ||
    120	//
-   121	// This source file is free software: you can redistribute it and/or modify 
-   122	// it under the terms of the GNU Lesser General Public License as published 
-   123	// by the Free Software Foundation, either version 3 of the License, or     
-   124	// (at your option) any later version.                                      
-   125	//                                                                          
-   126	// This source file is distributed in the hope that it will be useful,      
-   127	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-   128	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-   129	// GNU General Public License for more details.                             
-   130	//                                                                          
-   131	// You should have received a copy of the GNU General Public License        
-   132	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   121	// TCB.c
+   122	// Task Control Block related functions.
+   123	//
+   124	// This source file is free software: you can redistribute it and/or modify 
+   125	// it under the terms of the GNU Lesser General Public License as published 
+   126	// by the Free Software Foundation, either version 3 of the License, or     
+   127	// (at your option) any later version.                                      
+   128	//                                                                          
+   129	// This source file is distributed in the hope that it will be useful,      
+   130	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+   131	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+   132	// GNU General Public License for more details.                             
    133	//                                                                          
-   134	// ============================================================================
-   135	//
-   136	// JCB functions
-   137	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
-   138	
-   139	// TCB functions
-   140	TCB *GetRunningTCBPtr();
-   141	hTCB GetRunningTCB();
-   142	pascal void SetRunningTCB(hTCB ht);
-   143	pascal int chkTCB(TCB *p);
-   144	pascal int InsertIntoReadyList(hTCB ht);
-   145	pascal int RemoveFromReadyList(hTCB ht);
-   146	pascal int InsertIntoTimeoutList(hTCB ht, int to);
-   147	pascal int RemoveFromTimeoutList(hTCB ht);
-   148	void DumpTaskList();
-   149	
-   150	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
-   151	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
-   152	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
-   153	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
-   154	
-   155	void set_vector(unsigned int, unsigned int);
-   156	int getCPU();
-   157	int GetVecno();          // get the last interrupt vector number
-   158	void outb(unsigned int, int);
-   159	void outc(unsigned int, int);
-   160	void outh(unsigned int, int);
-   161	void outw(unsigned int, int);
-   162	pascal int LockSemaphore(int *sema, int retries);
-   163	pascal void UnlockSemaphore(int *sema);
-   164	
-   165	// The following causes a privilege violation if called from user mode
-   166	
+   134	// You should have received a copy of the GNU General Public License        
+   135	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   136	//                                                                          
+   137	// ============================================================================
+   138	//
+   139	// JCB functions
+   140	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+   141	
+   142	// TCB functions
+   143	TCB *GetRunningTCBPtr();
+   144	hTCB GetRunningTCB();
+   145	pascal void SetRunningTCB(hTCB ht);
+   146	pascal int chkTCB(TCB *p);
+   147	pascal int InsertIntoReadyList(hTCB ht);
+   148	pascal int RemoveFromReadyList(hTCB ht);
+   149	pascal int InsertIntoTimeoutList(hTCB ht, int to);
+   150	pascal int RemoveFromTimeoutList(hTCB ht);
+   151	void DumpTaskList();
+   152	
+   153	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
+   154	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
+   155	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
+   156	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
+   157	
+   158	pascal void set_vector(unsigned int, unsigned int);
+   159	int getCPU();
+   160	int GetVecno();          // get the last interrupt vector number
+   161	void outb(unsigned int, int);
+   162	void outc(unsigned int, int);
+   163	void outh(unsigned int, int);
+   164	void outw(unsigned int, int);
+   165	pascal int LockSemaphore(int *sema, int retries);
+   166	pascal void UnlockSemaphore(int *sema);
    167	
-   168	extern JCB *IOFocusNdx;
-   169	extern int IOFocusTbl[4];
+   168	// The following causes a privilege violation if called from user mode
+   169	
    170	
-   171	void ForceIOFocus(JCB *j)
-   172	{
-   173	    RequestIOFocus(j);   // In case it isn't requested yet.
-   174	    LockIOF();
-   175	        if (j != IOFocusNdx) {
-   176	            CopyScreenToVirtualScreen();
-   177	            j->pVidMem = j->pVirtVidMem;
-   178	            IOFocusNdx = j;
-   179	            j->pVidMem = 0xFFD00000;
-   180	            CopyVirtualScreenToScreen();
-   181	        }
-   182	    UnlockIOF();
-   183	}
-   184	
-   185	// First check if it's even possible to switch the focus to another
-   186	// task. The I/O focus list could be empty or there may be only a
-   187	// single task in the list. In either case it's not possible to
-   188	// switch.
+   171	extern JCB *IOFocusNdx;
+   172	extern int IOFocusTbl[4];
+   173	extern int iof_sema;
+   174	
+   175	void ForceIOFocus(JCB *j)
+   176	{
+   177	    RequestIOFocus(j);   // In case it isn't requested yet.
+   178	     if (LockSemaphore(&iof_sema,-1)) {
+   179	        if (j != IOFocusNdx) {
+   180	            CopyScreenToVirtualScreen();
+   181	            j->pVidMem = j->pVirtVidMem;
+   182	            IOFocusNdx = j;
+   183	            j->pVidMem = 0xFFD00000;
+   184	            CopyVirtualScreenToScreen();
+   185	        }
+   186	        UnlockSemaphore(&iof_sema);
+   187	     }
+   188	}
+   189	
+   190	
+   191	// First check if it's even possible to switch the focus to another
+   192	// task. The I/O focus list could be empty or there may be only a
+   193	// single task in the list. In either case it's not possible to
+   194	// switch.
 
 
 *** local symbol table ***
@@ -194,33 +200,34 @@ j_         =000018    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   189	void SwitchIOFocus()
-   190	{
-   191	     JCB *j, *p;
-   192	
-   193	     LockIOF();
-   194	         j = IOFocusNdx;
-   195	         if (j) {
-   196	             p = IOFocusNdx->iof_next;
-   197	             if (p <> IOFocusNdx) {
-   198	                 if (p) {
-   199	                     CopyScreenToVirtualScreen();
-   200	                     j->pVidMem = j->pVirtVidMem;
-   201	                     IOFocusNdx = p;
-   202	                     p->pVidMem = 0xFFD00000;
-   203	                     CopyVirtualScreenToScreen();
-   204	                 }
-   205	             }
-   206	         }
-   207	     UnlockIOF();
-   208	}
-   209	
-   210	//-----------------------------------------------------------------------------
-   211	// The I/O focus list is an array indicating which jobs are requesting the
-   212	// I/O focus. The I/O focus is user controlled by pressing ALT-TAB on the
-   213	// keyboard.
-   214	//-----------------------------------------------------------------------------
-   215	
+   195	void SwitchIOFocus()
+   196	{
+   197	     JCB *j, *p;
+   198	
+   199	     if (LockSemaphore(&iof_sema,-1)) {
+   200	         j = IOFocusNdx;
+   201	         if (j) {
+   202	             p = IOFocusNdx->iof_next;
+   203	             if (p <> IOFocusNdx) {
+   204	                 if (p) {
+   205	                     CopyScreenToVirtualScreen();
+   206	                     j->pVidMem = j->pVirtVidMem;
+   207	                     IOFocusNdx = p;
+   208	                     p->pVidMem = 0xFFD00000;
+   209	                     CopyVirtualScreenToScreen();
+   210	                 }
+   211	             }
+   212	         }
+   213	        UnlockSemaphore(&iof_sema);
+   214	     }
+   215	}
+   216	
+   217	//-----------------------------------------------------------------------------
+   218	// The I/O focus list is an array indicating which jobs are requesting the
+   219	// I/O focus. The I/O focus is user controlled by pressing ALT-TAB on the
+   220	// keyboard.
+   221	//-----------------------------------------------------------------------------
+   222	
 
 
 *** local symbol table ***
@@ -230,34 +237,35 @@ p_         =fffffff0    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   216	void RequestIOFocus(JCB *j)
-   217	{
-   218	     int nj;
-   219	     int stat;
-   220	
-   221	     nj = j->number;
-   222	     LockIOF();
-   223	        stat = (IOFocusTbl[0] >> nj) & 1;
-   224	        if (!stat) {
-   225	           if (IOFocusNdx==null) {
-   226	               IOFocusNdx = j;
-   227	               j->iof_next = j;
-   228	               j->iof_prev = j;
-   229	           }
-   230	           else {
-   231	               j->iof_prev = IOFocusNdx->iof_prev;
-   232	               j->iof_next = IOFocusNdx;
-   233	               IOFocusNdx->iof_prev->iof_next = j;
-   234	               IOFocusNdx->iof_prev = j;
-   235	           }
-   236	           IOFocusTbl[0] |= (1 << nj);
-   237	        }
-   238	     UnlockIOF();
-   239	}
-   240	        
-   241	//-----------------------------------------------------------------------------
-   242	// Release the IO focus for the current job.
-   243	//-----------------------------------------------------------------------------
+   223	void RequestIOFocus(JCB *j)
+   224	{
+   225	     int nj;
+   226	     int stat;
+   227	
+   228	     nj = j->number;
+   229	     if (LockSemaphore(&iof_sema,-1)) {
+   230	        stat = (IOFocusTbl[0] >> nj) & 1;
+   231	        if (!stat) {
+   232	           if (IOFocusNdx==null) {
+   233	               IOFocusNdx = j;
+   234	               j->iof_next = j;
+   235	               j->iof_prev = j;
+   236	           }
+   237	           else {
+   238	               j->iof_prev = IOFocusNdx->iof_prev;
+   239	               j->iof_next = IOFocusNdx;
+   240	               IOFocusNdx->iof_prev->iof_next = j;
+   241	               IOFocusNdx->iof_prev = j;
+   242	           }
+   243	           IOFocusTbl[0] |= (1 << nj);
+   244	        }
+   245	        UnlockSemaphore(&iof_sema);
+   246	     }
+   247	}
+   248	        
+   249	//-----------------------------------------------------------------------------
+   250	// Release the IO focus for the current job.
+   251	//-----------------------------------------------------------------------------
 
 
 *** local symbol table ***
@@ -268,18 +276,18 @@ stat_      =fffffff0    -    Auto        Long
 
 
 
-   244	void ReleaseIOFocus()
-   245	{
-   246	     ForceReleaseIOFocus(GetJCBPtr());
-   247	}
-   248	
-   249	//-----------------------------------------------------------------------------
-   250	// Releasing the I/O focus causes the focus to switch if the running job
-   251	// had the I/O focus.
-   252	// ForceReleaseIOFocus forces the release of the IO focus for a job
-   253	// different than the one currently running.
-   254	//-----------------------------------------------------------------------------
-   255	
+   252	void ReleaseIOFocus()
+   253	{
+   254	     ForceReleaseIOFocus(GetJCBPtr());
+   255	}
+   256	
+   257	//-----------------------------------------------------------------------------
+   258	// Releasing the I/O focus causes the focus to switch if the running job
+   259	// had the I/O focus.
+   260	// ForceReleaseIOFocus forces the release of the IO focus for a job
+   261	// different than the one currently running.
+   262	//-----------------------------------------------------------------------------
+   263	
 
 
 *** local symbol table ***
@@ -287,31 +295,32 @@ stat_      =fffffff0    -    Auto        Long
 
 
 
-   256	void ForceReleaseIOFocus(JCB * j)
-   257	{
-   258	     JCB *p;
-   259	     
-   260	     LockIOF();
-   261	         if (IOFocusTbl[0] & (1 << (int)j->number)) {
-   262	             IOFocusTbl[0] &= ~(1 << j->number);
-   263	             if (j == IOFocusNdx)
-   264	                SwitchIOFocus();
-   265	             p = j->iof_next;
-   266	             if (p) {
-   267	                  if (p <> j) {
-   268	                        p->iof_prev = j->iof_prev;
-   269	                        j->iof_prev->iof_next = p;
-   270	                  } 
-   271	                  else {
-   272	                       IOFocusNdx = null;
-   273	                  }
-   274	                  j->iof_next = null;
-   275	                  j->iof_prev = null;
-   276	             }
-   277	         }
-   278	     UnlockIOF();
-   279	}
-   280	
+   264	void ForceReleaseIOFocus(JCB * j)
+   265	{
+   266	     JCB *p;
+   267	     
+   268	     if (LockSemaphore(&iof_sema,-1)) {
+   269	         if (IOFocusTbl[0] & (1 << (int)j->number)) {
+   270	             IOFocusTbl[0] &= ~(1 << j->number);
+   271	             if (j == IOFocusNdx)
+   272	                SwitchIOFocus();
+   273	             p = j->iof_next;
+   274	             if (p) {
+   275	                  if (p <> j) {
+   276	                        p->iof_prev = j->iof_prev;
+   277	                        j->iof_prev->iof_next = p;
+   278	                  } 
+   279	                  else {
+   280	                       IOFocusNdx = null;
+   281	                  }
+   282	                  j->iof_next = null;
+   283	                  j->iof_prev = null;
+   284	             }
+   285	         }
+   286	        UnlockSemaphore(&iof_sema);
+   287	     }
+   288	}
+   289	
 
 
 *** local symbol table ***
@@ -321,22 +330,22 @@ p_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   281	void CopyVirtualScreenToScreen()
-   282	{
-   283	     short int *p, *q;
-   284	     JCB *j;
-   285	     int nn, pos;
-   286	
-   287	     j = IOFocusNdx;
-   288	     p = j->pVidMem;
-   289	     q = j->pVirtVidMem;
-   290	     nn = j->VideoRows * j->VideoCols;
-   291	     for (; nn >= 0; nn--)
-   292	         p[nn] = q[nn];
-   293	    pos = j->CursorRow * j->VideoCols + j->CursorCol;
-   294	    SetVideoReg(11,pos);
-   295	}
-   296	
+   290	void CopyVirtualScreenToScreen()
+   291	{
+   292	     short int *p, *q;
+   293	     JCB *j;
+   294	     int nn, pos;
+   295	
+   296	     j = IOFocusNdx;
+   297	     p = j->pVidMem;
+   298	     q = j->pVirtVidMem;
+   299	     nn = j->VideoRows * j->VideoCols;
+   300	     for (; nn >= 0; nn--)
+   301	         p[nn] = q[nn];
+   302	    pos = j->CursorRow * j->VideoCols + j->CursorCol;
+   303	    SetVideoReg(11,pos);
+   304	}
+   305	
 
 
 *** local symbol table ***
@@ -349,19 +358,20 @@ pos_       =ffffffd8    -    Auto        Long
 
 
 
-   297	void CopyScreenToVirtualScreen()
-   298	{
-   299	     short int *p, *q;
-   300	     JCB *j;
-   301	     int nn;
-   302	
-   303	     j = IOFocusNdx;
-   304	     p = j->pVidMem;
-   305	     q = j->pVirtVidMem;
-   306	     nn = j->VideoRows * j->VideoCols;
-   307	     for (; nn >= 0; nn--)
-   308	         q[nn] = p[nn];
-   309	}
+   306	void CopyScreenToVirtualScreen()
+   307	{
+   308	     short int *p, *q;
+   309	     JCB *j;
+   310	     int nn;
+   311	
+   312	     j = IOFocusNdx;
+   313	     p = j->pVidMem;
+   314	     q = j->pVirtVidMem;
+   315	     nn = j->VideoRows * j->VideoCols;
+   316	     for (; nn >= 0; nn--)
+   317	         q[nn] = p[nn];
+   318	}
+   319	
 
 
 *** local symbol table ***
@@ -404,12 +414,11 @@ hJCB_      =00000a    1   Byte
 set_vector_ =001480    -    Global      Function returning 
 hTCB_      =000008    1   Char
 SetVideoReg_ =000000    -    External    Function returning Long
+iof_sema_  =000000    -    External    Long
 ForceReleaseIOFocus_ =001480    -    Global      Function returning 
-UnlockIOF_ =000000    -    External    Function returning Long
 hMBX_      =00000c    1   Char
 hMSG_      =00000e    1   Char
 ReleaseIOFocus_ =001480    -    Global      Function returning 
-LockIOF_   =000000    -    External    Function returning Long
 ALARM_     =001440    1   struct tagALARM_ 
 RequestIOFocus_ =001480    -    Global      Function returning 
 RemoveFromTimeoutList_ =001480    -    Global      Function returning Long
@@ -451,8 +460,10 @@ _tagJCB_   =000000    -    Type        struct _tagJCB_
     KeybdWaitFlag_ =00066e    -    Member      Byte
     KeybdHead_ =00066f    -    Member      Byte
     KeybdTail_ =000670    -    Member      Byte
-    KeybdBuffer_ =000672    -    Member      Array of 
-    number_    =000692    -    Member      Byte
+    KeybdBuffer_ =000671    -    Member      Array of Unsigned Byte
+    number_    =000691    -    Member      Byte
+    tasks_     =000692    -    Member      Array of Char
+    next_      =0006a2    -    Member      Byte
 tagMBX_    =000000    -    Type        struct tagMBX_ 
     link_      =000000    -    Member      Char
     owner_     =000002    -    Member      Byte
@@ -502,6 +513,7 @@ _tagTCB_   =000000    -    Type        struct _tagTCB_
     startTick_ =0002d0    -    Member      Long
     endTick_   =0002d8    -    Member      Long
     ticks_     =0002e0    -    Member      Long
+    exception_ =0002e8    -    Member      Long
 tagALARM_  =000000    -    Type        struct tagALARM_ 
     next_      =000000    -    Member      Pointer to struct tagALARM_ 
     prev_      =000008    -    Member      Pointer to struct tagALARM_ 

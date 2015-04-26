@@ -1,4 +1,6 @@
+extern pascal void set_vector(int, unsigned int);
 extern pascal void putch(char ch);
+extern void printf();
 
 int linendx;
 char linebuf[100];
@@ -18,6 +20,7 @@ unsigned byte *bmem;
 unsigned char *cmem;
 unsigned short int *hmem;
 unsigned int *wmem;
+
 
 static void dbg_DisplayHelp()
 {
@@ -207,8 +210,9 @@ pascal void dbg_ReadSetIB(unsigned int n)
    char ch;
    unsigned int ad;
 
-   if (n > 3) return;
+
    ch = dbg_nextNonSpace();
+
    if (ch=='=') {
        if (dbg_getHexNumber(&ad) > 0) {
            dbg_SetDBAD(n,ad);
@@ -228,7 +232,6 @@ pascal void dbg_ReadSetIB(unsigned int n)
           printf("\r\nDBG>i%d <not set>", n);
    }
 }
-
 
 // Data load or store breakpoint
 
@@ -707,6 +710,12 @@ naked dbg_irq()
 }
 
 
+int debugger_task()
+{
+    debugger(0,0);
+    return 0;
+}
+
 void debugger(unsigned int ad, unsigned int ctrlreg)
 {
      char ch;
@@ -775,18 +784,38 @@ void debugger(unsigned int ad, unsigned int ctrlreg)
 }
 
 void dbg_init() {
+        asm {
+            ldi   r1,#60
+            sc    r1,LEDS
+        }
      set_vector(496,dbg_irq);     // breakpoint interrupt
+        asm {
+            ldi   r1,#61
+            sc    r1,LEDS
+        }
      set_vector(495,dbg_irq);     // single step interrupt
+        asm {
+            ldi   r1,#62
+            sc    r1,LEDS
+        }
      ssm = 0;
      bmem = (unsigned byte *)0;
      cmem = (unsigned char *)0;
      hmem = (unsigned short int *)0;
      wmem = (unsigned int *)0;
+        asm {
+            ldi   r1,#66
+            sc    r1,LEDS
+        }
      curaddr = 0x10000;
      muol = 16;
      cursz = 'b';
      curfmt = 'x';
      currep = 1;
      dbg_dbctrl = 0;
+        asm {
+            ldi   r1,#69
+            sc    r1,LEDS
+        }
 }
 

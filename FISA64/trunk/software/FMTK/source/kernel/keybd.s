@@ -4,24 +4,29 @@
 	align	8
 	fill.b	16,0x00
 	align	8
-	align	8
 	fill.b	1984,0x00
 	align	8
 	align	8
+	align	8
+public data kbd_sema_:
+	dw	0
+endpublic
+
 	bss
 	align	8
 public bss keybd_irq_stack_:
-	fill.b	4096,0x00
+	fill.b	2048,0x00
 
 endpublic
 	code
 	align	16
 	data
 	align	8
+	align	8
 	code
 	align	16
 public code KeybdIRQ_:
-	      	     	         lea   sp,keybd_irq_stack_+4088
+	      	     	         lea   sp,keybd_irq_stack_+2040
          sw    r1,8+312[tr]
          sw    r2,16+312[tr]
          sw    r3,24+312[tr]
@@ -61,21 +66,25 @@ public code KeybdIRQ_:
 	      	push 	bp
 	      	ldi  	xlr,#keybd_0
 	      	mov  	bp,sp
-	      	subui	sp,sp,#16
+	      	subui	sp,sp,#32
 	      	push 	r11
+	      	push 	r12
+keybd_2:
 	      	bsr  	KeybdGetStatus_
 	      	mov  	r3,r1
-	      	bge  	r3,keybd_1
+	      	bge  	r3,keybd_3
 	      	bsr  	KeybdGetScancode_
 	      	mov  	r3,r1
+	      	sxb  	r3,r3
 	      	sb   	r3,-1[bp]
-	      	lw   	r11,IOFocusNdx_
-	      	beq  	r11,keybd_3
-	      	push 	#10000
-	      	push 	#sys_sema_
-	      	bsr  	LockSemaphore_
+	      	lw   	r11,IOFocusNdx_[gp]
+	      	beq  	r11,keybd_4
+	      	push 	#200
+	      	pea  	kbd_sema_[gp]
+	      	bsr  	ILockSemaphore_
+	      	addui	sp,sp,#16
 	      	mov  	r3,r1
-	      	beq  	r3,keybd_5
+	      	beq  	r3,keybd_6
 	      	bsr  	KeybdClearRcv_
 	      	lb   	r3,1647[r11]
 	      	sb   	r3,-2[bp]
@@ -85,36 +94,108 @@ public code KeybdIRQ_:
 	      	addui	r3,r3,#1
 	      	sb   	r3,-2[bp]
 	      	lb   	r3,-2[bp]
-	      	andi 	r3,r3,#15
+	      	andi 	r3,r3,#31
 	      	sb   	r3,-2[bp]
 	      	lb   	r3,-2[bp]
 	      	lb   	r4,-3[bp]
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,keybd_7
+	      	beq  	r5,keybd_8
 	      	lb   	r3,-2[bp]
 	      	sb   	r3,1647[r11]
-	      	lb   	r3,-1[bp]
-	      	sxb  	r3,r3
-	      	lb   	r6,-2[bp]
-	      	sxb  	r6,r6
-	      	asli 	r5,r6,#1
-	      	addu 	r4,r5,r11
-	      	sc   	r3,1650[r4]
-keybd_7:
-	      	push 	#sys_sema_
+	      	lb   	r4,-2[bp]
+	      	sxb  	r4,r4
+	      	addu 	r3,r4,r11
+	      	lb   	r4,-1[bp]
+	      	andi 	r4,r4,#255
+	      	sb   	r4,1649[r3]
+keybd_8:
+	      	pea  	kbd_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-keybd_5:
+keybd_6:
+	      	lb   	r4,1645[r11]
+	      	and  	r3,r4,#4
+	      	beq  	r3,keybd_10
+	      	lb   	r3,-1[bp]
+	      	cmp  	r4,r3,#33
+	      	bne  	r4,keybd_12
+	      	sw   	r0,-32[bp]
+keybd_14:
+	      	lw   	r3,-32[bp]
+	      	cmp  	r4,r3,#8
+	      	bge  	r4,keybd_15
+	      	lw   	r4,-32[bp]
+	      	asli 	r3,r4,#1
+	      	addu 	r4,r11,#1682
+	      	lc   	r3,0[r4+r3]
+	      	cmp  	r4,r3,#-1
+	      	bne  	r4,keybd_17
+	      	bra  	keybd_15
+keybd_17:
+	      	lw   	r7,-32[bp]
+	      	asli 	r6,r7,#1
+	      	addu 	r5,r6,r11
+	      	lc   	r5,1682[r5]
+	      	asli 	r4,r5,#10
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
+	      	mov  	r12,r3
+	      	ldi  	r3,#515
+	      	sw   	r3,744[r12]
+keybd_16:
+	      	inc  	-32[bp],#1
+	      	bra  	keybd_14
+keybd_15:
+	      	bra  	keybd_13
+keybd_12:
+	      	lb   	r3,-1[bp]
+	      	cmp  	r4,r3,#44
+	      	beq  	r4,keybd_21
+	      	lb   	r3,-1[bp]
+	      	cmp  	r4,r3,#26
+	      	bne  	r4,keybd_19
+keybd_21:
+	      	ldi  	r4,#2048
+	      	lea  	r5,tcbs_[gp]
+	      	addu 	r3,r4,r5
+	      	mov  	r12,r3
+	      	ldi  	r5,#512
+	      	lb   	r6,-1[bp]
+	      	cmp  	r7,r6,#44
+	      	bne  	r7,keybd_22
+	      	ldi  	r6,#20
+	      	bra  	keybd_23
+keybd_22:
+	      	ldi  	r7,#26
+	      	mov  	r6,r7
+keybd_23:
+	      	addu 	r4,r5,r6
+	      	push 	r3
+	      	push 	r4
+	      	push 	r5
+	      	bsr  	GetRunningTCB_
+	      	pop  	r5
+	      	pop  	r4
+	      	pop  	r3
+	      	mov  	r6,r1
+	      	asli 	r5,r6,#32
+	      	or   	r3,r4,r5
+	      	sw   	r3,744[r12]
+keybd_19:
+keybd_13:
+keybd_10:
 	      	lb   	r4,1645[r11]
 	      	and  	r3,r4,#2
-	      	beq  	r3,keybd_9
+	      	beq  	r3,keybd_24
 	      	lb   	r3,-1[bp]
 	      	cmp  	r4,r3,#13
-	      	bne  	r4,keybd_9
-	      	inc  	iof_switch_,#1
-keybd_9:
+	      	bne  	r4,keybd_24
+	      	inc  	iof_switch_[gp],#1
+keybd_24:
+keybd_4:
+	      	bra  	keybd_2
 keybd_3:
-keybd_1:
-keybd_11:
+keybd_26:
+	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
@@ -156,69 +237,73 @@ keybd_11:
 keybd_0:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	keybd_11
+	      	bra  	keybd_26
 endpublic
 
 public code KeybdGetBufferStatus_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#keybd_12
+	      	ldi  	xlr,#keybd_27
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
+	      	sb   	r0,-10[bp]
+	      	lb   	r3,-10[bp]
+	      	sb   	r3,-9[bp]
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	push 	#-1
-	      	push 	#sys_sema_
+	      	push 	#200
+	      	pea  	kbd_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,keybd_13
+	      	beq  	r3,keybd_29
 	      	lb   	r3,1647[r11]
 	      	sb   	r3,-9[bp]
 	      	lb   	r3,1648[r11]
 	      	sb   	r3,-10[bp]
-	      	push 	#sys_sema_
+	      	pea  	kbd_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-keybd_13:
+keybd_29:
 	      	lb   	r3,-9[bp]
 	      	lb   	r4,-10[bp]
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,keybd_15
+	      	beq  	r5,keybd_31
 	      	ldi  	r1,#-1
-keybd_17:
+keybd_33:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-keybd_15:
+keybd_31:
 	      	ldi  	r1,#0
-	      	bra  	keybd_17
-keybd_12:
+	      	bra  	keybd_33
+keybd_27:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	keybd_17
+	      	bra  	keybd_33
 endpublic
 
 public code KeybdGetBufferedScancode_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#keybd_18
+	      	ldi  	xlr,#keybd_34
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-	      	push 	#-1
-	      	push 	#sys_sema_
+	      	sb   	r0,-11[bp]
+	      	push 	#200
+	      	pea  	kbd_sema_[gp]
 	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
-	      	beq  	r3,keybd_19
+	      	beq  	r3,keybd_36
 	      	lb   	r3,1647[r11]
 	      	sb   	r3,-9[bp]
 	      	lb   	r3,1648[r11]
@@ -226,43 +311,39 @@ public code KeybdGetBufferedScancode_:
 	      	lb   	r3,-9[bp]
 	      	lb   	r4,-10[bp]
 	      	cmp  	r5,r3,r4
-	      	beq  	r5,keybd_21
-	      	lb   	r4,-10[bp]
-	      	sxb  	r4,r4
-	      	asli 	r3,r4,#1
-	      	addu 	r4,r11,#1650
-	      	lcu  	r3,0[r4+r3]
-	      	sxc  	r3,r3
+	      	beq  	r5,keybd_38
+	      	lb   	r3,-10[bp]
+	      	sxb  	r3,r3
+	      	addu 	r4,r11,#1649
+	      	lb   	r3,0[r4+r3]
+	      	sxb  	r3,r3
 	      	sb   	r3,-11[bp]
 	      	lb   	r3,-10[bp]
 	      	addui	r3,r3,#1
 	      	sb   	r3,-10[bp]
 	      	lb   	r3,-10[bp]
-	      	andi 	r3,r3,#15
+	      	andi 	r3,r3,#31
 	      	sb   	r3,-10[bp]
 	      	lb   	r3,-10[bp]
 	      	sb   	r3,1648[r11]
-	      	bra  	keybd_22
-keybd_21:
-	      	sb   	r0,-11[bp]
-keybd_22:
-	      	push 	#sys_sema_
+keybd_38:
+	      	pea  	kbd_sema_[gp]
 	      	bsr  	UnlockSemaphore_
-keybd_19:
+keybd_36:
 	      	lb   	r3,-11[bp]
 	      	sxb  	r3,r3
 	      	mov  	r1,r3
-keybd_23:
+keybd_40:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-keybd_18:
+keybd_34:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	keybd_23
+	      	bra  	keybd_40
 endpublic
 
 	data
@@ -273,7 +354,7 @@ KeybdGetBufferedChar_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#keybd_25
+	      	ldi  	xlr,#keybd_42
 	      	mov  	bp,sp
 	      	subui	sp,sp,#16
 	      	push 	r11
@@ -281,15 +362,15 @@ KeybdGetBufferedChar_:
 	      	bsr  	GetJCBPtr_
 	      	mov  	r3,r1
 	      	mov  	r11,r3
-keybd_26:
-keybd_28:
+keybd_44:
+keybd_46:
 	      	bsr  	KeybdGetBufferStatus_
 	      	mov  	r3,r1
-	      	blt  	r3,keybd_29
+	      	blt  	r3,keybd_47
 	      	lb   	r3,1646[r11]
-	      	bne  	r3,keybd_30
+	      	bne  	r3,keybd_48
 	      	ldi  	r1,#-1
-keybd_32:
+keybd_50:
 	      	pop  	r12
 	      	pop  	r11
 	      	mov  	sp,bp
@@ -297,185 +378,179 @@ keybd_32:
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-keybd_30:
-	      	bra  	keybd_28
-keybd_29:
+keybd_48:
+	      	bra  	keybd_46
+keybd_47:
 	      	bsr  	KeybdGetBufferedScancode_
 	      	mov  	r3,r1
+	      	andi 	r3,r3,#255
+	      	andi 	r3,r3,#255
 	      	mov  	r12,r3
 	      	cmp  	r3,r12,#240
-	      	beq  	r3,keybd_34
+	      	beq  	r3,keybd_52
 	      	cmp  	r3,r12,#224
-	      	beq  	r3,keybd_35
+	      	beq  	r3,keybd_53
 	      	cmp  	r3,r12,#20
-	      	beq  	r3,keybd_36
+	      	beq  	r3,keybd_54
 	      	cmp  	r3,r12,#89
-	      	beq  	r3,keybd_37
+	      	beq  	r3,keybd_55
 	      	cmp  	r3,r12,#119
-	      	beq  	r3,keybd_38
+	      	beq  	r3,keybd_56
 	      	cmp  	r3,r12,#88
-	      	beq  	r3,keybd_39
+	      	beq  	r3,keybd_57
 	      	cmp  	r3,r12,#126
-	      	beq  	r3,keybd_40
+	      	beq  	r3,keybd_58
 	      	cmp  	r3,r12,#17
-	      	beq  	r3,keybd_41
-	      	bra  	keybd_42
-keybd_34:
+	      	beq  	r3,keybd_59
+	      	bra  	keybd_60
+keybd_52:
 	      	ldi  	r3,#-1
 	      	sb   	r3,1644[r11]
-	      	bra  	keybd_33
-keybd_35:
+	      	bra  	keybd_51
+keybd_53:
 	      	lb   	r3,1645[r11]
 	      	ori  	r3,r3,#128
 	      	sb   	r3,1645[r11]
 	      	lb   	r3,1645[r11]
 	      	sxb  	r3,r3
-	      	bra  	keybd_33
-keybd_36:
+	      	bra  	keybd_51
+keybd_54:
 	      	lb   	r3,1644[r11]
-	      	blt  	r3,keybd_43
+	      	blt  	r3,keybd_61
 	      	lb   	r3,1645[r11]
 	      	ori  	r3,r3,#4
 	      	sb   	r3,1645[r11]
-	      	bra  	keybd_44
-keybd_43:
+	      	bra  	keybd_62
+keybd_61:
 	      	lb   	r3,1645[r11]
 	      	andi 	r3,r3,#-5
 	      	sb   	r3,1645[r11]
-keybd_44:
+keybd_62:
 	      	sb   	r0,1644[r11]
-	      	bra  	keybd_33
-keybd_37:
+	      	bra  	keybd_51
+keybd_55:
 	      	lb   	r3,1644[r11]
-	      	blt  	r3,keybd_45
+	      	blt  	r3,keybd_63
 	      	lb   	r3,1645[r11]
 	      	ori  	r3,r3,#1
 	      	sb   	r3,1645[r11]
-	      	bra  	keybd_46
-keybd_45:
+	      	bra  	keybd_64
+keybd_63:
 	      	lb   	r3,1645[r11]
 	      	andi 	r3,r3,#-2
 	      	sb   	r3,1645[r11]
-keybd_46:
+keybd_64:
 	      	sb   	r0,1644[r11]
-	      	bra  	keybd_33
-keybd_38:
-	      	lw   	r3,-8[bp]
-	      	lb   	r4,1645[r3]
-	      	xori 	r4,r4,#16
-	      	sb   	r4,1645[r3]
-	      	bra  	keybd_33
-keybd_39:
-	      	lw   	r3,-8[bp]
-	      	lb   	r4,1645[r3]
-	      	xori 	r4,r4,#32
-	      	sb   	r4,1645[r3]
-	      	bra  	keybd_33
-keybd_40:
-	      	lw   	r3,-8[bp]
-	      	lb   	r4,1645[r3]
-	      	xori 	r4,r4,#64
-	      	sb   	r4,1645[r3]
-	      	bra  	keybd_33
-keybd_41:
+	      	bra  	keybd_51
+keybd_56:
+	      	lb   	r3,1645[r11]
+	      	xori 	r3,r3,#16
+	      	sb   	r3,1645[r11]
+	      	bra  	keybd_51
+keybd_57:
+	      	lb   	r3,1645[r11]
+	      	xori 	r3,r3,#32
+	      	sb   	r3,1645[r11]
+	      	bra  	keybd_51
+keybd_58:
+	      	lb   	r3,1645[r11]
+	      	xori 	r3,r3,#64
+	      	sb   	r3,1645[r11]
+	      	bra  	keybd_51
+keybd_59:
 	      	lb   	r3,1644[r11]
-	      	blt  	r3,keybd_47
+	      	blt  	r3,keybd_65
 	      	lb   	r3,1645[r11]
 	      	ori  	r3,r3,#2
 	      	sb   	r3,1645[r11]
-	      	bra  	keybd_48
-keybd_47:
+	      	bra  	keybd_66
+keybd_65:
 	      	lb   	r3,1645[r11]
 	      	andi 	r3,r3,#-3
 	      	sb   	r3,1645[r11]
-keybd_48:
+keybd_66:
 	      	sb   	r0,1644[r11]
-	      	bra  	keybd_33
-keybd_42:
+	      	bra  	keybd_51
+keybd_60:
 	      	cmp  	r3,r12,#13
-	      	bne  	r3,keybd_49
+	      	bne  	r3,keybd_67
 	      	lb   	r4,1645[r11]
 	      	and  	r3,r4,#2
-	      	beq  	r3,keybd_49
+	      	beq  	r3,keybd_67
 	      	lb   	r3,1644[r11]
-	      	bne  	r3,keybd_49
-	      	inc  	iof_switch_,#1
-	      	bra  	keybd_33
-keybd_49:
+	      	bne  	r3,keybd_67
+	      	inc  	iof_switch_[gp],#1
+	      	bra  	keybd_68
+keybd_67:
 	      	lb   	r3,1644[r11]
-	      	beq  	r3,keybd_51
+	      	beq  	r3,keybd_69
 	      	sb   	r0,1644[r11]
-	      	bra  	keybd_33
-keybd_51:
+	      	bra  	keybd_70
+keybd_69:
 	      	lb   	r4,1645[r11]
 	      	sxb  	r4,r4
 	      	and  	r3,r4,#128
-	      	beq  	r3,keybd_53
-	      	lbu  	r3,keybdExtendedCodes_[r12]
+	      	beq  	r3,keybd_71
+	      	lea  	r3,keybdExtendedCodes_[gp]
+	      	lb   	r3,0[r3+r12]
 	      	sxb  	r3,r3
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,-12[bp]
 	      	sb   	r0,1644[r11]
-	      	lb   	r3,1645[r11]
-	      	andi 	r3,r3,#127
-	      	sb   	r3,1645[r11]
-	      	lcu  	r3,-12[bp]
+	      	lc   	r3,-12[bp]
 	      	mov  	r1,r3
-	      	bra  	keybd_32
-keybd_53:
+	      	bra  	keybd_50
+keybd_71:
 	      	lb   	r4,1645[r11]
 	      	and  	r3,r4,#4
-	      	beq  	r3,keybd_55
-	      	lbu  	r3,keybdControlCodes_[r12]
+	      	beq  	r3,keybd_73
+	      	lea  	r3,keybdControlCodes_[gp]
+	      	lb   	r3,0[r3+r12]
 	      	sxb  	r3,r3
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,-12[bp]
-	      	lb   	r3,1645[r11]
-	      	andi 	r3,r3,#251
-	      	sb   	r3,1645[r11]
-	      	lb   	r3,1645[r11]
-	      	sxb  	r3,r3
-	      	lcu  	r3,-12[bp]
+	      	lc   	r3,-12[bp]
 	      	mov  	r1,r3
-	      	bra  	keybd_32
-keybd_55:
+	      	bra  	keybd_50
+keybd_73:
 	      	lb   	r4,1645[r11]
 	      	and  	r3,r4,#1
-	      	beq  	r3,keybd_57
-	      	lbu  	r3,shiftedScanCodes_[r12]
+	      	beq  	r3,keybd_75
+	      	lea  	r3,shiftedScanCodes_[gp]
+	      	lb   	r3,0[r3+r12]
 	      	sxb  	r3,r3
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,-12[bp]
-	      	lb   	r3,1645[r11]
-	      	andi 	r3,r3,#254
-	      	sb   	r3,1645[r11]
-	      	lb   	r3,1645[r11]
-	      	sxb  	r3,r3
-	      	lcu  	r3,-12[bp]
+	      	lc   	r3,-12[bp]
 	      	mov  	r1,r3
-	      	bra  	keybd_32
-keybd_57:
-	      	lbu  	r3,unshiftedScanCodes_[r12]
+	      	bra  	keybd_50
+keybd_75:
+	      	lea  	r3,unshiftedScanCodes_[gp]
+	      	lb   	r3,0[r3+r12]
 	      	sxb  	r3,r3
+	      	andi 	r3,r3,#65535
 	      	sc   	r3,-12[bp]
-	      	lcu  	r3,-12[bp]
+	      	lc   	r3,-12[bp]
 	      	mov  	r1,r3
-	      	bra  	keybd_32
-keybd_58:
-keybd_56:
-keybd_54:
-keybd_52:
-keybd_50:
-keybd_33:
-	      	bra  	keybd_26
-keybd_27:
-	      	bra  	keybd_32
-keybd_25:
+	      	bra  	keybd_50
+keybd_76:
+keybd_74:
+keybd_72:
+keybd_70:
+keybd_68:
+keybd_51:
+	      	bra  	keybd_44
+keybd_45:
+	      	bra  	keybd_50
+keybd_42:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	keybd_32
+	      	bra  	keybd_50
 public code KeybdGetBufferedCharWait_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#keybd_59
+	      	ldi  	xlr,#keybd_77
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
@@ -487,24 +562,24 @@ public code KeybdGetBufferedCharWait_:
 	      	bsr  	KeybdGetBufferedChar_
 	      	mov  	r3,r1
 	      	mov  	r1,r3
-keybd_60:
+keybd_79:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-keybd_59:
+keybd_77:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	keybd_60
+	      	bra  	keybd_79
 endpublic
 
 public code KeybdGetBufferedCharNoWait_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#keybd_61
+	      	ldi  	xlr,#keybd_80
 	      	mov  	bp,sp
 	      	subui	sp,sp,#8
 	      	push 	r11
@@ -515,17 +590,17 @@ public code KeybdGetBufferedCharNoWait_:
 	      	bsr  	KeybdGetBufferedChar_
 	      	mov  	r3,r1
 	      	mov  	r1,r3
-keybd_62:
+keybd_82:
 	      	pop  	r11
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-keybd_61:
+keybd_80:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	keybd_62
+	      	bra  	keybd_82
 endpublic
 
 	rodata
@@ -566,8 +641,9 @@ endpublic
 ;	global	LockSemaphore_
 	extern	keybdExtendedCodes_
 	extern	iof_switch_
-;	global	keybd_irq_stack_
 	extern	KeybdGetScancode_
+;	global	keybd_irq_stack_
+	extern	kbd_sema_
 	extern	nMailbox_
 	extern	unshiftedScanCodes_
 ;	global	set_vector_
@@ -581,6 +657,7 @@ endpublic
 	extern	sys_sema_
 	extern	readyQ_
 	extern	sysstack_
+	extern	ILockSemaphore_
 	extern	freeTCB_
 	extern	TimeoutList_
 ;	global	RemoveFromTimeoutList_

@@ -507,6 +507,60 @@ void PeepoptBranch(struct ocode *ip)
 	return;
 }
 
+// Look for the following sequence and convert it into a set operation.
+// Bcc lab1
+// ldi  rn,#1
+// bra lab2
+// lab1:
+// ldi  rn,#0
+// lab2:
+        
+void PeepoptBcc(struct ocode * ip)
+{
+     struct ocode *fwd1, *fwd2, *fwd3, *fwd4, *fwd5;
+     if (!ip->fwd)
+         return;
+     fwd1 = ip->fwd;
+     if (fwd1->opcode != op_ldi)
+         return;
+     fwd2 = fwd1->fwd;
+     if (!fwd2)
+         return;
+     if (fwd2->opcode != op_bra)
+         return;
+     fwd3 = fwd2->fwd;
+     if (!fwd3)
+         return;
+     if (fwd3->opcode != op_label)
+         return;
+     fwd4 = fwd3->fwd;
+     if (!fwd4)
+         return;
+     if (fwd4->opcode != op_ldi)
+         return;
+     fwd5 = fwd4->fwd;
+     if (!fwd5)
+         return;
+     if (fwd5->opcode != op_label)
+         return;
+     // now check labels match up
+     if (ip->oper2!=fwd3->oper1)
+         return;
+     if (fwd2->oper1!=fwd5->oper1)
+         return;
+     // check for same target register
+     if (!equal_address(fwd1->oper1,fwd4->oper1))
+         return;
+     // check ldi values
+     if (fwd1->oper2->offset->i != 1)
+         return;
+     if (fwd4->oper2->offset->i != 0)
+         return;
+// *****
+// need to check branch targets to make sure no other code targets the label.
+// or this code might not work.
+}
+
 void PeepoptLc(struct ocode *ip)
 {
 	if (ip->fwd) {
@@ -704,6 +758,19 @@ void PeepoptSxb(struct ocode *ip)
      if (ip->fwd->fwd)
           ip->fwd->fwd->back = ip;
 }
+void PeepoptSxbAnd(struct ocode *ip)
+{
+     if (!ip->fwd)
+         return;
+     if (ip->opcode != op_sxb)
+         return;
+     if (ip->fwd->opcode != op_andi)
+         return;
+     if (ip->fwd->oper3->offset->i != 255)
+         return;
+     ip->fwd->back = ip->back;
+     ip->back->fwd = ip->fwd;
+}
 
 /*
  *      peephole optimizer. This routine calls the instruction
@@ -756,6 +823,7 @@ static void opt_peep()
             case op_sxc:
             case op_sxh:
                     PeepoptSxb(ip);
+                    PeepoptSxbAnd(ip);
                     break;
             case op_bra:
 					if (ip->predop==1 || isTable888)

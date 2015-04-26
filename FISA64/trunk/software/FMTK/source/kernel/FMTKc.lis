@@ -59,272 +59,265 @@
     59	     E_NoMoreMsgBlks,
     60	     E_NoMoreAlarmBlks,
     61	     E_NoMoreTCBs,
-    62	     E_NoMem
-    63	};
-    64	
+    62	     E_NoMem,
+    63	     E_TooManyTasks
+    64	};
     65	
-    66	typedef unsigned int uint;
-    67	typedef __int16 hTCB;
-    68	typedef __int8 hJCB;
-    69	typedef __int16 hMBX;
-    70	typedef __int16 hMSG;
-    71	
-    72	typedef struct tagMSG align(32) {
-    73		unsigned __int16 link;
-    74		unsigned __int16 retadr;    // return address
-    75		unsigned __int16 tgtadr;    // target address
-    76		unsigned __int16 type;
-    77		unsigned int d1;            // payload data 1
-    78		unsigned int d2;            // payload data 2
-    79		unsigned int d3;            // payload data 3
-    80	} MSG;
-    81	
-    82	typedef struct _tagJCB align(2048)
-    83	{
-    84	    struct _tagJCB *iof_next;
-    85	    struct _tagJCB *iof_prev;
-    86	    char UserName[32];
-    87	    char path[256];
-    88	    char exitRunFile[256];
-    89	    char commandLine[256];
-    90	    unsigned __int32 *pVidMem;
-    91	    unsigned __int32 *pVirtVidMem;
-    92	    unsigned __int16 VideoRows;
-    93	    unsigned __int16 VideoCols;
-    94	    unsigned __int16 CursorRow;
-    95	    unsigned __int16 CursorCol;
-    96	    unsigned __int32 NormAttr;
-    97	    __int8 KeyState1;
-    98	    __int8 KeyState2;
-    99	    __int8 KeybdWaitFlag;
-   100	    __int8 KeybdHead;
-   101	    __int8 KeybdTail;
-   102	    unsigned __int16 KeybdBuffer[16];
-   103	    hJCB number;
-   104	} JCB;
-   105	
-   106	struct tagMBX;
-   107	
-   108	typedef struct _tagTCB align(1024) {
-   109	    // exception storage area
-   110		int regs[32];
-   111		int isp;
-   112		int dsp;
-   113		int esp;
-   114		int ipc;
-   115		int dpc;
-   116		int epc;
-   117		int cr0;
-   118		// interrupt storage
-   119		int iregs[32];
-   120		int iisp;
-   121		int idsp;
-   122		int iesp;
-   123		int iipc;
-   124		int idpc;
-   125		int iepc;
-   126		int icr0;
-   127		hTCB next;
-   128		hTCB prev;
-   129		hTCB mbq_next;
-   130		hTCB mbq_prev;
-   131		int *sys_stack;
-   132		int *bios_stack;
-   133		int *stack;
-   134		__int64 timeout;
-   135		MSG msg;
-   136		hMBX hMailboxes[4]; // handles of mailboxes owned by task
-   137		hMBX hWaitMbx;      // handle of mailbox task is waiting at
-   138		hTCB number;
-   139		__int8 priority;
-   140		__int8 status;
-   141		__int8 affinity;
-   142		hJCB hJob;
-   143		__int64 startTick;
-   144		__int64 endTick;
-   145		__int64 ticks;
-   146	} TCB;
-   147	
-   148	typedef struct tagMBX align(64) {
-   149	    hMBX link;
-   150		hJCB owner;		// hJcb of owner
-   151		hTCB tq_head;
-   152		hTCB tq_tail;
-   153		hMSG mq_head;
-   154		hMSG mq_tail;
-   155		char mq_strategy;
-   156		byte resv[2];
-   157		uint tq_count;
-   158		uint mq_size;
-   159		uint mq_count;
-   160		uint mq_missed;
-   161	} MBX;
-   162	
-   163	typedef struct tagALARM {
-   164		struct tagALARM *next;
-   165		struct tagALARM *prev;
-   166		MBX *mbx;
-   167		MSG *msg;
-   168		uint BaseTimeout;
-   169		uint timeout;
-   170		uint repeat;
-   171		byte resv[8];		// padding to 64 bytes
-   172	} ALARM;
-   173	
-   174	
-   175	// ============================================================================
-   176	//        __
-   177	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
-   178	//    \  __ /    All rights reserved.
-   179	//     \/_//     robfinch<remove>@finitron.ca
-   180	//       ||
-   181	//
-   182	// TCB.c
-   183	// Task Control Block related functions.
-   184	//
-   185	// This source file is free software: you can redistribute it and/or modify 
-   186	// it under the terms of the GNU Lesser General Public License as published 
-   187	// by the Free Software Foundation, either version 3 of the License, or     
-   188	// (at your option) any later version.                                      
-   189	//                                                                          
-   190	// This source file is distributed in the hope that it will be useful,      
-   191	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-   192	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-   193	// GNU General Public License for more details.                             
-   194	//                                                                          
-   195	// You should have received a copy of the GNU General Public License        
-   196	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-   197	//                                                                          
-   198	// ============================================================================
-   199	//
-   200	// JCB functions
-   201	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
-   202	
-   203	// TCB functions
-   204	TCB *GetRunningTCBPtr();
-   205	hTCB GetRunningTCB();
-   206	pascal void SetRunningTCB(hTCB ht);
-   207	pascal int chkTCB(TCB *p);
-   208	pascal int InsertIntoReadyList(hTCB ht);
-   209	pascal int RemoveFromReadyList(hTCB ht);
-   210	pascal int InsertIntoTimeoutList(hTCB ht, int to);
-   211	pascal int RemoveFromTimeoutList(hTCB ht);
-   212	void DumpTaskList();
-   213	
-   214	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
-   215	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
-   216	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
-   217	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
-   218	
-   219	void set_vector(unsigned int, unsigned int);
-   220	int getCPU();
-   221	int GetVecno();          // get the last interrupt vector number
-   222	void outb(unsigned int, int);
-   223	void outc(unsigned int, int);
-   224	void outh(unsigned int, int);
-   225	void outw(unsigned int, int);
-   226	pascal int LockSemaphore(int *sema, int retries);
-   227	pascal void UnlockSemaphore(int *sema);
-   228	
-   229	// The following causes a privilege violation if called from user mode
-   230	
-   231	
-   232	extern int irq_stack[];
-   233	extern int FMTK_Inited;
-   234	extern JCB jcbs[];
-   235	extern TCB tcbs[];
-   236	extern hTCB readyQ[];
-   237	extern hTCB freeTCB;
-   238	extern int sysstack[];
-   239	extern int stacks[][];
-   240	extern int sys_stacks[][];
-   241	extern int bios_stacks[][];
-   242	extern int fmtk_irq_stack[];
-   243	extern int fmtk_sys_stack[];
-   244	extern MBX mailbox[];
-   245	extern MSG message[];
-   246	extern int nMsgBlk;
-   247	extern int nMailbox;
-   248	extern hMSG freeMSG;
-   249	extern hMBX freeMBX;
-   250	extern JCB *IOFocusNdx;
-   251	extern int IOFocusTbl[];
-   252	extern int iof_switch;
-   253	extern int BIOS1_sema;
-   254	extern int iof_sema;
-   255	extern int sys_sema;
-   256	extern int BIOS_RespMbx;
-   257	extern char hasUltraHighPriorityTasks;
-   258	extern int missed_ticks;
-   259	extern short int video_bufs[][];
-   260	extern hTCB TimeoutList;
-   261	
-   262	
-   263	int irq_stack[512];
-   264	int sp_tmp;
-   265	int FMTK_Inited;
-   266	JCB jcbs[51];
-   267	extern TCB tcbs[256];
-   268	extern hTCB readyQ[8];
-   269	int sysstack[1024];
-   270	int stacks[256][1024];
-   271	int sys_stacks[256][512];
-   272	int bios_stacks[256][512];
-   273	int fmtk_irq_stack[512];
-   274	int fmtk_sys_stack[512];
-   275	MBX mailbox[1024];
-   276	MSG message[16384];
-   277	int nMsgBlk;
-   278	int nMailbox;
-   279	hMSG freeMSG;
-   280	hMBX freeMBX;
-   281	JCB *IOFocusNdx;
-   282	int IOFocusTbl[4];
-   283	int iof_switch;
-   284	int BIOS1_sema;
-   285	int iof_sema;
-   286	int sys_sema;
-   287	int BIOS_RespMbx;
-   288	char hasUltraHighPriorityTasks;
-   289	int missed_ticks;
-   290	
-   291	short int video_bufs[51][4096];
-   292	extern hTCB TimeoutList;
-   293	
-   294	// This table needed in case we want to call the OS routines directly.
-   295	// It is also used by the system call interrupt as a vector table.
-   296	
-   297	naked void FMTK_BrTbl()
-   298	{
-   299	      asm {
-   300	          bra  FMTKInitialize_
-   301	          bra  FMTK_StartTask_
-   302	          bra  FMTK_ExitTask_
-   303	          bra  FMTK_KillTask_
-   304	          bra  FMTK_SetTaskPriority_
-   305	          bra  FMTK_Sleep_
-   306	          bra  FMTK_AllocMbx_
-   307	          bra  FMTK_FreeMbx_
-   308	          bra  FMTK_PostMsg_
-   309	          bra  FMTK_SendMsg_
-   310	          bra  FMTK_WaitMsg_
-   311	          bra  FMTK_CheckMsg_
-   312	      }
-   313	}
-   314	
-
-
-*** local symbol table ***
-
-
-
-
-   315	naked int GetVecno()
-   316	{
-   317	    asm {
-   318	        mfspr  r1,12
-   319	        rtl
-   320	    }
+    66	
+    67	typedef unsigned int uint;
+    68	typedef __int16 hTCB;
+    69	typedef __int8 hJCB;
+    70	typedef __int16 hMBX;
+    71	typedef __int16 hMSG;
+    72	
+    73	typedef struct tagMSG align(32) {
+    74		unsigned __int16 link;
+    75		unsigned __int16 retadr;    // return address
+    76		unsigned __int16 tgtadr;    // target address
+    77		unsigned __int16 type;
+    78		unsigned int d1;            // payload data 1
+    79		unsigned int d2;            // payload data 2
+    80		unsigned int d3;            // payload data 3
+    81	} MSG;
+    82	
+    83	typedef struct _tagJCB align(2048)
+    84	{
+    85	    struct _tagJCB *iof_next;
+    86	    struct _tagJCB *iof_prev;
+    87	    char UserName[32];
+    88	    char path[256];
+    89	    char exitRunFile[256];
+    90	    char commandLine[256];
+    91	    unsigned __int32 *pVidMem;
+    92	    unsigned __int32 *pVirtVidMem;
+    93	    unsigned __int16 VideoRows;
+    94	    unsigned __int16 VideoCols;
+    95	    unsigned __int16 CursorRow;
+    96	    unsigned __int16 CursorCol;
+    97	    unsigned __int32 NormAttr;
+    98	    __int8 KeyState1;
+    99	    __int8 KeyState2;
+   100	    __int8 KeybdWaitFlag;
+   101	    __int8 KeybdHead;
+   102	    __int8 KeybdTail;
+   103	    unsigned __int8 KeybdBuffer[32];
+   104	    hJCB number;
+   105	    hTCB tasks[8];
+   106	    hJCB next;
+   107	} JCB;
+   108	
+   109	struct tagMBX;
+   110	
+   111	typedef struct _tagTCB align(1024) {
+   112	    // exception storage area
+   113		int regs[32];
+   114		int isp;
+   115		int dsp;
+   116		int esp;
+   117		int ipc;
+   118		int dpc;
+   119		int epc;
+   120		int cr0;
+   121		// interrupt storage
+   122		int iregs[32];
+   123		int iisp;
+   124		int idsp;
+   125		int iesp;
+   126		int iipc;
+   127		int idpc;
+   128		int iepc;
+   129		int icr0;
+   130		hTCB next;
+   131		hTCB prev;
+   132		hTCB mbq_next;
+   133		hTCB mbq_prev;
+   134		int *sys_stack;
+   135		int *bios_stack;
+   136		int *stack;
+   137		__int64 timeout;
+   138		MSG msg;
+   139		hMBX hMailboxes[4]; // handles of mailboxes owned by task
+   140		hMBX hWaitMbx;      // handle of mailbox task is waiting at
+   141		hTCB number;
+   142		__int8 priority;
+   143		__int8 status;
+   144		__int8 affinity;
+   145		hJCB hJob;
+   146		__int64 startTick;
+   147		__int64 endTick;
+   148		__int64 ticks;
+   149		int exception;
+   150	} TCB;
+   151	
+   152	typedef struct tagMBX align(64) {
+   153	    hMBX link;
+   154		hJCB owner;		// hJcb of owner
+   155		hTCB tq_head;
+   156		hTCB tq_tail;
+   157		hMSG mq_head;
+   158		hMSG mq_tail;
+   159		char mq_strategy;
+   160		byte resv[2];
+   161		uint tq_count;
+   162		uint mq_size;
+   163		uint mq_count;
+   164		uint mq_missed;
+   165	} MBX;
+   166	
+   167	typedef struct tagALARM {
+   168		struct tagALARM *next;
+   169		struct tagALARM *prev;
+   170		MBX *mbx;
+   171		MSG *msg;
+   172		uint BaseTimeout;
+   173		uint timeout;
+   174		uint repeat;
+   175		byte resv[8];		// padding to 64 bytes
+   176	} ALARM;
+   177	
+   178	
+   179	// ============================================================================
+   180	//        __
+   181	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+   182	//    \  __ /    All rights reserved.
+   183	//     \/_//     robfinch<remove>@finitron.ca
+   184	//       ||
+   185	//
+   186	// TCB.c
+   187	// Task Control Block related functions.
+   188	//
+   189	// This source file is free software: you can redistribute it and/or modify 
+   190	// it under the terms of the GNU Lesser General Public License as published 
+   191	// by the Free Software Foundation, either version 3 of the License, or     
+   192	// (at your option) any later version.                                      
+   193	//                                                                          
+   194	// This source file is distributed in the hope that it will be useful,      
+   195	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+   196	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+   197	// GNU General Public License for more details.                             
+   198	//                                                                          
+   199	// You should have received a copy of the GNU General Public License        
+   200	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   201	//                                                                          
+   202	// ============================================================================
+   203	//
+   204	// JCB functions
+   205	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+   206	
+   207	// TCB functions
+   208	TCB *GetRunningTCBPtr();
+   209	hTCB GetRunningTCB();
+   210	pascal void SetRunningTCB(hTCB ht);
+   211	pascal int chkTCB(TCB *p);
+   212	pascal int InsertIntoReadyList(hTCB ht);
+   213	pascal int RemoveFromReadyList(hTCB ht);
+   214	pascal int InsertIntoTimeoutList(hTCB ht, int to);
+   215	pascal int RemoveFromTimeoutList(hTCB ht);
+   216	void DumpTaskList();
+   217	
+   218	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
+   219	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
+   220	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
+   221	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
+   222	
+   223	pascal void set_vector(unsigned int, unsigned int);
+   224	int getCPU();
+   225	int GetVecno();          // get the last interrupt vector number
+   226	void outb(unsigned int, int);
+   227	void outc(unsigned int, int);
+   228	void outh(unsigned int, int);
+   229	void outw(unsigned int, int);
+   230	pascal int LockSemaphore(int *sema, int retries);
+   231	pascal void UnlockSemaphore(int *sema);
+   232	
+   233	// The following causes a privilege violation if called from user mode
+   234	
+   235	
+   236	extern int irq_stack[];
+   237	extern int FMTK_Inited;
+   238	extern JCB jcbs[];
+   239	extern TCB tcbs[];
+   240	extern hTCB readyQ[];
+   241	extern hTCB freeTCB;
+   242	extern int sysstack[];
+   243	extern int stacks[][];
+   244	extern int sys_stacks[][];
+   245	extern int bios_stacks[][];
+   246	extern int fmtk_irq_stack[];
+   247	extern int fmtk_sys_stack[];
+   248	extern MBX mailbox[];
+   249	extern MSG message[];
+   250	extern int nMsgBlk;
+   251	extern int nMailbox;
+   252	extern hMSG freeMSG;
+   253	extern hMBX freeMBX;
+   254	extern JCB *IOFocusNdx;
+   255	extern int IOFocusTbl[];
+   256	extern int iof_switch;
+   257	extern int BIOS1_sema;
+   258	extern int iof_sema;
+   259	extern int sys_sema;
+   260	extern int kbd_sema;
+   261	extern int BIOS_RespMbx;
+   262	extern char hasUltraHighPriorityTasks;
+   263	extern int missed_ticks;
+   264	extern short int video_bufs[][];
+   265	extern hTCB TimeoutList;
+   266	
+   267	
+   268	extern int shell();
+   269	
+   270	int irq_stack[512];
+   271	int sp_tmp;
+   272	int FMTK_Inited;
+   273	JCB jcbs[51];
+   274	extern TCB tcbs[256];
+   275	extern hTCB readyQ[8];
+   276	int sysstack[1024];
+   277	int stacks[256][1024];
+   278	int sys_stacks[256][512];
+   279	int bios_stacks[256][512];
+   280	int fmtk_irq_stack[512];
+   281	int fmtk_sys_stack[512];
+   282	MBX mailbox[1024];
+   283	MSG message[16384];
+   284	int nMsgBlk;
+   285	int nMailbox;
+   286	hJCB freeJCB;
+   287	hMSG freeMSG;
+   288	hMBX freeMBX;
+   289	JCB *IOFocusNdx;
+   290	int IOFocusTbl[4];
+   291	int iof_switch;
+   292	int BIOS1_sema;
+   293	int iof_sema;
+   294	int sys_sema;
+   295	int BIOS_RespMbx;
+   296	char hasUltraHighPriorityTasks;
+   297	int missed_ticks;
+   298	
+   299	short int video_bufs[51][4096];
+   300	extern hTCB TimeoutList;
+   301	
+   302	// This table needed in case we want to call the OS routines directly.
+   303	// It is also used by the system call interrupt as a vector table.
+   304	
+   305	naked void FMTK_BrTbl()
+   306	{
+   307	      asm {
+   308	          bra  FMTKInitialize_
+   309	          bra  FMTK_StartTask_
+   310	          bra  FMTK_ExitTask_
+   311	          bra  FMTK_KillTask_
+   312	          bra  FMTK_SetTaskPriority_
+   313	          bra  FMTK_Sleep_
+   314	          bra  FMTK_AllocMbx_
+   315	          bra  FMTK_FreeMbx_
+   316	          bra  FMTK_PostMsg_
+   317	          bra  FMTK_SendMsg_
+   318	          bra  FMTK_WaitMsg_
+   319	          bra  FMTK_CheckMsg_
+   320	      }
    321	}
    322	
 
@@ -334,12 +327,12 @@
 
 
 
-   323	naked void DisplayIRQLive()
+   323	naked int GetVecno()
    324	{
-   325	     asm {
-   326	         inc  $FFD00000+220,#1
-   327	         rtl
-   328	     }
+   325	    asm {
+   326	        mfspr  r1,12
+   327	        rtl
+   328	    }
    329	}
    330	
 
@@ -349,15 +342,15 @@
 
 
 
-   331	JCB *GetJCBPtr()
+   331	naked void DisplayIRQLive()
    332	{
-   333	    return &jcbs[tcbs[GetRunningTCB()].hJob];
-   334	}
-   335	
-   336	
-   337	// ----------------------------------------------------------------------------
-   338	// Select a task to run.
-   339	// ----------------------------------------------------------------------------
+   333	     asm {
+   334	         lh       r1,$FFD00000+220
+   335	         addui    r1,r1,#1
+   336	         sh       r1,$FFD00000+220
+   337	         rtl
+   338	     }
+   339	}
    340	
 
 
@@ -366,54 +359,71 @@
 
 
 
-   341	private __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 1, 0, 7, 0, 0, 0, 0 };
-   342	private __int8 startQNdx;
-   343	
-   344	private hTCB SelectTaskToRun()
-   345	{
-   346		int nn,kk;
-   347		TCB *p, *q;
-   348		int qToCheck;
-   349	    hTCB h;
-   350	 
-   351		startQNdx++;
-   352		startQNdx &= 31;
-   353		qToCheck = startQ[startQNdx];
-   354		qToCheck &= 7;
-   355		for (nn = 0; nn < 8; nn++) {
-   356			h = readyQ[qToCheck];
-   357			if (h >= 0 && h < 256) {
-   358	    		p = &tcbs[h];
-   359	            kk = 0;
-   360	            // Can run the head of a lower Q level if it's not the running
-   361	            // task, otherwise look to the next task.
-   362	            if (h != GetRunningTCB())
-   363	           		q = p;
-   364	    		else
-   365	           		q = &tcbs[p->next];
-   366	            do {  
-   367	                if (!(q->status & 8)) {
-   368	                    if (q->affinity == getCPU()) {
-   369	        			   readyQ[qToCheck] = q - tcbs;
-   370	        			   return q - tcbs;
-   371	                    }
-   372	                }
-   373	                q = &tcbs[q->next];
-   374	                kk = kk + 1;
-   375	            } while (q != p && kk < 256);
-   376	        }
-   377			qToCheck++;
-   378			qToCheck &= 7;
-   379		}
-   380		return GetRunningTCB();
-   381		panic("No entries in ready queue.");
-   382	}
-   383	
-   384	// ----------------------------------------------------------------------------
-   385	// There isn't any 'C' code in the SystemCall() function. If there were it
-   386	// would have to be arranged like the TimerIRQ() or RescheduleIRQ() functions.
-   387	// ----------------------------------------------------------------------------
-   388	
+   341	JCB *GetJCBPtr()
+   342	{
+   343	    return &jcbs[tcbs[GetRunningTCB()].hJob];
+   344	}
+   345	
+   346	
+   347	// ----------------------------------------------------------------------------
+   348	// Select a task to run.
+   349	// ----------------------------------------------------------------------------
+   350	
+
+
+*** local symbol table ***
+
+
+
+
+   351	private __int8 startQ[32] = { 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 1, 0, 4, 0, 0, 0, 5, 0, 0, 0, 6, 0, 1, 0, 7, 0, 0, 0, 0 };
+   352	private __int8 startQNdx;
+   353	
+   354	private hTCB SelectTaskToRun()
+   355	{
+   356		int nn,kk;
+   357		TCB *p, *q;
+   358		int qToCheck;
+   359	    hTCB h;
+   360	 
+   361		startQNdx++;
+   362		startQNdx &= 31;
+   363		qToCheck = startQ[startQNdx];
+   364		qToCheck &= 7;
+   365		for (nn = 0; nn < 8; nn++) {
+   366			h = readyQ[qToCheck];
+   367			if (h >= 0 && h < 256) {
+   368	    		p = &tcbs[h];
+   369	            kk = 0;
+   370	            // Can run the head of a lower Q level if it's not the running
+   371	            // task, otherwise look to the next task.
+   372	            if (h != GetRunningTCB())
+   373	           		q = p;
+   374	    		else
+   375	           		q = &tcbs[p->next];
+   376	            do {  
+   377	                if (!(q->status & 8)) {
+   378	                    if (q->affinity == getCPU()) {
+   379	        			   readyQ[qToCheck] = q - tcbs;
+   380	        			   return q - tcbs;
+   381	                    }
+   382	                }
+   383	                q = &tcbs[q->next];
+   384	                kk = kk + 1;
+   385	            } while (q != p && kk < 256);
+   386	        }
+   387			qToCheck++;
+   388			qToCheck &= 7;
+   389		}
+   390		return GetRunningTCB();
+   391		panic("No entries in ready queue.");
+   392	}
+   393	
+   394	// ----------------------------------------------------------------------------
+   395	// There isn't any 'C' code in the SystemCall() function. If there were it
+   396	// would have to be arranged like the TimerIRQ() or RescheduleIRQ() functions.
+   397	// ----------------------------------------------------------------------------
+   398	
 
 
 *** local symbol table ***
@@ -427,132 +437,132 @@ h_         =ffffffd6    -    Auto        Char
 
 
 
-   389	naked FMTK_SystemCall()
-   390	{
-   391	    asm {
-   392	         lea   sp,sys_stacks_[tr]
-   393	         sw    r1,8[tr]
-   394	         sw    r2,16[tr]
-   395	         sw    r3,24[tr]
-   396	         sw    r4,32[tr]
-   397	         sw    r5,40[tr]
-   398	         sw    r6,48[tr]
-   399	         sw    r7,56[tr]
-   400	         sw    r8,64[tr]
-   401	         sw    r9,72[tr]
-   402	         sw    r10,80[tr]
-   403	         sw    r11,88[tr]
-   404	         sw    r12,96[tr]
-   405	         sw    r13,104[tr]
-   406	         sw    r14,112[tr]
-   407	         sw    r15,120[tr]
-   408	         sw    r16,128[tr]
-   409	         sw    r17,136[tr]
-   410	         sw    r18,144[tr]
-   411	         sw    r19,152[tr]
-   412	         sw    r20,160[tr]
-   413	         sw    r21,168[tr]
-   414	         sw    r22,176[tr]
-   415	         sw    r23,184[tr]
-   416	         sw    r24,192[tr]
-   417	         sw    r25,200[tr]
-   418	         sw    r26,208[tr]
-   419	         sw    r27,216[tr]
-   420	         sw    r28,224[tr]
-   421	         sw    r29,232[tr]
-   422	         sw    r30,240[tr]
-   423	         sw    r31,248[tr]
-   424	         mfspr r1,isp
-   425	         sw    r1,256[tr]
-   426	         mfspr r1,dsp
-   427	         sw    r1,264[tr]
-   428	         mfspr r1,esp
-   429	         sw    r1,272[tr]
-   430	         mfspr r1,ipc
-   431	         sw    r1,280[tr]
-   432	         mfspr r1,dpc
-   433	         sw    r1,288[tr]
-   434	         mfspr r1,epc
-   435	         sw    r1,296[tr]
-   436	         mfspr r1,cr0
-   437	         sw    r1,304[tr]
-   438	
-   439	    	 mfspr r6,epc           ; get return address into r6
-   440	    	 and   r7,r6,#-4        ; clear LSB's
-   441	    	 lh	   r7,4[r7]			; get static call number parameter into r7
-   442	    	 addui r6,r6,#8		    ; update return address
-   443	    	 sw    r6,296[tr]
-   444	    	 cmpu  r6,r7,#20
-   445	    	 bgt   r6,.bad_callno
-   446	    	 asl   r7,r7,#2
-   447	    	 lw    r1,8[tr]         ; get back r1, we trashed it above
-   448	    	 push  r5
-   449	    	 push  r4
-   450	    	 push  r3
-   451	    	 push  r2
-   452	    	 push  r1
-   453	    	 jsr   FMTK_BrTbl_[r7]	; do the system function
-   454	    	 addui sp,sp,#40
-   455	    	 sw    r1,8[tr]
-   456	.0001:
-   457	         lw    r1,256[tr]
-   458	         mtspr isp,r1
-   459	         lw    r1,264[tr]
-   460	         mtspr dsp,r1
-   461	         lw    r1,272[tr]
-   462	         mtspr esp,r1
-   463	         lw    r1,280[tr]
-   464	         mtspr ipc,r1
-   465	         lw    r1,288[tr]
-   466	         mtspr dpc,r1
-   467	         lw    r1,296[tr]
-   468	         mtspr epc,r1
-   469	         lw    r1,304[tr]
-   470	         mtspr cr0,r1
-   471	         lw    r1,8[tr]
-   472	         lw    r2,16[tr]
-   473	         lw    r3,24[tr]
-   474	         lw    r4,32[tr]
-   475	         lw    r5,40[tr]
-   476	         lw    r6,48[tr]
-   477	         lw    r7,56[tr]
-   478	         lw    r8,64[tr]
-   479	         lw    r9,72[tr]
-   480	         lw    r10,80[tr]
-   481	         lw    r11,88[tr]
-   482	         lw    r12,96[tr]
-   483	         lw    r13,104[tr]
-   484	         lw    r14,112[tr]
-   485	         lw    r15,120[tr]
-   486	         lw    r16,128[tr]
-   487	         lw    r17,136[tr]
-   488	         lw    r18,144[tr]
-   489	         lw    r19,152[tr]
-   490	         lw    r20,160[tr]
-   491	         lw    r21,168[tr]
-   492	         lw    r22,176[tr]
-   493	         lw    r23,184[tr]
-   494	         lw    r25,200[tr]
-   495	         lw    r26,208[tr]
-   496	         lw    r27,216[tr]
-   497	         lw    r28,224[tr]
-   498	         lw    r29,232[tr]
-   499	         lw    r31,248[tr]
-   500	         rte
-   501	.bad_callno:
-   502	         ldi   r1,#E_BadFuncno
-   503	         sw    r1,8[tr]
-   504	         bra   .0001   
-   505	    }
-   506	}
-   507	
-   508	// ----------------------------------------------------------------------------
-   509	// If timer interrupts are enabled during a priority #0 task, this routine
-   510	// only updates the missed ticks and remains in the same task. No timeouts
-   511	// are updated and no task switches will occur. The timer tick routine
-   512	// basically has a fixed latency when priority #0 is present.
-   513	// ----------------------------------------------------------------------------
-   514	
+   399	naked FMTK_SystemCall()
+   400	{
+   401	    asm {
+   402	         lea   sp,sys_stacks_[tr]
+   403	         sw    r1,8[tr]
+   404	         sw    r2,16[tr]
+   405	         sw    r3,24[tr]
+   406	         sw    r4,32[tr]
+   407	         sw    r5,40[tr]
+   408	         sw    r6,48[tr]
+   409	         sw    r7,56[tr]
+   410	         sw    r8,64[tr]
+   411	         sw    r9,72[tr]
+   412	         sw    r10,80[tr]
+   413	         sw    r11,88[tr]
+   414	         sw    r12,96[tr]
+   415	         sw    r13,104[tr]
+   416	         sw    r14,112[tr]
+   417	         sw    r15,120[tr]
+   418	         sw    r16,128[tr]
+   419	         sw    r17,136[tr]
+   420	         sw    r18,144[tr]
+   421	         sw    r19,152[tr]
+   422	         sw    r20,160[tr]
+   423	         sw    r21,168[tr]
+   424	         sw    r22,176[tr]
+   425	         sw    r23,184[tr]
+   426	         sw    r24,192[tr]
+   427	         sw    r25,200[tr]
+   428	         sw    r26,208[tr]
+   429	         sw    r27,216[tr]
+   430	         sw    r28,224[tr]
+   431	         sw    r29,232[tr]
+   432	         sw    r30,240[tr]
+   433	         sw    r31,248[tr]
+   434	         mfspr r1,isp
+   435	         sw    r1,256[tr]
+   436	         mfspr r1,dsp
+   437	         sw    r1,264[tr]
+   438	         mfspr r1,esp
+   439	         sw    r1,272[tr]
+   440	         mfspr r1,ipc
+   441	         sw    r1,280[tr]
+   442	         mfspr r1,dpc
+   443	         sw    r1,288[tr]
+   444	         mfspr r1,epc
+   445	         sw    r1,296[tr]
+   446	         mfspr r1,cr0
+   447	         sw    r1,304[tr]
+   448	
+   449	    	 mfspr r6,epc           ; get return address into r6
+   450	    	 and   r7,r6,#-4        ; clear LSB's
+   451	    	 lh	   r7,4[r7]			; get static call number parameter into r7
+   452	    	 addui r6,r6,#8		    ; update return address
+   453	    	 sw    r6,296[tr]
+   454	    	 cmpu  r6,r7,#20
+   455	    	 bgt   r6,.bad_callno
+   456	    	 asl   r7,r7,#2
+   457	    	 lw    r1,8[tr]         ; get back r1, we trashed it above
+   458	    	 push  r5
+   459	    	 push  r4
+   460	    	 push  r3
+   461	    	 push  r2
+   462	    	 push  r1
+   463	    	 jsr   FMTK_BrTbl_[r7]	; do the system function
+   464	    	 addui sp,sp,#40
+   465	    	 sw    r1,8[tr]
+   466	.0001:
+   467	         lw    r1,256[tr]
+   468	         mtspr isp,r1
+   469	         lw    r1,264[tr]
+   470	         mtspr dsp,r1
+   471	         lw    r1,272[tr]
+   472	         mtspr esp,r1
+   473	         lw    r1,280[tr]
+   474	         mtspr ipc,r1
+   475	         lw    r1,288[tr]
+   476	         mtspr dpc,r1
+   477	         lw    r1,296[tr]
+   478	         mtspr epc,r1
+   479	         lw    r1,304[tr]
+   480	         mtspr cr0,r1
+   481	         lw    r1,8[tr]
+   482	         lw    r2,16[tr]
+   483	         lw    r3,24[tr]
+   484	         lw    r4,32[tr]
+   485	         lw    r5,40[tr]
+   486	         lw    r6,48[tr]
+   487	         lw    r7,56[tr]
+   488	         lw    r8,64[tr]
+   489	         lw    r9,72[tr]
+   490	         lw    r10,80[tr]
+   491	         lw    r11,88[tr]
+   492	         lw    r12,96[tr]
+   493	         lw    r13,104[tr]
+   494	         lw    r14,112[tr]
+   495	         lw    r15,120[tr]
+   496	         lw    r16,128[tr]
+   497	         lw    r17,136[tr]
+   498	         lw    r18,144[tr]
+   499	         lw    r19,152[tr]
+   500	         lw    r20,160[tr]
+   501	         lw    r21,168[tr]
+   502	         lw    r22,176[tr]
+   503	         lw    r23,184[tr]
+   504	         lw    r25,200[tr]
+   505	         lw    r26,208[tr]
+   506	         lw    r27,216[tr]
+   507	         lw    r28,224[tr]
+   508	         lw    r29,232[tr]
+   509	         lw    r31,248[tr]
+   510	         rte
+   511	.bad_callno:
+   512	         ldi   r1,#E_BadFuncno
+   513	         sw    r1,8[tr]
+   514	         bra   .0001   
+   515	    }
+   516	}
+   517	
+   518	// ----------------------------------------------------------------------------
+   519	// If timer interrupts are enabled during a priority #0 task, this routine
+   520	// only updates the missed ticks and remains in the same task. No timeouts
+   521	// are updated and no task switches will occur. The timer tick routine
+   522	// basically has a fixed latency when priority #0 is present.
+   523	// ----------------------------------------------------------------------------
+   524	
 
 
 *** local symbol table ***
@@ -560,157 +570,167 @@ h_         =ffffffd6    -    Auto        Char
 
 
 
-   515	void FMTK_SchedulerIRQ()
-   516	{
-   517	     TCB *t;
-   518	
-   519	     prolog asm {
-   520	         lea   sp,fmtk_irq_stack_+4088
-   521	         sw    r1,8+312[tr]
-   522	         sw    r2,16+312[tr]
-   523	         sw    r3,24+312[tr]
-   524	         sw    r4,32+312[tr]
-   525	         sw    r5,40+312[tr]
-   526	         sw    r6,48+312[tr]
-   527	         sw    r7,56+312[tr]
-   528	         sw    r8,64+312[tr]
-   529	         sw    r9,72+312[tr]
-   530	         sw    r10,80+312[tr]
-   531	         sw    r11,88+312[tr]
-   532	         sw    r12,96+312[tr]
-   533	         sw    r13,104+312[tr]
-   534	         sw    r14,112+312[tr]
-   535	         sw    r15,120+312[tr]
-   536	         sw    r16,128+312[tr]
-   537	         sw    r17,136+312[tr]
-   538	         sw    r18,144+312[tr]
-   539	         sw    r19,152+312[tr]
-   540	         sw    r20,160+312[tr]
-   541	         sw    r21,168+312[tr]
-   542	         sw    r22,176+312[tr]
-   543	         sw    r23,184+312[tr]
-   544	         sw    r24,192+312[tr]
-   545	         sw    r25,200+312[tr]
-   546	         sw    r26,208+312[tr]
-   547	         sw    r27,216+312[tr]
-   548	         sw    r28,224+312[tr]
-   549	         sw    r29,232+312[tr]
-   550	         sw    r30,240+312[tr]
-   551	         sw    r31,248+312[tr]
-   552	         mfspr r1,isp
-   553	         sw    r1,256+312[tr]
-   554	         mfspr r1,dsp
-   555	         sw    r1,264+312[tr]
-   556	         mfspr r1,esp
-   557	         sw    r1,272+312[tr]
-   558	         mfspr r1,ipc
-   559	         sw    r1,280+312[tr]
-   560	         mfspr r1,dpc
-   561	         sw    r1,288+312[tr]
-   562	         mfspr r1,epc
-   563	         sw    r1,296+312[tr]
-   564	         mfspr r1,cr0
-   565	         sw    r1,304+312[tr]
-   566	         mfspr r1,tick
-   567	         sw    r1,$2D8[tr]
-   568	     }
-   569	     switch(GetVecno()) {
-   570	     // Timer tick interrupt
-   571	     case 451:
-   572	          asm {
-   573	             ldi   r1,#3				; reset the edge sense circuit
-   574	             sh	   r1,PIC_RSTE
-   575	         }
-   576	         DisplayIRQLive();
-   577	         if (LockSemaphore(&sys_sema,10)) {
-   578	             t = GetRunningTCBPtr();
-   579	             t->ticks = t->ticks + (t->endTick - t->startTick);
-   580	             if (t->priority != 000) {
-   581	                 t->status = 4;
-   582	                 while (TimeoutList >= 0 && TimeoutList < 256) {
-   583	                     if (tcbs[TimeoutList].timeout<=0)
-   584	                         InsertIntoReadyList(PopTimeoutList());
-   585	                     else {
-   586	                          tcbs[TimeoutList].timeout = tcbs[TimeoutList].timeout - missed_ticks - 1;
-   587	                          missed_ticks = 0;
-   588	                          break;
-   589	                     }
-   590	                 }
-   591	                 if (t->priority > 002)
-   592	                    SetRunningTCB(SelectTaskToRun());
-   593	                 GetRunningTCBPtr()->status = 8;
-   594	             }
-   595	             else
-   596	                 missed_ticks++;
-   597	             UnlockSemaphore(&sys_sema);
-   598	         }
-   599	         else {
-   600	             missed_ticks++;
-   601	         }
-   602	         break;
-   603	     // Explicit rescheduling request.
-   604	     case 2:
-   605	         t = GetRunningTCBPtr();
-   606	         t->ticks = t->ticks + (t->endTick - t->startTick);
-   607	         t->status = 4;
-   608	         t->iipc = t->iipc + 4;  // advance the return address
-   609	         SetRunningTCB(SelectTaskToRun());
-   610	         GetRunningTCBPtr()->status = 8;
-   611	         break;
-   612	     default:  ;
-   613	     }
-   614	     // Restore the processor registers and return using an RTI.
-   615	     epilog asm {
-   616	RestoreContext:
-   617	         mfspr r1,tick
-   618	         sw    r1,$2d0[tr]
-   619	         lw    r1,256+312[tr]
-   620	         mtspr isp,r1
-   621	         lw    r1,264+312[tr]
-   622	         mtspr dsp,r1
-   623	         lw    r1,272+312[tr]
-   624	         mtspr esp,r1
-   625	         lw    r1,280+312[tr]
-   626	         mtspr ipc,r1
-   627	         lw    r1,288+312[tr]
-   628	         mtspr dpc,r1
-   629	         lw    r1,296+312[tr]
-   630	         mtspr epc,r1
-   631	         lw    r1,304+312[tr]
-   632	         mtspr cr0,r1
-   633	         lw    r1,8+312[tr]
-   634	         lw    r2,16+312[tr]
-   635	         lw    r3,24+312[tr]
-   636	         lw    r4,32+312[tr]
-   637	         lw    r5,40+312[tr]
-   638	         lw    r6,48+312[tr]
-   639	         lw    r7,56+312[tr]
-   640	         lw    r8,64+312[tr]
-   641	         lw    r9,72+312[tr]
-   642	         lw    r10,80+312[tr]
-   643	         lw    r11,88+312[tr]
-   644	         lw    r12,96+312[tr]
-   645	         lw    r13,104+312[tr]
-   646	         lw    r14,112+312[tr]
-   647	         lw    r15,120+312[tr]
-   648	         lw    r16,128+312[tr]
-   649	         lw    r17,136+312[tr]
-   650	         lw    r18,144+312[tr]
-   651	         lw    r19,152+312[tr]
-   652	         lw    r20,160+312[tr]
-   653	         lw    r21,168+312[tr]
-   654	         lw    r22,176+312[tr]
-   655	         lw    r23,184+312[tr]
-   656	         lw    r25,200+312[tr]
-   657	         lw    r26,208+312[tr]
-   658	         lw    r27,216+312[tr]
-   659	         lw    r28,224+312[tr]
-   660	         lw    r29,232+312[tr]
-   661	         lw    r31,248+312[tr]
-   662	         rti
-   663	     }
-   664	}
-   665	
+   525	void FMTK_SchedulerIRQ()
+   526	{
+   527	     TCB *t;
+   528	
+   529	     prolog asm {
+   530	         lea   sp,fmtk_irq_stack_+4088
+   531	         sw    r1,8+312[tr]
+   532	         sw    r2,16+312[tr]
+   533	         sw    r3,24+312[tr]
+   534	         sw    r4,32+312[tr]
+   535	         sw    r5,40+312[tr]
+   536	         sw    r6,48+312[tr]
+   537	         sw    r7,56+312[tr]
+   538	         sw    r8,64+312[tr]
+   539	         sw    r9,72+312[tr]
+   540	         sw    r10,80+312[tr]
+   541	         sw    r11,88+312[tr]
+   542	         sw    r12,96+312[tr]
+   543	         sw    r13,104+312[tr]
+   544	         sw    r14,112+312[tr]
+   545	         sw    r15,120+312[tr]
+   546	         sw    r16,128+312[tr]
+   547	         sw    r17,136+312[tr]
+   548	         sw    r18,144+312[tr]
+   549	         sw    r19,152+312[tr]
+   550	         sw    r20,160+312[tr]
+   551	         sw    r21,168+312[tr]
+   552	         sw    r22,176+312[tr]
+   553	         sw    r23,184+312[tr]
+   554	         sw    r24,192+312[tr]
+   555	         sw    r25,200+312[tr]
+   556	         sw    r26,208+312[tr]
+   557	         sw    r27,216+312[tr]
+   558	         sw    r28,224+312[tr]
+   559	         sw    r29,232+312[tr]
+   560	         sw    r30,240+312[tr]
+   561	         sw    r31,248+312[tr]
+   562	         mfspr r1,isp
+   563	         sw    r1,256+312[tr]
+   564	         mfspr r1,dsp
+   565	         sw    r1,264+312[tr]
+   566	         mfspr r1,esp
+   567	         sw    r1,272+312[tr]
+   568	         mfspr r1,ipc
+   569	         sw    r1,280+312[tr]
+   570	         mfspr r1,dpc
+   571	         sw    r1,288+312[tr]
+   572	         mfspr r1,epc
+   573	         sw    r1,296+312[tr]
+   574	         mfspr r1,cr0
+   575	         sw    r1,304+312[tr]
+   576	         mfspr r1,tick
+   577	         sw    r1,$2D8[tr]
+   578	     }
+   579	     switch(GetVecno()) {
+   580	     // Timer tick interrupt
+   581	     case 451:
+   582	          asm {
+   583	             ldi   r1,#3				; reset the edge sense circuit
+   584	             sh	   r1,PIC_RSTE
+   585	         }
+   586	         if (getCPU()==0) DisplayIRQLive();
+   587	         if (ILockSemaphore(&sys_sema,10)) {
+   588	             t = GetRunningTCBPtr();
+   589	             t->ticks = t->ticks + (t->endTick - t->startTick);
+   590	             if (t->priority != 000) {
+   591	                 t->status = 4;
+   592	                 while (TimeoutList >= 0 && TimeoutList < 256) {
+   593	                     if (tcbs[TimeoutList].timeout<=0)
+   594	                         InsertIntoReadyList(PopTimeoutList());
+   595	                     else {
+   596	                          tcbs[TimeoutList].timeout = tcbs[TimeoutList].timeout - missed_ticks - 1;
+   597	                          missed_ticks = 0;
+   598	                          break;
+   599	                     }
+   600	                 }
+   601	                 if (t->priority > 002)
+   602	                    SetRunningTCB(SelectTaskToRun());
+   603	                 GetRunningTCBPtr()->status = 8;
+   604	             }
+   605	             else
+   606	                 missed_ticks++;
+   607	             UnlockSemaphore(&sys_sema);
+   608	         }
+   609	         else {
+   610	             missed_ticks++;
+   611	         }
+   612	         break;
+   613	     // Explicit rescheduling request.
+   614	     case 2:
+   615	         t = GetRunningTCBPtr();
+   616	         t->ticks = t->ticks + (t->endTick - t->startTick);
+   617	         t->status = 4;
+   618	         t->iipc = t->iipc + 4;  // advance the return address
+   619	         SetRunningTCB(SelectTaskToRun());
+   620	         GetRunningTCBPtr()->status = 8;
+   621	         break;
+   622	     default:  ;
+   623	     }
+   624	     // If an exception was flagged (eg CTRL-C) return to the catch handler
+   625	     // not the interrupted code.
+   626	     t = GetRunningTCBPtr();
+   627	     if (t->exception) {
+   628	         t->iregs[31] = t->iregs[28];   // set link register to catch handler
+   629	         t->iipc = t->iregs[28];        // and the PC register
+   630	         t->iregs[1] = t->exception;    // r1 = exception value
+   631	         t->exception = 0;
+   632	         t->iregs[2] = 24;              // r2 = exception type
+   633	     }
+   634	     // Restore the processor registers and return using an RTI.
+   635	     epilog asm {
+   636	RestoreContext:
+   637	         mfspr r1,tick
+   638	         sw    r1,$2d0[tr]
+   639	         lw    r1,256+312[tr]
+   640	         mtspr isp,r1
+   641	         lw    r1,264+312[tr]
+   642	         mtspr dsp,r1
+   643	         lw    r1,272+312[tr]
+   644	         mtspr esp,r1
+   645	         lw    r1,280+312[tr]
+   646	         mtspr ipc,r1
+   647	         lw    r1,288+312[tr]
+   648	         mtspr dpc,r1
+   649	         lw    r1,296+312[tr]
+   650	         mtspr epc,r1
+   651	         lw    r1,304+312[tr]
+   652	         mtspr cr0,r1
+   653	         lw    r1,8+312[tr]
+   654	         lw    r2,16+312[tr]
+   655	         lw    r3,24+312[tr]
+   656	         lw    r4,32+312[tr]
+   657	         lw    r5,40+312[tr]
+   658	         lw    r6,48+312[tr]
+   659	         lw    r7,56+312[tr]
+   660	         lw    r8,64+312[tr]
+   661	         lw    r9,72+312[tr]
+   662	         lw    r10,80+312[tr]
+   663	         lw    r11,88+312[tr]
+   664	         lw    r12,96+312[tr]
+   665	         lw    r13,104+312[tr]
+   666	         lw    r14,112+312[tr]
+   667	         lw    r15,120+312[tr]
+   668	         lw    r16,128+312[tr]
+   669	         lw    r17,136+312[tr]
+   670	         lw    r18,144+312[tr]
+   671	         lw    r19,152+312[tr]
+   672	         lw    r20,160+312[tr]
+   673	         lw    r21,168+312[tr]
+   674	         lw    r22,176+312[tr]
+   675	         lw    r23,184+312[tr]
+   676	         lw    r25,200+312[tr]
+   677	         lw    r26,208+312[tr]
+   678	         lw    r27,216+312[tr]
+   679	         lw    r28,224+312[tr]
+   680	         lw    r29,232+312[tr]
+   681	         lw    r31,248+312[tr]
+   682	         rti
+   683	     }
+   684	}
+   685	
 
 
 *** local symbol table ***
@@ -719,108 +739,182 @@ t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   666	void panic(char *msg)
-   667	{
-   668	     putstr(msg);
-   669	j1:  goto j1;
-   670	}
-   671	
-   672	// ----------------------------------------------------------------------------
-   673	// ----------------------------------------------------------------------------
-   674	
+   686	void panic(char *msg)
+   687	{
+   688	     putstr(msg);
+   689	j1:  goto j1;
+   690	}
+   691	
+   692	// ----------------------------------------------------------------------------
+   693	// ----------------------------------------------------------------------------
+   694	
 
 
 *** local symbol table ***
 
 msg_       =000018    -    Auto        Pointer to Char
-j1_        =00002e    -    Label
+j1_        =000039    -    Label
 
 
 
-   675	void IdleTask()
-   676	{
-   677	     while(1) {
-   678	         asm {
-   679	             inc  $FFD00000+228
-   680	         }
-   681	     }
-   682	}
-   683	
-   684	// ----------------------------------------------------------------------------
-   685	// ----------------------------------------------------------------------------
-   686	
-
-
-*** local symbol table ***
-
-
-
-
-   687	int FMTK_ExitTask()
-   688	{
-   689	    hTCB ht;
-   690	    MBX *m, *n;
-   691	    int nn;
-   692	
-   693	    asm { mfspr r1,ivno };
-   694	    ht = GetRunningTCB();
-   695	    if (LockSemaphore(&sys_sema,-1)) {
-   696	        RemoveFromReadyList(ht);
-   697	        RemoveFromTimeoutList(ht);
-   698	        for (nn = 0; nn < 4; nn++)
-   699	            if (tcbs[ht].hMailboxes[n] >= 0) {
-   700	                FMTK_FreeMbx(tcbs[ht].hMailboxes[nn]);
-   701	                tcbs[ht].hMailboxes[nn] = -1;
-   702	            }
-   703	        UnlockSemaphore(&sys_sema);
-   704	    }
-   705	    asm { int #2 }     // reschedule
-   706	j1: goto j1;
-   707	}
-   708	
-   709	// ----------------------------------------------------------------------------
-   710	// ----------------------------------------------------------------------------
-   711	
+   695	void IdleTask()
+   696	{
+   697	     int ii;
+   698	     __int32 *screen = (__int32 *)0xFFD00000;
+   699	
+   700	//     try {
+   701	j1:  ;
+   702	         forever {
+   703	             try {
+   704	                 ii++;
+   705	                 if (getCPU()==0)
+   706	                     screen[57] = ii;
+   707	             }
+   708	             catch(static __exception ex=0) {
+   709	                 if (ex&0xFFFFFFFFL==515) {
+   710	                     printf("IdleTask: CTRL-C pressed.\r\n");
+   711	                 }
+   712	                 else
+   713	                     throw ex;
+   714	             }
+   715	         }
+   716	/*
+   717	     }
+   718	     catch (static __exception ex1=0) {
+   719	         printf("IdleTask: exception %d.\r\n", ex1);
+   720	         goto j1;
+   721	     }
+   722	*/
 
 
 *** local symbol table ***
 
-j1_        =000035    -    Label
-ht_        =fffffffe    -    Auto        Char
-m_         =fffffff0    -    Auto        Pointer to struct tagMBX_ 
-n_         =ffffffe8    -    Auto        Pointer to struct tagMBX_ 
-nn_        =ffffffe0    -    Auto        Long
+j1_        =00003d    -    Label
+ii_        =fffffff8    -    Auto        Long
+screen_    =fffffff0    -    Auto        Pointer to Short
 
 
 
-   712	int FMTK_StartTask(int priority, int affinity, int adr, int parm, hJCB job)
-   713	{
-   714	    hTCB ht;
-   715	    TCB *t;
-   716	    int nn;
-   717	
-   718	    asm { mfspr r1,ivno };
-   719	    if (LockSemaphore(&sys_sema,-1)) {
-   720	        ht = freeTCB;
-   721	        freeTCB = tcbs[ht].next;
-   722	        UnlockSemaphore(&sys_sema);
-   723	    }
-   724	    t = &tcbs[ht];
-   725	    t->affinity = affinity;
-   726	    t->priority = priority;
-   727	    t->hJob = job;
-   728	    t->iregs[1] = parm;
-   729	    t->iregs[31] = FMTK_ExitTask;
-   730	    t->iisp = t->stack + 1023;
-   731	    t->iipc = adr;
-   732	    t->icr0 = 0x140000000L;
-   733	    t->startTick = 0;
-   734	    t->endTick = 0;
-   735	    t->ticks = 0;
+   723	}
+   724	
+   725	// ----------------------------------------------------------------------------
+   726	// ----------------------------------------------------------------------------
+   727	
+   728	int FMTK_KillTask(int taskno)
+   729	{
+   730	    hTCB ht;
+   731	    int nn;
+   732	    JCB *j;
+   733	
+   734	    asm { mfspr r1,ivno };
+   735	    ht = taskno;
    736	    if (LockSemaphore(&sys_sema,-1)) {
-   737	        InsertIntoReadyList(ht); }
-   738	        UnlockSemaphore(&sys_sema);
-   739	    }
+   737	        RemoveFromReadyList(ht);
+   738	        RemoveFromTimeoutList(ht);
+   739	        for (nn = 0; nn < 4; nn++)
+   740	            if (tcbs[ht].hMailboxes[nn] >= 0 && tcbs[ht].hMailboxes[nn] < 1024) {
+   741	                FMTK_FreeMbx(tcbs[ht].hMailboxes[nn]);
+   742	                tcbs[ht].hMailboxes[nn] = -1;
+   743	            }
+   744	        // remove task from job's task list
+   745	        j = &jcbs[tcbs[ht].hJob];
+   746	        for (nn = 0; nn < 8; nn++) {
+   747	            if (j->tasks[nn]==ht)
+   748	                j->tasks[nn] = -1;
+   749	        }
+   750	        // If the job no longer has any tasks associated with it, it is 
+   751	        // finished.
+   752	        for (nn = 0; nn < 8; nn++)
+   753	            if (j->tasks[nn]!=-1)
+   754	                break;
+   755	        if (nn == 8) {
+   756	            j->next = freeJCB;
+   757	            freeJCB = j - jcbs;
+   758	        }
+   759	        UnlockSemaphore(&sys_sema);
+   760	    }
+   761	}
+   762	
+   763	
+   764	// ----------------------------------------------------------------------------
+   765	// ----------------------------------------------------------------------------
+   766	
+
+
+*** local symbol table ***
+
+taskno_    =000018    -    Auto        Long
+ht_        =fffffffe    -    Auto        Char
+nn_        =fffffff0    -    Auto        Long
+j_         =ffffffe8    -    Auto        Pointer to struct _tagJCB_ 
+
+
+
+   767	int FMTK_ExitTask()
+   768	{
+   769	    asm { mfspr r1,ivno };
+   770	    KillTask(GetRunningTCB());
+   771	    asm { int #2 }     // reschedule
+   772	j1: goto j1;
+   773	}
+   774	
+   775	
+   776	// ----------------------------------------------------------------------------
+   777	// ----------------------------------------------------------------------------
+   778	
+
+
+*** local symbol table ***
+
+j1_        =000064    -    Label
+
+
+
+   779	int FMTK_StartTask(int priority, int affinity, int adr, int parm, hJCB job)
+   780	{
+   781	    hTCB ht;
+   782	    TCB *t;
+   783	    int nn;
+   784	
+   785	    asm { mfspr r1,ivno };
+   786	    if (LockSemaphore(&sys_sema,-1)) {
+   787	        ht = freeTCB;
+   788	        freeTCB = tcbs[ht].next;
+   789	        UnlockSemaphore(&sys_sema);
+   790	    }
+   791	    t = &tcbs[ht];
+   792	    t->affinity = affinity;
+   793	    t->priority = priority;
+   794	    t->hJob = job;
+   795	    // Insert into the job's list of tasks.
+   796	    for (nn = 0; nn < 8; nn++) {
+   797	        if (jcbs[job].tasks[nn]<0) {
+   798	            jcbs[job].tasks[nn] = ht;
+   799	            break;
+   800	        }
+   801	    }
+   802	    if (nn == 8) {
+   803	        if (LockSemaphore(&sys_sema,-1)) {
+   804	            tcbs[ht].next = freeTCB;
+   805	            freeTCB = ht;
+   806	            UnlockSemaphore(&sys_sema);
+   807	        }
+   808	        return E_TooManyTasks;
+   809	    }
+   810	    t->iregs[1] = parm;
+   811	    t->iregs[28] = FMTK_ExitTask;
+   812	    t->iregs[31] = FMTK_ExitTask;
+   813	    t->iisp = t->stack + 1023;
+   814	    t->iipc = adr|1;   // stay in kernel mode for now
+   815	    t->icr0 = 0x140000000L;
+   816	    t->startTick = 0;
+   817	    t->endTick = 0;
+   818	    t->ticks = 0;
+   819	    t->exception = 0;
+   820	    if (LockSemaphore(&sys_sema,-1)) {
+   821	        InsertIntoReadyList(ht); }
+   822	        UnlockSemaphore(&sys_sema);
+   823	    }
 
 
 *** local symbol table ***
@@ -836,30 +930,30 @@ nn_        =ffffffe8    -    Auto        Long
 
 
 
-   740	    return E_Ok;
-   741	}
-   742	
-   743	// ----------------------------------------------------------------------------
-   744	// ----------------------------------------------------------------------------
-   745	
-   746	int FMTK_Sleep(int timeout)
-   747	{
-   748	    hTCB ht;
-   749	    
-   750	    asm { mfspr r1,ivno };
-   751	    if (LockSemaphore(&sys_sema,-1)) {
-   752	        ht = GetRunningTCB();
-   753	        RemoveFromReadyList(ht);
-   754	        InsertIntoTimeoutList(ht, timeout);
-   755	        UnlockSemaphore(&sys_sema);
-   756	    }
-   757	    asm { int #2 }      // reschedule
-   758	    return E_Ok;
-   759	}
-   760	
-   761	// ----------------------------------------------------------------------------
-   762	// ----------------------------------------------------------------------------
-   763	
+   824	    return E_Ok;
+   825	}
+   826	
+   827	// ----------------------------------------------------------------------------
+   828	// ----------------------------------------------------------------------------
+   829	
+   830	int FMTK_Sleep(int timeout)
+   831	{
+   832	    hTCB ht;
+   833	    
+   834	    asm { mfspr r1,ivno };
+   835	    if (LockSemaphore(&sys_sema,-1)) {
+   836	        ht = GetRunningTCB();
+   837	        RemoveFromReadyList(ht);
+   838	        InsertIntoTimeoutList(ht, timeout);
+   839	        UnlockSemaphore(&sys_sema);
+   840	    }
+   841	    asm { int #2 }      // reschedule
+   842	    return E_Ok;
+   843	}
+   844	
+   845	// ----------------------------------------------------------------------------
+   846	// ----------------------------------------------------------------------------
+   847	
 
 
 *** local symbol table ***
@@ -869,30 +963,30 @@ ht_        =fffffffe    -    Auto        Char
 
 
 
-   764	int FMTK_SetTaskPriority(hTCB ht, int priority)
-   765	{
-   766	    TCB *t;
-   767	
-   768	    asm { mfspr r1,ivno };
-   769	    if (priority > 077 || priority < 000)
-   770	       return E_Arg;
-   771	    if (LockSemaphore(&sys_sema,-1)) {
-   772	        t = &tcbs[ht];
-   773	        if (t->status & (8 | 16)) {
-   774	            RemoveFromReadyList(ht);
-   775	            t->priority = priority;
-   776	            InsertIntoReadyList(ht);
-   777	        }
-   778	        else
-   779	            t->priority = priority;
-   780	        UnlockSemaphore(&sys_sema);
-   781	    }
-   782	    return E_Ok;
-   783	}
-   784	
-   785	// ----------------------------------------------------------------------------
-   786	// ----------------------------------------------------------------------------
-   787	
+   848	int FMTK_SetTaskPriority(hTCB ht, int priority)
+   849	{
+   850	    TCB *t;
+   851	
+   852	    asm { mfspr r1,ivno };
+   853	    if (priority > 077 || priority < 000)
+   854	       return E_Arg;
+   855	    if (LockSemaphore(&sys_sema,-1)) {
+   856	        t = &tcbs[ht];
+   857	        if (t->status & (8 | 16)) {
+   858	            RemoveFromReadyList(ht);
+   859	            t->priority = priority;
+   860	            InsertIntoReadyList(ht);
+   861	        }
+   862	        else
+   863	            t->priority = priority;
+   864	        UnlockSemaphore(&sys_sema);
+   865	    }
+   866	    return E_Ok;
+   867	}
+   868	
+   869	// ----------------------------------------------------------------------------
+   870	// ----------------------------------------------------------------------------
+   871	
 
 
 *** local symbol table ***
@@ -903,119 +997,129 @@ t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   788	void FMTKInitialize()
-   789	{
-   790		int nn;
-   791	
-   792	    asm { mfspr r1,ivno };
-   793	//    firstcall
-   794	    {
-   795	        asm {
-   796	            ldi   r1,#20
-   797	            sc    r1,LEDS
-   798	        }
-   799	        hasUltraHighPriorityTasks = 0;
-   800	        missed_ticks = 0;
-   801	
-   802	        IOFocusTbl[0] = 0;
-   803	        IOFocusNdx = (void *)0;
-   804	
-   805	        // bounds register must be setup prior to unlocking semaphores
-   806	        UnlockSemaphore(&sys_sema);
-   807	        UnlockSemaphore(&iof_sema);
-   808	
-   809	        for (nn = 0; nn < 16384; nn++) {
-   810	            message[nn].link = nn+1;
-   811	        }
-   812	        message[16384-1].link = -1;
-   813	        freeMSG = 0;
-   814	
-   815	        asm {
-   816	            ldi   r1,#30
-   817	            sc    r1,LEDS
-   818	        }
-   819	
-   820	        for (nn = 0; nn < 51; nn++) {
-   821	            jcbs[nn].number = nn;
-   822	            if (nn == 0 ) {
-   823	                jcbs[nn].pVidMem = 0xFFD00000;
-   824	                jcbs[nn].pVirtVidMem = video_bufs[nn];
-   825	                jcbs[nn].NormAttr = 0x0026B800;
-   826	                RequestIOFocus(&jcbs[0]);
-   827	           }
-   828	            else {
-   829	                 jcbs[nn].pVidMem = video_bufs[nn];
-   830	                 jcbs[nn].pVirtVidMem = video_bufs[nn];
-   831	                 jcbs[nn].NormAttr = 0x0026B800;
-   832	            }
-   833	            jcbs[nn].VideoRows = 31;
-   834	            jcbs[nn].VideoCols = 84;
-   835	            jcbs[nn].CursorRow = 0;
-   836	            jcbs[nn].CursorCol = 0;
-   837	        }
-   838	
-   839	        asm {
-   840	            ldi   r1,#40
-   841	            sc    r1,LEDS
-   842	        }
-   843	
-   844	    	for (nn = 0; nn < 8; nn++)
-   845	    		readyQ[nn] = -1;
-   846	    	for (nn = 0; nn < 256; nn++) {
-   847	            tcbs[nn].number = nn;
-   848	    		tcbs[nn].next = nn+1;
-   849	    		tcbs[nn].prev = -1;
-   850	    		tcbs[nn].status = 0;
-   851	    		tcbs[nn].priority = 070;
-   852	    		tcbs[nn].affinity = 0;
-   853	    		tcbs[nn].sys_stack = &sys_stacks[nn] + 511;
-   854	    		tcbs[nn].bios_stack = &bios_stacks[nn] + 511;
-   855	    		tcbs[nn].stack = &stacks[nn] + 1023;
-   856	    		tcbs[nn].hJob = 0;
-   857	    		tcbs[nn].timeout = 0;
-   858	    		tcbs[nn].hMailboxes[0] = -1;
-   859	    		tcbs[nn].hMailboxes[1] = -1;
-   860	    		tcbs[nn].hMailboxes[2] = -1;
-   861	    		tcbs[nn].hMailboxes[3] = -1;
-   862	    		if (nn<2) {
-   863	                tcbs[nn].affinity = nn;
-   864	                tcbs[nn].priority = 030;
-   865	            }
-   866	    	}
-   867	    	tcbs[256-1].next = -1;
-   868	    	freeTCB = 2;
-   869	        asm {
-   870	            ldi   r1,#42
-   871	            sc    r1,LEDS
-   872	        }
-   873	    	InsertIntoReadyList(0);
-   874	    	InsertIntoReadyList(1);
-   875	    	tcbs[0].status = 8;
-   876	    	tcbs[1].status = 8;
-   877	        asm {
-   878	            ldi   r1,#44
-   879	            sc    r1,LEDS
-   880	        }
-   881	    	SetRunningTCB(0);
-   882	    	TimeoutList = -1;
-   883	    	set_vector(4,FMTK_SystemCall);
-   884	    	set_vector(2,FMTK_SchedulerIRQ);
-   885	    	set_vector(451,FMTK_SchedulerIRQ);
-   886	        FMTK_StartTask(070, 0, IdleTask, 0, 0);
-   887	        FMTK_StartTask(070, 1, IdleTask, 0, 0);
-   888	    	FMTK_Inited = 0x12345678;
-   889	        asm {
-   890	            ldi   r1,#50
-   891	            sc    r1,LEDS
-   892	        }
-   893	    }
-   894	}
-   895	
+   872	void FMTKInitialize()
+   873	{
+   874		int nn,jj;
+   875	
+   876	    asm { mfspr r1,ivno };
+   877	//    firstcall
+   878	    {
+   879	        asm {
+   880	            ldi   r1,#20
+   881	            sc    r1,LEDS
+   882	        }
+   883	        hasUltraHighPriorityTasks = 0;
+   884	        missed_ticks = 0;
+   885	
+   886	        IOFocusTbl[0] = 0;
+   887	        IOFocusNdx = (void *)0;
+   888	        iof_switch = 0;
+   889	
+   890	        UnlockSemaphore(&sys_sema);
+   891	        UnlockSemaphore(&iof_sema);
+   892	        UnlockSemaphore(&kbd_sema);
+   893	
+   894	        for (nn = 0; nn < 16384; nn++) {
+   895	            message[nn].link = nn+1;
+   896	        }
+   897	        message[16384-1].link = -1;
+   898	        freeMSG = 0;
+   899	
+   900	        asm {
+   901	            ldi   r1,#30
+   902	            sc    r1,LEDS
+   903	        }
+   904	
+   905	        for (nn = 0; nn < 51; nn++) {
+   906	            jcbs[nn].number = nn;
+   907	            for (jj = 0; jj < 8; jj++)
+   908	                jcbs[nn].tasks[jj] = -1;
+   909	            if (nn == 0 ) {
+   910	                jcbs[nn].pVidMem = 0xFFD00000;
+   911	                jcbs[nn].pVirtVidMem = video_bufs[nn];
+   912	                jcbs[nn].NormAttr = 0x0026B800;
+   913	                RequestIOFocus(&jcbs[0]);
+   914	           }
+   915	            else {
+   916	                 jcbs[nn].pVidMem = video_bufs[nn];
+   917	                 jcbs[nn].pVirtVidMem = video_bufs[nn];
+   918	                 jcbs[nn].NormAttr = 0x0026B800;
+   919	            }
+   920	            jcbs[nn].VideoRows = 31;
+   921	            jcbs[nn].VideoCols = 84;
+   922	            jcbs[nn].CursorRow = 0;
+   923	            jcbs[nn].CursorCol = 0;
+   924	            jcbs[nn].KeybdHead = 0;
+   925	            jcbs[nn].KeybdTail = 0;
+   926	            jcbs[nn].KeyState1 = 0;
+   927	            jcbs[nn].KeyState2 = 0;
+   928	        }
+   929	
+   930	        asm {
+   931	            ldi   r1,#40
+   932	            sc    r1,LEDS
+   933	        }
+   934	
+   935	    	for (nn = 0; nn < 8; nn++)
+   936	    		readyQ[nn] = -1;
+   937	    	for (nn = 0; nn < 256; nn++) {
+   938	            tcbs[nn].number = nn;
+   939	    		tcbs[nn].next = nn+1;
+   940	    		tcbs[nn].prev = -1;
+   941	    		tcbs[nn].status = 0;
+   942	    		tcbs[nn].priority = 070;
+   943	    		tcbs[nn].affinity = 0;
+   944	    		tcbs[nn].sys_stack = &sys_stacks[nn] + 511;
+   945	    		tcbs[nn].bios_stack = &bios_stacks[nn] + 511;
+   946	    		tcbs[nn].stack = &stacks[nn] + 1023;
+   947	    		tcbs[nn].hJob = 0;
+   948	    		tcbs[nn].timeout = 0;
+   949	    		tcbs[nn].hMailboxes[0] = -1;
+   950	    		tcbs[nn].hMailboxes[1] = -1;
+   951	    		tcbs[nn].hMailboxes[2] = -1;
+   952	    		tcbs[nn].hMailboxes[3] = -1;
+   953	    		if (nn<2) {
+   954	                tcbs[nn].affinity = nn;
+   955	                tcbs[nn].priority = 030;
+   956	            }
+   957	            tcbs[nn].exception = 0;
+   958	    	}
+   959	    	tcbs[256-1].next = -1;
+   960	    	freeTCB = 2;
+   961	        asm {
+   962	            ldi   r1,#42
+   963	            sc    r1,LEDS
+   964	        }
+   965	    	InsertIntoReadyList(0);
+   966	    	InsertIntoReadyList(1);
+   967	    	tcbs[0].status = 8;
+   968	    	tcbs[1].status = 8;
+   969	        asm {
+   970	            ldi   r1,#44
+   971	            sc    r1,LEDS
+   972	        }
+   973	    	SetRunningTCB(0);
+   974	    	TimeoutList = -1;
+   975	    	set_vector(4,FMTK_SystemCall);
+   976	    	set_vector(2,FMTK_SchedulerIRQ);
+   977	    	set_vector(451,FMTK_SchedulerIRQ);
+   978	    	FMTK_StartTask(030, 0, shell, 0, 0);
+   979	        FMTK_StartTask(077, 0, IdleTask, 0, 0);
+   980	        FMTK_StartTask(077, 1, IdleTask, 0, 0);
+   981	    	FMTK_Inited = 0x12345678;
+   982	        asm {
+   983	            ldi   r1,#50
+   984	            sc    r1,LEDS
+   985	        }
+   986	    }
+   987	}
+   988	
 
 
 *** local symbol table ***
 
 nn_        =fffffff8    -    Auto        Long
+jj_        =fffffff0    -    Auto        Long
 
 
 
@@ -1024,19 +1128,20 @@ nn_        =fffffff8    -    Auto        Long
 
 jcbs_      =000000    -    External    Array of struct _tagJCB_ 
 E_NoMoreMsgBlks_ =000041    -    Constant    Long
-startQNdx_ =000009    -    Static      Byte
+startQNdx_ =00000d    -    Static      Byte
 tcbs_      =000000    -    External    Array of struct _tagTCB_ 
 nMsgBlk_   =000000    -    External    Long
+FMTK_KillTask_ =57c0a2    -    Global      Function returning Long
 PopTimeoutList_ =000000    -    External    Function returning Long
 putstr_    =000000    -    External    Function returning Long
-FMTK_SetTaskPriority_ =57c0a8    -    Global      Function returning Long
+FMTK_SetTaskPriority_ =57c0b0    -    Global      Function returning Long
 E_NoThread_ =000007    -    Constant    Long
 E_WriteError_ =000024    -    Constant    Long
 outb_      =001480    -    Global      Function returning 
 IOFocusTbl_ =000000    -    External    Array of Long
 outc_      =001480    -    Global      Function returning 
 E_Arg_     =000004    -    Constant    Long
-FMTK_ExitTask_ =57c09a    -    Global      Function returning Long
+FMTK_ExitTask_ =57c0a2    -    Global      Function returning Long
 E_NotAlloc_ =000008    -    Constant    Long
 uint_      =000000    1   
 outh_      =001480    -    Global      Function returning 
@@ -1058,7 +1163,7 @@ message_   =000000    -    External    Array of struct tagMSG_
 SetRunningTCB_ =001480    -    Global      Function returning 
 MSG_       =000020    1   struct tagMSG_ 
 MBX_       =001400    1   struct tagMBX_ 
-SelectTaskToRun_ =00000a    -    Static      Function returning Char
+SelectTaskToRun_ =00000e    -    Static      Function returning Char
 mailbox_   =000000    -    External    Array of struct tagMBX_ 
 FMTK_Inited_ =000000    -    External    Long
 E_BadDevNum_ =000020    -    Constant    Long
@@ -1070,9 +1175,11 @@ chkTCB_    =001480    -    Global      Function returning Long
 GetRunningTCBPtr_ =001480    -    External    Function returning Pointer to struct _tagTCB_ 
 UnlockSemaphore_ =001480    -    Global      Function returning 
 IdleTask_  =57c09a    -    Global      Function returning 
+shell_     =000000    -    External    Function returning Long
 E_NoMoreMbx_ =000040    -    Constant    Long
 GetVecno_  =57c078    -    Global      Function returning Long
 FMTK_SchedulerIRQ_ =57c09a    -    Global      Function returning 
+KillTask_  =000000    -    External    Function returning Long
 E_QueStrategy_ =00000d    -    Constant    Long
 GetJCBPtr_ =57c078    -    Global      Function returning Pointer to struct _tagJCB_ 
 video_bufs_ =000000    -    External    Array of Array of Short
@@ -1081,7 +1188,8 @@ E_ReadError_ =000023    -    Constant    Long
 hasUltraHighPriorityTasks_ =000000    -    External    Char
 LockSemaphore_ =001480    -    Global      Function returning Long
 iof_switch_ =000000    -    External    Long
-FMTK_StartTask_ =57c09a    -    Global      Function returning Long
+FMTK_StartTask_ =57c0a2    -    Global      Function returning Long
+kbd_sema_  =000000    -    External    Long
 hJCB_      =00000a    1   Byte
 nMailbox_  =000000    -    External    Long
 FMTK_FreeMbx_ =000000    -    External    Function returning Long
@@ -1089,7 +1197,7 @@ set_vector_ =001480    -    Global      Function returning
 E_NoMoreTCBs_ =000043    -    Constant    Long
 hTCB_      =000008    1   Char
 iof_sema_  =000000    -    External    Long
-FMTKInitialize_ =57c0a8    -    Global      Function returning 
+FMTKInitialize_ =57c0b0    -    Global      Function returning 
 sys_stacks_ =000000    -    External    Array of Array of Long
 BIOS_RespMbx_ =000000    -    External    Long
 hMBX_      =00000c    1   Char
@@ -1104,9 +1212,12 @@ readyQ_    =000000    -    External    Array of Char
 FMTK_BrTbl_ =57c078    -    Global      Function returning 
 E_NoMoreAlarmBlks_ =000042    -    Constant    Long
 ALARM_     =001440    1   struct tagALARM_ 
+E_TooManyTasks_ =000045    -    Constant    Long
+freeJCB_   =4b0010    -    Global      Byte
 sysstack_  =000000    -    External    Array of Long
+ILockSemaphore_ =000000    -    External    Function returning Long
 freeTCB_   =000000    -    External    Char
-startQ_    =000008    -    Static      Array of Byte
+startQ_    =00000c    -    Static      Array of Byte
 E_NoDev_   =000021    -    Constant    Long
 E_NoMem_   =000044    -    Constant    Long
 RequestIOFocus_ =000000    -    External    Function returning Long
@@ -1119,7 +1230,7 @@ stacks_    =000000    -    External    Array of Array of Long
 freeMSG_   =000000    -    External    Char
 freeMBX_   =000000    -    External    Char
 SetBound51_ =001480    -    Global      Function returning 
-FMTK_Sleep_ =57c0a8    -    Global      Function returning Long
+FMTK_Sleep_ =57c0b0    -    Global      Function returning Long
 E_Timeout_ =00000a    -    Constant    Long
 SetBound48_ =001480    -    Global      Function returning 
 SetBound49_ =001480    -    Global      Function returning 
@@ -1127,6 +1238,7 @@ InsertIntoTimeoutList_ =001480    -    Global      Function returning Long
 FMTK_SystemCall_ =57c09a    -    Global      Function returning Long
 RemoveFromReadyList_ =001480    -    Global      Function returning Long
 sp_tmp_    =002480    -    Global      Long
+printf_    =000000    -    External    Function returning Long
 bios_stacks_ =000000    -    External    Array of Array of Long
 E_BadAlarm_ =00000b    -    Constant    Long
 InsertIntoReadyList_ =001480    -    Global      Function returning Long
@@ -1160,8 +1272,10 @@ _tagJCB_   =000000    -    Type        struct _tagJCB_
     KeybdWaitFlag_ =00066e    -    Member      Byte
     KeybdHead_ =00066f    -    Member      Byte
     KeybdTail_ =000670    -    Member      Byte
-    KeybdBuffer_ =000672    -    Member      Array of 
-    number_    =000692    -    Member      Byte
+    KeybdBuffer_ =000671    -    Member      Array of Unsigned Byte
+    number_    =000691    -    Member      Byte
+    tasks_     =000692    -    Member      Array of Char
+    next_      =0006a2    -    Member      Byte
 tagMBX_    =000000    -    Type        struct tagMBX_ 
     link_      =000000    -    Member      Char
     owner_     =000002    -    Member      Byte
@@ -1211,6 +1325,7 @@ _tagTCB_   =000000    -    Type        struct _tagTCB_
     startTick_ =0002d0    -    Member      Long
     endTick_   =0002d8    -    Member      Long
     ticks_     =0002e0    -    Member      Long
+    exception_ =0002e8    -    Member      Long
 tagALARM_  =000000    -    Type        struct tagALARM_ 
     next_      =000000    -    Member      Pointer to struct tagALARM_ 
     prev_      =000008    -    Member      Pointer to struct tagALARM_ 

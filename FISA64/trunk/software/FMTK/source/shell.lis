@@ -1,0 +1,268 @@
+     1	extern pascal void putch(char ch);
+     2	pascal char CvtScreenToAscii(unsigned short int sc);
+     3	extern void printf();
+     4	extern char getchar();
+     5	extern int FMTK_StartTask(int,int,int (*)(),int,int);
+     6	extern int debugger_task();
+     7	extern pascal int prtdbl(double,int,int,char);
+     8	
+     9	int sh_linendx;
+    10	char sh_linebuf[100];
+    11	
+    12	char sh_getchar()
+    13	{
+    14	     char ch;
+    15	     
+    16	     ch = -1;
+    17	     if (sh_linendx < 84) {
+    18	         ch = sh_linebuf[sh_linendx];
+    19	         sh_linendx++;
+    20	     }
+    21	     return ch;
+    22	}
+    23	
+
+
+*** local symbol table ***
+
+ch_        =fffffffe    -    Auto        Char
+
+
+
+    24	char sh_nextNonSpace()
+    25	{
+    26	     char ch;
+    27	
+    28	     while (sh_linendx < 84) {
+    29	           ch = sh_getchar();
+    30	           if (ch!=' ' || ch==-1)
+    31	               return ch;
+    32	     }
+    33	     return -1;
+    34	}
+    35	
+    36	
+
+
+*** local symbol table ***
+
+ch_        =fffffffe    -    Auto        Char
+
+
+
+    37	pascal int sh_getHexNumber(unsigned int *ad)
+    38	{
+    39	     char ch;
+    40	     unsigned int num;
+    41	     int nd;  // number of digits
+    42	
+    43	     num = 0;
+    44	     nd = 0;
+    45	     sh_nextNonSpace();
+    46	     sh_linendx--;
+    47	     while (1) {
+    48	           ch = sh_getchar();
+    49	           if (ch >= '0' && ch <= '9')
+    50	               num = (num << 4) | (ch - '0');
+    51	           else if (ch >= 'A' && ch <= 'F')
+    52	               num = (num << 4) | (ch - 'A' + 10);
+    53	           else if (ch >= 'a' && ch <= 'f')
+    54	               num = (num << 4) | (ch - 'a' + 10);
+    55	           else {
+    56	                *ad = num;
+    57	                return nd;
+    58	           }
+    59	           nd = nd + 1;
+    60	     }    
+    61	}
+    62	
+
+
+*** local symbol table ***
+
+ad_        =000018    -    Auto        Pointer to 
+ch_        =fffffffe    -    Auto        Char
+num_       =fffffff0    -    Auto        
+nd_        =ffffffe8    -    Auto        Long
+
+
+
+    63	pascal int sh_getDecNumber(int *n)
+    64	{
+    65	    int num;
+    66	    char ch;
+    67	    int nd;
+    68	
+    69	    if (n==(int *)0) return 0;
+    70	    num = 0;
+    71	    nd = 0;
+    72	     while(isdigit(ch=sh_getchar())) {
+    73	        num = num * 10 + (ch - '0');
+    74	        nd++;
+    75	    }
+    76	    sh_linendx--;
+    77	    *n = num;
+    78	    return nd;
+    79	}
+    80	
+    81	
+    82	
+
+
+*** local symbol table ***
+
+n_         =000018    -    Auto        Pointer to Long
+num_       =fffffff8    -    Auto        Long
+ch_        =fffffff6    -    Auto        Char
+nd_        =ffffffe8    -    Auto        Long
+
+
+
+    83	int sh_parse_line()
+    84	{
+    85	    char ch;
+    86	    int nd;
+    87	    int taskno;
+    88	    int (*ad)();
+    89	    int pri,cpu,parm,job;
+    90	
+    91	    ch = sh_getchar();
+    92	    switch (ch) {
+    93	    case 'd':
+    94	         FMTK_StartTask(040,0,debugger_task,0,0);
+    95	         break;
+    96	    case 't':
+    97	         DumpTaskList();
+    98	         return 0;
+    99	    case 'k':
+   100	         if ((ch=sh_getchar())=='i') {
+   101	             if ((ch = sh_getchar())=='l') {
+   102	                 if ((ch = sh_getchar())=='l') {
+   103	                 }
+   104	             }                        
+   105	         }
+   106	         nd = sh_getHexNumber(&taskno);
+   107	         if (nd > 0) {
+   108	             FMTK_KillTask(taskno);
+   109	         }
+   110	         return 0;
+   111	    case 'j':
+   112	         nd = sh_getHexNumber(&ad);
+   113	         if (nd > 0)
+   114	             (*ad)();
+   115	         break;   
+   116	    case 's':
+   117	         ch = sh_getchar();
+   118	         if (ch=='t') {
+   119	             nd = sh_getDecNumber(&pri);
+   120	             if (nd <= 0) break;
+   121	             nd = sh_getDecNumber(&cpu);
+   122	             if (nd <= 0) break;
+   123	             nd = sh_getHexNumber(&ad);
+   124	             if (nd <= 0) break;
+   125	             nd = sh_getHexNumber(&parm);
+   126	             if (nd <= 0) break;
+   127	             nd = sh_getHexNumber(&job);
+   128	             if (nd <= 0) break;
+   129	             FMTK_StartTask(pri,cpu,ad,parm,job);
+   130	         }
+   131	         break;        
+   132	    }
+   133	    return 0;
+   134	}
+   135	
+
+
+*** local symbol table ***
+
+ch_        =fffffffe    -    Auto        Char
+nd_        =fffffff0    -    Auto        Long
+taskno_    =ffffffe8    -    Auto        Long
+ad_        =ffffffe0    -    Auto        Pointer to Function returning Long
+pri_       =ffffffd8    -    Auto        Long
+cpu_       =ffffffd0    -    Auto        Long
+parm_      =ffffffc8    -    Auto        Long
+job_       =ffffffc0    -    Auto        Long
+
+
+
+   136	int sh_parse()
+   137	{
+   138	    sh_linendx = 0;
+   139	    if (sh_linebuf[0]=='$' && sh_linebuf[1]=='>')
+   140	        sh_linendx = 2;
+   141	    return sh_parse_line();
+   142	}
+   143	
+   144	
+
+
+*** local symbol table ***
+
+
+
+
+   145	int shell()
+   146	{
+   147	    unsigned __int32 *screen;
+   148	    int nn;
+   149	    int row;
+   150	    int col;
+   151	    char ch;
+   152	
+   153	    screen = (unsigned short int *)0xFFD00000;
+   154	    //printf("%10.6E",3.141592653589793238);
+   155	    forever {
+   156	        printf("\r\n$>");
+   157	        forever {
+   158	            ch = getchar();
+   159	            if (ch==0x0D)
+   160	                break;
+   161	            putch(ch);
+   162	        }
+   163	        row = dbg_GetCursorRow();
+   164	        col = dbg_GetCursorCol();
+   165	        for (nn = 0; nn < 84; nn++)
+   166	            sh_linebuf[nn] = CvtScreenToAscii(screen[row * 84 + nn] & 0x3ff);
+   167	        sh_parse();
+   168	    }
+   169	}
+
+
+*** local symbol table ***
+
+screen_    =fffffff8    -    Auto        Pointer to 
+nn_        =fffffff0    -    Auto        Long
+row_       =ffffffe8    -    Auto        Long
+col_       =ffffffe0    -    Auto        Long
+ch_        =ffffffde    -    Auto        Char
+
+
+
+
+ *** global scope typedef symbol table ***
+
+FMTK_KillTask_ =000000    -    External    Function returning Long
+DumpTaskList_ =000000    -    External    Function returning Long
+getchar_   =000000    -    External    Function returning Char
+isdigit_   =000000    -    External    Function returning Long
+sh_getDecNumber_ =0000d0    -    Global      Function returning Long
+sh_getHexNumber_ =0000d0    -    Global      Function returning Long
+sh_nextNonSpace_ =0000d0    -    Global      Function returning Char
+sh_getchar_ =0000d0    -    Global      Function returning Char
+shell_     =0000d0    -    Global      Function returning Long
+sh_linebuf_ =000008    -    Global      Array of Char
+putch_     =000000    -    External    Function returning 
+sh_linendx_ =000000    -    Global      Long
+FMTK_StartTask_ =000000    -    External    Function returning Long
+CvtScreenToAscii_ =000000    -    Global      Function returning Char
+dbg_GetCursorCol_ =000000    -    External    Function returning Long
+sh_parse_  =0000d0    -    Global      Function returning Long
+debugger_task_ =000000    -    External    Function returning Long
+sh_parse_line_ =0000d0    -    Global      Function returning Long
+dbg_GetCursorRow_ =000000    -    External    Function returning Long
+prtdbl_    =000000    -    External    Function returning Long
+printf_    =000000    -    External    Function returning 
+
+ *** structures and unions ***
+

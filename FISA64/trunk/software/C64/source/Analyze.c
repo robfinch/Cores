@@ -157,6 +157,7 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
         csp->exp = DuplicateEnode(node);
         csp->voidf = 0;
 		csp->reg = 0;
+		csp->isfp = node->isDouble;
         olist = csp;
         return csp;
     }
@@ -239,6 +240,8 @@ static void scanexpr(ENODE *node, int duse)
                 break;
 		case en_autofcon:
         case en_autocon:
+        case en_tempfpref:
+        case en_tempref:
                 csp1 = InsertNodeIntoCSEList(node,duse);
                 if ((nn = voidauto2(node)) > 0)
                     csp1->uses = (csp1->duses += nn);
@@ -264,6 +267,8 @@ static void scanexpr(ENODE *node, int duse)
 		case en_uhfieldref:
 		case en_wfieldref:
 		case en_uwfieldref:
+                // There is something wrong with the following code that causes
+                // it to remove zero extension conversion from a byte to a word.
                 if( node->p[0]->nodetype == en_autocon || node->p[0]->nodetype==en_autofcon) {
 					first = (SearchCSEList(node)==NULL);	// Detect if this is the first insert
                     csp = InsertNodeIntoCSEList(node,duse);
@@ -275,8 +280,10 @@ static void scanexpr(ENODE *node, int duse)
 						csp->voidf = 1;
 						scanexpr(node->p[0], 1);
 					}
-					//else {
-							//if (first) {
+					else {
+//                        if( csp->voidf )
+//                             scanexpr(node->p[0],1);
+					    if (first) {
 							///* look for register nodes */
 							//int i = 0;
 							//long j = node->p[0]->i;
@@ -308,7 +315,8 @@ static void scanexpr(ENODE *node, int duse)
 
                         //if( csp->voidf )
                         //        scanexpr(node->p[0],1);
-                        //}
+                        }
+                    }
 				}
                 else
                         scanexpr(node->p[0],1);
@@ -324,6 +332,9 @@ static void scanexpr(ENODE *node, int duse)
         case en_uminus:
         case en_compl:  case en_ainc:
         case en_adec:   case en_not:
+        case en_chk:
+        case en_i2d:
+        case en_d2i:
                 scanexpr(node->p[0],duse);
                 break;
         case en_asadd:  case en_assub:
@@ -333,7 +344,7 @@ static void scanexpr(ENODE *node, int duse)
                 break;
 		case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 		case en_shl:    case en_shlu:	case en_shr:	case en_shru:	case en_asr:
-        case en_mod:    case en_and:
+        case en_mod:    case en_umod:   case en_and:
         case en_or:     case en_xor:
         case en_lor:    case en_land:
         case en_eq:     case en_ne:
@@ -341,12 +352,16 @@ static void scanexpr(ENODE *node, int duse)
         case en_lt:     case en_le:
         case en_ugt:    case en_uge:
         case en_ult:    case en_ule:
+                case en_feq:    case en_fne:
+                case en_flt:    case en_fle:
+                case en_fgt:    case en_fge:
+                case en_fdmul:  case en_fddiv:
+                case en_fdadd:  case en_fdsub:
 		case en_asmul:  case en_asmulu:
 		case en_asdiv:	case en_asdivu:
         case en_asmod:  case en_aslsh:
 		case en_asrsh:
 		case en_asand:	case en_asxor: case en_asor:
-        case en_chk:
 		case en_cond:
         case en_void:   case en_assign:
                 scanexpr(node->p[0],0);
@@ -356,6 +371,7 @@ static void scanexpr(ENODE *node, int duse)
                 scanexpr(node->p[0],1);
                 scanexpr(node->p[1],0);
                 break;
+        default: printf("Uncoded node in scanexpr():%d\r\n", node->nodetype);
         }
 }
 
@@ -416,6 +432,12 @@ static void scan(Statement *block)
                     scan(block->s1);
                     scan(block->s2);
                     break;
+            // nothing to process for these statement
+            case st_break:
+            case st_continue:
+            case st_goto:
+                    break;
+            default:      ;// printf("Uncoded statement in scan():%d\r\n", block->stype);
         }
         block = block->next;
     }
@@ -499,12 +521,21 @@ void repexpr(ENODE *node)
         switch( node->nodetype ) {
 				case en_fcon:
 				case en_autofcon:
+                case en_tempfpref:
+					if( (csp = SearchCSEList(node)) != NULL ) {
+						if( csp->reg > 0 ) {
+							node->nodetype = en_fpregvar;
+							node->i = csp->reg;
+						}
+					}
+					break;
                 case en_icon:
                 case en_nacon:
                 case en_labcon:
                 case en_autocon:
 				case en_cnacon:
 				case en_clabcon:
+                case en_tempref:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if (csp->reg > 1000) {
 							node->nodetype = en_bregvar;
@@ -549,6 +580,18 @@ void repexpr(ENODE *node)
 					else
 						repexpr(node->p[0]);
 					break;
+				case en_dbl_ref:
+					if( (csp = SearchCSEList(node)) != NULL ) {
+						if( csp->reg > 0 ) {
+							node->nodetype = en_fpregvar;
+							node->i = csp->reg;
+						}
+						else
+							repexpr(node->p[0]);
+					}
+					else
+						repexpr(node->p[0]);
+					break;
 				case en_cbc: case en_cubw:
 				case en_cbh: case en_cucw:
 				case en_cbw: case en_cuhw:
@@ -560,11 +603,14 @@ void repexpr(ENODE *node)
                 case en_uminus:
                 case en_not:    case en_compl:
                 case en_ainc:   case en_adec:
+                case en_chk:
+                case en_i2d:
+                case en_d2i:
                         repexpr(node->p[0]);
                         break;
                 case en_add:    case en_sub:
 				case en_mul:    case en_mulu:   case en_div:	case en_udiv:
-				case en_mod:    
+				case en_mod:    case en_umod:
 				case en_shl:	case en_shlu:	case en_shru:	case en_asr:
                 case en_shr:
 				case en_and:
@@ -575,18 +621,24 @@ void repexpr(ENODE *node)
                 case en_gt:     case en_ge:
 				case en_ult:	case en_ule:
 				case en_ugt:	case en_uge:
-                case en_chk:
+                case en_feq:    case en_fne:
+                case en_flt:    case en_fle:
+                case en_fgt:    case en_fge:
+                case en_fdmul:  case en_fddiv:
+                case en_fdadd:  case en_fdsub:
                 case en_cond:   case en_void:
                 case en_asadd:  case en_assub:
 				case en_asmul:  case en_asmulu:
 				case en_asdiv:  case en_asdivu:
-                case en_asor:   case en_asand:
+                case en_asor:   case en_asand:    case en_asxor:
                 case en_asmod:  case en_aslsh:
                 case en_asrsh:  case en_fcall:
                 case en_assign:
                         repexpr(node->p[0]);
                         repexpr(node->p[1]);
                         break;
+                default:
+                        printf("Uncoded node in repexr():%d\r\n",node->nodetype);
                 }
 }
 

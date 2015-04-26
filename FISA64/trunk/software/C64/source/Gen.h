@@ -17,11 +17,12 @@
 #define F_IMM0	128		/* immediate value 0 */
 #define F_IMM8	256
 #define F_IMMED13  512
+#define F_FPREG 1024
 
 /*      addressing mode structure       */
 
 typedef struct amode {
-	unsigned int mode : 8;
+	unsigned int mode : 6;
 	unsigned int preg : 8;
 	unsigned int sreg : 8;
 	unsigned int segment : 4;
@@ -56,15 +57,12 @@ enum e_op {
 		op_shli, op_shri, op_shrui, op_shlu, op_shlui,
 		op_bfext, op_bfextu, op_bfins,
 		op_jmp, op_jsr, op_mului, op_mod, op_modu,
-		op_ftmul, op_ftsub, op_ftdiv, op_ftadd, op_ftneg,
-		op_fdmul, op_fdsub, op_fddiv, op_fdadd, op_fdneg,
-		op_fsmul, op_fssub, op_fsdiv, op_fsadd, op_fsneg,
-		op_fs2d, op_i2d, op_i2t,
 		op_tas, op_bmi, op_subu, op_lwr, op_swc, op_loop, op_iret,
 		op_sext32,op_sext16,op_sext8, op_sxb, op_sxc, op_sxh, 
 		op_dw, op_cache,
 		op_subui, op_addui, op_sei,
 		op_sw, op_sh, op_sc, op_sb, op_outb, op_inb, op_inbu,
+		op_sfd, op_lfd,
 		op_call, op_jal, op_beqi, op_bnei, op_tst,
 		op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge,
 		op_bltu, op_bleu, op_bgtu, op_bgeu,
@@ -77,6 +75,7 @@ enum e_op {
 		op_push, op_pop, op_movs,
 		op_seq, op_sne, op_slt, op_sle, op_sgt, op_sge, op_sltu, op_sleu, op_sgtu, op_sgeu,
 		op_bra, op_bf, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
+		op_feq, op_fne, op_flt, op_fle, op_fgt, op_fge,
 		op_gtu, op_geu, op_ltu, op_leu, op_nr,
         op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_swap,
         op_neg, op_not, op_com, op_cmp, op_clr, op_link, op_unlk, op_label, op_ilabel,
@@ -89,8 +88,14 @@ enum e_op {
         op_bpl,
         // FISA64
         op_lc0i, op_lc1i, op_lc2i, op_lc3i, op_chk,
-        op_cmpu, op_bsr,
-        op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri,
+        op_cmpu, op_bsr, op_bun,
+        op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri, op_rem,
+        // floating point
+		op_ftmul, op_ftsub, op_ftdiv, op_ftadd, op_ftneg, op_ftcmp,
+		op_fdmul, op_fdsub, op_fddiv, op_fdadd, op_fdneg, op_fdcmp,
+		op_fsmul, op_fssub, op_fsdiv, op_fsadd, op_fsneg, op_fscmp,
+		op_fs2d, op_i2d, op_i2t,
+        op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
         op_empty };
 
 enum e_seg {
@@ -113,7 +118,7 @@ enum e_seg {
 };
 
 enum e_am {
-        am_reg, am_sreg, am_breg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
+        am_reg, am_sreg, am_breg, am_fpreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
         am_direct, am_immed, am_mask, am_none, am_indx3, am_predreg
 	};
 

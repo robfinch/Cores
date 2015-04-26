@@ -1,16 +1,22 @@
      1	//#include "c:\AtlysCores\RTF65000\trunk\software\stdio.h"
-     2	
-     3	pascal void putch(char ch)
-     4	{
-     5		asm {
-     6	        push    r6
-     7			lw		r1,24[bp]
-     8			ldi     r6,#14    ; Teletype output function
-     9	        sys     #410      ; Video BIOS call
-    10	        pop     r6
-    11		}
-    12	}
-    13	
+     2	extern pascal int prtdbl(double,int,int,char E);
+     3	
+     4	typedef union tagval {
+     5	    __int64 i;
+     6	    double d;
+     7	} uval;
+     8	
+     9	pascal void putch(char ch)
+    10	{
+    11		asm {
+    12	        push    r6
+    13			lw		r1,24[bp]
+    14			ldi     r6,#14    ; Teletype output function
+    15	        sys     #410      ; Video BIOS call
+    16	        pop     r6
+    17		}
+    18	}
+    19	
 
 
 *** local symbol table ***
@@ -19,39 +25,39 @@ ch_        =000018    -    Auto        Char
 
 
 
-    14	pascal void putnum(int num, int wid, char sep, char padchar)
-    15	{
-    16		int n, m10;
-    17		char sign;
-    18		char numwka[200];
-    19	
-    20		if (wid < 0 or wid > 200)	// take care of nutty parameter
-    21			wid = 0;
-    22		sign = num < 0 ? '-' : '+';
-    23		if (num < 0) num = -num;
-    24		n = 0;
-    25		do {
-    26			if ((n % 4)==3 && sep) {
-    27				numwka[n]=sep;
-    28				n++;
-    29			}
-    30			m10 = num % 10;
-    31			numwka[n] = m10 + '0';
-    32			num = num / 10;
-    33			n++;
-    34		} until (num == 0 or n > 18);
-    35		if (sign=='-') {
-    36			numwka[n] = sign;
-    37			n++;
-    38		}
-    39		for (; n < wid; wid--)
-    40			putch(padchar);
-    41		while (n > 0) {
-    42			--n;
-    43			putch(numwka[n]);
+    20	pascal void putnum(int num, int wid, char sep, char padchar)
+    21	{
+    22		int n, m10;
+    23		char sign;
+    24		char numwka[200];
+    25	
+    26		if (wid < 0 or wid > 200)	// take care of nutty parameter
+    27			wid = 0;
+    28		sign = num < 0 ? '-' : '+';
+    29		if (num < 0) num = -num;
+    30		n = 0;
+    31		do {
+    32			if ((n % 4)==3 && sep) {
+    33				numwka[n]=sep;
+    34				n++;
+    35			}
+    36			m10 = num % 10;
+    37			numwka[n] = m10 + '0';
+    38			num = num / 10;
+    39			n++;
+    40		} until (num == 0 or n > 18);
+    41		if (sign=='-') {
+    42			numwka[n] = sign;
+    43			n++;
     44		}
-    45	}
-    46	
+    45		for (; n < wid; wid--)
+    46			putch(padchar);
+    47		while (n > 0) {
+    48			--n;
+    49			putch(numwka[n]);
+    50		}
+    51	}
+    52	
 
 
 *** local symbol table ***
@@ -67,43 +73,43 @@ numwka_    =fffffe5e    -    Auto        Array of Char
 
 
 
-    47	pascal void puthexnum(int num, int wid, int ul, char padchar)
-    48	{
-    49		int n, m;
-    50		char sign;
-    51		char numwka[200];
-    52	
-    53		if (wid < 0 or wid > 200)	// take care of nutty parameter
-    54			wid = 0;
-    55		n = 0;
-    56		sign = num < 0 ? '-' : '+';
-    57		if (num < 0) num = -num;
-    58		do {
-    59			m = num & 15;
-    60			if (m < 10)
-    61				numwka[n] = m + '0';
-    62			else if (ul)
-    63				numwka[n] = m + 'A'-10;
-    64			else
-    65				numwka[n] = m + 'a'-10;
-    66			num = num >> 4;
-    67			n++;
-    68		}
-    69		while (num != 0 && n < 18);
-    70		if (sign=='-') {
-    71			numwka[n] = sign;
-    72			n++;
-    73		}
-    74		while (n < wid) {
-    75			putch(sign=='-' ? ' ' : padchar);
-    76			wid--;
-    77		}
-    78		while (n > 0) {
-    79			--n;
-    80			putch(numwka[n]);
-    81		}
-    82	}
-    83	
+    53	pascal void puthexnum(int num, int wid, int ul, char padchar)
+    54	{
+    55		int n, m;
+    56		char sign;
+    57		char numwka[200];
+    58	
+    59		if (wid < 0 or wid > 200)	// take care of nutty parameter
+    60			wid = 0;
+    61		n = 0;
+    62		sign = num < 0 ? '-' : '+';
+    63		if (num < 0) num = -num;
+    64		do {
+    65			m = num & 15;
+    66			if (m < 10)
+    67				numwka[n] = m + '0';
+    68			else if (ul)
+    69				numwka[n] = m + 'A'-10;
+    70			else
+    71				numwka[n] = m + 'a'-10;
+    72			num = num >> 4;
+    73			n++;
+    74		}
+    75		while (num != 0 && n < 18);
+    76		if (sign=='-') {
+    77			numwka[n] = sign;
+    78			n++;
+    79		}
+    80		while (n < wid) {
+    81			putch(sign=='-' ? ' ' : padchar);
+    82			wid--;
+    83		}
+    84		while (n > 0) {
+    85			--n;
+    86			putch(numwka[n]);
+    87		}
+    88	}
+    89	
 
 
 *** local symbol table ***
@@ -119,15 +125,15 @@ numwka_    =fffffe5e    -    Auto        Array of Char
 
 
 
-    84	pascal int putstr(char *p, int maxchars)
-    85	{
-    86		char *q;
-    87	
-    88		for (q = p; *p && maxchars > 0; p++, maxchars--)
-    89			putch(*p);
-    90		return p-q;
-    91	}
-    92	
+    90	pascal int putstr(char *p, int maxchars)
+    91	{
+    92		char *q;
+    93	
+    94		for (q = p; *p && maxchars > 0; p++, maxchars--)
+    95			putch(*p);
+    96		return p-q;
+    97	}
+    98	
 
 
 *** local symbol table ***
@@ -138,17 +144,17 @@ q_         =fffffff8    -    Auto        Pointer to Char
 
 
 
-    93	pascal void putstr2(char *p)
-    94	{
-    95	    asm {
-    96	        push    r6
-    97	        lw      r1,24[bp]
-    98	        ldi     r6,#$1B   ; Video BIOS DisplayString16 function
-    99	        sys     #410
-   100	        pop     r6
-   101	    }
-   102	}
-   103	
+    99	pascal void putstr2(char *p)
+   100	{
+   101	    asm {
+   102	        push    r6
+   103	        lw      r1,24[bp]
+   104	        ldi     r6,#$1B   ; Video BIOS DisplayString16 function
+   105	        sys     #410
+   106	        pop     r6
+   107	    }
+   108	}
+   109	
 
 
 *** local symbol table ***
@@ -157,21 +163,21 @@ p_         =000018    -    Auto        Pointer to Char
 
 
 
-   104	naked int getcharNoWait()
-   105	{
-   106		asm {
-   107	        push    lr
-   108	        bsr     KeybdGetBufferedCharNoWait_
-   109	        pop     lr
-   110	        rtl
-   111	        push    r6
-   112	        ld      r6,#3    ; KeybdGetCharNoWait
-   113	        sys     #10
-   114	        pop     r6
-   115	        rtl
-   116		}
-   117	}
-   118	
+   110	naked int getcharNoWait()
+   111	{
+   112		asm {
+   113	        push    lr
+   114	        bsr     KeybdGetBufferedCharNoWait_
+   115	        pop     lr
+   116	        rtl
+   117	        push    r6
+   118	        ld      r6,#3    ; KeybdGetCharNoWait
+   119	        sys     #10
+   120	        pop     r6
+   121	        rtl
+   122		}
+   123	}
+   124	
 
 
 *** local symbol table ***
@@ -179,18 +185,18 @@ p_         =000018    -    Auto        Pointer to Char
 
 
 
-   119	int (getchar)()
-   120	{
-   121		int ch;
-   122	
-   123		do {
-   124			ch = getcharNoWait();
-   125		}
-   126		while (ch==-1);
-   127		return ch & 255;
-   128	}
-   129	
-   130	
+   125	int (getchar)()
+   126	{
+   127		int ch;
+   128	
+   129		do {
+   130			ch = getcharNoWait();
+   131		}
+   132		while (ch==-1);
+   133		return ch & 255;
+   134	}
+   135	
+   136	
 
 
 *** local symbol table ***
@@ -199,108 +205,121 @@ ch_        =fffffff8    -    Auto        Long
 
 
 
-   131	int printf(char *p, ...)
-   132	{
-   133		int *q;
-   134		int fmtwidth;
-   135		int maxwidth;
-   136		int wd;
-   137		char padchar;
-   138		q = &p;
-   139	
-   140		for (; *p; p++) {
-   141	        padchar = ' ';
-   142			if (*p=='%') {
-   143				fmtwidth = 0;
-   144				maxwidth = 65535;
-   145				p++;
-   146	j1:
-   147				switch(*p) {
-   148				case '%':
-   149					putch('%');
-   150					break;
-   151				case 'c':
-   152					q++;
-   153					putch(*q);
-   154					break;
-   155				case 'd':
-   156					q++;
-   157					putnum(*q,fmtwidth,0,padchar);
-   158					break;
-   159				case 'x':
-   160					q++;
-   161					puthexnum(*q,fmtwidth,0,padchar);
-   162					break;
-   163				case 'X':
-   164					q++;
-   165					puthexnum(*q,fmtwidth,1,padchar);
-   166					break;
-   167				case 's':
+   137	int printf(char *p, ...)
+   138	{
+   139		int *q;
+   140		int fmtwidth;
+   141		int maxwidth;
+   142		int wd;
+   143		uval v;
+   144		char padchar;
+   145		q = &p;
+   146	
+   147		for (; *p; p++) {
+   148	        padchar = ' ';
+   149			if (*p=='%') {
+   150				fmtwidth = 0;
+   151				maxwidth = 65535;
+   152				p++;
+   153	j1:
+   154				switch(*p) {
+   155				case '%':
+   156					putch('%');
+   157					break;
+   158				case 'c':
+   159					q++;
+   160					putch(*q);
+   161					break;
+   162				case 'd':
+   163					q++;
+   164					putnum(*q,fmtwidth,0,padchar);
+   165					break;
+   166				case 'e':
+   167	            case 'E':
    168					q++;
-   169					wd = putstr(*q,maxwidth);
-   170					//while (wd < fmtwidth) {
-   171					//	putch(' ');
-   172					//	wd++;
-   173					//}
-   174					break;
-   175				// width specification
-   176				case '0':
-   177	                padchar = '0';
-   178	            case '1','2','3','4','5','6','7','8','9':
-   179					fmtwidth = *p - '0';
-   180					p++;
-   181					while (isdigit(*p)) { 
-   182						fmtwidth *= 10;
-   183						fmtwidth += *p - '0';
-   184						p++;
-   185					}
-   186					if (*p != '.')
-   187						goto j1;
-   188				case '.':
-   189					p++;
-   190					if (!isdigit(*p))
-   191						goto j1;
-   192					maxwidth = *p - '0';
+   169					v.i = *q;
+   170					prtdbl(v.d,fmtwidth,maxwidth,*p);
+   171					break;
+   172				case 'x':
+   173					q++;
+   174					puthexnum(*q,fmtwidth,0,padchar);
+   175					break;
+   176				case 'X':
+   177					q++;
+   178					puthexnum(*q,fmtwidth,1,padchar);
+   179					break;
+   180				case 's':
+   181					q++;
+   182					wd = putstr(*q,maxwidth);
+   183					//while (wd < fmtwidth) {
+   184					//	putch(' ');
+   185					//	wd++;
+   186					//}
+   187					break;
+   188				// width specification
+   189				case '0':
+   190	                padchar = '0';
+   191	            case '1','2','3','4','5','6','7','8','9':
+   192					fmtwidth = *p - '0';
    193					p++;
-   194					while (isdigit(*p)) {
-   195						maxwidth *= 10;
-   196						maxwidth += *p - '0';
+   194					while (isdigit(*p)) { 
+   195						fmtwidth *= 10;
+   196						fmtwidth += *p - '0';
    197						p++;
    198					}
-   199					goto j1;
-   200				}
-   201			}
-   202			else
-   203				putch(*p);
-   204		}
-   205	}
+   199					if (*p != '.')
+   200						goto j1;
+   201				case '.':
+   202					p++;
+   203					if (!isdigit(*p))
+   204						goto j1;
+   205					maxwidth = *p - '0';
+   206					p++;
+   207					while (isdigit(*p)) {
+   208						maxwidth *= 10;
+   209						maxwidth += *p - '0';
+   210						p++;
+   211					}
+   212					goto j1;
+   213				}
+   214			}
+   215			else
+   216				putch(*p);
+   217		}
+   218	}
 
 
 *** local symbol table ***
 
 p_         =000018    -    Auto        Pointer to Char
 ...        =000020    -    Auto        Long
-j1_        =00003c    -    Label
+j1_        =000043    -    Label
 q_         =fffffff8    -    Auto        Pointer to Long
 fmtwidth_  =fffffff0    -    Auto        Long
 maxwidth_  =ffffffe8    -    Auto        Long
 wd_        =ffffffe0    -    Auto        Long
-padchar_   =ffffffde    -    Auto        Char
+v_         =ffffffd8    -    Auto        union tagval_ 
+padchar_   =ffffffd6    -    Auto        Char
 
 
 
 
  *** global scope typedef symbol table ***
 
-putnum_    =000000    -    Global      Function returning 
-putstr_    =000000    -    Global      Function returning Long
-getchar_   =000000    -    Global      Function returning Long
-putstr2_   =000000    -    Global      Function returning 
+putnum_    =000008    -    Global      Function returning 
+putstr_    =000008    -    Global      Function returning Long
+uval_      =000000    1   union tagval_ 
+getchar_   =000008    -    Global      Function returning Long
+putstr2_   =000008    -    Global      Function returning 
 isdigit_   =000000    -    External    Function returning Long
-puthexnum_ =000000    -    Global      Function returning 
-putch_     =000000    -    Global      Function returning 
-getcharNoWait_ =000000    -    Global      Function returning Long
-printf_    =000000    -    Global      Function returning Long
+puthexnum_ =000008    -    Global      Function returning 
+putch_     =000008    -    Global      Function returning 
+getcharNoWait_ =000008    -    Global      Function returning Long
+prtdbl_    =000000    -    External    Function returning Long
+printf_    =000008    -    Global      Function returning Long
 
  *** structures and unions ***
 
+tagval_    =000000    -    Type        union tagval_ 
+    i_         =000000    -    Member      Long
+    d_         =000000    -    Member      Double

@@ -35,8 +35,10 @@ typedef struct _tagJCB align(2048)
     __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -79,6 +81,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {
@@ -152,7 +155,7 @@ pascal void SetBound49(JCB *ps, JCB *pe, int algn);
 pascal void SetBound50(MBX *ps, MBX *pe, int algn);
 pascal void SetBound51(MSG *ps, MSG *pe, int algn);
 
-void set_vector(unsigned int, unsigned int);
+pascal void set_vector(unsigned int, unsigned int);
 int getCPU();
 int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);
@@ -185,8 +188,12 @@ void SetCurrAttr(short int attr)
      GetJCBPtr()->NormAttr = attr & 0xFFFFFC00;
 }
 
-void SetVideoReg(int regno, int val)
+static pascal void SetVideoReg(int regno, int val)
 {
+     if (regno < 0 or regno > 11) {
+         printf("bad video regno: %d", regno);
+         return;
+     }
      asm {
          lw   r1,24[bp]
          lw   r2,32[bp]

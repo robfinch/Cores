@@ -6,7 +6,7 @@ clsKeyboard::clsKeyboard(void)
 {
 	scancode = 0;
 	status = 0;
-	sp = sizeof(stack);
+	head = tail = 0;
 }
 
 

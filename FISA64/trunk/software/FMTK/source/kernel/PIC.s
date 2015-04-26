@@ -6,7 +6,7 @@ public code GetVBR_:
 	      	mov  	bp,sp
 	      	     	        mfspr r1,vbr
     
-PIC_1:
+PIC_2:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	rtl  	#16
@@ -16,26 +16,26 @@ public code set_vector_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#PIC_2
+	      	ldi  	xlr,#PIC_3
 	      	mov  	bp,sp
 	      	lw   	r3,24[bp]
 	      	cmpu 	r4,r3,#511
-	      	ble  	r4,PIC_3
-PIC_5:
+	      	ble  	r4,PIC_5
+PIC_7:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
-	      	rtl  	#0
-PIC_3:
+	      	rtl  	#16
+PIC_5:
 	      	lw   	r3,32[bp]
-	      	beq  	r3,PIC_8
+	      	beq  	r3,PIC_10
 	      	lw   	r4,32[bp]
 	      	and  	r3,r4,#3
-	      	beq  	r3,PIC_6
+	      	beq  	r3,PIC_8
+PIC_10:
+	      	bra  	PIC_7
 PIC_8:
-	      	bra  	PIC_5
-PIC_6:
 	      	lw   	r4,24[bp]
 	      	asli 	r3,r4,#3
 	      	push 	r3
@@ -44,18 +44,18 @@ PIC_6:
 	      	mov  	r4,r1
 	      	lw   	r5,32[bp]
 	      	sw   	r5,0[r4+r3]
-	      	bra  	PIC_5
-PIC_2:
+	      	bra  	PIC_7
+PIC_3:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	PIC_5
+	      	bra  	PIC_7
 endpublic
 
 public code InitPIC_:
 	      	push 	lr
 	      	push 	xlr
 	      	push 	bp
-	      	ldi  	xlr,#PIC_9
+	      	ldi  	xlr,#PIC_11
 	      	mov  	bp,sp
 	      	push 	#12
 	      	push 	#4292612048
@@ -63,28 +63,28 @@ public code InitPIC_:
 	      	addui	sp,sp,#16
 	      	bsr  	getCPU_
 	      	mov  	r3,r1
-	      	bne  	r3,PIC_10
+	      	bne  	r3,PIC_13
 	      	push 	#32783
 	      	push 	#4292612036
 	      	bsr  	outh_
 	      	addui	sp,sp,#16
-	      	bra  	PIC_11
-PIC_10:
+	      	bra  	PIC_14
+PIC_13:
 	      	push 	#11
 	      	push 	#4292612036
 	      	bsr  	outh_
 	      	addui	sp,sp,#16
-PIC_11:
-PIC_12:
+PIC_14:
+PIC_15:
 	      	mov  	sp,bp
 	      	pop  	bp
 	      	pop  	xlr
 	      	pop  	lr
 	      	rtl  	#0
-PIC_9:
+PIC_11:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
-	      	bra  	PIC_12
+	      	bra  	PIC_15
 endpublic
 
 	rodata

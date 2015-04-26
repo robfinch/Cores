@@ -374,10 +374,10 @@ CPU1_Start:
 .0001:
     nop
     nop
-	lw      r1,FMTK_Inited_
-	cmpu    r1,r1,#$12345678
-	bne     r1,.0001
-	bsr     FMTKInitialize_       ;  Initialize for CPU #1
+;	lw      r1,FMTK_Inited_
+;	cmpu    r1,r1,#$12345678
+;	bne     r1,.0001
+;	bsr     FMTKInitialize_       ;  Initialize for CPU #1
 .0003:
     cli
     inc     $30000
@@ -393,8 +393,10 @@ CPU0_Start:
     ; First thing to do is set the stack pointer. The stack for task #0 is
     ; used.
 	ldi     sp,#stacks_+8192-8
+	ldi     r26,#0                ; set global pointer to zero
     ldi     r1,#1                 ; indicate we booted
     sc      r1,LEDS
+
 
     ldi     r1,#$30000
 .zap_loop:
@@ -424,6 +426,18 @@ CPU0_Start:
 	bsr		SetupIntVectors
     ldi     r1,#12
     sc      r1,LEDS
+    
+    ldi     r1,#1          ; system is a member of memory group #1
+    mtspr   42,r1
+
+    ; Initialize the memory allocation system
+;    push    #0
+;    push    #0
+;    push    #0
+;    bsr     sys_alloc_
+
+    ldi     r1,#14
+    sc      r1,LEDS
 
 	bsr     FMTKInitialize_
     ldi     r1,#15
@@ -436,6 +450,8 @@ CPU0_Start:
 	sw      r1,API_sema
 	bsr     UnlockBIOS
 	bsr     UnlockVideoBIOS
+    ldi     r1,#21
+    sc      r1,LEDS
 	ldi		r1,#%000000100_110101110_0000000000
 	sb		r1,KeybdEcho
 	sb		r0,KeybdBad
@@ -490,7 +506,7 @@ CPU0_Start:
 	ldi     r2,#0                ; cpu affinity
 	ldi     r3,#BIOSCallTask|1   ; start address (start in kernel mode)
 	ldi     r4,#0                ; start parameter
-	ldi     r5,#jcbs_             ; owning job
+	ldi     r5,#0                ; owning job
 ;	sys     #FMTK_CALL
 ;	dh      1                    ; start task function
     ldi     r1,#25
@@ -498,6 +514,7 @@ CPU0_Start:
     bsr     DumpTaskList_
     ldi     r1,#26
     sc      r1,LEDS
+    bsr     sd_controller_init_
 	bra		Monitor
 
 ;==============================================================================
@@ -505,14 +522,26 @@ CPU0_Start:
 
 SerialStartMsg:
     push    lr
-	ldi     r1,#SerialPutChar
-	sw      r1,OutputVec
 	ldi     r1,#msgStart
-	bsr     DisplayStringCRLF_
-	ldi		r1,#DisplayChar_
-	sw		r1,OutputVec
+	bsr     SerialString
+	ldi     r1,#CR
+	bsr     SerialPutChar
+	ldi     r1,#LF
+	bsr     SerialPutChar
     rts
- 
+
+SerialString:
+    push    lr
+    mov     r2,r1
+.again:
+    lc      r1,[r2]
+    beq     r1,.done
+    bsr     SerialPutChar
+    addui   r2,r2,#2
+    bra     .again
+.done:
+    rts
+    
 SetupIntVectors:
 	mtspr   vbr,r0               ; place vector table at $0000
 	nop
@@ -699,17 +728,23 @@ LockBIOS:
     push    lr
     push    r1
     push    r2
-    ldi     r2,#-1       ; try forever
-    lea     r1,BIOS_sema
-    bsr     _LockSema    ; call library routine
+    push    r3
+    push    #-1       ; try forever
+    pea     BIOS_sema
+    bsr     LockSemaphore_    ; call library routine
+    pop     r3
     pop     r2
     pop     r1
     rts
 UnlockBIOS:
     push    lr
     push    r1
-    lea     r1,BIOS_sema
-    bsr     _UnlockSema
+    push    r2
+    push    r3
+    pea     BIOS_sema
+    bsr     UnlockSemaphore_
+    pop     r3
+    pop     r2
     pop     r1
     rts
 
@@ -923,7 +958,8 @@ GetSystemTime:
 	dc	0
 msgStart:
 	dc	"FISA64 test system starting.",0
-
+msgBytes:
+    dc  "\r\n%d bytes allocated to system.\r\n",0
 
 ; ============================================================================
 ; Monitor Task
@@ -936,9 +972,17 @@ Monitor:
 	sb		r0,KeybdEcho
 	ldi     r1,#jcbs_
 ;	sb      r0,JCB_KeybdEcho[r1]
+    lea     r28,MonAbort            ; point catch handler back to monitor
+    lw      r1,syspages_
+    asli    r1,r1,#16
+    push    r1
+    pea     msgBytes
+    bsr     printf_
+    addui   sp,sp,#16
 mon1:
 ;	ldi		sp,#TCBs+TCB_Size-8		; reload the stack pointer, it may have been trashed
 	ldi		sp,#MON_STACK
+    lea     r28,MonAbort
 	cli
 .PromptLn:
 	bsr		CRLF_
@@ -1000,7 +1044,16 @@ MonGetch:
 	pop     r3
 	pop     lr
 	rtl
+	
+MonAbort:
+    pea     msgCtrlC
+    bsr     DisplayString_
+    addui   sp,sp,#8
+    bra     mon1
 
+msgCtrlC:
+    dc      "CTRL-C  pressed",CR,LF,0
+    align   4
 ;------------------------------------------------------------------------------
 ; Ignore blanks in the input
 ; r3 = text pointer
@@ -1825,9 +1878,12 @@ include "..\FMTK\source\kernel\LockSemaphore.s"
 include "..\FMTK\source\kernel\UnlockSemaphore.s"
 include "..\FMTK\source\kernel\Semaphore.s"
 include "..\FMTK\source\kernel\IOFocusc.s"
+include "..\FMTK\source\shell.s"
+include "..\FMTK\source\memmgnt.s"
 include "..\c64libc\source\stdio.s"
 include "..\c64libc\source\string.s"
 include "..\c64libc\source\ctype.s"
+include "..\c64libc\source\prtdbl.s"
 include "..\c64libc\source\FISA64\getCPU.s"
 include "..\c64libc\source\FISA64\outb.s"
 include "..\c64libc\source\FISA64\outc.s"
@@ -1835,9 +1891,11 @@ include "..\c64libc\source\FISA64\outh.s"
 include "..\c64libc\source\FISA64\outw.s"
 include "..\c64libc\source\FISA64\_LockSema.s"
 include "..\c64libc\source\FISA64\_UnlockSema.s"
+include "sd_controller.s"
 include "disassem.s"
 include "debugger.s"
 include "ramtest.s"
+include "highest_data_word.s"
 message "hit end"
     nop
     nop

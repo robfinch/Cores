@@ -64,7 +64,7 @@ int expect(int tk)
 {
     if (tk != token) {
         if (tk==tk_comma)
-            printf("Expecting a ,\r\n");
+            printf("%d Expecting a ,\r\n", lineno);
     }
     NextToken();
 }
@@ -1023,7 +1023,7 @@ int NextToken()
              }
              break;
 
-        // lb lbu lc lcu lh lhu lw ldi lea lsr lsri lwar
+        // lb lbu lc lcu lh lhu lw ldi lea lsr lsri lwar lfd
         case 'l':
         case 'L':
             if ((inptr[1]=='b' || inptr[1]=='B') && isspace(inptr[2])) {
@@ -1073,6 +1073,10 @@ int NextToken()
             if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='r' || inptr[2]=='R') && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_lsr;
+            }
+            if ((inptr[1]=='f' || inptr[1]=='F') && (inptr[2]=='d' || inptr[2]=='D') && isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_lfd;
             }
             if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='a' || inptr[2]=='A') && (inptr[3]=='r' || inptr[3]=='R') && isspace(inptr[4])) {
                 inptr += 4;
@@ -1164,6 +1168,24 @@ int NextToken()
                 isspace(inptr[7])) {
                 inptr += 7;
                 return token = tk_message;
+            }
+            if ((inptr[1]=='v' || inptr[1]=='V') &&
+                (inptr[2]=='2' || inptr[2]=='2') &&
+                (inptr[3]=='f' || inptr[3]=='F') &&
+                (inptr[4]=='l' || inptr[4]=='L') &&
+                (inptr[5]=='t' || inptr[5]=='T') &&
+                isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_mv2flt;
+            }
+            if ((inptr[1]=='v' || inptr[1]=='V') &&
+                (inptr[2]=='2' || inptr[2]=='2') &&
+                (inptr[3]=='f' || inptr[3]=='F') &&
+                (inptr[4]=='i' || inptr[4]=='I') &&
+                (inptr[5]=='x' || inptr[5]=='X') &&
+                isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_mv2fix;
             }
             break;
 
@@ -1294,7 +1316,7 @@ int NextToken()
         
         // sb sc sh sw sxb sxc sxh sub subi subu subui shl shli shr shru shrui sei smr ss:
         // seq seqi sne snei sge sgei sgt sgti slt slti sle slei sgeu sgeui sgtu sgtui sltu sltui sleu sleui
-        // swcr
+        // swcr sfd
         case 's': case 'S':
             if ((inptr[1]=='w' || inptr[1]=='W') && isspace(inptr[2])) {
                 inptr += 2;
@@ -1331,6 +1353,10 @@ int NextToken()
             if ((inptr[1]=='u' || inptr[1]=='U') && (inptr[2]=='b' || inptr[2]=='B') && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_sub;
+            }
+            if ((inptr[1]=='f' || inptr[1]=='F') && (inptr[2]=='d' || inptr[2]=='D') && isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_sfd;
             }
             if ((inptr[1]=='h' || inptr[1]=='H') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
                 inptr += 4;

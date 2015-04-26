@@ -1,0 +1,226 @@
+     1	// ============================================================================
+     2	//        __
+     3	//   \\__/ o\    (C) 2015  Robert Finch, Stratford
+     4	//    \  __ /    All rights reserved.
+     5	//     \/_//     robfinch<remove>@finitron.ca
+     6	//       ||
+     7	//
+     8	// prtdbl.c
+     9	// Print a string representation of a double.
+    10	//
+    11	// This source file is free software: you can redistribute it and/or modify 
+    12	// it under the terms of the GNU Lesser General Public License as published 
+    13	// by the Free Software Foundation, either version 3 of the License, or     
+    14	// (at your option) any later version.                                      
+    15	//                                                                          
+    16	// This source file is distributed in the hope that it will be useful,      
+    17	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+    18	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+    19	// GNU General Public License for more details.                             
+    20	//                                                                          
+    21	// You should have received a copy of the GNU General Public License        
+    22	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+    23	//                                                                          
+    24	// ============================================================================
+    25	//
+    26	extern pascal void putchar(char ch);
+    27	extern pascal int putstr(char *p, int maxchars);
+    28	
+    29	// Put a string representation of a double into a char buffer.
+    30	// Buffer must be at least 30 characters in size and at least width characters
+    31	// in size.
+    32	
+    33	pascal int sprtdbl(char *buf, double dbl, int width, int precision, char E)
+    34	{
+    35	    int ndx;
+    36	    int exp, expcnt;
+    37	    int digit;
+    38	    int nn;
+    39	    int digits_before_decpt;
+    40	
+    41	    ndx = 0;
+    42	    if (dbl < 0.0) {
+    43	        dbl = -dbl;
+    44	        buf[0] = '-';
+    45	        ndx++;
+    46	    }
+    47	    if (dbl==0.0) {
+    48	        buf[ndx]='0';
+    49	        ndx++;
+    50	        buf[ndx]='\0';
+    51	        return;
+    52	    }
+    53	    exp = 0;
+    54	    while (dbl < 1.0) {
+    55	        dbl *= 1000000.0;
+    56	        exp -= 6;  
+    57	    }
+    58	    while (dbl > 100000.0) {
+    59	        dbl /= 10.0;
+    60	        exp++;  
+    61	    }
+    62	    while (dbl < 100000.0) {
+    63	        dbl *= 10.0;
+    64	        exp--;
+    65	    }
+    66	    digits_before_decpt = 1;
+    67	    expcnt = exp+7;
+    68	    if (exp+7 >= 0 && exp+7 < 8) {
+    69	        digits_before_decpt = exp+7;
+    70	        digits_before_decpt--;
+    71	        expcnt = 2;
+    72	    }
+    73	j1:;
+    74	    expcnt -= 2;
+    75	    exp = digits_before_decpt;
+    76	    if (exp <= 0) {
+    77	        buf[ndx] = '.';
+    78	        ndx++;
+    79	        if (exp < 0) {
+    80	           buf[ndx] = '0';
+    81	           ndx++;
+    82	        }
+    83	    }
+    84	    for (nn = 0; nn < 16 && precision > 0; nn++) {
+    85	        digit = 0;
+    86	        while (dbl > 100000.0) {
+    87	            dbl -= 100000.0;
+    88	            digit++;
+    89	        }
+    90	        buf[ndx] = digit + '0';
+    91	        ndx++;
+    92	        exp--;
+    93	        if (exp==0) {
+    94	           buf[ndx] = '.';
+    95	           ndx++;
+    96	        }
+    97	        else if (exp < 0)
+    98	            precision--;
+    99	        dbl *= 10.0;
+   100	    }
+   101	    do {
+   102	        ndx--;
+   103	    } while(buf[ndx]=='0');
+   104	    ndx++;
+   105	    if (expcnt==0) {
+   106	        buf[ndx]='\0';
+   107	        goto prt;
+   108	    }
+   109	    buf[ndx] = E;
+   110	    ndx++;
+   111	    if (expcnt < 0) {
+   112	        buf[ndx]='-';
+   113	        ndx++;
+   114	        expcnt = -expcnt;
+   115	    }
+   116	    else {
+   117	         buf[ndx]='+';
+   118	         ndx++;
+   119	    }
+   120	    digit = 0;
+   121	    while (expcnt > 1000) {
+   122	        expcnt -= 1000;
+   123	        digit++;
+   124	    }
+   125	    buf[ndx] = digit + '0';
+   126	    ndx++;
+   127	    digit = 0;
+   128	    while (expcnt > 100) {
+   129	        expcnt -= 100;
+   130	        digit++;
+   131	    }
+   132	    buf[ndx] = digit + '0';
+   133	    ndx++;
+   134	    digit = 0;
+   135	    while (expcnt > 10) {
+   136	        expcnt -= 10;
+   137	        digit++;
+   138	    }
+   139	    buf[ndx] = digit + '0';
+   140	    ndx++;
+   141	    digit = 0;
+   142	    while (expcnt > 0) {
+   143	        expcnt -= 1;
+   144	        digit++;
+   145	    }
+   146	    buf[ndx] = digit + '0';
+   147	    ndx++;
+   148	    buf[ndx] = '\0';
+   149	prt:;
+   150	    // pad left
+   151	    if (width > 0) {
+   152	        if (ndx < width) {
+   153	            for (nn = 29; nn >= width-ndx; nn--)
+   154	                buf[nn] = buf[nn-(width-ndx)];
+   155	            for (; nn >= 0; nn--)
+   156	                buf[nn] = ' ';
+   157	        }
+   158	    }
+   159	    // pad right
+   160	    if (width < 0) {
+   161	        width = -width;
+   162	        while (ndx < width) {
+   163	            buf[ndx]=' ';
+   164	            ndx++;
+   165	        }
+   166	        buf[ndx]='\0';
+   167	    }
+   168	    return ndx;
+   169	}
+   170	
+
+
+*** local symbol table ***
+
+buf_       =000018    -    Auto        Pointer to Char
+dbl_       =000020    -    Auto        Double
+width_     =000028    -    Auto        Long
+precision_ =000030    -    Auto        Long
+E_         =000038    -    Auto        Char
+j1_        =000000    -    Label
+prt_       =000001    -    Label
+ndx_       =fffffff8    -    Auto        Long
+exp_       =fffffff0    -    Auto        Long
+expcnt_    =ffffffe8    -    Auto        Long
+digit_     =ffffffe0    -    Auto        Long
+nn_        =ffffffd8    -    Auto        Long
+digits_before_decpt_ =ffffffd0    -    Auto        Long
+
+
+
+   171	pascal int prtdbl(double dbl, int width, int precision, char E)
+   172	{
+   173	    static char buf[200];
+   174	    int nn;
+   175	
+   176	    if (width > 199)
+   177	       width = 199;
+   178	    if (width < -199)
+   179	       width = -199;
+   180	    nn = sprtdbl(buf, dbl, width, precision, E);
+   181	    putstr(buf,width);
+   182	    return nn;
+   183	}
+
+
+*** local symbol table ***
+
+dbl_       =000018    -    Auto        Double
+width_     =000020    -    Auto        Long
+precision_ =000028    -    Auto        Long
+E_         =000030    -    Auto        Char
+buf_       =00003a    -    Static      Array of Char
+nn_        =fffffff8    -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+putstr_    =000000    -    External    Function returning Long
+putchar_   =000000    -    External    Function returning 
+sprtdbl_   =000000    -    Global      Function returning Long
+prtdbl_    =000000    -    Global      Function returning Long
+
+ *** structures and unions ***
+

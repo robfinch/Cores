@@ -37,8 +37,10 @@ typedef struct _tagJCB align(2048)
     __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -81,6 +83,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {

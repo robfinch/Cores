@@ -69,7 +69,8 @@ extern uint8_t binfile[10000000];
 extern int binndx;
 extern int binstart;
 extern NameTable nmTable;
-
+extern int num_bytes;
+extern int num_insns;
 
 extern int64_t expr();
 void Table888_processMaster();

@@ -7,9 +7,16 @@ class clsSystem;
 // Currently unaligned memory access is not supported.
 // Made more complicated by the fact it's a 64 bit machine.
 
+typedef	union tag_opval {
+	__int64 ai;
+	double ad;
+} opval;
+
 class clsCPU
 {
+	opval opera,operb,operc;
 	__int64 a, b, c, res, imm, sp_res;
+	opval dres;
 	unsigned __int64 ua, ub;
 	int sir;
 	bool StatusHWI;
@@ -23,6 +30,7 @@ class clsCPU
 	char hasPrefix;
 	int immcnt;
 	unsigned int opcode;
+	unsigned int func;
 	int i1;
 	int nn;
 	unsigned int bmask;
@@ -32,6 +40,7 @@ public:
 	char brk;
 	unsigned int ir, xir, wir;
 	unsigned __int64 regs[32];
+	double dregs[32];
 	unsigned int pc;
 	unsigned int pcs[40];
 	unsigned int dpc;
@@ -52,6 +61,7 @@ public:
 	bool irq;
 	bool nmi;
 	char im;
+	int imcd;
 	volatile short int vecno;
 	short int rvecno;			// registered vector number
 	unsigned __int64 cr0;

@@ -25,6 +25,7 @@ extern int iof_switch;
 extern int BIOS1_sema;
 extern int iof_sema;
 extern int sys_sema;
+extern int kbd_sema;
 extern int BIOS_RespMbx;
 extern char hasUltraHighPriorityTasks;
 extern int missed_ticks;

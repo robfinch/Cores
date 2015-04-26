@@ -30,6 +30,9 @@
 #include "Statement.h"
 #include "gen.h"
 #include "cglbdec.h"
+
+extern int catchdecl;
+
 /*
  *	68000 C compiler
  *
@@ -151,6 +154,7 @@ int InitializeType(TYP *tp)
 			else
 				nbytes = InitializePointer();
             break;
+    case bt_exception:
 	case bt_ulong:
     case bt_long:
             nbytes = initlong();
@@ -318,7 +322,11 @@ int InitializePointer()
 
 void endinit()
 {    
-	if( lastst != comma && lastst != semicolon && lastst != end) {
+    if (catchdecl) {
+        if (lastst!=closepa)
+        		error(ERR_PUNCT);
+    }
+    else if( lastst != comma && lastst != semicolon && lastst != end) {
 		error(ERR_PUNCT);
 		while( lastst != comma && lastst != semicolon && lastst != end)
             NextToken();

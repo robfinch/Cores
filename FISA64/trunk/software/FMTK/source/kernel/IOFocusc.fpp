@@ -35,8 +35,10 @@ typedef struct _tagJCB align(2048)
     __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -79,6 +81,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {
@@ -152,7 +155,7 @@ pascal void SetBound49(JCB *ps, JCB *pe, int algn);
 pascal void SetBound50(MBX *ps, MBX *pe, int algn);
 pascal void SetBound51(MSG *ps, MSG *pe, int algn);
 
-void set_vector(unsigned int, unsigned int);
+pascal void set_vector(unsigned int, unsigned int);
 int getCPU();
 int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);
@@ -167,11 +170,12 @@ pascal void UnlockSemaphore(int *sema);
 
 extern JCB *IOFocusNdx;
 extern int IOFocusTbl[4];
+extern int iof_sema;
 
 void ForceIOFocus(JCB *j)
 {
     RequestIOFocus(j);   // In case it isn't requested yet.
-    LockIOF();
+     if (LockSemaphore(&iof_sema,-1)) {
         if (j != IOFocusNdx) {
             CopyScreenToVirtualScreen();
             j->pVidMem = j->pVirtVidMem;
@@ -179,8 +183,10 @@ void ForceIOFocus(JCB *j)
             j->pVidMem = 0xFFD00000;
             CopyVirtualScreenToScreen();
         }
-    UnlockIOF();
+        UnlockSemaphore(&iof_sema);
+     }
 }
+
 
 // First check if it's even possible to switch the focus to another
 // task. The I/O focus list could be empty or there may be only a
@@ -190,7 +196,7 @@ void SwitchIOFocus()
 {
      JCB *j, *p;
 
-     LockIOF();
+     if (LockSemaphore(&iof_sema,-1)) {
          j = IOFocusNdx;
          if (j) {
              p = IOFocusNdx->iof_next;
@@ -204,7 +210,8 @@ void SwitchIOFocus()
                  }
              }
          }
-     UnlockIOF();
+        UnlockSemaphore(&iof_sema);
+     }
 }
 
 //-----------------------------------------------------------------------------
@@ -219,7 +226,7 @@ void RequestIOFocus(JCB *j)
      int stat;
 
      nj = j->number;
-     LockIOF();
+     if (LockSemaphore(&iof_sema,-1)) {
         stat = (IOFocusTbl[0] >> nj) & 1;
         if (!stat) {
            if (IOFocusNdx==null) {
@@ -235,7 +242,8 @@ void RequestIOFocus(JCB *j)
            }
            IOFocusTbl[0] |= (1 << nj);
         }
-     UnlockIOF();
+        UnlockSemaphore(&iof_sema);
+     }
 }
         
 //-----------------------------------------------------------------------------
@@ -257,7 +265,7 @@ void ForceReleaseIOFocus(JCB * j)
 {
      JCB *p;
      
-     LockIOF();
+     if (LockSemaphore(&iof_sema,-1)) {
          if (IOFocusTbl[0] & (1 << (int)j->number)) {
              IOFocusTbl[0] &= ~(1 << j->number);
              if (j == IOFocusNdx)
@@ -275,7 +283,8 @@ void ForceReleaseIOFocus(JCB * j)
                   j->iof_prev = null;
              }
          }
-     UnlockIOF();
+        UnlockSemaphore(&iof_sema);
+     }
 }
 
 void CopyVirtualScreenToScreen()
@@ -307,3 +316,4 @@ void CopyScreenToVirtualScreen()
      for (; nn >= 0; nn--)
          q[nn] = p[nn];
 }
+

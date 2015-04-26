@@ -222,6 +222,7 @@ void GenerateTempBrRegPop(int reg, int rmode, int number)
 void initstack()
 {
 	initRegStack();
+	initFPRegStack();
 }
 
 AMODE *GetTempRegister()
@@ -654,4 +655,11 @@ void ReleaseTempRegister(AMODE *ap)
 		PushOnRstk(ap->preg);
 }
 */
+void ReleaseTempReg(AMODE *ap)
+{
+     if (ap->mode==am_fpreg)
+         ReleaseTempFPRegister(ap);
+     else
+         ReleaseTempRegister(ap);
+}
 

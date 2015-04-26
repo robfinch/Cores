@@ -53,7 +53,7 @@ TYP             *head = (TYP *)NULL;
 TYP             *tail = (TYP *)NULL;
 char            *declid = (char *)NULL;
 TABLE           tagtable = {(SYM *)0,(SYM *)0};
-TYP             stdconst = { bt_long, bt_long, 1, FALSE, FALSE, FALSE, FALSE, 0, 0, 8, {0, 0}, 0, "stdconst"};
+TYP             stdconst = { bt_long, bt_long, 1, FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0, 8, {0, 0}, 0, "stdconst"};
 char *names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
@@ -243,6 +243,10 @@ int ParseSpecifier(TABLE *table)
 						head = tail = maketype(bt_long,8);
 				}
 				//NextToken();
+				if (lastst==kw_task) {
+				    isTask = TRUE;
+				    NextToken();
+                }
 				if (lastst==kw_oscall) {
 					isOscall = TRUE;
 					NextToken();
@@ -266,16 +270,25 @@ int ParseSpecifier(TABLE *table)
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
 				NextToken();
+				if (lastst==kw_task) {
+				    isTask = TRUE;
+				    NextToken();
+                }
 				if (lastst==kw_oscall) {
 					isOscall = TRUE;
 					NextToken();
 				}
-				if (lastst==kw_nocall || lastst==kw_naked) {
+				else if (lastst==kw_nocall || lastst==kw_naked) {
 					isNocall = TRUE;
 					NextToken();
 				}
 				bit_max = 64;
 				goto lxit;
+				break;
+
+            case kw_task:
+                isTask = TRUE;
+                NextToken();
 				break;
 
 			case kw_int8:
@@ -384,6 +397,13 @@ int ParseSpecifier(TABLE *table)
 				NextToken();
 				if (ParseStructDeclaration(bt_union))
 					return 1;
+				goto lxit;
+
+            case kw_exception:
+				head = tail = maketype(bt_exception,8);
+				head->isVolatile = isVolatile;
+				NextToken();
+				bit_max = 64;
 				goto lxit;
 
 			default:
@@ -887,6 +907,7 @@ void ParseGlobalDeclarations()
 		case ellipsis:
 		case id:
 		case kw_interrupt:
+        case kw_task:
 		case kw_cdecl:
 		case kw_pascal:
 		case kw_naked:
@@ -894,6 +915,7 @@ void ParseGlobalDeclarations()
 		case kw_oscall:
 		case kw_typedef:
 		case kw_volatile: case kw_const:
+        case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union:
@@ -957,6 +979,7 @@ void ParseParameterDeclarations(int fd)
 		case ellipsis:
 		case id:
 		case kw_volatile: case kw_const:
+        case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union:
@@ -1026,6 +1049,7 @@ void ParseAutoDeclarations(TABLE *ssyms)
 				return;
         case kw_register:
                 NextToken();
+        case kw_exception:
 		case kw_volatile: case kw_const:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:

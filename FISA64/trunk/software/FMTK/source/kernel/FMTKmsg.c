@@ -417,7 +417,7 @@ public int FMTK_WaitMsg(hMBX hMbx, int *d1, int *d2, int *d3, int timelimit)
 		//-----------------------
 		thrd->status |= TS_WAITMSG;
 		thrd->hWaitMbx = hMbx;
-		thrd->mbq_next = null;
+		thrd->mbq_next = -1;
     	if (LockSemaphore(&sys_sema,-1)) {
 			if (mbx->tq_head < 0) {
 				thrd->mbq_prev = -1;
@@ -436,6 +436,7 @@ public int FMTK_WaitMsg(hMBX hMbx, int *d1, int *d2, int *d3, int timelimit)
 		//---------------------------
 		// Is a timeout specified ?
 		if (timelimit) {
+            asm { ; Waitmsg here; }
         	if (LockSemaphore(&sys_sema,-1)) {
         	    InsertIntoTimeoutList(thrd-tcbs, timelimit);
         	    UnlockSemaphore(&sys_sema);

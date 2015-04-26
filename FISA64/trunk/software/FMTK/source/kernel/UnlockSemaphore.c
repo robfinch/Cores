@@ -5,8 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// TCB.c
-// Task Control Block related functions.
+// UnlockSemaphore.c
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -37,8 +36,7 @@ pascal void UnlockSemaphore(int *sema)
         ; must have interceded amd locked the semaphore right after it was unlocked
         ; by this task. Make sure this is the case, and it's not just bad memory.
         ; Make sure the semaphore was locked by a valid task
-        chk     r3,r2,b48
-        beq     r3,.0001
+        ;chk     r2,r0,#256
         ; Here the semaphore probably was validly locked by a different task.
         ; Assume the unlock must have been successful.
     .0002:

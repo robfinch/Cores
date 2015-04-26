@@ -95,16 +95,18 @@ struct oplst {
 		{"lwr", op_lwr}, {"swc", op_swc}, {"cache",op_cache},
 		{"or",op_or}, {"ori",op_ori}, {"iret", op_iret}, {"andi", op_andi},
 		{"xor",op_xor}, {"xori", op_xori}, {"mul",op_mul}, {"muli", op_muli}, {"mului", op_mului}, 
-		{"fdmul", op_fdmul}, {"fddiv", op_fddiv}, {"fdadd", op_fdadd}, {"fdsub", op_fdsub},
-		{"fsmul", op_fsmul}, {"fsdiv", op_fsdiv}, {"fsadd", op_fsadd}, {"fssub", op_fssub},
-		{"fs2d", op_fs2d}, {"fi2d", op_i2d},
+		
+		{"fmul", op_fdmul}, {"fdiv", op_fddiv}, {"fadd", op_fdadd}, {"fsub", op_fdsub}, {"fcmp", op_fdcmp},
+		{"fmul.s", op_fsmul}, {"fdiv.s", op_fsdiv}, {"fadd.s", op_fsadd}, {"fsub.s", op_fssub},
+		{"fs2d", op_fs2d}, {"fi2d", op_i2d}, {"fneg", op_fdneg}, 
+
 		{"divs",op_divs}, {"swap",op_swap}, {"mod", op_mod}, {"modu", op_modu},
 		{"eq",op_eq}, {"bnei", op_bnei}, {"sei", op_sei},
 		{"ltu", op_ltu}, {"leu",op_leu}, {"gtu",op_gtu}, {"geu", op_geu},
-                {"bhi",op_bhi}, {"bhs",op_bhs}, {"blo",op_blo},
+                {"bhi",op_bhi}, {"bhs",op_bhs}, {"blo",op_blo}, {"bun", op_bun},
                 {"bls",op_bls}, {"mulu",op_mulu}, {"divu",op_divu},
                 {"ne",op_ne}, {"lt",op_lt}, {"le",op_le},
-		{"gt",op_gt}, {"ge",op_ge}, {"neg",op_neg}, {"fdneg", op_fdneg}, {"nr", op_nr},
+		{"gt",op_gt}, {"ge",op_ge}, {"neg",op_neg}, {"nr", op_nr},
 		{"not",op_not}, {"com", op_com}, {"cmp",op_cmp}, {"ext",op_ext}, 
 		{"jmp",op_jmp},
 		{"lea",op_lea}, {"asr",op_asr}, {"asri", op_asri },
@@ -135,7 +137,10 @@ struct oplst {
 		{"cmpu", op_cmpu},
 		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
 		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
-		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri}, {"chk", op_chk },
+		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri}, {"chk", op_chk }, {";", op_rem},
+		{"sfd", op_sfd}, {"lfd", op_lfd}, {"fmov.d", op_fdmov},
+		{"fix2flt", op_fix2flt}, {"mtfp", op_mtfp}, {"flt2fix",op_flt2fix}, {"mffp",op_mffp},
+		{"mv2fix",op_mv2fix}, {"mv2flt", op_mv2flt},
                 {0,0} };
 
 static char *pad(char *op)
@@ -299,6 +304,8 @@ char *RegMoniker(int regno)
     else if (isFISA64) {
         if (regno==regBP)
 		    sprintf(&buf[n][0], "bp");
+        else if (regno==regGP)
+		    sprintf(&buf[n][0], "gp");
 	    else if (regno==regXLR)
 		    sprintf(&buf[n][0], "xlr");
 	    else if (regno==regPC)
@@ -445,6 +452,9 @@ void PutAddressMode(AMODE *ap)
             break;
     case am_reg:
 			fprintf(output, "%s", RegMoniker(ap->preg));
+            break;
+    case am_fpreg:
+            fprintf(output, "fp%d", ap->preg);
             break;
     case am_predreg:
 			fprintf(output, "%s", PredRegMoniker(ap->preg));

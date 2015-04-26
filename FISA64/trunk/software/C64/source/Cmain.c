@@ -160,7 +160,9 @@ int	options(char *s)
              regPC = 29;
              regSP = 30;
              regBP = 27;
+             regGP = 26;
              regXLR = 28;
+             use_gp = TRUE;
         }
 	}
 	else if (s[1]=='w')
@@ -171,6 +173,8 @@ int	options(char *s)
          else
              verbose = 1;
     }
+    else if (s[1]=='S')
+        mixedSource = TRUE;
 	return 0;
 }
 

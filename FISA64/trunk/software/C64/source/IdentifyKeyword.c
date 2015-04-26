@@ -240,7 +240,7 @@ int IdentifyKeyword()
 	}
 
 
-	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check
+	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check,__exception,__task,__unordered
 	if (p[0]=='_' && p[1]=='_') {
 		if (p[2]=='a' && p[3]=='s' && p[4]=='m' && p[5]=='\0')
 			return lastst = kw_asm;
@@ -258,6 +258,12 @@ int IdentifyKeyword()
 		}
 		if (p[2]=='c' && p[3]=='h' && p[4]=='e' && p[5]=='c' && p[6]=='k' && p[7]=='\0')
 			return lastst = kw_check;
+		if (p[2]=='e' && p[3]=='x' && p[4]=='c' && p[5]=='e' && p[6]=='p' && p[7]=='t' && p[8]=='i' && p[9]=='o' && p[10]=='n' && p[11]=='\0')
+			return lastst = kw_exception;
+		if (p[2]=='t' && p[3]=='a' && p[4]=='s' && p[5]=='k' && p[6]=='\0')
+			return lastst = kw_task;
+		if (p[2]=='u' && p[3]=='n' && p[4]=='o' && p[5]=='r' && p[6]=='d' && p[7]=='e' && p[8]=='r' && p[9]=='e' && p[10]=='d' && p[11]=='\0')
+			return lastst = kw_unordered;
 	}
 
 	return 0;

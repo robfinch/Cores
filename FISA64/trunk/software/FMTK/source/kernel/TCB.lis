@@ -61,191 +61,196 @@
     61	     E_NoMoreMsgBlks,
     62	     E_NoMoreAlarmBlks,
     63	     E_NoMoreTCBs,
-    64	     E_NoMem
-    65	};
-    66	
+    64	     E_NoMem,
+    65	     E_TooManyTasks
+    66	};
     67	
-    68	typedef unsigned int uint;
-    69	typedef __int16 hTCB;
-    70	typedef __int8 hJCB;
-    71	typedef __int16 hMBX;
-    72	typedef __int16 hMSG;
-    73	
-    74	typedef struct tagMSG align(32) {
-    75		unsigned __int16 link;
-    76		unsigned __int16 retadr;    // return address
-    77		unsigned __int16 tgtadr;    // target address
-    78		unsigned __int16 type;
-    79		unsigned int d1;            // payload data 1
-    80		unsigned int d2;            // payload data 2
-    81		unsigned int d3;            // payload data 3
-    82	} MSG;
-    83	
-    84	typedef struct _tagJCB align(2048)
-    85	{
-    86	    struct _tagJCB *iof_next;
-    87	    struct _tagJCB *iof_prev;
-    88	    char UserName[32];
-    89	    char path[256];
-    90	    char exitRunFile[256];
-    91	    char commandLine[256];
-    92	    unsigned __int32 *pVidMem;
-    93	    unsigned __int32 *pVirtVidMem;
-    94	    unsigned __int16 VideoRows;
-    95	    unsigned __int16 VideoCols;
-    96	    unsigned __int16 CursorRow;
-    97	    unsigned __int16 CursorCol;
-    98	    unsigned __int32 NormAttr;
-    99	    __int8 KeyState1;
-   100	    __int8 KeyState2;
-   101	    __int8 KeybdWaitFlag;
-   102	    __int8 KeybdHead;
-   103	    __int8 KeybdTail;
-   104	    unsigned __int16 KeybdBuffer[16];
-   105	    hJCB number;
-   106	} JCB;
-   107	
-   108	struct tagMBX;
-   109	
-   110	typedef struct _tagTCB align(1024) {
-   111	    // exception storage area
-   112		int regs[32];
-   113		int isp;
-   114		int dsp;
-   115		int esp;
-   116		int ipc;
-   117		int dpc;
-   118		int epc;
-   119		int cr0;
-   120		// interrupt storage
-   121		int iregs[32];
-   122		int iisp;
-   123		int idsp;
-   124		int iesp;
-   125		int iipc;
-   126		int idpc;
-   127		int iepc;
-   128		int icr0;
-   129		hTCB next;
-   130		hTCB prev;
-   131		hTCB mbq_next;
-   132		hTCB mbq_prev;
-   133		int *sys_stack;
-   134		int *bios_stack;
-   135		int *stack;
-   136		__int64 timeout;
-   137		MSG msg;
-   138		hMBX hMailboxes[4]; // handles of mailboxes owned by task
-   139		hMBX hWaitMbx;      // handle of mailbox task is waiting at
-   140		hTCB number;
-   141		__int8 priority;
-   142		__int8 status;
-   143		__int8 affinity;
-   144		hJCB hJob;
-   145		__int64 startTick;
-   146		__int64 endTick;
-   147		__int64 ticks;
-   148	} TCB;
-   149	
-   150	typedef struct tagMBX align(64) {
-   151	    hMBX link;
-   152		hJCB owner;		// hJcb of owner
-   153		hTCB tq_head;
-   154		hTCB tq_tail;
-   155		hMSG mq_head;
-   156		hMSG mq_tail;
-   157		char mq_strategy;
-   158		byte resv[2];
-   159		uint tq_count;
-   160		uint mq_size;
-   161		uint mq_count;
-   162		uint mq_missed;
-   163	} MBX;
-   164	
-   165	typedef struct tagALARM {
-   166		struct tagALARM *next;
-   167		struct tagALARM *prev;
-   168		MBX *mbx;
-   169		MSG *msg;
-   170		uint BaseTimeout;
-   171		uint timeout;
-   172		uint repeat;
-   173		byte resv[8];		// padding to 64 bytes
-   174	} ALARM;
-   175	
-   176	
-   177	// ============================================================================
-   178	//        __
-   179	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
-   180	//    \  __ /    All rights reserved.
-   181	//     \/_//     robfinch<remove>@finitron.ca
-   182	//       ||
-   183	//
-   184	// TCB.c
-   185	// Task Control Block related functions.
-   186	//
-   187	// This source file is free software: you can redistribute it and/or modify 
-   188	// it under the terms of the GNU Lesser General Public License as published 
-   189	// by the Free Software Foundation, either version 3 of the License, or     
-   190	// (at your option) any later version.                                      
-   191	//                                                                          
-   192	// This source file is distributed in the hope that it will be useful,      
-   193	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-   194	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-   195	// GNU General Public License for more details.                             
-   196	//                                                                          
-   197	// You should have received a copy of the GNU General Public License        
-   198	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-   199	//                                                                          
-   200	// ============================================================================
-   201	//
-   202	// JCB functions
-   203	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
-   204	
-   205	// TCB functions
-   206	TCB *GetRunningTCBPtr();
-   207	hTCB GetRunningTCB();
-   208	pascal void SetRunningTCB(hTCB ht);
-   209	pascal int chkTCB(TCB *p);
-   210	pascal int InsertIntoReadyList(hTCB ht);
-   211	pascal int RemoveFromReadyList(hTCB ht);
-   212	pascal int InsertIntoTimeoutList(hTCB ht, int to);
-   213	pascal int RemoveFromTimeoutList(hTCB ht);
-   214	void DumpTaskList();
-   215	
-   216	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
-   217	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
-   218	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
-   219	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
-   220	
-   221	void set_vector(unsigned int, unsigned int);
-   222	int getCPU();
-   223	int GetVecno();          // get the last interrupt vector number
-   224	void outb(unsigned int, int);
-   225	void outc(unsigned int, int);
-   226	void outh(unsigned int, int);
-   227	void outw(unsigned int, int);
-   228	pascal int LockSemaphore(int *sema, int retries);
-   229	pascal void UnlockSemaphore(int *sema);
-   230	
-   231	// The following causes a privilege violation if called from user mode
-   232	
-   233	
-   234	extern char hasUltraHighPriorityTasks;
-   235	
-   236	TCB tcbs[256];
-   237	hTCB freeTCB;
-   238	hTCB TimeoutList;
-   239	hTCB readyQ[8];
+    68	
+    69	typedef unsigned int uint;
+    70	typedef __int16 hTCB;
+    71	typedef __int8 hJCB;
+    72	typedef __int16 hMBX;
+    73	typedef __int16 hMSG;
+    74	
+    75	typedef struct tagMSG align(32) {
+    76		unsigned __int16 link;
+    77		unsigned __int16 retadr;    // return address
+    78		unsigned __int16 tgtadr;    // target address
+    79		unsigned __int16 type;
+    80		unsigned int d1;            // payload data 1
+    81		unsigned int d2;            // payload data 2
+    82		unsigned int d3;            // payload data 3
+    83	} MSG;
+    84	
+    85	typedef struct _tagJCB align(2048)
+    86	{
+    87	    struct _tagJCB *iof_next;
+    88	    struct _tagJCB *iof_prev;
+    89	    char UserName[32];
+    90	    char path[256];
+    91	    char exitRunFile[256];
+    92	    char commandLine[256];
+    93	    unsigned __int32 *pVidMem;
+    94	    unsigned __int32 *pVirtVidMem;
+    95	    unsigned __int16 VideoRows;
+    96	    unsigned __int16 VideoCols;
+    97	    unsigned __int16 CursorRow;
+    98	    unsigned __int16 CursorCol;
+    99	    unsigned __int32 NormAttr;
+   100	    __int8 KeyState1;
+   101	    __int8 KeyState2;
+   102	    __int8 KeybdWaitFlag;
+   103	    __int8 KeybdHead;
+   104	    __int8 KeybdTail;
+   105	    unsigned __int8 KeybdBuffer[32];
+   106	    hJCB number;
+   107	    hTCB tasks[8];
+   108	    hJCB next;
+   109	} JCB;
+   110	
+   111	struct tagMBX;
+   112	
+   113	typedef struct _tagTCB align(1024) {
+   114	    // exception storage area
+   115		int regs[32];
+   116		int isp;
+   117		int dsp;
+   118		int esp;
+   119		int ipc;
+   120		int dpc;
+   121		int epc;
+   122		int cr0;
+   123		// interrupt storage
+   124		int iregs[32];
+   125		int iisp;
+   126		int idsp;
+   127		int iesp;
+   128		int iipc;
+   129		int idpc;
+   130		int iepc;
+   131		int icr0;
+   132		hTCB next;
+   133		hTCB prev;
+   134		hTCB mbq_next;
+   135		hTCB mbq_prev;
+   136		int *sys_stack;
+   137		int *bios_stack;
+   138		int *stack;
+   139		__int64 timeout;
+   140		MSG msg;
+   141		hMBX hMailboxes[4]; // handles of mailboxes owned by task
+   142		hMBX hWaitMbx;      // handle of mailbox task is waiting at
+   143		hTCB number;
+   144		__int8 priority;
+   145		__int8 status;
+   146		__int8 affinity;
+   147		hJCB hJob;
+   148		__int64 startTick;
+   149		__int64 endTick;
+   150		__int64 ticks;
+   151		int exception;
+   152	} TCB;
+   153	
+   154	typedef struct tagMBX align(64) {
+   155	    hMBX link;
+   156		hJCB owner;		// hJcb of owner
+   157		hTCB tq_head;
+   158		hTCB tq_tail;
+   159		hMSG mq_head;
+   160		hMSG mq_tail;
+   161		char mq_strategy;
+   162		byte resv[2];
+   163		uint tq_count;
+   164		uint mq_size;
+   165		uint mq_count;
+   166		uint mq_missed;
+   167	} MBX;
+   168	
+   169	typedef struct tagALARM {
+   170		struct tagALARM *next;
+   171		struct tagALARM *prev;
+   172		MBX *mbx;
+   173		MSG *msg;
+   174		uint BaseTimeout;
+   175		uint timeout;
+   176		uint repeat;
+   177		byte resv[8];		// padding to 64 bytes
+   178	} ALARM;
+   179	
+   180	
+   181	// ============================================================================
+   182	//        __
+   183	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+   184	//    \  __ /    All rights reserved.
+   185	//     \/_//     robfinch<remove>@finitron.ca
+   186	//       ||
+   187	//
+   188	// TCB.c
+   189	// Task Control Block related functions.
+   190	//
+   191	// This source file is free software: you can redistribute it and/or modify 
+   192	// it under the terms of the GNU Lesser General Public License as published 
+   193	// by the Free Software Foundation, either version 3 of the License, or     
+   194	// (at your option) any later version.                                      
+   195	//                                                                          
+   196	// This source file is distributed in the hope that it will be useful,      
+   197	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+   198	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+   199	// GNU General Public License for more details.                             
+   200	//                                                                          
+   201	// You should have received a copy of the GNU General Public License        
+   202	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   203	//                                                                          
+   204	// ============================================================================
+   205	//
+   206	// JCB functions
+   207	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+   208	
+   209	// TCB functions
+   210	TCB *GetRunningTCBPtr();
+   211	hTCB GetRunningTCB();
+   212	pascal void SetRunningTCB(hTCB ht);
+   213	pascal int chkTCB(TCB *p);
+   214	pascal int InsertIntoReadyList(hTCB ht);
+   215	pascal int RemoveFromReadyList(hTCB ht);
+   216	pascal int InsertIntoTimeoutList(hTCB ht, int to);
+   217	pascal int RemoveFromTimeoutList(hTCB ht);
+   218	void DumpTaskList();
+   219	
+   220	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
+   221	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
+   222	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
+   223	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
+   224	
+   225	pascal void set_vector(unsigned int, unsigned int);
+   226	int getCPU();
+   227	int GetVecno();          // get the last interrupt vector number
+   228	void outb(unsigned int, int);
+   229	void outc(unsigned int, int);
+   230	void outh(unsigned int, int);
+   231	void outw(unsigned int, int);
+   232	pascal int LockSemaphore(int *sema, int retries);
+   233	pascal void UnlockSemaphore(int *sema);
+   234	
+   235	// The following causes a privilege violation if called from user mode
+   236	
+   237	
+   238	extern char hasUltraHighPriorityTasks;
+   239	extern pascal prtdbl(double);
    240	
-   241	pascal int chkTCB(TCB *p)
-   242	{
-   243	    asm {
-   244	        lw    r1,24[bp]
-   245	        chk   r1,r1,b48
-   246	    }
-   247	}
-   248	
+   241	TCB tcbs[256];
+   242	hTCB freeTCB;
+   243	hTCB TimeoutList;
+   244	hTCB readyQ[8];
+   245	
+   246	pascal int chkTCB(TCB *p)
+   247	{
+   248	    asm {
+   249	        lw    r1,24[bp]
+   250	        chk   r1,r1,b48
+   251	    }
+   252	}
+   253	
 
 
 *** local symbol table ***
@@ -254,14 +259,14 @@ p_         =000018    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   249	naked TCB *GetRunningTCBPtr()
-   250	{
-   251	    asm {
-   252	        mov   r1,tr
-   253	        rtl
-   254	    }
-   255	}
-   256	
+   254	naked TCB *GetRunningTCBPtr()
+   255	{
+   256	    asm {
+   257	        mov   r1,tr
+   258	        rtl
+   259	    }
+   260	}
+   261	
 
 
 *** local symbol table ***
@@ -269,15 +274,15 @@ p_         =000018    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   257	naked hTCB GetRunningTCB()
-   258	{
-   259	    asm {
-   260	        subui  r1,tr,#tcbs_
-   261	        lsri   r1,r1,#10
-   262	        rtl
-   263	    }
-   264	}
-   265	
+   262	naked hTCB GetRunningTCB()
+   263	{
+   264	    asm {
+   265	        subui  r1,tr,#tcbs_
+   266	        lsri   r1,r1,#10
+   267	        rtl
+   268	    }
+   269	}
+   270	
 
 
 *** local symbol table ***
@@ -285,18 +290,18 @@ p_         =000018    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   266	pascal void SetRunningTCB(hTCB ht)
-   267	{
-   268	     asm {
-   269	         lw      tr,24[bp]
-   270	         asli    tr,tr,#10
-   271	         addui   tr,tr,#tcbs_
-   272	     }
-   273	}
-   274	
-   275	// ----------------------------------------------------------------------------
-   276	// ----------------------------------------------------------------------------
-   277	
+   271	pascal void SetRunningTCB(hTCB ht)
+   272	{
+   273	     asm {
+   274	         lw      tr,24[bp]
+   275	         asli    tr,tr,#10
+   276	         addui   tr,tr,#tcbs_
+   277	     }
+   278	}
+   279	
+   280	// ----------------------------------------------------------------------------
+   281	// ----------------------------------------------------------------------------
+   282	
 
 
 *** local symbol table ***
@@ -305,38 +310,38 @@ ht_        =000018    -    Auto        Char
 
 
 
-   278	pascal int InsertIntoReadyList(hTCB ht)
-   279	{
-   280	    hTCB hq;
-   281	    TCB *p, *q;
-   282	
-   283	    __check(ht >=0 && ht < 256);
-   284	    p = &tcbs[ht];
-   285		if (p->priority > 077 || p->priority < 000)
-   286			return E_BadPriority;
-   287		if (p->priority < 003)
-   288		   hasUltraHighPriorityTasks |= (1 << p->priority);
-   289		p->status = 16;
-   290		hq = readyQ[p->priority>>3];
-   291		// Ready list empty ?
-   292		if (hq<0) {
-   293			p->next = ht;
-   294			p->prev = ht;
-   295			readyQ[p->priority>>3] = ht;
-   296			return E_Ok;
-   297		}
-   298		// Insert at tail of list
-   299		q = &tcbs[hq];
-   300		p->next = hq;
-   301		p->prev = q->prev;
-   302		tcbs[q->prev].next = ht;
-   303		q->prev = ht;
-   304		return E_Ok;
-   305	}
-   306	
-   307	// ----------------------------------------------------------------------------
-   308	// ----------------------------------------------------------------------------
-   309	
+   283	pascal int InsertIntoReadyList(hTCB ht)
+   284	{
+   285	    hTCB hq;
+   286	    TCB *p, *q;
+   287	
+   288	    __check(ht >=0 && ht < 256);
+   289	    p = &tcbs[ht];
+   290		if (p->priority > 077 || p->priority < 000)
+   291			return E_BadPriority;
+   292		if (p->priority < 003)
+   293		   hasUltraHighPriorityTasks |= (1 << p->priority);
+   294		p->status = 16;
+   295		hq = readyQ[p->priority>>3];
+   296		// Ready list empty ?
+   297		if (hq<0) {
+   298			p->next = ht;
+   299			p->prev = ht;
+   300			readyQ[p->priority>>3] = ht;
+   301			return E_Ok;
+   302		}
+   303		// Insert at tail of list
+   304		q = &tcbs[hq];
+   305		p->next = hq;
+   306		p->prev = q->prev;
+   307		tcbs[q->prev].next = ht;
+   308		q->prev = ht;
+   309		return E_Ok;
+   310	}
+   311	
+   312	// ----------------------------------------------------------------------------
+   313	// ----------------------------------------------------------------------------
+   314	
 
 
 *** local symbol table ***
@@ -348,30 +353,30 @@ q_         =ffffffe8    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   310	pascal int RemoveFromReadyList(hTCB ht)
-   311	{
-   312	    TCB *t;
-   313	
-   314	    __check(ht >=0 && ht < 256);
-   315	    t = &tcbs[ht];
-   316		if (t->priority > 077 || t->priority < 000)
-   317			return E_BadPriority;
-   318	    if (ht==readyQ[t->priority>>3])
-   319	       readyQ[t->priority>>3] = t->next;
-   320	    if (ht==readyQ[t->priority>>3])
-   321	       readyQ[t->priority>>3] = -1;
-   322	    tcbs[t->next].prev = t->prev;
-   323	    tcbs[t->prev].next = t->next;
-   324	    t->next = -1;
-   325	    t->prev = -1;
-   326	    t->status = 0;
-   327	    return E_Ok;
-   328	}
-   329	
-   330	
-   331	// ----------------------------------------------------------------------------
-   332	// ----------------------------------------------------------------------------
-   333	
+   315	pascal int RemoveFromReadyList(hTCB ht)
+   316	{
+   317	    TCB *t;
+   318	
+   319	    __check(ht >=0 && ht < 256);
+   320	    t = &tcbs[ht];
+   321		if (t->priority > 077 || t->priority < 000)
+   322			return E_BadPriority;
+   323	    if (ht==readyQ[t->priority>>3])
+   324	       readyQ[t->priority>>3] = t->next;
+   325	    if (ht==readyQ[t->priority>>3])
+   326	       readyQ[t->priority>>3] = -1;
+   327	    tcbs[t->next].prev = t->prev;
+   328	    tcbs[t->prev].next = t->next;
+   329	    t->next = -1;
+   330	    t->prev = -1;
+   331	    t->status = 0;
+   332	    return E_Ok;
+   333	}
+   334	
+   335	
+   336	// ----------------------------------------------------------------------------
+   337	// ----------------------------------------------------------------------------
+   338	
 
 
 *** local symbol table ***
@@ -381,38 +386,38 @@ t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   334	pascal int InsertIntoTimeoutList(hTCB ht, int to)
-   335	{
-   336	    TCB *p, *q, *t;
-   337	
-   338	    __check(ht >=0 && ht < 256);
-   339	    t = &tcbs[ht];
-   340	    if (TimeoutList<0) {
-   341	        t->timeout = to;
-   342	        TimeoutList = ht;
-   343	        t->next = -1;
-   344	        t->prev = -1;
-   345	        return E_Ok;
-   346	    }
-   347	    q = (void *)0;
-   348	    p = &tcbs[TimeoutList];
-   349	    while (to > p->timeout) {
-   350	        to -= p->timeout;
-   351	        q = p;
-   352	        p = &tcbs[p->next];
-   353	    }
-   354	    t->next = p - tcbs;
-   355	    t->prev = q - tcbs;
-   356	    if (p) {
-   357	        p->timeout -= to;
-   358	        p->prev = ht;
-   359	    }
-   360	    if (q)
-   361	        q->next = ht;
-   362	    else
-   363	        TimeoutList = ht;
-   364	    t->status |= 1;
-   365	    return E_Ok;
+   339	pascal int InsertIntoTimeoutList(hTCB ht, int to)
+   340	{
+   341	    TCB *p, *q, *t;
+   342	
+   343	    __check(ht >=0 && ht < 256);
+   344	    t = &tcbs[ht];
+   345	    if (TimeoutList<0) {
+   346	        t->timeout = to;
+   347	        TimeoutList = ht;
+   348	        t->next = -1;
+   349	        t->prev = -1;
+   350	        return E_Ok;
+   351	    }
+   352	    q = (void *)0;
+   353	    p = &tcbs[TimeoutList];
+   354	    while (to > p->timeout) {
+   355	        to -= p->timeout;
+   356	        q = p;
+   357	        p = &tcbs[p->next];
+   358	    }
+   359	    t->next = p - tcbs;
+   360	    t->prev = q - tcbs;
+   361	    if (p) {
+   362	        p->timeout -= to;
+   363	        p->prev = ht;
+   364	    }
+   365	    if (q)
+   366	        q->next = ht;
+   367	    else
+   368	        TimeoutList = ht;
+   369	    t->status |= 1;
+   370	    return E_Ok;
 
 
 *** local symbol table ***
@@ -425,32 +430,32 @@ t_         =ffffffe8    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   366	};
-   367	
-   368	// ----------------------------------------------------------------------------
-   369	// ----------------------------------------------------------------------------
-   370	
-   371	pascal int RemoveFromTimeoutList(hTCB ht)
-   372	{
-   373	    TCB *t;
-   374	    
-   375	    __check(ht >=0 && ht < 256);
-   376	    t = &tcbs[ht];
-   377	    if (t->next) {
-   378	       tcbs[t->next].prev = t->prev;
-   379	       tcbs[t->next].timeout += t->timeout;
-   380	    }
-   381	    if (t->prev >= 0)
-   382	       tcbs[t->prev].next = t->next;
-   383	    t->status = 0;
-   384	    t->next = -1;
-   385	    t->prev = -1;
-   386	}
-   387	
-   388	// ----------------------------------------------------------------------------
-   389	// Pop the top entry from the timeout list.
-   390	// ----------------------------------------------------------------------------
-   391	
+   371	};
+   372	
+   373	// ----------------------------------------------------------------------------
+   374	// ----------------------------------------------------------------------------
+   375	
+   376	pascal int RemoveFromTimeoutList(hTCB ht)
+   377	{
+   378	    TCB *t;
+   379	    
+   380	    __check(ht >=0 && ht < 256);
+   381	    t = &tcbs[ht];
+   382	    if (t->next) {
+   383	       tcbs[t->next].prev = t->prev;
+   384	       tcbs[t->next].timeout += t->timeout;
+   385	    }
+   386	    if (t->prev >= 0)
+   387	       tcbs[t->prev].next = t->next;
+   388	    t->status = 0;
+   389	    t->next = -1;
+   390	    t->prev = -1;
+   391	}
+   392	
+   393	// ----------------------------------------------------------------------------
+   394	// Pop the top entry from the timeout list.
+   395	// ----------------------------------------------------------------------------
+   396	
 
 
 *** local symbol table ***
@@ -460,23 +465,23 @@ t_         =fffffff8    -    Auto        Pointer to struct _tagTCB_
 
 
 
-   392	hTCB PopTimeoutList()
-   393	{
-   394	    TCB *p;
-   395	    hTCB h;
-   396	
-   397	    h = TimeoutList;
-   398	    if (TimeoutList >= 0 && TimeoutList < 256) {
-   399	        TimeoutList = tcbs[TimeoutList].next;
-   400	        if (TimeoutList >= 0 && TimeoutList < 256)
-   401	            tcbs[TimeoutList].prev = -1;
-   402	    }
-   403	    return h;
-   404	}
-   405	
-   406	// ----------------------------------------------------------------------------
-   407	// ----------------------------------------------------------------------------
-   408	
+   397	hTCB PopTimeoutList()
+   398	{
+   399	    TCB *p;
+   400	    hTCB h;
+   401	
+   402	    h = TimeoutList;
+   403	    if (TimeoutList >= 0 && TimeoutList < 256) {
+   404	        TimeoutList = tcbs[TimeoutList].next;
+   405	        if (TimeoutList >= 0 && TimeoutList < 256)
+   406	            tcbs[TimeoutList].prev = -1;
+   407	    }
+   408	    return h;
+   409	}
+   410	
+   411	// ----------------------------------------------------------------------------
+   412	// ----------------------------------------------------------------------------
+   413	
 
 
 *** local symbol table ***
@@ -486,45 +491,56 @@ h_         =fffffff6    -    Auto        Char
 
 
 
-   409	void DumpTaskList()
-   410	{
-   411	     TCB *p, *q;
-   412	     int n;
-   413	     int kk;
-   414	     hTCB h, j;
-   415	
-   416	     printf("CPU Pri Stat Task Prev Next Timeout\r\n");
-   417	     for (n = 0; n < 8; n++) {
-   418	         h = readyQ[n];
-   419	         if (h >= 0 && h < 256) {
-   420	             q = &tcbs[h];
-   421	             p = q;
-   422	             kk = 0;
-   423	             do {
-   424	//                 if (!chkTCB(p)) {
-   425	//                     printf("Bad TCB (%X)\r\n", p);
-   426	//                     break;
-   427	//                 }
-   428	                   j = p - tcbs;
-   429	                 printf("%3d %3d  %02X  %04X %04X %04X %08X %08X\r\n", p->affinity, p->priority, p->status, (int)j, p->prev, p->ne   430	xt, p->timeout, p->ticks);
-   431	                 if (p->next < 0 || p->next >= 256)
-   432	                     break;
-   433	                 p = &tcbs[p->next];
-   434	                 if (getcharNoWait()==3)
-   435	                    goto j1;
-   436	                 kk = kk + 1;
-   437	             } while (p != q && kk < 10);
-   438	         }
-   439	     }
-   440	j1:  ;
-   441	}
-   442	
-   443	
+   414	void DumpTaskList()
+   415	{
+   416	     TCB *p, *q;
+   417	     int n;
+   418	     int kk;
+   419	     hTCB h, j;
+   420	   
+   421	//     printf("pi is ");
+   422	//     prtdbl(3.141592653589793238,10,6,'E');
+   423	     printf("CPU Pri Stat Task Prev Next Timeout\r\n");
+   424	     for (n = 0; n < 8; n++) {
+   425	         h = readyQ[n];
+   426	         if (h >= 0 && h < 256) {
+   427	             q = &tcbs[h];
+   428	             p = q;
+   429	             kk = 0;
+   430	             do {
+   431	//                 if (!chkTCB(p)) {
+   432	//                     printf("Bad TCB (%X)\r\n", p);
+   433	//                     break;
+   434	//                 }
+   435	                   j = p - tcbs;
+   436	                 printf("%3d %3d  %02X  %04X %04X %04X %08X %08X\r\n", p->affinity, p->priority, p->status, (int)j, p->prev, p->ne   437	xt, p->timeout, p->ticks);
+   438	                 if (p->next < 0 || p->next >= 256)
+   439	                     break;
+   440	                 p = &tcbs[p->next];
+   441	                 if (getcharNoWait()==3)
+   442	                    goto j1;
+   443	                 kk = kk + 1;
+   444	             } while (p != q && kk < 10);
+   445	         }
+   446	     }
+   447	     printf("Waiting tasks\r\n");
+   448	     h = TimeoutList;
+   449	     while (h >= 0 && h < 256) {
+   450	         p = &tcbs[h];
+   451	         printf("%3d %3d  %02X  %04X %04X %04X %08X %08X\r\n", p->affinity, p->priority, p->status, (int)j, p->prev, p->next, p->t   452	imeout, p->ticks);
+   453	         h = p->next;
+   454	         if (getcharNoWait()==3)
+   455	            goto j1;
+   456	     }
+   457	j1:  ;
+   458	}
+   459	
+   460	
 
 
 *** local symbol table ***
 
-j1_        =000032    -    Label
+j1_        =00003b    -    Label
 p_         =fffffff8    -    Auto        Pointer to struct _tagTCB_ 
 q_         =fffffff0    -    Auto        Pointer to struct _tagTCB_ 
 n_         =ffffffe8    -    Auto        Long
@@ -588,12 +604,14 @@ E_QueFull_ =000006    -    Constant    Long
 readyQ_    =041804    -    Global      Array of Char
 E_NoMoreAlarmBlks_ =000042    -    Constant    Long
 ALARM_     =001440    1   struct tagALARM_ 
+E_TooManyTasks_ =000045    -    Constant    Long
 freeTCB_   =041800    -    Global      Char
 E_NoDev_   =000021    -    Constant    Long
 E_NoMem_   =000044    -    Constant    Long
 TimeoutList_ =041802    -    Global      Char
 RemoveFromTimeoutList_ =001480    -    Global      Function returning Long
 E_NoMsg_   =000009    -    Constant    Long
+prtdbl_    =000000    -    External    Function returning Long
 E_BadDevOp_ =000022    -    Constant    Long
 SetBound50_ =001480    -    Global      Function returning 
 SetBound51_ =001480    -    Global      Function returning 
@@ -635,8 +653,10 @@ _tagJCB_   =000000    -    Type        struct _tagJCB_
     KeybdWaitFlag_ =00066e    -    Member      Byte
     KeybdHead_ =00066f    -    Member      Byte
     KeybdTail_ =000670    -    Member      Byte
-    KeybdBuffer_ =000672    -    Member      Array of 
-    number_    =000692    -    Member      Byte
+    KeybdBuffer_ =000671    -    Member      Array of Unsigned Byte
+    number_    =000691    -    Member      Byte
+    tasks_     =000692    -    Member      Array of Char
+    next_      =0006a2    -    Member      Byte
 tagMBX_    =000000    -    Type        struct tagMBX_ 
     link_      =000000    -    Member      Char
     owner_     =000002    -    Member      Byte
@@ -686,6 +706,7 @@ _tagTCB_   =000000    -    Type        struct _tagTCB_
     startTick_ =0002d0    -    Member      Long
     endTick_   =0002d8    -    Member      Long
     ticks_     =0002e0    -    Member      Long
+    exception_ =0002e8    -    Member      Long
 tagALARM_  =000000    -    Type        struct tagALARM_ 
     next_      =000000    -    Member      Pointer to struct tagALARM_ 
     prev_      =000008    -    Member      Pointer to struct tagALARM_ 

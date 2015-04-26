@@ -18,7 +18,7 @@ unsigned int *GetVBR()
 // for a code address.
 // ----------------------------------------------------------------------------
 
-void set_vector(unsigned int vecno, unsigned int rout)
+pascal void set_vector(unsigned int vecno, unsigned int rout)
 {
      if (vecno > 511) return;
      if ((rout == 0) || ((rout & 3) != 0)) return;

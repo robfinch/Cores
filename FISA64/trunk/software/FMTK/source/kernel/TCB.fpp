@@ -61,7 +61,8 @@ enum {
      E_NoMoreMsgBlks,
      E_NoMoreAlarmBlks,
      E_NoMoreTCBs,
-     E_NoMem
+     E_NoMem,
+     E_TooManyTasks
 };
 
 
@@ -101,8 +102,10 @@ typedef struct _tagJCB align(2048)
     __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -145,6 +148,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {
@@ -218,7 +222,7 @@ pascal void SetBound49(JCB *ps, JCB *pe, int algn);
 pascal void SetBound50(MBX *ps, MBX *pe, int algn);
 pascal void SetBound51(MSG *ps, MSG *pe, int algn);
 
-void set_vector(unsigned int, unsigned int);
+pascal void set_vector(unsigned int, unsigned int);
 int getCPU();
 int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);
@@ -232,6 +236,7 @@ pascal void UnlockSemaphore(int *sema);
 
 
 extern char hasUltraHighPriorityTasks;
+extern pascal prtdbl(double);
 
 TCB tcbs[256];
 hTCB freeTCB;
@@ -412,7 +417,9 @@ void DumpTaskList()
      int n;
      int kk;
      hTCB h, j;
-
+   
+//     printf("pi is ");
+//     prtdbl(3.141592653589793238,10,6,'E');
      printf("CPU Pri Stat Task Prev Next Timeout\r\n");
      for (n = 0; n < 8; n++) {
          h = readyQ[n];
@@ -435,6 +442,15 @@ void DumpTaskList()
                  kk = kk + 1;
              } while (p != q && kk < 10);
          }
+     }
+     printf("Waiting tasks\r\n");
+     h = TimeoutList;
+     while (h >= 0 && h < 256) {
+         p = &tcbs[h];
+         printf("%3d %3d  %02X  %04X %04X %04X %08X %08X\r\n", p->affinity, p->priority, p->status, (int)j, p->prev, p->next, p->timeout, p->ticks);
+         h = p->next;
+         if (getcharNoWait()==3)
+            goto j1;
      }
 j1:  ;
 }

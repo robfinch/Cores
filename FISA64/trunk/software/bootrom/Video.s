@@ -79,15 +79,24 @@ VideoBIOS_FuncTable:
 LockVideoBIOS:
     push    lr
     push    r1
-    ldi     r1,#VideoBIOS_sema
-    bsr     LockSema
+    push    r2
+    push    r3
+    push    #-1
+    pea     VideoBIOS_sema
+    bsr     LockSemaphore_
+    pop     r3
+    pop     r2
     pop     r1
     rts
 UnlockVideoBIOS:
     push    lr
     push    r1
-    lea     r1,VideoBIOS_sema
-    bsr     UnlockSema
+    push    r2
+    push    r3
+    pea     VideoBIOS_sema
+    bsr     UnlockSemaphore_
+    pop     r3
+    pop     r2
     pop     r1
     rts
 

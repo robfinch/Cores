@@ -105,11 +105,13 @@ extern struct snode     *bodyptr;       /* parse tree for function */
 extern int              global_flag;
 extern TABLE            defsyms;
 extern int              save_mask;      /* register save mask */
+extern int              fpsave_mask;
 extern int				bsave_mask;
 extern int uctran_off;
 extern int isPascal;
 extern int isOscall;
 extern int isInterrupt;
+extern int isTask;
 extern int isNocall;
 extern int asmblock;
 extern int optimize;
@@ -117,6 +119,7 @@ extern int opt_noregs;
 extern int opt_nopeep;
 extern int opt_noexpr;
 extern int exceptions;
+extern int mixedSource;
 extern SYM *currentFn;
 extern int iflevel;
 extern int regmask;
@@ -276,7 +279,9 @@ extern void ListTable(TABLE *t, int i);
 // Register.c
 extern AMODE *GetTempRegister();
 extern AMODE *GetTempBrRegister();
+extern AMODE *GetTempFPRegister();
 extern void ReleaseTempRegister(AMODE *ap);
+extern void ReleaseTempReg(AMODE *ap);
 extern int TempInvalidate();
 extern void TempRevalidate(int sp);
 // Table888.c

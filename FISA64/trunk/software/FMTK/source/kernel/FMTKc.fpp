@@ -59,7 +59,8 @@ enum {
      E_NoMoreMsgBlks,
      E_NoMoreAlarmBlks,
      E_NoMoreTCBs,
-     E_NoMem
+     E_NoMem,
+     E_TooManyTasks
 };
 
 
@@ -99,8 +100,10 @@ typedef struct _tagJCB align(2048)
     __int8 KeybdWaitFlag;
     __int8 KeybdHead;
     __int8 KeybdTail;
-    unsigned __int16 KeybdBuffer[16];
+    unsigned __int8 KeybdBuffer[32];
     hJCB number;
+    hTCB tasks[8];
+    hJCB next;
 } JCB;
 
 struct tagMBX;
@@ -143,6 +146,7 @@ typedef struct _tagTCB align(1024) {
 	__int64 startTick;
 	__int64 endTick;
 	__int64 ticks;
+	int exception;
 } TCB;
 
 typedef struct tagMBX align(64) {
@@ -216,7 +220,7 @@ pascal void SetBound49(JCB *ps, JCB *pe, int algn);
 pascal void SetBound50(MBX *ps, MBX *pe, int algn);
 pascal void SetBound51(MSG *ps, MSG *pe, int algn);
 
-void set_vector(unsigned int, unsigned int);
+pascal void set_vector(unsigned int, unsigned int);
 int getCPU();
 int GetVecno();          // get the last interrupt vector number
 void outb(unsigned int, int);
@@ -253,12 +257,15 @@ extern int iof_switch;
 extern int BIOS1_sema;
 extern int iof_sema;
 extern int sys_sema;
+extern int kbd_sema;
 extern int BIOS_RespMbx;
 extern char hasUltraHighPriorityTasks;
 extern int missed_ticks;
 extern short int video_bufs[][];
 extern hTCB TimeoutList;
 
+
+extern int shell();
 
 int irq_stack[512];
 int sp_tmp;
@@ -276,6 +283,7 @@ MBX mailbox[1024];
 MSG message[16384];
 int nMsgBlk;
 int nMailbox;
+hJCB freeJCB;
 hMSG freeMSG;
 hMBX freeMBX;
 JCB *IOFocusNdx;
@@ -323,7 +331,9 @@ naked int GetVecno()
 naked void DisplayIRQLive()
 {
      asm {
-         inc  $FFD00000+220,#1
+         lh       r1,$FFD00000+220
+         addui    r1,r1,#1
+         sh       r1,$FFD00000+220
          rtl
      }
 }
@@ -573,8 +583,8 @@ void FMTK_SchedulerIRQ()
              ldi   r1,#3				; reset the edge sense circuit
              sh	   r1,PIC_RSTE
          }
-         DisplayIRQLive();
-         if (LockSemaphore(&sys_sema,10)) {
+         if (getCPU()==0) DisplayIRQLive();
+         if (ILockSemaphore(&sys_sema,10)) {
              t = GetRunningTCBPtr();
              t->ticks = t->ticks + (t->endTick - t->startTick);
              if (t->priority != 000) {
@@ -610,6 +620,16 @@ void FMTK_SchedulerIRQ()
          GetRunningTCBPtr()->status = 8;
          break;
      default:  ;
+     }
+     // If an exception was flagged (eg CTRL-C) return to the catch handler
+     // not the interrupted code.
+     t = GetRunningTCBPtr();
+     if (t->exception) {
+         t->iregs[31] = t->iregs[28];   // set link register to catch handler
+         t->iipc = t->iregs[28];        // and the PC register
+         t->iregs[1] = t->exception;    // r1 = exception value
+         t->exception = 0;
+         t->iregs[2] = 24;              // r2 = exception type
      }
      // Restore the processor registers and return using an RTI.
      epilog asm {
@@ -674,37 +694,84 @@ j1:  goto j1;
 
 void IdleTask()
 {
-     while(1) {
-         asm {
-             inc  $FFD00000+228
+     int ii;
+     __int32 *screen = (__int32 *)0xFFD00000;
+
+//     try {
+j1:  ;
+         forever {
+             try {
+                 ii++;
+                 if (getCPU()==0)
+                     screen[57] = ii;
+             }
+             catch(static __exception ex=0) {
+                 if (ex&0xFFFFFFFFL==515) {
+                     printf("IdleTask: CTRL-C pressed.\r\n");
+                 }
+                 else
+                     throw ex;
+             }
          }
+/*
      }
+     catch (static __exception ex1=0) {
+         printf("IdleTask: exception %d.\r\n", ex1);
+         goto j1;
+     }
+*/
 }
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+int FMTK_KillTask(int taskno)
+{
+    hTCB ht;
+    int nn;
+    JCB *j;
+
+    asm { mfspr r1,ivno };
+    ht = taskno;
+    if (LockSemaphore(&sys_sema,-1)) {
+        RemoveFromReadyList(ht);
+        RemoveFromTimeoutList(ht);
+        for (nn = 0; nn < 4; nn++)
+            if (tcbs[ht].hMailboxes[nn] >= 0 && tcbs[ht].hMailboxes[nn] < 1024) {
+                FMTK_FreeMbx(tcbs[ht].hMailboxes[nn]);
+                tcbs[ht].hMailboxes[nn] = -1;
+            }
+        // remove task from job's task list
+        j = &jcbs[tcbs[ht].hJob];
+        for (nn = 0; nn < 8; nn++) {
+            if (j->tasks[nn]==ht)
+                j->tasks[nn] = -1;
+        }
+        // If the job no longer has any tasks associated with it, it is 
+        // finished.
+        for (nn = 0; nn < 8; nn++)
+            if (j->tasks[nn]!=-1)
+                break;
+        if (nn == 8) {
+            j->next = freeJCB;
+            freeJCB = j - jcbs;
+        }
+        UnlockSemaphore(&sys_sema);
+    }
+}
+
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
 int FMTK_ExitTask()
 {
-    hTCB ht;
-    MBX *m, *n;
-    int nn;
-
     asm { mfspr r1,ivno };
-    ht = GetRunningTCB();
-    if (LockSemaphore(&sys_sema,-1)) {
-        RemoveFromReadyList(ht);
-        RemoveFromTimeoutList(ht);
-        for (nn = 0; nn < 4; nn++)
-            if (tcbs[ht].hMailboxes[n] >= 0) {
-                FMTK_FreeMbx(tcbs[ht].hMailboxes[nn]);
-                tcbs[ht].hMailboxes[nn] = -1;
-            }
-        UnlockSemaphore(&sys_sema);
-    }
+    KillTask(GetRunningTCB());
     asm { int #2 }     // reschedule
 j1: goto j1;
 }
+
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
@@ -725,14 +792,31 @@ int FMTK_StartTask(int priority, int affinity, int adr, int parm, hJCB job)
     t->affinity = affinity;
     t->priority = priority;
     t->hJob = job;
+    // Insert into the job's list of tasks.
+    for (nn = 0; nn < 8; nn++) {
+        if (jcbs[job].tasks[nn]<0) {
+            jcbs[job].tasks[nn] = ht;
+            break;
+        }
+    }
+    if (nn == 8) {
+        if (LockSemaphore(&sys_sema,-1)) {
+            tcbs[ht].next = freeTCB;
+            freeTCB = ht;
+            UnlockSemaphore(&sys_sema);
+        }
+        return E_TooManyTasks;
+    }
     t->iregs[1] = parm;
+    t->iregs[28] = FMTK_ExitTask;
     t->iregs[31] = FMTK_ExitTask;
     t->iisp = t->stack + 1023;
-    t->iipc = adr;
+    t->iipc = adr|1;   // stay in kernel mode for now
     t->icr0 = 0x140000000L;
     t->startTick = 0;
     t->endTick = 0;
     t->ticks = 0;
+    t->exception = 0;
     if (LockSemaphore(&sys_sema,-1)) {
         InsertIntoReadyList(ht); }
         UnlockSemaphore(&sys_sema);
@@ -787,7 +871,7 @@ int FMTK_SetTaskPriority(hTCB ht, int priority)
 
 void FMTKInitialize()
 {
-	int nn;
+	int nn,jj;
 
     asm { mfspr r1,ivno };
 //    firstcall
@@ -801,10 +885,11 @@ void FMTKInitialize()
 
         IOFocusTbl[0] = 0;
         IOFocusNdx = (void *)0;
+        iof_switch = 0;
 
-        // bounds register must be setup prior to unlocking semaphores
         UnlockSemaphore(&sys_sema);
         UnlockSemaphore(&iof_sema);
+        UnlockSemaphore(&kbd_sema);
 
         for (nn = 0; nn < 16384; nn++) {
             message[nn].link = nn+1;
@@ -819,6 +904,8 @@ void FMTKInitialize()
 
         for (nn = 0; nn < 51; nn++) {
             jcbs[nn].number = nn;
+            for (jj = 0; jj < 8; jj++)
+                jcbs[nn].tasks[jj] = -1;
             if (nn == 0 ) {
                 jcbs[nn].pVidMem = 0xFFD00000;
                 jcbs[nn].pVirtVidMem = video_bufs[nn];
@@ -834,6 +921,10 @@ void FMTKInitialize()
             jcbs[nn].VideoCols = 84;
             jcbs[nn].CursorRow = 0;
             jcbs[nn].CursorCol = 0;
+            jcbs[nn].KeybdHead = 0;
+            jcbs[nn].KeybdTail = 0;
+            jcbs[nn].KeyState1 = 0;
+            jcbs[nn].KeyState2 = 0;
         }
 
         asm {
@@ -863,6 +954,7 @@ void FMTKInitialize()
                 tcbs[nn].affinity = nn;
                 tcbs[nn].priority = 030;
             }
+            tcbs[nn].exception = 0;
     	}
     	tcbs[256-1].next = -1;
     	freeTCB = 2;
@@ -883,8 +975,9 @@ void FMTKInitialize()
     	set_vector(4,FMTK_SystemCall);
     	set_vector(2,FMTK_SchedulerIRQ);
     	set_vector(451,FMTK_SchedulerIRQ);
-        FMTK_StartTask(070, 0, IdleTask, 0, 0);
-        FMTK_StartTask(070, 1, IdleTask, 0, 0);
+    	FMTK_StartTask(030, 0, shell, 0, 0);
+        FMTK_StartTask(077, 0, IdleTask, 0, 0);
+        FMTK_StartTask(077, 1, IdleTask, 0, 0);
     	FMTK_Inited = 0x12345678;
         asm {
             ldi   r1,#50

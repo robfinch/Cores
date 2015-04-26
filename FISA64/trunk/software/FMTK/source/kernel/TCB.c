@@ -29,6 +29,7 @@
 #include "proto.h"
 
 extern char hasUltraHighPriorityTasks;
+extern pascal prtdbl(double);
 
 TCB tcbs[NR_TCB];
 hTCB freeTCB;
@@ -209,7 +210,9 @@ void DumpTaskList()
      int n;
      int kk;
      hTCB h, j;
-
+   
+//     printf("pi is ");
+//     prtdbl(3.141592653589793238,10,6,'E');
      printf("CPU Pri Stat Task Prev Next Timeout\r\n");
      for (n = 0; n < 8; n++) {
          h = readyQ[n];
@@ -232,6 +235,15 @@ void DumpTaskList()
                  kk = kk + 1;
              } while (p != q && kk < 10);
          }
+     }
+     printf("Waiting tasks\r\n");
+     h = TimeoutList;
+     while (h >= 0 && h < NR_TCB) {
+         p = &tcbs[h];
+         printf("%3d %3d  %02X  %04X %04X %04X %08X %08X\r\n", p->affinity, p->priority, p->status, (int)j, p->prev, p->next, p->timeout, p->ticks);
+         h = p->next;
+         if (getcharNoWait()==3)
+            goto j1;
      }
 j1:  ;
 }

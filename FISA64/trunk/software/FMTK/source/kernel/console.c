@@ -21,8 +21,12 @@ void SetCurrAttr(short int attr)
      GetJCBPtr()->NormAttr = attr & 0xFFFFFC00;
 }
 
-void SetVideoReg(int regno, int val)
+static pascal void SetVideoReg(int regno, int val)
 {
+     if (regno < 0 or regno > 11) {
+         printf("bad video regno: %d", regno);
+         return;
+     }
      asm {
          lw   r1,24[bp]
          lw   r2,32[bp]

@@ -35,146 +35,149 @@
     35	    __int8 KeybdWaitFlag;
     36	    __int8 KeybdHead;
     37	    __int8 KeybdTail;
-    38	    unsigned __int16 KeybdBuffer[16];
+    38	    unsigned __int8 KeybdBuffer[32];
     39	    hJCB number;
-    40	} JCB;
-    41	
-    42	struct tagMBX;
+    40	    hTCB tasks[8];
+    41	    hJCB next;
+    42	} JCB;
     43	
-    44	typedef struct _tagTCB align(1024) {
-    45	    // exception storage area
-    46		int regs[32];
-    47		int isp;
-    48		int dsp;
-    49		int esp;
-    50		int ipc;
-    51		int dpc;
-    52		int epc;
-    53		int cr0;
-    54		// interrupt storage
-    55		int iregs[32];
-    56		int iisp;
-    57		int idsp;
-    58		int iesp;
-    59		int iipc;
-    60		int idpc;
-    61		int iepc;
-    62		int icr0;
-    63		hTCB next;
-    64		hTCB prev;
-    65		hTCB mbq_next;
-    66		hTCB mbq_prev;
-    67		int *sys_stack;
-    68		int *bios_stack;
-    69		int *stack;
-    70		__int64 timeout;
-    71		MSG msg;
-    72		hMBX hMailboxes[4]; // handles of mailboxes owned by task
-    73		hMBX hWaitMbx;      // handle of mailbox task is waiting at
-    74		hTCB number;
-    75		__int8 priority;
-    76		__int8 status;
-    77		__int8 affinity;
-    78		hJCB hJob;
-    79		__int64 startTick;
-    80		__int64 endTick;
-    81		__int64 ticks;
-    82	} TCB;
-    83	
-    84	typedef struct tagMBX align(64) {
-    85	    hMBX link;
-    86		hJCB owner;		// hJcb of owner
-    87		hTCB tq_head;
-    88		hTCB tq_tail;
-    89		hMSG mq_head;
-    90		hMSG mq_tail;
-    91		char mq_strategy;
-    92		byte resv[2];
-    93		uint tq_count;
-    94		uint mq_size;
-    95		uint mq_count;
-    96		uint mq_missed;
-    97	} MBX;
-    98	
-    99	typedef struct tagALARM {
-   100		struct tagALARM *next;
-   101		struct tagALARM *prev;
-   102		MBX *mbx;
-   103		MSG *msg;
-   104		uint BaseTimeout;
-   105		uint timeout;
-   106		uint repeat;
-   107		byte resv[8];		// padding to 64 bytes
-   108	} ALARM;
-   109	
-   110	
-   111	// ============================================================================
-   112	//        __
-   113	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
-   114	//    \  __ /    All rights reserved.
-   115	//     \/_//     robfinch<remove>@finitron.ca
-   116	//       ||
-   117	//
-   118	// TCB.c
-   119	// Task Control Block related functions.
+    44	struct tagMBX;
+    45	
+    46	typedef struct _tagTCB align(1024) {
+    47	    // exception storage area
+    48		int regs[32];
+    49		int isp;
+    50		int dsp;
+    51		int esp;
+    52		int ipc;
+    53		int dpc;
+    54		int epc;
+    55		int cr0;
+    56		// interrupt storage
+    57		int iregs[32];
+    58		int iisp;
+    59		int idsp;
+    60		int iesp;
+    61		int iipc;
+    62		int idpc;
+    63		int iepc;
+    64		int icr0;
+    65		hTCB next;
+    66		hTCB prev;
+    67		hTCB mbq_next;
+    68		hTCB mbq_prev;
+    69		int *sys_stack;
+    70		int *bios_stack;
+    71		int *stack;
+    72		__int64 timeout;
+    73		MSG msg;
+    74		hMBX hMailboxes[4]; // handles of mailboxes owned by task
+    75		hMBX hWaitMbx;      // handle of mailbox task is waiting at
+    76		hTCB number;
+    77		__int8 priority;
+    78		__int8 status;
+    79		__int8 affinity;
+    80		hJCB hJob;
+    81		__int64 startTick;
+    82		__int64 endTick;
+    83		__int64 ticks;
+    84		int exception;
+    85	} TCB;
+    86	
+    87	typedef struct tagMBX align(64) {
+    88	    hMBX link;
+    89		hJCB owner;		// hJcb of owner
+    90		hTCB tq_head;
+    91		hTCB tq_tail;
+    92		hMSG mq_head;
+    93		hMSG mq_tail;
+    94		char mq_strategy;
+    95		byte resv[2];
+    96		uint tq_count;
+    97		uint mq_size;
+    98		uint mq_count;
+    99		uint mq_missed;
+   100	} MBX;
+   101	
+   102	typedef struct tagALARM {
+   103		struct tagALARM *next;
+   104		struct tagALARM *prev;
+   105		MBX *mbx;
+   106		MSG *msg;
+   107		uint BaseTimeout;
+   108		uint timeout;
+   109		uint repeat;
+   110		byte resv[8];		// padding to 64 bytes
+   111	} ALARM;
+   112	
+   113	
+   114	// ============================================================================
+   115	//        __
+   116	//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+   117	//    \  __ /    All rights reserved.
+   118	//     \/_//     robfinch<remove>@finitron.ca
+   119	//       ||
    120	//
-   121	// This source file is free software: you can redistribute it and/or modify 
-   122	// it under the terms of the GNU Lesser General Public License as published 
-   123	// by the Free Software Foundation, either version 3 of the License, or     
-   124	// (at your option) any later version.                                      
-   125	//                                                                          
-   126	// This source file is distributed in the hope that it will be useful,      
-   127	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
-   128	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
-   129	// GNU General Public License for more details.                             
-   130	//                                                                          
-   131	// You should have received a copy of the GNU General Public License        
-   132	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   121	// TCB.c
+   122	// Task Control Block related functions.
+   123	//
+   124	// This source file is free software: you can redistribute it and/or modify 
+   125	// it under the terms of the GNU Lesser General Public License as published 
+   126	// by the Free Software Foundation, either version 3 of the License, or     
+   127	// (at your option) any later version.                                      
+   128	//                                                                          
+   129	// This source file is distributed in the hope that it will be useful,      
+   130	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+   131	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+   132	// GNU General Public License for more details.                             
    133	//                                                                          
-   134	// ============================================================================
-   135	//
-   136	// JCB functions
-   137	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
-   138	
-   139	// TCB functions
-   140	TCB *GetRunningTCBPtr();
-   141	hTCB GetRunningTCB();
-   142	pascal void SetRunningTCB(hTCB ht);
-   143	pascal int chkTCB(TCB *p);
-   144	pascal int InsertIntoReadyList(hTCB ht);
-   145	pascal int RemoveFromReadyList(hTCB ht);
-   146	pascal int InsertIntoTimeoutList(hTCB ht, int to);
-   147	pascal int RemoveFromTimeoutList(hTCB ht);
-   148	void DumpTaskList();
-   149	
-   150	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
-   151	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
-   152	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
-   153	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
-   154	
-   155	void set_vector(unsigned int, unsigned int);
-   156	int getCPU();
-   157	int GetVecno();          // get the last interrupt vector number
-   158	void outb(unsigned int, int);
-   159	void outc(unsigned int, int);
-   160	void outh(unsigned int, int);
-   161	void outw(unsigned int, int);
-   162	pascal int LockSemaphore(int *sema, int retries);
-   163	pascal void UnlockSemaphore(int *sema);
-   164	
-   165	// The following causes a privilege violation if called from user mode
-   166	
+   134	// You should have received a copy of the GNU General Public License        
+   135	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+   136	//                                                                          
+   137	// ============================================================================
+   138	//
+   139	// JCB functions
+   140	JCB *GetJCBPtr();                   // get the JCB pointer of the running task
+   141	
+   142	// TCB functions
+   143	TCB *GetRunningTCBPtr();
+   144	hTCB GetRunningTCB();
+   145	pascal void SetRunningTCB(hTCB ht);
+   146	pascal int chkTCB(TCB *p);
+   147	pascal int InsertIntoReadyList(hTCB ht);
+   148	pascal int RemoveFromReadyList(hTCB ht);
+   149	pascal int InsertIntoTimeoutList(hTCB ht, int to);
+   150	pascal int RemoveFromTimeoutList(hTCB ht);
+   151	void DumpTaskList();
+   152	
+   153	pascal void SetBound48(TCB *ps, TCB *pe, int algn);
+   154	pascal void SetBound49(JCB *ps, JCB *pe, int algn);
+   155	pascal void SetBound50(MBX *ps, MBX *pe, int algn);
+   156	pascal void SetBound51(MSG *ps, MSG *pe, int algn);
+   157	
+   158	pascal void set_vector(unsigned int, unsigned int);
+   159	int getCPU();
+   160	int GetVecno();          // get the last interrupt vector number
+   161	void outb(unsigned int, int);
+   162	void outc(unsigned int, int);
+   163	void outh(unsigned int, int);
+   164	void outw(unsigned int, int);
+   165	pascal int LockSemaphore(int *sema, int retries);
+   166	pascal void UnlockSemaphore(int *sema);
    167	
-   168	// The text screen memory can only handle half-word transfers, hence the use
-   169	// of memsetH, memcpyH.
+   168	// The following causes a privilege violation if called from user mode
+   169	
    170	
-   171	extern int IOFocusNdx;
-   172	
-   173	short int *GetScreenLocation()
-   174	{
-   175	      return GetJCBPtr()->pVidMem;
-   176	}
-   177	
+   171	// The text screen memory can only handle half-word transfers, hence the use
+   172	// of memsetH, memcpyH.
+   173	
+   174	extern int IOFocusNdx;
+   175	
+   176	short int *GetScreenLocation()
+   177	{
+   178	      return GetJCBPtr()->pVidMem;
+   179	}
+   180	
 
 
 *** local symbol table ***
@@ -182,11 +185,11 @@
 
 
 
-   178	short int GetCurrAttr()
-   179	{
-   180	      return GetJCBPtr()->NormAttr;
-   181	}
-   182	
+   181	short int GetCurrAttr()
+   182	{
+   183	      return GetJCBPtr()->NormAttr;
+   184	}
+   185	
 
 
 *** local symbol table ***
@@ -194,11 +197,11 @@
 
 
 
-   183	void SetCurrAttr(short int attr)
-   184	{
-   185	     GetJCBPtr()->NormAttr = attr & 0xFFFFFC00;
-   186	}
-   187	
+   186	void SetCurrAttr(short int attr)
+   187	{
+   188	     GetJCBPtr()->NormAttr = attr & 0xFFFFFC00;
+   189	}
+   190	
 
 
 *** local symbol table ***
@@ -207,16 +210,20 @@ attr_      =000018    -    Auto        Short
 
 
 
-   188	void SetVideoReg(int regno, int val)
-   189	{
-   190	     asm {
-   191	         lw   r1,24[bp]
-   192	         lw   r2,32[bp]
-   193	         asl  r1,r1,#2
-   194	         sh   r2,$FFDA0000[r1]
-   195	     }
-   196	}
-   197	
+   191	static pascal void SetVideoReg(int regno, int val)
+   192	{
+   193	     if (regno < 0 or regno > 11) {
+   194	         printf("bad video regno: %d", regno);
+   195	         return;
+   196	     }
+   197	     asm {
+   198	         lw   r1,24[bp]
+   199	         lw   r2,32[bp]
+   200	         asl  r1,r1,#2
+   201	         sh   r2,$FFDA0000[r1]
+   202	     }
+   203	}
+   204	
 
 
 *** local symbol table ***
@@ -226,16 +233,16 @@ val_       =000020    -    Auto        Long
 
 
 
-   198	void SetCursorPos(int row, int col)
-   199	{
-   200	    JCB *j;
-   201	
-   202	    j = GetJCBPtr();
-   203	    j->CursorCol = col;
-   204	    j->CursorRow = row;
-   205	    UpdateCursorPos();
-   206	}
-   207	
+   205	void SetCursorPos(int row, int col)
+   206	{
+   207	    JCB *j;
+   208	
+   209	    j = GetJCBPtr();
+   210	    j->CursorCol = col;
+   211	    j->CursorRow = row;
+   212	    UpdateCursorPos();
+   213	}
+   214	
 
 
 *** local symbol table ***
@@ -246,15 +253,15 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   208	void SetCursorCol(int col)
-   209	{
-   210	    JCB *j;
-   211	
-   212	    j = GetJCBPtr();
-   213	    j->CursorCol = col;
-   214	    UpdateCursorPos();
-   215	}
-   216	
+   215	void SetCursorCol(int col)
+   216	{
+   217	    JCB *j;
+   218	
+   219	    j = GetJCBPtr();
+   220	    j->CursorCol = col;
+   221	    UpdateCursorPos();
+   222	}
+   223	
 
 
 *** local symbol table ***
@@ -264,14 +271,14 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   217	int GetCursorPos()
-   218	{
-   219	    JCB *j;
-   220	
-   221	    j = GetJCBPtr();
-   222	    return j->CursorCol | (j->CursorRow << 8);
-   223	}
-   224	
+   224	int GetCursorPos()
+   225	{
+   226	    JCB *j;
+   227	
+   228	    j = GetJCBPtr();
+   229	    return j->CursorCol | (j->CursorRow << 8);
+   230	}
+   231	
 
 
 *** local symbol table ***
@@ -280,11 +287,11 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   225	int GetTextCols()
-   226	{
-   227	    return GetJCBPtr()->VideoCols;
-   228	}
-   229	
+   232	int GetTextCols()
+   233	{
+   234	    return GetJCBPtr()->VideoCols;
+   235	}
+   236	
 
 
 *** local symbol table ***
@@ -292,11 +299,11 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   230	int GetTextRows()
-   231	{
-   232	    return GetJCBPtr()->VideoRows;
-   233	}
-   234	
+   237	int GetTextRows()
+   238	{
+   239	    return GetJCBPtr()->VideoRows;
+   240	}
+   241	
 
 
 *** local symbol table ***
@@ -304,43 +311,22 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   235	char AsciiToScreen(char ch)
-   236	{
-   237	     if (ch==0x5B)
-   238	         return 0x1B;
-   239	     if (ch==0x5D)
-   240	         return 0x1D;
-   241	     ch &= 0xFF;
-   242	     ch |= 0x100;
-   243	     if (!(ch & 0x20))
-   244	         return ch;
-   245	     if (!(ch & 0x40))
-   246	         return ch;
-   247	     ch = ch & 0x19F;
-   248	     return ch;
-   249	}
-   250	
-
-
-*** local symbol table ***
-
-ch_        =000018    -    Auto        Char
-
-
-
-   251	char ScreenToAscii(char ch)
-   252	{
-   253	     ch &= 0xFF;
-   254	     if (ch==0x1B)
-   255	        return 0x5B;
-   256	     if (ch==0x1D)
-   257	        return 0x5D;
-   258	     if (ch < 27)
-   259	        ch += 0x60;
-   260	     return ch;
-   261	}
-   262	    
-   263	
+   242	char AsciiToScreen(char ch)
+   243	{
+   244	     if (ch==0x5B)
+   245	         return 0x1B;
+   246	     if (ch==0x5D)
+   247	         return 0x1D;
+   248	     ch &= 0xFF;
+   249	     ch |= 0x100;
+   250	     if (!(ch & 0x20))
+   251	         return ch;
+   252	     if (!(ch & 0x40))
+   253	         return ch;
+   254	     ch = ch & 0x19F;
+   255	     return ch;
+   256	}
+   257	
 
 
 *** local symbol table ***
@@ -349,18 +335,39 @@ ch_        =000018    -    Auto        Char
 
 
 
-   264	void UpdateCursorPos()
-   265	{
-   266	    JCB *j;
-   267	    int pos;
-   268	
-   269	    j = GetJCBPtr();
-   270	//    if (j == IOFocusNdx) {
-   271	       pos = j->CursorRow * j->VideoCols + j->CursorCol;
-   272	       SetVideoReg(11,pos);
-   273	//    }
-   274	}
+   258	char ScreenToAscii(char ch)
+   259	{
+   260	     ch &= 0xFF;
+   261	     if (ch==0x1B)
+   262	        return 0x5B;
+   263	     if (ch==0x1D)
+   264	        return 0x5D;
+   265	     if (ch < 27)
+   266	        ch += 0x60;
+   267	     return ch;
+   268	}
+   269	    
+   270	
+
+
+*** local symbol table ***
+
+ch_        =000018    -    Auto        Char
+
+
+
+   271	void UpdateCursorPos()
+   272	{
+   273	    JCB *j;
+   274	    int pos;
    275	
+   276	    j = GetJCBPtr();
+   277	//    if (j == IOFocusNdx) {
+   278	       pos = j->CursorRow * j->VideoCols + j->CursorCol;
+   279	       SetVideoReg(11,pos);
+   280	//    }
+   281	}
+   282	
 
 
 *** local symbol table ***
@@ -370,16 +377,16 @@ pos_       =fffffff0    -    Auto        Long
 
 
 
-   276	void HomeCursor()
-   277	{
-   278	    JCB *j;
-   279	
-   280	    j = GetJCBPtr();
-   281	    j->CursorCol = 0;
-   282	    j->CursorRow = 0;
-   283	    UpdateCursorPos();
-   284	}
-   285	
+   283	void HomeCursor()
+   284	{
+   285	    JCB *j;
+   286	
+   287	    j = GetJCBPtr();
+   288	    j->CursorCol = 0;
+   289	    j->CursorRow = 0;
+   290	    UpdateCursorPos();
+   291	}
+   292	
 
 
 *** local symbol table ***
@@ -388,19 +395,19 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   286	short int *CalcScreenLocation()
-   287	{
-   288	    JCB *j;
-   289	    int pos;
-   290	
-   291	    j = GetJCBPtr();
-   292	    pos = j->CursorRow * j->VideoCols + j->CursorCol;
-   293	//    if (j == IOFocusNdx) {
-   294	       SetVideoReg(11,pos);
-   295	//    }
-   296	    return GetScreenLocation()+pos;
-   297	}
-   298	
+   293	short int *CalcScreenLocation()
+   294	{
+   295	    JCB *j;
+   296	    int pos;
+   297	
+   298	    j = GetJCBPtr();
+   299	    pos = j->CursorRow * j->VideoCols + j->CursorCol;
+   300	//    if (j == IOFocusNdx) {
+   301	       SetVideoReg(11,pos);
+   302	//    }
+   303	    return GetScreenLocation()+pos;
+   304	}
+   305	
 
 
 *** local symbol table ***
@@ -410,24 +417,24 @@ pos_       =fffffff0    -    Auto        Long
 
 
 
-   299	void ClearScreen()
-   300	{
-   301	     short int *p;
-   302	     int nn;
-   303	     int mx;
-   304	     JCB *j;
-   305	     short int vc;
-   306	     
-   307	     j = GetJCBPtr();
-   308	     p = GetScreenLocation();
-   309	     // Compiler did a byte multiply generating a single byte result first
-   310	     // before assigning it to mx. The (int) casts force the compiler to use
-   311	     // an int result.
-   312	     mx = (int)j->VideoRows * (int)j->VideoCols;
-   313	     vc = GetCurrAttr() | AsciiToScreen(' ');
-   314	     memsetH(p, vc, mx);
-   315	}
-   316	
+   306	void ClearScreen()
+   307	{
+   308	     short int *p;
+   309	     int nn;
+   310	     int mx;
+   311	     JCB *j;
+   312	     short int vc;
+   313	     
+   314	     j = GetJCBPtr();
+   315	     p = GetScreenLocation();
+   316	     // Compiler did a byte multiply generating a single byte result first
+   317	     // before assigning it to mx. The (int) casts force the compiler to use
+   318	     // an int result.
+   319	     mx = (int)j->VideoRows * (int)j->VideoCols;
+   320	     vc = GetCurrAttr() | AsciiToScreen(' ');
+   321	     memsetH(p, vc, mx);
+   322	}
+   323	
 
 
 *** local symbol table ***
@@ -440,11 +447,11 @@ vc_        =ffffffdc    -    Auto        Short
 
 
 
-   317	void ClearBmpScreen()
-   318	{
-   319	     memsetW(0x400000, 0, 0x80000);
-   320	}
-   321	
+   324	void ClearBmpScreen()
+   325	{
+   326	     memsetW(0x400000, 0, 0x80000);
+   327	}
+   328	
 
 
 *** local symbol table ***
@@ -452,25 +459,25 @@ vc_        =ffffffdc    -    Auto        Short
 
 
 
-   322	void BlankLine(int row)
-   323	{
-   324	     short int *p;
-   325	     int nn;
-   326	     int mx;
-   327	     JCB *j;
-   328	     short int vc;
-   329	     
-   330	     j = GetJCBPtr();
-   331	     p = GetScreenLocation();
-   332	     p = p + (int)j->VideoCols * row;
-   333	     vc = GetCurrAttr() | AsciiToScreen(' ');
-   334	     memsetH(p, vc, j->VideoCols);
-   335	}
-   336	
-   337	// ScrollUp will call BlankLine. Scrollup is written in assembler for
-   338	// performance reasons and is included as part of the video BIOS. Note the
-   339	// BIOS cannot be called with SYS #10 because the bios isn't re-entrant and
-   340	// the bios is already active from putch().
+   329	void BlankLine(int row)
+   330	{
+   331	     short int *p;
+   332	     int nn;
+   333	     int mx;
+   334	     JCB *j;
+   335	     short int vc;
+   336	     
+   337	     j = GetJCBPtr();
+   338	     p = GetScreenLocation();
+   339	     p = p + (int)j->VideoCols * row;
+   340	     vc = GetCurrAttr() | AsciiToScreen(' ');
+   341	     memsetH(p, vc, j->VideoCols);
+   342	}
+   343	
+   344	// ScrollUp will call BlankLine. Scrollup is written in assembler for
+   345	// performance reasons and is included as part of the video BIOS. Note the
+   346	// BIOS cannot be called with SYS #10 because the bios isn't re-entrant and
+   347	// the bios is already active from putch().
 
 
 *** local symbol table ***
@@ -484,15 +491,15 @@ vc_        =ffffffdc    -    Auto        Short
 
 
 
-   341	naked ScrollUp()
-   342	{
-   343	     asm {
-   344	         push  lr
-   345	         bsr   VBScrollUp
-   346	         rts
-   347	     }
-   348	}
-   349	
+   348	naked ScrollUp()
+   349	{
+   350	     asm {
+   351	         push  lr
+   352	         bsr   VBScrollUp
+   353	         rts
+   354	     }
+   355	}
+   356	
 
 
 *** local symbol table ***
@@ -500,43 +507,21 @@ vc_        =ffffffdc    -    Auto        Short
 
 
 
-   350	void IncrementCursorRow()
-   351	{
-   352	     JCB *j;
-   353	     
-   354	     j = GetJCBPtr();
-   355	     j->CursorRow++;
-   356	     if (j->CursorRow < j->VideoRows) {
-   357	         UpdateCursorPos();
-   358	         return;
-   359	     }
-   360	     j->CursorRow--;
-   361	     UpdateCursorPos();
-   362	     ScrollUp();
-   363	}
-   364	
-
-
-*** local symbol table ***
-
-j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_ 
-
-
-
-   365	void IncrementCursorPos()
-   366	{
-   367	     JCB *j;
-   368	     
-   369	     j = GetJCBPtr();
-   370	     j->CursorCol++;
-   371	     if (j->CursorCol < j->VideoCols) {
-   372	         UpdateCursorPos();
-   373	         return;
-   374	     }
-   375	     j->CursorCol = 0;
-   376	     IncrementCursorRow();
-   377	}
-   378	
+   357	void IncrementCursorRow()
+   358	{
+   359	     JCB *j;
+   360	     
+   361	     j = GetJCBPtr();
+   362	     j->CursorRow++;
+   363	     if (j->CursorRow < j->VideoRows) {
+   364	         UpdateCursorPos();
+   365	         return;
+   366	     }
+   367	     j->CursorRow--;
+   368	     UpdateCursorPos();
+   369	     ScrollUp();
+   370	}
+   371	
 
 
 *** local symbol table ***
@@ -545,81 +530,103 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   379	void DisplayChar(char ch)
-   380	{
-   381	     short int *p;
-   382	     int nn;
-   383	     JCB *j;
-   384	
-   385	     j = GetJCBPtr();
-   386	     switch(ch) {
-   387	     case '\r':  j->CursorCol = 0; UpdateCursorPos(); break;
-   388	     case '\n':  IncrementCursorRow(); break;
-   389	     case 0x91:
-   390	          if (j->CursorCol < j->VideoCols-1) {
-   391	             j->CursorCol++;
-   392	             UpdateCursorPos();
-   393	          }
-   394	          break;
-   395	     case 0x90:
-   396	          if (j->CursorRow > 0) {
-   397	               j->CursorRow--;
-   398	               UpdateCursorPos();
-   399	          }
-   400	          break;
-   401	     case 0x93:
-   402	          if (j->CursorCol > 0) {
-   403	               j->CursorCol--;
-   404	               UpdateCursorPos();
-   405	          }
-   406	          break;
-   407	     case 0x92:
-   408	          if (j->CursorRow < j->VideoRows-1) {
-   409	             j->CursorRow++;
-   410	             UpdateCursorPos();
-   411	          }
-   412	          break;
-   413	     case 0x94:
-   414	          if (j->CursorCol==0)
-   415	             j->CursorRow = 0;
-   416	          j->CursorCol = 0;
-   417	          UpdateCursorPos();
-   418	          break;
-   419	     case 0x99:  // delete
-   420	          p = CalcScreenLocation();
-   421	          for (nn = j->CursorCol; nn < j->VideoCols-1; nn++) {
-   422	              p[nn-j->CursorCol] = p[nn+1-j->CursorCol];
-   423	          }
-   424	          p[nn-j->CursorCol] = GetCurrAttr() | AsciiToScreen(' ');
+   372	void IncrementCursorPos()
+   373	{
+   374	     JCB *j;
+   375	     
+   376	     j = GetJCBPtr();
+   377	     j->CursorCol++;
+   378	     if (j->CursorCol < j->VideoCols) {
+   379	         UpdateCursorPos();
+   380	         return;
+   381	     }
+   382	     j->CursorCol = 0;
+   383	     IncrementCursorRow();
+   384	}
+   385	
+
+
+*** local symbol table ***
+
+j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_ 
+
+
+
+   386	void DisplayChar(char ch)
+   387	{
+   388	     short int *p;
+   389	     int nn;
+   390	     JCB *j;
+   391	
+   392	     j = GetJCBPtr();
+   393	     switch(ch) {
+   394	     case '\r':  j->CursorCol = 0; UpdateCursorPos(); break;
+   395	     case '\n':  IncrementCursorRow(); break;
+   396	     case 0x91:
+   397	          if (j->CursorCol < j->VideoCols-1) {
+   398	             j->CursorCol++;
+   399	             UpdateCursorPos();
+   400	          }
+   401	          break;
+   402	     case 0x90:
+   403	          if (j->CursorRow > 0) {
+   404	               j->CursorRow--;
+   405	               UpdateCursorPos();
+   406	          }
+   407	          break;
+   408	     case 0x93:
+   409	          if (j->CursorCol > 0) {
+   410	               j->CursorCol--;
+   411	               UpdateCursorPos();
+   412	          }
+   413	          break;
+   414	     case 0x92:
+   415	          if (j->CursorRow < j->VideoRows-1) {
+   416	             j->CursorRow++;
+   417	             UpdateCursorPos();
+   418	          }
+   419	          break;
+   420	     case 0x94:
+   421	          if (j->CursorCol==0)
+   422	             j->CursorRow = 0;
+   423	          j->CursorCol = 0;
+   424	          UpdateCursorPos();
    425	          break;
-   426	     case 0x08: // backspace
-   427	          if (j->CursorCol > 0) {
-   428	              j->CursorCol--;
-   429	              p = CalcScreenLocation();
-   430	              for (nn = j->CursorCol; nn < j->VideoCols-1; nn++) {
-   431	                  p[nn-j->CursorCol] = p[nn+1-j->CursorCol];
-   432	              }
-   433	              p[nn-j->CursorCol] = GetCurrAttr() | AsciiToScreen(' ');
-   434	          }
-   435	          break;
-   436	     case 0x0C:   // CTRL-L
-   437	          ClearScreen();
-   438	          HomeCursor();
-   439	          break;
-   440	     case '\t':
-   441	          DisplayChar(' ');
-   442	          DisplayChar(' ');
-   443	          DisplayChar(' ');
-   444	          DisplayChar(' ');
-   445	          break;
-   446	     default:
-   447	          p = CalcScreenLocation();
-   448	          *p = GetCurrAttr() | AsciiToScreen(ch);
-   449	          IncrementCursorPos();
-   450	          break;
-   451	     }
-   452	}
-   453	
+   426	     case 0x99:  // delete
+   427	          p = CalcScreenLocation();
+   428	          for (nn = j->CursorCol; nn < j->VideoCols-1; nn++) {
+   429	              p[nn-j->CursorCol] = p[nn+1-j->CursorCol];
+   430	          }
+   431	          p[nn-j->CursorCol] = GetCurrAttr() | AsciiToScreen(' ');
+   432	          break;
+   433	     case 0x08: // backspace
+   434	          if (j->CursorCol > 0) {
+   435	              j->CursorCol--;
+   436	              p = CalcScreenLocation();
+   437	              for (nn = j->CursorCol; nn < j->VideoCols-1; nn++) {
+   438	                  p[nn-j->CursorCol] = p[nn+1-j->CursorCol];
+   439	              }
+   440	              p[nn-j->CursorCol] = GetCurrAttr() | AsciiToScreen(' ');
+   441	          }
+   442	          break;
+   443	     case 0x0C:   // CTRL-L
+   444	          ClearScreen();
+   445	          HomeCursor();
+   446	          break;
+   447	     case '\t':
+   448	          DisplayChar(' ');
+   449	          DisplayChar(' ');
+   450	          DisplayChar(' ');
+   451	          DisplayChar(' ');
+   452	          break;
+   453	     default:
+   454	          p = CalcScreenLocation();
+   455	          *p = GetCurrAttr() | AsciiToScreen(ch);
+   456	          IncrementCursorPos();
+   457	          break;
+   458	     }
+   459	}
+   460	
 
 
 *** local symbol table ***
@@ -631,12 +638,12 @@ j_         =ffffffe8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   454	void CRLF()
-   455	{
-   456	     DisplayChar('\r');
-   457	     DisplayChar('\n');
-   458	}
-   459	
+   461	void CRLF()
+   462	{
+   463	     DisplayChar('\r');
+   464	     DisplayChar('\n');
+   465	}
+   466	
 
 
 *** local symbol table ***
@@ -644,11 +651,11 @@ j_         =ffffffe8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   460	void DisplayString(char *s)
-   461	{
-   462	     while (*s) { DisplayChar(*s); s++; }
-   463	}
-   464	
+   467	void DisplayString(char *s)
+   468	{
+   469	     while (*s) { DisplayChar(*s); s++; }
+   470	}
+   471	
 
 
 *** local symbol table ***
@@ -657,12 +664,12 @@ s_         =000018    -    Auto        Pointer to Char
 
 
 
-   465	void DisplayStringCRLF(char *s)
-   466	{
-   467	     DisplayString(s);
-   468	     CRLF();
-   469	}
-   470	
+   472	void DisplayStringCRLF(char *s)
+   473	{
+   474	     DisplayString(s);
+   475	     CRLF();
+   476	}
+   477	
 
 
 *** local symbol table ***
@@ -710,7 +717,7 @@ ScrollUp_  =001480    -    Global      Function returning Long
 hJCB_      =00000a    1   Byte
 set_vector_ =001480    -    Global      Function returning 
 hTCB_      =000008    1   Char
-SetVideoReg_ =001480    -    Global      Function returning 
+SetVideoReg_ =000009    -    Static      Function returning 
 ClearScreen_ =001480    -    Global      Function returning 
 DisplayString_ =001480    -    Global      Function returning 
 hMBX_      =00000c    1   Char
@@ -733,6 +740,7 @@ SetBound48_ =001480    -    Global      Function returning
 SetBound49_ =001480    -    Global      Function returning 
 InsertIntoTimeoutList_ =001480    -    Global      Function returning Long
 RemoveFromReadyList_ =001480    -    Global      Function returning Long
+printf_    =000000    -    External    Function returning Long
 InsertIntoReadyList_ =001480    -    Global      Function returning Long
 
  *** structures and unions ***
@@ -764,8 +772,10 @@ _tagJCB_   =000000    -    Type        struct _tagJCB_
     KeybdWaitFlag_ =00066e    -    Member      Byte
     KeybdHead_ =00066f    -    Member      Byte
     KeybdTail_ =000670    -    Member      Byte
-    KeybdBuffer_ =000672    -    Member      Array of 
-    number_    =000692    -    Member      Byte
+    KeybdBuffer_ =000671    -    Member      Array of Unsigned Byte
+    number_    =000691    -    Member      Byte
+    tasks_     =000692    -    Member      Array of Char
+    next_      =0006a2    -    Member      Byte
 tagMBX_    =000000    -    Type        struct tagMBX_ 
     link_      =000000    -    Member      Char
     owner_     =000002    -    Member      Byte
@@ -815,6 +825,7 @@ _tagTCB_   =000000    -    Type        struct _tagTCB_
     startTick_ =0002d0    -    Member      Long
     endTick_   =0002d8    -    Member      Long
     ticks_     =0002e0    -    Member      Long
+    exception_ =0002e8    -    Member      Long
 tagALARM_  =000000    -    Type        struct tagALARM_ 
     next_      =000000    -    Member      Pointer to struct tagALARM_ 
     prev_      =000008    -    Member      Pointer to struct tagALARM_ 

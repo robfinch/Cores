@@ -1,4 +1,10 @@
 //#include "c:\AtlysCores\RTF65000\trunk\software\stdio.h"
+extern pascal int prtdbl(double,int,int,char E);
+
+typedef union tagval {
+    __int64 i;
+    double d;
+} uval;
 
 pascal void putch(char ch)
 {
@@ -134,6 +140,7 @@ int printf(char *p, ...)
 	int fmtwidth;
 	int maxwidth;
 	int wd;
+	uval v;
 	char padchar;
 	q = &p;
 
@@ -155,6 +162,12 @@ j1:
 			case 'd':
 				q++;
 				putnum(*q,fmtwidth,0,padchar);
+				break;
+			case 'e':
+            case 'E':
+				q++;
+				v.i = *q;
+				prtdbl(v.d,fmtwidth,maxwidth,*p);
 				break;
 			case 'x':
 				q++;

@@ -41,6 +41,7 @@ int iflevel;
 Statement *currentStmt;
 char *llptr;
 extern char *lptr;
+extern char inpline[132];
 
 Statement *NewStatement(int typ, int gt) {
 	Statement *s = (Statement *)xalloc(sizeof(Statement));
@@ -52,6 +53,7 @@ Statement *NewStatement(int typ, int gt) {
 	s->s2 = (Statement *)NULL;
 	s->ssyms.head = (SYM *)NULL;
 	s->ssyms.tail = (SYM *)NULL;
+	s->lptr = litlate(inpline);
 	//memset(s->ssyms,0,sizeof(s->ssyms));
 	if (gt) NextToken();
 	return s;
@@ -445,7 +447,9 @@ Statement *ParseCatchStatement()
 	Statement *snp;
 	SYM *sp;
 	TYP *tp,*tp1,*tp2;
-
+    ENODE *node;
+    static char buf[200];
+    
 	snp = NewStatement(st_catch, TRUE);
 	currentStmt = snp;
 	if (lastst != openpa) {
@@ -462,25 +466,33 @@ Statement *ParseCatchStatement()
 	tp1 = tail;
 	catchdecl = TRUE;
 	ParseAutoDeclarations(&snp->ssyms);
+	cseg();
 	catchdecl = FALSE;
 	tp2 = head;
 	head = tp;
 	tail = tp1;
     needpunc(closepa);
-
-	if( (sp = search(declid,&lsyms)) == NULL)
+    
+	if( (sp = search(declid,&snp->ssyms)) == NULL)
         sp = makeint(declid);
+    node = makenode(sp->storage_class==sc_static ? en_labcon : en_autocon,NULL,NULL);
+    // nameref looks up the symbol using lastid, so we need to back it up and
+    // restore it.
+    strcpy(buf,lastid);
+    strcpy(lastid, declid);
+    nameref(&node);
+    strcpy(lastid,buf);
 	snp->s1 = ParseStatement();
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-	snp->label = (int64_t *)sp;	// save off symbol pointer
+	snp->label = (int64_t *)node;	// save name reference
 	if (sp->tp->typeno >= bt_last)
 		error(ERR_CATCHSTRUCT);
 	snp->s2 = (Statement *)GetTypeHash(sp->tp);
 	// Empty statements return NULL
-	if (snp->s2)
-		snp->s2->outer = snp;
+//	if (snp->s2)
+//		snp->s2->outer = snp;
 	return snp;
 }
 

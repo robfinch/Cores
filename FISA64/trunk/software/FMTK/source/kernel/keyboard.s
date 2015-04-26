@@ -105,6 +105,7 @@ kbdi5:
 
 msgBadKeybd:
 	dc		"Keyboard not responding.",0
+	align   4
 
 ;SendByteToKeybd:
 ;	push	r2

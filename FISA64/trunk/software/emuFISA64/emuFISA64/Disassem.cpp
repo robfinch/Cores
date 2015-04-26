@@ -8,6 +8,7 @@ unsigned int insn;
 unsigned int ad;
 unsigned int imm1,imm2;
 int immcnt;
+int opcode;
 
 std::string Ra()
 {
@@ -30,6 +31,38 @@ std::string Rt()
 	char buf[40];
 	std::string str;
 	str = "R" + std::string(_itoa((insn >> 12) & 0x1f,buf,10));
+	return str;
+}
+
+std::string Rt4()
+{
+	char buf[40];
+	std::string str;
+	str = "R" + std::string(_itoa(((insn >> 12) & 0xf)|((insn & 1) << 4),buf,10));
+	return str;
+}
+
+std::string FPa()
+{
+	char buf[40];
+	std::string str;
+	str = "FP" + std::string(_itoa((insn >> 7) & 0x1f,buf,10));
+	return str;
+}
+
+std::string FPb()
+{
+	char buf[40];
+	std::string str;
+	str = "FP" + std::string(_itoa((insn >> 17) & 0x1f,buf,10));
+	return str;
+}
+
+std::string FPt()
+{
+	char buf[40];
+	std::string str;
+	str = "FP" + std::string(_itoa((insn >> 12) & 0x1f,buf,10));
 	return str;
 }
 
@@ -94,10 +127,49 @@ static std::string DisassemConstant()
 
     sir = insn;
     if (immcnt == 1) {
-        sprintf(buf,"$%X", (imm1 << 15)|(insn>>17));
+        sprintf(buf,"$%X", (imm1 << 15)|(insn>>17)<<(opcode==JAL ? 1 : 0));
     }
     else
-        sprintf(buf,"$%X", (sir >> 17));
+        sprintf(buf,"$%X", (sir >> 17)<<(opcode==JAL ? 1 : 0));
+    return std::string(buf);
+}
+
+
+static std::string DisassemConstant9()
+{
+    static char buf[50];
+    int sir;
+
+    sir = insn;
+    sprintf(buf,"$%X", ((sir >> 7) & 0x1ff)<< 3);
+    return std::string(buf);
+}
+
+
+static std::string DisassemConstant4()
+{
+    static char buf[50];
+    int sir;
+
+    sir = insn;
+	sir >>= 12;
+	sir &= 0xF;
+	if (sir&8)
+		sir |= 0xFFFFFFF0;
+    sprintf(buf,"$%X", sir);
+    return std::string(buf);
+}
+
+
+static std::string DisassemConstant4u()
+{
+    static char buf[50];
+    int sir;
+
+    sir = insn;
+	sir >>= 12;
+	sir &= 0xF;
+    sprintf(buf,"$%X", sir);
     return std::string(buf);
 }
 
@@ -108,7 +180,7 @@ static std::string DisassemBraDisplacement()
     int sir;
 
     sir = insn;
-    sprintf(buf,"$%X", ((sir >> 7) <<2) + ad);
+    sprintf(buf,"$%X", ((sir >> 7) <<1) + ad);
     return std::string(buf);
 }
 
@@ -119,7 +191,7 @@ static std::string DisassemBccDisplacement()
     int sir;
 
     sir = insn;
-    sprintf(buf,"$%X", ((sir >> 17) <<2) + ad);
+    sprintf(buf,"$%X", ((sir >> 17) <<1) + ad);
     return std::string(buf);
 }
 
@@ -235,7 +307,7 @@ static std::string DisassemBrk()
 }
 
 
-std::string Disassem(std::string sad, std::string sinsn)
+std::string Disassem(std::string sad, std::string sinsn, unsigned int *ad1)
 {
 	char buf[20];
 	std::string str;
@@ -249,7 +321,9 @@ std::string Disassem(std::string sad, std::string sinsn)
 
 	ad = strtoul(sad.c_str(),0,16);
 	insn = strtoul(sinsn.c_str(),0,16);
-	switch(insn & 0x7F)
+	opcode = insn & 0x7f;
+	*ad1 = (((opcode>>3)==6) ||(opcode==MOV2)||(opcode==MOV2+1)||(opcode==ADDQ))? ad + 2 : ad + 4;
+	switch(opcode)
 	{
 	case RR:
 		switch((insn >> 25) & 0x7f)
@@ -399,44 +473,16 @@ std::string Disassem(std::string sad, std::string sinsn)
 			str = "CHK   " + Rt() +"," + Ra() + "," + Bn();
 			immcnt = 0;
 			return str;
-		case SEQ:
-			str = "SEQ   " + Rt() +"," + Ra() + "," + Rb();
+		case FMOV:
+			str = "FMOV  " + FPt() +"," + FPa();
 			immcnt = 0;
 			return str;
-		case SNE:
-			str = "SNE   " + Rt() +"," + Ra() + "," + Rb();
+		case FNEG:
+			str = "FNEG  " + FPt() +"," + FPa();
 			immcnt = 0;
 			return str;
-		case SGT:
-			str = "SGT   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SLE:
-			str = "SLE   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SGE:
-			str = "SGE   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SLT:
-			str = "SLT   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SHI:
-			str = "SHI   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SLS:
-			str = "SLS   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SHS:
-			str = "SHS   " + Rt() +"," + Ra() + "," + Rb();
-			immcnt = 0;
-			return str;
-		case SLO:
-			str = "SLO   " + Rt() +"," + Ra() + "," + Rb();
+		case FABS:
+			str = "FABS  " + FPt() +"," + FPa();
 			immcnt = 0;
 			return str;
 		}
@@ -514,50 +560,41 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "EOR   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
-	case SEQ:
-		str = "SEQ   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+	case CHKI:
+		str = "CHK   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
-	case SNE:
-		str = "SNE   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+	case FADD:
+		str = "FADD  " + FPt() +"," + FPa() + "," + FPb();
 		immcnt = 0;
 		return str;
-	case SGT:
-		str = "SGT   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+	case FSUB:
+		str = "FSUB  " + FPt() +"," + FPa() + "," + FPb();
 		immcnt = 0;
 		return str;
-	case SLE:
-		str = "SLE   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+	case FCMP:
+		str = "FCMP  " + Rt() +"," + FPa() + "," + FPb();
 		immcnt = 0;
 		return str;
-	case SGE:
-		str = "SGE   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+	case FMUL:
+		str = "FMUL  " + FPt() +"," + FPa() + "," + FPb();
 		immcnt = 0;
 		return str;
-	case SLT:
-		str = "SLT   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
-		immcnt = 0;
-		return str;
-	case SHI:
-		str = "SHI   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
-		immcnt = 0;
-		return str;
-	case SLS:
-		str = "SLS   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
-		immcnt = 0;
-		return str;
-	case SHS:
-		str = "SHS   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
-		immcnt = 0;
-		return str;
-	case SLO:
-		str = "SLO   " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+	case FDIV:
+		str = "FDIV  " + FPt() +"," + FPa() + "," + FPb();
 		immcnt = 0;
 		return str;
 
 	case IMM:
+	case IMM+1:
+	case IMM+2:
+	case IMM+3:
+	case IMM+4:
+	case IMM+5:
+	case IMM+6:
+	case IMM+7:
 		imm2 = imm1;
-		imm1 = (insn >> 7);
+		imm1 = ((insn >> 7)<<3)|(insn&7);
 		immcnt++;
 		return "IMM";
 	case Bcc:
@@ -609,8 +646,16 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "RTL   #" + DisassemConstant();
 		immcnt = 0;
 		return str;
+	case RTL2:
+		str = "RTL   #" + DisassemConstant9();
+		immcnt = 0;
+		return str;
 	case RTS:
 		str = "RTS   #" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case RTS2:
+		str = "RTS   #" + DisassemConstant9();
 		immcnt = 0;
 		return str;
 	case BRK:
@@ -624,11 +669,33 @@ std::string Disassem(std::string sad, std::string sinsn)
 	case PUSH:
 		immcnt = 0;
 		return "PUSH  " + Ra();
+	case PUSHF:
+		immcnt = 0;
+		return "PUSH  " + FPa();
 	case POP:
 		immcnt = 0;
 		return "POP   " + Rt();
+	case POPF:
+		immcnt = 0;
+		return "POP   " + FPt();
 	case LDI:
 		str = "LDI   " + Rt() + ",#" + DisassemConstant();
+		immcnt = 0;
+		return str;
+	case LDIQ:
+		str = "LDI   " + Ra() + ",#" + DisassemConstant4();
+		immcnt = 0;
+		return str;
+	case ADDQ:
+		str = "ADDQ  " + Ra() + ",#" + DisassemConstant4u();
+		immcnt = 0;
+		return str;
+	case MOV2:
+	case MOV2+1:
+		immcnt = 0;
+		return "MOV   " + Rt4() + "," + Ra();
+	case LDFI:
+		str = "LDI   " + FPt() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
 	case LB:
@@ -663,6 +730,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "LWAR  " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
 		return str;
+	case LFD:
+		str = "LFD   " + FPt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
 	case LEA:
 		str = "LEA   " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
@@ -695,6 +766,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "LWX   " + Rt() + "," + DisassemIndexedAddress();
 		immcnt = 0;
 		return str;
+	case LFDX:
+		str = "LFDX  " + FPt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
 	case SB:
 		str = "SB    " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
@@ -709,6 +784,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		return str;
 	case SW:
 		str = "SW    " + Rt() + "," + DisassemMemAddress();
+		immcnt = 0;
+		return str;
+	case SFD:
+		str = "SFD   " + FPt() + "," + DisassemMemAddress();
 		immcnt = 0;
 		return str;
 	case SWCR:
@@ -731,6 +810,10 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "SW    " + Rt() + "," + DisassemIndexedAddress();
 		immcnt = 0;
 		return str;
+	case SFDX:
+		str = "SFDX  " + FPt() + "," + DisassemIndexedAddress();
+		immcnt = 0;
+		return str;
 	case PEA:
 		str = "PEA   " + Rt() + "," + DisassemMemAddress();
 		immcnt = 0;
@@ -743,17 +826,26 @@ std::string Disassem(std::string sad, std::string sinsn)
 		str = "INC   " + DisassemMemAddress() + ",#" + IncAmt();
 		immcnt = 0;
 		return str;
+	case PUSHPOP:
+		switch((insn >> 12)&15) {
+		case 0:	str = "PUSH  " + Ra(); break;
+		case 1: str = "PUSH  " + FPa(); break;
+		case 2: str = "POP   " + Ra(); break;
+		case 3: str = "POP   " + FPa(); break;
+		}
+		immcnt = 0;
+		return str;
 	}
 	immcnt = 0;
 	return "?????";
 }
 
-std::string Disassem(unsigned int ad, unsigned int dat)
+std::string Disassem(unsigned int ad, unsigned int dat, unsigned int *ad1)
 {
 	char buf1[20];
 	char buf2[20];
 
 	sprintf(buf1,"%06X", ad);
 	sprintf(buf2,"%08X", dat);
-	return Disassem(std::string(buf1),std::string(buf2));
+	return Disassem(std::string(buf1),std::string(buf2),ad1);
 }

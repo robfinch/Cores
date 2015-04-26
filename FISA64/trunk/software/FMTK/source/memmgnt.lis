@@ -1,0 +1,234 @@
+     1	
+     2	extern int highest_data_word;
+     3	private unsigned int pam[512];
+     4	private unsigned int start_bit;
+     5	int syspages;
+     6	
+     7	private pascal void setLotReg(int lot, int val)
+     8	{
+     9	     asm {
+    10	         lw    r1,24[bp]
+    11	         lw    r2,32[bp]
+    12	         mtspr 40,r1
+    13	         mtspr 41,r2
+    14	     }
+    15	}
+    16	
+
+
+*** local symbol table ***
+
+lot_       =000018    -    Auto        Long
+val_       =000020    -    Auto        Long
+
+
+
+    17	private int getPamBit(int wb)
+    18	{
+    19	     int bit;
+    20	     int ndx;
+    21	
+    22	     bit = wb & 31;
+    23	     ndx = (wb >> 5) << 1;
+    24	     return (pam[ndx] >> (bit << 1)) & 3;
+    25	}
+    26	
+
+
+*** local symbol table ***
+
+wb_        =000018    -    Auto        Long
+bit_       =fffffff8    -    Auto        Long
+ndx_       =fffffff0    -    Auto        Long
+
+
+
+    27	private void setPamBit(int wb, int val, int whofor, int purpose)
+    28	{
+    29	     int bit;
+    30	     int ndx;
+    31	
+    32	     bit = wb & 31;
+    33	     ndx = (wb >> 5) << 1;
+    34	     pam[ndx] &= ~(3 << (bit << 1));
+    35	     pam[ndx] |= ((val & 3) << (bit << 1));
+    36	     setLotReg(wb << 16,((whofor & 0x3ff)<< 6)|((purpose & 7) << 3)|0x6);
+    37	}
+    38	
+
+
+*** local symbol table ***
+
+wb_        =000018    -    Auto        Long
+val_       =000020    -    Auto        Long
+whofor_    =000028    -    Auto        Long
+purpose_   =000030    -    Auto        Long
+bit_       =fffffff8    -    Auto        Long
+ndx_       =fffffff0    -    Auto        Long
+
+
+
+    39	private pascal void setPambits(unsigned int wb, int val, unsigned int numbits, int whofor, int purpose)
+    40	{
+    41	     for (; numbits > 0; numbits--, wb++)
+    42	         setPambit(wb, val, whofor, purpose);
+    43	}
+    44	
+
+
+*** local symbol table ***
+
+wb_        =000018    -    Auto        
+val_       =000020    -    Auto        Long
+numbits_   =000028    -    Auto        
+whofor_    =000030    -    Auto        Long
+purpose_   =000038    -    Auto        Long
+
+
+
+    45	private unsigned int find(unsigned int nbits)
+    46	{
+    47	    unsigned int bitno;
+    48	    unsigned int nb;
+    49	    unsigned int sb;
+    50	
+    51	    for(bitno = start_bit; bitno < 2048; bitno++) {
+    52	         if (getPamBit(bitno)==0) {
+    53	            nb = nbits;
+    54	            sb = bitno;
+    55	            while (getPamBit(bitno)==0 && nb > 0 && bitno < 2048) { bitno++, nb-- }
+    56	            if (nb <= 0)
+    57	                return sb;
+    58	            if (bitno >= 2048)
+    59	                return 0;
+    60	        }
+    61	    }
+    62	    return 0;
+    63	}
+    64	
+
+
+*** local symbol table ***
+
+nbits_     =000018    -    Auto        
+bitno_     =fffffff8    -    Auto        
+nb_        =fffffff0    -    Auto        
+sb_        =ffffffe8    -    Auto        
+
+
+
+    65	private pascal unsigned int round64k(unsigned int amt)
+    66	{
+    67	    amt += 65535;
+    68	    amt &= 0xFFFFFFFFFFFF0000L;
+    69	    return amt;
+    70	}
+    71	
+
+
+*** local symbol table ***
+
+amt_       =000018    -    Auto        
+
+
+
+    72	pascal unsigned int *sys_alloc(unsigned int amt, int whofor, int purpose)
+    73	{
+    74	    unsigned int *phdw;
+    75	    unsigned int pg;
+    76	    int nn;
+    77	    unsigned int sb;
+    78	    unsigned int bits_in_row;
+    79	
+    80	    if firstcall {
+    81	        memset(pam, 0, sizeof(pam));
+    82	        phdw = &highest_data_word;
+    83	        phdw = round64k(phdw);
+    84	        pg = (phdw >> 16) + 1;
+    85	        if (pg < 2048) { // It should be
+    86	            for (nn = 0; nn < pg; nn++) {
+    87	                //setPamBit(nn,1,1,0);
+    88	                // page1 and 2 are the bootrom, which is an executable space
+    89	                //setLotReg(nn << 16,(1<< 6)|((nn==1||nn==2) ? 0x7 : 0x6));
+    90	            }
+    91	            start_bit = pg;
+    92	            syspages = pg;
+    93	        }
+    94	    }
+    95	    amt = round64k(amt);
+    96	    if (amt==0)
+    97	        return (void *)0;
+    98	    bits_in_row = amt >> 16;
+    99	    sb = find(bits_in_row);
+   100	    if (sb == 0)
+   101	        return (void *)0;
+   102	    setPamBits(sb,1,bits_in_row,whofor,purpose);
+   103	    setPamBit(sb+bits_in_row-1,2,whofor,purpose);
+   104	    return (sb << 16);
+   105	}
+   106	
+
+
+*** local symbol table ***
+
+amt_       =000018    -    Auto        
+whofor_    =000020    -    Auto        Long
+purpose_   =000028    -    Auto        Long
+phdw_      =fffffff8    -    Auto        Pointer to 
+pg_        =fffffff0    -    Auto        
+nn_        =ffffffe8    -    Auto        Long
+sb_        =ffffffe0    -    Auto        
+bits_in_row_ =ffffffd8    -    Auto        
+
+
+
+   107	pascal void sys_free(unsigned int *p)
+   108	{
+   109	    unsigned int pg;
+   110	    int val;
+   111	
+   112	    if ((p & 0xFFFFL) != 0)
+   113	        return;
+   114	    pg = p >> 16;
+   115	    if (pg < start_bit or pg >= 2048)
+   116	        return;
+   117	    do {
+   118	        val = getPamBit(pg);
+   119	        if (val==1 or val==2)
+   120	            setPamBit(pg,0);
+   121	        setLotReg(pg << 16,0);
+   122	        pg++;
+   123	    } while (val==1 and pg < 2048);
+   124	}
+   125	
+
+
+*** local symbol table ***
+
+p_         =000018    -    Auto        Pointer to 
+pg_        =fffffff8    -    Auto        
+val_       =fffffff0    -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+find_      =000015    -    Static      Function returning 
+setPambit_ =000000    -    External    Function returning Long
+sys_alloc_ =001010    -    Global      Function returning Pointer to 
+start_bit_ =000001    -    Static      
+setPamBits_ =000000    -    External    Function returning Long
+round64k_  =000024    -    Static      Function returning 
+highest_data_word_ =000000    -    External    Long
+setPambits_ =00000e    -    Static      Function returning 
+pam_       =000000    -    Static      Array of 
+sys_free_  =001010    -    Global      Function returning 
+syspages_  =001008    -    Global      Long
+getPamBit_ =000006    -    Static      Function returning Long
+setPamBit_ =00000a    -    Static      Function returning 
+memset_    =000000    -    External    Function returning Long
+setLotReg_ =000002    -    Static      Function returning 
+
+ *** structures and unions ***
+

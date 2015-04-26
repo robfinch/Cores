@@ -110,6 +110,7 @@ int AllocateFISA64RegisterVars()
 	CSE *csp;
     ENODE *exptr;
     int reg, mask, rmask;
+    int fpreg, fpmask, fprmask;
     AMODE *ap, *ap2, *ap3;
     AMODE *a1,*a2,*a3,*a4;
 	int64_t nn;
@@ -117,28 +118,46 @@ int AllocateFISA64RegisterVars()
 	int size;
 
 	reg = 11;
+	fpreg = 11;
     mask = 0;
 	rmask = 0;
+	fpmask = 0;
+	fprmask = 0;
     while( FISA64_bsort(&olist) );         /* sort the expression list */
     csp = olist;
     while( csp != NULL ) {
-        if( FISA64OptimizationDesireability(csp) < 3 )	// was < 3
+        if( FISA64OptimizationDesireability(csp) < 3 )
             csp->reg = -1;
-//        else if( csp->duses > csp->uses / 4 && reg < 18 )
 		else {
 			{
-				if( csp->duses > csp->uses / 4 && reg < 18 )
-//				if( reg < 18 )	// was / 4
-					csp->reg = reg++;
-				else
-					csp->reg = -1;
+                if (csp->isfp) {
+    				if( csp->duses > csp->uses / 4 && fpreg < 18 )
+    					csp->reg = fpreg++;
+    				else
+    					csp->reg = -1;
+                }
+                else {
+    				if( csp->duses > csp->uses / 4 && reg < 18 )
+    					csp->reg = reg++;
+    				else
+    					csp->reg = -1;
+                }
 			}
 		}
-        if( csp->reg != -1 )
-		{
-			rmask = rmask | (1 << (31 - csp->reg));
-			mask = mask | (1 << csp->reg);
-		}
+		if (csp->isfp) {
+            if( csp->reg != -1 )
+    		{
+    			fprmask = fprmask | (1 << (31 - csp->reg));
+    			fpmask = fpmask | (1 << csp->reg);
+    		}
+        }
+        else {
+            if( csp->reg != -1 )
+    		{
+    			rmask = rmask | (1 << (31 - csp->reg));
+    			mask = mask | (1 << csp->reg);
+    		}
+        }
         csp = csp->next;
     }
 	if( mask != 0 ) {
@@ -152,7 +171,17 @@ int AllocateFISA64RegisterVars()
 			}
 		}
 	}
+	if( fpmask != 0 ) {
+		cnt = 0;
+		for (nn = 0; nn < 32; nn++) {
+			if (fprmask & (0x80000000 >> nn)) {
+				GenerateMonadic(op_push,0,makefpreg(nn&31));
+				cnt+=8;
+			}
+		}
+	}
     save_mask = mask;
+    fpsave_mask = fpmask;
     csp = olist;
     while( csp != NULL ) {
             if( csp->reg != -1 )
@@ -161,19 +190,26 @@ int AllocateFISA64RegisterVars()
                     if( !IsLValue(exptr) || (exptr->p[0]->i > 0) )
                             {
                             initstack();
-                            ap = GenerateExpression(exptr,F_ALL,8);
-							ap2 = makereg(csp->reg);
-							if (ap->mode==am_immed) {
-                                FISA64_GenLdi(ap2,ap);
-                           }
-							else if (ap->mode==am_reg)
-								GenerateDiadic(op_mov,0,ap2,ap);
-							else {
-								size = GetNaturalSize(exptr);
-								ap->isUnsigned = exptr->isUnsigned;
-								GenLoad(ap2,ap,size);
-							}
-                            ReleaseTempRegister(ap);
+                            if (csp->isfp) {
+                                ap = GenerateExpression(exptr,F_FPREG,8);
+    							ap2 = makefpreg(csp->reg);
+  								GenerateDiadic(op_fdmov,0,ap2,ap);
+                            }
+                            else {
+                                ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,8);
+    							ap2 = makereg(csp->reg);
+    							if (ap->mode==am_immed) {
+                                    FISA64_GenLdi(ap2,ap);
+                               }
+    							else if (ap->mode==am_reg)
+    								GenerateDiadic(op_mov,0,ap2,ap);
+    							else {
+    								size = GetNaturalSize(exptr);
+    								ap->isUnsigned = exptr->isUnsigned;
+    								GenLoad(ap2,ap,size);
+    							}
+                            }
+                            ReleaseTempReg(ap);
                             }
                     }
             csp = csp->next;
@@ -191,6 +227,7 @@ AMODE *GenExprFISA64(ENODE *node)
 
     lab0 = nextlabel++;
     lab1 = nextlabel++;
+/*
 	switch(node->nodetype) {
 	case en_eq:		op = op_seq;	break;
 	case en_ne:		op = op_sne;	break;
@@ -203,7 +240,9 @@ AMODE *GenExprFISA64(ENODE *node)
 	case en_ge:		op = op_sge;	break;
 	case en_uge:	op = op_sgeu;	break;
 	}
+*/
 	switch(node->nodetype) {
+/*
 	case en_eq:
 	case en_ne:
 	case en_lt:
@@ -220,6 +259,7 @@ AMODE *GenExprFISA64(ENODE *node)
 		GenerateTriadic(op,0,ap1,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		return ap1;
+*/
 	case en_chk:
 		size = GetNaturalSize(node);
         ap4 = GetTempRegister();         
@@ -252,8 +292,14 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 	AMODE *ap1, *ap2, *ap3;
 
 	size = GetNaturalSize(node);
-	ap1 = GenerateExpression(node->p[0],F_REG, size);
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+    if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
+    	ap1 = GenerateExpression(node->p[0],F_FPREG,size);
+	    ap2 = GenerateExpression(node->p[1],F_FPREG,size);
+    }
+    else {
+    	ap1 = GenerateExpression(node->p[0],F_REG, size);
+	    ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+    }
 	ap3 = GetTempRegister();
 	// Optimize CMP to zero and branch into plain branch, this works only for
 	// signed relational compares.
@@ -267,15 +313,17 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
     	case op_gt: op = op_bgt; break;
     	case op_ge: op = op_bge; break;
     	}
-    	ReleaseTempRegister(ap3);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
+    	ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
 		GenerateDiadic(op,0,ap1,make_clabel(label));
 		return;
 	}
 	if (op==op_ltu || op==op_leu || op==op_gtu || op==op_geu)
  	    GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
-	else
+    else if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne)
+        GenerateTriadic(op_fdcmp,0,ap3,ap1,ap2);
+	else 
  	    GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 	switch(op)
 	{
@@ -289,11 +337,29 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 	case op_leu: op = op_ble; break;
 	case op_gtu: op = op_bgt; break;
 	case op_geu: op = op_bge; break;
+	case op_feq:
+         op = op_beq;
+         break;
+	case op_fne:
+         op = op_bne;
+         break;
+	case op_flt:
+         op = op_blt;
+         break;
+	case op_fle:
+         op = op_ble;
+         break;
+	case op_fgt:
+         op = op_bgt;
+         break;
+	case op_fge:
+         op = op_bge;
+         break;
 	}
 	GenerateDiadic(op,0,ap3,make_clabel(label));
-	ReleaseTempRegister(ap3);
-	ReleaseTempRegister(ap2);
-	ReleaseTempRegister(ap1);
+	ReleaseTempReg(ap3);
+   	ReleaseTempReg(ap2);
+   	ReleaseTempReg(ap1);
 }
 
 
@@ -304,11 +370,13 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 	char buf[20];
 	char *bl;
 	AMODE *ap;
-
+    int defcatch;
+ 
 	throwlab = retlab = contlab = breaklab = -1;
 	lastsph = 0;
 	memset(semaphores,0,sizeof(semaphores));
 	throwlab = nextlabel++;
+	defcatch = nextlabel++;
 	while( lc_auto & 7 )	/* round frame size to word */
 		++lc_auto;
 	if (sym->IsInterrupt) {
@@ -402,11 +470,13 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
     if( stmt != NULL && stmt->exp != NULL )
 	{
 		initstack();
-		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,8);
+		ap = GenerateExpression(stmt->exp,F_REG|F_FPREG|F_IMMED,8);
 		if (ap->mode == am_immed)
 		    FISA64_GenLdi(makereg(1),ap);
 		else if (ap->mode == am_reg)
 			GenerateDiadic(op_mov, 0, makereg(1),ap);
+		else if (ap->mode == am_fpreg)
+			GenerateDiadic(op_fdmov, 0, makefpreg(1),ap);
 		else
 		    GenLoad(makereg(1),ap,8);
 		ReleaseTempRegister(ap);
@@ -424,6 +494,16 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
         if (sym->IsNocall) {	// nothing to do for nocall convention
 			return;
         }
+		// Restore fp registers used as register variables.
+		if( fpsave_mask != 0 ) {
+			cnt = (bitsset(fpsave_mask)-1)*8;
+			for (nn = 31; nn >=1 ; nn--) {
+				if (fpsave_mask & (1 << nn)) {
+					GenerateMonadic(op_pop,0,makefpreg(nn));
+					cnt -= 8;
+				}
+			}
+		}
 		// Restore registers used as register variables.
 		if( save_mask != 0 ) {
 			cnt = (bitsset(save_mask)-1)*8;
@@ -505,9 +585,9 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 static void GeneratePushParameter(ENODE *ep)
 {    
 	AMODE *ap;
-	ap = GenerateExpression(ep,F_REG,8);
+	ap = GenerateExpression(ep,F_REG|F_FPREG,8);
 	GenerateMonadic(op_push,0,ap);
-	ReleaseTempRegister(ap);
+	ReleaseTempReg(ap);
 }
 
 // push entire parameter list onto stack
@@ -532,8 +612,10 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
     int             i;
 	int msk;
 	int sp = 0;
+	int fsp = 0;
 
 	sp = TempInvalidate();
+	fsp = TempFPInvalidate();
 	sym = NULL;
     i = GeneratePushParameterList(node->p[1]);
 	// Call the function
@@ -581,8 +663,20 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 		else
 			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 	}
+	TempFPRevalidate(fsp);
 	TempRevalidate(sp);
-    result = GetTempRegister();
+	if (sym) {
+	   if (sym->tp->type==bt_double)
+           result = GetTempFPRegister();
+	   else
+           result = GetTempRegister();
+    }
+    else {
+        if (node->etype==bt_double)
+            result = GetTempFPRegister();
+        else
+            result = GetTempRegister();
+    }
 	if (flags & F_NOVALUE)
 		;
 	else {
@@ -590,11 +684,19 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 			if (sym) {
 				if (sym->tp->btp->type==bt_void)
 					;
-				else
-					GenerateDiadic(op_mov,0,result,makereg(1));
+				else {
+                    if (sym->tp->type==bt_double)
+					    GenerateDiadic(op_fdmov,0,result,makefpreg(1));
+                    else
+					    GenerateDiadic(op_mov,0,result,makereg(1));
+                }
 			}
-			else
-				GenerateDiadic(op_mov,0,result,makereg(1));
+			else {
+                if (node->etype==bt_double)
+      				GenerateDiadic(op_fdmov,0,result,makereg(1));
+                else
+		     		GenerateDiadic(op_mov,0,result,makereg(1));
+            }
 		}
 	}
     return result;

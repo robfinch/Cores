@@ -78,6 +78,37 @@ namespace emuFISA64 {
 
 	private: System::Windows::Forms::ToolStripMenuItem^  stackToolStripMenuItem;
 	private: System::Windows::Forms::ToolStripMenuItem^  memoryToolStripMenuItem;
+	private: System::Windows::Forms::Label^  label48;
+	private: System::Windows::Forms::Label^  label49;
+	private: System::Windows::Forms::Label^  label50;
+	private: System::Windows::Forms::Label^  label51;
+	private: System::Windows::Forms::Label^  label52;
+	private: System::Windows::Forms::Label^  label53;
+	private: System::Windows::Forms::Label^  label54;
+	private: System::Windows::Forms::Label^  label55;
+	private: System::Windows::Forms::TextBox^  textBoxFP7;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP6;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP5;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP4;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP3;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP2;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP1;
+
+	private: System::Windows::Forms::TextBox^  textBoxFP0;
+
+
+
+
+
+
+
+
 
 			 bool viewMacCode;
 	public:
@@ -280,6 +311,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->pCHistoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->machineCodeToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->stackToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->memoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->aboutToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->openFileDialog1 = (gcnew System::Windows::Forms::OpenFileDialog());
 			this->label1 = (gcnew System::Windows::Forms::Label());
@@ -401,7 +433,22 @@ private: System::Windows::Forms::Label^  label41;
 			this->timer1024 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->timer30 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->lblWriteErr = (gcnew System::Windows::Forms::Label());
-			this->memoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->label48 = (gcnew System::Windows::Forms::Label());
+			this->label49 = (gcnew System::Windows::Forms::Label());
+			this->label50 = (gcnew System::Windows::Forms::Label());
+			this->label51 = (gcnew System::Windows::Forms::Label());
+			this->label52 = (gcnew System::Windows::Forms::Label());
+			this->label53 = (gcnew System::Windows::Forms::Label());
+			this->label54 = (gcnew System::Windows::Forms::Label());
+			this->label55 = (gcnew System::Windows::Forms::Label());
+			this->textBoxFP7 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP6 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP5 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP4 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP3 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP2 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP1 = (gcnew System::Windows::Forms::TextBox());
+			this->textBoxFP0 = (gcnew System::Windows::Forms::TextBox());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			this->SuspendLayout();
@@ -412,7 +459,7 @@ private: System::Windows::Forms::Label^  label41;
 				this->runToolStripMenuItem, this->viewToolStripMenuItem, this->aboutToolStripMenuItem});
 			this->menuStrip1->Location = System::Drawing::Point(0, 0);
 			this->menuStrip1->Name = L"menuStrip1";
-			this->menuStrip1->Size = System::Drawing::Size(828, 24);
+			this->menuStrip1->Size = System::Drawing::Size(984, 24);
 			this->menuStrip1->TabIndex = 1;
 			this->menuStrip1->Text = L"menuStrip1";
 			// 
@@ -526,30 +573,37 @@ private: System::Windows::Forms::Label^  label41;
 			// registersToolStripMenuItem
 			// 
 			this->registersToolStripMenuItem->Name = L"registersToolStripMenuItem";
-			this->registersToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->registersToolStripMenuItem->Size = System::Drawing::Size(151, 22);
 			this->registersToolStripMenuItem->Text = L"&Registers";
 			this->registersToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::registersToolStripMenuItem_Click);
 			// 
 			// pCHistoryToolStripMenuItem
 			// 
 			this->pCHistoryToolStripMenuItem->Name = L"pCHistoryToolStripMenuItem";
-			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->pCHistoryToolStripMenuItem->Size = System::Drawing::Size(151, 22);
 			this->pCHistoryToolStripMenuItem->Text = L"PC History";
 			this->pCHistoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::pCHistoryToolStripMenuItem_Click);
 			// 
 			// machineCodeToolStripMenuItem
 			// 
 			this->machineCodeToolStripMenuItem->Name = L"machineCodeToolStripMenuItem";
-			this->machineCodeToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->machineCodeToolStripMenuItem->Size = System::Drawing::Size(151, 22);
 			this->machineCodeToolStripMenuItem->Text = L"Machine Code";
 			this->machineCodeToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::machineCodeToolStripMenuItem_Click);
 			// 
 			// stackToolStripMenuItem
 			// 
 			this->stackToolStripMenuItem->Name = L"stackToolStripMenuItem";
-			this->stackToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->stackToolStripMenuItem->Size = System::Drawing::Size(151, 22);
 			this->stackToolStripMenuItem->Text = L"Stack";
 			this->stackToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stackToolStripMenuItem_Click);
+			// 
+			// memoryToolStripMenuItem
+			// 
+			this->memoryToolStripMenuItem->Name = L"memoryToolStripMenuItem";
+			this->memoryToolStripMenuItem->Size = System::Drawing::Size(151, 22);
+			this->memoryToolStripMenuItem->Text = L"&Memory";
+			this->memoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::memoryToolStripMenuItem_Click);
 			// 
 			// aboutToolStripMenuItem
 			// 
@@ -579,7 +633,7 @@ private: System::Windows::Forms::Label^  label41;
 				this->toolStripButton2, this->toolStripButton3, this->toolStripButton4, this->toolStripButton5, this->toolStripButton6, this->toolStripButton7});
 			this->toolStrip1->Location = System::Drawing::Point(0, 24);
 			this->toolStrip1->Name = L"toolStrip1";
-			this->toolStrip1->Size = System::Drawing::Size(828, 25);
+			this->toolStrip1->Size = System::Drawing::Size(984, 25);
 			this->toolStrip1->TabIndex = 3;
 			this->toolStrip1->Text = L"toolStripExec";
 			// 
@@ -1682,18 +1736,183 @@ private: System::Windows::Forms::Label^  label41;
 			this->lblWriteErr->Text = L"Trying to write ROM";
 			this->lblWriteErr->Visible = false;
 			// 
-			// memoryToolStripMenuItem
+			// label48
 			// 
-			this->memoryToolStripMenuItem->Name = L"memoryToolStripMenuItem";
-			this->memoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
-			this->memoryToolStripMenuItem->Text = L"&Memory";
-			this->memoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::memoryToolStripMenuItem_Click);
+			this->label48->AutoSize = true;
+			this->label48->Location = System::Drawing::Point(828, 235);
+			this->label48->Name = L"label48";
+			this->label48->Size = System::Drawing::Size(26, 13);
+			this->label48->TabIndex = 160;
+			this->label48->Text = L"FP7";
+			this->label48->Click += gcnew System::EventHandler(this, &frmMain::label48_Click);
+			// 
+			// label49
+			// 
+			this->label49->AutoSize = true;
+			this->label49->Location = System::Drawing::Point(828, 209);
+			this->label49->Name = L"label49";
+			this->label49->Size = System::Drawing::Size(26, 13);
+			this->label49->TabIndex = 159;
+			this->label49->Text = L"FP6";
+			// 
+			// label50
+			// 
+			this->label50->AutoSize = true;
+			this->label50->Location = System::Drawing::Point(828, 183);
+			this->label50->Name = L"label50";
+			this->label50->Size = System::Drawing::Size(26, 13);
+			this->label50->TabIndex = 158;
+			this->label50->Text = L"FP5";
+			// 
+			// label51
+			// 
+			this->label51->AutoSize = true;
+			this->label51->Location = System::Drawing::Point(828, 157);
+			this->label51->Name = L"label51";
+			this->label51->Size = System::Drawing::Size(26, 13);
+			this->label51->TabIndex = 157;
+			this->label51->Text = L"FP4";
+			// 
+			// label52
+			// 
+			this->label52->AutoSize = true;
+			this->label52->Location = System::Drawing::Point(828, 131);
+			this->label52->Name = L"label52";
+			this->label52->Size = System::Drawing::Size(26, 13);
+			this->label52->TabIndex = 156;
+			this->label52->Text = L"FP3";
+			// 
+			// label53
+			// 
+			this->label53->AutoSize = true;
+			this->label53->Location = System::Drawing::Point(828, 105);
+			this->label53->Name = L"label53";
+			this->label53->Size = System::Drawing::Size(26, 13);
+			this->label53->TabIndex = 155;
+			this->label53->Text = L"FP2";
+			// 
+			// label54
+			// 
+			this->label54->AutoSize = true;
+			this->label54->Location = System::Drawing::Point(828, 79);
+			this->label54->Name = L"label54";
+			this->label54->Size = System::Drawing::Size(26, 13);
+			this->label54->TabIndex = 154;
+			this->label54->Text = L"FP1";
+			// 
+			// label55
+			// 
+			this->label55->AutoSize = true;
+			this->label55->Location = System::Drawing::Point(828, 53);
+			this->label55->Name = L"label55";
+			this->label55->Size = System::Drawing::Size(26, 13);
+			this->label55->TabIndex = 153;
+			this->label55->Text = L"FP0";
+			// 
+			// textBoxFP7
+			// 
+			this->textBoxFP7->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP7->Location = System::Drawing::Point(855, 232);
+			this->textBoxFP7->Name = L"textBoxFP7";
+			this->textBoxFP7->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP7->TabIndex = 152;
+			this->textBoxFP7->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxFP6
+			// 
+			this->textBoxFP6->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP6->Location = System::Drawing::Point(855, 206);
+			this->textBoxFP6->Name = L"textBoxFP6";
+			this->textBoxFP6->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP6->TabIndex = 151;
+			this->textBoxFP6->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxFP5
+			// 
+			this->textBoxFP5->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP5->Location = System::Drawing::Point(855, 180);
+			this->textBoxFP5->Name = L"textBoxFP5";
+			this->textBoxFP5->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP5->TabIndex = 150;
+			this->textBoxFP5->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxFP4
+			// 
+			this->textBoxFP4->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP4->Location = System::Drawing::Point(855, 154);
+			this->textBoxFP4->Name = L"textBoxFP4";
+			this->textBoxFP4->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP4->TabIndex = 149;
+			this->textBoxFP4->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxFP3
+			// 
+			this->textBoxFP3->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP3->Location = System::Drawing::Point(855, 128);
+			this->textBoxFP3->Name = L"textBoxFP3";
+			this->textBoxFP3->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP3->TabIndex = 148;
+			this->textBoxFP3->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			// 
+			// textBoxFP2
+			// 
+			this->textBoxFP2->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP2->Location = System::Drawing::Point(855, 102);
+			this->textBoxFP2->Name = L"textBoxFP2";
+			this->textBoxFP2->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP2->TabIndex = 147;
+			this->textBoxFP2->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->textBoxFP2->TextChanged += gcnew System::EventHandler(this, &frmMain::textBox6_TextChanged);
+			// 
+			// textBoxFP1
+			// 
+			this->textBoxFP1->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP1->Location = System::Drawing::Point(855, 76);
+			this->textBoxFP1->Name = L"textBoxFP1";
+			this->textBoxFP1->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP1->TabIndex = 146;
+			this->textBoxFP1->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->textBoxFP1->TextChanged += gcnew System::EventHandler(this, &frmMain::textBox7_TextChanged);
+			// 
+			// textBoxFP0
+			// 
+			this->textBoxFP0->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 6, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point, 
+				static_cast<System::Byte>(0)));
+			this->textBoxFP0->Location = System::Drawing::Point(855, 51);
+			this->textBoxFP0->Name = L"textBoxFP0";
+			this->textBoxFP0->Size = System::Drawing::Size(82, 17);
+			this->textBoxFP0->TabIndex = 145;
+			this->textBoxFP0->TabStop = false;
+			this->textBoxFP0->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(828, 549);
+			this->ClientSize = System::Drawing::Size(984, 549);
+			this->Controls->Add(this->label48);
+			this->Controls->Add(this->label49);
+			this->Controls->Add(this->label50);
+			this->Controls->Add(this->label51);
+			this->Controls->Add(this->label52);
+			this->Controls->Add(this->label53);
+			this->Controls->Add(this->label54);
+			this->Controls->Add(this->label55);
+			this->Controls->Add(this->textBoxFP7);
+			this->Controls->Add(this->textBoxFP6);
+			this->Controls->Add(this->textBoxFP5);
+			this->Controls->Add(this->textBoxFP4);
+			this->Controls->Add(this->textBoxFP3);
+			this->Controls->Add(this->textBoxFP2);
+			this->Controls->Add(this->textBoxFP1);
+			this->Controls->Add(this->textBoxFP0);
 			this->Controls->Add(this->lblWriteErr);
 			this->Controls->Add(this->lblChecksumError);
 			this->Controls->Add(this->lblChecksumErr);
@@ -1829,6 +2048,7 @@ private: System::Void loadToolStripMenuItem_Click(System::Object^  sender, Syste
 			 std::string str_ad_insn;
 			 std::string str_disassem;
 			 unsigned int ad;
+			 unsigned int ad1;
 			 unsigned int dat;
 			 unsigned int firstAdr;
 			 char buf2[20];
@@ -1853,7 +2073,7 @@ private: System::Void loadToolStripMenuItem_Click(System::Object^  sender, Syste
 				if (!firstAdr)
 					firstAdr = ad;
 				system1.memory[ad>>2] = dat;
-				str_disassem = Disassem(str_ad,str_insn);
+				str_disassem = Disassem(str_ad,str_insn,&ad1);
 				str_ad_insn = str_ad + "   " + str_insn + "    " + str_disassem;
 				label1->Text = gcnew String(str_ad_insn.c_str());
 				//this->checkedListBox1->Items->Add(gcnew String(str_ad_insn.c_str()));
@@ -1882,7 +2102,8 @@ public: void UpdateListBox(unsigned int ad) {
 	char buf2[50];
 	std::string buf;
 	int chksum;
-	unsigned int dat;
+	unsigned int dat, datx, daty;
+	unsigned int ad1;
 
 	if (ad > 134217727)
 		ad = 0;
@@ -1900,11 +2121,16 @@ public: void UpdateListBox(unsigned int ad) {
 		buf = std::string(buf2);
 		this->listBoxAdr->Items->Add(gcnew String(buf.c_str()));
 		if (viewMacCode) {
-			dat = system1.memory[ad>>2];
-			sprintf(buf2,"%08X", system1.memory[ad>>2]);
+			datx = system1.Read(ad);
+			datx = (datx >> ((ad & 3)<<3)) & 0xFFFF;
+			daty = system1.Read(ad+2);
+			daty = (daty >> (((ad+2) & 3)<<3)) & 0xFFFF;
+			dat = (daty << 16) | datx;
+//			dat = system1.memory[ad>>2];
+			sprintf(buf2,"%08X", dat);
 			this->listBoxBytes->Items->Add(gcnew String(buf2));
 		}
-		buf = Disassem(ad,system1.memory[ad>>2]);
+		buf = Disassem(ad,dat,&ad1);
 		//richTextCode->AppendText(gcnew String(buf.c_str()));
 //				this->checkedListBox1->Items->Add(gcnew String(buf.c_str()));
 		this->listBoxCode->Items->Add(gcnew String(buf.c_str()));
@@ -1913,7 +2139,7 @@ public: void UpdateListBox(unsigned int ad) {
 			if (viewMacCode) this->listBoxBytes->SetSelected(nn,true);
 			this->listBoxCode->SetSelected(nn,true);
 		}
-		ad = ad + 4;
+		ad = ad1;//ad + 4;
 	}
 	sprintf(buf2, "%016I64X", cpu1.regs[0]);
 	buf = std::string(buf2);
@@ -2035,6 +2261,30 @@ public: void UpdateListBox(unsigned int ad) {
 	sprintf(buf2, "%06X", cpu1.isp);
 	buf = std::string(buf2);
 	this->textISP->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[0]);
+	buf = std::string(buf2);
+	this->textBoxFP0->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[1]);
+	buf = std::string(buf2);
+	this->textBoxFP1->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[2]);
+	buf = std::string(buf2);
+	this->textBoxFP2->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[3]);
+	buf = std::string(buf2);
+	this->textBoxFP3->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[4]);
+	buf = std::string(buf2);
+	this->textBoxFP4->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[5]);
+	buf = std::string(buf2);
+	this->textBoxFP5->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[6]);
+	buf = std::string(buf2);
+	this->textBoxFP6->Text = gcnew String(buf.c_str());
+	sprintf(buf2, "%E", cpu1.dregs[7]);
+	buf = std::string(buf2);
+	this->textBoxFP7->Text = gcnew String(buf.c_str());
 	this->checkBoxLED0->Checked = (system1.leds & 1) ;
 	this->checkBoxLED1->Checked = (system1.leds & 2) >> 1;
 	this->checkBoxLED2->Checked = (system1.leds & 4) >> 2;
@@ -2122,7 +2372,7 @@ private: System::Void toolStripButton3_Click(System::Object^  sender, System::Ev
 private: void RunCPU() {
 			 int nn,kk;
 //			if (cpu1.pc > 134217727) {
-			 if (cpu1.pc < 0x10000 || cpu1.pc >= 0x20000) {
+			 if (cpu1.pc < 0x10000 || cpu1.pc >= 0x30000) {
 				isRunning = false;
 				return;
 			}
@@ -2223,6 +2473,7 @@ private: void LoadIntelHexFile() {
 			 char buf2[40];
 			 unsigned int ad_msbs;
 			 int chksum;
+			 int lineno;	// 16531
 
 			char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->openFileDialog1->FileName);
 			System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::WaitCursor; 
@@ -2231,7 +2482,9 @@ private: void LoadIntelHexFile() {
 			firstAdr = 0;
 			ad_msbs = 0;
 			chksum = 0;
+			lineno=0;
 			while (!fp_in.eof()) {
+				lineno++;
 				std::getline(fp_in, buf);
 				chksum += IHChecksumCheck(buf.c_str());
 				if (buf.c_str()[0]!=':') continue;
@@ -2350,6 +2603,12 @@ private: System::Void textBoxVBR_TextChanged(System::Object^  sender, System::Ev
 private: System::Void memoryToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 			 frmMemory^ form = gcnew frmMemory();
 			 form->Show();
+		 }
+private: System::Void label48_Click(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void textBox7_TextChanged(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void textBox6_TextChanged(System::Object^  sender, System::EventArgs^  e) {
 		 }
 };
 };

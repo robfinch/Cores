@@ -93,8 +93,14 @@ void put_ty(TYP *tp)
 {       if(tp == 0)
                 return;
         switch(tp->type) {
+                case bt_exception:
+                        fprintf(list,"Exception");
+                        break;
 				case bt_byte:
                         fprintf(list,"Byte");
+                        break;
+				case bt_ubyte:
+                        fprintf(list,"Unsigned Byte");
                         break;
                 case bt_char:
                         fprintf(list,"Char");

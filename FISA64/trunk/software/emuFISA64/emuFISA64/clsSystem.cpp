@@ -48,7 +48,7 @@ void clsSystem::Reset()
 		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
 			switch(ad & 0x1) {
 			case 0:
-				sc = keybd.Pop();
+				sc = keybd.Get();
 				rr = ((int)sc<<24)|((int)sc << 16)|((int)sc<<8)|sc;
 				break;
 			case 1:
@@ -131,7 +131,7 @@ void clsSystem::Reset()
 		}
 		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
 			switch(ad & 1) {
-			case 1:	keybd_status = 0; pic1.irqKeyboard = false; break;
+			case 1:	keybd_status = 0; pic1.irqKeyboard = keybd.GetStatus()==0x80; break;
 			}
 		}
 		else if ((ad & 0xFFFFFFC0)==0xFFDC0FC0) {
