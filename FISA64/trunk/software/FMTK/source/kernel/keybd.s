@@ -81,8 +81,7 @@ keybd_2:
 	      	beq  	r11,keybd_4
 	      	push 	#200
 	      	pea  	kbd_sema_[gp]
-	      	bsr  	ILockSemaphore_
-	      	addui	sp,sp,#16
+	      	bsr  	LockSemaphore_
 	      	mov  	r3,r1
 	      	beq  	r3,keybd_6
 	      	bsr  	KeybdClearRcv_
@@ -491,6 +490,11 @@ keybd_69:
 	      	sxb  	r4,r4
 	      	and  	r3,r4,#128
 	      	beq  	r3,keybd_71
+	      	lb   	r3,1645[r11]
+	      	andi 	r3,r3,#-129
+	      	sb   	r3,1645[r11]
+	      	lb   	r3,1645[r11]
+	      	sxb  	r3,r3
 	      	lea  	r3,keybdExtendedCodes_[gp]
 	      	lb   	r3,0[r3+r12]
 	      	sxb  	r3,r3
@@ -657,7 +661,6 @@ endpublic
 	extern	sys_sema_
 	extern	readyQ_
 	extern	sysstack_
-	extern	ILockSemaphore_
 	extern	freeTCB_
 	extern	TimeoutList_
 ;	global	RemoveFromTimeoutList_

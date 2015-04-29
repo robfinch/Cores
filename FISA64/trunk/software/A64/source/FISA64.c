@@ -570,6 +570,18 @@ static void emit2(int64_t oc)
      num_insns += 1;
 }
  
+static void emit6(int64_t oc)
+{
+     emitAlignedCode(oc & 255);
+     emitCode((oc >> 8) & 255);
+     emitCode((oc >> 16) & 255);
+     emitCode((oc >> 24) & 255);
+     emitCode((oc >> 32) & 255);
+     emitCode((oc >> 40) & 255);
+     num_bytes += 6;
+     num_insns += 1;
+}
+ 
 // ---------------------------------------------------------------------------
 // Emit code aligned to a code address.
 // ---------------------------------------------------------------------------
@@ -578,16 +590,41 @@ static void emitAlignedCode(int cd)
 {
      int64_t ad;
 
+
      ad = code_address & 15;
      while (ad != 0 && ad != 2 && ad != 4 && ad != 6 &&
             ad != 8 && ad != 10 && ad != 12 && ad != 14) {
          emitByte(0x00);
          ad = code_address & 15;
      }
+
      emitByte(cd);
 }
 
 
+// ---------------------------------------------------------------------------
+// Determine how big of a prefix is required.
+// ---------------------------------------------------------------------------
+
+static int fitsIn0(int64_t v)
+{
+    return (((v < 0) && ((v >> 14) == -1L)) || ((v >= 0) && ((v >> 14) == 0)));
+}
+
+static int fitsIn10(int64_t v)
+{
+    return (((v < 0) && ((v >> 24) == -1L)) || ((v >= 0) && ((v >> 24) == 0)));
+}
+
+static int fitsIn28(int64_t v)
+{
+    return (((v < 0) && ((v >> 42) == -1L)) || ((v >= 0) && ((v >> 42) == 0)));
+}
+
+static int fitsIn41(int64_t v)
+{
+    return (((v < 0) && ((v >> 55) == -1L)) || ((v >= 0) && ((v >> 55) == 0)));
+}
 // ---------------------------------------------------------------------------
 // Emit constant extension for 15-bit operands.
 // Returns number of constant prefixes placed.
@@ -596,16 +633,30 @@ static void emitAlignedCode(int cd)
 static int emitImm15(int64_t v, int force)
 {
      int nn;
-
-     nn = 0;
-     if (((v < 0) && ((v >> 43) != -1L)) || ((v > 0) && ((v >> 43) != 0L)) || (force && (code_bits > 43 || data_bits > 43))) {
-         emit_insn(0x78|(((v >> 46)&0x3FFFFLL) << 7)|((v >> 43)&7));
-         nn = 1;
+     
+     if (fitsIn0(v))
+        return 0;
+     else if (fitsIn10(v)) {
+         emit2(
+            ((v >> 16) << 7) | ((v>>15) & 1) |
+            0x10
+         );
+         return 1;
      }
-     if (v < -16384LL || v > 16383LL || force) {
+     else if (fitsIn28(v)) {
          emit_insn(0x78|(((v >> 18)&0x1FFFFFFLL) << 7)|((v >> 15)&7));
-         nn = nn + 1;
+         return 1;
      }
+     else if (fitsIn41(v)) {
+         emit6(0x13|((v >> 15)&0x1FFFFFFFFFFLL) << 7);
+         return 1;
+     }
+     else {
+         emit_insn(0x78|(((v >> 46)&0x3FFFFLL) << 7)|((v >> 43)&7));
+         emit_insn(0x78|(((v >> 18)&0x1FFFFFFLL) << 7)|((v >> 15)&7));
+         return 2;
+     }
+
      // ToDo: modify the fixup record type based on the number of prefixes emitted.
     if (bGen && lastsym && !use_gp && (lastsym->isExtern || lastsym->defined==0))
     if( lastsym->segment < 5)
@@ -1122,7 +1173,7 @@ static void process_bcc(int oc)
 static void process_bra(int oc)
 {
     int64_t val;
-    int64_t disp;
+    int64_t disp,disp1;
     int64_t ad;
 
     val = 0;
@@ -1134,11 +1185,18 @@ static void process_bra(int oc)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     ad = code_address;
+    disp1 = ((val - ad) >> 1);
     disp = ((val - ad) >> 1) & 0x1ffffffLL;
-    emit_insn(
-        (disp << 7) |
-        (oc & 0x7f)
-    );
+    if (disp1 >= -256 && disp1 <= 255 && disp1 != 0 && oc==0x3A)
+       emit2(
+            ((disp1 & 0x1ff) << 7) |
+            0x23
+       );
+    else
+        emit_insn(
+            (disp << 7) |
+            (oc & 0x7f)
+        );
 }
 
 // ---------------------------------------------------------------------------
@@ -1909,7 +1967,7 @@ static void ProcessEOL(int opt)
     nn = binstart;
     cc = 8;
     if (segment==codeseg) {
-       cc = 4;
+       cc = 12;
 /*
         if (sections[segment].bytes[binstart]==0x61) {
             fprintf(ofp, "%06LLX ", ca);
@@ -1980,7 +2038,7 @@ static void ProcessEOL(int opt)
     }
     // empty (codeless) line
     if (binstart==sections[segment].index) {
-        fprintf(ofp, "%16s\t%.*s", "", inptr-stptr, stptr);
+        fprintf(ofp, "%41s\t%.*s", "", inptr-stptr, stptr);
     }
     } // bGen
     if (opt) {

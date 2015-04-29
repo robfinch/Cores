@@ -55,6 +55,7 @@
 `define SXB			7'h10
 `define SXC			7'h11
 `define SXH			7'h12
+`define IMM41	7'h13
 `define ADDU	7'h14
 `define SUBU	7'h15
 `define CMPU	7'h16
@@ -67,8 +68,10 @@
 `define MV2FLT		7'h1D
 `define MTSPR		7'h1E
 `define MFSPR		7'h1F
+`define IMM10	7'b001000x
 `define MOV2	7'b010000x
 `define ADDQ	7'h22
+`define BRAS	7'h23
 `define MYST	7'h24
 `define RTL		7'h27
 `define FADD	7'h28
@@ -81,6 +84,17 @@
 `define BEQS	7'h32
 `define BNES	7'h33
 `define LDIQ	7'h34
+`define SYS		7'h35
+`define PCTRL2	7'h36
+`define NOP2			9'd0
+`define STP2			9'd1
+`define WAI2            9'd2
+`define INT3			9'd3
+`define CLI2			9'd4
+`define SEI2			9'd5
+`define RTI2			9'd6
+`define RTE2			9'd7
+`define RTD2			9'd8
 `define RTL2	7'h37
 `define BRK		7'h38
 `define BSR		7'h39
@@ -138,9 +152,6 @@
 `define LWX		7'h4E
 `define LEAX	7'h4F
 `define LFD		7'h51
-`define PUSHF	7'h54
-`define POPF	7'h55
-`define POP		7'h57
 `define LFDX	7'h59
 `define LWAR	7'h5C
 `define SUI		7'h5F
@@ -151,7 +162,6 @@
 `define INC		7'h64
 `define PEA		7'h65
 `define PMW		7'h66
-`define PUSH	7'h67
 `define SBX		7'h68
 `define SCX		7'h69
 `define SHX		7'h6A
@@ -182,6 +192,7 @@
 `define VBR			8'd10
 `define BEAR		8'd11
 `define VECNO		8'd12
+`define SR			8'd13
 `define MULH		8'd14
 `define ISP			8'd15
 `define DSP			8'd16
@@ -299,6 +310,10 @@ parameter half = 2'd1;
 parameter char = 2'd2;
 parameter word = 2'd3;
 
+parameter regTR = 6'd24;
+parameter regSP = 6'd30;
+parameter regLR = 6'd31;
+
 wire clk;
 reg [5:0] state;
 reg [63:0] tick;			// tick counter
@@ -311,6 +326,8 @@ reg [AMSB:0] dbad0,dbad1,dbad2,dbad3;	// debug address
 reg [AMSB:0] bear;			// bus error address register
 reg ssm;					// single step mode
 reg km;						// kernel mode
+wire im = status_reg[16];
+reg [63:0] status_reg;
 reg [63:0] cr0;
 wire pe = cr0[0];			// protected mode enabled
 wire bpe = cr0[32];			// branch predictor enable
@@ -318,7 +335,6 @@ wire ice = cr0[30];			// instruction cache enable
 wire rb = cr0[36];
 wire ovf_xe = cr0[40];		// overflow exception enable
 wire dbz_xe = cr0[41];		// divide by zero exception enable
-reg im;						// interrupt mask
 reg [2:0] imcd;				// interrupt enable count down
 reg [1:0] sscd;				// single step count down
 reg [8:0] vecno;
@@ -335,9 +351,51 @@ reg [31:0] ibuf;
 wire ibufhit = pc[AMSB:1]==ibufadr[AMSB:1];
 reg [63:0] regfile [63:0];
 reg [63:0] sp,usp;
-reg [4:0] regSP,regTR;
 reg [63:0] sp_inc;
 reg [31:0] ir,xir,mir,wir;
+wire [95:0] insn96;
+reg [31:0] insn;
+reg [3:0] pc_inc,dpc_inc,xpc_inc;
+reg [63:0] imm64,imm64a;
+
+function [3:0] insnsz;
+input [31:0] insn;
+insnsz = ((insn[6:3]==4'd6 || insn[6:1]==6'b010000 || insn[6:0]==`ADDQ || insn[6:0]==`BRAS || insn[6:1]==6'b001000) ? 64'd2 : 64'd4);
+endfunction
+
+always @(insn96)
+casex(insn96[6:0])
+7'b001000x:
+	begin	// IMM10
+		insn <= insn96[47:16];
+		pc_inc <= 4'd6;
+		imm64 <= {{39{insn96[15]}},insn96[15:7],insn96[0],insn96[47:33]};
+	end
+`IMM41:
+	begin	// IMM41
+		insn <= insn96[79:48];
+		pc_inc <= 4'd10;
+		imm64 <= {{8{insn96[47]}},insn96[47:7],insn96[79:65]};
+	end
+7'b1111xxx:
+	if (insn96[38:35]==4'hF) begin	// double prefix
+		insn <= insn96[95:64];
+		pc_inc <= 4'd12;
+		imm64 <= {insn96[31:7],insn96[2:0],insn96[63:39],insn96[34:32],insn96[95:81]};
+	end
+	else begin	// IMM28
+		insn <= insn96[63:32];
+		pc_inc <= 4'd8;
+		imm64 <= {{21{insn96[31]}},insn96[31:7],insn96[2:0],insn96[63:49]};
+	end
+default:
+	begin
+		insn <= insn96[31:0];
+		pc_inc <= insnsz(insn96[31:0]);
+		imm64 <= {{49{insn96[31]}},insn96[31:17]};
+	end
+endcase
+	
 wire [31:0] iir = ice ? insn : ibuf;
 wire [6:0] iopcode = iir[6:0];
 wire [6:0] opcode = ir[6:0];
@@ -345,27 +403,22 @@ wire [6:0] ifunct = iir[31:25];
 wire [6:0] funct = ir[31:25];
 reg [6:0] xfunct,mfunct,mdfunct,x1funct;
 reg [6:0] xopcode,mopcode,wopcode,mdopcode,x1opcode;
-`ifdef FLOAT
-wire fltRega = (opcode==`RR && funct[6:4]==3'd6) || opcode==`PUSHF || opcode==`FADD || opcode==FSUB || opcode==FCMP || opcode==`FMUL || opcode==`FDIV;
-wire fltRegb = (opcode==`RR && funct[6:4]==3'd6) || opcode==`FADD || opcode==FSUB || opcode==FCMP || opcode==`FMUL || opcode==`FDIV;
+wire fltRega = (opcode==`RR && funct[6:4]==3'd6) ||
+	opcode==`FADD || opcode==`FSUB || opcode==`FCMP || opcode==`FMUL || opcode==`FDIV ||
+	(opcode==`PUSHPOP && ir[12]==1'b1);
+wire fltRegb = (opcode==`RR && funct[6:4]==3'd6) || opcode==`FADD || opcode==`FSUB || opcode==`FCMP || opcode==`FMUL || opcode==`FDIV;
 wire fltRegc = (opcode==`RR && funct[6:4]==3'd6) || opcode==`SFD || opcode==`SFDX;
-`else
-wire fltRega = 1'b0;
-wire fltRegb = 1'b0;
-wire fltRegc = 1'b0;
-`endif
-wire isPush = opcode==7'h31 && ir[15:13]==3'd0;
-wire isPop = opcode==7'h31 && ir[15:13]==3'd1;
-wire isRts2 = opcode==`RTS2;
-wire isRtl2 = opcode==`RTL2;
-wire [5:0] Ra = isPop|isRts2 ? 6'h1E : {fltRega,ir[11:7]};
+wire isPush = (opcode==`PUSHPOP && ir[15:13]==3'd0)||opcode==`PEA||opcode==`PMW;
+wire isPop = (opcode==`PUSHPOP && ir[15:13]==3'd1);
+wire isRts = opcode==`RTS2 || opcode==`RTS;
+wire isRtl = opcode==`RTL2 || opcode==`RTL;
+wire [5:0] Ra = (isPop|isRts|isRtl) ? regSP : {fltRega,ir[11:7]};
 wire [5:0] Rb = {fltRegb,ir[21:17]};
-wire [5:0] Rc = isPush ? 6'h1E : isRtl2 ? 6'h1F : {fltRegc,ir[16:12]};
+wire [5:0] Rc = isPush ? regSP : isRtl ? regLR : {fltRegc,ir[16:12]};
 reg [5:0] xRt,mRt,wRt,tRt,uRt;
 reg xRt2,wRt2,tRt2;
 reg [63:0] rfoa,rfob,rfoc;
 reg [63:0] res,res2,ea,xres,mres,wres,lres,md_res,wres2,tres,tres2,ures;
-reg xisImm,wisImm,tisImm;
 reg mc_done;
 always @*
 case(Ra)
@@ -374,7 +427,7 @@ xRt:	rfoa <= res;
 wRt:	rfoa <= wres;
 tRt:	rfoa <= tres;
 uRt:	rfoa <= ures;
-6'd30:	if (xRt2)
+regSP:	if (xRt2)
 			rfoa <= res2;
 		else if (wRt2)
 			rfoa <= wres2;
@@ -391,7 +444,7 @@ xRt:	rfob <= res;
 wRt:	rfob <= wres;
 tRt:	rfob <= tres;
 uRt:	rfob <= ures;
-6'd30:	if (xRt2)
+regSP:	if (xRt2)
 			rfob <= res2;
 		else if (wRt2)
 			rfob <= wres2;
@@ -408,7 +461,7 @@ xRt:	rfoc <= res;
 wRt:	rfoc <= wres;
 tRt:	rfoc <= tres;
 uRt:	rfoc <= ures;
-6'd30:	if (xRt2)
+regSP:	if (xRt2)
 			rfoc <= res2;
 		else if (wRt2)
 			rfoc <= wres2;
@@ -431,34 +484,32 @@ reg [1:0] ld_size, st_size;
 reg [31:0] insncnt;
 reg [3:0] sri_cnt;
 
-wire dimm = opcode[6:3]==4'hF;
-wire ximm = xopcode[6:3]==4'hF;
-
 // Detect multi-cycle operation.
 function fnIsMC;
+input [31:0] ir;
 input [6:0] opcode;
 input [6:0] funct;
 case(opcode)
 `RR:
 	case(funct)
 	`MUL,`MULU,`DIV,`DIVU,`MOD,`MODU:	fnIsMC = TRUE;
-`ifdef FLOAT
 	`FIX2FLT,`FLT2FIX,`MV2FIX,`MV2FLT:  fnIsMC = TRUE;
-`endif
 	default:	fnIsMC = FALSE;
 	endcase
-`BRK,
+`PCTRL2:
+	case(ir[15:7])
+	`INT3:	 fnIsMC = TRUE;
+	default: fnIsMC = FALSE;
+	endcase
+`BRK,`SYS,
 `MUL,`MULU,`DIV,`DIVU,`MOD,`MODU,
 `PUSHPOP,
-`PUSH,`PMW,`PEA,`POP,`RTS,`RTS2,
+`PMW,`PEA,`RTS,`RTS2,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI,`INCX,
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
-`SB,`SC,`SH,`SW,`SWCR,`SBX,`SCX,`SHX,`SWX
-`ifdef FLOAT
-,`FADD,`FSUB,`FMUL,`FDIV,`FCMP,
-`PUSHF,`POPF,
+`SB,`SC,`SH,`SW,`SWCR,`SBX,`SCX,`SHX,`SWX,
+`FADD,`FSUB,`FMUL,`FDIV,`FCMP,
 `LFD,`LFDX,`SFD,`SFDX
-`endif
 	:
 	fnIsMC = TRUE;
 default:	fnIsMC = FALSE;
@@ -466,15 +517,10 @@ endcase
 endfunction
 
 wire iihit;
-// Stall the pipeline if there's an immediate prefix in it during a cache miss.
-wire stallRF = 
-	((opcode[6:3]==4'hF && xopcode[6:3]==4'hF) ||
-	 (opcode[6:3]==4'hF)) && !iihit;
-
-wire advanceEX = !fnIsMC(xopcode,xfunct) & !stallRF;
+wire advanceEX = !fnIsMC(xir,xopcode,xfunct);
 wire advanceWB = (xRt!=6'd0 || xRt2) && advanceEX;
 wire advanceTL = advanceWB;
-wire advanceRF = !stallRF & advanceEX;
+wire advanceRF = advanceEX;
 wire advanceIF = advanceRF & iihit;
 
 //-----------------------------------------------------------------------------
@@ -483,7 +529,6 @@ wire advanceIF = advanceRF & iihit;
 
 reg isICacheReset;
 reg isICacheLoad;
-wire [31:0] insn;
 wire [31:0] dbg_insn;
 wire ihit,ihit2;
 assign iihit = (ice ? ihit&ihit2 : ibufhit);
@@ -496,9 +541,9 @@ FISA64_icache_ram u1
 	.wa(adr_o[12:0]),
 	.wr(isICacheLoad & (ack_i|err_i)),
 	.i(err_i ? {2{`BRK_IBE}} : dat_i),
-	.rclk(clk3x_i),
+	.rclk(~clk),
 	.pc(pc[12:0]),
-	.insn(insn)
+	.insn(insn96)
 );
 
 FISA64_itag_ram u2
@@ -507,7 +552,7 @@ FISA64_itag_ram u2
 	.wa(tagadr),
 	.v(!isICacheReset),
 	.wr(utg|isICacheReset),
-	.rclk(clk3x_i),
+	.rclk(~clk),
 	.pc(pc),
 	.hit(ihit),
 	.hit2(ihit2)
@@ -1051,8 +1096,8 @@ FISA64_bitfield u3
 always @*
 casex(x1opcode)
 `BSR:	res <= xpc + 64'd4;
-`JAL:	res <= xpc + ((wisImm&&tisImm) ? 64'd12:wisImm ? 64'd8 : 64'd4);
-`JALI:	res <= xpc + ((wisImm&&tisImm) ? 64'd12:wisImm ? 64'd8 : 64'd4);
+`JAL:	res <= xpc + xpc_inc;
+`JALI:	res <= xpc + xpc_inc;
 `ADD:	res <= a + imm;
 `ADDU:	res <= a + imm;
 `SUB:	res <= a - imm;
@@ -1065,14 +1110,12 @@ casex(x1opcode)
 `AND,`OR,`EOR:	
 		res <= logico;
 `LDI:	res <= imm;
-`ifdef FLOAT
 `LDFI:	res <= imm;
+`LDIQ:	res <= imm;
 `FADD,`FSUB,`FCMP,`FMUL,`FDIV:
 		res <= lres;
-`POPF:	res <= lres;
 `LFD:	res <= lres;
 `LFDX:	res <= lres;
-`endif
 `RR:
 	case(x1funct)
 	`MFSPR:
@@ -1087,6 +1130,7 @@ casex(x1opcode)
 			`VBR:		res <= vbr;
 			`BEAR:		res <= bear;
 			`VECNO:		res <= vecno;
+			`SR:		res <= status_reg;
 			`MULH:		res <= p[127:64];
 			`ISP:		res <= isp;
 			`ESP:		res <= esp;
@@ -1168,7 +1212,6 @@ casex(x1opcode)
 		4'd8:	res <= 1;
 		default:	res <= 64'h0;
 		endcase
-`ifdef FLOAT
 	`FIX2FLT,`FLT2FIX,`MV2FIX,`MV2FLT:
 			res <= lres;
 	`FMOV:	res <= a;
@@ -1176,7 +1219,6 @@ casex(x1opcode)
 	`MFFP:	res <= a;
 	`FNEG:	res <= {^a[63],a[62:0]};
 	`FABS:	res <= {1'b0,a[62:0]};
-`endif
 	default:	res <= 64'd0;
 	endcase
 `MOV2:	res <= a;
@@ -1185,7 +1227,7 @@ casex(x1opcode)
 `LEA:	res <= a + imm;
 `LEAX:	res <= a + (b << xir[23:22]) + imm;
 `PMW:	res <= lres;
-`POP:	res <= lres;
+`PUSHPOP:	res <= lres;	// POP
 `RTS:	res <= lres;
 `RTS2:	res <= lres;
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI,
@@ -1196,7 +1238,6 @@ endcase
 
 always @(x1opcode,a,c,imm)
 case(x1opcode)
-`POP:	res2 <= a + imm;
 `RTS:	res2 <= a + imm;
 `RTS2:	res2 <= a + {imm,3'b000};
 `RTL2:	res2 <= a + {imm,3'b000};
@@ -1208,17 +1249,12 @@ case(x1opcode)
 		4'h2:	res2 <= a + 64'd8;
 		4'h3:	res2 <= a + 64'd8;
 		endcase
-`PUSH:	res2 <= c - 64'd8;
 `PMW:	res2 <= c - 64'd8;
 `PEA:	res2 <= c - 64'd8;
-`ifdef FLOAT
-`PUSHF:	res2 <= c - 64'd8;
-`POPF:	res2 <= a + imm;
-`endif
 default:	res2 <= 64'd0;
 endcase
 
-wire iselect_ssm = ((dimm&ximm) ? x63 : dimm ? d63 : dbctrl[63]) && iopcode[6:3]!=4'hF;
+wire iselect_ssm = dbctrl[63];
 
 reg hwi;
 reg nmi1;
@@ -1262,7 +1298,6 @@ if (rst_i) begin
 	ibufadr <= 28'd0;
 	tick <= 64'd0;
 	vbr <= 32'd0;
-	km <= `TRUE;
 	pc <= 32'h10000;
 	state <= RESET;
 	nop_ir();
@@ -1273,7 +1308,9 @@ if (rst_i) begin
 	isICacheReset <= TRUE;
 	isICacheLoad <= FALSE;
 	gie <= `FALSE;
-	im <= `TRUE;
+	status_reg[16] <= `TRUE;	// im
+	km <= `TRUE;	// km
+	status_reg[63] <= `FALSE;	// dm
 	imcd <= 3'b000;
 	StatusHWI <= `FALSE;
 	nmi1 <= `FALSE;
@@ -1286,20 +1323,16 @@ if (rst_i) begin
 	dbstat <= 64'd0;
 	mc_done <= TRUE;
 	tagadr <= 64'd0;
-	regSP <= 5'd30;
-	regTR <= 5'd24;
 	cr0[0] <= FALSE;	// protected mode enable
 	cr0[30] <= TRUE;	// instruction cache enable
 	cr0[32] <= TRUE;	// branch predictor enable
 	cr0[36] <= FALSE;	// store successful bit
 	cr0[40] <= FALSE;	// overflow exception enable
 	cr0[41] <= FALSE;	// divide by zero exception enable
-`ifdef FLOAT
 	dbl_overflow_xe <= FALSE;
 	dbl_underflow_xe <= FALSE;
 	dbl_divide_by_zero_xe <= FALSE;
 	dbl_invalid_op_xe <= FALSE;
-`endif
 	ssm <= FALSE;
 	sscd <= 2'b11;
 	d63 <= FALSE;
@@ -1350,7 +1383,7 @@ begin
 		if (imcd != 3'd000) begin
 			imcd <= {imcd[1:0],1'b0};
 			if (imcd==3'b100)
-				im <= `FALSE;
+				status_reg[16] <= `FALSE;
 		end
 		insncnt <= insncnt + 32'd1;
 		// We want the debug co-processor to be able to "break-in" to anything
@@ -1371,7 +1404,7 @@ begin
 			ir <= `BRK_NMI;
 			hwi = TRUE;
 		end
-		else if (!StatusHWI & gie & !im & irq_i) begin
+		else if (!StatusHWI & gie & !status_reg[16] & irq_i) begin
 			$display("*****************************");
 			$display("*****************************");
 			$display("*****************************");
@@ -1409,10 +1442,11 @@ begin
 		end
 		disassem(iir);
 		$display("%h: %h", pc, iir);
-		if (pc==32'h01019c)
+		if (pc==32'h013af2)
 			$stop;
 		dpc <= pc;
-		d63 <= dbctrl[63];
+		dpc_inc <= pc_inc;
+		imm64a <= imm64;
 		dbranch_taken <= FALSE;
 		// We take the following control transfers immediately in the IF stage,
 		// that makes them single cycle operations.
@@ -1427,6 +1461,9 @@ begin
 		else if (iopcode==`BSR || iopcode==`BRA) begin
 			pc <= pc + {{38{iir[31]}},iir[31:7],1'b0};
 		end
+		else if (iopcode==`BRAS) begin
+			pc <= pc + {{54{iir[15]}},iir[15:7],1'b0};
+		end
 		else if (iopcode==`RR && ifunct==`PCTRL) begin
 			case(iir[21:17])
 			`WAI:	if (!hwi) pc <= pc; else begin dpc <= pc + 64'd4; pc <= pc + 64'd4; end
@@ -1436,17 +1473,26 @@ begin
 			default:	pc <= pc + 64'd4;
 			endcase
 		end
+		else if (iopcode==`PCTRL2) begin
+			case(iir[15:7])
+			`WAI2:	if (!hwi) pc <= pc; else begin dpc <= pc + 64'd2; pc <= pc + 64'd2; end
+			`RTD2:	begin pc <= dpc; pc[0] <= 1'b0; end
+			`RTE2:	begin pc <= epc; pc[0] <= 1'b0; end
+			`RTI2:	begin pc <= ipc; pc[0] <= 1'b0; end
+			default:	pc <= pc + 64'd2;
+			endcase
+		end
 		else
-			pc <= pc + ((iopcode[6:3]==4'd6 || iopcode[6:1]==6'b010000 || iopcode==`ADDQ) ? 64'd2 : 64'd4);
+			pc <= pc + pc_inc;
 	end
 	else begin
-		if (!iihit & !fnIsMC(xopcode,xfunct))
+		if (!iihit & !fnIsMC(xir,xopcode,xfunct))
 			next_state(LOAD_ICACHE);
 		if (advanceRF) begin
 			nop_ir();
 			dpc <= pc;
+			dpc_inc <= pc_inc;
 			pc <= pc;
-			d63 <= dbctrl[63];
 		end
 	end
 	
@@ -1460,28 +1506,13 @@ begin
 		xfunct <= funct;
 		x1opcode <= opcode;
 		x1funct <= funct;
-		if (fnIsMC(opcode,funct))
+		if (fnIsMC(ir,opcode,funct))
 			mc_done <= FALSE;
 		if (opcode==`MYST)
 			xfunct <= mystreg;
 
-		// Set the PC associated with the instruction. There is some trickery
-		// involved here in order to support interrupts. The processor must
-		// return to a prior instruction prefix in th event of an interrupt,
-		// so we make the current instruction inherit the address of the
-		// prefix.
-		if (wopcode[6:3]==4'hF && xopcode[6:3]==4'hF) begin
-			xpc <= wpc;	// in case of interrupt
-			x63 <= w63;
-		end
-		else if (xopcode[6:3]==4'hF) begin
-			xpc <= xpc;
-			x63 <= x63;
-		end
-		else begin
-			xpc <= dpc;
-			x63 <= d63;
-		end
+		xpc <= dpc;
+		xpc_inc <= dpc_inc;
 
 		// And... register the register operands of the instruction.
 		a <= rfoa;
@@ -1497,19 +1528,13 @@ begin
 		// use constant extension. It's less hardware and can be handled
 		// by the assembler.
 		case(opcode)
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,
-		`SBX,`SCX,`SHX,`SWX,`INCX:
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LEAX,`LFDX,
+		`SBX,`SCX,`SHX,`SWX,`SFDX,`INCX:
 			imm <= ir[31:24];
 		`LDIQ,`BEQS,`BNES:	imm <= {{60{ir[15]}},ir[15:12]};
 		`ADDQ:  imm <= ir[15:12];
-		`RTS2:	imm <= ir[15:7];
-		default:
-			if (wopcode[6:3]==4'hF && xopcode[6:3]==4'hF)
-				imm <= {wir[31:7],wir[2:0],xir[31:7],xir[2:0],ir[31:17]};
-			else if (xopcode[6:3]==4'hF)
-				imm <= {{21{xir[31]}},xir[31:7],xir[2:0],ir[31:17]};
-			else
-				imm <= {{49{ir[31]}},ir[31:17]};
+		`RTS2,`RTL2:	imm <= ir[15:7];
+		default:	imm <= imm64a;
 		endcase
 
 		// Set the target register field. Some op's need this set to zero in
@@ -1526,30 +1551,25 @@ begin
 				xRt <= 6'd0;
 			`PCTRL:
 				xRt <= (km || ir[16:12]!=regTR) ? {1'b0,ir[16:12]} : 6'd0;
-`ifdef FLOAT
 			`FIX2FLT,`FLT2FIX,`FMOV,`FNEG,`FABS,`MTFP,`MV2FLT:
 				xRt <= {1'b1,ir[16:12]};
-`endif
 			default:	xRt <= (km || ir[16:12]!=regTR) ? {1'b0,ir[16:12]} : 6'd0;
 			endcase
-		`BRA,`Bcc,`BRK,`IMM,`NOP,`CHKI:
+		`PCTRL2,`SYS,
+		`BRA,`BRAS,`Bcc,`BEQS,`BNES,`BRK,`IMM,`IMM10,`NOP,`CHKI:
 			xRt <= 6'd0;
-`ifdef FLOAT
-		`PUSHF,`SFD,`SFDX,
-`endif
+		`SFD,`SFDX,
 		`SB,`SC,`SH,`SW,`SWCR,`SBX,`SCX,`SHX,`SWX,`INC,`INCX,
-		`RTL,`RTL2,`PUSH,`PEA,`PMW:
+		`RTL,`RTL2,`PEA,`PMW:
 			xRt <= 6'd0;
 		`PUSHPOP:
 			if (isPush)
 				xRt <= 6'd0;
 			else
-				xRt <= (km || ir[11:7]!=regTR) ? {1'b0,ir[11:7]} : 6'd0;
-		`BSR,`RTS,`RTS2:	xRt <= 6'h1F;
-`ifdef FLOAT
+				xRt <= (km || ir[12:7]!={1'b0,regTR}) ? ir[12:7] : 6'd0;
+		`BSR,`RTS,`RTS2:	xRt <= regLR;
 		`FADD,`FSUB,`FMUL,`FDIV,
-		`LDFI,`LFD,`LFDX,`POPF:	xRt <= {1'b1,ir[16:12]};
-`endif
+		`LDFI,`LFD,`LFDX:	xRt <= {1'b1,ir[16:12]};
 		`LDIQ,`ADDQ:	xRt <= (km || ir[11:7]!=regTR) ? {1'b0,ir[11:7]} : 6'd0;
 		`MOV2:	xRt <= (km || {ir[0],ir[15:12]}!=regTR) ? {1'b0,ir[0],ir[15:12]} : 6'd0;
 		default:	xRt <= (km || ir[16:12]!=regTR) ? {1'b0,ir[16:12]} : 6'd0;
@@ -1558,10 +1578,7 @@ begin
 		// Set the SP target register flag. This flag indicates an update to
 		// the SP register is required. Used for stack operations.
 		case(opcode)
-`ifdef FLOAT
-		`PUSHF,`POPF,
-`endif
-		`POP,`RTS,`RTS2,`RTL,`RTL2,`PUSH,`PEA,`PMW:	xRt2 <= 1'b1;
+		`RTS,`RTS2,`RTL,`RTL2,`PEA,`PMW,`PUSHPOP:	xRt2 <= 1'b1;
 		default:	xRt2 <= 1'b0;
 		endcase
 	end
@@ -1575,11 +1592,8 @@ begin
 	// EXECUTE
 	//-----------------------------------------------------------------------------
 	if (advanceEX) begin
-		// The following lines needed for code above for immediate prefixes.
-		wisImm <= ximm;
 		wopcode <= x1opcode;
 		wpc <= xpc;
-		w63 <= x63;
 		wir <= xir;
 		// Make the last register update "sticky" in the WB stage.
 		if (xRt != 6'd0 && xRt != regSP) begin
@@ -1609,6 +1623,13 @@ begin
 					`EPC:		epc <= a;
 					`IPC:		ipc <= a;
 					`VBR:		begin vbr <= a[AMSB:0]; vbr[12:0] <= 13'h000; end
+					`SR:		begin
+									status_reg[15:0] <= a[15:0];
+									status_reg[63:17] <= a[63:17];
+									if (a[16]) status_reg[16] <= 1'b1;
+									if (~a[16])
+										imcd <= 3'b111;
+								end
 					`MULH:		p[127:64] <= a;
 					`ISP:		isp <= {a[AMSB:3],3'b000};
 					`DSP:		dsp <= {a[AMSB:3],3'b000};
@@ -1664,20 +1685,20 @@ begin
 				if (km)
 					case(xir[21:17])
 					`CLI:	imcd <= 3'b111;
-					`SEI:	im <= `TRUE;
+					`SEI:	status_reg[16] <= `TRUE;
 					`STP:	begin clk_throttle_new <= 50'd0; ld_clk_throttle <= `TRUE; end
 					`EIC:	cr0[30] <= TRUE;
 					`DIC:	cr0[30] <= FALSE;
 					`FIP:	update_pc(xpc+64'd4);
 					`SRI:	sri_cnt <= 4'd10;
-					`RTE:	km <= epc[0];
+					`RTE:	km <= status_reg[60];
 					// Single step mode can't be enabled until we are sure the
 					// RTD instruction will execute. Also a countdown flag has 
 					// to be used because the first instruction after the RTD
 					// should execute not in single step mode.
 					`RTD:
 						begin
-						    km <= dbpc[0];
+						    km <= status_reg[61];
 							if (dbctrl[62]) begin
 								sscd <= 2'b00;	// single step countdown flag
 								update_pc(dbpc);// flush instruction pipe
@@ -1694,10 +1715,10 @@ begin
 						begin
 							StatusHWI <= FALSE;
 							imcd <= 3'b111;
-							km <= ipc[0];
-							//dbctrl[63] <= ipc[1];
-							//if (ipc[1])	// flush the instruction pipe
-							//	update_pc(ipc);	
+							km <= status_reg[62];
+							dbctrl[63] <= status_reg[63];
+							if (status_reg[63])	// flush the instruction pipe
+								update_pc(ipc);	
 						end
 					endcase
 				else
@@ -1708,6 +1729,43 @@ begin
 						overflow();
 			`CHK:	 if (!(a >= c && a < b))
 			            bounds_violation();
+			endcase
+		`PCTRL2:
+			case(xir[15:7])
+			`NOP2:	;
+			`CLI2:	imcd <= 3'b111;
+			`SEI2:	status_reg[16] <= `TRUE;
+			`STP2:	begin clk_throttle_new <= 50'd0; ld_clk_throttle <= `TRUE; end
+			`RTE2:	km <= status_reg[60];
+			// Single step mode can't be enabled until we are sure the
+			// RTD instruction will execute. Also a countdown flag has 
+			// to be used because the first instruction after the RTD
+			// should execute not in single step mode.
+			`RTD2:
+				begin
+					km <= status_reg[61];
+					if (dbctrl[62]) begin
+						sscd <= 2'b00;	// single step countdown flag
+						update_pc(dbpc);// flush instruction pipe
+					end
+					if (tam) begin
+						tam <= FALSE;
+					end
+				end
+			// A normal interrupt (eg timer) might occur during 
+			// single step mode. On an RTI instruction return to
+			// single step mode. In this case we want to activate
+			// single step mode without a delay.
+			`RTI2:
+				begin
+					StatusHWI <= FALSE;
+					imcd <= 3'b111;
+					km <= status_reg[62];
+					dbctrl[63] <= status_reg[63];
+					if (status_reg[63])	// flush the instruction pipe
+						update_pc(ipc);	
+				end
+			`INT3:	nop_xir();
 			endcase
 		`ADD:	if (fnASOverflow(0,a[63],imm[63],res[63]) && ovf_xe)
 					overflow();
@@ -1726,7 +1784,7 @@ begin
 		// following instructions.
 		// Don't need to flush the ir. The PC was set correctly
 		// a cycle sooner in the multi-cycle code.
-		`BRK,`RTS,`RTS2,`JALI:
+		`BRK,`SYS,`RTS,`RTS2,`JALI:
 				begin
 					nop_xir();
 				end
@@ -1752,7 +1810,6 @@ begin
 	//-----------------------------------------------------------------------------
 	// wRt2 and wRt==30 are never active together at the same time.
 	if (advanceWB) begin
-		tisImm <= wisImm;
 		if (wRt != 5'd0) begin
 			tRt <= wRt;
 			tres <= wres;
@@ -1780,7 +1837,7 @@ begin
 	// Kick off a multi-cycle operation. The EX stage will be stalled until
 	// the operation is complete. The operation is signalled as complete by
 	// setting xopcode=`NOP which allows the pipeline to advance.
-	if (fnIsMC(xopcode,xfunct)) begin
+	if (fnIsMC(xir,xopcode,xfunct)) begin
 		case (xopcode)
 		`RR:
 			case (xfunct)
@@ -1833,60 +1890,13 @@ begin
 				mdfunct <= xfunct;
 				next_state(MULDIV);
 			end
-		`BRK:	begin
-				case(xir[31:30])
-				2'b00:	
-					begin
-						epc[AMSB:2] <= xpc[AMSB:2];
-						epc[1] <= 1'b0;
-						epc[0] <= km;
-						esp[AMSB:3] <= a[AMSB:3];
-						esp[2:0] <= 3'b000;
-					end
-				2'b01:
-					begin
-						dbpc[AMSB:2] <= xpc[AMSB:2];
-						dbpc[1] <= 1'b0;
-						dbpc[0] <= km;
-						dsp[AMSB:3] <= a[AMSB:3];
-						dsp[2:0] <= 3'b000;
-						dbctrl[63] <= FALSE;	// clear SSM
-						ssm <= FALSE;
-					end
-				2'b10:
-					begin
-						StatusHWI <= `TRUE;
-						ipc[AMSB:2] <= xpc[AMSB:2];
-						dbctrl[63] <= FALSE;
-						ipc[1] <= dbctrl[63];
-						ipc[0] <= km;
-						isp[AMSB:3] <= a[AMSB:3];
-						isp[2:0] <= 3'b000;
-						if (xir[25:17]==9'd510)
-							nmi_edge <= FALSE;
-						else
-							im <= TRUE;
-					end
-				endcase
-				km <= TRUE;
-				mopcode <= xopcode;
-				mir <= xir;
-				// Test access mode is special, it just starts running the
-				// processor from the debug sandbox. It doesn't vector !
-				if (xir[25:17]==9'd494) begin
-					update_pc(32'hFFFFE000);	// Debug sandbox address
-					tam <= TRUE;
-				end
-				else begin
-					ea <= {vbr[AMSB:12],xir[25:17],3'b000};
-					ld_size <= word;
-					next_state(LOAD1);
-				end
-				vecno <= xir[25:17];
-				end
-`ifdef FLOAT
+		`BRK:	BRK_task(xir);
+		`SYS:	BRK_task({2'b00,4'd0,xir[15:7],5'd0,5'h1E,`BRK});
+		`PCTRL2:
+			case(xir[15:7])
+			`INT3:	BRK_task({2'b10,4'd0,9'h003,5'd0,5'h1E,`BRK});
+			endcase
 		`LFD,
-`endif
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWAR,`INC,`CAS,`JALI:
 			begin
 				next_state(LOAD1);
@@ -1903,9 +1913,7 @@ begin
 				endcase
 				st_size <= word;
 			end
-`ifdef FLOAT
 		`LFDX,
-`endif
 		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`INCX:
 			begin
 				next_state(LOAD1);
@@ -1928,14 +1936,6 @@ begin
 				ld_size <= word;
 				st_size <= word;
 			end
-		`PUSH,`PUSHF:
-				begin
-				next_state(STORE1);
-				mopcode <= xopcode;
-				ea <= res2;
-				xb <= a;
-				st_size <= word;
-				end
 		`PUSHPOP:
 				begin
 					mopcode <= xopcode;
@@ -1960,7 +1960,7 @@ begin
 				xb <= a + imm;
 				st_size <= word;
 				end
-		`POP,`RTS,`RTS2,`POPF:
+		`RTS,`RTS2:
 				begin
 				next_state(LOAD1);
 				mopcode <= xopcode;
@@ -2415,9 +2415,10 @@ LOAD3:
 			3'd7:	begin lres[ 7:0] <= dat_i[63:56]; next_state(LOAD4); wb_half_nack(); end
 			endcase
 		// Memory access is aligned
-		`BRK:	begin
-					pc[AMSB:2] <= dat_i[AMSB:2];
-					pc[1:0] <= 2'b00;
+		`PCTRL2,
+		`BRK,`SYS:	begin
+					pc[AMSB:1] <= dat_i[AMSB:1];
+					pc[0] <= 1'b0;
 					next_state(iihit ? RUN : LOAD_ICACHE);
 					xopcode <= `NOP;
 					wb_nack();
@@ -2426,14 +2427,14 @@ LOAD3:
 		`RTS,`RTS2:
 				begin
 					lres <= dat_i[63:0];
-					pc[AMSB:2] <= dat_i[AMSB:2];
-					pc[1:0] <= 2'b00;
+					pc[AMSB:1] <= dat_i[AMSB:1];
+					pc[0] <= 1'b0;
 					next_state(iihit ? RUN : LOAD_ICACHE);
 					xopcode <= `NOP;
 					wb_nack();
 					mc_done <= TRUE;
 				end
-		`POP,`POPF,`PUSHPOP:
+		`PUSHPOP:
 				begin
 					lres <= dat_i[63:0];
 					next_state(iihit ? RUN : LOAD_ICACHE);
@@ -2546,8 +2547,8 @@ INC:
 PMW:
 	begin
 		if (mopcode==`JALI) begin
-			pc[AMSB:2] <= lres[AMSB:2];
-			pc[1:0] <= 2'b00;
+			pc[AMSB:1] <= lres[AMSB:1];
+			pc[0] <= 1'b0;
 			mc_done <= TRUE;
 			xopcode <= `NOP;
 			next_state(iihit ? RUN : LOAD_ICACHE);
@@ -2650,9 +2651,13 @@ STORE5:
 LOAD_ICACHE:
 	begin
 		if (ice) begin
-			isICacheLoad <= TRUE;
-			wb_read1(word,{pc[AMSB:4],4'h0});
-			next_state(LOAD_ICACHE2);
+			if (ihit)
+				next_state(LOAD_ICACHE5);
+			else begin
+				isICacheLoad <= TRUE;
+				wb_read1(word,{pc[AMSB:4],4'h0});
+				next_state(LOAD_ICACHE2);
+			end
 		end
 		else begin
 			wb_read1(word,{pc[AMSB:3],3'b000});
@@ -2711,6 +2716,7 @@ LOAD_ICACHE4:
 	end
 LOAD_ICACHE5:
 	begin
+		isICacheLoad <= TRUE;
 		wb_read1(word,{pc[AMSB:4]+29'd1,4'h0});
 		next_state(LOAD_ICACHE6);
 	end
@@ -2728,7 +2734,7 @@ LOAD_ICACHE8:
 	if (ack_i|err_i) begin
 		wb_nack();
 		utg <= TRUE;
-		tagadr <= pc+32'd2;
+		tagadr <= pc+32'd16;
 		isICacheLoad <= FALSE;
 		next_state(RUN);
 	end
@@ -2971,7 +2977,7 @@ task update_pc;
 input [63:0] npc;
 begin
 	pc <= npc;
-	pc[1:0] <= 2'b00;
+	pc[0] <= 1'b0;
 	nop_ir();
 	nop_xir();
 end
@@ -2984,7 +2990,7 @@ task update_pc2;
 input [63:0] npc;
 begin
 	pc <= npc;
-	pc[1:0] <= 2'b00;
+	pc[0] <= 1'b0;
 //	if (!ssm)			// If in SSM the xir will be setup appropriately.
 		nop_ir();
 end
@@ -3065,6 +3071,59 @@ begin
 end
 endtask
 
+task BRK_task;
+input [31:0] xir;
+begin
+	case(xir[31:30])
+	2'b00:	
+		begin
+			epc[AMSB:1] <= xpc[AMSB:1];
+			status_reg[60] <= km;
+			esp[AMSB:3] <= a[AMSB:3];
+			esp[2:0] <= 3'b000;
+		end
+	2'b01:
+		begin
+			dbpc[AMSB:1] <= xpc[AMSB:1];
+			status_reg[61] <= km;
+			dsp[AMSB:3] <= a[AMSB:3];
+			dsp[2:0] <= 3'b000;
+			dbctrl[63] <= FALSE;	// clear SSM
+			ssm <= FALSE;
+		end
+	2'b10:
+		begin
+			StatusHWI <= `TRUE;
+			ipc[AMSB:1] <= xpc[AMSB:1];
+			dbctrl[63] <= FALSE;
+			status_reg[63] <= dbctrl[63];
+			status_reg[62] <= km;
+			isp[AMSB:3] <= a[AMSB:3];
+			isp[2:0] <= 3'b000;
+			if (xir[25:17]==9'd510)
+				nmi_edge <= FALSE;
+			else
+				im <= TRUE;
+		end
+	endcase
+	km <= TRUE;
+	mopcode <= xopcode;
+	mir <= xir;
+	// Test access mode is special, it just starts running the
+	// processor from the debug sandbox. It doesn't vector !
+	if (xir[25:17]==9'd494) begin
+		update_pc(32'hFFFFE000);	// Debug sandbox address
+		tam <= TRUE;
+	end
+	else begin
+		ea <= {vbr[AMSB:12],xir[25:17],3'b000};
+		ld_size <= word;
+		next_state(LOAD1);
+	end
+	vecno <= xir[25:17];
+end
+endtask
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Debugging aids - pretty state names
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3123,16 +3182,16 @@ begin
 			`RTD:	$display("RTD");
 			endcase
 		endcase
-	`BRA:	$display("BRA %h" , pc + {{37{insn[31]}},insn[31:7],2'b00});
-	`BSR:	$display("BSR %h" , pc + {{37{insn[31]}},insn[31:7],2'b00});
+	`BRA:	$display("BRA %h" , pc + {{38{insn[31]}},insn[31:7],1'b0});
+	`BSR:	$display("BSR %h" , pc + {{38{insn[31]}},insn[31:7],1'b0});
 	`Bcc:
 		case(insn[14:12])
-		`BEQ:	$display("BEQ r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
-		`BNE:	$display("BNE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
-		`BLT:	$display("BLT r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
-		`BGT:	$display("BGT r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
-		`BLE:	$display("BLE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
-		`BGE:	$display("BGE r%d,%h" , insn[11:7], pc + {{47{insn[31]}},insn[31:17],2'b00});
+		`BEQ:	$display("BEQ r%d,%h" , insn[11:7], pc + {{48{insn[31]}},insn[31:17],1'b0});
+		`BNE:	$display("BNE r%d,%h" , insn[11:7], pc + {{48{insn[31]}},insn[31:17],1'b0});
+		`BLT:	$display("BLT r%d,%h" , insn[11:7], pc + {{48{insn[31]}},insn[31:17],1'b0});
+		`BGT:	$display("BGT r%d,%h" , insn[11:7], pc + {{48{insn[31]}},insn[31:17],1'b0});
+		`BLE:	$display("BLE r%d,%h" , insn[11:7], pc + {{48{insn[31]}},insn[31:17],1'b0});
+		`BGE:	$display("BGE r%d,%h" , insn[11:7], pc + {{48{insn[31]}},insn[31:17],1'b0});
 		endcase
 	`BRK:	$display("BRK %d %s", insn[25:17], insn[31:30]==2'b00 ? "SWE" : insn[31:30]==2'b01 ? "DBG" : "HWI");
 	`LB:	$display("LB r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
@@ -3146,10 +3205,6 @@ begin
 	`SC:	$display("SC r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
 	`SH:	$display("SH r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
 	`SW:	$display("SW r%d,%h[r%d]", insn[16:12],insn[31:17],insn[11:7]);
-	`PUSH:	$display("PUSH r%d", insn[11:7]);
-	`PUSHF:	$display("PUSH fp%d", insn[11:7]);
-	`POP:	$display("POP r%d", insn[16:12]);
-	`POPF:	$display("POP fp%d", insn[16:12]);
 	`RTL:	$display("RTL");
 	`RTL2:	$display("RTL");
 	`RTS:	$display("RTS");
@@ -3263,27 +3318,25 @@ input wr;
 input [63:0] i;
 input rclk;
 input [12:0] pc;
-output reg [31:0] insn;
+output reg [95:0] insn;
 
 reg [12:0] rpc;
 reg [12:0] rpc2;
-reg [63:0] icache_ram [1023:0];
+reg [63:0] icache_ramL [511:0];
+reg [63:0] icache_ramH [511:0];
 always @(posedge wclk)
-	if (wr) icache_ram [wa[12:3]] <= i;
+	if (wr & ~wa[3]) icache_ramL [wa[12:4]] <= i;
+always @(posedge wclk)
+	if (wr & wa[3]) icache_ramH [wa[12:4]] <= i;
 always @(posedge rclk)
 	rpc <= pc;
 always @(posedge rclk)
-	rpc2 <= pc + 32'd2;
-wire [63:0] ico = icache_ram[rpc[12:3]];
-wire [63:0] ico2 = icache_ram[rpc2[12:3]];
-always @(rpc)
-case(rpc[2:1])
-2'd0:	insn <= ico[31: 0];
-2'd1: 	insn <= ico[47:16];
-2'd2:	insn <= ico[63:32];
-2'd3:	insn <= {ico2[15:0],ico[63:48]};
-endcase
-
+	rpc2 <= pc + 32'd16;
+wire [127:0] ico1 = {icache_ramH[rpc[12:4]],icache_ramL[rpc[12:4]]};
+wire [127:0] ico2 = {icache_ramH[rpc2[12:4]],icache_ramL[rpc2[12:4]]};
+wire [255:0] ico = {ico2,ico1};
+always @(rpc or ico)
+	insn <= ico >> {rpc[3:1],4'h0};
 endmodule
 
 module FISA64_itag_ram(wclk, wa, v, wr, rclk, pc, hit, hit2);
@@ -3304,7 +3357,7 @@ always @(posedge wclk)
 always @(posedge rclk)
 	rpc <= pc;
 always @(posedge rclk)
-	rpc2 <= pc+32'd2;
+	rpc2 <= pc+32'd16;
 wire [32:13] tag_out = itag_ram[rpc[12:4]];
 assign hit = tag_out=={1'b1,rpc[31:13]};
 wire [32:13] tag_out2 = itag_ram[rpc2[12:4]];
@@ -3398,7 +3451,7 @@ wire [1:0] bht_ibits = branch_history_table[bht_ra2];
 assign predict_taken = bht_ibits==2'd0 || bht_ibits==2'd1;
 
 wire [6:0] xOpcode = xir[6:0];
-wire isxBranch = (xOpcode==`Bcc);
+wire isxBranch = (xOpcode==`Bcc)||(xOpcode==`BEQS)||(xOpcode==`BNES);
 
 // Two bit saturating counter
 reg [1:0] xbits_new;
@@ -3505,47 +3558,3 @@ endcase
 
 endmodule
 
-/*
-module FISA64_bypass_mux(Rn, xRt, wRt, tRt, uRt, regSP, xres, wres, tres, ures, rfo, o);
-input [4:0] Rn;
-input [4:0] xRt;
-input [4:0] wRt;
-input [4:0] tRt;
-input [4:0] uRt;
-input [4:0] regSP;
-input [63:0] xres;
-input [63:0] wres;
-input [63:0] tres;
-input [63:0] ures;
-input [63:0] rfo;
-output reg [63:0] o;
-
-always @*
-if (Rn==5'd0)
-	o <= 64'd0;
-else if (Rn==xRt)
-	o <= xres;
-else if (Rn==wRt)
-	o <= wres;
-else if (Rn==tRt)
-	o <= tres;
-else if (Rn==uRt)
-	o <= ures;
-else if (Rn==regSP)
-case(Rn)
-5'd0:	rfoa <= 64'd0;
-xRt:	rfoa <= res;
-wRt:	rfoa <= wres;
-tRt:	rfoa <= tres;
-uRt:	rfoa <= ures;
-5'd30:	if (xRt2)
-			rfoa <= res2;
-		else if (wRt2)
-			rfoa <= wres2;
-		else
-			rfoa <= sp;
-default:	rfoa <= regfile[Ra];
-endcase
-endmodule
-
-*/

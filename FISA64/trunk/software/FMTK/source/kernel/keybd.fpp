@@ -324,7 +324,7 @@ void KeybdIRQ()
          sc = KeybdGetScancode();
          jcb = IOFocusNdx;             // Are there any jobs with focus ?     
          if (jcb) {
-          	 if (ILockSemaphore(&kbd_sema,200)) {
+          	 if (LockSemaphore(&kbd_sema,200)) {
                  KeybdClearRcv();              // clear recieve register
                  kh = jcb->KeybdHead;
                  kt = jcb->KeybdTail;
@@ -504,6 +504,7 @@ private char KeybdGetBufferedChar()
                  }
                  else {
                       if (j->KeyState2 & 0x80) { // Extended code ?
+                          j->KeyState2 &= ~0x80;
                           ch = keybdExtendedCodes[sc];
                           j->KeyState1 = 0;
                           return ch;

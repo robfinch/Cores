@@ -324,7 +324,7 @@
    324	         sc = KeybdGetScancode();
    325	         jcb = IOFocusNdx;             // Are there any jobs with focus ?     
    326	         if (jcb) {
-   327	          	 if (ILockSemaphore(&kbd_sema,200)) {
+   327	          	 if (LockSemaphore(&kbd_sema,200)) {
    328	                 KeybdClearRcv();              // clear recieve register
    329	                 kh = jcb->KeybdHead;
    330	                 kt = jcb->KeybdTail;
@@ -539,28 +539,29 @@ sc_        =fffffff5    -    Auto        Byte
    504	                 }
    505	                 else {
    506	                      if (j->KeyState2 & 0x80) { // Extended code ?
-   507	                          ch = keybdExtendedCodes[sc];
-   508	                          j->KeyState1 = 0;
-   509	                          return ch;
-   510	                      }
-   511	                      else if (j->KeyState2 & 0x04) { // control ?
-   512	                          ch = keybdControlCodes[sc];
-   513	                          return ch;
-   514	                      }
-   515	                      else if (j->KeyState2 & 0x01) { // shifted ?
-   516	                          ch = shiftedScanCodes[sc];
-   517	                          return ch;
-   518	                      }
-   519	                      else {
-   520	                          ch = unshiftedScanCodes[sc];
-   521	                          return ch;
-   522	                      }
-   523	                 }
-   524	            }
-   525	        }
-   526	    }
-   527	}
-   528	
+   507	                          j->KeyState2 &= ~0x80;
+   508	                          ch = keybdExtendedCodes[sc];
+   509	                          j->KeyState1 = 0;
+   510	                          return ch;
+   511	                      }
+   512	                      else if (j->KeyState2 & 0x04) { // control ?
+   513	                          ch = keybdControlCodes[sc];
+   514	                          return ch;
+   515	                      }
+   516	                      else if (j->KeyState2 & 0x01) { // shifted ?
+   517	                          ch = shiftedScanCodes[sc];
+   518	                          return ch;
+   519	                      }
+   520	                      else {
+   521	                          ch = unshiftedScanCodes[sc];
+   522	                          return ch;
+   523	                      }
+   524	                 }
+   525	            }
+   526	        }
+   527	    }
+   528	}
+   529	
 
 
 *** local symbol table ***
@@ -571,13 +572,13 @@ ch_        =fffffff4    -    Auto        Char
 
 
 
-   529	char KeybdGetBufferedCharWait() {
-   530	    JCB *j;
-   531	    j = GetJCBPtr();
-   532	    j->KeybdWaitFlag = 1;
-   533	    return KeybdGetBufferedChar();     
-   534	}
-   535	
+   530	char KeybdGetBufferedCharWait() {
+   531	    JCB *j;
+   532	    j = GetJCBPtr();
+   533	    j->KeybdWaitFlag = 1;
+   534	    return KeybdGetBufferedChar();     
+   535	}
+   536	
 
 
 *** local symbol table ***
@@ -586,13 +587,13 @@ j_         =fffffff8    -    Auto        Pointer to struct _tagJCB_
 
 
 
-   536	char KeybdGetBufferedCharNoWait() {
-   537	    JCB *j;
-   538	    j = GetJCBPtr();
-   539	    j->KeybdWaitFlag = 0;
-   540	    return KeybdGetBufferedChar();     
-   541	}
-   542	
+   537	char KeybdGetBufferedCharNoWait() {
+   538	    JCB *j;
+   539	    j = GetJCBPtr();
+   540	    j->KeybdWaitFlag = 0;
+   541	    return KeybdGetBufferedChar();     
+   542	}
+   543	
 
 
 *** local symbol table ***
@@ -688,7 +689,6 @@ E_NoMoreAlarmBlks_ =000042    -    Constant    Long
 ALARM_     =001440    1   struct tagALARM_ 
 E_TooManyTasks_ =000045    -    Constant    Long
 sysstack_  =000000    -    External    Array of Long
-ILockSemaphore_ =000000    -    External    Function returning Long
 freeTCB_   =000000    -    External    Char
 E_NoDev_   =000021    -    Constant    Long
 E_NoMem_   =000044    -    Constant    Long

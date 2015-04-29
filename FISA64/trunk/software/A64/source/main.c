@@ -1324,7 +1324,7 @@ int main(int argc, char *argv[])
     processMaster();
     if (verbose) printf("Pass 4: phase errors: %d\r\n", phasing_errors);
     pass = 5;
-    while (phasing_errors && pass < 30) {
+    while (phasing_errors && pass < 40) {
         phasing_errors = 0;
         num_bytes = 0;
         num_insns = 0;
