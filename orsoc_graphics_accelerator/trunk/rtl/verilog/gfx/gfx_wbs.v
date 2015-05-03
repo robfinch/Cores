@@ -375,10 +375,10 @@ module gfx_wbs(
   end
 
   // Assign target and texture signals
-  assign target_base_o   = target_base_reg[31:2];
+  assign target_base_o   = target_base_reg[31:0];
   assign target_size_x_o = target_size_x_reg[point_width-1:0];
   assign target_size_y_o = target_size_y_reg[point_width-1:0];
-  assign tex0_base_o     = tex0_base_reg[31:2];
+  assign tex0_base_o     = tex0_base_reg[31:0];
   assign tex0_size_x_o   = tex0_size_x_reg[point_width-1:0];
   assign tex0_size_y_o   = tex0_size_y_reg[point_width-1:0];
 
@@ -429,7 +429,7 @@ module gfx_wbs(
   assign a2_o                = alpha_reg[15:8];
   assign global_alpha_o      = alpha_reg[7:0];
   assign colorkey_o          = colorkey_reg;
-  assign zbuffer_base_o      = zbuffer_base_reg[31:2];
+  assign zbuffer_base_o      = zbuffer_base_reg[31:0];
 
 
   // decode control register

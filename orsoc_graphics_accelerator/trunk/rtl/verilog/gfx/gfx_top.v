@@ -625,7 +625,7 @@ wire            [31:0] blender_render_color;
 
 // Connected through arbiter
 wire        wbmreader_blender_target_ack;
-wire [31:2] blender_wbmreader_target_addr;
+wire [31:0] blender_wbmreader_target_addr;
 wire [127:0] wbmreader_blender_target_data;
 wire        blender_wbmreader_target_request;
 
@@ -681,13 +681,12 @@ gfx_renderer renderer (
   .color_i         (blender_render_color),
 
   .render_addr_o   (render_wbmwriter_addr),
-  .render_sel_o    (render_wbmwriter_sel),
   .render_dat_o    (render_wbmwriter_dat),
   .ack_o           (render_blender_ack),
   .ack_i           (wbmwriter_render_ack),
   .write_i         (blender_render_write_enable),
   .write_o         (render_wbmwriter_memory_pixel_write),
-  .writez_o         (render_wbmwriter_memory_zpixel_write),
+  .writez_o        (render_wbmwriter_memory_zpixel_write),
   .mb_o(mb),
   .me_o(me)
   );
@@ -718,14 +717,14 @@ gfx_wbm_write wbm_writer (
   .sint_o          (wbmwriter_sint),
 
   .write_i         (render_wbmwriter_memory_pixel_write),
-  .writez_i         (render_wbmwriter_memory_zpixel_write),
+  .writez_i        (render_wbmwriter_memory_zpixel_write),
   .ack_o           (wbmwriter_render_ack),
 
   // send ack to renderer when done writing to memory.
   .render_addr_i   (render_wbmwriter_addr),
   .render_dat_i    (render_wbmwriter_dat),
   .mb_i(mb),
-  .me_i(me)
+  .me_i(me),
 
   .reader_match_o  (writer_match_o),
   .reader_addr_i   (arbiter_wbmreader_addr),

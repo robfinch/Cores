@@ -40,13 +40,14 @@ module gfx_clip(clk_i, rst_i,
   );
 
 parameter point_width = 16;
+parameter BPP16 = 3'd5;
 
 input                   clk_i;
 input                   rst_i;
 
 input                   clipping_enable_i;
 input                   zbuffer_enable_i;
-input            [31:2] zbuffer_base_i;
+input            [31:0] zbuffer_base_i;
 input [point_width-1:0] target_size_x_i;
 input [point_width-1:0] target_size_y_i;
 //clip pixels

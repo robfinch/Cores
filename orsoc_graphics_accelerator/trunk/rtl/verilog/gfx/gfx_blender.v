@@ -48,7 +48,7 @@ input                   clk_i;
 input                   rst_i;
 
 input                   blending_enable_i;
-input            [31:2] target_base_i;
+input            [31:0] target_base_i;
 input [point_width-1:0] target_size_x_i;
 input [point_width-1:0] target_size_y_i;
 input             [2:0] color_depth_i;
@@ -114,80 +114,17 @@ gfx_CalcAddress u1
 );
 
 // Split colors for alpha blending (render color)
-reg [7:0] blend_color_r,blend_color_g,blend_color_b;
-reg [7:0] target_color_r,target_color_g,target_color_b;
+wire [7:0] blend_color_r,blend_color_g,blend_color_b;
+wire [7:0] target_color_r,target_color_g,target_color_b;
+wire [31:0] dest_color;
 
-always @(color_depth_i or pixel_color_i)
-case(color_depth_i)
-BPP6:	blend_color_r = pixel_color_i[5:4];
-BPP8:	blend_color_r = pixel_color_i[7:5];
-BPP9:	blend_color_r = pixel_color_i[8:6];
-BPP12:	blend_color_r = pixel_color_i[11:8];
-BPP15:	blend_color_r = pixel_color_i[14:10];
-BPP16:	blend_color_r = pixel_color_i[15:11];
-BPP24:	blend_color_r = pixel_color_i[23:16];
-BPP32:	blend_color_r = pixel_color_i[23:16];
-endcase
+gfx_SplitColorR u2 (color_depth_i, pixel_color_i, blend_color_r);
+gfx_SplitColorG u3 (color_depth_i, pixel_color_i, blend_color_g);
+gfx_SplitColorB u4 (color_depth_i, pixel_color_i, blend_color_b);
 
-always @(color_depth_i or pixel_color_i)
-case(color_depth_i)
-BPP6:	blend_color_g = pixel_color_i[3:2];
-BPP8:	blend_color_g = pixel_color_i[4:2];
-BPP9:	blend_color_g = pixel_color_i[5:3];
-BPP12:	blend_color_g = pixel_color_i[7:4];
-BPP15:	blend_color_g = pixel_color_i[9:5];
-BPP16:	blend_color_g = pixel_color_i[10:5];
-BPP24:	blend_color_g = pixel_color_i[15:8];
-BPP32:	blend_color_g = pixel_color_i[15:8];
-endcase
-
-always @(color_depth_i or pixel_color_i)
-case(color_depth_i)
-BPP6:	blend_color_b = pixel_color_i[1:0];
-BPP8:	blend_color_b = pixel_color_i[1:0];
-BPP9:	blend_color_b = pixel_color_i[2:0];
-BPP12:	blend_color_b = pixel_color_i[3:0];
-BPP15:	blend_color_b = pixel_color_i[4:0];
-BPP16:	blend_color_b = pixel_color_i[4:0];
-BPP24:	blend_color_b = pixel_color_i[7:0];
-BPP32:	blend_color_b = pixel_color_i[7:0];
-endcase
-
-always @(color_depth_i or pixel_color_i)
-case(color_depth_i)
-BPP6:	target_color_r = dest_color[5:4];
-BPP8:	target_color_r = dest_color[7:5];
-BPP9:	target_color_r = dest_color[8:6];
-BPP12:	target_color_r = dest_color[11:8];
-BPP15:	target_color_r = dest_color[14:10];
-BPP16:  target_color_r = dest_color[15:11];
-BPP24:	target_color_r = dest_color[23:16];
-BPP32:	target_color_r = dest_color[23:16];
-endcase
-
-always @(color_depth_i or pixel_color_i)
-case(color_depth_i)
-BPP6:	target_color_g = dest_color[3:2];
-BPP8:	target_color_g = dest_color[4:2];
-BPP9:	target_color_g = dest_color[5:3];
-BPP12:	target_color_g = dest_color[7:4];
-BPP15:	target_color_g = dest_color[9:5];
-BPP16:  target_color_g = dest_color[10:5];
-BPP24:	target_color_g = dest_color[15:8];
-BPP32:	target_color_g = dest_color[15:8];
-endcase
-
-always @(color_depth_i or pixel_color_i)
-case(color_depth_i)
-BPP6:	target_color_b = dest_color[1:0];
-BPP8:	target_color_b = dest_color[1:0];
-BPP9:	target_color_b = dest_color[2:0];
-BPP12:	target_color_b = dest_color[3:0];
-BPP15:	target_color_b = dest_color[4:0];
-BPP16:  target_color_b = dest_color[4:0];
-BPP24:	target_color_b = dest_color[7:0];
-BPP32:	target_color_b = dest_color[7:0];
-endcase
+gfx_SplitColorR u5 (color_depth_i, dest_color, target_color_r);
+gfx_SplitColorG u6 (color_depth_i, dest_color, target_color_g);
+gfx_SplitColorB u7 (color_depth_i, dest_color, target_color_b);
 
 // Alpha blending (per color channel):
 // rgb = (alpha1)(rgb1) + (1-alpha1)(rgb2)
@@ -195,7 +132,6 @@ wire [15:0] alpha_color_r = blend_color_r * alpha + target_color_r * (8'hff - al
 wire [15:0] alpha_color_g = blend_color_g * alpha + target_color_g * (8'hff - alpha);
 wire [15:0] alpha_color_b = blend_color_b * alpha + target_color_b * (8'hff - alpha);
 
-wire [31:0] dest_color;
 
 // Memory to color converter
 memory_to_color memory_proc(
