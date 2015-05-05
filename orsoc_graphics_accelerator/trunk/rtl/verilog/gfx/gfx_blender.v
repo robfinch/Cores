@@ -39,7 +39,7 @@ module gfx_blender(clk_i, rst_i,
   blending_enable_i, target_base_i, target_size_x_i, target_size_y_i, color_depth_i,
   x_counter_i, y_counter_i, z_i, alpha_i, global_alpha_i, write_i, ack_o,                      // from fragment
   target_ack_i, target_addr_o, target_data_i, target_request_o, wbm_busy_i, // from/to wbm reader
-  pixel_x_o, pixel_y_o, pixel_z_o, pixel_color_i, pixel_color_o, write_o, ack_i                      // to render
+  pixel_x_o, pixel_y_o, pixel_z_o, pixel_color_i, pixel_color_o, write_o, ack_i, nack_o        // to render
   );
 
 parameter point_width = 16;
@@ -69,6 +69,7 @@ output     [31:0] target_addr_o;
 input     [127:0] target_data_i;
 output reg        target_request_o;
 input             wbm_busy_i;
+output reg nack_o;
 
 //to render
 output reg [point_width-1:0] pixel_x_o;
@@ -141,8 +142,11 @@ memory_to_color memory_proc(
 .color_o (dest_color)
 );
 
+wire pe_ack;
+edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(target_ack_i), .pe(pe_ack), .ne(), .ee() );
+
 // Acknowledge when a command has completed
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 begin
   // reset, init component
   if(rst_i)
@@ -154,10 +158,13 @@ begin
     pixel_z_o        <= 1'b0;
     pixel_color_o    <= 1'b0;
     target_request_o <= 1'b0;
+	nack_o <= 1'b0;
   end
   // Else, set outputs for next cycle
   else
   begin
+    if (!target_ack_i)
+		nack_o <= 1'b0;
     case (state)
 
       wait_state:
@@ -184,8 +191,9 @@ begin
 
       // Read pixel color at target (request is sent through the wbm reader arbiter).
       target_read_state:
-        if(target_ack_i)
+        if(pe_ack)
         begin
+		  nack_o <= 1'b1;
           // When we receive an ack from memory, calculate the combined color and send the pixel forward in the pipeline (go to write state)
           write_o          <= 1'b1;
           pixel_x_o        <= x_counter_i;
@@ -220,7 +228,7 @@ begin
 end
 
 // State machine
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 begin
   // reset, init component
   if(rst_i)
@@ -236,7 +244,7 @@ begin
           state <= write_pixel_state;
 
       target_read_state:
-        if(target_ack_i)
+        if(pe_ack)
           state <= write_pixel_state;
 
       write_pixel_state:

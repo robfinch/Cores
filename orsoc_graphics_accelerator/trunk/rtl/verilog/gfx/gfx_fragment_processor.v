@@ -31,7 +31,7 @@ module gfx_fragment_processor(clk_i, rst_i,
   pixel_alpha_i,
   x_counter_i, y_counter_i, z_i, u_i, v_i, bezier_factor0_i, bezier_factor1_i, bezier_inside_i, write_i, curve_write_i, ack_o, // from raster
   pixel_x_o, pixel_y_o, pixel_z_o, pixel_color_i, pixel_color_o, pixel_alpha_o, write_o, ack_i,  // to blender
-  texture_ack_i, texture_data_i, texture_addr_o, texture_request_o, // to/from wishbone master read
+  texture_ack_i, texture_data_i, texture_addr_o, texture_request_o, nack_o,// to/from wishbone master read
   texture_enable_i, tex0_base_i, tex0_size_x_i, tex0_size_y_i, color_depth_i, colorkey_enable_i, colorkey_i // from wishbone slave
   );
 
@@ -70,13 +70,14 @@ input              texture_ack_i;
 input      [127:0] texture_data_i;
 output      [31:0] texture_addr_o;
 output reg         texture_request_o;
+output reg         nack_o;
 
 // from wishbone slave
 input                   texture_enable_i;
-input            [31:2] tex0_base_i;
+input            [31:0] tex0_base_i;
 input [point_width-1:0] tex0_size_x_i;
 input [point_width-1:0] tex0_size_y_i;
-input            [ 1:0] color_depth_i;
+input            [ 2:0] color_depth_i;
 input                   colorkey_enable_i;
 input            [31:0] colorkey_i;
 
@@ -143,8 +144,11 @@ wire [2*point_width-1:0] bezier_factor0_squared = bezier_factor0_i*bezier_factor
 wire bezier_eval = bezier_factor0_squared[2*point_width-1:point_width] > bezier_factor1_i;
 wire bezier_draw = bezier_inside_i ^ bezier_eval; // inside xor eval
 
+wire pe_ack;
+edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(texture_ack_i), .pe(pe_ack), .ne(), .ee() );
+
 // Acknowledge when a command has completed
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 begin
   // reset, init component
   if(rst_i)
@@ -157,10 +161,14 @@ begin
     pixel_color_o     <= 1'b0;
     pixel_alpha_o     <= 1'b0;
     texture_request_o <= 1'b0;
+	nack_o <= 1'b0;
   end
   // Else, set outputs for next cycle
   else
   begin
+	if (!texture_ack_i)
+		nack_o <= 1'b0;
+  
     case (state)
 
       wait_state:
@@ -182,8 +190,9 @@ begin
 
 
       texture_read_state:
-        if(texture_ack_i)
+        if(pe_ack)
         begin
+		  nack_o <= 1'b1;
           pixel_x_o         <= x_counter_i;
           pixel_y_o         <= y_counter_i;
           pixel_z_o         <= z_i;
@@ -208,7 +217,7 @@ begin
 end
 
 // State machine
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 begin
   // reset, init component
   if(rst_i)
@@ -225,9 +234,9 @@ begin
 
       texture_read_state:
         // Check for texture ack. If we have colorkeying enabled, only goto the write state if the texture doesn't match the colorkey
-        if(texture_ack_i & colorkey_enable_i)
+        if(pe_ack & colorkey_enable_i)
           state <= transparent_pixel ? wait_state : write_pixel_state;
-        else if(texture_ack_i)
+        else if(pe_ack)
           state <= write_pixel_state;
 
       write_pixel_state:

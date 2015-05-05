@@ -105,31 +105,7 @@ gfx_CalcAddress u2
 	.me_o(mez)
 );
 
-// Color to memory converter
-/*
-color_to_memory color_proc(
-.color_depth_i  (color_depth_i),
-.color_i        (color_i),
-.x_lsb_i        (pixel_x_i[1:0]),
-.mem_o          (target_dat),
-.sel_o          (target_sel)
-);
-*/
 assign target_dat = color_i;
-
-
-
-// Color to memory converter
-/*
-color_to_memory depth_proc(
-.color_depth_i  (2'b01),
-// Note: Padding because z_i is only [15:0]
-.color_i        ({ {point_width{1'b0}}, pixel_z_i[point_width-1:0] }),
-.x_lsb_i        (pixel_x_i[1:0]),
-.mem_o          (zbuffer_dat),
-.sel_o          (zbuffer_sel)
-);
-*/
 assign zbuffer_dat = pixel_z_i[point_width-1:0];
 
 // State machine
@@ -145,6 +121,7 @@ begin
   if(rst_i)
   begin
     write_o       <= 1'b0;
+	writez_o      <= 1'b0;
     ack_o         <= 1'b0;
     render_addr_o <= 1'b0;
     render_dat_o  <= 1'b0;

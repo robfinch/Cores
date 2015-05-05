@@ -33,7 +33,7 @@ module gfx_clip(clk_i, rst_i,
   raster_pixel_x_i, raster_pixel_y_i, raster_u_i, raster_v_i, flat_color_i, raster_write_i, ack_o, // from raster
   cuvz_pixel_x_i, cuvz_pixel_y_i, cuvz_pixel_z_i, cuvz_u_i, cuvz_v_i, cuvz_color_i, cuvz_write_i,  // from cuvz
   cuvz_a_i,                                                                                        // from cuvz
-  z_ack_i, z_addr_o, z_data_i, z_request_o, wbm_busy_i,                                   // from/to wbm reader
+  z_ack_i, z_addr_o, z_data_i, z_request_o, wbm_busy_i, nack_o,                                   // from/to wbm reader
   pixel_x_o, pixel_y_o, pixel_z_o, u_o, v_o, a_o,                                                  // to fragment
   bezier_factor0_i, bezier_factor1_i, bezier_factor0_o, bezier_factor1_o,                          // bezier calculations
   color_o, write_o, ack_i                                                                          // from/to fragment
@@ -80,6 +80,7 @@ output     [31:0] z_addr_o;
 input     [127:0] z_data_i;
 output reg        z_request_o;
 input             wbm_busy_i;
+output reg nack_o;
 
 // To fragment
 output reg [point_width-1:0] pixel_x_o;
@@ -128,6 +129,9 @@ memory_to_color memory_proc(
 .me_i (me),
 .color_o (z_value_at_target32)
 );
+
+wire pe_ack;
+edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(z_ack_i), .pe(pe_ack), .ne(), .ee() );
 
 // Forward texture coordinates, color, alpha etc
 always @(posedge clk_i or posedge rst_i)
@@ -185,17 +189,20 @@ wire discard_pixel  = outside_target | (clipping_enable_i & outside_clip);
 wire write_i        = raster_write_i | cuvz_write_i;
 
 // Acknowledge when a command has completed
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 // reset, init component
 if(rst_i)
 begin
   ack_o            <= 1'b0;
   write_o          <= 1'b0;
   z_request_o      <= 1'b0;
+  nack_o <= 1'b0;
 end
 // Else, set outputs for next cycle
 else
 begin
+	if (!z_ack_i)
+		nack_o <= 1'b0;
   case (state)
 
     wait_state:
@@ -214,11 +221,12 @@ begin
 
     // Do a depth check. If it fails, discard pixel, ack and go back to wait. If it succeeds, go to write state
     z_read_state:
-      if(z_ack_i)
+      if(pe_ack)
       begin
         write_o     <= ~fail_z_check;
         ack_o       <= fail_z_check;
         z_request_o <= 1'b0;
+		nack_o <= 1'b1;
       end
       else
         z_request_o <= ~wbm_busy_i | z_request_o;
@@ -236,7 +244,7 @@ begin
 end
 
 // State machine
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 // reset, init component
 if(rst_i)
   state <= wait_state;
@@ -254,7 +262,7 @@ else
       end
 
     z_read_state:
-      if(z_ack_i)
+      if(pe_ack)
         state <= fail_z_check ? wait_state : write_pixel_state;
 
     write_pixel_state:

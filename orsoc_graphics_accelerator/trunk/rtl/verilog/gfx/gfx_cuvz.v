@@ -130,7 +130,7 @@ parameter wait_state   = 2'b00,
           write_state  = 2'b10;
 
 // Manage states
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 if(rst_i)
   state <= wait_state;
 else
@@ -187,7 +187,7 @@ wire [8+point_width-1:0] color_r = factor0*color0_r +  factor1*color1_r +  facto
 wire [8+point_width-1:0] color_g = factor0*color0_g +  factor1*color1_g +  factor2*color2_g;
 wire [8+point_width-1:0] color_b = factor0*color0_b +  factor1*color1_b +  factor2*color2_b;
 
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 begin
   // Reset
   if(rst_i)

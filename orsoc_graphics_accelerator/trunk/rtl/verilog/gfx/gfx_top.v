@@ -27,7 +27,7 @@ module gfx_top (wb_clk_i, wb_rst_i, wb_inta_o,
   // Wishbone master signals (interfaces with video memory, write)
   wbm_write_cyc_o, wbm_write_stb_o, wbm_write_cti_o, wbm_write_bte_o, wbm_write_we_o, wbm_write_adr_o, wbm_write_sel_o, wbm_write_ack_i, wbm_write_err_i, wbm_write_dat_i, wbm_write_dat_o,
   // Wishbone master signals (interfaces with video memory, read)
-  wbm_read_cyc_o, wbm_read_stb_o, wbm_read_cti_o, wbm_read_bte_o, wbm_read_we_o, wbm_read_adr_o, wbm_read_ack_i, wbm_read_err_i, wbm_read_dat_i,
+  wbm_read_clk_i, wbm_read_cyc_o, wbm_read_stb_o, wbm_read_cti_o, wbm_read_bte_o, wbm_read_we_o, wbm_read_sel_o, wbm_read_adr_o, wbm_read_ack_i, wbm_read_err_i, wbm_read_dat_i,
   // Wishbone slave signals (interfaces with main bus/CPU)
   wbs_cyc_i, wbs_stb_i, wbs_cti_i, wbs_bte_i, wbs_we_i, wbs_adr_i, wbs_sel_i, wbs_ack_o, wbs_err_o, wbs_dat_i, wbs_dat_o
 );
@@ -37,7 +37,7 @@ parameter point_width    = 16;
 parameter subpixel_width = 16;
 parameter fifo_depth     = 10;
 
-parameter REG_ADR_HIBIT = 9;
+parameter REG_ADR_HIBIT = 7;
 
 // Common wishbone signals
 input         wb_clk_i;    // master clock input
@@ -58,11 +58,13 @@ input [127:0] wbm_write_dat_i;    // wishbone data in
 output [127:0] wbm_write_dat_o;    // wishbone data out
 
 // Wishbone master signals (read)
+input         wbm_read_clk_i;
 output        wbm_read_cyc_o;    // cycle output
 output        wbm_read_stb_o;    // strobe output
 output [ 2:0] wbm_read_cti_o;    // cycle type id
 output [ 1:0] wbm_read_bte_o;    // burst type extension
 output        wbm_read_we_o;     // write enable output
+output [15:0] wbm_read_sel_o;
 output [31:0] wbm_read_adr_o;    // address output
 input         wbm_read_ack_i;    // wishbone cycle acknowledge
 input         wbm_read_err_i;    // wishbone cycle error
@@ -512,6 +514,7 @@ wire        wbmreader_clip_z_ack;
 wire [31:0] clip_wbmreader_z_addr;
 wire [127:0] wbmreader_clip_z_data;
 wire        clip_wbmreader_z_request;
+wire wbmreader_clip_z_nack;
 
 // Apply clipping
 gfx_clip clip(
@@ -558,7 +561,8 @@ gfx_clip clip(
 .bezier_factor1_o (clip_fragment_bezier_factor1),
 .color_o          (clip_fragment_color),
 .write_o          (clip_fragment_write_enable),
-.ack_i            (fragment_clip_ack)
+.ack_i            (fragment_clip_ack),
+.nack_o           (wbmreader_clip_z_nack)
 );
 
 defparam clip.point_width = point_width;
@@ -575,7 +579,7 @@ wire        wbmreader_fragment_texture_ack;
 wire [127:0] wbmreader_fragment_texture_data;
 wire [31:0] fragment_wbmreader_texture_addr;
 wire        fragment_wbmreader_texture_request;
-
+wire wbmreader_fragment_texture_nack;
 
 // Fragment processor generates color of pixel (requires RAM read for textures)
 gfx_fragment_processor fp0 (
@@ -606,6 +610,7 @@ gfx_fragment_processor fp0 (
   .texture_addr_o    (fragment_wbmreader_texture_addr), 
   .texture_request_o (fragment_wbmreader_texture_request),
   .texture_enable_i  (texture_enable_reg),
+  .nack_o            (wbmreader_fragment_texture_nack),
   .tex0_base_i       (wbs_fragment_tex0_base), 
   .tex0_size_x_i     (wbs_fragment_tex0_size_x), 
   .tex0_size_y_i     (wbs_fragment_tex0_size_y),
@@ -628,7 +633,7 @@ wire        wbmreader_blender_target_ack;
 wire [31:0] blender_wbmreader_target_addr;
 wire [127:0] wbmreader_blender_target_data;
 wire        blender_wbmreader_target_request;
-
+wire wbmreader_blender_target_nack;
 // Applies alpha blending if enabled (requires RAM read to get target pixel color)
 // Fragment processor generates color of pixel (requires RAM read for textures)
 gfx_blender blender0 (
@@ -646,6 +651,7 @@ gfx_blender blender0 (
   .alpha_i          (fragment_blender_alpha),
   .global_alpha_i   (global_alpha_reg),
   .ack_i            (render_blender_ack),
+  .nack_o           (wbmreader_blender_target_nack),
   .target_ack_i     (wbmreader_blender_target_ack),
   .target_addr_o    (blender_wbmreader_target_addr),
   .target_data_i    (wbmreader_blender_target_data),
@@ -731,54 +737,42 @@ gfx_wbm_write wbm_writer (
   .reader_dat_o    (writer_dat_o)
   );
 
-// Instansiate wbm reader arbiter
-gfx_wbm_read_arbiter wbm_arbiter (
-  .master_busy_o     (wbmreader_busy),
-  // Interface against the wbm read module
-  .read_request_o    (arbiter_wbmreader_request),
-  .addr_o            (arbiter_wbmreader_addr),
-  .dat_i             (wbmreader_arbiter_data),
-  .ack_i             (wbmreader_arbiter_ack),
-  // Interface against masters (clip)
-  .m0_read_request_i (clip_wbmreader_z_request),
-  .m0_addr_i         (clip_wbmreader_z_addr),
-  .m0_dat_o          (wbmreader_clip_z_data),
-  .m0_ack_o          (wbmreader_clip_z_ack),
-  // Interface against masters (fragment processor)
-  .m1_read_request_i (fragment_wbmreader_texture_request),
-  .m1_addr_i         (fragment_wbmreader_texture_addr),
-  .m1_dat_o          (wbmreader_fragment_texture_data),
-  .m1_ack_o          (wbmreader_fragment_texture_ack),
-  // Interface against masters (blender)
-  .m2_read_request_i (blender_wbmreader_target_request),
-  .m2_addr_i         (blender_wbmreader_target_addr),
-  .m2_dat_o          (wbmreader_blender_target_data),
-  .m2_ack_o          (wbmreader_blender_target_ack)
-  );
+gfx_wbm_read ureader
+(
+	.rst_i(wb_rst_i),
+	.clk_i(wbm_read_clk_i),
+	.cyc_o(wbm_read_cyc_o),
+	.stb_o(wbm_read_stb_o),
+	.cti_o(wbm_read_cti_o),
+	.bte_o(wbm_read_bte_o),
+	.we_o (wbm_read_we_o),
+	.sel_o(wbm_read_sel_o),
+	.adr_o(wbm_read_adr_o),
+	.ack_i(wbm_read_ack_i),
+	.err_i(wbm_read_err_i),
+	.dat_i(wbm_read_dat_i),
+	// Interface against masters (clip)
+	.m0_read_request_i(clip_wbmreader_z_request),
+    .m0_adr_i(clip_wbmreader_z_addr),
+	.m0_dat_o(wbmreader_clip_z_data),
+	.m0_ack_o(wbmreader_clip_z_ack),
+	.m0_nack_i(wbmreader_clip_z_nack),
+	// Interface against masters (fragment processor)
+	.m1_read_request_i (fragment_wbmreader_texture_request),
+	.m1_adr_i         (fragment_wbmreader_texture_addr),
+	.m1_dat_o          (wbmreader_fragment_texture_data),
+	.m1_ack_o          (wbmreader_fragment_texture_ack),
+	.m1_nack_i	       (wbmreader_fragment_texture_nack),
+	// Interface against masters (blender)
+	.m2_read_request_i (blender_wbmreader_target_request),
+	.m2_adr_i         (blender_wbmreader_target_addr),
+	.m2_dat_o          (wbmreader_blender_target_data),
+	.m2_ack_o          (wbmreader_blender_target_ack),
+	.m2_nack_i         (wbmreader_blender_target_nack),
 
-// Instansiate wishbone master interface (read only for textures)
-gfx_wbm_read wbm_reader (
-  .clk_i            (wb_clk_i),
-  .rst_i            (wb_rst_i),
-  .cyc_o            (wbm_read_cyc_o),
-  .stb_o            (wbm_read_stb_o),
-  .cti_o            (wbm_read_cti_o),
-  .bte_o            (wbm_read_bte_o),
-  .we_o             (wbm_read_we_o),
-  .adr_o            (wbm_read_adr_o),
-  .ack_i            (wbm_read_ack_i),
-  .err_i            (wbm_read_err_i),
-  .dat_i            (wbm_read_dat_i),
-  .sint_o           (wbmreader_sint),
-
-  .writer_match_i   (writer_match_o),
-  .writer_dat_i     (writer_dat_o),
-  // send ack to renderer when done writing to memory.
-  .read_request_i   (arbiter_wbmreader_request),
-  .texture_addr_i   (arbiter_wbmreader_addr),
-  .texture_dat_o    (wbmreader_arbiter_data),
-  .texture_data_ack (wbmreader_arbiter_ack)
-  );
+	.writer_match_i   (writer_match_o),
+	.writer_dat_i     (writer_dat_o)
+);
 
 endmodule
 

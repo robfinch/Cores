@@ -72,7 +72,7 @@ BPP24:	bpp = 23;
 BPP32:	bpp = 31;
 endcase
 
-reg [6:0] coeff2;
+reg [7:0] coeff2;
 always @(color_depth_i)
 case(color_depth_i)
 BPP6:	coeff2 = 126;
@@ -85,17 +85,18 @@ BPP24:	coeff2 = 120;
 BPP32:	coeff2 = 128;
 endcase
 
-wire [25:0] strip_num65k = x_coord_i * coeff;
+wire [27:0] strip_num65k = x_coord_i * coeff;
 wire [15:0] strip_fract = strip_num65k[15:0];
-wire [13:0] ndx = strip_fract[15:9] * coeff2;
-assign mb_o = ndx[13:7];
+wire [14:0] ndx = strip_fract[15:9] * coeff2;
+wire [14:0] ndxr = ndx + 8'h7F;
+assign mb_o = ndxr[13:7];
 assign me_o = mb_o + bpp;
-wire [25:0] strip_num65kr = strip_num65k + 26'hFFFF;
-wire [25:0] num_strips65k = hdisplayed_i * coeff + 26'hFFFF;
-wire [9:0] strip_num = strip_num65kr[25:16];
-wire [9:0] num_strips = num_strips65k[25:16];
+wire [27:0] strip_num65kr = strip_num65k + 28'hFFFF;
+wire [27:0] num_strips65k = hdisplayed_i * coeff + 28'hFFFF;
+wire [13:0] strip_num = strip_num65kr[27:16];
+wire [13:0] num_strips = num_strips65k[27:16];
 
-wire [31:0] offset = {num_strips * y_coord_i + strip_num,4'h0};
+wire [31:0] offset = {{4'b0,num_strips} * y_coord_i + strip_num,4'h0};
 assign address_o = base_address_i + offset;
 
 endmodule

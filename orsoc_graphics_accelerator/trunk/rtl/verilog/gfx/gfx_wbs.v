@@ -79,7 +79,7 @@ module gfx_wbs(
   `include "gfx_params.v"
 
   // Adjust these parameters in gfx_top!
-  parameter REG_ADR_HIBIT = 9;
+  parameter REG_ADR_HIBIT = 7;
   parameter point_width = 16;
   parameter subpixel_width = 16;
   parameter fifo_depth = 10;
@@ -189,6 +189,7 @@ module gfx_wbs(
   //
   // variable declarations
   //
+reg [31:0] reg_shadow [63:0];
 
   wire [REG_ADR_HIBIT:0] REG_ADR  = {adr_i[REG_ADR_HIBIT : 2], 2'b00};
 
@@ -228,7 +229,7 @@ module gfx_wbs(
 
   // Generate wishbone ack
   reg ack1;
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   if(rst_i)
     ack1 <= 1'b0;
   else
@@ -236,28 +237,28 @@ module gfx_wbs(
 	assign ack_o = ack1 & cyc_i & stb_i;
 
   // Generate wishbone rty
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   if(rst_i)
     rty_o <= 1'b0;
   else
     rty_o <= 1'b0; //reg_acc & acc32 & ~rty_o ;
 
   // Generate wishbone err
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   if(rst_i)
     err_o <= 1'b0;
   else
     err_o <= acc & ~acc32 & ~err_o;
 
   // generate interrupt request signal
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   if(rst_i)
     inta_o <= 1'b0;
   else
     inta_o <= writer_sint_i | reader_sint_i; // | other_int | (int_enable & int) | ...
 
   // generate registers
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   begin : gen_regs
     if (rst_i)
       begin
@@ -307,6 +308,17 @@ module gfx_wbs(
     // Read fifo to write to registers
     else if (instruction_fifo_rreq)
     begin
+      case (instruction_fifo_q_adr) // synopsis full_case parallel_case
+        GFX_DEST_PIXEL_X,
+        GFX_DEST_PIXEL_Y,
+        GFX_DEST_PIXEL_Z,
+        GFX_AA,GFX_AB,GFX_AC,GFX_TX,
+        GFX_BA,GFX_BB,GFX_BC,GFX_TY,
+        GFX_CA,GFX_CB,GFX_CC,GFX_TZ:
+		reg_shadow[instruction_fifo_q_adr[7:2]] <= $signed(instruction_fifo_q_data);
+	  default:
+		reg_shadow[instruction_fifo_q_adr[7:2]] <= instruction_fifo_q_data;
+	  endcase
       case (instruction_fifo_q_adr) // synopsis full_case parallel_case
         GFX_CONTROL          : control_reg            <= instruction_fifo_q_data;
         GFX_TARGET_BASE      : target_base_reg        <= instruction_fifo_q_data;
@@ -365,7 +377,7 @@ module gfx_wbs(
   end
 
   // generate status register
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   if (rst_i)
     status_reg <= 32'h00000000;
   else
@@ -455,63 +467,21 @@ module gfx_wbs(
   // decode status register TODO
 
   // assign output from wishbone reads. Note that this does not account for pending writes in the fifo!
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
     if(rst_i)
       dat_o <= 32'h0000_0000;
     else begin
 		if (cs)
-		  case (REG_ADR) // synopsis full_case parallel_case
-			GFX_CONTROL       : dat_o <= control_reg;
-			GFX_STATUS        : dat_o <= status_reg;
-			GFX_TARGET_BASE   : dat_o <= target_base_reg;
-			GFX_TARGET_SIZE_X : dat_o <= target_size_x_reg;
-			GFX_TARGET_SIZE_Y : dat_o <= target_size_y_reg;
-			GFX_TEX0_BASE     : dat_o <= tex0_base_reg;
-			GFX_TEX0_SIZE_X   : dat_o <= tex0_size_x_reg;
-			GFX_TEX0_SIZE_Y   : dat_o <= tex0_size_y_reg;
-			GFX_SRC_PIXEL0_X  : dat_o <= src_pixel_pos_0_x_reg;
-			GFX_SRC_PIXEL0_Y  : dat_o <= src_pixel_pos_0_y_reg;
-			GFX_SRC_PIXEL1_X  : dat_o <= src_pixel_pos_1_x_reg;
-			GFX_SRC_PIXEL1_Y  : dat_o <= src_pixel_pos_1_y_reg;
-			GFX_DEST_PIXEL_X  : dat_o <= dest_pixel_pos_x_reg;
-			GFX_DEST_PIXEL_Y  : dat_o <= dest_pixel_pos_y_reg;
-			GFX_DEST_PIXEL_Z  : dat_o <= dest_pixel_pos_z_reg;
-			GFX_AA            : dat_o <= aa_reg;
-			GFX_AB            : dat_o <= ab_reg;
-			GFX_AC            : dat_o <= ac_reg;
-			GFX_TX            : dat_o <= tx_reg;
-			GFX_BA            : dat_o <= ba_reg;
-			GFX_BB            : dat_o <= bb_reg;
-			GFX_BC            : dat_o <= bc_reg;
-			GFX_TY            : dat_o <= ty_reg;
-			GFX_CA            : dat_o <= ca_reg;
-			GFX_CB            : dat_o <= cb_reg;
-			GFX_CC            : dat_o <= cc_reg;
-			GFX_TZ            : dat_o <= tz_reg;
-			GFX_CLIP_PIXEL0_X : dat_o <= clip_pixel_pos_0_x_reg;
-			GFX_CLIP_PIXEL0_Y : dat_o <= clip_pixel_pos_0_y_reg;
-			GFX_CLIP_PIXEL1_X : dat_o <= clip_pixel_pos_1_x_reg;
-			GFX_CLIP_PIXEL1_Y : dat_o <= clip_pixel_pos_1_y_reg;
-			GFX_COLOR0        : dat_o <= color0_reg;
-			GFX_COLOR1        : dat_o <= color1_reg;
-			GFX_COLOR2        : dat_o <= color2_reg;
-			GFX_U0            : dat_o <= u0_reg;
-			GFX_V0            : dat_o <= v0_reg;
-			GFX_U1            : dat_o <= u1_reg;
-			GFX_V1            : dat_o <= v1_reg;
-			GFX_U2            : dat_o <= u2_reg;
-			GFX_V2            : dat_o <= v2_reg;
-			GFX_ALPHA         : dat_o <= alpha_reg;
-			GFX_COLORKEY      : dat_o <= colorkey_reg;
-			GFX_ZBUFFER_BASE  : dat_o <= zbuffer_base_reg;
-			default           : dat_o <= 32'h0000_0000;
-		  endcase
+			case(adr_i[7:0])
+			GFX_STATUS:	dat_o <= status_reg;
+			default:   dat_o <= reg_shadow[adr_i[7:2]];
+			endcase
 		 else
 			dat_o <= 32'd0;
 	end
 
   // State machine
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
   if(rst_i)
     state <= wait_state;
   else
@@ -538,7 +508,7 @@ module gfx_wbs(
   wire [REG_ADR_HIBIT:0] instruction_fifo_q_adr;
   wire    [fifo_depth:0] instruction_fifo_count;
 
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
     if(rst_i)
       fifo_read_ack <= 1'b0;
     else
@@ -547,14 +517,25 @@ module gfx_wbs(
   wire ready_next_cycle = (state == wait_state) & ~rect_write_o & ~line_write_o & ~triangle_write_o & ~forward_point_o & ~transform_point_o;
   assign instruction_fifo_rreq = instruction_fifo_valid_out & ~fifo_read_ack & ready_next_cycle;
 
-  always @(posedge clk_i or posedge rst_i)
+  always @(posedge clk_i)
     if(rst_i)
       fifo_write_ack <= 1'b0;
     else
       fifo_write_ack <= instruction_fifo_wreq ? !fifo_write_ack : reg_wacc;
 
   assign instruction_fifo_wreq = reg_wacc & ~fifo_write_ack;
-
+ /*
+edge_det u1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ce(1'b1),
+	.i(reg_wacc),
+	.pe(instruction_fifo_wreq),
+	.ne(),
+	.ee()
+);
+*/
   // TODO: 1024 places large enough?
   basic_fifo instruction_fifo(
   .clk_i     ( clk_i ),
