@@ -86,14 +86,12 @@ BPP32:	coeff2 = 128;
 endcase
 
 wire [27:0] strip_num65k = x_coord_i * coeff;
-wire [15:0] strip_fract = strip_num65k[15:0];
-wire [14:0] ndx = strip_fract[15:9] * coeff2;
-wire [14:0] ndxr = ndx + 8'h7F;
-assign mb_o = ndxr[13:7];
+wire [15:0] strip_fract = strip_num65k[15:0]+16'h7F;
+wire [15:0] ndx = strip_fract[15:7] * coeff2;
+assign mb_o = ndx[15:9];
 assign me_o = mb_o + bpp;
-wire [27:0] strip_num65kr = strip_num65k + 28'hFFFF;
-wire [27:0] num_strips65k = hdisplayed_i * coeff + 28'hFFFF;
-wire [13:0] strip_num = strip_num65kr[27:16];
+wire [27:0] num_strips65k = hdisplayed_i * coeff;
+wire [13:0] strip_num = strip_num65k[27:16];
 wire [13:0] num_strips = num_strips65k[27:16];
 
 wire [31:0] offset = {{4'b0,num_strips} * y_coord_i + strip_num,4'h0};
