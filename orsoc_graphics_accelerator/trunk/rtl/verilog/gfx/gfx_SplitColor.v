@@ -39,8 +39,8 @@ parameter BPP32 = 3'd7;
 
 always @(color_depth_i or color_i)
 case(color_depth_i)
-BPP6:	color_o = color_i[5:4];
-BPP8:	color_o = color_i[7:5];
+BPP6:	color_o = color_i[5:0];
+BPP8:	color_o = color_i[7:0];
 BPP9:	color_o = color_i[8:6];
 BPP12:	color_o = color_i[11:8];
 BPP15:	color_o = color_i[14:10];
@@ -65,8 +65,8 @@ parameter BPP32 = 3'd7;
 
 always @(color_depth_i or color_i)
 case(color_depth_i)
-BPP6:	color_o = color_i[3:2];
-BPP8:	color_o = color_i[4:2];
+BPP6:	color_o = color_i[5:0];
+BPP8:	color_o = color_i[7:0];
 BPP9:	color_o = color_i[5:3];
 BPP12:	color_o = color_i[7:4];
 BPP15:	color_o = color_i[9:5];
@@ -91,8 +91,8 @@ parameter BPP32 = 3'd7;
 
 always @(color_depth_i or color_i)
 case(color_depth_i)
-BPP6:	color_o = color_i[1:0];
-BPP8:	color_o = color_i[1:0];
+BPP6:	color_o = color_i[5:0];
+BPP8:	color_o = color_i[7:0];
 BPP9:	color_o = color_i[2:0];
 BPP12:	color_o = color_i[3:0];
 BPP15:	color_o = color_i[4:0];

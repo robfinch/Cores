@@ -27,9 +27,6 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//	Verilog 1995
-//
-// ref: XC7a100t-1CSG324
 // ============================================================================
 //
 /*
@@ -63,7 +60,7 @@ Loosely based on the vga lcds wishbone writer (LGPL) in orpsocv2 by Julius Baxte
 
 module gfx_wbm_write (clk_i, rst_i,
                       cyc_o, stb_o, cti_o, bte_o, we_o, adr_o, sel_o, ack_i, err_i, dat_i, dat_o, sint_o,
-                      write_i, writez_i, ack_o,
+                      write_i, writez_i, ack_o, nack_i,
                       render_addr_i, render_dat_i, mb_i, me_i,
 					  reader_addr_i, reader_match_o, reader_dat_o);
 
@@ -88,6 +85,7 @@ module gfx_wbm_write (clk_i, rst_i,
   input         write_i;
   input         writez_i;
   output reg    ack_o;
+  input nack_i;
 
   input [31:0]  render_addr_i;
   input [31:0]  render_dat_i;
@@ -98,18 +96,21 @@ module gfx_wbm_write (clk_i, rst_i,
   output reader_match_o;
   output reg [127:0] reader_dat_o;
  
-parameter IDLE = 4'd1;
-parameter READ128ACK = 4'd2;
-parameter WRITEOLD = 4'd3;
-parameter WRITEOLD2 = 4'd4;
-parameter READ128 = 4'd5;
-parameter UPDBUF = 4'd6;
-parameter WAITACK = 4'd7;
-parameter WRITEOLDZ = 4'd8;
-parameter WRITEOLDZ2 = 4'd9;
-parameter READZ = 4'd10;
-parameter READZACK = 4'd11;
-parameter UPDZBUF = 4'd12;
+parameter IDLE = 5'd1;
+parameter READ128ACK = 5'd2;
+parameter WRITEOLD = 5'd3;
+parameter WRITEOLD2 = 5'd4;
+parameter READ128 = 5'd5;
+parameter UPDBUF = 5'd6;
+parameter WRITEOLDZ = 5'd8;
+parameter WRITEOLDZ2 = 5'd9;
+parameter READZ = 5'd10;
+parameter READZACK = 5'd11;
+parameter UPDZBUF = 5'd12;
+parameter WAITNACK = 5'd13;
+parameter WRITEOLD3 = 5'd14;
+parameter WRITEOLDZ3 = 5'd15;
+
   //
   // module body
   //
@@ -126,7 +127,7 @@ reg [31:4] bufadr,zbufadr;
 reg [127:0] buf128,zbuf128;
 reg [127:0] mask;
 reg [127:0] o2,o1;
-reg [3:0] state;
+reg [4:0] state;
 reg dirty,zdirty;
 integer nn,n;
 always @(mb_i or me_i or nn)
@@ -161,7 +162,6 @@ end
 	case(state)
 	IDLE:
 		begin
-			ack_o <= 1'b0;
 			if (write_i) begin
 				if (bufadr==render_addr_i[31:4])	// same buffer
 					state <= UPDBUF;
@@ -188,8 +188,11 @@ end
 			cyc_o <= 1'b0;
 			we_o <= 1'b0;
 			dirty <= 1'b0;
-			state <= READ128;
+			state <= WRITEOLD3;
 		end
+	WRITEOLD3:
+		if (!ack_i && !err_i)
+			state <= READ128;
 	READ128:
 		begin
 			cyc_o <= 1'b1;
@@ -204,19 +207,11 @@ end
 			state <= UPDBUF;
 		end
 	UPDBUF:
-		begin
+		if (!ack_i && !err_i) begin
 			dirty <= 1'b1;
 			ack_o <= 1'b1;
 			buf128 <= o;
-			state <= IDLE;
-		end
-
-	WAITACK:
-		if (ack_i|err_i) begin
-			cyc_o <= 1'b0;
-			we_o <= 1'b0;
-			ack_o <= 1'b1;
-			state <= IDLE;
+			state <= WAITNACK;
 		end
 
 	WRITEOLDZ:
@@ -232,8 +227,11 @@ end
 			cyc_o <= 1'b0;
 			we_o <= 1'b0;
 			zdirty <= 1'b0;
-			state <= READZ;
+			state <= WRITEOLDZ3;
 		end
+	WRITEOLDZ3:
+		if (!ack_i && !err_i)
+			state <= READZ;
 	READZ:
 		begin
 			cyc_o <= 1'b1;
@@ -248,24 +246,27 @@ end
 			state <= UPDZBUF;
 		end
 	UPDZBUF:
-		begin
+		if (!ack_i && !err_i) begin
 			zdirty <= 1'b1;
 			ack_o <= 1'b1;
 			zbuf128 <= o1;
-			state <= IDLE;
+			state <= WAITNACK;
 		end
-
+	WAITNACK:
+		if (nack_i) begin
+		    ack_o <= 1'b0;
+		    state <= IDLE;
+		end
+		
 	endcase
     end
   end
 
 assign reader_match_o = reader_addr_i[31:4]==bufadr||reader_addr_i[31:4]==zbufadr;
-always @(posedge clk_i)
-begin
-	if (reader_addr_i[31:4]==bufadr)
-		reader_dat_o <= buf128;
-	else if (reader_addr_i[31:4]==zbufadr)
+always @*
+	if (reader_addr_i[31:4]==zbufadr)
 		reader_dat_o <= zbuf128;
-end
+	else
+		reader_dat_o <= buf128;
 
 endmodule

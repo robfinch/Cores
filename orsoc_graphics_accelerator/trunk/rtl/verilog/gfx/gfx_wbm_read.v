@@ -19,9 +19,6 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//	Verilog 1995
-//
-// ref: XC7a100t-1CSG324
 // ============================================================================
 //
 module gfx_wbm_read (clk_i, rst_i,
@@ -119,20 +116,17 @@ else
 			state <= TEST_MATCH;
 		end
 	TEST_MATCH:
-		if (writer_match_i)
-			state <= MATCH;
-		else begin
-			cyc_o <= 1'b1;
-			state <= ACK;
-		end
-	MATCH:
-		begin
+		if (writer_match_i) begin
 			case(master_sel)
 			2'd0:	begin m0_ack_o <= 1'b1; m0_dat_o <= writer_dat_i; end
 			2'd1:	begin m1_ack_o <= 1'b1; m1_dat_o <= writer_dat_i; end
 			2'd2:	begin m2_ack_o <= 1'b1; m2_dat_o <= writer_dat_i; end
 			endcase
 			state <= NACK;
+		end
+		else begin
+			cyc_o <= 1'b1;
+			state <= ACK;
 		end
 	ACK:
 		if(ack_i|err_i) begin

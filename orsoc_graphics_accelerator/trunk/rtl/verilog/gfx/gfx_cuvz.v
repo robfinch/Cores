@@ -238,7 +238,7 @@ begin
         a_o     <= a[point_width+8-1:point_width];
         // Color
 		case(color_depth_i)
-		BPP6: color_o <= {color_r[6+point_width-1:point_width]}; // 8 bit greyscale
+		BPP6: color_o <= {color_r[6+point_width-1:point_width]}; // 6 bit greyscale
 		BPP8: color_o <= {color_r[8+point_width-1:point_width]}; // 8 bit greyscale
 		BPP9: color_o <= {color_r[3+point_width-1:point_width],color_g[3+point_width-1:point_width],color_b[3+point_width-1:point_width]};
 		BPP12:color_o <= {color_r[4+point_width-1:point_width],color_g[4+point_width-1:point_width],color_b[4+point_width-1:point_width]};

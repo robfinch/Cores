@@ -104,7 +104,7 @@ reg signed [2*point_width-1:-subpixel_width*2] cax;
 reg signed [2*point_width-1:-subpixel_width*2] cby;
 reg signed [2*point_width-1:-subpixel_width*2] ccz;
 
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 if(rst_i)
 begin
   // Initialize registers
@@ -211,7 +211,7 @@ wire signed [point_width-1:-subpixel_width] y_prime_trunc = y_prime[point_width-
 wire signed [point_width-1:-subpixel_width] z_prime_trunc = z_prime[point_width-1:-subpixel_width];
 
 // State machine
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 if(rst_i)
   state <= wait_state;
 else

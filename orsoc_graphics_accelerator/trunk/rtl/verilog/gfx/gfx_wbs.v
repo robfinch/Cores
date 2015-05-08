@@ -38,6 +38,7 @@ In the busy state all incoming wishbone writes are queued up in a 64 item fifo. 
 The module leaves the busy state and enters wait state when it receives an ack from the pipeline.
 */
 module gfx_wbs(
+  pclk_i,
   clk_i, rst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_i, cyc_i, ack_o, rty_o, err_o, inta_o,
   //src pixels
   src_pixel0_x_o, src_pixel0_y_o, src_pixel1_x_o, src_pixel1_y_o,
@@ -57,6 +58,7 @@ module gfx_wbs(
   a0_o, a1_o, a2_o,
   target_base_o, target_size_x_o, target_size_y_o, tex0_base_o, tex0_size_x_o, tex0_size_y_o,
   color_depth_o,
+  point_write_o,
   rect_write_o, line_write_o, triangle_write_o, curve_write_o, interpolate_o,
   writer_sint_i, reader_sint_i,
 
@@ -87,7 +89,7 @@ module gfx_wbs(
   //
   // inputs & outputs
   //
-
+  input  pclk_i;		// pipeline clock input
   // wishbone slave interface
   input                    clk_i;
   input                    rst_i;
@@ -156,7 +158,8 @@ module gfx_wbs(
   output [point_width-1:0] tex0_size_y_o;
 
   output [2:0]  color_depth_o;
-	
+
+  output        point_write_o;	
   output        rect_write_o;
   output        line_write_o;
   output        triangle_write_o;
@@ -367,6 +370,7 @@ reg [31:0] reg_shadow [63:0];
     else
     begin
       /* To prevent entering an infinite write cycle, the bits that start pipeline operations are cleared here */
+	  control_reg[GFX_CTRL_POINT] <= 1'b0;
       control_reg[GFX_CTRL_RECT]  <= 1'b0; // Reset rect write
       control_reg[GFX_CTRL_LINE]  <= 1'b0; // Reset line write
       control_reg[GFX_CTRL_TRI]   <= 1'b0; // Reset triangle write
@@ -453,6 +457,7 @@ reg [31:0] reg_shadow [63:0];
   assign clipping_enable_o  = control_reg[GFX_CTRL_CLIPPING];
   assign zbuffer_enable_o   = control_reg[GFX_CTRL_ZBUFFER ];
 
+  assign point_write_o      = control_reg[GFX_CTRL_POINT   ];
   assign rect_write_o       = control_reg[GFX_CTRL_RECT    ];
   assign line_write_o       = control_reg[GFX_CTRL_LINE    ];
   assign triangle_write_o   = control_reg[GFX_CTRL_TRI     ];
@@ -473,22 +478,23 @@ reg [31:0] reg_shadow [63:0];
     else begin
 		if (cs)
 			case(adr_i[7:0])
-			GFX_STATUS:	dat_o <= status_reg;
-			default:   dat_o <= reg_shadow[adr_i[7:2]];
+			GFX_CONTROL:	dat_o <= control_reg;
+			GFX_STATUS:		dat_o <= status_reg;
+			default:   		dat_o <= reg_shadow[adr_i[7:2]];
 			endcase
 		 else
 			dat_o <= 32'd0;
 	end
 
   // State machine
-  always @(posedge clk_i)
+  always @(posedge pclk_i)
   if(rst_i)
     state <= wait_state;
   else
     case (state)
       wait_state:
         // Signals that trigger pipeline operations 
-        if(rect_write_o | line_write_o | triangle_write_o |
+        if(point_write_o | rect_write_o | line_write_o | triangle_write_o |
            forward_point_o | transform_point_o)
           state <= busy_state;
 

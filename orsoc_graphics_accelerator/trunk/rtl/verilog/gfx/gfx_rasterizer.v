@@ -33,7 +33,7 @@ When all pixels have been generated and acked, the rasterizer acks the operation
 */
 module gfx_rasterizer(clk_i, rst_i,
   clip_ack_i, interp_ack_i, ack_o,
-  rect_write_i, line_write_i, triangle_write_i, interpolate_i, texture_enable_i,
+  point_write_i, rect_write_i, line_write_i, triangle_write_i, interpolate_i, texture_enable_i,
   //source pixel 0 and pixel 1
   src_pixel0_x_i, src_pixel0_y_i, src_pixel1_x_i, src_pixel1_y_i,
   //destination point 0, 1, 2
@@ -60,6 +60,7 @@ input clip_ack_i;
 input interp_ack_i;
 output reg ack_o;
 
+input point_write_i;
 input rect_write_i;
 input line_write_i;
 input triangle_write_i;
@@ -111,6 +112,9 @@ output [2*point_width-1:0] triangle_area_o;
 
 wire ack_i = interpolate_i ? interp_ack_i : clip_ack_i;
 
+reg [point_width-1:0] point_p0_x;
+reg [point_width-1:0] point_p0_y;
+
 // Variables used in rect drawing
 reg [point_width-1:0] rect_p0_x;
 reg [point_width-1:0] rect_p0_y;
@@ -128,12 +132,13 @@ wire [point_width-1:0] minor_out; // the minor axis
 wire                   request_next_pixel;
 
 // State machine
-reg [2:0] state;
-parameter wait_state           = 3'b000,
-          rect_state           = 3'b001,
-          line_state           = 3'b010,
-          triangle_state       = 3'b011,
-          triangle_final_state = 3'b100;
+reg [3:0] state;
+parameter wait_state           = 4'b000,
+          rect_state           = 4'b001,
+          line_state           = 4'b010,
+          triangle_state       = 4'b011,
+          triangle_final_state = 4'b100,
+		  point_state          = 4'b101;
 
 // Write/ack counter
 reg [delay_width-1:0] ack_counter;
@@ -146,8 +151,37 @@ else if(interpolate_i & ack_i & ~triangle_write_o)
 else if(interpolate_i & triangle_write_o & ~ack_i)
   ack_counter <= ack_counter + 1'b1;
 
+always @(posedge clk_i)
+if (rst_i) begin
+	point_p0_x <= 1'b0;
+	point_p0_y <= 1'b0;
+end
+else begin
+	if (clipping_enable_i) begin
+		// pixel0 x
+		if(p0_x < $signed(clip_pixel0_x_i)) // check if pixel is left of screen
+		  point_p0_x <= clip_pixel0_x_i;
+		else if(p0_x > $signed(clip_pixel1_x_i)) // check if pixel is right of screen
+		  point_p0_x <= clip_pixel1_x_i;
+		else
+		  point_p0_x <= p0_x;
+
+		// pixel0 y
+		if(p0_y < $signed(clip_pixel0_y_i)) // check if pixel is above the screen
+		  point_p0_y <= clip_pixel0_y_i;
+		else if(p0_y > $signed(clip_pixel1_y_i)) // check if pixel is below the screen
+		  point_p0_y <= clip_pixel1_y_i;
+		else
+		  point_p0_y <= p0_y;
+		end
+	else begin
+		point_p0_x <= p0_x >= 0 ? p0_x : 1'b0;
+		point_p0_y <= p0_y >= 0 ? p0_y : 1'b0;
+	end
+end
+
 // Rect drawing variables
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
 begin
   if(rst_i)
   begin
@@ -223,12 +257,17 @@ else
   case (state)
 
     wait_state:
-      if(triangle_write_i)
+	  if (point_write_i)
+		state <= point_state;
+      else if(triangle_write_i)
         state <= triangle_state;
       else if(rect_write_i & !empty_raster) // if request for drawing a rect, go to rect drawing state
         state <= rect_state;
       else if(line_write_i)
         state <= line_state; // if request for drawing a line, go to line drawing state
+
+	point_state:
+		state <= wait_state;
 
     rect_state:
       if(raster_rect_done) // if we are done drawing a rect, go to wait state
@@ -277,8 +316,14 @@ begin
 
       // Wait for incoming instructions
       wait_state:
+		if (point_write_i) begin
+		    x_counter_o <= point_p0_x;
+			y_counter_o <= point_p0_y;
+			clip_write_o <= 1'b1;
+			ack_o <= 1'b1;
+		end
         
-        if(rect_write_i & !empty_raster) // Start a raster rectangle operation
+        else if(rect_write_i & !empty_raster) // Start a raster rectangle operation
         begin
           ack_o        <= 1'b0;
           clip_write_o <= 1'b1;
@@ -305,6 +350,11 @@ begin
         else
           ack_o     <= 1'b0;
 
+      point_state:
+	  begin
+	    clip_write_o <= 1'b0;
+		ack_o <= 1'b0;
+	  end
 
       // Rasterize a rectangle between p0 and p1 (rasterize = generate the pixels)
       rect_state:

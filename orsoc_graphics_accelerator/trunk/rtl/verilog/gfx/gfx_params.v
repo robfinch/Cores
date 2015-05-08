@@ -82,7 +82,7 @@ Parameter file
   parameter GFX_CTRL_COLORKEY = 4;
   parameter GFX_CTRL_CLIPPING = 5;
   parameter GFX_CTRL_ZBUFFER  = 6;
-  
+  parameter GFX_CTRL_POINT    = 7;
   parameter GFX_CTRL_RECT     = 8;
   parameter GFX_CTRL_LINE     = 9;
   parameter GFX_CTRL_TRI      = 10;
