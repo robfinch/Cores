@@ -580,13 +580,42 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 	}
 }
 
+static round8(int n)
+{
+    while(n & 7) n++;
+    return n;
+};
+
 // push the operand expression onto the stack.
+// Structure variables are represented as an address in a register and arrive
+// here as autocon nodes if on the stack. If the variable size is greater than
+// 8 we assume a structure variable and we assume we have the address in a reg.
 //
 static void GeneratePushParameter(ENODE *ep)
 {    
-	AMODE *ap;
-	ap = GenerateExpression(ep,F_REG|F_FPREG,8);
-	GenerateMonadic(op_push,0,ap);
+	AMODE *ap,*ap2;
+	int nn;
+	ap = GenerateExpression(ep,F_REG|F_FPREG|F_IMMED,8);
+	switch(ap->mode) {
+    case am_reg:
+    case am_fpreg:
+    case am_immed:
+        nn = round8(ep->esize); 
+        if (nn > 8) {           // structure or array ?
+            ap2 = GetTempRegister();
+            GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(nn));
+            GenerateDiadic(op_mov, 0, ap2, makereg(regSP));
+            GenerateMonadic(op_push,0,make_immed(ep->esize));
+            GenerateMonadic(op_push,0,ap);
+            GenerateMonadic(op_push,0,ap2);
+            GenerateMonadic(op_bsr,0,make_string("memcpy_"));
+            GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+            ReleaseTempReg(ap2);
+        }
+        else
+          	GenerateMonadic(op_push,0,ap);
+    	break;
+    }
 	ReleaseTempReg(ap);
 }
 

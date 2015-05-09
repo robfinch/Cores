@@ -266,6 +266,22 @@ static void opt0(ENODE **node)
                         ep->i = -ep->p[0]->i;
                     }
                     return;
+            case en_tempref:
+                    opt0( &(ep->p[0]));
+                    if( ep->p[0] && ep->p[0]->nodetype == en_icon )
+                    {
+                        ep->nodetype = en_icon;
+                        ep->i = ep->p[0]->i;
+                    }
+                    return;
+            case en_tempfpref:
+                    opt0( &(ep->p[0]));
+                    if( ep->p[0] && ep->p[0]->nodetype == en_fcon )
+                    {
+                        ep->nodetype = en_fcon;
+                        ep->f = ep->p[0]->f;
+                    }
+                    return;
             case en_add:
             case en_sub:
                     opt0(&(ep->p[0]));

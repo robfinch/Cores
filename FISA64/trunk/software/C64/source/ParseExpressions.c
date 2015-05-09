@@ -595,6 +595,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
         break;
     case iconst:
         tptr = &stdint;
+        tptr->isConst = TRUE;
         pnode = makeinode(en_icon,ival);
         pnode->constflag = TRUE;
 		if (ival >= -128 && ival < 128)
@@ -609,6 +610,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
         break;
     case rconst:
         tptr = &stddouble;
+        tptr->isConst = TRUE;
         pnode = makefnode(en_fcon,rval);
         pnode->constflag = TRUE;
         pnode->isDouble = TRUE;
@@ -619,6 +621,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 			tptr = maketype(bt_pointer, 0);
 			tptr->size = strlen(laststr) + 1;
 			tptr->btp = &stdchar;
+            tptr->btp->isConst = TRUE;
 			tptr->val_flag = 1;
 			tptr->isConst = TRUE;
 		}
@@ -631,6 +634,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		pnode->etype = bt_pointer;
 		pnode->esize = 8;
         pnode->constflag = TRUE;
+     	tptr->isConst = TRUE;
         NextToken();
         break;
 
@@ -1022,6 +1026,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         }
         if( IsLValue(ep1))
             ep1 = ep1->p[0];
+        ep1->esize = 8;     // convected to a pointer so size is now 8
         tp1 = allocTYP();
         tp1->size = 8;
         tp1->type = bt_pointer;
@@ -1147,7 +1152,7 @@ static TYP *ParseCastExpression(ENODE **node)
 	case openpa:
 		NextToken();
         if(IsBeginningOfTypecast(lastst) ) {
-            ParseSpecifier(0); // do cast ParseSpecifieraration
+            ParseSpecifier(0); // do cast declaration
             ParseDeclarationPrefix(FALSE);
             tp = head;
 			tp1 = tail;
@@ -1155,6 +1160,10 @@ static TYP *ParseCastExpression(ENODE **node)
             if((tp2 = ParseCastExpression(&ep1)) == NULL ) {
                 error(ERR_IDEXPECT);
                 tp = (TYP *)NULL;
+            }
+            if (tp2->isConst) {
+                *node = ep1;
+                return tp;
             }
             if (tp->type == bt_double)
                 ep2 = makenode(en_tempfpref,(ENODE *)NULL,(ENODE *)NULL);

@@ -33,7 +33,7 @@ int IdentifyKeyword()
 {
 	char *p = lastkw;
 
-	if (p[0]=='i') { // if,int,inton,intoff,interrupt,icache
+	if (p[0]=='i') { // if,int,inton,intoff,interrupt,icache,inline
 		if (p[1]=='f' && p[2]=='\0')
 			return lastst = kw_if;
 		if (p[1]=='n' && p[2]=='t' && p[3]=='\0')
@@ -46,6 +46,8 @@ int IdentifyKeyword()
 			return lastst = kw_interrupt;
 		if (p[1]=='c' && p[2]=='a' && p[3]=='c' && p[4]=='h' && p[5]=='e' && p[6]=='\0')
 			return lastst = kw_icache;
+		if (p[1]=='n' && p[2]=='l' && p[3]=='i' && p[4]=='n' && p[5]=='e' && p[6]=='\0')
+			return lastst = kw_inline;
 	}
 
 	// break,byte

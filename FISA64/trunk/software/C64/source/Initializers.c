@@ -66,8 +66,15 @@ void doinit(SYM *sp)
 {
 	char lbl[200];
     int algn;
+    enum e_sg oseg;
  
+    oseg = noseg;
 	lbl[0] = 0;
+	// Initialize constants into read-only data segment. Constants may be placed
+	// in ROM along with code.
+	if (sp->isConst) {
+        oseg = rodataseg;
+    }
 	if (sp->storage_class == sc_thread) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
@@ -75,7 +82,7 @@ void doinit(SYM *sp)
            algn = imax(sp->tp->btp->alignment,8);
         else
             algn = 8;
-		seg(tlsseg,algn);
+		seg(oseg==noseg ? tlsseg : oseg,algn);
 		nl();
 	}
 	else if (sp->storage_class == sc_static || lastst==assign) {
@@ -85,7 +92,7 @@ void doinit(SYM *sp)
            algn = imax(sp->tp->btp->alignment,8);
         else
             algn = 8;
-		seg(dataseg,algn);          /* initialize into data segment */
+		seg(oseg==noseg ? dataseg : oseg,algn);          /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
 	else {
@@ -95,7 +102,7 @@ void doinit(SYM *sp)
            algn = imax(sp->tp->btp->alignment,8);
         else
             algn = 8;
-		seg(bssseg,algn);            /* initialize into data segment */
+		seg(oseg==noseg ? bssseg : oseg,algn);            /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
 	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
@@ -305,7 +312,7 @@ int InitializePointer()
 	//}
 	else {
 		lng = GetIntegerExpression(&n);
-		if (n->nodetype == en_cnacon) {
+		if (n && n->nodetype == en_cnacon) {
 			if (n->sp) {
 				sp = gsearch(n->sp);
 				GenerateReference(sp,0);
@@ -313,8 +320,9 @@ int InitializePointer()
 			else
 				GenerateLong(lng);
 		}
-		else
+		else {
 			GenerateLong(lng);
+        }
 	}
     endinit();
     return 8;       /* pointers are 8 bytes long */

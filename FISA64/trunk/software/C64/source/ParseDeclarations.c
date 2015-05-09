@@ -186,6 +186,7 @@ int ParseSpecifier(TABLE *table)
 				NextToken();
 				head->isUnsigned = !isSigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				bit_max = 8;
 				goto lxit;
 			
@@ -197,6 +198,7 @@ int ParseSpecifier(TABLE *table)
 				NextToken();
 				head->isUnsigned = !isSigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				bit_max = 16;
 				goto lxit;
 
@@ -208,6 +210,7 @@ int ParseSpecifier(TABLE *table)
 				NextToken();
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				bit_max = 16;
 				goto lxit;
 
@@ -223,6 +226,7 @@ int ParseSpecifier(TABLE *table)
 					NextToken();
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				head->isShort = TRUE;
 				goto lxit;
 				break;
@@ -257,6 +261,7 @@ int ParseSpecifier(TABLE *table)
 				}
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				bit_max = 64;
 				goto lxit;
 				break;
@@ -269,6 +274,7 @@ int ParseSpecifier(TABLE *table)
 					head = tail = maketype(bt_long,8);
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				if (lastst==kw_task) {
 				    isTask = TRUE;
@@ -298,6 +304,7 @@ int ParseSpecifier(TABLE *table)
 					head = tail = maketype(bt_byte,1);
 				head->isUnsigned = isUnsigned;
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				if (lastst==kw_oscall) {
 					isOscall = TRUE;
@@ -348,6 +355,7 @@ int ParseSpecifier(TABLE *table)
 			case kw_float:
 				head = tail = maketype(bt_float,4);
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				bit_max = 32;
 				goto lxit;
@@ -355,6 +363,7 @@ int ParseSpecifier(TABLE *table)
 			case kw_double:
 				head = tail = maketype(bt_double,8);
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				bit_max = 64;
 				goto lxit;
@@ -362,6 +371,7 @@ int ParseSpecifier(TABLE *table)
 			case kw_triple:
 				head = tail = maketype(bt_triple,12);
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				bit_max = 96;
 				goto lxit;
@@ -369,6 +379,7 @@ int ParseSpecifier(TABLE *table)
 			case kw_void:
 				head = tail = maketype(bt_void,0);
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				if (lastst==kw_interrupt) {
 					isInterrupt = TRUE;
@@ -402,9 +413,14 @@ int ParseSpecifier(TABLE *table)
             case kw_exception:
 				head = tail = maketype(bt_exception,8);
 				head->isVolatile = isVolatile;
+				head->isConst = isConst;
 				NextToken();
 				bit_max = 64;
 				goto lxit;
+				
+            case kw_inline:
+                NextToken();
+                break;
 
 			default:
 				goto lxit;
@@ -752,6 +768,7 @@ int declare(TABLE *table,int al,int ilc,int ztype)
             sp = allocSYM();
 			sp->name = declid;
             sp->storage_class = al;
+            sp->isConst = isConst;
 			if (bit_width > 0 && bit_offset > 0) {
 				// share the storage word with the previously defined field
 				nbytes = old_nbytes - ilc;
@@ -948,6 +965,9 @@ void ParseGlobalDeclarations()
                 ++global_flag;
                 declare(&gsyms[0],sc_external,0,bt_struct);
                 --global_flag;
+                break;
+        case kw_inline:
+                NextToken();
                 break;
         default:
                 return;

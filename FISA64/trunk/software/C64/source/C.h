@@ -72,7 +72,7 @@ enum e_sym {
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
-		kw_unordered,
+		kw_unordered, kw_inline,
         my_eof };
 
 enum e_sc {
@@ -117,6 +117,7 @@ struct sym {
 	unsigned int IsLeaf : 1;
 	unsigned int DoesThrow : 1;
 	unsigned int UsesPredicate : 1;
+	unsigned int isConst : 1;
 	struct enode *initexp;
     union {
         int64_t i;

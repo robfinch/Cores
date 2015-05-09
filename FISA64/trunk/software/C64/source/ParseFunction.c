@@ -60,6 +60,12 @@ static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
 void ListCompound(Statement *stmt);
 
+static int round8(int n)
+{
+    while (n & 7) n++;
+    return n;
+}
+
 
 /*      function compilation routines           */
 
@@ -114,7 +120,11 @@ int ParseFunction(SYM *sp)
 						//	poffset += sp1->tp->size;
 						//}
 						sp1->value.i = poffset;
-						poffset += 8;
+						poffset += round8(sp1->tp->size);
+						if (round8(sp1->tp->size) > 8)
+						   sp->IsLeaf = FALSE;
+						//sp1->value.i = poffset;
+						//poffset += 8;
                         sp1->storage_class = sc_auto;
 						sp1->nextparm = (SYM *)NULL;
 						// record parameter list
