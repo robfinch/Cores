@@ -596,7 +596,12 @@ void PeepoptLea(struct ocode *ip)
             ((ip2->oper4 != NULL) ? 1 : 0);
     if (whop > 1)
         return;
-         
+    // Pushing a single register     
+    if (ip2->oper1->mode != am_reg)
+       return;
+    // And it's the same register as the LEA
+    if (ip2->oper1->preg != ip->oper1->preg)
+       return;
     ip->opcode = op_pea;
     ip->oper1 = copy_addr(ip->oper2);
     ip->oper2 = NULL;
@@ -616,7 +621,11 @@ void PeepoptLw(struct ocode *ip)
 	   return;
     if (ip2->opcode != op_push)
        return;
+    if (ip2->oper1->mode != am_reg)
+       return;
     if (ip->oper2->mode != am_ind && ip->oper2->mode != am_indx)
+       return;
+    if (ip->oper1->preg != ip2->oper1->preg)
        return;     
     ip->opcode = op_push;
     ip->oper1 = copy_addr(ip->oper2);

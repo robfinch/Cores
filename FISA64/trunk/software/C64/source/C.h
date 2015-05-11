@@ -129,6 +129,7 @@ struct sym {
     struct typ *tp;
     struct snode *prolog;
     struct snode *epilog;
+    unsigned int stksize;
 };
 
 typedef struct stab {

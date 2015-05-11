@@ -38,6 +38,7 @@ static TYP *ParseCastExpression(ENODE **node);
 TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
 extern void backup();
 extern char *inpline;
+extern int parsingParameterList;
 
 // Tells subsequent levels that ParseCastExpression already fetched a token.
 //static unsigned char expr_flag = 0;
@@ -383,13 +384,17 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 
     if (tp->val_flag == 0)
 		return deref(node, tp);
-    if (tp->type == bt_pointer && sizeof_flag == 0) {
+    if (tp->type == bt_pointer && (sizeof_flag == 0)) {
 		tp1 = tp->btp;
 		if (tp1==NULL)
 		    printf("DIAG: CondDeref: tp1 is NULL\r\n");
 		tp = maketype(bt_pointer, 8);
 		tp->btp = tp1;
     }
+    else if (tp->type==bt_pointer)
+        return tp;
+    else if (tp->type==bt_struct || tp->type==bt_union)
+        return deref(node, tp);
     return tp;
 }
 
@@ -458,12 +463,14 @@ TYP *nameref(ENODE **node)
 								(*node)->isUnsigned = TRUE;
 								(*node)->esize = sp->tp->size;
 							}
+							(*node)->etype = bt_pointer;//sp->tp->type;
 							(*node)->isDouble = sp->tp->type==bt_double;
                             break;
 					case sc_thread:
 							*node = makeinode(en_labcon,sp->value.i);
 							(*node)->constflag = TRUE;
 							(*node)->esize = sp->tp->size;
+							(*node)->etype = bt_pointer;//sp->tp->type;
 							if (sp->tp->isUnsigned)
 								(*node)->isUnsigned = TRUE;
 							(*node)->isDouble = sp->tp->type==bt_double;
@@ -476,6 +483,7 @@ TYP *nameref(ENODE **node)
 	                            *node = makesnode(en_nacon,sp->name,sp->value.i);
                             (*node)->constflag = TRUE;
 							(*node)->esize = sp->tp->size;
+							(*node)->etype = bt_pointer;//sp->tp->type;
 							(*node)->isUnsigned = sp->tp->isUnsigned;
 							(*node)->isDouble = sp->tp->type==bt_double;
                             break;
@@ -502,9 +510,11 @@ TYP *nameref(ENODE **node)
 									(*node)->isUnsigned = TRUE;
 							}
 							(*node)->esize = sp->tp->size;
+							(*node)->etype = bt_pointer;//sp->tp->type;
 							(*node)->isDouble = sp->tp->type==bt_double;
                             break;
                     }
+                    (*node)->tp = sp->tp;
                     tp = CondDeref(node,tp);
             }
     NextToken();
@@ -577,11 +587,17 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 
 	qnode1 = (ENODE *)NULL;
 	qnode2 = (ENODE *)NULL;
+	pnode = (ENODE *)NULL;
+    *node = (ENODE *)NULL;
     Enter("ParsePrimary ");
     if (got_pa) {
         tptr = expression(&pnode);
         needpunc(closepa);
         *node = pnode;
+        if (pnode==NULL)
+           printf("pnode is NULL\r\n");
+        else
+           (*node)->tp = tptr;
         if (tptr)
         Leave("ParsePrimary", tptr->type);
         else
@@ -606,6 +622,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 			pnode->esize = 4;
 		else
 			pnode->esize = 8;
+        pnode->tp = tptr;
         NextToken();
         break;
     case rconst:
@@ -614,6 +631,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
         pnode = makefnode(en_fcon,rval);
         pnode->constflag = TRUE;
         pnode->isDouble = TRUE;
+        pnode->tp = tptr;
         NextToken();
         break;
     case sconst:
@@ -634,6 +652,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		pnode->etype = bt_pointer;
 		pnode->esize = 8;
         pnode->constflag = TRUE;
+        pnode->tp = tptr;
      	tptr->isConst = TRUE;
         NextToken();
         break;
@@ -644,6 +663,7 @@ j1:
 //        if( !IsBeginningOfTypecast(lastst) ) {
 //		expr_flag = 0;
         tptr = expression(&pnode);
+        pnode->tp = tptr;
         needpunc(closepa);
 //        }
         //else {			/* cast operator */
@@ -663,6 +683,8 @@ j1:
         return (TYP *)NULL;
     }
 fini:   *node = pnode;
+    if (*node)
+       (*node)->tp = tptr;
     if (tptr)
     Leave("ParsePrimary", tptr->type);
     else
@@ -747,6 +769,8 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
     else
         error(ERR_LVALUE);
 	*node = ep1;
+	if (*node)
+    	(*node)->tp = tp;
 	return tp;
 }
 
@@ -770,8 +794,12 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	SYM *sp;
 	int iu;
 
+    ep1 = (ENODE *)NULL;
     Enter("ParsePostfix ");
+    *node = (ENODE *)NULL;
 	tp1 = ParsePrimaryExpression(&ep1, got_pa);
+//	if (ep1==NULL)
+//	   printf("DIAG: ParsePostFix: ep1 is NULL\r\n");
 	if (tp1 == NULL) {
         Leave("ParsePostfix",0);
 		return (TYP *)NULL;
@@ -902,6 +930,8 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	}
 j1:
 	*node = ep1;
+	if (ep1)
+    	(*node)->tp = tp1;
 	if (tp1)
 	Leave("ParsePostfix", tp1->type);
 	else
@@ -935,11 +965,14 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 	SYM *sp;
 
     Enter("ParseUnary");
+    ep1 = NULL;
+    *node = (ENODE *)NULL;
 	flag2 = FALSE;
-
 	if (got_pa) {
         tp = ParsePostfixExpression(&ep1, got_pa);
 		*node = ep1;
+        if (ep1)
+    		(*node)->tp = tp;
         if (tp)
         Leave("ParseUnary", tp->type);
         else
@@ -1026,7 +1059,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         }
         if( IsLValue(ep1))
             ep1 = ep1->p[0];
-        ep1->esize = 8;     // convected to a pointer so size is now 8
+        ep1->esize = 8;     // converted to a pointer so size is now 8
         tp1 = allocTYP();
         tp1->size = 8;
         tp1->type = bt_pointer;
@@ -1035,6 +1068,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         tp1->lst.head = (SYM *)NULL;
         tp1->sname = (char *)NULL;
         tp = tp1;
+//        printf("tp %p: %d\r\n", tp, tp->type);
 /*
 		sp = search("ta_int",&tp->btp->lst);
 		if (sp) {
@@ -1103,6 +1137,8 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         break;
     }
     *node = ep1;
+    if (ep1)
+	    (*node)->tp = tp;
     if (tp)
     Leave("ParseUnary", tp->type);
     else
@@ -1121,6 +1157,7 @@ static TYP *ParseCastExpression(ENODE **node)
 	ENODE *ep1, *ep2;
 
     Enter("ParseCast ");
+    *node = (ENODE *)NULL;
 	switch(lastst) {
  /*
 	case openpa:
@@ -1178,6 +1215,7 @@ static TYP *ParseCastExpression(ENODE **node)
 			head = tp;
 			tail = tp1;
 			*node = ep2;
+      		(*node)->tp = tp;
 			return tp;
         }
 		else {
@@ -1190,6 +1228,8 @@ static TYP *ParseCastExpression(ENODE **node)
 		break;
 	}
 	*node = ep1;
+	if (ep1)
+	    (*node)->tp = tp;
 	if (tp)
 	Leave("ParseCast", tp->type);
 	else
@@ -1405,6 +1445,8 @@ TYP *multops(ENODE **node)
 	int	oper;
     
     Enter("Mulops");
+    ep1 = (ENODE *)NULL;
+    *node = (ENODE *)NULL;
 	tp1 = ParseCastExpression(&ep1);
 	if( tp1 == 0 ) {
         Leave("Mulops NULL",0);
@@ -1417,6 +1459,8 @@ TYP *multops(ENODE **node)
                 if( tp2 == 0 ) {
                         error(ERR_IDEXPECT);
                         *node = ep1;
+                        if (ep1)
+                            (*node)->tp = tp1;
                         return tp1;
                         }
                 tp1 = forcefit(&ep2,tp2,&ep1,tp1);
@@ -1462,6 +1506,8 @@ TYP *multops(ENODE **node)
                 PromoteConstFlag(ep1);
                 }
         *node = ep1;
+        if (ep1)
+		    (*node)->tp = tp1;
     Leave("Mulops",0);
         return tp1;
 }
@@ -1478,6 +1524,8 @@ static TYP *addops(ENODE **node)
 	int sz1, sz2;
 
     Enter("Addops");
+    ep1 = (ENODE *)NULL;
+    *node = (ENODE *)NULL;
 	sz1 = sz2 = 0;
 	tp1 = multops(&ep1);
     if( tp1 == (TYP *)NULL )
@@ -1545,6 +1593,8 @@ static TYP *addops(ENODE **node)
             }
     *node = ep1;
 xit:
+    if (*node)
+    	(*node)->tp = tp1;
     Leave("Addops",0);
     return tp1;
 }
@@ -1559,6 +1609,7 @@ TYP *shiftop(ENODE **node)
     int             oper;
 
     Enter("Shiftop");
+    *node = NULL;
 	tp1 = addops(&ep1);
 	if( tp1 == 0)
         goto xit;
@@ -1584,6 +1635,8 @@ TYP *shiftop(ENODE **node)
             }
     *node = ep1;
  xit:
+     if (*node)
+     	(*node)->tp = tp1;
     Leave("Shiftop",0);
     return tp1;
 }
@@ -1596,6 +1649,7 @@ TYP     *relation(ENODE **node)
         TYP             *tp1, *tp2;
         int             nt;
         Enter("Relation");
+        *node = (ENODE *)NULL;
         tp1 = shiftop(&ep1);
         if( tp1 == 0 )
                 goto xit;
@@ -1650,6 +1704,8 @@ TYP     *relation(ENODE **node)
                 }
 fini:   *node = ep1;
 xit:
+     if (*node)
+		(*node)->tp = tp1;
         Leave("Relation",0);
         return tp1;
 }
@@ -1663,6 +1719,7 @@ TYP     *equalops(ENODE **node)
     TYP             *tp1, *tp2;
     int             oper;
     Enter("EqualOps");
+    *node = (ENODE *)NULL;
     tp1 = relation(&ep1);
     if( tp1 == (TYP *)NULL )
         goto xit;
@@ -1685,6 +1742,8 @@ TYP     *equalops(ENODE **node)
 	}
     *node = ep1;
  xit:
+     if (*node)
+     	(*node)->tp = tp1;
     Leave("EqualOps",0);
     return tp1;
 }
@@ -1698,6 +1757,7 @@ TYP *binop(ENODE **node, TYP *(*xfunc)(ENODE **),int nt, int sy)
 	ENODE    *ep1, *ep2;
         TYP             *tp1, *tp2;
         Enter("Binop");
+        *node = (ENODE *)NULL;
         tp1 = (*xfunc)(&ep1);
         if( tp1 == 0 )
             goto xit;
@@ -1716,6 +1776,8 @@ TYP *binop(ENODE **node, TYP *(*xfunc)(ENODE **),int nt, int sy)
                 }
         *node = ep1;
 xit:
+     if (*node)
+		(*node)->tp = tp1;
         Leave("Binop",0);
         return tp1;
 }
@@ -1752,6 +1814,7 @@ TYP *conditional(ENODE **node)
 	TYP             *tp1, *tp2, *tp3;
     ENODE    *ep1, *ep2, *ep3;
     Enter("Conditional");
+    *node = (ENODE *)NULL;
     tp1 = orop(&ep1);       /* get condition */
     if( tp1 == (TYP *)NULL )
         goto xit;
@@ -1776,6 +1839,8 @@ TYP *conditional(ENODE **node)
             }
 cexit:  *node = ep1;
 xit:
+     if (*node)
+     	(*node)->tp = tp1;
     Leave("Conditional",0);
     return tp1;
 }
@@ -1791,6 +1856,7 @@ TYP *asnop(ENODE **node)
     int             op;
 
     Enter("Assignop");
+    *node = (ENODE *)NULL;
     tp1 = conditional(&ep1);
     if( tp1 == 0 )
         goto xit;
@@ -1870,6 +1936,8 @@ ascomm3:        tp2 = asnop(&ep2);
 	}
 asexit: *node = ep1;
 xit:
+     if (*node)
+     	(*node)->tp = tp1;
     Leave("Assignop",0);
         return tp1;
 }
@@ -1883,10 +1951,13 @@ TYP *NonCommaExpression(ENODE **node)
 {
 	TYP *tp;
 	Enter("NonCommaExpression");
+    *node = (ENODE *)NULL;
     tp = asnop(node);
     if( tp == (TYP *)NULL )
         *node =(ENODE *)NULL;
     Leave("NonCommaExpression",tp ? tp->type : 0);
+     if (*node)
+     	(*node)->tp = tp;
     return tp;
 }
 
@@ -1899,6 +1970,7 @@ TYP *commaop(ENODE **node)
 	TYP *tp1,*tp2;
 	ENODE *ep1,*ep2;
 
+    *node = (ENODE *)NULL;
 	tp1 = NonCommaExpression(&ep1);
 	if (tp1==(TYP *)NULL)
 		return (TYP *)NULL;
@@ -1913,6 +1985,8 @@ TYP *commaop(ENODE **node)
 			break;
 	}
 	*node = ep1;
+     if (*node)
+     	(*node)->tp = tp1;
 	return tp1;
 }
 
@@ -1943,12 +2017,16 @@ TYP *expression(ENODE **node)
 {
 	TYP *tp;
 	Enter("expression");
+    *node = (ENODE *)NULL;
     tp = commaop(node);
     if( tp == (TYP *)NULL )
         *node = (ENODE *)NULL;
     TRACE(printf("leave exp\r\n"));
-    if (tp)
-    Leave("Expression",tp->type);
+    if (tp) {
+       if (*node)
+          (*node)->tp = tp;
+        Leave("Expression",tp->type);
+    }
     else
     Leave("Expression",0);
     return tp;

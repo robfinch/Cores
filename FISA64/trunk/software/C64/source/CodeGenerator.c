@@ -593,8 +593,8 @@ long GetReferenceSize(ENODE *node)
             return 8;
     case en_triple_ref:
             return 12;
-	//case en_struct_ref:
-	//		return node->esize;
+	case en_struct_ref:
+			return node->esize;
     }
 	return 8;
 }
@@ -609,6 +609,11 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 
     Enter("Genderef");
 	siz1 = GetReferenceSize(node);
+	// When dereferencing a struct or union return a pointer to the struct or
+	// union.
+	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
+        return GenerateExpression(node,F_REG|F_MEM,size);
+    }
     if( node->p[0]->nodetype == en_add )
     {
 //        ap2 = GetTempRegister();
@@ -1154,6 +1159,17 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 	ssize = GetReferenceSize(node->p[0]);
 //	if( ssize > size )
 //			size = ssize;
+    if (node->tp->type==bt_struct || node->tp->type==bt_union) {
+		ap1 = GenerateExpression(node->p[0],F_REG,ssize);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateMonadic(op_push,0,make_immed(node->tp->size));
+		GenerateMonadic(op_push,0,ap2);
+		GenerateMonadic(op_push,0,ap1);
+		GenerateMonadic(op_bsr,0,make_string("memcpy_"));
+		GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		ReleaseTempReg(ap2);
+		return ap1;
+    }
 	if (size > 8) {
 		ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
 		ap2 = GenerateExpression(node->p[1],F_MEM,size);
@@ -1512,8 +1528,11 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_uc_ref:
 	case en_uh_ref:
 	case en_uw_ref:
-	case en_struct_ref:
 			ap1 = GenerateDereference(node,flags,size,0);
+			ap1->isUnsigned = TRUE;
+            return ap1;
+	case en_struct_ref:
+			ap1 = GenerateDereference(node->p[0],flags,size,0);
 			ap1->isUnsigned = TRUE;
             return ap1;
     case en_b_ref:

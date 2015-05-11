@@ -187,7 +187,7 @@ int AllocateFISA64RegisterVars()
             if( csp->reg != -1 )
                     {               /* see if preload needed */
                     exptr = csp->exp;
-                    if( !IsLValue(exptr) || (exptr->p[0]->i > 0) )
+                    if( !IsLValue(exptr) || (exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
                             {
                             initstack();
                             if (csp->isfp) {
@@ -367,7 +367,7 @@ void GenerateFISA64Cmp(ENODE *node, int op, int label, int predreg)
 //
 void GenerateFISA64Function(SYM *sym, Statement *stmt)
 {
-	char buf[20];
+	char buf[200];
 	char *bl;
 	AMODE *ap;
     int defcatch;
@@ -432,8 +432,10 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 			FISA64_GenLdi(makereg(regXLR),ap);
 		}
 		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
-		if (lc_auto)
-			GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(lc_auto));
+		//if (lc_auto)
+		//	GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(lc_auto));
+		sprintf(buf, "#%sSTKSIZE_",sym->name);
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_string(litlate(buf)));
 	}
 	if (optimize)
 		opt1(stmt);
@@ -473,8 +475,19 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 		ap = GenerateExpression(stmt->exp,F_REG|F_FPREG|F_IMMED,8);
 		if (ap->mode == am_immed)
 		    FISA64_GenLdi(makereg(1),ap);
-		else if (ap->mode == am_reg)
-			GenerateDiadic(op_mov, 0, makereg(1),ap);
+		else if (ap->mode == am_reg) {
+            if (sym->tp->btp && (sym->tp->btp->type==bt_struct || sym->tp->btp->type==bt_union)) {
+                GenerateDiadic(op_lw,0,makereg(1),make_indexed(sym->parms->value.i,regBP));
+                GenerateMonadic(op_push,0,make_immed(sym->tp->btp->size));
+                GenerateMonadic(op_push,0,ap);
+                GenerateMonadic(op_push,0,makereg(1));
+                GenerateMonadic(op_bsr,0,make_string("memcpy_"));
+                GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));                                                                
+            }
+            else
+
+			    GenerateDiadic(op_mov, 0, makereg(1),ap);
+        }
 		else if (ap->mode == am_fpreg)
 			GenerateDiadic(op_fdmov, 0, makefpreg(1),ap);
 		else
@@ -595,13 +608,17 @@ static void GeneratePushParameter(ENODE *ep)
 {    
 	AMODE *ap,*ap2;
 	int nn;
+	
 	ap = GenerateExpression(ep,F_REG|F_FPREG|F_IMMED,8);
 	switch(ap->mode) {
     case am_reg:
     case am_fpreg:
     case am_immed:
+/*
         nn = round8(ep->esize); 
-        if (nn > 8) {           // structure or array ?
+        if (nn > 8 && (ep->tp->type==bt_struct || ep->tp->type==bt_union)) {           // structure or array ?
+            printf("type:%p %d\r\n", ep->tp, ep->tp->type);
+
             ap2 = GetTempRegister();
             GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(nn));
             GenerateDiadic(op_mov, 0, ap2, makereg(regSP));
@@ -610,9 +627,11 @@ static void GeneratePushParameter(ENODE *ep)
             GenerateMonadic(op_push,0,ap2);
             GenerateMonadic(op_bsr,0,make_string("memcpy_"));
             GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+          	GenerateMonadic(op_push,0,ap2);
             ReleaseTempReg(ap2);
         }
         else
+*/
           	GenerateMonadic(op_push,0,ap);
     	break;
     }
@@ -642,11 +661,12 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 	int msk;
 	int sp = 0;
 	int fsp = 0;
+	int nn;
 
 	sp = TempInvalidate();
 	fsp = TempFPInvalidate();
 	sym = NULL;
-    i = GeneratePushParameterList(node->p[1]);
+
 	// Call the function
 	if( node->p[0]->nodetype == en_nacon || node->p[0]->nodetype == en_cnacon ) {
  /*
@@ -672,11 +692,20 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
         GenerateDiadic(op_jal,0,makereg(regLR),make_indirect(ap->preg));
 */
 		sym = gsearch(node->p[0]->sp);
+        i = 0;
+    	if ((sym->tp->btp->type==bt_struct || sym->tp->btp->type==bt_union) && sym->tp->btp->size > 8) {
+            nn = tmpAlloc(sym->tp->btp->size) + lc_auto + round8(sym->tp->btp->size);
+            GenerateMonadic(op_pea,0,make_indexed(-nn,regBP));
+            i = 1;
+        }
+
+        i = i + GeneratePushParameterList(node->p[1]);
 //		ReleaseTempRegister(ap);
         GenerateMonadic(op_bsr,0,make_offset(node->p[0]));
 	}
     else
     {
+        i = GeneratePushParameterList(node->p[1]);
 		ap = GenerateExpression(node->p[0],F_REG,8);
 		ap->mode = am_ind;
 		ap->offset = 0;

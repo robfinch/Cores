@@ -120,9 +120,15 @@ int ParseFunction(SYM *sp)
 						//	poffset += sp1->tp->size;
 						//}
 						sp1->value.i = poffset;
-						poffset += round8(sp1->tp->size);
-						if (round8(sp1->tp->size) > 8)
-						   sp->IsLeaf = FALSE;
+						// Check for aggregate types passed as parameters. Structs
+						// and unions use the type size. 
+					//	if (sp1->tp->type==bt_struct || sp1->tp->type==bt_union) {
+    						poffset += round8(sp1->tp->size);
+    						if (round8(sp1->tp->size) > 8)
+    						   sp->IsLeaf = FALSE;
+                    //     }
+                    //     else
+                    //         poffset += 8;
 						//sp1->value.i = poffset;
 						//poffset += 8;
                         sp1->storage_class = sc_auto;
@@ -136,6 +142,23 @@ int ParseFunction(SYM *sp)
 							sp->parms = sp1;
 						}
 					}
+					// Process extra hidden parameter
+					if (sp->tp->btp->type==bt_struct || sp->tp->btp->type==bt_union) {
+                         sp1 = makeint(litlate("_pHiddenStructPtr"));
+                         sp1->value.i = poffset;
+                         poffset += 8;
+                         sp1->storage_class = sc_auto;
+  	  	 	 	 	 	 sp1->nextparm = (SYM *)NULL;
+						// record parameter list
+						if (sp->parms == (SYM *)NULL) {
+							sp->parms = sp1;
+						}
+						else {
+							sp1->nextparm = sp->parms;
+							sp->parms = sp1;
+						}
+						nparms++;
+                    }
                 }
 		if (lastst == closepa)
 			NextToken();
@@ -292,7 +315,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 
 	lbl[0] = 0;
 	needpunc(begin);
-
+     
+    tmpReset();
 	TRACE( printf("Parse function body: %s\r\n", sp->name); )
     //ParseAutoDeclarations();
 	cseg();
@@ -335,5 +359,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 	if (sp->storage_class == sc_global) {
 		fprintf(output,"endpublic\r\n\r\n");
 	}
+	fprintf(output,"%sSTKSIZE_ EQU %d\r\n", sp->name, tmpVarSpace() + lc_auto);
 	return stmt;
 }

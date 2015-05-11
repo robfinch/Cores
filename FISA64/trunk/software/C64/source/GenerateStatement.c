@@ -913,6 +913,7 @@ void GenerateStatement(Statement *stmt)
                         ap = GenerateExpression(stmt->exp,F_ALL | F_NOVALUE,
                                 GetNaturalSize(stmt->exp));
 						ReleaseTempRegister(ap);
+						tmpFreeAll();
                         break;
                 case st_return:
                         if (isFISA64)

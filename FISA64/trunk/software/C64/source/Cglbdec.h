@@ -214,6 +214,7 @@ extern void GenerateFirstcall(struct snode *stmt);
 extern void gen_regrestore();
 extern AMODE *make_direct(int64_t i);
 extern AMODE *makereg(int r);
+extern AMODE *makefpreg(int t);
 extern AMODE *makebreg(int r);
 extern AMODE *makepred(int r);
 extern int bitsset(int mask);
@@ -304,6 +305,13 @@ extern AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size);
 extern AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 // err.c
 extern void fatal(char *str);
+
+extern int tmpVarSpace();
+extern void tmpFreeAll();
+extern void tmpReset();
+extern int tmpAlloc(int);
+extern void tmpFree(int);
+
 
 enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 

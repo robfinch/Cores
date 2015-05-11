@@ -87,6 +87,7 @@ struct enode {
     enum e_node nodetype;
 	enum e_bt etype;
 	long      esize;
+    TYP *tp;
     int8_t constflag;
 	unsigned int isVolatile : 1;
 	unsigned int isUnsigned : 1;
