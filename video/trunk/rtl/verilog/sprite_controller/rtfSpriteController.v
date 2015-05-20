@@ -1,9 +1,9 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2005-2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2005-2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 //	rtfSpriteController.v
@@ -26,7 +26,7 @@
 //	Sprite Controller
 //
 //	FEATURES
-//	- parameterized number of sprites 1,2,4,6,8 or 14
+//	- parameterized number of sprites 1,2,4,6,8,14 or 32
 //	- sprite image cache buffers
 //		- each image cache is capable of holding multiple
 //		  sprite images
@@ -36,14 +36,14 @@
 //	- programmable image offset within cache
 //	- programmable sprite width,height, and pixel size
 //		- sprite width and height may vary from 1 to 64 as long
-//		  as the product doesn't exceed 2048.
+//		  as the product doesn't exceed 4096.
 //	    - pixels may be programmed to be 1,2,3 or 4 video clocks
 //	      both height and width are programmable
 //	- programmable sprite position
 //	- 8 or 16 bits for color
 //		eg 32k color + 1 bit alpha blending indicator (1,5,5,5)
 //	- fixed display and DMA priority
-//	    sprite 0 highest, sprite 13 lowest
+//	    sprite 0 highest, sprite 31 lowest
 //
 //		This core requires an external timing generator to
 //	provide horizontal and vertical sync signals, but
@@ -71,53 +71,48 @@
 //		HPOS    [11: 0]	horizontal position (hctr value)
 //	    VPOS	[27:16]	vertical position (vctr value)
 //
-//	04:	SZ	- size and offset register
+//	04:	SZ	- size register
 //			bits
-//			[ 5: 0]	width of sprite in pixels - 1
-//			[ 7: 6]	size of horizontal pixels - 1 in clock cycles
-//			[13: 8]	height of sprite in pixels -1
-//			[15:14]	size of vertical pixels in scan-lines - 1
+//			[ 7: 0]	width of sprite in pixels - 1
+//			[15: 8]	height of sprite in pixels -1
+//			[19:16]	size of horizontal pixels - 1 in clock cycles
+//			[23:20]	size of vertical pixels in scan-lines - 1
 //				* the product of width * height cannot exceed 2048 !
 //				if it does, the display will begin repeating
 //				
-//		OFFS	[26:16] image offset bits [10:0]
-//			offset of the sprite image within the sprite image cache
-//			typically zero
-//
-//	08: ADR	23 bits sprite image address bits [33:11]
+//	08: ADR	[31:12] 20 bits sprite image address bits
 //			This registers contain the high order address bits of the
 //          location of the sprite image in system memory.
-//			The DMA controller will assign the low order 11 bits
+//			The DMA controller will assign the low order 12 bits
 //			during DMA.
+//		    [11:0] image offset bits [11:0]
+//			offset of the sprite image within the sprite image cache
+//			typically zero
 //	
-//	0C: TC	[7:0]	transparent color
+//	0C: TC	[15:0]	transparent color
 //			This register identifies which color of the sprite
 //			is transparent
 //
 //
-//	0C-DC:	registers reserved for up to thirteen other sprites
+//
+//	0C-1FC:	registers reserved for up to thirty-one other sprites
 //
 //	Global status and control
-//	E8: BTC	[23:0] background transparent color
-//	EC: BC	[23:0] background color
-//	F0: EN	[13:0] sprite enable register
-//		IE	[29:16] sprite interrupt enable / status
-//	F4: SCOL	[13:0] sprite-sprite collision register
-//		BCOL	[29:16] sprite-background collision register
-//	F8: DT		[13:0] sprite DMA trigger
-//  FC: ADDR	[31:0] sprite DMA address bits [63:32]
+//	3C0: EN [31:0] sprite enable register
+//  3C4: IE	[31:0] sprite interrupt enable / status
+//	3C8: SCOL	[31:0] sprite-sprite collision register
+//	3CC: BCOL	[31:0] sprite-background collision register
+//	3D0: DT		[31:0] sprite DMA trigger on
+//	3D4: DT		[31:0] sprite DMA trigger off
+//	3E8: BTC	[23:0] background transparent color
+//	3EC: BC	    [23:0] background color
+//  3FC: ADDR	[31:0] sprite DMA address bits [63:32]
 //
 //
-//	1635 LUTs/ 1112 slices/ 82MHz - Spartan3e-4 (8 sprites)
+//	2200 LUTs/ 188MHz - xc7a100t (8 sprites)
 //	3 8x8 multipliers (for alpha blending)
-//	14 block rams
-//  1933 LUTs / 114 MHz	- xc6slx45-3 (14 sprites)
-//  28 BRAMs / 1048 FF's
-//  495 LUTs / 162 MHz		(2 sprites)
-//  4 BRAMs / 337 FF's
+//	16 block rams
 //=============================================================== */
-
-`define VENDOR_XILINX	// block ram vendor (only one defined for now)
 
 module rtfSpriteController(
 // Bus Slave interface
@@ -130,30 +125,30 @@ input         s_stb_i,	// data transfer
 output        s_ack_o,	// transfer acknowledge
 input         s_we_i,	// write
 input  [ 3:0] s_sel_i,	// byte select
-input  [33:0] s_adr_i,	// address
+input  [31:0] s_adr_i,	// address
 input  [31:0] s_dat_i,	// data input
 output reg [31:0] s_dat_o,	// data output
 output vol_o,			// volatile register
 //------------------------------
 // Bus Master Signals
 input m_clk_i,				// clock
-output reg [1:0] m_bte_o,	// burst type
-output reg [2:0] m_cti_o,	// cycle type
-output reg [5:0] m_bl_o,	// burst length
+output [1:0]  m_bte_o,
+output [2:0]  m_cti_o,
 output reg    m_cyc_o,	// cycle is valid
-output reg    m_stb_o,	// strobe output
+output        m_stb_o,	// strobe output
 input         m_ack_i,	// input data is ready
-output reg    m_we_o,		// write (always inactive)
-output reg [ 3:0] m_sel_o,	// byte select
-output reg [33:0] m_adr_o,	// DMA address
+input         m_err_i,	
+output        m_we_o,
+output reg [31:0] m_adr_o,	// DMA address
 input  [31:0] m_dat_i,	// data input
-output reg [31:0] m_dat_o,	// data output (always zero)
+output [31:0] m_dat_o,
 //--------------------------
 input vclk,					// video dot clock
 input hSync,				// horizontal sync pulse
 input vSync,				// vertical sync pulse
 input blank,				// blanking signal
-input [24:0] rgbIn,			// input pixel stream
+input [1:0] rgbPriority,
+input [23:0] rgbIn,			// input pixel stream
 output reg [23:0] rgbOut,	// output pixel stream
 output irq					// interrupt request
 );
@@ -163,10 +158,10 @@ reg m_soc_o;
 //--------------------------------------------------------------------
 // Core Parameters
 //--------------------------------------------------------------------
-parameter pnSpr = 14;		// number of sprites
-parameter phBits = 11;		// number of bits in horizontal timing counter
-parameter pvBits = 11;		// number of bits in vertical timing counter
-parameter pColorBits = 8;	// number of bits used for color data
+parameter pnSpr = 8;		// number of sprites
+parameter phBits = 12;		// number of bits in horizontal timing counter
+parameter pvBits = 12;		// number of bits in vertical timing counter
+parameter pColorBits = 16;	// number of bits used for color data
 localparam pnSprm = pnSpr-1;
 
 
@@ -174,7 +169,7 @@ localparam pnSprm = pnSpr-1;
 // Variable Declarations
 //--------------------------------------------------------------------
 
-wire [3:0] sprN = s_adr_i[6:3];
+wire [4:0] sprN = s_adr_i[8:4];
 
 reg [phBits-1:0] hctr;		// horizontal reference counter (counts dots since hSync)
 reg [pvBits-1:0] vctr;		// vertical reference counter (counts scanlines since vSync)
@@ -192,7 +187,7 @@ reg [pnSprm:0] sprWe;	// block ram write enable for image cache update
 reg [pnSprm:0] sprRe;	// block ram read enable for image cache update
 
 // Global control registers
-reg [15:0] sprEn;   	// enable sprite
+reg [31:0] sprEn;   	// enable sprite
 reg [pnSprm:0] sprCollision;	    // sprite-sprite collision
 reg sprSprIe;			// sprite-sprite interrupt enable
 reg sprBkIe;            // sprite-background interrupt enable
@@ -204,37 +199,37 @@ reg sprSprIRQ1;			// vclk domain regs
 reg sprBkIRQ1;
 
 // Sprite control registers
-reg [15:0] sprSprCollision;
+reg [31:0] sprSprCollision;
 reg [pnSprm:0] sprSprCollision1;
-reg [15:0] sprBkCollision;
+reg [31:0] sprBkCollision;
 reg [pnSprm:0] sprBkCollision1;
 reg [pColorBits-1:0] sprTc [pnSprm:0];		// sprite transparent color code
 // How big the pixels are:
-// 1,2,3,or 4 video clocks
-reg [1:0] hSprRes [pnSprm:0];		// sprite horizontal resolution
-reg [1:0] vSprRes [pnSprm:0];		// sprite vertical resolution
-reg [5:0] sprWidth [pnSprm:0];		// number of pixels in X direction
-reg [5:0] sprHeight [pnSprm:0];		// number of vertical pixels
+// 1 to 16 video clocks
+reg [3:0] hSprRes [pnSprm:0];		// sprite horizontal resolution
+reg [3:0] vSprRes [pnSprm:0];		// sprite vertical resolution
+reg [7:0] sprWidth [pnSprm:0];		// number of pixels in X direction
+reg [7:0] sprHeight [pnSprm:0];		// number of vertical pixels
 
 // display and timing signals
-reg [13:0] hSprReset;   // horizontal reset
-reg [13:0] vSprReset;   // vertical reset
-reg [13:0] hSprDe;		// sprite horizontal display enable
-reg [13:0] vSprDe;		// sprite vertical display enable
-reg [13:0] sprDe;			// display enable
+reg [31:0] hSprReset;   // horizontal reset
+reg [31:0] vSprReset;   // vertical reset
+reg [31:0] hSprDe;		// sprite horizontal display enable
+reg [31:0] vSprDe;		// sprite vertical display enable
+reg [31:0] sprDe;			// display enable
 reg [phBits-1:0] hSprPos [pnSprm:0];	// sprite horizontal position
 reg [pvBits-1:0] vSprPos [pnSprm:0];	// sprite vertical position
-reg [5:0] hSprCnt [pnSprm:0];	// sprite horizontal display counter
-reg [5:0] vSprCnt [pnSprm:0];	// vertical display counter
-reg [10:0] sprImageOffs [pnSprm:0];	// offset within sprite memory
-reg [10:0] sprAddr [pnSprm:0];	// index into sprite memory
-reg [10:0] sprAddrB [pnSprm:0];	// backup address cache for rescan
+reg [7:0] hSprCnt [pnSprm:0];	// sprite horizontal display counter
+reg [7:0] vSprCnt [pnSprm:0];	// vertical display counter
+reg [11:0] sprImageOffs [pnSprm:0];	// offset within sprite memory
+reg [11:0] sprAddr [pnSprm:0];	// index into sprite memory
+reg [11:0] sprAddrB [pnSprm:0];	// backup address cache for rescan
 wire [pColorBits-1:0] sprOut [pnSprm:0];	// sprite image data output
 
 // DMA access
-reg [33:11] sprSysAddr [pnSprm:0];	// system memory address of sprite image (low bits)
-reg [3:0] dmaOwner;			// which sprite has the DMA channel
-reg [15:0] sprDt;		// DMA trigger register
+reg [31:12] sprSysAddr [pnSprm:0];	// system memory address of sprite image (low bits)
+reg [4:0] dmaOwner;			// which sprite has the DMA channel
+reg [31:0] sprDt;		// DMA trigger register
 reg dmaActive;				// this flag indicates that a block DMA transfer is active
 
 integer n;
@@ -242,8 +237,8 @@ integer n;
 //--------------------------------------------------------------------
 // DMA control / bus interfacing
 //--------------------------------------------------------------------
-wire cs_ram = s_cyc_i && s_stb_i && (s_adr_i[33:18]==16'hFFD8);
-wire cs_regs = s_cyc_i && s_stb_i && (s_adr_i[33:10]==24'hFFDAD0);
+wire cs_ram = s_cyc_i && s_stb_i && (s_adr_i[31:16]==16'hFFD8 || s_adr_i[31:16]==16'hFFD9);
+wire cs_regs = s_cyc_i && s_stb_i && (s_adr_i[31:12]==20'hFFDAD);
 
 reg sprRdy;
 always @(posedge clk_i)
@@ -251,7 +246,7 @@ always @(posedge clk_i)
 
 //assign s_ack_o = cs_regs ? 1'b1 : cs_ram ? (s_we_i ? 1 : sprRamRdy) : 0;
 assign s_ack_o = (cs_regs|cs_ram) ? (s_we_i ? 1'b1 : sprRdy) : 1'b0;
-assign vol_o = cs_regs & s_adr_i[8:2]>7'd111;
+assign vol_o = cs_regs & s_adr_i[9:2]>=8'b11110000;
 assign irq = sprSprIRQ|sprBkIRQ;
 
 //--------------------------------------------------------------------
@@ -259,19 +254,15 @@ assign irq = sprSprIRQ|sprBkIRQ;
 //--------------------------------------------------------------------
 reg dmaStart;
 
-wire btout;
-wire sbi_rdy1 = m_ack_i|btout;
-busTimeoutCtr #(20) br0(
-	.rst(rst_i),
-	.crst(1'b0),
-	.clk(m_clk_i),
-	.ce(1'b1),
-	.req(m_soc_o),
-	.rdy(m_ack_i),
-	.timeout(btout)
-);
+wire sbi_rdy1 = m_ack_i|m_err_i;
 
-reg [6:0] cob;	// count of burst cycles
+reg [7:0] cob;	// count of burst cycles
+
+assign m_bte_o = 2'b00;
+assign m_cti_o = 3'b000;
+assign m_stb_o = 1'b1;
+assign m_we_o = 1'b0;
+assign m_dat_o = 32'h00000;
 
 always @(posedge m_clk_i)
 if (rst_i) begin
@@ -279,13 +270,13 @@ if (rst_i) begin
 	dmaActive <= 1'b0;
 	dmaOwner <= 4'd0;
 	wb_m_nack();
-	cob <= 7'd0;
+	cob <= 8'd0;
 end
 else begin
 	dmaStart <= 1'b0;
 	m_soc_o <= 1'b0;
 	if (!dmaActive) begin
-		cob <= 7'd0;
+		cob <= 8'd0;
 		dmaStart <= |sprDt;
 		dmaActive <= |sprDt;
 		dmaOwner  <= 0;
@@ -294,25 +285,17 @@ else begin
 	end
 	else begin
 		if (!m_cyc_o) begin
-			m_bte_o <= 2'b00;
-			m_cti_o <= 3'b001;
 			m_cyc_o <= 1'b1;
-			m_stb_o <= 1'b1;
-			m_sel_o <= 4'b1111;
-			m_bl_o <= 6'd7;
-			m_adr_o <= {sprSysAddr[dmaOwner],cob[5:0],5'h00};
+			m_adr_o <= {sprSysAddr[dmaOwner],cob[7:0],4'h0};
 			m_soc_o <= 1'b1;
-			cob <= cob + 7'd1;
+			cob <= cob + 8'd1;
 		end
-		else if (m_ack_i|btout) begin
+		else if (m_ack_i|m_err_i) begin
 			m_soc_o <= 1'b1;
-			m_adr_o[4:0] <= m_adr_o[4:0] + 8'd4;
-			// Flag last cycle of burst
-			if (m_adr_o[4:0]==5'h18)
-				m_cti_o <= 3'b111;
-			if (m_adr_o[4:0]==5'h1C) begin
+			m_adr_o[3:0] <= m_adr_o[3:0] + 8'd4;
+			if (m_adr_o[3:0]==4'hC) begin
 				wb_m_nack();
-				if (cob==7'd64)
+				if (cob==8'd255)
 					dmaActive <= 1'b0;
 			end
 		end
@@ -321,27 +304,22 @@ end
 
 task wb_m_nack;
 begin
-	m_bte_o <= 2'b00;
-	m_cti_o <= 3'b000;
-	m_bl_o <= 6'd0;
 	m_soc_o <= 1'b0;
 	m_cyc_o <= 1'b0;
-	m_stb_o <= 1'b0;
-	m_we_o <= 1'b0;
-	m_sel_o <= 4'h0;
-	m_adr_o <= 34'd0;
-	m_dat_o <= 32'd0;
 end
 endtask
 
 // generate a write enable strobe for the sprite image memory
 always @(dmaOwner, dmaActive, s_adr_i, cs_ram, s_we_i, m_ack_i)
 for (n = 0; n < pnSpr; n = n + 1)
-	sprWe[n] = (dmaOwner==n && dmaActive && m_ack_i)||(cs_ram && s_we_i && s_adr_i[14:11]==n);
+	sprWe[n] = (dmaOwner==n && dmaActive && m_ack_i)||(cs_ram && s_we_i && s_adr_i[16:12]==n);
 
 always @(cs_ram, s_adr_i)
 for (n = 0; n < pnSpr; n = n + 1)
-	sprRe[n] = cs_ram && s_adr_i[14:11]==n;
+	sprRe[n] = cs_ram && s_adr_i[16:12]==n;
+
+//--------------------------------------------------------------------
+//--------------------------------------------------------------------
 
 wire [31:0] sr_dout [pnSprm:0];
 reg [31:0] sr_dout_all;
@@ -362,6 +340,12 @@ else if (pnSpr==8)
 else if (pnSpr==14)
 	sr_dout_all <= sr_dout[0]|sr_dout[1]|sr_dout[2]|sr_dout[3]|sr_dout[4]|sr_dout[5]|sr_dout[6]|sr_dout[7]|
 							sr_dout[8]|sr_dout[9]|sr_dout[10]|sr_dout[11]|sr_dout[12]|sr_dout[13];
+else if (pnSpr==32)
+	sr_dout_all <= sr_dout[0]|sr_dout[1]|sr_dout[2]|sr_dout[3]|sr_dout[4]|sr_dout[5]|sr_dout[6]|sr_dout[7]|
+				   sr_dout[8]|sr_dout[9]|sr_dout[10]|sr_dout[11]|sr_dout[12]|sr_dout[13]|sr_dout[14]|sr_dout[15]|
+				   sr_dout[16]|sr_dout[17]|sr_dout[18]|sr_dout[19]|sr_dout[20]|sr_dout[21]|sr_dout[22]|sr_dout[23]|
+				   sr_dout[24]|sr_dout[25]|sr_dout[26]|sr_dout[27]|sr_dout[28]|sr_dout[29]|sr_dout[30]|sr_dout[31]
+				   ;
 end
 endgenerate
 
@@ -370,12 +354,12 @@ always @(posedge clk_i)
 	if (cs_ram)
 		s_dat_o <= sr_dout_all;
 	else if (cs_regs)
-		case (s_adr_i[8:2])		// synopsys full_case parallel_case
-		7'd120:	s_dat_o <= sprEn;
-		7'd121:	s_dat_o <= {sprBkIRQPending|sprSprIRQPending,5'b0,sprBkIRQPending,sprSprIRQPending,6'b0,sprBkIe,sprSprIe};
-		7'd122:	s_dat_o <= sprSprCollision;
-		7'd123:	s_dat_o <= sprBkCollision;
-		7'd124:	s_dat_o <= sprDt;
+		case (s_adr_i[9:2])		// synopsys full_case parallel_case
+		8'b11110000:	s_dat_o <= sprEn;
+		8'b11110001:	s_dat_o <= {sprBkIRQPending|sprSprIRQPending,5'b0,sprBkIRQPending,sprSprIRQPending,6'b0,sprBkIe,sprSprIe};
+		8'b11110010:	s_dat_o <= sprSprCollision;
+		8'b11110011:	s_dat_o <= sprBkCollision;
+		8'b11110100:	s_dat_o <= sprDt;
 		default:	s_dat_o <= 32'd0;
 		endcase
 	else
@@ -398,10 +382,10 @@ end
 // on the clk_i domain
 always @(posedge clk_i)
 if (rst_i) begin
-	sprEn <= {pnSpr{1'b0}};
+	sprEn <= {pnSpr{1'b1}};
 	sprDt <= 0;
     for (n = 0; n < pnSpr; n = n + 1) begin
-		sprSysAddr[n] <= 23'b00_0001_0000_0000_0100_0 + n;	//1000_4000
+		sprSysAddr[n] <= 20'b0001_0000_0000_0100 + n;	//1000_4000
 	end
 	sprSprIe <= 0;
 	sprBkIe  <= 0;
@@ -409,11 +393,11 @@ if (rst_i) begin
     // Set reasonable starting positions on the screen
     // so that the sprites might be visible for testing
     for (n = 0; n < pnSpr; n = n + 1) begin
-        hSprPos[n] <= 440 + n * 50;
-        vSprPos[n] <= 200;
+        hSprPos[n] <= 400 + (n & 15) * 60;
+        vSprPos[n] <= 200 + (n > 16 ? 100 : 0);
         sprTc[n] <= 16'h6739;
-		sprWidth[n] <= 47;  // 48x42 sprites
-		sprHeight[n] <= 41;
+		sprWidth[n] <= 56;  // 56x36 sprites
+		sprHeight[n] <= 36;
 		hSprRes[n] <= 0;	// our standard display
 		vSprRes[n] <= 0;
 		sprImageOffs[n] <= 0;
@@ -431,56 +415,77 @@ else begin
 
 	if (cs_regs & s_we_i) begin
 
-		casex (s_adr_i[8:2])
-
-		7'd116,7'd117:	bgTc <= s_dat_i[23:0];
-		7'd118,7'd119:	bkColor <= s_dat_i[23:0];
-		7'd120,7'd121:
+		casex (s_adr_i[9:2])
+		8'b11110000:	// 3C0
 			begin
 				if (s_sel_i[0]) sprEn[7:0] <= s_dat_i[7:0];
-				if (s_sel_i[1]) sprEn[13:8] <= s_dat_i[13:8];
-				if (s_sel_i[2]) begin
-					sprSprIe <= s_dat_i[16];
-					sprBkIe <= s_dat_i[17];
-				end
+				if (s_sel_i[1]) sprEn[15:8] <= s_dat_i[15:8];
+				if (s_sel_i[2]) sprEn[23:16] <= s_dat_i[23:16];
+				if (s_sel_i[3]) sprEn[31:24] <= s_dat_i[31:24];
+			end
+		8'b11110001:	// 3C4
+			if (s_sel_i[0]) begin
+				sprSprIe <= s_dat_i[0];
+				sprBkIe <= s_dat_i[1];
 			end
 		// update DMA trigger
 		// s_dat_i[7:0] indicates which triggers to set  (1=set,0=ignore)
 		// s_dat_i[7:0] indicates which triggers to clear (1=clear,0=ignore)
-		7'd124,7'd125:	
+		8'b11110100:	// 3D0
 			begin
 				if (s_sel_i[0])	sprDt[7:0] <= sprDt[7:0] | s_dat_i[7:0];
-				if (s_sel_i[1]) sprDt[13:8] <= sprDt[13:8] | s_dat_i[13:8];
-				if (s_sel_i[2]) sprDt[7:0] <= sprDt[7:0] & ~s_dat_i[23:16];
-				if (s_sel_i[3])	sprDt[13:8] <= sprDt[13:8] & ~s_dat_i[29:24];
+				if (s_sel_i[1]) sprDt[15:8] <= sprDt[15:8] | s_dat_i[15:8];
+				if (s_sel_i[2]) sprDt[23:16] <= sprDt[23:16] | s_dat_i[23:16];
+				if (s_sel_i[3])	sprDt[31:24] <= sprDt[31:24] | s_dat_i[31:24];
 			end
-		7'bxxxx00x:
+		8'b11110101:	// 3D4
+			begin
+				if (s_sel_i[0])	sprDt[7:0] <= sprDt[7:0] & ~s_dat_i[7:0];
+				if (s_sel_i[1]) sprDt[15:8] <= sprDt[15:8] & ~s_dat_i[15:8];
+				if (s_sel_i[2]) sprDt[23:16] <= sprDt[23:16] & ~s_dat_i[23:16];
+				if (s_sel_i[3])	sprDt[31:24] <= sprDt[31:24] & ~s_dat_i[31:24];
+			end
+		8'b11111010:	// 3E8
+			begin
+				if (s_sel_i[0])	bgTc[7:0] <= s_dat_i[7:0];
+				if (s_sel_i[1])	bgTc[15:8] <= s_dat_i[15:8];
+				if (s_sel_i[2])	bgTc[23:16] <= s_dat_i[23:16];
+			end
+		8'b11111011:	// 3EC
+			begin
+				if (s_sel_i[0]) bkColor[7:0] <= s_dat_i[7:0];
+				if (s_sel_i[1]) bkColor[15:8] <= s_dat_i[15:8];
+				if (s_sel_i[2]) bkColor[23:16] <= s_dat_i[23:16];
+			end
+		8'b0xxxxx00:
 			 begin
 	    		if (s_sel_i[0]) hSprPos[sprN][ 7:0] <= s_dat_i[ 7: 0];
 	    		if (s_sel_i[1]) hSprPos[sprN][10:8] <= s_dat_i[10: 8];
 	    		if (s_sel_i[2]) vSprPos[sprN][ 7:0] <= s_dat_i[23:16];
 	    		if (s_sel_i[3]) vSprPos[sprN][10:8] <= s_dat_i[26:24];
     		end
-    	7'bxxxx01x:
+    	8'b0xxxxx01:
 			begin
 	    		if (s_sel_i[0]) begin
-					sprWidth[sprN] <= s_dat_i[5:0];
-	            	hSprRes[sprN] <= s_dat_i[7:6];
+					sprWidth[sprN] <= s_dat_i[7:0];
 	            end
 	    		if (s_sel_i[1]) begin
-					sprHeight[sprN] <= s_dat_i[13:8];
-	            	vSprRes[sprN] <= s_dat_i[15:14];
+					sprHeight[sprN] <= s_dat_i[15:8];
 	            end
-	            if (s_sel_i[2]) sprImageOffs[sprN][ 7:0] <= s_dat_i[23:16];
-	            if (s_sel_i[3]) sprImageOffs[sprN][10:8] <= s_dat_i[26:24];
+				if (s_sel_i[2]) begin
+	            	hSprRes[sprN] <= s_dat_i[19:16];
+	            	vSprRes[sprN] <= s_dat_i[23:20];
+				end
 			end
-		7'bxxxx10x:
+		8'b0xxxxx10:
 			begin	// DMA address set on clk_i domain
-				if (s_sel_i[0]) sprSysAddr[sprN][18:11] <= s_dat_i[ 7: 0];
-				if (s_sel_i[1]) sprSysAddr[sprN][26:19] <= s_dat_i[15: 8];
-				if (s_sel_i[2]) sprSysAddr[sprN][33:27] <= s_dat_i[22:16];
+	            if (s_sel_i[0]) sprImageOffs[sprN][ 7:0] <= s_dat_i[7:0];
+	            if (s_sel_i[1]) sprImageOffs[sprN][10:8] <= s_dat_i[11:8];
+				if (s_sel_i[1]) sprSysAddr[sprN][15:12] <= s_dat_i[15:12];
+				if (s_sel_i[2]) sprSysAddr[sprN][23:16] <= s_dat_i[23:16];
+				if (s_sel_i[3]) sprSysAddr[sprN][31:24] <= s_dat_i[31:24];
 			end
-		7'bxxxx11x:
+		8'b0xxxxx11:
 			begin
 				if (s_sel_i[0]) sprTc[sprN][ 7:0] <= s_dat_i[ 7:0];
 				if (pColorBits>8)
@@ -498,7 +503,7 @@ end
 // This RAM is dual ported with an SoC side and a display
 // controller side.
 //-------------------------------------------------------------
-wire [10:2] sr_adr = m_cyc_o ? m_adr_o[10:2] : s_adr_i[10:2];
+wire [11:2] sr_adr = m_cyc_o ? m_adr_o[11:2] : s_adr_i[11:2];
 wire [31:0] sr_din = m_cyc_o ? m_dat_i[31:0] : s_dat_i[31:0];
 wire sr_ce = m_cyc_o ? sbi_rdy1 : cs_ram;
 
@@ -529,7 +534,7 @@ generate
 			rtfSpriteRam16 sprRam0
 			(
 				.clka(vclk),
-				.adra(sprAddr[g]),
+				.adra(sprAddr[g][10:0]),
 				.doa(sprOut[g]),
 				.cea(1'b1),
 				
@@ -579,16 +584,16 @@ for (n = 0; n < pnSpr; n = n + 1)
 	vSprReset[n] <= vctr==vSprPos[n];
 
 always @(hSprDe, vSprDe)
-for (n = 0; n < 14; n = n + 1)
+for (n = 0; n < pnSpr; n = n + 1)
 	sprDe[n] <= hSprDe[n] & vSprDe[n];
 
 
 // take care of sprite size scaling
 // video clock division
-reg [13:0] hSprNextPixel;
-reg [13:0] vSprNextPixel;
-reg [1:0] hSprPt [13:0];   // horizontal pixel toggle
-reg [1:0] vSprPt [13:0];   // vertical pixel toggle
+reg [31:0] hSprNextPixel;
+reg [31:0] vSprNextPixel;
+reg [3:0] hSprPt [31:0];   // horizontal pixel toggle
+reg [3:0] vSprPt [31:0];   // vertical pixel toggle
 always @(n)
 for (n = 0; n < pnSpr; n = n + 1)
     hSprNextPixel[n] = hSprPt[n]==hSprRes[n];
@@ -714,8 +719,8 @@ endfunction
 
 
 // pipeline delays for display enable
-reg [14:0] sprDe1;
-reg [14:0] sproact;
+reg [31:0] sprDe1;
+reg [31:0] sproact;
 always @(posedge vclk)
 for (n = 0; n < pnSpr; n = n + 1) begin
 	sprDe1[n] <= sprDe[n];
@@ -761,7 +766,7 @@ always @(posedge vclk)
 if (blank)
 	rgbOut <= 0;
 else begin
-	if (rgbIn[24] && rgbIn[23:0] != bgTc)	// color is in front of sprite
+	if (rgbPriority==2'b10 && rgbIn[23:0] != bgTc)	// color is in front of sprite
 		rgbOut <= rgbIn[23:0];
 	else if (outact) begin
 		if (!out[15]) begin			// a sprite is displayed without alpha blending
@@ -853,12 +858,49 @@ else if (pnSpr==14)
 	14'b10000000000000:	sprCollision = 0;
 	default:			sprCollision = 1;
 	endcase
+else if (pnSpr==32)
+	case (sproact)
+	32'h00000000,
+	32'h00000001,
+	32'h00000002,
+	32'h00000004,
+	32'h00000008,
+	32'h00000010,
+	32'h00000020,
+	32'h00000040,
+	32'h00000080,
+	32'h00000100,
+	32'h00000200,
+	32'h00000400,
+	32'h00000800,
+	32'h00001000,
+	32'h00002000,
+	32'h00004000,
+	32'h00008000,
+	32'h00010000,
+	32'h00020000,
+	32'h00040000,
+	32'h00080000,
+	32'h00100000,
+	32'h00200000,
+	32'h00400000,
+	32'h00800000,
+	32'h01000000,
+	32'h02000000,
+	32'h04000000,
+	32'h08000000,
+	32'h10000000,
+	32'h20000000,
+	32'h40000000,
+	32'h80000000:		sprCollision = 0;
+	default:			sprCollision = 1;
+	endcase
 end
 endgenerate
 
 // Detect when a sprite-background collision has occurred
-assign bkCollision = (rgbIn[24] && rgbIn[23:0] != bgTc) ? 0 :
-		outact && rgbIn[23:0] != bkColor;
+assign bkCollision = //(rgbIn[24] && rgbIn[23:0] != bgTc) ? 0 :
+		outact && rgbPriority==2'b01;//rgbIn[23:0] != bkColor;
 
 // Load the sprite collision register. This register continually
 // accumulates collision bits until reset by reading the register.
@@ -872,7 +914,7 @@ if (rst_i) begin
 end
 else if (sprCollision) begin
 	// isFirstCollision
-	if ((sprSprCollision1==0)||(cs_regs && s_sel_i[0] && s_adr_i[8:2]==7'd122)) begin
+	if ((sprSprCollision1==0)||(cs_regs && s_sel_i[0] && s_adr_i[9:2]==8'b11110010)) begin
 		sprSprIRQPending1 <= 1;
 		sprSprIRQ1 <= sprSprIe;
 		sprSprCollision1 <= sproact;
@@ -880,7 +922,7 @@ else if (sprCollision) begin
 	else
 		sprSprCollision1 <= sprSprCollision1|sproact;
 end
-else if (cs_regs && s_sel_i[0] && s_adr_i[8:2]==7'd122) begin
+else if (cs_regs && s_sel_i[0] && s_adr_i[9:2]==8'b11110010) begin
 	sprSprCollision1 <= 0;
 	sprSprIRQPending1 <= 0;
 	sprSprIRQ1 <= 0;
@@ -904,7 +946,7 @@ else if (bkCollision) begin
 	// Is the register being cleared at the same time
 	// a collision occurss ?
 	// isFirstCollision
-	if ((sprBkCollision1==0) || (cs_regs && s_sel_i[0] && s_adr_i[8:2]==7'd123)) begin	
+	if ((sprBkCollision1==0) || (cs_regs && s_sel_i[0] && s_adr_i[9:2]==8'b11110011)) begin	
 		sprBkIRQ1 <= sprBkIe;
 		sprBkCollision1 <= sproact;
 		sprBkIRQPending1 <= 1;
@@ -912,7 +954,7 @@ else if (bkCollision) begin
 	else
 		sprBkCollision1 <= sprBkCollision1|sproact;
 end
-else if (cs_regs && s_sel_i[0] && s_adr_i[8:2]==7'd123) begin
+else if (cs_regs && s_sel_i[0] && s_adr_i[9:2]==8'b11110011) begin
 	sprBkCollision1 <= 0;
 	sprBkIRQPending1 <= 0;
 	sprBkIRQ1 <= 0;
@@ -926,30 +968,30 @@ module rtfSpriteRam8 (
 	clkb, adrb, dib, dob, ceb, web, rstb
 );
 input clka;
-input [10:0] adra;
+input [11:0] adra;
 output [7:0] doa;
 reg [7:0] doa;
 input cea;
 input clkb;
-input [8:0] adrb;
+input [9:0] adrb;
 input [31:0] dib;
 output [31:0] dob;
 input ceb;
 input web;
 input rstb;
 
-reg [31:0] mem [0:511];
-reg [10:0] radra;
-reg [8:0] radrb;
+reg [31:0] mem [0:1023];
+reg [11:0] radra;
+reg [9:0] radrb;
 
 always @(posedge clka)	if (cea) radra <= adra;
 always @(posedge clkb) 	if (ceb) radrb <= adrb;
 always @(radra)
 	case(radra[1:0])
-	2'b00:	doa <= mem[radra[10:2]][ 7: 0];
-	2'b01:	doa <= mem[radra[10:2]][15: 8];
-	2'b10:	doa <= mem[radra[10:2]][23:16];
-	2'b11:	doa <= mem[radra[10:2]][31:24];
+	2'b00:	doa <= mem[radra[11:2]][ 7: 0];
+	2'b01:	doa <= mem[radra[11:2]][15: 8];
+	2'b10:	doa <= mem[radra[11:2]][23:16];
+	2'b11:	doa <= mem[radra[11:2]][31:24];
 	endcase
 assign dob = rstb ? 32'd0 : mem [radrb];
 always @(posedge clkb)
@@ -963,28 +1005,28 @@ module rtfSpriteRam16 (
 	clkb, adrb, dib, dob, ceb, web, rstb
 );
 input clka;
-input [9:0] adra;
+input [10:0] adra;
 output [15:0] doa;
 reg [15:0] doa;
 input cea;
 input clkb;
-input [8:0] adrb;
+input [9:0] adrb;
 input [31:0] dib;
 output [31:0] dob;
 input ceb;
 input web;
 input rstb;
 
-reg [31:0] mem [0:511];
-reg [9:0] radra;
-reg [8:0] radrb;
+reg [31:0] mem [0:1023];
+reg [10:0] radra;
+reg [9:0] radrb;
 
 always @(posedge clka)	if (cea) radra <= adra;
 always @(posedge clkb) 	if (ceb) radrb <= adrb;
 always @(radra)
-	case(radra[1])
-	1'b0:	doa <= mem[radra[9:1]][15: 0];
-	1'b1:	doa <= mem[radra[9:1]][31:16];
+	case(radra[0])
+	1'b0:	doa <= mem[radra[10:1]][15: 0];
+	1'b1:	doa <= mem[radra[10:1]][31:16];
 	endcase
 assign dob = rstb ? 32'd0 : mem [radrb];
 always @(posedge clkb)
