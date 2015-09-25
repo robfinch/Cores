@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <stdio.h>
 
 void clsCPU::Reset()
 	{
@@ -16,7 +17,16 @@ void clsCPU::Reset()
 		rvecno = 0;
 	};
 	void clsCPU::BuildConstant() {
-		if (immcnt==2) {
+		if (immcnt==10) {
+			imm1 = (((((xir >> 7) & 0x1ff) << 1) | (xir & 1)) << 15) | (ir >> 17);
+			if (imm1 & 0x1000000) {
+				imm1 |= 0xFE000000;
+				imm2 = 0xFFFFFFFF;
+			}
+			else
+				imm2 = 0x00;
+		}
+		else if (immcnt==2) {
 			imm1 = (((xir >> 7) << 18) | ((xir & 7) << 15) | (ir >> 17));
 			imm2 = ((xir >> 7) >> 14);
 			imm2 = imm2 | ((wir >> 7) << 14) | ((wir & 7) << 11);
@@ -24,22 +34,22 @@ void clsCPU::Reset()
 		else if (immcnt==1) {
 			imm1 = (((xir >> 7) << 18) | ((xir & 7) << 15) | (ir >> 17));
 			imm2 = ((xir >> 7) >> 14);
-			imm2 = imm2 | (xir&0x80000000 ? 0xFFFFF800 : 0x00000000);
+			imm2 = imm2 | ((xir&0x80000000) ? 0xFFFFF800 : 0x00000000);
 		}
 		else {
 			sir = ir;
 			imm1 = (sir >> 17);
-			imm2 = sir&0x80000000 ? 0xFFFFFFFF : 0x00000000;
+			imm2 = (sir&0x80000000) ? 0xFFFFFFFF : 0x00000000;
 		}
 		imm = ((__int64)imm2 << 32) | imm1;
 	};
 	void clsCPU::Step()
 	{
-		unsigned int ad;
+		unsigned int ad, opc;
 		unsigned int irx, iry;
 		int nn;
 		int sc;
-		__int64 imm4,imm9;
+		__int64 imm4,imm9,imm9bra;
 		if (imcd > 0) {
 			imcd--;
 			if (imcd==1)
@@ -71,6 +81,9 @@ void clsCPU::Reset()
 		imm9 = ((ir >> 7) & 0x1ff) << 3;	// For RTS2
 		if (imm4 & 0x8)
 			imm4 |= 0xFFFFFFFFFFFFFFF0LL;
+		imm9bra = ((ir >> 7) & 0x1ff) ;	// For BRAS
+		if (imm9bra & 0x100)
+			imm9bra |= 0xFFFFFFFFFFFFFF00LL;
 dc:
 		//---------------------------------------------------------------------------
 		// Decode stage
@@ -108,7 +121,9 @@ dc:
 		ub = b;
 		res = 0;
 		opcode = ir & 0x7f;
-		if (((opcode >> 3)==6) || (opcode==MOV2) || (opcode==MOV2+1) || (opcode==ADDQ))
+		opc = pc;
+		if (((opcode >> 3)==6) || (opcode==MOV2) || (opcode==MOV2+1) || (opcode==ADDQ) || (opcode==IMM10) || (opcode==IMM10+1) ||
+			opcode==BRAS || opcode==SUBSP || opcode==LWBP || opcode==SWBP)
 			pc = pc + 2;
 		else
 			pc = pc + 4;
@@ -542,6 +557,12 @@ dc:
 			res = system1->Read(ad);
 			res |= ((unsigned __int64)system1->Read(ad+4)) << 32;
 			break;
+		case LWBP:
+			Rt = (ir >> 7) & 0x1f;
+			ad = regs[27] + (imm4 << 3);
+			res = system1->Read(ad);
+			res |= ((unsigned __int64)system1->Read(ad+4)) << 32;
+			break;
 		case LFD:
 			BuildConstant();
 			ad = a + imm;
@@ -568,8 +589,8 @@ dc:
 			res = system1->Read(ad);
 			res |= ((unsigned __int64)system1->Read(ad+4)) << 32;
 			res += (ir>> 16)&1 ? 0xFFFFFFFFFFFFFFF0LL | ((ir >> 12) & 0x1F): (ir >> 12) & 0x1F;
-			system1->Write(ad,(int)res,0xFFFFFFFF);
-			system1->Write(ad+4,(int)(res>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)res,0xF);
+			system1->Write(ad+4,(int)(res>>32),0xF);
 			break;
 		case LEA:
 			BuildConstant();
@@ -585,28 +606,28 @@ dc:
 			ad = a + imm;
 			switch(ad & 7) {
 			case 0:
-				system1->Write(ad,(int)regs[Rc],0x000000FF);
+				system1->Write(ad,(int)regs[Rc],0x1);
 				break;
 			case 1:
-				system1->Write(ad,(int)regs[Rc],0x0000FF00);
+				system1->Write(ad,(int)regs[Rc],0x2);
 				break;
 			case 2:
-				system1->Write(ad,(int)regs[Rc],0x00FF0000);
+				system1->Write(ad,(int)regs[Rc],0x4);
 				break;
 			case 3:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			case 4:
-				system1->Write(ad,(int)regs[Rc],0x000000FF);
+				system1->Write(ad,(int)regs[Rc],0x1);
 				break;
 			case 5:
-				system1->Write(ad,(int)regs[Rc],0x0000FF00);
+				system1->Write(ad,(int)regs[Rc],0x2);
 				break;
 			case 6:
-				system1->Write(ad,(int)regs[Rc],0x00FF0000);
+				system1->Write(ad,(int)regs[Rc],0x4);
 				break;
 			case 7:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			}
 			break;
@@ -616,28 +637,28 @@ dc:
 			ad = a + (b << sc) + imm;
 			switch(ad & 7) {
 			case 0:
-				system1->Write(ad,(int)regs[Rc],0x000000FF);
+				system1->Write(ad,(int)regs[Rc],0x1);
 				break;
 			case 1:
-				system1->Write(ad,(int)regs[Rc],0x0000FF00);
+				system1->Write(ad,(int)regs[Rc],0x2);
 				break;
 			case 2:
-				system1->Write(ad,(int)regs[Rc],0x00FF0000);
+				system1->Write(ad,(int)regs[Rc],0x4);
 				break;
 			case 3:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			case 4:
-				system1->Write(ad,(int)regs[Rc],0x000000FF);
+				system1->Write(ad,(int)regs[Rc],0x1);
 				break;
 			case 5:
-				system1->Write(ad,(int)regs[Rc],0x0000FF00);
+				system1->Write(ad,(int)regs[Rc],0x2);
 				break;
 			case 6:
-				system1->Write(ad,(int)regs[Rc],0x00FF0000);
+				system1->Write(ad,(int)regs[Rc],0x4);
 				break;
 			case 7:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			}
 			break;
@@ -647,28 +668,28 @@ dc:
 			ad = a + imm;
 			switch(ad & 7) {
 			case 0:
-				system1->Write(ad,(int)regs[Rc],0x0000FFFF);
+				system1->Write(ad,(int)regs[Rc],0x3);
 				break;
 			case 1:
-				system1->Write(ad,(int)regs[Rc],0x00FFFF00);
+				system1->Write(ad,(int)regs[Rc],0x6);
 				break;
 			case 2:
-				system1->Write(ad,(int)regs[Rc],0xFFFF0000);
+				system1->Write(ad,(int)regs[Rc],0xC);
 				break;
 			case 3:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			case 4:
-				system1->Write(ad,(int)regs[Rc],0x0000FFFF);
+				system1->Write(ad,(int)regs[Rc],0x3);
 				break;
 			case 5:
-				system1->Write(ad,(int)regs[Rc],0x00FFFF00);
+				system1->Write(ad,(int)regs[Rc],0x6);
 				break;
 			case 6:
-				system1->Write(ad,(int)regs[Rc],0xFFFF0000);
+				system1->Write(ad,(int)regs[Rc],0xC);
 				break;
 			case 7:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			}
 			break;
@@ -678,28 +699,28 @@ dc:
 			ad = a + (b << sc) + imm;
 			switch(ad & 7) {
 			case 0:
-				system1->Write(ad,(int)regs[Rc],0x0000FFFF);
+				system1->Write(ad,(int)regs[Rc],0x3);
 				break;
 			case 1:
-				system1->Write(ad,(int)regs[Rc],0x00FFFF00);
+				system1->Write(ad,(int)regs[Rc],0x6);
 				break;
 			case 2:
-				system1->Write(ad,(int)regs[Rc],0xFFFF0000);
+				system1->Write(ad,(int)regs[Rc],0xC);
 				break;
 			case 3:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			case 4:
-				system1->Write(ad,(int)regs[Rc],0x0000FFFF);
+				system1->Write(ad,(int)regs[Rc],0x3);
 				break;
 			case 5:
-				system1->Write(ad,(int)regs[Rc],0x00FFFF00);
+				system1->Write(ad,(int)regs[Rc],0x6);
 				break;
 			case 6:
-				system1->Write(ad,(int)regs[Rc],0xFFFF0000);
+				system1->Write(ad,(int)regs[Rc],0xC);
 				break;
 			case 7:
-				system1->Write(ad,(int)regs[Rc],0xFF000000);
+				system1->Write(ad,(int)regs[Rc],0x8);
 				break;
 			}
 			break;
@@ -707,50 +728,56 @@ dc:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			system1->Write(ad,(int)regs[Rc],0xFFFFFFFF);
+			system1->Write(ad,(int)regs[Rc],0xF);
 			break;
 		case SHX:
 			Rt = 0;
 			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
-			system1->Write(ad,(int)regs[Rc],0xFFFFFFFF);
+			system1->Write(ad,(int)regs[Rc],0xF);
 			break;
 		case SW:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			system1->Write(ad,(int)regs[Rc],0xFFFFFFFF);
-			system1->Write(ad+4,(int)(regs[Rc]>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)regs[Rc],0xF);
+			system1->Write(ad+4,(int)(regs[Rc]>>32),0xF);
+			break;
+		case SWBP:
+			Rt = 0;
+			ad = regs[27] + (imm4 << 3);
+			system1->Write(ad,(int)regs[Ra],0xF);
+			system1->Write(ad+4,(int)(regs[Ra]>>32),0xF);
 			break;
 		case SFD:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			system1->Write(ad,(int)operc.ai,0xFFFFFFFF);
-			system1->Write(ad+4,(int)(operc.ai>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)operc.ai,0xF);
+			system1->Write(ad+4,(int)(operc.ai>>32),0xF);
 			break;
 		case SWCR:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			nn = system1->Write(ad,(int)regs[Rc],0xFFFFFFFF,1);
+			nn = system1->Write(ad,(int)regs[Rc],0xF,1);
 			cr0 &= 0xFFFFFFEFFFFFFFFFLL;
 			if (nn) cr0 |= 0x1000000000LL;
-			system1->Write(ad+4,(int)(regs[Rc]>>32),0xFFFFFFFF,0);
+			system1->Write(ad+4,(int)(regs[Rc]>>32),0xF,0);
 			break;
 		case SWX:
 			Rt = 0;
 			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
-			system1->Write(ad,(int)regs[Rc],0xFFFFFFFF);
-			system1->Write(ad+4,(int)(regs[Rc]>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)regs[Rc],0xF);
+			system1->Write(ad+4,(int)(regs[Rc]>>32),0xF);
 			break;
 		case SFDX:
 			Rt = 0;
 			imm = (ir >> 24);
 			ad = a + (b << sc) + imm;
-			system1->Write(ad,(int)operc.ai,0xFFFFFFFF);
-			system1->Write(ad+4,(int)(operc.ai>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)operc.ai,0xF);
+			system1->Write(ad+4,(int)(operc.ai>>32),0xF);
 			break;
 		case POP:
 			BuildConstant();
@@ -772,15 +799,15 @@ dc:
 				regs[30] -= 8LL;
 				Rt = 0;
 				ad = regs[30];
-				system1->Write(ad,(int)regs[Ra],0xFFFFFFFF);
-				system1->Write(ad+4,(int)(regs[Ra]>>32),0xFFFFFFFF);
+				system1->Write(ad,(int)regs[Ra],0xF);
+				system1->Write(ad+4,(int)(regs[Ra]>>32),0xF);
 				break;
 			case 1:
 				regs[30] -= 8LL;
 				Rt = 0;
 				ad = regs[30];
-				system1->Write(ad,(int)opera.ai,0xFFFFFFFF);
-				system1->Write(ad+4,(int)(opera.ai>>32),0xFFFFFFFF);
+				system1->Write(ad,(int)opera.ai,0xF);
+				system1->Write(ad+4,(int)(opera.ai>>32),0xF);
 				break;
 			case 2:
 				Rt = (ir >> 7) & 0x1f;
@@ -798,29 +825,21 @@ dc:
 				break;
 			}
 			break;
-		case PUSH:
-			BuildConstant();
-			regs[30] -= 8LL;
-			Rt = 0;
-			ad = regs[30];
-			system1->Write(ad,(int)regs[Ra],0xFFFFFFFF);
-			system1->Write(ad+4,(int)(regs[Ra]>>32),0xFFFFFFFF);
-			break;
 		case PUSHF:
 			BuildConstant();
 			regs[30] -= 8LL;
 			Rt = 0;
 			ad = regs[30];
-			system1->Write(ad,(int)opera.ai,0xFFFFFFFF);
-			system1->Write(ad+4,(int)(opera.ai>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)opera.ai,0xF);
+			system1->Write(ad+4,(int)(opera.ai>>32),0xF);
 			break;
 		case PEA:
 			BuildConstant();
 			regs[30] -= 8LL;
 			Rt = 0;
 			ad = regs[30];
-			system1->Write(ad,(int)(a+imm),0xFFFFFFFF);
-			system1->Write(ad+4,(int)((a+imm)>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)(a+imm),0xF);
+			system1->Write(ad+4,(int)((a+imm)>>32),0xF);
 			break;
 		case PMW:
 			BuildConstant();
@@ -830,8 +849,8 @@ dc:
 			res = system1->Read(ad);
 			res |= ((unsigned __int64)system1->Read(ad+4)) << 32;
 			ad = regs[30];
-			system1->Write(ad,(int)(res),0xFFFFFFFF);
-			system1->Write(ad+4,(int)((res)>>32),0xFFFFFFFF);
+			system1->Write(ad,(int)(res),0xF);
+			system1->Write(ad+4,(int)((res)>>32),0xF);
 			break;
 
 		case BRA:	Rt = 0; pc = pc - 4 + ((sir >> 7) << 1); break;
@@ -846,6 +865,10 @@ dc:
 			Rt = 0;
 			pc = (unsigned int)regs[31];
 			regs[30] = regs[30] + imm9;
+			break;
+		case SUBSP:   
+			Rt = 0;
+			regs[30] = regs[30] - imm9;
 			break;
 		case RTS:
 			BuildConstant();
@@ -877,15 +900,15 @@ dc:
 		case BRK:
 			switch((ir >> 30)&3) {
 			case 0:	
-				epc = (pc-4)|km;
+				epc = opc|km;
 				esp = regs[30];
 				break;
 			case 1:
-				dpc = (pc-4)|km;
+				dpc = opc|km;
 				dsp = regs[30];
 				break;
 			case 2:
-				ipc = (pc - 4 - immcnt * 4)|km;
+				ipc = (immcnt==10) ? (opc-2)|km : (opc - immcnt * 4)|km;
 				isp = regs[30];
 				StatusHWI = true;
 				im = true;
@@ -905,6 +928,10 @@ dc:
 			Rt = 0;
 			if (a!=0)
 				pc = pc - 2 + (imm4 << 1);
+			break;
+		case BRAS:
+			Rt = 0;
+			pc = pc - 2 + (imm9bra << 1);
 			break;
 		case Bcc:
 			Rt = 0;
@@ -949,6 +976,10 @@ dc:
 			Rt = 0;
 			immcnt = immcnt + 1;
 			break;
+		case IMM10:
+		case IMM10+1:
+			Rt = 0;
+			immcnt = 10;
 		default: break;
 		}
 		//---------------------------------------------------------------------------
@@ -959,6 +990,10 @@ dc:
 				dregs[Rt&31] = dres.ad;
 			}
 			else {
+				if (Rt==31 && res==0xC48EE0) {
+					regs[Rt] <= res;
+					printf("hi there");
+				}
 				if (Rt==32 && (res & 3))
 					regs[Rt] = res;
 				regs[Rt] = res;
@@ -971,7 +1006,9 @@ dc:
 			opcode!=IMM+4 &&
 			opcode!=IMM+5 &&
 			opcode!=IMM+6 &&
-			opcode!=IMM+7
+			opcode!=IMM+7 &&
+			opcode!=IMM10 &&
+			(opcode!=IMM10+1)
 			)
 			immcnt = 0;
 		regs[0] = 0;

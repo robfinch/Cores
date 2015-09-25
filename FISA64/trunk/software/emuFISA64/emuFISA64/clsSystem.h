@@ -1,4 +1,5 @@
 #pragma once
+#include "clsDevice.h"
 #include "clsKeyboard.h"
 extern char refscreen;
 extern unsigned int dataBreakpoints[30];

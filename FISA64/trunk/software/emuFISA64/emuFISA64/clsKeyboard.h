@@ -9,6 +9,7 @@ public:
 	volatile unsigned __int8 status;
 	clsKeyboard(void);
 	~clsKeyboard(void);
+	bool IsSelected(unsigned int ad) { return ((ad & 0xFFFFFFF0)==0xFFDC0000); };
 	void Put(unsigned __int8 sc) {
 		scancode = sc;
 		buffer[head] = sc;

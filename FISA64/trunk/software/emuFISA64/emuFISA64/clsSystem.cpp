@@ -45,7 +45,7 @@ void clsSystem::Reset()
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
 			return VideoMem[(ad>>2)& 0xFFF];
 		}
-		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
+		else if (keybd.IsSelected(ad)) {
 			switch(ad & 0x1) {
 			case 0:
 				sc = keybd.Get();
@@ -59,7 +59,7 @@ void clsSystem::Reset()
 			}
 			return rr;
 		}
-		else if ((ad & 0xFFFFFFC0)==0xFFDC0FC0) {
+		else if (pic1.IsSelected(ad)) {
 			return pic1.Read(ad);
 		}
 		return 0;
@@ -88,34 +88,34 @@ void clsSystem::Reset()
 				ret = true;
 			}
 			switch(mask) {
-			case 0xFFFFFFFF:
+			case 0xF:
 				memory[ad>>2] = dat;
 				break;
-			case 0x000000FF:
+			case 0x1:
 				memory[ad >> 2] &= 0xFFFFFF00;
 				memory[ad >> 2] |= dat & 0xFF;
 				break;
-			case 0x0000FF00:
+			case 0x2:
 				memory[ad >> 2] &= 0xFFFF00FF;
 				memory[ad >> 2] |= (dat & 0xFF) << 8;
 				break;
-			case 0x00FF0000:
+			case 0x4:
 				memory[ad >> 2] &= 0xFF00FFFF;
 				memory[ad >> 2] |= (dat & 0xFF) << 16;
 				break;
-			case 0xFF000000:
+			case 0x8:
 				memory[ad >> 2] &= 0x00FFFFFF;
 				memory[ad >> 2] |= (dat & 0xFF) << 24;
 				break;
-			case 0x0000FFFF:
+			case 0x3:
 				memory[ad >> 2] &= 0xFFFF0000;
 				memory[ad >> 2] |= dat & 0xFFFF;
 				break;
-			case 0x00FFFF00:
+			case 0x6:
 				memory[ad >> 2] &= 0xFF0000FF;
 				memory[ad >> 2] |= (dat & 0xFFFF) << 8;
 				break;
-			case 0xFFFF0000:
+			case 0xC:
 				memory[ad >> 2] &= 0x0000FFFF;
 				memory[ad >> 2] |= (dat & 0xFFFF) << 16;
 				break;
@@ -129,13 +129,13 @@ void clsSystem::Reset()
 			VideoMemDirty[(ad>>2)&0xfff] = true;
 			refscreen = true;
 		}
-		else if ((ad & 0xFFFFFFF0)==0xFFDC0000) {
+		else if (keybd.IsSelected(ad)) {
 			switch(ad & 1) {
 			case 1:	keybd_status = 0; pic1.irqKeyboard = keybd.GetStatus()==0x80; break;
 			}
 		}
-		else if ((ad & 0xFFFFFFC0)==0xFFDC0FC0) {
-			pic1.Write(ad,dat);
+		else if (pic1.IsSelected(ad)) {
+			pic1.Write(ad,dat,0x3);
 		}
 		ret = true;
 j1:

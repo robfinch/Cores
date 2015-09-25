@@ -1,9 +1,10 @@
 #pragma once
+#include "clsDevice.h"
 #include "clsCPU.h"
 
 extern clsCPU cpu1;
 
-class clsPIC
+class clsPIC : public clsDevice
 {
 	bool enables[16];
 public:
@@ -13,6 +14,9 @@ public:
 	unsigned int vecno;
 	clsPIC(void);
 	void Reset();
+	bool IsSelected(unsigned int ad) {
+		return ((ad & 0xFFFFFFC0)==0xFFDC0FC0);
+	};
 	unsigned int Read(unsigned int ad) {
 		int nn;
 		unsigned int dat;
@@ -26,7 +30,7 @@ public:
 			return dat;
 		}
 	};
-	void Write(unsigned int ad, unsigned int dat) {
+	void Write(unsigned int ad, unsigned int dat, unsigned int mask) {
 		int nn;
 		switch((ad >> 2) & 15) {
 		case 1:
