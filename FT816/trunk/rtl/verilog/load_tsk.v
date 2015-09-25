@@ -20,30 +20,30 @@
 //                                                                          
 // ============================================================================
 //
-task load_tsk;
-input [7:0] dat8;
+//task load_tsk;
+//input [7:0] db;
 begin
 	case(load_what)
 	`BYTE_70:
 			begin
-				b8 <= dat8;
+				b8 <= db;
 				state <= BYTE_CALC;
 			end
 	`BYTE_71:
 			begin
 				moveto_ifetch();
-				res8 <= dat8;
+				res8 <= db;
 			end
 	`HALF_70:
 				begin
-					b16[7:0] <= dat8;
+					b16[7:0] <= db;
 					load_what <= `HALF_158;
 					radr <= radr+24'd1;
 					state <= LOAD_MAC1;
 				end
 	`HALF_158:
 				begin
-					b16[15:8] <= dat8;
+					b16[15:8] <= db;
 					if (isTribyte) begin
 						radr <= radr+24'd1;
 						load_what <= `TRIP_2316;
@@ -53,36 +53,36 @@ begin
 						state <= HALF_CALC;
 				end
 	`TRIP_2316:	begin
-					b24 <= dat8;
+					b24 <= db;
 					next_state(HALF_CALC);
 				end
 	`HALF_71:
 				begin
-					res16[7:0] <= dat8;
+					res16[7:0] <= db;
 					load_what <= `HALF_159;
 					radr <= radr+32'd1;
 					next_state(LOAD_MAC1);
 				end
 	`HALF_159:
 				begin
-					res16[15:8] <= dat8;
+					res16[15:8] <= db;
 					moveto_ifetch();
 				end
 	`HALF_71S:
 				begin
-					res16[7:0] <= dat8;
+					res16[7:0] <= db;
 					load_what <= `HALF_159S;
 					inc_sp();
 					next_state(LOAD_MAC1);
 				end
 	`HALF_159S:
 				begin
-					res16[15:8] <= dat8;
+					res16[15:8] <= db;
 					moveto_ifetch();
 				end
 	`BYTE_72:
 				begin
-					wdat[7:0] <= dat8;
+					wdat[7:0] <= db;
 					radr <= mvndst_address;
 					wadr <= mvndst_address;
 					store_what <= `STW_DEF8;
@@ -98,26 +98,28 @@ begin
 					next_state(STORE1);
 				end
 	`SR_70:		begin
-					cf <= dat8[0];
-					zf <= dat8[1];
-					if (dat8[2])
+					cf <= db[0];
+					zf <= db[1];
+					if (db[2])
 						im <= 1'b1;
 					else
 						imcd <= 3'b110;
-					df <= dat8[3];
+					df <= db[3];
 					if (m816) begin
-						x_bit <= dat8[4];
-						m_bit <= dat8[5];
-						if (dat8[4]) begin
+						x_bit <= db[4];
+						m_bit <= db[5];
+						if (db[4]) begin
 							x[15:8] <= 8'd0;
 							y[15:8] <= 8'd0;
 						end
-						//if (dat8[5]) acc[31:8] <= 24'd0;
+						//if (db[5]) acc[31:8] <= 24'd0;
 					end
+					// The following load of the break flag is different than the '02
+					// which never loads the flag.
 					else
-						bf <= dat8[4];
-					vf <= dat8[6];
-					nf <= dat8[7];
+						bf <= db[4];
+					vf <= db[6];
+					nf <= db[7];
 					if (isRTI) begin
 						load_what <= `PC_70;
 						inc_sp();
@@ -128,7 +130,7 @@ begin
 					end
 				end
 	`PC_70:		begin
-					pc[7:0] <= dat8;
+					pc[7:0] <= db;
 					load_what <= `PC_158;
 					if (isRTI|isRTS|isRTL) begin
 						inc_sp();
@@ -139,7 +141,7 @@ begin
 					state <= LOAD_MAC1;
 				end
 	`PC_158:	begin
-					pc[15:8] <= dat8;
+					pc[15:8] <= db;
 					if ((isRTI&m816)|isRTL) begin
 						load_what <= `PC_2316;
 						inc_sp();
@@ -154,7 +156,7 @@ begin
 					end
 				end
 	`PC_2316:	begin
-					pc[23:16] <= dat8;
+					pc[23:16] <= db;
 					if (isRTL) begin
 						load_what <= `NOTHING;
 						next_state(RTS1);
@@ -170,20 +172,20 @@ begin
 					end
 				end
 //	`PC_3124:	begin
-//					pc[31:24] <= dat8;
+//					pc[31:24] <= db;
 //					load_what <= `NOTHING;
 //					next_state(BYTE_IFETCH);
 //				end
 	`IA_70:
 			begin
 				radr <= radr + 24'd1;
-				ia[7:0] <= dat8;
+				ia[7:0] <= db;
 				load_what <= `IA_158;
 				state <= LOAD_MAC1;
 			end
 	`IA_158:
 			begin
-				ia[15:8] <= dat8;
+				ia[15:8] <= db;
 				ia[23:16] <= dbr;
 				if (isIY24|isI24) begin
 					radr <= radr + 24'd1;
@@ -195,9 +197,9 @@ begin
 			end
 	`IA_2316:
 			begin
-				ia[23:16] <= dat8;
+				ia[23:16] <= db;
 				state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
 			end
 	endcase
 end
-endtask
+//endtask

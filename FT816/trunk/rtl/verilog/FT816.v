@@ -506,7 +506,7 @@
 
 // Input Frequency is 32 times the 00 clock
 
-module FT816(rst, clk, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
+module FT816(rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
 parameter SUPPORT_TRIBYTES = 1'b0;
 parameter STORE_SKIPPING = 1'b1;
 parameter EXTRA_LONG_BRANCHES = 1'b1;
@@ -548,6 +548,7 @@ parameter MVN816 = 6'd36;
 
 input rst;
 input clk;
+output clko;
 output reg [4:0] cyc;
 output phi11;
 output phi12;
@@ -822,6 +823,8 @@ reg cpu_clk_en;
 reg clk_en;
 wire clkx;
 BUFGCE u20 (.CE(cpu_clk_en), .I(clk), .O(clkx) );
+assign clko = clkx;
+//assign clkx = clk;
 
 always @(posedge clk)
 if (~rst) begin
@@ -853,6 +856,7 @@ if (~rst) begin
 	pg2 <= 1'b0;
 	ir <= 8'hEA;
 	cf <= 1'b0;
+	df <= 1'b0;
 	m816 <= 1'b0;
 	m_bit <= 1'b1;
 	x_bit <= 1'b1;
@@ -1199,80 +1203,205 @@ DECODE1:
 		`ROR_ACC:	begin res8 <= {acc8[0],cf,acc8[7:1]}; res16 <= {acc16[0],cf,acc16[15:1]}; end
 		`RTS,`RTL:
 			begin
-				inc_sp();
-				data_nack();
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				data_nack();
 				load_what <= `PC_70;
 				state <= LOAD_MAC1;
 			end
 		`RTI:	begin
-				inc_sp();
-				data_nack();
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				data_nack();
 				load_what <= `SR_70;
 				state <= LOAD_MAC1;
 				end
 		`PHP:
 			begin
-				set_sp();
-				data_nack();
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				data_nack();
 				store_what <= `STW_SR70;
 				state <= STORE1;
 			end
-		`PHA:	tsk_push(`STW_ACC8,`STW_ACC70,m16);
+		`PHA:
+begin
+	if (m816) begin
+		if (m16) begin
+			radr <= {8'h00,sp_dec[15:0]};
+			wadr <= {8'h00,sp_dec[15:0]};
+			store_what <= `STW_ACC70;
+			sp <= sp_dec2;
+		end
+		else begin
+			radr <= {8'h00,sp[15:0]};
+			wadr <= {8'h00,sp[15:0]};
+			store_what <= `STW_ACC8;
+			sp <= sp_dec;
+		end
+	end
+	else begin
+		radr <= {16'h01,sp[7:0]};
+		wadr <= {16'h01,sp[7:0]};
+		store_what <= `STW_ACC8;
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+	state <= STORE1;
+end
+//		tsk_push(`STW_ACC8,`STW_ACC70,m16);
 		`PHX:	tsk_push(`STW_X8,`STW_X70,xb16);
 		`PHY:	tsk_push(`STW_Y8,`STW_Y70,xb16);
 		`PLP:
 			begin
-				inc_sp();
-				load_what <= `SR_70;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				load_what <= `SR_70;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLA:
 			begin
-				inc_sp();
-				load_what <= m16 ? `HALF_71S : `BYTE_71;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				load_what <= m16 ? `HALF_71S : `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLX,`PLY:
 			begin
-				inc_sp();
-				load_what <= xb16 ? `HALF_71S : `BYTE_71;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				load_what <= xb16 ? `HALF_71S : `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PHB:
 			begin
-				set_sp();
-				store_what <= `STW_DBR;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= `STW_DBR;
 				data_nack();
 				state <= STORE1;
 			end
 		`PHD:
 			begin
-				set_sp();
-				store_what <= `STW_DPR158;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= `STW_DPR158;
 				data_nack();
 				state <= STORE1;
 			end
 		`PHK:
 			begin
-				set_sp();
-				store_what <= `STW_PC2316;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= `STW_PC2316;
 				data_nack();
 				state <= STORE1;
 			end
 		`PLB:
 			begin
-				inc_sp();
-				load_what <= `BYTE_71;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				load_what <= `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLD:
 			begin
-				inc_sp();
-				load_what <= `HALF_71S;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp_inc[15:0]};
+		sp <= sp_inc;
+	end
+	else begin
+		radr <= {16'h0001,sp_inc[7:0]};
+		sp <= {8'h1,sp_inc[7:0]};
+	end
+end				load_what <= `HALF_71S;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
@@ -1559,16 +1688,38 @@ DECODE2:
 			end
 		`BRK:
 			begin
-				set_sp();
-				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
 				data_nack();
 				state <= STORE1;
 				bf <= !hwi;
 			end
 		`COP:
 			begin
-				set_sp();
-				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
 				state <= STORE1;
 				vect <= m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
 				data_nack();
@@ -1810,8 +1961,19 @@ DECODE3:
 			end	
 		`JSR,`JSR_INDX:
 			begin
-				set_sp();
-				pc <= pc - 24'd1;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				pc <= pc - 24'd1;
 				store_what <= `STW_PC158;
 				data_nack();
 				state <= STORE1;
@@ -1827,16 +1989,38 @@ DECODE3:
 		`PEA:
 			begin
 				tmp16 <= ir[23:8];
-				set_sp();
-				store_what <= `STW_TMP158;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= `STW_TMP158;
 				data_nack();
 				state <= STORE1;
 			end
 		`PER:
 			begin
 				tmp16 <= pc[15:0] + ir[23:8] + 16'd3;
-				set_sp();
-				store_what <= `STW_TMP158;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				store_what <= `STW_TMP158;
 				data_nack();
 				state <= STORE1;
 			end
@@ -1920,8 +2104,19 @@ DECODE4:
 			end
 		`JSL:
 			begin
-				set_sp();
-				pc <= pc - 24'd1;
+begin
+	if (m816) begin
+		radr <= {8'h00,sp[15:0]};
+		wadr <= {8'h00,sp[15:0]};
+		sp <= sp_dec;
+	end
+	else begin
+		radr <= {16'h0001,sp[7:0]};
+		wadr <= {16'h0001,sp[7:0]};
+		sp[7:0] <= sp[7:0] - 8'd1;
+		sp[15:8] <= 8'h1;
+	end
+end				pc <= pc - 24'd1;
 				store_what <= `STW_PC2316;
 				data_nack();
 				state <= STORE1;
@@ -1946,8 +2141,35 @@ DECODE4:
 
 `include "load_mac.v"
 `include "store.v"
-`include "half_calc.v"
+//`include "half_calc.v"
 `include "byte_calc.v"
+HALF_CALC:
+	begin
+		moveto_ifetch();
+		store_what <= `STW_DEF70;
+		case(ir[7:0])
+		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_AL,`ADC_ALX,`ADC_I,`ADC_IL,`ADC_DSP,`ADC_DSPIY:	begin res16 <= acc16 + b16 + {15'd0,cf}; end
+		`SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_AL,`SBC_ALX,`SBC_I,`SBC_IL,`SBC_DSP,`SBC_DSPIY:	begin res16 <= acc16 - b16 - {15'd0,~cf}; end
+		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_AL,`CMP_ALX,`CMP_I,`CMP_IL,`CMP_DSP,`CMP_DSPIY:	begin res16 <= acc16 - b16; end
+		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_AL,`AND_ALX,`AND_I,`AND_IL,`AND_DSP,`AND_DSPIY:	begin res16 <= acc16 & b16; end
+		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_AL,`ORA_ALX,`ORA_I,`ORA_IL,`ORA_DSP,`ORA_DSPIY:	begin res16 <= acc16 | b16; end
+		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_AL,`EOR_ALX,`EOR_I,`EOR_IL,`EOR_DSP,`EOR_DSPIY:	begin res16 <= acc16 ^ b16; end
+		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_AL,`LDA_ALX,`LDA_I,`LDA_IL,`LDA_DSP,`LDA_DSPIY:	begin res16 <= b16; end
+		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX:	begin res16 <= acc16 & b16; end
+		`TRB_ZP,`TRB_ABS:	begin res16 <= ~acc16 & b16; wdat <= ~acc16 & b16; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS:	begin res16 <= acc16 | b16; wdat <= acc16 | b16; state <= STORE1; data_nack(); end
+		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	begin res16 <= b16; end
+		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	begin res16 <= b16; end
+		`CPX_IMM,`CPX_ZP,`CPX_ABS:	begin res16 <= x16 - b16; end
+		`CPY_IMM,`CPY_ZP,`CPY_ABS:	begin res16 <= y16 - b16; end
+		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX:	begin res16 <= {b16,1'b0}; wdat <= {b16[14:0],1'b0}; state <= STORE1; data_nack(); end
+		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	begin res16 <= {b16,cf}; wdat <= {b16[14:0],cf}; state <= STORE1; data_nack(); end
+		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	begin res16 <= {b16[0],1'b0,b16[15:1]}; wdat <= {1'b0,b16[15:1]}; state <= STORE1; data_nack(); end
+		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	begin res16 <= {b16[0],cf,b16[15:1]}; wdat <= {cf,b16[15:1]}; state <= STORE1; data_nack(); end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:	begin res16 <= {b24,b16} + 24'd1; wdat <= {{b24,b16}+24'd1}; state <= STORE1; data_nack(); end
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	begin res16 <= {b24,b16} - 24'd1; wdat <= {{b24,b16}-24'd1}; state <= STORE1; data_nack(); end
+		endcase
+	end
 
 MVN816:
 	begin
@@ -1961,7 +2183,6 @@ MVN816:
 endcase
 end
 
-`include "load_tsk.v"
 `include "bus_task.v"
 `include "misc_task.v"
 

@@ -110,7 +110,6 @@ STORE2:
 				vpa <= `FALSE;	// override moveto_ifetch() setting.
 				vda <= `FALSE;
 				store_what <= `STW_DEF2316;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_ACC70:
@@ -147,7 +146,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_Z158;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_DPR158:
@@ -156,7 +154,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_DPR70;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_TMP158:
@@ -165,7 +162,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_TMP70;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_IA158:
@@ -174,7 +170,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_IA70;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_PC2316:
@@ -184,7 +179,6 @@ STORE2:
 					vpa <= `FALSE;
 					vda <= `FALSE;
 					store_what <= `STW_PC158;
-					retstate <= STORE1;
 					state <= STORE1;
 				end
 			end
@@ -194,7 +188,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				store_what <= `STW_PC70;
-				retstate <= STORE1;
 				state <= STORE1;
 			end
 		`STW_PC70:
@@ -206,7 +199,6 @@ STORE2:
 						vpa <= `FALSE;
 						vda <= `FALSE;
 						store_what <= `STW_SR70;
-						retstate <= STORE1;
 						state <= STORE1;
 						end
 				`JSR: 	begin
@@ -222,7 +214,6 @@ STORE2:
 						vpa <= `FALSE;
 						vda <= `FALSE;
 						state <= LOAD_MAC1;
-						retstate <= LOAD_MAC1;
 						load_what <= `PC_70;
 						radr <= absx_address;
 						end
@@ -235,17 +226,16 @@ STORE2:
 					state <= LOAD_MAC1;
 					vpa <= `FALSE;
 					vda <= `FALSE;
-					retstate <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
 					im <= hwi;
+					df <= 1'b0;
 				end
 				else if (ir[7:0]==`COP) begin
 					load_what <= `PC_70;
 					vpa <= `FALSE;
 					vda <= `FALSE;
 					state <= LOAD_MAC1;
-					retstate <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
 					im <= 1'b1;
@@ -257,7 +247,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				state <= LOAD_MAC1;
-				retstate <= LOAD_MAC1;
 				radr <= ir[31:8] + x;
 			end
 			else if (isJsrInd) begin
@@ -265,7 +254,6 @@ STORE2:
 				vpa <= `FALSE;
 				vda <= `FALSE;
 				state <= LOAD_MAC1;
-				retstate <= LOAD_MAC1;
 				radr <= ir[31:8];
 			end
 		endcase
