@@ -1164,13 +1164,14 @@ DECODE1:
 			end
 		`STP:	begin clk_en <= 1'b0; end
 		// Switching the processor mode always zeros out the upper part of the index registers.
-		// switching to 816 mode sets 8 bit memory/indexes
+		// switching to emulation mode sets 8 bit memory/indexes
 		`XCE:	begin
 					m816 <= ~cf;
 					cf <= ~m816;
-					if (~cf) begin		
+					if (cf) begin		
 						m_bit <= 1'b1;
 						x_bit <= 1'b1;
+						sp[15:8] <= 8'h01;
 					end
 					x[15:8] <= 8'd0;
 					y[15:8] <= 8'd0;
