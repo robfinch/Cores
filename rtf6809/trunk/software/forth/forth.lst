@@ -1,0 +1,1188 @@
+39 error(s), 0 warning(s) unlisted in pass 1
+                                      .OPTION M68
+                      BOS       EQU $20           ; bottom of data stack, in zero-page.
+                      TOS       EQU $9E           ; top of data stack, in zero-page.
+                      N         EQU TOS+8         ; scratch workspace.
+                      IP        EQU N+8           ; interpretive pointer.
+                      W         EQU IP+4          ; code field pointer.
+                      UP        EQU W+4           ; user area pointer.
+                      XSAVE     EQU UP+4          ; temporary for X register.
+                      YSAVE     EQU XSAVE+4
+                      ;
+                      TIBX      EQU $0100         ; terminal input buffer of 84 bytes.
+                      ORIG      EQU $0200         ; origin of FORTH's Dictionary.
+                      MEM       EQU $4000         ; top of assigned memory+1 byte.
+                      UAREA     EQU MEM-128       ; 128 bytes of user area
+                      DAREA     EQU UAREA-BMAG    ; disk buffer space.
+                      ;
+                      ;         Monitor calls for terminal support
+                      ;
+                      OUTCH     EQU $D2C1         ; output one ASCII char. to term.
+                      INCH      EQU $D1DC         ; input one ASCII char. to term.
+                      TCR       EQU $D0F1         ; terminal return and line feed.
+                      ;
+                      ;    From DAREA downward to the top of the dictionary is free
+                      ;    space where the user's applications are compiled.
+                      ;
+                      ;    Boot up parameters. This area provides jump vectors
+                      ;    to Boot up  code, and parameters describing the system.
+                      ;
+                      ;
+                                *=*+2
+                      ;
+                                               ; User cold entry point
+                                               ; User cold entry point
+ 00000000 12              ENTER     NOP            ; Vector to COLD entry
+ 00000001 7E0002                    JMP COLD+2     ;
+*** Error 3: Undefined label
+ 00000004 12              REENTR    NOP            ; User Warm entry point
+ 00000005 7E0000                    JMP WARM       ; Vector to WARM entry
+*** Error 3: Undefined label
+ 00000008 0004                      FCW $0004    ; 6502 in radix-36
+ 0000000A 5ED2                      FCW $5ED2    ;
+ 0000000C 04E9                      FCW NTOP     ; Name address of MON
+ 0000000E 007F                      FCW $7F      ; Backspace Character
+ 00000010 3F80                      FCW UAREA    ; Initial User Area
+ 00000012 009E                      FCW TOS      ; Initial Top of Stack
+ 00000014 01FF                      FCW $1FF     ; Initial Top of Return Stack
+ 00000016 0100                      FCW TIBX     ; Initial terminal input buffer
+                      ;
+                      ;
+ 00000018 001F                      FCW 31       ; Initial name field width
+ 0000001A 0000                      FCW 0        ; 0=nod disk, 1=disk
+ 0000001C 04F3                      FCW TOP      ; Initial fence address
+ 0000001E 04F3                      FCW TOP      ; Initial top of dictionary
+ 00000020 0000                      FCW VL0      ; Initial Vocabulary link ptr.
+*** Error 3: Undefined label
+                      ;
+                      ;    The following offset adjusts all code fields to avoid an
+                      ;    address ending $XXFF. This must be checked and altered on
+                      ;    any alteration , for the indirect jump at W-1 to operate !
+                      ;
+ 00000022 4F5F                    CLRD
+ 00000024 DDAE                    STD             IP
+ 00000026 DDB0                    STD             IP+2
+ 00000028 0CAE                    INC             IP
+ 0000002A DDB2                    STD             W
+ 0000002C DDB4                    STD             W+2
+ 0000002E 318F0000                LEAY    0
+                      ;
+                      ;    The following offset adjusts all code fields to avoid an
+                      ;    address ending $XXFF. This must be checked and altered on
+                      ;    any alteration , for the indirect jump at W-1 to operate !
+                      ;
+                                .ORIGIN *+2
+                      ;
+                      ;
+                      ;                                       LIT
+                      ;                                       SCREEN 13 LINE 1
+                      ;
+                      L22       .BYTE $83,'LI',$D4            ; <--- name field
+                      ;                          <----- link field
+ 00000032 0000                      FCW 00                        ; last link marked by zero
+ 00000034 0036            LIT       FCW *+2                       ; <----- code address field
+ 00000036 15A6A900AE                LDA   FAR (IP),Y    ; <----- start of parameter field
+ 0000003B 3402                      PSH   A
+ 0000003D 3121                              LEAY  1,Y
+ 0000003F 2602                              BNE   LIT_0001
+ 00000041 0CAF                      INC   IP+1
+                      LIT_0001:
+ 00000043 15A6A900AE      L30       LDA   FAR (IP),Y
+ 00000048 3121            L31               LEAY  1,Y
+ 0000004A 2602                              BNE   L31_0001
+ 0000004C 0CAF                      INC   IP+1
+                      L31_0001:
+                      PUSH:
+ 0000004E 301C                    LEAX    -4,X
+                      PUT:
+ 00000050 ED02                    STD             2,X
+ 00000052 3706                    PULU    D
+ 00000054 ED84                    STD             ,X
+ 
+                      NEXT:
+ 00000056 15ECA900AE          LDD         FAR (IP),Y          ; Y is used as the low order 16 bits of IP
+ 0000005B 3122                LEAY        2,Y
+ 0000005D 26A1                BNE         .0001
+*** Error 1: Error in expression
+ 0000005F 0CAF                INC         IP+1                   ;IP+2,IP+3=00 64k bank aligned
+                      .0001:
+ 00000061 DDB3                STD         W+1                  ; set bits [23:8]
+ 00000063 156E9F00B2              JMP             FAR [W]
+ 
+                      ;    CLIT pushes the next inline byte to data stack
+                      ;
+                      L35       .BYTE $84,'CLI',$D4
+ 00000068 0032                      FCW L22      ; Link to LIT
+ 0000006A 006C            CLIT      FCW *+2
+ 0000006C 15A6A900AE                LDA   FAR (IP),Y
+ 00000071 3402                      PSH   A
+ 00000073 1F20                      TFR   Y,D
+ 00000075 20D1                      BRA   L31        ; a forced branch into LIT
+ 
+                      ;
+                      ;
+                      ;    This is a temporary trace routine, to be used until FORTH
+                      ;    is generally operating. Then NOP the terminal query
+                      ;    "JSR ONEKEY". This will allow user input to the text
+                      ;    interpreter. When crashes occur, the display shows IP, W,
+                      ;    and the word locations of the offending code. When all is
+                      ;    well, remove : TRACE, TCOLON, PRNAM, DECNP, and the
+                      ;    following monitor/register equates.
+                      ;
+                      ;
+                      ;
+                      ;    Monitor routines needed to trace.
+                      ;
+                      XBLANK    EQU $D0AF         ; print one blank
+                      CRLF      EQU $D0D2         ; print a carriage return and line feed.
+                      HEX2      EQU $D2CE         ; print accum as two hex numbers
+                      LETTER    EQU $D2C1         ; print accum as one ASCII character
+                      ONEKEY    EQU $D1DC         ; wait for keystroke
+                      XW        EQU $12           ; scratch reg. to next code field add
+                      NP        EQU $14           ; scratch reg. pointing to name field
+                      ;
+                      ;
+ 00000077 9FBA            TRACE     STX XSAVE
+ 00000079 CF0000D0D2                JSR FAR CRLF
+ 0000007E 96AF                      LDA IP+1
+ 00000080 CF0000D2CE                JSR FAR HEX2
+ 00000085 96B0                      LDA IP+2
+ 00000087 CF0000D2CE                JSR FAR HEX2
+ 0000008C 96B1                      LDA IP+3
+ 0000008E CF0000D2CE                JSR FAR HEX2       ; print IP, the interpreter pointer
+ 00000093 CF0000D0AF                JSR FAR XBLANK
+                      ;
+                      ;
+ 00000098 8600                      LDA #0
+ 0000009A 15A6A900AE                LDA FAR (IP),Y
+ 0000009F 9712                      STA XW
+ 000000A1 9714                      STA NP         ; fetch the next code field pointer
+ 000000A3 3121                      INY
+ 000000A5 2602                              BNE TRACE_1
+ 000000A7 0CAF                              INC IP+1
+                      TRACE_1:
+ 000000A9 15A6A900AE                LDA FAR (IP),Y
+ 000000AE 9713                      STA XW+1
+ 000000B0 9715                      STA NP+1
+ 000000B2 CF0000012A                JSR FAR PRNAM  ; print dictionary name
+                      ;
+ 000000B7 9612                      LDA XW
+ 000000B9 CF0000D2CE                JSR FAR HEX2   ; print code field address
+ 000000BE 9613                      LDA XW+1
+ 000000C0 CF0000D2CE                JSR FAR HEX2
+ 000000C5 8600                              LDA #0
+ 000000C7 CF0000D2CE                        JSR FAR HEX2
+ 000000CC CF0000D0AF                JSR FAR XBLANK
+                      ;
+ 000000D1 96BA                      LDA XSAVE      ; print stack location in zero-page
+ 000000D3 CF0000D2CE                JSR FAR HEX2
+ 000000D8 96BB                              LDA XSAVE+1
+ 000000DA CF0000D2CE                        JSR FAR HEX2
+ 000000DF CF0000D0AF                JSR FAR XBLANK
+                      ;
+ 000000E4 8601                      LDA #1         ; print return stack bottom in page 1
+ 000000E6 1F40                              TFR S,D
+ 000000E8 1E89                              EXG A,B
+ 000000EA CF0000D2CE                JSR FAR HEX2
+ 000000EF 1E89                              EXG A,B
+ 000000F1 CF0000D2CE                JSR FAR HEX2
+ 000000F6 CF0000D0AF                JSR FAR XBLANK
+                      ;
+ 000000FB CF0000D1DC                JSR FAR ONEKEY ; wait for operator keystroke
+ 00000100 9EBA                      LDX XSAVE      ; just to pinpoint early problems
+ 00000102 108E0000                  LDY #0
+ 00000106 39                        RTS
+                      ;
+                      ;    TCOLON is called from DOCOLON to label each point
+                      ;    where FORTH 'nests' one level.
+                      ;
+ 00000107 9FBA            TCOLON    STX XSAVE
+ 00000109 DCB2                      LDD W
+ 0000010B DD14                      STD NP         ; locate the name of the called word
+ 0000010D DCB4                      LDD W+2
+ 0000010F DD16                      STD NP+2
+ 00000111 CF0000D0D2                JSR FAR CRLF
+ 00000116 863A                      LDA #$3A       ; ':
+ 00000118 CF0000D2C1                JSR FAR LETTER
+ 0000011D CF0000D0AF                JSR FAR XBLANK
+ 00000122 CF0000012A                JSR FAR PRNAM
+ 00000127 9EBA                      LDX XSAVE
+ 00000129 39                        RTS
+                      ;
+                      ;    Print name by it's code field address in NP
+                      ;
+ 0000012A 109FBE          PRNAM     STY YSAVE
+ 0000012D 8D2A                              BSR DECNP
+ 0000012F 8D28                      BSR DECNP
+ 00000131 8D26                      BSR DECNP
+ 00000133 108E0000                  LDY #0
+ 00000137 8D20            PN1       BSR DECNP
+ 00000139 15A6A814                  LDA FAR (NP),Y     ; loop till D7 in name set
+ 0000013D 2AF8                      BPL PN1
+ 0000013F 3121            PN2       INY
+ 00000141 15A6A814                  LDA FAR (NP),Y
+ 00000145 CF0000D2C1                JSR FAR LETTER     ; print letters of name field
+ 0000014A 15A6A814                  LDA FAR (NP),Y
+ 0000014E 2AEF                      BPL PN2
+ 00000150 CF0000D0AF                JSR FAR XBLANK
+ 00000155 109EBE                    LDY YSAVE
+ 00000158 38                        RTF
+                      ;
+                      ;    Decrement name field pointer
+                      ;
+ 00000159 DC16            DECNP     LDD   NP+2
+ 0000015B 830001                    SUBD  #1
+ 0000015E 2503                              BCS   DECNP1
+ 00000160 DD16                              STD   NP+2
+ 00000162 39                                RTS
+                      DECNP1:
+ 00000163 DD16                              STD   NP+2
+ 00000165 DC14                              LDD   NP
+ 00000167 830001                            SUBD  #1
+ 0000016A DD14                              STD   NP
+ 0000016C 39                        RTS
+ 
+ 
+ 0000016D 109FBE          SETUP     STY YSAVE
+ 00000170 108E0000                          LDY #0
+ 00000174 48                                ASLA
+ 00000175 97A5                      STA N-1
+ 00000177 A684            L63       LDA 0,X
+ 00000179 A7A900A6                  STA N,Y
+ 0000017D 3001                      INX
+ 0000017F 3121                      INY
+ 00000181 109CA5                    CPY N-1
+ 00000184 26F1                      BNE L63
+ 00000186 109EBE                    LDY YSAVE
+ 00000189 39                        RTS
+                      ;
+                      ;                                       EXCECUTE
+                      ;                                       SCREEN 14 LINE 11
+                      ;
+ 0000018A 87455845435554  L75       FCB $87,"EXECUT",$C5
+ 00000191 C5
+ 00000192 0068                      FCW L35      ; link to CLIT
+ 00000194 0196            EXEC      FCW *+2
+ 00000196 EC81                      LDD   ,X++
+ 00000198 97B2                      STA   W
+ 0000019A EC81                      LDD   ,X++
+ 0000019C 97B4                      STA   W+2
+ 0000019E 156E9F00B2                JMP   FAR [W]    ; to JMP (W) in z-page
+                      ;
+                      ;                                       DUP
+                      ;                                       SCREEN 30 LINE 21
+                      ;
+                      L733      .BYTE $83,'DU',$D0
+ 000001A3 0000                      FCW L718     ; link to SWAP
+*** Error 3: Undefined label
+ 000001A5 01A7            DUP       FCW *+2
+ 000001A7 EC02                      LDD 2,X
+ 000001A9 3406                      PSH D
+ 000001AB EC84                      LDD 0,X
+ 000001AD 0E4E                      JMP PUSH
+ 
+                      ;
+                      ;                                       R/W
+                      ;                              Read or write one sector
+                      ;
+                      L3060     .BYTE $83,'R/',$D7
+ 000001AF 0000                      FCW L3050    ; link to -BCD
+*** Error 3: Undefined label
+ 000001B1 0000            RSLW      FCW DOCOL
+*** Error 3: Undefined label
+ 000001B3 00000034C4DA00            FCW ZEQU,LIT,$C4DA,CSTOR
+ 000001BA 00
+*** Error 3: Undefined label
+ 000001BB 000000000000              FCW SWAP,ZERO,STORE
+*** Error 3: Undefined label
+ 000001C1 00000000000000            FCW ZERO,OVER,GREAT,OVER
+ 000001C8 00
+*** Error 3: Undefined label
+ 000001C9 0034FFFF000000            FCW LIT,SECTL-1,GREAT,OR,CLIT
+ 000001D0 00006A
+*** Error 3: Undefined label
+                                .BYTE 6
+ 000001D3 0000                      FCW QERR
+*** Error 3: Undefined label
+ 000001D5 00000034000000            FCW ZERO,LIT,SECTR,USLAS,ONEP
+ 000001DC 000000
+*** Error 3: Undefined label
+ 000001DF 00000000006A              FCW SWAP,ZERO,CLIT
+*** Error 3: Undefined label
+                                .BYTE $12
+ 000001E5 00000000000000            FCW USLAS,DBCD,SWAP,ONEP
+ 000001EC 00
+*** Error 3: Undefined label
+ 000001ED 00000000006A              FCW DBCD,DDISC,CLIT
+*** Error 3: Undefined label
+                                .BYTE 8
+ 000001F3 0000                      FCW QERR
+*** Error 3: Undefined label
+ 000001F5 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;
+                      ;
+ 000001F7 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       '
+                      ;                                       SCREEN 72 LINE 2
+                      ;
+                      L3202     .BYTE $C1,$A7
+ 000001F9 01AF                      FCW L3060    ; link to R/W
+ 000001FB 0000            TICK      FCW DOCOL
+*** Error 3: Undefined label
+ 000001FD 0000                      FCW DFIND
+*** Error 3: Undefined label
+ 000001FF 0000                      FCW ZEQU
+*** Error 3: Undefined label
+ 00000201 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 00000203 0000                      FCW QERR
+*** Error 3: Undefined label
+ 00000205 0000                      FCW DROP
+*** Error 3: Undefined label
+ 00000207 0000                      FCW LITER
+*** Error 3: Undefined label
+ 00000209 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       FORGET
+                      ;                                       Altered from model
+                      ;                                       SCREEN 72 LINE 6
+                      ;
+                      L3217     .BYTE $86,'FORGE',$D4
+ 0000020B 01F9                      FCW L3202    ; link to ' TICK
+ 0000020D 0000            FORG      FCW DOCOL
+*** Error 3: Undefined label
+ 0000020F 01FB000001A5              FCW TICK,NFA,DUP
+*** Error 3: Undefined label
+ 00000215 00000000000000            FCW FENCE,AT,ULESS,CLIT
+ 0000021C 6A
+*** Error 3: Undefined label
+                                .BYTE $15
+ 0000021D 00000000000000            FCW QERR,TOR,VOCL,AT
+ 00000224 00
+*** Error 3: Undefined label
+ 00000225 000000000000    L3220     FCW R,OVER,ULESS
+*** Error 3: Undefined label
+ 0000022B 00000014                  FCW ZBRAN,L3225-*
+*** Error 3: Undefined label
+ 0000022F 00000000000001            FCW FORTH,DEFIN,AT,DUP
+ 00000236 A5
+*** Error 3: Undefined label
+ 00000237 00000000                  FCW VOCL,STORE
+*** Error 3: Undefined label
+ 0000023B 0000FFE8                  FCW BRAN,$FFFF-24+1 ; L3220-*
+*** Error 3: Undefined label
+ 0000023F 01A5006A        L3225     FCW DUP,CLIT
+                                .BYTE 4
+ 00000243 0000                      FCW SUB
+*** Error 3: Undefined label
+ 00000245 000000000000    L3228     FCW PFA,LFA,AT
+*** Error 3: Undefined label
+ 0000024B 01A500000000              FCW DUP,R,ULESS
+*** Error 3: Undefined label
+ 00000251 0000FFF2                  FCW ZBRAN,$FFFF-14+1 ; L3228-*
+*** Error 3: Undefined label
+ 00000255 00000000000000            FCW OVER,TWO,SUB,STORE
+ 0000025C 00
+*** Error 3: Undefined label
+ 0000025D 000000000000              FCW AT,DDUP,ZEQU
+*** Error 3: Undefined label
+ 00000263 0000FFD9                  FCW ZBRAN,$FFFF-39+1 ; L3225-*
+*** Error 3: Undefined label
+ 00000267 000000000000              FCW RFROM,DP,STORE
+*** Error 3: Undefined label
+ 0000026D 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       BACK
+                      ;                                       SCREEN 73 LINE 1
+                      ;
+                      L3250     .BYTE $84,'BAC',$CB
+ 0000026F 020B                      FCW L3217    ; link to FORGET
+ 00000271 0000            BACK      FCW DOCOL
+*** Error 3: Undefined label
+ 00000273 0000                      FCW HERE
+*** Error 3: Undefined label
+ 00000275 0000                      FCW SUB
+*** Error 3: Undefined label
+ 00000277 0000                      FCW COMMA
+*** Error 3: Undefined label
+ 00000279 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       BEGIN
+                      ;                                       SCREEN 73 LINE 3
+                      ;
+                      L3261     .BYTE $C5,'BEGI',$CE
+ 0000027B 026F                      FCW L3250    ; link to BACK
+ 0000027D 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 0000027F 0000                      FCW QCOMP
+*** Error 3: Undefined label
+ 00000281 0000                      FCW HERE
+*** Error 3: Undefined label
+ 00000283 0000                      FCW ONE
+*** Error 3: Undefined label
+ 00000285 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       ENDIF
+                      ;                                       SCREEN 73 LINE 5
+                      ;
+                      L3273     .BYTE $C5,'ENDI',$C6
+ 00000287 027B                      FCW L3261    ; link to BEGIN
+ 00000289 0000            ENDIF     FCW DOCOL
+*** Error 3: Undefined label
+ 0000028B 0000                      FCW QCOMP
+*** Error 3: Undefined label
+ 0000028D 0000                      FCW TWO
+*** Error 3: Undefined label
+ 0000028F 0000                      FCW QPAIR
+*** Error 3: Undefined label
+ 00000291 0000                      FCW HERE
+*** Error 3: Undefined label
+ 00000293 0000                      FCW OVER
+*** Error 3: Undefined label
+ 00000295 0000                      FCW SUB
+*** Error 3: Undefined label
+ 00000297 0000                      FCW SWAP
+*** Error 3: Undefined label
+ 00000299 0000                      FCW STORE
+*** Error 3: Undefined label
+ 0000029B 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       THEN
+                      ;                                       SCREEN 73 LINE 7
+                      ;
+                      L3290     .BYTE $C4,'THE',$CE
+ 0000029D 0287                      FCW L3273    ; link to ENDIF
+ 0000029F 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 000002A1 0289                      FCW ENDIF
+ 000002A3 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       DO
+                      ;                                       SCREEN 73 LINE 9
+                      ;
+                      L3300     .BYTE $C2,'D',$CF
+ 000002A5 029D                      FCW L3290    ; link to THEN
+ 000002A7 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 000002A9 0000                      FCW COMP
+*** Error 3: Undefined label
+ 000002AB 0000                      FCW PDO
+*** Error 3: Undefined label
+ 000002AD 0000                      FCW HERE
+*** Error 3: Undefined label
+ 000002AF 0000                      FCW THREE
+*** Error 3: Undefined label
+ 000002B1 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       LOOP
+                      ;                                       SCREEN 73 LINE 11
+                      ;
+                      ;
+                      L3313     .BYTE $C4,'LOO',$D0
+ 000002B3 02A5                      FCW L3300    ; link to DO
+ 000002B5 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 000002B7 0000                      FCW THREE
+*** Error 3: Undefined label
+ 000002B9 0000                      FCW QPAIR
+*** Error 3: Undefined label
+ 000002BB 0000                      FCW COMP
+*** Error 3: Undefined label
+ 000002BD 0000                      FCW PLOOP
+*** Error 3: Undefined label
+ 000002BF 0271                      FCW BACK
+ 000002C1 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       +LOOP
+                      ;                                       SCREEN 73 LINE 13
+                      ;
+                      L3327     .BYTE $C5,'+LOO',$D0
+ 000002C3 02B3                      FCW L3313    ; link to LOOP
+ 000002C5 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 000002C7 0000                      FCW THREE
+*** Error 3: Undefined label
+ 000002C9 0000                      FCW QPAIR
+*** Error 3: Undefined label
+ 000002CB 0000                      FCW COMP
+*** Error 3: Undefined label
+ 000002CD 0000                      FCW PPLOO
+*** Error 3: Undefined label
+ 000002CF 0271                      FCW BACK
+ 000002D1 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       UNTIL
+                      ;                                       SCREEN 73 LINE 15
+                      ;
+                      L3341     .BYTE $C5,'UNTI',$CC
+ 000002D3 02C3                      FCW L3327    ; link to +LOOP
+ 000002D5 0000            UNTIL     FCW DOCOL
+*** Error 3: Undefined label
+ 000002D7 0000                      FCW ONE
+*** Error 3: Undefined label
+ 000002D9 0000                      FCW QPAIR
+*** Error 3: Undefined label
+ 000002DB 0000                      FCW COMP
+*** Error 3: Undefined label
+ 000002DD 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 000002DF 0271                      FCW BACK
+ 000002E1 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       END
+                      ;                                       SCREEN 74 LINE 1
+                      ;
+                      L3355     .BYTE $C3,'EN',$C4
+ 000002E3 02D3                      FCW L3341    ; link to UNTIL
+ 000002E5 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 000002E7 02D5                      FCW UNTIL
+ 000002E9 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       AGAIN
+                      ;                                       SCREEN 74 LINE 3
+                      ;
+                      L3365     .BYTE $C5,'AGAI',$CE
+ 000002EB 02E3                      FCW L3355    ; link to END
+ 000002ED 0000            AGAIN     FCW DOCOL
+*** Error 3: Undefined label
+ 000002EF 0000                      FCW ONE
+*** Error 3: Undefined label
+ 000002F1 0000                      FCW QPAIR
+*** Error 3: Undefined label
+ 000002F3 0000                      FCW COMP
+*** Error 3: Undefined label
+ 000002F5 0000                      FCW BRAN
+*** Error 3: Undefined label
+ 000002F7 0271                      FCW BACK
+ 000002F9 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       REPEAT
+                      ;                                       SCREEN 74 LINE 5
+                      ;
+                      L3379     .BYTE $C6,'REPEA',$D4
+ 000002FB 02EB                      FCW L3365    ; link to AGAIN
+ 000002FD 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 000002FF 0000                      FCW TOR
+*** Error 3: Undefined label
+ 00000301 0000                      FCW TOR
+*** Error 3: Undefined label
+ 00000303 02ED                      FCW AGAIN
+ 00000305 0000                      FCW RFROM
+*** Error 3: Undefined label
+ 00000307 0000                      FCW RFROM
+*** Error 3: Undefined label
+ 00000309 0000                      FCW TWO
+*** Error 3: Undefined label
+ 0000030B 0000                      FCW SUB
+*** Error 3: Undefined label
+ 0000030D 0289                      FCW ENDIF
+ 0000030F 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       IF
+                      ;                                       SCREEN 74 LINE 8
+                      ;
+                      L3396     .BYTE $C2,'I',$C6
+ 00000311 02FB                      FCW L3379    ; link to REPEAT
+ 00000313 0000            IF        FCW DOCOL
+*** Error 3: Undefined label
+ 00000315 0000                      FCW COMP
+*** Error 3: Undefined label
+ 00000317 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 00000319 0000                      FCW HERE
+*** Error 3: Undefined label
+ 0000031B 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 0000031D 0000                      FCW COMMA
+*** Error 3: Undefined label
+ 0000031F 0000                      FCW TWO
+*** Error 3: Undefined label
+ 00000321 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       ELSE
+                      ;                                       SCREEN 74 LINE 10
+                      ;
+                      L3411     .BYTE $C4,'ELS',$C5
+ 00000323 0311                      FCW L3396    ; link to IF
+ 00000325 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 00000327 0000                      FCW TWO
+*** Error 3: Undefined label
+ 00000329 0000                      FCW QPAIR
+*** Error 3: Undefined label
+ 0000032B 0000                      FCW COMP
+*** Error 3: Undefined label
+ 0000032D 0000                      FCW BRAN
+*** Error 3: Undefined label
+ 0000032F 0000                      FCW HERE
+*** Error 3: Undefined label
+ 00000331 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 00000333 0000                      FCW COMMA
+*** Error 3: Undefined label
+ 00000335 0000                      FCW SWAP
+*** Error 3: Undefined label
+ 00000337 0000                      FCW TWO
+*** Error 3: Undefined label
+ 00000339 0289                      FCW ENDIF
+ 0000033B 0000                      FCW TWO
+*** Error 3: Undefined label
+ 0000033D 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       WHILE
+                      ;                                       SCREEN 74 LINE 13
+                      ;
+                      L3431     .BYTE $C5,'WHIL',$C5
+ 0000033F 0323                      FCW L3411    ; link to ELSE
+ 00000341 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 00000343 0313                      FCW IF
+ 00000345 0000                      FCW TWOP
+*** Error 3: Undefined label
+ 00000347 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       SPACES
+                      ;                                       SCREEN 75 LINE 1
+                      ;
+                      L3442     .BYTE $86,'SPACE',$D3
+ 00000349 033F                      FCW L3431    ; link to WHILE
+ 0000034B 0000            SPACS     FCW DOCOL
+*** Error 3: Undefined label
+ 0000034D 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 0000034F 0000                      FCW MAX
+*** Error 3: Undefined label
+ 00000351 0000                      FCW DDUP
+*** Error 3: Undefined label
+ 00000353 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 00000355 000C            L3449     FCW $0C      ; L3455-L3449
+ 00000357 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 00000359 0000                      FCW PDO
+*** Error 3: Undefined label
+ 0000035B 0000            L3452     FCW SPACE
+*** Error 3: Undefined label
+ 0000035D 0000                      FCW PLOOP
+*** Error 3: Undefined label
+ 0000035F FFFC            L3454     FCW $FFFC    ; L3452-L3454
+ 00000361 0000            L3455     FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       <#
+                      ;                                       SCREEN 75 LINE 3
+                      ;
+                      L3460     .BYTE $82,'<',$A3
+ 00000363 0349                      FCW L3442    ; link to SPACES
+ 00000365 0000            BDIGS     FCW DOCOL
+*** Error 3: Undefined label
+ 00000367 0000                      FCW PAD
+*** Error 3: Undefined label
+ 00000369 0000                      FCW HLD
+*** Error 3: Undefined label
+ 0000036B 0000                      FCW STORE
+*** Error 3: Undefined label
+ 0000036D 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       #>
+                      ;                                       SCREEN 75 LINE 5
+                      ;
+                      L3471     .BYTE $82,'#',$BE
+ 0000036F 0363                      FCW L3460    ; link to <#
+ 00000371 0000            EDIGS     FCW DOCOL
+*** Error 3: Undefined label
+ 00000373 0000                      FCW DROP
+*** Error 3: Undefined label
+ 00000375 0000                      FCW DROP
+*** Error 3: Undefined label
+ 00000377 0000                      FCW HLD
+*** Error 3: Undefined label
+ 00000379 0000                      FCW AT
+*** Error 3: Undefined label
+ 0000037B 0000                      FCW PAD
+*** Error 3: Undefined label
+ 0000037D 0000                      FCW OVER
+*** Error 3: Undefined label
+ 0000037F 0000                      FCW SUB
+*** Error 3: Undefined label
+ 00000381 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       SIGN
+                      ;                                       SCREEN 75 LINE 7
+                      ;
+                      L3486     .BYTE $84,'SIG',$CE
+ 00000383 036F                      FCW L3471    ; link to #>
+ 00000385 0000            SIGN      FCW DOCOL
+*** Error 3: Undefined label
+ 00000387 0000                      FCW ROT
+*** Error 3: Undefined label
+ 00000389 0000                      FCW ZLESS
+*** Error 3: Undefined label
+ 0000038B 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 0000038D 0007            L3492     FCW $7       ; L3496-L3492
+ 0000038F 006A                      FCW CLIT
+                                .BYTE $2D
+ 00000391 0000                      FCW HOLD
+*** Error 3: Undefined label
+ 00000393 0000            L3496     FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       #
+                      ;                                       SCREEN 75 LINE 9
+                      ;
+                      L3501     .BYTE $81,$A3
+ 00000395 0383                      FCW L3486    ; link to SIGN
+ 00000397 0000            DIG       FCW DOCOL
+*** Error 3: Undefined label
+ 00000399 0000                      FCW BASE
+*** Error 3: Undefined label
+ 0000039B 0000                      FCW AT
+*** Error 3: Undefined label
+ 0000039D 0000                      FCW MSMOD
+*** Error 3: Undefined label
+ 0000039F 0000                      FCW ROT
+*** Error 3: Undefined label
+ 000003A1 006A                      FCW CLIT
+                                .BYTE 9
+ 000003A3 0000                      FCW OVER
+*** Error 3: Undefined label
+ 000003A5 0000                      FCW LESS
+*** Error 3: Undefined label
+ 000003A7 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 000003A9 0007            L3513     FCW 7        ; L3517-L3513
+ 000003AB 006A                      FCW CLIT
+                                .BYTE 7
+ 000003AD 0000                      FCW PLUS
+*** Error 3: Undefined label
+ 000003AF 006A            L3517     FCW CLIT
+                                .BYTE $30
+ 000003B1 0000                      FCW PLUS
+*** Error 3: Undefined label
+ 000003B3 0000                      FCW HOLD
+*** Error 3: Undefined label
+ 000003B5 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       #S
+                      ;                                       SCREEN 75 LINE 12
+                      ;
+                      L3526     .BYTE $82,'#',$D3
+ 000003B7 0395                      FCW L3501    ; link to #
+ 000003B9 0000            DIGS      FCW DOCOL
+*** Error 3: Undefined label
+ 000003BB 0397            L3529     FCW DIG
+ 000003BD 0000                      FCW OVER
+*** Error 3: Undefined label
+ 000003BF 0000                      FCW OVER
+*** Error 3: Undefined label
+ 000003C1 0000                      FCW OR
+*** Error 3: Undefined label
+ 000003C3 0000                      FCW ZEQU
+*** Error 3: Undefined label
+ 000003C5 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 000003C7 FFF4            L3535     FCW $FFF4    ; L3529-L3535
+ 000003C9 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       D.R
+                      ;                                       SCREEN 76 LINE 1
+                      ;
+                      L3541     .BYTE $83,'D.',$D2
+ 000003CB 03B7                      FCW L3526    ; link to #S
+ 000003CD 0000            DDOTR     FCW DOCOL
+*** Error 3: Undefined label
+ 000003CF 0000                      FCW TOR
+*** Error 3: Undefined label
+ 000003D1 0000                      FCW SWAP
+*** Error 3: Undefined label
+ 000003D3 0000                      FCW OVER
+*** Error 3: Undefined label
+ 000003D5 0000                      FCW DABS
+*** Error 3: Undefined label
+ 000003D7 0365                      FCW BDIGS
+ 000003D9 03B9                      FCW DIGS
+ 000003DB 0385                      FCW SIGN
+ 000003DD 0371                      FCW EDIGS
+ 000003DF 0000                      FCW RFROM
+*** Error 3: Undefined label
+ 000003E1 0000                      FCW OVER
+*** Error 3: Undefined label
+ 000003E3 0000                      FCW SUB
+*** Error 3: Undefined label
+ 000003E5 034B                      FCW SPACS
+ 000003E7 0000                      FCW TYPE
+*** Error 3: Undefined label
+ 000003E9 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       D.
+                      ;                                       SCREEN 76 LINE 5
+                      ;
+                      L3562     .BYTE $82,'D',$AE
+ 000003EB 03CB                      FCW L3541    ; link to D.R
+ 000003ED 0000            DDOT      FCW DOCOL
+*** Error 3: Undefined label
+ 000003EF 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 000003F1 03CD                      FCW DDOTR
+ 000003F3 0000                      FCW SPACE
+*** Error 3: Undefined label
+ 000003F5 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       .R
+                      ;                                       SCREEN 76 LINE 7
+                      ;
+                      L3573     .BYTE $82,'.',$D2
+ 000003F7 03EB                      FCW L3562     ; link to D.
+ 000003F9 0000            DOTR      FCW DOCOL
+*** Error 3: Undefined label
+ 000003FB 0000                      FCW TOR
+*** Error 3: Undefined label
+ 000003FD 0000                      FCW STOD
+*** Error 3: Undefined label
+ 000003FF 0000                      FCW RFROM
+*** Error 3: Undefined label
+ 00000401 03CD                      FCW DDOTR
+ 00000403 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       .
+                      ;                                       SCREEN 76  LINE  9
+                      ;
+                      L3585     .BYTE $81,$AE
+ 00000405 03F7                      FCW L3573    ; link to .R
+ 00000407 0000            DOT       FCW DOCOL
+*** Error 3: Undefined label
+ 00000409 0000                      FCW STOD
+*** Error 3: Undefined label
+ 0000040B 03ED                      FCW DDOT
+ 0000040D 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       ?
+                      ;                                       SCREEN 76 LINE 11
+                      ;
+                      L3595     .BYTE $81,$BF
+ 0000040F 0405                      FCW L3585    ; link to .
+ 00000411 0000            QUES      FCW DOCOL
+*** Error 3: Undefined label
+ 00000413 0000                      FCW AT
+*** Error 3: Undefined label
+ 00000415 0407                      FCW DOT
+ 00000417 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       LIST
+                      ;                                       SCREEN 77 LINE 2
+                      ;
+                      L3605     .BYTE $84,'LIS',$D4
+ 00000419 040F                      FCW L3595    ; link to ?
+ 0000041B 0000            LIST      FCW DOCOL
+*** Error 3: Undefined label
+ 0000041D 0000                      FCW DECIM
+*** Error 3: Undefined label
+ 0000041F 0000                      FCW CR
+*** Error 3: Undefined label
+ 00000421 01A5                      FCW DUP
+ 00000423 0000                      FCW SCR
+*** Error 3: Undefined label
+ 00000425 0000                      FCW STORE
+*** Error 3: Undefined label
+ 00000427 0000                      FCW PDOTQ
+*** Error 3: Undefined label
+                                .BYTE 6,'SCR # '
+ 00000429 0407                      FCW DOT
+ 0000042B 006A                      FCW CLIT
+                                .BYTE 16
+ 0000042D 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 0000042F 0000                      FCW PDO
+*** Error 3: Undefined label
+ 00000431 0000            L3620     FCW CR
+*** Error 3: Undefined label
+ 00000433 0000                      FCW I
+*** Error 3: Undefined label
+ 00000435 0000                      FCW THREE
+*** Error 3: Undefined label
+ 00000437 03F9                      FCW DOTR
+ 00000439 0000                      FCW SPACE
+*** Error 3: Undefined label
+ 0000043B 0000                      FCW I
+*** Error 3: Undefined label
+ 0000043D 0000                      FCW SCR
+*** Error 3: Undefined label
+ 0000043F 0000                      FCW AT
+*** Error 3: Undefined label
+ 00000441 0000                      FCW DLINE
+*** Error 3: Undefined label
+ 00000443 0000                      FCW PLOOP
+*** Error 3: Undefined label
+ 00000445 FFEC            L3630     FCW $FFEC
+ 00000447 0000                      FCW CR
+*** Error 3: Undefined label
+ 00000449 0000                      FCW SEMIS;
+*** Error 3: Undefined label
+                      ;                                       INDEX
+                      ;                                       SCREEN 77 LINE 7
+                      ;
+                      L3637     .BYTE $85,'INDE',$D8
+ 0000044B 0419                      FCW L3605    ; link to LIST
+ 0000044D 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 0000044F 0000                      FCW CR
+*** Error 3: Undefined label
+ 00000451 0000                      FCW ONEP
+*** Error 3: Undefined label
+ 00000453 0000                      FCW SWAP
+*** Error 3: Undefined label
+ 00000455 0000                      FCW PDO
+*** Error 3: Undefined label
+ 00000457 0000            L3647     FCW CR
+*** Error 3: Undefined label
+ 00000459 0000                      FCW I
+*** Error 3: Undefined label
+ 0000045B 0000                      FCW THREE
+*** Error 3: Undefined label
+ 0000045D 03F9                      FCW DOTR
+ 0000045F 0000                      FCW SPACE
+*** Error 3: Undefined label
+ 00000461 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 00000463 0000                      FCW I
+*** Error 3: Undefined label
+ 00000465 0000                      FCW DLINE
+*** Error 3: Undefined label
+ 00000467 0000                      FCW QTERM
+*** Error 3: Undefined label
+ 00000469 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 0000046B 0004            L3657     FCW 4        ; L3659-L3657
+ 0000046D 0000                      FCW LEAVE
+*** Error 3: Undefined label
+ 0000046F 0000            L3659     FCW PLOOP
+*** Error 3: Undefined label
+ 00000471 FFE6            L3660     FCW $FFE6    ; L3647-L3660
+ 00000473 006A                      FCW CLIT
+                                .BYTE $0C      ; form feed for printer
+ 00000475 0000                      FCW EMIT
+*** Error 3: Undefined label
+ 00000477 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       TRIAD
+                      ;                                       SCREEN 77 LINE 12
+                      ;
+                      L3666     .BYTE $85,'TRIA',$C4
+ 00000479 044B                      FCW L3637    ; link to INDEX
+ 0000047B 0000                      FCW DOCOL
+*** Error 3: Undefined label
+ 0000047D 0000                      FCW THREE
+*** Error 3: Undefined label
+ 0000047F 0000                      FCW SLASH
+*** Error 3: Undefined label
+ 00000481 0000                      FCW THREE
+*** Error 3: Undefined label
+ 00000483 0000                      FCW STAR
+*** Error 3: Undefined label
+ 00000485 0000                      FCW THREE
+*** Error 3: Undefined label
+ 00000487 0000                      FCW OVER
+*** Error 3: Undefined label
+ 00000489 0000                      FCW PLUS
+*** Error 3: Undefined label
+ 0000048B 0000                      FCW SWAP
+*** Error 3: Undefined label
+ 0000048D 0000                      FCW PDO
+*** Error 3: Undefined label
+ 0000048F 0000            L3681     FCW CR
+*** Error 3: Undefined label
+ 00000491 0000                      FCW I
+*** Error 3: Undefined label
+ 00000493 041B                      FCW LIST
+ 00000495 0000                      FCW PLOOP
+*** Error 3: Undefined label
+ 00000497 FFF8            L3685     FCW $FFF8    ; L3681-L3685
+ 00000499 0000                      FCW CR
+*** Error 3: Undefined label
+ 0000049B 006A                      FCW CLIT
+                                .BYTE $F
+ 0000049D 0000                      FCW MESS
+*** Error 3: Undefined label
+ 0000049F 0000                      FCW CR
+*** Error 3: Undefined label
+ 000004A1 006A                      FCW CLIT
+                                .BYTE $0C      ;  form feed for printer
+ 000004A3 0000                      FCW EMIT
+*** Error 3: Undefined label
+ 000004A5 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       VLIST
+                      ;                                       SCREEN 78 LINE 2
+                      ;
+                      ;
+                      L3696     .BYTE $85,'VLIS',$D4
+ 000004A7 0479                      FCW L3666    ; link to TRIAD
+ 000004A9 0000            VLIST     FCW DOCOL
+*** Error 3: Undefined label
+ 000004AB 006A                      FCW CLIT
+                                .BYTE $80
+ 000004AD 0000                      FCW OUT
+*** Error 3: Undefined label
+ 000004AF 0000                      FCW STORE
+*** Error 3: Undefined label
+ 000004B1 0005                      FCW CON
+*** Error 1: Error in expression
+ 000004B3 0000                      FCW AT
+*** Error 3: Undefined label
+ 000004B5 0000                      FCW AT
+*** Error 3: Undefined label
+ 000004B7 0000            L3706     FCW OUT
+*** Error 3: Undefined label
+ 000004B9 0000                      FCW AT
+*** Error 3: Undefined label
+ 000004BB 0000                      FCW CSLL
+*** Error 3: Undefined label
+ 000004BD 0000                      FCW GREAT
+*** Error 3: Undefined label
+ 000004BF 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 000004C1 000A            L3711     FCW $A       ; L3716-L3711
+ 000004C3 0000                      FCW CR
+*** Error 3: Undefined label
+ 000004C5 0000                      FCW ZERO
+*** Error 3: Undefined label
+ 000004C7 0000                      FCW OUT
+*** Error 3: Undefined label
+ 000004C9 0000                      FCW STORE
+*** Error 3: Undefined label
+ 000004CB 01A5            L3716     FCW DUP
+ 000004CD 0000                      FCW IDDOT
+*** Error 3: Undefined label
+ 000004CF 0000                      FCW SPACE
+*** Error 3: Undefined label
+ 000004D1 0000                      FCW SPACE
+*** Error 3: Undefined label
+ 000004D3 0000                      FCW PFA
+*** Error 3: Undefined label
+ 000004D5 0000                      FCW LFA
+*** Error 3: Undefined label
+ 000004D7 0000                      FCW AT
+*** Error 3: Undefined label
+ 000004D9 01A5                      FCW DUP
+ 000004DB 0000                      FCW ZEQU
+*** Error 3: Undefined label
+ 000004DD 0000                      FCW QTERM
+*** Error 3: Undefined label
+ 000004DF 0000                      FCW OR
+*** Error 3: Undefined label
+ 000004E1 0000                      FCW ZBRAN
+*** Error 3: Undefined label
+ 000004E3 FFD4            L3728     FCW $FFD4    ; L3706-L3728
+ 000004E5 0000                      FCW DROP
+*** Error 3: Undefined label
+ 000004E7 0000                      FCW SEMIS
+*** Error 3: Undefined label
+                      ;
+                      ;                                       MON
+                      ;                                       SCREEN 79 LINE 3
+                      ;
+                      NTOP      .BYTE $83,'MO',$CE
+ 000004E9 04A7                      FCW L3696    ; link to VLIST
+ 000004EB 04ED            MON       FCW *+2
+ 000004ED 9FBA                      STX XSAVE
+                                BRK       ; break to monitor which is assumed
+*** Error 16: Illegal mnemonic
+ 000004EF 9EBA                      LDX XSAVE ; to save this as reentry point
+ 000004F1 0E56                      JMP NEXT
+                      ;
+                      TOP       .END           ; end of listing
+
+287 error(s) in pass 2.
+
+SYMBOL TABLE
+     AGAIN 02 02ED        AT 06 0000      BACK 02 0271      BASE 06 0000
+     BDIGS 02 0365      BMAG 06 0000       BOS 00 0020      BRAN 06 0000
+      CLIT 02 006A      COLD 06 0000     COMMA 06 0000      COMP 06 0000
+        CR 06 0000      CRLF 00 D0D2      CSLL 06 0000     CSTOR 06 0000
+      DABS 06 0000     DAREA 00 3F80      DBCD 06 0000     DDISC 06 0000
+      DDOT 02 03ED     DDOTR 02 03CD      DDUP 06 0000     DECIM 06 0000
+     DECNP 02 0159    DECNP1 02 0163     DEFIN 06 0000     DFIND 06 0000
+       DIG 02 0397      DIGS 02 03B9     DLINE 06 0000     DOCOL 06 0000
+       DOT 02 0407      DOTR 02 03F9        DP 06 0000      DROP 06 0000
+       DUP 02 01A5     EDIGS 02 0371      EMIT 06 0000     ENDIF 02 0289
+     ENTER 02 0000      EXEC 02 0194     FENCE 06 0000      FORG 02 020D
+     FORTH 06 0000     GREAT 06 0000      HERE 06 0000      HEX2 00 D2CE
+       HLD 06 0000      HOLD 06 0000         I 06 0000     IDDOT 06 0000
+        IF 02 0313      INCH 00 D1DC        IP 00 00AE       L22 02 0032
+       L30 02 0043     L3050 06 0000     L3060 02 01AF       L31 02 0048
+  L31_0001 02 004E     L3202 02 01F9     L3217 02 020B     L3220 02 0225
+     L3225 02 023F     L3228 02 0245     L3250 02 026F     L3261 02 027B
+     L3273 02 0287     L3290 02 029D     L3300 02 02A5     L3313 02 02B3
+     L3327 02 02C3     L3341 02 02D3     L3355 02 02E3     L3365 02 02EB
+     L3379 02 02FB     L3396 02 0311     L3411 02 0323     L3431 02 033F
+     L3442 02 0349     L3449 02 0355     L3452 02 035B     L3454 02 035F
+     L3455 02 0361     L3460 02 0363     L3471 02 036F     L3486 02 0383
+     L3492 02 038D     L3496 02 0393       L35 02 0068     L3501 02 0395
+     L3513 02 03A9     L3517 02 03AF     L3526 02 03B7     L3529 02 03BB
+     L3535 02 03C7     L3541 02 03CB     L3562 02 03EB     L3573 02 03F7
+     L3585 02 0405     L3595 02 040F     L3605 02 0419     L3620 02 0431
+     L3630 02 0445     L3637 02 044B     L3647 02 0457     L3657 02 046B
+     L3659 02 046F     L3660 02 0471     L3666 02 0479     L3681 02 048F
+     L3685 02 0497     L3696 02 04A7     L3706 02 04B7     L3711 02 04C1
+     L3716 02 04CB     L3728 02 04E3       L63 02 0177      L718 06 0000
+      L733 02 01A3       L75 02 018A     LEAVE 06 0000      LESS 06 0000
+    LETTER 00 D2C1       LFA 06 0000      LIST 02 041B       LIT 02 0034
+     LITER 06 0000  LIT_0001 02 0043       MAX 06 0000       MEM 00 4000
+      MESS 06 0000       MON 02 04EB     MSMOD 06 0000         N 00 00A6
+      NEXT 02 0056       NFA 06 0000        NP 00 0014      NTOP 02 04E9
+       ONE 06 0000    ONEKEY 00 D1DC      ONEP 06 0000        OR 06 0000
+      ORIG 00 0200       OUT 06 0000     OUTCH 00 D2C1      OVER 06 0000
+       PAD 06 0000       PDO 06 0000     PDOTQ 06 0000       PFA 06 0000
+     PLOOP 06 0000      PLUS 06 0000       PN1 02 0137       PN2 02 013F
+     PPLOO 06 0000     PRNAM 02 012A      PUSH 02 004E       PUT 02 0050
+     QCOMP 06 0000      QERR 06 0000     QPAIR 06 0000     QTERM 06 0000
+      QUES 02 0411         R 06 0000    REENTR 02 0004     RFROM 06 0000
+       ROT 06 0000      RSLW 02 01B1       SCR 06 0000     SECTL 06 0000
+     SECTR 06 0000     SEMIS 06 0000     SETUP 02 016D      SIGN 02 0385
+     SLASH 06 0000     SPACE 06 0000     SPACS 02 034B      STAR 06 0000
+      STOD 06 0000     STORE 06 0000       SUB 06 0000      SWAP 06 0000
+    TCOLON 02 0107       TCR 00 D0F1     THREE 06 0000      TIBX 00 0100
+      TICK 02 01FB       TOP 02 04F3       TOR 06 0000       TOS 00 009E
+     TRACE 02 0077   TRACE_1 02 00A9       TWO 06 0000      TWOP 06 0000
+      TYPE 06 0000     UAREA 00 3F80     ULESS 06 0000     UNTIL 02 02D5
+        UP 00 00B6     USLAS 06 0000       VL0 06 0000     VLIST 02 04A9
+      VOCL 06 0000         W 00 00B2      WARM 06 0000    XBLANK 00 D0AF
+     XSAVE 00 00BA        XW 00 0012     YSAVE 00 00BE     ZBRAN 06 0000
+      ZEQU 06 0000      ZERO 06 0000     ZLESS 06 0000
+215 SYMBOLS
+
+326 error(s), 0 warning(s)
