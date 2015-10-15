@@ -1,4 +1,42 @@
-		.OPTION M68
+; Fig FORTH ported for the RTF6809
+;
+;                        Through the courtesy of
+;
+;                         FORTH INTEREST GROUP
+;                            P.O. BOX  2154
+;                         OAKLAND, CALIFORNIA
+;                                94621
+;
+;
+;                             Release 1.1
+;
+;                        with compiler security
+;                                  and
+;                        variable length names
+;
+;    Further distribution must include the above notice.
+;    The FIG installation Manual is required as it contains
+;    the model of FORTH and glossary of the system.
+;    Available from FIG at the above address for **.** postpaid.
+;
+;    Translated from the FIG model by W.F. Ragsdale with input-
+;    output given for the Rockwell System-65. Transportation to
+;    other systems requires only the alteration of :
+;                 XEMIT, XKEY, XQTER, XCR, AND RSLW
+;
+;    Equates giving memory assignments, machine
+;    registers, and disk parameters.
+;
+SSIZE     =512           ; sector size in bytes
+NBUF      =8             ; number of buffers desired in RAM
+;                             (SSIZE*NBUF >= 1024 bytes)
+SECTR     =800           ; sector per drive
+;                              forcing high drive to zero
+SECTL     =1600          ; sector limit for two drives
+;                              of 800 per drive.
+BMAG      =4128          ; total buffer magnitude, in bytes
+;                              expressed by SSIZE+4*NBUF
+;
 BOS       EQU $20           ; bottom of data stack, in zero-page.
 TOS       EQU $9E           ; top of data stack, in zero-page.
 N         EQU TOS+8         ; scratch workspace.
@@ -6,12 +44,13 @@ IP        EQU N+8           ; interpretive pointer.
 W         EQU IP+4          ; code field pointer.
 UP        EQU W+4           ; user area pointer.
 XSAVE     EQU UP+4          ; temporary for X register.
-YSAVE	  EQU XSAVE+4
+YSAVE	  EQU XSAVE+2
+USAVE		EQU	YSAVE+2
 ;
 TIBX      EQU $0100         ; terminal input buffer of 84 bytes.
-ORIG      EQU $0200         ; origin of FORTH's Dictionary.
-MEM       EQU $4000         ; top of assigned memory+1 byte.
-UAREA     EQU MEM-128       ; 128 bytes of user area
+ORIG      EQU $C000         ; origin of FORTH's Dictionary.
+MEM       EQU $C000         ; top of assigned memory+1 byte.
+UAREA     EQU MEM-256       ; 256 bytes of user area
 DAREA     EQU UAREA-BMAG    ; disk buffer space.
 ;
 ;         Monitor calls for terminal support
@@ -27,29 +66,30 @@ TCR       EQU $D0F1         ; terminal return and line feed.
 ;    to Boot up  code, and parameters describing the system.
 ;
 ;
-          *=*+2
+		  ORG $C000
+;          *=*+2
 ;
                          ; User cold entry point
                          ; User cold entry point
 ENTER     NOP            ; Vector to COLD entry
-          JMP FAR COLD+4     ;
+          JMP COLD+4     ;
 REENTR    NOP            ; User Warm entry point
           JMP WARM       ; Vector to WARM entry
-          FCW $0004    ; 6502 in radix-36
-          FCW $5ED2    ;
-          FCW NTOP     ; Name address of MON
-          FCW $7F      ; Backspace Character
-          FCW UAREA    ; Initial User Area
-          FCW TOS      ; Initial Top of Stack
-          FCW $1FF     ; Initial Top of Return Stack
-          FCW TIBX     ; Initial terminal input buffer
+          FCDW $0004    ; 6502 in radix-36
+          FCDW $5ED2    ;
+          FCDW NTOP     ; Name address of MON
+          FCDW $7F      ; Backspace Character
+          FCDW UAREA    ; Initial User Area
+          FCDW TOS      ; Initial Top of Stack
+          FCDW $1FF     ; Initial Top of Return Stack
+          FCDW TIBX     ; Initial terminal input buffer
 ;
 ;
-          FCW 31       ; Initial name field width
-          FCW 0        ; 0=nod disk, 1=disk
-          FCW TOP      ; Initial fence address
-          FCW TOP      ; Initial top of dictionary
-          FCW VL0      ; Initial Vocabulary link ptr.
+          FCDW 31       ; Initial name field width
+          FCDW 0        ; 0=nod disk, 1=disk
+          FCDW TOP      ; Initial fence address
+          FCDW TOP      ; Initial top of dictionary
+          FCDW VL0      ; Initial Vocabulary link ptr.
 ;
 ;    The following offset adjusts all code fields to avoid an
 ;    address ending $XXFF. This must be checked and altered on
@@ -77,12 +117,13 @@ L22       FCB $83,'LI',$D4            ; <--- name field
 ;                          <----- link field
           FCDW 00			; last link marked by zero
 LIT       FCDW *+4			; <----- code address field
-          LDB	FAR (IP)    ; <----- start of parameter field
-		  CLRA
+          LDD	FAR (IP)    ; <----- start of parameter field
           PSHS	D
-		  JSR	INC_IP
-L30       LDA	FAR (IP)
-L31		  JSR	INC_IP
+		  BSR	INC_IP
+		  BSR	INC_IP
+L30       LDD	FAR (IP)
+		  BSR	INC_IP
+L31		  BSR	INC_IP
 PUSH	  LEAU	-4,U
 PUT		  STD	2,U
 		  PULS	D
@@ -93,7 +134,7 @@ NEXT      LDD	FAR (IP)
 		  LDY	#2
 		  LDD	FAR (IP),Y
 		  STD	W+2
-		  LDD	IP+2
+		  LDD	IP+2		; inline increment IP by 4
 		  ADDD	#4
 		  STD	IP+2
 		  LDD	IP
@@ -101,17 +142,34 @@ NEXT      LDD	FAR (IP)
 		  ADCA	#0
 		  STD	IP
 		  JMP	FAR [W]
+
+; Increment IP by 1
+; Most of the time only the LSB of the IP needs to be incremented, so avoid a 
+; carry chain adder.
+
+INC_IP	  INC  IP+3
+		  BNE  INC_IP_1
+		  INC  IP+2
+		  BNE  INC_IP_1
+		  INC  IP+1
+		  BNE  INC_IP_1
+		  INC  IP
+INC_IP_1  RTS
 	
+; Increment IP by 2
+
+INC2_IP	  BSR	INC_IP
+		  BRA	INC_IP
+
 ;    CLIT pushes the next inline byte to data stack
 ;
 L35       FCB $84,'CLI',$D4
           FCDW L22      ; Link to LIT
 CLIT      FCDW *+4
-          LDA	FAR (IP),Y
-          PSHS	A
-          TFR	Y,D
+		  CLRD
+		  PSHS	D
+          LDB	FAR (IP)
           BRA	L31        ; a forced branch into LIT
-
 ;
 ;
 ;    This is a temporary trace routine, to be used until FORTH
@@ -262,19 +320,13 @@ EXEC      FCDW *+4
 ;
 L89       FCB $86,"BRANC",$C8
           FCW L75      ; link to EXCECUTE
-BRAN      FCW *+2
+BRAN      FCDW *+4
 BRAN_4:
 		  LDD	FAR (IP),Y
 		  PSHU	D
-		  LEAY  2,Y
-		  BNE	BRAN_1
-		  INC	IP+1
-BRAN_1:
+		  JSR	INC2_IP
 		  LDD	FAR (IP),Y
-		  LEAY  2,Y
-		  BNE	BRAN_2
-		  INC	IP+1
-BRAN_2:
+		  JSR	INC2_IP
 		  ADDD  IP+2
 		  STD	IP+2
 		  BCC  	BRAN_3
@@ -299,9 +351,13 @@ ZBRAN     FCDW *+4
 		  CMPX	#0
           BEQ	BRAN_4
 ;
-BUMP      LEAY	4,Y
-		  BNE	L122
-		  INC	IP+1
+BUMP      LDD	IP+2
+		  ADDD  #4
+		  STD	IP+2
+		  LDD	IP
+		  ADCB	#0
+		  ADCA	#0
+		  STD	IP
 L122	  JMP	NEXT
 ;
 ;                                       (LOOP)
@@ -310,44 +366,42 @@ L122	  JMP	NEXT
 L127      FCB $86,"(LOOP",$A9
           FCDW L107     ; link to 0BRANCH
 PLOOP     FCDW L130
-L130      STX  XSAVE
-          TSX
-          INC $101,X
-          BNE PL1
-          INC $102,X
+L130      LDD	2,S		; Increment LOOP var
+		  ADDD	#1
+		  STD	2,S
+		  LDD	,S
+		  ADCB	#0
+		  ADCA	#0
+		  STD	,S
 ;
-PL1       CLC
-          LDA $103,X
-          SBC $101,X
-          LDA $104,X
-          SBC $102,X
+PL1       LDD	6,S		; compare LOOP var to limit
+		  SUBD  2,S
+		  LDD	4,S
+		  SBCB	1,S
+		  SBCA	0,S
 ;
-PL2       LDX XSAVE
-          ASL A
-          BCC BRAN+2
-          PLA
-          PLA
-          PLA
-          PLA
-          JMP BUMP
+PL2       ASL	A
+          BCC	BRAN+4
+		  LEAS	8,S		; LOOP finished, pop stacked info
+          JMP	BUMP
 
 ;
 ;                                       (DO)
 ;                                       SCREEN 17 LINE 2
 ;
 L185      FCB $84,"(DO",$A9
-          FCW L154     ; link to (+LOOP)
-PDO       FCW *+2
-		  LDD	6,X
-		  PSHU	D
-		  LDD	4,X
-		  PSHU	D
-		  LDD	2,X
-		  PSHU	D
-		  LDD	,X
-		  PSHU	D
+          FCDW L154     ; link to (+LOOP)
+PDO       FCDW *+4
+		  LDD	6,U
+		  PSHS	D
+		  LDD	4,U
+		  PSHS	D
+		  LDD	2,U
+		  PSHS	D
+		  LDD	,U
+		  PSHS	D
 ;
-POPTWO    LEAX	8,X
+POPTWO    LEAU	8,U
 		  JMP	NEXT
 ;
 ;
@@ -358,38 +412,36 @@ POP       LEAU	4,U
 ;                                       I
 ;                                       SCREEN 17 LINE 9
 ;
-L207      .BYTE $81,$C9
-          .WORD L185     ; link to (DO)
-I         .WORD R+2      ; share the code for R
+L207      FCB $81,$C9
+          FCDW L185     ; link to (DO)
+I         FCDW R+4      ; share the code for R
 ;
 ;                                       DIGIT
 ;                                       SCREEN 18 LINE 1
 ;
-L214      .BYTE $85,'DIGI',$D4
-          .WORD L207     ; link to I
-DIGIT     .WORD *+2
-          SEC
-          LDA 2,X
-          SBC #$30
-          BMI L234
-          CMP #$A
-          BMI L227
-          SEC
-          SBC #7
-          CMP #$A
-          BMI L234
-L227      CMP 0,X
-          BPL L234
-          STA 2,X
-          LDA #1
+L214      FCB $85,'DIGI',$D4
+          FCDW L207     ; link to I
+DIGIT     FCDW *+4
+          LDA	3,U
+          SUBA	#$30
+          BMI	L234
+          CMPA	#$A
+          BMI	L227
+          SUBA	#7
+          CMP	#$A
+          BMI	L234
+L227      CMP	0,X
+          BPL	L234
+          STA	2,X
+          LDA	#1
           PHA
           TYA
-          JMP PUT        ; exit true with converted value
+          JMP	PUT        ; exit true with converted value
 L234      TYA
           PHA
           INX
           INX
-          JMP PUT        ; exit false with bad conversion
+          JMP	PUT        ; exit false with bad conversion
 ;
 ;                                       (FIND)
 ;                                       SCREEN 19 LINE 1
@@ -927,7 +979,7 @@ L813      FCB $82,"C",$A1
           FCDW L798     ; link to !
 CSTOR     FCDW *+4
           LDA	7,U
-          STA	(0,U)
+          STA	FAR (0,U)
           JMP	POPTWO
 ;
 ;                                       W!
@@ -937,7 +989,7 @@ L815      FCB $82,"W",$A1
           FCDW L813     ; link to C!
 WSTOR     FCDW *+4
           LDD	6,U
-          STD	(0,U)
+          STD	FAR (0,U)
           JMP	POPTWO
 ;
 ;                                       :
@@ -966,7 +1018,7 @@ DOCOL     LDD	IP+2
 		  LDD	W
 		  ADCB	#0
 		  ADCA	#0
-		  STD	W
+		  STD	IP
           JMP	NEXT
 ;
 ;                                       ;
@@ -1298,6 +1350,100 @@ L1162     FCB $83,"HL",$C4
           FCDW L1154    ; link to R#
 HLD       FCDW DOUSE
           FCB $30
+;
+;                                       1+
+;                                       SCREEN 38 LINE  1
+;
+L1170     FCB $82,"1",$AB
+          FCDW L1162    ; link to HLD
+ONEP      FCDW DOCOL
+          FCDW ONE
+          FCDW PLUS
+          FCDW SEMIS
+;
+;                                       2+
+;                                       SCREEN 38 LINE 2
+;
+L1180     FCB $82,"2",$AB
+          FCDW L1170    ; link to 1+
+TWOP      FCDW DOCOL
+          FCDW TWO
+          FCDW PLUS
+          FCDW SEMIS
+;
+;                                       HERE
+;                                       SCREEN 38 LINE 3
+;
+L1190     FCB $84,"HER",$C5
+          FCDW L1180    ; link to 2+
+HERE      FCDW DOCOL
+          FCDW DP
+          FCDW AT
+          FCDW SEMIS
+;
+;                                       ALLOT
+;                                       SCREEN 38 LINE 4
+;
+L1200     FCB $85,"ALLO",$D4
+          FCDW L1190    ; link to HERE
+ALLOT     FCDW DOCOL
+          FCDW DP
+          FCDW PSTOR
+          FCDW SEMIS
+;
+;                                       ,
+;                                       SCREEN 38 LINE 5
+;
+L1210     FCB $81,$AC
+          FCDW L1200    ; link to ALLOT
+COMMA     FCDW DOCOL
+          FCDW HERE
+          FCDW STORE
+          FCDW TWO
+          FCDW ALLOT
+          FCDW SEMIS
+;
+;                                       C,
+;                                       SCREEN 38 LINE 6
+;
+L1222     FCB $82,"C",$AC
+          FCDW L1210    ; link to ,
+CCOMM     FCDW DOCOL
+          FCDW HERE
+          FCDW CSTOR
+          FCDW ONE
+          FCDW ALLOT
+          FCDW SEMIS
+;
+;                                       -
+;                                       SCREEN 38 LINE 7
+;
+L1234     FCB $81,$AD
+          FCDW L1222    ; link to C,
+SUB       FCDW DOCOL
+          FCDW MINUS
+          FCDW PLUS
+          FCDW SEMIS
+;
+;                                       =
+;                                       SCREEN 38 LINE 8
+;
+L1244     FCB $81,$BD
+          FCDW L1234    ; link to -
+EQUAL     FCDW DOCOL
+          FCDW SUB
+          FCDW ZEQU
+          FCDW SEMIS
+;
+;                                       U<
+;                                       Unsigned less than
+;
+L1246     FCB $82,'U',$BC
+          FCDW L1244    ; link to =
+ULESS     FCDW DOCOL
+          FCDW SUB      ; subtract two values
+          FCDW ZLESS    ; test sign
+          FCDW SEMIS
 ;                                       <
 ;                                       Altered from model
 ;                                       SCREEN 38 LINE 9
@@ -1334,12 +1480,291 @@ GREAT     FCDW DOCOL
           FCDW LESS
           FCDW SEMIS
 ;
+;                                       ROT
+;                                       SCREEN 38 LINE 11
 ;
+L1274     FCB $83,'RO',$D4
+          FCDW L1264    ; link to >
+ROT       FCDW DOCOL
+          FCDW TOR
+          FCDW SWAP
+          FCDW RFROM
+          FCDW SWAP
+          FCDW SEMIS
+;
+;                                       SPACE
+;                                       SCREEN 38 LINE 12
+;
+L1286     FCB $85,"SPAC",$C5
+          FCDW L1274    ; link to ROT
+SPACE     FCDW DOCOL
+          FCDW BL
+          FCDW EMIT
+          FCDW SEMIS
+;
+;                                       -DUP
+;                                       SCREEN 38 LINE 13
+;
+L1296     FCB $84,"-DU",$D0
+          FCDW L1286    ; link to SPACE
+DDUP      FCDW DOCOL
+          FCDW DUP
+          FCDW ZBRAN
+L1301     FCDW $8       ; L1303-L1301
+          FCDW DUP
+L1303     FCDW SEMIS
+;
+;                                       TRAVERSE
+;                                       SCREEN 39 LINE 14
+;
+L1308     FCB $88,"TRAVERS",$C5
+          FCDW L1296    ; link to -DUP
+TRAV      FCDW DOCOL
+          FCDW SWAP
+L1312     FCDW OVER
+          FCDW PLUS
+          FCDW CLIT
+          FCB $7F
+          FCDW OVER
+          FCDW CAT
+          FCDW LESS
+          FCDW ZBRAN
+L1320     FCDW $FFFFFFE2    ; L1312-L1320
+          FCDW SWAP
+          FCDW DROP
+          FCDW SEMIS
+;
+;                                       LATEST
+;                                       SCREEN 39 LINE 6
+;
+L1328     FCB $86,"LATES",$D4
+          FCDW L1308    ; link to TRAVERSE
+LATES     FCDW DOCOL
+          FCDW CURR
+          FCDW AT
+          FCDW AT
+          FCDW SEMIS
+;
+;
+;                                       LFA
+;                                       SCREEN 39 LINE 11
+;
+L1339     FCB $83,"LF",$C1
+          FCDW L1328    ; link to LATEST
+LFA       FCDW DOCOL
+          FCDW CLIT
+          FCB 4
+          FCDW SUB
+          FCDW SEMIS
+;
+;                                       CFA
+;                                       SCREEN 39 LINE 12
+;
+L1350     FCB $83,"CF",$C1
+          FCDW L1339    ; link to LFA
+CFA       FCDW DOCOL
+          FCDW TWO
+          FCDW SUB
+          FCDW SEMIS
+;
+;                                       NFA
+;                                       SCREEN 39 LIINE 13
+;
+L1360     FCB $83,"NF",$C1
+          FCDW L1350    ; link to CFA
+NFA       FCDW DOCOL
+          FCDW CLIT
+          FCB $5
+          FCDW SUB
+          FCDW LIT,$FFFFFFFF
+          FCDW TRAV
+          FCDW SEMIS
+;
+;                                       PFA
+;                                       SCREEN 39 LINE 14
+;
+L1373     FCB $83,"PF",$C1
+          FCDW L1360    ; link to NFA
+PFA       FCDW DOCOL
+          FCDW ONE
+          FCDW TRAV
+          FCDW CLIT
+          FCB 5
+          FCDW PLUS
+          FCDW SEMIS
+;
+;                                       !CSP
+;                                       SCREEN 40 LINE 1
+;
+L1386     FCB $84,"!CS",$D0
+          FCDW L1373    ; link to PFA
+SCSP      FCDW DOCOL
+          FCDW SPAT
+          FCDW CSP
+          FCDW STORE
+          FCDW SEMIS
+;
+;                                       ?ERROR
+;                                       SCREEN 40 LINE 3
+;
+L1397     FCB $86,"?ERRO",$D2
+          FCDW L1386    ; link to !CSP
+QERR      FCDW DOCOL
+          FCDW SWAP
+          FCDW ZBRAN
+L1402     FCDW 16        ; L1406-L1402
+          FCDW ERROR
+          FCDW BRAN
+L1405     FCDW 8        ; L1407-L1405
+L1406     FCDW DROP
+L1407     FCDW SEMIS
+;
+;                                       ?COMP
+;                                       SCREEN 40 LINE 6
+;
+L1412     FCB $85,"?COM",$D0
+          FCDW L1397    ; link to ?ERROR
+QCOMP     FCDW DOCOL
+          FCDW STATE
+          FCDW AT
+          FCDW ZEQU
+          FCDW CLIT
+          FCB $11
+          FCDW QERR
+          FCDW SEMIS
+;
+;                                       ?EXEC
+;                                       SCREEN 40 LINE 8
+;
+L1426    FCB $85,"?EXE",$C3
+          FCDW L1412    ; link to ?COMP
+QEXEC     FCDW DOCOL
+          FCDW STATE
+          FCDW AT
+          FCDW CLIT
+          FCB $12
+          FCDW QERR
+          FCDW SEMIS
+;
+;                                       ?PAIRS
+;                                       SCREEN 40 LINE 10
+;
+L1439     FCB $86,"?PAIR",$D3
+          FCDW L1426    ; link to ?EXEC
+QPAIR     FCDW DOCOL
+          FCDW SUB
+          FCDW CLIT
+          FCB $13
+          FCDW QERR
+          FCDW SEMIS
+;
+;                                       ?CSP
+;                                       SCREEN 40 LINE 12
+;
+L1451     FCB $84,"?CS",$D0
+          FCDW L1439    ; link to ?PAIRS
+QCSP      FCDW DOCOL
+          FCDW SPAT
+          FCDW CSP
+          FCDW AT
+          FCDW SUB
+          FCDW CLIT
+          FCB $14
+          FCDW QERR
+          FCDW SEMIS
+;
+;                                       ?LOADING
+;                                       SCREEN 40 LINE 14
+;
+L1466     FCB $88,"?LOADIN",$C7
+          FCDW L1451    ; link to ?CSP
+QLOAD     FCDW DOCOL
+          FCDW BLK
+          FCDW AT
+          FCDW ZEQU
+          FCDW CLIT
+          FCB $16
+          FCDW QERR
+          FCDW SEMIS
+;
+;                                       COMPILE
+;                                       SCREEN 41 LINE 2
+;
+L1480     FCB $87,"COMPIL",$C5
+          FCDW L1466    ; link to ?LOADING
+COMP      FCDW DOCOL
+          FCDW QCOMP
+          FCDW RFROM
+          FCDW DUP
+          FCDW TWOP
+          FCDW TOR
+          FCDW AT
+          FCDW COMMA
+          FCDW SEMIS
+;
+;                                       [
+;                                       SCREEN 41 LINE 5
+;
+L1495     FCB $C1,$DB
+          FCDW L1480    ; link to COMPILE
+LBRAC     FCDW DOCOL
+          FCDW ZERO
+          FCDW STATE
+          FCDW STORE
+          FCDW SEMIS
+;
+;                                       ]
+;                                       SCREEN 41 LINE 7
+;
+L1507     FCB $81,$DD
+          FCDW L1495    ; link to [
+RBRAC     FCDW DOCOL
+          FCDW CLIT
+          FCB $C0
+          FCDW STATE
+          FCDW STORE
+          FCDW SEMIS
+;
+;                                       SMUDGE
+;                                       SCREEN 41 LINE 9
+;
+L1519     FCB $86,"SMUDG",$C5
+          FCDW L1507    ; link to ]
+SMUDG     FCDW DOCOL
+          FCDW LATES
+          FCDW CLIT
+          FCB $20
+          FCDW TOGGL
+          FCDW SEMIS
+;
+;                                       HEX
+;                                       SCREEN 41 LINE 11
+;
+L1531     FCB $83,"HE",$D8
+          FCDW L1519    ; link to SMUDGE
+HEX       FCDW DOCOL
+          FCDW CLIT
+          FCB 16
+          FCDW BASE
+          FCDW STORE
+          FCDW SEMIS
+;
+;                                       DECIMAL
+;                                       SCREEN 41 LINE 13
+;
+L1543     FCB $87,"DECIMA",$CC
+          FCDW L1531    ; link to HEX
+DECIM     FCDW DOCOL
+          FCDW CLIT
+          FCB 10
+          FCDW BASE
+          FCDW STORE
+          FCDW SEMIS
 ;
 ;                                       (;CODE)
 ;                                       SCREEN 42 LINE 2
 ;
-L1555     FCB $87,'(;CODE',$A9
+L1555     FCB $87,"(;CODE",$A9
           FCDW L1543    ; link to DECIMAL
 PSCOD     FCDW DOCOL
           FCDW RFROM
@@ -1349,27 +1774,328 @@ PSCOD     FCDW DOCOL
           FCDW STORE
           FCDW SEMIS
 ;
+;                                       ;CODE
+;                                       SCREEN 42 LINE 6
+;
+L1568     FCB $C5,";COD",$C5
+          FCDW L1555    ; link to (;CODE)
+          FCDW DOCOL
+          FCDW QCSP
+          FCDW COMP
+          FCDW PSCOD
+          FCDW LBRAC
+          FCDW SMUDG
+          FCDW SEMIS
+;
+;                                       <BUILDS
+;                                       SCREEN 43 LINE 2
+;
+L1582     FCB $87,"<BUILD",$D3
+          FCDW L1568    ; link to ;CODE
+BUILD     FCDW DOCOL
+          FCDW ZERO
+          FCDW CONST
+          FCDW SEMIS
+;
+;                                       DOES>
+;                                       SCREEN 43 LINE 4
+;
+L1592     FCB $85,"DOES",$BE
+          FCDW L1582    ; link to <BUILDS
+DOES      FCDW DOCOL
+          FCDW RFROM
+          FCDW LATES
+          FCDW PFA
+          FCDW STORE
+          FCDW PSCOD
+;
+DODOE     LDD	IP+2	; X and D in right order ???
+		  LDX	IP
+		  PSHS	D,X
+		  LDY	#4
+		  LDD	FAR (W),Y
+		  STD	IP
+		  LEAY	2,Y
+		  LDD	FAR (W),Y
+		  STD	IP+2
+		  LDD	W+2
+		  ADDD	#4
+		  TFR	D,X
+		  LDD	W
+		  ADCB	#0
+		  ADCA	#0
+		  PSHS	D
+		  TFR	X,D
+		  JMP	PUSH
+;
+;                                       COUNT
+;                                       SCREEN 44 LINE 1
+;
+L1622     FCB $85,"COUN",$D4
+          FCDW L1592    ; link to DOES>
+COUNT     FCDW DOCOL
+          FCDW DUP
+          FCDW ONEP
+          FCDW SWAP
+          FCDW CAT
+          FCDW SEMIS
+;
+;                                       TYPE
+;                                       SCREEN 44 LINE 2
+;
+L1634     FCB $84,"TYP",$C5
+          FCDW L1622    ; link to COUNT
+TYPE      FCDW DOCOL
+          FCDW DDUP
+          FCDW ZBRAN
+L1639     FCDW $30      ; L1651-L1639
+          FCDW OVER
+          FCDW PLUS
+          FCDW SWAP
+          FCDW PDO
+L1644     FCDW I
+          FCDW CAT
+          FCDW EMIT
+          FCDW PLOOP
+L1648     FCDW $FFFFFFF0    ; L1644-L1648
+          FCDW BRAN
+L1650     FCDW $8       ; L1652-L1650
+L1651     FCDW DROP
+L1652     FCDW SEMIS
+;
+;                                       -TRAILING
+;                                       SCREEN 44 LINE 5
+;
+L1657     FCB $89,"-TRAILIN",$C7
+          FCDW L1634    ; link to TYPE
+DTRAI     FCDW DOCOL
+          FCDW DUP
+          FCDW ZERO
+          FCDW PDO
+L1663     FCDW OVER
+          FCDW OVER
+          FCDW PLUS
+          FCDW ONE
+          FCDW SUB
+          FCDW CAT
+          FCDW BL
+          FCDW SUB
+          FCDW ZBRAN
+L1672     FCDW 16        ; L1676-L1672
+          FCDW LEAVE
+          FCDW BRAN
+L1675     FCDW 12        ; L1678-L1675
+L1676     FCDW ONE
+          FCDW SUB
+L1678     FCDW PLOOP
+L1679     FCDW $FFFFFFC0    ; L1663-L1679
+          FCDW SEMIS
+;
+;                                       (.")
+;                                       SCREEN 44 LINE 8
+L1685     FCB $84,"(.\"",$A9
+          FCDW L1657    ; link to -TRAILING
+PDOTQ     FCDW DOCOL
+          FCDW R
+          FCDW COUNT
+          FCDW DUP
+          FCDW ONEP
+          FCDW RFROM
+          FCDW PLUS
+          FCDW TOR
+          FCDW TYPE
+          FCDW SEMIS
+;
+;                                       ."
+;                                       SCREEN 44 LINE12
+;
+L1701     FCB $C2,".",$A2
+          FCDW L1685    ; link to PDOTQ
+          FCDW DOCOL
+          FCDW CLIT
+          FCB $22
+          FCDW STATE
+          FCDW AT
+          FCDW ZBRAN
+L1709     FCDW $28      ;L1719-L1709
+          FCDW COMP
+          FCDW PDOTQ
+          FCDW WORD
+          FCDW HERE
+          FCDW CAT
+          FCDW ONEP
+          FCDW ALLOT
+          FCDW BRAN
+L1718     FCDW $14       ;L1723-L1718
+L1719     FCDW WORD
+          FCDW HERE
+          FCDW COUNT
+          FCDW TYPE
+L1723     FCDW SEMIS
+;
+;                                       EXPECT
+;                                       SCREEN 45 LINE 2
+;
+L1729     FCB $86,"EXPEC",$D4
+          FCDW L1701    ; link to ."
+EXPEC     FCDW DOCOL
+          FCDW OVER
+          FCDW PLUS
+          FCDW OVER
+          FCDW PDO
+L1736     FCDW KEY
+          FCDW DUP
+          FCDW CLIT
+          FCB $E
+          FCDW PORIG
+          FCDW AT
+          FCDW EQUAL
+          FCDW ZBRAN
+L1744     FCDW $3E       ; L1760-L1744
+          FCDW DROP
+          FCDW CLIT
+          FCB 08
+          FCDW OVER
+          FCDW I
+          FCDW EQUAL
+          FCDW DUP
+          FCDW RFROM
+          FCDW TWO
+          FCDW SUB
+          FCDW PLUS
+          FCDW TOR
+          FCDW SUB
+          FCDW BRAN
+L1759     FCDW $4E       ; L1779-L1759
+L1760     FCDW DUP
+          FCDW CLIT
+          FCB $0D
+          FCDW EQUAL
+          FCDW ZBRAN
+L1765     FCDW $1C       ; L1772-L1765
+          FCDW LEAVE
+          FCDW DROP
+          FCDW BL
+          FCDW ZERO
+          FCDW BRAN
+L1771     FCDW 8        ; L1773-L1771
+L1772     FCDW DUP
+L1773     FCDW I
+          FCDW CSTOR
+          FCDW ZERO
+          FCDW I
+          FCDW ONEP
+          FCDW STORE
+L1779     FCDW EMIT
+          FCDW PLOOP
+L1781     FCDW $FFFFFF52
+          FCDW DROP      ; L1736-L1781
+          FCDW SEMIS
+;
+;                                       QUERY
+;                                       SCREEN 45 LINE 9
+;
+L1788     FCB $85,"QUER",$D9
+          FCDW L1729    ; link to EXPECT
+QUERY     FCDW DOCOL
+          FCDW TIB
+          FCDW AT
+          FCDW CLIT
+          FCB 80       ; 80 characters from terminal
+          FCDW EXPEC
+          FCDW ZERO
+          FCDW IN
+          FCDW STORE
+          FCDW SEMIS
+;
+;                                       X
+;                                       SCREEN 45 LINE 11
+;                                       Actually Ascii Null
+;
+L1804     FCB $C1,$80
+          FCDW L1788    ; link to QUERY
+          FCDW DOCOL
+          FCDW BLK
+          FCDW AT
+          FCDW ZBRAN
+L1810     FCDW $54      ; L1830-l1810
+          FCDW ONE
+          FCDW BLK
+          FCDW PSTOR
+          FCDW ZERO
+          FCDW IN
+          FCDW STORE
+          FCDW BLK
+          FCDW AT
+          FCDW ZERO,BSCR
+          FCDW USLAS
+          FCDW DROP     ; fixed from model
+          FCDW ZEQU
+          FCDW ZBRAN
+L1824     FCDW 16        ; L1828-L1824
+          FCDW QEXEC
+          FCDW RFROM
+          FCDW DROP
+L1828     FCDW BRAN
+L1829     FCDW 12        ; L1832-L1829
+L1830     FCDW RFROM
+          FCDW DROP
+L1832     FCDW SEMIS
+;
+;                                       FILL
+;                                       SCREEN 46 LINE 1
+;
+;
+L1838     FCB $84,"FIL",$CC
+          FCDW L1804    ; link to X
+FILL      FCDW DOCOL
+          FCDW SWAP
+          FCDW TOR
+          FCDW OVER
+          FCDW CSTOR
+          FCDW DUP
+          FCDW ONEP
+          FCDW RFROM
+          FCDW ONE
+          FCDW SUB
+          FCDW CMOVE
+          FCDW SEMIS
+;
+;                                       FORTH
+;                                       SCREEN 53 LINE 9
+;
+L2346     FCB $C5,"FORT",$C8
+          FCDW L2321    ; link to VOCABULARY
+FORTH     FCDW DODOE
+          FCDW DOVOC
+          FCDW $A081
+XFOR      FCDW NTOP     ; points to top name in FORTH
+VL0       FCDW 0        ; last vocab link ends at zero
+;
 ;                                       COLD
 ;                                       SCREEN 55 LINE 1
 ;
 L2423     FCB $84,"COL",$C4
           FCDW L2406    ; link to ABORT
-COLD      FDCW *+4
-          LDA ORIG+$0C   ; from cold start area
-          STA FORTH+6
-          LDA ORIG+$0D
-          STA FORTH+7
-          LDY #$15
+COLD      FCDW *+4
+          LDD ORIG+$10   ; from cold start area
+          STD FORTH+12
+          LDD ORIG+$12
+          STD FORTH+14
+
+          LDY #$2A
           BNE L2433
-WARM      LDY #$0F
-L2433     LDA ORIG+$10
-          STA UP
-          LDA ORIG+$11
-          STA UP+1
-L2437     LDA ORIG+$0C,Y
-          STA FAR (UP),Y
+WARM      LDY #$1E
+L2433     LDD ORIG+$18
+          STD UP
+          LDD ORIG+$1A
+          STD UP+2
+
+L2437     LDD ORIG+$10,Y
+          STD FAR (UP),Y
           DEY
-          BPL  L2437
+		  DEY
+          BPL L2437
           LDD #((ABORT+4)>>16) ; actually #>(ABORT+2)
           STD IP
           LDD #ABORT+4
@@ -1377,7 +2103,7 @@ L2437     LDA ORIG+$0C,Y
           CLD
 ;          LDA #$6C
 ;          STA W-1
-          JMP RPSTO+2    ; And off we go !
+          JMP RPSTO+4    ; And off we go !
 ;
 ;                                       R/W
 ;                              Read or write one sector
@@ -1407,44 +2133,44 @@ RSLW      FCDW DOCOL
 ;                                       '
 ;                                       SCREEN 72 LINE 2
 ;
-L3202     .BYTE $C1,$A7
-          FCW L3060    ; link to R/W
-TICK      FCW DOCOL
-          FCW DFIND
-          FCW ZEQU
-          FCW ZERO
-          FCW QERR
-          FCW DROP
-          FCW LITER
-          FCW SEMIS
+L3202     FCB $C1,$A7
+          FCDW L3060    ; link to R/W
+TICK      FCDW DOCOL
+          FCDW DFIND
+          FCDW ZEQU
+          FCDW ZERO
+          FCDW QERR
+          FCDW DROP
+          FCDW LITER
+          FCDW SEMIS
 ;
 ;                                       FORGET
 ;                                       Altered from model
 ;                                       SCREEN 72 LINE 6
 ;
-L3217     .BYTE $86,'FORGE',$D4
-          FCW L3202    ; link to ' TICK
-FORG      FCW DOCOL
-          FCW TICK,NFA,DUP
-          FCW FENCE,AT,ULESS,CLIT
-          .BYTE $15
-          FCW QERR,TOR,VOCL,AT
-L3220     FCW R,OVER,ULESS
-          FCW ZBRAN,L3225-*
-          FCW FORTH,DEFIN,AT,DUP
-          FCW VOCL,STORE
-          FCW BRAN,$FFFF-24+1 ; L3220-*
-L3225     FCW DUP,CLIT
-          .BYTE 4
-          FCW SUB
-L3228     FCW PFA,LFA,AT
-          FCW DUP,R,ULESS
-          FCW ZBRAN,$FFFF-14+1 ; L3228-*
-          FCW OVER,TWO,SUB,STORE
-          FCW AT,DDUP,ZEQU
-          FCW ZBRAN,$FFFF-39+1 ; L3225-*
-          FCW RFROM,DP,STORE
-          FCW SEMIS
+L3217     FCB $86,"FORGE",$D4
+          FCDW L3202    ; link to ' TICK
+FORG      FCDW DOCOL
+          FCDW TICK,NFA,DUP
+          FCDW FENCE,AT,ULESS,CLIT
+          FCB $15
+          FCDW QERR,TOR,VOCL,AT
+L3220     FCDW R,OVER,ULESS
+          FCDW ZBRAN,L3225-*
+          FCDW FORTH,DEFIN,AT,DUP
+          FCDW VOCL,STORE
+          FCDW BRAN,$FFFFFFFF-48+1 ; L3220-*
+L3225     FCDW DUP,CLIT
+          FCB 4
+          FCDW SUB
+L3228     FCDW PFA,LFA,AT
+          FCDW DUP,R,ULESS
+          FCDW ZBRAN,$FFFFFFFF-28+1 ; L3228-*
+          FCDW OVER,TWO,SUB,STORE
+          FCDW AT,DDUP,ZEQU
+          FCDW ZBRAN,$FFFFFFFF-78+1 ; L3225-*
+          FCDW RFROM,DP,STORE
+          FCDW SEMIS
 ;
 ;                                       BACK
 ;                                       SCREEN 73 LINE 1
@@ -1713,146 +2439,147 @@ L3517     FCW CLIT
 ;                                       #S
 ;                                       SCREEN 75 LINE 12
 ;
-L3526     .BYTE $82,'#',$D3
-          FCW L3501    ; link to #
-DIGS      FCW DOCOL
-L3529     FCW DIG
-          FCW OVER
-          FCW OVER
-          FCW OR
-          FCW ZEQU
-          FCW ZBRAN
-L3535     FCW $FFF4    ; L3529-L3535
-          FCW SEMIS
+L3526     FCB $82,"#",$D3
+          FCDW L3501    ; link to #
+DIGS      FCDW DOCOL
+L3529     FCDW DIG
+          FCDW OVER
+          FCDW OVER
+          FCDW OR
+          FCDW ZEQU
+          FCDW ZBRAN
+L3535     FCDW $FFFFFFE8    ; L3529-L3535
+          FCDW SEMIS
 ;
 ;                                       D.R
 ;                                       SCREEN 76 LINE 1
 ;
-L3541     .BYTE $83,'D.',$D2
-          FCW L3526    ; link to #S
-DDOTR     FCW DOCOL
-          FCW TOR
-          FCW SWAP
-          FCW OVER
-          FCW DABS
-          FCW BDIGS
-          FCW DIGS
-          FCW SIGN
-          FCW EDIGS
-          FCW RFROM
-          FCW OVER
-          FCW SUB
-          FCW SPACS
-          FCW TYPE
-          FCW SEMIS
+L3541     FCB $83,"D.",$D2
+          FCDW L3526    ; link to #S
+DDOTR     FCDW DOCOL
+          FCDW TOR
+          FCDW SWAP
+          FCDW OVER
+          FCDW DABS
+          FCDW BDIGS
+          FCDW DIGS
+          FCDW SIGN
+          FCDW EDIGS
+          FCDW RFROM
+          FCDW OVER
+          FCDW SUB
+          FCDW SPACS
+          FCDW TYPE
+          FCDW SEMIS
 ;
 ;                                       D.
 ;                                       SCREEN 76 LINE 5
 ;
-L3562     .BYTE $82,'D',$AE
-          FCW L3541    ; link to D.R
-DDOT      FCW DOCOL
-          FCW ZERO
-          FCW DDOTR
-          FCW SPACE
-          FCW SEMIS
+L3562     FCB $82,"D",$AE
+          FCDW L3541    ; link to D.R
+DDOT      FCDW DOCOL
+          FCDW ZERO
+          FCDW DDOTR
+          FCDW SPACE
+          FCDW SEMIS
 ;
 ;                                       .R
 ;                                       SCREEN 76 LINE 7
 ;
-L3573     .BYTE $82,'.',$D2
-          FCW L3562     ; link to D.
-DOTR      FCW DOCOL
-          FCW TOR
-          FCW STOD
-          FCW RFROM
-          FCW DDOTR
-          FCW SEMIS
+L3573     FCB $82,".",$D2
+          FCDW L3562     ; link to D.
+DOTR      FCDW DOCOL
+          FCDW TOR
+          FCDW STOD
+          FCDW RFROM
+          FCDW DDOTR
+          FCDW SEMIS
 ;
 ;                                       .
 ;                                       SCREEN 76  LINE  9
 ;
-L3585     .BYTE $81,$AE
-          FCW L3573    ; link to .R
-DOT       FCW DOCOL
-          FCW STOD
-          FCW DDOT
-          FCW SEMIS
+L3585     FCB $81,$AE
+          FCDW L3573    ; link to .R
+DOT       FCDW DOCOL
+          FCDW STOD
+          FCDW DDOT
+          FCDW SEMIS
 ;
 ;                                       ?
 ;                                       SCREEN 76 LINE 11
 ;
-L3595     .BYTE $81,$BF
-          FCW L3585    ; link to .
-QUES      FCW DOCOL
-          FCW AT
-          FCW DOT
-          FCW SEMIS
+L3595     FCB $81,$BF
+          FCDW L3585    ; link to .
+QUES      FCDW DOCOL
+          FCDW AT
+          FCDW DOT
+          FCDW SEMIS
 ;
 ;                                       LIST
 ;                                       SCREEN 77 LINE 2
 ;
-L3605     .BYTE $84,'LIS',$D4
-          FCW L3595    ; link to ?
-LIST      FCW DOCOL
-          FCW DECIM
-          FCW CR
-          FCW DUP
-          FCW SCR
-          FCW STORE
-          FCW PDOTQ
-          .BYTE 6,'SCR # '
-          FCW DOT
-          FCW CLIT
-          .BYTE 16
-          FCW ZERO
-          FCW PDO
-L3620     FCW CR
-          FCW I
-          FCW THREE
-          FCW DOTR
-          FCW SPACE
-          FCW I
-          FCW SCR
-          FCW AT
-          FCW DLINE
-          FCW PLOOP
-L3630     FCW $FFEC
-          FCW CR
-          FCW SEMIS;
+L3605     FCB $84,"LIS",$D4
+          FCDW L3595    ; link to ?
+LIST      FCDW DOCOL
+          FCDW DECIM
+          FCDW CR
+          FCDW DUP
+          FCDW SCR
+          FCDW STORE
+          FCDW PDOTQ
+          FCB 6,"SCR # "
+          FCDW DOT
+          FCDW CLIT
+          FCB 16
+          FCDW ZERO
+          FCDW PDO
+L3620     FCDW CR
+          FCDW I
+          FCDW THREE
+          FCDW DOTR
+          FCDW SPACE
+          FCDW I
+          FCDW SCR
+          FCDW AT
+          FCDW DLINE
+          FCDW PLOOP
+L3630     FCDW $FFFFFFD8
+          FCDW CR
+          FCDW SEMIS
+;
 ;                                       INDEX
 ;                                       SCREEN 77 LINE 7
 ;
-L3637     .BYTE $85,'INDE',$D8
-          FCW L3605    ; link to LIST
-          FCW DOCOL
-          FCW CR
-          FCW ONEP
-          FCW SWAP
-          FCW PDO
-L3647     FCW CR
-          FCW I
-          FCW THREE
-          FCW DOTR
-          FCW SPACE
-          FCW ZERO
-          FCW I
-          FCW DLINE
-          FCW QTERM
-          FCW ZBRAN
-L3657     FCW 4        ; L3659-L3657
-          FCW LEAVE
-L3659     FCW PLOOP
-L3660     FCW $FFE6    ; L3647-L3660
-          FCW CLIT
-          .BYTE $0C      ; form feed for printer
-          FCW EMIT
-          FCW SEMIS
+L3637     FCB $85,"INDE",$D8
+          FCDW L3605    ; link to LIST
+          FCDW DOCOL
+          FCDW CR
+          FCDW ONEP
+          FCDW SWAP
+          FCDW PDO
+L3647     FCDW CR
+          FCDW I
+          FCDW THREE
+          FCDW DOTR
+          FCDW SPACE
+          FCDW ZERO
+          FCDW I
+          FCDW DLINE
+          FCDW QTERM
+          FCDW ZBRAN
+L3657     FCDW 8        ; L3659-L3657
+          FCDW LEAVE
+L3659     FCDW PLOOP
+L3660     FCDW $FFFFFFCC    ; L3647-L3660
+          FCDW CLIT
+          FCB $0C      ; form feed for printer
+          FCDW EMIT
+          FCDW SEMIS
 ;
 ;                                       TRIAD
 ;                                       SCREEN 77 LINE 12
 ;
-L3666     FCB $85,'TRIA',$C4
+L3666     FCB $85,"TRIA",$C4
           FCDW L3637    ; link to INDEX
           FCDW DOCOL
           FCDW THREE
@@ -1883,7 +2610,7 @@ L3685     FCDW $FFFFFFF0    ; L3681-L3685
 ;                                       SCREEN 78 LINE 2
 ;
 ;
-L3696     FCB $85,'VLIS',$D4
+L3696     FCB $85,"VLIS",$D4
           FCDW L3666    ; link to TRIAD
 VLIST     FCDW DOCOL
           FCDW CLIT
@@ -1925,11 +2652,9 @@ L3728     FCDW $FFFFFFA8    ; L3706-L3728
 NTOP      FCB $83,"MO",$CE
           FCDW L3696    ; link to VLIST
 MON       FCDW *+4
-          STX XSAVE
-		  STY YSAVE
+          STU USAVE
           BRK       ; break to monitor which is assumed
-		  LDY YSAVE
-          LDX XSAVE ; to save this as reentry point
+          LDU USAVE ; to save this as reentry point
           JMP NEXT
 ;
 TOP       .END           ; end of listing
