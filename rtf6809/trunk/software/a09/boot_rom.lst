@@ -45,6 +45,7 @@
                       BlkcpySrc                       EQU             $1C
                       BlkcpyDst                       EQU             $20
                       Strptr                          EQU             $24
+                      PICptr                          EQU             $28
  
                       ; Task control blocks, room for 256 tasks
                       TCB_NxtRdy              EQU             $17EF8400       ; next task on ready / timeout list
@@ -84,6 +85,8 @@
                       TEXT_CURPOS     EQU             22
                       KEYBD           EQU             $FFDC0000
                       KEYBDCLR        EQU             $FFDC0002
+                      PIC                     EQU             $FFDC0F00
+ 
                       BIOS_SCREENS    EQU     $17000000       ; $17000000 to $171FFFFF
  
                       ; EhBASIC vars:
@@ -114,32 +117,119 @@
                       CursorFlash     EQU             $7C4
                       IRQFlag         EQU             $7C6
  
+                      CharOutVec      EQU             $800
+                      CharInVec       EQU             $804
+ 
+                      ; Register save area for monitor
+                      mon_DSAVE       EQU             $900
+                      mon_XSAVE       EQU             $902
+                      mon_YSAVE       EQU             $904
+                      mon_USAVE       EQU             $906
+                      mon_SSAVE       EQU             $908
+                      mon_PCSAVE      EQU             $90A
+                      mon_DPRSAVE     EQU             $90E
+                      mon_CCRSAVE     EQU             $90F
+ 
+                              org             $0000D0AF
+                      far XBLANK
+ 0000D0AF 8620                    lda             #' '
+ 0000D0B1 BDF621                  jsr             OUTCH
+ 0000D0B4 38                      rtf
+ 
+                              org             $0000D0D2
+                      far CRLF
+ 0000D0D2 860D                    lda             #CR
+ 0000D0D4 BDF621                  jsr             OUTCH
+ 0000D0D7 860A                    lda             #LF
+ 0000D0D9 BDF621                  jsr             OUTCH
+ 0000D0DC 38                      rtf
+ 
+                              org             $0000D1DC
+                      far ONEKEY
+ 0000D1DC 156E9F0804              jmp             far [CharInVec]
+ 
+                              org             $0000D2C1
+                      far LETTER
+ 0000D2C1 BDF621                  jsr             OUTCH
+ 0000D2C4 38                      rtf
+ 
+                              org             $0000D2CE
+                      far HEX2
+ 0000D2CE BDF5A6                  jsr             DispByteAsHex
+ 0000D2D1 38                      rtf
+                      far HEX4
+ 0000D2D2 BDF59D                  jsr             DispWordAsHex
+ 0000D2D5 38                      rtf
+ 
                               org             $0000F000
+ 0000F000 F669                    FDB MonitorNear
+ 0000F002 F0D3                    FDB DumRts      ;       NEXTCMD
+ 0000F004 F5ED                    FDB INCH
+ 0000F006 F606                    FDB INCHE
+ 0000F008 F60A                    FDB INCHEK
+ 0000F00A F621                    FDB OUTCH
+ 0000F00C F593                    FDB PDATA
+ 0000F00E F586                    FDB PCRLF
+ 0000F010 F582                    FDB PSTRNG
+ 0000F012 F0D3                    FDB DumRts                      ; LRA
+ 0000F014 F0D3                    FDB DumRts
+ 0000F016 F0D3                    FDB DumRts
+ 0000F018 F0D3                    FDB DumRts
+ 0000F01A F0D3                    FDB DumRts                      ; VINIZ
+ 0000F01C F519                    FDB DisplayCharNear     ;       VOUTCH
+ 0000F01E F0D3                    FDB DumRts                      ; ACINIZ
+ 0000F020 F0D3                    FDB DumRts                      ; AOUTCH
  
                       start:
- 0000F000 8601                    lda             #1
- 0000F002 15B7FFDC0600            sta             LEDS
- 0000F008 328F3FFF                leas    $3FFF
- 0000F00C 1CEF                    andcc   #$EF                    ; unmask irq
- 0000F00E CC00CE                  ldd             #$CE
- 0000F011 FD07C2                  std             ScreenColor
- 0000F014 FD07C0                  std             CharColor
- 0000F017 CF0000F179              jsr             ClearScreen
- 0000F01C BDF2E6                  jsr             HomeCursor
- 0000F01F CCF039                  ldd             #<msgStartup
- 0000F022 DD26                    std             Strptr+2
- 0000F024 CC0000                  ldd             #>msgStartup
- 0000F027 DD24                    std             Strptr
- 0000F029 8605                    lda             #5
- 0000F02B 15B7FFDC0600            sta             LEDS
- 0000F031 CF0000F4CE              jsr             DisplayString
- 0000F036 7EF545                  jmp             Monitor
+ 0000F022 8601                    lda             #1
+ 0000F024 15B7FFDC0600            sta             LEDS
+ 0000F02A 328F3FFF                leas    $3FFF
+ 
+                              ; initialize interrupt controller
+                              ; first, zero out all the vectors
+ 0000F02E 8E0040                  ldx             #64
+                      st1:
+ 0000F031 6F8AFFDC0F00            clr             PIC,x
+ 0000F037 3001                    leax    1,x
+ 0000F039 8C0080                  cmpx    #128
+ 0000F03C 25F3                    blo             st1
+                              ; set the irq routine vector
+ 0000F03E CC0000                  ldd             #>irq_rout
+ 0000F041 15FDFFDC0F48            std             PIC+72
+ 0000F047 CCF891                  ldd             #<irq_rout
+ 0000F04A 15FDFFDC0F4A            std             PIC+74
+ 0000F050 8604                    lda             #$04                    ; make the timer interrupt edge sensitive
+ 0000F052 15B7FFDC0F04            sta             PIC+4                   ; reg #4 is the edge sensitivity setting
+ 0000F058 15B7FFDC0F00            sta             PIC                             ; reg #0 is interrupt enable
+ 
+ 0000F05E 1CEF                    andcc   #$EF                    ; unmask irq
+ 0000F060 CC00CE                  ldd             #$CE
+ 0000F063 FD07C2                  std             ScreenColor
+ 0000F066 FD07C0                  std             CharColor
+ 0000F069 CF0000F1FA              jsr             ClearScreen
+ 0000F06E BDF367                  jsr             HomeCursor
+ 0000F071 CCF40C                  ldd             #DisplayChar
+ 0000F074 FD0802                  std             CharOutVec+2
+ 0000F077 CC0000                  ldd             #DisplayChar >> 16
+ 0000F07A FD0800                  std             CharOutVec
+ 0000F07D CCF658                  ldd             #KeybdGetCharDirectFar
+ 0000F080 FD0806                  std             CharInVec+2
+ 0000F083 CC0000                  ldd             #KeybdGetCharDirectFar >> 16
+ 0000F086 FD0804                  std             CharInVec
+ 0000F089 CCF0A3                  ldd             #<msgStartup
+ 0000F08C DD26                    std             Strptr+2
+ 0000F08E CC0000                  ldd             #>msgStartup
+ 0000F091 DD24                    std             Strptr
+ 0000F093 8605                    lda             #5
+ 0000F095 15B7FFDC0600            sta             LEDS
+ 0000F09B CF0000F565              jsr             DisplayString
+ 0000F0A0 7EF66D                  jmp             Monitor
  
                       msgStartup
- 0000F039 52544636383039          fcb             "RTF6809 System Starting.",CR,LF,0
- 0000F040 2053797374656D
- 0000F047 20537461727469
- 0000F04E 6E672E0D0A00
+ 0000F0A3 52544636383039          fcb             "RTF6809 System Starting.",CR,LF,0
+ 0000F0AA 2053797374656D
+ 0000F0B1 20537461727469
+ 0000F0B8 6E672E0D0A00
  
                       ;------------------------------------------------------------------------------
                       ; Convert ASCII character to screen display character.
@@ -150,195 +240,216 @@
                       ;------------------------------------------------------------------------------
                       ;
                       AsciiToScreen:
- 0000F054 5F                      clrb
- 0000F055 8141                    cmpa    #'A'
- 0000F057 250E                    blo             atoscr1
- 0000F059 815A                    cmpa    #'Z'
- 0000F05B 230A                    bls             atoscr1
- 0000F05D 817A                    cmpa    #'z'
- 0000F05F 2206                    bhi             atoscr1
- 0000F061 8161                    cmpa    #'a'
- 0000F063 2502                    blo             atoscr1
- 0000F065 8060                    suba    #$60
+ 0000F0BE 5F                      clrb
+ 0000F0BF 8141                    cmpa    #'A'
+ 0000F0C1 250E                    blo             atoscr1
+ 0000F0C3 815A                    cmpa    #'Z'
+ 0000F0C5 230A                    bls             atoscr1
+ 0000F0C7 817A                    cmpa    #'z'
+ 0000F0C9 2206                    bhi             atoscr1
+ 0000F0CB 8161                    cmpa    #'a'
+ 0000F0CD 2502                    blo             atoscr1
+ 0000F0CF 8060                    suba    #$60
                       atoscr1:
- 0000F067 CA01                    orb             #$1
-                      TestRts:
- 0000F069 39                      rts
+ 0000F0D1 CA01                    orb             #$1
+                      DumRts:
+ 0000F0D3 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Convert screen character to ascii character
                       ;------------------------------------------------------------------------------
                       ;
                       ScreenToAscii:
- 0000F06A 811B                    cmpa    #26+1
- 0000F06C 2502                    bcs             stasc1
- 0000F06E 8B60                    adda    #$60
+ 0000F0D4 811A                    cmpa    #26
+ 0000F0D6 2202                    bhi             stasc1
+ 0000F0D8 8B60                    adda    #$60
                       stasc1:
- 0000F070 39                      rts
+ 0000F0DA 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ;------------------------------------------------------------------------------
                       ShiftLeft5:
- 0000F071 58                      aslb
- 0000F072 49                      rola
- 0000F073 58                      aslb
- 0000F074 49                      rola
- 0000F075 58                      aslb
- 0000F076 49                      rola
- 0000F077 58                      aslb
- 0000F078 49                      rola
- 0000F079 58                      aslb
- 0000F07A 49                      rola
- 0000F07B 39                      rts
+ 0000F0DB 58                      aslb
+ 0000F0DC 49                      rola
+ 0000F0DD 58                      aslb
+ 0000F0DE 49                      rola
+ 0000F0DF 58                      aslb
+ 0000F0E0 49                      rola
+ 0000F0E1 58                      aslb
+ 0000F0E2 49                      rola
+ 0000F0E3 58                      aslb
+ 0000F0E4 49                      rola
+ 0000F0E5 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ;------------------------------------------------------------------------------
                       ;
                       BlockCopyWords:
- 0000F07C 108E0000                ldy             #0
+ 0000F0E6 108E0000                ldy             #0
                       bcw1:
- 0000F080 151BECB9001C            ldd             far [BlkcpySrc],y
- 0000F086 151BEDB90020            std             far [BlkcpyDst],y
- 0000F08C 3122                    leay    2,y
- 0000F08E 301F                    leax    -1,x
- 0000F090 26EE                    bne             bcw1
- 0000F092 39                      rts
+ 0000F0EA 151BECB9001C            ldd             far [BlkcpySrc],y
+ 0000F0F0 151BEDB90020            std             far [BlkcpyDst],y
+ 0000F0F6 3122                    leay    2,y
+ 0000F0F8 301F                    leax    -1,x
+ 0000F0FA 26EE                    bne             bcw1
+ 0000F0FC 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ;------------------------------------------------------------------------------
                       ;
                       CopyVirtualScreenToScreen
- 0000F093 3436                    pshs    d,x,y
- 0000F095 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
- 0000F098 2B59                    bmi             cvss3
+ 0000F0FD 3436                    pshs    d,x,y
+ 0000F0FF FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+ 0000F102 2B59                    bmi             cvss3
                               ; 8192 bytes per screen
- 0000F09A 0F1F                    clr             BlkcpySrc+3
- 0000F09C 0F1C                    clr             BlkcpySrc
- 0000F09E BDF071                  jsr             ShiftLeft5
+ 0000F104 0F1F                    clr             BlkcpySrc+3
+ 0000F106 0F1C                    clr             BlkcpySrc
+ 0000F108 BDF0DB                  jsr             ShiftLeft5
 *** warning 1: Long branch within short branch range could be optimized
- 0000F0A1 DD1D                    std             BlkcpySrc+1
+ 0000F10B DD1D                    std             BlkcpySrc+1
  
                               ; add in screens array base address
- 0000F0A3 DC1E                    ldd             BlkcpySrc+2
- 0000F0A5 C30000                  addd    #<BIOS_SCREENS
- 0000F0A8 DD1E                    std             BlkcpySrc+2
- 0000F0AA DC1C                    ldd             BlkcpySrc
- 0000F0AC C900                    adcb    #0
- 0000F0AE 8900                    adca    #0
- 0000F0B0 C31700                  addd    #>BIOS_SCREENS
- 0000F0B3 DD1C                    std             BlkcpySrc
+ 0000F10D DC1E                    ldd             BlkcpySrc+2
+ 0000F10F C30000                  addd    #<BIOS_SCREENS
+ 0000F112 DD1E                    std             BlkcpySrc+2
+ 0000F114 DC1C                    ldd             BlkcpySrc
+ 0000F116 C900                    adcb    #0
+ 0000F118 8900                    adca    #0
+ 0000F11A C31700                  addd    #>BIOS_SCREENS
+ 0000F11D DD1C                    std             BlkcpySrc
  
                               ; set destination pointer
- 0000F0B5 CC0000                  ldd             #<TEXTSCR
- 0000F0B8 DD22                    std             BlkcpyDst+2
- 0000F0BA CCFFD0                  ldd             #>TEXTSCR
- 0000F0BD DD20                    std             BlkcpyDst
+ 0000F11F CC0000                  ldd             #<TEXTSCR
+ 0000F122 DD22                    std             BlkcpyDst+2
+ 0000F124 CCFFD0                  ldd             #>TEXTSCR
+ 0000F127 DD20                    std             BlkcpyDst
  
- 0000F0BF 8E07FF                  ldx             #2047                           ; number of words to copy-1
- 0000F0C2 BDF07C                  jsr             BlockCopyWords
+ 0000F129 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F12C BDF0E6                  jsr             BlockCopyWords
 *** warning 1: Long branch within short branch range could be optimized
  
                               ; now copy the color codes
- 0000F0C5 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+ 0000F12F FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
                               ; 8192 bytes per screen
- 0000F0C8 0F1F                    clr             BlkcpySrc+3
- 0000F0CA 0F1C                    clr             BlkcpySrc
- 0000F0CC BDF071                  jsr             ShiftLeft5
+ 0000F132 0F1F                    clr             BlkcpySrc+3
+ 0000F134 0F1C                    clr             BlkcpySrc
+ 0000F136 BDF0DB                  jsr             ShiftLeft5
 *** warning 1: Long branch within short branch range could be optimized
- 0000F0CF DD1D                    std             BlkcpySrc+1
+ 0000F139 DD1D                    std             BlkcpySrc+1
  
                               ; add in screens array base address
- 0000F0D1 DC1E                    ldd             BlkcpySrc+2
- 0000F0D3 C31000                  addd    #<BIOS_SCREENS+4096
- 0000F0D6 DD1E                    std     BlkcpySrc+2
- 0000F0D8 DC1C                    ldd             BlkcpySrc
- 0000F0DA C900                    adcb    #0
- 0000F0DC 8900                    adca    #0
- 0000F0DE C31700                  addd    #>BIOS_SCREENS+4096
- 0000F0E1 DD1C                    std             BlkcpySrc
+ 0000F13B DC1E                    ldd             BlkcpySrc+2
+ 0000F13D C31000                  addd    #<BIOS_SCREENS+4096
+ 0000F140 DD1E                    std     BlkcpySrc+2
+ 0000F142 DC1C                    ldd             BlkcpySrc
+ 0000F144 C900                    adcb    #0
+ 0000F146 8900                    adca    #0
+ 0000F148 C31700                  addd    #>BIOS_SCREENS+4096
+ 0000F14B DD1C                    std             BlkcpySrc
  
                               ; set destination pointer
- 0000F0E3 CC0000                  ldd             #<TEXTSCR+$10000
- 0000F0E6 DD22                    std             BlkcpyDst+2
- 0000F0E8 CCFFD1                  ldd             #>TEXTSCR+$10000
- 0000F0EB DD20                    std             BlkcpyDst
+ 0000F14D CC0000                  ldd             #<TEXTSCR+$10000
+ 0000F150 DD22                    std             BlkcpyDst+2
+ 0000F152 CCFFD1                  ldd             #>TEXTSCR+$10000
+ 0000F155 DD20                    std             BlkcpyDst
  
- 0000F0ED 8E07FF                  ldx             #2047                           ; number of words to copy-1
- 0000F0F0 BDF07C                  jsr             BlockCopyWords
+ 0000F157 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F15A BDF0E6                  jsr             BlockCopyWords
 *** warning 1: Long branch within short branch range could be optimized
  
                       cvss3:
                               ; reset the cursor position in the text controller
- 0000F0F3 10BE0798                ldy             IOFocusNdx
- 0000F0F7 E6AA17EF4400            ldb             TCB_CursorRow,y
- 0000F0FD 15B6FFDA0000            lda             TEXTREG+TEXT_COLS
- 0000F103 3D                      mul
- 0000F104 1F01                    tfr             d,x
- 0000F106 E6AA17EF4500            ldb             TCB_CursorCol,y
- 0000F10C 3A                      abx
- 0000F10D 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
- 0000F113 3536                    puls    d,x,y
- 0000F115 39                      rts
+ 0000F15D 10BE0798                ldy             IOFocusNdx
+ 0000F161 E6AA17EF4400            ldb             TCB_CursorRow,y
+ 0000F167 15B6FFDA0000            lda             TEXTREG+TEXT_COLS
+ 0000F16D 3D                      mul
+ 0000F16E 1F01                    tfr             d,x
+ 0000F170 E6AA17EF4500            ldb             TCB_CursorCol,y
+ 0000F176 3A                      abx
+ 0000F177 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
+ 0000F17D 3536                    puls    d,x,y
+ 0000F17F 39                      rts
  
                       CopyScreenToVirtualScreen
- 0000F116 3436                    pshs    d,x,y
- 0000F118 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
- 0000F11B 2B5B                    bmi             csvs3
+ 0000F180 3436                    pshs    d,x,y
+ 0000F182 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+ 0000F185 2B5B                    bmi             csvs3
                               ; 8192 bytes per screen
- 0000F11D 0F23                    clr             BlkcpyDst+3
- 0000F11F 0F20                    clr             BlkcpyDst
- 0000F121 BDF071                  jsr             ShiftLeft5
- 0000F124 DD21                    std             BlkcpyDst+1
+ 0000F187 0F23                    clr             BlkcpyDst+3
+ 0000F189 0F20                    clr             BlkcpyDst
+ 0000F18B BDF0DB                  jsr             ShiftLeft5
+ 0000F18E DD21                    std             BlkcpyDst+1
  
                               ; add in screens array base address
- 0000F126 DC22                    ldd             BlkcpyDst+2
- 0000F128 C30000                  addd    #<BIOS_SCREENS
- 0000F12B DD22                    std             BlkcpyDst+2
- 0000F12D DC20                    ldd             BlkcpyDst
- 0000F12F C900                    adcb    #0
- 0000F131 8900                    adca    #0
- 0000F133 C31700                  addd    #>BIOS_SCREENS
- 0000F136 DD20                    std             BlkcpyDst
+ 0000F190 DC22                    ldd             BlkcpyDst+2
+ 0000F192 C30000                  addd    #<BIOS_SCREENS
+ 0000F195 DD22                    std             BlkcpyDst+2
+ 0000F197 DC20                    ldd             BlkcpyDst
+ 0000F199 C900                    adcb    #0
+ 0000F19B 8900                    adca    #0
+ 0000F19D C31700                  addd    #>BIOS_SCREENS
+ 0000F1A0 DD20                    std             BlkcpyDst
  
                               ; set destination pointer
- 0000F138 CC0000                  ldd             #<TEXTSCR
- 0000F13B DD1E                    std             BlkcpySrc+2
- 0000F13D CCFFD0                  ldd             #>TEXTSCR
- 0000F140 DD1C                    std             BlkcpySrc
+ 0000F1A2 CC0000                  ldd             #<TEXTSCR
+ 0000F1A5 DD1E                    std             BlkcpySrc+2
+ 0000F1A7 CCFFD0                  ldd             #>TEXTSCR
+ 0000F1AA DD1C                    std             BlkcpySrc
  
- 0000F142 8E07FF                  ldx             #2047                           ; number of words to copy-1
- 0000F145 BDF07C                  jsr             BlockCopyWords
+ 0000F1AC 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F1AF BDF0E6                  jsr             BlockCopyWords
  
                               ; now copy the color codes
- 0000F148 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
+ 0000F1B2 FC0798                  ldd             IOFocusNdx                      ; compute virtual screen location
                               ; 8192 bytes per screen
- 0000F14B 0F23                    clr             BlkcpyDst+3
- 0000F14D 0F20                    clr             BlkcpyDst
- 0000F14F BDF071                  jsr             ShiftLeft5
- 0000F152 DD21                    std             BlkcpyDst+1
+ 0000F1B5 0F23                    clr             BlkcpyDst+3
+ 0000F1B7 0F20                    clr             BlkcpyDst
+ 0000F1B9 BDF0DB                  jsr             ShiftLeft5
+ 0000F1BC DD21                    std             BlkcpyDst+1
  
                               ; add in screens array base address
- 0000F154 DC22                    ldd             BlkcpyDst+2
- 0000F156 C31000                  addd    #<BIOS_SCREENS+4096
- 0000F159 DD22                    std             BlkcpyDst+2
- 0000F15B DC20                    ldd             BlkcpyDst
- 0000F15D C900                    adcb    #0
- 0000F15F 8900                    adca    #0
- 0000F161 C31700                  addd    #>BIOS_SCREENS+4096
- 0000F164 DD20                    std             BlkcpyDst
+ 0000F1BE DC22                    ldd             BlkcpyDst+2
+ 0000F1C0 C31000                  addd    #<BIOS_SCREENS+4096
+ 0000F1C3 DD22                    std             BlkcpyDst+2
+ 0000F1C5 DC20                    ldd             BlkcpyDst
+ 0000F1C7 C900                    adcb    #0
+ 0000F1C9 8900                    adca    #0
+ 0000F1CB C31700                  addd    #>BIOS_SCREENS+4096
+ 0000F1CE DD20                    std             BlkcpyDst
  
                               ; set destination pointer
- 0000F166 CC0000                  ldd             #<TEXTSCR+$10000
- 0000F169 DD1E                    std             BlkcpySrc+2
- 0000F16B CCFFD1                  ldd             #>TEXTSCR+$10000
- 0000F16E DD1C                    std             BlkcpySrc
+ 0000F1D0 CC0000                  ldd             #<TEXTSCR+$10000
+ 0000F1D3 DD1E                    std             BlkcpySrc+2
+ 0000F1D5 CCFFD1                  ldd             #>TEXTSCR+$10000
+ 0000F1D8 DD1C                    std             BlkcpySrc
  
- 0000F170 8E07FF                  ldx             #2047                           ; number of words to copy-1
- 0000F173 BDF07C                  jsr             BlockCopyWords
+ 0000F1DA 8E07FF                  ldx             #2047                           ; number of words to copy-1
+ 0000F1DD BDF0E6                  jsr             BlockCopyWords
  
- 0000F176 3536                    puls    d,x,y
+ 0000F1E0 3536                    puls    d,x,y
                       csvs3:
- 0000F178 39                      rts
+ 0000F1E2 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ;------------------------------------------------------------------------------
+ 0000F1E3 54455854534352          fcb             "TEXTSCR "
+ 0000F1EA 20
+ 0000F1EB F1F5                    fcw             TextOpen
+ 0000F1ED F1F6                    fcw             TextClose
+ 0000F1EF F1F7                    fcw             TextRead
+ 0000F1F1 F1F8                    fcw             TextWrite
+ 0000F1F3 F1F9                    fcw             TextSeek
+ 
+                      TextOpen:
+ 0000F1F5 39                      rts
+                      TextClose:
+ 0000F1F6 39                      rts
+                      TextRead:
+ 0000F1F7 39                      rts
+                      TextWrite:
+ 0000F1F8 39                      rts
+                      TextSeek:
+ 0000F1F9 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Clear the screen and the screen color memory
@@ -347,71 +458,71 @@
                       ;------------------------------------------------------------------------------
                       ;
                       far ClearScreen:
- 0000F179 3476                    pshs    d,x,y,u
- 0000F17B 8602                    lda             #2
- 0000F17D 15B7FFDC0600            sta             LEDS
- 0000F183 15B6FFDA0000            lda             TEXTREG+TEXT_COLS       ; calc number to clear
- 0000F189 15F6FFDA0002            ldb             TEXTREG+TEXT_ROWS
- 0000F18F 3D                      mul                                                     ; d = # chars to clear
- 0000F190 1F01                    tfr             d,x
- 0000F192 1F03                    tfr             d,u
- 0000F194 BDF256                  jsr             GetScreenLocation
- 0000F197 8603                    lda             #3
- 0000F199 15B7FFDC0600            sta             LEDS
- 0000F19F 8620                    lda             #' '                            ; space char
- 0000F1A1 BDF054                  jsr             AsciiToScreen
- 0000F1A4 108E0000                ldy             #0
+ 0000F1FA 3476                    pshs    d,x,y,u
+ 0000F1FC 8602                    lda             #2
+ 0000F1FE 15B7FFDC0600            sta             LEDS
+ 0000F204 15B6FFDA0000            lda             TEXTREG+TEXT_COLS       ; calc number to clear
+ 0000F20A 15F6FFDA0002            ldb             TEXTREG+TEXT_ROWS
+ 0000F210 3D                      mul                                                     ; d = # chars to clear
+ 0000F211 1F01                    tfr             d,x
+ 0000F213 1F03                    tfr             d,u
+ 0000F215 BDF2D7                  jsr             GetScreenLocation
+ 0000F218 8603                    lda             #3
+ 0000F21A 15B7FFDC0600            sta             LEDS
+ 0000F220 8620                    lda             #' '                            ; space char
+ 0000F222 BDF0BE                  jsr             AsciiToScreen
+ 0000F225 108E0000                ldy             #0
                       cs1
- 0000F1A8 151BEDB90010            std             far [ScreenLocation],y  ; clear the memory
- 0000F1AE 3122                    leay    2,y                                     ; increment y
- 0000F1B0 301F                    leax    -1,x                            ; decrement x
- 0000F1B2 26F4                    bne             cs1
- 0000F1B4 8604                    lda             #4
- 0000F1B6 15B7FFDC0600            sta             LEDS
- 0000F1BC BDF2AD                  jsr             GetColorCodeLocation
- 0000F1BF FC07C2                  ldd             ScreenColor                     ; x = value to use
- 0000F1C2 1E89                    exg             a,b
- 0000F1C4 108E0000                ldy             #0
- 0000F1C8 1F31                    tfr             u,x
+ 0000F229 151BEDB90010            std             far [ScreenLocation],y  ; clear the memory
+ 0000F22F 3122                    leay    2,y                                     ; increment y
+ 0000F231 301F                    leax    -1,x                            ; decrement x
+ 0000F233 26F4                    bne             cs1
+ 0000F235 8604                    lda             #4
+ 0000F237 15B7FFDC0600            sta             LEDS
+ 0000F23D BDF32E                  jsr             GetColorCodeLocation
+ 0000F240 FC07C2                  ldd             ScreenColor                     ; x = value to use
+ 0000F243 1E89                    exg             a,b
+ 0000F245 108E0000                ldy             #0
+ 0000F249 1F31                    tfr             u,x
                       cs2
- 0000F1CA 151BEDB90014            std             far [ColorCodeLocation],y       ; clear the memory
- 0000F1D0 3122                    leay    2,y                                     ; increment y
- 0000F1D2 301F                    leax    -1,x                            ; decrement x
- 0000F1D4 26F4                    bne             cs2
- 0000F1D6 3576                    puls    d,x,y,u
- 0000F1D8 38                      rtf
+ 0000F24B 151BEDB90014            std             far [ColorCodeLocation],y       ; clear the memory
+ 0000F251 3122                    leay    2,y                                     ; increment y
+ 0000F253 301F                    leax    -1,x                            ; decrement x
+ 0000F255 26F4                    bne             cs2
+ 0000F257 3576                    puls    d,x,y,u
+ 0000F259 38                      rtf
  
                       ;------------------------------------------------------------------------------
                       ; Scroll text on the screen upwards
                       ;------------------------------------------------------------------------------
                       ;
                       far ScrollUp:
- 0000F1D9 3476                    pshs    d,x,y,u
- 0000F1DB 15B6FFDA0000            lda             TEXTREG+TEXT_COLS       ; acc = # text columns
- 0000F1E1 15F6FFDA0002            ldb             TEXTREG+TEXT_ROWS
- 0000F1E7 5A                      decb                                            ; one less row
- 0000F1E8 3D                      mul                                                     ; calc number of chars to scroll
- 0000F1E9 1F02                    tfr             d,y                                     ; y = count of chars to move
- 0000F1EB BDF256                  jsr             GetScreenLocation
- 0000F1EE BDF2AD                  jsr             GetColorCodeLocation
- 0000F1F1 CE0000                  ldu             #0                                      ; u = index to target row
- 0000F1F4 8E0000                  ldx             #0
- 0000F1F7 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS
- 0000F1FD 3A                      abx                                                     ; x = index to source row
+ 0000F25A 3476                    pshs    d,x,y,u
+ 0000F25C 15B6FFDA0000            lda             TEXTREG+TEXT_COLS       ; acc = # text columns
+ 0000F262 15F6FFDA0002            ldb             TEXTREG+TEXT_ROWS
+ 0000F268 5A                      decb                                            ; one less row
+ 0000F269 3D                      mul                                                     ; calc number of chars to scroll
+ 0000F26A 1F02                    tfr             d,y                                     ; y = count of chars to move
+ 0000F26C BDF2D7                  jsr             GetScreenLocation
+ 0000F26F BDF32E                  jsr             GetColorCodeLocation
+ 0000F272 CE0000                  ldu             #0                                      ; u = index to target row
+ 0000F275 8E0000                  ldx             #0
+ 0000F278 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS
+ 0000F27E 3A                      abx                                                     ; x = index to source row
                       scrup1:
- 0000F1FE 151BEC990010            ldd             far [ScreenLocation],x          ; move character
- 0000F204 151BEDD90010            std             far [ScreenLocation],u
- 0000F20A 151BEC990014            ldd             far [ColorCodeLocation],x       ; and move color code
- 0000F210 151BEDD90014            std             far [ColorCodeLocation],u
- 0000F216 3002                    leax    2,x
- 0000F218 3342                    leau    2,u
- 0000F21A 313F                    leay    -1,y
- 0000F21C 26E0                    bne             scrup1
- 0000F21E 15B6FFDA0002            lda             TEXTREG+TEXT_ROWS
- 0000F224 4A                      deca
- 0000F225 CF0000F22D              jsr             BlankLine
- 0000F22A 3576                    puls    d,x,y,u
- 0000F22C 38                      rtf
+ 0000F27F 151BEC990010            ldd             far [ScreenLocation],x          ; move character
+ 0000F285 151BEDD90010            std             far [ScreenLocation],u
+ 0000F28B 151BEC990014            ldd             far [ColorCodeLocation],x       ; and move color code
+ 0000F291 151BEDD90014            std             far [ColorCodeLocation],u
+ 0000F297 3002                    leax    2,x
+ 0000F299 3342                    leau    2,u
+ 0000F29B 313F                    leay    -1,y
+ 0000F29D 26E0                    bne             scrup1
+ 0000F29F 15B6FFDA0002            lda             TEXTREG+TEXT_ROWS
+ 0000F2A5 4A                      deca
+ 0000F2A6 CF0000F2AE              jsr             BlankLine
+ 0000F2AB 3576                    puls    d,x,y,u
+ 0000F2AD 38                      rtf
  
                       ;------------------------------------------------------------------------------
                       ; Blank out a line on the display
@@ -419,22 +530,22 @@
                       ;------------------------------------------------------------------------------
                       ;
                       far BlankLine:
- 0000F22D 3436                    pshs    d,x,y
- 0000F22F 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
- 0000F235 3D                      mul                                                     ; d = screen index (row# * #cols)
- 0000F236 BDF256                  jsr             GetScreenLocation
- 0000F239 1F02                    tfr             d,y
- 0000F23B 8620                    lda             #' '
- 0000F23D BDF054                  jsr             AsciiToScreen
- 0000F240 1F01                    tfr             d,x
- 0000F242 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
+ 0000F2AE 3436                    pshs    d,x,y
+ 0000F2B0 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
+ 0000F2B6 3D                      mul                                                     ; d = screen index (row# * #cols)
+ 0000F2B7 BDF2D7                  jsr             GetScreenLocation
+ 0000F2BA 1F02                    tfr             d,y
+ 0000F2BC 8620                    lda             #' '
+ 0000F2BE BDF0BE                  jsr             AsciiToScreen
+ 0000F2C1 1F01                    tfr             d,x
+ 0000F2C3 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS       ; b = # chars to blank out from video controller
                       blnkln1:
- 0000F248 151BAFB90010            stx             far [ScreenLocation],y
- 0000F24E 3122                    leay    2,y
- 0000F250 5A                      decb
- 0000F251 26F5                    bne             blnkln1
- 0000F253 3536                    puls    d,x,y
- 0000F255 38                      rtf
+ 0000F2C9 151BAFB90010            stx             far [ScreenLocation],y
+ 0000F2CF 3122                    leay    2,y
+ 0000F2D1 5A                      decb
+ 0000F2D2 26F5                    bne             blnkln1
+ 0000F2D4 3536                    puls    d,x,y
+ 0000F2D6 38                      rtf
  
                       ;------------------------------------------------------------------------------
                       ; Get the location of the screen and screen attribute memory. The location
@@ -442,88 +553,88 @@
                       ;------------------------------------------------------------------------------
                       ; private
                       GetScreenLocation:
- 0000F256 3406                    pshs    d
- 0000F258 860A                    lda             #10
- 0000F25A 15B7FFDC0600            sta             LEDS
- 0000F260 FC078E                  ldd             RunningTCB
- 0000F263 10B30798                cmpd    IOFocusNdx
- 0000F267 2727                    beq             gsl1
+ 0000F2D7 3406                    pshs    d
+ 0000F2D9 860A                    lda             #10
+ 0000F2DB 15B7FFDC0600            sta             LEDS
+ 0000F2E1 FC078E                  ldd             RunningTCB
+ 0000F2E4 10B30798                cmpd    IOFocusNdx
+ 0000F2E8 2727                    beq             gsl1
                               ; 8192 words per screen
- 0000F269 4F                      clra
- 0000F26A BDF071                  jsr             ShiftLeft5
- 0000F26D 0F13                    clr             ScreenLocation+3        ; low 8 bits=0
- 0000F26F DD11                    std             ScreenLocation+1        ; bits 23:8
- 0000F271 0F10                    clr             ScreenLocation
- 0000F273 DC12                    ldd             ScreenLocation+2
- 0000F275 C30000                  addd    #<BIOS_SCREENS
- 0000F278 DD12                    std             ScreenLocation+2
- 0000F27A DC10                    ldd             ScreenLocation
- 0000F27C C900                    adcb    #0
- 0000F27E 8900                    adca    #0
- 0000F280 C31700                  addd    #>BIOS_SCREENS
- 0000F283 DD10                    std             ScreenLocation
- 0000F285 860D                    lda             #13
- 0000F287 15B7FFDC0600            sta             LEDS
- 0000F28D 3506                    puls    d
- 0000F28F 39                      rts
+ 0000F2EA 4F                      clra
+ 0000F2EB BDF0DB                  jsr             ShiftLeft5
+ 0000F2EE 0F13                    clr             ScreenLocation+3        ; low 8 bits=0
+ 0000F2F0 DD11                    std             ScreenLocation+1        ; bits 23:8
+ 0000F2F2 0F10                    clr             ScreenLocation
+ 0000F2F4 DC12                    ldd             ScreenLocation+2
+ 0000F2F6 C30000                  addd    #<BIOS_SCREENS
+ 0000F2F9 DD12                    std             ScreenLocation+2
+ 0000F2FB DC10                    ldd             ScreenLocation
+ 0000F2FD C900                    adcb    #0
+ 0000F2FF 8900                    adca    #0
+ 0000F301 C31700                  addd    #>BIOS_SCREENS
+ 0000F304 DD10                    std             ScreenLocation
+ 0000F306 860D                    lda             #13
+ 0000F308 15B7FFDC0600            sta             LEDS
+ 0000F30E 3506                    puls    d
+ 0000F310 39                      rts
                       gsl1:
- 0000F290 860B                    lda             #11
- 0000F292 15B7FFDC0600            sta             LEDS
- 0000F298 CCFFD0                  ldd             #>TEXTSCR
- 0000F29B DD10                    std             ScreenLocation
- 0000F29D CC0000                  ldd             #<TEXTSCR
- 0000F2A0 DD12                    std             ScreenLocation+2
- 0000F2A2 860C                    lda             #12
- 0000F2A4 15B7FFDC0600            sta             LEDS
- 0000F2AA 3506                    puls    d
- 0000F2AC 39                      rts
+ 0000F311 860B                    lda             #11
+ 0000F313 15B7FFDC0600            sta             LEDS
+ 0000F319 CCFFD0                  ldd             #>TEXTSCR
+ 0000F31C DD10                    std             ScreenLocation
+ 0000F31E CC0000                  ldd             #<TEXTSCR
+ 0000F321 DD12                    std             ScreenLocation+2
+ 0000F323 860C                    lda             #12
+ 0000F325 15B7FFDC0600            sta             LEDS
+ 0000F32B 3506                    puls    d
+ 0000F32D 39                      rts
  
                       GetColorCodeLocation:
- 0000F2AD 3406                    pshs    d
- 0000F2AF FC078E                  ldd             RunningTCB
- 0000F2B2 10B30798                cmpd    IOFocusNdx
- 0000F2B6 2721                    beq             gccl1
+ 0000F32E 3406                    pshs    d
+ 0000F330 FC078E                  ldd             RunningTCB
+ 0000F333 10B30798                cmpd    IOFocusNdx
+ 0000F337 2721                    beq             gccl1
                               ; 8192 words per screen
- 0000F2B8 4F                      clra
- 0000F2B9 BDF071                  jsr             ShiftLeft5
- 0000F2BC 0F17                    clr             ColorCodeLocation+3     ; low 8 bits=0
- 0000F2BE D716                    stb             ColorCodeLocation+2     ; bits 15:8
- 0000F2C0 9715                    sta             ColorCodeLocation+1     ; bits 23:16
- 0000F2C2 0F14                    clr             ColorCodeLocation
- 0000F2C4 DC16                    ldd             ColorCodeLocation+2
- 0000F2C6 C31000                  addd    #<BIOS_SCREENS+4096
- 0000F2C9 DD16                    std             ColorCodeLocation+2
- 0000F2CB DC14                    ldd             ColorCodeLocation
- 0000F2CD C900                    adcb    #0
- 0000F2CF 8900                    adca    #0
- 0000F2D1 C31700                  addd    #>BIOS_SCREENS+4096
- 0000F2D4 DD14                    std             ColorCodeLocation
- 0000F2D6 3506                    puls    d
- 0000F2D8 39                      rts
+ 0000F339 4F                      clra
+ 0000F33A BDF0DB                  jsr             ShiftLeft5
+ 0000F33D 0F17                    clr             ColorCodeLocation+3     ; low 8 bits=0
+ 0000F33F D716                    stb             ColorCodeLocation+2     ; bits 15:8
+ 0000F341 9715                    sta             ColorCodeLocation+1     ; bits 23:16
+ 0000F343 0F14                    clr             ColorCodeLocation
+ 0000F345 DC16                    ldd             ColorCodeLocation+2
+ 0000F347 C31000                  addd    #<BIOS_SCREENS+4096
+ 0000F34A DD16                    std             ColorCodeLocation+2
+ 0000F34C DC14                    ldd             ColorCodeLocation
+ 0000F34E C900                    adcb    #0
+ 0000F350 8900                    adca    #0
+ 0000F352 C31700                  addd    #>BIOS_SCREENS+4096
+ 0000F355 DD14                    std             ColorCodeLocation
+ 0000F357 3506                    puls    d
+ 0000F359 39                      rts
                       gccl1:
- 0000F2D9 CC0000                  ldd             #<TEXTSCR+$10000
- 0000F2DC DD16                    std             ColorCodeLocation+2
- 0000F2DE CCFFD1                  ldd             #>TEXTSCR+$10000
- 0000F2E1 DD14                    std             ColorCodeLocation
- 0000F2E3 3506                    puls    d
- 0000F2E5 39                      rts
+ 0000F35A CC0000                  ldd             #<TEXTSCR+$10000
+ 0000F35D DD16                    std             ColorCodeLocation+2
+ 0000F35F CCFFD1                  ldd             #>TEXTSCR+$10000
+ 0000F362 DD14                    std             ColorCodeLocation
+ 0000F364 3506                    puls    d
+ 0000F366 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; HomeCursor
                       ; Set the cursor location to the top left of the screen.
                       ;------------------------------------------------------------------------------
                       HomeCursor:
- 0000F2E6 3410                    pshs    x
- 0000F2E8 BE078E                  ldx             RunningTCB
- 0000F2EB 6F8A17EF4400            clr             TCB_CursorRow,x
- 0000F2F1 6F8A17EF4500            clr             TCB_CursorCol,x
- 0000F2F7 BC0798                  cmpx    IOFocusNdx
- 0000F2FA 260C                    bne             hc1
- 0000F2FC 157FFFDA0016            clr             TEXTREG+TEXT_CURPOS
- 0000F302 157FFFDA0017            clr             TEXTREG+TEXT_CURPOS+1
+ 0000F367 3410                    pshs    x
+ 0000F369 BE078E                  ldx             RunningTCB
+ 0000F36C 6F8A17EF4400            clr             TCB_CursorRow,x
+ 0000F372 6F8A17EF4500            clr             TCB_CursorCol,x
+ 0000F378 BC0798                  cmpx    IOFocusNdx
+ 0000F37B 260C                    bne             hc1
+ 0000F37D 157FFFDA0016            clr             TEXTREG+TEXT_CURPOS
+ 0000F383 157FFFDA0017            clr             TEXTREG+TEXT_CURPOS+1
                       hc1:
- 0000F308 3510                    puls    x
- 0000F30A 39                      rts
+ 0000F389 3510                    puls    x
+ 0000F38B 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Update the cursor position in the text controller based on the
@@ -531,22 +642,24 @@
                       ;------------------------------------------------------------------------------
                       ;
                       UpdateCursorPos:
- 0000F30B 3436                    pshs    d,x,y
- 0000F30D BE078E                  ldx             RunningTCB
- 0000F310 BC0798                  cmpx    IOFocusNdx                              ; update cursor position in text controller
- 0000F313 2620                    bne             ucp1                                    ; only for the task with the output focus
- 0000F315 A68A17EF4400            lda             TCB_CursorRow,x
- 0000F31B 843F                    anda    #$3F                                    ; limit of 63 rows
- 0000F31D 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS
- 0000F323 3D                      mul
- 0000F324 1F02                    tfr             d,y
- 0000F326 E68A17EF4500            ldb             TCB_CursorCol,x
- 0000F32C 1F21                    tfr             y,x
- 0000F32E 3A                      abx
- 0000F32F 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
+ 0000F38C 3436                    pshs    d,x,y
+ 0000F38E BE078E                  ldx             RunningTCB
+ 0000F391 BC0798                  cmpx    IOFocusNdx                              ; update cursor position in text controller
+ 0000F394 2628                    bne             ucp1                                    ; only for the task with the output focus
+ 0000F396 A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F39C 843F                    anda    #$3F                                    ; limit of 63 rows
+ 0000F39E 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS
+ 0000F3A4 3D                      mul
+ 0000F3A5 1F02                    tfr             d,y
+ 0000F3A7 E68A17EF4500            ldb             TCB_CursorCol,x
+ 0000F3AD 1F21                    tfr             y,x
+ 0000F3AF 3A                      abx
+ 0000F3B0 1F10                    tfr             x,d
+ 0000F3B2 15B7FFDA0017            sta             TEXTREG+TEXT_CURPOS+1
+ 0000F3B8 15F7FFDA0016            stb             TEXTREG+TEXT_CURPOS
                       ucp1:
- 0000F335 3536                    puls    d,x,y
- 0000F337 39                      rts
+ 0000F3BE 3536                    puls    d,x,y
+ 0000F3C0 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Calculate screen memory location from CursorRow,CursorCol.
@@ -556,33 +669,35 @@
                       ;------------------------------------------------------------------------------
                       ;
                       CalcScreenLoc:
- 0000F338 3436                    pshs    d,x,y
- 0000F33A 10BE078E                ldy             RunningTCB
- 0000F33E A6AA17EF4400            lda             TCB_CursorRow,y
- 0000F344 843F                    anda    #$3F                                    ; limit to 63 rows
- 0000F346 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS
- 0000F34C 3D                      mul
- 0000F34D 1F01                    tfr             d,x
- 0000F34F E6AA17EF4500            ldb             TCB_CursorCol,y
- 0000F355 C47F                    andb    #$7F                                    ; limit to 127 cols
- 0000F357 3A                      abx
- 0000F358 10BC0798                cmpy    IOFocusNdx                              ; update cursor position in text controller
- 0000F35C 2606                    bne             csl1                                    ; only for the task with the output focus
- 0000F35E 15BFFFDA0016            stx             TEXTREG+TEXT_CURPOS
+ 0000F3C1 3436                    pshs    d,x,y
+ 0000F3C3 10BE078E                ldy             RunningTCB
+ 0000F3C7 A6AA17EF4400            lda             TCB_CursorRow,y
+ 0000F3CD 843F                    anda    #$3F                                    ; limit to 63 rows
+ 0000F3CF 15F6FFDA0000            ldb             TEXTREG+TEXT_COLS
+ 0000F3D5 3D                      mul
+ 0000F3D6 1F01                    tfr             d,x
+ 0000F3D8 E6AA17EF4500            ldb             TCB_CursorCol,y
+ 0000F3DE C47F                    andb    #$7F                                    ; limit to 127 cols
+ 0000F3E0 3A                      abx
+ 0000F3E1 10BC0798                cmpy    IOFocusNdx                              ; update cursor position in text controller
+ 0000F3E5 260E                    bne             csl1                                    ; only for the task with the output focus
+ 0000F3E7 1F10                    tfr             x,d
+ 0000F3E9 15B7FFDA0017            sta             TEXTREG+TEXT_CURPOS+1
+ 0000F3EF 15F7FFDA0016            stb             TEXTREG+TEXT_CURPOS
                       csl1:
- 0000F364 1F10                    tfr             x,d                                             
- 0000F366 58                      aslb                                                    ; * 2 for 2 bytes per char displayed.
- 0000F367 49                      rola
- 0000F368 BDF256                  jsr             GetScreenLocation
- 0000F36B D312                    addd    ScreenLocation+2
- 0000F36D DD12                    std             ScreenLocation+2
- 0000F36F 2407                    bcc             csl3
- 0000F371 DC10                    ldd             ScreenLocation
- 0000F373 C30001                  addd    #1
- 0000F376 DD10                    std             ScreenLocation
+ 0000F3F5 1F10                    tfr             x,d                                             
+ 0000F3F7 58                      aslb                                                    ; * 2 for 2 bytes per char displayed.
+ 0000F3F8 49                      rola
+ 0000F3F9 BDF2D7                  jsr             GetScreenLocation
+ 0000F3FC D312                    addd    ScreenLocation+2
+ 0000F3FE DD12                    std             ScreenLocation+2
+ 0000F400 2407                    bcc             csl3
+ 0000F402 DC10                    ldd             ScreenLocation
+ 0000F404 C30001                  addd    #1
+ 0000F407 DD10                    std             ScreenLocation
                       csl3:
- 0000F378 3536                    puls    d,x,y
- 0000F37A 39                      rts
+ 0000F409 3536                    puls    d,x,y
+ 0000F40B 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Display a character on the screen.
@@ -592,144 +707,148 @@
                       ;------------------------------------------------------------------------------
                       ;
                       far DisplayChar:
- 0000F37B 3412                    pshs    a,x
- 0000F37D BE078E                  ldx             RunningTCB
- 0000F380 810D                    cmpa    #CR                                     ; carriage return ?
- 0000F382 260C                    bne             dccr
- 0000F384 6F8A17EF4500            clr             TCB_CursorCol,x         ; just set cursor column to zero on a CR
- 0000F38A BDF30B                  jsr             UpdateCursorPos
+ 0000F40C 3412                    pshs    a,x
+ 0000F40E BE078E                  ldx             RunningTCB
+ 0000F411 810D                    cmpa    #CR                                     ; carriage return ?
+ 0000F413 260C                    bne             dccr
+ 0000F415 6F8A17EF4500            clr             TCB_CursorCol,x         ; just set cursor column to zero on a CR
+ 0000F41B BDF38C                  jsr             UpdateCursorPos
                       dcx14:
- 0000F38D 3512                    puls    a,x
- 0000F38F 38                      rtf
+ 0000F41E 3512                    puls    a,x
+ 0000F420 38                      rtf
                       dccr:
- 0000F390 8191                    cmpa    #$91                            ; cursor right ?
- 0000F392 2617                    bne             dcx6
- 0000F394 A68A17EF4500            lda             TCB_CursorCol,x
- 0000F39A 8137                    cmpa    #55
- 0000F39C 2407                    bhs             dcx7
- 0000F39E 4C                      inca
- 0000F39F A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F421 8191                    cmpa    #$91                            ; cursor right ?
+ 0000F423 2617                    bne             dcx6
+ 0000F425 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F42B 8137                    cmpa    #55
+ 0000F42D 2407                    bhs             dcx7
+ 0000F42F 4C                      inca
+ 0000F430 A78A17EF4500            sta             TCB_CursorCol,x
                       dcx7:
- 0000F3A5 BDF30B                  jsr             UpdateCursorPos
- 0000F3A8 3512                    puls    a,x
- 0000F3AA 38                      rtf
+ 0000F436 BDF38C                  jsr             UpdateCursorPos
+ 0000F439 3512                    puls    a,x
+ 0000F43B 38                      rtf
                       dcx6:
- 0000F3AB 8190                    cmpa    #$90                            ; cursor up ?
- 0000F3AD 2611                    bne             dcx8            
- 0000F3AF A68A17EF4400            lda             TCB_CursorRow,x
- 0000F3B5 27EE                    beq             dcx7
- 0000F3B7 4A                      deca
- 0000F3B8 A78A17EF4400            sta             TCB_CursorRow,x
- 0000F3BE 20E5                    bra             dcx7
+ 0000F43C 8190                    cmpa    #$90                            ; cursor up ?
+ 0000F43E 2611                    bne             dcx8            
+ 0000F440 A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F446 27EE                    beq             dcx7
+ 0000F448 4A                      deca
+ 0000F449 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F44F 20E5                    bra             dcx7
                       dcx8:
- 0000F3C0 8193                    cmpa    #$93                            ; cursor left ?
- 0000F3C2 2611                    bne             dcx9
- 0000F3C4 A68A17EF4500            lda             TCB_CursorCol,x
- 0000F3CA 27D9                    beq             dcx7
- 0000F3CC 4A                      deca
- 0000F3CD A78A17EF4500            sta             TCB_CursorCol,x
- 0000F3D3 20D0                    bra             dcx7
+ 0000F451 8193                    cmpa    #$93                            ; cursor left ?
+ 0000F453 2611                    bne             dcx9
+ 0000F455 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F45B 27D9                    beq             dcx7
+ 0000F45D 4A                      deca
+ 0000F45E A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F464 20D0                    bra             dcx7
                       dcx9:
- 0000F3D5 8192                    cmpa    #$92                            ; cursor down ?
- 0000F3D7 2613                    bne             dcx10
- 0000F3D9 A68A17EF4400            lda             TCB_CursorRow,x
- 0000F3DF 812E                    cmpa    #46
- 0000F3E1 27C2                    beq             dcx7
- 0000F3E3 4C                      inca
- 0000F3E4 A78A17EF4400            sta             TCB_CursorRow,x
- 0000F3EA 20B9                    bra             dcx7
+ 0000F466 8192                    cmpa    #$92                            ; cursor down ?
+ 0000F468 2613                    bne             dcx10
+ 0000F46A A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F470 812E                    cmpa    #46
+ 0000F472 27C2                    beq             dcx7
+ 0000F474 4C                      inca
+ 0000F475 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F47B 20B9                    bra             dcx7
                       dcx10:
- 0000F3EC 8194                    cmpa    #$94                            ; cursor home ?
- 0000F3EE 2618                    bne             dcx11
- 0000F3F0 A68A17EF4500            lda             TCB_CursorCol,x
- 0000F3F6 2708                    beq             dcx12
- 0000F3F8 6F8A17EF4500            clr             TCB_CursorCol,x
- 0000F3FE 20A5                    bra             dcx7
+ 0000F47D 8194                    cmpa    #$94                            ; cursor home ?
+ 0000F47F 2618                    bne             dcx11
+ 0000F481 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F487 2708                    beq             dcx12
+ 0000F489 6F8A17EF4500            clr             TCB_CursorCol,x
+ 0000F48F 20A5                    bra             dcx7
                       dcx12:
- 0000F400 6F8A17EF4400            clr             TCB_CursorRow,x
- 0000F406 209D                    bra             dcx7
+ 0000F491 6F8A17EF4400            clr             TCB_CursorRow,x
+ 0000F497 209D                    bra             dcx7
                       dcx11:
- 0000F408 3460                    pshs    y,u
- 0000F40A 8199                    cmpa    #$99                            ; delete ?
- 0000F40C 260B                    bne             dcx13
- 0000F40E BDF338                  jsr             CalcScreenLoc
- 0000F411 A68A17EF4500            lda             TCB_CursorCol,x         ; acc = cursor column
- 0000F417 201D                    bra             dcx5
+ 0000F499 3460                    pshs    y,u
+ 0000F49B 8199                    cmpa    #$99                            ; delete ?
+ 0000F49D 260B                    bne             dcx13
+ 0000F49F BDF3C1                  jsr             CalcScreenLoc
+ 0000F4A2 A68A17EF4500            lda             TCB_CursorCol,x         ; acc = cursor column
+ 0000F4A8 201D                    bra             dcx5
                       dcx13
- 0000F419 8108                    cmpa    #CTRLH                          ; backspace ?
- 0000F41B 263D                    bne             dcx3
- 0000F41D A68A17EF4500            lda             TCB_CursorCol,x
- 0000F423 275E                    beq             dcx4
- 0000F425 4A                      deca
- 0000F426 A78A17EF4500            sta             TCB_CursorCol,x
- 0000F42C BDF338                  jsr             CalcScreenLoc
- 0000F42F 108E0002                ldy             #2
- 0000F433 CE0000                  ldu             #0
+ 0000F4AA 8108                    cmpa    #CTRLH                          ; backspace ?
+ 0000F4AC 263D                    bne             dcx3
+ 0000F4AE A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F4B4 275E                    beq             dcx4
+ 0000F4B6 4A                      deca
+ 0000F4B7 A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F4BD BDF3C1                  jsr             CalcScreenLoc
+ 0000F4C0 108E0002                ldy             #2
+ 0000F4C4 CE0000                  ldu             #0
                       dcx5:
- 0000F436 151BAEB90010            ldx             far [ScreenLocation],y
- 0000F43C 151BAFD90010            stx             far [ScreenLocation],u
- 0000F442 3122                    leay    2,y
- 0000F444 3342                    leau    2,u
- 0000F446 4C                      inca
- 0000F447 8137                    cmpa    #55
- 0000F449 25EB                    blo             dcx5
- 0000F44B 8620                    lda             #' '
- 0000F44D BDF054                  jsr             AsciiToScreen
- 0000F450 313E                    leay    -2,y
- 0000F452 151BEDB90010            std             far [ScreenLocation],y
- 0000F458 2029                    bra             dcx4
+ 0000F4C7 151BAEB90010            ldx             far [ScreenLocation],y
+ 0000F4CD 151BAFD90010            stx             far [ScreenLocation],u
+ 0000F4D3 3122                    leay    2,y
+ 0000F4D5 3342                    leau    2,u
+ 0000F4D7 4C                      inca
+ 0000F4D8 8137                    cmpa    #55
+ 0000F4DA 25EB                    blo             dcx5
+ 0000F4DC 8620                    lda             #' '
+ 0000F4DE BDF0BE                  jsr             AsciiToScreen
+ 0000F4E1 313E                    leay    -2,y
+ 0000F4E3 151BEDB90010            std             far [ScreenLocation],y
+ 0000F4E9 2029                    bra             dcx4
                       dcx3:
- 0000F45A 810A                    cmpa    #LF                             ; linefeed ?
- 0000F45C 2722                    beq             dclf
- 0000F45E BDF338                  jsr     CalcScreenLoc
- 0000F461 BDF054                  jsr             AsciiToScreen   ; convert ascii char to screen char
- 0000F464 15ED9F0010              std             far [ScreenLocation]
- 0000F469 BDF256                  jsr             GetScreenLocation
- 0000F46C BDF2AD                  jsr             GetColorCodeLocation
- 0000F46F 9E12                    ldx             ScreenLocation+2
- 0000F471 9F16                    stx             ColorCodeLocation+2
- 0000F473 FC07C0                  ldd             CharColor
- 0000F476 15ED9F0014              std             far [ColorCodeLocation]
- 0000F47B BDF488                  jsr             IncCursorPos
- 0000F47E 2003                    bra             dcx4
+ 0000F4EB 810A                    cmpa    #LF                             ; linefeed ?
+ 0000F4ED 2722                    beq             dclf
+ 0000F4EF BDF3C1                  jsr     CalcScreenLoc
+ 0000F4F2 BDF0BE                  jsr             AsciiToScreen   ; convert ascii char to screen char
+ 0000F4F5 15ED9F0010              std             far [ScreenLocation]
+ 0000F4FA BDF2D7                  jsr             GetScreenLocation
+ 0000F4FD BDF32E                  jsr             GetColorCodeLocation
+ 0000F500 9E12                    ldx             ScreenLocation+2
+ 0000F502 9F16                    stx             ColorCodeLocation+2
+ 0000F504 FC07C0                  ldd             CharColor
+ 0000F507 15ED9F0014              std             far [ColorCodeLocation]
+ 0000F50C BDF51F                  jsr             IncCursorPos
+ 0000F50F 2003                    bra             dcx4
                       dclf:
- 0000F480 BDF4A6                  jsr             IncCursorRow
+ 0000F511 BDF53D                  jsr             IncCursorRow
                       dcx4:
- 0000F483 3560                    puls    y,u
- 0000F485 3512                    puls    a,x
- 0000F487 38                      rtf
+ 0000F514 3560                    puls    y,u
+ 0000F516 3512                    puls    a,x
+ 0000F518 38                      rtf
+ 
+                      DisplayCharNear
+ 0000F519 CF0000F40C              jsr             DisplayChar
+ 0000F51E 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Increment the cursor position, scroll the screen if needed.
                       ;------------------------------------------------------------------------------
                       ;
                       IncCursorPos:
- 0000F488 3412                    pshs    a,x
- 0000F48A BE078E                  ldx             RunningTCB
- 0000F48D A68A17EF4500            lda             TCB_CursorCol,x
- 0000F493 4C                      inca
- 0000F494 A78A17EF4500            sta             TCB_CursorCol,x
- 0000F49A 8137                    cmpa    #55
- 0000F49C 252A                    blo             icc1
- 0000F49E 6F8A17EF4500            clr             TCB_CursorCol,x         ; column = 0
- 0000F4A4 2005                    bra             icr1
+ 0000F51F 3412                    pshs    a,x
+ 0000F521 BE078E                  ldx             RunningTCB
+ 0000F524 A68A17EF4500            lda             TCB_CursorCol,x
+ 0000F52A 4C                      inca
+ 0000F52B A78A17EF4500            sta             TCB_CursorCol,x
+ 0000F531 8137                    cmpa    #55
+ 0000F533 252A                    blo             icc1
+ 0000F535 6F8A17EF4500            clr             TCB_CursorCol,x         ; column = 0
+ 0000F53B 2005                    bra             icr1
                       IncCursorRow:
- 0000F4A6 3412                    pshs    a,x
- 0000F4A8 BE078E                  ldx             RunningTCB
+ 0000F53D 3412                    pshs    a,x
+ 0000F53F BE078E                  ldx             RunningTCB
                       icr1:
- 0000F4AB A68A17EF4400            lda             TCB_CursorRow,x
- 0000F4B1 4C                      inca
- 0000F4B2 A78A17EF4400            sta             TCB_CursorRow,x
- 0000F4B8 811F                    cmpa    #31
- 0000F4BA 250C                    blo             icc1
- 0000F4BC 4A                      deca                                                    ; backup the cursor row, we are scrolling up
- 0000F4BD A78A17EF4400            sta             TCB_CursorRow,x
- 0000F4C3 CF0000F1D9              jsr             ScrollUp
+ 0000F542 A68A17EF4400            lda             TCB_CursorRow,x
+ 0000F548 4C                      inca
+ 0000F549 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F54F 811F                    cmpa    #31
+ 0000F551 250C                    blo             icc1
+ 0000F553 4A                      deca                                                    ; backup the cursor row, we are scrolling up
+ 0000F554 A78A17EF4400            sta             TCB_CursorRow,x
+ 0000F55A CF0000F25A              jsr             ScrollUp
                       icc1:
- 0000F4C8 BDF30B                  jsr             UpdateCursorPos
+ 0000F55F BDF38C                  jsr             UpdateCursorPos
                       icc2:
- 0000F4CB 3512                    puls    a,x
- 0000F4CD 39                      rts
+ 0000F562 3512                    puls    a,x
+ 0000F564 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Display a string on the screen.
@@ -738,28 +857,111 @@
                       ;------------------------------------------------------------------------------
                       ;
                       far DisplayString:
- 0000F4CE 3412                    pshs    a,x
- 0000F4D0 8E0000                  ldx             #0
+ 0000F565 3412                    pshs    a,x
+ 0000F567 8E0000                  ldx             #0
                       dspj1B:
- 0000F4D3 151BA6990024            lda             far [Strptr],x  ; move string char into acc
- 0000F4D9 2709                    beq             dsretB                  ; is it end of string ?
- 0000F4DB CF0000F37B              jsr             DisplayChar             ; display character
- 0000F4E0 3001                    leax    1,x
- 0000F4E2 20EF                    bra             dspj1B
+ 0000F56A 151BA6990024            lda             far [Strptr],x  ; move string char into acc
+ 0000F570 2707                    beq             dsretB                  ; is it end of string ?
+ 0000F572 BDF621                  jsr             OUTCH                   ; display character
+ 0000F575 3001                    leax    1,x
+ 0000F577 20F1                    bra             dspj1B
                       dsretB:
- 0000F4E4 3512                    puls    a,x
- 0000F4E6 38                      rtf
+ 0000F579 3512                    puls    a,x
+ 0000F57B 38                      rtf
  
-                      far CRLF
- 0000F4E7 860D                    lda             #CR
- 0000F4E9 CF0000F37B              jsr             DisplayChar
- 0000F4EE 860A                    lda             #LF
- 0000F4F0 CF0000F37B              jsr             DisplayChar
- 0000F4F5 38                      rtf
+                      CRLFNear:
+ 0000F57C CF0000D0D2              jsr             CRLF
+ 0000F581 39                      rts
+ 
+                      ;
+                      ; PRINT CR, LF, STRING
+                      ;
+                      PSTRNG
+ 0000F582 8D02                    BSR             PCRLF
+ 0000F584 200D                    BRA             PDATA
+                      PCRLF
+ 0000F586 3410                    PSHS    X
+ 0000F588 8EF59A                  LDX             #CRLFST
+ 0000F58B 8D06                    BSR             PDATA
+ 0000F58D 3510                    PULS    X
+ 0000F58F 39                      RTS
+ 
+                      PRINT
+ 0000F590 BDF621                  JSR             OUTCH
+                      PDATA
+ 0000F593 A680                    LDA             ,X+
+ 0000F595 8104                    CMPA    #$04
+ 0000F597 26F7                    BNE             PRINT
+ 0000F599 39                      RTS
+ 
+                      CRLFST
+ 0000F59A 0D0A04                  fcb     CR,LF,4
+ 
+                      DispWordAsHex:
+ 0000F59D 8D07                    bsr             DispByteAsHex
+ 0000F59F 1E89                    exg             a,b
+ 0000F5A1 8D03                    bsr             DispByteAsHex
+ 0000F5A3 1E89                    exg             a,b
+ 0000F5A5 39                      rts
+ 
+                      DispByteAsHex:
+ 0000F5A6 46                      rora
+ 0000F5A7 46                      rora
+ 0000F5A8 46                      rora
+ 0000F5A9 46                      rora
+ 0000F5AA 8D04                    bsr             DispNyb
+ 0000F5AC 49                      rola
+ 0000F5AD 49                      rola
+ 0000F5AE 49                      rola
+ 0000F5AF 49                      rola
+ 
+                      DispNyb
+ 0000F5B0 3402                    pshs    a
+ 0000F5B2 840F                    anda    #$0F
+ 0000F5B4 810A                    cmpa    #10
+ 0000F5B6 2508                    blo             DispNyb1
+ 0000F5B8 8B37                    adda    #'A'-10
+ 0000F5BA BDF621                  jsr             OUTCH
+ 0000F5BD 3502                    puls    a
+ 0000F5BF 39                      rts
+                      DispNyb1
+ 0000F5C0 8B30                    adda    #'0'
+ 0000F5C2 BDF621                  jsr             OUTCH
+ 0000F5C5 3502                    puls    a
+ 0000F5C7 39                      rts
  
                       ;==============================================================================
                       ; Keyboard I/O
                       ;==============================================================================
+ 
+ 0000F5C8 4B4559424F4152          fcb             "KEYBOARD"
+ 0000F5CF 44
+ 0000F5D0 F5DA                    fcw             KeybdOpen
+ 0000F5D2 F5DB                    fcw             KeybdClose
+ 0000F5D4 F5DC                    fcw             KeybdRead
+ 0000F5D6 F5DD                    fcw             KeybdWrite
+ 0000F5D8 F5DE                    fcw             KeybdSeek
+ 
+                      ; Keyboard Open:
+                      ; Initialize the keyboard buffer head and tail indexes
+                      ;
+                      KeybdOpen:
+ 0000F5DA 39                      rts
+ 
+                      ; Keyboard Close:
+                      ; Nothing to do except maybe clear the keyboard buffer
+                      ;
+                      KeybdClose:
+ 0000F5DB 39                      rts
+                      ;
+                      KeybdRead:
+ 0000F5DC 39                      rts
+                      ;
+                      KeybdWrite:
+ 0000F5DD 39                      rts
+ 
+                      KeybdSeek:
+ 0000F5DE 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Check if there is a keyboard character available. If so return true (1)
@@ -767,13 +969,49 @@
                       ;------------------------------------------------------------------------------
                       ;
                       KeybdCheckForKeyDirect:
- 0000F4F6 15FCFFDC0000            ldd             KEYBD
- 0000F4FC 5F                      clrb
- 0000F4FD 8480                    anda    #$80
- 0000F4FF 2702                    beq             kcfkd1
- 0000F501 8601                    lda             #1
+ 0000F5DF 15FCFFDC0000            ldd             KEYBD
+ 0000F5E5 5F                      clrb
+ 0000F5E6 8480                    anda    #$80
+ 0000F5E8 2702                    beq             kcfkd1
+ 0000F5EA 8601                    lda             #1
                       kcfkd1
- 0000F503 39                      rts
+ 0000F5EC 39                      rts
+ 
+                      ;------------------------------------------------------------------------------
+                      ;------------------------------------------------------------------------------
+                      INCH:
+ 0000F5ED 3414                    pshs    b,x
+                      inch1:
+ 0000F5EF 15FCFFDC0000            ldd             KEYBD
+ 0000F5F5 C580                    bitb    #$80                    ; is there a char available ?
+ 0000F5F7 27F6                    beq             inch1                   ; no, check again
+ 0000F5F9 15FDFFDC0002            std             KEYBD+2                 ; clear keyboard strobe
+ 0000F5FF C508                    bitb    #$8                             ; is it a keydown event ?
+ 0000F601 26EC                    bne             inch1                   ; no, go back check for another char
+ 0000F603 3514                    puls    b,x
+ 0000F605 39                      rts
+ 
+                      INCHE:
+ 0000F606 8DE5                    bsr             INCH
+ 0000F608 200A                    bra             INCHEK3
+ 
+                      INCHEK:
+ 0000F60A 8DE1                    bsr             INCH
+ 0000F60C 157D17EFAA00            tst             KeybdEcho
+ 0000F612 270C                    beq             INCHEK1
+                      INCHEK3:
+ 0000F614 810D                    cmpa    #CR
+ 0000F616 2605                    bne             INCHEK2
+ 0000F618 BDF57C                  jsr             CRLFNear
+ 0000F61B 2003                    bra             INCHEK1
+                      INCHEK2:
+ 0000F61D BDF519                  jsr             DisplayCharNear
+                      INCHEK1:
+ 0000F620 39                      rts
+ 
+                      OUTCH:
+ 0000F621 15AD9F0800              jsr             far [CharOutVec]
+ 0000F626 39                      rts
  
                       ;------------------------------------------------------------------------------
                       ; Get character directly from keyboard. This routine blocks until a key is
@@ -781,117 +1019,153 @@
                       ;------------------------------------------------------------------------------
                       ;
                       KeybdGetCharDirect:
- 0000F504 3410                    pshs    x
+ 0000F627 3410                    pshs    x
                       kgc1:
- 0000F506 15FCFFDC0000            ldd             KEYBD
- 0000F50C 8580                    bita    #$80                    ; is there a char available ?
- 0000F50E 27F6                    beq             kgc1                    ; no, check again
- 0000F510 15FDFFDC0002            std             KEYBD+2                 ; clear keyboard strobe
- 0000F516 8508                    bita    #$8                             ; is it a keydown event ?
- 0000F518 26EC                    bne             kgc1                    ; no, go back check for another char
- 0000F51A 1F98                    tfr             b,a                             ; tranfser ascii code to acca
- 0000F51C 15F617EFAA00            ldb             KeybdEcho               ; is keyboard echo on ?
- 0000F522 2710                    beq             gk1                             ; no keyboard echo, just return char
- 0000F524 810D                    cmpa    #CR
- 0000F526 2607                    bne             gk2                             ; convert CR keystroke into CRLF
- 0000F528 CF0000F4E7              jsr             CRLF
- 0000F52D 2005                    bra             gk1
+ 0000F629 15FCFFDC0000            ldd             KEYBD
+ 0000F62F C580                    bitb    #$80                    ; is there a char available ?
+ 0000F631 27F6                    beq             kgc1                    ; no, check again
+ 0000F633 15FDFFDC0002            std             KEYBD+2                 ; clear keyboard strobe
+ 0000F639 C508                    bitb    #$8                             ; is it a keydown event ?
+ 0000F63B 26EC                    bne             kgc1                    ; no, go back check for another char
+ 0000F63D 15F617EFAA00            ldb             KeybdEcho               ; is keyboard echo on ?
+ 0000F643 2710                    beq             gk1                             ; no keyboard echo, just return char
+ 0000F645 810D                    cmpa    #CR
+ 0000F647 2607                    bne             gk2                             ; convert CR keystroke into CRLF
+ 0000F649 CF0000D0D2              jsr             CRLF
+ 0000F64E 2005                    bra             gk1
                       gk2:
- 0000F52F CF0000F37B              jsr             DisplayChar
+ 0000F650 CF0000F40C              jsr             DisplayChar
                       gk1:
- 0000F534 3510                    puls    x
- 0000F536 39                      rts
+ 0000F655 3510                    puls    x
+ 0000F657 39                      rts
+ 
+                      far KeybdGetCharDirectFar:
+ 0000F658 8DCD                    bsr             KeybdGetCharDirect
+ 0000F65A 38                      rtf
  
                       ;------------------------------------------------------------------------------
                       ; r1 0=echo off, non-zero = echo on
                       ;------------------------------------------------------------------------------
                       ;
                       far SetKeyboardEcho:
- 0000F537 3410                    pshs    x
- 0000F539 BE078E                  ldx             RunningTCB
- 0000F53C A78A17EFAA00            sta             KeybdEcho,x
- 0000F542 3510                    puls    x
- 0000F544 38                      rtf
+ 0000F65B 3410                    pshs    x
+ 0000F65D BE078E                  ldx             RunningTCB
+ 0000F660 A78A17EFAA00            sta             KeybdEcho,x
+ 0000F666 3510                    puls    x
+ 0000F668 38                      rtf
  
                       ;==============================================================================
+                      ; System Monitor
                       ;==============================================================================
                       ;
+                      MonitorNear:
+ 0000F669 BDF66D                  jsr             Monitor
+ 0000F66C 39                      rts
+ 
                       Monitor:
- 0000F545 328F3FFF                leas    $3FFF
- 0000F549 8600                    lda             #0                                      ; turn off keyboard echo
- 0000F54B CF0000F537              jsr             SetKeyboardEcho
+ 0000F66D 328F3FFF                leas    $3FFF
+ 0000F671 8600                    lda             #0                                      ; turn off keyboard echo
+ 0000F673 CF0000F65B              jsr             SetKeyboardEcho
                       ;       jsr             RequestIOFocus
                       PromptLn:
- 0000F550 CF0000F4E7              jsr             CRLF
- 0000F555 8624                    lda             #'$'
- 0000F557 CF0000F37B              jsr             DisplayChar
+ 0000F678 CF0000D0D2              jsr             CRLF
+ 0000F67D 8624                    lda             #'$'
+ 0000F67F CF0000F40C              jsr             DisplayChar
  
                       ; Get characters until a CR is keyed
                       ;
                       Prompt3:
- 0000F55C BDF504                  jsr             KeybdGetCharDirect
+ 0000F684 BDF627                  jsr             KeybdGetCharDirect
 *** warning 1: Long branch within short branch range could be optimized
- 0000F55F 810D                    cmpa    #CR
- 0000F561 2707                    beq             Prompt1
- 0000F563 CF0000F37B              jsr             DisplayChar
- 0000F568 20F2                    bra             Prompt3
+ 0000F687 810D                    cmpa    #CR
+ 0000F689 2707                    beq             Prompt1
+ 0000F68B CF0000F40C              jsr             DisplayChar
+ 0000F690 20F2                    bra             Prompt3
  
                       ; Process the screen line that the CR was keyed on
                       ;
                       Prompt1:
- 0000F56A 108E0000                ldy             #0                              ; index to start of line
- 0000F56E CC5050                  ldd             #$5050
- 0000F571 15FDFFDC0600            std             LEDS
- 0000F577 BE078E                  ldx             RunningTCB
- 0000F57A 8C003F                  cmpx    #MAX_TASKNO
- 0000F57D 22DD                    bhi             Prompt3
- 0000F57F CC5151                  ldd             #$5151
- 0000F582 15FDFFDC0600            std             LEDS
- 0000F588 6F8A17EF4500            clr             TCB_CursorCol,x ; go back to the start of the line
- 0000F58E BDF338                  jsr             CalcScreenLoc   ; calc screen memory location
- 0000F591 CC5252                  ldd             #$5252
- 0000F594 15FDFFDC0600            std             LEDS
- 0000F59A BDF5C2                  jsr             MonGetch
- 0000F59D 8124                    cmpa    #'$'
- 0000F59F 260B                    bne             Prompt2                 ; skip over '$' prompt character
- 0000F5A1 8653                    lda             #$5353
- 0000F5A3 15FDFFDC0600            std             LEDS
- 0000F5A9 BDF5C2                  jsr             MonGetch
+ 0000F692 108E0000                ldy             #0                              ; index to start of line
+ 0000F696 CC5050                  ldd             #$5050
+ 0000F699 15FDFFDC0600            std             LEDS
+ 0000F69F BE078E                  ldx             RunningTCB
+ 0000F6A2 8C003F                  cmpx    #MAX_TASKNO
+ 0000F6A5 22DD                    bhi             Prompt3
+ 0000F6A7 CC5151                  ldd             #$5151
+ 0000F6AA 15FDFFDC0600            std             LEDS
+ 0000F6B0 6F8A17EF4500            clr             TCB_CursorCol,x ; go back to the start of the line
+ 0000F6B6 BDF3C1                  jsr             CalcScreenLoc   ; calc screen memory location
+ 0000F6B9 CC5252                  ldd             #$5252
+ 0000F6BC 15FDFFDC0600            std             LEDS
+ 0000F6C2 BDF721                  jsr             MonGetch
+ 0000F6C5 8124                    cmpa    #'$'
+ 0000F6C7 260B                    bne             Prompt2                 ; skip over '$' prompt character
+ 0000F6C9 8653                    lda             #$5353
+ 0000F6CB 15FDFFDC0600            std             LEDS
+ 0000F6D1 BDF721                  jsr             MonGetch
  
                       ; Dispatch based on command character
                       ;
                       Prompt2:
- 0000F5AC 813F                    cmpa    #'?'                    ; $? - display help
- 0000F5AE 26AC                    bne             Prompt3
- 0000F5B0 CCF5D0                  ldd             #<HelpMsg
- 0000F5B3 DD26                    std             Strptr+2
- 0000F5B5 CC0000                  ldd             #>HelpMsg
- 0000F5B8 DD24                    std             Strptr
- 0000F5BA CF0000F4CE              jsr             DisplayString
- 0000F5BF 7EF545                  jmp             Monitor
+ 0000F6D4 813F                    cmpa    #'?'                    ; $? - display help
+ 0000F6D6 2612                    bne             PromptC
+ 0000F6D8 CCF72D                  ldd             #<HelpMsg
+ 0000F6DB DD26                    std             Strptr+2
+ 0000F6DD CC0000                  ldd             #>HelpMsg
+ 0000F6E0 DD24                    std             Strptr
+ 0000F6E2 CF0000F565              jsr             DisplayString
+ 0000F6E7 7EF66D                  jmp             Monitor
 *** warning 1: Long branch within short branch range could be optimized
+                      PromptC:
+ 0000F6EA 8143                    cmpa    #'C'
+ 0000F6EC 2608                    bne             PromptD
+ 0000F6EE CF0000F1FA              jsr             ClearScreen
+ 0000F6F3 7EF66D                  jmp             Monitor
+                      PromptD:
+ 0000F6F6 8144                    cmpa    #'D'
+ 0000F6F8 260A                    bne             PromptF
+ 0000F6FA BDF721                  jsr             MonGetch
+ 0000F6FD 8152                    cmpa    #'R'
+ 0000F6FF 2683                    bne             Prompt3
+ 0000F701 7EF7A8                  jmp             DumpRegs
+                      PromptF:
+ 0000F704 8146                    cmpa    #'F'
+ 0000F706 1026FF63                lbne    Monitor
+ 0000F70A BDF721                  jsr             MonGetch
+ 0000F70D 8149                    cmpa    #'I'
+ 0000F70F 1026FF5A                lbne    Monitor
+ 0000F713 BDF721                  jsr             MonGetch
+ 0000F716 8147                    cmpa    #'G'
+ 0000F718 1026FF51                lbne    Monitor
+ 0000F71C 8F00020000              jmp             far $20000
  
                       MonGetch:
- 0000F5C2 151BECB90010            ldd             far [ScreenLocation],y
- 0000F5C8 1E89                    exg             a,b
- 0000F5CA 3122                    leay    2,y
- 0000F5CC BDF06A                  jsr             ScreenToAscii
- 0000F5CF 39                      rts
+ 0000F721 151BECB90010            ldd             far [ScreenLocation],y
+ 0000F727 3122                    leay    2,y
+ 0000F729 BDF0D4                  jsr             ScreenToAscii
+ 0000F72C 39                      rts
  
                       HelpMsg:
- 0000F5D0 3F203D20446973          fcb             "? = Display help",CR,LF
- 0000F5D7 706C6179206865
- 0000F5DE 6C700D0A
-                      ;       db      "CLS = clear screen",CR,LF
+ 0000F72D 3F203D20446973          fcb             "? = Display help",CR,LF
+ 0000F734 706C6179206865
+ 0000F73B 6C700D0A
+ 0000F73F 434C53203D2063          fcb     "CLS = clear screen",CR,LF
+ 0000F746 6C656172207363
+ 0000F74D 7265656E0D0A
                       ;       db      "S = Boot from SD Card",CR,LF
                       ;       db      ": = Edit memory bytes",CR,LF
                       ;       db      "L = Load sector",CR,LF
                       ;       db      "W = Write sector",CR,LF
-                      ;       db  "DR = Dump registers",CR,LF
+ 0000F753 4452203D204475          fcb "DR = Dump registers",CR,LF
+ 0000F75A 6D702072656769
+ 0000F761 73746572730D0A
                       ;       db      "D = Dump memory",CR,LF
                       ;       db      "F = Fill memory",CR,LF
                       ;       db  "FL = Dump I/O Focus List",CR,LF
-                      ;       db  "FIG = start FIG Forth",CR,LF
+ 0000F768 464947203D2073          fcb "FIG = start FIG Forth",CR,LF
+ 0000F76F 74617274204649
+ 0000F776 4720466F727468
+ 0000F77D 0D0A
                       ;       db      "KILL n = kill task #n",CR,LF
                       ;       db      "B = start tiny basic",CR,LF
                       ;       db      "b = start EhBasic 6502",CR,LF
@@ -904,95 +1178,200 @@
                       ;       db      "TI = display date/time",CR,LF
                       ;       db      "TEMP = display temperature",CR,LF
                       ;       db      "P = Piano",CR,LF,0
- 0000F5E2 00                      fcb             0
+ 0000F77F 00                      fcb             0
+ 
+                      msgRegHeadings
+ 0000F780 20442F41422020          fcb     " D/AB  X   Y   U   S     PC    DP CCR",CR,LF,0
+ 0000F787 58202020592020
+ 0000F78E 20552020205320
+ 0000F795 20202020504320
+ 0000F79C 20202044502043
+ 0000F7A3 43520D0A00
+ 
+                      DumpRegs
+ 0000F7A8 CCF780                  ldd             #msgRegHeadings
+ 0000F7AB DD26                    std             Strptr+2
+ 0000F7AD CC0000                  ldd             #msgRegHeadings>>16
+ 0000F7B0 DD24                    std             Strptr
+ 0000F7B2 CF0000F565              jsr             DisplayString
+ 0000F7B7 CF0000D0AF              jsr             XBLANK
+ 0000F7BC FC0900                  ldd             mon_DSAVE
+ 0000F7BF CF0000D2D2              jsr             HEX4
+ 0000F7C4 CF0000D0AF              jsr             XBLANK
+ 0000F7C9 FC0902                  ldd             mon_XSAVE
+ 0000F7CC CF0000D2D2              jsr             HEX4
+ 0000F7D1 CF0000D0AF              jsr             XBLANK
+ 0000F7D6 FC0904                  ldd             mon_YSAVE
+ 0000F7D9 CF0000D2D2              jsr             HEX4
+ 0000F7DE CF0000D0AF              jsr             XBLANK
+ 0000F7E3 FC0906                  ldd             mon_USAVE
+ 0000F7E6 CF0000D2D2              jsr             HEX4
+ 0000F7EB CF0000D0AF              jsr             XBLANK
+ 0000F7F0 FC0908                  ldd             mon_SSAVE
+ 0000F7F3 CF0000D2D2              jsr             HEX4
+ 0000F7F8 CF0000D0AF              jsr             XBLANK
+ 0000F7FD FC090A                  ldd             mon_PCSAVE
+ 0000F800 CF0000D2D2              jsr             HEX4
+ 0000F805 FC090C                  ldd             mon_PCSAVE+2
+ 0000F808 CF0000D2D2              jsr             HEX4
+ 0000F80D CF0000D0AF              jsr             XBLANK
+ 0000F812 FC090E                  ldd             mon_DPRSAVE
+ 0000F815 CF0000D2CE              jsr             HEX2
+ 0000F81A CF0000D0AF              jsr             XBLANK
+ 0000F81F B6090F                  lda             mon_CCRSAVE
+ 0000F822 CF0000D2CE              jsr             HEX2
+ 0000F827 CF0000D0AF              jsr             XBLANK
+ 0000F82C 7EF66D                  jmp             Monitor
+ 
+                      ;------------------------------------------------------------------------------
+                      ;------------------------------------------------------------------------------
+                      swi3_rout:
+ 0000F82F 1A10                    sei
+ 0000F831 3502                    puls    a
+ 0000F833 B7090F                  sta             mon_CCRSAVE
+ 0000F836 357E                    puls    D,DPR,X,Y,U
+ 0000F838 FD0900                  std             mon_DSAVE
+ 0000F83B BF0902                  stx             mon_XSAVE
+ 0000F83E 10BF0904                sty             mon_YSAVE
+ 0000F842 FF0906                  stu             mon_USAVE
+ 0000F845 1FB8                    tfr             dpr,a
+ 0000F847 B7090E                  sta             mon_DPRSAVE
+ 0000F84A 3506                    puls    D
+ 0000F84C FD090A                  std             mon_PCSAVE
+ 0000F84F 3506                    puls    D
+ 0000F851 FD090C                  std             mon_PCSAVE+2
+ 0000F854 10FF0908                sts             mon_SSAVE
+ 0000F858 10CE3FFF                lds             #$3FFF
+ 0000F85C 1CEF                    cli
+ 0000F85E 7EF7A8                  jmp             DumpRegs
+                      swi3_exit:
+ 0000F861 1A10                    sei
+ 0000F863 10FE0908                lds             mon_SSAVE
+ 0000F867 FC090C                  ldd             mon_PCSAVE+2
+ 0000F86A 3406                    pshs    d
+ 0000F86C FC090A                  ldd             mon_PCSAVE
+ 0000F86F 3406                    pshs    d
+ 0000F871 FE0906                  ldu             mon_USAVE
+ 0000F874 10BE0904                ldy             mon_YSAVE
+ 0000F878 BE0902                  ldx             mon_XSAVE
+ 0000F87B 3470                    pshs    x,y,u
+ 0000F87D B6090E                  lda             mon_DPRSAVE
+ 0000F880 3402                    pshs    a
+ 0000F882 FC0900                  ldd             mon_DSAVE
+ 0000F885 3406                    pshs    d
+ 0000F887 B6090F                  lda             mon_CCRSAVE
+ 0000F88A 3402                    pshs    a
+ 0000F88C 1F8A                    tfr             a,ccr
+ 0000F88E 1CEF                    cli
+ 0000F890 3B                      rti
  
                       ;------------------------------------------------------------------------------
                       ;------------------------------------------------------------------------------
                       irq_rout:
- 0000F5E3 8603                    lda             #3                              ; Timer is IRQ #3
- 0000F5E5 B7079A                  sta             IrqSource               ; stuff a byte indicating the IRQ source for PEEK()
- 0000F5E8 96DF                    lda             IrqBase                 ; get the IRQ flag byte
- 0000F5EA 44                      lsra
- 0000F5EB 9ADF                    ora             IrqBase
- 0000F5ED 84E0                    anda    #$E0
- 0000F5EF 97DF                    sta             IrqBase
+                              ; Reset the edge sense circuit in the PIC
+ 0000F891 8602                    lda             #2                              ; Timer is IRQ #2
+ 0000F893 15B7FFDC0F06            sta             PIC+6                   ; register 6 is edge sense reset reg    
  
- 0000F5F1 157CFFD0006E            inc             TEXTSCR+110             ; update IRQ live indicator on screen
+ 0000F899 B7079A                  sta             IrqSource               ; stuff a byte indicating the IRQ source for PEEK()
+ 0000F89C 96DF                    lda             IrqBase                 ; get the IRQ flag byte
+ 0000F89E 44                      lsra
+ 0000F89F 9ADF                    ora             IrqBase
+ 0000F8A1 84E0                    anda    #$E0
+ 0000F8A3 97DF                    sta             IrqBase
+ 
+ 0000F8A5 157CFFD0006E            inc             TEXTSCR+110             ; update IRQ live indicator on screen
                               
                               ; flash the cursor
- 0000F5F7 BE078E                  ldx             RunningTCB
- 0000F5FA BC0798                  cpx             IOFocusNdx              ; only bother to flash the cursor for the task with the IO focus.
- 0000F5FD 2627                    bne             tr1a
- 0000F5FF B607C4                  lda             CursorFlash             ; test if we want a flashing cursor
- 0000F602 2722                    beq             tr1a
- 0000F604 BDF338                  jsr             CalcScreenLoc   ; compute cursor location in memory
- 0000F607 109E12                  ldy             ScreenLocation+2
- 0000F60A A6AAFFD10000            lda             $FFD10000,y             ; get color code $10000 higher in memory
- 0000F610 F607C6                  ldb             IRQFlag                 ; get counter
- 0000F613 54                      lsrb
- 0000F614 44                      lsra
- 0000F615 44                      lsra
- 0000F616 44                      lsra
- 0000F617 44                      lsra
- 0000F618 54                      lsrb
- 0000F619 49                      rola
- 0000F61A 54                      lsrb
- 0000F61B 49                      rola
- 0000F61C 54                      lsrb
- 0000F61D 49                      rola
- 0000F61E 54                      lsrb
- 0000F61F 49                      rola
- 0000F620 A7AAFFD10000            sta             $FFD10000,y             ; store the color code back to memory
+ 0000F8AB BE078E                  ldx             RunningTCB
+ 0000F8AE BC0798                  cpx             IOFocusNdx              ; only bother to flash the cursor for the task with the IO focus.
+ 0000F8B1 2627                    bne             tr1a
+ 0000F8B3 B607C4                  lda             CursorFlash             ; test if we want a flashing cursor
+ 0000F8B6 2722                    beq             tr1a
+ 0000F8B8 BDF3C1                  jsr             CalcScreenLoc   ; compute cursor location in memory
+ 0000F8BB 109E12                  ldy             ScreenLocation+2
+ 0000F8BE A6AAFFD10000            lda             $FFD10000,y             ; get color code $10000 higher in memory
+ 0000F8C4 F607C6                  ldb             IRQFlag                 ; get counter
+ 0000F8C7 54                      lsrb
+ 0000F8C8 44                      lsra
+ 0000F8C9 44                      lsra
+ 0000F8CA 44                      lsra
+ 0000F8CB 44                      lsra
+ 0000F8CC 54                      lsrb
+ 0000F8CD 49                      rola
+ 0000F8CE 54                      lsrb
+ 0000F8CF 49                      rola
+ 0000F8D0 54                      lsrb
+ 0000F8D1 49                      rola
+ 0000F8D2 54                      lsrb
+ 0000F8D3 49                      rola
+ 0000F8D4 A7AAFFD10000            sta             $FFD10000,y             ; store the color code back to memory
                       tr1a
- 0000F626 3B                      rti
+ 0000F8DA 3B                      rti
+ 
+                              org             $FFF2
+ 0000FFF2 F82F                    fcw             swi3_rout
  
                               org             $FFF8
- 0000FFF8 F5E3                    fcw             irq_rout
- 0000FFFA F000                    fcw             start           ; SWI
- 0000FFFC F000                    fcw             start           ; NMI
- 0000FFFE F000                    fcw             start           ; RST
+ 0000FFF8 F891                    fcw             irq_rout
+ 0000FFFA F022                    fcw             start           ; SWI
+ 0000FFFC F022                    fcw             start           ; NMI
+ 0000FFFE F022                    fcw             start           ; RST
 
 6 warning(s) in pass 2.
 
 SYMBOL TABLE
- ASCIITOSCREEN 02 F054   ATOSCR1 02 F067      BCW1 02 F080 BIOS_SCREENS 00 17000000
- BLANKLINE 02 F22D BLKCPYDST 00 0020 BLKCPYSRC 00 001C   BLNKLN1 02 F248
- BLOCKCOPYWORDS 02 F07C CALCSCREENLOC 02 F338 CHARCOLOR 00 07C0 CLEARSCREEN 02 F179
- COLORCODELOCATION 00 0014 COPYSCREENTOVIRTUALSCREEN 02 F116 COPYVIRTUALSCREENTOSCREEN 02 F093        CR 00 000D
-      CRLF 02 F4E7       CS1 02 F1A8       CS2 02 F1CA      CSL1 02 F364
-      CSL3 02 F378     CSVS3 02 F178     CTRLC 00 0003     CTRLH 00 0008
-     CTRLI 00 0009     CTRLJ 00 000A     CTRLK 00 000B     CTRLM 00 000D
-     CTRLS 00 0013     CTRLX 00 0018 CURSORFLASH 00 07C4     CVSS3 02 F0F3
-      DCCR 02 F390      DCLF 02 F480     DCX10 02 F3EC     DCX11 02 F408
-     DCX12 02 F400     DCX13 02 F419     DCX14 02 F38D      DCX3 02 F45A
-      DCX4 02 F483      DCX5 02 F436      DCX6 02 F3AB      DCX7 02 F3A5
-      DCX8 02 F3C0      DCX9 02 F3D5 DISPLAYCHAR 02 F37B DISPLAYSTRING 02 F4CE
- DRAM_BASE 00 10000000    DSPJ1B 02 F4D3    DSRETB 02 F4E4   FREEMBX 00 0790
-   FREEMSG 00 0794   FREETCB 00 078A     GCCL1 02 F2D9 GETCOLORCODELOCATION 02 F2AD
- GETSCREENLOCATION 02 F256       GK1 02 F534       GK2 02 F52F      GSL1 02 F290
-       HC1 02 F308   HELPMSG 02 F5D0 HOMECURSOR 02 F2E6      ICC1 02 F4C8
-      ICC2 02 F4CB      ICR1 02 F4AB INCCURSORPOS 02 F488 INCCURSORROW 02 F4A6
- IOFOCUSNDX 00 0798   IRQBASE 00 00DF   IRQFLAG 00 07C6 IRQSOURCE 00 079A
-  IRQ_ROUT 02 F5E3    KCFKD1 02 F503     KEYBD 00 FFDC0000  KEYBDACK 00 17EFAC00
-  KEYBDBAD 00 17EFAB00 KEYBDBUFFER 00 17EFB000 KEYBDCHECKFORKEYDIRECT 02 F4F6  KEYBDCLR 00 FFDC0002
- KEYBDECHO 00 17EFAA00 KEYBDGETCHARDIRECT 02 F504 KEYBDHEAD 00 17EFA800 KEYBDLOCKS 00 17EFAD00
- KEYBDTAIL 00 17EFA900      KGC1 02 F506      LEDS 00 FFDC0600        LF 00 000A
- MAX_TASKNO 00 003F  MONGETCH 02 F5C2   MONITOR 02 F545 MSGSTARTUP 02 F039
-  NMAILBOX 00 0792   NMIBASE 00 00DC   NMSGBLK 00 0796   PROMPT1 02 F56A
-   PROMPT2 02 F5AC   PROMPT3 02 F55C  PROMPTLN 02 F550     QNDX0 00 0780
-     QNDX1 00 0782     QNDX2 00 0784     QNDX3 00 0786     QNDX4 00 0788
- RUNNINGTCB 00 078E SCREENCOLOR 00 07C2 SCREENLOCATION 00 0010 SCREENLOCATION2 00 0018
- SCREENTOASCII 02 F06A  SCROLLUP 02 F1D9    SCRUP1 02 F1FE SETKEYBOARDECHO 02 F537
- SHIFTLEFT5 02 F071     START 02 F000    STASC1 02 F070    STRPTR 00 0024
-       TAB 00 0009 TCB_ABS8SAVE 00 17EF4D00 TCB_CURSORCOL 00 17EF4500 TCB_CURSORROW 00 17EF4400
-  TCB_HJCB 00 17EF8B00 TCB_HWAITMBX 00 17EF4600 TCB_IOF_NEXT 00 17EF4900 TCB_IOF_PREV 00 17EF4A00
- TCB_MBQ_NEXT 00 17EF4700 TCB_MBQ_PREV 00 17EF4800 TCB_MMU_MAP 00 17EF4E00 TCB_MSGPTR_D1 00 17EF8900
- TCB_MSGPTR_D2 00 17EF8A00 TCB_NXTRDY 00 17EF8400 TCB_NXTTCB 00 17EF8600 TCB_PRIORITY 00 17EF8800
- TCB_PRVRDY 00 17EF8500 TCB_SP8SAVE 00 17EF4B00 TCB_SPSAVE 00 17EF4C00 TCB_STATUS 00 17EF8C00
- TCB_TIMEOUT 00 17EF8700   TESTRTS 02 F069   TEXTREG 00 FFDA0000   TEXTSCR 00 FFD00000
- TEXT_COLS 00 0000 TEXT_CURPOS 00 0016 TEXT_ROWS 00 0002 TIMEOUTLIST 00 078C
-      TR1A 02 F626      UCP1 02 F335 UPDATECURSORPOS 02 F30B      XOFF 00 0013
-       XON 00 0011
-149 SYMBOLS
+ ASCIITOSCREEN 02 0000F0BE   ATOSCR1 02 0000F0D1      BCW1 02 0000F0EA BIOS_SCREENS 00 17000000
+ BLANKLINE 02 0000F2AE BLKCPYDST 00 00000020 BLKCPYSRC 00 0000001C   BLNKLN1 02 0000F2C9
+ BLOCKCOPYWORDS 02 0000F0E6 CALCSCREENLOC 02 0000F3C1 CHARCOLOR 00 000007C0 CHARINVEC 00 00000804
+ CHAROUTVEC 00 00000800 CLEARSCREEN 02 0000F1FA COLORCODELOCATION 00 00000014 COPYSCREENTOVIRTUALSCREEN 02 0000F180
+ COPYVIRTUALSCREENTOSCREEN 02 0000F0FD        CR 00 0000000D      CRLF 02 0000D0D2  CRLFNEAR 02 0000F57C
+    CRLFST 02 0000F59A       CS1 02 0000F229       CS2 02 0000F24B      CSL1 02 0000F3F5
+      CSL3 02 0000F409     CSVS3 02 0000F1E2     CTRLC 00 00000003     CTRLH 00 00000008
+     CTRLI 00 00000009     CTRLJ 00 0000000A     CTRLK 00 0000000B     CTRLM 00 0000000D
+     CTRLS 00 00000013     CTRLX 00 00000018 CURSORFLASH 00 000007C4     CVSS3 02 0000F15D
+      DCCR 02 0000F421      DCLF 02 0000F511     DCX10 02 0000F47D     DCX11 02 0000F499
+     DCX12 02 0000F491     DCX13 02 0000F4AA     DCX14 02 0000F41E      DCX3 02 0000F4EB
+      DCX4 02 0000F514      DCX5 02 0000F4C7      DCX6 02 0000F43C      DCX7 02 0000F436
+      DCX8 02 0000F451      DCX9 02 0000F466 DISPBYTEASHEX 02 0000F5A6 DISPLAYCHAR 02 0000F40C
+ DISPLAYCHARNEAR 02 0000F519 DISPLAYSTRING 02 0000F565   DISPNYB 02 0000F5B0  DISPNYB1 02 0000F5C0
+ DISPWORDASHEX 02 0000F59D DRAM_BASE 00 10000000    DSPJ1B 02 0000F56A    DSRETB 02 0000F579
+  DUMPREGS 02 0000F7A8    DUMRTS 02 0000F0D3   FREEMBX 00 00000790   FREEMSG 00 00000794
+   FREETCB 00 0000078A     GCCL1 02 0000F35A GETCOLORCODELOCATION 02 0000F32E GETSCREENLOCATION 02 0000F2D7
+       GK1 02 0000F655       GK2 02 0000F650      GSL1 02 0000F311       HC1 02 0000F389
+   HELPMSG 02 0000F72D      HEX2 02 0000D2CE      HEX4 02 0000D2D2 HOMECURSOR 02 0000F367
+      ICC1 02 0000F55F      ICC2 02 0000F562      ICR1 02 0000F542 INCCURSORPOS 02 0000F51F
+ INCCURSORROW 02 0000F53D      INCH 02 0000F5ED     INCH1 02 0000F5EF     INCHE 02 0000F606
+    INCHEK 02 0000F60A   INCHEK1 02 0000F620   INCHEK2 02 0000F61D   INCHEK3 02 0000F614
+ IOFOCUSNDX 00 00000798   IRQBASE 00 000000DF   IRQFLAG 00 000007C6 IRQSOURCE 00 0000079A
+  IRQ_ROUT 02 0000F891    KCFKD1 02 0000F5EC     KEYBD 00 FFDC0000  KEYBDACK 00 17EFAC00
+  KEYBDBAD 00 17EFAB00 KEYBDBUFFER 00 17EFB000 KEYBDCHECKFORKEYDIRECT 02 0000F5DF KEYBDCLOSE 02 0000F5DB
+  KEYBDCLR 00 FFDC0002 KEYBDECHO 00 17EFAA00 KEYBDGETCHARDIRECT 02 0000F627 KEYBDGETCHARDIRECTFAR 02 0000F658
+ KEYBDHEAD 00 17EFA800 KEYBDLOCKS 00 17EFAD00 KEYBDOPEN 02 0000F5DA KEYBDREAD 02 0000F5DC
+ KEYBDSEEK 02 0000F5DE KEYBDTAIL 00 17EFA900 KEYBDWRITE 02 0000F5DD      KGC1 02 0000F629
+      LEDS 00 FFDC0600    LETTER 02 0000D2C1        LF 00 0000000A MAX_TASKNO 00 0000003F
+  MONGETCH 02 0000F721   MONITOR 02 0000F66D MONITORNEAR 02 0000F669 MON_CCRSAVE 00 0000090F
+ MON_DPRSAVE 00 0000090E MON_DSAVE 00 00000900 MON_PCSAVE 00 0000090A MON_SSAVE 00 00000908
+ MON_USAVE 00 00000906 MON_XSAVE 00 00000902 MON_YSAVE 00 00000904 MSGREGHEADINGS 02 0000F780
+ MSGSTARTUP 02 0000F0A3  NMAILBOX 00 00000792   NMIBASE 00 000000DC   NMSGBLK 00 00000796
+    ONEKEY 02 0000D1DC     OUTCH 02 0000F621     PCRLF 02 0000F586     PDATA 02 0000F593
+       PIC 00 FFDC0F00    PICPTR 00 00000028     PRINT 02 0000F590   PROMPT1 02 0000F692
+   PROMPT2 02 0000F6D4   PROMPT3 02 0000F684   PROMPTC 02 0000F6EA   PROMPTD 02 0000F6F6
+   PROMPTF 02 0000F704  PROMPTLN 02 0000F678    PSTRNG 02 0000F582     QNDX0 00 00000780
+     QNDX1 00 00000782     QNDX2 00 00000784     QNDX3 00 00000786     QNDX4 00 00000788
+ RUNNINGTCB 00 0000078E SCREENCOLOR 00 000007C2 SCREENLOCATION 00 00000010 SCREENLOCATION2 00 00000018
+ SCREENTOASCII 02 0000F0D4  SCROLLUP 02 0000F25A    SCRUP1 02 0000F27F SETKEYBOARDECHO 02 0000F65B
+ SHIFTLEFT5 02 0000F0DB       ST1 02 0000F031     START 02 0000F022    STASC1 02 0000F0DA
+    STRPTR 00 00000024 SWI3_EXIT 02 0000F861 SWI3_ROUT 02 0000F82F       TAB 00 00000009
+ TCB_ABS8SAVE 00 17EF4D00 TCB_CURSORCOL 00 17EF4500 TCB_CURSORROW 00 17EF4400  TCB_HJCB 00 17EF8B00
+ TCB_HWAITMBX 00 17EF4600 TCB_IOF_NEXT 00 17EF4900 TCB_IOF_PREV 00 17EF4A00 TCB_MBQ_NEXT 00 17EF4700
+ TCB_MBQ_PREV 00 17EF4800 TCB_MMU_MAP 00 17EF4E00 TCB_MSGPTR_D1 00 17EF8900 TCB_MSGPTR_D2 00 17EF8A00
+ TCB_NXTRDY 00 17EF8400 TCB_NXTTCB 00 17EF8600 TCB_PRIORITY 00 17EF8800 TCB_PRVRDY 00 17EF8500
+ TCB_SP8SAVE 00 17EF4B00 TCB_SPSAVE 00 17EF4C00 TCB_STATUS 00 17EF8C00 TCB_TIMEOUT 00 17EF8700
+ TEXTCLOSE 02 0000F1F6  TEXTOPEN 02 0000F1F5  TEXTREAD 02 0000F1F7   TEXTREG 00 FFDA0000
+   TEXTSCR 00 FFD00000  TEXTSEEK 02 0000F1F9 TEXTWRITE 02 0000F1F8 TEXT_COLS 00 00000000
+ TEXT_CURPOS 00 00000016 TEXT_ROWS 00 00000002 TIMEOUTLIST 00 0000078C      TR1A 02 0000F8DA
+      UCP1 02 0000F3BE UPDATECURSORPOS 02 0000F38C    XBLANK 02 0000D0AF      XOFF 00 00000013
+       XON 00 00000011
+205 SYMBOLS
 
 0 error(s), 48 warning(s)

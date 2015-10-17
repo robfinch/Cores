@@ -44,6 +44,7 @@ ScreenLocation2		EQU		$18
 BlkcpySrc			EQU		$1C
 BlkcpyDst			EQU		$20
 Strptr				EQU		$24
+PICptr				EQU		$28
 
 ; Task control blocks, room for 256 tasks
 TCB_NxtRdy		EQU		$17EF8400	; next task on ready / timeout list
@@ -83,6 +84,8 @@ TEXT_ROWS	EQU		2
 TEXT_CURPOS	EQU		22
 KEYBD		EQU		$FFDC0000
 KEYBDCLR	EQU		$FFDC0002
+PIC			EQU		$FFDC0F00
+
 BIOS_SCREENS	EQU	$17000000	; $17000000 to $171FFFFF
 
 ; EhBASIC vars:
@@ -113,18 +116,105 @@ ScreenColor	EQU		$7C2
 CursorFlash	EQU		$7C4
 IRQFlag		EQU		$7C6
 
+CharOutVec	EQU		$800
+CharInVec	EQU		$804
+
+; Register save area for monitor
+mon_DSAVE	EQU		$900
+mon_XSAVE	EQU		$902
+mon_YSAVE	EQU		$904
+mon_USAVE	EQU		$906
+mon_SSAVE	EQU		$908
+mon_PCSAVE	EQU		$90A
+mon_DPRSAVE	EQU		$90E
+mon_CCRSAVE	EQU		$90F
+
+	org		$0000D0AF
+far XBLANK
+	lda		#' '
+	jsr		OUTCH
+	rtf
+
+	org		$0000D0D2
+far CRLF
+	lda		#CR
+	jsr		OUTCH
+	lda		#LF
+	jsr		OUTCH
+	rtf
+
+	org		$0000D1DC
+far ONEKEY
+	jmp		far [CharInVec]
+
+	org		$0000D2C1
+far LETTER
+	jsr		OUTCH
+	rtf
+
+	org		$0000D2CE
+far HEX2
+	jsr		DispByteAsHex
+	rtf
+far HEX4
+	jsr		DispWordAsHex
+	rtf
+
 	org		$0000F000
+	FDB MonitorNear
+	FDB DumRts	;	NEXTCMD
+	FDB INCH
+	FDB INCHE
+	FDB INCHEK
+	FDB OUTCH
+	FDB PDATA
+	FDB PCRLF
+	FDB PSTRNG
+	FDB DumRts			; LRA
+	FDB DumRts
+	FDB DumRts
+	FDB DumRts
+	FDB DumRts			; VINIZ
+	FDB DisplayCharNear	;	VOUTCH
+	FDB DumRts			; ACINIZ
+	FDB DumRts			; AOUTCH
 
 start:
 	lda		#1
 	sta		LEDS
 	leas	$3FFF
+
+	; initialize interrupt controller
+	; first, zero out all the vectors
+	ldx		#64
+st1:
+	clr		PIC,x
+	leax	1,x
+	cmpx	#128
+	blo		st1
+	; set the irq routine vector
+	ldd		#>irq_rout
+	std		PIC+72
+	ldd		#<irq_rout
+	std		PIC+74
+	lda		#$04			; make the timer interrupt edge sensitive
+	sta		PIC+4			; reg #4 is the edge sensitivity setting
+	sta		PIC				; reg #0 is interrupt enable
+
 	andcc	#$EF			; unmask irq
 	ldd		#$CE
 	std		ScreenColor
 	std		CharColor
 	jsr		ClearScreen
 	jsr		HomeCursor
+	ldd		#DisplayChar
+	std		CharOutVec+2
+	ldd		#DisplayChar >> 16
+	std		CharOutVec
+	ldd		#KeybdGetCharDirectFar
+	std		CharInVec+2
+	ldd		#KeybdGetCharDirectFar >> 16
+	std		CharInVec
 	ldd		#<msgStartup
 	std		Strptr+2
 	ldd		#>msgStartup
@@ -158,7 +248,7 @@ AsciiToScreen:
 	suba	#$60
 atoscr1:
 	orb		#$1
-TestRts:
+DumRts:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -166,8 +256,8 @@ TestRts:
 ;------------------------------------------------------------------------------
 ;
 ScreenToAscii:
-	cmpa	#26+1
-	bcs		stasc1
+	cmpa	#26
+	bhi		stasc1
 	adda	#$60
 stasc1:
 	rts
@@ -330,6 +420,26 @@ CopyScreenToVirtualScreen
 
 	puls	d,x,y
 csvs3:
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+	fcb		"TEXTSCR "
+	fcw		TextOpen
+	fcw		TextClose
+	fcw		TextRead
+	fcw		TextWrite
+	fcw		TextSeek
+
+TextOpen:
+	rts
+TextClose:
+	rts
+TextRead:
+	rts
+TextWrite:
+	rts
+TextSeek:
 	rts
 
 ;------------------------------------------------------------------------------
@@ -535,7 +645,9 @@ UpdateCursorPos:
 	ldb		TCB_CursorCol,x
 	tfr		y,x
 	abx
-	stx		TEXTREG+TEXT_CURPOS
+	tfr		x,d
+	sta		TEXTREG+TEXT_CURPOS+1
+	stb		TEXTREG+TEXT_CURPOS
 ucp1:
 	puls	d,x,y
 	rts
@@ -560,7 +672,9 @@ CalcScreenLoc:
 	abx
 	cmpy	IOFocusNdx				; update cursor position in text controller
 	bne		csl1					; only for the task with the output focus
-	stx		TEXTREG+TEXT_CURPOS
+	tfr		x,d
+	sta		TEXTREG+TEXT_CURPOS+1
+	stb		TEXTREG+TEXT_CURPOS
 csl1:
 	tfr		x,d						
 	aslb							; * 2 for 2 bytes per char displayed.
@@ -691,6 +805,10 @@ dcx4:
 	puls	a,x
 	rtf
 
+DisplayCharNear
+	jsr		DisplayChar
+	rts
+
 ;------------------------------------------------------------------------------
 ; Increment the cursor position, scroll the screen if needed.
 ;------------------------------------------------------------------------------
@@ -735,23 +853,105 @@ far DisplayString:
 dspj1B:
 	lda		far [Strptr],x	; move string char into acc
 	beq		dsretB			; is it end of string ?
-	jsr		DisplayChar		; display character
+	jsr		OUTCH			; display character
 	leax	1,x
 	bra		dspj1B
 dsretB:
 	puls	a,x
 	rtf
 
-far CRLF
-	lda		#CR
-	jsr		DisplayChar
-	lda		#LF
-	jsr		DisplayChar
-	rtf
+CRLFNear:
+	jsr		CRLF
+	rts
+
+;
+; PRINT CR, LF, STRING
+;
+PSTRNG
+	BSR		PCRLF
+	BRA		PDATA
+PCRLF
+	PSHS	X
+	LDX		#CRLFST
+	BSR		PDATA
+	PULS	X
+	RTS
+
+PRINT
+	JSR		OUTCH
+PDATA
+	LDA		,X+
+	CMPA	#$04
+	BNE		PRINT
+	RTS
+
+CRLFST
+	fcb	CR,LF,4
+
+DispWordAsHex:
+	bsr		DispByteAsHex
+	exg		a,b
+	bsr		DispByteAsHex
+	exg		a,b
+	rts
+
+DispByteAsHex:
+	rora
+	rora
+	rora
+	rora
+	bsr		DispNyb
+	rola
+	rola
+	rola
+	rola
+
+DispNyb
+	pshs	a
+	anda	#$0F
+	cmpa	#10
+	blo		DispNyb1
+	adda	#'A'-10
+	jsr		OUTCH
+	puls	a
+	rts
+DispNyb1
+	adda	#'0'
+	jsr		OUTCH
+	puls	a
+	rts
 
 ;==============================================================================
 ; Keyboard I/O
 ;==============================================================================
+
+	fcb		"KEYBOARD"
+	fcw		KeybdOpen
+	fcw		KeybdClose
+	fcw		KeybdRead
+	fcw		KeybdWrite
+	fcw		KeybdSeek
+
+; Keyboard Open:
+; Initialize the keyboard buffer head and tail indexes
+;
+KeybdOpen:
+	rts
+
+; Keyboard Close:
+; Nothing to do except maybe clear the keyboard buffer
+;
+KeybdClose:
+	rts
+;
+KeybdRead:
+	rts
+;
+KeybdWrite:
+	rts
+
+KeybdSeek:
+	rts
 
 ;------------------------------------------------------------------------------
 ; Check if there is a keyboard character available. If so return true (1)
@@ -768,6 +968,42 @@ kcfkd1
 	rts
 
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+INCH:
+	pshs	b,x
+inch1:
+	ldd		KEYBD
+	bitb	#$80			; is there a char available ?
+	beq		inch1			; no, check again
+	std		KEYBD+2			; clear keyboard strobe
+	bitb	#$8				; is it a keydown event ?
+	bne		inch1			; no, go back check for another char
+	puls	b,x
+	rts
+
+INCHE:
+	bsr		INCH
+	bra		INCHEK3
+
+INCHEK:
+	bsr		INCH
+	tst		KeybdEcho
+	beq		INCHEK1
+INCHEK3:
+	cmpa	#CR
+	bne		INCHEK2
+	jsr		CRLFNear
+	bra		INCHEK1
+INCHEK2:
+	jsr		DisplayCharNear
+INCHEK1:
+	rts
+
+OUTCH:
+	jsr		far [CharOutVec]
+	rts
+
+;------------------------------------------------------------------------------
 ; Get character directly from keyboard. This routine blocks until a key is
 ; available.
 ;------------------------------------------------------------------------------
@@ -776,12 +1012,11 @@ KeybdGetCharDirect:
 	pshs	x
 kgc1:
 	ldd		KEYBD
-	bita	#$80			; is there a char available ?
+	bitb	#$80			; is there a char available ?
 	beq		kgc1			; no, check again
 	std		KEYBD+2			; clear keyboard strobe
-	bita	#$8				; is it a keydown event ?
+	bitb	#$8				; is it a keydown event ?
 	bne		kgc1			; no, go back check for another char
-	tfr		b,a				; tranfser ascii code to acca
 	ldb		KeybdEcho		; is keyboard echo on ?
 	beq		gk1				; no keyboard echo, just return char
 	cmpa	#CR
@@ -793,6 +1028,10 @@ gk2:
 gk1:
 	puls	x
 	rts
+
+far KeybdGetCharDirectFar:
+	bsr		KeybdGetCharDirect
+	rtf
 
 ;------------------------------------------------------------------------------
 ; r1 0=echo off, non-zero = echo on
@@ -806,8 +1045,13 @@ far SetKeyboardEcho:
 	rtf
 
 ;==============================================================================
+; System Monitor
 ;==============================================================================
 ;
+MonitorNear:
+	jsr		Monitor
+	rts
+
 Monitor:
 	leas	$3FFF
 	lda		#0					; turn off keyboard echo
@@ -853,33 +1097,54 @@ Prompt1:
 ;
 Prompt2:
 	cmpa	#'?'			; $? - display help
-	bne		Prompt3
+	bne		PromptC
 	ldd		#<HelpMsg
 	std		Strptr+2
 	ldd		#>HelpMsg
 	std		Strptr
 	jsr		DisplayString
 	jmp		Monitor
+PromptC:
+	cmpa	#'C'
+	bne		PromptD
+	jsr		ClearScreen
+	jmp		Monitor
+PromptD:
+	cmpa	#'D'
+	bne		PromptF
+	jsr		MonGetch
+	cmpa	#'R'
+	bne		Prompt3
+	jmp		DumpRegs
+PromptF:
+	cmpa	#'F'
+	lbne	Monitor
+	jsr		MonGetch
+	cmpa	#'I'
+	lbne	Monitor
+	jsr		MonGetch
+	cmpa	#'G'
+	lbne	Monitor
+	jmp		far $20000
 
 MonGetch:
 	ldd		far [ScreenLocation],y
-	exg		a,b
 	leay	2,y
 	jsr		ScreenToAscii
 	rts
 
 HelpMsg:
 	fcb		"? = Display help",CR,LF
-;	db	"CLS = clear screen",CR,LF
+	fcb	"CLS = clear screen",CR,LF
 ;	db	"S = Boot from SD Card",CR,LF
 ;	db	": = Edit memory bytes",CR,LF
 ;	db	"L = Load sector",CR,LF
 ;	db	"W = Write sector",CR,LF
-;	db  "DR = Dump registers",CR,LF
+	fcb "DR = Dump registers",CR,LF
 ;	db	"D = Dump memory",CR,LF
 ;	db	"F = Fill memory",CR,LF
 ;	db  "FL = Dump I/O Focus List",CR,LF
-;	db  "FIG = start FIG Forth",CR,LF
+	fcb "FIG = start FIG Forth",CR,LF
 ;	db	"KILL n = kill task #n",CR,LF
 ;	db	"B = start tiny basic",CR,LF
 ;	db	"b = start EhBasic 6502",CR,LF
@@ -894,10 +1159,93 @@ HelpMsg:
 ;	db	"P = Piano",CR,LF,0
 	fcb		0
 
+msgRegHeadings
+	fcb	" D/AB  X   Y   U   S     PC    DP CCR",CR,LF,0
+
+DumpRegs
+	ldd		#msgRegHeadings
+	std		Strptr+2
+	ldd		#msgRegHeadings>>16
+	std		Strptr
+	jsr		DisplayString
+	jsr		XBLANK
+	ldd		mon_DSAVE
+	jsr		HEX4
+	jsr		XBLANK
+	ldd		mon_XSAVE
+	jsr		HEX4
+	jsr		XBLANK
+	ldd		mon_YSAVE
+	jsr		HEX4
+	jsr		XBLANK
+	ldd		mon_USAVE
+	jsr		HEX4
+	jsr		XBLANK
+	ldd		mon_SSAVE
+	jsr		HEX4
+	jsr		XBLANK
+	ldd		mon_PCSAVE
+	jsr		HEX4
+	ldd		mon_PCSAVE+2
+	jsr		HEX4
+	jsr		XBLANK
+	ldd		mon_DPRSAVE
+	jsr		HEX2
+	jsr		XBLANK
+	lda		mon_CCRSAVE
+	jsr		HEX2
+	jsr		XBLANK
+	jmp		Monitor
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+swi3_rout:
+	sei
+	puls	a
+	sta		mon_CCRSAVE
+	puls	D,DPR,X,Y,U
+	std		mon_DSAVE
+	stx		mon_XSAVE
+	sty		mon_YSAVE
+	stu		mon_USAVE
+	tfr		dpr,a
+	sta		mon_DPRSAVE
+	puls	D
+	std		mon_PCSAVE
+	puls	D
+	std		mon_PCSAVE+2
+	sts		mon_SSAVE
+	lds		#$3FFF
+	cli
+	jmp		DumpRegs
+swi3_exit:
+	sei
+	lds		mon_SSAVE
+	ldd		mon_PCSAVE+2
+	pshs	d
+	ldd		mon_PCSAVE
+	pshs	d
+	ldu		mon_USAVE
+	ldy		mon_YSAVE
+	ldx		mon_XSAVE
+	pshs	x,y,u
+	lda		mon_DPRSAVE
+	pshs	a
+	ldd		mon_DSAVE
+	pshs	d
+	lda		mon_CCRSAVE
+	pshs	a
+	tfr		a,ccr
+	cli
+	rti
+
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 irq_rout:
-	lda		#3				; Timer is IRQ #3
+	; Reset the edge sense circuit in the PIC
+	lda		#2				; Timer is IRQ #2
+	sta		PIC+6			; register 6 is edge sense reset reg	
+
 	sta		IrqSource		; stuff a byte indicating the IRQ source for PEEK()
 	lda		IrqBase			; get the IRQ flag byte
 	lsra
@@ -933,6 +1281,9 @@ irq_rout:
 	sta		$FFD10000,y		; store the color code back to memory
 tr1a
 	rti
+
+	org		$FFF2
+	fcw		swi3_rout
 
 	org		$FFF8
 	fcw		irq_rout
