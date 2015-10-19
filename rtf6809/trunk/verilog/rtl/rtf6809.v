@@ -80,7 +80,7 @@ reg [31:0] pc;
 wire [31:0] pcp2 = pc + 32'd2;
 wire [31:0] pcp8 = pc + 32'd8;
 wire [63:0] insn;
-wire icacheOn = 1'b0;
+wire icacheOn = 1'b1;
 reg [31:0] ibufadr;
 reg [63:0] ibuf;
 wire ibufhit = ibufadr==pc;
@@ -2223,9 +2223,16 @@ DECODE:
 			end
 		`JSR_NDX:
 			begin
-				store_what <= `SW_PCH;
-				wadr <= ssp - 16'd2;
-				ssp <= ssp - 16'd2;
+			    if (isFar) begin
+					store_what <= `SW_PC3124;
+                    wadr <= ssp - 16'd4;
+                    ssp <= ssp - 16'd4;
+			    end
+			    else begin
+                    store_what <= `SW_PCH;
+                    wadr <= ssp - 16'd2;
+                    ssp <= ssp - 16'd2;
+				end
 				pc <= pc + insnsz;
 				next_state(STORE1);
 			end
@@ -2270,11 +2277,15 @@ DECODE:
 		`JMP_NDX:
 			begin
 				if (isIndirect) begin
-					load_what <= `LW_PCH;
+			        radr <= NdxAddr;
+				    if (isFar)
+					   load_what <= `LW_PC3124;
+				    else
+					   load_what <= `LW_PCH;
 					next_state(LOAD1);
 				end
 				else
-					pc <= NdxAddr;
+					pc <= isFar ? NdxAddr : {pc[31:16],NdxAddr[15:0]};
 			end
 		`LEAX_NDX,`LEAY_NDX,`LEAS_NDX,`LEAU_NDX:
 			if (md32) begin
@@ -2319,11 +2330,12 @@ DECODE:
 				pc <= pc + {{24{ir[15]}},ir[15:8]} + 16'd2;
 			else
 				pc <= pc + 16'd2;
+		// PC is already incremented by one due to the PG10 prefix.
 		`LBEQ,`LBNE,`LBMI,`LBPL,`LBVS,`LBVC,`LBHI,`LBLS,`LBHS,`LBLO,`LBGT,`LBGE,`LBLT,`LBLE,`LBRN:
 			if (takb)
-				pc <= pc + {{16{ir[15]}},ir[15:8],ir[23:16]} + 16'd4;
+				pc <= pc + {{16{ir[15]}},ir[15:8],ir[23:16]} + 16'd3;
 			else
-				pc <= pc + 16'd4;
+				pc <= pc + 16'd3;
 		`LBRA:	pc <= pc + {{16{ir[15]}},ir[15:8],ir[23:16]} + 16'd3;
 		`RTI:
 			begin
@@ -2580,9 +2592,9 @@ STORE1:
 					wb_write(wadr,xr[15:8]);
 		`SW_X2316:	wb_write(wadr,xr[23:16]);
 		`SW_X3124:
-				if (wadr[1:0]==2'b00)
-					wb_write4({xr[7:0],xr[15:8],xr[23:16],xr[31:24]});
-				else
+//				if (wadr[1:0]==2'b00)
+//					wb_write4({xr[7:0],xr[15:8],xr[23:16],xr[31:24]});
+//				else
 					wb_write(wadr,xr[31:24]);
 		`SW_YL:	wb_write(wadr,yr[7:0]);
 		`SW_YH:	wb_write(wadr,yr[15:8]);
@@ -2718,7 +2730,7 @@ STORE2:
 			begin
 				store_what <= `SW_ACCDL;
 				if (wadr[1:0]!=2'b11) begin
-					wadr <= wadr + 32'd2;
+//					wadr <= wadr + 32'd2;
 					next_state(IFETCH);
 				end
 				else
@@ -2729,6 +2741,7 @@ STORE2:
 		`SW_X3124:
 			begin
 				store_what <= `SW_X2316;
+/*
 				if (wadr[1:0]==2'b00) begin
 					wadr <= wadr + 32'd4;
 					if (isINT | isPSHS | isPSHU)
@@ -2737,8 +2750,9 @@ STORE2:
 						next_state(IFETCH);
 				end
 				else begin
+*/
 					next_state(STORE1);
-				end
+//				end
 			end
 		`SW_X2316:
 			begin
@@ -2753,7 +2767,8 @@ STORE2:
 				else	// STX
 					next_state(IFETCH);
 			end
-			else begin
+			else
+            begin
 				store_what <= `SW_XL;
 				next_state(STORE1);
 			end
@@ -2854,7 +2869,7 @@ STORE2:
 				`JSR_DP:	pc <= {16'h0000,dpr,ir[15:8]};
 				`JSR_EXT:
 						if (isFar)
-							pc <= far_address;
+							pc <= {16'h0000,near_address};
 						else
 							pc[15:0] <= near_address;
 				`JSR_FAR:	
@@ -3592,13 +3607,7 @@ begin
 				next_state(LOAD1);
 				usp[31:24] <= dat;
 				radr <= radr + 32'd1;
-				if (isRTI) begin
-					ssp <= ssp + 16'd1;
-				end
-				else if (isPULU) begin
-					usp <= usp + 16'd1;
-				end
-				else if (isPULS) begin
+				if (isRTI|isPULS) begin
 					ssp <= ssp + 16'd1;
 				end
 			end
@@ -3607,13 +3616,7 @@ begin
 				next_state(LOAD1);
 				usp[23:16] <= dat;
 				radr <= radr + 32'd1;
-				if (isRTI) begin
-					ssp <= ssp + 16'd1;
-				end
-				else if (isPULU) begin
-					usp <= usp + 16'd1;
-				end
-				else if (isPULS) begin
+				if (isRTI|isPULS) begin
 					ssp <= ssp + 16'd1;
 				end
 			end
@@ -3626,9 +3629,6 @@ begin
 					$display("loadded USPH=%h", dat);
 					ssp <= ssp + 16'd1;
 				end
-				else if (isPULU) begin
-					usp <= usp + 16'd1;
-				end
 				else if (isPULS) begin
 					ssp <= ssp + 16'd1;
 				end
@@ -3639,10 +3639,6 @@ begin
 				if (isRTI) begin
 					$display("loadded USPL=%h", dat);
 					ssp <= ssp + 16'd1;
-					next_state(PULL1);
-				end
-				else if (isPULU) begin
-					usp <= usp + 16'd1;
 					next_state(PULL1);
 				end
 				else if (isPULS) begin
@@ -3663,9 +3659,6 @@ begin
 				else if (isPULU) begin
 					usp <= usp + 16'd1;
 				end
-				else if (isPULS) begin
-					ssp <= ssp + 16'd1;
-				end
 			end
 	`LW_SSP2316:	begin
 				load_what <= `LW_SSPH;
@@ -3678,14 +3671,11 @@ begin
 				else if (isPULU) begin
 					usp <= usp + 16'd1;
 				end
-				else if (isPULS) begin
-					ssp <= ssp + 16'd1;
-				end
 			end
 	`LW_SSPH:	begin
 				load_what <= `LW_SSPL;
 				next_state(LOAD1);
-				usp[15:8] <= dat;
+				ssp[15:8] <= dat;
 				radr <= radr + 32'd1;
 				if (isRTI) begin
 					ssp <= ssp + 16'd1;
@@ -3693,12 +3683,9 @@ begin
 				else if (isPULU) begin
 					usp <= usp + 16'd1;
 				end
-				else if (isPULS) begin
-					ssp <= ssp + 16'd1;
-				end
 			end
 	`LW_SSPL:	begin
-				usp[7:0] <= dat;
+				ssp[7:0] <= dat;
 				radr <= radr + 16'd1;
 				if (isRTI) begin
 					ssp <= ssp + 16'd1;
@@ -3706,10 +3693,6 @@ begin
 				end
 				else if (isPULU) begin
 					usp <= usp + 16'd1;
-					next_state(PULL1);
-				end
-				else if (isPULS) begin
-					ssp <= ssp + 16'd1;
 					next_state(PULL1);
 				end
 				else

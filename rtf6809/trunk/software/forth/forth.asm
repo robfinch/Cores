@@ -70,6 +70,7 @@ TCR       EQU $D0F1         ; terminal return and line feed.
 		  ORG $20000
 ;          *=*+2
 ;
+		 ; These two jumps must occupy four bytes each.
                          ; User cold entry point
                          ; User cold entry point
 ENTER     NOP            ; Vector to COLD entry

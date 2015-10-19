@@ -129,6 +129,10 @@ mon_PCSAVE	EQU		$90A
 mon_DPRSAVE	EQU		$90E
 mon_CCRSAVE	EQU		$90F
 
+mon_numwka	EQU		$910
+mon_r1		EQU		$904
+mon_r2		EQU		$908
+
 	org		$0000D0AF
 far XBLANK
 	lda		#' '
@@ -137,11 +141,15 @@ far XBLANK
 
 	org		$0000D0D2
 far CRLF
+CRLF1:
 	lda		#CR
 	jsr		OUTCH
 	lda		#LF
 	jsr		OUTCH
 	rtf
+
+	org		$0000D0F1
+	jmp		CRLF1
 
 	org		$0000D1DC
 far ONEKEY
@@ -1024,7 +1032,7 @@ kgc1:
 	jsr		CRLF
 	bra		gk1
 gk2:
-	jsr		DisplayChar
+	jsr		OUTCH
 gk1:
 	puls	x
 	rts
@@ -1060,7 +1068,7 @@ Monitor:
 PromptLn:
 	jsr		CRLF
 	lda		#'$'
-	jsr		DisplayChar
+	jsr		OUTCH
 
 ; Get characters until a CR is keyed
 ;
@@ -1068,7 +1076,7 @@ Prompt3:
 	jsr		KeybdGetCharDirect
 	cmpa	#CR
 	beq		Prompt1
-	jsr		DisplayChar
+	jsr		OUTCH
 	bra		Prompt3
 
 ; Process the screen line that the CR was keyed on
@@ -1086,12 +1094,12 @@ Prompt1:
 	jsr		CalcScreenLoc	; calc screen memory location
 	ldd		#$5252
 	std		LEDS
-	jsr		MonGetch
+	jsr		MonGetNonSpace
 	cmpa	#'$'
 	bne		Prompt2			; skip over '$' prompt character
 	lda		#$5353
 	std		LEDS
-	jsr		MonGetch
+	jsr		MonGetNonSpace
 
 ; Dispatch based on command character
 ;
@@ -1118,7 +1126,7 @@ PromptD:
 	jmp		DumpRegs
 PromptF:
 	cmpa	#'F'
-	lbne	Monitor
+	bne		PromptJ
 	jsr		MonGetch
 	cmpa	#'I'
 	lbne	Monitor
@@ -1126,12 +1134,176 @@ PromptF:
 	cmpa	#'G'
 	lbne	Monitor
 	jmp		far $20000
+PromptJ:
+	cmpa	#'J'
+	lbeq	jump_to_code
+	jmp		Monitor
 
 MonGetch:
 	ldd		far [ScreenLocation],y
 	leay	2,y
 	jsr		ScreenToAscii
 	rts
+
+MonGetNonSpace:
+	bsr		MonGetCh
+	cmpa	#' '
+	beq		MonGetNonSpace
+	rts
+
+;------------------------------------------------------------------------------
+; Ignore blanks in the input
+; Y = text pointer
+; D destroyed
+;------------------------------------------------------------------------------
+;
+ignBlanks:
+ignBlanks1:
+	bsr		MonGetch
+	cmpa	#' '
+	beq		ignBlanks1
+	leay	-2,y
+	rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+GetTwoParams:
+	jsr		ignBlanks
+	jsr		GetHexNumber	; get start address of dump
+	tfr		d,x
+	jsr		ignBlanks
+	jsr		GetHexNumber	; get end address of dump
+	rts
+
+;------------------------------------------------------------------------------
+; Get a range, the end must be greater or equal to the start.
+;------------------------------------------------------------------------------
+;GetRange:
+;	jsr		GetTwoParams
+;	cmp		r2,r1
+;	bhi		DisplayErr
+;	rts
+
+shl_numwka:
+	asl		mon_numwka+3
+	rol		mon_numwka+2
+	rol		mon_numwka+1
+	rol		mon_numwka
+	rts
+
+;------------------------------------------------------------------------------
+; Get a hexidecimal number. Maximum of eight digits.
+; Y = text pointer (updated)
+; D = number of digits
+; mon_numwka contains number
+;------------------------------------------------------------------------------
+;
+GetHexNumber:
+	clrd
+	std		mon_numwka
+	std		mon_numwka+2
+	pshs	x
+	ldx		#0					; max 8 eight digits
+gthxn2:
+	jsr		MonGetch
+	jsr		AsciiToHexNybble
+	cmpa	#-1
+	beq		gthxn1
+	bsr		shl_numwka
+	bsr		shl_numwka
+	bsr		shl_numwka
+	bsr		shl_numwka
+	anda	#$0f
+	ora		mon_numwka+7
+	sta		mon_numwka+7
+	inx
+	cmpx	#8
+	blo		gthxn2
+gthxn1:
+	tfr		x,d
+	puls	x
+	rts
+
+;GetDecNumber:
+;	phx
+;	push	r4
+;	push	r5
+;	ldx		#0
+;	ld		r4,#10
+;	ld		r5,#10
+;gtdcn2:
+;	jsr		MonGetch
+;	jsr		AsciiToDecNybble
+;	cmp		#-1
+;	beq		gtdcn1
+;	mul		r2,r2,r5
+;	add		r2,r1
+;	dec		r4
+;	bne		gtdcn2
+;gtdcn1:
+;	txa
+;	pop		r5
+;	pop		r4
+;	plx
+;	rts
+
+;------------------------------------------------------------------------------
+; Convert ASCII character in the range '0' to '9', 'a' to 'f' or 'A' to 'F'
+; to a hex nybble.
+;------------------------------------------------------------------------------
+;
+AsciiToHexNybble:
+	cmpa	#'0'
+	bcc		gthx3
+	cmpa	#'9'+1
+	bcs		gthx5
+	suba	#'0'
+	rts
+gthx5:
+	cmpa	#'A'
+	bcc		gthx3
+	cmpa	#'F'+1
+	bcs		gthx6
+	suba	#'A'
+	adda	#10
+	rts
+gthx6:
+	cmpa	#'a'
+	bcc		gthx3
+	cmpa	#'z'+1
+	bcs		gthx3
+	suba	#'a'
+	adda	#10
+	rts
+gthx3:
+	lda		#-1		; not a hex number
+	rts
+
+AsciiToDecNybble:
+	cmpa	#'0'
+	bcc		gtdc3
+	cmpa	#'9'+1
+	bcs		gtdc3
+	suba	#'0'
+	rts
+gtdc3:
+	lda		#-1
+	rts
+
+DisplayErr:
+	ldx		#msgErr
+	clrd
+	bsr		DisplayStringDX
+	jmp		Monitor
+
+DisplayStringDX
+	std		Strptr
+	stx		Strptr+2
+	jsr		DisplayString
+	rts
+
+msgErr:
+	fcb	"**Err",CR,LF,0
 
 HelpMsg:
 	fcb		"? = Display help",CR,LF
@@ -1148,7 +1320,7 @@ HelpMsg:
 ;	db	"KILL n = kill task #n",CR,LF
 ;	db	"B = start tiny basic",CR,LF
 ;	db	"b = start EhBasic 6502",CR,LF
-;	db	"J = Jump to code",CR,LF
+	fcb	"J = Jump to code",CR,LF
 ;	db	"R[n] = Set register value",CR,LF
 ;	db	"r = random lines - test bitmap",CR,LF
 ;	db	"e = ethernet test",CR,LF
@@ -1163,11 +1335,11 @@ msgRegHeadings
 	fcb	" D/AB  X   Y   U   S     PC    DP CCR",CR,LF,0
 
 DumpRegs
-	ldd		#msgRegHeadings
-	std		Strptr+2
+	ldx		#msgRegHeadings
 	ldd		#msgRegHeadings>>16
-	std		Strptr
-	jsr		DisplayString
+	jsr		DisplayStringDX
+	nop
+	nop
 	jsr		XBLANK
 	ldd		mon_DSAVE
 	jsr		HEX4
@@ -1196,6 +1368,46 @@ DumpRegs
 	jsr		HEX2
 	jsr		XBLANK
 	jmp		Monitor
+
+; Jump to code
+jump_to_code:
+	jsr		GetHexNumber
+	sei
+	lds		mon_SSAVE
+	ldd		#<jtc_exit
+	pshs	d
+	ldd		#>jtc_exit
+	pshs	d
+	ldd		mon_numwka+2
+	pshs	d
+	ldd		mon_numwka
+	pshs	d
+	ldd		mon_USAVE
+	pshs	d
+	ldd		mon_YSAVE
+	pshs	y
+	ldd		mon_XSAVE
+	pshs	x
+	lda		mon_DPRSave
+	pshs	a
+	ldd		mon_DSAVE
+	pshs	d
+	lda		mon_CCRSAVE
+	pshs	a
+	puls	far ccr,d,dpr,x,y,u,pc
+jtc_exit:
+	pshs	ccr
+	std		mon_DSAVE
+	stx		mon_XSAVE
+	sty		mon_YSAVE
+	stu		mon_USAVE
+	tfr		dpr,a
+	sta		mon_DPRSAVE
+	puls	a
+	sta		mon_CCRSAVE
+	sts		mon_SSAVE
+	lds		#$3FFF
+	jmp		DumpRegs
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
