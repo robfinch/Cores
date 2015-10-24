@@ -39,7 +39,7 @@ BMAG      =4128          ; total buffer magnitude, in bytes
 ;
 BOS       EQU $B800         ; bottom of data stack, in zero-page.
 TOS       EQU $BBFF         ; top of data stack, in zero-page.
-N         EQU 8             ; scratch workspace.
+N         EQU $30             ; scratch workspace.
 IP        EQU N+8           ; interpretive pointer.
 W         EQU IP+4          ; code field pointer.
 UP        EQU W+4           ; user area pointer.
@@ -74,6 +74,8 @@ TCR       EQU $D0F1         ; terminal return and line feed.
                          ; User cold entry point
                          ; User cold entry point
 ENTER     NOP            ; Vector to COLD entry
+;		  NOP
+;		  SWI3
           JMP COLD+4     ;
 REENTR    NOP            ; User Warm entry point
           JMP WARM       ; Vector to WARM entry
@@ -114,7 +116,9 @@ LIT       FCDW *+4			; <----- code address field
 L30       LDD	FAR [IP]
 		  BSR	INC_IP
 L31		  BSR	INC_IP
+
 PUSH	  LEAU	-4,U
+
 PUT		  STD	2,U
 		  PULS	D
 		  STD	,U
@@ -131,6 +135,7 @@ NEXT      LDD	FAR [IP]
 		  ADCB	#0
 		  ADCA	#0
 		  STD	IP
+		  JSR	TRACE
 		  JMP	FAR [W]
 
 ; Increment IP by 1
@@ -180,12 +185,11 @@ HEX2      EQU $D2CE         ; print accum as two hex numbers
 HEX4		EQU	$D2D2		; print accum D as four hex numbers
 LETTER    EQU $D2C1         ; print accum as one ASCII character
 ONEKEY    EQU $D1DC         ; wait for keystroke
-XW        EQU $12           ; scratch reg. to next code field add
-NP        EQU $14           ; scratch reg. pointing to name field
+XW        EQU TMP+4             ; scratch reg. to next code field add
+NP        EQU XW+4              ; scratch reg. pointing to name field
 ;
 ;
-TRACE     STX XSAVE
-          JSR	FAR CRLF
+TRACE     JSR	FAR CRLF
 		  LDD	IP			; print IP, the interpreter pointer
 		  JSR	FAR HEX4
 		  LDD	IP+2
@@ -193,74 +197,65 @@ TRACE     STX XSAVE
           JSR	FAR XBLANK
 ;
 ;
-          LDA	#0
-          LDA	FAR [IP],Y
-          STA	XW
-          STA	NP         ; fetch the next code field pointer
-		  BSR	INC_IP
-          LDA	FAR [IP],Y
-          STA	XW+1
-          STA	NP+1
-          JSR	FAR PRNAM  ; print dictionary name
+          LDD	FAR [IP]
+          STD	XW
+          STD	NP         ; fetch the next code field pointer
+		  LDY	#2
+          LDD	FAR [IP],Y
+          STD	XW+2
+          STD	NP+2
+          JSR	PRNAM  ; print dictionary name
 ;
-          LDA XW
-          JSR FAR HEX2   ; print code field address
-          LDA XW+1
-          JSR FAR HEX2
-		  LDA #0
-		  JSR FAR HEX2
-          JSR FAR XBLANK
+          LDD	XW
+          JSR	FAR HEX4   ; print code field address
+          LDD	XW+2
+          JSR	FAR HEX4
+          JSR	FAR XBLANK
 ;
-          LDA XSAVE      ; print stack location in zero-page
-          JSR FAR HEX2
-		  LDA XSAVE+1
-		  JSR FAR HEX2
-          JSR FAR XBLANK
+		  TFR	U,D		; print stack location in zero-page
+          JSR	FAR HEX4
+          JSR	FAR XBLANK
 ;
-          LDA #1         ; print return stack bottom in page 1
-		  TFR S,D
-		  EXG A,B
-          JSR FAR HEX2
-		  EXG A,B
-          JSR FAR HEX2
-          JSR FAR XBLANK
+		  TFR	S,D		; print return stack bottom in page 1
+          JSR	FAR HEX4
+          JSR	FAR XBLANK
 ;
-          JSR FAR ONEKEY ; wait for operator keystroke
-          LDX XSAVE      ; just to pinpoint early problems
-          LDY #0
+          JSR	FAR ONEKEY ; wait for operator keystroke
           RTS
 ;
 ;    TCOLON is called from DOCOLON to label each point
 ;    where FORTH 'nests' one level.
 ;
-TCOLON    LDD W
-          STD NP         ; locate the name of the called word
-          LDD W+2
-          STD NP+2
-          JSR FAR CRLF
-          LDA #$3A       ; ':
-          JSR FAR LETTER
-          JSR FAR XBLANK
-          BSR PRNAM
-          RTS
+TCOLON    LDD	W
+          STD	NP         ; locate the name of the called word
+          LDD	W+2
+          STD	NP+2
+          JSR	FAR CRLF
+          LDA	#$3A       ; ':
+          JSR	FAR LETTER
+          JSR	FAR XBLANK
+;          BSR	 PRNAM
+;          RTS
 ;
 ;    Print name by it's code field address in NP
 ;
-PRNAM     BSR DECNP
-          BSR DECNP
-          BSR DECNP
-          BSR DECNP
-          BSR DECNP
-          LDY #0
-PN1       BSR DECNP
-          LDA FAR [NP],Y     ; loop till D7 in name set
-          BPL PN1
+PRNAM     BSR	DECNP
+          BSR	DECNP
+          BSR	DECNP
+          BSR	DECNP
+          BSR	DECNP
+          LDY	#0
+PN1       BSR	DECNP
+          LDA	FAR [NP]       ; loop till D7 in name set
+          BPL	PN1
 PN2       INY
-          LDA FAR [NP],Y
-          JSR FAR LETTER     ; print letters of name field
-          LDA FAR [NP],Y
-          BPL PN2
-          JSR FAR XBLANK
+          LDA	FAR [NP],Y
+		  PSHS	CCR
+		  ANDA	#$7F
+          JSR	FAR LETTER     ; print letters of name field
+          PULS	CCR
+          BPL	PN2
+          JSR	FAR XBLANK
           RTS
 ;
 ;    Decrement name field pointer
@@ -702,8 +697,8 @@ ANDD      FCDW	*+4
 		  STX	2,U
 		  JMP	NEXT
 ;
-BINARY    LEAX	4,X
-          JMP PUT
+BINARY    LEAU	4,U
+          JMP	PUT
 ;
 ;                                       OR
 ;                                       SCREEN 25 LINE 7
@@ -758,7 +753,7 @@ PUSHOA    CLRD
 L511      FCB $83,"SP",$A1
           FCDW L499     ; link to SP@
 SPSTO     FCDW *+4
-          LDY #12		 ; 6 or 12 ? User area format ????
+          LDY #14		 ; 6 or 12 ? User area format ????
           LDU FAR [UP],Y ; load data stack pointer (X reg) from
           JMP NEXT		 ; silent user variable S0.
 ;
@@ -769,7 +764,7 @@ L522      FCB $83,"RP",$A1
           FCDW	L511     ; link to SP!
 RPSTO     FCDW	*+4
 							; load return stack pointer (machine
-          LDY	#16         ; stack pointer) from silent user
+          LDY	#18         ; stack pointer) from silent user
           LDS	FAR [UP],Y  ; VARIABLE R0
           JMP	NEXT
 ;
@@ -779,9 +774,10 @@ RPSTO     FCDW	*+4
 L536      FCB $82,";",$D3
           FCDW L522     ; link to RP!
 SEMIS     FCDW *+4
-          PULS	D,X
+		  PULS	D
+		  STD	IP
+		  PULS	D
 		  STD	IP+2
-		  STX	IP
           JMP	NEXT
 ;
 ;                                       LEAVE
@@ -997,7 +993,6 @@ DUP       FCDW	*+4
 L744      FCB $82,'+',$A1
           FCDW L733     ; link to DUP
 PSTOR     FCDW *+4
-		  STY	YSAVE
 	      PULU	D,X		 ; get address of value
 		  STD	TMP		 ; store in TMP pointer
 		  STX	TMP+2
@@ -1009,7 +1004,6 @@ PSTOR     FCDW *+4
 		  ADCB	1,U
 		  ADCA  ,U
 		  STD   ,U
-		  LDY	YSAVE
 		  JMP	NEXT
 ;
 ;                                       TOGGLE
@@ -1074,6 +1068,7 @@ L798      FCB $81,$A1
           FCDW	L790     ; link to W@
 STORE     FCDW	*+4
           LDD	4,U
+		  LDX	6,U
           STD	FAR [0,U]; store second high 16 bits of 32bit value on stack
                          ; to memory as addressed by bottom
                         ; of stack.
@@ -1084,8 +1079,7 @@ STORE     FCDW	*+4
 		  ADCB	#0
 		  ADCA	#0
 		  STD	,U
-		  LDD	6,U
-          STD	FAR [0,U]; store second low 16 bits of 32bit value on stack
+          STX	FAR [0,U]; store second low 16 bits of 32bit value on stack
                          ; to memory as addressed by bottom
                         ; of stack.
           JMP POPTWO
@@ -1127,8 +1121,9 @@ COLON     FCDW	DOCOL
           FCDW	PSCOD
 ;
 DOCOL     LDD	IP+2
-		  LDX	IP
-		  PSHS	D,X
+		  PSHS	D
+		  LDD	IP
+		  PSHS	D
           JSR	TCOLON     ; mark the start of a traced : def.
 		  LDD	W+2
 		  ADDD	#4
@@ -2748,6 +2743,8 @@ ABORT     FCDW DOCOL
 L2423     FCB $84,"COL",$C4
           FCDW L2406    ; link to ABORT
 COLD      FCDW *+4
+		  LDA	#'*'
+		  JSR	FAR OUTCH
           LDD ORIG+$10   ; from cold start area
           STD FORTH+12
           LDD ORIG+$12
@@ -2763,8 +2760,8 @@ L2433     LDD ORIG+$18
 
 L2437     LDD ORIG+$10,Y
           STD FAR [UP],Y
-          DEY
-		  DEY
+		  LEAY -2,Y
+		  CMPY #0
           BPL L2437
           LDD #((ABORT+4)>>16) ; actually #>(ABORT+2)
           STD IP
@@ -2773,7 +2770,24 @@ L2437     LDD ORIG+$10,Y
 ;          CLD
 ;          LDA #$6C
 ;          STA W-1
+		  LDA	#'*'
+		  JSR	FAR OUTCH
           JMP RPSTO+4    ; And off we go !
+
+DumpUserArea:
+	LDY		#0
+	JSR		FAR CRLF
+dua_1:
+	LDD		FAR [UP],Y
+	JSR		FAR HEX4
+	LEAY	2,Y
+	LDD		FAR [UP],Y
+	JSR		FAR HEX4
+	LEAY	2,Y
+	JSR		FAR CRLF
+	CMPY	#$30
+	BLO		dua_1
+	RTS
 ;
 ;                                       S->D
 ;                                       SCREEN 56 LINE 1
@@ -3296,16 +3310,14 @@ XEMIT     LDY	#$36
 		  ADCA	#0
 		  STD	FAR [UP],Y
 		  LDA   3,U
-		  JSR	OUTCH
+		  JSR	FAR OUTCH
 		  JMP	POP
 ;
 ;         XKEY reads one terminal keystroke to stack
 ;
 ;
-XKEY      STX XSAVE
-          JSR INCH       ; might otherwise clobber it while
-          LDX XSAVE      ; inputting a char to accumulator
-          JMP PUSHOA
+XKEY      JSR	FAR INCH       ; might otherwise clobber it while
+          JMP	PUSHOA
 ;
 ;         XQTER leaves a boolean representing terminal break
 ;
@@ -3318,10 +3330,8 @@ XQTER     LDA $C000      ; system depend port test
 ;         XCR displays a CR and LF to terminal
 ;
 ;
-XCR       STX XSAVE
-          JSR TCR        ; use monitor call
-          LDX XSAVE
-          JMP NEXT
+XCR       JSR	FAR TCR        ; use monitor call
+          JMP	NEXT
 ;
 ;                                       -DISC
 ;                                       machine level sector R/W
