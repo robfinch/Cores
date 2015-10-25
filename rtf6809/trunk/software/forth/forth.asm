@@ -42,7 +42,8 @@ TOS       EQU $BBFF         ; top of data stack, in zero-page.
 N         EQU $30             ; scratch workspace.
 IP        EQU N+8           ; interpretive pointer.
 W         EQU IP+4          ; code field pointer.
-UP        EQU W+4           ; user area pointer.
+W2		  EQU W+4
+UP        EQU W2+4           ; user area pointer.
 XSAVE     EQU UP+4          ; temporary for X register.
 YSAVE	  EQU XSAVE+2
 USAVE		EQU	YSAVE+2
@@ -123,7 +124,8 @@ PUT		  STD	2,U
 		  PULS	D
 		  STD	,U
 
-NEXT      LDD	FAR [IP]
+NEXT      JSR	TRACE
+		  LDD	FAR [IP]
 		  STD	W
 		  LDY	#2
 		  LDD	FAR [IP],Y
@@ -135,8 +137,12 @@ NEXT      LDD	FAR [IP]
 		  ADCB	#0
 		  ADCA	#0
 		  STD	IP
-		  JSR	TRACE
-		  JMP	FAR [W]
+		  LDY	#2
+		  LDD	FAR [W]		; double indirect far jump is needed here
+		  LDX	FAR [W],Y
+		  STD	W2
+		  STX	W2+2
+		  JMP	FAR [W2]
 
 ; Increment IP by 1
 ; Most of the time only the LSB of the IP needs to be incremented, so avoid a 
@@ -189,7 +195,8 @@ XW        EQU TMP+4             ; scratch reg. to next code field add
 NP        EQU XW+4              ; scratch reg. pointing to name field
 ;
 ;
-TRACE     JSR	FAR CRLF
+TRACE     ;RTS
+		  JSR	FAR CRLF
 		  LDD	IP			; print IP, the interpreter pointer
 		  JSR	FAR HEX4
 		  LDD	IP+2
@@ -226,7 +233,8 @@ TRACE     JSR	FAR CRLF
 ;    TCOLON is called from DOCOLON to label each point
 ;    where FORTH 'nests' one level.
 ;
-TCOLON    LDD	W
+TCOLON    ;RTS
+		  LDD	W
           STD	NP         ; locate the name of the called word
           LDD	W+2
           STD	NP+2
@@ -302,11 +310,10 @@ L89       FCB $86,"BRANC",$C8
           FCW L75      ; link to EXCECUTE
 BRAN      FCDW *+4
 BRAN_4:
+		  LDD	FAR [IP]
+		  TFR	D,X
+		  LDY	#2
 		  LDD	FAR [IP],Y
-		  PSHU	D
-		  JSR	INC2_IP
-		  LDD	FAR [IP],Y
-		  JSR	INC2_IP
 		  ADDD  IP+2
 		  STD	IP+2
 		  BCC  	BRAN_3
@@ -314,7 +321,7 @@ BRAN_4:
 		  ADDD	#1
 		  STD	IP
 BRAN_3:
-		  PULU  D
+		  TFR	X,D
 		  ADDD	IP
 		  STD	IP
           JMP	NEXT
@@ -1043,10 +1050,10 @@ L787      FCB $82,"C",$C0
           FCDW	L773		; link to @
 CAT       FCDW	*+4
           LDB	FAR [0,U]	; fetch byte addressed by bottom of
-		  CLRA
-          STD	2,U			; stack to stack, zeroing the high
-		  CLRB
-          STD	,U			; byte
+		  CLR	,U			; stack to stack, zeroing the high bits
+		  CLR	1,U
+		  CLR	2,U
+		  STB	3,U
           JMP	NEXT
 ;
 ;                                       W@
@@ -1199,7 +1206,8 @@ DOUSE     LDY	#4
           ADDD	UP+2
 		  EXG	D,X
 		  CLRD
-		  ADDD	UP
+		  ADCB	UP+1
+		  ADCA	UP
 		  PSHS	D
 		  EXG	D,X
 		  JMP	PUSH
@@ -1307,7 +1315,7 @@ PORIG     FCDW DOCOL
 L1010     FCB $83,"TI",$C2
           FCDW L1000    ; link to +ORIGIN
 TIB       FCDW DOUSE
-          FCB $A
+          FCB $14
 ;
 ;                                       WIDTH
 ;                                       SCREEN 36 LINE 5
@@ -1315,7 +1323,7 @@ TIB       FCDW DOUSE
 L1018     FCB $85,"WIDT",$C8
           FCDW L1010    ; link to TIB
 WIDTH     FCDW DOUSE
-          FCB $C
+          FCB $18
 ;
 ;                                       WARNING
 ;                                       SCREEN 36 LINE 6
@@ -1323,7 +1331,7 @@ WIDTH     FCDW DOUSE
 L1026     FCB $87,"WARNIN",$C7
           FCDW L1018    ; link to WIDTH
 WARN      FCDW DOUSE
-          FCB $E
+          FCB $1C
 ;
 ;                                       FENCE
 ;                                       SCREEN 36 LINE 7
@@ -1331,7 +1339,7 @@ WARN      FCDW DOUSE
 L1034     FCB $85,"FENC",$C5
           FCDW L1026    ; link to WARNING
 FENCE     FCDW DOUSE
-          FCB $10
+          FCB $20
 ;
 ;
 ;                                       DP
@@ -1340,7 +1348,7 @@ FENCE     FCDW DOUSE
 L1042     FCB $82,"D",$D0
           FCDW L1034    ; link to FENCE
 DP        FCDW DOUSE
-          FCB $12
+          FCB $24
 ;
 ;                                       VOC-LINK
 ;                                       SCREEN 36 LINE 9
@@ -1348,7 +1356,7 @@ DP        FCDW DOUSE
 L1050     FCB $88,"VOC-LIN",$CB
           FCDW L1042    ; link to DP
 VOCL      FCDW DOUSE
-          FCB $14
+          FCB $28
 ;
 ;                                       BLK
 ;                                       SCREEN 36 LINE 10
@@ -1356,7 +1364,7 @@ VOCL      FCDW DOUSE
 L1058     FCB $83,"BL",$CB
           FCDW L1050    ; link to VOC-LINK
 BLK       FCDW DOUSE
-          FCB $16
+          FCB $2C
 ;
 ;                                       IN
 ;                                       SCREEN 36 LINE 11
@@ -1364,7 +1372,7 @@ BLK       FCDW DOUSE
 L1066     FCB $82,"I",$CE
           FCDW L1058    ; link to BLK
 IN        FCDW DOUSE
-          FCB $18
+          FCB $30
 ;
 ;                                       OUT
 ;                                       SCREEN 36 LINE 12
@@ -1372,7 +1380,7 @@ IN        FCDW DOUSE
 L1074     FCB $83,"OU",$D4
           FCDW L1066    ; link to IN
 OUT       FCDW DOUSE
-          FCB $1A
+          FCB $34
 ;
 ;                                       SCR
 ;                                       SCREEN 36 LINE 13
@@ -1380,7 +1388,7 @@ OUT       FCDW DOUSE
 L1082     FCB $83,"SC",$D2
           FCDW L1074    ; link to OUT
 SCR       FCDW DOUSE
-          FCB $1C
+          FCB $38
 ;
 ;                                       OFFSET
 ;                                       SCREEN 37 LINE 1
@@ -1388,7 +1396,7 @@ SCR       FCDW DOUSE
 L1090     FCB $86,"OFFSE",$D4
           FCDW L1082    ; link to SCR
 OFSET     FCDW DOUSE
-          FCB $1E
+          FCB $3C
 ;
 ;                                       CONTEXT
 ;                                       SCREEN 37 LINE 2
@@ -1396,7 +1404,7 @@ OFSET     FCDW DOUSE
 L1098     FCB $87,"CONTEX",$D4
           FCDW L1090    ; link to OFFSET
 CON_      FCDW DOUSE
-          FCB $20
+          FCB $40
 ;
 ;                                       CURRENT
 ;                                       SCREEN 37 LINE 3
@@ -1404,7 +1412,7 @@ CON_      FCDW DOUSE
 L1106     FCB $87,"CURREN",$D4
           FCDW L1098    ; link to CONTEXT
 CURR      FCDW DOUSE
-          FCB $22
+          FCB $44
 ;
 ;                                       STATE
 ;                                       SCREEN 37 LINE 4
@@ -1412,7 +1420,7 @@ CURR      FCDW DOUSE
 L1114     FCB $85,"STAT",$C5
           FCDW L1106    ; link to CURRENT
 STATE     FCDW DOUSE
-          FCB $24
+          FCB $48
 ;
 ;                                       BASE
 ;                                       SCREEN 37 LINE 5
@@ -1420,7 +1428,7 @@ STATE     FCDW DOUSE
 L1122     FCB $84,"BAS",$C5
           FCDW L1114    ; link to STATE
 BASE      FCDW DOUSE
-          FCB $26
+          FCB $4C
 ;
 ;                                       DPL
 ;                                       SCREEN 37 LINE 6
@@ -1428,7 +1436,7 @@ BASE      FCDW DOUSE
 L1130     FCB $83,"DP",$CC
           FCDW L1122    ; link to BASE
 DPL       FCDW DOUSE
-          FCB $28
+          FCB $50
 ;
 ;                                       FLD
 ;                                       SCREEN 37 LINE 7
@@ -1436,7 +1444,7 @@ DPL       FCDW DOUSE
 L1138     FCB $83,"FL",$C4
           FCDW L1130    ; link to DPL
 FLD       FCDW DOUSE
-          FCB $2A
+          FCB $54
 ;
 ;
 ;
@@ -1446,7 +1454,7 @@ FLD       FCDW DOUSE
 L1146     FCB $83,"CS",$D0
           FCDW L1138    ; link to FLD
 CSP       FCDW DOUSE
-          FCB $2C
+          FCB $58
 ;
 ;                                       R#
 ;                                       SCREEN 37  LINE 9
@@ -1454,7 +1462,7 @@ CSP       FCDW DOUSE
 L1154     FCB $82,"R",$A3
           FCDW L1146    ; link to CSP
 RNUM      FCDW DOUSE
-          FCB $2E
+          FCB $5C
 ;
 ;                                       HLD
 ;                                       SCREEN 37 LINE 10
@@ -1462,7 +1470,7 @@ RNUM      FCDW DOUSE
 L1162     FCB $83,"HL",$C4
           FCDW L1154    ; link to R#
 HLD       FCDW DOUSE
-          FCB $30
+          FCB $60
 ;
 ;                                       1+
 ;                                       SCREEN 38 LINE  1
@@ -2593,36 +2601,36 @@ L2269     FCB $89,"INTERPRE",$D4
 INTER     FCDW DOCOL
 L2272     FCDW DFIND
           FCDW ZBRAN
-L2274     FCDW $3C      ; L2289-L2274
+L2274     FCDW L2289-L2274
           FCDW STATE
           FCDW AT
           FCDW LESS
           FCDW ZBRAN
-L2279     FCDW $14       ; L2284-L2279
+L2279     FCDW L2284-L2279
           FCDW CFA
           FCDW COMMA
           FCDW BRAN
-L2283     FCDW $C       ; L2286-L2283
+L2283     FCDW L2286-L2283
 L2284     FCDW CFA
           FCDW EXEC
 L2286     FCDW QSTAC
           FCDW BRAN
-L2288     FCDW $38      ; L2302-L2288
+L2288     FCDW L2302-L2288
 L2289     FCDW HERE
           FCDW NUMBER
           FCDW DPL
           FCDW AT
           FCDW ONEP
           FCDW ZBRAN
-L2295     FCDW 16        ; L2299-L2295
+L2295     FCDW L2299-L2295
           FCDW DLIT
           FCDW BRAN
-L2298     FCDW $C       ; L2301-L2298
+L2298     FCDW L2301-L2298
 L2299     FCDW DROP
           FCDW LITER
 L2301     FCDW QSTAC
 L2302     FCDW BRAN
-L2303     FCDW $FFFFFF84    ; L2272-L2303
+L2303     FCDW L2272-L2303
 ;
 ;                                       IMMEDIATE
 ;                                       SCREEN 53 LINE 1
@@ -2743,8 +2751,6 @@ ABORT     FCDW DOCOL
 L2423     FCB $84,"COL",$C4
           FCDW L2406    ; link to ABORT
 COLD      FCDW *+4
-		  LDA	#'*'
-		  JSR	FAR OUTCH
           LDD ORIG+$10   ; from cold start area
           STD FORTH+12
           LDD ORIG+$12
@@ -2770,8 +2776,6 @@ L2437     LDD ORIG+$10,Y
 ;          CLD
 ;          LDA #$6C
 ;          STA W-1
-		  LDA	#'*'
-		  JSR	FAR OUTCH
           JMP RPSTO+4    ; And off we go !
 
 DumpUserArea:
