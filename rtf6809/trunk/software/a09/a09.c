@@ -1044,7 +1044,8 @@ struct symrecord
   {
   char name[MAXIDLEN + 1];              /* symbol name                       */
   char cat;                             /* symbol category                   */
-  char isFar;
+  char isFar;						/* far assumed */
+  char isFarkw;						/* FAR keyword used in symbol definiton */
   unsigned value;                 /* symbol value                      */
   union
     {
@@ -1406,7 +1407,7 @@ char modulename[MAXIDLEN + 1] = "";     /* module name buffer                */
 char namebuf[MAXIDLEN + 1];             /* name buffer for parsing           */
 char unamebuf[MAXIDLEN + 1];            /* name buffer in uppercase          */
 
-char isFar;
+char isFar,isFarkw;
 int vercount;
 char mode;   
 char isX32;
@@ -1421,6 +1422,7 @@ char isPostIndexed;
 #define ADRMODE_PCR  5                  /* 5 = PC relative (with postbyte)   */
 #define ADRMODE_IND  6                  /* 6 = indirect                      */
 #define ADRMODE_PIN  7                  /* 7 = PC relative & indirect        */
+#define ADRMODE_DBL_IND	8
 
 char opsize;                            /* desired operand size :            */
                                         /* 0=dunno,1=5, 2=8, 3=16, 4=32      */
@@ -1449,10 +1451,11 @@ int ifcount;                            /* count of nested IFs within        */
 #define OUT_VER	  6
 int outmode = OUT_BIN;                  /* default to binary output          */
 
-unsigned short hexaddr;
+unsigned hexaddr;
 int hexcount;
 unsigned char hexbuffer[256];
 unsigned int chksum;
+unsigned vslide;
 
 int nRepNext = 0;                       /* # repetitions for REP pseudo-op   */
 int nSkipCount = 0;                     /* # lines to skip                   */
@@ -2401,6 +2404,8 @@ if (pp)
   }
   if (p->isFar)
 	  isFar = 1;
+  if (p->isFarkw)
+	  isFarkw = 1;
 return p->value;
 }
  
@@ -2913,8 +2918,9 @@ else
 
 void scanoperands09(struct relocrecord *pp)
 {
-char c, *oldsrcptr;
+char c, *oldsrcptr, *ptr;
 unsigned char accpost, h63 = 0;
+unsigned char isIndexed = 0;
 
 isFar = 0;
 isPostIndexed = 0;
@@ -2928,7 +2934,13 @@ mode = ADRMODE_IMM;
 if (c == '[')
   {
   c = *++srcptr;
-  mode = ADRMODE_IND;
+  if (c=='[') {
+	  c = *++srcptr;
+	  mode = ADRMODE_DBL_IND;
+	  postbyte = 0x8F;
+  }
+  else
+	  mode = ADRMODE_IND;
   }
 switch (toupper(c))
   {
@@ -2943,6 +2955,7 @@ switch (toupper(c))
       RESTORE
     else
       {
+		  isIndexed = 1;
       if ((h63) && (!(dwOptions & OPTION_H63)))
         error |= ERR_ILLEGAL_ADDR;
       postbyte = accpost;
@@ -2969,6 +2982,7 @@ switch (toupper(c))
   case 'F':
 	  if (toupper(srcptr[1])=='A' && toupper(srcptr[2])=='R' && (srcptr[3]==' '||srcptr[3]=='\t')) {
 		  isFar = 1;
+		  isFarkw = 1;
 		  srcptr += 3;
 		  goto scano1;
 	  }
@@ -3025,6 +3039,7 @@ switch (toupper(c))
       skipspace();
     if (*srcptr == ',')
       {
+		  isIndexed = 1;
       srcptr++;
       if (!(dwOptions & OPTION_TSC))
         skipspace();
@@ -3055,8 +3070,11 @@ switch (toupper(c))
       if (mode == ADRMODE_IND)
         {
         postbyte = 0x8f;
-        opsize = 3;
+		// Why is the following set ?
+//        opsize = 3;
         }
+	  else if (mode == ADRMODE_DBL_IND)
+		  ;
 	  else {
 		  switch(opsize) {
 		case 2: mode = ADRMODE_DIR; break;
@@ -3073,17 +3091,37 @@ if (mode >= ADRMODE_IND)
   {
   if (!(dwOptions & OPTION_TSC))
     skipspace();
-  postbyte |= 0x10;
+  if (mode != ADRMODE_DBL_IND)
+	postbyte |= 0x10;
   if (*srcptr != ']')
     error |= ERR_ILLEGAL_ADDR;
-  else
-    srcptr++;    
+  srcptr++;
+  if (mode==ADRMODE_DBL_IND) {
+	  if (*srcptr != ']')
+		error |= ERR_ILLEGAL_ADDR;
+	  srcptr++;
   }
+  }
+  skipspace();
   if (*srcptr==',') {
 	  srcptr++;
 	  isPostIndexed = 1;
       scanindexed();	// scanindexed will reset the postbyte
 	  postbyte |= 0x10;
+  }
+  else {
+	  if (postbyte==0x9F || postbyte==0x8F)
+		  opsize = 3;
+      if (mode == ADRMODE_IND || mode==ADRMODE_DBL_IND)
+        {
+/*
+			if ((postbyte & 0xF)==4)	// 0 offset
+				opsize = 0;
+		//	else if ((postbyte & 0xf)==8 || (postbyte & 0xF)==
+			else
+				opsize = 3;
+*/
+        }
   }
 if (pass > 1 && unknown)
   error |= ERR_LABEL_UNDEF; 
@@ -3465,7 +3503,7 @@ int wd;
 int par;
 
 if (hexcount)
-  {
+ {
   if (objfile)
     {
 	wd = (hexbuffer[3] << 24) +
@@ -3572,9 +3610,10 @@ if (hexcount)
 
 void outver (unsigned char x) 
 {
-if (hexcount == 4)
-  flushver();
-hexbuffer[hexcount++] = x;
+	if (hexcount==4)
+		flushver();
+	hexbuffer[hexcount] = x;
+	hexcount++;
 chksum += x;
 }
 
@@ -3875,6 +3914,7 @@ void setlabel(struct symrecord * lp)
 if (lp)
   {
 	  lp->isFar = isFar;
+	  lp->isFarkw = isFarkw;
   if (lp->cat == SYMCAT_PUBLICUNDEF)
     {
     lp->cat = SYMCAT_PUBLIC;
@@ -3976,7 +4016,7 @@ switch (mode)
            warning |= (certain) ? WRN_OPT : 0;
       }
 	  if (codebuf[0]==0x15 && codebuf[1]==0xbd && isFar) {
-		  if (isNear) {
+		  if (isNear && !isFarkw) {
 			  codebuf[0]=0xbd;
 			  isFar = 0;
 		  }
@@ -3985,7 +4025,7 @@ switch (mode)
 		  codeptr--;
 	  }
 	  if (codebuf[0]==0x15 && codebuf[1]==0x7E && isFar) {
-		  if (isNear) {
+		  if (isNear && !isFarkw) {
 			codebuf[0]=0x7E;
 			isFar = 0;
 		  }
@@ -4004,6 +4044,7 @@ switch (mode)
     break;
   case ADRMODE_POST :
   case ADRMODE_IND :
+  case ADRMODE_DBL_IND:
     putbyte(postbyte);
     switch (opsize)
       {
@@ -6200,6 +6241,7 @@ lp = 0;
 codeptr = 0;
 condline = 0;
 isFar = 0;
+isFarkw = 0;
 
 if (inMacro)
   curline->lvl |= LINCAT_MACDEF;
@@ -6209,6 +6251,7 @@ if (isalnum(*srcptr))                   /* look for label on line start      */
   scanname();
   if (stricmp(namebuf, "far")==0) {
 	  isFar = 1;
+	  isFarkw = 1;
 	  while(*srcptr==' ' || *srcptr=='\t') srcptr++;
 	  scanname();
   }

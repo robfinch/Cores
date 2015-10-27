@@ -40,7 +40,7 @@ BMAG      =4128          ; total buffer magnitude, in bytes
 BOS       EQU $B800         ; bottom of data stack, in zero-page.
 TOS       EQU $BBFF         ; top of data stack, in zero-page.
 N         EQU $30             ; scratch workspace.
-IP        EQU N+8           ; interpretive pointer.
+IP        EQU N+16          ; interpretive pointer.
 W         EQU IP+4          ; code field pointer.
 W2		  EQU W+4
 UP        EQU W2+4           ; user area pointer.
@@ -51,6 +51,7 @@ TMP			EQU	USAVE+2
 ;
 TIBX      EQU $0100         ; terminal input buffer of 84 bytes.
 ORIG      EQU $20000        ; origin of FORTH's Dictionary.
+TOP		  EQU $10000000
 MEM       EQU $16000000     ; top of assigned memory+1 byte.
 UAREA     EQU MEM-256       ; 256 bytes of user area
 DAREA     EQU UAREA-BMAG    ; disk buffer space.
@@ -60,6 +61,8 @@ DAREA     EQU UAREA-BMAG    ; disk buffer space.
 OUTCH     EQU $D2C1         ; output one ASCII char. to term.
 INCH      EQU $D1DC         ; input one ASCII char. to term.
 TCR       EQU $D0F1         ; terminal return and line feed.
+CLEARSCREEN	EQU	$D300
+HOME_CURSOR	EQU	$D308
 ;
 ;    From DAREA downward to the top of the dictionary is free
 ;    space where the user's applications are compiled.
@@ -124,20 +127,14 @@ PUT		  STD	2,U
 		  PULS	D
 		  STD	,U
 
-NEXT      JSR	TRACE
+NEXT	  JSR	TRACE
+		  LDY	#2
 		  LDD	FAR [IP]
 		  STD	W
-		  LDY	#2
 		  LDD	FAR [IP],Y
 		  STD	W+2
-		  LDD	IP+2		; inline increment IP by 4
-		  ADDD	#4
-		  STD	IP+2
-		  LDD	IP
-		  ADCB	#0
-		  ADCA	#0
-		  STD	IP
-		  LDY	#2
+		  BSR	INC4_IP
+;		  JMP	FAR [[W]]
 		  LDD	FAR [W]		; double indirect far jump is needed here
 		  LDX	FAR [W],Y
 		  STD	W2
@@ -162,6 +159,27 @@ INC_IP_1  RTS
 INC2_IP	  BSR	INC_IP
 		  BRA	INC_IP
 
+INC4_IP	  LDD	IP+2
+		  ADDD	#4
+		  STD	IP+2
+		  LDD	IP
+		  ADCB	#0
+		  ADCA	#0
+		  STD	IP
+		  RTS
+
+; Add DX to IP
+
+ADXIP	  TFR	D,Y
+		  TFR	X,D
+		  ADDD	IP+2
+		  STD	IP+2
+		  TFR   Y,D
+		  ADCB	IP+1
+		  ADCA	IP
+		  STD	IP
+		  RTS
+
 ;    CLIT pushes the next inline byte to data stack
 ;
 L35       FCB $84,"CLI",$D4
@@ -170,7 +188,7 @@ CLIT      FCDW *+4
 		  CLRD
 		  PSHS	D
           LDB	FAR [IP]
-          BRA	L31        ; a forced branch into LIT
+          JMP	L31        ; a forced branch into LIT
 ;
 ;
 ;    This is a temporary trace routine, to be used until FORTH
@@ -195,7 +213,7 @@ XW        EQU TMP+4             ; scratch reg. to next code field add
 NP        EQU XW+4              ; scratch reg. pointing to name field
 ;
 ;
-TRACE     ;RTS
+TRACE     RTS
 		  JSR	FAR CRLF
 		  LDD	IP			; print IP, the interpreter pointer
 		  JSR	FAR HEX4
@@ -228,12 +246,20 @@ TRACE     ;RTS
           JSR	FAR XBLANK
 ;
           JSR	FAR ONEKEY ; wait for operator keystroke
+		  CMPA	#'c'
+		  BNE	TRACE1
+		  JSR	FAR CLEARSCREEN
+		  JSR	FAR HOME_CURSOR
+TRACE1:	  CMPA  #'s'
+		  BNE	TRACE2
+		  JSR	DumpDStack
+TRACE2:
           RTS
 ;
 ;    TCOLON is called from DOCOLON to label each point
 ;    where FORTH 'nests' one level.
 ;
-TCOLON    ;RTS
+TCOLON    RTS
 		  LDD	W
           STD	NP         ; locate the name of the called word
           LDD	W+2
@@ -310,20 +336,10 @@ L89       FCB $86,"BRANC",$C8
           FCW L75      ; link to EXCECUTE
 BRAN      FCDW *+4
 BRAN_4:
-		  LDD	FAR [IP]
-		  TFR	D,X
 		  LDY	#2
-		  LDD	FAR [IP],Y
-		  ADDD  IP+2
-		  STD	IP+2
-		  BCC  	BRAN_3
-		  LDD	IP
-		  ADDD	#1
-		  STD	IP
-BRAN_3:
-		  TFR	X,D
-		  ADDD	IP
-		  STD	IP
+		  LDD	FAR [IP]
+		  LDX	FAR [IP],Y
+		  JSR	ADXIP
           JMP	NEXT
 ;
 ;                                       0BRANCH
@@ -338,13 +354,7 @@ ZBRAN     FCDW *+4
 		  CMPX	#0
           BEQ	BRAN_4
 ;
-BUMP      LDD	IP+2
-		  ADDD  #4
-		  STD	IP+2
-		  LDD	IP
-		  ADCB	#0
-		  ADCA	#0
-		  STD	IP
+BUMP      JSR	INC4_IP
 L122	  JMP	NEXT
 ;
 ;                                       (LOOP)
@@ -353,13 +363,13 @@ L122	  JMP	NEXT
 L127      FCB $86,"(LOOP",$A9
           FCDW L107     ; link to 0BRANCH
 PLOOP     FCDW L130
-L130      LDD	2,S		; Increment LOOP var
-		  ADDD	#1
-		  STD	2,S
-		  LDD	,S
-		  ADCB	#0
-		  ADCA	#0
-		  STD	,S
+L130      INC   3,S		; Increment LOOP var
+          BNE   PL1
+		  INC   2,S
+		  BNE   PL1
+		  INC   1,S
+		  BNE   PL1
+		  INC   ,S
 ;
 PL1       LDD	6,S		; compare LOOP var to limit
 		  SUBD  2,S
@@ -367,8 +377,8 @@ PL1       LDD	6,S		; compare LOOP var to limit
 		  SBCB	1,S
 		  SBCA	0,S
 ;
-PL2       ASLA
-          LBCC	BRAN+4
+PL2       ASLA			; get sign bit into carry
+          BCC	BRAN+4
 		  LEAS	8,S		; LOOP finished, pop stacked info
           JMP	BUMP
 
@@ -390,13 +400,13 @@ PPLOO     FCDW *+4
 		  STD	0,S
 		  TFR	X,D
 		  ASLA
-		  LBCC	PL1
+		  BCC	PL1
 	      LDD	2,S		; compare LOOP var to limit
 		  SUBD  6,S
 		  LDD	0,S
 		  SBCB	5,S
 		  SBCA	4,S
-		  LBRA	PL2
+		  BRA	PL2
 ;
 ;                                       (DO)
 ;                                       SCREEN 17 LINE 2
@@ -749,7 +759,7 @@ L499      FCB $83,"SP",$C0
 SPAT      FCDW *+4
 ;
 PUSHOA    CLRD
-		  PSHU	D
+		  PSHS	D
 		  TFR	X,D
           JMP	PUSH
 ;
@@ -781,10 +791,9 @@ RPSTO     FCDW	*+4
 L536      FCB $82,";",$D3
           FCDW L522     ; link to RP!
 SEMIS     FCDW *+4
-		  PULS	D
+		  PULS	D,X
 		  STD	IP
-		  PULS	D
-		  STD	IP+2
+		  STX	IP+2
           JMP	NEXT
 ;
 ;                                       LEAVE
@@ -793,13 +802,10 @@ SEMIS     FCDW *+4
 L548      FCB $85,"LEAV",$C5
           FCDW	L536     ; link to ;S
 LEAVE     FCDW	*+4
-          STX	XSAVE
-          TFR	S,X
-		  LDD	$101,X
-		  STD	$105,X
-		  LDD	$103,X
-		  STD	$107,X
-          LDX	XSAVE
+          LDD   2,U
+		  LDX   ,U
+		  STD   10,U
+		  STX	8,U
           JMP	NEXT
 ;
 ;                                       >R
@@ -828,10 +834,15 @@ RFROM     FCDW	*+4
 L591      FCB $81,$D2
           FCDW	L577     ; link to R>
 R         FCDW	*+4
-		  LDD	,U
-		  LDX	2,U
-		  PSHS	D,X
-		  JMP	NEXT
+		  LDD	,S
+		  LDX	2,S
+		  PSHS	D
+		  TFR	X,D
+		  JMP	PUSH
+
+;		  PULU	D,X
+;		  PSHS	D,X
+;		  JMP	NEXT
 ;
 ;                                       0=
 ;                                       SCREEN 28 LINE 2
@@ -844,7 +855,7 @@ ZEQU      FCDW	*+4
 		  LDD	2,U
 		  BNE	ZEQU_1
 		  STD	,U
-		  INCA
+		  INCB
 		  STD	2,U
 		  JMP	NEXT
 ZEQU_1	  CLRD
@@ -876,16 +887,15 @@ ZLESS_1	  STD	2,U
 L632      FCB $81,$AB
           FCDW	L619     ; link to V-ADJ
 PLUS      FCDW	*+4
-		  LDD	,U
-		  ADDD	4,U
-		  STD	4,U
-		  LDD	2,U
-		  ADCB	6,U
-		  ADCA	7,U
+		  LDD	6,U
+		  ADDD	2,U
 		  STD	6,U
-		  LEAU	4,U
-          JMP NEXT
-
+		  LDD	4,U
+		  ADCB	1,U
+		  ADCA	,U
+		  STD	4,U
+		  LEAU	4,U		; POP
+          JMP	NEXT
 ;
 ;                                       D+
 ;                                       SCREEN 29 LINE 4
@@ -893,15 +903,15 @@ PLUS      FCDW	*+4
 L649      FCB $82,"D",$AB
           FCDW L632     ;    LINK TO +
 DPLUS     FCDW *+4
-		  LDD	,U
-		  ADDD	4,U
-		  STD	4,U
-		  LDD	2,U
-		  ADCB	6,U
-		  ADCA	7,U
+		  LDD	6,U
+		  ADDD	2,U
 		  STD	6,U
-		  LEAU	4,U
-          JMP NEXT
+		  LDD	4,U
+		  ADCB	1,U
+		  ADCA	,U
+		  STD	4,U
+		  LEAU	4,U		; POP
+          JMP	NEXT
 ;
 ;                                       MINUS
 ;                                       SCREEN 29 LINE 9
@@ -909,22 +919,16 @@ DPLUS     FCDW *+4
 L670      FCB $85,"MINU",$D3
           FCDW L649     ; link to D+
 MINUS     FCDW *+4
-		  LDD	2,U
-		  EORA	#$FF
-		  EORB	#$FF
+          CLRD
+		  SUBD	2,U
 		  STD	2,U
-		  LDD	,U
-		  EORA	#$FF
-		  EORB	#$FF
+		  PSHS	CCR
+		  CLRD
+		  PULS	CCR
+		  SBCB	1,U
+		  SBCA	,U
 		  STD	,U
-		  LDD	2,U
-		  ADDD	#1
-		  STD	2,U
-		  LDD	,U
-		  ADCB	#0
-		  ADCA	#0
-		  STD	,U
-          JMP NEXT
+          JMP	NEXT
 ;
 ;                                       DMINUS
 ;                                       SCREEN 29 LINE 12
@@ -932,22 +936,16 @@ MINUS     FCDW *+4
 L685      FCB	$86,"DMINU",$D3
           FCDW L670     ; link to  MINUS
 DMINU     FCDW *+4
-		  LDD	2,U
-		  EORA	#$FF
-		  EORB	#$FF
+          CLRD
+		  SUBD	2,U
 		  STD	2,U
-		  LDD	,U
-		  EORA	#$FF
-		  EORB	#$FF
+		  PSHS	CCR
+		  CLRD
+		  PULS	CCR
+		  SBCB	1,U
+		  SBCA	,U
 		  STD	,U
-		  LDD	2,U
-		  ADDD	#1
-		  STD	2,U
-		  LDD	,U
-		  ADCB	#0
-		  ADCA	#0
-		  STD	,U
-          JMP NEXT
+          JMP	NEXT
 ;
 ;                                       OVER
 ;                                       SCREEN 30 LINE 1
@@ -955,10 +953,10 @@ DMINU     FCDW *+4
 L700      FCB $84,"OVE",$D2
           FCDW L685     ; link to DMINUS
 OVER      FCDW *+4
-		  LDD	,U
-		  LDX	2,U
-		  PSHS	D,X
-		  JMP	NEXT
+		  LDD	4,U
+		  PSHS	D
+		  LDD	6,U
+		  JMP	PUSH
 ;
 ;                                       DROP
 ;                                       SCREEN 30 LINE 4
@@ -973,15 +971,14 @@ DROP      FCDW POP
 L718      FCB $84,"SWA",$D0
           FCDW L711     ; link to DROP
 SWAP      FCDW *+4
-		  LDD	,U
-		  LDX	4,U
+		  LDD	4,U
+		  PSHS	D
+		  LDD	0,U
 		  STD	4,U
-		  STX	,U
-		  LDD	2,U
-		  LDX	6,U
-		  STD	6,U
-		  STX	2,U
-          JMP	NEXT
+		  LDD	6,U
+		  LDX	2,U
+		  STX	6,U
+		  JMP	PUT
 ;
 ;                                       DUP
 ;                                       SCREEN 30 LINE 21
@@ -989,10 +986,10 @@ SWAP      FCDW *+4
 L733      FCB $83,"DU",$D0
           FCDW	L718     ; link to SWAP
 DUP       FCDW	*+4
-		  PULU	D,X
-		  PSHU	D,X
-		  PSHU	D,X
-		  JMP	NEXT
+          LDD	0,U
+		  PSHS	D
+		  LDD	2,U
+		  JMP	PUSH
 ;
 ;                                       +!
 ;                                       SCREEN 31 LINE 2
@@ -1049,11 +1046,11 @@ AT        FCDW *+4
 L787      FCB $82,"C",$C0
           FCDW	L773		; link to @
 CAT       FCDW	*+4
-          LDB	FAR [0,U]	; fetch byte addressed by bottom of
+          LDA	FAR [0,U]	; fetch byte addressed by bottom of
 		  CLR	,U			; stack to stack, zeroing the high bits
 		  CLR	1,U
 		  CLR	2,U
-		  STB	3,U
+		  STA	3,U
           JMP	NEXT
 ;
 ;                                       W@
@@ -1097,6 +1094,8 @@ STORE     FCDW	*+4
 L813      FCB $82,"C",$A1
           FCDW L798     ; link to !
 CSTOR     FCDW *+4
+		  LDD   ,U
+		  LDD   2,U
           LDA	7,U
           STA	FAR [0,U]
           JMP	POPTWO
@@ -1200,15 +1199,21 @@ USER      FCDW DOCOL
           FCDW CONST
           FCDW PSCOD
 ;
-DOUSE     LDY	#4
+DOUSE     LDD	UP
+		  LDD   UP+2
+		  LDY	#4
 		  CLRA
           LDB	FAR [W],Y
           ADDD	UP+2
+		  TFR   D,Y
+		  PSHS  CCR
 		  EXG	D,X
 		  CLRD
+		  PULS  CCR
 		  ADCB	UP+1
 		  ADCA	UP
 		  PSHS	D
+		  TFR   Y,D
 		  EXG	D,X
 		  JMP	PUSH
 ;
@@ -1244,11 +1249,19 @@ L944      FCB $81,$B3
 THREE     FCDW DOCON
           FCDW 3
 ;
+;                                       4
+;                                       SCREEN 35 LINE 3
+;
+L948      FCB $81,$B4
+          FCDW L944     ; link to 3
+FOUR      FCDW DOCON
+          FCDW 4
+;
 ;                                       BL
 ;                                       SCREEN 35 LINE 4
 ;
 L952      FCB $82,"B",$CC
-          FCDW L944     ; link to 3
+          FCDW L948     ; link to 4
 BL        FCDW DOCON
           FCDW $20
 ;
@@ -1492,11 +1505,21 @@ TWOP      FCDW DOCOL
           FCDW PLUS
           FCDW SEMIS
 ;
+;                                       4+
+;                                       SCREEN 38 LINE 2
+;
+L1185     FCB $82,"4",$AB
+          FCDW L1180    ; link to 1+
+FOURP     FCDW DOCOL
+          FCDW FOUR
+          FCDW PLUS
+          FCDW SEMIS
+;
 ;                                       HERE
 ;                                       SCREEN 38 LINE 3
 ;
 L1190     FCB $84,"HER",$C5
-          FCDW L1180    ; link to 2+
+          FCDW L1185    ; link to 2+
 HERE      FCDW DOCOL
           FCDW DP
           FCDW AT
@@ -1520,7 +1543,7 @@ L1210     FCB $81,$AC
 COMMA     FCDW DOCOL
           FCDW HERE
           FCDW STORE
-          FCDW TWO
+          FCDW FOUR
           FCDW ALLOT
           FCDW SEMIS
 ;
@@ -1684,7 +1707,7 @@ LFA       FCDW DOCOL
 L1350     FCB $83,"CF",$C1
           FCDW L1339    ; link to LFA
 CFA       FCDW DOCOL
-          FCDW TWO
+          FCDW FOUR
           FCDW SUB
           FCDW SEMIS
 ;
@@ -1817,7 +1840,7 @@ COMP      FCDW DOCOL
           FCDW QCOMP
           FCDW RFROM
           FCDW DUP
-          FCDW TWOP
+          FCDW FOURP
           FCDW TOR
           FCDW AT
           FCDW COMMA
@@ -1930,17 +1953,17 @@ DOES      FCDW DOCOL
           FCDW STORE
           FCDW PSCOD
 ;
-DODOE     LDD	IP+2	; X and D in right order ???
-		  LDX	IP
+DODOE     LDD	IP		; X and D in right order ???
+		  LDX	IP+2
 		  PSHS	D,X
 		  LDY	#4
-		  LDD	FAR (W),Y
+		  LDD	FAR [W],Y
 		  STD	IP
 		  LEAY	2,Y
-		  LDD	FAR (W),Y
+		  LDD	FAR [W],Y
 		  STD	IP+2
 		  LDD	W+2
-		  ADDD	#4
+		  ADDD	#8
 		  TFR	D,X
 		  LDD	W
 		  ADCB	#0
@@ -2081,7 +2104,7 @@ L1744     FCDW L1760-L1744
           FCDW EQUAL
           FCDW DUP
           FCDW RFROM
-          FCDW TWO
+          FCDW FOUR				; was TWO
           FCDW SUB
           FCDW PLUS
           FCDW TOR
@@ -2481,7 +2504,7 @@ CREAT     FCDW DOCOL
           FCB $A0        ;|  room exists in dict.
           FCDW PLUS     ;|
           FCDW ULESS    ;|
-          FCDW TWO      ;|
+          FCDW FOUR     ;|
           FCDW QERR     ;)
           FCDW DFIND
           FCDW ZBRAN
@@ -2523,7 +2546,7 @@ L2163     FCDW HERE
           FCDW AT
           FCDW STORE
           FCDW HERE
-          FCDW TWOP
+          FCDW FOURP
           FCDW COMMA
           FCDW SEMIS
 ;
@@ -2664,7 +2687,7 @@ L2321     FCB $8A,"VOCABULAR",$D9
           FCDW VOCL
           FCDW STORE
           FCDW DOES
-DOVOC     FCDW TWOP
+DOVOC     FCDW FOURP
           FCDW CON_
           FCDW STORE
           FCDW SEMIS
@@ -3128,7 +3151,7 @@ L2760     FCDW L2758-L2760
           FCDW ZBRAN
 L2767     FCDW L2776-L2767
           FCDW R
-          FCDW TWOP
+          FCDW FOURP
           FCDW R
           FCDW AT
           FCDW LIT,$7FFFFFFF
@@ -3141,7 +3164,7 @@ L2776     FCDW R
           FCDW PREV
           FCDW STORE
           FCDW RFROM
-          FCDW TWOP
+          FCDW FOURP
           FCDW SEMIS
 ;
 ;                                       BLOCK
@@ -3175,7 +3198,7 @@ L2808     FCDW L2818-L2808
           FCDW R
           FCDW ONE
           FCDW RSLW
-          FCDW TWO
+          FCDW FOUR
           FCDW SUB
 L2818     FCDW DUP
           FCDW AT
@@ -3191,7 +3214,7 @@ L2826     FCDW L2805-L2826
           FCDW STORE
 L2830     FCDW RFROM
           FCDW DROP
-          FCDW TWOP
+          FCDW FOURP
           FCDW SEMIS    ; end of BLOCK
 ;
 ;
@@ -3321,6 +3344,10 @@ XEMIT     LDY	#$36
 ;
 ;
 XKEY      JSR	FAR INCH       ; might otherwise clobber it while
+          TFR   A,B
+          CLRA
+		  TFR	D,X
+		  CLRB
           JMP	PUSHOA
 ;
 ;         XQTER leaves a boolean representing terminal break
@@ -3438,7 +3465,7 @@ L3225     FCDW DUP,CLIT
 L3228     FCDW PFA,LFA,AT
           FCDW DUP,R,ULESS
           FCDW ZBRAN,$FFFFFFFF-28+1 ; L3228-*
-          FCDW OVER,TWO,SUB,STORE
+          FCDW OVER,FOUR,SUB,STORE
           FCDW AT,DDUP,ZEQU
           FCDW ZBRAN,$FFFFFFFF-77+1 ; L3225-*
           FCDW RFROM,DP,STORE
@@ -3473,7 +3500,7 @@ L3273     FCB $C5,"ENDI",$C6
           FCDW L3261    ; link to BEGIN
 ENDIF     FCDW DOCOL
           FCDW QCOMP
-          FCDW TWO
+          FCDW FOUR
           FCDW QPAIR
           FCDW HERE
           FCDW OVER
@@ -3576,7 +3603,7 @@ L3379     FCB $C6,"REPEA",$D4
           FCDW AGAIN
           FCDW RFROM
           FCDW RFROM
-          FCDW TWO
+          FCDW FOUR
           FCDW SUB
           FCDW ENDIF
           FCDW SEMIS
@@ -3592,7 +3619,7 @@ IF        FCDW DOCOL
           FCDW HERE
           FCDW ZERO
           FCDW COMMA
-          FCDW TWO
+          FCDW FOUR
           FCDW SEMIS
 ;
 ;                                       ELSE
@@ -3601,7 +3628,7 @@ IF        FCDW DOCOL
 L3411     FCB $C4,"ELS",$C5
           FCDW L3396    ; link to IF
           FCDW DOCOL
-          FCDW TWO
+          FCDW FOUR
           FCDW QPAIR
           FCDW COMP
           FCDW BRAN
@@ -3609,9 +3636,9 @@ L3411     FCB $C4,"ELS",$C5
           FCDW ZERO
           FCDW COMMA
           FCDW SWAP
-          FCDW TWO
+          FCDW FOUR
           FCDW ENDIF
-          FCDW TWO
+          FCDW FOUR
           FCDW SEMIS
 ;
 ;                                       WHILE
@@ -3621,7 +3648,7 @@ L3431     FCB $C5,"WHIL",$C5
           FCDW L3411    ; link to ELSE
           FCDW DOCOL
           FCDW IF
-          FCDW TWOP
+          FCDW FOURP
           FCDW SEMIS
 ;
 ;                                       SPACES
@@ -3645,28 +3672,28 @@ L3455     FCDW SEMIS
 ;                                       <#
 ;                                       SCREEN 75 LINE 3
 ;
-L3460     .BYTE $82,'<',$A3
-          FCW L3442    ; link to SPACES
-BDIGS     FCW DOCOL
-          FCW PAD
-          FCW HLD
-          FCW STORE
-          FCW SEMIS
+L3460     FCB $82,"<",$A3
+          FCDW L3442    ; link to SPACES
+BDIGS     FCDW DOCOL
+          FCDW PAD
+          FCDW HLD
+          FCDW STORE
+          FCDW SEMIS
 ;
 ;                                       #>
 ;                                       SCREEN 75 LINE 5
 ;
-L3471     .BYTE $82,'#',$BE
-          FCW L3460    ; link to <#
-EDIGS     FCW DOCOL
-          FCW DROP
-          FCW DROP
-          FCW HLD
-          FCW AT
-          FCW PAD
-          FCW OVER
-          FCW SUB
-          FCW SEMIS
+L3471     FCB $82,"#",$BE
+          FCDW L3460    ; link to <#
+EDIGS     FCDW DOCOL
+          FCDW DROP
+          FCDW DROP
+          FCDW HLD
+          FCDW AT
+          FCDW PAD
+          FCDW OVER
+          FCDW SUB
+          FCDW SEMIS
 ;
 ;                                       SIGN
 ;                                       SCREEN 75 LINE 7
@@ -3687,26 +3714,26 @@ L3496     FCDW SEMIS
 ;                                       SCREEN 75 LINE 9
 ;
 L3501     FCB $81,$A3
-          FCW L3486    ; link to SIGN
-DIG       FCW DOCOL
-          FCW BASE
-          FCW AT
-          FCW MSMOD
-          FCW ROT
-          FCW CLIT
+          FCDW L3486    ; link to SIGN
+DIG       FCDW DOCOL
+          FCDW BASE
+          FCDW AT
+          FCDW MSMOD
+          FCDW ROT
+          FCDW CLIT
           FCB 9
-          FCW OVER
-          FCW LESS
-          FCW ZBRAN
-L3513     FCW L3517-L3513
-          FCW CLIT
+          FCDW OVER
+          FCDW LESS
+          FCDW ZBRAN
+L3513     FCDW L3517-L3513
+          FCDW CLIT
           FCB 7
-          FCW PLUS
-L3517     FCW CLIT
+          FCDW PLUS
+L3517     FCDW CLIT
           FCB $30
-          FCW PLUS
-          FCW HOLD
-          FCW SEMIS
+          FCDW PLUS
+          FCDW HOLD
+          FCdW SEMIS
 ;
 ;                                       #S
 ;                                       SCREEN 75 LINE 12
@@ -3929,4 +3956,28 @@ MON       FCDW *+4
           LDU USAVE ; to save this as reentry point
           JMP NEXT
 ;
-TOP       .END           ; end of listing
+DumpDStack
+		  JSR	FAR CRLF
+		  LDD	,U
+		  JSR	FAR HEX4
+		  LDD	2,U
+		  JSR	FAR HEX4
+		  JSR	FAR CRLF
+		  LDD	4,U
+		  JSR	FAR HEX4
+		  LDD	6,U
+		  JSR	FAR HEX4
+		  JSR	FAR CRLF
+		  LDD	8,U
+		  JSR	FAR HEX4
+		  LDD	10,U
+		  JSR	FAR HEX4
+		  JSR	FAR CRLF
+		  LDD	12,U
+		  JSR	FAR HEX4
+		  LDD	14,U
+		  JSR	FAR HEX4
+		  JSR	FAR CRLF
+		  RTS
+
+         .END           ; end of listing

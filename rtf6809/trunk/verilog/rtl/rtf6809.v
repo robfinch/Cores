@@ -24,6 +24,7 @@
 // 6733 LUTS / 745 FF's / 5 BRAMs
 // 60.0/94.0 MHz
 //`define SUPPORT_M32	1'b1
+//`define SUPPORT_DBL_IND   1'b1
 //`define H6309	1'b1
 
 module rtf6809(rst_i, clk_i, halt_i, nmi_i, irq_i, firq_i, vec_i, ba_o, bs_o, lic_o, tsc_i,
@@ -95,6 +96,9 @@ wire [9:0] ir10 = {ipg,ir[7:0]};
 wire [7:0] ndxbyte;
 reg [7:0] dpr;
 reg cf,vf,zf,nf,hf,ef;
+wire [7:0] cfx8 = {7'b0,cf};
+wire [15:0] cfx16 = {15'b0,cf};
+wire [31:0] cfx32 = {31'b0,cf};
 reg im,firqim;
 reg sync_state,wait_state;
 wire [7:0] ccr = {ef,firqim,hf,im,nf,zf,vf,cf};
@@ -232,7 +236,8 @@ wire isIndexed =
 	ir10[7:4]==4'h6 || ir10[7:4]==4'hA || ir10[7:4]==4'hE ||
 	ir10==`LEAX_NDX || ir10==`LEAY_NDX || ir10==`LEAS_NDX || ir10==`LEAU_NDX
 	;
-wire isIndirect = ndxbyte[4] & ndxbyte[7];
+wire isIndirect = (ndxbyte[4] & ndxbyte[7]);
+reg isDblIndirect;
 assign ndxbyte = isInMem ? ir[23:16] : ir[15:8];
 
 // Detect type of interrupt
@@ -1606,6 +1611,8 @@ DECODE:
 		pc <= pc + 32'd1;		// default: increment PC by one
 		a <= 32'd0;
 		b <= 32'd0;
+		ia <= 32'd0;
+		isDblIndirect <= ndxbyte==8'h8F;
 		if (isIndexed) begin
 			casex(ndxbyte)
 			8'b1xx00000:	
@@ -1700,6 +1707,7 @@ DECODE:
 		`TFR:	pc <= pc + 32'd2;
 		`EXG:	pc <= pc + 32'd2;
 		`ABX:	res <= xr + accb;
+		`SEX:   res <= {{8{accb[7]}},accb[7:0]};
 		`PG2:	begin ipg <= 2'b01; ir <= ir[63:8]; next_state(DECODE); end
 		`PG3:	begin ipg <= 2'b10;  ir <= ir[63:8]; next_state(DECODE); end
 		`FAR:	begin isFar <= `TRUE;  ir <= ir[63:8]; next_state(DECODE); end
@@ -1754,8 +1762,8 @@ DECODE:
 			if (md32) begin res32 <= acc - {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; pc <= pc + 16'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
 			else begin res8 <= acc[7:0] - ir[15:8]; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
 		`SBCA_IMM,`SBCB_IMM:
-			if (md32) begin res32 <= acc - {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} - cf; pc <= pc + 16'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
-			else begin res8 <= acc[7:0] - ir[15:8] - cf; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
+			if (md32) begin res32 <= acc - {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} - {31'b0,cf}; pc <= pc + 16'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
+			else begin res8 <= acc[7:0] - ir[15:8] - {7'b0,cf}; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
 		`ANDA_IMM,`ANDB_IMM,`BITA_IMM,`BITB_IMM:
 			if (md32) begin res32 <= acc & {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; pc <= pc + 32'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
 			else begin res8 <= acc[7:0] & ir[15:8]; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
@@ -1766,8 +1774,8 @@ DECODE:
 			if (md32) begin res32 <= acc ^ {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; pc <= pc + 32'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
 			else begin res8 <= acc[7:0] ^ ir[15:8]; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
 		`ADCA_IMM,`ADCB_IMM:
-			if (md32) begin res32 <= acc + {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} + cf; pc <= pc + 16'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
-			else begin res8 <= acc[7:0] + ir[15:8] + cf; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
+			if (md32) begin res32 <= acc + {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} + {31'b0,cf}; pc <= pc + 16'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
+			else begin res8 <= acc[7:0] + ir[15:8] + {7'b0,cf}; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
 		`ORA_IMM,`ORB_IMM:
 			if (md32) begin res32 <= acc | {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; pc <= pc + 32'd5; a <= acc; b <= {ir[15:8],ir[23:16],ir[31:24],ir[39:32]}; end
 			else begin res8 <= acc[7:0] | ir[15:8]; pc <= pc + 16'd2; a <= acc[7:0]; b <= ir[15:8]; end
@@ -1794,11 +1802,11 @@ DECODE:
 					end
 `ifdef H6309
 		`ADCD_IMM:	if (md32) begin
-						res32 <= accq + {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} + cf;
+						res32 <= accq + {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} + {31'b0,cf};
 						pc <= pc + 32'd5;
 					end
 					else begin 
-						res <= {acca[7:0],accb[7:0]} + {ir[15:8],ir[23:16]} + cf;
+						res <= {acca[7:0],accb[7:0]} + {ir[15:8],ir[23:16]} + {15'b0,cf};
 						pc <= pc + 32'd3;
 					end
 `endif		
@@ -1812,11 +1820,11 @@ DECODE:
 					end
 `ifdef H6309					
 		`SBCD_IMM:	if (md32) begin
-						res32 <= accq - {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} - cf;
+						res32 <= accq - {ir[15:8],ir[23:16],ir[31:24],ir[39:32]} - {31'b0,cf};
 						pc <= pc + 32'd5;
 					end
 					else begin 
-						res <= {acca[7:0],accb[7:0]} - {ir[15:8],ir[23:16]} - cf;
+						res <= {acca[7:0],accb[7:0]} - {ir[15:8],ir[23:16]} - {15'b0,cf};
 						pc <= pc + 32'd3;
 					end
 `endif
@@ -2412,25 +2420,41 @@ CALC:
 		case(ir10)
 		`SUBD_DP,`SUBD_NDX,`SUBD_EXT,
 		`CMPD_DP,`CMPD_NDX,`CMPD_EXT:
-			if (md32)
+			if (md32) begin
+			    a <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]};
 				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} - b[31:0];
-			else
+			end
+			else begin
+			    a <= {acca[7:0],accb[7:0]};
 				res <= {acca[7:0],accb[7:0]} - b[15:0];
+			end
 		`SBCD_DP,`SBCD_NDX,`SBCD_EXT:
-			if (md32)
-				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} - b[31:0] - cf;
-			else
-				res <= {acca[7:0],accb[7:0]} - b[15:0] - cf;
+			if (md32) begin
+			    a <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]};
+				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} - b[31:0] - {31'b0,cf};
+			end
+			else begin
+			    a <= {acca[7:0],accb[7:0]};
+				res <= {acca[7:0],accb[7:0]} - b[15:0] - {15'b0,cf};
+			end
 		`ADDD_DP,`ADDD_NDX,`ADDD_EXT:
-			if (md32)
+			if (md32) begin
+			    a <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]};
 				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} + b[31:0];
-			else
+			end
+			else begin
+			    a <= {acca[7:0],accb[7:0]};
 				res <= {acca[7:0],accb[7:0]} + b[15:0];
+			end
 		`ADCD_DP,`ADCD_NDX,`ADCD_EXT:
-			if (md32)
-				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} + b[31:0] + cf;
-			else
-				res <= {acca[7:0],accb[7:0]} + b[15:0] + cf;
+			if (md32) begin
+			    a <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]};
+				res32 <= {acca[7:0],accb[7:0],acce[7:0],accf[7:0]} + b[31:0] + {31'b0,cf};
+			end
+			else begin
+			    a <= {acca[7:0],accb[7:0]};
+				res <= {acca[7:0],accb[7:0]} + b[15:0] + {15'b0,cf};
+			end
 		`LDD_DP,`LDD_NDX,`LDD_EXT:		
 			if (md32)
 				res32 <= b[31:0];
@@ -2441,17 +2465,23 @@ CALC:
 		`SUBA_DP,`SUBA_NDX,`SUBA_EXT,
 		`CMPB_DP,`CMPB_NDX,`CMPB_EXT,
 		`SUBB_DP,`SUBB_NDX,`SUBB_EXT:
-				if (md32)
-					res32 <= acc - b;
-				else
-					res8 <= acc[7:0] - b8;
+		        begin
+    		        a <= acc;
+	       			if (md32)
+    					res32 <= acc - b;
+                    else
+                        res8 <= acc[7:0] - b8;
+				end
 		
 		`SBCA_DP,`SBCA_NDX,`SBCA_EXT,
 		`SBCB_DP,`SBCB_NDX,`SBCB_EXT:
-				if (md32)
-					res32 <= acc - b - cf;
-				else
-					res8 <= acc[7:0] - b8 - cf;
+		        begin
+		            a <= acc;
+                    if (md32)
+                        res32 <= acc - b - {31'b0,cf};
+                    else
+                        res8 <= acc[7:0] - b8 - {7'b0,cf};
+                end
 		`BITA_DP,`BITA_NDX,`BITA_EXT,
 		`ANDA_DP,`ANDA_NDX,`ANDA_EXT,
 		`BITB_DP,`BITB_NDX,`BITB_EXT,
@@ -2474,10 +2504,14 @@ CALC:
 					res8 <= acc[7:0] ^ b8;
 		`ADCA_DP,`ADCA_NDX,`ADCA_EXT,
 		`ADCB_DP,`ADCB_NDX,`ADCB_EXT:
-				if (md32)
-					res32 <= acc + b + cf;
-				else
-					res8 <= acc[7:0] + b8 + cf;
+				if (md32) begin
+				    a <= acc;
+					res32 <= acc + b + {31'b0,cf};
+				end
+				else begin
+				    a <= acc;
+					res8 <= acc[7:0] + b8 + {7'b0,cf};
+				end
 		`ORA_DP,`ORA_NDX,`ORA_EXT,
 		`ORB_DP,`ORB_NDX,`ORB_EXT:
 				if (md32)
@@ -2486,18 +2520,21 @@ CALC:
 					res8 <= acc[7:0] | b8;
 		`ADDA_DP,`ADDA_NDX,`ADDA_EXT,
 		`ADDB_DP,`ADDB_NDX,`ADDB_EXT:
-				if (md32)
-					res32 <= acc + b;
-				else
-					res8 <= acc[7:0] + b8;
+		        begin
+		            a <= acc;
+                    if (md32)
+                        res32 <= acc + b;
+                    else
+                        res8 <= acc[7:0] + b8;
+                end
 		
 		`LDU_DP,`LDS_DP,`LDX_DP,`LDY_DP,
 		`LDU_NDX,`LDS_NDX,`LDX_NDX,`LDY_NDX,
 		`LDU_EXT,`LDS_EXT,`LDX_EXT,`LDY_EXT:	if (md32) res32 <= b; else res <= b[15:0];
-		`CMPX_DP,`CMPX_NDX,`CMPX_EXT:	if (md32) res32 <= xr - b; else res <= xr[15:0] - b[15:0];
-		`CMPY_DP,`CMPY_NDX,`CMPY_EXT:	if (md32) res32 <= yr - b; else res <= yr[15:0] - b[15:0];
-		`CMPS_DP,`CMPS_NDX,`CMPS_EXT:	if (md32) res32 <= ssp - b; else res <= ssp[15:0] - b[15:0];
-		`CMPU_DP,`CMPU_NDX,`CMPU_EXT:	if (md32) res32 <= usp - b; else res <= usp[15:0] - b[15:0];
+		`CMPX_DP,`CMPX_NDX,`CMPX_EXT:	begin a <= xr; if (md32) res32 <= xr - b; else res <= xr[15:0] - b[15:0]; end
+		`CMPY_DP,`CMPY_NDX,`CMPY_EXT:	begin a <= yr; if (md32) res32 <= yr - b; else res <= yr[15:0] - b[15:0]; end
+		`CMPS_DP,`CMPS_NDX,`CMPS_EXT:	begin a <= ssp; if (md32) res32 <= ssp - b; else res <= ssp[15:0] - b[15:0]; end
+		`CMPU_DP,`CMPU_NDX,`CMPU_EXT:	begin a <= usp; if (md32) res32 <= usp - b; else res <= usp[15:0] - b[15:0]; end
 
 		`NEG_DP,`NEG_NDX,`NEG_EXT:	begin res8 <= -b8; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
 		`COM_DP,`COM_NDX,`COM_EXT:	begin res8 <= ~b8; wadr <= radr; store_what <= `SW_RES8; next_state(STORE1); end
@@ -3748,16 +3785,26 @@ begin
 				res32[7:0] <= dat;
 				radr <= {ia[31:8],dat};
 				wadr <= {ia[31:8],dat};
-				load_what <= load_what2;
-				if (isOuterIndexed)
-					next_state(OUTER_INDEXING);
-				else begin
-					if (isLEA)
-						next_state(IFETCH);
-					else if (isStore)
-						next_state(STORE1);
-					else
-						next_state(LOAD1);
+`ifdef SUPPORT_DBL_IND
+				if (isDblIndirect) begin
+                    load_what <= isFar ? `LW_IA3124 : `LW_IAH;
+                    next_state(LOAD1);
+                    isDblIndirect <= `FALSE;				
+				end
+				else
+`endif
+				begin
+                    load_what <= load_what2;
+                    if (isOuterIndexed)
+                        next_state(OUTER_INDEXING);
+                    else begin
+                        if (isLEA)
+                            next_state(IFETCH);
+                        else if (isStore)
+                            next_state(STORE1);
+                        else
+                            next_state(LOAD1);
+                    end
 				end
 			end
 	`LW_IAH:
@@ -3784,16 +3831,26 @@ begin
 				res32 <= dat32;
 				radr <= dat32;
 				wadr <= dat32;
-				load_what <= load_what2;
-				if (isOuterIndexed)
-					next_state(OUTER_INDEXING);
-				else begin
-					if (isLEA)
-						next_state(IFETCH);
-					else if (isStore)
-						next_state(STORE1);
-					else
-						next_state(LOAD1);
+`ifdef SUPPORT_DBL_IND
+				if (isDblIndirect) begin
+                    load_what <= load_what;
+                    next_state(LOAD1);
+                    isDblIndirect <= `FALSE;                
+                end
+                else
+`endif
+                begin
+                    load_what <= load_what2;
+                    if (isOuterIndexed)
+                        next_state(OUTER_INDEXING);
+                    else begin
+                        if (isLEA)
+                            next_state(IFETCH);
+                        else if (isStore)
+                            next_state(STORE1);
+                        else
+                            next_state(LOAD1);
+                    end
 				end
 			end
 			else begin
