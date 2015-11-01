@@ -2382,10 +2382,16 @@ DECODE:
 			begin
 				if (wait_state) begin
 					wait_state <= `FALSE;
-					radr <= vect;
-					load_what <= `LW_PCH;
-					pc <= 32'h0000FFFE;
-					next_state(LOAD1);
+					if (vec_i != 32'h0) begin
+					    pc <= vec_i;
+					    next_state(IFETCH);
+					end
+					else begin
+					    radr <= vect;
+                        load_what <= `LW_PCH;
+					    pc <= 32'h0000FFFE;
+					    next_state(LOAD1);
+					end
 				end
 				else begin
 					if (isNMI | isIRQ | isSWI | isSWI2 | isSWI3) begin
