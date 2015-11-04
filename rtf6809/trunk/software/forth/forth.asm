@@ -149,7 +149,12 @@ NEXT	  JSR	TRACE
 		  LDD	FAR [IP],Y
 		  STD	W+2
 		  BSR	INC4_IP
-;		  JMP	FAR [[W]]
+
+; Note standard forth practice places self-modifying code to implement a doubly
+; indirect jump. Self modifying code is avoided here by using an additional
+; variable. The cost is some performance.
+
+;		  JMP	FAR [[W]]	; this is the instruction we really want
 NEXTW	  LDY	#2			; entry point from EXEC
 		  LDD	FAR [W]		; double indirect far jump is needed here
 		  LDX	FAR [W],Y
@@ -175,6 +180,8 @@ INC_IP_1  RTS
 INC2_IP	  BSR	INC_IP
 		  BRA	INC_IP
 
+; Here we just use a carry chain adder, rather than calling INC_IP four times.
+
 INC4_IP	  LDD	IP+2
 		  ADDD	#4
 		  STD	IP+2
@@ -185,6 +192,7 @@ INC4_IP	  LDD	IP+2
 		  RTS
 
 ; Add DX to IP
+; This is used for branches.
 
 ADXIP	  TFR	D,Y
 		  TFR	X,D
@@ -225,7 +233,7 @@ HEX2      EQU $D2CE         ; print accum as two hex numbers
 HEX4		EQU	$D2D2		; print accum D as four hex numbers
 LETTER    EQU $D2C1         ; print accum as one ASCII character
 ONEKEY    EQU $D1DC         ; wait for keystroke
-XW        EQU TMP+4             ; scratch reg. to next code field add
+XW        EQU $60           ; scratch reg. to next code field add
 NP        EQU XW+4              ; scratch reg. pointing to name field
 ;
 ;
@@ -468,23 +476,23 @@ I         FCDW R+4      ; share the code for R
 L214      FCB $85,"DIGI",$D4
           FCDW L207     ; link to I
 DIGIT     FCDW *+4
-		  LDD	4,U		; high order bits must be zero (max allowed radix is then 65535)
-		  BNE	L234
-          LDD	6,U
-          SUBD	#$30	; if < '0' exit false
+          LDA	7,U
+          SUBA	#$30	; if < '0' exit false
           BMI	L234
-          CMPD	#$A		; if > 9
+          CMPA	#$A		; if > 9
           BMI	L227
-          SUBD	#7
-          CMPD	#$A
+          SUBA	#7
+          CMPA	#$A
           BMI	L234
-L227      CMPD	2,U		; compare to radix (here we assume radix < 65536)
+L227      CMPA	3,U		; compare to radix (here we assume radix < 256)
           BPL	L234	; greater than radix ? then return false
-          STD	6,U		; save conversion on stack
-		  LDD	#0
-		  STD	4,U
+          STA	7,U		; save conversion on stack
+		  CLR	6,U
+		  CLR	5,U
+		  CLR	4,U
+		  CLRD
 		  PSHS	D
-          LDB	#1
+          INCB
           JMP	PUT        ; exit true with converted value
 L234      CLRD
           PSHS	D
@@ -572,7 +580,7 @@ ENCL      FCDW *+4
 ;		  STD	2,U
 		  STD	4,U
 ;		  STD	6,U
-;		  STD	8,U
+		  STD	8,U
 		  LDY	#0
           DEY
 L313      INY
@@ -586,9 +594,9 @@ L318      LDA	FAR [N+4],Y
           STY	2,U
           CMPY	10,U
           BNE	L326
-          INC	5,U
+          INC	7,U
 		  BNE	L326
-		  INC   4,U
+		  INC   6,U
 L326      JMP	NEXT
 L327      STY	6,U
           INY
@@ -637,7 +645,7 @@ L365      FCB $85,"CMOV",$C5
 CMOVE     FCDW *+4
           LDB	#3
           JSR	SETUP
-L370      CPY	N+2
+L370      CMPY	N+2
           BNE	L375
 		  LDD	N
 		  SUBD	#1
@@ -685,7 +693,7 @@ L396	  ASL	7,U
 		  LDD	N
 		  ADCB	5,U
 		  ADCA	4,U
-		  STD	N
+		  STD	4,U
 		  LDA	#0
 		  ADCA	3,U
 		  STA	3,U
@@ -815,7 +823,11 @@ XOR       FCDW *+4
 L499      FCB $83,"SP",$C0
           FCDW L484     ; link  to XOR
 SPAT      FCDW *+4
-;
+		  CLRD
+		  PSHS	D
+		  TFR	U,D
+          JMP	PUSH
+
 PUSHOA    CLRD
 		  PSHS	D
 		  TFR	X,D
@@ -970,12 +982,33 @@ DPLUS     FCDW *+4
 		  STD	4,U
 		  LEAU	4,U		; POP
           JMP	NEXT
+
+L660      FCB $82,"D64",$AB
+          FCDW L649     ;    LINK TO +
+D64PLUS   FCDW *+4
+		  LDD	14,U
+		  ADDD	6,U
+		  STD	14,U
+		  LDD	12,U
+		  ADCB	5,U
+		  ADCA	4,U
+		  STD	12,U
+		  LDD	10,U
+		  ADCB	3,U
+		  ADCA	2,U
+		  STD	10,U
+		  LDD	8,U
+		  ADCB  1,U
+		  ADCA	0,U
+		  STD	8,U
+		  LEAU	8,U		; POP
+          JMP	NEXT
 ;
 ;                                       MINUS
 ;                                       SCREEN 29 LINE 9
 ;
 L670      FCB $85,"MINU",$D3
-          FCDW L649     ; link to D+
+          FCDW L660     ; link to D64+
 MINUS     FCDW *+4
           CLRD
 		  SUBD	2,U
@@ -1031,12 +1064,17 @@ L718      FCB $84,"SWA",$D0
 SWAP      FCDW *+4
 		  LDD	4,U
 		  PSHS	D
+		  LDD	6,U
+		  PSHS	D
 		  LDD	0,U
 		  STD	4,U
-		  LDD	6,U
-		  LDX	2,U
-		  STX	6,U
-		  JMP	PUT
+		  LDD	2,U
+		  STD	6,U
+		  PULS	D
+		  STD	2,U
+		  PULS	D
+		  STD	0,U
+		  JMP	NEXT
 ;
 ;                                       DUP
 ;                                       SCREEN 30 LINE 21
@@ -1045,9 +1083,9 @@ L733      FCB $83,"DU",$D0
           FCDW	L718     ; link to SWAP
 DUP       FCDW	*+4
           LDD	0,U
-		  PSHS	D
-		  LDD	2,U
-		  JMP	PUSH
+		  LDX	2,U
+		  PSHU	D,X
+		  JMP	NEXT
 ;
 ;                                       +!
 ;                                       SCREEN 31 LINE 2
@@ -1327,7 +1365,7 @@ BL        FCDW DOCON
 L960      FCB $83,"C/",$CC
           FCDW L952     ; link to BL
 CSLL      FCDW DOCON
-          FCDW 84						; was 64
+          FCDW 56						; was 64
 ;
 ;                                       FIRST
 ;                                       SCREEN 35 LINE 7
@@ -2396,8 +2434,8 @@ L1979     FCDW L2001-L1979
           FCDW ROT
           FCDW BASE
           FCDW AT
-          FCDW USTAR
-          FCDW DPLUS
+          FCDW USTAR	; ustar leaves 64 bit product
+          FCDW D64PLUS	; DPLUS is only 32 bits not 64 bits
           FCDW DPL
           FCDW AT
           FCDW ONEP
@@ -2425,7 +2463,7 @@ NUMBER    FCDW DOCOL
           FCDW ONEP
           FCDW CAT
           FCDW CLIT
-          FCB $2D
+          FCB $2D				; minus sign
           FCDW EQUAL
           FCDW DUP
           FCDW TOR
@@ -2443,7 +2481,7 @@ L2031     FCDW L2042-L2031
           FCDW DUP
           FCDW CAT
           FCDW CLIT
-          FCB $2E
+          FCB $2E				; decimal point
           FCDW SUB
           FCDW ZERO
           FCDW QERR
@@ -2863,6 +2901,7 @@ L2427	  CLR	FAR [UP],Y
           BNE L2433
 WARM      LDY #$1E
 L2433     CLR TRACEF
+;          INC TRACEF
 		  LDD ORIG+$18
           STD UP
           LDD ORIG+$1A
@@ -3434,10 +3473,13 @@ XKEY      JSR	FAR INCH       ; might otherwise clobber it while
 ;         XQTER leaves a boolean representing terminal break
 ;
 ;
-XQTER     LDA $C000      ; system depend port test
-          CMPA $C001
-          ANDA #1
-          JMP PUSHOA
+XQTER     CLRD
+		  PSHS	D
+		  JMP	PUSH
+;		  LDA $C000      ; system depend port test
+;          CMPA $C001
+;          ANDA #1
+;          JMP PUSHOA
 ;
 ;         XCR displays a CR and LF to terminal
 ;
