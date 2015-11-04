@@ -65,10 +65,12 @@
 `define COP_VECT_832	24'h00FFD4
 
 `define BRK			9'h00
+`define BRK2		9'h100
 `define RTI			9'h40
 `define RTS			9'h60
 `define PHP			9'h08
 `define CLC			9'h18
+`define CMC         9'h118
 `define PLP			9'h28
 `define SEC			9'h38
 `define PHA			9'h48
@@ -76,12 +78,16 @@
 `define PLA			9'h68
 `define SEI			9'h78
 `define DEY			9'h88
+`define DEY4		9'h188
 `define TYA			9'h98
 `define TAY			9'hA8
 `define CLV			9'hB8
+`define SEV			9'h1B8
 `define INY			9'hC8
+`define INY4		9'h1C8
 `define CLD			9'hD8
 `define INX			9'hE8
+`define INX4		9'h1E8
 `define SED			9'hF8
 `define ROR_ACC		9'h6A
 `define TXA			9'h8A
@@ -89,7 +95,9 @@
 `define TAX			9'hAA
 `define TSX			9'hBA
 `define DEX			9'hCA
+`define DEX4		9'h1CA
 `define NOP			9'hEA
+`define NOP2		9'h1EA
 `define TXY			9'h9B
 `define TYX			9'hBB
 `define TAS			9'h1B
@@ -110,8 +118,7 @@
 `define PEI			9'hD4
 `define PER			9'h62
 `define WDM			9'h42
-
-// CMP = SUB r0,....
+`define PEAxl       9'h1F4
 
 `define ADC_IMM		9'h69
 `define ADC_ZP		9'h65
@@ -128,6 +135,12 @@
 `define ADC_ALX		9'h7F
 `define ADC_DSP		9'h63
 `define ADC_DSPIY	9'h73
+`define ADC_XDSPIY	9'h173
+`define ADC_XIYL	9'h177
+`define ADC_XIL		9'h167
+`define ADC_XABS	9'h16D
+`define ADC_XABSX	9'h17D
+`define ADC_XABSY	9'h179
 
 `define SBC_IMM		9'hE9
 `define SBC_ZP		9'hE5
@@ -144,6 +157,12 @@
 `define SBC_ALX		9'hFF
 `define SBC_DSP		9'hE3
 `define SBC_DSPIY	9'hF3
+`define SBC_XDSPIY	9'h1F3
+`define SBC_XIYL	9'h1F7
+`define SBC_XIL		9'h1E7
+`define SBC_XABS	9'h1ED
+`define SBC_XABSX	9'h1FD
+`define SBC_XABSY	9'h1F9
 
 `define CMP_IMM		9'hC9
 `define CMP_ZP		9'hC5
@@ -160,6 +179,12 @@
 `define CMP_ALX		9'hDF
 `define CMP_DSP		9'hC3
 `define CMP_DSPIY	9'hD3
+`define CMP_XDSPIY	9'h1D3
+`define CMP_XIYL	8'h1D7
+`define CMP_XIL		9'h1C7
+`define CMP_XABS	9'h1CD
+`define CMP_XABSX	9'h1DD
+`define CMP_XABSY	9'h1D9
 
 `define LDA_IMM8	9'hA5
 `define LDA_IMM16	9'hB9
@@ -181,6 +206,12 @@
 `define AND_DSPIY	9'h33
 `define AND_AL		9'h2F
 `define AND_ALX		9'h3F
+`define AND_XDSPIY	9'h133
+`define AND_XIL		9'h127
+`define AND_XIYL	9'h137
+`define AND_XABS	9'h12D
+`define AND_XABSX	9'h13D
+`define AND_XABSY	9'h139
 
 `define ORA_IMM		9'h09
 `define ORA_ZP		9'h05
@@ -197,6 +228,12 @@
 `define ORA_ALX		9'h1F
 `define ORA_DSP		9'h03
 `define ORA_DSPIY	9'h13
+`define ORA_XDSPIY	9'h113
+`define ORA_XIL		9'h107
+`define ORA_XIYL	9'h117
+`define ORA_XABS	9'h10D
+`define ORA_XABSX	9'h11D
+`define ORA_XABSY	9'h119
 
 `define EOR_IMM		9'h49
 `define EOR_ZP		9'h45
@@ -214,6 +251,12 @@
 `define EOR_DSPIY	9'h53
 `define EOR_AL		9'h4F
 `define EOR_ALX		9'h5F
+`define EOR_XDSPIY	9'h153
+`define EOR_XIL		9'h147
+`define EOR_XIYL	9'h157
+`define EOR_XABS	9'h14D
+`define EOR_XABSX	9'h15D
+`define EOR_XABSY	9'h159
 
 //`define LDB_RIND	9'hB2	// Conflict with LDX #imm16
 
@@ -232,6 +275,12 @@
 `define LDA_ALX		9'hBF
 `define LDA_DSP		9'hA3
 `define LDA_DSPIY	9'hB3
+`define LDA_XDSPIY	9'h1B3
+`define LDA_XIL		9'h1A7
+`define LDA_XIYL	9'h1B7
+`define LDA_XABS	9'h1AD
+`define LDA_XABSX	9'h1BD
+`define LDA_XABSY	9'h1B9
 
 `define STA_ZP		9'h85
 `define STA_ZPX		9'h95
@@ -247,13 +296,22 @@
 `define STA_ALX		9'h9F
 `define STA_DSP		9'h83
 `define STA_DSPIY	9'h93
+`define STA_XDSPIY	9'h193
+`define STA_XIL		9'h187
+`define STA_XIYL	9'h197
+`define STA_XABS	9'h18D
+`define STA_XABSX	9'h19D
+`define STA_XABSY	9'h199
 
 `define ASL_ACC		9'h0A
+`define ASR_ACC		9'h10A
 `define ASL_ZP		9'h06
 `define ASL_RR		9'h06
 `define ASL_ZPX		9'h16
 `define ASL_ABS		9'h0E
 `define ASL_ABSX	9'h1E
+`define ASL_XABS	9'h10E
+`define ASL_XABSX	9'h11E
 
 `define ROL_ACC		9'h2A
 `define ROL_ZP		9'h26
@@ -261,6 +319,8 @@
 `define ROL_ZPX		9'h36
 `define ROL_ABS		9'h2E
 `define ROL_ABSX	9'h3E
+`define ROL_XABS	9'h12E
+`define ROL_XABSX	9'h13E
 
 `define LSR_ACC		9'h4A
 `define LSR_ZP		9'h46
@@ -268,29 +328,39 @@
 `define LSR_ZPX		9'h56
 `define LSR_ABS		9'h4E
 `define LSR_ABSX	9'h5E
+`define LSR_XABS	9'h14E
+`define LSR_XABSX	9'h15E
 
 `define ROR_RR		9'h66
 `define ROR_ZP		9'h66
 `define ROR_ZPX		9'h76
 `define ROR_ABS		9'h6E
 `define ROR_ABSX	9'h7E
+`define ROR_XABS	9'h16E
+`define ROR_XABSX	9'h17E
 
 `define DEC_RR		9'hC6
 `define DEC_ZP		9'hC6
 `define DEC_ZPX		9'hD6
 `define DEC_ABS		9'hCE
 `define DEC_ABSX	9'hDE
+`define DEC_XABS	9'h1CE
+`define DEC_XABSX	9'h1DE
 `define INC_RR		9'hE6
 `define INC_ZP		9'hE6
 `define INC_ZPX		9'hF6
 `define INC_ABS		9'hEE
 `define INC_ABSX	9'hFE
+`define INC_XABS	9'h1EE
+`define INC_XABSX	9'h1FE
 
 `define BIT_IMM		9'h89
 `define BIT_ZP		9'h24
 `define BIT_ZPX		9'h34
 `define BIT_ABS		9'h2C
 `define BIT_ABSX	9'h3C
+`define BIT_XABS	9'h12C
+`define BIT_XABSX	9'h13C
 
 // CMP = SUB r0,...
 // BIT = AND r0,...
@@ -304,30 +374,34 @@
 `define BEQ			9'hF0
 `define BRL			9'h82
 `define BRA			9'h80
+`define BGT         9'h110
+`define BLT         9'h130
+`define BGE         9'h190
+`define BLE         8'h1B0
 
 `define JML			9'h5C
+`define JMF			9'h15C
 `define JMP			9'h4C
 `define JMP_IND		9'h6C
 `define JMP_INDX	9'h7C
 `define JMP_RIND	9'hD2
 `define JSR			9'h20
 `define JSL			9'h22
+`define JSF			9'h122
 `define JSR_IND		9'h2C
 `define JSR_INDX	9'hFC
 `define JSR_RIND	9'hC2
 `define RTS			9'h60
 `define RTL			9'h6B
+`define RTF			9'h16B
 `define BSR			9'h62
 `define NOP			9'hEA
 
-`define BRK			9'h00
 `define PLX			9'hFA
 `define PLY			9'h7A
 `define PHX			9'hDA
 `define PHY			9'h5A
 `define WAI			9'hCB
-`define PUSH		9'h0B
-`define POP			9'h2B
 `define PHB			9'h8B
 `define PHD			9'h0B
 `define PHK			9'h4B
@@ -335,8 +409,6 @@
 `define COP			9'h02
 `define PLB			9'hAB
 `define PLD			9'h2B
-`define PSHR4		9'h0F
-`define POPR4		9'h2F
 
 `define LDX_IMM		9'hA2
 `define LDX_ZP		9'hA6
@@ -344,6 +416,8 @@
 `define LDX_ZPY		9'hB6
 `define LDX_ABS		9'hAE
 `define LDX_ABSY	9'hBE
+`define LDX_XABS	9'h1AE
+`define LDX_XABSY	9'h1BE
 
 `define LDX_IMM32	9'hA2
 `define LDX_IMM16	9'hB2
@@ -356,20 +430,26 @@
 `define LDY_IMM8	9'hA1
 `define LDY_ABS		9'hAC
 `define LDY_ABSX	9'hBC
+`define LDY_XABS	9'h1AC
+`define LDY_XABSX	9'h1BC
 
 `define STX_ZP		9'h86
 `define STX_ZPX		9'h96
 `define STX_ZPY		9'h96
 `define STX_ABS		9'h8E
+`define STX_XABS	9'h18E
 
 `define STY_ZP		9'h84
 `define STY_ZPX		9'h94
 `define STY_ABS		9'h8C
+`define STY_XABS	9'h18C
 
 `define STZ_ZP		9'h64
 `define STZ_ZPX		9'h74
 `define STZ_ABS		9'h9C
 `define STZ_ABSX	9'h9E
+`define STZ_XABS	9'h19C
+`define STZ_XABSX	9'h19E
 
 `define CPX_IMM		9'hE0
 `define CPX_IMM32	9'hE0
@@ -377,76 +457,30 @@
 `define CPX_ZP		9'hE4
 `define CPX_ZPX		9'hE4
 `define CPX_ABS		9'hEC
+`define CPX_XABS	9'h1EC
 `define CPY_IMM		9'hC0
 `define CPY_IMM32	9'hC0
 `define CPY_IMM8	9'hC1
 `define CPY_ZP		9'hC4
 `define CPY_ZPX		9'hC4
 `define CPY_ABS		9'hCC
+`define CPY_XABS	9'h1CC
 
 `define TRB_ZP		9'h14
 `define TRB_ZPX		9'h14
 `define TRB_ABS		9'h1C
+`define TRB_XABS	9'h11C
 `define TSB_ZP		9'h04
 `define TSB_ZPX		9'h04
 `define TSB_ABS		9'h0C
+`define TSB_XABS	9'h10C
 
 `define MVP			9'h44
 `define MVN			9'h54
-`define STS			9'h64
+`define STS			9'h144
 
 // Page Two Opcodes
 `define PG2			9'h42
-
-`define ICOFF		9'h108
-`define ICON		9'h128
-`define TOFF		9'h118
-`define TON			9'h138
-`define MUL_IMM8	9'h105
-`define MUL_IMM16	9'h119
-`define MUL_IMM32	9'h109
-`define MULS_IMM8	9'h125
-`define MULS_IMM16	9'h139
-`define MULS_IMM32	9'h129
-`define DIV_IMM8	9'h145
-`define DIV_IMM16	9'h159
-`define DIV_IMM32	9'h149
-`define DIVS_IMM8	9'h165
-`define DIVS_IMM16	9'h179
-`define DIVS_IMM32	9'h169
-`define MOD_IMM8	9'h185
-`define MOD_IMM16	9'h199
-`define MOD_IMM32	9'h189
-`define MODS_IMM8	9'h1A5
-`define MODS_IMM16	9'h1B9
-`define MODS_IMM32	9'h1A9
-`define PUSHA		9'h10B
-`define POPA		9'h12B
-`define BMS_ZPX		9'h106
-`define BMS_ABS		9'h10E
-`define BMS_ABSX	9'h11E
-`define BMC_ZPX		9'h126
-`define BMC_ABS		9'h12E
-`define BMC_ABSX	9'h13E
-`define BMF_ZPX		9'h146
-`define BMF_ABS		9'h14E
-`define BMF_ABSX	9'h15E
-`define BMT_ZPX		9'h166
-`define BMT_ABS		9'h16E
-`define BMT_ABSX	9'h17E
-`define HOFF		9'h158
-`define CMPS		9'h144
-`define SPL_ABS		9'h18E
-`define SPL_ABSX	9'h19E
-
-`define LEA_ZPX		9'h1D5
-`define LEA_IX		9'h1C1
-`define LEA_IY		9'h1D1
-`define LEA_ABS		9'h1CD
-`define LEA_ABSX	9'h1DD
-`define LEA_RIND	9'h1D2
-`define LEA_I		9'h1D2
-`define LEA_DSP		9'h1C3
 
 `define NOTHING		5'd0
 `define SR_70		5'd1
@@ -529,14 +563,8 @@ parameter SUPPORT_TRIBYTES = 1'b0;
 parameter STORE_SKIPPING = 1'b1;
 parameter EXTRA_LONG_BRANCHES = 1'b1;
 parameter RESET1 = 6'd0;
-parameter IFETCH1 = 6'd1;
-parameter IFETCH2 = 6'd2;
-parameter IFETCH3 = 6'd3;
-parameter IFETCH4 = 6'd4;
-parameter DECODE1 = 6'd5;
-parameter DECODE2 = 6'd6;
-parameter DECODE3 = 6'd7;
-parameter DECODE4 = 6'd8;
+parameter IFETCH = 6'd1;
+parameter DECODE = 6'd5;
 parameter STORE1 = 6'd9;
 parameter STORE2 = 6'd10;
 parameter JSR161 = 6'd11;
@@ -563,8 +591,7 @@ parameter IBUF1 = 6'd32;
 parameter DCACHE1 = 6'd33;
 parameter HALF_CALC = 6'd35;
 parameter MVN816 = 6'd36;
-parameter IFETCH5 = 6'd37;
-parameter DECODE5 = 6'd38;
+parameter WORD_CALC = 6'd42;
 
 input rst;
 input clk;
@@ -603,16 +630,17 @@ reg [7:0] dbi;
 reg pg2;
 reg [5:0] state;
 reg [5:0] retstate;
-reg [39:0] ir;
+reg [127:0] ir;
 wire [8:0] ir9 = {pg2,ir[7:0]};
 reg [23:0] pc,opc;
-reg [31:0] ps;      // program segment
+reg [31:0] cs;      // code segment
+wire [31:0] cspc = cs + pc;
 reg [15:0] dpr;		// direct page register
-reg [7:0] dbr;		// data bank register
 reg [31:0] ds;      // data segment
+wire [7:0] dbr = ds[23:16];		// data bank register
 reg [31:0] x,y,acc,sp;
 reg [15:0] tmp;
-wire [15:0] acc16 = acc;
+wire [15:0] acc16 = acc[15:0];
 wire [7:0] acc8=acc[7:0];
 wire [7:0] x8=x[7:0];
 wire [7:0] y8=y[7:0];
@@ -628,6 +656,7 @@ wire [31:0] y_inc = y + 32'd1;
 wire [31:0] sp_dec = sp - 32'd1;
 wire [31:0] sp_inc = sp + 32'd1;
 wire [31:0] sp_dec2 = sp - 32'd2;
+wire [31:0] sp_dec4 = sp - 32'd4;
 reg gie;	// global interrupt enable (set when sp is loaded)
 reg hwi;	// hardware interrupt indicator
 reg im;
@@ -664,21 +693,18 @@ wire [31:0] y32 = xb32 ? y : xb16 ? {16'h0000,y[15:0] : {24'h000000,y[7:0]};
 wire [7:0] sr8 = m816 ? {nf,vf,m_bit,x_bit,df,im,zf,cf} : {nf,vf,1'b0,bf,df,im,zf,cf};
 reg nmi1,nmi_edge;
 reg wai;
-reg [7:0] b8;
-reg [15:0] b16;
 reg [31:0] b32;
-reg [7:0] b24;
-reg [8:0] res8;
-reg [16:0] res16;
+wire [15:0] b16 = b32[15:0];
+wire [7:0] b8 = b32[7:0];
 reg [32:0] res32;
-wire resc8 = res8[8];
-wire resc16 = res16[16];
+wire resc8 = res32[8];
+wire resc16 = res32[16];
 wire resc32 = res32[32];
-wire resz8 = ~|res8[7:0];
-wire resz16 = ~|res16[15:0];
+wire resz8 = ~|res32[7:0];
+wire resz16 = ~|res32[15:0];
 wire resz32 = ~|res32[31:0];
-wire resn8 = res8[7];
-wire resn16 = res16[15];
+wire resn8 = res32[7];
+wire resn16 = res32[15];
 wire resn32 = res32[31];
 reg [31:0] radr;
 reg [31:0] wadr;
@@ -686,6 +712,7 @@ reg [31:0] wdat;
 wire [7:0] rdat;
 reg [4:0] load_what;
 reg [5:0] store_what;
+reg s8,s16,s32;
 reg [15:0] tmp16;
 reg first_ifetch;
 reg [31:0] derr_address;
@@ -694,12 +721,11 @@ reg [8:0] intno;
 reg isBusErr;
 reg isBrk,isMove,isSts;
 reg isMove816;
-reg isRTI,isRTL,isRTS;
+reg isRTI,isRTL,isRTS,isRTF;
 reg isRMW;
 reg isSub;
 reg isJsrIndx,isJsrInd;
-reg isIY,isIY24,isI24;
-reg isTribyte;
+reg isIY,isIY24,isI24,isIY32,isI32;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS ||
 			 ir9==`CPY_ZPX || ir9==`CPY_ABS;
@@ -708,8 +734,25 @@ wire isRMW8 =
 			 ir9==`ASL_ZPX || ir9==`ROL_ZPX || ir9==`LSR_ZPX || ir9==`ROR_ZPX || ir9==`INC_ZPX || ir9==`DEC_ZPX ||
 			 ir9==`ASL_ABS || ir9==`ROL_ABS || ir9==`LSR_ABS || ir9==`ROR_ABS || ir9==`INC_ABS || ir9==`DEC_ABS ||
 			 ir9==`ASL_ABSX || ir9==`ROL_ABSX || ir9==`LSR_ABSX || ir9==`ROR_ABSX || ir9==`INC_ABSX || ir9==`DEC_ABSX ||
-			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS;
-wire isBranch = ir9==`BRA || ir9==`BEQ || ir9==`BNE || ir9==`BVS || ir9==`BVC || ir9==`BMI || ir9==`BPL || ir9==`BCS || ir9==`BCC;
+			 ir9==`ASL_XABS || ir9==`ROL_XABS || ir9==`LSR_XABS || ir9==`ROR_XABS || ir9==`INC_XABS || ir9==`DEC_XABS ||
+             ir9==`ASL_XABSX || ir9==`ROL_XABSX || ir9==`LSR_XABSX || ir9==`ROR_XABSX || ir9==`INC_XABSX || ir9==`DEC_XABSX ||
+			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS
+			 ;
+wire isBranch = ir9==`BRA || ir9==`BEQ || ir9==`BNE || ir9==`BVS || ir9==`BVC || ir9==`BMI || ir9==`BPL || ir9==`BCS || ir9==`BCC ||
+                ir9==`BGT || ir9==`BGE || ir9==`BLT || ir9==`BLE;
+
+ft832_icachemem uicm1
+(
+    .wclk(clk),
+    .wce(1'b1),
+    .wr(wr_icache),
+    .wa(ado[11:0]),
+    .i(db),
+    .rclk(~clk),
+    .rce(1'b1),
+    .pc(cspc[11:0]),
+    .insn(insn)
+);
 
 // Registerable decodes
 // The following decodes can be registered because they aren't needed until at least the cycle after
@@ -718,11 +761,12 @@ wire isBranch = ir9==`BRA || ir9==`BEQ || ir9==`BNE || ir9==`BVS || ir9==`BVC ||
 always @(posedge clk)
 	if (state==RESET1)
 		isBrk <= `TRUE;
-	else if (state==DECODE1||state==DECODE2||state==DECODE3||state==DECODE4) begin
+	else if (state==DECODE) begin
 		isRMW <= isRMW8;
 		isRTI <= ir9==`RTI;
 		isRTL <= ir9==`RTL;
 		isRTS <= ir9==`RTS;
+		isRTF <= ir9==`RTF;
 		isBrk <= ir9==`BRK || ir9==`COP;
 		isMove <= ir9==`MVP || ir9==`MVN;
 		isJsrIndx <= ir9==`JSR_INDX;
@@ -763,23 +807,30 @@ case(ir9)
 `BVC:	takb <= !vf;
 `BRA:	takb <= 1'b1;
 `BRL:	takb <= 1'b1;
+`BGT:   takb <= (nf & vf & !zf) | (!nf & !vf & !zf);
+`BGE:   takb <= (nf & vf) | (!nf & !vf);
+`BLE:   takb <= zf | (nf & !vf) | (!nf & vf);
+`BLT:   takb <= (nf & !vf) | (!nf & vf);
 default:	takb <= 1'b0;
 endcase
 
 reg [31:0] ia;
-wire [31:0] mvnsrc_address	= m832 ? x32 : {8'h00,ir[23:16],x32[15:0]};
-wire [31:0] mvndst_address	= m832 ? y32 : {8'h00,ir[15: 8],y32[15:0]};
+wire [31:0] mvnsrc_address	= m832 ? ds + x32 : {8'h00,ir[23:16],x32[15:0]};
+wire [31:0] mvndst_address	= m832 ? ds + y32 : {8'h00,ir[15: 8],y32[15:0]};
 wire [31:0] iapy8 			= ia + y32;		// Don't add in abs8, already included with ia
 wire [31:0] zp_address 		= {16'h00,ir[15:8]} + dpr;
 wire [31:0] zpx_address 	= {{16'h00,ir[15:8]} + x32} + dpr;
 wire [31:0] zpy_address	 	= {{16'h00,ir[15:8]} + y32} + dpr;
-wire [31:0] abs_address 	= m832 ? dbr + ir[23:8] : {dbr,ir[23:8]};
-wire [31:0] absx_address 	= m832 ? dbr + ir[23:8] + x32 : {dbr,ir[23:8]} + x32;	// simulates 64k bank wrap-around
-wire [31:0] absy_address 	= m832 ? dbr + ir[23:8] + y32 : {dbr,ir[23:8]} + y32;
-wire [31:0] al_address		= m832 ? ir[39:8] : {8'h00,ir[31:8]};
-wire [31:0] alx_address		= m832 ? ir[39:8] + x32 : {8'h00,ir[31:8]} + x32;
+wire [31:0] abs_address 	= m832 ? ds + ir[23:8] : {ds[23:16],ir[23:8]};
+wire [31:0] absx_address 	= m832 ? ds + ir[23:8] + x32 : {ds[23:16],ir[23:8]} + x32;	// simulates 64k bank wrap-around
+wire [31:0] absy_address 	= m832 ? ds + ir[23:8] + y32 : {ds[23:16],ir[23:8]} + y32;
+wire [31:0] al_address		= m832 ? ds + ir[31:8] : {8'h00,ir[31:8]};
+wire [31:0] alx_address		= m832 ? ds + ir[31:8] + x32 : {8'h00,ir[31:8]} + x32;
+wire [31:0] xal_address		= ds + ir[39:8];
+wire [31:0] xalx_address	= ds + ir[39:8] + x32;
+wire [31:0] xaly_address	= ds + ir[39:8] + y32;
 
-wire [23:0] dsp_address = m832 ? sp + ir[15:8] :
+wire [23:0] dsp_address = m832 ? ds + sp + ir[15:8] :
                           m816 ? {16'h0000,sp16 + ir[15:8]} : {24'h000001,sp[7:0]+ir[15:8]};
 reg [23:0] vect;
 
@@ -808,68 +859,6 @@ else begin
 	phi81r <= {phi81r[30:0],phi81r[31]};
 	phi82r <= {phi82r[30:0],phi82r[31]};
 end
-
-// Detect a single byte opcode
-function isOneByte;
-input [7:0] ir;
-casex(ir)
-8'hx8:	isOneByte = TRUE;
-8'hxA:	isOneByte = TRUE;
-8'hxB: isOneByte = TRUE;
-`RTI,`RTS:	isOneByte = TRUE;
-default:	isOneByte = FALSE;
-endcase
-endfunction
-
-// Detect double byte opcode
-function isTwoBytes;
-input [7:0] ir;
-input m16;
-input m32;
-input xb16;
-input xb32;
-casex(ir)
-`BRK,`COP:	isTwoBytes = TRUE;
-8'hx1:	isTwoBytes = TRUE;
-8'hx3:	isTwoBytes = TRUE;
-8'hx5:	isTwoBytes = TRUE;
-8'hx6:	isTwoBytes = TRUE;
-8'hx7:	isTwoBytes = TRUE;
-`BPL,`BMI,`BVS,`BVC,`BCS,`BCC,`BEQ,`BNE,`BRA:	isTwoBytes = TRUE;
-`LDY_IMM,`CPY_IMM,`CPX_IMM,`LDX_IMM:			isTwoBytes = !xb16 & !xb32;
-`ORA_I,`AND_I,`EOR_I,`LDA_I,`CMP_I,`STA_I,`ADC_I,`SBC_I,`PEI:
-			isTwoBytes = TRUE;
-`REP,`SEP:	isTwoBytes = TRUE;
-`TSB_ZPX,`TRB_ZPX,`BIT_ZP,`BIT_ZPX,`STZ_ZP,`STZ_ZPX,`STY_ZP,`STY_ZPX,
-`LDY_ZP,`LDY_ZPX,`CPY_ZP,`CPX_ZP:
-			isTwoBytes = TRUE;
-`ORA_IMM,`AND_IMM,`EOR_IMM,`ADC_IMM,`SBC_IMM,`CMP_IMM,`LDA_IMM,`BIT_IMM:
-			isTwoBytes = !m16 & !m32;
-default:	isTwoBytes = FALSE;
-endcase
-endfunction
-
-function isThreeBytes;
-input [7:0] ir;
-input m16;
-input m32;
-input xb16;
-input xb32;
-casex(ir)
-`JSR:	isThreeBytes = TRUE;
-`PER,`BRL:	isThreeBytes = TRUE;
-`MVP,`MVN,`PEA:	isThreeBytes = TRUE;
-`LDY_IMM,`CPY_IMM,`CPX_IMM,`LDX_IMM:			isThreeBytes = xb16;
-`ORA_IMM,`AND_IMM,`EOR_IMM,`ADC_IMM,`SBC_IMM,`CMP_IMM,`LDA_IMM,`BIT_IMM:
-			isThreeBytes = m16;
-8'bxxx11001:	isThreeBytes = TRUE;
-`TSB_ABS,`TRB_ABS,`BIT_ABS,`BIT_ABSX,
-`JMP,`JMP_IND,`JMP_INDX,`STY_ABS,`STZ_ABS,`LDY_ABS,`LDY_ABSX,`CPY_ABS,
-`CPX_ABS,`JSR_INDX:	isThreeBytes = TRUE;
-8'hxD,8'hxE:	isThreeBytes = TRUE;
-default:	isThreeBytes = FALSE;
-endcase
-endfunction
 
 //-----------------------------------------------------------------------------
 // Clock control
@@ -916,13 +905,15 @@ if (~rst) begin
 	cf <= 1'b0;
 	df <= 1'b0;
 	m816 <= 1'b0;
+	m832 <= 1'b0;
 	m_bit <= 1'b1;
 	x_bit <= 1'b1;
-	pc <= 24'h00FFF0;		// set high-order pc to zero
 	vect <= `BYTE_RST_VECT;
 	state <= RESET1;
 	em <= 1'b1;
-	dbr <= 32'h00;
+	pc <= 24'h00FFF0;		// set high-order pc to zero
+	cs <= 32'd0;
+	ds <= 32'd0;
 	dpr <= 16'h0000;
 	clk_en <= 1'b1;
 	im <= `TRUE;
@@ -948,11 +939,12 @@ RESET1:
 	begin
 		radr <= `BYTE_RST_VECT;
 		load_what <= `PC_70;
+		cs <= 32'd0;
 		state <= LOAD_MAC1;
 	end
 IFETCH0:
 	moveto_ifetch();
-IFETCH1:
+IFETCH:
 	if (rdy) begin
 		if (imcd != 3'b111)
 			imcd <= {imcd[1:0],1'b0};
@@ -963,12 +955,17 @@ IFETCH1:
 		vect <= m832 ? `BRK_VECT_832 : m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		hwi <= `FALSE;
 		isBusErr <= `FALSE;
-		pg2 <= `FALSE;
+		pg2 <= FALSE;
 		isIY <= `FALSE;
 		isIY24 <= `FALSE;
-		isTribyte <= `FALSE;
+		isIY32 <= `FALSE;
+		isI24 <= `FALSE;
+		isI32 <= `FALSE;
+		s8 <= FALSE;
+		s16 <= FALSE;
+		s32 <= FALSE;
 		store_what <= (m32 | m16) ? `STW_DEF70 : `STW_DEF;
-		ir[7:0] <= db;
+		ir <= insn;
 		opc <= pc;
 		if (nmi_edge | ~irq)
 			wai <= 1'b0;
@@ -979,7 +976,7 @@ IFETCH1:
 			hwi <= `TRUE;
 			vect <= m832 ? `ABT_VECT_832 : m816 ? `ABT_VECT_816 : `BYTE_ABT_VECT;
 			vect[23:16] <= 8'h00;
-			next_state(DECODE2);
+			next_state(DECODE);
 		end
 		else if (nmi_edge & gie) begin
 			ir[7:0] <= `BRK;
@@ -987,7 +984,7 @@ IFETCH1:
 			hwi <= `TRUE;
 			vect <= m832 ? `NMI_VECT_832 : m816 ? `NMI_VECT_816 : `BYTE_NMI_VECT;
 			vect[23:16] <= 8'h00;
-			next_state(DECODE2);
+			next_state(DECODE);
 		end
 		else if (~irq & gie & ~im) begin
 			ir[7:0] <= `BRK;
@@ -996,26 +993,15 @@ IFETCH1:
 			    vect <= `IRQ_VECT_832;
 			else if (m816)
 				vect <= `IRQ_VECT_816;
-			next_state(DECODE2);
+			next_state(DECODE);
 		end
 		else if (!wai) begin
-			ado <= ps + pc + 32'd1;
-			pc <= pc + 24'd1;
-			// Is it more than one byte ?
-			if (!isOneByte(db)) begin
-				vpa <= TRUE;
-				next_state(IFETCH2);
-			end
-			else begin
-				vpa <= FALSE;
-				next_state(DECODE1);
-			end
-			vda <= FALSE;
+			next_state(DECODE);
 		end
 		else
-			next_state(IFETCH1);
+			next_state(IFETCH);
 		if (!abort_edge) begin
-		case(ir[7:0])
+		case(ir9)
 		// Note the break flag is not affected by SEP/REP
 		// Setting the index registers to eight bit zeros out the upper part of the register.
 		`SEP:
@@ -1029,8 +1015,8 @@ IFETCH1:
 					m_bit <= m_bit | ir[13];
 					//if (ir[13]) acc[31:8] <= 24'd0;
 					if (ir[12]) begin
-						x[15:8] <= 8'd0;
-						y[15:8] <= 8'd0;
+						x[31:8] <= 24'd0;
+						y[31:8] <= 24'd0;
 					end
 				end
 				vf <= vf | ir[14];
@@ -1042,7 +1028,7 @@ IFETCH1:
 				zf <= zf & ~ir[9];
 				im <= im & ~ir[10];
 				df <= df & ~ir[11];
-				if (m816) begin
+				if (m816|m832) begin
 					x_bit <= x_bit & ~ir[12];
 					m_bit <= m_bit & ~ir[13];
 				end
@@ -1057,12 +1043,12 @@ IFETCH1:
                     zf <= resz16;
 			    end
 			    else begin
-                    acc[15:0] <= res16[15:0];
+                    acc[15:0] <= res32[15:0];
                     nf <= resn8;
                     zf <= resz8;
 				end
 			end
-		`TAY,`TXY,`DEY,`INY:
+		`TAY,`TXY,`DEY,`INY,`INY4,`DEY4:
 			begin
                 if (xb32) begin
                     y <= res32;
@@ -1080,7 +1066,7 @@ IFETCH1:
                     zf <= resz8;
                 end
             end
-        `TAX,`TYX,`TSX,`DEX,`INX:
+        `TAX,`TYX,`TSX,`DEX,`INX,`INX4,`DEX4:
 			begin
                 if (xb32) begin
                     x <= res32;
@@ -1106,20 +1092,19 @@ IFETCH1:
                     zf <= resz32;
                 end
                 else if (m16) begin
-                    acc[15:0] <= {16'h0000,res32[15:0]};
+                    acc[15:0] <= {acc[31:16],res32[15:0]};
                     nf <= resn16;
                     zf <= resz16;
                 end
                 else begin
-                    acc[7:0] <= {24'h000000,res32[7:0]};
+                    acc[7:0] <= {acc[31:8],res32[7:0]};
                     nf <= resn8;
                     zf <= resz8;
                 end
             end
 		`TAS,`TXS:
 		    begin
-		        if (m832)
-		          sp <= res32;
+		        if (m832) sp <= res32;
 		        else if (m816) sp <= res32[15:0];
 		        else sp <= {8'h01,res8[7:0]};
 		        gie <= `TRUE;
@@ -1153,7 +1138,8 @@ IFETCH1:
 					zf <= df ? bcaio[7:0]==8'h00 : resz8;
 				end
 			end
-		`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I,`ADC_IL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY:
+		`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_I,`ADC_IL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY,
+		`ADC_XABS,`ADC_XABSX,`ADC_XABSY,`ADC_XIYL,`ADC_XIL,`ADC_XDSPIY:
 			begin
 			    if (m32) begin
 					acc <= df ? bcao : res32;
@@ -1201,7 +1187,8 @@ IFETCH1:
 					zf <= df ? bcsio[7:0]==8'h00 : resz8;
 				end
 			end
-		`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_I,`SBC_IL,`SBC_AL,`SBC_ALX,`SBC_DSP,`SBC_DSPIY:
+		`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_I,`SBC_IL,`SBC_AL,`SBC_ALX,`SBC_DSP,`SBC_DSPIY,
+		`SBC_XABS,`SBC_XABSX,`SBC_XABSY,`SBC_XIYL,`SBC_XIL,`SBC_XDSPIY:
 			begin
 				if (m32) begin
                     acc <= df ? bcso : res32;
@@ -1225,27 +1212,32 @@ IFETCH1:
 					zf <= df ? bcso[7:0]==8'h00 : resz8;
 				end
 			end
-		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_I,`CMP_IL,`CMP_AL,`CMP_ALX,`CMP_DSP,`CMP_DSPIY:
+		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_I,`CMP_IL,`CMP_AL,`CMP_ALX,`CMP_DSP,`CMP_DSPIY,
+		`CMP_XABS,`CMP_XABSX,`CMP_XABSY,`CMP_XIYL,`CMP_XIL,`CMP_XDSPIY:
 		        if (m32) begin cf <= ~resc32; nf <= resn32; zf <= resz32; end 
 				else if (m16) begin cf <= ~resc16; nf <= resn16; zf <= resz16; end
 				else                cf <= ~resc8; nf <= resn8; zf <= resz8; end
-		`CPX_IMM,`CPX_ZP,`CPX_ABS,
-		`CPY_IMM,`CPY_ZP,`CPY_ABS:
+		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS,
+		`CPY_IMM,`CPY_ZP,`CPY_ABS,`CPY_XABS:
 		        if (xb32) begin cf <= ~resc32; nf <= resn32; zf <= resz32; end 
 				else if (xb16) begin cf <= ~resc16; nf <= resn16; zf <= resz16; end
 				else                 cf <= ~resc8; nf <= resn8; zf <= resz8; end
-		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX:
+		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX,`BIT_XABS,`BIT_XABSX:
 		        if (m32) begin nf <= b32[31]; vf <= b32[30]; zf <= resz32; end 
 				else if (m16) begin nf <= b32[15]; vf <= b32[14]; zf <= resz16; end
 				else                nf <= b32[7]; vf <= b32[6]; zf <= resz8; end
-		`TRB_ZP,`TRB_ABS,`TSB_ZP,`TSB_ABS:
+		`TRB_ZP,`TRB_ABS,`TSB_ZP,`TSB_ABS,`TRB_XABS,`TSB_XABS:
 		    if (n32) begin zf <= resz32; end
 			else if (m16) begin zf <= resz16; end
 			else                zf <= resz8; end
 		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_I,`LDA_IL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,
+		`LDA_XABS,`LDA_XABSX,`LDA_XABSY,`LDA_XIYL,`LDA_XIL,`LDA_XDSPIY,
 		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_I,`AND_IL,`AND_AL,`AND_ALX,`AND_DSP,`AND_DSPIY,
+		`AND_XABS,`AND_XABSX,`AND_XABSY,`AND_XIYL,`AND_XIL,`AND_XDSPIY,
 		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_I,`ORA_IL,`ORA_AL,`ORA_ALX,`ORA_DSP,`ORA_DSPIY,
-		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_I,`EOR_IL,`EOR_AL,`EOR_ALX,`EOR_DSP,`EOR_DSPIY:
+		`ORA_XABS,`ORA_XABSX,`ORA_XABSY,`ORA_XIYL,`ORA_XIL,`ORA_XDSPIY,
+		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_I,`EOR_IL,`EOR_AL,`EOR_ALX,`EOR_DSP,`EOR_DSPIY,
+		`ORA_XABS,`ORA_XABSX,`ORA_XABSY,`ORA_XIYL,`ORA_XIL,`ORA_XDSPIY:
 		    if (m32) begin acc <= res32; nf <= resn32; zf <= resz32; end
 			else if (m16) begin acc[15:0] <= res32[15:0]; nf <= resn16; zf <= resz16; end
 			else begin acc[7:0] <= res32[7:0]; nf <= resn8; zf <= resz8; end
@@ -1253,39 +1245,43 @@ IFETCH1:
 		      if (m32) begin acc <= res32; cf <= resc32; nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc16; nf <= resn16; zf <= resz16; end
 		      else begin acc[7:0] <= res32[7:0]; cf <= resc8; nf <= resn8; zf <= resz8; end
-		`ROL_ACC:
+		`ASR_ACC:
+                if (m32) begin acc <= res32; cf <= resc32; nf <= resn32; zf <= resz32; end 
+                else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc16; nf <= resn16; zf <= resz16; end
+                else begin acc[7:0] <= res32[7:0]; cf <= resc8; nf <= resn8; zf <= resz8; end
+        `ROL_ACC:
 		      if (m32) begin acc <= res32; cf <= resc32; nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc16; nf <= resn16; zf <= resz16; end
 		      else begin acc[7:0] <= res32[7:0]; cf <= resc8; nf <= resn8; zf <= resz8; end
 		`LSR_ACC:
 		      if (m32) begin acc <= res32; cf <= resc32; nf <= resn32; zf <= resz32; end 
-		      else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc16; nf <= resn16; zf <= resz16; end
-		      else begin acc[7:0] <= res32[7:0]; cf <= resc8; nf <= resn8; zf <= resz8; end
+		      else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc32; nf <= resn16; zf <= resz16; end
+		      else begin acc[7:0] <= res32[7:0]; cf <= resc32; nf <= resn8; zf <= resz8; end
 		`ROR_ACC:
 		      if (n32) begin acc <= res32; cf <= resc32; nf <= resn32; zf <= resz32; end 
-		      else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc16; nf <= resn16; zf <= resz16; end
-		      else begin acc[7:0] <= res32[7:0]; cf <= resc8; nf <= resn8; zf <= resz8; end
-		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX:
+		      else if (m16) begin acc[15:0] <= res32[15:0]; cf <= resc32; nf <= resn16; zf <= resz16; end
+		      else begin acc[7:0] <= res32[7:0]; cf <= resc32; nf <= resn8; zf <= resz8; end
+		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin cf <= resc16; nf <= resn16; zf <= resz16; end
 		      else begin cf <= resc8; nf <= resn8; zf <= resz8; end
-		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:
+		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX,`ROL_XABS,`ROL_XABSX:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin cf <= resc16; nf <= resn16; zf <= resz16; end
 		      else begin cf <= resc8; nf <= resn8; zf <= resz8; end
-		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:
+		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX,`LSR_XABS,`LSR_XABSX:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
-		      else if (m16) begin cf <= resc16; nf <= resn16; zf <= resz16; end
-		      else begin cf <= resc8; nf <= resn8; zf <= resz8; end
-		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX:
+		      else if (m16) begin cf <= resc32; nf <= resn16; zf <= resz16; end
+		      else begin cf <= resc32; nf <= resn8; zf <= resz8; end
+		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX,`ROR_XABS,`ROR_XABSZ:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
-		      else if (m16) begin cf <= resc16; nf <= resn16; zf <= resz16; end
-		      else begin cf <= resc8; nf <= resn8; zf <= resz8; end
-		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:
+		      else if (m16) begin cf <= resc32; nf <= resn16; zf <= resz16; end
+		      else begin cf <= resc32; nf <= resn8; zf <= resz8; end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX,`INC_XABS,`INC_XABSX:
 		      if (m32) begin nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin nf <= resn16; zf <= resz16; end
 		      else begin nf <= resn8; zf <= resz8; end
-		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX,`DEC_XABS,`DEC_XABSX:
 		      if (m32) begin nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin nf <= resn16; zf <= resz16; end
 		      else begin nf <= resn8; zf <= resz8; end
@@ -1302,83 +1298,35 @@ IFETCH1:
 		      else if (xb16) begin y[15:0] <= res16[15:0]; zf <= resz16; nf <= resn16; end
 		      else begin y[7:0] <= res8[7:0]; zf <= resz8; nf <= resn8; end
 		`PLB:	
-		      if (m832) dbr <= res32; nf <= resn32; zf <= resz32; end
-		      else begin dbr <= res8[7:0]; nf <= resn8; zf <= resz8; end
-		`PLD:   if (m832) begin dpr <= res32; nf <= resn32; zf <= resz32; end
+		      if (m832) ds <= res32; nf <= resn32; zf <= resz32; end
+		      else begin ds <= {8'h00,res8[7:0],16'h0000}; nf <= resn8; zf <= resz8; end
+		`PLDS:	
+                begin ds <= res32; nf <= resn32; zf <= resz32; end
+        `PLD:   if (m832) begin dpr <= res32; nf <= resn32; zf <= resz32; end
 		      	else begin dpr <= res16[15:0]; nf <= resn16; zf <= resz16; end
-		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY:
+		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`LDX_XABS,`LDX_XABSY:
 		      if (xb32) begin x <= res32; nf <= resn32; zf <= resz32; end 
 		      else if (xb16) begin x[15:0] <= res32[15:0]; nf <= resn16; zf <= resz16; end
 		      else begin x[7:0] <= res32[7:0]; nf <= resn8; zf <= resz8; end
-		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:
+		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:
 		      if (xb32) begin y <= res32; nf <= resn32; zf <= resz32; end 
 		      else if (xb16) begin y[15:0] <= res16[15:0]; nf <= resn16; zf <= resz16; end
 		      else begin y[7:0] <= res32[7:0]; nf <= resn8; zf <= resz8; end
 		endcase
 		end	// abort_edge
 	end
-IFETCH2:
-	if (rdy) begin
-		ir[15:8] <= db;
-		ado <= ps + pc + 24'd1;
-		pc <= pc + 24'd1;
-		if ((isBranch && db==8'hFF && EXTRA_LONG_BRANCHES) ||
-		   (!isTwoBytes(ir,m16,m32,xb16,xb32))) begin
-			vpa <= TRUE;
-			next_state(IFETCH3);
-		end
-		else begin
-			vpa <= FALSE;
-			next_state(DECODE2);
-		end
-		vda <= FALSE;
-	end
-IFETCH3:
-	if (rdy) begin
-		ir[23:16] <= db;
-		ado <= ps + pc + 24'd1;
-		pc <= pc + 24'd1;
-		if (!isThreeBytes(ir,m16,m32,xb16,xb32)) begin
-			vpa <= TRUE;
-			next_state(IFETCH4);
-		end
-		else begin
-			vpa <= FALSE;
-			next_state(DECODE3);
-		end
-		vda <= FALSE;
-	end
-IFETCH4:
-	if (rdy) begin
-		ir[31:24] <= db;
-		ado <= ps + pc + 24'd1;
-		pc <= pc + 24'd1;
-		if (m832) begin
-		    vpa <= TRUE;
-		    next_state(IFETCH5);
-		end
-		else begin
-		    vpa <= FALSE;
-		    next_state(DECODE4);
-		end
-		vda <= FALSE;
-	end
-IFETCH5:
-    if (rdy) begin
-        ir[39:32] <= db;
-        ado <= ps + pc + 24'd1;
-        pc <= pc + 24'd1;
-        vpa <= FALSE;
-        next_state(DECODE5);
-        vda <= FALSE;
-    end
 
-// Decode single byte opcodes
-DECODE1:
-	if (rdy) begin
-		next_state(IFETCH1);
-		opcode_read();
-		case(ir[7:0])
+// Decode
+DECODE:
+	begin
+		next_state(IFETCH);
+		pc <= pc + 24'd1;
+		case(ir9)
+		`PG2: begin
+		      pg2 <= TRUE;
+		      ir <= {8'h00,ir[127:8]};
+		      next_state(DECODE);
+		      end
 		`SEP:	;	// see byte_ifetch
 		`REP:	;
 		// XBA cannot be done in the ifetch stage because it'd repeat when there
@@ -1389,7 +1337,6 @@ DECODE1:
 			        res32 <= {acc[15:0],acc[31:16]};
 			    else
 			        res32 <= {acc[31:16],acc[7:0],acc[15:8]};
-				res8 <= acc[15:8];	// for flag settings
 			end
 		`STP:	begin clk_en <= 1'b0; end
 		// Switching the processor mode always zeros out the upper part of the index registers.
@@ -1402,15 +1349,17 @@ DECODE1:
 					if (cf) begin		
 						m_bit <= 1'b1;
 						x_bit <= 1'b1;
-						sp[15:8] <= 8'h01;
+						sp[31:8] <= 24'h01;
 					end
-					x[31:8] <= 24d0;
+					x[31:8] <= 24'd0;
 					y[31:8] <= 24'd0;
 				end
 //		`NOP:	;	// may help routing
 		`CLC:	begin cf <= 1'b0; end
 		`SEC:	begin cf <= 1'b1; end
+		`CMC:   cf <= ~cf;
 		`CLV:	begin vf <= 1'b0; end
+		`SEV:   vf <= 1'b1;
 		`CLI:	begin imcd <= 3'b110; end
 		`SEI:	begin im <= 1'b1; end
 		`CLD:	begin df <= 1'b0; end
@@ -1420,12 +1369,16 @@ DECODE1:
 		`INX:	begin res32 <= x_inc; end
 		`DEY:	begin res32 <= y_dec; end
 		`INY:	begin res32 <= y_inc; end
-		`DEA:	if (m32) res32 <= acc_dec; else if (m16) res32 <= {acc[31:16],acc_dec[15:0]}; else res32 <= {acc[31:24],acc_dec[7:0]};
-		`INA:	if (m32) res32 <= acc_inc; else if (m16) res32 <= {acc[31:16],acc_inc[15:0]}; else res32 <= {acc[31:24],acc_inc[7:0]};
-		`TSX,`TSA:	if (m832) res32 <= sp; else if (m816) res32 <= sp[15:0]; else res32 <= {24'd1,sp[7:0]};
+		`DEX4:    res32 <= x - 32'd4;
+		`DEY4:    res32 <= y - 32'd4;
+		`INX4:    res32 <= x + 32'd4;
+		`INY4:    res32 <= y + 32'd4;
+		`DEA:	res32 <= acc_dec;
+		`INA:	res32 <= acc_inc;
+		`TSX,`TSA:	res32 <= sp;
 		`TXS,`TXA,`TXY:	begin res32 <= x; end
 		`TAX,`TAY:	begin res32 <= acc; end
-		`TAS:	if (m832) res32 <= acc; else if (m816) res32 <= acc[15:0]; else res32 <= {24'd1,acc[7:0]};
+		`TAS:	res32 <= acc;
 		`TYA,`TYX:	begin res32 <= y; end
 		`TDC:		begin res32 <= dpr; end
 		`TCD:		begin res32 <= acc; end
@@ -1437,1046 +1390,2198 @@ DECODE1:
 		`ROR_ACC:	if (m32) res32 <= {acc[0],cf,acc[31:1]};
 		            else if (m16) res32 <= {acc[0],acc[31:16],cf,acc[15:1]};
 		            else if res32 <= {acc[0],acc[31:8],cf,acc[7:1]};
-		`RTS,`RTL:
+		`RTS,`RTL,`RTF:
 			begin
-begin
-    if (m832) begin
-        radr <= sp;
-        sp <= sp_inc;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				data_nack();
+                begin
+                    if (m832) begin
+                        radr <= sp_inc;
+                        sp <= sp_inc;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+                    end
+                end
+				data_nack();
 				load_what <= `PC_70;
 				state <= LOAD_MAC1;
 			end
 		`RTI:	begin
-begin
-    if (m832) begin
-        radr <= sp;
-        sp <= sp_inc;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				data_nack();
+                begin
+                    if (m832) begin
+                        radr <= sp_inc;
+                        sp <= sp_inc;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+                    end
+                end
+				data_nack();
 				load_what <= `SR_70;
 				state <= LOAD_MAC1;
 				end
 		`PHP:
-		begin
-		begin
-            if (m832) begin
-                radr <= sp;
-                wadr <= sp;
-                sp <= sp_dec;
-            end
-            else if (m816) begin
-                radr <= {8'h00,sp[15:0]};
-                wadr <= {8'h00,sp[15:0]};
-                sp <= sp_dec;
-            end
-            else begin
-                radr <= {16'h0001,sp[7:0]};
-                wadr <= {16'h0001,sp[7:0]};
-                sp[7:0] <= sp[7:0] - 8'd1;
-                sp[15:8] <= 8'h1;
-            end
-       end	
+    		begin
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                        store_what <= `STW_SR3124;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+        				store_what <= `STW_SR70;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+        				store_what <= `STW_SR70;
+                    end
+               end	
          		data_nack();
-				store_what <= `STW_SR70;
 				state <= STORE1;
 			end
-		`PHA:
-begin
-	if (m832) begin
-	    if (m32) begin
-            radr <= sp_dec;
-            wadr <= sp_dec;
-            store_what <= `STW_ACC70;
-            sp <= sp_dec4;
-	    end
-        else if (m16) begin
-            radr <= {8'h00,sp_dec[15:0]};
-            wadr <= {8'h00,sp_dec[15:0]};
-            store_what <= `STW_ACC70;
-            sp <= sp_dec2;
-        end
-        else begin
-            radr <= {8'h00,sp[15:0]};
-            wadr <= {8'h00,sp[15:0]};
-            store_what <= `STW_ACC8;
-            sp <= sp_dec;
-        end
-    end
-	else if (m816) begin
-		if (m16) begin
-			radr <= {8'h00,sp_dec[15:0]};
-			wadr <= {8'h00,sp_dec[15:0]};
-			store_what <= `STW_ACC70;
-			sp <= sp_dec2;
-		end
-		else begin
-			radr <= {8'h00,sp[15:0]};
-			wadr <= {8'h00,sp[15:0]};
-			store_what <= `STW_ACC8;
-			sp <= sp_dec;
-		end
-	end
-	else begin
-		radr <= {16'h01,sp[7:0]};
-		wadr <= {16'h01,sp[7:0]};
-		store_what <= `STW_ACC8;
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-	state <= STORE1;
-end
-//		tsk_push(`STW_ACC8,`STW_ACC70,m16);
-		`PHX:	tsk_push(`STW_X8,`STW_X70,xb16);
-		`PHY:	tsk_push(`STW_Y8,`STW_Y70,xb16);
+        `PHA:   tsk_push(`STW_ACC70,m16);
+		`PHX:	tsk_push(`STW_X70,xb16);
+		`PHY:	tsk_push(`STW_Y70,xb16);
 		`PLP:
 			begin
-begin
-	if (m832) begin
-        radr <= sp_inc;
-        sp <= sp_inc;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				load_what <= `SR_70;
+                begin
+                    if (m832) begin
+                        radr <= sp_inc;
+                        sp <= sp_inc;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+                    end
+                end
+				load_what <= `SR_70;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLA:
 			begin
-begin
-	if (m832) begin
-        radr <= sp_inc;
-        sp <= sp_inc;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				load_what <= m32 ? `WORD_71S : m16 ? `HALF_71S : `BYTE_71;
+                begin
+                    if (m832) begin
+                        radr <= sp_inc;
+                        sp <= sp_inc;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+                    end
+                end
+                load_what <= m832 ? `WORD_71S : m16 ? `HALF_71S : `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLX,`PLY:
 			begin
-begin
-	if (m832) begin
-        radr <= sp_inc;
-        sp <= sp_inc;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				load_what <= xb32 ? `WORD_71S : xb16 ? `HALF_71S : `BYTE_71;
+                begin
+                    if (m832) begin
+                        radr <= sp_inc;
+                        sp <= sp_inc;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+                    end
+                end
+				load_what <= m832 ? `WORD_71S : xb16 ? `HALF_71S : `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
+		`PHDS:
+		      begin
+                  radr <= sp;
+                  wadr <= sp;
+                  sp <= sp_dec;
+                  store_what <= `STW_DS3124;
+                  data_nack();
+                  state <= STORE1;
+		      end
 		`PHB:
 			begin
-begin
-	if (m832) begin
-        radr <= sp;
-        wadr <= sp;
-        sp <= sp_dec;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= `STW_DBR;
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+        				store_what <= `STW_DS3124;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+        				store_what <= `STW_DS2316;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+        				store_what <= `STW_DS2316;
+                    end
+                end
 				data_nack();
 				state <= STORE1;
 			end
 		`PHD:
 			begin
-begin
-    if (m832) begin
-		radr <= sp;
-        wadr <= sp;
-        sp <= sp_dec;
-    end
-	else if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= `STW_DPR158;
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+        				store_what <= `STW_DPR3124;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+        				store_what <= `STW_DPR158;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+        				store_what <= `STW_DPR158;
+                    end
+                end
 				data_nack();
 				state <= STORE1;
 			end
+		`PHCS:
+            begin
+                store_what <= `STW_CS3124;
+                radr <= sp;
+                wadr <= sp;
+                sp <= sp_dec;
+				data_nack();
+                state <= STORE1;
+            end
 		`PHK:
 			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= `STW_PC2316;
+                begin
+                    if (m832) begin
+                        store_what <= `STW_CS3124;
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                    end
+                    else if (m816) begin
+                        store_what <= `STW_PC2316;
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                    end
+                    else begin
+                        store_what <= `STW_PC2316;
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+                    end
+                end
 				data_nack();
 				state <= STORE1;
 			end
+		`PLDS:
+            begin
+                radr <= sp_inc;
+                sp <= sp_inc;
+                load_what <= `WORD_71;
+				data_nack();
+                state <= LOAD_MAC1;
+            end
 		`PLB:
 			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				load_what <= `BYTE_71;
+                begin
+                    if (m832) begin
+                        radr <= sp_inc;
+                        sp <= sp_inc;
+        				load_what <= `WORD_71;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+        				load_what <= `BYTE_71;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+        				load_what <= `BYTE_71;
+                    end
+                end
 				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLD:
 			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {16'h0001,sp_inc[7:0]};
-		sp <= {8'h1,sp_inc[7:0]};
-	end
-end				load_what <= `HALF_71S;
+                begin
+                    if (m832) begin
+        				load_what <= `WORD_71S;
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else if (m816) begin
+        				load_what <= `HALF_71S;
+                        radr <= {8'h00,sp_inc[15:0]};
+                        sp <= sp_inc;
+                    end
+                    else begin
+        				load_what <= `HALF_71S;
+                        radr <= {16'h0001,sp_inc[7:0]};
+                        sp <= {8'h1,sp_inc[7:0]};
+                    end
+                end
 				data_nack();
 				state <= LOAD_MAC1;
 			end
-		default:
-			begin
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		endcase
-	end
-
-// Decode 2-byte opcodes
-DECODE2:
-	if (rdy) begin
-		case(ir[7:0])
 		// Handle # mode
-		`LDA_IMM:
-			begin
-				res8 <= ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`LDX_IMM,`LDY_IMM:
-			begin
-				res8 <= ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`ADC_IMM:
-			begin
-				res8 <= acc8 + ir[15:8] + {7'b0,cf};
-				b8 <= ir[15:8];		// for overflow calc
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`SBC_IMM:
-			begin
-				res8 <= acc8 - ir[15:8] - {7'b0,~cf};
-				$display("sbc: %h= %h-%h-%h", acc8 - ir[15:8] - {7'b0,~cf},acc8,ir[15:8],~cf);
-				b8 <= ir[15:8];		// for overflow calc
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`AND_IMM,`BIT_IMM:
-			begin
-				res8 <= acc8 & ir[15:8];
-				b8 <= ir[15:8];	// for bit flags
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`ORA_IMM:
-			begin
-				res8 <= acc8 | ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`EOR_IMM:
-			begin
-				res8 <= acc8 ^ ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`CMP_IMM:
-			begin
-				res8 <= acc8 - ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`CPX_IMM:
-			begin
-				res8 <= x8 - ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`CPY_IMM:
-			begin
-				res8 <= y8 - ir[15:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
+        `LDA_IMM:
+            begin
+                if (m32) pc <= pc + 24'd5;
+                else if (m16) pc <= pc + 24'd3;
+                else pc <= pc + 24'd2;
+                res32 <= ir[39:8];
+                next_state(IFETCH);
+            end
+        `LDX_IMM,`LDY_IMM:
+            begin
+                if (xb32) pc <= pc + 24'd5;
+                else if (xb16) pc <= pc + 24'd3;
+                else pc <= pc + 24'd2;
+                res32 <= ir[39:8];
+                next_state(IFETCH);
+            end
+        `ADC_IMM:
+            begin
+                if (m32) begin
+                    pc <= pc + 24'd5;
+                    res32 <= acc + ir[39:8] + {31'b0,cf};
+                    b32 <= ir[39:8];        // for overflow calc
+                end
+                else if (m16) begin
+                    pc <= pc + 24'd3;
+                    res32 <= acc16 + ir[23:8] + {15'b0,cf};
+                    b32 <= ir[23:8];        // for overflow calc
+                end
+                else begin
+                    pc <= pc + 24'd2;
+                    res32 <= acc8 + ir[15:8] + {7'b0,cf};
+                    b32 <= ir[15:8];        // for overflow calc
+                end
+                next_state(IFETCH);
+            end
+        `SBC_IMM:
+            begin
+                if (m32) begin
+                    pc <= pc + 24'd5;
+                    res32 <= acc - ir[39:8] - {31'b0,~cf};
+                    b32 <= ir[39:8];        // for overflow calc
+                end
+                else if (m16) begin
+                     pc <= pc + 24'd3;
+                     res32 <= acc16 - ir[23:8] - {15'b0,~cf};
+                     b32 <= ir[15:8];        // for overflow calc
+                end
+                else begin
+                    pc <= pc + 24'd2;
+                    res32 <= acc8 - ir[15:8] - {7'b0,~cf};
+                    b32 <= ir[15:8];        // for overflow calc
+                end
+                next_state(IFETCH);
+            end
+        `AND_IMM,`BIT_IMM:
+            begin
+                if (m32) pc <= pc + 24'd5;
+                else if (m16) pc <= pc + 24'd3;
+                else pc <= pc + 24'd2;
+                res32 <= acc & ir[39:8];
+                b32 <= ir[39:8];    // for bit flags
+                next_state(IFETCH);
+            end
+        `ORA_IMM:
+            begin
+                if (m32) pc <= pc + 24'd5;
+                else if (m16) pc <= pc + 24'd3;
+                else pc <= pc + 24'd2;
+                res32 <= acc | ir[39:8];
+                next_state(IFETCH);
+            end
+        `EOR_IMM:
+            begin
+                if (m32) pc <= pc + 24'd5;
+                else if (m16) pc <= pc + 24'd3;
+                else pc <= pc + 24'd2;
+                res32 <= acc ^ ir[39:8];
+                next_state(IFETCH);
+            end
+        `CMP_IMM:
+            begin
+                if (m32) begin
+                    pc <= pc + 24'd5;
+                    res32 <= acc - ir[39:8];
+                    b32 <= ir[39:8];        // for overflow calc
+                end
+                else if (m16) begin
+                     pc <= pc + 24'd3;
+                     res32 <= acc16 - ir[23:8];
+                     b32 <= ir[15:8];        // for overflow calc
+                end
+                else begin
+                    pc <= pc + 24'd2;
+                    res32 <= acc8 - ir[15:8];
+                    b32 <= ir[15:8];        // for overflow calc
+                end
+                next_state(IFETCH);
+            end
+        `CPX_IMM:
+            begin
+                if (m32) begin
+                    pc <= pc + 24'd5;
+                    res32 <= x32 - ir[39:8];
+                    b32 <= ir[39:8];        // for overflow calc
+                end
+                else if (m16) begin
+                     pc <= pc + 24'd3;
+                     res32 <= x16 - ir[23:8];
+                     b32 <= ir[15:8];        // for overflow calc
+                end
+                else begin
+                    pc <= pc + 24'd2;
+                    res32 <= x8 - ir[15:8];
+                    b32 <= ir[15:8];        // for overflow calc
+                end
+                next_state(IFETCH);
+            end
+        `CPY_IMM:
+            begin
+                if (m32) begin
+                    pc <= pc + 24'd5;
+                    res32 <= y32 - ir[39:8];
+                    b32 <= ir[39:8];        // for overflow calc
+                end
+                else if (m16) begin
+                     pc <= pc + 24'd3;
+                     res32 <= y16 - ir[23:8];
+                     b32 <= ir[15:8];        // for overflow calc
+                end
+                else begin
+                    pc <= pc + 24'd2;
+                    res32 <= y8 - ir[15:8];
+                    b32 <= ir[15:8];        // for overflow calc
+                end
+                next_state(IFETCH);
+            end
 		// Handle zp mode
-		`LDA_ZP:
-			begin
-				data_nack();
-				radr <= zp_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				state <= LOAD_MAC1;
-			end
-		`LDX_ZP,`LDY_ZP:
-			begin
-				radr <= zp_address;
-				load_what <= xb16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_ZP,`SBC_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`CMP_ZP,
-		`BIT_ZP,
-		`ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`TRB_ZP,`TSB_ZP:
-			begin
-				radr <= zp_address;
-				wadr <= zp_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`INC_ZP,`DEC_ZP:
-			begin
-				radr <= zp_address;
-				wadr <= zp_address;
-				isTribyte <= zp_address[23:4]==16'h2 && SUPPORT_TRIBYTES;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`CPX_ZP,`CPY_ZP:
-			begin
-				radr <= zp_address;
-				load_what <= xb16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_ZP:
-			begin
-				wadr <= zp_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STX_ZP:
-			begin
-				wadr <= zp_address;
-				store_what <= xb16 ? `STW_X70 : `STW_X8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STY_ZP:
-			begin
-				wadr <= zp_address;
-				store_what <= xb16 ? `STW_Y70 : `STW_Y8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STZ_ZP:
-			begin
-				wadr <= zp_address;
-				store_what <= m16 ? `STW_Z70 : `STW_Z8;
-				data_nack();
-				state <= STORE1;
-			end
+        `LDA_ZP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDX_ZP,`LDY_ZP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_ZP,`SBC_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`CMP_ZP,
+        `BIT_ZP,
+        `ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`TRB_ZP,`TSB_ZP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                wadr <= zp_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `INC_ZP,`DEC_ZP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                wadr <= zp_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `CPX_ZP,`CPY_ZP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                load_what <= xb32 ? `WORD_70 : xb16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_ZP:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zp_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STX_ZP:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zp_address;
+                if (xb32) s32 <= TRUE;
+                else if (xb16) s16 <= TRUE;
+                store_what <= `STW_X70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STY_ZP:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zp_address;
+                if (xb32) s32 <= TRUE;
+                else if (xb16) s16 <= TRUE;
+                store_what <= `STW_Y70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STZ_ZP:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zp_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_Z70;
+                data_nack();
+                state <= STORE1;
+            end
 		// Handle zp,x mode
-		`LDA_ZPX:
-			begin
-				radr <= zpx_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`LDY_ZPX:
-			begin
-				radr <= zpx_address;
-				load_what <= xb16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_ZPX,`SBC_ZPX,`AND_ZPX,`ORA_ZPX,`EOR_ZPX,`CMP_ZPX,
-		`BIT_ZPX,
-		`ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX:
-			begin
-				radr <= zpx_address;
-				wadr <= zpx_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_ZPX:
-			begin
-				wadr <= zpx_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STY_ZPX:
-			begin
-				wadr <= zpx_address;
-				store_what <= xb16 ? `STW_Y70 : `STW_Y8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STZ_ZPX:
-			begin
-				wadr <= zpx_address;
-				store_what <= m16 ? `STW_Z70 : `STW_Z8;
-				data_nack();
-				state <= STORE1;
-			end
-		// Handle zp,y
-		`LDX_ZPY:
-			begin
-				radr <= zpy_address;
-				load_what <= xb16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STX_ZPY:
-			begin
-				wadr <= zpy_address;
-				store_what <= xb16 ? `STW_X70 : `STW_X8;
-				data_nack();
-				state <= STORE1;
-			end
+        `LDA_ZPX:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zpx_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDY_ZPX:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zpx_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_ZPX,`SBC_ZPX,`AND_ZPX,`ORA_ZPX,`EOR_ZPX,`CMP_ZPX,
+        `BIT_ZPX,
+        `ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zpx_address;
+                wadr <= zpx_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_ZPX:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zpx_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STY_ZPX:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zpx_address;
+                if (xb32) s32 <= TRUE;
+                else if (xb16) s16 <= TRUE;
+                store_what <= `STW_Y70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STZ_ZPX:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zpx_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_Z70;
+                data_nack();
+                state <= STORE1;
+            end
+        // Handle zp,y
+        `LDX_ZPY:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zpy_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STX_ZPY:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= zpy_address;
+                if (xb32) s32 <= TRUE;
+                else if (xb16) s16 <= TRUE;
+                store_what <= `STW_X70;
+                data_nack();
+                state <= STORE1;
+            end
 		// Handle (zp,x)
-		`ADC_IX,`SBC_IX,`AND_IX,`ORA_IX,`EOR_IX,`CMP_IX,`LDA_IX,`STA_IX:
-			begin
-				radr <= zpx_address;
-				load_what <= `IA_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		// Handle (zp),y
-		`ADC_IY,`SBC_IY,`AND_IY,`ORA_IY,`EOR_IY,`CMP_IY,`LDA_IY,`STA_IY:
-			begin
-				radr <= zp_address;
-				isIY <= `TRUE;
-				load_what <= `IA_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
+        `ADC_IX,`SBC_IX,`AND_IX,`ORA_IX,`EOR_IX,`CMP_IX,`LDA_IX,`STA_IX:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zpx_address;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        // Handle (zp),y
+        `ADC_IY,`SBC_IY,`AND_IY,`ORA_IY,`EOR_IY,`CMP_IY,`LDA_IY,`STA_IY:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                isIY <= `TRUE;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
 		// Handle d,sp
-		`LDA_DSP:
-			begin
-				radr <= dsp_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP:
-			begin
-				radr <= dsp_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_DSP:
-			begin
-				wadr <= dsp_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
+        `LDA_DSP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= dsp_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP:
+            begin
+                pc <= pc + 24'd2;
+                radr <= dsp_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_DSP:
+            begin
+                pc <= pc + 24'd2;
+                wadr <= dsp_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
 		// Handle (d,sp),y
-		`ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY:
-			begin
-				radr <= dsp_address;
-				isIY <= `TRUE;
-				load_what <= `IA_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		// Handle [zp],y
-		`ADC_IYL,`SBC_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`CMP_IYL,`LDA_IYL,`STA_IYL:
-			begin
-				radr <= zp_address;
-				isIY24 <= `TRUE;
-				load_what <= `IA_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
+        `ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY:
+            begin
+                pc <= pc + 24'd2;
+                radr <= dsp_address;
+                isIY <= `TRUE;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+		// Handle {d,sp},y
+       `ADC_XDSPIY,`SBC_XDSPIY,`CMP_XDSPIY,`ORA_XDSPIY,`AND_XDSPIY,`EOR_XDSPIY,`LDA_XDSPIY,`STA_XDSPIY:
+            begin
+                pc <= pc + 24'd2;
+                radr <= dsp_address;
+                isIY32 <= `TRUE;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        // Handle [zp],y
+        `ADC_IYL,`SBC_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`CMP_IYL,`LDA_IYL,`STA_IYL:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                isIY24 <= `TRUE;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        // Handle {zp},y
+        `ADC_XIYL,`SBC_XIYL,`AND_XIYL,`ORA_XIYL,`EOR_XIYL,`CMP_XIYL,`LDA_XIYL,`STA_XIYL:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                isIY32 <= `TRUE;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
 		// Handle [zp]
-		`ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`LDA_IL,`STA_IL:
-			begin
-				isI24 <= `TRUE;
-				radr <= zp_address;
-				load_what <= `IA_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		// Handle (zp)
-		`ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`LDA_I,`STA_I,`PEI:
-			begin
-				radr <= zp_address;
-				load_what <= `IA_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`BRK:
-			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
-				data_nack();
-				state <= STORE1;
-				bf <= !hwi;
-			end
-		`COP:
-			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
-				state <= STORE1;
-				vect <= m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
-				data_nack();
-			end
-		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA:
-				begin
-					vpa <= `TRUE;
-					vda <= `TRUE;
-					if (takb) begin
-						pc <= pc + {{16{ir[15]}},ir[15:8]};
-						ado <= pc + {{16{ir[15]}},ir[15:8]};
-					end
-					next_state(IFETCH1);
-				end
-			//end
-		default:
-			begin
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		endcase
-	end
-
-DECODE3:
-	if (rdy) begin
-		case(ir[7:0])
-		// Handle # mode
-		`LDA_IMM:
-			begin
-				res16 <= ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`LDX_IMM,`LDY_IMM:
-			begin
-				res16 <= ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`ADC_IMM:
-			begin
-				res16 <= acc16 + ir[23:8] + {15'b0,cf};
-				b16 <= ir[23:8];		// for overflow calc
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`SBC_IMM:
-			begin
-				res16 <= acc16 - ir[23:8] - {15'b0,~cf};
-				b16 <= ir[23:8];		// for overflow calc
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`AND_IMM,`BIT_IMM:
-			begin
-				res16 <= acc16 & ir[23:8];
-				b16 <= ir[23:8];	// for bit flags
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`ORA_IMM:
-			begin
-				res16 <= acc16 | ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`EOR_IMM:
-			begin
-				res16 <= acc16 ^ ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`CMP_IMM:
-			begin
-				res16 <= acc16 - ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`CPX_IMM:
-			begin
-				res16 <= x16 - ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		`CPY_IMM:
-			begin
-				res16 <= y16 - ir[23:8];
-				opcode_read();
-				next_state(IFETCH1);
-			end
+        `ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`LDA_IL,`STA_IL:
+            begin
+                pc <= pc + 24'd2;
+                isI24 <= `TRUE;
+                radr <= zp_address;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+		// Handle {zp}
+        `ADC_XIL,`SBC_XIL,`AND_XIL,`ORA_XIL,`EOR_XIL,`CMP_XIL,`LDA_XIL,`STA_XIL:
+            begin
+                pc <= pc + 24'd2;
+                isI32 <= `TRUE;
+                radr <= zp_address;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        // Handle (zp)
+        `ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`LDA_I,`STA_I,`PEI:
+            begin
+                pc <= pc + 24'd2;
+                radr <= zp_address;
+                load_what <= `IA_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
 		// Handle abs
-		`LDA_ABS:
-			begin
-				radr <= abs_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`LDX_ABS,`LDY_ABS:
-			begin
-				radr <= abs_address;
-				load_what <= xb16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_ABS,`SBC_ABS,`AND_ABS,`ORA_ABS,`EOR_ABS,`CMP_ABS,
-		`ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS,`TRB_ABS,`TSB_ABS,
-		`BIT_ABS:
-			begin
-				radr <= abs_address;
-				wadr <= abs_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`CPX_ABS,`CPY_ABS:
-			begin
-				radr <= abs_address;
-				load_what <= xb16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_ABS:
-			begin
-				wadr <= abs_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STX_ABS:
-			begin
-				wadr <= abs_address;
-				store_what <= xb16 ? `STW_X70 : `STW_X8;
-				data_nack();
-				state <= STORE1;
-			end	
-		`STY_ABS:
-			begin
-				wadr <= abs_address;
-				store_what <= xb16 ? `STW_Y70 : `STW_Y8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STZ_ABS:
-			begin
-				wadr <= abs_address;
-				store_what <= m16 ? `STW_Z70 : `STW_Z8;
-				data_nack();
-				state <= STORE1;
-			end
-		// Handle abs,x
-		`LDA_ABSX:
-			begin
-				radr <= absx_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_ABSX,`SBC_ABSX,`AND_ABSX,`ORA_ABSX,`EOR_ABSX,`CMP_ABSX,
-		`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`BIT_ABSX:
-			begin
-				radr <= absx_address;
-				wadr <= absx_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`LDY_ABSX:
-			begin
-				radr <= absx_address;
-				load_what <= xb16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_ABSX:
-			begin
-				wadr <= absx_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
-		`STZ_ABSX:
-			begin
-				wadr <= absx_address;
-				store_what <= m16 ? `STW_Z70 : `STW_Z8;
-				data_nack();
-				state <= STORE1;
-			end
+        `LDA_ABS:
+            begin
+                pc <= pc + 24'd3;
+                radr <= abs_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDX_ABS,`LDY_ABS:
+            begin
+                pc <= pc + 24'd3;
+                radr <= abs_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_ABS,`SBC_ABS,`AND_ABS,`ORA_ABS,`EOR_ABS,`CMP_ABS,
+        `ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS,`TRB_ABS,`TSB_ABS,
+        `BIT_ABS:
+            begin
+                pc <= pc + 24'd3;
+                radr <= abs_address;
+                wadr <= abs_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `CPX_ABS,`CPY_ABS:
+            begin
+                pc <= pc + 24'd3;
+                radr <= abs_address;
+                load_what <= xb32 ? `WORD_70 : xb16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_ABS:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= abs_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STX_ABS:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= abs_address;
+                if (xb2) s32 <= `TRUE;
+                else if (xb16) s16 <= `TRUE;
+                store_what <= `STW_X70;
+                data_nack();
+                state <= STORE1;
+            end    
+        `STY_ABS:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= abs_address;
+                if (xb2) s32 <= `TRUE;
+                else if (xb16) s16 <= `TRUE;
+                store_what <= `STW_Y70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STZ_ABS:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= abs_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_Z70;
+                data_nack();
+                state <= STORE1;
+            end
+		// Handle xlabs
+        `LDA_XABS:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xal_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDX_XABS,`LDY_XABS:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xal_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_XABS,`SBC_XABS,`AND_XABS,`ORA_XABS,`EOR_XABS,`CMP_XABS,
+        `ASL_XABS,`ROL_XABS,`LSR_XABS,`ROR_XABS,`INC_XABS,`DEC_XABS,`TRB_XABS,`TSB_XABS,
+        `BIT_XABS:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xal_address;
+                wadr <= xal_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `CPX_XABS,`CPY_XABS:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xal_address;
+                load_what <= xb32 ? `WORD_70 : xb16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_XABS:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xal_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STX_XABS:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xal_address;
+                if (xb2) s32 <= `TRUE;
+                else if (xb16) s16 <= `TRUE;
+                store_what <= `STW_X70;
+                data_nack();
+                state <= STORE1;
+            end    
+        `STY_XABS:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xal_address;
+                if (xb2) s32 <= `TRUE;
+                else if (xb16) s16 <= `TRUE;
+                store_what <= `STW_Y70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STZ_XABS:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xal_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_Z70;
+                data_nack();
+                state <= STORE1;
+            end
+        // Handle abs,x
+        `LDA_ABSX:
+            begin
+                pc <= pc + 24'd3;
+                radr <= absx_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_ABSX,`SBC_ABSX,`AND_ABSX,`ORA_ABSX,`EOR_ABSX,`CMP_ABSX,
+        `ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`BIT_ABSX:
+            begin
+                pc <= pc + 24'd3;
+                radr <= absx_address;
+                wadr <= absx_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDY_ABSX:
+            begin
+                pc <= pc + 24'd3;
+                radr <= absx_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_ABSX:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= absx_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STZ_ABSX:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= absx_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_Z70;
+                data_nack();
+                state <= STORE1;
+            end
+        // Handle xlabs,x
+        `LDA_XABSX:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xalx_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_XABSX,`SBC_XABSX,`AND_XABSX,`ORA_XABSX,`EOR_XABSX,`CMP_XABSX,
+        `ASL_XABSX,`ROL_XABSX,`LSR_XABSX,`ROR_XABSX,`INC_XABSX,`DEC_XABSX,`BIT_XABSX:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xalx_address;
+                wadr <= xalx_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDY_XABSX:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xalx_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_XABSX:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xalx_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `STZ_XABSX:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xalx_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_Z70;
+                data_nack();
+                state <= STORE1;
+            end
 		// Handle abs,y
-		`LDA_ABSY:
-			begin
-				radr <= absy_address;
-				load_what <= m16 ? `HALF_71	: `BYTE_71;
-				state <= LOAD_MAC1;
-				data_nack();
-			end
-		`ADC_ABSY,`SBC_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`CMP_ABSY:
-			begin
-				radr <= absy_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`LDX_ABSY:
-			begin
-				radr <= absy_address;
-				load_what <= xb16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_ABSY:
-			begin
-				wadr <= absy_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
-		`JMP:
-			begin
-				vpa <= `TRUE;
-				vda <= `TRUE;
-				pc[15:0] <= ir[23:8];
-				ado[15:0] <= ir[23:8];
-				next_state(IFETCH1);
-			end
-		`JMP_IND:
-			begin
-				radr <= abs_address;
-				load_what <= `PC_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`JMP_INDX:
-			begin
-				radr <= absx_address;
-				load_what <= `PC_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end	
-		`JSR,`JSR_INDX:
-			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				pc <= pc - 24'd1;
-				store_what <= `STW_PC158;
-				data_nack();
-				state <= STORE1;
-			end
-		`BRL:
-			begin
-				vpa <= `TRUE;
-				vda <= `TRUE;
-				pc <= pc + {{8{ir[23]}},ir[23:8]};
-				ado <= pc + {{8{ir[23]}},ir[23:8]};
-				next_state(IFETCH1);
-			end
-		`PEA:
-			begin
-				tmp16 <= ir[23:8];
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= `STW_TMP158;
-				data_nack();
-				state <= STORE1;
-			end
-		`PER:
-			begin
-				tmp16 <= pc[15:0] + ir[23:8] + 16'd3;
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				store_what <= `STW_TMP158;
-				data_nack();
-				state <= STORE1;
-			end
-		`MVN,`MVP:
-			begin
-				radr <= mvnsrc_address;
-				load_what <= `BYTE_72;
-				pc <= pc - 24'd3;	// override increment above
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		default:
-			begin
-				opcode_read();
-				next_state(IFETCH1);
-			end
-		endcase
-	end
-
-DECODE4:
-	if (rdy) begin
-		first_ifetch <= `TRUE;
-		next_state(IFETCH1);
-		case(ir[7:0])
-		`WDM:	if (ir[15:8]==`XCE) begin
-					em <= 1'b0;
-					next_state(IFETCH1);
-					pc <= pc + 32'd2;
-				end
+        `LDA_ABSY:
+            begin
+                pc <= pc + 24'd3;
+                radr <= absy_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                state <= LOAD_MAC1;
+                data_nack();
+            end
+        `ADC_ABSY,`SBC_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`CMP_ABSY:
+            begin
+                pc <= pc + 24'd3;
+                radr <= absy_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDX_ABSY:
+            begin
+                pc <= pc + 24'd3;
+                radr <= absy_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_ABSY:
+            begin
+                pc <= pc + 24'd3;
+                wadr <= absy_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+		// Handle xlabs,y
+        `LDA_XABSY:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xaly_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                state <= LOAD_MAC1;
+                data_nack();
+            end
+        `ADC_XABSY,`SBC_XABSY,`AND_XABSY,`ORA_XABSY,`EOR_XABSY,`CMP_XABSY:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xaly_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `LDX_XABSY:
+            begin
+                pc <= pc + 24'd5;
+                radr <= xaly_address;
+                load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_XABSY:
+            begin
+                pc <= pc + 24'd5;
+                wadr <= xaly_address;
+                if (m32) s32 <= `TRUE;
+                else if (m16) s16 <= `TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
 		// Handle al
-		`LDA_AL:
-			begin
-				radr <= al_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL:
-			begin
-				radr <= al_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_AL:
-			begin
-				wadr <= al_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
+        `LDA_AL:
+            begin
+                pc <= pc + 24'd4;
+                radr <= al_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL:
+            begin
+                pc <= pc + 24'd4;
+                radr <= al_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_AL:
+            begin
+                pc <= pc + 24'd4;
+                wadr <= al_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
 		// Handle alx
-		`LDA_ALX:
-			begin
-				radr <= alx_address;
-				load_what <= m16 ? `HALF_71 : `BYTE_71;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`ADC_ALX,`SBC_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`CMP_ALX:
-			begin
-				radr <= alx_address;
-				load_what <= m16 ? `HALF_70 : `BYTE_70;
-				data_nack();
-				state <= LOAD_MAC1;
-			end
-		`STA_ALX:
-			begin
-				wadr <= alx_address;
-				store_what <= m16 ? `STW_ACC70 : `STW_ACC8;
-				data_nack();
-				state <= STORE1;
-			end
+        `LDA_ALX:
+            begin
+                pc <= pc + 24'd4;
+                radr <= alx_address;
+                load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `ADC_ALX,`SBC_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`CMP_ALX:
+            begin
+                pc <= pc + 24'd4;
+                radr <= alx_address;
+                load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `STA_ALX:
+            begin
+                pc <= pc + 24'd4;
+                wadr <= alx_address;
+                if (m32) s32 <= TRUE;
+                else if (m16) s16 <= TRUE;
+                store_what <= `STW_ACC70;
+                data_nack();
+                state <= STORE1;
+            end
+        `BRK:
+            begin
+                pc <= pc + 24'd2;
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+                    end
+                end
+                store_what <= m832 ? `STW_CS3124 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
+                data_nack();
+                state <= STORE1;
+                bf <= !hwi;
+            end
+		`COP:
+            begin
+                pc <= pc + 24'd2;
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+                    end
+                end
+                store_what <= m832 ? `STW_CS3124 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
+                state <= STORE1;
+                vect <= m832 ? `COP_VECT_832 : m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
+                data_nack();
+            end
+		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA,`BGT,`BGE,`BLT,`BLE:
+            begin
+                if (ir[15:8]==8'hFF) begin
+                    if (takb)
+                        pc <= pc + {{8{ir[31]}},ir[31:16]};
+                    else
+                        pc <= pc + 24'd4;
+                end
+                else begin
+                    if (takb)
+                        pc <= pc + {{16{ir[15]}},ir[15:8]};
+                    else
+                        pc <= pc + 24'd2;
+                end
+                next_state(IFETCH);
+            end
+		`JMP:
+            begin
+                vpa <= `TRUE;
+                vda <= `TRUE;
+                pc[15:0] <= ir[23:8];
+                next_state(IFETCH);
+            end
+        `JMP_IND:
+            begin
+                radr <= abs_address;
+                load_what <= `PC_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `JMP_INDX:
+            begin
+                radr <= absx_address;
+                load_what <= `PC_70;
+                data_nack();
+                state <= LOAD_MAC1;
+            end    
+        `JSR,`JSR_INDX:
+            begin
+                pc <= pc + 24'd2;
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                        store_what <= `STW_PC158;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                        store_what <= `STW_PC158;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[31:8] <= 24'h1;
+                        store_what <= `STW_PC158;
+                    end
+                end
+                data_nack();
+                state <= STORE1;
+            end
+        `BRL:
+            begin
+                vpa <= `TRUE;
+                vda <= `TRUE;
+                pc <= pc + {{8{ir[23]}},ir[23:8]};
+                next_state(IFETCH);
+            end
 		`JML:
+            begin
+                vpa <= `TRUE;
+                vda <= `TRUE;
+                pc <= ir[31:8];
+                next_state(IFETCH);
+            end
+		`JMF:
+            begin
+                vpa <= `TRUE;
+                vda <= `TRUE;
+                pc <= ir[31:8];
+                // Switch modes ?
+                if (ir[63:32]==32'hFFFFFFFF) begin
+                    m832 <= `FALSE;
+                    m816 <= `FALSE;
+                    cs <= 32'd0;
+                    x[31:8] <= 24'd0;
+                    y[31:8] <= 24'd0;
+                    sp[31:8] <= 24'd1;
+                end
+                else if (ir[63:32]==32'hFFFFFFFE) begin
+                    m832 <= `FALSE;
+                    m816 <= `TRUE;
+                    cs <= 32'd0;
+                    x[31:8] <= 24'd0;
+                    y[31:8] <= 24'd0;
+                    sp[31:16] <= 16'd0;
+                end
+                else
+                    cs <= ir[63:32];
+                next_state(IFETCH);
+            end
+        `JSL:
+            begin
+                pc <= pc + 24'd3;
+                begin
+                   if (m832) begin
+                       store_what <= `STW_PC2316;
+                       radr <= sp;
+                       wadr <= sp;
+                       sp <= sp_dec;
+                   end
+                   else if (m816) begin
+                        store_what <= `STW_PC2316;
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                    end
+                    else begin
+                        store_what <= `STW_PC2316;
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[31:8] <= 24'h1;
+                    end
+                end
+                data_nack();
+                state <= STORE1;
+            end
+        `JSF:
+            begin
+                pc <= pc + 24'd7;
+                store_what <= `STW_CS3124;
+                radr <= sp;
+                wadr <= sp;
+                sp <= sp_dec;
+                data_nack();
+                state <= STORE1;
+            end
+		`PEA:
+            begin
+                pc <= pc + 24'd3;
+                tmp32 <= ir[23:8];
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+                    end
+                end
+                store_what <= `STW_TMP158;
+                data_nack();
+                state <= STORE1;
+            end
+        `PER:
+            begin
+                pc <= pc + 24'd3;
+                tmp32 <= pc[15:0] + ir[23:8] + 16'd3;
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                        store_what <= `STW_TMP3124;
+                    end
+                    else if (m816) begin
+                        radr <= {8'h00,sp[15:0]};
+                        wadr <= {8'h00,sp[15:0]};
+                        sp <= sp_dec;
+                        store_what <= `STW_TMP158;
+                    end
+                    else begin
+                        radr <= {16'h0001,sp[7:0]};
+                        wadr <= {16'h0001,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[15:8] <= 8'h1;
+                        store_what <= `STW_TMP158;
+                    end
+                end
+                data_nack();
+                state <= STORE1;
+            end
+		`MVN,`MVP:
+            begin
+                radr <= mvnsrc_address;
+                load_what <= `BYTE_72;
+                pc <= pc;       // override increment above
+                data_nack();
+                state <= LOAD_MAC1;
+            end
+        default:
 			begin
-				vpa <= `TRUE;
-				vda <= `TRUE;
-				pc[23:0] <= ir[31:8];
-				ado[23:0] <= ir[31:8];
-				next_state(IFETCH1);
-			end
-		`JSL:
-			begin
-begin
-	if (m816) begin
-		radr <= {8'h00,sp[15:0]};
-		wadr <= {8'h00,sp[15:0]};
-		sp <= sp_dec;
-	end
-	else begin
-		radr <= {16'h0001,sp[7:0]};
-		wadr <= {16'h0001,sp[7:0]};
-		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[15:8] <= 8'h1;
-	end
-end				pc <= pc - 24'd1;
-				store_what <= `STW_PC2316;
-				data_nack();
-				state <= STORE1;
-			end
-		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA:
-			begin
-				vpa <= `TRUE;
-				vda <= `TRUE;
-				if (takb) begin
-					pc <= pc + {{8{ir[31]}},ir[31:16]};
-					ado <= pc + {{8{ir[31]}},ir[31:16]};
-				end
-				next_state(IFETCH1);
-			end
-		default:
-			begin
-				opcode_read();
-				next_state(IFETCH1);
+				next_state(IFETCH);
 			end
 		endcase
 	end
 
-`include "load_mac.v"
-`include "store.v"
-//`include "half_calc.v"
-`include "byte_calc.v"
+LOAD_MAC1:
+`ifdef SUPPORT_DCACHE
+    if (unCachedData)
+`endif
+    begin
+        if (isRMW)
+            mlb <= 1'b1;
+        if (isBrk)
+            vpb <= `TRUE;
+        data_read(radr);
+        state <= LOAD_MAC2;
+    end
+`ifdef SUPPORT_DCACHE
+    else if (dhit)
+        load_tsk(rdat,rdat8,rdat16);
+    else begin
+        retstate <= LOAD_MAC1;
+        state <= DCACHE1;
+    end
+`endif
+LOAD_MAC2:
+    if (rdy) begin
+        data_nack();
+        begin
+            case(load_what)
+            `BYTE_70:
+                    begin
+                        b32 <= db;
+                        state <= BYTE_CALC;
+                    end
+            `BYTE_71:
+                    begin
+                        moveto_ifetch();
+                        res32 <= db;
+                    end
+            `HALF_70:
+                        begin
+                            b32[7:0] <= db;
+                            load_what <= `HALF_158;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `HALF_158:
+                        begin
+                            b32[15:8] <= db;
+                            state <= HALF_CALC;
+                        end
+            `HALF_71:
+                        begin
+                            res32[7:0] <= db;
+                            load_what <= `HALF_159;
+                            radr <= radr+32'd1;
+                            next_state(LOAD_MAC1);
+                        end
+            `HALF_159:
+                        begin
+                            res32[15:8] <= db;
+                            moveto_ifetch();
+                        end
+            `HALF_71S:
+                        begin
+                            res32[7:0] <= db;
+                            load_what <= `HALF_159S;
+                            inc_sp();
+                            next_state(LOAD_MAC1);
+                        end
+            `HALF_159S:
+                        begin
+                            res32[15:8] <= db;
+                            moveto_ifetch();
+                        end
+            `BYTE_72:
+                        begin
+                            wdat[7:0] <= db;
+                            radr <= mvndst_address;
+                            wadr <= mvndst_address;
+                            store_what <= `STW_DEF70;
+                            acc <= acc_dec;
+                            if (ir9==`MVN) begin
+                                x <= x_inc;
+                                y <= y_inc;
+                            end
+                            else begin
+                                x <= x_dec;
+                                y <= y_dec;
+                            end
+                            next_state(STORE1);
+                        end
+            `WORD_70:
+                        begin
+                            b32[7:0] <= db;
+                            load_what <= `WORD_158;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `WORD_158:
+                        begin
+                            b32[15:8] <= db;
+                            load_what <= `WORD_2316;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `WORD_2316:
+                        begin
+                            b32[23:16] <= db;
+                            load_what <= `WORD_3124;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `WORD_3124:
+                        begin
+                            b32[31:24] <= db;
+                            state <= WORD_CALC;
+                        end
+            `WORD_71:
+                        begin
+                            b32[7:0] <= db;
+                            load_what <= `WORD_159;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `WORD_159:
+                        begin
+                            b32[15:8] <= db;
+                            load_what <= `WORD_2317;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `WORD_2317:
+                        begin
+                            b32[23:16] <= db;
+                            load_what <= `WORD_3125;
+                            radr <= radr+32'd1;
+                            state <= LOAD_MAC1;
+                        end
+            `WORD_3125:
+                        begin
+                            b32[31:24] <= db;
+                            moveto_ifetch();
+                        end
+            `SR_70:        begin
+                            cf <= db[0];
+                            zf <= db[1];
+                            if (db[2])
+                                im <= 1'b1;
+                            else
+                                imcd <= 3'b110;
+                            df <= db[3];
+                            if (m816|m832) begin
+                                x_bit <= db[4];
+                                m_bit <= db[5];
+                                if (db[4]) begin
+                                    x[31:8] <= 24'd0;
+                                    y[31:8] <= 24'd0;
+                                end
+                                //if (db[5]) acc[31:8] <= 24'd0;
+                            end
+                            // The following load of the break flag is different than the '02
+                            // which never loads the flag.
+                            else
+                                bf <= db[4];
+                            vf <= db[6];
+                            nf <= db[7];
+                            if (m832) begin
+                                load_what <= `SR158;
+                                inc_sp();
+                                state <= LOAD_MAC1;
+                            end
+                            else if (isRTI) begin
+                                load_what <= `PC_70;
+                                inc_sp();
+                                state <= LOAD_MAC1;
+                            end        
+                            else begin    // PLP
+                                moveto_ifetch();
+                            end
+                        end
+            `SR_158:
+                        begin
+                            load_what <= `SR2316;
+                            inc_sp();
+                            state <= LOAD_MAC1;
+                        end
+            `SR_2316:
+                        begin
+                            load_what <= `SR3124;
+                            inc_sp();
+                            state <= LOAD_MAC1;
+                        end
+            `SR_3124:
+                        begin
+                            if (isRTI) begin
+                                load_what <= `PC_70;
+                                inc_sp();
+                                state <= LOAD_MAC1;
+                            end
+                            else
+                                moveto_ifetch();
+                        end
+             `PC_70:        begin
+                            pc[7:0] <= db;
+                            load_what <= `PC_158;
+                            if (isRTI|isRTS|isRTL) begin
+                                inc_sp();
+                            end
+                            else begin    // JMP (abs)
+                                radr <= radr + 32'd1;
+                            end
+                            state <= LOAD_MAC1;
+                        end
+            `PC_158:    begin
+                            pc[15:8] <= db;
+                            if ((isRTI&m816)|isRTL|m832) begin
+                                load_what <= `PC_2316;
+                                inc_sp();
+                                state <= LOAD_MAC1;
+                            end
+                            else if (isRTS)    // rts instruction
+                                next_state(RTS1);
+                            else            // jmp (abs)
+                            begin
+                                vpb <= `FALSE;
+                                next_state(IFETCH0);
+                            end
+                        end
+            `PC_2316:    begin
+                            pc[23:16] <= db;
+                            if (m832) begin
+                                load_what <= `PC_3124;
+                                inc_sp();
+                                next_state(LOAD_MAC1);
+                            end
+                            else if (isRTL) begin
+                                load_what <= `NOTHING;
+                                next_state(RTS1);
+                            end
+                            else begin
+                                load_what <= `NOTHING;
+                                next_state(IFETCH0);
+        //                        load_what <= `PC_3124;
+        //                        if (isRTI) begin
+        //                            inc_sp();
+        //                        end
+        //                        state <= LOAD_MAC1;    
+                            end
+                        end
+              `PC_3124: begin
+                            if (isRTS) begin
+                                load_what <= `NOTHING;
+                                next_state(RTS1);
+                            end
+                            else begin
+                                inc_sp();
+                                load_what <= `CS_70;
+                                next_state(LOAD_MAC1);
+                            end
+                        end
+              `CS_70:   begin
+                              inc_sp();
+                              cs[7:0] <= db;
+                              load_what <= `CS_158;
+                              next_state(LOAD_MAC1);
+                        end
+              `CS_158:   begin
+                            inc_sp();
+                            cs[15:8] <= db;
+                            load_what <= `CS_2316;
+                            next_state(LOAD_MAC1);
+                        end
+              `CS_2316:   begin
+                              inc_sp();
+                              cs[23:16] <= db;
+                              load_what <= `CS_3124;
+                              next_state(LOAD_MAC1);
+                          end
+              `CS_3124:   begin
+                              cs[31:24] <= db;
+                              vpb <= `FALSE;
+                              next_state(IFETCH0);
+                          end
+        //    `PC_3124:    begin
+        //                    pc[31:24] <= db;
+        //                    load_what <= `NOTHING;
+        //                    next_state(BYTE_IFETCH);
+        //                end
+            `IA_70:
+                    begin
+                        radr <= radr + 24'd1;
+                        ia[7:0] <= db;
+                        load_what <= `IA_158;
+                        state <= LOAD_MAC1;
+                    end
+            `IA_158:
+                    begin
+                        ia[15:8] <= db;
+                        ia[23:16] <= dbr;
+                        if (isIY24|isI24) begin
+                            radr <= radr + 24'd1;
+                            load_what <= `IA_2316;
+                            state <= LOAD_MAC1;
+                        end
+                        else
+                            state <= isIY ? BYTE_IY5 : BYTE_IX5;
+                    end
+            `IA_2316:
+                    begin
+                        ia[23:16] <= db;
+                        if (m832) begin
+                            load_what <= `IA_3124;
+                            next_atate(LOAD_MAC1);
+                        end
+                        else
+                            state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
+                    end
+            `IA_3124:
+                    begin
+                        ia[31:24] <= db;
+                        state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
+                    end
+            endcase
+        end
+        //endtask
+//        load_tsk(db,b16);
+    end
+`ifdef SUPPORT_BERR
+    else if (err_i) begin
+        mlb <= 1'b0;
+        data_nack();
+        derr_address <= ado;
+        intno <= 9'd508;
+        state <= BUS_ERROR;
+    end
+`endif
+RTS1:
+    begin
+        vpa <= `TRUE;
+        vda <= `TRUE;
+        pc <= pc + 24'd1;
+        ado <= cs + pc + 24'd1;
+        next_state(IFETCH1);
+    end
+BYTE_IX5:
+    begin
+        isI24 <= `FALSE;
+        radr <= ia;
+        load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+        state <= LOAD_MAC1;
+        if (m32) s32 <= TRUE;
+        else if (m16) s16 <= TRUE;
+        if (ir[7:0]==`STA_IX || ir[7:0]==`STA_I || ir[7:0]==`STA_IL) begin
+            wadr <= ia;
+            store_what <= `STW_ACC70;
+            state <= STORE1;
+        end
+        else if (ir[7:0]==`PEI) begin
+            set_sp();
+            store_what <= m832 ? `STW_IA3124 : `STW_IA158;
+            state <= STORE1;
+        end
+    end
+BYTE_IY5:
+    begin
+        isIY <= `FALSE;
+        isIY24 <= `FALSE;
+        radr <= iapy8;
+        wadr <= iapy8;
+        if (m32) s32 <= TRUE;
+        else if (m16) s16 <= TRUE;
+        store_what <= `STW_ACC70;
+        load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
+        $display("IY addr: %h", iapy8);
+        if (ir[7:0]==`STA_IY || ir[7:0]==`STA_IYL || ir[7:0]==`STA_DSPIY)
+            state <= STORE1;
+        else
+            state <= LOAD_MAC1;
+    end
+
+STORE1:
+	begin
+		case(store_what)
+		`STW_CS3124:    data_write(cs[31:24]);
+		`STW_CS2316:    data_write(cs[23:16]);
+		`STW_CS158:     data_write(cs[15:8]);
+		`STW_CS70:      data_write(cs[7:0]);
+		`STW_PC3124:    data_write(8'h00);
+		`STW_PC2316:	data_write(pc[23:16]);
+		`STW_PC158:		data_write(pc[15:8]);
+		`STW_PC70:		data_write(pc[7:0]);
+		`STW_SR3124:    data_write(8'h00);
+		`STW_SR2316:    data_write(8'h00);
+		`STW_SR158:     data_write(8'h00);
+		`STW_SR70:		data_write(sr8);
+		`STW_DEF8:		data_write(wdat);
+		`STW_DEF70:		begin data_write(wdat); mlb <= 1'b1; end
+		`STW_DEF158:	data_write(wdat[15:8]);
+		`STW_DEF2316:	data_write(wdat[23:16]);
+		`STW_DEF3124:	data_write(wdat[31:24]);
+		`STW_ACC70:		begin data_write(acc); mlb <= 1'b1; end
+		`STW_ACC158:	data_write(acc[15:8]);
+		`STW_ACC2316:	data_write(acc[23:16]);
+		`STW_ACC3124:	data_write(acc[31:24]);
+		`STW_X70:		begin data_write(x); mlb <= 1'b1; end
+		`STW_X158:		data_write(x[15:8]);
+		`STW_X2316:		data_write(x[23:16]);
+		`STW_X3124:		data_write(x[31:24]);
+		`STW_Y70:		begin data_write(y); mlb <= 1'b1; end
+		`STW_Y158:		data_write(y[15:8]);
+		`STW_Y2316:		data_write(y[23:16]);
+		`STW_Y3124:		data_write(y[31:24]);
+		`STW_Z70:		begin data_write(8'h00); mlb <= 1'b1; end
+		`STW_Z158:		data_write(8'h00);
+		`STW_Z2316:		data_write(8'h00);
+		`STW_Z3124:		data_write(8'h00);
+		`STW_DS3124:    data_write(ds[31:24]);
+		`STW_DS2316:    data_write(ds[23:16]);
+		`STW_DS158:     data_write(ds[15:8]);
+		`STW_DS70:      data_write(ds[7:0]);
+		`STW_DPR158:	begin data_write(dpr[15:8]); mlb<= 1'b1; end
+		`STW_DPR70:		data_write(dpr);
+		`STW_TMP158:	begin data_write(tmp16[15:8]); mlb <= 1'b1; end
+		`STW_TMP70:		data_write(tmp16);
+		`STW_IA3124:	begin data_write(ia[31:24]); mlb <= 1'b1; end
+		`STW_IA2316:	data_write(ia[23:16]);
+		`STW_IA158:		begin data_write(ia[15:8]); mlb <= 1'b1; end
+		`STW_IA70:		data_write(ia);
+		default:	data_write(wdat);
+		endcase
+`ifdef SUPPORT_DCACHE
+		radr <= wadr;		// Do a cache read to test the hit
+`endif
+		state <= STORE2;
+	end
+	
+// Terminal state for stores. Update the data cache if there was a cache hit.
+// Clear any previously set lock status
+STORE2:
+	if (rdy) begin
+//		wdat <= dat_o;
+		mlb <= 1'b0;
+		data_nack();
+		if (!em && (isMove|isSts)) begin
+			state <= MVN3;
+			retstate <= MVN3;
+		end
+		else begin
+			if (em) begin
+				if (isMove) begin
+					state <= MVN816;
+					retstate <= MVN816;
+				end
+				else begin
+					moveto_ifetch();
+					retstate <= IFETCH1;
+				end
+			end
+			else begin
+				moveto_ifetch();
+				retstate <= IFETCH1;
+			end
+		end
+		case(store_what)
+		`STW_DEF70:
+			begin
+				wadr <= wadr + 32'd1;
+				store_what <= `STW_DEF158;
+				retstate <= STORE1;
+				if (s16|s32) begin
+					mlb <= 1'b1;
+					vpa <= `FALSE;	// override moveto_ifetch() setting.
+					vda <= `TRUE;
+					state <= STORE1;
+				end
+			end
+		`STW_DEF158:
+			if (s32) begin
+				wadr <= wadr + 32'd1;
+				vpa <= `FALSE;	// override moveto_ifetch() setting.
+                vda <= `TRUE;
+				store_what <= `STW_DEF2316;
+				state <= STORE1;
+			end
+		`STW_DEF2316:
+            begin
+                wadr <= wadr + 32'd1;
+                vpa <= `FALSE;    // override moveto_ifetch() setting.
+                vda <= `TRUE;
+                store_what <= `STW_DEF3124;
+                state <= STORE1;
+            end
+        `STW_ACC70:
+            if (s16|s32) begin
+                wadr <= wadr + 32'd1;
+                mlb <= 1'b1;
+                vpa <= `FALSE;
+                vda <= `TRUE;
+                store_what <= `STW_ACC158;
+                state <= STORE1;
+            end
+		`STW_X70:
+			if (s16|s32) begin
+				mlb <= 1'b1;
+				wadr <= wadr + 32'd1;
+				vpa <= `FALSE;
+				vda <= `TRUE;
+				store_what <= `STW_X158;
+				state <= STORE1;
+			end
+		`STW_Y70:
+			if (s16|s32) begin
+				mlb <= 1'b1;
+				wadr <= wadr + 32'd1;
+				vpa <= `FALSE;
+				vda <= `TRUE;
+				store_what <= `STW_Y158;
+				state <= STORE1;
+			end
+		`STW_Z70:
+			if (s16|s32) begin
+				mlb <= 1'b1;
+				wadr <= wadr + 32'd1;
+				vpa <= `FALSE;
+				vda <= `TRUE;
+				store_what <= `STW_Z158;
+				state <= STORE1;
+			end
+		`STW_DPR158:
+			begin
+				set_sp();
+				vpa <= `FALSE;
+				vda <= `TRUE;
+				store_what <= `STW_DPR70;
+				state <= STORE1;
+			end
+		`STW_TMP158:
+			begin
+				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
+				store_what <= `STW_TMP70;
+				state <= STORE1;
+			end
+		`STW_IA158:
+			begin
+				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
+				store_what <= `STW_IA70;
+				state <= STORE1;
+			end
+		`STW_CS3124:
+		    begin
+		        mlb <= `TRUE;
+				set_sp();
+                vpa <= `FALSE;
+                vda <= `TRUE;
+                store_what <= `STW_CS2316;
+                state <= STORE1;
+		    end
+		`STW_CS2316:
+            begin
+                set_sp();
+                store_what <= `STW_CS158;
+                state <= STORE1;
+            end
+		`STW_CS158:
+            begin
+                set_sp();
+                store_what <= `STW_CS70;
+                state <= STORE1;
+            end
+		`STW_CS70:
+            begin
+                if (ir9 != `PHK) begin
+                    set_sp();
+                    store_what <= `STW_PC3124;
+                    state <= STORE1;
+                end
+            end
+        `STW_PC3124:
+			begin
+                set_sp();
+                vpa <= `FALSE;
+                vda <= `TRUE;
+                store_what <= `STW_PC2316;
+                state <= STORE1;
+            end
+        `STW_PC2316:
+			begin
+				if (ir9 != `PHK) begin
+					set_sp();
+					vpa <= `FALSE;
+					vda <= `FALSE;
+					store_what <= `STW_PC158;
+					state <= STORE1;
+				end
+			end
+		`STW_PC158:
+			begin
+				set_sp();
+				vpa <= `FALSE;
+				vda <= `FALSE;
+				store_what <= `STW_PC70;
+				state <= STORE1;
+			end
+		`STW_PC70:
+			begin
+				case({1'b0,ir[7:0]})
+				`BRK,`COP:
+						begin
+						set_sp();
+						vpa <= `FALSE;
+						vda <= `TRUE;
+						if (m832)
+						    store_what <= `STW_SR3124;
+						else
+						    store_what <= `STW_SR70;
+						state <= STORE1;
+						end
+				`JSR: 	begin
+				        if (m832) begin
+				            pc <= ir[31:8];
+				            ado <= cs + ir[31:8];
+				        end
+				        else begin
+						    pc[15:0] <= ir[23:8];
+						    ado <= cs + {pc[23:16],ir[23:8]};
+						end
+						end
+				`JSL: 	begin
+				        if (m832) begin
+				            pc <= ir[31:8];
+				            cs <= ir[63:32];
+                            ado <= ir[63:32] + ir[31:8];
+				        end
+				        else begin
+                            pc[23:0] <= ir[31:8];
+                            ado <= cs + ir[31:8];
+						end
+						end
+				`JSR_INDX:
+						begin
+						vpa <= `FALSE;
+						vda <= `FALSE;
+						state <= LOAD_MAC1;
+						load_what <= `PC_70;
+						radr <= absx_address;
+						end
+				endcase
+			end
+		`STW_SR3124:
+		    begin
+				set_sp();
+		        store_what <= `STW_SR2316;
+		        state <= STORE1;
+		    end
+		`STW_SR2316:
+            begin
+				set_sp();
+                store_what <= `STW_SR158;
+                state <= STORE1;
+            end
+        `STW_SR158:
+            begin
+				set_sp();
+                store_what <= `STW_SR70;
+                state <= STORE1;
+            end
+        `STW_SR70:
+			begin
+				if (ir[7:0]==`BRK) begin
+					load_what <= `PC_70;
+					state <= LOAD_MAC1;
+					vpa <= `FALSE;
+					vda <= `FALSE;
+					pc[23:16] <= 8'h00;//abs8[23:16];
+					radr <= vect;
+					im <= hwi;
+					df <= 1'b0;
+				end
+				else if (ir[7:0]==`COP) begin
+					load_what <= `PC_70;
+					vpa <= `FALSE;
+					vda <= `FALSE;
+					state <= LOAD_MAC1;
+					pc[23:16] <= 8'h00;//abs8[23:16];
+					radr <= vect;
+					im <= 1'b1;
+				end
+			end
+		default:
+			if (isJsrIndx) begin
+				load_what <= `PC_310;
+				vpa <= `FALSE;
+				vda <= `FALSE;
+				state <= LOAD_MAC1;
+				radr <= ir[31:8] + x;
+			end
+			else if (isJsrInd) begin
+				load_what <= `PC_310;
+				vpa <= `FALSE;
+				vda <= `FALSE;
+				state <= LOAD_MAC1;
+				radr <= ir[31:8];
+			end
+		endcase
+`ifdef SUPPORT_DCACHE
+		if (!dhit && write_allocate) begin
+			state <= DCACHE1;
+		end
+`endif
+	end
+`ifdef SUPPORT_BERR
+	else if (err_i) begin
+		mlb <= 1'b0;
+		data_nack();
+		derr_address <= ado[23:0];
+		intno <= 9'd508;
+		state <= BUS_ERROR;
+	end
+`endif
+
+BYTE_CALC:
+	begin
+		moveto_ifetch();
+		store_what <= `STW_DEF70;
+		s8 <= TRUE;
+		case(ir9)
+		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_XABS,`ADC_XABSX,`ADC_XABSY,
+		`ADC_IYL,`ADC_XIYL,`ADC_I,`ADC_IL,`ADC_XIL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY,`ADC_XDSPIY:
+		      begin res32 <= acc8 + b8 + {7'b0,cf}; end
+		`SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_XABS,`SBC_XABSX,`SBC_XABSY,
+		`SBC_IYL,`SBC_XIYL,`SBC_I,`SBC_IL,`SBC_XIL,`SBC_AL,`SBC_ALX,`SBC_DSP,`SBC_DSPIY,`SBC_XDSPIY:
+		      begin res32 <= acc8 - b8 - {7'b0,~cf}; end
+		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_XABS,`CMP_XABSX,`CMP_XABSY,
+		`CMP_IYL,`CMP_XIYL,`CMP_I,`CMP_IL,`CMP_XIL,`CMP_AL,`CMP_ALX,`CMP_DSP,`CMP_DSPIY,`CMP_XDSPIY:
+		      begin res32 <= acc8 - b8; end
+		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_XABS,`AND_XABSX,`AND_XABSY,
+		`AND_IYL,`AND_XIYL,`AND_I,`AND_IL,`AND_XIL,`AND_AL,`AND_ALX,`AND_DSP,`AND_DSPIY,`AND_XDSPIY:
+		      begin res32 <= acc & b32; end
+		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_XABS,`ORA_XABSX,`ORA_XABSY,
+		`ORA_IYL,`ORA_XIYL,`ORA_I,`ORA_IL,`ORA_XIL,`ORA_AL,`ORA_ALX,`ORA_DSP,`ORA_DSPIY,`ORA_XDSPIY:
+		      begin res32 <= acc | b32; end
+		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_XABS,`EOR_XABSX,`EOR_XABSY,
+		`EOR_IYL,`EOR_XIYL,`EOR_I,`EOR_IL,`EOR_XIL,`EOR_AL,`EOR_ALX,`EOR_DSP,`EOR_DSPIY,`EOR_XDSPIY:
+		      begin res32 <= acc ^ b32; end
+		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_XABS,`LDA_XABSX,`LDA_XABSY,
+		`LDA_IYL,`LDA_XIYL,`LDA_I,`LDA_IL,`LDA_XIL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,`LDA_XDSPIY:
+		      begin res32 <= b32; end
+		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX,`BIT_XABS,`BIT_XABSX:	begin res32 <= acc & b32; end
+		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`LDX_XABS,`LDX_XABSY:	begin res32 <= b32; end
+		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:	begin res32 <= b32; end
+		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS:	begin res32 <= x8 - b8; end
+		`CPY_IMM,`CPY_ZP,`CPY_ABS,`CPY_XABS:	begin res32 <= y8 - b8; end
+		`TRB_ZP,`TRB_ABS,`TRB_XABS:	begin res32 <= ~acc32 & b32; wdat <= ~acc32 & b32; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS,`TSB_XABS:	begin res32 <= acc32 | b32; wdat <= acc32 | b32; state <= STORE1; data_nack(); end
+		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:	begin res32 <= {b8[7],23'b0,b8,1'b0}; wdat <= {b32[31:0],1'b0}; state <= STORE1; data_nack(); end
+		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX,`ROL_XABS,`ROL_XABSX:	begin res32 <= {b8[7],23'b0,b8,cf}; wdat <= {b32[31:0],cf}; state <= STORE1; data_nack(); end
+		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX,`LSR_XABS,`LSR_XABSX:	begin res32 <= {b8[0],b32[31:8],1'b0,b8[7:1]}; wdat <= {b32[31:8],1'b0,b8[7:1]}; state <= STORE1; data_nack(); end
+		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX,`ROR_XABS,`ROR_XABSX:	begin res32 <= {b8[0],b32[31:8],cf,b8[7:1]}; wdat <= {b32[31:8],cf,b8[7:1]}; state <= STORE1; data_nack(); end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX,`INC_XABS,`INC_XABSX:	begin res32 <= b32 + 32'd1; wdat <= {b32+32'd1}; state <= STORE1; data_nack(); end
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX,`DEC_XABS,`DEC_XABSX:	begin res32 <= b32 - 32'd1; wdat <= {b32-32'd1}; state <= STORE1; data_nack(); end
+		endcase
+	end
+
 HALF_CALC:
 	begin
 		moveto_ifetch();
 		store_what <= `STW_DEF70;
-		case(ir[7:0])
-		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_IYL,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_AL,`ADC_ALX,`ADC_I,`ADC_IL,`ADC_DSP,`ADC_DSPIY:	begin res16 <= acc16 + b16 + {15'd0,cf}; end
-		`SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_IYL,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_AL,`SBC_ALX,`SBC_I,`SBC_IL,`SBC_DSP,`SBC_DSPIY:	begin res16 <= acc16 - b16 - {15'd0,~cf}; end
-		`CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_IYL,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_AL,`CMP_ALX,`CMP_I,`CMP_IL,`CMP_DSP,`CMP_DSPIY:	begin res16 <= acc16 - b16; end
-		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_AL,`AND_ALX,`AND_I,`AND_IL,`AND_DSP,`AND_DSPIY:	begin res16 <= acc16 & b16; end
-		`ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_IYL,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_AL,`ORA_ALX,`ORA_I,`ORA_IL,`ORA_DSP,`ORA_DSPIY:	begin res16 <= acc16 | b16; end
-		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_AL,`EOR_ALX,`EOR_I,`EOR_IL,`EOR_DSP,`EOR_DSPIY:	begin res16 <= acc16 ^ b16; end
-		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_AL,`LDA_ALX,`LDA_I,`LDA_IL,`LDA_DSP,`LDA_DSPIY:	begin res16 <= b16; end
-		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX:	begin res16 <= acc16 & b16; end
-		`TRB_ZP,`TRB_ABS:	begin res16 <= ~acc16 & b16; wdat <= ~acc16 & b16; state <= STORE1; data_nack(); end
-		`TSB_ZP,`TSB_ABS:	begin res16 <= acc16 | b16; wdat <= acc16 | b16; state <= STORE1; data_nack(); end
-		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	begin res16 <= b16; end
-		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	begin res16 <= b16; end
-		`CPX_IMM,`CPX_ZP,`CPX_ABS:	begin res16 <= x16 - b16; end
-		`CPY_IMM,`CPY_ZP,`CPY_ABS:	begin res16 <= y16 - b16; end
-		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX:	begin res16 <= {b16,1'b0}; wdat <= {b16[14:0],1'b0}; state <= STORE1; data_nack(); end
-		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	begin res16 <= {b16,cf}; wdat <= {b16[14:0],cf}; state <= STORE1; data_nack(); end
-		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	begin res16 <= {b16[0],1'b0,b16[15:1]}; wdat <= {1'b0,b16[15:1]}; state <= STORE1; data_nack(); end
-		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX:	begin res16 <= {b16[0],cf,b16[15:1]}; wdat <= {cf,b16[15:1]}; state <= STORE1; data_nack(); end
-		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX:	begin res16 <= {b24,b16} + 24'd1; wdat <= {{b24,b16}+24'd1}; state <= STORE1; data_nack(); end
-		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX:	begin res16 <= {b24,b16} - 24'd1; wdat <= {{b24,b16}-24'd1}; state <= STORE1; data_nack(); end
+		s16 <= TRUE;
+		case(ir9)
+		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_XABS,`ADC_XABSX,`ADC_XABSY,
+        `ADC_IYL,`ADC_XIYL,`ADC_I,`ADC_IL,`ADC_XIL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY,`ADC_XDSPIY:
+              begin res32 <= acc16 + b16 + {15'b0,cf}; end
+        `SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_XABS,`SBC_XABSX,`SBC_XABSY,
+        `SBC_IYL,`SBC_XIYL,`SBC_I,`SBC_IL,`SBC_XIL,`SBC_AL,`SBC_ALX,`SBC_DSP,`SBC_DSPIY,`SBC_XDSPIY:
+              begin res32 <= acc16 - b16 - {15'b0,~cf}; end
+        `CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_XABS,`CMP_XABSX,`CMP_XABSY,
+        `CMP_IYL,`CMP_XIYL,`CMP_I,`CMP_IL,`CMP_XIL,`CMP_AL,`CMP_ALX,`CMP_DSP,`CMP_DSPIY,`CMP_XDSPIY:
+              begin res32 <= acc16 - b16; end
+        `AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_XABS,`AND_XABSX,`AND_XABSY,
+        `AND_IYL,`AND_XIYL,`AND_I,`AND_IL,`AND_XIL,`AND_AL,`AND_ALX,`AND_DSP,`AND_DSPIY,`AND_XDSPIY:
+              begin res32 <= acc & b32; end
+        `ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_XABS,`ORA_XABSX,`ORA_XABSY,
+        `ORA_IYL,`ORA_XIYL,`ORA_I,`ORA_IL,`ORA_XIL,`ORA_AL,`ORA_ALX,`ORA_DSP,`ORA_DSPIY,`ORA_XDSPIY:
+              begin res32 <= acc | b32; end
+        `EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_XABS,`EOR_XABSX,`EOR_XABSY,
+        `EOR_IYL,`EOR_XIYL,`EOR_I,`EOR_IL,`EOR_XIL,`EOR_AL,`EOR_ALX,`EOR_DSP,`EOR_DSPIY,`EOR_XDSPIY:
+              begin res32 <= acc ^ b32; end
+        `LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_XABS,`LDA_XABSX,`LDA_XABSY,
+        `LDA_IYL,`LDA_XIYL,`LDA_I,`LDA_IL,`LDA_XIL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,`LDA_XDSPIY:
+              begin res32 <= b32; end
+		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX,`BIT_XABS,`BIT_XABSX:	begin res32 <= acc & b32; end
+		`TRB_ZP,`TRB_ABS,`TRB_XABS:	begin res32 <= ~acc32 & b32; wdat <= ~acc32 & b32; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS,`TSB_XABS:	begin res32 <= acc32 | b32; wdat <= acc32 | b32; state <= STORE1; data_nack(); end
+		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`LDX_XABS,`LDX_XABSY:	begin res32 <= b32; end
+		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:	begin res32 <= b32; end
+		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS:	begin res32 <= x16 - b16; end
+		`CPY_IMM,`CPY_ZP,`CPY_ABS,`CPY_XABS:	begin res32 <= y16 - b16; end
+		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:	begin res32 <= {b16[15],15'b0,b16,1'b0}; wdat <= {16'h0,b16[14:0],1'b0}; state <= STORE1; data_nack(); end
+		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX,`ROL_XABS,`ROL_XABSX:	begin res32 <= {b16[15],15'b0,b16,cf}; wdat <= {16'h0,b16[14:0],cf}; state <= STORE1; data_nack(); end
+		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX,`LSR_XABS,`LSR_XABSX:	begin res32 <= {b16[0],17'b0,b16[15:1]}; wdat <= {17'b0,b16[15:1]}; state <= STORE1; data_nack(); end
+		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX,`ROR_XABS,`ROR_XABSX:	begin res32 <= {b16[0],16'b0,cf,b16[15:1]}; wdat <= {16'h0,cf,b16[15:1]}; state <= STORE1; data_nack(); end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX,`INC_XABS,`INC_XABSX:	begin res32 <= b32 + 32'd1; wdat <= b32+32'd1; state <= STORE1; data_nack(); end
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX,`DEC_XABS,`DEC_XABSX:	begin res32 <= b32 - 32'd1; wdat <= b32-32'd1; state <= STORE1; data_nack(); end
+		endcase
+	end
+
+WORD_CALC:
+	begin
+		moveto_ifetch();
+		store_what <= `STW_DEF70;
+		s32 <= TRUE;
+		case(ir9)
+		`ADC_IMM,`ADC_ZP,`ADC_ZPX,`ADC_IX,`ADC_IY,`ADC_ABS,`ADC_ABSX,`ADC_ABSY,`ADC_XABS,`ADC_XABSX,`ADC_XABSY,
+        `ADC_IYL,`ADC_XIYL,`ADC_I,`ADC_IL,`ADC_XIL,`ADC_AL,`ADC_ALX,`ADC_DSP,`ADC_DSPIY,`ADC_XDSPIY:
+              begin res32 <= acc32 + b32 + {31'b0,cf}; end
+        `SBC_IMM,`SBC_ZP,`SBC_ZPX,`SBC_IX,`SBC_IY,`SBC_ABS,`SBC_ABSX,`SBC_ABSY,`SBC_XABS,`SBC_XABSX,`SBC_XABSY,
+        `SBC_IYL,`SBC_XIYL,`SBC_I,`SBC_IL,`SBC_XIL,`SBC_AL,`SBC_ALX,`SBC_DSP,`SBC_DSPIY,`SBC_XDSPIY:
+              begin res32 <= acc32 - b32 - {31'b0,~cf}; end
+        `CMP_IMM,`CMP_ZP,`CMP_ZPX,`CMP_IX,`CMP_IY,`CMP_ABS,`CMP_ABSX,`CMP_ABSY,`CMP_XABS,`CMP_XABSX,`CMP_XABSY,
+        `CMP_IYL,`CMP_XIYL,`CMP_I,`CMP_IL,`CMP_XIL,`CMP_AL,`CMP_ALX,`CMP_DSP,`CMP_DSPIY,`CMP_XDSPIY:
+              begin res32 <= acc32 - b32; end
+        `AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_XABS,`AND_XABSX,`AND_XABSY,
+        `AND_IYL,`AND_XIYL,`AND_I,`AND_IL,`AND_XIL,`AND_AL,`AND_ALX,`AND_DSP,`AND_DSPIY,`AND_XDSPIY:
+              begin res32 <= acc & b32; end
+        `ORA_IMM,`ORA_ZP,`ORA_ZPX,`ORA_IX,`ORA_IY,`ORA_ABS,`ORA_ABSX,`ORA_ABSY,`ORA_XABS,`ORA_XABSX,`ORA_XABSY,
+        `ORA_IYL,`ORA_XIYL,`ORA_I,`ORA_IL,`ORA_XIL,`ORA_AL,`ORA_ALX,`ORA_DSP,`ORA_DSPIY,`ORA_XDSPIY:
+              begin res32 <= acc | b32; end
+        `EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_XABS,`EOR_XABSX,`EOR_XABSY,
+        `EOR_IYL,`EOR_XIYL,`EOR_I,`EOR_IL,`EOR_XIL,`EOR_AL,`EOR_ALX,`EOR_DSP,`EOR_DSPIY,`EOR_XDSPIY:
+              begin res32 <= acc ^ b32; end
+        `LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_XABS,`LDA_XABSX,`LDA_XABSY,
+        `LDA_IYL,`LDA_XIYL,`LDA_I,`LDA_IL,`LDA_XIL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,`LDA_XDSPIY:
+              begin res32 <= b32; end
+        `BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX,`BIT_XABS,`BIT_XABSX:    begin res32 <= acc & b32; end
+        `TRB_ZP,`TRB_ABS,`TRB_XABS:    begin res32 <= ~acc32 & b32; wdat <= ~acc32 & b32; state <= STORE1; data_nack(); end
+        `TSB_ZP,`TSB_ABS,`TSB_XABS:    begin res32 <= acc32 | b32; wdat <= acc32 | b32; state <= STORE1; data_nack(); end
+        `LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`LDX_XABS,`LDX_XABSY:    begin res32 <= b32; end
+        `LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:    begin res32 <= b32; end
+		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS:	begin res32 <= x - b32; end
+		`CPY_IMM,`CPY_ZP,`CPY_ABS,`CPY_XABS:	begin res32 <= y - b32; end
+		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:	begin res32 <= {b32,1'b0}; wdat <= {b32[30:0],1'b0}; state <= STORE1; data_nack(); end
+		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX,`ROL_XABS,`ROL_XABSX:	begin res32 <= {b32,cf}; wdat <= {b32[30:0],cf}; state <= STORE1; data_nack(); end
+		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX,`LSR_XABS,`LSR_XABSX:	begin res32 <= {b32[0],1'b0,b32[31:1]}; wdat <= {1'b0,b32[31:1]}; state <= STORE1; data_nack(); end
+		`ROR_ZP,`ROR_ZPX,`ROR_ABS,`ROR_ABSX,`ROR_XABS,`ROR_XABSX:	begin res32 <= {b32[0],cf,b32[31:1]}; wdat <= {cf,b32[31:1]}; state <= STORE1; data_nack(); end
+		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX,`INC_XABS,`INC_XABSX:	begin res32 <= b32 + 32'd1; wdat <= b32+32'd1; state <= STORE1; data_nack(); end
+		`DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX,`DEC_XABS,`DEC_XABSX:	begin res32 <= b32 - 32'd1; wdat <= b32-32'd1; state <= STORE1; data_nack(); end
 		endcase
 	end
 
 MVN816:
 	begin
 		moveto_ifetch();
-		if (&acc[15:0]) begin
-			pc <= pc + 24'd3;
-			ado <= pc + 24'd3;
-			dbr <= ir[15:8];
+		if (m832) begin
+            if (&acc) begin
+                pc <= pc + 24'd3;
+            end
+		end
+		else begin
+            if (&acc[15:0]) begin
+                pc <= pc + 24'd3;
+                ds[23:16] <= ir[15:8];
+            end
 		end
 	end
 endcase
 end
 
 `include "bus_task.v"
-`include "misc_task.v"
+`include "FT832misc_task.v"
 
 task next_state;
 input [5:0] nxt;
@@ -2493,6 +3598,10 @@ IFETCH1:	fnStateName = "IFETCH1    ";
 IFETCH2:	fnStateName = "IFETCH2    ";
 IFETCH3:	fnStateName = "IFETCH3    ";
 IFETCH4:	fnStateName = "IFETCH4    ";
+IFETCH5:	fnStateName = "IFETCH5    ";
+IFETCH6:	fnStateName = "IFETCH6    ";
+IFETCH7:	fnStateName = "IFETCH7    ";
+IFETCH8:	fnStateName = "IFETCH8    ";
 STORE1:	fnStateName = "STORE1     ";
 STORE2:	fnStateName = "STORE2     ";
 RTS1:	fnStateName = "RTS1       ";
@@ -2503,6 +3612,8 @@ DECODE1:	fnStateName = "DECODE1    ";
 DECODE2:	fnStateName = "DECODE2    ";
 DECODE3:	fnStateName = "DECODE3    ";
 DECODE4:	fnStateName = "DECODE4    ";
+DECODE5:	fnStateName = "DECODE5    ";
+DECODE8:	fnStateName = "DECODE8    ";
 BYTE_CALC:	fnStateName = "BYTE_CALC  ";
 BUS_ERROR:	fnStateName = "BUS_ERROR  ";
 LOAD_MAC1:	fnStateName = "LOAD_MAC1  ";
@@ -2518,6 +3629,7 @@ ICACHE1:		fnStateName = "ICACHE1    ";
 IBUF1:			fnStateName = "IBUF1      ";
 DCACHE1:		fnStateName = "DCACHE1    ";
 HALF_CALC:		fnStateName = "HALF_CALC  ";
+WORD_CALC:		fnStateName = "WORD_CALC  ";
 MVN816:			fnStateName = "MVN816     ";
 default:		fnStateName = "UNKNOWN    ";
 endcase
@@ -2525,3 +3637,92 @@ endfunction
 
 endmodule
 
+
+// ============================================================================
+// Cache Memories
+// ============================================================================
+module ft832_icachemem(wclk, wce, wr, wa, i, rclk, rce, pc, insn);
+input wclk;
+input wce;
+input wr;
+input [11:0] wa;
+input [7:0] i;
+input rclk;
+input rce;
+input [11:0] pc;
+output [127:0] insn;
+reg [127:0] insn;
+
+reg [127:0] mem [0:255];
+reg [11:0] rpc,rpcp16;
+
+genvar g;
+generate
+begin : wstrobes
+for (g = 0; g < 16; g = g + 1)
+always @(posedge wclk)
+	if (wce & wr && wa[3:0]==g) mem[wa[11:4]][g*8+7:g*8] <= i;
+end
+endgenerate
+
+always @(posedge rclk)
+	if (rce) rpc <= pc;
+always @(posedge rclk)
+	if (rce) rpcp16 <= pc + 12'd16;
+wire [127:0] insn0 = mem[rpc[11:4]];
+wire [127:0] insn1 = mem[rpcp16[11:4]];
+always @(insn0 or insn1 or rpc)
+case(rpc[3:0])
+4'h0:	insn <= insn0;
+h'h1:	insn <= {insn1[7:0],insn0[127:8]};
+4'h2:	insn <= {insn1[15:0],insn0[127:16]};
+4'h3:	insn <= {insn1[23:0],insn0[127:24]};
+4'h4:	insn <= {insn1[31:0],insn0[127:32]};
+4'h5:	insn <= {insn1[39:0],insn0[127:40]};
+4'h6:	insn <= {insn1[47:0],insn0[127:48]};
+4'h7:	insn <= {insn1[55:0],insn0[127:56]};
+4'h8:	insn <= {insn1[63:0],insn0[127:64]};
+4'h9:	insn <= {insn1[71:0],insn0[127:72]};
+4'hA:	insn <= {insn1[79:0],insn0[127:80]};
+4'hB:	insn <= {insn1[87:0],insn0[127:88]};
+4'hC:	insn <= {insn1[95:0],insn0[127:96]};
+4'hD:	insn <= {insn1[103:0],insn0[127:104]};
+4'hE:	insn <= {insn1[111:0],insn0[127:112]};
+4'hF:	insn <= {insn1[119:0],insn0[127:120]};
+endcase
+
+endmodule
+
+module ft832_itagmem(wclk, wce, wr, wa, invalidate, rclk, rce, pc, hit0, hit1);
+input wclk;
+input wce;
+input wr;
+input [31:0] wa;
+input invalidate;
+input rclk;
+input rce;
+input [31:0] pc;
+output hit0;
+output hit1;
+
+reg [31:12] mem [0:255];
+reg [0:255] tvalid;
+reg [31:0] rpc,rpcp16;
+wire [20:0] tag0,tag1;
+
+always @(posedge wclk)
+	if (wce & wr) mem[wa[11:4]] <= wa[31:12];
+always @(posedge wclk)
+	if (invalidate) tvalid <= 256'd0;
+	else if (wce & wr) tvalid[wa[11:4]] <= 1'b1;
+always @(posedge rclk)
+	if (rce) rpc <= pc;
+always @(posedge rclk)
+	if (rce) rpcp16 <= pc + 32'd16;
+assign tag0 = {mem[rpc[11:4]],tvalid[rpc[11:4]]};
+assign tag1 = {mem[rpcp16[11:4]],tvalid[rpcp16[11:4]]};
+
+assign hit0 = tag0 == {rpc[31:12],1'b1};
+assign hit1 = tag1 == {rpcp16[31:12],1'b1};
+
+endmodule
