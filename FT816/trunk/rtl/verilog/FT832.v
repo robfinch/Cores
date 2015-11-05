@@ -119,6 +119,11 @@
 `define PER			9'h62
 `define WDM			9'h42
 `define PEAxl       9'h1F4
+`define CS          9'h11B
+`define SEG         9'h13B
+`define SEG0        9'h15B
+`define IOS         9'h17B
+
 
 `define ADC_IMM		9'h69
 `define ADC_ZP		9'h65
@@ -482,41 +487,59 @@
 // Page Two Opcodes
 `define PG2			9'h42
 
-`define NOTHING		5'd0
-`define SR_70		5'd1
-`define SR_310		5'd2
-`define BYTE_70		5'd3
-`define WORD_310	5'd4
-`define PC_70		5'd5
-`define PC_158		5'd6
-`define PC_2316		5'd7
-`define PC_3124		5'd8
-`define PC_310		5'd9
-`define WORD_311	5'd10
-`define IA_310		5'd11
-`define IA_70		5'd12
-`define IA_158		5'd13
-`define BYTE_71		5'd14
-`define WORD_312	5'd15
-`define WORD_313	5'd16
-`define WORD_314	5'd17
-`define IA_2316		5'd18
-`define HALF_70		5'd19
-`define HALF_158	5'd20
-`define HALF_71		5'd21
-`define HALF_159	5'd22
-`define HALF_71S	5'd23
-`define HALF_159S	5'd24
-`define BYTE_72		5'd25
-`define TRIP_2316	5'd26
-`define WORD_71S    5'd27
+`define NOTHING		6'd0
+`define SR_70		6'd1
+`define SR_310		6'd2
+`define BYTE_70		6'd3
+`define WORD_310	6'd4
+`define PC_70		6'd5
+`define PC_158		6'd6
+`define PC_2316		6'd7
+`define PC_3124		6'd8
+`define PC_310		6'd9
+`define WORD_311	6'd10
+`define IA_310		6'd11
+`define IA_70		6'd12
+`define IA_158		6'd13
+`define BYTE_71		6'd14
+`define WORD_312	6'd15
+`define WORD_313	6'd16
+`define WORD_314	6'd17
+`define IA_2316		6'd18
+`define HALF_70		6'd19
+`define HALF_158	6'd20
+`define HALF_71		6'd21
+`define HALF_159	6'd22
+`define HALF_71S	6'd23
+`define HALF_159S	6'd24
+`define BYTE_72		6'd25
+`define TRIP_2316	6'd26
+`define WORD_71S    6'd27
+`define WORD_70     6'd28
+`define WORD_158    6'd29
+`define WORD_2316   6'd30
+`define WORD_3124   6'd31
+`define WORD_71     6'd32
+`define WORD_159    6'd33
+`define WORD_2317   6'd34
+`define WORD_3125   6'd35
+`define WORD_159S   6'd36
+`define WORD_2317S  6'd37
+`define WORD_3125S  6'd38
+`define IA_3124     6'd39
 
 `define STW_DEF		6'h0
+`define STW_CS3124  6'd4
+`define STW_CS2316  6'd5
+`define STW_CS158   6'd6
+`define STW_CS70    6'd7
+`define STW_DS3124  6'd8
+`define STW_DS2316  6'd9
+`define STW_DS158   6'd10
+`define STW_DS70    6'd11
+`define STW_ACC3124 6'd12
+`define STW_ACC2316 6'd13
 `define STW_RES8	6'd14
-`define STW_R4		6'd15
-`define STW_ACC8	6'd16
-`define STW_X8		6'd17
-`define STW_Y8		6'd18
 `define STW_PC3124	6'd19
 `define STW_PC2316	6'd20
 `define STW_PC158	6'd21
@@ -551,10 +574,6 @@
 `define STW_Y2316   6'd51
 `define STW_Z3124   6'd52
 `define STW_Z2316   6'd53
-`define STW_DBR70	6'd54
-`define STW_DBR158	6'd55
-`define STW_DBR2316	6'd56
-`define STW_DBR3124	6'd57
 
 // Input Frequency is 32 times the 00 clock
 
@@ -562,6 +581,7 @@ module FT832(rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e
 parameter SUPPORT_TRIBYTES = 1'b0;
 parameter STORE_SKIPPING = 1'b1;
 parameter EXTRA_LONG_BRANCHES = 1'b1;
+parameter IO_SEGMENT = 32'hFFD00000;
 parameter RESET1 = 6'd0;
 parameter IFETCH = 6'd1;
 parameter DECODE = 6'd5;
@@ -630,6 +650,7 @@ reg [7:0] dbi;
 reg pg2;
 reg [5:0] state;
 reg [5:0] retstate;
+reg [3:0] cnt;      // icache counter
 reg [127:0] ir;
 wire [8:0] ir9 = {pg2,ir[7:0]};
 reg [23:0] pc,opc;
@@ -637,7 +658,7 @@ reg [31:0] cs;      // code segment
 wire [31:0] cspc = cs + pc;
 reg [15:0] dpr;		// direct page register
 reg [31:0] ds;      // data segment
-wire [7:0] dbr = ds[23:16];		// data bank register
+reg [7:0] dbr;		// data bank register
 reg [31:0] x,y,acc,sp;
 reg [15:0] tmp;
 wire [15:0] acc16 = acc[15:0];
@@ -690,7 +711,7 @@ begin
 end
 wire [31:0] x32 = xb32 ? x : xb16 ? {16'h0000,x[15:0] : {24'h000000,x[7:0]};
 wire [31:0] y32 = xb32 ? y : xb16 ? {16'h0000,y[15:0] : {24'h000000,y[7:0]};
-wire [7:0] sr8 = m816 ? {nf,vf,m_bit,x_bit,df,im,zf,cf} : {nf,vf,1'b0,bf,df,im,zf,cf};
+wire [7:0] sr8 = (m816|m832) ? {nf,vf,m_bit,x_bit,df,im,zf,cf} : {nf,vf,1'b0,bf,df,im,zf,cf};
 reg nmi1,nmi_edge;
 reg wai;
 reg [31:0] b32;
@@ -710,7 +731,7 @@ reg [31:0] radr;
 reg [31:0] wadr;
 reg [31:0] wdat;
 wire [7:0] rdat;
-reg [4:0] load_what;
+reg [5:0] load_what;
 reg [5:0] store_what;
 reg s8,s16,s32;
 reg [15:0] tmp16;
@@ -727,8 +748,8 @@ reg isSub;
 reg isJsrIndx,isJsrInd;
 reg isIY,isIY24,isI24,isIY32,isI32;
 
-wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS ||
-			 ir9==`CPY_ZPX || ir9==`CPY_ABS;
+wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS || ir9==`CPX_XABS ||
+			 ir9==`CPY_ZPX || ir9==`CPY_ABS || ir9==`CPY_XABS;
 wire isRMW8 =
 			 ir9==`ASL_ZP || ir9==`ROL_ZP || ir9==`LSR_ZP || ir9==`ROR_ZP || ir9==`INC_ZP || ir9==`DEC_ZP ||
 			 ir9==`ASL_ZPX || ir9==`ROL_ZPX || ir9==`LSR_ZPX || ir9==`ROR_ZPX || ir9==`INC_ZPX || ir9==`DEC_ZPX ||
@@ -736,15 +757,17 @@ wire isRMW8 =
 			 ir9==`ASL_ABSX || ir9==`ROL_ABSX || ir9==`LSR_ABSX || ir9==`ROR_ABSX || ir9==`INC_ABSX || ir9==`DEC_ABSX ||
 			 ir9==`ASL_XABS || ir9==`ROL_XABS || ir9==`LSR_XABS || ir9==`ROR_XABS || ir9==`INC_XABS || ir9==`DEC_XABS ||
              ir9==`ASL_XABSX || ir9==`ROL_XABSX || ir9==`LSR_XABSX || ir9==`ROR_XABSX || ir9==`INC_XABSX || ir9==`DEC_XABSX ||
-			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS
+			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS ||
+			 ir9==`TRB_XABS || ir9==`TSB_XABS
 			 ;
 wire isBranch = ir9==`BRA || ir9==`BEQ || ir9==`BNE || ir9==`BVS || ir9==`BVC || ir9==`BMI || ir9==`BPL || ir9==`BCS || ir9==`BCC ||
                 ir9==`BGT || ir9==`BGE || ir9==`BLT || ir9==`BLE;
 
+reg wr_icache;
 ft832_icachemem uicm1
 (
     .wclk(clk),
-    .wce(1'b1),
+    .wce(rdy),
     .wr(wr_icache),
     .wa(ado[11:0]),
     .i(db),
@@ -752,6 +775,24 @@ ft832_icachemem uicm1
     .rce(1'b1),
     .pc(cspc[11:0]),
     .insn(insn)
+);
+
+reg inv_icache;
+reg wr_itag;
+wire hit0,hit1;
+reg prc_hit0,prc_hit1;
+ft832_itagmem uitm1
+(
+    .wclk(clk),
+    .wce(rdy),
+    .wr(wr_icache & wr_itag),
+    .wa(ado),
+    .invalidate(inv_icache),
+    .rclk(~clk),
+    .rce(1'b1),
+    .pc(cspc),
+    .hit0(hit0),
+    .hit1(hit1)
 );
 
 // Registerable decodes
@@ -814,25 +855,28 @@ case(ir9)
 default:	takb <= 1'b0;
 endcase
 
+reg [31:0] seg;
 reg [31:0] ia;
-wire [31:0] mvnsrc_address	= m832 ? ds + x32 : {8'h00,ir[23:16],x32[15:0]};
-wire [31:0] mvndst_address	= m832 ? ds + y32 : {8'h00,ir[15: 8],y32[15:0]};
-wire [31:0] iapy8 			= ia + y32;		// Don't add in abs8, already included with ia
-wire [31:0] zp_address 		= {16'h00,ir[15:8]} + dpr;
-wire [31:0] zpx_address 	= {{16'h00,ir[15:8]} + x32} + dpr;
-wire [31:0] zpy_address	 	= {{16'h00,ir[15:8]} + y32} + dpr;
-wire [31:0] abs_address 	= m832 ? ds + ir[23:8] : {ds[23:16],ir[23:8]};
-wire [31:0] absx_address 	= m832 ? ds + ir[23:8] + x32 : {ds[23:16],ir[23:8]} + x32;	// simulates 64k bank wrap-around
-wire [31:0] absy_address 	= m832 ? ds + ir[23:8] + y32 : {ds[23:16],ir[23:8]} + y32;
-wire [31:0] al_address		= m832 ? ds + ir[31:8] : {8'h00,ir[31:8]};
-wire [31:0] alx_address		= m832 ? ds + ir[31:8] + x32 : {8'h00,ir[31:8]} + x32;
-wire [31:0] xal_address		= ds + ir[39:8];
-wire [31:0] xalx_address	= ds + ir[39:8] + x32;
-wire [31:0] xaly_address	= ds + ir[39:8] + y32;
+wire [31:0] mvnsrc_address	= m832 ? seg + x32 : seg + {8'h00,ir[23:16],x16};
+wire [31:0] mvndst_address	= m832 ? seg + y32 : seg + {8'h00,ir[15: 8],y16};
+wire [31:0] iapy8 			= seg + ia + y32;		// Don't add in abs8, already included with ia
+wire [31:0] zp_address 		= seg + {16'h00,ir[15:8]} + dpr;
+wire [31:0] zpx_address 	= seg + {{16'h00,ir[15:8]} + x32} + dpr;
+wire [31:0] zpy_address	 	= seg + {{16'h00,ir[15:8]} + y32} + dpr;
+wire [31:0] abs_address 	= seg + {8'h00,dbr,ir[23:8]};
+wire [31:0] absx_address 	= m832 ? seg + {8'h00,dbr,ir[23:8]} + x32 :
+                                     seg + {8'h00,dbr,ir[23:8] + x16} ;	// simulates 64k bank wrap-around
+wire [31:0] absy_address 	= m832 ? seg + {8'h00,dbr,ir[23:8]} + y32 :
+                                     seg + {8'h00,dbr,ir[23:8] + y16} ;
+wire [31:0] al_address		= seg + {8'h00,ir[31:8]};
+wire [31:0] alx_address		= seg + {8'h00,ir[31:8]} + x32;
+wire [31:0] xal_address		= seg + ir[39:8];
+wire [31:0] xalx_address	= seg + ir[39:8] + x32;
+wire [31:0] xaly_address	= seg + ir[39:8] + y32;
 
-wire [23:0] dsp_address = m832 ? ds + sp + ir[15:8] :
-                          m816 ? {16'h0000,sp16 + ir[15:8]} : {24'h000001,sp[7:0]+ir[15:8]};
-reg [23:0] vect;
+wire [31:0] dsp_address = m832 ? seg + sp + ir[15:8] :
+                          m816 ? seg + {16'h0000,sp16 + ir[15:8]} : seg + {24'h000001,sp[7:0]+ir[15:8]};
+reg [31:0] vect;
 
 assign rw = be ? rwo : 1'bz;
 assign ad = be ? ado : {32{1'bz}};
@@ -925,6 +969,7 @@ if (~rst) begin
 	abort_edge <= 1'b0;
 	abort1 <= 1'b0;
 	imcd <= 3'b111;
+	inv_icache <= TRUE;
 end
 else begin
 abort1 <= abort;
@@ -940,12 +985,14 @@ RESET1:
 		radr <= `BYTE_RST_VECT;
 		load_what <= `PC_70;
 		cs <= 32'd0;
+		ds <= 32'd0;
+		inv_icache <= FALSE;
 		state <= LOAD_MAC1;
 	end
 IFETCH0:
 	moveto_ifetch();
 IFETCH:
-	if (rdy) begin
+	if (hit0&hit1) begin
 		if (imcd != 3'b111)
 			imcd <= {imcd[1:0],1'b0};
 		if (imcd == 3'b000) begin
@@ -964,6 +1011,7 @@ IFETCH:
 		s8 <= FALSE;
 		s16 <= FALSE;
 		s32 <= FALSE;
+		seg <= ds;
 		store_what <= (m32 | m16) ? `STW_DEF70 : `STW_DEF;
 		ir <= insn;
 		opc <= pc;
@@ -1315,6 +1363,11 @@ IFETCH:
 		endcase
 		end	// abort_edge
 	end
+	else begin
+	    prc_hit0 <= FALSE;
+	    prc_hit1 <= FALSE;
+	    next_state(ICACHE1);
+	end
 
 // Decode
 DECODE:
@@ -1325,6 +1378,28 @@ DECODE:
 		`PG2: begin
 		      pg2 <= TRUE;
 		      ir <= {8'h00,ir[127:8]};
+		      next_state(DECODE);
+		      end
+		`CS:  begin
+		      seg <= cs;
+		      ir <= {8'h00,ir[127:8]};
+		      next_state(DECODE);
+		      end
+		`IOS: begin
+		      seg <= IO_SEGMENT;
+		      ir <= {8'h00,ir[127:8]};
+              next_state(DECODE);
+		      end
+		`SEG0:
+		        begin
+                seg <= 32'd0;
+                ir <= {8'h00,ir[127:8]};
+                next_state(DECODE);
+                end
+         `SEG: begin
+              pc <= pc + 32'd5;
+		      seg <= ir[39:8];
+		      ir <= {40'h00,ir[127:40]};
 		      next_state(DECODE);
 		      end
 		`SEP:	;	// see byte_ifetch
@@ -1359,7 +1434,6 @@ DECODE:
 		`SEC:	begin cf <= 1'b1; end
 		`CMC:   cf <= ~cf;
 		`CLV:	begin vf <= 1'b0; end
-		`SEV:   vf <= 1'b1;
 		`CLI:	begin imcd <= 3'b110; end
 		`SEI:	begin im <= 1'b1; end
 		`CLD:	begin df <= 1'b0; end
@@ -1592,7 +1666,7 @@ DECODE:
 			begin
                 begin
                     if (m832) begin
-                        store_what <= `STW_CS3124;
+                        store_what <= `STW_PC2316;
                         radr <= sp;
                         wadr <= sp;
                         sp <= sp_dec;
@@ -2590,17 +2664,23 @@ DECODE:
                     m832 <= `FALSE;
                     m816 <= `FALSE;
                     cs <= 32'd0;
+                    ds <= 32'd0;
                     x[31:8] <= 24'd0;
                     y[31:8] <= 24'd0;
                     sp[31:8] <= 24'd1;
+					m_bit <= 1'b1;
+                    x_bit <= 1'b1;
                 end
                 else if (ir[63:32]==32'hFFFFFFFE) begin
                     m832 <= `FALSE;
                     m816 <= `TRUE;
                     cs <= 32'd0;
+                    ds <= 32'd0;
                     x[31:8] <= 24'd0;
                     y[31:8] <= 24'd0;
                     sp[31:16] <= 16'd0;
+					m_bit <= 1'b1;
+                    x_bit <= 1'b1;
                 end
                 else
                     cs <= ir[63:32];
@@ -2852,6 +2932,32 @@ LOAD_MAC2:
                             b32[31:24] <= db;
                             moveto_ifetch();
                         end
+            `WORD_71S:
+                        begin
+                            res32[7:0] <= db;
+                            load_what <= `WORD_159S;
+                            inc_sp();
+                            next_state(LOAD_MAC1);
+                        end
+            `WORD_159S:
+                        begin
+                            res32[15:8] <= db;
+                            load_what <= `WORD_2317S;
+                            inc_sp();
+                            next_state(LOAD_MAC1);
+                        end
+            `WORD_2317S:
+                        begin
+                            res32[23:16] <= db;
+                            load_what <= `WORD_3125S;
+                            inc_sp();
+                            next_state(LOAD_MAC1);
+                        end
+            `WORD_3125S:
+                        begin
+                            res32[31:24] <= db;
+                            moveto_ifetch();
+                        end
             `SR_70:        begin
                             cf <= db[0];
                             zf <= db[1];
@@ -2866,6 +2972,7 @@ LOAD_MAC2:
                                 if (db[4]) begin
                                     x[31:8] <= 24'd0;
                                     y[31:8] <= 24'd0;
+                                    sp[31:8] <= 24'd1;
                                 end
                                 //if (db[5]) acc[31:8] <= 24'd0;
                             end
@@ -2875,12 +2982,7 @@ LOAD_MAC2:
                                 bf <= db[4];
                             vf <= db[6];
                             nf <= db[7];
-                            if (m832) begin
-                                load_what <= `SR158;
-                                inc_sp();
-                                state <= LOAD_MAC1;
-                            end
-                            else if (isRTI) begin
+                            if (isRTI) begin
                                 load_what <= `PC_70;
                                 inc_sp();
                                 state <= LOAD_MAC1;
@@ -2889,32 +2991,10 @@ LOAD_MAC2:
                                 moveto_ifetch();
                             end
                         end
-            `SR_158:
-                        begin
-                            load_what <= `SR2316;
-                            inc_sp();
-                            state <= LOAD_MAC1;
-                        end
-            `SR_2316:
-                        begin
-                            load_what <= `SR3124;
-                            inc_sp();
-                            state <= LOAD_MAC1;
-                        end
-            `SR_3124:
-                        begin
-                            if (isRTI) begin
-                                load_what <= `PC_70;
-                                inc_sp();
-                                state <= LOAD_MAC1;
-                            end
-                            else
-                                moveto_ifetch();
-                        end
              `PC_70:        begin
                             pc[7:0] <= db;
                             load_what <= `PC_158;
-                            if (isRTI|isRTS|isRTL) begin
+                            if (isRTI|isRTS|isRTL|isRTF) begin
                                 inc_sp();
                             end
                             else begin    // JMP (abs)
@@ -2924,7 +3004,7 @@ LOAD_MAC2:
                         end
             `PC_158:    begin
                             pc[15:8] <= db;
-                            if ((isRTI&m816)|isRTL|m832) begin
+                            if ((isRTI&(m816|m832))|isRTL|isRTF) begin
                                 load_what <= `PC_2316;
                                 inc_sp();
                                 state <= LOAD_MAC1;
@@ -2939,8 +3019,8 @@ LOAD_MAC2:
                         end
             `PC_2316:    begin
                             pc[23:16] <= db;
-                            if (m832) begin
-                                load_what <= `PC_3124;
+                            if (isRTF|(isRTI&m832)) begin
+                                load_what <= `CS_70;
                                 inc_sp();
                                 next_state(LOAD_MAC1);
                             end
@@ -2956,17 +3036,6 @@ LOAD_MAC2:
         //                            inc_sp();
         //                        end
         //                        state <= LOAD_MAC1;    
-                            end
-                        end
-              `PC_3124: begin
-                            if (isRTS) begin
-                                load_what <= `NOTHING;
-                                next_state(RTS1);
-                            end
-                            else begin
-                                inc_sp();
-                                load_what <= `CS_70;
-                                next_state(LOAD_MAC1);
                             end
                         end
               `CS_70:   begin
@@ -2990,7 +3059,11 @@ LOAD_MAC2:
               `CS_3124:   begin
                               cs[31:24] <= db;
                               vpb <= `FALSE;
-                              next_state(IFETCH0);
+                              load_what <= `NOTHING;
+                              if (isRTF)
+                                  next_state(RTS1);
+                              else
+                                  next_state(IFETCH0);
                           end
         //    `PC_3124:    begin
         //                    pc[31:24] <= db;
@@ -3008,7 +3081,8 @@ LOAD_MAC2:
                     begin
                         ia[15:8] <= db;
                         ia[23:16] <= dbr;
-                        if (isIY24|isI24) begin
+                        ir[31:24] <= 8'h00;
+                        if (isIY24|isI24|isIY32|isI32) begin
                             radr <= radr + 24'd1;
                             load_what <= `IA_2316;
                             state <= LOAD_MAC1;
@@ -3019,9 +3093,10 @@ LOAD_MAC2:
             `IA_2316:
                     begin
                         ia[23:16] <= db;
-                        if (m832) begin
+                        ia[31:24] <= 8'h00;
+                        if (isI32|isIY32) begin
                             load_what <= `IA_3124;
-                            next_atate(LOAD_MAC1);
+                            next_state(LOAD_MAC1);
                         end
                         else
                             state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
@@ -3029,7 +3104,7 @@ LOAD_MAC2:
             `IA_3124:
                     begin
                         ia[31:24] <= db;
-                        state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
+                        state <= isIY32 ? BYTE_IY5 : BYTE_IX5;
                     end
             endcase
         end
@@ -3050,12 +3125,12 @@ RTS1:
         vpa <= `TRUE;
         vda <= `TRUE;
         pc <= pc + 24'd1;
-        ado <= cs + pc + 24'd1;
         next_state(IFETCH1);
     end
 BYTE_IX5:
     begin
         isI24 <= `FALSE;
+        isI32 <= `FALSE;
         radr <= ia;
         load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
         state <= LOAD_MAC1;
@@ -3068,7 +3143,7 @@ BYTE_IX5:
         end
         else if (ir[7:0]==`PEI) begin
             set_sp();
-            store_what <= m832 ? `STW_IA3124 : `STW_IA158;
+            store_what <= isI32 ? `STW_IA3124 : `STW_IA158;
             state <= STORE1;
         end
     end
@@ -3076,6 +3151,7 @@ BYTE_IY5:
     begin
         isIY <= `FALSE;
         isIY24 <= `FALSE;
+        isIY32 <= `FALSE;
         radr <= iapy8;
         wadr <= iapy8;
         if (m32) s32 <= TRUE;
@@ -3096,13 +3172,9 @@ STORE1:
 		`STW_CS2316:    data_write(cs[23:16]);
 		`STW_CS158:     data_write(cs[15:8]);
 		`STW_CS70:      data_write(cs[7:0]);
-		`STW_PC3124:    data_write(8'h00);
 		`STW_PC2316:	data_write(pc[23:16]);
 		`STW_PC158:		data_write(pc[15:8]);
 		`STW_PC70:		data_write(pc[7:0]);
-		`STW_SR3124:    data_write(8'h00);
-		`STW_SR2316:    data_write(8'h00);
-		`STW_SR158:     data_write(8'h00);
 		`STW_SR70:		data_write(sr8);
 		`STW_DEF8:		data_write(wdat);
 		`STW_DEF70:		begin data_write(wdat); mlb <= 1'b1; end
@@ -3129,6 +3201,7 @@ STORE1:
 		`STW_DS2316:    data_write(ds[23:16]);
 		`STW_DS158:     data_write(ds[15:8]);
 		`STW_DS70:      data_write(ds[7:0]);
+		`STW_DBR:       data_write(dbr);
 		`STW_DPR158:	begin data_write(dpr[15:8]); mlb<= 1'b1; end
 		`STW_DPR70:		data_write(dpr);
 		`STW_TMP158:	begin data_write(tmp16[15:8]); mlb <= 1'b1; end
@@ -3286,17 +3359,9 @@ STORE2:
             begin
                 if (ir9 != `PHK) begin
                     set_sp();
-                    store_what <= `STW_PC3124;
+                    store_what <= `STW_PC2316;
                     state <= STORE1;
                 end
-            end
-        `STW_PC3124:
-			begin
-                set_sp();
-                vpa <= `FALSE;
-                vda <= `TRUE;
-                store_what <= `STW_PC2316;
-                state <= STORE1;
             end
         `STW_PC2316:
 			begin
@@ -3318,39 +3383,28 @@ STORE2:
 			end
 		`STW_PC70:
 			begin
-				case({1'b0,ir[7:0]})
-				`BRK,`COP:
+				case(ir9)
+				`BRK,`BRK2,`COP:
 						begin
 						set_sp();
 						vpa <= `FALSE;
 						vda <= `TRUE;
-						if (m832)
-						    store_what <= `STW_SR3124;
-						else
-						    store_what <= `STW_SR70;
+					    store_what <= `STW_SR70;
 						state <= STORE1;
 						end
 				`JSR: 	begin
-				        if (m832) begin
-				            pc <= ir[31:8];
-				            ado <= cs + ir[31:8];
-				        end
-				        else begin
-						    pc[15:0] <= ir[23:8];
-						    ado <= cs + {pc[23:16],ir[23:8]};
-						end
+					    pc[15:0] <= ir[23:8];
+					    ado <= cs + {pc[23:16],ir[23:8]};
 						end
 				`JSL: 	begin
-				        if (m832) begin
-				            pc <= ir[31:8];
-				            cs <= ir[63:32];
-                            ado <= ir[63:32] + ir[31:8];
-				        end
-				        else begin
-                            pc[23:0] <= ir[31:8];
-                            ado <= cs + ir[31:8];
+                        pc[23:0] <= ir[31:8];
+                        ado <= cs + ir[31:8];
 						end
-						end
+			    `JSF:   begin
+    		            pc <= ir[31:8];
+                        cs <= ir[63:32];
+                        ado <= ir[63:32] + ir[31:8];
+		                end
 				`JSR_INDX:
 						begin
 						vpa <= `FALSE;
@@ -3361,24 +3415,6 @@ STORE2:
 						end
 				endcase
 			end
-		`STW_SR3124:
-		    begin
-				set_sp();
-		        store_what <= `STW_SR2316;
-		        state <= STORE1;
-		    end
-		`STW_SR2316:
-            begin
-				set_sp();
-                store_what <= `STW_SR158;
-                state <= STORE1;
-            end
-        `STW_SR158:
-            begin
-				set_sp();
-                store_what <= `STW_SR70;
-                state <= STORE1;
-            end
         `STW_SR70:
 			begin
 				if (ir[7:0]==`BRK) begin
@@ -3577,6 +3613,44 @@ MVN816:
             end
 		end
 	end
+
+ICACHE1:
+    begin
+        rwo <= TRUE;
+        if (!hit0) begin
+            prc_hit0 <= TRUE;
+            vpa <= TRUE;
+            vda <= TRUE;
+            ado <= {cspc[31:4],4'h0};
+            wr_icache <= TRUE; 
+            cnt <= 4'h1;
+            next_state(ICACHE2);
+        end
+        else if (!hit1) begin
+            prc_hit1 <= TRUE;
+            vpa <= TRUE;
+            vda <= TRUE;
+            ado <= {cspc[31:4]+28'd1,4'h0};
+            wr_icache <= TRUE; 
+            cnt <= 4'h1;
+            next_state(ICACHE2);
+        end
+    end
+ICACHE2:
+    if (rdy) begin
+        vda <= FALSE;
+        ado <= ado + 32'd1;
+        if (cnt == 4'hE)
+            wr_itag <= TRUE;
+        if (cnt == 4'hF) begin
+            vpa <= FALSE;
+            (hit1|prc_hit1) ? next_state(IFETCH) : next_state(ICACHE1);
+            wr_itag <= FALSE;
+            wr_icache <= FALSE;
+        end
+        cnt <= cnt + 4'd1;
+    end
+ 
 endcase
 end
 
@@ -3626,6 +3700,7 @@ LOAD_IBUF1:		fnStateName = "LOAD_IBUF1 ";
 LOAD_IBUF2:		fnStateName = "LOAD_IBUF2 ";
 LOAD_IBUF3:		fnStateName = "LOAD_IBUF3 ";
 ICACHE1:		fnStateName = "ICACHE1    ";
+ICACHE2:		fnStateName = "ICACHE2    ";
 IBUF1:			fnStateName = "IBUF1      ";
 DCACHE1:		fnStateName = "DCACHE1    ";
 HALF_CALC:		fnStateName = "HALF_CALC  ";
