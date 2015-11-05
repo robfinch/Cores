@@ -610,7 +610,6 @@ parameter BUS_ERROR = 6'd19;
 parameter LOAD_MAC1 = 6'd20;
 parameter LOAD_MAC2 = 6'd21;
 parameter LOAD_MAC3 = 6'd22;
-parameter MVN3 = 6'd23;
 parameter IFETCH0 = 6'd24;
 parameter LOAD_DCACHE = 6'd26;
 parameter LOAD_ICACHE = 6'd27;
@@ -689,6 +688,7 @@ wire [31:0] y_inc = y + 32'd1;
 wire [31:0] sp_dec = sp - 32'd1;
 wire [31:0] sp_inc = sp + 32'd1;
 wire [31:0] sp_dec2 = sp - 32'd2;
+wire [31:0] sp_dec3 = sp - 32'd3;
 wire [31:0] sp_dec4 = sp - 32'd4;
 reg gie;	// global interrupt enable (set when sp is loaded)
 reg hwi;	// hardware interrupt indicator
@@ -700,9 +700,9 @@ reg m16,m32;
 reg xb16,xb32;
 //wire m16 = m816 & ~m_bit;
 //wire xb16 = m816 & ~x_bit;
-always @(m816,m832,x_bit,m_bit)
+always @(m816,m832,m_bit,x_bit)
 begin
-    case ({~m832,~m816,x_bit,m_bit})
+    case ({~m832,~m816,m_bit,x_bit})
     4'b0000:    begin m32 = `FALSE; m16 = `TRUE; xb32 = `TRUE; xb16 = `FALSE; end
     4'b0001:    begin m32 = `FALSE; m16 = `TRUE; xb32 = `FALSE; xb16 = `FALSE; end
     4'b0010:    begin m32 = `FALSE; m16 = `FALSE; xb32 = `TRUE; xb16 = `FALSE; end
@@ -973,6 +973,10 @@ if (~rst) begin
 	ds <= 32'd0;
 	dpr <= 16'h0000;
 	dbr <= 8'h00;
+	acc <= 32'h0;
+	x <= 32'h0;
+	y <= 32'h0;
+	sp <= 32'h1FF;
 	clk_en <= 1'b1;
 	im <= `TRUE;
 	gie <= 1'b0;
@@ -1325,12 +1329,12 @@ IFETCH:
 		      else begin acc[7:0] <= res32[7:0]; cf <= resc32; nf <= resn8; zf <= resz8; end
 		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
-		      else if (m16) begin cf <= resc16; nf <= resn16; zf <= resz16; end
-		      else begin cf <= resc8; nf <= resn8; zf <= resz8; end
+		      else if (m16) begin cf <= resc32; nf <= resn16; zf <= resz16; end
+		      else begin cf <= resc32; nf <= resn8; zf <= resz8; end
 		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX,`ROL_XABS,`ROL_XABSX:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
-		      else if (m16) begin cf <= resc16; nf <= resn16; zf <= resz16; end
-		      else begin cf <= resc8; nf <= resn8; zf <= resz8; end
+		      else if (m16) begin cf <= resc32; nf <= resn16; zf <= resz16; end
+		      else begin cf <= resc32; nf <= resn8; zf <= resz8; end
 		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX,`LSR_XABS,`LSR_XABSX:
 		      if (m32) begin cf <= resc32; nf <= resn32; zf <= resz32; end 
 		      else if (m16) begin cf <= resc32; nf <= resn16; zf <= resz16; end
@@ -1486,12 +1490,13 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {16'h00,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= 16'h000;
                     end
                     else begin
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {24'h0001,sp_inc[7:0]};
+                        sp <= {24'h1,sp_inc[7:0]};
                     end
                 end
 				data_nack();
@@ -1517,35 +1522,15 @@ DECODE:
 				load_what <= `SR_70;
 				state <= LOAD_MAC1;
 				end
-		`PHP:
-    		begin
-                begin
-                    if (m832) begin
-                        radr <= sp;
-                        wadr <= sp;
-                        sp <= sp_dec;
-                        store_what <= `STW_SR70;
-                    end
-                    else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
-                        sp <= sp_dec;
-        				store_what <= `STW_SR70;
-                    end
-                    else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
-                        sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
-        				store_what <= `STW_SR70;
-                    end
-               end	
-         		data_nack();
-				state <= STORE1;
-			end
+		`PHP:   tsk_push(`STW_SR70,0,0);
         `PHA:   tsk_push(`STW_ACC70,m16,m32);
 		`PHX:	tsk_push(`STW_X70,xb16,xb32);
 		`PHY:	tsk_push(`STW_Y70,xb16,xb32);
+//		`PHCS:  tsk_push(`STW_CS0,0,1);
+        `PHK:   tsk_push(`STW_PC2316,0,0);
+		`PHDS:  tsk_push(`STW_DS70,0,1);
+		`PHB:   tsk_push(`STW_DBR,0,0);
+		`PHD:   tsk_push(`STW_DPR70,1,0);
 		`PLP:
 			begin
                 begin
@@ -1556,6 +1541,7 @@ DECODE:
                     else if (m816) begin
                         radr <= {8'h00,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= 16'h0000;
                     end
                     else begin
                         radr <= {16'h0001,sp_inc[7:0]};
@@ -1574,15 +1560,16 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {16'h0000,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= 16'h0000;
                     end
                     else begin
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {24'h000001,sp_inc[7:0]};
+                        sp <= {24'h1,sp_inc[7:0]};
                     end
                 end
-                load_what <= m832 ? `WORD_71S : m16 ? `HALF_71S : `BYTE_71;
+                load_what <= m32 ? `WORD_71S : m16 ? `HALF_71S : `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
 			end
@@ -1594,78 +1581,18 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {16'h00,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= 16'h0000;
                     end
                     else begin
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {24'h0001,sp_inc[7:0]};
+                        sp <= {24'h1,sp_inc[7:0]};
                     end
                 end
-				load_what <= m832 ? `WORD_71S : xb16 ? `HALF_71S : `BYTE_71;
+				load_what <= xb32 ? `WORD_71S : xb16 ? `HALF_71S : `BYTE_71;
 				data_nack();
 				state <= LOAD_MAC1;
-			end
-		`PHDS:
-		      begin
-                  radr <= sp;
-                  wadr <= sp;
-                  sp <= sp_dec;
-                  store_what <= `STW_DS3124;
-                  data_nack();
-                  state <= STORE1;
-		      end
-		`PHB:
-			begin
-                begin
-                    if (m832) begin
-                        radr <= sp;
-                        wadr <= sp;
-                        sp <= sp_dec;
-        				store_what <= `STW_DS3124;
-                    end
-                    else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
-                        sp <= sp_dec;
-        				store_what <= `STW_DS2316;
-                    end
-                    else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
-                        sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
-        				store_what <= `STW_DS2316;
-                    end
-                end
-				data_nack();
-				state <= STORE1;
-			end
-		`PHD:
-			begin
-                begin
-                    if (m832) begin
-                        radr <= sp;
-                        wadr <= sp;
-                        sp <= sp_dec;
-        				store_what <= `STW_DPR158;
-                    end
-                    else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
-                        sp <= sp_dec;
-        				store_what <= `STW_DPR158;
-                    end
-                    else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
-                        sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
-        				store_what <= `STW_DPR158;
-                    end
-                end
-				data_nack();
-				state <= STORE1;
 			end
 		`PHCS:
             begin
@@ -1676,37 +1603,11 @@ DECODE:
 				data_nack();
                 state <= STORE1;
             end
-		`PHK:
-			begin
-                begin
-                    if (m832) begin
-                        store_what <= `STW_PC2316;
-                        radr <= sp;
-                        wadr <= sp;
-                        sp <= sp_dec;
-                    end
-                    else if (m816) begin
-                        store_what <= `STW_PC2316;
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
-                        sp <= sp_dec;
-                    end
-                    else begin
-                        store_what <= `STW_PC2316;
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
-                        sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
-                    end
-                end
-				data_nack();
-				state <= STORE1;
-			end
 		`PLDS:
             begin
                 radr <= sp_inc;
                 sp <= sp_inc;
-                load_what <= `WORD_71;
+                load_what <= `WORD_71S;
 				data_nack();
                 state <= LOAD_MAC1;
             end
@@ -1716,11 +1617,12 @@ DECODE:
                     if (m832) begin
                         radr <= sp_inc;
                         sp <= sp_inc;
-        				load_what <= `WORD_71;
+        				load_what <= `BYTE_71;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {16'h00,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= 16'h00;
         				load_what <= `BYTE_71;
                     end
                     else begin
@@ -1744,6 +1646,7 @@ DECODE:
         				load_what <= `HALF_71S;
                         radr <= {8'h00,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= 16'h00;
                     end
                     else begin
         				load_what <= `HALF_71S;
@@ -1800,7 +1703,7 @@ DECODE:
                 else if (m16) begin
                      pc <= pc + 24'd3;
                      res32 <= acc16 - ir[23:8] - {15'b0,~cf};
-                     b32 <= ir[15:8];        // for overflow calc
+                     b32 <= ir[23:8];        // for overflow calc
                 end
                 else begin
                     pc <= pc + 24'd2;
@@ -1839,55 +1742,46 @@ DECODE:
                 if (m32) begin
                     pc <= pc + 24'd5;
                     res32 <= acc - ir[39:8];
-                    b32 <= ir[39:8];        // for overflow calc
                 end
                 else if (m16) begin
                      pc <= pc + 24'd3;
                      res32 <= acc16 - ir[23:8];
-                     b32 <= ir[15:8];        // for overflow calc
                 end
                 else begin
                     pc <= pc + 24'd2;
                     res32 <= acc8 - ir[15:8];
-                    b32 <= ir[15:8];        // for overflow calc
                 end
                 next_state(IFETCH);
             end
         `CPX_IMM:
             begin
-                if (m32) begin
+                if (xb32) begin
                     pc <= pc + 24'd5;
                     res32 <= x32 - ir[39:8];
-                    b32 <= ir[39:8];        // for overflow calc
                 end
-                else if (m16) begin
+                else if (xb16) begin
                      pc <= pc + 24'd3;
                      res32 <= x16 - ir[23:8];
-                     b32 <= ir[15:8];        // for overflow calc
                 end
                 else begin
                     pc <= pc + 24'd2;
                     res32 <= x8 - ir[15:8];
-                    b32 <= ir[15:8];        // for overflow calc
                 end
                 next_state(IFETCH);
             end
         `CPY_IMM:
             begin
-                if (m32) begin
+                if (xb32) begin
                     pc <= pc + 24'd5;
                     res32 <= y32 - ir[39:8];
-                    b32 <= ir[39:8];        // for overflow calc
                 end
-                else if (m16) begin
+                else if (xb16) begin
                      pc <= pc + 24'd3;
                      res32 <= y16 - ir[23:8];
-                     b32 <= ir[15:8];        // for overflow calc
                 end
                 else begin
                     pc <= pc + 24'd2;
                     res32 <= y8 - ir[15:8];
-                    b32 <= ir[15:8];        // for overflow calc
                 end
                 next_state(IFETCH);
             end
@@ -2551,12 +2445,13 @@ DECODE:
                         radr <= {8'h00,sp[15:0]};
                         wadr <= {8'h00,sp[15:0]};
                         sp <= sp_dec;
+                        sp[31:16] <= 16'h0000;
                     end
                     else begin
                         radr <= {16'h0001,sp[7:0]};
                         wadr <= {16'h0001,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
+                        sp[31:8] <= 24'h1;
                     end
                 end
                 store_what <= m832 ? `STW_CS3124 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
@@ -2656,22 +2551,16 @@ DECODE:
             end
         `BRL:
             begin
-                vpa <= `TRUE;
-                vda <= `TRUE;
-                pc <= pc + {{8{ir[23]}},ir[23:8]};
+                pc <= pc + {{8{ir[23]}},ir[23:8]} + 24'd3;
                 next_state(IFETCH);
             end
 		`JML:
             begin
-                vpa <= `TRUE;
-                vda <= `TRUE;
                 pc <= ir[31:8];
                 next_state(IFETCH);
             end
 		`JMF:
             begin
-                vpa <= `TRUE;
-                vda <= `TRUE;
                 pc <= ir[31:8];
                 // Switch modes ?
                 if (ir[63:32]==32'hFFFFFFFF) begin
@@ -2756,7 +2645,7 @@ DECODE:
                         radr <= {16'h0001,sp[7:0]};
                         wadr <= {16'h0001,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
+                        sp[31:8] <= 24'h1;
                     end
                 end
                 store_what <= `STW_TMP158;
@@ -3086,7 +2975,7 @@ LOAD_MAC2:
         //                end
             `IA_70:
                     begin
-                        radr <= radr + 24'd1;
+                        radr <= radr + 32'd1;
                         ia[7:0] <= db;
                         load_what <= `IA_158;
                         state <= LOAD_MAC1;
@@ -3095,9 +2984,9 @@ LOAD_MAC2:
                     begin
                         ia[15:8] <= db;
                         ia[23:16] <= dbr;
-                        ir[31:24] <= 8'h00;
+                        ia[31:24] <= 8'h00;
                         if (isIY24|isI24|isIY32|isI32) begin
-                            radr <= radr + 24'd1;
+                            radr <= radr + 32'd1;
                             load_what <= `IA_2316;
                             state <= LOAD_MAC1;
                         end
@@ -3214,10 +3103,10 @@ STORE1:
 		`STW_DS3124:    data_write(ds[31:24]);
 		`STW_DS2316:    data_write(ds[23:16]);
 		`STW_DS158:     data_write(ds[15:8]);
-		`STW_DS70:      data_write(ds[7:0]);
+		`STW_DS70:      begin data_write(ds[7:0]); mlb <= 1'b1; end
 		`STW_DBR:       data_write(dbr);
 		`STW_DPR158:	begin data_write(dpr[15:8]); mlb<= 1'b1; end
-		`STW_DPR70:		data_write(dpr);
+		`STW_DPR70:		begin data_write(dpr[7:0]); mlb <= 1'b1; end
 		`STW_TMP3124:	begin data_write(tmp32[31:24]); mlb <= 1'b1; end
 		`STW_TMP2316:	begin data_write(tmp32[23:16]); mlb <= 1'b1; end
 		`STW_TMP158:	begin data_write(tmp32[15:8]); mlb <= 1'b1; end
@@ -3242,8 +3131,8 @@ STORE2:
 		mlb <= 1'b0;
 		data_nack();
 		if (!em && (isMove|isSts)) begin
-			state <= MVN3;
-			retstate <= MVN3;
+			state <= MVN816;
+			retstate <= MVN816;
 		end
 		else begin
 			if (em) begin
@@ -3326,14 +3215,36 @@ STORE2:
 				store_what <= `STW_Z158;
 				state <= STORE1;
 			end
-		`STW_DPR158:
+		`STW_DPR70:
 			begin
-				set_sp();
+				mlb <= 1'b1;
 				vpa <= `FALSE;
 				vda <= `TRUE;
-				store_what <= `STW_DPR70;
+				wadr <= wadr + 32'd1;
+				store_what <= `STW_DPR158;
 				state <= STORE1;
 			end
+		`STW_DS70:
+		    begin
+				mlb <= 1'b1;
+                vpa <= `FALSE;
+                vda <= `TRUE;
+                wadr <= wadr + 32'd1;
+                store_what <= `STW_DS158;
+                state <= STORE1;
+		    end
+		`STW_DS158:
+            begin
+                wadr <= wadr + 32'd1;
+                store_what <= `STW_DS2316;
+                state <= STORE1;
+            end
+		`STW_DS2316:
+            begin
+                wadr <= wadr + 32'd1;
+                store_what <= `STW_DS3124;
+                state <= STORE1;
+            end
 		`STW_TMP158:
 			begin
 				set_sp();
@@ -3372,12 +3283,10 @@ STORE2:
                 state <= STORE1;
             end
 		`STW_CS70:
-            begin
-                if (ir9 != `PHK) begin
-                    set_sp();
-                    store_what <= `STW_PC2316;
-                    state <= STORE1;
-                end
+            if (ir9 != `PHCS) begin
+                set_sp();
+                store_what <= `STW_PC2316;
+                state <= STORE1;
             end
         `STW_PC2316:
 			begin
@@ -3746,7 +3655,6 @@ BUS_ERROR:	fnStateName = "BUS_ERROR  ";
 LOAD_MAC1:	fnStateName = "LOAD_MAC1  ";
 LOAD_MAC2:	fnStateName = "LOAD_MAC2  ";
 LOAD_MAC3:	fnStateName = "LOAD_MAC3  ";
-MVN3:		fnStateName = "MVN3       ";
 LOAD_DCACHE:	fnStateName = "LOAD_DCACHE";
 LOAD_ICACHE:	fnStateName = "LOAD_ICACHE";
 LOAD_IBUF1:		fnStateName = "LOAD_IBUF1 ";
