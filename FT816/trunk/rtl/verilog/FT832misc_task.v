@@ -61,13 +61,29 @@ endtask
 task tsk_push;
 input [5:0] SW8;
 input szFlg;
+input szFlg2;
 begin
     if (m832) begin
-        radr <= sp_dec4;
-        wadr <= sp_dec4;
-        s32 <= TRUE;
-        store_what <= SW8;
-        sp <= sp_dec4;
+		if (szFlg2) begin
+			radr <= sp_dec4;
+			wadr <= sp_dec4;
+			store_what <= SW8;
+			sp <= sp_dec4;
+			s32 <= TRUE;
+		end
+		else if (szFlg) begin
+			radr <= {8'h00,sp_dec2[15:0]};
+			wadr <= {8'h00,sp_dec2[15:0]};
+			s16 <= TRUE;
+			store_what <= SW8;
+			sp <= sp_dec2;
+		end
+		else begin
+			radr <= {8'h00,sp[15:0]};
+			wadr <= {8'h00,sp[15:0]};
+			store_what <= SW8;
+			sp <= sp_dec;
+		end
     end
 	else if (m816) begin
 		if (szFlg) begin
@@ -97,10 +113,7 @@ endtask
 
 task moveto_ifetch;
 begin
-	vpa <= `TRUE;
-	vda <= `TRUE;
-	ado <= cs + pc;
-	next_state(IFETCH1);
+	next_state(IFETCH);
 end
 endtask
 
