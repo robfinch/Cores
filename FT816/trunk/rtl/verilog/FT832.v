@@ -2667,13 +2667,14 @@ DECODE:
                         radr <= {8'h00,sp[15:0]};
                         wadr <= {8'h00,sp[15:0]};
                         sp <= sp_dec;
+                        sp[31:16] <= 16'h0000;
                         store_what <= `STW_TMP158;
                     end
                     else begin
                         radr <= {16'h0001,sp[7:0]};
                         wadr <= {16'h0001,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
+                        sp[31:8] <= 24'h1;
                         store_what <= `STW_TMP158;
                     end
                 end
@@ -3319,16 +3320,13 @@ STORE2:
 						end
 				`JSR: 	begin
 					    pc[15:0] <= ir[23:8];
-					    ado <= cs + {pc[23:16],ir[23:8]};
 						end
 				`JSL: 	begin
                         pc[23:0] <= ir[31:8];
-                        ado <= cs + ir[31:8];
 						end
 			    `JSF:   begin
     		            pc <= ir[31:8];
                         cs <= ir[63:32];
-                        ado <= ir[63:32] + ir[31:8];
 		                end
 				`JSR_INDX:
 						begin
@@ -3426,8 +3424,8 @@ BYTE_CALC:
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:	begin res32 <= b32; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS:	begin res32 <= x8 - b8; end
 		`CPY_IMM,`CPY_ZP,`CPY_ABS,`CPY_XABS:	begin res32 <= y8 - b8; end
-		`TRB_ZP,`TRB_ABS,`TRB_XABS:	begin res32 <= ~acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
-		`TSB_ZP,`TSB_ABS,`TSB_XABS:	begin res32 <= acc | b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
+		`TRB_ZP,`TRB_ABS,`TRB_XABS:	begin res32 <= acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS,`TSB_XABS:	begin res32 <= acc & b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
 		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:	begin res32 <= {b8[7],23'b0,b8,1'b0}; wdat <= {b32[31:0],1'b0}; state <= STORE1; data_nack(); end
 		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX,`ROL_XABS,`ROL_XABSX:	begin res32 <= {b8[7],23'b0,b8,cf}; wdat <= {b32[31:0],cf}; state <= STORE1; data_nack(); end
 		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX,`LSR_XABS,`LSR_XABSX:	begin res32 <= {b8[0],b32[31:8],1'b0,b8[7:1]}; wdat <= {b32[31:8],1'b0,b8[7:1]}; state <= STORE1; data_nack(); end
@@ -3465,8 +3463,8 @@ HALF_CALC:
         `LDA_IYL,`LDA_XIYL,`LDA_I,`LDA_IL,`LDA_XIL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,`LDA_XDSPIY:
               begin res32 <= b32; end
 		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX,`BIT_XABS,`BIT_XABSX:	begin res32 <= acc & b32; end
-		`TRB_ZP,`TRB_ABS,`TRB_XABS:	begin res32 <= ~acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
-		`TSB_ZP,`TSB_ABS,`TSB_XABS:	begin res32 <= acc | b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
+		`TRB_ZP,`TRB_ABS,`TRB_XABS:	begin res32 <= acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS,`TSB_XABS:	begin res32 <= acc & b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
 		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`LDX_XABS,`LDX_XABSY:	begin res32 <= b32; end
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:	begin res32 <= b32; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS:	begin res32 <= x16 - b16; end
@@ -3508,8 +3506,8 @@ WORD_CALC:
         `LDA_IYL,`LDA_XIYL,`LDA_I,`LDA_IL,`LDA_XIL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,`LDA_XDSPIY:
               begin res32 <= b32; end
         `BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX,`BIT_XABS,`BIT_XABSX:    begin res32 <= acc & b32; end
-        `TRB_ZP,`TRB_ABS,`TRB_XABS:    begin res32 <= ~acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
-        `TSB_ZP,`TSB_ABS,`TSB_XABS:    begin res32 <= acc | b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
+        `TRB_ZP,`TRB_ABS,`TRB_XABS:    begin res32 <= acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
+        `TSB_ZP,`TSB_ABS,`TSB_XABS:    begin res32 <= acc & b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
         `LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY,`LDX_XABS,`LDX_XABSY:    begin res32 <= b32; end
         `LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:    begin res32 <= b32; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS,`CPX_XABS:	begin res32 <= x - b32; end
@@ -3534,7 +3532,7 @@ MVN816:
 		else begin
             if (&acc[15:0]) begin
                 pc <= pc + 24'd3;
-                ds[23:16] <= ir[15:8];
+                dbr <= ir[15:8];
             end
 		end
 	end
