@@ -35,7 +35,14 @@ enum {
 	AM_IMM8,
 	AM_IMM16,
 	AM_IMM32,
-	AM_SPR
+	AM_SPR,
+	AM_XAL,
+	AM_XAXL,
+	AM_XAYL,
+	AM_XIL,
+	AM_XIYL,
+	AM_XSRIY,
+	AM_SEG
 };
 
 /*

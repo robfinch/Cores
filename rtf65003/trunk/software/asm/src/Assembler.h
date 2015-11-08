@@ -1,6 +1,5 @@
 #pragma once
 
-#include "stdafx.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -80,6 +79,7 @@ namespace RTFClasses
 	extern Cpu optab6502;
 	extern Cpu optabW65C02;
 	extern Cpu optabW65C816S;
+	extern Cpu optabFT832;
 	extern Cpu optabRTF65002;
 	extern Debug debug;
 
@@ -88,12 +88,12 @@ namespace RTFClasses
 
 	class Assembler
 	{
-		static char *verstr;
-		static char *verstr2;
+		static const char *verstr;
+		static const char *verstr2;
 
 		int m_argc;
-		_TCHAR **m_argv;
-		_TCHAR **m_envp;
+		char **m_argv;
+		char **m_envp;
 
 		Cpu *cpu;
 
@@ -192,17 +192,19 @@ namespace RTFClasses
 		char fnameList[MAXLINE];
 		char fnameMem[MAXLINE];
 		char fnameVer[MAXLINE];
+		char fnameVerDP[MAXLINE];
 		char fnameSym[MAXLINE];
 		char fnameS[MAXLINE];
 		char fnameErr[MAXLINE];
 		bool bFirstObj;          // flag to indicate if any object code has been output yet
-		ObjFile ObjFile;       // Area to build object records
+		ObjFile ObjFilex;       // Area to build object records
 		FILE *ofp;              // binary output file
 		FILE *fpBin;
 		FILE *fpList;
 		FILE *fpMem;
 		FILE *fpSym;
 		FILE *fpVer;
+		FILE *fpVerDP;
 		fstreamS19 gSOut;			// S37 output generator
 		FILE *fpErr;
 
@@ -246,7 +248,7 @@ private:
 		void copyChToMacro(char ch);
 		void SearchAndSub();
 		int processLine();
-		void processFile(char *, String="*");
+		void processFile(char *, char *);
 		void processMneumonic(Mne *optr);
 		int run();
 
@@ -267,6 +269,7 @@ private:
 		void emit8Bin(unsigned int byte);
 		void emit8Mem(unsigned int byte);
 		void emit8Verilog(unsigned int byte);
+		void emit8VerilogDP(unsigned int byte);
 		void emit8DoingDc(unsigned int byte);
 		void emit8FirstListCol(unsigned int byte);
 		void emit8ListCol(unsigned int byte);
@@ -303,11 +306,14 @@ private:
 		bool errtype;            // global error flag
 
 	public:
-		int main(int argc, _TCHAR **argv, _TCHAR **envp);
+		int main(int argc, char **argv, char **envp);
 		int getArgc() { return m_argc; };
-		_TCHAR **getArgv() { return m_argv; };
-		_TCHAR **getEnvp() { return m_envp; };
-		String getExeName() { return String((char *)m_argv[0]); };
+		char **getArgv() { return m_argv; };
+		char **getEnvp() { return m_envp; };
+		String getExeName() { 
+               String aa;
+               aa = m_argv[0];
+               return aa; };
 
 		// pseudo-op processing
 		bool processPseudo(char *);

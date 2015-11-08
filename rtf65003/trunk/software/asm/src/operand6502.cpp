@@ -234,8 +234,9 @@ int Operand6502::parse(char *op)
 	char ch;
 	char ch1;
 	int reg;
-	AsmBuf eb(100);
+	AsmBuf eb(100),ec(100),ed(100);
 	AsmBuf ob(op+1,strlen(op+1)+1);
+	hasSegPrefix = 0;
 
 	theAssembler.errtype = true;
 
@@ -255,7 +256,7 @@ int Operand6502::parse(char *op)
 	}
 
 	// (d,s),y
-    if (strmat(op, " ( %s, %c ) , %c ", eb.buf(), &ch1, &ch))
+    if (strmat(op, " ( %s, %c ) , %c ", eb.buf(), (char *)&ch1, (char *)&ch))
     {
 		if (tolower(ch1) == 's') {
 			val = eb.expeval(NULL);
@@ -265,8 +266,19 @@ int Operand6502::parse(char *op)
 		}
     }
 
+	// {d,s},y
+    if (strmat(op, " { %s, %c } , %c ", eb.buf(), (char *)&ch1, (char *)&ch))
+    {
+		if (tolower(ch1) == 's') {
+			val = eb.expeval(NULL);
+			if (tolower(ch)!='y')
+				Err(E_INVOPERAND, op);
+			return type = AM_XSRIY;
+		}
+    }
+
 	// (zp),y
-    if (strmat(op, " ( %s) , %c ", eb.buf(), &ch))
+    if (strmat(op, " ( %s) , %c ", eb.buf(), (char *)&ch))
     {
 		val = eb.expeval(NULL);
 		if (tolower(ch)!='y')
@@ -276,7 +288,7 @@ int Operand6502::parse(char *op)
     }
 
 	// [zp],y
-    if (strmat(op, " [ %s] , %c ", eb.buf(), &ch))
+    if (strmat(op, " [ %s] , %c ", eb.buf(), (char *)&ch))
     {
 		val = eb.expeval(NULL);
 		if (tolower(ch)!='y')
@@ -284,8 +296,17 @@ int Operand6502::parse(char *op)
 		return type = AM_IYL;
     }
 
+	// {zp},y
+    if (strmat(op, " { %s} , %c ", eb.buf(), (char *)&ch))
+    {
+		val = eb.expeval(NULL);
+		if (tolower(ch)!='y')
+			Err(E_INVOPERAND, op);
+		return type = AM_XIYL;
+    }
+
 	// (zp,x)
-	if(strmat(op, " ( %s, %c) ", eb.buf(), &ch))
+	if(strmat(op, " ( %s, %c) ", eb.buf(), (char *)&ch))
 	{
 		val = eb.expeval(NULL);
 		r1 = 2;
@@ -312,6 +333,16 @@ int Operand6502::parse(char *op)
 		return type = AM_IL;
 	}
 
+	// {zp} 
+	if(strmat(op, " { %s} ", eb.buf()))
+	{
+		val = eb.expeval(NULL);
+        if (val.value < 256 && val.value >= 0)
+			return type = AM_XIL;
+		Err(E_INVOPERAND, op);
+		return type = AM_XIL;
+	}
+
 	// d,sp
     if (strmat(op, " %s, %c ", eb.buf(), &ch))
     {
@@ -335,17 +366,63 @@ int Operand6502::parse(char *op)
 				Err(E_INVOPERAND, op);
 			return AM_Z;
 		}
-        else {
+        else if (val.value < 65536 && val.value >= 0)
+		{
 			if (tolower(ch)=='x')
 				return type = AM_AX;
 			else if (tolower(ch)=='y')
 				return type = AM_AY;
 			else 
 				Err(E_INVOPERAND, op);
-			return AM_A;
+			return AM_Z;
+		}
+        else if (val.value < 16777216 && val.value >=0) {
+			if (tolower(ch)=='x')
+				return type = AM_AXL;
+			else if (tolower(ch)=='y')
+				return type = AM_XAYL;
+			else 
+				Err(E_INVOPERAND, op);
+			return AM_AL;
+		}
+        else {
+			if (tolower(ch)=='x')
+				return type = AM_XAXL;
+			else if (tolower(ch)=='y')
+				return type = AM_XAYL;
+			else 
+				Err(E_INVOPERAND, op);
+			return AM_XAL;
 		}
 	}
 
+    if (strmat(op, " %s:%s ", ec.buf(), eb.buf())) {
+        if (stricmp(ec.buf(), "CS")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 1;
+           return type;
+        }
+        else if (stricmp(ec.buf(), "SEG0")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 2;
+           return type;
+        }
+        else if (stricmp(ec.buf(), "IOS")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 3;
+           return type;
+        }
+        else if (strnicmp(ec.buf(), "SEG",3)==0) {
+           strmat(ec.buf(), " SEG %s ", ed.buf());
+           type = parse(eb.buf());
+           seg = ed.expeval(NULL);
+           hasSegPrefix = 4;
+           return type;
+        }
+        seg = ec.expeval(NULL);
+        offs = eb.expeval(NULL);
+        return type = AM_SEG;
+    }
 
 	// Assume
 	// Absolute / Zero page
@@ -357,7 +434,13 @@ int Operand6502::parse(char *op)
 		r2 = 0;
 		return type = AM_Z;
 	}
-	return type = AM_A;
+	if (val.value < 65536 && val.value >= 0) {
+    	return type = AM_A;
+    }
+	else if (val.value < 16777216 && val.value >= 0) {
+    	return type = AM_AL;
+    }
+    return type = AM_XAL;
 }
 
 

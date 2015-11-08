@@ -7,7 +7,6 @@
 // asm.cpp : Defines the entry point for the console application.
 //
 
-#include "stdafx.h"
 #include "asm.h"
 
 #include <stdio.h>
@@ -29,6 +28,7 @@
 #include "err.h"
 #include "macro.h"
 #include "Cpu.h"
+#include "MyString.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -39,15 +39,16 @@ static char THIS_FILE[] = __FILE__;
 /////////////////////////////////////////////////////////////////////////////
 // The one and only application object
 
-CWinApp theApp;
+//CWinApp theApp;
 
 namespace RTFClasses
 {
-	Debug debug(0,"");
+    String aa((char *)"");
+	Debug debug(0,aa);
 	Assembler theAssembler;
 
-	char *Assembler::verstr = "Finitron 65002 assembler   version 1.2   %.24s     Page %d\r\n";
-	char *Assembler::verstr2 = "asm V1.2  (c) 2013,2014 Finitron - 65002 cross assembler\r\n";
+	const char *Assembler::verstr = "Finitron FT832 assembler   version 1.4   %.24s     Page %d\r\n";
+	const char *Assembler::verstr2 = "asm V1.4  (c) 2013,2014,2015 Finitron - 65002 cross assembler\r\n";
 
 	Cpu *getCpu()
 	{
@@ -55,10 +56,10 @@ namespace RTFClasses
 	}
 }
 
-int _tmain(int argc, _TCHAR **argv, _TCHAR **envp)
+int main(int argc, char **argv, char **envp)
 {
 	int nRetCode = 0;
-
+/*
 	// initialize MFC and print and error on failure
 	if (!AfxWinInit(::GetModuleHandle(NULL), NULL, ::GetCommandLine(), 0))
 	{
@@ -67,6 +68,7 @@ int _tmain(int argc, _TCHAR **argv, _TCHAR **envp)
 		nRetCode = 1;
 	}
 	else
+*/
 		nRetCode = RTFClasses::theAssembler.main(argc, argv, envp);
 
 	return nRetCode;
@@ -93,6 +95,7 @@ namespace RTFClasses
 			"      6502\r\n"
 			"      W65C02\r\n"
 			"      W65C816S\r\n"
+			"      FT832\r\n"
 			"      RTF65002\r\n\r\n"
  			"   /REGISTER:<string> - enter registration code\r\n\r\n"
 			"Example:  asm br4.asm /olye      ; Generate listing, symbols, and error\r\n"
@@ -113,8 +116,8 @@ namespace RTFClasses
 		// Validate registration
 		int regdate = 0;
 		int t = time(NULL);
-		Registry reg("Software\\Finitron\\asm65816");
-		if (!reg.check("RegCode", "ASM65816")) {
+		Registry reg((char *)"Software\\Finitron\\asm65816");
+		if (!reg.check((char *)"RegCode", (char *)"ASM65816")) {
 			fprintf(stderr, "This program isn't registered. It'll stop working after 45 days\r\n");
 			fprintf(stderr, "unless it's registered.\r\n");
 			fprintf(stderr, "Use the /REGISTER option to register this program.\r\n");
@@ -122,7 +125,7 @@ namespace RTFClasses
 			if (regdate == 0)
 			{
 				reg.create();
-				reg.write("DATE", REG_DWORD, &t, sizeof(int) );
+				reg.write("DATE", 0/*REG_DWORD*/, &t, sizeof(int) );
 			}
 			//else if (t - regdate > 3974400)
 			//	return false;
@@ -133,32 +136,43 @@ namespace RTFClasses
 
 	void Assembler::openOutputStreams()
 	{
+         Err e1(E_OPEN,fnameBin);
+         Err e2(E_OPEN,fnameList);
+         Err e3(E_OPEN,fnameMem);
+         Err e4(E_OPEN,fnameVer);
+         Err e5(E_OPEN,fnameS);
+         Err e6(E_OPEN,fnameErr);
+         Err e7(E_OPEN,fnameObj);
+         Err e8(E_OPEN,fnameVerDP);
 		if (fBinOut)
 			if ((fpBin = fopen(fnameBin, "wb")) == NULL)
-				throw Err(E_OPEN, fnameBin);
+				throw e1;
 		if (fListing)
 			if ((fpList = fopen(fnameList, "wb")) == NULL)
-				throw Err(E_OPEN, fnameList);
+				throw e2;
 		if (bMemOut)
 			if ((fpMem = fopen(fnameMem, "wb")) == NULL)
-				throw Err(E_OPEN, fnameMem);
-		if (bVerOut)
+				throw e3;
+		if (bVerOut) {
 			if ((fpVer = fopen(fnameVer, "wb")) == NULL)
-				throw Err(E_OPEN, fnameVer);
+				throw e4;
+			if ((fpVerDP =fopen(fnameVerDP,"wb")) == NULL)
+				throw e8;
+       }
 		if (fSOut)
 			if (!gSOut.open(fnameS, ios::out))
-				throw Err(E_OPEN, fnameS);
+				throw e5;
 		if (fErrOut)
 		{
 			if ((fpErr = fopen(fnameErr, "wb")) == NULL)
-				throw Err(E_OPEN, fnameErr);
+				throw e6;
 		}
 		else
 			fpErr = stderr;
 
 		if (bObjOut) {
-			if (ObjFile.open(fnameObj, O_WRONLY | O_CREAT | O_TRUNC, SH_DENYRW) < 0) {
-				throw Err(E_OPEN, fnameObj);
+			if (ObjFilex.open(fnameObj, O_WRONLY | O_CREAT | O_TRUNC, SH_DENYRW) < 0) {
+				throw e7;
 			}
 		}
 	}
@@ -214,7 +228,7 @@ namespace RTFClasses
 			for (ii = 0; ii < jj; ii++) {
 				nms = fls[ii].split('|');
 				//printf("processing:%s::%s\r\n", nms[0].buf(), nms[1].buf());
-				processFile(nms[0].buf(),nms[1]);
+				processFile(nms[0].buf(),nms[1].buf());
 				delete[] nms;
 			}
 			delete[] fls;
@@ -234,6 +248,7 @@ namespace RTFClasses
 		int undef,undef1;
 		int no;
 		String str;
+		String s1;
 
 		rty = 0;
 		do {
@@ -255,16 +270,23 @@ namespace RTFClasses
 								// included snippets. We don't want to process the same snippet more
 								// than once.
 								str = "";
-								str = str + SearchList[ii].buf() + "|" + symlist[jj]->getName() + "\n";
+								str.add(SearchList[ii].buf());
+                                str.add((char *)"|");
+								s1 = symlist[jj]->getName().buf();
+                                str.add(s1);
+                                str.add((char *)"\n");
 								if (appendFiles.find(str,0) < 0)
-									processFile(SearchList[ii].buf(), symlist[jj]->getName());
+									processFile(SearchList[ii].buf(), symlist[jj]->getName().buf());
 
 								// Record which file snippets were successfully included. We need these
 								// same files for each pass, but we don't want to include them more 
 								// than once.
-								if (appendText != "") {	// something was found in the file
+								if (appendText != (char *)"") {	// something was found in the file
 									str = "";
-									str = str + SearchList[ii].buf() + "|" + symlist[jj]->getName() + "\n";
+									str.add(SearchList[ii].buf());
+                                    str.add((char *)"|");
+                                    str.add(symlist[jj]->getName().buf());
+                                    str.add((char *)"\n");
 									if (appendFiles.find(str,0) < 0)
 										appendFiles.add(str);
 								}
@@ -281,21 +303,22 @@ namespace RTFClasses
 		//printf ("append files:%s\r\n", appendFiles.buf());
 	}
 
-	int Assembler::main(int argc, _TCHAR **argv, _TCHAR **envp)
+	int Assembler::main(int argc, char **argv, char **envp)
 	{
 		int nRetCode = 1;
 
 		m_argc = argc;
 		m_argv = argv;
 		m_envp = envp;
+//		String nm(getExeName());
 
 		try {
-			debug.set(0, getExeName());
-			debug.log5("********************************************");
-			debug.log5("********************************************");
-			debug.log5("***** Starting Assembly                *****");
-			debug.log5("********************************************");
-			debug.log5("********************************************");
+//			debug.set(0, nm);
+//			debug.log5(String((char *)"********************************************"));
+//			debug.log5((char *)"********************************************");
+//			debug.log5((char *)"***** Starting Assembly                *****");
+//			debug.log5((char *)"********************************************");
+//			debug.log5((char *)"********************************************");
 			progArg = argv;
 			progArgc = argc;
 
@@ -374,6 +397,7 @@ namespace RTFClasses
 			memset(fnameList, '\0', sizeof(fnameList));
 			memset(fnameMem, '\0', sizeof(fnameMem));
 			memset(fnameVer, '\0', sizeof(fnameVer));
+			memset(fnameVerDP, '\0', sizeof(fnameVerDP));
 			memset(fnameSym, '\0', sizeof(fnameSym));
 			memset(fnameS, '\0', sizeof(fnameS));
 			memset(fnameErr, '\0', sizeof(fnameErr));
@@ -429,6 +453,7 @@ namespace RTFClasses
 			strcpy(fnameList, ofname);
 			strcpy(fnameMem, ofname);
 			strcpy(fnameVer, ofname);
+			strcpy(fnameVerDP, ofname);
 			strcpy(fnameSym, ofname);
 			strcpy(fnameS, ofname);
 			strcpy(fnameErr, ofname);
@@ -437,6 +462,7 @@ namespace RTFClasses
 			strcat(fnameList, ".lst");
 			strcat(fnameMem, ".mem");
 			strcat(fnameVer, ".ver");
+			strcat(fnameVerDP, ".vdp");
 			strcat(fnameSym, ".sym");
 			strcat(fnameS, ".S19");
 			strcat(fnameErr, ".err");
@@ -456,7 +482,7 @@ namespace RTFClasses
 				else
 					fprintf(fpErr, "\r\n");
 				bOutOfPhase = 0;
-				processFile(sfname);
+				processFile(sfname,(char *)"*");
 	//			if (bOutOfPhase==0)
 	//				break;
 				if (pass==1)
@@ -468,13 +494,13 @@ namespace RTFClasses
 			bOutOfPhase = 0;
 			bGen = true;
 			initializeForPass();
-			processFile(sfname);
+			processFile(sfname, (char *)"*");
 			processAppendFiles();
 
 			// Flush object buffer.
 			if (bObjOut) {
-				ObjFile.flush();
-				ObjFile.close();
+				ObjFilex.flush();
+				ObjFilex.close();
 			}
 			fprintf(fpList, "\r\nChecksum=%08.8X\r\n", checksum);
 			fprintf(fpList, "\r\nNumber of instructions processed: %d\r\n", NumInsn);
@@ -497,7 +523,13 @@ namespace RTFClasses
 				emit8Verilog(255);
 				emit8Verilog(255);
 				emit8Verilog(255);
+				emit8VerilogDP(255);
+				emit8VerilogDP(255);
+				emit8VerilogDP(255);
+				fseek(fpVerDP,-3,SEEK_END);
+				fprintf(fpVerDP,";\r\n");
 				fclose(fpVer);
+				fclose(fpVerDP);
 			}
 			if (fSOut)
 				gSOut.close(StartAddress);
@@ -567,8 +599,10 @@ namespace RTFClasses
 			lab = label;
 			lastLabel = label;
 		}
-		else
-			lab = lastLabel + label;
+		else {
+			lab = lastLabel;
+			lab.add(label);
+       }
 
 		/* -----------------------------------------------------------
 				See if the symbol exists in the symbol table
@@ -671,8 +705,9 @@ namespace RTFClasses
 
 	void Assembler::copyChToMacro(char ch)
 	{
+         Err e1(E_MACSIZE);
 		if (macrobuf.len() >= MAX_MACRO_EXP)
-			throw Err(E_MACSIZE);
+			throw e1;
 		macrobuf += ch;
 	}
 
@@ -1221,7 +1256,7 @@ namespace RTFClasses
 			Assembles a file.
 	--------------------------------------------------------------- */
 
-	void Assembler::processFile(char *fname, String publicName)
+	void Assembler::processFile(char *fname, char *publicName)
 	{
 		int nargs = 0;
 		time_t tim;
@@ -1232,6 +1267,7 @@ namespace RTFClasses
 
 		lineno = 0;
 
+        printf("ProcessFile:%s\r\n", fname);
 		// search for the file in memory
 		//for (ii = 0; ii <= FileNum; ii++) {
 		//	if (File[ii].name==fname) {
@@ -1257,15 +1293,17 @@ j1:
 		if (needLoad) {
 			if (File[CurFileNum].load(fname)==0)
 			{
+                Err e1(E_OPEN, fname);
 				ForceErr = true;
-				throw Err(E_OPEN, fname);
+				throw e1;
 				return;
 			}
 		}
-		if (publicName=="*")
+		if (strcmp(publicName,"*")==0)
 			;
 		else {
-			str = File[CurFileNum].buf->ExtractPublicSymbol(publicName);
+             String pname(publicName);
+			str.copy(File[CurFileNum].buf->ExtractPublicSymbol(publicName));
 		}
 		if (pass < 2) {
 			if (FileLevel > 0)
@@ -1294,7 +1332,7 @@ j1:
 			}
 		}
 
-		if (publicName=="*")
+		if (strcmp(publicName,"*")==0)
 			ibuf =File[CurFileNum].getBuf();
 		else {
 			ibuf->copy(str);
@@ -1536,6 +1574,11 @@ j1:
 		{
 			cpu = &optabW65C816S;
 			gProcessor.copy("W65C816S");
+		}
+		else if (proc.equalsNoCase("FT832"))
+		{
+			cpu = &optabFT832;
+			gProcessor.copy("FT832");
 		}
 		else if (proc.equalsNoCase("RTF65003"))
 		{

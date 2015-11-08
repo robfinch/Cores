@@ -24,4 +24,4 @@ int xf;
 int mf;
 
 //Cpu *cpu = &optab6502;
-
+int seg, offs;

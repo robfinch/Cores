@@ -21,7 +21,8 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//                                                                          
+//
+// Approx 7900 LUTs                                                                          
 // ============================================================================
 //
 `define TRUE		1'b1
@@ -126,6 +127,7 @@
 `define PHDS        9'h10B
 `define PLDS        9'h12B
 `define PHCS        9'h14B
+`define PCHIST      9'h1F0
 
 `define ADC_IMM		9'h69
 `define ADC_ZP		9'h65
@@ -387,22 +389,23 @@
 `define BLE         8'h1B0
 
 `define JML			9'h5C
+`define JML_IND     9'hDC
+`define JML_XIND    9'h1DC
 `define JMF			9'h15C
 `define JMP			9'h4C
 `define JMP_IND		9'h6C
 `define JMP_INDX	9'h7C
-`define JMP_RIND	9'hD2
+`define JML_XINDX   9'h17C
 `define JSR			9'h20
 `define JSL			9'h22
+`define JSL_XINDX   9'h1FC
 `define JSF			9'h122
-`define JSR_IND		9'h2C
 `define JSR_INDX	9'hFC
-`define JSR_RIND	9'hC2
 `define RTS			9'h60
 `define RTL			9'h6B
 `define RTF			9'h16B
-`define BSR			9'h62
 `define NOP			9'hEA
+`define NOP2        9'h1EA
 
 `define PLX			9'hFA
 `define PLY			9'h7A
@@ -589,10 +592,13 @@
 // Input Frequency is 32 times the 00 clock
 
 module FT832(rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
-parameter SUPPORT_TRIBYTES = 1'b0;
-parameter STORE_SKIPPING = 1'b1;
-parameter EXTRA_LONG_BRANCHES = 1'b1;
-parameter IO_SEGMENT = 32'hFFD00000;
+parameter STORE_SKIPPING = 1'b1;        // set to 1 to skip the store operation if the value didn't change during a RMW instruction
+parameter EXTRA_LONG_BRANCHES = 1'b1;   // set to 1 to use an illegal branch displacement ($FF) to indicate a long branch
+parameter IO_SEGMENT = 32'hFFD00000;    // set to determine the segment value of the IOS: prefix
+parameter PC24 = 1'b1;                  // set if PC is to be true 24 bits (generates slightly more hardware).
+parameter POPBF = 1'b0;                 // set to 1 if popping the break flag from the stack is desired
+
+// There parameters are not meant to be altered.
 parameter RESET1 = 6'd0;
 parameter IFETCH = 6'd1;
 parameter DECODE = 6'd5;
@@ -659,20 +665,25 @@ reg [7:0] dbo;
 
 reg [7:0] dbi;
 reg pg2;
-reg [5:0] state;
-reg [5:0] retstate;
+reg [5:0] state;    // machine state number
+reg [5:0] retstate; // return state - allows 1 level of state subroutine call (not used)
 reg [3:0] cnt;      // icache counter
-reg [127:0] ir;
-wire [8:0] ir9 = {pg2,ir[7:0]};
+reg [127:0] ir;     // the instruction register
+wire [8:0] ir9 = {pg2,ir[7:0]}; // The first byte of the instruction
 reg [23:0] pc,opc;
-reg [31:0] cs;      // code segment
+reg [23:0] pc_hist [31:0];  // program counter history buffer
+reg [4:0] pchcnt;           // index into pc history buffer
+reg pc_cap;                 // pc history capture flag
+reg [31:0] cs;              // code segment
 wire [31:0] cspc = cs + pc;
-reg [15:0] dpr;		// direct page register
-reg [31:0] ds;      // data segment
-reg [7:0] dbr;		// data bank register
-reg [31:0] x,y,acc,sp;
+reg [15:0] dpr;		        // direct page register
+reg [31:0] ds;              // data segment
+reg [7:0] dbr;		        // data bank register
+reg [31:0] x,y,acc,sp;      // programming model registers
+reg [23:0] stack_page = 24'd1;    // The default stack page for eight bit emulation
+reg [15:0] stack_bank = 16'd0;    // The default stack bank for sixteen bit emulation
 reg [15:0] tmp;
-wire [15:0] acc16 = acc[15:0];
+wire [15:0] acc16 = acc[15:0];  // convenience wires
 wire [7:0] acc8=acc[7:0];
 wire [7:0] x8=x[7:0];
 wire [7:0] y8=y[7:0];
@@ -733,9 +744,9 @@ reg [32:0] res32;
 wire resc8 = res32[8];
 wire resc16 = res32[16];
 wire resc32 = res32[32];
-wire resz8 = ~|res32[7:0];
-wire resz16 = ~|res32[15:0];
-wire resz32 = ~|res32[31:0];
+wire resz8 = res32[7:0]==8'h00;
+wire resz16 = res32[15:0]==16'h0000;
+wire resz32 = res32[31:0]==32'd0;
 wire resn8 = res32[7];
 wire resn16 = res32[15];
 wire resn32 = res32[31];
@@ -757,7 +768,7 @@ reg isMove816;
 reg isRTI,isRTL,isRTS,isRTF;
 reg isRMW;
 reg isSub;
-reg isJsrIndx,isJsrInd;
+reg isJsrIndx,isJsrInd,isJLInd;
 reg isIY,isIY24,isI24,isIY32,isI32;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS || ir9==`CPX_XABS ||
@@ -824,11 +835,11 @@ always @(posedge clk)
 		isBrk <= ir9==`BRK || ir9==`COP;
 		isMove <= ir9==`MVP || ir9==`MVN;
 		isJsrIndx <= ir9==`JSR_INDX;
-		isJsrInd <= ir9==`JSR_IND;
+		isJLInd <= ir9==`JML_IND || ir9==`JML_XIND || ir9==`JSL_XINDX || ir9==`JML_XINDX;
 	end
 
 assign mx = clk ? m_bit : x_bit;
-assign e = ~m816;
+assign e = ~(m816|m832);
 
 wire [15:0] bcaio;
 wire [15:0] bcao;
@@ -868,6 +879,7 @@ case(ir9)
 default:	takb <= 1'b0;
 endcase
 
+// Address generation
 reg [31:0] seg;
 reg [31:0] ia;
 wire [31:0] mvnsrc_address	= m832 ? seg + x32 : seg + {8'h00,ir[23:16],x16};
@@ -888,7 +900,7 @@ wire [31:0] xalx_address	= seg + ir[39:8] + x32;
 wire [31:0] xaly_address	= seg + ir[39:8] + y32;
 
 wire [31:0] dsp_address = m832 ? seg + sp + ir[15:8] :
-                          m816 ? seg + {16'h0000,sp16 + ir[15:8]} : seg + {24'h000001,sp[7:0]+ir[15:8]};
+                          m816 ? seg + {stack_bank,sp16 + ir[15:8]} : seg + {stack_page,sp[7:0]+ir[15:8]};
 reg [31:0] vect;
 
 assign rw = be ? rwo : 1'bz;
@@ -988,6 +1000,8 @@ if (~rst) begin
 	abort1 <= 1'b0;
 	imcd <= 3'b111;
 	inv_icache <= TRUE;
+	pchcnt <= 5'd0;
+	pc_cap <= TRUE;
 end
 else begin
 abort1 <= abort;
@@ -1020,6 +1034,10 @@ IFETCH:
 		vect <= m832 ? `BRK_VECT_832 : m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		hwi <= `FALSE;
 		isBusErr <= `FALSE;
+		if (pc_cap) begin
+            pc_hist[pchcnt] <= pc;
+            pchcnt <= pchcnt + 5'd1;
+		end
 		pg2 <= FALSE;
 		isIY <= `FALSE;
 		isIY24 <= `FALSE;
@@ -1168,6 +1186,7 @@ IFETCH:
                     zf <= resz8;
                 end
             end
+        `PCHIST:    acc <= res32;
 		`TAS,`TXS:
 		    begin
 		        if (m832) sp <= res32;
@@ -1391,7 +1410,7 @@ IFETCH:
 DECODE:
 	begin
 		next_state(IFETCH);
-		pc <= pc + 24'd1;
+        inc_pc(24'd1);
 		case(ir9)
 		`PG2: begin
 		      pg2 <= TRUE;
@@ -1415,13 +1434,18 @@ DECODE:
                 next_state(DECODE);
                 end
          `SEG: begin
-              pc <= pc + 24'd5;
+              inc_pc(24'd5);
 		      seg <= ir[39:8];
 		      ir <= {40'h00,ir[127:40]};
 		      next_state(DECODE);
 		      end
-		`SEP:	pc <= pc + 24'd2;	// see byte_ifetch
-		`REP:	pc <= pc + 24'd2;
+		`SEP:	inc_pc(24'd2);	// see byte_ifetch
+		`REP:	inc_pc(24'd2);
+		`PCHIST:
+		      begin
+		          res32 <= pc_hist[pchcnt];
+		          pchcnt <= pchcnt + 5'd1;
+		      end
 		// XBA cannot be done in the ifetch stage because it'd repeat when there
 		// was a cache miss, causing the instruction to be done twice.
 		`XBA:	
@@ -1479,6 +1503,9 @@ DECODE:
 		`LSR_ACC:	if (m32) res32 <= {acc[0],1'b0,acc[31:1]};
 		            else if (m16) res32 <= {acc[0],acc[31:16],1'b0,acc[15:1]};
 		            else res32 <= {acc[0],acc[31:8],1'b0,acc[7:1]};
+		`ASR_ACC:	if (m32) res32 <= {acc[0],acc[31],acc[31:1]};
+                    else if (m16) res32 <= {acc[0],acc[31:16],acc[15],acc[15:1]};
+                    else res32 <= {acc[0],acc[31:8],acc[7],acc[7:1]};
 		`ROR_ACC:	if (m32) res32 <= {acc[0],cf,acc[31:1]};
 		            else if (m16) res32 <= {acc[0],acc[31:16],cf,acc[15:1]};
 		            else res32 <= {acc[0],acc[31:8],cf,acc[7:1]};
@@ -1490,16 +1517,15 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {16'h00,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
-                        sp[31:16] <= 16'h000;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {24'h0001,sp_inc[7:0]};
-                        sp <= {24'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
                     end
                 end
-				data_nack();
 				load_what <= `PC_70;
 				state <= LOAD_MAC1;
 			end
@@ -1510,15 +1536,17 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
+                        sp[31:8] <= stack_page;
                     end
                 end
-				data_nack();
+                pc_cap <= TRUE;
 				load_what <= `SR_70;
 				state <= LOAD_MAC1;
 				end
@@ -1531,6 +1559,25 @@ DECODE:
 		`PHDS:  tsk_push(`STW_DS70,0,1);
 		`PHB:   tsk_push(`STW_DBR,0,0);
 		`PHD:   tsk_push(`STW_DPR70,1,0);
+		`PHCS:
+            begin
+                store_what <= `STW_CS3124;
+                if (m832) begin
+                    radr <= sp;
+                    wadr <= sp;
+                    sp <= sp_dec;
+                end
+                else if (m816) begin
+                    radr <= {stack_bank,sp[15:0]};
+                    sp <= sp_dec;
+                    sp[31:16] <= stack_bank;
+                end
+                else begin
+                    radr <= {stack_page,sp[7:0]};
+                    sp <= {stack_page,sp_dec[7:0]};
+                end
+                state <= STORE1;
+            end
 		`PLP:
 			begin
                 begin
@@ -1539,17 +1586,16 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
-                        sp[31:16] <= 16'h0000;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
                     end
                 end
 				load_what <= `SR_70;
-				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLA:
@@ -1560,17 +1606,16 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {16'h0000,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
-                        sp[31:16] <= 16'h0000;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {24'h000001,sp_inc[7:0]};
-                        sp <= {24'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
                     end
                 end
                 load_what <= m32 ? `WORD_71S : m16 ? `HALF_71S : `BYTE_71;
-				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLX,`PLY:
@@ -1581,35 +1626,35 @@ DECODE:
                         sp <= sp_inc;
                     end
                     else if (m816) begin
-                        radr <= {16'h00,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
-                        sp[31:16] <= 16'h0000;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {24'h0001,sp_inc[7:0]};
-                        sp <= {24'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
                     end
                 end
 				load_what <= xb32 ? `WORD_71S : xb16 ? `HALF_71S : `BYTE_71;
-				data_nack();
 				state <= LOAD_MAC1;
 			end
-		`PHCS:
-            begin
-                store_what <= `STW_CS3124;
-                radr <= sp;
-                wadr <= sp;
-                sp <= sp_dec;
-				data_nack();
-                state <= STORE1;
-            end
 		`PLDS:
             begin
-                radr <= sp_inc;
-                sp <= sp_inc;
                 load_what <= `WORD_71S;
-				data_nack();
                 state <= LOAD_MAC1;
+                if (m832) begin
+                    radr <= sp_inc;
+                    sp <= sp_inc;
+                end
+                else if (m816) begin
+                    radr <= {stack_bank,sp_inc[15:0]};
+                    sp <= sp_inc;
+                    sp[31:16] <= stack_bank;
+                end
+                else begin
+                    radr <= {stack_page,sp_inc[7:0]};
+                    sp <= {stack_page,sp_inc[7:0]};
+                end
             end
 		`PLB:
 			begin
@@ -1620,18 +1665,17 @@ DECODE:
         				load_what <= `BYTE_71;
                     end
                     else if (m816) begin
-                        radr <= {16'h00,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
-                        sp[31:16] <= 16'h00;
+                        sp[31:16] <= stack_bank;
         				load_what <= `BYTE_71;
                     end
                     else begin
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
         				load_what <= `BYTE_71;
                     end
                 end
-				data_nack();
 				state <= LOAD_MAC1;
 			end
 		`PLD:
@@ -1639,116 +1683,111 @@ DECODE:
                 begin
                     if (m832) begin
         				load_what <= `WORD_71S;
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= sp_inc;
                         sp <= sp_inc;
                     end
                     else if (m816) begin
         				load_what <= `HALF_71S;
-                        radr <= {8'h00,sp_inc[15:0]};
+                        radr <= {stack_bank,sp_inc[15:0]};
                         sp <= sp_inc;
-                        sp[31:16] <= 16'h00;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
         				load_what <= `HALF_71S;
-                        radr <= {16'h0001,sp_inc[7:0]};
-                        sp <= {8'h1,sp_inc[7:0]};
+                        radr <= {stack_page,sp_inc[7:0]};
+                        sp <= {stack_page,sp_inc[7:0]};
                     end
                 end
-				data_nack();
 				state <= LOAD_MAC1;
 			end
 		// Handle # mode
         `LDA_IMM:
             begin
-                if (m32) pc <= pc + 24'd5;
-                else if (m16) pc <= pc + 24'd3;
-                else pc <= pc + 24'd2;
+                if (m32) inc_pc(24'd5);
+                else if (m16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 res32 <= ir[39:8];
                 next_state(IFETCH);
             end
         `LDX_IMM,`LDY_IMM:
             begin
-                if (xb32) pc <= pc + 24'd5;
-                else if (xb16) pc <= pc + 24'd3;
-                else pc <= pc + 24'd2;
+                if (xb32) inc_pc(24'd5);
+                else if (xb16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 res32 <= ir[39:8];
                 next_state(IFETCH);
             end
         `ADC_IMM:
             begin
+                b32 <= ir[39:8];        // for overflow calc
+                if (m32) inc_pc(24'd5);
+                else if (m16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 if (m32) begin
-                    pc <= pc + 24'd5;
                     res32 <= acc + ir[39:8] + {31'b0,cf};
-                    b32 <= ir[39:8];        // for overflow calc
                 end
                 else if (m16) begin
-                    pc <= pc + 24'd3;
                     res32 <= acc16 + ir[23:8] + {15'b0,cf};
-                    b32 <= ir[23:8];        // for overflow calc
                 end
                 else begin
-                    pc <= pc + 24'd2;
                     res32 <= acc8 + ir[15:8] + {7'b0,cf};
-                    b32 <= ir[15:8];        // for overflow calc
                 end
                 next_state(IFETCH);
             end
         `SBC_IMM:
             begin
+                b32 <= ir[39:8];        // for overflow calc
+                if (m32) inc_pc(24'd5);
+                else if (m16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 if (m32) begin
-                    pc <= pc + 24'd5;
                     res32 <= acc - ir[39:8] - {31'b0,~cf};
-                    b32 <= ir[39:8];        // for overflow calc
                 end
                 else if (m16) begin
-                     pc <= pc + 24'd3;
                      res32 <= acc16 - ir[23:8] - {15'b0,~cf};
-                     b32 <= ir[23:8];        // for overflow calc
                 end
                 else begin
-                    pc <= pc + 24'd2;
                     res32 <= acc8 - ir[15:8] - {7'b0,~cf};
-                    b32 <= ir[15:8];        // for overflow calc
                 end
                 next_state(IFETCH);
             end
         `AND_IMM,`BIT_IMM:
             begin
-                if (m32) pc <= pc + 24'd5;
-                else if (m16) pc <= pc + 24'd3;
-                else pc <= pc + 24'd2;
+                if (m32) inc_pc(24'd5);
+                else if (m16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 res32 <= acc & ir[39:8];
                 b32 <= ir[39:8];    // for bit flags
                 next_state(IFETCH);
             end
         `ORA_IMM:
             begin
-                if (m32) pc <= pc + 24'd5;
-                else if (m16) pc <= pc + 24'd3;
-                else pc <= pc + 24'd2;
+                if (m32) inc_pc(24'd5);
+                else if (m16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 res32 <= acc | ir[39:8];
                 next_state(IFETCH);
             end
         `EOR_IMM:
             begin
-                if (m32) pc <= pc + 24'd5;
-                else if (m16) pc <= pc + 24'd3;
-                else pc <= pc + 24'd2;
+                if (m32) inc_pc(24'd5);
+                else if (m16) inc_pc(24'd3);
+                else inc_pc(24'd2);
                 res32 <= acc ^ ir[39:8];
                 next_state(IFETCH);
             end
         `CMP_IMM:
             begin
                 if (m32) begin
-                    pc <= pc + 24'd5;
+                    inc_pc(24'd5);
                     res32 <= acc - ir[39:8];
                 end
                 else if (m16) begin
-                     pc <= pc + 24'd3;
+                    inc_pc(24'd3);
                      res32 <= acc16 - ir[23:8];
                 end
                 else begin
-                    pc <= pc + 24'd2;
+                    inc_pc(24'd2);
                     res32 <= acc8 - ir[15:8];
                 end
                 next_state(IFETCH);
@@ -1756,31 +1795,31 @@ DECODE:
         `CPX_IMM:
             begin
                 if (xb32) begin
-                    pc <= pc + 24'd5;
+                    inc_pc(24'd5);
                     res32 <= x32 - ir[39:8];
                 end
                 else if (xb16) begin
-                     pc <= pc + 24'd3;
+                     inc_pc(24'd3);
                      res32 <= x16 - ir[23:8];
                 end
                 else begin
-                    pc <= pc + 24'd2;
-                    res32 <= x8 - ir[15:8];
+                    inc_pc(24'd2);
+                   res32 <= x8 - ir[15:8];
                 end
                 next_state(IFETCH);
             end
         `CPY_IMM:
             begin
                 if (xb32) begin
-                    pc <= pc + 24'd5;
+                    inc_pc(24'd5);
                     res32 <= y32 - ir[39:8];
                 end
                 else if (xb16) begin
-                     pc <= pc + 24'd3;
+                     inc_pc(24'd3);
                      res32 <= y16 - ir[23:8];
                 end
                 else begin
-                    pc <= pc + 24'd2;
+                    inc_pc(24'd2);
                     res32 <= y8 - ir[15:8];
                 end
                 next_state(IFETCH);
@@ -1788,554 +1827,496 @@ DECODE:
 		// Handle zp mode
         `LDA_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDX_ZP,`LDY_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_ZP,`SBC_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`CMP_ZP,
         `BIT_ZP,
         `ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`TRB_ZP,`TSB_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 wadr <= zp_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `INC_ZP,`DEC_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 wadr <= zp_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `CPX_ZP,`CPY_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 load_what <= xb32 ? `WORD_70 : xb16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zp_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
         `STX_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zp_address;
                 if (xb32) s32 <= TRUE;
                 else if (xb16) s16 <= TRUE;
                 store_what <= `STW_X70;
-                data_nack();
                 state <= STORE1;
             end
         `STY_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zp_address;
                 if (xb32) s32 <= TRUE;
                 else if (xb16) s16 <= TRUE;
                 store_what <= `STW_Y70;
-                data_nack();
                 state <= STORE1;
             end
         `STZ_ZP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zp_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_Z70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle zp,x mode
         `LDA_ZPX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zpx_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDY_ZPX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zpx_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_ZPX,`SBC_ZPX,`AND_ZPX,`ORA_ZPX,`EOR_ZPX,`CMP_ZPX,
         `BIT_ZPX,
         `ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zpx_address;
                 wadr <= zpx_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_ZPX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zpx_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
         `STY_ZPX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zpx_address;
                 if (xb32) s32 <= TRUE;
                 else if (xb16) s16 <= TRUE;
                 store_what <= `STW_Y70;
-                data_nack();
                 state <= STORE1;
             end
         `STZ_ZPX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zpx_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_Z70;
-                data_nack();
                 state <= STORE1;
             end
         // Handle zp,y
         `LDX_ZPY:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zpy_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STX_ZPY:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= zpy_address;
                 if (xb32) s32 <= TRUE;
                 else if (xb16) s16 <= TRUE;
                 store_what <= `STW_X70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle (zp,x)
         `ADC_IX,`SBC_IX,`AND_IX,`ORA_IX,`EOR_IX,`CMP_IX,`LDA_IX,`STA_IX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zpx_address;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         // Handle (zp),y
         `ADC_IY,`SBC_IY,`AND_IY,`ORA_IY,`EOR_IY,`CMP_IY,`LDA_IY,`STA_IY:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 isIY <= `TRUE;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
 		// Handle d,sp
         `LDA_DSP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= dsp_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= dsp_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_DSP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 wadr <= dsp_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle (d,sp),y
         `ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= dsp_address;
                 isIY <= `TRUE;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
 		// Handle {d,sp},y
        `ADC_XDSPIY,`SBC_XDSPIY,`CMP_XDSPIY,`ORA_XDSPIY,`AND_XDSPIY,`EOR_XDSPIY,`LDA_XDSPIY,`STA_XDSPIY:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= dsp_address;
                 isIY32 <= `TRUE;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         // Handle [zp],y
         `ADC_IYL,`SBC_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`CMP_IYL,`LDA_IYL,`STA_IYL:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 isIY24 <= `TRUE;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         // Handle {zp},y
         `ADC_XIYL,`SBC_XIYL,`AND_XIYL,`ORA_XIYL,`EOR_XIYL,`CMP_XIYL,`LDA_XIYL,`STA_XIYL:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 isIY32 <= `TRUE;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
 		// Handle [zp]
         `ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`LDA_IL,`STA_IL:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 isI24 <= `TRUE;
                 radr <= zp_address;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
 		// Handle {zp}
         `ADC_XIL,`SBC_XIL,`AND_XIL,`ORA_XIL,`EOR_XIL,`CMP_XIL,`LDA_XIL,`STA_XIL:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 isI32 <= `TRUE;
                 radr <= zp_address;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         // Handle (zp)
         `ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`LDA_I,`STA_I,`PEI:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 radr <= zp_address;
                 load_what <= `IA_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
 		// Handle abs
         `LDA_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= abs_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDX_ABS,`LDY_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= abs_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_ABS,`SBC_ABS,`AND_ABS,`ORA_ABS,`EOR_ABS,`CMP_ABS,
         `ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS,`TRB_ABS,`TSB_ABS,
         `BIT_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= abs_address;
                 wadr <= abs_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `CPX_ABS,`CPY_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= abs_address;
                 load_what <= xb32 ? `WORD_70 : xb16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= abs_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
         `STX_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= abs_address;
                 if (xb32) s32 <= `TRUE;
                 else if (xb16) s16 <= `TRUE;
                 store_what <= `STW_X70;
-                data_nack();
                 state <= STORE1;
             end    
         `STY_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= abs_address;
                 if (xb32) s32 <= `TRUE;
                 else if (xb16) s16 <= `TRUE;
                 store_what <= `STW_Y70;
-                data_nack();
                 state <= STORE1;
             end
         `STZ_ABS:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= abs_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_Z70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle xlabs
         `LDA_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xal_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDX_XABS,`LDY_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xal_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_XABS,`SBC_XABS,`AND_XABS,`ORA_XABS,`EOR_XABS,`CMP_XABS,
         `ASL_XABS,`ROL_XABS,`LSR_XABS,`ROR_XABS,`INC_XABS,`DEC_XABS,`TRB_XABS,`TSB_XABS,
         `BIT_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xal_address;
                 wadr <= xal_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `CPX_XABS,`CPY_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xal_address;
                 load_what <= xb32 ? `WORD_70 : xb16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xal_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
         `STX_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xal_address;
                 if (xb32) s32 <= `TRUE;
                 else if (xb16) s16 <= `TRUE;
                 store_what <= `STW_X70;
-                data_nack();
                 state <= STORE1;
             end    
         `STY_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xal_address;
                 if (xb32) s32 <= `TRUE;
                 else if (xb16) s16 <= `TRUE;
                 store_what <= `STW_Y70;
-                data_nack();
                 state <= STORE1;
             end
         `STZ_XABS:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xal_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_Z70;
-                data_nack();
                 state <= STORE1;
             end
         // Handle abs,x
         `LDA_ABSX:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= absx_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_ABSX,`SBC_ABSX,`AND_ABSX,`ORA_ABSX,`EOR_ABSX,`CMP_ABSX,
         `ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`BIT_ABSX:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= absx_address;
                 wadr <= absx_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDY_ABSX:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= absx_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_ABSX:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= absx_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
         `STZ_ABSX:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= absx_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_Z70;
-                data_nack();
                 state <= STORE1;
             end
         // Handle xlabs,x
         `LDA_XABSX:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xalx_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_XABSX,`SBC_XABSX,`AND_XABSX,`ORA_XABSX,`EOR_XABSX,`CMP_XABSX,
         `ASL_XABSX,`ROL_XABSX,`LSR_XABSX,`ROR_XABSX,`INC_XABSX,`DEC_XABSX,`BIT_XABSX:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xalx_address;
                 wadr <= xalx_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDY_XABSX:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xalx_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_XABSX:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xalx_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
         `STZ_XABSX:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xalx_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_Z70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle abs,y
         `LDA_ABSY:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= absy_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
                 state <= LOAD_MAC1;
-                data_nack();
             end
         `ADC_ABSY,`SBC_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`CMP_ABSY:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= absy_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDX_ABSY:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 radr <= absy_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_ABSY:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 wadr <= absy_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
@@ -2346,95 +2327,86 @@ DECODE:
 		// Handle xlabs,y
         `LDA_XABSY:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xaly_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
                 state <= LOAD_MAC1;
-                data_nack();
             end
         `ADC_XABSY,`SBC_XABSY,`AND_XABSY,`ORA_XABSY,`EOR_XABSY,`CMP_XABSY:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xaly_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `LDX_XABSY:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 radr <= xaly_address;
                 load_what <= xb32 ? `WORD_71 : xb16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_XABSY:
             begin
-                pc <= pc + 24'd5;
+                inc_pc(24'd5);
                 wadr <= xaly_address;
                 if (m32) s32 <= `TRUE;
                 else if (m16) s16 <= `TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle al
         `LDA_AL:
             begin
-                pc <= pc + 24'd4;
+                inc_pc(24'd4);
                 radr <= al_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL:
             begin
-                pc <= pc + 24'd4;
+                inc_pc(24'd4);
                 radr <= al_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_AL:
             begin
-                pc <= pc + 24'd4;
+                inc_pc(24'd4);
                 wadr <= al_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
 		// Handle alx
         `LDA_ALX:
             begin
-                pc <= pc + 24'd4;
+                inc_pc(24'd4);
                 radr <= alx_address;
                 load_what <= m32 ? `WORD_71 : m16 ? `HALF_71 : `BYTE_71;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `ADC_ALX,`SBC_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`CMP_ALX:
             begin
-                pc <= pc + 24'd4;
+                inc_pc(24'd4);
                 radr <= alx_address;
                 load_what <= m32 ? `WORD_70 : m16 ? `HALF_70 : `BYTE_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end
         `STA_ALX:
             begin
-                pc <= pc + 24'd4;
+                inc_pc(24'd4);
                 wadr <= alx_address;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 store_what <= `STW_ACC70;
-                data_nack();
                 state <= STORE1;
             end
-        `BRK:
+        `BRK,`BRK2:
             begin
-                pc <= pc + 24'd2;
+                pc_cap <= FALSE;
+                inc_pc(24'd2);
                 begin
                     if (m832) begin
                         radr <= sp;
@@ -2442,16 +2414,16 @@ DECODE:
                         sp <= sp_dec;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
                         sp <= sp_dec;
-                        sp[31:16] <= 16'h0000;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[31:8] <= 24'h1;
+                        sp[31:8] <= stack_page;
                     end
                 end
                 store_what <= m832 ? `STW_CS3124 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
@@ -2461,7 +2433,7 @@ DECODE:
             end
 		`COP:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);
                 begin
                     if (m832) begin
                         radr <= sp;
@@ -2469,42 +2441,40 @@ DECODE:
                         sp <= sp_dec;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
                         sp <= sp_dec;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[15:8] <= 8'h1;
+                        sp[31:8] <= stack_page;
                     end
                 end
                 store_what <= m832 ? `STW_CS3124 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
                 state <= STORE1;
                 vect <= m832 ? `COP_VECT_832 : m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
-                data_nack();
             end
 		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA,`BGT,`BGE,`BLT,`BLE:
             begin
                 if (ir[15:8]==8'hFF) begin
                     if (takb)
-                        pc <= pc + {{8{ir[31]}},ir[31:16]} + 24'd4;
+                        inc_pc({{8{ir[31]}},ir[31:16]} + 24'd4);
                     else
-                        pc <= pc + 24'd4;
+                        inc_pc(24'd4);
                 end
                 else begin
                     if (takb)
-                        pc <= pc + {{16{ir[15]}},ir[15:8]} + 24'd2;
+                        inc_pc({{16{ir[15]}},ir[15:8]} + 24'd2);
                     else
-                        pc <= pc + 24'd2;
+                        inc_pc(24'd2);
                 end
                 next_state(IFETCH);
             end
 		`JMP:
             begin
-                vpa <= `TRUE;
-                vda <= `TRUE;
                 pc[15:0] <= ir[23:8];
                 next_state(IFETCH);
             end
@@ -2512,19 +2482,35 @@ DECODE:
             begin
                 radr <= abs_address;
                 load_what <= `PC_70;
-                data_nack();
+                state <= LOAD_MAC1;
+            end
+        `JML_IND:
+            begin
+                radr <= abs_address;
+                load_what <= `PC_70;
+                state <= LOAD_MAC1;
+            end
+        `JML_XIND:
+            begin
+                radr <= xal_address;
+                load_what <= `PC_70;
+                state <= LOAD_MAC1;
+            end
+        `JML_XINDX:
+            begin
+                radr <= xalx_address;
+                load_what <= `PC_70;
                 state <= LOAD_MAC1;
             end
         `JMP_INDX:
             begin
                 radr <= absx_address;
                 load_what <= `PC_70;
-                data_nack();
                 state <= LOAD_MAC1;
             end    
         `JSR,`JSR_INDX:
             begin
-                pc <= pc + 24'd2;
+                inc_pc(24'd2);  // Yes this should be one less than the instruction length.
                 begin
                     if (m832) begin
                         radr <= sp;
@@ -2533,25 +2519,52 @@ DECODE:
                         store_what <= `STW_PC158;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
                         sp <= sp_dec;
+                        sp[31:16] <= stack_bank;
                         store_what <= `STW_PC158;
                     end
                     else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[31:8] <= 24'h1;
+                        sp[31:8] <= stack_page;
                         store_what <= `STW_PC158;
                     end
                 end
-                data_nack();
+                state <= STORE1;
+            end
+        `JSL_XINDX:
+            begin
+                inc_pc(24'd4);  // Yes this should be one less than the instruction length.
+                begin
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                        store_what <= `STW_PC2316;
+                    end
+                    else if (m816) begin
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
+                        sp <= sp_dec;
+                        sp[31:16] <= stack_bank;
+                        store_what <= `STW_PC2316;
+                    end
+                    else begin
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[31:8] <= stack_page;
+                        store_what <= `STW_PC2316;
+                    end
+                end
                 state <= STORE1;
             end
         `BRL:
             begin
-                pc <= pc + {{8{ir[23]}},ir[23:8]} + 24'd3;
+                inc_pc({{8{ir[23]}},ir[23:8]} + 24'd3);
                 next_state(IFETCH);
             end
 		`JML:
@@ -2591,7 +2604,7 @@ DECODE:
             end
         `JSL:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 begin
                    if (m832) begin
                        store_what <= `STW_PC2316;
@@ -2601,34 +2614,49 @@ DECODE:
                    end
                    else if (m816) begin
                         store_what <= `STW_PC2316;
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
                         sp <= sp_dec;
+                        sp[31:16] <= stack_bank;
                     end
                     else begin
                         store_what <= `STW_PC2316;
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[31:8] <= 24'h1;
+                        sp[31:8] <= stack_page;
                     end
                 end
-                data_nack();
                 state <= STORE1;
             end
         `JSF:
             begin
-                pc <= pc + 24'd7;
+                inc_pc(24'd7);
                 store_what <= `STW_CS3124;
+                if (m832) begin
+                    radr <= sp;
+                    wadr <= sp;
+                    sp <= sp_dec;
+                end
+                else if (m816) begin
+                     radr <= {stack_bank,sp[15:0]};
+                     wadr <= {stack_bank,sp[15:0]};
+                     sp <= sp_dec;
+                     sp[31:16] <= stack_bank;
+                 end
+                 else begin
+                     radr <= {stack_page,sp[7:0]};
+                     wadr <= {stack_page,sp[7:0]};
+                     sp[7:0] <= sp[7:0] - 8'd1;
+                     sp[31:8] <= stack_page;
+                 end
                 radr <= sp;
                 wadr <= sp;
-                sp <= sp_dec;
-                data_nack();
                 state <= STORE1;
             end
 		`PEA:
             begin
-                pc <= pc + 24'd3;
+                inc_pc(24'd3);
                 tmp32 <= ir[23:8];
                 begin
                     if (m832) begin
@@ -2637,48 +2665,68 @@ DECODE:
                         sp <= sp_dec;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
-                        sp <= sp_dec;
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
+                        sp <= {stack_bank,sp_dec[15:0]};
                     end
                     else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[31:8] <= 24'h1;
+                        sp[31:8] <= stack_page;
                     end
                 end
                 store_what <= `STW_TMP158;
-                data_nack();
                 state <= STORE1;
             end
-        `PER:
+		`PEAxl:
             begin
-                pc <= pc + 24'd3;
-                tmp32 <= pc[15:0] + ir[23:8] + 16'd3;
+                inc_pc(24'd5);
+                tmp32 <= ir[39:8];
                 begin
                     if (m832) begin
                         radr <= sp;
                         wadr <= sp;
                         sp <= sp_dec;
-                        store_what <= `STW_TMP158;
                     end
                     else if (m816) begin
-                        radr <= {8'h00,sp[15:0]};
-                        wadr <= {8'h00,sp[15:0]};
-                        sp <= sp_dec;
-                        sp[31:16] <= 16'h0000;
-                        store_what <= `STW_TMP158;
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
+                        sp <= {stack_bank,sp_dec[15:0]};
                     end
                     else begin
-                        radr <= {16'h0001,sp[7:0]};
-                        wadr <= {16'h0001,sp[7:0]};
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
                         sp[7:0] <= sp[7:0] - 8'd1;
-                        sp[31:8] <= 24'h1;
-                        store_what <= `STW_TMP158;
+                        sp[31:8] <= stack_page;
                     end
                 end
-                data_nack();
+                store_what <= `STW_TMP3124;
+                state <= STORE1;
+            end
+        `PER:
+            begin
+                inc_pc(24'd3);
+                tmp32 <= pc[15:0] + ir[23:8] + 16'd3;
+                begin
+                    store_what <= `STW_TMP158;
+                    if (m832) begin
+                        radr <= sp;
+                        wadr <= sp;
+                        sp <= sp_dec;
+                    end
+                    else if (m816) begin
+                        radr <= {stack_bank,sp[15:0]};
+                        wadr <= {stack_bank,sp[15:0]};
+                        sp <= {stack_bank,sp_dec[15:0]};
+                    end
+                    else begin
+                        radr <= {stack_page,sp[7:0]};
+                        wadr <= {stack_page,sp[7:0]};
+                        sp[7:0] <= sp[7:0] - 8'd1;
+                        sp[31:8] <= stack_page;
+                    end
+                end
                 state <= STORE1;
             end
 		`MVN,`MVP:
@@ -2686,7 +2734,6 @@ DECODE:
                 radr <= mvnsrc_address;
                 load_what <= `BYTE_72;
                 pc <= pc;       // override increment above
-                data_nack();
                 state <= LOAD_MAC1;
             end
         default:
@@ -2723,13 +2770,13 @@ LOAD_MAC2:
             case(load_what)
             `BYTE_70:
                     begin
-                        b32 <= db;
+                        b32 <= {25'b0,db};
                         state <= BYTE_CALC;
                     end
             `BYTE_71:
                     begin
                         moveto_ifetch();
-                        res32 <= db;
+                        res32 <= {25'b0,db};
                     end
             `HALF_70:
                         begin
@@ -2876,13 +2923,12 @@ LOAD_MAC2:
                                 if (db[4]) begin
                                     x[31:8] <= 24'd0;
                                     y[31:8] <= 24'd0;
-                                    sp[31:8] <= 24'd1;
                                 end
                                 //if (db[5]) acc[31:8] <= 24'd0;
                             end
                             // The following load of the break flag is different than the '02
                             // which never loads the flag.
-                            else
+                            else if (POPBF)
                                 bf <= db[4];
                             vf <= db[6];
                             nf <= db[7];
@@ -2915,7 +2961,11 @@ LOAD_MAC2:
                             end
                             else if (isRTS)    // rts instruction
                                 next_state(RTS1);
-                            else            // jmp (abs)
+                            else if (isJLInd) begin   // jmp (abs)
+                                load_what <= `PC_2316;
+                                state <= LOAD_MAC1;
+                            end
+                            else
                             begin
                                 vpb <= `FALSE;
                                 next_state(IFETCH0);
@@ -3026,9 +3076,7 @@ LOAD_MAC2:
 `endif
 RTS1:
     begin
-        vpa <= `TRUE;
-        vda <= `TRUE;
-        pc <= pc + 24'd1;
+        inc_pc(24'd1);
         next_state(IFETCH);
     end
 BYTE_IX5:
@@ -3313,8 +3361,6 @@ STORE2:
 				`BRK,`BRK2,`COP:
 						begin
 						set_sp();
-						vpa <= `FALSE;
-						vda <= `TRUE;
 					    store_what <= `STW_SR70;
 						state <= STORE1;
 						end
@@ -3330,12 +3376,16 @@ STORE2:
 		                end
 				`JSR_INDX:
 						begin
-						vpa <= `FALSE;
-						vda <= `FALSE;
 						state <= LOAD_MAC1;
 						load_what <= `PC_70;
 						radr <= absx_address;
 						end
+				`JSL_XINDX:
+                        begin
+                        state <= LOAD_MAC1;
+                        load_what <= `PC_70;
+                        radr <= xalx_address;
+                        end
 				endcase
 			end
         `STW_SR70:
@@ -3577,25 +3627,6 @@ ICACHE2:
 endcase
 end
 
-task opcode_read;
-begin
-	vpa <= `TRUE;
-	vda <= `TRUE;
-	rwo <= `TRUE;
-	ado <= pc;
-end
-endtask
-
-task insn_read;
-input [31:0] adr;
-begin
-	vpa <= `TRUE;
-	vda <= `FALSE;
-	rwo <= `TRUE;
-	ado <= adr;
-end
-endtask
-
 task data_read;
 input [31:0] adr;
 begin
@@ -3633,6 +3664,16 @@ task next_state;
 input [5:0] nxt;
 begin
 	state <= nxt;
+end
+endtask
+
+task inc_pc;
+input [23:0] amt;
+begin
+if (PC24)
+    pc <= pc + amt;
+else
+    pc[15:0] <= pc[15:0] + amt[15:0];
 end
 endtask
 

@@ -21,6 +21,9 @@ namespace RTFClasses
 		int r1;			// base register
 		int r2;			// index register if present
 		Value val;		// immediate value / address constant
+		Value seg;
+		Value offs;
+		char hasSegPrefix;
 		virtual int parse(char *) { return 1; };
 //		char *text();
 	};
