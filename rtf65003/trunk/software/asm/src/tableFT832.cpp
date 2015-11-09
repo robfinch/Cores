@@ -243,14 +243,14 @@ static Opa pldAsm[] = { {Asm6502::out8, 0x2B}, NULL };
 static Opa plxAsm[] = { {Asm6502::out8, 0xFA}, NULL };
 static Opa plyAsm[] = { {Asm6502::out8, 0x7A}, NULL };
 static Opa plpAsm[] = { {Asm6502::out8, 0x28}, NULL };
-static Opa phcsAsm[] = { {Asm6502::out16, 0x424B}, NULL };
-static Opa phdsAsm[] = { {Asm6502::out16, 0x420B}, NULL };
-static Opa pldsAsm[] = { {Asm6502::out16, 0x422B}, NULL };
+static Opa phcsAsm[] = { {Asm6502::out16, 0x4B42}, NULL };
+static Opa phdsAsm[] = { {Asm6502::out16, 0x0B42}, NULL };
+static Opa pldsAsm[] = { {Asm6502::out16, 0x2B42}, NULL };
 
 static Opa rtiAsm[] = { {Asm6502::out8, 0x40}, NULL };
 static Opa rtsAsm[] = { {Asm6502::out8, 0x60}, NULL };
 static Opa rtlAsm[] = { {Asm6502::out8, 0x6B}, NULL };
-static Opa rtfAsm[] = { {Asm6502::out16, 0x4260}, NULL };
+static Opa rtfAsm[] = { {Asm6502::out16, 0x6042}, NULL };
 
 static Opa taxAsm[] = { {Asm6502::out8, 0xAA}, NULL };
 static Opa tayAsm[] = { {Asm6502::out8, 0xA8}, NULL };
@@ -584,6 +584,11 @@ static Opa jmpAsm[] =
 		NULL
 	};
 
+static Opa cacheAsm[] =
+{
+	{AsmFT832::imm, 0x42E0, 1, AM_IMM},
+    NULL
+};
 
 static Mne opsFT832[] =
 {
@@ -605,6 +610,7 @@ static Mne opsFT832[] =
 	{"bvc", bvcAsm, 1 },
 	{"bvs", bvsAsm, 1 },
 
+	{"cache", cacheAsm, 1 },
 	{"clc", clcAsm, 0 },
 	{"cld", cldAsm, 0 },
 	{"cli", cliAsm, 0 },
@@ -710,8 +716,8 @@ static Mne opsFT832[] =
 	{"tcs", tcsAsm, 0 },
 	{"tdc", tdcAsm, 0 },
 	{"trb", trbAsm, 1 },
-	{"tsb", tsbAsm, 1 },
 	{"tsa", tscAsm, 0 },
+	{"tsb", tsbAsm, 1 },
 	{"tsc", tscAsm, 0 },
 	{"tsx", tsxAsm, 0 },
 	{"txa", txaAsm, 0 },

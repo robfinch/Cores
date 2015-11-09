@@ -62,7 +62,12 @@ namespace RTFClasses
 		else
 			data = expeval(&theAssembler.gOperand[0][1], NULL).value;
 	*/
-		theAssembler.emit8(op);
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
 		theAssembler.emit8(data);
 	}
 
