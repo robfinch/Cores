@@ -692,8 +692,8 @@ static Mne opsFT832[] =
 	{"ror", rorAsm, 1 },
 
 	{"rtf", rtfAsm, 0 },
-	{"rtl", rtlAsm, 0 },
 	{"rti", rtiAsm, 0 },
+	{"rtl", rtlAsm, 0 },
 	{"rts", rtsAsm, 0 },
 
 	{"sbc", sbcAsm, 1 },

@@ -120,6 +120,16 @@ static Opa braAsm[] = {	{AsmW65C816S::br, 0x80, 1}, NULL };
 static Opa brlAsm[] = {	{AsmW65C816S::brl, 0x82, 1}, NULL };
 static Opa brkAsm[] = {	{Asm6502::out8, 0x00, 0}, NULL };
 
+static Opa lbccAsm[] = {	{AsmW65C816S::lbr, 0x90, 1}, NULL };
+static Opa lbcsAsm[] = {	{AsmW65C816S::lbr, 0xB0, 1}, NULL };
+static Opa lbeqAsm[] = {	{AsmW65C816S::lbr, 0xF0, 1}, NULL };
+static Opa lbmiAsm[] = {	{AsmW65C816S::lbr, 0x30, 1}, NULL };
+static Opa lbneAsm[] = {	{AsmW65C816S::lbr, 0xD0, 1}, NULL };
+static Opa lbplAsm[] = {	{AsmW65C816S::lbr, 0x10, 1}, NULL };
+static Opa lbvcAsm[] = {	{AsmW65C816S::lbr, 0x50, 1}, NULL };
+static Opa lbvsAsm[] = {	{AsmW65C816S::lbr, 0x70, 1}, NULL };
+static Opa lbraAsm[] = {	{AsmW65C816S::lbr, 0x80, 1}, NULL };
+
 static Opa bitAsm[] =
 {
 	{AsmW65C816S::immm, 0x89, 1, AM_IMM},
@@ -536,6 +546,18 @@ static Mne opsW65C816S[] =
 	{"jsl", jslAsm, 1 },
 	{"jsr", jsrAsm, 1 },
 
+	{"lbcc", lbccAsm, 1 },
+	{"lbcs", lbcsAsm, 1 },
+	{"lbeq", lbeqAsm, 1 },
+	{"lbgeu", lbccAsm, 1 },
+	{"lbltu", lbcsAsm, 1 },
+	{"lbmi", lbmiAsm, 1 },
+	{"lbne", lbneAsm, 1 },
+	{"lbpl", lbplAsm, 1 },
+//	{"lbra", lbraAsm, 1 },
+	{"lbvc", lbvcAsm, 1 },
+	{"lbvs", lbvsAsm, 1 },
+
     {"lda", ldaAsm, 1 },
     {"ldx", ldxAsm, 1 },
     {"ldy", ldyAsm, 1 },
@@ -572,8 +594,8 @@ static Mne opsW65C816S[] =
 	{"rol", rolAsm, 1 },
 	{"ror", rorAsm, 1 },
 
-	{"rtl", rtlAsm, 0 },
 	{"rti", rtiAsm, 0 },
+	{"rtl", rtlAsm, 0 },
 	{"rts", rtsAsm, 0 },
 
 	{"sbc", sbcAsm, 1 },
@@ -596,8 +618,8 @@ static Mne opsW65C816S[] =
 	{"tcs", tcsAsm, 0 },
 	{"tdc", tdcAsm, 0 },
 	{"trb", trbAsm, 1 },
-	{"tsb", tsbAsm, 1 },
 	{"tsa", tscAsm, 0 },
+	{"tsb", tsbAsm, 1 },
 	{"tsc", tscAsm, 0 },
 	{"tsx", tsxAsm, 0 },
 	{"txa", txaAsm, 0 },

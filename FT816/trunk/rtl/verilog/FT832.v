@@ -128,6 +128,7 @@
 `define PLDS        9'h12B
 `define PHCS        9'h14B
 `define PCHIST      9'h1F0
+`define CACHE       9'h1E0
 
 `define ADC_IMM		9'h69
 `define ADC_ZP		9'h65
@@ -477,11 +478,9 @@
 `define CPY_XABS	9'h1CC
 
 `define TRB_ZP		9'h14
-`define TRB_ZPX		9'h14
 `define TRB_ABS		9'h1C
 `define TRB_XABS	9'h11C
 `define TSB_ZP		9'h04
-`define TSB_ZPX		9'h04
 `define TSB_ABS		9'h0C
 `define TSB_XABS	9'h10C
 
@@ -671,8 +670,6 @@ reg [3:0] cnt;      // icache counter
 reg [127:0] ir;     // the instruction register
 wire [8:0] ir9 = {pg2,ir[7:0]}; // The first byte of the instruction
 reg [23:0] pc,opc;
-reg [23:0] pc_hist [31:0];  // program counter history buffer
-reg [4:0] pchcnt;           // index into pc history buffer
 reg pc_cap;                 // pc history capture flag
 reg [31:0] cs;              // code segment
 wire [31:0] cspc = cs + pc;
@@ -780,7 +777,7 @@ wire isRMW8 =
 			 ir9==`ASL_ABSX || ir9==`ROL_ABSX || ir9==`LSR_ABSX || ir9==`ROR_ABSX || ir9==`INC_ABSX || ir9==`DEC_ABSX ||
 			 ir9==`ASL_XABS || ir9==`ROL_XABS || ir9==`LSR_XABS || ir9==`ROR_XABS || ir9==`INC_XABS || ir9==`DEC_XABS ||
              ir9==`ASL_XABSX || ir9==`ROL_XABSX || ir9==`LSR_XABSX || ir9==`ROR_XABSX || ir9==`INC_XABSX || ir9==`DEC_XABSX ||
-			 ir9==`TRB_ZP || ir9==`TRB_ZPX || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ZPX || ir9==`TSB_ABS ||
+			 ir9==`TRB_ZP || ir9==`TRB_ABS || ir9==`TSB_ZP || ir9==`TSB_ABS ||
 			 ir9==`TRB_XABS || ir9==`TSB_XABS
 			 ;
 wire isBranch = ir9==`BRA || ir9==`BEQ || ir9==`BNE || ir9==`BVS || ir9==`BVC || ir9==`BMI || ir9==`BPL || ir9==`BCS || ir9==`BCC ||
@@ -805,6 +802,8 @@ reg inv_icache;
 reg wr_itag;
 wire hit0,hit1;
 reg prc_hit0,prc_hit1;
+reg inv_iline;
+
 ft832_itagmem uitm1
 (
     .wclk(clk),
@@ -812,6 +811,7 @@ ft832_itagmem uitm1
     .wr(wr_icache & wr_itag),
     .wa(ado),
     .invalidate(inv_icache),
+    .invalidate_line(inv_iline),
     .rclk(~clk),
     .rce(1'b1),
     .pc(cspc),
@@ -907,6 +907,16 @@ assign rw = be ? rwo : 1'bz;
 assign ad = be ? ado : {32{1'bz}};
 assign db = rwo ? {8{1'bz}} : be ? dbo : {8{1'bz}};
 
+wire [31:0] pc_hist_o;
+
+c_shift_ram_0 pc_hist_buf (
+  .A(x[5:0]),      // input wire [5 : 0] A
+  .D(pc),      // input wire [31 : 0] D
+  .CLK(clk),  // input wire CLK
+  .CE(state==IFETCH && hit0 && hit1 && pc_cap),    // input wire CE
+  .Q(pc_hist_o)      // output wire [31 : 0] Q
+);
+
 reg [31:0] phi11r,phi12r,phi81r,phi82r;
 assign phi11 = phi11r[31];
 assign phi12 = phi12r[31];
@@ -1000,6 +1010,7 @@ if (~rst) begin
 	abort1 <= 1'b0;
 	imcd <= 3'b111;
 	inv_icache <= TRUE;
+	inv_iline <= FALSE;
 	pchcnt <= 5'd0;
 	pc_cap <= TRUE;
 end
@@ -1011,6 +1022,7 @@ if (~nmi & nmi1)
 	nmi_edge <= 1'b1;
 if (~nmi|~nmi1)
 	clk_en <= 1'b1;
+inv_iline <= FALSE;
 case(state)
 RESET1:
 	begin
@@ -1034,10 +1046,6 @@ IFETCH:
 		vect <= m832 ? `BRK_VECT_832 : m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		hwi <= `FALSE;
 		isBusErr <= `FALSE;
-		if (pc_cap) begin
-            pc_hist[pchcnt] <= pc;
-            pchcnt <= pchcnt + 5'd1;
-		end
 		pg2 <= FALSE;
 		isIY <= `FALSE;
 		isIY24 <= `FALSE;
@@ -1441,11 +1449,7 @@ DECODE:
 		      end
 		`SEP:	inc_pc(24'd2);	// see byte_ifetch
 		`REP:	inc_pc(24'd2);
-		`PCHIST:
-		      begin
-		          res32 <= pc_hist[pchcnt];
-		          pchcnt <= pchcnt + 5'd1;
-		      end
+		`PCHIST:  res32 <= pc_hist_o;
 		// XBA cannot be done in the ifetch stage because it'd repeat when there
 		// was a cache miss, causing the instruction to be done twice.
 		`XBA:	
@@ -2736,6 +2740,18 @@ DECODE:
                 pc <= pc;       // override increment above
                 state <= LOAD_MAC1;
             end
+        `CACHE:
+            begin
+                inc_pc(24'd2);
+                case(ir[15:8])
+                8'h00:  inv_icache <= TRUE; // invalidate entire instruction cache
+                8'h01:  begin
+                        ado <= acc;
+                        inv_iline <= TRUE;
+                        end
+                default:    ;
+                endcase
+            end
         default:
 			begin
 				next_state(IFETCH);
@@ -3590,6 +3606,8 @@ MVN816:
 ICACHE1:
     begin
         rwo <= TRUE;
+        inv_icache <= FALSE;
+        inv_iline <= FALSE;
         if (!hit0) begin
             prc_hit0 <= TRUE;
             vpa <= TRUE;
@@ -3617,7 +3635,11 @@ ICACHE2:
             wr_itag <= TRUE;
         if (cnt == 4'hF) begin
             vpa <= FALSE;
-            next_state((hit1|prc_hit1) ? IFETCH : ICACHE1);
+            if (hit1|prc_hit1) begin
+                next_state(IFETCH);
+            end
+            else
+                next_state(ICACHE1);
             wr_itag <= FALSE;
             wr_icache <= FALSE;
         end
@@ -3768,12 +3790,13 @@ endcase
 
 endmodule
 
-module ft832_itagmem(wclk, wce, wr, wa, invalidate, rclk, rce, pc, hit0, hit1);
+module ft832_itagmem(wclk, wce, wr, wa, invalidate, invalidate_line, rclk, rce, pc, hit0, hit1);
 input wclk;
 input wce;
 input wr;
 input [31:0] wa;
 input invalidate;
+input invalidate_line;
 input rclk;
 input rce;
 input [31:0] pc;
@@ -3789,6 +3812,7 @@ always @(posedge wclk)
 	if (wce & wr) mem[wa[11:4]] <= wa[31:12];
 always @(posedge wclk)
 	if (invalidate) tvalid <= 256'd0;
+	else if (invalidate_line) tvalid[wa[11:4]] <= 1'b0;
 	else if (wce & wr) tvalid[wa[11:4]] <= 1'b1;
 always @(posedge rclk)
 	if (rce) rpc <= pc;
