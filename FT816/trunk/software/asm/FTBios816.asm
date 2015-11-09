@@ -26,6 +26,7 @@ CR			EQU		13
 LF			EQU		10
 ESC			EQU		$1B
 BS			EQU		8
+CTRLC		EQU		3
 
 SC_LSHIFT	EQU		$12
 SC_RSHIFT	EQU		$59
@@ -47,18 +48,21 @@ KeyState1	EQU		$8
 KeyState2	EQU		$9
 KeybdLEDs	EQU		$A
 KeybdWaitFlag	EQU	$B
+NumWorkArea	EQU		$C
 
 ; Range $10 to $1F reserved for hardware counters
 CNT0L		EQU		$10
 CNT0M		EQU		$11
 CNT0H		EQU		$12
-; Range $20 to $2F reserved for tri-byte pointers
+RangeStart	EQU		$20
+RangeEnd	EQU		$24
 CursorX		EQU		$30
 CursorY		EQU		$32
 VideoPos	EQU		$34
 NormAttr	EQU		$36
 StringPos	EQU		$38
 EscState	EQU		$3C
+
 OutputVec	EQU		$03F0
 
 VIDBUF		EQU		$FD0000
@@ -70,13 +74,15 @@ FAC1		EQU		$FEA200
 .include "supermon816.asm"
 .include "FAC1ToString.asm"
 
-	cpu		W65C816S
+;	cpu		W65C816S
+	cpu		FT832
 	.org	$E000
 
 start:
 	SEI
 	CLD
 	CLC					; switch to '816 mode
+	BIT		start		; set overflow bit
 	XCE
 	REP		#$30		; set 16 bit regs & mem
 	NDX 	16
@@ -117,7 +123,10 @@ start:
 	REP		#$30		; set 16 bit regs & mem
 	NDX 	16
 	MEM		16
-	
+
+	LDA		#BrkRout1
+	STA		$0102
+
 ;	CLI
 
 	stz		TickCount
@@ -156,6 +165,7 @@ start:
 	JSR		OutChar
 	JSR		DispFAC1
 	JSR		KeybdInit
+Mon1:
 .mon1:
 	JSR		OutCRLF
 	LDA		#'$'
@@ -171,23 +181,32 @@ start:
 	ASL
 	TAX
 	LDA		LineTbl,X
+	ASL
 	TAX
 .mon4:
+	JSR		IgnoreBlanks
 	JSR		MonGetch
 	CMP		#'$'
-	BEQ		.mon4
-	CMP		#' '
-	BEQ		.mon4
-	CMP		#'\t'
 	BEQ		.mon4
 	CMP		#'S'
 	BNE		.mon2
 	JMP		$C000		; invoke Supermon816
 .mon2:
 	CMP		#'C'
-	BNE		.mon1
+	BNE		.mon5
 	JSR		ClearScreen
+	JSR		HomeCursor
 	BRA		.mon1
+.mon5:
+	CMP		#'M'
+	LBEQ	doMemoryDump
+	CMP		#'D'
+	LBEQ	doDisassemble
+	CMP		#'>'
+	LBEQ	doMemoryEdit
+	CMP		#'J'
+	LBEQ	doJump
+	BRA		Mon1
 
 ; Get a character from the screen, skipping over spaces and tabs
 ;
@@ -195,8 +214,6 @@ MonGetNonSpace:
 .0001:
 	JSR		MonGetch
 	CMP		#' '
-	BEQ		.0001
-	CMP		#'\t'
 	BEQ		.0001
 	RTS
 
@@ -208,6 +225,192 @@ MonGetch:
 	INX
 	AND		#$FF
 	JSR		ScreenToAscii
+	RTS
+
+;------------------------------------------------------------------------------
+; Dump memory.
+;------------------------------------------------------------------------------
+
+doMemoryDump:
+	JSR		IgnoreBlanks
+	JSR		GetRange
+	JSR		OutCRLF
+.0007:
+	LDA		#'>'
+	JSR		OutChar
+	JSR		DispRangeStart
+	LDY		#0
+.0001:
+	LDA		[RangeStart],Y
+	JSR		DispByte
+	LDA		#' '
+	JSR		OutChar
+	INY
+	CPY		#8
+	BNE		.0001
+	LDY 	#0
+.0005:
+	LDA		[RangeStart],Y
+	CMP		#$' '
+	BCS		.0002
+.0004:
+	LDA		#'.'
+	BRA		.0003
+.0002:
+	CMP		#$7f
+	BCC		.0004
+.0003:
+	JSR		OutChar
+	INY
+	CPY		#8
+	BNE		.0005
+	JSR		OutCRLF
+	CLC
+	LDA		RangeStart
+	ADC		#8
+	STA		RangeStart
+	BCC		.0006
+	INC		RangeStart+2
+.0006:
+	SEC
+	LDA		RangeEnd
+	SBC		RangeStart
+	LDA		RangeEnd+2
+	SBC		RangeStart+2
+	PHP
+	JSR		KeybdGetCharNoWait
+	CMP		#CTRLC
+	BEQ		.0009
+	PLP
+	BPL		.0007
+.0008:
+	JMP		Mon1
+.0009:
+	PLP
+	JMP		Mon1
+
+;------------------------------------------------------------------------------
+; Edit memory.
+;------------------------------------------------------------------------------
+
+doMemoryEdit:
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	Mon1
+	LDA		NumWorkArea
+	STA		RangeStart
+	LDA		NumWorkArea+1
+	STA		RangeStart+1
+	LDY		#0
+.0001:
+	PHY
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.0002
+	PLY
+	SEP		#$20
+	LDA		NumWorkArea
+	STA		[RangeStart],Y
+	REP		#$20
+	INY
+	CPY		#8
+	BNE		.0001
+	BRL		Mon1
+.0002:
+	PLY
+	BRL		Mon1
+
+;------------------------------------------------------------------------------
+; Disassemble code
+;------------------------------------------------------------------------------
+
+doDisassemble:
+	JSR		MonGetch
+	CMP		#'M'
+	BEQ		.0002
+.0004:
+	CMP		#'N'
+	BNE		.0003
+	SEP		#$20
+	MEM		8
+	LDA		$BC
+	ORA		#$40
+	STA		$BC
+	REP		#$20
+	BRA		.0005
+.0002:
+	SEP		#$20
+	LDA		$BC
+	ORA		#$80
+	STA		$BC
+	REP		#$20
+	JSR		MonGetch
+	BRA		.0004
+	MEM		16
+.0003:
+	DEX
+	DEX
+.0005:
+	JSR		IgnoreBlanks
+	JSR		GetRange
+	LDA		RangeStart
+	STA		$8F				; addra
+	LDA		RangeStart+1
+	STA		$90
+	JSR		OutCRLF
+	LDY		#20
+.0001:
+	PHY
+	SEP		#$30
+	JSR		dpycod
+	REP		#$30
+	JSR		OutCRLF
+	PLY
+	DEY
+	BNE		.0001
+	JMP		Mon1
+
+;$BC flimflag
+
+;------------------------------------------------------------------------------
+; Jump to subroutine
+;------------------------------------------------------------------------------
+
+doJump:
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	Mon1
+	LDA		#$5C			; JML opcode
+	STA		RangeEnd-1
+	LDA		NumWorkArea
+	STA		RangeEnd
+	LDA		NumWorkArea+1
+	STA		RangeEnd+1
+	JSL		RangeEnd
+	BRL		Mon1
+
+DispRangeStart:
+	LDA		RangeStart+1
+	JSR		DispWord
+	LDA		RangeStart
+	JSR		DispByte
+	LDA		#' '
+	JMP		OutChar
+	
+;------------------------------------------------------------------------------
+; Skip over blanks in the input
+;------------------------------------------------------------------------------
+
+IgnoreBlanks:
+.0001:
+	JSR		MonGetch
+	CMP		#' '
+	BEQ		.0001
+	DEX
+	DEX
 	RTS
 
 ;------------------------------------------------------------------------------
@@ -265,7 +468,7 @@ BIOSInput:
 	bra		.st0001
 
 msgStarting:
-	.byte	"FT816 Test System Starting",CR,LF,0
+	.byte	"FT832 Test System Starting",CR,LF,0
 
 echo_switch:
 	lda		$7100
@@ -621,8 +824,9 @@ DisplayString2:
 
 CursorOn:
 	PHA
-	LDA		#$0760
+	LDA		#$1F60
 	STA		VIDREGS+9
+	PLA
 	RTS
 
 CursorOff:
@@ -650,7 +854,7 @@ ScrollUp:
 	LDX		#0
 	LDY 	#TEXTROWS*TEXTCOLS
 .0001:
-	LDA		VIDBUF+112,X
+	LDA		VIDBUF+TEXTCOLS*2,X
 	STA		VIDBUF,X
 	INX
 	INX
@@ -662,6 +866,7 @@ BlankLine:
 	ASL
 	TAX
 	LDA		LineTbl,X
+	ASL
 	TAX
 	LDY		#TEXTCOLS
 	LDA		NormAttr
@@ -702,6 +907,113 @@ DispNybble:
 	RTS
 
 ;------------------------------------------------------------------------------
+; Get a range (two hex numbers)
+;------------------------------------------------------------------------------
+
+GetRange:
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.0001
+	LDA		NumWorkArea
+	STA		RangeStart
+	STA		RangeEnd
+	LDA		NumWorkArea+2
+	STA		RangeStart+2
+	STA		RangeEnd+2
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.0001
+	LDA		NumWorkArea
+	STA		RangeEnd
+	LDA		NumWorkArea+2
+	STA		RangeEnd+2
+.0001:
+	RTS
+	
+;------------------------------------------------------------------------------
+; Get a hexidecimal number. Maximum of six digits.
+; .X = text pointer (updated)
+;------------------------------------------------------------------------------
+;
+GetHexNumber:
+	LDY		#0					; maximum of six digits
+	STZ		NumWorkArea
+	STZ		NumWorkArea+2
+gthxn2:
+	JSR		MonGetch
+	JSR		AsciiToHexNybble
+	BMI		gthxn1
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	ORA		NumWorkArea
+	STA		NumWorkArea
+	INY
+	CPY		#6
+	BNE		gthxn2
+	RTS
+gthxn1:
+	DEX
+	DEX
+	RTS
+
+;------------------------------------------------------------------------------
+; Convert ASCII character in the range '0' to '9', 'a' to 'f' or 'A' to 'F'
+; to a hex nybble.
+;------------------------------------------------------------------------------
+;
+AsciiToHexNybble:
+	CMP		#'0'
+	BCC		gthx3
+	CMP		#'9'+1
+	BCS		gthx5
+	SEC
+	SBC		#'0'
+	RTS
+gthx5:
+	CMP		#'A'
+	BCC		gthx3
+	CMP		#'F'+1
+	BCS		gthx6
+	SEC
+	SBC		#'A'
+	CLC
+	ADC		#10
+	RTS
+gthx6:
+	CMP		#'a'
+	BCC		gthx3
+	CMP		#'z'+1
+	BCS		gthx3
+	SEC
+	SBC		#'a'
+	CLC
+	ADC		#10
+	RTS
+gthx3:
+	LDA		#-1		; not a hex number
+	RTS
+
+AsciiToDecNybble:
+	CMP		#'0'
+	BCC		gtdc3
+	CMP		#'9'+1
+	BCS		gtdc3
+	SEC
+	SBC		#'0'
+	RTS
+gtdc3:
+	LDA		#-1
+	RTS
+
+;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; Keyboard processing routines follow.
 ;------------------------------------------------------------------------------
@@ -711,6 +1023,8 @@ KeybdInit:
 	SEP		#$30
 	MEM		8
 	NDX		8
+	STZ		KeyState1
+	STZ		KeyState2
 	LDY		#$5
 .0001:
 	JSR		KeybdRecvByte	; Look for $AA
@@ -1188,6 +1502,10 @@ SuperPutch:
 	PLP
 	RTS
 
+ICacheIL832:
+	CACHE	#1			; 1= invalidate instruction line identified by accumulator
+	RTS
+
 IRQRout:
 	REP		#$30
 	NDX		16
@@ -1196,7 +1514,7 @@ IRQRout:
 	LDA		TickCount
 	INA
 	STA		TickCount
-	STA		$FD00A6
+	STA		$FD00A4
 	SEP		#$30
 	NDX		8
 	MEM		8
@@ -1212,12 +1530,38 @@ IRQRout:
 	PLA
 	RTI
 
+; The following store sequence for the benefit of Supermon816
+;
 BrkRout:
+	PHD
+	PHB
+	REP		#$30
+	PHA
+	PHX
+	PHY
+	JMP		($0102)		; This jump normally points to BrkRout1
+BrkRout1:
+	REP		#$30
+	PLY
+	PLX
+	PLA
+	PLB
+	PLD
 	SEP		#$20
 	PLA
-	REP		#$20
+	REP		#$30
 	PLA
 	JSR		DispWord
+	LDY		#32
+.0001:
+	.word	$f042		; pchist
+	JSR		DispWord
+	LDA		#' '
+	JSR		OutChar
+	DEY
+	BNE		.0001
+	LDA		#$FFFF
+	STA		$7000
 Hung:
 	BRA		Hung
 	
@@ -1253,6 +1597,18 @@ LineTbl:
 	.WORD	TEXTCOLS*28
 	.WORD	TEXTCOLS*29
 	.WORD	TEXTCOLS*30
+
+	cpu		FT832
+	MEM		32
+	NDX		32
+	LDA		#$12345678
+	LDX		#$98765432
+	STA		{$23},Y
+	LDY		$44455556,X
+	LDA		CS:$44455556,X
+	LDA		SEG $88888888:$1234,Y
+	JSF	    $0000:start
+	RTF
 
 	.org	$F400
 	JMP		SuperGetch
