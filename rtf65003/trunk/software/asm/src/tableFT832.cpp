@@ -590,6 +590,23 @@ static Opa cacheAsm[] =
     NULL
 };
 
+static Opa tskAsm[] =
+{
+	{AsmFT832::imm, 0x42A2, 1, AM_IMM},
+    {Asm6502::out16, 0x3A42, 0, AM_},
+    {Asm6502::out16, 0x3A42, 1, AM_ACC},
+    NULL
+};
+
+static Opa ldtAsm[] =
+{
+	{AsmFT832::xlabs, 0x424C, 1, AM_ZX},
+	{AsmFT832::xlabs, 0x424C, 1, AM_AX},
+	{AsmFT832::xlabs, 0x424C, 1, AM_AXL},
+	{AsmFT832::xlabs, 0x424C, 1, AM_XAXL},
+    NULL
+};
+
 static Mne opsFT832[] =
 {
 	{"adc", adcAsm, 1 },
@@ -653,6 +670,7 @@ static Mne opsFT832[] =
 	{"lbvs", lbvsAsm, 1 },
 
     {"lda", ldaAsm, 1 },
+    {"ldt", ldtAsm, 1 },
     {"ldx", ldxAsm, 1 },
     {"ldy", ldyAsm, 1 },
 
@@ -719,6 +737,7 @@ static Mne opsFT832[] =
 	{"tsa", tscAsm, 0 },
 	{"tsb", tsbAsm, 1 },
 	{"tsc", tscAsm, 0 },
+	{"tsk", tskAsm, 1 },
 	{"tsx", tsxAsm, 0 },
 	{"txa", txaAsm, 0 },
 	{"txs", txsAsm, 0 },

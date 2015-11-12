@@ -29,5 +29,6 @@ namespace RTFClasses
 		static bool isX32() { return ndx==32; };
 		static bool isM32() { return mem==32; };
 		static void doSegPrefix(void);
+		static void doSizePrefix(void);
 	};
 }

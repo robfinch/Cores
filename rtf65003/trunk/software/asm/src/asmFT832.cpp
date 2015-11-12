@@ -104,6 +104,7 @@ namespace RTFClasses
 		long loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
 
         doSegPrefix();
+        doSizePrefix();
         if (op > 255) {
             theAssembler.emit8(op>>8);
             theAssembler.emit8(op&255);
@@ -153,6 +154,7 @@ namespace RTFClasses
 
 		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
         doSegPrefix();
+        doSizePrefix();
         if (op > 255) {
             theAssembler.emit8(op>>8);
             theAssembler.emit8(op&255);
@@ -181,6 +183,7 @@ namespace RTFClasses
 
 		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
         doSegPrefix();
+        doSizePrefix();
 		theAssembler.emit8(o->oc);
 		theAssembler.emit16(d);
 	}
@@ -192,6 +195,7 @@ namespace RTFClasses
 
 		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
         doSegPrefix();
+        doSizePrefix();
 		theAssembler.emit8(o->oc);
 		theAssembler.emit16(d);
 		theAssembler.emit8(d>>16);
@@ -211,6 +215,18 @@ namespace RTFClasses
             }
         }
     }
+    
+    void AsmFT832::doSizePrefix(void)
+    {
+         if (theAssembler.gSzChar=='B')
+             theAssembler.emit16(0x8B42);
+         else if (theAssembler.gSzChar=='H')
+             theAssembler.emit16(0xAB42);
+         else if (theAssembler.gSzChar==('U'<<8|'B'))
+             theAssembler.emit16(0x9B42);
+         else if (theAssembler.gSzChar==('U'<<8|'H'))
+             theAssembler.emit16(0xBB42);
+    }
 
 	void AsmFT832::xlabs(Opa *o)
 	{
@@ -219,6 +235,7 @@ namespace RTFClasses
 
 		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
         doSegPrefix();
+        doSizePrefix();
         if (op > 255) {
             theAssembler.emit8(op>>8);
             theAssembler.emit8(op&255);
