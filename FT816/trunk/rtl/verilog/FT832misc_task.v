@@ -28,16 +28,18 @@ begin
         sp <= sp_dec;
     end
 	else if (m816) begin
-		radr <= {16'h00,sp[15:0]};
-		wadr <= {16'h00,sp[15:0]};
+		radr <= {stack_bank,sp[15:0]};
+		wadr <= {stack_bank,sp[15:0]};
 		sp <= sp_dec;
-		sp[31:16] <= 16'h0000;
+		sp[31:16] <= stack_bank;
+        bank_wrap <= TRUE;
 	end
 	else begin
-		radr <= {24'h0001,sp[7:0]};
-		wadr <= {24'h0001,sp[7:0]};
+		radr <= {stack_page,sp[7:0]};
+		wadr <= {stack_page,sp[7:0]};
 		sp[7:0] <= sp[7:0] - 8'd1;
-		sp[31:8] <= 24'h1;
+		sp[31:8] <= stack_page;
+        page_wrap <= TRUE;
 	end
 end
 endtask
@@ -45,17 +47,20 @@ endtask
 task inc_sp;
 begin
     if (m832) begin
-		radr <= sp_inc;
+        radr <= sp_inc;
         sp <= sp_inc;
     end
-	else if (m816) begin
-		radr <= {16'h0000,sp_inc[15:0]};
-		sp <= sp_inc;
-	end
-	else begin
-		radr <= {24'h0001,sp_inc[7:0]};
-		sp <= {24'h1,sp_inc[7:0]};
-	end
+    else if (m816) begin
+        radr <= {stack_bank,sp_inc[15:0]};
+        sp <= sp_inc;
+        sp[31:16] <= stack_bank;
+        bank_wrap <= TRUE;
+    end
+    else begin
+        radr <= {stack_page,sp_inc[7:0]};
+        sp <= {stack_page,sp_inc[7:0]};
+        page_wrap <= TRUE;
+    end
 end
 endtask
 
@@ -88,55 +93,57 @@ begin
     end
 	else if (m816) begin
 		if (szFlg2) begin
-            radr <= {16'h00,sp_dec3[15:0]};
-            wadr <= {16'h00,sp_dec3[15:0]};
+            radr <= {stack_bank,sp_dec3[15:0]};
+            wadr <= {stack_bank,sp_dec3[15:0]};
             store_what <= SW8;
             sp <= sp_dec4;
-			sp[31:16] <= 16'h00;
+			sp[31:16] <= stack_bank;
             s32 <= TRUE;
         end
 		else if (szFlg) begin
-			radr <= {16'h00,sp_dec[15:0]};
-			wadr <= {16'h00,sp_dec[15:0]};
+			radr <= {stack_bank,sp_dec[15:0]};
+			wadr <= {stack_bank,sp_dec[15:0]};
 			s16 <= TRUE;
 			store_what <= SW8;
 			sp <= sp_dec2;
-			sp[31:16] <= 16'h00;
+			sp[31:16] <= stack_bank;
 		end
 		else begin
-			radr <= {16'h00,sp[15:0]};
-			wadr <= {16'h00,sp[15:0]};
+			radr <= {stack_bank,sp[15:0]};
+			wadr <= {stack_bank,sp[15:0]};
 			store_what <= SW8;
 			sp <= sp_dec;
-			sp[31:16] <= 16'h00;
+			sp[31:16] <= stack_bank;
 		end
+        bank_wrap <= TRUE;
 	end
 	else begin
 	    // We could be pushing the CS or DS from
 	    // emulation mode.
 		if (szFlg2) begin
-            radr <= {24'h01,sp_dec3[7:0]};
-            wadr <= {24'h01,sp_dec3[7:0]};
+            radr <= {stack_page,sp_dec3[7:0]};
+            wadr <= {stack_page,sp_dec3[7:0]};
             store_what <= SW8;
             sp <= sp_dec4;
             sp[31:8] <= 24'd1;
             s32 <= TRUE;
         end
 		else if (szFlg) begin
-            radr <= {24'h01,sp_dec[8:0]};
-            wadr <= {24'h01,sp_dec[8:0]};
+            radr <= {stack_page,sp_dec[8:0]};
+            wadr <= {stack_page,sp_dec[8:0]};
             s16 <= TRUE;
             store_what <= SW8;
             sp <= sp_dec2;
-            sp[31:8] <= 24'h01;
+            sp[31:8] <= stack_page;
         end
         else begin
-            radr <= {16'h01,sp[7:0]};
-            wadr <= {16'h01,sp[7:0]};
+            radr <= {stack_page,sp[7:0]};
+            wadr <= {stack_page,sp[7:0]};
             store_what <= SW8;
             sp[7:0] <= sp[7:0] - 8'd1;
-            sp[31:8] <= 8'h1;
+            sp[31:8] <= stack_page;
         end
+        page_wrap <= TRUE;
 	end
 	data_nack();
 	state <= STORE1;
