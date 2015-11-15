@@ -30,23 +30,18 @@
 
 `define DEBUG		1'b1
 
-`define SUPPORT_ICACHE	1'b1
+// Comment out the SUPPORT_xxx definitions to remove a core feature.
+`define SUPPORT_TASK	1'b1
+`define TASK_MEM        512
+`define TASK_MEM_ABIT   8
+`define SUPPORT_SEG     1'b1
 `define ICACHE_4K		1'b1
 //`define ICACHE_16K		1'b1
 //`define ICACHE_2WAY		1'b1
-//`define SUPPORT_DCACHE	1'b1
 `define SUPPORT_BCD		1'b1
-`define SUPPORT_DIVMOD		1'b1
-`define SUPPORT_EM8		1'b1
-`define SUPPORT_816		1'b1
-//`define SUPPORT_EXEC	1'b1
-`define SUPPORT_BERR	1'b1
-`define SUPPORT_STRING	1'b1
-`define SUPPORT_SHIFT	1'b1
 //`define SUPPORT_CGI		1'b1			// support the control giveaway interrupt
+`define SUPPORT_NEW_INSN    1'b1
 
-`define BRK_VECTNO	9'd0
-`define SLP_VECTNO	9'd1
 `define BYTE_RST_VECT	32'h0000FFFC
 `define BYTE_NMI_VECT	32'h0000FFFA
 `define BYTE_IRQ_VECT	32'h0000FFFE
@@ -106,13 +101,13 @@
 `define TCD			9'h5B
 `define TDC			9'h7B
 `define STP			9'hDB
-`define NAT			9'hFB
-`define EMM			9'hFB
 `define XCE			9'hFB
 `define INA			9'h1A
 `define DEA			9'h3A
 `define SEP			9'hE2
+`define SEP16       9'h1E2
 `define REP			9'hC2
+`define REP16       9'h1C2
 `define PEA			9'hF4
 `define PEI			9'hD4
 `define PER			9'h62
@@ -153,9 +148,6 @@
 `define ADC_XABS	9'h16D
 `define ADC_XABSX	9'h17D
 `define ADC_XABSY	9'h179
-`define TSK_IMM     9'h1A2
-`define TSK_ACC     9'h13A
-`define LDT         9'h14C
 
 `define SBC_IMM		9'hE9
 `define SBC_ZP		9'hE5
@@ -407,6 +399,7 @@
 `define JSF			9'h122
 `define JSR_INDX	9'hFC
 `define RTS			9'h60
+`define RTT         9'h160
 `define RTL			9'h6B
 `define RTF			9'h16B
 `define NOP			9'hEA
@@ -490,7 +483,12 @@
 
 `define MVP			9'h44
 `define MVN			9'h54
-`define STS			9'h144
+`define FILL		9'h144
+
+`define TSK_IMM     9'h1A2
+`define TSK_ACC     9'h13A
+`define LDT_XABSX   9'h14C
+`define LDT_XABS    9'h16C
 
 // Page Two Opcodes
 `define PG2			9'h42
@@ -527,7 +525,8 @@
 `define CS_158      6'd41
 `define CS_2316     6'd42
 `define CS_3124     6'd43
-`define LDW_TR      6'd44
+`define LDW_TR70    6'd44
+`define LDW_TR158   6'd45
 
 `define STW_DEF		6'h1
 `define STW_CS3124  6'd4
@@ -663,10 +662,14 @@ reg [127:0] ir;     // the instruction register
 wire [8:0] ir9 = {pg2,ir[7:0]}; // The first byte of the instruction
 reg [23:0] pc,opc;
 reg pc_cap;                 // pc history capture flag
+`ifdef SUPPORT_SEG
+reg [31:0] ds;              // data segment
 reg [31:0] cs;              // code segment
 wire [31:0] cspc = cs + pc;
+`else
+wire [31:0] cspc = pc;
+`endif
 reg [15:0] dpr;		        // direct page register
-reg [31:0] ds;              // data segment
 reg [7:0] dbr;		        // data bank register
 reg [31:0] x,y,acc,sp;      // programming model registers
 reg [23:0] stack_page = 24'd1;    // The default stack page for eight bit emulation
@@ -840,10 +843,11 @@ ft832_itagmem uitm1
     .hit1(hit1)
 );
 
-reg [7:0] tr;
+`ifdef SUPPORT_TASK
+reg [`TASK_MEM_ABIT:0] tr;
 reg tskm_we;
 reg tskm_wr;
-reg [7:0] tskm_wa;
+reg [`TASK_MEM_ABIT:0] tskm_wa;
 
 wire [31:0] cs_o;
 wire [31:0] ds_o;
@@ -856,6 +860,7 @@ wire [7:0] sr_o;
 wire [7:0] srx_o;
 wire [7:0] dbr_o;
 wire [15:0] dpr_o;
+wire [`TASK_MEM_ABIT:0] bl_o;
 reg [31:0] cs_i;
 reg [31:0] ds_i;
 reg [23:0] pc_i;
@@ -867,6 +872,8 @@ reg [7:0] sr_i;
 reg [7:0] srx_i;
 reg [7:0] dbr_i;
 reg [15:0] dpr_i;
+reg [`TASK_MEM_ABIT:0] bl_i;
+reg [`TASK_MEM_ABIT:0] back_link;
 
 task_mem utskm1
 (
@@ -885,6 +892,7 @@ task_mem utskm1
     .srx_i(srx_i),
     .db_i(dbr_i),
     .dpr_i(dpr_i),
+    .bl_i(bl_i),
     .rclk(~clk),
     .rce(1'b1),
     .ra(tr),
@@ -898,8 +906,10 @@ task_mem utskm1
     .sr_o(sr_o),
     .srx_o(srx_o),
     .db_o(dbr_o),
-    .dpr_o(dpr_o)
+    .dpr_o(dpr_o),
+    .bl_o(bl_o)
 );
+`endif
 
 // Registerable decodes
 // The following decodes can be registered because they aren't needed until at least the cycle after
@@ -1120,6 +1130,7 @@ if (~rst) begin
 	inv_icache <= TRUE;
 	inv_iline <= FALSE;
 	pc_cap <= TRUE;
+	tr <= 8'h00;
     tskm_we <= FALSE;
     tskm_wr <= FALSE;
 end
@@ -1132,15 +1143,19 @@ if (~nmi & nmi1)
 if (~nmi|~nmi1)
 	clk_en <= 1'b1;
 inv_iline <= FALSE;
+`ifdef SUPPORT_TASK
 tskm_we <= FALSE;
 tskm_wr <= FALSE;
+`endif
 case(state)
 RESET1:
 	begin
 		radr <= `BYTE_RST_VECT;
 		load_what <= `PC_70;
+`ifdef SUPPORT_SEG
 		cs <= 32'd0;
 		ds <= 32'd0;
+`endif
 		seg <= 32'd0;
 		inv_icache <= FALSE;
 		state <= LOAD_MAC1;
@@ -1171,7 +1186,9 @@ IFETCH:
 		sop <= FALSE;
 		bank_wrap <= FALSE;
 		page_wrap <= FALSE;
+`ifdef SUPPORT_SEG
 		seg <= ds;
+`endif
 		store_what <= (m32 | m16) ? `STW_DEF70 : `STW_DEF;
 		ir <= insn;
 		opc <= pc;
@@ -1246,6 +1263,43 @@ IFETCH:
 				vf <= vf & ~ir[14];
 				nf <= nf & ~ir[15];
 			end
+`ifdef SUPPORT_NEW_INSN
+		`SEP16:
+                begin
+                    cf <= cf | ir[8];
+                    zf <= zf | ir[9];
+                    im <= im | ir[10];
+                    df <= df | ir[11];
+                    if (m816|m832) begin
+                        x_bit <= x_bit | ir[12];
+                        m_bit <= m_bit | ir[13];
+                        //if (ir[13]) acc[31:8] <= 24'd0;
+                        if (ir[12]) begin
+                            x[31:8] <= 24'd0;
+                            y[31:8] <= 24'd0;
+                        end
+                    end
+                    vf <= vf | ir[14];
+                    nf <= nf | ir[15];
+                    m816 <= m816 | ir[16];
+                    m832 <= m832 | ir[17];
+                end
+		`REP16:
+            begin
+                cf <= cf & ~ir[8];
+                zf <= zf & ~ir[9];
+                im <= im & ~ir[10];
+                df <= df & ~ir[11];
+                if (m816|m832) begin
+                    x_bit <= x_bit & ~ir[12];
+                    m_bit <= m_bit & ~ir[13];
+                end
+                vf <= vf & ~ir[14];
+                nf <= nf & ~ir[15];
+                m816 <= m816 & ~ir[16];
+                m832 <= m832 & ~ir[17];
+            end
+`endif
 		`XBA:
 			begin
 			    if (m832) begin
@@ -1488,7 +1542,9 @@ IFETCH:
 		      else if (m16) begin nf <= resn16; zf <= resz16; end
 		      else begin nf <= resn8; zf <= resz8; end
 		`PLB:	begin dbr <= res32[7:0]; nf <= resn8; zf <= resz8; end
+`ifdef SUPPORT_NEW_INSN
 		`PLDS:	begin ds <= res32; nf <= resn32; zf <= resz32; end
+`endif
         `PLD:   begin dpr <= res32[15:0]; nf <= resn16; zf <= resz16; end
 		endcase
 		end	// abort_edge
@@ -1511,6 +1567,8 @@ DECODE:
 		      ir <= {8'h00,ir[127:8]};
 		      next_state(DECODE);
 		      end
+`ifdef SUPPORT_NEW_INSN
+`ifdef SUPPORT_SEG
 		`CS:  begin
 		      seg <= cs;
 		      ir <= {8'h00,ir[127:8]};
@@ -1533,10 +1591,14 @@ DECODE:
 		      ir <= {40'h00,ir[127:40]};
 		      next_state(DECODE);
 		      end
+`endif
 		`BYT: begin sop <= TRUE; lds <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
 		`UBT: begin sop <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
 		`HAF: begin sop <= TRUE; lds <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
 		`UHF: begin sop <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
+		`SEP16:	  inc_pc(24'd3);	// see byte_ifetch
+        `REP16:   inc_pc(24'd3);
+`endif
 		`SEP:	inc_pc(24'd2);	// see byte_ifetch
 		`REP:	inc_pc(24'd2);
 		`PCHIST:  res32 <= pc_hist_o;
@@ -1579,10 +1641,12 @@ DECODE:
 		`INX:	begin res32 <= x_inc; end
 		`DEY:	begin res32 <= y_dec; end
 		`INY:	begin res32 <= y_inc; end
+`ifdef SUPPORT_NEW_INSN
 		`DEX4:    res32 <= x - 32'd4;
 		`DEY4:    res32 <= y - 32'd4;
 		`INX4:    res32 <= x + 32'd4;
 		`INY4:    res32 <= y + 32'd4;
+`endif
 		`DEA:	res32 <= acc_dec;
 		`INA:	res32 <= acc_inc;
 		`TSX,`TSA:	res32 <= sp;
@@ -1597,13 +1661,18 @@ DECODE:
 		`LSR_ACC:	if (m32) res32 <= {acc[0],1'b0,acc[31:1]};
 		            else if (m16) res32 <= {acc[0],17'b0,acc[15:1]};
 		            else res32 <= {acc[0],25'b0,acc[7:1]};
+`ifdef SUPPORT_NEW_INSN
 		`ASR_ACC:	if (m32) res32 <= {acc[0],acc[31],acc[31:1]};
                     else if (m16) res32 <= {acc[0],16'b0,acc[15],acc[15:1]};
                     else res32 <= {acc[0],24'b0,acc[7],acc[7:1]};
+`endif
 		`ROR_ACC:	if (m32) res32 <= {acc[0],cf,acc[31:1]};
 		            else if (m16) res32 <= {acc[0],16'b0,cf,acc[15:1]};
 		            else res32 <= {acc[0],24'b0,cf,acc[7:1]};
-		`RTS,`RTL,`RTF:
+`ifdef SUPPORT_SEG
+		`RTF,
+`endif
+		`RTS,`RTL:
 			begin
 			    inc_sp();
 				load_what <= `PC_70;
@@ -1621,27 +1690,22 @@ DECODE:
 		`PHY:	tsk_push(`STW_Y70,xb16,xb32);
 //		`PHCS:  tsk_push(`STW_CS0,0,1);
         `PHK:   tsk_push(`STW_PC2316,0,0);
-		`PHDS:  tsk_push(`STW_DS70,0,1);
 		`PHB:   tsk_push(`STW_DBR,0,0);
 		`PHD:   tsk_push(`STW_DPR70,1,0);
-		`PHCS:
-            begin
-                set_sp();
-                store_what <= `STW_CS3124;
-                state <= STORE1;
-            end
 		`PEA:
             begin
                 inc_pc(24'd3);
                 wdat <= ir[23:8];
                 tsk_push(`STW_DEF70,1,0);
             end
+`ifdef SUPPORT_NEW_INSN
         `PEAxl:
             begin
                 inc_pc(24'd5);
                 wdat <= ir[39:8];
                 tsk_push(`STW_DEF70,0,1);
             end
+`endif
         `PER:
             begin
                 inc_pc(24'd3);
@@ -1672,14 +1736,6 @@ DECODE:
 				state <= LOAD_MAC1;
 				retstate <= IFETCH;
 			end
-		`PLDS:
-            begin
-                inc_sp();
-                s32 <= TRUE;
-                load_what <= `WORD_71S;
-                state <= LOAD_MAC1;
-                retstate <= IFETCH;
-            end
 		`PLB:
 			begin
 			    inc_sp();
@@ -2153,6 +2209,7 @@ DECODE:
                 retstate <= CALC;
                 state <= LOAD_MAC2;
             end
+`ifdef SUPPORT_NEW_INSN
 		// Handle {d,sp},y
 	   `LDA_XDSPIY:
             begin
@@ -2178,6 +2235,7 @@ DECODE:
                 state <= LOAD_MAC2;
                 retstate <= CALC;
             end
+`endif
         // Handle [zp],y
         `LDA_IYL:
             begin
@@ -2203,6 +2261,7 @@ DECODE:
                 state <= LOAD_MAC2;
                 retstate <= CALC;
             end
+`ifdef SUPPORT_NEW_INSN
         // Handle {zp},y
         `LDA_XIYL:
             begin
@@ -2228,6 +2287,7 @@ DECODE:
                 state <= LOAD_MAC2;
                 retstate <= CALC;
             end
+`endif
 		// Handle [zp]
 		`LDA_IL:
             begin
@@ -2255,6 +2315,7 @@ DECODE:
                 retstate <= CALC;
                 bank_wrap <= !m832;
             end
+`ifdef SUPPORT_NEW_INSN
 		// Handle {zp}
 		`LDA_XIL:
             begin
@@ -2282,6 +2343,7 @@ DECODE:
                 retstate <= CALC;
                 bank_wrap <= !m832;
             end
+`endif
         // Handle (zp)
         `LDA_I:
             begin
@@ -2427,6 +2489,7 @@ DECODE:
                 store_what <= `STW_Z70;
                 state <= STORE1;
             end
+`ifdef SUPPORT_NEW_INSN
 		// Handle xlabs
         `LDA_XABS:
             begin
@@ -2545,6 +2608,7 @@ DECODE:
                 store_what <= `STW_Z70;
                 state <= STORE1;
             end
+`endif
         // Handle abs,x
         `LDA_ABSX:
             begin
@@ -2621,6 +2685,7 @@ DECODE:
                 store_what <= `STW_Z70;
                 state <= STORE1;
             end
+`ifdef SUPPORT_NEW_INSN
         // Handle xlabs,x
         `LDA_XABSX:
             begin
@@ -2697,6 +2762,7 @@ DECODE:
                 store_what <= `STW_Z70;
                 state <= STORE1;
             end
+`endif
 		// Handle abs,y
         `LDA_ABSY:
             begin
@@ -2759,6 +2825,7 @@ DECODE:
                 data_nack();
                 state <= STORE1;
             end
+`ifdef SUPPORT_NEW_INSN
 		// Handle xlabs,y
         `LDA_XABSY:
             begin
@@ -2819,6 +2886,7 @@ DECODE:
                 store_what <= `STW_ACC70;
                 state <= STORE1;
             end
+`endif
 		// Handle al
         `LDA_AL:
             begin
@@ -2916,22 +2984,22 @@ DECODE:
                     inc_pc(24'd2);
                 else
                     pc <= pc;   // override increment above
-                set_sp();
                 if (m832) begin
-                    tskm_we <= TRUE;
-                    tskm_wr <= TRUE;
-                    tskm_wa <= tr;
-                    set_task_regs(24'd0);
-                    s16 <= FALSE;
-                    s32 <= FALSE;
+`ifdef SUPPORT_TASK
                     radr <= vect;
-                    load_what <= `LDW_TR;
+                    load_what <= `LDW_TR70;
+                    data_read(vect);
+					vpb <= TRUE;
                     next_state(LOAD_MAC2);
-                    retstate <= TSK1;
-                    df <= 1'b0;
-                    im <= !hwi;
+`else
+                    set_sp();
+                    store_what <= `STW_CS3124;
+                    data_nack();
+                    state <= STORE1;
+`endif
                 end
                 else begin
+                    set_sp();
                     store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
                     data_nack();
                     state <= STORE1;
@@ -2985,12 +3053,21 @@ DECODE:
                 load_what <= `PC_70;
                 state <= LOAD_MAC1;
             end
+`ifdef SUPPORT_NEW_INSN
         `JML_XINDX:
             begin
                 radr <= xalx_address;
                 load_what <= `PC_70;
                 state <= LOAD_MAC1;
             end
+        `JSL_XINDX:
+            begin
+                inc_pc(24'd4);  // Yes this should be one less than the instruction length.
+                set_sp();
+                store_what <= `STW_PC2316;
+                state <= STORE1;
+            end
+`endif
         `JMP_INDX:
             begin
                 radr <= absx_address;
@@ -3004,13 +3081,6 @@ DECODE:
                 store_what <= `STW_PC158;
                 state <= STORE1;
             end
-        `JSL_XINDX:
-            begin
-                inc_pc(24'd4);  // Yes this should be one less than the instruction length.
-                set_sp();
-                store_what <= `STW_PC2316;
-                state <= STORE1;
-            end
         `BRL:
             begin
                 inc_pc({{8{ir[23]}},ir[23:8]} + 24'd3);
@@ -3020,6 +3090,30 @@ DECODE:
             begin
                 pc <= ir[31:8];
                 next_state(IFETCH);
+            end
+        `JSL:
+                begin
+                    inc_pc(24'd3);
+                    set_sp();
+                    store_what <= `STW_PC2316;
+                    state <= STORE1;
+                end
+`ifdef SUPPORT_NEW_INSN
+`ifdef SUPPORT_SEG
+		`PHDS:  tsk_push(`STW_DS70,0,1);
+        `PHCS:
+            begin
+                set_sp();
+                store_what <= `STW_CS3124;
+                state <= STORE1;
+            end
+        `PLDS:
+            begin
+                inc_sp();
+                s32 <= TRUE;
+                load_what <= `WORD_71S;
+                state <= LOAD_MAC1;
+                retstate <= IFETCH;
             end
 		`JMF:
             begin
@@ -3051,13 +3145,6 @@ DECODE:
                     cs <= ir[63:32];
                 next_state(IFETCH);
             end
-        `JSL:
-            begin
-                inc_pc(24'd3);
-                set_sp();
-                store_what <= `STW_PC2316;
-                state <= STORE1;
-            end
         `JSF:
             begin
                 inc_pc(24'd7);
@@ -3067,32 +3154,51 @@ DECODE:
                 wadr <= sp;
                 state <= STORE1;
             end
+`endif
+`ifdef SUPPORT_TASK
         `TSK_IMM:
             begin
-                inc_pc(24'd2);
-                tskm_we <= TRUE;
-                tskm_wr <= TRUE;
-                tskm_wa <= tr;
-                set_task_regs(24'd2);
-                tr <= ir[15:8];
-                state <= TSK1;
+                inc_pc(24'd3);
+                if (tr != ir[`TASK_MEM_ABIT+8:8]) begin
+                    set_task_regs(24'd3);
+                    tr <= ir[`TASK_MEM_ABIT+8:8];
+                    back_link <= tr;
+                    state <= TSK1;
+                end
             end
         `TSK_ACC:
             begin
-                tskm_we <= TRUE;
-                tskm_wr <= TRUE;
-                tskm_wa <= tr;
-                set_task_regs(24'd1);
-                tr <= acc[7:0];
-                state <= TSK1;
+                if (tr != acc[`TASK_MEM_ABIT:0]) begin
+                    set_task_regs(24'd1);
+                    tr <= acc[`TASK_MEM_ABIT:0];
+                    back_link <= tr;
+                    state <= TSK1;
+                end
             end
-        `LDT:
+        `RTT:
+            begin
+                if (tr != bl_o) begin
+                    set_task_regs(24'd1);
+                    tr <= bl_o;
+                    state <= TSK1;
+                end
+            end
+        `LDT_XABS:
+            begin
+                inc_pc(24'd5);
+                cnt <= 4'd0;
+                radr <= ir[39:8];
+                next_state(LDT1);
+            end
+        `LDT_XABSX:
             begin
                 inc_pc(24'd5);
                 cnt <= 4'd0;
                 radr <= ir[39:8] + (x << 5);
                 next_state(LDT1);
             end
+`endif
+`endif
 		`MVN,`MVP:
             begin
                 radr <= mvnsrc_address;
@@ -3100,28 +3206,45 @@ DECODE:
                 pc <= pc;       // override increment above
                 state <= LOAD_MAC1;
             end
+`ifdef SUPPORT_NEW_INSN
         `CACHE:
             begin
                 inc_pc(24'd2);
                 case(ir[15:8])
                 8'h00:  inv_icache <= TRUE; // invalidate entire instruction cache
                 8'h01:  begin
-                        ado <= acc;
+                        ado <= {acc[31:4],4'h0};
                         inv_iline <= TRUE;
+                        end
+                8'h02:  begin       // LICL
+                        rwo <= TRUE;
+                        vpa <= TRUE;
+                        vda <= TRUE;
+                        ado <= {acc[31:4],4'h0};
+                        wr_icache <= TRUE; 
+                        cnt <= 4'h0;
+                        // Going to the ICACHE2 state will ensure that loading
+                        // the cache line didn't dump the cache line that is
+                        // required by the PC.
+                        next_state(ICACHE2);
                         end
                 default:    ;
                 endcase
             end
+`endif
         default:
 			begin
 				next_state(IFETCH);
 			end
 		endcase
 	end
+`ifdef SUPPORT_TASK
 TSK1:
     begin
+`ifdef SUPPORT_SEG
         cs <= cs_o;
         ds <= ds_o;
+`endif
         pc <= pc_o;
         acc <= acc_o;
         x <= x_o;
@@ -3129,18 +3252,17 @@ TSK1:
         sp <= sp_o;
         cf <= sr_o[0];
         zf <= sr_o[1];
-        if (sr_o[2])
+        // Force further interrupts to be masked automatically when the task is
+        // invoked as an interrupt handler. Otherwise the task will be invoked
+        // continuously.
+        if (sr_o[2]|hwi)
             im <= 1'b1;
         else
             imcd <= 3'b110;
         df <= sr_o[3];
-        if (m816|m832) begin
+        if (|srx_o[1:0]) begin
             x_bit <= sr_o[4];
             m_bit <= sr_o[5];
-            if (sr_o[4]) begin
-                x[31:8] <= 24'd0;
-                y[31:8] <= 24'd0;
-            end
         end
         // The following load of the break flag is different than the '02
         // which never loads the flag.
@@ -3175,12 +3297,12 @@ LDT1:
         4'd8:   begin srx_i <= b32[7:0]; dbr_i <= b32[15:8]; dpr_i <= b32[31:16];
                 tskm_we <= TRUE;
                 tskm_wr <= TRUE;
-                tskm_wa <= x[7:0];
+                tskm_wa <= x[`TASK_MEM_ABIT:0];
                 next_state(IFETCH);
                 end
         endcase 
     end
-
+`endif
 LOAD_MAC1:
 `ifdef SUPPORT_DCACHE
     if (unCachedData)
@@ -3351,11 +3473,10 @@ LOAD_MAC2:
                             if (m816|m832) begin
                                 x_bit <= db[4];
                                 m_bit <= db[5];
-                                if (db[4]) begin
-                                    x[31:8] <= 24'd0;
-                                    y[31:8] <= 24'd0;
-                                end
-                                //if (db[5]) acc[31:8] <= 24'd0;
+//                                if (db[4]) begin
+//                                    x[31:8] <= 24'd0;
+//                                    y[31:8] <= 24'd0;
+//                                end
                             end
                             // The following load of the break flag is different than the '02
                             // which never loads the flag.
@@ -3366,34 +3487,54 @@ LOAD_MAC2:
                             if (isRTI) begin
                                 load_what <= `PC_70;
                                 inc_sp();
-                                state <= LOAD_MAC1;
+                                data_read(fn_sp_inc(sp_inc));
+                                state <= LOAD_MAC2;
                             end        
                             else begin    // PLP
                                 moveto_ifetch();
                             end
                         end
-             `LDW_TR:   begin
-                            tr <= db;
+`ifdef SUPPORT_TASK
+             // Vector to the task only if it's not the one currently running. 
+             `LDW_TR70: begin
+                            b32 <= db;
                             radr <= inc_adr(radr);
-                            state <= retstate;
+                            data_read(inc_adr(radr));
+                            state <= `LDW_TR158;
                         end
+             `LDW_TR158: begin
+                           radr <= inc_adr(radr);
+                           vpb <= FALSE;
+                           if ({db,b32[7:0]} != tr) begin
+                               set_task_regs(hwi ? 24'd0 : 24'd2);
+                               tr <= {db,b32[7:0]};
+                               back_link <= tr;
+                               state <= TSK1;
+                           end
+                           else
+                               state <= IFETCH;
+                        end
+`endif
              `PC_70:        begin
                             pc[7:0] <= db;
                             load_what <= `PC_158;
                             if (isRTI|isRTS|isRTL|isRTF) begin
                                 inc_sp();
+                                data_read(fn_sp_inc(sp_inc));
+                                state <= LOAD_MAC2;
                             end
                             else begin    // JMP (abs)
                                 radr <= inc_adr(radr);
+                                state <= LOAD_MAC1;
                             end
-                            state <= LOAD_MAC1;
                         end
             `PC_158:    begin
                             pc[15:8] <= db;
                             if ((isRTI&(m816|m832))|isRTL|isRTF) begin
                                 load_what <= `PC_2316;
                                 inc_sp();
-                                state <= LOAD_MAC1;
+                                data_read(fn_sp_inc(sp_inc));
+                                state <= LOAD_MAC2;
                             end
                             else if (isRTS)    // rts instruction
                                 next_state(RTS1);
@@ -3413,7 +3554,8 @@ LOAD_MAC2:
                             if (isRTF|(isRTI&m832)) begin
                                 load_what <= `CS_70;
                                 inc_sp();
-                                next_state(LOAD_MAC1);
+                                data_read(fn_sp_inc(sp_inc));
+                                next_state(LOAD_MAC2);
                             end
                             else if (isRTL) begin
                                 load_what <= `NOTHING;
@@ -3424,23 +3566,27 @@ LOAD_MAC2:
                                 next_state(IFETCH);
                             end
                         end
+`ifdef SUPPORT_SEG
               `CS_70:   begin
                               inc_sp();
                               cs[7:0] <= db;
+                              data_read(fn_sp_inc(sp_inc));
                               load_what <= `CS_158;
-                              next_state(LOAD_MAC1);
+                              next_state(LOAD_MAC2);
                         end
               `CS_158:   begin
                             inc_sp();
                             cs[15:8] <= db;
+                            data_read(fn_sp_inc(sp_inc));
                             load_what <= `CS_2316;
-                            next_state(LOAD_MAC1);
+                            next_state(LOAD_MAC2);
                         end
               `CS_2316:   begin
                               inc_sp();
                               cs[23:16] <= db;
+                              data_read(fn_sp_inc(sp_inc));
                               load_what <= `CS_3124;
-                              next_state(LOAD_MAC1);
+                              next_state(LOAD_MAC2);
                           end
               `CS_3124:   begin
                               cs[31:24] <= db;
@@ -3451,6 +3597,7 @@ LOAD_MAC2:
                               else
                                   next_state(IFETCH);
                           end
+`endif
         //    `PC_3124:    begin
         //                    pc[31:24] <= db;
         //                    load_what <= `NOTHING;
@@ -3564,10 +3711,10 @@ BYTE_IY5:
 STORE1:
 	begin
 		case(store_what)
+`ifdef SUPPORT_SEG
 		`STW_CS3124:    begin data_write(wadr,cs[31:24]); mlb <= 1'b1; end
-		`STW_CS2316:    data_write(wadr,cs[23:16]);
-		`STW_CS158:     data_write(wadr,cs[15:8]);
-		`STW_CS70:      data_write(wadr,cs[7:0]);
+        `STW_DS70:      begin data_write(wadr,ds[7:0]); mlb <= 1'b1; end
+`endif
 		`STW_PC2316:	begin data_write(wadr,pc[23:16]); mlb <= 1'b1; end
 		`STW_PC158:		data_write(wadr,pc[15:8]);
 		`STW_PC70:		data_write(wadr,pc[7:0]);
@@ -3577,10 +3724,6 @@ STORE1:
 		`STW_X70:		begin data_write(wadr,x); mlb <= s16|s32; end
 		`STW_Y70:		begin data_write(wadr,y); mlb <= s16|s32; end
 		`STW_Z70:		begin data_write(wadr,8'h00); mlb <= s16|s32; end
-		`STW_DS3124:    data_write(wadr,ds[31:24]);
-		`STW_DS2316:    data_write(wadr,ds[23:16]);
-		`STW_DS158:     data_write(wadr,ds[15:8]);
-		`STW_DS70:      begin data_write(wadr,ds[7:0]); mlb <= 1'b1; end
 		`STW_DBR:       data_write(wadr,dbr);
 		`STW_DPR158:	begin data_write(wadr,dpr[15:8]); mlb<= 1'b1; end
 		`STW_DPR70:		begin data_write(wadr,dpr[7:0]); mlb <= 1'b1; end
@@ -3754,25 +3897,59 @@ STORE2:
 				store_what <= `STW_DPR158;
 				state <= STORE1;
 			end
+`ifdef SUPPORT_SEG
 		`STW_DS70:
 		    begin
 				mlb <= 1'b1;
 				wadr <= inc_adr(wadr);
+				data_write(inc_adr(wadr),ds[15:8]);
                 store_what <= `STW_DS158;
-                state <= STORE1;
+                state <= STORE2;
 		    end
 		`STW_DS158:
             begin
 				wadr <= inc_adr(wadr);
+				data_write(inc_adr(wadr),ds[23:16]);
                 store_what <= `STW_DS2316;
-                state <= STORE1;
+                state <= STORE2;
             end
 		`STW_DS2316:
             begin
 				wadr <= inc_adr(wadr);
+				data_write(inc_adr(wadr),ds[31:24]);
                 store_what <= `STW_DS3124;
-                state <= STORE1;
+                state <= STORE2;
             end
+		`STW_CS3124:
+            begin
+                mlb <= `TRUE;
+                set_sp();
+                data_write(fn_get_sp(sp),cs[23:16]);
+                store_what <= `STW_CS2316;
+                state <= STORE2;
+            end
+        `STW_CS2316:
+            begin
+                set_sp();
+                data_write(fn_get_sp(sp),cs[15:8]);
+                store_what <= `STW_CS158;
+                state <= STORE2;
+            end
+        `STW_CS158:
+            begin
+                set_sp();
+                data_write(fn_get_sp(sp),cs[7:0]);
+                store_what <= `STW_CS70;
+                state <= STORE2;
+            end
+        `STW_CS70:
+            if (ir9 != `PHCS) begin
+                set_sp();
+                data_write(fn_get_sp(sp),pc[23:16]);
+                store_what <= `STW_PC2316;
+                state <= STORE2;
+            end
+`endif
 		`STW_TMP158:
 			begin
 				set_sp();
@@ -3797,44 +3974,21 @@ STORE2:
 				store_what <= `STW_IA70;
 				state <= STORE1;
 			end
-		`STW_CS3124:
-		    begin
-		        mlb <= `TRUE;
-				set_sp();
-                store_what <= `STW_CS2316;
-                state <= STORE1;
-		    end
-		`STW_CS2316:
-            begin
-                set_sp();
-                store_what <= `STW_CS158;
-                state <= STORE1;
-            end
-		`STW_CS158:
-            begin
-                set_sp();
-                store_what <= `STW_CS70;
-                state <= STORE1;
-            end
-		`STW_CS70:
-            if (ir9 != `PHCS) begin
-                set_sp();
-                store_what <= `STW_PC2316;
-                state <= STORE1;
-            end
         `STW_PC2316:
 			begin
 				if (ir9 != `PHK) begin
 					set_sp();
+                    data_write(fn_get_sp(sp),pc[15:8]);
 					store_what <= `STW_PC158;
-					state <= STORE1;
+					state <= STORE2;
 				end
 			end
 		`STW_PC158:
 			begin
 				set_sp();
+                data_write(fn_get_sp(sp),pc[7:0]);
 				store_what <= `STW_PC70;
-				state <= STORE1;
+				state <= STORE2;
 			end
 		`STW_PC70:
 			begin
@@ -3842,8 +3996,9 @@ STORE2:
 				`BRK,`BRK2,`COP:
 						begin
 						set_sp();
+                        data_write(fn_get_sp(sp),sr8);
 					    store_what <= `STW_SR70;
-						state <= STORE1;
+						state <= STORE2;
 						end
 				`JSR: 	begin
 					    pc[15:0] <= ir[23:8];
@@ -3851,10 +4006,12 @@ STORE2:
 				`JSL: 	begin
                         pc[23:0] <= ir[31:8];
 						end
+`ifdef SUPPORT_SEG
 			    `JSF:   begin
     		            pc <= ir[31:8];
                         cs <= ir[63:32];
 		                end
+`endif
 				`JSR_INDX:
 						begin
 						state <= LOAD_MAC1;
@@ -4011,7 +4168,6 @@ MVN816:
             end
 		end
 	end
-
 ICACHE1:
     begin
         rwo <= TRUE;
@@ -4035,6 +4191,8 @@ ICACHE1:
             cnt <= 4'h0;
             next_state(ICACHE2);
         end
+        else
+            next_state(IFETCH);
     end
 ICACHE2:
     if (rdy) begin
@@ -4044,7 +4202,7 @@ ICACHE2:
             wr_itag <= TRUE;
         if (cnt == 4'hF) begin
             vpa <= FALSE;
-            if (hit1|prc_hit1) begin
+            if ((hit1|prc_hit1)&hit0) begin
                 next_state(IFETCH);
             end
             else
@@ -4093,8 +4251,16 @@ endtask
 task set_task_regs;
 input [23:0] amt;
 begin
+    tskm_we <= TRUE;
+    tskm_wr <= TRUE;
+    tskm_wa <= tr;
+`ifdef SUPPORT_SEG
     cs_i <= cs;
     ds_i <= ds;
+`else
+    cs_i <= 32'd0;
+    ds_i <= 32'd0;
+`endif
     if (PC24)
         pc_i <= pc + amt;
     else
@@ -4104,9 +4270,10 @@ begin
     y_i <= y;
     sp_i <= sp;
     sr_i <= sr8;
-    srx_i <= {m832,m816};
+    srx_i <= {6'd0,m832,m816};
     dbr_i <= dbr;
-    dpr_i <= dpr; 
+    dpr_i <= dpr;
+    bl_i <= back_link;
 end
 endtask
 
@@ -4170,32 +4337,45 @@ module ft832_icachemem(wclk, wce, wr, wa, i, rclk, rce, pc, insn);
 input wclk;
 input wce;
 input wr;
-input [11:0] wa;
 input [7:0] i;
 input rclk;
 input rce;
-input [11:0] pc;
 output [127:0] insn;
 reg [127:0] insn;
 
+`ifdef ICACHE_4K
+input [11:0] wa;
+input [11:0] pc;
 reg [127:0] mem [0:255];
 reg [11:0] rpc,rpcp16;
+wire [127:0] insn0 = mem[rpc[11:4]];
+wire [127:0] insn1 = mem[rpcp16[11:4]];
+`elsif ICACHE_16K
+input [13:0] wa;
+input [13:0] pc;
+reg [127:0] mem [0:1023];
+reg [13:0] rpc,rpcp16;
+wire [127:0] insn0 = mem[rpc[13:4]];
+wire [127:0] insn1 = mem[rpcp16[13:4]];
+`endif
 
 genvar g;
 generate
 begin : wstrobes
 for (g = 0; g < 16; g = g + 1)
 always @(posedge wclk)
+`ifdef ICACHE_4K
 	if (wce & wr && wa[3:0]==g) mem[wa[11:4]][g*8+7:g*8] <= i;
+`elsif ICACHE_16K
+	if (wce & wr && wa[3:0]==g) mem[wa[13:4]][g*8+7:g*8] <= i;
+`endif
 end
 endgenerate
 
 always @(posedge rclk)
 	if (rce) rpc <= pc;
 always @(posedge rclk)
-	if (rce) rpcp16 <= pc + 12'd16;
-wire [127:0] insn0 = mem[rpc[11:4]];
-wire [127:0] insn1 = mem[rpcp16[11:4]];
+	if (rce) rpcp16 <= pc + 16'd16;
 always @(insn0 or insn1 or rpc)
 case(rpc[3:0])
 4'h0:	insn <= insn0;
@@ -4231,38 +4411,60 @@ input [31:0] pc;
 output hit0;
 output hit1;
 
+`ifdef ICACHE_4K
+wire [20:0] tag0,tag1;
 reg [31:12] mem [0:255];
 reg [0:255] tvalid;
+`elsif ICACHE_16K
+wire [18:0] tag0,tag1;
+reg [31:14] mem [0:1023];
+reg [0:1023] tvalid;
+`endif
 reg [31:0] rpc,rpcp16;
-wire [20:0] tag0,tag1;
 
-always @(posedge wclk)
-	if (wce & wr) mem[wa[11:4]] <= wa[31:12];
-always @(posedge wclk)
-	if (invalidate) tvalid <= 256'd0;
-	else if (invalidate_line) tvalid[wa[11:4]] <= 1'b0;
-	else if (wce & wr) tvalid[wa[11:4]] <= 1'b1;
 always @(posedge rclk)
 	if (rce) rpc <= pc;
 always @(posedge rclk)
 	if (rce) rpcp16 <= pc + 32'd16;
+
+`ifdef ICACHE_4K
+always @(posedge wclk)
+	if (wce & wr) mem[wa[11:4]] <= wa[31:12];
+always @(posedge wclk)
+        if (invalidate) tvalid <= 256'd0;
+        else if (invalidate_line) tvalid[wa[11:4]] <= 1'b0;
+        else if (wce & wr) tvalid[wa[11:4]] <= 1'b1;
 assign tag0 = {mem[rpc[11:4]],tvalid[rpc[11:4]]};
 assign tag1 = {mem[rpcp16[11:4]],tvalid[rpcp16[11:4]]};
 
 assign hit0 = tag0 == {rpc[31:12],1'b1};
 assign hit1 = tag1 == {rpcp16[31:12],1'b1};
 
+`elsif ICACHE_16K
+always @(posedge wclk)
+	if (wce & wr) mem[wa[13:4]] <= wa[31:14];
+always @(posedge wclk)
+        if (invalidate) tvalid <= 1024'd0;
+        else if (invalidate_line) tvalid[wa[13:4]] <= 1'b0;
+        else if (wce & wr) tvalid[wa[13:4]] <= 1'b1;
+assign tag0 = {mem[rpc[13:4]],tvalid[rpc[13:4]]};
+assign tag1 = {mem[rpcp16[13:4]],tvalid[rpcp16[13:4]]};
+
+assign hit0 = tag0 == {rpc[31:14],1'b1};
+assign hit1 = tag1 == {rpcp16[31:14],1'b1};
+`endif
+
 endmodule
 
 module task_mem(wclk, wce, wr, wa,
-    cs_i, ds_i, pc_i, acc_i, x_i, y_i, sp_i, sr_i, srx_i, db_i, dpr_i,
+    cs_i, ds_i, pc_i, acc_i, x_i, y_i, sp_i, sr_i, srx_i, db_i, dpr_i, bl_i,
     rclk, rce, ra,
-    cs_o, ds_o, pc_o, acc_o, x_o, y_o, sp_o, sr_o, srx_o, db_o, dpr_o
+    cs_o, ds_o, pc_o, acc_o, x_o, y_o, sp_o, sr_o, srx_o, db_o, dpr_o, bl_o
 );
 input wclk;
 input wce;
 input wr;
-input [7:0] wa;
+input [`TASK_MEM_ABIT:0] wa;
 input [31:0] cs_i;
 input [31:0] ds_i;
 input [23:0] pc_i;
@@ -4274,9 +4476,10 @@ input [7:0] sr_i;
 input [7:0] srx_i;
 input [7:0] db_i;
 input [15:0] dpr_i;
+input [`TASK_MEM_ABIT:0] bl_i;
 input rclk;
 input rce;
-input [7:0] ra;
+input [`TASK_MEM_ABIT:0] ra;
 output [31:0] cs_o;
 output [31:0] ds_o;
 output [23:0] pc_o;
@@ -4288,12 +4491,13 @@ output [7:0] sr_o;
 output [7:0] srx_o;
 output [7:0] db_o;
 output [15:0] dpr_o;
-reg [255:0] mem [255:0];
+output [`TASK_MEM_ABIT:0] bl_o;
+reg [`TASK_MEM_ABIT+256:0] mem [`TASK_MEM-1:0];
 always @(posedge wclk)
     if (wce & wr)
-        mem[wa] <= {cs_i,ds_i,pc_i,acc_i,x_i,y_i,sp_i,sr_i,srx_i,db_i,dpr_i};
-wire [255:0] memo;
-reg [7:0] rra;
+        mem[wa] <= {bl_i,cs_i,ds_i,pc_i,acc_i,x_i,y_i,sp_i,sr_i,srx_i,db_i,dpr_i};
+wire [`TASK_MEM_ABIT+256:0] memo;
+reg [`TASK_MEM_ABIT:0] rra;
 always @(posedge rclk)
     rra <= ra;
 assign memo = mem[rra];
@@ -4308,5 +4512,6 @@ assign acc_o = memo[167:136];
 assign pc_o = memo[191:168];
 assign ds_o = memo[223:192];
 assign cs_o = memo[255:224];
+assign bl_o = memo[`TASK_MEM_ABIT+256:256];
 
 endmodule

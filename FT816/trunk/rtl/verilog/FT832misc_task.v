@@ -20,6 +20,18 @@
 //                                                                          
 // ============================================================================
 //
+function [31:0] fn_get_sp;
+input [31:0] sp;
+begin
+    if (m832)
+        fn_get_sp = sp;
+    else if (m816)
+        fn_get_sp = {stack_bank,sp[15:0]};
+    else
+        fn_get_sp = {stack_page,sp[7:0]};
+end
+endfunction
+
 task set_sp;
 begin
     if (m832) begin
@@ -63,6 +75,18 @@ begin
     end
 end
 endtask
+
+function [31:0] fn_sp_inc;
+input [31:0] sp_inc;
+begin
+    if (m832)
+        fn_sp_inc = sp_inc;
+    else if (m816)
+        fn_sp_inc = {stack_bank,sp_inc[15:0]};
+    else
+        fn_sp_inc = {stack_page,sp_inc[7:0]};
+end
+endfunction
 
 task tsk_push;
 input [5:0] SW8;
