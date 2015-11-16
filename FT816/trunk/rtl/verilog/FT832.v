@@ -489,6 +489,9 @@
 `define TSK_ACC     9'h13A
 `define LDT_XABSX   9'h14C
 `define LDT_XABS    9'h16C
+`define FORK_IMM    9'h1A0
+`define FORK_ACC    9'h1AA
+`define TTA         9'h11A
 
 // Page Two Opcodes
 `define PG2			9'h42
@@ -1351,7 +1354,7 @@ IFETCH:
                     zf <= resz8;
                 end
             end
-		`TSA,`TYA,`TXA,`INA,`DEA,`PLA:
+		`TSA,`TYA,`TXA,`TTA,`INA,`DEA,`PLA:
 			begin
                 if (m32) begin
                     acc <= res32;
@@ -1656,6 +1659,7 @@ DECODE:
 		`TYA,`TYX:	begin res32 <= y; end
 		`TDC:		begin res32 <= dpr; end
 		`TCD:		begin res32 <= acc; end
+		`TTA:       res32 <= tr;
 		`ASL_ACC:   res32 <= {acc,1'b0};
 		`ROL_ACC:	res32 <= {acc,cf};
 		`LSR_ACC:	if (m32) res32 <= {acc[0],1'b0,acc[31:1]};
@@ -1679,10 +1683,22 @@ DECODE:
 				state <= LOAD_MAC1;
 			end
 		`RTI:	begin
-		        inc_sp();
-                if (bf) pc_cap <= TRUE;
-				load_what <= `SR_70;
-				state <= LOAD_MAC1;
+`ifdef SUPPORT_TASK
+		        if (m832) begin
+                    if (tr != bl_o) begin
+                        set_task_regs(24'd1);
+                        tr <= bl_o;
+                        state <= TSK1;
+                    end 
+                end
+                else
+`endif
+                begin
+                    inc_sp();
+                    if (bf) pc_cap <= TRUE;
+                    load_what <= `SR_70;
+                    state <= LOAD_MAC1;
+				end
 				end
 		`PHP:   tsk_push(`STW_SR70,0,0);
         `PHA:   tsk_push(`STW_ACC70,m16,m32);
@@ -3174,6 +3190,17 @@ DECODE:
                     back_link <= tr;
                     state <= TSK1;
                 end
+            end
+        `FORK_IMM:
+            begin
+                inc_pc(24'd2);
+                back_link <= tr;
+                tr <= ir[`TASK_MEM_ABIT+8:8];
+            end
+        `FORK_ACC:
+            begin
+                back_link <= tr;
+                tr <= acc[`TASK_MEM_ABIT:0];
             end
         `RTT:
             begin
