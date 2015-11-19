@@ -63,6 +63,24 @@ NormAttr	EQU		$36
 StringPos	EQU		$38
 EscState	EQU		$3C
 
+cs_save		EQU		$80
+ds_save		EQU		$84
+pc_save		EQU		$88
+pb_save		EQU		$8A
+acc_save	EQU		$8B
+x_save		EQU		$8F
+y_save		EQU		$93
+sp_save		EQU		$97
+sr_save		EQU		$9B
+srx_save	EQU		$9C
+db_save		EQU		$9D
+dpr_save	EQU		$9E
+
+running_task	EQU		$A0
+
+keybd_char	EQU		$A2
+keybd_cmd	EQU		$A4
+
 OutputVec	EQU		$03F0
 
 VIDBUF		EQU		$FD0000
@@ -71,8 +89,11 @@ PRNG		EQU		$FEA100
 KEYBD		EQU		$FEA110
 FAC1		EQU		$FEA200
 
-.include "supermon816.asm"
+do_invaders			EQU		$7868
+
+.include "supermon832.asm"
 .include "FAC1ToString.asm"
+.include "invaders.asm"
 
 ;	cpu		W65C816S
 	cpu		FT832
@@ -81,6 +102,15 @@ FAC1		EQU		$FEA200
 start:
 	SEI
 	CLD
+;	CLV					; overflow low
+;	SEC					; carry high
+;	XCE					; sets 32 bit mode, 32 bit registers
+;	REP		#$30		; 32 bit registers
+;	MEM		32
+;	NDX		32
+;	LDA		#$3FFF
+;	TAS
+;
 	CLC					; switch to '816 mode
 	BIT		start		; set overflow bit
 	XCE
@@ -124,12 +154,24 @@ start:
 	NDX 	16
 	MEM		16
 
+	; Setup the task registers
+	LDY		#5			; # tasks to setup
+	LDX		#1
+.0001:
+	LDT		TaskStartTbl,X
+	INX
+	DEY
+	BNE		.0001
+
+	STZ		running_task
+
 	LDA		#BrkRout1
 	STA		$0102
 
-;	CLI
-
-	stz		TickCount
+	STZ		TickCount
+	STZ		TickCount+2
+Task0:
+	CLI
 .0001:
 	LDA		#DisplayChar
 	STA		OutputVec
@@ -146,6 +188,7 @@ start:
 	STA		$7000
 	PEA		msgStarting
 	JSR		DisplayString
+	PLA
 	LDA		#0
 	STA		FAC1
 	STA		FAC1+2
@@ -161,10 +204,21 @@ start:
 	JSR		FAC1ToString
 	PEA		$3A0
 	JSR		DisplayString
+	PLA
 	LDA		#' '
 	JSR		OutChar
 	JSR		DispFAC1
-	JSR		KeybdInit
+	FORK	#7			; fork a BIOS context
+	TTA
+	CMP		#7
+	BNE		.0002
+	RTT
+.0002:
+	FORK	#6
+	TTA
+	CMP		#6
+	LBEQ	KeybdInit
+
 Mon1:
 .mon1:
 	JSR		OutCRLF
@@ -206,6 +260,10 @@ Mon1:
 	LBEQ	doMemoryEdit
 	CMP		#'J'
 	LBEQ	doJump
+	CMP		#'T'
+	LBEQ	doTask2
+	CMP		#'I'
+	LBEQ	doInvaders
 	BRA		Mon1
 
 ; Get a character from the screen, skipping over spaces and tabs
@@ -226,6 +284,21 @@ MonGetch:
 	AND		#$FF
 	JSR		ScreenToAscii
 	RTS
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+doTask2:
+	TSK		#2
+	BRL		Mon1
+
+doInvaders:
+	LDA		#$FFFF
+	STA		do_invaders
+	FORK	#5
+	TTA
+	CMP		#5
+	LBEQ	InvadersTask
+	BRL		Mon1
 
 ;------------------------------------------------------------------------------
 ; Dump memory.
@@ -489,6 +562,17 @@ AsciiToScreen:
 .00001:
 	rts
 
+	MEM		8
+AsciiToScreen8:
+	BIT		#%00100000	; if bit 5 isn't set
+	BEQ		.00001
+	BIT		#%01000000	; or bit 6 isn't set
+	BEQ		.00001
+	AND		#%10011111
+.00001:
+	rts
+
+	MEM		16
 ;------------------------------------------------------------------------------
 ; Convert screen character to ascii character
 ;------------------------------------------------------------------------------
@@ -760,6 +844,7 @@ HomeCursor:
 ;
 SyncVideoPos:
 	LDA		CursorY
+	STA		$7000
 	ASL
 	TAX
 	LDA		LineTbl,X
@@ -784,17 +869,15 @@ OutChar:
 	RTS
 
 DisplayString:
-	PLA							; pop return address
-	PLX							; get string address parameter
-	PHA							; push return address
+;	PLA							; pop return address
+;	PLX							; get string address parameter
+;	PHA							; push return address
 	SEP		#$20				; ACC = 8 bit
 	MEM		8
-	LDA		#$DE
-	STA		$7000
-	STX		StringPos
+;	STX		StringPos
 	LDY		#0
 .0002:
-	LDA		(StringPos),Y
+	LDA		(3,S),Y
 	BEQ		.0001
 	JSR		SuperPutch
 	INY
@@ -1013,6 +1096,30 @@ gtdc3:
 	LDA		#-1
 	RTS
 
+getcharNoWait:
+	LDA		#1
+	STA		ZS:keybd_cmd
+	TSK		#6
+	LDA		ZS:keybd_char
+	BPL		.0001
+	SEC
+	RTS
+.0001:
+	CLC
+	RTS
+
+getcharWait:
+	LDA		#2
+	STA		ZS:keybd_cmd
+	TSK		#6
+	LDA		ZS:keybd_char
+	BPL		.0001
+	SEC
+	RTS
+.0001:
+	CLC
+	RTS
+
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; Keyboard processing routines follow.
@@ -1020,6 +1127,9 @@ gtdc3:
 ;------------------------------------------------------------------------------
 
 KeybdInit:
+	LDA		#$2000
+	TAS
+	STZ		keybd_cmd
 	SEP		#$30
 	MEM		8
 	NDX		8
@@ -1062,15 +1172,53 @@ KeybdInit:
 	REP		#$30
 	PEA		msgKeybdNR
 	JSR		DisplayString
-	RTS
+	PLA
+	RTT
+	BRA		KeybdService
 .0004:
 	LDA		#2				; select scan code set #2
 	STA		KEYBD
 	JSR		KeybdWaitTx
 	BCC		.tryAgain
 	REP		#$30
-	RTS
+	RTT
+	BRA		KeybdService
 
+KeybdService:
+	REP		#$30
+	MEM		16
+	NDX		16
+	LDA		#$2000
+	TAS
+	LDA		keybd_cmd
+	CMP		#1
+	BNE		.0001
+	JSR		KeybdGetCharNoWait
+	BCS		.nokey
+	STZ		keybd_cmd
+	STA		keybd_char
+	RTT
+	BRA		KeybdService
+.nokey
+	LDA		#-1
+	STZ		keybd_cmd
+	STA		keybd_char
+	RTT
+	BRA		KeybdService
+.0001:
+	CMP		#2
+	BNE		.0002
+	JSR		KeybdGetCharWait
+	STZ		keybd_cmd
+	STA		keybd_char
+	RTT
+	BRA		KeybdService
+.0002:
+	RTT
+	BRA		KeybdService
+
+	MEM		8
+	NDX		8
 ; Recieve a byte from the keyboard, used after a command is sent to the
 ; keyboard in order to wait for a response.
 ;
@@ -1164,18 +1312,31 @@ Wait10ms:
 msgKeybdNR:
 	.byte	CR,LF,"Keyboard not responding.",CR,LF,0
 
+	cpu		FT832
+
+KeybdGetCharNoWaitCtx:
+	JSR		KeybdGetCharNoWait
+	RTC		#0
+	
 KeybdGetCharNoWait:
+	PHP
 	SEP		#$20
+	REP		#$10
 	MEM		8
+	NDX		16
 	LDA		#0
 	STA		KeybdWaitFlag
-	BRA		KeybdGetChar
+	BRA		KeybdGetChar1
 
 KeybdGetCharWait:
+	PHP
 	SEP		#$20
+	REP		#$10
 	MEM		8
+	NDX		16
 	LDA		#$FF
 	STA		KeybdWaitFlag
+	BRA		KeybdGetChar1
 
 ; Wait for a keyboard character to be available
 ; Returns (CF=1) if no key available
@@ -1183,9 +1344,16 @@ KeybdGetCharWait:
 ;
 ;
 KeybdGetChar:
+	PHP
 	SEP		#$20		; 8 bit acc
+	REP		#$10
 	MEM		8
+	NDX		16
+KeybdGetChar1:
 	PHX
+	XBA					; force .B to zero for TAX
+	LDA		#0
+	XBA
 .0002:
 .0003:
 	LDA		KEYBD+1		; check MSB of keyboard status reg.
@@ -1194,8 +1362,8 @@ KeybdGetChar:
 	BIT		KeybdWaitFlag
 	BMI		.0003
 	PLX
+	PLP
 	SEC
-	REP		#$20
 	RTS
 .0006:
 	LDA		KEYBD		; get scan code value
@@ -1256,6 +1424,7 @@ KeybdGetChar:
 	REP		#$20
 	MEM		16
 	PLX
+	PLP
 	CLC
 	RTS
 	MEM		8
@@ -1306,6 +1475,10 @@ KeybdGetChar:
 	BRL		.0003
 
 KeybdSetLEDStatus:
+	PHDS				; save off DS
+	PEA		0			; set DS to zero
+	PEA		0			; set DS to zero
+	PLDS
 	LDA		#0
 	STA		KeybdLEDs
 	LDA		#16
@@ -1340,6 +1513,7 @@ KeybdSetLEDStatus:
 	JSR		KeybdWaitTx
 	JSR		KeybdRecvByte	; wait for $FA byte
 .0001:
+	PLDS				; recover DS
 	RTS
 
 	MEM		16
@@ -1502,33 +1676,116 @@ SuperPutch:
 	PLP
 	RTS
 
+warm_start:
+	JSR		CursorOn
+	BRL		Mon1
+
+	cpu		FT832
 ICacheIL832:
 	CACHE	#1			; 1= invalidate instruction line identified by accumulator
 	RTS
 
+ByteIRQRout:
+	RTI
+
 IRQRout:
+	TSK		#1			; switch to the interrupt handling task
+	RTI
+
 	REP		#$30
 	NDX		16
 	MEM		16
 	PHA
-	LDA		TickCount
-	INA
-	STA		TickCount
-	STA		$FD00A4
-	SEP		#$30
-	NDX		8
-	MEM		8
+	JSR		Task1
+	PLA
+	RTI
+
+Task1:
+	REP		#$30
+	NDX		16
+	MEM		16
 	LDA		$F01F		; check if counter expired
 	BIT		#2
 	BEQ		.0001
+	LDA		TickCount	; increment the tick count
+	INA
+	STA		TickCount
+	STA		$FD00A4		; update on-screen IRQ live indicator
+	SEP		#$30
+	NDX		8
+	MEM		8
 	LDA		#$05		; count down, on mpu clock, irq enabled (clears irq)
 	STA		$F017
 .0001:
 	REP		#$30
 	NDX		16
 	MEM		16
-	PLA
-	RTI
+;	BIT		do_invaders
+;	BPL		.0002
+;	TSK		#5
+.0002:
+	RTT					; go back to interrupted task
+	BRA		Task1		; the next time task1 is run it will start here
+
+; IRQ handler task - 32 bit
+;
+IRQTask:
+	SEP		#$220		; eight bit accumulator, 32 bit indexes
+	REP		#$110
+	MEM		8
+	NDX		32
+IRQTask1:
+	LDA		$F01F		; check if counter expired
+	BIT		#2
+	BEQ		.0001
+	LDX		TickCount	; increment the tick count
+	INX
+	STX		TickCount
+	STX.H	$FD00A2		; update on-screen IRQ live indicator
+	LDA		#$05		; count down, on mpu clock, irq enabled (clears irq)
+	STA		$F017
+.0001:
+;	BIT		do_invaders
+;	BPL		.0002
+;	TSK		#5
+.0002:
+	RTT					; go back to interrupted task
+	BRA		IRQTask1	; the next time task is run it will start here
+
+; This little task sample runs in native 32 bit mode and displays
+; "Hello World!" on the screen.
+
+	CPU		FT832
+	MEM		8
+	NDX		32
+
+Task2:
+	LDX		#84*2*3
+.0003:
+	LDY		#0
+.0002:
+	LDA		msgHelloWorld,Y
+	BEQ		.0001
+	JSR		AsciiToScreen8
+	STA		VIDBUF,X
+	INX
+	INX
+	INY
+	BRA		.0002
+.0001:
+	RTT
+	BRA		.0003
+
+msgHelloWorld:
+	.byte	CR,LF,"Hello World!",CR,LF,0
+
+	NDX		16
+	MEM		16
+
+BrkTask:
+	INC		$FFD00000
+	RTT
+	BRA		BrkTask
 
 ; The following store sequence for the benefit of Supermon816
 ;
@@ -1552,12 +1809,14 @@ BrkRout1:
 	REP		#$30
 	PLA
 	JSR		DispWord
-	LDY		#32
+	LDX		#0
+	LDY		#64
 .0001:
 	.word	$f042		; pchist
 	JSR		DispWord
 	LDA		#' '
 	JSR		OutChar
+	INX
 	DEY
 	BNE		.0001
 	LDA		#$FFFF
@@ -1598,23 +1857,149 @@ LineTbl:
 	.WORD	TEXTCOLS*29
 	.WORD	TEXTCOLS*30
 
+TaskStartTbl:
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	0
+	.WORD	Task0		; PC
+	.BYTE	Task0>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$3FFF		; sp
+	.WORD	0
+	.BYTE	4			; SR
+	.BYTE	1			; SR extension
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	0
+	.WORD	Task1		; PC
+	.BYTE	Task1>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$3BFF		; sp
+	.WORD	0
+	.BYTE	4			; SR
+	.BYTE	1			; SR extension
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	0
+	.WORD	Task2		; PC
+	.BYTE	Task2>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$37FF		; sp
+	.WORD	0
+	.BYTE	$20			; SR			; eight bit mem
+	.BYTE	2			; SR extension
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	0
+	.WORD	IRQTask		; PC
+	.BYTE	IRQTask>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$33FF		; sp
+	.WORD	0
+	.BYTE	$24			; SR	eight bit acc, mask interrupts
+	.BYTE	2			; SR extension
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	0
+	.WORD	BrkTask		; PC
+	.BYTE	BrkTask>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$2FFF		; sp
+	.WORD	0
+	.BYTE	0			; SR
+	.BYTE	1			; SR extension
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
+	; task #5
+	; DS is placed at $10000
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	1
+	.WORD	InvadersTask	; PC
+	.BYTE	InvadersTask>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$2BFF		; sp
+	.WORD	0
+	.BYTE	0			; SR
+	.BYTE	1			; SR extension
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
 	cpu		FT832
 	MEM		32
 	NDX		32
 	LDA		#$12345678
 	LDX		#$98765432
-	STA		{$23},Y
-	LDY		$44455556,X
-	LDA		CS:$44455556,X
-	LDA		SEG $88888888:$1234,Y
+	STA.B	{$23},Y
+	LDY.UH	$44455556,X
+	LDA.H	CS:$44455556,X
+	LDA.UB	SEG $88888888:$1234,Y
 	JSF	    $0000:start
 	RTF
+	TSK		#2
+	TSK
+	LDT		$10000,X
 
 	.org	$F400
 	JMP		SuperGetch
-	JMP		start
+	JMP		warm_start
 	JMP		SuperPutch
 	JMP		BIOSInput
+
+	.org 	$FFD6
+	dw		4			; task #4
+
+	.org	$FFDE
+	dw		3			; task #3
 
 	.org 	$FFE6
 	dw		BrkRout
@@ -1624,3 +2009,6 @@ LineTbl:
 
 	.org	$FFFC
 	dw		$E000
+
+	.org	$FFFE
+	dw		ByteIRQRout

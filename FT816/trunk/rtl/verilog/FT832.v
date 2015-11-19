@@ -492,6 +492,11 @@
 `define FORK_IMM    9'h1A0
 `define FORK_ACC    9'h1AA
 `define TTA         9'h11A
+`define TASB        9'h19A
+`define TSBA        9'h1BA
+`define JCR         9'h120
+`define JCL         9'h182
+`define RTC         9'h140 
 
 // Page Two Opcodes
 `define PG2			9'h42
@@ -530,6 +535,7 @@
 `define CS_3124     6'd43
 `define LDW_TR70    6'd44
 `define LDW_TR158   6'd45
+`define CPY_BUF     6'd46
 
 `define STW_DEF		6'h1
 `define STW_CS3124  6'd4
@@ -582,15 +588,19 @@
 `define STW_IA3124  6'd55
 `define STW_TMP3124 6'd56
 `define STW_TMP2316 6'd57
+`define STW_CPY_BUF 6'd58
 
 // Input Frequency is 32 times the 00 clock
 
-module FT832(rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb, rw, ad, db, err_i, rty_i);
+module FT832(rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb,
+    rw, rwo, ad, ado, db, dbo, err_i, rty_i);
 parameter STORE_SKIPPING = 1'b1;        // set to 1 to skip the store operation if the value didn't change during a RMW instruction
 parameter EXTRA_LONG_BRANCHES = 1'b1;   // set to 1 to use an illegal branch displacement ($FF) to indicate a long branch
 parameter IO_SEGMENT = 32'hFFD00000;    // set to determine the segment value of the IOS: prefix
 parameter PC24 = 1'b1;                  // set if PC is to be true 24 bits (generates slightly more hardware).
 parameter POPBF = 1'b0;                 // set to 1 if popping the break flag from the stack is desired
+parameter TASK_VECTORING = 1'b1;        // controls whether the core uses task vectors or regular interrupt vectors
+//parameter DEAD_CYCLE = 1'b1;            // insert dead cycles between each memory access
 
 // There parameters are not meant to be altered.
 parameter RESET1 = 6'd0;
@@ -622,6 +632,7 @@ parameter DCACHE1 = 6'd33;
 parameter MVN816 = 6'd36;
 parameter ICACHE2 = 6'd43;
 parameter CALC = 6'd44;
+parameter ICACHE3 = 6'd45;
 
 input rst;
 input clk;
@@ -643,8 +654,11 @@ output reg vda;
 output reg mlb;
 output reg vpb;
 output tri rw;
+output reg rwo;
 output tri [31:0] ad;
+output reg [31:0] ado;
 inout tri [7:0] db;
+output reg [7:0] dbo;
 input err_i;
 input rty_i;
 
@@ -652,15 +666,14 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
 reg [31:0] phi1r,phi2r;
-reg rwo;
-reg [31:0] ado;
-reg [7:0] dbo;
+reg [31:0] ado1;
 
 reg [7:0] dbi;
 reg pg2;
 reg [5:0] state;    // machine state number
 reg [5:0] retstate; // return state - allows 1 level of state subroutine call
-reg [3:0] cnt;      // icache counter
+reg [7:0] cnt;      // icache counter / general counter
+reg [7:0] maxcnt;
 reg [127:0] ir;     // the instruction register
 wire [8:0] ir9 = {pg2,ir[7:0]}; // The first byte of the instruction
 reg [23:0] pc,opc;
@@ -668,6 +681,7 @@ reg pc_cap;                 // pc history capture flag
 `ifdef SUPPORT_SEG
 reg [31:0] ds;              // data segment
 reg [31:0] cs;              // code segment
+reg [31:0] ss = 0;          // stack segment
 wire [31:0] cspc = cs + pc;
 `else
 wire [31:0] cspc = pc;
@@ -707,6 +721,8 @@ reg x_bit,m_bit;
 reg m16,m32;
 reg xb16,xb32;
 reg mxb16,mxb32;
+wire DEAD_CYCLE = TRUE;//(vda|vpa) && ado >= 32'h10000;
+
 //wire m16 = m816 & ~m_bit;
 //wire xb16 = m816 & ~x_bit;
 always @(m816,m832,m_bit,x_bit)
@@ -816,7 +832,7 @@ ft832_icachemem uicm1
 (
     .wclk(clk),
     .wce(rdy),
-    .wr(wr_icache),
+    .wr(vpa&wr_icache),
     .wa(ado[11:0]),
     .i(db),
     .rclk(~clk),
@@ -834,9 +850,9 @@ reg inv_iline;
 ft832_itagmem uitm1
 (
     .wclk(clk),
-    .wce(rdy),
-    .wr(wr_icache & wr_itag),
-    .wa(ado),
+    .wce(1'b1),
+    .wr(wr_itag),
+    .wa(ado1),
     .invalidate(inv_icache),
     .invalidate_line(inv_iline),
     .rclk(~clk),
@@ -847,7 +863,8 @@ ft832_itagmem uitm1
 );
 
 `ifdef SUPPORT_TASK
-reg [`TASK_MEM_ABIT:0] tr;
+reg [`TASK_MEM_ABIT:0] tr, otr;
+reg [4:0] tsk_pres;                 // register value preservation flags
 reg tskm_we;
 reg tskm_wr;
 reg [`TASK_MEM_ABIT:0] tskm_wa;
@@ -914,6 +931,8 @@ task_mem utskm1
 );
 `endif
 
+reg  [7:0] cpybuf [63:0];
+
 // Registerable decodes
 // The following decodes can be registered because they aren't needed until at least the cycle after
 // the DECODE stage.
@@ -979,10 +998,10 @@ case(ir9)
 `BVC:	takb <= !vf;
 `BRA:	takb <= 1'b1;
 `BRL:	takb <= 1'b1;
-`BGT:   takb <= (nf & vf & !zf) | (!nf & !vf & !zf);
-`BGE:   takb <= (nf & vf) | (!nf & !vf);
-`BLE:   takb <= zf | (nf & !vf) | (!nf & vf);
-`BLT:   takb <= (nf & !vf) | (!nf & vf);
+`BGT:   takb <= !nf & !zf;//(nf & vf & !zf) | (!nf & !vf & !zf);
+`BGE:   takb <= !nf;//(nf & vf) | (!nf & !vf);
+`BLE:   takb <= zf | nf;//zf | (nf & !vf) | (!nf & vf);
+`BLT:   takb <= nf;//(nf & !vf) | (!nf & vf);
 default:	takb <= 1'b0;
 endcase
 
@@ -1114,6 +1133,7 @@ if (~rst) begin
 	pc <= 24'h00FFF0;		// set high-order pc to zero
 	cs <= 32'd0;
 	ds <= 32'd0;
+	ss <= 32'd0;
 	dpr <= 16'h0000;
 	dbr <= 8'h00;
 	acc <= 32'h0;
@@ -1150,6 +1170,7 @@ inv_iline <= FALSE;
 tskm_we <= FALSE;
 tskm_wr <= FALSE;
 `endif
+wr_itag <= FALSE;
 case(state)
 RESET1:
 	begin
@@ -1158,6 +1179,7 @@ RESET1:
 `ifdef SUPPORT_SEG
 		cs <= 32'd0;
 		ds <= 32'd0;
+		ss <= 32'd0;
 `endif
 		seg <= 32'd0;
 		inv_icache <= FALSE;
@@ -1546,7 +1568,9 @@ IFETCH:
 		      else begin nf <= resn8; zf <= resz8; end
 		`PLB:	begin dbr <= res32[7:0]; nf <= resn8; zf <= resz8; end
 `ifdef SUPPORT_NEW_INSN
+`ifdef SUPPORT_SEG
 		`PLDS:	begin ds <= res32; nf <= resn32; zf <= resz32; end
+`endif
 `endif
         `PLD:   begin dpr <= res32[15:0]; nf <= resn16; zf <= resz16; end
 		endcase
@@ -1575,30 +1599,34 @@ DECODE:
 		`CS:  begin
 		      seg <= cs;
 		      ir <= {8'h00,ir[127:8]};
+		      pg2 <= FALSE;
 		      next_state(DECODE);
 		      end
 		`IOS: begin
 		      seg <= IO_SEGMENT;
 		      ir <= {8'h00,ir[127:8]};
+		      pg2 <= FALSE;
               next_state(DECODE);
 		      end
 		`SEG0:
-		        begin
-                seg <= 32'd0;
-                ir <= {8'h00,ir[127:8]};
-                next_state(DECODE);
-                end
+   	          begin
+              seg <= 32'd0;
+              ir <= {8'h00,ir[127:8]};
+		      pg2 <= FALSE;
+              next_state(DECODE);
+              end
          `SEG: begin
               inc_pc(24'd5);
 		      seg <= ir[39:8];
 		      ir <= {40'h00,ir[127:40]};
+		      pg2 <= FALSE;
 		      next_state(DECODE);
 		      end
 `endif
-		`BYT: begin sop <= TRUE; lds <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
-		`UBT: begin sop <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
-		`HAF: begin sop <= TRUE; lds <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
-		`UHF: begin sop <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; next_state(DECODE); end
+		`BYT: begin sop <= TRUE; lds <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
+		`UBT: begin sop <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
+		`HAF: begin sop <= TRUE; lds <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
+		`UHF: begin sop <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
 		`SEP16:	  inc_pc(24'd3);	// see byte_ifetch
         `REP16:   inc_pc(24'd3);
 `endif
@@ -1649,6 +1677,9 @@ DECODE:
 		`DEY4:    res32 <= y - 32'd4;
 		`INX4:    res32 <= x + 32'd4;
 		`INY4:    res32 <= y + 32'd4;
+`ifdef SUPPORT_TASK
+		`TTA:       res32 <= tr;
+`endif
 `endif
 		`DEA:	res32 <= acc_dec;
 		`INA:	res32 <= acc_inc;
@@ -1659,7 +1690,6 @@ DECODE:
 		`TYA,`TYX:	begin res32 <= y; end
 		`TDC:		begin res32 <= dpr; end
 		`TCD:		begin res32 <= acc; end
-		`TTA:       res32 <= tr;
 		`ASL_ACC:   res32 <= {acc,1'b0};
 		`ROL_ACC:	res32 <= {acc,cf};
 		`LSR_ACC:	if (m32) res32 <= {acc[0],1'b0,acc[31:1]};
@@ -1679,10 +1709,12 @@ DECODE:
 		`RTS,`RTL:
 			begin
 			    inc_sp();
+			    seg <= ss;
 				load_what <= `PC_70;
 				state <= LOAD_MAC1;
 			end
 		`RTI:	begin
+			    seg <= ss;
 `ifdef SUPPORT_TASK
 		        if (m832) begin
                     if (tr != bl_o) begin
@@ -1731,12 +1763,14 @@ DECODE:
 		`PLP:
 			begin
                 inc_sp();
+                seg <= ss;
 				load_what <= `SR_70;
 				state <= LOAD_MAC1;
 			end
 		`PLA:
 			begin
 			    inc_sp();
+                seg <= ss;
                 if (m32) s32 <= TRUE;
                 else if (m16) s16 <= TRUE;
                 load_what <= `WORD_71S;
@@ -1746,6 +1780,7 @@ DECODE:
 		`PLX,`PLY:
 			begin
 			    inc_sp();
+                seg <= ss;
                 if (xb32) s32 <= TRUE;
                 else if (xb16) s16 <= TRUE;
 				load_what <= `WORD_71S;
@@ -1755,6 +1790,7 @@ DECODE:
 		`PLB:
 			begin
 			    inc_sp();
+                seg <= ss;
   				load_what <= `WORD_71S;
 				state <= LOAD_MAC1;
 				retstate <= IFETCH;
@@ -1762,6 +1798,7 @@ DECODE:
 		`PLD:
 			begin
 			    inc_sp();
+                seg <= ss;
 			    s16 <= TRUE;
   				load_what <= `WORD_71S;
 				state <= LOAD_MAC1;
@@ -2161,8 +2198,9 @@ DECODE:
         `LDA_DSP:
             begin
                 inc_pc(24'd2);
+                seg <= ss;
                 radr <= dsp_address;
-                data_read(dsp_address);
+//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2170,14 +2208,15 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 load_what <= `LOAD_70;
-                state <= LOAD_MAC2;
+                state <= LOAD_MAC1;
                 retstate <= IFETCH;
             end
         `ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP:
             begin
                 inc_pc(24'd2);
                 radr <= dsp_address;
-                data_read(dsp_address);
+                seg <= ss;
+//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2185,12 +2224,13 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 load_what <= `LOAD_70;
-                state <= LOAD_MAC2;
+                state <= LOAD_MAC1;
                 retstate <= CALC;
             end
         `STA_DSP:
             begin
                 inc_pc(24'd2);
+                seg <= ss;
                 radr <= dsp_address;
                 wadr <= dsp_address;
                 if (!sop) begin
@@ -2204,51 +2244,55 @@ DECODE:
 		`LDA_DSPIY:
             begin
                 inc_pc(24'd2);
+                seg <= ss;
                 radr <= dsp_address;
-                data_read(dsp_address);
+//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY <= `TRUE;
                 load_what <= `IA_70;
                 retstate <= IFETCH;
-                state <= LOAD_MAC2;
+                state <= LOAD_MAC1;
             end
         `ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`STA_DSPIY:
             begin
                 inc_pc(24'd2);
                 radr <= dsp_address;
-                data_read(dsp_address);
+                seg <= ss;
+//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY <= `TRUE;
                 load_what <= `IA_70;
                 retstate <= CALC;
-                state <= LOAD_MAC2;
+                state <= LOAD_MAC1;
             end
 `ifdef SUPPORT_NEW_INSN
 		// Handle {d,sp},y
 	   `LDA_XDSPIY:
             begin
                inc_pc(24'd2);
+               seg <= ss;
                radr <= dsp_address;
-               data_read(dsp_address);
+//               data_read(dsp_address);
                mxb16 <= m16;
                mxb32 <= m32;
                isIY32 <= `TRUE;
                load_what <= `IA_70;
-               state <= LOAD_MAC2;
+               state <= LOAD_MAC1;
                retstate <= IFETCH;
            end
        `ADC_XDSPIY,`SBC_XDSPIY,`CMP_XDSPIY,`ORA_XDSPIY,`AND_XDSPIY,`EOR_XDSPIY,`STA_XDSPIY:
             begin
                 inc_pc(24'd2);
+                seg <= ss;
                 radr <= dsp_address;
-                data_read(dsp_address);
+//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY32 <= `TRUE;
                 load_what <= `IA_70;
-                state <= LOAD_MAC2;
+                state <= LOAD_MAC1;
                 retstate <= CALC;
             end
 `endif
@@ -3002,13 +3046,23 @@ DECODE:
                     pc <= pc;   // override increment above
                 if (m832) begin
 `ifdef SUPPORT_TASK
-                    radr <= vect;
-                    load_what <= `LDW_TR70;
-                    data_read(vect);
-					vpb <= TRUE;
-                    next_state(LOAD_MAC2);
+                    if (TASK_VECTORING) begin
+                        radr <= vect;
+                        load_what <= `LDW_TR70;
+                        data_read(vect);
+                        vpb <= TRUE;
+                        next_state(LOAD_MAC2);
+                    end
+                    else begin
+                        set_sp();
+                        seg <= ss;
+                        store_what <= `STW_CS3124;
+                        data_nack();
+                        state <= STORE1;
+                    end
 `else
                     set_sp();
+                    seg <= ss;
                     store_what <= `STW_CS3124;
                     data_nack();
                     state <= STORE1;
@@ -3016,6 +3070,7 @@ DECODE:
                 end
                 else begin
                     set_sp();
+                    seg <= ss;
                     store_what <= m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
                     data_nack();
                     state <= STORE1;
@@ -3026,6 +3081,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 set_sp();
+                seg <= ss;
                 store_what <= m832 ? `STW_CS3124 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
                 state <= STORE1;
                 vect <= m832 ? `COP_VECT_832 : m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
@@ -3080,6 +3136,7 @@ DECODE:
             begin
                 inc_pc(24'd4);  // Yes this should be one less than the instruction length.
                 set_sp();
+                seg <= ss;
                 store_what <= `STW_PC2316;
                 state <= STORE1;
             end
@@ -3094,6 +3151,7 @@ DECODE:
             begin
                 inc_pc(24'd2);  // Yes this should be one less than the instruction length.
                 set_sp();
+                seg <= ss;
                 store_what <= `STW_PC158;
                 state <= STORE1;
             end
@@ -3111,6 +3169,7 @@ DECODE:
                 begin
                     inc_pc(24'd3);
                     set_sp();
+                    seg <= ss;
                     store_what <= `STW_PC2316;
                     state <= STORE1;
                 end
@@ -3120,12 +3179,16 @@ DECODE:
         `PHCS:
             begin
                 set_sp();
+                seg <= ss;
+//                data_write(fn_get_sp(sp),cs[31:24]);
+//                mlb <= TRUE;
                 store_what <= `STW_CS3124;
                 state <= STORE1;
             end
         `PLDS:
             begin
                 inc_sp();
+                seg <= ss;
                 s32 <= TRUE;
                 load_what <= `WORD_71S;
                 state <= LOAD_MAC1;
@@ -3165,6 +3228,7 @@ DECODE:
             begin
                 inc_pc(24'd7);
                 set_sp();
+                seg <= ss;
                 store_what <= `STW_CS3124;
                 radr <= sp;
                 wadr <= sp;
@@ -3179,7 +3243,9 @@ DECODE:
                     set_task_regs(24'd3);
                     tr <= ir[`TASK_MEM_ABIT+8:8];
                     back_link <= tr;
+                    tsk_pres <= 5'h0;
                     state <= TSK1;
+                    retstate <= IFETCH;
                 end
             end
         `TSK_ACC:
@@ -3188,26 +3254,36 @@ DECODE:
                     set_task_regs(24'd1);
                     tr <= acc[`TASK_MEM_ABIT:0];
                     back_link <= tr;
+                    tsk_pres <= 5'h0;
                     state <= TSK1;
+                    retstate <= IFETCH;
                 end
             end
         `FORK_IMM:
             begin
-                inc_pc(24'd2);
-                back_link <= tr;
-                tr <= ir[`TASK_MEM_ABIT+8:8];
+                inc_pc(24'd3);
+                if (tr != ir[`TASK_MEM_ABIT+8:8]) begin
+                    set_task_regs(24'd3);
+                    back_link <= tr;
+                    tr <= ir[`TASK_MEM_ABIT+8:8];
+                end
             end
         `FORK_ACC:
             begin
-                back_link <= tr;
-                tr <= acc[`TASK_MEM_ABIT:0];
+                if (tr != acc[`TASK_MEM_ABIT:0]) begin
+                    set_task_regs(24'd1);
+                    back_link <= tr;
+                    tr <= acc[`TASK_MEM_ABIT:0];
+                end
             end
         `RTT:
             begin
                 if (tr != bl_o) begin
                     set_task_regs(24'd1);
                     tr <= bl_o;
+                    tsk_pres <= 5'd0;
                     state <= TSK1;
+                    retstate <= IFETCH;
                 end
             end
         `LDT_XABS:
@@ -3223,6 +3299,63 @@ DECODE:
                 cnt <= 4'd0;
                 radr <= ir[39:8] + (x << 5);
                 next_state(LDT1);
+            end
+        `JCL:
+            begin
+                inc_pc(24'd7);
+                if (tr != ir[`TASK_MEM_ABIT+32:32]) begin
+                    set_task_regs(24'd7);
+                    back_link <= tr;
+                    tr <= ir[`TASK_MEM_ABIT+32:32];
+                    pc <= ir[31:8];
+                    maxcnt <= ir[52:48];
+                    if (ir[55]) begin
+                        tsk_pres[3:0] <= 4'hF;
+                        tsk_pres[4] <= TRUE;
+                    end
+                    else begin
+                        tsk_pres[3:0] <= 4'h0;
+                        tsk_pres[4] <= TRUE;
+                    end
+                    if (ir[52:48] > 5'd0) begin
+                        cnt <= 8'h00;
+                        load_what <= `CPY_BUF;
+                        store_what <= `STW_CPY_BUF;
+                        inc_sp();
+                        next_state(LOAD_MAC1);
+                        retstate <= STORE1;
+                    end
+                    else begin 
+                        state <= TSK1;
+                        retstate <= IFETCH;
+                    end
+                end
+            end
+        `JCR:
+            begin
+                inc_pc(24'd4);
+                if (tr != {8'h00,ir[31:24]}) begin
+                    set_task_regs(24'd4);
+                    back_link <= tr;
+                    tr <= {8'h00,ir[31:24]};
+                    pc <= {8'h00,ir[23:8]};
+                    tsk_pres[3:0] <= 4'hF;
+                    tsk_pres[4] <= TRUE;
+                    state <= TSK1;
+                    retstate <= IFETCH;
+                end
+            end
+        `RTC:
+            begin
+                inc_pc(24'd2);
+                if (tr != bl_o) begin
+                    set_task_regs(24'd2);
+                    sp_i <= sp + ir[15:8];
+                    tr <= bl_o;
+                    state <= TSK1;
+                    tsk_pres[3:0] <= 4'hF;
+                    retstate <= IFETCH;
+                end
             end
 `endif
 `endif
@@ -3240,7 +3373,7 @@ DECODE:
                 case(ir[15:8])
                 8'h00:  inv_icache <= TRUE; // invalidate entire instruction cache
                 8'h01:  begin
-                        ado <= {acc[31:4],4'h0};
+                        ado1 <= {acc[31:4],4'h0};
                         inv_iline <= TRUE;
                         end
                 8'h02:  begin       // LICL
@@ -3272,13 +3405,13 @@ TSK1:
         cs <= cs_o;
         ds <= ds_o;
 `endif
-        pc <= pc_o;
-        acc <= acc_o;
-        x <= x_o;
-        y <= y_o;
+        if (!tsk_pres[4]) pc <= pc_o;
+        if (!tsk_pres[3]) acc <= acc_o;
+        if (!tsk_pres[2]) x <= x_o;
+        if (!tsk_pres[1]) y <= y_o;
         sp <= sp_o;
-        cf <= sr_o[0];
-        zf <= sr_o[1];
+        if (!tsk_pres[0]) cf <= sr_o[0];
+        if (!tsk_pres[0]) zf <= sr_o[1];
         // Force further interrupts to be masked automatically when the task is
         // invoked as an interrupt handler. Otherwise the task will be invoked
         // continuously.
@@ -3295,13 +3428,15 @@ TSK1:
         // which never loads the flag.
         else if (POPBF)
             bf <= sr_o[4];
-        vf <= sr_o[6];
-        nf <= sr_o[7];
+        if (!tsk_pres[0]) vf <= sr_o[6];
+        if (!tsk_pres[0]) nf <= sr_o[7];
         m816 <= srx_o[0];
         m832 <= srx_o[1];
         dbr <= dbr_o;
         dpr <= dpr_o;
-        next_state(IFETCH);
+        if (retstate==STORE1)
+            set_sp();
+        next_state(retstate);
     end
 LDT1:
     begin
@@ -3324,7 +3459,7 @@ LDT1:
         4'd8:   begin srx_i <= b32[7:0]; dbr_i <= b32[15:8]; dpr_i <= b32[31:16];
                 tskm_we <= TRUE;
                 tskm_wr <= TRUE;
-                tskm_wa <= x[`TASK_MEM_ABIT:0];
+                tskm_wa <= x32[`TASK_MEM_ABIT:0];
                 next_state(IFETCH);
                 end
         endcase 
@@ -3335,6 +3470,8 @@ LOAD_MAC1:
     if (unCachedData)
 `endif
     begin
+        if (load_what==`CPY_BUF && maxcnt > 1)
+            mlb <= 1'b1;
         if (isRMW)
             mlb <= 1'b1;
         if (isBrk)
@@ -3355,6 +3492,20 @@ LOAD_MAC2:
         data_nack();
         begin
             case(load_what)
+            `CPY_BUF:
+                begin
+                    cnt <= cnt + 8'd1;
+                    cpybuf[cnt] <= db;
+                    if (cnt < maxcnt - 8'd1) begin
+                        inc_sp();
+                        next_state(LOAD_MAC1);
+                    end
+                    else begin
+                        mlb <= 1'b0;
+                        cnt <= cnt;
+                        next_state(TSK1);
+                    end
+                end
             `BYTE_72:
                         begin
                             wdat[7:0] <= db;
@@ -3408,8 +3559,14 @@ LOAD_MAC2:
                             end
                             if (s16|s32) begin
                                 load_what <= `LOAD_158;
-                                data_read(inc_adr(radr));
-                                state <= LOAD_MAC2;
+                                if (DEAD_CYCLE) begin
+                                    data_nack();
+                                    next_state(LOAD_MAC1);
+                                end
+                                else begin
+                                    data_read(inc_adr(radr));
+                                    state <= LOAD_MAC2;
+                                end
                             end
                             else
                                 state <= retstate;
@@ -3427,8 +3584,14 @@ LOAD_MAC2:
                             end
                             if (s32) begin
                                 load_what <= `LOAD_2316;
-                                data_read(inc_adr(radr));
-                                state <= LOAD_MAC2;
+                                if (DEAD_CYCLE) begin
+                                    data_nack();
+                                    next_state(LOAD_MAC1);
+                                end
+                                else begin
+                                    data_read(inc_adr(radr));
+                                    state <= LOAD_MAC2;
+                                end
                             end
                             else
                                 state <= retstate;
@@ -3439,8 +3602,14 @@ LOAD_MAC2:
                             res32[23:16] <= db;
                             load_what <= `LOAD_3124;
                             radr <= inc_adr(radr);
-                            data_read(inc_adr(radr));
-                            state <= LOAD_MAC2;
+                            if (DEAD_CYCLE) begin
+                                data_nack();
+                                next_state(LOAD_MAC1);
+                            end
+                            else begin
+                                data_read(inc_adr(radr));
+                                state <= LOAD_MAC2;
+                            end
                         end
             `LOAD_3124:
                         begin
@@ -3455,9 +3624,12 @@ LOAD_MAC2:
                             if (s16|s32) begin
                                 load_what <= `WORD_159S;
                                 inc_sp();
-                                radr <= inc_adr(radr);
-                                data_read(inc_adr(radr));
-                                next_state(LOAD_MAC2);
+                                if (DEAD_CYCLE)
+                                    next_state(LOAD_MAC1);
+                                else begin
+                                    data_read(fn_sp_inc(sp_inc));
+                                    next_state(LOAD_MAC2);
+                                end
                             end
                             else
                                 next_state(retstate);
@@ -3468,9 +3640,12 @@ LOAD_MAC2:
                             if (s32) begin
                                 load_what <= `WORD_2317S;
                                 inc_sp();
-                                radr <= inc_adr(radr);
-                                data_read(inc_adr(radr));
-                                next_state(LOAD_MAC2);
+                                if (DEAD_CYCLE)
+                                    next_state(LOAD_MAC1);
+                                else begin
+                                    data_read(fn_sp_inc(sp_inc));
+                                    next_state(LOAD_MAC2);
+                                end
                             end
                             else
                                 next_state(retstate);
@@ -3480,9 +3655,12 @@ LOAD_MAC2:
                             res32[23:16] <= db;
                             load_what <= `WORD_3125S;
                             inc_sp();
-                            radr <= inc_adr(radr);
-                            data_read(inc_adr(radr));
-                            next_state(LOAD_MAC2);
+                            if (DEAD_CYCLE)
+                                next_state(LOAD_MAC1);
+                            else begin
+                                data_read(fn_sp_inc(sp_inc));
+                                next_state(LOAD_MAC2);
+                            end
                         end
             `WORD_3125S:
                         begin
@@ -3514,8 +3692,14 @@ LOAD_MAC2:
                             if (isRTI) begin
                                 load_what <= `PC_70;
                                 inc_sp();
-                                data_read(fn_sp_inc(sp_inc));
-                                state <= LOAD_MAC2;
+                                if (DEAD_CYCLE) begin
+                                    data_nack();
+                                    next_state(LOAD_MAC1);
+                                end
+                                else begin
+                                    data_read(fn_sp_inc(sp_inc));
+                                    state <= LOAD_MAC2;
+                                end
                             end        
                             else begin    // PLP
                                 moveto_ifetch();
@@ -3526,8 +3710,15 @@ LOAD_MAC2:
              `LDW_TR70: begin
                             b32 <= db;
                             radr <= inc_adr(radr);
-                            data_read(inc_adr(radr));
-                            state <= `LDW_TR158;
+                            load_what <= `LDW_TR158;
+                            if (DEAD_CYCLE) begin
+                                data_nack();
+                                next_state(LOAD_MAC1);
+                            end
+                            else begin
+                                data_read(inc_adr(radr));
+                                next_state(LOAD_MAC2);
+                            end
                         end
              `LDW_TR158: begin
                            radr <= inc_adr(radr);
@@ -3547,8 +3738,14 @@ LOAD_MAC2:
                             load_what <= `PC_158;
                             if (isRTI|isRTS|isRTL|isRTF) begin
                                 inc_sp();
-                                data_read(fn_sp_inc(sp_inc));
-                                state <= LOAD_MAC2;
+                                if (DEAD_CYCLE) begin
+                                    data_nack();
+                                    next_state(LOAD_MAC1);
+                                end
+                                else begin
+                                    data_read(fn_sp_inc(sp_inc));
+                                    state <= LOAD_MAC2;
+                                end
                             end
                             else begin    // JMP (abs)
                                 radr <= inc_adr(radr);
@@ -3560,13 +3757,20 @@ LOAD_MAC2:
                             if ((isRTI&(m816|m832))|isRTL|isRTF) begin
                                 load_what <= `PC_2316;
                                 inc_sp();
-                                data_read(fn_sp_inc(sp_inc));
-                                state <= LOAD_MAC2;
+                                if (DEAD_CYCLE) begin
+                                    data_nack();
+                                    next_state(LOAD_MAC1);
+                                end
+                                else begin
+                                    data_read(fn_sp_inc(sp_inc));
+                                    state <= LOAD_MAC2;
+                                end
                             end
                             else if (isRTS)    // rts instruction
                                 next_state(RTS1);
                             else if (isJLInd) begin   // jmp (abs)
                                 load_what <= `PC_2316;
+                                seg <= ds;
                                 radr <= inc_adr(radr);
                                 state <= LOAD_MAC1;
                             end
@@ -3581,8 +3785,14 @@ LOAD_MAC2:
                             if (isRTF|(isRTI&m832)) begin
                                 load_what <= `CS_70;
                                 inc_sp();
-                                data_read(fn_sp_inc(sp_inc));
-                                next_state(LOAD_MAC2);
+                                if (DEAD_CYCLE) begin
+                                    data_nack();
+                                    next_state(LOAD_MAC1);
+                                end
+                                else begin
+                                    data_read(fn_sp_inc(sp_inc));
+                                    next_state(LOAD_MAC2);
+                                end
                             end
                             else if (isRTL) begin
                                 load_what <= `NOTHING;
@@ -3595,25 +3805,43 @@ LOAD_MAC2:
                         end
 `ifdef SUPPORT_SEG
               `CS_70:   begin
+                              load_what <= `CS_158;
                               inc_sp();
                               cs[7:0] <= db;
-                              data_read(fn_sp_inc(sp_inc));
-                              load_what <= `CS_158;
-                              next_state(LOAD_MAC2);
+                              if (DEAD_CYCLE) begin
+                                  data_nack();
+                                  next_state(LOAD_MAC1);
+                              end
+                              else begin
+                                  data_read(fn_sp_inc(sp_inc));
+                                  next_state(LOAD_MAC2);
+                              end
                         end
               `CS_158:   begin
+                            load_what <= `CS_2316;
                             inc_sp();
                             cs[15:8] <= db;
-                            data_read(fn_sp_inc(sp_inc));
-                            load_what <= `CS_2316;
-                            next_state(LOAD_MAC2);
+                            if (DEAD_CYCLE) begin
+                                data_nack();
+                                next_state(LOAD_MAC1);
+                            end
+                            else begin
+                                data_read(fn_sp_inc(sp_inc));
+                                next_state(LOAD_MAC2);
+                            end
                         end
               `CS_2316:   begin
+                              load_what <= `CS_3124;
                               inc_sp();
                               cs[23:16] <= db;
-                              data_read(fn_sp_inc(sp_inc));
-                              load_what <= `CS_3124;
-                              next_state(LOAD_MAC2);
+                              if (DEAD_CYCLE) begin
+                                  data_nack();
+                                  next_state(LOAD_MAC1);
+                              end
+                              else begin
+                                  data_read(fn_sp_inc(sp_inc));
+                                  next_state(LOAD_MAC2);
+                              end
                           end
               `CS_3124:   begin
                               cs[31:24] <= db;
@@ -3633,10 +3861,16 @@ LOAD_MAC2:
             `IA_70:
                     begin
                         radr <= radr + 32'd1;
-                        data_read(radr + 32'd1);
+                        if (DEAD_CYCLE) begin
+                            data_nack();
+                            next_state(LOAD_MAC1);
+                        end
+                        else begin
+                            data_read(radr + 32'd1);
+                            state <= LOAD_MAC2;
+                        end
                         ia[7:0] <= db;
                         load_what <= `IA_158;
-                        state <= LOAD_MAC2;
                     end
             `IA_158:
                     begin
@@ -3645,9 +3879,15 @@ LOAD_MAC2:
                         ia[31:24] <= 8'h00;
                         if (isIY24|isI24|isIY32|isI32) begin
                             radr <= radr + 32'd1;
-                            data_read(radr + 32'd1);
+                            if (DEAD_CYCLE) begin
+                                data_nack();
+                                next_state(LOAD_MAC1);
+                            end
+                            else begin
+                                data_read(radr + 32'd1);
+                                state <= LOAD_MAC2;
+                            end
                             load_what <= `IA_2316;
-                            state <= LOAD_MAC2;
                         end
                         else
                             state <= isIY ? BYTE_IY5 : BYTE_IX5;
@@ -3659,8 +3899,14 @@ LOAD_MAC2:
                         if (isI32|isIY32) begin
                             load_what <= `IA_3124;
                             radr <= radr + 32'd1;
-                            data_read(radr + 32'd1);
-                            next_state(LOAD_MAC2);
+                            if (DEAD_CYCLE) begin
+                                data_nack();
+                                next_state(LOAD_MAC1);
+                            end
+                            else begin
+                                data_read(radr + 32'd1);
+                                next_state(LOAD_MAC2);
+                            end
                         end
                         else
                             state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
@@ -3695,6 +3941,7 @@ BYTE_IX5:
         isI32 <= `FALSE;
         bank_wrap <= FALSE;
         page_wrap <= FALSE;
+        seg <= ds;
         radr <= ia;
         load_what <= `LOAD_70;
         state <= LOAD_MAC1;
@@ -3709,6 +3956,7 @@ BYTE_IX5:
         end
         else if (ir[7:0]==`PEI) begin
             set_sp();
+            seg <= ss;
             store_what <= isI32 ? `STW_IA3124 : `STW_IA158;
             state <= STORE1;
         end
@@ -3720,6 +3968,7 @@ BYTE_IY5:
         isIY32 <= `FALSE;
         bank_wrap <= FALSE;
         page_wrap <= FALSE;
+        seg <= ds;
         radr <= iapy8;
         wadr <= iapy8;
         if (!sop) begin
@@ -3740,17 +3989,38 @@ STORE1:
 		case(store_what)
 `ifdef SUPPORT_SEG
 		`STW_CS3124:    begin data_write(wadr,cs[31:24]); mlb <= 1'b1; end
+		`STW_CS2316:    data_write(wadr,cs[23:16]);
+		`STW_CS158:     data_write(wadr,cs[15:8]);
+		`STW_CS70:      data_write(wadr,cs[7:0]);
         `STW_DS70:      begin data_write(wadr,ds[7:0]); mlb <= 1'b1; end
+        `STW_DS158:     data_write(wadr,ds[15:8]);
+        `STW_DS2316:    data_write(wadr,ds[23:16]);
+        `STW_DS3124:    data_write(wadr,ds[31:24]);
 `endif
 		`STW_PC2316:	begin data_write(wadr,pc[23:16]); mlb <= 1'b1; end
 		`STW_PC158:		data_write(wadr,pc[15:8]);
 		`STW_PC70:		data_write(wadr,pc[7:0]);
 		`STW_SR70:		data_write(wadr,sr8);
 		`STW_DEF70:		begin data_write(wadr,wdat); mlb <= s16|s32; end
+		`STW_DEF158:    data_write(wadr,wdat[15:8]);
+		`STW_DEF2316:   data_write(wadr,wdat[23:16]);
+		`STW_DEF3124:   data_write(wadr,wdat[31:24]);
 		`STW_ACC70:		begin data_write(wadr,acc); mlb <= s16|s32; end
+		`STW_ACC158:	data_write(wadr,acc[15:8]);
+		`STW_ACC2316:	data_write(wadr,acc[23:16]);
+		`STW_ACC3124:	data_write(wadr,acc[31:24]);
 		`STW_X70:		begin data_write(wadr,x); mlb <= s16|s32; end
+		`STW_X158:		data_write(wadr,x[15:8]);
+		`STW_X2316:		data_write(wadr,x[23:16]);
+		`STW_X3124:		data_write(wadr,x[31:24]);
 		`STW_Y70:		begin data_write(wadr,y); mlb <= s16|s32; end
+		`STW_Y158:		data_write(wadr,y[15:8]);
+		`STW_Y2316:		data_write(wadr,y[23:16]);
+		`STW_Y3124:		data_write(wadr,y[31:24]);
 		`STW_Z70:		begin data_write(wadr,8'h00); mlb <= s16|s32; end
+		`STW_Z158:		data_write(wadr,8'h00);
+		`STW_Z2316:		data_write(wadr,8'h00);
+		`STW_Z3124:		data_write(wadr,8'h00);
 		`STW_DBR:       data_write(wadr,dbr);
 		`STW_DPR158:	begin data_write(wadr,dpr[15:8]); mlb<= 1'b1; end
 		`STW_DPR70:		begin data_write(wadr,dpr[7:0]); mlb <= 1'b1; end
@@ -3762,6 +4032,7 @@ STORE1:
 		`STW_IA2316:	data_write(wadr,ia[23:16]);
 		`STW_IA158:		begin data_write(wadr,ia[15:8]); mlb <= 1'b1; end
 		`STW_IA70:		data_write(wadr,ia);
+		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt]); mlb <= 1'b1; end
 		default:	data_write(wadr,wdat);
 		endcase
 `ifdef SUPPORT_DCACHE
@@ -3798,124 +4069,227 @@ STORE2:
 			end
 		end
 		case(store_what)
+		`STW_CPY_BUF:
+		    begin
+		        if (cnt > 0) begin
+		            cnt <= cnt - 8'd1;
+                    set_sp();
+                    if (DEAD_CYCLE) begin
+                        data_nack();
+                        next_state(STORE1);
+                    end
+                    else begin
+                        data_write(fn_get_sp(sp),cpybuf[cnt-8'd1]);
+                        state <= STORE2;
+                    end
+		        end
+		        else
+		            state <= IFETCH;
+		    end
 		`STW_DEF70:
 			begin
 				wadr <= inc_adr(wadr);
 				if (s16|s32) begin
                     store_what <= `STW_DEF158;
-		            data_write(inc_adr(wadr),wdat[15:8]);
-                    next_state(STORE2);
+                    if (DEAD_CYCLE)
+                        next_state(STORE1);
+                    else begin
+		                data_write(inc_adr(wadr),wdat[15:8]);
+                        next_state(STORE2);
+                    end
                 end
 			end
 		`STW_DEF158:
 			if (s32) begin
 				wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),wdat[23:16]);
+				if (DEAD_CYCLE)
+				    next_state(STORE1);
+				else begin
+                    data_write(inc_adr(wadr),wdat[23:16]);
+                    next_state(STORE2);
+                end
 				store_what <= `STW_DEF2316;
-                next_state(STORE2);
 			end
 		`STW_DEF2316:
             begin
 				wadr <= inc_adr(wadr);
-	            data_write(inc_adr(wadr),wdat[31:24]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+	                data_write(inc_adr(wadr),wdat[31:24]);
+                    next_state(STORE2);
+	            end
                 store_what <= `STW_DEF3124;
-                next_state(STORE2);
             end
         `STW_ACC70:
             if (s16|s32) begin
 				wadr <= inc_adr(wadr);
                 mlb <= 1'b1;
                 store_what <= `STW_ACC158;
-		        data_write(inc_adr(wadr),acc[15:8]);
-                state <= STORE2;
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+		            data_write(inc_adr(wadr),acc[15:8]);
+                    state <= STORE2;
+                end
             end
         `STW_ACC158:
             if (s32) begin
                 wadr <= inc_adr(wadr);
                 mlb <= 1'b1;
                 store_what <= `STW_ACC2316;
-		        data_write(inc_adr(wadr),acc[23:16]);
-                state <= STORE2;
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+		            data_write(inc_adr(wadr),acc[23:16]);
+                    state <= STORE2;
+                end
             end
         `STW_ACC2316:
             begin
                 wadr <= inc_adr(wadr);
                 mlb <= 1'b1;
                 store_what <= `STW_ACC3124;
-		        data_write(inc_adr(wadr),acc[31:24]);
-                state <= STORE2;
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+		            data_write(inc_adr(wadr),acc[31:24]);
+                    state <= STORE2;
+                end
             end
 		`STW_X70:
 			if (s16|s32) begin
 				mlb <= 1'b1;
 				wadr <= inc_adr(wadr);
-		        data_write(inc_adr(wadr),x[15:8]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+		            data_write(inc_adr(wadr),x[15:8]);
+    				state <= STORE2;
+		        end
 				store_what <= `STW_X158;
-				state <= STORE2;
 			end
 		`STW_X158:
             if (s32) begin
                 mlb <= 1'b1;
                 wadr <= inc_adr(wadr);
-		        data_write(inc_adr(wadr),x[23:16]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+		            data_write(inc_adr(wadr),x[23:16]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_X2316;
-                state <= STORE2;
             end
 		`STW_X2316:
             begin
                 mlb <= 1'b1;
                 wadr <= inc_adr(wadr);
-		        data_write(inc_adr(wadr),x[31:24]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+		            data_write(inc_adr(wadr),x[31:24]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_X3124;
-                state <= STORE2;
             end
 		`STW_Y70:
 			if (s16|s32) begin
 				mlb <= 1'b1;
 				wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),y[15:8]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+                    data_write(inc_adr(wadr),y[15:8]);
+    				state <= STORE2;
+    		    end
 				store_what <= `STW_Y158;
-				state <= STORE2;
 			end
 		`STW_Y158:
             if (s32) begin
                 mlb <= 1'b1;
                 wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),y[23:16]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(inc_adr(wadr),y[23:16]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_Y2316;
-                state <= STORE2;
             end
 		`STW_Y2316:
             begin
                 mlb <= 1'b1;
                 wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),y[31:24]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(inc_adr(wadr),y[31:24]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_Y3124;
-                state <= STORE2;
             end
 		`STW_Z70:
 			if (s16|s32) begin
 				mlb <= 1'b1;
 				wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),8'h00);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+                    data_write(inc_adr(wadr),8'h00);
+				    state <= STORE2;
+				end
 				store_what <= `STW_Z158;
-				state <= STORE2;
 			end
 		`STW_Z158:
             if (s32) begin
                 mlb <= 1'b1;
                 wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),8'h00);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(inc_adr(wadr),8'h00);
+                    state <= STORE2;
+                end
                 store_what <= `STW_Z2316;
-                state <= STORE2;
             end
 		`STW_Z2316:
             begin
                 mlb <= 1'b1;
                 wadr <= inc_adr(wadr);
-                data_write(inc_adr(wadr),8'h00);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(inc_adr(wadr),8'h00);
+                    state <= STORE2;
+                end
                 store_what <= `STW_Z3124;
-                state <= STORE2;
             end
 		`STW_DPR70:
 			begin
@@ -3929,52 +4303,94 @@ STORE2:
 		    begin
 				mlb <= 1'b1;
 				wadr <= inc_adr(wadr);
-				data_write(inc_adr(wadr),ds[15:8]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+				    data_write(inc_adr(wadr),ds[15:8]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_DS158;
-                state <= STORE2;
 		    end
 		`STW_DS158:
             begin
 				wadr <= inc_adr(wadr);
-				data_write(inc_adr(wadr),ds[23:16]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+				    data_write(inc_adr(wadr),ds[23:16]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_DS2316;
-                state <= STORE2;
             end
 		`STW_DS2316:
             begin
 				wadr <= inc_adr(wadr);
-				data_write(inc_adr(wadr),ds[31:24]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+				    data_write(inc_adr(wadr),ds[31:24]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_DS3124;
-                state <= STORE2;
             end
 		`STW_CS3124:
             begin
                 mlb <= `TRUE;
                 set_sp();
-                data_write(fn_get_sp(sp),cs[23:16]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(fn_get_sp(sp),cs[23:16]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_CS2316;
-                state <= STORE2;
             end
         `STW_CS2316:
             begin
                 set_sp();
-                data_write(fn_get_sp(sp),cs[15:8]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(fn_get_sp(sp),cs[15:8]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_CS158;
-                state <= STORE2;
             end
         `STW_CS158:
             begin
                 set_sp();
-                data_write(fn_get_sp(sp),cs[7:0]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(fn_get_sp(sp),cs[7:0]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_CS70;
-                state <= STORE2;
             end
         `STW_CS70:
             if (ir9 != `PHCS) begin
                 set_sp();
-                data_write(fn_get_sp(sp),pc[23:16]);
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(fn_get_sp(sp),pc[23:16]);
+                    state <= STORE2;
+                end
                 store_what <= `STW_PC2316;
-                state <= STORE2;
             end
 `endif
 		`STW_TMP158:
@@ -4005,17 +4421,29 @@ STORE2:
 			begin
 				if (ir9 != `PHK) begin
 					set_sp();
-                    data_write(fn_get_sp(sp),pc[15:8]);
+					if (DEAD_CYCLE) begin
+                        data_nack();
+		 			    next_state(STORE1);
+					end
+					else begin
+                        data_write(fn_get_sp(sp),pc[15:8]);
+    					state <= STORE2;
+    			    end
 					store_what <= `STW_PC158;
-					state <= STORE2;
 				end
 			end
 		`STW_PC158:
 			begin
 				set_sp();
-                data_write(fn_get_sp(sp),pc[7:0]);
+				if (DEAD_CYCLE) begin
+                    data_nack();
+				    next_state(STORE1);
+				end
+				else begin
+                    data_write(fn_get_sp(sp),pc[7:0]);
+    				state <= STORE2;
+    		    end
 				store_what <= `STW_PC70;
-				state <= STORE2;
 			end
 		`STW_PC70:
 			begin
@@ -4023,9 +4451,15 @@ STORE2:
 				`BRK,`BRK2,`COP:
 						begin
 						set_sp();
-                        data_write(fn_get_sp(sp),sr8);
+						if (DEAD_CYCLE) begin
+                            data_nack();
+						    next_state(STORE1);
+						end
+						else begin
+                            data_write(fn_get_sp(sp),sr8);
+    						state <= STORE2;
+    				    end
 					    store_what <= `STW_SR70;
-						state <= STORE2;
 						end
 				`JSR: 	begin
 					    pc[15:0] <= ir[23:8];
@@ -4043,6 +4477,7 @@ STORE2:
 						begin
 						state <= LOAD_MAC1;
 						load_what <= `PC_70;
+						seg <= ds;
 						radr <= absx_address;
 						bank_wrap <= FALSE;
 						page_wrap <= FALSE;
@@ -4051,6 +4486,7 @@ STORE2:
                         begin
                         state <= LOAD_MAC1;
                         load_what <= `PC_70;
+                        seg <= ds;
                         radr <= xalx_address;
 						bank_wrap <= FALSE;
                         page_wrap <= FALSE;
@@ -4061,11 +4497,12 @@ STORE2:
 			begin
 				if (ir[7:0]==`BRK) begin
 					load_what <= `PC_70;
-					state <= LOAD_MAC2;
+					seg <= ds;
+					state <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
 					vpb <= TRUE;
-					data_read(vect);
+//					data_read(vect);
 					im <= hwi;
 					df <= 1'b0;
 					bank_wrap <= FALSE;
@@ -4073,11 +4510,12 @@ STORE2:
 				end
 				else if (ir[7:0]==`COP) begin
 					load_what <= `PC_70;
-					state <= LOAD_MAC2;
+					seg <= ds;
+					state <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
 					vpb <= TRUE;
-					data_read(vect);
+//					data_read(vect);
 					im <= 1'b1;
 					bank_wrap <= FALSE;
                     page_wrap <= FALSE;
@@ -4087,6 +4525,7 @@ STORE2:
 			if (isJsrIndx) begin
 				load_what <= `PC_310;
 				state <= LOAD_MAC1;
+				seg <= ds;
 				radr <= ir[31:8] + x;
 				bank_wrap <= FALSE;
                 page_wrap <= FALSE;
@@ -4094,6 +4533,7 @@ STORE2:
 			else if (isJsrInd) begin
 				load_what <= `PC_310;
 				state <= LOAD_MAC1;
+				seg <= ds;
 				radr <= ir[31:8];
 				bank_wrap <= FALSE;
                 page_wrap <= FALSE;
@@ -4206,7 +4646,7 @@ ICACHE1:
             vda <= TRUE;
             ado <= {cspc[31:4],4'h0};
             wr_icache <= TRUE; 
-            cnt <= 4'h0;
+            cnt <= 8'h0;
             next_state(ICACHE2);
         end
         else if (!hit1) begin
@@ -4215,7 +4655,7 @@ ICACHE1:
             vda <= TRUE;
             ado <= {cspc[31:4]+28'd1,4'h0};
             wr_icache <= TRUE; 
-            cnt <= 4'h0;
+            cnt <= 8'h0;
             next_state(ICACHE2);
         end
         else
@@ -4223,21 +4663,34 @@ ICACHE1:
     end
 ICACHE2:
     if (rdy) begin
+        ado1 <= ado;
         vda <= FALSE;
-        ado <= ado + 32'd1;
-        if (cnt == 4'hE)
-            wr_itag <= TRUE;
-        if (cnt == 4'hF) begin
+        if (DEAD_CYCLE) begin
             vpa <= FALSE;
+            ado <= 32'd0;
+            next_state(ICACHE3);
+        end
+        else
+            ado <= {ado[31:4],cnt[3:0]+4'd1};
+        if (cnt[3:0] == 4'hE)
+            wr_itag <= TRUE;
+        if (cnt[3:0] == 4'hF) begin
+            vpa <= FALSE;
+            ado <= 32'd0;
             if ((hit1|prc_hit1)&hit0) begin
                 next_state(IFETCH);
             end
             else
                 next_state(ICACHE1);
-            wr_itag <= FALSE;
             wr_icache <= FALSE;
         end
         cnt <= cnt + 4'd1;
+    end
+ICACHE3:
+    begin
+        vpa <= TRUE;
+        ado <= {ado1[31:4],cnt[3:0]};
+        next_state(ICACHE2);
     end
  
 endcase
@@ -4270,8 +4723,8 @@ begin
 	vpa <= `FALSE;
 	vda <= `FALSE;
 	rwo <= `TRUE;
-	ado <= 32'h000000;
-	dbo <= 8'h00;
+//	ado <= 32'h000000;
+//	dbo <= 8'h00;
 end
 endtask
 
@@ -4347,9 +4800,12 @@ LOAD_IBUF2:		fnStateName = "LOAD_IBUF2 ";
 LOAD_IBUF3:		fnStateName = "LOAD_IBUF3 ";
 ICACHE1:		fnStateName = "ICACHE1    ";
 ICACHE2:		fnStateName = "ICACHE2    ";
+ICACHE3:		fnStateName = "ICACHE3    ";
 IBUF1:			fnStateName = "IBUF1      ";
 DCACHE1:		fnStateName = "DCACHE1    ";
 MVN816:			fnStateName = "MVN816     ";
+TSK1:           fnStateName = "TSK1       ";
+LDT1:           fnStateName = "LDT1       ";
 default:		fnStateName = "UNKNOWN    ";
 endcase
 endfunction

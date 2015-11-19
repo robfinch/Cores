@@ -170,6 +170,7 @@ begin
         page_wrap <= TRUE;
 	end
 	data_nack();
+	seg <= ss;
 	state <= STORE1;
 end
 endtask

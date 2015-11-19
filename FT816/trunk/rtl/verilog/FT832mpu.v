@@ -27,7 +27,8 @@
 `define TRUE 	1'b1
 `define FALSE	1'b0
 
-module FT832mpu(rst, clk, clko, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, abort, be, vpa, vda, mlb, vpb, rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6, ct0, ct1, ct2);
+module FT832mpu(rst, clk, clko, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, abort, be, vpa, vda, mlb, vpb,
+    rw, rwo, ad, ado, db, dbo, cs0, cs1, cs2, cs3, cs4, cs5, cs6, ct0, ct1, ct2);
 parameter pIOAddress = 32'h0000F000;
 parameter pZPAddress = 32'h00000010;
 input rst;
@@ -49,8 +50,11 @@ output vda;
 output mlb;
 output vpb;
 output tri rw;
+output rwo;
 output tri [31:0] ad;
+output [31:0] ado;
 inout tri [7:0] db;
+output [7:0] dbo;
 output cs0;
 output cs1;
 output cs2;
@@ -248,23 +252,23 @@ else begin
 	end
 end
 
-reg [7:0] dbo;
+reg [7:0] dbo1;
 always @(ad or realCnt0 or realCnt1 or realCnt2)
 case(ad[3:0])
-4'h0:	dbo <= realCnt0[7:0];
-4'h1:	dbo <= realCnt0[15:8];
-4'h2:	dbo <= realCnt0[23:16];
-4'h4:	dbo <= realCnt1[7:0];
-4'h5:	dbo <= realCnt1[15:8];
-4'h6:	dbo <= realCnt1[23:16];
-4'h8:	dbo <= realCnt2[7:0];
-4'h9:	dbo <= realCnt2[15:8];
-4'hA:	dbo <= realCnt2[23:16];
-default:	dbo <= zp_shadow[ad[3:0]];
+4'h0:	dbo1 <= realCnt0[7:0];
+4'h1:	dbo1 <= realCnt0[15:8];
+4'h2:	dbo1 <= realCnt0[23:16];
+4'h4:	dbo1 <= realCnt1[7:0];
+4'h5:	dbo1 <= realCnt1[15:8];
+4'h6:	dbo1 <= realCnt1[23:16];
+4'h8:	dbo1 <= realCnt2[7:0];
+4'h9:	dbo1 <= realCnt2[15:8];
+4'hA:	dbo1 <= realCnt2[23:16];
+default:	dbo1 <= zp_shadow[ad[3:0]];
 endcase
 
 wire cs_mpu = (ivda && ad[31:4]==pZPAddress[31:4]) || (ivda && ad[31:8]==pIOAddress[31:8]);
-assign db = (ivda && ad[31:4]==pZPAddress[31:4] && rw) ? dbo : {8{1'bz}};
+assign db = (ivda && ad[31:4]==pZPAddress[31:4] && rw) ? dbo1 : {8{1'bz}};
 assign db =	(ivda && ad[31:8]==pIOAddress[31:8] && rw) ? (
 	ad[4:0]==5'h1F ? {cntIrq2,cntIrq1,cntIrq0} :
 	shadow_ram[ad[4:0]] ) :
@@ -320,8 +324,11 @@ FT832 u1
 	.vpa(vpa),
 	.vda(ivda),
 	.rw(rw),
+	.rwo(rwo),
 	.ad(ad),
+	.ado(ado),
 	.db(db),
+	.dbo(dbo),
 	.err_i(1'b0),
 	.rty_i(1'b0)
 );
