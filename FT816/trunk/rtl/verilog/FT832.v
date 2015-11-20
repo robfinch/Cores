@@ -22,7 +22,8 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
-// Approx 7900 LUTs                                                                          
+// Approx 9000 LUTs   (14400 LC's)]
+// 9 block rams                                                                       
 // ============================================================================
 //
 `define TRUE		1'b1
@@ -126,6 +127,8 @@
 `define UBT         9'h19B
 `define HAF         9'h1AB
 `define UHF         9'h1BB
+`define INF         9'h14A
+`define AAX         9'h18A
 
 `define ADC_IMM		9'h69
 `define ADC_ZP		9'h65
@@ -414,9 +417,11 @@
 `define PHD			9'h0B
 `define PHK			9'h4B
 `define XBA			9'hEB
+`define XBAW        9'h1EB
 `define COP			9'h02
 `define PLB			9'hAB
 `define PLD			9'h2B
+`define MUL         9'h12A
 
 `define LDX_IMM		9'hA2
 `define LDX_ZP		9'hA6
@@ -497,6 +502,7 @@
 `define JCR         9'h120
 `define JCL         9'h182
 `define RTC         9'h140 
+`define JCI         9'h180
 
 // Page Two Opcodes
 `define PG2			9'h42
@@ -592,7 +598,7 @@
 
 // Input Frequency is 32 times the 00 clock
 
-module FT832(rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb,
+module FT832(corenum, rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb,
     rw, rwo, ad, ado, db, dbo, err_i, rty_i);
 parameter STORE_SKIPPING = 1'b1;        // set to 1 to skip the store operation if the value didn't change during a RMW instruction
 parameter EXTRA_LONG_BRANCHES = 1'b1;   // set to 1 to use an illegal branch displacement ($FF) to indicate a long branch
@@ -608,6 +614,8 @@ parameter IFETCH = 6'd1;
 parameter LDT1 = 6'd2;
 parameter TSK1 = 6'd3;
 parameter DECODE = 6'd5;
+parameter INF1 = 6'd6;
+parameter SSM1 = 6'd7;
 parameter STORE1 = 6'd9;
 parameter STORE2 = 6'd10;
 parameter JSR161 = 6'd11;
@@ -634,6 +642,7 @@ parameter ICACHE2 = 6'd43;
 parameter CALC = 6'd44;
 parameter ICACHE3 = 6'd45;
 
+input [31:0] corenum;
 input rst;
 input clk;
 output clko;
@@ -721,6 +730,8 @@ reg x_bit,m_bit;
 reg m16,m32;
 reg xb16,xb32;
 reg mxb16,mxb32;
+reg mib;
+reg ssm;
 wire DEAD_CYCLE = TRUE;//(vda|vpa) && ado >= 32'h10000;
 
 //wire m16 = m816 & ~m_bit;
@@ -746,6 +757,7 @@ begin
     4'b1111:    begin m32 = `FALSE; m16 = `FALSE; xb32 = `FALSE; xb16 = `FALSE; end
     endcase 
 end
+wire [31:0] acc32 = m32 ? acc : m16 ? {16'h0000,acc[15:0]} : {24'h000000,acc[7:0]}; // for multiply
 wire [31:0] x32 = xb32 ? x : xb16 ? {16'h0000,x[15:0]} : {24'h000000,x[7:0]};
 wire [31:0] y32 = xb32 ? y : xb16 ? {16'h0000,y[15:0]} : {24'h000000,y[7:0]};
 wire [7:0] sr8 = (m816|m832) ? {nf,vf,m_bit,x_bit,df,im,zf,cf} : {nf,vf,1'b0,bf,df,im,zf,cf};
@@ -755,6 +767,7 @@ reg [31:0] b32;
 wire [15:0] b16 = b32[15:0];
 wire [7:0] b8 = b32[7:0];
 reg [32:0] res32;
+reg [63:0] prod64;
 wire resc8 = res32[8];
 wire resc16 = res32[16];
 wire resc32 = res32[32];
@@ -999,13 +1012,15 @@ case(ir9)
 `BRA:	takb <= 1'b1;
 `BRL:	takb <= 1'b1;
 `BGT:   takb <= !nf & !zf;//(nf & vf & !zf) | (!nf & !vf & !zf);
-`BGE:   takb <= !nf;//(nf & vf) | (!nf & !vf);
+//`BGE:   takb <= !nf;//(nf & vf) | (!nf & !vf);
 `BLE:   takb <= zf | nf;//zf | (nf & !vf) | (!nf & vf);
-`BLT:   takb <= nf;//(nf & !vf) | (!nf & vf);
+//`BLT:   takb <= nf;//(nf & !vf) | (!nf & vf);
 default:	takb <= 1'b0;
 endcase
 
 // Address generation
+reg [7:0] mvndst_bank;
+reg [7:0] mvnsrc_bank;
 reg [31:0] seg;
 reg [31:0] ia;
 wire [15:0] dpr_zp = {16'h00,ir[15:8]} + dpr;
@@ -1014,8 +1029,8 @@ wire [15:0] dpr_zpy = {{16'h00,ir[15:8]} + y32} + dpr;
 wire [31:0] dpr_zp32 = {16'h00,ir[15:8]} + dpr;
 wire [31:0] dpr_zpx32 = {{16'h00,ir[15:8]} + x32} + dpr;
 wire [31:0] dpr_zpy32 = {{16'h00,ir[15:8]} + y32} + dpr;
-wire [31:0] mvnsrc_address	= m832 ? x32 : {8'h00,ir[23:16],x32[15:0]};
-wire [31:0] mvndst_address	= m832 ? y32 : {8'h00,ir[15: 8],y32[15:0]};
+wire [31:0] mvnsrc_address	= m832 ? x32 : {8'h00,mvnsrc_bank,x32[15:0]};
+wire [31:0] mvndst_address	= m832 ? y32 : {8'h00,mvndst_bank,y32[15:0]};
 wire [31:0] iapy8 			= ia + y32;		// Don't add in abs8, already included with ia
 wire [31:0] zp_address 		= (m832 ? dpr_zp32 : dpr_zp);
 wire [31:0] zpx_address 	= (m832 ? dpr_zpx32 : dpr_zpx);
@@ -1215,7 +1230,7 @@ IFETCH:
 		seg <= ds;
 `endif
 		store_what <= (m32 | m16) ? `STW_DEF70 : `STW_DEF;
-		ir <= insn;
+	    ir <= insn;
 		opc <= pc;
 		if (nmi_edge | ~irq)
 			wai <= 1'b0;
@@ -1249,7 +1264,21 @@ IFETCH:
 			next_state(DECODE);
 		end
 		else if (!wai) begin
-			next_state(DECODE);
+            if (mib) begin
+                set_task_regs(m832 ? 24'd4 : m816 ? 24'd2 : 24'd1);
+                case({m832,m816})
+                2'd0: acc <= insn[7:0];
+                2'd1: acc <= insn[15:0];
+                2'd2: acc <= insn[31:0];
+                2'd3: acc <= insn[31:0];
+                endcase
+                x <= pc;
+                tr <= bl_o;
+                tsk_pres <= 5'h0C;
+                next_state(TSK1);
+            end
+            else
+			    next_state(DECODE);
 		end
 		else
 			next_state(IFETCH);
@@ -1308,6 +1337,8 @@ IFETCH:
                     nf <= nf | ir[15];
                     m816 <= m816 | ir[16];
                     m832 <= m832 | ir[17];
+                    mib <= mib | ir[18];
+                    ssm <= ssm | ir[20];
                 end
 		`REP16:
             begin
@@ -1323,21 +1354,53 @@ IFETCH:
                 nf <= nf & ~ir[15];
                 m816 <= m816 & ~ir[16];
                 m832 <= m832 & ~ir[17];
+                mib <= mib & ~ir[18];
+                ssm <= ssm & ~ir[20];
             end
+        `INF:   begin
+                acc <= res32;
+                nf <= resn32;
+                zf <= resz32;
+                end
 `endif
 		`XBA:
 			begin
-			    if (m832) begin
-                    acc <= res32;
+                acc[15:0] <= res32[15:0];
+                nf <= resn8;
+                zf <= resz8;
+            end
+`ifdef SUPPORT_NEW_INSN
+		`XBAW:
+		    begin
+		        acc <= res32;
+		        nf <= resn16;
+		        zf <= resz16;
+		    end
+		`AAX:
+		    begin
+		        if (m32) begin
+    		        acc <= res32;
+	 	            zf <= resz32;
+                    nf <= resn32;
+                    vf <= (res32[31] ^ x32[31]) & (1'b1 ^ acc[31] ^ x32[31]);
+                    cf <= carry(0,acc[31],x32[31],res32[31]);
+		        end
+		        else if (m16) begin
+    		        acc[15:0] <= res32[15:0];
+		            zf <= resz16;
                     nf <= resn16;
-                    zf <= resz16;
-			    end
-			    else begin
-                    acc[15:0] <= res32[15:0];
-                    nf <= resn8;
-                    zf <= resz8;
-				end
-			end
+                    vf <= (res32[15] ^ x32[15]) & (1'b1 ^ acc[15] ^ x32[15]);
+                    cf <= carry(0,acc[15],x32[15],res32[15]);
+		        end
+		        else begin
+    		        acc[7:0] <= res32[7:0];
+		            zf <= resz8;
+		            nf <= resn8;
+                    vf <= (res32[7] ^ x32[7]) & (1'b1 ^ acc[7] ^ x32[7]);
+                    cf <= carry(0,acc[7],x32[7],res32[7]);
+		        end
+		    end
+`endif
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX,
 		`TAY,`TXY,`DEY,`INY,`INY4,`DEY4,`PLY:
 			begin
@@ -1568,6 +1631,13 @@ IFETCH:
 		      else begin nf <= resn8; zf <= resz8; end
 		`PLB:	begin dbr <= res32[7:0]; nf <= resn8; zf <= resz8; end
 `ifdef SUPPORT_NEW_INSN
+		`MUL:   begin
+		            acc <= prod64[31:0];
+		            x <= prod64[63:32];
+		            zf <= prod64==64'd0;
+		            nf <= prod64[63];
+		            vf <= prod64[63:32]!=32'd0;
+		        end
 `ifdef SUPPORT_SEG
 		`PLDS:	begin ds <= res32; nf <= resn32; zf <= resz32; end
 `endif
@@ -1585,8 +1655,8 @@ IFETCH:
 
 // Decode
 DECODE:
-	begin
-		next_state(IFETCH);
+    begin
+		moveto_ifetch();
         inc_pc(24'd1);
 		case(ir9)
 		`PG2: begin
@@ -1635,13 +1705,7 @@ DECODE:
 		`PCHIST:  res32 <= pc_hist_o;
 		// XBA cannot be done in the ifetch stage because it'd repeat when there
 		// was a cache miss, causing the instruction to be done twice.
-		`XBA:	
-			begin
-			    if (m32)
-			        res32 <= {acc[15:0],acc[31:16]};
-			    else
-			        res32 <= {acc[31:16],acc[7:0],acc[15:8]};
-			end
+		`XBA:   res32 <= {acc[31:16],acc[7:0],acc[15:8]};
 		`STP:	begin clk_en <= 1'b0; end
 		// Switching the processor mode always zeros out the upper part of the index registers.
 		// switching to emulation mode sets 8 bit memory/indexes
@@ -1673,10 +1737,12 @@ DECODE:
 		`DEY:	begin res32 <= y_dec; end
 		`INY:	begin res32 <= y_inc; end
 `ifdef SUPPORT_NEW_INSN
+		`XBAW:    res32 <= {acc[15:0],acc[31:16]};
 		`DEX4:    res32 <= x - 32'd4;
 		`DEY4:    res32 <= y - 32'd4;
 		`INX4:    res32 <= x + 32'd4;
 		`INY4:    res32 <= y + 32'd4;
+		`AAX:     res32 <= acc32 + x32;
 `ifdef SUPPORT_TASK
 		`TTA:       res32 <= tr;
 `endif
@@ -1684,10 +1750,10 @@ DECODE:
 		`DEA:	res32 <= acc_dec;
 		`INA:	res32 <= acc_inc;
 		`TSX,`TSA:	res32 <= sp;
-		`TXS,`TXA,`TXY:	begin res32 <= x; end
+		`TXS,`TXA,`TXY:	begin res32 <= x32; end
 		`TAX,`TAY:	begin res32 <= acc; end
 		`TAS:	res32 <= acc;
-		`TYA,`TYX:	begin res32 <= y; end
+		`TYA,`TYX:	begin res32 <= y32; end
 		`TDC:		begin res32 <= dpr; end
 		`TCD:		begin res32 <= acc; end
 		`ASL_ACC:   res32 <= {acc,1'b0};
@@ -1699,6 +1765,12 @@ DECODE:
 		`ASR_ACC:	if (m32) res32 <= {acc[0],acc[31],acc[31:1]};
                     else if (m16) res32 <= {acc[0],16'b0,acc[15],acc[15:1]};
                     else res32 <= {acc[0],24'b0,acc[7],acc[7:1]};
+        `MUL:       prod64 <= acc32 * x32;
+        `INF:       begin
+                    otr <= tr;
+                    tr <= x32[15:4];
+                    next_state(INF1);
+                    end
 `endif
 		`ROR_ACC:	if (m32) res32 <= {acc[0],cf,acc[31:1]};
 		            else if (m16) res32 <= {acc[0],16'b0,cf,acc[15:1]};
@@ -1775,7 +1847,7 @@ DECODE:
                 else if (m16) s16 <= TRUE;
                 load_what <= `WORD_71S;
 				state <= LOAD_MAC1;
-				retstate <= IFETCH;
+				retstate <= ssm ? SSM1:IFETCH;
 			end
 		`PLX,`PLY:
 			begin
@@ -1785,7 +1857,7 @@ DECODE:
                 else if (xb16) s16 <= TRUE;
 				load_what <= `WORD_71S;
 				state <= LOAD_MAC1;
-				retstate <= IFETCH;
+				retstate <= ssm ? SSM1:IFETCH;
 			end
 		`PLB:
 			begin
@@ -1793,7 +1865,7 @@ DECODE:
                 seg <= ss;
   				load_what <= `WORD_71S;
 				state <= LOAD_MAC1;
-				retstate <= IFETCH;
+				retstate <= ssm ? SSM1 : IFETCH;
 			end
 		`PLD:
 			begin
@@ -1802,7 +1874,7 @@ DECODE:
 			    s16 <= TRUE;
   				load_what <= `WORD_71S;
 				state <= LOAD_MAC1;
-				retstate <= IFETCH;
+				retstate <= ssm ? SSM1 : IFETCH;
 			end
 		// Handle # mode
         `LDA_IMM:
@@ -1811,7 +1883,6 @@ DECODE:
                 else if (m16) inc_pc(24'd3);
                 else inc_pc(24'd2);
                 res32 <= ir[39:8];
-                next_state(IFETCH);
             end
         `LDX_IMM,`LDY_IMM:
             begin
@@ -1819,7 +1890,6 @@ DECODE:
                 else if (xb16) inc_pc(24'd3);
                 else inc_pc(24'd2);
                 res32 <= ir[39:8];
-                next_state(IFETCH);
             end
             // We don't care what the high order bits of the calculation
             // are for 8/16 bit results, so we can safely use 32 bits
@@ -1833,7 +1903,6 @@ DECODE:
                 else if (m16) inc_pc(24'd3);
                 else inc_pc(24'd2);
                 res32 <= acc + ir[39:8] + {31'b0,cf};
-                next_state(IFETCH);
             end
         `SBC_IMM:
             begin
@@ -1842,7 +1911,6 @@ DECODE:
                 else if (m16) inc_pc(24'd3);
                 else inc_pc(24'd2);
                 res32 <= acc - ir[39:8] - {31'b0,~cf};
-                next_state(IFETCH);
             end
         `AND_IMM,`BIT_IMM:
             begin
@@ -1851,7 +1919,6 @@ DECODE:
                 else inc_pc(24'd2);
                 res32 <= acc & ir[39:8];
                 b32 <= ir[39:8];    // for bit flags
-                next_state(IFETCH);
             end
         `ORA_IMM:
             begin
@@ -1859,7 +1926,6 @@ DECODE:
                 else if (m16) inc_pc(24'd3);
                 else inc_pc(24'd2);
                 res32 <= acc | ir[39:8];
-                next_state(IFETCH);
             end
         `EOR_IMM:
             begin
@@ -1867,7 +1933,6 @@ DECODE:
                 else if (m16) inc_pc(24'd3);
                 else inc_pc(24'd2);
                 res32 <= acc ^ ir[39:8];
-                next_state(IFETCH);
             end
         `CMP_IMM:
             begin
@@ -1876,7 +1941,6 @@ DECODE:
                 if (m32) inc_pc(24'd5);
                 else if (m16) inc_pc(24'd3);
                 else inc_pc(24'd2);
-                next_state(IFETCH);
             end
         `CPX_IMM:
             begin
@@ -1885,7 +1949,6 @@ DECODE:
                 if (xb32) inc_pc(24'd5);
                 else if (xb16) inc_pc(24'd3);
                 else inc_pc(24'd2);
-                next_state(IFETCH);
             end
         `CPY_IMM:
             begin
@@ -1894,7 +1957,6 @@ DECODE:
                 if (xb32) inc_pc(24'd5);
                 else if (xb16) inc_pc(24'd3);
                 else inc_pc(24'd2);
-                next_state(IFETCH);
             end
 		// Handle zp mode
         `LDA_ZP:
@@ -1910,7 +1972,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `LDX_ZP,`LDY_ZP:
@@ -1925,7 +1987,7 @@ DECODE:
                     else if (xb16) s16 <= TRUE;
                 end
                 load_what <= `LOAD_70;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 state <= LOAD_MAC2;
                 bank_wrap <= !m832;
             end
@@ -2043,7 +2105,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `LDY_ZPX:
@@ -2057,7 +2119,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_ZPX,`SBC_ZPX,`AND_ZPX,`ORA_ZPX,`EOR_ZPX,`CMP_ZPX,
@@ -2127,7 +2189,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `STX_ZPY:
@@ -2152,7 +2214,7 @@ DECODE:
                 mxb32 <= m32;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_IX,`SBC_IX,`AND_IX,`ORA_IX,`EOR_IX,`CMP_IX,`STA_IX:
@@ -2178,7 +2240,7 @@ DECODE:
                 isIY <= `TRUE;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_IY,`SBC_IY,`AND_IY,`ORA_IY,`EOR_IY,`CMP_IY,`LDA_IY,`STA_IY:
@@ -2209,7 +2271,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC1;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_DSP,`SBC_DSP,`CMP_DSP,`ORA_DSP,`AND_DSP,`EOR_DSP:
             begin
@@ -2251,7 +2313,7 @@ DECODE:
                 mxb32 <= m32;
                 isIY <= `TRUE;
                 load_what <= `IA_70;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 state <= LOAD_MAC1;
             end
         `ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`ORA_DSPIY,`AND_DSPIY,`EOR_DSPIY,`STA_DSPIY:
@@ -2280,7 +2342,7 @@ DECODE:
                isIY32 <= `TRUE;
                load_what <= `IA_70;
                state <= LOAD_MAC1;
-               retstate <= IFETCH;
+               retstate <= ssm ? SSM1 : IFETCH;
            end
        `ADC_XDSPIY,`SBC_XDSPIY,`CMP_XDSPIY,`ORA_XDSPIY,`AND_XDSPIY,`EOR_XDSPIY,`STA_XDSPIY:
             begin
@@ -2359,7 +2421,7 @@ DECODE:
                 mxb32 <= m32;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`STA_IL:
@@ -2387,7 +2449,7 @@ DECODE:
                 mxb32 <= m32;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_XIL,`SBC_XIL,`AND_XIL,`ORA_XIL,`EOR_XIL,`CMP_XIL,`STA_XIL:
@@ -2414,7 +2476,7 @@ DECODE:
                 mxb32 <= m32;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`STA_I,`PEI:
@@ -2442,7 +2504,7 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 load_what <= `LOAD_70;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 state <= LOAD_MAC2;
             end
         `LDX_ABS,`LDY_ABS:
@@ -2458,7 +2520,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_ABS,`SBC_ABS,`AND_ABS,`ORA_ABS,`EOR_ABS,`CMP_ABS,
         `ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS,`TRB_ABS,`TSB_ABS,
@@ -2564,7 +2626,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `LDX_XABS,`LDY_XABS:
             begin
@@ -2579,7 +2641,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_XABS,`SBC_XABS,`AND_XABS,`ORA_XABS,`EOR_XABS,`CMP_XABS,
         `ASL_XABS,`ROL_XABS,`LSR_XABS,`ROR_XABS,`INC_XABS,`DEC_XABS,`TRB_XABS,`TSB_XABS,
@@ -2683,7 +2745,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_ABSX,`SBC_ABSX,`AND_ABSX,`ORA_ABSX,`EOR_ABSX,`CMP_ABSX,
         `ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX,`BIT_ABSX:
@@ -2715,7 +2777,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `STA_ABSX:
             begin
@@ -2760,7 +2822,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_XABSX,`SBC_XABSX,`AND_XABSX,`ORA_XABSX,`EOR_XABSX,`CMP_XABSX,
         `ASL_XABSX,`ROL_XABSX,`LSR_XABSX,`ROR_XABSX,`INC_XABSX,`DEC_XABSX,`BIT_XABSX:
@@ -2792,7 +2854,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `STA_XABSX:
             begin
@@ -2837,7 +2899,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
                 bank_wrap <= !m832;
             end
         `ADC_ABSY,`SBC_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`CMP_ABSY:
@@ -2868,7 +2930,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `STA_ABSY:
             begin
@@ -2900,7 +2962,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_XABSY,`SBC_XABSY,`AND_XABSY,`ORA_XABSY,`EOR_XABSY,`CMP_XABSY:
             begin
@@ -2930,7 +2992,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `STA_XABSY:
             begin
@@ -2961,7 +3023,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_AL,`SBC_AL,`AND_AL,`ORA_AL,`EOR_AL,`CMP_AL:
             begin
@@ -3006,7 +3068,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_ALX,`SBC_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`CMP_ALX:
             begin
@@ -3100,12 +3162,10 @@ DECODE:
                     else
                         inc_pc(24'd2);
                 end
-                next_state(IFETCH);
             end
 		`JMP:
             begin
                 pc[15:0] <= ir[23:8];
-                next_state(IFETCH);
             end
         `JMP_IND:
             begin
@@ -3158,12 +3218,10 @@ DECODE:
         `BRL:
             begin
                 inc_pc({{8{ir[23]}},ir[23:8]} + 24'd3);
-                next_state(IFETCH);
             end
 		`JML:
             begin
                 pc <= ir[31:8];
-                next_state(IFETCH);
             end
         `JSL:
                 begin
@@ -3192,7 +3250,7 @@ DECODE:
                 s32 <= TRUE;
                 load_what <= `WORD_71S;
                 state <= LOAD_MAC1;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
 		`JMF:
             begin
@@ -3222,7 +3280,6 @@ DECODE:
                 end
                 else
                     cs <= ir[63:32];
-                next_state(IFETCH);
             end
         `JSF:
             begin
@@ -3245,7 +3302,7 @@ DECODE:
                     back_link <= tr;
                     tsk_pres <= 5'h0;
                     state <= TSK1;
-                    retstate <= IFETCH;
+                    retstate <= ssm ? SSM1 : IFETCH;
                 end
             end
         `TSK_ACC:
@@ -3256,7 +3313,7 @@ DECODE:
                     back_link <= tr;
                     tsk_pres <= 5'h0;
                     state <= TSK1;
-                    retstate <= IFETCH;
+                    retstate <= ssm ? SSM1 : IFETCH;
                 end
             end
         `FORK_IMM:
@@ -3283,7 +3340,7 @@ DECODE:
                     tr <= bl_o;
                     tsk_pres <= 5'd0;
                     state <= TSK1;
-                    retstate <= IFETCH;
+                    retstate <= ssm ? SSM1 : IFETCH;
                 end
             end
         `LDT_XABS:
@@ -3327,7 +3384,7 @@ DECODE:
                     end
                     else begin 
                         state <= TSK1;
-                        retstate <= IFETCH;
+                        retstate <= ssm ? SSM1 : IFETCH;
                     end
                 end
             end
@@ -3342,7 +3399,20 @@ DECODE:
                     tsk_pres[3:0] <= 4'hF;
                     tsk_pres[4] <= TRUE;
                     state <= TSK1;
-                    retstate <= IFETCH;
+                    retstate <= ssm ? SSM1 : IFETCH;
+                end
+            end
+        `JCI:
+            begin
+                if (tr != {8'h00,acc[31:24]}) begin
+                    set_task_regs(24'd1);
+                    back_link <= tr;
+                    tr <= {8'h00,acc[31:24]};
+                    pc <= acc[23:0];
+                    tsk_pres[3:0] <= 4'hF;
+                    tsk_pres[4] <= TRUE;
+                    state <= TSK1;
+                    retstate <= ssm ? SSM1 : IFETCH;
                 end
             end
         `RTC:
@@ -3353,14 +3423,24 @@ DECODE:
                     sp_i <= sp + ir[15:8];
                     tr <= bl_o;
                     state <= TSK1;
-                    tsk_pres[3:0] <= 4'hF;
-                    retstate <= IFETCH;
+                    tsk_pres <= 5'hF;
+                    retstate <= ssm ? SSM1 : IFETCH;
                 end
             end
 `endif
+        `FILL:
+            begin
+                mvndst_bank <= ir[15:8];
+                wadr <= mvndst_address;
+                store_what <= `STW_X70;
+                pc <= pc - 24'd1;   // back up to the page 2 prefix
+                next_state(STORE1);
+            end
 `endif
 		`MVN,`MVP:
             begin
+                mvndst_bank <= ir[15:8];
+                mvnsrc_bank <= ir[23:16];
                 radr <= mvnsrc_address;
                 load_what <= `BYTE_72;
                 pc <= pc;       // override increment above
@@ -3394,7 +3474,7 @@ DECODE:
 `endif
         default:
 			begin
-				next_state(IFETCH);
+				moveto_ifetch();
 			end
 		endcase
 	end
@@ -3432,6 +3512,8 @@ TSK1:
         if (!tsk_pres[0]) nf <= sr_o[7];
         m816 <= srx_o[0];
         m832 <= srx_o[1];
+        mib <= srx_o[2];
+        ssm <= srx_o[4];
         dbr <= dbr_o;
         dpr <= dpr_o;
         if (retstate==STORE1)
@@ -3460,9 +3542,36 @@ LDT1:
                 tskm_we <= TRUE;
                 tskm_wr <= TRUE;
                 tskm_wa <= x32[`TASK_MEM_ABIT:0];
-                next_state(IFETCH);
+                moveto_ifetch();
                 end
         endcase 
+    end
+INF1:
+    begin
+        if (x[15:4]==12'hFFF) begin
+            case(x[3:0])
+            4'h0:   res32 <= corenum;
+            default:    ;
+            endcase
+        end
+        else begin
+            case(x[3:0])
+            4'h0:   res32 <= cs_o;
+            4'h1:   res32 <= ds_o;
+            4'h2:   res32 <= pc_o;
+            4'h3:   res32 <= acc_o;
+            4'h4:   res32 <= x_o;
+            4'h5:   res32 <= y_o;
+            4'h6:   res32 <= sp_o;
+            4'h7:   res32 <= {srx_o,sr_o};
+            4'h8:   res32 <= dbr_o;
+            4'h9:   res32 <= dpr_o;
+            4'hA:   res32 <= bl_o;
+            default:    ;
+            endcase
+        end
+        tr <= otr;
+        moveto_ifetch();
     end
 `endif
 LOAD_MAC1:
@@ -3730,7 +3839,7 @@ LOAD_MAC2:
                                state <= TSK1;
                            end
                            else
-                               state <= IFETCH;
+                               moveto_ifetch();
                         end
 `endif
              `PC_70:        begin
@@ -3777,7 +3886,7 @@ LOAD_MAC2:
                             else
                             begin
                                 vpb <= `FALSE;
-                                next_state(IFETCH);
+                                moveto_ifetch();
                             end
                         end
             `PC_2316:    begin
@@ -3800,7 +3909,7 @@ LOAD_MAC2:
                             end
                             else begin
                                 load_what <= `NOTHING;
-                                next_state(IFETCH);
+                                moveto_ifetch();
                             end
                         end
 `ifdef SUPPORT_SEG
@@ -3850,7 +3959,7 @@ LOAD_MAC2:
                               if (isRTF)
                                   next_state(RTS1);
                               else
-                                  next_state(IFETCH);
+                                  moveto_ifetch();
                           end
 `endif
         //    `PC_3124:    begin
@@ -3933,7 +4042,7 @@ LOAD_MAC2:
 RTS1:
     begin
         inc_pc(24'd1);
-        next_state(IFETCH);
+        moveto_ifetch();
     end
 BYTE_IX5:
     begin
@@ -4032,7 +4141,7 @@ STORE1:
 		`STW_IA2316:	data_write(wadr,ia[23:16]);
 		`STW_IA158:		begin data_write(wadr,ia[15:8]); mlb <= 1'b1; end
 		`STW_IA70:		data_write(wadr,ia);
-		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt]); mlb <= 1'b1; end
+		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt]); mlb <= maxcnt > 8'd1; end
 		default:	data_write(wadr,wdat);
 		endcase
 `ifdef SUPPORT_DCACHE
@@ -4072,6 +4181,7 @@ STORE2:
 		`STW_CPY_BUF:
 		    begin
 		        if (cnt > 0) begin
+		            mlb <= TRUE;
 		            cnt <= cnt - 8'd1;
                     set_sp();
                     if (DEAD_CYCLE) begin
@@ -4084,12 +4194,13 @@ STORE2:
                     end
 		        end
 		        else
-		            state <= IFETCH;
+		            moveto_ifetch();
 		    end
 		`STW_DEF70:
 			begin
 				wadr <= inc_adr(wadr);
 				if (s16|s32) begin
+				    mlb <= TRUE;
                     store_what <= `STW_DEF158;
                     if (DEAD_CYCLE)
                         next_state(STORE1);
@@ -4101,6 +4212,7 @@ STORE2:
 			end
 		`STW_DEF158:
 			if (s32) begin
+			    mlb <= TRUE;
 				wadr <= inc_adr(wadr);
 				if (DEAD_CYCLE)
 				    next_state(STORE1);
@@ -4112,6 +4224,7 @@ STORE2:
 			end
 		`STW_DEF2316:
             begin
+			    mlb <= TRUE;
 				wadr <= inc_adr(wadr);
 				if (DEAD_CYCLE) begin
                     data_nack();
@@ -4126,7 +4239,7 @@ STORE2:
         `STW_ACC70:
             if (s16|s32) begin
 				wadr <= inc_adr(wadr);
-                mlb <= 1'b1;
+			    mlb <= TRUE;
                 store_what <= `STW_ACC158;
                 if (DEAD_CYCLE) begin
                     data_nack();
@@ -4140,7 +4253,7 @@ STORE2:
         `STW_ACC158:
             if (s32) begin
                 wadr <= inc_adr(wadr);
-                mlb <= 1'b1;
+			    mlb <= TRUE;
                 store_what <= `STW_ACC2316;
                 if (DEAD_CYCLE) begin
                     data_nack();
@@ -4154,7 +4267,7 @@ STORE2:
         `STW_ACC2316:
             begin
                 wadr <= inc_adr(wadr);
-                mlb <= 1'b1;
+			    mlb <= TRUE;
                 store_what <= `STW_ACC3124;
                 if (DEAD_CYCLE) begin
                     data_nack();
@@ -4166,18 +4279,35 @@ STORE2:
                 end
             end
 		`STW_X70:
-			if (s16|s32) begin
-				mlb <= 1'b1;
-				wadr <= inc_adr(wadr);
-				if (DEAD_CYCLE) begin
-                    data_nack();
-				    next_state(STORE1);
-				end
-				else begin
-		            data_write(inc_adr(wadr),x[15:8]);
-    				state <= STORE2;
-		        end
-				store_what <= `STW_X158;
+		    begin
+                if (s16|s32) begin
+                    mlb <= 1'b1;
+                    wadr <= inc_adr(wadr);
+                    if (DEAD_CYCLE) begin
+                        data_nack();
+                        next_state(STORE1);
+                    end
+                    else begin
+                        data_write(inc_adr(wadr),x[15:8]);
+                        state <= STORE2;
+                    end
+                    store_what <= `STW_X158;
+    			end
+			    else begin
+			        if (ir9==`FILL) begin
+                        if (m832)
+                            acc <= acc_dec;
+                        else
+                            acc[15:0] <= acc_dec[15:0];
+                        if (xb32)
+                            y <= y_inc;
+                        else if (xb16)
+                            y <= {16'h0000,y_inc[15:0]};
+                        else
+                            y <= {24'h0000,y_inc[7:0]};
+                        next_state(MVN816);
+                    end
+			    end
 			end
 		`STW_X158:
             if (s32) begin
@@ -4315,6 +4445,7 @@ STORE2:
 		    end
 		`STW_DS158:
             begin
+			    mlb <= TRUE;
 				wadr <= inc_adr(wadr);
 				if (DEAD_CYCLE) begin
                     data_nack();
@@ -4328,6 +4459,7 @@ STORE2:
             end
 		`STW_DS2316:
             begin
+			    mlb <= TRUE;
 				wadr <= inc_adr(wadr);
 				if (DEAD_CYCLE) begin
                     data_nack();
@@ -4355,6 +4487,7 @@ STORE2:
             end
         `STW_CS2316:
             begin
+			    mlb <= TRUE;
                 set_sp();
                 if (DEAD_CYCLE) begin
                     data_nack();
@@ -4368,6 +4501,7 @@ STORE2:
             end
         `STW_CS158:
             begin
+			    mlb <= TRUE;
                 set_sp();
                 if (DEAD_CYCLE) begin
                     data_nack();
@@ -4381,6 +4515,7 @@ STORE2:
             end
         `STW_CS70:
             if (ir9 != `PHCS) begin
+			    mlb <= TRUE;
                 set_sp();
                 if (DEAD_CYCLE) begin
                     data_nack();
@@ -4420,6 +4555,7 @@ STORE2:
         `STW_PC2316:
 			begin
 				if (ir9 != `PHK) begin
+    			    mlb <= TRUE;
 					set_sp();
 					if (DEAD_CYCLE) begin
                         data_nack();
@@ -4434,6 +4570,7 @@ STORE2:
 			end
 		`STW_PC158:
 			begin
+			    mlb <= TRUE;
 				set_sp();
 				if (DEAD_CYCLE) begin
                     data_nack();
@@ -4450,6 +4587,7 @@ STORE2:
 				case(ir9)
 				`BRK,`BRK2,`COP:
 						begin
+        			    mlb <= TRUE;
 						set_sp();
 						if (DEAD_CYCLE) begin
                             data_nack();
@@ -4631,10 +4769,19 @@ MVN816:
 		else begin
             if (&acc[15:0]) begin
                 pc <= pc + 24'd3;
-                dbr <= ir[15:8];
+                dbr <= mvndst_bank;
             end
 		end
 	end
+SSM1:
+    begin
+        set_task_regs(24'd0);
+        tr <= 16'd3;        // single step task
+        tsk_pres <= 5'h0;
+        retstate <= IFETCH; // Do not switch on SSM here
+        next_state(TSK1);
+    end
+
 ICACHE1:
     begin
         rwo <= TRUE;
@@ -4659,7 +4806,7 @@ ICACHE1:
             next_state(ICACHE2);
         end
         else
-            next_state(IFETCH);
+            moveto_ifetch();
     end
 ICACHE2:
     if (rdy) begin
@@ -4678,7 +4825,7 @@ ICACHE2:
             vpa <= FALSE;
             ado <= 32'd0;
             if ((hit1|prc_hit1)&hit0) begin
-                next_state(IFETCH);
+                moveto_ifetch();
             end
             else
                 next_state(ICACHE1);
@@ -4806,6 +4953,8 @@ DCACHE1:		fnStateName = "DCACHE1    ";
 MVN816:			fnStateName = "MVN816     ";
 TSK1:           fnStateName = "TSK1       ";
 LDT1:           fnStateName = "LDT1       ";
+INF1:           fnStateName = "INF1       ";
+SSM1:           fnStateName = "SSM1       ";
 default:		fnStateName = "UNKNOWN    ";
 endcase
 endfunction

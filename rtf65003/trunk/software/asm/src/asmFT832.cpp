@@ -71,6 +71,49 @@ namespace RTFClasses
 		theAssembler.emit8(data);
 	}
 
+	void AsmFT832::imm16(Opa *o)
+	{
+		int op = o->oc;
+		int data = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
+	/*
+		if (((Operands6502 *)getCpu()->op)->op[0].text()[1]=='<')
+			data = expeval(&theAssembler.gOperand[0][2], NULL).value;
+		else if (((Operands6502 *)getCpu()->op)->op[0].text()[1]=='>')
+			data = expeval(&theAssembler.gOperand[0][2], NULL).value >> 8;
+		else
+			data = expeval(&theAssembler.gOperand[0][1], NULL).value;
+	*/
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
+		theAssembler.emit16(data);
+	}
+
+	void AsmFT832::epimm(Opa *o)
+	{
+		int op = o->oc;
+		int data = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
+	/*
+		if (((Operands6502 *)getCpu()->op)->op[0].text()[1]=='<')
+			data = expeval(&theAssembler.gOperand[0][2], NULL).value;
+		else if (((Operands6502 *)getCpu()->op)->op[0].text()[1]=='>')
+			data = expeval(&theAssembler.gOperand[0][2], NULL).value >> 8;
+		else
+			data = expeval(&theAssembler.gOperand[0][1], NULL).value;
+	*/
+        if (data > 255) {
+            theAssembler.emit8(0x42);
+            theAssembler.emit8(op&255);
+            theAssembler.emit16(data);
+        }
+        else {
+        	theAssembler.emit8(op);
+            theAssembler.emit8(data);
+        }
+    }
 
 	void AsmFT832::pea(Opa *o)
 	{
@@ -177,6 +220,22 @@ namespace RTFClasses
 	}
 
 
+	void AsmFT832::fill(Opa *o)
+	{
+		__int32 d;
+		int op = o->oc;
+
+		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
+		theAssembler.emit8(d);
+	}
+
+
 	void AsmFT832::abs(Opa *o)
 	{
 		__int32 d;
@@ -274,8 +333,14 @@ namespace RTFClasses
 void AsmFT832::br(Opa *o)
 {
 	long loc;
-
-    theAssembler.emit8(o->oc);
+    int op = o->oc;
+ 
+    if (op > 255) {
+        theAssembler.emit8(op>>8);
+        theAssembler.emit8(op&255);
+    }
+    else
+    	theAssembler.emit8(op);
 	loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
 	// it's possible the symbol could have been defined
 	// if it was a backwards reference
@@ -299,8 +364,14 @@ void AsmFT832::br(Opa *o)
 void AsmFT832::lbr(Opa *o)
 {
 	long loc;
-
-    theAssembler.emit8(o->oc);
+    int op = o->oc;
+    
+    if (op > 255) {
+        theAssembler.emit8(op>>8);
+        theAssembler.emit8(op&255);
+    }
+    else
+    	theAssembler.emit8(op);
     theAssembler.emit8(0xff);
 	loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
 	// it's possible the symbol could have been defined
@@ -349,4 +420,61 @@ void AsmFT832::lbr(Opa *o)
     		theAssembler.emit16(0xffff);
 		}
 	}
+
+    void AsmFT832::jcr(Opa *o)
+    {
+    	long loc;
+    	int ctx;
+        int op = o->oc;
+        
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
+		loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		ctx = ((Operands6502 *)getCpu()->getOp())->op[1].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		theAssembler.emit16(loc);
+		theAssembler.emit8(ctx);
+    }
+
+    void AsmFT832::jcl(Opa *o)
+    {
+    	long loc;
+    	int ctx;
+        int op = o->oc;
+        int popcnt;
+        int p;
+        
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
+		loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		ctx = ((Operands6502 *)getCpu()->getOp())->op[1].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		p = ((Operands6502 *)getCpu()->getOp())->op[2].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		popcnt = ((Operands6502 *)getCpu()->getOp())->op[3].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		theAssembler.emit24(loc);
+		theAssembler.emit16(ctx);
+		theAssembler.emit8((p ? 0x80 : 0x00)|(popcnt & 0x1f));
+    }
+
+    void AsmFT832::rtc(Opa *o)
+    {
+    	int popcnt;
+        int op = o->oc;
+        
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
+		popcnt = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		theAssembler.emit8(popcnt);
+    }
+
 }

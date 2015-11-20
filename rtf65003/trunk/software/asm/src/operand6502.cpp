@@ -343,6 +343,39 @@ int Operand6502::parse(char *op)
 		return type = AM_XIL;
 	}
 
+    if (strmat(op, " %s:%s ", ec.buf(), eb.buf())) {
+        if (stricmp(ec.buf(), "CS")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 1;
+           return type;
+        }
+        else if (stricmp(ec.buf(), "ZS")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 2;
+           return type;
+        }
+        else if (stricmp(ec.buf(), "SEG0")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 2;
+           return type;
+        }
+        else if (stricmp(ec.buf(), "IOS")==0) {
+           type = parse(eb.buf());
+           hasSegPrefix = 3;
+           return type;
+        }
+        else if (strnicmp(ec.buf(), "SEG",3)==0) {
+           strmat(ec.buf(), " SEG %s ", ed.buf());
+           type = parse(eb.buf());
+           seg = ed.expeval(NULL);
+           hasSegPrefix = 4;
+           return type;
+        }
+        seg = ec.expeval(NULL);
+        offs = eb.expeval(NULL);
+        return type = AM_SEG;
+    }
+
 	// d,sp
     if (strmat(op, " %s, %c ", eb.buf(), &ch))
     {
@@ -395,34 +428,6 @@ int Operand6502::parse(char *op)
 			return AM_XAL;
 		}
 	}
-
-    if (strmat(op, " %s:%s ", ec.buf(), eb.buf())) {
-        if (stricmp(ec.buf(), "CS")==0) {
-           type = parse(eb.buf());
-           hasSegPrefix = 1;
-           return type;
-        }
-        else if (stricmp(ec.buf(), "SEG0")==0) {
-           type = parse(eb.buf());
-           hasSegPrefix = 2;
-           return type;
-        }
-        else if (stricmp(ec.buf(), "IOS")==0) {
-           type = parse(eb.buf());
-           hasSegPrefix = 3;
-           return type;
-        }
-        else if (strnicmp(ec.buf(), "SEG",3)==0) {
-           strmat(ec.buf(), " SEG %s ", ed.buf());
-           type = parse(eb.buf());
-           seg = ed.expeval(NULL);
-           hasSegPrefix = 4;
-           return type;
-        }
-        seg = ec.expeval(NULL);
-        offs = eb.expeval(NULL);
-        return type = AM_SEG;
-    }
 
 	// Assume
 	// Absolute / Zero page

@@ -177,7 +177,7 @@ endtask
 
 task moveto_ifetch;
 begin
-	next_state(IFETCH);
+	next_state(ssm ? SSM1 : IFETCH);
 end
 endtask
 
