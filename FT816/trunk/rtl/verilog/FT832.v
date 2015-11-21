@@ -129,6 +129,8 @@
 `define UHF         9'h1BB
 `define INF         9'h14A
 `define AAX         9'h18A
+`define RA          9'h1F8
+`define CR          9'h1D8
 
 `define ADC_IMM		9'h69
 `define ADC_ZP		9'h65
@@ -599,7 +601,7 @@
 // Input Frequency is 32 times the 00 clock
 
 module FT832(corenum, rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb,
-    rw, rwo, ad, ado, db, dbo, err_i, rty_i);
+    rw, ad, db, err_i, rty_i);
 parameter STORE_SKIPPING = 1'b1;        // set to 1 to skip the store operation if the value didn't change during a RMW instruction
 parameter EXTRA_LONG_BRANCHES = 1'b1;   // set to 1 to use an illegal branch displacement ($FF) to indicate a long branch
 parameter IO_SEGMENT = 32'hFFD00000;    // set to determine the segment value of the IOS: prefix
@@ -663,11 +665,8 @@ output reg vda;
 output reg mlb;
 output reg vpb;
 output tri rw;
-output reg rwo;
 output tri [31:0] ad;
-output reg [31:0] ado;
 inout tri [7:0] db;
-output reg [7:0] dbo;
 input err_i;
 input rty_i;
 
@@ -677,6 +676,9 @@ parameter FALSE = 1'b0;
 reg [31:0] phi1r,phi2r;
 reg [31:0] ado1;
 
+reg rwo;
+reg [7:0] dbo;
+reg [31:0] ado;
 reg [7:0] dbi;
 reg pg2;
 reg [5:0] state;    // machine state number
@@ -732,7 +734,7 @@ reg xb16,xb32;
 reg mxb16,mxb32;
 reg mib;
 reg ssm;
-wire DEAD_CYCLE = TRUE;//(vda|vpa) && ado >= 32'h10000;
+wire DEAD_CYCLE = FALSE;//(vda|vpa) && ado >= 32'h10000;
 
 //wire m16 = m816 & ~m_bit;
 //wire xb16 = m816 & ~x_bit;
@@ -798,6 +800,7 @@ reg isRMW;
 reg isSub;
 reg isJsrIndx,isJsrInd,isJLInd;
 reg isIY,isIY24,isI24,isIY32,isI32;
+reg isDspiy;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS || ir9==`CPX_XABS ||
 			 ir9==`CPY_ZPX || ir9==`CPY_ABS || ir9==`CPY_XABS;
@@ -944,7 +947,7 @@ task_mem utskm1
 );
 `endif
 
-reg  [7:0] cpybuf [63:0];
+reg  [7:0] cpybuf [63:0];   // stack copy buffer
 
 // Registerable decodes
 // The following decodes can be registered because they aren't needed until at least the cycle after
@@ -963,6 +966,7 @@ always @(posedge clk)
 		isMove <= ir9==`MVP || ir9==`MVN;
 		isJsrIndx <= ir9==`JSR_INDX;
 		isJLInd <= ir9==`JML_IND || ir9==`JML_XIND || ir9==`JSL_XINDX || ir9==`JML_XINDX;
+		isDspiy <= ir9[4:0]==5'h13;
 	end
 
 assign mx = clk ? m_bit : x_bit;
@@ -1029,8 +1033,8 @@ wire [15:0] dpr_zpy = {{16'h00,ir[15:8]} + y32} + dpr;
 wire [31:0] dpr_zp32 = {16'h00,ir[15:8]} + dpr;
 wire [31:0] dpr_zpx32 = {{16'h00,ir[15:8]} + x32} + dpr;
 wire [31:0] dpr_zpy32 = {{16'h00,ir[15:8]} + y32} + dpr;
-wire [31:0] mvnsrc_address	= m832 ? x32 : {8'h00,mvnsrc_bank,x32[15:0]};
-wire [31:0] mvndst_address	= m832 ? y32 : {8'h00,mvndst_bank,y32[15:0]};
+wire [31:0] mvnsrc_address	= m832 ? x32 : {8'h00,ir[23:16],x32[15:0]};
+wire [31:0] mvndst_address	= m832 ? y32 : {8'h00,ir[15:8],y32[15:0]};
 wire [31:0] iapy8 			= ia + y32;		// Don't add in abs8, already included with ia
 wire [31:0] zp_address 		= (m832 ? dpr_zp32 : dpr_zp);
 wire [31:0] zpx_address 	= (m832 ? dpr_zpx32 : dpr_zpx);
@@ -1157,6 +1161,7 @@ if (~rst) begin
 	sp <= 32'h1FF;
 	clk_en <= 1'b1;
 	im <= `TRUE;
+	mib <= `FALSE;
 	gie <= 1'b0;
 	isIY <= 1'b0;
 	isIY24 <= 1'b0;
@@ -1171,6 +1176,7 @@ if (~rst) begin
 	tr <= 8'h00;
     tskm_we <= FALSE;
     tskm_wr <= FALSE;
+    ssm <= FALSE;
 end
 else begin
 abort1 <= abort;
@@ -1439,7 +1445,25 @@ IFETCH:
                     zf <= resz8;
                 end
             end
-		`TSA,`TYA,`TXA,`TTA,`INA,`DEA,`PLA:
+        `TTA:
+            begin
+                if (m32) begin
+                    acc <= res32;
+                    nf <= resn16;
+                    zf <= resz16;
+                end
+                else if (m16) begin
+                    acc[15:0] <= res32[15:0];
+                    nf <= resn16;
+                    zf <= resz16;
+                end
+                else begin
+                    acc[15:0] <= res32[15:0];
+                    nf <= resn16;
+                    zf <= resz16;
+                end
+            end
+		`TSA,`TYA,`TXA,`INA,`DEA,`PLA:
 			begin
                 if (m32) begin
                     acc <= res32;
@@ -1792,6 +1816,7 @@ DECODE:
                     if (tr != bl_o) begin
                         set_task_regs(24'd1);
                         tr <= bl_o;
+                        tsk_pres <= 5'h0;
                         state <= TSK1;
                     end 
                 end
@@ -1963,7 +1988,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -1979,7 +2004,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 if (!sop) begin
@@ -2004,7 +2029,7 @@ DECODE:
                 end
                 radr <= zp_address;
                 wadr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
                 retstate <= CALC;
@@ -2021,7 +2046,7 @@ DECODE:
                 end
                 radr <= zp_address;
                 wadr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
                 retstate <= CALC;
@@ -2037,7 +2062,7 @@ DECODE:
                     else if (xb16) s16 <= TRUE;
                 end
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 load_what <= `LOAD_70;
                 state <= LOAD_MAC2;
                 retstate <= CALC;
@@ -2096,7 +2121,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zpx_address;
-                data_read(zpx_address);
+                data_read(zpx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2112,7 +2137,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zpx_address;
-                data_read(zpx_address);
+                data_read(zpx_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2129,7 +2154,7 @@ DECODE:
                 inc_pc(24'd2);
                 radr <= zpx_address;
                 wadr <= zpx_address;
-                data_read(zpx_address);
+                data_read(zpx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2182,7 +2207,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zpy_address;
-                data_read(zpy_address);
+                data_read(zpy_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2209,7 +2234,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zpx_address;
-                data_read(zpx_address);
+                data_read(zpx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2221,7 +2246,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zpx_address;
-                data_read(zpx_address);
+                data_read(zpx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2234,7 +2259,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY <= `TRUE;
@@ -2247,7 +2272,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY <= `TRUE;
@@ -2262,7 +2287,6 @@ DECODE:
                 inc_pc(24'd2);
                 seg <= ss;
                 radr <= dsp_address;
-//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2278,7 +2302,6 @@ DECODE:
                 inc_pc(24'd2);
                 radr <= dsp_address;
                 seg <= ss;
-//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2308,7 +2331,6 @@ DECODE:
                 inc_pc(24'd2);
                 seg <= ss;
                 radr <= dsp_address;
-//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY <= `TRUE;
@@ -2321,7 +2343,6 @@ DECODE:
                 inc_pc(24'd2);
                 radr <= dsp_address;
                 seg <= ss;
-//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY <= `TRUE;
@@ -2336,7 +2357,6 @@ DECODE:
                inc_pc(24'd2);
                seg <= ss;
                radr <= dsp_address;
-//               data_read(dsp_address);
                mxb16 <= m16;
                mxb32 <= m32;
                isIY32 <= `TRUE;
@@ -2349,7 +2369,6 @@ DECODE:
                 inc_pc(24'd2);
                 seg <= ss;
                 radr <= dsp_address;
-//                data_read(dsp_address);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY32 <= `TRUE;
@@ -2363,19 +2382,19 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY24 <= `TRUE;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_IYL,`SBC_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`CMP_IYL,`STA_IYL:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY24 <= `TRUE;
@@ -2389,19 +2408,19 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY32 <= `TRUE;
                 load_what <= `IA_70;
                 state <= LOAD_MAC2;
-                retstate <= IFETCH;
+                retstate <= ssm ? SSM1 : IFETCH;
             end
         `ADC_XIYL,`SBC_XIYL,`AND_XIYL,`ORA_XIYL,`EOR_XIYL,`CMP_XIYL,`STA_XIYL:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 isIY32 <= `TRUE;
@@ -2416,7 +2435,7 @@ DECODE:
                 inc_pc(24'd2);
                 isI24 <= `TRUE;
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2429,7 +2448,7 @@ DECODE:
                 inc_pc(24'd2);
                 isI24 <= `TRUE;
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2444,7 +2463,7 @@ DECODE:
                 inc_pc(24'd2);
                 isI32 <= `TRUE;
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2457,7 +2476,7 @@ DECODE:
                 inc_pc(24'd2);
                 isI32 <= `TRUE;
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2471,7 +2490,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2483,7 +2502,7 @@ DECODE:
             begin
                 inc_pc(24'd2);
                 radr <= zp_address;
-                data_read(zp_address);
+                data_read(zp_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 load_what <= `IA_70;
@@ -2498,7 +2517,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= abs_address;
-                data_read(abs_address);
+                data_read(abs_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -2513,7 +2532,7 @@ DECODE:
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 radr <= abs_address;
-                data_read(abs_address);
+                data_read(abs_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2529,7 +2548,7 @@ DECODE:
                 inc_pc(24'd3);
                 radr <= abs_address;
                 wadr <= abs_address;
-                data_read(abs_address);
+                data_read(abs_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2544,7 +2563,7 @@ DECODE:
             begin
                 inc_pc(24'd3);
                 radr <= abs_address;
-                data_read(abs_address);
+                data_read(abs_address,1);
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 if (!sop) begin
@@ -2567,7 +2586,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(abs_address,acc[7:0],1);
+                state <= STORE2;
             end
         `STX_ABS:
             begin
@@ -2581,7 +2601,8 @@ DECODE:
                     else if (xb16) s16 <= TRUE;
                 end
                 store_what <= `STW_X70;
-                state <= STORE1;
+                data_write(abs_address,x[7:0],1);
+                state <= STORE2;
             end    
         `STY_ABS:
             begin
@@ -2595,7 +2616,8 @@ DECODE:
                     else if (xb16) s16 <= TRUE;
                 end
                 store_what <= `STW_Y70;
-                state <= STORE1;
+                data_write(abs_address,y[7:0],1);
+                state <= STORE2;
             end
         `STZ_ABS:
             begin
@@ -2609,7 +2631,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_Z70;
-                state <= STORE1;
+                data_write(abs_address,8'h00,1);
+                state <= STORE2;
             end
 `ifdef SUPPORT_NEW_INSN
 		// Handle xlabs
@@ -2619,7 +2642,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= xal_address;
-                data_read(xal_address);
+                data_read(xal_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -2634,7 +2657,7 @@ DECODE:
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 radr <= xal_address;
-                data_read(xal_address);
+                data_read(xal_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2650,7 +2673,7 @@ DECODE:
                 inc_pc(24'd5);
                 radr <= xal_address;
                 wadr <= xal_address;
-                data_read(xal_address);
+                data_read(xal_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2665,7 +2688,7 @@ DECODE:
             begin
                 inc_pc(24'd5);
                 radr <= xal_address;
-                data_read(xal_address);
+                data_read(xal_address,1);
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 if (!sop) begin
@@ -2688,7 +2711,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(xal_address,acc[7:0],1);
+                state <= STORE2;
             end
         `STX_XABS:
             begin
@@ -2702,7 +2726,8 @@ DECODE:
                     else if (xb16) s16 <= TRUE;
                 end
                 store_what <= `STW_X70;
-                state <= STORE1;
+                data_write(xal_address,x[7:0],1);
+                state <= STORE2;
             end    
         `STY_XABS:
             begin
@@ -2716,7 +2741,8 @@ DECODE:
                     else if (xb16) s16 <= TRUE;
                 end
                 store_what <= `STW_Y70;
-                state <= STORE1;
+                data_write(xal_address,y[7:0],1);
+                state <= STORE2;
             end
         `STZ_XABS:
             begin
@@ -2728,7 +2754,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_Z70;
-                state <= STORE1;
+                data_write(xal_address,8'h00,1);
+                state <= STORE2;
             end
 `endif
         // Handle abs,x
@@ -2738,7 +2765,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= absx_address;
-                data_read(absx_address);
+                data_read(absx_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -2753,7 +2780,7 @@ DECODE:
                 inc_pc(24'd3);
                 radr <= absx_address;
                 wadr <= absx_address;
-                data_read(absx_address);
+                data_read(absx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2770,7 +2797,7 @@ DECODE:
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 radr <= absx_address;
-                data_read(absx_address);
+                data_read(absx_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2791,7 +2818,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(absx_address,acc[7:0],1);
+                state <= STORE2;
             end
         `STZ_ABSX:
             begin
@@ -2805,7 +2833,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_Z70;
-                state <= STORE1;
+                data_write(absx_address,8'h00,1);
+                state <= STORE2;
             end
 `ifdef SUPPORT_NEW_INSN
         // Handle xlabs,x
@@ -2815,7 +2844,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= xalx_address;
-                data_read(xalx_address);
+                data_read(xalx_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -2830,7 +2859,7 @@ DECODE:
                 inc_pc(24'd5);
                 radr <= xalx_address;
                 wadr <= xalx_address;
-                data_read(xalx_address);
+                data_read(xalx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2847,7 +2876,7 @@ DECODE:
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 radr <= xalx_address;
-                data_read(xalx_address);
+                data_read(xalx_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2868,7 +2897,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(xalx_address,acc[7:0],1);
+                state <= STORE2;
             end
         `STZ_XABSX:
             begin
@@ -2882,7 +2912,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_Z70;
-                state <= STORE1;
+                data_write(xalx_address,8'h00,1);
+                state <= STORE2;
             end
 `endif
 		// Handle abs,y
@@ -2892,7 +2923,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= absy_address;
-                data_read(absy_address);
+                data_read(absy_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -2906,7 +2937,7 @@ DECODE:
             begin
                 inc_pc(24'd3);
                 radr <= absy_address;
-                data_read(absy_address);
+                data_read(absy_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2923,7 +2954,7 @@ DECODE:
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 radr <= absy_address;
-                data_read(absy_address);
+                data_read(absy_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -2944,8 +2975,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                data_nack();
-                state <= STORE1;
+                data_write(absy_address,acc[7:0],1);
+                state <= STORE2;
             end
 `ifdef SUPPORT_NEW_INSN
 		// Handle xlabs,y
@@ -2955,7 +2986,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= xaly_address;
-                data_read(xaly_address);
+                data_read(xaly_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -2968,7 +2999,7 @@ DECODE:
             begin
                 inc_pc(24'd5);
                 radr <= xaly_address;
-                data_read(xaly_address);
+                data_read(xaly_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -2985,7 +3016,7 @@ DECODE:
                 mxb16 <= xb16;
                 mxb32 <= xb32;
                 radr <= xaly_address;
-                data_read(xaly_address);
+                data_read(xaly_address,1);
                 if (!sop) begin
                     if (xb32) s32 <= TRUE;
                     else if (xb16) s16 <= TRUE;
@@ -3006,7 +3037,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(xaly_address,acc[7:0],1);
+                state <= STORE2;
             end
 `endif
 		// Handle al
@@ -3016,7 +3048,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= al_address;
-                data_read(al_address);
+                data_read(al_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -3029,7 +3061,7 @@ DECODE:
             begin
                 inc_pc(24'd4);
                 radr <= al_address;
-                data_read(al_address);
+                data_read(al_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -3052,7 +3084,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(al_address,acc[7:0],1);
+                state <= STORE2;
             end
 		// Handle alx
         `LDA_ALX:
@@ -3061,7 +3094,7 @@ DECODE:
                 mxb16 <= m16;
                 mxb32 <= m32;
                 radr <= alx_address;
-                data_read(alx_address);
+                data_read(alx_address,1);
                 if (!sop) begin
                     if (m32) s32 <= TRUE;
                     else if (m16) s16 <= TRUE;
@@ -3074,7 +3107,7 @@ DECODE:
             begin
                 inc_pc(24'd4);
                 radr <= alx_address;
-                data_read(alx_address);
+                data_read(alx_address,1);
                 mxb16 <= m16;
                 mxb32 <= m32;
                 if (!sop) begin
@@ -3097,7 +3130,8 @@ DECODE:
                     else if (m16) s16 <= TRUE;
                 end
                 store_what <= `STW_ACC70;
-                state <= STORE1;
+                data_write(alx_address,acc[7:0],1);
+                state <= STORE2;
             end
         `BRK,`BRK2:
             begin
@@ -3111,7 +3145,7 @@ DECODE:
                     if (TASK_VECTORING) begin
                         radr <= vect;
                         load_what <= `LDW_TR70;
-                        data_read(vect);
+                        data_read(vect,1);
                         vpb <= TRUE;
                         next_state(LOAD_MAC2);
                     end
@@ -3171,26 +3205,30 @@ DECODE:
             begin
                 radr <= abs_address;
                 load_what <= `PC_70;
-                state <= LOAD_MAC1;
+                data_read(abs_address,0);
+                state <= LOAD_MAC2;
             end
         `JML_IND:
             begin
                 radr <= abs_address;
                 load_what <= `PC_70;
-                state <= LOAD_MAC1;
+                data_read(abs_address,0);
+                state <= LOAD_MAC2;
             end
         `JML_XIND:
             begin
                 radr <= xal_address;
+                data_read(xal_address,0);
                 load_what <= `PC_70;
-                state <= LOAD_MAC1;
+                state <= LOAD_MAC2;
             end
 `ifdef SUPPORT_NEW_INSN
         `JML_XINDX:
             begin
                 radr <= xalx_address;
                 load_what <= `PC_70;
-                state <= LOAD_MAC1;
+                data_read(xalx_address,0);
+                state <= LOAD_MAC2;
             end
         `JSL_XINDX:
             begin
@@ -3205,7 +3243,8 @@ DECODE:
             begin
                 radr <= absx_address;
                 load_what <= `PC_70;
-                state <= LOAD_MAC1;
+                data_read(absx_address,0);
+                state <= LOAD_MAC2;
             end    
         `JSR,`JSR_INDX:
             begin
@@ -3238,7 +3277,7 @@ DECODE:
             begin
                 set_sp();
                 seg <= ss;
-//                data_write(fn_get_sp(sp),cs[31:24]);
+//                data_write(fn_get_sp(sp),cs[31:24],0); // new to set the segment in use
 //                mlb <= TRUE;
                 store_what <= `STW_CS3124;
                 state <= STORE1;
@@ -3249,6 +3288,7 @@ DECODE:
                 seg <= ss;
                 s32 <= TRUE;
                 load_what <= `WORD_71S;
+//                data_read(fn_sp_inc(sp_inc),0);
                 state <= LOAD_MAC1;
                 retstate <= ssm ? SSM1 : IFETCH;
             end
@@ -3286,7 +3326,6 @@ DECODE:
                 inc_pc(24'd7);
                 set_sp();
                 seg <= ss;
-                store_what <= `STW_CS3124;
                 radr <= sp;
                 wadr <= sp;
                 state <= STORE1;
@@ -3379,6 +3418,7 @@ DECODE:
                         load_what <= `CPY_BUF;
                         store_what <= `STW_CPY_BUF;
                         inc_sp();
+                        seg <= ss;
                         next_state(LOAD_MAC1);
                         retstate <= STORE1;
                     end
@@ -3525,7 +3565,7 @@ LDT1:
         cnt <= cnt + 4'd1;
         s32 <= TRUE;
         if (cnt < 4'd8) begin
-            data_read(radr);
+            data_read(radr,cnt==4'd0);
             load_what <= `LOAD_70;
             next_state(LOAD_MAC2);
             retstate <= LDT1;
@@ -3585,7 +3625,7 @@ LOAD_MAC1:
             mlb <= 1'b1;
         if (isBrk)
             vpb <= `TRUE;
-        data_read(radr);
+        data_read(radr,0);
         state <= LOAD_MAC2;
     end
 `ifdef SUPPORT_DCACHE
@@ -3673,7 +3713,7 @@ LOAD_MAC2:
                                     next_state(LOAD_MAC1);
                                 end
                                 else begin
-                                    data_read(inc_adr(radr));
+                                    data_read(inc_adr(radr),0);
                                     state <= LOAD_MAC2;
                                 end
                             end
@@ -3698,7 +3738,7 @@ LOAD_MAC2:
                                     next_state(LOAD_MAC1);
                                 end
                                 else begin
-                                    data_read(inc_adr(radr));
+                                    data_read(inc_adr(radr),0);
                                     state <= LOAD_MAC2;
                                 end
                             end
@@ -3716,7 +3756,7 @@ LOAD_MAC2:
                                 next_state(LOAD_MAC1);
                             end
                             else begin
-                                data_read(inc_adr(radr));
+                                data_read(inc_adr(radr),0);
                                 state <= LOAD_MAC2;
                             end
                         end
@@ -3736,7 +3776,7 @@ LOAD_MAC2:
                                 if (DEAD_CYCLE)
                                     next_state(LOAD_MAC1);
                                 else begin
-                                    data_read(fn_sp_inc(sp_inc));
+                                    data_read(fn_sp_inc(sp_inc),0);
                                     next_state(LOAD_MAC2);
                                 end
                             end
@@ -3752,7 +3792,7 @@ LOAD_MAC2:
                                 if (DEAD_CYCLE)
                                     next_state(LOAD_MAC1);
                                 else begin
-                                    data_read(fn_sp_inc(sp_inc));
+                                    data_read(fn_sp_inc(sp_inc),0);
                                     next_state(LOAD_MAC2);
                                 end
                             end
@@ -3767,7 +3807,7 @@ LOAD_MAC2:
                             if (DEAD_CYCLE)
                                 next_state(LOAD_MAC1);
                             else begin
-                                data_read(fn_sp_inc(sp_inc));
+                                data_read(fn_sp_inc(sp_inc),0);
                                 next_state(LOAD_MAC2);
                             end
                         end
@@ -3806,7 +3846,7 @@ LOAD_MAC2:
                                     next_state(LOAD_MAC1);
                                 end
                                 else begin
-                                    data_read(fn_sp_inc(sp_inc));
+                                    data_read(fn_sp_inc(sp_inc),0);
                                     state <= LOAD_MAC2;
                                 end
                             end        
@@ -3825,7 +3865,7 @@ LOAD_MAC2:
                                 next_state(LOAD_MAC1);
                             end
                             else begin
-                                data_read(inc_adr(radr));
+                                data_read(inc_adr(radr),0);
                                 next_state(LOAD_MAC2);
                             end
                         end
@@ -3839,7 +3879,7 @@ LOAD_MAC2:
                                state <= TSK1;
                            end
                            else
-                               moveto_ifetch();
+                               next_state(IFETCH);
                         end
 `endif
              `PC_70:        begin
@@ -3852,7 +3892,7 @@ LOAD_MAC2:
                                     next_state(LOAD_MAC1);
                                 end
                                 else begin
-                                    data_read(fn_sp_inc(sp_inc));
+                                    data_read(fn_sp_inc(sp_inc),0);
                                     state <= LOAD_MAC2;
                                 end
                             end
@@ -3871,7 +3911,7 @@ LOAD_MAC2:
                                     next_state(LOAD_MAC1);
                                 end
                                 else begin
-                                    data_read(fn_sp_inc(sp_inc));
+                                    data_read(fn_sp_inc(sp_inc),0);
                                     state <= LOAD_MAC2;
                                 end
                             end
@@ -3886,7 +3926,7 @@ LOAD_MAC2:
                             else
                             begin
                                 vpb <= `FALSE;
-                                moveto_ifetch();
+                                next_state(IFETCH);
                             end
                         end
             `PC_2316:    begin
@@ -3899,7 +3939,7 @@ LOAD_MAC2:
                                     next_state(LOAD_MAC1);
                                 end
                                 else begin
-                                    data_read(fn_sp_inc(sp_inc));
+                                    data_read(fn_sp_inc(sp_inc),0);
                                     next_state(LOAD_MAC2);
                                 end
                             end
@@ -3909,7 +3949,7 @@ LOAD_MAC2:
                             end
                             else begin
                                 load_what <= `NOTHING;
-                                moveto_ifetch();
+                                next_state(IFETCH);
                             end
                         end
 `ifdef SUPPORT_SEG
@@ -3922,7 +3962,7 @@ LOAD_MAC2:
                                   next_state(LOAD_MAC1);
                               end
                               else begin
-                                  data_read(fn_sp_inc(sp_inc));
+                                  data_read(fn_sp_inc(sp_inc),0);
                                   next_state(LOAD_MAC2);
                               end
                         end
@@ -3935,7 +3975,7 @@ LOAD_MAC2:
                                 next_state(LOAD_MAC1);
                             end
                             else begin
-                                data_read(fn_sp_inc(sp_inc));
+                                data_read(fn_sp_inc(sp_inc),0);
                                 next_state(LOAD_MAC2);
                             end
                         end
@@ -3948,7 +3988,7 @@ LOAD_MAC2:
                                   next_state(LOAD_MAC1);
                               end
                               else begin
-                                  data_read(fn_sp_inc(sp_inc));
+                                  data_read(fn_sp_inc(sp_inc),0);
                                   next_state(LOAD_MAC2);
                               end
                           end
@@ -3975,7 +4015,7 @@ LOAD_MAC2:
                             next_state(LOAD_MAC1);
                         end
                         else begin
-                            data_read(radr + 32'd1);
+                            data_read(radr + 32'd1,0);
                             state <= LOAD_MAC2;
                         end
                         ia[7:0] <= db;
@@ -3993,13 +4033,15 @@ LOAD_MAC2:
                                 next_state(LOAD_MAC1);
                             end
                             else begin
-                                data_read(radr + 32'd1);
+                                data_read(radr + 32'd1,0);
                                 state <= LOAD_MAC2;
                             end
                             load_what <= `IA_2316;
                         end
-                        else
+                        else begin
+                            seg <= ds;
                             state <= isIY ? BYTE_IY5 : BYTE_IX5;
+                        end
                     end
             `IA_2316:
                     begin
@@ -4013,16 +4055,19 @@ LOAD_MAC2:
                                 next_state(LOAD_MAC1);
                             end
                             else begin
-                                data_read(radr + 32'd1);
+                                data_read(radr + 32'd1,0);
                                 next_state(LOAD_MAC2);
                             end
                         end
-                        else
+                        else begin
+                            seg <= ds;
                             state <= isIY24 ? BYTE_IY5 : BYTE_IX5;
+                        end
                     end
             `IA_3124:
                     begin
                         ia[31:24] <= db;
+                        seg <= ds;
                         state <= isIY32 ? BYTE_IY5 : BYTE_IX5;
                     end
             endcase
@@ -4097,52 +4142,52 @@ STORE1:
 	begin
 		case(store_what)
 `ifdef SUPPORT_SEG
-		`STW_CS3124:    begin data_write(wadr,cs[31:24]); mlb <= 1'b1; end
-		`STW_CS2316:    data_write(wadr,cs[23:16]);
-		`STW_CS158:     data_write(wadr,cs[15:8]);
-		`STW_CS70:      data_write(wadr,cs[7:0]);
-        `STW_DS70:      begin data_write(wadr,ds[7:0]); mlb <= 1'b1; end
-        `STW_DS158:     data_write(wadr,ds[15:8]);
-        `STW_DS2316:    data_write(wadr,ds[23:16]);
-        `STW_DS3124:    data_write(wadr,ds[31:24]);
+		`STW_CS3124:    begin data_write(wadr,cs[31:24],0); mlb <= 1'b1; end
+		`STW_CS2316:    data_write(wadr,cs[23:16],0);
+		`STW_CS158:     data_write(wadr,cs[15:8],0);
+		`STW_CS70:      data_write(wadr,cs[7:0],0);
+        `STW_DS70:      begin data_write(wadr,ds[7:0],0); mlb <= 1'b1; end
+        `STW_DS158:     data_write(wadr,ds[15:8],0);
+        `STW_DS2316:    data_write(wadr,ds[23:16],0);
+        `STW_DS3124:    data_write(wadr,ds[31:24],0);
 `endif
-		`STW_PC2316:	begin data_write(wadr,pc[23:16]); mlb <= 1'b1; end
-		`STW_PC158:		data_write(wadr,pc[15:8]);
-		`STW_PC70:		data_write(wadr,pc[7:0]);
-		`STW_SR70:		data_write(wadr,sr8);
-		`STW_DEF70:		begin data_write(wadr,wdat); mlb <= s16|s32; end
-		`STW_DEF158:    data_write(wadr,wdat[15:8]);
-		`STW_DEF2316:   data_write(wadr,wdat[23:16]);
-		`STW_DEF3124:   data_write(wadr,wdat[31:24]);
-		`STW_ACC70:		begin data_write(wadr,acc); mlb <= s16|s32; end
-		`STW_ACC158:	data_write(wadr,acc[15:8]);
-		`STW_ACC2316:	data_write(wadr,acc[23:16]);
-		`STW_ACC3124:	data_write(wadr,acc[31:24]);
-		`STW_X70:		begin data_write(wadr,x); mlb <= s16|s32; end
-		`STW_X158:		data_write(wadr,x[15:8]);
-		`STW_X2316:		data_write(wadr,x[23:16]);
-		`STW_X3124:		data_write(wadr,x[31:24]);
-		`STW_Y70:		begin data_write(wadr,y); mlb <= s16|s32; end
-		`STW_Y158:		data_write(wadr,y[15:8]);
-		`STW_Y2316:		data_write(wadr,y[23:16]);
-		`STW_Y3124:		data_write(wadr,y[31:24]);
-		`STW_Z70:		begin data_write(wadr,8'h00); mlb <= s16|s32; end
-		`STW_Z158:		data_write(wadr,8'h00);
-		`STW_Z2316:		data_write(wadr,8'h00);
-		`STW_Z3124:		data_write(wadr,8'h00);
-		`STW_DBR:       data_write(wadr,dbr);
-		`STW_DPR158:	begin data_write(wadr,dpr[15:8]); mlb<= 1'b1; end
-		`STW_DPR70:		begin data_write(wadr,dpr[7:0]); mlb <= 1'b1; end
-		`STW_TMP3124:	begin data_write(wadr,tmp32[31:24]); mlb <= 1'b1; end
-		`STW_TMP2316:	begin data_write(wadr,tmp32[23:16]); mlb <= 1'b1; end
-		`STW_TMP158:	begin data_write(wadr,tmp32[15:8]); mlb <= 1'b1; end
-		`STW_TMP70:		data_write(wadr,tmp32[7:0]);
-		`STW_IA3124:	begin data_write(wadr,ia[31:24]); mlb <= 1'b1; end
-		`STW_IA2316:	data_write(wadr,ia[23:16]);
-		`STW_IA158:		begin data_write(wadr,ia[15:8]); mlb <= 1'b1; end
-		`STW_IA70:		data_write(wadr,ia);
-		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt]); mlb <= maxcnt > 8'd1; end
-		default:	data_write(wadr,wdat);
+		`STW_PC2316:	begin data_write(wadr,pc[23:16],0); mlb <= 1'b1; end
+		`STW_PC158:		data_write(wadr,pc[15:8],0);
+		`STW_PC70:		data_write(wadr,pc[7:0],0);
+		`STW_SR70:		data_write(wadr,sr8,0);
+		`STW_DEF70:		begin data_write(wadr,wdat,0); mlb <= s16|s32; end
+		`STW_DEF158:    data_write(wadr,wdat[15:8],0);
+		`STW_DEF2316:   data_write(wadr,wdat[23:16],0);
+		`STW_DEF3124:   data_write(wadr,wdat[31:24],0);
+		`STW_ACC70:		begin data_write(wadr,acc,0); mlb <= s16|s32; end
+		`STW_ACC158:	data_write(wadr,acc[15:8],0);
+		`STW_ACC2316:	data_write(wadr,acc[23:16],0);
+		`STW_ACC3124:	data_write(wadr,acc[31:24],0);
+		`STW_X70:		begin data_write(wadr,x,0); mlb <= s16|s32; end
+		`STW_X158:		data_write(wadr,x[15:8],0);
+		`STW_X2316:		data_write(wadr,x[23:16],0);
+		`STW_X3124:		data_write(wadr,x[31:24],0);
+		`STW_Y70:		begin data_write(wadr,y,0); mlb <= s16|s32; end
+		`STW_Y158:		data_write(wadr,y[15:8],0);
+		`STW_Y2316:		data_write(wadr,y[23:16],0);
+		`STW_Y3124:		data_write(wadr,y[31:24],0);
+		`STW_Z70:		begin data_write(wadr,8'h00,0); mlb <= s16|s32; end
+		`STW_Z158:		data_write(wadr,8'h00,0);
+		`STW_Z2316:		data_write(wadr,8'h00,0);
+		`STW_Z3124:		data_write(wadr,8'h00,0);
+		`STW_DBR:       data_write(wadr,dbr,0);
+		`STW_DPR158:	begin data_write(wadr,dpr[15:8],0); mlb<= 1'b1; end
+		`STW_DPR70:		begin data_write(wadr,dpr[7:0],0); mlb <= 1'b1; end
+		`STW_TMP3124:	begin data_write(wadr,tmp32[31:24],0); mlb <= 1'b1; end
+		`STW_TMP2316:	begin data_write(wadr,tmp32[23:16],0); mlb <= 1'b1; end
+		`STW_TMP158:	begin data_write(wadr,tmp32[15:8],0); mlb <= 1'b1; end
+		`STW_TMP70:		data_write(wadr,tmp32[7:0],0);
+		`STW_IA3124:	begin data_write(wadr,ia[31:24],0); mlb <= 1'b1; end
+		`STW_IA2316:	data_write(wadr,ia[23:16],0);
+		`STW_IA158:		begin data_write(wadr,ia[15:8],0); mlb <= 1'b1; end
+		`STW_IA70:		data_write(wadr,ia,0);
+		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt],0); mlb <= maxcnt > 8'd1; end
+		default:	data_write(wadr,wdat,0);
 		endcase
 `ifdef SUPPORT_DCACHE
 		radr <= wadr;		// Do a cache read to test the hit
@@ -4189,7 +4234,7 @@ STORE2:
                         next_state(STORE1);
                     end
                     else begin
-                        data_write(fn_get_sp(sp),cpybuf[cnt-8'd1]);
+                        data_write(fn_get_sp(sp),cpybuf[cnt-8'd1],0);
                         state <= STORE2;
                     end
 		        end
@@ -4205,7 +4250,7 @@ STORE2:
                     if (DEAD_CYCLE)
                         next_state(STORE1);
                     else begin
-		                data_write(inc_adr(wadr),wdat[15:8]);
+		                data_write(inc_adr(wadr),wdat[15:8],0);
                         next_state(STORE2);
                     end
                 end
@@ -4217,7 +4262,7 @@ STORE2:
 				if (DEAD_CYCLE)
 				    next_state(STORE1);
 				else begin
-                    data_write(inc_adr(wadr),wdat[23:16]);
+                    data_write(inc_adr(wadr),wdat[23:16],0);
                     next_state(STORE2);
                 end
 				store_what <= `STW_DEF2316;
@@ -4231,7 +4276,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-	                data_write(inc_adr(wadr),wdat[31:24]);
+	                data_write(inc_adr(wadr),wdat[31:24],0);
                     next_state(STORE2);
 	            end
                 store_what <= `STW_DEF3124;
@@ -4246,7 +4291,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-		            data_write(inc_adr(wadr),acc[15:8]);
+		            data_write(inc_adr(wadr),acc[15:8],0);
                     state <= STORE2;
                 end
             end
@@ -4260,7 +4305,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-		            data_write(inc_adr(wadr),acc[23:16]);
+		            data_write(inc_adr(wadr),acc[23:16],0);
                     state <= STORE2;
                 end
             end
@@ -4274,7 +4319,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-		            data_write(inc_adr(wadr),acc[31:24]);
+		            data_write(inc_adr(wadr),acc[31:24],0);
                     state <= STORE2;
                 end
             end
@@ -4288,7 +4333,7 @@ STORE2:
                         next_state(STORE1);
                     end
                     else begin
-                        data_write(inc_adr(wadr),x[15:8]);
+                        data_write(inc_adr(wadr),x[15:8],0);
                         state <= STORE2;
                     end
                     store_what <= `STW_X158;
@@ -4318,7 +4363,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-		            data_write(inc_adr(wadr),x[23:16]);
+		            data_write(inc_adr(wadr),x[23:16],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_X2316;
@@ -4332,7 +4377,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-		            data_write(inc_adr(wadr),x[31:24]);
+		            data_write(inc_adr(wadr),x[31:24],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_X3124;
@@ -4346,7 +4391,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-                    data_write(inc_adr(wadr),y[15:8]);
+                    data_write(inc_adr(wadr),y[15:8],0);
     				state <= STORE2;
     		    end
 				store_what <= `STW_Y158;
@@ -4360,7 +4405,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(inc_adr(wadr),y[23:16]);
+                    data_write(inc_adr(wadr),y[23:16],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_Y2316;
@@ -4374,7 +4419,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(inc_adr(wadr),y[31:24]);
+                    data_write(inc_adr(wadr),y[31:24],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_Y3124;
@@ -4388,7 +4433,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-                    data_write(inc_adr(wadr),8'h00);
+                    data_write(inc_adr(wadr),8'h00,0);
 				    state <= STORE2;
 				end
 				store_what <= `STW_Z158;
@@ -4402,7 +4447,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(inc_adr(wadr),8'h00);
+                    data_write(inc_adr(wadr),8'h00,0);
                     state <= STORE2;
                 end
                 store_what <= `STW_Z2316;
@@ -4416,7 +4461,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(inc_adr(wadr),8'h00);
+                    data_write(inc_adr(wadr),8'h00,0);
                     state <= STORE2;
                 end
                 store_what <= `STW_Z3124;
@@ -4438,7 +4483,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-				    data_write(inc_adr(wadr),ds[15:8]);
+				    data_write(inc_adr(wadr),ds[15:8],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_DS158;
@@ -4452,7 +4497,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-				    data_write(inc_adr(wadr),ds[23:16]);
+				    data_write(inc_adr(wadr),ds[23:16],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_DS2316;
@@ -4466,7 +4511,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-				    data_write(inc_adr(wadr),ds[31:24]);
+				    data_write(inc_adr(wadr),ds[31:24],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_DS3124;
@@ -4480,7 +4525,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(fn_get_sp(sp),cs[23:16]);
+                    data_write(fn_get_sp(sp),cs[23:16],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_CS2316;
@@ -4494,7 +4539,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(fn_get_sp(sp),cs[15:8]);
+                    data_write(fn_get_sp(sp),cs[15:8],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_CS158;
@@ -4508,7 +4553,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(fn_get_sp(sp),cs[7:0]);
+                    data_write(fn_get_sp(sp),cs[7:0],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_CS70;
@@ -4522,7 +4567,7 @@ STORE2:
                     next_state(STORE1);
                 end
                 else begin
-                    data_write(fn_get_sp(sp),pc[23:16]);
+                    data_write(fn_get_sp(sp),pc[23:16],0);
                     state <= STORE2;
                 end
                 store_what <= `STW_PC2316;
@@ -4562,7 +4607,7 @@ STORE2:
 		 			    next_state(STORE1);
 					end
 					else begin
-                        data_write(fn_get_sp(sp),pc[15:8]);
+                        data_write(fn_get_sp(sp),pc[15:8],0);
     					state <= STORE2;
     			    end
 					store_what <= `STW_PC158;
@@ -4577,7 +4622,7 @@ STORE2:
 				    next_state(STORE1);
 				end
 				else begin
-                    data_write(fn_get_sp(sp),pc[7:0]);
+                    data_write(fn_get_sp(sp),pc[7:0],0);
     				state <= STORE2;
     		    end
 				store_what <= `STW_PC70;
@@ -4594,7 +4639,7 @@ STORE2:
 						    next_state(STORE1);
 						end
 						else begin
-                            data_write(fn_get_sp(sp),sr8);
+                            data_write(fn_get_sp(sp),sr8,0);
     						state <= STORE2;
     				    end
 					    store_what <= `STW_SR70;
@@ -4635,7 +4680,7 @@ STORE2:
 			begin
 				if (ir[7:0]==`BRK) begin
 					load_what <= `PC_70;
-					seg <= ds;
+					seg <= 32'd0;
 					state <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
@@ -4648,7 +4693,7 @@ STORE2:
 				end
 				else if (ir[7:0]==`COP) begin
 					load_what <= `PC_70;
-					seg <= ds;
+					seg <= 32'd0;
 					state <= LOAD_MAC1;
 					pc[23:16] <= 8'h00;//abs8[23:16];
 					radr <= vect;
@@ -4777,7 +4822,9 @@ SSM1:
     begin
         set_task_regs(24'd0);
         tr <= 16'd3;        // single step task
-        tsk_pres <= 5'h0;
+        tsk_pres <= 5'hC;
+        acc <= tr;
+        x <= pc;
         retstate <= IFETCH; // Do not switch on SSM here
         next_state(TSK1);
     end
@@ -4806,7 +4853,7 @@ ICACHE1:
             next_state(ICACHE2);
         end
         else
-            moveto_ifetch();
+            next_state(IFETCH);
     end
 ICACHE2:
     if (rdy) begin
@@ -4825,7 +4872,7 @@ ICACHE2:
             vpa <= FALSE;
             ado <= 32'd0;
             if ((hit1|prc_hit1)&hit0) begin
-                moveto_ifetch();
+                next_state(IFETCH);
             end
             else
                 next_state(ICACHE1);
@@ -4845,6 +4892,7 @@ end
 
 task data_read;
 input [31:0] adr;
+input first;
 begin
 	vpa <= `FALSE;
 	vda <= `TRUE;
@@ -4856,6 +4904,7 @@ endtask
 task data_write;
 input [31:0] adr;
 input [7:0] dat;
+input first;
 begin
 	vpa <= `FALSE;
 	vda <= `TRUE;
@@ -4897,7 +4946,7 @@ begin
     y_i <= y;
     sp_i <= sp;
     sr_i <= sr8;
-    srx_i <= {6'd0,m832,m816};
+    srx_i <= {3'b0,ssm,1'b0,mib,m832,m816};
     dbr_i <= dbr;
     dpr_i <= dpr;
     bl_i <= back_link;

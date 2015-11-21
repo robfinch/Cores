@@ -66,8 +66,8 @@ InvBomb:
 	BEQ		.0002
 	JSR		CanDropBomb
 	BEQ		.0002
-	LDA		PRNG_NUM
-	STA		PRNG_ADV
+	LDA		ZS:PRNG_NUM
+	STA		ZS:PRNG_ADV
 	AND		#$63
 	BNE		.0002
 	JSR		FindEmptyBomb
@@ -635,6 +635,7 @@ public InvadersTask:
 	LDA		#$2BFF			; set stack to $2BFF
 	TAS
 	JSR		Initialize
+	SEP		#$1000			; turn on single step mode
 	JSR		RenderInvaders
 .0002:
 	JCR 	KeybdGetCharNoWaitCtx,7	; check for char at keyboard

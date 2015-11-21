@@ -63,25 +63,50 @@ NormAttr	EQU		$36
 StringPos	EQU		$38
 EscState	EQU		$3C
 
+reg_cs		EQU		$80
+reg_ds		EQU		reg_cs + 4
+reg_pc		EQU		reg_ds + 4
+reg_a		EQU		reg_pc + 4
+reg_x		EQU		reg_a + 4
+reg_y		EQU		reg_x + 4
+reg_sp		EQU		reg_y + 4
+reg_sr		EQU		reg_sp + 4
+reg_db		EQU		reg_sr + 4
+reg_dp		EQU		reg_db + 4
+reg_bl		EQU		reg_dp + 4
+
 cs_save		EQU		$80
 ds_save		EQU		$84
 pc_save		EQU		$88
-pb_save		EQU		$8A
-acc_save	EQU		$8B
-x_save		EQU		$8F
-y_save		EQU		$93
-sp_save		EQU		$97
-sr_save		EQU		$9B
-srx_save	EQU		$9C
-db_save		EQU		$9D
-dpr_save	EQU		$9E
+pb_save		EQU		$8C
+acc_save	EQU		$90
+x_save		EQU		$94
+y_save		EQU		$98
+sp_save		EQU		$9C
+sr_save		EQU		$A0
+srx_save	EQU		$A4
+db_save		EQU		$A8
+dpr_save	EQU		$AC
 
-running_task	EQU		$A0
+running_task	EQU		$B4
 
-keybd_char	EQU		$A2
-keybd_cmd	EQU		$A4
+keybd_char	EQU		$B6
+keybd_cmd	EQU		$B8
+WorkTR		EQU		$BA
+ldtrec		EQU		$100
 
 OutputVec	EQU		$03F0
+
+PCS0		EQU		$B000
+PCS1		EQU		PCS0 + 2
+PCS2		EQU		PCS1 + 2
+PCS3		EQU		PCS2 + 2
+PCS4	    EQU		PCS3 + 2
+PCS5		EQU		PCS4 + 2
+CTR0_LMT	EQU		PCS0 + 16
+CTR0_CTRL	EQU		CTR_LMT + 3
+CTR1_LMT	EQU		CTR0_CTRL + 1
+CTR1_CTRL	EQU		CTR1_LMT + 3
 
 VIDBUF		EQU		$FD0000
 VIDREGS		EQU		$FEA000
@@ -119,14 +144,16 @@ start:
 	MEM		16
 	LDA		#$3FFF		; set top of stack
 	TAS
+
+	; setup the programmable address decodes
 	LDA		#$0070		; program chip selects for I/O
-	STA		$F000		; at $007000
+	STA		PCS0		; at $007000
 	LDA		#$0071
-	STA		$F002
+	STA		PCS1
 ;	LDA		#$FEA1		; select $FEA1xx I/O
-;	STA		$F006
+;	STA		PCS3
 	LDA		#$0000		; select zero page ram
-	STA		$F00A
+	STA		PCS5
 
 	; Setup the counters
 	SEP		#$30		; set 8 bit regs
@@ -134,20 +161,20 @@ start:
 	MEM		8
 	; Counter #0 is setup as a free running tick count
 	LDA		#$FF		; set limit to $FFFFFF
-	STA		$F010
-	STA		$F011
-	STA		$F012
+	STA		CTR0_LMT
+	STA		CTR0_LMT+1
+	STA		CTR0_LMT+2
 	LDA		#$14		; count up, on mpu clock
-	STA		$F013
+	STA		CTR0_CTRL
 	; Counter #1 is set to interrupt at a 100Hz rate
 	LDA		#$94		; divide by 95794 (for 100Hz)
-	STA		$F014
+	STA		CTR1_LMT
 	LDA		#$57
-	STA		$F015
+	STA		CTR1_LMT+1
 	LDA		#$09
-	STA		$F016
+	STA		CTR1_LMT+2
 	LDA		#$05		; count down, on mpu clock, irq disenabled
-	STA		$F017
+	STA		CTR1_CTRL
 	; Counter #2 isn't setup
 
 	REP		#$30		; set 16 bit regs & mem
@@ -155,7 +182,7 @@ start:
 	MEM		16
 
 	; Setup the task registers
-	LDY		#5			; # tasks to setup
+	LDY		#6			; # tasks to setup
 	LDX		#1
 .0001:
 	LDT		TaskStartTbl,X
@@ -214,9 +241,9 @@ Task0:
 	BNE		.0002
 	RTT
 .0002:
-	FORK	#6
+	FORK	#11
 	TTA
-	CMP		#6
+	CMP		#11
 	LBEQ	KeybdInit
 
 Mon1:
@@ -264,6 +291,8 @@ Mon1:
 	LBEQ	doTask2
 	CMP		#'I'
 	LBEQ	doInvaders
+	CMP		#'R'
+	LBEQ	doRegs
 	BRA		Mon1
 
 ; Get a character from the screen, skipping over spaces and tabs
@@ -294,11 +323,299 @@ doTask2:
 doInvaders:
 	LDA		#$FFFF
 	STA		do_invaders
-	FORK	#5
-	TTA
-	CMP		#5
-	LBEQ	InvadersTask
+	TSK		#5
+;	FORK	#5
+;	TTA
+;	CMP		#5
+;	LBEQ	InvadersTask
 	BRL		Mon1
+
+;------------------------------------------------------------------------------
+; Display Registers
+; R<xx>		xx = context register to display
+; Update Registers
+; R.<reg> <val>
+;	reg = CS PB PC A X Y SP SR DS DB or DP
+;------------------------------------------------------------------------------
+
+doRegs:
+	JSR		MonGetch
+	CMP		#'.'
+	LBNE	.0004
+	JSR		MonGetch
+	CMP		#'C'
+	BNE		.0005
+	JSR		MonGetch
+	CMP		#'S'
+	LBNE	Mon1
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_cs
+	LDA		NumWorkArea+2
+	STA		reg_cs+2
+.buildrec
+	JSR		BuildRec
+	LDX		WorkTR
+	LDT		ldtrec
+	BRL		Mon1
+.0005:
+	CMP		#'P'
+	BNE		.0006
+	JSR		MonGetch
+	CMP		#'B'
+	BNE		.0007
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea+2
+	STA		reg_pc+2
+	BRA		.buildrec
+.0007:
+	CMP		#'C'
+	LBNE	Mon1
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_pc
+	BRA		.buildrec
+.0006:
+	CMP		#'A'
+	BNE		.0008
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_a
+	LDA		NumWorkArea+2
+	STA		reg_a+2
+	BRA		.buildrec
+.0008:
+	CMP		#'X'
+	BNE		.0009
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_x
+	LDA		NumWorkArea+2
+	STA		reg_x+2
+	BRL		.buildrec
+.0009:
+	CMP		#'Y'
+	BNE		.0010
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_y
+	LDA		NumWorkArea+2
+	STA		reg_y+2
+	BRL		.buildrec
+.0010:
+	CMP		#'S'
+	BNE		.0011
+	JSR		MonGetch
+	CMP		#'P'
+	BNE		.0015
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_sp
+	LDA		NumWorkArea+2
+	STA		reg_sp+2
+	BRL		.buildrec
+.0015:
+	CMP		#'R'
+	LBNE	Mon1
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_sr
+	BRL		.buildrec
+.0011:
+	CMP		#'D'
+	LBNE	Mon1
+	JSR		MonGetch
+	CMP		#'S'
+	BNE		.0012
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_ds
+	LDA		NumWorkArea+2
+	STA		reg_ds+2
+	BRL		.buildrec
+.0012:
+	CMP		#'B'
+	BNE		.0013
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_db
+	BRL		.buildrec
+.0013:
+	CMP		#'P'
+	LBNE	Mon1
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_dp
+	BRL		.buildrec
+
+.0004:
+	DEX
+	DEX
+;	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	Mon1
+	LDA		NumWorkArea
+	STA		WorkTR
+	JSR		DispRegs
+	BRL		Mon1
+
+DispRegs:
+	PEA		msgRegs
+	JSR		DisplayString
+	PLA
+	JSR		space
+
+	LDA		WorkTR
+	ASL
+	ASL
+	ASL
+	ASL
+	TAX
+
+	LDY		#0
+.0001:
+	INF
+	INX
+	STA		reg_cs,Y
+	XBAW
+	STA		reg_cs+2,Y
+	INY4
+	CPY		#44
+	BNE		.0001
+
+	; Display CS
+	LDA		reg_cs+2
+	JSR		DispWord
+	LDA		reg_cs
+	JSR		DispWord
+	LDA		#':'
+	JSR		OutChar
+
+	; Display PB PC
+	LDA		reg_cs+10
+	JSR		DispByte
+	LDA		reg_cs+8
+	JSR		DispWord
+	JSR		space
+
+	; Display SRX,SR
+	LDA		reg_cs+28
+	LDX		#16
+.0003:
+	ASL
+	PHA
+	LDA		#'0'
+	ADC		#0
+	JSR		DispNybble
+	PLA
+	DEX
+	BNE		.0003
+	JSR		space
+
+	LDX		#12
+.0002
+	; display Acc,.X,.Y,.SP
+	LDA		reg_cs+2,X
+	JSR		DispWord
+	LDA		reg_cs,X
+	JSR		DispWord
+	JSR		space
+	INX4
+	CPX		#28
+	BNE		.0002
+
+	PEA		msgRegs2
+	JSR		DisplayString
+	PLA
+	JSR		space
+
+	; Display DS
+	LDA		reg_cs+6
+	JSR		DispWord
+	LDA		reg_cs+4
+	JSR		DispWord
+	JSR		space
+
+	; Display DB
+	LDA		reg_cs+32
+	JSR		DispByte
+	JSR		space
+
+	; Display DPR
+	LDA		reg_cs+36
+	JSR		DispWord
+	JSR		space
+
+	; Display back link
+	LDA		reg_cs+40
+	JSR		DispWord
+
+	JSR		OutCRLF
+	RTS
+
+; Build a startup record from the register values so that a context reg
+; may be loaded
+
+BuildRec:
+	LDA		reg_cs
+	STA		ldtrec
+	LDA		reg_cs+2
+	STA		ldtrec+2
+	LDA		reg_ds
+	STA		ldtrec+4
+	LDA		reg_ds+2
+	STA		ldtrec+6
+	LDA		reg_pc
+	STA		ldtrec+8
+	LDA		reg_pc+2
+	AND		#$FF
+	SEP		#$30		; 8 bit regs
+	MEM		8
+	XBA
+	LDA		reg_a
+	XBA
+	REP		#$30
+	MEM		16
+	STA		ldtrec+10
+	LDA		reg_a+1
+	STA		ldtrec+12
+	LDA		reg_a+3
+	STA		ldtrec+14
+	LDA		reg_x+1
+	STA		ldtrec+16
+	LDA		reg_x+3
+	STA		ldtrec+18
+	LDA		reg_y+1
+	STA		ldtrec+20
+	LDA		reg_y+3
+	STA		ldtrec+22
+	LDA		reg_sp+1
+	STA		ldtrec+24
+	LDA		reg_sp+3
+	STA		ldtrec+26
+	SEP		#$30
+	LDA		reg_sr+1
+	STA		ldtrec+28
+	LDA		reg_db
+	STA		ldtrec+29
+	LDA		reg_dp
+	STA		ldtrec+30
+	LDA		reg_dp+1
+	STA		ldtrec+31
+	REP		#$30
+	RTS
 
 ;------------------------------------------------------------------------------
 ; Dump memory.
@@ -314,7 +631,7 @@ doMemoryDump:
 	JSR		DispRangeStart
 	LDY		#0
 .0001:
-	LDA		[RangeStart],Y
+	LDA		{RangeStart},Y
 	JSR		DispByte
 	LDA		#' '
 	JSR		OutChar
@@ -323,7 +640,7 @@ doMemoryDump:
 	BNE		.0001
 	LDY 	#0
 .0005:
-	LDA		[RangeStart],Y
+	LDA		{RangeStart},Y
 	CMP		#$' '
 	BCS		.0002
 .0004:
@@ -364,6 +681,7 @@ doMemoryDump:
 
 ;------------------------------------------------------------------------------
 ; Edit memory.
+; ><memory address> <val1> <val2> ... <val8>
 ;------------------------------------------------------------------------------
 
 doMemoryEdit:
@@ -373,8 +691,8 @@ doMemoryEdit:
 	LBEQ	Mon1
 	LDA		NumWorkArea
 	STA		RangeStart
-	LDA		NumWorkArea+1
-	STA		RangeStart+1
+	LDA		NumWorkArea+2
+	STA		RangeStart+2
 	LDY		#0
 .0001:
 	PHY
@@ -385,7 +703,7 @@ doMemoryEdit:
 	PLY
 	SEP		#$20
 	LDA		NumWorkArea
-	STA		[RangeStart],Y
+	STA		{RangeStart},Y
 	REP		#$20
 	INY
 	CPY		#8
@@ -547,6 +865,42 @@ echo_switch:
 	lda		$7100
 	sta		$7000
 	rts
+
+;------------------------------------------------------------------------------
+; On entry to the SSM task the .A register will be set to the task number
+; being single stepped. The .X register will contain the address of the
+; next instruction to execute.
+;------------------------------------------------------------------------------
+
+SSMTask:
+	STA		WorkTR
+	JSR		DispRegs
+.0004:
+	LDA		#'S'
+	JSR		OutChar
+	JSR		OutChar
+	LDA		#'M'
+	JSR		OutChar
+	LDA		#'>'
+	JSR		OutChar
+	JSR		KeybdGetCharWait
+	AND		#$FF
+	CMP		#'S'		; step
+	BNE		.0001
+.0002:
+	RTT
+	BRA		SSMTask
+.0001:
+	CMP		#'X'
+	BNE		.0002
+	LDA		reg_sr
+	AND		#$FDFF
+	STA		reg_sr
+	JSR		BuildRec
+	LDX		WorkTR
+	LDT		ldtrec
+	RTT
+	BRA		SSMTask
 
 ;------------------------------------------------------------------------------
 ; Convert Ascii character to screen character.
@@ -872,18 +1226,20 @@ DisplayString:
 ;	PLA							; pop return address
 ;	PLX							; get string address parameter
 ;	PHA							; push return address
+	PHP							; push reg settings
 	SEP		#$20				; ACC = 8 bit
 	MEM		8
 ;	STX		StringPos
 	LDY		#0
 .0002:
-	LDA		(3,S),Y
+	LDA		(4,S),Y
 	BEQ		.0001
 	JSR		SuperPutch
 	INY
 	BRA		.0002
 .0001:
-	REP		#$20				; ACC 16 bits
+	PLP							; restore regs settings
+;	REP		#$20				; ACC 16 bits
 	MEM		16
 	RTS
 
@@ -962,6 +1318,10 @@ BlankLine:
 	BNE		.0001
 	RTS
 
+DispDWord:
+	XBAW
+	JSR		DispWord
+	XBAW
 DispWord:
 	XBA
 	JSR		DispByte
@@ -985,6 +1345,13 @@ DispNybble:
 	RTS
 .0001:
 	ORA		#'0'
+	JSR		OutChar
+	PLA
+	RTS
+
+space:
+	PHA
+	LDA		#' '
 	JSR		OutChar
 	PLA
 	RTS
@@ -1021,7 +1388,7 @@ GetRange:
 ;------------------------------------------------------------------------------
 ;
 GetHexNumber:
-	LDY		#0					; maximum of six digits
+	LDY		#0					; maximum of eight digits
 	STZ		NumWorkArea
 	STZ		NumWorkArea+2
 gthxn2:
@@ -1039,7 +1406,7 @@ gthxn2:
 	ORA		NumWorkArea
 	STA		NumWorkArea
 	INY
-	CPY		#6
+	CPY		#8
 	BNE		gthxn2
 	RTS
 gthxn1:
@@ -1677,6 +2044,8 @@ SuperPutch:
 	RTS
 
 warm_start:
+	LDA		#$3FFF
+	TAS
 	JSR		CursorOn
 	BRL		Mon1
 
@@ -1823,7 +2192,14 @@ BrkRout1:
 	STA		$7000
 Hung:
 	BRA		Hung
-	
+
+	;--------------------------------------------------------
+	;--------------------------------------------------------
+	; I/O page is located at $F0xx
+	;--------------------------------------------------------
+	;--------------------------------------------------------	
+	;org		$F100
+
 LineTbl:
 	.WORD	0
 	.WORD	TEXTCOLS
@@ -1919,8 +2295,8 @@ TaskStartTbl:
 	.WORD	0
 	.WORD	0			; DS
 	.WORD	0
-	.WORD	IRQTask		; PC
-	.BYTE	IRQTask>>16
+	.WORD	SSMTask		; PC
+	.BYTE	SSMTask>>16
 	.WORD	0			; acc
 	.WORD	0
 	.WORD	0			; x
@@ -1929,8 +2305,8 @@ TaskStartTbl:
 	.WORD	0
 	.WORD	$33FF		; sp
 	.WORD	0
-	.BYTE	$24			; SR	eight bit acc, mask interrupts
-	.BYTE	2			; SR extension
+	.BYTE	$4			; SR	16 bit regs, mask interrupts
+	.BYTE	1			; SR extension - 816 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 
@@ -1954,11 +2330,11 @@ TaskStartTbl:
 	.WORD	0			; DPR
 
 	; task #5
-	; DS is placed at $10000
+	; DS is placed at $7800
 	.WORD	0			; CS
 	.WORD	0
-	.WORD	0			; DS
-	.WORD	1
+	.WORD	7800		; DS
+	.WORD	0
 	.WORD	InvadersTask	; PC
 	.BYTE	InvadersTask>>16
 	.WORD	0			; acc
@@ -1973,6 +2349,33 @@ TaskStartTbl:
 	.BYTE	1			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+
+	.WORD	0			; CS
+	.WORD	0
+	.WORD	0			; DS
+	.WORD	0
+	.WORD	IRQTask		; PC
+	.BYTE	IRQTask>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$27FF		; sp
+	.WORD	0
+	.BYTE	$24			; SR	8 bit acc, mask interrupts
+	.BYTE	2			; SR extension - 832 mode
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+
+msgRegs:
+	.byte	CR,LF
+    .byte   "                 xxxsxi31",CR,LF
+    .byte   "    CS    PB PC  xxxsxn26NVmxDIZC    .A       .X       .Y       SP  ",CR,LF,0
+msgRegs2:
+	.byte	CR,LF
+	.byte	"    DS    DB  DP   BL",CR,LF,0
 
 	cpu		FT832
 	MEM		32
@@ -1999,7 +2402,7 @@ TaskStartTbl:
 	dw		4			; task #4
 
 	.org	$FFDE
-	dw		3			; task #3
+	dw		6			; task #6
 
 	.org 	$FFE6
 	dw		BrkRout

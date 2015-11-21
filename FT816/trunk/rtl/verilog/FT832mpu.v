@@ -28,8 +28,8 @@
 `define FALSE	1'b0
 
 module FT832mpu(rst, clk, clko, phi11, phi12, phi81, phi82, rdy, e, mx, nmi, irq, abort, be, vpa, vda, mlb, vpb,
-    rw, rwo, ad, ado, db, dbo, cs0, cs1, cs2, cs3, cs4, cs5, cs6, ct0, ct1, ct2);
-parameter pIOAddress = 32'h0000F000;
+    rw, ad, db, cs0, cs1, cs2, cs3, cs4, cs5, cs6, ct0, ct1, ct2);
+parameter pIOAddress = 32'h0000B000;
 parameter pZPAddress = 32'h00000010;
 input rst;
 input clk;
@@ -50,11 +50,8 @@ output vda;
 output mlb;
 output vpb;
 output tri rw;
-output rwo;
 output tri [31:0] ad;
-output [31:0] ado;
 inout tri [7:0] db;
-output [7:0] dbo;
 output cs0;
 output cs1;
 output cs2;
@@ -324,11 +321,8 @@ FT832 u1
 	.vpa(vpa),
 	.vda(ivda),
 	.rw(rw),
-	.rwo(rwo),
 	.ad(ad),
-	.ado(ado),
 	.db(db),
-	.dbo(dbo),
 	.err_i(1'b0),
 	.rty_i(1'b0)
 );

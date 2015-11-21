@@ -24,11 +24,11 @@ namespace RTFClasses
 
 static Opa adcAsm[] =
 {
-	{AsmFT832::immm, 0x69, 1, AM_IMM},
-	{AsmFT832::zp, 0x65, 1, AM_Z},
-	{AsmFT832::zp, 0x75, 1, AM_ZX},
-	{AsmFT832::abs, 0x79, 1, AM_ZY},	// force abs,y
-	{AsmFT832::zp, 0x61, 1, AM_IX},
+	{AsmFT832::immm, 0x69, 1, AM_IMM, 2},
+	{AsmFT832::zp, 0x65, 1, AM_Z, 4},
+	{AsmFT832::zp, 0x75, 1, AM_ZX, 4},
+	{AsmFT832::abs, 0x79, 1, AM_ZY, 4},	// force abs,y
+	{AsmFT832::zp, 0x61, 1, AM_IX, 4},
 	{AsmFT832::zp, 0x71, 1, AM_IY},
 	{AsmFT832::zp, 0x72, 1, AM_ZI},
 	{AsmFT832::abs, 0x6D, 1, AM_A},
@@ -84,6 +84,8 @@ static Opa aslAsm[] =
 	{AsmFT832::zp, 0x16, 1, AM_ZX},
 	{AsmFT832::abs, 0x0E, 1, AM_A},
 	{AsmFT832::abs, 0x1E, 1, AM_AX},
+	{AsmFT832::xlabs, 0x420E, 1, AM_AL},
+	{AsmFT832::xlabs, 0x421E, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x420E, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x421E, 1, AM_XAXL},
 	NULL
@@ -97,6 +99,8 @@ static Opa rolAsm[] =
 	{AsmFT832::zp, 0x36, 1, AM_ZX},
 	{AsmFT832::abs, 0x2E, 1, AM_A},
 	{AsmFT832::abs, 0x3E, 1, AM_AX},
+	{AsmFT832::xlabs, 0x422E, 1, AM_AL},
+	{AsmFT832::xlabs, 0x423E, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x422E, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x423E, 1, AM_XAXL},
 	NULL
@@ -110,6 +114,8 @@ static Opa rorAsm[] =
 	{AsmFT832::zp, 0x76, 1, AM_ZX},
 	{AsmFT832::abs, 0x6E, 1, AM_A},
 	{AsmFT832::abs, 0x7E, 1, AM_AX},
+	{AsmFT832::xlabs, 0x426E, 1, AM_AL},
+	{AsmFT832::xlabs, 0x427E, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x426E, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x427E, 1, AM_XAXL},
 	NULL
@@ -123,6 +129,8 @@ static Opa lsrAsm[] =
 	{AsmFT832::zp, 0x56, 1, AM_ZX},
 	{AsmFT832::abs, 0x4E, 1, AM_A},
 	{AsmFT832::abs, 0x5E, 1, AM_AX},
+	{AsmFT832::xlabs, 0x424E, 1, AM_AL},
+	{AsmFT832::xlabs, 0x425E, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x424E, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x425E, 1, AM_XAXL},
 	NULL
@@ -139,6 +147,10 @@ static Opa bvsAsm[] = {	{AsmFT832::br, 0x70, 1}, NULL };
 static Opa braAsm[] = {	{AsmFT832::br, 0x80, 1}, NULL };
 static Opa brlAsm[] = {	{AsmFT832::brl, 0x82, 1}, NULL };
 static Opa brkAsm[] = {	{Asm6502::out8, 0x00, 0}, NULL };
+static Opa bltAsm[] = {	{AsmFT832::br, 0x4230, 1}, NULL };
+static Opa bleAsm[] = {	{AsmFT832::br, 0x42B0, 1}, NULL };
+static Opa bgtAsm[] = {	{AsmFT832::br, 0x4210, 1}, NULL };
+static Opa bgeAsm[] = {	{AsmFT832::br, 0x4290, 1}, NULL };
 
 static Opa lbccAsm[] = {	{AsmFT832::lbr, 0x90, 1}, NULL };
 static Opa lbcsAsm[] = {	{AsmFT832::lbr, 0xB0, 1}, NULL };
@@ -149,6 +161,10 @@ static Opa lbplAsm[] = {	{AsmFT832::lbr, 0x10, 1}, NULL };
 static Opa lbvcAsm[] = {	{AsmFT832::lbr, 0x50, 1}, NULL };
 static Opa lbvsAsm[] = {	{AsmFT832::lbr, 0x70, 1}, NULL };
 static Opa lbraAsm[] = {	{AsmFT832::lbr, 0x80, 1}, NULL };
+static Opa lbltAsm[] = {	{AsmFT832::lbr, 0x4230, 1}, NULL };
+static Opa lbleAsm[] = {	{AsmFT832::lbr, 0x42B0, 1}, NULL };
+static Opa lbgtAsm[] = {	{AsmFT832::lbr, 0x4210, 1}, NULL };
+static Opa lbgeAsm[] = {	{AsmFT832::lbr, 0x4290, 1}, NULL };
 
 static Opa bitAsm[] =
 {
@@ -157,6 +173,8 @@ static Opa bitAsm[] =
     {AsmFT832::zp, 0x34, 1, AM_ZX},
     {AsmFT832::abs, 0x2C, 1, AM_A},
     {AsmFT832::abs, 0x3C, 1, AM_AX},
+    {AsmFT832::xlabs, 0x422C, 1, AM_AL},
+    {AsmFT832::xlabs, 0x423C, 1, AM_AXL},
     {AsmFT832::xlabs, 0x422C, 1, AM_XAL},
     {AsmFT832::xlabs, 0x423C, 1, AM_XAXL},
     NULL
@@ -164,7 +182,7 @@ static Opa bitAsm[] =
 
 static Opa repAsm[] =
 {
-	{AsmFT832::imm, 0xC2, 1, AM_IMM},
+	{AsmFT832::epimm, 0xC2, 1, AM_IMM, 2},
     NULL
 };
 
@@ -184,6 +202,7 @@ static Opa perAsm[] =
 static Opa peaAsm[] =
 {
 	{AsmFT832::pea, 0x42F4, 1, AM_XAL},
+	{AsmFT832::pea, 0x42F4, 1, AM_AL},
 	{AsmFT832::pea, 0xF4, 1, AM_A},
 	{AsmFT832::pea, 0xF4, 1, AM_Z},
     NULL
@@ -191,7 +210,7 @@ static Opa peaAsm[] =
 
 static Opa sepAsm[] =
 {
-	{AsmFT832::imm, 0xE2, 1, AM_IMM},
+	{AsmFT832::epimm, 0xE2, 1, AM_IMM, 2},
     NULL
 };
 
@@ -205,6 +224,7 @@ static Opa sepAsm[] =
 	{
 		{AsmFT832::zp, 0x04, 1, AM_Z},
 		{AsmFT832::abs, 0x0C, 1, AM_A},
+		{AsmFT832::xlabs, 0x420C, 1, AM_AL},
 		{AsmFT832::xlabs, 0x420C, 1, AM_XAL},
 		NULL
 	};
@@ -213,22 +233,23 @@ static Opa sepAsm[] =
 	{
 		{AsmFT832::zp, 0x14, 1, AM_Z},
 		{AsmFT832::abs, 0x1C, 1, AM_A},
+		{AsmFT832::xlabs, 0x421C, 1, AM_AL},
 		{AsmFT832::xlabs, 0x421C, 1, AM_XAL},
 		NULL
 	};
 
-static Opa clcAsm[] = { {Asm6502::out8, 0x18}, NULL };
-static Opa cldAsm[] = { {Asm6502::out8, 0xD8}, NULL };
-static Opa cliAsm[] = { {Asm6502::out8, 0x58}, NULL };
-static Opa clvAsm[] = { {Asm6502::out8, 0xB8}, NULL };
-static Opa dexAsm[] = { {Asm6502::out8, 0xCA}, NULL };
-static Opa deyAsm[] = { {Asm6502::out8, 0x88}, NULL };
-static Opa inxAsm[] = { {Asm6502::out8, 0xE8}, NULL };
-static Opa inyAsm[] = { {Asm6502::out8, 0xC8}, NULL };
+static Opa clcAsm[] = { {Asm6502::out8, 0x18,0,0,2}, NULL };
+static Opa cldAsm[] = { {Asm6502::out8, 0xD8,0,0,2}, NULL };
+static Opa cliAsm[] = { {Asm6502::out8, 0x58,0,0,2}, NULL };
+static Opa clvAsm[] = { {Asm6502::out8, 0xB8,0,0,2}, NULL };
+static Opa dexAsm[] = { {Asm6502::out8, 0xCA,0,0,2}, NULL };
+static Opa deyAsm[] = { {Asm6502::out8, 0x88,0,0,2}, NULL };
+static Opa inxAsm[] = { {Asm6502::out8, 0xE8,0,0,2}, NULL };
+static Opa inyAsm[] = { {Asm6502::out8, 0xC8,0,0,2}, NULL };
 
-static Opa secAsm[] = { {Asm6502::out8, 0x38}, NULL };
-static Opa sedAsm[] = { {Asm6502::out8, 0xF8}, NULL };
-static Opa seiAsm[] = { {Asm6502::out8, 0x78}, NULL };
+static Opa secAsm[] = { {Asm6502::out8, 0x38,0,0,2}, NULL };
+static Opa sedAsm[] = { {Asm6502::out8, 0xF8,0,0,2}, NULL };
+static Opa seiAsm[] = { {Asm6502::out8, 0x78,0,0,2}, NULL };
 
 static Opa phaAsm[] = { {Asm6502::out8, 0x48}, NULL };
 static Opa phbAsm[] = { {Asm6502::out8, 0x8B}, NULL };
@@ -250,7 +271,12 @@ static Opa pldsAsm[] = { {Asm6502::out16, 0x2B42}, NULL };
 static Opa rtiAsm[] = { {Asm6502::out8, 0x40}, NULL };
 static Opa rtsAsm[] = { {Asm6502::out8, 0x60}, NULL };
 static Opa rtlAsm[] = { {Asm6502::out8, 0x6B}, NULL };
-static Opa rtfAsm[] = { {Asm6502::out16, 0x6042}, NULL };
+static Opa rtfAsm[] = { {Asm6502::out16, 0x6B42}, NULL };
+static Opa rttAsm[] = { {Asm6502::out16, 0x6042}, NULL };
+static Opa rtcAsm[] = { {AsmFT832::rtc, 0x4042, 1, AM_IMM, 4},
+                        {AsmFT832::rtc, 0x4042, 1, AM_IMM4, 4},
+                        {AsmFT832::rtc, 0x4042, 1, AM_IMM8, 4},
+                        NULL };
 
 static Opa taxAsm[] = { {Asm6502::out8, 0xAA}, NULL };
 static Opa tayAsm[] = { {Asm6502::out8, 0xA8}, NULL };
@@ -269,6 +295,16 @@ static Opa wdmAsm[] = { {Asm6502::out8, 0x42}, NULL };
 static Opa stpAsm[] = { {Asm6502::out8, 0xDB}, NULL };
 static Opa xbaAsm[] = { {Asm6502::out8, 0xEB}, NULL };
 static Opa xceAsm[] = { {Asm6502::out8, 0xFB}, NULL };
+static Opa ttaAsm[] = { {Asm6502::out16, 0x1A42}, NULL };
+static Opa xbawAsm[] = { {Asm6502::out16, 0xEB42}, NULL };
+static Opa infAsm[] = { {Asm6502::out16, 0x4A42}, NULL };
+static Opa dex4Asm[] = { {Asm6502::out16, 0xCA42}, NULL };
+static Opa dey4Asm[] = { {Asm6502::out16, 0x8842}, NULL };
+static Opa inx4Asm[] = { {Asm6502::out16, 0xE842}, NULL };
+static Opa iny4Asm[] = { {Asm6502::out16, 0xC842}, NULL };
+static Opa mulAsm[] = { {Asm6502::out16, 0x2A42}, NULL };
+static Opa aaxAsm[] = { {Asm6502::out16, 0x8A42}, NULL };
+static Opa jciAsm[] = { {Asm6502::out16, 0x8042}, NULL };
 
 
 
@@ -308,6 +344,7 @@ static Opa cpxAsm[] =
 	{AsmFT832::immx, 0xE0, 1, AM_IMM},
     {AsmFT832::zp, 0xE4, 1, AM_Z},
 	{AsmFT832::abs, 0xEC, 1, AM_A},
+	{AsmFT832::xlabs, 0x42EC, 1, AM_AL},
 	{AsmFT832::xlabs, 0x42EC, 1, AM_XAL},
 	NULL
 };
@@ -317,6 +354,7 @@ static Opa cpyAsm[] =
 	{AsmFT832::immx, 0xC0, 1, AM_IMM},
     {AsmFT832::zp, 0xC4, 1, AM_Z},
 	{AsmFT832::abs, 0xCC, 1, AM_A},
+	{AsmFT832::xlabs, 0x42CC, 1, AM_AL},
 	{AsmFT832::xlabs, 0x42CC, 1, AM_XAL},
 	NULL
 };
@@ -328,6 +366,8 @@ static Opa decAsm[] =
     {AsmFT832::zp, 0xD6, 1, AM_ZX},
 	{AsmFT832::abs, 0xCE, 1, AM_A},
 	{AsmFT832::abs, 0xDE, 1, AM_AX},
+	{AsmFT832::xlabs, 0x42CE, 1, AM_AL},
+	{AsmFT832::xlabs, 0x42DE, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x42CE, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x42DE, 1, AM_XAXL},
 	NULL
@@ -340,6 +380,8 @@ static Opa incAsm[] =
     {AsmFT832::zp, 0xF6, 1, AM_ZX},
 	{AsmFT832::abs, 0xEE, 1, AM_A},
 	{AsmFT832::abs, 0xFE, 1, AM_AX},
+	{AsmFT832::xlabs, 0x42EE, 1, AM_AL},
+	{AsmFT832::xlabs, 0x42FE, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x42EE, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x42FE, 1, AM_XAXL},
 	NULL
@@ -460,6 +502,7 @@ static Opa stxAsm[] =
     {AsmFT832::zp, 0x86, 1, AM_Z},
     {AsmFT832::zp, 0x96, 1, AM_ZY},
 	{AsmFT832::abs, 0x8E, 1, AM_A},
+	{AsmFT832::xlabs, 0x428E, 1, AM_AL},
 	{AsmFT832::xlabs, 0x428E, 1, AM_XAL},
 	NULL
 };
@@ -469,6 +512,7 @@ static Opa styAsm[] =
     {AsmFT832::zp, 0x84, 1, AM_Z},
     {AsmFT832::zp, 0x94, 1, AM_ZX},
 	{AsmFT832::abs, 0x8C, 1, AM_A},
+	{AsmFT832::xlabs, 0x428C, 1, AM_AL},
 	{AsmFT832::xlabs, 0x428C, 1, AM_XAL},
 	NULL
 };
@@ -479,6 +523,8 @@ static Opa stzAsm[] =
     {AsmFT832::zp, 0x74, 1, AM_ZX},
 	{AsmFT832::abs, 0x9C, 1, AM_A},
 	{AsmFT832::abs, 0x9E, 1, AM_AX},
+	{AsmFT832::xlabs, 0x429C, 1, AM_AL},
+	{AsmFT832::xlabs, 0x429E, 1, AM_AXL},
 	{AsmFT832::xlabs, 0x429C, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x429E, 1, AM_XAXL},
 	NULL
@@ -518,6 +564,7 @@ static Opa ldxAsm[] =
     {AsmFT832::zp, 0xB6, 1, AM_ZY},
 	{AsmFT832::abs, 0xAE, 1, AM_A},
 	{AsmFT832::abs, 0xBE, 1, AM_AY},
+	{AsmFT832::xlabs, 0x42AE, 1, AM_AL},
 	{AsmFT832::xlabs, 0x42AE, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x42BE, 1, AM_XAYL},
 	NULL
@@ -530,6 +577,7 @@ static Opa ldyAsm[] =
     {AsmFT832::zp, 0xB4, 1, AM_ZX},
 	{AsmFT832::abs, 0xAC, 1, AM_A},
 	{AsmFT832::abs, 0xBC, 1, AM_AX},
+	{AsmFT832::xlabs, 0x42AC, 1, AM_AL},
 	{AsmFT832::xlabs, 0x42AC, 1, AM_XAL},
 	{AsmFT832::xlabs, 0x42BC, 1, AM_XAXL},
 	NULL
@@ -584,6 +632,12 @@ static Opa jmpAsm[] =
 		NULL
 	};
 
+	static Opa fillAsm[] =
+	{
+		{AsmFT832::fill, 0x4244, 1, AM_Z, 6},
+		NULL
+	};
+
 static Opa cacheAsm[] =
 {
 	{AsmFT832::imm, 0x42E0, 1, AM_IMM},
@@ -592,31 +646,67 @@ static Opa cacheAsm[] =
 
 static Opa tskAsm[] =
 {
-	{AsmFT832::imm, 0x42A2, 1, AM_IMM},
+	{AsmFT832::imm16, 0x42A2, 1, AM_IMM},
     {Asm6502::out16, 0x3A42, 0, AM_},
     {Asm6502::out16, 0x3A42, 1, AM_ACC},
     NULL
 };
 
+static Opa forkAsm[] =
+{
+	{AsmFT832::imm16, 0x42A0, 1, AM_IMM},
+    {Asm6502::out16, 0xAA42, 0, AM_},
+    {Asm6502::out16, 0xAA42, 1, AM_ACC},
+    NULL
+};
+
 static Opa ldtAsm[] =
 {
-	{AsmFT832::xlabs, 0x424C, 1, AM_ZX},
-	{AsmFT832::xlabs, 0x424C, 1, AM_AX},
-	{AsmFT832::xlabs, 0x424C, 1, AM_AXL},
-	{AsmFT832::xlabs, 0x424C, 1, AM_XAXL},
+	{AsmFT832::xlabs, 0x426C, 1, AM_Z, 44},
+	{AsmFT832::xlabs, 0x424C, 1, AM_ZX, 44},
+	{AsmFT832::xlabs, 0x426C, 1, AM_A, 44},
+	{AsmFT832::xlabs, 0x424C, 1, AM_AX, 44},
+	{AsmFT832::xlabs, 0x426C, 1, AM_AL, 44},
+	{AsmFT832::xlabs, 0x424C, 1, AM_AXL, 44},
+	{AsmFT832::xlabs, 0x426C, 1, AM_XAL, 44},
+	{AsmFT832::xlabs, 0x424C, 1, AM_XAXL, 44},
+    NULL
+};
+
+static Opa jcrAsm[] =
+{
+	{AsmFT832::jcr, 0x4220, 2, (AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcr, 0x4220, 2, (AM_A<<8)|AM_Z, 4},
+    NULL
+};
+
+static Opa jclAsm[] =
+{
+	{AsmFT832::jcl, 0x4282, 4, (AM_Z<<24)|(AM_Z<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcl, 0x4282, 4, (AM_A<<24)|(AM_Z<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcl, 0x4282, 4, (AM_AL<<24)|(AM_Z<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcl, 0x4282, 4, (AM_AL<<24)|(AM_A<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcl, 0x4282, 4, (AM_Z<<24)|(AM_A<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcl, 0x4282, 4, (AM_A<<24)|(AM_A<<16)|(AM_Z<<8)|AM_Z, 4},
     NULL
 };
 
 static Mne opsFT832[] =
 {
+	{"aax", aaxAsm, 0 },
 	{"adc", adcAsm, 1 },
 	{"and", andAsm, 1 },
 	{"asl", aslAsm, 1 },
+
 	{"bcc", bccAsm, 1 },
 	{"bcs", bcsAsm, 1 },
 	{"beq", beqAsm, 1 },
+	{"bge", bplAsm, 1 },
 	{"bgeu", bccAsm, 1 },
+	{"bgt", bgtAsm, 1 },
 	{"bit", bitAsm, 1 },
+	{"ble", bleAsm, 1 },
+	{"blt", bmiAsm, 1 },
 	{"bltu", bcsAsm, 1 },
 	{"bmi", bmiAsm, 1 },
 	{"bne", bneAsm, 1 },
@@ -642,16 +732,26 @@ static Mne opsFT832[] =
 	{"dea", deaAsm, 0 },
 	{"dec", decAsm, 1 },
 	{"dex", dexAsm, 0 },
+	{"dex4", dex4Asm, 0 },
 	{"dey", deyAsm, 0 },
+	{"dey4", dey4Asm, 0 },
 	
 	{"eor", eorAsm, 1 },
+	{"fill", fillAsm, 1 },
+	{"fork", forkAsm, 1 },
 
 	{"ina", inaAsm, 0 },
 	{"inc", incAsm, 1 },
+	{"inf", infAsm, 0 },
 
 	{"inx", inxAsm, 0 },
+	{"inx4", inx4Asm, 0 },
 	{"iny", inyAsm, 0 },
+	{"iny4", iny4Asm, 0 },
 
+	{"jci", jciAsm, 0 },
+	{"jcl", jclAsm, 4 },
+	{"jcr", jcrAsm, 2 },
 	{"jmp", jmpAsm, 1 },
 	{"jsf", jsfAsm, 1 },
 	{"jsl", jslAsm, 1 },
@@ -660,7 +760,11 @@ static Mne opsFT832[] =
 	{"lbcc", lbccAsm, 1 },
 	{"lbcs", lbcsAsm, 1 },
 	{"lbeq", lbeqAsm, 1 },
+	{"lbge", lbgeAsm, 1 },
 	{"lbgeu", lbccAsm, 1 },
+	{"lbgt", lbgtAsm, 1 },
+	{"lble", lbleAsm, 1 },
+	{"lblt", lbltAsm, 1 },
 	{"lbltu", lbcsAsm, 1 },
 	{"lbmi", lbmiAsm, 1 },
 	{"lbne", lbneAsm, 1 },
@@ -673,10 +777,10 @@ static Mne opsFT832[] =
     {"ldt", ldtAsm, 1 },
     {"ldx", ldxAsm, 1 },
     {"ldy", ldyAsm, 1 },
-
 	{"lsr", lsrAsm, 1 },
 
 	{"mem", memAsm, 1},
+	{"mul", mulAsm, 0},
 	{"mvn", mvnAsm, 2},
 	{"mvp", mvpAsm, 2},
 
@@ -709,10 +813,12 @@ static Mne opsFT832[] =
 	{"rol", rolAsm, 1 },
 	{"ror", rorAsm, 1 },
 
+	{"rtc", rtcAsm, 1 },
 	{"rtf", rtfAsm, 0 },
 	{"rti", rtiAsm, 0 },
 	{"rtl", rtlAsm, 0 },
 	{"rts", rtsAsm, 0 },
+	{"rtt", rttAsm, 0 },
 
 	{"sbc", sbcAsm, 1 },
 
@@ -739,6 +845,7 @@ static Mne opsFT832[] =
 	{"tsc", tscAsm, 0 },
 	{"tsk", tskAsm, 1 },
 	{"tsx", tsxAsm, 0 },
+	{"tta", ttaAsm, 0 },
 	{"txa", txaAsm, 0 },
 	{"txs", txsAsm, 0 },
 	{"txy", txyAsm, 0 },
@@ -749,6 +856,7 @@ static Mne opsFT832[] =
 	{"wdm", wdmAsm, 0 },
 
 	{"xba", xbaAsm, 0 },
+	{"xbaw", xbawAsm, 0 },
 	{"xce", xceAsm, 0 },
 };
 
