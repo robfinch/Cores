@@ -35,6 +35,7 @@
 `define SUPPORT_TASK	1'b1
 `define TASK_MEM        512
 `define TASK_MEM_ABIT   8
+`define TASK_BL         1'b1                // core uses back link register rather than stack
 `define SUPPORT_SEG     1'b1
 `define ICACHE_4K		1'b1
 //`define ICACHE_16K		1'b1
@@ -409,6 +410,8 @@
 `define RTF			9'h16B
 `define NOP			9'hEA
 `define NOP2        9'h1EA
+`define RTS_IMM     9'h1C0
+`define RTL_IMM     9'h168
 
 `define PLX			9'hFA
 `define PLY			9'h7A
@@ -505,6 +508,7 @@
 `define JCL         9'h182
 `define RTC         9'h140 
 `define JCI         9'h180
+`define TJ          9'h1CB
 
 // Page Two Opcodes
 `define PG2			9'h42
@@ -544,6 +548,8 @@
 `define LDW_TR70    6'd44
 `define LDW_TR158   6'd45
 `define CPY_BUF     6'd46
+`define LDW_TR70S   6'd47
+`define LDW_TR158S  6'd48
 
 `define STW_DEF		6'h1
 `define STW_CS3124  6'd4
@@ -557,6 +563,8 @@
 `define STW_ACC3124 6'd12
 `define STW_ACC2316 6'd13
 `define STW_RES8	6'd14
+`define STW_TR70    6'd15
+`define STW_TR158   6'd16
 `define STW_PC3124	6'd19
 `define STW_PC2316	6'd20
 `define STW_PC158	6'd21
@@ -687,7 +695,7 @@ reg [7:0] cnt;      // icache counter / general counter
 reg [7:0] maxcnt;
 reg [127:0] ir;     // the instruction register
 wire [8:0] ir9 = {pg2,ir[7:0]}; // The first byte of the instruction
-reg [23:0] pc,opc;
+reg [23:0] pc,opc,npc;
 reg pc_cap;                 // pc history capture flag
 `ifdef SUPPORT_SEG
 reg [31:0] ds;              // data segment
@@ -801,6 +809,7 @@ reg isSub;
 reg isJsrIndx,isJsrInd,isJLInd;
 reg isIY,isIY24,isI24,isIY32,isI32;
 reg isDspiy;
+reg cs_prefix,tj_prefix;
 
 wire isCmp = ir9==`CPX_ZPX || ir9==`CPX_ABS || ir9==`CPX_XABS ||
 			 ir9==`CPY_ZPX || ir9==`CPY_ABS || ir9==`CPY_XABS;
@@ -880,7 +889,7 @@ ft832_itagmem uitm1
 
 `ifdef SUPPORT_TASK
 reg [`TASK_MEM_ABIT:0] tr, otr;
-reg [4:0] tsk_pres;                 // register value preservation flags
+reg [5:0] tsk_pres;                 // register value preservation flags
 reg tskm_we;
 reg tskm_wr;
 reg [`TASK_MEM_ABIT:0] tskm_wa;
@@ -959,8 +968,8 @@ always @(posedge clk)
 	else if (state==DECODE) begin
 		isRMW <= isRMW8;
 		isRTI <= ir9==`RTI;
-		isRTL <= ir9==`RTL;
-		isRTS <= ir9==`RTS;
+		isRTL <= ir9==`RTL || ir9==`RTL_IMM;
+		isRTS <= ir9==`RTS || ir9==`RTS_IMM;
 		isRTF <= ir9==`RTF;
 		isBrk <= ir9==`BRK || ir9==`COP;
 		isMove <= ir9==`MVP || ir9==`MVN;
@@ -1177,6 +1186,8 @@ if (~rst) begin
     tskm_we <= FALSE;
     tskm_wr <= FALSE;
     ssm <= FALSE;
+    cs_prefix <= FALSE;
+    tj_prefix <= FALSE;
 end
 else begin
 abort1 <= abort;
@@ -1230,6 +1241,8 @@ IFETCH:
 		s32 <= FALSE;
 		lds <= FALSE;
 		sop <= FALSE;
+		cs_prefix <= FALSE;
+		tj_prefix <= FALSE;
 		bank_wrap <= FALSE;
 		page_wrap <= FALSE;
 `ifdef SUPPORT_SEG
@@ -1279,8 +1292,9 @@ IFETCH:
                 2'd3: acc <= insn[31:0];
                 endcase
                 x <= pc;
-                tr <= bl_o;
                 tsk_pres <= 5'h0C;
+                tr <= back_link;
+                retstate <= IFETCH;
                 next_state(TSK1);
             end
             else
@@ -1692,6 +1706,7 @@ DECODE:
 `ifdef SUPPORT_SEG
 		`CS:  begin
 		      seg <= cs;
+		      cs_prefix <= TRUE;
 		      ir <= {8'h00,ir[127:8]};
 		      pg2 <= FALSE;
 		      next_state(DECODE);
@@ -1717,6 +1732,7 @@ DECODE:
 		      next_state(DECODE);
 		      end
 `endif
+        `TJ:  begin tj_prefix <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
 		`BYT: begin sop <= TRUE; lds <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
 		`UBT: begin sop <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
 		`HAF: begin sop <= TRUE; lds <= TRUE; s16 <= TRUE; ir <= {8'h00,ir[127:8]}; pg2 <= FALSE; next_state(DECODE); end
@@ -1800,7 +1816,14 @@ DECODE:
 		            else if (m16) res32 <= {acc[0],16'b0,cf,acc[15:1]};
 		            else res32 <= {acc[0],24'b0,cf,acc[7:1]};
 `ifdef SUPPORT_SEG
-		`RTF,
+		`RTF,`RTS_IMM,`RTL_IMM:
+			begin
+			    inc_pc(24'd2);
+                inc_sp();
+                seg <= ss;
+                load_what <= `PC_70;
+                state <= LOAD_MAC1;
+            end
 `endif
 		`RTS,`RTL:
 			begin
@@ -1813,12 +1836,29 @@ DECODE:
 			    seg <= ss;
 `ifdef SUPPORT_TASK
 		        if (m832) begin
-                    if (tr != bl_o) begin
-                        set_task_regs(24'd1);
-                        tr <= bl_o;
+                    set_task_regs(24'd1);
+`ifdef TASK_BL
+                    begin
+                        tr <= back_link;
                         tsk_pres <= 5'h0;
-                        state <= TSK1;
-                    end 
+                        retstate <= IFETCH;
+                        next_state(TSK1);
+                    end
+`else
+                    begin
+                        if (m832)
+                            sp_i <= sp + 32'd2;
+                        else if (m816)
+                            sp_i <= {stack_bank,sp16 + 16'd2};
+                        else
+                            sp_i <= {stack_page,sp[7:0] + 8'd2};
+                        inc_sp();
+                        seg <= ss;
+                        tsk_pres <= 5'd0;
+                        load_what <= `LDW_TR70S;
+                        state <= LOAD_MAC1;
+                    end
+`endif
                 end
                 else
 `endif
@@ -3143,11 +3183,11 @@ DECODE:
                 if (m832) begin
 `ifdef SUPPORT_TASK
                     if (TASK_VECTORING) begin
+                        seg <= 32'd0;
                         radr <= vect;
+                        otr <= tr;
                         load_what <= `LDW_TR70;
-                        data_read(vect,1);
-                        vpb <= TRUE;
-                        next_state(LOAD_MAC2);
+                        next_state(LOAD_MAC1);
                     end
                     else begin
                         set_sp();
@@ -3337,22 +3377,35 @@ DECODE:
                 inc_pc(24'd3);
                 if (tr != ir[`TASK_MEM_ABIT+8:8]) begin
                     set_task_regs(24'd3);
-                    tr <= ir[`TASK_MEM_ABIT+8:8];
+                    otr <= tr;
                     back_link <= tr;
-                    tsk_pres <= 5'h0;
-                    state <= TSK1;
+                    tr <= ir[`TASK_MEM_ABIT+8:8];
+                    tsk_pres <= 6'h20;
+                    store_what <= `STW_TR158;
+                    next_state(TSK1);
+`ifdef TASK_BL
                     retstate <= ssm ? SSM1 : IFETCH;
+`else
+                    retstate <= tj_prefix ? IFETCH : STORE1;
+`endif
+                    //retstate <= ssm ? SSM1 : IFETCH;
                 end
             end
         `TSK_ACC:
             begin
                 if (tr != acc[`TASK_MEM_ABIT:0]) begin
                     set_task_regs(24'd1);
-                    tr <= acc[`TASK_MEM_ABIT:0];
+                    otr <= tr;
                     back_link <= tr;
-                    tsk_pres <= 5'h0;
-                    state <= TSK1;
+                    tr <= acc[`TASK_MEM_ABIT:0];
+                    tsk_pres <= 6'h20;
+                    store_what <= `STW_TR158;
+                    next_state(TSK1);
+`ifdef TASK_BL
                     retstate <= ssm ? SSM1 : IFETCH;
+`else
+                    retstate <= tj_prefix ? IFETCH : STORE1;
+`endif
                 end
             end
         `FORK_IMM:
@@ -3360,27 +3413,58 @@ DECODE:
                 inc_pc(24'd3);
                 if (tr != ir[`TASK_MEM_ABIT+8:8]) begin
                     set_task_regs(24'd3);
+                    otr <= tr;
                     back_link <= tr;
                     tr <= ir[`TASK_MEM_ABIT+8:8];
+`ifdef TASK_BL
+                    next_state(ssm ? SSM1 : IFETCH);
+`else
+                    set_sp();
+                    seg <= ss;
+                    store_what <= `STW_TR158;
+                    if (!tj_prefix)
+                        next_state(STORE1);
+`endif
                 end
             end
         `FORK_ACC:
             begin
                 if (tr != acc[`TASK_MEM_ABIT:0]) begin
                     set_task_regs(24'd1);
+                    otr <= tr;
                     back_link <= tr;
                     tr <= acc[`TASK_MEM_ABIT:0];
+`ifdef TASK_BL
+                    next_state(ssm ? SSM1 : IFETCH);                    
+`else
+                    set_sp();
+                    seg <= ss;
+                    store_what <= `STW_TR158;
+                    if (!tj_prefix)
+                        next_state(STORE1);
+`endif
                 end
             end
-        `RTT:
+		`RTT:
             begin
-                if (tr != bl_o) begin
-                    set_task_regs(24'd1);
-                    tr <= bl_o;
-                    tsk_pres <= 5'd0;
-                    state <= TSK1;
-                    retstate <= ssm ? SSM1 : IFETCH;
-                end
+                set_task_regs(24'd1);
+                tsk_pres <= 6'd0;
+`ifdef TASK_BL
+                tr <= back_link;
+                retstate <= ssm ? SSM1 : IFETCH;
+                next_state(TSK1);
+`else
+                if (m832)
+                    sp_i <= sp + 32'd2;
+                else if (m816)
+                    sp_i <= {stack_bank,sp16 + 16'd2};
+                else
+                    sp_i <= {stack_page,sp[7:0] + 8'd2};
+                inc_sp();
+                seg <= ss;
+                load_what <= `LDW_TR70S;
+                state <= LOAD_MAC1;
+`endif
             end
         `LDT_XABS:
             begin
@@ -3401,6 +3485,7 @@ DECODE:
                 inc_pc(24'd7);
                 if (tr != ir[`TASK_MEM_ABIT+32:32]) begin
                     set_task_regs(24'd7);
+                    otr <= tr;
                     back_link <= tr;
                     tr <= ir[`TASK_MEM_ABIT+32:32];
                     pc <= ir[31:8];
@@ -3408,10 +3493,12 @@ DECODE:
                     if (ir[55]) begin
                         tsk_pres[3:0] <= 4'hF;
                         tsk_pres[4] <= TRUE;
+                        tsk_pres[5] <= TRUE;
                     end
                     else begin
                         tsk_pres[3:0] <= 4'h0;
                         tsk_pres[4] <= TRUE;
+                        tsk_pres[5] <= TRUE;
                     end
                     if (ir[52:48] > 5'd0) begin
                         cnt <= 8'h00;
@@ -3424,7 +3511,12 @@ DECODE:
                     end
                     else begin 
                         state <= TSK1;
+`ifdef TASK_BL
                         retstate <= ssm ? SSM1 : IFETCH;
+`else                        
+                        store_what <= `STW_TR158;
+                        retstate <= tj_prefix ? IFETCH : STORE1;
+`endif
                     end
                 end
             end
@@ -3433,39 +3525,63 @@ DECODE:
                 inc_pc(24'd4);
                 if (tr != {8'h00,ir[31:24]}) begin
                     set_task_regs(24'd4);
+                    otr <= tr;
                     back_link <= tr;
                     tr <= {8'h00,ir[31:24]};
                     pc <= {8'h00,ir[23:8]};
                     tsk_pres[3:0] <= 4'hF;
                     tsk_pres[4] <= TRUE;
+                    tsk_pres[5] <= TRUE;
                     state <= TSK1;
+`ifdef TASK_BL
                     retstate <= ssm ? SSM1 : IFETCH;
+`else
+                    store_what <= `STW_TR158;
+                    retstate <= tj_prefix ? IFETCH : STORE1;
+`endif
                 end
             end
         `JCI:
             begin
                 if (tr != {8'h00,acc[31:24]}) begin
                     set_task_regs(24'd1);
+                    otr <= tr;
                     back_link <= tr;
                     tr <= {8'h00,acc[31:24]};
                     pc <= acc[23:0];
                     tsk_pres[3:0] <= 4'hF;
                     tsk_pres[4] <= TRUE;
+                    tsk_pres[5] <= TRUE;
                     state <= TSK1;
+`ifdef TASK_BL
                     retstate <= ssm ? SSM1 : IFETCH;
+`else
+                    store_what <= `STW_TR158;
+                    retstate <= tj_prefix ? IFETCH : STORE1;
+`endif
                 end
             end
-        `RTC:
+		`RTC:
             begin
                 inc_pc(24'd2);
-                if (tr != bl_o) begin
-                    set_task_regs(24'd2);
-                    sp_i <= sp + ir[15:8];
-                    tr <= bl_o;
-                    state <= TSK1;
-                    tsk_pres <= 5'hF;
-                    retstate <= ssm ? SSM1 : IFETCH;
-                end
+                set_task_regs(24'd2);
+                tsk_pres <= 6'hF;
+`ifdef TASK_BL
+                tr <= back_link;
+                next_state(TSK1);
+                retstate <= ssm ? SSM1 : IFETCH;
+`else
+                if (m832)
+                    sp_i <= sp + ir[15:8] + 32'd2;
+                else if (m816)
+                    sp_i <= {stack_bank,sp16 + ir[15:8] + 16'd2};
+                else
+                    sp_i <= {stack_page,sp[7:0] + ir[15:8] + 8'd2};
+                inc_sp();
+                seg <= ss;
+                load_what <= `LDW_TR70S;
+                state <= LOAD_MAC1;
+`endif
             end
 `endif
         `FILL:
@@ -3473,7 +3589,8 @@ DECODE:
                 mvndst_bank <= ir[15:8];
                 wadr <= mvndst_address;
                 store_what <= `STW_X70;
-                pc <= pc - 24'd1;   // back up to the page 2 prefix
+                npc <= PC24 ? pc + 24'd2 : {pc[23:16],pc[15:0]+16'd2};
+                pc <= opc;      // override increment above
                 next_state(STORE1);
             end
 `endif
@@ -3483,7 +3600,8 @@ DECODE:
                 mvnsrc_bank <= ir[23:16];
                 radr <= mvnsrc_address;
                 load_what <= `BYTE_72;
-                pc <= pc;       // override increment above
+                npc <= PC24 ? pc + 24'd3 : {pc[23:16],pc[15:0]+16'd3};
+                pc <= opc;       // override increment above
                 state <= LOAD_MAC1;
             end
 `ifdef SUPPORT_NEW_INSN
@@ -3556,9 +3674,16 @@ TSK1:
         ssm <= srx_o[4];
         dbr <= dbr_o;
         dpr <= dpr_o;
-        if (retstate==STORE1)
-            set_sp();
-        next_state(retstate);
+        if (!tsk_pres[5]) back_link <= bl_o;
+        if (!srx_o[2]) begin
+            if (retstate==STORE1) begin
+                set_sp();
+                seg <= ss;
+            end
+            next_state(retstate);
+        end
+        else
+            moveto_ifetch();
     end
 LDT1:
     begin
@@ -3658,7 +3783,7 @@ LOAD_MAC2:
             `BYTE_72:
                         begin
                             wdat[7:0] <= db;
-                            radr <= mvndst_address;
+                            radr <= mvnsrc_address;
                             wadr <= mvndst_address;
                             store_what <= `STW_DEF70;
                             if (m832)
@@ -3876,11 +4001,40 @@ LOAD_MAC2:
                                set_task_regs(hwi ? 24'd0 : 24'd2);
                                tr <= {db,b32[7:0]};
                                back_link <= tr;
+                               tsk_pres <= 6'h20;
                                state <= TSK1;
+`ifdef TASK_BL
+                               retstate <= IFETCH;
+`else                               
+                               store_what <= `STW_TR158;
+                               retstate <= STORE1;
+`endif
                            end
                            else
                                next_state(IFETCH);
                         end
+`ifndef TASK_BL
+             `LDW_TR70S:
+                        begin
+                           tr[7:0] <= db;
+                           load_what <= `LDW_TR158S;
+                           inc_sp();
+                           if (DEAD_CYCLE) begin
+                               data_nack();
+                               next_state(LOAD_MAC1);
+                           end
+                           else begin
+                               data_read(fn_sp_inc(sp_inc),0);
+                               state <= LOAD_MAC2;
+                           end
+                        end
+             `LDW_TR158S:
+                       begin
+                          tr[`TASK_MEM_ABIT:8] <= db;
+                          next_state(TSK1);
+                          retstate <= ssm ? SSM1 : IFETCH;
+                       end
+`endif
 `endif
              `PC_70:        begin
                             pc[7:0] <= db;
@@ -4086,6 +4240,14 @@ LOAD_MAC2:
 `endif
 RTS1:
     begin
+        if (ir9==`RTL_IMM || ir9==`RTS_IMM || ir9==`RTF) begin
+            if (m832)
+                sp <= sp + ir[15:8];
+            else if (m816)
+                sp[15:0] <= sp[15:0] + ir[15:8];
+            else
+                sp[7:0] <= sp[7:0] + ir[15:8];
+        end
         inc_pc(24'd1);
         moveto_ifetch();
     end
@@ -4186,7 +4348,11 @@ STORE1:
 		`STW_IA2316:	data_write(wadr,ia[23:16],0);
 		`STW_IA158:		begin data_write(wadr,ia[15:8],0); mlb <= 1'b1; end
 		`STW_IA70:		data_write(wadr,ia,0);
+`ifdef SUPPORT_TASK
+        `STW_TR158:     begin data_write(wadr,otr[`TASK_MEM_ABIT:8],1); mlb <= 1'b1; end
+        `STW_TR70:      data_write(wadr,otr[7:0],0);
 		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt],0); mlb <= maxcnt > 8'd1; end
+`endif
 		default:	data_write(wadr,wdat,0);
 		endcase
 `ifdef SUPPORT_DCACHE
@@ -4238,8 +4404,24 @@ STORE2:
                         state <= STORE2;
                     end
 		        end
-		        else
-		            moveto_ifetch();
+		        else begin
+`ifdef TASK_BL
+                    moveto_ifetch();
+`else
+		            if (tj_prefix)
+		               moveto_ifetch();
+		            else begin
+    		            store_what <= `STW_TR158;
+    		            set_sp();
+                        if (DEAD_CYCLE)
+                            next_state(STORE1);
+                        else begin
+                            data_write(fn_get_sp(sp),otr[`TASK_MEM_ABIT:8],0);
+                            next_state(STORE2);
+    		            end
+		            end
+`endif
+		        end
 		    end
 		`STW_DEF70:
 			begin
@@ -4473,6 +4655,28 @@ STORE2:
 				store_what <= `STW_DPR158;
 				state <= STORE1;
 			end
+`ifdef SUPPORT_TASK
+`ifndef TASK_BL
+		`STW_TR158:
+            begin
+                mlb <= `TRUE;
+                set_sp();
+                if (DEAD_CYCLE) begin
+                    data_nack();
+                    next_state(STORE1);
+                end
+                else begin
+                    data_write(fn_get_sp(sp),otr[7:0],0);
+                    next_state(STORE2);
+                end
+                store_what <= `STW_TR70;
+            end
+        `STW_TR70:
+            begin
+                moveto_ifetch();
+            end
+`endif
+`endif
 `ifdef SUPPORT_SEG
 		`STW_DS70:
 		    begin
@@ -4808,12 +5012,12 @@ MVN816:
 		moveto_ifetch();
 		if (m832) begin
             if (&acc) begin
-                pc <= pc + 24'd3;
+                pc <= npc;
             end
 		end
 		else begin
             if (&acc[15:0]) begin
-                pc <= pc + 24'd3;
+                pc <= npc;
                 dbr <= mvndst_bank;
             end
 		end
@@ -4821,11 +5025,19 @@ MVN816:
 SSM1:
     begin
         set_task_regs(24'd0);
+        otr <= tr;
+        back_link <= tr; 
         tr <= 16'd3;        // single step task
-        tsk_pres <= 5'hC;
+        tsk_pres <= 6'h2C;
         acc <= tr;
         x <= pc;
-        retstate <= IFETCH; // Do not switch on SSM here
+`ifndef TASK_BL
+        seg <= ss;
+        store_what <= `STW_TR158;
+        retstate <= STORE1; // Do not switch on SSM here
+`else
+        retstate <= IFETCH; 
+`endif
         next_state(TSK1);
     end
 
@@ -4906,11 +5118,13 @@ input [31:0] adr;
 input [7:0] dat;
 input first;
 begin
-	vpa <= `FALSE;
-	vda <= `TRUE;
-	rwo <= `FALSE;
-	ado <= seg + adr;
-	dbo <= dat;
+    if (!cs_prefix) begin
+        vpa <= `FALSE;
+        vda <= `TRUE;
+        rwo <= `FALSE;
+        ado <= seg + adr;
+        dbo <= dat;
+	end
 end
 endtask
 

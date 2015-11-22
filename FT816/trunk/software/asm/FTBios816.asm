@@ -104,9 +104,10 @@ PCS3		EQU		PCS2 + 2
 PCS4	    EQU		PCS3 + 2
 PCS5		EQU		PCS4 + 2
 CTR0_LMT	EQU		PCS0 + 16
-CTR0_CTRL	EQU		CTR_LMT + 3
+CTR0_CTRL	EQU		CTR0_LMT + 3
 CTR1_LMT	EQU		CTR0_CTRL + 1
 CTR1_CTRL	EQU		CTR1_LMT + 3
+MPU_IRQ_STATUS	EQU		$B01F
 
 VIDBUF		EQU		$FD0000
 VIDREGS		EQU		$FEA000
@@ -181,6 +182,12 @@ start:
 	NDX 	16
 	MEM		16
 
+;	FORK	#7			; fork a BIOS context
+;	TTA
+;	CMP		#7
+;	BNE		.0002
+;	RTT
+;.0002:
 	; Setup the task registers
 	LDY		#6			; # tasks to setup
 	LDX		#1
@@ -215,7 +222,6 @@ Task0:
 	STA		$7000
 	PEA		msgStarting
 	JSR		DisplayString
-	PLA
 	LDA		#0
 	STA		FAC1
 	STA		FAC1+2
@@ -231,10 +237,10 @@ Task0:
 	JSR		FAC1ToString
 	PEA		$3A0
 	JSR		DisplayString
-	PLA
 	LDA		#' '
 	JSR		OutChar
 	JSR		DispFAC1
+	SEI
 	FORK	#7			; fork a BIOS context
 	TTA
 	CMP		#7
@@ -245,6 +251,7 @@ Task0:
 	TTA
 	CMP		#11
 	LBEQ	KeybdInit
+	CLI
 
 Mon1:
 .mon1:
@@ -285,6 +292,8 @@ Mon1:
 	LBEQ	doDisassemble
 	CMP		#'>'
 	LBEQ	doMemoryEdit
+	CMP		#'F'
+	LBEQ	doFill
 	CMP		#'J'
 	LBEQ	doJump
 	CMP		#'T'
@@ -313,6 +322,11 @@ MonGetch:
 	AND		#$FF
 	JSR		ScreenToAscii
 	RTS
+
+MonErr:
+	PEA		msgErr
+	JSR		DisplayString
+	BRL		Mon1
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -474,7 +488,6 @@ doRegs:
 DispRegs:
 	PEA		msgRegs
 	JSR		DisplayString
-	PLA
 	JSR		space
 
 	LDA		WorkTR
@@ -538,7 +551,6 @@ DispRegs:
 
 	PEA		msgRegs2
 	JSR		DisplayString
-	PLA
 	JSR		space
 
 	; Display DS
@@ -668,7 +680,7 @@ doMemoryDump:
 	LDA		RangeEnd+2
 	SBC		RangeStart+2
 	PHP
-	JSR		KeybdGetCharNoWait
+	JCR		KeybdGetCharNoWaitCtx,7
 	CMP		#CTRLC
 	BEQ		.0009
 	PLP
@@ -711,6 +723,46 @@ doMemoryEdit:
 	BRL		Mon1
 .0002:
 	PLY
+	BRL		Mon1
+
+;------------------------------------------------------------------------------
+; Fill memory.
+; $F <start address> <end address> <val1>
+;------------------------------------------------------------------------------
+
+doFill:
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	MonErr
+	LDA		NumWorkArea
+	STA		RangeStart
+	LDA		NumWorkArea+2
+	STA		RangeStart+2
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	MonErr
+	LDA		NumWorkArea
+	STA		RangeEnd
+	LDA		NumWorkArea+2
+	STA		RangeEnd+2
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	MonErr
+	LDX		NumWorkArea
+	; Process in 32 bit mode
+	SEP		#$200
+	REP		#$100
+	LDA		RangeEnd
+	SEC
+	SBC		RangeStart
+	LDY		RangeStart
+	FIL		$00
+	; Back to 16 bits mode
+	REP		#$200
+	SEP		#$100
 	BRL		Mon1
 
 ;------------------------------------------------------------------------------
@@ -878,6 +930,7 @@ SSMTask:
 .0004:
 	LDA		#'S'
 	JSR		OutChar
+	LDA		#'S'
 	JSR		OutChar
 	LDA		#'M'
 	JSR		OutChar
@@ -1241,7 +1294,7 @@ DisplayString:
 	PLP							; restore regs settings
 ;	REP		#$20				; ACC 16 bits
 	MEM		16
-	RTS
+	RTS		#2					; pop stack argument
 
 DisplayString2:
 	PLA							; pop return address
@@ -1539,7 +1592,6 @@ KeybdInit:
 	REP		#$30
 	PEA		msgKeybdNR
 	JSR		DisplayString
-	PLA
 	RTT
 	BRA		KeybdService
 .0004:
@@ -2044,6 +2096,10 @@ SuperPutch:
 	RTS
 
 warm_start:
+	SEP		#$100		; 16 bit mode
+	REP		#$30		; 16 bit MEM,NDX
+	MEM		16
+	NDX		16
 	LDA		#$3FFF
 	TAS
 	JSR		CursorOn
@@ -2073,18 +2129,18 @@ Task1:
 	REP		#$30
 	NDX		16
 	MEM		16
-	LDA		$F01F		; check if counter expired
+	LDA		MPU_IRQ_STATUS	; check if counter expired
 	BIT		#2
 	BEQ		.0001
-	LDA		TickCount	; increment the tick count
+	LDA		TickCount		; increment the tick count
 	INA
 	STA		TickCount
-	STA		$FD00A4		; update on-screen IRQ live indicator
+	STA.B	$FD00A4			; update on-screen IRQ live indicator
 	SEP		#$30
 	NDX		8
 	MEM		8
-	LDA		#$05		; count down, on mpu clock, irq enabled (clears irq)
-	STA		$F017
+	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
+	STA		CTR1_CTRL
 .0001:
 	REP		#$30
 	NDX		16
@@ -2104,15 +2160,15 @@ IRQTask:
 	MEM		8
 	NDX		32
 IRQTask1:
-	LDA		$F01F		; check if counter expired
+	LDA		MPU_IRQ_STATUS	; check if counter expired
 	BIT		#2
 	BEQ		.0001
-	LDX		TickCount	; increment the tick count
+	LDX		TickCount		; increment the tick count
 	INX
 	STX		TickCount
-	STX.H	$FD00A2		; update on-screen IRQ live indicator
-	LDA		#$05		; count down, on mpu clock, irq enabled (clears irq)
-	STA		$F017
+	STX.B	$FD00A2			; update on-screen IRQ live indicator
+	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
+	STA		CTR1_CTRL
 .0001:
 ;	BIT		do_invaders
 ;	BPL		.0002
@@ -2376,6 +2432,8 @@ msgRegs:
 msgRegs2:
 	.byte	CR,LF
 	.byte	"    DS    DB  DP   BL",CR,LF,0
+msgErr:
+	.byte	"***Err",CR,LF,0
 
 	cpu		FT832
 	MEM		32
