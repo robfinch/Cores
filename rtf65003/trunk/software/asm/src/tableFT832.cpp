@@ -146,6 +146,8 @@ static Opa bvcAsm[] = {	{AsmFT832::br, 0x50, 1}, NULL };
 static Opa bvsAsm[] = {	{AsmFT832::br, 0x70, 1}, NULL };
 static Opa braAsm[] = {	{AsmFT832::br, 0x80, 1}, NULL };
 static Opa brlAsm[] = {	{AsmFT832::brl, 0x82, 1}, NULL };
+static Opa bsrAsm[] = {	{AsmFT832::brl, 0x4228, 1}, NULL };
+static Opa bslAsm[] = {	{AsmFT832::bsl, 0x4248, 1}, NULL };
 static Opa brkAsm[] = {	{Asm6502::out8, 0x00, 0}, NULL };
 static Opa bltAsm[] = {	{AsmFT832::br, 0x4230, 1}, NULL };
 static Opa bleAsm[] = {	{AsmFT832::br, 0x42B0, 1}, NULL };
@@ -269,13 +271,19 @@ static Opa phdsAsm[] = { {Asm6502::out16, 0x0B42}, NULL };
 static Opa pldsAsm[] = { {Asm6502::out16, 0x2B42}, NULL };
 
 static Opa rtiAsm[] = { {Asm6502::out8, 0x40}, NULL };
-static Opa rtsAsm[] = { {Asm6502::out8, 0x60}, NULL };
-static Opa rtlAsm[] = { {Asm6502::out8, 0x6B}, NULL };
-static Opa rtfAsm[] = { {Asm6502::out16, 0x6B42}, NULL };
-static Opa rttAsm[] = { {Asm6502::out16, 0x6042}, NULL };
-static Opa rtcAsm[] = { {AsmFT832::rtc, 0x4042, 1, AM_IMM, 4},
-                        {AsmFT832::rtc, 0x4042, 1, AM_IMM4, 4},
-                        {AsmFT832::rtc, 0x4042, 1, AM_IMM8, 4},
+static Opa rtsAsm[] = { {Asm6502::out8, 0x60},
+                        {AsmFT832::imm, 0x42C0, 1, AM_IMM},
+                          NULL };
+static Opa rtlAsm[] = { {Asm6502::out8, 0x6B},
+                        {AsmFT832::imm, 0x4268, 1, AM_IMM},
+                          NULL };
+static Opa rtfAsm[] = { {Asm6502::out16, 0x6B42},
+                        {AsmFT832::imm, 0x4260, 1, AM_IMM},
+                         NULL };
+static Opa rttAsm[] = { {Asm6502::out16, 0x6042},NULL };
+static Opa rtcAsm[] = { {AsmFT832::rtc, 0x4240, 1, AM_IMM, 4},
+                        {AsmFT832::rtc, 0x4240, 1, AM_IMM4, 4},
+                        {AsmFT832::rtc, 0x4240, 1, AM_IMM8, 4},
                         NULL };
 
 static Opa taxAsm[] = { {Asm6502::out8, 0xAA}, NULL };
@@ -305,6 +313,9 @@ static Opa iny4Asm[] = { {Asm6502::out16, 0xC842}, NULL };
 static Opa mulAsm[] = { {Asm6502::out16, 0x2A42}, NULL };
 static Opa aaxAsm[] = { {Asm6502::out16, 0x8A42}, NULL };
 static Opa jciAsm[] = { {Asm6502::out16, 0x8042}, NULL };
+static Opa sduAsm[] = { {Asm6502::out16, 0xBA42}, NULL };
+static Opa tassAsm[] = { {Asm6502::out16, 0x5A42}, NULL };
+static Opa tssaAsm[] = { {Asm6502::out16, 0x7A42}, NULL };
 
 
 
@@ -614,6 +625,12 @@ static Opa jmpAsm[] =
 		NULL
 	};
 
+    static Opa jmfAsm[] =
+    {
+    	{AsmFT832::jsegoffs, 0x425C, 1, AM_SEG},
+		NULL
+    };
+
     static Opa jsfAsm[] =
     {
     	{AsmFT832::jsegoffs, 0x4220, 1, AM_SEG},
@@ -691,6 +708,14 @@ static Opa jclAsm[] =
     NULL
 };
 
+static Opa jcfAsm[] =
+{
+	{AsmFT832::jcf, 0x4262, 4, (AM_SEG<<24)|(AM_Z<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcf, 0x4262, 4, (AM_SEG<<24)|(AM_A<<16)|(AM_Z<<8)|AM_Z, 4},
+	{AsmFT832::jcf, 0x4262, 4, (AM_SEG<<24)|(AM_A<<16)|(AM_Z<<8)|AM_IMM, 4},
+    NULL
+};
+
 static Mne opsFT832[] =
 {
 	{"aax", aaxAsm, 0 },
@@ -714,6 +739,8 @@ static Mne opsFT832[] =
 	{"bra", braAsm, 1 },
 	{"brk", brkAsm, 1 },
 	{"brl", brlAsm, 1 },
+	{"bsl", bslAsm, 1 },
+	{"bsr", bsrAsm, 1 },
 	{"bvc", bvcAsm, 1 },
 	{"bvs", bvsAsm, 1 },
 
@@ -737,7 +764,7 @@ static Mne opsFT832[] =
 	{"dey4", dey4Asm, 0 },
 	
 	{"eor", eorAsm, 1 },
-	{"fill", fillAsm, 1 },
+	{"fil", fillAsm, 1 },
 	{"fork", forkAsm, 1 },
 
 	{"ina", inaAsm, 0 },
@@ -749,9 +776,11 @@ static Mne opsFT832[] =
 	{"iny", inyAsm, 0 },
 	{"iny4", iny4Asm, 0 },
 
+	{"jcf", jcfAsm, 4 },
 	{"jci", jciAsm, 0 },
 	{"jcl", jclAsm, 4 },
 	{"jcr", jcrAsm, 2 },
+	{"jmf", jmfAsm, 1 },
 	{"jmp", jmpAsm, 1 },
 	{"jsf", jsfAsm, 1 },
 	{"jsl", jslAsm, 1 },
@@ -814,14 +843,15 @@ static Mne opsFT832[] =
 	{"ror", rorAsm, 1 },
 
 	{"rtc", rtcAsm, 1 },
-	{"rtf", rtfAsm, 0 },
+	{"rtf", rtfAsm, 1 },
 	{"rti", rtiAsm, 0 },
-	{"rtl", rtlAsm, 0 },
-	{"rts", rtsAsm, 0 },
+	{"rtl", rtlAsm, 1 },
+	{"rts", rtsAsm, 1 },
 	{"rtt", rttAsm, 0 },
 
 	{"sbc", sbcAsm, 1 },
 
+	{"sdu", sduAsm, 0 },
 	{"sec", secAsm, 0 },
 	{"sed", sedAsm, 0 },
 	{"sei", seiAsm, 0 },
@@ -834,6 +864,7 @@ static Mne opsFT832[] =
 	{"stz", stzAsm, 1 },
 
 	{"tas", tcsAsm, 0 },
+	{"tass", tassAsm, 0 },
 	{"tax", taxAsm, 0 },
 	{"tay", tayAsm, 0 },
 	{"tcd", tcdAsm, 0 },
@@ -844,6 +875,7 @@ static Mne opsFT832[] =
 	{"tsb", tsbAsm, 1 },
 	{"tsc", tscAsm, 0 },
 	{"tsk", tskAsm, 1 },
+	{"tssa", tssaAsm, 0 },
 	{"tsx", tsxAsm, 0 },
 	{"tta", ttaAsm, 0 },
 	{"txa", txaAsm, 0 },

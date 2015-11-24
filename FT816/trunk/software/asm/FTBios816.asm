@@ -65,7 +65,8 @@ EscState	EQU		$3C
 
 reg_cs		EQU		$80
 reg_ds		EQU		reg_cs + 4
-reg_pc		EQU		reg_ds + 4
+reg_ss		EQU		reg_ds + 4
+reg_pc		EQU		reg_ss + 4
 reg_a		EQU		reg_pc + 4
 reg_x		EQU		reg_a + 4
 reg_y		EQU		reg_x + 4
@@ -88,11 +89,11 @@ srx_save	EQU		$A4
 db_save		EQU		$A8
 dpr_save	EQU		$AC
 
-running_task	EQU		$B4
+running_task	EQU		$B8
 
-keybd_char	EQU		$B6
-keybd_cmd	EQU		$B8
-WorkTR		EQU		$BA
+keybd_char	EQU		$BA
+keybd_cmd	EQU		$BC
+WorkTR		EQU		$BE
 ldtrec		EQU		$100
 
 OutputVec	EQU		$03F0
@@ -143,6 +144,57 @@ start:
 	REP		#$30		; set 16 bit regs & mem
 	NDX 	16
 	MEM		16
+
+	; Setup all the segment descriptors
+	; This must be done before the stack can be accessed, and
+	; before subroutine calls and task switching can be made.
+
+	; First setup segment #0, the segment the core starts running under.
+	; It's setup for flat addressing.
+	LDA		#0
+	XBAW
+	LDA		#0
+	LDX		#$98D		; present, writeable, executable, max size.
+	TAY
+	SDU
+	INY
+
+	; Flag remaining segments as not present 
+	LDX		#$000		; not present, non-executable, non-writeable, min size
+.0003:
+	SDU					; update segment descriptor
+	INY
+	CPY		#4096
+	BNE		.0003
+
+	; setup code segment #1
+	LDX		#$904		; executable, 64k
+	TAY
+	INY
+	SDU
+	; setup data segment #2
+	LDX		#$88A		; writeable, 256M
+	INY
+	SDU
+	; setup stack segment #3 (for 65c02 mode)
+	LDX		#$881		; writeable, 1k (based at zero)
+	INY
+	SDU
+	; setup stack segment #4 (for 65c816 mode)
+	LDX		#$884		; writeable, 64k (based at zero)
+	INY
+	SDU
+	; seg #5 is the maxed out segment
+	LDX		#$98D		; executable, writable, max size
+	INY
+	SDU
+	; now set the code segment (test far jump)
+	JMF		1:.0004
+.0004:
+	; set the stack segment
+	; (must be before PEA/PLDS)
+	LDA		#4
+	TASS
 	LDA		#$3FFF		; set top of stack
 	TAS
 
@@ -155,6 +207,11 @@ start:
 ;	STA		PCS3
 	LDA		#$0000		; select zero page ram
 	STA		PCS5
+
+	; set the data segment
+	; this must be setup after address decoding is setup
+	PEA		2
+	PLDS
 
 	; Setup the counters
 	SEP		#$30		; set 8 bit regs
@@ -205,7 +262,7 @@ start:
 	STZ		TickCount
 	STZ		TickCount+2
 Task0:
-	CLI
+;	CLI
 .0001:
 	LDA		#DisplayChar
 	STA		OutputVec
@@ -245,13 +302,15 @@ Task0:
 	TTA
 	CMP		#7
 	BNE		.0002
+	LDX		#$23FF
+	TXS
 	RTT
 .0002:
 	FORK	#11
 	TTA
 	CMP		#11
 	LBEQ	KeybdInit
-	CLI
+;	CLI
 
 Mon1:
 .mon1:
@@ -287,7 +346,10 @@ Mon1:
 	BRA		.mon1
 .mon5:
 	CMP		#'M'
-	LBEQ	doMemoryDump
+	BNE		.mon6
+	JSR		doMemoryDump
+	BRA		Mon1
+.mon6:
 	CMP		#'D'
 	LBEQ	doDisassemble
 	CMP		#'>'
@@ -302,7 +364,7 @@ Mon1:
 	LBEQ	doInvaders
 	CMP		#'R'
 	LBEQ	doRegs
-	BRA		Mon1
+	BRL		Mon1
 
 ; Get a character from the screen, skipping over spaces and tabs
 ;
@@ -482,7 +544,7 @@ doRegs:
 	LBEQ	Mon1
 	LDA		NumWorkArea
 	STA		WorkTR
-	JSR		DispRegs
+	BSR		DispRegs
 	BRL		Mon1
 
 DispRegs:
@@ -505,26 +567,24 @@ DispRegs:
 	XBAW
 	STA		reg_cs+2,Y
 	INY4
-	CPY		#44
+	CPY		#48
 	BNE		.0001
 
 	; Display CS
-	LDA		reg_cs+2
-	JSR		DispWord
 	LDA		reg_cs
 	JSR		DispWord
 	LDA		#':'
 	JSR		OutChar
 
 	; Display PB PC
-	LDA		reg_cs+10
+	LDA		reg_pc+2
 	JSR		DispByte
-	LDA		reg_cs+8
+	LDA		reg_pc
 	JSR		DispWord
 	JSR		space
 
 	; Display SRX,SR
-	LDA		reg_cs+28
+	LDA		reg_cs+32
 	LDX		#16
 .0003:
 	ASL
@@ -537,7 +597,7 @@ DispRegs:
 	BNE		.0003
 	JSR		space
 
-	LDX		#12
+	LDX		#16
 .0002
 	; display Acc,.X,.Y,.SP
 	LDA		reg_cs+2,X
@@ -546,32 +606,35 @@ DispRegs:
 	JSR		DispWord
 	JSR		space
 	INX4
-	CPX		#28
+	CPX		#32
 	BNE		.0002
 
 	PEA		msgRegs2
 	JSR		DisplayString
 	JSR		space
 
-	; Display DS
-	LDA		reg_cs+6
+	; Display SS
+	LDA		reg_ss
 	JSR		DispWord
-	LDA		reg_cs+4
+	JSR		space
+
+	; Display DS
+	LDA		reg_ds
 	JSR		DispWord
 	JSR		space
 
 	; Display DB
-	LDA		reg_cs+32
+	LDA		reg_db
 	JSR		DispByte
 	JSR		space
 
 	; Display DPR
-	LDA		reg_cs+36
+	LDA		reg_dp
 	JSR		DispWord
 	JSR		space
 
 	; Display back link
-	LDA		reg_cs+40
+	LDA		reg_bl
 	JSR		DispWord
 
 	JSR		OutCRLF
@@ -583,14 +646,12 @@ DispRegs:
 BuildRec:
 	LDA		reg_cs
 	STA		ldtrec
-	LDA		reg_cs+2
-	STA		ldtrec+2
 	LDA		reg_ds
+	STA		ldtrec+2
+	LDA		reg_ss
 	STA		ldtrec+4
-	LDA		reg_ds+2
-	STA		ldtrec+6
 	LDA		reg_pc
-	STA		ldtrec+8
+	STA		ldtrec+6
 	LDA		reg_pc+2
 	AND		#$FF
 	SEP		#$30		; 8 bit regs
@@ -600,32 +661,32 @@ BuildRec:
 	XBA
 	REP		#$30
 	MEM		16
-	STA		ldtrec+10
+	STA		ldtrec+8
 	LDA		reg_a+1
-	STA		ldtrec+12
+	STA		ldtrec+10
 	LDA		reg_a+3
-	STA		ldtrec+14
+	STA		ldtrec+12
 	LDA		reg_x+1
-	STA		ldtrec+16
+	STA		ldtrec+14
 	LDA		reg_x+3
-	STA		ldtrec+18
+	STA		ldtrec+16
 	LDA		reg_y+1
-	STA		ldtrec+20
+	STA		ldtrec+18
 	LDA		reg_y+3
-	STA		ldtrec+22
+	STA		ldtrec+20
 	LDA		reg_sp+1
-	STA		ldtrec+24
+	STA		ldtrec+22
 	LDA		reg_sp+3
-	STA		ldtrec+26
+	STA		ldtrec+24
 	SEP		#$30
 	LDA		reg_sr+1
-	STA		ldtrec+28
+	STA		ldtrec+26
 	LDA		reg_db
-	STA		ldtrec+29
+	STA		ldtrec+27
 	LDA		reg_dp
-	STA		ldtrec+30
+	STA		ldtrec+28
 	LDA		reg_dp+1
-	STA		ldtrec+31
+	STA		ldtrec+29
 	REP		#$30
 	RTS
 
@@ -653,14 +714,15 @@ doMemoryDump:
 	LDY 	#0
 .0005:
 	LDA		{RangeStart},Y
-	CMP		#$' '
+	AND		#$FF
+	CMP		#' '
 	BCS		.0002
 .0004:
 	LDA		#'.'
 	BRA		.0003
 .0002:
 	CMP		#$7f
-	BCC		.0004
+	BCS		.0004
 .0003:
 	JSR		OutChar
 	INY
@@ -680,16 +742,17 @@ doMemoryDump:
 	LDA		RangeEnd+2
 	SBC		RangeStart+2
 	PHP
-	JCR		KeybdGetCharNoWaitCtx,7
+	JSR		KeybdGetCharNoWait;Ctx,7
+	AND		#$FF
 	CMP		#CTRLC
 	BEQ		.0009
 	PLP
 	BPL		.0007
 .0008:
-	JMP		Mon1
+	RTS
 .0009:
 	PLP
-	JMP		Mon1
+	RTS
 
 ;------------------------------------------------------------------------------
 ; Edit memory.
@@ -926,6 +989,10 @@ echo_switch:
 
 SSMTask:
 	STA		WorkTR
+	STZ		CursorX
+	LDA		#24
+	STA		CursorY
+	JSR		SyncVideoPos
 	JSR		DispRegs
 .0004:
 	LDA		#'S'
@@ -935,6 +1002,7 @@ SSMTask:
 	LDA		#'M'
 	JSR		OutChar
 	LDA		#'>'
+.0005:
 	JSR		OutChar
 	JSR		KeybdGetCharWait
 	AND		#$FF
@@ -945,15 +1013,35 @@ SSMTask:
 	BRA		SSMTask
 .0001:
 	CMP		#'X'
-	BNE		.0002
+	BNE		.0006
 	LDA		reg_sr
-	AND		#$FDFF
+	AND		#$EFFF
 	STA		reg_sr
 	JSR		BuildRec
 	LDX		WorkTR
 	LDT		ldtrec
 	RTT
 	BRA		SSMTask
+.0006:
+	CMP		#CR
+	BNE		.0005
+	LDA		CursorY
+	ASL
+	TAX
+	LDA		LineTbl,X
+	CLC
+	ADC		#4
+	ASL
+	TAX
+	JSR		IgnoreBlanks
+	JSR		MonGetch
+	CMP		#'M'
+	BNE		.0007
+	JSR		doMemoryDump
+.0007:
+	BRL		.0005
+	RTT
+	BRL		SSMTask
 
 ;------------------------------------------------------------------------------
 ; Convert Ascii character to screen character.
@@ -994,6 +1082,7 @@ ScreenToAscii:
 
 ;------------------------------------------------------------------------------
 ; Display a character on the screen device
+; Expects the processor to be in 16 bit mode with 16 bit acc and 16 bit indexes
 ;------------------------------------------------------------------------------
 ;
 DisplayChar:
@@ -1267,12 +1356,15 @@ OutCRLF:
 	LDA		#LF
 
 OutChar:
+	PHP
+	REP		#$30
 	PHX
 	PHY
 	LDX		#0
 	JSR		(OutputVec,x)
 	PLY
 	PLX
+	PLP
 	RTS
 
 DisplayString:
@@ -1786,10 +1878,7 @@ KeybdGetChar1:
 	RTS
 .0006:
 	LDA		KEYBD		; get scan code value
-	PHA
-	LDA		#0			; write a zero to the status reg
-	STA		KEYBD+1		; to clear recieve register
-	PLA
+	STZ		KEYBD+1		; to clear recieve register
 .0001:
 	CMP		#SC_KEYUP	; keyup scan code ?
 	LBEQ	.doKeyup	; 
@@ -1878,25 +1967,30 @@ KeybdGetChar1:
 	LDA		KeyState2
 	EOR		#16
 	STA		KeyState2
+	SEP		#$30
 	JSR		KeybdSetLEDStatus
+	REP		#$10
 	BRL		.0003
 .doCapsLock:
 	LDA		KeyState2
 	EOR		#32
 	STA		KeyState2
+	SEP		#$30
 	JSR		KeybdSetLEDStatus
+	REP		#$10
 	BRL		.0003
 .doScrollLock:
 	LDA		KeyState2
 	EOR		#64
 	STA		KeyState2
+	SEP		#$30
 	JSR		KeybdSetLEDStatus
+	REP		#$10
 	BRL		.0003
 
 KeybdSetLEDStatus:
 	PHDS				; save off DS
-	PEA		0			; set DS to zero
-	PEA		0			; set DS to zero
+	PEA		5			; set DS to zero
 	PLDS
 	LDA		#0
 	STA		KeybdLEDs
@@ -2117,18 +2211,7 @@ IRQRout:
 	TSK		#1			; switch to the interrupt handling task
 	RTI
 
-	REP		#$30
-	NDX		16
-	MEM		16
-	PHA
-	JSR		Task1
-	PLA
-	RTI
-
 Task1:
-	REP		#$30
-	NDX		16
-	MEM		16
 	LDA		MPU_IRQ_STATUS	; check if counter expired
 	BIT		#2
 	BEQ		.0001
@@ -2136,19 +2219,9 @@ Task1:
 	INA
 	STA		TickCount
 	STA.B	$FD00A4			; update on-screen IRQ live indicator
-	SEP		#$30
-	NDX		8
-	MEM		8
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
-	STA		CTR1_CTRL
+	STA.B	CTR1_CTRL
 .0001:
-	REP		#$30
-	NDX		16
-	MEM		16
-;	BIT		do_invaders
-;	BPL		.0002
-;	TSK		#5
-.0002:
 	RTT					; go back to interrupted task
 	BRA		Task1		; the next time task1 is run it will start here
 
@@ -2291,11 +2364,10 @@ LineTbl:
 
 TaskStartTbl:
 	.WORD	0			; CS
-	.WORD	0
 	.WORD	0			; DS
-	.WORD	0
+	.WORD	0			; SS
 	.WORD	Task0		; PC
-	.BYTE	Task0>>16
+	.BYTE	Task0>>16	; PB
 	.WORD	0			; acc
 	.WORD	0
 	.WORD	0			; x
@@ -2308,11 +2380,11 @@ TaskStartTbl:
 	.BYTE	1			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 	.WORD	0			; CS
-	.WORD	0
 	.WORD	0			; DS
-	.WORD	0
+	.WORD	0			; SS
 	.WORD	Task1		; PC
 	.BYTE	Task1>>16
 	.WORD	0			; acc
@@ -2327,11 +2399,11 @@ TaskStartTbl:
 	.BYTE	1			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 	.WORD	0			; CS
-	.WORD	0
 	.WORD	0			; DS
-	.WORD	0
+	.WORD	0			; SS
 	.WORD	Task2		; PC
 	.BYTE	Task2>>16
 	.WORD	0			; acc
@@ -2346,11 +2418,11 @@ TaskStartTbl:
 	.BYTE	2			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 	.WORD	0			; CS
-	.WORD	0
 	.WORD	0			; DS
-	.WORD	0
+	.WORD	0			; SS
 	.WORD	SSMTask		; PC
 	.BYTE	SSMTask>>16
 	.WORD	0			; acc
@@ -2365,11 +2437,11 @@ TaskStartTbl:
 	.BYTE	1			; SR extension - 816 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 	.WORD	0			; CS
-	.WORD	0
 	.WORD	0			; DS
-	.WORD	0
+	.WORD	0			; SS
 	.WORD	BrkTask		; PC
 	.BYTE	BrkTask>>16
 	.WORD	0			; acc
@@ -2384,13 +2456,13 @@ TaskStartTbl:
 	.BYTE	1			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 	; task #5
 	; DS is placed at $7800
 	.WORD	0			; CS
-	.WORD	0
-	.WORD	7800		; DS
-	.WORD	0
+	.WORD	0    		; DS
+	.WORD	0			; SS
 	.WORD	InvadersTask	; PC
 	.BYTE	InvadersTask>>16
 	.WORD	0			; acc
@@ -2405,11 +2477,11 @@ TaskStartTbl:
 	.BYTE	1			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 	.WORD	0			; CS
-	.WORD	0
 	.WORD	0			; DS
-	.WORD	0
+	.WORD	0			; SS
 	.WORD	IRQTask		; PC
 	.BYTE	IRQTask>>16
 	.WORD	0			; acc
@@ -2424,14 +2496,15 @@ TaskStartTbl:
 	.BYTE	2			; SR extension - 832 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0
 
 msgRegs:
 	.byte	CR,LF
-    .byte   "                 xxxsxi31",CR,LF
-    .byte   "    CS    PB PC  xxxsxn26NVmxDIZC    .A       .X       .Y       SP  ",CR,LF,0
+    .byte   "             xxxsxi31",CR,LF
+    .byte   "  CS  PB PC  xxxsxn26NVmxDIZC    .A       .X       .Y       SP  ",CR,LF,0
 msgRegs2:
 	.byte	CR,LF
-	.byte	"    DS    DB  DP   BL",CR,LF,0
+	.byte	"  SS   DS  DB  DP   BL",CR,LF,0
 msgErr:
 	.byte	"***Err",CR,LF,0
 

@@ -1,0 +1,170 @@
+# Project: asm816
+# Makefile created by Dev-C++ 5.1.0.0
+
+CPP      = g++.exe
+CC       = gcc.exe
+WINDRES  = windres.exe
+OBJ      = a_all.o asm.o asm6502.o Asmbuf.o common/LTRIM.o common/rtrim.o asmRTF65002.o asmW65C816S.o BINTOASC.o Buf.o Emit.o err.o Eval.o FileInfo.o fstreamS19.o globals.o misc.o Objfile.o operand.o operand6502.o operand65002.o operands.o operands6502.o operands65002.o OutListLine.o ParseCmdLine.o processMneumonic.o registry.o STOUL.o stouxl.o STRDUP.o Strmat.o Symbol.o SymbolTable.o table6502.o tableRTF65002.o tableRTF65003.o tableW65C02.o tableW65C816S.o ../../../../../../Projects/CPP/String/String.o ../../../../../../Cores/asm/common/Macro.o ../../../../../../Cores/asm/common/HashTable.o ../../../../../../Cores/asm/common/MacroTable.o ../../../../../../Cores/asm/common/Rept.o ../../../../../../Cores/asm/common/trim.o ../../../../../../Projects/CPP/ListObject.o asmFT832.o tableFT832.o $(RES)
+LINKOBJ  = a_all.o asm.o asm6502.o Asmbuf.o common/LTRIM.o common/rtrim.o asmRTF65002.o asmW65C816S.o BINTOASC.o Buf.o Emit.o err.o Eval.o FileInfo.o fstreamS19.o globals.o misc.o Objfile.o operand.o operand6502.o operand65002.o operands.o operands6502.o operands65002.o OutListLine.o ParseCmdLine.o processMneumonic.o registry.o STOUL.o stouxl.o STRDUP.o Strmat.o Symbol.o SymbolTable.o table6502.o tableRTF65002.o tableRTF65003.o tableW65C02.o tableW65C816S.o ../../../../../../Projects/CPP/String/String.o ../../../../../../Cores/asm/common/Macro.o ../../../../../../Cores/asm/common/HashTable.o ../../../../../../Cores/asm/common/MacroTable.o ../../../../../../Cores/asm/common/Rept.o ../../../../../../Cores/asm/common/trim.o ../../../../../../Projects/CPP/ListObject.o asmFT832.o tableFT832.o $(RES)
+LIBS     = -L"" -L"C:/Program Files (x86)/Dev-Cpp/MinGW32/lib" -L"C:/Cores/asm/common" -L"C:/Projects/CPP" -L"C:/Cores3/FT816/trunk/software/asm/asm" -L"C:/Projects/FW"  
+INCS     = -I""  -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include"  -I"C:/Projects/CPP/String"  -I"C:/Projects/CPP"  -I"C:/Cores/asm/common"  -I"C:/Cores3/FT816/trunk/software/asm/asm" 
+CXXINCS  = -I""  -I"C:/Program Files (x86)/Dev-Cpp/MinGW32/include"  -I"C:/Projects/CPP/String"  -I"C:/Projects/CPP"  -I"C:/Cores/asm/common"  -I"C:/Cores3/FT816/trunk/software/asm/asm" 
+BIN      = asm816.exe
+CXXFLAGS = $(CXXINCS)  
+CFLAGS   = $(INCS)  
+RM       = rm -f
+
+.PHONY: all all-before all-after clean clean-custom
+
+all: all-before asm816.exe all-after
+
+
+clean: clean-custom
+	${RM} $(OBJ) $(BIN)
+
+$(BIN): $(OBJ)
+	$(CPP) $(LINKOBJ) -o "asm816.exe" $(LIBS)
+
+a_all.o: a_all.cpp
+	$(CPP) -c a_all.cpp -o a_all.o $(CXXFLAGS)
+
+asm.o: asm.cpp
+	$(CPP) -c asm.cpp -o asm.o $(CXXFLAGS)
+
+asm6502.o: asm6502.cpp
+	$(CPP) -c asm6502.cpp -o asm6502.o $(CXXFLAGS)
+
+Asmbuf.o: Asmbuf.cpp
+	$(CPP) -c Asmbuf.cpp -o Asmbuf.o $(CXXFLAGS)
+
+common/LTRIM.o: common/LTRIM.C
+	$(CPP) -c common/LTRIM.C -o common/LTRIM.o $(CXXFLAGS)
+
+common/rtrim.o: common/rtrim.c
+	$(CPP) -c common/rtrim.c -o common/rtrim.o $(CXXFLAGS)
+
+asmRTF65002.o: asmRTF65002.cpp
+	$(CPP) -c asmRTF65002.cpp -o asmRTF65002.o $(CXXFLAGS)
+
+asmW65C816S.o: asmW65C816S.cpp
+	$(CPP) -c asmW65C816S.cpp -o asmW65C816S.o $(CXXFLAGS)
+
+BINTOASC.o: BINTOASC.C
+	$(CPP) -c BINTOASC.C -o BINTOASC.o $(CXXFLAGS)
+
+Buf.o: Buf.cpp
+	$(CPP) -c Buf.cpp -o Buf.o $(CXXFLAGS)
+
+Emit.o: Emit.cpp
+	$(CPP) -c Emit.cpp -o Emit.o $(CXXFLAGS)
+
+err.o: err.cpp
+	$(CPP) -c err.cpp -o err.o $(CXXFLAGS)
+
+Eval.o: Eval.cpp
+	$(CPP) -c Eval.cpp -o Eval.o $(CXXFLAGS)
+
+FileInfo.o: FileInfo.cpp
+	$(CPP) -c FileInfo.cpp -o FileInfo.o $(CXXFLAGS)
+
+fstreamS19.o: fstreamS19.cpp
+	$(CPP) -c fstreamS19.cpp -o fstreamS19.o $(CXXFLAGS)
+
+globals.o: globals.cpp
+	$(CPP) -c globals.cpp -o globals.o $(CXXFLAGS)
+
+misc.o: misc.cpp
+	$(CPP) -c misc.cpp -o misc.o $(CXXFLAGS)
+
+Objfile.o: Objfile.cpp
+	$(CPP) -c Objfile.cpp -o Objfile.o $(CXXFLAGS)
+
+operand.o: operand.cpp
+	$(CPP) -c operand.cpp -o operand.o $(CXXFLAGS)
+
+operand6502.o: operand6502.cpp
+	$(CPP) -c operand6502.cpp -o operand6502.o $(CXXFLAGS)
+
+operand65002.o: operand65002.cpp
+	$(CPP) -c operand65002.cpp -o operand65002.o $(CXXFLAGS)
+
+operands.o: operands.cpp
+	$(CPP) -c operands.cpp -o operands.o $(CXXFLAGS)
+
+operands6502.o: operands6502.cpp
+	$(CPP) -c operands6502.cpp -o operands6502.o $(CXXFLAGS)
+
+operands65002.o: operands65002.cpp
+	$(CPP) -c operands65002.cpp -o operands65002.o $(CXXFLAGS)
+
+OutListLine.o: OutListLine.cpp
+	$(CPP) -c OutListLine.cpp -o OutListLine.o $(CXXFLAGS)
+
+ParseCmdLine.o: ParseCmdLine.cpp
+	$(CPP) -c ParseCmdLine.cpp -o ParseCmdLine.o $(CXXFLAGS)
+
+processMneumonic.o: processMneumonic.cpp
+	$(CPP) -c processMneumonic.cpp -o processMneumonic.o $(CXXFLAGS)
+
+registry.o: registry.cpp
+	$(CPP) -c registry.cpp -o registry.o $(CXXFLAGS)
+
+STOUL.o: STOUL.C
+	$(CPP) -c STOUL.C -o STOUL.o $(CXXFLAGS)
+
+stouxl.o: stouxl.c
+	$(CPP) -c stouxl.c -o stouxl.o $(CXXFLAGS)
+
+STRDUP.o: STRDUP.C
+	$(CPP) -c STRDUP.C -o STRDUP.o $(CXXFLAGS)
+
+Strmat.o: Strmat.c
+	$(CPP) -c Strmat.c -o Strmat.o $(CXXFLAGS)
+
+Symbol.o: Symbol.cpp
+	$(CPP) -c Symbol.cpp -o Symbol.o $(CXXFLAGS)
+
+SymbolTable.o: SymbolTable.cpp
+	$(CPP) -c SymbolTable.cpp -o SymbolTable.o $(CXXFLAGS)
+
+table6502.o: table6502.cpp
+	$(CPP) -c table6502.cpp -o table6502.o $(CXXFLAGS)
+
+tableRTF65002.o: tableRTF65002.cpp
+	$(CPP) -c tableRTF65002.cpp -o tableRTF65002.o $(CXXFLAGS)
+
+tableRTF65003.o: tableRTF65003.cpp
+	$(CPP) -c tableRTF65003.cpp -o tableRTF65003.o $(CXXFLAGS)
+
+tableW65C02.o: tableW65C02.cpp
+	$(CPP) -c tableW65C02.cpp -o tableW65C02.o $(CXXFLAGS)
+
+tableW65C816S.o: tableW65C816S.cpp
+	$(CPP) -c tableW65C816S.cpp -o tableW65C816S.o $(CXXFLAGS)
+
+../../../../../../Projects/CPP/String/String.o: ../../../../../../Projects/CPP/String/String.cpp
+	$(CPP) -c ../../../../../../Projects/CPP/String/String.cpp -o ../../../../../../Projects/CPP/String/String.o $(CXXFLAGS)
+
+../../../../../../Cores/asm/common/Macro.o: ../../../../../../Cores/asm/common/Macro.cpp
+	$(CPP) -c ../../../../../../Cores/asm/common/Macro.cpp -o ../../../../../../Cores/asm/common/Macro.o $(CXXFLAGS)
+
+../../../../../../Cores/asm/common/HashTable.o: ../../../../../../Cores/asm/common/HashTable.cpp
+	$(CPP) -c ../../../../../../Cores/asm/common/HashTable.cpp -o ../../../../../../Cores/asm/common/HashTable.o $(CXXFLAGS)
+
+../../../../../../Cores/asm/common/MacroTable.o: ../../../../../../Cores/asm/common/MacroTable.cpp
+	$(CPP) -c ../../../../../../Cores/asm/common/MacroTable.cpp -o ../../../../../../Cores/asm/common/MacroTable.o $(CXXFLAGS)
+
+../../../../../../Cores/asm/common/Rept.o: ../../../../../../Cores/asm/common/Rept.cpp
+	$(CPP) -c ../../../../../../Cores/asm/common/Rept.cpp -o ../../../../../../Cores/asm/common/Rept.o $(CXXFLAGS)
+
+../../../../../../Cores/asm/common/trim.o: ../../../../../../Cores/asm/common/trim.c
+	$(CPP) -c ../../../../../../Cores/asm/common/trim.c -o ../../../../../../Cores/asm/common/trim.o $(CXXFLAGS)
+
+../../../../../../Projects/CPP/ListObject.o: ../../../../../../Projects/CPP/ListObject.cpp
+	$(CPP) -c ../../../../../../Projects/CPP/ListObject.cpp -o ../../../../../../Projects/CPP/ListObject.o $(CXXFLAGS)
+
+asmFT832.o: asmFT832.cpp
+	$(CPP) -c asmFT832.cpp -o asmFT832.o $(CXXFLAGS)
+
+tableFT832.o: tableFT832.cpp
+	$(CPP) -c tableFT832.cpp -o tableFT832.o $(CXXFLAGS)

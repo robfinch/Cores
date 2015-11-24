@@ -226,6 +226,8 @@ namespace RTFClasses
 		int op = o->oc;
 
 		d = ((Operands6502 *)getCpu()->getOp())->op[0].val.value;
+		doSegPrefix();
+		doSizePrefix();
         if (op > 255) {
             theAssembler.emit8(op>>8);
             theAssembler.emit8(op&255);
@@ -281,6 +283,8 @@ namespace RTFClasses
              theAssembler.emit16(0x8B42);
          else if (theAssembler.gSzChar=='H')
              theAssembler.emit16(0xAB42);
+         else if (theAssembler.gSzChar=='W')
+             theAssembler.emit16(0x9A42);
          else if (theAssembler.gSzChar==('U'<<8|'B'))
              theAssembler.emit16(0x9B42);
          else if (theAssembler.gSzChar==('U'<<8|'H'))
@@ -318,9 +322,8 @@ namespace RTFClasses
         }
         else
         	theAssembler.emit8(op);
-		theAssembler.emit16(o);
-		theAssembler.emit8(o>>16);
-		theAssembler.emit32(s);
+		theAssembler.emit24(o);
+		theAssembler.emit16(s);
 	}
 
 
@@ -400,7 +403,12 @@ void AsmFT832::lbr(Opa *o)
 	{
 		long loc;
 
-		theAssembler.emit8(o->oc);
+        if (o->oc > 255) {
+            theAssembler.emit8(o->oc>>8);
+            theAssembler.emit8(o->oc&255);
+        }
+        else
+        	theAssembler.emit8(o->oc);
 		loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
 		// it's possible the symbol could have been defined
 		// if it was a backwards reference
@@ -418,6 +426,36 @@ void AsmFT832::lbr(Opa *o)
 		{
 			// branch displacment unknown
     		theAssembler.emit16(0xffff);
+		}
+	}
+
+	void AsmFT832::bsl(Opa *o)
+	{
+		long loc;
+
+        if (o->oc > 255) {
+            theAssembler.emit8(o->oc>>8);
+            theAssembler.emit8(o->oc&255);
+        }
+        else
+        	theAssembler.emit8(o->oc);
+		loc = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		// it's possible the symbol could have been defined
+		// if it was a backwards reference
+		if (theAssembler.getPass() > 1)// || val.bDefined)
+		{
+    		loc -= (theAssembler.getProgramCounter().val + 3);
+			if (loc > 16277215 || loc < -16277216)
+			{
+				Err(E_BRANCH, loc);     // Branch out of range.
+				loc = 0xffffffff;
+			}
+    		theAssembler.emit24(loc);
+		}
+		else
+		{
+			// branch displacment unknown
+    		theAssembler.emit24(0xffffff);
 		}
 	}
 
@@ -476,5 +514,30 @@ void AsmFT832::lbr(Opa *o)
 		popcnt = ((Operands6502 *)getCpu()->getOp())->op[0].val.value; //expeval(theAssembler.gOperand[0], NULL);
 		theAssembler.emit8(popcnt);
     }
+
+	void AsmFT832::jcf(Opa *oc)
+	{
+		__int32 s,o;
+		int op = oc->oc;
+    	int ctx;
+        int p;
+        int popcnt;
+
+		s = ((Operands6502 *)getCpu()->getOp())->op[0].seg.value;
+		o = ((Operands6502 *)getCpu()->getOp())->op[0].offs.value;
+		ctx = ((Operands6502 *)getCpu()->getOp())->op[1].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		p = ((Operands6502 *)getCpu()->getOp())->op[2].val.value; //expeval(theAssembler.gOperand[0], NULL);
+		popcnt = ((Operands6502 *)getCpu()->getOp())->op[3].val.value; //expeval(theAssembler.gOperand[0], NULL);
+        if (op > 255) {
+            theAssembler.emit8(op>>8);
+            theAssembler.emit8(op&255);
+        }
+        else
+        	theAssembler.emit8(op);
+		theAssembler.emit24(o);
+		theAssembler.emit16(s);
+		theAssembler.emit16(ctx);
+		theAssembler.emit8((p ? 0x80 : 0x00)|(popcnt & 0x1f));
+	}
 
 }

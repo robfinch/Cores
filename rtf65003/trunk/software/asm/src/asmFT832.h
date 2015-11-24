@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Assembler.h"
 namespace RTFClasses
 {
 	class AsmFT832
@@ -27,6 +27,8 @@ namespace RTFClasses
 		static void br(Opa *);
 		static void lbr(Opa *);
 		static void brl(Opa *);
+		static void bsl(Opa *);
+		static void jcf(Opa *);
 		static void jcr(Opa *);
 		static void jcl(Opa *);
 		static void rtc(Opa *);
@@ -34,6 +36,7 @@ namespace RTFClasses
 		static bool isM16() { return mem==16; };
 		static bool isX32() { return ndx==32; };
 		static bool isM32() { return mem==32; };
+		static void out24(Opa *o) { theAssembler.out24(o); };
 		static void doSegPrefix(void);
 		static void doSizePrefix(void);
 	};

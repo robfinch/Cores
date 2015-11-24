@@ -84,9 +84,9 @@ int Assembler::GetSzCode(int xx)
 		rr = 4;
 	else
 		rr = 0;
-	if ((xx & 0xff) == 'C')	// half word
+	if ((xx & 0xff) == 'C' || (xx & 0xff)=='H' )	// half word
 		rr |= 1;
-	else if ((xx & 0xff) == 'W' || (xx & 0xff)=='H' || xx == 0)	// word
+	else if ((xx & 0xff) == 'W' || xx == 0)	// word
 		rr |= 2;
 	// byte = 0
 	return rr << 9;
