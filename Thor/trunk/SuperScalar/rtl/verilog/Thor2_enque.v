@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2014  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,11 +37,69 @@
 
 if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's been a branch miss
 
-	case ({fetchbuf0_v, fetchbuf1_v && ((fnNumReadPorts(fetchbuf0_instr) + fnNumReadPorts(fetchbuf1_instr) < 3'd5)||!fetchbuf0_v)})
+	case ({fetchbuf0_v, fetchbuf1_v, fetchbuf2_v, fetchbuf3_v})
 
-	2'b00: ; // do nothing
+	4'b0000: ; // do nothing
+	
+	4'b0001:
+			if (iqentry_v[tail0] == `INV) begin
+				iqentry_v    [tail0]    <=   `VAL;
+				iqentry_done [tail0]    <=   `INV;
+				iqentry_cmt	 [tail0]    <=   `INV;
+				iqentry_out  [tail0]    <=   `INV;
+				iqentry_res  [tail0]    <=   `ZERO;
+				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf3_instr);
+				iqentry_op   [tail0]    <=   opcode3;
+				iqentry_fn   [tail0]    <=   fnFunc(fetchbuf3_instr);
+				iqentry_cond [tail0]    <=   cond3;
+				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode3) && predict_taken3; 
+				iqentry_agen [tail0]    <=   `INV;
+				// If an interrupt is being enqueued and the previous instruction was an immediate prefix, then
+				// inherit the address of the previous instruction, so that the prefix will be executed on return
+				// from interrupt.
+				// If a string operation was in progress then inherit the address of the string operation so that
+				// it can be continued.
+				iqentry_pc   [tail0]    <=	
+					(opcode3==`INT && iqentry_op[tail0-4'd1]==`IMM && iqentry_v[tail0-4'd1]==`VAL) ? 
+						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-4'd1]) : fetchbuf3_pc;
+				//iqentry_pc   [tail0]    <=   fetchbuf1_pc;
+				iqentry_mem  [tail0]    <=   fetchbuf3_mem;
+				iqentry_jmp  [tail0]    <=   fetchbuf3_jmp;
+				iqentry_fp   [tail0]    <=   fetchbuf3_fp;
+				iqentry_rfw  [tail0]    <=   fetchbuf3_rfw;
+				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf3_instr);
+				iqentry_pred [tail0]    <=   pregs[Pn3];
+				// The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
+				iqentry_p_v  [tail0]    <=   rf_v [7'd80+Pn3] || cond3 < 4'h2;
+				iqentry_p_s  [tail0]    <=   rf_source [7'd80+Pn3];
+				// Look at the previous queue slot to see if an immediate prefix is enqueued
+				// But don't allow it for a branch
+				iqentry_a0[tail0]   <=  	opcode3==`INT ? fnImm(fetchbuf3_instr) :
+											fnIsBranch(opcode3) ? {{DBW-12{fetchbuf3_instr[11]}},fetchbuf3_instr[11:8],fetchbuf3_instr[23:16]} :
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf3_instr)} :
+											opcode3==`IMM ? fnImmImm(fetchbuf3_instr) :
+											fnImm(fetchbuf3_instr);
+				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
+												fnOpa(opcode3,fetchbuf3_instr,rfoa3,fetchbuf3_pc);
+				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode3 ) | rf_v[ fnRa(fetchbuf3_instr) ];
+				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf3_instr)];
+				iqentry_a2   [tail0]    <=   fnIsShiftiop(opcode3) ? {{DBW-6{1'b0}},Rb3[5:0]} : opcode3==`STI ? fetchbuf3_instr[31:22] : rfob3;
+				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode3 ) | rf_v[ Rb3 ];
+				iqentry_a2_s [tail0]    <=   rf_source[Rb3];
+				iqentry_a3   [tail0]    <=   rfob0;
+				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode3 ) | rf_v[ Rb0 ];
+				iqentry_a3_s [tail0]    <=   rf_source[Rb0];
+				tail0 <= tail0 + 1;
+				tail1 <= tail1 + 1;
+				tail2 <= tail2 + 1;
+				tail3 <= tail3 + 1;
+				if (fetchbuf3_rfw|fetchbuf3_pfw) begin
+					rf_v[ fnTargetReg(fetchbuf3_instr) ] = `INV;
+					rf_source[ fnTargetReg(fetchbuf3_instr) ] <= { fetchbuf3_mem, tail0 };	// top bit indicates ALU/MEM bus
+				end
+			end
 
-	2'b01:
+	4'b0100:
 			if (iqentry_v[tail0] == `INV) begin
 				iqentry_v    [tail0]    <=   `VAL;
 				iqentry_done [tail0]    <=   `INV;
@@ -60,8 +118,8 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				// If a string operation was in progress then inherit the address of the string operation so that
 				// it can be continued.
 				iqentry_pc   [tail0]    <=	
-					(opcode1==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
-						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf1_pc;
+					(opcode1==`INT && iqentry_op[tail0-4'd1]==`IMM && iqentry_v[tail0-4'd1]==`VAL) ? 
+						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-4'd1]) : fetchbuf1_pc;
 				//iqentry_pc   [tail0]    <=   fetchbuf1_pc;
 				iqentry_mem  [tail0]    <=   fetchbuf1_mem;
 				iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
@@ -70,8 +128,8 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf1_instr);
 				iqentry_pred [tail0]    <=   pregs[Pn1];
 				// The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
-				iqentry_p_v  [tail0]    <=   rf_v [{1'b1,4'h0,Pn1}] || cond1 < 4'h2;
-				iqentry_p_s  [tail0]    <=   rf_source [{1'b1,4'h0,Pn1}];
+				iqentry_p_v  [tail0]    <=   rf_v [7'd80+Pn1] || cond1 < 4'h2;
+				iqentry_p_s  [tail0]    <=   rf_source [7'd80+Pn1];
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
 				// But don't allow it for a branch
 				iqentry_a0[tail0]   <=  	opcode1==`INT ? fnImm(fetchbuf1_instr) :
@@ -95,7 +153,6 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
 				end
-				rrmapno <= rrmapno + 3'd1;
 			end
 
 	2'b10:
@@ -145,11 +202,9 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
 					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };	// top bit indicates ALU/MEM bus
 				end
-				rrmapno <= rrmapno + 3'd1;
 			end
 	
 		2'b11: if (iqentry_v[tail0] == `INV) begin
-					rrmapno <= rrmapno + 3'd1;
 
 		//
 		// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
@@ -449,37 +504,101 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 	endcase
 	end
 	else begin	// if branchmiss
-		if ((iqentry_stomp[0] & ~iqentry_stomp[7]) || stomp_all) begin
+		if ((iqentry_stomp[0] & ~iqentry_stomp[15]) || stomp_all) begin
 			tail0 <= 0;
 			tail1 <= 1;
+			tail2 <= 2;
+			tail3 <= 3;
 		end
 		else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
 			tail0 <= 1;
 			tail1 <= 2;
+			tail2 <= 3;
+			tail3 <= 4;
 		end
 		else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
 			tail0 <= 2;
 			tail1 <= 3;
+			tail2 <= 4;
+			tail3 <= 5;
 		end
 		else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
 			tail0 <= 3;
 			tail1 <= 4;
+			tail2 <= 5;
+			tail3 <= 6;
 		end
 		else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
 			tail0 <= 4;
 			tail1 <= 5;
+			tail2 <= 6;
+			tail3 <= 7;
 		end
 		else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
 			tail0 <= 5;
 			tail1 <= 6;
+			tail2 <= 7;
+			tail3 <= 8;
 		end
 		else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
 			tail0 <= 6;
 			tail1 <= 7;
+			tail2 <= 8;
+			tail3 <= 9;
 		end
 		else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
 			tail0 <= 7;
+			tail1 <= 8;
+			tail2 <= 9;
+			tail3 <= 10;
+		end
+		else if (iqentry_stomp[8] & ~iqentry_stomp[7]) begin
+			tail0 <= 8;
+			tail1 <= 9;
+			tail2 <= 10;
+			tail3 <= 11;
+		end
+		else if (iqentry_stomp[9] & ~iqentry_stomp[8]) begin
+			tail0 <= 9;
+			tail1 <= 10;
+			tail2 <= 11;
+			tail3 <= 12;
+		end
+		else if (iqentry_stomp[10] & ~iqentry_stomp[9]) begin
+			tail0 <= 10;
+			tail1 <= 11;
+			tail2 <= 12;
+			tail3 <= 13;
+		end
+		else if (iqentry_stomp[11] & ~iqentry_stomp[10]) begin
+			tail0 <= 11;
+			tail1 <= 12;
+			tail2 <= 13;
+			tail3 <= 14;
+		end
+		else if (iqentry_stomp[12] & ~iqentry_stomp[11]) begin
+			tail0 <= 12;
+			tail1 <= 13;
+			tail2 <= 14;
+			tail3 <= 15;
+		end
+		else if (iqentry_stomp[13] & ~iqentry_stomp[12]) begin
+			tail0 <= 13;
+			tail1 <= 14;
+			tail2 <= 15;
+			tail3 <= 0;
+		end
+		else if (iqentry_stomp[14] & ~iqentry_stomp[13]) begin
+			tail0 <= 14;
+			tail1 <= 15;
+			tail2 <= 0;
+			tail3 <= 1;
+		end
+		else if (iqentry_stomp[15] & ~iqentry_stomp[14]) begin
+			tail0 <= 15;
 			tail1 <= 0;
+			tail2 <= 1;
+			tail3 <= 2;
 		end
 		// otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
 	end

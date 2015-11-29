@@ -186,11 +186,9 @@ endcase
 // determine if the instructions ready to issue can, in fact, issue.
 // "ready" means that the instruction has valid operands but has not gone yet
 //
-// Stores can only issue if they are at the head of the queue, guarenteeing that they
-// will not need to be undone due to a prior exception. Checking for a flow-control
-// op isn't good enough once exceptions are present in the processor. The exception
-// could become active at an unknown time in a previous queue slot. Eg. divide by
-// zero, arithmetic overflow, etc.
+// Stores can only issue if there is no possibility of a change of program flow.
+// That means no flow control operations or instructions that can cause an
+// exception can be before the store.
 iqentry_memissue[ head0 ] <=	iqentry_memready[ head0 ];		// first in line ... go as soon as ready
 
 iqentry_memissue[ head1 ] <=	~iqentry_stomp[head1] && iqentry_memready[ head1 ]		// addr and data are valid
@@ -200,7 +198,7 @@ iqentry_memissue[ head1 ] <=	~iqentry_stomp[head1] && iqentry_memready[ head1 ]	
 				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
 					|| (iqentry_a1_v[head0] && iqentry_a1[head1][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head1]))// || !fnIsFlowCtrl(iqentry_op[head0]));
+				&& (fnIsStore(iqentry_op[head1]) ? !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) : TRUE)
 				&& (iqentry_op[head1]!=`CAS)
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				;
@@ -215,7 +213,10 @@ iqentry_memissue[ head2 ] <=	~iqentry_stomp[head2] && iqentry_memready[ head2 ]	
 				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
 					|| (iqentry_a1_v[head1] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head2]))// ||
+				&& (fnIsStore(iqentry_op[head2]) ?
+				    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
+				    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) 
+				    : TRUE)
 				&& (iqentry_op[head2]!=`CAS)
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
 				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMDB)
@@ -236,7 +237,11 @@ iqentry_memissue[ head3 ] <=	~iqentry_stomp[head3] && iqentry_memready[ head3 ]	
 				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
 					|| (iqentry_a1_v[head2] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head3]))
+				&& (fnIsStore(iqentry_op[head3]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) 
+                    : TRUE)
 				&& (iqentry_op[head3]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
@@ -263,7 +268,12 @@ iqentry_memissue[ head4 ] <=	~iqentry_stomp[head4] && iqentry_memready[ head4 ]	
 				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
 					|| (iqentry_a1_v[head3] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head4]))
+				&& (fnIsStore(iqentry_op[head4]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) 
+                    : TRUE)
 				&& (iqentry_op[head4]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
@@ -296,7 +306,13 @@ iqentry_memissue[ head5 ] <=	~iqentry_stomp[head5] && iqentry_memready[ head5 ]	
 				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
 					|| (iqentry_a1_v[head4] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head5]))
+				&& (fnIsStore(iqentry_op[head5]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) && 
+                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4]) 
+                    : TRUE)
 				&& (iqentry_op[head5]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
@@ -334,7 +350,14 @@ iqentry_memissue[ head6 ] <=	~iqentry_stomp[head6] && iqentry_memready[ head6 ]	
 				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
 					|| (iqentry_a1_v[head5] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head6]))
+				&& (fnIsStore(iqentry_op[head6]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) && 
+                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4]) && 
+                    !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5]) 
+                    : TRUE)
 				&& (iqentry_op[head6]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
@@ -377,7 +400,15 @@ iqentry_memissue[ head7 ] <=	~iqentry_stomp[head7] && iqentry_memready[ head7 ]	
 				&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) 
 					|| (iqentry_a1_v[head6] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head6][DBW-1:3]))
 				// ... and, if it is a SW, there is no chance of it being undone
-				&& (!fnIsStore(iqentry_op[head7]))
+				&& (fnIsStore(iqentry_op[head7]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) && 
+                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4]) && 
+                    !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5]) && 
+                    !fnIsFlowCtrl(iqentry_op[head6]) && !fnCanException(iqentry_op[head6]) 
+                    : TRUE)
 				&& (iqentry_op[head7]!=`CAS)
 				// ... and there is no memory barrier
 				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMDB)
@@ -432,7 +463,7 @@ for (n = 0; n < 8; n = n + 1)
 			dram0_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
 			dram0_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
-			dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
+			dram0_addr	<= iqentry_a1[n][DBW-5:0] + {sregs[iqentry_a1[n][DBW-1:DBW-4]],12'h000};
 `else
 			dram0_addr	<= iqentry_a1[n];
 `endif

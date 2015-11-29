@@ -54,6 +54,7 @@
 `define _4ADDU			6'h09
 `define _8ADDU			6'h0A
 `define _16ADDU			6'h0B
+`define ADDUIS      8'h47
 `define ADDI		8'h48
 `define SUBI		8'h49
 `define MULI		8'h4A
@@ -145,6 +146,8 @@
 `define CACHE		8'h9F
 
 // Flow control Opcodes
+`define JSRZ        8'hA0
+`define JSRS        8'hA1
 `define JSR			8'hA2
 `define RTS			8'hA3
 `define LOOP		8'hA4
@@ -177,6 +180,7 @@
 `define SCX			8'hC1
 `define SHX			8'hC2
 `define SWX			8'hC3
+`define STIX        8'hC6
 
 `define FNABS		8'hC8
 `define FMOV		8'hC9
@@ -249,7 +253,7 @@
 `define PREGS			8'h04
 `define ASID			8'h06
 `define SR				8'h07
-`define BREGS			8'h1x
+`define CREGS			8'h1x
 `define SREGS			8'h2x
 		
 // exception types:

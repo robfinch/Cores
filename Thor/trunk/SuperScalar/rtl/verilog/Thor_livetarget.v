@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -35,18 +35,18 @@ module Thor_livetarget(iqentry_v,iqentry_stomp,iqentry_cmt,tgt0,tgt1,tgt2,tgt3,t
 	iqentry_6_livetarget,
 	iqentry_7_livetarget
 );
-parameter NREGS = 303;
+parameter NREGS = 111;
 input [7:0] iqentry_v;
 input [7:0] iqentry_stomp;
 input [7:0] iqentry_cmt;
-input [8:0] tgt0;
-input [8:0] tgt1;
-input [8:0] tgt2;
-input [8:0] tgt3;
-input [8:0] tgt4;
-input [8:0] tgt5;
-input [8:0] tgt6;
-input [8:0] tgt7;
+input [6:0] tgt0;
+input [6:0] tgt1;
+input [6:0] tgt2;
+input [6:0] tgt3;
+input [6:0] tgt4;
+input [6:0] tgt5;
+input [6:0] tgt6;
+input [6:0] tgt7;
 output [NREGS:1] livetarget;
 output [NREGS:1] iqentry_0_livetarget;
 output [NREGS:1] iqentry_1_livetarget;
@@ -57,7 +57,7 @@ output [NREGS:1] iqentry_5_livetarget;
 output [NREGS:1] iqentry_6_livetarget;
 output [NREGS:1] iqentry_7_livetarget;
 
-wire [8:0] iqentry_tgt [0:7];
+wire [6:0] iqentry_tgt [0:7];
 assign iqentry_tgt[0] = tgt0;
 assign iqentry_tgt[1] = tgt1;
 assign iqentry_tgt[2] = tgt2;
@@ -78,14 +78,14 @@ wire [NREGS:1] iq7_out;
 
 reg [NREGS:1] livetarget;
 
-decoder9 iq0(.num(iqentry_tgt[0]), .out(iq0_out));
-decoder9 iq1(.num(iqentry_tgt[1]), .out(iq1_out));
-decoder9 iq2(.num(iqentry_tgt[2]), .out(iq2_out));
-decoder9 iq3(.num(iqentry_tgt[3]), .out(iq3_out));
-decoder9 iq4(.num(iqentry_tgt[4]), .out(iq4_out));
-decoder9 iq5(.num(iqentry_tgt[5]), .out(iq5_out));
-decoder9 iq6(.num(iqentry_tgt[6]), .out(iq6_out));
-decoder9 iq7(.num(iqentry_tgt[7]), .out(iq7_out));
+decoder7 iq0(.num(iqentry_tgt[0]), .out(iq0_out));
+decoder7 iq1(.num(iqentry_tgt[1]), .out(iq1_out));
+decoder7 iq2(.num(iqentry_tgt[2]), .out(iq2_out));
+decoder7 iq3(.num(iqentry_tgt[3]), .out(iq3_out));
+decoder7 iq4(.num(iqentry_tgt[4]), .out(iq4_out));
+decoder7 iq5(.num(iqentry_tgt[5]), .out(iq5_out));
+decoder7 iq6(.num(iqentry_tgt[6]), .out(iq6_out));
+decoder7 iq7(.num(iqentry_tgt[7]), .out(iq7_out));
 
 integer n;
 always @*
@@ -105,13 +105,13 @@ assign
 
 endmodule
 
-module decoder9 (num, out);
-input [8:0] num;
-output [303:1] out;
+module decoder7 (num, out);
+input [6:0] num;
+output [111:1] out;
 
-wire [303:0] out1;
+wire [111:0] out1;
 
-assign out1 = 304'd1 << num;
-assign out = out1[303:1];
+assign out1 = 111'd1 << num;
+assign out = out1[111:1];
 
 endmodule

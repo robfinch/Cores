@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -48,6 +48,9 @@ static int64_t ca;
 extern int isInitializationData;
 extern int use_gp;
 
+int predicate;
+int seg;
+
 // This structure not used.
 typedef struct tagInsn
 {
@@ -68,6 +71,64 @@ typedef struct tagInsn
         } rr;
     };
 };
+
+static int isdelim(char ch)
+{
+    return ch==',' || ch=='[' || ch=='(' || ch==']' || ch==')' || ch=='.';
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static int getPredreg()
+{
+    int pr;
+
+    NextToken();
+    if (token != tk_pred) {
+        printf("%d expecting predicate register %d.\r\n", lineno, token);
+        return -1;
+    }
+     if (isdigit(inptr[0]) && isdigit(inptr[1])) {
+          pr = ((inptr[0]-'0' * 10) + (inptr[1]-'0')) << 4;
+          inptr += 2;
+     }
+     else if (isdigit(inptr[0])) {
+          pr = (inptr[0]-'0') << 4;
+          inptr += 1;
+     }
+     NextToken();
+     return pr;
+}
+
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static int getCodeareg()
+{
+    int pr;
+
+    SkipSpaces();
+    if (inptr[0]=='c' || inptr[0]=='C') {
+         if (isdigit(inptr[1]) && (inptr[2]==',' || isdelim(inptr[2]) || isspace(inptr[2]))) {
+              pr = (inptr[1]-'0');
+              inptr += 2;
+         }
+         else if (isdigit(inptr[1]) && isdigit(inptr[2]) && (inptr[3]==',' || isdelim(inptr[3]) || isspace(inptr[3]))) {
+              pr = ((inptr[1]-'0') * 10) + (inptr[2]-'0');
+              inptr += 3;
+         }
+         else
+             return -1;
+    }
+    else
+        return -1;
+     NextToken();
+     return pr;
+}
+
+
 
 // ----------------------------------------------------------------------------
 // Return the register number or -1 if not a register.
@@ -217,7 +278,7 @@ static int getBoundsRegister()
 // Get the friendly name of a special purpose register.
 // ----------------------------------------------------------------------------
 
-static int FISA64_getSprRegister()
+static int Thor_getSprRegister()
 {
     int reg;
 
@@ -531,6 +592,67 @@ static int FISA64_getSprRegister()
              return 10;
          }
          break;
+    case 'z': case 'Z':
+        if ((inptr[1]=='s' || inptr[1]=='S') &&
+            !isIdentChar(inptr[2])) {
+            inptr += 2;
+            NextToken();
+            return 0x20;
+        }
+        break;
+    }
+    return -1;
+}
+
+static int getPredcon()
+{
+    if (inptr[0]=='f' || inptr[0]=='F') {
+        inptr += 1;
+        return 0;
+    }
+    if (inptr[0]=='t' || inptr[0]=='T') {
+        inptr += 1;
+        return 1;
+    }
+    if ((inptr[0]=='e' || inptr[0]=='E') && (inptr[1]=='q' || inptr[1]=='Q')) {
+        inptr += 2;
+        return 2;
+    }
+    if ((inptr[0]=='n' || inptr[0]=='N') && (inptr[1]=='e' || inptr[1]=='E')) {
+        inptr += 2;
+        return 3;
+    }
+    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='e' || inptr[1]=='E')) {
+        inptr += 2;
+        return 4;
+    }
+    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='t' || inptr[1]=='T')) {
+        inptr += 2;
+        return 5;
+    }
+    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='e' || inptr[1]=='E')) {
+        inptr += 2;
+        return 6;
+    }
+    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='t' || inptr[1]=='T')) {
+        inptr += 2;
+        return 7;
+    }
+    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 2;
+        return 8;
+    }
+    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 2;
+        return 9;
+    }
+    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 2;
+        return 10;
+    }
+    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 2;
+        return 11;
     }
     return -1;
 }
@@ -538,14 +660,17 @@ static int FISA64_getSprRegister()
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
-static void emit_insn(int64_t oc)
+static void emit_first(int oc)
 {
-     emitAlignedCode(oc & 255);
-     emitCode((oc >> 8) & 255);
-     emitCode((oc >> 16) & 255);
-     emitCode((oc >> 24) & 255);
-     num_bytes += 4;
+     emitCode(oc & 255);
+     num_bytes ++;
      num_insns += 1;
+}
+ 
+static void emit_insn(int oc)
+{
+     emitCode(oc & 255);
+     num_bytes ++;
 }
  
 // ---------------------------------------------------------------------------
@@ -553,10 +678,10 @@ static void emit_insn(int64_t oc)
 
 static void emit_insn2(int64_t oc)
 {
-     emitCode(oc & 255);
-     emitCode((oc >> 8) & 255);
-     emitCode((oc >> 16) & 255);
-     emitCode((oc >> 24) & 255);
+     emit_first(oc & 255);
+     emit_first((oc >> 8) & 255);
+     emit_first((oc >> 16) & 255);
+     emit_first((oc >> 24) & 255);
      num_bytes += 4;
      num_insns += 1;
 }
@@ -565,7 +690,7 @@ static void emit_insn2(int64_t oc)
 static void emit2(int64_t oc)
 {
      emitAlignedCode(oc & 255);
-     emitCode((oc >> 8) & 255);
+     emit_first((oc >> 8) & 255);
      num_bytes += 2;
      num_insns += 1;
 }
@@ -573,11 +698,11 @@ static void emit2(int64_t oc)
 static void emit6(int64_t oc)
 {
      emitAlignedCode(oc & 255);
-     emitCode((oc >> 8) & 255);
-     emitCode((oc >> 16) & 255);
-     emitCode((oc >> 24) & 255);
-     emitCode((oc >> 32) & 255);
-     emitCode((oc >> 40) & 255);
+     emit_first((oc >> 8) & 255);
+     emit_first((oc >> 16) & 255);
+     emit_first((oc >> 24) & 255);
+     emit_first((oc >> 32) & 255);
+     emit_first((oc >> 40) & 255);
      num_bytes += 6;
      num_insns += 1;
 }
@@ -611,11 +736,6 @@ static int fitsIn0(int64_t v)
     return (((v < 0) && ((v >> 14) == -1L)) || ((v >= 0) && ((v >> 14) == 0)));
 }
 
-static int fitsIn10(int64_t v)
-{
-    return (((v < 0) && ((v >> 24) == -1L)) || ((v >= 0) && ((v >> 24) == 0)));
-}
-
 static int fitsIn28(int64_t v)
 {
     return (((v < 0) && ((v >> 42) == -1L)) || ((v >= 0) && ((v >> 42) == 0)));
@@ -625,6 +745,346 @@ static int fitsIn41(int64_t v)
 {
     return (((v < 0) && ((v >> 55) == -1L)) || ((v >= 0) && ((v >> 55) == 0)));
 }
+
+static int fitsIn10(int64_t v)
+{
+    return ((v < 0) && ((v >> 9) == -1L)) || ((v >= 0) && ((v >> 9) == 0));
+}
+
+static int fitsIn8(int64_t v)
+{
+    return ((v < 0) && ((v >> 7) == -1L)) || ((v >= 0) && ((v >> 7) == 0));
+}
+
+static int fitsIn9(int64_t v)
+{
+    return ((v < 0) && ((v >> 8) == -1L)) || ((v >= 0) && ((v >> 8) == 0));
+}
+
+static int fitsIn12(int64_t v)
+{
+    return ((v < 0) && ((v >> 11) == -1L)) || ((v >= 0) && ((v >> 11) == 0));
+}
+
+static int fitsIn16(int64_t v)
+{
+    return ((v < 0) && ((v >> 15) == -1L)) || ((v >= 0) && ((v >> 15) == 0));
+}
+
+static int fitsIn24(int64_t v)
+{
+    return ((v < 0) && ((v >> 23) == -1L)) || ((v >= 0) && ((v >> 23) == 0));
+}
+
+static int fitsIn32(int64_t v)
+{
+    return ((v < 0) && ((v >> 31) == -1L)) || ((v >= 0) && ((v >> 31) == 0));
+}
+
+static int fitsIn40(int64_t v)
+{
+    return ((v < 0) && ((v >> 39) == -1L)) || ((v >= 0) && ((v >> 39) == 0));
+}
+
+static int fitsIn48(int64_t v)
+{
+    return ((v < 0) && ((v >> 47) == -1L)) || ((v >= 0) && ((v >> 47) == 0));
+}
+
+static int fitsIn56(int64_t v)
+{
+    return ((v < 0) && ((v >> 55) == -1L)) || ((v >= 0) && ((v >> 55) == 0));
+}
+
+static int emitImm8(int64_t v, int force)
+{
+     if (fitsIn8(v))
+         return 0;
+     if (fitsIn16(v)) {
+         emit_first(0x20);
+         emit_first(v >> 8);
+         return 1;
+     }
+     if (fitsIn24(v)) {
+         emit_first(0x30);
+         emit_first(v >> 8);
+         emit_first(v >> 16);
+         return 1;
+     }
+     if (fitsIn32(v)) {
+         emit_first(0x40);
+         emit_first(v >> 8);
+         emit_first(v >> 16);
+         emit_first(v >> 24);
+         return 1;
+     }
+     if (fitsIn40(v)) {
+         emit_first(0x50);
+         emit_first(v >> 8);
+         emit_first(v >> 16);
+         emit_first(v >> 24);
+         emit_first(v >> 32);
+         return 1;
+     }
+     if (fitsIn48(v)) {
+         emit_first(0x60);
+         emit_first(v >> 8);
+         emit_first(v >> 16);
+         emit_first(v >> 24);
+         emit_first(v >> 32);
+         emit_first(v >> 40);
+         return 1;
+     }
+     if (fitsIn56(v)) {
+         emit_first(0x70);
+         emit_first(v >> 8);
+         emit_first(v >> 16);
+         emit_first(v >> 24);
+         emit_first(v >> 32);
+         emit_first(v >> 40);
+         emit_first(v >> 48);
+         return 1;
+     }
+     emit_first(0x80);
+     emit_first(v >> 8);
+     emit_first(v >> 16);
+     emit_first(v >> 24);
+     emit_first(v >> 32);
+     emit_first(v >> 40);
+     emit_first(v >> 48);
+     emit_first(v >> 56);
+     return 1;
+}
+
+static int emitImm9(int64_t v, int force)
+{
+     if (fitsIn9(v))
+         return 0;
+     if (fitsIn16(v)) {
+         emit_first(0x20);
+         emit_insn(v >> 8);
+         return 1;
+     }
+     if (fitsIn24(v)) {
+         emit_first(0x30);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         return 1;
+     }
+     if (fitsIn32(v)) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+     }
+     if (fitsIn40(v)) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+     }
+     if (fitsIn48(v)) {
+         emit_insn(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         return 1;
+     }
+     if (fitsIn56(v)) {
+         emit_first(0x70);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         emit_insn(v >> 48);
+         return 1;
+     }
+     emit_first(0x80);
+     emit_insn(v >> 8);
+     emit_insn(v >> 16);
+     emit_insn(v >> 24);
+     emit_insn(v >> 32);
+     emit_insn(v >> 40);
+     emit_insn(v >> 48);
+     emit_insn(v >> 56);
+     return 1;
+}
+
+static int emitImm10(int64_t v, int force)
+{
+     if (fitsIn10(v))
+         return 0;
+     if (fitsIn16(v)) {
+         emit_first(0x20);
+         emit_insn(v >> 8);
+         return 1;
+     }
+     if (fitsIn24(v)) {
+         emit_first(0x30);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         return 1;
+     }
+     if (fitsIn32(v)) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+     }
+     if (fitsIn40(v)) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+     }
+     if (fitsIn48(v)) {
+         emit_first(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         return 1;
+     }
+     if (fitsIn56(v)) {
+         emit_first(0x70);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         emit_insn(v >> 48);
+         return 1;
+     }
+     emit_first(0x80);
+     emit_insn(v >> 8);
+     emit_insn(v >> 16);
+     emit_insn(v >> 24);
+     emit_insn(v >> 32);
+     emit_insn(v >> 40);
+     emit_insn(v >> 48);
+     emit_insn(v >> 56);
+     return 1;
+}
+
+static int emitImm12(int64_t v, int force)
+{
+     if (fitsIn12(v))
+         return 0;
+     if (fitsIn16(v)) {
+         emit_first(0x20);
+         emit_insn(v >> 8);
+         return 1;
+     }
+     if (fitsIn24(v)) {
+         emit_first(0x30);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         return 1;
+     }
+     if (fitsIn32(v)) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+     }
+     if (fitsIn40(v)) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+     }
+     if (fitsIn48(v)) {
+         emit_first(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         return 1;
+     }
+     if (fitsIn56(v)) {
+         emit_first(0x70);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         emit_insn(v >> 48);
+         return 1;
+     }
+     emit_first(0x80);
+     emit_insn(v >> 8);
+     emit_insn(v >> 16);
+     emit_insn(v >> 24);
+     emit_insn(v >> 32);
+     emit_insn(v >> 40);
+     emit_insn(v >> 48);
+     emit_insn(v >> 56);
+     return 1;
+}
+
+static int emitImm24(int64_t v, int force)
+{
+     if (fitsIn24(v))
+         return 0;
+     if (fitsIn32(v)) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+     }
+     if (fitsIn40(v)) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+     }
+     if (fitsIn48(v)) {
+         emit_first(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_first(v >> 40);
+         return 1;
+     }
+     if (fitsIn56(v)) {
+         emit_first(0x70);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         emit_insn(v >> 48);
+         return 1;
+     }
+     emit_first(0x80);
+     emit_insn(v >> 8);
+     emit_insn(v >> 16);
+     emit_insn(v >> 24);
+     emit_insn(v >> 32);
+     emit_insn(v >> 40);
+     emit_insn(v >> 48);
+     emit_insn(v >> 56);
+     return 1;
+}
+
 // ---------------------------------------------------------------------------
 // Emit constant extension for 15-bit operands.
 // Returns number of constant prefixes placed.
@@ -881,6 +1341,113 @@ static void process_jal(int oc, int Rt)
 }
 
 // ---------------------------------------------------------------------------
+// JAL also processes JMP and JSR
+// jal r0,main
+// jal r0,[r19]
+// jmp (tbl,r2)
+// ---------------------------------------------------------------------------
+
+static void process_jsr(int oc)
+{
+    int64_t addr, disp;
+    int Ca, Rb;
+    int Ct;
+
+    Ct = getCodeareg();
+    printf("ct:%d\r\n",Ct);
+    if (Ct==-1) {
+       Ct = oc==1 ? 0 : 1;
+    }
+    else {
+        need(',');
+        NextToken();
+    }
+    if (oc==15) {
+       Ca = 15;
+    }
+    else {
+        // Simple [Rn] ?
+        if (token=='(' || token=='[') {
+           Ca = getCodeareg();
+            if (token != ')' && token!=']')
+                printf("Missing close bracket\r\n");
+            emit_first(predicate);
+            emit_insn(0xA0);
+            emit_insn((Ca<<4)|Ct);
+            return;
+        }
+    }
+    printf("expr:\r\n");
+    NextToken();
+    addr = expr();
+    prevToken();
+    // d(Rn)? 
+    if (token=='(' || token=='[' || oc==15) {
+        if (oc != 15) {
+            NextToken();
+            Ca = getCodeareg();
+            if (Ca==-1) {
+                printf("Illegal jump address mode.\r\n");
+                Ca = 0;
+            }
+        }
+        if (Ca==15)
+            disp = addr - code_address;            
+        else
+            disp = addr;
+        printf("disp:%d\r\n", disp);
+        if (disp >= -32768 && disp < 32767) {
+            emit_first(predicate);
+            emit_insn(0xA1);
+            emit_insn((Ca<<4)|Ct);
+            emit_insn(disp & 0xff);
+            emit_insn(disp >> 8);
+            return;                     
+        }
+        if (disp >= -8388608 && disp < 8388607) {
+            emit_first(predicate);
+            emit_insn(0xA2);
+            emit_insn((Ca<<4)|Ct);
+            emit_insn(disp & 0xff);
+            emit_insn(disp >> 8);
+            emit_insn(disp >> 16);
+            return;                     
+        }
+        emitImm8(disp,0);
+        emit_first(predicate);
+        emit_insn(0xA1);
+        emit_insn((Ca<<4)|Ct);
+        emit_insn(disp & 0xff);
+        emit_insn(disp >> 8);
+        return;
+    }
+    if (addr >= -32768 && addr < 32767) {
+       emit_first(predicate);
+       emit_insn(0xA1);
+       emit_insn((Ca<<4)|Ct);
+       emit_insn(disp & 0xff);
+       emit_insn(disp >> 8);
+       return;
+    }
+    if (addr >= -8388608 && addr < 8388607) {
+        emit_first(predicate);
+        emit_insn(0xA2);
+        emit_insn((Ca<<4)|Ct);
+        emit_insn(addr & 0xff);
+        emit_insn(addr >> 8);
+        emit_insn(addr >> 16);
+        return;                     
+    }
+    emitImm8(addr,0);
+    emit_first(predicate);
+    emit_insn(0xA1);
+    emit_insn((Ca<<4)|Ct);
+    emit_insn(addr & 0xff);
+    emit_insn(addr >> 8);
+    return;
+}
+
+// ---------------------------------------------------------------------------
 // subi r1,r2,#1234
 // ---------------------------------------------------------------------------
 
@@ -898,34 +1465,27 @@ static void process_riop(int oc)
     need(',');
     NextToken();
     val = expr();
-    emitImm15(val,lastsym!=(SYM*)NULL);
-    if (oc == 0x14 && Ra==Rt && val >= 0 && val <= 15) {
-        emit2(
-            ((val & 15) << 12) |
-            (Ra << 7) |
-            0x22
-        );
+    if (oc==0x4C && Ra == Rt) {
+        emitImm10(val,lastsym!=(SYM*)NULL);
+        emit_first(predicate);
+        emit_insn(0x47);
+        emit_insn(Rt|(val << 6));
+        emit_insn(val >> 2);
+        return;
     }
-    else if (oc==0x15 && Ra==30 && Rt==30 && val >=0 && val < 4096 && (val &7)==0) {
-        emit2(
-            (((val >> 3)&0x1ff) << 7) |
-            0x25
-        );
-    }
-    else
-        emit_insn(
-            ((val & 0x7fff) << 17) |
-            (Rt << 12) |
-            (Ra << 7) |
-            oc
-        );
+    emitImm12(val,lastsym!=(SYM*)NULL);
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra|(Rt << 6));
+    emit_insn((Rt >> 2)|((val &15) << 4));
+    emit_insn(val >> 4);
 }
 
 // ---------------------------------------------------------------------------
 // add r1,r2,r12
 // ---------------------------------------------------------------------------
 
-static void process_rrop(int oc)
+static void process_rrop(int op, int func)
 {
     int Ra;
     int Rb;
@@ -940,7 +1500,7 @@ static void process_rrop(int oc)
     NextToken();
     if (token=='#') {
         inptr = p;
-        switch(oc & 0x7F) {
+        switch(op & 0x7F) {
         case 4: process_riop(4); return;  // add
         case 5: process_riop(5); return;  // sub
         case 6: process_riop(6); return;  // cmp
@@ -962,22 +1522,20 @@ static void process_rrop(int oc)
         case 0x32:
         case 0x33:
         case 0x34:
-             process_shifti((oc & 0x7F) + 8); return;
-        default:    process_riop(oc); return;
+             process_shifti((op & 0x7F) + 8); return;
+        default:    process_riop(op); return;
         }
         return;
     }
     prevToken();
     Rb = getRegisterX();
     prevToken();
-    emit_insn(
-              ((oc & 0x7f) << 25) |
-//              ((oc >> 6) << 31) | // for shifts
-              (Rb << 17) |
-              (Rt << 12) |
-              (Ra << 7)|
-              2
-    );
+
+    emit_first(predicate);
+    emit_insn(op);
+    emit_insn(Ra|((Rb & 3 )<< 6));
+    emit_insn((Rb >> 2)|((Rt & 15)<<4));
+    emit_insn((func << 2)|(Rt >> 4));
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,10 +1666,10 @@ static void process_fpstat(int oc)
     }
     prevToken();
     emitAlignedCode(0x01);
-    emitCode(Ra);
-    emitCode(bits & 0xff);
-    emitCode(0x00);
-    emitCode(oc);
+    emit_insn(Ra);
+    emit_insn(bits & 0xff);
+    emit_insn(0x00);
+    emit_insn(oc);
 }
 
 // ---------------------------------------------------------------------------
@@ -1206,6 +1764,36 @@ static void process_bra(int oc)
 }
 
 // ---------------------------------------------------------------------------
+// bra label
+// ---------------------------------------------------------------------------
+
+static void process_br(int oc)
+{
+    int64_t val;
+    int64_t disp;
+    int64_t ad;
+
+    val = 0;
+    NextToken();
+    val = expr();
+     // ToDo: modify the fixup record type based on the number of prefixes emitted.
+    if (bGen && lastsym && (lastsym->isExtern || lastsym->defined==0))
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    ad = code_address + 3;
+    disp = (val - ad);
+    if (disp >= -2048 && disp < 2047) {
+        emit_first(predicate);
+        emit_insn(oc|((disp>>8)&15));
+        emit_insn(disp & 0xff);
+    }
+    else {
+         printf("%d Branch out of range.\r\n", lineno);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
 static void getIndexScale(int *sc)
@@ -1278,6 +1866,38 @@ static void mem_operand(int64_t *disp, int *regA, int *regB, int *sc, int *md)
      *regA = -1;
      *regB = -1;
      *sc = 0;
+     if (token==tk_zs) {
+        seg = 0;
+        NextToken();
+     }
+     else if (token==tk_ds) {
+         seg = 1;
+         NextToken();
+     }
+     else if (token==tk_es) {
+         seg = 2;
+         NextToken();
+     }
+     else if (token==tk_fs) {
+         seg = 3;
+         NextToken();
+     }
+     else if (token==tk_gs) {
+         seg = 4;
+         NextToken();
+     }
+     else if (token==tk_hs) {
+         seg = 5;
+         NextToken();
+     }
+     else if (token==tk_ss) {
+         seg = 6;
+         NextToken();
+     }
+     else if (token==tk_cs) {
+         seg = 7;
+         NextToken();
+     }
      if (token!='[') {;
           val = expr();
           *disp = val;
@@ -1369,49 +1989,42 @@ static void process_store(int oc)
     int md;
     int64_t disp;
 
-    if (oc==0x71)
+    if (oc==0x94 || oc==0x95)
         Rs = getFPRegister();
     else
         Rs = getRegisterX();
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
+   if (seg < 0) {
+       if (Ra==26 || Ra==27)
+          seg = 6;
+       else
+          seg = 1;
+   }
     if (Rs < 0) {
         printf("Expecting a source register.\r\n");
         ScanToEOL();
         return;
     }
     if (Rb > 0) {
-       if (disp < 0)
-           printf("store offset must be greater than zero.\r\n");
-       if (disp > 255LL)
-           printf("store offset too large.\r\n");
-        emit_insn(
-            ((disp & 0xff) << 24) |
-            (sc << 22) |
-            (Rb << 17) |
-            (Rs << 12) |
-            (Ra << 7) |
-            (oc==0x71 ? 0x75 : oc+8)
-        );
+       if (disp != 0)
+           printf("%d: displacement not supported with indexed mode.\r\n", lineno);
+       emit_first(predicate);
+       emit_insn(oc+0x30);
+       emit_insn(Ra|((Rb & 3)<<6));
+       emit_insn((Rb >> 2)|((Rs & 15) << 4));
+       emit_insn((Rs >> 4)|(sc << 2)|(seg << 5));
+       ScanToEOL();
        return;
     }
-    emitImm15(disp,lastsym!=(SYM*)NULL);
+    Rb = 0;
+    emitImm9(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
-    // Convert SW Rn,D[BP] to short form
-    if (oc==0x63 && Ra==27 && ((disp & 0x7)==0) && ((disp >> 3) >= -8) && ((disp >> 3) <= 7)) {
-        emit2(
-           (((disp >> 3) & 0x0f) << 12) |
-           (Rs << 7) |
-           0x67
-        );
-    }
-    else
-        emit_insn(
-            ((disp & 0x7fff) << 17) |
-            (Rs << 12) |
-            (Ra << 7) |
-            oc
-        );
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra | ((Rs & 3) << 6));
+    emit_insn((Rs >> 2)|((disp & 15) << 4));
+    emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
 }
 
@@ -1431,21 +2044,36 @@ static void process_ldi(int oc)
     }
     expect(',');
     val = expr();
-    emitImm15(val,lastsym!=(SYM*)NULL);
+    emitImm10(val,lastsym!=(SYM*)NULL);
+//    emitImm15(val,lastsym!=(SYM*)NULL);
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Rt|(val & 3) << 6);
+    emit_insn((val >> 2) & 0xff);
+}
 
-    if (val <= 7 && val >= -8)
-       emit2(
-           ((val & 15) << 12) |
-           (Rt << 7) |
-           0x34
-       );
-    else
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
-        emit_insn(
-            ((val & 0x7FFFLL) << 17) |
-            (Rt << 12) |
-            oc
-        );
+static void process_ldis(int oc)
+{
+    int Rt;
+    int64_t val;
+    int nn;
+
+    Rt = Thor_getSprRegister();
+    if (Rt==-1) {
+        printf("%d: expecting a special purpose register.\r\n", lineno);
+        return;
+    }
+    expect(',');
+    val = expr();
+    emitImm10(val,lastsym!=(SYM*)NULL);
+//    emitImm15(val,lastsym!=(SYM*)NULL);
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Rt|(val & 3) << 6);
+    emit_insn((val >> 2) & 0xff);
 }
 
 // ----------------------------------------------------------------------------
@@ -1467,7 +2095,7 @@ static void process_load(int oc)
 
     sc = 0;
     p = inptr;
-    if (oc==0x51)
+    if (oc==0x87 || oc==0x88)
        Rt = getFPRegister();
     else
         Rt = getRegisterX();
@@ -1480,45 +2108,37 @@ static void process_load(int oc)
     }
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
+   if (seg < 0) {
+       if (Ra==26 || Ra==27)
+          seg = 6;
+       else
+          seg = 1;
+   }
     if (Rb >= 0) {
-       if (disp < 0)
-           printf("load offset must be greater than zero.\r\n");
-       if (disp > 255LL)
-           printf("load offset too large.\r\n");
+       if (disp != 0)
+           printf("%d: displacement not supported with indexed mode.\r\n", lineno);
        fixup = 11;
-       if (oc==0x87 || oc==0x6c) {  //LWS CAS
-          printf("Address mode not supported.\r\n");
+       if (oc==0x97 || oc==0x8E) {  //LWS CAS
+          printf("%d: Address mode not supported.\r\n", lineno);
           return;
        }
-       if (oc==0x9F) oc = 0x8F;  // LEA
-       else oc = oc + 8;
-        emit_insn(
-            ((disp & 0xff) << 24) |
-            (sc << 22) |
-            (Rb << 17) |
-            (Rt << 12) |
-            (Ra << 7) |
-            oc
-        );
+//       if (oc==0x9F) oc = 0x8F;  // LEA
+       emit_first(predicate);
+       emit_insn(oc+0x40);
+       emit_insn(Ra|((Rb & 3)<<6));
+       emit_insn((Rb >> 2)|((Rt & 15) << 4));
+       emit_insn((Rt >> 4)|(sc << 2)|(seg << 5));
+       ScanToEOL();
        return;
     }
-    emitImm15(disp,lastsym!=(SYM*)NULL);
+    Rb = 0;
+    emitImm9(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
-    // Convert LW Rn,D[BP] to short form
-    if (oc==0x46 && Ra==27 && ((disp & 0x7)==0) && ((disp >> 3) >= -8) && ((disp >> 3) <= 7)) {
-        emit2(
-           (((disp >> 3) & 0x0f) << 12) |
-           (Rt << 7) |
-           0x5F
-        );
-    }
-    else
-        emit_insn(
-            ((disp & 0x7ffff) << 17) |
-            (Rt << 12) |
-            (Ra << 7) |
-            oc
-        );
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra | ((Rt & 3) << 6));
+    emit_insn((Rt >> 2)|((disp & 15) << 4));
+    emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
 }
 
@@ -1608,10 +2228,10 @@ static void process_pea()
         if( lastsym->segment < 5)
         sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
-       emitCode(Ra);
-       emitCode(Rb);
-       emitCode(0x00);
-       emitCode(sc | ((sg & 15) << 2));
+       emit_insn(Ra);
+       emit_insn(Rb);
+       emit_insn(0x00);
+       emit_insn(sc | ((sg & 15) << 2));
        return;
     }
     oc = 0x65;        // PEA
@@ -1793,24 +2413,22 @@ static void process_rts(int oc)
 {
      int64_t val;
 
-     val = oc==0x3B ? 8 :0;
+     val = 0;
      NextToken();
      if (token=='#') {
         val = expr();
      }
-     emitImm15(val,(code_bits > 32 || data_bits > 32) && lastsym!=(SYM *)NULL);
-     if (val < 4096)
-         emit2(
-             (((val>>3) & 0x1FFLL) << 7) |
-             ((oc==0x27) ? 0x37 : 0x30)
-         );
+     if (val > 15 || val < 0) {
+         printf("%d Return point too far.\r\n", lineno);
+         return;
+     }
+     if (val > 0) {
+        emit_first(predicate);
+        emit_insn(0xA3);
+        emit_insn(0x10|val);
+     }
      else
-         emit_insn(
-             ((val & 0x7FFFLL) << 17) |
-             (0x1F << 12) |
-             (0x1E << 7) |
-             oc
-         );
+         emit_first(0x11);
 }
 
 // ----------------------------------------------------------------------------
@@ -1848,10 +2466,10 @@ static void process_gran(int oc)
 
     Rt = getRegisterX();
     emitAlignedCode(0x01);
-    emitCode(0x00);
-    emitCode(Rt);
-    emitCode(0x00);
-    emitCode(oc);
+    emit_insn(0x00);
+    emit_insn(Rt);
+    emit_insn(0x00);
+    emit_insn(oc);
     prevToken();
 }
 
@@ -1867,7 +2485,7 @@ static void process_mtspr(int oc)
     Rc = getRegisterX();
     if (Rc==-1) {
         Rc = 0;
-        spr = FISA64_getSprRegister();
+        spr = Thor_getSprRegister();
         if (spr==-1) {
             printf("Line %d: An SPR is needed.\r\n", lineno);
             return;
@@ -1900,10 +2518,10 @@ static void process_mtfp(int oc)
     need(',');
     Ra = getRegisterX();
     emitAlignedCode(0x01);
-    emitCode(Ra);
-    emitCode(fpr);
-    emitCode(0x00);
-    emitCode(oc);
+    emit_insn(Ra);
+    emit_insn(fpr);
+    emit_insn(0x00);
+    emit_insn(oc);
     if (Ra >= 0)
     prevToken();
 }
@@ -1922,7 +2540,7 @@ static void process_mfspr(int oc)
     Ra = getRegisterX();
     if (Ra==-1) {
         Ra = 0;
-        spr = FISA64_getSprRegister();
+        spr = Thor_getSprRegister();
         if (spr==-1) {
             printf("An SPR is needed.\r\n");
             return;
@@ -1953,11 +2571,25 @@ static void process_mffp(int oc)
     need(',');
     fpr = getFPRegister();
     emitAlignedCode(0x01);
-    emitCode(fpr);
-    emitCode(Rt);
-    emitCode(0x00);
-    emitCode(oc);
+    emit_insn(fpr);
+    emit_insn(Rt);
+    emit_insn(0x00);
+    emit_insn(oc);
     if (fpr >= 0)
+    prevToken();
+}
+
+static void process_tst()
+{
+    int Pt;
+    int Ra;
+
+    Pt = getPredreg();
+    need(',');
+    Ra = getRegisterX();
+    emit_first(predicate);
+    emit_insn(Pt);
+    emit_insn(Ra);    
     prevToken();
 }
 
@@ -1970,10 +2602,10 @@ static void process_fprdstat(int oc)
     
     Rt = getRegisterX();
     emitAlignedCode(0x01);
-    emitCode(0x00);
-    emitCode(Rt);
-    emitCode(0x00);
-    emitCode(oc);
+    emit_insn(0x00);
+    emit_insn(Rt);
+    emit_insn(0x00);
+    emit_insn(oc);
 }
 
 // ----------------------------------------------------------------------------
@@ -1986,6 +2618,8 @@ static void ProcessEOL(int opt)
     int cc;
     
      //printf("Line: %d\r", lineno);
+     predicate = 0x01;
+     seg = -1;
      segprefix = -1;
      if (bGen && (segment==codeseg || segment==dataseg || segment==rodataseg)) {
     nn = binstart;
@@ -2077,7 +2711,7 @@ static void ProcessEOL(int opt)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-void FISA64_processMaster()
+void Thor_processMaster()
 {
     int nn,mm;
     int64_t bs1, bs2;
@@ -2109,6 +2743,10 @@ void FISA64_processMaster()
     ca = code_address;
     segment = codeseg;
     memset(current_label,0,sizeof(current_label));
+    predicate = 0x01;
+    seg = -1;
+    num_bytes = 0;
+    num_insns = 0;
     NextToken();
     while (token != tk_eof) {
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
@@ -2116,28 +2754,22 @@ void FISA64_processMaster()
 j_processToken:
         switch(token) {
         case tk_eol: ProcessEOL(1); break;
-        case tk_add:  process_rrop(0x04); break;
-        case tk_addi: process_riop(0x04); break;
-        case tk_addu:  process_rrop(0x14); break;
-        case tk_addui: process_riop(0x14); break;
+        case tk_add:  process_rrop(0x40,0x00); break;
+        case tk_addi: process_riop(0x48); break;
+        case tk_addu:  process_rrop(0x40,0x04); break;
+        case tk_addui: process_riop(0x4C); break;
         case tk_align: process_align(); continue; break;
-        case tk_and:  process_rrop(12); break;
-        case tk_andi:  process_riop(12); break;
-        case tk_asl:  process_rrop(0x30); break;
+        case tk_and:  process_rrop(0x50,0x00); break;
+        case tk_andi:  process_riop(0x53); break;
+        case tk_asl:  process_rrop(0x58,0x30); break;
         case tk_asli: process_shifti(0x38); break;
-        case tk_asr:  process_rrop(0x34); break;
+        case tk_asr:  process_rrop(0x58,0x34); break;
         case tk_asri: process_shifti(0x3C); break;
         case tk_beq: process_bcc(0); break;
         case tk_bfextu: process_bitfield(6); break;
-        case tk_bge: process_bcc(3); break;
-        case tk_bgt: process_bcc(2); break;
-        case tk_ble: process_bcc(5); break;
-        case tk_blt: process_bcc(4); break;
-        case tk_bmi: process_bcc(4); break;
-        case tk_bne: process_bcc(1); break;
-        case tk_bpl: process_bcc(3); break;
+        case tk_br:  process_br(0x30); break;
         case tk_bra: process_bra(0x3A); break;
-        case tk_bsr: process_bra(0x39); break;
+        case tk_bsr: process_jsr(15); break;
 //        case tk_bsr: process_bra(0x56); break;
         case tk_bss:
             if (first_bss) {
@@ -2154,11 +2786,12 @@ j_processToken:
         case tk_cas: process_load(0x6C); break;
         case tk_chk: process_chk(0x1A); break;
         case tk_cli: process_pctrl(0); break;
-        case tk_cmp: process_rrop(0x06); break;
-        case tk_cmpu: process_rrop(0x16); break;
+        case tk_cmp: process_rrop(0xff,0x06); break;
+        case tk_cmpu: process_rrop(0xff,0x16); break;
         case tk_code: process_code(); break;
         case tk_com: process_com(); break;
         case tk_cpuid: process_cpuid(0x36); break;
+        case tk_cs: seg = 7; break;
         case tk_data:
              // Process data declarations as if we are in the rodata segment
              // for initialization data.
@@ -2180,13 +2813,17 @@ j_processToken:
         case tk_dc:  process_dc(); break;
         case tk_dec: process_inc(0x65); break;
         case tk_dh:  process_dh(); break;
-        case tk_div: process_rrop(0x08); break;
-        case tk_divu: process_rrop(0x18); break;
+        case tk_div: process_rrop(0x40,0x03); break;
+        case tk_divi: process_riop(0x4B); break;
+        case tk_divu: process_rrop(0x40,0x07); break;
+        case tk_divui: process_riop(0x4F); break;
+        case tk_ds: seg = 1; break;
         case tk_dw:  process_dw(); break;
         case tk_end: goto j1;
         case tk_endpublic: break;
-        case tk_eor: process_rrop(0x0E); break;
-        case tk_eori: process_riop(0x0E); break;
+        case tk_eor: process_rrop(0x50,0x02); break;
+        case tk_eori: process_riop(0x55); break;
+        case tk_es: seg = 2; break;
         case tk_extern: process_extern(); break;
 
         case tk_fabs: process_fprop(0x64); break;
@@ -2221,40 +2858,60 @@ j_processToken:
         case tk_int: process_brk(2); break;
   
         case tk_jal: process_jal(0x3C,-1); break;
-        case tk_jmp: process_jal(0x3C,0); break;
-        case tk_jsr: process_jal(0x3C,31); break;
+        case tk_jmp: process_jsr(1); break;
+        case tk_jsr: process_jsr(0); break;
 
         case tk_lb:  process_load(0x40); break;
         case tk_lbu: process_load(0x41); break;
         case tk_lc:  process_load(0x42); break;
         case tk_lcu: process_load(0x43); break;
-        case tk_ldi: process_ldi(0x0A); break;
+        case tk_ldi: process_ldi(0x6F); break;
+        case tk_ldis: process_ldis(0x9D); break;
         case tk_lea: process_load(0x47); break;
         case tk_lfd: process_load(0x51); break;
         case tk_lh:  process_load(0x44); break;
         case tk_lhu: process_load(0x45); break;
-        case tk_lsr: process_rrop(0x31); break;
+        case tk_lsr: process_rrop(0x58,0x31); break;
         case tk_lsri: process_shifti(0x39); break;
         case tk_lw:  process_load(0x46); break;
         case tk_lwar:  process_load(0x5C); break;
         case tk_message: process_message(); break;
-        case tk_mfspr: process_mfspr(0x1F); break;
-        case tk_mod: process_rrop(0x09); break;
-        case tk_modu: process_rrop(0x19); break;
+        case tk_mfspr: process_mfspr(0xA8); break;
+        case tk_mod: process_rrop(0x40,0x09); break;
+        case tk_modu: process_rrop(0x40,0x19); break;
         case tk_mov: process_mov(); break;
-        case tk_mtspr: process_mtspr(0x1E); break;
-        case tk_mul: process_rrop(0x07); break;
-        case tk_muli: process_riop(0x07); break;
-        case tk_mulu: process_rrop(0x17); break;
-        case tk_mului: process_riop(0x17); break;
+        case tk_mtspr: process_mtspr(0xA9); break;
+        case tk_mul: process_rrop(0x40,0x02); break;
+        case tk_muli: process_riop(0x4A); break;
+        case tk_mulu: process_rrop(0x40,0x06); break;
+        case tk_mului: process_riop(0x4E); break;
         case tk_neg: process_neg(0x15); break;
         case tk_nop: emit_insn(0x0000003F); break;
         case tk_not: process_rop(0x0A); break;
-        case tk_or:  process_rrop(0x0D); break;
-        case tk_ori: process_riop(0x0D); break;
+        case tk_or:  process_rrop(0x40,0x01); break;
+        case tk_ori: process_riop(0x54); break;
         case tk_org: process_org(); break;
         case tk_pea: process_pea(); break;
         case tk_pop:  process_pushpop(0x57); break;
+        case tk_pred:
+             if (isdigit(inptr[0]) && isdigit(inptr[1])) {
+                  predicate = ((inptr[0]-'0' * 10) + (inptr[1]-'0')) << 4;
+                  inptr += 2;
+                  if (inptr[0]=='.') inptr++;
+                  nn = getPredcon();
+                  if (nn >= 0)
+                     predicate |= nn;
+             }
+             else if (isdigit(inptr[0])) {
+                  predicate = (inptr[0]-'0') << 4;
+                  inptr += 1;
+                  if (inptr[0]=='.') inptr++;
+                  nn = getPredcon();
+                  if (nn >= 0)
+                     predicate |= nn;
+             }
+             SkipSpaces();
+             break;
         case tk_public: process_public(); break;
         case tk_push: process_pushpop(0x67); break;
         case tk_rodata:
@@ -2268,8 +2925,8 @@ j_processToken:
             }
             segment = rodataseg;
             break;
-        case tk_rol: process_rrop(0x32); break;
-        case tk_ror: process_rrop(0x33); break;
+        case tk_rol: process_rrop(0x58,0x32); break;
+        case tk_ror: process_rrop(0x58,0x33); break;
         case tk_roli: process_shifti(0x3A); break;
         case tk_rori: process_shifti(0x3B); break;
         case tk_rtd: process_pctrl(29); break;
@@ -2277,30 +2934,35 @@ j_processToken:
         case tk_rti: process_pctrl(31); break;
         case tk_rtl: process_rts(0x27); break;
         case tk_rts: process_rts(0x3B); break;
-        case tk_sb:  process_store(0x60); break;
-        case tk_sc:  process_store(0x61); break;
+        case tk_sb:  process_store(0x90); break;
+//        case tk_sbx:  process_store(0xC0); break;
+        case tk_sc:  process_store(0x91); break;
+//        case tk_scx:  process_store(0xC1); break;
         case tk_sei: process_pctrl(1); break;
-        case tk_seq:  process_rrop(0x20); break;
         case tk_sfd: process_store(0x71); break;
-        case tk_sh:  process_store(0x62); break;
-        case tk_shl:  process_rrop(0x30); break;
+        case tk_sh:  process_store(0x92); break;
+        case tk_shl:  process_rrop(0x58,0x30); break;
         case tk_shli: process_shifti(0x38); break;
-        case tk_sne:  process_rrop(0x21); break;
+//        case tk_shx:  process_store(0xC2); break;
+        case tk_ss: seg = 6; break;
         case tk_stp: process_pctrl(2); break;
-        case tk_sub:  process_rrop(0x05); break;
-        case tk_subi: process_riop(0x05); break;
-        case tk_subu:  process_rrop(0x15); break;
-        case tk_subui: process_riop(0x15); break;
+        case tk_sub:  process_rrop(0x40,0x01); break;
+        case tk_subi: process_riop(0x49); break;
+        case tk_subu:  process_rrop(0x40,0x05); break;
+        case tk_subui: process_riop(0x4D); break;
         case tk_sxb: process_rop(0x10); break;
         case tk_sxc: process_rop(0x11); break;
         case tk_sxh: process_rop(0x12); break;
         case tk_sys: process_brk(0); break;
-        case tk_sw:  process_store(0x63); break;
+        case tk_sw:  process_store(0x93); break;
         case tk_swcr:  process_store(0x6E); break;
-        case tk_xor: process_rrop(0x0E); break;
-        case tk_xori: process_riop(0x0E); break;
+//        case tk_swx:  process_store(0xC3); break;
+        case tk_tst:   process_tst(); break;
+        case tk_xor: process_rrop(0x40,0x02); break;
+        case tk_xori: process_riop(0x55); break;
         case tk_wai: process_pctrl(3); break;
         case tk_id:  process_label(); break;
+        case tk_zs:  seg = 0; break;
         }
         NextToken();
     }

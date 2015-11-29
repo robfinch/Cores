@@ -194,6 +194,7 @@ else begin
 				TLBC[i] <= HTLBC;
 				TLBValid[i] <= HTLBValid;
 			end
+		default:  ;
 		endcase
 	end
 

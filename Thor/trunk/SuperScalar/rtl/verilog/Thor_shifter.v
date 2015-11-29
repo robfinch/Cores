@@ -26,9 +26,9 @@
 //
 `include "Thor_defines.v"
 
-module Thor_shifter(opcode, a, b, o);
+module Thor_shifter(func, a, b, o);
 parameter DBW=64;
-input [7:0] opcode;
+input [5:0] func;
 input [DBW-1:0] a;
 input [DBW-1:0] b;
 output reg [DBW-1:0] o;
@@ -38,8 +38,8 @@ wire [DBW*2-1:0] shruo = {a,{DBW{1'b0}}} >> b[5:0];
 wire signed [DBW-1:0] as = a;
 wire signed [DBW-1:0] shro = as >> b[5:0];
 
-always @(opcode or shlo or shro or shruo)
-case(opcode)
+always @(func or shlo or shro or shruo)
+case(func)
 `SHL,`SHLU,`SHLI,`SHLUI:
 	o <= shlo[DBW-1:0];
 `SHR,`SHRI:

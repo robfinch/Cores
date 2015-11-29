@@ -30,8 +30,8 @@ Thor_multiplier #(DBW) umult0
 (
 	.rst(rst_i),
 	.clk(clk),
-	.ld(alu0_ld && (alu0_op==`MUL || alu0_op==`MULU || alu0_op==`MULI || alu0_op==`MULUI)),
-	.sgn(alu0_op==`MUL || alu0_op==`MULI),
+	.ld(alu0_ld && ((alu0_op==`RR && (alu0_fn==`MUL || alu0_fn==`MULU)) || alu0_op==`MULI || alu0_op==`MULUI)),
+	.sgn((alu0_op==`RR && alu0_op==`MUL) || alu0_op==`MULI),
 	.isMuli(alu0_op==`MULI || alu0_op==`MULUI),
 	.a(alu0_argA),
 	.b(alu0_argB),
@@ -44,8 +44,8 @@ Thor_multiplier #(DBW) umult1
 (
 	.rst(rst_i),
 	.clk(clk),
-	.ld(alu1_ld && (alu1_op==`MUL || alu1_op==`MULU || alu1_op==`MULI || alu1_op==`MULUI)),
-	.sgn(alu1_op==`MUL || alu1_op==`MULI),
+	.ld(alu1_ld && ((alu1_op==`RR && (alu1_fn==`MUL || alu1_fn==`MULU)) || alu1_op==`MULI || alu1_op==`MULUI)),
+	.sgn((alu1_op==`RR && alu1_op==`MUL) || alu1_op==`MULI),
 	.isMuli(alu1_op==`MULI || alu1_op==`MULUI),
 	.a(alu1_argA),
 	.b(alu1_argB),
@@ -89,6 +89,7 @@ Thor_divider #(DBW) udiv1
 Thor_alu #(DBW) ualu0 
 (
 	.alu_op(alu0_op),
+	.alu_fn(alu0_fn),
 	.alu_argA(alu0_argA),
 	.alu_argB(alu0_argB),
 	.alu_argC(alu0_argC),
@@ -101,6 +102,7 @@ Thor_alu #(DBW) ualu0
 Thor_alu #(DBW) ualu1 
 (
 	.alu_op(alu1_op),
+	.alu_fn(alu1_fn),
 	.alu_argA(alu1_argA),
 	.alu_argB(alu1_argB),
 	.alu_argC(alu1_argC),
@@ -144,12 +146,14 @@ assign  alu0_v = alu0_dataready,
 assign  alu0_id = alu0_sourceid,
 		alu1_id = alu1_sourceid;
 
-assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
+assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`JSRS || alu0_op==`JSRZ || 
+                       alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
 					  (alu0_op == `SYS || alu0_op==`INT) ? alu0_argA + {alu0_argI[DBW-5:0],4'b0} :
-					  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_argI),
-		alu1_misspc = (alu1_op == `JSR || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || alu1_op==`LOOP) ? alu1_argA + alu1_argI :
+					  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI),
+		alu1_misspc = (alu1_op == `JSR || alu1_op==`JSRS || alu1_op==`JSRZ || 
+		               alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || alu1_op==`LOOP) ? alu1_argA + alu1_argI :
 					  (alu1_op == `SYS || alu1_op==`INT) ? alu1_argA + {alu1_argI[DBW-5:0],4'b0} :
-					  (alu1_bt ? alu1_pc + alu0_insnsz : alu1_pc + alu1_argI);
+					  (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
 
 assign  alu0_exc = `EXC_NONE;
 //			? `EXC_NONE
@@ -177,11 +181,11 @@ assign  alu1_exc = `EXC_NONE;
 
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
-		  : (alu0_cmt && (alu0_op == `JSR || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || (alu0_op==`LOOP && lc != 64'd0))));
+		  : (alu0_cmt && (alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || (alu0_op==`LOOP && lc != 64'd0))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
-		  : (alu1_cmt && (alu1_op == `JSR || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || (alu1_op==`LOOP && lc != 64'd0))));
+		  : (alu1_cmt && (alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || (alu1_op==`LOOP && lc != 64'd0))));
 
 assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
 	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),

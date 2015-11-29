@@ -87,6 +87,9 @@ int rodatandx;
 int tlsndx;
 int bssndx;
 SYM *lastsym;
+int isInitializationData;
+int num_bytes;
+int num_insns;
 
 void emitCode(int cd);
 void emitAlignedCode(int cd);
@@ -98,6 +101,7 @@ extern void searchenv(char *filename, char *envname, char **pathname);
 extern void Table888mmu_processMaster();
 extern void Friscv_processMaster();
 extern void FISA64_processMaster();
+extern void Thor_processMaster();
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -108,7 +112,7 @@ void displayHelp()
      printf("    +v      = verbose output\r\n");
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
-     printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64\r\n");
+     printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64 T=Thor\r\n");
      printf("    -o[bvl] = suppress output file b=binary, v=verilog, l=listing\r\n");
 }
 
@@ -159,6 +163,9 @@ int processOptions(int argc, char **argv)
               if (argv[nn][2]=='6') {
                  gCpu = 64;
               }
+              if (argv[nn][2]=='T') {
+                 gCpu = 4;
+              }
            }
            nn++;
         }
@@ -174,13 +181,15 @@ void emitByte(int64_t cd)
 {
      if (segment < 5)
         sections[segment].AddByte(cd);
-    if (segment == codeseg || segment == dataseg || segment == rodataseg) {
+    if (segment == codeseg || segment == rodataseg) {
         binfile[binndx] = cd & 255LL;
         binndx++;
     }
     if (segment==bssseg) {
        bss_address++;
     }
+    else if (segment==dataseg)
+         data_address++;
     else
         code_address++;
 }
@@ -238,11 +247,16 @@ void process_public()
          segment = rodataseg;
     }
     else if (token==tk_data) {
-         segment = dataseg;
+         if (isInitializationData)
+             segment = rodataseg;
+         else
+             segment = dataseg;
     }
     else if (token==tk_bss) {
          segment = bssseg;
     }
+    else
+        prevToken();
     bump_address();
 //    if (segment==bssseg)
 //        ca = bss_address;
@@ -272,11 +286,15 @@ void process_public()
         printf("Line:%.60s", stptr);
     }
     else {
+         if (isInitializationData) {
+             ScanToEOL();
+             return;
+         }
         sym = find_symbol(lastid);
         if (pass == 3) {
             if (sym) {
                 if (sym->defined)
-                    printf("Symbol already defined.\r\n");
+                    printf("Symbol (%s) already defined.\r\n", lastid);
             }
             else {
                 sym = new_symbol(lastid);
@@ -348,7 +366,11 @@ void process_org()
     NextToken();
     new_address = expr();
     if (!rel_out) {
-        if (segment==bssseg || segment==tlsseg) {
+        if (segment==dataseg) {
+            data_address = new_address;
+            sections[segment].address = new_address;
+        }
+        else if (segment==bssseg || segment==tlsseg) {
             bss_address = new_address;
             sections[segment].address = new_address;
         }
@@ -360,6 +382,8 @@ void process_org()
                first_org = 0;
             }
             else {
+                 // Ignore the org directive in initialized data area of rodata
+                 if (!isInitializationData)
                 while(sections[0].address < new_address)
                     emitByte(0x00);
             }
@@ -756,6 +780,8 @@ void process_label()
         strcpy(current_label, lastid);
         strcpy(nm, lastid);
     }
+    if (strcmp("end_init_data", nm)==0)
+       isInitializationData = 0;
     NextToken();
 //    SkipSpaces();
     if (token==tk_equ || token==tk_eq) {
@@ -767,6 +793,9 @@ void process_label()
 //    if (token==tk_eol)
 //       prevToken();
     //else if (token==':') inptr++;
+    // ignore the labels in initialization data
+    if (isInitializationData)
+       return;
     sym = find_symbol(nm);
     if (pass==3) {
         if (sym) {
@@ -820,6 +849,8 @@ void process_label()
              }
          }
     }
+    if (strcmp("begin_init_data", nm)==0)
+       isInitializationData = 1;
 }
 
 // ----------------------------------------------------------------------------
@@ -895,8 +926,15 @@ void processSegments()
         pinptr = inptr;
     }
     memset(masterFile,0,sizeof(masterFile));
-    strcpy(masterFile, codebuf);
+    strcat(masterFile, codebuf);
     strcat(masterFile, rodatabuf);
+    strcat(masterFile, "\r\n\trodata\r\n");
+    strcat(masterFile, "\talign 8\r\n");
+    strcat(masterFile, "begin_init_data:\r\n");
+    strcat(masterFile, databuf);
+    strcat(masterFile, "\r\n\trodata\r\n");
+    strcat(masterFile, "\talign 8\r\n");
+    strcat(masterFile, "end_init_data:\r\n");
     strcat(masterFile, databuf);
     strcat(masterFile, bssbuf);
     strcat(masterFile, tlsbuf);
@@ -921,6 +959,7 @@ void processLine(char *line)
     static char fnm[300];
     char *fname;
     int nn;
+    int lb;
 
     p = line;
     while(isspace(*p)) p++;
@@ -945,7 +984,10 @@ void processLine(char *line)
         } while(nn < sizeof(fnm)/sizeof(char));
         fnm[nn] = '\0';
         fname = strdup(fnm);
+        lb = lineno;
+        lineno = 1;
         processFile(fname,1);
+        lineno = lb;
         free(fname);
         return;
     }
@@ -1030,6 +1072,8 @@ void processMaster()
         FISA64_processMaster();
     else if (gCpu==5)
         Friscv_processMaster();
+    else if (gCpu==4)
+        Thor_processMaster();
 }
 
 // ----------------------------------------------------------------------------
@@ -1215,15 +1259,37 @@ void WriteELFFile(FILE *fp)
 
 }
 
+int IHChecksum(char *ibuf, int payloadCount)
+{
+    char buf[20];
+    int nn;
+    int ii;
+    int sum;
+
+    sum = 0;
+    for (nn = 0; nn < payloadCount +4; nn++) {
+        buf[0] = ibuf[nn*2+1];
+        buf[1] = ibuf[nn*2+2];
+        buf[2] = '\0';        
+        ii = strtoul(buf,NULL,16);
+        sum = sum + ii;
+    }
+    sum = -sum;
+    sprintf(&ibuf[(payloadCount+4) * 2+1],"%02X\n", sum & 0xFF);
+}
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
 int main(int argc, char *argv[])
 {
-    int nn,qq;
+    int nn,qq,kk;
     static char fname[500];
+    static char hexbuf[500];
     char *p;
+    int chksum;
+    unsigned long lsa;      // last start address
+    double bpi;
 
     ofp = stdout;
     nn = processOptions(argc, argv);
@@ -1236,6 +1302,8 @@ int main(int argc, char *argv[])
     start_address = 0;
     code_address = 0;
     bss_address = 0;
+    data_address = 0;
+    isInitializationData = 0;
     for (qq = 0; qq < 12; qq++)
         sections[qq].Clear();
     nmTable.Clear();
@@ -1262,8 +1330,10 @@ int main(int argc, char *argv[])
     processMaster();
     if (verbose) printf("Pass 4: phase errors: %d\r\n", phasing_errors);
     pass = 5;
-    while (phasing_errors && pass < 10) {
+    while (phasing_errors && pass < 40) {
         phasing_errors = 0;
+        num_bytes = 0;
+        num_insns = 0;
         processMaster();
         if (verbose) printf("Pass %d: phase errors: %d\r\n", pass, phasing_errors);
         pass++;
@@ -1287,6 +1357,23 @@ int main(int argc, char *argv[])
     }
     processMaster();
     DumpSymbols();
+    fprintf(ofp, "\nnumber of bytes: %d\n", num_bytes);
+    fprintf(ofp, "number of instructions: %d\n", num_insns);
+    bpi = (double)num_bytes/(double)num_insns;
+    fprintf(ofp, "%0.6f bytes (%d bits) per instruction\n", bpi, (int)(bpi*8));
+
+/*
+    chksum = 0;
+    for (nn = 0; nn < binndx; nn+=4) {
+        chksum += binfile[nn] +
+                  (binfile[nn+1] << 8) + 
+                  (binfile[nn+2] << 16) + 
+                  (binfile[nn+3] << 24) 
+                  ;
+    }
+
+    fprintf(ofp, "\r\nChecksum: %08X\r\n", chksum);
+*/
     if (listing)
         fclose(ofp);
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1304,7 +1391,7 @@ int main(int argc, char *argv[])
         if (ofp) {
             fwrite((void*)sections[0].bytes,sections[0].index,1,ofp);
             fwrite((void*)sections[1].bytes,sections[1].index,1,ofp);
-            fwrite((void*)sections[2].bytes,sections[2].index,1,ofp);
+            //fwrite((void*)sections[2].bytes,sections[2].index,1,ofp);
             //fwrite(binfile,binndx,1,ofp);
             fclose(ofp);    
         }
@@ -1347,17 +1434,17 @@ int main(int argc, char *argv[])
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
-                for (nn = 0; nn < binndx; nn+=8) {
+                for (kk = 0; kk < binndx; kk+=8) {
                     fprintf(vfp, "\trommem[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
-                        (((start_address+nn)/8)%8192), checksum64((int64_t *)&binfile[nn]),
-                        binfile[nn+7], binfile[nn+6], binfile[nn+5], binfile[nn+4], 
-                        binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+                        (((0+kk)/8)%16384), checksum64((int64_t *)&binfile[kk]),
+                        binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
             else {
-                for (nn = 0; nn < binndx; nn+=4) {
+                for (kk = 0;kk < binndx; kk+=4) {
                     fprintf(vfp, "\trommem[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
-                        (((start_address+nn)/4)%8192), checksum((int32_t *)&binfile[nn]), binfile[nn+3], binfile[nn+2], binfile[nn+1], binfile[nn]);
+                        (((start_address+kk)/4)%8192), checksum((int32_t *)&binfile[kk]), binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
             fclose(vfp);
@@ -1365,5 +1452,64 @@ int main(int argc, char *argv[])
         else
             printf("Can't create .ver file.\r\n");
     }
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Output Verilog memory declaration
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if (verbose) printf("Generating Text file.\r\n");
+        strcpy(fname, argv[nn]);
+        p = strrchr(fname,'.');
+        if (p) {
+            *p = '\0';
+        }
+        strcat(fname, ".txt");
+        printf("fname:%s\r\n", fname);
+        vfp = fopen(fname, "w");
+        if (vfp) {
+            if (gCpu==64) {
+                for (kk = 0; kk < binndx; kk+=4) {
+                    fprintf(vfp, "%06X,%02X%02X%02X%02X\n", 
+                        (((start_address+kk))),
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                }
+            }
+            fclose(vfp);
+        }
+        else
+            printf("Can't create .txt file.\r\n");
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Output Intel hex file
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if (verbose) printf("Generating Hex file.\r\n");
+        strcpy(fname, argv[nn]);
+        p = strrchr(fname,'.');
+        if (p) {
+            *p = '\0';
+        }
+        lsa = 0;
+        strcat(fname, ".hex");
+        printf("fname:%s\r\n", fname);
+        vfp = fopen(fname, "w");
+        if (vfp) {
+            if (gCpu==64) {
+                for (kk = 0; kk < binndx; kk+=4) {
+                    if (lsa != (start_address + kk) >> 16) {
+                        sprintf(hexbuf, ":02000004%04X00\n", ((start_address+kk) >> 16));
+                        IHChecksum(hexbuf, 2);
+                        fprintf(vfp, hexbuf);
+                        lsa = (start_address+kk) >> 16;
+                    }
+                    sprintf(hexbuf, ":%02X%04X00%02X%02X%02X%02X%02X\n",
+                        4, (start_address + kk) & 0xFFFF,
+                        binfile[kk], binfile[kk+1], binfile[kk+2], binfile[kk+3]
+                    );
+                    IHChecksum(hexbuf, 4);
+                    fprintf(vfp, hexbuf);
+                }
+            }
+            fprintf(vfp, ":00000001FF\n%c",26);        // end of file record
+            fclose(vfp);
+        }
+        else
+            printf("Can't create .txt file.\r\n");
     return 0;
 }

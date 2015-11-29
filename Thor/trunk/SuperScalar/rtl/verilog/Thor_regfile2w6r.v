@@ -20,11 +20,11 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
 //
-// Register file with two write ports and four read ports.
+// Register file with two write ports and six read ports.
 // ============================================================================
 //
-module Thor_regfile2w4r(clk, wr0, wr1, wa0, wa1, i0, i1,
-	rclk, ra0, ra1, ra2, ra3, o0, o1, o2, o3);
+module Thor_regfile2w6r(clk, wr0, wr1, wa0, wa1, i0, i1,
+	rclk, ra0, ra1, ra2, ra3, ra4, ra5, o0, o1, o2, o3, o4, o5);
 parameter WID=64;
 input clk;
 input wr0;
@@ -38,14 +38,18 @@ input [5:0] ra0;
 input [5:0] ra1;
 input [5:0] ra2;
 input [5:0] ra3;
+input [5:0] ra4;
+input [5:0] ra5;
 output [WID-1:0] o0;
 output [WID-1:0] o1;
 output [WID-1:0] o2;
 output [WID-1:0] o3;
+output [WID-1:0] o4;
+output [WID-1:0] o5;
 
 reg [WID-1:0] regs0 [0:63];
 reg [WID-1:0] regs1 [0:63];
-reg [5:0] rra0,rra1,rra2,rra3;
+reg [5:0] rra0,rra1,rra2,rra3,rra4,rra5;
 
 reg whichreg [0:63];	// tracks which register file is the valid one for a given register
 
@@ -65,6 +69,14 @@ assign o3 = rra3==6'd0 ? {WID{1'b0}} :
 	(wr1 && (rra3==wa1)) ? i1 :
 	(wr0 && (rra3==wa0)) ? i0 :
 	whichreg[rra3]==1'b0 ? regs0[rra3] : regs1[rra3];
+assign o4 = rra4==6'd0 ? {WID{1'b0}} :
+    (wr1 && (rra4==wa1)) ? i1 :
+    (wr0 && (rra4==wa0)) ? i0 :
+    whichreg[rra4]==1'b0 ? regs0[rra4] : regs1[rra4];
+assign o5 = rra5==6'd0 ? {WID{1'b0}} :
+    (wr1 && (rra5==wa1)) ? i1 :
+    (wr0 && (rra5==wa0)) ? i0 :
+    whichreg[rra5]==1'b0 ? regs0[rra5] : regs1[rra5];
 
 always @(posedge clk)
 	if (wr0)
@@ -78,6 +90,8 @@ always @(posedge rclk) rra0 <= ra0;
 always @(posedge rclk) rra1 <= ra1;
 always @(posedge rclk) rra2 <= ra2;
 always @(posedge rclk) rra3 <= ra3;
+always @(posedge rclk) rra4 <= ra4;
+always @(posedge rclk) rra5 <= ra5;
 
 always @(posedge clk)
 	// writing three registers at once

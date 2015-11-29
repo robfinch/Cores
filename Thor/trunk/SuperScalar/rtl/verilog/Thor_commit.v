@@ -29,12 +29,12 @@
 // independant always clk block
 //
 if (commit0_v && commit0_tgt[8:4]==5'h11) begin
-	bregs[commit0_tgt[3:0]] <= commit0_bus;
-	$display("bregs[%d]<=%h", commit0_tgt[3:0], commit0_bus);
+	cregs[commit0_tgt[3:0]] <= commit0_bus;
+	$display("cregs[%d]<=%h", commit0_tgt[3:0], commit0_bus);
 end
 if (commit1_v && commit1_tgt[8:4]==5'h11) begin
-	$display("bregs[%d]<=%h", commit1_tgt[3:0], commit1_bus);
-	bregs[commit1_tgt[3:0]] <= commit1_bus;
+	$display("cregs[%d]<=%h", commit1_tgt[3:0], commit1_bus);
+	cregs[commit1_tgt[3:0]] <= commit1_bus;
 end
 
 `ifdef SEGMENTATION
@@ -141,6 +141,13 @@ if (commit0_v) begin
 			case(iqentry_tgt[head0])
 			`LCTR:	lc <= commit0_bus;
 			`ASID:	asid <= commit0_bus;
+			`SR:	begin
+					GM <= commit0_bus[7:0];
+					GMB <= commit0_bus[23:16];
+					imb <= commit0_bus[31];
+					im <= commit0_bus[15];
+					fxe <= commit0_bus[12];
+					end
 			default:	;
 			endcase
 		end
@@ -168,6 +175,13 @@ if (commit0_v && commit1_v) begin
 			case(iqentry_tgt[head1])
 			`LCTR:	lc <= commit1_bus;
 			`ASID:	asid <= commit1_bus;
+			`SR:	begin
+					GM <= commit1_bus[7:0];
+					GMB <= commit1_bus[23:16];
+					imb <= commit1_bus[31];
+					im <= commit1_bus[15];
+					fxe <= commit1_bus[12];
+					end
 			default:	;
 			endcase
 		end

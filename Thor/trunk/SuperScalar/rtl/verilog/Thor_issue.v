@@ -80,6 +80,7 @@ begin
 			alu0_sourceid	<= n[3:0];
 			alu0_insnsz <= iqentry_insnsz[n];
 			alu0_op		<= iqentry_op[n];
+			alu0_fn     <= iqentry_fn[n];
 			alu0_cond   <= iqentry_cond[n];
 			alu0_bt		<= iqentry_bt[n];
 			alu0_pc		<= iqentry_pc[n];
@@ -106,6 +107,7 @@ begin
 			alu1_sourceid	<= n[3:0];
 			alu1_insnsz <= iqentry_insnsz[n];
 			alu1_op		<= iqentry_op[n];
+			alu1_fn     <= iqentry_fn[n];
 			alu1_cond   <= iqentry_cond[n];
 			alu1_bt		<= iqentry_bt[n];
 			alu1_pc		<= iqentry_pc[n];
@@ -149,6 +151,7 @@ begin
 			fp0_ld <= 1'b1;
 			fp0_sourceid	<= n[3:0];
 			fp0_op		<= iqentry_op[n];
+			fp0_fn     <= iqentry_fn[n];
 			fp0_cond   <= iqentry_cond[n];
 			fp0_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
 							(iqentry_p_s[n] == alu0_id) ? alu0_bus[3:0] :

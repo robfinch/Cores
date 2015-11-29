@@ -173,7 +173,7 @@ end
 // What if there's a databus error during the store ?
 // set the IQ entry == DONE as soon as the SW is let loose to the memory system
 //
-if (dram0 == 2'd1 && fnIsStore(dram0_op)) begin
+/*if (dram0 == 2'd1 && fnIsStore(dram0_op)) begin
 	if ((alu0_v && dram0_id[2:0] == alu0_id[2:0]) || (alu1_v && dram0_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram0_id[2:0] ] <= `TRUE;
 	iqentry_cmt [ dram0_id[2:0]] <= `TRUE;
@@ -191,18 +191,22 @@ if (dram2 == 2'd1 && fnIsStore(dram2_op)) begin
 	iqentry_cmt [ dram2_id[2:0]] <= `TRUE;
 	iqentry_out[ dram2_id[2:0] ] <= `FALSE;
 end
-
+*/
 //
 // see if anybody else wants the results ... look at lots of buses:
 //  - alu0_bus
 //  - alu1_bus
+//  - alu2_bus
+//  - alu3_bus
 //  - fp0_bus
 //  - dram_bus
 //  - commit0_bus
 //  - commit1_bus
+//  - commit2_bus
+//  - commit3_bus
 //
 
-for (n = 0; n < 8; n = n + 1)
+for (n = 0; n < 16; n = n + 1)
 begin
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
 		iqentry_pred[n] <= alu0_bus[3:0];
@@ -234,6 +238,40 @@ begin
 	end
 	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
 		iqentry_a3[n] <= alu1_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
+
+	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu2_id && iqentry_v[n] == `VAL && alu2_v == `VAL) begin
+		iqentry_pred[n] <= alu2_bus[3:0];
+		iqentry_p_v[n] <= `VAL;
+	end
+	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == alu2_id && iqentry_v[n] == `VAL && alu2_v == `VAL) begin
+		iqentry_a1[n] <= alu2_bus;
+		iqentry_a1_v[n] <= `VAL;
+	end
+	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == alu2_id && iqentry_v[n] == `VAL && alu2_v == `VAL) begin
+		iqentry_a2[n] <= alu2_bus;
+		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == alu2_id && iqentry_v[n] == `VAL && alu2_v == `VAL) begin
+		iqentry_a3[n] <= alu2_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
+
+	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu3_id && iqentry_v[n] == `VAL && alu3_v == `VAL) begin
+		iqentry_pred[n] <= alu3_bus[3:0];
+		iqentry_p_v[n] <= `VAL;
+	end
+	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == alu3_id && iqentry_v[n] == `VAL && alu3_v == `VAL) begin
+		iqentry_a1[n] <= alu3_bus;
+		iqentry_a1_v[n] <= `VAL;
+	end
+	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == alu3_id && iqentry_v[n] == `VAL && alu3_v == `VAL) begin
+		iqentry_a2[n] <= alu3_bus;
+		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == alu3_id && iqentry_v[n] == `VAL && alu3_v == `VAL) begin
+		iqentry_a3[n] <= alu3_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
 `ifdef FLOATING_POINT
@@ -300,6 +338,40 @@ begin
 	end
 	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
 		iqentry_a3[n] <= commit1_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
+
+	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit2_id && iqentry_v[n] == `VAL && commit2_v == `VAL) begin
+		iqentry_pred[n] <= commit2_bus[3:0];
+		iqentry_p_v[n] <= `VAL;
+	end
+	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == commit2_id && iqentry_v[n] == `VAL && commit2_v == `VAL) begin
+		iqentry_a1[n] <= commit2_bus;
+		iqentry_a1_v[n] <= `VAL;
+	end
+	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == commit2_id && iqentry_v[n] == `VAL && commit2_v == `VAL) begin
+		iqentry_a2[n] <= commit2_bus;
+		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit2_id && iqentry_v[n] == `VAL && commit2_v == `VAL) begin
+		iqentry_a3[n] <= commit2_bus;
+		iqentry_a3_v[n] <= `VAL;
+	end
+
+	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit3_id && iqentry_v[n] == `VAL && commit3_v == `VAL) begin
+		iqentry_pred[n] <= commit3_bus[3:0];
+		iqentry_p_v[n] <= `VAL;
+	end
+	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == commit3_id && iqentry_v[n] == `VAL && commit3_v == `VAL) begin
+		iqentry_a1[n] <= commit3_bus;
+		iqentry_a1_v[n] <= `VAL;
+	end
+	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == commit3_id && iqentry_v[n] == `VAL && commit3_v == `VAL) begin
+		iqentry_a2[n] <= commit3_bus;
+		iqentry_a2_v[n] <= `VAL;
+	end
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit3_id && iqentry_v[n] == `VAL && commit3_v == `VAL) begin
+		iqentry_a3[n] <= commit3_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
 end

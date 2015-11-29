@@ -38,12 +38,15 @@ always @(posedge clk)
 	if (LEDS_ack)
 		$display("LEDS: %b", cpu_dato[7:0]);
 
+wire tc_ack = cyc && stb && (adr[31:16]==16'hFFD0);
+
 //wire cs0 = cyc&& stb && adr[31:16]==16'h0000;
 
 assign cpu_ack =
 	LEDS_ack |
 	scr_ack |
-	br_ack
+	br_ack |
+	tc_ack
 	;
 assign cpu_dati =
 	scr_dato |
