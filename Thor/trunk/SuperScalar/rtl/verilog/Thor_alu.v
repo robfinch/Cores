@@ -112,7 +112,7 @@ casex(alu_op)
 `_16ADDUI:		o <= {alu_argA[DBW-5:0],4'b0} + alu_argI;
 `NEG:			o <= -alu_argA;
 `NOT:			o <= ~alu_argA;
-`MOV:			o <= alu_argA;
+`MOV,`STS:		o <= alu_argA;
 `DOUBLE:
 	case (alu_fn)
 	`FNEG:		o <= {~alu_argA[DBW-1],alu_argA[DBW-2:0]};

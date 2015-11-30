@@ -135,10 +135,7 @@
 `define SFD			8'h95
 `define STI			8'h96
 `define CAS			8'h97
-`define STSB		8'h98
-`define STSC		8'h99
-`define STSH		8'h99
-`define STSW		8'h9A
+`define STS	    	8'h98
 
 `define LDIT10		8'h9C
 `define LDIS		8'h9D
@@ -228,6 +225,7 @@
 `define BCDADD			8'h00
 `define BCDSUB			8'h01
 `define BCDMUL			8'h02
+`define SYNC        8'hF7
 `define MEMSB		8'hF8	// synchronization barrier
 `define MEMDB		8'hF9	// data barrier
 `define CLI			8'hFA
