@@ -137,7 +137,8 @@ casex(alu_op)
 	endcase
 `ADDI,`ADDUI,`ADDUIS:
                 o <= alu_argA + alu_argI;
-`SUBI,`SUBUI:	o <= alu_argA - alu_argI;
+`SUBI,`SUBUI,`PUSH:
+            	o <= alu_argA - alu_argI;
 `ANDI:			o <= alu_argA & alu_argI;
 `ORI:			o <= alu_argA | alu_argI;
 `EORI:			o <= alu_argA ^ alu_argI;
@@ -208,7 +209,8 @@ casex(alu_op)
 			o[3] <= 1'b0;
 			o[DBW-1:4] <= 64'd0;
 		end
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,`LEA,`PUSH,`RTS2:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,
+`LWS,`SWS,`LEA,`RTS2:
 				o <= alu_argA + alu_argI;
 `LBX,`LBUX,`SBX,
 `LCX,`LCUX,`SCX,

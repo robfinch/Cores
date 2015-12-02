@@ -299,6 +299,7 @@ reg  [2:0] head4;	// used only to determine memory-access ordering
 reg  [2:0] head5;	// used only to determine memory-access ordering
 reg  [2:0] head6;	// used only to determine memory-access ordering
 reg  [2:0] head7;	// used only to determine memory-access ordering
+reg  [2:0] headinc;
 
 wire  [2:0] missid;
 reg   fetchbuf;		// determines which pair to read from & write to
@@ -687,6 +688,9 @@ endfunction
 
 function [5:0] fnFunc;
 input [63:0] insn;
+if (insn[7:0]==8'h11)   // RTS short form
+    fnFunc = 6'h00;     // func is used as a small immediate
+else
 casex(insn[15:8])
 `BITFIELD:	fnFunc = insn[43:40];
 `CMP:	fnFunc = insn[31:28];
@@ -1203,7 +1207,7 @@ default:
 	casex(insn[15:8])
 	`NOP,`SEI,`CLI,`RTI,`RTE,`MEMSB,`MEMDB,`SYNC:
 		fnInsnLength = 4'd2;
-	`TST,`BR,`JSRZ,`RTS:
+	`TST,`BR,`JSRZ,`RTS,`PUSH:
 		fnInsnLength = 4'd3;
 	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`ADDUIS,`NEG,`NOT,`R,`TLB,`MOVS,`RTS2:
 		fnInsnLength = 4'd4;
@@ -1653,9 +1657,9 @@ assign take_branch1 = ({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`
 assign take_branch = take_branch0 || take_branch1;
 
 wire [DBW-1:0] branch_pc =
-		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ? 
-			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3:
-			fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3;
+		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ? (ihit ?
+			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3 : fetchbuf0_pc):
+			(ihit ? fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3 : fetchbuf1_pc);
 
 
 assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
@@ -1707,7 +1711,7 @@ else if (ihit) begin
 	if (insn[7:0]==8'h00)
 		insn0 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
 	else
-		insn0 <= insn[63:0];
+        insn0 <= insn[63:0];
 end
 else
 	insn0 <= {8{8'h10}};	// load with NOPs
@@ -3578,9 +3582,8 @@ if (alu0_v) begin
 		end
 		else begin
 			iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
-			if (alu0_op[7:4]==4'h0)
-			    $stop;
-			iqentry_done[ alu0_id[2:0] ] <= !fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
+			iqentry_done[ alu0_id[2:0] ] <= (!fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt) &&
+			 iqentry_op[alu0_id[2:0]]!=`IMM;
 			iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 		end
 		iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
@@ -3621,10 +3624,9 @@ if (alu1_v) begin
 			end
 		end
 		else begin
-			if (alu1_op[7:4]==4'h0)
-                $stop;
 			iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
-			iqentry_done[ alu1_id[2:0] ] <= !fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
+			iqentry_done[ alu1_id[2:0] ] <= (!fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt) &&
+			  iqentry_op[alu1_id[2:0]]!=`IMM;
 			iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 		end
 		iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
@@ -3632,6 +3634,11 @@ if (alu1_v) begin
 	end
 end
 
+if (alu0_op==`IMM && iqentry_v[alu0_id[2:0]+3'd1])
+    iqentry_done[ alu0_id[2:0] ] <= `TRUE;
+if (alu1_op==`IMM && iqentry_v[alu1_id[2:0]+3'd1])
+    iqentry_done[ alu1_id[2:0] ] <= `TRUE;
+ 
 `ifdef FLOATING_POINT
 if (fp0_v) begin
 	$display("0results to iq[%d]=%h", alu0_id[2:0],alu0_bus);
@@ -4758,43 +4765,46 @@ casex ({ iqentry_v[head0],
 	// retire 3
 	6'b0x_11_0x:
 		if (head0 != tail0 && head1 != tail0 && head2 != tail0) begin
-			iqentry_v[head1] <= `INV;
-			head0 <= head0 + 3;
-			head1 <= head1 + 3;
-			head2 <= head2 + 3;
-			head3 <= head3 + 3;
-			head4 <= head4 + 3;
-			head5 <= head5 + 3;
-			head6 <= head6 + 3;
-			head7 <= head7 + 3;
-			I <= I + 3;
+			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
+			headinc = 3;//iqentry_op[head1]==`IMM ? 1 : 3;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 		else if (head0 != tail0) begin
-			iqentry_v[head1] <= `INV;
-			head0 <= head0 + 2;
-			head1 <= head1 + 2;
-			head2 <= head2 + 2;
-			head3 <= head3 + 2;
-			head4 <= head4 + 2;
-			head5 <= head5 + 2;
-			head6 <= head6 + 2;
-			head7 <= head7 + 2;
-			I <= I + 2;
+			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
+			headinc = 2;//iqentry_op[head1]==`IMM ? 1 : 2;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 
 	// retire 2	(wait on head2 or wait on register file for head2)
 	6'b0x_11_1x:
 		if (head0 != tail0) begin
-			iqentry_v[head1] <= `INV;
-			head0 <= head0 + 2;
-			head1 <= head1 + 2;
-			head2 <= head2 + 2;
-			head3 <= head3 + 2;
-			head4 <= head4 + 2;
-			head5 <= head5 + 2;
-			head6 <= head6 + 2;
-			head7 <= head7 + 2;
-			I <= I + 2;
+			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
+			headinc = 2;//iqentry_op[head1]==`IMM ? 1 : 2;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 
 	// 4'b00_00	- neither valid; skip both
@@ -4821,31 +4831,34 @@ casex ({ iqentry_v[head0],
 	// retire 3
 	6'b11_0x_0x:
 		if (head1 != tail0 && head2 != tail0) begin
-			iqentry_v[head0] <= `INV;
-			head0 <= head0 + 3;
-			head1 <= head1 + 3;
-			head2 <= head2 + 3;
-			head3 <= head3 + 3;
-			head4 <= head4 + 3;
-			head5 <= head5 + 3;
-			head6 <= head6 + 3;
-			head7 <= head7 + 3;
-			I <= I + 3;
+			iqentry_v[head0] <= `INV;//iqentry_op[head0]==`IMM;
+			headinc = 3;//iqentry_op[head0]==`IMM ? 0 : 3;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 		else if (head1 != tail0) begin
-			iqentry_v[head0] <= `INV;
-			head0 <= head0 + 2;
-			head1 <= head1 + 2;
-			head2 <= head2 + 2;
-			head3 <= head3 + 2;
-			head4 <= head4 + 2;
-			head5 <= head5 + 2;
-			head6 <= head6 + 2;
-			head7 <= head7 + 2;
-			I <= I + 2;
+			iqentry_v[head0] <= `INV;//iqentry_op[head0]==`IMM;
+			headinc = 2;//iqentry_op[head0]==`IMM ? 0 : 2;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 		else begin
-			iqentry_v[head0] <= `INV;
+			iqentry_v[head0] <= `INV;//iqentry_op[head0]==`IMM;
+			headinc = 1;//iqentry_op[head0]==`IMM ? 0 : 1;
 			head0 <= head0 + 1;
 			head1 <= head1 + 1;
 			head2 <= head2 + 1;
@@ -4890,45 +4903,48 @@ casex ({ iqentry_v[head0],
 	6'b01_10_xx,
 	6'b11_10_xx:
 		if (iqentry_v[head0] || head0 != tail0) begin
-			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			head0 <= head0 + 1;
-			head1 <= head1 + 1;
-			head2 <= head2 + 1;
-			head3 <= head3 + 1;
-			head4 <= head4 + 1;
-			head5 <= head5 + 1;
-			head6 <= head6 + 1;
-			head7 <= head7 + 1;
-			I <= I + 1;
+    	    iqentry_v[head0] <= `INV;
+		    headinc = 1;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 
 	// retire 2 or 3
 	6'b11_11_0x:
 		if (head2 != tail0) begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			iqentry_v[head1] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			head0 <= head0 + 3;
-			head1 <= head1 + 3;
-			head2 <= head2 + 3;
-			head3 <= head3 + 3;
-			head4 <= head4 + 3;
-			head5 <= head5 + 3;
-			head6 <= head6 + 3;
-			head7 <= head7 + 3;
-			I <= I + 3;
+			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;	// may conflict with STOMP, but since both are setting to 0, it is okay
+            headinc = 3;//iqentry_op[head1]==`IMM ? 1 : 3;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 		else begin
 			iqentry_v[head0] <= `INV;
-			iqentry_v[head1] <= `INV;
-			head0 <= head0 + 2;
-			head1 <= head1 + 2;
-			head2 <= head2 + 2;
-			head3 <= head3 + 2;
-			head4 <= head4 + 2;
-			head5 <= head5 + 2;
-			head6 <= head6 + 2;
-			head7 <= head7 + 2;
-			I <= I + 2;
+			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
+            headinc = 2;//iqentry_op[head1]==`IMM ? 1 : 2;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 
 	// retire 2 (wait on regfile for head2)
@@ -4936,15 +4952,16 @@ casex ({ iqentry_v[head0],
 		begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			iqentry_v[head1] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			head0 <= head0 + 2;
-			head1 <= head1 + 2;
-			head2 <= head2 + 2;
-			head3 <= head3 + 2;
-			head4 <= head4 + 2;
-			head5 <= head5 + 2;
-			head6 <= head6 + 2;
-			head7 <= head7 + 2;
-			I <= I + 2;
+			headinc = 2;
+			head0 <= head0 + headinc;
+			head1 <= head1 + headinc;
+			head2 <= head2 + headinc;
+			head3 <= head3 + headinc;
+			head4 <= head4 + headinc;
+			head5 <= head5 + headinc;
+			head6 <= head6 + headinc;
+			head7 <= head7 + headinc;
+			I <= I + headinc;
 		end
 endcase
 
