@@ -41,6 +41,8 @@ output reg [DBW-1:0] o;
 wire signed [DBW-1:0] alu_argAs = alu_argA;
 wire signed [DBW-1:0] alu_argBs = alu_argB;
 wire signed [DBW-1:0] alu_argIs = alu_argI;
+wire [DBW-1:0] andi_res = alu_argA & alu_argI;
+
 integer n;
 
 wire [7:0] bcdao,bcdso;
@@ -104,17 +106,27 @@ casex(alu_op)
 	`_4ADDU:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argB;
 	`_8ADDU:		o <= {alu_argA[DBW-4:0],3'b0} + alu_argB;
 	`_16ADDU:		o <= {alu_argA[DBW-5:0],4'b0} + alu_argB;
+	`MIN:           o <= alu_argA < alu_argB ? alu_argA : alu_argB;
+	`MAX:           o <= alu_argA < alu_argB ? alu_argB : alu_argA;
 	default:   o <= 64'd0;
 	endcase
 `_2ADDUI:		o <= {alu_argA[DBW-2:0],1'b0} + alu_argI;
 `_4ADDUI:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argI;
 `_8ADDUI:		o <= {alu_argA[DBW-4:0],3'b0} + alu_argI;
 `_16ADDUI:		o <= {alu_argA[DBW-5:0],4'b0} + alu_argI;
-`NEG:			o <= -alu_argA;
-`NOT:			o <= ~alu_argA;
-`MOV,`STS:		o <= alu_argA;
+`R:
+    case(alu_fn[3:0])
+    `MOV:       o <= alu_argA;
+    `NEG:		o <= -alu_argA;
+    `NOT:       o <= ~alu_argA;
+    `ABS:       o <= alu_argA[DBW] ? -alu_argA : alu_argA;
+    `SGN:       o <= alu_argA[DBW] ? 64'hFFFFFFFFFFFFFFFF : alu_argA==64'd0 ? 64'd0 : 64'd1;
+    default:    o <= 64'hDEADDEADDEADDEAD;
+    endcase
+`STS:		o <= alu_argA;
 `DOUBLE:
 	case (alu_fn)
+	`FMOV:      o <= alu_argA;
 	`FNEG:		o <= {~alu_argA[DBW-1],alu_argA[DBW-2:0]};
 	`FABS:		o <= {1'b0,alu_argA[DBW-2:0]};
 	`FSIGN:			if (DBW==64)
@@ -141,6 +153,14 @@ casex(alu_op)
 	`ENOR:			o <= ~(alu_argA ^ alu_argB);
 	default:       o <= 64'd0;
 	endcase
+`BITI:
+    begin
+        o[0] <= andi_res==64'd0;
+        o[1] <= andi_res[DBW-1];
+    	o[2] <= andi_res[0];
+        o[3] <= 1'b0;
+        o[DBW-1:4] <= 60'd0;
+    end
 `TST:	
 	case(alu_fn)
 	6'd0:	// TST - integer
@@ -148,7 +168,8 @@ casex(alu_op)
 			o[0] <= alu_argA == 64'd0;
 			o[1] <= alu_argA[DBW-1];
 			o[2] <= 1'b0;
-			o[DBW-1:3] <= 61'd0;
+			o[3] <= 1'b0;
+			o[DBW-1:4] <= 60'd0;
 		end
 	6'd1:	// FSTST - float single
 		begin
@@ -177,15 +198,17 @@ casex(alu_op)
 			o[0] <= alu_argA == alu_argB;
 			o[1] <= alu_argAs < alu_argBs;
 			o[2] <= alu_argA < alu_argB;
-			o[DBW-1:3] <= 61'd0;
+			o[3] <= 1'b0;
+			o[DBW-1:4] <= 64'd0;
 		end
 `CMPI:	begin
 			o[0] <= alu_argA == alu_argI;
 			o[1] <= alu_argAs < alu_argIs;
 			o[2] <= alu_argA < alu_argI;
-			o[DBW-1:3] <= 61'd0;
+			o[3] <= 1'b0;
+			o[DBW-1:4] <= 64'd0;
 		end
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,`LEA:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,`LEA,`PUSH,`RTS2:
 				o <= alu_argA + alu_argI;
 `LBX,`LBUX,`SBX,
 `LCX,`LCUX,`SCX,
@@ -193,7 +216,9 @@ casex(alu_op)
 `LWX,`SWX:	o <= alu_argA + alu_argB;
 `JSR,`JSRS,`JSRZ,`SYS:	o <= alu_pc + insnsz;
 `INT:		o <= alu_pc;
-`MFSPR,`MTSPR:	o <= alu_argA;
+`MFSPR,`MTSPR:	begin
+                o <= alu_argA;
+                end
 `MUX:	begin
 			for (n = 0; n < DBW; n = n + 1)
 				o[n] <= alu_argA[n] ? alu_argB[n] : alu_argC[n];

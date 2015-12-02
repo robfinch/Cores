@@ -146,15 +146,39 @@ assign  alu0_v = alu0_dataready,
 assign  alu0_id = alu0_sourceid,
 		alu1_id = alu1_sourceid;
 
+always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc or alu0_bt)
+    case(alu0_op)
+    `JSR,`JSRS,`JSRZ,`RTE,`RTI,`LOOP:
+        alu0_misspc <= alu0_argA + alu0_argI;
+    `RTS,`RTS2:
+        alu0_misspc <= alu0_argA + alu0_fn[3:0];
+    `SYS,`INT:
+        alu0_misspc <= alu0_argA + {alu0_argI[DBW-5:0],4'b0};
+    default:
+        alu0_misspc <= (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI);
+    endcase
+
+always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc or alu1_bt)
+    case(alu1_op)
+    `JSR,`JSRS,`JSRZ,`RTE,`RTI,`LOOP:
+        alu1_misspc <= alu1_argA + alu1_argI;
+    `RTS,`RTS2:
+        alu1_misspc <= alu1_argA + alu1_fn[3:0];
+    `SYS,`INT:
+        alu1_misspc <= alu1_argA + {alu1_argI[DBW-5:0],4'b0};
+    default:
+        alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
+    endcase
+/*
 assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`JSRS || alu0_op==`JSRZ || 
-                       alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
+                       alu0_op==`RTS || alu0_op==`RTS2 || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
 					  (alu0_op == `SYS || alu0_op==`INT) ? alu0_argA + {alu0_argI[DBW-5:0],4'b0} :
 					  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI),
 		alu1_misspc = (alu1_op == `JSR || alu1_op==`JSRS || alu1_op==`JSRZ || 
 		               alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || alu1_op==`LOOP) ? alu1_argA + alu1_argI :
 					  (alu1_op == `SYS || alu1_op==`INT) ? alu1_argA + {alu1_argI[DBW-5:0],4'b0} :
 					  (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
-
+*/
 assign  alu0_exc = `EXC_NONE;
 //			? `EXC_NONE
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
@@ -181,15 +205,17 @@ assign  alu1_exc = `EXC_NONE;
 
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
-		  : (alu0_cmt && (alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ || alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTS || alu0_op == `RTE || alu0_op==`RTI || (alu0_op==`LOOP && lc != 64'd0))));
+		  : (alu0_cmt && (alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ || alu0_op==`SYS || alu0_op==`INT ||
+		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op == `RTE || alu0_op==`RTI || (alu0_op==`LOOP && lc != 64'd0))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
-		  : (alu1_cmt && (alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ || alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || (alu1_op==`LOOP && lc != 64'd0))));
+		  : (alu1_cmt && (alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ || alu1_op==`SYS || alu1_op==`INT ||
+		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op == `RTE || alu1_op==`RTI || (alu1_op==`LOOP && lc != 64'd0))));
 
-assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
-	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),
-	missid = (alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
+assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss),
+	misspc = (mem_stringmiss ? string_pc : alu0_branchmiss ? alu0_misspc : alu1_misspc),
+	missid = (mem_stringmiss ? dram0_id[2:0] : alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
 
 `ifdef FLOATING_POINT
 wire [DBW-1:0] fp0_zlout,fp0_loout,fp0_out;

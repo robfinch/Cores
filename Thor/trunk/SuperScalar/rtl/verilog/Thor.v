@@ -92,6 +92,8 @@
 //      The instruction set is changed completely with many new instructions.
 //      An instruction cache was added.
 //      A WISHBONE bus interface was added,
+//
+// 44745 (72,000 LC's)
 // ============================================================================
 //
 `include "Thor_defines.v"
@@ -193,6 +195,7 @@ wire [DBW-1:0] spc = pc;
 `endif
 wire [DBW-1:0] ppcp16 = ppc + 64'd16;
 reg [DBW-1:0] string_pc;
+reg stmv_flag;
 reg [7:0] asid;
 
 wire clk = clk_i;
@@ -356,7 +359,7 @@ wire  [3:0] alu0_id;
 wire  [3:0] alu0_exc;
 wire        alu0_v;
 wire        alu0_branchmiss;
-wire [DBW-1:0] alu0_misspc;
+reg [DBW-1:0] alu0_misspc;
 
 reg        alu1_ld;
 reg        alu1_available;
@@ -379,8 +382,9 @@ wire  [3:0] alu1_id;
 wire  [3:0] alu1_exc;
 wire        alu1_v;
 wire        alu1_branchmiss;
-wire [DBW-1:0] alu1_misspc;
+reg [DBW-1:0] alu1_misspc;
 
+wire mem_stringmiss;
 wire        branchmiss;
 wire [DBW-1:0] misspc;
 
@@ -432,7 +436,7 @@ reg [DBW-1:0] dram1_datacmp;
 reg [DBW-1:0] dram1_addr;
 reg  [7:0] dram1_op;
 reg  [5:0] dram1_fn;
-reg  [8:0] dram1_tgt;
+reg  [6:0] dram1_tgt;
 reg  [3:0] dram1_id;
 reg  [3:0] dram1_exc;
 reg [DBW-1:0] dram2_data;
@@ -440,16 +444,18 @@ reg [DBW-1:0] dram2_datacmp;
 reg [DBW-1:0] dram2_addr;
 reg  [7:0] dram2_op;
 reg  [5:0] dram2_fn;
-reg  [8:0] dram2_tgt;
+reg  [6:0] dram2_tgt;
 reg  [3:0] dram2_id;
 reg  [3:0] dram2_exc;
 
 reg [DBW-1:0] dram_bus;
-reg  [8:0] dram_tgt;
+reg  [6:0] dram_tgt;
 reg  [3:0] dram_id;
 reg  [3:0] dram_exc;
 reg        dram_v;
 
+reg [DBW-1:0] index;
+reg [DBW-1:0] src_addr,dst_addr;
 wire mem_will_issue;
 
 wire        outstanding_stores;
@@ -634,7 +640,8 @@ default:
 	case(insn[15:8])
 	`RTI:	fnRa = 7'h5E;
 	`RTE:	fnRa = 7'h5D;
-	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS:
+	`PUSH:  fnRa = 7'd27;
+	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`RTS2:
 		fnRa = {3'h5,insn[23:20]};
 	default:	fnRa = {1'b0,insn[`INSTRUCTION_RA]};
 	endcase
@@ -649,7 +656,10 @@ else
 	case(insn[15:8])
 	`RTI:	fnRb = 7'h5E;
 	`RTE:	fnRb = 7'h5D;
-	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS:
+	`PUSH:  fnRb = insn[22:16];
+	`RTS2:  fnRb = 7'd27;
+	`RTS:   fnRb = 7'd0;
+	`JSR,`JSRS,`JSRZ,`SYS,`INT:
 		fnRb = {3'h5,insn[23:20]};
 	`TLB:	fnRb = {1'b0,insn[29:24]};
 	default:	fnRb = {1'b0,insn[`INSTRUCTION_RB]};
@@ -669,7 +679,7 @@ else
 	case(insn[15:8])
 	`RTI:	fnCar = 4'hE;
 	`RTE:	fnCar = 4'hD;
-	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS:
+	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`RTS2:
 		fnCar = {insn[23:20]};
 	default:	fnCar = 4'h0;
 	endcase
@@ -681,6 +691,8 @@ casex(insn[15:8])
 `BITFIELD:	fnFunc = insn[43:40];
 `CMP:	fnFunc = insn[31:28];
 `TST:	fnFunc = insn[23:22];
+`INC:   fnFunc = insn[24:22];
+`RTS,`RTS2: fnFunc = insn[19:16];   // used to pass a small immediate
 default:
 	fnFunc = insn[39:34];
 endcase
@@ -733,8 +745,9 @@ endfunction
 // 0 if we need a RF value
 function fnSource2_v;
 input [7:0] opcode;
+input [5:0] func;
 	casex(opcode)
-	`NEG,`NOT,`MOV:		fnSource2_v = 1'b1;
+	`NEG,`NOT,`R:		fnSource2_v = 1'b1;
 	`LDI,`STI,`LDIS,`IMM,`NOP:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB,`SYNC:
 					fnSource2_v = 1'b1;
@@ -748,11 +761,16 @@ input [7:0] opcode;
 	`CMPI:			fnSource2_v = 1'b1;
 	`MULI,`MULUI,`DIVI,`DIVUI:
 					fnSource2_v = 1'b1;
-	`ANDI:			fnSource2_v = 1'b1;
+	`ANDI,`BITI:	fnSource2_v = 1'b1;
 	`ORI:			fnSource2_v = 1'b1;
 	`EORI:			fnSource2_v = 1'b1;
+	`SHIFT:
+	           if (func>=6'h10)
+	               fnSource2_v = `TRUE;
+	           else
+	               fnSource2_v = `FALSE;
 	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`STI:
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`STI,`INC:
 			fnSource2_v = 1'b1;
 	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR,`LOOP:
 			fnSource2_v = 1'b1;
@@ -769,7 +787,7 @@ endfunction
 function fnSource3_v;
 input [7:0] opcode;
 	casex(opcode)
-	`SBX,`SCX,`SHX,`SWX,`CAS:	fnSource3_v = 1'b0;
+	`SBX,`SCX,`SHX,`SWX,`CAS,`STMV,`STCMP,`STFND:	fnSource3_v = 1'b0;
 	`MUX:	fnSource3_v = 1'b0;
 	default:	fnSource3_v = 1'b1;
 	endcase
@@ -784,7 +802,7 @@ casex(fnOpcode(ins))
 `BR:                fnNumReadPorts = 3'd0;
 `LOOP:				fnNumReadPorts = 3'd0;
 `LDI,`LDIS,`IMM:		fnNumReadPorts = 3'd0;
-`NEG,`NOT,`MOV,`STI:	fnNumReadPorts = 3'd1;
+`NEG,`NOT,`R,`STI:	fnNumReadPorts = 3'd1;
 `RTI,`RTE:			fnNumReadPorts = 3'd1;
 `TST:				fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI,`ADDUIS:
@@ -795,21 +813,23 @@ casex(fnOpcode(ins))
 `CMPI:				fnNumReadPorts = 3'd1;
 `MULI,`MULUI,`DIVI,`DIVUI:
 					fnNumReadPorts = 3'd1;
+`BITI,
 `ANDI,`ORI,`EORI:	fnNumReadPorts = 3'd1;
 `SHIFT:
                     if (ins[39:38]==2'h1)   // shift immediate
 					   fnNumReadPorts = 3'd1;
 					else
 					   fnNumReadPorts = 3'd2;
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LWS,`LEA:
+`RTS2,					 
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LWS,`LEA,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR,`LOOP:
 					fnNumReadPorts = 3'd1;
 `SBX,`SCX,`SHX,`SWX,
-`MUX,`CAS:
+`MUX,`CAS,`STMV,`STCMP:
 					fnNumReadPorts = 3'd3;
 `MTSPR,`MFSPR:		fnNumReadPorts = 3'd1;
-`TLB:				fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
+`TLB,`STFND:		fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
 `BITFIELD:
     case(ins[43:40])
     `BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:
@@ -993,11 +1013,12 @@ endfunction
 //wire [3:0] Pn = ir[7:4];
 
 // Set the target register
-// 0xx = general register file
-// 10x = predicate register
-// 11x = code address register
-// 12x = segment register
-// 130 = predicate register horizontal
+// 00-3F = general register file
+// 40-4F = predicate register
+// 50-5F = code address register
+// 60-67 = segment base register
+// 70 = predicate register horizontal
+// 73 = loop counter
 function [6:0] fnTargetReg;
 input [63:0] ir;
 begin
@@ -1013,18 +1034,17 @@ begin
 			fnTargetReg = {1'b0,ir[33:28]};
 		`BCD,
 		`LOGIC,
-		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX:
+		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`STMV,`STCMP,`STFND:
 			fnTargetReg = {1'b0,ir[33:28]};
 		`SHIFT:
 			fnTargetReg = {1'b0,ir[33:28]};
-		`NEG,`NOT,`MOV,
+		`R,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
+		`LVB,`LVC,`LVH,`LVW,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
 			fnTargetReg = {1'b0,ir[27:22]};
-		`LWS:
-			fnTargetReg = {1'b1,ir[27:22]};
 		`CAS:
 			fnTargetReg = {1'b0,ir[39:34]};
 		`BITFIELD:
@@ -1036,21 +1056,27 @@ begin
 				fnTargetReg = 7'h00;
 		`MFSPR:
 			fnTargetReg = {1'b0,ir[27:22]};
+		`BITI:
+		      fnTargetReg = {3'h4,ir[25:22]};
 		`CMP,`CMPI,`TST:
 		    begin
-			fnTargetReg = {1'b1,2'h0,ir[11:8]};
+			fnTargetReg = {3'h4,ir[11:8]};
 			end
 		`JSR,`JSRZ,`JSRS,`SYS,`INT:
-			fnTargetReg = {1'b1,2'h1,ir[19:16]};
-		`MTSPR,`MOVS:
+			fnTargetReg = {3'h5,ir[19:16]};
+		`MTSPR,`MOVS,`LWS:
+		    fnTargetReg = {1'b1,ir[27:22]};
+/*
 			if (ir[27:26]==2'h1)		// Move to code address register
-				fnTargetReg = {1'b1,2'h1,ir[25:22]};
+				fnTargetReg = {3'h5,ir[25:22]};
 			else if (ir[27:26]==2'h2)	// Move to seg. reg.
-				fnTargetReg = {1'b1,2'h2,ir[25:22]};
+				fnTargetReg = {3'h6,ir[25:22]};
 			else if (ir[27:22]==6'h04)
 				fnTargetReg = 7'h70;
 			else
 				fnTargetReg = 7'h00;
+*/      
+        `PUSH,`RTS2:    fnTargetReg = 7'd27;
 		default:	fnTargetReg = 7'h00;
 		endcase
 end
@@ -1126,12 +1152,12 @@ input [7:0] opcode;
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 	`CMPI,
-	`ANDI,`ORI,`EORI,
+	`ANDI,`ORI,`EORI,`BITI,
 //	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`INC,
 	`LVB,`LVC,`LVH,`LVW,`STI,
 	`SB,`SC,`SH,`SW,`CAS,`SWS,
-	`JSR,`JSRS,`SYS,`INT,`BR:
+	`JSR,`JSRS,`SYS,`INT,`BR,`RTS2:
 		fnHasConst = 1'b1;
 	default:
 		fnHasConst = 1'b0;
@@ -1142,7 +1168,7 @@ function fnIsFlowCtrl;
 input [7:0] opcode;
 begin
 casex(opcode)
-`JSR,`JSRS,`JSRZ,`SYS,`INT,`BR,`RTS,`RTI,`RTE:
+`JSR,`JSRS,`JSRZ,`SYS,`INT,`LOOP,`BR,`RTS,`RTS2,`RTI,`RTE:
 	fnIsFlowCtrl = 1'b1;
 default:	fnIsFlowCtrl = 1'b0;
 endcase
@@ -1179,9 +1205,9 @@ default:
 		fnInsnLength = 4'd2;
 	`TST,`BR,`JSRZ,`RTS:
 		fnInsnLength = 4'd3;
-	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`ADDUIS,`NEG,`NOT,`MOV,`TLB,`MOVS:
+	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`ADDUIS,`NEG,`NOT,`R,`TLB,`MOVS,`RTS2:
 		fnInsnLength = 4'd4;
-	`BITFIELD,`JSR,`MUX,`BCD:
+	`BITFIELD,`JSR,`MUX,`BCD,`INC:
 		fnInsnLength = 4'd6;
 	`CAS:
 		fnInsnLength = 4'd6;
@@ -1214,16 +1240,19 @@ always @(fetchbuf or fetchbufA_instr or fetchbufA_v or fetchbufA_pc
 begin
 	fetchbuf0_instr <= (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
 	fetchbuf0_v     <= (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
+	
 	if (int_pending && string_pc!=64'd0)
 		fetchbuf0_pc <= string_pc;
 	else
-		fetchbuf0_pc    <= (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
+	fetchbuf0_pc    <= (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
+
 	fetchbuf1_instr <= (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
 	fetchbuf1_v     <= (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
+
 	if (int_pending && string_pc != 64'd0)
 		fetchbuf1_pc <= string_pc;
 	else
-		fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+	fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 end
 
 wire [7:0] opcodeA = fetchbufA_instr[`OPCODE];
@@ -1237,10 +1266,11 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`LBX || opcode==`LWX || opcode==`LBUX || opcode==`LHX || opcode==`LHUX || opcode==`LCX || opcode==`LCUX ||
 			opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 			opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
-			opcode==`STS ||
+			opcode==`STS || opcode==`PUSH ||
 			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
-			opcode==`TLB || opcode==`CAS ||
-			opcode==`LWS || opcode==`SWS || opcode==`STI
+			opcode==`TLB || opcode==`CAS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
+			opcode==`LWS || opcode==`SWS || opcode==`STI ||
+			opcode==`INC
 			;
 endfunction
 
@@ -1253,7 +1283,8 @@ fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW ||
-			opcode==`CAS || opcode==`LWS ||
+			opcode==`PUSH || opcode==`RTS2 ||
+			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
@@ -1261,7 +1292,7 @@ fnIsRFW =	// General registers
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
 			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
-			opcode==`NOT || opcode==`NEG || opcode==`MOV || opcode==`LEA ||
+			opcode==`NOT || opcode==`NEG || opcode==`R || opcode==`LEA ||
 			opcode==`LDI || opcode==`LDIS || opcode==`ADDUIS || opcode==`MFSPR ||
 			// Branch registers / Segment registers
 			((opcode==`MTSPR || opcode==`MOVS) && (fnTargetsCa(ir) || fnTargetsSegreg(ir))) ||
@@ -1279,7 +1310,8 @@ input [7:0] opcode;
 fnIsStore = 	opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
 				opcode==`STS ||
-				opcode==`SWS || opcode==`STI;
+				opcode==`SWS || opcode==`STI || 
+				opcode==`PUSH;
 endfunction
 
 function fnIsLoad;
@@ -1304,7 +1336,7 @@ endfunction
 // *** check these
 function fnIsPFW;
 input [7:0] opcode;
-fnIsPFW =	opcode[7:4]<4'h3;//opcode==`CMP || opcode==`CMPI || opcode==`TST;
+fnIsPFW =	opcode[7:4]<4'h3 || opcode==`BITI;//opcode==`CMP || opcode==`CMPI || opcode==`TST;
 endfunction
 
 function [7:0] fnSelect;
@@ -1314,7 +1346,7 @@ input [DBW-1:0] adr;
 begin
 if (DBW==32)
 	case(opcode)
-	`STS:
+	`STS,`STMV,`STCMP,`STFND,`INC:
 	   case(fn[2:0])
 	   3'd0:
            case(adr[1:0])
@@ -1346,13 +1378,13 @@ if (DBW==32)
 		endcase
 	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		fnSelect = 8'hFF;
-	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI:
+	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
 else
 	case(opcode)
-	`STS:
+	`STS,`STMV,`STCMP,`STFND,`INC:
        case(fn[2:0])
        3'd0:
            case(adr[2:0])
@@ -1404,7 +1436,7 @@ else
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
-	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI:
+	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1413,11 +1445,31 @@ endfunction
 
 function [DBW-1:0] fnDatai;
 input [7:0] opcode;
+input [5:0] func;
 input [DBW-1:0] dat;
 input [7:0] sel;
 begin
 if (DBW==32)
 	case(opcode)
+	`STMV,`STCMP,`STFND,`INC:
+	   case(func[2:0])
+	   3'd0,3'd4:
+		case(sel[3:0])
+        4'h1:    fnDatai = dat[7:0];
+        4'h2:    fnDatai = dat[15:8];
+        4'h4:    fnDatai = dat[23:16];
+        4'h8:    fnDatai = dat[31:24];
+        default:    fnDatai = {DBW{1'b1}};
+        endcase
+       3'd1,3'd5:
+		case(sel[3:0])
+        4'h3:    fnDatai = dat[15:0];
+        4'hC:    fnDatai = dat[31:16];
+        default:    fnDatai = {DBW{1'b1}};
+        endcase
+       default:    
+		fnDatai = dat[31:0];
+	   endcase
 	`LB,`LBX,`LVB:
 		case(sel[3:0])
 		8'h1:	fnDatai = {{24{dat[7]}},dat[7:0]};
@@ -1452,6 +1504,36 @@ if (DBW==32)
 	endcase
 else
 	case(opcode)
+	`STMV,`STCMP,`STFND,`INC:
+	   case(func[2:0])
+	   3'd0,3'd4:
+		case(sel)
+        8'h01:    fnDatai = dat[DBW*1/8-1:0];
+        8'h02:    fnDatai = dat[DBW*2/8-1:DBW*1/8];
+        8'h04:    fnDatai = dat[DBW*3/8-1:DBW*2/8];
+        8'h08:    fnDatai = dat[DBW*4/8-1:DBW*3/8];
+        8'h10:    fnDatai = dat[DBW*5/8-1:DBW*4/8];
+        8'h20:    fnDatai = dat[DBW*6/8-1:DBW*5/8];
+        8'h40:    fnDatai = dat[DBW*7/8-1:DBW*6/8];
+        8'h80:    fnDatai = dat[DBW-1:DBW*7/8];
+        default:    fnDatai = {DBW{1'b1}};
+        endcase
+       3'd1,3'd5:
+		case(sel)
+        8'h03:    fnDatai = dat[DBW/4-1:0];
+        8'h0C:    fnDatai = dat[DBW/2-1:DBW/4];
+        8'h30:    fnDatai = dat[DBW*3/4-1:DBW/2];
+        8'hC0:    fnDatai = dat[DBW-1:DBW*3/4];
+        default:    fnDatai = {DBW{1'b1}};
+        endcase
+       3'd2,3'd6:
+		case(sel)
+        8'h0F:    fnDatai = dat[DBW/2-1:0];
+        8'hF0:    fnDatai = dat[DBW-1:DBW/2];
+        default:    fnDatai = {DBW{1'b1}};
+        endcase
+       3'd3,3'd7:   fnDatai = dat;
+	   endcase
 	`LB,`LBX,`LVB:
 		case(sel)
 		8'h01:	fnDatai = {{DBW*7/8{dat[DBW*1/8-1]}},dat[DBW*1/8-1:0]};
@@ -1516,10 +1598,17 @@ endfunction
 
 function [DBW-1:0] fnDatao;
 input [7:0] opcode;
+input [5:0] func;
 input [DBW-1:0] dat;
 if (DBW==32)
 	case(opcode)
-	`SW,`SWX,`CAS,`SWS,`STI:	fnDatao = dat;
+	`STMV,`INC:
+	   case(func[2:0])
+	   3'd0,3'd4:  fnDatao = {4{dat[7:0]}};
+	   3'd1,3'd5:  fnDatao = {2{dat[15:8]}};
+	   default:    fnDatao = dat;
+	   endcase
+	`SW,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = dat;
 	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
 	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
@@ -1527,7 +1616,14 @@ if (DBW==32)
 	endcase
 else
 	case(opcode)
-	`SW,`SWX,`CAS,`SWS,`STI:	fnDatao = dat;
+	`STMV,`INC:
+	   case(func[2:0])
+	   3'd0,3'd4:  fnDatao = {8{dat[DBW/8-1:0]}};
+	   3'd1,3'd5:  fnDatao = {4{dat[DBW/4-1:0]}};
+	   3'd2,3'd6:  fnDatao = {2{dat[DBW/2-1:0]}};
+	   3'd3,3'd7:  fnDatao = dat;
+	   endcase
+	`SW,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
 	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
 	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
@@ -1563,6 +1659,9 @@ wire [DBW-1:0] branch_pc =
 
 
 assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
+
+assign mem_stringmiss = ((dram0_op==`STS || dram0_op==`STFND) && int_pending && lc != 0) ||
+                        ((dram0_op==`STMV || dram0_op==`STCMP) && int_pending && lc != 0 && stmv_flag);
 
 // "Stream" interrupt instructions into the instruction stream until an INT
 // instruction commits. This avoids the problem of an INT instruction being
@@ -1678,6 +1777,10 @@ else
 // Return the immediate field of an instruction
 function [63:0] fnImm;
 input [127:0] insn;
+casex(insn[15:0])
+16'bxxxxxxxx00010001:   // RTS short form
+    fnImm = 64'd0;
+default:
 casex(insn[15:8])
 `CAS:	fnImm = {{56{insn[47]}},insn[47:40]};
 `BCD:	fnImm = insn[47:40];
@@ -1687,35 +1790,41 @@ casex(insn[15:8])
 `JSRS:  fnImm = {{48{insn[39]}},insn[39:24]};
 `BITFIELD:	fnImm = insn[47:32];
 `SYS,`INT:	fnImm = insn[31:24];
+`RTS2:  fnImm = {insn[31:27],3'b000};
 `CMPI,`LDI,`LDIS,`ADDUIS:
 	fnImm = {{54{insn[31]}},insn[31:22]};
-`LDIT10:	fnImm = {insn[31:22],54'd0};
 `RTS:	fnImm = insn[19:16];
-`RTE,`RTI,`JSRZ:	fnImm = 8'h00;
-`STI:	fnImm = {{56{insn[39]}},insn[39:32]};
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW:
-	fnImm = {{52{insn[39]}},insn[39:28]};
+`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND:	fnImm = 8'h00;
+`STI:	fnImm = {{58{insn[33]}},insn[33:28]};
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`LWS,`SWS,`INC:
+	fnImm = {{55{insn[36]}},insn[36:28]};
+`PUSH:  fnImm = 64'd8;
 default:
 	fnImm = {{52{insn[39]}},insn[39:28]};
+endcase
 endcase
 
 endfunction
 
 function [7:0] fnImm8;
 input [127:0] insn;
+if (insn[7:0]==8'h11)
+    fnImm8 = 8'h00;
+else
 casex(insn[15:8])
 `CAS:	fnImm8 = insn[47:40];
 `BCD:	fnImm8 = insn[47:40];
 `TLB:	fnImm8 = insn[23:16];
 `LOOP:	fnImm8 = insn[23:16];
-`JSR,`JSRS:	fnImm8 = insn[31:24];
+`JSR,`JSRS,`RTS2:	fnImm8 = insn[31:24];
 `BITFIELD:	fnImm8 = insn[39:32];
 `SYS,`INT:	fnImm8 = insn[31:24];
 `CMPI,`LDI,`LDIS,`ADDUIS:	fnImm8 = insn[29:22];
 `RTS:	fnImm8 = insn[19:16];
-`RTE,`RTI,`JSRZ:	fnImm8 = 8'h00;
-`STI:	fnImm8 = insn[39:32];
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW:
+`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND:	fnImm8 = 8'h00;
+`STI:	fnImm8 = insn[39:28];
+`PUSH:  fnImm8 = 8'd8;
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`LWS,`SWS,`INC:
 	fnImm8 = insn[35:28];
 default:	fnImm8 = insn[35:28];
 endcase
@@ -1724,7 +1833,9 @@ endfunction
 // Return MSB of immediate value for instruction
 function fnImmMSB;
 input [127:0] insn;
-
+if (insn[7:0]==8'h11)
+    fnImmMSB = 1'b0;
+else
 casex(insn[15:8])
 `CAS:	fnImmMSB = insn[47];
 `TLB,`BCD:
@@ -1737,15 +1848,15 @@ casex(insn[15:8])
     fnImmMSB = insn[39];
 `CMPI,`LDI,`LDIS,`ADDUIS:
 	fnImmMSB = insn[31];
-`SYS,`INT:
+`SYS,`INT,`PUSH:
 	fnImmMSB = 1'b0;		// SYS,INT are unsigned
-`RTS,`RTE,`RTI,`JSRZ:
+`RTS,`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND,`RTS2:
 	fnImmMSB = 1'b0;		// RTS is unsigned
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`STI:
-	fnImmMSB = insn[39];
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`STI,`LWS,`SWS,`INC:
+	fnImmMSB = insn[36];
 default:
 	fnImmMSB = insn[39];
 endcase
@@ -1782,7 +1893,7 @@ begin
 		casex(ins[21:16])
 		`TICK:	fnOpa = tick;
 		`LCTR:	fnOpa = lc;
-		`PREGS:
+		`PREGS_ALL:
 				begin
 					fnOpa[3:0] = pregs[0];
 					fnOpa[7:4] = pregs[1];
@@ -2377,7 +2488,7 @@ begin
 end
 `endif
 
-assign stomp_all = fnIsStoreString(iqentry_op[head0]) && int_pending;
+assign stomp_all = `FALSE;//fnIsStoreString(iqentry_op[head0]) && int_pending;
 
 // 
 // additional logic for handling a branch miss (STOMP logic)
@@ -2484,7 +2595,7 @@ assign mem_will_issue =
 	(~iqentry_stomp[5] && iqentry_memissue[5] && iqentry_agen[5] && ~iqentry_out[5] && iqentry_cmt[5] && ihit) ||
 	(~iqentry_stomp[6] && iqentry_memissue[6] && iqentry_agen[6] && ~iqentry_out[6] && iqentry_cmt[6] && ihit) ||
 	(~iqentry_stomp[7] && iqentry_memissue[7] && iqentry_agen[7] && ~iqentry_out[7] && iqentry_cmt[7] && ihit))
-	&& (dram0 == 3'd0 || dram1==3'd0 || dram2==3'd0)
+	&& (dram0 == 3'd0)// || dram1==3'd0 || dram2==3'd0)
 	;
 
 //`include "Thor_commit_combo.v"
@@ -2544,7 +2655,7 @@ always @(posedge clk) begin
 		GM <= 8'hFF;
 		nmi_edge <= 1'b0;
 		cstate <= IDLE;
-		pc <= {{DBW-4{1'b1}},4'h0};
+		pc <= {{DBW-8{1'b1}},8'h80};
 		StatusHWI <= `TRUE;		// disables interrupts at startup until an RTI instruction is executed.
 		im <= 1'b1;
 		ic_invalidate <= `TRUE;
@@ -2573,8 +2684,8 @@ always @(posedge clk) begin
 		for (n = 1; n < NREGS; n = n + 1)
 			rf_v[n] = `VAL;
 		rf_v[0] = `VAL;
-		rf_v[9'h110] = `VAL;
-		rf_v[9'h11F] = `VAL;
+		rf_v[7'h50] = `VAL;
+		rf_v[7'h5F] = `VAL;
 		alu0_available <= `TRUE;
 		alu1_available <= `TRUE;
 		tail0 <= 3'd0;
@@ -2604,9 +2715,9 @@ always @(posedge clk) begin
 	end
 
 	// The following registers are always valid
-	rf_v[9'h000] = `VAL;
-	rf_v[9'h110] = `VAL;	// C0
-	rf_v[9'h11F] = `VAL;	// C15 (PC)
+	rf_v[7'h00] = `VAL;
+	rf_v[7'h50] = `VAL;	// C0
+	rf_v[7'h5F] = `VAL;	// C15 (PC)
 
 	did_branchback <= take_branch;
 	did_branchback0 <= take_branch0;
@@ -2975,6 +3086,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				// from interrupt.
 				// If a string operation was in progress then inherit the address of the string operation so that
 				// it can be continued.
+				
 				iqentry_pc   [tail0]    <=	
 					(opcode1==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
 						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf1_pc;
@@ -2999,8 +3111,12 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 												fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf1_instr)];
-				iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf1_instr) ? {{DBW-6{1'b0}},fetchbuf1_instr[`INSTRUCTION_RB]} : opcode1==`STI ? fetchbuf1_instr[31:22] : rfob1;
-				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1 ) | rf_v[ Rb1 ];
+				iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf1_instr) ? {{DBW-6{1'b0}},fetchbuf1_instr[`INSTRUCTION_RB]} :
+				                            opcode1==`INC ? {{56{fetchbuf1_instr[47]}},fetchbuf1_instr[47:40]} : 
+				                            opcode1==`STI ? fetchbuf1_instr[27:22] :
+				                            Rb1[6] ? fnSpr(Rb1[5:0]) :
+				                            rfob1;
+				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1, fnFunc(fetchbuf1_instr) ) | rf_v[ Rb1 ];
 				iqentry_a2_s [tail0]    <=   rf_source[Rb1];
 				iqentry_a3   [tail0]    <=   rfoc1;
 				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc1 ];
@@ -3029,8 +3145,8 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
 				iqentry_agen [tail0]    <=   `INV;
 				iqentry_pc   [tail0]    <=   
-					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
-						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
+					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
+						iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
 				iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 				iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 				iqentry_fp   [tail0]    <=   fetchbuf0_fp;
@@ -3042,15 +3158,19 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				// Look at the previous queue slot to see if an immediate prefix is enqueued
 				iqentry_a0[tail0]   <=  	opcode0==`INT ? fnImm(fetchbuf0_instr) :
 											fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm8(fetchbuf0_instr):
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
 											fnImm(fetchbuf0_instr);
 				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-				iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} : opcode0==`STI ? fetchbuf0_instr[31:22] : rfob0;
-				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0) | rf_v[Rb0];
+				iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
+				                             opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
+				                             opcode0==`STI ? fetchbuf0_instr[27:22] :
+				                             Rb0[6] ? fnSpr(Rb0[5:0]) :
+				                             rfob0;
+				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[Rb0];
 				iqentry_a2_s [tail0]    <=   rf_source [Rb0];
 				iqentry_a3   [tail0]    <=   rfoc0;
 				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc0 ];
@@ -3083,8 +3203,8 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_bt   [tail0]    <=	`VAL;
 			iqentry_agen [tail0]    <=	`INV;
 			iqentry_pc   [tail0]    <=	
-					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
-						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
+					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
+						iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
 			iqentry_mem  [tail0]    <=	fetchbuf0_mem;
 			iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
 			iqentry_fp   [tail0]    <=  fetchbuf0_fp;
@@ -3096,15 +3216,19 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			// Look at the previous queue slot to see if an immediate prefix is enqueued
 			iqentry_a0[tail0]   	<=  opcode0==`INT ? fnImm(fetchbuf0_instr) :
 										fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? iqentry_a0[tail0-3'd1] | fnImm8(fetchbuf0_instr):
+											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
 											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
 										fnImm(fetchbuf0_instr);
 			iqentry_a1   [tail0]    <=	//fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
 												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
 			iqentry_a1_v [tail0]    <=	fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 			iqentry_a1_s [tail0]    <=	rf_source [fnRa(fetchbuf0_instr)];
-			iqentry_a2   [tail0]    <=	fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} : opcode0==`STI ? fetchbuf0_instr[31:22] : rfob0;
-			iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
+			iqentry_a2   [tail0]    <=	fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
+ 			                            opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
+	                                    opcode0==`STI ? fetchbuf0_instr[27:22] :
+	                                    Rb0[6] ? fnSpr(Rb0[5:0]) :
+	                                    rfob0;
+			iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0,fnFunc(fetchbuf0_instr) ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=	rf_source[ Rb0 ];
 			iqentry_a3   [tail0]    <=   rfoc0;
 			iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc0 ];
@@ -3147,8 +3271,8 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_bt   [tail0]    <=   `INV;
 			iqentry_agen [tail0]    <=   `INV;
 			iqentry_pc   [tail0]    <=
-					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
-						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
+					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
+						iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
 			iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 			iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
 			iqentry_fp   [tail0]    <=   fetchbuf0_fp;
@@ -3169,8 +3293,12 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
 							
 			iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-			iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} : opcode0==`STI ? fetchbuf0_instr[31:22] : rfob0;
-			iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0 ) | rf_v[ Rb0 ];
+			iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
+			                             opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
+			                             opcode0==`STI ? fetchbuf0_instr[27:22] :
+			                             Rb0[6] ? fnSpr(Rb0[5:0]) :
+			                             rfob0;
+			iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0,fnFunc(fetchbuf0_instr) ) | rf_v[ Rb0 ];
 			iqentry_a2_s [tail0]    <=   rf_source[Rb0];
 			iqentry_a3   [tail0]    <=   rfoc0;
 			iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc0 ];
@@ -3190,7 +3318,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_cond [tail1]    <=   cond1;
 			iqentry_bt   [tail1]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
 			iqentry_agen [tail1]    <=   `INV;
-			iqentry_pc   [tail1]    <=   (opcode1==`INT && opcode0==`IMM) ? (string_pc != 64'd0 ? string_pc : fetchbuf0_pc) : fetchbuf1_pc;
+			iqentry_pc   [tail1]    <=   (opcode1==`INT && opcode0==`IMM) ? (string_pc != 0 ? string_pc : fetchbuf0_pc) : fetchbuf1_pc;
 			iqentry_mem  [tail1]    <=   fetchbuf1_mem;
 			iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
 			iqentry_fp   [tail1]    <=   fetchbuf1_fp;
@@ -3201,12 +3329,16 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_a0[tail1]   <=  	opcode1==`INT ? fnImm(fetchbuf1_instr) :
 										fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} : 
 											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
-											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) | fnImm8(fetchbuf1_instr) :
+											opcode0==`IMM ? fnImmImm(fetchbuf0_instr)|fnImm8(fetchbuf1_instr) :
 										fnImm(fetchbuf1_instr);
 			iqentry_a1   [tail1]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
 												fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
 												$display("this1 %h", fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc) );
-			iqentry_a2   [tail1]    <=   fnIsShiftiop(fetchbuf1_instr) ? {58'b0,fetchbuf1_instr[`INSTRUCTION_RB]} : opcode1==`STI ? fetchbuf1_instr[31:22] : rfob1;
+			iqentry_a2   [tail1]    <=   fnIsShiftiop(fetchbuf1_instr) ? {58'b0,fetchbuf1_instr[`INSTRUCTION_RB]} :
+  			                             opcode1==`INC ? {{56{fetchbuf1_instr[47]}},fetchbuf1_instr[47:40]} : 
+			                             opcode1==`STI ? fetchbuf1_instr[27:22] :
+			                             Rb1[6] ? fnSpr(Rb1[5:0]) :
+			                             rfob1;
 			iqentry_a3   [tail1]    <=   rfoc1;
 			// a1/a2_v and a1/a2_s values require a bit of thinking ...
 
@@ -3245,7 +3377,8 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				iqentry_p_v  [tail1]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
 				iqentry_p_s  [tail1]    <=   rf_source [{1'b1,2'h0,Pn1}];
 			end
-			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 && fetchbuf1_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF) begin
+			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 && fetchbuf1_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF
+			    && (fnTargetReg(fetchbuf0_instr) & 7'h70)==7'h40) begin
 				iqentry_p_v [tail1] <= cond1 < 4'h2;
 				iqentry_p_s [tail1] <= { fetchbuf0_mem, tail0 };
 			end
@@ -3259,7 +3392,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
 			//
 			// if the argument is an immediate or not needed, we're done
-			if (fnSource2_v( opcode1 ) == `VAL) begin
+			if (fnSource2_v( opcode1,fnFunc(fetchbuf1_instr) ) == `VAL) begin
 				iqentry_a2_v [tail1] <= `VAL;
 //					iqentry_a2_s [tail1] <= 4'd0;
 			end
@@ -3419,6 +3552,7 @@ if (alu0_v) begin
 		iqentry_mem[alu0_id[2:0]] <= `FALSE;
 		iqentry_rfw[alu0_id[2:0]] <= `TRUE;			// writes to IPC
 		iqentry_a0 [alu0_id[2:0]] <= alu0_exc;
+		iqentry_p_v  [alu0_id[2:0]] <= `TRUE;
 		iqentry_a1 [alu0_id[2:0]] <= cregs[4'hC];	// *** assumes BR12 is static
 		iqentry_a1_v [alu0_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [alu0_id[2:0]] <= `TRUE;
@@ -3444,6 +3578,8 @@ if (alu0_v) begin
 		end
 		else begin
 			iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
+			if (alu0_op[7:4]==4'h0)
+			    $stop;
 			iqentry_done[ alu0_id[2:0] ] <= !fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt;
 			iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 		end
@@ -3460,6 +3596,7 @@ if (alu1_v) begin
 		iqentry_mem[alu1_id[2:0]] <= `FALSE;
 		iqentry_rfw[alu1_id[2:0]] <= `TRUE;			// writes to IPC
 		iqentry_a0 [alu1_id[2:0]] <= alu1_exc;
+		iqentry_p_v  [alu1_id[2:0]] <= `TRUE;
 		iqentry_a1 [alu1_id[2:0]] <= cregs[4'hC];	// *** assumes BR12 is static
 		iqentry_a1_v [alu1_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [alu1_id[2:0]] <= `TRUE;
@@ -3484,6 +3621,8 @@ if (alu1_v) begin
 			end
 		end
 		else begin
+			if (alu1_op[7:4]==4'h0)
+                $stop;
 			iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
 			iqentry_done[ alu1_id[2:0] ] <= !fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt;
 			iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
@@ -3503,6 +3642,7 @@ if (fp0_v) begin
 		iqentry_rfw[alu0_id[2:0]] <= `TRUE;			// writes to IPC
 		iqentry_a0 [alu0_id[2:0]] <= fp0_exc;
 		iqentry_a1 [alu0_id[2:0]] <= bregs[4'hC];	// *** assumes BR12 is static
+		iqentry_p_v  [alu0_id[2:0]] <= `TRUE;
 		iqentry_a1_v [alu0_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [alu0_id[2:0]] <= `TRUE;
 		iqentry_a3_v [alu0_id[2:0]] <= `TRUE;
@@ -3531,6 +3671,7 @@ if (dram_v && iqentry_v[ dram_id[2:0] ] && iqentry_mem[ dram_id[2:0] ] ) begin	/
 		iqentry_mem[dram_id[2:0]] <= `FALSE;		// It's no longer a memory op
 		iqentry_rfw[dram_id[2:0]] <= `TRUE;			// writes to IPC
 		iqentry_a0 [dram_id[2:0]] <= dram_exc==`EXC_DBE ? 8'hFB : 8'hF8;
+		iqentry_p_v  [dram_id[2:0]] <= `TRUE;
 		iqentry_a1 [dram_id[2:0]] <= cregs[4'hC];	// *** assumes BR12 is static
 		iqentry_a1_v [dram_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [dram_id[2:0]] <= `TRUE;
@@ -3614,10 +3755,12 @@ begin
 		iqentry_a3_v[n] <= `VAL;
 	end
 `ifdef FLOATING_POINT
+/*
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
 		iqentry_pred[n] <= fp0_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
 	end
+*/
 	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
 		iqentry_a1[n] <= fp0_bus;
 		iqentry_a1_v[n] <= `VAL;
@@ -3631,10 +3774,12 @@ begin
 		iqentry_a3_v[n] <= `VAL;
 	end
 `endif
+/*
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_pred[n] <= dram_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
 	end
+*/
 	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_a1[n] <= dram_bus;
 		iqentry_a1_v[n] <= `VAL;
@@ -3894,16 +4039,20 @@ case(dram0)
         dram0 <= 3'd0;
 	end
 	else begin
-		if (uncached || fnIsStore(dram0_op) || fnIsLoadV(dram0_op) || dram0_op==`CAS) begin
+		if (uncached || fnIsStore(dram0_op) || fnIsLoadV(dram0_op) || dram0_op==`CAS ||
+		  ((dram0_op==`STMV || dram0_op==`INC) && stmv_flag)) begin
     		if (cstate==IDLE) begin // make sure an instruction load isn't taking place
                 dram0_owns_bus <= `TRUE;
                 lock_o <= dram0_op==`CAS;
                 cyc_o <= 1'b1;
                 stb_o <= 1'b1;
-                we_o <= fnIsStore(dram0_op);
+                we_o <= fnIsStore(dram0_op) || ((dram0_op==`STMV || dram0_op==`INC) && stmv_flag);
                 sel_o <= fnSelect(dram0_op,dram0_fn,pea);
                 adr_o <= pea;
-                dat_o <= fnDatao(dram0_op,dram0_data);
+                if (dram0_op==`INC)
+                    dat_o <= fnDatao(dram0_op,dram0_fn,dram0_data) + index;
+                else
+                    dat_o <= fnDatao(dram0_op,dram0_fn,dram0_data);
                 dram0 <= dram0 + 3'd1;
 			end
 		end
@@ -3916,17 +4065,18 @@ case(dram0)
 3'd3:
 	if (ack_i|err_i) begin
 		$display("MEM ack");
-		dram_v <= dram0_op != `CAS && dram0_op != `STS;
+		dram_v <= dram0_op != `CAS && dram0_op != `INC && dram0_op != `STS && dram0_op != `STMV && dram0_op != `STCMP && dram0_op != `STFND;
 		dram_id <= dram0_id;
 		dram_tgt <= dram0_tgt;
 		dram_exc <= err_i ? `EXC_DBE : `EXC_NONE;//dram0_exc;
-		dram_bus <= fnDatai(dram0_op,dat_i,sel_o);
+		dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
 		dram0_owns_bus <= `FALSE;
 		wb_nack();
 		dram0 <= 3'd7;
 		case(dram0_op)
 		`STS:
 			if (lc != 0 && !int_pending) begin
+			    dram0_owns_bus <= `TRUE;
 				dram0_addr <= dram0_addr +
 				    (dram0_fn[2:0]==3'd0 ? 64'd1 :
 				    dram0_fn[2:0]==3'd1 ? 64'd2 :
@@ -3944,7 +4094,49 @@ case(dram0)
                 dram_bus <= dram0_addr;
                 dram_v <= `VAL;
             end
-		`CAS:
+        `STMV,`STCMP:
+            if (lc != 0 && !(int_pending && stmv_flag)) begin 
+			    dram0_owns_bus <= `TRUE;
+                if (stmv_flag) begin
+                    dram0_addr <= src_addr + index;
+                    if (dram0_op==`STCMP) begin
+                        if (dram0_data != fnDatai(dram0_op,dram0_fn,dat_i,sel_o)) begin
+                            lc <= 64'd0;
+                            dram0 <= 3'd7;
+                            dram_v <= `VAL;
+                            dram_bus <= index;
+                        end
+                    end
+                end               
+                else begin
+                    dram0_addr <= dst_addr + index;
+                    dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
+                end
+                if (!stmv_flag)
+                    inc_index(dram0_fn);
+                stmv_flag <= ~stmv_flag;
+                dram0 <= 3'd2;
+            end
+            else begin
+                dram_bus <= index;
+                dram_v <= `VAL;
+            end
+        `STFND:
+            if (lc != 0 && !int_pending) begin 
+                dram0_addr <= src_addr + index;
+                inc_index(dram0_fn);
+                if (dram0_data == dram_bus) begin
+                    lc <= 64'd0;
+                    dram0 <= 3'd7;
+                    dram_v <= `VAL;
+                    dram_bus <= index;
+                end
+            end
+            else begin
+                dram_bus <= index;
+                dram_v <= `VAL;
+            end
+        `CAS:
 			if (dram0_datacmp == dat_i) begin
 				$display("CAS match");
 				dram0_owns_bus <= `TRUE;
@@ -3953,6 +4145,17 @@ case(dram0)
 			end
 			else
 				dram_v <= `VAL;
+		`INC:
+		     begin
+		         if (stmv_flag) begin
+		             dram_v <= `VAL;
+		         end
+		         else begin
+		             dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
+                     stmv_flag <= ~stmv_flag;
+                     dram0 <= 3'd2;
+		         end
+		     end
 		endcase
 	end
 
@@ -3964,7 +4167,7 @@ case(dram0)
 		we_o <= 1'b1;
 		sel_o <= fnSelect(dram0_op,dram0_fn,pea);
 		adr_o <= pea;
-		dat_o <= fnDatao(dram0_op,dram0_data);
+		dat_o <= fnDatao(dram0_op,dram0_fn,dram0_data);
 		dram0 <= dram0 + 3'd1;
 	end
 
@@ -3973,28 +4176,86 @@ case(dram0)
 //
 3'd5:
 	if (ack_i|err_i) begin
-		$display("MEM ack2");
-		dram_v <= `VAL;
-		dram_id <= dram0_id;
-		dram_tgt <= dram0_tgt;
-		dram_exc <= err_i ? `EXC_DBE : `EXC_NONE;
-		dram0_owns_bus <= `FALSE;
-		wb_nack();
-		lock_o <= 1'b0;
-		dram0 <= 3'd7;
-	end
+        $display("MEM ack2");
+        dram_v <= `VAL;
+        dram_id <= dram0_id;
+        dram_tgt <= dram0_tgt;
+        dram_exc <= err_i ? `EXC_DBE : `EXC_NONE;
+        dram0_owns_bus <= `FALSE;
+        wb_nack();
+        lock_o <= 1'b0;
+        dram0 <= 3'd7;
+    end
 
 // State 6:
 // Wait for a data cache read hit
 3'd6:
 	if (rhit) begin
-		$display("Read hit");
-		dram_v <= `TRUE;
-		dram_id <= dram0_id;
-		dram_tgt <= dram0_tgt;
-		dram_exc <= `EXC_NONE;
-		dram_bus <= fnDatai(dram0_op,cdat,sel_o);
-		dram0 <= 3'd0;
+	    case(dram0_op)
+	    // The read portion of the STMV was just done, go back and do
+	    // the write portion.
+        `STMV:
+           begin
+               stmv_flag <= `TRUE;
+               dram0_addr <= dst_addr + index;
+               dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+               dram0 <= 3'd2;
+           end
+        `STCMP:
+            if (lc != 0 && !int_pending && stmv_flag) begin
+                dram0_addr <= src_addr + index;
+                stmv_flag <= ~stmv_flag;
+                if (dram0_data != dram_bus) begin
+                    lc <= 64'd0;
+                    dram0 <= 3'd7;
+                    dram_v <= `VAL;
+                    dram_bus <= index;
+                end
+            end
+            else if (!stmv_flag) begin
+                stmv_flag <= ~stmv_flag;
+                dram0_addr <= dst_addr + index;
+                dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+                dram0 <= 3'd2;
+                inc_index(dram0_fn);
+            end
+            else begin
+                dram_bus <= index;
+                dram_v <= `VAL;
+                dram0 <= 3'd7;
+            end
+        `STFND:
+            if (lc != 0 && !int_pending) begin 
+                dram0_addr <= src_addr + index;
+                inc_index(dram0_fn);
+                if (dram0_data == dram_bus) begin
+                    lc <= 64'd0;
+                    dram0 <= 3'd7;
+                    dram_v <= `VAL;
+                    dram_bus <= index;
+                end
+            end
+            else begin
+                dram_bus <= index;
+                dram_v <= `VAL;
+                dram0 <= 3'd7;
+            end
+		`INC:
+             begin
+                 dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+                 stmv_flag <= `TRUE;
+                 dram0 <= 3'd2;
+            end
+    default: begin
+            $display("Read hit");
+            dram_v <= `TRUE;
+            dram_id <= dram0_id;
+            dram_tgt <= dram0_tgt;
+            dram_exc <= `EXC_NONE;
+            dram_bus <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+            dram0 <= 3'd0;
+            end
+        endcase
 	end
 3'd7:
     dram0 <= 3'd0;
@@ -4316,12 +4577,21 @@ for (n = 0; n < 8; n = n + 1)
 			dram0_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
 			dram0_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
-			dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
+            if (iqentry_op[n]==`PUSH)
+			     dram0_addr	<= iqentry_a1[n] + {sregs[3'd6],12'h000};
+			else
+			     dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
 //			if (iqentry_a1[n] > sregs_lmt[iqentry_fn[n]])
 //			    dram0_exc <= `EXC_SEGLMT;
+            src_addr <= iqentry_a1[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
+            dst_addr <= iqentry_a2[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
 `else
 			dram0_addr	<= iqentry_a1[n];
+            src_addr <= iqentry_a1[n];
+            dst_addr <= iqentry_a2[n];
 `endif
+            stmv_flag <= `FALSE;
+            index <= iqentry_op[n]==`INC ? iqentry_a2[n] : iqentry_a3[n];
 			iqentry_out[n]	<= `TRUE;
 		end
 	end
@@ -4332,74 +4602,9 @@ for (n = 0; n < 8; n = n + 1)
 // It didn't work in simulation when the following was declared under an
 // independant always clk block
 //
-if (commit0_v && commit0_tgt[6:4]==5'b101) begin
-	cregs[commit0_tgt[3:0]] <= commit0_bus;
-	$display("cregs[%d]<=%h", commit0_tgt[3:0], commit0_bus);
-end
-if (commit1_v && commit1_tgt[6:4]==5'b101) begin
-	$display("cregs[%d]<=%h", commit1_tgt[3:0], commit1_bus);
-	cregs[commit1_tgt[3:0]] <= commit1_bus;
-end
-
-`ifdef SEGMENTATION
-if (commit0_v && commit0_tgt[6:4]==5'b110) begin
-	$display("sregs[%d]<=%h", commit0_tgt[2:0], commit0_bus);
-	sregs[commit0_tgt[2:0]] <= commit0_bus[DBW-1:12];
-end
-if (commit1_v && commit1_tgt[6:4]==5'b110) begin
-	$display("sregs[%d]<=%h", commit1_tgt[2:0], commit1_bus);
-	sregs[commit1_tgt[2:0]] <= commit1_bus[DBW-1:12];
-end
-`endif
-
-if (commit0_v && commit0_tgt[8:4]==5'b100)
-	pregs[commit0_tgt[3:0]] <= commit0_bus[3:0];
-if (commit1_v && commit1_tgt[8:4]==5'b100)
-	pregs[commit1_tgt[3:0]] <= commit1_bus[3:0];
-
-//	if (commit1_v && commit1_tgt[8:4]==5'h10)
-//		pregs[commit1_tgt[3:0]] <= commit1_bus[3:0];
-if (commit0_v && commit0_tgt==7'h70) begin
-	pregs[0] <= commit0_bus[3:0];
-	pregs[1] <= commit0_bus[7:4];
-	pregs[2] <= commit0_bus[11:8];
-	pregs[3] <= commit0_bus[15:12];
-	pregs[4] <= commit0_bus[19:16];
-	pregs[5] <= commit0_bus[23:20];
-	pregs[6] <= commit0_bus[27:24];
-	pregs[7] <= commit0_bus[31:28];
-	if (DBW==64) begin
-		pregs[8] <= commit0_bus[35:32];
-		pregs[9] <= commit0_bus[39:36];
-		pregs[10] <= commit0_bus[43:40];
-		pregs[11] <= commit0_bus[47:44];
-		pregs[12] <= commit0_bus[51:48];
-		pregs[13] <= commit0_bus[55:52];
-		pregs[14] <= commit0_bus[59:56];
-		pregs[15] <= commit0_bus[63:60];
-	end
-end
-if (commit1_v && commit1_tgt==7'h70) begin
-	pregs[0] <= commit1_bus[3:0];
-	pregs[1] <= commit1_bus[7:4];
-	pregs[2] <= commit1_bus[11:8];
-	pregs[3] <= commit1_bus[15:12];
-	pregs[4] <= commit1_bus[19:16];
-	pregs[5] <= commit1_bus[23:20];
-	pregs[6] <= commit1_bus[27:24];
-	pregs[7] <= commit1_bus[31:28];
-	if (DBW==64) begin
-		pregs[8] <= commit1_bus[35:32];
-		pregs[9] <= commit1_bus[39:36];
-		pregs[10] <= commit1_bus[43:40];
-		pregs[11] <= commit1_bus[47:44];
-		pregs[12] <= commit1_bus[51:48];
-		pregs[13] <= commit1_bus[55:52];
-		pregs[14] <= commit1_bus[59:56];
-		pregs[15] <= commit1_bus[63:60];
-	end
-end
-
+    commit_spr(commit0_v,commit0_tgt,commit0_bus);
+    commit_spr(commit1_v,commit1_tgt,commit1_bus);
+    
 // When the INT instruction commits set the hardware interrupt status to disable further interrupts.
 if (int_commit)
 begin
@@ -4440,26 +4645,11 @@ if (commit0_v) begin
 	`LOOP:
 		if (lc != 64'd0)
 			lc <= lc - 64'd1;
-	`MTSPR,`LDIS:
-		begin
-			case(iqentry_tgt[head0][5:0])
-			`LCTR:	lc <= commit0_bus;
-			`ASID:	asid <= commit0_bus;
-			`SR:	begin
-					GM <= commit0_bus[7:0];
-					GMB <= commit0_bus[23:16];
-					imb <= commit0_bus[31];
-					im <= commit0_bus[15];
-					fxe <= commit0_bus[12];
-					end
-			default:	;
-			endcase
-		end
 	default:	;
 	endcase
 end
 
-if (commit0_v && commit1_v) begin
+if (commit1_v) begin
 	case(iqentry_op[head1])
 	`CLI:	im <= 1'b0;
 	`SEI:	im <= 1'b1;
@@ -4474,21 +4664,6 @@ if (commit0_v && commit1_v) begin
 	`LOOP:
 		if (lc != 64'd0)
 			lc <= lc - 64'd1;
-	`MTSPR,`LDIS:
-		begin
-			case(iqentry_tgt[head1][5:0])
-			`LCTR:	lc <= commit1_bus;
-			`ASID:	asid <= commit1_bus;
-			`SR:	begin
-					GM <= commit1_bus[7:0];
-					GMB <= commit1_bus[23:16];
-					imb <= commit1_bus[31];
-					im <= commit1_bus[15];
-					fxe <= commit1_bus[12];
-					end
-			default:	;
-			endcase
-		end
 	default:	;
 	endcase
 end
@@ -5049,6 +5224,110 @@ begin
 	dat_o <= {DBW{1'b0}};
 end
 endtask
+
+task commit_spr;
+input commit_v;
+input [6:0] commit_tgt;
+input [DBW-1:0] commit_bus;
+begin
+if (commit_v && commit_tgt[6]) begin
+    casex(commit_tgt[5:0])
+    6'b00xxxx:  begin
+                pregs[commit_tgt[3:0]] <= commit_bus[3:0];
+	            $display("pregs[%d]<=%h", commit_tgt[3:0], commit_bus[3:0]);
+//	            $stop;
+                end
+    6'b01xxxx:  begin
+                cregs[commit_tgt[3:0]] <= commit_bus;
+	            $display("cregs[%d]<=%h", commit_tgt[3:0], commit_bus);
+	           end
+`ifdef SEGMENTATION    
+    6'b100xxx:  begin
+                sregs[commit_tgt[2:0]] <= commit_bus[DBW-1:12];
+	            $display("sregs[%d]<=%h", commit_tgt[2:0], commit_bus);
+	            end
+`endif
+    6'b110000:
+        begin
+        pregs[0] <= commit_bus[3:0];
+        pregs[1] <= commit_bus[7:4];
+        pregs[2] <= commit_bus[11:8];
+        pregs[3] <= commit_bus[15:12];
+        pregs[4] <= commit_bus[19:16];
+        pregs[5] <= commit_bus[23:20];
+        pregs[6] <= commit_bus[27:24];
+        pregs[7] <= commit_bus[31:28];
+        if (DBW==64) begin
+            pregs[8] <= commit_bus[35:32];
+            pregs[9] <= commit_bus[39:36];
+            pregs[10] <= commit_bus[43:40];
+            pregs[11] <= commit_bus[47:44];
+            pregs[12] <= commit_bus[51:48];
+            pregs[13] <= commit_bus[55:52];
+            pregs[14] <= commit_bus[59:56];
+            pregs[15] <= commit_bus[63:60];
+        end
+        end
+    `LCTR:      lc <= commit_bus;
+	`ASID:	    asid <= commit_bus;
+    `SR:    begin
+            GM <= commit_bus[7:0];
+            GMB <= commit_bus[23:16];
+            imb <= commit_bus[31];
+            im <= commit_bus[15];
+            fxe <= commit_bus[12];
+            end
+    endcase
+end
+end
+endtask
+
+task inc_index;
+input [5:0] fn;
+begin
+    case(fn[2:0])
+    3'd0:   index <= index + 64'd1;
+    3'd1:   index <= index + 64'd2;
+    3'd2:   index <= index + 64'd4;
+    3'd3:   index <= index + 64'd8;
+    3'd4:   index <= index - 64'd1;
+    3'd5:   index <= index - 64'd2;
+    3'd6:   index <= index - 64'd4;
+    3'd7:   index <= index - 64'd8;
+    endcase
+    lc <= lc - 64'd1;    
+end
+endtask
+
+function [DBW-1:0] fnSpr;
+input [5:0] regno;
+begin
+    casex(regno)
+    6'b00xxxx:  fnSpr = pregs[regno[3:0]];
+    6'b01xxxx:  fnSpr = cregs[regno[3:0]];
+    6'b100xxx:  fnSpr = sregs[regno[2:0]];
+    6'b110000:  if (DBW==64)
+                fnSpr = {pregs[15],pregs[14],pregs[13],pregs[12],
+                         pregs[11],pregs[10],pregs[9],pregs[8],
+                         pregs[7],pregs[6],pregs[5],pregs[4],
+                         pregs[3],pregs[2],pregs[1],pregs[0]};
+                else
+                fnSpr = {pregs[7],pregs[6],pregs[5],pregs[4],
+                         pregs[3],pregs[2],pregs[1],pregs[0]};
+    `TICK:      fnSpr = tick;                    
+    `LCTR:      fnSpr = lc;
+    `ASID:      fnSpr = asid; 
+    `SR:    begin
+            fnSpr[7:0] = GM;
+            fnSpr[23:16] = GMB;
+            fnSpr[31] = imb;
+            fnSpr[15] = im;
+            fnSpr[12] = fxe;
+            end
+    default:    fnSpr = 64'd0;
+    endcase
+end
+endfunction
 
 endmodule
 

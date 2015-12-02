@@ -54,6 +54,9 @@
 `define _4ADDU			6'h09
 `define _8ADDU			6'h0A
 `define _16ADDU			6'h0B
+`define MIN             6'h10
+`define MAX             6'h11
+`define BITI        8'h46
 `define ADDUIS      8'h47
 `define ADDI		8'h48
 `define SUBI		8'h49
@@ -96,8 +99,6 @@
 `define _16ADDUI	8'h6E
 `define LDI			8'h6F
 
-`define NEG			8'h70
-`define NOT			8'h71
 `define MUX			8'h72
 
 `define FSTAT		8'h73
@@ -106,13 +107,16 @@
 `define ITOF		8'h76
 `define FTOI		8'h77
 `define DOUBLE		8'h78
+`define FMOV            6'h00
 `define FNEG			6'h04
 `define FABS			6'h05
 `define FSIGN			6'h06
+`define FMAN            6'h07
 `define FADD			6'h08
 `define FSUB			6'h09
 `define FMUL			6'h0A
 `define FDIV			6'h0B
+`define FNABS           6'h0C
 
 `define LB			8'h80
 `define LBU			8'h81
@@ -136,6 +140,9 @@
 `define STI			8'h96
 `define CAS			8'h97
 `define STS	    	8'h98
+`define STMV        8'h99
+`define STCMP       8'h9A
+`define STFND       8'h9B
 
 `define LDIT10		8'h9C
 `define LDIS		8'h9D
@@ -150,8 +157,12 @@
 `define LOOP		8'hA4
 `define SYS			8'hA5
 `define INT			8'hA6
-
-`define MOV			8'hA7
+`define R           8'hA7
+`define MOV			    4'h0
+`define NEG			    4'h1
+`define NOT			    4'h2
+`define ABS             4'h3
+`define SGN             4'h4
 `define MFSPR		8'hA8
 `define MTSPR		8'hA9
 
@@ -164,6 +175,11 @@
 `define BFEXT			4'h5
 
 `define MOVS		8'hAB
+// Uncached access instructions
+`define LVB			8'hAC
+`define LVC			8'hAD
+`define LVH			8'hAE
+`define LVW			8'hAF
 
 `define LBX			8'hB0
 `define LBUX		8'hB1
@@ -178,19 +194,12 @@
 `define SHX			8'hC2
 `define SWX			8'hC3
 `define STIX        8'hC6
+`define INC         8'hC7
+`define PUSH        8'hC8
 
-`define FNABS		8'hC8
-`define FMOV		8'hC9
-`define FMAN		8'hCA
 `define FCX			8'hCC
 `define FEX			8'hCD
 `define FDX			8'hCE
-
-// Uncached access instructions
-`define LVB			8'hD0
-`define LVC			8'hD1
-`define LVH			8'hD2
-`define LVW			8'hD3
 
 `define NOP			8'hE1
 
@@ -218,7 +227,7 @@
 `define TLBPageTblAddr	4'd10
 `define TLBPageTblCtrl	4'd11
 
-
+`define RTS2        8'hF2
 `define RTE			8'hF3
 `define RTI			8'hF4
 `define BCD			8'hF5
@@ -246,13 +255,14 @@
 `define IPC		4'd14
 
 // Special Registers
-`define TICK			8'h02
-`define LCTR			8'h03
-`define PREGS			8'h04
-`define ASID			8'h06
-`define SR				8'h07
-`define CREGS			8'h1x
-`define SREGS			8'h2x
+`define PREGS           6'h0x
+`define CREGS			6'h1x
+`define SREGS			6'h2x
+`define PREGS_ALL		6'h30
+`define TICK			6'h32
+`define LCTR			6'h33
+`define ASID			8'h36
+`define SR				8'h37
 		
 // exception types:
 `define EXC_NONE	4'd0
