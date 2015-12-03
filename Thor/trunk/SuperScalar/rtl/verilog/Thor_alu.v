@@ -142,7 +142,7 @@ casex(alu_op)
 `ANDI:			o <= alu_argA & alu_argI;
 `ORI:			o <= alu_argA | alu_argI;
 `EORI:			o <= alu_argA ^ alu_argI;
-`LOGIC:
+`LOGIC,`MLO:
 	case(alu_fn)
 	`AND:			o <= alu_argA & alu_argB;
 	`ANDC:			o <= alu_argA & ~alu_argB;
@@ -234,6 +234,7 @@ casex(alu_op)
 		endcase
 `SHIFT:	o <= shfto;
 `BITFIELD:	o <= bf_out;
+`LOOP:      o <= alu_argB - 64'd1;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end

@@ -98,7 +98,8 @@
 //
 `include "Thor_defines.v"
 
-module Thor(rst_i, clk_i, km, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
+module Thor(rst_i, clk_i, km, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, resv_o, resv_i, cres_o,
+    cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter DBW = 32;
 parameter QENTRIES = 8;
 parameter IDLE = 4'd0;
@@ -109,7 +110,7 @@ parameter IBUF2 = 4'd4;
 parameter IBUF3 = 4'd5;
 parameter IBUF4 = 4'd6;
 parameter IBUF5 = 4'd7;
-parameter NREGS = 111;
+parameter NREGS = 127;
 parameter PF = 4'd0;
 parameter PT = 4'd1;
 parameter PEQ = 4'd2;
@@ -132,6 +133,9 @@ output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg [4:0] bl_o;
 output reg lock_o;
+output reg resv_o;
+input resv_i;
+output reg cres_o;
 output reg cyc_o;
 output reg stb_o;
 input ack_i;
@@ -660,6 +664,7 @@ else
 	`PUSH:  fnRb = insn[22:16];
 	`RTS2:  fnRb = 7'd27;
 	`RTS:   fnRb = 7'd0;
+	`LOOP:  fnRb = 7'h73;
 	`JSR,`JSRS,`JSRZ,`SYS,`INT:
 		fnRb = {3'h5,insn[23:20]};
 	`TLB:	fnRb = {1'b0,insn[29:24]};
@@ -773,10 +778,10 @@ input [5:0] func;
 	               fnSource2_v = `TRUE;
 	           else
 	               fnSource2_v = `FALSE;
-	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
+	`LVB,`LVC,`LVH,`LVW,`LVWAR,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`STI,`INC:
 			fnSource2_v = 1'b1;
-	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR,`LOOP:
+	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR:
 			fnSource2_v = 1'b1;
 	`MTSPR,`MFSPR:
 				fnSource2_v = 1'b1;
@@ -825,7 +830,7 @@ casex(fnOpcode(ins))
 					else
 					   fnNumReadPorts = 3'd2;
 `RTS2,					 
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LWS,`LEA,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`LEA,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR,`LOOP:
 					fnNumReadPorts = 3'd1;
@@ -1046,7 +1051,7 @@ begin
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
-		`LVB,`LVC,`LVH,`LVW,
+		`LVB,`LVC,`LVH,`LVW,`LVWAR,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA:
 			fnTargetReg = {1'b0,ir[27:22]};
 		`CAS:
@@ -1066,6 +1071,7 @@ begin
 		    begin
 			fnTargetReg = {3'h4,ir[11:8]};
 			end
+		`SWCR:    fnTargetReg = {3'h4,4'h0};
 		`JSR,`JSRZ,`JSRS,`SYS,`INT:
 			fnTargetReg = {3'h5,ir[19:16]};
 		`MTSPR,`MOVS,`LWS:
@@ -1081,6 +1087,7 @@ begin
 				fnTargetReg = 7'h00;
 */      
         `PUSH,`RTS2:    fnTargetReg = 7'd27;
+        `LOOP:      fnTargetReg = 7'h73;
 		default:	fnTargetReg = 7'h00;
 		endcase
 end
@@ -1159,8 +1166,8 @@ input [7:0] opcode;
 	`ANDI,`ORI,`EORI,`BITI,
 //	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`INC,
-	`LVB,`LVC,`LVH,`LVW,`STI,
-	`SB,`SC,`SH,`SW,`CAS,`SWS,
+	`LVB,`LVC,`LVH,`LVW,`LVWAR,`STI,
+	`SB,`SC,`SH,`SW,`SWCR,`CAS,`SWS,
 	`JSR,`JSRS,`SYS,`INT,`BR,`RTS2:
 		fnHasConst = 1'b1;
 	default:
@@ -1271,7 +1278,7 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 			opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
 			opcode==`STS || opcode==`PUSH ||
-			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
+			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
 			opcode==`TLB || opcode==`CAS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`LWS || opcode==`SWS || opcode==`STI ||
 			opcode==`INC
@@ -1286,7 +1293,7 @@ begin
 fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
-			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW ||
+			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
 			opcode==`PUSH || opcode==`RTS2 ||
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS ||
@@ -1313,7 +1320,7 @@ function fnIsStore;
 input [7:0] opcode;
 fnIsStore = 	opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
-				opcode==`STS ||
+				opcode==`STS || opcode==`SWCR ||
 				opcode==`SWS || opcode==`STI || 
 				opcode==`PUSH;
 endfunction
@@ -1322,13 +1329,13 @@ function fnIsLoad;
 input [7:0] opcode;
 fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
-			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW ||
+			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR ||
 			opcode==`LWS;
 endfunction
 
 function fnIsLoadV;
 input [7:0] opcode;
-fnIsLoadV = opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW;
+fnIsLoadV = opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR;
 endfunction
 
 function fnIsIndexed;
@@ -1382,7 +1389,7 @@ if (DBW==32)
 		endcase
 	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		fnSelect = 8'hFF;
-	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
+	`LW,`LWX,`SW,`SWCR,`LVW,`LVWAR,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1440,7 +1447,7 @@ else
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
-	`LW,`LWX,`SW,`LVW,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
+	`LW,`LWX,`SW,`SWCR,`LVW,`LVWAR,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1502,7 +1509,7 @@ if (DBW==32)
 		4'hC:	fnDatai = dat[31:16];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LHX,`LHUX,`CAS,`LWS:
+	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LVWAR,`LHX,`LHUX,`CAS,`LWS:
 		fnDatai = dat[31:0];
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
@@ -1590,7 +1597,7 @@ else
 		8'hF0:	fnDatai = dat[DBW-1:DBW/2];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LW,`LWX,`LVW,`CAS,`LWS:
+	`LW,`LWX,`LVW,`LVWAR,`CAS,`LWS:
 		case(sel)
 		8'hFF:	fnDatai = dat;
 		default:	fnDatai = {DBW{1'b1}};
@@ -1612,7 +1619,7 @@ if (DBW==32)
 	   3'd1,3'd5:  fnDatao = {2{dat[15:8]}};
 	   default:    fnDatao = dat;
 	   endcase
-	`SW,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
+	`SW,`SWCR,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = dat;
 	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
 	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
@@ -1627,7 +1634,7 @@ else
 	   3'd2,3'd6:  fnDatao = {2{dat[DBW/2-1:0]}};
 	   3'd3,3'd7:  fnDatao = dat;
 	   endcase
-	`SW,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
+	`SW,`SWCR,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
 	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
 	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
@@ -1800,7 +1807,7 @@ casex(insn[15:8])
 `RTS:	fnImm = insn[19:16];
 `RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND:	fnImm = 8'h00;
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`LWS,`SWS,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC:
 	fnImm = {{55{insn[36]}},insn[36:28]};
 `PUSH:  fnImm = 64'd8;
 default:
@@ -1828,7 +1835,7 @@ casex(insn[15:8])
 `RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND:	fnImm8 = 8'h00;
 `STI:	fnImm8 = insn[39:28];
 `PUSH:  fnImm8 = 8'd8;
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`LWS,`SWS,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC:
 	fnImm8 = insn[35:28];
 default:	fnImm8 = insn[35:28];
 endcase
@@ -1859,7 +1866,7 @@ casex(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`STI,`LWS,`SWS,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC:
 	fnImmMSB = insn[36];
 default:
 	fnImmMSB = insn[39];
@@ -2687,9 +2694,9 @@ always @(posedge clk) begin
 		// to stall.
 		for (n = 1; n < NREGS; n = n + 1)
 			rf_v[n] = `VAL;
-		rf_v[0] = `VAL;
-		rf_v[7'h50] = `VAL;
-		rf_v[7'h5F] = `VAL;
+//		rf_v[0] = `VAL;
+//		rf_v[7'h50] = `VAL;
+//		rf_v[7'h5F] = `VAL;
 		alu0_available <= `TRUE;
 		alu1_available <= `TRUE;
 		tail0 <= 3'd0;
@@ -3081,7 +3088,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				iqentry_res  [tail0]    <=   `ZERO;
 				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf1_instr);
 				iqentry_op   [tail0]    <=   opcode1;
-				iqentry_fn   [tail0]    <=   fnFunc(fetchbuf1_instr);
+				iqentry_fn   [tail0]    <=   opcode1==`MLO ? rfoc1[5:0] : fnFunc(fetchbuf1_instr);
 				iqentry_cond [tail0]    <=   cond1;
 				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
 				iqentry_agen [tail0]    <=   `INV;
@@ -3144,7 +3151,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 				iqentry_res  [tail0]    <=   `ZERO;
 				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
 				iqentry_op   [tail0]    <=   opcode0; 
-				iqentry_fn   [tail0]    <=   fnFunc(fetchbuf0_instr);
+				iqentry_fn   [tail0]    <=   opcode0==`MLO ? rfoc0[5:0] : fnFunc(fetchbuf0_instr);
 				iqentry_cond [tail0]    <=   cond0;
 				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
 				iqentry_agen [tail0]    <=   `INV;
@@ -3202,7 +3209,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_res  [tail0]    <=	`ZERO;
 			iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
 			iqentry_op   [tail0]    <=	opcode0; 			// BEQ
-			iqentry_fn   [tail0]    <=   fnFunc(fetchbuf0_instr);
+			iqentry_fn   [tail0]    <=   opcode0==`MLO ? rfoc0 : fnFunc(fetchbuf0_instr);
 			iqentry_cond [tail0]    <=   cond0;
 			iqentry_bt   [tail0]    <=	`VAL;
 			iqentry_agen [tail0]    <=	`INV;
@@ -3270,7 +3277,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_res  [tail0]    <=   `ZERO;
 			iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
 			iqentry_op   [tail0]    <=  opcode0;
-			iqentry_fn   [tail0]    <=   fnFunc(fetchbuf0_instr);
+			iqentry_fn   [tail0]    <=   opcode0==`MLO ? rfoc0[5:0] : fnFunc(fetchbuf0_instr);
 			iqentry_cond [tail0]    <=   cond0;
 			iqentry_bt   [tail0]    <=   `INV;
 			iqentry_agen [tail0]    <=   `INV;
@@ -3318,7 +3325,7 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 			iqentry_res  [tail1]    <=   `ZERO;
 			iqentry_insnsz[tail1]   <=  fnInsnLength(fetchbuf1_instr);
 			iqentry_op   [tail1]    <=   opcode1; 
-			iqentry_fn   [tail1]    <=   fnFunc(fetchbuf1_instr);
+			iqentry_fn   [tail1]    <=   opcode1==`MLO ? rfoc1[5:0] :  fnFunc(fetchbuf1_instr);
 			iqentry_cond [tail1]    <=   cond1;
 			iqentry_bt   [tail1]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
 			iqentry_agen [tail1]    <=   `INV;
@@ -3781,12 +3788,11 @@ begin
 		iqentry_a3_v[n] <= `VAL;
 	end
 `endif
-/*
+    // For SWCR
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_pred[n] <= dram_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
 	end
-*/
 	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_a1[n] <= dram_bus;
 		iqentry_a1_v[n] <= `VAL;
@@ -4050,6 +4056,8 @@ case(dram0)
 		  ((dram0_op==`STMV || dram0_op==`INC) && stmv_flag)) begin
     		if (cstate==IDLE) begin // make sure an instruction load isn't taking place
                 dram0_owns_bus <= `TRUE;
+                resv_o <= dram0_op==`LVWAR;
+                cres_o <= dram0_op==`SWCR;
                 lock_o <= dram0_op==`CAS;
                 cyc_o <= 1'b1;
                 stb_o <= 1'b1;
@@ -4076,7 +4084,10 @@ case(dram0)
 		dram_id <= dram0_id;
 		dram_tgt <= dram0_tgt;
 		dram_exc <= err_i ? `EXC_DBE : `EXC_NONE;//dram0_exc;
-		dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
+		if (dram0_op==`SWCR)
+		     dram_bus <= {63'd0,resv_i};
+		else
+		     dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
 		dram0_owns_bus <= `FALSE;
 		wb_nack();
 		dram0 <= 3'd7;
@@ -4649,9 +4660,6 @@ if (commit0_v) begin
 				if (StatusEXL!=8'h00)
 					StatusEXL <= StatusEXL - 8'd1;
 			end
-	`LOOP:
-		if (lc != 64'd0)
-			lc <= lc - 64'd1;
 	default:	;
 	endcase
 end
@@ -4668,9 +4676,6 @@ if (commit1_v) begin
 				if (StatusEXL!=8'h00)
 					StatusEXL <= StatusEXL - 8'd1;
 			end
-	`LOOP:
-		if (lc != 64'd0)
-			lc <= lc - 64'd1;
 	default:	;
 	endcase
 end
@@ -5230,6 +5235,8 @@ end
 
 task wb_nack;
 begin
+    resv_o <= 1'b0;
+    cres_o <= 1'b0;
 	bte_o <= 2'b00;
 	cti_o <= 3'b000;
 	bl_o <= 5'd0;
@@ -5285,7 +5292,7 @@ if (commit_v && commit_tgt[6]) begin
             pregs[15] <= commit_bus[63:60];
         end
         end
-    `LCTR:      lc <= commit_bus;
+    `LCTR:  begin    lc <= commit_bus; $display("LC <= %h", commit_bus); end
 	`ASID:	    asid <= commit_bus;
     `SR:    begin
             GM <= commit_bus[7:0];
@@ -5343,6 +5350,10 @@ begin
             end
     default:    fnSpr = 64'd0;
     endcase
+    if (commit0_v && commit0_tgt=={1'b1,regno})
+        fnSpr = commit0_bus;
+    if (commit1_v && commit1_tgt=={1'b1,regno})
+        fnSpr = commit1_bus;
 end
 endfunction
 

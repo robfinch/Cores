@@ -107,11 +107,11 @@ endmodule
 
 module decoder7 (num, out);
 input [6:0] num;
-output [111:1] out;
+output [127:1] out;
 
-wire [111:0] out1;
+wire [127:0] out1;
 
-assign out1 = 111'd1 << num;
-assign out = out1[111:1];
+assign out1 = 127'd1 << num;
+assign out = out1[127:1];
 
 endmodule

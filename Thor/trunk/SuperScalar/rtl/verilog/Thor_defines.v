@@ -75,6 +75,7 @@
 `define ENOR			6'h5
 `define ANDC			6'h6
 `define ORC				6'h7
+`define MLO         8'h51
 `define ANDI		8'h53
 `define ORI			8'h54
 `define EORI		8'h55
@@ -127,6 +128,8 @@
 `define LW			8'h86
 `define LFS			8'h87
 `define LFD			8'h88
+`define LVWAR       8'h8B
+`define SWCR        8'h8C
 `define LEA			8'h8D
 `define LWS			8'h8E
 `define PFLD		8'h8F

@@ -31,7 +31,7 @@ initial begin
 	#20 nmi = 1'b0;
 end
 
-always #5 clk = ~clk;
+always #1 clk = ~clk;
 
 assign LEDS_ack = cyc && stb && adr[31:8]==32'hFFDC06;
 always @(posedge clk)
