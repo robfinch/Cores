@@ -24,7 +24,8 @@
 //
 // ============================================================================
 //
-module Thor_itagmem(wclk, wce, wr, wa, err_i, invalidate, rclk, rce, pc, hit0, hit1, err_o);
+module Thor_itagmem(wclk, wce, wr, wa, err_i, invalidate, invalidate_line, invalidate_lineno, 
+    rclk, rce, pc, hit0, hit1, err_o);
 parameter AMSB=63;
 input wclk;
 input wce;
@@ -32,6 +33,8 @@ input wr;
 input [AMSB:0] wa;
 input err_i;
 input invalidate;
+input invalidate_line;
+input [AMSB:0] invalidate_lineno;
 input rclk;
 input rce;
 input [AMSB:0] pc;
@@ -55,6 +58,7 @@ always @(posedge wclk)
 	if (wce & wr) mem[wa[11:5]] <= wa[AMSB:12];
 always @(posedge wclk)
 	if (invalidate) begin tvalid <= 128'd0; errmem <= 128'd0; end
+	else if (invalidate_line) tvalid[invalidate_lineno[11:5]] <= 1'b0;
 	else if (wce & wr) begin tvalid[wa[11:5]] <= 1'b1; errmem[wa[11:5]] <= err_i; end
 always @(posedge rclk)
 	if (rce) rpc <= pc;

@@ -39,7 +39,7 @@
 
 extern int isIdentChar(char);
 static void emitAlignedCode(int cd);
-static void process_shifti(int oc);
+static void process_shifti(int oc, int fn);
 static void ProcessEOL(int opt);
 static void mem_operand(int64_t *disp, int *regA, int *regB, int *sc, int *md);
 
@@ -93,11 +93,11 @@ static int getPredreg()
         return -1;
     }
      if (isdigit(inptr[0]) && isdigit(inptr[1])) {
-          pr = ((inptr[0]-'0' * 10) + (inptr[1]-'0')) << 4;
+          pr = ((inptr[0]-'0' * 10) + (inptr[1]-'0'));
           inptr += 2;
      }
      else if (isdigit(inptr[0])) {
-          pr = (inptr[0]-'0') << 4;
+          pr = (inptr[0]-'0');
           inptr += 1;
      }
      NextToken();
@@ -675,6 +675,19 @@ static int Thor_getSprRegister()
          }
          break;
 
+    // pregs
+    case 'p': case 'P':
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='e' || inptr[2]=='E') &&
+             (inptr[3]=='g' || inptr[3]=='G') &&
+             (inptr[4]=='s' || inptr[4]=='S') &&
+             !isIdentChar(inptr[5])) {
+             inptr += 5;
+             NextToken();
+             return 0x30;
+         }
+         break;
+
     // rand
     case 'r': case 'R':
          if ((inptr[1]=='a' || inptr[1]=='A') &&
@@ -741,7 +754,7 @@ static int Thor_getSprRegister()
              !isIdentChar(inptr[4])) {
              inptr += 4;
              NextToken();
-             return 4;
+             return 0x32;
          }
          if ((inptr[1]=='a' || inptr[1]=='A') &&
              (inptr[2]=='g' || inptr[2]=='G') &&
@@ -1684,12 +1697,8 @@ static void process_rrop(int op, int func)
         case 0x18: process_riop(0x18); return;  // divu
         case 0x19: process_riop(0x19); return;  // modu
         // Shift
-        case 0x30:
-        case 0x31:
-        case 0x32:
-        case 0x33:
-        case 0x34:
-             process_shifti((op & 0x7F) + 8); return;
+        case 0x58:
+             process_shifti(0x58,func + 0x10); return;
         default:    process_riop(op); return;
         }
         return;
@@ -1870,7 +1879,7 @@ static void process_fpstat(int oc)
 // not r3,r3
 // ---------------------------------------------------------------------------
 
-static void process_rop(int oc)
+static void process_rop(int oc, int fn)
 {
     int Ra;
     int Rt;
@@ -1879,12 +1888,10 @@ static void process_rop(int oc)
     need(',');
     Ra = getRegister();
     prevToken();
-    emit_insn(
-        (oc << 25) |
-        (Rt << 12) |
-        (Ra << 7) |
-        0x02
-    );
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra|(Rt << 6));
+    emit_insn((Rt >> 2)|(fn << 4));
 }
 
 // ---------------------------------------------------------------------------
@@ -1987,6 +1994,31 @@ static void process_br(int oc)
          printf("%.300s\r\n", inptr-150);
     }
 }
+
+
+static void process_loop(int oc)
+{
+    int64_t val;
+    int64_t disp;
+    int64_t ad;
+
+    val = 0;
+    NextToken();
+    val = expr();
+     // ToDo: modify the fixup record type based on the number of prefixes emitted.
+    if (bGen && lastsym && (lastsym->isExtern || lastsym->defined==0))
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    ad = code_address + 3;
+    disp = (val - ad);
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(disp & 0xff);
+    if (disp < -128 || disp > 127)
+       printf("%d: loop target too far away.\r\n");
+}
+
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -2236,7 +2268,7 @@ static void process_sws(int oc)
     int md;
     int64_t disp;
 
-    Rs = getSprRegister();
+    Rs = Thor_getSprRegister();
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
    if (seg < 0) {
@@ -2673,7 +2705,7 @@ static void process_rts(int oc)
 // asli r1,r2,#5
 // ----------------------------------------------------------------------------
 
-static void process_shifti(int oc)
+static void process_shifti(int oc, int fn)
 {
      int Ra;
      int Rt;
@@ -2685,13 +2717,11 @@ static void process_shifti(int oc)
      need(',');
      NextToken();
      val = expr();
-     emit_insn(
-         (oc << 25) |      
-         ((val & 63) << 17) |
-         (Rt << 12) |
-         (Ra << 7) |
-         0x02
-     );
+     emit_first(predicate);
+     emit_insn(oc);
+     emit_insn(Ra|(val << 6));
+     emit_insn(((val & 0x3f) >> 2)|(Rt << 4));
+     emit_insn((Rt >> 4)|(fn << 2));
 }
 
 // ----------------------------------------------------------------------------
@@ -2772,24 +2802,15 @@ static void process_mfspr(int oc)
     
     Rt = getRegisterX();
     need(',');
-    Ra = getRegisterX();
-    if (Ra==-1) {
-        Ra = 0;
-        spr = Thor_getSprRegister();
-        if (spr==-1) {
-            printf("An SPR is needed.\r\n");
-            return;
-        }  
-    }
-    else
-        spr = 0;
-    emit_insn(
-        (oc << 25) |
-        (spr << 17) |
-        (Rt << 12) |
-        (Ra << 7) |
-        0x02
-    );
+    spr = Thor_getSprRegister();
+    if (spr==-1) {
+        printf("An SPR is needed.\r\n");
+        return;
+    }  
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(spr|(Rt << 6));
+    emit_insn(Rt >> 2);
     if (spr >= 0)
     prevToken();
 }
@@ -3097,10 +3118,10 @@ j_processToken:
         case tk_align: process_align(); continue; break;
         case tk_and:  process_rrop(0x50,0x00); break;
         case tk_andi:  process_riop(0x53); break;
-        case tk_asl:  process_rrop(0x58,0x30); break;
-        case tk_asli: process_shifti(0x38); break;
-        case tk_asr:  process_rrop(0x58,0x34); break;
-        case tk_asri: process_shifti(0x3C); break;
+        case tk_asl:  process_rrop(0x58,0x00); break;
+        case tk_asli: process_shifti(0x58,0x10); break;
+        case tk_asr:  process_rrop(0x58,0x01); break;
+        case tk_asri: process_shifti(0x58,0x11); break;
         case tk_beq: process_bcc(0); break;
         case tk_bfextu: process_bitfield(6); break;
         case tk_biti: process_biti(0x46); break;
@@ -3202,23 +3223,26 @@ j_processToken:
         case tk_jmp: process_jsr(1); break;
         case tk_jsr: process_jsr(0); break;
 
-        case tk_lb:  process_load(0x40); break;
-        case tk_lbu: process_load(0x41); break;
-        case tk_lc:  process_load(0x42); break;
-        case tk_lcu: process_load(0x43); break;
+        case tk_lb:  process_load(0x80); break;
+        case tk_lbu: process_load(0x81); break;
+        case tk_lc:  process_load(0x82); break;
+        case tk_lcu: process_load(0x83); break;
         case tk_ldi: process_ldi(0x6F); break;
         case tk_ldis: process_ldis(0x9D); break;
         case tk_lea: process_load(0x47); break;
         case tk_lfd: process_load(0x51); break;
-        case tk_lh:  process_load(0x44); break;
-        case tk_lhu: process_load(0x45); break;
-        case tk_lsr: process_rrop(0x58,0x31); break;
-        case tk_lsri: process_shifti(0x39); break;
+        case tk_lh:  process_load(0x84); break;
+        case tk_lhu: process_load(0x85); break;
+        case tk_loop: process_loop(0xA4); break;
+        case tk_lsr: process_rrop(0x58,0x03); break;
+        case tk_lsri: process_shifti(0x58,0x13); break;
         case tk_lvb: process_load(0xAC); break;
-        case tk_lw:  process_load(0x46); break;
+        case tk_lvc: process_load(0xAD); break;
+        case tk_lw:  process_load(0x86); break;
         case tk_lws: process_lws(0x8E); break;
         case tk_lwar:  process_load(0x5C); break;
         case tk_memdb: process_sync(0xF9); break;
+        case tk_memsb: process_sync(0xF8); break;
         case tk_message: process_message(); break;
         case tk_mfspr: process_mfspr(0xA8); break;
         case tk_mod: process_rrop(0x40,0x09); break;
@@ -3231,7 +3255,7 @@ j_processToken:
         case tk_mului: process_riop(0x4E); break;
         case tk_neg: process_neg(0x15); break;
         case tk_nop: emit_insn(0x0000003F); break;
-        case tk_not: process_rop(0x0A); break;
+        case tk_not: process_rop(0xA7,0x02); break;
         case tk_or:  process_rrop(0x40,0x01); break;
         case tk_ori: process_riop(0x54); break;
         case tk_org: process_org(); break;
@@ -3268,10 +3292,10 @@ j_processToken:
             }
             segment = rodataseg;
             break;
-        case tk_rol: process_rrop(0x58,0x32); break;
-        case tk_ror: process_rrop(0x58,0x33); break;
-        case tk_roli: process_shifti(0x3A); break;
-        case tk_rori: process_shifti(0x3B); break;
+        case tk_rol: process_rrop(0x58,0x04); break;
+        case tk_ror: process_rrop(0x58,0x05); break;
+        case tk_roli: process_shifti(0x58,0x14); break;
+        case tk_rori: process_shifti(0x58,0x15); break;
         case tk_rtd: process_pctrl(29); break;
         case tk_rte: process_pctrl(30); break;
         case tk_rti: process_pctrl(31); break;
@@ -3284,8 +3308,10 @@ j_processToken:
         case tk_sei: process_pctrl(1); break;
         case tk_sfd: process_store(0x71); break;
         case tk_sh:  process_store(0x92); break;
-        case tk_shl:  process_rrop(0x58,0x30); break;
-        case tk_shli: process_shifti(0x38); break;
+        case tk_shl:  process_rrop(0x58,0x00); break;
+        case tk_shli: process_shifti(0x58,0x10); break;
+        case tk_shru:  process_rrop(0x58,0x03); break;
+        case tk_shrui: process_shifti(0x58,0x13); break;
 //        case tk_shx:  process_store(0xC2); break;
         case tk_ss: seg = 6; break;
         case tk_stp: process_pctrl(2); break;
@@ -3298,9 +3324,9 @@ j_processToken:
         case tk_subu:  process_rrop(0x40,0x05); break;
         case tk_subui: process_riop(0x4D); break;
         case tk_sws: process_sws(0x9E); break;
-        case tk_sxb: process_rop(0x10); break;
-        case tk_sxc: process_rop(0x11); break;
-        case tk_sxh: process_rop(0x12); break;
+        case tk_sxb: process_rop(0xA7,0x08); break;
+        case tk_sxc: process_rop(0xA7,0x09); break;
+        case tk_sxh: process_rop(0xA7,0x0A); break;
         case tk_sync: process_sync(0xF7); break;
         case tk_sys: process_brk(0); break;
         case tk_sw:  process_store(0x93); break;
@@ -3320,6 +3346,9 @@ j_processToken:
         case tk_wai: process_pctrl(3); break;
         case tk_id:  process_label(); break;
         case tk_zs:  seg = 0; break;
+        case tk_zxb: process_rop(0xA7,0x0C); break;
+        case tk_zxc: process_rop(0xA7,0x0D); break;
+        case tk_zxh: process_rop(0xA7,0x0E); break;
         }
         NextToken();
     }

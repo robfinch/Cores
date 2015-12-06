@@ -35,12 +35,16 @@
 // requires BLOCKING assignments, so that we can read from rf[i] later.
 //
 if (commit0_v) begin
-		if (!rf_v[ commit0_tgt ]) 
+		if (!rf_v[ commit0_tgt ]) begin 
 			rf_v[ commit0_tgt ] = rf_source[ commit0_tgt ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[2:0] ]);
+			$display("regv[%d]<=%d", commit0_tgt, rf_v[commit0_tgt]);
+		end
 		if (commit0_tgt != 9'd0) $display("r%d <- %h", commit0_tgt, commit0_bus);
 end
 if (commit1_v) begin
-		if (!rf_v[ commit1_tgt ]) 
+		if (!rf_v[ commit1_tgt ]) begin 
 			rf_v[ commit1_tgt ] = rf_source[ commit1_tgt ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[2:0] ]);
+			$display("regv[%d]<=%d", commit1_tgt, rf_v[commit1_tgt]);
+	    end
 		if (commit1_tgt != 9'd0) $display("r%d <- %h", commit1_tgt, commit1_bus);
 end

@@ -93,7 +93,7 @@ int num_insns;
 
 void emitCode(int cd);
 void emitAlignedCode(int cd);
-void process_shifti(int oc);
+void process_shifti(int oc,int fn);
 void processFile(char *fname, int searchincl);
 void bump_address();
 extern void Table888_bump_address();

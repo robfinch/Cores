@@ -161,16 +161,19 @@ enum {
      tk_lhu,
      tk_le,
      tk_lmr,
+     tk_loop,
      tk_lor,
      tk_lshift,
      tk_lsr,
      tk_lsri,
      tk_lt,
      tk_lvb,
+     tk_lvc,
      tk_lw,
      tk_lwar,
      tk_lws,
      tk_memdb,
+     tk_memsb,
      tk_message,
      tk_mffp,
      tk_mfspr,
@@ -277,7 +280,10 @@ enum {
      tk_xnor,
      tk_xor,
      tk_xori,
-     tk_zs
+     tk_zs,
+     tk_zxb,
+     tk_zxc,
+     tk_zxh
 };
 
 extern int token;

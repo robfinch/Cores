@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -28,6 +28,7 @@
 
 module Thor_alu(alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, o);
 parameter DBW=64;
+parameter BIG=1;
 input [7:0] alu_op;
 input [5:0] alu_fn;
 input [DBW-1:0] alu_argA;
@@ -93,8 +94,44 @@ Thor_bitfield #(DBW) ubf1
 	.masko()
 );
 
+wire [DBW-1:0] cntlzo;
+wire [DBW-1:0] cntloo;
+wire [DBW-1:0] cntpopo;
 
-always @(alu_argI or alu_argA or alu_argB or alu_argC or alu_op or alu_fn or insnsz)
+generate
+begin : clzg
+if (DBW==64) begin
+cntlz64 u12 ( .i(alu_argA),  .o(cntlzo) );
+cntlo64 u13 ( .i(alu_argA),  .o(cntloo) );
+cntpop64 u14 ( .i(alu_argA), .o(cntpopo) );
+end
+else begin
+cntlz32 u12 ( .i(alu_argA),  .o(cntlzo) );
+cntlo32 u13 ( .i(alu_argA),  .o(cntloo) );
+cntpop32 u14 ( .i(alu_argA), .o(cntpopo) );
+end
+end
+endgenerate
+
+wire faz = alu_argA[DBW-2:0]==63'd0;
+wire fbz = alu_argB[DBW-2:0]==63'd0;
+wire feq = (faz & fbz) || (alu_argA==alu_argB);	// special test for zero
+wire fgt1 = alu_argA[DBW-2:0] > alu_argB[DBW-2:0];
+wire flt1 = alu_argA[DBW-2:0] < alu_argB[DBW-2:0];
+wire flt = alu_argA[DBW] ^ alu_argB[DBW] ? alu_argA[DBW] & !(faz & fbz): alu_argA[DBW] ? fgt1 : flt1;
+wire nanA = DBW==32 ? alu_argA[30:23]==8'hFF && (alu_argA[22:0]!=23'd0) : alu_argA[62:52]==11'h7FF && (alu_argA[51:0]!=52'd0);
+wire nanB = DBW==32 ? alu_argB[30:23]==8'hFF && (alu_argB[22:0]!=23'd0) : alu_argB[62:52]==11'h7FF && (alu_argB[51:0]!=52'd0);
+
+wire fsaz = alu_argA[30:0]==31'd0;
+wire fsbz = alu_argB[30:0]==31'd0;
+wire fseq = (fsaz & fsbz) || (alu_argA[31:0]==alu_argB[31:0]);	// special test for zero
+wire fsgt1 = alu_argA[30:0] > alu_argB[30:0];
+wire fslt1 = alu_argA[30:0] < alu_argB[30:0];
+wire fslt = alu_argA[31] ^ alu_argB[31] ? alu_argA[31] & !(fsaz & fsbz): alu_argA[31] ? fsgt1 : fslt1;
+wire snanA = alu_argA[30:23]==8'hFF && (alu_argA[22:0]!=23'd0);
+wire snanB = alu_argB[30:23]==8'hFF && (alu_argB[22:0]!=23'd0);
+
+always @*
 begin
 casex(alu_op)
 `LDI,`LDIS:			o <= alu_argI;
@@ -106,9 +143,9 @@ casex(alu_op)
 	`_4ADDU:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argB;
 	`_8ADDU:		o <= {alu_argA[DBW-4:0],3'b0} + alu_argB;
 	`_16ADDU:		o <= {alu_argA[DBW-5:0],4'b0} + alu_argB;
-	`MIN:           o <= alu_argA < alu_argB ? alu_argA : alu_argB;
-	`MAX:           o <= alu_argA < alu_argB ? alu_argB : alu_argA;
-	default:   o <= 64'd0;
+	`MIN:           o <= BIG ? (alu_argA < alu_argB ? alu_argA : alu_argB) : 64'hDEADDEADDEADDEAD; 
+	`MAX:           o <= BIG ? (alu_argA < alu_argB ? alu_argB : alu_argA) : 64'hDEADDEADDEADDEAD;
+	default:   o <= 64'hDEADDEADDEADDEAD;
 	endcase
 `_2ADDUI:		o <= {alu_argA[DBW-2:0],1'b0} + alu_argI;
 `_4ADDUI:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argI;
@@ -118,23 +155,51 @@ casex(alu_op)
     case(alu_fn[3:0])
     `MOV:       o <= alu_argA;
     `NEG:		o <= -alu_argA;
-    `NOT:       o <= ~alu_argA;
-    `ABS:       o <= alu_argA[DBW] ? -alu_argA : alu_argA;
-    `SGN:       o <= alu_argA[DBW] ? 64'hFFFFFFFFFFFFFFFF : alu_argA==64'd0 ? 64'd0 : 64'd1;
+    `NOT:       o <= |alu_argA ? 64'd0 : 64'd1;
+    `ABS:       o <= BIG ? (alu_argA[DBW] ? -alu_argA : alu_argA) : 64'hDEADDEADDEADDEAD;
+    `SGN:       o <= BIG ? (alu_argA[DBW] ? 64'hFFFFFFFFFFFFFFFF : alu_argA==64'd0 ? 64'd0 : 64'd1) : 64'hDEADDEADDEADDEAD;
+    `CNTLZ:     o <= BIG ? cntlzo : 64'hDEADDEADDEADDEAD;
+    `CNTLO:     o <= BIG ? cntloo : 64'hDEADDEADDEADDEAD;
+    `CNTPOP:    o <= BIG ? cntpopo : 64'hDEADDEADDEADDEAD;
+    `ZXB:       o <= BIG ? {56'd0,alu_argA[7:0]} : 64'hDEADDEADDEADDEAD;
+    `ZXC:       o <= BIG ? {48'd0,alu_argA[15:0]} : 64'hDEADDEADDEADDEAD;
+    `ZXH:       o <= BIG ? {32'd0,alu_argA[31:0]} : 64'hDEADDEADDEADDEAD;
+    `COM:       o <= ~alu_argA;
+    `SXB:       o <= BIG ? {{56{alu_argA[7]}},alu_argA[7:0]} : 64'hDEADDEADDEADDEAD;
+    `SXC:       o <= BIG ? {{48{alu_argA[15]}},alu_argA[15:0]} : 64'hDEADDEADDEADDEAD;
+    `SXH:       o <= BIG ? {{32{alu_argA[31]}},alu_argA[31:0]} : 64'hDEADDEADDEADDEAD;
     default:    o <= 64'hDEADDEADDEADDEAD;
     endcase
 `STS:		o <= alu_argA;
+/*
 `DOUBLE:
-	case (alu_fn)
-	`FMOV:      o <= alu_argA;
-	`FNEG:		o <= {~alu_argA[DBW-1],alu_argA[DBW-2:0]};
-	`FABS:		o <= {1'b0,alu_argA[DBW-2:0]};
-	`FSIGN:			if (DBW==64)
-						o <= alu_argA[DBW-2:0]==0 ? {DBW{1'b0}} : {alu_argA[DBW-1],1'b0,{10{1'b1}},{52{1'b0}}};
-					else
-						o <= alu_argA[DBW-2:0]==0 ? {DBW{1'b0}} : {alu_argA[DBW-1],1'b0,{7{1'b1}},{23{1'b0}}};
-	default:	o <= 64'd0;
-	endcase
+    if (BIG) begin
+        if (alu_fn[5:4]==2'b00)
+            case (alu_fn)
+            `FMOV:      o <= alu_argA;
+            `FNEG:		o <= {~alu_argA[DBW-1],alu_argA[DBW-2:0]};
+            `FABS:		o <= {1'b0,alu_argA[DBW-2:0]};
+            `FSIGN:			if (DBW==64)
+                                o <= alu_argA[DBW-2:0]==0 ? {DBW{1'b0}} : {alu_argA[DBW-1],1'b0,{10{1'b1}},{52{1'b0}}};
+                            else
+                                o <= alu_argA[DBW-2:0]==0 ? {DBW{1'b0}} : {alu_argA[DBW-1],1'b0,{7{1'b1}},{23{1'b0}}};
+            `FMAN:      o <= alu_argA[(DBW==64?51:22):0];
+            default:	o <= 64'hDEADDEADDEADDEAD;
+            endcase
+        else
+            case (alu_fn)
+            `FMOV:      o <= alu_argA;
+            `FSNEG:     o <= {~alu_argA[31],alu_argA[30:0]};
+            `FSABS:     o <= {1'b0,alu_argA[30:0]};
+            `FSSIGN:    o <= alu_argA[30:0]==0 ? {DBW{1'b0}} : {alu_argA[31],1'b0,{7{1'b1}},{23{1'b0}}};
+            `FSMAN:     o <= alu_argA[22:0];
+            default:    o <= 64'hDEADDEADDEADDEAD;
+            endcase
+    end
+    else
+        o <= 64'hDEADDEADDEADDEAD;
+ */
+
 `ADDI,`ADDUI,`ADDUIS:
                 o <= alu_argA + alu_argI;
 `SUBI,`SUBUI,`PUSH:
@@ -196,11 +261,32 @@ casex(alu_op)
 	default:	o <= 64'd0;
 	endcase
 `CMP:	begin
-			o[0] <= alu_argA == alu_argB;
-			o[1] <= alu_argAs < alu_argBs;
-			o[2] <= alu_argA < alu_argB;
-			o[3] <= 1'b0;
-			o[DBW-1:4] <= 64'd0;
+            case(alu_fn)
+            2'd0: begin     // ICMP
+                o[0] <= alu_argA == alu_argB;
+                o[1] <= alu_argAs < alu_argBs;
+                o[2] <= alu_argA < alu_argB;
+                o[3] <= 1'b0;
+                o[DBW-1:4] <= 60'd0;
+                end
+`ifdef FLOATING_POINT
+            2'd1: begin     // FSCMP
+                o[0] <= fseq;
+                o[1] <= fslt;
+                o[2] <= fslt1;
+                o[3] <= snanA | snanB;
+                o[DBW-1:4] <= 60'd0;
+                end
+            2'd2: begin     // FCMP
+                o[0] <= feq;
+                o[1] <= flt;
+                o[2] <= flt1;
+                o[3] <= nanA | nanB;
+                o[DBW-1:4] <= 60'd0;
+                end
+`endif
+            default: o <= 64'hDEADDEADDEADDEAD;
+            endcase
 		end
 `CMPI:	begin
 			o[0] <= alu_argA == alu_argI;
@@ -210,12 +296,18 @@ casex(alu_op)
 			o[DBW-1:4] <= 64'd0;
 		end
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,
-`LWS,`SWS,`LEA,`RTS2:
+`LWS,`SWS,`LEA,`RTS2,`PUSH:
 				o <= alu_argA + alu_argI;
 `LBX,`LBUX,`SBX,
 `LCX,`LCUX,`SCX,
 `LHX,`LHUX,`SHX,
-`LWX,`SWX:	o <= alu_argA + alu_argB;
+`LWX,`SWX:	
+            case(alu_fn[1:0])
+            2'd0:   o <= alu_argA + alu_argB;
+            2'd1:   o <= alu_argA + {alu_argB,1'b0};
+            2'd2:   o <= alu_argA + {alu_argB,2'b0};
+            2'd3:   o <= alu_argA + {alu_argB,3'b0};
+            endcase
 `JSR,`JSRS,`JSRZ,`SYS:	o <= alu_pc + insnsz;
 `INT:		o <= alu_pc;
 `MFSPR,`MTSPR:	begin
@@ -226,15 +318,19 @@ casex(alu_op)
 				o[n] <= alu_argA[n] ? alu_argB[n] : alu_argC[n];
 		end
 `BCD:
-		case(alu_fn)
-		`BCDADD:	o <= bcdao;
-		`BCDSUB:	o <= bcdso;
-		`BCDMUL:	o <= bcdmo;
-		default:	o <= 64'd0;
-		endcase
-`SHIFT:	o <= shfto;
-`BITFIELD:	o <= bf_out;
-`LOOP:      o <= alu_argB - 64'd1;
+        if (BIG)
+            case(alu_fn)
+            `BCDADD:	o <= bcdao;
+            `BCDSUB:	o <= bcdso;
+            `BCDMUL:	o <= bcdmo;
+            default:	o <= 64'hDEADDEADDEADDEAD;
+            endcase
+        else
+            o <= 64'hDEADDEADDEADDEAD;
+`SHIFT:	    o <= BIG ? shfto : 64'hDEADDEADDEADDEAD;
+`BITFIELD:	o <= BIG ? bf_out : 64'hDEADDEADDEADDEAD;
+`LOOP:      o <= alu_argB > 0 ? alu_argB - 64'd1 : alu_argB;
+`PEA:       o <= alu_argA - 64'd8;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end

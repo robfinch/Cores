@@ -93,15 +93,17 @@
 //      An instruction cache was added.
 //      A WISHBONE bus interface was added,
 //
-// 44745 (72,000 LC's)
+// 42551 (70,000 LC's)
 // ============================================================================
 //
 `include "Thor_defines.v"
 
 module Thor(rst_i, clk_i, km, nmi_i, irq_i, vec_i, bte_o, cti_o, bl_o, lock_o, resv_o, resv_i, cres_o,
     cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
-parameter DBW = 32;
+parameter DBW = 32;         // databus width
+parameter ABW = 32;         // address bus width
 parameter QENTRIES = 8;
+parameter ALU1BIG = 0;
 parameter IDLE = 4'd0;
 parameter ICACHE1 = 4'd1;
 parameter DCACHE1 = 4'd2;
@@ -142,11 +144,12 @@ input ack_i;
 input err_i;
 output reg we_o;
 output reg [DBW/8-1:0] sel_o;
-output reg [DBW-1:0] adr_o;
+output reg [ABW-1:0] adr_o;
 input [DBW-1:0] dat_i;
 output reg [DBW-1:0] dat_o;
 
 integer n,i;
+reg [DBW/8-1:0] rsel;
 reg [3:0] cstate;
 reg [DBW-1:0] pc;				// program counter (virtual)
 wire [DBW-1:0] ppc;				// physical pc address
@@ -167,10 +170,12 @@ reg pwe;
 wire [DBW-1:0] pea;
 reg [DBW-1:0] tick;
 reg [DBW-1:0] lc;				// loop counter
-wire [DBW-1:0] rfoa0,rfoa1;
-wire [DBW-1:0] rfob0,rfob1;
-wire [DBW-1:0] rfoc0,rfoc1;
-reg ic_invalidate;
+reg [DBW-1:0] rfoa0,rfoa1;
+reg [DBW-1:0] rfob0,rfob1;
+reg [DBW-1:0] rfoc0,rfoc1;
+reg ic_invalidate,dc_invalidate;
+reg ic_invalidate_line,dc_invalidate_line;
+reg [ABW-1:0] ic_lineno,dc_lineno;
 reg ierr,derr;					// err_i during icache load
 wire insnerr;					// err_i during icache load
 wire [127:0] insn;
@@ -249,10 +254,19 @@ wire  [7:0] iqentry_source;
 wire  [7:0] iqentry_imm;
 wire  [7:0] iqentry_memready;
 wire  [7:0] iqentry_memopsvalid;
+reg qstomp;
 
 wire stomp_all;
 reg  [7:0] iqentry_fpissue;
 reg  [7:0] iqentry_memissue;
+wire iqentry_memissue_head0;
+wire iqentry_memissue_head1;
+wire iqentry_memissue_head2;
+wire iqentry_memissue_head3;
+wire iqentry_memissue_head4;
+wire iqentry_memissue_head5;
+wire iqentry_memissue_head6;
+wire iqentry_memissue_head7;
 wire  [7:0] iqentry_stomp;
 reg  [7:0] iqentry_issue;
 wire  [1:0] iqentry_0_islot;
@@ -265,6 +279,8 @@ wire  [1:0] iqentry_6_islot;
 wire  [1:0] iqentry_7_islot;
 reg  [1:0] iqentry_islot[0:7];
 reg [1:0] iqentry_fpislot[0:7];
+
+reg queued1,queued2;
 
 wire  [NREGS:1] livetarget;
 wire  [NREGS:1] iqentry_0_livetarget;
@@ -325,6 +341,15 @@ wire 		fetchbuf1_fp;
 wire        fetchbuf1_rfw;
 wire        fetchbuf1_pfw;
 wire        fetchbuf1_bfw;
+reg  [63:0] fetchbuf2_instr;
+reg  [DBW-1:0] fetchbuf2_pc;
+reg        fetchbuf2_v;
+wire        fetchbuf2_mem;
+wire        fetchbuf2_jmp;
+wire 		fetchbuf2_fp;
+wire        fetchbuf2_rfw;
+wire        fetchbuf2_pfw;
+wire        fetchbuf2_bfw;
 
 reg [63:0] fetchbufA_instr;	
 reg [DBW-1:0] fetchbufA_pc;
@@ -399,6 +424,7 @@ reg        fp0_available;
 reg        fp0_dataready;
 reg  [3:0] fp0_sourceid;
 reg  [7:0] fp0_op;
+reg  [5:0] fp0_fn;
 reg  [3:0] fp0_cond;
 wire        fp0_cmt;
 reg 		fp0_done;
@@ -408,7 +434,7 @@ reg [DBW-1:0] fp0_argC;
 reg [DBW-1:0] fp0_argI;
 reg  [3:0] fp0_pred;
 reg [DBW-1:0] fp0_pc;
-reg [DBW-1:0] fp0_bus;
+wire [DBW-1:0] fp0_bus;
 wire  [3:0] fp0_id;
 wire  [3:0] fp0_exc;
 wire        fp0_v;
@@ -461,18 +487,18 @@ reg        dram_v;
 
 reg [DBW-1:0] index;
 reg [DBW-1:0] src_addr,dst_addr;
-wire mem_will_issue;
+wire mem_issue;
 
 wire        outstanding_stores;
 reg [DBW-1:0] I;	// instruction count
 
 wire        commit0_v;
 wire  [3:0] commit0_id;
-wire  [8:0] commit0_tgt;
+wire  [6:0] commit0_tgt;
 wire [DBW-1:0] commit0_bus;
 wire        commit1_v;
 wire  [3:0] commit1_id;
-wire  [8:0] commit1_tgt;
+wire  [6:0] commit1_tgt;
 wire [DBW-1:0] commit1_bus;
 wire limit_cmt;
 wire committing2;
@@ -608,12 +634,136 @@ assign
 // ports are supported because most of the time that's enough.
 // If there aren't enough read ports available then the second instruction
 // isn't enqueued (it'll be enqueued in the next cycle).
+reg [1:0] ports_avail;  // available read ports for instruction #3.
+reg [6:0] pRa0,pRb0,pRa1,pRb1;
+wire [DBW:0] prfoa0,prfob0,prfoa1,prfob1;
+`ifdef THREEWAY
 wire [6:0] Ra0 = fnRa(fetchbuf0_instr);
 wire [6:0] Rb0 = fnRb(fetchbuf0_instr);
 wire [6:0] Rc0 = fnRc(fetchbuf0_instr);
 wire [6:0] Ra1 = fnRa(fetchbuf1_instr);
 wire [6:0] Rb1 = fnRb(fetchbuf1_instr);
 wire [6:0] Rc1 = fnRc(fetchbuf1_instr);
+wire [6:0] Ra2 = fnRa(fetchbuf2_instr);
+wire [6:0] Rb2 = fnRb(fetchbuf2_instr);
+wire [6:0] Rc2 = fnRc(fetchbuf2_instr);
+
+case (fnNumReadPorts(fetchbuf0_instr))
+2'd0:
+       begin
+       pRa0 = Ra2; pRb0 = Rb2; pRc0 = Rc2;
+       pRa1 = Ra1; pRb1 = Rb1; pRc1 = Rc1;
+       ports_avail = 2'd3;
+       rfoa0 = 64'd0;
+       rfob0 = 64'd0;
+       rfoc0 = 64'd0;
+       rfoa1 = prfoa1;
+       rfob1 = prfob1;
+       rfoc1 = prfoc1;
+       rfoa2 = prfoa0;
+       rfob2 = prfob0;
+       rfoc3 = prfoc0;
+       end
+2'd1:  begin
+       pRa0 = Ra0; pRb0 = Ra2; pRc0 = Rb2;
+       if (fnNumReadPorts(fetchbuf1_instr))< 3'd3)
+           pRc1 = Rc2;
+           ports_avail = 2'd3;
+       end       
+       else
+           ports_avail = 2'd2;
+2'd2:
+       begin
+       pRa0 = Ra0; pRb0 = Rb0; pRc0 = Ra2;
+       if (fnNumReadPorts(fetchbuf1_instr))< 3'd2) begin
+           pRb1 = Rb2; pRc1 = Rc2;
+           ports_avail = 2'd3;
+       end
+       else if (fnNumReadPorts(fetchbuf1_instr))< 3'd3) begin
+           pRc1 = Rb2;
+           ports_avail = 2'd2;
+       end
+       else
+           ports_avail = 2'd1;
+       end
+2'd3:  begin
+           pRa0 = Ra0; pRb0 = Rb0; pRc0 = Rc0;
+           if (fnNumReadPorts(fetchbuf1_instr))< 3'd2) begin
+               pRb1 = Ra2; pRc1 = Rb2;
+               ports_avail = 3'd2;
+           end
+           else if (fnNumReadPorts(fetchbuf1_instr))< 3'd3) begin
+               pRc1 = Rc2;
+               ports_avail = 3'd1;
+           end
+           else
+               ports_avail = 3'd0;
+       end
+endcase
+`else
+wire [6:0] Ra0 = fnRa(fetchbuf0_instr);
+wire [6:0] Rb0 = fnRb(fetchbuf0_instr);
+wire [6:0] Rc0 = fnRc(fetchbuf0_instr);
+wire [6:0] Ra1 = fnRa(fetchbuf1_instr);
+wire [6:0] Rb1 = fnRb(fetchbuf1_instr);
+wire [6:0] Rc1 = fnRc(fetchbuf1_instr);
+always @*
+    case(fetchbuf0_v ? fnNumReadPorts(fetchbuf0_instr) : 2'd0)
+    2'd0:   begin
+            pRa0 = 7'd0;
+            pRb0 = Rc1;
+            pRa1 = Ra1;
+            pRb1 = Rb1;
+            rfoa0 = 64'd0;
+            rfob0 = 64'd0;
+            rfoc0 = 64'd0;
+            rfoa1 = prfoa1;
+            rfob1 = prfob1;
+            rfoc1 = prfob0;
+            ports_avail = 2'd3;
+            end
+    2'd1:   begin
+            pRa0 = Ra0;
+            pRb0 = Rc1;
+            pRa1 = Ra1;
+            pRb1 = Rb1;
+            rfoa0 = prfoa0;
+            rfob0 = 64'd0;
+            rfoc0 = 64'd0;
+            rfoa1 = prfoa1;
+            rfob1 = prfob1;
+            rfoc1 = prfob0;
+            ports_avail = 2'd3;
+            end
+    2'd2:   begin
+            pRa0 = Ra0;
+            pRb0 = Rb0;
+            pRa1 = Ra1;
+            pRb1 = Rb1;
+            rfoa0 = prfoa0;
+            rfob0 = prfob0;
+            rfoc0 = 64'd0;
+            rfoa1 = prfoa1;
+            rfob1 = prfob1;
+            rfoc1 = 64'd0; 
+            ports_avail = 2'd2;
+            end   
+    2'd3:   begin
+            pRa0 = Ra0;
+            pRb0 = Rb0;
+            pRa1 = Rc0;
+            pRb1 = Ra1;
+            rfoa0 = prfoa0;
+            rfob0 = prfob0;
+            rfoc0 = prfoa1;
+            rfoa1 = prfob1;
+            rfob1 = 64'd0;
+            rfoc1 = 64'd0;
+            ports_avail = 2'd1;
+            end
+    endcase
+`endif
+
 /*
 wire [8:0] Rb0 = ((fnNumReadPorts(fetchbuf0_instr) < 3'd2) || !fetchbuf0_v) ? {1'b0,fetchbuf1_instr[`INSTRUCTION_RC]} :
 				fnRb(fetchbuf0_instr);
@@ -632,10 +782,14 @@ wire [7:0] opcode0 = fnOpcode(fetchbuf0_instr);
 wire [7:0] opcode1 = fnOpcode(fetchbuf1_instr);
 wire [3:0] cond0 = fetchbuf0_instr[3:0];
 wire [3:0] cond1 = fetchbuf1_instr[3:0];
-wire [3:0] Pn1 = fetchbuf1_instr[7:4];
 wire [3:0] Pn0 = fetchbuf0_instr[7:4];
-wire [3:0] Pt1 = fetchbuf1_instr[11:8];
 wire [3:0] Pt0 = fetchbuf0_instr[11:8];
+wire [3:0] Pn1 = fetchbuf1_instr[7:4];
+wire [3:0] Pt1 = fetchbuf1_instr[11:8];
+`ifdef THREEWAY
+wire [3:0] Pn2 = fetchbuf2_instr[7:4];
+wire [3:0] Pt2 = fetchbuf2_instr[11:8];
+`endif
 
 function [6:0] fnRa;
 input [63:0] insn;
@@ -645,7 +799,7 @@ default:
 	case(insn[15:8])
 	`RTI:	fnRa = 7'h5E;
 	`RTE:	fnRa = 7'h5D;
-	`PUSH:  fnRa = 7'd27;
+	`PUSH,`PEA:  fnRa = 7'd27;
 	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`RTS2:
 		fnRa = {3'h5,insn[23:20]};
 	default:	fnRa = {1'b0,insn[`INSTRUCTION_RA]};
@@ -668,6 +822,7 @@ else
 	`JSR,`JSRS,`JSRZ,`SYS,`INT:
 		fnRb = {3'h5,insn[23:20]};
 	`TLB:	fnRb = {1'b0,insn[29:24]};
+	`SWS:   fnRb = {1'b1,insn[27:22]};
 	default:	fnRb = {1'b0,insn[`INSTRUCTION_RB]};
 	endcase
 endfunction
@@ -702,12 +857,41 @@ casex(insn[15:8])
 `TST:	fnFunc = insn[23:22];
 `INC:   fnFunc = insn[24:22];
 `RTS,`RTS2: fnFunc = insn[19:16];   // used to pass a small immediate
+`CACHE: fnFunc = insn[31:26];
+`PEA,`PUSH: fnFunc = 6'd6;
 default:
 	fnFunc = insn[39:34];
 endcase
 endfunction
 
-Thor_regfile2w6r #(DBW) urf1
+// Returns true if the operation is limited to ALU #0
+function fnIsAlu0Op;
+input [7:0] opcode;
+input [5:0] func;
+case(opcode)
+`R:
+    case(func)
+    `CNTLZ,`CNTLO,`CNTPOP:  fnIsAlu0Op = `TRUE;
+    `ABS,`SGN,`ZXB,`ZXC,`ZXH,`SXB,`SXC,`SXH:  fnIsAlu0Op = `TRUE;
+    default:    fnIsAlu0Op = `FALSE;
+    endcase
+`RR:
+    case(func)
+    `DIV,`DIVU: fnIsAlu0Op = `TRUE;
+    `MIN,`MAX:  fnIsAlu0Op = `TRUE;
+    default:    fnIsAlu0Op = `FALSE;
+    endcase
+`BCD:       fnIsAlu0Op = `TRUE;
+`DIVI,`DIVUI:   fnIsAlu0Op = `TRUE;
+//`DOUBLE:    fnIsAlu0Op = `TRUE;
+`SHIFT:     fnIsAlu0Op = `TRUE;
+`BITFIELD:  fnIsAlu0Op = `TRUE;
+default:    fnIsAlu0Op = `FALSE;
+endcase
+endfunction
+
+`ifdef THREEWAY
+Thor_regfile2w9r #(DBW) urf1
 (
 	.clk(clk),
 	.rclk(~clk),
@@ -721,6 +905,9 @@ Thor_regfile2w6r #(DBW) urf1
 	.ra3(Ra1[5:0]),
 	.ra4(Rb1[5:0]),
 	.ra5(Rc1[5:0]),
+	.ra6(Ra2[5:0]),
+	.ra7(Rb2[5:0]),
+	.ra8(Rc2[5:0]),
 	.i0(commit0_bus),
 	.i1(commit1_bus),
 	.o0(rfoa0),
@@ -728,12 +915,38 @@ Thor_regfile2w6r #(DBW) urf1
 	.o2(rfoc0),
 	.o3(rfoa1),
 	.o4(rfob1),
-	.o5(rfoc1)
+	.o5(rfoc1),
+	.o6(rfoa2),
+    .o7(rfob2),
+    .o8(rfoc2)
 );
+`else
+Thor_regfile2w4r #(DBW) urf1
+(
+	.clk(clk),
+	.rclk(~clk),
+	.wr0(commit0_v && ~commit0_tgt[6] && iqentry_op[head0]!=`MTSPR),
+	.wr1(commit1_v && ~commit1_tgt[6] && iqentry_op[head1]!=`MTSPR),
+	.wa0(commit0_tgt[5:0]),
+	.wa1(commit1_tgt[5:0]),
+	.ra0(pRa0[5:0]),
+	.ra1(pRb0[5:0]),
+	.ra2(pRa1[5:0]),
+	.ra3(pRb1[5:0]),
+	.i0(commit0_bus),
+	.i1(commit1_bus),
+	.o0(prfoa0),
+	.o1(prfob0),
+	.o2(prfoa1),
+	.o3(prfob1)
+);
+`endif
 
 wire [63:0] cregs0 = fnCar(fetchbuf0_instr)==4'd0 ? 64'd0 : fnCar(fetchbuf0_instr)==4'hF ? fetchbuf0_pc : cregs[fnCar(fetchbuf0_instr)];
 wire [63:0] cregs1 = fnCar(fetchbuf1_instr)==4'd0 ? 64'd0 : fnCar(fetchbuf1_instr)==4'hF ? fetchbuf1_pc : cregs[fnCar(fetchbuf1_instr)];
-
+`ifdef THREEWAY
+wire [63:0] cregs2 = fnCar(fetchbuf2_instr)==4'd0 ? 64'd0 : fnCar(fetchbuf2_instr)==4'hF ? fetchbuf2_pc : cregs[fnCar(fetchbuf2_instr)];
+`endif
 //
 // 1 if the the operand is automatically valid, 
 // 0 if we need a RF value
@@ -756,7 +969,7 @@ function fnSource2_v;
 input [7:0] opcode;
 input [5:0] func;
 	casex(opcode)
-	`NEG,`NOT,`R:		fnSource2_v = 1'b1;
+	`R:		fnSource2_v = 1'b1;
 	`LDI,`STI,`LDIS,`IMM,`NOP:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB,`SYNC:
 					fnSource2_v = 1'b1;
@@ -778,6 +991,7 @@ input [5:0] func;
 	               fnSource2_v = `TRUE;
 	           else
 	               fnSource2_v = `FALSE;
+	`CACHE,`LCL,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`STI,`INC:
 			fnSource2_v = 1'b1;
@@ -811,7 +1025,7 @@ casex(fnOpcode(ins))
 `BR:                fnNumReadPorts = 3'd0;
 `LOOP:				fnNumReadPorts = 3'd0;
 `LDI,`LDIS,`IMM:		fnNumReadPorts = 3'd0;
-`NEG,`NOT,`R,`STI:	fnNumReadPorts = 3'd1;
+`R,`STI:	        fnNumReadPorts = 3'd1;
 `RTI,`RTE:			fnNumReadPorts = 3'd1;
 `TST:				fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI,`ADDUIS:
@@ -829,7 +1043,7 @@ casex(fnOpcode(ins))
 					   fnNumReadPorts = 3'd1;
 					else
 					   fnNumReadPorts = 3'd2;
-`RTS2,					 
+`RTS2,`CACHE,`LCL,					 
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`LEA,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR,`LOOP:
@@ -838,7 +1052,7 @@ casex(fnOpcode(ins))
 `MUX,`CAS,`STMV,`STCMP:
 					fnNumReadPorts = 3'd3;
 `MTSPR,`MFSPR:		fnNumReadPorts = 3'd1;
-`TLB,`STFND:		fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
+`TLB,`STFND,`PEA:	fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
 `BITFIELD:
     case(ins[43:40])
     `BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU:
@@ -921,6 +1135,30 @@ Thor_BranchHistory #(DBW) ubhtD
 	.predict_taken(predict_takenD)
 );
 
+`ifdef THREEWAY
+Thor_BranchHistory #(DBW) ubhtE
+(
+	.rst(rst_i),
+	.clk(clk),
+	.advanceX(xbr),
+	.xisBranch(xbr),
+	.pc(pc+fnInsnLength(insn)+fnInsnLength1(insn)),
+	.xpc(xbrpc),
+	.takb(takb),
+	.predict_taken(predict_takenE)
+);
+Thor_BranchHistory #(DBW) ubhtF
+(
+	.rst(rst_i),
+	.clk(clk),
+	.advanceX(xbr),
+	.xisBranch(xbr),
+	.pc(pc+fnInsnLength(insn)+fnInsnLength1(insn)),
+	.xpc(xbrpc),
+	.takb(takb),
+	.predict_taken(predict_takenF)
+);
+`endif
 
 Thor_icachemem #(DBW) uicm1
 (
@@ -943,6 +1181,8 @@ Thor_itagmem #(DBW-1) uitm1
 	.wa(adr_o),
 	.err_i(err_i|ierr),
 	.invalidate(ic_invalidate),
+	.invalidate_line(ic_invalidate_line),
+	.invalidate_lineno(ic_lineno),
 	.rclk(~clk),
 	.rce(1'b1),
 	.pc(ppc),
@@ -978,7 +1218,9 @@ Thor_dtagmem #(DBW-1) udtm1
 	.wr(ack_i|err_i),
 	.wa(adr_o),
 	.err_i(err_i|derr),
-	.invalidate(ic_invalidate),
+	.invalidate(dc_invalidate),
+	.invalidate_line(dc_invalidate_line),
+    .invalidate_lineno(dc_lineno),
 	.rclk(~clk),
 	.rce(1'b1),
 	.ra(pea),
@@ -1009,9 +1251,10 @@ endfunction
 
 function fnIsFP;
 input [7:0] opcode;
-fnIsFP = 	opcode==`ITOF || opcode==`FTOI || opcode==`FNEG || opcode==`FSIGN || /*opcode==`FCMP || */ opcode==`FABS ||
-			opcode==`FADD || opcode==`FSUB || opcode==`FMUL || opcode==`FDIV
-			;
+fnIsFP = 	opcode==`DOUBLE_R||opcode==`FLOAT||opcode==`SINGLE_R;
+//            opcode==`ITOF || opcode==`FTOI || opcode==`FNEG || opcode==`FSIGN || /*opcode==`FCMP || */ opcode==`FABS ||
+//			opcode==`FADD || opcode==`FSUB || opcode==`FMUL || opcode==`FDIV
+//			;
 endfunction
 
 function fnIsBitfield;
@@ -1042,12 +1285,12 @@ begin
 		`RR:
 			fnTargetReg = {1'b0,ir[33:28]};
 		`BCD,
-		`LOGIC,
+		`LOGIC,`FLOAT,
 		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`STMV,`STCMP,`STFND:
 			fnTargetReg = {1'b0,ir[33:28]};
 		`SHIFT:
 			fnTargetReg = {1'b0,ir[33:28]};
-		`R,
+		`R,`DOUBLE_R,`SINGLE_R,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
@@ -1086,7 +1329,7 @@ begin
 			else
 				fnTargetReg = 7'h00;
 */      
-        `PUSH,`RTS2:    fnTargetReg = 7'd27;
+        `PUSH,`PEA,`RTS2:    fnTargetReg = 7'd27;
         `LOOP:      fnTargetReg = 7'h73;
 		default:	fnTargetReg = 7'h00;
 		endcase
@@ -1167,8 +1410,8 @@ input [7:0] opcode;
 //	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`INC,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,`STI,
-	`SB,`SC,`SH,`SW,`SWCR,`CAS,`SWS,
-	`JSR,`JSRS,`SYS,`INT,`BR,`RTS2:
+	`SB,`SC,`SH,`SW,`SWCR,`CAS,`SWS,`PEA,
+	`JSR,`JSRS,`SYS,`INT,`BR,`RTS2,`LOOP:
 		fnHasConst = 1'b1;
 	default:
 		fnHasConst = 1'b0;
@@ -1188,11 +1431,18 @@ endfunction
 
 function fnCanException;
 input [7:0] op;
+input [5:0] func;
 case(op)
+`FLOAT:
+    case(func)
+    `FDIVS,`FMULS,`FADDS,`FSUBS,
+    `FDIV,`FMUL,`FADD,`FSUB:
+        fnCanException = `TRUE;
+    endcase
 `ADD,`ADDI,`SUB,`SUBI,`DIV,`DIVI,`MUL,`MULI:
     fnCanException = `TRUE;
 default:
-    fnCanException = fnIsMem(op) | fnIsFP(op);
+    fnCanException = fnIsMem(op);
 endcase
 endfunction
 
@@ -1214,9 +1464,9 @@ default:
 	casex(insn[15:8])
 	`NOP,`SEI,`CLI,`RTI,`RTE,`MEMSB,`MEMDB,`SYNC:
 		fnInsnLength = 4'd2;
-	`TST,`BR,`JSRZ,`RTS,`PUSH:
+	`TST,`BR,`JSRZ,`RTS,`PUSH,`CACHE,`LOOP:
 		fnInsnLength = 4'd3;
-	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`ADDUIS,`NEG,`NOT,`R,`TLB,`MOVS,`RTS2:
+	`SYS,`CMP,`CMPI,`MTSPR,`MFSPR,`LDI,`LDIS,`ADDUIS,`R,`TLB,`MOVS,`RTS2:
 		fnInsnLength = 4'd4;
 	`BITFIELD,`JSR,`MUX,`BCD,`INC:
 		fnInsnLength = 4'd6;
@@ -1243,10 +1493,39 @@ default:	fnInsnLength1 = 4'd0;
 endcase
 endfunction
 
+function [3:0] fnInsnLength2;
+input [127:0] insn;
+case(fnInsnLength(insn)+fnInsnLength1(insn))
+4'd2:	fnInsnLength2 = fnInsnLength(insn[127:16]);
+4'd3:	fnInsnLength2 = fnInsnLength(insn[127:24]);
+4'd4:	fnInsnLength2 = fnInsnLength(insn[127:32]);
+4'd5:	fnInsnLength2 = fnInsnLength(insn[127:40]);
+4'd6:	fnInsnLength2 = fnInsnLength(insn[127:48]);
+4'd7:	fnInsnLength2 = fnInsnLength(insn[127:56]);
+4'd8:	fnInsnLength2 = fnInsnLength(insn[127:64]);
+4'd9:	fnInsnLength2 = fnInsnLength(insn[127:72]);
+4'd10:	fnInsnLength2 = fnInsnLength(insn[127:80]);
+4'd11:	fnInsnLength2 = fnInsnLength(insn[127:88]);
+4'd12:	fnInsnLength2 = fnInsnLength(insn[127:96]);
+4'd13:	fnInsnLength2 = fnInsnLength(insn[127:104]);
+4'd14:	fnInsnLength2 = fnInsnLength(insn[127:112]);
+4'd15:	fnInsnLength2 = fnInsnLength(insn[127:120]);
+default:	fnInsnLength2 = 4'd0;
+endcase
+endfunction
+
+wire [5:0] total_insn_length = fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
+wire [5:0] insn_length12 = fnInsnLength(insn) + fnInsnLength1(insn);
+wire insn3_will_fit = total_insn_length < 6'd16;
+
 always @(fetchbuf or fetchbufA_instr or fetchbufA_v or fetchbufA_pc
  or fetchbufB_instr or fetchbufB_v or fetchbufB_pc
  or fetchbufC_instr or fetchbufC_v or fetchbufC_pc
  or fetchbufD_instr or fetchbufD_v or fetchbufD_pc
+`ifdef THREEWAY
+ or fetchbufE_instr or fetchbufE_v or fetchbufE_pc
+ or fetchbufF_instr or fetchbufF_v or fetchbufF_pc
+`endif
 )
 begin
 	fetchbuf0_instr <= (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
@@ -1264,12 +1543,25 @@ begin
 		fetchbuf1_pc <= string_pc;
 	else
 	fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+`ifdef THREEWAY
+	fetchbuf2_instr <= (fetchbuf == 1'b0) ? fetchbufE_instr : fetchbufF_instr;
+	fetchbuf2_v     <= (fetchbuf == 1'b0) ? fetchbufE_v     : fetchbufF_v    ;
+
+	if (int_pending && string_pc != 64'd0)
+		fetchbuf2_pc <= string_pc;
+	else
+	fetchbuf2_pc    <= (fetchbuf == 1'b0) ? fetchbufE_pc    : fetchbufF_pc   ;
+`endif
 end
 
 wire [7:0] opcodeA = fetchbufA_instr[`OPCODE];
 wire [7:0] opcodeB = fetchbufB_instr[`OPCODE];
 wire [7:0] opcodeC = fetchbufC_instr[`OPCODE];
 wire [7:0] opcodeD = fetchbufD_instr[`OPCODE];
+`ifdef THREEWAY
+wire [7:0] opcodeE = fetchbufE_instr[`OPCODE];
+wire [7:0] opcodeF = fetchbufF_instr[`OPCODE];
+`endif
 
 function fnIsMem;
 input [7:0] opcode;
@@ -1277,7 +1569,7 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`LBX || opcode==`LWX || opcode==`LBUX || opcode==`LHX || opcode==`LHUX || opcode==`LCX || opcode==`LCUX ||
 			opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 			opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
-			opcode==`STS || opcode==`PUSH ||
+			opcode==`STS || opcode==`PUSH || opcode==`PEA ||  opcode==`LCL ||
 			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
 			opcode==`TLB || opcode==`CAS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`LWS || opcode==`SWS || opcode==`STI ||
@@ -1294,7 +1586,7 @@ fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
-			opcode==`PUSH || opcode==`RTS2 ||
+			opcode==`PUSH || opcode==`PEA || opcode==`RTS2 ||
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
@@ -1303,7 +1595,7 @@ fnIsRFW =	// General registers
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
 			opcode==`SHL || opcode==`SHLU || opcode==`SHR || opcode==`SHRU || opcode==`ROL || opcode==`ROR ||
 			opcode==`SHLI || opcode==`SHLUI || opcode==`SHRI || opcode==`SHRUI || opcode==`ROLI || opcode==`RORI ||
-			opcode==`NOT || opcode==`NEG || opcode==`R || opcode==`LEA ||
+			opcode==`R || opcode==`LEA ||
 			opcode==`LDI || opcode==`LDIS || opcode==`ADDUIS || opcode==`MFSPR ||
 			// Branch registers / Segment registers
 			((opcode==`MTSPR || opcode==`MOVS) && (fnTargetsCa(ir) || fnTargetsSegreg(ir))) ||
@@ -1322,20 +1614,20 @@ fnIsStore = 	opcode==`SB || opcode==`SC || opcode==`SH || opcode==`SW ||
 				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
 				opcode==`STS || opcode==`SWCR ||
 				opcode==`SWS || opcode==`STI || 
-				opcode==`PUSH;
+				opcode==`PUSH || opcode==`PEA;
 endfunction
 
 function fnIsLoad;
 input [7:0] opcode;
 fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
-			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR ||
+			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR || opcode==`LCL ||
 			opcode==`LWS;
 endfunction
 
 function fnIsLoadV;
 input [7:0] opcode;
-fnIsLoadV = opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR;
+fnIsLoadV = opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR || opcode==`LCL;
 endfunction
 
 function fnIsIndexed;
@@ -1389,7 +1681,7 @@ if (DBW==32)
 		endcase
 	`LH,`LHU,`SH,`LVH,`LHX,`LHUX,`SHX:
 		fnSelect = 8'hFF;
-	`LW,`LWX,`SW,`SWCR,`LVW,`LVWAR,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
+	`LW,`LWX,`SW,`SWCR,`LVW,`LVWAR,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH,`PEA,`LCL:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1447,7 +1739,7 @@ else
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
-	`LW,`LWX,`SW,`SWCR,`LVW,`LVWAR,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH:
+	`LW,`LWX,`SW,`SWCR,`LVW,`LVWAR,`SWX,`CAS,`LWS,`SWS,`STI,`PUSH,`PEA,`LCL:
 		fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -1509,7 +1801,7 @@ if (DBW==32)
 		4'hC:	fnDatai = dat[31:16];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LVWAR,`LHX,`LHUX,`CAS,`LWS:
+	`LH,`LHU,`LW,`LWX,`LVH,`LVW,`LVWAR,`LHX,`LHUX,`CAS,`LWS,`LCL:
 		fnDatai = dat[31:0];
 	default:	fnDatai = {DBW{1'b1}};
 	endcase
@@ -1597,7 +1889,7 @@ else
 		8'hF0:	fnDatai = dat[DBW-1:DBW/2];
 		default:	fnDatai = {DBW{1'b1}};
 		endcase
-	`LW,`LWX,`LVW,`LVWAR,`CAS,`LWS:
+	`LW,`LWX,`LVW,`LVWAR,`CAS,`LWS,`LCL:
 		case(sel)
 		8'hFF:	fnDatai = dat;
 		default:	fnDatai = {DBW{1'b1}};
@@ -1619,7 +1911,7 @@ if (DBW==32)
 	   3'd1,3'd5:  fnDatao = {2{dat[15:8]}};
 	   default:    fnDatao = dat;
 	   endcase
-	`SW,`SWCR,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
+	`SW,`SWCR,`SWX,`CAS,`SWS,`STI,`PUSH,`PEA:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = dat;
 	`SC,`SCX:	fnDatao = {2{dat[15:0]}};
 	`SB,`SBX:	fnDatao = {4{dat[7:0]}};
@@ -1634,7 +1926,7 @@ else
 	   3'd2,3'd6:  fnDatao = {2{dat[DBW/2-1:0]}};
 	   3'd3,3'd7:  fnDatao = dat;
 	   endcase
-	`SW,`SWCR,`SWX,`CAS,`SWS,`STI,`PUSH:	fnDatao = dat;
+	`SW,`SWCR,`SWX,`CAS,`SWS,`STI,`PUSH,`PEA:	fnDatao = dat;
 	`SH,`SHX:	fnDatao = {2{dat[DBW/2-1:0]}};
 	`SC,`SCX:	fnDatao = {4{dat[DBW/4-1:0]}};
 	`SB,`SBX:	fnDatao = {8{dat[DBW/8-1:0]}};
@@ -1643,31 +1935,94 @@ else
 endfunction
 
 assign fetchbuf0_mem	= fetchbuf ? fnIsMem(opcodeC) : fnIsMem(opcodeA);
-assign fetchbuf1_mem	= fetchbuf ? fnIsMem(opcodeD) : fnIsMem(opcodeB);
-
 assign fetchbuf0_jmp   = fnIsFlowCtrl(opcode0);
-assign fetchbuf1_jmp   = fnIsFlowCtrl(opcode1);
 assign fetchbuf0_fp		= fnIsFP(opcode0);
-assign fetchbuf1_fp		= fnIsFP(opcode1);
 assign fetchbuf0_rfw	= fetchbuf ? fnIsRFW(opcodeC,fetchbufC_instr) : fnIsRFW(opcodeA,fetchbufA_instr);
-assign fetchbuf1_rfw	= fetchbuf ? fnIsRFW(opcodeD,fetchbufD_instr) : fnIsRFW(opcodeB,fetchbufB_instr);
 assign fetchbuf0_pfw	= fetchbuf ? fnIsPFW(opcodeC) : fnIsPFW(opcodeA);
+assign fetchbuf1_mem	= fetchbuf ? fnIsMem(opcodeD) : fnIsMem(opcodeB);
+assign fetchbuf1_jmp   = fnIsFlowCtrl(opcode1);
+assign fetchbuf1_fp		= fnIsFP(opcode1);
+assign fetchbuf1_rfw	= fetchbuf ? fnIsRFW(opcodeD,fetchbufD_instr) : fnIsRFW(opcodeB,fetchbufB_instr);
 assign fetchbuf1_pfw    = fetchbuf ? fnIsPFW(opcodeD) : fnIsPFW(opcodeB);
+`ifdef THREEWAY
+assign fetchbuf2_mem	= fetchbuf ? fnIsMem(opcodeF) : fnIsMem(opcodeE);
+assign fetchbuf2_jmp    = fnIsFlowCtrl(opcode2);
+assign fetchbuf2_fp		= fnIsFP(opcode2);
+assign fetchbuf2_rfw	= fetchbuf ? fnIsRFW(opcodeF,fetchbufF_instr) : fnIsRFW(opcodeE,fetchbufE_instr);
+assign fetchbuf2_pfw    = fetchbuf ? fnIsPFW(opcodeF) : fnIsPFW(opcodeE);
+`endif
 
 wire predict_taken0 = fetchbuf ? predict_takenC : predict_takenA;
 wire predict_taken1 = fetchbuf ? predict_takenD : predict_takenB;
+`ifdef THREEWAY
+wire predict_taken2 = fetchbuf ? predict_takenF : predict_takenE;
+`endif
 //
 // set branchback and backpc values ... ignore branches in fetchbuf slots not ready for enqueue yet
 //
-assign take_branch0 = ({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE});
-assign take_branch1 = ({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`VAL, `TRUE, `TRUE});
-assign take_branch = take_branch0 || take_branch1;
+assign take_branch0 = ({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ||
+                      ({fetchbuf0_v, opcode0==`LOOP}  == {`VAL, `TRUE})
+                        ;
+assign take_branch1 = ({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`VAL, `TRUE, `TRUE}) ||
+                      ({fetchbuf1_v, opcode1==`LOOP}  == {`VAL, `TRUE})
+                        ;
+`ifdef THREEWAY
+assign take_branch2 = ({fetchbuf2_v, fnIsBranch(opcode2), predict_taken2}  == {`VAL, `TRUE, `TRUE}) ||
+                      ({fetchbuf2_v, opcode2==`LOOP}  == {`VAL, `TRUE})
+                        ;
+`endif                     
+assign take_branch = take_branch0 || take_branch1
+`ifdef THREEWAY
+        || take_branch2
+`endif
+        ;
 
-wire [DBW-1:0] branch_pc =
-		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ? (ihit ?
-			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3 : fetchbuf0_pc):
-			(ihit ? fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3 : fetchbuf1_pc);
-
+reg [DBW-1:0] branch_pc;// =
+//		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ? (ihit ?
+//			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3 : fetchbuf0_pc):
+//			(ihit ? fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3 : fetchbuf1_pc);
+always @*
+if (fnIsBranch(opcode0) && fetchbuf0_v && predict_taken0) begin
+    if (ihit)
+        branch_pc <= fetchbuf0_pc + {{ABW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3;
+    else
+        branch_pc <= fetchbuf0_pc;
+end
+else if (opcode0==`LOOP && fetchbuf0_v) begin
+    if (ihit)
+        branch_pc <= fetchbuf0_pc + {{ABW-8{fetchbuf0_instr[23]}},fetchbuf0_instr[23:16]} + 64'd3;
+    else
+        branch_pc <= fetchbuf0_pc;
+end
+else if (fnIsBranch(opcode1) && fetchbuf1_v && predict_taken1) begin
+    if (ihit)
+        branch_pc <= fetchbuf1_pc + {{ABW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3;
+    else
+        branch_pc <= fetchbuf1_pc;
+end
+else if (opcode1==`LOOP && fetchbuf1_v) begin
+    if (ihit)
+        branch_pc <= fetchbuf1_pc + {{ABW-8{fetchbuf1_instr[23]}},fetchbuf1_instr[23:16]} + 64'd3;
+    else
+        branch_pc <= fetchbuf1_pc;
+end
+`ifdef THREEWAY
+else if (fnIsBranch(opcode2) && fetchbuf2_v && predict_taken2) begin
+    if (ihit)
+        branch_pc <= fetchbuf2_pc + {{ABW-12{fetchbuf2_instr[11]}},fetchbuf2_instr[11:8],fetchbuf2_instr[23:16]} + 64'd3;
+    else
+        branch_pc <= fetchbuf2_pc;
+end
+else if (opcode2==`LOOP && fetchbuf2_v) begin
+    if (ihit)
+        branch_pc <= fetchbuf2_pc + {{ABW-8{fetchbuf2_instr[23]}},fetchbuf2_instr[23:16]} + 64'd3;
+    else
+        branch_pc <= fetchbuf2_pc;
+end
+`endif
+else begin
+    branch_pc <= {{ABW-8{1'b1}},8'h80};  // set to something to prevent a latch
+end
 
 assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
 
@@ -1688,8 +2043,8 @@ assign mem_stringmiss = ((dram0_op==`STS || dram0_op==`STFND) && int_pending && 
 
 // On a cache miss the instruction buffers are loaded with NOPs this prevents
 // the PC from being trashed by invalid branch instructions.
-reg [63:0] insn1a;
-reg [63:0] insn0,insn1;
+reg [63:0] insn1a,insn2a;
+reg [63:0] insn0,insn1,insn2;
 always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn or vec_i or ITLBMiss or ihit or iuncached or ibufhit or ierr or ibuf)
 //if (int_commit)
 //	insn0 <= {8{8'h10}};	// load with NOPs
@@ -1758,6 +2113,41 @@ else
 	insn1 <= {8{8'h10}};	// load with NOPs
 
 
+`ifdef THREEWAY
+always @(nmi_edge or StatusHWI or int_commit or irq_i or im or insnerr or insn2a or vec_i or ITLBMiss or ihit or ierr or ibufhit or iuncached)
+//if (int_commit)
+//	insn1 <= {8{8'h10}};	// load with NOPs
+//else
+if (nmi_edge & ~StatusHWI & ~int_commit)
+	insn2 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
+else if (ITLBMiss)
+	insn2 <= {8'hF9,8'hCE,8'hA6,8'h01,8'hF9,8'hCE,8'hA6,8'h01};
+else if (insnerr)
+	insn2 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+else if (irq_i & ~im & ~StatusHWI & ~int_commit)
+	insn2 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
+else if (iuncached) begin
+	if (ibufhit) begin
+		if (ierr)
+			insn2 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
+		else if (insn1a[7:0]==8'h00)
+			insn2 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+		else
+			insn2 <= insn2a[63:0];
+	end
+	else
+		insn2 <= {8{8'h10}};	// load with NOPs
+end
+else if (ihit) begin
+	if (insn2a[7:0]==8'h00)
+		insn2 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+	else
+		insn2 <= insn2a;
+end
+else
+	insn2 <= {8{8'h10}};	// load with NOPs
+`endif
+
 // Find the second instruction in the instruction line.
 always @(insn or iuncached or ibuf)
 if (iuncached)
@@ -1785,6 +2175,28 @@ else
 	default:	insn1a <= {8{8'h10}};	// NOPs
 	endcase
 
+`ifdef THREEWAY
+// Find the third instruction in the instruction line.
+always @(insn or iuncached or ibuf)
+	case(fnInsnLength(insn)+fnInsnLength1(insn))
+	4'd2:	insn2a <= insn[79:16];
+	4'd3:	insn2a <= insn[87:24];
+	4'd4:	insn2a <= insn[95:32];
+	4'd5:	insn2a <= insn[103:40];
+	4'd6:	insn2a <= insn[111:48];
+	4'd7:	insn2a <= insn[119:56];
+	4'd8:	insn2a <= insn[127:64];
+	4'd9:	insn2a <= insn[127:72];
+	4'd10:	insn2a <= insn[127:80];
+	4'd11:	insn2a <= insn[127:88];
+	4'd12:	insn2a <= insn[127:96];
+	4'd13:	insn2a <= insn[127:104];
+	4'd14:	insn2a <= insn[127:112];
+	4'd15:	insn2a <= insn[127:120];
+	default:	insn2a <= {8{8'h10}};	// NOPs
+	endcase
+`endif
+
 // Return the immediate field of an instruction
 function [63:0] fnImm;
 input [127:0] insn;
@@ -1805,9 +2217,10 @@ casex(insn[15:8])
 `CMPI,`LDI,`LDIS,`ADDUIS:
 	fnImm = {{54{insn[31]}},insn[31:22]};
 `RTS:	fnImm = insn[19:16];
-`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND:	fnImm = 8'h00;
+`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND,`CACHE:	fnImm = 8'h00;
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
+`SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm = {{55{insn[36]}},insn[36:28]};
 `PUSH:  fnImm = 64'd8;
 default:
@@ -1832,10 +2245,11 @@ casex(insn[15:8])
 `SYS,`INT:	fnImm8 = insn[31:24];
 `CMPI,`LDI,`LDIS,`ADDUIS:	fnImm8 = insn[29:22];
 `RTS:	fnImm8 = insn[19:16];
-`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND:	fnImm8 = 8'h00;
+`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND,`CACHE:	fnImm8 = 8'h00;
 `STI:	fnImm8 = insn[39:28];
 `PUSH:  fnImm8 = 8'd8;
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
+`SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm8 = insn[35:28];
 default:	fnImm8 = insn[35:28];
 endcase
@@ -1859,14 +2273,15 @@ casex(insn[15:8])
     fnImmMSB = insn[39];
 `CMPI,`LDI,`LDIS,`ADDUIS:
 	fnImmMSB = insn[31];
-`SYS,`INT,`PUSH:
+`SYS,`INT,`PUSH,`CACHE:
 	fnImmMSB = 1'b0;		// SYS,INT are unsigned
 `RTS,`RTE,`RTI,`JSRZ,`STMV,`STCMP,`STFND,`RTS2:
 	fnImmMSB = 1'b0;		// RTS is unsigned
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,
+`SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImmMSB = insn[36];
 default:
 	fnImmMSB = insn[39];
@@ -1894,7 +2309,12 @@ input [63:0] ins;
 input [63:0] rfo;
 input [63:0] epc;
 begin
-	if (opcode==`LOOP)
+    if (opcode==`RTS) begin
+        fnOpa = (commit1_v && commit1_tgt[6:0]==7'h51) ? commit1_bus :
+                (commit0_v && commit0_tgt[6:0]==7'h51) ? commit0_bus :
+                cregs[3'd1]; 
+    end
+	else if (opcode==`LOOP)
 		fnOpa = epc;
 	else if (fnIsFlowCtrl(opcode))
 		fnOpa = fnCar(ins)==4'd0 ? 64'd0 : fnCar(ins)==4'd15 ? epc :
@@ -1950,6 +2370,11 @@ else
 	2'h0:	fnRegstrGrp="PR";
 	2'h1:	fnRegstrGrp="CA";
 	2'h2:	fnRegstrGrp="SG";
+	2'h3:
+	       case(Rn[3:0])
+	       3'h0:   fnRegstrGrp="PA";
+	       3'h3:   fnRegstrGrp="LC";
+	       endcase
 	endcase
 
 endfunction
@@ -2180,7 +2605,7 @@ wire any_sync =
 	|| (iqentry_v[head6] && iqentry_op[head6]==`SYNC)
 	;
 */
-// The simulator didn't handle the asynchronous race loop properly in the 
+// The (old) simulator didn't handle the asynchronous race loop properly in the 
 // original code. It would issue two instructions to the same islot. So the
 // issue logic has been re-written to eliminate the asynchronous loop.
 // Not that this issue logic won't isse the second instruction if there is
@@ -2269,12 +2694,14 @@ begin
     // Don't bother checking head0, it should have issued to the first
     // instruction.
 	if (could_issue[head1] && !iqentry_fp[head1] && !iqentry_issue[head1]
+	&& !fnIsAlu0Op(iqentry_op[head1],iqentry_fn[head1])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC))
 	begin
 		iqentry_issue[head1] = `TRUE;
 		iqentry_islot[head1] = 2'b01;
 	end
 	else if (could_issue[head2] && !iqentry_fp[head2] && !iqentry_issue[head2]
+	&& !fnIsAlu0Op(iqentry_op[head2],iqentry_fn[head2])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	)
@@ -2283,6 +2710,7 @@ begin
 		iqentry_islot[head2] = 2'b01;
 	end
 	else if (could_issue[head3] & !iqentry_fp[head3] && !iqentry_issue[head3]
+	&& !fnIsAlu0Op(iqentry_op[head3],iqentry_fn[head3])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2291,6 +2719,7 @@ begin
 		iqentry_islot[head3] = 2'b01;
 	end
 	else if (could_issue[head4] & !iqentry_fp[head4] && !iqentry_issue[head4]
+	&& !fnIsAlu0Op(iqentry_op[head4],iqentry_fn[head4])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2300,6 +2729,7 @@ begin
 		iqentry_islot[head4] = 2'b01;
 	end
 	else if (could_issue[head5] & !iqentry_fp[head5] && !iqentry_issue[head5]
+	&& !fnIsAlu0Op(iqentry_op[head5],iqentry_fn[head5])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2310,6 +2740,7 @@ begin
 		iqentry_islot[head5] = 2'b01;
 	end
 	else if (could_issue[head6] & !iqentry_fp[head6] && !iqentry_issue[head6]
+	&& !fnIsAlu0Op(iqentry_op[head6],iqentry_fn[head6])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2321,6 +2752,7 @@ begin
 		iqentry_islot[head6] = 2'b01;
 	end
 	else if (could_issue[head7] & !iqentry_fp[head7] && !iqentry_issue[head7]
+	&& !fnIsAlu0Op(iqentry_op[head7],iqentry_fn[head7])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2546,6 +2978,289 @@ assign fp0_issue = (!(iqentry_v[0] && iqentry_stomp[0]) && iqentry_fpissue[0] &&
 			(!(iqentry_v[7] && iqentry_stomp[7]) && iqentry_fpissue[7] && iqentry_islot[7]==2'd0)
 			;
 `endif
+
+wire dcache_access_pending = dram0 == 3'd6 && (!rhit || (dram0_op==`LCL && dram0_tgt==7'd1));
+
+//
+// determine if the instructions ready to issue can, in fact, issue.
+// "ready" means that the instruction has valid operands but has not gone yet
+//
+// Stores can only issue if there is no possibility of a change of program flow.
+// That means no flow control operations or instructions that can cause an
+// exception can be before the store.
+assign iqentry_memissue_head0 =	iqentry_memready[ head0 ] && cstate==IDLE && !dcache_access_pending && dram0==0;		// first in line ... go as soon as ready
+
+assign iqentry_memissue_head1 =	~iqentry_stomp[head1] && iqentry_memready[ head1 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head1][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head1]) ? !fnIsFlowCtrl(iqentry_op[head0])
+				&& !fnCanException(iqentry_op[head0],iqentry_fn[head0]) : `TRUE)
+				&& (iqentry_op[head1]!=`CAS)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB) 
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+
+assign iqentry_memissue_head2 =	~iqentry_stomp[head2] && iqentry_memready[ head2 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				&& ~iqentry_memready[head1] 
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
+					|| (iqentry_a1_v[head1] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head2]) ?
+				    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
+				    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) 
+				    : `TRUE)
+				&& (iqentry_op[head2]!=`CAS)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				// ... and there is no instruction barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB)
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+//					(   !fnIsFlowCtrl(iqentry_op[head0])
+//					 && !fnIsFlowCtrl(iqentry_op[head1])));
+
+assign iqentry_memissue_head3 =	~iqentry_stomp[head3] && iqentry_memready[ head3 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				&& ~iqentry_memready[head1] 
+				&& ~iqentry_memready[head2] 
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
+					|| (iqentry_a1_v[head1] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
+				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
+					|| (iqentry_a1_v[head2] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head3]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) 
+                    : `TRUE)
+				&& (iqentry_op[head3]!=`CAS)
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
+				// ... and there is no instruction barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
+                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB)
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+/*					(   !fnIsFlowCtrl(iqentry_op[head0])
+					 && !fnIsFlowCtrl(iqentry_op[head1])
+					 && !fnIsFlowCtrl(iqentry_op[head2])));
+*/
+assign iqentry_memissue_head4 =	~iqentry_stomp[head4] && iqentry_memready[ head4 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				&& ~iqentry_memready[head1] 
+				&& ~iqentry_memready[head2] 
+				&& ~iqentry_memready[head3] 
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
+					|| (iqentry_a1_v[head1] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
+				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
+					|| (iqentry_a1_v[head2] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
+				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
+					|| (iqentry_a1_v[head3] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head4]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3],iqentry_fn[head3]) 
+                    : `TRUE)
+				&& (iqentry_op[head4]!=`CAS)
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
+				// ... and there is no instruction barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
+                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
+                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB)
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+/* ||
+					(   !fnIsFlowCtrl(iqentry_op[head0])
+					 && !fnIsFlowCtrl(iqentry_op[head1])
+					 && !fnIsFlowCtrl(iqentry_op[head2])
+					 && !fnIsFlowCtrl(iqentry_op[head3])));
+*/
+assign iqentry_memissue_head5 =	~iqentry_stomp[head5] && iqentry_memready[ head5 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				&& ~iqentry_memready[head1] 
+				&& ~iqentry_memready[head2] 
+				&& ~iqentry_memready[head3] 
+				&& ~iqentry_memready[head4] 
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
+					|| (iqentry_a1_v[head1] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
+				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
+					|| (iqentry_a1_v[head2] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
+				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
+					|| (iqentry_a1_v[head3] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
+				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
+					|| (iqentry_a1_v[head4] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head5]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3],iqentry_fn[head3]) && 
+                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4],iqentry_fn[head4]) 
+                    : `TRUE)
+				&& (iqentry_op[head5]!=`CAS)
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
+				// ... and there is no instruction barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
+                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
+                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
+                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB)
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+/*||
+					(   !fnIsFlowCtrl(iqentry_op[head0])
+					 && !fnIsFlowCtrl(iqentry_op[head1])
+					 && !fnIsFlowCtrl(iqentry_op[head2])
+					 && !fnIsFlowCtrl(iqentry_op[head3])
+					 && !fnIsFlowCtrl(iqentry_op[head4])));
+*/
+assign iqentry_memissue_head6 =	~iqentry_stomp[head6] && iqentry_memready[ head6 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				&& ~iqentry_memready[head1] 
+				&& ~iqentry_memready[head2] 
+				&& ~iqentry_memready[head3] 
+				&& ~iqentry_memready[head4] 
+				&& ~iqentry_memready[head5] 
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
+					|| (iqentry_a1_v[head1] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
+				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
+					|| (iqentry_a1_v[head2] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
+				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
+					|| (iqentry_a1_v[head3] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
+				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
+					|| (iqentry_a1_v[head4] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
+				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
+					|| (iqentry_a1_v[head5] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head6]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3],iqentry_fn[head3]) && 
+                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4],iqentry_fn[head4]) && 
+                    !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5],iqentry_fn[head5]) 
+                    : `TRUE)
+				&& (iqentry_op[head6]!=`CAS)
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
+				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_op[head5]==`MEMDB)
+				// ... and there is no instruction barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
+                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
+                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
+                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
+                && !(iqentry_v[head5] && iqentry_op[head5]==`MEMSB)
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+				/*||
+					(   !fnIsFlowCtrl(iqentry_op[head0])
+					 && !fnIsFlowCtrl(iqentry_op[head1])
+					 && !fnIsFlowCtrl(iqentry_op[head2])
+					 && !fnIsFlowCtrl(iqentry_op[head3])
+					 && !fnIsFlowCtrl(iqentry_op[head4])
+					 && !fnIsFlowCtrl(iqentry_op[head5])));
+*/
+assign iqentry_memissue_head7 =	~iqentry_stomp[head7] && iqentry_memready[ head7 ]		// addr and data are valid
+				// ... and no preceding instruction is ready to go
+				&& ~iqentry_memready[head0]
+				&& ~iqentry_memready[head1] 
+				&& ~iqentry_memready[head2] 
+				&& ~iqentry_memready[head3] 
+				&& ~iqentry_memready[head4] 
+				&& ~iqentry_memready[head5] 
+				&& ~iqentry_memready[head6] 
+				// ... and there is no address-overlap with any preceding instruction
+				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
+					|| (iqentry_a1_v[head0] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
+				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
+					|| (iqentry_a1_v[head1] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
+				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
+					|| (iqentry_a1_v[head2] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
+				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
+					|| (iqentry_a1_v[head3] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
+				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
+					|| (iqentry_a1_v[head4] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
+				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
+					|| (iqentry_a1_v[head5] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
+				&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) 
+					|| (iqentry_a1_v[head6] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head6][DBW-1:3]))
+				// ... and, if it is a SW, there is no chance of it being undone
+				&& (fnIsStore(iqentry_op[head7]) ?
+                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
+                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) &&
+                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) && 
+                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3],iqentry_fn[head3]) && 
+                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4],iqentry_fn[head4]) && 
+                    !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5],iqentry_fn[head5]) && 
+                    !fnIsFlowCtrl(iqentry_op[head6]) && !fnCanException(iqentry_op[head6],iqentry_fn[head6]) 
+                    : `TRUE)
+				&& (iqentry_op[head7]!=`CAS)
+				// ... and there is no memory barrier
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
+				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_op[head5]==`MEMDB)
+				&& !(iqentry_v[head6] && fnIsMem(iqentry_op[head6]) && iqentry_op[head6]==`MEMDB)
+				// ... and there is no instruction barrier
+				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
+                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
+                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
+                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
+                && !(iqentry_v[head5] && iqentry_op[head5]==`MEMSB) 
+                && !(iqentry_v[head6] && iqentry_op[head6]==`MEMSB)
+				&& cstate==IDLE && !dcache_access_pending && dram0==0
+				;
+
 `include "Thor_execute_combo.v"
 //`include "Thor_memory_combo.v"
 // additional DRAM-enqueue logic
@@ -2596,18 +3311,16 @@ assign  iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_
 assign outstanding_stores = (dram0 && fnIsStore(dram0_op)) || (dram1 && fnIsStore(dram1_op)) || (dram2 && fnIsStore(dram2_op));
 
 // This signal needed to stave off an instruction cache access.
-assign mem_will_issue =
-	(
-	(~iqentry_stomp[0] && iqentry_memissue[0] && iqentry_agen[0] && ~iqentry_out[0] && iqentry_cmt[0] && ihit) ||
-	(~iqentry_stomp[1] && iqentry_memissue[1] && iqentry_agen[1] && ~iqentry_out[1] && iqentry_cmt[1] && ihit) ||
-	(~iqentry_stomp[2] && iqentry_memissue[2] && iqentry_agen[2] && ~iqentry_out[2] && iqentry_cmt[2] && ihit) ||
-	(~iqentry_stomp[3] && iqentry_memissue[3] && iqentry_agen[3] && ~iqentry_out[3] && iqentry_cmt[3] && ihit) ||
-	(~iqentry_stomp[4] && iqentry_memissue[4] && iqentry_agen[4] && ~iqentry_out[4] && iqentry_cmt[4] && ihit) ||
-	(~iqentry_stomp[5] && iqentry_memissue[5] && iqentry_agen[5] && ~iqentry_out[5] && iqentry_cmt[5] && ihit) ||
-	(~iqentry_stomp[6] && iqentry_memissue[6] && iqentry_agen[6] && ~iqentry_out[6] && iqentry_cmt[6] && ihit) ||
-	(~iqentry_stomp[7] && iqentry_memissue[7] && iqentry_agen[7] && ~iqentry_out[7] && iqentry_cmt[7] && ihit))
-	&& (dram0 == 3'd0)// || dram1==3'd0 || dram2==3'd0)
-	;
+assign mem_issue =
+    iqentry_memissue_head0 |
+    iqentry_memissue_head1 |
+    iqentry_memissue_head2 |
+    iqentry_memissue_head3 |
+    iqentry_memissue_head4 |
+    iqentry_memissue_head5 |
+    iqentry_memissue_head6 |
+    iqentry_memissue_head7
+    ;
 
 //`include "Thor_commit_combo.v"
 // If trying to write to two branch registers at once, or trying to write 
@@ -2637,6 +3350,13 @@ assign commit1_bus = iqentry_res[head1];
 assign int_commit = (iqentry_op[head0]==`INT && commit0_v) || (commit0_v && iqentry_op[head1]==`INT && commit1_v);
 assign sys_commit = (iqentry_op[head0]==`SYS && commit0_v) || (commit0_v && iqentry_op[head1]==`SYS && commit1_v);
 
+wire [63:0] imm0 =
+        opcode0==`INT ? fnImm(fetchbuf0_instr) :
+        fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
+        iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
+        opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
+        fnImm(fetchbuf0_instr);
+
 always @(posedge clk)
 	if (rst_i)
 		tick <= 64'd0;
@@ -2662,6 +3382,9 @@ always @(posedge clk) begin
 `endif
 
 	ic_invalidate <= `FALSE;
+	dc_invalidate <= `FALSE;
+	ic_invalidate_line <= `FALSE;
+    dc_invalidate_line <= `FALSE;
 	if (rst_i) begin
 		GM <= 8'hFF;
 		nmi_edge <= 1'b0;
@@ -2670,6 +3393,7 @@ always @(posedge clk) begin
 		StatusHWI <= `TRUE;		// disables interrupts at startup until an RTI instruction is executed.
 		im <= 1'b1;
 		ic_invalidate <= `TRUE;
+		dc_invalidate <= `TRUE;
 		fetchbuf <= 1'b0;
 		fetchbufA_v <= `INV;
 		fetchbufB_v <= `INV;
@@ -2683,8 +3407,18 @@ always @(posedge clk) begin
 		fetchbufB_pc <= {{DBW-4{1'b1}},4'h0};
 		fetchbufC_pc <= {{DBW-4{1'b1}},4'h0};
 		fetchbufD_pc <= {{DBW-4{1'b1}},4'h0};
+`ifdef THREEWAY
+		fetchbufE_v <= `INV;
+		fetchbufF_v <= `INV;
+		fetchbufE_instr <= {8{8'h10}};
+        fetchbufF_instr <= {8{8'h10}};
+		fetchbufE_pc <= {{DBW-4{1'b1}},4'h0};
+        fetchbufF_pc <= {{DBW-4{1'b1}},4'h0};
+`endif
 		for (i=0; i<8; i=i+1) begin
 			iqentry_v[i] <= `INV;
+			iqentry_agen[i] <= `FALSE;
+			iqentry_op[i] <= `NOP;
 		end
 		// All the register are flagged as valid on startup even though they
 		// may not contain valid data. Otherwise the processor will stall
@@ -2723,12 +3457,16 @@ always @(posedge clk) begin
 			pregs[i] <= 4'd0;
 		asid <= 8'h00;
 		rrmapno <= 3'd0;
+		dram0_id <= 0;
+		alu1_sourceid <= 0;
 	end
 
 	// The following registers are always valid
 	rf_v[7'h00] = `VAL;
 	rf_v[7'h50] = `VAL;	// C0
 	rf_v[7'h5F] = `VAL;	// C15 (PC)
+    queued1 = `FALSE;
+    queued2 = `FALSE;
 
 	did_branchback <= take_branch;
 	did_branchback0 <= take_branch0;
@@ -2736,16 +3474,19 @@ always @(posedge clk) begin
 
 	if (branchmiss) begin
 		for (n = 1; n < NREGS; n = n + 1)
-			if (rf_v[n] == `INV && ~livetarget[n]) rf_v[n] = `VAL;
+			if (rf_v[n] == `INV && ~livetarget[n]) begin
+			  $display("brmiss: rf_v[%d] <= VAL",n);
+			  rf_v[n] = `VAL;
+			end
 
-	    if (|iqentry_0_latestID[NREGS:1])	rf_source[ iqentry_tgt[0] ] <= { iqentry_mem[0], 3'd0 };
-	    if (|iqentry_1_latestID[NREGS:1])	rf_source[ iqentry_tgt[1] ] <= { iqentry_mem[1], 3'd1 };
-	    if (|iqentry_2_latestID[NREGS:1])	rf_source[ iqentry_tgt[2] ] <= { iqentry_mem[2], 3'd2 };
-	    if (|iqentry_3_latestID[NREGS:1])	rf_source[ iqentry_tgt[3] ] <= { iqentry_mem[3], 3'd3 };
-	    if (|iqentry_4_latestID[NREGS:1])	rf_source[ iqentry_tgt[4] ] <= { iqentry_mem[4], 3'd4 };
-	    if (|iqentry_5_latestID[NREGS:1])	rf_source[ iqentry_tgt[5] ] <= { iqentry_mem[5], 3'd5 };
-	    if (|iqentry_6_latestID[NREGS:1])	rf_source[ iqentry_tgt[6] ] <= { iqentry_mem[6], 3'd6 };
-	    if (|iqentry_7_latestID[NREGS:1])	rf_source[ iqentry_tgt[7] ] <= { iqentry_mem[7], 3'd7 };
+	    if (|iqentry_0_latestID[NREGS:1])	rf_source[ iqentry_tgt[0] ] <= { iqentry_mem[0]&&!iqentry_op[0]==`PUSH, 3'd0 };
+	    if (|iqentry_1_latestID[NREGS:1])	rf_source[ iqentry_tgt[1] ] <= { iqentry_mem[1]&&!iqentry_op[1]==`PUSH, 3'd1 };
+	    if (|iqentry_2_latestID[NREGS:1])	rf_source[ iqentry_tgt[2] ] <= { iqentry_mem[2]&&!iqentry_op[2]==`PUSH, 3'd2 };
+	    if (|iqentry_3_latestID[NREGS:1])	rf_source[ iqentry_tgt[3] ] <= { iqentry_mem[3]&&!iqentry_op[3]==`PUSH, 3'd3 };
+	    if (|iqentry_4_latestID[NREGS:1])	rf_source[ iqentry_tgt[4] ] <= { iqentry_mem[4]&&!iqentry_op[4]==`PUSH, 3'd4 };
+	    if (|iqentry_5_latestID[NREGS:1])	rf_source[ iqentry_tgt[5] ] <= { iqentry_mem[5]&&!iqentry_op[5]==`PUSH, 3'd5 };
+	    if (|iqentry_6_latestID[NREGS:1])	rf_source[ iqentry_tgt[6] ] <= { iqentry_mem[6]&&!iqentry_op[6]==`PUSH, 3'd6 };
+	    if (|iqentry_7_latestID[NREGS:1])	rf_source[ iqentry_tgt[7] ] <= { iqentry_mem[7]&&!iqentry_op[7]==`PUSH, 3'd7 };
 
 	end
 
@@ -2753,6 +3494,141 @@ always @(posedge clk) begin
 		$display("\r\n");
 		$display("TIME %0d", $time);
 	end
+`include "Thor_commit_early.v"
+    //`include "Thor_enque.v"
+    //
+    // ENQUEUE
+    //
+    // place up to three instructions from the fetch buffer into slots in the IQ.
+    //   note: they are placed in-order, and they are expected to be executed
+    // 0, 1, or 2 of the fetch buffers may have valid data
+    // 0, 1, or 2 slots in the instruction queue may be available.
+    // if we notice that one of the instructions in the fetch buffer is a backwards branch,
+    // predict it taken (set branchback/backpc and delete any instructions after it in fetchbuf)
+    //
+`ifdef THREEWAY
+    if (!branchmiss) begin    // don't bother doing anything if there's been a branch miss
+    
+        case ({fetchbuf0_v, fetchbuf1_v, fetchbuf2_v})// && ((fnNumReadPorts(fetchbuf0_instr) + fnNumReadPorts(fetchbuf1_instr) < 3'd5)||!fetchbuf0_v)})
+        3'b000: ;   // do nothing
+        3'b001: enque2(tail0,1,0);
+        3'b010: enque1(tail0,1,0);
+        3'b011: begin
+                enque1(tail0,1,1);
+                enque2(tail1,2,0);
+                validate_args1;
+                end
+        3'b100: enque0(tail0,1,0);
+        3'b101: ;   // illegal state
+        3'b110: begin
+                enque0(tail0,1,1);
+                enque1(tail1,2,0);
+                validate_args2;
+                end
+        3'b111: begin
+                enque0(tail0,1,1);
+                enque1(tail1,2,1);
+                enque2(tail2,3,0);
+                validate_args3;
+                end
+        endcase
+    end
+    else begin    // if branchmiss
+            if ((iqentry_stomp[0] & ~iqentry_stomp[7])) begin
+                tail0 <= 0;
+                tail1 <= 1;
+                tail2 <= 2;
+            end
+            else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
+                tail0 <= 1;
+                tail1 <= 2;
+                tail2 <= 3;
+            end
+            else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
+                tail0 <= 2;
+                tail1 <= 3;
+                tail2 <= 4;
+            end
+            else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
+                tail0 <= 3;
+                tail1 <= 4;
+                tail2 <= 5;
+            end
+            else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
+                tail0 <= 4;
+                tail1 <= 5;
+                tail2 <= 6;
+            end
+            else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
+                tail0 <= 5;
+                tail1 <= 6;
+                tail2 <= 7;
+            end
+            else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
+                tail0 <= 6;
+                tail1 <= 7;
+                tail2 <= 0;
+            end
+            else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
+                tail0 <= 7;
+                tail1 <= 0;
+                tail2 <= 1;
+            end
+            // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
+        end
+`else
+    if (!branchmiss) begin    // don't bother doing anything if there's been a branch miss
+        qstomp = `FALSE;
+        queued1 = `FALSE;
+        queued2 = `FALSE;
+        case ({fetchbuf0_v, fetchbuf1_v && fnNumReadPorts(fetchbuf1_instr) <=  ports_avail})
+        2'b00: ; // do nothing
+        2'b01:  enque1(tail0,1,0,1);
+        2'b10:  enque0(tail0,1,0,1);
+        2'b11:  begin
+                enque0(tail0,1,1,0);
+                enque1(tail1,2,0,0);
+                if (queued2)
+                    validate_args();
+                end
+        endcase
+    end
+    else begin    // if branchmiss
+            if ((iqentry_stomp[0] & ~iqentry_stomp[7])) begin
+                tail0 <= 0;
+                tail1 <= 1;
+            end
+            else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
+                tail0 <= 1;
+                tail1 <= 2;
+            end
+            else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
+                tail0 <= 2;
+                tail1 <= 3;
+            end
+            else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
+                tail0 <= 3;
+                tail1 <= 4;
+            end
+            else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
+                tail0 <= 4;
+                tail1 <= 5;
+            end
+            else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
+                tail0 <= 5;
+                tail1 <= 6;
+            end
+            else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
+                tail0 <= 6;
+                tail1 <= 7;
+            end
+            else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
+                tail0 <= 7;
+                tail1 <= 0;
+            end
+            // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
+        end
+`endif
 //`include "Thor_ifetch.v"
 // FETCH
 //
@@ -2760,6 +3636,9 @@ always @(posedge clk) begin
 // unless either one of the buffers is still full, in which case we
 // do nothing (kinda like alpha approach)
 //
+`ifdef THREEWAY
+`include "Thor_ifetch3.v"
+`else
 if (branchmiss) begin
 	$display("pc <= %h", misspc);
 	pc <= misspc;
@@ -2792,14 +3671,14 @@ else if (take_branch) begin
 				fetchbufD_pc <= pc + fnInsnLength(insn);
 				fetchbufD_v <= ld_fetchbuf;
 				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-				fetchbufB_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufB_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b1;
 			end
 		4'b0111:
 			begin
-				fetchbufB_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufB_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b1;
 			end
 		4'b1000:
@@ -2811,23 +3690,23 @@ else if (take_branch) begin
 				fetchbufD_v <= ld_fetchbuf;
 				fetchbufD_pc <= pc + fnInsnLength(insn);
 				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-				fetchbufA_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufA_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b1;
 			end
 		4'b1011:
 			begin
-				fetchbufA_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufA_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b1;
 			end
 		4'b1100: 
 			// Note that there is no point to loading C,D here because
 			// there is a predicted taken branch that would stomp on the
 			// instructions anyways.
-			if (fnIsBranch(opcodeA) && predict_takenA) begin
+			if ((fnIsBranch(opcodeA) && predict_takenA)||opcodeA==`LOOP) begin
 				pc <= branch_pc;
-				fetchbufA_v <= iqentry_v[tail0];
+				fetchbufA_v <= !(queued1|queued2);
 				fetchbufB_v <= `INV;		// stomp on it
 				// may as well stick with same fetchbuf
 			end
@@ -2840,23 +3719,23 @@ else if (take_branch) begin
 					fetchbufD_v <= ld_fetchbuf;
 					fetchbufD_pc <= pc + fnInsnLength(insn);
 					if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-					fetchbufA_v <= iqentry_v[tail0];
-					fetchbufB_v <= iqentry_v[tail1];
-					if (iqentry_v[tail1]==`INV)
+					fetchbufA_v <= !(queued1|queued2);
+					fetchbufB_v <= !queued2;
+					if (queued2)
 						fetchbuf <= 1'b1;
 				end
 				else begin
 					pc <= branch_pc;
-					fetchbufA_v <= iqentry_v[tail0];
-					fetchbufB_v <= iqentry_v[tail1];
+					fetchbufA_v <= !(queued1|queued2);
+					fetchbufB_v <= !queued2;
 					// may as well keep the same fetchbuffer
 				end
 			end
 		4'b1111:
 			begin
-				fetchbufA_v <= iqentry_v[tail0];
-				fetchbufB_v <= iqentry_v[tail1];
-				if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
+				fetchbufA_v <= !(queued1|queued2);
+				fetchbufB_v <= !queued2;
+				if (queued2)
 					fetchbuf <= 1'b1;
 			end
 		default: panic <= `PANIC_INVALIDFBSTATE;
@@ -2884,14 +3763,14 @@ else if (take_branch) begin
 				fetchbufB_pc <= pc + fnInsnLength(insn);
 				fetchbufB_v <= ld_fetchbuf;
 				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-				fetchbufD_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufD_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b0;
 			end
 		4'b0111:
 			begin
-				fetchbufD_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufD_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b0;
 			end
 		4'b1000:
@@ -2903,20 +3782,20 @@ else if (take_branch) begin
 				fetchbufB_v <= ld_fetchbuf;
 				fetchbufB_pc <= pc + fnInsnLength(insn);
 				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-				fetchbufC_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufC_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b0;
 			end
 		4'b1011:
 			begin
-				fetchbufC_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
+				fetchbufC_v <= !queued1;
+				if (queued1)
 					fetchbuf <= 1'b0;
 			end
 		4'b1100:
-			if (fnIsBranch(opcodeC) && predict_takenC) begin
+			if ((fnIsBranch(opcodeC) && predict_takenC)||opcodeC==`LOOP) begin
 				pc <= branch_pc;
-				fetchbufC_v <= iqentry_v[tail0];
+				fetchbufC_v <= !(queued1|queued2);
 				fetchbufD_v <= `INV;		// stomp on it
 				// may as well stick with same fetchbuf
 			end
@@ -2929,23 +3808,23 @@ else if (take_branch) begin
 					fetchbufB_v <= ld_fetchbuf;
 					fetchbufB_pc <= pc + fnInsnLength(insn);
 					if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-					fetchbufC_v <= iqentry_v[tail0];
-					fetchbufD_v <= iqentry_v[tail1];
-					if (iqentry_v[tail1]==`INV)
+					fetchbufC_v <= !(queued1|queued2);
+					fetchbufD_v <= !queued2;
+					if (queued2)
 						fetchbuf <= 1'b0;
 				end
 				else begin
 					pc <= branch_pc;
-					fetchbufC_v <= iqentry_v[tail0];
-					fetchbufD_v <= iqentry_v[tail1];
+					fetchbufC_v <= !(queued1|queued2);
+					fetchbufD_v <= !queued2;
 					// may as well keep the same fetchbuffer
 				end
 			end
 		4'b1111:
 			begin
-				fetchbufC_v <= iqentry_v[tail0];
-				fetchbufD_v <= iqentry_v[tail1];
-				if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
+				fetchbufC_v <= !(queued1|queued2);
+				fetchbufD_v <= !queued2;
+				if (queued2)
 					fetchbuf <= 1'b0;
 			end
 		default: panic <= `PANIC_INVALIDFBSTATE;
@@ -2954,71 +3833,36 @@ else if (take_branch) begin
 end
 else begin
 	if (fetchbuf == 1'b0)
-		case ({fetchbufA_v, fetchbufB_v, ~iqentry_v[tail0], ~iqentry_v[tail1]})
-		4'b00_00 : ;
-		4'b00_01 : panic <= `PANIC_INVALIDIQSTATE;
-		4'b00_10 : ;
-		4'b00_11 : ;
-		4'b01_00 : ;
-		4'b01_01 : panic <= `PANIC_INVALIDIQSTATE;
-		4'b01_10,
-		4'b01_11 : begin
-			fetchbufB_v <= `INV;
-			fetchbuf <= 1'b1;
+		case ({fetchbufA_v, fetchbufB_v})
+		2'b00: ;
+		2'b01: begin
+			fetchbufB_v <= !(queued2|queued1);
+			fetchbuf <= queued2|queued1;
 			end
-		4'b10_00 : ;
-		4'b10_01 : panic <= `PANIC_INVALIDIQSTATE;
-		4'b10_10,
-		4'b10_11 : begin
-			fetchbufA_v <= `INV;
-			fetchbuf <= 1'b1;
+		2'b10: begin
+			fetchbufA_v <= !(queued2|queued1);
+			fetchbuf <= queued2|queued1;
 			end
-		4'b11_00 : ;
-		4'b11_01 : panic <= `PANIC_INVALIDIQSTATE;
-		4'b11_10 : begin
-			fetchbufA_v <= `INV;
-			end
-		4'b11_11 : begin
-			fetchbufA_v <= `INV;
-			fetchbufB_v <= `INV;
-			fetchbuf <= 1'b1;
+		2'b11: begin
+			fetchbufA_v <= !(queued1|queued2);
+			fetchbufB_v <= !queued2;
+			fetchbuf <= queued2;
 			end
 		endcase
 	else
-		case ({fetchbufC_v, fetchbufD_v, ~iqentry_v[tail0], ~iqentry_v[tail1]})
-		4'b00_00 : ;
-		4'b00_01 : panic <= `PANIC_INVALIDIQSTATE;
-		4'b00_10 : ;
-		4'b00_11 : ;
-		4'b01_00 : ;
-		4'b01_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b01_10,
-		4'b01_11 : begin
-			fetchbufD_v <= `INV;
-			fetchbuf <= 1'b0;
+		case ({fetchbufC_v, fetchbufD_v})
+		2'b01: begin
+			fetchbufD_v <= !(queued2|queued1);
+			fetchbuf <= !(queued2|queued1);
 			end
-
-		4'b10_00 : ;
-		4'b10_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b10_10,
-		4'b10_11 : begin
-			fetchbufC_v <= `INV;
-			fetchbuf <= 1'b0;
+		2'b10: begin
+			fetchbufC_v <= !(queued2|queued1);
+			fetchbuf <= !(queued2|queued1);
 			end
-
-		4'b11_00 : ;
-		4'b11_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b11_10 : begin
-			fetchbufC_v <= `INV;
-			end
-
-		4'b11_11 : begin
-			fetchbufC_v <= `INV;
-			fetchbufD_v <= `INV;
-			fetchbuf <= 1'b0;
+		2'b11: begin
+			fetchbufC_v <= !(queued2|queued1);
+			fetchbufD_v <= !queued2;
+			fetchbuf <= !queued2;
 			end
 		endcase
 	if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin
@@ -3045,6 +3889,7 @@ else begin
 		$display("2pc <= %h", pc + fnInsnLength(insn) + fnInsnLength1(insn));
 	end
 end
+`endif
 	if (ihit) begin
 	$display("%h %h hit0=%b hit1=%b#", spc, pc, hit0, hit1);
 	$display("insn=%h", insn);
@@ -3060,479 +3905,10 @@ end
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 	$display("fetchbuf=%d",fetchbuf);
 	end
-`include "Thor_commit_early.v"
-//`include "Thor_enque.v"
-//
-// ENQUEUE
-//
-// place up to three instructions from the fetch buffer into slots in the IQ.
-//   note: they are placed in-order, and they are expected to be executed
-// 0, 1, or 2 of the fetch buffers may have valid data
-// 0, 1, or 2 slots in the instruction queue may be available.
-// if we notice that one of the instructions in the fetch buffer is a backwards branch,
-// predict it taken (set branchback/backpc and delete any instructions after it in fetchbuf)
-//
-
-if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's been a branch miss
-
-	case ({fetchbuf0_v, fetchbuf1_v})// && ((fnNumReadPorts(fetchbuf0_instr) + fnNumReadPorts(fetchbuf1_instr) < 3'd5)||!fetchbuf0_v)})
-
-	2'b00: ; // do nothing
-
-	2'b01:
-			if (iqentry_v[tail0] == `INV) begin
-				iqentry_v    [tail0]    <=   `VAL;
-				iqentry_done [tail0]    <=   `INV;
-				iqentry_cmt	 [tail0]    <=   `INV;
-				iqentry_out  [tail0]    <=   `INV;
-				iqentry_res  [tail0]    <=   `ZERO;
-				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf1_instr);
-				iqentry_op   [tail0]    <=   opcode1;
-				iqentry_fn   [tail0]    <=   opcode1==`MLO ? rfoc1[5:0] : fnFunc(fetchbuf1_instr);
-				iqentry_cond [tail0]    <=   cond1;
-				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
-				iqentry_agen [tail0]    <=   `INV;
-				// If an interrupt is being enqueued and the previous instruction was an immediate prefix, then
-				// inherit the address of the previous instruction, so that the prefix will be executed on return
-				// from interrupt.
-				// If a string operation was in progress then inherit the address of the string operation so that
-				// it can be continued.
-				
-				iqentry_pc   [tail0]    <=	
-					(opcode1==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? 
-						(string_pc != 64'd0 ? string_pc : iqentry_pc[tail0-3'd1]) : fetchbuf1_pc;
-				//iqentry_pc   [tail0]    <=   fetchbuf1_pc;
-				iqentry_mem  [tail0]    <=   fetchbuf1_mem;
-				iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
-				iqentry_fp   [tail0]    <=   fetchbuf1_fp;
-				iqentry_rfw  [tail0]    <=   fetchbuf1_rfw;
-				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf1_instr);
-				iqentry_pred [tail0]    <=   pregs[Pn1];
-				// The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
-				iqentry_p_v  [tail0]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
-				iqentry_p_s  [tail0]    <=   rf_source [{1'b1,2'h0,Pn1}];
-				// Look at the previous queue slot to see if an immediate prefix is enqueued
-				// But don't allow it for a branch
-				iqentry_a0[tail0]   <=  	opcode1==`INT ? fnImm(fetchbuf1_instr) :
-											fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} :
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf1_instr)} :
-											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
-											fnImm(fetchbuf1_instr);
-				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
-												fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
-				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
-				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf1_instr)];
-				iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf1_instr) ? {{DBW-6{1'b0}},fetchbuf1_instr[`INSTRUCTION_RB]} :
-				                            opcode1==`INC ? {{56{fetchbuf1_instr[47]}},fetchbuf1_instr[47:40]} : 
-				                            opcode1==`STI ? fetchbuf1_instr[27:22] :
-				                            Rb1[6] ? fnSpr(Rb1[5:0]) :
-				                            rfob1;
-				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode1, fnFunc(fetchbuf1_instr) ) | rf_v[ Rb1 ];
-				iqentry_a2_s [tail0]    <=   rf_source[Rb1];
-				iqentry_a3   [tail0]    <=   rfoc1;
-				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc1 ];
-				iqentry_a3_s [tail0]    <=   rf_source[Rc1];
-				tail0 <= tail0 + 1;
-				tail1 <= tail1 + 1;
-				if (fetchbuf1_rfw|fetchbuf1_pfw) begin
-					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
-				end
-				rrmapno <= rrmapno + 3'd1;
-			end
-
-	2'b10:
-			if (iqentry_v[tail0] == `INV) begin
-
-				iqentry_v    [tail0]    <=   `VAL;
-				iqentry_done [tail0]    <=   `INV;
-				iqentry_cmt	 [tail0]    <=   `INV;
-				iqentry_out  [tail0]    <=   `INV;
-				iqentry_res  [tail0]    <=   `ZERO;
-				iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
-				iqentry_op   [tail0]    <=   opcode0; 
-				iqentry_fn   [tail0]    <=   opcode0==`MLO ? rfoc0[5:0] : fnFunc(fetchbuf0_instr);
-				iqentry_cond [tail0]    <=   cond0;
-				iqentry_bt   [tail0]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
-				iqentry_agen [tail0]    <=   `INV;
-				iqentry_pc   [tail0]    <=   
-					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
-						iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
-				iqentry_mem  [tail0]    <=   fetchbuf0_mem;
-				iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
-				iqentry_fp   [tail0]    <=   fetchbuf0_fp;
-				iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
-				iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
-				iqentry_pred [tail0]    <=   pregs[Pn0];
-				iqentry_p_v  [tail0]    <=   rf_v [{1'b1,2'h0,Pn0}] || cond0 < 4'h2;
-				iqentry_p_s  [tail0]    <=   rf_source [{1'b1,2'h0,Pn0}];
-				// Look at the previous queue slot to see if an immediate prefix is enqueued
-				iqentry_a0[tail0]   <=  	opcode0==`INT ? fnImm(fetchbuf0_instr) :
-											fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
-											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
-											fnImm(fetchbuf0_instr);
-				iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
-												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
-				iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
-				iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-				iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
-				                             opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
-				                             opcode0==`STI ? fetchbuf0_instr[27:22] :
-				                             Rb0[6] ? fnSpr(Rb0[5:0]) :
-				                             rfob0;
-				iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[Rb0];
-				iqentry_a2_s [tail0]    <=   rf_source [Rb0];
-				iqentry_a3   [tail0]    <=   rfoc0;
-				iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc0 ];
-				iqentry_a3_s [tail0]    <=   rf_source[Rc0];
-				tail0 <= tail0 + 1;
-				tail1 <= tail1 + 1;
-				if (fetchbuf0_rfw|fetchbuf0_pfw) begin
-					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };	// top bit indicates ALU/MEM bus
-				end
-				rrmapno <= rrmapno + 3'd1;
-			end
-	
-		2'b11: if (iqentry_v[tail0] == `INV) begin
-					rrmapno <= rrmapno + 3'd1;
-
-		//
-		// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
-		//
-		if ({fnIsBranch(opcode0), predict_taken0} == {`TRUE, `TRUE}) begin
-			iqentry_v    [tail0]    <=	`VAL;
-			iqentry_done [tail0]    <=	`INV;
-			iqentry_cmt	 [tail0]    <=  `INV;
-			iqentry_out  [tail0]    <=	`INV;
-			iqentry_res  [tail0]    <=	`ZERO;
-			iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
-			iqentry_op   [tail0]    <=	opcode0; 			// BEQ
-			iqentry_fn   [tail0]    <=   opcode0==`MLO ? rfoc0 : fnFunc(fetchbuf0_instr);
-			iqentry_cond [tail0]    <=   cond0;
-			iqentry_bt   [tail0]    <=	`VAL;
-			iqentry_agen [tail0]    <=	`INV;
-			iqentry_pc   [tail0]    <=	
-					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
-						iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
-			iqentry_mem  [tail0]    <=	fetchbuf0_mem;
-			iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
-			iqentry_fp   [tail0]    <=  fetchbuf0_fp;
-			iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
-			iqentry_tgt  [tail0]    <=	fnTargetReg(fetchbuf0_instr);
-			iqentry_pred [tail0]    <=   pregs[Pn0];
-			iqentry_p_v  [tail0]    <=   rf_v [{1'b1,2'h0,Pn0}] || cond0 < 4'h2;
-			iqentry_p_s  [tail0]    <=   rf_source [{1'b1,2'h0,Pn0}];
-			// Look at the previous queue slot to see if an immediate prefix is enqueued
-			iqentry_a0[tail0]   	<=  opcode0==`INT ? fnImm(fetchbuf0_instr) :
-										fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
-											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
-										fnImm(fetchbuf0_instr);
-			iqentry_a1   [tail0]    <=	//fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
-												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
-			iqentry_a1_v [tail0]    <=	fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
-			iqentry_a1_s [tail0]    <=	rf_source [fnRa(fetchbuf0_instr)];
-			iqentry_a2   [tail0]    <=	fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
- 			                            opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
-	                                    opcode0==`STI ? fetchbuf0_instr[27:22] :
-	                                    Rb0[6] ? fnSpr(Rb0[5:0]) :
-	                                    rfob0;
-			iqentry_a2_v [tail0]    <=	fnSource2_v( opcode0,fnFunc(fetchbuf0_instr) ) | rf_v[ Rb0 ];
-			iqentry_a2_s [tail0]    <=	rf_source[ Rb0 ];
-			iqentry_a3   [tail0]    <=   rfoc0;
-			iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc0 ];
-			iqentry_a3_s [tail0]    <=   rf_source[Rc0];
-			tail0 <= tail0 + 1;
-			tail1 <= tail1 + 1;
-
-		end
-
-		else begin	// fetchbuf0 doesn't contain a backwards branch
-			//
-			// so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
-			// update tail0/tail1 separately (at top)
-			// update the rf_v and rf_source bits separately (at end)
-			//   the problem is that if we do have two instructions, 
-			//   they may interact with each other, so we have to be
-			//   careful about where things point.
-			//
-
-			if (iqentry_v[tail1] == `INV) begin
-				tail0 <= tail0 + 2;
-				tail1 <= tail1 + 2;
-			end
-			else begin
-				tail0 <= tail0 + 1;
-				tail1 <= tail1 + 1;
-			end
-			//
-			// enqueue the first instruction ...
-			//
-			iqentry_v    [tail0]    <=   `VAL;
-			iqentry_done [tail0]    <=   `INV;
-			iqentry_cmt  [tail0]    <=   `INV;
-			iqentry_out  [tail0]    <=   `INV;
-			iqentry_res  [tail0]    <=   `ZERO;
-			iqentry_insnsz[tail0]   <=  fnInsnLength(fetchbuf0_instr);
-			iqentry_op   [tail0]    <=  opcode0;
-			iqentry_fn   [tail0]    <=   opcode0==`MLO ? rfoc0[5:0] : fnFunc(fetchbuf0_instr);
-			iqentry_cond [tail0]    <=   cond0;
-			iqentry_bt   [tail0]    <=   `INV;
-			iqentry_agen [tail0]    <=   `INV;
-			iqentry_pc   [tail0]    <=
-					(opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
-						iqentry_pc[tail0-3'd1]) : fetchbuf0_pc;
-			iqentry_mem  [tail0]    <=   fetchbuf0_mem;
-			iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
-			iqentry_fp   [tail0]    <=   fetchbuf0_fp;
-			iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
-			iqentry_tgt  [tail0]    <=   fnTargetReg(fetchbuf0_instr);
-			iqentry_pred [tail0]    <=   pregs[Pn0];
-			iqentry_p_v  [tail0]    <=   rf_v [{1'b1,2'h0,Pn0}] || cond0 < 4'h2;
-			iqentry_p_s  [tail0]    <=   rf_source [{1'b1,2'h0,Pn0}];
-			// Look at the previous queue slot to see if an immediate prefix is enqueued
-			iqentry_a0[tail0]   	<=  opcode0==`INT ? fnImm(fetchbuf0_instr) :
-										fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
-											iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail0-3'd1] ? {iqentry_a0[tail0-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
-											opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
-										fnImm(fetchbuf0_instr);
-			iqentry_a1   [tail0]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
-												fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
-										$display("writing %h",fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc));
-			iqentry_a1_v [tail0]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
-							
-			iqentry_a1_s [tail0]    <=   rf_source [fnRa(fetchbuf0_instr)];
-			iqentry_a2   [tail0]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
-			                             opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
-			                             opcode0==`STI ? fetchbuf0_instr[27:22] :
-			                             Rb0[6] ? fnSpr(Rb0[5:0]) :
-			                             rfob0;
-			iqentry_a2_v [tail0]    <=   fnSource2_v( opcode0,fnFunc(fetchbuf0_instr) ) | rf_v[ Rb0 ];
-			iqentry_a2_s [tail0]    <=   rf_source[Rb0];
-			iqentry_a3   [tail0]    <=   rfoc0;
-			iqentry_a3_v [tail0]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc0 ];
-			iqentry_a3_s [tail0]    <=   rf_source[Rc0];
-			//
-			// if there is room for a second instruction, enqueue it
-			//
-			if (iqentry_v[tail1] == `INV) begin
-			iqentry_v    [tail1]    <=   `VAL;
-			iqentry_done [tail1]    <=   `INV;
-			iqentry_cmt  [tail1]    <=   `INV;
-			iqentry_out  [tail1]    <=   `INV;
-			iqentry_res  [tail1]    <=   `ZERO;
-			iqentry_insnsz[tail1]   <=  fnInsnLength(fetchbuf1_instr);
-			iqentry_op   [tail1]    <=   opcode1; 
-			iqentry_fn   [tail1]    <=   opcode1==`MLO ? rfoc1[5:0] :  fnFunc(fetchbuf1_instr);
-			iqentry_cond [tail1]    <=   cond1;
-			iqentry_bt   [tail1]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
-			iqentry_agen [tail1]    <=   `INV;
-			iqentry_pc   [tail1]    <=   (opcode1==`INT && opcode0==`IMM) ? (string_pc != 0 ? string_pc : fetchbuf0_pc) : fetchbuf1_pc;
-			iqentry_mem  [tail1]    <=   fetchbuf1_mem;
-			iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
-			iqentry_fp   [tail1]    <=   fetchbuf1_fp;
-			iqentry_rfw  [tail1]    <=   fetchbuf1_rfw;
-			iqentry_tgt  [tail1]    <=   fnTargetReg(fetchbuf1_instr);
-			iqentry_pred [tail1]    <=   pregs[Pn1];
-			// Look at the previous queue slot to see if an immediate prefix is enqueued
-			iqentry_a0[tail1]   <=  	opcode1==`INT ? fnImm(fetchbuf1_instr) :
-										fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} : 
-											opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
-											opcode0==`IMM ? fnImmImm(fetchbuf0_instr)|fnImm8(fetchbuf1_instr) :
-										fnImm(fetchbuf1_instr);
-			iqentry_a1   [tail1]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
-												fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
-												$display("this1 %h", fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc) );
-			iqentry_a2   [tail1]    <=   fnIsShiftiop(fetchbuf1_instr) ? {58'b0,fetchbuf1_instr[`INSTRUCTION_RB]} :
-  			                             opcode1==`INC ? {{56{fetchbuf1_instr[47]}},fetchbuf1_instr[47:40]} : 
-			                             opcode1==`STI ? fetchbuf1_instr[27:22] :
-			                             Rb1[6] ? fnSpr(Rb1[5:0]) :
-			                             rfob1;
-			iqentry_a3   [tail1]    <=   rfoc1;
-			// a1/a2_v and a1/a2_s values require a bit of thinking ...
-
-			//
-			// SOURCE 1 ... this is relatively straightforward, because all instructions
-			// that have a source (i.e. every instruction but LUI) read from RB
-			//
-			// if the argument is an immediate or not needed, we're done
-			if (fnSource1_v( opcode1 ) == `VAL) begin
-				iqentry_a1_v [tail1] <= `VAL;
-//					iqentry_a1_s [tail1] <= 4'd0;
-			end
-			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-			else if (~fetchbuf0_rfw) begin
-				begin
-					iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
-					iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
-				end
-			end
-			// otherwise, previous instruction does write to RF ... see if overlap
-			else if (fnTargetReg(fetchbuf0_instr) != 9'd0
-				&& fnRa(fetchbuf1_instr) == fnTargetReg(fetchbuf0_instr)) begin
-				// if the previous instruction is a LW, then grab result from memq, not the iq
-				iqentry_a1_v [tail1]    <=   `INV;
-				iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
-			end
-			// if no overlap, get info from rf_v and rf_source
-			else begin
-				begin
-					iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
-					iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
-				end
-			end
-
-			if (~fetchbuf0_pfw) begin
-				iqentry_p_v  [tail1]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
-				iqentry_p_s  [tail1]    <=   rf_source [{1'b1,2'h0,Pn1}];
-			end
-			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 && fetchbuf1_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF
-			    && (fnTargetReg(fetchbuf0_instr) & 7'h70)==7'h40) begin
-				iqentry_p_v [tail1] <= cond1 < 4'h2;
-				iqentry_p_s [tail1] <= { fetchbuf0_mem, tail0 };
-			end
-			else begin
-				iqentry_p_v [tail1] <= rf_v[{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
-				iqentry_p_s [tail1] <= rf_source[{1'b1,2'h0,Pn1}];
-			end
-
-			//
-			// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
-			// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
-			//
-			// if the argument is an immediate or not needed, we're done
-			if (fnSource2_v( opcode1,fnFunc(fetchbuf1_instr) ) == `VAL) begin
-				iqentry_a2_v [tail1] <= `VAL;
-//					iqentry_a2_s [tail1] <= 4'd0;
-			end
-			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-			else if (~fetchbuf0_rfw) begin
-				iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
-				iqentry_a2_s [tail1] <= rf_source[Rb1];
-			end
-			// otherwise, previous instruction does write to RF ... see if overlap
-			else if (fnTargetReg(fetchbuf0_instr) != 9'd0 &&
-				Rb1 == fnTargetReg(fetchbuf0_instr)) begin
-				// if the previous instruction is a LW, then grab result from memq, not the iq
-				iqentry_a2_v [tail1]    <=   `INV;
-				iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
-			end
-			// if no overlap, get info from rf_v and rf_source
-			else begin
-				iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
-				iqentry_a2_s [tail1] <= rf_source[Rb1];
-			end
-
-			//
-			// SOURCE 3 ... this is relatively straightforward, because all instructions
-			// that have a source (i.e. every instruction but LUI) read from RC
-			//
-			// if the argument is an immediate or not needed, we're done
-			if (fnSource3_v( opcode1 ) == `VAL) begin
-				iqentry_a3_v [tail1] <= `VAL;
-//					iqentry_a1_s [tail1] <= 4'd0;
-			end
-			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-			else if (~fetchbuf0_rfw) begin
-				begin
-					iqentry_a3_v [tail1]    <=   rf_v [Rc1];
-					iqentry_a3_s [tail1]    <=   rf_source [Rc1];
-				end
-			end
-			// otherwise, previous instruction does write to RF ... see if overlap
-			else if (fnTargetReg(fetchbuf0_instr) != 9'd0
-				&& Rc1 == fnTargetReg(fetchbuf0_instr)) begin
-				// if the previous instruction is a LW, then grab result from memq, not the iq
-				iqentry_a3_v [tail1]    <=   `INV;
-				iqentry_a3_s [tail1]    <=   { fetchbuf0_mem, tail0 };
-			end
-			// if no overlap, get info from rf_v and rf_source
-			else begin
-				begin
-					iqentry_a3_v [tail1]    <=   rf_v [Rc1];
-					iqentry_a3_s [tail1]    <=   rf_source [Rc1];
-				end
-			end
-			//
-			// if the two instructions enqueued target the same register, 
-			// make sure only the second writes to rf_v and rf_source.
-			// first is allowed to update rf_v and rf_source only if the
-			// second has no target (BEQ or SW)
-			//
-			if (fnTargetReg(fetchbuf0_instr) == fnTargetReg(fetchbuf1_instr)) begin
-				if (fetchbuf1_rfw) begin
-					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail1 };
-				end
-				else if (fetchbuf0_rfw) begin
-					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };
-				end
-			end
-			else begin
-				if (fetchbuf0_rfw) begin
-					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { fetchbuf0_mem, tail0 };
-				end
-				if (fetchbuf1_rfw) begin
-					rf_v[ fnTargetReg(fetchbuf1_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { fetchbuf1_mem, tail1 };
-				end
-			end
-
-			end	// ends the "if IQ[tail1] is available" clause
-			else begin	// only first instruction was enqueued
-				if (fetchbuf0_rfw) begin
-					rf_v[ fnTargetReg(fetchbuf0_instr) ] = `INV;
-					rf_source[ fnTargetReg(fetchbuf0_instr) ] <= {fetchbuf0_mem, tail0};
-				end
-			end
-
-		end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
-		end
-	endcase
-	end
-	else begin	// if branchmiss
-		if ((iqentry_stomp[0] & ~iqentry_stomp[7]) || stomp_all) begin
-			tail0 <= 0;
-			tail1 <= 1;
-		end
-		else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
-			tail0 <= 1;
-			tail1 <= 2;
-		end
-		else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
-			tail0 <= 2;
-			tail1 <= 3;
-		end
-		else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
-			tail0 <= 3;
-			tail1 <= 4;
-		end
-		else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
-			tail0 <= 4;
-			tail1 <= 5;
-		end
-		else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
-			tail0 <= 5;
-			tail1 <= 6;
-		end
-		else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
-			tail0 <= 6;
-			tail1 <= 7;
-		end
-		else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
-			tail0 <= 7;
-			tail1 <= 0;
-		end
-		// otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
-	end
 
 	if (ihit) begin
 	for (i=0; i<8; i=i+1) 
-	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h #",
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %d %c%h %d%s %h %h %h %d %o %h %d %o %h %d %o %h #",
 		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
 		iqentry_v[i], iqentry_done[i], iqentry_cmt[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
 		iqentry_islot[i],
@@ -3543,7 +3919,9 @@ if (!branchmiss && !stomp_all)  begin	// don't bother doing anything if there's 
 		iqentry_op[i],
 		fnRegstr(iqentry_tgt[i]),fnRegstrGrp(iqentry_tgt[i]),
 		iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
-		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
+		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i],
+		iqentry_a3[i], iqentry_a3_v[i], iqentry_a3_s[i],
+		iqentry_pc[i]);
 	end
 //`include "Thor_dataincoming.v"
 // DATAINCOMING
@@ -3587,7 +3965,8 @@ if (alu0_v) begin
 				iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 			end
 		end
-		else begin
+		else
+		if (!iqentry_done[alu0_id[2:0]]) begin    // <- this is a bit of a hack
 			iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
 			iqentry_done[ alu0_id[2:0] ] <= (!fnIsMem(iqentry_op[ alu0_id[2:0] ]) || !alu0_cmt) &&
 			 iqentry_op[alu0_id[2:0]]!=`IMM;
@@ -3616,21 +3995,22 @@ if (alu1_v) begin
 		iqentry_tgt[alu1_id[2:0]] <= {1'b1,2'h1,4'hE};	// Target IPC
 	end
 	else begin
-		if ((alu1_op==`RR && (alu1_fn==`MUL || alu1_fn==`MULU)) || alu1_op==`MULI || alu1_op==`MULUI) begin
+		if (((alu1_op==`RR && (alu1_fn==`MUL || alu1_fn==`MULU)) || alu1_op==`MULI || alu1_op==`MULUI) && ALU1BIG) begin
 			if (alu1_mult_done) begin
 				iqentry_res	[ alu1_id[2:0] ] <= alu1_prod[63:0];
 				iqentry_done[alu1_id[2:0]] <= `TRUE;
 				iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 			end
 		end
-		else if ((alu1_op==`RR && (alu1_fn==`DIV || alu1_fn==`DIVU)) || alu1_op==`DIVI || alu1_op==`DIVUI) begin
+		else if (((alu1_op==`RR && (alu1_fn==`DIV || alu1_fn==`DIVU)) || alu1_op==`DIVI || alu1_op==`DIVUI) && ALU1BIG) begin
 			if (alu1_div_done) begin
 				iqentry_res	[ alu1_id[2:0] ] <= alu1_divq;
 				iqentry_done[alu1_id[2:0]] <= `TRUE;
 				iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 			end
 		end
-		else begin
+		else
+		if (!iqentry_done[alu1_id[2:0]]) begin
 			iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
 			iqentry_done[ alu1_id[2:0] ] <= (!fnIsMem(iqentry_op[ alu1_id[2:0] ]) || !alu1_cmt) &&
 			  iqentry_op[alu1_id[2:0]]!=`IMM;
@@ -3655,7 +4035,7 @@ if (fp0_v) begin
 		iqentry_mem[alu0_id[2:0]] <= `FALSE;
 		iqentry_rfw[alu0_id[2:0]] <= `TRUE;			// writes to IPC
 		iqentry_a0 [alu0_id[2:0]] <= fp0_exc;
-		iqentry_a1 [alu0_id[2:0]] <= bregs[4'hC];	// *** assumes BR12 is static
+		iqentry_a1 [alu0_id[2:0]] <= cregs[4'hC];	// *** assumes BR12 is static
 		iqentry_p_v  [alu0_id[2:0]] <= `TRUE;
 		iqentry_a1_v [alu0_id[2:0]] <= `TRUE;		// Flag arguments as valid
 		iqentry_a2_v [alu0_id[2:0]] <= `TRUE;
@@ -3705,19 +4085,19 @@ end
 // What if there's a databus error during the store ?
 // set the IQ entry == DONE as soon as the SW is let loose to the memory system
 //
-if (dram0 == 2'd1 && fnIsStore(dram0_op) && dram0_op != `STS) begin
+if (dram0 == 2'd2 && fnIsStore(dram0_op) && dram0_op != `STS) begin
 	if ((alu0_v && dram0_id[2:0] == alu0_id[2:0]) || (alu1_v && dram0_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram0_id[2:0] ] <= `TRUE;
 	iqentry_cmt [ dram0_id[2:0]] <= `TRUE;
 	iqentry_out[ dram0_id[2:0] ] <= `FALSE;
 end
-if (dram1 == 2'd1 && fnIsStore(dram1_op) && dram1_op != `STS) begin
+if (dram1 == 2'd2 && fnIsStore(dram1_op) && dram1_op != `STS) begin
 	if ((alu0_v && dram1_id[2:0] == alu0_id[2:0]) || (alu1_v && dram1_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram1_id[2:0] ] <= `TRUE;
 	iqentry_cmt [ dram1_id[2:0]] <= `TRUE;
 	iqentry_out[ dram1_id[2:0] ] <= `FALSE;
 end
-if (dram2 == 2'd1 && fnIsStore(dram2_op) && dram2_op != `STS) begin
+if (dram2 == 2'd2 && fnIsStore(dram2_op) && dram2_op != `STS) begin
 	if ((alu0_v && dram2_id[2:0] == alu0_id[2:0]) || (alu1_v && dram2_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram2_id[2:0] ] <= `TRUE;
 	iqentry_cmt [ dram2_id[2:0]] <= `TRUE;
@@ -3789,19 +4169,19 @@ begin
 	end
 `endif
     // For SWCR
-	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+	if (iqentry_p_v[n] == `INV && iqentry_p_s[n][2:0]==dram_id[2:0] && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_pred[n] <= dram_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
 	end
-	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+	if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n][2:0] == dram_id[2:0] && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_a1[n] <= dram_bus;
 		iqentry_a1_v[n] <= `VAL;
 	end
-	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+	if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n][2:0] == dram_id[2:0] && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_a2[n] <= dram_bus;
 		iqentry_a2_v[n] <= `VAL;
 	end
-	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+	if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n][2:0] == dram_id[2:0] && iqentry_v[n] == `VAL && dram_v == `VAL) begin
 		iqentry_a3[n] <= dram_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
@@ -4028,7 +4408,7 @@ case(dram0)
 3'd1:
 	begin
 		$display("0MEM %c:%h %h cycle started",fnIsLoad(dram0_op)?"L" : "S", dram0_addr, dram0_data);
-        dram0 <= dram0 + 3'd1;
+        if (!cyc_o) dram0 <= dram0 + 3'd1;
 	end
 
 // State 2:
@@ -4052,7 +4432,14 @@ case(dram0)
         dram0 <= 3'd0;
 	end
 	else begin
-		if (uncached || fnIsStore(dram0_op) || fnIsLoadV(dram0_op) || dram0_op==`CAS ||
+	    if (dram0_op==`LCL) begin
+	       if (dram0_tgt==7'd0) begin
+	           ic_invalidate_line <= `TRUE;
+	           ic_lineno <= dram0_addr;
+	       end
+           dram0 <= 3'd6;
+	    end
+		else if (uncached || fnIsStore(dram0_op) || fnIsLoadV(dram0_op) || dram0_op==`CAS ||
 		  ((dram0_op==`STMV || dram0_op==`INC) && stmv_flag)) begin
     		if (cstate==IDLE) begin // make sure an instruction load isn't taking place
                 dram0_owns_bus <= `TRUE;
@@ -4063,6 +4450,7 @@ case(dram0)
                 stb_o <= 1'b1;
                 we_o <= fnIsStore(dram0_op) || ((dram0_op==`STMV || dram0_op==`INC) && stmv_flag);
                 sel_o <= fnSelect(dram0_op,dram0_fn,pea);
+                rsel <= fnSelect(dram0_op,dram0_fn,pea);
                 adr_o <= pea;
                 if (dram0_op==`INC)
                     dat_o <= fnDatao(dram0_op,dram0_fn,dram0_data) + index;
@@ -4071,8 +4459,10 @@ case(dram0)
                 dram0 <= dram0 + 3'd1;
 			end
 		end
-		else	// cached read
+		else begin	// cached read
 			dram0 <= 3'd6;
+            rsel <= fnSelect(dram0_op,dram0_fn,pea);
+	   end
 	end
 
 // State 3:
@@ -4087,7 +4477,7 @@ case(dram0)
 		if (dram0_op==`SWCR)
 		     dram_bus <= {63'd0,resv_i};
 		else
-		     dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
+		     dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i,rsel);
 		dram0_owns_bus <= `FALSE;
 		wb_nack();
 		dram0 <= 3'd7;
@@ -4101,7 +4491,7 @@ case(dram0)
 				    dram0_fn[2:0]==3'd2 ? 64'd4 :
 				    64'd8); 
 				lc <= lc - 64'd1;
-				dram0 <= 3'd2;
+				dram0 <= 3'd1;
 				dram_bus <= dram0_addr +
                     (dram0_fn[2:0]==3'd0 ? 64'd1 :
                     dram0_fn[2:0]==3'd1 ? 64'd2 :
@@ -4114,11 +4504,12 @@ case(dram0)
             end
         `STMV,`STCMP:
             if (lc != 0 && !(int_pending && stmv_flag)) begin 
+                dram0 <= 3'd1;
 			    dram0_owns_bus <= `TRUE;
                 if (stmv_flag) begin
                     dram0_addr <= src_addr + index;
                     if (dram0_op==`STCMP) begin
-                        if (dram0_data != fnDatai(dram0_op,dram0_fn,dat_i,sel_o)) begin
+                        if (dram0_data != fnDatai(dram0_op,dram0_fn,dat_i,rsel)) begin
                             lc <= 64'd0;
                             dram0 <= 3'd7;
                             dram_v <= `VAL;
@@ -4128,12 +4519,11 @@ case(dram0)
                 end               
                 else begin
                     dram0_addr <= dst_addr + index;
-                    dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
+                    dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,rsel);
                 end
                 if (!stmv_flag)
                     inc_index(dram0_fn);
                 stmv_flag <= ~stmv_flag;
-                dram0 <= 3'd2;
             end
             else begin
                 dram_bus <= index;
@@ -4149,6 +4539,8 @@ case(dram0)
                     dram_v <= `VAL;
                     dram_bus <= index;
                 end
+                else
+                    dram0 <= 3'd1;
             end
             else begin
                 dram_bus <= index;
@@ -4169,11 +4561,12 @@ case(dram0)
 		             dram_v <= `VAL;
 		         end
 		         else begin
-		             dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,sel_o);
+		             dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,rsel);
                      stmv_flag <= ~stmv_flag;
                      dram0 <= 3'd2;
 		         end
 		     end
+		default:  ;
 		endcase
 	end
 
@@ -4208,7 +4601,7 @@ case(dram0)
 // State 6:
 // Wait for a data cache read hit
 3'd6:
-	if (rhit) begin
+	if (rhit && dram0_op!=`LCL) begin
 	    case(dram0_op)
 	    // The read portion of the STMV was just done, go back and do
 	    // the write portion.
@@ -4216,7 +4609,7 @@ case(dram0)
            begin
                stmv_flag <= `TRUE;
                dram0_addr <= dst_addr + index;
-               dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+               dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,rsel);
                dram0 <= 3'd2;
            end
         `STCMP:
@@ -4233,7 +4626,7 @@ case(dram0)
             else if (!stmv_flag) begin
                 stmv_flag <= ~stmv_flag;
                 dram0_addr <= dst_addr + index;
-                dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+                dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,rsel);
                 dram0 <= 3'd2;
                 inc_index(dram0_fn);
             end
@@ -4260,7 +4653,7 @@ case(dram0)
             end
 		`INC:
              begin
-                 dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+                 dram0_data <= fnDatai(dram0_op,dram0_fn,cdat,rsel);
                  stmv_flag <= `TRUE;
                  dram0 <= 3'd2;
             end
@@ -4270,7 +4663,7 @@ case(dram0)
             dram_id <= dram0_id;
             dram_tgt <= dram0_tgt;
             dram_exc <= `EXC_NONE;
-            dram_bus <= fnDatai(dram0_op,dram0_fn,cdat,sel_o);
+            dram_bus <= fnDatai(dram0_op,dram0_fn,cdat,rsel);
             dram0 <= 3'd0;
             end
         endcase
@@ -4286,270 +4679,15 @@ endcase
 // Stores can only issue if there is no possibility of a change of program flow.
 // That means no flow control operations or instructions that can cause an
 // exception can be before the store.
-iqentry_memissue[ head0 ] <=	iqentry_memready[ head0 ];		// first in line ... go as soon as ready
-
-iqentry_memissue[ head1 ] <=	~iqentry_stomp[head1] && iqentry_memready[ head1 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head1][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head1]) ? !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) : `TRUE)
-				&& (iqentry_op[head1]!=`CAS)
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB) 
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-				;
-
-iqentry_memissue[ head2 ] <=	~iqentry_stomp[head2] && iqentry_memready[ head2 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				&& ~iqentry_memready[head1] 
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head2][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head2]) ?
-				    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
-				    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) 
-				    : `TRUE)
-				&& (iqentry_op[head2]!=`CAS)
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-				;
-//					(   !fnIsFlowCtrl(iqentry_op[head0])
-//					 && !fnIsFlowCtrl(iqentry_op[head1])));
-
-iqentry_memissue[ head3 ] <=	~iqentry_stomp[head3] && iqentry_memready[ head3 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				&& ~iqentry_memready[head1] 
-				&& ~iqentry_memready[head2] 
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
-				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head3][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head3]) ?
-                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
-                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
-                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) 
-                    : `TRUE)
-				&& (iqentry_op[head3]!=`CAS)
-				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-				;
-/*					(   !fnIsFlowCtrl(iqentry_op[head0])
-					 && !fnIsFlowCtrl(iqentry_op[head1])
-					 && !fnIsFlowCtrl(iqentry_op[head2])));
-*/
-iqentry_memissue[ head4 ] <=	~iqentry_stomp[head4] && iqentry_memready[ head4 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				&& ~iqentry_memready[head1] 
-				&& ~iqentry_memready[head2] 
-				&& ~iqentry_memready[head3] 
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
-				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
-				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head4][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head4]) ?
-                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
-                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
-                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
-                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) 
-                    : `TRUE)
-				&& (iqentry_op[head4]!=`CAS)
-				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-				;
-/* ||
-					(   !fnIsFlowCtrl(iqentry_op[head0])
-					 && !fnIsFlowCtrl(iqentry_op[head1])
-					 && !fnIsFlowCtrl(iqentry_op[head2])
-					 && !fnIsFlowCtrl(iqentry_op[head3])));
-*/
-iqentry_memissue[ head5 ] <=	~iqentry_stomp[head5] && iqentry_memready[ head5 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				&& ~iqentry_memready[head1] 
-				&& ~iqentry_memready[head2] 
-				&& ~iqentry_memready[head3] 
-				&& ~iqentry_memready[head4] 
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
-				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
-				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
-				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-					|| (iqentry_a1_v[head4] && iqentry_a1[head5][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head5]) ?
-                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
-                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
-                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
-                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) && 
-                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4]) 
-                    : `TRUE)
-				&& (iqentry_op[head5]!=`CAS)
-				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
-				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
-				;
-/*||
-					(   !fnIsFlowCtrl(iqentry_op[head0])
-					 && !fnIsFlowCtrl(iqentry_op[head1])
-					 && !fnIsFlowCtrl(iqentry_op[head2])
-					 && !fnIsFlowCtrl(iqentry_op[head3])
-					 && !fnIsFlowCtrl(iqentry_op[head4])));
-*/
-iqentry_memissue[ head6 ] <=	~iqentry_stomp[head6] && iqentry_memready[ head6 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				&& ~iqentry_memready[head1] 
-				&& ~iqentry_memready[head2] 
-				&& ~iqentry_memready[head3] 
-				&& ~iqentry_memready[head4] 
-				&& ~iqentry_memready[head5] 
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
-				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
-				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
-				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-					|| (iqentry_a1_v[head4] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
-				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
-					|| (iqentry_a1_v[head5] && iqentry_a1[head6][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head6]) ?
-                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
-                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
-                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
-                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) && 
-                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4]) && 
-                    !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5]) 
-                    : `TRUE)
-				&& (iqentry_op[head6]!=`CAS)
-				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
-				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_op[head5]==`MEMDB)
-				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
-                && !(iqentry_v[head5] && iqentry_op[head5]==`MEMSB) 
-				;
-				/*||
-					(   !fnIsFlowCtrl(iqentry_op[head0])
-					 && !fnIsFlowCtrl(iqentry_op[head1])
-					 && !fnIsFlowCtrl(iqentry_op[head2])
-					 && !fnIsFlowCtrl(iqentry_op[head3])
-					 && !fnIsFlowCtrl(iqentry_op[head4])
-					 && !fnIsFlowCtrl(iqentry_op[head5])));
-*/
-iqentry_memissue[ head7 ] <=	~iqentry_stomp[head7] && iqentry_memready[ head7 ]		// addr and data are valid
-				// ... and no preceding instruction is ready to go
-				&& ~iqentry_memready[head0]
-				&& ~iqentry_memready[head1] 
-				&& ~iqentry_memready[head2] 
-				&& ~iqentry_memready[head3] 
-				&& ~iqentry_memready[head4] 
-				&& ~iqentry_memready[head5] 
-				&& ~iqentry_memready[head6] 
-				// ... and there is no address-overlap with any preceding instruction
-				&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-					|| (iqentry_a1_v[head0] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head0][DBW-1:3]))
-				&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-					|| (iqentry_a1_v[head1] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head1][DBW-1:3]))
-				&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-					|| (iqentry_a1_v[head2] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head2][DBW-1:3]))
-				&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-					|| (iqentry_a1_v[head3] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head3][DBW-1:3]))
-				&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-					|| (iqentry_a1_v[head4] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head4][DBW-1:3]))
-				&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
-					|| (iqentry_a1_v[head5] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head5][DBW-1:3]))
-				&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) 
-					|| (iqentry_a1_v[head6] && iqentry_a1[head7][DBW-1:3] != iqentry_a1[head6][DBW-1:3]))
-				// ... and, if it is a SW, there is no chance of it being undone
-				&& (fnIsStore(iqentry_op[head7]) ?
-                    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0]) && 
-                    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1]) &&
-                    !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2]) && 
-                    !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3]) && 
-                    !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4]) && 
-                    !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5]) && 
-                    !fnIsFlowCtrl(iqentry_op[head6]) && !fnCanException(iqentry_op[head6]) 
-                    : `TRUE)
-				&& (iqentry_op[head7]!=`CAS)
-				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
-				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_op[head5]==`MEMDB)
-				&& !(iqentry_v[head6] && fnIsMem(iqentry_op[head6]) && iqentry_op[head6]==`MEMDB)
-				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
-                && !(iqentry_v[head5] && iqentry_op[head5]==`MEMSB) 
-                && !(iqentry_v[head6] && iqentry_op[head6]==`MEMSB) 
-				;
+iqentry_memissue[ head0 ] <= iqentry_memissue_head0;
+iqentry_memissue[ head1 ] <= iqentry_memissue_head1;
+iqentry_memissue[ head2 ] <= iqentry_memissue_head2;
+iqentry_memissue[ head3 ] <= iqentry_memissue_head3;
+iqentry_memissue[ head4 ] <= iqentry_memissue_head4;
+iqentry_memissue[ head5 ] <= iqentry_memissue_head5;
+iqentry_memissue[ head6 ] <= iqentry_memissue_head6;
+iqentry_memissue[ head7 ] <= iqentry_memissue_head7;
+	
 				/* ||
 					(   !fnIsFlowCtrl(iqentry_op[head0])
 					 && !fnIsFlowCtrl(iqentry_op[head1])
@@ -4582,7 +4720,7 @@ for (n = 0; n < 8; n = n + 1)
 			iqentry_out[n] <= `TRUE;
 		end
 	end
-	else if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && iqentry_cmt[n] && ihit) begin
+	else if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && iqentry_cmt[n]) begin
 		if (fnIsStoreString(iqentry_op[n]))
 			string_pc <= iqentry_pc[n];
 		$display("issued memory cycle");
@@ -4592,13 +4730,11 @@ for (n = 0; n < 8; n = n + 1)
 			dram0_op 	<= iqentry_op[n];
 			dram0_fn    <= iqentry_fn[n];
 			dram0_tgt 	<= iqentry_tgt[n];
-			dram0_data	<= (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
+			dram0_data	<= (iqentry_op[n]==`PEA) ? iqentry_a2[n] + iqentry_a0[n]
+			: (fnIsIndexed(iqentry_op[n]) || iqentry_op[n]==`CAS) ? iqentry_a3[n] : iqentry_a2[n];
 			dram0_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
-            if (iqentry_op[n]==`PUSH)
-			     dram0_addr	<= iqentry_a1[n] + {sregs[3'd6],12'h000};
-			else
-			     dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
+	        dram0_addr	<= iqentry_a1[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
 //			if (iqentry_a1[n] > sregs_lmt[iqentry_fn[n]])
 //			    dram0_exc <= `EXC_SEGLMT;
             src_addr <= iqentry_a1[n] + {sregs[iqentry_fn[n][5:3]],12'h000};
@@ -4647,43 +4783,14 @@ begin
 		StatusEXL <= StatusEXL + 8'd1;
 end
 
-if (commit0_v) begin
-	case(iqentry_op[head0])
-	`CLI:	im <= 1'b0;
-	`SEI:	im <= 1'b1;
-	// When the RTI instruction commits clear the hardware interrupt status to enable interrupts.
-	`RTI:	begin
-			StatusHWI <= `FALSE;
-			im <= imb;
-			end
-	`RTE:	begin
-				if (StatusEXL!=8'h00)
-					StatusEXL <= StatusEXL - 8'd1;
-			end
-	default:	;
-	endcase
-end
-
-if (commit1_v) begin
-	case(iqentry_op[head1])
-	`CLI:	im <= 1'b0;
-	`SEI:	im <= 1'b1;
-	`RTI:	begin
-			StatusHWI <= `FALSE;
-			im <= imb;
-			end
-	`RTE:	begin
-				if (StatusEXL!=8'h00)
-					StatusEXL <= StatusEXL - 8'd1;
-			end
-	default:	;
-	endcase
-end
+oddball_commit(commit0_v,head0);
+oddball_commit(commit1_v,head1);
 
 //
 // COMMIT PHASE (dequeue only ... not register-file update)
 //
-// If the third instruction is invalidated then it is allowed to commit too.
+// If the third instruction is invalidated or if it doesn't update the register
+// file then it is allowed to commit too.
 // The head pointer might advance by three.
 //
 if (~|panic)
@@ -4731,20 +4838,8 @@ casex ({ iqentry_v[head0],
 		end
 
 	// retire 2 (wait for regfile for head2)
-	6'b0x_0x_1x:
-//		if (head0 != tail0 && head1 != tail0 && iqentry_rfw[head2]==`FALSE) begin
-//			head0 <= head0 + 3;
-//			head1 <= head1 + 3;
-//			head2 <= head2 + 3;
-//			head3 <= head3 + 3;
-//			head4 <= head4 + 3;
-//			head5 <= head5 + 3;
-//			head6 <= head6 + 3;
-//			head7 <= head7 + 3;
-//			I <= I + 3;
-//		end
-//		else
-		if (head0 != tail0 && head1 != tail0) begin
+	6'b0x_0x_10:
+		begin
 			head0 <= head0 + 2;
 			head1 <= head1 + 2;
 			head2 <= head2 + 2;
@@ -4755,62 +4850,104 @@ casex ({ iqentry_v[head0],
 			head7 <= head7 + 2;
 			I <= I + 2;
 		end
-		else if (head0 != tail0) begin
-			head0 <= head0 + 1;
-			head1 <= head1 + 1;
-			head2 <= head2 + 1;
-			head3 <= head3 + 1;
-			head4 <= head4 + 1;
-			head5 <= head5 + 1;
-			head6 <= head6 + 1;
-			head7 <= head7 + 1;
-			I <= I + 1;
+
+	// retire 2 or 3 (wait for regfile for head2)
+	6'b0x_0x_11:
+	   begin
+	        if (iqentry_tgt[head2]==7'd0) begin
+	            iqentry_v[head2] <= `INV;
+                head0 <= head0 + 3;
+                head1 <= head1 + 3;
+                head2 <= head2 + 3;
+                head3 <= head3 + 3;
+                head4 <= head4 + 3;
+                head5 <= head5 + 3;
+                head6 <= head6 + 3;
+                head7 <= head7 + 3;
+                I <= I + 3;
+	        end
+	        else begin
+                head0 <= head0 + 2;
+                head1 <= head1 + 2;
+                head2 <= head2 + 2;
+                head3 <= head3 + 2;
+                head4 <= head4 + 2;
+                head5 <= head5 + 2;
+                head6 <= head6 + 2;
+                head7 <= head7 + 2;
+                I <= I + 2;
+			end
 		end
 
 	// retire 3
 	6'b0x_11_0x:
-		if (head0 != tail0 && head1 != tail0 && head2 != tail0) begin
-			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
-			headinc = 3;//iqentry_op[head1]==`IMM ? 1 : 3;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+		if (head1 != tail0 && head2 != tail0) begin
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
 		end
-		else if (head0 != tail0) begin
-			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
-			headinc = 2;//iqentry_op[head1]==`IMM ? 1 : 2;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+		else begin
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
 		end
 
 	// retire 2	(wait on head2 or wait on register file for head2)
-	6'b0x_11_1x:
-		if (head0 != tail0) begin
-			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
-			headinc = 2;//iqentry_op[head1]==`IMM ? 1 : 2;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+	6'b0x_11_10:
+		begin
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
 		end
+	6'b0x_11_11:
+        begin
+            if (iqentry_tgt[head2]==7'd0) begin
+                iqentry_v[head1] <= `INV;
+                iqentry_v[head2] <= `INV;
+                head0 <= head0 + 3;
+                head1 <= head1 + 3;
+                head2 <= head2 + 3;
+                head3 <= head3 + 3;
+                head4 <= head4 + 3;
+                head5 <= head5 + 3;
+                head6 <= head6 + 3;
+                head7 <= head7 + 3;
+                I <= I + 3;
+            end
+            else begin
+                iqentry_v[head1] <= `INV;
+                head0 <= head0 + 2;
+                head1 <= head1 + 2;
+                head2 <= head2 + 2;
+                head3 <= head3 + 2;
+                head4 <= head4 + 2;
+                head5 <= head5 + 2;
+                head6 <= head6 + 2;
+                head7 <= head7 + 2;
+                I <= I + 2;
+            end
+        end
 
 	// 4'b00_00	- neither valid; skip both
 	// 4'b00_01	- neither valid; skip both
@@ -4836,48 +4973,18 @@ casex ({ iqentry_v[head0],
 	// retire 3
 	6'b11_0x_0x:
 		if (head1 != tail0 && head2 != tail0) begin
-			iqentry_v[head0] <= `INV;//iqentry_op[head0]==`IMM;
-			headinc = 3;//iqentry_op[head0]==`IMM ? 0 : 3;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
 		end
 		else if (head1 != tail0) begin
-			iqentry_v[head0] <= `INV;//iqentry_op[head0]==`IMM;
-			headinc = 2;//iqentry_op[head0]==`IMM ? 0 : 2;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
-		end
-		else begin
-			iqentry_v[head0] <= `INV;//iqentry_op[head0]==`IMM;
-			headinc = 1;//iqentry_op[head0]==`IMM ? 0 : 1;
-			head0 <= head0 + 1;
-			head1 <= head1 + 1;
-			head2 <= head2 + 1;
-			head3 <= head3 + 1;
-			head4 <= head4 + 1;
-			head5 <= head5 + 1;
-			head6 <= head6 + 1;
-			head7 <= head7 + 1;
-			I <= I + 1;
-		end
-
-	// retire 2 (wait for regfile for head2)
-	6'b11_0x_1x:
-		if (head1 != tail0) begin
 			iqentry_v[head0] <= `INV;
 			head0 <= head0 + 2;
 			head1 <= head1 + 2;
@@ -4902,6 +5009,49 @@ casex ({ iqentry_v[head0],
 			I <= I + 1;
 		end
 
+	// retire 2 (wait for regfile for head2)
+	6'b11_0x_10:
+		begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+
+	// retire 2 or 3 (wait for regfile for head2)
+	6'b11_0x_11:
+	    if (iqentry_tgt[head2]==7'd0) begin
+			iqentry_v[head0] <= `INV;
+			iqentry_v[head2] <= `INV;
+            head0 <= head0 + 3;
+            head1 <= head1 + 3;
+            head2 <= head2 + 3;
+            head3 <= head3 + 3;
+            head4 <= head4 + 3;
+            head5 <= head5 + 3;
+            head6 <= head6 + 3;
+            head7 <= head7 + 3;
+            I <= I + 3;
+	    end
+	    else begin
+			iqentry_v[head0] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
+		end
+
 	//
 	// retire 1 (stuck on head1)
 	6'b00_10_xx,
@@ -4909,65 +5059,89 @@ casex ({ iqentry_v[head0],
 	6'b11_10_xx:
 		if (iqentry_v[head0] || head0 != tail0) begin
     	    iqentry_v[head0] <= `INV;
-		    headinc = 1;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+			head0 <= head0 + 1;
+			head1 <= head1 + 1;
+			head2 <= head2 + 1;
+			head3 <= head3 + 1;
+			head4 <= head4 + 1;
+			head5 <= head5 + 1;
+			head6 <= head6 + 1;
+			head7 <= head7 + 1;
+			I <= I + 1;
 		end
 
 	// retire 2 or 3
 	6'b11_11_0x:
 		if (head2 != tail0) begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;	// may conflict with STOMP, but since both are setting to 0, it is okay
-            headinc = 3;//iqentry_op[head1]==`IMM ? 1 : 3;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 3;
+			head1 <= head1 + 3;
+			head2 <= head2 + 3;
+			head3 <= head3 + 3;
+			head4 <= head4 + 3;
+			head5 <= head5 + 3;
+			head6 <= head6 + 3;
+			head7 <= head7 + 3;
+			I <= I + 3;
 		end
 		else begin
 			iqentry_v[head0] <= `INV;
-			iqentry_v[head1] <= `INV;//iqentry_op[head1]==`IMM;
-            headinc = 2;//iqentry_op[head1]==`IMM ? 1 : 2;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+			iqentry_v[head1] <= `INV;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
 		end
 
 	// retire 2 (wait on regfile for head2)
-	6'b11_11_1x:
+	6'b11_11_10:
 		begin
 			iqentry_v[head0] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
 			iqentry_v[head1] <= `INV;	// may conflict with STOMP, but since both are setting to 0, it is okay
-			headinc = 2;
-			head0 <= head0 + headinc;
-			head1 <= head1 + headinc;
-			head2 <= head2 + headinc;
-			head3 <= head3 + headinc;
-			head4 <= head4 + headinc;
-			head5 <= head5 + headinc;
-			head6 <= head6 + headinc;
-			head7 <= head7 + headinc;
-			I <= I + headinc;
+			head0 <= head0 + 2;
+			head1 <= head1 + 2;
+			head2 <= head2 + 2;
+			head3 <= head3 + 2;
+			head4 <= head4 + 2;
+			head5 <= head5 + 2;
+			head6 <= head6 + 2;
+			head7 <= head7 + 2;
+			I <= I + 2;
 		end
+	6'b11_11_11:
+	    if (iqentry_tgt[head2]==7'd0) begin
+            iqentry_v[head0] <= `INV;    // may conflict with STOMP, but since both are setting to 0, it is okay
+            iqentry_v[head1] <= `INV;    // may conflict with STOMP, but since both are setting to 0, it is okay
+            iqentry_v[head2] <= `INV;    // may conflict with STOMP, but since both are setting to 0, it is okay
+            head0 <= head0 + 3;
+            head1 <= head1 + 3;
+            head2 <= head2 + 3;
+            head3 <= head3 + 3;
+            head4 <= head4 + 3;
+            head5 <= head5 + 3;
+            head6 <= head6 + 3;
+            head7 <= head7 + 3;
+            I <= I + 3;
+	    end
+        else begin
+            iqentry_v[head0] <= `INV;    // may conflict with STOMP, but since both are setting to 0, it is okay
+            iqentry_v[head1] <= `INV;    // may conflict with STOMP, but since both are setting to 0, it is okay
+            head0 <= head0 + 2;
+            head1 <= head1 + 2;
+            head2 <= head2 + 2;
+            head3 <= head3 + 2;
+            head4 <= head4 + 2;
+            head5 <= head5 + 2;
+            head6 <= head6 + 2;
+            head7 <= head7 + 2;
+            I <= I + 2;
+        end
 endcase
 
 	if (branchmiss)
@@ -4975,7 +5149,7 @@ endcase
 
 	case(cstate)
 	IDLE:
-		if (dram0 == 3'd6 && !rhit) begin
+		if (dcache_access_pending) begin
 				$display("********************");
 				$display("DCache access to: %h",{pea[DBW-1:5],5'b00000});
 				$display("********************");
@@ -4991,7 +5165,7 @@ endcase
 				dat_o <= {DBW{1'b0}};
 				cstate <= DCACHE1;
 		end
-		else if (iuncached & !ibufhit & !mem_will_issue) begin
+		else if (iuncached & !ibufhit & !mem_issue) begin
 			ierr <= 1'b0;
 			bte_o <= 2'b00;
 			cti_o <= 3'b001;
@@ -5016,12 +5190,14 @@ endcase
 				adr_o <= {ppc[DBW-1:2],2'b00};
 			end
 		end
-		else if (!ihit & !mem_will_issue) begin
-			if (dram0!=2'd0 || dram1!=2'd0 || dram2!=2'd0)
+		else if ((!ihit && !mem_issue && dram0==3'd0)||(dram0==3'd6 && (dram0_op==`LCL && dram0_tgt==7'd0))) begin
+			if ((dram0!=2'd0 || dram1!=2'd0 || dram2!=2'd0) && !(dram0==3'd6 && (dram0_op==`LCL && dram0_tgt==7'd0)))
 				$display("drams non-zero");
 			else begin
 				$display("********************");
-				$display("Cache access to: %h",!hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000});
+				$display("Cache access to: %h",
+				    (dram0==3'd6 && (dram0_op==`LCL && dram0_tgt==7'd0)) ? {dram0_addr[ABW-1:5],5'h00} : 
+				    !hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000});
 				$display("********************");
 				ierr <= 1'b0;
 				bte_o <= 2'b00;
@@ -5031,7 +5207,7 @@ endcase
 				stb_o <= 1'b1;
 				we_o <= 1'b0;
 				sel_o <= {DBW/8{1'b1}};
-				adr_o <= !hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000};
+				adr_o <= (dram0==3'd6 && (dram0_op==`LCL && dram0_tgt==7'd0)) ? {dram0_addr[ABW-1:5],5'h00} : !hit0 ? {ppc[DBW-1:5],5'b00000} : {ppcp16[DBW-1:5],5'b00000};
 				dat_o <= {DBW{1'b0}};
 				cstate <= ICACHE1;
 			end
@@ -5047,6 +5223,9 @@ endcase
 					if (adr_o[4:2]==3'b111) begin
 						wb_nack();
 						cstate <= IDLE;
+						if (dram0==3'd6 && dram0_op==`LCL) begin
+						     dram0_op<=`NOP;
+						end
 					end
 				end
 				else begin
@@ -5056,6 +5235,9 @@ endcase
 					if (adr_o[4:3]==2'b11) begin
 						wb_nack();
 						cstate <= IDLE;
+						if (dram0==3'd6 && dram0_op==`LCL) begin
+                             dram0_op<=`NOP;
+                        end
 					end
 				end
 			end
@@ -5071,6 +5253,10 @@ endcase
 					if (adr_o[4:2]==3'b111) begin
 						wb_nack();
 						cstate <= IDLE;
+						if (dram0_op==`LCL) begin
+						    dram0_op <= `NOP;
+						    dram0_tgt <= 7'd0;
+						end
 					end
 				end
 				else begin
@@ -5080,6 +5266,10 @@ endcase
 					if (adr_o[4:3]==2'b11) begin
 						wb_nack();
 						cstate <= IDLE;
+						if (dram0_op==`LCL) begin
+						    dram0_op <= `NOP;
+						    dram0_tgt <= 7'd0;
+					    end
 					end
 				end
 			end
@@ -5357,5 +5547,309 @@ begin
 end
 endfunction
 
-endmodule
+task oddball_commit;
+input commit_v;
+input [2:0] head;
+begin
+    if (commit_v)
+        case(iqentry_op[head])
+        `CLI:	im <= 1'b0;
+        `SEI:	im <= 1'b1;
+        // When the RTI instruction commits clear the hardware interrupt status to enable interrupts.
+        `RTI:	begin
+                StatusHWI <= `FALSE;
+                im <= imb;
+                end
+        `RTE:	begin
+                    if (StatusEXL!=8'h00)
+                        StatusEXL <= StatusEXL - 8'd1;
+                end
+        `CACHE:
+               begin
+                   case(iqentry_fn[head])
+                   6'd0:   ic_invalidate <= `TRUE;
+                   6'd1:   begin
+                           ic_invalidate_line <= `TRUE;
+                           ic_lineno <= iqentry_a1[head]  + {sregs[3'd7],12'h000};
+                           end
+                   6'd32:  dc_invalidate <= `TRUE;
+                   6'd33:  begin
+                           dc_invalidate_line <= `TRUE;
+                           dc_lineno <= iqentry_a1[head] + {sregs[iqentry_fn[head][5:3]],12'h000};
+                           end
+                   endcase
+               end
+        default:	;
+        endcase
+end
+endtask
 
+`ifdef THREEWAY
+`include "Thor_enque3_task.v"
+`else
+// enque 0 on tail0 or tail1
+task enque0;
+input [2:0] tail;
+input [2:0] inc;
+input test_stomp;
+input validate_args;
+begin
+    if (iqentry_v[tail] == `INV) begin
+        if ((({fnIsBranch(opcode0), predict_taken0} == {`TRUE, `TRUE})||(opcode0==`LOOP)) && test_stomp)
+            qstomp = `TRUE;
+        iqentry_v    [tail]    <=   `VAL;
+        iqentry_done [tail]    <=   `INV;
+        iqentry_cmt     [tail]    <=   `INV;
+        iqentry_out  [tail]    <=   `INV;
+        iqentry_res  [tail]    <=   `ZERO;
+        iqentry_insnsz[tail]   <=  fnInsnLength(fetchbuf0_instr);
+        iqentry_op   [tail]    <=   opcode0; 
+        iqentry_fn   [tail]    <=   opcode0==`MLO ? rfoc0[5:0] : fnFunc(fetchbuf0_instr);
+        iqentry_cond [tail]    <=   cond0;
+        iqentry_bt   [tail]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
+        iqentry_agen [tail]    <=   `INV;
+        iqentry_pc   [tail]    <=   
+            (opcode0==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail-3'd1]==`VAL) ? (string_pc != 0 ? string_pc :
+                iqentry_pc[tail-3'd1]) : fetchbuf0_pc;
+        iqentry_mem  [tail]    <=   fetchbuf0_mem;
+        iqentry_jmp  [tail]    <=   fetchbuf0_jmp;
+        iqentry_fp   [tail]    <=   fetchbuf0_fp;
+        iqentry_rfw  [tail]    <=   fetchbuf0_rfw;
+        iqentry_tgt  [tail]    <=   fnTargetReg(fetchbuf0_instr);
+        iqentry_pred [tail]    <=   pregs[Pn0];
+        iqentry_p_s  [tail]    <=   rf_source [{1'b1,2'h0,Pn0}];
+        // Look at the previous queue slot to see if an immediate prefix is enqueued
+        iqentry_a0[tail]   <=      opcode0==`INT ? fnImm(fetchbuf0_instr) :
+                                    fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
+                                    iqentry_op[tail-3'd1]==`IMM && iqentry_v[tail-3'd1] ? {iqentry_a0[tail-3'd1][DBW-1:8],fnImm8(fetchbuf0_instr)}:
+                                    opcode0==`IMM ? fnImmImm(fetchbuf0_instr) :
+                                    fnImm(fetchbuf0_instr);
+        iqentry_a1   [tail]    <=   //fnIsFlowCtrl(opcode0) ? bregs0 : rfoa0;
+                                        fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
+        iqentry_a1_s [tail]    <=   rf_source [fnRa(fetchbuf0_instr)];
+        iqentry_a2   [tail]    <=   fnIsShiftiop(fetchbuf0_instr) ? {58'b0,fetchbuf0_instr[`INSTRUCTION_RB]} :
+                                     opcode0==`INC ? {{56{fetchbuf0_instr[47]}},fetchbuf0_instr[47:40]} : 
+                                     opcode0==`STI ? fetchbuf0_instr[27:22] :
+                                     Rb0[6] ? fnSpr(Rb0[5:0]) :
+                                     rfob0;
+        iqentry_a2_s [tail]    <=   rf_source [Rb0];
+        iqentry_a3   [tail]    <=   rfoc0;
+        iqentry_a3_s [tail]    <=   rf_source[Rc0];
+        begin
+        iqentry_p_v  [tail]    <=   rf_v [{1'b1,2'h0,Pn0}] || cond0 < 4'h2;
+        iqentry_a1_v [tail]    <=   fnSource1_v( opcode0 ) | rf_v[ fnRa(fetchbuf0_instr) ];
+        iqentry_a2_v [tail]    <=   fnSource2_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[Rb0];
+        iqentry_a3_v [tail]    <=   fnSource3_v( opcode0 ) | rf_v[ Rc0 ];
+        if (fetchbuf0_rfw|fetchbuf0_pfw) begin
+            $display("regv[%d] = %d", fnTargetReg(fetchbuf0_instr),rf_v[ fnTargetReg(fetchbuf0_instr) ]);
+            rf_v[ fnTargetReg(fetchbuf0_instr) ] = fnTargetReg(fetchbuf0_instr)==7'd0;
+            $display("reg[%d] <= INV",fnTargetReg(fetchbuf0_instr));
+            rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { /*fetchbuf0_mem*/1'b0, tail };    // top bit indicates ALU/MEM bus
+        end
+        end
+        tail0 <= tail0 + inc;
+        tail1 <= tail1 + inc;
+        if (inc==2) queued2=`TRUE; else queued1 = `TRUE;
+        rrmapno <= rrmapno + 3'd1;
+    end
+end
+endtask
+
+// enque 1 on tail0 or tail1
+task enque1;
+input [2:0] tail;
+input [2:0] inc;
+input test_stomp;
+input validate_args;
+begin
+    if (iqentry_v[tail] == `INV && !qstomp) begin
+        if ((({fnIsBranch(opcode1), predict_taken1} == {`TRUE, `TRUE})||(opcode1==`LOOP)) && test_stomp)
+            qstomp = `TRUE;
+        iqentry_v    [tail]    <=   `VAL;
+        iqentry_done [tail]    <=   `INV;
+        iqentry_cmt     [tail]    <=   `INV;
+        iqentry_out  [tail]    <=   `INV;
+        iqentry_res  [tail]    <=   `ZERO;
+        iqentry_insnsz[tail]   <=  fnInsnLength(fetchbuf1_instr);
+        iqentry_op   [tail]    <=   opcode1;
+        iqentry_fn   [tail]    <=   opcode1==`MLO ? rfoc1[5:0] : fnFunc(fetchbuf1_instr);
+        iqentry_cond [tail]    <=   cond1;
+        iqentry_bt   [tail]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
+        iqentry_agen [tail]    <=   `INV;
+        // If an interrupt is being enqueued and the previous instruction was an immediate prefix, then
+        // inherit the address of the previous instruction, so that the prefix will be executed on return
+        // from interrupt.
+        // If a string operation was in progress then inherit the address of the string operation so that
+        // it can be continued.
+        
+        iqentry_pc   [tail]    <=    
+            (opcode1==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail-3'd1]==`VAL) ? 
+                (string_pc != 64'd0 ? string_pc : iqentry_pc[tail-3'd1]) : fetchbuf1_pc;
+        //iqentry_pc   [tail0]    <=   fetchbuf1_pc;
+        iqentry_mem  [tail]    <=   fetchbuf1_mem;
+        iqentry_jmp  [tail]    <=   fetchbuf1_jmp;
+        iqentry_fp   [tail]    <=   fetchbuf1_fp;
+        iqentry_rfw  [tail]    <=   fetchbuf1_rfw;
+        iqentry_tgt  [tail]    <=   fnTargetReg(fetchbuf1_instr);
+        iqentry_pred [tail]    <=   pregs[Pn1];
+        iqentry_p_s  [tail]    <=   rf_source [{1'b1,2'h0,Pn1}];
+        // Look at the previous queue slot to see if an immediate prefix is enqueued
+        // But don't allow it for a branch
+        iqentry_a0[tail]   <=       opcode1==`INT ? fnImm(fetchbuf1_instr) :
+                                    fnIsBranch(opcode1) ? {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} :
+                                    (inc==3'd2 && opcode0==`IMM) ? {fnImmImm(fetchbuf0_instr)|fnImm8(fetchbuf1_instr)} :
+                                    iqentry_op[tail-3'd1]==`IMM && iqentry_v[tail-3'd1] ? {iqentry_a0[tail-3'd1][DBW-1:8],fnImm8(fetchbuf1_instr)} :
+                                    opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
+                                    fnImm(fetchbuf1_instr);
+        iqentry_a1   [tail]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
+                                        fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
+        iqentry_a1_s [tail]    <=   rf_source [fnRa(fetchbuf1_instr)];
+        iqentry_a2   [tail]    <=   fnIsShiftiop(fetchbuf1_instr) ? {{DBW-6{1'b0}},fetchbuf1_instr[`INSTRUCTION_RB]} :
+                                    opcode1==`INC ? {{56{fetchbuf1_instr[47]}},fetchbuf1_instr[47:40]} : 
+                                    opcode1==`STI ? fetchbuf1_instr[27:22] :
+                                    Rb1[6] ? fnSpr(Rb1[5:0]) :
+                                    rfob1;
+        iqentry_a2_s [tail]    <=   rf_source[Rb1];
+        iqentry_a3   [tail]    <=   rfoc1;
+        iqentry_a3_s [tail]    <=   rf_source[Rc1];
+        if (validate_args) begin
+        // The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
+        iqentry_p_v  [tail]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
+        iqentry_a1_v [tail]    <=   fnSource1_v( opcode1 ) | rf_v[ fnRa(fetchbuf1_instr) ];
+        iqentry_a2_v [tail]    <=   fnSource2_v( opcode1, fnFunc(fetchbuf1_instr) ) | rf_v[ Rb1 ];
+        iqentry_a3_v [tail]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc1 ];
+        if (fetchbuf1_rfw|fetchbuf1_pfw) begin
+            $display("1:regv[%d] = %d", fnTargetReg(fetchbuf1_instr),rf_v[ fnTargetReg(fetchbuf1_instr) ]);
+            rf_v[ fnTargetReg(fetchbuf1_instr) ] = fnTargetReg(fetchbuf1_instr)==7'd0;
+            $display("reg[%d] <= INV",fnTargetReg(fetchbuf1_instr));
+            rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { /*fetchbuf1_mem*/1'b0, tail };    // top bit indicates ALU/MEM bus
+        end
+        end
+        tail0 <= tail0 + inc;
+        tail1 <= tail1 + inc;
+        if (inc==2) queued2=`TRUE; else queued1 = `TRUE;
+    end
+end
+endtask
+
+task validate_args;
+begin
+    // SOURCE 1 ... this is relatively straightforward, because all instructions
+       // that have a source (i.e. every instruction but LUI) read from RB
+       //
+       // if the argument is an immediate or not needed, we're done
+       if (fnSource1_v( opcode1 ) == `VAL) begin
+           iqentry_a1_v [tail1] <= `VAL;
+//                    iqentry_a1_s [tail1] <= 4'd0;
+       end
+       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+       else if (~fetchbuf0_rfw) begin
+           begin
+               iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
+               iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
+           end
+       end
+       // otherwise, previous instruction does write to RF ... see if overlap
+       else if (fnTargetReg(fetchbuf0_instr) != 7'd0
+           && fnRa(fetchbuf1_instr) == fnTargetReg(fetchbuf0_instr)) begin
+           // if the previous instruction is a LW, then grab result from memq, not the iq
+           iqentry_a1_v [tail1]    <=   `INV;
+           iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
+       end
+       // if no overlap, get info from rf_v and rf_source
+       else begin
+           begin
+               iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
+               iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
+           end
+       end
+
+       if (~fetchbuf0_pfw) begin
+           iqentry_p_v  [tail1]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
+           iqentry_p_s  [tail1]    <=   rf_source [{1'b1,2'h0,Pn1}];
+       end
+       else if (fnTargetReg(fetchbuf0_instr) != 9'd0 && fetchbuf1_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF
+           && (fnTargetReg(fetchbuf0_instr) & 7'h70)==7'h40) begin
+           iqentry_p_v [tail1] <= cond1 < 4'h2;
+           iqentry_p_s [tail1] <= { fetchbuf0_mem, tail0 };
+       end
+       else begin
+           iqentry_p_v [tail1] <= rf_v[{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
+           iqentry_p_s [tail1] <= rf_source[{1'b1,2'h0,Pn1}];
+       end
+
+       //
+       // SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+       // some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+       //
+       // if the argument is an immediate or not needed, we're done
+       if (fnSource2_v( opcode1,fnFunc(fetchbuf1_instr) ) == `VAL) begin
+           iqentry_a2_v [tail1] <= `VAL;
+//                    iqentry_a2_s [tail1] <= 4'd0;
+       end
+       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+       else if (~fetchbuf0_rfw) begin
+           iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
+           iqentry_a2_s [tail1] <= rf_source[Rb1];
+       end
+       // otherwise, previous instruction does write to RF ... see if overlap
+       else if (fnTargetReg(fetchbuf0_instr) != 9'd0 &&
+           Rb1 == fnTargetReg(fetchbuf0_instr)) begin
+           // if the previous instruction is a LW, then grab result from memq, not the iq
+           iqentry_a2_v [tail1]    <=   `INV;
+           iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
+       end
+       // if no overlap, get info from rf_v and rf_source
+       else begin
+           iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
+           iqentry_a2_s [tail1] <= rf_source[Rb1];
+       end
+
+       //
+       // SOURCE 3 ... this is relatively straightforward, because all instructions
+       // that have a source (i.e. every instruction but LUI) read from RC
+       //
+       // if the argument is an immediate or not needed, we're done
+       if (fnSource3_v( opcode1 ) == `VAL) begin
+           iqentry_a3_v [tail1] <= `VAL;
+//                    iqentry_a1_s [tail1] <= 4'd0;
+       end
+       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+       else if (~fetchbuf0_rfw) begin
+           begin
+               iqentry_a3_v [tail1]    <=   rf_v [Rc1];
+               iqentry_a3_s [tail1]    <=   rf_source [Rc1];
+           end
+       end
+       // otherwise, previous instruction does write to RF ... see if overlap
+       else if (fnTargetReg(fetchbuf0_instr) != 9'd0
+           && Rc1 == fnTargetReg(fetchbuf0_instr)) begin
+           // if the previous instruction is a LW, then grab result from memq, not the iq
+           iqentry_a3_v [tail1]    <=   `INV;
+           iqentry_a3_s [tail1]    <=   { fetchbuf0_mem, tail0 };
+       end
+       // if no overlap, get info from rf_v and rf_source
+       else begin
+           begin
+               iqentry_a3_v [tail1]    <=   rf_v [Rc1];
+               iqentry_a3_s [tail1]    <=   rf_source [Rc1];
+           end
+       end
+
+        if (fetchbuf0_rfw|fetchbuf0_pfw) begin
+            $display("regv[%d] = %d", fnTargetReg(fetchbuf0_instr),rf_v[ fnTargetReg(fetchbuf0_instr) ]);
+            rf_v[ fnTargetReg(fetchbuf0_instr) ] = fnTargetReg(fetchbuf0_instr)==7'd0;
+            $display("reg[%d] <= INV",fnTargetReg(fetchbuf0_instr));
+            rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { /*fetchbuf0_mem*/1'b0, tail0 };    // top bit indicates ALU/MEM bus
+        end
+        if (fetchbuf1_rfw|fetchbuf1_pfw) begin
+            $display("1:regv[%d] = %d", fnTargetReg(fetchbuf1_instr),rf_v[ fnTargetReg(fetchbuf1_instr) ]);
+            rf_v[ fnTargetReg(fetchbuf1_instr) ] = fnTargetReg(fetchbuf1_instr)==7'd0;
+            $display("reg[%d] <= INV",fnTargetReg(fetchbuf1_instr));
+            rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { /*fetchbuf1_mem*/1'b0, tail1 };    // top bit indicates ALU/MEM bus
+        end
+end
+endtask
+`endif
+
+endmodule

@@ -27,7 +27,8 @@
 `define THOR_DEFINES	1'b1
 
 `define SEGMENTATION	1'b1
-//`define FLOATING_POINT	1'b1
+`define FLOATING_POINT	1'b1
+//`define THREEWAY    1'b1
 
 `define TRUE	1'b1
 `define FALSE	1'b0
@@ -105,19 +106,42 @@
 `define FSTAT		8'h73
 `define FRM			8'h74
 `define FTX			8'h75
-`define ITOF		8'h76
-`define FTOI		8'h77
-`define DOUBLE		8'h78
-`define FMOV            6'h00
-`define FNEG			6'h04
-`define FABS			6'h05
-`define FSIGN			6'h06
-`define FMAN            6'h07
+`define DOUBLE_R    8'h77
+`define FMOV            4'h00
+`define FTOI		    4'h02
+`define ITOF		    4'h03
+`define FNEG			4'h04
+`define FABS			4'h05
+`define FSIGN			4'h06
+`define FMAN            4'h07
+`define FNABS           4'h08
+`define FLOAT		8'h78
+`define FCMP            6'h07
 `define FADD			6'h08
 `define FSUB			6'h09
 `define FMUL			6'h0A
 `define FDIV			6'h0B
-`define FNABS           6'h0C
+`define FCMPS           6'h17
+`define FADDS           6'h18
+`define FSUBS           6'h19
+`define FMULS           6'h1A
+`define FDIVS           6'h1B
+`define FSTAT           6'h30
+`define FTX             6'h31
+`define FCX             6'h32
+`define FEX             6'h33
+`define FDX             6'h34
+`define FRM             6'h35                       
+`define SINGLE_R    8'h79
+`define FMOVS           4'h00
+`define FTOIS		    4'h02
+`define ITOFS		    4'h03
+`define FNEGS			4'h04
+`define FABSS			4'h05
+`define FSIGNS			4'h06
+`define FMANS           4'h07
+`define FNABSS          4'h08
+
 
 `define LB			8'h80
 `define LBU			8'h81
@@ -132,7 +156,7 @@
 `define SWCR        8'h8C
 `define LEA			8'h8D
 `define LWS			8'h8E
-`define PFLD		8'h8F
+`define LCL		    8'h8F
 
 `define SB			8'h90
 `define SC			8'h91
@@ -166,6 +190,16 @@
 `define NOT			    4'h2
 `define ABS             4'h3
 `define SGN             4'h4
+`define CNTLZ           4'h5
+`define CNTLO           4'h6
+`define CNTPOP          4'h7
+`define SXB             4'h8
+`define SXC             4'h9
+`define SXH             4'hA
+`define COM             4'hB
+`define ZXB             4'hC
+`define ZXC             4'hD
+`define ZXH             4'hE
 `define MFSPR		8'hA8
 `define MTSPR		8'hA9
 
@@ -199,12 +233,11 @@
 `define STIX        8'hC6
 `define INC         8'hC7
 `define PUSH        8'hC8
+`define PEA         8'hC9
 
 `define FCX			8'hCC
 `define FEX			8'hCD
 `define FDX			8'hCE
-
-`define NOP			8'hE1
 
 `define TLB			8'hF0
 `define TLB_NOP			4'd0
@@ -217,6 +250,7 @@
 `define TLB_RDREG		4'd7
 `define TLB_WRREG		4'd8
 `define TLB_INVALL		4'd9
+`define NOP			8'hF1
 
 `define TLBWired		4'h0
 `define TLBIndex		4'h1
@@ -278,6 +312,7 @@
 `define EXC_OFL		4'd7
 `define EXC_DBE		4'd8		// databus error
 `define EXC_DBZ		4'd9		// divide by zero
+`define EXC_FLT     4'd10       // floating point exception
 
 //
 // define PANIC types
