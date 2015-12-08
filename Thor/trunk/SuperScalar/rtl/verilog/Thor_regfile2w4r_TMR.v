@@ -44,7 +44,11 @@ output [WID-1:0] o2;
 output [WID-1:0] o3;
 
 reg [WID-1:0] regs0a [0:63];
+reg [WID-1:0] regs0b [0:63];
+reg [WID-1:0] regs0c [0:63];
 reg [WID-1:0] regs1a [0:63];
+reg [WID-1:0] regs1b [0:63];
+reg [WID-1:0] regs1c [0:63];
 reg [5:0] rra0,rra1,rra2,rra3;
 
 reg whichreg [0:63];	// tracks which register file is the valid one for a given register
@@ -52,31 +56,39 @@ reg whichreg [0:63];	// tracks which register file is the valid one for a given 
 assign o0 = rra0==6'd0 ? {WID{1'b0}} :
 	(wr1 && (rra0==wa1)) ? i1 :
 	(wr0 && (rra0==wa0)) ? i0 :
-	whichreg[rra0]==1'b0 ? regs0a[rra0] : regs1a[rra0];
+	whichreg[rra0]==1'b0 ? (regs0a[rra0]&(regs0b[rra0]^32'hAAAAAAAA) ) | (regs0a[rra0]&(regs0c[rra0]^32'h55555555) ) | ((regs0b[rra0]^32'hAAAAAAAA)&(regs0c[rra0]^32'h55555555) )
+	                       : (regs1a[rra0]&(regs1b[rra0]^32'hAAAAAAAA) ) | (regs1a[rra0]&(regs1c[rra0]^32'h55555555) ) | ((regs1b[rra0]^32'hAAAAAAAA)&(regs1c[rra0]^32'h55555555) );
 assign o1 = rra1==6'd0 ? {WID{1'b0}} :
 	(wr1 && (rra1==wa1)) ? i1 :
 	(wr0 && (rra1==wa0)) ? i0 :
-	whichreg[rra1]==1'b0 ? regs0a[rra1] : regs1a[rra1];
+	whichreg[rra1]==1'b0 ? (regs0a[rra1]&(regs0b[rra1]^32'hAAAAAAAA) ) | (regs0a[rra1]&(regs0c[rra1]^32'h55555555) ) | ((regs0b[rra1]^32'hAAAAAAAA)&(regs0c[rra1]^32'h55555555) )
+                           : (regs1a[rra1]&(regs1b[rra1]^32'hAAAAAAAA) ) | (regs1a[rra1]&(regs1c[rra1]^32'h55555555) ) | ((regs1b[rra1]^32'hAAAAAAAA)&(regs1c[rra1]^32'h55555555) );
 //	whichreg[rra1]==1'b0 ? regs0[rra1] : regs1[rra1];
 assign o2 = rra2==6'd0 ? {WID{1'b0}} :
 	(wr1 && (rra2==wa1)) ? i1 :
 	(wr0 && (rra2==wa0)) ? i0 :
 //	whichreg[rra2]==1'b0 ? regs0[rra2] : regs1[rra2];
-	whichreg[rra2]==1'b0 ? regs0a[rra2] : regs1a[rra2];
+	whichreg[rra2]==1'b0 ? (regs0a[rra2]&(regs0b[rra2]^32'hAAAAAAAA) ) | (regs0a[rra2]&(regs0c[rra2]^32'h55555555) ) | ((regs0b[rra2]^32'hAAAAAAAA)&(regs0c[rra2]^32'h55555555) )
+                           : (regs1a[rra2]&(regs1b[rra2]^32'hAAAAAAAA) ) | (regs1a[rra2]&(regs1c[rra2]^32'h55555555) ) | ((regs1b[rra2]^32'hAAAAAAAA)&(regs1c[rra2]^32'h55555555) );
 assign o3 = rra3==6'd0 ? {WID{1'b0}} :
 	(wr1 && (rra3==wa1)) ? i1 :
 	(wr0 && (rra3==wa0)) ? i0 :
 //	whichreg[rra3]==1'b0 ? regs0[rra3] : regs1[rra3];
-	whichreg[rra3]==1'b0 ? regs0a[rra3] : regs1a[rra3];
+	whichreg[rra3]==1'b0 ? (regs0a[rra3]&(regs0b[rra3]^32'hAAAAAAAA) ) | (regs0a[rra3]&(regs0c[rra3]^32'h55555555) ) | ((regs0b[rra3]^32'hAAAAAAAA)&(regs0c[rra3]^32'h55555555) )
+                           : (regs1a[rra3]&(regs1b[rra3]^32'hAAAAAAAA) ) | (regs1a[rra3]&(regs1c[rra3]^32'h55555555) ) | ((regs1b[rra3]^32'hAAAAAAAA)&(regs1c[rra3]^32'h55555555) );
 
 always @(posedge clk)
 	if (wr0) begin
 		regs0a[wa0] <= i0;
+		regs0b[wa0] <= i0^32'hAAAAAAAA;
+		regs0c[wa0] <= i0^32'h55555555;
     end
 
 always @(posedge clk)
 	if (wr1) begin
 		regs1a[wa1] <= i1;
+		regs1b[wa1] <= i1^32'hAAAAAAAA;
+		regs1c[wa1] <= i1^32'h55555555;
 	end
 
 always @(posedge rclk) rra0 <= ra0;

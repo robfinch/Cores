@@ -42,33 +42,33 @@ output hit0;
 output hit1;
 output err_o;
 
-reg [AMSB:12] mem [0:127];
-reg [0:127] tvalid;
-reg [0:127] errmem;
+reg [AMSB:15] mem [0:1023];
+reg [0:1023] tvalid;
+reg [0:1023] errmem;
 reg [AMSB:0] rpc,rpcp16;
-wire [AMSB-11:0] tag0,tag1;
+wire [AMSB-13:0] tag0,tag1;
 
 integer n;
 initial begin
-	for (n = 0; n < 128; n = n + 1)
+	for (n = 0; n < 1024; n = n + 1)
 		mem[n] <= 0;
 end
 
 always @(posedge wclk)
-	if (wce & wr) mem[wa[11:5]] <= wa[AMSB:12];
+	if (wce & wr) mem[wa[14:5]] <= wa[AMSB:15];
 always @(posedge wclk)
-	if (invalidate) begin tvalid <= 128'd0; errmem <= 128'd0; end
-	else if (invalidate_line) tvalid[invalidate_lineno[11:5]] <= 1'b0;
-	else if (wce & wr) begin tvalid[wa[11:5]] <= 1'b1; errmem[wa[11:5]] <= err_i; end
+	if (invalidate) begin tvalid <= 1024'd0; errmem <= 1024'd0; end
+	else if (invalidate_line) tvalid[invalidate_lineno[14:5]] <= 1'b0;
+	else if (wce & wr) begin tvalid[wa[14:5]] <= 1'b1; errmem[wa[14:5]] <= err_i; end
 always @(posedge rclk)
 	if (rce) rpc <= pc;
 always @(posedge rclk)
 	if (rce) rpcp16 <= pc + 64'd16;
-assign tag0 = {mem[rpc[11:5]],tvalid[rpc[11:5]]};
-assign tag1 = {mem[rpcp16[11:5]],tvalid[rpcp16[11:5]]};
+assign tag0 = {mem[rpc[14:5]],tvalid[rpc[14:5]]};
+assign tag1 = {mem[rpcp16[14:5]],tvalid[rpcp16[14:5]]};
 
-assign hit0 = tag0 == {rpc[AMSB:12],1'b1};
-assign hit1 = tag1 == {rpcp16[AMSB:12],1'b1};
-assign err_o = errmem[rpc[11:5]]|errmem[rpcp16[11:5]];
+assign hit0 = tag0 == {rpc[AMSB:15],1'b1};
+assign hit1 = tag1 == {rpcp16[AMSB:15],1'b1};
+assign err_o = errmem[rpc[14:5]]|errmem[rpcp16[14:5]];
 
 endmodule

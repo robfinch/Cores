@@ -5,6 +5,7 @@ reg rst;
 reg clk;
 reg nmi;
 wire [2:0] cti;
+wire cpu_clk;
 wire cyc;
 wire stb;
 wire we;
@@ -27,11 +28,11 @@ initial begin
 	#0 nmi = 1'b0;
 	#10 rst = 1'b1;
 	#50 rst = 1'b0;
-	#500 nmi = 1'b1;
+//	#500 nmi = 1'b1;
 	#20 nmi = 1'b0;
 end
 
-always #1 clk = ~clk;
+always #5 clk = ~clk;
 
 assign LEDS_ack = cyc && stb && adr[31:8]==32'hFFDC06;
 always @(posedge clk)
@@ -62,7 +63,7 @@ assign cpu_dati =
 Ps2Keyboard_sim ukbd
 (
     .rst_i(rst),
-    .clk_i(clk),
+    .clk_i(cpu_clk),
     .cyc_i(cyc),
     .stb_i(stb),
     .ack_o(kbd_ack),
@@ -78,7 +79,7 @@ Ps2Keyboard_sim ukbd
 rtfTextController3 #(.num(1), .pTextAddress(32'hFFD00000))  tc1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpu_clk),
 	.cyc_i(cyc),
 	.stb_i(stb),
 	.ack_o(tc1_ack),
@@ -100,7 +101,7 @@ rtfTextController3 #(.num(1), .pTextAddress(32'hFFD00000))  tc1
 rtfTextController3 #(.num(1), .pTextAddress(32'hFFD10000))  tc2
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpu_clk),
 	.cyc_i(cyc),
 	.stb_i(stb),
 	.ack_o(tc2_ack),
@@ -122,7 +123,7 @@ rtfTextController3 #(.num(1), .pTextAddress(32'hFFD10000))  tc2
 scratchmem32 #(DBW) uscrm1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpu_clk),
 	.cyc_i(cyc),
 	.stb_i(stb),
 	.ack_o(scr_ack),
@@ -136,7 +137,7 @@ scratchmem32 #(DBW) uscrm1
 bootrom #(DBW) ubr1
 (
 	.rst_i(rst),
-	.clk_i(clk),
+	.clk_i(cpu_clk),
 	.cti_i(cti),
 	.cyc_i(cyc),
 	.stb_i(stb),
@@ -150,6 +151,7 @@ Thor #(DBW) uthor1
 (
 	.rst_i(rst),
 	.clk_i(clk),
+	.clk_o(cpu_clk),
 	.nmi_i(nmi),
 	.irq_i(1'b0),
 	.vec_i(8'h00),

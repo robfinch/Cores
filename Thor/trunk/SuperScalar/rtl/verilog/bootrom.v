@@ -51,13 +51,19 @@ end
 assign cs = cyc_i && stb_i && adr_i[31:16]==16'hFFFF;
 assign ack_o = cs & ack0;
 
-reg [DBW:0] rommem [0:8191];
+reg [DBW:0] rommem0 [0:8191];
+reg [DBW:0] rommem1 [0:8191];
+reg [DBW:0] rommem2 [0:8191];
 initial begin
 if (DBW==32) begin
-`include "..\..\software\asm\Thorasm\bin\bootrom32.ver"
+`include "..\..\software\A64\bin\boot.ve0"
+`include "..\..\software\A64\bin\boot.ve1"
+`include "..\..\software\A64\bin\boot.ve2"
 end
 else begin
-`include "..\..\software\asm\Thorasm\bin\bootrom.ver"
+`include "..\..\software\a64\bin\boot.ve0"
+`include "..\..\software\A64\bin\boot.ve1"
+`include "..\..\software\A64\bin\boot.ve2"
 end
 end
 
@@ -65,15 +71,15 @@ wire pe_cs;
 edge_det u1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee());
 edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(pe_cs), .pe(), .ne(ne_cs), .ee());
 
-reg [15:3] radr;
-reg [15:3] ctr;
+reg [14:2] radr;
+reg [14:2] ctr;
 
 always @(posedge clk_i)
 	if (pe_cs) begin
 		if (DBW==32)
 			ctr <= adr_i[14:2] + 13'd1;
 		else
-			ctr <= adr_i[15:3] + 13'd1;
+			ctr <= adr_i[14:3] + 13'd1;
 	end
 	else if (cs)
 		ctr <= ctr + 13'd1;
@@ -82,17 +88,24 @@ always @(posedge clk_i)
 	if (DBW==32)
 		radr <= pe_cs ? adr_i[14:2] : ctr;
 	else
-		radr <= pe_cs ? adr_i[15:3] : ctr;
+		radr <= pe_cs ? adr_i[14:3] : ctr;
+
+wire [31:0] d0 = rommem0[radr][DBW-1:0];
+wire [31:0] d1 = rommem1[radr][DBW-1:0]^32'hAAAAAAAA;
+wire [31:0] d2 = rommem2[radr][DBW-1:0]^32'h55555555;
+wire [31:0] d4 = (d0&d1)|(d0&d2)|(d1&d2);
 
 always @(posedge clk_i)
-	if (cs)
-		dat_o <= rommem[radr][DBW-1:0];
+	if (cs) begin
+		dat_o <= d4;
+		$display("br read: %h %h", radr,d4); 
+	end
 	else
 		dat_o <= {DBW{1'b0}};
 
 always @(posedge clk_i)
 	if (cs)
-		perr <= ^rommem[radr][DBW-1:0]!=rommem[radr][DBW];
+		perr <= ^rommem0[radr][DBW-1:0]!=rommem0[radr][DBW];
 	else
 		perr <= 1'd0;
 

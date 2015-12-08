@@ -36,6 +36,7 @@ input rce;
 input [DBW-1:0] ra;
 output [DBW-1:0] o;
 
+wire [DBW-1:0] o0, o1, o2;
 genvar n;
 
 generate
@@ -54,7 +55,7 @@ begin : BRAMS
 			.ra(ra[13:3]),
 			.o(o[n*8+7:n*8])
 		);
-	else
+	else begin
 		syncRam2kx8_1rw1r uga (
 			.wclk(wclk),
 			.wce(wce),
@@ -64,10 +65,35 @@ begin : BRAMS
 			.rclk(rclk),
 			.rce(rce),
 			.ra(ra[12:2]),
-			.o(o[n*8+7:n*8])
+			.o(o0[n*8+7:n*8])
 		);
+		syncRam2kx8_1rw1r ugb (
+            .wclk(wclk),
+            .wce(wce),
+            .wr(wr & sel[n]),
+            .wa(wa[12:2]),
+            .wd(wd[n*8+7:n*8]^8'hAA),
+            .rclk(rclk),
+            .rce(rce),
+            .ra(ra[12:2]),
+            .o(o1[n*8+7:n*8])
+        );
+		syncRam2kx8_1rw1r ugc (
+            .wclk(wclk),
+            .wce(wce),
+            .wr(wr & sel[n]),
+            .wa(wa[12:2]),
+            .wd(wd[n*8+7:n*8]^8'h55),
+            .rclk(rclk),
+            .rce(rce),
+            .ra(ra[12:2]),
+            .o(o2[n*8+7:n*8])
+        );
+    end
 end
 endgenerate
+
+assign o = (o0&(o1^32'hAAAAAAAA))|(o0&(o2^32'h55555555))|((o1^32'hAAAAAAAA)&(o2^32'h55555555));
 
 endmodule
 
@@ -84,6 +110,11 @@ output [7:0] o;
 
 reg [7:0] mem [0:2047];
 reg [10:0] rra;
+integer n;
+initial begin
+    for (n = 0; n < 2048; n = n + 1)
+        mem[n] <= 0;
+end
 
 always @(posedge wclk)
 	if (wce & wr) mem[wa] <= wd;

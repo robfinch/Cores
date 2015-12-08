@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,38 +34,112 @@ input rclk;
 input [DBW-1:0] pc;
 output reg [127:0] insn;
 
-reg [127:0] mem [0:511];
-reg [12:0] rpc,rpcp16;
+wire [127:0] mem0a;
+wire [127:0] mem1a;
+reg [14:0] pcp16;
 
 generate
 begin : gen1
-	if (DBW==64) begin
-		always @(posedge wclk)
-			if (wce & wr & ~wa[3]) mem[wa[12:4]][63:0] <= wd[63:0];
-		always @(posedge wclk)
-			if (wce & wr &  wa[3]) mem[wa[12:4]][127:64] <= wd[63:0];
-	end
-	else if (DBW==32) begin
-		always @(posedge wclk)
-			if (wce & wr & wa[3:2]==2'b00) mem[wa[12:4]][31:0] <= wd;
-		always @(posedge wclk)
-			if (wce & wr & wa[3:2]==2'b01) mem[wa[12:4]][63:32] <= wd;
-		always @(posedge wclk)
-			if (wce & wr & wa[3:2]==2'b10) mem[wa[12:4]][95:64] <= wd;
-		always @(posedge wclk)
-			if (wce & wr & wa[3:2]==2'b11) mem[wa[12:4]][127:96] <= wd;
-	end
+	if (DBW==32) begin
+        syncRam2kx32_1w1r uicm0a0 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b00),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pc[14:4]),
+            .o(mem0a[31:0])
+        );
+        syncRam2kx32_1w1r uicm0a1 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b01),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pc[14:4]),
+            .o(mem0a[63:32])
+        );
+        syncRam2kx32_1w1r uicm0a2 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b10),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pc[14:4]),
+            .o(mem0a[95:64])
+        );
+        syncRam2kx32_1w1r uicm0a3 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b11),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pc[14:4]),
+            .o(mem0a[127:96])
+        );
+
+        syncRam2kx32_1w1r uicm1a0 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b00),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pcp16[14:4]),
+            .o(mem1a[31:0])
+        );
+        syncRam2kx32_1w1r uicm1a1 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b01),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pcp16[14:4]),
+            .o(mem1a[63:32])
+        );
+        syncRam2kx32_1w1r uicm1a2 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b10),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pcp16[14:4]),
+            .o(mem1a[95:64])
+        );
+        syncRam2kx32_1w1r uicm1a3 (
+            .wclk(wclk),
+            .wce(wce && wa[3:2]==2'b11),
+            .wr({4{wr}}),
+            .wa(wa[14:4]),
+            .wd(wd),
+            .rclk(rclk),
+            .rce(1'b1),
+            .ra(pcp16[14:4]),
+            .o(mem1a[127:96])
+        );
+    end
 end
 endgenerate
 
-always @(posedge rclk)
-	rpc <= pc[12:0];
-always @(posedge rclk)
-	rpcp16 <= pc[12:0] + 13'd16;
-wire [127:0] insn0 = mem[rpc[12:4]];
-wire [127:0] insn1 = mem[rpcp16[12:4]];
-always @(rpc or insn0 or insn1)
-case(rpc[3:0])
+always @(pc)
+	pcp16 <= pc[14:0] + 15'd16;
+wire [127:0] insn0 = mem0a;
+wire [127:0] insn1 = mem1a;
+always @(pc or insn0 or insn1)
+case(pc[3:0])
 4'd0:	insn <= insn0;
 4'd1:	insn <= {insn1[7:0],insn0[127:8]};
 4'd2:	insn <= {insn1[15:0],insn0[127:16]};
