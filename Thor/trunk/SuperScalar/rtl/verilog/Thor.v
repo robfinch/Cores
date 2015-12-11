@@ -93,7 +93,7 @@
 //      An instruction and data cache were added.
 //      A WISHBONE bus interface was added,
 //
-// 48226 (78,000 LC's)
+// 50,000 (80,000 LC's)
 // (42360 - no FP)
 // ============================================================================
 //
@@ -177,6 +177,7 @@ reg [DBW-1:0] lc;				// loop counter
 reg [DBW-1:0] rfoa0,rfoa1;
 reg [DBW-1:0] rfob0,rfob1;
 reg [DBW-1:0] rfoc0,rfoc1;
+reg [DBW-1:0] rfot0,rfot1;
 reg ic_invalidate,dc_invalidate;
 reg ic_invalidate_line,dc_invalidate_line;
 reg [ABW-1:0] ic_lineno,dc_lineno;
@@ -253,6 +254,9 @@ reg  [3:0] iqentry_a2_s	[0:7];	// arg2 source (iq entry # with top bit represent
 reg [DBW-1:0] iqentry_a3	[0:7];	// argument 3
 reg        iqentry_a3_v	[0:7];	// arg3 valid
 reg  [3:0] iqentry_a3_s	[0:7];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
+reg [DBW-1:0] iqentry_T [0:7];
+reg        iqentry_T_v [0:7];
+reg  [3:0] iqentry_T_s [0:7];
 reg [DBW-1:0] iqentry_pc	[0:7];	// program counter for this instruction
 
 wire  iqentry_source [0:7];
@@ -509,8 +513,6 @@ wire  [6:0] commit1_tgt;
 wire [DBW-1:0] commit1_bus;
 wire limit_cmt;
 wire committing2;
-reg cmt_miss;
-reg [2:0] cmt_miss_id;
  
 wire [63:0] alu0_divq;
 wire [63:0] alu0_rem;
@@ -563,59 +565,59 @@ Thor_livetarget #(NREGS) ultgt1
 // a particular register.  looks a lot like scheduling logic, but in reverse.
 // 
 
-assign iqentry_0_latestID = ((branchmiss ? missid == 3'd0 : cmt_miss_id==3'd0 )|| ((iqentry_0_livetarget & iqentry_1_cumulative) == {NREGS{1'b0}}))
+assign iqentry_0_latestID = ((missid == 3'd0)|| ((iqentry_0_livetarget & iqentry_1_cumulative) == {NREGS{1'b0}}))
 				? iqentry_0_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_0_cumulative = (branchmiss ? missid == 3'd0 : cmt_miss_id==3'd0)
+assign iqentry_0_cumulative = (missid == 3'd0)
 				? iqentry_0_livetarget
 				: iqentry_0_livetarget | iqentry_1_cumulative;
 
-assign iqentry_1_latestID = ((branchmiss ? missid == 3'd1 : cmt_miss_id==3'd1 )|| ((iqentry_1_livetarget & iqentry_2_cumulative) == {NREGS{1'b0}}))
+assign iqentry_1_latestID = ((missid == 3'd1)|| ((iqentry_1_livetarget & iqentry_2_cumulative) == {NREGS{1'b0}}))
 				? iqentry_1_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_1_cumulative = (branchmiss ? missid == 3'd1 : cmt_miss_id==3'd1)
+assign iqentry_1_cumulative = (missid == 3'd1)
 				? iqentry_1_livetarget
 				: iqentry_1_livetarget | iqentry_2_cumulative;
 
-assign iqentry_2_latestID = ((branchmiss ? missid == 3'd2 : cmt_miss_id==3'd2) || ((iqentry_2_livetarget & iqentry_3_cumulative) == {NREGS{1'b0}}))
+assign iqentry_2_latestID = ((missid == 3'd2) || ((iqentry_2_livetarget & iqentry_3_cumulative) == {NREGS{1'b0}}))
 				? iqentry_2_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_2_cumulative = (branchmiss ? missid == 3'd2 : cmt_miss_id==3'd2)
+assign iqentry_2_cumulative = (missid == 3'd2)
 				? iqentry_2_livetarget
 				: iqentry_2_livetarget | iqentry_3_cumulative;
 
-assign iqentry_3_latestID = ((branchmiss ? missid == 3'd3: cmt_miss_id==3'd3 )|| ((iqentry_3_livetarget & iqentry_4_cumulative) == {NREGS{1'b0}}))
+assign iqentry_3_latestID = ((missid == 3'd3)|| ((iqentry_3_livetarget & iqentry_4_cumulative) == {NREGS{1'b0}}))
 				? iqentry_3_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_3_cumulative = (branchmiss ? missid == 3'd3 : cmt_miss_id==3'd3)
+assign iqentry_3_cumulative = (missid == 3'd3)
 				? iqentry_3_livetarget
 				: iqentry_3_livetarget | iqentry_4_cumulative;
 
-assign iqentry_4_latestID = ((branchmiss ? missid == 3'd4 : cmt_miss_id==3'd4) || ((iqentry_4_livetarget & iqentry_5_cumulative) == {NREGS{1'b0}}))
+assign iqentry_4_latestID = ((missid == 3'd4) || ((iqentry_4_livetarget & iqentry_5_cumulative) == {NREGS{1'b0}}))
 				? iqentry_4_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_4_cumulative = (branchmiss ? missid == 3'd4 : cmt_miss_id==3'd4)
+assign iqentry_4_cumulative = (missid == 3'd4)
 				? iqentry_4_livetarget
 				: iqentry_4_livetarget | iqentry_5_cumulative;
 
-assign iqentry_5_latestID = ((branchmiss ? missid == 3'd5 : cmt_miss_id==3'd5 )|| ((iqentry_5_livetarget & iqentry_6_cumulative) == {NREGS{1'b0}}))
+assign iqentry_5_latestID = ((missid == 3'd5)|| ((iqentry_5_livetarget & iqentry_6_cumulative) == {NREGS{1'b0}}))
 				? iqentry_5_livetarget
 				: 287'd0;
-assign iqentry_5_cumulative = (branchmiss ? missid == 3'd5 : cmt_miss_id==3'd5)
+assign iqentry_5_cumulative = (missid == 3'd5)
 				? iqentry_5_livetarget
 				: iqentry_5_livetarget | iqentry_6_cumulative;
 
-assign iqentry_6_latestID = ((branchmiss ? missid == 3'd6 : cmt_miss_id==3'd6) || ((iqentry_6_livetarget & iqentry_7_cumulative) == {NREGS{1'b0}}))
+assign iqentry_6_latestID = ((missid == 3'd6) || ((iqentry_6_livetarget & iqentry_7_cumulative) == {NREGS{1'b0}}))
 				? iqentry_6_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_6_cumulative = (branchmiss ? missid == 3'd6 : cmt_miss_id==3'd6)
+assign iqentry_6_cumulative = (missid == 3'd6)
 				? iqentry_6_livetarget
 				: iqentry_6_livetarget | iqentry_7_cumulative;
 
-assign iqentry_7_latestID = ((branchmiss ? missid == 3'd7 : cmt_miss_id==3'd7) || ((iqentry_7_livetarget & iqentry_0_cumulative) == {NREGS{1'b0}}))
+assign iqentry_7_latestID = ((missid == 3'd7) || ((iqentry_7_livetarget & iqentry_0_cumulative) == {NREGS{1'b0}}))
 				? iqentry_7_livetarget
 				: {NREGS{1'b0}};
-assign iqentry_7_cumulative = (branchmiss ? missid==3'd7 : cmt_miss_id== 3'd7)
+assign iqentry_7_cumulative = (missid==3'd7)
 				? iqentry_7_livetarget
 				: iqentry_7_livetarget | iqentry_0_cumulative;
 
@@ -644,75 +646,10 @@ assign
 // If there aren't enough read ports available then the second instruction
 // isn't enqueued (it'll be enqueued in the next cycle).
 reg [1:0] ports_avail;  // available read ports for instruction #3.
-reg [6:0] pRa0,pRb0,pRa1,pRb1;
-wire [DBW:0] prfoa0,prfob0,prfoa1,prfob1;
-`ifdef THREEWAY
-wire [6:0] Ra0 = fnRa(fetchbuf0_instr);
-wire [6:0] Rb0 = fnRb(fetchbuf0_instr);
-wire [6:0] Rc0 = fnRc(fetchbuf0_instr);
-wire [6:0] Ra1 = fnRa(fetchbuf1_instr);
-wire [6:0] Rb1 = fnRb(fetchbuf1_instr);
-wire [6:0] Rc1 = fnRc(fetchbuf1_instr);
-wire [6:0] Ra2 = fnRa(fetchbuf2_instr);
-wire [6:0] Rb2 = fnRb(fetchbuf2_instr);
-wire [6:0] Rc2 = fnRc(fetchbuf2_instr);
-wire [6:0] Rt0 = fnTargetReg(fetchbuf0_instr);
-wire [6:0] Rt1 = fnTargetReg(fetchbuf1_instr);
-wire [6:0] Rt2 = fnTargetReg(fetchbuf2_instr);
+reg [6:0] pRa0,pRb0,pRa1,pRb1,pRt0,pRt1;
+wire [DBW-1:0] prfoa0,prfob0,prfoa1,prfob1;
+wire [DBW-1:0] prfot0,prfot1;
 
-case (fnNumReadPorts(fetchbuf0_instr))
-2'd0:
-       begin
-       pRa0 = Ra2; pRb0 = Rb2; pRc0 = Rc2;
-       pRa1 = Ra1; pRb1 = Rb1; pRc1 = Rc1;
-       ports_avail = 2'd3;
-       rfoa0 = 64'd0;
-       rfob0 = 64'd0;
-       rfoc0 = 64'd0;
-       rfoa1 = prfoa1;
-       rfob1 = prfob1;
-       rfoc1 = prfoc1;
-       rfoa2 = prfoa0;
-       rfob2 = prfob0;
-       rfoc3 = prfoc0;
-       end
-2'd1:  begin
-       pRa0 = Ra0; pRb0 = Ra2; pRc0 = Rb2;
-       if (fnNumReadPorts(fetchbuf1_instr))< 3'd3)
-           pRc1 = Rc2;
-           ports_avail = 2'd3;
-       end       
-       else
-           ports_avail = 2'd2;
-2'd2:
-       begin
-       pRa0 = Ra0; pRb0 = Rb0; pRc0 = Ra2;
-       if (fnNumReadPorts(fetchbuf1_instr))< 3'd2) begin
-           pRb1 = Rb2; pRc1 = Rc2;
-           ports_avail = 2'd3;
-       end
-       else if (fnNumReadPorts(fetchbuf1_instr))< 3'd3) begin
-           pRc1 = Rb2;
-           ports_avail = 2'd2;
-       end
-       else
-           ports_avail = 2'd1;
-       end
-2'd3:  begin
-           pRa0 = Ra0; pRb0 = Rb0; pRc0 = Rc0;
-           if (fnNumReadPorts(fetchbuf1_instr))< 3'd2) begin
-               pRb1 = Ra2; pRc1 = Rb2;
-               ports_avail = 3'd2;
-           end
-           else if (fnNumReadPorts(fetchbuf1_instr))< 3'd3) begin
-               pRc1 = Rc2;
-               ports_avail = 3'd1;
-           end
-           else
-               ports_avail = 3'd0;
-       end
-endcase
-`else
 wire [6:0] Ra0 = fnRa(fetchbuf0_instr);
 wire [6:0] Rb0 = fnRb(fetchbuf0_instr);
 wire [6:0] Rc0 = fnRc(fetchbuf0_instr);
@@ -722,6 +659,11 @@ wire [6:0] Rc1 = fnRc(fetchbuf1_instr);
 wire [6:0] Rt0 = fnTargetReg(fetchbuf0_instr);
 wire [6:0] Rt1 = fnTargetReg(fetchbuf1_instr);
 always @*
+begin
+    pRt0 = Rt0;
+    pRt1 = Rt1;
+    rfot0 = prfot0;
+    rfot1 = prfot1; 
     case(fetchbuf0_v ? fnNumReadPorts(fetchbuf0_instr) : 2'd0)
     2'd0:   begin
             pRa0 = 7'd0;
@@ -776,7 +718,7 @@ always @*
             ports_avail = 2'd1;
             end
     endcase
-`endif
+end
 
 /*
 wire [8:0] Rb0 = ((fnNumReadPorts(fetchbuf0_instr) < 3'd2) || !fetchbuf0_v) ? {1'b0,fetchbuf1_instr[`INSTRUCTION_RC]} :
@@ -800,10 +742,6 @@ wire [3:0] Pn0 = fetchbuf0_instr[7:4];
 wire [3:0] Pt0 = fetchbuf0_instr[11:8];
 wire [3:0] Pn1 = fetchbuf1_instr[7:4];
 wire [3:0] Pt1 = fetchbuf1_instr[11:8];
-`ifdef THREEWAY
-wire [3:0] Pn2 = fetchbuf2_instr[7:4];
-wire [3:0] Pt2 = fetchbuf2_instr[11:8];
-`endif
 
 function [6:0] fnRa;
 input [63:0] insn;
@@ -901,38 +839,7 @@ default:    fnIsAlu0Op = `FALSE;
 endcase
 endfunction
 
-`ifdef THREEWAY
-Thor_regfile2w9r #(DBW) urf1
-(
-	.clk(clk),
-	.rclk(~clk),
-	.wr0(commit0_v && ~commit0_tgt[6] && iqentry_op[head0]!=`MTSPR),
-	.wr1(commit1_v && ~commit1_tgt[6] && iqentry_op[head1]!=`MTSPR),
-	.wa0(commit0_tgt[5:0]),
-	.wa1(commit1_tgt[5:0]),
-	.ra0(Ra0[5:0]),
-	.ra1(Rb0[5:0]),
-	.ra2(Rc0[5:0]),
-	.ra3(Ra1[5:0]),
-	.ra4(Rb1[5:0]),
-	.ra5(Rc1[5:0]),
-	.ra6(Ra2[5:0]),
-	.ra7(Rb2[5:0]),
-	.ra8(Rc2[5:0]),
-	.i0(commit0_bus),
-	.i1(commit1_bus),
-	.o0(rfoa0),
-	.o1(rfob0),
-	.o2(rfoc0),
-	.o3(rfoa1),
-	.o4(rfob1),
-	.o5(rfoc1),
-	.o6(rfoa2),
-    .o7(rfob2),
-    .o8(rfoc2)
-);
-`else
-Thor_regfile2w4r #(DBW) urf1
+Thor_regfile2w6r #(DBW) urf1
 (
 	.clk(clk),
 	.rclk(~clk),
@@ -944,20 +851,20 @@ Thor_regfile2w4r #(DBW) urf1
 	.ra1(pRb0[5:0]),
 	.ra2(pRa1[5:0]),
 	.ra3(pRb1[5:0]),
+	.ra4(pRt0[5:0]),
+	.ra5(pRt1[5:0]),
 	.i0(commit0_bus),
 	.i1(commit1_bus),
 	.o0(prfoa0),
 	.o1(prfob0),
 	.o2(prfoa1),
-	.o3(prfob1)
+	.o3(prfob1),
+	.o4(prfot0),
+	.o5(prfot1)
 );
-`endif
 
 wire [63:0] cregs0 = fnCar(fetchbuf0_instr)==4'd0 ? 64'd0 : fnCar(fetchbuf0_instr)==4'hF ? fetchbuf0_pc : cregs[fnCar(fetchbuf0_instr)];
 wire [63:0] cregs1 = fnCar(fetchbuf1_instr)==4'd0 ? 64'd0 : fnCar(fetchbuf1_instr)==4'hF ? fetchbuf1_pc : cregs[fnCar(fetchbuf1_instr)];
-`ifdef THREEWAY
-wire [63:0] cregs2 = fnCar(fetchbuf2_instr)==4'd0 ? 64'd0 : fnCar(fetchbuf2_instr)==4'hF ? fetchbuf2_pc : cregs[fnCar(fetchbuf2_instr)];
-`endif
 //
 // 1 if the the operand is automatically valid, 
 // 0 if we need a RF value
@@ -1028,6 +935,19 @@ input [7:0] opcode;
 	`MUX:	fnSource3_v = 1'b0;
 	default:	fnSource3_v = 1'b1;
 	endcase
+endfunction
+
+function fnSourceT_v;
+input [7:0] opcode;
+    casex(opcode)
+    `BR,
+    `SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`SWS,
+    `CACHE,
+    `SEI,`CLI,`NOP,`STP,
+    `MEMSB,`MEMDB,`SYNC:
+            fnSourceT_v = 1'b1;
+    default:    fnSourceT_v = 1'b0;
+    endcase
 endfunction
 
 // Return the number of register read ports required for an instruction.
@@ -1569,25 +1489,12 @@ begin
 		fetchbuf1_pc <= string_pc;
 	else
 	fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
-`ifdef THREEWAY
-	fetchbuf2_instr <= (fetchbuf == 1'b0) ? fetchbufE_instr : fetchbufF_instr;
-	fetchbuf2_v     <= (fetchbuf == 1'b0) ? fetchbufE_v     : fetchbufF_v    ;
-
-	if (int_pending && string_pc != 64'd0)
-		fetchbuf2_pc <= string_pc;
-	else
-	fetchbuf2_pc    <= (fetchbuf == 1'b0) ? fetchbufE_pc    : fetchbufF_pc   ;
-`endif
 end
 
 wire [7:0] opcodeA = fetchbufA_instr[`OPCODE];
 wire [7:0] opcodeB = fetchbufB_instr[`OPCODE];
 wire [7:0] opcodeC = fetchbufC_instr[`OPCODE];
 wire [7:0] opcodeD = fetchbufD_instr[`OPCODE];
-`ifdef THREEWAY
-wire [7:0] opcodeE = fetchbufE_instr[`OPCODE];
-wire [7:0] opcodeF = fetchbufF_instr[`OPCODE];
-`endif
 
 function fnIsMem;
 input [7:0] opcode;
@@ -1998,15 +1905,7 @@ assign take_branch0 = ({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`
 assign take_branch1 = ({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`VAL, `TRUE, `TRUE}) ||
                       ({fetchbuf1_v, opcode1==`LOOP}  == {`VAL, `TRUE})
                         ;
-`ifdef THREEWAY
-assign take_branch2 = ({fetchbuf2_v, fnIsBranch(opcode2), predict_taken2}  == {`VAL, `TRUE, `TRUE}) ||
-                      ({fetchbuf2_v, opcode2==`LOOP}  == {`VAL, `TRUE})
-                        ;
-`endif                     
 assign take_branch = take_branch0 || take_branch1
-`ifdef THREEWAY
-        || take_branch2
-`endif
         ;
 
 reg [DBW-1:0] branch_pc;// =
@@ -2120,29 +2019,6 @@ end
 else
 	insn1 <= {8{8'h10}};	// load with NOPs
 
-
-`ifdef THREEWAY
-always @*
-//if (int_commit)
-//	insn1 <= {8{8'h10}};	// load with NOPs
-//else
-if (nmi_edge & ~StatusHWI & ~int_commit)
-	insn2 <= {8'hFE,8'hCE,8'hA6,8'h01,8'hFE,8'hCE,8'hA6,8'h01};
-else if (ITLBMiss)
-	insn2 <= {8'hF9,8'hCE,8'hA6,8'h01,8'hF9,8'hCE,8'hA6,8'h01};
-else if (insnerr)
-	insn2 <= {8'hFC,8'hCE,8'hA6,8'h01,8'hFC,8'hCE,8'hA6,8'h01};
-else if (irq_i & ~im & ~StatusHWI & ~int_commit)
-	insn2 <= {vec_i,8'hCE,8'hA6,8'h01,vec_i,8'hCE,8'hA6,8'h01};
-else if (ihit) begin
-	if (insn2a[7:0]==8'h00)
-		insn2 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
-	else
-		insn2 <= insn2a;
-end
-else
-	insn2 <= {8{8'h10}};	// load with NOPs
-`endif
 
 // Find the second instruction in the instruction line.
 always @(insn)
@@ -2413,7 +2289,7 @@ assign  iqentry_imm[0] = fnHasConst(iqentry_op[0]),
 // their results into the IQ entry directly, at which point it becomes issue-able
 //
 
-always @(n)
+always @*
 for (n = 0; n < QENTRIES; n = n + 1)
     iq_cmt[n] <= fnPredicate(iqentry_pred[n], iqentry_cond[n]) ||
         (iqentry_cond[n] < 4'h2 && ({iqentry_pred[n],iqentry_cond[n]}!=8'h90));
@@ -2442,7 +2318,11 @@ assign args_valid[g] =
 				|| (iqentry_a2_s[g] == alu1_sourceid && alu1_v))
 			&& (iqentry_a3_v[g] 
 				|| (iqentry_a3_s[g] == alu0_sourceid && alu0_v)
-				|| (iqentry_a3_s[g] == alu1_sourceid && alu1_v));
+				|| (iqentry_a3_s[g] == alu1_sourceid && alu1_v))
+			&& (iqentry_T_v[g]
+				|| (iqentry_T_s[g] == alu0_sourceid && alu0_v)
+                || (iqentry_T_s[g] == alu1_sourceid && alu1_v))
+			;
 
 assign could_issue[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g] && args_valid[g] &&
                          (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1) && iq_cmt[g];
@@ -2706,321 +2586,17 @@ begin
 end
 `endif
 
-assign stomp_all = `FALSE;//fnIsStoreString(iqentry_op[head0]) && int_pending;
-reg [7:0] stomp_mask;
-reg [DBW-1:0] cmt_miss_pc;
 // 
 // additional logic for handling a branch miss (STOMP logic)
 //
-always @*     
-begin
-    cmt_miss = `FALSE;
-    cmt_miss_id = 3'd0;
-    stomp_mask = 8'hFF;
-    // If not committing
-    if (!iqentry_cmt[head0]) begin
-        // And the next instruction depends on the commit
-        if (iqentry_v[head1] && (iqentry_a1_s[head1][2:0]==head0 ||
-            iqentry_a2_s[head1][2:0]==head0 || iqentry_a3_s[head1]==head0 || iqentry_p_s[head1]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head1;
-            cmt_miss_pc = iqentry_pc[head1];
-            stomp_mask[head1] = 1'b0;
-            stomp_mask[head2] = 1'b0;
-            stomp_mask[head3] = 1'b0;
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        // Or the following instruction
-        else if (iqentry_v[head2] && (iqentry_a1_s[head2][2:0]==head0 ||
-            iqentry_a2_s[head2][2:0]==head0 || iqentry_a3_s[head2]==head0 || iqentry_p_s[head2]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head2;
-            cmt_miss_pc = iqentry_pc[head2];
-            stomp_mask[head2] = 1'b0;
-            stomp_mask[head3] = 1'b0;
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head3] && (iqentry_a1_s[head3][2:0]==head0 ||
-            iqentry_a2_s[head3][2:0]==head0 || iqentry_a3_s[head3]==head0 || iqentry_p_s[head3]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head3;
-            cmt_miss_pc = iqentry_pc[head3];
-            stomp_mask[head3] = 1'b0;
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head4] && (iqentry_a1_s[head4][2:0]==head0 || 
-        iqentry_a2_s[head4][2:0]==head0 || iqentry_a3_s[head4]==head0 || iqentry_p_s[head4]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head4;
-            cmt_miss_pc = iqentry_pc[head4];
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head5] && (iqentry_a1_s[head5][2:0]==head0 ||
-            iqentry_a2_s[head5][2:0]==head0 || iqentry_a3_s[head5]==head0 || iqentry_p_s[head5]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head5;
-            cmt_miss_pc = iqentry_pc[head5];
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head6] && (iqentry_a1_s[head6][2:0]==head0 ||
-         iqentry_a2_s[head6][2:0]==head0 || iqentry_a3_s[head6]==head0 || iqentry_p_s[head6]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head6;
-            cmt_miss_pc = iqentry_pc[head6];
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head0 ||
-        iqentry_a2_s[head7][2:0]==head0 || iqentry_a3_s[head7]==head0 || iqentry_p_s[head7]==head0)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head7;
-            cmt_miss_pc = iqentry_pc[head7];
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-    else if (!iqentry_cmt[head1]) begin
-        if (iqentry_v[head2] && (iqentry_a1_s[head2][2:0]==head1 || 
-        iqentry_a2_s[head2][2:0]==head1 || iqentry_a3_s[head2]==head1 || iqentry_p_s[head2]==head1)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head2;
-            cmt_miss_pc = iqentry_pc[head2];
-            stomp_mask[head2] = 1'b0;
-            stomp_mask[head3] = 1'b0;
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head3] && (iqentry_a1_s[head3][2:0]==head1 ||
-        iqentry_a2_s[head3][2:0]==head1 || iqentry_a3_s[head3]==head1 || iqentry_p_s[head3]==head1)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head3;
-            cmt_miss_pc = iqentry_pc[head3];
-            stomp_mask[head3] = 1'b0;
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head4] && (iqentry_a1_s[head4][2:0]==head1 || 
-        iqentry_a2_s[head4][2:0]==head1 || iqentry_a3_s[head4]==head1 || iqentry_p_s[head4]==head1)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head4;
-            cmt_miss_pc = iqentry_pc[head4];
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head5] && (iqentry_a1_s[head5][2:0]==head1 || 
-        iqentry_a2_s[head5][2:0]==head1 || iqentry_a3_s[head5]==head1 || iqentry_p_s[head5]==head1)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head5;
-            cmt_miss_pc = iqentry_pc[head5];
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head6] && (iqentry_a1_s[head6][2:0]==head1 ||
-        iqentry_a2_s[head6][2:0]==head1 || iqentry_a3_s[head6]==head1 || iqentry_p_s[head6]==head1)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head6;
-            cmt_miss_pc = iqentry_pc[head6];
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head1 ||
-        iqentry_a2_s[head7][2:0]==head1 || iqentry_a3_s[head7]==head1 || iqentry_p_s[head7]==head1)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head7;
-            cmt_miss_pc = iqentry_pc[head7];
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-    else if (!iqentry_cmt[head2]) begin
-        if (iqentry_v[head3] && (iqentry_a1_s[head3][2:0]==head2 ||
-        iqentry_a2_s[head3][2:0]==head2 || iqentry_a3_s[head3]==head2 || iqentry_p_s[head3]==head2)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head3;
-            cmt_miss_pc = iqentry_pc[head3];
-            stomp_mask[head3] = 1'b0;
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head4] && (iqentry_a1_s[head4][2:0]==head2 ||
-        iqentry_a2_s[head4][2:0]==head2 || iqentry_a3_s[head4]==head2 || iqentry_p_s[head4]==head2)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head4;
-            cmt_miss_pc = iqentry_pc[head4];
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head5] && (iqentry_a1_s[head5][2:0]==head2 ||
-        iqentry_a2_s[head5][2:0]==head2 || iqentry_a3_s[head5]==head2 || iqentry_p_s[head5]==head2)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head5;
-            cmt_miss_pc = iqentry_pc[head5];
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head6] && (iqentry_a1_s[head6][2:0]==head2 || 
-        iqentry_a2_s[head6][2:0]==head2 || iqentry_a3_s[head6]==head2 || iqentry_p_s[head6]==head2)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head6;
-            cmt_miss_pc = iqentry_pc[head6];
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head2 ||
-        iqentry_a2_s[head7][2:0]==head2 || iqentry_a3_s[head7]==head2 || iqentry_p_s[head7]==head2)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head7;
-            cmt_miss_pc = iqentry_pc[head7];
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-    else if (!iqentry_cmt[head3]) begin
-        if (iqentry_v[head4] && (iqentry_a1_s[head4][2:0]==head3 || 
-        iqentry_a2_s[head4][2:0]==head3 || iqentry_a3_s[head4]==head3 || iqentry_p_s[head4]==head3)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head4;
-            cmt_miss_pc = iqentry_pc[head4];
-            stomp_mask[head4] = 1'b0;
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head5] && (iqentry_a1_s[head5][2:0]==head3 ||
-        iqentry_a2_s[head5][2:0]==head3 || iqentry_a3_s[head5]==head3 || iqentry_p_s[head5]==head3)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head5;
-            cmt_miss_pc = iqentry_pc[head5];
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head6] && (iqentry_a1_s[head6][2:0]==head3 ||
-        iqentry_a2_s[head6][2:0]==head3 || iqentry_a3_s[head6]==head3 || iqentry_p_s[head6]==head3)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head6;
-            cmt_miss_pc = iqentry_pc[head6];
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head3 || 
-        iqentry_a2_s[head7][2:0]==head3 || iqentry_a3_s[head7]==head3 || iqentry_p_s[head7]==head3)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_pc = iqentry_pc[head7];
-            cmt_miss_id = head7;
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-    else if (!iqentry_cmt[head4]) begin
-        if (iqentry_v[head5] && (iqentry_a1_s[head5][2:0]==head4 || 
-        iqentry_a2_s[head5][2:0]==head4 || iqentry_a3_s[head5]==head4 || iqentry_p_s[head5]==head4)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head5;
-            cmt_miss_pc = iqentry_pc[head5];
-            stomp_mask[head5] = 1'b0;
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head6] && (iqentry_a1_s[head6][2:0]==head4 ||
-        iqentry_a2_s[head6][2:0]==head4 || iqentry_a3_s[head6]==head4 || iqentry_p_s[head6]==head4)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head6;
-            cmt_miss_pc = iqentry_pc[head6];
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head4 ||
-        iqentry_a2_s[head7][2:0]==head4 || iqentry_a3_s[head7]==head4 || iqentry_p_s[head7]==head4)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head7;
-            cmt_miss_pc = iqentry_pc[head7];
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-    else if (!iqentry_cmt[head5]) begin
-        if (iqentry_v[head6] && (iqentry_a1_s[head6][2:0]==head5 || 
-        iqentry_a2_s[head6][2:0]==head5 || iqentry_a3_s[head6]==head5 || iqentry_p_s[head6]==head5)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head6;
-            cmt_miss_pc = iqentry_pc[head6];
-            stomp_mask[head6] = 1'b0;
-            stomp_mask[head7] = 1'b0; 
-        end
-        else if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head5 ||
-        iqentry_a2_s[head7][2:0]==head5 || iqentry_a3_s[head7]==head5 || iqentry_p_s[head7]==head5)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head7;
-            cmt_miss_pc = iqentry_pc[head7];
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-    else if (!iqentry_cmt[head6]) begin
-        if (iqentry_v[head7] && (iqentry_a1_s[head7][2:0]==head6 ||
-        iqentry_a2_s[head7][2:0]==head6 || iqentry_a3_s[head7]==head6 || iqentry_p_s[head7]==head6)) begin
-            cmt_miss = `TRUE;
-            cmt_miss_id = head7;
-            cmt_miss_pc = iqentry_pc[head7];
-            stomp_mask[head7] = 1'b0; 
-        end
-    end
-end
-
-assign
-	iqentry_stomp[0] = branchmiss ? (iqentry_v[0] && head0 != 3'd0 && (missid == 3'd7 || iqentry_stomp[7])) :
-	                   cmt_miss ? ~stomp_mask[0] : 1'b0;
-assign	                   
-	iqentry_stomp[1] = branchmiss ? (iqentry_v[1] && head0 != 3'd1 && (missid == 3'd0 || iqentry_stomp[0])) :
-	                   cmt_miss ? ~stomp_mask[1] : 1'b0;
-assign	                  
-	iqentry_stomp[2] = branchmiss ? (iqentry_v[2] && head0 != 3'd2 && (missid == 3'd1 || iqentry_stomp[1])) :
-	                   cmt_miss ? ~stomp_mask[2] : 1'b0;
-assign	                   
-	iqentry_stomp[3] = branchmiss ? (iqentry_v[3] && head0 != 3'd3 && (missid == 3'd2 || iqentry_stomp[2])) :
-	                   cmt_miss ? ~stomp_mask[3] : 1'b0;
-assign	                   
-	iqentry_stomp[4] = branchmiss ? (iqentry_v[4] && head0 != 3'd4 && (missid == 3'd3 || iqentry_stomp[3])) :
-	                   cmt_miss ? ~stomp_mask[4] : 1'b0;
-assign	                  
-	iqentry_stomp[5] = branchmiss ? (iqentry_v[5] && head0 != 3'd5 && (missid == 3'd4 || iqentry_stomp[4])) :
-	                   cmt_miss ? ~stomp_mask[5] : 1'b0;
-assign	                   
-	iqentry_stomp[6] = branchmiss ? (iqentry_v[6] && head0 != 3'd6 && (missid == 3'd5 || iqentry_stomp[5])) :
-	                   cmt_miss ? ~stomp_mask[6] : 1'b0;
-assign	                  
-	iqentry_stomp[7] = branchmiss ? (iqentry_v[7] && head0 != 3'd7 && (missid == 3'd6 || iqentry_stomp[6])) :
-	                   cmt_miss ? ~stomp_mask[7] : 1'b0;
-/*
-	iqentry_stomp[1] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[1] && head0 != 3'd1 && (missid == 3'd0 || iqentry_stomp[0])),
-	iqentry_stomp[2] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[2] && head0 != 3'd2 && (missid == 3'd1 || iqentry_stomp[1])),
-	iqentry_stomp[3] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[3] && head0 != 3'd3 && (missid == 3'd2 || iqentry_stomp[2])),
-	iqentry_stomp[4] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[4] && head0 != 3'd4 && (missid == 3'd3 || iqentry_stomp[3])),
-	iqentry_stomp[5] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[5] && head0 != 3'd5 && (missid == 3'd4 || iqentry_stomp[4])),
-	iqentry_stomp[6] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[6] && head0 != 3'd6 && (missid == 3'd5 || iqentry_stomp[5])),
-	iqentry_stomp[7] = stomp_all || ((branchmiss|cmt_miss) && iqentry_v[7] && head0 != 3'd7 && (missid == 3'd6 || iqentry_stomp[6]));
-*/
+assign iqentry_stomp[0] = branchmiss & (iqentry_v[0] && head0 != 3'd0 && (missid == 3'd7 || iqentry_stomp[7]));
+assign iqentry_stomp[1] = branchmiss & (iqentry_v[1] && head0 != 3'd1 && (missid == 3'd0 || iqentry_stomp[0]));
+assign iqentry_stomp[2] = branchmiss & (iqentry_v[2] && head0 != 3'd2 && (missid == 3'd1 || iqentry_stomp[1]));
+assign iqentry_stomp[3] = branchmiss & (iqentry_v[3] && head0 != 3'd3 && (missid == 3'd2 || iqentry_stomp[2]));
+assign iqentry_stomp[4] = branchmiss & (iqentry_v[4] && head0 != 3'd4 && (missid == 3'd3 || iqentry_stomp[3]));
+assign iqentry_stomp[5] = branchmiss & (iqentry_v[5] && head0 != 3'd5 && (missid == 3'd4 || iqentry_stomp[4]));
+assign iqentry_stomp[6] = branchmiss & (iqentry_v[6] && head0 != 3'd6 && (missid == 3'd5 || iqentry_stomp[5]));
+assign iqentry_stomp[7] = branchmiss & (iqentry_v[7] && head0 != 3'd7 && (missid == 3'd6 || iqentry_stomp[6]));
 
 assign alu0_issue = (!(iqentry_v[0] && iqentry_stomp[0]) && iqentry_issue[0] && iqentry_islot[0]==2'd0) ||
 			(!(iqentry_v[1] && iqentry_stomp[1]) && iqentry_issue[1] && iqentry_islot[1]==2'd0) ||
@@ -3422,9 +2998,9 @@ assign mem_issue =
 assign limit_cmt = 1'b0;
 //assign committing2 = (iqentry_v[head0] && iqentry_v[head1] && !limit_cmt) || (head0 != tail0 && head1 != tail0);
 
-assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic && iqentry_cmt[head0]);
+assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic);
 assign commit1_v = ({iqentry_v[head0], iqentry_done[head0]} != 2'b10 
-		&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && iqentry_cmt[head1] && !limit_cmt);
+		&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && !limit_cmt);
 
 assign commit0_id = {iqentry_mem[head0], head0};	// if a memory op, it has a DRAM-bus id
 assign commit1_id = {iqentry_mem[head1], head1};	// if a memory op, it has a DRAM-bus id
@@ -3533,14 +3109,6 @@ always @(posedge clk) begin
 		fetchbufB_pc <= {{DBW-4{1'b1}},4'h0};
 		fetchbufC_pc <= {{DBW-4{1'b1}},4'h0};
 		fetchbufD_pc <= {{DBW-4{1'b1}},4'h0};
-`ifdef THREEWAY
-		fetchbufE_v <= `INV;
-		fetchbufF_v <= `INV;
-		fetchbufE_instr <= {8{8'h10}};
-        fetchbufF_instr <= {8{8'h10}};
-		fetchbufE_pc <= {{DBW-4{1'b1}},4'h0};
-        fetchbufF_pc <= {{DBW-4{1'b1}},4'h0};
-`endif
 		for (i=0; i< QENTRIES; i=i+1) begin
 			iqentry_v[i] <= `INV;
 			iqentry_agen[i] <= `FALSE;
@@ -3605,7 +3173,7 @@ always @(posedge clk) begin
 	did_branchback0 <= take_branch0;
 	did_branchback1 <= take_branch1;
 
-	if (branchmiss|cmt_miss) begin
+	if (branchmiss) begin
 		for (n = 1; n < NREGS; n = n + 1)
 			if (rf_v[n] == `INV && ~livetarget[n]) begin
 			  $display("brmiss: rf_v[%d] <= VAL",n);
@@ -3667,41 +3235,9 @@ end
 // assignments are used for these vars.
 //-------------------------------------------------------------------------------
 //
-`ifdef THREEWAY
     queued1 = `FALSE;
     queued2 = `FALSE;
-    queued3 = `FALSE;
-    if (branchmiss|cmt_miss) // don't bother doing anything if there's been a branch miss
-        reset_tail_pointers(0);
-    else begin    
-        case ({fetchbuf0_v, fetchbuf1_v, fetchbuf2_v})// && ((fnNumReadPorts(fetchbuf0_instr) + fnNumReadPorts(fetchbuf1_instr) < 3'd5)||!fetchbuf0_v)})
-        3'b000: ;   // do nothing
-        3'b001: enque2(tail0,1,0,1);
-        3'b010: enque1(tail0,1,0,1);
-        3'b011: begin
-                enque1(tail0,1,1,1);
-                enque2(tail1,2,0,0);
-                validate_args1();
-                end
-        3'b100: enque0(tail0,1,0,1);
-        3'b101: ;   // illegal state
-        3'b110: begin
-                enque0(tail0,1,1,1);
-                enque1(tail1,2,0,0);
-                validate_args();
-                end
-        3'b111: begin
-                enque0(tail0,1,1,1);
-                enque1(tail1,2,1,0);
-                enque2(tail2,3,0,0);
-                validate_args3();
-                end
-        endcase
-    end
-`else
-    queued1 = `FALSE;
-    queued2 = `FALSE;
-    if (branchmiss|cmt_miss) // don't bother doing anything if there's been a branch miss
+    if (branchmiss) // don't bother doing anything if there's been a branch miss
         reset_tail_pointers(0);
     else begin
         qstomp = `FALSE;
@@ -3716,7 +3252,7 @@ end
                 end
         endcase
     end
-`endif
+
 //------------------------------------------------------------------------------
 // FETCH
 //
@@ -3725,495 +3261,14 @@ end
 // like alpha approach)
 //------------------------------------------------------------------------------
 //
-`ifdef THREEWAY
 if (branchmiss) begin
-	$display("pc <= %h", misspc);
-	pc <= misspc;
-	fetchbuf <= 1'b0;
-	fetchbufA_v <= 1'b0;
-	fetchbufB_v <= 1'b0;
-	fetchbufC_v <= 1'b0;
-	fetchbufD_v <= 1'b0;
-	fetchbufE_v <= 1'b0;
-	fetchbufF_v <= 1'b0;
-end
-else if (take_branch) begin
-	if (fetchbuf == 1'b0) begin
-		casex ({fetchbufA_v,fetchbufB_v,fetchbufC_v,fetchbufD_v,fetchbufE_v,fetchbufF_v})
-		6'b000000:
-			begin
-			    fetchDEF();
-				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-				fetchbuf <= 1'b1;
-			end
-		6'b000001:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b000010:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b000011:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b000100:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b000101:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b000110:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b000111:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001000:
-			begin
-			    fetchDEF();
-				if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-				fetchbufC_v <= iqentry_v[tail0];
-				if (iqentry_v[tail0]==`INV)
-					fetchbuf <= 1'b1;
-			end
-		6'b001001:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001010:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001011:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001100:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001101:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001110:    panic <= `PANIC_INVALIDFBSTATE;
-		6'b001111:    
-			begin
-                fetchbufC_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b010000:
-			begin
-			    fetchDEF();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufB_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b010001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010111:
-            begin
-                fetchbufB_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b011000:
-            begin
-                if ((fnIsBranch(opcodeB) && predict_takenB)||opcodeB==`LOOP) begin
-                    pc <= branch_pc;
-                    fetchbufB_v <= iqentry_v[tail0];
-                    fetchbufC_v <= `INV;
-                end
-                else begin
-                    if (did_branchback0) begin
-                        fetchDEF();
-                        if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                        fetchbufB_v <= iqentry_v[tail0];
-                        fetchbufC_v <= iqentry_v[tail1];
-                        if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                            fetchbuf <= 1'b1;
-                    end
-                    else begin
-                        pc <= branch_pc;
-                        fetchbufB_v <= iqentry_v[tail0];
-                        fetchbufC_v <= iqentry_v[tail1];
-                    end
-                end
-            end
-        6'b011001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011111:
-            begin
-                fetchbufB_v <= iqentry_v[tail0];
-                fetchbufC_v <= iqentry_v[tail1];
-                if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b100000:
-            begin
-                fetchDEF();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufA_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b100001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100111:
-            begin
-                fetchbufA_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b101xxx:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110000:
-            begin
-                if ((fnIsBranch(opcodeA) && predict_takenA)||opcodeA==`LOOP) begin
-                    pc <= branch_pc;
-                    fetchbufA_v <= iqentry_v[tail0];
-                    fetchbufB_v <= `INV;
-                end
-                else begin
-                    if (did_branchback0) begin
-                        fetchDEF();
-                        if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                        fetchbufA_v <= iqentry_v[tail0];
-                        fetchbufB_v <= iqentry_v[tail1];
-                        if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                            fetchbuf <= 1'b1;
-                    end
-                    else begin
-                        pc <= branch_pc;
-                        fetchbufA_v <= iqentry_v[tail0];
-                        fetchbufB_v <= iqentry_v[tail1];
-                    end
-                end
-            end
-        6'b110001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110111:
-            begin
-                if ((fnIsBranch(opcodeA) && predict_takenA)||opcodeA==`LOOP)
-                    panic <= `PANIC_INVALIDFBSTATE;
-                else begin
-                    fetchbufA_v <= iqentry_v[tail0];
-                    fetchbufB_v <= iqentry_v[tail1];
-                    if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                        fetchbuf <= 1'b1;
-                end
-        6'b111000:
-            begin
-                fetchDEF();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufA_v <= iqentry_v[tail0];
-                fetchbufB_v <= iqentry_v[tail1];
-                fetchbufC_v <= iqentry_v[tail2];
-                if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV && iqentry_v[tail2]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b111001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111111:  panic <= `PANIC_INVALIDFBSTATE;
-            begin
-                fetchbufA_v <= iqentry_v[tail0];
-                fetchbufB_v <= iqentry_v[tail1];
-                fetchbufC_v <= iqentry_v[tail2];
-                if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV && iqentry_v[tail2]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        endcase
-    else
-		casex ({fetchbufD_v,fetchbufE_v,fetchbufF_v,fetchbufA_v,fetchbufB_v,fetchbufC_v})
-        6'b000000:
-            begin
-                fetchABC();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbuf <= 1'b1;
-            end
-        6'b000001:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b000010:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b000011:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b000100:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b000101:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b000110:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b000111:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001000:
-            begin
-                fetchABC();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufF_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b001001:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001010:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001011:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001100:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001101:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001110:    panic <= `PANIC_INVALIDFBSTATE;
-        6'b001111:    
-            begin
-                fetchbufF_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b010000:
-            begin
-                fetchABC();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufE_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b010001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b010111:
-            begin
-                fetchbufE_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b011000:
-            begin
-                if ((fnIsBranch(opcodeE) && predict_takenE)||opcodeE==`LOOP) begin
-                    pc <= branch_pc;
-                    fetchbufE_v <= iqentry_v[tail0];
-                    fetchbufF_v <= `INV;
-                end
-                else begin
-                    if (did_branchback1) begin
-                        fetchABC();
-                        if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                        fetchbufE_v <= iqentry_v[tail0];
-                        fetchbufF_v <= iqentry_v[tail1];
-                        if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                            fetchbuf <= 1'b1;
-                    end
-                    else begin
-                        pc <= branch_pc;
-                        fetchbufE_v <= iqentry_v[tail0];
-                        fetchbufF_v <= iqentry_v[tail1];
-                    end
-                end
-            end
-        6'b011001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b011111:
-            begin
-                fetchbufE_v <= iqentry_v[tail0];
-                fetchbufF_v <= iqentry_v[tail1];
-                if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b100000:
-            begin
-                fetchABC();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufD_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b100001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b100111:
-            begin
-                fetchbufD_v <= iqentry_v[tail0];
-                if (iqentry_v[tail0]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b101xxx:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110000:
-            begin
-                if ((fnIsBranch(opcodeD) && predict_takenD)||opcodeD==`LOOP) begin
-                    pc <= branch_pc;
-                    fetchbufD_v <= iqentry_v[tail0];
-                    fetchbufE_v <= `INV;
-                end
-                else begin
-                    if (did_branchback1) begin
-                        fetchABC();
-                        if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                        fetchbufD_v <= iqentry_v[tail0];
-                        fetchbufE_v <= iqentry_v[tail1];
-                        if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                            fetchbuf <= 1'b1;
-                    end
-                    else begin
-                        pc <= branch_pc;
-                        fetchbufD_v <= iqentry_v[tail0];
-                        fetchbufE_v <= iqentry_v[tail1];
-                    end
-                end
-            end
-        6'b110001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b110111:
-            begin
-                if ((fnIsBranch(opcodeD) && predict_takenD)||opcodeD==`LOOP)
-                    panic <= `PANIC_INVALIDFBSTATE;
-                else begin
-                    fetchbufD_v <= iqentry_v[tail0];
-                    fetchbufE_v <= iqentry_v[tail1];
-                    if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV)
-                        fetchbuf <= 1'b1;
-                end
-        6'b111000:
-            begin
-                fetchABC();
-                if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-                fetchbufD_v <= iqentry_v[tail0];
-                fetchbufE_v <= iqentry_v[tail1];
-                fetchbufF_v <= iqentry_v[tail2];
-                if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV && iqentry_v[tail2]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        6'b111001:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111010:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111011:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111100:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111101:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111110:  panic <= `PANIC_INVALIDFBSTATE;
-        6'b111111:  panic <= `PANIC_INVALIDFBSTATE;
-            begin
-                fetchbufD_v <= iqentry_v[tail0];
-                fetchbufE_v <= iqentry_v[tail1];
-                fetchbufF_v <= iqentry_v[tail2];
-                if (iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV && iqentry_v[tail2]==`INV)
-                    fetchbuf <= 1'b1;
-            end
-        endcase
-else begin  // if (take_branch)
-    if (fetchbuf==1'b0)
-		case ({fetchbufA_v,fetchbufB_v,fetchbufC_v})
-		3'b000:   ;
-		3'b001:
-		    begin
-		        fetchbufC_v <= !queued1;
-		        fetchbuf <= !queued1;
-		    end
-		3'b010:
-		    begin
-		        fetchbufB_v <= !queued1;
-		        fetchbuf <= !queued1;
-		    end
-		3'b011:
-		    begin
-		        fetchbufB_v <= !(queued1|queued2);
-		        fetchbufC_v <= !queued2;
-                fetchbuf <= !queued2;
-		    end
-		3'b100:
-		    begin
-		        fetchbufA_v <= !queued1;
-                fetchbuf <= !queued1;
-		    end
-		3'b101:   // This is an invalid state
-		    begin
-                fetchbufA_v <= !(queued1|queued2);
-                fetchbufC_v <= !queued2;
-                fetchbuf <= !queued2;
-            end
-        3'b110:
-		    begin
-                fetchbufA_v <= !(queued1|queued2);
-                fetchbufB_v <= !queued2;
-                fetchbuf <= !queued2;
-            end
-        3'b111:
-		    begin
-                fetchbufA_v <= !(queued1|queued2|queued3);
-                fetchbufB_v <= !(queued2|queued3);
-                fetchbufC_v <= !queued3;
-                fetchbuf <= !queued3;
-            end
-        endcase
-    else
-		case ({fetchbufD_v,fetchbufE_v,fetchbufF_v})
-		3'b000:   ;
-        3'b001:
-            begin
-                fetchbufF_v <= !queued1;
-                fetchbuf <= queued1;
-            end
-        3'b010:
-            begin
-                fetchbufE_v <= !queued1;
-                fetchbuf <= queued1;
-            end
-        3'b011:
-            begin
-                fetchbufE_v <= !(queued1|queued2);
-                fetchbufF_v <= !queued2;
-                fetchbuf <= queued2;
-            end
-        3'b100:
-            begin
-                fetchbufF_v <= !queued1;
-                fetchbuf <= queued1;
-            end
-        3'b101:   // This is an invalid state
-            begin
-                fetchbufD_v <= !(queued1|queued2);
-                fetchbufF_v <= !queued2;
-                fetchbuf <= queued2;
-            end
-        3'b110:
-            begin
-                fetchbufD_v <= !(queued1|queued2);
-                fetchbufE_v <= !queued2;
-                fetchbuf <= queued2;
-            end
-        3'b111:
-            begin
-                fetchbufD_v <= !(queued1|queued2|queued3);
-                fetchbufE_v <= !(queued2|queued3);
-                fetchbufF_v <= !queued3;
-                fetchbuf <= queued3;
-            end
-        endcase
-
-	if (fetchbufA_v == `INV && fetchbufB_v == `INV && fetchbufD_v==`INV) begin
-	    fetchABC();
-        if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-        // fetchbuf steering logic correction
-        if (fetchbufD_v==`INV && fetchbufE_v==`INV && fetchbufF_v==`INV && do_pcinc)
-            fetchbuf <= 1'b0;
-        $display("hit %b 1pc <= %h", do_pcinc, pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn));
-    end
-    else if (fetchbufD_v == `INV && fetchbufE_v == `INV && fetchbufF_v==`INV) begin
-        fetchDEF();
-        if (do_pcinc) pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn);
-        $display("2pc <= %h", pc + fnInsnLength(insn) + fnInsnLength1(insn) + fnInsnLength2(insn));
-    end
-end
-`else
-if (branchmiss|cmt_miss) begin
-    if (branchmiss) begin
-        $display("pc <= %h", misspc);
-        pc <= misspc;
-        fetchbuf <= 1'b0;
-        fetchbufA_v <= 1'b0;
-        fetchbufB_v <= 1'b0;
-        fetchbufC_v <= 1'b0;
-        fetchbufD_v <= 1'b0;
-	end
-	else begin
-        $display("pc <= %h", misspc);
-        pc <= cmt_miss_pc;
-        fetchbuf <= 1'b0;
-        fetchbufA_v <= 1'b0;
-        fetchbufB_v <= 1'b0;
-        fetchbufC_v <= 1'b0;
-        fetchbufD_v <= 1'b0;
-	end
+    $display("pc <= %h", misspc);
+    pc <= misspc;
+    fetchbuf <= 1'b0;
+    fetchbufA_v <= 1'b0;
+    fetchbufB_v <= 1'b0;
+    fetchbufC_v <= 1'b0;
+    fetchbufD_v <= 1'b0;
 end
 else if (take_branch) begin
 	if (fetchbuf == 1'b0) begin
@@ -4434,7 +3489,7 @@ else begin
 		$display("2pc <= %h", pc + fnInsnLength(insn) + fnInsnLength1(insn));
 	end
 end
-`endif
+
 	if (ihit) begin
 	$display("%h %h hit0=%b hit1=%b#", spc, pc, hit0, hit1);
 	$display("insn=%h", insn);
@@ -4453,10 +3508,10 @@ end
 
 //	if (ihit) begin
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c%c%c%c%c%c %d %c %c%h %d%s %h %h %h %c %o %h %c %o %h %c %o %h %c %o %h #",
+	    $display("%c%c %d: %c%c%c%c%c%c%c%c%c %d %c %c%h %d%s %h %h %h %c %o %h %c %o %h %c %o %h %c %o %h #",
 		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
 		iqentry_v[i]?"v":"-", iqentry_done[i]?"d":"-",
-		iqentry_cmt[i]?"c":"-", iqentry_out[i]?"o":"-", iqentry_bt[i]?"b":"-", iqentry_memissue[i]?"m":"-",
+		iqentry_cmt[i]?"c":"-", iq_cmt[i]?"C":"-",iqentry_out[i]?"o":"-", iqentry_bt[i]?"b":"-", iqentry_memissue[i]?"m":"-",
 		iqentry_agen[i]?"a":"-", iqentry_issue[i]?"i":"-",
 		iqentry_islot[i],
 //		((i==0) ? iqentry_0_islot : (i==1) ? iqentry_1_islot : (i==2) ? iqentry_2_islot : (i==3) ? iqentry_3_islot :
@@ -4704,6 +3759,10 @@ begin
 		iqentry_a3[n] <= alu0_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+	if (iqentry_T_v[n] == `INV && iqentry_T_s[n] == alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
+        iqentry_T[n] <= alu0_bus;
+        iqentry_T_v[n] <= `VAL;
+    end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
 		iqentry_pred[n] <= alu1_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
@@ -4720,6 +3779,10 @@ begin
 		iqentry_a3[n] <= alu1_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+	if (iqentry_T_v[n] == `INV && iqentry_T_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
+        iqentry_T[n] <= alu1_bus;
+        iqentry_T_v[n] <= `VAL;
+    end
 `ifdef FLOATING_POINT
 /*
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
@@ -4739,6 +3802,10 @@ begin
 		iqentry_a3[n] <= fp0_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+	if (iqentry_T_v[n] == `INV && iqentry_T_s[n] == fp0_id && iqentry_v[n] == `VAL && fp0_v == `VAL) begin
+        iqentry_T[n] <= fp0_bus;
+        iqentry_T_v[n] <= `VAL;
+    end
 `endif
     // For SWCR
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
@@ -4757,6 +3824,10 @@ begin
 		iqentry_a3[n] <= dram_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+	if (iqentry_T_v[n] == `INV && iqentry_T_s[n] == dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
+        iqentry_T[n] <= dram_bus;
+        iqentry_T_v[n] <= `VAL;
+    end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
 		iqentry_pred[n] <= commit0_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
@@ -4773,6 +3844,10 @@ begin
 		iqentry_a3[n] <= commit0_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+	if (iqentry_T_v[n] == `INV && iqentry_T_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
+        iqentry_T[n] <= commit0_bus;
+        iqentry_T_v[n] <= `VAL;
+    end
 	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
 		iqentry_pred[n] <= commit1_bus[3:0];
 		iqentry_p_v[n] <= `VAL;
@@ -4789,6 +3864,10 @@ begin
 		iqentry_a3[n] <= commit1_bus;
 		iqentry_a3_v[n] <= `VAL;
 	end
+	if (iqentry_T_v[n] == `INV && iqentry_T_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
+        iqentry_T[n] <= commit1_bus;
+        iqentry_T_v[n] <= `VAL;
+    end
 end
 
 //`include "Thor_issue.v"
@@ -5336,8 +4415,10 @@ for (n = 0; n < QENTRIES; n = n + 1)
 begin
     if (iqentry_op[n]==`IMM && iqentry_v[(n+1)&7] && iqentry_pc[(n+1)&7]==iqentry_pc[n]+iqentry_insnsz[n])
         iqentry_done[n] <= `TRUE;
-    if (iqentry_v[n] && args_valid[n] && !iqentry_out[n] && !iq_cmt[n] && iqentry_op[n]!=`IMM)
+    if (iqentry_v[n] && args_valid[n] && !iqentry_out[n] && !iq_cmt[n] && iqentry_op[n]!=`IMM) begin
         iqentry_done[n] <= `TRUE;
+        iqentry_res[n] <= iqentry_T[n];
+    end
     if (!iqentry_v[n])
         iqentry_done[n] <= `FALSE;
 /*
@@ -5965,12 +5046,14 @@ begin
                                      Rb0[6] ? fnSpr(Rb0[5:0],fetchbuf0_pc) :
                                      rfob0;
         iqentry_a3   [tail]    <=   rfoc0;
+        iqentry_T    [tail]    <=   rfot0;
         // The source is set even though the arg might be automatically valid (less logic).
         // This is harmless to do. Note there is no source for the 'I' argument.
         iqentry_p_s  [tail]    <=   rf_source[{1'b1,2'h0,Pn0}];
         iqentry_a1_s [tail]    <=   rf_source[Ra0];
         iqentry_a2_s [tail]    <=   rf_source[Rb0];
         iqentry_a3_s [tail]    <=   rf_source[Rc0];
+        iqentry_T_s  [tail]    <=   rf_source[Rt0];
         // Always do this because it's the first queue slot.
         validate_args10(tail);
         tail0 <= tail0 + inc;
@@ -6039,12 +5122,14 @@ begin
                                     Rb1[6] ? fnSpr(Rb1[5:0],fetchbuf1_pc) :
                                     rfob1;
         iqentry_a3   [tail]    <=   rfoc1;
+        iqentry_T    [tail]    <=   rfot1;
         // The source is set even though the arg might be automatically valid (less logic). If 
         // queueing two entries the source settings may be overridden in the argument valudation.
         iqentry_p_s  [tail]    <=   rf_source[{1'b1,2'h0,Pn1}];
         iqentry_a1_s [tail]    <=   rf_source[Ra1];
         iqentry_a2_s [tail]    <=   rf_source[Rb1];
         iqentry_a3_s [tail]    <=   rf_source[Rc1];
+        iqentry_T_s  [tail]    <=   rf_source[Rt1];
         if (validate_args)
             validate_args11(tail);
         tail0 <= tail0 + inc;
@@ -6056,77 +5141,6 @@ begin
 end
 endtask
 
-`ifdef THREEWAY
-// enque 3 on tail0 or tail1
-task enque2;
-input [2:0] tail;
-input [2:0] inc;
-input test_stomp;
-input validate_args;
-begin
-    if (iqentry_v[tail] == `INV && !qstomp) begin
-        if ((({fnIsBranch(opcode2), predict_taken2} == {`TRUE, `TRUE})||(opcode2==`LOOP)) && test_stomp)
-            qstomp = `TRUE;
-        iqentry_v    [tail]    <=   `VAL;
-        iqentry_done [tail]    <=   `INV;
-        iqentry_cmt  [tail]    <=   `TRUE;
-        iqentry_out  [tail]    <=   `INV;
-        iqentry_res  [tail]    <=   `ZERO;
-        iqentry_insnsz[tail]   <=  fnInsnLength(fetchbuf2_instr);
-        iqentry_op   [tail]    <=   opcode2;
-        iqentry_fn   [tail]    <=   opcode2==`MLO ? rfoc2[5:0] : fnFunc(fetchbuf2_instr);
-        iqentry_cond [tail]    <=   cond2;
-        iqentry_bt   [tail]    <=   fnIsFlowCtrl(opcode2) && predict_taken2; 
-        iqentry_agen [tail]    <=   `INV;
-        // If an interrupt is being enqueued and the previous instruction was an immediate prefix, then
-        // inherit the address of the previous instruction, so that the prefix will be executed on return
-        // from interrupt.
-        // If a string operation was in progress then inherit the address of the string operation so that
-        // it can be continued.
-        
-        iqentry_pc   [tail]    <=    
-            (opcode2==`INT && iqentry_op[tail0-3'd1]==`IMM && iqentry_v[tail-3'd1]==`VAL) ? 
-                (string_pc != 64'd0 ? string_pc : iqentry_pc[tail-3'd1]) : fetchbuf2_pc;
-        //iqentry_pc   [tail0]    <=   fetchbuf1_pc;
-        iqentry_mem  [tail]    <=   fetchbuf2_mem;
-        iqentry_jmp  [tail]    <=   fetchbuf2_jmp;
-        iqentry_fp   [tail]    <=   fetchbuf2_fp;
-        iqentry_rfw  [tail]    <=   fetchbuf2_rfw;
-        iqentry_tgt  [tail]    <=   Rt2;
-        iqentry_pred [tail]    <=   pregs[Pn2];
-        iqentry_p_s  [tail]    <=   rf_source [{1'b1,2'h0,Pn2}];
-        // Look at the previous queue slot to see if an immediate prefix is enqueued
-        // But don't allow it for a branch
-        iqentry_a0[tail]   <=       opcode2==`INT ? fnImm(fetchbuf2_instr) :
-                                    fnIsBranch(opcode2) ? {{DBW-12{fetchbuf2_instr[11]}},fetchbuf2_instr[11:8],fetchbuf2_instr[23:16]} :
-                                    (inc>3'd1 && opcode1==`IMM) ? {fnImmImm(fetchbuf1_instr)|fnImm8(fetchbuf2_instr)} :
-                                    iqentry_op[tail-3'd1]==`IMM && iqentry_v[tail-3'd1] ? {iqentry_a0[tail-3'd1][DBW-1:8],fnImm8(fetchbuf2_instr)} :
-                                    opcode2==`IMM ? fnImmImm(fetchbuf2_instr) :
-                                    fnImm(fetchbuf2_instr);
-        iqentry_a1   [tail]    <=   //fnIsFlowCtrl(opcode1) ? bregs1 : rfoa1;
-                                        fnOpa(opcode2,fetchbuf2_instr,rfoa2,fetchbuf2_pc);
-        iqentry_a1_s [tail]    <=   rf_source [fnRa(fetchbuf2_instr)];
-        iqentry_a2   [tail]    <=   fnIsShiftiop(fetchbuf2_instr) ? {{DBW-6{1'b0}},fetchbuf2_instr[`INSTRUCTION_RB]} :
-                                    fnIsFPCtrl(fetchbuf2_instr) ? {{DBW-6{1'b0}},fetchbuf2_instr[`INSTRUCTION_RB]} :
-                                    opcode1==`INC ? {{56{fetchbuf2_instr[47]}},fetchbuf2_instr[47:40]} : 
-                                    opcode1==`STI ? fetchbuf2_instr[27:22] :
-                                    Rb2[6] ? fnSpr(Rb2[5:0],fetchbuf2_pc) :
-                                    rfob2;
-        iqentry_a2_s [tail]    <=   rf_source[Rb2];
-        iqentry_a3   [tail]    <=   rfoc2;
-        iqentry_a3_s [tail]    <=   rf_source[Rc2];
-        if (validate_args)
-            validate_args12(tail); 
-        tail0 <= tail0 + inc;
-        tail1 <= tail1 + inc;
-        tail2 <= tail2 + inc;
-        if (inc==3) queued3=`TRUE;
-        else if (inc==2) queued2=`TRUE; else queued1 = `TRUE;
-    end
-end
-endtask
-`endif
-
 task validate_args10;
 input [2:0] tail;
 begin
@@ -6134,6 +5148,7 @@ begin
     iqentry_a1_v [tail]    <=   fnSource1_v( opcode0 ) | rf_v[ Ra0 ];
     iqentry_a2_v [tail]    <=   fnSource2_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[Rb0];
     iqentry_a3_v [tail]    <=   fnSource3_v( opcode0 ) | rf_v[ Rc0 ];
+    iqentry_T_v  [tail]    <=   fnSourceT_v( opcode0 ) | rf_v[ Rt0 ];
     if (fetchbuf0_rfw|fetchbuf0_pfw) begin
         $display("regv[%d] = %d", Rt0,rf_v[ Rt0 ]);
         rf_v[ Rt0 ] = Rt0==7'd0;
@@ -6152,6 +5167,7 @@ begin
     iqentry_a1_v [tail]    <=   fnSource1_v( opcode1 ) | rf_v[ Ra1 ];
     iqentry_a2_v [tail]    <=   fnSource2_v( opcode1, fnFunc(fetchbuf1_instr) ) | rf_v[ Rb1 ];
     iqentry_a3_v [tail]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc1 ];
+    iqentry_T_v  [tail]    <=   fnSourceT_v( opcode1 ) | rf_v[ Rt1 ];
     if (fetchbuf1_rfw|fetchbuf1_pfw) begin
         $display("1:regv[%d] = %d", Rt1,rf_v[ Rt1 ]);
         rf_v[ Rt1 ] = Rt1==7'd0;
@@ -6161,25 +5177,6 @@ begin
     end
 end
 endtask
-
-`ifdef THREEWAY
-task validate_args12;
-input [2:0] tail;
-begin
-    // The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
-    iqentry_p_v  [tail]    <=   rf_v [{1'b1,2'h0,Pn2}] || cond2 < 4'h2;
-    iqentry_a1_v [tail]    <=   fnSource1_v( opcode2 ) | rf_v[ fnRa(fetchbuf2_instr) ];
-    iqentry_a2_v [tail]    <=   fnSource2_v( opcode2, fnFunc(fetchbuf2_instr) ) | rf_v[ Rb2 ];
-    iqentry_a3_v [tail]    <=   fnSource3_v( opcode2 ) | rf_v[ Rc2 ];
-    if (fetchbuf2_rfw|fetchbuf2_pfw) begin
-        $display("1:regv[%d] = %d", Rt2,rf_v[ Rt2 ]);
-        rf_v[ Rt2 ] = Rt2==7'd0;
-        $display("reg[%d] <= INV",Rt2);
-        rf_source[ Rt2 ] <= { /*fetchbuf1_mem*/1'b0, tail };    // top bit indicates ALU/MEM bus
-    end
-end
-endtask
-`endif
 
 // If two entries were queued then validate the arguments for the second entry.
 //
@@ -6280,6 +5277,33 @@ begin
            iqentry_a3_v [tail1]    <=   rf_v [Rc1];
            iqentry_a3_s [tail1]    <=   rf_source [Rc1];
        end
+
+
+       //
+       // Target 3 ... this is relatively straightforward, because all instructions
+       // that have a source (i.e. every instruction but LUI) read from RC
+       //
+       // if the argument is an immediate or not needed, we're done
+       if (fnSourceT_v( opcode1 ) == `VAL) begin
+           iqentry_T_v [tail1] <= `VAL;
+           iqentry_T_v [tail1] <= 4'hF;
+       end
+       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+       else if (!fetchbuf0_rfw) begin
+           iqentry_T_v [tail1]    <=   rf_v [Rt1];
+           iqentry_T_s [tail1]    <=   rf_source [Rt1];
+       end
+       // otherwise, previous instruction does write to RF ... see if overlap
+       else if (Rt0 != 7'd0 && Rt1 == Rt0) begin
+           // if the previous instruction is a LW, then grab result from memq, not the iq
+           iqentry_T_v [tail1]    <=   `INV;
+           iqentry_T_s [tail1]    <=   {fetchbuf0_mem,tail0};
+       end
+       // if no overlap, get info from rf_v and rf_source
+       else begin
+           iqentry_T_v [tail1]    <=   rf_v [Rt1];
+           iqentry_T_s [tail1]    <=   rf_source [Rt1];
+       end
     end
     if (queued1|queued2) begin
         if (fetchbuf0_rfw|fetchbuf0_pfw) begin
@@ -6301,405 +5325,6 @@ begin
 end
 endtask
 
-`ifdef THREEWAY
-task validate_args1;
-begin
-    // SOURCE 1 ... this is relatively straightforward, because all instructions
-       // that have a source (i.e. every instruction but LUI) read from RB
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource1_v( opcode2 ) == `VAL) begin
-           iqentry_a1_v [tail1] <= `VAL;
-           iqentry_a1_s [tail1] <= 4'hF;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (!fetchbuf1_rfw) begin
-           iqentry_a1_v [tail1]    <=   rf_v [Ra2];
-           iqentry_a1_s [tail1]    <=   rf_source [Ra2];
-       end
-       // otherwise, previous instruction does write to RF ... see if overlap
-       else if (Rt1 != 7'd0 && Ra2 == Rt1) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a1_v [tail1]    <=   `INV;
-           iqentry_a1_s [tail1]    <=   { fetchbuf1_mem, tail1 };
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           iqentry_a1_v [tail1]    <=   rf_v [Ra2];
-           iqentry_a1_s [tail1]    <=   rf_source [Ra2];
-       end
-
-       if (!fetchbuf1_pfw) begin
-           iqentry_p_v  [tail1]    <=   rf_v [{1'b1,2'h0,Pn2}] || cond2 < 4'h2;
-           iqentry_p_s  [tail1]    <=   rf_source [{1'b1,2'h0,Pn2}];
-       end
-       else if (fnTargetReg(fetchbuf1_instr) != 9'd0 && fetchbuf2_instr[7:4]==fnTargetReg(fetchbuf1_instr) & 4'hF
-           && (fnTargetReg(fetchbuf1_instr) & 7'h70)==7'h40) begin
-           iqentry_p_v [tail1] <= cond2 < 4'h2;
-           iqentry_p_s [tail1] <= { fetchbuf1_mem, tail0 };
-       end
-       else begin
-           iqentry_p_v [tail1] <= rf_v[{1'b1,2'h0,Pn2}] || cond2 < 4'h2;
-           iqentry_p_s [tail1] <= rf_source[{1'b1,2'h0,Pn2}];
-       end
-
-       //
-       // SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
-       // some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource2_v( opcode2,fnFunc(fetchbuf2_instr) ) == `VAL) begin
-           iqentry_a2_v [tail1] <= `VAL;
-//                    iqentry_a2_s [tail1] <= 4'd0;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (~fetchbuf1_rfw) begin
-           iqentry_a2_v [tail1] <= rf_v[ Rb2 ];
-           iqentry_a2_s [tail1] <= rf_source[Rb2];
-       end
-       // otherwise, previous instruction does write to RF ... see if overlap
-       else if (fnTargetReg(fetchbuf1_instr) != 7'd0 &&
-           Rb2 == fnTargetReg(fetchbuf1_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a2_v [tail1]    <=   `INV;
-           iqentry_a2_s [tail1]    <=   { fetchbuf1_mem, tail0 };
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           iqentry_a2_v [tail1] <= rf_v[ Rb2 ];
-           iqentry_a2_s [tail1] <= rf_source[Rb2];
-       end
-
-       //
-       // SOURCE 3 ... this is relatively straightforward, because all instructions
-       // that have a source (i.e. every instruction but LUI) read from RC
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource3_v( opcode2 ) == `VAL) begin
-           iqentry_a3_v [tail1] <= `VAL;
-//                    iqentry_a1_s [tail1] <= 4'd0;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (~fetchbuf1_rfw) begin
-           begin
-               iqentry_a3_v [tail1]    <=   rf_v [Rc2];
-               iqentry_a3_s [tail1]    <=   rf_source [Rc2];
-           end
-       end
-       // otherwise, previous instruction does write to RF ... see if overlap
-       else if (fnTargetReg(fetchbuf1_instr) != 7'd0
-           && Rc2 == fnTargetReg(fetchbuf1_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a3_v [tail1]    <=   `INV;
-           iqentry_a3_s [tail1]    <=   { fetchbuf1_mem, tail0 };
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           begin
-               iqentry_a3_v [tail1]    <=   rf_v [Rc2];
-               iqentry_a3_s [tail1]    <=   rf_source [Rc2];
-           end
-       end
-       
-       if (queued1|queued2) begin
-            if (fetchbuf1_rfw|fetchbuf1_pfw) begin
-                $display("regv[%d] = %d", fnTargetReg(fetchbuf1_instr),rf_v[ fnTargetReg(fetchbuf1_instr) ]);
-                rf_v[ fnTargetReg(fetchbuf1_instr) ] = fnTargetReg(fetchbuf1_instr)==7'd0;
-                $display("reg[%d] <= INV",fnTargetReg(fetchbuf1_instr));
-                rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { /*fetchbuf0_mem*/1'b0, tail0 };    // top bit indicates ALU/MEM bus
-            end
-        end
-        if (queued2) begin
-            if (fetchbuf2_rfw|fetchbuf2_pfw) begin
-                $display("1:regv[%d] = %d", fnTargetReg(fetchbuf2_instr),rf_v[ fnTargetReg(fetchbuf2_instr) ]);
-                rf_v[ fnTargetReg(fetchbuf1_instr) ] = fnTargetReg(fetchbuf2_instr)==7'd0;
-                $display("reg[%d] <= INV",fnTargetReg(fetchbuf2_instr));
-                rf_source[ fnTargetReg(fetchbuf2_instr) ] <= { /*fetchbuf1_mem*/1'b0, tail1 };    // top bit indicates ALU/MEM bus
-            end
-        end
-end
-endtask
-
-// three-way argument validation
-task validate_args3;
-begin
-       // SOURCE 1 ... this is relatively straightforward, because all instructions
-        // that have a source (i.e. every instruction but LUI) read from RB
-        //
-        // if the argument is an immediate or not needed, we're done
-        if (fnSource1_v( opcode1 ) == `VAL) begin
-            iqentry_a1_v [tail1] <= `VAL;
-        end
-        // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-        else if (~fetchbuf0_rfw) begin
-            begin
-                iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
-                iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
-            end
-        end
-        // otherwise, previous instruction does write to RF ... see if overlap
-        else if (fnTargetReg(fetchbuf0_instr) != 7'd0
-            && fnRa(fetchbuf1_instr) == fnTargetReg(fetchbuf0_instr)) begin
-            // if the previous instruction is a LW, then grab result from memq, not the iq
-            iqentry_a1_v [tail1]    <=   `INV;
-            iqentry_a1_s [tail1]    <=   {fetchbuf1_mem,tail0};
-        end
-        // if no overlap, get info from rf_v and rf_source
-        else begin
-            begin
-                iqentry_a1_v [tail1]    <=   rf_v [fnRa(fetchbuf1_instr)];
-                iqentry_a1_s [tail1]    <=   rf_source [fnRa(fetchbuf1_instr)];
-            end
-        end
-
-       if (~fetchbuf0_pfw) begin
-           iqentry_p_v  [tail1]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
-           iqentry_p_s  [tail1]    <=   rf_source [{1'b1,2'h0,Pn1}];
-       end
-       else if (fnTargetReg(fetchbuf0_instr) != 7'd0 && fetchbuf1_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF
-           && (fnTargetReg(fetchbuf0_instr) & 7'h70)==7'h40) begin
-           iqentry_p_v [tail1] <= cond1 < 4'h2;
-           iqentry_p_s [tail1] <= {fetchbuf1_mem,tail0};
-       end
-       else begin
-           iqentry_p_v [tail1] <= rf_v[{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
-           iqentry_p_s [tail1] <= rf_source[{1'b1,2'h0,Pn1}];
-       end
-
-       //
-       // SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
-       // some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource2_v( opcode1,fnFunc(fetchbuf1_instr) ) == `VAL) begin
-           iqentry_a2_v [tail1] <= `VAL;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (~fetchbuf0_rfw) begin
-           iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
-           iqentry_a2_s [tail1] <= rf_source[Rb1];
-       end
-       else if (fnTargetReg(fetchbuf0_instr) != 7'd0 && Rb1 == fnTargetReg(fetchbuf0_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a2_v [tail1]    <=   `INV;
-           iqentry_a2_s [tail1]    <=   {fetchbuf1_mem,tail0};
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
-           iqentry_a2_s [tail1] <= rf_source[Rb1];
-       end
-
-       //
-       // SOURCE 3 ... this is relatively straightforward, because all instructions
-       // that have a source (i.e. every instruction but LUI) read from RC
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource3_v( opcode1 ) == `VAL) begin
-           iqentry_a3_v [tail1] <= `VAL;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (~fetchbuf0_rfw) begin
-           begin
-               iqentry_a3_v [tail1]    <=   rf_v [Rc1];
-               iqentry_a3_s [tail1]    <=   rf_source [Rc1];
-           end
-       end
-       else if (fetchbuf0_rfw && fnTargetReg(fetchbuf0_instr) != 7'd0 && Rc1 == fnTargetReg(fetchbuf0_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a3_v [tail1]    <=   `INV;
-           iqentry_a3_s [tail1]    <=   {fetchbuf1_mem,tail0};
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           begin
-               iqentry_a3_v [tail1]    <=   rf_v [Rc1];
-               iqentry_a3_s [tail1]    <=   rf_source [Rc1];
-           end
-       end
-
-
-
-       // SOURCE 1 ... this is relatively straightforward, because all instructions
-       // that have a source (i.e. every instruction but LUI) read from RB
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource1_v( opcode2 ) == `VAL) begin
-           iqentry_a1_v [tail2] <= `VAL;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (!fetchbuf1_rfw && !fetchbuf0_rfw) begin
-           begin
-               iqentry_a1_v [tail2]    <=   rf_v [fnRa(fetchbuf2_instr)];
-               iqentry_a1_s [tail2]    <=   rf_source [fnRa(fetchbuf2_instr)];
-           end
-       end
-       // otherwise, previous instruction does write to RF ... see if overlap
-       else if (fetchbuf1_rfw && fnTargetReg(fetchbuf1_instr) != 7'd0
-           && fnRa(fetchbuf2_instr) == fnTargetReg(fetchbuf1_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a1_v [tail2]    <=   `INV;
-           iqentry_a1_s [tail2]    <=   {fetchbuf2_mem,tail1};
-       end
-       else if (fetchbuf0_rfw && fnTargetReg(fetchbuf0_instr) != 7'd0
-           && fnRa(fetchbuf2_instr) == fnTargetReg(fetchbuf0_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a1_v [tail2]    <=   `INV;
-           iqentry_a1_s [tail2]    <=   tail0;
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           begin
-               iqentry_a1_v [tail2]    <=   rf_v [fnRa(fetchbuf2_instr)];
-               iqentry_a1_s [tail2]    <=   rf_source [fnRa(fetchbuf2_instr)];
-           end
-       end
-
-       if (~fetchbuf1_pfw & ~fetchbuf0_pfw) begin
-           iqentry_p_v  [tail2]    <=   rf_v [{1'b1,2'h0,Pn2}] || cond2 < 4'h2;
-           iqentry_p_s  [tail2]    <=   rf_source [{1'b1,2'h0,Pn2}];
-       end
-       else if (fetchbuf1_pfw && fnTargetReg(fetchbuf1_instr) != 7'd0 && fetchbuf2_instr[7:4]==fnTargetReg(fetchbuf1_instr) & 4'hF
-           && (fnTargetReg(fetchbuf1_instr) & 7'h70)==7'h40) begin
-           iqentry_p_v [tail2] <= cond2 < 4'h2;
-           iqentry_p_s [tail2] <= { tail1 };
-       end
-       else if (fetchbuf0_pfw && fnTargetReg(fetchbuf0_instr) != 7'd0 && fetchbuf2_instr[7:4]==fnTargetReg(fetchbuf0_instr) & 4'hF
-           && (fnTargetReg(fetchbuf0_instr) & 7'h70)==7'h40) begin
-           iqentry_p_v [tail2] <= cond2 < 4'h2;
-           iqentry_p_s [tail2] <= { fetchbuf2_mem, tail0 };
-       end
-       else begin
-           iqentry_p_v [tail2] <= rf_v[{1'b1,2'h0,Pn2}] || cond2 < 4'h2;
-           iqentry_p_s [tail2] <= rf_source[{1'b1,2'h0,Pn2}];
-       end
-
-       //
-       // SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
-       // some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource2_v( opcode2,fnFunc(fetchbuf2_instr) ) == `VAL) begin
-           iqentry_a2_v [tail2] <= `VAL;
-//                    iqentry_a2_s [tail1] <= 4'd0;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (~fetchbuf1_rfw & ~fetchbuf0_rfw) begin
-           iqentry_a2_v [tail2] <= rf_v[ Rb2 ];
-           iqentry_a2_s [tail2] <= rf_source[Rb2];
-       end
-       // otherwise, previous instruction does write to RF ... see if overlap
-       else if (fetchbuf1_rfw && fnTargetReg(fetchbuf1_instr) != 7'd0 &&
-           Rb2 == fnTargetReg(fetchbuf1_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a2_v [tail2]    <=   `INV;
-           iqentry_a2_s [tail2]    <=  {fetchbuf2_mem, tail1};
-       end
-       else if (fetchbuf0_rfw && fnTargetReg(fetchbuf0_instr) != 7'd0 &&
-           Rb2 == fnTargetReg(fetchbuf0_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a2_v [tail2]    <=   `INV;
-           iqentry_a2_s [tail2]    <=   tail0;
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           iqentry_a2_v [tail2] <= rf_v[ Rb2 ];
-           iqentry_a2_s [tail2] <= rf_source[Rb2];
-       end
-
-       //
-       // SOURCE 3 ... this is relatively straightforward, because all instructions
-       // that have a source (i.e. every instruction but LUI) read from RC
-       //
-       // if the argument is an immediate or not needed, we're done
-       if (fnSource3_v( opcode2 ) == `VAL) begin
-           iqentry_a3_v [tail2] <= `VAL;
-//                    iqentry_a1_s [tail1] <= 4'd0;
-       end
-       // if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-       else if (~fetchbuf1_rfw & ~fetchbuf0_rfw) begin
-           begin
-               iqentry_a3_v [tail2]    <=   rf_v [Rc2];
-               iqentry_a3_s [tail2]    <=   rf_source [Rc2];
-           end
-       end
-       // otherwise, previous instruction does write to RF ... see if overlap
-       else if (fetchbuf1_rfw && fnTargetReg(fetchbuf1_instr) != 7'd0
-           && Rc2 == fnTargetReg(fetchbuf1_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a3_v [tail2]    <=   `INV;
-           iqentry_a3_s [tail2]    <=  {fetchbuf2_mem, tail1};
-       end
-       else if (fetchbuf0_rfw && fnTargetReg(fetchbuf0_instr) != 7'd0
-           && Rc2 == fnTargetReg(fetchbuf0_instr)) begin
-           // if the previous instruction is a LW, then grab result from memq, not the iq
-           iqentry_a3_v [tail2]    <=   `INV;
-           iqentry_a3_s [tail2]    <=   {fetchbuf2_mem,tail0};
-       end
-       // if no overlap, get info from rf_v and rf_source
-       else begin
-           begin
-               iqentry_a3_v [tail2]    <=   rf_v [Rc2];
-               iqentry_a3_s [tail2]    <=   rf_source [Rc2];
-           end
-       end
-
-        if (queued1|queued2|queued3) begin
-            if (fetchbuf0_rfw|fetchbuf0_pfw) begin
-                $display("regv[%d] = %d", fnTargetReg(fetchbuf0_instr),rf_v[ fnTargetReg(fetchbuf0_instr) ]);
-                rf_v[ fnTargetReg(fetchbuf0_instr) ] = fnTargetReg(fetchbuf0_instr)==7'd0;
-                $display("reg[%d] <= INV",fnTargetReg(fetchbuf0_instr));
-                rf_source[ fnTargetReg(fetchbuf0_instr) ] <= { /*fetchbuf0_mem*/1'b0, tail0 };    // top bit indicates ALU/MEM bus
-            end
-        end
-        if (queued2|queued3) begin
-            if (fetchbuf1_rfw|fetchbuf1_pfw) begin
-                $display("regv[%d] = %d", fnTargetReg(fetchbuf1_instr),rf_v[ fnTargetReg(fetchbuf1_instr) ]);
-                rf_v[ fnTargetReg(fetchbuf1_instr) ] = fnTargetReg(fetchbuf1_instr)==7'd0;
-                $display("reg[%d] <= INV",fnTargetReg(fetchbuf1_instr));
-                rf_source[ fnTargetReg(fetchbuf1_instr) ] <= { /*fetchbuf0_mem*/1'b0, tail };    // top bit indicates ALU/MEM bus
-            end
-        end
-        if (queued3) begin
-            if (fetchbuf2_rfw|fetchbuf2_pfw) begin
-                $display("1:regv[%d] = %d", fnTargetReg(fetchbuf2_instr),rf_v[ fnTargetReg(fetchbuf2_instr) ]);
-                rf_v[ fnTargetReg(fetchbuf1_instr) ] = fnTargetReg(fetchbuf2_instr)==7'd0;
-                $display("reg[%d] <= INV",fnTargetReg(fetchbuf2_instr));
-                rf_source[ fnTargetReg(fetchbuf2_instr) ] <= { /*fetchbuf1_mem*/1'b0, tail2 };    // top bit indicates ALU/MEM bus
-            end
-        end
-end
-endtask
-
-task fetchABC;
-begin
-    fetchbufA_instr <= insn0;
-    fetchbufA_pc <= pc;
-    fetchbufA_v <= ld_fetchbuf;
-    fetchbufB_instr <= insn1;
-    fetchbufB_pc <= pc + fnInsnLength(insn);
-    fetchbufB_v <= ld_fetchbuf;
-    fetchbufC_instr <= insn2;
-    fetchbufC_pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-    fetchbufC_v <= ld_fetchbuf;
-end
-endtask
-
-task fetchDEF;
-begin
-    fetchbufD_instr <= insn0;
-    fetchbufD_pc <= pc;
-    fetchbufD_v <= ld_fetchbuf;
-    fetchbufE_instr <= insn1;
-    fetchbufE_pc <= pc + fnInsnLength(insn);
-    fetchbufE_v <= ld_fetchbuf;
-    fetchbufF_instr <= insn2;
-    fetchbufF_pc <= pc + fnInsnLength(insn) + fnInsnLength1(insn);
-    fetchbufF_v <= ld_fetchbuf;
-end
-endtask
-
-`else
 task fetchAB;
 begin
     fetchbufA_instr <= insn0;
@@ -6721,7 +5346,6 @@ begin
     fetchbufD_v <= ld_fetchbuf;
 end
 endtask
-`endif
 
 // Reset the tail pointers.
 // Used by the enqueue logic
@@ -6729,48 +5353,6 @@ endtask
 task reset_tail_pointers;
 input first;
 begin
-`ifdef THREEWAY
-    if ((iqentry_stomp[0] & ~iqentry_stomp[7])|first) begin
-        tail0 <= 0;
-        tail1 <= 1;
-        tail2 <= 2;
-    end
-    else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
-        tail0 <= 1;
-        tail1 <= 2;
-        tail2 <= 3;
-    end
-    else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
-        tail0 <= 2;
-        tail1 <= 3;
-        tail2 <= 4;
-    end
-    else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
-        tail0 <= 3;
-        tail1 <= 4;
-        tail2 <= 5;
-    end
-    else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
-        tail0 <= 4;
-        tail1 <= 5;
-        tail2 <= 6;
-    end
-    else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
-        tail0 <= 5;
-        tail1 <= 6;
-        tail2 <= 7;
-    end
-    else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
-        tail0 <= 6;
-        tail1 <= 7;
-        tail2 <= 0;
-    end
-    else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
-        tail0 <= 7;
-        tail1 <= 0;
-        tail2 <= 1;
-    end
-`else
     if ((iqentry_stomp[0] & ~iqentry_stomp[7]) | first) begin
         tail0 <= 0;
         tail1 <= 1;
@@ -6804,7 +5386,6 @@ begin
         tail1 <= 0;
     end
     // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
-`endif
 end
 endtask
 
