@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,8 +26,9 @@
 `ifndef THOR_DEFINES
 `define THOR_DEFINES	1'b1
 
+`define SIMULATION      1'b1
 `define SEGMENTATION	1'b1
-`define FLOATING_POINT	1'b1
+//`define FLOATING_POINT	1'b1
 //`define THREEWAY    1'b1
 
 `define TRUE	1'b1
@@ -115,6 +116,8 @@
 `define FSIGN			4'h06
 `define FMAN            4'h07
 `define FNABS           4'h08
+`define FSTAT           4'h0C
+`define FRM             4'h0D                       
 `define FLOAT		8'h78
 `define FCMP            6'h07
 `define FADD			6'h08
@@ -126,12 +129,6 @@
 `define FSUBS           6'h19
 `define FMULS           6'h1A
 `define FDIVS           6'h1B
-`define FSTAT           6'h30
-`define FTX             6'h31
-`define FCX             6'h32
-`define FEX             6'h33
-`define FDX             6'h34
-`define FRM             6'h35                       
 `define SINGLE_R    8'h79
 `define FMOVS           4'h00
 `define FTOIS		    4'h02
@@ -141,7 +138,10 @@
 `define FSIGNS			4'h06
 `define FMANS           4'h07
 `define FNABSS          4'h08
-
+`define FTX             4'h0C
+`define FCX             4'h0D
+`define FEX             4'h0E
+`define FDX             4'h0F
 
 `define LB			8'h80
 `define LBU			8'h81
@@ -232,12 +232,6 @@
 `define SWX			8'hC3
 `define STIX        8'hC6
 `define INC         8'hC7
-`define PUSH        8'hC8
-`define PEA         8'hC9
-
-`define FCX			8'hCC
-`define FEX			8'hCD
-`define FDX			8'hCE
 
 `define TLB			8'hF0
 `define TLB_NOP			4'd0
@@ -271,6 +265,7 @@
 `define BCDADD			8'h00
 `define BCDSUB			8'h01
 `define BCDMUL			8'h02
+`define STP         8'hF6
 `define SYNC        8'hF7
 `define MEMSB		8'hF8	// synchronization barrier
 `define MEMDB		8'hF9	// data barrier
@@ -298,8 +293,10 @@
 `define PREGS_ALL		6'h30
 `define TICK			6'h32
 `define LCTR			6'h33
-`define ASID			8'h36
-`define SR				8'h37
+`define ASID			6'h36
+`define SR				6'h37
+`define FPSCR           6'h38
+`define CLK_THROTTLE    6'h3F
 		
 // exception types:
 `define EXC_NONE	4'd0

@@ -72,16 +72,6 @@ end
 endgenerate
 
 assign o = o0;
-always @(posedge wclk)
-begin
-    if (wce & wr & |sel) begin
-        $display("*************************");
-        $display("*************************");
-        $display("Writing to DCACHE %h=%h", wa, wd);
-        $display("*************************");
-        $display("*************************");
-    end
-end
 
 endmodule
 

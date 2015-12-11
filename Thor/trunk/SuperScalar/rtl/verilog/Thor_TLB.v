@@ -263,7 +263,7 @@ begin
 	3'd2:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:16] : ITLBMiss ? `TLBMissPage: IPFN,pc[15:12]};	// 64KiB
 	3'd3:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:18] : ITLBMiss ? `TLBMissPage: IPFN,pc[17:12]};	// 256 KiB
 	3'd4:	ppc[DBW-1:12] = {unmappedArea ? pc[DBW-1:20] : ITLBMiss ? `TLBMissPage: IPFN,pc[19:12]};	// 1 MiB
-	default:	ppc[DBW-1:12] = 0;
+	default:	ppc[DBW-1:12] = pc[DBW-1:12];
 	endcase
 end
 
@@ -298,7 +298,7 @@ begin
 	3'd2:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:16] : DTLBMiss ? `TLBMissPage: DPFN,ea[15:12]};
 	3'd3:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:18] : DTLBMiss ? `TLBMissPage: DPFN,ea[17:12]};
 	3'd4:	pea[DBW-1:12] = {unmappedDataArea ? ea[DBW-1:20] : DTLBMiss ? `TLBMissPage: DPFN,ea[19:12]};
-	default:	pea[DBW-1:12] = 0;
+	default:	pea[DBW-1:12] = ea[DBW-1:12];
 	endcase
 	pea[11:0] = ea[11:0];
 end

@@ -23,6 +23,8 @@
 //
 module bootrom(rst_i, clk_i, cti_i, cyc_i, stb_i, ack_o, adr_i, dat_o, perr);
 parameter DBW=64;
+parameter MAGIC1=32'hAAAAAAAA;
+parameter MAGIC2=32'h55555555;
 input rst_i;
 input clk_i;
 input [2:0] cti_i;
@@ -91,8 +93,8 @@ always @(posedge clk_i)
 		radr <= pe_cs ? adr_i[14:3] : ctr;
 
 wire [31:0] d0 = rommem0[radr][DBW-1:0];
-wire [31:0] d1 = rommem1[radr][DBW-1:0]^32'hAAAAAAAA;
-wire [31:0] d2 = rommem2[radr][DBW-1:0]^32'h55555555;
+wire [31:0] d1 = rommem1[radr][DBW-1:0]^MAGIC1;
+wire [31:0] d2 = rommem2[radr][DBW-1:0]^MAGIC2;
 wire [31:0] d4 = (d0&d1)|(d0&d2)|(d1&d2);
 
 always @(posedge clk_i)

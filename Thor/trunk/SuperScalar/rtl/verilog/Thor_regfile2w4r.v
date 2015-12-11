@@ -49,6 +49,21 @@ reg [5:0] rra0,rra1,rra2,rra3;
 
 reg whichreg [0:63];	// tracks which register file is the valid one for a given register
 
+// We only care about what's in the regs to begin with in simulation. In sim
+// the 'x' values propagate screwing things up. In real hardware there's no such
+// thing as an 'x'.
+`ifdef SIMULATION
+integer n;
+initial begin
+    for (n = 0; n < 64; n = n + 1)
+    begin
+        regs0a[n] = 0;
+        regs1a[n] = 0;
+        whichreg[n] = 0;
+    end
+end
+`endif
+
 assign o0 = rra0==6'd0 ? {WID{1'b0}} :
 	(wr1 && (rra0==wa1)) ? i1 :
 	(wr0 && (rra0==wa0)) ? i0 :

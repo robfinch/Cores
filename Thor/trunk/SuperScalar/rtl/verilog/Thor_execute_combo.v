@@ -134,23 +134,29 @@ endcase
 
 endfunction
 
-assign alu0_cmt = fnPredicate(alu0_pred, alu0_cond);
-assign alu1_cmt = fnPredicate(alu1_pred, alu1_cond);
+wire alu0_cmtw = fnPredicate(alu0_pred, alu0_cond);
+wire alu1_cmtw = fnPredicate(alu1_pred, alu1_cond);
 
-assign alu0_bus = 	alu0_out;
-assign alu1_bus = 	alu1_out;
+always @*
+begin
+    alu0_cmt <= alu0_cmtw;
+    alu1_cmt <= alu1_cmtw;
 
-assign  alu0_v = alu0_dataready,
-		alu1_v = alu1_dataready;
+    alu0_bus <= alu0_out;
+    alu1_bus <= alu1_out;
 
-assign  alu0_id = alu0_sourceid,
-		alu1_id = alu1_sourceid;
+    alu0_v <= alu0_dataready;
+	alu1_v <= alu1_dataready;
+
+    alu0_id <= alu0_sourceid;
+	alu1_id <= alu1_sourceid;
+end
 
 always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc or alu0_bt)
     case(alu0_op)
     `JSR,`JSRS,`JSRZ,`RTE,`RTI:
         alu0_misspc <= alu0_argA + alu0_argI;
-    `LOOP:
+    `LOOP,`SYNC:
         alu0_misspc <= alu0_pc + alu0_insnsz;
     `RTS,`RTS2:
         alu0_misspc <= alu0_argA + alu0_fn[3:0];
@@ -164,7 +170,7 @@ always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc 
     case(alu1_op)
     `JSR,`JSRS,`JSRZ,`RTE,`RTI:
         alu1_misspc <= alu1_argA + alu1_argI;
-    `LOOP:
+    `LOOP,`SYNC:
         alu1_misspc <= alu1_pc + alu1_insnsz;
     `RTS,`RTS2:
         alu1_misspc <= alu1_argA + alu1_fn[3:0];
@@ -209,12 +215,14 @@ assign  alu1_exc = `EXC_NONE;
 
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
-		  : (alu0_cmt && (alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ || alu0_op==`SYS || alu0_op==`INT ||
+		  : (alu0_cmtw && (alu0_op==`SYNC || alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ ||
+		     alu0_op==`SYS || alu0_op==`INT ||
 		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argB == 64'd0)))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
-		  : (alu1_cmt && (alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ || alu1_op==`SYS || alu1_op==`INT ||
+		  : (alu1_cmtw && (alu1_op==`SYNC || alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ ||
+		     alu1_op==`SYS || alu1_op==`INT ||
 		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argB == 64'd0)))));
 
 assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss),
@@ -283,7 +291,7 @@ begin
 end
 
 assign fp0_cmt = fnPredicate(fp0_pred, fp0_cond);
-assign fp0_exc = fp0_exception ? `EXC_FLT : `EXC_NONE;
+assign fp0_exc = fp0_exception ? 8'd242 : 8'd0;
 
 assign  fp0_v = fp0_dataready;
 assign  fp0_id = fp0_sourceid;

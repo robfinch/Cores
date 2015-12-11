@@ -37,10 +37,18 @@ reg [DBW-1:0] dat_o;
 
 integer n;
 
-reg [7:0] smemA0 [4095:0];
-reg [7:0] smemB0 [4095:0];
-reg [7:0] smemC0 [4095:0];
-reg [7:0] smemD0 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemA0 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemB0 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemC0 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemD0 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemA1 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemB1 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemC1 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemD1 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemA2 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemB2 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemC2 [4095:0];
+(* dont_touch="true" *) reg [7:0] smemD2 [4095:0];
 
 initial begin
 for (n = 0; n < 4096; n = n + 1)
@@ -49,6 +57,14 @@ begin
 	smemB0[n] = 0;
 	smemC0[n] = 0;
 	smemD0[n] = 0;
+	smemA1[n] = 0;
+    smemB1[n] = 0;
+    smemC1[n] = 0;
+    smemD1[n] = 0;
+	smemA2[n] = 0;
+    smemB2[n] = 0;
+    smemC2[n] = 0;
+    smemD2[n] = 0;
 end
 end
 /*
@@ -100,18 +116,26 @@ always @(posedge clk_i)
 always @(posedge clk_i)
 	if (cs & we_i & sel_i[0]) begin
 		smemA0[adr_i[13:2]] <= dat_i[7:0];
+		smemA1[adr_i[13:2]] <= dat_i[7:0]^8'hAA;
+		smemA2[adr_i[13:2]] <= dat_i[7:0]^8'h55;
     end
 always @(posedge clk_i)
 	if (cs & we_i & sel_i[1]) begin
 		smemB0[adr_i[13:2]] <= dat_i[15:8];
+		smemB1[adr_i[13:2]] <= dat_i[15:8]^8'hAA;
+		smemB2[adr_i[13:2]] <= dat_i[15:8]^8'h55;
     end
 always @(posedge clk_i)
 	if (cs & we_i & sel_i[2]) begin
 		smemC0[adr_i[13:2]] <= dat_i[23:16];
+		smemC1[adr_i[13:2]] <= dat_i[23:16]^8'hAA;
+		smemC2[adr_i[13:2]] <= dat_i[23:16]^8'h55;
     end
 always @(posedge clk_i)
 	if (cs & we_i & sel_i[3]) begin
 		smemD0[adr_i[13:2]] <= dat_i[31:24];
+		smemD1[adr_i[13:2]] <= dat_i[31:24]^8'hAA;
+		smemD2[adr_i[13:2]] <= dat_i[31:24]^8'h55;
 	end
 
 /*
@@ -172,11 +196,14 @@ end
 end
 endgenerate
 */
-wire [31:0] d0 = {smemD0[radr],smemC0[radr],smemB0[radr],smemA0[radr]};
+(* dont_touch="true" *) wire [31:0] d0 = { smemD0[radr],smemC0[radr],smemB0[radr],smemA0[radr]};
+(* dont_touch="true" *) wire [31:0] d1 = { smemD1[radr],smemC1[radr],smemB1[radr],smemA1[radr]}^32'hAAAAAAAA;
+(* dont_touch="true" *) wire [31:0] d2 = { smemD2[radr],smemC2[radr],smemB2[radr],smemA2[radr]}^32'h55555555;
+wire [31:0] d4 = (d0&(d1^32'hAAAAAAAA))|(d0&(d2^32'h55555555))|((d1^32'hAAAAAAAA)&(d2^32'h55555555));
 
 always @(posedge clk_i)
 if (cs) begin
-	dat_o <= d0;
+	dat_o <= d4;
 end
 else
 	dat_o <= {DBW{1'd0}};

@@ -170,7 +170,6 @@ casex(alu_op)
     `SXH:       o <= BIG ? {{32{alu_argA[31]}},alu_argA[31:0]} : 64'hDEADDEADDEADDEAD;
     default:    o <= 64'hDEADDEADDEADDEAD;
     endcase
-`STS:		o <= alu_argA;
 /*
 `DOUBLE:
     if (BIG) begin
@@ -202,7 +201,7 @@ casex(alu_op)
 
 `ADDI,`ADDUI,`ADDUIS:
                 o <= alu_argA + alu_argI;
-`SUBI,`SUBUI,`PUSH:
+`SUBI,`SUBUI:
             	o <= alu_argA - alu_argI;
 `ANDI:			o <= alu_argA & alu_argI;
 `ORI:			o <= alu_argA | alu_argI;
@@ -296,17 +295,19 @@ casex(alu_op)
 			o[DBW-1:4] <= 64'd0;
 		end
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,
-`LWS,`SWS,`LEA,`RTS2,`PUSH:
-				o <= alu_argA + alu_argI;
+`LWS,`SWS,`LEA,`RTS2,`STS,`STFND,`STCMP:
+            begin
+				o <= alu_argA + alu_argC + alu_argI;
+		    end
 `LBX,`LBUX,`SBX,
 `LCX,`LCUX,`SCX,
 `LHX,`LHUX,`SHX,
 `LWX,`SWX:	
             case(alu_fn[1:0])
-            2'd0:   o <= alu_argA + alu_argB;
-            2'd1:   o <= alu_argA + {alu_argB,1'b0};
-            2'd2:   o <= alu_argA + {alu_argB,2'b0};
-            2'd3:   o <= alu_argA + {alu_argB,3'b0};
+            2'd0:   o <= alu_argA + alu_argC + alu_argB;
+            2'd1:   o <= alu_argA + alu_argC + {alu_argB,1'b0};
+            2'd2:   o <= alu_argA + alu_argC + {alu_argB,2'b0};
+            2'd3:   o <= alu_argA + alu_argC + {alu_argB,3'b0};
             endcase
 `JSR,`JSRS,`JSRZ,`SYS:	o <= alu_pc + insnsz;
 `INT:		o <= alu_pc;
@@ -330,7 +331,6 @@ casex(alu_op)
 `SHIFT:	    o <= BIG ? shfto : 64'hDEADDEADDEADDEAD;
 `BITFIELD:	o <= BIG ? bf_out : 64'hDEADDEADDEADDEAD;
 `LOOP:      o <= alu_argB > 0 ? alu_argB - 64'd1 : alu_argB;
-`PEA:       o <= alu_argA - 64'd8;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end
