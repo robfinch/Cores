@@ -397,6 +397,85 @@ int NextToken()
              inptr++;
              return token = '&';
 
+        case '_':
+             if (inptr[1]=='4' && 
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='u' || inptr[5]=='U') &&
+             isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_4addu;
+             }
+             if (inptr[1]=='2' && 
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='u' || inptr[5]=='U') &&
+             isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_2addu;
+             }
+             if (inptr[1]=='8' && 
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='u' || inptr[5]=='U') &&
+             isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_8addu;
+             }
+             if (inptr[1]=='1' && inptr[2]=='6' &&
+             (inptr[3]=='a' || inptr[3]=='A') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='d' || inptr[5]=='D') &&
+             (inptr[6]=='u' || inptr[6]=='U') &&
+             isspace(inptr[7])) {
+                inptr += 7;
+                return token = tk_16addu;
+             }
+             if (inptr[1]=='4' && 
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='u' || inptr[5]=='U') &&
+             (inptr[6]=='i' || inptr[6]=='I') &&
+             isspace(inptr[7])) {
+                inptr += 7;
+                return token = tk_4addui;
+             }
+             if (inptr[1]=='2' && 
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='u' || inptr[5]=='U') &&
+             (inptr[6]=='i' || inptr[6]=='I') &&
+             isspace(inptr[7])) {
+                inptr += 7;
+                return token = tk_2addui;
+             }
+             if (inptr[1]=='8' && 
+             (inptr[2]=='a' || inptr[2]=='A') &&
+             (inptr[3]=='d' || inptr[3]=='D') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='u' || inptr[5]=='U') &&
+             (inptr[6]=='i' || inptr[6]=='I') &&
+             isspace(inptr[7])) {
+                inptr += 7;
+                return token = tk_8addui;
+             }
+             if (inptr[1]=='1' && inptr[2]=='6' &&
+             (inptr[3]=='a' || inptr[3]=='A') &&
+             (inptr[4]=='d' || inptr[4]=='D') &&
+             (inptr[5]=='d' || inptr[5]=='D') &&
+             (inptr[6]=='u' || inptr[6]=='U') &&
+             (inptr[7]=='i' || inptr[7]=='I') &&
+             isspace(inptr[8])) {
+                inptr += 8;
+                return token = tk_16addui;
+             }
+             break;
+
         // add addi addu addui and andi align asr asri
         case 'a':
         case 'A':
@@ -866,7 +945,7 @@ int NextToken()
              }
              break;
 
-        // fill fabs fadd fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix
+        // fill fabs fadd fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix ftst
         case 'f': case 'F':
              if ((inptr[1]=='i' || inptr[1]=='I') &&
                  (inptr[2]=='l' || inptr[2]=='L') &&
@@ -996,6 +1075,13 @@ int NextToken()
                  (isspace(inptr[5]))) {
                  inptr += 5;
                  return token = tk_fstat;
+             }
+             if ((inptr[1]=='t' || inptr[1]=='T') &&
+                 (inptr[2]=='s' || inptr[2]=='S') &&
+                 (inptr[3]=='t' || inptr[3]=='T') &&
+                 (isspace(inptr[4])||inptr[4]=='.')) {
+                 inptr += 4;
+                 return token = tk_ftst;
              }
              break;
 

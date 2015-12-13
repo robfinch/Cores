@@ -1430,12 +1430,12 @@ int main(int argc, char *argv[])
         if (p) {
             *p = '\0';
         }
-        strcat(fname, ".ver");
+        strcat(fname, ".ve0");
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
                 for (kk = 0; kk < binndx; kk+=8) {
-                    fprintf(vfp, "\trommem[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+                    fprintf(vfp, "\trommem0[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
                         (((0+kk)/8)%16384), checksum64((int64_t *)&binfile[kk]),
                         binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
                         binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
@@ -1443,8 +1443,60 @@ int main(int argc, char *argv[])
             }
             else {
                 for (kk = 0;kk < binndx; kk+=4) {
-                    fprintf(vfp, "\trommem[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
+                    fprintf(vfp, "\trommem0[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
                         (((start_address+kk)/4)%8192), checksum((int32_t *)&binfile[kk]), binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                }
+            }
+            fclose(vfp);
+        }
+        else
+            printf("Can't create .ver file.\r\n");
+        strcpy(fname, argv[nn]);
+        p = strrchr(fname,'.');
+        if (p) {
+            *p = '\0';
+        }
+        strcat(fname, ".ve1");
+        vfp = fopen(fname, "w");
+        if (vfp) {
+            if (gCpu==64) {
+                for (kk = 0; kk < binndx; kk+=8) {
+                    fprintf(vfp, "\trommem1[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+                        (((0+kk)/8)%16384), checksum64((int64_t *)&binfile[kk]),
+                        binfile[kk+7]^0xAA, binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                }
+            }
+            else {
+                for (kk = 0;kk < binndx; kk+=4) {
+                    fprintf(vfp, "\trommem1[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
+                        (((start_address+kk)/4)%8192), checksum((int32_t *)&binfile[kk]), binfile[kk+3]^0xAA, binfile[kk+2]^0xAA, binfile[kk+1]^0xAA, binfile[kk]^0xAA);
+                }
+            }
+            fclose(vfp);
+        }
+        else
+            printf("Can't create .ver file.\r\n");
+        strcpy(fname, argv[nn]);
+        p = strrchr(fname,'.');
+        if (p) {
+            *p = '\0';
+        }
+        strcat(fname, ".ve2");
+        vfp = fopen(fname, "w");
+        if (vfp) {
+            if (gCpu==64) {
+                for (kk = 0; kk < binndx; kk+=8) {
+                    fprintf(vfp, "\trommem2[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+                        (((0+kk)/8)%16384), checksum64((int64_t *)&binfile[kk]),
+                        binfile[kk+7]^0x55, binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                }
+            }
+            else {
+                for (kk = 0;kk < binndx; kk+=4) {
+                    fprintf(vfp, "\trommem2[%d] = 33'h%01d%02X%02X%02X%02X;\n", 
+                        (((start_address+kk)/4)%8192), checksum((int32_t *)&binfile[kk]), binfile[kk+3]^0x55, binfile[kk+2]^0x55, binfile[kk+1]^0x55, binfile[kk]^0x55);
                 }
             }
             fclose(vfp);

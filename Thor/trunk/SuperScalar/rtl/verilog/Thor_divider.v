@@ -58,6 +58,13 @@ reg [WID:0] r;
 wire b0 = bb <= r;
 wire [WID-1:0] r1 = b0 ? r - bb : r;
 
+initial begin
+    q = 64'd0;
+    r = 64'd0;
+    qo = 64'd0;
+    ro = 64'd0;
+end
+
 always @(posedge clk)
 if (rst) begin
 	aa <= {WID{1'b0}};

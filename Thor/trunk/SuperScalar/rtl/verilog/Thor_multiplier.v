@@ -55,6 +55,11 @@ reg [WID*2-1:0] prod;
 //wire [65:0] p2 = aa[1] ? p1 + {b,1'b0} : p1;
 wire [WID+WID/4-1:0] p1 = bb * aa[WID/4-1:0] + prod[WID*2-1:WID];
 
+initial begin
+    prod = 64'd0;
+    o = 64'd0;
+end
+
 always @(posedge clk)
 if (rst) begin
 	aa <= {WID{1'b0}};

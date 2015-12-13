@@ -19,6 +19,9 @@ wire [63:0] scr_dato;
 wire cpu_ack;
 wire [DBW-1:0] cpu_dati;
 wire [DBW-1:0] cpu_dato;
+wire pic_ack,irq;
+wire [31:0] pic_dato;
+wire [7:0] vecno;
 
 wire LEDS_ack;
 
@@ -28,7 +31,7 @@ initial begin
 	#0 nmi = 1'b0;
 	#10 rst = 1'b1;
 	#50 rst = 1'b0;
-//	#500 nmi = 1'b1;
+	#19550 nmi = 1'b1;
 	#20 nmi = 1'b0;
 end
 
@@ -51,13 +54,14 @@ assign cpu_ack =
 	scr_ack |
 	br_ack |
 	tc1_ack | tc2_ack |
-	kbd_ack
+	kbd_ack | pic_ack
 	;
 assign cpu_dati =
 	scr_dato |
 	br_dato |
 	tc1_dato | tc2_dato |
-	{4{kbd_dato}}
+	{4{kbd_dato}} |
+	pic_dato
 	;
 
 Ps2Keyboard_sim ukbd
@@ -147,12 +151,46 @@ bootrom #(DBW) ubr1
 	.perr()
 );
 
+wire nmio;
+Thor_pic upic1
+(
+	.rst_i(rst),		// reset
+	.clk_i(cpu_clk),	// system clock
+	.cyc_i(cyc),	// cycle valid
+	.stb_i(stb),	// strobe
+    .ack_o(pic_ack),	// transfer acknowledge
+	.we_i(we),		// write
+	.adr_i(adr),	// address
+	.dat_i(cpu_dato),
+	.dat_o(pic_dato),
+	.vol_o(),		// volatile register selected
+	.i1(),
+	.i2(),
+	.i3(),
+	.i4(),
+	.i5(),
+	.i6(),
+	.i7(),
+	.i8(),
+	.i9(),
+	.i10(),
+	.i11(),
+	.i12(),
+	.i13(),
+	.i14(),
+	.i15(),
+	.irqo(irq),	// normally connected to the processor irq
+	.nmii(nmi),		// nmi input connected to nmi requester
+	.nmio(nmio),	// normally connected to the nmi of cpu
+	.vecno(vecno)
+);
+
 Thor #(DBW) uthor1
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.clk_o(cpu_clk),
-	.nmi_i(nmi),
+	.nmi_i(nmio),
 	.irq_i(1'b0),
 	.vec_i(8'h00),
 	.bte_o(),

@@ -88,6 +88,7 @@ Thor_divider #(DBW) udiv1
 
 Thor_alu #(.DBW(DBW),.BIG(1)) ualu0 
 (
+    .corenum(corenum),
 	.alu_op(alu0_op),
 	.alu_fn(alu0_fn),
 	.alu_argA(alu0_argA),
@@ -96,11 +97,14 @@ Thor_alu #(.DBW(DBW),.BIG(1)) ualu0
 	.alu_argI(alu0_argI),
 	.alu_pc(alu0_pc),
 	.insnsz(alu0_insnsz),
+	.prod(alu0_prod),
+	.divq(alu0_divq),
 	.o(alu0_out)
 );
 
 Thor_alu #(.DBW(DBW),.BIG(ALU1BIG)) ualu1 
 (
+    .corenum(corenum),
 	.alu_op(alu1_op),
 	.alu_fn(alu1_fn),
 	.alu_argA(alu1_argA),
@@ -109,6 +113,8 @@ Thor_alu #(.DBW(DBW),.BIG(ALU1BIG)) ualu1
 	.alu_argI(alu1_argI),
 	.alu_pc(alu1_pc),
 	.insnsz(alu1_insnsz),
+	.prod(alu1_prod),
+    .divq(alu1_divq),
 	.o(alu1_out)
 );
 
@@ -142,8 +148,8 @@ begin
     alu0_cmt <= alu0_cmtw;
     alu1_cmt <= alu1_cmtw;
 
-    alu0_bus <= alu0_out;
-    alu1_bus <= alu1_out;
+    alu0_bus <= alu0_cmtw ? alu0_out : alu0_argT;
+    alu1_bus <= alu1_cmtw ? alu1_out : alu1_argT;
 
     alu0_v <= alu0_dataready;
 	alu1_v <= alu1_dataready;
@@ -225,9 +231,9 @@ assign alu1_branchmiss = alu1_dataready &&
 		     alu1_op==`SYS || alu1_op==`INT ||
 		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argB == 64'd0)))));
 
-assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss),
-	misspc = (mem_stringmiss ? string_pc : alu0_branchmiss ? alu0_misspc : alu1_misspc),
-	missid = (mem_stringmiss ? dram0_id[2:0] : alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
+assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
+	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),
+	missid = (alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
 
 `ifdef FLOATING_POINT
  wire fp0_exception;

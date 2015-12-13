@@ -26,9 +26,11 @@
 //
 `include "Thor_defines.v"
 
-module Thor_alu(alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, o);
+module Thor_alu(corenum, alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, prod, divq, o);
 parameter DBW=64;
 parameter BIG=1;
+parameter FEATURES = 0;
+input [63:0] corenum;
 input [7:0] alu_op;
 input [5:0] alu_fn;
 input [DBW-1:0] alu_argA;
@@ -37,6 +39,8 @@ input [DBW-1:0] alu_argC;
 input [DBW-1:0] alu_argI;
 input [DBW-1:0] alu_pc;
 input [3:0] insnsz;
+input [127:0] prod;
+input [63:0] divq;
 output reg [DBW-1:0] o;
 
 wire signed [DBW-1:0] alu_argAs = alu_argA;
@@ -145,8 +149,12 @@ casex(alu_op)
 	`_16ADDU:		o <= {alu_argA[DBW-5:0],4'b0} + alu_argB;
 	`MIN:           o <= BIG ? (alu_argA < alu_argB ? alu_argA : alu_argB) : 64'hDEADDEADDEADDEAD; 
 	`MAX:           o <= BIG ? (alu_argA < alu_argB ? alu_argB : alu_argA) : 64'hDEADDEADDEADDEAD;
+	`MUL,`MULU:     o <= BIG ? prod[63:0] : 64'hDEADDEADDEADDEAD;
+	`DIV,`DIVU:     o <= BIG ? divq : 64'hDEADDEADDEADDEAD;  
 	default:   o <= 64'hDEADDEADDEADDEAD;
 	endcase
+`MULI,`MULUI:   o <= BIG ? prod[63:0] : 64'hDEADDEADDEADDEAD;
+`DIVI,`DIVUI:   o <= BIG ? divq : 64'hDEADDEADDEADDEAD;
 `_2ADDUI:		o <= {alu_argA[DBW-2:0],1'b0} + alu_argI;
 `_4ADDUI:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argI;
 `_8ADDUI:		o <= {alu_argA[DBW-4:0],3'b0} + alu_argI;
@@ -170,6 +178,29 @@ casex(alu_op)
     `SXH:       o <= BIG ? {{32{alu_argA[31]}},alu_argA[31:0]} : 64'hDEADDEADDEADDEAD;
     default:    o <= 64'hDEADDEADDEADDEAD;
     endcase
+`R2:
+    case(alu_fn)
+    `CPUID:
+        if (BIG)
+        case(alu_argA[4:0])
+        5'd0:       o <= corenum;
+        5'd2:       o <= "Finitron";
+        5'd3:       o <= "";        // vendor ID
+        5'd4:       o <= "64BitSS"; // class
+        5'd6:       o <= "Thor";    // Name
+        5'd8:       o <= "M1";      // model 
+        5'd9:       o <= "1234";    // serial num
+        5'd10:      o <= FEATURES;
+        5'd11:      o <= {32'd16384,32'd32768}; // Cache D,I
+        default:    o <= 64'hDEADDEADDEADDEAD;
+        endcase
+        else    o <= 64'hDEADDEADDEADDEAD;
+    `REDOR:     o <= BIG ? |alu_argA : 64'hDEADDEADDEADDEAD;
+    `REDAND:    o <= BIG ? &alu_argA : 64'hDEADDEADDEADDEAD;
+    `PAR:       o <= BIG ? ^alu_argA : 64'hDEADDEADDEADDEAD;
+    default:    o <= 64'hDEADDEADDEADDEAD;
+    endcase
+ 
 /*
 `DOUBLE:
     if (BIG) begin
@@ -236,6 +267,7 @@ casex(alu_op)
 			o[3] <= 1'b0;
 			o[DBW-1:4] <= 60'd0;
 		end
+`ifdef FLOATING_POINT
 	6'd1:	// FSTST - float single
 		begin
 			o[0] <= alu_argA[30:0]==31'd0;	// + or - zero
@@ -257,6 +289,7 @@ casex(alu_op)
 				o[3] <= 1'b0;
 			o[DBW-1:4] <= 60'd0;
 		end
+`endif
 	default:	o <= 64'd0;
 	endcase
 `CMP:	begin
@@ -309,6 +342,11 @@ casex(alu_op)
             2'd2:   o <= alu_argA + alu_argC + {alu_argB,2'b0};
             2'd3:   o <= alu_argA + alu_argC + {alu_argB,3'b0};
             endcase
+`ifdef STACKOPS
+`PUSH,`PEA,`LINK: o <= alu_argA + alu_argC - 64'd8;
+`UNLINK:    o <= alu_argA + alu_argC + 64'd8;
+`POP:       o <= alu_argA + alu_argC;
+`endif
 `JSR,`JSRS,`JSRZ,`SYS:	o <= alu_pc + insnsz;
 `INT:		o <= alu_pc;
 `MFSPR,`MTSPR:	begin
@@ -329,7 +367,9 @@ casex(alu_op)
         else
             o <= 64'hDEADDEADDEADDEAD;
 `SHIFT:	    o <= BIG ? shfto : 64'hDEADDEADDEADDEAD;
+`ifdef BITFIELDOPS
 `BITFIELD:	o <= BIG ? bf_out : 64'hDEADDEADDEADDEAD;
+`endif
 `LOOP:      o <= alu_argB > 0 ? alu_argB - 64'd1 : alu_argB;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
