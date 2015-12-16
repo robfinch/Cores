@@ -4,6 +4,7 @@ parameter DBW=32;
 reg rst;
 reg clk;
 reg nmi;
+reg p100Hz;
 wire [2:0] cti;
 wire cpu_clk;
 wire cyc;
@@ -29,13 +30,15 @@ initial begin
 	#0 rst = 1'b0;
 	#0 clk = 1'b0;
 	#0 nmi = 1'b0;
+	#0 p100Hz = 1'b0;
 	#10 rst = 1'b1;
 	#50 rst = 1'b0;
-	#19550 nmi = 1'b1;
+	#20800 nmi = 1'b1;
 	#20 nmi = 1'b0;
 end
 
 always #5 clk = ~clk;
+always #10000 p100Hz = ~p100Hz;
 
 assign LEDS_ack = cyc && stb && adr[31:8]==32'hFFDC06;
 always @(posedge clk)
@@ -165,7 +168,7 @@ Thor_pic upic1
 	.dat_o(pic_dato),
 	.vol_o(),		// volatile register selected
 	.i1(),
-	.i2(),
+	.i2(p100Hz),
 	.i3(),
 	.i4(),
 	.i5(),
@@ -191,8 +194,8 @@ Thor #(DBW) uthor1
 	.clk_i(clk),
 	.clk_o(cpu_clk),
 	.nmi_i(nmio),
-	.irq_i(1'b0),
-	.vec_i(8'h00),
+	.irq_i(irq),
+	.vec_i(vecno),
 	.bte_o(),
 	.cti_o(cti),
 	.bl_o(),

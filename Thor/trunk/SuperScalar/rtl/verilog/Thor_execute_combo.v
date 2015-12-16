@@ -25,70 +25,15 @@
 // ============================================================================
 //
 wire [DBW-1:0] alu0_out, alu1_out;
-
-Thor_multiplier #(DBW) umult0
-(
-	.rst(rst_i),
-	.clk(clk),
-	.ld(alu0_ld && ((alu0_op==`RR && (alu0_fn==`MUL || alu0_fn==`MULU)) || alu0_op==`MULI || alu0_op==`MULUI)),
-	.sgn((alu0_op==`RR && alu0_op==`MUL) || alu0_op==`MULI),
-	.isMuli(alu0_op==`MULI || alu0_op==`MULUI),
-	.a(alu0_argA),
-	.b(alu0_argB),
-	.imm(alu0_argI),
-	.o(alu0_prod),
-	.done(alu0_mult_done)
-);
-
-Thor_multiplier #(DBW) umult1
-(
-	.rst(rst_i),
-	.clk(clk),
-	.ld(alu1_ld && ((alu1_op==`RR && (alu1_fn==`MUL || alu1_fn==`MULU)) || alu1_op==`MULI || alu1_op==`MULUI)),
-	.sgn((alu1_op==`RR && alu1_op==`MUL) || alu1_op==`MULI),
-	.isMuli(alu1_op==`MULI || alu1_op==`MULUI),
-	.a(alu1_argA),
-	.b(alu1_argB),
-	.imm(alu1_argI),
-	.o(alu1_prod),
-	.done(alu1_mult_done)
-);
-
-Thor_divider #(DBW) udiv0
-(
-	.rst(rst_i),
-	.clk(clk),
-	.ld(alu0_ld && (alu0_op==`DIV || alu0_op==`DIVI || alu0_op==`DIVU || alu0_op==`DIVUI)),
-	.sgn(alu0_op==`DIV || alu0_op==`DIVI),
-	.isDivi(alu0_op==`DIVI || alu0_op==`DIVUI),
-	.a(alu0_argA),
-	.b(alu0_argB),
-	.imm(alu0_argI),
-	.qo(alu0_divq),
-	.ro(alu0_rem),
-	.dvByZr(),
-	.done(alu0_div_done)
-);
-
-Thor_divider #(DBW) udiv1
-(
-	.rst(rst_i),
-	.clk(clk),
-	.ld(alu1_ld && (alu1_op==`DIV || alu1_op==`DIVI || alu1_op==`DIVU || alu1_op==`DIVUI)),
-	.sgn(alu1_op==`DIV || alu1_op==`DIVI),
-	.isDivi(alu1_op==`DIVI || alu1_op==`DIVUI),
-	.a(alu1_argA),
-	.b(alu1_argB),
-	.imm(alu1_argI),
-	.qo(alu1_divq),
-	.ro(alu1_rem),
-	.dvByZr(),
-	.done(alu1_div_done)
-);
+wire alu0_done,alu1_done;
+wire alu0_divByZero, alu1_divByZero;
 
 Thor_alu #(.DBW(DBW),.BIG(1)) ualu0 
 (
     .corenum(corenum),
+    .rst(rst),
+    .clk(clk),
+    .alu_ld(alu0_ld),
 	.alu_op(alu0_op),
 	.alu_fn(alu0_fn),
 	.alu_argA(alu0_argA),
@@ -97,14 +42,17 @@ Thor_alu #(.DBW(DBW),.BIG(1)) ualu0
 	.alu_argI(alu0_argI),
 	.alu_pc(alu0_pc),
 	.insnsz(alu0_insnsz),
-	.prod(alu0_prod),
-	.divq(alu0_divq),
-	.o(alu0_out)
+	.o(alu0_out),
+	.alu_done(alu0_done),
+	.alu_divByZero(alu0_divByZero)
 );
 
 Thor_alu #(.DBW(DBW),.BIG(ALU1BIG)) ualu1 
 (
     .corenum(corenum),
+    .rst(rst),
+    .clk(clk),
+    .alu_ld(alu1_ld),
 	.alu_op(alu1_op),
 	.alu_fn(alu1_fn),
 	.alu_argA(alu1_argA),
@@ -113,9 +61,9 @@ Thor_alu #(.DBW(DBW),.BIG(ALU1BIG)) ualu1
 	.alu_argI(alu1_argI),
 	.alu_pc(alu1_pc),
 	.insnsz(alu1_insnsz),
-	.prod(alu1_prod),
-    .divq(alu1_divq),
-	.o(alu1_out)
+	.o(alu1_out),
+	.alu_done(alu1_done),
+    .alu_divByZero(alu1_divByZero)
 );
 
 function fnPredicate;
@@ -158,30 +106,33 @@ begin
 	alu1_id <= alu1_sourceid;
 end
 
+// Special flag nybble is used for INT and SYS instructions in order to turn off
+// segmentation while the vector jump is taking place.
+
 always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc or alu0_bt)
     case(alu0_op)
-    `JSR,`JSRS,`JSRZ,`RTE,`RTI:
+    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI:
         alu0_misspc <= alu0_argA + alu0_argI;
     `LOOP,`SYNC:
         alu0_misspc <= alu0_pc + alu0_insnsz;
     `RTS,`RTS2:
         alu0_misspc <= alu0_argA + alu0_fn[3:0];
     `SYS,`INT:
-        alu0_misspc <= alu0_argA + {alu0_argI[DBW-5:0],4'b0};
+        alu0_misspc <= {4'hF,alu0_argA + {alu0_argI[DBW-5:0],4'b0}};
     default:
         alu0_misspc <= (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI);
     endcase
 
 always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc or alu1_bt)
     case(alu1_op)
-    `JSR,`JSRS,`JSRZ,`RTE,`RTI:
+    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI:
         alu1_misspc <= alu1_argA + alu1_argI;
     `LOOP,`SYNC:
         alu1_misspc <= alu1_pc + alu1_insnsz;
     `RTS,`RTS2:
         alu1_misspc <= alu1_argA + alu1_fn[3:0];
     `SYS,`INT:
-        alu1_misspc <= alu1_argA + {alu1_argI[DBW-5:0],4'b0};
+        alu1_misspc <= {4'hF,alu1_argA + {alu1_argI[DBW-5:0],4'b0}};
     default:
         alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
     endcase
@@ -195,7 +146,9 @@ assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`JSRS || alu0_op==`JSRZ ||
 					  (alu1_op == `SYS || alu1_op==`INT) ? alu1_argA + {alu1_argI[DBW-5:0],4'b0} :
 					  (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
 */
-assign  alu0_exc = `EXC_NONE;
+assign  alu0_exc =  (fnIsKMOnly(alu0_op) && !km) ? `EXC_PRIV :
+                    (alu0_done && alu0_divByZero) ? `EXC_DBZ : `EXC_NONE;
+
 //			? `EXC_NONE
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu0_argB[`INSTRUCTION_S2]
@@ -207,7 +160,9 @@ assign  alu0_exc = `EXC_NONE;
 //			: (alu0_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu0_argB[`INSTRUCTION_S2]
 //			: `EXC_INVALID;
 
-assign  alu1_exc = `EXC_NONE;
+assign  alu1_exc =  (fnIsKMOnly(alu1_op) && !km) ? `EXC_PRIV :
+                    (alu1_done && alu1_divByZero) ? `EXC_DBZ : `EXC_NONE;
+
 //			? `EXC_NONE
 //			: (alu1_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
 //			: (alu1_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu1_argB[`INSTRUCTION_S2]
@@ -223,17 +178,17 @@ assign alu0_branchmiss = alu0_dataready &&
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
 		  : (alu0_cmtw && (alu0_op==`SYNC || alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ ||
 		     alu0_op==`SYS || alu0_op==`INT ||
-		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argB == 64'd0)))));
+		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op==`RTD || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argB == 64'd0)))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
 		  : (alu1_cmtw && (alu1_op==`SYNC || alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ ||
 		     alu1_op==`SYS || alu1_op==`INT ||
-		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argB == 64'd0)))));
+		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op==`RTD || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argB == 64'd0)))));
 
-assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
-	misspc = (alu0_branchmiss ? alu0_misspc : alu1_misspc),
-	missid = (alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
+assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss),
+	misspc = (mem_stringmiss ? dram0_misspc : alu0_branchmiss ? alu0_misspc : alu1_misspc),
+	missid = (mem_stringmiss ? dram0_id : alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
 
 `ifdef FLOATING_POINT
  wire fp0_exception;
@@ -302,3 +257,4 @@ assign fp0_exc = fp0_exception ? 8'd242 : 8'd0;
 assign  fp0_v = fp0_dataready;
 assign  fp0_id = fp0_sourceid;
 `endif
+

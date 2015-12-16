@@ -19,18 +19,21 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
 //
-// Thor SuperScalar
+// Thor SuperScaler
 // ALU
 //
 // ============================================================================
 //
 `include "Thor_defines.v"
 
-module Thor_alu(corenum, alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, prod, divq, o);
+module Thor_alu(corenum, rst, clk, alu_ld, alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, o, alu_done, alu_divByZero);
 parameter DBW=64;
 parameter BIG=1;
 parameter FEATURES = 0;
 input [63:0] corenum;
+input rst;
+input clk;
+input alu_ld;
 input [7:0] alu_op;
 input [5:0] alu_fn;
 input [DBW-1:0] alu_argA;
@@ -39,21 +42,56 @@ input [DBW-1:0] alu_argC;
 input [DBW-1:0] alu_argI;
 input [DBW-1:0] alu_pc;
 input [3:0] insnsz;
-input [127:0] prod;
-input [63:0] divq;
 output reg [DBW-1:0] o;
+output reg alu_done;
+output alu_divByZero;
 
 wire signed [DBW-1:0] alu_argAs = alu_argA;
 wire signed [DBW-1:0] alu_argBs = alu_argB;
 wire signed [DBW-1:0] alu_argIs = alu_argI;
 wire [DBW-1:0] andi_res = alu_argA & alu_argI;
-
-integer n;
-
+wire [127:0] alu_prod;
+wire [63:0] alu_divq;
+wire [63:0] alu_rem;
 wire [7:0] bcdao,bcdso;
 wire [15:0] bcdmo;
 wire [DBW-1:0] bf_out;
 wire [DBW-1:0] shfto;
+wire alu_mult_done,alu_div_done;
+wire [DBW-1:0] p_out;
+reg [3:0] o1;
+
+integer n;
+
+Thor_multiplier #(DBW) umult1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(alu_ld && ((alu_op==`RR && (alu_fn==`MUL || alu_fn==`MULU)) || alu_op==`MULI || alu_op==`MULUI)),
+	.sgn((alu_op==`RR && alu_op==`MUL) || alu_op==`MULI),
+	.isMuli(alu_op==`MULI || alu_op==`MULUI),
+	.a(alu_argA),
+	.b(alu_argB),
+	.imm(alu_argI),
+	.o(alu_prod),
+	.done(alu_mult_done)
+);
+
+Thor_divider #(DBW) udiv1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(alu_ld && ((alu_op==`RR && (alu_fn==`DIV || alu_fn==`DIVU)) || alu_op==`DIVI || alu_op==`DIVUI)),
+	.sgn((alu_op==`RR && alu_fn==`DIV) || alu_op==`DIVI),
+	.isDivi(alu_op==`DIVI || alu_op==`DIVUI),
+	.a(alu_argA),
+	.b(alu_argB),
+	.imm(alu_argI),
+	.qo(alu_divq),
+	.ro(alu_rem),
+	.dvByZr(alu_divByZero),
+	.done(alu_div_done)
+);
 
 Thor_shifter #(DBW) ushft0
 (
@@ -96,6 +134,16 @@ Thor_bitfield #(DBW) ubf1
 	.m(alu_argI[11:0]),
 	.o(bf_out),
 	.masko()
+);
+
+Thor_P #(DBW) upr1
+(
+    .fn(alu_fn),
+    .ra(alu_argI[5:0]),
+    .rb(alu_argI[11:6]),
+    .rt(alu_argI[17:12]),
+    .pregs_i(alu_argA),
+    .pregs_o(p_out)
 );
 
 wire [DBW-1:0] cntlzo;
@@ -149,12 +197,12 @@ casex(alu_op)
 	`_16ADDU:		o <= {alu_argA[DBW-5:0],4'b0} + alu_argB;
 	`MIN:           o <= BIG ? (alu_argA < alu_argB ? alu_argA : alu_argB) : 64'hDEADDEADDEADDEAD; 
 	`MAX:           o <= BIG ? (alu_argA < alu_argB ? alu_argB : alu_argA) : 64'hDEADDEADDEADDEAD;
-	`MUL,`MULU:     o <= BIG ? prod[63:0] : 64'hDEADDEADDEADDEAD;
-	`DIV,`DIVU:     o <= BIG ? divq : 64'hDEADDEADDEADDEAD;  
+	`MUL,`MULU:     o <= BIG ? alu_prod[63:0] : 64'hDEADDEADDEADDEAD;
+	`DIV,`DIVU:     o <= BIG ? alu_divq : 64'hDEADDEADDEADDEAD;  
 	default:   o <= 64'hDEADDEADDEADDEAD;
 	endcase
-`MULI,`MULUI:   o <= BIG ? prod[63:0] : 64'hDEADDEADDEADDEAD;
-`DIVI,`DIVUI:   o <= BIG ? divq : 64'hDEADDEADDEADDEAD;
+`MULI,`MULUI:   o <= BIG ? alu_prod[63:0] : 64'hDEADDEADDEADDEAD;
+`DIVI,`DIVUI:   o <= BIG ? alu_divq : 64'hDEADDEADDEADDEAD;
 `_2ADDUI:		o <= {alu_argA[DBW-2:0],1'b0} + alu_argI;
 `_4ADDUI:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argI;
 `_8ADDUI:		o <= {alu_argA[DBW-4:0],3'b0} + alu_argI;
@@ -200,7 +248,7 @@ casex(alu_op)
     `PAR:       o <= BIG ? ^alu_argA : 64'hDEADDEADDEADDEAD;
     default:    o <= 64'hDEADDEADDEADDEAD;
     endcase
- 
+`P: o <= p_out;
 /*
 `DOUBLE:
     if (BIG) begin
@@ -251,43 +299,43 @@ casex(alu_op)
 	endcase
 `BITI:
     begin
-        o[0] <= andi_res==64'd0;
-        o[1] <= andi_res[DBW-1];
-    	o[2] <= andi_res[0];
-        o[3] <= 1'b0;
-        o[DBW-1:4] <= 60'd0;
+        o1[0] = andi_res==64'd0;
+        o1[1] = andi_res[DBW-1];
+    	o1[2] = andi_res[0];
+        o1[3] = 1'b0;
+        o <= {16{o1}};
     end
 `TST:	
 	case(alu_fn)
 	6'd0:	// TST - integer
 		begin
-			o[0] <= alu_argA == 64'd0;
-			o[1] <= alu_argA[DBW-1];
-			o[2] <= 1'b0;
-			o[3] <= 1'b0;
-			o[DBW-1:4] <= 60'd0;
+			o1[0] = alu_argA == 64'd0;
+			o1[1] = alu_argA[DBW-1];
+			o1[2] = 1'b0;
+			o1[3] = 1'b0;
+			o <= {16{o1}};
 		end
 `ifdef FLOATING_POINT
 	6'd1:	// FSTST - float single
 		begin
-			o[0] <= alu_argA[30:0]==31'd0;	// + or - zero
-			o[1] <= alu_argA[31];			// signed less than
-			o[2] <= alu_argA[31];
+			o1[0] = alu_argA[30:0]==31'd0;	// + or - zero
+			o1[1] = alu_argA[31];			// signed less than
+			o1[2] = alu_argA[31];
 			// unordered
-			o[3] <= alu_argA[30:23]==8'hFF && alu_argA[22:0]!=23'd0;	// NaN
-			o[DBW-1:4] <= 60'd0;
+			o1[3] = alu_argA[30:23]==8'hFF && alu_argA[22:0]!=23'd0;	// NaN
+			o <= {16{o1}};
 		end
 	6'd2:	// FTST - float double
 		begin
-			o[0] <= alu_argA[DBW-2:0]==63'd0;	// + or - zero
-			o[1] <= alu_argA[DBW-1];			// signed less than
-			o[2] <= alu_argA[DBW-1];
+			o1[0] = alu_argA[DBW-2:0]==63'd0;	// + or - zero
+			o1[1] = alu_argA[DBW-1];			// signed less than
+			o1[2] = alu_argA[DBW-1];
 			// unordered
 			if (DBW==64)
-				o[3] <= alu_argA[62:52]==11'h7FF && alu_argA[51:0]!=52'd0;	// NaN
+				o1[3] = alu_argA[62:52]==11'h7FF && alu_argA[51:0]!=52'd0;	// NaN
 			else
-				o[3] <= 1'b0;
-			o[DBW-1:4] <= 60'd0;
+				o1[3] = 1'b0;
+			o <= {16{o1}};
 		end
 `endif
 	default:	o <= 64'd0;
@@ -295,37 +343,37 @@ casex(alu_op)
 `CMP:	begin
             case(alu_fn)
             2'd0: begin     // ICMP
-                o[0] <= alu_argA == alu_argB;
-                o[1] <= alu_argAs < alu_argBs;
-                o[2] <= alu_argA < alu_argB;
-                o[3] <= 1'b0;
-                o[DBW-1:4] <= 60'd0;
+                o1[0] = alu_argA == alu_argB;
+                o1[1] = alu_argAs < alu_argBs;
+                o1[2] = alu_argA < alu_argB;
+                o1[3] = 1'b0;
+    			o <= {16{o1}};
                 end
 `ifdef FLOATING_POINT
             2'd1: begin     // FSCMP
-                o[0] <= fseq;
-                o[1] <= fslt;
-                o[2] <= fslt1;
-                o[3] <= snanA | snanB;
-                o[DBW-1:4] <= 60'd0;
+                o1[0] = fseq;
+                o1[1] = fslt;
+                o1[2] = fslt1;
+                o1[3] = snanA | snanB;
+    			o <= {16{o1}};
                 end
             2'd2: begin     // FCMP
-                o[0] <= feq;
-                o[1] <= flt;
-                o[2] <= flt1;
-                o[3] <= nanA | nanB;
-                o[DBW-1:4] <= 60'd0;
+                o1[0] = feq;
+                o1[1] = flt;
+                o1[2] = flt1;
+                o1[3] = nanA | nanB;
+    			o <= {16{o1}};
                 end
 `endif
             default: o <= 64'hDEADDEADDEADDEAD;
             endcase
 		end
 `CMPI:	begin
-			o[0] <= alu_argA == alu_argI;
-			o[1] <= alu_argAs < alu_argIs;
-			o[2] <= alu_argA < alu_argI;
-			o[3] <= 1'b0;
-			o[DBW-1:4] <= 64'd0;
+			o1[0] = alu_argA == alu_argI;
+			o1[1] = alu_argAs < alu_argIs;
+			o1[2] = alu_argA < alu_argI;
+			o1[3] = 1'b0;
+			o <= {16{o1}};
 		end
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,
 `LWS,`SWS,`LEA,`RTS2,`STS,`STFND,`STCMP:
@@ -374,4 +422,19 @@ casex(alu_op)
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end
+
+// Generate done signal
+always @*
+case(alu_op)
+`RR:
+    case(alu_fn)
+    `MUL,`MULU: alu_done <= alu_mult_done;
+    `DIV,`DIVU: alu_done <= alu_div_done;
+    default:    alu_done <= `TRUE;
+    endcase
+`MULI,`MULUI:   alu_done <= alu_mult_done;
+`DIVI,`DIVUI:   alu_done <= alu_div_done;
+default:    alu_done <= `TRUE;
+endcase
+
 endmodule

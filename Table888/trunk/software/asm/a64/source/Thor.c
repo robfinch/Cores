@@ -251,6 +251,41 @@ static int getTlbReg()
    return Tn;
 }
 
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+static int getBitno()
+{
+    int bit;
+
+    bit = -1;
+    while(isspace(*inptr)) inptr++;
+    switch(*inptr) {
+    case 'b': case 'B':
+         if (isdigit(inptr[1])) {
+             bit = inptr[1]-'0';
+             if (isdigit(inptr[2])) {
+                 bit = 10 * bit + (inptr[2]-'0');
+                 if (isIdentChar(inptr[3]))
+                     return -1;
+                 else {
+                     inptr += 3;
+                     NextToken();
+                     return bit;
+                 }
+             }
+             else if (isIdentChar(inptr[2]))
+                 return -1;
+             else {
+                 inptr += 2;
+                 NextToken();
+                 return bit;
+             }
+         }
+         else return -1;
+    }
+    return bit;
+}
+
 
 // ----------------------------------------------------------------------------
 // Return the register number or -1 if not a register.
@@ -470,6 +505,16 @@ static int Thor_getSprRegister()
          }
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x2F;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x27;
@@ -549,6 +594,16 @@ static int Thor_getSprRegister()
          }
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&         
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x29;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x21;
@@ -579,13 +634,23 @@ static int Thor_getSprRegister()
          }
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&  
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x2A;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x22;
         }
          break;
 
-    // fault_pc
+    // fault_pc fs
     case 'f': case 'F':
          if ((inptr[1]=='a' || inptr[1]=='A') &&
              (inptr[2]=='u' || inptr[2]=='U') &&
@@ -601,6 +666,16 @@ static int Thor_getSprRegister()
          }
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x2B;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x23;
@@ -611,6 +686,16 @@ static int Thor_getSprRegister()
     case 'g': case 'G':
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') && 
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x2C;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x24;
@@ -632,6 +717,16 @@ static int Thor_getSprRegister()
          }
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x2D;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x25;
@@ -740,6 +835,16 @@ static int Thor_getSprRegister()
          }
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x2E;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x26;
@@ -778,6 +883,16 @@ static int Thor_getSprRegister()
     case 'z': case 'Z':
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
+            if (inptr[2]=='.') {
+               if ((inptr[3]=='l' || inptr[3]=='L') &&
+                   (inptr[4]=='m' || inptr[4]=='M') &&
+                   (inptr[5]=='t' || inptr[5]=='T') &&
+                   !isIdentChar(inptr[6])) {
+                       inptr += 6;
+                       NextToken();
+                       return 0x28;
+               }
+            }
             inptr += 2;
             NextToken();
             return 0x20;
@@ -2476,6 +2591,64 @@ static void process_mfspr(int oc)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
+static void process_stcmp(int oc)
+{
+    char sz;
+    char dir;
+    int64_t disp;
+    int Ra, Rb, Rc;
+    int sc;
+    int md;
+
+    if (seg == -1)
+       seg = 1;
+
+    sz = inptr[0];
+    switch(sz) {
+    case 'b': case 'B': sz = 0; break;
+    case 'c': case 'C': sz = 1; break;
+    case 'h': case 'H': sz = 2; break;
+    case 'w': case 'W': sz = 3; break;
+    default: 
+             printf("%d bad string size.\r\n", lineno);
+             sz = 0;
+    }
+    dir = inptr[1];
+    switch(dir) {
+    case 'i': case 'I': dir = 0; break;
+    case 'd': case 'D': dir = 1; break;
+    default:
+              printf("%d bad inc/dec indicator.\r\n", lineno);
+              dir = 0;
+    }
+    inptr += 2;
+    NextToken();
+    mem_operand(&disp, &Ra, &Rc, &sc, &md);
+    if (disp!=0 || Rc != -1 || sc != 0)
+        printf("%d: illegal memory operand.\r\n", lineno);
+    if (token==']')
+       NextToken();
+    need(',');    
+    NextToken();
+    mem_operand(&disp, &Rb, &Rc, &sc, &md);
+    if (disp!=0 || Rc != -1 || sc != 0)
+        printf("%d: illegal memory operand.\r\n", lineno);
+    if (token==']')
+       NextToken();
+    need(',');    
+    Rc = getRegisterX();
+    if (Ra==-1 || Rb==-1 || Rc==-1)
+       printf("%d bad register.\r\n");
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra|(Rb << 6));
+    emit_insn((Rb >> 2)|(Rc << 4));
+    emit_insn((Rc >> 4) | (sz << 2) | (dir << 4)|(seg << 5));
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 static void process_cmp()
 {
     int Pt;
@@ -2505,6 +2678,26 @@ static void process_cmp()
         emit_insn(Rb >> 2);
         prevToken();
     }
+}
+
+static void process_pand(int oc, int fn)
+{
+    int Bt;
+    int Ba;
+    int Bb;
+    
+    Bt = getBitno();
+    need(',');
+    Ba = getBitno();
+    need(',');
+    Bb = getBitno();
+    if (Bt==-1 || Ba==-1 || Bb==-1)
+       printf("%d expecting a bit number.\r\n", lineno);
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ba|(Bb << 6));
+    emit_insn((Bb >> 2)|(Bt << 4));
+    emit_insn((Bt >> 4)|(fn << 2));
 }
 
 static void process_biti(int oc)
@@ -2912,6 +3105,14 @@ j_processToken:
         case tk_or:  process_rrop(0x40,0x01); break;
         case tk_ori: process_riop(0x54); break;
         case tk_org: process_org(); break;
+        case tk_pand: process_pand(0x42,0x00); break;
+        case tk_por: process_pand(0x42,0x01); break;
+        case tk_peor: process_pand(0x42,0x02); break;
+        case tk_pnand: process_pand(0x42,0x03); break;
+        case tk_pnor: process_pand(0x42,0x04); break;
+        case tk_penor: process_pand(0x42,0x05); break;
+        case tk_pandc: process_pand(0x42,0x06); break;
+        case tk_porc: process_pand(0x42,0x07); break;
         case tk_pop: process_push(0xCA); break;
         case tk_pred:
              if (isdigit(inptr[0]) && isdigit(inptr[1])) {
@@ -2966,6 +3167,7 @@ j_processToken:
         case tk_shrui: process_shifti(0x58,0x13); break;
 //        case tk_shx:  process_store(0xC2); break;
         case tk_ss: seg = 6; break;
+        case tk_stcmp: process_stcmp(0x9A); break;
         case tk_stp: process_stp(0xF6); break;
         case tk_stsb: process_sts(0x98,0); break;
         case tk_stsc: process_sts(0x98,1); break;

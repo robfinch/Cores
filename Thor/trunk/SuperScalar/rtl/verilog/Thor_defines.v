@@ -28,7 +28,11 @@
 
 `define SIMULATION      1'b1
 `define SEGMENTATION	1'b1
+//`define STACKOPS        1'b1
+//`define BITFIELDOPS     1'b1
 //`define FLOATING_POINT	1'b1
+`define STRINGOPS       1'b1
+`define DEBUG_LOGIC     1'b1
 //`define THREEWAY    1'b1
 
 `define TRUE	1'b1
@@ -58,6 +62,20 @@
 `define _16ADDU			6'h0B
 `define MIN             6'h10
 `define MAX             6'h11
+`define R2          8'h41
+`define CPUID           4'h0
+`define REDOR           4'h1    // reduction or
+`define REDAND          4'h2    // reduction and
+`define PAR             4'h3    // parity
+`define P           8'h42
+`define PAND            6'd0
+`define POR             6'd1
+`define PEOR            6'd2
+`define PNAND           6'd3
+`define PNOR            6'd4
+`define PENOR           6'd5
+`define PANDC           6'd6
+`define PORC            6'd7
 `define BITI        8'h46
 `define ADDUIS      8'h47
 `define ADDI		8'h48
@@ -232,6 +250,11 @@
 `define SWX			8'hC3
 `define STIX        8'hC6
 `define INC         8'hC7
+`define PUSH        8'hC8
+`define PEA         8'hC9
+`define POP         8'hCA
+`define LINK        8'hCB
+`define UNLINK      8'hCC
 
 `define TLB			8'hF0
 `define TLB_NOP			4'd0
@@ -271,6 +294,7 @@
 `define MEMDB		8'hF9	// data barrier
 `define CLI			8'hFA
 `define SEI			8'hFB
+`define RTD         8'hFC
 `define IMM			8'hFF
 
 `define PREDC	3:0
@@ -302,7 +326,7 @@
 `define EXC_NONE	4'd0
 `define EXC_HALT	4'd1
 `define EXC_TLBMISS	4'd2
-`define EXC_SIGSEGV	4'd3
+`define EXC_SEGV	4'd3
 `define EXC_INVALID	4'd4
 `define EXC_SYS		4'd5
 `define EXC_INT		4'd6
@@ -310,7 +334,8 @@
 `define EXC_DBE		4'd8		// databus error
 `define EXC_DBZ		4'd9		// divide by zero
 `define EXC_FLT     4'd10       // floating point exception
-
+`define EXC_DBG     4'd11
+`define EXC_PRIV    4'd12
 //
 // define PANIC types
 //

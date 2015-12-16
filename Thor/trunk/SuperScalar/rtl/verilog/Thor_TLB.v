@@ -252,7 +252,7 @@ else m <= 4'd15;
 wire [DBW-1:0] IPFN = TLBPhysPage[{m[2:0],pcs[2:0]}];
 assign iuncached = TLBC[{m[2:0],pcs[2:0]}]==3'd1;
 
-assign ITLBMiss = !unmappedArea & (m[3] | ~TLBValid[{m[2:0],pcs[2:0]}]);
+assign ITLBMiss = TLBenabled & (!unmappedArea & (m[3] | ~TLBValid[{m[2:0],pcs[2:0]}]));
 
 always @*
 begin
@@ -287,8 +287,8 @@ else q <= 4'd15;
 wire [DBW-1:0] DPFN = TLBPhysPage[{q[2:0],eas[2:0]}];
 assign uncached = TLBC[{q[2:0],eas[2:0]}]==3'd1;// || unmappedDataArea;
 
-assign DTLBMiss = !unmappedDataArea & (q[3] | ~TLBValid[{q[2:0],eas[2:0]}]) ||
-					(!km && hitIOPage);
+assign DTLBMiss = TLBenabled & (!unmappedDataArea & (q[3] | ~TLBValid[{q[2:0],eas[2:0]}]) ||
+					(!km && hitIOPage));
 
 always @*
 begin
