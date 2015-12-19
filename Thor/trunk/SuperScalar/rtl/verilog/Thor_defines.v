@@ -34,6 +34,7 @@
 `define STRINGOPS       1'b1
 `define DEBUG_LOGIC     1'b1
 //`define THREEWAY    1'b1
+`define TRAP_ILLEGALOPS 1'b1
 
 `define TRUE	1'b1
 `define FALSE	1'b0
@@ -42,10 +43,10 @@
 `define ZERO		64'd0
 
 
-`define TST			8'b0000xxxx
-`define CMP			8'b0001xxxx
-`define CMPI		8'b0010xxxx
-`define BR			8'b0011xxxx
+`define TST			4'b0000
+`define CMP			4'b0001
+`define CMPI		4'b0010
+`define BR			4'b0011
 
 `define RR			8'h40
 `define ADD				6'h00
@@ -228,6 +229,7 @@
 `define BFCHG			4'h3
 `define BFEXTU			4'h4
 `define BFEXT			4'h5
+`define BFINSI          4'd6
 
 `define MOVS		8'hAB
 // Uncached access instructions

@@ -1,16 +1,46 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2015  Robert Finch, Stratford
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; This source file is free software: you can redistribute it and/or modify 
+; it under the terms of the GNU Lesser General Public License as published 
+; by the Free Software Foundation, either version 3 of the License, or     
+; (at your option) any later version.                                      
+;                                                                          
+; This source file is distributed in the hope that it will be useful,      
+; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+; GNU General Public License for more details.                             
+;                                                                          
+; You should have received a copy of the GNU General Public License        
+; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+;                                                                          
+; ============================================================================
+;
 ;------------------------------------------------------------------------------
 ; Display a character on the screen device
 ; Expects the processor to be in 16 bit mode with 16 bit acc and 16 bit indexes
 ;------------------------------------------------------------------------------
 ;
 public DisplayChar:
-		subui	r27,r27,#40
-		sws		c1,[r27]
-		sws		pregs,8[r27]
-		sw		r2,16[r27]
-		sw		r3,24[r27]
-		sw		r4,32[r27]
-		and		r1,r1,#$FF
+;		push	c1
+;		push	pregs
+;		push	r2
+;		push	r3
+;		push	r4
+		addui	sp,sp,#-40
+		sws		c1,[sp]
+		sws		pregs,8[sp]
+		sw		r2,16[sp]
+		sw		r3,24[sp]
+		sw		r4,32[sp]
+		ldi		r2,#8
+		sc		r2,$FFDC0600
+		zxb		r1,r1
 		lb		r2,EscState
 		tst		p0,r2
 p0.lt	br		processEsc
@@ -37,33 +67,41 @@ p0.ne	br		_0003
 		ldi		r1,#1
 		sb		r1,EscState
 exitDC:
-		lws		c1,[r27]
-		lws		pregs,8[r27]
-		lw		r2,16[r27]
-		lw		r3,24[r27]
-		lw		r4,32[r27]
-		addui	r27,r27,#40
+;		pop		r4
+;		pop		r3
+;		pop		r2
+;		pop		pregs
+;		pop		c1
+		lws		c1,[sp]
+		lws		pregs,8[sp]
+		lw		r2,16[sp]
+		lw		r3,24[sp]
+		lw		r4,32[sp]
+		addui	sp,sp,#40
 		rts
 _0003:
+		ldi		r4,#10
+		sc		r4,$FFDC0600
 		bsr		AsciiToScreen
 		lhu		r2,NormAttr
+		andi	r2,r2,#-1024
 		or		r1,r1,r2
 		lcu		r3,VideoPos
 		lhu		r2,Vidptr
-		sh		r1,[r2+r3*4]
+		sh		r1,hs:[r2+r3*4]
 		lcu		r1,CursorX
 		addui	r1,r1,#1
 		lcu		r2,Textcols
 		cmp		p0,r1,r2
-p0.ne	br		.0001
+p0.ltu	br		.0001
 		sc		r0,CursorX
 		lcu		r1,CursorY
 		addui	r1,r1,#1
 		lcu		r2,Textrows
 		cmp		p0,r1,r2
-p0.ne	sc		r1,CursorY
-p0.ne	bsr		SyncVideoPos
-p0.ne	br		exitDC
+p0.ltu	sc		r1,CursorY
+p0.ltu	bsr		SyncVideoPos	; wont affect p0
+p0.ltu	br		exitDC
 		bsr		SyncVideoPos
 		bsr		ScrollUp
 		br		exitDC
@@ -88,6 +126,8 @@ p1.ge	br		exitDC
 		br		exitDC
 
 processEsc:
+		ldi		r4,#22
+		sc		r4,$FFDC0600
 		lb		r2,EscState
 		cmpi	p0,r2,#-1
 p0.ne	br		.0006
@@ -104,7 +144,7 @@ p0.ge	br		.0002
 		lhu		r4,NormAttr
 		or		r1,r1,r4
 		lhu		r4,Vidptr
-		sh		r1,[r4+r3*4]
+		sh		r1,hs:[r4+r3*4]
 		addui	r2,r2,#1
 		addui	r3,r3,#1
 		br		.0001
@@ -182,15 +222,17 @@ p0.ne	br		.0012
 		br		exitDC
 
 doBackSpace:
+		ldi		r4,#23
+		sc		r4,$FFDC0600
 		lc		r2,CursorX
 		tst		p0,r2
 p0.eq	br		exitDC		; Can't backspace anymore
 		lcu		r3,VideoPos
 .0002:
 		lh		r4,Vidptr
-		lh		r1,[r4+r3*4]
+		lh		r1,hs:[r4+r3*4]
 		addui	r3,r3,#-1
-		sh		r1,[r4+r3*4]
+		sh		r1,hs:[r4+r3*4]
 		addui	r3,r3,#2
 		lc		r4,Textcols
 		addui	r2,r2,#1
@@ -201,7 +243,7 @@ p0.ne	br		.0002
 		lh		r4,NormAttr
 		or		r1,r1,r4
 		lh		r4,Vidptr
-		sh		r1,[r4+r3*4]
+		sh		r1,hs:[r4+r3*4]
 		inc		CursorX,#-1
 		bsr		SyncVideoPos
 		br		exitDC
@@ -220,9 +262,9 @@ p0.ge	br		.0001
 		addui	r2,r2,#-1
 		addui	r3,r3,#1
 		lh		r4,Vidptr
-		lh		r1,[r4+r3*4]
+		lh		r1,hs:[r4+r3*4]
 		addui	r3,r3,#-1
-		sh		r1,[r4+r3*4]
+		sh		r1,hs:[r4+r3*4]
 		addui	r3,r3,#1
 		addui	r2,r2,#1
 		br		.0002
@@ -230,7 +272,7 @@ p0.ge	br		.0001
 		ldi		r1,#' '
 		lh		r2,NormAttr
 		or		r1,r1,r2
-		sh		r1,[r4+r3*4]
+		sh		r1,hs:[r4+r3*4]
 		br		exitDC
 
 doCursorHome:

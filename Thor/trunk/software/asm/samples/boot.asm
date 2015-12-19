@@ -22,6 +22,7 @@
 ;                                                                          
 ; ============================================================================
 ;
+SCRSZ	EQU	2604
 CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
@@ -51,6 +52,7 @@ SC_SCROLLLOCK	EQU	$7E
 SC_CAPSLOCK	EQU		$58
 
 IOBASE_ADDR	EQU		0xFFD00000
+IOLMT		EQU		0x100000
 LEDS		EQU		0xC0600
 TEXTSCR		EQU		0x00000
 TEXTSCR2	EQU		0x10000
@@ -60,34 +62,120 @@ TEXT_ROWS	EQU		0x2
 TEXT_CURPOS	EQU		0x16
 KEYBD		EQU		0xC0000
 
-KeyState1	EQU		$08
-KeyState2	EQU		$09
-KeybdLEDs	EQU		$0A
-KeybdWaitFlag	EQU	$0B
+PIC_IE		EQU		0xC0FC8
+PIC_ES		EQU		0xC0FE0
+PIC_ESR		EQU		0xC0FE8		; edge sense reset
 
-CursorX		EQU		$30
-CursorY		EQU		$32
-VideoPos	EQU		$34
-NormAttr	EQU		$36
-Vidregs		EQU		$40
-Vidptr		EQU		$44
-EscState	EQU		$48
-Textrows	EQU		$4A
-Textcols	EQU		$4C
+KeyState1	EQU		$2008
+KeyState2	EQU		$2009
+KeybdLEDs	EQU		$200A
+KeybdWaitFlag	EQU	$200B
+
+CursorX		EQU		$2030
+CursorY		EQU		$2032
+VideoPos	EQU		$2034
+NormAttr	EQU		$2036
+Vidregs		EQU		$2040
+Vidptr		EQU		$2044
+EscState	EQU		$2048
+Textrows	EQU		$204A
+Textcols	EQU		$204C
+
+		bss
+		org		$30000
+
+Milliseconds	dw		0
+
+rxfull     EQU      1
+Uart_ms         db      0
+Uart_txxonoff   db      0
+Uart_rxhead     dc      0
+Uart_rxtail     dc      0
+Uart_rxflow     db      0
+Uart_rxrts      db      0
+Uart_rxdtr      db      0
+Uart_rxxon      db      0
+Uart_foff       dc      0
+Uart_fon        dc      0
+Uart_txrts      db      0
+Uart_txdtr      db      0
+Uart_txxon      db      0
+Uart_rxfifo     fill.b  512,0
 
 	code
 	org		$FFFF8000
 
 cold_start:
+
 		; Initialize segment registers for flat model
 		mtspr	cs,r0
+		ldis	cs.lmt,#-1		; maximum
 		mtspr	zs,r0
+		ldis	zs.lmt,#-1
 		mtspr	ds,r0
+		ldis	ds.lmt,#-1
 		mtspr	es,r0
+		ldis	es.lmt,#-1
 		mtspr	fs,r0
+		ldis	fs.lmt,#-1
 		mtspr	gs,r0
-		mtspr	hs,r0
+		ldis	gs.lmt,#-1
+		ldis	hs,#IOBASE_ADDR
+		ldis	hs.lmt,#IOLMT
+
+		; set SS:SP
 		mtspr	ss,r0
+		ldis	ss.lmt,#$4000
+		ldi		r27,#$03ff8		; initialize SP
+
+		; switch processor to full speed
+		stp		#$FFFF
+
+		; set interrupt table at $0000
+		ldis	c12,#0
+
+		; set all vectors to the uninitialized interrupt vector
+;		mov		r4,r0
+;		ldis	lc,#255		; 256 vectors to set
+;su1:
+;		ldi		r1,#uii_jmp
+;		mov		r2,r4
+;		bsr		set_vector	; trashes r2,r3
+;		addui	r4,r4,#1
+;		loop	su1
+
+		; setup break vector
+		ldi		r1,#brk_jmp
+		ldi		r2,#0
+		bsr		set_vector
+
+		; setup NMI vector
+		ldi		r1,#nmi_jmp
+		ldi		r2,#254
+		bsr		set_vector
+
+		; setup MSI vector
+		sh		r0,Milliseconds
+		ldi		r1,#msi_jmp
+		ldi		r2,#193
+		bsr		set_vector
+
+		; setup IRQ vector
+		ldi		r1,#tms_jmp
+		ldi		r2,#194
+		bsr		set_vector
+
+		; Initialize PIC
+		ldi		r1,#%00111		; time slice interrupt is edge sensitive
+		sh		r1,hs:PIC_ES
+		ldi		r1,#%00111		; enable time slice interrupt, msi, nmi
+		sh		r1,hs:PIC_IE
+
+		mov		r1,r0
+		mov		r2,r0
+		mov		r3,r0
+		mov		r4,r0
+		mov		r5,r0
 
 		ldi		r1,#1
 		sc		r1,$FFDC0600
@@ -123,36 +211,117 @@ cold_start:
 		; turn on the TLB
 ;		tlben
 
-		; set interrupt table at $0000
-		ldis	c12,#0
+		; enable maskable interrupts
+		; Interrupts also are not enabled until an RTI instruction is executed.
+		; there will likely be a timer interrupt outstanding so this
+		; should go to the timer IRQ.	
+;		cli
 
-		ldi		r27,#$03ff8		; initialize SP
-		ldis	hs,#IOBASE_ADDR
+		; now globally enable interrupts using the RTI instruction, this will also
+		; switch to core to application/user mode.
+		ldis	c14,#j1			; c14 contains RTI return address
+;		rti
+j1:
 		ldi		r1,#2
 		sc		r1,$FFDC0600
 		sb		r0,EscState
+		bsr		SerialInit
+		ldi		r2,#msgStartup
+		ldis	lc,#msgStartupEnd-msgStartup-1
+j3:
+;		lbu		r1,[r2]
+;		addui	r2,r2,#1
+;		tst		p0,r1
+;p0.eq	br		j2
+;		bsr		SerialPutChar
+;		loop	j3
+j2:
 		bsr		VideoInit
 		bsr		ClearScreen
 		bsr		ClearScreen2
+		ldi		r1,#3
+		sc		r1,$FFDC0600
 		bsr		HomeCursor
-		ldi		r2,#msgStartup
+		ldi		r1,#6
+		sc		r1,$FFDC0600
+		bsr		alphabet
+		ldi		r1,#msgStartup
 		bsr		DisplayString
 		ldi		r5,#TEXTSCR
 .0001:
 		bsr		KeybdGetCharWait
 		bsr		AsciiToScreen
-		or		r1,r1,#%000000111_111111111_00_00000000
+		ori		r1,r1,#%000000111_111111111_00_00000000
 		sh		r1,hs:[r5]
 		addui	r5,r5,#4
 		br		.0001
 
 msgStartup:	
 		byte	"Thor Test System Starting...",CR,LF,0
+msgStartupEnd:
+
+bad_ram:
+		ldi		r1,#'B'
+		bsr		AsciiToScreen
+		ori		r1,r1,#%011000000_111111111_00_00000000
+		sh		r1,hs:TEXTSCR+16
+.bram1:	br		.bram1
+
+;------------------------------------------------------------------------------
+; alphabet:
+;
+; Display the alphabet across the top of the screen.
+;------------------------------------------------------------------------------
+
+alphabet:
+		addui	sp,sp,#-8
+		sws		c1,[sp]			; store off return address
+		ldi		r5,#'A'			; the first char
+		ldi		r3,#TEXTSCR		; screen address
+		ldis	lc,#25			; 25 chars
+.0001:
+		mov		r1,r5			; r1 = ascii letter
+		bsr		AsciiToScreen	; r1 = screen char
+		lhu		r2,NormAttr		; r2 = attribute
+		or		r1,r1,r2		; r1 = screen char + attribute
+		sh		r1,hs:[r3]		; store r1 to screen
+		addui	r5,r5,#1		; increment to next char
+		addui	r3,r3,#4		; increment to next screen loc
+		loop	.0001			; loop back
+		lws		c1,[sp]			; restore return address
+		addui	sp,sp,#8
+		rts
+	
+;------------------------------------------------------------------------------
+; Set interrupt vector
+;
+; Parameters:
+;	r1 = address of jump code
+;	r2 = vector number to set
+; Trashes: r2,r3
+;------------------------------------------------------------------------------
+
+set_vector:
+		mfspr	r3,c12			; get base address of interrupt table
+		_16addu	r2,r2,r3
+		lh		r3,cs:[r1]
+		sh		r3,zs:[r2]
+		lh		r3,cs:4[r1]
+		sh		r3,zs:4[r2]
+		lh		r3,cs:8[r1]
+		sh		r3,zs:8[r2]
+		lh		r3,cs:12[r1]
+		sh		r3,zs:12[r2]
+		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 VideoInit:
+		ldi		r1,#84
+		sc		r1,Textcols
+		ldi		r1,#31
+		sc		r1,Textrows
 		ldi		r1,#%011000000_111111111_00_00000000
 		sh		r1,NormAttr
 		ldi		r1,#TEXTREG
@@ -164,8 +333,8 @@ VideoInit:
 		ldis	lc,#10				; initialize loop counter ( one less)
 		lhu		r3,Vidregs
 .0001:
-		lcu		r1,cs:[r2]
-		sh		r1,hs:[r3]
+		lvc		r1,cs:[r2]
+;		sh		r1,hs:[r3]
 		addui	r2,r2,#2
 		addui	r3,r3,#4
 		loop	.0001
@@ -175,18 +344,36 @@ VideoInit:
 ;------------------------------------------------------------------------------
 
 ClearScreen:
+;		push	c1
+		addui	r27,r27,#-8
+		sws		c1,[r27]
+		ldi		r1,#' '
+		bsr		AsciiToScreen
 		lh		r2,NormAttr
-		ori		r2,r2,#' '
-		ldis	lc,#4096
+		or		r2,r2,r1
+		ldis	lc,#SCRSZ-1
+		mfspr	r1,lc
+		cmpi	p0,r1,#SCRSZ-1
+p0.ne	br		.0001
 		lh		r1,Vidptr
-		stsh	r2,hs:[r1]
+		ldi		r1,#TEXTSCR
+		stset.hi	r2,hs:[r1]
+		ldi		r1,#TEXTSCR
+		mov		r2,r1
+		mov		r3,r0
+		ldis	lc,#SCRSZ-1
+		stcmp.hi	hs:[r1],[r2],r3
+;		pop		c1
+		lws		c1,[r27]
+		addui	r27,r27,#8
+.0001:
 		rts
 
 ClearScreen2:
-		ldis	lc,#4096
+		ldis	lc,#SCRSZ-1
 		ldi		r2,#' '|%000011000_111111111_00_00000000;
 		ldi		r1,#TEXTSCR2
-		stsh	r2,hs:[r1]
+		stset.hi	r2,hs:[r1]
 		rts
 
 ;------------------------------------------------------------------------------
@@ -198,7 +385,8 @@ ScrollUp:
 		ldi		r2,#4096
 		lh		r4,Vidptr
 .0001:
-		push	r3
+		addui	r27,r27,#-8
+		sw		r2,[r27]
 		lc		r1,Textcols
 		add		r3,r3,r1
 		lh		r1,[r4+r3*4]
@@ -207,6 +395,7 @@ ScrollUp:
 		sh		r1,[r4+r3*4]
 		addui	r3,r3,#1
 		addui	r2,r2,#-1
+		tst		p0,r2
 p0.ne	br		.0001
 		lc		r1,Textrows
 		addui	r1,r1,#-1
@@ -231,6 +420,7 @@ BlankLine:
 		sh		r1,[r4+r3]
 		addui	r3,r3,#4
 		addui	r2,r2,#-1
+		tst		p0,r2
 p0.ne	br		.0001
 		rts
 
@@ -239,8 +429,9 @@ p0.ne	br		.0001
 ;------------------------------------------------------------------------------
 
 CursorOn:
-		push	r1
-		push	r2
+		addui	r27,r27,#-16
+		sw		r1,8[r27]
+		sw		r2,[r27]
 		lh		r2,Vidregs
 		ldi		r1,#$40
 		sh		r1,hs:32[r2]
@@ -251,8 +442,9 @@ CursorOn:
 		rts
 
 CursorOff:
-		push	r1
-		push	r2
+		addui	r27,r27,#-16
+		sw		r1,8[r27]
+		sw		r2,[r27]
 		lh		r2,Vidregs
 		ldi		r1,#$20
 		sh		r1,hs:32[r2]
@@ -263,6 +455,18 @@ CursorOff:
 		rts
 
 ;------------------------------------------------------------------------------
+; Get the number of text rows and columns from the video controller.
+;------------------------------------------------------------------------------
+
+GetTextRowscols:
+		lh		r2,Vidregs
+		lvc		r1,hs:0[r2]
+		sc		r1,Textcols
+		lvc		r1,hs:4[r2]
+		sc		r1,Textrows
+		rts
+
+;------------------------------------------------------------------------------
 ; Set cursor to home position.
 ;------------------------------------------------------------------------------
 
@@ -270,25 +474,30 @@ HomeCursor:
 		sc		r0,CursorX
 		sc		r0,CursorY
 		sc		r0,VideoPos
+		ldi		r1,#4
+		sc		r1,$FFDC0600
 
 ;------------------------------------------------------------------------------
 ; Synchronize the absolute video position with the cursor co-ordinates.
+; Does not modify any predicates.
 ;------------------------------------------------------------------------------
 
 SyncVideoPos:
-		push	r1					; save off some working regs
-		push	r2
-		push	r3
+		addui	r27,r27,#-24
+		sw		r1,16[r27]			; save off some working regs
+		sw		r2,8[r27]
+		sw		r3,[r27]
+		ldi		r1,#5
+		sc		r1,$FFDC0600
 		lc		r2,CursorY
-		sc		r2,$FFDC0600
 		shli	r2,r2,#1
 		lcu		r1,cs:LineTbl[r2]
 		shrui	r1,r1,#2
 		lc		r2,CursorX
 		addu	r1,r1,r2
 		sc		r1,VideoPos
-		lh		r3,hs:Vidregs		; r3 = address of video registers
-		sh		r1,44[r3]			; Update the position in the text controller
+		lh		r3,Vidregs			; r3 = address of video registers
+		sh		r1,hs:44[r3]		; Update the position in the text controller
 		lw		r3,[r27]			; restore the regs
 		lw		r2,8[r27]
 		lw		r1,16[r27]
@@ -360,12 +569,26 @@ TC2InitData:
 ;------------------------------------------------------------------------------
 
 AsciiToScreen:
-		andi	r1,r1,#$FF
-		biti	p0,r1,#%00100000	; if bit 5 isn't set
-p0.eq	br		.00001
-		biti	p0,r1,#%01000000	; or bit 6 isn't set
-p0.ne	and		r1,r1,#%10011111
-.00001:
+		zxb		r1,r1
+		cmp		p0,r1,#' '
+p0.le	ori		r1,r1,#$100
+p0.le	br		.0003
+		cmp		p0,r1,#$5B			; special test for  [ ] characters
+p0.ne	br		.0001
+		ldi		r1,#$11B
+		rts
+.0001:
+		cmp		p0,r1,#$5D
+p0.ne	br		.0002
+		ldi		r1,#$11D
+		rts
+.0002:
+		ori		r1,r1,#$100
+		biti	p0,r1,#$20			; if bit 5 isn't set
+p0.eq	br		.0003
+		biti	p0,r1,#$40			; or bit 6 isn't set
+p0.ne	andi	r1,r1,#$19F
+.0003:
 		rts
 
 ;------------------------------------------------------------------------------
@@ -373,7 +596,7 @@ p0.ne	and		r1,r1,#%10011111
 ;------------------------------------------------------------------------------
 ;
 ScreenToAscii:
-		andi	r1,r1,#$FF
+		zxb		r1,r1
 		cmpi	p0,r1,#27
 p0.le	addi	r1,r1,#$60
 		rts
@@ -382,17 +605,31 @@ p0.le	addi	r1,r1,#$60
 
 ;------------------------------------------------------------------------------
 ; Display a string on the screen.
+; Parameters:
+;	r1 = pointer to string
 ;------------------------------------------------------------------------------
 
 DisplayString:
+		addui	sp,sp,#-32
+		sws		c1,[sp]			; save return address
+		sws		lc,8[sp]		; save loop counter
+		sw		r2,16[sp]
+		sws		p2,24[sp]
+		ldis	lc,#$FFF		; set max 4k
+		mov		r2,r1
 .0001:
 		lbu		r1,[r2]
 		tst		p2,r1
 p2.eq	br		.0002
 		bsr		DisplayChar
 		addui	r2,r2,#1
-		br		.0001
+		loop	.0001
 .0002:
+		lws		c1,[sp]			; restore return address
+		lws		lc,8[sp]		; restore loop counter
+		lw		r2,16[sp]
+		lws		p2,24[sp]
+		addui	sp,sp,#32
 		rts
 
 KeybdGetCharWait:
@@ -411,8 +648,9 @@ KeybdGetCharNoWait:
 ;
 KeybdGetChar:
 KeybdGetChar1:
-		push	c1				; save off link register
-		push	r2
+		addui	r27,r27,#-16
+		sws		c1,8[r27]		; save off link register
+		sw		r2,[r27]
 .0002:
 .0003:
 		memsb
@@ -430,7 +668,7 @@ p0.lt	br		.0003
 		memsb
 		lvb		r1,hs:KEYBD		; get scan code value
 		memdb
-		andi	r1,r1,#$FF		; make unsigned
+		zxb		r1,r1			; make unsigned
 		sb		r0,hs:KEYBD+1	; clear read flag
 		ldi		r3,#3
 		sc		r3,$FFDC0600
@@ -553,7 +791,8 @@ p0.eq	br		.0005
 ;------------------------------------------------------------------------------
 
 KeybdSetLEDStatus:
-		push	c1
+		addui	r27,r27,#-8
+		sws		c1,[r27]
 		sb		r0,KeybdLEDs
 		lb		r1,KeyState2
 		biti	p0,r1,#16
@@ -593,8 +832,9 @@ p0.ne	sb		r1,KeybdLEDs
 ;------------------------------------------------------------------------------
 ;
 KeybdRecvByte:
-		push	c1
-		push	r3
+		addui	r27,r27,#-16
+		sws		c1,8[r27]
+		sw		r3,[r27]
 		ldi		r3,#20			; wait up to .2s
 .0003:
 		bsr		KeybdWaitBusy
@@ -612,7 +852,7 @@ p0.ne	br		.0003			; go back and try again
 		rts
 .0004:
 		lvb		r1,hs:KEYBD		; get scancode
-		andi	r1,r1,#$FF		; convert to unsigned char
+		zxb		r1,r1			; convert to unsigned char
 		sb		r0,hs:KEYBD+1	; clear recieve state
 		lw		r3,[r27]
 		lws		c1,8[r27]
@@ -629,8 +869,9 @@ p0.ne	br		.0003			; go back and try again
 ;
 KeybdWaitBusy:				; alias for KeybdWaitTx
 KeybdWaitTx:
-		push	c1				; save return address
-		push	r3
+		addui	r27,r27,#-16
+		sws		c1,8[r27]
+		sw		r3,[r27]
 		ldi		r3,#10			; wait a max of .1s
 .0001:
 		lvb		r1,hs:KEYBD+1
@@ -657,8 +898,9 @@ p0.ne	br		.0001
 ;------------------------------------------------------------------------------
 
 Wait10ms:
-		push	r1
-		push	r2
+		addui	r27,r27,#-16
+		sw		r1,8[r27]
+		sw		r2,[r27]
 		mfspr	r1,tick
 		addui	r1,r1,#250000	; 10ms at 25 MHz
 .0001:
@@ -781,6 +1023,166 @@ keybdExtendedCodes:
 	byte	$98,$99,$92,$2e,$91,$90,$2e,$2e
 	byte	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
 
-		org		$FFFFFF80
+.include "serial.asm"
+
+;------------------------------------------------------------------------------
+; Uninitialized interrupt
+;------------------------------------------------------------------------------
+uii_rout:
+		addui	r27,r27,#-16
+		sw		r1,[r27]
+		sws		hs,8[r27]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+
+		; update on-screen IRQ live indicator
+		ldi		r1,#'U'|%011000000_111111111_00_00000000
+		sh		r1,hs:TEXTSCR+320
+
+		; restore regs and return
+		lw		r1,[r27]
+		lws		hs,8[r27]
+		addui	r27,r27,#16
+		rti
+
+;------------------------------------------------------------------------------
+; Non-maskable interrupt routine.
+;
+;------------------------------------------------------------------------------
+;
+nmi_rout:
+		addui	r27,r27,#-16
+		sw		r1,[r27]
+		sws		hs,8[r27]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+
+		ldi		r1,#16
+		sc		r1,hs:LEDS
+
+		; reset the edge sense circuit to re-enable interrupts
+		ldi		r1,#0
+		sh		r1,hs:PIC_ESR
+
+		; update on-screen IRQ live indicator
+		lh		r1,hs:TEXTSCR+324
+		addui	r1,r1,#1
+		sh		r1,hs:TEXTSCR+324
+
+		; restore regs and return
+		lw		r1,[r27]
+		lws		hs,8[r27]
+		addui	r27,r27,#16
+		rti
+
+;------------------------------------------------------------------------------
+; Millisecond interrupt routine.
+;
+;
+;------------------------------------------------------------------------------
+;
+msi_rout:
+		addui	sp,sp,#-16
+		sw		r1,[sp]
+		sws		hs,8[sp]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+
+		ldi		r1,#24
+		sc		r1,hs:LEDS
+
+		; reset the edge sense circuit to re-enable interrupts
+		ldi		r1,#1
+		sh		r1,hs:PIC_ESR
+
+		; update milliseconds
+		lh		r1,Milliseconds
+		addui	r1,r1,#1
+		sh		r1,Milliseconds
+
+		; restore regs and return
+		lw		r1,[sp]
+		lws		hs,8[sp]
+		addui	sp,sp,#16
+		rti
+
+;------------------------------------------------------------------------------
+; Time Slice IRQ routine.
+;
+;
+;------------------------------------------------------------------------------
+;
+tms_rout:
+		addui	r27,r27,#-16
+		sw		r1,[r27]
+		sws		hs,8[r27]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+
+		ldi		r1,#32
+		sc		r1,hs:LEDS
+
+		; reset the edge sense circuit to re-enable interrupts
+		ldi		r1,#2
+		sh		r1,hs:PIC_ESR
+
+		; update on-screen IRQ live indicator
+		lh		r1,hs:TEXTSCR+328
+		addui	r1,r1,#1
+		sh		r1,hs:TEXTSCR+328
+
+		; restore regs and return
+		lw		r1,[r27]
+		lws		hs,8[r27]
+		addui	r27,r27,#16
+		rti
+
+;------------------------------------------------------------------------------
+; Break routine
+;
+; Currently uses only registers in case memory is bad, and sets an indicator
+; on-screen.
+;------------------------------------------------------------------------------
+;
+brk_rout:
+		ldi		r1,#'B'
+		bsr		AsciiToScreen
+		ori		r1,r1,#|%011000000_111111111_00_00000000
+		sh		r1,$FFD00000
+		ldi		r1,#'R'
+		bsr		AsciiToScreen
+		ori		r1,r1,#|%011000000_111111111_00_00000000
+		sh		r1,$FFD00004
+		ldi		r1,#'K'
+		bsr		AsciiToScreen
+		ori		r1,r1,#|%011000000_111111111_00_00000000
+		sh		r1,$FFD00008
+brk_lockup:
+		br		brk_lockup[c0]
+
+; code snippet to jump to the break routine, copied to the break vector
+;
+; vector table jumps
+;
+		align	4
+brk_jmp:	jmp		brk_rout[c0]
+		align	4
+tms_jmp:	jmp		tms_rout[c0]
+		align	4
+msi_jmp:	jmp		msi_rout[c0]
+		align	4
+nmi_jmp:	jmp		nmi_rout[c0]
+		align	4
+uii_jmp:	jmp		uii_rout[c0]
+
+;------------------------------------------------------------------------------
+; Reset Point
+;------------------------------------------------------------------------------
+
+		org		$FFFFEFF0
 		jmp		cold_start[C15]
 

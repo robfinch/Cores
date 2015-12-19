@@ -1,6 +1,6 @@
 //=============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,6 +41,7 @@ reg [1:0] branch_history_table [255:0];
 // For simulation only, initialize the history table to zeros.
 // In the real world we don't care.
 initial begin
+    gbl_branch_hist = 0;
 	for (n = 0; n < 256; n = n + 1)
 		branch_history_table[n] = 0;
 end
