@@ -23,21 +23,15 @@
 ;
 ;------------------------------------------------------------------------------
 ; Display a character on the screen device
-; Expects the processor to be in 16 bit mode with 16 bit acc and 16 bit indexes
 ;------------------------------------------------------------------------------
 ;
-public DisplayChar:
-;		push	c1
-;		push	pregs
-;		push	r2
-;		push	r3
-;		push	r4
-		addui	sp,sp,#-40
-		sws		c1,[sp]
-		sws		pregs,8[sp]
-		sw		r2,16[sp]
-		sw		r3,24[sp]
-		sw		r4,32[sp]
+public VBDisplayChar:
+		addui	r31,r31,#-40
+		sws		c1,zs:[r31]
+		sws		pregs,zs:8[r31]
+		sw		r2,zs:16[r31]
+		sw		r3,zs:24[r31]
+		sw		r4,zs:32[r31]
 		ldi		r2,#8
 		sc		r2,$FFDC0600
 		zxb		r1,r1
@@ -67,22 +61,17 @@ p0.ne	br		_0003
 		ldi		r1,#1
 		sb		r1,EscState
 exitDC:
-;		pop		r4
-;		pop		r3
-;		pop		r2
-;		pop		pregs
-;		pop		c1
-		lws		c1,[sp]
-		lws		pregs,8[sp]
-		lw		r2,16[sp]
-		lw		r3,24[sp]
-		lw		r4,32[sp]
-		addui	sp,sp,#40
+		lws		c1,zs:[r31]
+		lws		pregs,zs:8[r31]
+		lw		r2,zs:16[r31]
+		lw		r3,zs:24[r31]
+		lw		r4,zs:32[r31]
+		addui	r31,r31,#40
 		rts
 _0003:
 		ldi		r4,#10
 		sc		r4,$FFDC0600
-		bsr		AsciiToScreen
+		bsr		VBAsciiToScreen
 		lhu		r2,NormAttr
 		andi	r2,r2,#-1024
 		or		r1,r1,r2

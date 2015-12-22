@@ -158,6 +158,7 @@ else begin
 			`TLBIMissAdr:	imiss_addr <= dati;
 			`TLBPageTblAddr:	PageTblAddr <= dati;
 			`TLBPageTblCtrl:	PageTblCtrl <= dati;
+			default: ;
 			endcase
 			end
 		`TLB_EN:
@@ -166,6 +167,7 @@ else begin
 			TLBenabled <= 1'b0;
 		`TLB_INVALL:
 			TLBValid <= 64'd0;
+		default:  ;
 		endcase
 	end
 	else if (state==3'd2) begin
@@ -268,7 +270,7 @@ begin
 end
 
 wire [DBW-1:0] eas = ea[DBW-1:12] >> {PageSize,1'b0};
-always @(ea)
+always @(eas or ASID or q or TLBG or TLBValid)
 for (n = 0; n < 8; n = n + 1)
 	DMatch[n[2:0]] = (eas[DBW-1:3]==TLBVirtPage[{n,eas[2:0]}]) &&
 				((TLBASID[{n,eas[2:0]}]==ASID) || TLBG[{n,eas[2:0]}]) &&

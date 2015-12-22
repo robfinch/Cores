@@ -28,7 +28,8 @@ UART_SPR        EQU     0xC0A0F
 SerialInit:
     ldis    hs,#$FFD00000
 ;	ldi		r1,#$0218DEF4	; constant for clock multiplier with 18.75MHz clock for 9600 baud
-	ldi		r1,#$03254E6E	; constant for clock multiplier with 12.5MHz clock for 9600 baud
+;	ldi		r1,#$03254E6E	; constant for clock multiplier with 12.5MHz clock for 9600 baud
+	ldi		r1,#$00C9539B	; constant for clock multiplier with 50.0MHz clock for 9600 baud
     shrui   r1,r1,#8          ; drop the LSB (not used)
     sb      r1,hs:UART_CM1
     shrui   r1,r1,#8
@@ -175,4 +176,175 @@ p0.gt	br		cirxb1
 		subu	r4,r4,r3
 cirxb1:
 		rts
+
+;----------------------------------------------
+; Get character from rx fifo
+; If the fifo is empty enough then send an XON
+;----------------------------------------------
+;
+SerialGetChar:
+		addui	sp,sp,#-40
+		sw		r2,[sp]
+		sw		r3,8[sp]
+		sw		r4,16[sp]
+		sw		r5,24[sp]
+		sws		c1,32[sp]
+		lcu		r3,Uart_rxhead
+		lcu		r2,Uart_rxtail
+		cmp		p0,r2,r3
+p0.eq	br		sgcfifo1		; is there a char available ?
+		lbu		r1,Uart_rxfifo[r2]	; get the char from the fifo into r1
+		addui   r2,r2,#1    		; increment the fifo pointer
+		andi	r2,r2,#$1ff
+		sc		r2,Uart_rxtail
+		lb		r2,Uart_rxflow		; using flow control ?
+		tst		p0,r2
+p0.eq	br		sgcfifo2
+		lcu		r3,Uart_fon		; enough space in Rx buffer ?
+		bsr		CharsInRxBuf
+		cmp		p0,r4,r3
+p0.gt	br		sgcfifo2
+		sb		r0,Uart_rxflow		; flow off
+		lb		r4,Uart_rxrts
+		tst		p0,r4
+p0.eq	br		sgcfifo3
+		lb		r4,hs:UART_MC		; set rts bit in MC
+		ori		r4,r4,#2
+		sb		r4,hs:UART_MC
+sgcfifo3:
+		lb		r4,Uart_rxdtr
+		tst		p0,r4
+p0.eq	br		sgcfifo4
+		lb		r4,hs:UART_MC		; set DTR
+		ori		r4,r4,#1
+		sb		r4,hs:UART_MC
+sgcfifo4:
+		lb		r4,Uart_rxxon
+		tst		p0,r4
+p0.eq	br		sgcfifo5
+		ldi		r4,#XON
+		sb		r4,hs:UART
+sgcfifo5:
+sgcfifo2:					; return with char in r1
+		lw		r2,[sp]
+		lw		r3,8[sp]
+		lw		r4,16[sp]
+		lw		r5,24[sp]
+		lws		c1,32[sp]
+		addui	sp,sp,#40
+		rts
+sgcfifo1:
+		ldi		r1,#-1				; no char available
+		lw		r2,[sp]
+		lw		r3,8[sp]
+		lw		r4,16[sp]
+		lw		r5,24[sp]
+		lws		c1,32[sp]
+		addui	sp,sp,#40
+		rts
+
+
+;-----------------------------------------
+; Serial port IRQ
+;-----------------------------------------
+;
+SerialIRQ:
+		sync
+		ldi     r31,#INT_STACK-48
+		sw		r1,[r31]
+		sw		r2,8[r31]
+		sw		r4,16[r31]
+		sws		p0,24[r31]
+		sw		r3,32[r31]
+		sws		c1,40[r31]
+		ldis	hs,#$FFD00000
+
+		lb      r1,hs:UART_IS  ; get interrupt status
+		tst		p0,r1
+p0.gt	br		sirq1			; no interrupt
+		andi	r1,r1,#0x7f  	; switch on interrupt type
+		biti	p0,r1,#4
+p0.ne	br		srxirq
+		biti	p0,r1,#$0C
+p0.ne	br		stxirq
+		biti	p0,r1,#$10
+p0.ne	br		smsirq
+		; unknown IRQ type
+sirq1:
+		lw		r1,[r31]
+		lw		r2,8[r31]
+		lw		r4,16[r31]
+		lws		p0,24[r31]
+		lw		r3,32[r31]
+		lws		c1,40[r31]
+		sync
+		rti
+
+; Get the modem status and record it
+smsirq:
+		lbu     r1,hs:UART_MS
+		sb      r1,Uart_ms
+		br		sirq1
+
+stxirq:
+		br		sirq1
+
+; Get a character from the uart and store it in the rx fifo
+srxirq:
+srxirq1:
+		lbu     r1,hs:UART_RX      ; get the char (clears interrupt)
+		lbu     r3,Uart_txxon
+		tst		p0,r3
+p0.eq	br		srxirq3
+		cmpi	p0,r1,#XOFF
+p0.ne	br		srxirq2
+		ldi     r1,#1
+		sb		r1,Uart_txxonoff
+		br		srxirq5
+srxirq2:
+		cmpi	p0,r1,#XON
+p0.ne	br		srxirq3
+		sb		r0,Uart_txxonoff
+		br		srxirq5
+srxirq3:
+		sb		r0,Uart_txxonoff
+		lcu		r4,Uart_rxhead
+		sb		r1,Uart_rxfifo[r4]  ; store in buffer
+		addui   r4,r4,#1
+		andi	r4,r4,#$1ff
+		sc		r4,Uart_rxhead
+srxirq5:
+		lb      r1,hs:UART_LS   ; check for another ready character
+		biti	p0,r1,#1        ; check rxfull bit
+p0.ne	br		srxirq1			; loop back for another character
+		lb		r1,Uart_rxflow		; are we using flow controls?
+		tst		p0,r1
+p0.ne	br		srxirq8
+		bsr		CharsInRxBuf
+		lb		r1,Uart_foff
+		cmp		p0,r4,r1
+p0.lt	br		srxirq8
+		ldi		r1,#1
+		sb		r1,Uart_rxflow
+		lb		r1,Uart_rxrts
+		tst		p0,r1
+p0.eq	br		srxirq6
+		lb		r1,hs:UART_MC
+		andi	r1,r1,#$FD		; turn off RTS
+		sb		r1,hs:UART_MC
+srxirq6:
+		lb		r1,Uart_rxdtr
+		tst		p0,r1
+p0.eq	br		srxirq7
+		lb		r1,hs:UART_MC
+		andi	r1,r1,#$FE		; turn off DTR
+		sb		r1,hs:UART_MC
+srxirq7:
+		lb		r1,Uart_rxxon
+		tst		p0,r1
+p0.eq	br		srxirq8
+		ldi		r1,#XOFF
+		sb		r1,hs:UART_TX
+srxirq8:
+		br		sirq1
 

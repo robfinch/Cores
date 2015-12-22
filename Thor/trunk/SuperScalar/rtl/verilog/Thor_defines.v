@@ -29,12 +29,13 @@
 `define SIMULATION      1'b1
 `define SEGMENTATION	1'b1
 //`define STACKOPS        1'b1
+//`define UNLINKOP        1'b1
 //`define BITFIELDOPS     1'b1
 //`define FLOATING_POINT	1'b1
 `define STRINGOPS       1'b1
 `define DEBUG_LOGIC     1'b1
 //`define THREEWAY    1'b1
-`define TRAP_ILLEGALOPS 1'b1
+//`define TRAP_ILLEGALOPS 1'b1
 
 `define TRUE	1'b1
 `define FALSE	1'b0

@@ -178,13 +178,13 @@ assign alu0_branchmiss = alu0_dataready &&
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
 		  : (alu0_cmtw && (alu0_op==`SYNC || alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ ||
 		     alu0_op==`SYS || alu0_op==`INT ||
-		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op==`RTD || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argB == 64'd0)))));
+		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op==`RTD || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argA == 64'd0)))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
 		  : (alu1_cmtw && (alu1_op==`SYNC || alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ ||
 		     alu1_op==`SYS || alu1_op==`INT ||
-		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op==`RTD || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argB == 64'd0)))));
+		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op==`RTD || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argA == 64'd0)))));
 
 assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss),
 	misspc = (mem_stringmiss ? dram0_misspc : alu0_branchmiss ? alu0_misspc : alu1_misspc),

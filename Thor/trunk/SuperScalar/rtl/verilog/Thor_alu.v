@@ -380,8 +380,8 @@ case(alu_op)
 			o1[3] = 1'b0;
 			o <= {16{o1}};
 		end
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVH,`STI,
-`LWS,`SWS,`LEA,`RTS2,`STS,`STFND,`STCMP:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVW,`STI,
+`LWS,`SWS,`LEA,`RTS2,`STS,`STFND,`STCMP,`PUSH:
             begin
 				o <= alu_argA + alu_argC + alu_argI;
 		    end
@@ -396,7 +396,7 @@ case(alu_op)
             2'd3:   o <= alu_argA + alu_argC + {alu_argB,3'b0};
             endcase
 `ifdef STACKOPS
-`PUSH,`PEA,`LINK: o <= alu_argA + alu_argC - 64'd8;
+`PEA,`LINK: o <= alu_argA + alu_argC - 64'd8;
 `UNLINK:    o <= alu_argA + alu_argC + 64'd8;
 `POP:       o <= alu_argA + alu_argC;
 `endif
@@ -423,7 +423,7 @@ case(alu_op)
 `ifdef BITFIELDOPS
 `BITFIELD:	o <= BIG ? bf_out : 64'hDEADDEADDEADDEAD;
 `endif
-`LOOP:      o <= alu_argB > 0 ? alu_argB - 64'd1 : alu_argB;
+`LOOP:      o <= alu_argA > 0 ? alu_argA - 64'd1 : alu_argA;
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end
