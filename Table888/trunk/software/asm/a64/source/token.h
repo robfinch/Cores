@@ -35,7 +35,7 @@ enum {
      tk_eol = '\n',
      tk_add = 128,
      tk_addi,
-     tk_addu,
+     tk_addu, // 130
      tk_2addu,
      tk_4addu,
      tk_8addu,
@@ -45,7 +45,7 @@ enum {
      tk_8addui,
      tk_16addui,
      tk_addui,
-     tk_align,
+     tk_align, //140
      tk_and,
      tk_andi,
      tk_asl,
@@ -55,8 +55,7 @@ enum {
      tk_beq,
      tk_bge,
      tk_bgeu,
-     // 140
-     tk_bfchg,
+     tk_bfchg, // 150
      tk_bfclr,
      tk_bfext,
      tk_bfextu,
@@ -66,7 +65,7 @@ enum {
      tk_bgt,
      tk_bgtu,
      tk_bit,
-     tk_biti,
+     tk_biti, // 160
      tk_bits,
      tk_ble,
      tk_bleu,
@@ -76,8 +75,7 @@ enum {
      tk_bne,
      tk_bpl,
      tk_br,
-     tk_bra,
-     // 150
+     tk_bra, // 170
      tk_brk,
      tk_brnz,
      tk_brz,
@@ -87,18 +85,17 @@ enum {
      tk_bvs,
      tk_byte,
      tk_cas,
-     tk_chk,
+     tk_chk, // 180
      tk_cli,
      tk_cmp,
      tk_cmpi,
      tk_cmpu,
      tk_code,
-     tk_cpuid,
-     // 160
      tk_com,
+     tk_cpuid,
      tk_cs,
      tk_data,
-     tk_db,
+     tk_db,   // 190
      tk_dbnz,
      tk_dc,
      tk_dec,
@@ -108,8 +105,7 @@ enum {
      tk_divu,
      tk_divui,
      tk_ds,
-     // 170
-     tk_dw,
+     tk_dw,   // 200
      tk_end,
      tk_endpublic,
      tk_enor,
@@ -119,9 +115,8 @@ enum {
      tk_equ,
      tk_es,
      tk_extern,
-     tk_fabs,
+     tk_fabs,  // 210
      tk_fadd,
-     // 180
      tk_fcmp,
      tk_fcx,
      tk_fdiv,
@@ -130,10 +125,9 @@ enum {
      tk_fill,
      tk_fix2flt,
      tk_flt2fix,
-     tk_fmov,
+     tk_fmov,   // 220
      tk_fmul,
      tk_fs,
-     // 190
      tk_fnabs,
      tk_fneg,
      tk_frm,
@@ -141,18 +135,17 @@ enum {
      tk_fsub,
      tk_ftst,
      tk_ftx,
-     tk_ge,
+     tk_ge,  // 230
      tk_gran,
      tk_gs,
      tk_gt,
-     // 200
      tk_hs,
      tk_icon,
      tk_id,
      tk_inc,
      tk_int,
      tk_ios,
-     tk_jal,
+     tk_jal, // 240
      tk_jgr,
      tk_jmp,
      tk_jsp,
@@ -178,6 +171,8 @@ enum {
      tk_lt,
      tk_lvb,
      tk_lvc,
+     tk_lvh,
+     tk_lvw,
      tk_lw,
      tk_lwar,
      tk_lws,
@@ -266,6 +261,7 @@ enum {
      tk_ss,
      tk_stcmp,
      tk_stp,
+     tk_stset,
      tk_stsb,
      tk_stsc,
      tk_stsh,

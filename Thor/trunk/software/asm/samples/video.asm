@@ -164,7 +164,7 @@ SyncVideoPos:
 		sws		hs,zs:24[r31]
 		ldis	hs,#$FFD00000
 		ldi		r1,#5
-		sc		r1,$FFDC0600
+		sc		r1,hs:LEDS
 		lc		r2,CursorY
 		shli	r2,r2,#1
 		lcu		r1,cs:LineTbl[r2]
@@ -880,9 +880,9 @@ public VideoInit:
 		ldis	lc,#10				; initialize loop counter ( one less)
 		lhu		r3,Vidregs
 .0001:
-		lvc		r1,cs:[r2]
-;		sh		r1,hs:[r3]
-		addui	r2,r2,#2
+		lvh		r1,cs:[r2]
+		sh		r1,hs:[r3]
+		addui	r2,r2,#4
 		addui	r3,r3,#4
 		loop	.0001
 		rts
@@ -909,9 +909,9 @@ public VideoInit2:
 		ldis	lc,#10				; initialize loop counter ( one less)
 		lhu		r3,Vidregs
 .0001:
-		lvc		r1,cs:[r2]
+		lvh		r1,cs:[r2]
 		sh		r1,hs:[r3]
-		addui	r2,r2,#2
+		addui	r2,r2,#4
 		addui	r3,r3,#4
 		loop	.0001
 		rts
@@ -920,29 +920,54 @@ endpublic
 ;------------------------------------------------------------------------------
 ; Text controller initialization data.
 ;------------------------------------------------------------------------------
+		align	4
 
 TC1InitData:
 		dc		84		; #columns
+		dc		 3	    ; #char out delay
 		dc		31		; #rows
-		dc		64		; window left
+		dc		 0
+		dc		69		; window left
+		dc		 0
 		dc		17		; window top
+		dc       0
 		dc		 7		; max scan line
+		dc       0
 		dc	   $21		; pixel size (hhhhvvvv)
+		dc       0
 		dc	  $1FF		; transparent color
+		dc       0
 		dc	   $40		; cursor blink, start line
+		dc       0
 		dc	    31		; cursor end
+		dc       0
 		dc		 0		; start address
+		dc       0
 		dc		 0		; cursor position
+		dc       0
+
+		align	 4
 TC2InitData:
 		dc		84
+		dc       3
 		dc		31
+		dc       0
 		dc	   376 
+		dc       0
 		dc      64		; window top
+		dc       0
 		dc		 7
+		dc       0
 		dc	   $10
+		dc       0
 		dc	  $1FF
+		dc       0
 		dc	   $40
+		dc       0
 		dc      31
+		dc       0
+		dc       0
+		dc       0
 		dc       0
 		dc       0
 

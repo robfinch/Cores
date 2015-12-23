@@ -92,7 +92,7 @@ Textrows	EQU		$204A
 Textcols	EQU		$204C
 
 		bss
-		org		$30000
+		org		$4000
 
 Milliseconds	dw		0
 
@@ -183,6 +183,11 @@ cold_start:
 		ldi		r2,#194
 		bsr		set_vector
 
+		; setup data bus error vector
+		ldi		r1,#dbe_jmp
+		ldi		r2,#251
+		bsr		set_vector
+
 		; Initialize PIC
 		ldi		r1,#%00111		; time slice interrupt is edge sensitive
 		sh		r1,hs:PIC_ES
@@ -196,7 +201,7 @@ cold_start:
 		mov		r5,r0
 
 		ldi		r1,#1
-		sc		r1,$FFDC0600
+		sc		r1,hs:LEDS
 
 		tlbwrreg DMA,r0				; clear TLB miss registers
 		tlbwrreg IMA,r0
@@ -242,10 +247,10 @@ cold_start:
 ;		rti
 j1:
 		ldi		r1,#2
-		sc		r1,$FFDC0600
+		sc		r1,hs:LEDS
 		sb		r0,EscState
 		bsr		SerialInit
-;		bsr		Debugger
+		bsr		Debugger
 		ldi		r2,#msgStartup
 		ldis	lc,#msgStartupEnd-msgStartup-1
 j3:
@@ -258,15 +263,15 @@ j3:
 j2:
 		bsr		VideoInit
 		bsr		VBClearScreen
-		bsr		VBClearScreen2
+;		bsr		VBClearScreen2
 		ldi		r1,#3
-		sc		r1,$FFDC0600
+		sc		r1,hs:LEDS
 		mov		r1,r0
 		mov		r2,r0
 		ldi		r6,#2		; Set Cursor Pos
 		sys		#10
 		ldi		r1,#6
-		sc		r1,$FFDC0600
+		sc		r1,hs:LEDS
 		bsr		alphabet
 		ldi		r1,#msgStartup
 		ldi		r6,#$14
@@ -468,6 +473,45 @@ tms_rout:
 		rti
 
 ;------------------------------------------------------------------------------
+; Time Slice IRQ routine.
+;
+;
+;------------------------------------------------------------------------------
+;
+dbe_rout:
+		sync
+		ldi		r31,#INT_STACK-24
+		sw		r1,[r31]
+		sws		hs,8[r31]
+		sw		r5,16[r31]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+
+		ldi		r1,#64
+		sc		r1,hs:LEDS
+
+		; reset the bus error circuit to re-enable interrupts
+		sh		r0,hs:$CFFE0
+
+		; update on-screen DBE indicator
+		ldi		r1,'D'|%011000000_000000110_0000000000
+		sh		r1,hs:TEXTSCR+320
+
+		; Advance the program to the next address
+		mfspr	r5,c14
+		bsr		DBGGetInsnLength
+		addu	r1,r5,r1
+		mtspr	c14,r1
+
+		; restore regs and return
+		lw		r1,[r31]
+		lws		hs,8[r31]
+		lw		r5,16[r31]
+		sync
+		rti
+
+;------------------------------------------------------------------------------
 ; Break routine
 ;
 ; Currently uses only registers in case memory is bad, and sets an indicator
@@ -479,15 +523,19 @@ brk_rout:
 		ldi		r1,#'B'
 		bsr		VBAsciiToScreen
 		ori		r1,r1,#|%011000000_111111111_00_00000000
-		sh		r1,$FFD00000
+		sh		r1,zs:$FFD10140
 		ldi		r1,#'R'
 		bsr		VBAsciiToScreen
 		ori		r1,r1,#|%011000000_111111111_00_00000000
-		sh		r1,$FFD00004
+		sh		r1,zs:$FFD10144
 		ldi		r1,#'K'
 		bsr		VBAsciiToScreen
 		ori		r1,r1,#|%011000000_111111111_00_00000000
-		sh		r1,$FFD00008
+		sh		r1,zs:$FFD10148
+		ldi		r2,#10
+		ldi		r6,#0
+		mfspr	r5,c13
+		bsr		DisplayAddr
 brk_lockup:
 		br		brk_lockup[c0]
 
@@ -509,6 +557,8 @@ uii_jmp:	jmp		uii_rout[c0]
 vb_jmp:		jmp		VideoBIOSCall[c0]
 		align	4
 ser_jmp:	jmp		SerialIRQ[c0]
+		align	4
+dbe_jmp:	jmp		dbe_rout[c0]
 
 ;------------------------------------------------------------------------------
 ; Reset Point

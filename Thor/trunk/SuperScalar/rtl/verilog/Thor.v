@@ -961,6 +961,7 @@ default:
 `ifdef STACKOPS
 	`PEA,`POP,`LINK:   fnRa = km ? 7'd31 : 7'd27;
 `endif
+    `MFSPR,`MOVS:   fnRa = {1'b1,isn[`INSTRUCTION_RA]};
 	default:	fnRa = {1'b0,isn[`INSTRUCTION_RA]};
 	endcase
 endcase
@@ -2579,6 +2580,7 @@ endfunction
 // purpose registers.
 function [63:0] fnOpa;
 input [7:0] opcode;
+input [6:0] Ra;
 input [63:0] ins;
 input [63:0] rfo;
 input [63:0] epc;
@@ -2588,14 +2590,8 @@ begin
         fnOpa = ins[21:16];
     else
 `endif
-	if (opcode==`LOOP)
-		fnOpa = fnSpr(6'h33,epc);//was epc
-	else if (fnIsFlowCtrl(opcode))
-		fnOpa = fnCar(ins)==4'd0 ? 64'd0 : fnCar(ins)==4'd15 ? epc : cregs[fnCar(ins)];
-    else if (opcode==`P)
-        fnOpa = fnSpr(6'h30,epc);
-	else if (opcode==`MFSPR || opcode==`MOVS)
-	    fnOpa = fnSpr(ins[`INSTRUCTION_RA],epc);
+	if (Ra[6])
+		fnOpa = fnSpr(Ra[5:0],epc);
 	else
 		fnOpa = rfo;
 end
@@ -4102,12 +4098,14 @@ if (dram_v && iqentry_v[ dram_id[2:0] ] && iqentry_mem[ dram_id[2:0] ] ) begin	/
 	// If an exception occurred, stuff an interrupt instruction into the queue
 	// slot. The instruction will re-issue as an ALU operation. We can change
 	// the queued instruction because it isn't finished yet.
-	if (|dram_exc)
+	if (|dram_exc) begin
 	    set_exception(dram_id,
 	       dram_exc==`EXC_DBE ? 8'hFB :
 	       dram_exc==`EXC_DBG ? 8'd243 : 
 	       dram_exc==`EXC_SEGV ? 8'd244 : 
 	       8'hF8);    // F8 = TLBMiss exception 243 = debug
+	       $stop;
+	end
 	else begin
 	    // Note that the predicate was already evaluated to TRUE before the
 	    // dram operation started.
@@ -5462,12 +5460,15 @@ begin
             endcase
     default:    fnSpr = 64'd0;
     endcase
-/* Not sure why bother read the commit bus here ? Why not the alu bus as well ?   
+// Not sure why bother read the commit bus here ? Why not the alu bus as well ?
+// Need bypassing for write-through register file, reg read at same time as write
+// Shaves a clock cycle off register updates. rf_v is being set valid on the
+// clock cycle of the commit.   
     // If an spr is committing...
     if (commit0_v && commit0_tgt=={1'b1,regno})
         fnSpr = commit0_bus;
     if (commit1_v && commit1_tgt=={1'b1,regno})
-            fnSpr = commit1_bus;
+        fnSpr = commit1_bus;
  
     // Special cases where the register would not be read from the commit bus
     case(regno)
@@ -5476,7 +5477,6 @@ begin
     6'b011111:  fnSpr = epc;    // current program counter from fetchbufx_pc
     default:    ;
     endcase
-*/
 end
 endfunction
 
@@ -5530,6 +5530,10 @@ input [2:0] tail;
 input [2:0] inc;
 input unlink;
 begin
+    if (fetchbuf0_pc==32'h0)
+        $stop;
+    if (fetchbuf0_pc==32'hF44)
+        $stop;
 `ifdef SEGMENTATION
     // If segment limit exceeded and not in the non-segmented area.
     if (fetchbuf0_pc >= {sregs_lmt[7],12'h000} && fetchbuf0_pc[ABW-1:ABW-4]!=4'hF)
@@ -5610,7 +5614,7 @@ begin
     iqentry_r3   [tail]    <=   Rc0;
     iqentry_rt   [tail]    <=   Rt0;
 `endif
-    iqentry_a1   [tail]    <=   fnOpa(opcode0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
+    iqentry_a1   [tail]    <=   fnOpa(opcode0,Ra0,fetchbuf0_instr,rfoa0,fetchbuf0_pc);
     iqentry_a2   [tail]    <=   fnOpb(opcode0,Rb0,fetchbuf0_instr,rfob0,fetchbuf0_pc);   
     iqentry_a3   [tail]    <=   rfoc0;
     iqentry_T    [tail]    <=   fnOpt(Rt0,rfot0,fetchbuf0_pc);
@@ -5737,6 +5741,10 @@ input [2:0] inc;
 input validate_args;
 input unlink;
 begin
+    if (fetchbuf1_pc==32'h0)
+        $stop;
+    if (fetchbuf1_pc==32'hF44)
+        $stop;
 `ifdef SEGMENTATION
     if (fetchbuf1_pc >= {sregs_lmt[7],12'h000} && fetchbuf1_pc[ABW-1:ABW-4]!=4'hF)
         set_exception(tail,8'd244);
@@ -5812,7 +5820,7 @@ begin
                                 (!queued1 && iqentry_op[(tail-3'd1)&7]==`IMM) && iqentry_v[(tail-3'd1)&7] ? {iqentry_a0[(tail-3'd1)&7][DBW-1:8],fnImm8(fetchbuf1_instr)} :
                                 opcode1==`IMM ? fnImmImm(fetchbuf1_instr) :
                                 fnImm(fetchbuf1_instr);
-    iqentry_a1   [tail]    <=   fnOpa(opcode1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
+    iqentry_a1   [tail]    <=   fnOpa(opcode1,Ra1,fetchbuf1_instr,rfoa1,fetchbuf1_pc);
     iqentry_a2   [tail]    <=   fnOpb(opcode1,Rb1,fetchbuf1_instr,rfob1,fetchbuf1_pc);
     iqentry_a3   [tail]    <=   rfoc1;
     iqentry_T    [tail]    <=   fnOpt(Rt1,rfot1,fetchbuf1_pc);

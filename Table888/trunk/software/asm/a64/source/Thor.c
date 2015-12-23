@@ -27,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "a64.h"
+#include "..\inc\futs.h"
 
 #define BCC(x)       (((x) << 12)|0x38)
 
@@ -36,12 +37,12 @@
 #define FUT_C64       3
 #define FUT_R27       4
 
-
 extern int isIdentChar(char);
 static void emitAlignedCode(int cd);
 static void process_shifti(int oc, int fn);
 static void ProcessEOL(int opt);
 static void mem_operand(int64_t *disp, int *regA, int *regB, int *sc, int *md);
+static void getSzDir(int *, int *);
 
 extern int first_rodata;
 extern int first_data;
@@ -86,7 +87,7 @@ static int isdelim(char ch)
 static int getPredreg()
 {
     int pr;
-
+    
     NextToken();
     if (token != tk_pred) {
         printf("%d expecting predicate register %d.\r\n", lineno, token);
@@ -332,55 +333,33 @@ static int getRegisterX()
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 27;
+            return 26;
         }
         break;
     case 'g': case 'G':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 26;
+            return 25;
         }
         break;
     case 's': case 'S':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 30;
+            return 27;
         }
         break;
     case 't': case 'T':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 25;
-        }
-        if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
             return 24;
         }
-        break;
-    case 'p': case 'P':
-        if ((inptr[1]=='c' || inptr[1]=='C') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
-            return 29;
-        }
-        break;
-    case 'l': case 'L':
         if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 31;
-        }
-        break;
-    case 'x': case 'X':
-        if ((inptr[1]=='l' || inptr[1]=='L') && (inptr[2]=='r' || inptr[2]=='R') &&
-        !isIdentChar(inptr[3])) {
-            inptr += 3;
-            NextToken();
-            return 28;
+            return 23;
         }
         break;
     default:
@@ -438,12 +417,32 @@ static int getBoundsRegister()
 static int Thor_getSprRegister()
 {
     int reg;
+    int pr;
 
+    while(isspace(*inptr)) inptr++;
     reg = getCodeareg();
     if (reg >= 0) {
        reg |= 0x10;
        return reg;
     }
+    if (inptr[0]=='p' || inptr[0]=='P') {
+         if (isdigit(inptr[1]) && isdigit(inptr[2])) {
+              pr = ((inptr[1]-'0' * 10) + (inptr[2]-'0'));
+              if (!isIdentChar(inptr[3])) {
+                  inptr += 3;
+                  NextToken();
+                  return pr | 0x40;
+              }
+         }
+         else if (isdigit(inptr[1])) {
+              pr = (inptr[1]-'0');
+              if (!isIdentChar(inptr[2])) {
+                  inptr += 2;
+                  NextToken();
+                  return pr | 0x40;
+              }
+         }
+     }
 
     while(isspace(*inptr)) inptr++;
     switch(*inptr) {
@@ -904,6 +903,23 @@ static int Thor_getSprRegister()
 
 static int getPredcon()
 {
+    // longer match sequences must be first
+    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 3;
+        return 8;
+    }
+    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 3;
+        return 9;
+    }
+    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 3;
+        return 10;
+    }
+    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='u' || inptr[2]=='U')) {
+        inptr += 3;
+        return 11;
+    }
     if (inptr[0]=='f' || inptr[0]=='F') {
         inptr += 1;
         return 0;
@@ -935,22 +951,6 @@ static int getPredcon()
     if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='t' || inptr[1]=='T')) {
         inptr += 2;
         return 7;
-    }
-    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='u' || inptr[2]=='U')) {
-        inptr += 2;
-        return 8;
-    }
-    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='u' || inptr[2]=='U')) {
-        inptr += 2;
-        return 9;
-    }
-    if ((inptr[0]=='g' || inptr[0]=='G') && (inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='u' || inptr[2]=='U')) {
-        inptr += 2;
-        return 10;
-    }
-    if ((inptr[0]=='l' || inptr[0]=='L') && (inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='u' || inptr[2]=='U')) {
-        inptr += 2;
-        return 11;
     }
     return -1;
 }
@@ -1156,6 +1156,41 @@ static int emitImm8(int64_t v, int force)
 
 static int emitImm9(int64_t v, int force)
 {
+     if (force > 0 && force < 16) {
+         emit_first(0x20);
+         emit_insn(v >> 8);
+         return 1;
+     }
+     else if (force >= 16 && force < 24) {
+         emit_first(0x30);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         return 1;
+     }
+     else if (force >= 24 && force < 32) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+     }
+     else if (force >= 32 && force < 40) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+     }
+     else if (force >= 40 && force < 48) {
+         emit_insn(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         return 1;
+     }
      if (fitsIn9(v))
          return 0;
      if (fitsIn16(v)) {
@@ -1216,6 +1251,41 @@ static int emitImm9(int64_t v, int force)
 
 static int emitImm10(int64_t v, int force)
 {
+    if (force > 0 && force < 16) {
+         emit_first(0x20);
+         emit_insn(v >> 8);
+         return 1;
+    }
+    else if (force >= 16 && force < 24) {
+         emit_first(0x30);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         return 1;
+    }
+    else if (force >= 24 && force < 32) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+    }
+    else if (force >= 32 && force < 40) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+    }
+    else if (force >= 40 && force < 48) {
+         emit_first(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         return 1;
+    }
      if (fitsIn10(v))
          return 0;
      if (fitsIn16(v)) {
@@ -1274,8 +1344,44 @@ static int emitImm10(int64_t v, int force)
      return 1;
 }
 
+// Immediate constants RI instructions
 static int emitImm12(int64_t v, int force)
 {
+     if (force > 0 && force < 16) {
+         emit_first(0x20);
+         emit_insn(v >> 8);
+         return 1;
+     }
+     else if (force >= 16 && force < 24) {
+         emit_first(0x30);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         return 1;
+     }
+     else if (force >= 24 && force < 32) {
+         emit_first(0x40);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         return 1;
+     }
+     else if (force >= 32 && force < 40) {
+         emit_first(0x50);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         return 1;
+     }
+     else if (force >= 40 && force < 48) {
+         emit_first(0x60);
+         emit_insn(v >> 8);
+         emit_insn(v >> 16);
+         emit_insn(v >> 24);
+         emit_insn(v >> 32);
+         emit_insn(v >> 40);
+         return 1;
+     }
      if (fitsIn12(v))
          return 0;
      if (fitsIn16(v)) {
@@ -1443,6 +1549,8 @@ static void process_bitfield(int oc)
     need(',');
     NextToken();
     me = expr();
+    emit_first(predicate);
+    emit_insn(oc);
     emit_insn(
         (oc << 29) |
         (me << 23) |
@@ -1457,9 +1565,16 @@ static void process_bitfield(int oc)
 // sys 4
 // ---------------------------------------------------------------------------
 
-static void process_brk(int oc)
+static void process_sys(int oc)
 {
-    emit_first(oc);
+     int64_t val;
+
+     NextToken();
+     val = expr();
+     emit_first(predicate);
+     emit_insn(oc);
+     emit_insn(0xCD);
+     emit_insn(val);
 }
 
 // ----------------------------------------------------------------------------
@@ -1537,6 +1652,7 @@ static void process_jsr(int oc)
        Ca = 15;
     }
     else {
+         NextToken();
         // Simple [Rn] ?
         if (token=='(' || token=='[') {
            Ca = getCodeareg();
@@ -1547,6 +1663,7 @@ static void process_jsr(int oc)
             emit_insn((Ca<<4)|Ct);
             return;
         }
+        prevToken();
     }
     NextToken();
     addr = expr();
@@ -1565,7 +1682,12 @@ static void process_jsr(int oc)
             disp = addr - code_address;            
         else
             disp = addr;
-        if (disp >= -32768 && disp < 32767) {
+        if ((disp >= -32768 && disp < 32767) || code_bits < 16) {
+            if (bGen)
+                if (lastsym && !use_gp) {
+                    if( lastsym->segment < 5)
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                }
             emit_first(predicate);
             emit_insn(0xA1);
             emit_insn((Ca<<4)|Ct);
@@ -1573,7 +1695,12 @@ static void process_jsr(int oc)
             emit_insn(disp >> 8);
             return;                     
         }
-        if (disp >= -8388608 && disp < 8388607) {
+        if ((disp >= -8388608 && disp < 8388607) || code_bits < 24) {
+            if (bGen)
+                if (lastsym && !use_gp) {
+                    if( lastsym->segment < 5)
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                }
             emit_first(predicate);
             emit_insn(0xA2);
             emit_insn((Ca<<4)|Ct);
@@ -1582,7 +1709,12 @@ static void process_jsr(int oc)
             emit_insn(disp >> 16);
             return;                     
         }
-        emitImm8(disp,0);
+        emitImm8(disp,code_bits);
+        if (bGen)
+            if (lastsym && !use_gp) {
+                if( lastsym->segment < 5)
+                    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+            }
         emit_first(predicate);
         emit_insn(0xA1);
         emit_insn((Ca<<4)|Ct);
@@ -1590,7 +1722,12 @@ static void process_jsr(int oc)
         emit_insn(disp >> 8);
         return;
     }
-    if (addr >= -32768 && addr < 32767) {
+    if ((addr >= -32768 && addr < 32767)|| code_bits < 16) {
+        if (bGen)
+            if (lastsym && !use_gp) {
+                if( lastsym->segment < 5)
+                    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+            }
        emit_first(predicate);
        emit_insn(0xA1);
        emit_insn((Ca<<4)|Ct);
@@ -1598,7 +1735,12 @@ static void process_jsr(int oc)
        emit_insn(disp >> 8);
        return;
     }
-    if (addr >= -8388608 && addr < 8388607) {
+    if ((addr >= -8388608 && addr < 8388607) || code_bits < 24) {
+        if (bGen)
+            if (lastsym && !use_gp) {
+                if( lastsym->segment < 5)
+                    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+            }
         emit_first(predicate);
         emit_insn(0xA2);
         emit_insn((Ca<<4)|Ct);
@@ -1607,7 +1749,12 @@ static void process_jsr(int oc)
         emit_insn(addr >> 16);
         return;                     
     }
-    emitImm8(addr,0);
+    emitImm8(addr,code_bits);
+    if (bGen)
+        if (lastsym && !use_gp) {
+            if( lastsym->segment < 5)
+                sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+        }
     emit_first(predicate);
     emit_insn(0xA1);
     emit_insn((Ca<<4)|Ct);
@@ -1635,14 +1782,24 @@ static void process_riop(int oc)
     NextToken();
     val = expr();
     if (oc==0x4C && Ra == Rt) {
-        emitImm10(val,lastsym!=(SYM*)NULL);
+        emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    //    emitImm15(val,lastsym!=(SYM*)NULL);
+        if (bGen && lastsym && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
         emit_first(predicate);
         emit_insn(0x47);
         emit_insn(Rt|(val << 6));
         emit_insn(val >> 2);
         return;
     }
-    emitImm12(val,lastsym!=(SYM*)NULL);
+    emitImm12(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+//    emitImm15(val,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT6 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra|(Rt << 6));
@@ -1708,14 +1865,16 @@ static void process_rrop(int op, int func)
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-static void process_sts(int oc, int fn)
+static void process_stset(int oc)
 {
     int Ra;
     int Rb, Rc;
     int64_t disp;
     int sc;
     int md;
+    int sz,dir;
 
+    getSzDir(&sz,&dir);
     seg = 1;
     Rb = getRegisterX();
     need(',');
@@ -1723,14 +1882,14 @@ static void process_sts(int oc, int fn)
 //       prevToken();
     mem_operand(&disp, &Ra, &Rc, &sc, &md);
     if (disp!=0 || Rc != -1 || sc != 0)
-        printf("%d: illegal memory operand.\r\n", lineno);
+        printf("%d: illegal memory operand stset.\r\n", lineno);
     if (token==']')
        ;
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra|((Rb & 3)<<6));
     emit_insn((Rb >> 2));
-    emit_insn((seg << 5)|(fn << 2));
+    emit_insn((seg << 5)|(sz << 2)|(dir << 4));
 }
 
 // ---------------------------------------------------------------------------
@@ -2091,6 +2250,20 @@ static void mem_operand(int64_t *disp, int *regA, int *regB, int *sc, int *md)
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+static void setSegAssoc(int Ra)
+{
+   if (seg < 0) {
+       if (Ra==26 || Ra==27)
+          seg = 6;
+       else if (Ra==31)
+          seg = 0;
+       else
+          seg = 1;
+   }
+}
+
+// ---------------------------------------------------------------------------
 // sw disp[r1],r2
 // sw [r1+r2],r3
 // ----------------------------------------------------------------------------
@@ -2110,12 +2283,7 @@ static void process_store(int oc)
         Rs = getRegisterX();
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
-   if (seg < 0) {
-       if (Ra==26 || Ra==27)
-          seg = 6;
-       else
-          seg = 1;
-   }
+    setSegAssoc(Ra);
     if (Rs < 0) {
         printf("Expecting a source register.\r\n");
         ScanToEOL();
@@ -2133,8 +2301,12 @@ static void process_store(int oc)
        return;
     }
     Rb = 0;
-    emitImm9(disp,lastsym!=(SYM*)NULL);
+    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Rs & 3) << 6));
@@ -2157,14 +2329,10 @@ static void process_sws(int oc)
     int64_t disp;
 
     Rs = Thor_getSprRegister();
+    Rs &= 0x3f;
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
-   if (seg < 0) {
-       if (Ra==26 || Ra==27)
-          seg = 6;
-       else
-          seg = 1;
-   }
+    setSegAssoc(Ra);
     if (Rs < 0) {
         printf("%d: Expecting a special purpose source register.\r\n", lineno);
         ScanToEOL();
@@ -2175,8 +2343,12 @@ static void process_sws(int oc)
         ScanToEOL();
        return;
     }
-    emitImm9(disp,lastsym!=(SYM*)NULL);
+    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Rs & 3) << 6));
@@ -2201,8 +2373,12 @@ static void process_ldi(int oc)
     }
     expect(',');
     val = expr();
-    emitImm10(val,lastsym!=(SYM*)NULL);
+    emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
 //    emitImm15(val,lastsym!=(SYM*)NULL);
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Rt|(val & 3) << 6);
@@ -2219,14 +2395,18 @@ static void process_ldis(int oc)
     int nn;
 
     Rt = Thor_getSprRegister();
+    Rt &= 0x3f;
     if (Rt==-1) {
         printf("%d: expecting a special purpose register.\r\n", lineno);
         return;
     }
     expect(',');
     val = expr();
-    emitImm10(val,lastsym!=(SYM*)NULL);
-//    emitImm15(val,lastsym!=(SYM*)NULL);
+    emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Rt|(val & 3) << 6);
@@ -2265,12 +2445,7 @@ static void process_load(int oc)
     }
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
-   if (seg < 0) {
-       if (Ra==26 || Ra==27)
-          seg = 6;
-       else
-          seg = 1;
-   }
+    setSegAssoc(Ra);
     if (Rb >= 0) {
        if (disp != 0)
            printf("%d: displacement not supported with indexed mode.\r\n", lineno);
@@ -2281,7 +2456,7 @@ static void process_load(int oc)
        }
 //       if (oc==0x9F) oc = 0x8F;  // LEA
        emit_first(predicate);
-       emit_insn(oc+0x40);
+       emit_insn(oc+0x30);
        emit_insn(Ra|((Rb & 3)<<6));
        emit_insn((Rb >> 2)|((Rt & 15) << 4));
        emit_insn((Rt >> 4)|(sc << 2)|(seg << 5));
@@ -2289,8 +2464,12 @@ static void process_load(int oc)
        return;
     }
     Rb = 0;
-    emitImm9(disp,lastsym!=(SYM*)NULL);
+    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Rt & 3) << 6));
@@ -2317,6 +2496,7 @@ static void process_lws(int oc)
     sc = 0;
     p = inptr;
     Spr = Thor_getSprRegister();
+    Spr &= 0x3F;
     if (Spr < 0) {
         printf("%d: Expecting a special purpose target register.\r\n", lineno);
 //        printf("Line:%.60s\r\n",p);
@@ -2326,18 +2506,17 @@ static void process_lws(int oc)
     }
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
-   if (seg < 0) {
-       if (Ra==26 || Ra==27)
-          seg = 6;
-       else
-          seg = 1;
-   }
+    setSegAssoc(Ra);
     if (Rb >= 0) {
           printf("%d: Address mode not supported.\r\n", lineno);
           return;
     }
-    emitImm9(disp,lastsym!=(SYM*)NULL);
+    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Spr & 3) << 6));
@@ -2365,6 +2544,7 @@ static void process_inc(int oc)
     NextToken();
     p = inptr;
     mem_operand(&disp, &Ra, &Rb, &sc, &sg);
+    setSegAssoc(Ra);
     incamt = 1;
     if (token==']')
        NextToken();
@@ -2515,6 +2695,7 @@ static void process_shifti(int oc, int fn)
      emit_insn(Ra|(val << 6));
      emit_insn(((val & 0x3f) >> 2)|(Rt << 4));
      emit_insn((Rt >> 4)|(fn << 2));
+     ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -2547,6 +2728,7 @@ static void process_mtspr(int oc)
     if (Rc==-1) {
         Rc = 0;
         spr = Thor_getSprRegister();
+        spr &= 0x3f;
         if (spr==-1) {
             printf("Line %d: An SPR is needed.\r\n", lineno);
             return;
@@ -2576,6 +2758,7 @@ static void process_mfspr(int oc)
     Rt = getRegisterX();
     need(',');
     spr = Thor_getSprRegister();
+    spr &= 0x3f;
     if (spr==-1) {
         printf("An SPR is needed.\r\n");
         return;
@@ -2590,11 +2773,36 @@ static void process_mfspr(int oc)
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
+static void getSzDir(int *sz, int *dir)
+{
+    *sz = inptr[0];
+    switch(*sz) {
+    case 'b': case 'B': *sz = 0; break;
+    case 'c': case 'C': *sz = 1; break;
+    case 'h': case 'H': *sz = 2; break;
+    case 'w': case 'W': *sz = 3; break;
+    default: 
+             printf("%d bad string size.\r\n", lineno);
+             *sz = 0;
+    }
+    *dir = inptr[1];
+    switch(*dir) {
+    case 'i': case 'I': *dir = 0; break;
+    case 'd': case 'D': *dir = 1; break;
+    default:
+              printf("%d bad inc/dec indicator.\r\n", lineno);
+              *dir = 0;
+    }
+    inptr += 2;
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 static void process_stcmp(int oc)
 {
-    char sz;
-    char dir;
+    int sz;
+    int dir;
     int64_t disp;
     int Ra, Rb, Rc;
     int sc;
@@ -2603,36 +2811,18 @@ static void process_stcmp(int oc)
     if (seg == -1)
        seg = 1;
 
-    sz = inptr[0];
-    switch(sz) {
-    case 'b': case 'B': sz = 0; break;
-    case 'c': case 'C': sz = 1; break;
-    case 'h': case 'H': sz = 2; break;
-    case 'w': case 'W': sz = 3; break;
-    default: 
-             printf("%d bad string size.\r\n", lineno);
-             sz = 0;
-    }
-    dir = inptr[1];
-    switch(dir) {
-    case 'i': case 'I': dir = 0; break;
-    case 'd': case 'D': dir = 1; break;
-    default:
-              printf("%d bad inc/dec indicator.\r\n", lineno);
-              dir = 0;
-    }
-    inptr += 2;
+    getSzDir(&sz,&dir);
     NextToken();
     mem_operand(&disp, &Ra, &Rc, &sc, &md);
     if (disp!=0 || Rc != -1 || sc != 0)
-        printf("%d: illegal memory operand.\r\n", lineno);
+        printf("%d: illegal memory operand - 1.\r\n", lineno);
     if (token==']')
        NextToken();
     need(',');    
     NextToken();
     mem_operand(&disp, &Rb, &Rc, &sc, &md);
     if (disp!=0 || Rc != -1 || sc != 0)
-        printf("%d: illegal memory operand.\r\n", lineno);
+        printf("%d: illegal memory operand - 2.\r\n", lineno);
     if (token==']')
        NextToken();
     need(',');    
@@ -2663,7 +2853,12 @@ static void process_cmp()
     NextToken();
     if (token=='#') {
        val = expr();                    
-       emitImm10(val,lastsym!=(SYM*)NULL);
+        emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    //    emitImm15(val,lastsym!=(SYM*)NULL);
+        if (bGen && lastsym && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emit_first(predicate);
        emit_insn(Pt|0x20);
        emit_insn(Ra|(val << 6));
@@ -2714,7 +2909,12 @@ static void process_biti(int oc)
     NextToken();
     if (token=='#') {
        val = expr();                    
-       emitImm12(val,lastsym!=(SYM*)NULL);
+        emitImm12(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    //    emitImm15(val,lastsym!=(SYM*)NULL);
+        if (bGen && lastsym && !use_gp)
+        if( lastsym->segment < 5)
+        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT6 | (lastsym->isExtern ? 128 : 0)|
+        (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emit_first(predicate);
        emit_insn(oc);
        emit_insn(Ra|(Pt << 6));
@@ -2951,8 +3151,9 @@ void Thor_processMaster()
     NextToken();
     while (token != tk_eof) {
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
-//        printf("token=%d\r", token);
+//        printf("%d token=%d\r\n", lineno, token);
 j_processToken:
+//        printf("line: %d, token %d\r\n", lineno, token);
         switch(token) {
         case tk_eol: ProcessEOL(1); break;
         case tk_add:  process_rrop(0x40,0x00); break;
@@ -3062,7 +3263,7 @@ j_processToken:
 
         case tk_gran: process_gran(0x14); break;
         case tk_inc: process_inc(0x64); break;
-        case tk_int: process_brk(2); break;
+//        case tk_int: process_brk(2); break;
   
         case tk_jmp: process_jsr(1); break;
         case tk_jsr: process_jsr(0); break;
@@ -3084,6 +3285,8 @@ j_processToken:
         case tk_lsri: process_shifti(0x58,0x13); break;
         case tk_lvb: process_load(0xAC); break;
         case tk_lvc: process_load(0xAD); break;
+        case tk_lvh: process_load(0xAE); break;
+        case tk_lvw: process_load(0xAF); break;
         case tk_lw:  process_load(0x86); break;
         case tk_lws: process_lws(0x8E); break;
         case tk_lwar:  process_load(0x5C); break;
@@ -3169,10 +3372,11 @@ j_processToken:
         case tk_ss: seg = 6; break;
         case tk_stcmp: process_stcmp(0x9A); break;
         case tk_stp: process_stp(0xF6); break;
-        case tk_stsb: process_sts(0x98,0); break;
-        case tk_stsc: process_sts(0x98,1); break;
-        case tk_stsh: process_sts(0x98,2); break;
-        case tk_stsw: process_sts(0x98,3); break;
+        case tk_stset: process_stset(0x98); break;
+//        case tk_stsb: process_sts(0x98,0); break;
+//        case tk_stsc: process_sts(0x98,1); break;
+//        case tk_stsh: process_sts(0x98,2); break;
+//        case tk_stsw: process_sts(0x98,3); break;
         case tk_sub:  process_rrop(0x40,0x01); break;
         case tk_subi: process_riop(0x49); break;
         case tk_subu:  process_rrop(0x40,0x05); break;
@@ -3182,7 +3386,7 @@ j_processToken:
         case tk_sxc: process_rop(0xA7,0x09); break;
         case tk_sxh: process_rop(0xA7,0x0A); break;
         case tk_sync: process_sync(0xF7); break;
-        case tk_sys: process_brk(0); break;
+        case tk_sys: process_sys(0xA5); break;
         case tk_sw:  process_store(0x93); break;
         case tk_swcr:  process_store(0x6E); break;
 //        case tk_swx:  process_store(0xC3); break;

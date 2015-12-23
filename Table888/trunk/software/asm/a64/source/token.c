@@ -64,7 +64,7 @@ int expect(int tk)
 {
     if (tk != token) {
         if (tk==tk_comma)
-            printf("%d Expecting a ,\r\n", lineno);
+            printf("%d Expecting a , %.60s\r\n", lineno, inptr-30);
     }
     NextToken();
 }
@@ -270,6 +270,7 @@ int getIdentifier()
 {
     int nn;
 
+//    printf("GetIdentifier: %.30s\r\n", inptr);
     if (isFirstIdentChar(*inptr) || (*inptr=='.' && isIdentChar(inptr[1]))) {
         nn = 1;
         lastid[0] = *inptr;
@@ -336,7 +337,7 @@ int NextToken()
         SkipSpaces();                      // skip over leading spaces
         if (*inptr==';') {                 // comment ?
             ScanToEOL();
-            lineno++;
+//            lineno++;
             continue;
         }
         if (isdigit(*inptr)) {
@@ -353,13 +354,20 @@ int NextToken()
         case ',': inptr++; return token = ',';
         case '+': inptr++; return token = '+';
         case '-': inptr++; return token = '-';
-        case '/': inptr++; return token = '/';
+        case '/':
+             if (inptr[1]=='/') {
+                ScanToEOL();
+                continue;
+             }
+             inptr++; 
+             return token = '/';
         case '*': inptr++; return token = '*';
         case '#': inptr++; return token = '#';
         case '[': inptr++; return token = '[';
         case ']': inptr++; return token = ']';
         case '(': inptr++; return token = '(';
         case ')': inptr++; return token = ')';
+        case ':': inptr++; return token = ':';
         case '\'':
              inptr++;
              ival = getsch();
@@ -1122,7 +1130,7 @@ int NextToken()
              if (gCpu==4) {
                  if ((inptr[1]=='s' || inptr[1]=='S') &&
                      (inptr[2]==':')) {
-                     inptr += 2;
+                     inptr += 3;
                      return token = tk_hs;
                  }
              }
@@ -1162,7 +1170,7 @@ int NextToken()
              }
              break;
 
-        // lb lbu lc lcu lh lhu lw ldi ldis lea lsr lsri lwar lfd lvb lws
+        // lb lbu lc lcu lh lhu lw ldi ldis lea lsr lsri lwar lfd lvb lws lvh lvw
         case 'l':
         case 'L':
             if ((inptr[1]=='b' || inptr[1]=='B') && isspace(inptr[2])) {
@@ -1233,6 +1241,14 @@ int NextToken()
                 if ((inptr[1]=='v' || inptr[1]=='V') && (inptr[2]=='c' || inptr[2]=='C') && isspace(inptr[3])) {
                     inptr += 3;
                     return token = tk_lvc;
+                }
+                if ((inptr[1]=='v' || inptr[1]=='V') && (inptr[2]=='h' || inptr[2]=='H') && isspace(inptr[3])) {
+                    inptr += 3;
+                    return token = tk_lvh;
+                }
+                if ((inptr[1]=='v' || inptr[1]=='V') && (inptr[2]=='w' || inptr[2]=='W') && isspace(inptr[3])) {
+                    inptr += 3;
+                    return token = tk_lvw;
                 }
                 if ((inptr[1]=='w' || inptr[1]=='W') &&
                     (inptr[2]=='s' || inptr[2]=='S') &&
@@ -1531,7 +1547,7 @@ int NextToken()
                 inptr += 3;
                 return token = tk_rol;
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[3])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
                 inptr += 4;
                 return token = tk_roli;
             }
@@ -1539,7 +1555,7 @@ int NextToken()
                 inptr += 3;
                 return token = tk_ror;
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[3])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
                 inptr += 4;
                 return token = tk_rori;
             }
@@ -1845,6 +1861,14 @@ int NextToken()
                     inptr[5]=='.') {
                     inptr += 6;
                     return token = tk_stcmp;
+                }
+                if ((inptr[1]=='t' || inptr[1]=='T') && 
+                    (inptr[2]=='s' || inptr[2]=='S') && 
+                    (inptr[3]=='e' || inptr[3]=='E') && 
+                    (inptr[4]=='t' || inptr[4]=='T') && 
+                    inptr[5]=='.') {
+                    inptr += 6;
+                    return token = tk_stset;
                 }
             }
             if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='c' || inptr[2]=='C') && (inptr[3]=='r' || inptr[3]=='R') && isspace(inptr[4])) {

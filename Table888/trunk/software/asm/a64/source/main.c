@@ -351,7 +351,17 @@ void process_extern()
         }
         else if (pass > 3) {
         }
+        NextToken();
+        if (token==':') {
+           NextToken();
+           sym->bits = expr();
+        }
+        else {
+           prevToken();
+           sym->bits = 32;
+        }
     }
+    ScanToEOL();
 }
 
 // ----------------------------------------------------------------------------
@@ -504,6 +514,7 @@ void process_db()
             }
             inptr++;
         }
+/*
         else if (*inptr=='\'') {
             inptr++;
             emitByte(*inptr);
@@ -512,6 +523,7 @@ void process_db()
                 printf("Missing ' in character constant.\r\n");
             }
         }
+*/
         else {
             NextToken();
             val = expr();
@@ -809,10 +821,15 @@ void process_label()
             if (isEquate) {
                 sym->value = val;
                 sym->segment = constseg;
+                sym->bits = ceil(log(abs(val)+1) / log(2))+1;
             }
             else {
                 sym->value = ca;
                 sym->segment = segment;
+                if (segment==codeseg)
+                   sym->bits = code_bits;
+                else
+                    sym->bits = data_bits;
             }
         }
         else {
@@ -821,10 +838,15 @@ void process_label()
             if (isEquate) {
                 sym->value = val;
                 sym->segment = constseg;
+                sym->bits = ceil(log(abs(val)+1) / log(2))+1;
             }
             else {
                 sym->value = ca;
                 sym->segment = segment;
+                if (segment==codeseg)
+                   sym->bits = code_bits;
+                else
+                    sym->bits = data_bits;
             }
         }
     }
@@ -1343,7 +1365,7 @@ int main(int argc, char *argv[])
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     ofp = (FILE *)NULL;
     if (listing) {
-        if (verbose) printf("Generating listing file.\r\n");
+        if (verbose) printf("Generating listing file %s.\r\n", argv[nn]);
         strcpy(fname, argv[nn]);
         p = strrchr(fname,'.');
         if (p) {
