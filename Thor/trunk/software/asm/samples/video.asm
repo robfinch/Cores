@@ -373,7 +373,6 @@ public VBDisplayString:
 p0.eq	br		.0002
 		bsr		VBDisplayChar
 		addui	r2,r2,#1
-		br		.0001
 		loop	.0001
 .0002:
 		lws		c1,zs:[r31]			; restore return address
@@ -927,7 +926,7 @@ TC1InitData:
 		dc		 3	    ; #char out delay
 		dc		31		; #rows
 		dc		 0
-		dc		69		; window left
+		dc		84		; window left
 		dc		 0
 		dc		17		; window top
 		dc       0

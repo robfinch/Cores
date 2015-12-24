@@ -2360,34 +2360,6 @@ static void process_sws(int oc)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
-static void process_ldi(int oc)
-{
-    int Rt;
-    int64_t val;
-    int nn;
-
-    Rt = getRegisterX();
-    if (Rt==-1) {
-        Rt = getFPRegister();
-        oc = 0x1A;
-    }
-    expect(',');
-    val = expr();
-    emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
-//    emitImm15(val,lastsym!=(SYM*)NULL);
-    if (bGen && lastsym && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
-    emit_first(predicate);
-    emit_insn(oc);
-    emit_insn(Rt|(val & 3) << 6);
-    emit_insn((val >> 2) & 0xff);
-}
-
-// ----------------------------------------------------------------------------
-// ----------------------------------------------------------------------------
-
 static void process_ldis(int oc)
 {
     int Rt;
@@ -2403,6 +2375,36 @@ static void process_ldis(int oc)
     expect(',');
     val = expr();
     emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Rt|(val & 3) << 6);
+    emit_insn((val >> 2) & 0xff);
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void process_ldi(int oc)
+{
+    int Rt;
+    int64_t val;
+    int nn;
+
+    Rt = getRegisterX();
+    if (Rt==-1) {
+        process_ldis(0x9D);
+        return;
+//        Rt = getFPRegister();
+//        oc = 0x1A;
+    }
+    expect(',');
+    val = expr();
+    emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+//    emitImm15(val,lastsym!=(SYM*)NULL);
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|

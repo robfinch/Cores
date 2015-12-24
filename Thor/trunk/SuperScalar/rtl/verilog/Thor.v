@@ -199,6 +199,7 @@ reg im,imb;
 reg fxe;
 reg nmi1,nmi_edge;
 reg StatusHWI;
+reg StatusDBG;
 reg [7:0] StatusEXL;
 assign km = StatusHWI | |StatusEXL;
 reg [7:0] GM;		// register group mask
@@ -207,6 +208,7 @@ wire [63:0] sr = {32'd0,imb,7'b0,GMB,im,1'b0,km,fxe,4'b0,GM};
 wire int_commit;
 wire int_pending;
 wire sys_commit;
+wire dbg_commit;
 `ifdef SEGMENTATION
 wire [DBW-1:0] spc = (pc[ABW+3:ABW]==4'hF) ? pc[ABW-1:0] :
                      (pc[ABW-1:ABW-4]==4'hF) ? pc[ABW-1:0] : {sregs[7],12'h000} + pc[ABW-1:0];
@@ -1015,6 +1017,10 @@ if (isn[7:0]==8'h11)   // RTS short form
 else
 case(isn[15:8])
 `BITFIELD:	fnFunc = isn[43:40];
+`R:     fnFunc = isn[31:28];
+`R2:    fnFunc = isn[31:28];
+`DOUBLE_R:  fnFunc = isn[31:28];
+`SINGLE_R:  fnFunc = isn[31:28];
 8'h10:	fnFunc = isn[31:28];
 8'h11:	fnFunc = isn[31:28];
 8'h12:	fnFunc = isn[31:28];
@@ -1048,6 +1054,7 @@ case(isn[15:8])
 8'h0E:	fnFunc = isn[23:22];
 8'h0F:	fnFunc = isn[23:22];
 `INC:   fnFunc = isn[24:22];
+`TLB:   fnFunc = isn[19:16];
 `RTS,`RTS2: fnFunc = isn[19:16];   // used to pass a small immediate
 `CACHE: fnFunc = isn[31:26];
 `PUSH,`PEA: fnFunc = km ? 6'b0 : 6'b110000; // select segment register #6
@@ -1529,7 +1536,9 @@ endfunction
 function [6:0] fnTargetReg;
 input [63:0] ir;
 begin
-	if (ir[3:0]==4'h0)	// Process special predicates
+    // Process special predicates (NOP, IMM)
+    // Note that BRK (00) is already translated to a SYS instruction
+	if (ir[3:0]==4'h0)
 		fnTargetReg = 7'h000;
 	else
 		case(fnOpcode(ir))
@@ -1546,7 +1555,7 @@ begin
 			fnTargetReg = {1'b0,ir[33:28]};
 		`SHIFT:
 			fnTargetReg = {1'b0,ir[33:28]};
-		`R,`DOUBLE_R,`SINGLE_R,
+		`R,`R2,`DOUBLE_R,`SINGLE_R,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
@@ -1700,6 +1709,7 @@ input [7:0] opcode;
 	endcase
 endfunction
 
+// Used by memory issue logic.
 function fnIsFlowCtrl;
 input [7:0] opcode;
 begin
@@ -1716,7 +1726,7 @@ end
 endfunction
 
 // fnCanException
-// Used by issue logic.
+// Used by memory issue logic.
 // Returns TRUE if the instruction can cause an exception
 //
 function fnCanException;
@@ -1887,6 +1897,7 @@ fnIsRFW =	// General registers
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS || opcode==`PUSH || opcode==`POP || opcode==`LINK || opcode==`UNLINK ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
+			opcode==`_2ADDUI || opcode==`_4ADDUI || opcode==`_8ADDUI || opcode==`_16ADDUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
 			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
@@ -3451,6 +3462,12 @@ assign sys_commit = ((iqentry_op[head0]==`SYS || (iqentry_op[head0]==`INT &&
                         (iqentry_tgt[head0][3:0]==4'hD || iqentry_tgt[head0][3:0]==4'hB))) && commit0_v) ||
                      (commit0_v && (iqentry_op[head1]==`SYS || (iqentry_op[head1]==`INT &&
                         (iqentry_tgt[head1][3:0]==4'hD || iqentry_tgt[head1][3:0]==4'hB))) && commit1_v);
+`ifdef DEBUG_LOGIC                       
+assign dbg_commit = (((iqentry_op[head0]==`SYS && iqentry_tgt[head0][3:0]==4'hB) ||
+                      (iqentry_op[head0]==`INT && (iqentry_tgt[head0][3:0]==4'hB))) && commit0_v) ||
+       (commit0_v && ((iqentry_op[head1]==`SYS && iqentry_tgt[head1][3:0]==4'hB)||
+                      (iqentry_op[head1]==`INT && (iqentry_tgt[head1][3:0]==4'hB))) && commit1_v);
+`endif
 
 always @(posedge clk)
 	if (rst_i)
@@ -4500,6 +4517,7 @@ case(dram0)
             dram0 <= 3'd0;
         end
 `ifdef SEGMENTATION
+`ifdef SEGLIMITS
         else if (dram0_addr[ABW-1:12] >= dram0_lmt) begin
             dram_v <= `TRUE;            // we are finished the memory cycle
             dram_id <= dram0_id;
@@ -4508,6 +4526,7 @@ case(dram0)
             dram_bus <= 64'h0;
             dram0 <= 3'd0;
         end
+`endif
 `endif
         else if (!cyc_o) dram0 <= dram0 + 3'd1;
 	end
@@ -4954,6 +4973,14 @@ begin
 	if (StatusEXL!=8'hFF)
 		StatusEXL <= StatusEXL + 8'd1;
 end
+
+// On a debug commit set status StatusDBG to prevent further single stepping.
+`ifdef DEBUG_LOGIC
+if (dbg_commit)
+begin
+    StatusDBG <= `TRUE;
+end
+`endif
 
 oddball_commit(commit0_v,head0);
 oddball_commit(commit1_v,head1);
@@ -5495,7 +5522,13 @@ begin
                 StatusHWI <= `FALSE;
                 im <= imb;
                 end
-        `RTE,`RTD:
+        `RTD:
+                begin
+                    StatusDBG <= `FALSE;
+                    if (StatusEXL!=8'h00)
+                        StatusEXL <= StatusEXL - 8'd1;
+                end
+        `RTE:
                 begin
                     if (StatusEXL!=8'h00)
                         StatusEXL <= StatusEXL - 8'd1;
@@ -5534,10 +5567,14 @@ begin
         $stop;
     if (fetchbuf0_pc==32'hF44)
         $stop;
+    if (fetchbuf0_pc==32'h013E)
+        $stop;
 `ifdef SEGMENTATION
+`ifdef SEGLIMITS
     // If segment limit exceeded and not in the non-segmented area.
     if (fetchbuf0_pc >= {sregs_lmt[7],12'h000} && fetchbuf0_pc[ABW-1:ABW-4]!=4'hF)
         set_exception(tail,8'd244);
+`endif
 `endif
     // If targeting a kernel mode register and not in kernel mode.
     // But okay if it is an SYS or INT instruction.
@@ -5549,11 +5586,8 @@ begin
         set_exception(tail,8'd250);
 `endif
 `ifdef DEBUG_LOGIC
-    if (dbg_ctrl[0] && dbg_ctrl[17:16]==2'b00 && fetchbuf0_pc==dbg_adr0) begin
+    if (dbg_ctrl[0] && dbg_ctrl[17:16]==2'b00 && fetchbuf0_pc==dbg_adr0)
         dbg_imatchA0 = `TRUE;
-        if (dbg_stat[31])
-            dbg_adr0 <= fetchbuf0_pc + fnInsnLength(fetchbuf0_instr);
-    end
     if (dbg_ctrl[1] && dbg_ctrl[21:20]==2'b00 && fetchbuf0_pc==dbg_adr1)
         dbg_imatchA1 = `TRUE;
     if (dbg_ctrl[2] && dbg_ctrl[25:24]==2'b00 && fetchbuf0_pc==dbg_adr2)
@@ -5706,11 +5740,20 @@ input validate_args;
 begin
     if (opcode0==`NOP)
         queued1 = `TRUE;    // to update fetch buffers
+`ifdef DEBUG_LOGIC
+    else if (dbg_ctrl[7] && !StatusDBG) begin
+        if (iqentry_v[tail]==`INV && iqentry_v[(tail+1)&7]==`INV) begin
+            enque0a(tail,3'd2,1'b0);
+            set_exception((tail+1)&7,8'd243);
+            allowq = `FALSE;
+        end
+    end
+`endif
 `ifdef STACKOPS
     // A pop instruction takes 2 queue entries.
     else if (fnIsPop(fetchbuf0_instr)|fnIsPush(fetchbuf0_instr)|opcode0==`LINK) begin
         $display("0 found push/pop");
-        if (iqentry_v[tail]==`INV && iqentry_v[tail+1]==`INV) begin
+        if (iqentry_v[tail]==`INV && iqentry_v[(tail+1)&7]==`INV) begin
             $display("enqueing2");
             enque0a(tail,3'd2,1'b0);
             enquePushpopAdd((tail+1)&7,fnIsPop(fetchbuf0_instr),opcode0==`LINK,0,0);
@@ -5745,9 +5788,13 @@ begin
         $stop;
     if (fetchbuf1_pc==32'hF44)
         $stop;
+    if (fetchbuf1_pc==32'h013E)
+        $stop;
 `ifdef SEGMENTATION
+`ifdef SEGLIMITS
     if (fetchbuf1_pc >= {sregs_lmt[7],12'h000} && fetchbuf1_pc[ABW-1:ABW-4]!=4'hF)
         set_exception(tail,8'd244);
+`endif
 `endif
     if (fnIsKMOnlyReg(Rt1) && !km && !(opcode1==`SYS || opcode1==`INT))
         set_exception(tail,8'd245);
@@ -5756,11 +5803,8 @@ begin
         set_exception(tail,8'd250);
 `endif
 `ifdef DEBUG_LOGIC
-    if (dbg_ctrl[0] && dbg_ctrl[17:16]==2'b00 && fetchbuf1_pc==dbg_adr0) begin
+    if (dbg_ctrl[0] && dbg_ctrl[17:16]==2'b00 && fetchbuf1_pc==dbg_adr0)
         dbg_imatchB0 = `TRUE;
-        if (dbg_stat[31])
-            dbg_adr0 <= fetchbuf1_pc + fnInsnLength(fetchbuf1_instr);
-    end
     if (dbg_ctrl[1] && dbg_ctrl[21:20]==2'b00 && fetchbuf1_pc==dbg_adr1)
         dbg_imatchB1 = `TRUE;
     if (dbg_ctrl[2] && dbg_ctrl[25:24]==2'b00 && fetchbuf1_pc==dbg_adr2)
@@ -5858,6 +5902,15 @@ begin
         if (queued1==`TRUE) queued2 = `TRUE;
         queued1 = `TRUE;
     end
+`ifdef DEBUG_LOGIC
+    else if (dbg_ctrl[7] && !StatusDBG) begin
+        if (iqentry_v[tail]==`INV && iqentry_v[(tail+1)&7]==`INV) begin
+            enque1a(tail,3'd2,1,0);
+            set_exception((tail+1)&7,8'd243);
+            allowq = `FALSE;
+        end
+    end
+`endif
 `ifdef STACKOPS
     else if (fnIsPop(fetchbuf1_instr)|fnIsPush(fetchbuf1_instr)|opcode1==`LINK) begin
         $display("1 found push/pop");

@@ -23,7 +23,7 @@
 ; ============================================================================
 ;
 
-SCRSZ	EQU	20
+SCRSZ	EQU	2604
 CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
