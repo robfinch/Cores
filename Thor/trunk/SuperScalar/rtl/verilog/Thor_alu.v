@@ -381,14 +381,16 @@ case(alu_op)
 			o <= {16{o1}};
 		end
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVW,`STI,
-`LWS,`SWS,`LEA,`RTS2,`STS,`STFND,`STCMP,`PUSH:
+`LWS,`SWS,`RTS2,`STS,`STFND,`STCMP,`PUSH:
             begin
 				o <= alu_argA + alu_argC + alu_argI;
 		    end
+`JMPI:      o <= {alu_argA << alu_fn[1:0]} + alu_argC + alu_argI;
 `LBX,`LBUX,`SBX,
 `LCX,`LCUX,`SCX,
 `LHX,`LHUX,`SHX,
-`LWX,`SWX:	
+`LWX,`SWX,
+`JMPIX:	
             case(alu_fn[1:0])
             2'd0:   o <= alu_argA + alu_argC + alu_argB;
             2'd1:   o <= alu_argA + alu_argC + {alu_argB,1'b0};

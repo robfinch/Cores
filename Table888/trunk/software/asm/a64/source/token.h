@@ -146,6 +146,7 @@ enum {
      tk_int,
      tk_ios,
      tk_jal, // 240
+     tk_jci,
      tk_jgr,
      tk_jmp,
      tk_jsp,
@@ -260,6 +261,7 @@ enum {
      tk_snei,
      tk_ss,
      tk_stcmp,
+     tk_stmov,
      tk_stp,
      tk_stset,
      tk_stsb,

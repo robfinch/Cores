@@ -2264,6 +2264,52 @@ static void setSegAssoc(int Ra)
 }
 
 // ---------------------------------------------------------------------------
+// sws LC,disp[r1]
+// ----------------------------------------------------------------------------
+
+static void process_sws(int oc, int opt)
+{
+    int Ra;
+    int Rb;
+    int Rs;
+    int sc;
+    int md;
+    int64_t disp;
+
+    Rs = Thor_getSprRegister();
+    expect(',');
+    mem_operand(&disp, &Ra, &Rb, &sc, &md);
+    setSegAssoc(Ra);
+    if (Rs < 0) {
+        if (opt)
+            printf("%d: Expecting a source register.\r\n", lineno);
+        else
+            printf("%d: Expecting a special purpose source register.\r\n", lineno);
+        ScanToEOL();
+        inptr -= 2;
+        return;
+    }
+    if (Rb >= 0) {
+       printf("%d: unsupported address mode.\r\n", lineno);
+        ScanToEOL();
+       return;
+    }
+    Rs &= 0x3f;
+    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (Ra < 0) Ra = 0;
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra | ((Rs & 3) << 6));
+    emit_insn((Rs >> 2)|((disp & 15) << 4));
+    emit_insn(((disp >> 4) & 31)|(seg << 5));
+    ScanToEOL();
+}
+
+// ---------------------------------------------------------------------------
 // sw disp[r1],r2
 // sw [r1+r2],r3
 // ----------------------------------------------------------------------------
@@ -2285,6 +2331,10 @@ static void process_store(int oc)
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
     setSegAssoc(Ra);
     if (Rs < 0) {
+        if (oc==0x93) {
+            process_sws(0x9E,1);
+            return;
+        }
         printf("Expecting a source register.\r\n");
         ScanToEOL();
         return;
@@ -2301,48 +2351,6 @@ static void process_store(int oc)
        return;
     }
     Rb = 0;
-    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
-    if (Ra < 0) Ra = 0;
-    if (bGen && lastsym && !use_gp)
-    if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
-    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
-    emit_first(predicate);
-    emit_insn(oc);
-    emit_insn(Ra | ((Rs & 3) << 6));
-    emit_insn((Rs >> 2)|((disp & 15) << 4));
-    emit_insn(((disp >> 4) & 31)|(seg << 5));
-    ScanToEOL();
-}
-
-// ---------------------------------------------------------------------------
-// sws LC,disp[r1]
-// ----------------------------------------------------------------------------
-
-static void process_sws(int oc)
-{
-    int Ra;
-    int Rb;
-    int Rs;
-    int sc;
-    int md;
-    int64_t disp;
-
-    Rs = Thor_getSprRegister();
-    Rs &= 0x3f;
-    expect(',');
-    mem_operand(&disp, &Ra, &Rb, &sc, &md);
-    setSegAssoc(Ra);
-    if (Rs < 0) {
-        printf("%d: Expecting a special purpose source register.\r\n", lineno);
-        ScanToEOL();
-        return;
-    }
-    if (Rb >= 0) {
-       printf("%d: unsupported address mode.\r\n", lineno);
-        ScanToEOL();
-       return;
-    }
     emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
@@ -2416,6 +2424,56 @@ static void process_ldi(int oc)
 }
 
 // ----------------------------------------------------------------------------
+// lws lc,disp[r2]
+// ----------------------------------------------------------------------------
+
+static void process_lws(int oc, int opt)
+{
+    int Ra;
+    int Rb;
+    int Spr;
+    int sc;
+    int md;
+    char *p;
+    int64_t disp;
+    int fixup = 5;
+
+    sc = 0;
+    p = inptr;
+    Spr = Thor_getSprRegister();
+    if (Spr < 0) {
+        if (opt)
+            printf("%d: Expecting a target register.\r\n", lineno);
+        else
+            printf("%d: Expecting a special purpose target register.\r\n", lineno);
+//        printf("Line:%.60s\r\n",p);
+        ScanToEOL();
+        inptr-=2;
+        return;
+    }
+    Spr &= 0x3F;
+    expect(',');
+    mem_operand(&disp, &Ra, &Rb, &sc, &md);
+    setSegAssoc(Ra);
+    if (Rb >= 0) {
+          printf("%d: Address mode not supported.\r\n", lineno);
+          return;
+    }
+    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (Ra < 0) Ra = 0;
+    if (bGen && lastsym && !use_gp)
+    if( lastsym->segment < 5)
+    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra | ((Spr & 3) << 6));
+    emit_insn((Spr >> 2)|((disp & 15) << 4));
+    emit_insn(((disp >> 4) & 31)|(seg << 5));
+    ScanToEOL();
+}
+
+// ----------------------------------------------------------------------------
 // lw r1,disp[r2]
 // lw r1,[r2+r3]
 // cas r2,disp[r1]
@@ -2439,6 +2497,10 @@ static void process_load(int oc)
     else
         Rt = getRegisterX();
     if (Rt < 0) {
+        if (oc==0x86) {     // LW
+           process_lws(0x8E,1);
+           return;
+        }
         printf("Expecting a target register.\r\n");
 //        printf("Line:%.60s\r\n",p);
         ScanToEOL();
@@ -2481,14 +2543,15 @@ static void process_load(int oc)
 }
 
 // ----------------------------------------------------------------------------
-// lws lc,disp[r2]
+// jci c1,disp[r2]
+// jci c1,[r2+r3]
 // ----------------------------------------------------------------------------
 
-static void process_lws(int oc)
+static void process_jmpi(int fn)
 {
     int Ra;
     int Rb;
-    int Spr;
+    int Rt;
     int sc;
     int md;
     char *p;
@@ -2497,10 +2560,9 @@ static void process_lws(int oc)
 
     sc = 0;
     p = inptr;
-    Spr = Thor_getSprRegister();
-    Spr &= 0x3F;
-    if (Spr < 0) {
-        printf("%d: Expecting a special purpose target register.\r\n", lineno);
+    Rt = getCodeareg();
+    if (Rt < 0) {
+        printf("%d: Expecting a target register.\r\n", lineno);
 //        printf("Line:%.60s\r\n",p);
         ScanToEOL();
         inptr-=2;
@@ -2510,9 +2572,19 @@ static void process_lws(int oc)
     mem_operand(&disp, &Ra, &Rb, &sc, &md);
     setSegAssoc(Ra);
     if (Rb >= 0) {
-          printf("%d: Address mode not supported.\r\n", lineno);
-          return;
+       if (disp != 0)
+           printf("%d: displacement not supported with indexed mode.\r\n", lineno);
+       fixup = 11;
+//       if (oc==0x9F) oc = 0x8F;  // LEA
+       emit_first(predicate);
+       emit_insn(0xB7);
+       emit_insn(Ra|((Rb & 3)<<6));
+       emit_insn((Rb >> 2)|((Rt & 15) << 4));
+       emit_insn((sc << 2)|(seg << 5)|fn);
+       ScanToEOL();
+       return;
     }
+    Rb = 0;
     emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
@@ -2520,11 +2592,12 @@ static void process_lws(int oc)
     sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
-    emit_insn(oc);
-    emit_insn(Ra | ((Spr & 3) << 6));
-    emit_insn((Spr >> 2)|((disp & 15) << 4));
+    emit_insn(0x8D);
+    emit_insn(Ra | ((Rt & 3) << 6));
+    emit_insn((Rt >> 2)|((disp & 15) << 4)|(fn<<2));
     emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
+    inptr -= 2;
 }
 
 // ----------------------------------------------------------------------------
@@ -3231,6 +3304,7 @@ j_processToken:
         case tk_dw:  process_dw(); break;
         case tk_end: goto j1;
         case tk_endpublic: break;
+        case tk_enor:  process_rrop(0x50,0x05); break;
         case tk_eor: process_rrop(0x50,0x02); break;
         case tk_eori: process_riop(0x55); break;
         case tk_es: seg = 2; break;
@@ -3267,6 +3341,7 @@ j_processToken:
         case tk_inc: process_inc(0x64); break;
 //        case tk_int: process_brk(2); break;
   
+        case tk_jci:  process_jmpi(1); break;
         case tk_jmp: process_jsr(1); break;
         case tk_jsr: process_jsr(0); break;
 
@@ -3290,7 +3365,7 @@ j_processToken:
         case tk_lvh: process_load(0xAE); break;
         case tk_lvw: process_load(0xAF); break;
         case tk_lw:  process_load(0x86); break;
-        case tk_lws: process_lws(0x8E); break;
+        case tk_lws: process_lws(0x8E,0); break;
         case tk_lwar:  process_load(0x5C); break;
         case tk_memdb: process_sync(0xF9); break;
         case tk_memsb: process_sync(0xF8); break;
@@ -3304,10 +3379,12 @@ j_processToken:
         case tk_muli: process_riop(0x4A); break;
         case tk_mulu: process_rrop(0x40,0x06); break;
         case tk_mului: process_riop(0x4E); break;
+        case tk_nand:  process_rrop(0x50,0x03); break;
         case tk_neg: process_rop(0xA7,0x01); break;
         case tk_nop: emit_first(0x10); break;
+        case tk_nor:  process_rrop(0x50,0x04); break;
         case tk_not: process_rop(0xA7,0x02); break;
-        case tk_or:  process_rrop(0x40,0x01); break;
+        case tk_or:  process_rrop(0x50,0x01); break;
         case tk_ori: process_riop(0x54); break;
         case tk_org: process_org(); break;
         case tk_pand: process_pand(0x42,0x00); break;
@@ -3373,6 +3450,7 @@ j_processToken:
 //        case tk_shx:  process_store(0xC2); break;
         case tk_ss: seg = 6; break;
         case tk_stcmp: process_stcmp(0x9A); break;
+        case tk_stmov: process_stcmp(0x99); break;
         case tk_stp: process_stp(0xF6); break;
         case tk_stset: process_stset(0x98); break;
 //        case tk_stsb: process_sts(0x98,0); break;
@@ -3383,7 +3461,7 @@ j_processToken:
         case tk_subi: process_riop(0x49); break;
         case tk_subu:  process_rrop(0x40,0x05); break;
         case tk_subui: process_riop(0x4D); break;
-        case tk_sws: process_sws(0x9E); break;
+        case tk_sws: process_sws(0x9E,0); break;
         case tk_sxb: process_rop(0xA7,0x08); break;
         case tk_sxc: process_rop(0xA7,0x09); break;
         case tk_sxh: process_rop(0xA7,0x0A); break;

@@ -25,6 +25,10 @@
 
 DBG_DS		= $5000
 DBG_ATTR	= %000011000_111111110_0000000000
+
+DBGBuf		EQU		$00
+DBGBufndx	EQU		$80
+
 		code
 		org		$FFFFD000
 
@@ -51,6 +55,63 @@ public Debugger:
 		bsr		DBGDispString
 		ldi		r5,#$FFFF8000
 		bsr		Disassem20
+		br		Debugger_exit
+
+promptAgain:
+		; Clear input buffer
+		sb		r0,DBGBufndx
+		ldis	lc,#$20
+		ldi		r1,#DBGBuf
+		ldi		r2,#0			; 
+		stset.hi	r2,[r1]		; clear the buffer
+		
+		ldi		r6,#30			; move cursor pos to row 30
+		bsr		DBGPrompt
+
+		; Get character loop
+.0001:
+		bsr		KeybdGetCharWait
+		cmpi	p0,r1,#CR
+p0.eq	br		.processInput
+		cmpi	p0,r1,#BS
+p0.eq	br		.backspace
+		cmpi	p0,r1,#' '
+p0.ltu	br		.0001
+		; some other character, store in buffer if it will fit
+		lbu		r3,DBGBufndx
+		cmpi	p3,r3,#80		; max 80 chars
+p3.ltu	br		DBGDispChar
+p3.ltu	sb		r1,[r3]
+p3.ltu	addui	r3,r3,#1
+p3.ltu	sb		r3,DBGBufndx
+		br		.0001
+.backspace:
+		lbu		r1,DBGBufndx
+		tst		p0,r1			; is is even possible to backspace ?
+p0.eq	br		.0001
+		ldi		r7,#$80
+		subu	r7,r7,r1
+		addui	r7,r7,#-1		; loop count is one less
+		mtspr	lc,r7
+		mov		r4,r1
+		addui	r1,r1,#-1
+		mov		r3,r0
+		stmov.bi	[r4],[r1],r3
+		br		.0001
+.processInput:
+		mov		r4,r0
+.0002:
+		lbu		r1,DBGBuf[r4]
+		tst		p0,r1
+p0.eq	br		promptAgain
+		cmpi	p0,r1,#' '
+p0.leu	addui	r4,r4,#1
+p0.leu	br		.0002
+		cmpi	p0,r1,#'D'
+p0.eq	addui	r4,r4,#1
+p0.eq	br		DoDisassem
+		br		promptAgain
+Debugger_exit:
 		lws		c1,zs:[r30]
 		lws		ds,zs:8[r30]
 		lws		ds.lmt,zs:16[r30]
@@ -62,6 +123,82 @@ endpublic
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
+DoDisassem:
+		bsr		DBGGetHexNumber
+		tst		p0,r8
+p0.eq	br		promptAgain
+		mov		r5,r1
+		bsr		VBClearScreen2
+		bsr		Dissassem20
+		br		promptAgain
+
+;------------------------------------------------------------------------------
+; Parameters:
+;	r4 = text pointer (updated)
+; Returns:
+;	r1 = number
+;   r8 = number of digits
+;------------------------------------------------------------------------------
+
+DBGGetHexNumber:
+		addui	r30,r30,#-8
+		sws		c1,[r30]
+		ldis	lc,#80			; max 80 chars
+		mov		r7,r0			; working accum.
+		mov		r8,r0			; number of digits
+.0002:
+		lbu		r1,[r4]
+		bsr		DBGCharToHex
+		tst		p0,r3
+p0.eq	br		.0001
+		shli	r7,r7,#4
+		or		r7,r7,r1
+		addui	r4,r4,#1
+		addui	r8,r8,#1
+		loop	.0002
+.0001:
+		mov		r1,r7
+		lws		c1,[r30]
+		addui	r30,r30,#8
+		rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DBGCharToHex:
+		cmpi	p0,r1,#'0'
+.0002:
+p0.ltu	mov		r3,r0
+p0.ltu	br		.exit
+		cmpi	p0,r1,#'9'
+p0.gtu	br		.0001
+		subui	r1,r1,#'0'
+		ldi		r3,#1
+		rts
+.0001:
+		cmpi	p0,r1,#'A'
+p0.ltu	br		.0002
+		cmpi	p0,r1,#'F'
+p0.gtu	br		.0003
+		subui	r1,r1,#'A'-10
+		ldi		r3,#1
+		rts
+.0003:
+		cmpi	p0,r1,#'a'
+p0.ltu	br		.0002
+		cmpi	p0,r1,#'f'
+p0.gtu	br		.0004
+		subui	r1,r1,#'a'-10
+		ldi		r3,#1
+		rts
+.0004:
+		mov		r3,r0
+.exit:
+		rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
 public DebugIRQ:
 		ldi		r30,#$2bf8
 		addui	r30,r30,#-104
@@ -69,7 +206,7 @@ public DebugIRQ:
 		sws		ds,zs:8[r30]
 		sws		ds.lmt,zs:16[r30]
 		sw		r1,zs:24[r30]
-		sw		r2,zs:32[r30
+		sw		r2,zs:32[r30]
 		sw		r3,zs:40[r30]
 		sw		r4,zs:48[r30]
 		sw		r5,zs:56[r30]
@@ -94,7 +231,7 @@ public DebugIRQ:
 		lws		ds,zs:8[r30]
 		lws		ds.lmt,zs:16[r30]
 		lw		r1,zs:24[r30]
-		lw		r2,zs:32[r30
+		lw		r2,zs:32[r30]
 		lw		r3,zs:40[r30]
 		lw		r4,zs:48[r30]
 		lw		r5,zs:56[r30]
@@ -120,6 +257,25 @@ Disassem20:
 		addu	r5,r5,r10
 		addui	r6,r6,#1
 		loop	.0001
+		lws		c1,zs:[r30]
+		addui	r30,r30,#8
+		rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DBGPrompt:
+		addui	r30,r30,#-8
+		sws		c1,zs:[r30]
+		mov		r2,r0
+		ldi		r1,#'D'
+		bsr		DBGDispChar
+		ldi		r1,#'B'
+		bsr		DBGDispChar
+		ldi		r1,#'G'
+		bsr		DBGDispChar
+		ldi		r1,#'>'
+		bsr		DBGDispChar
 		lws		c1,zs:[r30]
 		addui	r30,r30,#8
 		rts
@@ -183,10 +339,11 @@ p0.geu  br		.0002
 .dispOper:
 		lbu		r1,zs:1[r5]
 		lbu		r1,cs:DBGOperFmt[r1]
-		lcu		r1,cs:DBGOperFmtT[r1]
-		ori		r1,r1,#$FFFF0000
-		mtspr	c2,r1
-		jsr		[c2]
+		jci		c1,cs:DBGOperFmtT[r1]
+;		lcu		r1,cs:DBGOperFmtT[r1]
+;		ori		r1,r1,#$FFFF0000
+;		mtspr	c2,r1
+;		jsr		[c2]
 .exit:
 		lws		c1,zs:[r30]
 		lws		c2,zs:8[r30]
@@ -510,6 +667,7 @@ DBGDispReg:
 		sw		r7,zs:8[r30]
 		mov		r7,r1
 		ldi		r1,#'r'
+DBGDispBx1:
 		bsr		DBGDispChar
 		cmpi	p0,r7,#10
 p0.ltu	br		.0001
@@ -526,6 +684,18 @@ p0.ltu	br		.0001
 		lw		r7,zs:8[r30]
 		addui	r30,r30,#16
 		rts
+
+;------------------------------------------------------------------------------
+; Display a bit number
+;------------------------------------------------------------------------------
+
+DBGDispBReg:
+		addui	r30,r30,#-16
+		sws		c1,zs:[r30]
+		sw		r7,zs:8[r30]
+		mov		r7,r1
+		ldi		r1,#'b'
+		br		DBGDispBx1
 
 ;------------------------------------------------------------------------------
 ; Display a special purpose register
@@ -652,20 +822,23 @@ DBGDispSprRx:
 		sw		r7,zs:8[r30]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:2[r5]
-		andi	r1,r1,#63
-		bsr		DBGDispReg
-		bsr		DBGComma
-		lbu		r1,zs:2[r5]
 		lbu		r7,zs:3[r5]
 		shrui	r1,r1,#6
+		andi	r7,r7,#15
 		shli	r7,r7,#2
 		or		r1,r7,r1
 		bsr		DBGDispSpr
+		bsr		DBGComma
+		lbu		r1,zs:2[r5]
+		andi	r1,r1,#63
+		bsr		DBGDispReg
 		lws		c1,zs:[r30]
 		lw		r7,zs:8[r30]
 		addui	r30,r30,#16
 		rts
 
+; Format #4
+;
 DBGDispRxRxRx:
 		addui	r30,r30,#-16
 		sws		c1,zs:[r30]
@@ -690,6 +863,60 @@ DBGDispRxRxRx:
 		shli	r7,r7,#2
 		or		r1,r7,r1
 		bsr		DBGDispReg
+		lws		c1,zs:[r30]
+		lw		r7,zs:8[r30]
+		addui	r30,r30,#16
+		rts
+
+; Format #5
+;
+DBGDispRxRx:
+		addui	r30,r30,#-16
+		sws		c1,zs:[r30]
+		sw		r7,zs:8[r30]
+		ldi		r2,#54			; tab out to column 54
+		lbu		r1,zs:2[r5]
+		shrui	r1,r1,#6
+		lbu		r7,zs:3[r5]
+		andi	r7,r7,#15
+		shli	r7,r7,#2
+		or		r1,r7,r1
+		bsr		DBGDispReg
+		bsr		DBGComma
+		lbu		r1,zs:2[r5]
+		andi	r1,r1,#63
+		bsr		DBGDispReg
+		lws		c1,zs:[r30]
+		lw		r7,zs:8[r30]
+		addui	r30,r30,#16
+		rts
+
+; Format #6
+;
+DBGDispPxPxPx:
+		addui	r30,r30,#-16
+		sws		c1,zs:[r30]
+		sw		r7,zs:8[r30]
+		ldi		r2,#54			; tab out to column 54
+		lbu		r1,zs:3[r5]
+		shrui	r1,r1,#4
+		lbu		r7,zs:4[r5]
+		andi	r7,r7,#3
+		shli	r7,r7,#4
+		or		r1,r7,r1
+		bsr		DBGDispBReg
+		bsr		DBGComma
+		lbu		r1,zs:2[r5]
+		andi	r1,r1,#63
+		bsr		DBGDispBReg
+		bsr		DBGComma
+		lbu		r1,zs:2[r5]
+		shrui	r1,r1,#6
+		lbu		r7,zs:3[r5]
+		andi	r7,r7,#15
+		shli	r7,r7,#2
+		or		r1,r7,r1
+		bsr		DBGDispBReg
 		lws		c1,zs:[r30]
 		lw		r7,zs:8[r30]
 		addui	r30,r30,#16
@@ -868,7 +1095,7 @@ DBGOperFmt:
 		align	2
 
 DBGOperFmtT:
-		dc		DBGDispTstregs,DBGDispCmpregs,DBGDispBrDisp,DBGDispCmpimm,DBGDispRxRxRx,DBGDispNone,DBGDispNone,DBGDispNone
+		dc		DBGDispTstregs,DBGDispCmpregs,DBGDispBrDisp,DBGDispCmpimm,DBGDispRxRxRx,DBGDispRxRx,DBGDispPxPxPx,DBGDispNone
 		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone
 		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone
 		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispSprRx,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone

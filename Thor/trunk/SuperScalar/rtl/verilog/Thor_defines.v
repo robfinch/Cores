@@ -175,7 +175,7 @@
 `define LFD			8'h88
 `define LVWAR       8'h8B
 `define SWCR        8'h8C
-`define LEA			8'h8D
+`define JMPI		8'h8D
 `define LWS			8'h8E
 `define LCL		    8'h8F
 
@@ -247,6 +247,7 @@
 `define LHX			8'hB4
 `define LHUX		8'hB5
 `define LWX			8'hB6
+`define JMPIX       8'hB7
 
 `define SBX			8'hC0
 `define SCX			8'hC1

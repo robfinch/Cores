@@ -1136,7 +1136,7 @@ int NextToken()
              }
              break;
              
-        // jal jgr jmp jsr jsp
+        // jal jgr jmp jsr jsp jci
         case 'j': case 'J':
              if ((inptr[1]=='a' || inptr[1]=='A') &&
                  (inptr[2]=='l' || inptr[2]=='L') &&
@@ -1167,6 +1167,14 @@ int NextToken()
                  isspace(inptr[3])) {
                  inptr += 3;
                  return token = tk_jgr;
+             }
+             if (gCpu==4) {
+                if ((inptr[1]=='c' || inptr[1]=='C') &&
+                    (inptr[2]=='i' || inptr[2]=='I') &&
+                    isspace(inptr[3])) {
+                    inptr += 3;
+                    return token = tk_jci;
+                }
              }
              break;
 
@@ -1584,7 +1592,7 @@ int NextToken()
         
         // sb sc sh sw sxb sxc sxh sub subi subu subui shl shli shr shru shrui sei smr ss:
         // seq seqi sne snei sge sgei sgt sgti slt slti sle slei sgeu sgeui sgtu sgtui sltu sltui sleu sleui
-        // swcr sfd sts sync sws stcmp
+        // swcr sfd sts sync sws stcmp stmov
         case 's': case 'S':
             if ((inptr[1]=='w' || inptr[1]=='W') && isspace(inptr[2])) {
                 inptr += 2;
@@ -1861,6 +1869,14 @@ int NextToken()
                     inptr[5]=='.') {
                     inptr += 6;
                     return token = tk_stcmp;
+                }
+                if ((inptr[1]=='t' || inptr[1]=='T') && 
+                    (inptr[2]=='m' || inptr[2]=='M') && 
+                    (inptr[3]=='o' || inptr[3]=='O') && 
+                    (inptr[4]=='v' || inptr[4]=='V') && 
+                    inptr[5]=='.') {
+                    inptr += 6;
+                    return token = tk_stmov;
                 }
                 if ((inptr[1]=='t' || inptr[1]=='T') && 
                     (inptr[2]=='s' || inptr[2]=='S') && 

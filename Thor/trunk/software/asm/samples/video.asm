@@ -244,25 +244,24 @@ VideoBIOS_FuncTable:
 
 VideoBIOSCall:
 		ldi		r31,#VIDEO_BIOS_STACKTOP
-		addui	r31,r31,#-32
+		addui	r31,r31,#-24
 		sws		c1,zs:[r31]
 		sws		c2,zs:8[r31]
-		sw		r10,zs:16[r31]
-		sws		hs,zs:24[r31]
+		sws		hs,zs:16[r31]
 		ldis	hs,#$FFD00000
 		cmpi	p0,r6,#MAX_VIDEO_BIOS_CALL
 p0.ge	br		.badCallno
-		ldi     r10,#VideoBIOS_FuncTable
-		lcu     r10,cs:[r10+r6*2]
-		ori     r10,r10,#VideoBIOSCall & 0xFFFFFFFFFFFF0000    ; recover high order bits
-		mtspr	c2,r10
-		jsr     [c2]
+		jci		c1,cs:VideoBIOS_FuncTable[r6]
+;		ldi		r10,#VideoBIOS_FuncTable
+;		lcu     r10,cs:[r10+r6*2]
+;		ori     r10,r10,#VideoBIOSCall & 0xFFFFFFFFFFFF0000    ; recover high order bits
+;		mtspr	c2,r10
+;		jsr     [c2]
 .0004:
 ;		bsr     UnlockVideoBIOS
 		lws		c1,zs:[r31]
 		lws		c2,zs:8[r31]
-		lw		r10,zs:16[r31]
-		lws		hs,zs:24[r31]
+		lws		hs,zs:16[r31]
 ;		ldi		r31,#BIOS_STACKTOP
 		rte
 .badCallno:

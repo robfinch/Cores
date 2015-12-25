@@ -245,6 +245,7 @@ reg        iqentry_pea  [0:7];
 reg        iqentry_cmpmv [0:7];
 reg        iqentry_tlb  [0:7];
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
+reg        iqentry_jmpi [0:7];
 reg        iqentry_fp   [0:7];  // is an floating point operation
 reg        iqentry_rfw	[0:7];	// writes to register file
 reg [DBW-1:0] iqentry_res	[0:7];	// instruction result
@@ -446,6 +447,8 @@ reg        alu1_v;
 wire        alu1_branchmiss;
 reg [ABW+3:0] alu1_misspc;
 
+wire jmpi_miss;
+reg [ABW-1:0] jmpi_misspc;
 wire mem_stringmissx;
 reg mem_stringmiss;
 wire        branchmiss;
@@ -1058,6 +1061,8 @@ case(isn[15:8])
 `RTS,`RTS2: fnFunc = isn[19:16];   // used to pass a small immediate
 `CACHE: fnFunc = isn[31:26];
 `PUSH,`PEA: fnFunc = km ? 6'b0 : 6'b110000; // select segment register #6
+`JMPI:  fnFunc = {isn[39:37],1'b0,isn[27:26]};
+`JMPIX: fnFunc = {isn[39:37],1'b0,isn[33:32]};
 default:
 	fnFunc = isn[39:34];
 endcase
@@ -1160,7 +1165,7 @@ input [5:0] func;
 	`LDI,`LDIS,`IMM,`NOP,`STP:		fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB,`SYNC:
 					fnSource2_v = 1'b1;
-	`RTI,`RTD,`RTE:	fnSource2_v = 1'b1;
+	`RTI,`RTD,`RTE,`JMPI:	fnSource2_v = 1'b1;
 	// TST
 	8'h00:			fnSource2_v = 1'b1;
 	8'h01:			fnSource2_v = 1'b1;
@@ -1229,7 +1234,7 @@ input [5:0] func;
 	               fnSource2_v = `FALSE;
 	`CACHE,`LCL,`TLB,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`STI,`INC:
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`STI,`INC:
 			fnSource2_v = 1'b1;
 	`JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS:
 			fnSource2_v = 1'b1;
@@ -1284,7 +1289,7 @@ case(fnOpcode(ins))
 `SEI,`CLI,`MEMSB,`MEMDB,`SYNC,`NOP,`MOVS,`STP:
 					fnNumReadPorts = 3'd0;
 `LDI,`LDIS,`IMM:		fnNumReadPorts = 3'd0;
-`R,`P,`STI,`LOOP:   fnNumReadPorts = 3'd1;
+`R,`P,`STI,`LOOP,`JMPI:   fnNumReadPorts = 3'd1;
 `RTI,`RTD,`RTE:		fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI,`ADDUIS:
                     fnNumReadPorts = 3'd1;
@@ -1301,7 +1306,7 @@ case(fnOpcode(ins))
 					else
 					   fnNumReadPorts = 3'd2;
 `RTS2,`CACHE,`LCL,`TLB,					 
-`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`LEA,`INC:
+`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR:
 					fnNumReadPorts = 3'd1;
@@ -1560,7 +1565,7 @@ begin
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 		`ANDI,`ORI,`EORI,
 		`LVB,`LVC,`LVH,`LVW,`LVWAR,
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LEA,`LINK:
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LINK:
 			fnTargetReg = {1'b0,ir[27:22]};
 		`CAS:
 			fnTargetReg = {1'b0,ir[39:34]};
@@ -1596,6 +1601,10 @@ begin
 		`SWCR:    fnTargetReg = {3'h4,4'h0};
 		`JSR,`JSRZ,`JSRS,`SYS,`INT:
 			fnTargetReg = {3'h5,ir[19:16]};
+		`JMPI:
+		    fnTargetReg = {3'h5,ir[25:22]};
+		`JMPIX:
+		    fnTargetReg = {3'h5,ir[31:28]};
 		`MTSPR,`MOVS,`LWS:
 		    fnTargetReg = {1'b1,ir[27:22]};
 /*
@@ -1630,6 +1639,8 @@ if (ir[3:0]==4'h0)
 else begin
 	case(fnOpcode(ir))
 	`JSR,`JSRZ,`JSRS,`SYS,`INT:
+	       fnTargetsCa = `TRUE;
+	`JMPI,`JMPIX:
 	       fnTargetsCa = `TRUE;
 	`LWS:
 		if (ir[27:26]==2'h1)
@@ -1698,8 +1709,8 @@ input [7:0] opcode;
     8'h3C,8'h3D,8'h3E,8'h3F,
 	`ANDI,`ORI,`EORI,`BITI,
 //	`SHLI,`SHLUI,`SHRI,`SHRUI,`ROLI,`RORI,
-	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`LEA,`INC,
-	`LVB,`LVC,`LVH,`LVW,`LVWAR,`STI,
+	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`INC,
+	`LVB,`LVC,`LVH,`LVW,`LVWAR,`STI,`JMPI,
 	`SB,`SC,`SH,`SW,`SWCR,`CAS,`SWS,
 	`RTI,`RTD,`RTE,
 	`JSR,`JSRS,`SYS,`INT,`RTS2,`LOOP,`PEA,`LINK,`UNLINK:
@@ -1714,6 +1725,7 @@ function fnIsFlowCtrl;
 input [7:0] opcode;
 begin
 case(opcode)
+`JMPI,`JMPIX,
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`LOOP,`RTS,`RTS2,`RTI,`RTD,`RTE:
 	fnIsFlowCtrl = 1'b1;
 default:
@@ -1873,6 +1885,7 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`TLB || opcode==`CAS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`LWS || opcode==`SWS || opcode==`STI ||
 			opcode==`INC ||
+			opcode==`JMPI || opcode==`JMPIX ||
 			opcode==`PUSH || opcode==`POP || opcode==`PEA || opcode==`LINK || opcode==`UNLINK
 			;
 endfunction
@@ -1880,7 +1893,8 @@ endfunction
 function fnIsNdxd;
 input [7:0] opcode;
 fnIsNdxd = opcode==`LBX || opcode==`LWX || opcode==`LBUX || opcode==`LHX || opcode==`LHUX || opcode==`LCX || opcode==`LCUX ||
-           opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX
+           opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX ||
+           opcode==`JMPIX
            ;
 endfunction
 
@@ -1896,13 +1910,14 @@ fnIsRFW =	// General registers
 			opcode==`RTS2 || opcode==`STP ||
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS || opcode==`PUSH || opcode==`POP || opcode==`LINK || opcode==`UNLINK ||
+			opcode==`JMPI || opcode==`JMPIX ||
 			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
 			opcode==`_2ADDUI || opcode==`_4ADDUI || opcode==`_8ADDUI || opcode==`_16ADDUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
 			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
 			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
 			opcode==`SHIFT ||
-			opcode==`R || opcode==`RR || opcode==`LEA || opcode==`P || opcode==`LOOP ||
+			opcode==`R || opcode==`RR || opcode==`P || opcode==`LOOP ||
 			opcode==`BITI || opcode==`CMP || opcode==`CMPI || opcode==`TST ||
 			opcode==`LDI || opcode==`LDIS || opcode==`ADDUIS || opcode==`MFSPR ||
 			// Branch registers / Segment registers
@@ -1930,7 +1945,7 @@ input [7:0] opcode;
 fnIsLoad =	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW || 
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVC || opcode==`LVH || opcode==`LVW || opcode==`LVWAR || opcode==`LCL ||
-			opcode==`LWS || opcode==`UNLINK ||
+			opcode==`LWS || opcode==`UNLINK || opcode==`JMPI || opcode==`JMPIX ||
 			opcode==`POP;
 endfunction
 
@@ -1942,7 +1957,7 @@ endfunction
 function fnIsIndexed;
 input [7:0] opcode;
 fnIsIndexed = opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
-				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX;
+				opcode==`SBX || opcode==`SCX || opcode==`SHX || opcode==`SWX || opcode==`JMPIX;
 endfunction
 
 // 
@@ -2008,11 +2023,11 @@ casex(op)
     fnIsIllegal = `TRUE;
 8'h73,8'h74,8'h75,8'h76,8'h7A,8'h7B,8'h7C,8'h7D,8'h7E,8'h7F:
     fnIsIllegal = `TRUE;
-8'h87,8'h88,8'h89,8'h8A,8'h8D:
+8'h87,8'h88,8'h89,8'h8A:
     fnIsIllegal = `TRUE;
 8'h94,8'h95,8'h9C:
     fnIsIllegal = `TRUE;
-8'hB7,8'b10111xxx:
+8'b10111xxx:
     fnIsIllegal = `TRUE;
 8'hC4,8'hC5,8'b11001xxx:
     fnIsIllegal = `TRUE;
@@ -2048,6 +2063,17 @@ if (DBW==32)
     		fnSelect = 8'hFF;
        default: fnSelect = 8'h00;
        endcase
+    `JMPI,`JMPIX:
+        case(fn[1:0])
+        2'd1:
+            case(adr[1]) 
+            1'b0:   fnSelect = 8'h33;
+            1'b1:   fnSelect = 8'hCC;
+            endcase
+        2'd2:   fnSelect = 8'hFF;
+        2'd3:   fnSelect = 8'hFF;
+        default:    fnSelect = 8'h00;
+        endcase
 	`LB,`LBU,`LBX,`LBUX,`SB,`SBX,`LVB:
 		case(adr[1:0])
 		3'd0:	fnSelect = 8'h11;
@@ -2098,7 +2124,24 @@ else
            fnSelect = 8'hFF;
        default: fnSelect = 8'h00;
        endcase
-	`LB,`LBU,`LBX,`SB,`LVB,`LBUX,`SBX:
+    `JMPI,`JMPIX:
+       case(fn[1:0])
+       2'd1:
+           case(adr[2:1]) 
+           2'd0:   fnSelect = 8'h03;
+           2'd1:   fnSelect = 8'h0C;
+           2'd2:   fnSelect = 8'h30;
+           2'd3:   fnSelect = 8'hC0;
+           endcase
+       2'd2:
+            case(adr[2])
+            1'b0:   fnSelect = 8'h0F;
+            1'b1:   fnSelect = 8'hF0;
+            endcase
+       2'd3:   fnSelect = 8'hFF;
+       default:    fnSelect = 8'h00;
+       endcase
+    `LB,`LBU,`LBX,`SB,`LVB,`LBUX,`SBX:
 		case(adr[2:0])
 		3'd0:	fnSelect = 8'h01;
 		3'd1:	fnSelect = 8'h02;
@@ -2155,6 +2198,17 @@ if (DBW==32)
         endcase
        default:    
 		fnDatai = dat[31:0];
+	   endcase
+	`JMPI,`JMPIX:
+	   case(func[1:0])
+	   2'd1:
+	       case(sel[3:0])
+	       4'h3:   fnDatai = dat[15:0];
+	       4'hC:   fnDatai = dat[31:16];
+	       default:    fnDatai = {DBW{1'b1}};
+	       endcase
+	   2'd2:   fnDatai = dat[31:0];
+	   default:    fnDatai = dat[31:0];
 	   endcase
 	`LB,`LBX,`LVB:
 		case(sel[3:0])
@@ -2219,6 +2273,25 @@ else
         default:    fnDatai = {DBW{1'b1}};
         endcase
        3'd3,3'd7:   fnDatai = dat;
+	   endcase
+	`JMPI,`JMPIX:
+	   case(func[1:0])
+	   2'd1:
+	       case(sel[7:0])
+	       8'h03:  fnDatai = dat[15:0];
+	       8'h0C:  fnDatai = dat[31:16];
+	       8'h30:  fnDatai = dat[47:32];
+	       8'hC0:  fnDatai = dat[63:48];
+	       default:    fnDatai = dat[15:0];
+	       endcase
+	   2'd2:
+	       case(sel[7:0])
+           8'h0F:  fnDatai = dat[31:0];
+           8'hF0:  fnDatai = dat[63:32];
+           default: fnDatai = dat[31:0];
+           endcase
+       2'd3:    fnDatai = dat;
+       default: fnDatai = dat;
 	   endcase
 	`LB,`LBX,`LVB:
 		case(sel)
@@ -2350,37 +2423,27 @@ reg [DBW-1:0] branch_pc;// =
 //			(ihit ? fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3 : fetchbuf1_pc);
 always @*
 if (fnIsBranch(opcode0) && fetchbuf0_v && predict_taken0) begin
-    if (ihit)
-        branch_pc <= fetchbuf0_pc + {{ABW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3;
-    else
-        branch_pc <= fetchbuf0_pc;
+    branch_pc <= fetchbuf0_pc + {{ABW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3;
 end
 else if (opcode0==`LOOP && fetchbuf0_v) begin
-    if (ihit)
-        branch_pc <= fetchbuf0_pc + {{ABW-8{fetchbuf0_instr[23]}},fetchbuf0_instr[23:16]} + 64'd3;
-    else
-        branch_pc <= fetchbuf0_pc;
+    branch_pc <= fetchbuf0_pc + {{ABW-8{fetchbuf0_instr[23]}},fetchbuf0_instr[23:16]} + 64'd3;
 end
 else if (fnIsBranch(opcode1) && fetchbuf1_v && predict_taken1) begin
-    if (ihit)
-        branch_pc <= fetchbuf1_pc + {{ABW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3;
-    else
-        branch_pc <= fetchbuf1_pc;
+    branch_pc <= fetchbuf1_pc + {{ABW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3;
 end
 else if (opcode1==`LOOP && fetchbuf1_v) begin
-    if (ihit)
-        branch_pc <= fetchbuf1_pc + {{ABW-8{fetchbuf1_instr[23]}},fetchbuf1_instr[23:16]} + 64'd3;
-    else
-        branch_pc <= fetchbuf1_pc;
+    branch_pc <= fetchbuf1_pc + {{ABW-8{fetchbuf1_instr[23]}},fetchbuf1_instr[23:16]} + 64'd3;
 end
 else begin
-    branch_pc <= {{ABW-8{1'b1}},8'h80};  // set to something to prevent a latch
+    branch_pc <= RSTADDR;  // set to something to prevent a latch
 end
 
 assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
 
 assign mem_stringmissx = ((dram0_op==`STS || dram0_op==`STFND) && int_pending && lc != 0) ||
                         ((dram0_op==`STMV || dram0_op==`STCMP) && int_pending && lc != 0 && stmv_flag);
+
+assign jmpi_miss = dram_v && (dram0_op==`JMPI || dram0_op==`JMPIX);
 
 // "Stream" interrupt instructions into the instruction stream until an INT
 // instruction commits. This avoids the problem of an INT instruction being
@@ -2487,6 +2550,7 @@ case(insn[15:8])
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
 `PUSH:  fnImm = 64'hFFFFFFFFFFFFFFF8;   //-8
 //`LINK:  fnImm = {insn[39:28],3'b000};
+`JMPI,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm = {{55{insn[36]}},insn[36:28]};
@@ -2524,6 +2588,7 @@ case(insn[15:8])
 `ifdef STACKOPS
 `LINK:  fnImm8 = {insn[32:28],3'b000};
 `endif
+`JMPI,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm8 = insn[35:28];
@@ -2562,6 +2627,7 @@ case(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
+`JMPI,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,
 `SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImmMSB = insn[36];
@@ -3735,11 +3801,13 @@ if (alu0_v) begin
 	else begin
         if (iqentry_op[alu0_id[2:0]]!=`IMM)
             iqentry_done[ alu0_id[2:0] ] <= (!iqentry_mem[ alu0_id[2:0] ] || !alu0_cmt);
-        iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
+        if (iqentry_jmpi[alu0_id[2:0]] && alu0_cmt)
+            iqentry_res [alu0_id[2:0]] <= alu0_pc + alu0_insnsz;
+        else
+            iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
         iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
 		iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
         iqentry_agen[ alu0_id[2:0] ] <= `TRUE;
-		iqentry_out [ alu0_id[2:0] ] <= `FALSE;
 	end
 end
 
@@ -3763,11 +3831,13 @@ if (alu1_v) begin
 	else begin
         if (iqentry_op[alu1_id[2:0]]!=`IMM)
              iqentry_done[ alu1_id[2:0] ] <= (!iqentry_mem[ alu1_id[2:0] ] || !alu1_cmt);
-        iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
+        if (iqentry_jmpi[alu1_id[2:0]] && alu1_cmt)
+             iqentry_res [alu1_id[2:0]] <= alu1_pc + alu1_insnsz;
+         else
+             iqentry_res [ alu1_id[2:0] ] <= alu1_bus;
         iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
 		iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
         iqentry_agen[ alu1_id[2:0] ] <= `TRUE;
-		iqentry_out [ alu1_id[2:0] ] <= `FALSE;
 	end
 end
 
@@ -4111,7 +4181,8 @@ end
 //
 if (dram_v && iqentry_v[ dram_id[2:0] ] && iqentry_mem[ dram_id[2:0] ] ) begin	// if data for stomped instruction, ignore
 	$display("dram results to iq[%d]=%h", dram_id[2:0],dram_bus);
-	iqentry_res	[ dram_id[2:0] ] <= dram_bus;
+	if (!iqentry_jmpi[dram_id[2:0]]) 
+	   iqentry_res	[ dram_id[2:0] ] <= dram_bus;
 	// If an exception occurred, stuff an interrupt instruction into the queue
 	// slot. The instruction will re-issue as an ALU operation. We can change
 	// the queued instruction because it isn't finished yet.
@@ -5567,7 +5638,7 @@ begin
         $stop;
     if (fetchbuf0_pc==32'hF44)
         $stop;
-    if (fetchbuf0_pc==32'h013E)
+    if (fetchbuf0_pc==32'hFFFFda49)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -5629,6 +5700,7 @@ begin
     iqentry_cmpmv[tail]    <=   opcode0==`STCMP || opcode0==`STMV;
     iqentry_tlb  [tail]    <=   opcode0==`TLB;
     iqentry_jmp  [tail]    <=   fetchbuf0_jmp;
+    iqentry_jmpi [tail]    <=   opcode0==`JMPI || opcode0==`JMPIX;
     iqentry_fp   [tail]    <=   fetchbuf0_fp;
     iqentry_rfw  [tail]    <=   fetchbuf0_rfw;
     iqentry_tgt  [tail]    <=   Rt0;
@@ -5699,6 +5771,7 @@ begin
     iqentry_cmpmv[tail]    <=   1'b0;
     iqentry_tlb  [tail]    <=   1'b0;
     iqentry_jmp  [tail]    <=   1'b0;
+    iqentry_jmpi [tail]    <=   1'b0;
     iqentry_fp   [tail]    <=   1'b0;
     iqentry_rfw  [tail]    <=   1'b1;
     iqentry_tgt  [tail]    <=   7'd27;
@@ -5738,10 +5811,13 @@ input [2:0] inc;
 input test_stomp;
 input validate_args;
 begin
-    if (opcode0==`NOP)
-        queued1 = `TRUE;    // to update fetch buffers
+    if (`FALSE)
+        ;
+//    if (opcode0==`NOP)
+ //       queued1 = `TRUE;    // to update fetch buffers
 `ifdef DEBUG_LOGIC
-    else if (dbg_ctrl[7] && !StatusDBG) begin
+    else
+    if (dbg_ctrl[7] && !StatusDBG) begin
         if (iqentry_v[tail]==`INV && iqentry_v[(tail+1)&7]==`INV) begin
             enque0a(tail,3'd2,1'b0);
             set_exception((tail+1)&7,8'd243);
@@ -5788,7 +5864,7 @@ begin
         $stop;
     if (fetchbuf1_pc==32'hF44)
         $stop;
-    if (fetchbuf1_pc==32'h013E)
+    if (fetchbuf1_pc==32'hFFFFDA49)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -5851,6 +5927,7 @@ begin
     iqentry_cmpmv[tail]    <=   opcode1==`STCMP || opcode1==`STMV;
     iqentry_tlb  [tail]    <=   opcode1==`TLB;
     iqentry_jmp  [tail]    <=   fetchbuf1_jmp;
+    iqentry_jmpi [tail]    <=   opcode1==`JMPI || opcode1==`JMPIX;
     iqentry_fp   [tail]    <=   fetchbuf1_fp;
     iqentry_rfw  [tail]    <=   fetchbuf1_rfw;
     iqentry_tgt  [tail]    <=   Rt1;
@@ -5898,12 +5975,15 @@ input [2:0] inc;
 input test_stomp;
 input validate_args;
 begin
-    if (opcode1==`NOP) begin
-        if (queued1==`TRUE) queued2 = `TRUE;
-        queued1 = `TRUE;
-    end
+    if (`FALSE)
+        ;
+//    if (opcode1==`NOP) begin
+//        if (queued1==`TRUE) queued2 = `TRUE;
+//        queued1 = `TRUE;
+//    end
 `ifdef DEBUG_LOGIC
-    else if (dbg_ctrl[7] && !StatusDBG) begin
+    else
+    if (dbg_ctrl[7] && !StatusDBG) begin
         if (iqentry_v[tail]==`INV && iqentry_v[(tail+1)&7]==`INV) begin
             enque1a(tail,3'd2,1,0);
             set_exception((tail+1)&7,8'd243);

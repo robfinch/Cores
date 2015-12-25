@@ -136,6 +136,14 @@ always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc 
     default:
         alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
     endcase
+ 
+always @(dram0_fn or dram0_misspc or dram_bus)
+    case (dram0_fn[1:0])
+    2'd1:   jmpi_misspc <= {dram0_misspc[DBW-1:16],dram_bus[15:0]};
+    2'd2:   jmpi_misspc <= (DBW==32) ? dram_bus[31:0] : {dram0_misspc[63:32],dram_bus[31:0]};
+    2'd3:   jmpi_misspc <= dram_bus[DBW-1:0];
+    default:    jmpi_misspc <= 32'h00000FA0;    // unimplemented instruction vector 
+    endcase
 /*
 assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`JSRS || alu0_op==`JSRZ || 
                        alu0_op==`RTS || alu0_op==`RTS2 || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
@@ -186,9 +194,9 @@ assign alu1_branchmiss = alu1_dataready &&
 		     alu1_op==`SYS || alu1_op==`INT ||
 		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op==`RTD || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argA == 64'd0)))));
 
-assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss),
-	misspc = (mem_stringmiss ? dram0_misspc : alu0_branchmiss ? alu0_misspc : alu1_misspc),
-	missid = (mem_stringmiss ? dram0_id : alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
+assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss | jmpi_miss),
+	misspc = (jmpi_miss ? jmpi_misspc : mem_stringmiss ? dram0_misspc : alu0_branchmiss ? alu0_misspc : alu1_misspc),
+	missid = (jmpi_miss ? dram0_id : mem_stringmiss ? dram0_id : alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
 
 `ifdef FLOATING_POINT
  wire fp0_exception;
