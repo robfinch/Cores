@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-module Thor_divider(rst, clk, ld, sgn, isDivi, a, b, imm, qo, ro, dvByZr, done);
+module Thor_divider(rst, clk, ld, abort, sgn, isDivi, a, b, imm, qo, ro, dvByZr, done, idle);
 parameter WID=64;
 parameter DIV=3'd3;
 parameter IDLE=3'd4;
@@ -33,6 +33,7 @@ parameter DONE=3'd5;
 input clk;
 input rst;
 input ld;
+input abort;
 input sgn;
 input isDivi;
 input [WID-1:0] a;
@@ -43,6 +44,7 @@ reg [WID-1:0] qo;
 output [WID-1:0] ro;
 reg [WID-1:0] ro;
 output done;
+output idle;
 output dvByZr;
 reg dvByZr;
 
@@ -52,6 +54,7 @@ reg [2:0] state;
 reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
 assign done = state==DONE;
+assign idle = state==IDLE;
 reg ce1;
 reg [WID-1:0] q;
 reg [WID:0] r;
@@ -78,7 +81,9 @@ if (rst) begin
 end
 else
 begin
-if (!cnt_done)
+if (abort)
+    cnt <= 8'd00;
+else if (!cnt_done)
 	cnt <= cnt - 8'd1;
 
 case(state)

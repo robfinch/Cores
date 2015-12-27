@@ -146,9 +146,6 @@ GetTextRowscols:
 public HomeCursor:
 		sc		r0,CursorX
 		sc		r0,CursorY
-		sc		r0,VideoPos
-		ldi		r1,#4
-		sc		r1,$FFDC0600
 endpublic
 
 ;------------------------------------------------------------------------------
@@ -166,9 +163,11 @@ SyncVideoPos:
 		ldi		r1,#5
 		sc		r1,hs:LEDS
 		lc		r2,CursorY
-		shli	r2,r2,#1
-		lcu		r1,cs:LineTbl[r2]
-		shrui	r1,r1,#2
+		lc		r3,Textcols
+		mulu	r1,r2,r3
+;		shli	r2,r2,#1
+;		lcu		r1,cs:LineTbl[r2]
+;		shrui	r1,r1,#2
 		lc		r2,CursorX
 		addu	r1,r1,r2
 		sc		r1,VideoPos
@@ -180,7 +179,6 @@ SyncVideoPos:
 		lw		r1,zs:16[r31]
 		addui	r31,r31,#32
 		rts
-
 
 ;------------------------------------------------------------------------------
 ; Video BIOS
@@ -244,24 +242,17 @@ VideoBIOS_FuncTable:
 
 VideoBIOSCall:
 		ldi		r31,#VIDEO_BIOS_STACKTOP
-		addui	r31,r31,#-24
+		addui	r31,r31,#-16
 		sws		c1,zs:[r31]
-		sws		c2,zs:8[r31]
-		sws		hs,zs:16[r31]
+		sws		hs,zs:8[r31]
 		ldis	hs,#$FFD00000
 		cmpi	p0,r6,#MAX_VIDEO_BIOS_CALL
 p0.ge	br		.badCallno
 		jci		c1,cs:VideoBIOS_FuncTable[r6]
-;		ldi		r10,#VideoBIOS_FuncTable
-;		lcu     r10,cs:[r10+r6*2]
-;		ori     r10,r10,#VideoBIOSCall & 0xFFFFFFFFFFFF0000    ; recover high order bits
-;		mtspr	c2,r10
-;		jsr     [c2]
 .0004:
 ;		bsr     UnlockVideoBIOS
 		lws		c1,zs:[r31]
-		lws		c2,zs:8[r31]
-		lws		hs,zs:16[r31]
+		lws		hs,zs:8[r31]
 ;		ldi		r31,#BIOS_STACKTOP
 		rte
 .badCallno:
@@ -277,11 +268,11 @@ VBUnsupported:
 
 VBSetCursorPos:
 		addui	r31,r31,#-8
-		sws		c1,zs:[r31]
+		sws		c1,[r31]
 		sc		r1,CursorY
 		sc		r2,CursorX
 		bsr		SyncVideoPos
-		lws		c1,zs:[r31]
+		lws		c1,[r31]
 		addui	r31,r31,#8
 		rts
 
@@ -355,29 +346,29 @@ p0.le	addi	r1,r1,#$60
 ;------------------------------------------------------------------------------
 ; Display a string on the screen.
 ; Parameters:
-;	r1 = pointer to string
+;	r1 = linear address pointer to string
 ;------------------------------------------------------------------------------
 
 public VBDisplayString:
 		addui	r31,r31,#-32
-		sws		c1,zs:[r31]			; save return address
-		sws		lc,zs:8[r31]		; save loop counter
-		sw		r2,zs:16[r31]
-		sws		p0,zs:24[r31]
+		sws		c1,[r31]			; save return address
+		sws		lc,8[r31]		; save loop counter
+		sw		r2,16[r31]
+		sws		p0,24[r31]
 		ldis	lc,#$FFF		; set max 4k
 		mov		r2,r1
 .0001:
-		lbu		r1,[r2]
+		lbu		r1,zs:[r2]
 		tst		p0,r1
 p0.eq	br		.0002
 		bsr		VBDisplayChar
 		addui	r2,r2,#1
 		loop	.0001
 .0002:
-		lws		c1,zs:[r31]			; restore return address
-		lws		lc,zs:8[r31]		; restore loop counter
-		lw		r2,zs:16[r31]
-		lws		p0,zs:24[r31]
+		lws		c1,[r31]			; restore return address
+		lws		lc,8[r31]		; restore loop counter
+		lw		r2,16[r31]
+		lws		p0,24[r31]
 		addui	r31,r31,#32
 		rts
 endpublic
@@ -584,12 +575,12 @@ p0.ne	br		.next
 ;
 public VBDisplayChar:
 		addui	r31,r31,#-48
-		sws		c1,zs:[r31]
-		sws		pregs,zs:8[r31]
-		sw		r2,zs:16[r31]
-		sw		r3,zs:24[r31]
-		sw		r4,zs:32[r31]
-		sws		hs,zs:40[r31]
+		sws		c1,[r31]
+		sws		pregs,8[r31]
+		sw		r2,16[r31]
+		sw		r3,24[r31]
+		sw		r4,32[r31]
+		sws		hs,40[r31]
 		ldis	hs,#$FFD00000
 		zxb		r1,r1
 		lb		r2,EscState
@@ -618,15 +609,16 @@ p0.ne	br		_0003
 		ldi		r1,#1
 		sb		r1,EscState
 exitDC:
-		lws		c1,zs:[r31]
-		lws		pregs,zs:8[r31]
-		lw		r2,zs:16[r31]
-		lw		r3,zs:24[r31]
-		lw		r4,zs:32[r31]
-		lws		hs,zs:40[r31]
+		lws		c1,[r31]
+		lws		pregs,8[r31]
+		lw		r2,16[r31]
+		lw		r3,24[r31]
+		lw		r4,32[r31]
+		lws		hs,40[r31]
 		addui	r31,r31,#48
 		rts
 _0003:
+		andi	r1,r1,#$7F
 		bsr		VBAsciiToScreen
 		lhu		r2,NormAttr
 		andi	r2,r2,#-1024
@@ -672,7 +664,7 @@ p1.ge	br		exitDC
 
 processEsc:
 		ldi		r4,#22
-		sc		r4,$FFDC0600
+		sc		r4,hs:LEDS
 		lb		r2,EscState
 		cmpi	p0,r2,#-1
 p0.ne	br		.0006
@@ -768,7 +760,7 @@ p0.ne	br		.0012
 
 doBackSpace:
 		ldi		r4,#23
-		sc		r4,$FFDC0600
+		sc		r4,hs:LEDS
 		lc		r2,CursorX
 		tst		p0,r2
 p0.eq	br		exitDC		; Can't backspace anymore

@@ -26,7 +26,7 @@
 //
 `include "Thor_defines.v"
 
-module Thor_alu(corenum, rst, clk, alu_ld, alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, o, alu_done, alu_divByZero);
+module Thor_alu(corenum, rst, clk, alu_ld, alu_abort, alu_op, alu_fn, alu_argA, alu_argB, alu_argC, alu_argI, alu_pc, insnsz, o, alu_done, alu_idle, alu_divByZero);
 parameter DBW=64;
 parameter BIG=1;
 parameter FEATURES = 0;
@@ -34,6 +34,7 @@ input [63:0] corenum;
 input rst;
 input clk;
 input alu_ld;
+input alu_abort;
 input [7:0] alu_op;
 input [5:0] alu_fn;
 input [DBW-1:0] alu_argA;
@@ -44,6 +45,7 @@ input [DBW-1:0] alu_pc;
 input [3:0] insnsz;
 output reg [DBW-1:0] o;
 output reg alu_done;
+output reg alu_idle;
 output alu_divByZero;
 
 wire signed [DBW-1:0] alu_argAs = alu_argA;
@@ -58,6 +60,7 @@ wire [15:0] bcdmo;
 wire [DBW-1:0] bf_out;
 wire [DBW-1:0] shfto;
 wire alu_mult_done,alu_div_done;
+wire alu_mult_idle,alu_div_idle;
 wire [DBW-1:0] p_out;
 reg [3:0] o1;
 
@@ -68,29 +71,34 @@ Thor_multiplier #(DBW) umult1
 	.rst(rst),
 	.clk(clk),
 	.ld(alu_ld && ((alu_op==`RR && (alu_fn==`MUL || alu_fn==`MULU)) || alu_op==`MULI || alu_op==`MULUI)),
+	.abort(alu_abort),
 	.sgn((alu_op==`RR && alu_op==`MUL) || alu_op==`MULI),
 	.isMuli(alu_op==`MULI || alu_op==`MULUI),
 	.a(alu_argA),
 	.b(alu_argB),
 	.imm(alu_argI),
 	.o(alu_prod),
-	.done(alu_mult_done)
+	.done(alu_mult_done),
+	.idle(alu_mult_idle)
 );
 
 Thor_divider #(DBW) udiv1
 (
 	.rst(rst),
 	.clk(clk),
-	.ld(alu_ld && ((alu_op==`RR && (alu_fn==`DIV || alu_fn==`DIVU)) || alu_op==`DIVI || alu_op==`DIVUI)),
-	.sgn((alu_op==`RR && alu_fn==`DIV) || alu_op==`DIVI),
-	.isDivi(alu_op==`DIVI || alu_op==`DIVUI),
+	.ld(alu_ld && ((alu_op==`RR && (alu_fn==`DIV || alu_fn==`DIVU || alu_fn==`MOD || alu_fn==`MODU))
+	   || alu_op==`DIVI || alu_op==`DIVUI || alu_op==`MODI || alu_op==`MODUI)),
+	.abort(alu_abort),
+	.sgn((alu_op==`RR && (alu_fn==`DIV || alu_fn==`MOD)) || alu_op==`DIVI || alu_op==`MODI),
+	.isDivi(alu_op==`DIVI || alu_op==`DIVUI || alu_op==`MODI || alu_op==`MODUI),
 	.a(alu_argA),
 	.b(alu_argB),
 	.imm(alu_argI),
 	.qo(alu_divq),
 	.ro(alu_rem),
 	.dvByZr(alu_divByZero),
-	.done(alu_div_done)
+	.done(alu_div_done),
+	.idle(alu_div_idle)
 );
 
 Thor_shifter #(DBW) ushft0
@@ -199,10 +207,12 @@ case(alu_op)
 	`MAX:           o <= BIG ? (alu_argA < alu_argB ? alu_argB : alu_argA) : 64'hDEADDEADDEADDEAD;
 	`MUL,`MULU:     o <= BIG ? alu_prod[63:0] : 64'hDEADDEADDEADDEAD;
 	`DIV,`DIVU:     o <= BIG ? alu_divq : 64'hDEADDEADDEADDEAD;  
+    `MOD,`MODU:     o <= BIG ? alu_rem : 64'hDEADDEADDEADDEAD;
 	default:   o <= 64'hDEADDEADDEADDEAD;
 	endcase
 `MULI,`MULUI:   o <= BIG ? alu_prod[63:0] : 64'hDEADDEADDEADDEAD;
 `DIVI,`DIVUI:   o <= BIG ? alu_divq : 64'hDEADDEADDEADDEAD;
+`MODI,`MODUI:   o <= BIG ? alu_rem : 64'hDEADDEADDEADDEAD;
 `_2ADDUI:		o <= {alu_argA[DBW-2:0],1'b0} + alu_argI;
 `_4ADDUI:		o <= {alu_argA[DBW-3:0],2'b0} + alu_argI;
 `_8ADDUI:		o <= {alu_argA[DBW-4:0],3'b0} + alu_argI;
@@ -380,6 +390,7 @@ case(alu_op)
 			o1[3] = 1'b0;
 			o <= {16{o1}};
 		end
+`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVW,`STI,
 `LWS,`SWS,`RTS2,`STS,`STFND,`STCMP,`PUSH:
             begin
@@ -389,7 +400,7 @@ case(alu_op)
 `LBX,`LBUX,`SBX,
 `LCX,`LCUX,`SCX,
 `LHX,`LHUX,`SHX,
-`LWX,`SWX,
+`LWX,`SWX,`LLAX,
 `JMPIX:	
             case(alu_fn[1:0])
             2'd0:   o <= alu_argA + alu_argC + alu_argB;
@@ -436,12 +447,26 @@ case(alu_op)
 `RR:
     case(alu_fn)
     `MUL,`MULU: alu_done <= alu_mult_done;
-    `DIV,`DIVU: alu_done <= alu_div_done;
+    `DIV,`DIVU,`MOD,`MODU: alu_done <= alu_div_done;
     default:    alu_done <= `TRUE;
     endcase
 `MULI,`MULUI:   alu_done <= alu_mult_done;
-`DIVI,`DIVUI:   alu_done <= alu_div_done;
+`DIVI,`DIVUI,`MODI,`MODUI:   alu_done <= alu_div_done;
 default:    alu_done <= `TRUE;
+endcase
+
+// Generate idle signal
+always @*
+case(alu_op)
+`RR:
+    case(alu_fn)
+    `MUL,`MULU: alu_idle <= alu_mult_idle;
+    `DIV,`DIVU,`MOD,`MODU: alu_idle <= alu_div_idle;
+    default:    alu_idle <= `TRUE;
+    endcase
+`MULI,`MULUI:   alu_idle <= alu_mult_idle;
+`DIVI,`DIVUI,`MODI,`MODUI:   alu_idle <= alu_div_idle;
+default:    alu_idle <= `TRUE;
 endcase
 
 endmodule

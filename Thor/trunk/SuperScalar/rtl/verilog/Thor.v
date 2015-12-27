@@ -105,7 +105,8 @@ module Thor(corenum, rst_i, clk_i, clk_o, km, nmi_i, irq_i, vec_i, bte_o, cti_o,
     cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_i, dat_o);
 parameter DBW = 32;         // databus width
 parameter ABW = 32;         // address bus width
-parameter RSTADDR = 64'hFFFFFFFFFFFFEFF0;
+parameter RSTCSEG = 52'h0;
+parameter RSTPC = 64'hFFFFFFFFFFFFEFF0;
 parameter STARTUP_POWER = 16'hFFFF;
 localparam AMSB = ABW-1;
 parameter QENTRIES = 8;
@@ -170,7 +171,7 @@ reg [128:0] message [0:15];	// indexed by panic
 reg [DBW-1:0] cregs [0:15];		// code address registers
 reg [ 3:0] pregs [0:15];		// predicate registers
 `ifdef SEGMENTATION
-reg [DBW-1:12] sregs [0:7];		// segment registers
+reg [DBW-1:12] sregs [0:7];	// segment registers
 reg [DBW-1:12] sregs_lmt [0:7];
 `endif
 reg [2:0] rrmapno;				// register rename map number
@@ -211,7 +212,7 @@ wire sys_commit;
 wire dbg_commit;
 `ifdef SEGMENTATION
 wire [DBW-1:0] spc = (pc[ABW+3:ABW]==4'hF) ? pc[ABW-1:0] :
-                     (pc[ABW-1:ABW-4]==4'hF) ? pc[ABW-1:0] : {sregs[7],12'h000} + pc[ABW-1:0];
+                     (pc[ABW-1:ABW-4]==4'hF) ? pc[ABW-1:0] : {sregs[3'd7],12'h000} + pc[ABW-1:0];
 `else
 wire [DBW-1:0] spc = pc;
 `endif
@@ -236,6 +237,7 @@ reg        iqentry_out	[0:7];	// instruction has been issued to an ALU ...
 reg        iqentry_done	[0:7];	// instruction result valid
 reg [7:0]  iqentry_cmt;  		// commit result to machine state
 reg        iqentry_bt  	[0:7];	// branch-taken (used only for branches)
+reg        iqentry_br   [0:7];  // branch instruction decode
 reg        iqentry_agen [0:7];  // memory address is generated
 reg        iqentry_mem	[0:7];	// touches memory: 1 if LW/SW
 reg        iqentry_ndx  [0:7];  // TRUE if indexed memory op
@@ -243,6 +245,7 @@ reg        iqentry_cas  [0:7];
 reg        iqentry_pushpop [0:7];
 reg        iqentry_pea  [0:7];
 reg        iqentry_cmpmv [0:7];
+reg        iqentry_lla  [0:7];  // load linear address
 reg        iqentry_tlb  [0:7];
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_jmpi [0:7];
@@ -636,7 +639,7 @@ wire dbg_stat1 = dbg_imatchA1 | dbg_imatchB1 | dbg_lmatch1 | dbg_smatch1;
 wire dbg_stat2 = dbg_imatchA2 | dbg_imatchB2 | dbg_lmatch2 | dbg_smatch2;
 wire dbg_stat3 = dbg_imatchA3 | dbg_imatchB3 | dbg_lmatch3 | dbg_smatch3;
 assign dbg_stat1x = {dbg_stat3,dbg_stat2,dbg_stat1,dbg_stat0};
-
+wire debug_on = |dbg_ctrl[3:0]|dbg_ctrl[7];
 
 reg [11:0] spr_bir;
 
@@ -1082,11 +1085,13 @@ case(opcode)
 `RR:
     case(func)
     `DIV,`DIVU: fnIsAlu0Op = `TRUE;
+    `MOD,`MODU: fnIsAlu0Op = `TRUE;
     `MIN,`MAX:  fnIsAlu0Op = `TRUE;
     default:    fnIsAlu0Op = `FALSE;
     endcase
 `BCD:       fnIsAlu0Op = `TRUE;
 `DIVI,`DIVUI:   fnIsAlu0Op = `TRUE;
+`MODI,`MODUI:   fnIsAlu0Op = `TRUE;
 //`DOUBLE:    fnIsAlu0Op = `TRUE;
 `SHIFT:     fnIsAlu0Op = `TRUE;
 `BITFIELD:  fnIsAlu0Op = `TRUE;
@@ -1103,10 +1108,10 @@ case(opcode)
 `R: fnAluValid = `TRUE;
 `RR:
     case(func)
-    `MUL,`MULU,`DIV,`DIVU: fnAluValid = `FALSE;
+    `MUL,`MULU,`DIV,`DIVU,`MOD,`MODU: fnAluValid = `FALSE;
     default:    fnAluValid = `TRUE;
     endcase
-`MULI,`MULUI,`DIVI,`DIVUI:   fnAluValid = `FALSE;
+`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI:   fnAluValid = `FALSE;
 default:    fnAluValid = `TRUE;
 endcase
 endfunction
@@ -1222,7 +1227,7 @@ input [5:0] func;
     8'h3D:            fnSource2_v = 1'b1;
     8'h3E:            fnSource2_v = 1'b1;
     8'h3F:            fnSource2_v = 1'b1;
-	`MULI,`MULUI,`DIVI,`DIVUI:
+	`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI:
 					fnSource2_v = 1'b1;
 	`ANDI,`BITI:	fnSource2_v = 1'b1;
 	`ORI:			fnSource2_v = 1'b1;
@@ -1232,7 +1237,7 @@ input [5:0] func;
 	               fnSource2_v = `TRUE;
 	           else
 	               fnSource2_v = `FALSE;
-	`CACHE,`LCL,`TLB,
+	`CACHE,`LCL,`TLB,`LLA,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`STI,`INC:
 			fnSource2_v = 1'b1;
@@ -1296,7 +1301,7 @@ case(fnOpcode(ins))
 `_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI:
 					fnNumReadPorts = 3'd1;
 `SUBI,`SUBUI:		fnNumReadPorts = 3'd1;
-`MULI,`MULUI,`DIVI,`DIVUI:
+`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI:
 					fnNumReadPorts = 3'd1;
 `BITI,
 `ANDI,`ORI,`EORI:	fnNumReadPorts = 3'd1;
@@ -1305,7 +1310,7 @@ case(fnOpcode(ins))
 					   fnNumReadPorts = 3'd1;
 					else
 					   fnNumReadPorts = 3'd2;
-`RTS2,`CACHE,`LCL,`TLB,					 
+`RTS2,`CACHE,`LCL,`TLB,`LLA,					 
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`BR:
@@ -1357,9 +1362,9 @@ fnIsStoreString =
 	opcode==`STS;
 endfunction
 
-wire xbr = (iqentry_op[head0][7:4]==`BR) || (iqentry_op[head1][7:4]==`BR);
-wire takb = (iqentry_op[head0][7:4]==`BR) ? commit0_v : commit1_v;
-wire [DBW-1:0] xbrpc = (iqentry_op[head0][7:4]==`BR) ? iqentry_pc[head0] : iqentry_pc[head1];
+wire xbr = iqentry_br[head0] | iqentry_br[head1];
+wire takb = iqentry_br[head0] ? commit0_v : commit1_v;
+wire [DBW-1:0] xbrpc = iqentry_br[head0] ? iqentry_pc[head0] : iqentry_pc[head1];
 
 wire predict_takenA,predict_takenB,predict_takenC,predict_takenD;
 
@@ -1561,9 +1566,10 @@ begin
 		`SHIFT:
 			fnTargetReg = {1'b0,ir[33:28]};
 		`R,`R2,`DOUBLE_R,`SINGLE_R,
-		`ADDI,`ADDUI,`SUBI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
+		`ADDI,`ADDUI,`SUBI,`SUBUI,
+		`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
-		`ANDI,`ORI,`EORI,
+		`ANDI,`ORI,`EORI,`LLA,
 		`LVB,`LVC,`LVH,`LVW,`LVWAR,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LINK:
 			fnTargetReg = {1'b0,ir[27:22]};
@@ -1695,7 +1701,7 @@ input [7:0] opcode;
 	case(opcode)
 	`BFCLR,`BFSET,`BFCHG,`BFEXT,`BFEXTU,`BFINS,
 	`LDI,`LDIS,`ADDUIS,
-	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,
+	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
 	// CMPI
 	8'h20,8'h21,8'h22,8'h23,
@@ -1712,7 +1718,7 @@ input [7:0] opcode;
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`INC,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,`STI,`JMPI,
 	`SB,`SC,`SH,`SW,`SWCR,`CAS,`SWS,
-	`RTI,`RTD,`RTE,
+	`RTI,`RTD,`RTE,`LLA,
 	`JSR,`JSRS,`SYS,`INT,`RTS2,`LOOP,`PEA,`LINK,`UNLINK:
 		fnHasConst = 1'b1;
 	default:
@@ -1738,12 +1744,21 @@ end
 endfunction
 
 // fnCanException
+//
 // Used by memory issue logic.
-// Returns TRUE if the instruction can cause an exception
+// Returns TRUE if the instruction can cause an exception.
+// In debug mode any instruction could potentially cause a breakpoint exception.
+// Rather than check all the addresses for potential debug exceptions it's
+// simpler to just have it so that all instructions could exception. This will
+// slow processing down somewhat as stores will only be done at the head of the
+// instruction queue, but it's debug mode so we probably don't care.
 //
 function fnCanException;
 input [7:0] op;
 input [5:0] func;
+if (debug_on)
+    fnCanException = `TRUE;
+else
 case(op)
 `FLOAT:
     case(func)
@@ -1755,8 +1770,13 @@ case(op)
 `SINGLE_R:
     if (func==`FTX) fnCanException = `TRUE;
     else fnCanException = `FALSE;
-`ADD,`ADDI,`SUB,`SUBI,`DIV,`DIVI,`MUL,`MULI:
+`ADDI,`SUBI,`DIVI,`MODI,`MULI:
     fnCanException = `TRUE;
+`RR:
+    if (func==`ADD || func==`SUB || func==`MUL || func==`DIV || func==`MOD)
+        fnCanException = `TRUE;
+    else
+        fnCanException = `FALSE;
 `TLB,`RTI,`RTD,`RTE,`CLI,`SEI:
     fnCanException = `TRUE;
 default:
@@ -1907,19 +1927,21 @@ fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
-			opcode==`RTS2 || opcode==`STP ||
+			opcode==`RTS2 || opcode==`STP || opcode==`LLA || opcode==`LLAX ||
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS || opcode==`PUSH || opcode==`POP || opcode==`LINK || opcode==`UNLINK ||
 			opcode==`JMPI || opcode==`JMPIX ||
-			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI || opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI ||
+			opcode==`ADDI || opcode==`SUBI || opcode==`ADDUI || opcode==`SUBUI ||
+			opcode==`MULI || opcode==`MULUI || opcode==`DIVI || opcode==`DIVUI || opcode==`MODI || opcode==`MODUI ||
 			opcode==`_2ADDUI || opcode==`_4ADDUI || opcode==`_8ADDUI || opcode==`_16ADDUI ||
 			opcode==`ANDI || opcode==`ORI || opcode==`EORI ||
-			opcode==`ADD || opcode==`SUB || opcode==`ADDU || opcode==`SUBU || opcode==`MUL || opcode==`MULU || opcode==`DIV || opcode==`DIVU ||
-			opcode==`AND || opcode==`OR || opcode==`EOR || opcode==`NAND || opcode==`NOR || opcode==`ENOR || opcode==`ANDC || opcode==`ORC ||
-			opcode==`SHIFT ||
-			opcode==`R || opcode==`RR || opcode==`P || opcode==`LOOP ||
+			opcode==`SHIFT || opcode==`LOGIC ||
+			opcode==`R || opcode==`R2 || opcode==`RR || opcode==`P || opcode==`LOOP ||
 			opcode==`BITI || opcode==`CMP || opcode==`CMPI || opcode==`TST ||
 			opcode==`LDI || opcode==`LDIS || opcode==`ADDUIS || opcode==`MFSPR ||
+`ifdef FLOATING_POINT
+			opcode==`DOUBLE_R || opcode==`FLOAT_RR || opcode==`SINGLE_R ||
+`endif
 			// Branch registers / Segment registers
 			((opcode==`MTSPR || opcode==`MOVS) /*&& (fnTargetsCa(ir) || fnTargetsSegreg(ir))*/) ||
 			opcode==`JSR || opcode==`JSRS || opcode==`JSRZ || opcode==`SYS || opcode==`INT ||
@@ -1972,9 +1994,9 @@ input [7:0] op;
 input [5:0] fn;
 casex(op)
 8'h40:
-    if (fn > 6'h11)
+    if (fn > 6'h17)
         fnIsIllegal = `TRUE;
-    else if (fn==6'hC || fn==6'hD || fn==6'hE || fn==6'hF)
+    else if (fn==6'hC || fn==6'hD || fn==6'hE || fn==6'hF || fn==6'h12 || fn==6'h14 || fn==6'h15 || fn==6'h16)
         fnIsIllegal = `TRUE; 
     else fnIsIllegal = `FALSE;
 8'h41:
@@ -2017,9 +2039,9 @@ casex(op)
     else 
         fnIsIllegal = `FALSE;
 8'h43,8'h44,8'h45:  fnIsIllegal = `TRUE;
-8'h52,8'h56,8'h57,8'h59,8'h5A,8'h5B,8'h5C,8'h5D,8'h5E,8'h5F:
+8'h52,8'h56,8'h57,8'h59,8'h5A,8'h5C,8'h5D,8'h5E:
     fnIsIllegal = `TRUE;
-8'h60,8'h61,8'h62,8'h63,8'h64,8'h65,8'h66,8'h67,8'h68,8'h69,8'h6A:
+8'h60,8'h61,8'h62,8'h63,8'h64,8'h65,8'h66,8'h67,8'h68,8'h69:
     fnIsIllegal = `TRUE;
 8'h73,8'h74,8'h75,8'h76,8'h7A,8'h7B,8'h7C,8'h7D,8'h7E,8'h7F:
     fnIsIllegal = `TRUE;
@@ -2027,7 +2049,7 @@ casex(op)
     fnIsIllegal = `TRUE;
 8'h94,8'h95,8'h9C:
     fnIsIllegal = `TRUE;
-8'b10111xxx:
+8'hB9,8'hBA,8'hBB,8'hBC,8'hBD,8'hBE,8'hBF:
     fnIsIllegal = `TRUE;
 8'hC4,8'hC5,8'b11001xxx:
     fnIsIllegal = `TRUE;
@@ -2435,7 +2457,7 @@ else if (opcode1==`LOOP && fetchbuf1_v) begin
     branch_pc <= fetchbuf1_pc + {{ABW-8{fetchbuf1_instr[23]}},fetchbuf1_instr[23:16]} + 64'd3;
 end
 else begin
-    branch_pc <= RSTADDR;  // set to something to prevent a latch
+    branch_pc <= RSTPC;  // set to something to prevent a latch
 end
 
 assign int_pending = (nmi_edge & ~StatusHWI & ~int_commit) || (irq_i & ~im & ~StatusHWI & ~int_commit);
@@ -2550,7 +2572,7 @@ case(insn[15:8])
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
 `PUSH:  fnImm = 64'hFFFFFFFFFFFFFFF8;   //-8
 //`LINK:  fnImm = {insn[39:28],3'b000};
-`JMPI,
+`JMPI,`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm = {{55{insn[36]}},insn[36:28]};
@@ -2588,7 +2610,7 @@ case(insn[15:8])
 `ifdef STACKOPS
 `LINK:  fnImm8 = {insn[32:28],3'b000};
 `endif
-`JMPI,
+`JMPI,`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm8 = insn[35:28];
@@ -2627,7 +2649,7 @@ case(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`JMPI,
+`JMPI,`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,
 `SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImmMSB = insn[36];
@@ -2846,17 +2868,17 @@ begin
 	iqentry_islot[5] = 2'b00;
 	iqentry_islot[6] = 2'b00;
 	iqentry_islot[7] = 2'b00;
-	if (could_issue[head0] & !iqentry_fp[head0]) begin
+	if (could_issue[head0] & !iqentry_fp[head0] & alu0_idle) begin
 		iqentry_issue[head0] = `TRUE;
 		iqentry_islot[head0] = 2'b00;
 	end
-	else if (could_issue[head1] & !iqentry_fp[head1]
+	else if (could_issue[head1] & !iqentry_fp[head1]  & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC))
 	begin
 		iqentry_issue[head1] = `TRUE;
 		iqentry_islot[head1] = 2'b00;
 	end
-	else if (could_issue[head2] & !iqentry_fp[head2]
+	else if (could_issue[head2] & !iqentry_fp[head2] & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	)
@@ -2864,7 +2886,7 @@ begin
 		iqentry_issue[head2] = `TRUE;
 		iqentry_islot[head2] = 2'b00;
 	end
-	else if (could_issue[head3] & !iqentry_fp[head3]
+	else if (could_issue[head3] & !iqentry_fp[head3] & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2872,7 +2894,7 @@ begin
 		iqentry_issue[head3] = `TRUE;
 		iqentry_islot[head3] = 2'b00;
 	end
-	else if (could_issue[head4] & !iqentry_fp[head4]
+	else if (could_issue[head4] & !iqentry_fp[head4] & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2881,7 +2903,7 @@ begin
 		iqentry_issue[head4] = `TRUE;
 		iqentry_islot[head4] = 2'b00;
 	end
-	else if (could_issue[head5] & !iqentry_fp[head5]
+	else if (could_issue[head5] & !iqentry_fp[head5] & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2891,7 +2913,7 @@ begin
 		iqentry_issue[head5] = `TRUE;
 		iqentry_islot[head5] = 2'b00;
 	end
-	else if (could_issue[head6] & !iqentry_fp[head6]
+	else if (could_issue[head6] & !iqentry_fp[head6] & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2902,7 +2924,7 @@ begin
 		iqentry_issue[head6] = `TRUE;
 		iqentry_islot[head6] = 2'b00;
 	end
-	else if (could_issue[head7] & !iqentry_fp[head7]
+	else if (could_issue[head7] & !iqentry_fp[head7] & alu0_idle
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
 	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
@@ -2917,14 +2939,14 @@ begin
 
     // Don't bother checking head0, it should have issued to the first
     // instruction.
-	if (could_issue[head1] && !iqentry_fp[head1] && !iqentry_issue[head1]
+	if (could_issue[head1] && !iqentry_fp[head1] && !iqentry_issue[head1] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head1],iqentry_fn[head1])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC))
 	begin
 		iqentry_issue[head1] = `TRUE;
 		iqentry_islot[head1] = 2'b01;
 	end
-	else if (could_issue[head2] && !iqentry_fp[head2] && !iqentry_issue[head2]
+	else if (could_issue[head2] && !iqentry_fp[head2] && !iqentry_issue[head2] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head2],iqentry_fn[head2])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
@@ -2933,7 +2955,7 @@ begin
 		iqentry_issue[head2] = `TRUE;
 		iqentry_islot[head2] = 2'b01;
 	end
-	else if (could_issue[head3] & !iqentry_fp[head3] && !iqentry_issue[head3]
+	else if (could_issue[head3] & !iqentry_fp[head3] && !iqentry_issue[head3] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head3],iqentry_fn[head3])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
@@ -2942,7 +2964,7 @@ begin
 		iqentry_issue[head3] = `TRUE;
 		iqentry_islot[head3] = 2'b01;
 	end
-	else if (could_issue[head4] & !iqentry_fp[head4] && !iqentry_issue[head4]
+	else if (could_issue[head4] & !iqentry_fp[head4] && !iqentry_issue[head4] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head4],iqentry_fn[head4])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
@@ -2952,7 +2974,7 @@ begin
 		iqentry_issue[head4] = `TRUE;
 		iqentry_islot[head4] = 2'b01;
 	end
-	else if (could_issue[head5] & !iqentry_fp[head5] && !iqentry_issue[head5]
+	else if (could_issue[head5] & !iqentry_fp[head5] && !iqentry_issue[head5] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head5],iqentry_fn[head5])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
@@ -2963,7 +2985,7 @@ begin
 		iqentry_issue[head5] = `TRUE;
 		iqentry_islot[head5] = 2'b01;
 	end
-	else if (could_issue[head6] & !iqentry_fp[head6] && !iqentry_issue[head6]
+	else if (could_issue[head6] & !iqentry_fp[head6] && !iqentry_issue[head6] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head6],iqentry_fn[head6])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
@@ -2975,7 +2997,7 @@ begin
 		iqentry_issue[head6] = `TRUE;
 		iqentry_islot[head6] = 2'b01;
 	end
-	else if (could_issue[head7] & !iqentry_fp[head7] && !iqentry_issue[head7]
+	else if (could_issue[head7] & !iqentry_fp[head7] && !iqentry_issue[head7] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head7],iqentry_fn[head7])
 	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
 	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
@@ -3122,6 +3144,12 @@ wire dcache_access_pending = dram0 == 3'd6 && (!rhit || (dram0_op==`LCL && dram0
 // Stores can only issue if there is no possibility of a change of program flow.
 // That means no flow control operations or instructions that can cause an
 // exception can be before the store.
+
+// ToDo: if debugging matches are enabled in theory any instruction could cause
+// a debug exception. The memory issue logic should check to see a debug address
+// match will occur, and avoid a store operation. It may be simpler to have stores
+// only occur if they are at the head of the queue if debugging matches are turned
+// on.
 assign iqentry_memissue_head0 =	iqentry_memready[ head0 ] && cstate==IDLE && !dcache_access_pending && dram0==0;		// first in line ... go as soon as ready
 
 assign iqentry_memissue_head1 =	~iqentry_stomp[head1] && iqentry_memready[ head1 ] 		// addr and data are valid
@@ -3624,7 +3652,7 @@ always @(posedge clk) begin
 	    ierr <= 1'b0;
 		GM <= 8'hFF;
 		nmi_edge <= 1'b0;
-		pc <= RSTADDR[ABW-1:0];
+		pc <= RSTPC[ABW-1:0];
 		StatusHWI <= `TRUE;		// disables interrupts at startup until an RTI instruction is executed.
 		im <= 1'b1;
 		imb <= 1'b1;
@@ -3708,7 +3736,7 @@ always @(posedge clk) begin
 		// The pc wraps around to address zero while fetching the reset vector.
 		// This causes the processor to use the code segement register so the
 		// CS has to be defined for reset.
-		sregs[7] <= 52'd0;
+		sregs[7] <= RSTCSEG;
 		for (i=0; i < 16; i=i+1)
 			pregs[i] <= 4'd0;
 		asid <= 8'h00;
@@ -3785,13 +3813,12 @@ end
 if ((alu0_op==`RR && (alu0_fn==`MUL || alu0_fn==`MULU)) || alu0_op==`MULI || alu0_op==`MULUI) begin
     if (alu0_done) begin
         alu0_dataready <= `TRUE;
-        alu0_op <= `NOP;
     end
 end
-else if ((alu0_op==`RR && (alu0_fn==`DIV || alu0_fn==`DIVU)) || alu0_op==`DIVI || alu0_op==`DIVUI) begin
+else if ((alu0_op==`RR && (alu0_fn==`DIV || alu0_fn==`DIVU || alu0_fn==`MOD || alu0_fn==`MODU)) ||
+    alu0_op==`DIVI || alu0_op==`DIVUI || alu0_op==`MODI || alu0_op==`MODUI) begin
     if (alu0_done) begin
         alu0_dataready <= `TRUE;
-        alu0_op <= `NOP;
     end
 end
 
@@ -3815,13 +3842,12 @@ end
 if (((alu1_op==`RR && (alu1_fn==`MUL || alu1_fn==`MULU)) || alu1_op==`MULI || alu1_op==`MULUI) && ALU1BIG) begin
     if (alu1_done) begin
         alu1_dataready <= `TRUE;
-        alu1_op <= `NOP;
     end
 end
-else if (((alu1_op==`RR && (alu1_fn==`DIV || alu1_fn==`DIVU)) || alu1_op==`DIVI || alu1_op==`DIVUI) && ALU1BIG) begin
+else if (((alu1_op==`RR && (alu1_fn==`DIV || alu1_fn==`DIVU || alu1_fn==`MOD || alu1_fn==`MODU)) ||
+    alu1_op==`DIVI || alu1_op==`DIVUI || alu1_op==`MODI || alu1_op==`MODUI) && ALU1BIG) begin
     if (alu1_done) begin
         alu1_dataready <= `TRUE;
-        alu1_op <= `NOP;
     end
 end
 
@@ -4443,7 +4469,7 @@ begin
 						: 64'hDEADDEADDEADDEAD;
 			alu0_argC	<=
 `ifdef SEGMENTATION
-			               (iqentry_mem[n] && !iqentry_cmpmv[n]) ? {sregs[iqentry_fn[n][5:3]],12'h000} :
+			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? {sregs[iqentry_fn[n][5:3]],12'h000} :
 `endif			               
 			               iqentry_a3_v[n] ? iqentry_a3[n]
 						: (iqentry_a3_s[n] == alu0_id) ? alu0_bus
@@ -4455,6 +4481,7 @@ begin
                         : 64'hDEADDEADDEADDEAD;
             alu0_argI	<= iqentry_a0[n];
             alu0_dataready <= fnAluValid(iqentry_op[n],iqentry_fn[n]);
+    		iqentry_out[n] <= `TRUE;
 			end
 		2'd1: if (alu1_available) begin
 			alu1_ld <= 1'b1;
@@ -4478,7 +4505,7 @@ begin
 						: 64'hDEADDEADDEADDEAD;
 			alu1_argC	<=
 `ifdef SEGMENTATION
-			               (iqentry_mem[n] && !iqentry_cmpmv[n])? {sregs[iqentry_fn[n][5:3]],12'h000} :
+			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? {sregs[iqentry_fn[n][5:3]],12'h000} :
 `endif			                
 			               iqentry_a3_v[n] ? iqentry_a3[n]
 						: (iqentry_a3_s[n] == alu0_id) ? alu0_bus
@@ -4490,10 +4517,11 @@ begin
                         : 64'hDEADDEADDEADDEAD;
             alu1_argI	<= iqentry_a0[n];
             alu1_dataready <= fnAluValid(iqentry_op[n],iqentry_fn[n]);
+    		iqentry_out[n] <= `TRUE;
 			end
 		default: panic <= `PANIC_INVALIDISLOT;
 		endcase
-		iqentry_out[n] <= `TRUE;
+//		iqentry_out[n] <= `TRUE;
 		// if it is a memory operation, this is the address-generation step ... collect result into arg1
 		if (iqentry_mem[n] && !iqentry_tlb[n]) begin
 			iqentry_a1_v[n] <= `INV;
@@ -5547,7 +5575,7 @@ begin
             end
     6'd60:  fnSpr = spr_bir;
     6'd61:
-            case(spr_bir[5:0])
+            casex(spr_bir[5:0])
             6'd0:   fnSpr = dbg_adr0;  
             6'd1:   fnSpr = dbg_adr1;  
             6'd2:   fnSpr = dbg_adr2;  
@@ -5563,10 +5591,26 @@ begin
 // Shaves a clock cycle off register updates. rf_v is being set valid on the
 // clock cycle of the commit.   
     // If an spr is committing...
-    if (commit0_v && commit0_tgt=={1'b1,regno})
-        fnSpr = commit0_bus;
-    if (commit1_v && commit1_tgt=={1'b1,regno})
-        fnSpr = commit1_bus;
+    if (commit0_v && commit0_tgt=={1'b1,regno}) begin
+        if (regno[5:4]==2'b00) begin
+            if (DBW==32)
+                fnSpr = {8{cmt0nyb[regno[2:0]]}};
+            else
+                fnSpr = {16{cmt0nyb[regno[3:0]]}};
+        end
+        else
+            fnSpr = commit0_bus;
+    end
+    if (commit1_v && commit1_tgt=={1'b1,regno}) begin
+        if (regno[5:4]==2'b00) begin
+            if (DBW==32)
+                fnSpr = {8{cmt1nyb[regno[2:0]]}};
+            else
+                fnSpr = {16{cmt1nyb[regno[3:0]]}};
+        end
+        else
+            fnSpr = commit1_bus;
+    end
  
     // Special cases where the register would not be read from the commit bus
     case(regno)
@@ -5638,12 +5682,12 @@ begin
         $stop;
     if (fetchbuf0_pc==32'hF44)
         $stop;
-    if (fetchbuf0_pc==32'hFFFFda49)
+    if (fetchbuf0_pc==32'hFFFFD83C)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
     // If segment limit exceeded and not in the non-segmented area.
-    if (fetchbuf0_pc >= {sregs_lmt[7],12'h000} && fetchbuf0_pc[ABW-1:ABW-4]!=4'hF)
+    if (fetchbuf0_pc >= {sregs_lmt[3'd7],12'h000} && fetchbuf0_pc[ABW-1:ABW-4]!=4'hF)
         set_exception(tail,8'd244);
 `endif
 `endif
@@ -5689,7 +5733,8 @@ begin
     iqentry_op   [tail]    <=   opcode0; 
     iqentry_fn   [tail]    <=   opcode0==`MLO ? rfoc0[5:0] : fnFunc(fetchbuf0_instr);
     iqentry_cond [tail]    <=   cond0;
-    iqentry_bt   [tail]    <=   fnIsFlowCtrl(opcode0) && predict_taken0; 
+    iqentry_bt   [tail]    <=   fnIsFlowCtrl(opcode0) && predict_taken0;
+    iqentry_br   [tail]    <=   opcode0[7:4]==`BR;
     iqentry_agen [tail]    <=   `INV;
     iqentry_pc   [tail]    <=   (opcode0==`INT && Rt0[3:0]==4'hE) ? interrupt_pc : fetchbuf0_pc;
     iqentry_mem  [tail]    <=   fetchbuf0_mem;
@@ -5698,6 +5743,7 @@ begin
     iqentry_pushpop[tail]  <=   opcode0==`PUSH || opcode0==`POP;
     iqentry_pea  [tail]    <=   opcode0==`PEA;
     iqentry_cmpmv[tail]    <=   opcode0==`STCMP || opcode0==`STMV;
+    iqentry_lla  [tail]    <=   opcode0==`LLA || opcode0==`LLAX;
     iqentry_tlb  [tail]    <=   opcode0==`TLB;
     iqentry_jmp  [tail]    <=   fetchbuf0_jmp;
     iqentry_jmpi [tail]    <=   opcode0==`JMPI || opcode0==`JMPIX;
@@ -5705,7 +5751,8 @@ begin
     iqentry_rfw  [tail]    <=   fetchbuf0_rfw;
     iqentry_tgt  [tail]    <=   Rt0;
     iqentry_preg [tail]    <=   Pn0;
-    iqentry_pred [tail]    <=   pregs[Pn0];
+    // Need the bypassing on the preg file for write-through register effect.
+    iqentry_pred [tail]    <=   fnSpr({2'h0,Pn0},fetchbuf0_pc);//pregs[Pn0];
     // Look at the previous queue slot to see if an immediate prefix is enqueued
     iqentry_a0[tail]   <=      opcode0==`INT ? fnImm(fetchbuf0_instr) :
                                 fnIsBranch(opcode0) ? {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} : 
@@ -5769,6 +5816,7 @@ begin
     iqentry_pushpop[tail]  <=   1'b0;
     iqentry_pea  [tail]    <=   1'b0;
     iqentry_cmpmv[tail]    <=   1'b0;
+    iqentry_lla  [tail]    <=   1'b0;
     iqentry_tlb  [tail]    <=   1'b0;
     iqentry_jmp  [tail]    <=   1'b0;
     iqentry_jmpi [tail]    <=   1'b0;
@@ -5864,11 +5912,11 @@ begin
         $stop;
     if (fetchbuf1_pc==32'hF44)
         $stop;
-    if (fetchbuf1_pc==32'hFFFFDA49)
+    if (fetchbuf1_pc==32'hFFFFD83C)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
-    if (fetchbuf1_pc >= {sregs_lmt[7],12'h000} && fetchbuf1_pc[ABW-1:ABW-4]!=4'hF)
+    if (fetchbuf1_pc >= {sregs_lmt[3'd7],12'h000} && fetchbuf1_pc[ABW-1:ABW-4]!=4'hF)
         set_exception(tail,8'd244);
 `endif
 `endif
@@ -5911,6 +5959,7 @@ begin
     iqentry_fn   [tail]    <=   opcode1==`MLO ? rfoc1[5:0] : fnFunc(fetchbuf1_instr);
     iqentry_cond [tail]    <=   cond1;
     iqentry_bt   [tail]    <=   fnIsFlowCtrl(opcode1) && predict_taken1; 
+    iqentry_br   [tail]    <=   opcode1[7:4]==`BR;
     iqentry_agen [tail]    <=   `INV;
     // If an interrupt is being enqueued and the previous instruction was an immediate prefix, then
     // inherit the address of the previous instruction, so that the prefix will be executed on return
@@ -5925,6 +5974,7 @@ begin
     iqentry_pushpop[tail]  <=   opcode1==`PUSH || opcode1==`POP;
     iqentry_pea  [tail]    <=   opcode1==`PEA;
     iqentry_cmpmv[tail]    <=   opcode1==`STCMP || opcode1==`STMV;
+    iqentry_lla  [tail]    <=   opcode1==`LLA || opcode1==`LLAX;
     iqentry_tlb  [tail]    <=   opcode1==`TLB;
     iqentry_jmp  [tail]    <=   fetchbuf1_jmp;
     iqentry_jmpi [tail]    <=   opcode1==`JMPI || opcode1==`JMPIX;
@@ -5932,7 +5982,7 @@ begin
     iqentry_rfw  [tail]    <=   fetchbuf1_rfw;
     iqentry_tgt  [tail]    <=   Rt1;
     iqentry_preg [tail]    <=   Pn1;
-    iqentry_pred [tail]    <=   pregs[Pn1];
+    iqentry_pred [tail]    <=   fnSpr({2'h0,Pn1},fetchbuf1_pc);//pregs[Pn1];
     // Look at the previous queue slot to see if an immediate prefix is enqueued
     // But don't allow it for a branch
     iqentry_a0[tail]   <=       opcode1==`INT ? fnImm(fetchbuf1_instr) :

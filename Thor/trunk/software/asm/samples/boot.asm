@@ -76,25 +76,34 @@ PIC_IE		EQU		0xC0FC8
 PIC_ES		EQU		0xC0FE0
 PIC_ESR		EQU		0xC0FE8		; edge sense reset
 
-KeyState1	EQU		$2008
-KeyState2	EQU		$2009
-KeybdLEDs	EQU		$200A
-KeybdWaitFlag	EQU	$200B
+		bss
+		org		$0000
+		dw		0				; the first word is unused
+Milliseconds	dw		0
+KeyState1		db		0	
+KeyState2		db		0
+KeybdLEDs		db		0
+KeybdWaitFlag	db		0
 
-CursorX		EQU		$2030
-CursorY		EQU		$2032
-VideoPos	EQU		$2034
-NormAttr	EQU		$2036
-Vidregs		EQU		$2040
-Vidptr		EQU		$2044
-EscState	EQU		$2048
-Textrows	EQU		$204A
-Textcols	EQU		$204C
+CursorX			dc		0
+CursorY			dc		0
+VideoPos		dc		0
+		align	4
+NormAttr		dh		0
+Vidregs			dh		0
+Vidptr			dh		0
+EscState		dc		0
+Textrows		dc		0
+Textcols		dc		0
+		align	8
+reg_save		fill.w	64,0
+creg_save		fill.w	16,0
+sreg_save		fill.w	16,0
+preg_save		dw		0
 
 		bss
 		org		$4000
 
-Milliseconds	dw		0
 
 rxfull     EQU      1
 Uart_ms         db      0
@@ -118,10 +127,7 @@ NUMWKA          fill.b  64,0
 	org		$FFFF8000
 
 cold_start:
-
 		; Initialize segment registers for flat model
-		mtspr	cs,r0
-		ldis	cs.lmt,#-1		; maximum
 		mtspr	zs,r0
 		ldis	zs.lmt,#-1
 		mtspr	ds,r0
@@ -144,8 +150,8 @@ cold_start:
 		; switch processor to full speed
 		stp		#$FFFF
 
-		; set interrupt table at $0000
-		ldis	c12,#0
+		; set interrupt table at $1000
+		ldis	c12,#$1000
 
 		; set all vectors to the uninitialized interrupt vector
 ;		mov		r4,r0
@@ -158,33 +164,33 @@ cold_start:
 ;		loop	su1
 
 		; setup break vector
-		ldi		r1,#brk_jmp
+		lla		r1,cs:brk_jmp
 		ldi		r2,#0
 		bsr		set_vector
 
 		; setup Video BIOS vector
-		ldi		r1,#vb_jmp
+		lla		r1,cs:vb_jmp
 		ldi		r2,#10
 		bsr		set_vector
 
 		; setup NMI vector
-		ldi		r1,#nmi_jmp
+		lla		r1,cs:nmi_jmp
 		ldi		r2,#254
 		bsr		set_vector
 
 		; setup MSI vector
 		sh		r0,Milliseconds
-		ldi		r1,#msi_jmp
+		lla		r1,cs:msi_jmp
 		ldi		r2,#193
 		bsr		set_vector
 
 		; setup IRQ vector
-		ldi		r1,#tms_jmp
+		lla		r1,cs:tms_jmp
 		ldi		r2,#194
 		bsr		set_vector
 
 		; setup data bus error vector
-		ldi		r1,#dbe_jmp
+		lla		r1,cs:dbe_jmp
 		ldi		r2,#251
 		bsr		set_vector
 
@@ -250,7 +256,7 @@ j1:
 		sc		r1,hs:LEDS
 		sb		r0,EscState
 		bsr		SerialInit
-		bsr		Debugger
+;		bsr		Debugger
 		ldi		r2,#msgStartup
 		ldis	lc,#msgStartupEnd-msgStartup-1
 j3:
@@ -273,26 +279,89 @@ j2:
 		ldi		r1,#6
 		sc		r1,hs:LEDS
 		bsr		alphabet
-		ldi		r1,#msgStartup
+		lla		r1,cs:msgStartup	; convert to linear address
 		ldi		r6,#$14
 		sys		#10
-;		bsr		VBDisplayString
-		ldi		r5,#TEXTSCR
-.0001:
-.0002:
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; Monitor
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+		lla		r1,cs:msgMonitor
+		bsr		VBDisplayString
+
+		; Display monitor prompt
+.prompt:
+		ldi		r1,#CR
+		bsr		VBDisplayChar
+		ldi		r1,#LF
+		bsr		VBDisplayChar
+		ldi		r1,#'$'
+		bsr		VBDisplayChar
+.getkey:
 		bsr		KeybdGetCharWait
 		bsr		VBDisplayChar
 		cmpi	p0,r1,#CR
-p0.ne	br		.0002
-		bsr		VBAsciiToScreen
-		ori		r1,r1,#%000000111_111111111_00_00000000
-		sh		r1,hs:[r5]
-		addui	r5,r5,#4
-		br		.0001
+p0.ne	br		.getkey
+		lcu		r1,CursorY
+		lcu		r7,Textcols
+		mtspr	lc,r7				; use loop counter as safety
+		mulu	r10,r1,r7			; pos = row * cols
+		_4addu	r10,r10,r0			; pos *= 4
+		bsr		MonGetch1			; get character skipping spaces
+		cmpi	p0,r1,#'d'			; debug ?
+p0.eq	bsr		Debugger
+		br		.prompt
+
+;------------------------------------------------------------------------------
+; Returns:
+;	r1  ascii code for character
+;	r10 incremented
+;   lc  decremented
+;------------------------------------------------------------------------------
+
+MonGetch:
+		addui	r31,r31,#-8
+		sws		c1,[r31]
+		lhu		r1,[r10]
+		andi	r1,r1,#$3ff
+		bsr		VBScreenToAscii
+		addui	r10,r10,#4
+		loop	.0001			; decrement loop counter
+.0001:
+		lws		c1,[r31]
+		addui	r31,r31,#8
+		rts
+
+;------------------------------------------------------------------------------
+; Returns:
+;	r1  ascii code for character
+;	r10 incremented by number of spaces + 1
+;   lc  decremented by number of spaces + 1
+;------------------------------------------------------------------------------
+
+MonGetch1:
+		addui	r31,r31,#-8
+		sws		c1,[r31]
+.0001:
+		lhu		r1,[r10]
+		andi	r1,r1,#$3ff
+		bsr		VBScreenToAscii
+		addui	r10,r10,#4
+		cmpi	p0,r1,#' '
+p0.leu	loop	.0001
+		lws		c1,[r31]
+		addui	r31,r31,#8
+		rts
+
+;------------------------------------------------------------------------------
 
 msgStartup:	
 		byte	"Thor Test System Starting...",CR,LF,0
 msgStartupEnd:
+msgMonitor:
+		byte	CR,LF,"d - run debugger",CR,LF,0
 
 bad_ram:
 		ldi		r1,#'B'
@@ -338,13 +407,13 @@ alphabet:
 set_vector:
 		mfspr	r3,c12			; get base address of interrupt table
 		_16addu	r2,r2,r3
-		lh		r3,cs:[r1]
+		lh		r3,zs:[r1]
 		sh		r3,zs:[r2]
-		lh		r3,cs:4[r1]
+		lh		r3,zs:4[r1]
 		sh		r3,zs:4[r2]
-		lh		r3,cs:8[r1]
+		lh		r3,zs:8[r1]
 		sh		r3,zs:8[r2]
-		lh		r3,cs:12[r1]
+		lh		r3,zs:12[r1]
 		sh		r3,zs:12[r2]
 		rts
 
@@ -543,29 +612,37 @@ brk_lockup:
 ;
 ; vector table jumps
 ;
-		align	4
-brk_jmp:	jmp		brk_rout[c0]
-		align	4
-tms_jmp:	jmp		tms_rout[c0]
-		align	4
-msi_jmp:	jmp		msi_rout[c0]
-		align	4
-nmi_jmp:	jmp		nmi_rout[c0]
-		align	4
-uii_jmp:	jmp		uii_rout[c0]
-		align	4
-vb_jmp:		jmp		VideoBIOSCall[c0]
-		align	4
-ser_jmp:	jmp		SerialIRQ[c0]
-		align	4
-dbe_jmp:	jmp		dbe_rout[c0]
+		align	8
+brk_jmp:
+		jmp		brk_rout[c0]
+		align	8
+tms_jmp:
+		jmp		tms_rout[c0]
+		align	8
+msi_jmp:
+		jmp		msi_rout[c0]
+		align	8
+nmi_jmp:
+		jmp		nmi_rout[c0]
+		align	8
+uii_jmp:
+		jmp		uii_rout[c0]
+		align	8
+vb_jmp:
+		jmp		VideoBIOSCall[c0]
+		align	8
+ser_jmp:
+		jmp		SerialIRQ[c0]
+		align	8
+dbe_jmp:
+		jmp		dbe_rout[c0]
 
 ;------------------------------------------------------------------------------
 ; Reset Point
 ;------------------------------------------------------------------------------
 
 		org		$FFFFEFF0
-		jmp		cold_start[C15]
+		jmp		cold_start[c15]
 
 extern my_main : 24
 

@@ -49,10 +49,19 @@ public Debugger:
 		sync
 		bsr		VideoInit2
 		bsr		VBClearScreen2
+		ldi		r1,#1
 		mov		r2,r0
+		ldi		r6,#2				; set cursor pos
+		sys		#10
 		mov		r6,r0
-		ldi		r1,#msgDebugger
+		lla		r1,cs:msgDebugger
 		bsr		DBGDispString
+;		bsr		DBGRamTest
+		lla		r1,cs:msgDebugger	; convert address to linear
+		ldi		r6,#$14				; Try display string
+		sys		#10
+		mov		r6,r0
+		mov		r2,r0
 		ldi		r5,#$FFFF8000
 		bsr		Disassem20
 		br		Debugger_exit
@@ -81,7 +90,7 @@ p0.ltu	br		.0001
 		lbu		r3,DBGBufndx
 		cmpi	p3,r3,#80		; max 80 chars
 p3.ltu	br		DBGDispChar
-p3.ltu	sb		r1,[r3]
+p3.ltu	sb		r1,DBGBuf[r3]
 p3.ltu	addui	r3,r3,#1
 p3.ltu	sb		r3,DBGBufndx
 		br		.0001
@@ -93,6 +102,7 @@ p0.eq	br		.0001
 		subu	r7,r7,r1
 		addui	r7,r7,#-1		; loop count is one less
 		mtspr	lc,r7
+		addui	r1,r1,#DBGBuf
 		mov		r4,r1
 		addui	r1,r1,#-1
 		mov		r3,r0
@@ -110,6 +120,8 @@ p0.leu	br		.0002
 		cmpi	p0,r1,#'D'
 p0.eq	addui	r4,r4,#1
 p0.eq	br		DoDisassem
+		cmpi	p0,r1,#'x'
+p0.eq	br		Debugger_exit
 		br		promptAgain
 Debugger_exit:
 		lws		c1,zs:[r30]
@@ -326,13 +338,13 @@ p0.eq	br		.0001
 		cmpi	p0,r1,#$FFF0
 p0.geu  br		.0002
 .dispMne:
-		ori		r3,r1,#$FFFF0000	; set high order address bits
+		ori		r3,r1,#Debugger & $FFFF0000	; set high order address bits
 		bsr		DBGDisplayMne
 		br		.dispOper
 .0002:
 		andi	r1,r1,#15
 		lcu		r3,cs:DBGInsnMneT[r1]
-		ori		r3,r3,#$FFFF0000
+		ori		r3,r3,#Debugger & $FFFF0000
 		bsr		DBGGetFunc
 		lcu		r3,cs:[r3+r1*2]
 		br		.dispMne
@@ -340,8 +352,10 @@ p0.geu  br		.0002
 		lbu		r1,zs:1[r5]
 		lbu		r1,cs:DBGOperFmt[r1]
 		jci		c1,cs:DBGOperFmtT[r1]
+		ldi		r1,#48
+		sc		r1,hs:LEDS
 ;		lcu		r1,cs:DBGOperFmtT[r1]
-;		ori		r1,r1,#$FFFF0000
+;		ori		r1,r1,#Debugger & $FFFF0000
 ;		mtspr	c2,r1
 ;		jsr		[c2]
 .exit:
@@ -430,23 +444,32 @@ p0.gtu	addui	r1,r1,#7
 		rts
 
 ;------------------------------------------------------------------------------
+; DBGDispChar:
+;
 ; Display a character on the debug screen.
+;
+; Parameters:
+;	r1 = character to display
+;	r2 = text column
+;	r6 = text row
+; Returns:
+;	r2 incremented
 ;------------------------------------------------------------------------------
 
 DBGDispChar:
 		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
-		andi	r1,r1,#$7F
-		bsr		VBAsciiToScreen
-		ori		r1,r1,#DBG_ATTR
-		shli	r7,r6,#1
-		lcu		r8,cs:DBGLineTbl[r7]
-		_4addui	r7,r8,#$FFD10000
-		_4addu	r7,r2,r7
-		sh		r1,zs:[r7]
-		addui	r2,r2,#1
-		lws		c1,zs:[r30]
+		sws		c1,zs:[r30]			; save return address
+		sw		r7,zs:8[r30]		; save r7 work register
+		andi	r1,r1,#$7F			; make sure in range
+		bsr		VBAsciiToScreen		; convert to screen char
+		ori		r1,r1,#DBG_ATTR		; add in attribute
+		lcu		r7,Textcols			; figure out memory index
+		mulu	r7,r6,r7			; row * num cols
+		_4addui	r7,r7,#$FFD10000	; + text base + (row * num cols) * 4
+		_4addu	r7,r2,r7			; + column * 4
+		sh		r1,zs:[r7]			; store the char
+		addui	r2,r2,#1			; increment text position
+		lws		c1,zs:[r30]			; restore return address
 		lw		r7,zs:8[r30]
 		addui	r30,r30,#16
 		rts
@@ -670,14 +693,10 @@ DBGDispReg:
 DBGDispBx1:
 		bsr		DBGDispChar
 		cmpi	p0,r7,#10
-p0.ltu	br		.0001
-		divui	r9,r7,#10
-		addui	r1,r9,#'0'
-		mului   r9,r9,#10
-		subu	r7,r7,r9
-		bsr		DBGDispChar
-.0001:
-		mov		r1,r7
+p0.geu	divui	r1,r7,#10
+p0.geu	addui	r1,r1,#'0'
+p0.geu	bsr		DBGDispChar
+		modui	r1,r7,#10
 		addui	r1,r1,#'0'
 		bsr		DBGDispChar
 		lws		c1,zs:[r30]
@@ -702,8 +721,9 @@ DBGDispBReg:
 ;------------------------------------------------------------------------------
 
 DBGDispSpr:
-		addui	r30,r30,#-8
+		addui	r30,r30,#-16
 		sws		c1,zs:[r30]
+		sw		r7,zs:8[r30]
 		addu	r7,r1,r1
 		addu	r7,r7,r1			; r7 = r1 * 3
 		lbu		r1,cs:DBGSpr[r7]
@@ -714,7 +734,8 @@ DBGDispSpr:
 		cmpi	p0,r1,#' '
 p0.ne	bsr		DBGDispChar
 		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lw		r7,zs:8[r30]
+		addui	r30,r30,#16
 		rts
 
 ;------------------------------------------------------------------------------
@@ -922,23 +943,94 @@ DBGDispPxPxPx:
 		addui	r30,r30,#16
 		rts
 
+; Format #7
+;
 DBGDispNone:
 		rts
 
+; Format #8 (biti)
+;
+DBGDispPxRxImm:
+		addui	r30,r30,#-16
+		sws		c1,zs:[r30]
+		ldi		r2,#54			; tab out to column 54
+		lbu		r1,zs:2[r5]
+		shrui	r1,r1,#6
+		lbu		r7,zs:3[r5]
+		andi	r7,r7,#3
+		_4addu	r1,r7,r1
+		bsr		DBgDispSpr	
+		bsr		DBGComma
+		lbu		r1,2[r5]
+		andi	r1,r1,#63
+		bsr		DBgDispReg
+		bsr		DBGComma
+		lbu		r1,3[r5]
+		shrui	r1,r1,#4
+		lbu		r7,4[r5]
+		_16addu	r1,r7,r1
+		bsr		DBGDispImm
+		lws		c1,zs:[r30]
+		addui	r30,r30,#16
+		rts
+
+; Format #9 (adduis)
+;
+DBGDispRxImm:
+		addui	r30,r30,#-8
+		sws		c1,zs:[r30]
+		lbu		r1,2[r5]
+		andi	r1,r1,#63
+		bsr		DBGDispReg
+		bsr		DBGComma
+		lbu		r1,2[r2]
+		shrui	r1,r1,#6
+		lbu		r7,3[r2]
+		_4addu	r1,r7,r1
+		bsr		DBGDispImm
+		lws		c1,zs:[r30]
+		addui	r30,r30,#8
+		rts
+
 ;------------------------------------------------------------------------------
+; Display an immediate value.
+;------------------------------------------------------------------------------
+
+DBGDispImm:
+		addui	r30,r30,#-16
+		sws		c1,zs:[r30]
+		sw		r4,zs:8[r30]
+		mov		r4,r1
+		ldi		r1,#'#'
+		bsr		DBGDispChar
+		ldi		r1,#'$'
+		bsr		DBGDispChar
+		cmpi	p0,r4,#$FFFF
+p0.gtu	bsr		DBGDisplayHalf
+p0.gtu	br		.exit
+		cmpi	p0,r4,#$FF
+p0.gtu	bsr		DBGDisplayCharr
+p0.gtu	br		.exit
+		bsr		DBGDisplayByte
+.exit:
+		lw		c1,zs:[r30]
+		lw		r4,zs:8[r30]
+		addui	r30,r30,#16
+		rts
+
+;------------------------------------------------------------------------------
+; DBGGetFunc:
+;    Get the function code bits from the instruction. These come from one of
+; four different locations depending on the opcode.
+;
 ; Parameters:
-;	r1 = opcode group
+;	r1 = opcode group (0 to 15)
 ; Returns:
 ;	r1 = function code
 ;------------------------------------------------------------------------------
 
 DBGGetFunc:
-		shli	r1,r1,#1
-		lcu		r1,cs:DBGFuncT[r1]
-		ori		r1,r1,#$FFFF0000
-		mtspr	c2,r1
-		jmp		[c2]
-
+		jci		c0,cs:DBGFuncT[r1]
 gf0:
 gf2:
 gf3:
@@ -964,13 +1056,117 @@ gfA:
 		andi	r1,r1,#15
 		rts
 
-	align	2
-DBGFuncT:
-		dc		gf0,gf1,gf2,gf3,gf4,gf5,gf6,gf7,gf8,gf9,gfA,gfB,gf0,gf0,gf0,gf0
+;------------------------------------------------------------------------------
+; Checker-board RAM testing routine.
+;
+; Ram is tested from $6000 to $7FFFFFF. The first 24k of RAM is not tested,
+; as 16k underlays the scratchpad RAM and is unaccessible and 8kb is used by
+; the kernel.
+;
+; First uses the pattern AAAAAAAA to memory
+;                        55555555
+;
+; Then uses the pattern  55555555 to memory
+;                        AAAAAAAA
+;------------------------------------------------------------------------------
 
+DBGRamTest:
+		addui	r30,r30,#-8
+		sws		c1,zs:[r30]
+		ldi		r10,#$AAAAAAAA
+		ldi		r11,#$55555555
+		bsr		DBGRamTest1
+		ldi		r10,#$55555555
+		ldi		r11,#$AAAAAAAA
+		bsr		DBGRamTest1
+		lws		c1,zs:[r30]
+		addui	r30,r30,#8
+		rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DBGRamTest1:
+		addui	r30,r30,#-8
+		sws		c1,zs:[r30]
+
+		mov		r1,r10
+		mov		r3,r11
+		ldi		r5,#$6000
+		ldi		lc,#$3FF3FF		; (32MB - 24kB)/8 - 1
+		mov		r8,r0
+.0001:
+		sh		r1,[r5]
+		sh		r3,4[r5]
+		addui	r5,r5,#8
+		andi	r4,r5,#$FFF
+		tst		p0,r4
+p0.eq	shrui	r4,r5,#12
+p0.eq	ldi		r2,#0
+p0.eq	ldi		r6,#1
+p0.eq	bsr		DBGDisplayCharr
+		loop	.0001
+
+		ldi		r5,#$6000
+		ldi		lc,#$3FF3FF		; (32MB - 24kB)/8 - 1
+.0002:
+		lh		r1,[r5]
+		lh		r3,4[r5]
+		cmp		p0,r1,r10
+p0.ne	mov		r7,r1
+p0.ne	bsr		DBGBadRam
+		cmp		p0,r3,r11
+p0.ne	mov		r7,r3
+p0.ne	bsr		DBGBadRam
+		addui	r5,r5,#8
+		andi	r4,r5,#$FFF
+		tst		p0,r4
+p0.eq	shrui	r4,r5,#12
+p0.eq	ldi		r2,#0
+p0.eq	ldi		r6,#1
+p0.eq	bsr		DBGDisplayCharr
+		loop	.0002
+		lws		c1,zs:[r30]
+		addui	r30,r30,#8
+		rts
+
+;------------------------------------------------------------------------------
+; Dispay bad ram nessage with address and data.
+;------------------------------------------------------------------------------
+
+DBGBadRam:
+		addui	r30,r30,#-8
+		sws		c1,zs:[r30]
+		lla		r1,cs:msgBadRam
+		ldi		r2,#0
+		ldi		r6,#2
+		addu	r6,r6,r8
+		bsr		DBGDispString
+		mov		r4,r5
+		bsr		DBGDisplayHalf
+		bsr		space1
+		mov		r4,r7
+		bsr		DBGDisplayHalf
+		addui	r8,r8,#1
+		andi	r8,r8,#15
+		cmpi	p0,r8,#15
+p0.eq	ldis	lc,#1
+		lws		c1,zs:[r30]
+		addui	r30,r30,#8
+		rts
+
+msgBadRam:
+	byte	"Menory failed at: ",0
+
+;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ; Tables
 ;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+	align	2
+DBGFuncT:
+		dc		gf0,gf1,gf2,gf3,gf4,gf5,gf6,gf7,gf8,gf9,gfA,gfB,gf0,gf0,gf0,gf0
 
 		align	2
 DBGLineTbl:
@@ -1083,7 +1279,7 @@ DBGOperFmt:
 		byte	7,7,14,7, 7,7,7,5, 4,6,7,7, 7,7,7,7
 
 		byte	15,15,15,15, 15,15,15,7, 7,7,7,15, 15,7,15,15
-		byte	15,15,15,15, 7,7,15,16, 17,18,18,17, 7,13,15,19
+		byte	15,15,15,15, 7,7,15,16, 17,18,18,17, 7,38,15,19
 		byte	20,21,22,23, 24,25,25,5, 26,27,28,29, 15,15,15,15
 		byte	30,30,30,30, 30,30,30,7, 7,7,7,7, 7,7,7,7
 
@@ -1096,7 +1292,7 @@ DBGOperFmt:
 
 DBGOperFmtT:
 		dc		DBGDispTstregs,DBGDispCmpregs,DBGDispBrDisp,DBGDispCmpimm,DBGDispRxRxRx,DBGDispRxRx,DBGDispPxPxPx,DBGDispNone
-		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone
+		dc		DBGDispPxRxImm,DBGDispRxImm,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispRxImm,DBGDispNone,DBGDispNone
 		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone
 		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispSprRx,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone
 		dc		DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone,DBGDispNone
@@ -1178,7 +1374,16 @@ DBGSpr:
 
 ; Table of mnemonics
 ;
+mne_16addu:	byte	"16add",'u'|$80
+mne_2addu:	byte	"2add",'u'|$80
+mne_4addu:	byte	"4add",'u'|$80
+mne_8addu:	byte	"8add",'u'|$80
+mne_16addui:	byte	"16addu",'i'|$80
+mne_2addui:	byte	"2addu",'i'|$80
+mne_4addui:	byte	"4addu",'i'|$80
+mne_8addui:	byte	"8addu",'i'|$80
 mne_add:	byte	"ad",'d'|$80
+mne_addi:	byte	"add",'i'|$80
 mne_addu:	byte	"add",'u'|$80
 mne_addui:	byte	"addu",'i'|$80
 mne_and:	byte	"an",'d'|$80
@@ -1190,6 +1395,7 @@ mne_bfextu:	byte	"bfext",'u'|$80
 mne_bfins:	byte	"bfin",'s'|$80
 mne_bfinsi:	byte	"bfins",'i'|$80
 mne_bfset:	byte	"bfse",'t'|$80
+mne_biti:	byte	"bit",'i'|$80
 mne_br:		byte	"b",'r'|$80
 mne_brk:	byte	"br",'k'|$80
 mne_bsr:	byte	"bs",'r'|$80
@@ -1217,6 +1423,7 @@ mne_lvc:	byte	"lv",'c'|$80
 mne_lvh:	byte	"lv",'h'|$80
 mne_lvw:	byte	"lv",'w'|$80
 mne_lw:		byte	"l",'w'|$80
+mne_lws:	byte	"lw",'s'|$80
 mne_mfspr:	byte	"mfsp",'r'|$80
 mne_mtspr:	byte	"mtsp",'r'|$80
 mne_mov:	byte	"mo",'v'|$80

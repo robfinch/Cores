@@ -65,6 +65,8 @@
 `define _16ADDU			6'h0B
 `define MIN             6'h10
 `define MAX             6'h11
+`define MOD             6'h13
+`define MODU            6'h17 
 `define R2          8'h41
 `define CPUID           4'h0
 `define REDOR           4'h1    // reduction or
@@ -116,7 +118,10 @@
 `define SHRUI			6'h13
 `define ROLI			6'h14
 `define RORI			6'h15
+`define MODI        8'h5B
+`define MODUI       8'h5F
 
+`define LLA         8'h6A       // compute linear address
 `define _2ADDUI		8'h6B
 `define _4ADDUI		8'h6C
 `define _8ADDUI		8'h6D
@@ -248,6 +253,7 @@
 `define LHUX		8'hB5
 `define LWX			8'hB6
 `define JMPIX       8'hB7
+`define LLAX        8'hB8
 
 `define SBX			8'hC0
 `define SCX			8'hC1

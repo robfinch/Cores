@@ -1271,10 +1271,23 @@ int NextToken()
                     inptr += 4;
                     return token = tk_loop;
                 }  
+                if ((inptr[1]=='l' || inptr[1]=='L') &&
+                    (inptr[2]=='a' || inptr[2]=='A') &&
+                    isspace(inptr[3])) {
+                    inptr += 3;
+                    return token = tk_lla;
+                }  
+                if ((inptr[1]=='l' || inptr[1]=='L') &&
+                    (inptr[2]=='a' || inptr[2]=='A') &&
+                    (inptr[3]=='x' || inptr[3]=='X') &&
+                    isspace(inptr[4])) {
+                    inptr += 4;
+                    return token = tk_llax;
+                }  
             }
             break;
 
-        // mod modu mov mul muli mulu mului mtspr mfspr mtfp mffp message memdb memsb
+        // mod modu modi modui mov mul muli mulu mului mtspr mfspr mtfp mffp message memdb memsb
         case 'm': case 'M':
             if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
                 inptr += 3;
@@ -1318,6 +1331,21 @@ int NextToken()
                 isspace(inptr[4])) {
                 inptr += 4;
                 return token = tk_modu;
+            }
+            if ((inptr[1]=='o' || inptr[1]=='O') &&
+                (inptr[2]=='d' || inptr[2]=='D') &&
+                (inptr[3]=='i' || inptr[3]=='I') &&
+                isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_modi;
+            }
+            if ((inptr[1]=='o' || inptr[1]=='O') &&
+                (inptr[2]=='d' || inptr[2]=='D') &&
+                (inptr[3]=='u' || inptr[3]=='U') &&
+                (inptr[4]=='i' || inptr[4]=='I') &&
+                isspace(inptr[5])) {
+                inptr += 5;
+                return token = tk_modui;
             }
             if ((inptr[1]=='t' || inptr[1]=='T') &&
                 (inptr[2]=='s' || inptr[2]=='S') &&

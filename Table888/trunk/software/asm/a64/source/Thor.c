@@ -2520,7 +2520,7 @@ static void process_load(int oc)
        }
 //       if (oc==0x9F) oc = 0x8F;  // LEA
        emit_first(predicate);
-       emit_insn(oc+0x30);
+       emit_insn(oc==0x6A ? 0xB8 : oc+0x30);
        emit_insn(Ra|((Rb & 3)<<6));
        emit_insn((Rb >> 2)|((Rt & 15) << 4));
        emit_insn((Rt >> 4)|(sc << 2)|(seg << 5));
@@ -2729,7 +2729,7 @@ static void process_mov()
 
 static void process_rts(int oc)
 {
-     int64_t val;
+     int64_t val,val1;
 
      val = 0;
      NextToken();
@@ -2739,6 +2739,16 @@ static void process_rts(int oc)
      if (val > 15 || val < 0) {
          printf("%d Return point too far.\r\n", lineno);
          return;
+     }
+     if (token==',') {
+        NextToken();
+        val1 = expr();
+        emitImm8(val1,lastsym!=(SYM *)NULL);
+        emit_first(predicate);
+        emit_insn(0xF2);
+        emit_insn(0x10|val);
+        emit_insn(val1);
+        return;
      }
      if (val > 0) {
         emit_first(predicate);
@@ -3357,6 +3367,8 @@ j_processToken:
 
         case tk_lh:  process_load(0x84); break;
         case tk_lhu: process_load(0x85); break;
+        case tk_lla: process_load(0x6A); break;
+//        case tk_llax: process_load(0xB8); break;
         case tk_loop: process_loop(0xA4); break;
         case tk_lsr: process_rrop(0x58,0x03); break;
         case tk_lsri: process_shifti(0x58,0x13); break;
@@ -3371,8 +3383,10 @@ j_processToken:
         case tk_memsb: process_sync(0xF8); break;
         case tk_message: process_message(); break;
         case tk_mfspr: process_mfspr(0xA8); break;
-        case tk_mod: process_rrop(0x40,0x09); break;
-        case tk_modu: process_rrop(0x40,0x19); break;
+        case tk_mod: process_rrop(0x40,0x13); break;
+        case tk_modu: process_rrop(0x40,0x17); break;
+        case tk_modi: process_riop(0x5B); break;
+        case tk_modui: process_riop(0x5F); break;
         case tk_mov: process_mov(); break;
         case tk_mtspr: process_mtspr(0xA9); break;
         case tk_mul: process_rrop(0x40,0x02); break;

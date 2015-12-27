@@ -26,14 +26,17 @@
 //
 wire [DBW-1:0] alu0_out, alu1_out;
 wire alu0_done,alu1_done;
+wire alu0_idle,alu1_idle;
 wire alu0_divByZero, alu1_divByZero;
+wire alu0_abort,alu1_abort;
 
 Thor_alu #(.DBW(DBW),.BIG(1)) ualu0 
 (
     .corenum(corenum),
-    .rst(rst),
+    .rst(rst_i),
     .clk(clk),
     .alu_ld(alu0_ld),
+    .alu_abort(alu0_abort),
 	.alu_op(alu0_op),
 	.alu_fn(alu0_fn),
 	.alu_argA(alu0_argA),
@@ -44,15 +47,17 @@ Thor_alu #(.DBW(DBW),.BIG(1)) ualu0
 	.insnsz(alu0_insnsz),
 	.o(alu0_out),
 	.alu_done(alu0_done),
+	.alu_idle(alu0_idle),
 	.alu_divByZero(alu0_divByZero)
 );
 
 Thor_alu #(.DBW(DBW),.BIG(ALU1BIG)) ualu1 
 (
     .corenum(corenum),
-    .rst(rst),
+    .rst(rst_i),
     .clk(clk),
     .alu_ld(alu1_ld),
+    .alu_abort(alu1_abort),
 	.alu_op(alu1_op),
 	.alu_fn(alu1_fn),
 	.alu_argA(alu1_argA),
@@ -63,6 +68,7 @@ Thor_alu #(.DBW(DBW),.BIG(ALU1BIG)) ualu1
 	.insnsz(alu1_insnsz),
 	.o(alu1_out),
 	.alu_done(alu1_done),
+	.alu_idle(alu1_idle),
     .alu_divByZero(alu1_divByZero)
 );
 
@@ -105,6 +111,8 @@ begin
     alu0_id <= alu0_sourceid;
 	alu1_id <= alu1_sourceid;
 end
+assign alu0_abort = !alu0_cmt;
+assign alu1_abort = !alu1_cmt;
 
 // Special flag nybble is used for INT and SYS instructions in order to turn off
 // segmentation while the vector jump is taking place.

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-module Thor_multiplier(rst, clk, ld, sgn, isMuli, a, b, imm, o, done);
+module Thor_multiplier(rst, clk, ld, abort, sgn, isMuli, a, b, imm, o, done, idle);
 parameter WID=64;
 parameter SGNADJO=3'd2;
 parameter MULT=3'd3;
@@ -34,6 +34,7 @@ parameter DONE=3'd5;
 input clk;
 input rst;
 input ld;
+input abort;
 input sgn;
 input isMuli;
 input [WID-1:0] a;
@@ -42,6 +43,7 @@ input [WID-1:0] imm;
 output [WID*2-1:0] o;
 reg [WID*2-1:0] o;
 output done;
+output idle;
 
 reg [WID-1:0] aa,bb;
 reg so;
@@ -49,6 +51,7 @@ reg [2:0] state;
 reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
 assign done = state==DONE;
+assign idle = state==IDLE;
 reg ce1;
 reg [WID*2-1:0] prod;
 //wire [64:0] p1 = aa[0] ? prod[127:64] + b : prod[127:64];
@@ -70,7 +73,9 @@ if (rst) begin
 end
 else
 begin
-if (!cnt_done)
+if (abort)
+    cnt <= 8'd00;
+else if (!cnt_done)
 	cnt <= cnt - 8'd1;
 
 case(state)
