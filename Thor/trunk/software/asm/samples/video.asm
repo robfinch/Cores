@@ -337,7 +337,7 @@ p0.eq	br		.0004
 		cmpi	p0,r1,#$1D
 p0.eq	br		.0004
 		cmpi	p0,r1,#27
-p0.le	addi	r1,r1,#$60
+p0.le	addui	r1,r1,#$60
 		rts
 .0004:
 		ori		r1,r1,#$40
@@ -807,8 +807,9 @@ p0.ge	br		.0001
 		br		.0002
 .0001:
 		ldi		r1,#' '
-		lh		r2,NormAttr
+		lhu		r2,NormAttr
 		or		r1,r1,r2
+		lhu		r4,Vidptr
 		sh		r1,hs:[r4+r3*4]
 		br		exitDC
 
@@ -833,18 +834,19 @@ doCursorLeft:
 		lcu		r1,CursorX
 		tst		p0,r1
 p0.eq	br		exitDC
-		subui	r1,r1,#1
+		addui	r1,r1,#-1
 		br		doCursor2
 doCursorUp:
 		lcu		r1,CursorY
 		tst		p0,r1
 p0.eq	br		exitDC
-		subui	r1,r1,#1
+		addui	r1,r1,#-1
 		br		doCursor1
 doCursorDown:
 		lcu		r1,CursorY
 		addui	r1,r1,#1
 		lcu		r2,Textrows
+		cmp		p0,r1,r2
 p0.ge	br		exitDC
 doCursor1:
 		sc		r1,CursorY
@@ -867,7 +869,7 @@ public VideoInit:
 		sh		r1,Vidptr
 
 		ldi		r2,#TC1InitData
-		ldis	lc,#10				; initialize loop counter ( one less)
+		ldis	lc,#11				; initialize loop counter ( one less)
 		lhu		r3,Vidregs
 .0001:
 		lvh		r1,cs:[r2]
@@ -896,7 +898,7 @@ public VideoInit2:
 		sh		r1,Vidptr
 
 		ldi		r2,#TC2InitData
-		ldis	lc,#10				; initialize loop counter ( one less)
+		ldis	lc,#11				; initialize loop counter ( one less)
 		lhu		r3,Vidregs
 .0001:
 		lvh		r1,cs:[r2]
@@ -925,6 +927,8 @@ TC1InitData:
 		dc       0
 		dc	   $21		; pixel size (hhhhvvvv)
 		dc       0
+		dc       0		; not used
+		dc       0
 		dc	  $1FF		; transparent color
 		dc       0
 		dc	   $40		; cursor blink, start line
@@ -942,13 +946,15 @@ TC2InitData:
 		dc       3
 		dc		31
 		dc       0
-		dc	   376 
+		dc	   676 
 		dc       0
 		dc      64		; window top
 		dc       0
 		dc		 7
 		dc       0
 		dc	   $10
+		dc       0
+		dc       0
 		dc       0
 		dc	  $1FF
 		dc       0

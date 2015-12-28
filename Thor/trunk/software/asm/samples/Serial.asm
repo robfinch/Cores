@@ -335,7 +335,8 @@ p0.eq	br		srxirq6
 srxirq6:
 		lb		r1,Uart_rxdtr
 		tst		p0,r1
-p0.eq	br		srxirq7
+
+ p0.eq	br		srxirq7
 		lb		r1,hs:UART_MC
 		andi	r1,r1,#$FE		; turn off DTR
 		sb		r1,hs:UART_MC

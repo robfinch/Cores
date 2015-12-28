@@ -26,8 +26,10 @@
 DBG_DS		= $5000
 DBG_ATTR	= %000011000_111111110_0000000000
 
-DBGBuf		EQU		$00
-DBGBufndx	EQU		$80
+		bss
+		org		$1000
+DBGBuf		fill.b	84,0
+DBGBufndx	db		0
 
 		code
 		org		$FFFFD000
@@ -39,11 +41,12 @@ DBGBufndx	EQU		$80
 ;------------------------------------------------------------------------------
 
 public Debugger:
-		ldi		r30,#$2bf8
-		addui	r30,r30,#-24
-		sws		c1,zs:[r30]
-		sws		ds,zs:8[r30]
-		sws		ds.lmt,zs:16[r30]
+		sys		#190				; save context
+		ldi		sp,#$2bf8
+		addui	sp,sp,#-24
+		sws		c1,[sp]
+		sws		ds,8[sp]
+		sws		ds.lmt,16[sp]
 		ldis	ds,#DBG_DS
 		ldis	ds.lmt,#$8000
 		sync
@@ -64,7 +67,7 @@ public Debugger:
 		mov		r2,r0
 		ldi		r5,#$FFFF8000
 		bsr		Disassem20
-		br		Debugger_exit
+;		br		Debugger_exit
 
 promptAgain:
 		; Clear input buffer
@@ -89,7 +92,7 @@ p0.ltu	br		.0001
 		; some other character, store in buffer if it will fit
 		lbu		r3,DBGBufndx
 		cmpi	p3,r3,#80		; max 80 chars
-p3.ltu	br		DBGDispChar
+p3.ltu	bsr		DBGDispChar
 p3.ltu	sb		r1,DBGBuf[r3]
 p3.ltu	addui	r3,r3,#1
 p3.ltu	sb		r3,DBGBufndx
@@ -107,6 +110,7 @@ p0.eq	br		.0001
 		addui	r1,r1,#-1
 		mov		r3,r0
 		stmov.bi	[r4],[r1],r3
+
 		br		.0001
 .processInput:
 		mov		r4,r0
@@ -120,15 +124,16 @@ p0.leu	br		.0002
 		cmpi	p0,r1,#'D'
 p0.eq	addui	r4,r4,#1
 p0.eq	br		DoDisassem
+		cmpi	p0,r1,#'M'
+p0.eq	br		DBGDumpMem
 		cmpi	p0,r1,#'x'
 p0.eq	br		Debugger_exit
 		br		promptAgain
 Debugger_exit:
-		lws		c1,zs:[r30]
-		lws		ds,zs:8[r30]
-		lws		ds.lmt,zs:16[r30]
-		sync
-		addui	r30,r30,#24
+		lws		c1,[sp]
+		lws		ds,8[sp]
+		lws		ds.lmt,16[sp]
+		sys		#191			; restore context
 		rts
 endpublic
 
@@ -145,6 +150,55 @@ p0.eq	br		promptAgain
 		br		promptAgain
 
 ;------------------------------------------------------------------------------
+; Dump memory bytes
+; M <start address>
+;------------------------------------------------------------------------------
+
+DBGDumpMem:
+		addui	r4,r4,#1			; advance a character past 'M'
+		bsr		DBGGetHexNumber
+		mov		r12,r1
+		tst		p0,r8
+p0.eq	jmp		PromptAgain
+		bsr		VBClearScreen2
+		addui	r13,r12,#200
+		ldi		r6,#2
+		mov		r2,r0
+.0002:
+		mov		r14,r0
+		ldi		r1,#'>'
+		bsr		DBGDispChar
+		mov		r4,r12
+		bsr		DBGDisplayHalf
+.0001:
+		bsr		space1
+		lbu		r4,zs:[r12+r14]
+		bsr		DBGDisplayByte
+		addui	r14,r14,#1
+		cmpi	p0,r14,#8
+p0.ltu	br		.0001
+		bsr		space1
+		mov		r14,r0
+		bsr		ReverseVideo		; reverse video attribute
+.0003:
+		lbu		r1,zs:[r12+r14]
+		cmpi	p0,r1,#' '
+p0.ltu	ldi		r1,#'.'
+		bsr		DBGDispChar
+		addui	r14,r14,#1
+		cmpi	p0,r14,#8
+p0.ltu	br		.0003
+		bsr		ReverseVideo		; put video back to normal
+		addui	r6,r6,#1
+		addu	r12,r12,r14
+		cmp		p0,r12,r13
+p0.ltu	br		.0002
+		jmp		promptAgain
+		
+;------------------------------------------------------------------------------
+; DBGGetHexNumber:
+;	Get a hexi-decimal number from the input buffer.
+;
 ; Parameters:
 ;	r4 = text pointer (updated)
 ; Returns:
@@ -153,11 +207,16 @@ p0.eq	br		promptAgain
 ;------------------------------------------------------------------------------
 
 DBGGetHexNumber:
-		addui	r30,r30,#-8
-		sws		c1,[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldis	lc,#80			; max 80 chars
 		mov		r7,r0			; working accum.
 		mov		r8,r0			; number of digits
+.0003:
+		lbu		r1,[r4]			; skip leading spaces
+		cmpi	p0,r1,#' '
+p0.leu	addui	r4,r4,#1
+p0.leu	br		.0003
 .0002:
 		lbu		r1,[r4]
 		bsr		DBGCharToHex
@@ -170,26 +229,31 @@ p0.eq	br		.0001
 		loop	.0002
 .0001:
 		mov		r1,r7
-		lws		c1,[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
+; DBGCharToHex:
+;	Convert a single ascii character to hex nybble.
+; Parameters:
+;	r1 = ascii character to convert
+; Returns:
+;	r1 = binary nybble
+;	r3 = 1 if conversion successful, 0 otherwise
 ;------------------------------------------------------------------------------
 
 DBGCharToHex:
 		cmpi	p0,r1,#'0'
-.0002:
-p0.ltu	mov		r3,r0
-p0.ltu	br		.exit
+p0.ltu	br		.0004
 		cmpi	p0,r1,#'9'
 p0.gtu	br		.0001
-		subui	r1,r1,#'0'
+		addui	r1,r1,#-'0'
 		ldi		r3,#1
 		rts
 .0001:
 		cmpi	p0,r1,#'A'
-p0.ltu	br		.0002
+p0.ltu	br		.0004
 		cmpi	p0,r1,#'F'
 p0.gtu	br		.0003
 		subui	r1,r1,#'A'-10
@@ -197,7 +261,7 @@ p0.gtu	br		.0003
 		rts
 .0003:
 		cmpi	p0,r1,#'a'
-p0.ltu	br		.0002
+p0.ltu	br		.0004
 		cmpi	p0,r1,#'f'
 p0.gtu	br		.0004
 		subui	r1,r1,#'a'-10
@@ -212,21 +276,22 @@ p0.gtu	br		.0004
 ;------------------------------------------------------------------------------
 
 public DebugIRQ:
-		ldi		r30,#$2bf8
-		addui	r30,r30,#-104
-		sws		c1,zs:[r30]
-		sws		ds,zs:8[r30]
-		sws		ds.lmt,zs:16[r30]
-		sw		r1,zs:24[r30]
-		sw		r2,zs:32[r30]
-		sw		r3,zs:40[r30]
-		sw		r4,zs:48[r30]
-		sw		r5,zs:56[r30]
-		sw		r6,zs:64[r30]
-		sw		r7,zs:72[r30]
-		sw		r8,zs:80[r30]
-		sw		r9,zs:88[r30]
-		sw		r10,zs:96[r30]
+		sw		sp,reg_save+8*27
+		ldi		sp,#$2bf8
+		addui	sp,sp,#-104
+		sws		c1,[sp]
+		sws		ds,8[sp]
+		sws		ds.lmt,16[sp]
+		sw		r1,24[sp]
+		sw		r2,32[sp]
+		sw		r3,40[sp]
+		sw		r4,48[sp]
+		sw		r5,56[sp]
+		sw		r6,64[sp]
+		sw		r7,72[sp]
+		sw		r8,80[sp]
+		sw		r9,88[sp]
+		sw		r10,96[sp]
 
 		ldis	ds,#DBG_DS
 		ldis	ds.lmt,#$8000
@@ -239,19 +304,20 @@ public DebugIRQ:
 		mfspr	r5,dpc
 		bsr		Disassem20
 
-		lws		c1,zs:[r30]
-		lws		ds,zs:8[r30]
-		lws		ds.lmt,zs:16[r30]
-		lw		r1,zs:24[r30]
-		lw		r2,zs:32[r30]
-		lw		r3,zs:40[r30]
-		lw		r4,zs:48[r30]
-		lw		r5,zs:56[r30]
-		lw		r6,zs:64[r30]
-		lw		r7,zs:72[r30]
-		lw		r8,zs:80[r30]
-		lw		r9,zs:88[r30]
-		lw		r10,zs:96[r30]
+		lws		c1,[sp]
+		lws		ds,8[sp]
+		lws		ds.lmt,16[sp]
+		lw		r1,24[sp]
+		lw		r2,32[sp]
+		lw		r3,40[sp]
+		lw		r4,48[sp]
+		lw		r5,56[sp]
+		lw		r6,64[sp]
+		lw		r7,72[sp]
+		lw		r8,80[sp]
+		lw		r9,88[sp]
+		lw		r10,96[sp]
+		lw		sp,reg_save+8*27
 		rtd	
 endpublic
 
@@ -260,8 +326,8 @@ endpublic
 ;------------------------------------------------------------------------------
 
 Disassem20:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldis	lc,#19
 		ldi		r6,#3
 .0001:
@@ -269,16 +335,16 @@ Disassem20:
 		addu	r5,r5,r10
 		addui	r6,r6,#1
 		loop	.0001
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 DBGPrompt:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		mov		r2,r0
 		ldi		r1,#'D'
 		bsr		DBGDispChar
@@ -288,17 +354,17 @@ DBGPrompt:
 		bsr		DBGDispChar
 		ldi		r1,#'>'
 		bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 Disassem:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sws		c2,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sws		c2,8[sp]
 		ldi		r2,#1				; column one
 		bsr		DisplayAddr
 		bsr		DisplayBytes
@@ -359,9 +425,9 @@ p0.geu  br		.0002
 ;		mtspr	c2,r1
 ;		jsr		[c2]
 .exit:
-		lws		c1,zs:[r30]
-		lws		c2,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lws		c2,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ;------------------------------------------------------------------------------
@@ -369,78 +435,78 @@ p0.geu  br		.0002
 ;------------------------------------------------------------------------------
 
 DisplayAddr:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		mov		r4,r5
 		bsr		DBGDisplayHalf
 		bsr		space3
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 space1:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r1,#' '
 		bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 space3:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		bsr		space1
 		bsr		space1
 		bsr		space1
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 DBGDisplayHalf:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		rori	r4,r4,#16
 		bsr		DBGDisplayCharr
 		roli	r4,r4,#16
 		bsr		DBGDisplayCharr
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 DBGDisplayCharr:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		rori	r4,r4,#8
 		bsr		DBGDisplayByte
 		roli	r4,r4,#8
 		bsr		DBGDisplayByte
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 DBGDisplayByte:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		rori	r4,r4,#4
 		bsr		DBGDisplayNybble
 		roli	r4,r4,#4
 		bsr		DBGDisplayNybble
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 DBGDisplayNybble:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		andi	r1,r4,#15
 		cmpi	p0,r1,#9
 p0.gtu	addui	r1,r1,#7
 		addui	r1,r1,#'0'
 		bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -457,21 +523,21 @@ p0.gtu	addui	r1,r1,#7
 ;------------------------------------------------------------------------------
 
 DBGDispChar:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]			; save return address
-		sw		r7,zs:8[r30]		; save r7 work register
+		addui	sp,sp,#-16
+		sws		c1,[sp]				; save return address
+		sw		r7,8[sp]			; save r7 work register
 		andi	r1,r1,#$7F			; make sure in range
 		bsr		VBAsciiToScreen		; convert to screen char
 		ori		r1,r1,#DBG_ATTR		; add in attribute
 		lcu		r7,Textcols			; figure out memory index
 		mulu	r7,r6,r7			; row * num cols
-		_4addui	r7,r7,#$FFD10000	; + text base + (row * num cols) * 4
+		_4addui	r7,r7,#$10000	; + text base + (row * num cols) * 4
 		_4addu	r7,r2,r7			; + column * 4
-		sh		r1,zs:[r7]			; store the char
+		sh		r1,hs:[r7]			; store the char
 		addui	r2,r2,#1			; increment text position
-		lws		c1,zs:[r30]			; restore return address
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]				; restore return address
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ;------------------------------------------------------------------------------
@@ -479,9 +545,9 @@ DBGDispChar:
 ;------------------------------------------------------------------------------
 
 DBGDispString:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		mov		r7,r1
 .0001:
 		lbu		r1,zs:[r7]
@@ -491,9 +557,9 @@ p0.eq	br		.0002
 		addui	r7,r7,#1
 		br		.0001
 .0002:
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 		
 ;------------------------------------------------------------------------------
@@ -550,10 +616,10 @@ endpublic
 ;------------------------------------------------------------------------------
 
 DisplayBytes:
-		addui	r30,r30,#-24
-		sws		c1,zs:[r30]
-		sws		lc,zs:8[r30]
-		sw		r7,zs:16[r30]
+		addui	sp,sp,#-24
+		sws		c1,[sp]
+		sws		lc,8[sp]
+		sw		r7,16[sp]
 		sei
 		ldi		r31,#INT_STACK
 		bsr		DBGGetInsnLength
@@ -568,10 +634,10 @@ DisplayBytes:
 		bsr		space1			; skip a space
 		addui	r7,r7,#1		; increment offset to next byte
 		loop	.next
-		lws		c1,zs:[r30]
-		lws		lc,zs:8[r30]
-		lw		r7,zs:16[r30]
-		addui	r30,r30,#24
+		lws		c1,[sp]
+		lws		lc,8[sp]
+		lw		r7,16[sp]
+		addui	sp,sp,#24
 		rts
 
 ;------------------------------------------------------------------------------
@@ -581,8 +647,8 @@ DisplayBytes:
 ;------------------------------------------------------------------------------
 
 DBGDisplayPred:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		lbu		r1,zs:[r5]
 		cmpi	p0,r1,#$00		; brk special
 p0.eq	br		.noDisp	
@@ -619,8 +685,8 @@ p0.eq	br		.noDisp
 .noDisp:
 		addui	r2,r2,#7
 .exit
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -628,8 +694,8 @@ p0.eq	br		.noDisp
 ;------------------------------------------------------------------------------
 
 DBGDispCond:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		andi	r7,r1,#15
 		addu	r7,r7,r7
 		addu	r7,r7,r1
@@ -639,8 +705,8 @@ DBGDispCond:
 		bsr		DBGDispChar
 		lbu		r1,cs:DBGPredCons+2[r7]
 		bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -650,8 +716,8 @@ DBGDispCond:
 ;------------------------------------------------------------------------------
 
 DBGDisplayMne:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		bsr		space1
 		; Mnemonics are always at least 2 chars
 		lbu		r1,cs:[r3]
@@ -676,8 +742,8 @@ p1.ne	br		.exit
 		bsr		DBGDispChar
 .exit:
 		addui	r2,r2,#1			; 1 space
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -685,9 +751,9 @@ p1.ne	br		.exit
 ;------------------------------------------------------------------------------
 
 DBGDispReg:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		mov		r7,r1
 		ldi		r1,#'r'
 DBGDispBx1:
@@ -699,9 +765,9 @@ p0.geu	bsr		DBGDispChar
 		modui	r1,r7,#10
 		addui	r1,r1,#'0'
 		bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ;------------------------------------------------------------------------------
@@ -709,9 +775,9 @@ p0.geu	bsr		DBGDispChar
 ;------------------------------------------------------------------------------
 
 DBGDispBReg:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		mov		r7,r1
 		ldi		r1,#'b'
 		br		DBGDispBx1
@@ -721,9 +787,9 @@ DBGDispBReg:
 ;------------------------------------------------------------------------------
 
 DBGDispSpr:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		addu	r7,r1,r1
 		addu	r7,r7,r1			; r7 = r1 * 3
 		lbu		r1,cs:DBGSpr[r7]
@@ -733,21 +799,21 @@ DBGDispSpr:
 		lbu		r1,cs:DBGSpr+2[r7]
 		cmpi	p0,r1,#' '
 p0.ne	bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 DBGComma:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r1,#','
 		bsr		DBGDispChar
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -755,8 +821,8 @@ DBGComma:
 ;------------------------------------------------------------------------------
 
 DBGDispTstregs:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:1[r5]
 		andi	r1,r1,#15
@@ -765,13 +831,13 @@ DBGDispTstregs:
 		lbu		r1,zs:2[r5]
 		andi	r1,r1,#$3f
 		bsr		DBGDispReg
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 DBGDispCmpregs:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:1[r5]
 		andi	r1,r1,#15
@@ -788,13 +854,13 @@ DBGDispCmpregs:
 		shli	r7,r7,#2
 		or		r1,r7,r1
 		bsr		DBGDispReg
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 DBGDispBrDisp:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:1[r5]
 		lbu		r7,zs:2[r5]
@@ -806,13 +872,13 @@ DBGDispBrDisp:
 		ldi		r1,#'$'
 		bsr		DBGDispChar
 		bsr		DBGDispHalf
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 DBGDispCmpimm:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:1[r5]
 		andi	r1,r1,#15
@@ -832,15 +898,15 @@ DBGDispCmpimm:
 		ldi		r1,#'$'
 		bsr		DBGDispChar
 		bsr		DBGDispHalf
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ; Used by mtspr
 DBGDispSprRx:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:2[r5]
 		lbu		r7,zs:3[r5]
@@ -853,17 +919,17 @@ DBGDispSprRx:
 		lbu		r1,zs:2[r5]
 		andi	r1,r1,#63
 		bsr		DBGDispReg
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ; Format #4
 ;
 DBGDispRxRxRx:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:3[r5]
 		shrui	r1,r1,#4
@@ -884,17 +950,17 @@ DBGDispRxRxRx:
 		shli	r7,r7,#2
 		or		r1,r7,r1
 		bsr		DBGDispReg
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ; Format #5
 ;
 DBGDispRxRx:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:2[r5]
 		shrui	r1,r1,#6
@@ -907,17 +973,17 @@ DBGDispRxRx:
 		lbu		r1,zs:2[r5]
 		andi	r1,r1,#63
 		bsr		DBGDispReg
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ; Format #6
 ;
 DBGDispPxPxPx:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r7,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r7,8[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:3[r5]
 		shrui	r1,r1,#4
@@ -938,9 +1004,9 @@ DBGDispPxPxPx:
 		shli	r7,r7,#2
 		or		r1,r7,r1
 		bsr		DBGDispBReg
-		lws		c1,zs:[r30]
-		lw		r7,zs:8[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		lw		r7,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ; Format #7
@@ -951,8 +1017,8 @@ DBGDispNone:
 ; Format #8 (biti)
 ;
 DBGDispPxRxImm:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
 		ldi		r2,#54			; tab out to column 54
 		lbu		r1,zs:2[r5]
 		shrui	r1,r1,#6
@@ -961,35 +1027,35 @@ DBGDispPxRxImm:
 		_4addu	r1,r7,r1
 		bsr		DBgDispSpr	
 		bsr		DBGComma
-		lbu		r1,2[r5]
+		lbu		r1,zs:2[r5]
 		andi	r1,r1,#63
 		bsr		DBgDispReg
 		bsr		DBGComma
-		lbu		r1,3[r5]
+		lbu		r1,zs:3[r5]
 		shrui	r1,r1,#4
-		lbu		r7,4[r5]
+		lbu		r7,zs:4[r5]
 		_16addu	r1,r7,r1
 		bsr		DBGDispImm
-		lws		c1,zs:[r30]
-		addui	r30,r30,#16
+		lws		c1,[sp]
+		addui	sp,sp,#16
 		rts
 
 ; Format #9 (adduis)
 ;
 DBGDispRxImm:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
-		lbu		r1,2[r5]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
+		lbu		r1,zs:2[r5]
 		andi	r1,r1,#63
 		bsr		DBGDispReg
 		bsr		DBGComma
-		lbu		r1,2[r2]
+		lbu		r1,zs:2[r2]
 		shrui	r1,r1,#6
-		lbu		r7,3[r2]
+		lbu		r7,zs:3[r2]
 		_4addu	r1,r7,r1
 		bsr		DBGDispImm
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -997,9 +1063,9 @@ DBGDispRxImm:
 ;------------------------------------------------------------------------------
 
 DBGDispImm:
-		addui	r30,r30,#-16
-		sws		c1,zs:[r30]
-		sw		r4,zs:8[r30]
+		addui	sp,sp,#-16
+		sws		c1,[sp]
+		sw		r4,8[sp]
 		mov		r4,r1
 		ldi		r1,#'#'
 		bsr		DBGDispChar
@@ -1013,9 +1079,9 @@ p0.gtu	bsr		DBGDisplayCharr
 p0.gtu	br		.exit
 		bsr		DBGDisplayByte
 .exit:
-		lw		c1,zs:[r30]
-		lw		r4,zs:8[r30]
-		addui	r30,r30,#16
+		lw		c1,[sp]
+		lw		r4,8[sp]
+		addui	sp,sp,#16
 		rts
 
 ;------------------------------------------------------------------------------
@@ -1071,24 +1137,24 @@ gfA:
 ;------------------------------------------------------------------------------
 
 DBGRamTest:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		ldi		r10,#$AAAAAAAA
 		ldi		r11,#$55555555
 		bsr		DBGRamTest1
 		ldi		r10,#$55555555
 		ldi		r11,#$AAAAAAAA
 		bsr		DBGRamTest1
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 DBGRamTest1:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 
 		mov		r1,r10
 		mov		r3,r11
@@ -1096,8 +1162,8 @@ DBGRamTest1:
 		ldi		lc,#$3FF3FF		; (32MB - 24kB)/8 - 1
 		mov		r8,r0
 .0001:
-		sh		r1,[r5]
-		sh		r3,4[r5]
+		sh		r1,zs:[r5]
+		sh		r3,zs:4[r5]
 		addui	r5,r5,#8
 		andi	r4,r5,#$FFF
 		tst		p0,r4
@@ -1110,8 +1176,8 @@ p0.eq	bsr		DBGDisplayCharr
 		ldi		r5,#$6000
 		ldi		lc,#$3FF3FF		; (32MB - 24kB)/8 - 1
 .0002:
-		lh		r1,[r5]
-		lh		r3,4[r5]
+		lh		r1,zs:[r5]
+		lh		r3,zs:4[r5]
 		cmp		p0,r1,r10
 p0.ne	mov		r7,r1
 p0.ne	bsr		DBGBadRam
@@ -1126,8 +1192,8 @@ p0.eq	ldi		r2,#0
 p0.eq	ldi		r6,#1
 p0.eq	bsr		DBGDisplayCharr
 		loop	.0002
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 ;------------------------------------------------------------------------------
@@ -1135,8 +1201,8 @@ p0.eq	bsr		DBGDisplayCharr
 ;------------------------------------------------------------------------------
 
 DBGBadRam:
-		addui	r30,r30,#-8
-		sws		c1,zs:[r30]
+		addui	sp,sp,#-8
+		sws		c1,[sp]
 		lla		r1,cs:msgBadRam
 		ldi		r2,#0
 		ldi		r6,#2
@@ -1151,12 +1217,25 @@ DBGBadRam:
 		andi	r8,r8,#15
 		cmpi	p0,r8,#15
 p0.eq	ldis	lc,#1
-		lws		c1,zs:[r30]
-		addui	r30,r30,#8
+		lws		c1,[sp]
+		addui	sp,sp,#8
 		rts
 
 msgBadRam:
 	byte	"Menory failed at: ",0
+
+;------------------------------------------------------------------------------
+; Reverse the video attribute.
+;------------------------------------------------------------------------------
+
+ReverseVideo:
+		lhu		r1,NormAttr
+		shrui	r2,r1,#9
+		shli	r3,r1,#9
+		andi	r2,r2,#%111111111_0000000000
+		andi	r3,r3,#%111111111_000000000_0000000000
+		or		r1,r2,r3
+		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------

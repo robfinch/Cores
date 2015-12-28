@@ -178,6 +178,13 @@ cold_start:
 		ldi		r2,#254
 		bsr		set_vector
 
+		lla		r1,cs:svc_jmp
+		ldi		r2,#190
+		bsr		set_vector
+		lla		r1,cs:rsc_jmp
+		ldi		r2,#191
+		bsr		set_vector
+
 		; setup MSI vector
 		sh		r0,Milliseconds
 		lla		r1,cs:msi_jmp
@@ -256,7 +263,7 @@ j1:
 		sc		r1,hs:LEDS
 		sb		r0,EscState
 		bsr		SerialInit
-;		bsr		Debugger
+		bsr		Debugger
 		ldi		r2,#msgStartup
 		ldis	lc,#msgStartupEnd-msgStartup-1
 j3:
@@ -288,6 +295,8 @@ j2:
 ; Monitor
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+
+Monitor:
 		lla		r1,cs:msgMonitor
 		bsr		VBDisplayString
 
@@ -299,17 +308,22 @@ j2:
 		bsr		VBDisplayChar
 		ldi		r1,#'$'
 		bsr		VBDisplayChar
+		bsr		CursorOn
 .getkey:
 		bsr		KeybdGetCharWait
 		bsr		VBDisplayChar
 		cmpi	p0,r1,#CR
 p0.ne	br		.getkey
+		bsr		CursorOff
 		lcu		r1,CursorY
 		lcu		r7,Textcols
 		mtspr	lc,r7				; use loop counter as safety
 		mulu	r10,r1,r7			; pos = row * cols
 		_4addu	r10,r10,r0			; pos *= 4
+.0001:
 		bsr		MonGetch1			; get character skipping spaces
+		cmpi	p0,r1,#'$'			; skip over prompt
+p0.eq	br		.0001
 		cmpi	p0,r1,#'d'			; debug ?
 p0.eq	bsr		Debugger
 		br		.prompt
@@ -416,6 +430,133 @@ set_vector:
 		lh		r3,zs:12[r1]
 		sh		r3,zs:12[r2]
 		rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+save_context:
+		sw		r1,reg_save+8*1
+		sw		r2,reg_save+8*2
+		sw		r3,reg_save+8*3
+		sw		r4,reg_save+8*4
+		sw		r5,reg_save+8*5
+		sw		r6,reg_save+8*6
+		sw		r7,reg_save+8*7
+		sw		r8,reg_save+8*8
+		sw		r9,reg_save+8*9
+		sw		r10,reg_save+8*10
+		sw		r11,reg_save+8*11
+		sw		r12,reg_save+8*12
+		sw		r13,reg_save+8*13
+		sw		r14,reg_save+8*14
+		sw		r15,reg_save+8*15
+		sw		r16,reg_save+8*16
+		sw		r17,reg_save+8*17
+		sw		r18,reg_save+8*18
+		sw		r19,reg_save+8*19
+		sw		r20,reg_save+8*20
+		sw		r21,reg_save+8*21
+		sw		r22,reg_save+8*22
+		sw		r23,reg_save+8*23
+		sw		r24,reg_save+8*24
+		sw		r25,reg_save+8*25
+		sw		r26,reg_save+8*26
+		sw		r27,reg_save+8*27
+		sw		r28,reg_save+8*28
+		sw		r29,reg_save+8*29
+		sw		r30,reg_save+8*30
+		sw		r31,reg_save+8*31
+		sws		ds,sreg_save+8*1
+		sws		es,sreg_save+8*2
+		sws		fs,sreg_save+8*3
+		sws		gs,sreg_save+8*4
+		sws		hs,sreg_save+8*5
+		sws		ss,sreg_save+8*6
+		sws		cs,sreg_save+8*7
+		sws		ds.lmt,sreg_save+8*9
+		sws		es.lmt,sreg_save+8*10
+		sws		fs.lmt,sreg_save+8*11
+		sws		gs.lmt,sreg_save+8*12
+		sws		hs.lmt,sreg_save+8*13
+		sws		ss.lmt,sreg_save+8*14
+		sws		cs.lmt,sreg_save+8*15
+		sws		c1,creg_save+8*1
+		sws		c2,creg_save+8*2
+		sws		c3,creg_save+8*3
+		sws		c4,creg_save+8*4
+		sws		c5,creg_save+8*5
+		sws		c6,creg_save+8*6
+		sws		c7,creg_save+8*7
+		sws		c8,creg_save+8*8
+		sws		c9,creg_save+8*9
+		sws		c10,creg_save+8*10
+		sws		c11,creg_save+8*11
+		sws		c13,creg_save+8*13
+		sws		c14,creg_save+8*14
+		sws		pregs,preg_save
+		rte
+
+restore_context:
+		lw		r1,reg_save+8*1
+		lw		r2,reg_save+8*2
+		lw		r3,reg_save+8*3
+		lw		r4,reg_save+8*4
+		lw		r5,reg_save+8*5
+		lw		r6,reg_save+8*6
+		lw		r7,reg_save+8*7
+		lw		r8,reg_save+8*8
+		lw		r9,reg_save+8*9
+		lw		r10,reg_save+8*10
+		lw		r11,reg_save+8*11
+		lw		r12,reg_save+8*12
+		lw		r13,reg_save+8*13
+		lw		r14,reg_save+8*14
+		lw		r15,reg_save+8*15
+		lw		r16,reg_save+8*16
+		lw		r17,reg_save+8*17
+		lw		r18,reg_save+8*18
+		lw		r19,reg_save+8*19
+		lw		r20,reg_save+8*20
+		lw		r21,reg_save+8*21
+		lw		r22,reg_save+8*22
+		lw		r23,reg_save+8*23
+		lw		r24,reg_save+8*24
+		lw		r25,reg_save+8*25
+		lw		r26,reg_save+8*26
+		lw		r27,reg_save+8*27
+		lw		r28,reg_save+8*28
+		lw		r29,reg_save+8*29
+		lw		r30,reg_save+8*30
+		lw		r31,reg_save+8*31
+		lws		ds,sreg_save+8*1
+		lws		es,sreg_save+8*2
+		lws		fs,sreg_save+8*3
+		lws		gs,sreg_save+8*4
+		lws		hs,sreg_save+8*5
+		lws		ss,sreg_save+8*6
+		lws		cs,sreg_save+8*7
+		lws		ds.lmt,sreg_save+8*9
+		lws		es.lmt,sreg_save+8*10
+		lws		fs.lmt,sreg_save+8*11
+		lws		gs.lmt,sreg_save+8*12
+		lws		hs.lmt,sreg_save+8*13
+		lws		ss.lmt,sreg_save+8*14
+		lws		cs.lmt,sreg_save+8*15
+		lws		c1,creg_save+8*1
+		lws		c2,creg_save+8*2
+		lws		c3,creg_save+8*3
+		lws		c4,creg_save+8*4
+		lws		c5,creg_save+8*5
+		lws		c6,creg_save+8*6
+		lws		c7,creg_save+8*7
+		lws		c8,creg_save+8*8
+		lws		c9,creg_save+8*9
+		lws		c10,creg_save+8*10
+		lws		c11,creg_save+8*11
+;		lws		c13,creg_save+8*13
+		lws		c14,creg_save+8*14
+		lws		pregs,preg_save
+		rte
 
 .include "video.asm"
 .include "keyboard.asm"
@@ -636,6 +777,12 @@ ser_jmp:
 		align	8
 dbe_jmp:
 		jmp		dbe_rout[c0]
+		align	8
+svc_jmp:
+		jmp		save_context
+		align	8
+rsc_jmp:
+		jmp		restore_context
 
 ;------------------------------------------------------------------------------
 ; Reset Point

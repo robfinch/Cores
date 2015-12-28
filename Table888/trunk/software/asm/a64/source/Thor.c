@@ -2036,7 +2036,7 @@ static void process_br(int oc)
     emit_insn(disp & 0xff);
     if (disp >= -2048 && disp < 2047)
        ;
-    else if (pass > 3) {
+    else if (pass > 4) {
          printf("%d Branch out of range.\r\n", lineno);
          printf("%.300s\r\n", inptr-150);
     }
@@ -2062,7 +2062,7 @@ static void process_loop(int oc)
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(disp & 0xff);
-    if (disp < -128 || disp > 127)
+    if ((disp < -128 || disp > 127) && pass > 4)
        printf("%d: loop target too far away.\r\n");
 }
 
@@ -2750,7 +2750,7 @@ static void process_rts(int oc)
         emit_insn(val1);
         return;
      }
-     if (val > 0) {
+     if (val > 0 || predicate!=0x01) {
         emit_first(predicate);
         emit_insn(0xA3);
         emit_insn(0x10|val);

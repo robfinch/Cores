@@ -249,6 +249,9 @@ reg        iqentry_lla  [0:7];  // load linear address
 reg        iqentry_tlb  [0:7];
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_jmpi [0:7];
+reg        iqentry_sync [0:7];  // sync instruction
+reg        iqentry_memsb[0:7];
+reg        iqentry_memdb[0:7];
 reg        iqentry_fp   [0:7];  // is an floating point operation
 reg        iqentry_rfw	[0:7];	// writes to register file
 reg [DBW-1:0] iqentry_res	[0:7];	// instruction result
@@ -1120,8 +1123,8 @@ Thor_regfile2w6r #(DBW) urf1
 (
 	.clk(clk),
 	.rclk(~clk),
-	.wr0(commit0_v && ~commit0_tgt[6] && iqentry_op[head0]!=`MTSPR),
-	.wr1(commit1_v && ~commit1_tgt[6] && iqentry_op[head1]!=`MTSPR),
+	.wr0(commit0_v && ~commit0_tgt[6]),
+	.wr1(commit1_v && ~commit1_tgt[6]),
 	.wa0(commit0_tgt[5:0]),
 	.wa1(commit1_tgt[5:0]),
 	.ra0(pRa0[5:0]),
@@ -1362,14 +1365,28 @@ fnIsStoreString =
 	opcode==`STS;
 endfunction
 
+reg [DBW-1:0] branch_pc;
 wire xbr = iqentry_br[head0] | iqentry_br[head1];
 wire takb = iqentry_br[head0] ? commit0_v : commit1_v;
 wire [DBW-1:0] xbrpc = iqentry_br[head0] ? iqentry_pc[head0] : iqentry_pc[head1];
 
-wire predict_takenA,predict_takenB,predict_takenC,predict_takenD;
+wire predict_taken0;
+wire predict_taken1;
 
-// There are really only two branch tables required one for fetchbuf0 and one
-// for fetchbuf1. Synthesis removes the extra tables.
+// This is really just a single history table with three read ports.
+// One for fetchbuf0, one for fetchbuf1 and one for the branch_pc.
+// Ideally, there really needs to be two write ports as well (for
+// head0 and head1).
+// There is only a single write port for branches committing at
+// head0 or head1. If there are two branches one after the other
+// in code, then the prediction will be off because the taken/
+// not taken status for the second branch won't be updated. It
+// doesn't happen that often that branches are piled together and
+// executing during the same clock cycle.
+// There's usually at least an intervening compare operation.
+// Needs more work yet.
+//
+// ToDo: add return address stack predictor.
 //
 Thor_BranchHistory #(DBW) ubhtA
 (
@@ -1377,10 +1394,10 @@ Thor_BranchHistory #(DBW) ubhtA
 	.clk(clk),
 	.advanceX(xbr),
 	.xisBranch(xbr),
-	.pc(pc),
+	.pc(branch_pc),
 	.xpc(xbrpc),
 	.takb(takb),
-	.predict_taken(predict_takenA)
+	.predict_taken(predict_takenBr)
 );
 
 Thor_BranchHistory #(DBW) ubhtB
@@ -1389,12 +1406,25 @@ Thor_BranchHistory #(DBW) ubhtB
 	.clk(clk),
 	.advanceX(xbr),
 	.xisBranch(xbr),
-	.pc(pc+fnInsnLength(insn)),
+	.pc(fetchbuf0_pc),
 	.xpc(xbrpc),
 	.takb(takb),
-	.predict_taken(predict_takenB)
+	.predict_taken(predict_taken0)
 );
 
+Thor_BranchHistory #(DBW) ubhtC
+(
+	.rst(rst_i),
+	.clk(clk),
+	.advanceX(xbr),
+	.xisBranch(xbr),
+	.pc(fetchbuf1_pc),
+	.xpc(xbrpc),
+	.takb(takb),
+	.predict_taken(predict_taken1)
+);
+
+/*
 Thor_BranchHistory #(DBW) ubhtC
 (
 	.rst(rst_i),
@@ -1418,7 +1448,7 @@ Thor_BranchHistory #(DBW) ubhtD
 	.takb(takb),
 	.predict_taken(predict_takenD)
 );
-
+*/
 Thor_icachemem #(DBW) uicm1
 (
 	.wclk(clk),
@@ -1889,10 +1919,10 @@ begin
 	fetchbuf1_pc    <= (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 end
 
-wire [7:0] opcodeA = fetchbufA_instr[`OPCODE];
-wire [7:0] opcodeB = fetchbufB_instr[`OPCODE];
-wire [7:0] opcodeC = fetchbufC_instr[`OPCODE];
-wire [7:0] opcodeD = fetchbufD_instr[`OPCODE];
+wire [7:0] opcodeA = fnOpcode(fetchbufA_instr);
+wire [7:0] opcodeB = fnOpcode(fetchbufB_instr);
+wire [7:0] opcodeC = fnOpcode(fetchbufC_instr);
+wire [7:0] opcodeD = fnOpcode(fetchbufD_instr);
 
 function fnIsMem;
 input [7:0] opcode;
@@ -2414,19 +2444,17 @@ else
 	endcase
 endfunction
 
-assign fetchbuf0_mem	= fetchbuf ? fnIsMem(opcodeC) : fnIsMem(opcodeA);
+assign fetchbuf0_mem	= fnIsMem(opcode0);
 assign fetchbuf0_jmp   = fnIsFlowCtrl(opcode0);
 assign fetchbuf0_fp		= fnIsFP(opcode0);
-assign fetchbuf0_rfw	= fetchbuf ? fnIsRFW(opcodeC,fetchbufC_instr) : fnIsRFW(opcodeA,fetchbufA_instr);
-assign fetchbuf0_pfw	= fetchbuf ? fnIsPFW(opcodeC) : fnIsPFW(opcodeA);
-assign fetchbuf1_mem	= fetchbuf ? fnIsMem(opcodeD) : fnIsMem(opcodeB);
+assign fetchbuf0_rfw	= fnIsRFW(opcode0,fetchbuf0_instr);
+assign fetchbuf0_pfw	= fnIsPFW(opcode0);
+assign fetchbuf1_mem	= fnIsMem(opcode1);
 assign fetchbuf1_jmp   = fnIsFlowCtrl(opcode1);
 assign fetchbuf1_fp		= fnIsFP(opcode1);
-assign fetchbuf1_rfw	= fetchbuf ? fnIsRFW(opcodeD,fetchbufD_instr) : fnIsRFW(opcodeB,fetchbufB_instr);
-assign fetchbuf1_pfw    = fetchbuf ? fnIsPFW(opcodeD) : fnIsPFW(opcodeB);
+assign fetchbuf1_rfw	= fnIsRFW(opcode1,fetchbuf1_instr);
+assign fetchbuf1_pfw    = fnIsPFW(opcode1);
 
-wire predict_taken0 = fetchbuf ? predict_takenC : predict_takenA;
-wire predict_taken1 = fetchbuf ? predict_takenD : predict_takenB;
 //
 // set branchback and backpc values ... ignore branches in fetchbuf slots not ready for enqueue yet
 //
@@ -2439,10 +2467,6 @@ assign take_branch1 = ({fetchbuf1_v, fnIsBranch(opcode1), predict_taken1}  == {`
 assign take_branch = take_branch0 || take_branch1
         ;
 
-reg [DBW-1:0] branch_pc;// =
-//		({fetchbuf0_v, fnIsBranch(opcode0), predict_taken0}  == {`VAL, `TRUE, `TRUE}) ? (ihit ?
-//			fetchbuf0_pc + {{DBW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3 : fetchbuf0_pc):
-//			(ihit ? fetchbuf1_pc + {{DBW-12{fetchbuf1_instr[11]}},fetchbuf1_instr[11:8],fetchbuf1_instr[23:16]} + 64'd3 : fetchbuf1_pc);
 always @*
 if (fnIsBranch(opcode0) && fetchbuf0_v && predict_taken0) begin
     branch_pc <= fetchbuf0_pc + {{ABW-12{fetchbuf0_instr[11]}},fetchbuf0_instr[11:8],fetchbuf0_instr[23:16]} + 64'd3;
@@ -2857,6 +2881,8 @@ endgenerate
 // The (old) simulator didn't handle the asynchronous race loop properly in the 
 // original code. It would issue two instructions to the same islot. So the
 // issue logic has been re-written to eliminate the asynchronous loop.
+// Can't issue to the ALU if it's busy doing a long running operation like a 
+// divide.
 always @*//(could_issue or head0 or head1 or head2 or head3 or head4 or head5 or head6 or head7)
 begin
 	iqentry_issue = 8'h00;
@@ -2873,65 +2899,65 @@ begin
 		iqentry_islot[head0] = 2'b00;
 	end
 	else if (could_issue[head1] & !iqentry_fp[head1]  & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC))
+	&& !(iqentry_v[head0] && iqentry_sync[head0]))
 	begin
 		iqentry_issue[head1] = `TRUE;
 		iqentry_islot[head1] = 2'b00;
 	end
 	else if (could_issue[head2] & !iqentry_fp[head2] & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
 	)
 	begin
 		iqentry_issue[head2] = `TRUE;
 		iqentry_islot[head2] = 2'b00;
 	end
 	else if (could_issue[head3] & !iqentry_fp[head3] & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
 	) begin
 		iqentry_issue[head3] = `TRUE;
 		iqentry_islot[head3] = 2'b00;
 	end
 	else if (could_issue[head4] & !iqentry_fp[head4] & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
 	) begin
 		iqentry_issue[head4] = `TRUE;
 		iqentry_islot[head4] = 2'b00;
 	end
 	else if (could_issue[head5] & !iqentry_fp[head5] & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
 	) begin
 		iqentry_issue[head5] = `TRUE;
 		iqentry_islot[head5] = 2'b00;
 	end
 	else if (could_issue[head6] & !iqentry_fp[head6] & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
-	&& !(iqentry_v[head5] && iqentry_op[head5]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
+	&& !(iqentry_v[head5] && iqentry_sync[head5])
 	) begin
 		iqentry_issue[head6] = `TRUE;
 		iqentry_islot[head6] = 2'b00;
 	end
 	else if (could_issue[head7] & !iqentry_fp[head7] & alu0_idle
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
-	&& !(iqentry_v[head5] && iqentry_op[head5]==`SYNC)
-	&& !(iqentry_v[head6] && iqentry_op[head6]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
+	&& !(iqentry_v[head5] && iqentry_sync[head5])
+	&& !(iqentry_v[head6] && iqentry_sync[head6])
 	) begin
 		iqentry_issue[head7] = `TRUE;
 		iqentry_islot[head7] = 2'b00;
@@ -2941,15 +2967,15 @@ begin
     // instruction.
 	if (could_issue[head1] && !iqentry_fp[head1] && !iqentry_issue[head1] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head1],iqentry_fn[head1])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC))
+	&& !(iqentry_v[head0] && iqentry_sync[head0]))
 	begin
 		iqentry_issue[head1] = `TRUE;
 		iqentry_islot[head1] = 2'b01;
 	end
 	else if (could_issue[head2] && !iqentry_fp[head2] && !iqentry_issue[head2] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head2],iqentry_fn[head2])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
 	)
 	begin
 		iqentry_issue[head2] = `TRUE;
@@ -2957,55 +2983,55 @@ begin
 	end
 	else if (could_issue[head3] & !iqentry_fp[head3] && !iqentry_issue[head3] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head3],iqentry_fn[head3])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
 	) begin
 		iqentry_issue[head3] = `TRUE;
 		iqentry_islot[head3] = 2'b01;
 	end
 	else if (could_issue[head4] & !iqentry_fp[head4] && !iqentry_issue[head4] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head4],iqentry_fn[head4])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
 	) begin
 		iqentry_issue[head4] = `TRUE;
 		iqentry_islot[head4] = 2'b01;
 	end
 	else if (could_issue[head5] & !iqentry_fp[head5] && !iqentry_issue[head5] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head5],iqentry_fn[head5])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
 	) begin
 		iqentry_issue[head5] = `TRUE;
 		iqentry_islot[head5] = 2'b01;
 	end
 	else if (could_issue[head6] & !iqentry_fp[head6] && !iqentry_issue[head6] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head6],iqentry_fn[head6])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
-	&& !(iqentry_v[head5] && iqentry_op[head5]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
+	&& !(iqentry_v[head5] && iqentry_sync[head5])
 	) begin
 		iqentry_issue[head6] = `TRUE;
 		iqentry_islot[head6] = 2'b01;
 	end
 	else if (could_issue[head7] & !iqentry_fp[head7] && !iqentry_issue[head7] & alu1_idle
 	&& !fnIsAlu0Op(iqentry_op[head7],iqentry_fn[head7])
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
-	&& !(iqentry_v[head5] && iqentry_op[head5]==`SYNC)
-	&& !(iqentry_v[head6] && iqentry_op[head6]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
+	&& !(iqentry_v[head5] && iqentry_sync[head5])
+	&& !(iqentry_v[head6] && iqentry_sync[head6])
 	) begin
 		iqentry_issue[head7] = `TRUE;
 		iqentry_islot[head7] = 2'b01;
@@ -3033,15 +3059,15 @@ begin
 		fpispot = head0;
 	end
 	else if (could_issue[head1] & iqentry_fp[head1]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC))
+	&& !(iqentry_v[head0] && iqentry_sync[head0]))
 	begin
 		iqentry_fpissue[head1] = `TRUE;
 		iqentry_fpislot[head1] = 2'b00;
 		fpispot = head1;
 	end
 	else if (could_issue[head2] & iqentry_fp[head2]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
 	)
 	begin
 		iqentry_fpissue[head2] = `TRUE;
@@ -3049,55 +3075,55 @@ begin
 		fpispot = head2;
 	end
 	else if (could_issue[head3] & iqentry_fp[head3]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
 	) begin
 		iqentry_fpissue[head3] = `TRUE;
 		iqentry_fpislot[head3] = 2'b00;
 		fpispot = head3;
 	end
 	else if (could_issue[head4] & iqentry_fp[head4]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
 	) begin
 		iqentry_fpissue[head4] = `TRUE;
 		iqentry_fpislot[head4] = 2'b00;
 		fpispot = head4;
 	end
 	else if (could_issue[head5] & iqentry_fp[head5]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
 	) begin
 		iqentry_fpissue[head5] = `TRUE;
 		iqentry_fpislot[head5] = 2'b00;
 		fpispot = head5;
 	end
 	else if (could_issue[head6] & iqentry_fp[head6]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
-	&& !(iqentry_v[head5] && iqentry_op[head5]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
+	&& !(iqentry_v[head5] && iqentry_sync[head5])
 	) begin
 		iqentry_fpissue[head6] = `TRUE;
 		iqentry_fpislot[head6] = 2'b00;
 		fpispot = head6;
 	end
 	else if (could_issue[head7] & iqentry_fp[head7]
-	&& !(iqentry_v[head0] && iqentry_op[head0]==`SYNC)
-	&& !(iqentry_v[head1] && iqentry_op[head1]==`SYNC)
-	&& !(iqentry_v[head2] && iqentry_op[head2]==`SYNC)
-	&& !(iqentry_v[head3] && iqentry_op[head3]==`SYNC)
-	&& !(iqentry_v[head4] && iqentry_op[head4]==`SYNC)
-	&& !(iqentry_v[head5] && iqentry_op[head5]==`SYNC)
-	&& !(iqentry_v[head6] && iqentry_op[head6]==`SYNC)
+	&& !(iqentry_v[head0] && iqentry_sync[head0])
+	&& !(iqentry_v[head1] && iqentry_sync[head1])
+	&& !(iqentry_v[head2] && iqentry_sync[head2])
+	&& !(iqentry_v[head3] && iqentry_sync[head3])
+	&& !(iqentry_v[head4] && iqentry_sync[head4])
+	&& !(iqentry_v[head5] && iqentry_sync[head5])
+	&& !(iqentry_v[head6] && iqentry_sync[head6])
 	) begin
 		iqentry_fpissue[head7] = `TRUE;
 		iqentry_fpislot[head7] = 2'b00;
@@ -3161,9 +3187,9 @@ assign iqentry_memissue_head1 =	~iqentry_stomp[head1] && iqentry_memready[ head1
 				// ... and, if it is a SW, there is no chance of it being undone
 				&& (fnIsStore(iqentry_op[head1]) ? !fnIsFlowCtrl(iqentry_op[head0])
 				&& !fnCanException(iqentry_op[head0],iqentry_fn[head0]) : `TRUE)
-				&& (iqentry_op[head1]!=`CAS)
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB) 
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
+				&& (!iqentry_cas[head1])
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0]) 
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 
@@ -3181,12 +3207,12 @@ assign iqentry_memissue_head2 =	~iqentry_stomp[head2] && iqentry_memready[ head2
 				    !fnIsFlowCtrl(iqentry_op[head0]) && !fnCanException(iqentry_op[head0],iqentry_fn[head0]) && 
 				    !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) 
 				    : `TRUE)
-				&& (iqentry_op[head2]!=`CAS)
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
+				&& (!iqentry_cas[head2])
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0])
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_memdb[head1])
 				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-				&& !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB)
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
+				&& !(iqentry_v[head1] && iqentry_memsb[head1])
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 //					(   !fnIsFlowCtrl(iqentry_op[head0])
@@ -3210,15 +3236,15 @@ assign iqentry_memissue_head3 =	~iqentry_stomp[head3] && iqentry_memready[ head3
                     !fnIsFlowCtrl(iqentry_op[head1]) && !fnCanException(iqentry_op[head1],iqentry_fn[head1]) &&
                     !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) 
                     : `TRUE)
-				&& (iqentry_op[head3]!=`CAS)
+				&& (!iqentry_cas[head3])
 				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0])
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_memdb[head1])
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_memdb[head2])
 				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB)
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                && !(iqentry_v[head2] && iqentry_memsb[head2])
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 /*					(   !fnIsFlowCtrl(iqentry_op[head0])
@@ -3247,17 +3273,17 @@ assign iqentry_memissue_head4 =	~iqentry_stomp[head4] && iqentry_memready[ head4
                     !fnIsFlowCtrl(iqentry_op[head2]) && !fnCanException(iqentry_op[head2],iqentry_fn[head2]) && 
                     !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3],iqentry_fn[head3]) 
                     : `TRUE)
-				&& (iqentry_op[head4]!=`CAS)
+				&& (!iqentry_cas[head4])
 				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0])
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_memdb[head1])
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_memdb[head2])
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_memdb[head3])
 				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB)
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                && !(iqentry_v[head3] && iqentry_memsb[head3])
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 /* ||
@@ -3292,19 +3318,19 @@ assign iqentry_memissue_head5 =	~iqentry_stomp[head5] && iqentry_memready[ head5
                     !fnIsFlowCtrl(iqentry_op[head3]) && !fnCanException(iqentry_op[head3],iqentry_fn[head3]) && 
                     !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4],iqentry_fn[head4]) 
                     : `TRUE)
-				&& (iqentry_op[head5]!=`CAS)
+				&& (!iqentry_cas[head5])
 				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0])
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_memdb[head1])
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_memdb[head2])
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_memdb[head3])
+				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_memdb[head4])
 				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB)
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                && !(iqentry_v[head3] && iqentry_memsb[head3]) 
+                && !(iqentry_v[head4] && iqentry_memsb[head4])
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 /*||
@@ -3344,21 +3370,21 @@ assign iqentry_memissue_head6 =	~iqentry_stomp[head6] && iqentry_memready[ head6
                     !fnIsFlowCtrl(iqentry_op[head4]) && !fnCanException(iqentry_op[head4],iqentry_fn[head4]) && 
                     !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5],iqentry_fn[head5]) 
                     : `TRUE)
-				&& (iqentry_op[head6]!=`CAS)
+				&& (!iqentry_cas[head6])
 				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
-				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_op[head5]==`MEMDB)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0])
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_memdb[head1])
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_memdb[head2])
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_memdb[head3])
+				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_memdb[head4])
+				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_memdb[head5])
 				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
-                && !(iqentry_v[head5] && iqentry_op[head5]==`MEMSB)
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                && !(iqentry_v[head3] && iqentry_memsb[head3]) 
+                && !(iqentry_v[head4] && iqentry_memsb[head4]) 
+                && !(iqentry_v[head5] && iqentry_memsb[head5])
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 				/*||
@@ -3403,23 +3429,23 @@ assign iqentry_memissue_head7 =	~iqentry_stomp[head7] && iqentry_memready[ head7
                     !fnIsFlowCtrl(iqentry_op[head5]) && !fnCanException(iqentry_op[head5],iqentry_fn[head5]) && 
                     !fnIsFlowCtrl(iqentry_op[head6]) && !fnCanException(iqentry_op[head6],iqentry_fn[head6]) 
                     : `TRUE)
-				&& (iqentry_op[head7]!=`CAS)
+				&& (!iqentry_cas[head7])
 				// ... and there is no memory barrier
-				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_op[head0]==`MEMDB)
-				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_op[head1]==`MEMDB)
-				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_op[head2]==`MEMDB)
-				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_op[head3]==`MEMDB)
-				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_op[head4]==`MEMDB)
-				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_op[head5]==`MEMDB)
-				&& !(iqentry_v[head6] && fnIsMem(iqentry_op[head6]) && iqentry_op[head6]==`MEMDB)
+				&& !(iqentry_v[head0] && fnIsMem(iqentry_op[head0]) && iqentry_memdb[head0])
+				&& !(iqentry_v[head1] && fnIsMem(iqentry_op[head1]) && iqentry_memdb[head1])
+				&& !(iqentry_v[head2] && fnIsMem(iqentry_op[head2]) && iqentry_memdb[head2])
+				&& !(iqentry_v[head3] && fnIsMem(iqentry_op[head3]) && iqentry_memdb[head3])
+				&& !(iqentry_v[head4] && fnIsMem(iqentry_op[head4]) && iqentry_memdb[head4])
+				&& !(iqentry_v[head5] && fnIsMem(iqentry_op[head5]) && iqentry_memdb[head5])
+				&& !(iqentry_v[head6] && fnIsMem(iqentry_op[head6]) && iqentry_memdb[head6])
 				// ... and there is no instruction barrier
-				&& !(iqentry_v[head0] && iqentry_op[head0]==`MEMSB) 
-                && !(iqentry_v[head1] && iqentry_op[head1]==`MEMSB) 
-                && !(iqentry_v[head2] && iqentry_op[head2]==`MEMSB) 
-                && !(iqentry_v[head3] && iqentry_op[head3]==`MEMSB) 
-                && !(iqentry_v[head4] && iqentry_op[head4]==`MEMSB) 
-                && !(iqentry_v[head5] && iqentry_op[head5]==`MEMSB) 
-                && !(iqentry_v[head6] && iqentry_op[head6]==`MEMSB)
+				&& !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                && !(iqentry_v[head3] && iqentry_memsb[head3]) 
+                && !(iqentry_v[head4] && iqentry_memsb[head4]) 
+                && !(iqentry_v[head5] && iqentry_memsb[head5]) 
+                && !(iqentry_v[head6] && iqentry_memsb[head6])
 				&& cstate==IDLE && !dcache_access_pending && dram0==0
 				;
 
@@ -3456,32 +3482,15 @@ generate
 begin : memr
     for (g = 0; g < QENTRIES; g = g + 1)
     begin
-assign iqentry_memopsvalid[g] = (iqentry_mem[g] & iqentry_a2_v[g] & iqentry_a3_v[g] & iqentry_agen[g]);
-assign iqentry_memready[g] = (iqentry_v[g] & iqentry_memopsvalid[g] & ~iqentry_memissue[g] & !iqentry_issue[g] & ~iqentry_done[g] & ~iqentry_out[g] & ~iqentry_stomp[g]);
+assign iqentry_memopsvalid[g] = (iqentry_mem[g] & iqentry_a2_v[g] & iqentry_a3_v[g] & iqentry_agen[g] & iqentry_T_v[g]);
+assign iqentry_memready[g] = (iqentry_v[g] & iqentry_memopsvalid[g] & ~iqentry_memissue[g] /*& !iqentry_issue[g]*/ & ~iqentry_done[g] & ~iqentry_out[g] & ~iqentry_stomp[g]);
     end
 end
 endgenerate
 
 /*
 assign
-    iqentry_memopsvalid[0] = (iqentry_mem[0] & iqentry_a2_v[0] & iqentry_a3_v[0] & iqentry_agen[0]),
-	iqentry_memopsvalid[1] = (iqentry_mem[1] & iqentry_a2_v[1] & iqentry_a3_v[1] & iqentry_agen[1]),
-	iqentry_memopsvalid[2] = (iqentry_mem[2] & iqentry_a2_v[2] & iqentry_a3_v[2] & iqentry_agen[2]),
-	iqentry_memopsvalid[3] = (iqentry_mem[3] & iqentry_a2_v[3] & iqentry_a3_v[3] & iqentry_agen[3]),
-	iqentry_memopsvalid[4] = (iqentry_mem[4] & iqentry_a2_v[4] & iqentry_a3_v[4] & iqentry_agen[4]),
-	iqentry_memopsvalid[5] = (iqentry_mem[5] & iqentry_a2_v[5] & iqentry_a3_v[5] & iqentry_agen[5]),
-	iqentry_memopsvalid[6] = (iqentry_mem[6] & iqentry_a2_v[6] & iqentry_a3_v[6] & iqentry_agen[6]),
-	iqentry_memopsvalid[7] = (iqentry_mem[7] & iqentry_a2_v[7] & iqentry_a3_v[7] & iqentry_agen[7]);
-
-assign
     iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_memissue[0] & ~iqentry_done[0] & ~iqentry_out[0] & ~iqentry_stomp[0]),
-	iqentry_memready[1] = (iqentry_v[1] & iqentry_memopsvalid[1] & ~iqentry_memissue[1] & ~iqentry_done[1] & ~iqentry_out[1] & ~iqentry_stomp[1]),
-	iqentry_memready[2] = (iqentry_v[2] & iqentry_memopsvalid[2] & ~iqentry_memissue[2] & ~iqentry_done[2] & ~iqentry_out[2] & ~iqentry_stomp[2]),
-	iqentry_memready[3] = (iqentry_v[3] & iqentry_memopsvalid[3] & ~iqentry_memissue[3] & ~iqentry_done[3] & ~iqentry_out[3] & ~iqentry_stomp[3]),
-	iqentry_memready[4] = (iqentry_v[4] & iqentry_memopsvalid[4] & ~iqentry_memissue[4] & ~iqentry_done[4] & ~iqentry_out[4] & ~iqentry_stomp[4]),
-	iqentry_memready[5] = (iqentry_v[5] & iqentry_memopsvalid[5] & ~iqentry_memissue[5] & ~iqentry_done[5] & ~iqentry_out[5] & ~iqentry_stomp[5]),
-	iqentry_memready[6] = (iqentry_v[6] & iqentry_memopsvalid[6] & ~iqentry_memissue[6] & ~iqentry_done[6] & ~iqentry_out[6] & ~iqentry_stomp[6]),
-	iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]);
 */
 assign outstanding_stores = (dram0 && fnIsStore(dram0_op)) || (dram1 && fnIsStore(dram1_op)) || (dram2 && fnIsStore(dram2_op));
 
@@ -3497,13 +3506,7 @@ assign mem_issue =
     iqentry_memissue_head7
     ;
 
-wire [DBW-1:0] argA	= iqentry_a1_v[n] ? iqentry_a1[n]
-					: (iqentry_a1_s[n] == alu0_id) ? alu0_bus
-					: (iqentry_a1_s[n] == alu1_id) ? alu1_bus
-					: (iqentry_a1_s[n] == commit1_id) ? commit1_bus
-					: (iqentry_a1_s[n] == commit0_id) ? commit0_bus
-					: 64'hDEADDEADDEADDEAD;
-
+// Nybble slices for predicate register forwarding
 wire [3:0] alu0nyb[0:15];
 wire [3:0] alu1nyb[0:15];
 wire [3:0] cmt0nyb[0:15];
@@ -3522,20 +3525,10 @@ end
 endgenerate
 
 //`include "Thor_commit_combo.v"
-// If trying to write to two branch registers at once, or trying to write 
-// to two predicate registers at once, then limit the processor to single
-// commit.
-// The processor does not support writing two registers in the same register
-// group at the same time for anything other than the general purpose
-// registers. It is possible for the processor to write to two diffent groups
-// at the same time.
-//assign limit_cmt = (iqentry_rfw[head0] && iqentry_rfw[head1] && iqentry_tgt[head0][8]==1'b1 && iqentry_tgt[head1][8]==1'b1);
-assign limit_cmt = 1'b0;
-//assign committing2 = (iqentry_v[head0] && iqentry_v[head1] && !limit_cmt) || (head0 != tail0 && head1 != tail0);
 
 assign commit0_v = ({iqentry_v[head0], iqentry_done[head0]} == 2'b11 && ~|panic);
 assign commit1_v = ({iqentry_v[head0], iqentry_done[head0]} != 2'b10 
-		&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic && !limit_cmt);
+		&& {iqentry_v[head1], iqentry_done[head1]} == 2'b11 && ~|panic);
 
 assign commit0_id = {iqentry_mem[head0], head0};	// if a memory op, it has a DRAM-bus id
 assign commit1_id = {iqentry_mem[head1], head1};	// if a memory op, it has a DRAM-bus id
@@ -3994,7 +3987,7 @@ else if (take_branch) begin
 			// Note that there is no point to loading C,D here because
 			// there is a predicted taken branch that would stomp on the
 			// instructions anyways.
-			if ((fnIsBranch(opcodeA) && predict_takenA)||opcodeA==`LOOP) begin
+			if ((fnIsBranch(opcodeA) && predict_takenBr)||opcodeA==`LOOP) begin
 				pc <= branch_pc;
 				fetchbufA_v <= !(queued1|queued2);
 				fetchbufB_v <= `INV;		// stomp on it
@@ -4074,7 +4067,7 @@ else if (take_branch) begin
                     panic <= `PANIC_INVALIDIQSTATE;
 			end
 		4'b1100:
-			if ((fnIsBranch(opcodeC) && predict_takenC)||opcodeC==`LOOP) begin
+			if ((fnIsBranch(opcodeC) && predict_takenBr)||opcodeC==`LOOP) begin
 				pc <= branch_pc;
 				fetchbufC_v <= !(queued1|queued2);
 				fetchbufD_v <= `INV;		// stomp on it
@@ -5682,7 +5675,7 @@ begin
         $stop;
     if (fetchbuf0_pc==32'hF44)
         $stop;
-    if (fetchbuf0_pc==32'hFFFFD83C)
+    if (fetchbuf0_pc==32'hFFFFD09B)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -5747,6 +5740,9 @@ begin
     iqentry_tlb  [tail]    <=   opcode0==`TLB;
     iqentry_jmp  [tail]    <=   fetchbuf0_jmp;
     iqentry_jmpi [tail]    <=   opcode0==`JMPI || opcode0==`JMPIX;
+    iqentry_sync [tail]    <=   opcode0==`SYNC;
+    iqentry_memsb[tail]    <=   opcode0==`MEMSB;
+    iqentry_memdb[tail]    <=   opcode0==`MEMDB;
     iqentry_fp   [tail]    <=   fetchbuf0_fp;
     iqentry_rfw  [tail]    <=   fetchbuf0_rfw;
     iqentry_tgt  [tail]    <=   Rt0;
@@ -5820,6 +5816,9 @@ begin
     iqentry_tlb  [tail]    <=   1'b0;
     iqentry_jmp  [tail]    <=   1'b0;
     iqentry_jmpi [tail]    <=   1'b0;
+    iqentry_sync [tail]    <=   1'b0;
+    iqentry_memsb[tail]    <=   1'b0;
+    iqentry_memdb[tail]    <=   1'b0;
     iqentry_fp   [tail]    <=   1'b0;
     iqentry_rfw  [tail]    <=   1'b1;
     iqentry_tgt  [tail]    <=   7'd27;
@@ -5912,7 +5911,7 @@ begin
         $stop;
     if (fetchbuf1_pc==32'hF44)
         $stop;
-    if (fetchbuf1_pc==32'hFFFFD83C)
+    if (fetchbuf1_pc==32'hFFFFD09B)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -5978,6 +5977,9 @@ begin
     iqentry_tlb  [tail]    <=   opcode1==`TLB;
     iqentry_jmp  [tail]    <=   fetchbuf1_jmp;
     iqentry_jmpi [tail]    <=   opcode1==`JMPI || opcode1==`JMPIX;
+    iqentry_sync [tail]    <=   opcode1==`SYNC;
+    iqentry_memsb[tail]    <=   opcode1==`MEMSB;
+    iqentry_memdb[tail]    <=   opcode1==`MEMDB;
     iqentry_fp   [tail]    <=   fetchbuf1_fp;
     iqentry_rfw  [tail]    <=   fetchbuf1_rfw;
     iqentry_tgt  [tail]    <=   Rt1;
