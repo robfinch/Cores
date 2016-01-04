@@ -25,35 +25,48 @@ UART_SPR        EQU     0xC0A0F
 ; Initialize UART
 ;------------------------------------------------------------------------------
 
+		align	8
+ser_jmp:
+		jmp		SerialIRQ[c0]
+
 SerialInit:
-    ldis    hs,#$FFD00000
-;	ldi		r1,#$0218DEF4	; constant for clock multiplier with 18.75MHz clock for 9600 baud
-;	ldi		r1,#$03254E6E	; constant for clock multiplier with 12.5MHz clock for 9600 baud
-	ldi		r1,#$00C9539B	; constant for clock multiplier with 50.0MHz clock for 9600 baud
-    shrui   r1,r1,#8          ; drop the LSB (not used)
-    sb      r1,hs:UART_CM1
-    shrui   r1,r1,#8
-    sb      r1,hs:UART_CM2
-    shrui   r1,r1,#8
-    sb      r1,hs:UART_CM3
-    sb      r0,hs:UART_CTRL     ; no hardware flow control
-	sc		r0,Uart_rxhead		; reset buffer indexes
-	sc		r0,Uart_rxtail
-	ldi		r1,#0x1f0
-	sc		r1,Uart_foff		; set threshold for XOFF
-	ldi		r1,#0x010
-	sc		r1,Uart_fon			; set threshold for XON
-	ldi		r1,#1
-	sb		r1,hs:UART_IE		; enable receive interrupt only
-	sb		r0,Uart_rxrts		; no RTS/CTS signals available
-	sb		r0,Uart_txrts		; no RTS/CTS signals available
-	sb		r0,Uart_txdtr		; no DTR signals available
-	sb		r0,Uart_rxdtr		; no DTR signals available
-	ldi		r1,#1
-	sb		r1,Uart_txxon		; for now
-	ldi		r1,#1
-;	sb		r1,SERIAL_SEMA
-    rts
+		addui	sp,sp,#-8
+		sws		c1,[sp]
+		ldis    hs,#$FFD00000
+		ldis	hs.lmt,#$100000
+;		ldi		r1,#$0218DEF4	; constant for clock multiplier with 18.75MHz clock for 9600 baud
+;		ldi		r1,#$03254E6E	; constant for clock multiplier with 12.5MHz clock for 9600 baud
+		ldi		r1,#$00C9539B	; constant for clock multiplier with 50.0MHz clock for 9600 baud
+		shrui   r1,r1,#8          ; drop the LSB (not used)
+		sb      r1,hs:UART_CM1
+		shrui   r1,r1,#8
+		sb      r1,hs:UART_CM2
+		shrui   r1,r1,#8
+		sb      r1,hs:UART_CM3
+		sb      r0,hs:UART_CTRL     ; no hardware flow control
+		sc		r0,Uart_rxhead		; reset buffer indexes
+		sc		r0,Uart_rxtail
+		ldi		r1,#0x1f0
+		sc		r1,Uart_foff		; set threshold for XOFF
+		ldi		r1,#0x010
+		sc		r1,Uart_fon			; set threshold for XON
+		ldi		r1,#1
+		sb		r1,hs:UART_IE		; enable receive interrupt only
+		sb		r0,Uart_rxrts		; no RTS/CTS signals available
+		sb		r0,Uart_txrts		; no RTS/CTS signals available
+		sb		r0,Uart_txdtr		; no DTR signals available
+		sb		r0,Uart_rxdtr		; no DTR signals available
+		ldi		r1,#1
+		sb		r1,Uart_txxon		; for now
+		ldi		r1,#1
+;		sb		r1,SERIAL_SEMA
+		; setup IRQ vector
+		lla		r1,cs:ser_jmp
+		ldi		r2,#199
+		bsr		set_vector
+		lws		c1,[sp]
+		addui	sp,sp,#8
+		rts
 
 ;---------------------------------------------------------------------------------
 ; Get character directly from serial port. Blocks until a character is available.
@@ -250,14 +263,17 @@ sgcfifo1:
 ;
 SerialIRQ:
 		sync
-		ldi     r31,#INT_STACK-48
+		addui	r31,r31,#-64
 		sw		r1,[r31]
 		sw		r2,8[r31]
 		sw		r4,16[r31]
 		sws		p0,24[r31]
 		sw		r3,32[r31]
 		sws		c1,40[r31]
+		sws		hs,48[r31]
+		sws		hs.lmt,56[r31]
 		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
 
 		lb      r1,hs:UART_IS  ; get interrupt status
 		tst		p0,r1
@@ -277,6 +293,9 @@ sirq1:
 		lws		p0,24[r31]
 		lw		r3,32[r31]
 		lws		c1,40[r31]
+		lws		hs,48[r31]
+		lws		hs.lmt,56[r31]
+		addui	r31,r31,#64
 		sync
 		rti
 

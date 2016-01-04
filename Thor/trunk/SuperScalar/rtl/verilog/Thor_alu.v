@@ -357,7 +357,7 @@ case(alu_op)
             case(alu_fn)
             2'd0: begin     // ICMP
                 o1[0] = alu_argA == alu_argB;
-                o1[1] = alu_argAs < alu_argBs;
+                o1[1] = ($signed(alu_argA) < $signed(alu_argB));
                 o1[2] = alu_argA < alu_argB;
                 o1[3] = 1'b0;
     			o <= {16{o1}};
@@ -385,14 +385,14 @@ case(alu_op)
 8'h20,8'h21,8'h22,8'h23,8'h24,8'h25,8'h26,8'h27,8'h28,8'h29,8'h2A,8'h2B,8'h2C,8'h2D,8'h2E,8'h2f:
 	begin
 			o1[0] = alu_argA == alu_argI;
-			o1[1] = alu_argAs < alu_argIs;
+			o1[1] = ($signed(alu_argA) < $signed(alu_argI));
 			o1[2] = alu_argA < alu_argI;
 			o1[3] = 1'b0;
 			o <= {16{o1}};
 		end
 `LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`SB,`SC,`SH,`SW,`CAS,`LVB,`LVC,`LVH,`LVW,`STI,
-`LWS,`SWS,`RTS2,`STS,`STFND,`STCMP,`PUSH:
+`LWS,`SWS,`STS,`STFND,`STCMP,`PUSH:
             begin
 				o <= alu_argA + alu_argC + alu_argI;
 		    end

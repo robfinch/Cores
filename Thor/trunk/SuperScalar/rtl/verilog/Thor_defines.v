@@ -37,6 +37,8 @@
 //`define DEBUG_LOGIC     1'b1
 //`define THREEWAY    1'b1
 //`define TRAP_ILLEGALOPS 1'b1
+//`define PRIVCHKS        1'b1
+//`define PCHIST      1'b1      // Primarily for debugging the processor
 
 `define TRUE	1'b1
 `define FALSE	1'b0
@@ -119,6 +121,7 @@
 `define ROLI			6'h14
 `define RORI			6'h15
 `define MODI        8'h5B
+`define LEA         8'h5C
 `define MODUI       8'h5F
 
 `define LLA         8'h6A       // compute linear address

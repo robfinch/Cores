@@ -32,7 +32,7 @@ DBGBuf		fill.b	84,0
 DBGBufndx	db		0
 
 		code
-		org		$FFFFD000
+		org		$FFFFC800
 
 ;------------------------------------------------------------------------------
 ; r2 = text output column
@@ -49,30 +49,29 @@ public Debugger:
 		sws		ds.lmt,16[sp]
 		ldis	ds,#DBG_DS
 		ldis	ds.lmt,#$8000
+		sws		ds,zs:IOFocusNdx_
 		sync
+		bsr		KeybdClearBuf
 		bsr		VideoInit2
-		bsr		VBClearScreen2
-		ldi		r1,#1
-		mov		r2,r0
+		bsr		VBClearScreen
+		mov		r1,r0				; row = 0
+		mov		r2,r0				; col = 0
 		ldi		r6,#2				; set cursor pos
-		sys		#10
-		mov		r6,r0
-		lla		r1,cs:msgDebugger
-		bsr		DBGDispString
+		sys		#10					; call video BIOS
 ;		bsr		DBGRamTest
 		lla		r1,cs:msgDebugger	; convert address to linear
 		ldi		r6,#$14				; Try display string
-		sys		#10
+		sys		#10					; call video BIOS
 		mov		r6,r0
 		mov		r2,r0
 		ldi		r5,#$FFFF8000
-		bsr		Disassem20
+		bsr		DBGDisassem20
 ;		br		Debugger_exit
 
 promptAgain:
 		; Clear input buffer
 		sb		r0,DBGBufndx
-		ldis	lc,#$20
+		ldis	lc,#$14			; (21-1)*4
 		ldi		r1,#DBGBuf
 		ldi		r2,#0			; 
 		stset.hi	r2,[r1]		; clear the buffer
@@ -85,7 +84,7 @@ promptAgain:
 		bsr		KeybdGetCharWait
 		cmpi	p0,r1,#CR
 p0.eq	br		.processInput
-		cmpi	p0,r1,#BS
+		cmpi	p0,r1,#_BS
 p0.eq	br		.backspace
 		cmpi	p0,r1,#' '
 p0.ltu	br		.0001
@@ -133,6 +132,7 @@ Debugger_exit:
 		lws		c1,[sp]
 		lws		ds,8[sp]
 		lws		ds.lmt,16[sp]
+		sws		ds,zs:IOFocusNdx_
 		sys		#191			; restore context
 		rts
 endpublic
@@ -146,7 +146,7 @@ DoDisassem:
 p0.eq	br		promptAgain
 		mov		r5,r1
 		bsr		VBClearScreen2
-		bsr		Dissassem20
+		bsr		DBGDisassem20
 		br		promptAgain
 
 ;------------------------------------------------------------------------------
@@ -159,7 +159,7 @@ DBGDumpMem:
 		bsr		DBGGetHexNumber
 		mov		r12,r1
 		tst		p0,r8
-p0.eq	jmp		PromptAgain
+p0.eq	jmp		promptAgain
 		bsr		VBClearScreen2
 		addui	r13,r12,#200
 		ldi		r6,#2
@@ -302,7 +302,7 @@ public DebugIRQ:
 		ldi		r1,#msgDebugger
 		bsr		DBGDispString
 		mfspr	r5,dpc
-		bsr		Disassem20
+		bsr		DBGDisassem20
 
 		lws		c1,[sp]
 		lws		ds,8[sp]
@@ -325,7 +325,7 @@ endpublic
 ; Disassemble 20 lines of code.
 ;------------------------------------------------------------------------------
 
-Disassem20:
+DBGDisassem20:
 		addui	sp,sp,#-8
 		sws		c1,[sp]
 		ldis	lc,#19
@@ -871,7 +871,7 @@ DBGDispBrDisp:
 		addu	r4,r1,r5		; instruction address
 		ldi		r1,#'$'
 		bsr		DBGDispChar
-		bsr		DBGDispHalf
+		bsr		DBGDisplayHalf
 		lws		c1,[sp]
 		addui	sp,sp,#8
 		rts
@@ -897,7 +897,7 @@ DBGDispCmpimm:
 		bsr		DBGDispChar
 		ldi		r1,#'$'
 		bsr		DBGDispChar
-		bsr		DBGDispHalf
+		bsr		DBGDisplayHalf
 		lws		c1,[sp]
 		addui	sp,sp,#8
 		rts
@@ -1025,11 +1025,11 @@ DBGDispPxRxImm:
 		lbu		r7,zs:3[r5]
 		andi	r7,r7,#3
 		_4addu	r1,r7,r1
-		bsr		DBgDispSpr	
+		bsr		DBGDispSpr	
 		bsr		DBGComma
 		lbu		r1,zs:2[r5]
 		andi	r1,r1,#63
-		bsr		DBgDispReg
+		bsr		DBGDispReg
 		bsr		DBGComma
 		lbu		r1,zs:3[r5]
 		shrui	r1,r1,#4

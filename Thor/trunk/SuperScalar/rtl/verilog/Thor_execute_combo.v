@@ -119,28 +119,28 @@ assign alu1_abort = !alu1_cmt;
 
 always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc or alu0_bt)
     case(alu0_op)
-    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI:
+    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI,`RTS2:
         alu0_misspc <= alu0_argA + alu0_argI;
     `LOOP,`SYNC:
         alu0_misspc <= alu0_pc + alu0_insnsz;
-    `RTS,`RTS2:
+    `RTS:
         alu0_misspc <= alu0_argA + alu0_fn[3:0];
     `SYS,`INT:
-        alu0_misspc <= {4'hF,alu0_argA + {alu0_argI[DBW-5:0],4'b0}};
+        alu0_misspc <= {1'b1,alu0_argA + alu0_argI};
     default:
         alu0_misspc <= (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI);
     endcase
 
 always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc or alu1_bt)
     case(alu1_op)
-    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI:
+    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI,`RTS2:
         alu1_misspc <= alu1_argA + alu1_argI;
     `LOOP,`SYNC:
         alu1_misspc <= alu1_pc + alu1_insnsz;
-    `RTS,`RTS2:
+    `RTS:
         alu1_misspc <= alu1_argA + alu1_fn[3:0];
     `SYS,`INT:
-        alu1_misspc <= {4'hF,alu1_argA + {alu1_argI[DBW-5:0],4'b0}};
+        alu1_misspc <= {1'b1,alu1_argA + alu1_argI};
     default:
         alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
     endcase
@@ -193,14 +193,14 @@ assign  alu1_exc =  (fnIsKMOnly(alu1_op) && !km) ? `EXC_PRIV :
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
 		  : !alu0_cmt ? (alu0_op==`LOOP)
-		  : (alu0_cmtw && (alu0_op==`SYNC || alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ ||
+		  : (alu0_cmt && (alu0_op==`SYNC || alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ ||
 		     alu0_op==`SYS || alu0_op==`INT ||
 		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op==`RTD || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argA == 64'd0)))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
 		  : !alu1_cmt ? (alu1_op==`LOOP)
-		  : (alu1_cmtw && (alu1_op==`SYNC || alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ ||
+		  : (alu1_cmt && (alu1_op==`SYNC || alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ ||
 		     alu1_op==`SYS || alu1_op==`INT ||
 		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op==`RTD || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argA == 64'd0)))));
 

@@ -22,13 +22,14 @@
 ;                                                                          
 ; ============================================================================
 ;
+.include "C:\Cores4\Thor\trunk\software\FMTK\source\kernel\FMTK_Equates.inc"
 
 SCRSZ	EQU	2604
+_BS		EQU	0x07
 CR	EQU	0x0D		;ASCII equates
 LF	EQU	0x0A
 TAB	EQU	0x09
 CTRLC	EQU	0x03
-BS		EQU	0x07
 CTRLH	EQU	0x08
 CTRLI	EQU	0x09
 CTRLJ	EQU	0x0A
@@ -40,6 +41,7 @@ XON		EQU	0x11
 XOFF	EQU	0x13
 ESC		EQU	0x1B
 
+SC_TAB		EQU		$0D
 SC_LSHIFT	EQU		$12
 SC_RSHIFT	EQU		$59
 SC_KEYUP	EQU		$F0
@@ -72,6 +74,7 @@ TEXT_ROWS	EQU		0x2
 TEXT_CURPOS	EQU		0x16
 KEYBD		EQU		0xC0000
 
+PIC_IS		EQU		0xC0FC0
 PIC_IE		EQU		0xC0FC8
 PIC_ES		EQU		0xC0FE0
 PIC_ESR		EQU		0xC0FE8		; edge sense reset
@@ -80,11 +83,26 @@ PIC_ESR		EQU		0xC0FE8		; edge sense reset
 		org		$0000
 		dw		0				; the first word is unused
 Milliseconds	dw		0
+m_w				dh		0
+m_z				dh		0
+FMTK_SchedulerIRQ_vec	dw	0
+Running_		dw		0
+IOFocusNdx_		dw		0
+iof_switch_		db		0
+		align	8
+NextRdy_		dw		0
+PrevRdy_		dw		0
+
 KeyState1		db		0	
 KeyState2		db		0
 KeybdLEDs		db		0
 KeybdWaitFlag	db		0
-
+		align	2
+KeybdHead		db		0
+KeybdTail		db		0
+KeybdBufSz		db		0
+KeybdBuf		fill.b	128,0
+		align	2
 CursorX			dc		0
 CursorY			dc		0
 VideoPos		dc		0
@@ -154,18 +172,27 @@ cold_start:
 		ldis	c12,#$1000
 
 		; set all vectors to the uninitialized interrupt vector
-;		mov		r4,r0
-;		ldis	lc,#255		; 256 vectors to set
-;su1:
-;		ldi		r1,#uii_jmp
-;		mov		r2,r4
-;		bsr		set_vector	; trashes r2,r3
-;		addui	r4,r4,#1
-;		loop	su1
+		mov		r4,r0
+		ldis	lc,#255		; 256 vectors to set
+su1:
+		ldi		r1,#uii_jmp
+		mov		r2,r4
+		bsr		set_vector	; trashes r2,r3
+		addui	r4,r4,#1
+		loop	su1
 
 		; setup break vector
 		lla		r1,cs:brk_jmp
 		ldi		r2,#0
+		bsr		set_vector
+
+		; setup system scheduler vector
+		; points to an RTE at startup
+		lla		r1,cs:tms_jmp
+		ldi		r2,#2
+		bsr		set_vector
+		lla		r1,cs:rte_jmp
+		ldi		r2,#3
 		bsr		set_vector
 
 		; setup Video BIOS vector
@@ -185,15 +212,26 @@ cold_start:
 		ldi		r2,#191
 		bsr		set_vector
 
+		; spurious interrupt
+		;
+		lla		r1,cs:spur_jmp
+		ldi		r2,#192
+		bsr		set_vector
+
 		; setup MSI vector
 		sh		r0,Milliseconds
 		lla		r1,cs:msi_jmp
 		ldi		r2,#193
 		bsr		set_vector
 
-		; setup IRQ vector
-		lla		r1,cs:tms_jmp
-		ldi		r2,#194
+		; setup BTNU vector
+		lla		r1,cs:btnu_jmp
+		ldi		r2,#200
+		bsr		set_vector
+
+		; setup KM vector
+		lla		r1,cs:km_jmp
+		ldi		r2,#245
 		bsr		set_vector
 
 		; setup data bus error vector
@@ -201,11 +239,29 @@ cold_start:
 		ldi		r2,#251
 		bsr		set_vector
 
+		ldi		r1,#JCB_Array
+		sw		r1,zs:RunningJCB_
+		sw		r1,zs:IOFocusNdx_	; set I/O focus to BIOS
+		ldi		r1,#TCB_Array
+		sw		r1,zs:RunningTCB_
+		sb		r0,zs:iof_switch_	; reset switch flag
+		mov		tr,r0
+		bsr		KeybdInit
+
+		jsr		FMTKInitialize_
+
 		; Initialize PIC
-		ldi		r1,#%00111		; time slice interrupt is edge sensitive
+		ldi		r1,#%00000111		; nmi, time slice interrupt is edge sensitive
 		sh		r1,hs:PIC_ES
-		ldi		r1,#%00111		; enable time slice interrupt, msi, nmi
+		ldi		r1,#%000001111		; enable time slice interrupt, msi, nmi
 		sh		r1,hs:PIC_IE
+
+		; Initialize random number generator
+		; m_z and m_w must not be zero
+		ldi		r1,#$88888888
+		sh		r1,m_w
+		ldi		r1,#$77777777
+		sh		r1,m_z
 
 		mov		r1,r0
 		mov		r2,r0
@@ -257,13 +313,13 @@ cold_start:
 		; switch to core to application/user mode.
 		ldis	c14,#j1			; c14 contains RTI return address
 		sync
-;		rti
+		rti
 j1:
 		ldi		r1,#2
 		sc		r1,hs:LEDS
 		sb		r0,EscState
 		bsr		SerialInit
-		bsr		Debugger
+;		bsr		Debugger
 		ldi		r2,#msgStartup
 		ldis	lc,#msgStartupEnd-msgStartup-1
 j3:
@@ -326,6 +382,24 @@ p0.ne	br		.getkey
 p0.eq	br		.0001
 		cmpi	p0,r1,#'d'			; debug ?
 p0.eq	bsr		Debugger
+p0.eq	br		.prompt
+		cmpi	p0,r1,#'g'
+p0.eq	bsr		GoGraphics
+p0.eq	br		.prompt
+		cmpi	p0,r1,#'t'
+p0.eq	bsr		MonGetch
+p0.eq	cmpi	p0,r1,#'x'
+p0.eq	bsr		GoText
+p0.eq	br		.prompt
+		cmpi	p0,r1,'r'
+p0.eq	bsr		RandomDots
+p0.eq	br		.prompt
+		cmpi	p0,r1,#'c'
+p0.eq	bsr		VBClearScreen
+p0.eq	mov		r1,r0
+p0.eq	mov		r2,r0
+p0.eq	ldi		r6,#2
+p0.eq	sys		#10
 		br		.prompt
 
 ;------------------------------------------------------------------------------
@@ -338,7 +412,7 @@ p0.eq	bsr		Debugger
 MonGetch:
 		addui	r31,r31,#-8
 		sws		c1,[r31]
-		lhu		r1,[r10]
+		lhu		r1,hs:[r10]
 		andi	r1,r1,#$3ff
 		bsr		VBScreenToAscii
 		addui	r10,r10,#4
@@ -359,7 +433,7 @@ MonGetch1:
 		addui	r31,r31,#-8
 		sws		c1,[r31]
 .0001:
-		lhu		r1,[r10]
+		lhu		r1,hs:[r10]
 		andi	r1,r1,#$3ff
 		bsr		VBScreenToAscii
 		addui	r10,r10,#4
@@ -370,12 +444,113 @@ p0.leu	loop	.0001
 		rts
 
 ;------------------------------------------------------------------------------
+; Go into graphics mode, four lines of text at bottom.
+;------------------------------------------------------------------------------
+
+GoGraphics:
+		lhu		r3,Vidregs
+		ldi		r1,#4
+		sc		r1,Textrows
+		sh		r1,hs:4[r3]		; # rows
+		ldi		r1,#240
+		sh		r1,hs:12[r3]	; window top
+		mov		r1,r0			; reset cursor position
+		mov		r2,r0
+		ldi		r6,#2
+		sys		#10
+		rts
+
+;------------------------------------------------------------------------------
+; Go back to full text mode.
+;------------------------------------------------------------------------------
+
+GoText:
+		lhu		r3,Vidregs
+		ldi		r1,#31
+		sc		r1,Textrows
+		sh		r1,hs:4[r3]		; # rows
+		ldi		r1,#17
+		sh		r1,hs:12[r3]	; window top
+		mov		r1,r0			; reset cursor position
+		mov		r2,r0
+		ldi		r6,#2
+		sys		#10
+		rts
+
+// ----------------------------------------------------------------------------
+// Uses George Marsaglia's multiply method
+//
+// m_w = <choose-initializer>;    /* must not be zero */
+// m_z = <choose-initializer>;    /* must not be zero */
+//
+// uint get_random()
+// {
+//     m_z = 36969 * (m_z & 65535) + (m_z >> 16);
+//     m_w = 18000 * (m_w & 65535) + (m_w >> 16);
+//     return (m_z << 16) + m_w;  /* 32-bit result */
+// }
+// ----------------------------------------------------------------------------
+//
+gen_rand:
+		addui	r31,r31,#-8
+		sw		r2,[r31]
+		lhu		r1,m_z
+		mului	r2,r1,#36969
+		shrui	r1,r1,#16
+		addu	r2,r2,r1
+		sh		r2,m_z
+
+		lhu		r1,m_w
+		mului	r2,r1,#18000
+		shrui	r1,r1,#16
+		addu	r2,r2,r1
+		sh		r2,m_w
+rand:
+		lhu		r1,m_z
+		shli	r1,r1,#16
+		addu	r1,r1,r2
+		lw		r2,[r31]
+		addui	r31,r31,#8
+		rts
+
+// ----------------------------------------------------------------------------
+// Display random dots on the graphics screen.
+// ----------------------------------------------------------------------------
+
+RandomDots:
+		addui	r31,r31,#-8
+		sws		c1,[r31]		; stack the return address
+		mov		r4,r0
+.0001:
+		bsr		gen_rand		; get random bitmap memory location
+		modui	r2,r1,#172032	; mod the memory size
+		_2addui	r2,r2,#$FFA00000	; *2 for 16 bit data, generate address
+		bsr		gen_rand		; get random color
+		modui	r3,r1,#$1000	; limit to 12 bits
+		sc		r3,zs:[r2]		; store color in memory
+		addui	r4,r4,#1		; increment loop index
+		andi	r4,r4,#$FFF		;
+		tst		p1,r4			; check if time to check for keypress
+p1.ne	br		.0001
+		bsr		KeybdGetCharNoWait	; try get a key, but don't wait
+		tst		p1,r1			; branch if no key pressed
+p1.lt	br		RandomDots.0001			
+		lws		c1,[r31]		; restore return address
+		addui	r31,r31,#8
+		rts
+
+;------------------------------------------------------------------------------
 
 msgStartup:	
 		byte	"Thor Test System Starting...",CR,LF,0
 msgStartupEnd:
 msgMonitor:
-		byte	CR,LF,"d - run debugger",CR,LF,0
+		byte	CR,LF
+		byte	"d  - run debugger",CR,LF
+		byte	"g  - graphics mode",CR,LF
+		byte	"tx - text mode",CR,LF
+		byte	"r  - random dots",CR,LF
+		byte	0
 
 bad_ram:
 		ldi		r1,#'B'
@@ -413,15 +588,18 @@ alphabet:
 ; Set interrupt vector
 ;
 ; Parameters:
-;	r1 = address of jump code
+;	r1 = linear address of jump code
 ;	r2 = vector number to set
-; Trashes: r2,r3
+; Trashes: r2,r3,r5,p0
 ;------------------------------------------------------------------------------
 
 set_vector:
 		mfspr	r3,c12			; get base address of interrupt table
 		_16addu	r2,r2,r3
 		lh		r3,zs:[r1]
+		cmpi	p0,r3,#$003F6F01	; unitialized interrupt number load
+p0.eq	shli	r5,r2,#18
+p0.eq	or		r3,r3,r5
 		sh		r3,zs:[r2]
 		lh		r3,zs:4[r1]
 		sh		r3,zs:4[r2]
@@ -432,156 +610,248 @@ set_vector:
 		rts
 
 ;------------------------------------------------------------------------------
+; Save the register context.
+;
+; Parameters:
+;	tr points to app's TCB
+;
 ;------------------------------------------------------------------------------
 
 save_context:
-		sw		r1,reg_save+8*1
-		sw		r2,reg_save+8*2
-		sw		r3,reg_save+8*3
-		sw		r4,reg_save+8*4
-		sw		r5,reg_save+8*5
-		sw		r6,reg_save+8*6
-		sw		r7,reg_save+8*7
-		sw		r8,reg_save+8*8
-		sw		r9,reg_save+8*9
-		sw		r10,reg_save+8*10
-		sw		r11,reg_save+8*11
-		sw		r12,reg_save+8*12
-		sw		r13,reg_save+8*13
-		sw		r14,reg_save+8*14
-		sw		r15,reg_save+8*15
-		sw		r16,reg_save+8*16
-		sw		r17,reg_save+8*17
-		sw		r18,reg_save+8*18
-		sw		r19,reg_save+8*19
-		sw		r20,reg_save+8*20
-		sw		r21,reg_save+8*21
-		sw		r22,reg_save+8*22
-		sw		r23,reg_save+8*23
-		sw		r24,reg_save+8*24
-		sw		r25,reg_save+8*25
-		sw		r26,reg_save+8*26
-		sw		r27,reg_save+8*27
-		sw		r28,reg_save+8*28
-		sw		r29,reg_save+8*29
-		sw		r30,reg_save+8*30
-		sw		r31,reg_save+8*31
-		sws		ds,sreg_save+8*1
-		sws		es,sreg_save+8*2
-		sws		fs,sreg_save+8*3
-		sws		gs,sreg_save+8*4
-		sws		hs,sreg_save+8*5
-		sws		ss,sreg_save+8*6
-		sws		cs,sreg_save+8*7
-		sws		ds.lmt,sreg_save+8*9
-		sws		es.lmt,sreg_save+8*10
-		sws		fs.lmt,sreg_save+8*11
-		sws		gs.lmt,sreg_save+8*12
-		sws		hs.lmt,sreg_save+8*13
-		sws		ss.lmt,sreg_save+8*14
-		sws		cs.lmt,sreg_save+8*15
-		sws		c1,creg_save+8*1
-		sws		c2,creg_save+8*2
-		sws		c3,creg_save+8*3
-		sws		c4,creg_save+8*4
-		sws		c5,creg_save+8*5
-		sws		c6,creg_save+8*6
-		sws		c7,creg_save+8*7
-		sws		c8,creg_save+8*8
-		sws		c9,creg_save+8*9
-		sws		c10,creg_save+8*10
-		sws		c11,creg_save+8*11
-		sws		c13,creg_save+8*13
-		sws		c14,creg_save+8*14
-		sws		pregs,preg_save
+		sw		r1,TCB_r1[tr]
+		sw		r2,TCB_r2[tr]
+		sw		r3,TCB_r3[tr]
+		sw		r4,TCB_r4[tr]
+		sw		r5,TCB_r5[tr]
+		sw		r6,TCB_r6[tr]
+		sw		r7,TCB_r7[tr]
+		sw		r8,TCB_r8[tr]
+		sw		r9,TCB_r9[tr]
+		sw		r10,TCB_r10[tr]
+		sw		r11,TCB_r11[tr]
+		sw		r12,TCB_r12[tr]
+		sw		r13,TCB_r13[tr]
+		sw		r14,TCB_r14[tr]
+		sw		r15,TCB_r15[tr]
+		sw		r16,TCB_r16[tr]
+		sw		r17,TCB_r17[tr]
+		sw		r18,TCB_r18[tr]
+		sw		r19,TCB_r19[tr]
+		sw		r20,TCB_r20[tr]
+		sw		r21,TCB_r21[tr]
+		sw		r22,TCB_r22[tr]
+		sw		r23,TCB_r23[tr]
+		sw		r24,TCB_r24[tr]
+		sw		r25,TCB_r25[tr]
+		sw		r26,TCB_r26[tr]
+		sw		r27,TCB_r27[tr]
+		sws		ds,TCB_ds[tr]
+		sws		es,TCB_es[tr]
+		sws		fs,TCB_fs[tr]
+		sws		gs,TCB_gs[tr]
+		sws		hs,TCB_hs[tr]
+		sws		ss,TCB_ss[tr]
+		sws		cs,TCB_cs[tr]
+		sws		ds.lmt,TCB_dslmt[tr]
+		sws		es.lmt,TCB_eslmt[tr]
+		sws		fs.lmt,TCB_fslmt[tr]
+		sws		gs.lmt,TCB_gslmt[tr]
+		sws		hs.lmt,TCB_hslmt[tr]
+		sws		ss.lmt,TCB_sslmt[tr]
+		sws		cs.lmt,TCB_cslmt[tr]
+		sws		c1,TCB_c1[tr]
+		sws		c2,TCB_c2[tr]
+		sws		c3,TCB_c3[tr]
+		sws		c4,TCB_c4[tr]
+		sws		c5,TCB_c5[tr]
+		sws		c6,TCB_c6[tr]
+		sws		c7,TCB_c7[tr]
+		sws		c8,TCB_c8[tr]
+		sws		c9,TCB_c9[tr]
+		sws		c10,TCB_c10[tr]
+		sws		c11,TCB_c11[tr]
+;		sws		c13,TCB_c13[tr]
+;		sws		c14,TCB_c14[tr]
+		sws		pregs,TCB_pregs[tr]
 		rte
+
+;------------------------------------------------------------------------------
+; Restore register context.
+; Parameters:
+;	DS points to app's data space.
+;------------------------------------------------------------------------------
 
 restore_context:
-		lw		r1,reg_save+8*1
-		lw		r2,reg_save+8*2
-		lw		r3,reg_save+8*3
-		lw		r4,reg_save+8*4
-		lw		r5,reg_save+8*5
-		lw		r6,reg_save+8*6
-		lw		r7,reg_save+8*7
-		lw		r8,reg_save+8*8
-		lw		r9,reg_save+8*9
-		lw		r10,reg_save+8*10
-		lw		r11,reg_save+8*11
-		lw		r12,reg_save+8*12
-		lw		r13,reg_save+8*13
-		lw		r14,reg_save+8*14
-		lw		r15,reg_save+8*15
-		lw		r16,reg_save+8*16
-		lw		r17,reg_save+8*17
-		lw		r18,reg_save+8*18
-		lw		r19,reg_save+8*19
-		lw		r20,reg_save+8*20
-		lw		r21,reg_save+8*21
-		lw		r22,reg_save+8*22
-		lw		r23,reg_save+8*23
-		lw		r24,reg_save+8*24
-		lw		r25,reg_save+8*25
-		lw		r26,reg_save+8*26
-		lw		r27,reg_save+8*27
-		lw		r28,reg_save+8*28
-		lw		r29,reg_save+8*29
-		lw		r30,reg_save+8*30
-		lw		r31,reg_save+8*31
-		lws		ds,sreg_save+8*1
-		lws		es,sreg_save+8*2
-		lws		fs,sreg_save+8*3
-		lws		gs,sreg_save+8*4
-		lws		hs,sreg_save+8*5
-		lws		ss,sreg_save+8*6
-		lws		cs,sreg_save+8*7
-		lws		ds.lmt,sreg_save+8*9
-		lws		es.lmt,sreg_save+8*10
-		lws		fs.lmt,sreg_save+8*11
-		lws		gs.lmt,sreg_save+8*12
-		lws		hs.lmt,sreg_save+8*13
-		lws		ss.lmt,sreg_save+8*14
-		lws		cs.lmt,sreg_save+8*15
-		lws		c1,creg_save+8*1
-		lws		c2,creg_save+8*2
-		lws		c3,creg_save+8*3
-		lws		c4,creg_save+8*4
-		lws		c5,creg_save+8*5
-		lws		c6,creg_save+8*6
-		lws		c7,creg_save+8*7
-		lws		c8,creg_save+8*8
-		lws		c9,creg_save+8*9
-		lws		c10,creg_save+8*10
-		lws		c11,creg_save+8*11
-;		lws		c13,creg_save+8*13
-		lws		c14,creg_save+8*14
-		lws		pregs,preg_save
+		lw		r1,TCB_r1[tr]
+		lw		r2,TCB_r2[tr]
+		lw		r3,TCB_r3[tr]
+		lw		r4,TCB_r4[tr]
+		lw		r5,TCB_r5[tr]
+		lw		r6,TCB_r6[tr]
+		lw		r7,TCB_r7[tr]
+		lw		r8,TCB_r8[tr]
+		lw		r9,TCB_r9[tr]
+		lw		r10,TCB_r10[tr]
+		lw		r11,TCB_r11[tr]
+		lw		r12,TCB_r12[tr]
+		lw		r13,TCB_r13[tr]
+		lw		r14,TCB_r14[tr]
+		lw		r15,TCB_r15[tr]
+		lw		r16,TCB_r16[tr]
+		lw		r17,TCB_r17[tr]
+		lw		r18,TCB_r18[tr]
+		lw		r19,TCB_r19[tr]
+		lw		r20,TCB_r20[tr]
+		lw		r21,TCB_r21[tr]
+		lw		r22,TCB_r22[tr]
+		lw		r23,TCB_r23[tr]
+		lw		r24,TCB_r24[tr]
+		lw		r25,TCB_r25[tr]
+		lw		r26,TCB_r26[tr]
+		lw		r27,TCB_r27[tr]
+		lws		ds,TCB_ds[tr]
+		lws		es,TCB_es[tr]
+		lws		fs,TCB_fs[tr]
+		lws		gs,TCB_gs[tr]
+		lws		hs,TCB_hs[tr]
+		lws		ss,TCB_ss[tr]
+		lws		cs,TCB_cs[tr]
+		lws		ds.lmt,TCB_dslmt[tr]
+		lws		es.lmt,TCB_eslmt[tr]
+		lws		fs.lmt,TCB_fslmt[tr]
+		lws		gs.lmt,TCB_gslmt[tr]
+		lws		hs.lmt,TCB_hslmt[tr]
+		lws		ss.lmt,TCB_sslmt[tr]
+		lws		cs.lmt,TCB_cslmt[tr]
+		lws		c1,TCB_c1[tr]
+		lws		c2,TCB_c2[tr]
+		lws		c3,TCB_c3[tr]
+		lws		c4,TCB_c4[tr]
+		lws		c5,TCB_c5[tr]
+		lws		c6,TCB_c6[tr]
+		lws		c7,TCB_c7[tr]
+		lws		c8,TCB_c8[tr]
+		lws		c9,TCB_c9[tr]
+		lws		c10,TCB_c10[tr]
+		lws		c11,TCB_c11[tr]
+;		lws		c13,TCB_c13[tr]
+;		lws		c14,TCB_c14[tr]
+		lws		pregs,TCB_pregs[tr]
 		rte
 
+.include "c:\cores4\thor\trunk\software\FMTK\source\kernel\FMTKc.s"
 .include "video.asm"
-.include "keyboard.asm"
 .include "serial.asm"
+.include "keyboard.asm"
 .include "debugger.asm"
+
+
+;------------------------------------------------------------------------------
+; BTNU IRQ routine.
+;
+;------------------------------------------------------------------------------
+;
+btnu_rout:
+		sync
+		addui	r31,r31,#-24
+		sw		r1,[r31]
+		sws		hs,8[r31]
+		sws		hs.lmt,16[r31]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
+
+		; update on-screen IRQ live indicator
+		inc.h	hs:TEXTSCR+312
+
+		; restore regs and return
+		lw		r1,[r31]
+		lws		hs,8[r31]
+		lws		hs.lmt,16[r31]
+		addui	r31,r31,#24
+		sync
+		rti
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+spur_rout:
+		sync
+		addui	r31,r31,#-24
+		sw		r1,[r31]
+		sws		hs,8[r31]
+		sws		hs.lmt,16[r31]
+
+		; set I/O segment
+		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
+
+;		ldi		r1,#18
+;		sc		r1,hs:LEDS
+
+		; update on-screen IRQ live indicator
+		inc.h	hs:TEXTSCR+316
+
+		; restore regs and return
+		lw		r1,[r31]
+		lws		hs,8[r31]
+		lws		hs.lmt,16[r31]
+		addui	r31,r31,#24
+		sync
+		rti
 
 ;------------------------------------------------------------------------------
 ; Uninitialized interrupt
 ;------------------------------------------------------------------------------
 uii_rout:
 		sync
-		ldi		r31,#INT_STACK-16
+		addui	r31,r31,#-24
 		sw		r1,[r31]
 		sws		hs,8[r31]
+		sws		hs.lmt,16[r31]
 
 		; set I/O segment
 		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
 
 		; update on-screen IRQ live indicator
 		ldi		r1,#'U'|%011000000_111111111_00_00000000
 		sh		r1,hs:TEXTSCR+320
 
+		mov		r5,r63
+		sc		r63,hs:LEDS
+		bsr		DisplayAddr
+
+		ldi		r6,#2
+		ldi		r2,#0
+		ldi		r7,#0
+.0001:
+		ldis	60,#18		; set breakout index to 18
+		sync
+		mtspr	61,r7		; select history reg #
+		sync
+		ldis	60,#16		; set breakout index to 16
+		sync
+		mfspr	r5,61		; get address
+		bsr		DisplayAddr
+		addui	r2,r2,#1
+		ldis	60,#17		; set breakout index to 17
+		sync
+		mfspr	r5,61		; get address
+		bsr		DisplayAddr
+		addui	r2,r2,#1
+		addui	r7,r7,#1
+		cmpi	p0,r7,#63
+p0.ltu	br		.0001
+
+uii_hang:
+		br		uii_hang
 		; restore regs and return
 		lw		r1,[r31]
 		lws		hs,8[r31]
+		lws		hs.lmt,16[r31]
+		addui	r31,r31,#24
 		sync
 		rti
 
@@ -592,12 +862,14 @@ uii_rout:
 ;
 nmi_rout:
 		sync
-		ldi		r31,#INT_STACK-16
+		addui	r31,r31,#-24
 		sw		r1,[r31]
 		sws		hs,8[r31]
+		sws		hs.lmt,16[r31]
 
 		; set I/O segment
 		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
 
 		ldi		r1,#16
 		sc		r1,hs:LEDS
@@ -614,6 +886,8 @@ nmi_rout:
 		; restore regs and return
 		lw		r1,[r31]
 		lws		hs,8[r31]
+		lws		hs.lmt,16[r31]
+		addui	r31,r31,#24
 		sync
 		rti
 
@@ -624,12 +898,15 @@ nmi_rout:
 ;
 msi_rout:
 		sync
-		ldi		r31,#INT_STACK-16
-		sw		r1,[r31]
-		sws		hs,8[r31]
+		addui	sp,sp,#-32
+		sw		r1,[sp]
+		sws		hs,8[sp]
+		sws		hs.lmt,16[sp]
+		sws		c1,24[sp]
 
 		; set I/O segment
 		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
 
 		ldi		r1,#24
 		sc		r1,hs:LEDS
@@ -639,30 +916,34 @@ msi_rout:
 		sh		r1,hs:PIC_ESR
 
 		; update milliseconds
-		lh		r1,Milliseconds
+		lw		r1,zs:Milliseconds
 		addui	r1,r1,#1
-		sh		r1,Milliseconds
+		sw		r1,zs:Milliseconds
 
 		; restore regs and return
-		lw		r1,[r31]
-		lws		hs,8[r31]
+		lw		r1,[sp]
+		lws		hs,8[sp]
+		lws		hs.lmt,16[sp]
+		lws		c1,24[sp]
+		addui	sp,sp,#32
 		sync
 		rti
 
 ;------------------------------------------------------------------------------
 ; Time Slice IRQ routine.
 ;
-;
 ;------------------------------------------------------------------------------
 ;
 tms_rout:
 		sync
-		ldi		r31,#INT_STACK-16
+		addui	r31,r31,#-24
 		sw		r1,[r31]
 		sws		hs,8[r31]
+		sws		hs.lmt,16[r31]
 
 		; set I/O segment
 		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
 
 		ldi		r1,#32
 		sc		r1,hs:LEDS
@@ -672,18 +953,18 @@ tms_rout:
 		sh		r1,hs:PIC_ESR
 
 		; update on-screen IRQ live indicator
-		lh		r1,hs:TEXTSCR+328
-		addui	r1,r1,#1
-		sh		r1,hs:TEXTSCR+328
+		inc.h	hs:TEXTSCR+328
 
 		; restore regs and return
 		lw		r1,[r31]
 		lws		hs,8[r31]
+		lws		hs.lmt,16[r31]
+		addui	r31,r31,#24
 		sync
-		rti
+		rte
 
 ;------------------------------------------------------------------------------
-; Time Slice IRQ routine.
+; Data bus error routine.
 ;
 ;
 ;------------------------------------------------------------------------------
@@ -746,6 +1027,32 @@ brk_rout:
 		ldi		r6,#0
 		mfspr	r5,c13
 		bsr		DisplayAddr
+		ldi		r2,#10
+		ldi		r6,#1
+		mfspr	r5,c14
+		bsr		DisplayAddr
+		ldi		r6,#2
+		ldi		r2,#0
+		ldi		r7,#0
+.0001:
+		ldis	60,#18		; set breakout index to 18
+		sync
+		mtspr	61,r7		; select history reg #
+		sync
+		ldis	60,#16		; set breakout index to 16
+		sync
+		mfspr	r5,61		; get address
+		bsr		DisplayAddr
+		addui	r2,r2,#1
+		ldis	60,#17		; set breakout index to 17
+		sync
+		mfspr	r5,61		; get address
+		bsr		DisplayAddr
+		addui	r2,r2,#1
+		addui	r7,r7,#1
+		cmpi	p0,r7,#63
+p0.ltu	br		.0001
+
 brk_lockup:
 		br		brk_lockup[c0]
 
@@ -767,22 +1074,33 @@ nmi_jmp:
 		jmp		nmi_rout[c0]
 		align	8
 uii_jmp:
+		ldi		r63,#00
 		jmp		uii_rout[c0]
 		align	8
 vb_jmp:
 		jmp		VideoBIOSCall[c0]
 		align	8
-ser_jmp:
-		jmp		SerialIRQ[c0]
-		align	8
 dbe_jmp:
 		jmp		dbe_rout[c0]
 		align	8
 svc_jmp:
-		jmp		save_context
+		jmp		save_context[c0]
 		align	8
 rsc_jmp:
-		jmp		restore_context
+		jmp		restore_context[c0]
+		align	8
+spur_jmp:
+		jmp		spur_rout[c0]
+		align	8
+btnu_jmp:
+		jmp		btnu_rout[c0]
+		align	8
+rti_jmp:
+km_jmp:
+		rti
+		align	8
+rte_jmp:
+		rte
 
 ;------------------------------------------------------------------------------
 ; Reset Point

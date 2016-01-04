@@ -20,16 +20,96 @@
 ; You should have received a copy of the GNU General Public License        
 ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 ;                                                                          
+;
+; KeyState1_
+; 76543210
+;        + = keyup
+;
+; KeyState2_
+; 76543210
+; |||||||+ = shift
+; ||||||+- = alt
+; |||||+-- = control
+; ||||+--- = numlock
+; |||+---- = capslock
+; ||+----- = scrolllock
+; |+------ =
+; +------- = extended
+;
 ; ============================================================================
 ;
+; Static Device Control Block for Keyboard
+;
+		align	8
+		byte	8,"keyboard   "		; DCB_Name	string: first byte is length, 11 chars max
+		dh		0					; DCB_Type			0 = character
+		dw		0					; DCB_nBPB
+		dw		0					; DCB_LastErc		last error code
+		dw		0					; DCB_StartBlock	starting block number (partitioned devices)
+		dw		0					; DCB_nBlocks		number of blocks on device
+		dw		KeybdCmdProc		; DCB_pCmdProc		pointer to command processor routine
+		byte	1					; DCB_ReentCount	re-entrancy count (1 to 255)
+		byte	0					; DCB_fSingleUser
+		fill.b	6,0
+		dw		0					; DCB_hJob			handle to associated job
+		dw		0					; DCB_Mbx
+		dw		0					; DCB_pSema			pointer to device semaphore
+		dw		0					; DCB_Resv1			reserved
+		dw		0					; DCB_Resv2			reserved
+
+	align	8
+kbd_jmp:
+		jmp		KeybdIRQ[c0]
+
+KeybdCmdProc:
+		rts
+
+KeybdInit:
+		addui	sp,sp,#-8
+		sws		c1,[sp]
+		lla		r1,cs:kbd_jmp		; set interrupt vector
+		ldi		r2,#195
+		bsr		set_vector
+		lws		c1,[sp]
+		addui	sp,sp,#8
+KeybdClearBuf:
+		lw		r29,zs:RunningJCB_
+		sb		r0,zs:JCB_KeybdHead[r29]	; clear buffer pointers
+		sb		r0,zs:JCB_KeybdTail[r29]
+		sb		r0,zs:JCB_KeyState1[r29]
+		sb		r0,zs:JCB_KeyState2[r29]
+		sb		r0,zs:JCB_KeybdLEDs[r29]
+		ldi		r1,#64
+		sb		r1,zs:JCB_KeybdBufSz[r29]
+		rts
+
+; Check if a key is available
+; Returns:
+;	r1 = non-zero if key is available, otherwise zero
+;
+public KeybdCheckForKey
+		addui	sp,sp,#-8
+		sw		r2,[sp]
+		lw		r2,zs:RunningJCB_
+		lcu		r1,zs:JCB_KeybdHead[r2]
+		shrui	r2,r1,#8
+		zxb		r1,r1
+		eor		r1,r1,r2
+		lw		r2,[sp]
+		addui	sp,sp,#8
+		rts
+endpublic
+
 public KeybdGetCharWait:
 		ldi		r1,#-1
-		sb		r1,KeybdWaitFlag
+		lw		r29,zs:RunningJCB_
+		sb		r1,zs:JCB_KeybdWaitFlag[r29]
 		br		KeybdGetChar
 endpublic
 
 public KeybdGetCharNoWait:
-		sb		r0,KeybdWaitFlag
+		lw		r1,zs:RunningJCB_
+		sb		r0,zs:JCB_KeybdWaitFlag[r1]
 		br		KeybdGetChar
 endpublic
 
@@ -40,27 +120,49 @@ endpublic
 ;
 KeybdGetChar:
 KeybdGetChar1:
-		addui	sp,sp,#-24
+		addui	sp,sp,#-64
 		sw		r2,[sp]
 		sws		c1,8[sp]		; save off link register
 		sws		hs,16[sp]
+		sws		hs.lmt,24[sp]
+		sw		r3,32[sp]
+		sws		ds,40[sp]
+		sws		ds.lmt,48[sp]
 		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
+		lws		ds,zs:RunningJCB_
+		ldis	ds.lmt,#$10000
 .0002:
 .0003:
-		memsb
-		lvb		r1,hs:KEYBD+1	; check MSB of keyboard status reg.
-		biti	p0,r1,#$80
-p0.ne	br		.0006
-		lb		r1,KeybdWaitFlag
+		; Allow for some interruptible code to occur
+		nop nop nop	nop
+		nop	nop	nop	nop
+		nop	nop	nop	nop
+
+		; Get head and tail pointers as a single load
+		; then separate
+;		sei
+		sync
+		lcu		r1,JCB_KeybdHead	; 1 memory op instead of 2
+		shrui	r2,r1,#8		; r2 = tail index
+		zxb		r1,r1			; r1 = head index
+		cmp		p0,r1,r2		; is there anything in the buffer ?
+p0.ne	br		.0006			; yes, branch
+		cli
+		lb		r1,JCB_KeybdWaitFlag	; are we waiting indefinitely for a key ?
 		tst		p0,r1
-p0.lt	br		.0003
-		br		.0008
+p0.lt	br		.0003			; if yes, branch
+		br		.0008			; otherwise exit no key available
 .0006:
-		memsb
-		lvb		r1,hs:KEYBD		; get scan code value
-		memdb
-		zxb		r1,r1			; make unsigned
-		sb		r0,hs:KEYBD+1	; clear read flag
+		ldi		r1,#$300
+		sc		r1,hs:LEDS
+		lbu		r1,JCB_KeybdBuf[r2]	; get scan code from buffer
+		lbu		r3,JCB_KeybdBufSz
+		addui	r2,r2,#1		; increment tail index
+		cmp		p0,r2,r3
+p0.geu	mov		r2,r0			; take modulus
+		sb		r2,JCB_KeybdTail	; and store it back
+		cli
 .0001:
 		cmp		p0,r1,#SC_KEYUP	; keyup scan code ?
 p0.eq	br		.doKeyup
@@ -78,83 +180,93 @@ p0.eq	br		.doNumLock
 p0.eq	br		.doCapsLock
 		cmp		p0,r1,#SC_SCROLLLOCK
 p0.eq	br		.doScrollLock
-		lb		r2,KeyState1
-		sb		r0,KeyState1
-		andi	r2,r2,#1
-		cmpi	p0,r2,#0
-p0.ne	br		.0003
-		lb		r2,KeyState2	; Is extended code ?
-		andi	r2,r2,#$80
+		cmp		p0,r1,#SC_ALT
+p0.eq	br		.doAlt
+		lb		r2,JCB_KeyState1
+		sb		r0,JCB_KeyState1
+		biti	p0,r2,#1		; was keyup set ?
+p0.ne	br		.0003			; if yes, ignore and branch back
+		lb		r2,JCB_KeyState2	; Is extended code ?
+		biti	p0,r2,#$80
 p0.eq	br		.0010
-		lb		r2,KeyState2
+		lb		r2,JCB_KeyState2	; clear extended bit
 		andi	r2,r2,#$7F
-		sb		r2,KeyState2
-		sb		r0,KeyState1	; clear keyup
+		sb		r2,JCB_KeyState2
+		sb		r0,JCB_KeyState1	; clear keyup
 		andi	r1,r1,#$7F
 		lbu		r1,cs:keybdExtendedCodes[r1]
 		br		.0008
 .0010:
-		lb		r2,KeyState2
 		biti	p0,r2,#4		; Is Cntrl down ?
 p0.eq	br		.0009
 		andi	r1,r1,#$7F
 		lbu		r1,cs:keybdControlCodes[r1]
 		br		.0008
 .0009:
-		lb		r2,KeyState2
-		biti	p0,r2,#1		; Is shift down ?
-		andi	r1,r1,#$FF
+		biti	p0,r2,#33		; Is shift or CAPS-Lock down ?
 p0.ne	lbu		r1,cs:shiftedScanCodes[r1]
 p0.eq	lbu		r1,cs:unshiftedScanCodes[r1]
 .0008:
 		lw		r2,[sp]
 		lws		c1,8[sp]
 		lws		hs,16[sp]
-		addui	sp,sp,#24
+		lws		hs.lmt,24[sp]
+		lw		r3,32[sp]
+		lws		ds,40[sp]
+		lws		ds.lmt,48[sp]
+		addui	sp,sp,#64
 		rts
 
 .doKeyup:
-		lb		r2,KeyState1
+		lb		r2,JCB_KeyState1	; set keyup flag
 		ori		r2,r2,#1
-		sb		r2,KeyState1
+		sb		r2,JCB_KeyState1
 		br		.0003
 .doExtend:
-		lb		r2,KeyState2
+		lb		r2,JCB_KeyState2
 		ori		r2,r2,#$80
-		sb		r2,KeyState2
+		sb		r2,JCB_KeyState2
 		br		.0003
 .doCtrl:
-		lb		r2,KeyState1
+		lb		r2,JCB_KeyState1
 		biti	p0,r2,#1
-		lbu		r2,KeyState2
+		lbu		r2,JCB_KeyState2
 p0.eq	ori		r2,r2,#4
 p0.ne	andi	r2,r2,#~4
-		sb		r2,KeyState2
+		sb		r2,JCB_KeyState2
+		br		.0003
+.doAlt:
+		lb		r2,JCB_KeyState1
+		biti	p0,r2,#1
+		lbu		r2,JCB_KeyState2
+p0.eq	ori		r2,r2,#2
+p0.ne	andi	r2,r2,#~2
+		sb		r2,JCB_KeyState2
 		br		.0003
 .doShift:
-		lb		r2,KeyState1
+		lb		r2,JCB_KeyState1
 		biti	p0,r2,#1
-		lbu		r2,KeyState2
+		lbu		r2,JCB_KeyState2
 p0.eq	ori		r2,r2,#1
 p0.ne	andi	r2,r2,#~1
-		sb		r2,KeyState2
+		sb		r2,JCB_KeyState2
 		br		.0003
 .doNumLock:
-		lbu		r2,KeyState2
+		lbu		r2,JCB_KeyState2
 		eori	r2,r2,#16
-		sb		r2,KeyState2
+		sb		r2,JCB_KeyState2
 		bsr		KeybdSetLEDStatus
 		br		.0003
 .doCapsLock:
-		lbu		r2,KeyState2
+		lbu		r2,JCB_KeyState2
 		eori	r2,r2,#32
-		sb		r2,KeyState2
+		sb		r2,JCB_KeyState2
 		bsr		KeybdSetLEDStatus
 		br		.0003
 .doScrollLock:
-		lbu		r2,KeyState2
+		lbu		r2,JCB_KeyState2
 		eori	r2,r2,#64
-		sb		r2,KeyState2
+		sb		r2,JCB_KeyState2
 		bsr		KeybdSetLEDStatus
 		br		.0003
 
@@ -167,17 +279,17 @@ KeybdSetLEDStatus:
 		addui	r27,r27,#-8
 		sws		c1,[r27]
 		sb		r0,KeybdLEDs
-		lb		r1,KeyState2
+		lb		r1,JCB_KeyState2
 		biti	p0,r1,#16
 p0.ne	lb		r1,KeybdLEDs	; set bit 1 for Num lock, 0 for scrolllock , 2 for caps lock
 p0.ne	ori		r1,r1,#2
 p0.ne	sb		r1,KeybdLEDs
-		lb		r1,KeyState2
+		lb		r1,JCB_KeyState2
 		biti	p0,r1,#32
 p0.ne	lb		r1,KeybdLEDs
 p0.ne	ori		r1,r1,#4
 p0.ne	sb		r1,KeybdLEDs
-		lb		r1,KeyState2
+		lb		r1,JCB_KeyState2
 		biti	p0,r1,#64
 p0.ne	lb		r1,KeybdLEDs
 p0.ne	ori		r1,r1,#1
@@ -284,6 +396,69 @@ p0.lt	br		.0001
 		lw		r1,8[r27]
 		addui	r27,r27,#16
 		rts
+
+;------------------------------------------------------------------------------
+; KeybdIRQ:
+;     Store scancode in keyboard buffer. Also check for the special key
+; sequences ALT-tab and CTRL-ALT-del. If the keyboard buffer is full then
+; the newest keystrokes are lost. 
+;------------------------------------------------------------------------------
+
+KeybdIRQ:
+		sync
+		addui	r31,r31,#-80
+		sws		p0,[r31]
+		sw		r1,8[r31]
+		sw		r2,16[r31]
+		sws		hs,24[r32]
+		sw		r3,32[r31]
+		sws		ds,40[r31]
+		sws		ds.lmt,48[r31]
+		sws		hs.lmt,56[r31]
+		sw		r4,64[r31]
+		sw		r5,72[r31]
+
+		ldis	hs,#$FFD00000
+		ldis	hs.lmt,#$100000
+		lws		ds,zs:IOFocusNdx_	; set input to correct keyboard buffer
+		ldis	ds.lmt,#$10000
+		lvb		r1,hs:KEYBD			; get the scan code
+		sb		r0,hs:KEYBD+1		; clear interrupt status
+		lcu		r2,JCB_KeybdHead	; get head/tail index (1 memory op)
+		shrui	r3,r2,#8			; r3 = tail
+		zxb		r2,r2				; r2 = head
+		mov		r4,r2				; make copy of old head index
+		addui	r2,r2,#1			; increment head index
+		lbu		r5,JCB_KeybdBufSz
+		cmp		p0,r2,r5
+p0.geu	mov		r2,r0				; modulus buffer size
+		cmp		p0,r2,r3			; is there room in buffer ?
+p0.ne	sb		r1,JCB_KeybdBuf[r4]	; store scan code in buffer
+p0.ne	sb		r2,JCB_KeybdHead	; save buffer index
+		lb		r2,JCB_KeyState2	; check for ALT
+		biti	p0,r2,#2
+p0.eq	br		.exit
+		cmpi	p0,r1,#SC_TAB
+p0.eq	inc.b	zs:iof_switch_		; set IOF switch flag if ALT-Tab pressed.
+p0.eq	br		.exit
+		cmpi	p0,r1,#SC_DEL
+p0.ne	br		.exit
+		biti	p0,r2,#4			; check for CTRL-ALT-DEL
+p0.ne	jmp		cold_start
+.exit:
+		lws		p0,[r31]
+		lw		r1,8[r31]
+		lw		r2,16[r31]
+		lws		hs,24[r32]
+		lw		r3,32[r31]
+		lws		ds,40[r31]
+		lws		ds.lmt,48[r31]
+		lws		hs.lmt,56[r31]
+		lw		r4,64[r31]
+		lw		r5,72[r31]
+		addui	r31,r31,#80
+		sync
+		rti
 
 	;--------------------------------------------------------------------------
 	; PS2 scan codes to ascii conversion tables.

@@ -34,7 +34,7 @@ public VBClearScreen:
 		or		r2,r2,r1
 		ldis	lc,#SCRSZ-1
 		lh		r1,Vidptr
-		ldi		r1,#TEXTSCR
+;		ldi		r1,#TEXTSCR
 		stset.hi	r2,hs:[r1]
 		rts
 endpublic
@@ -52,24 +52,19 @@ endpublic
 ;------------------------------------------------------------------------------
 
 ScrollUp:
-		ldi		r3,#0
-		ldi		r2,#4096
-		lh		r4,Vidptr
-.0001:
 		addui	r31,r31,#-8
-		sw		r2,zs:[r31]
-		lc		r1,Textcols
-		add		r3,r3,r1
-		lh		r1,[r4+r3*4]
-		lw		r3,zs:[r31]		; pop r3
+		sws		c1,[r31]
+		mov		r1,r0
+		mov		r2,r0
+		lcu		r3,Textcols
+		lcu		r4,Textrows
+		ldi		r5,#1
+		bsr		VBScrollWindowUp
+		addui	r1,r4,#-1
+		bsr		BlankLine
+		lws		c1,[r31]
 		addui	r31,r31,#8
-		sh		r1,[r4+r3*4]
-		addui	r3,r3,#1
-		addui	r2,r2,#-1
-		tst		p0,r2
-p0.ne	br		.0001
-		lc		r1,Textrows
-		addui	r1,r1,#-1
+		rts
 
 ;------------------------------------------------------------------------------
 ; Blank out a line on the screen.
@@ -81,9 +76,9 @@ p0.ne	br		.0001
 ;------------------------------------------------------------------------------
 
 BlankLine:
-		shli	r1,r1,#1
-		lc		r3,cs:LineTbl[r1]
-		lc		r2,Textcols
+		lcu		r2,Textcols
+		mulu	r1,r1,r2
+		_4addu	r3,r1,r0
 		lh		r1,NormAttr
 		ori		r1,r1,#$20
 		lh		r4,Vidptr
@@ -99,6 +94,7 @@ p0.ne	br		.0001
 ; Turn cursor on or off.
 ;------------------------------------------------------------------------------
 
+VBCursorOn:
 CursorOn:
 		addui	r31,r31,#-16
 		sw		r1,zs:8[r31]
@@ -111,8 +107,10 @@ CursorOn:
 		lw		r2,zs:[r31]
 		lw		r1,zs:8[r31]
 		addui	r31,r31,#16
+		mov		r6,r0
 		rts
 
+VBCursorOff:
 CursorOff:
 		addui	r31,r31,#-16
 		sw		r1,zs:8[r31]
@@ -125,6 +123,7 @@ CursorOff:
 		lw		r2,zs:[r31]
 		lw		r1,zs:8[r31]
 		addui	r31,r31,#16
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -149,34 +148,33 @@ public HomeCursor:
 endpublic
 
 ;------------------------------------------------------------------------------
+; SyncVideoPos:
+;
 ; Synchronize the absolute video position with the cursor co-ordinates.
-; Does not modify any predicates.
+; Does not modify any predicates. Leaf routine.
 ;------------------------------------------------------------------------------
 
 SyncVideoPos:
 		addui	r31,r31,#-32
-		sw		r1,zs:16[r31]			; save off some working regs
-		sw		r2,zs:8[r31]
-		sw		r3,zs:[r31]
-		sws		hs,zs:24[r31]
+		sw		r1,16[r31]			; save off some working regs
+		sw		r2,8[r31]
+		sw		r3,[r31]
+		sws		hs,24[r31]
 		ldis	hs,#$FFD00000
 		ldi		r1,#5
 		sc		r1,hs:LEDS
 		lc		r2,CursorY
 		lc		r3,Textcols
 		mulu	r1,r2,r3
-;		shli	r2,r2,#1
-;		lcu		r1,cs:LineTbl[r2]
-;		shrui	r1,r1,#2
 		lc		r2,CursorX
 		addu	r1,r1,r2
 		sc		r1,VideoPos
 		lh		r3,Vidregs			; r3 = address of video registers
 		sh		r1,hs:44[r3]		; Update the position in the text controller
-		lws		hs,zs:24[r31]
-		lw		r3,zs:[r31]			; restore the regs
-		lw		r2,zs:8[r31]
-		lw		r1,zs:16[r31]
+		lws		hs,24[r31]
+		lw		r3,[r31]			; restore the regs
+		lw		r2,8[r31]
+		lw		r1,16[r31]
 		addui	r31,r31,#32
 		rts
 
@@ -184,9 +182,15 @@ SyncVideoPos:
 ; Video BIOS
 ; Video Exception #10
 ;
-; Function in R6
+; Parameters:
+;	r1 to r5 as needed
+;	r6 = Function
+; Returns:
+;	r6 = 0 if everything ok, otherwise BIOS error code
+;
 ; 0x02 = Set Cursor Position	r1 = row, r2 = col 
 ; 0x03 = Get Cursor position	returns r1 = row, r2 = col
+; 0x06 = Scroll Window up		r1=left, r2=top, r3=right, r4=bottom, r5=#lines
 ; 0x0A = Display character at cursor position, r1 = char, r2 = # times
 ; 0x14 = Display String	r1 = pointer to string
 ; 0x15 = Display number r1 = number, r2 = # digits
@@ -195,10 +199,14 @@ SyncVideoPos:
 ; 0x19 = Display Charr char in hex r1 = char
 ; 0x1A = Display Byte in hex r1 = byte
 ; 0x20 = Convert ascii to screen r1 = char to convert
-; 0x21 = Convert screen to ascii
+; 0x21 = Convert screen to ascii r1 = char to convert
+; 0x22 = clear screen
+; 0x23 = set attribute  r1 = attribute
+; 0x24 = turn cursor on
+; 0x25 = turn cursor off
 ;------------------------------------------------------------------------------
 
-MAX_VIDEO_BIOS_CALL = 0x23
+MAX_VIDEO_BIOS_CALL = 0x25
 
 		code
 	    align   2
@@ -209,7 +217,7 @@ VideoBIOS_FuncTable:
 		dc      VBGetCursorPos ; 0x03
 		dc      VBUnsupported
 		dc      VBUnsupported
-		dc      VBUnsupported
+		dc      VBScrollWindowUp	; 0x06
 		dc      VBUnsupported
 		dc      VBUnsupported	; 0x08
 		dc      VBUnsupported
@@ -237,23 +245,24 @@ VideoBIOS_FuncTable:
 		dc      VBUnsupported
 		dc      VBAsciiToScreen	; 0x20
 		dc      VBScreenToAscii
-		dc      VBUnsupported
-		dc      VBUnsupported
+		dc      VBClearScreen
+		dc      VBSetNormAttribute
+		dc		VBCursorOn
+		dc		VBCursorOff		; 0x25
 
 VideoBIOSCall:
-		ldi		r31,#VIDEO_BIOS_STACKTOP
 		addui	r31,r31,#-16
-		sws		c1,zs:[r31]
-		sws		hs,zs:8[r31]
+		sws		c1,[r31]
+		sws		hs,8[r31]
 		ldis	hs,#$FFD00000
 		cmpi	p0,r6,#MAX_VIDEO_BIOS_CALL
 p0.ge	br		.badCallno
 		jci		c1,cs:VideoBIOS_FuncTable[r6]
 .0004:
 ;		bsr     UnlockVideoBIOS
-		lws		c1,zs:[r31]
-		lws		hs,zs:8[r31]
-;		ldi		r31,#BIOS_STACKTOP
+		lws		c1,[r31]
+		lws		hs,8[r31]
+		addui	r31,r31,#16
 		rte
 .badCallno:
 		ldi     r2,#E_BadFuncno
@@ -272,6 +281,7 @@ VBSetCursorPos:
 		sc		r1,CursorY
 		sc		r2,CursorX
 		bsr		SyncVideoPos
+		mov		r6,r0
 		lws		c1,[r31]
 		addui	r31,r31,#8
 		rts
@@ -279,12 +289,24 @@ VBSetCursorPos:
 VBGetCursorPos:
 		lcu		r1,CursorY
 		lcu		r2,CursorX
+		mov		r6,r0
+		rts
+
+;------------------------------------------------------------------------------
+; Set the attribute to use for subsequent video output.
+;------------------------------------------------------------------------------
+
+VBSetNormAttribute:
+		sh		r1,NormAttr
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
 VBDisplayCharRep:
+		addui	r31,r31,#-8
+		sws		c1,[r31]
 		tst		p0,r2			; check if zero chars requested
 p0.eq	br		.0002
 		addui	r31,r31,#-16
@@ -300,6 +322,9 @@ p0.eq	br		.0002
 		lws		c1,zs:[r31]
 		addui	r31,r31,#16
 .0002:
+		lws		c1,[r31]
+		addui	r31,r31,#8
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -321,9 +346,11 @@ p0.eq	br		.0003
 		biti	p0,r1,#$40			; or bit 6 isn't set
 p0.ne	andi	r1,r1,#$19F
 .0003:
+		mov		r6,r0
 		rts
 .0002:
 		andi	r1,r1,#~$40
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -338,9 +365,11 @@ p0.eq	br		.0004
 p0.eq	br		.0004
 		cmpi	p0,r1,#27
 p0.le	addui	r1,r1,#$60
+		mov		r6,r0
 		rts
 .0004:
 		ori		r1,r1,#$40
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -370,6 +399,7 @@ p0.eq	br		.0002
 		lw		r2,16[r31]
 		lws		p0,24[r31]
 		addui	r31,r31,#32
+		mov		r6,r0
 		rts
 endpublic
 
@@ -432,6 +462,7 @@ p0.ge	addui	r1,r1,#7
 		lws		c1,[r31]
 		lw		r1,8[r31]
 		addui	r31,r31,#16
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -498,6 +529,7 @@ PNRET:
 		lw		r7,zs:32[r31]
 		lw		r4,zs:40[r31]
 		addui	r31,r31,#48
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -514,6 +546,7 @@ VBGetCharAt:
 		_4addu	r1,r2,r1
 		lhu		r3,Vidptr
 		lhu		r1,[r3+r1]
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -525,33 +558,34 @@ VBGetCharAt:
 ;------------------------------------------------------------------------------
 
 VBScrollWindowUp:
-		addui	r31,r31,#-88
+		addui	r31,r31,#-96
 		sw		r1,[r31]
 		sw		r2,8[r31]
 		sw		r3,16[r31]
 		sw		r4,24[r31]
 		sw		r5,32[r31]
-		sw		r6,40[r31]
-		sw		r9,48[r31]
-		sw		r10,56[r31]
-		sw		r11,64[r31]
-		sw		r12,72[r31]
-		sw		r13,80[r31]
-		mov		r5,r1
+		sw		r7,48[r31]
+		sw		r9,56[r31]
+		sw		r10,64[r31]
+		sw		r11,72[r31]
+		sw		r12,80[r31]
+		sw		r13,88[r31]
+		mov		r7,r1				; r7 = left
 		mov		r6,r2
 		lhu		r11,Vidptr
-		lcu		r13,TextCols		; r13 = # cols
+		lcu		r13,Textcols		; r13 = # cols
 .next:
-		_2addu	r9,r2,r0			; r9 = row * 2
-		lcu		r9,cs:LineTbl[r9]	; r9 = row offset
+		mulu	r9,r2,r13			; r9 = row offset
+		_4addu	r9,r9,r0			; r9 *= 4 for half-words
 		_4addu	r9,r1,r9			; r9 += col * 4
-		_4addu	r10,r13,r9			; r10 = 4 * #cols + r9
+		mulu	r10,r13,r5			; r10 = #lines to scroll * #cols
+		_4addu	r10,r10,r9			; r10 = 4* r10 + r9
 		lhu		r12,[r11+r10]		; r12 = char+atrrib
 		sh		r12,[r11+r9]		; mem = char + attrib
 		; Now increment the video position
 		addui	r1,r1,#1
 		cmp		p0,r1,r3	; hit right edge ?
-p0.eq	mov		r1,r5		; if yes, reset back to left
+p0.eq	mov		r1,r7		; if yes, reset back to left
 p0.eq	addui	r2,r2,#1	; and increment row
 		cmp		p0,r2,r4	; hit bottom ?
 p0.ne	br		.next
@@ -560,13 +594,14 @@ p0.ne	br		.next
 		lw		r3,16[r31]
 		lw		r4,24[r31]
 		lw		r5,32[r31]
-		lw		r6,40[r31]
-		lw		r9,48[r31]
-		lw		r10,56[r31]
-		lw		r11,64[r31]
-		lw		r12,72[r31]
-		lw		r13,80[r31]
-		addui	r31,r31,#88
+		lw		r7,48[r31]
+		lw		r9,56[r31]
+		lw		r10,64[r31]
+		lw		r11,72[r31]
+		lw		r12,80[r31]
+		lw		r13,88[r31]
+		addui	r31,r31,#96
+		mov		r6,r0
 		rts
 
 ;------------------------------------------------------------------------------
@@ -574,19 +609,20 @@ p0.ne	br		.next
 ;------------------------------------------------------------------------------
 ;
 public VBDisplayChar:
-		addui	r31,r31,#-48
+		addui	r31,r31,#-56
 		sws		c1,[r31]
 		sws		pregs,8[r31]
-		sw		r2,16[r31]
-		sw		r3,24[r31]
-		sw		r4,32[r31]
-		sws		hs,40[r31]
+		sw		r1,16[r31]
+		sw		r2,24[r31]
+		sw		r3,32[r31]
+		sw		r4,40[r31]
+		sws		hs,48[r31]
 		ldis	hs,#$FFD00000
 		zxb		r1,r1
 		lb		r2,EscState
 		tst		p0,r2
 p0.lt	br		processEsc
-		cmpi	p0,r1,#BS
+		cmpi	p0,r1,#_BS
 p0.eq	br		doBackSpace
 		cmpi	p0,r1,#$91	; cursor right
 p0.eq	br		doCursorRight
@@ -611,11 +647,13 @@ p0.ne	br		_0003
 exitDC:
 		lws		c1,[r31]
 		lws		pregs,8[r31]
-		lw		r2,16[r31]
-		lw		r3,24[r31]
-		lw		r4,32[r31]
-		lws		hs,40[r31]
-		addui	r31,r31,#48
+		lw		r1,16[r31]
+		lw		r2,24[r31]
+		lw		r3,32[r31]
+		lw		r4,40[r31]
+		lws		hs,48[r31]
+		addui	r31,r31,#56
+		mov		r6,r0
 		rts
 _0003:
 		andi	r1,r1,#$7F
@@ -877,6 +915,7 @@ public VideoInit:
 		addui	r2,r2,#4
 		addui	r3,r3,#4
 		loop	.0001
+		mov		r6,r0
 		rts
 endpublic
 
@@ -906,6 +945,7 @@ public VideoInit2:
 		addui	r2,r2,#4
 		addui	r3,r3,#4
 		loop	.0001
+		mov		r6,r0
 		rts
 endpublic
 
