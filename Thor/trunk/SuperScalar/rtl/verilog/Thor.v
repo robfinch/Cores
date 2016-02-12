@@ -1452,7 +1452,7 @@ vtdl #(.WID(64),.DEP(64)) uvtl1
 );
 `endif
 
-Thor_icachemem #(DBW) uicm1
+Thor_icachemem #(.DBW(DBW),.ABW(ABW)) uicm1
 (
 	.wclk(clk),
 	.wce(cstate==ICACHE1),
@@ -1951,7 +1951,7 @@ fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
-			opcode==`STP || opcode==`LLA || opcode==`LLAX ||
+			opcode==`STP || opcode==`LLA || opcode==`LLAX || opcode==`LEA ||
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS || opcode==`PUSH || opcode==`POP || opcode==`LINK || opcode==`UNLINK ||
 			opcode==`JMPI || opcode==`JMPIX ||
@@ -2063,7 +2063,7 @@ casex(op)
     else 
         fnIsIllegal = `FALSE;
 8'h43,8'h44,8'h45:  fnIsIllegal = `TRUE;
-8'h52,8'h56,8'h57,8'h59,8'h5A,8'h5C,8'h5D,8'h5E:
+8'h52,8'h56,8'h57,8'h59,8'h5A,8'h5D,8'h5E:
     fnIsIllegal = `TRUE;
 8'h60,8'h61,8'h62,8'h63,8'h64,8'h65,8'h66,8'h67,8'h68,8'h69:
     fnIsIllegal = `TRUE;
@@ -2585,7 +2585,7 @@ case(insn[15:8])
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
 `PUSH:  fnImm = 64'hFFFFFFFFFFFFFFF8;   //-8
 //`LINK:  fnImm = {insn[39:28],3'b000};
-`JMPI,`LLA,
+`JMPI,`LLA,`LEA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm = {{55{insn[36]}},insn[36:28]};
@@ -2619,7 +2619,7 @@ case(insn[15:8])
 `ifdef STACKOPS
 `LINK:  fnImm8 = {insn[32:28],3'b000};
 `endif
-`JMPI,`LLA,
+`JMPI,`LLA,`LEA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm8 = insn[35:28];
@@ -2655,7 +2655,7 @@ case(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`JMPI,`LLA,
+`JMPI,`LLA,`LEA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,
 `SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImmMSB = insn[36];
@@ -5695,7 +5695,7 @@ begin
         $stop;
     if (fetchbuf0_pc==32'hF44)
         $stop;
-    if (fetchbuf0_pc==32'hFFFC263F)
+    if (fetchbuf0_pc==32'hFFFC2F71)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -5929,7 +5929,7 @@ begin
         $stop;
     if (fetchbuf1_pc==32'hF44)
         $stop;
-    if (fetchbuf1_pc==32'hFFFC263F)
+    if (fetchbuf1_pc==32'hFFFC2F71)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS

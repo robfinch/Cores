@@ -288,7 +288,7 @@ case(alu_op)
         o <= 64'hDEADDEADDEADDEAD;
  */
 
-`ADDI,`ADDUI,`ADDUIS:
+`ADDI,`ADDUI,`ADDUIS,`LEA:
                 o <= alu_argA + alu_argI;
 `SUBI,`SUBUI:
             	o <= alu_argA - alu_argI;

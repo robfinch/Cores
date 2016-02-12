@@ -18,6 +18,7 @@ wire [DBW-1:0] br_dato;
 wire scr_ack;
 wire [63:0] scr_dato;
 reg [31:0] rammem [0:1048575];
+wire err1,err2;
 
 wire cpu_ack;
 wire [DBW-1:0] cpu_dati;
@@ -62,6 +63,10 @@ assign LEDS_ack = cyc && stb && adr[31:8]==32'hFFDC06;
 always @(posedge clk)
 	if (LEDS_ack)
 		$display("LEDS: %b", cpu_dato[7:0]);
+
+always @(posedge clk)
+    if ((err1|err2)&&$time > 11000)
+        $stop;
 
 wire tc1_ack, tc2_ack;
 wire kbd_ack;
@@ -205,7 +210,9 @@ bootrom #(DBW) ubr1
 	.ack_o(br_ack),
 	.adr_i(adr),
 	.dat_o(br_dato),
-	.perr()
+	.perr(),
+	.err1(err1),
+	.err2(err2)
 );
 
 wire nmio;
