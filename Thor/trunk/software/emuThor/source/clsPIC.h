@@ -12,6 +12,7 @@ public:
 	bool irq30Hz;
 	bool irq1024Hz;
 	bool irqKeyboard;
+	bool irqUart;
 	unsigned int vecno;
 	clsPIC(void);
 	void Reset();
@@ -49,25 +50,31 @@ public:
 				irq1024Hz = false;
 			if (dat==3)
 				irq30Hz = false;
+			if (dat==7)
+				irqUart = false;
 			if (dat==15)
 				irqKeyboard = false;
 			break;
 		}
 	};
 	void Step(void) {
-		vecno = 448;
+		vecno = 192;
 		cpu1.irq = false;
 		if (enables[15] & irqKeyboard) {
 			cpu1.irq = true;
-			vecno = 448+15;
+			vecno = 192+15;
+		}
+		if (enables[7] & irqUart) {
+			cpu1.irq = true;
+			vecno = 192+7;
 		}
 		if (enables[3] & irq30Hz) {
 			cpu1.irq = true;
-			vecno = 448+3;
+			vecno = 192+3;
 		}
 		if (enables[2] & irq1024Hz) {
 			cpu1.irq = true;
-			vecno = 448+2;
+			vecno = 192+2;
 		}
 		cpu1.vecno = vecno;
 	};

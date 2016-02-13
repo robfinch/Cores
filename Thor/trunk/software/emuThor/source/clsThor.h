@@ -5,8 +5,25 @@ extern clsSystem system1;
 
 class clsThor : public clsCPU
 {
+	bool StatusHWI;
+	bool StatusDBG;
+	__int16 StatusEXL;
+	__int64 string_pc;
+	unsigned __int64 imm;
+	bool imm_prefix;
+	unsigned __int64 ea;
+	unsigned int mode : 2;
+
+	__int64 GetGP(int rg);
+	void SetGP(int rg, __int64 val);
+	int GetMode();
+	void SetSpr(int Sprn, __int64 val);
+	__int64 GetSpr(int Sprn);
+	void dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *disp);
+	int WriteMask(int ad, int sz);
+	unsigned __int64 ReadByte(int ad) { return system1->ReadByte(ad); };
 public:
-	__int64 pc;
+	unsigned __int64 pc;
 	__int64 gp[64];		// general purpose registers
 	__int64 ca[16];		// code address registers
 	__int8 pr[16];		// predicate registers
@@ -17,15 +34,13 @@ public:
 	__int8 bir;
 	__int64 dbad0,dbad1,dbad2,dbad3;
 	__int64 dbctrl,dbstat;
-	unsigned __int64 imm;
-	bool imm_prefix;
-	unsigned __int64 ea;
 	bool im;
 	int imcd;
 	int pred;
+	bool IsKM();
 	void Reset();
 	void Step();
-	unsigned __int64 ReadByte(int ad) { return system1->ReadByte(ad); };
-	void dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *disp);
+private:
+	inline bool IRQActive() { return !StatusHWI && irq && !im; };
 };
 

@@ -40,6 +40,8 @@ namespace emuThor {
 				delete components;
 			}
 		}
+	public: unsigned long *pVidMem;
+	public: bool *pVidDirty;
 	private: System::Windows::Forms::Timer^  timer1;
 	private: System::Windows::Forms::PictureBox^  pictureBox1;
 	protected: 
@@ -121,13 +123,15 @@ namespace emuThor {
 				 minx = 1000; miny = 1000;
 				 if (refscreen) {
 					 for (nn = 0; nn < 4096; nn++) {
-						 if (system1.VideoMemDirty[nn]) {
-							 xx = nn % 84;
-							 yy = nn / 84;
-							 maxx = max(xx,maxx);
-							 maxy = max(yy,maxy);
-							 minx = min(xx,minx);
-							 miny = min(yy,miny);
+						 if (pVidDirty) {
+							 if (pVidDirty[nn]) {
+								 xx = nn % 84;
+								 yy = nn / 84;
+								 maxx = max(xx,maxx);
+								 maxy = max(yy,maxy);
+								 minx = min(xx,minx);
+								 miny = min(yy,miny);
+							 }
 						 }
 					 }
 					ur.X = minx<<3;
@@ -161,20 +165,23 @@ private: System::Void pictureBox1_Paint(System::Object^  sender, System::Windows
 					 for (yy = ur.Y; yy < ur.Y + ur.Height; yy += 8) {
 						 ndx = (xx/8 + yy/8 * 84);
 //						 if (system1.VideoMemDirty[ndx]) {
-							v = system1.VideoMem[ndx];
-							r = ((((v >> 10) >> 9) >> 6) & 7) << 5;
-							g = ((((v >> 10) >> 9) >> 3) & 7) << 5;
-							b = ((((v >> 10) >> 9) >> 0) & 7) << 5;
-							bkbr->Color = col->FromArgb(255,r,g,b);
-							gr->FillRectangle(bkbr,xx,yy,8,8);
-							r = ((((v >> 10)) >> 6) & 7) << 5;
-							g = ((((v >> 10)) >> 3) & 7)<< 5;
-							b = ((((v >> 10)) >> 0) & 7)<< 5;
-							fgbr->Color = col->FromArgb(255,r,g,b);
-							sprintf(buf,"%c",ScreenToAscii(system1.VideoMem[ndx]&0xff));
-							str = std::string(buf);
-							gr->DrawString(gcnew String(str.c_str()),myfont,fgbr,xx,yy);
-							system1.VideoMemDirty[ndx] = false;
+							if (pVidMem) {
+								v = pVidMem[ndx];
+								r = ((((v >> 10) >> 9) >> 6) & 7) << 5;
+								g = ((((v >> 10) >> 9) >> 3) & 7) << 5;
+								b = ((((v >> 10) >> 9) >> 0) & 7) << 5;
+								bkbr->Color = col->FromArgb(255,r,g,b);
+								gr->FillRectangle(bkbr,xx,yy,8,8);
+								r = ((((v >> 10)) >> 6) & 7) << 5;
+								g = ((((v >> 10)) >> 3) & 7)<< 5;
+								b = ((((v >> 10)) >> 0) & 7)<< 5;
+								fgbr->Color = col->FromArgb(255,r,g,b);
+								sprintf(buf,"%c",ScreenToAscii(v&0xff));
+								str = std::string(buf);
+								gr->DrawString(gcnew String(str.c_str()),myfont,fgbr,xx,yy);
+								if (pVidDirty)
+									pVidDirty[ndx] = false;
+							}
 //						 }
 					 }
 				 }

@@ -9,6 +9,8 @@ public:
 	unsigned __int64 pcs[40];
 	clsSystem *system1;
 public:
+	bool isRunning;
+	unsigned int sub_depth;
 	virtual void Reset() {};
 	virtual void Step() {};
 };

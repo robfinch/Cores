@@ -17,6 +17,8 @@ public:
 	unsigned __int64 rom[32768];
 	unsigned long VideoMem[4096];
 	bool VideoMemDirty[4096];
+	unsigned long DBGVideoMem[4096];
+	bool DBGVideoMemDirty[4096];
 	unsigned int leds;
 	int m_z;
 	int m_w;

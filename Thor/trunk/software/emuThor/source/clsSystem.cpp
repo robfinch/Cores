@@ -1,6 +1,7 @@
 #include "stdafx.h"
 
 extern clsPIC pic1;
+extern clsUart uart1;
 
 clsSystem::clsSystem() {
 	int nn;
@@ -25,6 +26,7 @@ void clsSystem::Reset()
 	runstop = false;
 	cpu1.system1 = this;
 	refscreen = true;
+	uart1.Reset();
 };
 	unsigned __int64 clsSystem::Read(unsigned int ad, int sr) {
 		__int64 rr;
@@ -74,6 +76,12 @@ void clsSystem::Reset()
 			rr = (rr << 48) | (rr << 32) | (rr << 16) | rr;
 			return rr;
 		}
+		else if (uart1.IsSelected(ad)) {
+			rr = uart1.Read(ad) & 0xFF;
+			rr = (rr << 56) | (rr << 48) || (rr << 40) | (rr << 32)
+				 | (rr << 24) | (rr << 16) | (rr << 8) | rr;
+			return rr;
+		}
 		return 0;
 	};
 	int clsSystem::Write(unsigned int ad, unsigned __int64 dat, unsigned int mask, int cr) {
@@ -91,7 +99,7 @@ void clsSystem::Reset()
 				radr2 = 0x00000000;
 		}
 		if (ad < 134217728) {
-			if (ad >= 0x10000 && ad < 0x20000) {
+			if (ad >= 0xFFFC0000LL) {
 				write_error = true;
 				ret = true;
 				goto j1;
@@ -197,6 +205,11 @@ void clsSystem::Reset()
 			VideoMemDirty[(ad>>2)&0xfff] = true;
 			refscreen = true;
 		}
+		else if ((ad & 0xFFFF0000)==0xFFD10000) {
+			DBGVideoMem[(ad>>2)& 0xFFF] = dat;
+			DBGVideoMemDirty[(ad>>2)&0xfff] = true;
+			refscreen = true;
+		}
 		else if ((ad & 0xFFFC0000)==0xFFFC0000 && WriteROM) {
 			rom[(ad&0x3FFFF)>>3] = dat;
 		}
@@ -207,6 +220,9 @@ void clsSystem::Reset()
 		}
 		else if (pic1.IsSelected(ad)) {
 			pic1.Write(ad,dat,0x3);
+		}
+		else if (uart1.IsSelected(ad)) {
+			uart1.Write(ad,dat,0x1);
 		}
 		ret = true;
 j1:

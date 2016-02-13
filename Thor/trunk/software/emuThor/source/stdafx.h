@@ -6,6 +6,7 @@
 // TODO: reference additional headers your program requires here
 #include <string>
 #include "clsPIC.h"
+#include "clsUart.h"
 #include "clsSystem.h"
 
 enum {

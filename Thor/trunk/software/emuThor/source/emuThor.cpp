@@ -11,6 +11,7 @@
 
 clsThor cpu1;
 clsPIC pic1;
+clsUart uart1;
 clsSystem system1;
 clsKeyboard keybd;
 volatile unsigned __int8 keybd_scancode;
