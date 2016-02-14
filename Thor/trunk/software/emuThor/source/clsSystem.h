@@ -1,12 +1,10 @@
 #pragma once
-#include "stdafx.h"
-#include "clsKeyboard.h"
+#include "clsThor.h"
 
 extern char refscreen;
 extern unsigned int dataBreakpoints[30];
 extern int numDataBreakpoints;
-extern int runstop;
-extern clsKeyboard keybd;
+extern bool runstop;
 extern volatile unsigned __int8 keybd_status;
 extern volatile unsigned __int8 keybd_scancode;
 
@@ -26,6 +24,11 @@ public:
 	unsigned int radr1;
 	unsigned int radr2;
 	bool WriteROM;
+	bool quit;
+	clsThor cpu2;
+	clsPIC pic1;
+	clsUart uart1;
+	clsKeyboard keybd;
 
 	clsSystem();
 	void Reset();
@@ -33,4 +36,6 @@ public:
 	unsigned __int64 ReadByte(unsigned int ad);
 	int Write(unsigned int ad, unsigned __int64 dat, unsigned int mask, int cr=0);
  	int random();
+	void Run();
+	void Step();
 };

@@ -2,8 +2,6 @@
 #include "stdafx.h"
 #include "clsKeyboard.h"
 
-extern clsKeyboard keybd;
-extern clsPIC pic1;
 extern volatile unsigned __int8 keybd_status;
 extern volatile unsigned __int8 keybd_scancode;
 
@@ -1152,537 +1150,537 @@ private: System::Windows::Forms::Button^  buttonTab;
 		}
 #pragma endregion
 	private: System::Void btnQuest_Click(System::Object^  sender, System::EventArgs^  e) {
-				 keybd.Put(0x4A);
-				 keybd.Put(0xF0);
-				 keybd.Put(0x4A);
+				 system1.keybd.Put(0x4A);
+				 system1.keybd.Put(0xF0);
+				 system1.keybd.Put(0x4A);
 				 keybd_status = 0x80;
-     			 pic1.irqKeyboard = true;
+     			 system1.pic1.irqKeyboard = true;
 			 }
 private: System::Void btnEnter_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x5A);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x5A);
+			 system1.keybd.Put(0x5A);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x5A);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnRshift_Click(System::Object^  sender, System::EventArgs^  e) {
 			 static bool sh = false;
 
 			 if (sh!=0)
-			     keybd.Put(0xF0);
-			 keybd.Put(0x59);
+			     system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x59);
 			 sh = !sh;
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn1_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x16);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x16);
+			 system1.keybd.Put(0x16);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x16);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnD_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x23);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x23);
+			 system1.keybd.Put(0x23);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x23);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnB_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x32);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x32);
+			 system1.keybd.Put(0x32);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x32);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnG_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x34);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x34);
+			 system1.keybd.Put(0x34);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x34);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnQ_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x15);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x15);
+			 system1.keybd.Put(0x15);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x15);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnT_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x2C);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x2C);
+			 system1.keybd.Put(0x2C);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x2C);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnS_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x1B);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x1B);
+			 system1.keybd.Put(0x1B);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x1B);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnM_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x3A);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x3A);
+			 system1.keybd.Put(0x3A);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x3A);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnMinus_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x4E);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x4E);
+			 system1.keybd.Put(0x4E);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x4E);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnBackspace_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x66);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x66);
+			 system1.keybd.Put(0x66);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x66);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button14_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x71);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x71);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x71);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x71);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnJ_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x3B);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x3B);
+			 system1.keybd.Put(0x3B);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x3B);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnSpace_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x29);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x29);
+			 system1.keybd.Put(0x29);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x29);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button10_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x6B);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x6B);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x6B);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x6B);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn2_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x1E);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x1E);
+			 system1.keybd.Put(0x1E);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x1E);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn3_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x26);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x26);
+			 system1.keybd.Put(0x26);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x26);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn4_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x25);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x25);
+			 system1.keybd.Put(0x25);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x25);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn5_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x2E);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x2E);
+			 system1.keybd.Put(0x2E);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x2E);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn6_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x36);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x36);
+			 system1.keybd.Put(0x36);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x36);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn7_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x3D);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x3D);
+			 system1.keybd.Put(0x3D);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x3D);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn8_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x3E);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x3E);
+			 system1.keybd.Put(0x3E);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x3E);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn9_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x46);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x46);
+			 system1.keybd.Put(0x46);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x46);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btn0_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x45);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x45);
+			 system1.keybd.Put(0x45);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x45);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnA_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x1C);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x1C);
+			 system1.keybd.Put(0x1C);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x1C);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnC_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x21);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x21);
+			 system1.keybd.Put(0x21);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x21);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnE_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x24);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x24);
+			 system1.keybd.Put(0x24);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x24);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnF_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x2B);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x2B);
+			 system1.keybd.Put(0x2B);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x2B);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnX_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x22);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x22);
+			 system1.keybd.Put(0x22);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x22);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnRctrl_Click(System::Object^  sender, System::EventArgs^  e) {
 			 static bool sh = false;
-			 keybd.Put(0xE0);
+			 system1.keybd.Put(0xE0);
 			 if (sh!=0)
-			     keybd.Put(0xF0);
-			 keybd.Put(0x14);
+			     system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x14);
 			 sh = !sh;
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button9_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x55);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x55);
+			 system1.keybd.Put(0x55);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x55);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button8_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x0E);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x0E);
+			 system1.keybd.Put(0x0E);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x0E);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnW_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x1D);
+			 system1.keybd.Put(0x1D);
 			 keybd_status = 0x80;
-			 keybd.Put(0xF0);
-			 keybd.Put(0x1D);
-			 pic1.irqKeyboard = true;
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x1D);
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnR_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x2D);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x2D);
+			 system1.keybd.Put(0x2D);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x2D);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnY_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x35);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x35);
+			 system1.keybd.Put(0x35);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x35);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnU_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x3C);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x3C);
+			 system1.keybd.Put(0x3C);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x3C);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnI_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x43);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x43);
+			 system1.keybd.Put(0x43);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x43);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnO_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x44);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x44);
+			 system1.keybd.Put(0x44);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x44);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnP_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x4D);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x4D);
+			 system1.keybd.Put(0x4D);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x4D);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnH_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x33);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x33);
+			 system1.keybd.Put(0x33);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x33);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnK_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x42);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x42);
+			 system1.keybd.Put(0x42);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x42);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnL_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x4B);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x4B);
+			 system1.keybd.Put(0x4B);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x4B);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button3_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x4C);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x4C);
+			 system1.keybd.Put(0x4C);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x4C);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button4_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x52);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x52);
+			 system1.keybd.Put(0x52);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x52);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnZ_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x1A);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x1A);
+			 system1.keybd.Put(0x1A);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x1A);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnV_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x2A);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x2A);
+			 system1.keybd.Put(0x2A);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x2A);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnN_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x31);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x31);
+			 system1.keybd.Put(0x31);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x31);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button1_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x41);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x41);
+			 system1.keybd.Put(0x41);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x41);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button2_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x49);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x49);
+			 system1.keybd.Put(0x49);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x49);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button5_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x5D);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x5D);
+			 system1.keybd.Put(0x5D);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x5D);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnLalt_Click(System::Object^  sender, System::EventArgs^  e) {
 			 static bool sh = false;
 			 if (sh!=0)
-			     keybd.Put(0xF0);
-			 keybd.Put(0x11);
+			     system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x11);
 			 sh = !sh;
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // Alt
 private: System::Void button20_Click(System::Object^  sender, System::EventArgs^  e) {
 			 static bool sh = false;
-			 keybd.Put(0xE0);
+			 system1.keybd.Put(0xE0);
 			 if (sh!=0)
-			     keybd.Put(0xF0);
-			 keybd.Put(0x11);
+			     system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x11);
 			 sh = !sh;
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void buttonLctrl_Click(System::Object^  sender, System::EventArgs^  e) {
 			 static bool sh = false;
 			 if (sh!=0)
-			     keybd.Put(0xF0);
-			 keybd.Put(0x14);
+			     system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x14);
 			 sh = !sh;
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button16_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x70);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x70);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x70);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x70);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // Home
 private: System::Void button17_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x6C);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x6C);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x6C);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x6C);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // End
 private: System::Void button15_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x69);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x69);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x69);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x69);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // Cursor down
 private: System::Void button11_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x72);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x72);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x72);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x72);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // Cursor Up
 private: System::Void button13_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x75);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x75);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x75);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x75);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // Cursor right
 private: System::Void button12_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x74);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x74);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x74);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x74);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // page up
 private: System::Void button19_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x7D);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x7D);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x7D);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x7D);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 		 // page down
 private: System::Void button18_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0xE0);
-			 keybd.Put(0x7A);
-			 keybd.Put(0xE0);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x7A);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0x7A);
+			 system1.keybd.Put(0xE0);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x7A);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button6_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x54);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x54);
+			 system1.keybd.Put(0x54);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x54);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void button7_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x5B);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x5B);
+			 system1.keybd.Put(0x5B);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x5B);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void buttonEsc_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x76);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x76);
+			 system1.keybd.Put(0x76);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x76);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void buttonF1_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x05);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x05);
+			 system1.keybd.Put(0x05);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x05);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void buttonF2_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x06);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x06);
+			 system1.keybd.Put(0x06);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x06);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void buttonCapslock_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x58);
+			 system1.keybd.Put(0x58);
 			 keybd_status = 0x80;
-			 keybd.Put(0xF0);
-			 keybd.Put(0x58);
-			 pic1.irqKeyboard = true;
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x58);
+			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void frmKeyboard_MouseUp(System::Object^  sender, System::Windows::Forms::MouseEventArgs^  e) {
 		 }
 private: System::Void buttonTab_Click(System::Object^  sender, System::EventArgs^  e) {
-			 keybd.Put(0x0D);
-			 keybd.Put(0xF0);
-			 keybd.Put(0x0D);
+			 system1.keybd.Put(0x0D);
+			 system1.keybd.Put(0xF0);
+			 system1.keybd.Put(0x0D);
 			 keybd_status = 0x80;
-			 pic1.irqKeyboard = true;
+			 system1.pic1.irqKeyboard = true;
 		 }
 };
 }

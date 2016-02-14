@@ -1,9 +1,7 @@
 #pragma once
-#include "clsDevice.h"
-#include "clsCPU.h"
-#include "clsThor.h"
+#include "stdafx.h"
 
-extern clsThor cpu1;
+extern clsSystem system1;
 
 class clsPIC : public clsDevice
 {
@@ -19,64 +17,8 @@ public:
 	bool IsSelected(unsigned int ad) {
 		return ((ad & 0xFFFFFFC0)==0xFFDC0FC0);
 	};
-	unsigned int Read(unsigned int ad) {
-		int nn;
-		unsigned int dat;
-		switch((ad >> 2) & 15) {
-		case 0:
-			return vecno;
-		default:
-			dat = 0;
-			for (nn = 0; nn < 16; nn++)
-				dat |= (enables[nn] << nn);
-			return dat;
-		}
-	};
-	void Write(unsigned int ad, unsigned int dat, unsigned int mask) {
-		int nn;
-		switch((ad >> 2) & 15) {
-		case 1:
-			for (nn = 0; nn < 16; nn++)
-				enables[nn] = dat & (1 << nn);
-			break;
-		case 2:
-			enables[dat & 15] = false;
-			break;
-		case 3:
-			enables[dat & 15] = true;
-			break;
-		case 5:
-			if (dat==2)
-				irq1024Hz = false;
-			if (dat==3)
-				irq30Hz = false;
-			if (dat==7)
-				irqUart = false;
-			if (dat==15)
-				irqKeyboard = false;
-			break;
-		}
-	};
-	void Step(void) {
-		vecno = 192;
-		cpu1.irq = false;
-		if (enables[15] & irqKeyboard) {
-			cpu1.irq = true;
-			vecno = 192+15;
-		}
-		if (enables[7] & irqUart) {
-			cpu1.irq = true;
-			vecno = 192+7;
-		}
-		if (enables[3] & irq30Hz) {
-			cpu1.irq = true;
-			vecno = 192+3;
-		}
-		if (enables[2] & irq1024Hz) {
-			cpu1.irq = true;
-			vecno = 192+2;
-		}
-		cpu1.vecno = vecno;
-	};
+	unsigned int Read(unsigned int ad);
+	void Write(unsigned int ad, unsigned int dat, unsigned int mask);
+	void Step(void);
 };
 

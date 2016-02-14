@@ -12,10 +12,11 @@
 #include "frmScreen.h"
 #include "frmKeyboard.h"
 #include "frmUart.h"
+#include "fmrFreeRun.h"
 #include "About.h"
 //#include "fmrPCS.h"
 //#include "frmInterrupts.h"
-//#include "frmStack.h"
+#include "frmStack.h"
 #include "frmMemory.h"
 //#include "Disassem.h"
 #include "clsCPU.h"
@@ -23,12 +24,18 @@
 #include "clsDisassem.h"
 
 clsDisassem da;
-extern clsThor cpu1;
-extern clsPIC pic1;
 extern clsSystem system1;
 extern unsigned int breakpoints[30];
 extern unsigned __int64 ibreakpoints[10];
 extern bool ib_active[10];
+bool isRunning;
+bool stepout, stepover;
+unsigned int step_depth, stepover_depth;
+unsigned int stepoverBkpt;
+unsigned int stepover_pc;
+bool animate;
+bool fullspeed;
+bool runstop;
 
 namespace emuThor {
 
@@ -58,6 +65,7 @@ namespace emuThor {
 			stepout = false;
 			stepover = false;
 			animate = false;
+			isRunning = false;
 			frmKeyboard^ keyboardFrm = gcnew frmKeyboard();
 			     keyboardFrm->Show();
 			frmScreen^ screenFrm = gcnew frmScreen();
@@ -71,8 +79,12 @@ namespace emuThor {
 			frmUart^ uartFrm = gcnew frmUart();
 				uartFrm->Show();
 				uartFrm->WindowState = FormWindowState::Minimized;
-			cpu1.isRunning = false;
-			myThreadDelegate = gcnew ThreadStart(this, &frmMain::RunCPU2);
+			myThreadDelegate = gcnew ThreadStart(this, &frmMain::Run);
+			myThread = gcnew Thread(myThreadDelegate);			
+			myThread->Start();
+
+//			this->SetStyle(ControlStyles::AllPaintingInWmPaint |
+//			ControlStyles::Opaque, true);
 		}
 
 	protected:
@@ -81,10 +93,12 @@ namespace emuThor {
 		/// </summary>
 		~frmMain()
 		{
+//			this->backgroundWorker1->CancelAsync();
 			if (components)
 			{
 				delete components;
 			}
+			system1.quit = true;
 		}
 	private: System::Windows::Forms::MenuStrip^  menuStrip1;
 	protected: 
@@ -113,18 +127,16 @@ namespace emuThor {
 	private: System::Windows::Forms::ToolStripMenuItem^  resetToolStripMenuItem;
 	private: System::Windows::Forms::Label^  lblLEDS;
 	private: System::Windows::Forms::ToolStripMenuItem^  breakpointsToolStripMenuItem;
-	private: bool animate;
-	private: bool fullspeed;
-	private: bool isRunning, runstop;
-	private: bool stepout, stepover;
-	private: unsigned int step_depth, stepover_depth;
-	private: unsigned int stepoverBkpt;
-	private: unsigned int stepover_pc;
 	private: ThreadStart^ myThreadDelegate;
+	private: Thread^ myThread;
 	private: System::Windows::Forms::ToolStripMenuItem^  fullSpeedToolStripMenuItem;
 	private: System::Windows::Forms::Timer^  timer1;
 	private: System::Windows::Forms::ToolStripMenuItem^  animateFastToolStripMenuItem;
 	private: System::Windows::Forms::TrackBar^  trackBar1;
+	private: System::Windows::Forms::ToolStripMenuItem^  freeRunToolStripMenuItem;
+	private: System::Windows::Forms::ToolStripMenuItem^  stackToolStripMenuItem;
+
+
 	private: System::ComponentModel::IContainer^  components;
 	private:
 		/// <summary>
@@ -149,6 +161,7 @@ namespace emuThor {
 			this->stepToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->fullSpeedToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->animateFastToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
+			this->freeRunToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->viewToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->registersToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->memoryToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
@@ -171,6 +184,7 @@ namespace emuThor {
 			this->lblLEDS = (gcnew System::Windows::Forms::Label());
 			this->timer1 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->trackBar1 = (gcnew System::Windows::Forms::TrackBar());
+			this->stackToolStripMenuItem = (gcnew System::Windows::Forms::ToolStripMenuItem());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->BeginInit();
@@ -203,8 +217,8 @@ namespace emuThor {
 			// 
 			// runToolStripMenuItem
 			// 
-			this->runToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(4) {this->resetToolStripMenuItem, 
-				this->stepToolStripMenuItem, this->fullSpeedToolStripMenuItem, this->animateFastToolStripMenuItem});
+			this->runToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(5) {this->resetToolStripMenuItem, 
+				this->stepToolStripMenuItem, this->fullSpeedToolStripMenuItem, this->animateFastToolStripMenuItem, this->freeRunToolStripMenuItem});
 			this->runToolStripMenuItem->Name = L"runToolStripMenuItem";
 			this->runToolStripMenuItem->Size = System::Drawing::Size(40, 20);
 			this->runToolStripMenuItem->Text = L"&Run";
@@ -237,10 +251,17 @@ namespace emuThor {
 			this->animateFastToolStripMenuItem->Text = L"&Animate Fast";
 			this->animateFastToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::animateFastToolStripMenuItem_Click);
 			// 
+			// freeRunToolStripMenuItem
+			// 
+			this->freeRunToolStripMenuItem->Name = L"freeRunToolStripMenuItem";
+			this->freeRunToolStripMenuItem->Size = System::Drawing::Size(143, 22);
+			this->freeRunToolStripMenuItem->Text = L"Free Run";
+			this->freeRunToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::freeRunToolStripMenuItem_Click);
+			// 
 			// viewToolStripMenuItem
 			// 
-			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(3) {this->registersToolStripMenuItem, 
-				this->memoryToolStripMenuItem, this->breakpointsToolStripMenuItem});
+			this->viewToolStripMenuItem->DropDownItems->AddRange(gcnew cli::array< System::Windows::Forms::ToolStripItem^  >(4) {this->registersToolStripMenuItem, 
+				this->memoryToolStripMenuItem, this->breakpointsToolStripMenuItem, this->stackToolStripMenuItem});
 			this->viewToolStripMenuItem->Name = L"viewToolStripMenuItem";
 			this->viewToolStripMenuItem->Size = System::Drawing::Size(44, 20);
 			this->viewToolStripMenuItem->Text = L"&View";
@@ -248,21 +269,21 @@ namespace emuThor {
 			// registersToolStripMenuItem
 			// 
 			this->registersToolStripMenuItem->Name = L"registersToolStripMenuItem";
-			this->registersToolStripMenuItem->Size = System::Drawing::Size(136, 22);
+			this->registersToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->registersToolStripMenuItem->Text = L"&Registers";
 			this->registersToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::registersToolStripMenuItem_Click);
 			// 
 			// memoryToolStripMenuItem
 			// 
 			this->memoryToolStripMenuItem->Name = L"memoryToolStripMenuItem";
-			this->memoryToolStripMenuItem->Size = System::Drawing::Size(136, 22);
+			this->memoryToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->memoryToolStripMenuItem->Text = L"&Memory";
 			this->memoryToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::memoryToolStripMenuItem_Click);
 			// 
 			// breakpointsToolStripMenuItem
 			// 
 			this->breakpointsToolStripMenuItem->Name = L"breakpointsToolStripMenuItem";
-			this->breakpointsToolStripMenuItem->Size = System::Drawing::Size(136, 22);
+			this->breakpointsToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->breakpointsToolStripMenuItem->Text = L"&Breakpoints";
 			this->breakpointsToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::breakpointsToolStripMenuItem_Click);
 			// 
@@ -429,6 +450,13 @@ namespace emuThor {
 			this->trackBar1->TickStyle = System::Windows::Forms::TickStyle::TopLeft;
 			this->trackBar1->Value = 10000;
 			this->trackBar1->Scroll += gcnew System::EventHandler(this, &frmMain::trackBar1_Scroll);
+			// 
+			// stackToolStripMenuItem
+			// 
+			this->stackToolStripMenuItem->Name = L"stackToolStripMenuItem";
+			this->stackToolStripMenuItem->Size = System::Drawing::Size(152, 22);
+			this->stackToolStripMenuItem->Text = L"&Stack";
+			this->stackToolStripMenuItem->Click += gcnew System::EventHandler(this, &frmMain::stackToolStripMenuItem_Click);
 			// 
 			// frmMain
 			// 
@@ -610,7 +638,7 @@ private: void UpdateListBoxes(int ad)
 				this->listBoxCode->Items->Add(gcnew String(dstr.c_str()));
 			 }
 			 for (nn = 0; nn < 32; nn++) {
-				if (adr[nn]==cpu1.pc) {
+				if (adr[nn]==system1.cpu2.pc) {
 					this->listBoxAdr->SetSelected(nn,true);
 					this->listBoxBytes->SetSelected(nn,true);
 					this->listBoxCode->SetSelected(nn,true);
@@ -624,9 +652,7 @@ private: System::Void resetToolStripMenuItem_Click(System::Object^  sender, Syst
 		 }
 private: void Reset() {
 			 system1.Reset();
-			 pic1.Reset();
-			 cpu1.Reset();
-			 UpdateListBoxes(PCIsInList(cpu1.pc-32));
+			 UpdateListBoxes(PCIsInList(system1.cpu2.pc-32));
 		 }
 
 // Try and align the disassembled code with the current PC.
@@ -640,7 +666,7 @@ private: int PCIsInList(int as)
 	for (ad = as; ad > as-32; ad--) {
 		ae = ad;
 		for (nn = 0; nn < 64; nn++) {
-			if (ae==cpu1.pc)
+			if (ae==system1.cpu2.pc)
 				return ad;
 		dstr = da.Disassem(ae,&nb);
 		ae += nb;
@@ -653,90 +679,16 @@ private: void DoStepInto() {
 //		 	 animate = false;
 //			 isRunning = false;
 			 char buf[100];
-			 cpu1.Step();
-			 pic1.Step();
-			 UpdateListBoxes(PCIsInList(cpu1.pc-32));
+			 system1.Step();
+			 UpdateListBoxes(PCIsInList(system1.cpu2.pc-32));
 			 sprintf(buf, "%04X", system1.leds);
 			 lblLEDS->Text = gcnew String(buf);
 			 pictureBox1->Refresh();
 		 }
-private: void RunCPU() {
-			 int nn,kk;
-//			if (cpu1.pc > 134217727) {
-			 if (cpu1.pc < 0xFFFFFFFFFFFC0000LL || cpu1.pc >= 0xFFFFFFFFFFFFFFFFLL) {
-				isRunning = false;
-				return;
-			}
-			if (cpu1.pc == stepoverBkpt) {
-				stepoverBkpt = 0;
-				isRunning = false;
-				return;
-			}
-			for (kk = 0; kk < 5; kk++) {
-				if (cpu1.pc == ibreakpoints[kk] && ib_active[kk]) {
-					isRunning = false;
-					return;
-				}
-			}
-			if (system1.write_error==true) {
-				isRunning = false;
-//				this->lblWriteErr->Visible = true;
-				return;
-			}
-			// Runstop becomes active when a data breakpoint is hit.
-			if (runstop) {
-				isRunning = false;
-				runstop = false;
-				return;
-			}
-			cpu1.Step();
-			pic1.Step();
-			if (stepout) {
-				if (cpu1.sub_depth<step_depth) {
-					isRunning = false;
-					stepout = false;
-					return;
-				}
-			}
-			if (stepover) {
-				if (cpu1.pc > stepover_pc && cpu1.sub_depth==stepover_depth) {
-					isRunning = false;
-					stepover = false;
-				}
-			}
-				 /*
-				if (cpu1.pc == stepoverBkpt) {
-					stepoverBkpt = 0;
-					cpu1.isRunning = false;
-					UpdateListBox(cpu1.pc-32);
-					return;
-				}
-				for (kk = 0; kk < numBreakpoints; kk++) {
-					if (cpu1.pc == breakpoints[kk]) {
-						cpu1.isRunning = false;
-						 UpdateListBox(cpu1.pc-32);
-						return;
-					}
-				}
-				 cpu1.Step();
-     			 pic1.Step();
-				 UpdateListBox(cpu1.pc-32);
-				 */
-//			 UpdateListBox(cpu1.pc-32);
-		 }
-private: void RunCPU2()
-		 {
-			 while(1) {
-				 if (isRunning)
-					RunCPU();
-				 else
-					 Sleep(100);
-			 }
-		 };
 private: void DoStopButton() {
 			 animate = false;
 			 isRunning = false;
-//			 cpu1.brk = true;
+//			 cpu2.brk = true;
 			 fullspeed = false;
 			 this->fullSpeedToolStripMenuItem->Checked = false;
 			 this->animateFastToolStripMenuItem->Checked = false;
@@ -766,7 +718,7 @@ private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, 
 			 this->animateFastToolStripMenuItem->Checked = false;
 		 }
 private: System::Void toolStripButton3_Click(System::Object^  sender, System::EventArgs^  e) {
-			 step_depth = cpu1.sub_depth;
+			 step_depth = system1.cpu2.sub_depth;
 			 stepout = true;
 			 animate = false;
 			 fullspeed = true;
@@ -774,7 +726,7 @@ private: System::Void toolStripButton3_Click(System::Object^  sender, System::Ev
 			 this->fullSpeedToolStripMenuItem->Checked = true;
 		 }
 private: System::Void animateFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-			 cpu1.isRunning = false;
+			 isRunning = false;
 			 animate = true;
 			 this->timer1->Interval = 1;
 			 this->trackBar1->Value = 3;
@@ -785,13 +737,17 @@ private: System::Void toolStripButton5_Click(System::Object^  sender, System::Ev
 			 DoStopButton();
 		 }
 private: System::Void toolStripButton2_Click(System::Object^  sender, System::EventArgs^  e) {
-			 stepover_pc = cpu1.pc;
-			 stepover_depth = cpu1.sub_depth;
+			 stepover_pc = system1.cpu2.pc;
+			 stepover_depth = system1.cpu2.sub_depth;
 			 stepover = true;
 			 animate = false;
 			 fullspeed = true;
 			 isRunning = true;
 			 this->fullSpeedToolStripMenuItem->Checked = true;
+		 }
+private: System::Void Run()
+		 {
+			 system1.Run();
 		 }
 private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
 			 static int tt = 0;
@@ -801,16 +757,16 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 				 tt += 1;
 				 if (tt == 10 * this->timer1->Interval) {
 					 tt = 0;
-					 UpdateListBoxes(PCIsInList(cpu1.pc-32));
+					 UpdateListBoxes(PCIsInList(system1.cpu2.pc-32));
 				 }
 			 else
-				UpdateListBoxes(PCIsInList(cpu1.pc-32));
-			if (fullspeed) {
-				for (xx = 0; xx < 100000; xx++)
-					RunCPU();
-			}
-			 if (!cpu1.isRunning && animate)
-				RunCPU();
+				UpdateListBoxes(PCIsInList(system1.cpu2.pc-32));
+//			if (fullspeed) {
+//				for (xx = 0; xx < 100000; xx++)
+//					RunCPU();
+//			}
+			 if (!isRunning && animate)
+				system1.Step();
 	/*
 			 if (trigger30) {
 				 trigger30 = false;
@@ -838,6 +794,7 @@ private: System::Void toolStripButton4_Click(System::Object^  sender, System::Ev
 				 isRunning = true;
 			 }
 			 else {
+				 isRunning = false;
 				 animate = true;
 				 this->timer1->Interval = (int)(sqrt((float)1000000-trackBar1->Value));
 			 }
@@ -849,11 +806,19 @@ private: System::Void toolStripButton7_Click(System::Object^  sender, System::Ev
 private: System::Void trackBar1_Scroll(System::Object^  sender, System::EventArgs^  e) {
 			 animate = true;
 			 isRunning = false;
-//			 cpu1.brk = true;
+//			 cpu2.brk = true;
 			 fullspeed = false;
 			 this->fullSpeedToolStripMenuItem->Checked = false;
 //			 this->animateFastToolStripMenuItem->Checked = false;
 			 this->timer1->Interval = (int)(sqrt((float)1000000-trackBar1->Value));
+		 }
+private: System::Void freeRunToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 fmrFreeRun^ form = gcnew fmrFreeRun;
+			 form->Show();
+		 }
+private: System::Void stackToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
+			 frmStack^ form = gcnew frmStack;
+			 form->Show();
 		 }
 };
 }

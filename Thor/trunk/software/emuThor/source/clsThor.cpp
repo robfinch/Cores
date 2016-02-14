@@ -21,6 +21,9 @@ bool clsThor::IsKM()
 	return StatusHWI || (StatusEXL > 0) || StatusDBG;
 }
 
+unsigned __int64 clsThor::ReadByte(int ad) { return system1->ReadByte(ad); };
+
+
 int clsThor::GetMode()
 {
 	if (StatusHWI)
@@ -73,6 +76,16 @@ void clsThor::dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *disp)
 		*disp &= 0xFF;
 		*disp |= imm;
 	}
+}
+
+// Compute [Rn+Rn*Sc] address info
+void clsThor::ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, int *Sg, int *Sc)
+{
+	if (Ra) *Ra = b1 & 0x3f;
+	if (Rb) *Rb = (b1 >> 6) | ((b2 & 0xf) << 2);
+	if (Rt) *Rt = ((b2 & 0xF0) >> 4) | (( b3 & 3) << 4);
+	if (Sg) *Sg = (b3 >> 5) & 7;
+	if (Sc) *Sc = 1 << ((b3 >> 2) & 3);
 }
 
 int clsThor::WriteMask(int ad, int sz)
@@ -174,7 +187,7 @@ void clsThor::Step()
 	unsigned int opcode, func;
 	__int64 disp;
 	int Ra,Rb,Rc,Rt,Pn,Cr,Ct;
-	int Sprn,Sg;
+	int Sprn,Sg,Sc;
 	int b1, b2, b3, b4;
 	int nn;
 	__int64 dat;
@@ -600,6 +613,56 @@ void clsThor::Step()
 		imm_prefix = false;
 		break;
 
+	case DIVI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,GetGP(Ra) / imm);
+			gp[0] = 0;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case DIVUI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,(unsigned __int64)GetGP(Ra) / (unsigned __int64)imm);
+			gp[0] = 0;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case EORI:
 		b1 = ReadByte(pc);
 		pc++;
@@ -716,7 +779,7 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			dat = system1->Read(ea);
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -743,7 +806,57 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			dat = system1->Read(ea);
+			if (ea & 4)
+				dat = (dat >> 32);
+			if (ea & 2)
+				dat = (dat >> 16);
+			if (ea & 1)
+				dat = (dat >> 8);
+			dat &= 0xFFLL;
+			SetGP(Rt,dat);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case LBX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			dat = system1->Read(ea);
+			if (ea & 4)
+				dat = (dat >> 32);
+			if (ea & 2)
+				dat = (dat >> 16);
+			if (ea & 1)
+				dat = (dat >> 8);
+			dat &= 0xFFLL;
+			if (dat & 0x80LL)
+				dat |= 0xFFFFFFFFFFFFFF00LL;
+			SetGP(Rt,dat);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case LBUX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
 			dat = system1->Read(ea);
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -769,7 +882,31 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			dat = system1->Read(ea);
+			if (ea & 4)
+				dat = (dat >> 32);
+			if (ea & 2)
+				dat = (dat >> 16);
+			dat &= 0xFFFF;
+			if (dat & 0x8000LL)
+				dat |= 0xFFFFFFFFFFFF0000LL;
+			SetGP(Rt,dat);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case LCX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
 			dat = system1->Read(ea);
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -794,13 +931,35 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			dat = system1->Read(ea);
 			if (ea & 4)
 				dat = (dat >> 32);
 			if (ea & 2)
 				dat = (dat >> 16);
 			dat &= 0xFFFFLL;
+			SetGP(Rt,dat);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case LCUX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			dat = system1->Read(ea);
+			if (ea & 4)
+				dat = (dat >> 32);
+			if (ea & 2)
+				dat = (dat >> 16);
+			dat &= 0xFFFF;
 			SetGP(Rt,dat);
 		}
 		ca[15] = pc;
@@ -893,7 +1052,29 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			dat = system1->Read(ea);
+			if (ea & 4)
+				dat = (dat >> 32);
+			dat &= 0xFFFFFFFFLL;
+			if (dat & 0x80000000LL)
+				dat |= 0xFFFFFFFF00000000LL;
+			SetGP(Rt,dat);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case LHX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
 			dat = system1->Read(ea);
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -916,7 +1097,27 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			dat = system1->Read(ea);
+			if (ea & 4)
+				dat = (dat >> 32);
+			dat &= 0xFFFFFFFFLL;
+			SetGP(Rt,dat);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case LHUX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
 			dat = system1->Read(ea);
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -937,7 +1138,7 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			SetGP(Rt,ea);
 		}
 		ca[15] = pc;
@@ -1006,7 +1207,7 @@ void clsThor::Step()
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + gp[Ra];
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			dat = system1->Read(ea);
 			/*
 			if (ea & 4)
@@ -1046,6 +1247,29 @@ void clsThor::Step()
 		ca[15] = pc;
 		return;
 
+	case LWX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			dat = system1->Read(ea);
+			/*
+			if (ea & 4)
+				dat = (dat >> 32);
+			if (ea & 2)
+				dat = (dat >> 16);
+			*/
+			SetGP(Rt,dat);
+		}
+		imm_prefix = false;
+		ca[15] = pc;
+		return;
+
 	case MFSPR:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1060,6 +1284,56 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case MODI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,GetGP(Ra) % imm);
+			gp[0] = 0;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case MODUI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,(unsigned __int64) GetGP(Ra) % (unsigned __int64)imm);
+			gp[0] = 0;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case GRPA7:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1069,8 +1343,23 @@ void clsThor::Step()
 			Ra = b1 & 0x3f;
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			switch(b2 >> 4) {
+			case ABS:
+				SetGP(Rt, GetGP(Ra) < 0 ? -GetGP(Ra) : GetGP(Ra));
+				break;
+			case COM:
+				SetGP(Rt, ~GetGP(Ra));
+				break;
 			case MOV:
 				SetGP(Rt, GetGP(Ra));
+				break;
+			case NEG:
+				SetGP(Rt, -GetGP(Ra));
+				break;
+			case NOT:
+				SetGP(Rt, !GetGP(Ra));
+				break;
+			case SGN:
+				SetGP(Rt, (GetGP(Ra) == 0) ? 0 : (GetGP(Ra) < 0) ? -1 : 1);
 				break;
 			case SXB:
 				dat = GetGP(Ra);
@@ -1125,6 +1414,56 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case MULI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,GetGP(Ra) * imm);
+			gp[0] = 0;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case MULUI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,(unsigned __int64)GetGP(Ra) * (unsigned __int64)imm);
+			gp[0] = 0;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case ORI:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1163,8 +1502,31 @@ void clsThor::Step()
 			Rt = (b2 >> 4) | ((b3 & 0x3) << 4);
 			func = b3 >> 2;
 			switch(func) {
+			case ADD:
+			case ADDU:
+				SetGP(Rt,(unsigned __int64)GetGP(Ra) + (unsigned __int64)GetGP(Rb));
+				break;
+			case SUB:
+			case SUBU:
+				SetGP(Rt,(unsigned __int64)GetGP(Ra) - (unsigned __int64)GetGP(Rb));
+				break;
+			case MUL:
+				SetGP(Rt,GetGP(Ra) * GetGP(Rb));
+				break;
+			case DIV:
+				SetGP(Rt,GetGP(Ra) / GetGP(Rb));
+				break;
+			case MOD:
+				SetGP(Rt,GetGP(Ra) % GetGP(Rb));
+				break;
 			case MULU:
 				SetGP(Rt,(unsigned __int64)GetGP(Ra) * (unsigned __int64)GetGP(Rb));
+				break;
+			case DIVU:
+				SetGP(Rt,(unsigned __int64)GetGP(Ra) / (unsigned __int64)GetGP(Rb));
+				break;
+			case MODU:
+				SetGP(Rt,(unsigned __int64)GetGP(Ra) % (unsigned __int64)GetGP(Rb));
 				break;
 			case _2ADDU:
 				SetGP(Rt,(GetGP(Ra) << 1) + GetGP(Rb));
@@ -1192,7 +1554,7 @@ void clsThor::Step()
 		}
 		ca[15] = pc;
 		imm_prefix = false;
-		break;
+		return;
 
 	case RTI:
 		if (ex) {
@@ -1202,7 +1564,7 @@ void clsThor::Step()
 		}
 		ca[15] = pc;
 		imm_prefix = false;
-		break;
+		return;
 
 	case RTS:
 		b1 = ReadByte(pc);
@@ -1242,6 +1604,22 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case SBX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			system1->Write(ea,GetGP(Rt),(0x1 << (ea & 7)) & 0xFF);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case SC:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1259,6 +1637,22 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case SCX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			system1->Write(ea,GetGP(Rt),(0x3 << (ea & 7)) & 0xFF);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case SH:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1271,6 +1665,22 @@ void clsThor::Step()
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
 			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			system1->Write(ea,GetGP(Rb),(0xF << (ea & 7)) & 0xFF);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case SHX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			system1->Write(ea,GetGP(Rt),(0xF << (ea & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1379,6 +1789,30 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case SUBUI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,GetGP(Ra) - imm);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case SW:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1408,6 +1842,22 @@ void clsThor::Step()
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
 			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			system1->Write(ea,GetSpr(Rb),(0xFF << (ea & 7)) & 0xFF);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case SWX:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
+			system1->Write(ea,GetGP(Rt),(0xFF << (ea & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;

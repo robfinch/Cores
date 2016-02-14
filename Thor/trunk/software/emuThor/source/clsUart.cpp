@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "clsUart.h"
 
-extern clsPIC pic1;
-
 void clsUart::Reset()
 {
 	ls = 0x60;
@@ -55,7 +53,7 @@ int clsUart::TxPort()
 	ls |= 0x60;
 	if (ier & 2) {
 		irq = true;
-		pic1.irqUart = true;
+		system1.pic1.irqUart = true;
 	}
 	return d;
 }
@@ -67,6 +65,6 @@ void clsUart::RxPort(unsigned int dat)
 	ls |= 1;
 	if (ier & 1) {
 		irq = true;
-		pic1.irqUart = true;
+		system1.pic1.irqUart = true;
 	}
 }

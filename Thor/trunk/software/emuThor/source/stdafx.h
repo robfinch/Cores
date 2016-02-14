@@ -5,8 +5,12 @@
 
 // TODO: reference additional headers your program requires here
 #include <string>
+#include "clsDevice.h"
+#include "clsCPU.h"
 #include "clsPIC.h"
+#include "clsKeyboard.h"
 #include "clsUart.h"
+#include "clsThor.h"
 #include "clsSystem.h"
 
 enum {

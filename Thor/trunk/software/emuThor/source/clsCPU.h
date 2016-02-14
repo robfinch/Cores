@@ -1,5 +1,6 @@
 #pragma once
-#include "clsSystem.h"
+
+extern class clsSystem;
 
 class clsCPU
 {

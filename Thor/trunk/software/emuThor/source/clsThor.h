@@ -1,7 +1,7 @@
 #pragma once
 #include "clsCPU.h"
 
-extern clsSystem system1;
+extern class clsSystem system1;
 
 class clsThor : public clsCPU
 {
@@ -14,14 +14,14 @@ class clsThor : public clsCPU
 	unsigned __int64 ea;
 	unsigned int mode : 2;
 
-	__int64 GetGP(int rg);
 	void SetGP(int rg, __int64 val);
 	int GetMode();
 	void SetSpr(int Sprn, __int64 val);
 	__int64 GetSpr(int Sprn);
 	void dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *disp);
+	void ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, int *Sg, int *Sc);
 	int WriteMask(int ad, int sz);
-	unsigned __int64 ReadByte(int ad) { return system1->ReadByte(ad); };
+	unsigned __int64 ReadByte(int ad);
 public:
 	unsigned __int64 pc;
 	__int64 gp[64];		// general purpose registers
@@ -37,6 +37,7 @@ public:
 	bool im;
 	int imcd;
 	int pred;
+	__int64 GetGP(int rg);
 	bool IsKM();
 	void Reset();
 	void Step();

@@ -1,6 +1,6 @@
 #pragma once
 #include "stdafx.h"
-extern clsUart uart1;
+extern clsSystem system1;
 
 namespace emuThor {
 
@@ -549,30 +549,30 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 			 if (do_send && txtToUart->Text->Length > 0) {
  	 			 char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(txtToUart->Text->Substring(0,1));
 				 txtToUart->Text = txtToUart->Text->Substring(1);
-				 uart1.RxPort(str[0]);
+				 system1.uart1.RxPort(str[0]);
 			 }
 			 if (txtToUart->Text->Length <= 0)
 				 do_send = false;
-			 dat = uart1.TxPort() & 0xFF;
+			 dat = system1.uart1.TxPort() & 0xFF;
 			 buf[0] = dat;
 			 buf[1] = '\0';
 			 if (dat != 0xFF)
 				 txtFromUart->Text = txtFromUart->Text + gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.cm1);
+			 sprintf(buf, "%02X", system1.uart1.cm1);
 			 txtCM1->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.cm2);
+			 sprintf(buf, "%02X", system1.uart1.cm2);
 			 txtCM2->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.cm3);
+			 sprintf(buf, "%02X", system1.uart1.cm3);
 			 txtCM3->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.ls);
+			 sprintf(buf, "%02X", system1.uart1.ls);
 			 txtLS->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.rb);
+			 sprintf(buf, "%02X", system1.uart1.rb);
 			 txtRB->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.tb);
+			 sprintf(buf, "%02X", system1.uart1.tb);
 			 txtTB->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.ier);
+			 sprintf(buf, "%02X", system1.uart1.ier);
 			 txtIER->Text = gcnew String(buf);
-			 sprintf(buf, "%02X", uart1.is);
+			 sprintf(buf, "%02X", system1.uart1.is);
 			 txtIS->Text = gcnew String(buf);
 		 }
 };

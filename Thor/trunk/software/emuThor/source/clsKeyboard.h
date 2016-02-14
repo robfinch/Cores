@@ -1,5 +1,7 @@
 #pragma once
-class clsKeyboard
+#include "clsDevice.h"
+
+class clsKeyboard : public clsDevice
 {
 	unsigned __int8 buffer[32];
 	int head;

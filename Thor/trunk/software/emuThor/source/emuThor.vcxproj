@@ -95,11 +95,13 @@
     <ClCompile Include="clsThor.cpp" />
     <ClCompile Include="clsUart.cpp" />
     <ClCompile Include="emuThor.cpp" />
+    <ClCompile Include="fmrFreeRun.cpp" />
     <ClCompile Include="frmBreakpoints.cpp" />
     <ClCompile Include="frmKeyboard.cpp" />
     <ClCompile Include="frmMemory.cpp" />
     <ClCompile Include="frmRegisters.cpp" />
     <ClCompile Include="frmScreen.cpp" />
+    <ClCompile Include="frmStack.cpp" />
     <ClCompile Include="frmUart.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -118,6 +120,9 @@
     <ClInclude Include="clsSystem.h" />
     <ClInclude Include="clsThor.h" />
     <ClInclude Include="clsUart.h" />
+    <ClInclude Include="fmrFreeRun.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
     <ClInclude Include="frmBreakpoints.h">
       <FileType>CppForm</FileType>
     </ClInclude>
@@ -130,6 +135,9 @@
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmScreen.h" />
+    <ClInclude Include="frmStack.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
     <ClInclude Include="frmUart.h">
       <FileType>CppForm</FileType>
     </ClInclude>
@@ -144,6 +152,9 @@
     <EmbeddedResource Include="About.resx">
       <DependentUpon>About.h</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="fmrFreeRun.resx">
+      <DependentUpon>fmrFreeRun.h</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmBreakpoints.resx">
       <DependentUpon>frmBreakpoints.h</DependentUpon>
     </EmbeddedResource>
@@ -157,6 +168,9 @@
       <DependentUpon>frmRegisters.h</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmScreen.resx" />
+    <EmbeddedResource Include="frmStack.resx">
+      <DependentUpon>frmStack.h</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="frmUart.resx">
       <DependentUpon>frmUart.h</DependentUpon>
     </EmbeddedResource>

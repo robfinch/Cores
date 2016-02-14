@@ -69,6 +69,12 @@
     <ClCompile Include="clsUart.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="fmrFreeRun.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="frmStack.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -128,6 +134,12 @@
     <ClInclude Include="clsUart.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="fmrFreeRun.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="frmStack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="app.rc">
@@ -154,6 +166,12 @@
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
     <EmbeddedResource Include="frmKeyboard.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmUart.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="fmrFreeRun.resx">
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
   </ItemGroup>

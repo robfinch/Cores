@@ -4,16 +4,8 @@
 #include "frmRegisters.h"
 #include "frmMain.h"
 #include "frmScreen.h"
-#include "clsCPU.h"
-#include "clsThor.h"
-#include "clsSystem.h"
-#include "clsKeyboard.h"
 
-clsThor cpu1;
-clsPIC pic1;
-clsUart uart1;
 clsSystem system1;
-clsKeyboard keybd;
 volatile unsigned __int8 keybd_scancode;
 volatile unsigned __int8 keybd_status;
 volatile unsigned int interval1024;
@@ -24,7 +16,6 @@ unsigned int breakpoints[30];
 unsigned int dataBreakpoints[30];
 int numBreakpoints;
 int numDataBreakpoints;
-int runstop;
 bool irq1024Hz;
 bool irq30Hz;
 bool irqKeyboard;

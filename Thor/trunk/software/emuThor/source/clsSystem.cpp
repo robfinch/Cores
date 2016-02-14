@@ -1,7 +1,16 @@
 #include "stdafx.h"
 
-extern clsPIC pic1;
-extern clsUart uart1;
+extern unsigned int breakpoints[30];
+extern unsigned __int64 ibreakpoints[10];
+extern bool ib_active[10];
+extern bool isRunning;
+extern bool stepout, stepover;
+extern unsigned int step_depth, stepover_depth;
+extern unsigned int stepoverBkpt;
+extern unsigned int stepover_pc;
+extern bool animate;
+extern bool fullspeed;
+extern bool runstop;
 
 clsSystem::clsSystem() {
 	int nn;
@@ -9,6 +18,7 @@ clsSystem::clsSystem() {
 	for (nn = 0; nn < sizeof(memory); nn+=8) {
 		memory[nn>>3] = 0;
 	}
+	quit = false;
 	Reset();
 };
 void clsSystem::Reset()
@@ -24,8 +34,10 @@ void clsSystem::Reset()
 	leds = 0;
 	write_error = false;
 	runstop = false;
-	cpu1.system1 = this;
+	cpu2.system1 = this;
 	refscreen = true;
+	cpu2.Reset();
+	pic1.Reset();
 	uart1.Reset();
 };
 	unsigned __int64 clsSystem::Read(unsigned int ad, int sr) {
@@ -242,4 +254,82 @@ j1:
 unsigned __int64 clsSystem::ReadByte(unsigned int ad) {
 unsigned __int64 dat = Read(ad);
 	return (dat >> ((ad & 7) * 8)) & 0xFFLL;
+}
+
+void clsSystem::Step() {
+	cpu2.Step();
+	pic1.Step();
+	uart1.Step();
+	keybd.Step();
+}
+
+void clsSystem::Run() {
+	int nn,kk;
+
+	while (!quit) {
+		if (isRunning) {
+		//			if (cpu2.pc > 134217727) {
+			if (cpu2.pc < 0xFFFFFFFFFFFC0000LL || cpu2.pc >= 0xFFFFFFFFFFFFFFFFLL) {
+				isRunning = false;
+				continue;
+			}
+			if (cpu2.pc == stepoverBkpt) {
+				stepoverBkpt = 0;
+				isRunning = false;
+				continue;
+			}
+			for (kk = 0; kk < 5; kk++) {
+				if (cpu2.pc == ibreakpoints[kk] && ib_active[kk]) {
+					isRunning = false;
+					continue;
+				}
+			}
+			if (system1.write_error==true) {
+				isRunning = false;
+				continue;
+			//				this->lblWriteErr->Visible = true;
+			}
+			// Runstop becomes active when a data breakpoint is hit.
+			if (runstop) {
+				isRunning = false;
+				runstop = false;
+				continue;
+			}
+			cpu2.Step();
+			pic1.Step();
+			if (stepout) {
+				if (cpu2.sub_depth<step_depth) {
+					isRunning = false;
+					stepout = false;
+					continue;
+				}
+			}
+			if (stepover) {
+				if (cpu2.pc > stepover_pc && cpu2.sub_depth==stepover_depth) {
+					isRunning = false;
+					stepover = false;
+					continue;
+				}
+			}
+					/*
+				if (cpu2.pc == stepoverBkpt) {
+					stepoverBkpt = 0;
+					cpu2.isRunning = false;
+					UpdateListBox(cpu2.pc-32);
+					return;
+				}
+				for (kk = 0; kk < numBreakpoints; kk++) {
+					if (cpu2.pc == breakpoints[kk]) {
+						cpu2.isRunning = false;
+							UpdateListBox(cpu2.pc-32);
+						return;
+					}
+				}
+					cpu2.Step();
+     				pic1.Step();
+					UpdateListBox(cpu2.pc-32);
+					*/
+			//			 UpdateListBox(cpu2.pc-32);
+		}
+	}
 }

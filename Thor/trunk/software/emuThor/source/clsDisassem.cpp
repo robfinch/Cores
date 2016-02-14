@@ -1,6 +1,5 @@
 #include "stdafx.h"
 #include "insn.h"
-#include "clsSystem.h"
 #include "clsDisassem.h"
 
 extern clsSystem system1;
@@ -129,6 +128,29 @@ std::string clsDisassem::dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *
 	return std::string(buf);
 }
 
+// Compute d[Rn] address info
+std::string clsDisassem::ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, int *Sg, int *Sc)
+{
+	char buf[100];
+
+	if (!Ra || !Rb || !Rt || !Sg)
+		return "<error>";
+	*Ra = b1 & 0x3f;
+	*Rb = (b1 >> 6) | ((b2 & 0x0f) >> 4);
+	*Rt = ((b2 & 0xF0) >> 4) | ((b3 & 3) << 4);
+	*Sg = (b3 >> 5) & 7;
+	*Sc = (b3 >> 2) & 3;
+	if (*Sg != DefaultSeg(*Ra))
+		sprintf(buf, "%s:[r%d+r%d", SegName(*Sg).c_str(), *Ra, *Rb);
+	else 
+		sprintf(buf, "[r%d+r%d", *Ra, *Rb);
+	if (*Sc != 1)
+		sprintf(&buf[strlen(buf)], "*%d]", (1 << *Sc));
+	else
+		sprintf(&buf[strlen(buf)], "]");
+	return std::string(buf);
+}
+
 std::string clsDisassem::mem(std::string mne, int ad, int *nb)
 {
 	int b1, b2, b3;
@@ -152,6 +174,28 @@ std::string clsDisassem::mem(std::string mne, int ad, int *nb)
 	return std::string(buf);
 }
 
+std::string clsDisassem::memndx(std::string mne, int ad, int *nb)
+{
+	int b1, b2, b3;
+	int Ra,Rb,Rt,Sg,Sc;
+	__int64 disp;
+	std::string str;
+	char buf[100];
+
+	buf[0] = '\0';
+	b1 = ReadByte(ad);
+	ad++;
+	b2 = ReadByte(ad);
+	ad++;
+	b3 = ReadByte(ad);
+	ad++;
+	str = ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
+	sprintf(&buf[strlen(buf)]," %s r%d,%s", mne.c_str(), Rt, str.c_str());
+	if (nb) *nb = 5;
+	imm_prefix = false;
+	return std::string(buf);
+}
+
 std::string clsDisassem::Disassem(int ad, int *nb)
 {
 	int byt;
@@ -160,7 +204,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 	__int64 val, disp;
 	int rv;
 	int b1, b2, b3, b4;
-	int Ra,Rb,Rc,Rt,Sprn,Sg;
+	int Ra,Rb,Rc,Rt,Sprn,Sg,Sc;
 	int Cr,Ct,Tn;
 	int Pn;
 	char buf[100];
@@ -335,7 +379,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		disp = (b1 << 4) | (opcode & 0xF);
 		if (disp & 0x800)
 			disp |= 0xFFFFFFFFFFFFF000LL;
-		sprintf(&buf[strlen(buf)], " BR $%LLX", disp + cpu1.pc);
+		sprintf(&buf[strlen(buf)], " BR $%LLX", disp + ad);
 		if (nb) *nb = 3;
 		imm_prefix = false;
 		return std::string(buf);
@@ -467,6 +511,36 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		imm_prefix = false;
 		return std::string(buf);
 
+	case DIVI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " DIVI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case DIVUI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " DIVUI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
 	case EORI:
 		b1 = system1.ReadByte(ad);
 		ad++;
@@ -569,15 +643,22 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		return std::string(buf);
 
 	case LB:	return mem("LB", ad, nb);
+	case LBX:	return memndx("LBX", ad, nb);
+	case LBUX:	return memndx("LBUX", ad, nb);
 	case LVB:	return mem("LVB", ad, nb);
 	case LBU:	return mem("LBU", ad, nb);
 	case LC:	return mem("LC", ad, nb);
+	case LCX:	return memndx("LCX", ad, nb);
+	case LCUX:	return memndx("LCUX", ad, nb);
 	case LVC:	return mem("LVC", ad, nb);
 	case LCU:	return mem("LCU", ad, nb);
 	case LH:	return mem("LH", ad, nb);
+	case LHX:	return memndx("LHX", ad, nb);
+	case LHUX:	return memndx("LHUX", ad, nb);
 	case LVH:	return mem("LVH", ad, nb);
 	case LHU:	return mem("LHU", ad, nb);
 	case LW:	return mem("LW", ad, nb);
+	case LWX:	return memndx("LWX", ad, nb);
 	case LVW:	return mem("LVW", ad, nb);
 
 	case LLA:
@@ -653,6 +734,36 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		imm_prefix = false;
 		return std::string(buf);
 
+	case MODI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " MODI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case MODUI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " MODUI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
 	case GRPA7:
 		b1 = ReadByte(ad);
 		ad++;
@@ -685,6 +796,36 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		imm_prefix = false;
 		return std::string(buf);
 
+	case MULI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " MULI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case MULUI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " MULUI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
 	case ORI:
 		b1 = system1.ReadByte(ad);
 		ad++;
@@ -712,6 +853,21 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		Rt = ((b3 & 3) << 4) | (b2 >> 4);
 		func = b3 >> 2;
 		switch(func) {
+		case ADD:
+			sprintf(&buf[strlen(buf)], " ADD r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case ADDU:
+			sprintf(&buf[strlen(buf)], " ADDU r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case DIV:
+			sprintf(&buf[strlen(buf)], " DIV r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case DIVU:
+			sprintf(&buf[strlen(buf)], " DIVU r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case MUL:
+			sprintf(&buf[strlen(buf)], " MUL r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
 		case MULU:
 			sprintf(&buf[strlen(buf)], " MULU r%d,r%d,r%d", Rt, Ra, Rb);
 			break;
@@ -726,6 +882,18 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 			break;
 		case _16ADDU:
 			sprintf(&buf[strlen(buf)], " _16ADDU r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case MOD:
+			sprintf(&buf[strlen(buf)], " MOD r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case MODU:
+			sprintf(&buf[strlen(buf)], " MODU r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case SUB:
+			sprintf(&buf[strlen(buf)], " SUB r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case SUBU:
+			sprintf(&buf[strlen(buf)], " SUBU r%d,r%d,r%d", Rt, Ra, Rb);
 			break;
 		}
 		if (nb) *nb = 5;
@@ -766,6 +934,11 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		if (nb) *nb = 5;
 		imm_prefix = false;
 		return std::string(buf);
+
+	case SBX:	return memndx("SBX", ad, nb);
+	case SCX:	return memndx("SCX", ad, nb);
+	case SHX:	return memndx("SHX", ad, nb);
+	case SWX:	return memndx("SWX", ad, nb);
 
 	case SC:
 		b1 = ReadByte(ad);
@@ -861,6 +1034,21 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		imm_prefix = false;
 		return std::string(buf);
 
+	case SUBUI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rt = ((b2 & 0xf) << 2) | (b1 >> 6);
+		val = (b3 << 4) | (b2 >> 4);
+		sprintf(&buf[strlen(buf)], " SUBUI r%d,r%d,#$%I64X", Rt, Ra, val);
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
 	case SW:
 		b1 = ReadByte(ad);
 		ad++;
@@ -890,7 +1078,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		return std::string(buf);
 
 	case SYNC:
-		sprintf(&buf[strlen(buf)], " CLI");
+		sprintf(&buf[strlen(buf)], " SYNC");
 		if (nb) *nb = 2;
 		imm_prefix = false;
 		return std::string(buf);
