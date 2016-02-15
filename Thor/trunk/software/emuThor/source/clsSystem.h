@@ -34,6 +34,8 @@ public:
 	void Reset();
 	unsigned __int64 Read(unsigned int ad, int sr=0);
 	unsigned __int64 ReadByte(unsigned int ad);
+	unsigned __int64 ReadChar(unsigned int ad);
+	unsigned __int64 ReadHalf(unsigned int ad);
 	int Write(unsigned int ad, unsigned __int64 dat, unsigned int mask, int cr=0);
  	int random();
 	void Run();

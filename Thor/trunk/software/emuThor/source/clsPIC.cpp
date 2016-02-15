@@ -22,7 +22,7 @@ void clsPIC::Reset(void)
 unsigned int clsPIC::Read(unsigned int ad) {
 	int nn;
 	unsigned int dat;
-	switch((ad >> 2) & 15) {
+	switch((ad >> 3) & 7) {
 	case 0:
 		return vecno;
 	default:
@@ -35,10 +35,10 @@ unsigned int clsPIC::Read(unsigned int ad) {
 
 void clsPIC::Write(unsigned int ad, unsigned int dat, unsigned int mask) {
 	int nn;
-	switch((ad >> 2) & 15) {
+	switch((ad >> 3) & 7) {
 	case 1:
 		for (nn = 0; nn < 16; nn++)
-			enables[nn] = dat & (1 << nn);
+			enables[nn] = (dat & (1 << nn)) != 0;
 		break;
 	case 2:
 		enables[dat & 15] = false;
@@ -47,13 +47,13 @@ void clsPIC::Write(unsigned int ad, unsigned int dat, unsigned int mask) {
 		enables[dat & 15] = true;
 		break;
 	case 5:
-		if (dat==2)
+		if (dat==1)
 			irq1024Hz = false;
-		if (dat==3)
+		if (dat==2)
 			irq30Hz = false;
 		if (dat==7)
 			irqUart = false;
-		if (dat==15)
+		if (dat==3)
 			irqKeyboard = false;
 		break;
 	}
@@ -61,22 +61,22 @@ void clsPIC::Write(unsigned int ad, unsigned int dat, unsigned int mask) {
 
 void clsPIC::Step(void) {
 	vecno = 192;
-	system1.cpu2.irq = false;
-	if (enables[15] & irqKeyboard) {
-		system1.cpu2.irq = true;
-		vecno = 192+15;
-	}
+	irq = system1.cpu2.irq = false;
 	if (enables[7] & irqUart) {
-		system1.cpu2.irq = true;
+		irq = system1.cpu2.irq = true;
 		vecno = 192+7;
 	}
-	if (enables[3] & irq30Hz) {
-		system1.cpu2.irq = true;
+	if (enables[3] & irqKeyboard) {
+		irq = system1.cpu2.irq = true;
 		vecno = 192+3;
 	}
-	if (enables[2] & irq1024Hz) {
-		system1.cpu2.irq = true;
+	if (enables[2] & irq30Hz) {
+		irq = system1.cpu2.irq = true;
 		vecno = 192+2;
+	}
+	if (enables[1] & irq1024Hz) {
+		irq = system1.cpu2.irq = true;
+		vecno = 192+1;
 	}
 	system1.cpu2.vecno = vecno;
 }

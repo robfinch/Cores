@@ -5,12 +5,14 @@ extern clsSystem system1;
 
 class clsPIC : public clsDevice
 {
-	bool enables[16];
 public:
+	bool enables[16];
 	bool irq30Hz;
 	bool irq1024Hz;
 	bool irqKeyboard;
 	bool irqUart;
+	bool irq;
+	bool nmi;
 	unsigned int vecno;
 	clsPIC(void);
 	void Reset();

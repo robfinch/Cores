@@ -11,6 +11,7 @@ namespace emuThor {
 	using namespace System::Windows::Forms;
 	using namespace System::Data;
 	using namespace System::Drawing;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmStack
@@ -18,8 +19,10 @@ namespace emuThor {
 	public ref class frmStack : public System::Windows::Forms::Form
 	{
 	public:
-		frmStack(void)
+		Mutex^ mut;
+		frmStack(Mutex^ m)
 		{
+			mut = m;
 			InitializeComponent();
 			//
 			//TODO: Add the constructor code here
@@ -27,6 +30,7 @@ namespace emuThor {
 			int xx;
 			char buf[4000];
 			buf[0] = '\0';
+			mut->WaitOne();
 			for (xx = -128; xx < 128; xx+=8) {
 				sprintf(&buf[strlen(buf)], "%c %08I64X: %016I64X\r\n", xx==0 ? '>' : ' ',
 					system1.cpu2.GetGP(27)+xx, system1.Read(system1.cpu2.GetGP(27)+xx));
@@ -37,6 +41,7 @@ namespace emuThor {
 				sprintf(&buf[strlen(buf)], "%c %08I64X: %016I64X\r\n", xx==0 ? '>' : ' ',
 					system1.cpu2.GetGP(26)+xx, system1.Read(system1.cpu2.GetGP(26)+xx));
 			}
+			mut->ReleaseMutex();
 			textBox2->Text = gcnew String(buf);
 		}
 
@@ -121,6 +126,7 @@ namespace emuThor {
 			this->Controls->Add(this->label1);
 			this->Controls->Add(this->textBox2);
 			this->Controls->Add(this->textBox1);
+			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
 			this->MaximizeBox = false;
 			this->Name = L"frmStack";
 			this->Text = L"emuThor - Stack View";

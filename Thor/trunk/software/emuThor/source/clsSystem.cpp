@@ -255,21 +255,31 @@ unsigned __int64 clsSystem::ReadByte(unsigned int ad) {
 unsigned __int64 dat = Read(ad);
 	return (dat >> ((ad & 7) * 8)) & 0xFFLL;
 }
+unsigned __int64 clsSystem::ReadChar(unsigned int ad) {
+unsigned __int64 dat = Read(ad);
+	return (dat >> ((ad & 7) * 8)) & 0xFFFFLL;
+}
+unsigned __int64 clsSystem::ReadHalf(unsigned int ad) {
+unsigned __int64 dat = Read(ad);
+	return (dat >> ((ad & 7) * 8)) & 0xFFFFFFFFLL;
+}
+
 
 void clsSystem::Step() {
-	cpu2.Step();
-	pic1.Step();
 	uart1.Step();
 	keybd.Step();
+	pic1.Step();
+	cpu2.Step();
 }
 
 void clsSystem::Run() {
 	int nn,kk;
+	int xx;
 
-	while (!quit) {
+	do {
 		if (isRunning) {
 		//			if (cpu2.pc > 134217727) {
-			if (cpu2.pc < 0xFFFFFFFFFFFC0000LL || cpu2.pc >= 0xFFFFFFFFFFFFFFFFLL) {
+			if (cpu2.pc < 0xFFFC0000LL && cpu2.pc & 0x1000 != 0x1000) {
 				isRunning = false;
 				continue;
 			}
@@ -331,5 +341,5 @@ void clsSystem::Run() {
 					*/
 			//			 UpdateListBox(cpu2.pc-32);
 		}
-	}
+	} while (false);	// !quit
 }

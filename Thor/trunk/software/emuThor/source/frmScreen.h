@@ -13,6 +13,7 @@ namespace emuThor {
 	using namespace System::Windows::Forms;
 	using namespace System::Data;
 	using namespace System::Drawing;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmScreen
@@ -21,12 +22,15 @@ namespace emuThor {
 	{
 		 System::Drawing::Rectangle ur;
 	public:
-		frmScreen(void)
+		Mutex^ mut;
+		frmScreen(Mutex^ m, String^ tbs)
 		{
+			mut = m;
 			InitializeComponent();
 			//
 			//TODO: Add the constructor code here
 			//
+			this->Text = L"emuFISA64 Test System Screen - " + tbs;
 		}
 
 	protected:
@@ -76,7 +80,7 @@ namespace emuThor {
 			this->pictureBox1->BackgroundImageLayout = System::Windows::Forms::ImageLayout::None;
 			this->pictureBox1->Location = System::Drawing::Point(2, 0);
 			this->pictureBox1->Name = L"pictureBox1";
-			this->pictureBox1->Size = System::Drawing::Size(681, 266);
+			this->pictureBox1->Size = System::Drawing::Size(681, 328);
 			this->pictureBox1->TabIndex = 0;
 			this->pictureBox1->TabStop = false;
 			this->pictureBox1->Click += gcnew System::EventHandler(this, &frmScreen::pictureBox1_Click);
@@ -87,7 +91,7 @@ namespace emuThor {
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->BackgroundImageLayout = System::Windows::Forms::ImageLayout::None;
-			this->ClientSize = System::Drawing::Size(684, 262);
+			this->ClientSize = System::Drawing::Size(684, 332);
 			this->Controls->Add(this->pictureBox1);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
 			this->MaximizeBox = false;
@@ -124,6 +128,7 @@ namespace emuThor {
 				 if (refscreen) {
 					 for (nn = 0; nn < 4096; nn++) {
 						 if (pVidDirty) {
+							 mut->WaitOne();
 							 if (pVidDirty[nn]) {
 								 xx = nn % 84;
 								 yy = nn / 84;
@@ -132,12 +137,13 @@ namespace emuThor {
 								 minx = min(xx,minx);
 								 miny = min(yy,miny);
 							 }
+							 mut->ReleaseMutex();
 						 }
 					 }
 					ur.X = minx<<3;
-					ur.Y = miny<<3;
+					ur.Y = miny * 10;
 					ur.Width = (maxx - minx)<<3;
-					ur.Height = (maxy - miny)<<3;
+					ur.Height = (maxy - miny) * 10;
 					this->pictureBox1->Invalidate(ur);
 					refscreen = false;
 //					this->Refresh();
@@ -162,16 +168,18 @@ private: System::Void pictureBox1_Paint(System::Object^  sender, System::Windows
 				 fgbr = gcnew System::Drawing::SolidBrush(System::Drawing::Color::White);
 				 int xx, yy;
 				 for (xx = ur.X; xx < ur.X + ur.Width; xx += 8) {
-					 for (yy = ur.Y; yy < ur.Y + ur.Height; yy += 8) {
-						 ndx = (xx/8 + yy/8 * 84);
+					 for (yy = ur.Y; yy < ur.Y + ur.Height; yy += 10) {
+						 ndx = (xx/8 + yy/10 * 84);
 //						 if (system1.VideoMemDirty[ndx]) {
 							if (pVidMem) {
+								mut->WaitOne();
 								v = pVidMem[ndx];
+								mut->ReleaseMutex();
 								r = ((((v >> 10) >> 9) >> 6) & 7) << 5;
 								g = ((((v >> 10) >> 9) >> 3) & 7) << 5;
 								b = ((((v >> 10) >> 9) >> 0) & 7) << 5;
 								bkbr->Color = col->FromArgb(255,r,g,b);
-								gr->FillRectangle(bkbr,xx,yy,8,8);
+								gr->FillRectangle(bkbr,xx,yy,8,10);
 								r = ((((v >> 10)) >> 6) & 7) << 5;
 								g = ((((v >> 10)) >> 3) & 7)<< 5;
 								b = ((((v >> 10)) >> 0) & 7)<< 5;
@@ -179,8 +187,11 @@ private: System::Void pictureBox1_Paint(System::Object^  sender, System::Windows
 								sprintf(buf,"%c",ScreenToAscii(v&0xff));
 								str = std::string(buf);
 								gr->DrawString(gcnew String(str.c_str()),myfont,fgbr,xx,yy);
-								if (pVidDirty)
+								if (pVidDirty) {
+									mut->WaitOne();
 									pVidDirty[ndx] = false;
+									mut->ReleaseMutex();
+								}
 							}
 //						 }
 					 }

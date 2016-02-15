@@ -1,3 +1,7 @@
+// 0x0x = TST
+// 0x1x = CMP
+// 0x2x = CMPI
+// 0x3x = BR
 #define RR		0x40
 #define ADD			0x00
 #define SUB			0x01
@@ -13,8 +17,24 @@
 #define _16ADDU		0x0B
 #define MOD			0x13
 #define MODU		0x17
+#define R1		0x41
+#define CPUID		0x00
+#define REDOR		0x01
+#define REDAND		0x02
+#define PAR			0x03
+#define P1		0x42
+#define PAND		0x00
+#define POR			0x01
+#define PEOR		0x02
+#define PNAND		0x03
+#define PNOR		0x04
+#define PENOR		0x05
+#define PANDC		0x06
+#define PORC		0x07
 #define BITI	0x46
 #define ADDUIS	0x47
+#define ADDI	0x48
+#define SUBI	0x49
 #define MULI	0x4A
 #define DIVI	0x4B
 #define ADDUI	0x4C
@@ -28,6 +48,8 @@
 #define NAND		0x03
 #define NOR			0x04
 #define ENOR		0x05
+#define ANDC		0x06
+#define ORC			0x07
 #define ANDI	0x53
 #define ORI		0x54
 #define EORI	0x55
@@ -35,7 +57,14 @@
 #define MODI	0x5B
 #define MODUI	0x5F
 #define SHL			0x00
+#define SHR			0x01
+#define SHLU		0x02
+#define SHRU		0x03
+#define ROL			0x04
+#define ROR			0x05
 #define SHLI		0x10
+#define SHRI		0x11
+#define SHLUI		0x12
 #define SHRUI		0x13
 #define ROLI		0x14
 #define RORI		0x15
@@ -52,6 +81,9 @@
 #define LH		0x84
 #define LHU		0x85
 #define LW		0x86
+#define LVWAR	0x8B
+#define SWCR	0x8C
+#define JSRI	0x8D
 #define LWS		0x8E
 #define SB		0x90
 #define SC		0x91
@@ -66,6 +98,7 @@
 #define RTS		0xA3
 #define LOOP	0xA4
 #define SYS		0xA5
+#define INT		0xA6
 #define GRPA7	0xA7
 #define MOV			0x00
 #define NEG			0x01
@@ -105,4 +138,8 @@
 #define RTI		0xF4
 #define STP		0xF6
 #define SYNC	0xF7
+#define MEMSB	0xF8
+#define MEMDB	0xF9
 #define CLI		0xFA
+#define SEI		0xFB
+#define RTD		0xFC

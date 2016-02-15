@@ -67,7 +67,7 @@ namespace emuThor {
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(61, 31);
+			this->label1->Location = System::Drawing::Point(74, 31);
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(179, 13);
 			this->label1->TabIndex = 0;
@@ -76,7 +76,7 @@ namespace emuThor {
 			// label2
 			// 
 			this->label2->AutoSize = true;
-			this->label2->Location = System::Drawing::Point(89, 56);
+			this->label2->Location = System::Drawing::Point(103, 57);
 			this->label2->Name = L"label2";
 			this->label2->Size = System::Drawing::Size(111, 13);
 			this->label2->TabIndex = 1;
@@ -85,7 +85,7 @@ namespace emuThor {
 			// linkLabel1
 			// 
 			this->linkLabel1->AutoSize = true;
-			this->linkLabel1->Location = System::Drawing::Point(89, 83);
+			this->linkLabel1->Location = System::Drawing::Point(103, 83);
 			this->linkLabel1->Name = L"linkLabel1";
 			this->linkLabel1->Size = System::Drawing::Size(111, 13);
 			this->linkLabel1->TabIndex = 2;
@@ -108,7 +108,7 @@ namespace emuThor {
 			this->label4->AutoSize = true;
 			this->label4->Location = System::Drawing::Point(12, 141);
 			this->label4->Name = L"label4";
-			this->label4->Size = System::Drawing::Size(297, 52);
+			this->label4->Size = System::Drawing::Size(347, 65);
 			this->label4->TabIndex = 4;
 			this->label4->Text = resources->GetString(L"label4.Text");
 			// 
@@ -117,23 +117,22 @@ namespace emuThor {
 			this->label5->AutoSize = true;
 			this->label5->Location = System::Drawing::Point(12, 208);
 			this->label5->Name = L"label5";
-			this->label5->Size = System::Drawing::Size(267, 65);
+			this->label5->Size = System::Drawing::Size(267, 78);
 			this->label5->TabIndex = 5;
-			this->label5->Text = L"For an example:\r\n\r\nLoad a hex file (boot.hex) using the file menu.\r\nGoto the run " 
-				L"menu and select reset to reset the system.\r\nThen single step via the single step" 
-				L" toolbar button.";
+			this->label5->Text = resources->GetString(L"label5.Text");
 			// 
 			// About
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(316, 291);
+			this->ClientSize = System::Drawing::Size(369, 321);
 			this->Controls->Add(this->label5);
 			this->Controls->Add(this->label4);
 			this->Controls->Add(this->label3);
 			this->Controls->Add(this->linkLabel1);
 			this->Controls->Add(this->label2);
 			this->Controls->Add(this->label1);
+			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
 			this->MaximizeBox = false;
 			this->Name = L"About";
 			this->Text = L"About";

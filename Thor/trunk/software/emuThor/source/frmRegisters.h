@@ -8,6 +8,7 @@ namespace emuThor {
 	using namespace System::Windows::Forms;
 	using namespace System::Data;
 	using namespace System::Drawing;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmRegisters
@@ -15,13 +16,16 @@ namespace emuThor {
 	public ref class frmRegisters : public System::Windows::Forms::Form
 	{
 	public:
-		frmRegisters(void)
+		Mutex^ mut;
+		frmRegisters(Mutex^ m)
 		{
+			mut = m;
 			InitializeComponent();
 			//
 			//TODO: Add the constructor code here
 			//
 			char buf[100];
+			mut->WaitOne();
 			sprintf(buf, "%016I64X", system1.cpu2.gp[1]);
 			txtR1->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.gp[2]);
@@ -38,6 +42,28 @@ namespace emuThor {
 			txtR7->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.gp[8]);
 			txtR8->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[9]);
+			txtR9->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[10]);
+			txtR10->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[11]);
+			txtR11->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[12]);
+			txtR12->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[13]);
+			txtR13->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[14]);
+			txtR14->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[15]);
+			txtR15->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[16]);
+			txtR16->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[17]);
+			txtR17->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[18]);
+			txtR18->Text = gcnew String(buf);
+			sprintf(buf, "%016I64X", system1.cpu2.gp[19]);
+			txtR19->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.gp[26]);
 			txtR26->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.gp[27]);
@@ -50,6 +76,58 @@ namespace emuThor {
 			txtR30->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.gp[31]);
 			txtR31->Text = gcnew String(buf);
+
+			// Predicate Registers
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[0],
+				system1.cpu2.pr[0] & 4 ? '<' : ' ',
+				system1.cpu2.pr[0] & 2 ? '<' : ' ',
+				system1.cpu2.pr[0] & 1 ? '=' : ' '
+				);
+			txtP0->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[1],
+				system1.cpu2.pr[1] & 4 ? '<' : ' ',
+				system1.cpu2.pr[1] & 2 ? '<' : ' ',
+				system1.cpu2.pr[1] & 1 ? '=' : ' '
+				);
+			txtP1->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[2],
+				system1.cpu2.pr[2] & 4 ? '<' : ' ',
+				system1.cpu2.pr[2] & 2 ? '<' : ' ',
+				system1.cpu2.pr[2] & 1 ? '=' : ' '
+				);
+			txtP2->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[3],
+				system1.cpu2.pr[3] & 4 ? '<' : ' ',
+				system1.cpu2.pr[3] & 2 ? '<' : ' ',
+				system1.cpu2.pr[3] & 1 ? '=' : ' '
+				);
+			txtP3->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[4],
+				system1.cpu2.pr[4] & 4 ? '<' : ' ',
+				system1.cpu2.pr[4] & 2 ? '<' : ' ',
+				system1.cpu2.pr[4] & 1 ? '=' : ' '
+				);
+			txtP4->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[5],
+				system1.cpu2.pr[5] & 4 ? '<' : ' ',
+				system1.cpu2.pr[5] & 2 ? '<' : ' ',
+				system1.cpu2.pr[5] & 1 ? '=' : ' '
+				);
+			txtP5->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[6],
+				system1.cpu2.pr[6] & 4 ? '<' : ' ',
+				system1.cpu2.pr[6] & 2 ? '<' : ' ',
+				system1.cpu2.pr[6] & 1 ? '=' : ' '
+				);
+			txtP6->Text = gcnew String(buf);
+			sprintf(buf, "%04X %c%c%c", system1.cpu2.pr[7],
+				system1.cpu2.pr[7] & 4 ? '<' : ' ',
+				system1.cpu2.pr[7] & 2 ? '<' : ' ',
+				system1.cpu2.pr[7] & 1 ? '=' : ' '
+				);
+			txtP7->Text = gcnew String(buf);
+
+			// Code address registers
 			sprintf(buf, "%016I64X", system1.cpu2.ca[1]);
 			txtCa1->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.ca[12]);
@@ -58,10 +136,12 @@ namespace emuThor {
 			txtCa14->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.pc);
 			txtCa15->Text = gcnew String(buf);
+
 			sprintf(buf, "%016I64X", system1.cpu2.tick);
 			txtTick->Text = gcnew String(buf);
 			sprintf(buf, "%016I64X", system1.cpu2.lc);
 			txtLC->Text = gcnew String(buf);
+			mut->ReleaseMutex();
 		}
 
 	protected:
@@ -141,13 +221,17 @@ namespace emuThor {
 	private: System::Windows::Forms::Label^  label43;
 	private: System::Windows::Forms::TextBox^  textBox44;
 	private: System::Windows::Forms::Label^  label44;
-	private: System::Windows::Forms::TextBox^  textBox45;
+private: System::Windows::Forms::TextBox^  txtR35;
+
 	private: System::Windows::Forms::Label^  label45;
-	private: System::Windows::Forms::TextBox^  textBox46;
+private: System::Windows::Forms::TextBox^  txtR34;
+
 	private: System::Windows::Forms::Label^  label46;
-	private: System::Windows::Forms::TextBox^  textBox47;
+private: System::Windows::Forms::TextBox^  txtR33;
+
 	private: System::Windows::Forms::Label^  label47;
-	private: System::Windows::Forms::TextBox^  textBox48;
+private: System::Windows::Forms::TextBox^  txtR32;
+
 	private: System::Windows::Forms::Label^  label48;
 private: System::Windows::Forms::TextBox^  txtR31;
 
@@ -248,7 +332,8 @@ private: System::Windows::Forms::TextBox^  textBox94;
 private: System::Windows::Forms::TextBox^  txtCs;
 
 private: System::Windows::Forms::Label^  label104;
-private: System::Windows::Forms::TextBox^  textBox92;
+private: System::Windows::Forms::TextBox^  txtSSLmt;
+
 private: System::Windows::Forms::TextBox^  txtSs;
 
 private: System::Windows::Forms::Label^  label103;
@@ -272,7 +357,8 @@ private: System::Windows::Forms::TextBox^  textBox82;
 private: System::Windows::Forms::TextBox^  txtDs;
 
 private: System::Windows::Forms::Label^  label98;
-private: System::Windows::Forms::TextBox^  textBox81;
+private: System::Windows::Forms::TextBox^  txtZSLmt;
+
 private: System::Windows::Forms::TextBox^  txtZs;
 
 private: System::Windows::Forms::Label^  label97;
@@ -323,21 +409,29 @@ private: System::Windows::Forms::TextBox^  txtCa1;
 private: System::Windows::Forms::Label^  label82;
 private: System::Windows::Forms::TextBox^  textBox16;
 private: System::Windows::Forms::Label^  label81;
-private: System::Windows::Forms::TextBox^  textBox15;
+private: System::Windows::Forms::TextBox^  txtP14;
+
 private: System::Windows::Forms::Label^  label80;
-private: System::Windows::Forms::TextBox^  textBox14;
+private: System::Windows::Forms::TextBox^  txtP13;
+
 private: System::Windows::Forms::Label^  label79;
-private: System::Windows::Forms::TextBox^  textBox13;
+private: System::Windows::Forms::TextBox^  txtP12;
+
 private: System::Windows::Forms::Label^  label78;
-private: System::Windows::Forms::TextBox^  textBox12;
+private: System::Windows::Forms::TextBox^  txtP11;
+
 private: System::Windows::Forms::Label^  label77;
-private: System::Windows::Forms::TextBox^  textBox11;
+private: System::Windows::Forms::TextBox^  txtP15;
+
 private: System::Windows::Forms::Label^  label76;
-private: System::Windows::Forms::TextBox^  textBox10;
+private: System::Windows::Forms::TextBox^  txtP10;
+
 private: System::Windows::Forms::Label^  label75;
-private: System::Windows::Forms::TextBox^  textBox9;
+private: System::Windows::Forms::TextBox^  txtP9;
+
 private: System::Windows::Forms::Label^  label74;
-private: System::Windows::Forms::TextBox^  textBox8;
+private: System::Windows::Forms::TextBox^  txtP8;
+
 private: System::Windows::Forms::Label^  label73;
 private: System::Windows::Forms::TextBox^  txtP7;
 
@@ -373,7 +467,8 @@ private: System::Windows::Forms::TextBox^  textBox98;
 private: System::Windows::Forms::Label^  label112;
 private: System::Windows::Forms::TextBox^  textBox97;
 private: System::Windows::Forms::Label^  label111;
-private: System::Windows::Forms::TextBox^  textBox96;
+private: System::Windows::Forms::TextBox^  txtDBAD0;
+
 private: System::Windows::Forms::Label^  label110;
 private: System::Windows::Forms::TextBox^  txtTick;
 private: System::Windows::Forms::Label^  label118;
@@ -581,13 +676,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label43 = (gcnew System::Windows::Forms::Label());
 			this->textBox44 = (gcnew System::Windows::Forms::TextBox());
 			this->label44 = (gcnew System::Windows::Forms::Label());
-			this->textBox45 = (gcnew System::Windows::Forms::TextBox());
+			this->txtR35 = (gcnew System::Windows::Forms::TextBox());
 			this->label45 = (gcnew System::Windows::Forms::Label());
-			this->textBox46 = (gcnew System::Windows::Forms::TextBox());
+			this->txtR34 = (gcnew System::Windows::Forms::TextBox());
 			this->label46 = (gcnew System::Windows::Forms::Label());
-			this->textBox47 = (gcnew System::Windows::Forms::TextBox());
+			this->txtR33 = (gcnew System::Windows::Forms::TextBox());
 			this->label47 = (gcnew System::Windows::Forms::Label());
-			this->textBox48 = (gcnew System::Windows::Forms::TextBox());
+			this->txtR32 = (gcnew System::Windows::Forms::TextBox());
 			this->label48 = (gcnew System::Windows::Forms::Label());
 			this->txtR31 = (gcnew System::Windows::Forms::TextBox());
 			this->label17 = (gcnew System::Windows::Forms::Label());
@@ -669,7 +764,7 @@ private: System::Windows::Forms::Label^  label117;
 			this->label112 = (gcnew System::Windows::Forms::Label());
 			this->textBox97 = (gcnew System::Windows::Forms::TextBox());
 			this->label111 = (gcnew System::Windows::Forms::Label());
-			this->textBox96 = (gcnew System::Windows::Forms::TextBox());
+			this->txtDBAD0 = (gcnew System::Windows::Forms::TextBox());
 			this->label110 = (gcnew System::Windows::Forms::Label());
 			this->label109 = (gcnew System::Windows::Forms::Label());
 			this->label108 = (gcnew System::Windows::Forms::Label());
@@ -679,7 +774,7 @@ private: System::Windows::Forms::Label^  label117;
 			this->textBox94 = (gcnew System::Windows::Forms::TextBox());
 			this->txtCs = (gcnew System::Windows::Forms::TextBox());
 			this->label104 = (gcnew System::Windows::Forms::Label());
-			this->textBox92 = (gcnew System::Windows::Forms::TextBox());
+			this->txtSSLmt = (gcnew System::Windows::Forms::TextBox());
 			this->txtSs = (gcnew System::Windows::Forms::TextBox());
 			this->label103 = (gcnew System::Windows::Forms::Label());
 			this->textBox90 = (gcnew System::Windows::Forms::TextBox());
@@ -697,7 +792,7 @@ private: System::Windows::Forms::Label^  label117;
 			this->textBox82 = (gcnew System::Windows::Forms::TextBox());
 			this->txtDs = (gcnew System::Windows::Forms::TextBox());
 			this->label98 = (gcnew System::Windows::Forms::Label());
-			this->textBox81 = (gcnew System::Windows::Forms::TextBox());
+			this->txtZSLmt = (gcnew System::Windows::Forms::TextBox());
 			this->txtZs = (gcnew System::Windows::Forms::TextBox());
 			this->label97 = (gcnew System::Windows::Forms::Label());
 			this->txtCa15 = (gcnew System::Windows::Forms::TextBox());
@@ -732,21 +827,21 @@ private: System::Windows::Forms::Label^  label117;
 			this->label82 = (gcnew System::Windows::Forms::Label());
 			this->textBox16 = (gcnew System::Windows::Forms::TextBox());
 			this->label81 = (gcnew System::Windows::Forms::Label());
-			this->textBox15 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP14 = (gcnew System::Windows::Forms::TextBox());
 			this->label80 = (gcnew System::Windows::Forms::Label());
-			this->textBox14 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP13 = (gcnew System::Windows::Forms::TextBox());
 			this->label79 = (gcnew System::Windows::Forms::Label());
-			this->textBox13 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP12 = (gcnew System::Windows::Forms::TextBox());
 			this->label78 = (gcnew System::Windows::Forms::Label());
-			this->textBox12 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP11 = (gcnew System::Windows::Forms::TextBox());
 			this->label77 = (gcnew System::Windows::Forms::Label());
-			this->textBox11 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP15 = (gcnew System::Windows::Forms::TextBox());
 			this->label76 = (gcnew System::Windows::Forms::Label());
-			this->textBox10 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP10 = (gcnew System::Windows::Forms::TextBox());
 			this->label75 = (gcnew System::Windows::Forms::Label());
-			this->textBox9 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP9 = (gcnew System::Windows::Forms::TextBox());
 			this->label74 = (gcnew System::Windows::Forms::Label());
-			this->textBox8 = (gcnew System::Windows::Forms::TextBox());
+			this->txtP8 = (gcnew System::Windows::Forms::TextBox());
 			this->label73 = (gcnew System::Windows::Forms::Label());
 			this->txtP7 = (gcnew System::Windows::Forms::TextBox());
 			this->label72 = (gcnew System::Windows::Forms::Label());
@@ -837,13 +932,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->tabPage1->Controls->Add(this->label43);
 			this->tabPage1->Controls->Add(this->textBox44);
 			this->tabPage1->Controls->Add(this->label44);
-			this->tabPage1->Controls->Add(this->textBox45);
+			this->tabPage1->Controls->Add(this->txtR35);
 			this->tabPage1->Controls->Add(this->label45);
-			this->tabPage1->Controls->Add(this->textBox46);
+			this->tabPage1->Controls->Add(this->txtR34);
 			this->tabPage1->Controls->Add(this->label46);
-			this->tabPage1->Controls->Add(this->textBox47);
+			this->tabPage1->Controls->Add(this->txtR33);
 			this->tabPage1->Controls->Add(this->label47);
-			this->tabPage1->Controls->Add(this->textBox48);
+			this->tabPage1->Controls->Add(this->txtR32);
 			this->tabPage1->Controls->Add(this->label48);
 			this->tabPage1->Controls->Add(this->txtR31);
 			this->tabPage1->Controls->Add(this->label17);
@@ -1393,13 +1488,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label44->TabIndex = 72;
 			this->label44->Text = L"R36";
 			// 
-			// textBox45
+			// txtR35
 			// 
-			this->textBox45->Location = System::Drawing::Point(354, 91);
-			this->textBox45->Name = L"textBox45";
-			this->textBox45->Size = System::Drawing::Size(121, 20);
-			this->textBox45->TabIndex = 71;
-			this->textBox45->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtR35->Location = System::Drawing::Point(354, 91);
+			this->txtR35->Name = L"txtR35";
+			this->txtR35->Size = System::Drawing::Size(121, 20);
+			this->txtR35->TabIndex = 71;
+			this->txtR35->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label45
 			// 
@@ -1410,13 +1505,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label45->TabIndex = 70;
 			this->label45->Text = L"R35";
 			// 
-			// textBox46
+			// txtR34
 			// 
-			this->textBox46->Location = System::Drawing::Point(354, 65);
-			this->textBox46->Name = L"textBox46";
-			this->textBox46->Size = System::Drawing::Size(121, 20);
-			this->textBox46->TabIndex = 69;
-			this->textBox46->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtR34->Location = System::Drawing::Point(354, 65);
+			this->txtR34->Name = L"txtR34";
+			this->txtR34->Size = System::Drawing::Size(121, 20);
+			this->txtR34->TabIndex = 69;
+			this->txtR34->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label46
 			// 
@@ -1427,13 +1522,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label46->TabIndex = 68;
 			this->label46->Text = L"R34";
 			// 
-			// textBox47
+			// txtR33
 			// 
-			this->textBox47->Location = System::Drawing::Point(354, 39);
-			this->textBox47->Name = L"textBox47";
-			this->textBox47->Size = System::Drawing::Size(121, 20);
-			this->textBox47->TabIndex = 67;
-			this->textBox47->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtR33->Location = System::Drawing::Point(354, 39);
+			this->txtR33->Name = L"txtR33";
+			this->txtR33->Size = System::Drawing::Size(121, 20);
+			this->txtR33->TabIndex = 67;
+			this->txtR33->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label47
 			// 
@@ -1444,13 +1539,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label47->TabIndex = 66;
 			this->label47->Text = L"R33";
 			// 
-			// textBox48
+			// txtR32
 			// 
-			this->textBox48->Location = System::Drawing::Point(354, 13);
-			this->textBox48->Name = L"textBox48";
-			this->textBox48->Size = System::Drawing::Size(121, 20);
-			this->textBox48->TabIndex = 65;
-			this->textBox48->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtR32->Location = System::Drawing::Point(354, 13);
+			this->txtR32->Name = L"txtR32";
+			this->txtR32->Size = System::Drawing::Size(121, 20);
+			this->txtR32->TabIndex = 65;
+			this->txtR32->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label48
 			// 
@@ -2026,7 +2121,7 @@ private: System::Windows::Forms::Label^  label117;
 			this->tabPage2->Controls->Add(this->label112);
 			this->tabPage2->Controls->Add(this->textBox97);
 			this->tabPage2->Controls->Add(this->label111);
-			this->tabPage2->Controls->Add(this->textBox96);
+			this->tabPage2->Controls->Add(this->txtDBAD0);
 			this->tabPage2->Controls->Add(this->label110);
 			this->tabPage2->Controls->Add(this->label109);
 			this->tabPage2->Controls->Add(this->label108);
@@ -2036,7 +2131,7 @@ private: System::Windows::Forms::Label^  label117;
 			this->tabPage2->Controls->Add(this->textBox94);
 			this->tabPage2->Controls->Add(this->txtCs);
 			this->tabPage2->Controls->Add(this->label104);
-			this->tabPage2->Controls->Add(this->textBox92);
+			this->tabPage2->Controls->Add(this->txtSSLmt);
 			this->tabPage2->Controls->Add(this->txtSs);
 			this->tabPage2->Controls->Add(this->label103);
 			this->tabPage2->Controls->Add(this->textBox90);
@@ -2054,7 +2149,7 @@ private: System::Windows::Forms::Label^  label117;
 			this->tabPage2->Controls->Add(this->textBox82);
 			this->tabPage2->Controls->Add(this->txtDs);
 			this->tabPage2->Controls->Add(this->label98);
-			this->tabPage2->Controls->Add(this->textBox81);
+			this->tabPage2->Controls->Add(this->txtZSLmt);
 			this->tabPage2->Controls->Add(this->txtZs);
 			this->tabPage2->Controls->Add(this->label97);
 			this->tabPage2->Controls->Add(this->txtCa15);
@@ -2089,21 +2184,21 @@ private: System::Windows::Forms::Label^  label117;
 			this->tabPage2->Controls->Add(this->label82);
 			this->tabPage2->Controls->Add(this->textBox16);
 			this->tabPage2->Controls->Add(this->label81);
-			this->tabPage2->Controls->Add(this->textBox15);
+			this->tabPage2->Controls->Add(this->txtP14);
 			this->tabPage2->Controls->Add(this->label80);
-			this->tabPage2->Controls->Add(this->textBox14);
+			this->tabPage2->Controls->Add(this->txtP13);
 			this->tabPage2->Controls->Add(this->label79);
-			this->tabPage2->Controls->Add(this->textBox13);
+			this->tabPage2->Controls->Add(this->txtP12);
 			this->tabPage2->Controls->Add(this->label78);
-			this->tabPage2->Controls->Add(this->textBox12);
+			this->tabPage2->Controls->Add(this->txtP11);
 			this->tabPage2->Controls->Add(this->label77);
-			this->tabPage2->Controls->Add(this->textBox11);
+			this->tabPage2->Controls->Add(this->txtP15);
 			this->tabPage2->Controls->Add(this->label76);
-			this->tabPage2->Controls->Add(this->textBox10);
+			this->tabPage2->Controls->Add(this->txtP10);
 			this->tabPage2->Controls->Add(this->label75);
-			this->tabPage2->Controls->Add(this->textBox9);
+			this->tabPage2->Controls->Add(this->txtP9);
 			this->tabPage2->Controls->Add(this->label74);
-			this->tabPage2->Controls->Add(this->textBox8);
+			this->tabPage2->Controls->Add(this->txtP8);
 			this->tabPage2->Controls->Add(this->label73);
 			this->tabPage2->Controls->Add(this->txtP7);
 			this->tabPage2->Controls->Add(this->label72);
@@ -2258,13 +2353,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label111->TabIndex = 93;
 			this->label111->Text = L"DBAD1";
 			// 
-			// textBox96
+			// txtDBAD0
 			// 
-			this->textBox96->Location = System::Drawing::Point(353, 296);
-			this->textBox96->Name = L"textBox96";
-			this->textBox96->Size = System::Drawing::Size(118, 20);
-			this->textBox96->TabIndex = 92;
-			this->textBox96->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtDBAD0->Location = System::Drawing::Point(353, 296);
+			this->txtDBAD0->Name = L"txtDBAD0";
+			this->txtDBAD0->Size = System::Drawing::Size(118, 20);
+			this->txtDBAD0->TabIndex = 92;
+			this->txtDBAD0->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label110
 			// 
@@ -2345,13 +2440,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label104->TabIndex = 83;
 			this->label104->Text = L"CS";
 			// 
-			// textBox92
+			// txtSSLmt
 			// 
-			this->textBox92->Location = System::Drawing::Point(471, 218);
-			this->textBox92->Name = L"textBox92";
-			this->textBox92->Size = System::Drawing::Size(118, 20);
-			this->textBox92->TabIndex = 82;
-			this->textBox92->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtSSLmt->Location = System::Drawing::Point(471, 218);
+			this->txtSSLmt->Name = L"txtSSLmt";
+			this->txtSSLmt->Size = System::Drawing::Size(118, 20);
+			this->txtSSLmt->TabIndex = 82;
+			this->txtSSLmt->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// txtSs
 			// 
@@ -2495,13 +2590,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label98->TabIndex = 65;
 			this->label98->Text = L"DS";
 			// 
-			// textBox81
+			// txtZSLmt
 			// 
-			this->textBox81->Location = System::Drawing::Point(471, 62);
-			this->textBox81->Name = L"textBox81";
-			this->textBox81->Size = System::Drawing::Size(118, 20);
-			this->textBox81->TabIndex = 64;
-			this->textBox81->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtZSLmt->Location = System::Drawing::Point(471, 62);
+			this->txtZSLmt->Name = L"txtZSLmt";
+			this->txtZSLmt->Size = System::Drawing::Size(118, 20);
+			this->txtZSLmt->TabIndex = 64;
+			this->txtZSLmt->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// txtZs
 			// 
@@ -2795,13 +2890,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label81->TabIndex = 30;
 			this->label81->Text = L"C0";
 			// 
-			// textBox15
+			// txtP14
 			// 
-			this->textBox15->Location = System::Drawing::Point(36, 400);
-			this->textBox15->Name = L"textBox15";
-			this->textBox15->Size = System::Drawing::Size(54, 20);
-			this->textBox15->TabIndex = 29;
-			this->textBox15->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP14->Location = System::Drawing::Point(36, 400);
+			this->txtP14->Name = L"txtP14";
+			this->txtP14->Size = System::Drawing::Size(54, 20);
+			this->txtP14->TabIndex = 29;
+			this->txtP14->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label80
 			// 
@@ -2812,13 +2907,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label80->TabIndex = 28;
 			this->label80->Text = L"P14";
 			// 
-			// textBox14
+			// txtP13
 			// 
-			this->textBox14->Location = System::Drawing::Point(36, 374);
-			this->textBox14->Name = L"textBox14";
-			this->textBox14->Size = System::Drawing::Size(54, 20);
-			this->textBox14->TabIndex = 27;
-			this->textBox14->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP13->Location = System::Drawing::Point(36, 374);
+			this->txtP13->Name = L"txtP13";
+			this->txtP13->Size = System::Drawing::Size(54, 20);
+			this->txtP13->TabIndex = 27;
+			this->txtP13->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label79
 			// 
@@ -2829,13 +2924,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label79->TabIndex = 26;
 			this->label79->Text = L"P13";
 			// 
-			// textBox13
+			// txtP12
 			// 
-			this->textBox13->Location = System::Drawing::Point(36, 348);
-			this->textBox13->Name = L"textBox13";
-			this->textBox13->Size = System::Drawing::Size(54, 20);
-			this->textBox13->TabIndex = 25;
-			this->textBox13->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP12->Location = System::Drawing::Point(36, 348);
+			this->txtP12->Name = L"txtP12";
+			this->txtP12->Size = System::Drawing::Size(54, 20);
+			this->txtP12->TabIndex = 25;
+			this->txtP12->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label78
 			// 
@@ -2846,13 +2941,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label78->TabIndex = 24;
 			this->label78->Text = L"P12";
 			// 
-			// textBox12
+			// txtP11
 			// 
-			this->textBox12->Location = System::Drawing::Point(36, 322);
-			this->textBox12->Name = L"textBox12";
-			this->textBox12->Size = System::Drawing::Size(54, 20);
-			this->textBox12->TabIndex = 23;
-			this->textBox12->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP11->Location = System::Drawing::Point(36, 322);
+			this->txtP11->Name = L"txtP11";
+			this->txtP11->Size = System::Drawing::Size(54, 20);
+			this->txtP11->TabIndex = 23;
+			this->txtP11->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label77
 			// 
@@ -2863,13 +2958,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label77->TabIndex = 22;
 			this->label77->Text = L"P11";
 			// 
-			// textBox11
+			// txtP15
 			// 
-			this->textBox11->Location = System::Drawing::Point(36, 426);
-			this->textBox11->Name = L"textBox11";
-			this->textBox11->Size = System::Drawing::Size(54, 20);
-			this->textBox11->TabIndex = 23;
-			this->textBox11->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP15->Location = System::Drawing::Point(36, 426);
+			this->txtP15->Name = L"txtP15";
+			this->txtP15->Size = System::Drawing::Size(54, 20);
+			this->txtP15->TabIndex = 23;
+			this->txtP15->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label76
 			// 
@@ -2880,13 +2975,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label76->TabIndex = 22;
 			this->label76->Text = L"P15";
 			// 
-			// textBox10
+			// txtP10
 			// 
-			this->textBox10->Location = System::Drawing::Point(36, 296);
-			this->textBox10->Name = L"textBox10";
-			this->textBox10->Size = System::Drawing::Size(54, 20);
-			this->textBox10->TabIndex = 21;
-			this->textBox10->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP10->Location = System::Drawing::Point(36, 296);
+			this->txtP10->Name = L"txtP10";
+			this->txtP10->Size = System::Drawing::Size(54, 20);
+			this->txtP10->TabIndex = 21;
+			this->txtP10->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label75
 			// 
@@ -2897,13 +2992,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label75->TabIndex = 20;
 			this->label75->Text = L"P10";
 			// 
-			// textBox9
+			// txtP9
 			// 
-			this->textBox9->Location = System::Drawing::Point(36, 270);
-			this->textBox9->Name = L"textBox9";
-			this->textBox9->Size = System::Drawing::Size(54, 20);
-			this->textBox9->TabIndex = 19;
-			this->textBox9->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP9->Location = System::Drawing::Point(36, 270);
+			this->txtP9->Name = L"txtP9";
+			this->txtP9->Size = System::Drawing::Size(54, 20);
+			this->txtP9->TabIndex = 19;
+			this->txtP9->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label74
 			// 
@@ -2914,13 +3009,13 @@ private: System::Windows::Forms::Label^  label117;
 			this->label74->TabIndex = 18;
 			this->label74->Text = L"P9";
 			// 
-			// textBox8
+			// txtP8
 			// 
-			this->textBox8->Location = System::Drawing::Point(36, 244);
-			this->textBox8->Name = L"textBox8";
-			this->textBox8->Size = System::Drawing::Size(54, 20);
-			this->textBox8->TabIndex = 17;
-			this->textBox8->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
+			this->txtP8->Location = System::Drawing::Point(36, 244);
+			this->txtP8->Name = L"txtP8";
+			this->txtP8->Size = System::Drawing::Size(54, 20);
+			this->txtP8->TabIndex = 17;
+			this->txtP8->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
 			// label73
 			// 

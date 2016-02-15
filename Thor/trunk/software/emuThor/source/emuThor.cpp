@@ -19,6 +19,7 @@ int numDataBreakpoints;
 bool irq1024Hz;
 bool irq30Hz;
 bool irqKeyboard;
+bool irqUart;
 bool trigger30;
 bool trigger1024;
 

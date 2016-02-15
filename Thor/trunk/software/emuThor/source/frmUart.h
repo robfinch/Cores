@@ -11,6 +11,7 @@ namespace emuThor {
 	using namespace System::Data;
 	using namespace System::Drawing;
 	using namespace System::Runtime::InteropServices;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmUart
@@ -18,8 +19,10 @@ namespace emuThor {
 	public ref class frmUart : public System::Windows::Forms::Form
 	{
 	public:
-		frmUart(void)
+		Mutex^ mut;
+		frmUart(Mutex^ m)
 		{
+			mut = m;
 			InitializeComponent();
 			//
 			//TODO: Add the constructor code here
@@ -532,6 +535,7 @@ namespace emuThor {
 			this->Controls->Add(this->label2);
 			this->Controls->Add(this->label1);
 			this->Controls->Add(this->txtToUart);
+			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
 			this->Name = L"frmUart";
 			this->Text = L"rtfSimpleUart Emulator";
 			this->ResumeLayout(false);
@@ -549,15 +553,20 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 			 if (do_send && txtToUart->Text->Length > 0) {
  	 			 char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(txtToUart->Text->Substring(0,1));
 				 txtToUart->Text = txtToUart->Text->Substring(1);
+				 mut->WaitOne();
 				 system1.uart1.RxPort(str[0]);
+				 mut->ReleaseMutex();
 			 }
 			 if (txtToUart->Text->Length <= 0)
 				 do_send = false;
+			 mut->WaitOne();
 			 dat = system1.uart1.TxPort() & 0xFF;
+			 mut->ReleaseMutex();
 			 buf[0] = dat;
 			 buf[1] = '\0';
 			 if (dat != 0xFF)
 				 txtFromUart->Text = txtFromUart->Text + gcnew String(buf);
+			 mut->WaitOne();
 			 sprintf(buf, "%02X", system1.uart1.cm1);
 			 txtCM1->Text = gcnew String(buf);
 			 sprintf(buf, "%02X", system1.uart1.cm2);
@@ -573,6 +582,7 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 			 sprintf(buf, "%02X", system1.uart1.ier);
 			 txtIER->Text = gcnew String(buf);
 			 sprintf(buf, "%02X", system1.uart1.is);
+			 mut->ReleaseMutex();
 			 txtIS->Text = gcnew String(buf);
 		 }
 };

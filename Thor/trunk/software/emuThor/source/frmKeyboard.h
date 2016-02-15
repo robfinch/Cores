@@ -13,6 +13,7 @@ namespace emuThor {
 	using namespace System::Windows::Forms;
 	using namespace System::Data;
 	using namespace System::Drawing;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmKeyboard
@@ -21,8 +22,10 @@ namespace emuThor {
 	{
 
 	public:
-		frmKeyboard(void)
+		Mutex^ mut;
+		frmKeyboard(Mutex^ m)
 		{
+			mut = m;
 			InitializeComponent();
 			//
 			//TODO: Add the constructor code here
@@ -1150,11 +1153,13 @@ private: System::Windows::Forms::Button^  buttonTab;
 		}
 #pragma endregion
 	private: System::Void btnQuest_Click(System::Object^  sender, System::EventArgs^  e) {
+				 mut->WaitOne();
 				 system1.keybd.Put(0x4A);
 				 system1.keybd.Put(0xF0);
 				 system1.keybd.Put(0x4A);
 				 keybd_status = 0x80;
      			 system1.pic1.irqKeyboard = true;
+				 mut->ReleaseMutex();
 			 }
 private: System::Void btnEnter_Click(System::Object^  sender, System::EventArgs^  e) {
 			 system1.keybd.Put(0x5A);
@@ -1181,11 +1186,13 @@ private: System::Void btn1_Click(System::Object^  sender, System::EventArgs^  e)
 			 system1.pic1.irqKeyboard = true;
 		 }
 private: System::Void btnD_Click(System::Object^  sender, System::EventArgs^  e) {
+			 mut->WaitOne();
 			 system1.keybd.Put(0x23);
 			 system1.keybd.Put(0xF0);
 			 system1.keybd.Put(0x23);
 			 keybd_status = 0x80;
 			 system1.pic1.irqKeyboard = true;
+			 mut->ReleaseMutex();
 		 }
 private: System::Void btnB_Click(System::Object^  sender, System::EventArgs^  e) {
 			 system1.keybd.Put(0x32);

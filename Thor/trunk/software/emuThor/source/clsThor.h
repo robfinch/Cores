@@ -22,8 +22,11 @@ class clsThor : public clsCPU
 	void ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, int *Sg, int *Sc);
 	int WriteMask(int ad, int sz);
 	unsigned __int64 ReadByte(int ad);
+	unsigned __int64 ReadChar(int ad);
+	unsigned __int64 ReadHalf(int ad);
+	unsigned __int64 Read(int ad);
 public:
-	unsigned __int64 pc;
+	unsigned __int32 pc;
 	__int64 gp[64];		// general purpose registers
 	__int64 ca[16];		// code address registers
 	__int8 pr[16];		// predicate registers
@@ -43,5 +46,8 @@ public:
 	void Step();
 private:
 	inline bool IRQActive() { return !StatusHWI && irq && !im; };
+	int GetBit(__int64 a, int b);
+	void SetBit(__int64 *a, int b);
+	void ClearBit(__int64 *a, int b);
 };
 

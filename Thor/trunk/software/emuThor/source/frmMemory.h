@@ -16,6 +16,7 @@ namespace emuThor {
 	using namespace System::Data;
 	using namespace System::Drawing;
 	using namespace System::Runtime::InteropServices;
+	using namespace System::Threading;
 
 	/// <summary>
 	/// Summary for frmMemory
@@ -23,8 +24,10 @@ namespace emuThor {
 	public ref class frmMemory : public System::Windows::Forms::Form
 	{
 	public:
-		frmMemory(void)
+		Mutex^ mut;
+		frmMemory(Mutex^ m)
 		{
+			mut = m;
 			InitializeComponent();
 			//
 			//TODO: Add the constructor code here
@@ -123,7 +126,9 @@ namespace emuThor {
 						 sprintf(buf, "\r\n%06X ", nn);
 						 str2 += buf;
 					 }
+					 mut->WaitOne();
 					 sprintf(buf, "%02X ", (system1.Read(nn,0) >> ((nn & 7)<<3)) & 0xFF);
+					 mut->ReleaseMutex();
 					 str2 += buf;
 				 }
 				 this->textBoxMem->Text = gcnew String(str2.c_str());

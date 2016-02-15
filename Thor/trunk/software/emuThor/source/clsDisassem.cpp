@@ -136,7 +136,7 @@ std::string clsDisassem::ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, 
 	if (!Ra || !Rb || !Rt || !Sg)
 		return "<error>";
 	*Ra = b1 & 0x3f;
-	*Rb = (b1 >> 6) | ((b2 & 0x0f) >> 4);
+	*Rb = (b1 >> 6) | ((b2 & 0x0f) << 2);
 	*Rt = ((b2 & 0xF0) >> 4) | ((b3 & 3) << 4);
 	*Sg = (b3 >> 5) & 7;
 	*Sc = (b3 >> 2) & 3;
@@ -204,7 +204,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 	__int64 val, disp;
 	int rv;
 	int b1, b2, b3, b4;
-	int Ra,Rb,Rc,Rt,Sprn,Sg,Sc;
+	int Ra,Rb,Rc,Rt,Sprn,Sg,Sc,Sz;
 	int Cr,Ct,Tn;
 	int Pn;
 	char buf[100];
@@ -351,6 +351,23 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		Pn = opcode & 0x0f;
 		sprintf(&buf[strlen(buf)], "TST p%d,r%d", Pn, Ra);
 		if (nb) *nb = 3;
+		imm_prefix = false;
+		return std::string(buf);
+	}
+	if ((opcode & 0xF0)==0x10) {
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Rb = ((b2 << 2) | (b1 >> 6)) & 0x3f;
+		Pn = opcode & 0x0f;
+		switch(b2 >> 4) {
+		case 0:	sprintf(&buf[strlen(buf)], " CMP p%d,r%d,r%d", Pn, Ra, Rb); break;
+		case 1:	sprintf(&buf[strlen(buf)], " FCMP.S p%d,r%d,r%d", Pn, Ra, Rb); break;
+		case 2:	sprintf(&buf[strlen(buf)], " FCMP.D p%d,r%d,r%d", Pn, Ra, Rb); break;
+		}
+		if (nb) *nb = 4;
 		imm_prefix = false;
 		return std::string(buf);
 	}
@@ -581,6 +598,33 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 			sprintf(&buf[strlen(buf)], "  ($%I64X)", ad-6 + disp);
 		return std::string(buf);
 
+	case JSRI:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Ct = (b1 >> 6) | (b2 << 2) & 0xc0;
+		Sz = (b2 >> 2) & 3;
+		Sg = b3 >> 5;
+		disp = ((b3 & 0x1f) << 4) | (b2 >> 4);
+		if (disp & 0x800LL)
+			disp |= 0xFFFFFFFFFFFFFE00LL;
+		if (imm_prefix) {
+			disp &= 0xFFLL;
+			disp = imm | disp;
+		}
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		switch(Sz) {
+		case 1:	sprintf(&buf[strlen(buf)], " JCI c%d,%s:$%I64X[r%d]", Ct, SegName(Sg).c_str(), disp, Ra); break;
+		case 2:	sprintf(&buf[strlen(buf)], " JHI c%d,%s:$%I64X[r%d]", Ct, SegName(Sg).c_str(), disp, Ra); break;
+		case 3:	sprintf(&buf[strlen(buf)], " JWI c%d,%s:$%I64X[r%d]", Ct, SegName(Sg).c_str(), disp, Ra); break;
+		}
+		return std::string(buf);
+
 	case JSRS:
 		b1 = system1.ReadByte(ad);
 		ad++;
@@ -604,6 +648,16 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 			sprintf(&buf[strlen(buf)], "[c%d]  ($%LLX)", Cr, ad-5 + disp);
 		else
 			sprintf(&buf[strlen(buf)], "[c%d]", Cr);
+		return std::string(buf);
+
+	case JSRR:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		Cr = b1 >> 4;
+		Ct = b1 & 0xF;
+		if (nb) *nb = 3;
+		imm_prefix = false;
+		sprintf(&buf[strlen(buf)], " JSR c%d,[c%d]", Ct, Cr);
 		return std::string(buf);
 
 	case LDI:
@@ -660,6 +714,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 	case LW:	return mem("LW", ad, nb);
 	case LWX:	return memndx("LWX", ad, nb);
 	case LVW:	return mem("LVW", ad, nb);
+	case LVWAR:	return mem("LVWAR", ad, nb);
 
 	case LLA:
 		b1 = ReadByte(ad);
@@ -719,6 +774,18 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		str = dRn(b1,b2,b3,&Ra,&Sg,&disp);
 		sprintf(&buf[strlen(buf)]," LWS %s,%s", SprName(Rb).c_str(), str.c_str());
 		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case MEMSB:
+		sprintf(&buf[strlen(buf)], " MEMSB");
+		if (nb) *nb = 2;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case MEMDB:
+		sprintf(&buf[strlen(buf)], " MEMDB");
+		if (nb) *nb = 2;
 		imm_prefix = false;
 		return std::string(buf);
 
@@ -900,6 +967,18 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		imm_prefix = false;
 		return std::string(buf);
 
+	case RTD:
+		sprintf(&buf[strlen(buf)], " RTD");
+		if (nb) *nb = 2;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case RTE:
+		sprintf(&buf[strlen(buf)], " RTE");
+		if (nb) *nb = 2;
+		imm_prefix = false;
+		return std::string(buf);
+
 	case RTI:
 		sprintf(&buf[strlen(buf)], " RTI");
 		if (nb) *nb = 2;
@@ -983,11 +1062,32 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		case SHL:
 			sprintf(&buf[strlen(buf)], " SHL r%d,r%d,r%d", Rt, Ra, Rb);
 			break;
+		case SHR:
+			sprintf(&buf[strlen(buf)], " SHR r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case SHLU:
+			sprintf(&buf[strlen(buf)], " SHLU r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case SHRU:
+			sprintf(&buf[strlen(buf)], " SHRU r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
 		case SHLI:
 			sprintf(&buf[strlen(buf)], " SHLI r%d,r%d,#$%X", Rt, Ra, Rb);
 			break;
+		case SHRI:
+			sprintf(&buf[strlen(buf)], " SHRI r%d,r%d,#$%X", Rt, Ra, Rb);
+			break;
+		case SHLUI:
+			sprintf(&buf[strlen(buf)], " SHLUI r%d,r%d,#$%X", Rt, Ra, Rb);
+			break;
 		case SHRUI:
 			sprintf(&buf[strlen(buf)], " SHRUI r%d,r%d,#$%X", Rt, Ra, Rb);
+			break;
+		case ROL:
+			sprintf(&buf[strlen(buf)], " ROL r%d,r%d,r%d", Rt, Ra, Rb);
+			break;
+		case ROR:
+			sprintf(&buf[strlen(buf)], " ROR r%d,r%d,r%d", Rt, Ra, Rb);
 			break;
 		case ROLI:
 			sprintf(&buf[strlen(buf)], " ROLI r%d,r%d,#$%X", Rt, Ra, Rb);
@@ -1059,6 +1159,20 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 		str = dRn(b1,b2,b3,&Ra,&Sg,&disp);
 		sprintf(&buf[strlen(buf)]," SW r%d,%s", Rb, str.c_str());
+		if (nb) *nb = 5;
+		imm_prefix = false;
+		return std::string(buf);
+
+	case SWCR:
+		b1 = ReadByte(ad);
+		ad++;
+		b2 = ReadByte(ad);
+		ad++;
+		b3 = ReadByte(ad);
+		ad++;
+		Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+		str = dRn(b1,b2,b3,&Ra,&Sg,&disp);
+		sprintf(&buf[strlen(buf)]," SWCR r%d,%s", Rb, str.c_str());
 		if (nb) *nb = 5;
 		imm_prefix = false;
 		return std::string(buf);

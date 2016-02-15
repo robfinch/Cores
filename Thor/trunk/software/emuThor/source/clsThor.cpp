@@ -22,6 +22,9 @@ bool clsThor::IsKM()
 }
 
 unsigned __int64 clsThor::ReadByte(int ad) { return system1->ReadByte(ad); };
+unsigned __int64 clsThor::ReadChar(int ad) { return system1->ReadChar(ad); };
+unsigned __int64 clsThor::ReadHalf(int ad) { return system1->ReadHalf(ad); };
+unsigned __int64 clsThor::Read(int ad) { return system1->Read(ad); };
 
 
 int clsThor::GetMode()
@@ -181,6 +184,21 @@ void clsThor::SetSpr(int Sprn, __int64 val)
 	}
 }
 
+int clsThor::GetBit(__int64 a, int b)
+{
+	return (a >> b) & 1;
+}
+
+void clsThor::SetBit(__int64 *a, int b)
+{
+	*a |= (1 << b);
+}
+
+void clsThor::ClearBit(__int64 *a, int b)
+{
+	*a &= ~(1 << b);
+}
+
 void clsThor::Step()
 {
 	bool ex = true;	// execute instruction
@@ -191,7 +209,13 @@ void clsThor::Step()
 	int b1, b2, b3, b4;
 	int nn;
 	__int64 dat;
+	unsigned __int64 overflow;
+	unsigned __int64 carry;
+	unsigned __int64 a,b,res;
 
+	for (nn = 39; nn >= 0; nn--)
+		pcs[nn] = pcs[nn-1];
+	pcs[0] = pc;
 	if (IRQActive()) {
 		StatusHWI = true;
 		if (string_pc)
@@ -199,6 +223,7 @@ void clsThor::Step()
 		else
 			ca[14] = pc;
 		pc = ca[12] + (vecno << 4);
+		ca[15] = pc;
 	}
 	gp[0] = 0;
 	ca[0] = 0;
@@ -210,11 +235,9 @@ void clsThor::Step()
 	tick = tick + 1;
 	pred = ReadByte(pc);
 	pc++;
-	for (nn = 39; nn >= 0; nn--)
-		pcs[nn] = pcs[nn-1];
-	pcs[0] = pc;
 	switch (pred) {
 	case 0x00:	// BRK instruction
+		isRunning = false;
 		return;
 	case 0x10:	// NOP
 		return;
@@ -502,6 +525,35 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	/* ToDo: add overflow exception */
+	case ADDI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			a = GetGP(Ra);
+			b = imm;
+			res = a + b;
+			// overflow = 
+			SetGP(Rt,res);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case ADDUI:
 		b1 = ReadByte(pc);
 		pc++;
@@ -607,7 +659,7 @@ void clsThor::Step()
 
 	case CLI:
 		if (ex) {
-			im = 0;
+			imcd = 3;
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -687,6 +739,36 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case INT:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ct = b1 & 0xF;
+			Cr = b1 >> 4;
+			// Normal INT stores the address of the interrupted instruction.
+			// However if the target register indicates a system call or
+			// debug interrupt, then the address of the following
+			// instruction is stored.
+			if (!(Ct==11 || Ct==13))
+				pc -= 4;
+			ca[Ct] = pc;
+			ca[0] = 0;
+			pc = (b2 << 4) + ca[Cr];
+			if (Ct==11)
+				StatusDBG = true;
+			else if (Ct==13) {
+				if (StatusEXL < 255)
+					StatusEXL++;
+			}
+			else
+				StatusHWI = true;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case JSR:
 		b1 = ReadByte(pc);
 		pc++;
@@ -712,6 +794,51 @@ void clsThor::Step()
 				pc = disp + pc - 6;
 			else
 				pc = disp + ca[Cr];
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case JSRI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			int Sz;
+			unsigned __int64 dat;
+			Ra = b1 & 0x3f;
+			Ct = (b1 >> 6) | ((b2 << 2) & 0xf);
+			Sz = (b2 & 0xC) >> 2;
+			Sg = (b3 >> 5);
+			if (Ct != 0)
+				ca[Ct] = pc;
+			disp = ((b3 & 0x1f) << 4) | (b2 >> 4);
+			if (disp & 0x100)
+				disp |= 0xFFFFFFFFFFFFFE00LL;
+			if (imm_prefix) {
+				disp &= 0xFF;
+				disp |= imm;
+			}
+			switch(Sz) {
+			case 1:
+				dat = ReadChar(disp + seg_base[Sg] + GetGP(Ra)*2);
+				dat &= 0xFFFFLL;
+				pc = pc & 0xFFFF0000;
+				pc |= dat;
+				break;
+			case 2:
+				dat = ReadHalf(disp + seg_base[Sg] + GetGP(Ra)*4);
+				dat &= 0xFFFFFFFFLL;
+				pc = dat;
+				break;
+			case 3:
+				dat = Read(disp + seg_base[Sg] + GetGP(Ra)*8);
+				pc = dat;
+				break;
+			}
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1176,6 +1303,12 @@ void clsThor::Step()
 			case ENOR:
 				SetGP(Rt, ~(GetGP(Ra) ^ GetGP(Rb)));
 				break;
+			case ANDC:
+				SetGP(Rt, GetGP(Ra) & ~GetGP(Rb));
+				break;
+			case ORC:
+				SetGP(Rt, GetGP(Ra) | ~GetGP(Rb));
+				break;
 			}
 		}
 		ca[15] = pc;
@@ -1209,6 +1342,30 @@ void clsThor::Step()
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
 			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			dat = system1->Read(ea);
+			/*
+			if (ea & 4)
+				dat = (dat >> 32);
+			if (ea & 2)
+				dat = (dat >> 16);
+			*/
+			SetGP(Rt,dat);
+		}
+		imm_prefix = false;
+		ca[15] = pc;
+		return;
+
+	case LVWAR:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp);
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			dat = system1->Read(ea,1);
 			/*
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -1269,6 +1426,18 @@ void clsThor::Step()
 		imm_prefix = false;
 		ca[15] = pc;
 		return;
+
+	// Memory synchronization primitives are not useful to the software ISA
+	// emulator. They are treated like NOP's.
+	case MEMSB:
+		ca[15] = pc;
+		imm_prefix = false;
+		break;
+
+	case MEMDB:
+		ca[15] = pc;
+		imm_prefix = false;
+		break;
 
 	case MFSPR:
 		b1 = ReadByte(pc);
@@ -1488,6 +1657,95 @@ void clsThor::Step()
 		ca[15] = pc;
 		imm_prefix = false;
 		return;
+	
+	case R1:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			switch(b2 >> 4) {
+			case CPUID:
+				switch(Ra) {
+				case 0:	SetGP(Rt,0x0002LL); break;	// Processor ID
+				case 2: SetGP(Rt,0x4e4F5254494E4966LL);	break;	// "Finitron"
+				case 3: SetGP(Rt,0x00LL); break;
+				case 4: SetGP(Rt,0x36346249547373LL); break;	// 64BitSS
+				case 5: SetGP(Rt,0x00LL); break;	
+				case 6: SetGP(Rt,0x524F4A74LL); break;	// "Thor"
+				case 7: SetGP(Rt, 0x00LL); break;
+				case 8: SetGP(Rt, 0x316ELL); break;		// "M1"
+				case 9: SetGP(Rt, 0x1235LL); break;
+				case 10:	SetGP(Rt,0x00LL); break;
+				case 11:	SetGP(Rt,0x0000400000008000LL); break;	// 16k,32k cache size
+				default:	SetGP(Rt,0x00LL); break;
+				}
+			case REDOR:	SetGP(Rt, GetGP(Ra) != 0); break;
+			case REDAND:	SetGP(Rt, GetGP(Ra)==0xFFFFFFFFFFFFFFFFLL); break;
+			case PAR:	break; /* ToDo */
+			}
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case P1:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			int bita,bitb,bitt;
+			Ra = (b1 & 0x3f) >> 2;
+			bita = b1 & 3;
+			a = GetBit(pr[Ra],bita);
+			Rb = (b2 & 0xf);
+			bitb = b1 >> 6;
+			b = GetBit(pr[Rb],bitb);
+			Rt = (b2 >> 6) | ((b3 & 3) << 2);
+			bitt = (b2 >> 4) & 3;
+			switch(b3 >> 2) {
+			case PAND:
+				res = a & b;
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case POR:
+				res = a | b;
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case PEOR:
+				res = a ^ b;
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case PNAND:
+				res = !(a & b);
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case PNOR:
+				res = !(a | b);
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case PENOR:
+				res = !(a ^ b);
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case PANDC:
+				res = a & !b;
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			case PORC:
+				res = a | !b;
+				if (res) SetBit((__int64 *)&pr[Rt],bitt); else ClearBit((__int64 *)&pr[Rt],bitt);
+				break;
+			}
+		}
+		ca[15] = pc;
+		imm_prefix = 0;
+		return;
 
 	case RR:
 		b1 = ReadByte(pc);
@@ -1544,6 +1802,15 @@ void clsThor::Step()
 		}
 		ca[15] = pc;
 		imm_prefix = 0;
+		return;
+
+	case RTD:
+		if (ex) {
+			StatusDBG = false;
+			pc = ca[11];
+		}
+		ca[15] = pc;
+		imm_prefix = false;
 		return;
 
 	case RTE:
@@ -1653,6 +1920,14 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case SEI:
+		if (ex) {
+			im = 1;
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		break;
+
 	case SH:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1701,10 +1976,28 @@ void clsThor::Step()
 			func = b3 >> 2;
 			switch(func) {
 			case SHL:
+			case SHLU:
 				SetGP(Rt, GetGP(Ra) << (GetGP(Rb) & 0x3f));
 				break;
+			case SHR:
+				SetGP(Rt, GetGP(Ra) >> (GetGP(Rb) & 0x3f));
+				break;
+			case ROL:
+				a = (unsigned __int64)GetGP(Ra) << (GetGP(Rb) & 0x3f);
+				b = (unsigned __int64)GetGP(Ra) >> (64-(GetGP(Rb) & 0x3f));
+				SetGP(Rt, (unsigned __int64)a|b);
+				break;
+			case ROR:
+				a = (unsigned __int64)GetGP(Ra) >> (GetGP(Rb) & 0x3f);
+				b = (unsigned __int64)GetGP(Ra) << (64-(GetGP(Rb) & 0x3f));
+				SetGP(Rt, (unsigned __int64)a|b);
+				break;
 			case SHLI:
+			case SHLUI:
 				SetGP(Rt, GetGP(Ra) << Rb);
+				break;
+			case SHRI:
+				SetGP(Rt, GetGP(Ra) >> Rb);
 				break;
 			case SHRUI:
 				SetGP(Rt, (unsigned __int64)GetGP(Ra) >> Rb);
@@ -1789,6 +2082,31 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	/* ToDo: cause overflow exception */
+	case SUBI:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Ra = b1 & 0x3f;
+			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			if (imm_prefix) {
+				imm |= ((b3 << 4)&0xF0) | ((b2 >> 4) & 0xF);
+			}
+			else {
+				imm = (b3 << 4) | ((b2 >> 4) & 0xF);
+				if (imm & 0x800)
+					imm |= 0xFFFFFFFFFFFFF000LL;
+			}
+			SetGP(Rt,GetGP(Ra) - imm);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
 	case SUBUI:
 		b1 = ReadByte(pc);
 		pc++;
@@ -1825,6 +2143,23 @@ void clsThor::Step()
 			dRn(b1,b2,b3,&Ra,&Sg,&disp);
 			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
 			system1->Write(ea,GetGP(Rb),(0xFF << (ea & 7)) & 0xFF);
+		}
+		ca[15] = pc;
+		imm_prefix = false;
+		return;
+
+	case SWCR:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp);
+			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			system1->Write(ea,GetGP(Rb),(0xFF << (ea & 7)) & 0xFF,1);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1881,7 +2216,9 @@ void clsThor::Step()
 			ca[Ct] = pc;
 			ca[0] = 0;
 			pc = (b2 << 4) + ca[Cr];
-			if (StatusEXL < 255)
+			if (Ct==11)
+				StatusDBG = true;
+			else if (StatusEXL < 255)
 				StatusEXL++;
 		}
 		ca[15] = pc;

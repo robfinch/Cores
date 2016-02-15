@@ -75,6 +75,12 @@
     <ClCompile Include="frmStack.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="frmInterrupts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="frmPCHistory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -140,6 +146,12 @@
     <ClInclude Include="frmStack.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="frmInterrupts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="frmPCHistory.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="app.rc">
@@ -172,6 +184,9 @@
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
     <EmbeddedResource Include="fmrFreeRun.resx">
+      <Filter>Resource Files</Filter>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmStack.resx">
       <Filter>Resource Files</Filter>
     </EmbeddedResource>
   </ItemGroup>

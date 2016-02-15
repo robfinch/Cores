@@ -117,19 +117,4 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="label4.Text" xml:space="preserve">
-    <value>Most instructions have been implemented. Exceptional conditions
-(divide by zero / overflow / segment limit) haven't been implemented yet.
-Only the HEX file produced by the assembler is accepted.
-Some of the GUI doesn't work yet.
-It works well enough to see the BIOS startup menu.</value>
-  </data>
-  <data name="label5.Text" xml:space="preserve">
-    <value>For an example:
-
-Load a hex file (boot.hex) using the file menu.
-Goto the run menu and select reset to reset the system.
-Then single step via the single step toolbar button.
-Use the green run button to run multiple steps.</value>
-  </data>
 </root>
