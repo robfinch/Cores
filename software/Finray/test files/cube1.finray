@@ -1,0 +1,126 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+MIRROR =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	1.0
+		reflection	0.98
+	}
+
+camera {
+    location < 0.0, 10.0, -20.0 >
+	look_at < 0.0, 0.0, 0.0 >
+//    direction < 0.3, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+    right < 1.0, 0.0, 0.0 >
+}
+
+plane ( < 0, 0, 1 > 50 )
+{
+	texture MIRROR
+	color MidnightBlue
+}
+
+object {
+triangle ( < 1, 0, 0 > < 1, 1, 0 > < 0, 0, 0 > )
+{
+	texture SURFACE
+	color Blue
+}
+
+triangle ( < 0, 1, 0 > < 1, 1, 0 > < 0, 0, 0 > )
+{
+	texture SURFACE
+	color Blue
+}
+
+triangle ( < 1, 0, 0 > < 1, 1, 0 > < 0, 0, 0 > )
+{
+	texture SURFACE
+	color Blue
+	rotate < 0, 90, 0 >
+}
+
+triangle ( < 0, 1, 0 > < 1, 1, 0 > < 0, 0, 0 > )
+{
+	texture SURFACE
+	color Blue
+	rotate < 0, 90, 0 >
+}
+
+triangle ( < 1, 0, 0 > < 1, 1, 0 > < 0, 0, 0 > )
+{
+	texture SURFACE
+	color Blue
+	rotate < 90, 0, 0 >
+}
+
+triangle ( < 0, 1, 0 > < 1, 1, 0 > < 0, 0, 0 > )
+{
+	texture SURFACE
+	color Blue
+	rotate < 90, 0, 0 >
+}
+rotate < 15, 15, 15 >
+}
+
+//sphere ( < 0, 0, 0 > 1 )
+//{
+//	texture SURFACE
+//	color Orange1
+//}
+
+object {
+/*
+		triangle ( < 0 0 0 > < 1 0 0 > < 0 1 0> )
+		{
+			texture SURFACE
+			color RED
+		}
+		triangle ( < 0 1 0 > < 1 1 0 > < 1 0 0 > )
+		{
+			texture SURFACE
+			color RED
+		}
+*/
+		triangle ( < 0, 0, 0 > < 0, 5, 5 > < 0, 0, 5 > )
+		{
+			texture SURFACE
+			color Blue
+		}
+		triangle ( < 0, 0, 0 > < 0, 5, 0 > < 0, 5, 5 > )
+		{
+			texture SURFACE
+			color Blue
+		}
+
+//	for x = 1 to 20 {
+//	triangle ( randv < 10 10 10 > randv < 10 10 10 > randv < 10 10  10 > ) {
+//		texture SURFACE
+//		color randv < 1 1 1 >
+//	}
+//	}
+//	rectangle ( < 0 0 0 > < 5 0 0 > < 5 5 0 > < 0 5 0 > ) {
+//		texture SURFACE
+//		color RED
+
+	}
+	rotate < 15, 15, 15 >
+}
+
+light (<-30, 50, -150>) {
+	color White
+}

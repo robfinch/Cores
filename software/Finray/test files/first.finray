@@ -1,0 +1,85 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+view_point {
+    location < 0.0 -5.0 -110.0 >
+    direction < 0.0 -0.05 1.0 >
+    up < 0.0 1.0 0.0 >
+    right < 1.333 0.0 0.0 >
+}
+
+sphere (<0 0 0> 25) {
+	texture SURFACE
+	color GOLD
+}
+
+sphere (<-37.5 -30.0 -15.5> 20) {
+	texture SURFACE
+	color MEDIUMFORESTGREEN
+}
+
+sphere (<52.5 -17.5 -18.0> 20) {
+	texture SURFACE
+	color ORANGE1
+}
+
+sphere (<-57.5 12.5 0.0> 15) {
+	texture SURFACE
+	color COPPER
+}
+
+sphere (<12.5 -32.5 -14.0> 15) {
+	texture SURFACE
+	color COPPER
+	sphere (<15.5 -40.5 -20.0> 17) {
+		texture SURFACE
+		color MIDNIGHTBLUE
+	}
+}
+
+plane (< 0 0 -1 > -200) {
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	1.0
+		specular	0.0
+		roughness	0.0
+		reflection	0.0
+	}
+	color MIDNIGHTBLUE
+}
+
+plane (< 12.5 -32.5 -14.0 > 100) {
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	1.0
+		specular	0.0
+		roughness	0.0
+		reflection	0.0
+	}
+	color BLUE
+}
+
+light (<65 100 -100>) {
+	color WHITE
+}
+
+//sphere (<65 100 -100> 20) {
+//	texture {
+//		color WHITE
+//		ambient 1.0
+//		diffuse 0.0
+//	}
+//	light_source
+//}
+

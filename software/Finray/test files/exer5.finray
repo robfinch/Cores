@@ -1,0 +1,75 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+view_point {
+    location < 0.0 10.0 -50.0 >
+    direction < 0.3 0.00 1.0 >
+    up < 0.0 1.0 0.0 >
+    right < 1.0 0.0 0.0 >
+}
+
+light (<-30 50 -150>) {
+	color WHITE
+}
+
+// Composite object
+object {
+
+	// Cylinder along X-Axis
+	quadric ( < 0 1 1 > < 0 0 0 > < 0 0 0 > -1 ) {
+		texture SURFACE
+		color RED
+	}
+
+	// Cylinder along Y-Axis
+	quadric ( < 1 0 1 > < 0 0 0 > < 0 0 0 > -1 ) {
+		texture SURFACE
+		color GREEN
+	}
+
+	// Cylinder along Z-Axis
+	quadric ( < 1 1 0 > < 0 0 0 > < 0 0 0 > -1 ) {
+		texture SURFACE
+		color BLUE
+	}
+
+	sphere ( < 10 10 10 > 5 ) {
+		texture SURFACE
+		color GOLD
+	}
+
+	triangle ( < 0 0 0 > < 30 5 0 > < 30 20 0 > ) {
+		texture {
+			ambient		0.3
+			diffuse		0.7
+			brilliance	20.0
+			specular	0.9
+			roughness	10.0
+			reflection	0.35
+		}
+		color BLUE
+		rotate < 0 -30 0 >
+	}
+
+	triangle ( randv < 10 10 10 > randv < 10 10 10 > randv < 10 10 10 > ) {
+		texture {
+			ambient		0.3
+			diffuse		0.7
+			brilliance	20.0
+			specular	0.9
+			roughness	10.0
+			reflection	0.35
+		}
+		color randv < 1 1 1 >
+	}
+}
+

@@ -1,0 +1,39 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+camera {
+    location < 0.0, 10.0, -50.0 >
+    direction < 0.3, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+    right < 1.0, 0.0, 0.0 >
+}
+
+object {
+	plane (< 0, 0, 1 > 15 ) {
+		texture SURFACE
+		color MidnightBlue
+	}
+	// Cylinder along Y-Axis
+	for xx = 1 to 100 {
+		x1 = rand (-50,50)
+		y1 = rand (-50,50)
+		z1 = rand (-50,50)
+		sphere ( < x1, y1, z1 > rand (0.1,5.0) ) {
+			texture SURFACE
+			color randv < 1, 1, 1 >
+		}
+	}
+}
+
+light (<-30, 50, -150>) {
+	color White
+}

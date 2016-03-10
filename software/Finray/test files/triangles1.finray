@@ -1,0 +1,49 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+camera {
+    location < 0.0, 20.0, -110.0 >
+//    direction < 0.3, 0.00, 1.0 >
+	look_at < 0, 0, 0 >
+    up < 0.0, 1.0, 0.0 >
+    right < 1.0, 0.0, 0.0 >
+}
+
+object {
+	plane (< 0, 0, 1 > 15 ) {
+		texture SURFACE
+		color Aquamarine
+	}
+	for xx = 1 to 50 {
+		x1 = rand (-5,5)
+		y1 = rand (-5,5)
+		z1 = rand (-5,5)
+		x2 = rand (-5,5)
+		y2 = rand (-5,5)
+		z2 = rand (-5,5)
+		x3 = rand (-5,5)
+		y3 = rand (-5,5)
+		z3 = rand (-5,5)
+		px = rand (-50,50)
+		py = rand (-50,50)
+		pz = rand (-50,50)
+		triangle ( < x1, y1, z1 > < x2, y2, z2 > < x3, y3, z3 > ) {
+			texture SURFACE
+			color randv < 1, 1, 1 >
+			translate < px, py, pz >
+		}
+	}
+}
+
+light (<-30, 50, -150>) {
+	color White
+}

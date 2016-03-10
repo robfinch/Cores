@@ -1,0 +1,47 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+view_point {
+    location < 0.0 0.0 -20.0 >
+    direction < 0.0 0.00 1.0 >
+    up < 0.0 1.0 0.0 >
+    right < 1.0 0.0 0.0 >
+}
+
+quadric ( < 0 1 1 > < 0 0 0 > < 0 0 0 > -1 ) {
+	texture SURFACE
+	color RED
+}
+
+quadric ( < 1 0 1 > < 0 0 0 > < 0 -1 0 > 0 ) {
+	texture SURFACE
+	color GREEN
+}
+
+quadric ( < 1 1 0 > < 0 0 0 > < 0 0 -1 > 0 ) {
+	texture SURFACE
+	color BLUE
+}
+
+light (<-30 50 -150>) {
+	color WHITE
+}
+
+//sphere (<65 100 -100> 20) {
+//	texture {
+//		color WHITE
+//		ambient 1.0
+//		diffuse 0.0
+//	}
+//	light_source
+//}
+

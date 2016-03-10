@@ -1,0 +1,13 @@
+Aquamarine			= color < 0.439216, 0.858824, 0.576471>
+Black				= color < 0.000, 0.000, 0.000 >
+White				= color < 1.000, 1.000, 1.000 >
+Blue				= color < 0.000, 0.000, 1.000 >
+Red					= color < 1.000, 0.000, 0.000 >
+Green				= color < 0.000, 1.000, 0.000 >
+Gold				= color < 0.800, 0.498, 0.196 >
+MediumForestGreen	= color < 0.419, 0.556, 0.137 >
+MidnightBlue		= color < 0.184, 0.184, 0.304 >
+Orange1				= color < 1.000, 0.160, 0.000 >
+Copper				= color < 0.840, 0.160, 0.000 >
+SeaGreen			= color < 0.137255, 0.556863, 0.419608 >
+SteelBlue			= color < 0.137255, 0.419608, 0.556863 >
