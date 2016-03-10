@@ -14,7 +14,7 @@ wire we;
 wire [7:0] sel;
 wire br_ack;
 wire [31:0] adr;
-wire [DBW-1:0] br_dato;
+wire [DBW+6:0] br_dato;
 wire scr_ack;
 wire [63:0] scr_dato;
 reg [31:0] rammem [0:1048575];

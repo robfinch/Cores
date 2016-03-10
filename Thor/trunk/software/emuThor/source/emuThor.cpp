@@ -8,8 +8,8 @@
 clsSystem system1;
 volatile unsigned __int8 keybd_scancode;
 volatile unsigned __int8 keybd_status;
-volatile unsigned int interval1024;
-volatile unsigned int interval30;
+volatile unsigned int interval1024 = 977;
+volatile unsigned int interval30 = 33333;
 
 char refscreen;
 unsigned int breakpoints[30];

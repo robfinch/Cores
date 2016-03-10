@@ -308,7 +308,7 @@ void clsSystem::Run() {
 			cpu2.Step();
 			pic1.Step();
 			if (stepout) {
-				if (cpu2.sub_depth<step_depth) {
+				if (cpu2.rts && cpu2.sub_depth < step_depth) {
 					isRunning = false;
 					stepout = false;
 					continue;

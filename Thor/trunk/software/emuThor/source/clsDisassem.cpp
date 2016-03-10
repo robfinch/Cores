@@ -393,7 +393,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 	if ((opcode & 0xF0)==0x30) {
 		b1 = system1.ReadByte(ad);
 		ad++;
-		disp = (b1 << 4) | (opcode & 0xF);
+		disp = b1 | ((opcode & 0xF) << 8);
 		if (disp & 0x800)
 			disp |= 0xFFFFFFFFFFFFF000LL;
 		sprintf(&buf[strlen(buf)], " BR $%LLX", disp + ad);

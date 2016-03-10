@@ -109,6 +109,7 @@ namespace emuThor {
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
 			this->Name = L"frmMemory";
 			this->Text = L"Memory";
+			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmMemory::frmMemory_FormClosing);
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
@@ -133,5 +134,9 @@ namespace emuThor {
 				 }
 				 this->textBoxMem->Text = gcnew String(str2.c_str());
 			 }
+private: System::Void frmMemory_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
+			 if (e->CloseReason==CloseReason::UserClosing)
+				 e->Cancel = true;
+		 }
 	};
 }

@@ -56,7 +56,7 @@
 //
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -161,6 +161,7 @@ input [DBW-1:0] dat_i;
 output reg [DBW-1:0] dat_o;
 
 integer n,i;
+reg [1:0] mode;
 reg [DBW/8-1:0] rsel;
 reg [3:0] cstate;
 reg [ABW:0] pc;				     // program counter (virtual)
@@ -648,6 +649,16 @@ wire debug_on = |dbg_ctrl[3:0]|dbg_ctrl[7];
 
 reg [11:0] spr_bir;
 
+always @(StatusHWI or StatusDBG or StatusEXL)
+if (StatusHWI)
+    mode = 2'd1;
+else if (StatusDBG)
+    mode = 2'd3;
+else if (StatusEXL)
+    mode = 2'd2;
+else
+    mode = 2'd0;
+
 //
 // BRANCH-MISS LOGIC: livetarget
 //
@@ -955,6 +966,8 @@ wire [3:0] Pt0 = fetchbuf0_instr[11:8];
 wire [3:0] Pn1 = fetchbuf1_instr[7:4];
 wire [3:0] Pt1 = fetchbuf1_instr[11:8];
 
+wire [6:0] r27 = 7'd27 + mode;
+
 function [6:0] fnRa;
 input [63:0] isn;
 	case(isn[15:8])
@@ -967,12 +980,20 @@ input [63:0] isn;
 	`TLB:  fnRa = {1'b0,isn[29:24]};
 	`P:    fnRa = 7'h70;
 	`LOOP:  fnRa = 7'h73;
-	`PUSH:   fnRa = km ? 7'd31 : 7'd27;
+	`PUSH:   fnRa = r27;
 `ifdef STACKOPS
-	`PEA,`POP,`LINK:   fnRa = km ? 7'd31 : 7'd27;
+	`PEA,`POP,`LINK:   fnRa = r27;
 `endif
-    `MFSPR,`MOVS:   fnRa = {1'b1,isn[`INSTRUCTION_RA]};
-	default:	fnRa = {1'b0,isn[`INSTRUCTION_RA]};
+    `MFSPR,`MOVS:   
+        if (isn[`INSTRUCTION_RA]==`USP)
+            fnRa = 7'd27;
+        else
+            fnRa = {1'b1,isn[`INSTRUCTION_RA]};
+	default:
+	       if (isn[`INSTRUCTION_RA]==6'd27)
+	           fnRa = r27;
+	       else	
+	           fnRa = {1'b0,isn[`INSTRUCTION_RA]};
 	endcase
 endfunction
 
@@ -983,19 +1004,29 @@ input [63:0] isn;
 //	`RTS,`STP,`TLB,`POP:   fnRb = 7'd0;
 	`JSR,`JSRS,`JSRZ,`SYS,`INT:
 		fnRb = {3'h5,isn[23:20]};
-	`SWS:   fnRb = {1'b1,isn[27:22]};
+	`SWS:  if (isn[27:22]==`USP)
+	           fnRb = {1'b0,6'd27};
+	       else 
+	           fnRb = {1'b1,isn[27:22]};
 	`PUSH:  fnRb = isn[22:16];
 `ifdef STACKOPS
 	`LINK:  fnRb = {1'b0,isn[27:22]};
 	`PEA:   fnRb = {1'b0,isn[21:16]};
 `endif
-	default:	fnRb = {1'b0,isn[`INSTRUCTION_RB]};
+	default:
+	   if (isn[`INSTRUCTION_RB]==6'd27)
+	       fnRb = r27;
+	   else	
+	       fnRb = {1'b0,isn[`INSTRUCTION_RB]};
 	endcase
 endfunction
 
 function [6:0] fnRc;
 input [63:0] isn;
-fnRc = {1'b0,isn[`INSTRUCTION_RC]};
+if (isn[`INSTRUCTION_RC]==6'd27)
+    fnRc = r27;
+else
+    fnRc = {1'b0,isn[`INSTRUCTION_RC]};
 endfunction
 
 function [3:0] fnCar;
@@ -1074,6 +1105,7 @@ case(opcode)
     `ABS,`SGN,`ZXB,`ZXC,`ZXH,`SXB,`SXC,`SXH:  fnIsAlu0Op = `TRUE;
     default:    fnIsAlu0Op = `FALSE;
     endcase
+`R2:    fnIsAlu0Op = `TRUE;
 `RR:
     case(func)
     `DIV,`DIVU: fnIsAlu0Op = `TRUE;
@@ -1229,7 +1261,7 @@ input [5:0] func;
 	               fnSource2_v = `TRUE;
 	           else
 	               fnSource2_v = `FALSE;
-	`CACHE,`LCL,`TLB,`LLA,`LEA,
+	`CACHE,`LCL,`TLB,`LLA,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`STI,`INC:
 			fnSource2_v = 1'b1;
@@ -1255,7 +1287,13 @@ endfunction
 // 0 if we need a RF value
 function fnSource3_v;
 input [7:0] opcode;
+input [5:0] func;
 	case(opcode)
+	`RR:
+	   case(func)
+	   `CHK:   fnSource3_v = 1'b0;
+	   default:    fnSource3_v = 1'b1;
+	   endcase
 	`SBX,`SCX,`SHX,`SWX,`CAS,`STMV,`STCMP,`STFND:	fnSource3_v = 1'b0;
 	`MUX:	fnSource3_v = 1'b0;
 	default:	fnSource3_v = 1'b1;
@@ -1264,14 +1302,20 @@ endfunction
 
 function fnSourceT_v;
 input [7:0] opcode;
+input [5:0] func;
     case(opcode)
+    `RR:
+        case(func)
+        `CHK:   fnSourceT_v = 1'b1;
+        default:    fnSourceT_v = 1'b0;
+        endcase
     // BR
     8'h30,8'h31,8'h32,8'h33,
     8'h34,8'h35,8'h36,8'h37,
     8'h38,8'h39,8'h3A,8'h3B,
     8'h3C,8'h3D,8'h3E,8'h3F,
     `SB,`SC,`SH,`SW,`SBX,`SCX,`SHX,`SWX,`SWS,
-    `CACHE,
+    `CACHE,`CHKI,
     `SEI,`CLI,`NOP,`STP,`RTI,`RTD,`RTE,
     `MEMSB,`MEMDB,`SYNC:
             fnSourceT_v = 1'b1;
@@ -1302,7 +1346,7 @@ case(fnOpcode(ins))
 					   fnNumReadPorts = 3'd1;
 					else
 					   fnNumReadPorts = 3'd2;
-`CACHE,`LCL,`TLB,`LLA,`LEA,					 
+`CACHE,`LCL,`TLB,`LLA,					 
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`RTS2,`BR:
@@ -1312,6 +1356,11 @@ case(fnOpcode(ins))
 					fnNumReadPorts = 3'd3;
 `MTSPR,`MFSPR,`POP,`UNLINK:	fnNumReadPorts = 3'd1;
 `STFND:	   fnNumReadPorts = 3'd2;	// *** TLB reads on Rb we say 2 for simplicity
+`RR:
+    case(ins[39:34])
+    `CHK:   fnNumReadPorts = 3'd3;
+    default:    fnNumReadPorts = 3'd2;
+    endcase
 `BITFIELD:
     case(ins[43:40])
     `BFSET,`BFCLR,`BFCHG,`BFEXT,`BFEXTU,`BFINSI:
@@ -1452,13 +1501,13 @@ vtdl #(.WID(64),.DEP(64)) uvtl1
 );
 `endif
 
-Thor_icachemem #(.DBW(DBW),.ABW(ABW)) uicm1
+Thor_icachemem #(.DBW(DBW),.ABW(ABW),.ECC(1'b0)) uicm1
 (
 	.wclk(clk),
 	.wce(cstate==ICACHE1),
 	.wr(ack_i|err_i),
 	.wa(adr_o),
-	.wd({err_i,dat_i}),
+	.wd(dat_i),
 	.rclk(~clk),
 	.pc(ppc),
 	.insn(insn)
@@ -1498,7 +1547,7 @@ Thor_dcachemem_1w1r #(DBW) udcm1
 	.wr(ack_i|err_i),
 	.sel(whit ? sel_o : 8'hFF),
 	.wa(adr_o),
-	.wd(whit ? dat_o : dat_i),
+	.wd(whit ? dat_o : dat_i[DBW-1:0]),
 	.rclk(~clk),
 	.rce(1'b1),
 	.ra(pea),
@@ -1587,36 +1636,40 @@ begin
 		case(fnOpcode(ir))
 		`POP: fnTargetReg = ir[22:16];
 		`LDI,`ADDUIS,`STS,`LINK,`UNLINK:
-			fnTargetReg = {1'b0,ir[21:16]};
+		    if (ir[21:16]==6'd27)
+		        fnTargetReg = r27;
+		    else
+			    fnTargetReg = {1'b0,ir[21:16]};
 		`LDIS:
 			fnTargetReg = {1'b1,ir[21:16]};
-		`RR:
-			fnTargetReg = {1'b0,ir[33:28]};
+		`RR,
+		`SHIFT,
 		`BCD,
-		`LOGIC,`FLOAT,
-		`LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`STMV,`STCMP,`STFND:
-			fnTargetReg = {1'b0,ir[33:28]};
-		`SHIFT:
-			fnTargetReg = {1'b0,ir[33:28]};
+        `LOGIC,`FLOAT,
+        `LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`STMV,`STCMP,`STFND:
+		    if (ir[33:28]==6'd27)
+		        fnTargetReg = r27;
+		    else
+			    fnTargetReg = {1'b0,ir[33:28]};
 		`R,`R2,`DOUBLE_R,`SINGLE_R,
 		`ADDI,`ADDUI,`SUBI,`SUBUI,
 		`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
-		`ANDI,`ORI,`EORI,`LLA,`LEA,
+		`ANDI,`ORI,`EORI,`LLA,
 		`LVB,`LVC,`LVH,`LVW,`LVWAR,
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LINK:
-			fnTargetReg = {1'b0,ir[27:22]};
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LINK,
+		`BITFIELD,`MFSPR:
+		    if (ir[27:22]==6'd27)
+		        fnTargetReg = r27;
+		    else
+			    fnTargetReg = {1'b0,ir[27:22]};
 		`CAS:
 			fnTargetReg = {1'b0,ir[39:34]};
-		`BITFIELD:
-			fnTargetReg = {1'b0,ir[27:22]};
 		`TLB:
 			if (ir[19:16]==`TLB_RDREG)
 				fnTargetReg = {1'b0,ir[29:24]};
 			else
 				fnTargetReg = 7'h00;
-		`MFSPR:
-			fnTargetReg = {1'b0,ir[27:22]};
 		`BITI:
 		      fnTargetReg = {3'h4,ir[25:22]};
 		// TST
@@ -1645,7 +1698,10 @@ begin
 		`JMPIX:
 		    fnTargetReg = {3'h5,ir[31:28]};
 		`MTSPR,`MOVS,`LWS:
-		    fnTargetReg = {1'b1,ir[27:22]};
+		    if (ir[27:22]==`USP)
+		        fnTargetReg = {1'b0,6'd27};
+		    else
+		        fnTargetReg = {1'b1,ir[27:22]};
 /*
 			if (ir[27:26]==2'h1)		// Move to code address register
 				fnTargetReg = {3'h5,ir[25:22]};
@@ -1656,7 +1712,7 @@ begin
 			else
 				fnTargetReg = 7'h00;
 */      
-        `PUSH:      fnTargetReg = km ? 7'd31 : 7'd27;
+        `PUSH:      fnTargetReg = r27;
         `LOOP:      fnTargetReg = 7'h73;
         `STP:       fnTargetReg = 7'h7F;
         `P:         fnTargetReg = 7'h70;
@@ -1735,7 +1791,7 @@ input [7:0] opcode;
 	`BFCLR,`BFSET,`BFCHG,`BFEXT,`BFEXTU,`BFINS,
 	`LDI,`LDIS,`ADDUIS,
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
-	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
+	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,`CHKI,
 	// CMPI
 	8'h20,8'h21,8'h22,8'h23,
 	8'h24,8'h25,8'h26,8'h27,
@@ -1803,10 +1859,10 @@ case(op)
 `SINGLE_R:
     if (func==`FTX) fnCanException = `TRUE;
     else fnCanException = `FALSE;
-`ADDI,`SUBI,`DIVI,`MODI,`MULI:
+`ADDI,`SUBI,`DIVI,`MODI,`MULI,`CHKI:
     fnCanException = `TRUE;
 `RR:
-    if (func==`ADD || func==`SUB || func==`MUL || func==`DIV || func==`MOD)
+    if (func==`ADD || func==`SUB || func==`MUL || func==`DIV || func==`MOD || func==`CHK)
         fnCanException = `TRUE;
     else
         fnCanException = `FALSE;
@@ -1951,7 +2007,7 @@ fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
-			opcode==`STP || opcode==`LLA || opcode==`LLAX || opcode==`LEA ||
+			opcode==`STP || opcode==`LLA || opcode==`LLAX || 
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS || opcode==`PUSH || opcode==`POP || opcode==`LINK || opcode==`UNLINK ||
 			opcode==`JMPI || opcode==`JMPIX ||
@@ -2020,7 +2076,7 @@ casex(op)
 8'h40:
     if (fn > 6'h17)
         fnIsIllegal = `TRUE;
-    else if (fn==6'hC || fn==6'hD || fn==6'hE || fn==6'hF || fn==6'h12 || fn==6'h14 || fn==6'h15 || fn==6'h16)
+    else if (fn==6'hC || fn==6'hD || fn==6'hE || fn==6'hF || fn==6'h12 || fn==6'h15 || fn==6'h16)
         fnIsIllegal = `TRUE; 
     else fnIsIllegal = `FALSE;
 8'h41:
@@ -2063,7 +2119,7 @@ casex(op)
     else 
         fnIsIllegal = `FALSE;
 8'h43,8'h44,8'h45:  fnIsIllegal = `TRUE;
-8'h52,8'h56,8'h57,8'h59,8'h5A,8'h5D,8'h5E:
+8'h52,8'h56,8'h57,8'h59,8'h5A,8'h5C,8'h5E:
     fnIsIllegal = `TRUE;
 8'h60,8'h61,8'h62,8'h63,8'h64,8'h65,8'h66,8'h67,8'h68,8'h69:
     fnIsIllegal = `TRUE;
@@ -2585,7 +2641,7 @@ case(insn[15:8])
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
 `PUSH:  fnImm = 64'hFFFFFFFFFFFFFFF8;   //-8
 //`LINK:  fnImm = {insn[39:28],3'b000};
-`JMPI,`LLA,`LEA,
+`JMPI,`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm = {{55{insn[36]}},insn[36:28]};
@@ -2619,7 +2675,7 @@ case(insn[15:8])
 `ifdef STACKOPS
 `LINK:  fnImm8 = {insn[32:28],3'b000};
 `endif
-`JMPI,`LLA,`LEA,
+`JMPI,`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImm8 = insn[35:28];
@@ -2655,7 +2711,7 @@ case(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`JMPI,`LLA,`LEA,
+`JMPI,`LLA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,
 `SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC,`LCL,`PEA:
 	fnImmMSB = insn[36];
@@ -2747,8 +2803,8 @@ function fnIsKMOnlyReg;
 input [6:0] regx;
 `ifdef PRIVCHKS
     fnIsKMOnlyReg = regx==7'd28 || regx==7'd29 || regx==7'd30 || regx==7'd31 ||
-                    regx==7'h5B || regx==7'h5C || regx==7'h5D || regx==7'h5E ||
-                    regx==7'h60 || regx==7'h68;
+                    regx==7'h5B || regx==7'h5C || regx==7'h5D || regx==7'h5E
+                    ;
 `else
     fnIsKMOnlyReg = `FALSE;
 `endif
@@ -3819,7 +3875,10 @@ end
 
 if (alu0_v) begin
 	if (|alu0_exc)
-	    set_exception(alu0_id, alu0_exc==`EXC_DBZ ? 8'd241 : 8'h00);
+	    set_exception(alu0_id,
+	       alu0_exc==`EXC_PRIV ? 8'd245 :
+	       alu0_exc==`EXC_DBZ ? 8'd241 :
+	       alu0_exc==`EXC_CHK ? 8'd239 : 8'h00);
 	else begin
         if (iqentry_op[alu0_id[2:0]]!=`IMM)
             iqentry_done[ alu0_id[2:0] ] <= (!iqentry_mem[ alu0_id[2:0] ] || !alu0_cmt);
@@ -3848,7 +3907,10 @@ end
 
 if (alu1_v) begin
 	if (|alu1_exc)
-	    set_exception(alu1_id, alu1_exc==`EXC_DBZ ? 8'd241 : 8'h00);
+	    set_exception(alu1_id,
+	       alu1_exc==`EXC_PRIV ? 8'd245 :
+	       alu1_exc==`EXC_DBZ ? 8'd241 :
+	       alu1_exc==`EXC_CHK ? 8'd239 : 8'h00);
 	else begin
         if (iqentry_op[alu1_id[2:0]]!=`IMM)
              iqentry_done[ alu1_id[2:0] ] <= (!iqentry_mem[ alu1_id[2:0] ] || !alu1_cmt);
@@ -4691,7 +4753,7 @@ case(dram0)
 		if (dram0_op==`SWCR)
 		     dram_bus <= {63'd0,resv_i};
 		else
-		     dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i,rsel);
+		     dram_bus <= fnDatai(dram0_op,dram0_fn,dat_i[DBW-1:0],rsel);
 		dram0_owns_bus <= `FALSE;
 		wb_nack();
         dram0 <= 3'd7;
@@ -4718,7 +4780,7 @@ case(dram0)
                     if (stmv_flag) begin
                         dram0_addr <= src_addr + index;
                         if (dram0_op==`STCMP) begin
-                            if (dram0_data != fnDatai(dram0_op,dram0_fn,dat_i,rsel)) begin
+                            if (dram0_data != fnDatai(dram0_op,dram0_fn,dat_i[DBW-1:0],rsel)) begin
                                 lc <= 64'd0;
                                 dram0 <= 3'd7;
                                 dram_v <= `VAL;
@@ -4727,7 +4789,7 @@ case(dram0)
                     end               
                     else begin
                         dram0_addr <= dst_addr + index;
-                        dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,rsel);
+                        dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i[DBW-1:0],rsel);
                     end
                     if (!stmv_flag)
                         inc_index(dram0_fn);
@@ -4742,7 +4804,7 @@ case(dram0)
             if (lc != 0 && !int_pending) begin 
                 dram0_addr <= src_addr + index;
                 inc_index(dram0_fn);
-                if (dram0_data == fnDatai(dram0_op,dram0_fn,dat_i,rsel)) begin
+                if (dram0_data == fnDatai(dram0_op,dram0_fn,dat_i[DBW-1:0],rsel)) begin
                     lc <= 64'd0;
                     dram_v <= `VAL;
                     dram_bus <= index;
@@ -4757,7 +4819,7 @@ case(dram0)
             end
 `endif
         `CAS:
-			if (dram0_datacmp == dat_i) begin
+			if (dram0_datacmp == dat_i[DBW-1:0]) begin
 				$display("CAS match");
 				dram0_owns_bus <= `TRUE;
 				cyc_o <= 1'b1;	// hold onto cyc_o
@@ -4774,7 +4836,7 @@ case(dram0)
     				 dram0 <= 3'd0;
 		         end
 		         else begin
-		             dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i,rsel);
+		             dram0_data <= fnDatai(dram0_op,dram0_fn,dat_i[DBW-1:0],rsel);
                      stmv_flag <= ~stmv_flag;
                      dram0 <= 3'd1;
 		         end
@@ -5695,7 +5757,7 @@ begin
         $stop;
     if (fetchbuf0_pc==32'hF44)
         $stop;
-    if (fetchbuf0_pc==32'hFFFC2F71)
+    if (fetchbuf0_pc==32'hFFFC275A)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -5929,7 +5991,7 @@ begin
         $stop;
     if (fetchbuf1_pc==32'hF44)
         $stop;
-    if (fetchbuf1_pc==32'hFFFC2F71)
+    if (fetchbuf1_pc==32'hFFFC275A)
         $stop;
 `ifdef SEGMENTATION
 `ifdef SEGLIMITS
@@ -6099,8 +6161,8 @@ begin
     iqentry_p_v  [tail]    <=   rf_v [{1'b1,2'h0,Pn0}] || cond0 < 4'h2;
     iqentry_a1_v [tail]    <=   fnSource1_v( opcode0 ) | rf_v[ Ra0 ];
     iqentry_a2_v [tail]    <=   fnSource2_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[Rb0];
-    iqentry_a3_v [tail]    <=   fnSource3_v( opcode0 ) | rf_v[ Rc0 ];
-    iqentry_T_v  [tail]    <=   fnSourceT_v( opcode0 ) | rf_v[ Rt0 ];
+    iqentry_a3_v [tail]    <=   fnSource3_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[ Rc0 ];
+    iqentry_T_v  [tail]    <=   fnSourceT_v( opcode0, fnFunc(fetchbuf0_instr)) | rf_v[ Rt0 ];
     if (fetchbuf0_rfw|fetchbuf0_pfw) begin
         $display("regv[%d] = %d", Rt0,rf_v[ Rt0 ]);
         rf_v[ Rt0 ] = fnRegIsAutoValid(Rt0);
@@ -6118,9 +6180,9 @@ begin
     // The predicate is automatically valid for condiitions 0 and 1 (always false or always true).
     iqentry_p_v  [tail]    <=   rf_v [{1'b1,2'h0,Pn1}] || cond1 < 4'h2;
     iqentry_a1_v [tail]    <=   fnSource1_v( opcode1 ) | rf_v[ Ra1 ];
-    iqentry_a2_v [tail]    <=   fnSource2_v( opcode1, fnFunc(fetchbuf1_instr) ) | rf_v[ Rb1 ];
-    iqentry_a3_v [tail]    <=   fnSource3_v( opcode1 ) | rf_v[ Rc1 ];
-    iqentry_T_v  [tail]    <=   fnSourceT_v( opcode1 ) | rf_v[ Rt1 ];
+    iqentry_a2_v [tail]    <=   fnSource2_v( opcode1, fnFunc(fetchbuf1_instr)) | rf_v[ Rb1 ];
+    iqentry_a3_v [tail]    <=   fnSource3_v( opcode1, fnFunc(fetchbuf1_instr)) | rf_v[ Rc1 ];
+    iqentry_T_v  [tail]    <=   fnSourceT_v( opcode1, fnFunc(fetchbuf1_instr)) | rf_v[ Rt1 ];
     if (fetchbuf1_rfw|fetchbuf1_pfw) begin
         $display("1:regv[%d] = %d", Rt1,rf_v[ Rt1 ]);
         rf_v[ Rt1 ] = fnRegIsAutoValid(Rt1);
@@ -6210,7 +6272,7 @@ begin
        // that have a source (i.e. every instruction but LUI) read from RC
        //
        // if the argument is an immediate or not needed, we're done
-       if (fnSource3_v( opcode1 ) == `VAL) begin
+       if (fnSource3_v( opcode1,fnFunc(fetchbuf1_instr) ) == `VAL) begin
            iqentry_a3_v [tail1] <= `VAL;
            iqentry_a3_v [tail1] <= 4'hF;
 //                    iqentry_a1_s [tail1] <= 4'd0;
@@ -6238,7 +6300,7 @@ begin
        // that have a source (i.e. every instruction but LUI) read from RC
        //
        // if the argument is an immediate or not needed, we're done
-       if (fnSourceT_v( opcode1 ) == `VAL) begin
+       if (fnSourceT_v( opcode1,fnFunc(fetchbuf1_instr) ) == `VAL) begin
            iqentry_T_v [tail1] <= `VAL;
            iqentry_T_v [tail1] <= 4'hF;
        end
@@ -6415,22 +6477,22 @@ input [6:0] Rt;
 input mem;
 begin
 if (Rt==7'h70) begin
-    rf_v[7'h40] <= `INV;
-    rf_v[7'h41] <= `INV;
-    rf_v[7'h42] <= `INV;
-    rf_v[7'h43] <= `INV;
-    rf_v[7'h44] <= `INV;
-    rf_v[7'h45] <= `INV;
-    rf_v[7'h46] <= `INV;
-    rf_v[7'h47] <= `INV;
-    rf_v[7'h48] <= `INV;
-    rf_v[7'h49] <= `INV;
-    rf_v[7'h4A] <= `INV;
-    rf_v[7'h4B] <= `INV;
-    rf_v[7'h4C] <= `INV;
-    rf_v[7'h4D] <= `INV;
-    rf_v[7'h4E] <= `INV;
-    rf_v[7'h4F] <= `INV;
+    rf_v[7'h40] = `INV;
+    rf_v[7'h41] = `INV;
+    rf_v[7'h42] = `INV;
+    rf_v[7'h43] = `INV;
+    rf_v[7'h44] = `INV;
+    rf_v[7'h45] = `INV;
+    rf_v[7'h46] = `INV;
+    rf_v[7'h47] = `INV;
+    rf_v[7'h48] = `INV;
+    rf_v[7'h49] = `INV;
+    rf_v[7'h4A] = `INV;
+    rf_v[7'h4B] = `INV;
+    rf_v[7'h4C] = `INV;
+    rf_v[7'h4D] = `INV;
+    rf_v[7'h4E] = `INV;
+    rf_v[7'h4F] = `INV;
     rf_source[7'h40] <= { mem, tail };
     rf_source[7'h41] <= { mem, tail };
     rf_source[7'h42] <= { mem, tail };

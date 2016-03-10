@@ -112,6 +112,7 @@ namespace emuThor {
 	private: System::Windows::Forms::CheckBox^  checkBox9;
 	private: System::Windows::Forms::CheckBox^  checkBox10;
 	private: System::Windows::Forms::Label^  label3;
+	private: System::Windows::Forms::Label^  label4;
 
 	private:
 		/// <summary>
@@ -151,12 +152,13 @@ namespace emuThor {
 			this->checkBox9 = (gcnew System::Windows::Forms::CheckBox());
 			this->checkBox10 = (gcnew System::Windows::Forms::CheckBox());
 			this->label3 = (gcnew System::Windows::Forms::Label());
+			this->label4 = (gcnew System::Windows::Forms::Label());
 			this->SuspendLayout();
 			// 
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(54, 29);
+			this->label1->Location = System::Drawing::Point(53, 51);
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(56, 13);
 			this->label1->TabIndex = 0;
@@ -164,35 +166,35 @@ namespace emuThor {
 			// 
 			// textBox1
 			// 
-			this->textBox1->Location = System::Drawing::Point(57, 56);
+			this->textBox1->Location = System::Drawing::Point(56, 78);
 			this->textBox1->Name = L"textBox1";
 			this->textBox1->Size = System::Drawing::Size(120, 20);
 			this->textBox1->TabIndex = 1;
 			// 
 			// textBox2
 			// 
-			this->textBox2->Location = System::Drawing::Point(57, 82);
+			this->textBox2->Location = System::Drawing::Point(56, 104);
 			this->textBox2->Name = L"textBox2";
 			this->textBox2->Size = System::Drawing::Size(120, 20);
 			this->textBox2->TabIndex = 2;
 			// 
 			// textBox3
 			// 
-			this->textBox3->Location = System::Drawing::Point(57, 108);
+			this->textBox3->Location = System::Drawing::Point(56, 130);
 			this->textBox3->Name = L"textBox3";
 			this->textBox3->Size = System::Drawing::Size(120, 20);
 			this->textBox3->TabIndex = 3;
 			// 
 			// textBox4
 			// 
-			this->textBox4->Location = System::Drawing::Point(57, 134);
+			this->textBox4->Location = System::Drawing::Point(56, 156);
 			this->textBox4->Name = L"textBox4";
 			this->textBox4->Size = System::Drawing::Size(120, 20);
 			this->textBox4->TabIndex = 4;
 			// 
 			// textBox5
 			// 
-			this->textBox5->Location = System::Drawing::Point(57, 160);
+			this->textBox5->Location = System::Drawing::Point(56, 182);
 			this->textBox5->Name = L"textBox5";
 			this->textBox5->Size = System::Drawing::Size(120, 20);
 			this->textBox5->TabIndex = 5;
@@ -200,7 +202,7 @@ namespace emuThor {
 			// textBox6
 			// 
 			this->textBox6->Enabled = false;
-			this->textBox6->Location = System::Drawing::Point(244, 160);
+			this->textBox6->Location = System::Drawing::Point(243, 182);
 			this->textBox6->Name = L"textBox6";
 			this->textBox6->Size = System::Drawing::Size(125, 20);
 			this->textBox6->TabIndex = 11;
@@ -208,7 +210,7 @@ namespace emuThor {
 			// textBox7
 			// 
 			this->textBox7->Enabled = false;
-			this->textBox7->Location = System::Drawing::Point(244, 134);
+			this->textBox7->Location = System::Drawing::Point(243, 156);
 			this->textBox7->Name = L"textBox7";
 			this->textBox7->Size = System::Drawing::Size(125, 20);
 			this->textBox7->TabIndex = 10;
@@ -216,7 +218,7 @@ namespace emuThor {
 			// textBox8
 			// 
 			this->textBox8->Enabled = false;
-			this->textBox8->Location = System::Drawing::Point(244, 108);
+			this->textBox8->Location = System::Drawing::Point(243, 130);
 			this->textBox8->Name = L"textBox8";
 			this->textBox8->Size = System::Drawing::Size(125, 20);
 			this->textBox8->TabIndex = 9;
@@ -224,7 +226,7 @@ namespace emuThor {
 			// textBox9
 			// 
 			this->textBox9->Enabled = false;
-			this->textBox9->Location = System::Drawing::Point(244, 82);
+			this->textBox9->Location = System::Drawing::Point(243, 104);
 			this->textBox9->Name = L"textBox9";
 			this->textBox9->Size = System::Drawing::Size(125, 20);
 			this->textBox9->TabIndex = 8;
@@ -232,7 +234,7 @@ namespace emuThor {
 			// textBox10
 			// 
 			this->textBox10->Enabled = false;
-			this->textBox10->Location = System::Drawing::Point(244, 56);
+			this->textBox10->Location = System::Drawing::Point(243, 78);
 			this->textBox10->Name = L"textBox10";
 			this->textBox10->Size = System::Drawing::Size(125, 20);
 			this->textBox10->TabIndex = 7;
@@ -241,7 +243,7 @@ namespace emuThor {
 			// 
 			this->label2->AutoSize = true;
 			this->label2->Enabled = false;
-			this->label2->Location = System::Drawing::Point(241, 29);
+			this->label2->Location = System::Drawing::Point(240, 51);
 			this->label2->Name = L"label2";
 			this->label2->Size = System::Drawing::Size(30, 13);
 			this->label2->TabIndex = 6;
@@ -250,7 +252,7 @@ namespace emuThor {
 			// button25
 			// 
 			this->button25->DialogResult = System::Windows::Forms::DialogResult::OK;
-			this->button25->Location = System::Drawing::Point(294, 205);
+			this->button25->Location = System::Drawing::Point(293, 227);
 			this->button25->Name = L"button25";
 			this->button25->Size = System::Drawing::Size(75, 23);
 			this->button25->TabIndex = 35;
@@ -261,7 +263,7 @@ namespace emuThor {
 			// button26
 			// 
 			this->button26->DialogResult = System::Windows::Forms::DialogResult::Cancel;
-			this->button26->Location = System::Drawing::Point(181, 205);
+			this->button26->Location = System::Drawing::Point(180, 227);
 			this->button26->Name = L"button26";
 			this->button26->Size = System::Drawing::Size(75, 23);
 			this->button26->TabIndex = 36;
@@ -271,7 +273,7 @@ namespace emuThor {
 			// checkBox1
 			// 
 			this->checkBox1->AutoSize = true;
-			this->checkBox1->Location = System::Drawing::Point(21, 56);
+			this->checkBox1->Location = System::Drawing::Point(20, 78);
 			this->checkBox1->Name = L"checkBox1";
 			this->checkBox1->Size = System::Drawing::Size(15, 14);
 			this->checkBox1->TabIndex = 37;
@@ -281,7 +283,7 @@ namespace emuThor {
 			// checkBox2
 			// 
 			this->checkBox2->AutoSize = true;
-			this->checkBox2->Location = System::Drawing::Point(21, 82);
+			this->checkBox2->Location = System::Drawing::Point(20, 104);
 			this->checkBox2->Name = L"checkBox2";
 			this->checkBox2->Size = System::Drawing::Size(15, 14);
 			this->checkBox2->TabIndex = 38;
@@ -290,7 +292,7 @@ namespace emuThor {
 			// checkBox3
 			// 
 			this->checkBox3->AutoSize = true;
-			this->checkBox3->Location = System::Drawing::Point(21, 108);
+			this->checkBox3->Location = System::Drawing::Point(20, 130);
 			this->checkBox3->Name = L"checkBox3";
 			this->checkBox3->Size = System::Drawing::Size(15, 14);
 			this->checkBox3->TabIndex = 39;
@@ -299,7 +301,7 @@ namespace emuThor {
 			// checkBox4
 			// 
 			this->checkBox4->AutoSize = true;
-			this->checkBox4->Location = System::Drawing::Point(21, 134);
+			this->checkBox4->Location = System::Drawing::Point(20, 156);
 			this->checkBox4->Name = L"checkBox4";
 			this->checkBox4->Size = System::Drawing::Size(15, 14);
 			this->checkBox4->TabIndex = 40;
@@ -309,7 +311,7 @@ namespace emuThor {
 			// 
 			this->checkBox5->AutoSize = true;
 			this->checkBox5->Enabled = false;
-			this->checkBox5->Location = System::Drawing::Point(210, 82);
+			this->checkBox5->Location = System::Drawing::Point(209, 104);
 			this->checkBox5->Name = L"checkBox5";
 			this->checkBox5->Size = System::Drawing::Size(15, 14);
 			this->checkBox5->TabIndex = 41;
@@ -318,7 +320,7 @@ namespace emuThor {
 			// checkBox6
 			// 
 			this->checkBox6->AutoSize = true;
-			this->checkBox6->Location = System::Drawing::Point(21, 160);
+			this->checkBox6->Location = System::Drawing::Point(20, 182);
 			this->checkBox6->Name = L"checkBox6";
 			this->checkBox6->Size = System::Drawing::Size(15, 14);
 			this->checkBox6->TabIndex = 41;
@@ -328,7 +330,7 @@ namespace emuThor {
 			// 
 			this->checkBox7->AutoSize = true;
 			this->checkBox7->Enabled = false;
-			this->checkBox7->Location = System::Drawing::Point(210, 56);
+			this->checkBox7->Location = System::Drawing::Point(209, 78);
 			this->checkBox7->Name = L"checkBox7";
 			this->checkBox7->Size = System::Drawing::Size(15, 14);
 			this->checkBox7->TabIndex = 42;
@@ -338,7 +340,7 @@ namespace emuThor {
 			// 
 			this->checkBox8->AutoSize = true;
 			this->checkBox8->Enabled = false;
-			this->checkBox8->Location = System::Drawing::Point(210, 108);
+			this->checkBox8->Location = System::Drawing::Point(209, 130);
 			this->checkBox8->Name = L"checkBox8";
 			this->checkBox8->Size = System::Drawing::Size(15, 14);
 			this->checkBox8->TabIndex = 43;
@@ -348,7 +350,7 @@ namespace emuThor {
 			// 
 			this->checkBox9->AutoSize = true;
 			this->checkBox9->Enabled = false;
-			this->checkBox9->Location = System::Drawing::Point(210, 134);
+			this->checkBox9->Location = System::Drawing::Point(209, 156);
 			this->checkBox9->Name = L"checkBox9";
 			this->checkBox9->Size = System::Drawing::Size(15, 14);
 			this->checkBox9->TabIndex = 44;
@@ -358,7 +360,7 @@ namespace emuThor {
 			// 
 			this->checkBox10->AutoSize = true;
 			this->checkBox10->Enabled = false;
-			this->checkBox10->Location = System::Drawing::Point(210, 160);
+			this->checkBox10->Location = System::Drawing::Point(209, 182);
 			this->checkBox10->Name = L"checkBox10";
 			this->checkBox10->Size = System::Drawing::Size(15, 14);
 			this->checkBox10->TabIndex = 45;
@@ -369,17 +371,27 @@ namespace emuThor {
 			this->label3->AutoSize = true;
 			this->label3->ForeColor = System::Drawing::Color::FromArgb(static_cast<System::Int32>(static_cast<System::Byte>(255)), static_cast<System::Int32>(static_cast<System::Byte>(128)), 
 				static_cast<System::Int32>(static_cast<System::Byte>(0)));
-			this->label3->Location = System::Drawing::Point(241, 9);
+			this->label3->Location = System::Drawing::Point(240, 31);
 			this->label3->Name = L"label3";
 			this->label3->Size = System::Drawing::Size(158, 13);
 			this->label3->TabIndex = 46;
 			this->label3->Text = L"Data Breakpoints don\'t work yet";
 			// 
+			// label4
+			// 
+			this->label4->AutoSize = true;
+			this->label4->Location = System::Drawing::Point(17, 51);
+			this->label4->Name = L"label4";
+			this->label4->Size = System::Drawing::Size(20, 13);
+			this->label4->TabIndex = 47;
+			this->label4->Text = L"En";
+			// 
 			// frmBreakpoints
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(403, 249);
+			this->ClientSize = System::Drawing::Size(403, 259);
+			this->Controls->Add(this->label4);
 			this->Controls->Add(this->label3);
 			this->Controls->Add(this->checkBox10);
 			this->Controls->Add(this->checkBox9);
@@ -406,9 +418,9 @@ namespace emuThor {
 			this->Controls->Add(this->textBox1);
 			this->Controls->Add(this->label1);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
-			this->MaximizeBox = false;
 			this->Name = L"frmBreakpoints";
 			this->Text = L"emuThor - Breakpoints";
+			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmBreakpoints::frmBreakpoints_FormClosing);
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
@@ -448,6 +460,10 @@ private: System::Void button25_Click(System::Object^  sender, System::EventArgs^
 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->textBox5->Text);
 			 ibreakpoints[4] = _strtoui64(str, &ep, 16);
 			 mut->ReleaseMutex();
+		 }
+private: System::Void frmBreakpoints_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
+			 if (e->CloseReason==CloseReason::UserClosing)
+				 e->Cancel = true;
 		 }
 };
 }

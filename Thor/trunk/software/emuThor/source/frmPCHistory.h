@@ -23,15 +23,7 @@ namespace emuThor {
 			//
 			//TODO: Add the constructor code here
 			//
-			char buf[4000];
-			int xx;
-			buf[0] = '\0';
-			for (xx = 0; xx < 40; xx++) {
-				mut->WaitOne();
-				sprintf(&buf[strlen(buf)], "%08I64X\r\n", system1.cpu2.pcs[xx]);
-				mut->ReleaseMutex();
-			}
-			textBox1->Text = gcnew String(buf);
+			UpdateForm();
 		}
 		frmPCHistory(void)
 		{
@@ -39,15 +31,7 @@ namespace emuThor {
 			//
 			//TODO: Add the constructor code here
 			//
-			char buf[4000];
-			int xx;
-			buf[0] = '\0';
-			for (xx = 0; xx < 40; xx++) {
-				mut->WaitOne();
-				sprintf(&buf[strlen(buf)], "%08I64X\r\n", system1.cpu2.pcs[xx]);
-				mut->ReleaseMutex();
-			}
-			textBox1->Text = gcnew String(buf);
+			UpdateForm();
 		}
 
 	protected:
@@ -83,10 +67,12 @@ namespace emuThor {
 			// 
 			// textBox1
 			// 
-			this->textBox1->Location = System::Drawing::Point(12, 22);
+			this->textBox1->Location = System::Drawing::Point(12, 47);
 			this->textBox1->Multiline = true;
 			this->textBox1->Name = L"textBox1";
-			this->textBox1->Size = System::Drawing::Size(162, 385);
+			this->textBox1->ReadOnly = true;
+			this->textBox1->ScrollBars = System::Windows::Forms::ScrollBars::Vertical;
+			this->textBox1->Size = System::Drawing::Size(162, 379);
 			this->textBox1->TabIndex = 0;
 			// 
 			// frmPCHistory
@@ -98,10 +84,26 @@ namespace emuThor {
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
 			this->Name = L"frmPCHistory";
 			this->Text = L"PCHistory";
+			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmPCHistory::frmPCHistory_FormClosing);
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
 		}
 #pragma endregion
+	private: System::Void frmPCHistory_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
+			 if (e->CloseReason==CloseReason::UserClosing)
+				 e->Cancel = true;
+			 }
+	public: void UpdateForm() {
+				char buf[4000];
+				int xx;
+				buf[0] = '\0';
+				for (xx = 0; xx < 40; xx++) {
+					mut->WaitOne();
+					sprintf(&buf[strlen(buf)], "%08I64X\r\n", system1.cpu2.pcs[xx]);
+					mut->ReleaseMutex();
+				}
+				textBox1->Text = gcnew String(buf);
+			}
 	};
 }

@@ -1,4 +1,10 @@
 #pragma once
+// Allows the user to disable / enable interrupts via the gui.
+// The could be interrupt control on the Form associated with the device
+// but it's more convenient to place all the interrupt related controls
+// on a single form for the user.
+// Timers are used to emulate the hard-wired interrupt clock sources in the
+// test system.
 extern bool irq1024Hz;
 extern bool irq30Hz;
 extern bool irqKeyboard;
@@ -32,25 +38,7 @@ namespace emuThor {
 			//
 			//TODO: Add the constructor code here
 			//
-			char buf[20];
-
-			mut->WaitOne();
-			system1.pic1.Step();
-			trigger30 = false;
-			trigger1024 = false;
-			checkBox0En->Checked = system1.pic1.enables[0];
-			checkBox1En->Checked = system1.pic1.enables[1];
-			checkBox2En->Checked = system1.pic1.enables[2];
-			checkBox3En->Checked = system1.pic1.enables[3];
-			checkBox7En->Checked = system1.pic1.enables[7];
-			checkBox1Act->Checked = system1.pic1.irq1024Hz;
-			checkBox2Act->Checked = system1.pic1.irq30Hz;
-			checkBox3Act->Checked = system1.pic1.irqKeyboard;
-			checkBox7Act->Checked = system1.pic1.irqUart;
-			checkBoxIRQOut->Checked = system1.pic1.irq;
-			sprintf(buf, "%d (%02X)", system1.pic1.vecno, system1.pic1.vecno);
-			mut->ReleaseMutex();
-			textBoxVecno->Text = gcnew String(buf);
+			UpdateForm();
 		}
 		frmInterrupts(void)
 		{
@@ -155,6 +143,28 @@ namespace emuThor {
 	private: System::Windows::Forms::CheckBox^  checkBox1En;
 
 	private: System::Windows::Forms::CheckBox^  checkBox0En;
+private: System::Windows::Forms::Label^  label7;
+private: System::Windows::Forms::CheckBox^  checkBox1;
+private: System::Windows::Forms::CheckBox^  checkBox2;
+private: System::Windows::Forms::CheckBox^  checkBox3;
+private: System::Windows::Forms::CheckBox^  checkBox4;
+private: System::Windows::Forms::CheckBox^  checkBox5;
+private: System::Windows::Forms::CheckBox^  checkBox8;
+private: System::Windows::Forms::CheckBox^  checkBox25;
+private: System::Windows::Forms::CheckBox^  checkBox29;
+private: System::Windows::Forms::CheckBox^  checkBox7Edge;
+
+private: System::Windows::Forms::CheckBox^  checkBox32;
+private: System::Windows::Forms::CheckBox^  checkBox33;
+private: System::Windows::Forms::CheckBox^  checkBox34;
+private: System::Windows::Forms::CheckBox^  checkBox3Edge;
+
+private: System::Windows::Forms::CheckBox^  checkBox2Edge;
+
+private: System::Windows::Forms::CheckBox^  checkBox1Edge;
+
+private: System::Windows::Forms::CheckBox^  checkBox0Edge;
+
 
 
 	private:
@@ -182,6 +192,23 @@ namespace emuThor {
 			this->checkBox30 = (gcnew System::Windows::Forms::CheckBox());
 			this->checkBoxUart = (gcnew System::Windows::Forms::CheckBox());
 			this->groupBox1 = (gcnew System::Windows::Forms::GroupBox());
+			this->label7 = (gcnew System::Windows::Forms::Label());
+			this->checkBox1 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox2 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox3 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox4 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox5 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox8 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox25 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox29 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox7Edge = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox32 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox33 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox34 = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox3Edge = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox2Edge = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox1Edge = (gcnew System::Windows::Forms::CheckBox());
+			this->checkBox0Edge = (gcnew System::Windows::Forms::CheckBox());
 			this->label6 = (gcnew System::Windows::Forms::Label());
 			this->label5 = (gcnew System::Windows::Forms::Label());
 			this->textBoxVecno = (gcnew System::Windows::Forms::TextBox());
@@ -227,7 +254,7 @@ namespace emuThor {
 			// btnOK
 			// 
 			this->btnOK->DialogResult = System::Windows::Forms::DialogResult::OK;
-			this->btnOK->Location = System::Drawing::Point(247, 115);
+			this->btnOK->Location = System::Drawing::Point(247, 137);
 			this->btnOK->Name = L"btnOK";
 			this->btnOK->Size = System::Drawing::Size(75, 23);
 			this->btnOK->TabIndex = 19;
@@ -238,7 +265,7 @@ namespace emuThor {
 			// label2
 			// 
 			this->label2->AutoSize = true;
-			this->label2->Location = System::Drawing::Point(107, 21);
+			this->label2->Location = System::Drawing::Point(107, 43);
 			this->label2->Name = L"label2";
 			this->label2->Size = System::Drawing::Size(57, 13);
 			this->label2->TabIndex = 18;
@@ -247,7 +274,7 @@ namespace emuThor {
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(10, 21);
+			this->label1->Location = System::Drawing::Point(10, 43);
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(77, 13);
 			this->label1->TabIndex = 17;
@@ -255,7 +282,7 @@ namespace emuThor {
 			// 
 			// btnTrigger30
 			// 
-			this->btnTrigger30->Location = System::Drawing::Point(247, 70);
+			this->btnTrigger30->Location = System::Drawing::Point(247, 92);
 			this->btnTrigger30->Name = L"btnTrigger30";
 			this->btnTrigger30->Size = System::Drawing::Size(75, 23);
 			this->btnTrigger30->TabIndex = 16;
@@ -269,14 +296,14 @@ namespace emuThor {
 			this->comboBox30->FormattingEnabled = true;
 			this->comboBox30->Items->AddRange(gcnew cli::array< System::Object^  >(5) {L"30Hz", L"3 Hz", L"Every 3 seconds", L"Every 30 Seconds", 
 				L"One shot"});
-			this->comboBox30->Location = System::Drawing::Point(110, 72);
+			this->comboBox30->Location = System::Drawing::Point(110, 94);
 			this->comboBox30->Name = L"comboBox30";
 			this->comboBox30->Size = System::Drawing::Size(121, 21);
 			this->comboBox30->TabIndex = 15;
 			// 
 			// btnTrigger1024
 			// 
-			this->btnTrigger1024->Location = System::Drawing::Point(247, 41);
+			this->btnTrigger1024->Location = System::Drawing::Point(247, 63);
 			this->btnTrigger1024->Name = L"btnTrigger1024";
 			this->btnTrigger1024->Size = System::Drawing::Size(75, 23);
 			this->btnTrigger1024->TabIndex = 14;
@@ -289,7 +316,7 @@ namespace emuThor {
 			this->comboBox1024->DropDownStyle = System::Windows::Forms::ComboBoxStyle::DropDownList;
 			this->comboBox1024->FormattingEnabled = true;
 			this->comboBox1024->Items->AddRange(gcnew cli::array< System::Object^  >(3) {L"102 Hz", L"1 Hz", L"One shot"});
-			this->comboBox1024->Location = System::Drawing::Point(110, 43);
+			this->comboBox1024->Location = System::Drawing::Point(110, 65);
 			this->comboBox1024->Name = L"comboBox1024";
 			this->comboBox1024->Size = System::Drawing::Size(121, 21);
 			this->comboBox1024->TabIndex = 13;
@@ -297,7 +324,7 @@ namespace emuThor {
 			// checkBox1024
 			// 
 			this->checkBox1024->AutoSize = true;
-			this->checkBox1024->Location = System::Drawing::Point(13, 47);
+			this->checkBox1024->Location = System::Drawing::Point(13, 69);
 			this->checkBox1024->Name = L"checkBox1024";
 			this->checkBox1024->Size = System::Drawing::Size(63, 17);
 			this->checkBox1024->TabIndex = 12;
@@ -308,7 +335,7 @@ namespace emuThor {
 			// 
 			this->checkBoxKeyboard->AutoSize = true;
 			this->checkBoxKeyboard->Enabled = false;
-			this->checkBoxKeyboard->Location = System::Drawing::Point(13, 93);
+			this->checkBoxKeyboard->Location = System::Drawing::Point(13, 115);
 			this->checkBoxKeyboard->Name = L"checkBoxKeyboard";
 			this->checkBoxKeyboard->Size = System::Drawing::Size(71, 17);
 			this->checkBoxKeyboard->TabIndex = 11;
@@ -318,7 +345,7 @@ namespace emuThor {
 			// checkBox30
 			// 
 			this->checkBox30->AutoSize = true;
-			this->checkBox30->Location = System::Drawing::Point(13, 70);
+			this->checkBox30->Location = System::Drawing::Point(13, 92);
 			this->checkBox30->Name = L"checkBox30";
 			this->checkBox30->Size = System::Drawing::Size(51, 17);
 			this->checkBox30->TabIndex = 10;
@@ -329,7 +356,7 @@ namespace emuThor {
 			// 
 			this->checkBoxUart->AutoSize = true;
 			this->checkBoxUart->Enabled = false;
-			this->checkBoxUart->Location = System::Drawing::Point(13, 116);
+			this->checkBoxUart->Location = System::Drawing::Point(13, 138);
 			this->checkBoxUart->Name = L"checkBoxUart";
 			this->checkBoxUart->Size = System::Drawing::Size(46, 17);
 			this->checkBoxUart->TabIndex = 20;
@@ -338,6 +365,23 @@ namespace emuThor {
 			// 
 			// groupBox1
 			// 
+			this->groupBox1->Controls->Add(this->label7);
+			this->groupBox1->Controls->Add(this->checkBox1);
+			this->groupBox1->Controls->Add(this->checkBox2);
+			this->groupBox1->Controls->Add(this->checkBox3);
+			this->groupBox1->Controls->Add(this->checkBox4);
+			this->groupBox1->Controls->Add(this->checkBox5);
+			this->groupBox1->Controls->Add(this->checkBox8);
+			this->groupBox1->Controls->Add(this->checkBox25);
+			this->groupBox1->Controls->Add(this->checkBox29);
+			this->groupBox1->Controls->Add(this->checkBox7Edge);
+			this->groupBox1->Controls->Add(this->checkBox32);
+			this->groupBox1->Controls->Add(this->checkBox33);
+			this->groupBox1->Controls->Add(this->checkBox34);
+			this->groupBox1->Controls->Add(this->checkBox3Edge);
+			this->groupBox1->Controls->Add(this->checkBox2Edge);
+			this->groupBox1->Controls->Add(this->checkBox1Edge);
+			this->groupBox1->Controls->Add(this->checkBox0Edge);
 			this->groupBox1->Controls->Add(this->label6);
 			this->groupBox1->Controls->Add(this->label5);
 			this->groupBox1->Controls->Add(this->textBoxVecno);
@@ -377,12 +421,181 @@ namespace emuThor {
 			this->groupBox1->Controls->Add(this->checkBox2En);
 			this->groupBox1->Controls->Add(this->checkBox1En);
 			this->groupBox1->Controls->Add(this->checkBox0En);
-			this->groupBox1->Location = System::Drawing::Point(12, 144);
+			this->groupBox1->Location = System::Drawing::Point(12, 166);
 			this->groupBox1->Name = L"groupBox1";
 			this->groupBox1->Size = System::Drawing::Size(310, 414);
 			this->groupBox1->TabIndex = 21;
 			this->groupBox1->TabStop = false;
 			this->groupBox1->Text = L"PIC State";
+			// 
+			// label7
+			// 
+			this->label7->AutoSize = true;
+			this->label7->Location = System::Drawing::Point(57, 26);
+			this->label7->Name = L"label7";
+			this->label7->Size = System::Drawing::Size(32, 13);
+			this->label7->TabIndex = 55;
+			this->label7->Text = L"Edge";
+			// 
+			// checkBox1
+			// 
+			this->checkBox1->AutoSize = true;
+			this->checkBox1->Enabled = false;
+			this->checkBox1->Location = System::Drawing::Point(60, 390);
+			this->checkBox1->Name = L"checkBox1";
+			this->checkBox1->Size = System::Drawing::Size(15, 14);
+			this->checkBox1->TabIndex = 54;
+			this->checkBox1->UseVisualStyleBackColor = true;
+			// 
+			// checkBox2
+			// 
+			this->checkBox2->AutoSize = true;
+			this->checkBox2->Enabled = false;
+			this->checkBox2->Location = System::Drawing::Point(60, 367);
+			this->checkBox2->Name = L"checkBox2";
+			this->checkBox2->Size = System::Drawing::Size(15, 14);
+			this->checkBox2->TabIndex = 53;
+			this->checkBox2->UseVisualStyleBackColor = true;
+			// 
+			// checkBox3
+			// 
+			this->checkBox3->AutoSize = true;
+			this->checkBox3->Enabled = false;
+			this->checkBox3->Location = System::Drawing::Point(60, 344);
+			this->checkBox3->Name = L"checkBox3";
+			this->checkBox3->Size = System::Drawing::Size(15, 14);
+			this->checkBox3->TabIndex = 52;
+			this->checkBox3->UseVisualStyleBackColor = true;
+			// 
+			// checkBox4
+			// 
+			this->checkBox4->AutoSize = true;
+			this->checkBox4->Enabled = false;
+			this->checkBox4->Location = System::Drawing::Point(60, 321);
+			this->checkBox4->Name = L"checkBox4";
+			this->checkBox4->Size = System::Drawing::Size(15, 14);
+			this->checkBox4->TabIndex = 51;
+			this->checkBox4->UseVisualStyleBackColor = true;
+			// 
+			// checkBox5
+			// 
+			this->checkBox5->AutoSize = true;
+			this->checkBox5->Enabled = false;
+			this->checkBox5->Location = System::Drawing::Point(60, 299);
+			this->checkBox5->Name = L"checkBox5";
+			this->checkBox5->Size = System::Drawing::Size(15, 14);
+			this->checkBox5->TabIndex = 50;
+			this->checkBox5->UseVisualStyleBackColor = true;
+			// 
+			// checkBox8
+			// 
+			this->checkBox8->AutoSize = true;
+			this->checkBox8->Enabled = false;
+			this->checkBox8->Location = System::Drawing::Point(60, 276);
+			this->checkBox8->Name = L"checkBox8";
+			this->checkBox8->Size = System::Drawing::Size(15, 14);
+			this->checkBox8->TabIndex = 49;
+			this->checkBox8->UseVisualStyleBackColor = true;
+			// 
+			// checkBox25
+			// 
+			this->checkBox25->AutoSize = true;
+			this->checkBox25->Enabled = false;
+			this->checkBox25->Location = System::Drawing::Point(60, 253);
+			this->checkBox25->Name = L"checkBox25";
+			this->checkBox25->Size = System::Drawing::Size(15, 14);
+			this->checkBox25->TabIndex = 48;
+			this->checkBox25->UseVisualStyleBackColor = true;
+			// 
+			// checkBox29
+			// 
+			this->checkBox29->AutoSize = true;
+			this->checkBox29->Enabled = false;
+			this->checkBox29->Location = System::Drawing::Point(60, 230);
+			this->checkBox29->Name = L"checkBox29";
+			this->checkBox29->Size = System::Drawing::Size(15, 14);
+			this->checkBox29->TabIndex = 47;
+			this->checkBox29->UseVisualStyleBackColor = true;
+			// 
+			// checkBox7Edge
+			// 
+			this->checkBox7Edge->AutoSize = true;
+			this->checkBox7Edge->Enabled = false;
+			this->checkBox7Edge->Location = System::Drawing::Point(60, 207);
+			this->checkBox7Edge->Name = L"checkBox7Edge";
+			this->checkBox7Edge->Size = System::Drawing::Size(15, 14);
+			this->checkBox7Edge->TabIndex = 46;
+			this->checkBox7Edge->UseVisualStyleBackColor = true;
+			// 
+			// checkBox32
+			// 
+			this->checkBox32->AutoSize = true;
+			this->checkBox32->Enabled = false;
+			this->checkBox32->Location = System::Drawing::Point(60, 184);
+			this->checkBox32->Name = L"checkBox32";
+			this->checkBox32->Size = System::Drawing::Size(15, 14);
+			this->checkBox32->TabIndex = 45;
+			this->checkBox32->UseVisualStyleBackColor = true;
+			// 
+			// checkBox33
+			// 
+			this->checkBox33->AutoSize = true;
+			this->checkBox33->Enabled = false;
+			this->checkBox33->Location = System::Drawing::Point(60, 161);
+			this->checkBox33->Name = L"checkBox33";
+			this->checkBox33->Size = System::Drawing::Size(15, 14);
+			this->checkBox33->TabIndex = 44;
+			this->checkBox33->UseVisualStyleBackColor = true;
+			// 
+			// checkBox34
+			// 
+			this->checkBox34->AutoSize = true;
+			this->checkBox34->Enabled = false;
+			this->checkBox34->Location = System::Drawing::Point(60, 138);
+			this->checkBox34->Name = L"checkBox34";
+			this->checkBox34->Size = System::Drawing::Size(15, 14);
+			this->checkBox34->TabIndex = 43;
+			this->checkBox34->UseVisualStyleBackColor = true;
+			// 
+			// checkBox3Edge
+			// 
+			this->checkBox3Edge->AutoSize = true;
+			this->checkBox3Edge->Enabled = false;
+			this->checkBox3Edge->Location = System::Drawing::Point(60, 115);
+			this->checkBox3Edge->Name = L"checkBox3Edge";
+			this->checkBox3Edge->Size = System::Drawing::Size(15, 14);
+			this->checkBox3Edge->TabIndex = 42;
+			this->checkBox3Edge->UseVisualStyleBackColor = true;
+			// 
+			// checkBox2Edge
+			// 
+			this->checkBox2Edge->AutoSize = true;
+			this->checkBox2Edge->Enabled = false;
+			this->checkBox2Edge->Location = System::Drawing::Point(60, 92);
+			this->checkBox2Edge->Name = L"checkBox2Edge";
+			this->checkBox2Edge->Size = System::Drawing::Size(15, 14);
+			this->checkBox2Edge->TabIndex = 41;
+			this->checkBox2Edge->UseVisualStyleBackColor = true;
+			// 
+			// checkBox1Edge
+			// 
+			this->checkBox1Edge->AutoSize = true;
+			this->checkBox1Edge->Enabled = false;
+			this->checkBox1Edge->Location = System::Drawing::Point(60, 69);
+			this->checkBox1Edge->Name = L"checkBox1Edge";
+			this->checkBox1Edge->Size = System::Drawing::Size(15, 14);
+			this->checkBox1Edge->TabIndex = 40;
+			this->checkBox1Edge->UseVisualStyleBackColor = true;
+			// 
+			// checkBox0Edge
+			// 
+			this->checkBox0Edge->AutoSize = true;
+			this->checkBox0Edge->Enabled = false;
+			this->checkBox0Edge->Location = System::Drawing::Point(60, 46);
+			this->checkBox0Edge->Name = L"checkBox0Edge";
+			this->checkBox0Edge->Size = System::Drawing::Size(15, 14);
+			this->checkBox0Edge->TabIndex = 39;
+			this->checkBox0Edge->UseVisualStyleBackColor = true;
 			// 
 			// label6
 			// 
@@ -633,9 +846,8 @@ namespace emuThor {
 			this->checkBox16->Enabled = false;
 			this->checkBox16->Location = System::Drawing::Point(6, 390);
 			this->checkBox16->Name = L"checkBox16";
-			this->checkBox16->Size = System::Drawing::Size(97, 17);
+			this->checkBox16->Size = System::Drawing::Size(15, 14);
 			this->checkBox16->TabIndex = 15;
-			this->checkBox16->Text = L"15 Unassigned";
 			this->checkBox16->UseVisualStyleBackColor = true;
 			// 
 			// checkBox15
@@ -644,9 +856,8 @@ namespace emuThor {
 			this->checkBox15->Enabled = false;
 			this->checkBox15->Location = System::Drawing::Point(6, 367);
 			this->checkBox15->Name = L"checkBox15";
-			this->checkBox15->Size = System::Drawing::Size(97, 17);
+			this->checkBox15->Size = System::Drawing::Size(15, 14);
 			this->checkBox15->TabIndex = 14;
-			this->checkBox15->Text = L"14 Unassigned";
 			this->checkBox15->UseVisualStyleBackColor = true;
 			// 
 			// checkBox14
@@ -655,9 +866,8 @@ namespace emuThor {
 			this->checkBox14->Enabled = false;
 			this->checkBox14->Location = System::Drawing::Point(6, 344);
 			this->checkBox14->Name = L"checkBox14";
-			this->checkBox14->Size = System::Drawing::Size(97, 17);
+			this->checkBox14->Size = System::Drawing::Size(15, 14);
 			this->checkBox14->TabIndex = 13;
-			this->checkBox14->Text = L"13 Unassigned";
 			this->checkBox14->UseVisualStyleBackColor = true;
 			// 
 			// checkBox13
@@ -666,9 +876,8 @@ namespace emuThor {
 			this->checkBox13->Enabled = false;
 			this->checkBox13->Location = System::Drawing::Point(6, 321);
 			this->checkBox13->Name = L"checkBox13";
-			this->checkBox13->Size = System::Drawing::Size(97, 17);
+			this->checkBox13->Size = System::Drawing::Size(15, 14);
 			this->checkBox13->TabIndex = 12;
-			this->checkBox13->Text = L"12 Unassigned";
 			this->checkBox13->UseVisualStyleBackColor = true;
 			// 
 			// checkBox12
@@ -677,9 +886,8 @@ namespace emuThor {
 			this->checkBox12->Enabled = false;
 			this->checkBox12->Location = System::Drawing::Point(6, 299);
 			this->checkBox12->Name = L"checkBox12";
-			this->checkBox12->Size = System::Drawing::Size(97, 17);
+			this->checkBox12->Size = System::Drawing::Size(15, 14);
 			this->checkBox12->TabIndex = 11;
-			this->checkBox12->Text = L"11 Unassigned";
 			this->checkBox12->UseVisualStyleBackColor = true;
 			// 
 			// checkBox11
@@ -688,9 +896,8 @@ namespace emuThor {
 			this->checkBox11->Enabled = false;
 			this->checkBox11->Location = System::Drawing::Point(6, 276);
 			this->checkBox11->Name = L"checkBox11";
-			this->checkBox11->Size = System::Drawing::Size(97, 17);
+			this->checkBox11->Size = System::Drawing::Size(15, 14);
 			this->checkBox11->TabIndex = 10;
-			this->checkBox11->Text = L"10 Unassigned";
 			this->checkBox11->UseVisualStyleBackColor = true;
 			// 
 			// checkBox10
@@ -699,9 +906,8 @@ namespace emuThor {
 			this->checkBox10->Enabled = false;
 			this->checkBox10->Location = System::Drawing::Point(6, 253);
 			this->checkBox10->Name = L"checkBox10";
-			this->checkBox10->Size = System::Drawing::Size(91, 17);
+			this->checkBox10->Size = System::Drawing::Size(15, 14);
 			this->checkBox10->TabIndex = 9;
-			this->checkBox10->Text = L"9 Unassigned";
 			this->checkBox10->UseVisualStyleBackColor = true;
 			// 
 			// checkBox9
@@ -710,9 +916,8 @@ namespace emuThor {
 			this->checkBox9->Enabled = false;
 			this->checkBox9->Location = System::Drawing::Point(6, 230);
 			this->checkBox9->Name = L"checkBox9";
-			this->checkBox9->Size = System::Drawing::Size(91, 17);
+			this->checkBox9->Size = System::Drawing::Size(15, 14);
 			this->checkBox9->TabIndex = 8;
-			this->checkBox9->Text = L"8 Unassigned";
 			this->checkBox9->UseVisualStyleBackColor = true;
 			// 
 			// checkBox7En
@@ -721,9 +926,8 @@ namespace emuThor {
 			this->checkBox7En->Enabled = false;
 			this->checkBox7En->Location = System::Drawing::Point(6, 207);
 			this->checkBox7En->Name = L"checkBox7En";
-			this->checkBox7En->Size = System::Drawing::Size(55, 17);
+			this->checkBox7En->Size = System::Drawing::Size(15, 14);
 			this->checkBox7En->TabIndex = 7;
-			this->checkBox7En->Text = L"7 Uart";
 			this->checkBox7En->UseVisualStyleBackColor = true;
 			// 
 			// checkBox7
@@ -732,9 +936,8 @@ namespace emuThor {
 			this->checkBox7->Enabled = false;
 			this->checkBox7->Location = System::Drawing::Point(6, 184);
 			this->checkBox7->Name = L"checkBox7";
-			this->checkBox7->Size = System::Drawing::Size(91, 17);
+			this->checkBox7->Size = System::Drawing::Size(15, 14);
 			this->checkBox7->TabIndex = 6;
-			this->checkBox7->Text = L"6 Unassigned";
 			this->checkBox7->UseVisualStyleBackColor = true;
 			// 
 			// checkBox6
@@ -743,9 +946,8 @@ namespace emuThor {
 			this->checkBox6->Enabled = false;
 			this->checkBox6->Location = System::Drawing::Point(6, 161);
 			this->checkBox6->Name = L"checkBox6";
-			this->checkBox6->Size = System::Drawing::Size(91, 17);
+			this->checkBox6->Size = System::Drawing::Size(15, 14);
 			this->checkBox6->TabIndex = 5;
-			this->checkBox6->Text = L"5 Unassigned";
 			this->checkBox6->UseVisualStyleBackColor = true;
 			// 
 			// checkBox4En
@@ -754,9 +956,8 @@ namespace emuThor {
 			this->checkBox4En->Enabled = false;
 			this->checkBox4En->Location = System::Drawing::Point(6, 138);
 			this->checkBox4En->Name = L"checkBox4En";
-			this->checkBox4En->Size = System::Drawing::Size(91, 17);
+			this->checkBox4En->Size = System::Drawing::Size(15, 14);
 			this->checkBox4En->TabIndex = 4;
-			this->checkBox4En->Text = L"4 Unassigned";
 			this->checkBox4En->UseVisualStyleBackColor = true;
 			// 
 			// checkBox3En
@@ -765,9 +966,8 @@ namespace emuThor {
 			this->checkBox3En->Enabled = false;
 			this->checkBox3En->Location = System::Drawing::Point(6, 115);
 			this->checkBox3En->Name = L"checkBox3En";
-			this->checkBox3En->Size = System::Drawing::Size(80, 17);
+			this->checkBox3En->Size = System::Drawing::Size(15, 14);
 			this->checkBox3En->TabIndex = 3;
-			this->checkBox3En->Text = L"3 Keyboard";
 			this->checkBox3En->UseVisualStyleBackColor = true;
 			// 
 			// checkBox2En
@@ -776,9 +976,8 @@ namespace emuThor {
 			this->checkBox2En->Enabled = false;
 			this->checkBox2En->Location = System::Drawing::Point(6, 92);
 			this->checkBox2En->Name = L"checkBox2En";
-			this->checkBox2En->Size = System::Drawing::Size(60, 17);
+			this->checkBox2En->Size = System::Drawing::Size(15, 14);
 			this->checkBox2En->TabIndex = 2;
-			this->checkBox2En->Text = L"2 30Hz";
 			this->checkBox2En->UseVisualStyleBackColor = true;
 			// 
 			// checkBox1En
@@ -787,9 +986,8 @@ namespace emuThor {
 			this->checkBox1En->Enabled = false;
 			this->checkBox1En->Location = System::Drawing::Point(6, 69);
 			this->checkBox1En->Name = L"checkBox1En";
-			this->checkBox1En->Size = System::Drawing::Size(72, 17);
+			this->checkBox1En->Size = System::Drawing::Size(15, 14);
 			this->checkBox1En->TabIndex = 1;
-			this->checkBox1En->Text = L"1 1024Hz";
 			this->checkBox1En->UseVisualStyleBackColor = true;
 			// 
 			// checkBox0En
@@ -798,16 +996,15 @@ namespace emuThor {
 			this->checkBox0En->Enabled = false;
 			this->checkBox0En->Location = System::Drawing::Point(6, 46);
 			this->checkBox0En->Name = L"checkBox0En";
-			this->checkBox0En->Size = System::Drawing::Size(55, 17);
+			this->checkBox0En->Size = System::Drawing::Size(15, 14);
 			this->checkBox0En->TabIndex = 0;
-			this->checkBox0En->Text = L"0 NMI";
 			this->checkBox0En->UseVisualStyleBackColor = true;
 			// 
 			// frmInterrupts
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(331, 568);
+			this->ClientSize = System::Drawing::Size(331, 592);
 			this->Controls->Add(this->groupBox1);
 			this->Controls->Add(this->checkBoxUart);
 			this->Controls->Add(this->btnOK);
@@ -821,10 +1018,10 @@ namespace emuThor {
 			this->Controls->Add(this->checkBoxKeyboard);
 			this->Controls->Add(this->checkBox30);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
-			this->MaximizeBox = false;
 			this->Name = L"frmInterrupts";
 			this->SizeGripStyle = System::Windows::Forms::SizeGripStyle::Hide;
 			this->Text = L"emuThor - Interrupts";
+			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmInterrupts::frmInterrupts_FormClosing);
 			this->Load += gcnew System::EventHandler(this, &frmInterrupts::frmInterrupts_Load);
 			this->groupBox1->ResumeLayout(false);
 			this->groupBox1->PerformLayout();
@@ -842,6 +1039,7 @@ private: System::Void btnTrigger1024_Click(System::Object^  sender, System::Even
 			 case 0: interval1024 = 98; break;
 			 case 1: interval1024 = 977; break;
 			 case 2: interval1024 = -1; break;
+			 default: interval1024 = 977; break;
 			 }
 			 trigger1024 = true;
 			 mut->ReleaseMutex();
@@ -856,12 +1054,44 @@ private: System::Void btnTrigger30_Click(System::Object^  sender, System::EventA
 			 case 2: interval30 = 3333; break;
 			 case 3: interval30 = 33333; break;
 			 case 4: interval30 = -1; break;
+			 default: interval30 = 33333; break;
 			 }
 			 trigger30 = true;
 			 mut->ReleaseMutex();
 			 }
 		 }
+public: void UpdateForm()
+		 {
+			char buf[20];
+
+			mut->WaitOne();
+			system1.pic1.Step();
+			trigger30 = false;
+			trigger1024 = false;
+			checkBox0En->Checked = system1.pic1.enables[0];
+			checkBox1En->Checked = system1.pic1.enables[1];
+			checkBox2En->Checked = system1.pic1.enables[2];
+			checkBox3En->Checked = system1.pic1.enables[3];
+			checkBox7En->Checked = system1.pic1.enables[7];
+			checkBox0Edge->Checked = system1.pic1.edges[0];
+			checkBox1Edge->Checked = system1.pic1.edges[1];
+			checkBox2Edge->Checked = system1.pic1.edges[2];
+			checkBox3Edge->Checked = system1.pic1.edges[3];
+			checkBox7Edge->Checked = system1.pic1.edges[7];
+			checkBox1Act->Checked = system1.pic1.irq1024Hz;
+			checkBox2Act->Checked = system1.pic1.irq30Hz;
+			checkBox3Act->Checked = system1.pic1.irqKeyboard;
+			checkBox7Act->Checked = system1.pic1.irqUart;
+			checkBoxIRQOut->Checked = system1.pic1.irq;
+			sprintf(buf, "%d (%02X)", system1.pic1.vecno, system1.pic1.vecno);
+			mut->ReleaseMutex();
+			textBoxVecno->Text = gcnew String(buf);
+		 }
 private: System::Void frmInterrupts_Load(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void frmInterrupts_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
+			 if (e->CloseReason==CloseReason::UserClosing)
+				 e->Cancel = true;
 		 }
 };
 }

@@ -1,5 +1,12 @@
 #pragma once
 #include "clsThor.h"
+// Test System Emulator
+//
+// Emulates the test system that the Thor processor is part of.
+// Currently the screen display is not fully implemented as an
+// emulation. The register set isn't present.
+// Other devices present in the system are aggregated into the
+// clsSystem class.
 
 extern char refscreen;
 extern unsigned int dataBreakpoints[30];

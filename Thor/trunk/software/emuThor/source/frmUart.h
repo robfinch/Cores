@@ -154,7 +154,7 @@ namespace emuThor {
 			// 
 			// txtToUart
 			// 
-			this->txtToUart->Location = System::Drawing::Point(31, 27);
+			this->txtToUart->Location = System::Drawing::Point(27, 67);
 			this->txtToUart->Multiline = true;
 			this->txtToUart->Name = L"txtToUart";
 			this->txtToUart->Size = System::Drawing::Size(318, 124);
@@ -163,7 +163,7 @@ namespace emuThor {
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(28, 11);
+			this->label1->Location = System::Drawing::Point(24, 51);
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(53, 13);
 			this->label1->TabIndex = 1;
@@ -172,7 +172,7 @@ namespace emuThor {
 			// label2
 			// 
 			this->label2->AutoSize = true;
-			this->label2->Location = System::Drawing::Point(28, 169);
+			this->label2->Location = System::Drawing::Point(24, 209);
 			this->label2->Name = L"label2";
 			this->label2->Size = System::Drawing::Size(95, 13);
 			this->label2->TabIndex = 2;
@@ -180,7 +180,7 @@ namespace emuThor {
 			// 
 			// txtFromUart
 			// 
-			this->txtFromUart->Location = System::Drawing::Point(31, 185);
+			this->txtFromUart->Location = System::Drawing::Point(27, 225);
 			this->txtFromUart->Multiline = true;
 			this->txtFromUart->Name = L"txtFromUart";
 			this->txtFromUart->Size = System::Drawing::Size(318, 124);
@@ -188,7 +188,7 @@ namespace emuThor {
 			// 
 			// button1
 			// 
-			this->button1->Location = System::Drawing::Point(474, 353);
+			this->button1->Location = System::Drawing::Point(470, 393);
 			this->button1->Name = L"button1";
 			this->button1->Size = System::Drawing::Size(75, 23);
 			this->button1->TabIndex = 4;
@@ -197,7 +197,7 @@ namespace emuThor {
 			// 
 			// button2
 			// 
-			this->button2->Location = System::Drawing::Point(355, 25);
+			this->button2->Location = System::Drawing::Point(351, 65);
 			this->button2->Name = L"button2";
 			this->button2->Size = System::Drawing::Size(75, 23);
 			this->button2->TabIndex = 5;
@@ -208,7 +208,7 @@ namespace emuThor {
 			// label3
 			// 
 			this->label3->AutoSize = true;
-			this->label3->Location = System::Drawing::Point(475, 72);
+			this->label3->Location = System::Drawing::Point(471, 112);
 			this->label3->Name = L"label3";
 			this->label3->Size = System::Drawing::Size(29, 13);
 			this->label3->TabIndex = 6;
@@ -216,7 +216,7 @@ namespace emuThor {
 			// 
 			// txtCM0
 			// 
-			this->txtCM0->Location = System::Drawing::Point(510, 69);
+			this->txtCM0->Location = System::Drawing::Point(506, 109);
 			this->txtCM0->Name = L"txtCM0";
 			this->txtCM0->ReadOnly = true;
 			this->txtCM0->Size = System::Drawing::Size(39, 20);
@@ -225,7 +225,7 @@ namespace emuThor {
 			// 
 			// txtCM1
 			// 
-			this->txtCM1->Location = System::Drawing::Point(510, 95);
+			this->txtCM1->Location = System::Drawing::Point(506, 135);
 			this->txtCM1->Name = L"txtCM1";
 			this->txtCM1->ReadOnly = true;
 			this->txtCM1->Size = System::Drawing::Size(39, 20);
@@ -235,7 +235,7 @@ namespace emuThor {
 			// label4
 			// 
 			this->label4->AutoSize = true;
-			this->label4->Location = System::Drawing::Point(475, 98);
+			this->label4->Location = System::Drawing::Point(471, 138);
 			this->label4->Name = L"label4";
 			this->label4->Size = System::Drawing::Size(29, 13);
 			this->label4->TabIndex = 8;
@@ -243,7 +243,7 @@ namespace emuThor {
 			// 
 			// txtCM2
 			// 
-			this->txtCM2->Location = System::Drawing::Point(510, 121);
+			this->txtCM2->Location = System::Drawing::Point(506, 161);
 			this->txtCM2->Name = L"txtCM2";
 			this->txtCM2->ReadOnly = true;
 			this->txtCM2->Size = System::Drawing::Size(39, 20);
@@ -253,7 +253,7 @@ namespace emuThor {
 			// label5
 			// 
 			this->label5->AutoSize = true;
-			this->label5->Location = System::Drawing::Point(475, 124);
+			this->label5->Location = System::Drawing::Point(471, 164);
 			this->label5->Name = L"label5";
 			this->label5->Size = System::Drawing::Size(29, 13);
 			this->label5->TabIndex = 10;
@@ -261,7 +261,7 @@ namespace emuThor {
 			// 
 			// txtCM3
 			// 
-			this->txtCM3->Location = System::Drawing::Point(510, 147);
+			this->txtCM3->Location = System::Drawing::Point(506, 187);
 			this->txtCM3->Name = L"txtCM3";
 			this->txtCM3->ReadOnly = true;
 			this->txtCM3->Size = System::Drawing::Size(39, 20);
@@ -271,7 +271,7 @@ namespace emuThor {
 			// label6
 			// 
 			this->label6->AutoSize = true;
-			this->label6->Location = System::Drawing::Point(475, 150);
+			this->label6->Location = System::Drawing::Point(471, 190);
 			this->label6->Name = L"label6";
 			this->label6->Size = System::Drawing::Size(29, 13);
 			this->label6->TabIndex = 12;
@@ -280,7 +280,7 @@ namespace emuThor {
 			// label7
 			// 
 			this->label7->AutoSize = true;
-			this->label7->Location = System::Drawing::Point(378, 72);
+			this->label7->Location = System::Drawing::Point(374, 112);
 			this->label7->Name = L"label7";
 			this->label7->Size = System::Drawing::Size(21, 13);
 			this->label7->TabIndex = 14;
@@ -288,7 +288,7 @@ namespace emuThor {
 			// 
 			// txtTB
 			// 
-			this->txtTB->Location = System::Drawing::Point(413, 69);
+			this->txtTB->Location = System::Drawing::Point(409, 109);
 			this->txtTB->Name = L"txtTB";
 			this->txtTB->ReadOnly = true;
 			this->txtTB->Size = System::Drawing::Size(39, 20);
@@ -297,7 +297,7 @@ namespace emuThor {
 			// 
 			// txtLS
 			// 
-			this->txtLS->Location = System::Drawing::Point(413, 124);
+			this->txtLS->Location = System::Drawing::Point(409, 164);
 			this->txtLS->Name = L"txtLS";
 			this->txtLS->ReadOnly = true;
 			this->txtLS->Size = System::Drawing::Size(39, 20);
@@ -307,7 +307,7 @@ namespace emuThor {
 			// label8
 			// 
 			this->label8->AutoSize = true;
-			this->label8->Location = System::Drawing::Point(378, 127);
+			this->label8->Location = System::Drawing::Point(374, 167);
 			this->label8->Name = L"label8";
 			this->label8->Size = System::Drawing::Size(20, 13);
 			this->label8->TabIndex = 16;
@@ -315,7 +315,7 @@ namespace emuThor {
 			// 
 			// txtMS
 			// 
-			this->txtMS->Location = System::Drawing::Point(413, 150);
+			this->txtMS->Location = System::Drawing::Point(409, 190);
 			this->txtMS->Name = L"txtMS";
 			this->txtMS->ReadOnly = true;
 			this->txtMS->Size = System::Drawing::Size(39, 20);
@@ -325,7 +325,7 @@ namespace emuThor {
 			// label9
 			// 
 			this->label9->AutoSize = true;
-			this->label9->Location = System::Drawing::Point(378, 153);
+			this->label9->Location = System::Drawing::Point(374, 193);
 			this->label9->Name = L"label9";
 			this->label9->Size = System::Drawing::Size(23, 13);
 			this->label9->TabIndex = 18;
@@ -333,7 +333,7 @@ namespace emuThor {
 			// 
 			// txtIS
 			// 
-			this->txtIS->Location = System::Drawing::Point(413, 176);
+			this->txtIS->Location = System::Drawing::Point(409, 216);
 			this->txtIS->Name = L"txtIS";
 			this->txtIS->ReadOnly = true;
 			this->txtIS->Size = System::Drawing::Size(39, 20);
@@ -343,7 +343,7 @@ namespace emuThor {
 			// label10
 			// 
 			this->label10->AutoSize = true;
-			this->label10->Location = System::Drawing::Point(378, 179);
+			this->label10->Location = System::Drawing::Point(374, 219);
 			this->label10->Name = L"label10";
 			this->label10->Size = System::Drawing::Size(17, 13);
 			this->label10->TabIndex = 20;
@@ -351,7 +351,7 @@ namespace emuThor {
 			// 
 			// txtIER
 			// 
-			this->txtIER->Location = System::Drawing::Point(413, 202);
+			this->txtIER->Location = System::Drawing::Point(409, 242);
 			this->txtIER->Name = L"txtIER";
 			this->txtIER->Size = System::Drawing::Size(39, 20);
 			this->txtIER->TabIndex = 23;
@@ -360,7 +360,7 @@ namespace emuThor {
 			// label11
 			// 
 			this->label11->AutoSize = true;
-			this->label11->Location = System::Drawing::Point(378, 205);
+			this->label11->Location = System::Drawing::Point(374, 245);
 			this->label11->Name = L"label11";
 			this->label11->Size = System::Drawing::Size(25, 13);
 			this->label11->TabIndex = 22;
@@ -368,7 +368,7 @@ namespace emuThor {
 			// 
 			// txtFF
 			// 
-			this->txtFF->Location = System::Drawing::Point(413, 228);
+			this->txtFF->Location = System::Drawing::Point(409, 268);
 			this->txtFF->Name = L"txtFF";
 			this->txtFF->Size = System::Drawing::Size(39, 20);
 			this->txtFF->TabIndex = 25;
@@ -377,7 +377,7 @@ namespace emuThor {
 			// label12
 			// 
 			this->label12->AutoSize = true;
-			this->label12->Location = System::Drawing::Point(378, 231);
+			this->label12->Location = System::Drawing::Point(374, 271);
 			this->label12->Name = L"label12";
 			this->label12->Size = System::Drawing::Size(19, 13);
 			this->label12->TabIndex = 24;
@@ -385,7 +385,7 @@ namespace emuThor {
 			// 
 			// txtMC
 			// 
-			this->txtMC->Location = System::Drawing::Point(413, 254);
+			this->txtMC->Location = System::Drawing::Point(409, 294);
 			this->txtMC->Name = L"txtMC";
 			this->txtMC->Size = System::Drawing::Size(39, 20);
 			this->txtMC->TabIndex = 27;
@@ -394,7 +394,7 @@ namespace emuThor {
 			// label13
 			// 
 			this->label13->AutoSize = true;
-			this->label13->Location = System::Drawing::Point(378, 257);
+			this->label13->Location = System::Drawing::Point(374, 297);
 			this->label13->Name = L"label13";
 			this->label13->Size = System::Drawing::Size(23, 13);
 			this->label13->TabIndex = 26;
@@ -402,7 +402,7 @@ namespace emuThor {
 			// 
 			// txtCTRL
 			// 
-			this->txtCTRL->Location = System::Drawing::Point(413, 280);
+			this->txtCTRL->Location = System::Drawing::Point(409, 320);
 			this->txtCTRL->Name = L"txtCTRL";
 			this->txtCTRL->Size = System::Drawing::Size(39, 20);
 			this->txtCTRL->TabIndex = 29;
@@ -411,7 +411,7 @@ namespace emuThor {
 			// label14
 			// 
 			this->label14->AutoSize = true;
-			this->label14->Location = System::Drawing::Point(378, 283);
+			this->label14->Location = System::Drawing::Point(374, 323);
 			this->label14->Name = L"label14";
 			this->label14->Size = System::Drawing::Size(35, 13);
 			this->label14->TabIndex = 28;
@@ -419,7 +419,7 @@ namespace emuThor {
 			// 
 			// txtFC
 			// 
-			this->txtFC->Location = System::Drawing::Point(510, 176);
+			this->txtFC->Location = System::Drawing::Point(506, 216);
 			this->txtFC->Name = L"txtFC";
 			this->txtFC->Size = System::Drawing::Size(39, 20);
 			this->txtFC->TabIndex = 31;
@@ -428,7 +428,7 @@ namespace emuThor {
 			// label15
 			// 
 			this->label15->AutoSize = true;
-			this->label15->Location = System::Drawing::Point(475, 179);
+			this->label15->Location = System::Drawing::Point(471, 219);
 			this->label15->Name = L"label15";
 			this->label15->Size = System::Drawing::Size(20, 13);
 			this->label15->TabIndex = 30;
@@ -444,7 +444,7 @@ namespace emuThor {
 			this->checkBox1->AutoSize = true;
 			this->checkBox1->Checked = true;
 			this->checkBox1->CheckState = System::Windows::Forms::CheckState::Checked;
-			this->checkBox1->Location = System::Drawing::Point(31, 315);
+			this->checkBox1->Location = System::Drawing::Point(27, 355);
 			this->checkBox1->Name = L"checkBox1";
 			this->checkBox1->Size = System::Drawing::Size(47, 17);
 			this->checkBox1->TabIndex = 32;
@@ -456,7 +456,7 @@ namespace emuThor {
 			this->checkBox2->AutoSize = true;
 			this->checkBox2->Checked = true;
 			this->checkBox2->CheckState = System::Windows::Forms::CheckState::Checked;
-			this->checkBox2->Location = System::Drawing::Point(31, 338);
+			this->checkBox2->Location = System::Drawing::Point(27, 378);
 			this->checkBox2->Name = L"checkBox2";
 			this->checkBox2->Size = System::Drawing::Size(49, 17);
 			this->checkBox2->TabIndex = 33;
@@ -468,7 +468,7 @@ namespace emuThor {
 			this->checkBox3->AutoSize = true;
 			this->checkBox3->Checked = true;
 			this->checkBox3->CheckState = System::Windows::Forms::CheckState::Checked;
-			this->checkBox3->Location = System::Drawing::Point(31, 361);
+			this->checkBox3->Location = System::Drawing::Point(27, 401);
 			this->checkBox3->Name = L"checkBox3";
 			this->checkBox3->Size = System::Drawing::Size(49, 17);
 			this->checkBox3->TabIndex = 34;
@@ -477,7 +477,7 @@ namespace emuThor {
 			// 
 			// txtRB
 			// 
-			this->txtRB->Location = System::Drawing::Point(413, 95);
+			this->txtRB->Location = System::Drawing::Point(409, 135);
 			this->txtRB->Name = L"txtRB";
 			this->txtRB->ReadOnly = true;
 			this->txtRB->Size = System::Drawing::Size(39, 20);
@@ -487,7 +487,7 @@ namespace emuThor {
 			// label16
 			// 
 			this->label16->AutoSize = true;
-			this->label16->Location = System::Drawing::Point(378, 98);
+			this->label16->Location = System::Drawing::Point(374, 138);
 			this->label16->Name = L"label16";
 			this->label16->Size = System::Drawing::Size(22, 13);
 			this->label16->TabIndex = 35;
@@ -497,7 +497,7 @@ namespace emuThor {
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(571, 388);
+			this->ClientSize = System::Drawing::Size(571, 429);
 			this->Controls->Add(this->txtRB);
 			this->Controls->Add(this->label16);
 			this->Controls->Add(this->checkBox3);
@@ -538,6 +538,7 @@ namespace emuThor {
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
 			this->Name = L"frmUart";
 			this->Text = L"rtfSimpleUart Emulator";
+			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmUart::frmUart_FormClosing);
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
@@ -584,6 +585,10 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 			 sprintf(buf, "%02X", system1.uart1.is);
 			 mut->ReleaseMutex();
 			 txtIS->Text = gcnew String(buf);
+		 }
+private: System::Void frmUart_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
+			 if (e->CloseReason==CloseReason::UserClosing)
+				 e->Cancel = true;
 		 }
 };
 }

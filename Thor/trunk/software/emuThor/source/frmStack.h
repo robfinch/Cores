@@ -27,22 +27,7 @@ namespace emuThor {
 			//
 			//TODO: Add the constructor code here
 			//
-			int xx;
-			char buf[4000];
-			buf[0] = '\0';
-			mut->WaitOne();
-			for (xx = -128; xx < 128; xx+=8) {
-				sprintf(&buf[strlen(buf)], "%c %08I64X: %016I64X\r\n", xx==0 ? '>' : ' ',
-					system1.cpu2.GetGP(27)+xx, system1.Read(system1.cpu2.GetGP(27)+xx));
-			}
-			textBox1->Text = gcnew String(buf);
-			buf[0] = '\0';
-			for (xx = -128; xx < 128; xx+=8) {
-				sprintf(&buf[strlen(buf)], "%c %08I64X: %016I64X\r\n", xx==0 ? '>' : ' ',
-					system1.cpu2.GetGP(26)+xx, system1.Read(system1.cpu2.GetGP(26)+xx));
-			}
-			mut->ReleaseMutex();
-			textBox2->Text = gcnew String(buf);
+			UpdateForm();
 		}
 
 	protected:
@@ -83,26 +68,26 @@ namespace emuThor {
 			// 
 			// textBox1
 			// 
-			this->textBox1->Location = System::Drawing::Point(12, 32);
+			this->textBox1->Location = System::Drawing::Point(12, 72);
 			this->textBox1->Multiline = true;
 			this->textBox1->Name = L"textBox1";
 			this->textBox1->ScrollBars = System::Windows::Forms::ScrollBars::Vertical;
-			this->textBox1->Size = System::Drawing::Size(228, 241);
+			this->textBox1->Size = System::Drawing::Size(228, 432);
 			this->textBox1->TabIndex = 0;
 			// 
 			// textBox2
 			// 
-			this->textBox2->Location = System::Drawing::Point(254, 32);
+			this->textBox2->Location = System::Drawing::Point(254, 72);
 			this->textBox2->Multiline = true;
 			this->textBox2->Name = L"textBox2";
 			this->textBox2->ScrollBars = System::Windows::Forms::ScrollBars::Vertical;
-			this->textBox2->Size = System::Drawing::Size(228, 241);
+			this->textBox2->Size = System::Drawing::Size(228, 432);
 			this->textBox2->TabIndex = 1;
 			// 
 			// label1
 			// 
 			this->label1->AutoSize = true;
-			this->label1->Location = System::Drawing::Point(12, 16);
+			this->label1->Location = System::Drawing::Point(9, 56);
 			this->label1->Name = L"label1";
 			this->label1->Size = System::Drawing::Size(61, 13);
 			this->label1->TabIndex = 2;
@@ -111,7 +96,7 @@ namespace emuThor {
 			// label2
 			// 
 			this->label2->AutoSize = true;
-			this->label2->Location = System::Drawing::Point(251, 16);
+			this->label2->Location = System::Drawing::Point(251, 56);
 			this->label2->Name = L"label2";
 			this->label2->Size = System::Drawing::Size(93, 13);
 			this->label2->TabIndex = 3;
@@ -121,19 +106,41 @@ namespace emuThor {
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(506, 306);
+			this->ClientSize = System::Drawing::Size(506, 516);
 			this->Controls->Add(this->label2);
 			this->Controls->Add(this->label1);
 			this->Controls->Add(this->textBox2);
 			this->Controls->Add(this->textBox1);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
-			this->MaximizeBox = false;
 			this->Name = L"frmStack";
 			this->Text = L"emuThor - Stack View";
+			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmStack::frmStack_FormClosing);
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
 		}
 #pragma endregion
-	};
+	private: System::Void frmStack_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
+			 if (e->CloseReason==CloseReason::UserClosing)
+				 e->Cancel = true;
+			 }
+	public: void UpdateForm() {
+				int xx;
+				char buf[4000];
+				buf[0] = '\0';
+				mut->WaitOne();
+				for (xx = -128; xx < 128; xx+=8) {
+					sprintf(&buf[strlen(buf)], "%c %08I64X: %016I64X\r\n", xx==0 ? '>' : ' ',
+						system1.cpu2.GetGP(27)+xx, system1.Read(system1.cpu2.GetGP(27)+xx));
+				}
+				textBox1->Text = gcnew String(buf);
+				buf[0] = '\0';
+				for (xx = -128; xx < 128; xx+=8) {
+					sprintf(&buf[strlen(buf)], "%c %08I64X: %016I64X\r\n", xx==0 ? '>' : ' ',
+						system1.cpu2.GetGP(26)+xx, system1.Read(system1.cpu2.GetGP(26)+xx));
+				}
+				mut->ReleaseMutex();
+				textBox2->Text = gcnew String(buf);
+			}
+};
 }

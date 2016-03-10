@@ -102,6 +102,7 @@
     <ClCompile Include="frmMemory.cpp" />
     <ClCompile Include="frmPCHistory.cpp" />
     <ClCompile Include="frmRegisters.cpp" />
+    <ClCompile Include="frmRun.cpp" />
     <ClCompile Include="frmScreen.cpp" />
     <ClCompile Include="frmStack.cpp" />
     <ClCompile Include="frmUart.cpp" />
@@ -142,6 +143,9 @@
     <ClInclude Include="frmRegisters.h">
       <FileType>CppForm</FileType>
     </ClInclude>
+    <ClInclude Include="frmRun.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
     <ClInclude Include="frmScreen.h" />
     <ClInclude Include="frmStack.h">
       <FileType>CppForm</FileType>
@@ -180,6 +184,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="frmRegisters.resx">
       <DependentUpon>frmRegisters.h</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmRun.resx">
+      <DependentUpon>frmRun.h</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmScreen.resx" />
     <EmbeddedResource Include="frmStack.resx">

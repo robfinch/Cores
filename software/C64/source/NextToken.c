@@ -350,7 +350,9 @@ void getexp()
 void getnum()
 {       register int    i;
         i = 0;
-
+        
+        ival = 0;
+        rval = 0.0;
         numstrptr = &numstr[0];
          *numstrptr = lastch;
          numstrptr++; 

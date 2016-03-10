@@ -12,6 +12,7 @@
 #include "clsUart.h"
 #include "clsThor.h"
 #include "clsSystem.h"
+#include "clsDisassem.h"
 
 enum {
 	PF = 0,

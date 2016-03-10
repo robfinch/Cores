@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,119 +25,241 @@
 //
 module Thor_icachemem(wclk, wce, wr, wa, wd, rclk, pc, insn);
 parameter DBW=64;
+parameter ABW=32;
+parameter ECC=1'b0;
 input wclk;
 input wce;
 input wr;
-input [DBW-1:0] wa;
-input [DBW-1:0] wd;
+input [ABW-1:0] wa;
+input [(ECC?((DBW==64)?DBW+13:DBW+6):DBW-1):0] wd;
 input rclk;
-input [DBW-1:0] pc;
+input [ABW-1:0] pc;
 output reg [127:0] insn;
 
-wire [127:0] mem0a;
-wire [127:0] mem1a;
-reg [14:0] pcp16;
+wire [127:0] insn0;
+wire [127:0] insn1;
+wire [(ECC?155:127):0] insn0a;
+wire [(ECC?155:127):0] insn1a;
 
 generate
-begin : gen1
-	if (DBW==32) begin
-        syncRam2kx32_1w1r uicm0a0 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b00),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pc[14:4]),
-            .o(mem0a[31:0])
-        );
-        syncRam2kx32_1w1r uicm0a1 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b01),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pc[14:4]),
-            .o(mem0a[63:32])
-        );
-        syncRam2kx32_1w1r uicm0a2 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b10),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pc[14:4]),
-            .o(mem0a[95:64])
-        );
-        syncRam2kx32_1w1r uicm0a3 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b11),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pc[14:4]),
-            .o(mem0a[127:96])
-        );
+begin : cache_mem
+if (DBW==32) begin
+if (ECC) begin
+/*
+blk_mem_gen_2 uicm1 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:2]),  // input wire [14 : 0] addra
+  .dina(wd),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]),  // input wire [12 : 0] addrb
+  .doutb(insn0a)  // output wire [127 : 0] doutb
+);
 
-        syncRam2kx32_1w1r uicm1a0 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b00),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pcp16[14:4]),
-            .o(mem1a[31:0])
-        );
-        syncRam2kx32_1w1r uicm1a1 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b01),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pcp16[14:4]),
-            .o(mem1a[63:32])
-        );
-        syncRam2kx32_1w1r uicm1a2 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b10),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pcp16[14:4]),
-            .o(mem1a[95:64])
-        );
-        syncRam2kx32_1w1r uicm1a3 (
-            .wclk(wclk),
-            .wce(wce && wa[3:2]==2'b11),
-            .wr({4{wr}}),
-            .wa(wa[14:4]),
-            .wd(wd),
-            .rclk(rclk),
-            .rce(1'b1),
-            .ra(pcp16[14:4]),
-            .o(mem1a[127:96])
-        );
-    end
+blk_mem_gen_2 uicm2 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:2]),  // input wire [14 : 0] addra
+  .dina(wd),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]+11'd1),  // input wire [12 : 0] addrb
+  .doutb(insn1a)  // output wire [127 : 0] doutb
+);
+*/
+end
+else begin
+icache_ram uicm1 (
+    .wclk(wclk),
+    .wce(wce),
+    .wr(wr),
+    .wa(wa[14:2]),
+    .d(wd[31:0]),
+    .rclk(rclk),
+    .rce(1'b1),
+    .ra(pc[14:4]),
+    .q(insn0a)
+);
+
+icache_ram uicm2 (
+    .wclk(wclk),
+    .wce(wce),
+    .wr(wr),
+    .wa(wa[14:2]),
+    .d(wd[31:0]),
+    .rclk(rclk),
+    .rce(1'b1),
+    .ra(pc[14:4]+11'd1),
+    .q(insn1a)
+);
+/*
+blk_mem_gen_0 uicm1 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:2]),  // input wire [14 : 0] addra
+  .dina(wd[31:0]),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]),  // input wire [12 : 0] addrb
+  .doutb(insn0a)  // output wire [127 : 0] doutb
+);
+
+blk_mem_gen_0 uicm2 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:2]),  // input wire [14 : 0] addra
+  .dina(wd[31:0]),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]+11'd1),  // input wire [12 : 0] addrb
+  .doutb(insn1a)  // output wire [127 : 0] doutb
+);
+*/
+end
+
+end
+else begin
+if (ECC) begin
+/*
+blk_mem_gen_3 uicm1 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:3]),  // input wire [14 : 0] addra
+  .dina(wd),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]),  // input wire [12 : 0] addrb
+  .doutb(insn0a)  // output wire [127 : 0] doutb
+);
+
+blk_mem_gen_3 uicm2 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:3]),  // input wire [14 : 0] addra
+  .dina(wd),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]+11'd1),  // input wire [12 : 0] addrb
+  .doutb(insn1a)  // output wire [127 : 0] doutb
+);
+*/
+end
+else begin
+/*
+blk_mem_gen_1 uicm1 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:3]),  // input wire [14 : 0] addra
+  .dina(wd[63:0]),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]),  // input wire [12 : 0] addrb
+  .doutb(insn0a)  // output wire [127 : 0] doutb
+);
+
+blk_mem_gen_1 uicm2 (
+  .clka(wclk),    // input wire clka
+  .ena(wce),      // input wire ena
+  .wea(wr),      // input wire [0 : 0] wea
+  .addra(wa[14:3]),  // input wire [14 : 0] addra
+  .dina(wd[63:0]),    // input wire [31 : 0] dina
+  .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
+  .addrb(pc[14:4]+11'd1),  // input wire [12 : 0] addrb
+  .doutb(insn1a)  // output wire [127 : 0] doutb
+);
+*/
+end
+end
+
 end
 endgenerate
 
-always @(pc)
-	pcp16 <= pc[14:0] + 15'd16;
-wire [127:0] insn0 = mem0a;
-wire [127:0] insn1 = mem1a;
+generate
+begin : ECCx
+if (ECC) begin
+/*
+ecc_0 uecc1a (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn0a[31:0]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn0[31:0]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn0a[37:32],insn0a[38]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc1b (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn0a[70:39]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn0[63:32]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn0a[76:71],insn0a[77]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc1c (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn0a[109:78]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn0[95:64]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn0a[115:110],insn0a[116]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc1d (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn0a[148:117]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn0[127:96]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn0a[154:149],insn0a[155]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc2a (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn1a[31:0]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn1[31:0]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn1a[37:32],insn1a[38]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc2b (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn1a[70:39]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn1[63:32]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn1a[76:71],insn1a[77]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc2c (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn1a[109:78]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn1[95:64]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn1a[115:110],insn1a[116]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+ecc_0 uecc2d (
+  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
+  .ecc_data_in(insn1a[148:117]),        // input wire [31 : 0] ecc_data_in
+  .ecc_data_out(insn1[127:96]),      // output wire [31 : 0] ecc_data_out
+  .ecc_chkbits_in({insn1a[154:149],insn1a[155]}),  // input wire [6 : 0] ecc_chkbits_in
+  .ecc_sbit_err(),      // output wire ecc_sbit_err
+  .ecc_dbit_err()      // output wire ecc_dbit_err
+);
+*/
+end
+else begin
+assign insn0 = insn0a;//{insn0a[148:117],insn0a[109:78],insn0a[70:39],insn0a[31:0]};
+assign insn1 = insn1a;//{insn1a[148:117],insn1a[109:78],insn1a[70:39],insn1a[31:0]};
+end
+end
+endgenerate
+
 always @(pc or insn0 or insn1)
 case(pc[3:0])
 4'd0:	insn <= insn0;

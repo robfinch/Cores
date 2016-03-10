@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -178,7 +178,7 @@ wire fbz = alu_argB[DBW-2:0]==63'd0;
 wire feq = (faz & fbz) || (alu_argA==alu_argB);	// special test for zero
 wire fgt1 = alu_argA[DBW-2:0] > alu_argB[DBW-2:0];
 wire flt1 = alu_argA[DBW-2:0] < alu_argB[DBW-2:0];
-wire flt = alu_argA[DBW] ^ alu_argB[DBW] ? alu_argA[DBW] & !(faz & fbz): alu_argA[DBW] ? fgt1 : flt1;
+wire flt = alu_argA[DBW-1] ^ alu_argB[DBW-1] ? alu_argA[DBW-1] & !(faz & fbz): alu_argA[DBW-1] ? fgt1 : flt1;
 wire nanA = DBW==32 ? alu_argA[30:23]==8'hFF && (alu_argA[22:0]!=23'd0) : alu_argA[62:52]==11'h7FF && (alu_argA[51:0]!=52'd0);
 wire nanB = DBW==32 ? alu_argB[30:23]==8'hFF && (alu_argB[22:0]!=23'd0) : alu_argB[62:52]==11'h7FF && (alu_argB[51:0]!=52'd0);
 
@@ -208,6 +208,7 @@ case(alu_op)
 	`MUL,`MULU:     o <= BIG ? alu_prod[63:0] : 64'hDEADDEADDEADDEAD;
 	`DIV,`DIVU:     o <= BIG ? alu_divq : 64'hDEADDEADDEADDEAD;  
     `MOD,`MODU:     o <= BIG ? alu_rem : 64'hDEADDEADDEADDEAD;
+    `CHK:           o <= ($signed(alu_argC) >= $signed(alu_argA)) && ($signed(alu_argC) < $signed(alu_argB));
 	default:   o <= 64'hDEADDEADDEADDEAD;
 	endcase
 `MULI,`MULUI:   o <= BIG ? alu_prod[63:0] : 64'hDEADDEADDEADDEAD;
@@ -222,8 +223,8 @@ case(alu_op)
     `MOV:       o <= alu_argA;
     `NEG:		o <= -alu_argA;
     `NOT:       o <= |alu_argA ? 64'd0 : 64'd1;
-    `ABS:       o <= BIG ? (alu_argA[DBW] ? -alu_argA : alu_argA) : 64'hDEADDEADDEADDEAD;
-    `SGN:       o <= BIG ? (alu_argA[DBW] ? 64'hFFFFFFFFFFFFFFFF : alu_argA==64'd0 ? 64'd0 : 64'd1) : 64'hDEADDEADDEADDEAD;
+    `ABS:       o <= BIG ? (alu_argA[DBW-1] ? -alu_argA : alu_argA) : 64'hDEADDEADDEADDEAD;
+    `SGN:       o <= BIG ? (alu_argA[DBW-1] ? 64'hFFFFFFFFFFFFFFFF : alu_argA==64'd0 ? 64'd0 : 64'd1) : 64'hDEADDEADDEADDEAD;
     `CNTLZ:     o <= BIG ? cntlzo : 64'hDEADDEADDEADDEAD;
     `CNTLO:     o <= BIG ? cntloo : 64'hDEADDEADDEADDEAD;
     `CNTPOP:    o <= BIG ? cntpopo : 64'hDEADDEADDEADDEAD;
@@ -288,7 +289,7 @@ case(alu_op)
         o <= 64'hDEADDEADDEADDEAD;
  */
 
-`ADDI,`ADDUI,`ADDUIS,`LEA:
+`ADDI,`ADDUI,`ADDUIS:
                 o <= alu_argA + alu_argI;
 `SUBI,`SUBUI:
             	o <= alu_argA - alu_argI;
@@ -437,6 +438,7 @@ case(alu_op)
 `BITFIELD:	o <= BIG ? bf_out : 64'hDEADDEADDEADDEAD;
 `endif
 `LOOP:      o <= alu_argA > 0 ? alu_argA - 64'd1 : alu_argA;
+`CHKI:      o <= ($signed(alu_argB) >= $signed(alu_argA)) && ($signed(alu_argB) < $signed(alu_argI));
 default:	o <= 64'hDEADDEADDEADDEAD;
 endcase
 end

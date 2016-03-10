@@ -4,6 +4,8 @@
 #include "clsSystem.h"
 extern clsSystem system1;
 extern char refscreen;
+extern bool screenClosed;
+extern bool dbgScreenClosed;
 
 namespace emuThor {
 
@@ -44,6 +46,7 @@ namespace emuThor {
 				delete components;
 			}
 		}
+	public: int which;
 	public: unsigned long *pVidMem;
 	public: bool *pVidDirty;
 	private: System::Windows::Forms::Timer^  timer1;
@@ -97,6 +100,7 @@ namespace emuThor {
 			this->MaximizeBox = false;
 			this->Name = L"frmScreen";
 			this->Text = L"emuFISA64 Test System Screen";
+			this->FormClosed += gcnew System::Windows::Forms::FormClosedEventHandler(this, &frmScreen::frmScreen_FormClosed);
 			this->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmScreen::frmScreen_Paint);
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->EndInit();
 			this->ResumeLayout(false);
@@ -151,6 +155,12 @@ namespace emuThor {
 			 }
 	private: System::Void pictureBox1_Click(System::Object^  sender, System::EventArgs^  e) {
 			 }
+private: System::Void frmScreen_FormClosed(System::Object^  sender, System::Windows::Forms::FormClosedEventArgs^  e) {
+			 if (which==0)
+				 screenClosed = true;
+			 else
+				 dbgScreenClosed = true;
+		 }
 private: System::Void pictureBox1_Paint(System::Object^  sender, System::Windows::Forms::PaintEventArgs^  e) {
 				 char buf[10];
 				 unsigned int ndx;

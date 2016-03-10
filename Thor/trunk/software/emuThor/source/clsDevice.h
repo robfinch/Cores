@@ -1,6 +1,11 @@
 #pragma once
 
 // Generic system device
+//
+// Base class for devices in the system. This is a more or less 
+// abstract class with suggested methods to be provided in 
+// derivatives. Default methods are provided in case the derived
+// device class is read-only or write-only.
 
 class clsDevice
 {

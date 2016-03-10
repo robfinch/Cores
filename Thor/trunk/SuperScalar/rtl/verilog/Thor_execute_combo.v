@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -114,7 +114,7 @@ end
 assign alu0_abort = !alu0_cmt;
 assign alu1_abort = !alu1_cmt;
 
-// Special flag nybble is used for INT and SYS instructions in order to turn off
+// Special flag bit is used for INT and SYS instructions in order to turn off
 // segmentation while the vector jump is taking place.
 
 always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc or alu0_bt)
@@ -152,43 +152,16 @@ always @(dram0_fn or dram0_misspc or dram_bus)
     2'd3:   jmpi_misspc <= dram_bus[DBW-1:0];
     default:    jmpi_misspc <= 32'h00000FA0;    // unimplemented instruction vector 
     endcase
-/*
-assign  alu0_misspc = (alu0_op == `JSR || alu0_op==`JSRS || alu0_op==`JSRZ || 
-                       alu0_op==`RTS || alu0_op==`RTS2 || alu0_op == `RTE || alu0_op==`RTI || alu0_op==`LOOP) ? alu0_argA + alu0_argI :
-					  (alu0_op == `SYS || alu0_op==`INT) ? alu0_argA + {alu0_argI[DBW-5:0],4'b0} :
-					  (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI),
-		alu1_misspc = (alu1_op == `JSR || alu1_op==`JSRS || alu1_op==`JSRZ || 
-		               alu1_op==`RTS || alu1_op == `RTE || alu1_op==`RTI || alu1_op==`LOOP) ? alu1_argA + alu1_argI :
-					  (alu1_op == `SYS || alu1_op==`INT) ? alu1_argA + {alu1_argI[DBW-5:0],4'b0} :
-					  (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
-*/
-assign  alu0_exc =  (fnIsKMOnly(alu0_op) && !km) ? `EXC_PRIV :
-                    (alu0_done && alu0_divByZero) ? `EXC_DBZ : `EXC_NONE;
 
-//			? `EXC_NONE
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu0_argB[`INSTRUCTION_S2]
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_MFSR)	? `EXC_NONE
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_MTSR)	? `EXC_NONE
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU1)	? `EXC_INVALID
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU2)	? `EXC_INVALID
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU3)	? `EXC_INVALID
-//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu0_argB[`INSTRUCTION_S2]
-//			: `EXC_INVALID;
+assign  alu0_exc =  (fnIsKMOnly(alu0_op) && !km && alu0_cmt) ? `EXC_PRIV :
+                    (alu0_done && alu0_divByZero && alu0_cmt) ? `EXC_DBZ :
+                    ((alu0_op==`CHKI||(alu0_op==`RR && alu0_fn==`CHK)) && !alu0_out && alu0_cmt) ? `EXC_CHK : 
+                    `EXC_NONE;
 
-assign  alu1_exc =  (fnIsKMOnly(alu1_op) && !km) ? `EXC_PRIV :
-                    (alu1_done && alu1_divByZero) ? `EXC_DBZ : `EXC_NONE;
-
-//			? `EXC_NONE
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu1_argB[`INSTRUCTION_S2]
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_MFSR)	? `EXC_NONE
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_MTSR)	? `EXC_NONE
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU1)	? `EXC_INVALID
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU2)	? `EXC_INVALID
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU3)	? `EXC_INVALID
-//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu1_argB[`INSTRUCTION_S2]
-//			: `EXC_INVALID;
+assign  alu1_exc =  (fnIsKMOnly(alu1_op) && !km && alu1_cmt) ? `EXC_PRIV :
+                    (alu1_done && alu1_divByZero && alu1_cmt) ? `EXC_DBZ :
+                    ((alu1_op==`CHKI ||(alu1_op==`RR && alu1_fn==`CHK)) && !alu1_out && alu1_cmt) ? `EXC_CHK : 
+                    `EXC_NONE;
 
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))

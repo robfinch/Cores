@@ -213,17 +213,28 @@ void clsThor::Step()
 	unsigned __int64 carry;
 	unsigned __int64 a,b,res;
 
-	for (nn = 39; nn >= 0; nn--)
-		pcs[nn] = pcs[nn-1];
-	pcs[0] = pc;
+	rts = false;
+	// Capture PC History, but only when the PC changes.
+	if (pcs[0] != pc) {
+		for (nn = 39; nn >= 0; nn--)
+			pcs[nn] = pcs[nn-1];
+		pcs[0] = pc;
+	}
 	if (IRQActive()) {
 		StatusHWI = true;
 		if (string_pc)
 			ca[14] = string_pc;
-		else
-			ca[14] = pc;
+		else {
+			// If a prefix was present, back up to the previous insn.
+			if (imm_prefix) {
+				ca[14] = pcs[1];
+			}
+			else
+				ca[14] = pc;
+		}
 		pc = ca[12] + (vecno << 4);
 		ca[15] = pc;
+		imm_prefix = false;
 	}
 	gp[0] = 0;
 	ca[0] = 0;
@@ -781,8 +792,10 @@ void clsThor::Step()
 		if (ex) {
 			Ct = b1 & 0x0F;
 			Cr = (b1 & 0xF0) >> 4;
-			if (Ct != 0)
+			if (Ct != 0) {
 				ca[Ct] = pc;
+				sub_depth++;
+			}
 			disp = (b4 << 16) | (b3 << 8) | b2;
 			if (disp & 0x800000)
 				disp |= 0xFFFFFFFFFF000000LL;
@@ -813,8 +826,10 @@ void clsThor::Step()
 			Ct = (b1 >> 6) | ((b2 << 2) & 0xf);
 			Sz = (b2 & 0xC) >> 2;
 			Sg = (b3 >> 5);
-			if (Ct != 0)
+			if (Ct != 0) {
 				ca[Ct] = pc;
+				sub_depth++;
+			}
 			disp = ((b3 & 0x1f) << 4) | (b2 >> 4);
 			if (disp & 0x100)
 				disp |= 0xFFFFFFFFFFFFFE00LL;
@@ -1432,12 +1447,12 @@ void clsThor::Step()
 	case MEMSB:
 		ca[15] = pc;
 		imm_prefix = false;
-		break;
+		return;
 
 	case MEMDB:
 		ca[15] = pc;
 		imm_prefix = false;
-		break;
+		return;
 
 	case MFSPR:
 		b1 = ReadByte(pc);
@@ -1772,19 +1787,41 @@ void clsThor::Step()
 				SetGP(Rt,GetGP(Ra) * GetGP(Rb));
 				break;
 			case DIV:
-				SetGP(Rt,GetGP(Ra) / GetGP(Rb));
+				if (GetGP(Rb)==0) {
+					if (StatusEXL < 255)
+						StatusEXL++;
+					ca[13] = pc;
+					pc = ca[12] + (241 << 4);
+					ca[15] = pc;
+				}
+				else
+					SetGP(Rt,GetGP(Ra) / GetGP(Rb));
 				break;
 			case MOD:
-				SetGP(Rt,GetGP(Ra) % GetGP(Rb));
+				if (GetGP(Rb)==0) {
+					if (StatusEXL < 255)
+						StatusEXL++;
+					ca[13] = pc;
+					pc = ca[12] + (241 << 4);
+					ca[15] = pc;
+				}
+				else
+					SetGP(Rt,GetGP(Ra) % GetGP(Rb));
 				break;
 			case MULU:
 				SetGP(Rt,(unsigned __int64)GetGP(Ra) * (unsigned __int64)GetGP(Rb));
 				break;
 			case DIVU:
-				SetGP(Rt,(unsigned __int64)GetGP(Ra) / (unsigned __int64)GetGP(Rb));
+				if (GetGP(Rb)==0)
+					SetGP(Rt,-1LL);
+				else
+					SetGP(Rt,(unsigned __int64)GetGP(Ra) / (unsigned __int64)GetGP(Rb));
 				break;
 			case MODU:
-				SetGP(Rt,(unsigned __int64)GetGP(Ra) % (unsigned __int64)GetGP(Rb));
+				if (GetGP(Rb)==0)
+					SetGP(Rt,-1LL);
+				else
+					SetGP(Rt,(unsigned __int64)GetGP(Ra) % (unsigned __int64)GetGP(Rb));
 				break;
 			case _2ADDU:
 				SetGP(Rt,(GetGP(Ra) << 1) + GetGP(Rb));
@@ -1808,6 +1845,7 @@ void clsThor::Step()
 		if (ex) {
 			StatusDBG = false;
 			pc = ca[11];
+			rts = true;
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1818,6 +1856,7 @@ void clsThor::Step()
 			if (StatusEXL > 0)
 				StatusEXL--;
 			pc = ca[13];
+			rts = true;
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1825,9 +1864,10 @@ void clsThor::Step()
 
 	case RTI:
 		if (ex) {
-			im = 0;
+			imcd = 3;
 			StatusHWI = false;
 			pc = ca[14];
+			rts = true;
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1839,6 +1879,7 @@ void clsThor::Step()
 		if (ex) {
 			Cr = (b1 & 0xF0) >> 4;
 			pc = ca[Cr] + (b1 & 0x0F);
+			rts = true;
 			if (sub_depth > 0) sub_depth--;
 		}
 		ca[15] = pc;
@@ -1848,6 +1889,7 @@ void clsThor::Step()
 	case RTSQ:
 		if (ex) {
 			pc = ca[1];
+			rts = true;
 			if (sub_depth > 0) sub_depth--;
 		}
 		ca[15] = pc;

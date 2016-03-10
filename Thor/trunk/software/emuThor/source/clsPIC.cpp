@@ -1,7 +1,6 @@
 #include "StdAfx.h"
 #include "clsPIC.h"
 
-
 clsPIC::clsPIC(void)
 {
 	Reset();
@@ -13,10 +12,12 @@ void clsPIC::Reset(void)
 
 	for (nn = 0; nn < 16; nn++) {
 		enables[nn] = false;
+		edges[nn] = false;
 	}
 	irq30Hz = false;
 	irq1024Hz = false;
 	irqKeyboard = false;
+	irqUart = false;
 }
 
 unsigned int clsPIC::Read(unsigned int ad) {
@@ -45,6 +46,10 @@ void clsPIC::Write(unsigned int ad, unsigned int dat, unsigned int mask) {
 		break;
 	case 3:
 		enables[dat & 15] = true;
+		break;
+	case 4:
+		for (nn = 0; nn < 16; nn++)
+			edges[nn] = (dat & (1 << nn)) != 0;
 		break;
 	case 5:
 		if (dat==1)

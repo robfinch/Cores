@@ -37,15 +37,18 @@ public:
 	__int8 bir;
 	__int64 dbad0,dbad1,dbad2,dbad3;
 	__int64 dbctrl,dbstat;
+	bool _32bit;
 	bool im;
 	int imcd;
 	int pred;
+	bool rts;			// Indicator for step out.
 	__int64 GetGP(int rg);
 	bool IsKM();
 	void Reset();
 	void Step();
+	clsThor() { _32bit = true; };
 private:
-	inline bool IRQActive() { return !StatusHWI && irq && !im; };
+	inline bool IRQActive() { return !StatusHWI && irq && !im && imcd==0; };
 	int GetBit(__int64 a, int b);
 	void SetBit(__int64 *a, int b);
 	void ClearBit(__int64 *a, int b);

@@ -135,6 +135,7 @@ namespace emuThor {
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedDialog;
 			this->MaximizeBox = false;
 			this->Name = L"About";
+			this->StartPosition = System::Windows::Forms::FormStartPosition::CenterParent;
 			this->Text = L"About";
 			this->ResumeLayout(false);
 			this->PerformLayout();
