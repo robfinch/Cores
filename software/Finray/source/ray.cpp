@@ -9,13 +9,10 @@ namespace Finray
 {
 void Ray::Trace(Color *c)
 {
-	double t, minT, normalDir;
-	AnObject *minObjectPtr;
+	double normalDir;
 	AnObject *objectPtr;
 	Vector point;
 	Vector normal;
-	AnObject *stack[100];
-	int sp = 0;
 
 	c->r = c->g = c->b = 0.0;
 	if (rayTracer.recurseLevel > MAXRECURSELEVEL)
@@ -24,28 +21,8 @@ void Ray::Trace(Color *c)
 	minObjectPtr = nullptr;
 	objectPtr = rayTracer.objectList;
 	while (objectPtr) {
-		while (objectPtr) {
-			if (objectPtr->Intersect(this, &t) > 0) {
-				if ((t > EPSILON) && (t < minT)) {
-					minT = t;
-					minObjectPtr = objectPtr;
-				}
-			}
-			if (objectPtr->obj) {
-				stack[sp] = objectPtr;
-				if (sp >= 98)
-					throw gcnew Finray::FinrayException(ERR_TOOMANY_OBJECTS,0);
-				sp++;
-				objectPtr = objectPtr->obj;
-			}
-			else
-				objectPtr = objectPtr->next;
-		}
-		if (sp > 0) {
-			sp--;
-			objectPtr = stack[sp];
-			objectPtr = objectPtr->next;
-		}
+		Test(objectPtr);
+		objectPtr = objectPtr->next;
 	}
 	// If nothing intersected
 	if (minT >= BIG) {
@@ -62,6 +39,28 @@ void Ray::Trace(Color *c)
 	if (normalDir > 0.0)
 		normal = Vector::Neg(normal);
 	minObjectPtr->Shade(this, normal, point, c);
+}
+
+void Ray::Test(AnObject *o)
+{
+	double t;
+	AnObject *o2;
+
+	if (o->obj) {
+		o2 = o->obj;
+		while (o2) {
+			Test(o2);
+			o2 = o2->next;
+		}
+	}
+	if (!o->AntiIntersects(this)) {
+		if (o->Intersect(this, &t) > 0) {
+			if ((t > EPSILON) && (t < minT)) {
+				minT = t;
+				minObjectPtr = o;
+			}
+		}
+	}
 }
 
 };

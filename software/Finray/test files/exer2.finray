@@ -11,10 +11,10 @@ SURFACE =
 	}
 
 view_point {
-    location < 0.0 0.0 -20.0 >
-    direction < 0.0 0.00 1.0 >
-    up < 0.0 1.0 0.0 >
-    right < 1.0 0.0 0.0 >
+    location < 0.0, 0.0, -20.0 >
+    direction < 0.0, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+    right < 1.0, 0.0, 0.0 >
 }
 
 quadric ( < 0 1 1 > < 0 0 0 > < 0 0 0 > -1 ) {

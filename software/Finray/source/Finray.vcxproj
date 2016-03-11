@@ -92,6 +92,7 @@
     <ClCompile Include="ASphere.cpp" />
     <ClCompile Include="AssemblyInfo.cpp" />
     <ClCompile Include="color.cpp" />
+    <ClCompile Include="Cone.cpp" />
     <ClCompile Include="Finray.cpp" />
     <ClCompile Include="frmError.cpp" />
     <ClCompile Include="frmRay.cpp" />
@@ -112,6 +113,7 @@
     <ClCompile Include="Triangle.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Color.h" />
     <ClInclude Include="Finray.h" />
     <ClInclude Include="Form1.h">
       <FileType>CppForm</FileType>

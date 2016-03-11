@@ -27,10 +27,12 @@ Finray::Color ALight::GetColor(AnObject *objPtr, Ray *ray, double distance)
 	while (shadowObjPtr) {
 		while (shadowObjPtr) {
 			if (shadowObjPtr != objPtr) {
-				if (shadowObjPtr->Intersect(ray, &distanceT) > 0) {
-					if ((distanceT >  EPSILON) && distanceT < distance) {
-						_color.r = _color.g = _color.b = 0.0;
-						return (_color);
+				if (!shadowObjPtr->AntiIntersects(ray)) {
+					if (shadowObjPtr->Intersect(ray, &distanceT) > 0) {
+						if ((distanceT >  EPSILON) && distanceT < distance) {
+							_color.r = _color.g = _color.b = 0.0;
+							return (_color);
+						}
 					}
 				}
 			}

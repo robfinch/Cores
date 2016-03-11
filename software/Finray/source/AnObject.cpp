@@ -8,6 +8,7 @@ AnObject::AnObject()
 {
 	type = OBJ_OBJECT;
 	obj = nullptr;
+	negobj = nullptr;
 	next = nullptr;
 }
 
@@ -17,10 +18,10 @@ int AnObject::Print(AnObject *obj) {
 
 Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pColor)
 {
-	float _ambient, _diffuse, _specular;
+	float _specular, _diffuse;
 	double k, distanceT;
 	Ray lightRay;
-	Ray reflectedRay;
+	Ray reflectedRay, refractedRay;
 	ALight *lightSrcPtr;
 	Finray::Color lightColor, newColor;
 
@@ -32,10 +33,9 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	reflectedRay.dir.y = k * normal.y + ray->dir.y;
 	reflectedRay.dir.z = k * normal.z + ray->dir.z;
 
-	_ambient = properties.ambient;
-	pColor->r = properties.color.r * _ambient;
-	pColor->g = properties.color.g * _ambient;
-	pColor->b = properties.color.b * _ambient;
+	pColor->r = properties.color.r * properties.ambient.r;
+	pColor->g = properties.color.g * properties.ambient.g;
+	pColor->b = properties.color.b * properties.ambient.b;
 	lightSrcPtr = rayTracer.lightList;
 	while (lightSrcPtr) {
 		distanceT = lightSrcPtr->MakeRay(point, &lightRay);
@@ -60,15 +60,15 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	if (k > 0.0) {
 		rayTracer.recurseLevel++;
 		reflectedRay.Trace(&newColor);
-		pColor->r += newColor.r * k;
-		pColor->g += newColor.g * k;
-		pColor->b += newColor.b * k;
+		pColor->r += newColor.r * (float)k;
+		pColor->g += newColor.g * (float)k;
+		pColor->b += newColor.b * (float)k;
 		rayTracer.recurseLevel--;
 	}
 	return *pColor;
 }
 
-void AnObject::SetAttrib(float rd, float gr, float bl, float a, float d, float b, float s, float ro, float r)
+void AnObject::SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r)
 {
 	properties.SetAttrib(rd, gr, bl, a, d, b, s, ro, r);
 }
@@ -95,6 +95,56 @@ void AnObject::Translate(double ax, double ay, double az)
 	while (o) {
 		o->Translate(ax,ay,az);
 		o = o->next;
+	}
+}
+
+/*
+bool AnObject::Intersects(Ray *ray, double *d) {
+	AnObject *o;
+	double d1;
+	int nn, jj;
+
+	*d = BIG;
+	o = posobj;
+	while(o) {
+		if ((jj = o->Intersect(ray, &d1)) <= 0)
+			return false;
+		if (d1 < *d)
+			*d = d1;
+		nn = max(nn,jj);
+		o = o->next;
+	}
+	return true;
+}
+*/
+bool AnObject::AntiIntersects(Ray *ray) {
+	AnObject *o;
+	double d;
+
+	o = negobj;
+	while(o) {
+		if (o->negobj) {
+			if (o->negobj->AntiIntersects(ray)) {
+				return true;
+			}
+		}
+		if (o->Intersect(ray, &d) > 0)
+			return true;
+		o = o->next;
+	}
+	return false;
+}
+
+int AnObject::Intersect(Ray *r, double *d)
+{
+	switch(type) {
+	case OBJ_SPHERE:	return ((ASphere *)this)->Intersect(r,d);
+	case OBJ_PLANE:		return ((APlane *)this)->Intersect(r,d);
+	case OBJ_TRIANGLE:	return ((ATriangle *)this)->Intersect(r,d);
+	case OBJ_QUADRIC:	return ((AQuadric *)this)->Intersect(r,d);
+	case OBJ_CONE:		return ((ACone *)this)->Intersect(r,d);
+	case OBJ_CYLINDER:	return ((ACylinder *)this)->Intersect(r,d);
+	default:	return 0;
 	}
 }
 

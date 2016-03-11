@@ -4,12 +4,14 @@ namespace Finray {
 
 ATriangle::ATriangle(Vector pt1, Vector pt2, Vector pt3)
 {
+	type = OBJ_TRIANGLE;
 	p1 = pt1;
 	p2 = pt2;
 	p3 = pt3;
 	Init();
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 }
 
 void ATriangle::Init()
@@ -64,7 +66,6 @@ int ATriangle::Intersect(Ray *ray, double *T)
 	double r,a,b;
 	double wu, wv;
 	double s, t;
-	Vector dir;
 
 //	if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON && abs(normal.z) < EPSILON)
 	if (normal.x == 0.0 && normal.y == 0.0 && normal.z == 0.0)

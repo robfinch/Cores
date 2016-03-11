@@ -12,6 +12,7 @@ ASphere::ASphere()
 	radius2 = 0;
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 }
 
 ASphere::ASphere(double X, double Y, double Z, double R)
@@ -24,6 +25,7 @@ ASphere::ASphere(double X, double Y, double Z, double R)
 	radius2 = SQUARE(R);
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 }
 
 int ASphere::Intersect(Ray *ray, double *T)

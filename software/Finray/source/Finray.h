@@ -13,20 +13,17 @@ typedef unsigned __int8 BYTE;
 #define MAX(a,b)	(((a) > (b)) ? (a) : (b))
 #define SQUARE(x)	((x) * (x))
 
-class Color
-{
-public:
-	float r;
-	float g;
-	float b;
-};
+class AnObject;
 
 class Ray
 {
+	double minT;
+	AnObject *minObjectPtr;
 public:
 	Vector origin;
 	Vector dir;
 	void Trace(Color *clr);
+	void Test(AnObject *);
 };
 
 class Viewpoint
@@ -56,15 +53,17 @@ class Surface
 {
 public:
 	Color color;
-	float ambient;
+	Color acolor;	// color with ambience pre-calculated
+	Color ambient;
 	float diffuse;
 	float brilliance;
-	float specular;
+	float specular;	// phong
 	float roughness;
 	float reflection;
+	bool transparent;
 	Surface();
 	Surface(Surface *);
-	void SetAttrib(float rd, float gr, float bl, float a, float d, float b, float s, float ro, float r);
+	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
 };
 
 enum {
@@ -72,6 +71,9 @@ enum {
 	OBJ_SPHERE,
 	OBJ_PLANE,
 	OBJ_TRIANGLE,
+	OBJ_RECTANGLE,
+	OBJ_CONE,
+	OBJ_CYLINDER,
 	OBJ_QUADRIC,
 	OBJ_LIGHT
 };
@@ -81,12 +83,15 @@ public:
 	unsigned int type;
 	AnObject *next;
 	AnObject *obj;
+	AnObject *posobj;
+	AnObject *negobj;
 	Surface properties;
 	AnObject();
 	int Print(AnObject *);
-	void SetAttrib(float rd, float gr, float bl, float a, float d, float b, float s, float ro, float r);
+	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
 	Color Shade(Ray *ray, Vector normal, Vector point, Color *color);
-	virtual int Intersect(Ray *, double *) { return 0.0; } ;
+	int Intersect(Ray *, double *);
+	bool AntiIntersects(Ray *);
 	virtual Vector Normal(Vector) { return Vector(); };
 	virtual void Translate(double x, double y, double z);
 	virtual void RotXYZ(double, double, double);
@@ -193,6 +198,43 @@ public:
 	void RotZ(double);
 };
 
+
+class ACone : public AnObject
+{
+public:
+	enum {
+		BODY,
+		BASE,
+		APEX
+	};
+	Vector base, apex;
+	Vector baseNormal, apexNormal, bodyNormal;
+	double baseRadius, apexRadius;
+	double length;
+	static const double tolerance;
+	Transform trans;
+	unsigned int intersectedPart : 2;
+	unsigned int openBase : 1;
+	unsigned int openApex : 1;
+	ACone(Vector b, Vector a, double rb, double ra);
+	void TransformX(Transform *t);
+	void CalcCylinderTransform();
+	void CalcTransform();
+	Vector Normal(Vector);
+	int Intersect(Ray *, double *);
+	void Translate(double x, double y, double z);
+	void Print() {};
+	void RotXYZ(double,double,double);
+};
+
+class ACylinder : public ACone
+{
+public:
+	ACylinder(Vector b, Vector a, double r);
+	void CalcTransform();
+	int Intersect(Ray *, double *);
+};
+
 class ARectangle : public AnObject
 {
 public:
@@ -235,10 +277,13 @@ public:
 enum {
 	TK_EOF = 0,
 	TK_AMBIENT = 256,
+	TK_ANTI,
 	TK_BACKGROUND,
 	TK_BRILLIANCE,
 	TK_CAMERA,
 	TK_COLOR,
+	TK_CONE,
+	TK_CYLINDER,
 	TK_DIFFUSE,
 	TK_DIRECTION,
 	TK_FOR,
@@ -251,6 +296,7 @@ enum {
 	TK_LOOK_AT,
 	TK_NUM,
 	TK_OBJECT,
+	TK_OPEN,
 	TK_PHONG,
 	TK_PHONGSIZE,
 	TK_PLANE,
@@ -286,7 +332,11 @@ enum {
 	ERR_NOVIEWPOINT,
 	ERR_TOOMANY_OBJECTS,
 	ERR_NONPLANER,
-	ERR_ASSIGNMENT
+	ERR_ASSIGNMENT,
+	ERR_ILLEGALOP,
+	ERR_BADTYPE,
+	ERR_SINGULAR_MATRIX,
+	ERR_DEGENERATE,
 };
 
 enum {
@@ -301,22 +351,25 @@ enum {
 	TYP_TRIANGLE,
 	TYP_RECTANGLE,
 	TYP_QUADRIC,
+	TYP_CONE,
+	TYP_CYLINDER,
 	TYP_OBJECT,
 	TYP_TEXTURE,
 	TYP_VIEWPOINT,
 	TYP_LIGHT
 };
 
-class Symbol
+class Value
 {
 public:
-	std::string varname;
 	int type;
-	union symval {
-		int i;
-		double d;
-		Color c;
-		Vector *v;
+	int i;
+	double d;
+	Color c;
+	Vector v;
+	union {
+		ACone *cn;
+		ACylinder *cy;
 		ASphere *sp;
 		APlane *pl;
 		Viewpoint *vp;
@@ -324,7 +377,14 @@ public:
 		AQuadric *qd;
 		AnObject *obj;
 		ALight *lt;
-	} value;
+	} val;
+};
+
+class Symbol
+{
+public:
+	std::string varname;
+	Value value;
 };
 
 class SymbolTable
@@ -343,6 +403,8 @@ class Parser
 	int token;
 	double rval;
 	double last_num;
+	Color last_color;
+	Vector last_vector;
 	int level;				// Parse level
 	int lastch;
 	char fbuf[2000000];
@@ -361,19 +423,23 @@ class Parser
 	int isidch(char c);
 	int isspace(char c);
 	int isdigit(char c);
-	double Unary();
-	double Multdiv();
-	double Addsub();
-	double eval();
+	Value Unary();
+	Value Multdiv();
+	Value Addsub();
+	Value eval();
 	void getid();
+	bool Test(int);
+	Color ParseAmbient();
+	ACone *ParseCone();
+	ACylinder *ParseCylinder();
 public:
 	char *p;
 	Parser();
 	void Need(int);
 	void Was(int);
 	int NextToken();
-	Vector *ParseVector();
-	int ParseBuffer(char *buf, void *q);
+//	Vector *ParseVector();
+	Value ParseBuffer(char *buf);
 	Color ParseColor();
 	Surface *ParseTexture(Surface *texture);
 	void ParseObjectBody(AnObject *obj);

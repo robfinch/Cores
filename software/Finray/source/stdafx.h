@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iomanip>
 #include "rand.h"
+#include "Color.h"
 #include "Vector.h"
 #include "Matrix.h"
 #include "Finray.h"

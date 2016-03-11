@@ -6,9 +6,10 @@ AQuadric::AQuadric()
 {
 	A = B = C = D = E = 0.0;
 	F = G = H = I = J = 0.0;
-	type = TYP_QUADRIC;
+	type = OBJ_QUADRIC;
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 }
 
 AQuadric::AQuadric(double a, double b, double c, double d, double e,
@@ -16,9 +17,10 @@ AQuadric::AQuadric(double a, double b, double c, double d, double e,
 {
 	A = a; B = b; C = c; D = d; E = e;
 	F = f; G = g; H = h; I = i; J = j;
-	type = TYP_QUADRIC;
+	type = OBJ_QUADRIC;
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 }
 
 int AQuadric::Intersect(Ray *ray, double *T)

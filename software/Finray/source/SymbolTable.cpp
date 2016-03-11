@@ -28,7 +28,6 @@ void SymbolTable::Add(Symbol *sym)
 		s->value = sym->value;
 	}
 	else if (count < 1000) {
-		symbols[count].type = sym->type;
 		symbols[count].varname = sym->varname;
 		symbols[count].value = sym->value;
 		count++;

@@ -30,6 +30,15 @@ void Parser::Was(int tk) {
 	}
 }
 
+bool Parser::Test(int tk) {
+	char *op;
+
+	op = p;
+	NextToken();
+	p = op;
+	return (token == tk);
+}
+
 int Parser::isalnum(char c)
 {       return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                 (c >= '0' && c <= '9');
@@ -296,147 +305,170 @@ int	Parser::NextToken() {
 			p++;
 			return token = '/';
 		}
-		if (p[0]=='a' && p[1]=='m' && p[2]=='b' && p[3]=='i' && p[4]=='e' && p[5]=='n' && p[6]=='t' && isspace(p[7])) {
-			p += 7;
-			return token = TK_AMBIENT;
+
+		// ambient anti
+		if (p[0]=='a') {
+			if (p[1]=='m' && p[2]=='b' && p[3]=='i' && p[4]=='e' && p[5]=='n' && p[6]=='t' && !isidch(p[7])) {
+				p += 7;
+				return token = TK_AMBIENT;
+			}
+			if (p[1]=='n' && p[2]=='t' && p[3]=='i' && !isidch(p[4])) {
+				p += 4;
+				return token = TK_ANTI;
+			}
 		}
 		if (p[0]=='b' && p[1]=='r' && p[2]=='i' && p[3]=='l' && p[4]=='l'
-			&& p[5]=='i' && p[6]=='a' && p[7]=='n' && p[8]=='c' && p[9]=='e' && isspace(p[10])) {
+			&& p[5]=='i' && p[6]=='a' && p[7]=='n' && p[8]=='c' && p[9]=='e' && !isidch(p[10])) {
 			p += 10;
 			return token = TK_BRILLIANCE;
 		}
 		if (p[0]=='b' && p[1]=='a' && p[2]=='c' && p[3]=='k' && p[4]=='g'
-			&& p[5]=='r' && p[6]=='o' && p[7]=='u' && p[8]=='n' && p[9]=='d' && isspace(p[10])) {
+			&& p[5]=='r' && p[6]=='o' && p[7]=='u' && p[8]=='n' && p[9]=='d' && !isidch(p[10])) {
 			p += 10;
 			return token = TK_BACKGROUND;
 		}
-		// camera color colour
+		// camera color colour cone cylinder
 		if (p[0]=='c') {
-			if (p[1]=='a' && p[2]=='m' && p[3]=='e' && p[4]=='r' && p[5]=='a' && isspace(p[6])) {
+			if (p[1]=='a' && p[2]=='m' && p[3]=='e' && p[4]=='r' && p[5]=='a' && !isidch(p[6])) {
 				p += 6;
 				return token = TK_CAMERA;
 			}
-			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='r' && isspace(p[5])) {
+			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='r' && !isidch(p[5])) {
 				p += 5;
 				return token = TK_COLOR;
 			}
-			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='u' && p[5]=='r' && isspace(p[6])) {
+			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='u' && p[5]=='r' && !isidch(p[6])) {
 				p += 6;
 				return token = TK_COLOR;
 			}
+			if (p[1]=='o' && p[2]=='n' && p[3]=='e' && !isidch(p[4])) {
+				p += 4;
+				return token = TK_CONE;
+			}
+			if (p[1]=='y' && p[2]=='l' && p[3]=='i' && p[4]=='n' && p[5]=='d' && p[6]=='e' && p[7]=='r' && !isidch(p[8])) {
+				p += 8;
+				return token = TK_CYLINDER;
+			}
 		}
-		if (p[0]=='d' && p[1]=='i' && p[2]=='f' && p[3]=='f' && p[4]=='u' && p[5]=='s' && p[6]=='e' && isspace(p[7])) {
+		if (p[0]=='d' && p[1]=='i' && p[2]=='f' && p[3]=='f' && p[4]=='u' && p[5]=='s' && p[6]=='e' && !isidch(p[7])) {
 			p += 7;
 			return token = TK_DIFFUSE;
 		}
-		if (p[0]=='f' && p[1]=='o' && p[2]=='r' && isspace(p[3])) {
+		if (p[0]=='f' && p[1]=='o' && p[2]=='r' && !isidch(p[3])) {
 			p += 3;
 			return token = TK_FOR;
 		}
-		if (p[0]=='d' && p[1]=='i' && p[2]=='r' && p[3]=='e' && p[4]=='c' && p[5]=='t' && p[6]=='i' && p[7]=='o' && p[8]=='n' && isspace(p[9])) {
+		if (p[0]=='d' && p[1]=='i' && p[2]=='r' && p[3]=='e' && p[4]=='c' && p[5]=='t' && p[6]=='i' && p[7]=='o' && p[8]=='n' && !isidch(p[9])) {
 			p += 9;
 			return token = TK_DIRECTION;
 		}
-		if (p[0]=='i' && p[1]=='n' && p[2]=='c' && p[3]=='l' && p[4]=='u' && p[5]=='d' && p[6]=='e' && isspace(p[7])) {
+		if (p[0]=='i' && p[1]=='n' && p[2]=='c' && p[3]=='l' && p[4]=='u' && p[5]=='d' && p[6]=='e' && !isidch(p[7])) {
 			p += 7;
 			return token = TK_INCLUDE;
 		}
 		// light location look_at
 		if (p[0]=='l') {
-			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' && isspace(p[5])) {
+			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' && !isidch(p[5])) {
 				p += 5;
 				return token = TK_LIGHT;
 			}
-			if (p[1]=='o' && p[2]=='c' && p[3]=='a' && p[4]=='t' && p[5]=='i' && p[6]=='o' && p[7]=='n' && isspace(p[8])) {
+			if (p[1]=='o' && p[2]=='c' && p[3]=='a' && p[4]=='t' && p[5]=='i' && p[6]=='o' && p[7]=='n' && !isidch(p[8])) {
 				p += 8;
 				return token = TK_LOCATION;
 			}
-			if (p[1]=='o' && p[2]=='o' && p[3]=='k' && p[4]=='_' && p[5]=='a' && p[6]=='t' && isspace(p[7])) {
+			if (p[1]=='o' && p[2]=='o' && p[3]=='k' && p[4]=='_' && p[5]=='a' && p[6]=='t' && !isidch(p[7])) {
 				p += 7;
 				return token = TK_LOOK_AT;
 			}
 		}
-		if (p[0]=='o' && p[1]=='b' && p[2]=='j' && p[3]=='e' && p[4]=='c' && p[5]=='t' && isspace(p[6])) {
-			p += 6;
-			return token = TK_OBJECT;
+		// object open
+		if (p[0]=='o') {
+			if (p[1]=='b' && p[2]=='j' && p[3]=='e' && p[4]=='c' && p[5]=='t' && !isidch(p[6])) {
+				p += 6;
+				return token = TK_OBJECT;
+			}
+			if (p[1]=='p' && p[2]=='e' && p[3]=='n' && !isidch(p[4])) {
+				p += 4;
+				return token = TK_OPEN;
+			}
 		}
-		if (p[0]=='p' && p[1]=='l' && p[2]=='a' && p[3]=='n' && p[4]=='e' && isspace(p[5])) {
+		if (p[0]=='p' && p[1]=='l' && p[2]=='a' && p[3]=='n' && p[4]=='e' && !isidch(p[5])) {
 			p += 5;
 			return token = TK_PLANE;
 		}
-		if (p[0]=='q' && p[1]=='u' && p[2]=='a' && p[3]=='d' && p[4]=='r' && p[5]=='i' && p[6]=='c' && isspace(p[7])) {
+		if (p[0]=='q' && p[1]=='u' && p[2]=='a' && p[3]=='d' && p[4]=='r' && p[5]=='i' && p[6]=='c' && !isidch(p[7])) {
 			p += 7;
 			return token = TK_QUADRIC;
 		}
 		// rectangle reflection right rotate roughness
 		if (p[0]=='r') {
-			if (p[1]=='e' && p[2]=='c' && p[3]=='t' && p[4]=='a' && p[5]=='n' && p[6]=='g' && p[7]=='l' && p[8]=='e' && isspace(p[9])) {
+			if (p[1]=='e' && p[2]=='c' && p[3]=='t' && p[4]=='a' && p[5]=='n' && p[6]=='g' && p[7]=='l' && p[8]=='e' && !isidch(p[9])) {
 				p += 9;
 				return token = TK_RECTANGLE;
 			}
-			if (p[1]=='a' && p[2]=='n' && p[3]=='d' && isspace(p[4])) {
+			if (p[1]=='a' && p[2]=='n' && p[3]=='d' && !isidch(p[4])) {
 				p += 4;
 				return TK_RAND;
 			}
-			if (p[1]=='a' && p[2]=='n' && p[3]=='d' && p[4]=='v' && isspace(p[5])) {
+			if (p[1]=='a' && p[2]=='n' && p[3]=='d' && p[4]=='v' && !isidch(p[5])) {
 				p += 5;
 				return TK_RANDV;
 			}
 			if (p[1]=='e' && p[2]=='f' && p[3]=='l' && p[4]=='e'
-				&& p[5]=='c' && p[6]=='t' && p[7]=='i' && p[8]=='o' && p[9]=='n' && isspace(p[10])) {
+				&& p[5]=='c' && p[6]=='t' && p[7]=='i' && p[8]=='o' && p[9]=='n' && !isidch(p[10])) {
 				p += 10;
 				return token = TK_REFLECTION;
 			}
-			if (p[1]=='e' && p[2]=='p' && p[3]=='e' && p[4]=='a' && p[5]=='t' && isspace(p[6])) {
+			if (p[1]=='e' && p[2]=='p' && p[3]=='e' && p[4]=='a' && p[5]=='t' && !isidch(p[6])) {
 				p += 6;
 				return token = TK_REPEAT;
 			}
-			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' && isspace(p[5])) {
+			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' && !isidch(p[5])) {
 				p += 5;
 				return token = TK_RIGHT;
 			}
-			if (p[1]=='o' && p[2]=='t' && p[3]=='a' && p[4]=='t' && p[5]=='e' && isspace(p[6])) {
+			if (p[1]=='o' && p[2]=='t' && p[3]=='a' && p[4]=='t' && p[5]=='e' && !isidch(p[6])) {
 				p += 6;
 				return token = TK_ROTATE;
 			}
-			if (p[1]=='o' && p[2]=='u' && p[3]=='g' && p[4]=='h' && p[5]=='n' && p[6]=='e' && p[7]=='s' && p[8]=='s' && isspace(p[9])) {
+			if (p[1]=='o' && p[2]=='u' && p[3]=='g' && p[4]=='h' && p[5]=='n' && p[6]=='e' && p[7]=='s' && p[8]=='s' && !isidch(p[9])) {
 				p += 9;
 				return token = TK_ROUGHNESS;
 			}
 		}
-		if (p[0]=='s' && p[1]=='p' && p[2]=='e' && p[3]=='c' && p[4]=='u' && p[5]=='l' && p[6]=='a' && p[7]=='r' && isspace(p[8])) {
+		if (p[0]=='s' && p[1]=='p' && p[2]=='e' && p[3]=='c' && p[4]=='u' && p[5]=='l' && p[6]=='a' && p[7]=='r' && !isidch(p[8])) {
 			p += 8;
 			return token = TK_SPECULAR;
 		}
-		if (p[0]=='s' && p[1]=='p' && p[2]=='h' && p[3]=='e' && p[4]=='r' && p[5]=='e' && isspace(p[6])) {
+		if (p[0]=='s' && p[1]=='p' && p[2]=='h' && p[3]=='e' && p[4]=='r' && p[5]=='e' && !isidch(p[6])) {
 			p += 6;
 			return token = TK_SPHERE;
 		}
 		// texture to translate triangle
 		if (p[0]=='t') {
-			if (p[1]=='e' && p[2]=='x' && p[3]=='t' && p[4]=='u' && p[5]=='r' && p[6]=='e' && isspace(p[7])) {
+			if (p[1]=='e' && p[2]=='x' && p[3]=='t' && p[4]=='u' && p[5]=='r' && p[6]=='e' && !isidch(p[7])) {
 				p += 7;
 				return token = TK_TEXTURE;
 			}
-			if (p[1]=='o' && isspace(p[2])) {
+			if (p[1]=='o' && !isidch(p[2])) {
 				p += 2;
 				return token = TK_TO;
 			}
-			if (p[1]=='r' && p[2]=='a' && p[3]=='n' && p[4]=='s' && p[5]=='l' && p[6]=='a' && p[7]=='t' && p[8]=='e' && isspace(p[9])) {
+			if (p[1]=='r' && p[2]=='a' && p[3]=='n' && p[4]=='s' && p[5]=='l' && p[6]=='a' && p[7]=='t' && p[8]=='e' && !isidch(p[9])) {
 				p += 9;
 				return token = TK_TRANSLATE;
 			}
-			if (p[1]=='r' && p[2]=='i' && p[3]=='a' && p[4]=='n' && p[5]=='g' && p[6]=='l' && p[7]=='e' && isspace(p[8])) {
+			if (p[1]=='r' && p[2]=='i' && p[3]=='a' && p[4]=='n' && p[5]=='g' && p[6]=='l' && p[7]=='e' && !isidch(p[8])) {
 				p += 8;
 				return token = TK_TRIANGLE;
 			}
 		}
 		if (p[0]=='v' && p[1]=='i' && p[2]=='e' && p[3]=='w' && p[4]=='_'
-			&& p[5]=='p' && p[6]=='o' && p[7]=='i' && p[8]=='n' && p[9]=='t' && isspace(p[10])) {
+			&& p[5]=='p' && p[6]=='o' && p[7]=='i' && p[8]=='n' && p[9]=='t' && !isidch(p[10])) {
 			p += 10;
 			return token = TK_VIEW_POINT;
 		}
-		if (p[0]=='u' && p[1]=='p' && isspace(p[2])) {
+		if (p[0]=='u' && p[1]=='p' && !isidch(p[2])) {
 			p += 2;
 			return token = TK_UP;
 		}
@@ -447,111 +479,311 @@ int	Parser::NextToken() {
 	}
 }
 
-double Parser::Unary()
+Value Parser::Unary()
 {
 	bool minus = false;
 	double val = 0;
 	double minval,maxval;
+	Vector minvalv,maxvalv;
 	Symbol *sym;
 	char *op;
+	Value v, v2;
+	Surface *tx;
 
 	while (true) {
 		op = p;
 		switch(NextToken()) {
+
 		case TK_ID:
 			sym = rayTracer.symbolTable.Find(std::string(lastid));
 			if (!sym)
 				throw gcnew Finray::FinrayException(ERR_UNDEFINED,0);
-			if (sym->type == TYP_NUM)
-				return sym->value.d;
-			if (sym->type == TYP_INT)
-				return (double)sym->value.i;
-			return 0.0;
-/*
+			return sym->value;
+
+		case TK_RANDV:
+			Need('(');
+			v2 = eval();
+			minvalv = v2.v;
+			Need(',');
+			v2 = eval();
+			maxvalv = v2.v;
+			Need(')');
+			v2.v.x = (maxvalv.x-minvalv.x) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.x;
+			v2.v.y = (maxvalv.y-minvalv.y) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.y;
+			v2.v.z = (maxvalv.x-minvalv.z) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.z;
+			v2.type = TYP_VECTOR;
+			return v2;
+
+			// Fall through
 		case '<':
-			vector.x = eval();
-			vector.y = eval();
-			vector.z = eval();
-			Was('>');
-			return 0.0;
-*/
+			v2 = eval();
+			v.v.x = v2.d;
+			Need(',');
+			v2 = eval();
+			v.v.y = v2.d;
+			Need(',');
+			v2 = eval();
+			v.v.z = v2.d;
+			Need('>');
+			v.type = TYP_VECTOR;
+			return v;
 
 		case '(':
-			val = eval();
+			v2 = eval();
 			Need(')');
-			if (minus)
-				return -val;
-			else
-				return val;
+			switch (v2.type) {
+			case TYP_NUM:
+				if (minus)
+					v2.d = -v2.d;
+				break;
+			case TYP_INT:
+				if (minus)
+					v2.i = -v2.i;
+				break;
+			case TYP_COLOR:
+				if (minus)
+					v2.c = Color::Neg(v2.c);
+				break;
+			case TYP_VECTOR:
+				if (minus)
+					v2.v = Vector::Neg(v2.v);
+				break;
+			}
+			return v2;
 
 		case '-':
 			minus = !minus;
 			break;
-		case TK_NUM:
-			val = last_num;
-			if (minus)
-				return -val;
-			else
-				return val;
+
 		case TK_RAND:
 			Need('(');
-			minval = eval();
+			v2 = eval();
+			minval = v2.d;
 			Need(',');
-			maxval = eval();
+			v2 = eval();
+			maxval = v2.d;
 			Need(')');
-			val = (maxval-minval) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minval;
+			last_num = (maxval-minval) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minval;
+			// Fall through
+		case TK_NUM:
+			v2.d = last_num;
 			if (minus)
-				return -val;
+				v2.d = -v2.d;
 			else
-				return val;
+				v2.d = v2.d;
+			v2.type = TYP_NUM;
+			return v2;
+/*
+		case TK_INT:
+			if (minus)
+				v2.i = -(int)last_num;
+			else
+				v2.i = (int)last_num;
+			v2.type = TYP_INT;
+			return v2;
+*/
+		case TK_COLOR:
+			v = eval();
+			if (v.type==TYP_VECTOR) {
+				v2.c.r = (float)v.v.x;
+				v2.c.g = (float)v.v.y;
+				v2.c.b = (float)v.v.z;
+			}
+			else if (v.type==TYP_COLOR) {
+				v2.c = v.c;
+			}
+			else if (v.type==TYP_NUM) {
+				v2.c.r = (float)v.d;
+				v2.c.g = (float)v.d;
+				v2.c.b = (float)v.d;
+			}
+			else if (v.type==TYP_INT) {
+				v2.c.r = (float)v.i;
+				v2.c.g = (float)v.i;
+				v2.c.b = (float)v.i;
+			}
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
+			if (minus)
+				v2.c = Color::Neg(v2.c);
+			v2.type = TYP_COLOR;
+			return v2;
+/*
+		case TK_VECTOR:
+			v = eval();
+			if (v.type==TYP_COLOR) {
+				v2.v.x = v.c.r;
+				v2.v.y = v.c.g;
+				v2.v.z = v.c.b;
+			}
+			else if (v.type==TYP_VECTOR) {
+				v2.v = v.v;
+			}
+			else if (v.type==TYP_NUM) {
+				v2.v.x = v.d;
+				v2.v.y = v.d;
+				v2.v.z = v.d;
+			}
+			else if (x.type==TYP_INT) {
+				v2.v.x = (double)v.i;
+				v2.v.y = (double)v.i;
+				v2.v.z = (double)v.i;
+			}
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
+			if (minus)
+				v2.v = Vector::Neg(v2.v);
+			v2.type = TYP_VECTOR;
+			return v2;
+*/
+		case TK_TEXTURE:
+			tx = ParseTexture(nullptr);
+			v.type = TYP_TEXTURE;
+			v.val.tx = tx;
+			return v;
+
 		default:
 			p = op;
-			return val;
+			throw gcnew Finray::FinrayException(ERR_SYNTAX,0);
 		}
 	}
 }
 
-double Parser::Multdiv()
+Value Parser::Multdiv()
 {
-	double val = Unary();
+	Value val = Unary();
+	Value v2;
 	char *op;
 
 	while (true) {
 		op = p;
 		switch (NextToken()) {
 		case '*':
-			val *= Unary(); break;
+			switch(val.type) {
+			case TYP_INT:
+				v2 = Unary();
+				if (v2.type==TYP_INT)
+					val.i *= v2.i;
+				else if (v2.type==TYP_NUM)
+					val.i *= (int)v2.d;
+				else
+					throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				break;
+			case TYP_NUM:
+				v2 = Unary();
+				if (v2.type==TYP_INT)
+					val.d *= (double)v2.i;
+				else if (v2.type==TYP_NUM)
+					val.d *= (int)v2.d;
+				else
+					throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				break;
+			}
+			break;
 		case '/':
-			val /= Unary(); break;
+			switch(val.type) {
+			case TYP_INT:
+				v2 = Unary();
+				if (v2.type==TYP_INT)
+					val.i /= v2.i;
+				else if (v2.type==TYP_NUM)
+					val.i /= (int)v2.d;
+				else
+					throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				break;
+			case TYP_NUM:
+				v2 = Unary();
+				if (v2.type==TYP_INT)
+					val.d /= (double)v2.i;
+				else if (v2.type==TYP_NUM)
+					val.d /= (int)v2.d;
+				else
+					throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				break;
+			}
+			break;
 		default:
 			p = op; return val;
 		}
 	}
 }
 
-double Parser::Addsub()
+Value Parser::Addsub()
 {
-	double val = Multdiv();
+	Value val = Multdiv();
+	Value v2;
 	char *op;
 
 	while (true) {
 		op = p;
 		switch (NextToken()) {
 		case '+':
-			val += Unary(); break;
+			v2 = Multdiv();
+			switch(val.type) {
+			case TYP_INT:
+				switch(v2.type) {
+				case TYP_INT:	val.i += v2.i; break;
+				case TYP_NUM:	val.i += (int)v2.d; break;
+				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				}
+			case TYP_NUM:
+				switch(v2.type) {
+				case TYP_INT:	val.d += (double)v2.i; break;
+				case TYP_NUM:	val.d += v2.d; break;
+				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				}
+			case TYP_COLOR:
+				switch(v2.type) {
+				case TYP_COLOR:	val.c = Color::Add(val.c, v2.c); break;
+				case TYP_VECTOR:
+								val.c.r += (float)v2.v.x;
+								val.c.g += (float)v2.v.y;
+								val.c.b += (float)v2.v.z;
+								break;
+				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				}
+			}
+			break;
 		case '-':
-			val -= Unary(); break;
+			v2 = Multdiv();
+			switch(val.type) {
+			case TYP_INT:
+				switch(v2.type) {
+				case TYP_INT:	val.i -= v2.i; break;
+				case TYP_NUM:	val.i -= (int)v2.d; break;
+				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				}
+				break;
+			case TYP_NUM:
+				switch(v2.type) {
+				case TYP_INT:	val.d -= (double)v2.i; break;
+				case TYP_NUM:	val.d -= v2.d; break;
+				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				}
+				break;
+			case TYP_COLOR:
+				switch(v2.type) {
+				case TYP_COLOR:	val.c = Color::Sub(val.c, v2.c); break;
+				case TYP_VECTOR:
+								val.c.r -= (float)v2.v.x;
+								val.c.g -= (float)v2.v.y;
+								val.c.b -= (float)v2.v.z;
+								break;
+				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
+				}
+			}
+			break;
 		default:	p = op; return val;
 		}
 	}
 }
 
-double Parser::eval()
+Value Parser::eval()
 {
 	return Addsub();
 }
 
-int Parser::ParseBuffer(char *buf, void *q)
+Value Parser::ParseBuffer(char *buf)
 {
 	AnObject *obj, *fobj;
 	Viewpoint *vp;
@@ -559,9 +791,9 @@ int Parser::ParseBuffer(char *buf, void *q)
 	Surface *tx;
 	Color c;
 	Symbol sym, *s;
-	double d;
 	int nn;
 	char *old_p;
+	Value v;
 
 	p = buf;
 	while (*p) {
@@ -572,83 +804,102 @@ int Parser::ParseBuffer(char *buf, void *q)
 		case TK_VIEW_POINT:
 			vp = ParseViewPoint();
 			rayTracer.viewPoint = vp;
+			v.type = TYP_VIEWPOINT;
+			v.val.vp = vp;
 			if (level > 0) {
-				*(Viewpoint **)q = vp;
-				return TYP_VIEWPOINT;
+				return v;
 			}
 			break;
 		case TK_LIGHT:
 			light = ParseLight();
+			v.type = TYP_LIGHT;
+			v.val.lt = light;
 			if (level > 0) {
-				*(ALight **)q = light;
-				return TYP_LIGHT;
+				return v;
 			}
 			rayTracer.Add(light);
 			break;
 		case TK_SPHERE:
 			obj = (AnObject *)ParseSphere();
+			v.type = TYP_SPHERE;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(AnObject **)q = obj;
-				return TYP_SPHERE;
+				return v;
 			}
 			rayTracer.Add(obj);
 			break;
 		case TK_PLANE:
 			obj = (AnObject *)ParsePlane();
+			v.type = TYP_PLANE;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(AnObject **)q = obj;
-				return TYP_PLANE;
+				return v;
 			}
 			rayTracer.Add(obj);
 			break;
 		case TK_TRIANGLE:
 			obj = (AnObject *)ParseTriangle();
+			v.type = TYP_TRIANGLE;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(AnObject **)q = obj;
-				return TYP_PLANE;
+				return v;
 			}
 			rayTracer.Add(obj);
 			break;
 		case TK_RECTANGLE:
 			obj = (AnObject *)ParseRectangle();
+			v.type = TYP_RECTANGLE;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(AnObject **)q = obj;
-				return TYP_PLANE;
+				return v;
 			}
 			rayTracer.Add(obj);
 			break;
 		case TK_QUADRIC:
 			obj = (AnObject *)ParseQuadric();
+			v.type = TYP_QUADRIC;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(AnObject **)q = obj;
-				return TYP_QUADRIC;
+				return v;
+			}
+			rayTracer.Add(obj);
+			break;
+		case TK_CONE:
+			obj = (AnObject *)ParseCone();
+			v.type = TYP_CONE;
+			v.val.obj = obj;
+			if (level > 0) {
+				return v;
+			}
+			rayTracer.Add(obj);
+			break;
+		case TK_CYLINDER:
+			obj = (AnObject *)ParseCylinder();
+			v.type = TYP_CYLINDER;
+			v.val.obj = obj;
+			if (level > 0) {
+				return v;
 			}
 			rayTracer.Add(obj);
 			break;
 		case TK_OBJECT:
 			obj = ParseObject();
+			v.type = TYP_OBJECT;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(AnObject **)q = obj;
-				return TYP_OBJECT;
+				return v;
 			}
 			rayTracer.Add(obj);
 			break;
 		case TK_COLOR:
 			c = ParseColor();
+			v.type = TYP_COLOR;
+			v.val.obj = obj;
 			if (level > 0) {
-				*(Color *)q = c;
-				return TYP_COLOR;
+				return v;
 			}
 			break;
 
-		case TK_RANDV:
-		case '<':
-			if (level > 0) {
-				p = old_p;
-				*(Vector **)q = ParseVector();
-				return TYP_VECTOR;
-			}
-			break;
 		case TK_BACKGROUND:
 			Need('{');
 			backGround = ParseColor();
@@ -665,15 +916,17 @@ int Parser::ParseBuffer(char *buf, void *q)
 */
 		case TK_TEXTURE:
 			tx = ParseTexture(nullptr);
+			v.type = TYP_TEXTURE;
+			v.val.tx = tx;
 			if (level > 0) {
-				*(Surface **)q = tx;
-				return TYP_TEXTURE;
+				return v;
 			}
 			break;
 		case TK_NUM:
+			v.type = TYP_NUM;
+			v.d = last_num;
 			if (level > 0) {
-				*(double *)q = last_num;
-				return TYP_NUM;
+				return v;
 			}
 			break;
 
@@ -690,9 +943,10 @@ int Parser::ParseBuffer(char *buf, void *q)
 				obj->next = fobj->obj;
 				fobj->obj = obj;
 			}
+			v.type = TYP_OBJECT;
+			v.val.obj = fobj;
 			if (level > 0) {
-				*(AnObject **)q = fobj;
-				return TYP_OBJECT;
+				return v;
 			}
 			rayTracer.Add(fobj);
 			break;
@@ -709,12 +963,12 @@ int Parser::ParseBuffer(char *buf, void *q)
 				if (!s) {
 					throw gcnew Finray::FinrayException(ERR_UNDEFINED,0);
 				}
-				switch(sym.type) {
+				switch(sym.value.type) {
 				case TYP_TEXTURE:
-					ParseTexture(s->value.tx);
+					ParseTexture(s->value.val.tx);
 					continue;
 				case TYP_OBJECT:
-					ParseObjectBody(s->value.obj);
+					ParseObjectBody(s->value.val.obj);
 					continue;
 				}
 			}
@@ -722,26 +976,27 @@ int Parser::ParseBuffer(char *buf, void *q)
 				throw gcnew Finray::FinrayException(ERR_ASSIGNMENT,0);
 			}
 			level++;
-			sym.type = ParseBuffer(p,&sym.value);
+			sym.value = eval();
 			level--;
 			s = rayTracer.symbolTable.Find(sym.varname);
 			if (s) {
-				s->type = sym.type;
 				s->value = sym.value;
 			}
 			else
 				rayTracer.symbolTable.Add(&sym);
 			break;
 		case TK_EOF:
-			return TYP_NONE;
+			v.type = TYP_NONE;
+			v.d = 0.0;
+			return v;
 		default:
 			p = old_p;
-			d = eval();
-			*(double *)q = d;
-			return TYP_NUM;
+			v = eval();
+			return v;
 		}
 	}
-	return TYP_NONE;
+	v.type = TYP_NONE;
+	return v;
 }
 
 AnObject *Parser::ParseObject()
@@ -753,6 +1008,7 @@ AnObject *Parser::ParseObject()
 	return obj;
 }
 
+/*
 Vector *Parser::ParseVector()
 {
 	Symbol *sym;
@@ -806,41 +1062,52 @@ Vector *Parser::ParseVector()
 	}
 	return vector;
 }
-
+*/
 Viewpoint *Parser::ParseViewPoint()
 {
-	Vector *vector;
+	Value v;
 	Need('{');
 	Viewpoint *viewpoint = new Viewpoint();
 
 	while(true) {
 		switch(NextToken()) {
 		case TK_LOCATION:
-			vector = ParseVector();
-			viewpoint->loc.x = vector->x;
-			viewpoint->loc.y = vector->y;
-			viewpoint->loc.z = vector->z;
-			delete vector;
+			v = eval();
+			if (v.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			viewpoint->loc.x = v.v.x;
+			viewpoint->loc.y = v.v.y;
+			viewpoint->loc.z = v.v.z;
 			break;
 		case TK_DIRECTION:
-			vector = ParseVector();
-			viewpoint->dir = *vector;
-			delete vector;
+			v = eval();
+			if (v.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			viewpoint->dir.x = v.v.x;
+			viewpoint->dir.y = v.v.y;
+			viewpoint->dir.z = v.v.z;
 			break;
 		case TK_UP:		
-			vector = ParseVector();
-			viewpoint->up = *vector;
-			delete vector;
+			v = eval();
+			if (v.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			viewpoint->up.x = v.v.x;
+			viewpoint->up.y = v.v.y;
+			viewpoint->up.z = v.v.z;
 			break;
 		case TK_RIGHT:
-			vector = ParseVector();
-			viewpoint->right = *vector;
-			delete vector;
+			v = eval();
+			if (v.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			viewpoint->right.x = v.v.x;
+			viewpoint->right.y = v.v.y;
+			viewpoint->right.z = v.v.z;
 			break;
 		case TK_LOOK_AT:
-			vector = ParseVector();
-			viewpoint->dir = Vector::Normalize(Vector::Sub(*vector, viewpoint->loc));
-			delete vector;
+			v = eval();
+			if (v.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			viewpoint->dir = Vector::Normalize(Vector::Sub(v.v, viewpoint->loc));
 			break;
 		case '}':
 			return viewpoint;
@@ -854,14 +1121,12 @@ Viewpoint *Parser::ParseViewPoint()
 ALight *Parser::ParseLight()
 {
 	ALight *light;
-	Vector *l;
+	Value v;
 
-	Need('(');
-	l = ParseVector();
-	NextToken();
-	Was(')');
-	light = new ALight(l->x,l->y,l->z,0.0,0.0,0.0);
-	delete l;
+	v = eval();
+	if (v.type != TYP_VECTOR)
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	light = new ALight(v.v.x,v.v.y,v.v.z,0.0,0.0,0.0);
 	ParseObjectBody(light);
 	return light;
 }
@@ -869,23 +1134,25 @@ ALight *Parser::ParseLight()
 AQuadric *Parser::ParseQuadric()
 {
 	AQuadric *quadric;
-	Vector *vector1,*vector2,*vector3;
-	double r;
+	Value v1,v2,v3,v4;
 
 	Need('(');
-	vector1 = ParseVector();
-	vector2 = ParseVector();
-	vector3 = ParseVector();
-	r = eval();
+	v1 = eval();
+	Need(',');
+	v2 = eval();
+	Need(',');
+	v3 = eval();
+	Need(',');
+	v4 = eval();
 	Need(')');
+	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR 
+		|| v3.type != TYP_VECTOR || (v4.type != TYP_NUM && v2.type != TYP_INT))
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 	quadric = new AQuadric(
-		vector1->x, vector1->y, vector1->z,
-		vector2->x, vector2->y, vector2->z,
-		vector3->x, vector3->y, vector3->z,
-		r);
-	delete vector1;
-	delete vector2;
-	delete vector3;
+		v1.v.x, v1.v.y, v1.v.z,
+		v2.v.x, v2.v.y, v2.v.z,
+		v3.v.x, v3.v.y, v3.v.z,
+		v4.d);
 	ParseObjectBody(quadric);
 	return quadric;
 }
@@ -893,33 +1160,126 @@ AQuadric *Parser::ParseQuadric()
 ASphere *Parser::ParseSphere()
 {
 	ASphere *sphere;
-	double r;
-	Vector *vector;
+	Value v1,v2;
 
 	Need('(');
-	vector = ParseVector();
-	r = eval();
-	NextToken();
-	Was(')');
-	sphere = new ASphere(vector->x,vector->y,vector->z,r);
-	delete vector;
+	v1 = eval();
+	Need(',');
+	v2 = eval();
+	Need(')');
+	if (v1.type != TYP_VECTOR || (v2.type != TYP_NUM && v2.type != TYP_INT))
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	if (v2.type==TYP_INT)
+		sphere = new ASphere(v1.v.x,v1.v.y,v1.v.z,(double)v2.i);
+	else
+		sphere = new ASphere(v1.v.x,v1.v.y,v1.v.z,v2.d);
 	ParseObjectBody(sphere);
 	return sphere;
+}
+
+ACylinder *Parser::ParseCylinder()
+{
+	ACylinder *obj;
+	Value v1,v2,v3;
+	bool openA = false;
+	bool openB = false;
+	char *op;
+
+	Need('(');
+	v1 = eval();
+	op = p;
+	NextToken();
+	if (token==TK_OPEN)
+		openB = true;
+	else
+		p = op;
+	Need(',');
+	v2 = eval();
+	op = p;
+	NextToken();
+	if (token==TK_OPEN)
+		openA = true;
+	else
+		p = op;
+	Need(',');
+	v3 = eval();
+	Need(')');
+	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR || (v3.type != TYP_NUM && v3.type != TYP_INT))
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	if (v3.type==TYP_INT)
+		obj = new ACylinder(v1.v,v2.v,(double)v3.i);
+	else
+		obj = new ACylinder(v1.v,v2.v,v3.d);
+	obj->openBase = openB;
+	obj->openApex = openA;
+	ParseObjectBody(obj);
+	return obj;
+}
+
+ACone *Parser::ParseCone()
+{
+	ACone *obj;
+	Value v1,v2,v3,v4;
+	double ra, rb;
+	bool openA = false;
+	bool openB = false;
+	char *op;
+
+	Need('(');
+	v1 = eval();
+	op = p;
+	NextToken();
+	if (token==TK_OPEN)
+		openB = true;
+	else
+		p = op;
+	v2 = eval();
+	op = p;
+	NextToken();
+	if (token==TK_OPEN)
+		openA = true;
+	else
+		p = op;
+	Need(',');
+	v3 = eval();
+	Need(',');
+	v4 = eval();
+	Need(')');
+	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR
+		|| (v3.type != TYP_NUM && v3.type != TYP_INT)
+		|| (v4.type != TYP_NUM && v4.type != TYP_INT))
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	if (v3.type==TYP_INT)
+		rb = (double)v3.i;
+	else
+		rb = v3.d;
+	if (v4.type==TYP_INT)
+		ra = (double)v4.i;
+	else
+		ra = v4.d;
+	obj = new ACone(v1.v,v2.v,rb,ra);
+	obj->openBase = openB;
+	obj->openApex = openA;
+	ParseObjectBody(obj);
+	return obj;
 }
 
 APlane *Parser::ParsePlane()
 {
 	APlane *plane;
-	Vector *vector;
-	double d;
+	Value v1,v2;
 
 	Need('(');
-	vector = ParseVector();
-	d = eval();
-	NextToken();
-	Was(')');
-	plane = new APlane(vector->x,vector->y,vector->z,d);
-	delete vector;
+	v1 = eval();
+	Need(',');
+	v2 = eval();
+	Need(')');
+	if (v1.type != TYP_VECTOR || (v2.type != TYP_NUM && v2.type != TYP_INT))
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	if (v2.type==TYP_INT)
+		plane = new APlane(v1.v.x,v1.v.y,v1.v.z,(double)v2.i);
+	else
+		plane = new APlane(v1.v.x,v1.v.y,v1.v.z,v2.d);
 	ParseObjectBody(plane);
 	return plane;
 }
@@ -927,17 +1287,18 @@ APlane *Parser::ParsePlane()
 ATriangle *Parser::ParseTriangle()
 {
 	ATriangle *triangle;
-	Vector *pt1, *pt2, *pt3;
+	Value v1,v2,v3;
 
 	Need('(');
-	pt1 = ParseVector();
-	pt2 = ParseVector();
-	pt3 = ParseVector();
+	v1 = eval();
+	Need(',');
+	v2 = eval();
+	Need(',');
+	v3 = eval();
 	Need(')');
-	triangle = new ATriangle(*pt1, *pt2, *pt3);
-	delete pt1;
-	delete pt2;
-	delete pt3;
+	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR || v3.type != TYP_VECTOR)
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	triangle = new ATriangle(v1.v, v2.v, v3.v);
 	ParseObjectBody(triangle);
 	return triangle;
 }
@@ -945,19 +1306,20 @@ ATriangle *Parser::ParseTriangle()
 ARectangle *Parser::ParseRectangle()
 {
 	ARectangle *rectangle;
-	Vector *pt1, *pt2, *pt3, *pt4;
+	Value v1,v2,v3,v4;
 
 	Need('(');
-	pt1 = ParseVector();
-	pt2 = ParseVector();
-	pt3 = ParseVector();
-	pt4 = ParseVector();
+	v1 = eval();
+	Need(',');
+	v2 = eval();
+	Need(',');
+	v3 = eval();
+	Need(',');
+	v4 = eval();
 	Need(')');
-	rectangle = new ARectangle(*pt1, *pt2, *pt3, *pt4);
-	delete pt1;
-	delete pt2;
-	delete pt3;
-	delete pt4;
+	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR || v3.type != TYP_VECTOR || v4.type != TYP_VECTOR)
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	rectangle = new ARectangle(v1.v, v2.v, v3.v, v4.v);
 	ParseObjectBody(rectangle);
 	return rectangle;
 }
@@ -965,18 +1327,40 @@ ARectangle *Parser::ParseRectangle()
 Color Parser::ParseColor()
 {
 	Color color;
-	Vector *vector;
+	Value v1;
 
-	vector = ParseVector();
-	color.r = (float)vector->x;
-	color.g = (float)vector->y;
-	color.b = (float)vector->z;
-	delete vector;
-	return color;
+	v1 = eval();
+	switch(v1.type) {
+	case TYP_COLOR:	return v1.c;
+	case TYP_VECTOR:
+		color.r = (float)v1.v.x;
+		color.g = (float)v1.v.y;
+		color.b = (float)v1.v.z;
+		return color;
+	case TYP_INT:
+		color.r = (float)v1.i;
+		color.g = (float)v1.i;
+		color.b = (float)v1.i;
+		return color;
+	case TYP_NUM:
+		color.r = (float)v1.d;
+		color.g = (float)v1.d;
+		color.b = (float)v1.d;
+		return color;
+	default:
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	}
+}
+
+Color Parser::ParseAmbient()
+{
+	return ParseColor();
 }
 
 Surface *Parser::ParseTexture(Surface *texture)
 {
+	Value v;
+
 	if (texture==nullptr)
 		texture = new Surface;
 	NextToken();
@@ -984,25 +1368,50 @@ Surface *Parser::ParseTexture(Surface *texture)
 		Symbol *sym = rayTracer.symbolTable.Find(lastid);
 		if (!sym)
 			throw gcnew Finray::FinrayException(ERR_UNDEFINED,0);
-		texture->color = sym->value.tx->color;
-		texture->ambient = sym->value.tx->ambient;
-		texture->diffuse = sym->value.tx->diffuse;
-		texture->brilliance = sym->value.tx->brilliance;
-		texture->roughness = sym->value.tx->roughness;
-		texture->reflection = sym->value.tx->reflection;
-		texture->specular = sym->value.tx->specular;
+		texture->color = sym->value.val.tx->color;
+		texture->ambient = sym->value.val.tx->ambient;
+		texture->diffuse = sym->value.val.tx->diffuse;
+		texture->brilliance = sym->value.val.tx->brilliance;
+		texture->roughness = sym->value.val.tx->roughness;
+		texture->reflection = sym->value.val.tx->reflection;
+		texture->specular = sym->value.val.tx->specular;
 		return texture;
 	}
 	Was('{');
 	while (true) {
 		switch(NextToken()) {
 		case TK_COLOR:		texture->color = ParseColor(); break;
-		case TK_AMBIENT:	texture->ambient = eval(); break;
-		case TK_DIFFUSE:	texture->diffuse = eval(); break;
-		case TK_BRILLIANCE:	texture->brilliance = eval(); break;
-		case TK_ROUGHNESS:	texture->roughness = eval(); break;
-		case TK_REFLECTION:	texture->reflection = eval(); break;
-		case TK_SPECULAR:	texture->specular = eval(); break;
+		case TK_AMBIENT:	texture->ambient = ParseColor(); break;
+		case TK_DIFFUSE:
+			v = eval();
+			if (v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->diffuse = (float)v.d;
+			break;
+		case TK_BRILLIANCE:
+			v = eval();
+			if (v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->brilliance = (float)v.d;
+			break;
+		case TK_ROUGHNESS:
+			v = eval();
+			if (v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->roughness = (float)v.d;
+			break;
+		case TK_REFLECTION:
+			v = eval();
+			if (v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->reflection = (float)v.d;
+			break;
+		case TK_SPECULAR:
+			v = eval();
+			if (v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->specular = (float)v.d;
+			break;
 		case '}': return texture;
 		default:	throw gcnew Finray::FinrayException(ERR_TEXTURE,0);
 		}
@@ -1015,16 +1424,20 @@ void Parser::ParseObjectBody(AnObject *obj)
 	AnObject *o;
 	Surface *tx;
 	Symbol *sym;
-	Vector *vector;
 	ALight *light;
 	ASphere *sphere;
 	Color color;
 	int nn;
 	char *old_p;
+	Value val;
+	bool minus = false;
 
 	Need('{');
 	while(true) {
 		switch(NextToken()) {
+		case TK_ANTI:
+			minus = !minus;
+			break;
 		case TK_ID:
 			sym = rayTracer.symbolTable.Find(lastid);
 			old_p = p;
@@ -1034,7 +1447,7 @@ void Parser::ParseObjectBody(AnObject *obj)
 					Symbol s;
 					s.varname = lastid;
 					level++;
-					s.type = ParseBuffer(p,&s.value);
+					s.value = ParseBuffer(p);
 					level--;
 					rayTracer.symbolTable.Add(&s);
 					break;
@@ -1046,23 +1459,31 @@ void Parser::ParseObjectBody(AnObject *obj)
 			}
 			if (token=='=') {
 				level++;
-				sym->type = ParseBuffer(p,&sym->value);
+				sym->value = ParseBuffer(p);
 				level--;
 				break;
 			}
 			p = old_p;
-			switch(sym->type) {
+			switch(sym->value.type) {
 			case TYP_SPHERE:
 			case TYP_PLANE:
 			case TYP_TRIANGLE:
 			case TYP_RECTANGLE:
 			case TYP_QUADRIC:
-				o = sym->value.obj;
-				o->next = obj->obj;
-				obj->obj = o;
+			case TYP_CONE:
+			case TYP_CYLINDER:
+				o = sym->value.val.obj;
+				if (minus) {
+					o->next = obj->negobj;
+					obj->negobj = o;
+				}
+				else {
+					o->next = obj->obj;
+					obj->obj = o;
+				}
 				break;
 			case TYP_TEXTURE:
-				tx = sym->value.tx;
+				tx = sym->value.val.tx;
 				obj->properties = *tx;
 				break;
 			case TYP_COLOR:
@@ -1072,8 +1493,14 @@ void Parser::ParseObjectBody(AnObject *obj)
 			break;
 		case TK_SPHERE:
 			o = (AnObject *)ParseSphere();
-			o->next = obj->obj;
-			obj->obj = o;
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
 /*
 			if (obj->obj) {
 				o->next = obj->obj->next;
@@ -1085,33 +1512,81 @@ void Parser::ParseObjectBody(AnObject *obj)
 			break;
 		case TK_PLANE:
 			o = (AnObject *)ParsePlane();
-			o->next = obj->obj;
-			obj->obj = o;
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
 			break;
 		case TK_TRIANGLE:
 			o = (AnObject *)ParseTriangle();
-			o->next = obj->obj;
-			obj->obj = o;
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
 			break;
 		case TK_RECTANGLE:
 			o = (AnObject *)ParseRectangle();
-			o->next = obj->obj;
-			obj->obj = o;
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
 			break;
 		case TK_QUADRIC:
 			o = (AnObject *)ParseQuadric();
-			o->next = obj->obj;
-			obj->obj = o;
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
+			break;
+		case TK_CONE:
+			o = (AnObject *)ParseCone();
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
+			break;
+		case TK_CYLINDER:
+			o = (AnObject *)ParseCylinder();
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
 			break;
 		case TK_TRANSLATE:
-			vector = ParseVector();
-			obj->Translate(vector->x, vector->y, vector->z);
-			delete vector;
+			val = eval();
+			if (val.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			obj->Translate(val.v.x, val.v.y, val.v.z);
 			break;
 		case TK_ROTATE:
-			vector = ParseVector();
-			obj->RotXYZ(vector->x, vector->y, vector->z);
-			delete vector;
+			val = eval();
+			if (val.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			obj->RotXYZ(val.v.x, val.v.y, val.v.z);
 			break;
 		case TK_TEXTURE:	tx = ParseTexture(nullptr);
 							obj->properties = *tx;
@@ -1122,21 +1597,21 @@ void Parser::ParseObjectBody(AnObject *obj)
 			obj->properties.color = color;
 			break;
 		case TK_LOCATION:
-			vector = ParseVector();
+			val = eval();
+			if (val.type != TYP_VECTOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			switch(obj->type) {
 			case OBJ_SPHERE:
 				sphere = (ASphere *)obj;
-				sphere->center.x =  vector->x;
-				sphere->center.y =  vector->y;
-				sphere->center.z =  vector->z;
-				delete vector;
+				sphere->center.x =  val.v.x;
+				sphere->center.y =  val.v.y;
+				sphere->center.z =  val.v.z;
 				break;
 			case OBJ_LIGHT:
 				light = (ALight *)obj;
-				light->center.x = vector->x;
-				light->center.y = vector->y;
-				light->center.z = vector->z;
-				delete vector;
+				light->center.x = val.v.x;
+				light->center.y = val.v.y;
+				light->center.z = val.v.z;
 				break;
 			}
 			break;
@@ -1181,18 +1656,24 @@ AnObject *Parser::ParseFor(AnObject *obj)
 	Symbol sym, *s;
 	int lmt;
 	char *old_p;
-	AnObject *o;
+	Value val;
 
 	Need(TK_ID);
 	sym.varname = lastid;
 	Need('=');
-	sym.value.i = (int)eval();
-	sym.type = TYP_INT;
+	val = eval();
+	if (val.type != TYP_NUM)
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	sym.value.i = (int)val.d;
+	sym.value.type = TYP_INT;
 	Need(TK_TO);
-	lmt = eval();
+	val = eval();
+	if (val.type != TYP_NUM)
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	lmt = (int)val.d;
 	s = rayTracer.symbolTable.Find(sym.varname);
 	if (s) {
-		s->type = sym.type;
+		s->value.type = sym.value.type;
 		s->value.i = sym.value.i;
 	}
 	else {
@@ -1200,15 +1681,12 @@ AnObject *Parser::ParseFor(AnObject *obj)
 		s = rayTracer.symbolTable.Find(sym.varname);
 	}
 	old_p = p;
+	if (obj == nullptr) {
+		obj = new AnObject();
+	}
 	while (sym.value.i < lmt) {
 		p = old_p;
-		o = ParseObject();
-		if (obj) {
-			o->next = obj->obj;
-			obj->obj = o;
-		}
-		else
-			obj = o;
+		ParseObjectBody(obj);
 		sym.value.i++;
 		s->value.i++;
 	}
@@ -1224,7 +1702,7 @@ void Parser::Parse(std::string fname)
 	fs.open(fname, std::ios::in);
 	fs.read(master_filebuf,sizeof(master_filebuf));
 	fs.close();
-	ParseBuffer(master_filebuf,&obj);
+	ParseBuffer(master_filebuf);
 //	rayTracer.viewPoint = viewpoint;
 	if (rayTracer.viewPoint==nullptr) {
 		throw gcnew Finray::FinrayException(ERR_NOVIEWPOINT, 0);

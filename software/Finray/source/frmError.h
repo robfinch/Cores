@@ -15,8 +15,12 @@ static char *msgs[100] = {
 	"%d Too many nested include files",
 	"%d No viewpoint has been set",
 	"%d Too many nested objects",
-	"%d Non-planer rectangle (given points don't make up a rectangle)"
-	"%d An assignment was expected"
+	"%d Non-planer rectangle (given points don't make up a rectangle)",
+	"%d An assignment was expected",
+	"%d Operation is illegal with given types",
+	"%d The expected type was not found.",
+	"%d Singular matrix found.",
+	"%d Degenerate object detected."
 };
 
 namespace Finray {

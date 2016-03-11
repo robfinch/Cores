@@ -8,6 +8,9 @@ ARectangle::ARectangle(Vector a, Vector b, Vector c, Vector d)
 	p2 = b;
 	p3 = c;
 	p4 = d;
+	obj = nullptr;
+	next = nullptr;
+	negobj = nullptr;
 }
 
 // The normals determined by cross products of any three point in a

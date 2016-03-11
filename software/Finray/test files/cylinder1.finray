@@ -10,28 +10,37 @@ SURFACE =
 		reflection	0.65
 	}
 
-camera {
+view_point {
     location < 0.0, 10.0, -50.0 >
     direction < 0.3, 0.00, 1.0 >
     up < 0.0, 1.0, 0.0 >
     right < 1.0, 0.0, 0.0 >
 }
 
-object {
-	plane (< 0, 0, 1 >, 15 ) {
+plane ( < 0, 0, 1>, 100 ) {
 		texture SURFACE
-		color MidnightBlue
+		color Aquamarine
+}
+
+object {
+	// Cylinder along X-Axis
+	cylinder (<-5,0,0>, < 5, 0, 0>, 1) {
+		texture SURFACE
+		color Red
 	}
+
 	// Cylinder along Y-Axis
-	for xx = 1 to 100 {
-		x1 = rand (-50,50)
-		y1 = rand (-50,50)
-		z1 = rand (-50,50)
-		sphere ( < x1, y1, z1 >, rand (0.1,5.0) ) {
-			texture SURFACE
-			color randv (<0,0,0>,< 1, 1, 1 >)
-		}
+	cylinder (<0,-5,0>, < 0, 5, 0>, 1) {
+		texture SURFACE
+		color Green
 	}
+
+	// Cylinder along Z-Axis
+	cylinder (<0,0,-5>, < 0, 0, 5>, 1) {
+		texture SURFACE
+		color Blue
+	}
+
 }
 
 light (<-30, 50, -150>) {

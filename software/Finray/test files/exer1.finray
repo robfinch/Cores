@@ -11,37 +11,36 @@ SURFACE =
 	}
 
 view_point {
-    location < 0.0 0.0 -20.0 >
-    direction < 0.0 0.00 1.0 >
-    up < 0.0 1.0 0.0 >
-    right < 1.0 0.0 0.0 >
+    location < 0.0, 0.0, -20.0 >
+    direction < 0.0, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+    right < 1.0, 0.0, 0.0 >
 }
 
-quadric ( < 1 2 2 > < 0 0 0 > < 0 0 0 > -10 ) {
+quadric ( < 1, 2, 2 >, < 0, 0, 0 >, < 0, 0, 0 >, -10 ) {
 	texture SURFACE
-	color RED
+	color Red
 }
 
-quadric ( < 2 1 2 > < 0 0 0 > < 0 0 0 > -10 ) {
+quadric ( < 2, 1, 2 >, < 0, 0, 0 >, < 0, 0, 0 >, -10 ) {
 	texture SURFACE
-	color GREEN
+	color Green
 }
 
-quadric ( < 2 1 1 > < 0 0 0 > < 0 0 0 > -10 ) {
+quadric ( < 2, 1, 1 >, < 0, 0, 0 >, < 0, 0, 0 >, -10 ) {
 	texture SURFACE
-	color BLUE
+	color Blue
 }
 
-light (<-30 50 -150>) {
-	color WHITE
+light (<-30, 50, -150>) {
+	color White
 }
 
-//sphere (<65 100 -100> 20) {
+//sphere (<65, 100, -100>, 20) {
 //	texture {
-//		color WHITE
+//		color White
 //		ambient 1.0
 //		diffuse 0.0
 //	}
 //	light_source
 //}
-

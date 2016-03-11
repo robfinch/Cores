@@ -6,6 +6,8 @@ public:
 	double x;
 	double y;
 	double z;
+	Vector(double a, double b, double c) { x = a; y = b; z = c; };
+	Vector() { x = 0.0; y = 0.0; z = 0.0; };
 	static Vector Add(Vector a, Vector b) {
 		Vector c;
 		c.x = a.x + b.x;
@@ -89,4 +91,5 @@ public:
 		return pt;
 	}
 };
+
 

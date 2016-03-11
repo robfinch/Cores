@@ -43,6 +43,7 @@ void RayTracer::DeleteList() {
 
 	while (objectList) {
 		DeleteList(objectList->obj);
+		DeleteList(objectList->negobj);
 		obj = objectList->next;
 		delete objectList;
 		objectList = obj;

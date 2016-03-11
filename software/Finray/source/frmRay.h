@@ -79,8 +79,8 @@ namespace Finray {
 //			objectPtr = new APlane(0,0,-1,-200);
 //			objectPtr->SetAttrib(MIDNIGHTBLUE,0.3,0.7,1.0,0.0,0.0,0.0);
 
-			objectPtr = new APlane(0,1,0,-50);
-			objectPtr->SetAttrib(BLUE,0.3,0.7,1.0,0.0,0.0,0.0);
+//			objectPtr = new APlane(0,1,0,-50);
+//			objectPtr->SetAttrib(BLUE,0.3,0.7,1.0,0.0,0.0,0.0);
 
 //			objectPtr = new ALight(65,100,-100,1.0,1.0,1.0);
 
@@ -109,6 +109,8 @@ namespace Finray {
 	private: System::Windows::Forms::ProgressBar^  progressBar1;
 	private: System::ComponentModel::BackgroundWorker^  backgroundWorker1;
 	private: System::Windows::Forms::Button^  button1;
+	private: System::Windows::Forms::Button^  button2;
+	private: System::Windows::Forms::SaveFileDialog^  saveFileDialog1;
 			 /// <summary>
 		/// Required designer variable.
 		/// </summary>
@@ -125,6 +127,8 @@ namespace Finray {
 			this->progressBar1 = (gcnew System::Windows::Forms::ProgressBar());
 			this->backgroundWorker1 = (gcnew System::ComponentModel::BackgroundWorker());
 			this->button1 = (gcnew System::Windows::Forms::Button());
+			this->button2 = (gcnew System::Windows::Forms::Button());
+			this->saveFileDialog1 = (gcnew System::Windows::Forms::SaveFileDialog());
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->BeginInit();
 			this->SuspendLayout();
 			// 
@@ -161,11 +165,27 @@ namespace Finray {
 			this->button1->UseVisualStyleBackColor = true;
 			this->button1->Click += gcnew System::EventHandler(this, &frmRay::button1_Click);
 			// 
+			// button2
+			// 
+			this->button2->Location = System::Drawing::Point(4, 46);
+			this->button2->Name = L"button2";
+			this->button2->Size = System::Drawing::Size(75, 23);
+			this->button2->TabIndex = 3;
+			this->button2->Text = L"Save";
+			this->button2->UseVisualStyleBackColor = true;
+			this->button2->Click += gcnew System::EventHandler(this, &frmRay::button2_Click);
+			// 
+			// saveFileDialog1
+			// 
+			this->saveFileDialog1->DefaultExt = L"png";
+			this->saveFileDialog1->FileName = L"Finray1";
+			// 
 			// frmRay
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(814, 538);
+			this->Controls->Add(this->button2);
 			this->Controls->Add(this->button1);
 			this->Controls->Add(this->progressBar1);
 			this->Controls->Add(this->pictureBox1);
@@ -258,6 +278,15 @@ private: System::Void backgroundWorker1_RunWorkerCompleted(System::Object^  send
 			this->button1->Enabled = true;
 			this->pictureBox1->Image = bmp;
 			this->progressBar1->Value = 0;
+		 }
+private: System::Void button2_Click(System::Object^  sender, System::EventArgs^  e) {
+			 std::ofstream fp;
+			 std::string path;
+			if (this->saveFileDialog1->ShowDialog()  == System::Windows::Forms::DialogResult::OK ) {
+				System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::WaitCursor;
+				bmp->Save(this->saveFileDialog1->FileName,System::Drawing::Imaging::ImageFormat::Png);
+				System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::Default; 
+			}
 		 }
 };
 }

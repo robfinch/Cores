@@ -44,14 +44,17 @@ object {
 		}
 	}
 
-	// Cylinder along Y-Axis
-	for xx = 1 to 300 {
-		x1 = rand (-5,5)
-		y1 = rand (-5,5)
-		z1 = rand (-5,5)
-		sphere ( < x1, y1, z1 >, rand (0.1,0.5) ) {
-			texture SURFACE
-			color randv (<0,0,0>,< 1, 1, 1 >)
+	sphere ( < 0, 0, 0 >, 5 ) {
+		texture SURFACE
+		color randv (<0,0,0>,< 1, 1, 1 >)
+		for xx = 1 to 300 {
+			x1 = rand (-12,12)
+			y1 = rand (-12,12)
+			z1 = rand (-12,12)
+			anti sphere ( < x1, y1, z1 >, rand (0.1,0.5) ) {
+				texture SURFACE
+				color randv (<0,0,0>,< 1, 1, 1 >)
+			}
 		}
 	}
 

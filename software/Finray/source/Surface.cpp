@@ -9,7 +9,9 @@ Surface::Surface()
 	color.r = 0.0;
 	color.g = 0.0;
 	color.b = 0.0;
-	ambient = 0.0;
+	ambient.r = 0.0;
+	ambient.g = 0.0;
+	ambient.b = 0.0;
 	diffuse = 0.0;
 	brilliance = 0.0;
 	specular = 0.0;
@@ -30,7 +32,7 @@ Surface::Surface(Surface *s)
 	reflection = s->reflection;
 }
 
-void Surface::SetAttrib(float rd, float gn, float bl, float a, float d, float b, float s, float ro, float r)
+void Surface::SetAttrib(float rd, float gn, float bl, Color a, float d, float b, float s, float ro, float r)
 {
 	color.r = rd;
 	color.g = gn;

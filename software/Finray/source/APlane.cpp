@@ -12,6 +12,7 @@ APlane::APlane()
 	distance = 0;
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 }
 
 APlane::APlane(double A, double B, double C, double D)
@@ -23,6 +24,7 @@ APlane::APlane(double A, double B, double C, double D)
 	distance = -D;
 	obj = nullptr;
 	next = nullptr;
+	negobj = nullptr;
 	normal = Vector::Normalize(normal);
 }
 
