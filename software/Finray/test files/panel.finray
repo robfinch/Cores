@@ -1,0 +1,54 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	100.0
+		specular	0.9
+		roughness	100.0
+		reflection	1.0
+	}
+
+F_MetalE  =
+	texture {
+		ambient 0.1
+		brilliance 6
+		diffuse 0.7
+		specular 0.80
+		roughness 1/120
+		reflection 0.8
+	}
+
+camera {
+    location < 80.0, 15.0, -70.0 >
+//    direction < 0.3, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+	look_at <1, 1, 1>
+    right < 1.0, 0.0, 0.0 >
+}
+
+plane ( < 0, 0, 1>, 100 ) {
+		texture SURFACE
+		color MidnightBlue
+}
+
+for x = 1 to 16 {
+	sphere (<x*3+1,1,1>, 1) {
+		texture SURFACE
+		color Green
+	}
+	light (<x*3+1.5,1.5,0.4>) {
+		color Green
+	}
+}
+
+box (<0.0,0.0,0.5>, <50,2,2>) {
+	texture F_MetalE
+	color Brown
+}
+
+light (<-30, 50, -150>) {
+	color White
+	no_reflection
+}

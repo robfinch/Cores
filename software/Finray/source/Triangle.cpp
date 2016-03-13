@@ -1,21 +1,31 @@
 #include "stdafx.h"
 
+// Triangle math for intersection point implemented from Dan Sunday's article
+// http://geomalgorithms.com/a06-_intersect-2.html
+
 namespace Finray {
 
-ATriangle::ATriangle(Vector pt1, Vector pt2, Vector pt3)
+ATriangle::ATriangle(Vector pt1, Vector pt2, Vector pt3) : AnObject()
 {
 	type = OBJ_TRIANGLE;
 	p1 = pt1;
 	p2 = pt2;
 	p3 = pt3;
 	Init();
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
+}
+
+ATriangle::ATriangle() : AnObject()
+{
+	type = OBJ_TRIANGLE;
+	p1 = Vector(0,0,0);
+	p2 = Vector(1,0,0);
+	p3 = Vector(1,1,0);
+	Init();
 }
 
 void ATriangle::Init()
 {
+	type = OBJ_TRIANGLE;
 	CalcNormal();
 	CalcCentroid();
 }
@@ -67,8 +77,8 @@ int ATriangle::Intersect(Ray *ray, double *T)
 	double wu, wv;
 	double s, t;
 
-//	if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON && abs(normal.z) < EPSILON)
-	if (normal.x == 0.0 && normal.y == 0.0 && normal.z == 0.0)
+	if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON && abs(normal.z) < EPSILON)
+//	if (normal.x == 0.0 && normal.y == 0.0 && normal.z == 0.0)
 		return -1;	// triangle is degenerate
 
 	w0 = Vector::Sub(ray->origin, p1);
@@ -108,7 +118,7 @@ void ATriangle::RotX(double a)
 	p1 = Vector::RotX(p1, a);
 	p2 = Vector::RotX(p2, a);
 	p3 = Vector::RotX(p3, a);
-	CalcNormal();
+	Init();
 }
 
 void ATriangle::RotY(double a)
@@ -116,7 +126,7 @@ void ATriangle::RotY(double a)
 	p1 = Vector::RotY(p1, a);
 	p2 = Vector::RotY(p2, a);
 	p3 = Vector::RotY(p3, a);
-	CalcNormal();
+	Init();
 }
 
 void ATriangle::RotZ(double a)
@@ -124,7 +134,7 @@ void ATriangle::RotZ(double a)
 	p1 = Vector::RotZ(p1, a);
 	p2 = Vector::RotZ(p2, a);
 	p3 = Vector::RotZ(p3, a);
-	CalcNormal();
+	Init();
 }
 
 Vector ATriangle::Normal(Vector p)
@@ -132,19 +142,42 @@ Vector ATriangle::Normal(Vector p)
 	return normal;
 }
 
-void ATriangle::Translate(double x, double y, double z)
+void ATriangle::Translate(Vector p)
 {
-	Vector p;
 	Vector d1 = Vector::Sub(p1,pc);
 	Vector d2 = Vector::Sub(p2,pc);
 	Vector d3 = Vector::Sub(p3,pc);
-	p.x = x;
-	p.y = y;
-	p.z = z;
 	pc = Vector::Add(pc,p);
 	p1 = Vector::Add(pc,d1);
 	p2 = Vector::Add(pc,d2);
 	p3 = Vector::Add(pc,d3);
+	Init();
+}
+
+void ATriangle::Scale(Vector p)
+{
+	p1.x = p1.x * p.x;
+	p2.x = p2.x * p.x;
+	p3.x = p3.x * p.x;
+
+	p1.y = p1.y * p.y;
+	p2.y = p2.y * p.y;
+	p3.y = p3.y * p.y;
+
+	p1.z = p1.z * p.z;
+	p2.z = p2.z * p.z;
+	p3.z = p3.z * p.z;
+
+	Init();
+}
+
+void ATriangle::Translate(double x, double y, double z)
+{
+	Vector p;
+	p.x = x;
+	p.y = y;
+	p.z = z;
+	Translate(p);
 }
 
 void ATriangle::CalcCentroid()

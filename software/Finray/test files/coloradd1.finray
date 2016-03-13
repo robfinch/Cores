@@ -1,0 +1,50 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	100.0
+		specular	0.9
+		roughness	100.0
+		reflection	1.0
+	}
+
+camera {
+    location < 2.0, 10.0, -40.0 >
+//    direction < 0.3, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+	look_at <1, 1, 1>
+    right < 1.0, 0.0, 0.0 >
+}
+
+plane ( < 0, 0, 1>, 100 ) {
+		texture SURFACE
+		color MidnightBlue
+}
+
+for x = 1 to 2 {
+	p = rand(-24,24)
+	q = rand(-24,24)
+	r = rand(-24,24)
+	p = 1
+	q = 1
+	r = 1
+	box ( <p, q, r>, <17,17,17> ) {
+		texture SURFACE
+		approximate color Cyan 0.7
+//		rotate (<0,x*24,0>)
+		rotate randv (<0,0,0>,<360,360,360>)
+	}
+}
+
+box ( <20, 20, 20>, <5,5,5> ) {
+	texture SURFACE
+	color Red
+	no_reflection
+	rotate randv (<0,0,0>,<360,360,360>)
+}
+
+light (<-30, 50, -150>) {
+	color White
+}

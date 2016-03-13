@@ -57,14 +57,17 @@ void RayTracer::DeleteList() {
 
 void RayTracer::Add(ALight *L)
 {
-	if (lightList) {
-		L->next = lightList;
-		lightList = L;
+	ALight *p, *q = nullptr;
+
+	p = lightList;
+	while (p) {
+		q = p;
+		p = (ALight *)p->next;
 	}
-	else {
-		L->next = nullptr;
+	if (q)
+		q->next = L;
+	else
 		lightList = L;
-	}
 }
 
 };

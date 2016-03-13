@@ -91,6 +91,7 @@
     <ClCompile Include="APlane.cpp" />
     <ClCompile Include="ASphere.cpp" />
     <ClCompile Include="AssemblyInfo.cpp" />
+    <ClCompile Include="Box.cpp" />
     <ClCompile Include="color.cpp" />
     <ClCompile Include="Cone.cpp" />
     <ClCompile Include="Finray.cpp" />

@@ -2,25 +2,19 @@
 
 namespace Finray {
 
-AQuadric::AQuadric()
+AQuadric::AQuadric() : AnObject()
 {
 	A = B = C = D = E = 0.0;
 	F = G = H = I = J = 0.0;
 	type = OBJ_QUADRIC;
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 }
 
 AQuadric::AQuadric(double a, double b, double c, double d, double e,
-		double f, double g, double h, double i, double j)
+		double f, double g, double h, double i, double j) : AnObject()
 {
 	A = a; B = b; C = c; D = d; E = e;
 	F = f; G = g; H = h; I = i; J = j;
 	type = OBJ_QUADRIC;
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 }
 
 int AQuadric::Intersect(Ray *ray, double *T)

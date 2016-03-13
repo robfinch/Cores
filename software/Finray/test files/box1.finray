@@ -1,0 +1,46 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	100.0
+		specular	0.9
+		roughness	100.0
+		reflection	1.0
+	}
+
+camera {
+    location < 2.0, -200.0, -250.0 >
+//    direction < 0.3, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+	look_at <1, 1, 1>
+    right < 1.0, 0.0, 0.0 >
+}
+
+plane ( < 0, 0, 1>, 100 ) {
+		texture SURFACE
+		color Aquamarine
+}
+
+for x = 1 to 30 {
+//	box ( <rand(-100,100), rand(-100,100), rand(-100,100)>,
+//			 <rand(1,15), rand(1,15), rand(1,15)> ) {
+	cube ( <rand(-100,100), rand(-100,100), rand(-100,100)>,
+			 rand(1,15) ) {
+		texture {
+			ambient		rand (0,1)
+			diffuse		rand (0,1)
+			brilliance	rand (0,100)
+			specular	rand (0,1)
+			roughness	rand (0,100)
+			reflection	rand (0,1)
+		}
+		color randv (<0,0,0>,<1,1,1>)
+		rotate randv (<0,0,0>,<360,360,360>)
+	}
+}
+
+light (<-30, 50, -150>) {
+	color White
+}

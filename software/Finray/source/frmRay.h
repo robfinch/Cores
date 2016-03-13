@@ -190,7 +190,7 @@ namespace Finray {
 			this->Controls->Add(this->progressBar1);
 			this->Controls->Add(this->pictureBox1);
 			this->Name = L"frmRay";
-			this->Text = L"frmRay";
+			this->Text = L"Finitron Ray Trace";
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->EndInit();
 			this->ResumeLayout(false);
 

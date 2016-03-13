@@ -41,6 +41,7 @@ public:
 		return rand_state.is_init;
 	}
 	RANDOM_TYPE static rand(RANDOM_TYPE size);
+	double static dbl();
 	void static srand(RANDOM_TYPE seed);
 	void test(int n);
 };

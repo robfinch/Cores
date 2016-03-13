@@ -175,6 +175,12 @@ void Random::test(int n)
 
   /* restore state: */
   setRandState(saved_state);
+}
+
+double Random::dbl()
+{
+	return (double)rand(2147483648) / 2147483648;
+}
+
 };
 
-}

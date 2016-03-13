@@ -1,0 +1,199 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-ca">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>The Finitron Ray Tracer</title>
+<link rel="stylesheet" type="text/css" href="styles.css">
+<link rel="stylesheet" type="text/css" href="../styles.css">
+<meta name="Microsoft Theme" content="water 011">
+</head>
+
+<body background="_themes/water/background_water.gif" bgcolor="#4F68A7" text="#FFFFFF" link="#B6F1BC" vlink="#DBD7FF" alink="#FFFFFF"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">
+
+<font FACE="Consolas" size="7">
+<p>The Finitron Ray Tracer: Finray</p>
+</font><font FACE="Consolas">
+<p><a href="http://www.Finitron.ca">Home</a></p>
+<p>This project was started based on 'C' code found in the book:</p>
+<p>Practical RAY TRACING in C by Craig A. Lindley</p>
+<p>Program source code and script samples are available on GitHub.
+<a href="http://github.com/robfinch/Cores/blob/master/Software/Finray/Finray.html">
+Here</a></p>
+<p>&nbsp;</p>
+<p>I've been looking at code and mathematics for ray-tracing from a number of 
+sources.</p>
+<p>Some of the back-end code from POV-ray has been ported over with significant 
+modifications. The mathematics is common for all ray-tracers so the code should 
+look roughly the same.</p>
+<p>Finray scripts are similar to the most primitive forms of POV scene 
+description files. The thought had crossed my mind to just re-use the POV-Ray 
+language grammar which is very good. I wanted to understand things at a basic 
+level by developing a grammar. I'm still debating with myself whether or not to 
+incorporate POV ray compatibility, but at this point it isn't a goal.</p>
+<p>Keywords are case-sensitive and must be lower case.</p>
+<p>Three dimensional vectors are used in scripts and are denoted with angle 
+brackets. So the point at X=10, Y=12 and Z=50 is represented as &quot;&lt;10,12,50&gt;&quot; in 
+the scripts. Components of the vector must be separated by commas. Elements of a 
+list of vectors and numbers are separated by commas.</p>
+<p>Finray supports the following basic shapes:</p>
+</font>
+<!--mstheme--></font><table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" width="74%" bordercolordark="#213D83" bordercolorlight="#32558D">
+  <tr>
+    <td width="22%" bgcolor="#800000"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Shape<!--mstheme--></font></td>
+    <td width="78%" bgcolor="#800000"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="22%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Spheres<!--mstheme--></font></td>
+    <td width="78%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="22%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Boxes and Cubes<!--mstheme--></font></td>
+    <td width="78%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Boxes and cubes are currently implemented as an aggregated 
+    array of 12 triangles<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="22%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Cones and Cylinders<!--mstheme--></font></td>
+    <td width="78%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="22%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Quadrics<!--mstheme--></font></td>
+    <td width="78%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="22%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Triangles<!--mstheme--></font></td>
+    <td width="78%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="22%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Object<!--mstheme--></font></td>
+    <td width="78%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Aggregated object - composed of any number of objects<!--mstheme--></font></td>
+  </tr>
+</table><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">
+<p>Objects may also be anti-objects (also called hollow objects). The presence 
+of anti-objects causes ray-object intersection tests to fail which makes that 
+part of a scene transparent. Anti-objects are specified using the keyword 'anti' 
+before the object.</p>
+<p>&nbsp;</p>
+<p>The following transforms are at least partially supported (I haven' tested 
+everything for every object). The same transform will be applied to all objects 
+contained in an aggregated object.</p>
+<!--mstheme--></font><table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" width="75%" bordercolordark="#213D83" bordercolorlight="#32558D">
+  <tr>
+    <td width="17%" bgcolor="#800000"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Operation<!--mstheme--></font></td>
+    <td width="83%" bgcolor="#800000"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="17%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Translation<!--mstheme--></font></td>
+    <td width="83%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="17%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Rotation<!--mstheme--></font></td>
+    <td width="83%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">angles are specified in degrees<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="17%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">Scaling<!--mstheme--></font></td>
+    <td width="83%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+  <tr>
+    <td width="17%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+    <td width="83%"><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">&nbsp;<!--mstheme--></font></td>
+  </tr>
+</table><!--mstheme--><font face="Verdana,Arial,Helvetica,sans-serif">
+<p>Parameters for the objects location and size may usually be specified as part 
+of the object declaration. Parameters must be surrounded by round brackets. 
+Other properties of the object are set in a language block which is identified 
+with curly brackets.</p>
+<p>The following declares a sphere of radius 7 at point x=10, y = 12, and z = 50 
+:</p>
+<p><b>sphere (&lt;10,12,50&gt;, 7) { }</b></p>
+<p>Note this is slightly different from POV-Ray.</p>
+<p>The box object is specified as a point and a vector length. To create a box 
+of width =8, height = 10 and depth = 15 at x = -10, y = 20, and z = -1 the 
+following would do so:</p>
+<p><b>box (&lt;-10,20,-1&gt;, &lt;8,10,15&gt;) {}</b></p>
+<p>&lt;8,10,15&gt; is the distance from the point specified as the first parameter.</p>
+<p>&nbsp;</p>
+<p><font size="5">Pre-Processing</font></p>
+<p>The ray tracer uses a slightly modified version of a 'C' pre-processor ( the 
+pre-processor looks in the 'FINRAY' environment variable in order to locate 
+script files rather than the 'INCLUDE' environment variable in order to keep the 
+graphics separate from other code).&nbsp; Otherwise it's a fairly standard 'C' 
+pre-processor supporting #include's #define's #if / #else. The pre-processor is 
+a bit dated, having been originally developed about 25 years ago.</p>
+<p>&nbsp;</p>
+<p>Language Elements</p>
+<p>Comments may be either to the end of the line with '//' or block comments 
+denoted with /* and */ as in C.</p>
+<p>Variables may be used to represent objects and properties of objects. The 
+variables do not have to be #declared. For example the following creates a 
+variable to hold texture elements:</p>
+<font FACE="Consolas" SIZE="2">
+<p style="margin-top: 0; margin-bottom: 0"><b>SURFACE =</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>texture {</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; ambient 0.3</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; diffuse 0.7</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; brilliance 
+100.0</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; specular 0.9</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; roughness 100.0</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; reflection 1.0</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>}</b></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+</font><font FACE="Verdana">
+<p style="margin-top: 0; margin-bottom: 0">The variable may then be substituted 
+as part of the texture element.</p>
+</font><font FACE="Consolas" SIZE="2">
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0"><b>sphere (&lt;x*3+1,1,1&gt;, 1) {</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; texture SURFACE</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>&nbsp;&nbsp;&nbsp; color Green</b></p>
+<p style="margin-top: 0; margin-bottom: 0"><b>}</b></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+</font>
+<p style="margin-top: 0; margin-bottom: 0">A common use of this is to set colour 
+definitions. The color property accepts a color vector for specification. This 
+property may be supplied from a variable.</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0"><font size="4">Precision</font></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">The ray tracer uses float singles (32 
+bits) for each color component. The goal here was better performance in color 
+calculations. Whether it's better or not than using float doubles I don't know 
+yet. The eye and most displays are limited to under 24 bits for color. About 
+eight bits per component are usually sufficient. The extra 15 or 16 bits 
+available in a float single can help provide insurance against rounding errors. 
+When I first started the ray-tracer I was going to use 32 bit scaled integer 
+arithmetic for colors as color varies only from 0 to 1. The exponent part of the 
+float number is more or less wasted for colours.</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">For other calculations the ray-tracer 
+uses double precision arithmetic.</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0"><font size="4">Performance</font></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">It's slow :) Compared to POV-ray. 
+It's fast to enough to render simple scenes. Performance is likely to improve in 
+the future. Getting it to work at all is the first goal. The tracer doesn't 
+support bounding objects yet.</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0"><font size="4">Likely to change:</font></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">Likely to change is the generation of 
+random numbers and vectors. Currently only a single channel is supported, and 
+all numbers generated are based on using the time as a seed. This makes scenes 
+with random elements in them non-repeatable. </p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0"><font size="4">Missing Elements:</font></p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+<p style="margin-top: 0; margin-bottom: 0">As of now there is no support for 
+pigments or image mapping. I'm currently researching these things.</p>
+<p style="margin-top: 0; margin-bottom: 0">&nbsp;</p>
+
+<!--mstheme--></font></body>
+
+</html>

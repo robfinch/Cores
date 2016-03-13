@@ -46,6 +46,10 @@ void Ray::Test(AnObject *o)
 	double t;
 	AnObject *o2;
 
+	if (o->boundingObject) {
+		if (o->boundingObject->Intersect(this, &t) <= 0)
+			return;
+	}
 	if (o->obj) {
 		o2 = o->obj;
 		while (o2) {

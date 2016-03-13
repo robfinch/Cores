@@ -1,13 +1,31 @@
+// This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License.
+// To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/3.0/ or send a
+// letter to Creative Commons, 444 Castro Street, Suite 900, Mountain View, California, 94041, USA.
+//
+// Some of these color values from:
+//    Persistence of Vision Ray Tracer version 3.5 Include File
+//    File: colors.inc
+
 Aquamarine			= color < 0.439216, 0.858824, 0.576471>
 Black				= color < 0.000, 0.000, 0.000 >
 White				= color < 1.000, 1.000, 1.000 >
 Blue				= color < 0.000, 0.000, 1.000 >
 Red					= color < 1.000, 0.000, 0.000 >
 Green				= color < 0.000, 1.000, 0.000 >
+Cyan				= color < 0.000, 1.000, 1.000 >
 Gold				= color < 0.800, 0.498, 0.196 >
 MediumForestGreen	= color < 0.419, 0.556, 0.137 >
 MidnightBlue		= color < 0.184, 0.184, 0.304 >
 Orange1				= color < 1.000, 0.160, 0.000 >
+Brown				= color < 0.647059, 0.164706, 0.164706 >
 Copper				= color < 0.840, 0.160, 0.000 >
+Sienna				= color < 0.556863, 0.419608, 0.137255 >
 SeaGreen			= color < 0.137255, 0.556863, 0.419608 >
 SteelBlue			= color < 0.137255, 0.419608, 0.556863 >
+
+P_Chrome1			= color <0.20, 0.20, 0.20>
+P_Chrome2			= color <0.39, 0.41, 0.43>
+P_Chrome3			= color <0.50, 0.50, 0.50>
+P_Chrome4			= color <0.75, 0.75, 0.75>
+P_Chrome5			= color <0.95, 0.95, 0.95>
+

@@ -3,28 +3,22 @@ extern Finray::RayTracer rayTracer;
 
 namespace Finray {
 
-APlane::APlane()
+APlane::APlane() : AnObject()
 {
 	type = OBJ_PLANE;
 	normal.x = 0;
 	normal.y = 0;
 	normal.z = 0;
 	distance = 0;
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 }
 
-APlane::APlane(double A, double B, double C, double D)
+APlane::APlane(double A, double B, double C, double D) : AnObject()
 {
 	type = OBJ_PLANE;
 	normal.x = A;
 	normal.y = B;
 	normal.z = C;
 	distance = -D;
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 	normal = Vector::Normalize(normal);
 }
 

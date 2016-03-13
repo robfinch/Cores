@@ -8,6 +8,8 @@ public:
 	float r;
 	float g;
 	float b;
+	Color(float R, float G, float B) { r = R; g = G; b = B; };
+	Color() { r = 0.0f; g = 0.0f; b = 0.0f; };
 	static Color Add(Color a, Color b) {
 		Color c;
 		c.r = a.r + b.r;

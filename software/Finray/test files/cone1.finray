@@ -1,0 +1,32 @@
+#include "colors.finray"
+
+SURFACE =
+	texture {
+		ambient		0.3
+		diffuse		0.7
+		brilliance	20.0
+		specular	0.9
+		roughness	100.0
+		reflection	0.65
+	}
+
+view_point {
+    location < 0.0, 10.0, -50.0 >
+    direction < 0.3, 0.00, 1.0 >
+    up < 0.0, 1.0, 0.0 >
+    right < 1.0, 0.0, 0.0 >
+}
+
+plane ( < 0, 0, 1>, 100 ) {
+		texture SURFACE
+		color Aquamarine
+}
+
+cone (<0,0,0>, < 0, 0, 5>, 5, 0) {
+	texture SURFACE
+	color Red
+}
+
+light (<-30, 50, -150>) {
+	color White
+}

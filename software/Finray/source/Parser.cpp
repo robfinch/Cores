@@ -191,8 +191,9 @@ void Parser::getnum()
          numstrptr++; 
         if(p[0] == '0') {
 				p++;
-                if (p[0]=='.')
+                if (p[0]=='.') {
                      goto j1;
+				}
                 if(p[0] == 'x' || p[0] == 'X') {
 						p++;
                         getbase(16);
@@ -214,7 +215,7 @@ j1:
                         }
 				// Ignore 'U' unsigned suffix
 				if (p[0]=='U' || p[0]=='u') {
-					p++;
+//					p++;
 				}
 				}
     numstrptr[-1]='\0';
@@ -306,7 +307,7 @@ int	Parser::NextToken() {
 			return token = '/';
 		}
 
-		// ambient anti
+		// ambient anti approximate
 		if (p[0]=='a') {
 			if (p[1]=='m' && p[2]=='b' && p[3]=='i' && p[4]=='e' && p[5]=='n' && p[6]=='t' && !isidch(p[7])) {
 				p += 7;
@@ -316,18 +317,31 @@ int	Parser::NextToken() {
 				p += 4;
 				return token = TK_ANTI;
 			}
+			if (p[1]=='p' && p[2]=='p' && p[3]=='r' && p[4]=='o' && p[5]=='x' && p[6]=='i' && p[7]=='m'
+				&& p[8]=='a' && p[9]=='t' && p[10]=='e' && !isidch(p[11])) {
+					p += 11;
+				return token = TK_APPROXIMATE;
+			}
 		}
-		if (p[0]=='b' && p[1]=='r' && p[2]=='i' && p[3]=='l' && p[4]=='l'
-			&& p[5]=='i' && p[6]=='a' && p[7]=='n' && p[8]=='c' && p[9]=='e' && !isidch(p[10])) {
-			p += 10;
-			return token = TK_BRILLIANCE;
+
+		// background brilliance box
+		if (p[0]=='b') {
+			if (p[0]=='b' && p[1]=='r' && p[2]=='i' && p[3]=='l' && p[4]=='l'
+				&& p[5]=='i' && p[6]=='a' && p[7]=='n' && p[8]=='c' && p[9]=='e' && !isidch(p[10])) {
+				p += 10;
+				return token = TK_BRILLIANCE;
+			}
+			if (p[0]=='b' && p[1]=='a' && p[2]=='c' && p[3]=='k' && p[4]=='g'
+				&& p[5]=='r' && p[6]=='o' && p[7]=='u' && p[8]=='n' && p[9]=='d' && !isidch(p[10])) {
+				p += 10;
+				return token = TK_BACKGROUND;
+			}
+			if (p[1]=='o' && p[2]=='x' && !isidch(p[3])) {
+				p += 3;
+				return token = TK_BOX;
+			}
 		}
-		if (p[0]=='b' && p[1]=='a' && p[2]=='c' && p[3]=='k' && p[4]=='g'
-			&& p[5]=='r' && p[6]=='o' && p[7]=='u' && p[8]=='n' && p[9]=='d' && !isidch(p[10])) {
-			p += 10;
-			return token = TK_BACKGROUND;
-		}
-		// camera color colour cone cylinder
+		// camera color colour cone cos cube cylinder
 		if (p[0]=='c') {
 			if (p[1]=='a' && p[2]=='m' && p[3]=='e' && p[4]=='r' && p[5]=='a' && !isidch(p[6])) {
 				p += 6;
@@ -344,6 +358,14 @@ int	Parser::NextToken() {
 			if (p[1]=='o' && p[2]=='n' && p[3]=='e' && !isidch(p[4])) {
 				p += 4;
 				return token = TK_CONE;
+			}
+			if (p[1]=='o' && p[2]=='s' && !isidch(p[3])) {
+				p += 3;
+				return token = TK_COS;
+			}
+			if (p[1]=='u' && p[2]=='b' && p[3]=='e' && !isidch(p[4])) {
+				p += 4;
+				return token = TK_CUBE;
 			}
 			if (p[1]=='y' && p[2]=='l' && p[3]=='i' && p[4]=='n' && p[5]=='d' && p[6]=='e' && p[7]=='r' && !isidch(p[8])) {
 				p += 8;
@@ -381,6 +403,24 @@ int	Parser::NextToken() {
 				return token = TK_LOOK_AT;
 			}
 		}
+
+		// no_reflection no_shadow
+		if (p[0]=='n') {
+			if (p[1]=='o') {
+				if (p[2]=='_') {
+					if (p[3]=='r' && p[4]=='e' && p[5]=='f' && p[6]=='l' && p[7]=='e' && p[8]=='c'
+						&& p[9]=='t' && p[10]=='i' && p[11]=='o' && p[12]=='n' && !isidch(p[13])) {
+						p += 13;
+						return TK_NO_REFLECTION;
+					}
+					if (p[3]=='s' && p[4]=='h' && p[5]=='a' && p[6]=='d' && p[7]=='o' && p[8]=='w' && !isidch(p[9])) {
+						p += 9;
+						return TK_NO_SHADOW;
+					}
+				}
+			}
+		}
+
 		// object open
 		if (p[0]=='o') {
 			if (p[1]=='b' && p[2]=='j' && p[3]=='e' && p[4]=='c' && p[5]=='t' && !isidch(p[6])) {
@@ -436,14 +476,23 @@ int	Parser::NextToken() {
 				return token = TK_ROUGHNESS;
 			}
 		}
-		if (p[0]=='s' && p[1]=='p' && p[2]=='e' && p[3]=='c' && p[4]=='u' && p[5]=='l' && p[6]=='a' && p[7]=='r' && !isidch(p[8])) {
-			p += 8;
-			return token = TK_SPECULAR;
+
+		// sin specular sphere
+		if (p[0]=='s') {
+			if (p[1]=='i' && p[2]=='n' && !isidch(p[3])) {
+				p += 3;
+				return TK_SIN;
+			}
+			if (p[1]=='p' && p[2]=='e' && p[3]=='c' && p[4]=='u' && p[5]=='l' && p[6]=='a' && p[7]=='r' && !isidch(p[8])) {
+				p += 8;
+				return token = TK_SPECULAR;
+			}
+			if (p[1]=='p' && p[2]=='h' && p[3]=='e' && p[4]=='r' && p[5]=='e' && !isidch(p[6])) {
+				p += 6;
+				return token = TK_SPHERE;
+			}
 		}
-		if (p[0]=='s' && p[1]=='p' && p[2]=='h' && p[3]=='e' && p[4]=='r' && p[5]=='e' && !isidch(p[6])) {
-			p += 6;
-			return token = TK_SPHERE;
-		}
+
 		// texture to translate triangle
 		if (p[0]=='t') {
 			if (p[1]=='e' && p[2]=='x' && p[3]=='t' && p[4]=='u' && p[5]=='r' && p[6]=='e' && !isidch(p[7])) {
@@ -476,6 +525,7 @@ int	Parser::NextToken() {
 			getid();
 			return token = TK_ID;
 		}
+		throw gcnew Finray::FinrayException(ERR_SYNTAX,1);
 	}
 }
 
@@ -508,22 +558,71 @@ Value Parser::Unary()
 			v2 = eval();
 			maxvalv = v2.v;
 			Need(')');
-			v2.v.x = (maxvalv.x-minvalv.x) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.x;
+			v2.v.x = (maxvalv.x-minvalv.x) * RTFClasses::Random::dbl() + minvalv.x;
 			v2.v.y = (maxvalv.y-minvalv.y) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.y;
 			v2.v.z = (maxvalv.x-minvalv.z) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.z;
 			v2.type = TYP_VECTOR;
 			return v2;
 
+		case TK_SIN:
+			Need('(');
+			v2 = eval();
+			if (v2.type==TYP_INT) {
+				v2.d = sin((double)v2.i*PI/180.0);
+				v2.type = TYP_NUM;
+			}
+			else if (v2.type==TYP_NUM)
+				v2.d = sin(v2.d*PI/180.0);
+			else if (v2.type==TYP_VECTOR) {
+				v2.v = Vector(sin(v2.v.x*PI/180.0),sin(v2.v.y*PI/180.0),sin(v2.v.z*PI/180.0));
+			}
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
+			Need(')');
+			return v2;
+
+		case TK_COS:
+			Need('(');
+			v2 = eval();
+			if (v2.type==TYP_INT) {
+				v2.d = cos((double)v2.i*PI/180.0);
+				v2.type = TYP_NUM;
+			}
+			else if (v2.type==TYP_NUM)
+				v2.d = cos(v2.d*PI/180.0);
+			else if (v2.type==TYP_VECTOR) {
+				v2.v = Vector(cos(v2.v.x*PI/180.0),cos(v2.v.y*PI/180.0),cos(v2.v.z*PI/180.0));
+			}
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
+			Need(')');
+			return v2;
+
 			// Fall through
 		case '<':
 			v2 = eval();
-			v.v.x = v2.d;
+			if (v2.type==TYP_INT)
+				v.v.x = (double)v2.i;
+			else if (v2.type==TYP_NUM)
+				v.v.x = v2.d;
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
 			Need(',');
 			v2 = eval();
-			v.v.y = v2.d;
+			if (v2.type==TYP_INT)
+				v.v.y = (double)v2.i;
+			else if (v2.type==TYP_NUM)
+				v.v.y = v2.d;
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
 			Need(',');
 			v2 = eval();
-			v.v.z = v2.d;
+			if (v2.type==TYP_INT)
+				v.v.z = (double)v2.i;
+			else if (v2.type==TYP_NUM)
+				v.v.z = v2.d;
+			else
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
 			Need('>');
 			v.type = TYP_VECTOR;
 			return v;
@@ -726,12 +825,14 @@ Value Parser::Addsub()
 				case TYP_NUM:	val.i += (int)v2.d; break;
 				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
 				}
+				break;
 			case TYP_NUM:
 				switch(v2.type) {
 				case TYP_INT:	val.d += (double)v2.i; break;
 				case TYP_NUM:	val.d += v2.d; break;
 				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
 				}
+				break;
 			case TYP_COLOR:
 				switch(v2.type) {
 				case TYP_COLOR:	val.c = Color::Add(val.c, v2.c); break;
@@ -742,6 +843,7 @@ Value Parser::Addsub()
 								break;
 				default:	throw gcnew Finray::FinrayException(ERR_ILLEGALOP,0);
 				}
+				break;
 			}
 			break;
 		case '-':
@@ -827,6 +929,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_PLANE:
 			obj = (AnObject *)ParsePlane();
@@ -836,6 +939,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_TRIANGLE:
 			obj = (AnObject *)ParseTriangle();
@@ -845,6 +949,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_RECTANGLE:
 			obj = (AnObject *)ParseRectangle();
@@ -854,6 +959,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_QUADRIC:
 			obj = (AnObject *)ParseQuadric();
@@ -863,6 +969,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_CONE:
 			obj = (AnObject *)ParseCone();
@@ -872,6 +979,27 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
+			break;
+		case TK_BOX:
+			obj = (AnObject *)ParseBox();
+			v.type = TYP_BOX;
+			v.val.obj = obj;
+			if (level > 0) {
+				return v;
+			}
+			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
+			break;
+		case TK_CUBE:
+			obj = (AnObject *)ParseCube();
+			v.type = TYP_BOX;
+			v.val.obj = obj;
+			if (level > 0) {
+				return v;
+			}
+			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_CYLINDER:
 			obj = (AnObject *)ParseCylinder();
@@ -881,6 +1009,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_OBJECT:
 			obj = ParseObject();
@@ -890,6 +1019,7 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
 			break;
 		case TK_COLOR:
 			c = ParseColor();
@@ -949,10 +1079,12 @@ Value Parser::ParseBuffer(char *buf)
 				return v;
 			}
 			rayTracer.Add(fobj);
+			rayTracer.Add(fobj->lights);
 			break;
 
 		case TK_FOR:
-			rayTracer.Add(ParseFor(nullptr));
+			rayTracer.Add(obj = ParseFor(nullptr));
+			rayTracer.Add(obj->lights);
 			break;
 
 		case TK_ID:
@@ -1204,6 +1336,14 @@ ACylinder *Parser::ParseCylinder()
 	Need(',');
 	v3 = eval();
 	Need(')');
+	op = p;
+	NextToken();
+	if (token==TK_OPEN) {
+		openA = true;
+		openB = true;
+	}
+	else
+		p = op;
 	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR || (v3.type != TYP_NUM && v3.type != TYP_INT))
 		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 	if (v3.type==TYP_INT)
@@ -1233,6 +1373,7 @@ ACone *Parser::ParseCone()
 		openB = true;
 	else
 		p = op;
+	Need(',');
 	v2 = eval();
 	op = p;
 	NextToken();
@@ -1245,6 +1386,14 @@ ACone *Parser::ParseCone()
 	Need(',');
 	v4 = eval();
 	Need(')');
+	op = p;
+	NextToken();
+	if (token==TK_OPEN) {
+		openA = true;
+		openB = true;
+	}
+	else
+		p = op;
 	if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR
 		|| (v3.type != TYP_NUM && v3.type != TYP_INT)
 		|| (v4.type != TYP_NUM && v4.type != TYP_INT))
@@ -1324,6 +1473,36 @@ ARectangle *Parser::ParseRectangle()
 	return rectangle;
 }
 
+Color Parser::ParseApproximate(AnObject *obj)
+{
+	Color color;
+	Value v;
+
+	switch(NextToken()) {
+	case TK_COLOR:
+		color = ParseColor();
+		obj->SetColor(color);
+		v = eval();
+		if (v.type==TYP_VECTOR) {
+			color.r = v.v.x;
+			color.g = v.v.y;
+			color.b = v.v.z;
+			obj->SetColorVariance(color);
+			return color;
+		}
+		if (v.type == TYP_NUM) {
+			color.r = v.d;
+			color.g = v.d;
+			color.b = v.d;
+			obj->SetColorVariance(color);
+			return color;
+		}
+		break;
+	default:
+		throw gcnew Finray::FinrayException(ERR_SYNTAX,0);
+	}
+}
+
 Color Parser::ParseColor()
 {
 	Color color;
@@ -1350,6 +1529,56 @@ Color Parser::ParseColor()
 	default:
 		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 	}
+}
+
+ABox *Parser::ParseBox()
+{
+	Value v1,v2;
+	char *op;
+	ABox *box;
+
+	op = p;
+	NextToken();
+	if (token=='(') {
+		v1 = eval();
+		Need(',');
+		v2 = eval();
+		Need(')');
+		if (v1.type != TYP_VECTOR || v2.type != TYP_VECTOR)
+			throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+		box = new ABox(v1.v,v2.v);
+		ParseObjectBody(box);
+		return box;
+	}
+	p = op;
+	box = new ABox();
+	ParseObjectBody(box);
+	return box;
+}
+
+ABox *Parser::ParseCube()
+{
+	Value v1,v2,v3;
+	char *op;
+	ABox *cube;
+
+	op = p;
+	NextToken();
+	if (token=='(') {
+		v1 = eval();
+		Need(',');
+		v2 = eval();
+		Need(')');
+		if (v1.type != TYP_VECTOR || v2.type != TYP_NUM)
+			throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+		cube = new ABox(v1.v,Vector(v2.d,v2.d,v2.d));
+		ParseObjectBody(cube);
+		return cube;
+	}
+	p = op;
+	cube = new ABox();
+	ParseObjectBody(cube);
+	return cube;
 }
 
 Color Parser::ParseAmbient()
@@ -1419,6 +1648,42 @@ Surface *Parser::ParseTexture(Surface *texture)
 	return texture;
 }
 
+void Parser::ParseNoShadow2(AnObject *obj)
+{
+	AnObject *o = obj;
+	while (o) {
+		if (o->obj) {
+			ParseNoShadow2(o->obj);
+		}
+		o->doShadows = false;
+		o = o->next;
+	}
+}
+
+void Parser::ParseNoShadow(AnObject *obj)
+{
+	ParseNoShadow2(obj->obj);
+	obj->doShadows = false;
+}
+
+void Parser::ParseNoReflection2(AnObject *obj)
+{
+	AnObject *o = obj;
+	while (o) {
+		if (o->obj) {
+			ParseNoReflection2(o->obj);
+		}
+		o->doReflections = false;
+		o = o->next;
+	}
+}
+
+void Parser::ParseNoReflection(AnObject *obj)
+{
+	ParseNoReflection2(obj->obj);
+	obj->doReflections = false;
+}
+
 void Parser::ParseObjectBody(AnObject *obj)
 {
 	AnObject *o;
@@ -1471,6 +1736,7 @@ void Parser::ParseObjectBody(AnObject *obj)
 			case TYP_RECTANGLE:
 			case TYP_QUADRIC:
 			case TYP_CONE:
+			case TYP_BOX:
 			case TYP_CYLINDER:
 				o = sym->value.val.obj;
 				if (minus) {
@@ -1565,6 +1831,28 @@ void Parser::ParseObjectBody(AnObject *obj)
 				obj->obj = o;
 			}
 			break;
+		case TK_BOX:
+			o = (AnObject *)ParseBox();
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
+			break;
+		case TK_CUBE:
+			o = (AnObject *)ParseCube();
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
+			break;
 		case TK_CYLINDER:
 			o = (AnObject *)ParseCylinder();
 			if (minus) {
@@ -1589,12 +1877,18 @@ void Parser::ParseObjectBody(AnObject *obj)
 			obj->RotXYZ(val.v.x, val.v.y, val.v.z);
 			break;
 		case TK_TEXTURE:	tx = ParseTexture(nullptr);
-							obj->properties = *tx;
+//							obj->properties = *tx;
+							obj->SetTexture(tx);
 							delete tx;
 							break;
 		case TK_COLOR:	
 			color = ParseColor();
-			obj->properties.color = color;
+			obj->SetColor(color);
+//			obj->properties.color = color;
+			break;
+		case TK_APPROXIMATE:
+			color = ParseApproximate(obj);
+			obj->SetColorVariance(color);
 			break;
 		case TK_LOCATION:
 			val = eval();
@@ -1630,6 +1924,12 @@ void Parser::ParseObjectBody(AnObject *obj)
 			}
 			break;
 
+		case TK_LIGHT:
+			light = ParseLight();
+			light->next = obj->lights;
+			obj->lights = light;
+			break;
+
 		case TK_REPEAT:
 			Need(TK_NUM);
 			nn = last_num;
@@ -1646,7 +1946,15 @@ void Parser::ParseObjectBody(AnObject *obj)
 			ParseFor(obj);
 			break;
 
-		case '}': return;
+		case TK_NO_SHADOW:
+			ParseNoShadow(obj);
+			break;
+		case TK_NO_REFLECTION:
+			ParseNoReflection(obj);
+			break;
+
+		case '}':
+			return;
 		}
 	}
 }

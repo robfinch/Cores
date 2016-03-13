@@ -2,15 +2,12 @@
 
 namespace Finray {
 
-ARectangle::ARectangle(Vector a, Vector b, Vector c, Vector d)
+ARectangle::ARectangle(Vector a, Vector b, Vector c, Vector d) : AnObject()
 {
 	p1 = a;
 	p2 = b;
 	p3 = c;
 	p4 = d;
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 }
 
 // The normals determined by cross products of any three point in a

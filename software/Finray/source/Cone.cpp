@@ -115,16 +115,13 @@ int ACylinder::Intersect(Ray *ray, double *t)
 }
 
 
-ACone::ACone(Vector b, Vector a, double rb, double ra)
+ACone::ACone(Vector b, Vector a, double rb, double ra) : AnObject()
 {
 	type = OBJ_CONE;
 	base = b;
 	apex = a;
 	baseRadius = rb;
 	apexRadius = ra;
-	next = nullptr;
-	obj = nullptr;
-	negobj = nullptr;
 	CalcTransform();
 }
 
@@ -226,6 +223,26 @@ void ACone::Translate(double ax, double ay, double az)
 	v.y = ay;
 	v.z = az;
 	T.CalcTranslation(v);
+	TransformX(&T);
+	CalcTransform();
+}
+
+void ACone::Scale(Vector v)
+{
+	Transform T;
+	T.CalcScaling(v);
+	TransformX(&T);
+	CalcTransform();
+}
+
+void ACone::Scale(double ax, double ay, double az)
+{
+	Vector v;
+	Transform T;
+	v.x = ax;
+	v.y = ay;
+	v.z = az;
+	T.CalcScaling(v);
 	TransformX(&T);
 	CalcTransform();
 }

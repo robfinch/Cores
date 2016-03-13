@@ -10,6 +10,11 @@ AnObject::AnObject()
 	obj = nullptr;
 	negobj = nullptr;
 	next = nullptr;
+	lights = nullptr;
+	boundingObject = nullptr;
+	doReflections = true;
+	doShadows = true;
+	doImage = true;
 }
 
 int AnObject::Print(AnObject *obj) {
@@ -24,6 +29,7 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	Ray reflectedRay, refractedRay;
 	ALight *lightSrcPtr;
 	Finray::Color lightColor, newColor;
+	Finray::Color clr;
 
 	k = Vector::Dot(ray->dir,normal);
 	k *= -2.0f;
@@ -33,9 +39,10 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	reflectedRay.dir.y = k * normal.y + ray->dir.y;
 	reflectedRay.dir.z = k * normal.z + ray->dir.z;
 
-	pColor->r = properties.color.r * properties.ambient.r;
-	pColor->g = properties.color.g * properties.ambient.g;
-	pColor->b = properties.color.b * properties.ambient.b;
+	clr = GetColor(point);
+	pColor->r = clr.r * properties.ambient.r;
+	pColor->g = clr.g * properties.ambient.g;
+	pColor->b = clr.b * properties.ambient.b;
 	lightSrcPtr = rayTracer.lightList;
 	while (lightSrcPtr) {
 		distanceT = lightSrcPtr->MakeRay(point, &lightRay);
@@ -56,14 +63,16 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 		}
 		lightSrcPtr = (ALight *)lightSrcPtr->next;
 	}
-	k = properties.reflection;
-	if (k > 0.0) {
-		rayTracer.recurseLevel++;
-		reflectedRay.Trace(&newColor);
-		pColor->r += newColor.r * (float)k;
-		pColor->g += newColor.g * (float)k;
-		pColor->b += newColor.b * (float)k;
-		rayTracer.recurseLevel--;
+	if (doReflections) {
+		k = properties.reflection;
+		if (k > 0.0) {
+			rayTracer.recurseLevel++;
+				reflectedRay.Trace(&newColor);
+			pColor->r += newColor.r * (float)k;
+			pColor->g += newColor.g * (float)k;
+			pColor->b += newColor.b * (float)k;
+			rayTracer.recurseLevel--;
+		}
 	}
 	return *pColor;
 }
@@ -143,9 +152,31 @@ int AnObject::Intersect(Ray *r, double *d)
 	case OBJ_TRIANGLE:	return ((ATriangle *)this)->Intersect(r,d);
 	case OBJ_QUADRIC:	return ((AQuadric *)this)->Intersect(r,d);
 	case OBJ_CONE:		return ((ACone *)this)->Intersect(r,d);
+//	case OBJ_CUBE:		return ((ACube *)this)->Intersect(r,d);
 	case OBJ_CYLINDER:	return ((ACylinder *)this)->Intersect(r,d);
 	default:	return 0;
 	}
 }
+
+Color AnObject::GetColor(Vector point)
+{
+	Color color;
+	Color v;
+
+	if (properties.variance.r != 0
+		|| properties.variance.g != 0
+		|| properties.variance.b != 0
+		) {
+		v = Color(
+			(float)RTFClasses::Random::dbl()*properties.variance.r,
+			(float)RTFClasses::Random::dbl()*properties.variance.g,
+			(float)RTFClasses::Random::dbl()*properties.variance.b);
+	}
+	else
+		v = Color(0,0,0);
+	color = properties.color;
+	color = Color::Add(color,v);
+	return color;
+};
 
 };

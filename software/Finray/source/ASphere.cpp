@@ -4,18 +4,23 @@ extern Finray::RayTracer rayTracer;
 
 namespace Finray {
 
-ASphere::ASphere()
+ASphere::ASphere() : AnObject()
 {
 	type = OBJ_SPHERE;
 	center.x = center.y = center.z = 0;
 	radius = 0;
 	radius2 = 0;
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 }
 
-ASphere::ASphere(double X, double Y, double Z, double R)
+ASphere::ASphere(Vector P, double R) : AnObject()
+{
+	type = OBJ_SPHERE;
+	center = P;
+	radius = R;
+	radius2 = SQUARE(R);
+}
+
+ASphere::ASphere(double X, double Y, double Z, double R)  : AnObject()
 {
 	type = OBJ_SPHERE;
 	center.x = X;
@@ -23,9 +28,6 @@ ASphere::ASphere(double X, double Y, double Z, double R)
 	center.z = Z;
 	radius = R;
 	radius2 = SQUARE(R);
-	obj = nullptr;
-	next = nullptr;
-	negobj = nullptr;
 }
 
 int ASphere::Intersect(Ray *ray, double *T)
@@ -77,6 +79,12 @@ void ASphere::RotY(double angle)
 void ASphere::RotZ(double angle)
 {
 	center = Vector::RotZ(center, angle);
+}
+
+void ASphere::Scale(Vector p)
+{
+	radius = radius * Vector::Length(p);
+	radius2 = SQUARE(radius);
 }
 
 void ASphere::Print()

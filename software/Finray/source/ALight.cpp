@@ -5,7 +5,7 @@ using namespace Finray;
 
 namespace Finray {
 
-ALight::ALight(double X, double Y, double Z, float R, float G, float B)
+ALight::ALight(double X, double Y, double Z, float R, float G, float B) : AnObject()
 {
 	center.x = X;
 	center.y = Y;
@@ -27,7 +27,12 @@ Finray::Color ALight::GetColor(AnObject *objPtr, Ray *ray, double distance)
 	while (shadowObjPtr) {
 		while (shadowObjPtr) {
 			if (shadowObjPtr != objPtr) {
-				if (!shadowObjPtr->AntiIntersects(ray)) {
+				if (shadowObjPtr->boundingObject) {
+					if (shadowObjPtr->boundingObject->Intersect(ray, &distanceT) <= 0) {
+						goto j1;
+					}
+				}
+				if (!shadowObjPtr->AntiIntersects(ray) && shadowObjPtr->doShadows) {
 					if (shadowObjPtr->Intersect(ray, &distanceT) > 0) {
 						if ((distanceT >  EPSILON) && distanceT < distance) {
 							_color.r = _color.g = _color.b = 0.0;
@@ -36,6 +41,7 @@ Finray::Color ALight::GetColor(AnObject *objPtr, Ray *ray, double distance)
 					}
 				}
 			}
+j1:
 			if (shadowObjPtr->obj) {
 				stack[sp] = shadowObjPtr;
 				sp++;
