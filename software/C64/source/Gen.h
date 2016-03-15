@@ -33,6 +33,7 @@ typedef struct amode {
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
 	unsigned int isVolatile : 1;
+	unsigned int isPascal : 1;
 	unsigned int rshift : 8;
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
@@ -91,7 +92,7 @@ enum e_op {
         op_pha, op_phx, op_pla, op_plx, op_rep, op_sep,
         op_bpl,
         // FISA64
-        op_lc0i, op_lc1i, op_lc2i, op_lc3i, op_chk,
+        op_lc0i, op_lc1i, op_lc2i, op_lc3i, op_chk, op_chki,
         op_cmpu, op_bsr, op_bun,
         op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri, op_rem,
         // floating point

@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - Raptor64 'C' derived language compiler
+// C64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -23,13 +23,7 @@
 //                                                                          
 // ============================================================================
 //
-#include <stdio.h>
-#include <string.h>
-#include "c.h"
-#include "expr.h"
-#include "Statement.h"
-#include "gen.h"
-#include "cglbdec.h"
+#include "stdafx.h"
 
 extern int     breaklab;
 extern int     contlab;
@@ -42,18 +36,213 @@ extern char *semaphores[20];
 extern TYP              stdfunc;
 
 void GenerateTable888Return(SYM *sym, Statement *stmt);
+int TempInvalidate();
+void TempRevalidate(int);
+void ReleaseTempRegister(AMODE *ap);
+AMODE *GetTempRegister();
 
+
+// ----------------------------------------------------------------------------
+// AllocateRegisterVars will allocate registers for the expressions that have
+// a high enough desirability.
+// ----------------------------------------------------------------------------
+
+int AllocateTable888RegisterVars()
+{
+	CSE *csp;
+    ENODE *exptr;
+    int reg, mask, rmask;
+	int brreg, brmask, brrmask;
+	int fpreg, fpmask;
+    AMODE *ap, *ap2;
+	int nn;
+	int cnt;
+	int size;
+
+	reg = 11;
+	brreg = 19;
+	fpreg = 256+11;
+    mask = 0;
+	rmask = 0;
+	brmask = 0;
+	fpmask = 0;
+	brrmask = 0;
+    while( bsort(&olist) );         /* sort the expression list */
+    csp = olist;
+    while( csp != NULL ) {
+        if( OptimizationDesireability(csp) < 3 )	// was < 3
+            csp->reg = -1;
+//        else if( csp->duses > csp->uses / 4 && reg < 18 )
+		else {
+			if ((csp->exp->nodetype==en_clabcon || csp->exp->nodetype==en_cnacon)) {
+				if (brreg < 21)
+					csp->reg = brreg++;
+				else
+					csp->reg = -1;
+			}
+			else if (csp->exp->etype==bt_triple)
+			{
+				if( csp->duses > csp->uses / 4 && reg < 256+18 )
+//				if( reg < 18 )	// was / 4
+					csp->reg = reg++;
+				else
+					csp->reg = -1;
+			}
+			else
+			{
+				if( csp->duses > csp->uses / 4 && reg < 18 )
+//				if( reg < 18 )	// was / 4
+					csp->reg = reg++;
+				else
+					csp->reg = -1;
+			}
+		}
+        if( csp->reg != -1 && csp->reg < 256)
+		{
+			rmask = rmask | (1 << (31 - csp->reg));
+			mask = mask | (1 << csp->reg);
+		}
+        csp = csp->next;
+    }
+	if( mask != 0 ) {
+		cnt = 0;
+		//GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(bitsset(rmask)*8));
+		for (nn = 0; nn < 32; nn++) {
+			if (rmask & (0x80000000 >> nn)) {
+				GenerateMonadic(op_push,0,makereg(nn&31));//,make_indexed(cnt,SP),NULL);
+				//GenerateDiadic(op_sw,0,makereg(nn&31),make_indexed(cnt,SP));
+				cnt+=8;
+			}
+		}
+	}
+    save_mask = mask;
+    csp = olist;
+    while( csp != NULL ) {
+            if( csp->reg != -1 )
+                    {               /* see if preload needed */
+                    exptr = csp->exp;
+                    if( !IsLValue(exptr) || (exptr->p[0]->i > 0) )
+                            {
+                            initstack();
+                            ap = GenerateExpression(exptr,F_ALL,8);
+							ap2 = makereg(csp->reg);
+							if (ap->mode==am_immed)
+								GenerateDiadic(op_ldi,0,ap2,ap);
+							else if (ap->mode==am_reg)
+								GenerateDiadic(op_mov,0,ap2,ap);
+							else {
+								size = GetNaturalSize(exptr);
+								if (exptr->isUnsigned) {
+									switch(size) {
+									case 1:	GenerateDiadic(op_lbu,0,ap2,ap); break;
+									case 2:	GenerateDiadic(op_lcu,0,ap2,ap); break;
+									case 4:	GenerateDiadic(op_lhu,0,ap2,ap); break;
+									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
+									}
+								}
+								else {
+									switch(size) {
+									case 1:	GenerateDiadic(op_lb,0,ap2,ap); break;
+									case 2:	GenerateDiadic(op_lc,0,ap2,ap); break;
+									case 4:	GenerateDiadic(op_lh,0,ap2,ap); break;
+									case 8:	GenerateDiadic(op_lw,0,ap2,ap); break;
+									}
+								}
+							}
+                            ReleaseTempRegister(ap);
+                            }
+                    }
+            csp = csp->next;
+            }
+	return popcnt(mask);
+}
+
+AMODE *GenTable888Set(ENODE *node)
+{
+	AMODE *ap1,*ap2,*ap3;
+	int op;
+	int size;
+
+	switch(node->nodetype) {
+	case en_eq:		op = op_seq;	break;
+	case en_ne:		op = op_sne;	break;
+	case en_lt:		op = op_slt;	break;
+	case en_ult:	op = op_sltu;	break;
+	case en_le:		op = op_sle;	break;
+	case en_ule:	op = op_sleu;	break;
+	case en_gt:		op = op_sgt;	break;
+	case en_ugt:	op = op_sgtu;	break;
+	case en_ge:		op = op_sge;	break;
+	case en_uge:	op = op_sgeu;	break;
+	}
+	size = GetNaturalSize(node);
+	ap3 = GetTempRegister();
+	ap1 = GenerateExpression(node->p[0],F_REG, size);
+	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	GenerateTriadic(op,0,ap3,ap1,ap2);
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	return ap3;
+}
+
+void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg)
+{
+	int size;
+	AMODE *ap1, *ap2;
+
+	size = GetNaturalSize(node);
+	ap1 = GenerateExpression(node->p[0],F_REG, size);
+	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	// Optimize CMP to zero and branch into BRZ/BRNZ
+	if (ap2->mode == am_immed && ap2->offset->i==0 && op==op_eq) {
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		GenerateDiadic(op_brz,0,ap1,make_clabel(label));
+		return;
+	}
+	if (ap2->mode == am_immed && ap2->offset->i==0 && op==op_ne) {
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		GenerateDiadic(op_brnz,0,ap1,make_clabel(label));
+		return;
+	}
+	GenerateTriadic(op_cmp,0,makereg(244),ap1,ap2);
+	switch(op)
+	{
+	case op_eq:	op = op_beq; break;
+	case op_ne:	op = op_bne; break;
+	case op_lt: op = op_blt; break;
+	case op_le: op = op_ble; break;
+	case op_gt: op = op_bgt; break;
+	case op_ge: op = op_bge; break;
+	case op_ltu: op = op_bltu; break;
+	case op_leu: op = op_bleu; break;
+	case op_gtu: op = op_bgtu; break;
+	case op_geu: op = op_bgeu; break;
+	}
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	GenerateDiadic(op,0,makereg(244),make_clabel(label));
+}
+
+void GenerateTable888StackLink(SYM *sym)
+{
+	if (lc_auto || sym->NumParms > 0) {
+		//GenerateMonadic(op_link,0,make_immed(24));
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		GenerateDiadic(op_sw,0,makereg(regBP),make_indirect(regSP));
+		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
+	}
+	else
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(24));
+}
 
 // Generate a function body.
 //
 void GenerateTable888Function(SYM *sym, Statement *stmt)
 {
-	char buf[20];
-	char *bl;
-	int cnt, nn;
-	AMODE *ap, *ap2;
+	AMODE *ap;
 	ENODE *ep;
-	SYM *sp;
 
 	throwlab = retlab = contlab = breaklab = -1;
 	lastsph = 0;
@@ -71,23 +260,16 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
 	// 0[bp]	base pointer
 	if (!sym->IsNocall) {
 //		GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(32));
-		if (lc_auto || sym->NumParms > 0) {
-			//GenerateMonadic(op_link,0,make_immed(24));
-			GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(24));
-			GenerateDiadic(op_sw,0,makereg(BP),make_indirect(SP));
-			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
-		}
-		else
-			GenerateTriadic(op_subui,0,makereg(SP),makereg(SP),make_immed(24));
+		GenerateTable888StackLink(sym);
 		if (exceptions) {
-			GenerateDiadic(op_sw, 0, makereg(CLR), make_indexed(8,SP));
-			ep = allocEnode();
+			GenerateDiadic(op_sw, 0, makereg(regXLR), make_indexed(8,regSP));
+			ep = (ENODE *)xalloc(sizeof(struct enode));
 			ep->nodetype = en_clabcon;
 			ep->i = throwlab;
 			ap = allocAmode();
 			ap->mode = am_immed;
 			ap->offset = ep;
-			GenerateDiadic(op_ldi,0, makereg(CLR), ap);
+			GenerateDiadic(op_ldi,0, makereg(regXLR), ap);
 		}
 		if (lc_auto || sym->NumParms > 0) {
 //			GenerateDiadic(op_mov,0,makereg(BP),makereg(SP));
@@ -115,9 +297,9 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
 	// Generate code for the hidden default catch
 	if (exceptions) {
 		GenerateLabel(throwlab);
-		GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,BP));		// load throw return address from stack into LR
-		GenerateDiadic(op_sw,0,makereg(CLR),make_indexed(24,BP));		// and store it back (so it can be picked up by RTS)
-		GenerateMonadic(op_bra,0,make_clabel(retlab));				// goto regular return cleanup code
+		GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,regBP));		// load throw return address from stack into LR
+		GenerateDiadic(op_sw,0,makereg(CLR),make_indexed(24,regBP));		// and store it back (so it can be picked up by RTS)
+		GenerateDiadic(op_bra,0,make_clabel(retlab),NULL);				// goto regular return cleanup code
 	}
 }
 
@@ -128,7 +310,6 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 {
 	AMODE *ap;
 	int nn;
-	int lab1;
 	int cnt;
 	int sz;
 
@@ -181,7 +362,7 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 			cnt = (bitsset(bsave_mask)-1)*8;
 			for (nn = 15; nn >=1 ; nn--) {
 				if (bsave_mask & (1 << nn)) {
-					GenerateDiadic(op_lws,0,makebreg(nn),make_indexed(cnt,regSP));
+					GenerateTriadic(op_lws,0,makebreg(nn),make_indexed(cnt,SP),NULL);
 					cnt -= 8;
 				}
 			}
@@ -200,27 +381,42 @@ void GenerateTable888Return(SYM *sym, Statement *stmt)
 		}
 		// Unlink the stack
 		// For a leaf routine the link register and exception link register doesn't need to be saved/restored.
-		if (lc_auto || sym->NumParms > 0) {
-			//GenerateMonadic(op_unlk,0,NULL);
-			GenerateDiadic(op_mov,0,makereg(SP),makereg(BP));
-			GenerateDiadic(op_lw,0,makereg(BP),make_indirect(SP));
-		}
+		if (exceptions) {
+			if (lc_auto || sym->NumParms > 0) {
+				//GenerateMonadic(op_unlk,0,NULL);
+				GenerateDiadic(op_mov,0,makereg(255),makereg(regBP));
+				GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(255));
+			}
 
-		if (exceptions)
-			GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,SP));
-		//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
-		//if (isOscall) {
-		//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
-		//	gen_regrestore();
-		//}
-		GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(24));
+			if (exceptions)
+				GenerateDiadic(op_lw,0,makereg(CLR),make_indexed(8,255));
+			//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
+			//if (isOscall) {
+			//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
+			//	gen_regrestore();
+			//}
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		}
+		else {
+			if (lc_auto || sym->NumParms > 0) {
+				//GenerateMonadic(op_unlk,0,make_immed(24));
+				GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
+				GenerateDiadic(op_lw,0,makereg(regBP),make_indirect(regSP));
+			}
+			//GenerateDiadic(op_lws,0,make_string("pregs"),make_indexed(24,SP));
+			//if (isOscall) {
+			//	GenerateDiadic(op_move,0,makereg(0),make_string("_TCBregsave"));
+			//	gen_regrestore();
+			//}
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+		}
 		// Generate the return instruction. For the Pascal calling convention pop the parameters
 		// from the stack.
 		if (sym->IsInterrupt) {
 			//GenerateTriadic(op_addui,0,makereg(30),makereg(30),make_immed(24));
 			//GenerateDiadic(op_lm,0,make_indirect(30),make_mask(0x9FFFFFFE));
 			//GenerateTriadic(op_addui,0,makereg(30),makereg(30),make_immed(popcnt(0x9FFFFFFE)*8));
-			GenerateMonadic(op_rti,0,(AMODE *)NULL);
+			GenerateMonadic(op_rti,0,NULL);
 			return;
 		}
 		if (sym->IsPascal) {
@@ -247,7 +443,7 @@ static void GenerateTable888PushParameter(ENODE *ep, int i, int n)
 
 	if (ep==NULL)
 		return;
-	ap = GenerateExpression(ep,F_REG,8);
+	ap = GenerateExpression(ep,F_REG|F_IMMED,8);
 	GenerateMonadic(op_push,0,ap);
 /*	ap[i % 4] = GenerateExpression(ep,F_REG,8);
 	if (n-1==i) {
@@ -306,15 +502,17 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 	AMODE *ap, *result;
 	SYM *sym;
     int             i;
-	int msk;
 	int sp;
 
 	sp = TempInvalidate();
-	sym = (SYM *)NULL;
+	sym = NULL;
     i = GenerateTable888PushParameterList(node->p[1]);
 	// Call the function
 	if( node->p[0]->nodetype == en_cnacon ) {
-        GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
+        if (use_gp)
+            GenerateMonadic(op_jsr,0,make_indx(node->p[0],regGP));//make_offset(node->p[0]));
+        else
+            GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
 		sym = gsearch(node->p[0]->sp);
 	}
     else
@@ -322,8 +520,15 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 		ap = GenerateExpression(node->p[0],F_REG,8);
 		if (node->p[0]->sp)
 			sym = gsearch(node->p[0]->sp);
-		ap->mode = am_ind;
-		ap->offset = 0;
+		if (use_gp) {
+    		ap->mode = am_indx2;
+    		ap->offset = 0;
+    		ap->sreg = regGP;
+        }
+        else {
+    		ap->mode = am_indx;
+    		ap->offset = 0;
+        }
 		GenerateMonadic(op_jsr,0,ap);
 		ReleaseTempRegister(ap);
     }
@@ -331,10 +536,10 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 	if (i!=0) {
 		if (sym) {
 			if (!sym->IsPascal)
-				GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(i * 8));
+				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 		}
 		else
-			GenerateTriadic(op_addui,0,makereg(SP),makereg(SP),make_immed(i * 8));
+			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(i * 8));
 	}
 	TempRevalidate(sp);
     result = GetTempRegister();

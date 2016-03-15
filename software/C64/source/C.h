@@ -45,22 +45,28 @@
  */
 
 /*      compiler header file    */
-#include <inttypes.h>
-//typedef int8_t __int8
-//typedef int64_t __int64
+
+typedef __int8 int8_t;
+typedef __int16 int16_t;
+typedef __int64 int64_t;
+
+typedef unsigned __int8 uint8_t;
+typedef unsigned __int16 uint16_t;
+typedef unsigned __int64 uint64_t;
 
 enum e_sym {
         id, cconst, iconst, lconst, sconst, rconst, plus, minus,
         star, divide, lshift, rshift, modop, eq, neq, lt, leq, gt,
         geq, assign, asplus, asminus, astimes, asdivide, asmodop,
 		aslshift, asrshift, asand, asor, asxor, autoinc, autodec, hook, cmpl,
-        comma, colon, semicolon, uparrow, openbr, closebr, begin, end,
+        comma, colon, semicolon, double_colon, uparrow, openbr, closebr, begin, end,
         openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
 		ellipsis,
 
 		kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int64,
 		kw_icache, kw_dcache, kw_thread,
-        kw_void, kw_char, kw_float, kw_double, kw_triple, kw_struct, kw_union,
+        kw_void, kw_char, kw_float, kw_double, kw_triple,
+        kw_struct, kw_union, kw_class,
         kw_long, kw_short, kw_unsigned, kw_auto, kw_extern,
         kw_register, kw_typedef, kw_static, kw_goto, kw_return,
         kw_sizeof, kw_break, kw_continue, kw_if, kw_else, kw_elsif,
@@ -72,7 +78,7 @@ enum e_sym {
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
-		kw_unordered, kw_inline, kw_kernel, kw_inout,
+		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs, kw_unique,
         my_eof };
 
 enum e_sc {
@@ -83,7 +89,8 @@ enum e_bt {
 		bt_byte, bt_ubyte,
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
-        bt_unsigned, bt_struct, bt_union, bt_enum, bt_void, bt_func, bt_ifunc,
+        bt_unsigned,
+        bt_struct, bt_union, bt_class, bt_enum, bt_void, bt_func, bt_ifunc,
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
 		bt_exception,
         bt_last};
@@ -99,6 +106,7 @@ struct typ;
 struct snode;
 
 struct sym {
+  struct sym *parent;
     struct sym *next;
     char *name;
     char *realname;
@@ -119,11 +127,12 @@ struct sym {
 	unsigned int UsesPredicate : 1;
 	unsigned int isConst : 1;
 	unsigned int IsKernel : 1;
+	unsigned int IsPrivate : 1;
 	struct enode *initexp;
     union {
         int64_t i;
         uint64_t u;
-        __float128 f;
+        double f;
         uint16_t wa[8];
         char *s;
     } value;
@@ -138,7 +147,7 @@ typedef struct stab {
 } TABLE;
 
 typedef struct typ {
-    int8_t type;
+    e_bt type;
 	int16_t typeno;			// number of the type
 	unsigned int val_flag : 1;       /* is it a value type */
 	unsigned int isArray : 1;
@@ -151,6 +160,7 @@ typedef struct typ {
 	int8_t		bit_width;
 	int8_t		bit_offset;
     long        size;
+    long 		size2;
     TABLE       lst;
     struct typ      *btp;
     char            *sname;
@@ -207,6 +217,9 @@ typedef struct typ {
 #define ERR_CHECK       41
 #define ERR_BADARRAYNDX	42
 #define ERR_TOOMANYDIMEN	43
+#define ERR_OUTOFPREDS  44 
+#define ERR_PARMLIST_MISMATCH	45
+#define ERR_PRIVATE		46
 
 /*      alignment sizes         */
 

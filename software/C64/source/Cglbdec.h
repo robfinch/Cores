@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,8 +26,6 @@
 //                                                                          
 // ============================================================================
 //
-#include "c.h"
-#include "Statement.h"
 /*
  *	68000 C compiler
  *
@@ -64,6 +62,8 @@
 #define TRACE(x)
 #endif
 
+extern int maxPn;
+extern int hook_predreg;
 extern int gCpu;
 extern int regGP;
 extern int regSP;
@@ -71,14 +71,20 @@ extern int regBP;
 extern int regLR;
 extern int regXLR;
 extern int regPC;
+extern int regCLP;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;
 extern int use_gp;
 extern int address_bits;
+extern std::ifstream *ifs;
+extern txtoStream ofs;
+extern txtoStream lfs;
+/*
 extern FILE             *input,
                         *list,
                         *output;
+*/
 extern FILE *outputG;
 extern int incldepth;
 extern int              lineno;
@@ -166,19 +172,22 @@ extern SYM *gsearch(char *na);
 extern SYM *search(char *na,TABLE *thead);
 extern void insert(SYM* sp, TABLE *table);
 
+// ParseFunction.c
+extern SYM *BuildParameterList(SYM *sp, int *);
+
 extern char *litlate(char *);
 // Decl.c
 extern int imax(int i, int j);
 extern TYP *maketype(int bt, int siz);
 extern void dodecl(int defclass);
-extern void ParseParameterDeclarations(int);
-extern void ParseAutoDeclarations(TABLE *table);
+extern int ParseParameterDeclarations(int);
+extern void ParseAutoDeclarations(SYM *sym, TABLE *table);
 extern int ParseSpecifier(TABLE *table);
-extern int ParseDeclarationPrefix(char isUnion);
+extern SYM* ParseDeclarationPrefix(char isUnion);
 extern int ParseStructDeclaration(int);
 extern void ParseEnumerationList(TABLE *table);
 extern int ParseFunction(SYM *sp);
-extern int declare(TABLE *table,int al,int ilc,int ztype);
+extern int declare(SYM *sym,TABLE *table,int al,int ilc,int ztype);
 extern void initstack();
 extern int getline(int listflag);
 extern void compile();
@@ -194,7 +203,7 @@ extern int64_t GetIntegerExpression(ENODE **p);
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, int64_t v1);
 extern ENODE *makesnode(int nt, char *v1, int64_t i);
-extern TYP *nameref(ENODE **node);
+extern TYP *nameref(ENODE **node,int);
 extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
 extern TYP *expression(struct enode **node);
 extern int IsLValue(struct enode *node);
@@ -298,7 +307,7 @@ extern AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags);
 extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
 
 extern void GenerateFunction(SYM *sym, Statement *stmt);
-extern void GenerateReturn(SYM *sym, Statement *stmt);
+extern void GenerateReturn(Statement *stmt);
 
 extern AMODE *GenerateShift(ENODE *node,int flags, int size, int op);
 extern AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op);

@@ -54,7 +54,7 @@ enum e_node {
         en_cbc, en_cbh,
 		en_cch,
 		en_cwl, en_cld, en_cfd,
-        en_icon, en_fcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon,
+        en_icon, en_fcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		
@@ -88,17 +88,19 @@ struct enode {
 	enum e_bt etype;
 	long      esize;
     TYP *tp;
-    int8_t constflag;
+    __int8 constflag;
+    unsigned int predreg : 4;
 	unsigned int isVolatile : 1;
 	unsigned int isIO : 1;
 	unsigned int isUnsigned : 1;
 	unsigned int isDouble : 1;
 	unsigned int isCheckExpr : 1;
-	int8_t bit_width;
-	int8_t bit_offset;
-	int8_t scale;
+	unsigned int isPascal : 1;
+	__int8 bit_width;
+	__int8 bit_offset;
+	__int8 scale;
 	// The following could be in a value union
-    int64_t i;
+    __int64 i;
     double f;
     double f1, f2;
     char  *sp;
