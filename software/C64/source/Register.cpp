@@ -92,7 +92,7 @@ void initRegStack()
 	//rsp = 0;
 	for (i = 0; i <= 255; i++) {
 		reg_in_use[i] = -1;
-		breg_in_use[i] = -1;
+		breg_in_use[i&15] = -1;
 	}
     reg_stack_ptr = 0;
     reg_alloc_ptr = 0;

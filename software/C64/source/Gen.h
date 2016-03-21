@@ -61,7 +61,7 @@ enum e_op {
 		op_shli, op_shri, op_shrui, op_shlu, op_shlui,
 		op_bfext, op_bfextu, op_bfins,
 		op_jmp, op_jsr, op_mului, op_mod, op_modu,
-		op_tas, op_bmi, op_subu, op_lwr, op_swc, op_loop, op_iret,
+		op_bmi, op_subu, op_lwr, op_swc, op_loop, op_iret,
 		op_sext32,op_sext16,op_sext8, op_sxb, op_sxc, op_sxh, op_zxb, op_zxc, op_zxh,
 		op_dw, op_cache,
 		op_subui, op_addui, op_sei,
@@ -90,7 +90,7 @@ enum e_op {
         op_jsl, 
         op_rtl, op_php, op_plp, op_cli, op_ldx, op_stx, op_brl,
         op_pha, op_phx, op_pla, op_plx, op_rep, op_sep,
-        op_bpl,
+        op_bpl, op_tsa, op_tas,
         // FISA64
         op_lc0i, op_lc1i, op_lc2i, op_lc3i, op_chk, op_chki,
         op_cmpu, op_bsr, op_bun,
@@ -124,7 +124,7 @@ enum e_seg {
 
 enum e_am {
         am_reg, am_sreg, am_breg, am_fpreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
-        am_direct, am_immed, am_mask, am_none, am_indx3, am_predreg
+        am_direct, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
 	};
 
 #define LR		1

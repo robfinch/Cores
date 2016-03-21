@@ -134,9 +134,9 @@ int dodefine()
             }
     ++global_flag;          /* always do #define as globals */
     sp = allocSYM();
-    sp->name = litlate(lastid);
-    sp->value.s = litlate(lptr-1);
-    insert(sp,&defsyms);
+    sp->name = new std::string(lastid);
+    sp->value.s = my_strdup(lptr-1);
+    defsyms.insert(sp);
     --global_flag;
     return getline(incldepth == 0);
 }
@@ -154,7 +154,7 @@ int doifdef()
         return getline(incldepth == 0);
     }
 	endifCount++;
-	sp = search(lastid,&defsyms);
+	sp = defsyms.Find(lastid,false);
 	if (sp == NULL) {
 		do
 			rv = getline(incldepth == 0);
@@ -174,7 +174,7 @@ int doifndef()
         return getline(incldepth == 0);
     }
 	endifCount++;
-	sp = search(lastid,&defsyms);
+	sp = defsyms.Find(lastid,false);
 	if (sp != NULL) {
 		do
 			rv = getline(incldepth == 0);

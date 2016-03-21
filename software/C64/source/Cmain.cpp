@@ -53,6 +53,7 @@ char            infile[256],
                 listfile[256],
                 outfile[256],
 				outfileG[256];
+std::string	dbgfile;
 
 extern TABLE    tagtable;
 int		mainflag;
@@ -60,12 +61,15 @@ extern int      total_errors;
 int uctran_off;
 extern int lstackptr;
 
+Compiler compiler;
+
 int main(int argc, char **argv)
 {
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
 //	printf("c64 starting...\r\n");
+	getchar();
 	while(--argc) {
         if( **++argv == '-')
             options(*argv);
@@ -82,7 +86,8 @@ int main(int argc, char **argv)
 				lstackptr = 0;
 				lastst = 0;
 				NextToken();
-				compile();
+	compiler.compile();
+//				compile();
 				summary();
 				ReleaseGlobalMemory();
 				closefiles();
@@ -201,6 +206,8 @@ int     openfiles(char *s)
         strcpy(infile,s);
         strcpy(listfile,s);
         strcpy(outfile,s);
+  dbgfile = s;
+
 		//strcpy(outfileG,s);
 		_splitpath(s,NULL,NULL,nmspace[0],NULL);
 //		strcpy(nmspace[0],basename(s));
@@ -210,6 +217,7 @@ int     openfiles(char *s)
 		makename(infile,".fpp");
         makename(listfile,".lis");
         makename(outfile,".s");
+    dbgfile += ".dbg";
 		ifs = new std::ifstream();
 		ifs->open(infile,std::ios::in);
 /*
@@ -236,6 +244,7 @@ int     openfiles(char *s)
         //        return 0;
         //        }
 		ofs.open(outfile,std::ios::out|std::ios::trunc);
+		dfs.open(dbgfile.c_str(),std::ios::out|std::ios::trunc);
 /*
         if( (output = fdopen(ofl,"w")) == 0) {
                 printf(" cant open %s\n",outfile);
@@ -289,6 +298,7 @@ void closefiles()
 {    
 	lfs.close();
 	ofs.close();
+	dfs.close();
 	ifs->close();
 }
 

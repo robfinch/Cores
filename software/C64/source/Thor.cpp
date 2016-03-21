@@ -166,7 +166,7 @@ void GenerateThorCmp(ENODE *node, int op, int label, int predreg)
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
 	sprintf(buf[ndx], "p%d", predreg);
-	buf2 = litlate(buf[ndx]);
+	buf2 = my_strdup(buf[ndx]);
 	if (ap2->mode==am_immed)
   	    GenerateTriadic(op_cmpi,0,make_string(buf2),ap1,ap2);
 	else

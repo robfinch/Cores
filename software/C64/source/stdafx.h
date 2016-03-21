@@ -1,12 +1,9 @@
 // stdafx.h : include file for standard system include files,
 // or project specific include files that are used frequently, but
 // are changed infrequently
-//
-
 #pragma once
 
-#include "targetver.h"
-
+// TODO: reference additional headers your program requires here
 #include <Windows.h>
 #include <stdio.h>
 /*
@@ -24,6 +21,9 @@
 #include <fstream>
 #include <iomanip>
 #include <string.h>
+#include <time.h>
+#include <string>
+#include "Rand.h"
 #include "txtStream.h"
 #include "c.h"
 #include "expr.h"
@@ -45,5 +45,8 @@ extern int equalnode(ENODE *node1, ENODE *node2);
 
 extern void initFPRegStack();
 extern void ReleaseTempFPRegister(AMODE *ap);
+
+//#define nullptr  NULL
+#define nullptr    0
 
 // TODO: reference additional headers your program requires here

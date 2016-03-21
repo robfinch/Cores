@@ -129,7 +129,7 @@ struct oplst {
 		{"cli", op_cli}, {"brl", op_brl},
 		{"pha", op_pha}, {"phx", op_phx}, {"pla", op_pla}, {"plx", op_plx},
 		{"rep", op_rep}, {"sep", op_sep},
-		{"bpl", op_bpl},
+		{"bpl", op_bpl}, {"tsa", op_tsa}, {"tas", op_tas},
 		
 		{"bsr", op_bsr},
 		{"cmpu", op_cmpu},
@@ -266,7 +266,7 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 			}
 			break;
 	case en_nacon:
-			sprintf(buf,"%s",offset->sp);
+			sprintf(buf,"%s",(char *)offset->sp->c_str());
 			ofs.write(buf);
 			if (lowhigh==3) {
 			    sprintf(buf, ">>16");
@@ -278,11 +278,11 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 			}
 			break;
 	case en_cnacon:
-			sprintf(buf,"%s",offset->sp);
+			sprintf(buf,"%s",(char *)offset->msp->c_str());
 			if (strncmp(buf, "public code",11)==0) {
 				printf("pub code\r\n");
 			}
-			sprintf(buf,"%s",offset->sp);
+			sprintf(buf,"%s",(char *)offset->msp->c_str());
 			ofs.write(buf);
             if (rshift > 0) {
                 sprintf(buf, ">>%d", rshift);
@@ -585,7 +585,7 @@ void put_code(struct ocode *p)
 		}
 	if (op==op_fnname) {
 		ep = (ENODE *)p->oper1->offset;
-		ofs.printf("%s:", ep->sp);
+		ofs.printf("%s:", (char *)ep->sp->c_str());
 	}
 	else if( aps != 0 )
         {
@@ -751,7 +751,7 @@ void GenerateReference(SYM *sp,int offset)
     }
     else
         sign = '+';
-    if( gentype == longgen && outcol < 55 - strlen(sp->name)) {
+    if( gentype == longgen && outcol < 55 - sp->name->length()) {
         if( sp->storage_class == sc_static) {
 			ofs.printf(",");
 			ofs.printf(GetNamespace());
@@ -770,15 +770,15 @@ void GenerateReference(SYM *sp,int offset)
 		}
 		else {
 			if (offset==0) {
-                ofs.printf(",%s",sp->name);
+                ofs.printf(",%s",(char *)sp->name->c_str());
 			}
 			else {
-                ofs.printf(",%s",sp->name);
+                ofs.printf(",%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
 				ofs.printf("%d",offset);
 			}
 		}
-        outcol += (11 + strlen(sp->name));
+        outcol += (11 + sp->name->length());
     }
     else {
         nl();
@@ -798,16 +798,16 @@ void GenerateReference(SYM *sp,int offset)
 		}
 		else {
 			if (offset==0) {
-				ofs.printf("\tdw\t%s",sp->name);
+				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
 			}
 			else {
-				ofs.printf("\tdw\t%s", sp->name);
+				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
 				ofs.printf("%d", offset);
 //				fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
 			}
 		}
-        outcol = 26 + strlen(sp->name);
+        outcol = 26 + sp->name->length();
         gentype = longgen;
     }
 }
@@ -841,8 +841,8 @@ int stringlit(char *s)
     ++global_flag;          /* always allocate from global space. */
     lp = (struct slit *)xalloc(sizeof(struct slit));
     lp->label = nextlabel++;
-    lp->str = litlate(s);
-	lp->nmspace = litlate(GetNamespace());
+    lp->str = my_strdup(s);
+	lp->nmspace = my_strdup(GetNamespace());
     lp->next = strtab;
     strtab = lp;
     --global_flag;

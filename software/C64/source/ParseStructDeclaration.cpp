@@ -55,12 +55,10 @@ extern int isStructDecl;
 
 int16_t typeno = bt_last;
 
-static void ParseStructMembers(SYM *sym, TYP *tp, int ztype);
-
-int ParseStructDeclaration(int ztype)
+int StructDeclaration::Parse(int ztype)
 {
-    SYM     *sp;
-    TYP     *tp;
+  SYM *sp;
+  TYP *tp;
 	int gblflag;
 	int ret;
 	int psd;
@@ -73,107 +71,99 @@ int ParseStructDeclaration(int ztype)
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-    if(lastst == id) {
-        if((sp = search(lastid,&tagtable)) == NULL) {
-			// If we encounted an unknown struct in a parameter list, we want
-			// it to go into the global memory pool, not a local one.
-			if (parsingParameterList) {
-				gblflag = global_flag;
-				global_flag++;
-	            sp = allocSYM();
-				sp->name = litlate(lastid);
-				global_flag = gblflag;
-			}
-			else {
-	            sp = allocSYM();
-				sp->name = litlate(lastid);
-			}
-            sp->tp = allocTYP();
-            sp->tp->type = (e_bt)ztype;
-			sp->tp->typeno = typeno++;
-            sp->tp->lst.head = 0;
-            sp->storage_class = sc_type;
-            sp->tp->sname = sp->name;
-            sp->tp->alignment = 0;
-            NextToken();
+  if(lastst == id) {
+    if((sp = tagtable.Find(lastid,false)) == NULL) {
+      sp = allocSYM();
+  		sp->SetName(my_strdup(lastid));
+      sp->tp = allocTYP();
+      sp->tp->type = (e_bt)ztype;
+		  sp->tp->typeno = typeno++;
+      sp->tp->lst.Clear();
+      sp->storage_class = sc_type;
+      sp->tp->sname = new std::string(*sp->name);
+      sp->tp->alignment = 0;
+      NextToken();
 
 			if (lastst == kw_align) {
-                NextToken();
-                sp->tp->alignment = GetIntegerExpression(&pnd);
-            }
+        NextToken();
+        sp->tp->alignment = GetIntegerExpression(&pnd);
+      }
 
 			// Could be a forward structure declaration like:
 			// struct buf;
 			if (lastst==semicolon) {
 				ret = 1;
-                insert(sp,&tagtable);
-                NextToken();
+        tagtable.insert(sp);
+        NextToken();
 			}
 			// Defining a pointer to an unknown struct ?
 			else if (lastst == star) {
-                insert(sp,&tagtable);
+        tagtable.insert(sp);
 			}
-            else if(lastst != begin)
-                error(ERR_INCOMPLETE);
-            else    {
-                insert(sp,&tagtable);
-                NextToken();
-                ParseStructMembers(sp, sp->tp,ztype);
-                }
-        }
+      else if(lastst != begin)
+        error(ERR_INCOMPLETE);
+      else {
+        tagtable.insert(sp);
+        NextToken();
+        ParseMembers(sp, sp->tp,ztype);
+      }
+    }
+    // Else it is a known structure
 		else {
-            NextToken();
-            if (lastst==kw_align) {
-	            NextToken();
-                sp->tp->alignment = GetIntegerExpression(&pnd);
-            }
+      NextToken();
+      if (lastst==kw_align) {
+        NextToken();
+        sp->tp->alignment = GetIntegerExpression(&pnd);
+      }
 			if (lastst==begin) {
-	            NextToken();
-                ParseStructMembers(sp,sp->tp,ztype);
+        NextToken();
+        ParseMembers(sp,sp->tp,ztype);
 			}
 		}
-        head = sp->tp;
+    head = sp->tp;
+  }
+  // Else there was no tag identifier
+  else {
+    tp = allocTYP();
+    tp->type = (e_bt)ztype;
+	  tp->typeno = typeno++;
+    tp->sname = new std::string("");
+    tp->lst.Clear();
+
+    if (lastst==kw_align) {
+      NextToken();
+      tp->alignment = GetIntegerExpression(&pnd);
     }
+
+    if( lastst != begin)
+      error(ERR_INCOMPLETE);
     else {
-        tp = allocTYP();
-        tp->type = (e_bt)ztype;
-        tp->sname = 0;
-        tp->lst.head = 0;
-
-        if (lastst==kw_align) {
-            NextToken();
-            tp->alignment = GetIntegerExpression(&pnd);
-        }
-
-        if( lastst != begin)
-            error(ERR_INCOMPLETE);
-        else {
 			NextToken();
-			ParseStructMembers(sp,tp,ztype);
-        }
-        head = tp;
+			ParseMembers(sp,tp,ztype);
     }
+    head = tp;
+  }
 	isStructDecl = psd;
 	return ret;
 }
 
-static void ParseStructMembers(SYM * sym, TYP *tp, int ztype)
+void StructDeclaration::ParseMembers(SYM * sym, TYP *tp, int ztype)
 {
 	int slc;
 
-    slc = 0;
-    tp->val_flag = 1;
+  slc = 0;
+  tp->val_flag = 1;
 //	tp->val_flag = FALSE;
-    while( lastst != end) {
-        if(ztype == bt_struct || ztype==bt_class)
-            slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
-        else
-            slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
-    }
+  while( lastst != end) {
+    if(ztype == bt_struct || ztype==bt_class)
+      slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
+    else
+      slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
+  }
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-    tp->size = tp->alignment ? tp->alignment : slc;
-    NextToken();
+  tp->size = tp->alignment ? tp->alignment : slc;
+  NextToken();
 }
 

@@ -134,12 +134,12 @@ AMODE *make_direct(int64_t i)
 /*
  *      generate a direct reference to a string label.
  */
-AMODE *make_strlab(char *s)
+AMODE *make_strlab(std::string s)
 {
 	AMODE *ap;
     ap = allocAmode();
     ap->mode = am_direct;
-    ap->offset = makesnode(en_nacon,s,-1);
+    ap->offset = makesnode(en_nacon,s,s,-1);
     return ap;
 }
 
@@ -835,13 +835,13 @@ void GenerateCompound(Statement *stmt)
 
 //    if (stmt->prolog)
 //        GenerateStatement(stmt->prolog);
-	sp = stmt->ssyms.head;
+	sp = sp->GetPtr(stmt->ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
 			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,8));
         }
-		sp = sp->next;
+		sp = sp->GetNextPtr();
 	}
 	// Generate statement will process the entire list of statements in
 	// the block.
@@ -857,13 +857,13 @@ void GenerateFuncbody(Statement *stmt)
 	Statement *st;
 	SYM *sp;
 
-	sp = stmt->ssyms.head;
+	sp = sp->GetPtr(stmt->ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
 			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,8));
         }
-		sp = sp->next;
+		sp = sp->GetNextPtr();
 	}
 	// Generate statement will process the entire list of statements in
 	// the block.

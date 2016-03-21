@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,7 +47,7 @@ void ListTable(TABLE *t, int i);
 
 void put_typedef(int td)
 {
-	lfs.printf(td ? "   1   " : "   -    ");
+	lfs.printf(td ? (char *)"   1   " : (char *)"   -    ");
 }
 
 void put_sc(int scl)
@@ -86,7 +86,8 @@ void put_sc(int scl)
 }
 
 void put_ty(TYP *tp)
-{       if(tp == 0)
+{
+		if(tp == 0)
                 return;
         switch(tp->type) {
                 case bt_exception:
@@ -124,7 +125,7 @@ void put_ty(TYP *tp)
                                 lfs.printf("Pointer to ");
                         else
                                 lfs.printf("Array of ");
-                        put_ty(tp->btp);
+                        put_ty(tp->GetBtp());
                         break;
                 case bt_class:
                         lfs.printf("class ");
@@ -134,37 +135,47 @@ void put_ty(TYP *tp)
                         goto ucont;
                 case bt_struct:
                         lfs.printf("struct ");
-ucont:                  if(tp->sname == 0)
+ucont:                  if(tp->sname->length() == 0)
                                 lfs.printf("<no name> ");
                         else
-                                lfs.printf("%s ",tp->sname);
+                                lfs.printf("%s ",(char *)tp->sname->c_str());
                         break;
                 case bt_ifunc:
                 case bt_func:
                         lfs.printf("Function returning ");
-                        put_ty(tp->btp);
+                        put_ty(tp->GetBtp());
                         break;
                 }
 }
 
 void list_var(SYM *sp, int i)
-{       int     j;
+{
+	TypeArray *ta;
+	int nn;
+		int     j;
         for(j = i; j; --j)
                 lfs.printf("    ");
-		if (sp->name == NULL)
+		if (sp->name->length()== 0)
 			lfs.printf("%-10s =%06x ","<unnamed>",sp->value.u);
 		else
-			lfs.printf("%-10s =%06x ",sp->name,sp->value.u);
+			lfs.printf("%-10s =%06x ",(char *)sp->name->c_str(),sp->value.u);
         if( sp->storage_class == sc_external)
-                ofs.printf("\textern\t%s\n",sp->name);
+                ofs.printf("\textern\t%s\n",(char *)sp->name->c_str());
         else if( sp->storage_class == sc_global )
-                ofs.printf(";\tglobal\t%s\n",sp->name);
+                ofs.printf(";\tglobal\t%s\n",(char *)sp->name->c_str());
 		put_typedef(sp->storage_class==sc_typedef);
         put_sc(sp->storage_class);
         put_ty(sp->tp);
         lfs.printf("\n");
         if(sp->tp == 0)
                 return;
+		if (sp->tp->type==bt_ifunc || sp->tp->type==bt_func) {
+			lfs.printf("\t\tParameters:\n\t\t\t");
+			ta = sp->GetProtoTypes();
+			ta->Print(&lfs);
+			if (ta)
+				delete ta;
+		}
         if((sp->tp->type == bt_struct || sp->tp->type == bt_union || sp->tp->type==bt_class) &&
                 sp->storage_class == sc_type)
                 ListTable(&(sp->tp->lst),i+1);
@@ -178,19 +189,19 @@ void ListTable(TABLE *t, int i)
 	if (t==&gsyms[0]) {
 		for (nn = 0; nn < 257; nn++) {
 			t = &gsyms[nn];
-			sp = t->head;
+			sp = SYM::GetPtr(t->GetHead());
 			while(sp != NULL) {
 				list_var(sp,i);
-				sp = sp->next;
-            }
+				sp = sp->GetNextPtr();
+      }
 		}
 	}
 	else {
-		sp = t->head;
+		sp = SYM::GetPtr(t->GetHead());
 		while(sp != NULL) {
 			list_var(sp,i);
-			sp = sp->next;
-        }
+			sp = sp->GetNextPtr();
+    }
 	}
 }
 

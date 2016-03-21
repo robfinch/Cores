@@ -99,10 +99,10 @@ int equalnode(ENODE *node1, ENODE *node2)
 			return (node1->i == node2->i);
 	   }
       case en_nacon:{
-			return (!strcmp(node1->sp, node2->sp));
+			return (node1->sp->compare(*node2->sp)==0);
 	    }
 	  case en_cnacon:
-			return (!strcmp(node1->sp, node2->sp));
+			return (node1->sp->compare(*node2->sp)==0);
       default:
 	        if( IsLValue(node1) && equalnode(node1->p[0], node2->p[0])  )
 		        return TRUE;
@@ -452,13 +452,13 @@ static void scan_compound(Statement *stmt)
 {
 	SYM *sp;
 
-	sp = stmt->ssyms.head;
+	sp = sp->GetPtr(stmt->ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
 			opt_const(&sp->initexp);
             scanexpr(sp->initexp,0);
 		}
-		sp = sp->next;
+		sp = sp->GetNextPtr();
 	}
     scan(stmt->s1);
 }
@@ -717,12 +717,12 @@ static void repcse_compound(Statement *stmt)
 {
 	SYM *sp;
 
-	sp = stmt->ssyms.head;
+	sp = sp->GetPtr(stmt->ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
 			repexpr(sp->initexp);
 		}
-		sp = sp->next;
+		sp = sp->GetNextPtr();
 	}
 	repcse(stmt->s1);
 }

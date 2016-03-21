@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -63,9 +63,12 @@ int IdentifyKeyword()
 				return lastst = kw_char;
 	}
 
-	if (p[0]=='d') {	// do,default,double,dcache
+	if (p[0]=='d') {	// do,default,double,dcache,delete
 		if (p[1]=='o' && p[2]=='\0')
 			return lastst = kw_do;
+		if (p[1]=='e' && p[2]=='l' && p[3]=='e' && p[4]=='t' && p[5]=='e' && p[6]=='\0') {
+			return lastst = kw_delete;
+		}
 		if (p[1]=='o' && p[2]=='u' && p[3]=='b' && p[4]=='l' && p[5]=='e' && p[6]=='\0')
 			return lastst = kw_double;
 		if (p[1]=='e' && p[2]=='f' && p[3]=='a' && p[4]=='u' && p[5]=='l' && p[6]=='t' && p[7]=='\0')
@@ -216,7 +219,10 @@ int IdentifyKeyword()
 		if (p[1]=='r' && p[2]=='o' && p[3]=='l' && p[4]=='o' && p[5]=='g' && p[6]=='\0')
 			return lastst = kw_prolog;
 	}
-	if (p[0]=='n') {	// nocall,null,naked
+	if (p[0]=='n') {	// nocall,null,naked,new
+		if (p[1]=='e' && p[2]=='w' && p[3]=='\0') {
+			return lastst = kw_new;
+		}
 		if (p[1]=='a' && p[2]=='k' && p[3]=='e' && p[4]=='d' && p[5]=='\0')
 			return lastst = kw_naked;
 		if (p[1]=='o' && p[2]=='c' && p[3]=='a' && p[4]=='l' && p[5]=='l' && p[6]=='\0')

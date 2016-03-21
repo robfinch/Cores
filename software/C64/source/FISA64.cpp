@@ -428,8 +428,8 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
 		//if (lc_auto)
 		//	GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(lc_auto));
-		sprintf(buf, "#%sSTKSIZE_",sym->name);
-		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_string(litlate(buf)));
+		sprintf(buf, "#%sSTKSIZE_",sym->name->c_str());
+		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_string(my_strdup(buf)));
 	}
 	if (optimize)
 		opt1(stmt);
@@ -468,9 +468,9 @@ void GenerateFISA64Return(SYM *sym, Statement *stmt)
 		if (ap->mode == am_immed)
 		    FISA64_GenLdi(makereg(1),ap);
 		else if (ap->mode == am_reg) {
-            if (sym->tp->btp && (sym->tp->btp->type==bt_struct || sym->tp->btp->type==bt_union)) {
+            if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union)) {
                 GenerateDiadic(op_lw,0,makereg(1),make_indexed(sym->parms->value.i,regBP));
-                GenerateMonadic(op_push,0,make_immed(sym->tp->btp->size));
+                GenerateMonadic(op_push,0,make_immed(sym->tp->GetBtp()->size));
                 GenerateMonadic(op_push,0,ap);
                 GenerateMonadic(op_push,0,makereg(1));
                 GenerateMonadic(op_bsr,0,make_string("memcpy_"));
@@ -688,11 +688,11 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
         //GenerateDiadic(op_jal,0,makereg(regLR),make_offset(node->p[0]));
         GenerateDiadic(op_jal,0,makereg(regLR),make_indirect(ap->preg));
 */
-		sym = gsearch(node->p[0]->sp);
+		sym = gsearch(*node->p[0]->sp);
         i = 0;
   /*
-    	if ((sym->tp->btp->type==bt_struct || sym->tp->btp->type==bt_union) && sym->tp->btp->size > 8) {
-            nn = tmpAlloc(sym->tp->btp->size) + lc_auto + round8(sym->tp->btp->size);
+    	if ((sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union) && sym->tp->GetBtp()->size > 8) {
+            nn = tmpAlloc(sym->tp->GetBtp()->size) + lc_auto + round8(sym->tp->GetBtp()->size);
             GenerateMonadic(op_pea,0,make_indexed(-nn,regBP));
             i = 1;
         }
@@ -705,8 +705,8 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
     {
         i = 0;
     /*
-    	if ((node->p[0]->tp->btp->type==bt_struct || node->p[0]->tp->btp->type==bt_union) && node->p[0]->tp->btp->size > 8) {
-            nn = tmpAlloc(node->p[0]->tp->btp->size) + lc_auto + round8(node->p[0]->tp->btp->size);
+    	if ((node->p[0]->tp->GetBtp()->type==bt_struct || node->p[0]->tp->GetBtp()->type==bt_union) && node->p[0]->tp->GetBtp()->size > 8) {
+            nn = tmpAlloc(node->p[0]->tp->GetBtp()->size) + lc_auto + round8(node->p[0]->tp->GetBtp()->size);
             GenerateMonadic(op_pea,0,make_indexed(-nn,regBP));
             i = 1;
         }
@@ -746,7 +746,7 @@ AMODE *GenerateFISA64FunctionCall(ENODE *node, int flags)
 	else {
 		if( result->preg != 1 || (flags & F_REG) == 0 ) {
 			if (sym) {
-				if (sym->tp->btp->type==bt_void)
+				if (sym->tp->GetBtp()->type==bt_void)
 					;
 				else {
                     if (sym->tp->type==bt_double)

@@ -52,7 +52,7 @@ extern char *errtext(int);
 int inComment = FALSE;
 int      my_errno[80];
 int      numerrs;
-char     inpline[140];
+char     inpline[520];
 int             total_errors = 0;
 extern char     *lptr;          /* shared with preproc */
 extern std::ifstream *inclfile[10];  /* shared with preproc */
@@ -98,7 +98,7 @@ int getline(int listflag)
     }
     ++lineno;
 	memset(inpline, 0, sizeof(inpline));
-    ifs->getline(inpline,131);
+    ifs->getline(inpline,512);
 	strcat(inpline,"\n");
 	rv = ifs->gcount()==0;
 	//printf("line:%.60s\r\n", inpline);
@@ -147,17 +147,18 @@ int getch()
  */
 void getid()
 {
-	register int    i;
+	int    i;
     i = 0;
+    lastid[0] = '_';
     while(isidch(lastch)) {
-		if(i < 62) {
+		if(i < 120) {
 			lastkw[i] = lastch;
-			lastid[i++] = lastch;
+			i++;
+			lastid[i] = lastch;
         }
 		getch();
     }
     lastkw[i] = '\0';
-    lastid[i] = '_';
     lastid[i+1] = '\0';
     lastst = id;
 }
@@ -427,7 +428,7 @@ restart:        /* we come back here after comments */
                 getnum();
         else if(isidch(lastch)) {
                 getid();
-				if( (sp = search(lastid,&defsyms)) != NULL) {
+				if( (sp = defsyms.Find(lastid,false)) != NULL) {
 						tch = lastch;
 						if (!(lastch==')' && sp->value.s[0]=='(')) {
 							if (lstackptr < 19) {
@@ -704,14 +705,18 @@ restart:        /* we come back here after comments */
                 }
         if(lastst == id)
                 IdentifyKeyword();
+//	printf("token: %d",lastst);
+//	if (lastst==id)
+//		printf("lastid=%s| ", lastid);
 }
 
-void needpunc(enum e_sym p)
+void needpunc(enum e_sym p,int clue)
 {
 	if( lastst == p)
         NextToken();
 	else {
 		//printf("%d %s\r\n", lineno, inpline);
+		printf("*************clue:%d************\r\n",clue);
         error(ERR_PUNCT);
 	}
 }

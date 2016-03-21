@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -23,9 +23,7 @@
 //                                                                          
 // ============================================================================
 //
-#include <stdio.h>
-#include <stdlib.h>
-#include "c.h"
+#include "stdafx.h"
 
 extern int numerrs;
 extern int total_errors;
@@ -79,12 +77,18 @@ static char *errtextstr[] = {
 	"Too many dimensions",
 	"Out of predicate registers",
 	"Parameter list doesn't match prototype",
-	"Can't access private member"
+	"Can't access private member",
+	"The function call signature doesn't match any of the class methods",
+	"Method not found",
+	"Out of memory",
+	"Too many symbols"
 };
 
 char *errtext(int errnum)
 {
-	return errtextstr[errnum];
+	if (errnum < 1000)
+		return errtextstr[errnum];
+	return "";
 }
 
 /*

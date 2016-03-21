@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -79,6 +79,7 @@ enum e_sym {
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
 		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs, kw_unique,
+		kw_new, kw_delete,
         my_eof };
 
 enum e_sc {
@@ -86,14 +87,24 @@ enum e_sc {
         sc_member, sc_label, sc_ulabel, sc_typedef };
 
 enum e_bt {
+		bt_none,
 		bt_byte, bt_ubyte,
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
         bt_unsigned,
         bt_struct, bt_union, bt_class, bt_enum, bt_void, bt_func, bt_ifunc,
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
-		bt_exception,
+		bt_exception, bt_ellipsis,
         bt_last};
+
+class MBlk
+{
+	static MBlk *first;
+public:
+	MBlk *next;
+	static void ReleaseAll();
+	static void *alloc(int sz);
+};
 
 struct slit {
     struct slit     *next;
@@ -102,21 +113,79 @@ struct slit {
 	char			*nmspace;
 };
 
+class C64PException
+{
+public:
+	int errnum;
+	int data;
+	C64PException(int e, int d) { errnum = e; data = d; };
+};
+
 struct typ;
 struct snode;
 
-struct sym {
-  struct sym *parent;
-    struct sym *next;
-    char *name;
-    char *realname;
-    char *stkname;
-    int8_t storage_class;
+class TYP;
+class SYM;
+class TypeArray;
+
+// Class for representing tables. Small footprint.
+
+class TABLE {
+public:
+	int head, tail;
+	int base;
+	int owner;
+	static SYM *match[100];
+	static int matchno;
+	TABLE();
+	static void CopySymbolTable(TABLE *dst, TABLE *src);
+	void insert(SYM* sp);
+	SYM *Find(std::string na,bool opt);
+	int Find(std::string na);
+	int Find(std::string na,__int16,TypeArray *typearray, bool exact);
+	int FindRising(std::string na);
+	TABLE *GetPtr(int n);
+	void SetOwner(int n) { owner = n; };
+	int GetHead() { return head; };
+	void SetHead(int p) { head = p; };
+	void SetTail(int p) { tail = p; };
+	void Clear() { head = tail = base = 0; };
+	void CopyTo(TABLE *dst) {
+		dst->head = head;
+		dst->tail = tail;
+	};
+	void MoveTo(TABLE *dst) {
+		CopyTo(dst);
+		Clear();
+	};
+	void SetBase(int b) { base = b; };
+};
+
+class SYM {
+public:
+  int id;
+  int parent;
+  int next;
+  std::string *name;
+  std::string *name2;
+  std::string *name3;
+	std::string *shortname;
+	std::string *mangledName;
+	char nameext[4];
+  char *realname;
+  char *stkname;
+	std::string signature;
+    __int8 storage_class;
+	unsigned int pos : 4;			// position of the symbol (param, auto or return type)
 	// Function attributes
 	uint8_t NumRegisterVars;
-	uint8_t NumParms;
-	struct sym *parms;
-	struct sym *nextparm;
+	unsigned __int8 NumParms;
+	// Auto's are ehandled by compound statements
+	TABLE proto;
+	TABLE params;
+	TABLE lsyms;              // local symbols (goto labels)
+	SYM *parms;					      // List of parameters associated with symbol
+	SYM *nextparm;
 	unsigned int IsPrototype : 1;
 	unsigned int IsTask : 1;
 	unsigned int IsInterrupt : 1;
@@ -128,6 +197,8 @@ struct sym {
 	unsigned int isConst : 1;
 	unsigned int IsKernel : 1;
 	unsigned int IsPrivate : 1;
+	unsigned int ctor : 1;
+	unsigned int dtor : 1;
 	struct enode *initexp;
     union {
         int64_t i;
@@ -136,19 +207,43 @@ struct sym {
         uint16_t wa[8];
         char *s;
     } value;
-    struct typ *tp;
+    TYP *tp;
     struct snode *prolog;
     struct snode *epilog;
     unsigned int stksize;
+
+	TypeArray *GetParameterTypes();
+	TypeArray *GetProtoTypes();
+	void PrintParameterTypes();
+	static SYM *Copy(SYM *src);
+	bool ParameterTypesMatch(SYM *sym);
+	bool ParameterTypesMatch(TypeArray *typearray);
+	SYM *Find(std::string name);
+	std::string GetNameHash();
+	bool CheckSignatureMatch(SYM *a, SYM *b) const;
+	SYM *FindExactMatch(int mm);
+	static SYM *FindExactMatch(int mm, std::string name, int rettype, TypeArray *typearray);
+	std::string BuildSignature(int opt = 0);
+	void BuildParameterList(int *num);
+	void AddParameters(SYM *list);
+	void AddProto(SYM *list);
+	void AddProto(TypeArray *);
+	static SYM *GetPtr(int n);
+	SYM *GetParentPtr();
+	void SetName(std::string nm) {
+       name = new std::string(nm);
+       name2 = new std::string(nm);
+       name3 = new std::string(nm); };
+	void SetNext(int nxt) { next = nxt; };
+  int GetNext() { return next; };
+	SYM *GetNextPtr();
+  int GetIndex();
 };
 
-typedef struct stab {
-    struct sym *head, *tail;
-} TABLE;
-
-typedef struct typ {
+class TYP {
+public:
     e_bt type;
-	int16_t typeno;			// number of the type
+	__int16 typeno;			// number of the type
 	unsigned int val_flag : 1;       /* is it a value type */
 	unsigned int isArray : 1;
 	unsigned int isUnsigned : 1;
@@ -159,15 +254,106 @@ typedef struct typ {
 	unsigned int isResv : 1;
 	int8_t		bit_width;
 	int8_t		bit_offset;
-    long        size;
-    long 		size2;
-    TABLE       lst;
-    struct typ      *btp;
-    char            *sname;
+  long        size;
+  long 		size2;
+  TABLE lst;
+  int btp;
+  TYP *GetBtp();
+  static TYP *GetPtr(int n);
+  int GetIndex();
+  std::string *sname;
 	unsigned int alignment;
-} TYP;
+	static TYP *Make(int bt, int siz);
+	static TYP *Copy(TYP *src);
+};
 
-#define SYM     struct sym
+class TypeArray
+{
+  void Add(int tp);
+public:
+  int types[40];
+  int length;
+  TypeArray();
+  void Add(TYP *tp);
+  bool IsEmpty();
+  bool IsEqual(TypeArray *);
+  void Clear();
+  TypeArray *Alloc();
+  void Print(txtoStream *);
+  void Print();
+  std::string BuildSignature();
+};
+
+class Declaration
+{
+	static void SetType(SYM *sp);
+public:
+	Declaration *next;
+	static int declare(SYM *parent,TABLE *table,int al,int ilc,int ztype);
+	static void ParseConst();
+	static void ParseTypedef();
+	static void ParseNaked();
+	static void ParseLong();
+	static void ParseInt();
+	static void ParseInt32();
+	static void ParseByte();
+	static SYM *ParseId();
+	static int ParseSpecifier(TABLE *table);
+	static SYM *ParsePrefix(char isUnion);
+	static SYM *ParseSuffix(SYM *sp);
+};
+
+class StructDeclaration : public Declaration
+{
+public:
+	static void ParseMembers(SYM * sym, TYP *tp, int ztype);
+	static int Parse(int ztype);
+};
+
+class ClassDeclaration : public Declaration
+{
+public:
+	static void ParseMembers(SYM * sym, int ztype);
+	static int Parse(int ztype);
+};
+
+class AutoDeclaration : public Declaration
+{
+public:
+	static void Parse(SYM *parent, TABLE *ssyms);
+};
+
+class ParameterDeclaration : public Declaration
+{
+public:
+	static int Parse(int);
+};
+
+class GlobalDeclaration : public Declaration
+{
+public:
+	void Parse();
+	static GlobalDeclaration *Make();
+};
+
+class Compiler
+{
+public:
+  int typenum;
+  int symnum;
+  SYM symbolTable[32768];
+  TYP typeTable[32768];
+public:
+	GlobalDeclaration *decls;
+	Compiler();
+	void compile();
+	int PreprocessFile(char *nm);
+	void CloseFiles();
+	void AddStandardTypes();
+  int main2(int c, char **argv);
+};
+
+//#define SYM     struct sym
 //#define TYP     struct typ
 //#define TABLE   struct stab
 
@@ -220,6 +406,12 @@ typedef struct typ {
 #define ERR_OUTOFPREDS  44 
 #define ERR_PARMLIST_MISMATCH	45
 #define ERR_PRIVATE		46
+#define ERR_CALLSIG2	47
+#define ERR_METHOD_NOTFOUND	48
+#define ERR_OUT_OF_MEMORY   49
+#define ERR_TOOMANY_SYMBOLS 50
+#define ERR_NULLPOINTER		1000
+#define ERR_CIRCULAR_LIST 1001
 
 /*      alignment sizes         */
 

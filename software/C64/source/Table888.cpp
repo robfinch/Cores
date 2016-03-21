@@ -513,13 +513,13 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
             GenerateMonadic(op_jsr,0,make_indx(node->p[0],regGP));//make_offset(node->p[0]));
         else
             GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
-		sym = gsearch(node->p[0]->sp);
+		sym = gsearch(*node->p[0]->sp);
 	}
     else
     {
 		ap = GenerateExpression(node->p[0],F_REG,8);
-		if (node->p[0]->sp)
-			sym = gsearch(node->p[0]->sp);
+		if (node->p[0]->sp->length())
+			sym = gsearch(*node->p[0]->sp);
 		if (use_gp) {
     		ap->mode = am_indx2;
     		ap->offset = 0;
@@ -548,7 +548,7 @@ AMODE *GenerateTable888FunctionCall(ENODE *node, int flags)
 	else {
 		if( result->preg != 1 || (flags & F_REG) == 0 ) {
 			if (sym) {
-				if (sym->tp->btp->type==bt_void)
+				if (sym->tp->GetBtp()->type==bt_void)
 					;
 				else
 					GenerateDiadic(op_mov,0,result,makereg(1));

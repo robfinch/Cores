@@ -80,6 +80,7 @@ extern int address_bits;
 extern std::ifstream *ifs;
 extern txtoStream ofs;
 extern txtoStream lfs;
+extern txtoStream dfs;
 /*
 extern FILE             *input,
                         *list,
@@ -91,8 +92,8 @@ extern int              lineno;
 extern int              nextlabel;
 extern int              lastch;
 extern int              lastst;
-extern char             lastid[63];
-extern char             lastkw[63];
+extern char             lastid[128];
+extern char             lastkw[128];
 extern char             laststr[MAX_STLP1];
 extern int64_t	ival;
 extern double           rval;
@@ -133,6 +134,27 @@ extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
 
+extern TYP stdint;
+extern TYP stduint;
+extern TYP stdlong;
+extern TYP stdulong;
+extern TYP stdshort;
+extern TYP stdushort;
+extern TYP stdchar;
+extern TYP stduchar;
+extern TYP stdbyte;
+extern TYP stdubyte;
+extern TYP stdstring;
+extern TYP stddbl;
+extern TYP stdtriple;
+extern TYP stdflt;
+extern TYP stddouble;
+extern TYP stdfunc;
+extern TYP stdexception;
+extern TYP stdconst;
+
+extern std::string declid;
+extern Compiler compiler;
 
 // Analyze.c
 extern int bsort(CSE **list);
@@ -143,8 +165,9 @@ extern CSE *olist;         /* list of optimizable expressions */
 extern void closefiles();
 
 extern void error(int n);
-extern void needpunc(enum e_sym p);
+extern void needpunc(enum e_sym p,int);
 // Memmgt.c
+extern void *allocx(int);
 extern char *xalloc(int);
 extern SYM *allocSYM();
 extern TYP *allocTYP();
@@ -168,14 +191,14 @@ extern struct snode *ParseCompoundStatement();
 
 extern void GenerateDiadic(int op, int len, struct amode *ap1,struct amode *ap2);
 // Symbol.c
-extern SYM *gsearch(char *na);
-extern SYM *search(char *na,TABLE *thead);
+extern SYM *gsearch(std::string na);
+extern SYM *search(std::string na,TABLE *thead);
 extern void insert(SYM* sp, TABLE *table);
 
 // ParseFunction.c
 extern SYM *BuildParameterList(SYM *sp, int *);
 
-extern char *litlate(char *);
+extern char *my_strdup(char *);
 // Decl.c
 extern int imax(int i, int j);
 extern TYP *maketype(int bt, int siz);
@@ -202,7 +225,7 @@ extern int64_t GetIntegerExpression(ENODE **p);
 // Expr.c
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, int64_t v1);
-extern ENODE *makesnode(int nt, char *v1, int64_t i);
+extern ENODE *makesnode(int nt, std::string v1, std::string v2, int64_t i);
 extern TYP *nameref(ENODE **node,int);
 extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
 extern TYP *expression(struct enode **node);

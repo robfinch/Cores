@@ -382,7 +382,7 @@ AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags)
 	// Call the function
 	if( node->p[0]->nodetype == en_nacon ) {
         GenerateDiadic(op_call,0,make_offset(node->p[0]),NULL);
-		sym = gsearch(node->p[0]->sp);
+		sym = gsearch(*node->p[0]->sp);
 	}
     else
     {
@@ -408,7 +408,7 @@ AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags)
 	else {
 		if( result->preg != 1 || (flags & F_REG) == 0 ) {
 			if (sym) {
-				if (sym->tp->btp->type==bt_void)
+				if (sym->tp->GetBtp()->type==bt_void)
 					;
 				else
 					GenerateDiadic(op_mov,0,result,makereg(1));

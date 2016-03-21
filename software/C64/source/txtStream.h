@@ -8,8 +8,10 @@ class txtoStream : public std::ofstream
 {
 	char buf[4000];
 public:
-	void write(char *buf) { std::ofstream::write(buf, strlen(buf)); };
+	void write(char *buf) { std::ofstream::write(buf, strlen(buf));
+       flush(); };
 	void printf(char *str) { write(str); };
+	void printf(const char *str) { write((char *)str); };
 	void printf(char *fmt, char *str);
 	void printf(char *fmt, char *str, int n);
 	void printf(char *fmt, char *str, char *str2);

@@ -37,52 +37,11 @@ extern int isStructDecl;
 
 extern int16_t typeno;
 extern int isTypedef;
-extern char *classname;
+extern std::string classname;
 extern bool isPrivate;
+extern SYM *currentClass;
 
 extern int roundSize(TYP *tp);
-static void ParseClassMembers(SYM * sym, int ztype);
-void CopySymbolTable(TABLE *dst, TABLE *src);
-
-TYP *CopyType(TYP *src)
-{
-	TYP *dst;
-	dst = allocTYP();
-//	if (dst==nullptr)
-//		throw gcnew C64::C64Exception();
-	memcpy(dst,src,sizeof(TYP));
-	if (src->btp) {
-		dst->btp = CopyType(src->btp);
-	}
-	dst->lst.head = 0;
-	dst->lst.tail = 0;
-	CopySymbolTable(&dst->lst,&src->lst);
-	return dst;
-}
-
-SYM *CopySymbol(SYM *src)
-{
-	SYM *dst;
-
-	dst = allocSYM();
-//	if (dst==nullptr)
-//		throw gcnew C64::C64Exception();
-	memcpy(dst, src, sizeof(SYM));
-	dst->tp = CopyType(src->tp);
-	dst->next = nullptr;
-	return dst;
-}
-
-void CopySymbolTable(TABLE *dst, TABLE *src)
-{
-	SYM *sp, *newsym;
-	sp = src->head;
-	while (sp) {
-		newsym = CopySymbol(sp);
-		insert(newsym,dst);
-		sp = sp->next;
-	}
-}
 
 // Class declarations have the form:
 //
@@ -99,7 +58,7 @@ void CopySymbolTable(TABLE *dst, TABLE *src)
 //
 //	class *identifier;
 //
-int ParseClassDeclaration(int ztype)
+int ClassDeclaration::Parse(int ztype)
 {
     SYM *sp, *bcsp;
     TYP *tp;
@@ -110,7 +69,10 @@ int ParseClassDeclaration(int ztype)
 	ENODE *pnd = &nd;
 	char *idsave;
 	int alignment;
+  SYM *cls;
 
+  cls = currentClass;
+	printf("ParseClassDeclaration\r\n");
 	alignment = 0;
 	isTypedef = TRUE;
 	NextToken();
@@ -119,7 +81,7 @@ int ParseClassDeclaration(int ztype)
 		goto lxit;
 	}
 //	ws = allocSYM();
-	idsave = litlate(lastid);
+	idsave = my_strdup(lastid);
 //	ws->name = idsave;
 //	ws->storage_class = sc_typedef;
 	// Passes lastid onto struct parsing
@@ -131,40 +93,37 @@ int ParseClassDeclaration(int ztype)
 	bit_next = 0;
 	bit_width = -1;
 
-	if((sp = search(lastid,&tagtable)) == NULL) {
-		// If we encounted an unknown struct in a parameter list, we want
-		// it to go into the global memory pool, not a local one.
-		if (parsingParameterList) {
-			gblflag = global_flag;
-			global_flag++;
-	        sp = allocSYM();
-			sp->name = litlate(lastid);
-			global_flag = gblflag;
-		}
-		else {
-	        sp = allocSYM();
-			sp->name = litlate(lastid);
-		}
+  dfs.printf("---------------------------------");
+  dfs.printf("Class decl:%s\n", lastid);
+  dfs.printf("---------------------------------");
+	if((sp = tagtable.Find(std::string(lastid),false)) == NULL) {
+    sp = allocSYM();
+    sp->SetName(my_strdup(lastid));
 		sp->tp = nullptr;
-        NextToken();
-
+    NextToken();
+    dfs.printf("A");
 		if (lastst == kw_align) {
-            NextToken();
-            alignment = GetIntegerExpression(&pnd);
-        }
+      NextToken();
+      alignment = GetIntegerExpression(&pnd);
+    }
 
 		// Could be a forward structure declaration like:
 		// struct buf;
 		if (lastst==semicolon) {
+      dfs.printf("B");
 			ret = 1;
-            insert(sp,&tagtable);
-            NextToken();
+			printf("classdecl insert1\r\n");
+      tagtable.insert(sp);
+      NextToken();
 		}
 		// Defining a pointer to an unknown struct ?
 		else if (lastst == star) {
-            insert(sp,&tagtable);
+      dfs.printf("C");
+			printf("classdecl insert2\r\n");
+      tagtable.insert(sp);
 		}
 		else if (lastst==colon) {
+      dfs.printf("D");
 			NextToken();
 			// Absorb and ignore public/private keywords
 			if (lastst == kw_public || lastst==kw_private)
@@ -173,79 +132,92 @@ int ParseClassDeclaration(int ztype)
 				error(ERR_SYNTAX);
 				goto lxit;
 			}
-			bcsp = search(lastid,&tagtable);
+			bcsp = tagtable.Find(std::string(lastid),false);
 			if (bcsp==nullptr) {
 				error(ERR_UNDEFINED);
 				goto lxit;
 			}
+      dfs.printf("E");
 			// Copy the type chain of base class
-			sp->tp = CopyType(bcsp->tp);
+			sp->tp = TYP::Copy(bcsp->tp);
+	    sp->storage_class = sc_type;
 			NextToken();
 			if (lastst != begin) {
-	            error(ERR_INCOMPLETE);
+        error(ERR_INCOMPLETE);
 				goto lxit;
 			}
+			/*
+			sp->tp = allocTYP();
 			sp->tp->typeno = typeno++;
-	        sp->tp->sname = sp->name;
-		    sp->tp->alignment = alignment;
+      sp->tp->sname =  new std::string(*sp->name);
+      sp->tp->alignment = alignment;
 			sp->tp->type = (e_bt)ztype;
-		    sp->storage_class = sc_type;
-            insert(sp,&tagtable);
-            NextToken();
-            ParseClassMembers(sp,ztype);
+			sp->tp->lst.SetBase(bcsp->GetIndex());
+	    sp->storage_class = sc_type;
+	    */
+      tagtable.insert(sp);
+      NextToken();
+      currentClass = sp;
+      dfs.printf("f");
+      ParseMembers(sp,ztype);
+      dfs.printf("G");
 		}
-        else if(lastst != begin)
-            error(ERR_INCOMPLETE);
-        else    {
+    else if(lastst != begin)
+      error(ERR_INCOMPLETE);
+    else {
 			if (sp->tp == nullptr) {
 				sp->tp = allocTYP();
-				sp->tp->lst.head = 0;
-				sp->tp->lst.tail = 0;
-				sp->tp->size = 0;
+				sp->tp->lst.Clear();
 			}
+			sp->tp->size = 0;
 			sp->tp->typeno = typeno++;
-	        sp->tp->sname = sp->name;
-		    sp->tp->alignment = alignment;
+      sp->tp->sname = new std::string(*sp->name);
+      sp->tp->alignment = alignment;
 			sp->tp->type = (e_bt)ztype;
-		    sp->storage_class = sc_type;
-            insert(sp,&tagtable);
-            NextToken();
-            ParseClassMembers(sp,ztype);
-            }
+			sp->tp->lst.SetBase(0);
+	    sp->storage_class = sc_type;
+      tagtable.insert(sp);
+      NextToken();
+      currentClass = sp;
+      ParseMembers(sp,ztype);
     }
+  }
+  // Else the class was found in the tag table.
 	else {
-        NextToken();
-        if (lastst==kw_align) {
-	        NextToken();
-            sp->tp->alignment = GetIntegerExpression(&pnd);
-        }
+    NextToken();
+    if (lastst==kw_align) {
+	    NextToken();
+      sp->tp->alignment = GetIntegerExpression(&pnd);
+    }
 		if (lastst==begin) {
-	        NextToken();
-            ParseClassMembers(sp,ztype);
+        NextToken();
+        currentClass = sp;
+        ParseMembers(sp,ztype);
 		}
 	}
-    head = sp->tp;
+  head = sp->tp;
 	isStructDecl = psd;
 lxit:
 	isTypedef = TRUE;
 	classname = idsave;
+	currentClass = cls;
 	return ret;
 }
 
-static void ParseClassMembers(SYM * sym, int ztype)
+void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 {
 	int slc;
 	TYP *tp = sym->tp;
 	int ist;
 
 	isPrivate = true;
-    slc = roundSize(sym->tp);
+  slc = roundSize(sym->tp);
 //	slc = 0;
-    tp->val_flag = 1;
+  tp->val_flag = 1;
 //	tp->val_flag = FALSE;
 	ist = isTypedef;
 	isTypedef = false;
-    while( lastst != end) {
+  while( lastst != end) {
 		if (lastst==kw_public)
 			isPrivate = false;
 		if (lastst==kw_private)
@@ -257,20 +229,20 @@ static void ParseClassMembers(SYM * sym, int ztype)
 		}
 		if (lastst==kw_unique || lastst==kw_static) {
 			NextToken();
-            declare(sym,&(tp->lst),sc_static,slc,ztype);
+      declare(sym,&(tp->lst),sc_static,slc,ztype);
 		}
 		else {
 			if(ztype == bt_struct || ztype==bt_class)
 				slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
 			else
-				slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
+				slc = imax(slc,declare(sym,&(tp->lst),sc_member,0,ztype));
 		}
-    }
+  }
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-    tp->size = tp->alignment ? tp->alignment : slc;
-    NextToken();
+  tp->size = tp->alignment ? tp->alignment : slc;
+  NextToken();
 	isTypedef = ist;
 }
 

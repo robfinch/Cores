@@ -27,7 +27,6 @@
 
 extern TYP *head, *tail;
 extern TYP stdbyte;
-extern char *declid;
 extern int catchdecl;
 Statement *ParseStatement();   /* forward declararation */ 
 Statement *ParseCatchStatement();
@@ -45,9 +44,8 @@ Statement *NewStatement(int typ, int gt) {
 	s->outer = currentStmt;
 	s->s1 = (Statement *)NULL;
 	s->s2 = (Statement *)NULL;
-	s->ssyms.head = (SYM *)NULL;
-	s->ssyms.tail = (SYM *)NULL;
-	s->lptr = litlate(inpline);
+	s->ssyms.Clear();
+	s->lptr = my_strdup(inpline);
 	//memset(s->ssyms,0,sizeof(s->ssyms));
 	if (gt) NextToken();
 	return s;
@@ -64,7 +62,7 @@ int GetTypeHash(TYP *p)
 		if (p->type==bt_pointer)
 			n+=20000;
 		p1 = p;
-		p = p->btp;
+		p = p->GetBtp();
 	} while (p);
 	n += p1->typeno;
 	return n;
@@ -82,7 +80,7 @@ int GetTypeHash(TYP *p)
 //			return 0; 
 //        } 
 //        sp = allocSYM(); 
-//        sp->name = litlate(lastid); 
+//        sp->name = my_strdup(lastid); 
 //        sp->value.i = nextlabel++; 
 //        sp->storage_class = sc_global;
 //        sp->tp = temp1; 
@@ -110,19 +108,19 @@ Statement *vortex_stmt()
 			error(ERR_IDEXPECT); 
 			return 0; 
         } 
-        temp1 = maketype(bt_long,0);
+        temp1 = (TYP *)TYP::Make(bt_long,0);
         temp1->val_flag = 1;
         sp = allocSYM(); 
-        sp->name = litlate(lastid); 
+        sp->SetName(my_strdup(lastid)); 
         sp->value.i = nextlabel++; 
         sp->storage_class = sc_global;
         sp->tp = temp1; 
-        insert(sp,&lsyms); 
+        currentFn->lsyms.insert(sp); 
         NextToken();       /* get past label name */ 
-        needpunc( colon );
+        needpunc( colon,30 );
 		snp = (struct snode *)xalloc(sizeof(struct snode)); 
         snp->stype = st_vortex; 
-        snp->label = (int64_t *)sp->name;
+        snp->label = (int64_t *)my_strdup((char *)sp->name->c_str());
         snp->next = 0; 
 		snp->s1 = ParseStatement(); 
         return snp; 
@@ -134,7 +132,7 @@ Statement *ParseCheckStatement()
     snp = NewStatement(st_check, TRUE);
     if( expression(&(snp->exp)) == 0 ) 
         error(ERR_EXPREXPECT); 
-    needpunc( semicolon );
+    needpunc( semicolon,31 );
     return snp; 
 } 
   
@@ -154,7 +152,7 @@ Statement *ParseWhileStatement()
         NextToken(); 
         if( expression(&(snp->exp)) == 0 ) 
             error(ERR_EXPREXPECT); 
-        needpunc( closepa ); 
+        needpunc( closepa,13 ); 
 		if (lastst==kw_do)
 			NextToken();
         snp->s1 = ParseStatement(); 
@@ -182,7 +180,7 @@ Statement *ParseUntilStatement()
         NextToken(); 
         if( expression(&(snp->exp)) == 0 ) 
             error(ERR_EXPREXPECT); 
-        needpunc( closepa ); 
+        needpunc( closepa,14 ); 
         snp->s1 = ParseStatement(); 
 		// Empty statements return NULL
 		if (snp->s1)
@@ -219,7 +217,7 @@ Statement *ParseDoStatement()
             error(ERR_EXPREXPECT); 
 		}
         if( lastst != end )
-            needpunc( semicolon );
+            needpunc( semicolon,15 );
     } 
 	iflevel--;
     return snp; 
@@ -235,16 +233,16 @@ Statement *ParseForStatement()
 	iflevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
-    needpunc(openpa); 
+    needpunc(openpa,16); 
     if( expression(&(snp->initExpr)) == NULL ) 
         snp->initExpr = (ENODE *)NULL; 
-    needpunc(semicolon); 
+    needpunc(semicolon,32); 
     if( expression(&(snp->exp)) == NULL ) 
         snp->exp = (ENODE *)NULL; 
-    needpunc(semicolon); 
+    needpunc(semicolon,17); 
     if( expression(&(snp->incrExpr)) == NULL ) 
         snp->incrExpr = (ENODE *)NULL; 
-    needpunc(closepa); 
+    needpunc(closepa,18); 
     snp->s1 = ParseStatement(); 
 	// Empty statements return NULL
 	if (snp->s1)
@@ -278,7 +276,7 @@ struct snode *ParseCriticalStatement()
         error(ERR_IDEXPECT); 
         return 0; 
     }
-    if( (sp = search(lastid,&gsyms[0])) == NULL ) { 
+    if( (sp = gsyms[0].Find(lastid,false)) == NULL ) { 
             error( ERR_UNDEFINED ); 
 			return 0;
             }
@@ -286,7 +284,7 @@ struct snode *ParseCriticalStatement()
 	if (lastst==closepa)
 		NextToken();
     snp->stype = st_critical; 
-    snp->label = (int64_t *)sp->name; 
+    snp->label = (int64_t *)my_strdup((char *)sp->name->c_str()); 
     snp->next = 0; 
 	snp->s1 = ParseStatement();
 	// Empty statements return NULL
@@ -387,7 +385,7 @@ Statement *ParseFirstcallStatement()
 
     snp = NewStatement(st_firstcall, TRUE); 
     sp = allocSYM();
-	sp->name = snp->fcname;
+	sp->SetName(snp->fcname);
     sp->storage_class = sc_static;
     sp->value.i = nextlabel++;
     sp->tp = &stdbyte;
@@ -395,7 +393,7 @@ Statement *ParseFirstcallStatement()
     lastst = kw_firstcall;       // fake out doinit()
     doinit(sp);
     lastst = st;
-    snp->fcname = litlate(sp->realname);
+    snp->fcname = my_strdup(sp->realname);
     snp->s1 = ParseStatement(); 
 	// Empty statements return NULL
 	if (snp->s1)
@@ -422,7 +420,7 @@ Statement *ParseIfStatement()
         NextToken(); 
         if( expression(&(snp->exp)) == 0 ) 
             error(ERR_EXPREXPECT); 
-        needpunc( closepa ); 
+        needpunc( closepa,19 ); 
 		if (lastst==kw_then)
 			NextToken();
         snp->s1 = ParseStatement(); 
@@ -465,25 +463,25 @@ Statement *ParseCatchStatement()
 			snp->s1->outer = snp;
 		return snp;
 	}
-    needpunc(openpa);
+    needpunc(openpa,33);
 	tp = head;
 	tp1 = tail;
 	catchdecl = TRUE;
-	ParseAutoDeclarations(NULL,&snp->ssyms);
+	AutoDeclaration::Parse(NULL,&snp->ssyms);
 	cseg();
 	catchdecl = FALSE;
 	tp2 = head;
 	head = tp;
 	tail = tp1;
-    needpunc(closepa);
+    needpunc(closepa,34);
     
-	if( (sp = search(declid,&snp->ssyms)) == NULL)
-        sp = makeint(declid);
+	if( (sp = snp->ssyms.Find(declid,false)) == NULL)
+        sp = makeint((char *)declid.c_str());
     node = makenode(sp->storage_class==sc_static ? en_labcon : en_autocon,NULL,NULL);
     // nameref looks up the symbol using lastid, so we need to back it up and
     // restore it.
     strncpy(buf,lastid,199);
-    strcpy(lastid, declid);
+    strcpy(lastid, declid.c_str());
     nameref(&node,FALSE);
     strcpy(lastid,buf);
 	snp->s1 = ParseStatement();
@@ -539,7 +537,7 @@ Statement *ParseCaseStatement()
         error(ERR_NOCASE); 
         return (Statement *)NULL;
     } 
-    needpunc(colon); 
+    needpunc(colon,35); 
     head = (Statement *)NULL; 
     while( lastst != end && lastst != kw_case && lastst != kw_default ) { 
 		if( head == NULL ) {
@@ -596,7 +594,7 @@ Statement *ParseSwitchStatement()
 	    error(ERR_OUTOFPREDS);
     if( expression(&(snp->exp)) == NULL ) 
         error(ERR_EXPREXPECT); 
-    needpunc(begin); 
+    needpunc(begin,36); 
     head = 0; 
     while( lastst != end ) { 
 		if( head == (Statement *)NULL ) {
@@ -629,7 +627,7 @@ Statement *ParseReturnStatement()
 	snp = NewStatement(st_return, TRUE);
     expression(&(snp->exp));
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,37 );
     return snp; 
 } 
   
@@ -643,7 +641,7 @@ Statement *ParseThrowStatement()
     tp = expression(&(snp->exp));
 	snp->label = (int64_t *)GetTypeHash(tp);
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,38 );
     return snp;
 } 
   
@@ -653,7 +651,7 @@ Statement *ParseBreakStatement()
 
 	snp = NewStatement(st_break, TRUE);
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,39 );
     return snp; 
 } 
   
@@ -663,7 +661,7 @@ Statement *ParseContinueStatement()
 
     snp = NewStatement(st_continue, TRUE);
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,40 );
     return snp;
 } 
   
@@ -672,7 +670,7 @@ Statement *ParseIntoffStatement()
 	Statement *snp; 
     snp = NewStatement(st_intoff, TRUE); 
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,41 );
     return snp;
 } 
   
@@ -682,7 +680,7 @@ Statement *ParseIntonStatement()
 
     snp = NewStatement(st_inton, TRUE); 
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,42 );
     return snp;
 } 
   
@@ -692,7 +690,7 @@ Statement *ParseStopStatement()
 
 	snp = NewStatement(st_stop, TRUE); 
 	if( lastst != end )
-		needpunc( semicolon );
+		needpunc( semicolon,43 );
 	return snp;
 } 
   
@@ -725,7 +723,7 @@ Statement *ParseAsmStatement()
 	if (nn >= 3500)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
-	snp->label = (int64_t *)litlate(buf);
+	snp->label = (int64_t *)my_strdup(buf);
     return snp;
 } 
 
@@ -768,14 +766,16 @@ Statement *ParseTryStatement()
 Statement *ParseExpressionStatement() 
 {       
 	Statement *snp;
-    snp = NewStatement(st_expr, FALSE); 
-    if( expression(&(snp->exp)) == NULL ) { 
-        error(ERR_EXPREXPECT);
-        NextToken(); 
-    } 
-    if( lastst != end )
-        needpunc( semicolon );
-    return snp; 
+	dfs.printf("Enter Parse Expression Statement\n");
+  snp = NewStatement(st_expr, FALSE); 
+  if( expression(&(snp->exp)) == NULL ) { 
+      error(ERR_EXPREXPECT);
+      NextToken(); 
+  } 
+  if( lastst != end )
+      needpunc( semicolon,44 );
+	dfs.printf("Leave Parse Expression Statement\n");
+  return snp; 
 } 
 
 // Parse a compound statement.
@@ -784,8 +784,9 @@ Statement *ParseCompoundStatement()
 {  
 	Statement *snp;
 	Statement *head, *tail; 
+  Statement *p;
 
-    snp = NewStatement(st_compound, FALSE); 
+  snp = NewStatement(st_compound, FALSE); 
 	currentStmt = snp;
 	head = 0;
 	if (lastst==colon) {
@@ -795,9 +796,10 @@ Statement *ParseCompoundStatement()
 			printf("clockbug\r\n");
 		NextToken();
 	}
-	ParseAutoDeclarations(NULL,&snp->ssyms);
+	AutoDeclaration::Parse(NULL,&snp->ssyms);
 	cseg();
 	// Add the first statement at the head of the list.
+	p = currentStmt;
 	if (lastst != end) {
 		head = tail = ParseStatement(); 
 		if (head)
@@ -816,9 +818,10 @@ Statement *ParseCompoundStatement()
 			tail = tail->next;
 		}
 	}
-    NextToken();
+	currentStmt = p;
+  NextToken();
 	snp->s1 = head;
-    return snp;
+  return snp;
 } 
   
 Statement *ParseLabelStatement()
@@ -827,13 +830,13 @@ Statement *ParseLabelStatement()
     SYM *sp;
 
     snp = NewStatement(st_label, FALSE); 
-    if( (sp = search(lastid,&lsyms)) == NULL ) { 
+    if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
         sp = allocSYM(); 
-        sp->name = litlate(lastid); 
+        sp->SetName(my_strdup(lastid));
         sp->storage_class = sc_label; 
         sp->tp = 0; 
         sp->value.i = nextlabel++; 
-        insert(sp,&lsyms); 
+        currentFn->lsyms.insert(sp); 
     } 
     else { 
         if( sp->storage_class != sc_ulabel ) 
@@ -842,7 +845,7 @@ Statement *ParseLabelStatement()
             sp->storage_class = sc_label; 
     } 
     NextToken();       /* get past id */ 
-    needpunc(colon); 
+    needpunc(colon,45); 
     if( sp->storage_class == sc_label ) { 
         snp->label = (int64_t *)sp->value.i; 
         snp->next = (Statement *)NULL; 
@@ -862,17 +865,17 @@ Statement *ParseGotoStatement()
         return (Statement *)NULL;
     } 
     snp = NewStatement(st_goto, FALSE);
-    if( (sp = search(lastid,&lsyms)) == NULL ) { 
+    if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
         sp = allocSYM(); 
-        sp->name = litlate(lastid); 
+        sp->SetName(my_strdup(lastid));
         sp->value.i = nextlabel++; 
         sp->storage_class = sc_ulabel; 
         sp->tp = 0; 
-        insert(sp,&lsyms); 
+        currentFn->lsyms.insert(sp); 
     }
     NextToken();       /* get past label name */
     if( lastst != end )
-        needpunc( semicolon );
+        needpunc( semicolon,46 );
     if( sp->storage_class != sc_label && sp->storage_class != sc_ulabel)
         error( ERR_LABEL );
     else { 

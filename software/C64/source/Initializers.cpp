@@ -73,7 +73,7 @@ void doinit(SYM *sp)
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->btp->alignment,8);
+           algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 8;
 		seg(oseg==noseg ? tlsseg : oseg,algn);
@@ -83,7 +83,7 @@ void doinit(SYM *sp)
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->btp->alignment,8);
+           algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 8;
 		seg(oseg==noseg ? dataseg : oseg,algn);          /* initialize into data segment */
@@ -93,14 +93,14 @@ void doinit(SYM *sp)
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->btp->alignment,8);
+           algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 8;
 		seg(oseg==noseg ? bssseg : oseg,algn);            /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
 	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
-		sp->realname = litlate(put_label(sp->value.i, sp->name, GetNamespace(), 'D'));
+		sp->realname = my_strdup(put_label(sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
 	}
 	else {
 		if (sp->storage_class == sc_global) {
@@ -112,7 +112,7 @@ void doinit(SYM *sp)
 			else if (curseg==tlsseg)
 				strcat(lbl, "tls ");
 		}
-		strcat(lbl, sp->name);
+		strcat(lbl, sp->name->c_str());
 		gen_strlab(lbl);
 	}
 	if (lastst == kw_firstcall) {
@@ -180,7 +180,7 @@ int InitializeArray(TYP *tp)
         NextToken();               /* skip past the brace */
         while(lastst != end) {
 			// Allow char array initialization like { "something", "somethingelse" }
-			if (lastst == sconst && (tp->btp->type==bt_char || tp->btp->type==bt_uchar)) {
+			if (lastst == sconst && (tp->GetBtp()->type==bt_char || tp->GetBtp()->type==bt_uchar)) {
 				nbytes = strlen(laststr) * 2 + 2;
 				p = laststr;
 				while( *p )
@@ -189,7 +189,7 @@ int InitializeArray(TYP *tp)
 				NextToken();
 			}
 			else
-				nbytes += InitializeType(tp->btp);
+				nbytes += InitializeType(tp->GetBtp());
             if( lastst == comma)
                 NextToken();
             else if( lastst != end)
@@ -197,7 +197,7 @@ int InitializeArray(TYP *tp)
         }
         NextToken();               /* skip closing brace */
     }
-    else if( lastst == sconst && (tp->btp->type == bt_char || tp->btp->type==bt_uchar)) {
+    else if( lastst == sconst && (tp->GetBtp()->type == bt_char || tp->GetBtp()->type==bt_uchar)) {
         nbytes = strlen(laststr) * 2 + 2;
         p = laststr;
         while( *p )
@@ -221,9 +221,9 @@ int InitializeStructure(TYP *tp)
 	SYM *sp;
     int nbytes;
 
-    needpunc(begin);
+    needpunc(begin,25);
     nbytes = 0;
-    sp = tp->lst.head;      /* start at top of symbol table */
+    sp = sp->GetPtr(tp->lst.GetHead());      /* start at top of symbol table */
     while(sp != 0) {
 		while(nbytes < sp->value.i) {     /* align properly */
 //                    nbytes += GenerateByte(0);
@@ -237,11 +237,11 @@ int InitializeStructure(TYP *tp)
             break;
         else
             error(ERR_PUNCT);
-        sp = sp->next;
+        sp = sp->GetNextPtr();
     }
     if( nbytes < tp->size)
         genstorage( tp->size - nbytes);
-    needpunc(end);
+    needpunc(end,26);
     return tp->size;
 }
 
@@ -307,8 +307,8 @@ int InitializePointer()
 	else {
 		lng = GetIntegerExpression(&n);
 		if (n && n->nodetype == en_cnacon) {
-			if (n->sp) {
-				sp = gsearch(n->sp);
+			if (n->sp->length()) {
+				sp = gsearch(*n->sp);
 				GenerateReference(sp,0);
 			}
 			else

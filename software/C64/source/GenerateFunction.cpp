@@ -263,24 +263,24 @@ static void GeneratePushParameter(ENODE *ep, int i, int n)
 
 // push entire parameter list onto stack
 //
-static int GeneratePushParameterList(ENODE *plist,bool xtra)
+static int GeneratePushParameterList(ENODE *plist)
 {
 	ENODE *st = plist;
 	int i,n;
 	// count the number of parameters
 	for(n = 0; plist != NULL; n++ )
 		plist = plist->p[1];
-	if (xtra) n++;
+	dfs.printf("Funccall %d parameters",n);
 	// move stack pointer down by number of parameters
 	if (st)
 		GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-n*8));
 	plist = st;
-    for(i = 0; plist != NULL; i++ )
-    {
+  for(i = 0; plist != NULL; i++ )
+  {
 		GeneratePushParameter(plist->p[0],i,n);
 		plist = plist->p[1];
-    }
-    return i;
+  }
+  return i;
 }
 
 AMODE *GenerateFunctionCall(ENODE *node, int flags)
@@ -295,21 +295,23 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
  	//msk = SaveTempRegs();
 	sp = TempInvalidate();
 	sym = (SYM*)NULL;
-    i = GeneratePushParameterList(node->p[1],node->p[0]->i==25);
+  i = GeneratePushParameterList(node->p[1]);
 	// Call the function
 	if( node->p[0]->nodetype == en_cnacon ) {
-		if (node->p[0]->i==25)
-			GenerateDiadic(op_sw,0,makereg(regCLP),make_indexed(0,regSP));
-        GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
-		sym = gsearch(node->p[0]->sp);
+//		if (node->p[0]->i==25)
+//			GenerateDiadic(op_sw,0,makereg(regCLP),make_indexed(0,regSP));
+    GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
+		sym = gsearch(*node->p[0]->sp);
 	}
     else
     {
+
 		ap = GenerateExpression(node->p[0],F_BREG,8);
 		ap->mode = am_brind;
 		isPascal = node->p[0]->isPascal;
 		GenerateDiadic(op_jsr,0,makebreg(1),ap);
 		ReleaseTempRegister(ap);
+
     }
 	// Pop parameters off the stack
 	if (i!=0) {

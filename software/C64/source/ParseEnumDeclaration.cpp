@@ -41,16 +41,16 @@ void ParseEnumDeclaration(TABLE *table)
             sp->tp = allocTYP();
             sp->tp->type = bt_enum;
             sp->tp->size = 2;
-            sp->tp->lst.head = 0;
-			sp->tp->btp = 0;
+            sp->tp->lst.Clear();
+			      sp->tp->btp = 0;
             sp->storage_class = sc_type;
-            sp->name = litlate(lastid);
-            sp->tp->sname = sp->name;
+            sp->SetName(my_strdup(lastid));
+            sp->tp->sname = new std::string(*sp->name);
             NextToken();
             if( lastst != begin)
                     error(ERR_INCOMPLETE);
             else {
-				insert(sp,&tagtable);
+				tagtable.insert(sp);
 				NextToken();
 				ParseEnumerationList(table);
             }
@@ -80,15 +80,15 @@ void ParseEnumerationList(TABLE *table)
     evalue = 0;
     while(lastst == id) {
         sp = allocSYM();
-        sp->name = litlate(lastid);
+        sp->SetName(my_strdup(lastid));
         sp->storage_class = sc_const;
         sp->tp = &stdconst;
-        insert(sp,table);
+        table->insert(sp);
         NextToken();
 		if (lastst==assign) {
 			NextToken();
 			sp->value.i = GetIntegerExpression((ENODE **)NULL);
-			evalue = sp->value.i+1;
+			evalue = (int)sp->value.i+1;
 		}
 		else
 			sp->value.i = evalue++;
@@ -97,6 +97,6 @@ void ParseEnumerationList(TABLE *table)
         else if(lastst != end)
                 break;
     }
-    needpunc(end);
+    needpunc(end,48);
 }
 

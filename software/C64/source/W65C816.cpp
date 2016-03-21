@@ -1,5 +1,5 @@
 // ============================================================================
-// (C) 2012-2014 Robert Finch
+// (C) 2012-2016 Robert Finch
 // All Rights Reserved.
 // robfinch<remove>@finitron.ca
 //
@@ -82,13 +82,10 @@ int Allocate816RegisterVars()
 	if( mask != 0 ) {
 		cnt = 0;
 		//GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(bitsset(rmask)*4));
+		GenerateMonadic(op_tsa,0,NULL);
 		GenerateMonadic(op_clc,0,NULL);
-		GenerateMonadic(op_lda,0,makereg(regSP));
 		GenerateMonadic(op_sbc,0,make_immed(bitsset(rmask)*4&0xffff));
-		GenerateMonadic(op_sta,0,makereg(regSP));
-		GenerateMonadic(op_lda,0,makereg(regSP+2));
-		GenerateMonadic(op_sbc,0,make_immed(0));
-		GenerateMonadic(op_sta,0,makereg(regSP+2));
+		GenerateMonadic(op_tas,0,NULL);
 		for (nn = 0; nn < 32; nn++) {
 			if (rmask & (0x80000000 >> nn)) {
 //				GenerateDiadic(op_sw,0,makereg(nn&31),make_indexed(cnt,regSP));
@@ -626,7 +623,7 @@ AMODE *Generate816FunctionCall(ENODE *node, int flags)
 	// Call the function
 	if( node->p[0]->nodetype == en_nacon ) {
         GenerateDiadic(op_jsl,0,make_offset(node->p[0]),NULL);
-		sym = gsearch(node->p[0]->sp);
+		sym = gsearch(*node->p[0]->sp);
 	}
     else
     {
@@ -673,7 +670,7 @@ AMODE *Generate816FunctionCall(ENODE *node, int flags)
 	else {
 		if( result->preg != 1 || (flags & F_REG) == 0 ) {
 			if (sym) {
-				if (sym->tp->btp->type==bt_void)
+				if (sym->tp->GetBtp()->type==bt_void)
 					;
 				else
 					GenerateDiadic(op_mov,0,result,makereg(1));

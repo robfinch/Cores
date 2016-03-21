@@ -133,15 +133,15 @@ AMODE *make_clabel(int64_t lab)
 AMODE *make_string(char *s)
 {
 	ENODE *lnode;
-    AMODE *ap;
+  AMODE *ap;
 
-    lnode = allocEnode();
-    lnode->nodetype = en_nacon;
-    lnode->sp = s;
-    ap = allocAmode();
-    ap->mode = am_direct;
-    ap->offset = lnode;
-    return ap;
+  lnode = allocEnode();
+  lnode->nodetype = en_nacon;
+  lnode->sp = new std::string(s);
+  ap = allocAmode();
+  ap->mode = am_direct;
+  ap->offset = lnode;
+  return ap;
 }
 
 /*
@@ -194,10 +194,10 @@ AMODE *make_indexed(int64_t o, int i)
 AMODE *make_offset(ENODE *node)
 {
 	AMODE *ap;
-    ap = allocAmode();
-    ap->mode = am_direct;
-    ap->offset = node;
-    return ap;
+  ap = allocAmode();
+  ap->mode = am_direct;
+  ap->offset = node;
+  return ap;
 }
         
 AMODE *make_indx(ENODE *node, int reg)
@@ -1951,6 +1951,7 @@ int GetNaturalSize(ENODE *node)
 		case en_cnacon: case en_nacon:  case en_autocon: case en_autofcon: case en_classcon:
 		case en_tempref:
 		case en_regvar:
+		case en_bregvar:
         case en_fpregvar:
 		case en_cbw: case en_cubw:
 		case en_ccw: case en_cucw:

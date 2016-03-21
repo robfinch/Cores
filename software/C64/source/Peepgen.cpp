@@ -81,17 +81,23 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
+  printf("Enter GenerateMonadic\r\n");
 	struct ocode *cd;
-    cd = (struct ocode *)xalloc(sizeof(struct ocode));
+printf("A");
+  cd = (struct ocode *)allocx(sizeof(struct ocode));
+printf("B");
 	cd->predop = 1;
 	cd->pregreg = 15;
-    cd->opcode = op;
-    cd->length = len;
-    cd->oper1 = copy_addr(ap1);
-    cd->oper2 = NULL;
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = copy_addr(ap1);
+printf("C");
+  cd->oper2 = NULL;
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
-    AddToPeepList(cd);
+printf("D");
+  AddToPeepList(cd);
+  printf("Leave GenerateMonadic\r\n");
 }
 
 void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)
@@ -187,7 +193,7 @@ void GenerateLabel(int labno)
     newl = (struct ocode *)xalloc(sizeof(struct ocode));
     newl->opcode = op_label;
     newl->oper1 = (struct amode *)labno;
-	newl->oper2 = (struct amode *)currentFn->name;
+	newl->oper2 = (struct amode *)my_strdup((char *)currentFn->name->c_str());
     AddToPeepList(newl);
 }
 

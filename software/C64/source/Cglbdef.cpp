@@ -62,6 +62,7 @@ int address_bits = 32;
 std::ifstream *ifs;
 txtoStream ofs;
 txtoStream lfs;
+txtoStream dfs;
 /*
 FILE            *input = 0,
                 *list = 0,
@@ -72,8 +73,8 @@ int             lineno = 0;
 int             nextlabel = 0;
 int             lastch = 0;
 int             lastst = 0;
-char            lastid[63] = "";
-char            lastkw[63] = "";
+char            lastid[128] = "";
+char            lastkw[128] = "";
 char            laststr[MAX_STRLEN + 1] = "";
 int64_t			ival = 0;
 double          rval = 0.0;
@@ -81,8 +82,8 @@ double          rval = 0.0;
 //FLOAT           rval = {0,0,0,0,0,0};
 int parseEsc = TRUE;
 
-TABLE           gsyms[257],// = {0,0},
-	           lsyms = {0,0};
+TABLE           gsyms[257];// = {0,0},
+	           
 SYM             *lasthead = (SYM *)NULL;
 struct slit     *strtab = (struct slit *)NULL;
 int             lc_static = 0;
@@ -90,7 +91,7 @@ int             lc_auto = 0;
 int				lc_thread = 0;
 struct snode    *bodyptr = 0;
 int             global_flag = 1;
-TABLE           defsyms = {0,0};
+TABLE           defsyms;
 int             save_mask = 0;          /* register save mask */
 int             fpsave_mask = 0;
 TYP             tp_int, tp_econst;
