@@ -167,7 +167,9 @@ int IdentifyKeyword()
 		if (p[1]=='l' && p[2]=='i' && p[3]=='g' && p[4]=='n' && p[5]=='\0')
 			return lastst = kw_align;
 	}
-	if (p[0]=='v') {		// void,volatile
+	if (p[0]=='v') {		// virtual void,volatile
+		if (p[1]=='i' && p[2]=='r' && p[3]=='t' && p[4]=='u' && p[5]=='a' && p[6]=='l' && p[7]=='\0')
+			return lastst = kw_virtual;
 		if (p[1]=='o' && p[2]=='i' && p[3]=='d' && p[4]=='\0')
 			return lastst = kw_void;
 		if (p[1]=='o' && p[2]=='l' && p[3]=='a' && p[4]=='t' && p[5]=='i' && p[6]=='l' && p[7]=='e' && p[8]=='\0')

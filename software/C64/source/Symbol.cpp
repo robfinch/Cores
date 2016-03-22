@@ -28,7 +28,7 @@
 char *prefix;
 extern int GetReturnBlockSize();
 extern int nparms;
-extern std::string names[20];
+extern Stringx names[20];
 
 SYM *makeint2(std::string na);
 
@@ -150,7 +150,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 					if (ta->IsEqual(typearray))
 						break;
 					if (ta)
-						delete[] ta;
+						delete ta;
 				}
 				else
 					break;
@@ -283,7 +283,7 @@ void SYM::PrintParameterTypes()
 	dfs.printf("Proto types(%s)\n",(char *)name->c_str());
 	ta->Print();
 	if (ta)
-		delete[] ta;
+		delete ta;
 }
 
 
@@ -334,8 +334,8 @@ bool SYM::CheckSignatureMatch(SYM *a, SYM *b) const
 //	if (a->tp->typeno != b->tp->typeno)
 //		return false;
 
-	ta = a->BuildSignature().substr(5);
-	tb = b->BuildSignature().substr(5);
+	ta = a->BuildSignature()->substr(5);
+	tb = b->BuildSignature()->substr(5);
 	return ta.compare(tb)==0;
 }
 
@@ -343,53 +343,88 @@ bool SYM::CheckSignatureMatch(SYM *a, SYM *b) const
 // Convert a type number to a character string
 // These will always be three characters.
 
-std::string TypenoToChars(__int16 typeno)
+std::string *TypenoToChars(__int16 typeno)
 {
 	const std::string alphabet =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
-	char c1,c2,c3;
-	std::string str;
+	char c[8];
+	std::string *str;
 
-	c1 = alphabet[typeno & 31];
-	c2 = alphabet[(typeno>>5) & 31];
-	c3 = alphabet[(typeno>>10) & 31];
-	str += c1;
-	str += c2;
-	str += c3;
+  str = new std::string();
+  dfs.puts("<TypenoToChars>");
+  dfs.putch('A');
+	c[0] = alphabet[typeno & 31];
+  dfs.putch('B');
+	c[1] = alphabet[(typeno>>5) & 31];
+  dfs.putch('C');
+	c[2] = alphabet[(typeno>>10) & 31];
+  c[3] = '\0';
+  c[4] = '\0';
+  c[5] = '\0';
+  c[6] = '\0';
+  c[7] = '\0';
+  dfs.puts("D:");
+	str->append(c);
+//	dfs.printf("%s",(char *)str->c_str());
+  dfs.puts("</TypenoToChars>");
 	return str;
 }
 
 // Get the mangled name for the function
 //
-std::string SYM::GetNameHash()
+std::string *SYM::GetNameHash()
 {
-	std::string nh;
+	std::string *nh;
   SYM *sp;
+  int nn;
 
+  dfs.puts("<GetNameHash>");
 	nh = TypenoToChars(tp->typeno);
+  dfs.putch('A');
+	sp = GetPtr(sp->tp->lst.base);
+  dfs.putch('B');
+	for (nn = 0; sp && nn < 200; nn++) {
+	   dfs.putch('.');
+	   nh->append(*sp->GetNameHash());
+     sp = GetPtr(sp->tp->lst.base);
+	}
+	if (nn >= 200) {
+	  error(ERR_CIRCULAR_LIST);
+	}
+/*
 	if (parent) {
 	  sp = GetPtr(parent);
 		nh += sp->GetNameHash();
 	}
+*/
+  dfs.puts("</GetNameHash>\n");
 	return nh;
 }
 
 // Build a function signature string including
 // the return type, base classes, and any parameters.
 
-std::string SYM::BuildSignature(int opt)
+std::string *SYM::BuildSignature(int opt)
 {
-	std::string str;
-	SYM *sp;
-	int n;
+	std::string *str;
+  std::string *nh;
 
-	str = "_Z";		// 'C' likes this
-	str += GetNameHash();
-	str += *name;
-	if (opt)
-	   str += GetParameterTypes()->BuildSignature();
-	else
-	   str += GetProtoTypes()->BuildSignature();
+  dfs.puts("<BuildSignature>");
+	str = new std::string("_Z");		// 'C' likes this
+	nh = GetNameHash();
+	str->append(*nh);
+	delete nh;
+	dfs.printf("A");
+	str->append(*name);
+	if (opt) {
+    dfs.printf("B");
+	  str->append(*GetParameterTypes()->BuildSignature());
+  }
+	else {
+	  dfs.printf("C");
+	  str->append(*GetProtoTypes()->BuildSignature());
+  }
+  dfs.printf(":%s</BuildSignature>",(char *)str->c_str());
 	return str;
 }
 
@@ -481,9 +516,9 @@ void SYM::BuildParameterList(int *num)
 dfs.printf("B");
 	nparms = onp;
 	for(i = 0;i < np && i < 20;++i) {
-		if( (sp1 = currentFn->params.Find(names[i],false)) == NULL) {
-printf("C");
-			sp1 = makeint2(names[i]);
+		if( (sp1 = currentFn->params.Find(names[i].str,false)) == NULL) {
+dfs.printf("C");
+			sp1 = makeint2(names[i].str);
 //			lsyms.insert(sp1);
 		}
 		sp1->parent = parent;
@@ -556,6 +591,28 @@ void SYM::AddProto(TypeArray *ta)
     sym->tp->typeno = ta->types[nn];
     proto.insert(sym);
   }
+}
+
+void SYM::AddDerived(SYM *sp)
+{
+  DerivedMethod *mthd;
+ 
+  dfs.printf("Enter Add derived"); 
+  mthd = (DerivedMethod *)allocx(sizeof(DerivedMethod));
+  dfs.printf("A");
+  if (sp->tp==nullptr)
+    dfs.printf("Nullptr");
+  mthd->typeno = sp->tp->typeno;
+  dfs.printf("B");
+  mthd->name = sp->BuildSignature();
+
+  dfs.printf("C");
+  if (derivitives) {
+    dfs.printf("D");
+     mthd->next = derivitives;
+  }
+  derivitives = mthd;
+  dfs.printf("Leave Add derived"); 
 }
 
 

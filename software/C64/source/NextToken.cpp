@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -77,10 +77,10 @@ int isdigit(char c) { return (c >= '0' && c <= '9'); }
 void initsym()
 {
 	lptr = inpline;
-    inpline[0] = 0;
-    numerrs = 0;
-    total_errors = 0;
-    lineno = 0;
+  inpline[0] = 0;
+  numerrs = 0;
+  total_errors = 0;
+  lineno = 0;
 }
 
 int getline(int listflag)
@@ -121,6 +121,7 @@ int getline(int listflag)
  */
 int getch()
 {
+
 	while( (lastch = *lptr++) == '\0') {
         if( lstackptr > 0 ) {
             lptr = linstack[--lstackptr];
@@ -391,8 +392,9 @@ j1:
 
 void SkipSpaces()
 {
-    while( my_isspace(lastch) ) 
+    while( my_isspace(lastch) ) {
         getch(); 
+    }
 }
 /*
  *      NextToken - get next symbol from input stream.
@@ -411,49 +413,56 @@ void SkipSpaces()
  *      NextToken should be called for all your input needs...
  */
 void NextToken()
-{       register int    i, j;
-        SYM             *sp;
-		int tch;
+{
+  int i, j;
+  SYM *sp;
+  int tch;
 restart:        /* we come back here after comments */
-        if (backup_token) {
-           backup_token = 0;
-           lastch = '(';
-           lastst = openpa;
-           return;
-        }
-		SkipSpaces();
-        if( lastch == -1)
-                lastst = my_eof;
-        else if(isdigit(lastch))
-                getnum();
-        else if(isidch(lastch)) {
-                getid();
-				if( (sp = defsyms.Find(lastid,false)) != NULL) {
-						tch = lastch;
-						if (!(lastch==')' && sp->value.s[0]=='(')) {
-							if (lstackptr < 19) {
-								linstack[lstackptr] = lptr;
-								chstack[lstackptr++] = tch;
-								lptr = sp->value.s;
-							}
-							getch();
-							goto restart;
-						}
-						}
-                }
-        else switch(lastch) {
-                case '+':
-                        getch();
-                        if(lastch == '+') {
-                                getch();
-                                lastst = autoinc;
-                                }
-                        else if(lastch == '=') {
-                                getch();
-                                lastst = asplus;
-                                }
-                        else lastst = plus;
-                        break;
+  if (backup_token) {
+     backup_token = 0;
+     lastch = '(';
+     lastst = openpa;
+     return;
+  }
+	SkipSpaces();
+  if( lastch == -1) {
+    lastst = my_eof;
+    dfs.printf("Returning EOF from NextToken.\n");
+  }
+  else if(isdigit(lastch)) {
+    getnum();
+  }
+  else if(isidch(lastch)) {
+    getid();
+
+		if( (sp = defsyms.Find(lastid,false)) != NULL) {
+			tch = lastch;
+			if (!(lastch==')' && sp->value.s[0]=='(')) {
+				if (lstackptr < 19) {
+					linstack[lstackptr] = lptr;
+					chstack[lstackptr++] = tch;
+					lptr = sp->value.s;
+  			}
+				getch();
+				goto restart;
+			}
+		}
+
+  }
+  else {
+  switch(lastch) {
+  case '+':
+    getch();
+    if(lastch == '+') {
+            getch();
+            lastst = autoinc;
+            }
+    else if(lastch == '=') {
+            getch();
+            lastst = asplus;
+            }
+    else lastst = plus;
+    break;
                 case '-':
                         getch();
                         if(lastch == '-') {
@@ -481,12 +490,12 @@ restart:        /* we come back here after comments */
                 case '/':
                         getch();
                         if(lastch == '=') {
-                                getch();
-                                lastst = asdivide;
-                                }
+                          getch();
+                          lastst = asdivide;
+                        }
                         else if(lastch == '*') {
-								inComment = TRUE;
-                                getch();
+                          inComment = TRUE;
+                          getch();
                                 for(;;) {
                                         if(lastch == '*') {
                                                 getch();
@@ -501,15 +510,17 @@ restart:        /* we come back here after comments */
                                         }
                                 }
 						else if (lastch == '/') {
+
 							inComment = TRUE;
 							for(;;) {
 								getch();
-								if (lastch=='\n') {
+								if (lastch=='\n' || lastch==-1) {
 									//getch();
 									inComment = FALSE;
 									goto restart;
 								}
 							}
+
 						}
                         else lastst = divide;
                         break;
@@ -703,8 +714,9 @@ restart:        /* we come back here after comments */
                         error(ERR_ILLCHAR);
                         goto restart;   /* get a real token */
                 }
-        if(lastst == id)
-                IdentifyKeyword();
+              }
+  if(lastst == id)
+    IdentifyKeyword();
 //	printf("token: %d",lastst);
 //	if (lastst==id)
 //		printf("lastid=%s| ", lastid);

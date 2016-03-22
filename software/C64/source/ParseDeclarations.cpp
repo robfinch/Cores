@@ -25,31 +25,13 @@
 //
 #include "stdafx.h"
 
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
 TYP *head = (TYP *)NULL;
 TYP *tail = (TYP *)NULL;
 std::string declid;
 //char *Declaration::declid = (char *)NULL;
 TABLE tagtable;
 TYP stdconst;
-std::string names[20];
+Stringx names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
 int nfc = 0;
@@ -60,6 +42,7 @@ int isUnion = FALSE;
 int isUnsigned = FALSE;
 int isSigned = FALSE;
 int isVolatile = FALSE;
+int isVirtual = FALSE;
 int isIO = FALSE;
 int isConst = FALSE;
 int missingArgumentName = FALSE;
@@ -249,6 +232,32 @@ void Declaration::ParseInt32()
 	head->isShort = TRUE;
 }
 
+void Declaration::ParseInt8()
+{
+	if (isUnsigned) {
+		head = (TYP *)TYP::Make(bt_ubyte,1);
+		tail = head;
+	}
+	else {
+		head =(TYP *)TYP::Make(bt_byte,1);
+		tail = head;
+	}
+	head->isUnsigned = isUnsigned;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	NextToken();
+	if (lastst==kw_oscall) {
+		isOscall = TRUE;
+		NextToken();
+	}
+	if (lastst==kw_nocall || lastst==kw_naked) {
+		isNocall = TRUE;
+		NextToken();
+	}
+	bit_max = 8;
+}
+
 void Declaration::ParseByte()
 {
 	if (isUnsigned) {
@@ -301,13 +310,14 @@ int Declaration::ParseSpecifier(TABLE *table)
 	SYM *sp;
 	char *idsave;
 
-printf("Enter ParseSpecifier\r\n");
+dfs.printf("Enter ParseSpecifier\r\n");
 	isUnsigned = FALSE;
 	isSigned = FALSE;
 	isVolatile = FALSE;
+	isVirtual = FALSE;
 	isIO = FALSE;
 	isConst = FALSE;
-printf("A");
+dfs.printf("A");
 	for (;;) {
 		switch (lastst) {
 				
@@ -335,6 +345,12 @@ printf("A");
                     stkname = my_strdup(lastid);
                 }
 				goto lxit;
+
+      case kw_virtual:
+        dfs.printf("virtual");
+        isVirtual = TRUE;
+        NextToken();
+        break;
 
 			case kw_kernel:
 				isKernel = TRUE;
@@ -400,31 +416,7 @@ printf("A");
                 NextToken();
 				break;
 
-			case kw_int8:
-				if (isUnsigned) {
-					head = (TYP *)TYP::Make(bt_ubyte,1);
-					tail = head;
-				}
-				else {
-					head =(TYP *)TYP::Make(bt_byte,1);
-					tail = head;
-				}
-				head->isUnsigned = isUnsigned;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				if (lastst==kw_oscall) {
-					isOscall = TRUE;
-					NextToken();
-				}
-				if (lastst==kw_nocall || lastst==kw_naked) {
-					isNocall = TRUE;
-					NextToken();
-				}
-				bit_max = 8;
-				goto lxit;
-				break;
+			case kw_int8: ParseInt8(); goto lxit;
 
 			case kw_signed:
 				isSigned = TRUE;
@@ -576,8 +568,12 @@ dfs.printf("B|%s|",(char *)declid.c_str());
       strncpy(namebuf,lastid,990);
 dfs.printf("C"); 
 		  if (funcdecl==1) {
-				names[nparms] = declid;
-				nparms++;
+		    if (nparms > 19)
+		      error(ERR_TOOMANY_PARAMS);
+        else {
+				  names[nparms].str = declid;
+				  nparms++;
+			  }
 			}
 dfs.printf("D"); 
       NextToken();
@@ -603,7 +599,7 @@ dfs.printf("D");
 					dfs.printf("Setting parent:%s|\r\n",(char *)sp->GetParentPtr()->name->c_str());
 			declid = my_strdup(lastid);
       sp->name = new std::string(declid);
-printf("E"); 
+dfs.printf("E"); 
 			if (lastst == colon) {
 				NextToken();
 				bit_width = GetIntegerExpression((ENODE **)NULL);
@@ -619,7 +615,7 @@ printf("E");
 					bit_offset = 0;
 				bit_next = bit_offset + bit_width;
 //					SetType(sp);
-printf("F"); 
+dfs.printf("F"); 
 				break;	// no ParseDeclarationSuffix()
 			}
 				//if (lastst==closepa) {
@@ -709,160 +705,151 @@ printf("F");
 	return sp;
 }
 
-// Take care of the () or [] trailing part of a declaration
-//
-SYM *Declaration::ParseSuffix(SYM *sp)
+
+// Take care of trailing [] in a declaration. These indicate array indicies.
+
+void Declaration::ParseSuffixOpenbr()
 {
-	TYP     *temp1;
-	SYM *sym;
+	TYP *temp1;
+	long sz2;
+
+  NextToken();
+  temp1 = (TYP *)TYP::Make(bt_pointer,0);
+  temp1->val_flag = 1;
+  temp1->isArray = TRUE;
+  temp1->btp = head->GetIndex();
+  if(lastst == closebr) {
+    temp1->size = 0;
+    NextToken();
+  }
+  else if(head != NULL) {
+    sz2 = GetIntegerExpression((ENODE **)NULL);
+    temp1->size = sz2 * head->size;
+	  temp1->alignment = head->alignment;
+		needpunc(closebr,21);
+  }
+  else {
+    sz2 = GetIntegerExpression((ENODE **)NULL);
+	  temp1->size = sz2;
+	  needpunc(closebr,22);
+	}
+  head = temp1;
+  if( tail == NULL)
+    tail = head;
+}
+
+// Take care of following open parenthesis (). These indicate a function
+// call. There may or may not be following parameters. A following '{' is
+// looked for and if found a flag is set to parse the function body.
+
+void Declaration::ParseSuffixOpenpa(SYM *sp)
+{
+	TYP *temp1;
+	TYP *tempHead, *tempTail;
 	int fd;
 	std::string odecl;
-	TYP *tempHead, *tempTail;
-	long sz2;
-	bool isFuncPtr = false;
 	int isd;
 	int nump;
+	bool isFuncPtr = false;
 
-	dfs.printf("Enter ParseDeclSuffix\n");
-	// The declaration doesn't have to have an identifier name
-	// so sp might be null.
-	if (sp==nullptr)
-		sp = allocSYM();
-
-//	printf("ParseDeclSuffix %d",head->type);
-  switch (lastst) {
-  case openbr:
-
+  dfs.printf("<openpa>\n");
+  dfs.printf("****************************\n");
+  dfs.printf("****************************\n");
+  dfs.printf("Function: %s\n", (char *)sp->name->c_str());
+  dfs.printf("****************************\n");
+  dfs.printf("****************************\n");
+  NextToken();
+  isFuncPtr = head->type==bt_pointer;
+  temp1 =(TYP *) TYP::Make(bt_func,0/*isFuncPtr ? bt_func : bt_ifunc,0*/);
+  temp1->val_flag = 1;
+  dfs.printf("o ");
+  if (isFuncPtr) {
+    temp1->btp = head->btp;
+    head->btp = temp1->GetIndex();
+  }
+  else {
+	  temp1->btp= head->GetIndex();
+	  head = temp1;
+  }
+  dfs.printf("p ");
+  if (tail==NULL) {
+	  if (temp1->GetBtp())
+		  tail = temp1->GetBtp();
+	  else
+		  tail = temp1;
+  }
+  dfs.printf("q ");
+  needParseFunction = TRUE;
+  sp->params.Clear();
+  if(lastst == closepa) {
     NextToken();
-    temp1 = (TYP *)TYP::Make(bt_pointer,0);
-    temp1->val_flag = 1;
-    temp1->isArray = TRUE;
-    temp1->btp = head->GetIndex();
-    if(lastst == closebr) {
-      temp1->size = 0;
-      NextToken();
-    }
-    else if(head != NULL) {
-      sz2 = GetIntegerExpression((ENODE **)NULL);
-	    temp1->size = sz2 * head->size;
-		  temp1->alignment = head->alignment;
-			needpunc(closebr,21);
+	  if(lastst == begin) {
+      temp1->type = bt_ifunc;
 	  }
-    else {
-      sz2 = GetIntegerExpression((ENODE **)NULL);
-		  temp1->size = sz2;
-		  needpunc(closebr,22);
-		}
-      head = temp1;
-      if( tail == NULL)
-        tail = head;
-      sp = ParseSuffix(sp);
-      break;
-
-    case openpa:
-      printf("openpa");
-      dfs.printf("****************************\n");
-      dfs.printf("****************************\n");
-      dfs.printf("Function: %s\n", (char *)sp->name->c_str());
-      dfs.printf("****************************\n");
-      dfs.printf("****************************\n");
-      sp->params.Clear();
-      NextToken();
-      isFuncPtr = head->type==bt_pointer;
-      temp1 =(TYP *) TYP::Make(bt_func,0/*isFuncPtr ? bt_func : bt_ifunc,0*/);
-      temp1->val_flag = 1;
-    printf("o ");
-      if (isFuncPtr) {
-        temp1->btp = head->btp;
-        head->btp = temp1->GetIndex();
+	  else {
+      temp1->type = bt_func;
+		  needParseFunction = FALSE;
+		  dfs.printf("Set false\n");
+	  }
+	  currentFn = sp;
+	  sp->parent = currentClass->GetIndex();
+	  sp->NumParms = 0;
+  }
+  else {
+    dfs.printf("r");
+	  currentFn = sp;
+	  sp->parent = currentClass->GetIndex();
+    temp1->type = bt_func;
+  	// Parse the parameter list for a function pointer passed as a
+  	// parameter.
+  	// Parse parameter list for a function pointer defined within
+  	// a structure.
+  	if (parsingParameterList || isStructDecl) {
+      dfs.printf("s ");
+  		int pacnt;
+  		int nn;
+  		fd = funcdecl;
+  		needParseFunction = FALSE;
+  	  dfs.printf("Set false\n");
+  		odecl = declid;
+  		tempHead = head;
+  		tempTail = tail;
+  		isd = isStructDecl;
+  		//ParseParameterDeclarations(10);	// parse and discard
+  		funcdecl = 10;
+  //				SetType(sp);
+  		sp->BuildParameterList(&nump);
+  		needParseFunction = FALSE;
+  	  dfs.printf("Set false\n");
+  //				sp->parms = sym;
+  		sp->NumParms = nump;
+  		isStructDecl = isd;
+  		head = tempHead;
+  		tail = tempTail;
+  		declid = odecl;
+  		funcdecl = fd;
+  		needpunc(closepa,23);
+  
+  		if (lastst==begin) {
+  		  needParseFunction = TRUE;
+  		  dfs.printf("Set true1\n");
+  			if (sp->params.GetHead() && sp->proto.GetHead()) {
+  			  dfs.printf("Matching parameter types to prototype.\n");
+  			  if (!sp->ParameterTypesMatch(sp))
+  			     error(ERR_PARMLIST_MISMATCH);
+  		  }
+  			temp1->type = bt_ifunc;
+  		}
+  		// If the delaration is ending in a semicolon then it was really
+  		// a function prototype, so move the parameters to the prototype
+  		// area.
+  		else if (lastst==semicolon) {
+  			sp->params.CopyTo(&sp->proto);
       }
-		  else {
-			  temp1->btp= head->GetIndex();
-			  head = temp1;
-		  }
-    printf("p ");
-		  if (tail==NULL) {
-			  if (temp1->GetBtp())
-				  tail = temp1->GetBtp();
-			  else
-				  tail = temp1;
-		  }
-    printf("q ");
-		  needParseFunction = TRUE;
-      if( lastst == closepa) {
-        NextToken();
-//            temp1->type = bt_ifunc;			// this line wasn't present
-			  if(lastst == begin) {
-          temp1->type = bt_ifunc;
-//				ParseFunction(sp);
-			  }
-			  else {
-		      temp1->type = bt_func;
-				  needParseFunction = FALSE;
-				  dfs.printf("Set false\n");
-			  }
-			  currentFn = sp;
-			  sp->parent = currentClass->GetIndex();
-//			SetType(sp);
-			  sp->NumParms = 0;
-      }
-		  else {
-    printf("r");
-			  currentFn = sp;
-			  sp->parent = currentClass->GetIndex();
-        temp1->type = bt_func;
-			// Parse the parameter list for a function pointer passed as a
-			// parameter.
-			// Parse parameter list for a function pointer defined within
-			// a structure.
-			if (parsingParameterList || isStructDecl) {
-    printf("s ");
-				int pacnt;
-				__int16 *ta;
-				__int16 pt[20];
-				int nn;
-				fd = funcdecl;
-				needParseFunction = FALSE;
-			  dfs.printf("Set false\n");
-				odecl = declid;
-				tempHead = head;
-				tempTail = tail;
-				isd = isStructDecl;
-				//ParseParameterDeclarations(10);	// parse and discard
-				funcdecl = 10;
-//				SetType(sp);
-				sp->BuildParameterList(&nump);
-				needParseFunction = FALSE;
-			  dfs.printf("Set false\n");
-//				sp->parms = sym;
-				sp->NumParms = nump;
-				isStructDecl = isd;
-				head = tempHead;
-				tail = tempTail;
-				declid = odecl;
-				funcdecl = fd;
-				needpunc(closepa,23);
-
-				if (lastst==begin) {
-				  needParseFunction = TRUE;
-				  dfs.printf("Set true1\n");
-    			if (sp->params.GetHead() && sp->proto.GetHead()) {
-    			  dfs.printf("Matching parameter types to prototype.\n");
-    			  if (!sp->ParameterTypesMatch(sp))
-    			     error(ERR_PARMLIST_MISMATCH);
-  			  }
-					temp1->type = bt_ifunc;
-				}
-				// If the delaration is ending in a semicolon then it was really
-				// a function prototype, so move the parameters to the prototype
-				// area.
-				else if (lastst==semicolon) {
-					sp->params.CopyTo(&sp->proto);
-		        }
- 			  else {
- 			    error(ERR_SYNTAX);
- 			  }
-printf("Z\r\n");
+  	  else {
+  	    error(ERR_SYNTAX);
+  	  }
+      dfs.printf("Z\r\n");
 //				if (isFuncPtr)
 //					temp1->type = bt_func;
 //				if (lastst != begin)
@@ -870,18 +857,47 @@ printf("Z\r\n");
 //				if (lastst==begin) {
 //					ParseFunction(sp);
 //				}
-    	  sp->PrintParameterTypes();
-			}
-		}
-		dfs.printf("NeedParseFunction=%d\n",needParseFunction);
-    break;
+    }
+	  sp->PrintParameterTypes();
   }
-//	printf("leave suffix");
-//	if (sp->tp==nullptr)
-//		SetType(sp);
-	dfs.printf("Leave ParseDeclSuffix\n");
+}
+
+
+// Take care of the () or [] trailing part of a declaration.
+// There could be multiple sets of [] so a loop is formed to accomodate
+// this. There will be only a single set of () indicating parameters.
+
+SYM *Declaration::ParseSuffix(SYM *sp)
+{
+	dfs.printf("<ParseDeclSuffix>\n");
+
+  while(true) {
+    switch (lastst) {
+
+    case openbr:
+      ParseSuffixOpenbr();  
+      break;                // We want to loop back for more brackets
+  
+    case openpa:
+    	// The declaration doesn't have to have an identifier name; it could
+    	// just be a type chain. so sp incoming might be null. We need a place
+    	// to stuff the parameter / protoype list so we may as well create
+    	// the symbol here if it isn't yet defined.
+    	if (sp==nullptr)
+    		sp = allocSYM();
+      ParseSuffixOpenpa(sp);
+      goto lxit;
+      
+    default:
+      goto lxit;
+    }
+  }
+lxit:
+  dfs.printf("</ParseDeclSuffix>\n");
 	return sp;
 }
+
+// Get the natural alignment for a given type.
 
 int alignment(TYP *tp)
 {
@@ -893,22 +909,25 @@ int alignment(TYP *tp)
 	case bt_char:   case bt_uchar:  return AL_CHAR;
 	case bt_short:  case bt_ushort: return AL_SHORT;
 	case bt_long:   case bt_ulong:  return AL_LONG;
-    case bt_enum:           return AL_CHAR;
-    case bt_pointer:
+  case bt_enum:           return AL_CHAR;
+  case bt_pointer:
             if(tp->val_flag)
                 return alignment(tp->GetBtp());
             else
 				return AL_POINTER;
-    case bt_float:          return AL_FLOAT;
-    case bt_double:         return AL_DOUBLE;
-    case bt_triple:         return AL_TRIPLE;
+  case bt_float:          return AL_FLOAT;
+  case bt_double:         return AL_DOUBLE;
+  case bt_triple:         return AL_TRIPLE;
 	case bt_class:
-    case bt_struct:
-    case bt_union:          
-         return (tp->alignment) ?  tp->alignment : AL_STRUCT;
-    default:                return AL_CHAR;
-    }
+  case bt_struct:
+  case bt_union:          
+    return (tp->alignment) ?  tp->alignment : AL_STRUCT;
+  default:                return AL_CHAR;
+  }
 }
+
+
+// Figure out the worst alignment required.
 
 int walignment(TYP *tp)
 {
@@ -958,6 +977,9 @@ int roundAlignment(TYP *tp)
 	return alignment(tp);
 }
 
+
+// Round the size of the type up according to the worst alignment.
+
 int roundSize(TYP *tp)
 {
 	int sz;
@@ -974,6 +996,32 @@ int roundSize(TYP *tp)
 		return sz;
 	}
 	return tp->size;
+}
+
+// When going to insert a class method, check the base classes to see if it's
+// a virtual function override. If it's an override, then add the method to
+// the list of overrides for the virtual function.
+
+void InsertMethod(SYM *sp)
+{
+  int nn;
+  SYM *parentSym;
+
+  dfs.puts("<InsertMethod>");
+  sp->GetParentPtr()->tp->lst.insert(sp);
+  nn = sp->GetParentPtr()->tp->lst.FindRising(*sp->name);
+  if (nn) {
+    dfs.puts("Found method:");
+    parentSym = sp->FindExactMatch(TABLE::matchno);
+    if (parentSym != sp->GetParentPtr()) {         // ignore entry just added
+      dfs.puts("Found in a base class:");
+      if (parentSym->IsVirtual) {
+        dfs.printf("Found virtual:");
+        parentSym->AddDerived(sp);
+      }
+    }
+  }
+  dfs.printf("</InsertMethod>\n");
 }
 
 /*
@@ -1004,7 +1052,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
     static long old_nbytes;
     int nbytes;
 
-	printf("Enter declare()\r\n");
+	dfs.printf("Enter declare()\r\n");
 	nbytes = 0;
 dfs.printf("A");
 	classname = "";
@@ -1023,8 +1071,13 @@ dfs.printf("b");
 		if (funcdecl>0 && funcdecl != 10 && declid.length()==0) {
 			sprintf(buf, "_p%d", nparms);
 			declid = my_strdup(buf);
-			names[nparms] = declid;
-			nparms++;
+			if (nparms > 19) {
+			  error(ERR_TOOMANY_PARAMS);
+	    }
+	    else {
+			  names[nparms].str = declid;
+			  nparms++;
+		  }
 			missingArgumentName = TRUE;
 		}
 dfs.printf("C");
@@ -1043,6 +1096,7 @@ dfs.printf("C");
 			sp->shortname = new std::string(undeclid);
 dfs.printf("D");
 			classname = "";
+			sp->IsVirtual = isVirtual;
       sp->storage_class = al;
       sp->isConst = isConst;
 			if (bit_width > 0 && bit_offset > 0) {
@@ -1173,6 +1227,7 @@ dfs.printf("Ia");
 				sp1->storage_class = sp->storage_class;
         sp1->value.i = sp->value.i;
 				sp1->IsPrototype = sp->IsPrototype;
+				sp1->IsVirtual = sp->IsVirtual;
 				sp1->parent = sp->parent;
 				sp1->params = sp->params;
 				sp1->proto = sp->proto;
@@ -1190,14 +1245,15 @@ dfs.printf("Ic");
           else {
             dfs.printf("insert type: %d\n", sp->tp->type);
 					  dfs.printf("***Inserting:%s into %p\n",(char *)sp->name->c_str(), (char *) table);
-					  if (sp->parent)
-					    sp->GetParentPtr()->tp->lst.insert(sp);
+					  if (sp->parent) {
+					    InsertMethod(sp);
+			      }
 			      else
 					    table->insert(sp);
 				  }
 				}
 			}
-printf("J");
+dfs.printf("J");
 			if (needParseFunction) {
 				needParseFunction = FALSE;
 				fn_doneinit = ParseFunction(sp);
@@ -1208,7 +1264,7 @@ printf("J");
    //             ParseFunction(sp);
    //             return nbytes;
    //         }
-printf("K");
+dfs.printf("K");
             if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
                     sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
                     doinit(sp);
@@ -1286,7 +1342,7 @@ int declbegin(int st)
 
 void GlobalDeclaration::Parse()
 {
-	printf("Enter ParseGlobalDecl");
+	dfs.printf("Enter ParseGlobalDecl");
  for(;;) {
     currentClass = nullptr;
     currentFn = nullptr;
@@ -1305,6 +1361,7 @@ void GlobalDeclaration::Parse()
 		case kw_nocall:
 		case kw_oscall:
 		case kw_typedef:
+    case kw_virtual:
 		case kw_volatile: case kw_const:
         case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64:
@@ -1352,7 +1409,7 @@ void GlobalDeclaration::Parse()
 		}
 	}
 xit:
-	printf("Leave ParseGlobalDecl");
+	dfs.printf("Leave ParseGlobalDecl");
 	;
 }
 
@@ -1508,11 +1565,6 @@ GlobalDeclaration *GlobalDeclaration::Make()
   return p;
 }
 
-/*
- *      main compiler routine. this routine parses all of the
- *      declarations using declare which will call funcbody as
- *      functions are encountered.
- */
 void compile()
 {
 }

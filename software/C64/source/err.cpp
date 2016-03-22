@@ -81,7 +81,8 @@ static char *errtextstr[] = {
 	"The function call signature doesn't match any of the class methods",
 	"Method not found",
 	"Out of memory",
-	"Too many symbols"
+	"Too many symbols",
+	"Too many parameters - the compiler is limited to 20 or less"
 };
 
 char *errtext(int errnum)

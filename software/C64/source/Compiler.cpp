@@ -52,10 +52,6 @@ int Compiler::main2(int argc, char **argv)
 			if( openfiles(*argv)) {
 				lineno = 0;
 				initsym();
-				memset(gsyms,0,sizeof(gsyms));
-				memset(&defsyms,0,sizeof(defsyms));
-				memset(&tagtable,0,sizeof(tagtable));
-				getch();
 				lstackptr = 0;
 				lastst = 0;
 				NextToken();
@@ -75,8 +71,12 @@ void Compiler::compile()
 {
 	GlobalDeclaration *gd;
 
+	dfs.printf("<compile>\n");
   typenum = 1;
   symnum = 257;
+  ZeroMemory(&gsyms[0],sizeof(gsyms));
+  ZeroMemory(&defsyms,sizeof(defsyms));
+  ZeroMemory(&tagtable,sizeof(tagtable));
   ZeroMemory(&symbolTable,sizeof(symbolTable));
   ZeroMemory(&typeTable,sizeof(typeTable));
   AddStandardTypes();
@@ -84,20 +84,24 @@ void Compiler::compile()
 	RTFClasses::Random::srand(time(NULL));
 	decls = GlobalDeclaration::Make();
 	gd = decls;
+	lastst = tk_nop;
 
+  getch();
   try {
   	while(lastst != my_eof)
   	{
-  	  printf(".");
   	  if (gd==nullptr)
   	    break;
+  		dfs.printf("<Parsing GlobalDecl>\n");
   		gd->Parse();
+  		dfs.printf("</Parsing GlobalDecl>\n");
   		if( lastst != my_eof) {
   			NextToken();
   			gd->next = (Declaration *)GlobalDeclaration::Make();
   			gd = (GlobalDeclaration*)gd->next;
   		}
   	}
+ 		dfs.printf("</compile>\n");
   }
   catch (C64PException * ex) {
     dfs.printf(errtext(ex->errnum));

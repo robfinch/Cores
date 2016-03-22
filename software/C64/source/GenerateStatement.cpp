@@ -375,21 +375,21 @@ void GenerateDoUntil(struct snode *stmt)
  */
 void GenerateSwitch(Statement *stmt)
 {    
-     AMODE *ap2;
+  AMODE *ap2;
 	int             curlab;
 	int *bf;
 	int nn;
 	int predreg;
-        struct snode    *defcase;
-        struct amode    *ap;
-		predreg = stmt->predreg;
-        curlab = nextlabel++;
-        defcase = 0;
-        initstack();
-		if (stmt->exp==NULL) {
-			error(ERR_BAD_SWITCH_EXPR);
-			return;
-		}
+  struct snode    *defcase;
+  struct amode    *ap;
+	predreg = stmt->predreg;
+  curlab = nextlabel++;
+  defcase = 0;
+  initstack();
+  if (stmt->exp==NULL) {
+	  error(ERR_BAD_SWITCH_EXPR);
+		return;
+	}
         ap = GenerateExpression(stmt->exp,F_REG,GetNaturalSize(stmt->exp));
 //        if( ap->preg != 0 )
 //                GenerateDiadic(op_mov,0,makereg(1),ap);
@@ -529,38 +529,38 @@ void gen_vortex(struct snode *stmt)
 
 void GenerateTry(Statement *stmt)
 {
-    int lab1,curlab;
+  int lab1,curlab;
 	int oldthrow;
 	char buf[20];
 	AMODE *ap, *a, *ap2;
 	ENODE *node;
 	SYM *sym;
 
-    lab1 = nextlabel++;
+  lab1 = nextlabel++;
 	oldthrow = throwlab;
 	throwlab = nextlabel++;
 
 	if (isTable888|isRaptor64)
 		GenerateDiadic(op_lea,0,makereg(regXLR),make_clabel(throwlab));
 	else if (isFISA64) {
-        a = make_clabel(throwlab);
-        a->mode = am_immed;
-        FISA64_GenLdi(makereg(regXLR),a);
-    }
-    else {
-        a = make_clabel(throwlab);
-        a->mode = am_immed;
+   a = make_clabel(throwlab);
+   a->mode = am_immed;
+   FISA64_GenLdi(makereg(regXLR),a);
+  }
+  else {
+    a = make_clabel(throwlab);
+    a->mode = am_immed;
 		GenerateDiadic(op_ldi,0,makebreg(regXLR),a);
 	}
 	GenerateStatement(stmt->s1);
-    GenerateMonadic(isThor?op_br:op_bra,0,make_clabel(lab1));
+  GenerateMonadic(isThor?op_br:op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
 	stmt = stmt->s2;
 	// Generate catch statements
 	// r1 holds the value to be assigned to the catch variable
 	// r2 holds the type number
 	while (stmt) {
-        GenMixedSource(stmt);
+    GenMixedSource(stmt);
 		throwlab = oldthrow;
 		curlab = nextlabel++;
 		GenerateLabel(curlab);
@@ -570,11 +570,11 @@ void GenerateTry(Statement *stmt)
 			if (isRaptor64)
 				GenerateTriadic(op_bnei,0,makereg(2),make_immed((int64_t)stmt->s2),make_clabel(nextlabel));
 			else if (isFISA64) {
-                ap = GetTempRegister();
+        ap = GetTempRegister();
 				GenerateTriadic(op_cmp, 0, ap, makereg(2), make_immed((int64_t)stmt->s2));
 				GenerateDiadic(op_bne, 0, ap, make_clabel(nextlabel));
 				ReleaseTempRegister(ap);
-            }
+      }
 			else if (isTable888) {
 				GenerateTriadic(op_cmp, 0, makereg(244), makereg(2), make_immed((int64_t)stmt->s2));
 				GenerateDiadic(op_bne, 0, makereg(244), make_clabel(nextlabel));
@@ -582,36 +582,36 @@ void GenerateTry(Statement *stmt)
 			else {
 				// ToDo: fix Thor
 				GenerateTriadic(op_cmpi, 0, make_string("p0"), makereg(2), make_immed((int64_t)stmt->s2));
-            	GeneratePredicatedMonadic(0,PredOp(op_ne),op_br,0,make_clabel(nextlabel));
+      	GeneratePredicatedMonadic(0,PredOp(op_ne),op_br,0,make_clabel(nextlabel));
 			}
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = (ENODE *)stmt->label;
-        {
-            ap2 = GenerateExpression(node,F_REG|F_MEM,GetNaturalSize(node));
-            if (ap2->mode==am_reg)
-               GenerateDiadic(op_mov,0,ap2,makereg(1));
-            else
-               GenStore(makereg(1),ap2,GetNaturalSize(node));
-            ReleaseTempRegister(ap2);
-        }
+    {
+      ap2 = GenerateExpression(node,F_REG|F_MEM,GetNaturalSize(node));
+      if (ap2->mode==am_reg)
+         GenerateDiadic(op_mov,0,ap2,makereg(1));
+      else
+         GenStore(makereg(1),ap2,GetNaturalSize(node));
+      ReleaseTempRegister(ap2);
+    }
 //            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
 		GenerateStatement(stmt->s1);
 		stmt=stmt->next;
 	}
 	GenerateLabel(nextlabel);
 	nextlabel++;
-    GenerateLabel(lab1);
+  GenerateLabel(lab1);
 	if (isTable888|isRaptor64)
 		GenerateDiadic(op_lea,0,makereg(regXLR),make_clabel(oldthrow));
 	else if (isFISA64) {
-        a = make_clabel(oldthrow);
-        a->mode = am_immed;
-        FISA64_GenLdi(makereg(regXLR),a);
-    }
+    a = make_clabel(oldthrow);
+    a->mode = am_immed;
+    FISA64_GenLdi(makereg(regXLR),a);
+  }
 	else { // Thor
-        a = make_clabel(oldthrow);
-        a->mode = am_immed;
+    a = make_clabel(oldthrow);
+    a->mode = am_immed;
 		GenerateDiadic(op_ldi,0,makebreg(regXLR),a);
 	}
 }

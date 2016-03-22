@@ -61,6 +61,24 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 		//GenerateTriadic(op_subui,0,makereg(30),makereg(30),make_immed(30*8));
 		//GenerateDiadic(op_sm,0,make_indirect(30), make_mask(0x9FFFFFFE));
 	}
+	// Generate switch to call derived methods
+	if (sym->IsVirtual || sym->derivitives) {
+	  char buf[20];
+	  char *buf2;
+	  DerivedMethod *mthd;
+	  
+	  dfs.printf("VirtualFunction Switch");
+	  GenerateDiadic(op_lcu,0,makereg(24),make_indirect(regCLP));
+	  mthd = sym->derivitives;
+	  while (mthd) {
+   	  sprintf(buf, "p%d", 7);
+	    buf2 = my_strdup(buf);
+      GenerateTriadic(op_cmpi,0,make_string(buf2),makereg(24),make_immed(mthd->typeno));
+   	  GeneratePredicatedMonadic(7,PredOp(op_eq),op_jmp,0,
+        make_string((char *)mthd->name->c_str()));   // jump to the method
+   	  mthd = mthd->next;
+	  }
+  }
 	if (sym->prolog) {
        if (optimize)
            opt1(sym->prolog);
@@ -287,11 +305,11 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 { 
 	AMODE *ap, *result;
 	SYM *sym;
-    int             i;
+  int             i;
 	int msk;
 	int sp;
 	int isPascal = FALSE;
-
+ 
  	//msk = SaveTempRegs();
 	sp = TempInvalidate();
 	sym = (SYM*)NULL;
@@ -301,10 +319,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 //		if (node->p[0]->i==25)
 //			GenerateDiadic(op_sw,0,makereg(regCLP),make_indexed(0,regSP));
     GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
-		sym = gsearch(*node->p[0]->sp);
+    sym = gsearch(*node->p[0]->sp);
 	}
-    else
-    {
+  else
+  {
 
 		ap = GenerateExpression(node->p[0],F_BREG,8);
 		ap->mode = am_brind;

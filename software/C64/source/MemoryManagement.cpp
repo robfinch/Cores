@@ -167,24 +167,27 @@ void ReleaseLocalMemory()
 void ReleaseGlobalMemory()
 {
 	struct blk      *bp1, *bp2;
-    int             blkcnt;
-    bp1 = glbblk;
-    blkcnt = 0;
-    while( bp1 != (struct blk *)NULL ) {
+  int             blkcnt;
+
+  dfs.printf("Enter ReleaseGlobalMemory\n");
+  bp1 = glbblk;
+  blkcnt = 0;
+  while( bp1 != (struct blk *)NULL ) {
 		if (strcmp(bp1->name,"C64    "))
-			printf("Block corrupted.");
-        bp2 = bp1->next;
-        free(bp1);
-        ++blkcnt;
-        bp1 = bp2;
-    }
-    glbblk = (struct blk *)NULL;
-    glbsize = 0;
+		  dfs.printf("Block corrupted.");
+    bp2 = bp1->next;
+    free(bp1);
+    ++blkcnt;
+    bp1 = bp2;
+  }
+  glbblk = (struct blk *)NULL;
+  glbsize = 0;
 //    gsyms.head = NULL;         /* clear global symbol table */
 //	gsyms.tail = NULL;
 	memset(gsyms,0,sizeof(gsyms));
 	if (verbose) printf(" releasing %d bytes global tables.\n",blkcnt * BLKSIZE);
     strtab = (struct slit *)NULL;             /* clear literal table */
+ dfs.printf("Leave ReleaseGlobalMemory\n");
 }
 
 SYM *allocSYM() {

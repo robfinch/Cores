@@ -659,9 +659,9 @@ void gen_strlab(char *s)
  */
 char *put_label(int lab, char *nm, char *ns, char d)
 {
-    static char buf[300];
+  static char buf[500];
 
-    sprintf(buf, "%s_%d", ns, lab);
+  sprintf(buf, "%.400s_%d", ns, lab);
 	if (nm==NULL)
 		ofs.printf("%s:\n",buf);
 	else if (strlen(nm)==0)
@@ -838,15 +838,13 @@ int stringlit(char *s)
 {      
 	struct slit *lp;
 
-    ++global_flag;          /* always allocate from global space. */
-    lp = (struct slit *)xalloc(sizeof(struct slit));
-    lp->label = nextlabel++;
-    lp->str = my_strdup(s);
+  lp = (struct slit *)allocx(sizeof(struct slit));
+  lp->label = nextlabel++;
+  lp->str = my_strdup(s);
 	lp->nmspace = my_strdup(GetNamespace());
-    lp->next = strtab;
-    strtab = lp;
-    --global_flag;
-    return lp->label;
+  lp->next = strtab;
+  strtab = lp;
+  return lp->label;
 }
 
 char *strip_crlf(char *p)
@@ -864,27 +862,30 @@ char *strip_crlf(char *p)
 	 return buf;
 }
 
-/*
- *      Dump the string literal pool.
- */
+
+//     Dump the string literal pool.
+
 void dumplits()
 {
-	char            *cp;
+	char *cp;
 
-    roseg();
-    nl();
+  dfs.printf("Enter Dumplits\n");
+  roseg();
+  nl();
 	align(8);
-    nl();
+  nl();
 	while( strtab != NULL) {
-	    nl();
-        put_label(strtab->label,strip_crlf(strtab->str),strtab->nmspace,'D');
-        cp = strtab->str;
-        while(*cp)
-            GenerateChar(*cp++);
-        GenerateChar(0);
-        strtab = strtab->next;
-    }
+	  dfs.printf(".");
     nl();
+    put_label(strtab->label,strip_crlf(strtab->str),strtab->nmspace,'D');
+    cp = strtab->str;
+    while(*cp)
+      GenerateChar(*cp++);
+    GenerateChar(0);
+    strtab = strtab->next;
+  }
+  nl();
+  dfs.printf("Leave Dumplits\n");
 }
 
 void nl()

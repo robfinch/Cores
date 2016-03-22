@@ -56,132 +56,132 @@ struct ocode    *peep_head = NULL,
 AMODE *copy_addr(AMODE *ap)
 {
 	AMODE *newap;
-    if( ap == NULL )
-        return NULL;
-    newap = allocAmode();
+  if( ap == NULL )
+    return NULL;
+  newap = allocAmode();
 	memcpy(newap,ap,sizeof(AMODE));
-    return newap;
+  return newap;
 }
 
 void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 {
 	struct ocode *cd;
-    cd = (struct ocode *)xalloc(sizeof(struct ocode));
+  cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = pop;
 	cd->pregreg = pr;
-    cd->opcode = op;
-    cd->length = len;
-    cd->oper1 = copy_addr(ap1);
-    cd->oper2 = NULL;
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = copy_addr(ap1);
+  cd->oper2 = NULL;
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	currentFn->UsesPredicate = TRUE;
-    AddToPeepList(cd);
+  AddToPeepList(cd);
 }
 
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
-  printf("Enter GenerateMonadic\r\n");
+  dfs.printf("Enter GenerateMonadic\r\n");
 	struct ocode *cd;
-printf("A");
+dfs.printf("A");
   cd = (struct ocode *)allocx(sizeof(struct ocode));
-printf("B");
+dfs.printf("B");
 	cd->predop = 1;
 	cd->pregreg = 15;
   cd->opcode = op;
   cd->length = len;
   cd->oper1 = copy_addr(ap1);
-printf("C");
+dfs.printf("C");
   cd->oper2 = NULL;
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
-printf("D");
+dfs.printf("D");
   AddToPeepList(cd);
-  printf("Leave GenerateMonadic\r\n");
+  dfs.printf("Leave GenerateMonadic\r\n");
 }
 
 void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)
 {
 	struct ocode *cd;
-    cd = (struct ocode *)xalloc(sizeof(struct ocode));
+  cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = pop;
 	cd->pregreg = pr;
-    cd->opcode = op;
-    cd->length = len;
-    cd->oper1 = copy_addr(ap1);
-    cd->oper2 = copy_addr(ap2);
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = copy_addr(ap1);
+  cd->oper2 = copy_addr(ap2);
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	currentFn->UsesPredicate = TRUE;
-    AddToPeepList(cd);
+  AddToPeepList(cd);
 }
 
 void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 {
 	struct ocode *cd;
-    cd = (struct ocode *)xalloc(sizeof(struct ocode));
+  cd = (struct ocode *)xalloc(sizeof(struct ocode));
 	cd->predop = 1;
 	cd->pregreg = 15;
-    cd->opcode = op;
-    cd->length = len;
-    cd->oper1 = copy_addr(ap1);
-    cd->oper2 = copy_addr(ap2);
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = copy_addr(ap1);
+  cd->oper2 = copy_addr(ap2);
 	if (ap2) {
 		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==SP || ap2->preg==BP)
+			if (ap2->preg==regSP || ap2->preg==regBP)
 				cd->opcode |= op_ss;
 		}
 	}
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
-    AddToPeepList(cd);
+  AddToPeepList(cd);
 }
 
 void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 {
 	struct ocode    *cd;
-    cd = (struct ocode *)xalloc(sizeof(struct ocode));
+  cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = 1;
 	cd->pregreg = 15;
-    cd->opcode = op;
-    cd->length = len;
-    cd->oper1 = copy_addr(ap1);
-    cd->oper2 = copy_addr(ap2);
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = copy_addr(ap1);
+  cd->oper2 = copy_addr(ap2);
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = NULL;
-    AddToPeepList(cd);
+  AddToPeepList(cd);
 }
 
 void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
 {
-	struct ocode    *cd;
-    cd = (struct ocode *)xalloc(sizeof(struct ocode));
+	struct ocode *cd;
+  cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = 1;
 	cd->pregreg = 15;
-    cd->opcode = op;
-    cd->length = len;
-    cd->oper1 = copy_addr(ap1);
-    cd->oper2 = copy_addr(ap2);
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = copy_addr(ap1);
+  cd->oper2 = copy_addr(ap2);
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = copy_addr(ap4);
-    AddToPeepList(cd);
+  AddToPeepList(cd);
 }
 
 static void AddToPeepList(struct ocode *cd)
 {
 	if( peep_head == NULL )
-    {
+  {
 		peep_head = peep_tail = cd;
 		cd->fwd = NULL;
 		cd->back = NULL;
-    }
-    else
-    {
+  }
+  else
+  {
 		cd->fwd = NULL;
 		cd->back = peep_tail;
 		peep_tail->fwd = cd;
 		peep_tail = cd;
-    }
+  }
 }
 
 /*
@@ -190,11 +190,11 @@ static void AddToPeepList(struct ocode *cd)
 void GenerateLabel(int labno)
 {      
 	struct ocode *newl;
-    newl = (struct ocode *)xalloc(sizeof(struct ocode));
-    newl->opcode = op_label;
-    newl->oper1 = (struct amode *)labno;
+  newl = (struct ocode *)allocx(sizeof(struct ocode));
+  newl->opcode = op_label;
+  newl->oper1 = (struct amode *)labno;
 	newl->oper2 = (struct amode *)my_strdup((char *)currentFn->name->c_str());
-    AddToPeepList(newl);
+  AddToPeepList(newl);
 }
 
 //void gen_ilabel(char *name)
@@ -213,14 +213,14 @@ void flush_peep()
 {
 	if (opt_nopeep==FALSE)
 		opt_peep();         /* do the peephole optimizations */
-    while( peep_head != NULL )
-    {
+  while( peep_head != NULL )
+  {
 		if( peep_head->opcode == op_label )
 			put_label((int64_t)peep_head->oper1,"",GetNamespace(),'C');
 		else
 			put_ocode(peep_head);
 		peep_head = peep_head->fwd;
-    }
+  }
 }
 
 /*
@@ -260,14 +260,14 @@ int equal_address(AMODE *ap1, AMODE *ap2)
 {
 	if( ap1 == NULL || ap2 == NULL )
 		return FALSE;
-    if( ap1->mode != ap2->mode )
-        return FALSE;
-    switch( ap1->mode )
-    {
-        case am_reg:
-            return ap1->preg == ap2->preg;
-    }
+  if( ap1->mode != ap2->mode )
     return FALSE;
+  switch( ap1->mode )
+  {
+  case am_reg:
+    return ap1->preg == ap2->preg;
+  }
+  return FALSE;
 }
 
 /*
@@ -345,59 +345,50 @@ void peep_cmp(struct ocode *ip)
  */
 void PeepoptMuldiv(struct ocode *ip, int op)
 {  
-	int     shcnt;
+	__int64 shcnt, num;
 
-    if( ip->oper1->mode != am_immed )
-         return;
-    if( ip->oper1->offset->nodetype != en_icon )
-         return;
+  if( ip->oper1->mode != am_immed )
+    return;
+  if( ip->oper1->offset->nodetype != en_icon )
+    return;
 
-        shcnt = ip->oper1->offset->i;
-		// remove multiply / divide by 1
-		// This shouldn't get through Optimize, but does sometimes.
-		if (shcnt==1) {
-			if (ip->back)
-				ip->back->fwd = ip->fwd;
-			if (ip->fwd)
-				ip->fwd->back = ip->back;
-			return;
-		}
-/*      vax c doesn't do this type of switch well       */
-        if( shcnt == 2) shcnt = 1;
-        else if( shcnt == 4) shcnt = 2;
-        else if( shcnt == 8) shcnt = 3;
-        else if( shcnt == 16) shcnt = 4;
-        else if( shcnt == 32) shcnt = 5;
-        else if( shcnt == 64) shcnt = 6;
-        else if( shcnt == 128) shcnt = 7;
-        else if( shcnt == 256) shcnt = 8;
-        else if( shcnt == 512) shcnt = 9;
-        else if( shcnt == 1024) shcnt = 10;
-        else if( shcnt == 2048) shcnt = 11;
-        else if( shcnt == 4096) shcnt = 12;
-        else if( shcnt == 8192) shcnt = 13;
-        else if( shcnt == 16384) shcnt = 14;
-		else if( shcnt == 32768) shcnt = 15;
-		else if( shcnt == 65536) shcnt = 16;
-        else return;
-        ip->oper1->offset->i = shcnt;
-        ip->opcode = op;
-        ip->length = 4;
+  num = ip->oper1->offset->i;
+
+  // remove multiply / divide by 1
+	// This shouldn't get through Optimize, but does sometimes.
+  if (num==1) {
+		if (ip->back)
+			ip->back->fwd = ip->fwd;
+		if (ip->fwd)
+			ip->fwd->back = ip->back;
+		return;
+	}
+  for (shcnt = 1; shcnt < 64; shcnt++) {
+    if (num == (__int64)1 << shcnt) {
+      num = shcnt;
+      break;
+    }
+  }
+  if (shcnt==64)
+    return;
+  ip->oper1->offset->i = num;
+  ip->opcode = op;
+  ip->length = 4;
 }
 
 // Optimize unconditional control flow transfers
 // Instructions that follow an unconditional transfer won't be executed
 // unless there is a label to branch to them.
 //
-void PeepoptUctran(struct ocode    *ip)
+void PeepoptUctran(struct ocode *ip)
 {
 	if (uctran_off) return;
 	while( ip->fwd != NULL && ip->fwd->opcode != op_label)
-    {
+  {
 		ip->fwd = ip->fwd->fwd;
 		if( ip->fwd != NULL )
 			ip->fwd->back = ip;
-    }
+  }
 }
 
 void PeepoptJAL(struct ocode *ip)
@@ -583,28 +574,28 @@ void PeepoptLea(struct ocode *ip)
 	struct ocode *ip2;
 	int whop;
 
-    whop = 0;
+  whop = 0;
 	ip2 = ip->fwd;
 	if (!ip2)
 	   return;
-    if (ip2->opcode != op_push)
-       return;
-    whop =  ((ip2->oper1 != NULL) ? 1 : 0) +
-            ((ip2->oper2 != NULL) ? 1 : 0) +
-            ((ip2->oper3 != NULL) ? 1 : 0) +
-            ((ip2->oper4 != NULL) ? 1 : 0);
-    if (whop > 1)
-        return;
-    // Pushing a single register     
-    if (ip2->oper1->mode != am_reg)
-       return;
-    // And it's the same register as the LEA
-    if (ip2->oper1->preg != ip->oper1->preg)
-       return;
-    ip->opcode = op_pea;
-    ip->oper1 = copy_addr(ip->oper2);
-    ip->oper2 = NULL;
-    ip->fwd = ip2->fwd;
+  if (ip2->opcode != op_push)
+    return;
+  whop =  ((ip2->oper1 != NULL) ? 1 : 0) +
+          ((ip2->oper2 != NULL) ? 1 : 0) +
+          ((ip2->oper3 != NULL) ? 1 : 0) +
+          ((ip2->oper4 != NULL) ? 1 : 0);
+  if (whop > 1)
+    return;
+  // Pushing a single register     
+  if (ip2->oper1->mode != am_reg)
+     return;
+  // And it's the same register as the LEA
+  if (ip2->oper1->preg != ip->oper1->preg)
+     return;
+  ip->opcode = op_pea;
+  ip->oper1 = copy_addr(ip->oper2);
+  ip->oper2 = NULL;
+  ip->fwd = ip2->fwd;
 }
 
 // LW followed by a push of the same register gets translated to PUSH.

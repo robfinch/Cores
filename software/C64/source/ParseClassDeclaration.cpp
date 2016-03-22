@@ -72,7 +72,7 @@ int ClassDeclaration::Parse(int ztype)
   SYM *cls;
 
   cls = currentClass;
-	printf("ParseClassDeclaration\r\n");
+	dfs.printf("ParseClassDeclaration\r\n");
 	alignment = 0;
 	isTypedef = TRUE;
 	NextToken();
@@ -139,7 +139,14 @@ int ClassDeclaration::Parse(int ztype)
 			}
       dfs.printf("E");
 			// Copy the type chain of base class
-			sp->tp = TYP::Copy(bcsp->tp);
+			//sp->tp = TYP::Copy(bcsp->tp);
+			// Start off at the size of the base.
+			sp->tp = allocTYP();
+			sp->tp->lst.base = bcsp->GetIndex();
+			sp->tp->size = bcsp->tp->size;
+			sp->tp->typeno = typeno++;
+      sp->tp->sname = new std::string(*sp->name);
+      sp->tp->alignment = alignment;
 	    sp->storage_class = sc_type;
 			NextToken();
 			if (lastst != begin) {
@@ -209,6 +216,7 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 	int slc;
 	TYP *tp = sym->tp;
 	int ist;
+  SYM *hsym;
 
 	isPrivate = true;
   slc = roundSize(sym->tp);
@@ -217,6 +225,26 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 //	tp->val_flag = FALSE;
 	ist = isTypedef;
 	isTypedef = false;
+
+	// First add a hidden member that indicates the class number. The type
+	// number is used during virtual function calls to determine which
+	// method to call. This is the first field in the class so it can be
+	// refeerenced as 0[r25].
+	hsym = allocSYM();
+  hsym->name = new std::string("_typeno");
+	hsym->storage_class = sc_member;
+	hsym->value.i = sym->tp->typeno;
+	hsym->tp = allocTYP();
+	hsym->tp->lst.Clear();
+	hsym->tp->size = 2;
+	hsym->tp->typeno = bt_char;     // 2 bytes
+  hsym->tp->sname = new std::string("_typeno");
+  hsym->tp->alignment = 2;
+	hsym->tp->type = bt_char;
+	hsym->tp->lst.SetBase(0);
+	tp->lst.insert(hsym);
+  slc += 2;
+
   while( lastst != end) {
 		if (lastst==kw_public)
 			isPrivate = false;

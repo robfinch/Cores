@@ -69,32 +69,33 @@ int main(int argc, char **argv)
 	optimize =1;
 	exceptions=1;
 //	printf("c64 starting...\r\n");
-	getchar();
 	while(--argc) {
-        if( **++argv == '-')
-            options(*argv);
+    if( **++argv == '-')
+      options(*argv);
 		else {
 			if (PreProcessFile(*argv) == -1)
 				break;
 			if( openfiles(*argv)) {
 				lineno = 0;
 				initsym();
-				memset(gsyms,0,sizeof(gsyms));
-				memset(&defsyms,0,sizeof(defsyms));
-				memset(&tagtable,0,sizeof(tagtable));
 				getch();
 				lstackptr = 0;
 				lastst = 0;
 				NextToken();
 	compiler.compile();
 //				compile();
-				summary();
-				ReleaseGlobalMemory();
+//				summary();
+//				MBlk::ReleaseAll();
+//				ReleaseGlobalMemory();
 				closefiles();
 			}
-        }
     }
+    dfs.printf("Next on command line (%d).\n", argc);
+  }
 	//getchar();
+	dfs.printf("Exiting\n");
+	dfs.close();
+ 	exit(0);
 	return 0;
 }
 
@@ -198,7 +199,7 @@ int PreProcessFile(char *nm)
 	return system(sysbuf);
 }
 
-int     openfiles(char *s)
+int openfiles(char *s)
 {
 	int     ofl,oflg;
 	int i;
@@ -245,6 +246,9 @@ int     openfiles(char *s)
         //        }
 		ofs.open(outfile,std::ios::out|std::ios::trunc);
 		dfs.open(dbgfile.c_str(),std::ios::out|std::ios::trunc);
+		dfs.level = 1;
+		lfs.level = 1;
+		ofs.level = 1;
 /*
         if( (output = fdopen(ofl,"w")) == 0) {
                 printf(" cant open %s\n",outfile);
@@ -286,20 +290,27 @@ void makename(char *s, char *e)
 void summary()
 {
 //    if (verbose > 0)
+  dfs.printf("Enter summary\n");
     	printf("\n -- %d errors found.",total_errors);
     lfs.write("\f\n *** global scope typedef symbol table ***\n\n");
     ListTable(&gsyms[0],0);
     lfs.write("\n *** structures and unions ***\n\n");
     ListTable(&tagtable,0);
+  dfs.printf("Leave summary\n");
 //	fflush(list);
 }
 
 void closefiles()
-{    
-	lfs.close();
-	ofs.close();
-	dfs.close();
+{ 
+  dfs.printf("Enter closefiles\n");
 	ifs->close();
+	delete ifs;
+  dfs.printf("A");
+	lfs.close();
+  dfs.printf("B");
+	ofs.close();
+  dfs.printf("C");
+ dfs.printf("Leave closefiles\n");
 }
 
 char *GetNamespace()

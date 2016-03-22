@@ -169,16 +169,20 @@ void list_var(SYM *sp, int i)
         lfs.printf("\n");
         if(sp->tp == 0)
                 return;
-		if (sp->tp->type==bt_ifunc || sp->tp->type==bt_func) {
-			lfs.printf("\t\tParameters:\n\t\t\t");
-			ta = sp->GetProtoTypes();
-			ta->Print(&lfs);
-			if (ta)
-				delete ta;
-		}
+    if (sp->tp) {
+  		if (sp->tp->type==bt_ifunc || sp->tp->type==bt_func) {
+  			lfs.printf("\t\tParameters:\n\t\t\t");
+  			ta = sp->GetProtoTypes();
+  			ta->Print(&lfs);
+  			if (ta)
+  				delete ta;
+  		}
+	  }
+	  if (sp->tp) {
         if((sp->tp->type == bt_struct || sp->tp->type == bt_union || sp->tp->type==bt_class) &&
                 sp->storage_class == sc_type)
                 ListTable(&(sp->tp->lst),i+1);
+    }
 }
 
 void ListTable(TABLE *t, int i)

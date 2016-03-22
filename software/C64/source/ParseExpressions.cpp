@@ -140,9 +140,9 @@ void Leave(char *p, int n)
 ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
 {
 	ENODE *ep;
-    ep = (ENODE *)xalloc(sizeof(ENODE));
-    ep->nodetype = (enum e_node)nt;
-    ep->constflag = FALSE;
+  ep = (ENODE *)xalloc(sizeof(ENODE));
+  ep->nodetype = (enum e_node)nt;
+  ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
@@ -150,6 +150,22 @@ ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
 	ep->p[1] = v2;
 	ep->p[2] = 0;
     return ep;
+}
+
+ENODE *makefcnode(int nt, ENODE *v1, ENODE *v2, SYM *sp)
+{
+	ENODE *ep;
+  ep = (ENODE *)xalloc(sizeof(ENODE));
+  ep->nodetype = (enum e_node)nt;
+  ep->sym = sp;
+  ep->constflag = FALSE;
+	ep->isUnsigned = FALSE;
+	ep->etype = bt_void;
+	ep->esize = -1;
+	ep->p[0] = v1;
+	ep->p[1] = v2;
+	ep->p[2] = 0;
+  return ep;
 }
 
 ENODE *makesnode(int nt, std::string v1, std::string v2, __int64 i)
@@ -502,7 +518,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			typearray->Print();
       //    gsyms[0].insert(sp);
       tp = &stdfunc;
-      *node = makesnode(en_cnacon,*sp->name,sp->BuildSignature(),sp->value.i);
+      *node = makesnode(en_cnacon,*sp->name,*sp->BuildSignature(),sp->value.i);
       (*node)->constflag = TRUE;
       (*node)->sym = sp;
 			if (sp->tp->isUnsigned)
@@ -531,7 +547,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 						//strcat(stnm,"_");
 						stnm = "";
 						stnm += *sp->name;
-						*node = makesnode(en_cnacon,stnm,sp->BuildSignature(),sp->value.i);
+						*node = makesnode(en_cnacon,stnm,*sp->BuildSignature(),sp->value.i);
 						(*node)->constflag = TRUE;
 						(*node)->esize = 8;
 						//*node = makesnode(en_nacon,sp->name);
@@ -561,9 +577,9 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
                     case sc_global:
                     case sc_external:
 							if (sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
-	                            *node = makesnode(en_cnacon,*sp->name,sp->BuildSignature(),sp->value.i);
+	                            *node = makesnode(en_cnacon,*sp->name,*sp->BuildSignature(),sp->value.i);
 							else
-	                            *node = makesnode(en_nacon,*sp->name,sp->BuildSignature(),sp->value.i);
+	                            *node = makesnode(en_nacon,*sp->name,*sp->BuildSignature(),sp->value.i);
                             (*node)->constflag = TRUE;
 							(*node)->esize = sp->tp->size;
 							(*node)->etype = bt_pointer;//sp->tp->type;
@@ -590,7 +606,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
   			if ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc) 
   			  ||(sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type == bt_func ||sp->tp->GetBtp()->type == bt_ifunc)))
         {
-  				*node = makesnode(en_cnacon,*sp->name,sp->BuildSignature(),25);
+  				*node = makesnode(en_cnacon,*sp->name,*sp->BuildSignature(),25);
   			}
   			else {
   				*node = makeinode(en_classcon,sp->value.i);
@@ -934,7 +950,7 @@ TYP *ExprFunction(TYP *tp1, ENODE **ep1)
       if (!classdet)
 			   gsyms[0].insert(sp);
 			tp1 = &stdfunc;
-			ep2 = makesnode(en_cnacon,name,sp->BuildSignature(),classdet ? 25 : 0);
+			ep2 = makesnode(en_cnacon,name,*sp->BuildSignature(),classdet ? 25 : 0);
 			ep2->constflag = TRUE;
 			if (sp->tp->isUnsigned)
 				ep2->isUnsigned = TRUE;
@@ -1015,7 +1031,7 @@ TYP *ExprFunction(TYP *tp1, ENODE **ep1)
     		sp->AddParameters(list->GetNextPtr());
 //				gsyms[0].insert(sp);
 				tp1 = &stdfunc;
-				ep3 = makesnode(en_cnacon,name,sp->BuildSignature(),25);
+				ep3 = makesnode(en_cnacon,name,*sp->BuildSignature(),25);
 				ep3->constflag = TRUE;
 				if (sp->tp->isUnsigned)
 					ep3->isUnsigned = TRUE;
@@ -1051,7 +1067,7 @@ TYP *ExprFunction(TYP *tp1, ENODE **ep1)
     		sp->AddParameters(list);
 				gsyms[0].insert(sp);
 				tp1 = &stdfunc;
-				ep2 = makesnode(en_cnacon,name,sp->BuildSignature(),0);
+				ep2 = makesnode(en_cnacon,name,*sp->BuildSignature(),0);
 				ep2->constflag = TRUE;
 				if (sp->tp->isUnsigned)
 					ep2->isUnsigned = TRUE;
@@ -1553,8 +1569,8 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
       }
       sp = gsearch2(name,bt_long,&typearray,true);
       if (sp) {
-		    ep3 = makesnode(en_cnacon,*sp->name,sp->BuildSignature(),sp->value.i);
-        ep1 = makenode(en_fcall,ep3,ep2);
+		    ep3 = makesnode(en_cnacon,*sp->name,*sp->BuildSignature(),sp->value.i);
+        ep1 = makefcnode(en_fcall,ep3,ep2,sp);
         break;
       }
       sp = allocSYM();
@@ -1562,7 +1578,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
       sp->tp = &stdfunc;
       sp->AddProto(&typearray);
       gsyms[0].insert(sp);
-	    ep3 = makesnode(en_cnacon,lastid,sp->BuildSignature(),sp->value.i);
+	    ep3 = makesnode(en_cnacon,lastid,*sp->BuildSignature(),sp->value.i);
       ep1 = makenode(en_fcall,ep3,ep2);
 //			tp1 = ExprFunction(tp1, &ep1);
       break;
@@ -1619,7 +1635,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				  sp = SYM::FindExactMatch(ii,lastid,bt_long,&typearray);
 				  if (sp) {
 				    sp = TABLE::match[TABLE::matchno-1];
-				    ep3 = makesnode(en_cnacon,*sp->name,sp->BuildSignature(),sp->value.i);
+				    ep3 = makesnode(en_cnacon,*sp->name,*sp->BuildSignature(),sp->value.i);
 				    ep1 = makenode(en_fcall,ep3,ep2);
           }
           else {

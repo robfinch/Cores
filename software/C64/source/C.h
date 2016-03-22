@@ -55,6 +55,7 @@ typedef unsigned __int16 uint16_t;
 typedef unsigned __int64 uint64_t;
 
 enum e_sym {
+  tk_nop,
         id, cconst, iconst, lconst, sconst, rconst, plus, minus,
         star, divide, lshift, rshift, modop, eq, neq, lt, leq, gt,
         geq, assign, asplus, asminus, astimes, asdivide, asmodop,
@@ -78,7 +79,8 @@ enum e_sym {
 		kw_intoff, kw_inton, kw_then,
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
-		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs, kw_unique,
+		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
+    kw_unique, kw_virtual,
 		kw_new, kw_delete,
         my_eof };
 
@@ -127,6 +129,14 @@ struct snode;
 class TYP;
 class SYM;
 class TypeArray;
+
+class DerivedMethod
+{
+public:
+  int typeno;
+  DerivedMethod *next;
+  std::string *name;
+};
 
 // Class for representing tables. Small footprint.
 
@@ -186,6 +196,7 @@ public:
 	TABLE lsyms;              // local symbols (goto labels)
 	SYM *parms;					      // List of parameters associated with symbol
 	SYM *nextparm;
+	DerivedMethod *derivitives;
 	unsigned int IsPrototype : 1;
 	unsigned int IsTask : 1;
 	unsigned int IsInterrupt : 1;
@@ -197,6 +208,7 @@ public:
 	unsigned int isConst : 1;
 	unsigned int IsKernel : 1;
 	unsigned int IsPrivate : 1;
+	unsigned int IsVirtual : 1;
 	unsigned int ctor : 1;
 	unsigned int dtor : 1;
 	struct enode *initexp;
@@ -219,11 +231,11 @@ public:
 	bool ParameterTypesMatch(SYM *sym);
 	bool ParameterTypesMatch(TypeArray *typearray);
 	SYM *Find(std::string name);
-	std::string GetNameHash();
+	std::string *GetNameHash();
 	bool CheckSignatureMatch(SYM *a, SYM *b) const;
 	SYM *FindExactMatch(int mm);
 	static SYM *FindExactMatch(int mm, std::string name, int rettype, TypeArray *typearray);
-	std::string BuildSignature(int opt = 0);
+	std::string *BuildSignature(int opt = 0);
 	void BuildParameterList(int *num);
 	void AddParameters(SYM *list);
 	void AddProto(SYM *list);
@@ -238,6 +250,7 @@ public:
   int GetNext() { return next; };
 	SYM *GetNextPtr();
   int GetIndex();
+  void AddDerived(SYM *sym);
 };
 
 class TYP {
@@ -281,7 +294,13 @@ public:
   TypeArray *Alloc();
   void Print(txtoStream *);
   void Print();
-  std::string BuildSignature();
+  std::string *BuildSignature();
+};
+
+class Stringx
+{
+public:
+  std::string str;
 };
 
 class Declaration
@@ -296,10 +315,13 @@ public:
 	static void ParseLong();
 	static void ParseInt();
 	static void ParseInt32();
+	static void ParseInt8();
 	static void ParseByte();
 	static SYM *ParseId();
 	static int ParseSpecifier(TABLE *table);
 	static SYM *ParsePrefix(char isUnion);
+	static void ParseSuffixOpenbr();
+	static void ParseSuffixOpenpa(SYM *);
 	static SYM *ParseSuffix(SYM *sp);
 };
 
@@ -410,6 +432,7 @@ public:
 #define ERR_METHOD_NOTFOUND	48
 #define ERR_OUT_OF_MEMORY   49
 #define ERR_TOOMANY_SYMBOLS 50
+#define ERR_TOOMANY_PARAMS  51
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 
