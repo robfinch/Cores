@@ -263,7 +263,7 @@ void GenerateTable888Function(SYM *sym, Statement *stmt)
 		GenerateTable888StackLink(sym);
 		if (exceptions) {
 			GenerateDiadic(op_sw, 0, makereg(regXLR), make_indexed(8,regSP));
-			ep = (ENODE *)xalloc(sizeof(struct enode));
+			ep = (ENODE *)xalloc(sizeof(ENODE));
 			ep->nodetype = en_clabcon;
 			ep->i = throwlab;
 			ap = allocAmode();

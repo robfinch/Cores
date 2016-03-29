@@ -52,6 +52,7 @@ extern int bit_width;
 extern int parsingParameterList;
 extern int funcdecl;
 extern int isStructDecl;
+extern bool isPrivate;
 
 int16_t typeno = bt_last;
 
@@ -65,6 +66,7 @@ int StructDeclaration::Parse(int ztype)
 	ENODE nd;
 	ENODE *pnd = &nd;
 
+  sp = nullptr;
 	psd = isStructDecl;
 	isStructDecl++;
 	ret = 0;
@@ -74,7 +76,7 @@ int StructDeclaration::Parse(int ztype)
   if(lastst == id) {
     if((sp = tagtable.Find(lastid,false)) == NULL) {
       sp = allocSYM();
-  		sp->SetName(my_strdup(lastid));
+  		sp->SetName(*(new std::string(lastid)));
       sp->tp = allocTYP();
       sp->tp->type = (e_bt)ztype;
 		  sp->tp->typeno = typeno++;
@@ -128,7 +130,6 @@ int StructDeclaration::Parse(int ztype)
     tp->type = (e_bt)ztype;
 	  tp->typeno = typeno++;
     tp->sname = new std::string("");
-    tp->lst.Clear();
 
     if (lastst==kw_align) {
       NextToken();
@@ -150,15 +151,19 @@ int StructDeclaration::Parse(int ztype)
 void StructDeclaration::ParseMembers(SYM * sym, TYP *tp, int ztype)
 {
 	int slc;
+  bool priv;
 
   slc = 0;
   tp->val_flag = 1;
 //	tp->val_flag = FALSE;
   while( lastst != end) {
+    priv = isPrivate;
+    isPrivate = false;    
     if(ztype == bt_struct || ztype==bt_class)
       slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
     else
       slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
+    isPrivate = priv;
   }
 	bit_offset = 0;
 	bit_next = 0;

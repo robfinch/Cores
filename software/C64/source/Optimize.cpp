@@ -47,7 +47,7 @@
 	Robert Finch	robfinch<remove>@opencores.org
 */
 
-static void fold_const(struct enode **node);
+static void fold_const(ENODE **node);
 
 /*
  *      dooper will execute a constant operation in a node and

@@ -108,13 +108,13 @@ Statement *vortex_stmt()
 			error(ERR_IDEXPECT); 
 			return 0; 
         } 
-        temp1 = (TYP *)TYP::Make(bt_long,0);
+        temp1 = TYP::Make(bt_long,0);
         temp1->val_flag = 1;
         sp = allocSYM(); 
-        sp->SetName(my_strdup(lastid)); 
+        sp->SetName(*(new std::string(lastid))); 
         sp->value.i = nextlabel++; 
         sp->storage_class = sc_global;
-        sp->tp = temp1; 
+        sp->SetType(temp1); 
         currentFn->lsyms.insert(sp); 
         NextToken();       /* get past label name */ 
         needpunc( colon,30 );
@@ -383,33 +383,37 @@ Statement *ParseFirstcallStatement()
 	SYM *sp;
 	int st;
 
-    snp = NewStatement(st_firstcall, TRUE); 
-    sp = allocSYM();
-	sp->SetName(snp->fcname);
-    sp->storage_class = sc_static;
-    sp->value.i = nextlabel++;
-    sp->tp = &stdbyte;
-    st = lastst;
-    lastst = kw_firstcall;       // fake out doinit()
-    doinit(sp);
-    lastst = st;
-    snp->fcname = my_strdup(sp->realname);
-    snp->s1 = ParseStatement(); 
+  dfs.puts("<ParseFirstcall>");
+  snp = NewStatement(st_firstcall, TRUE); 
+  sp = allocSYM();
+//	sp->SetName(*(new std::string(snp->fcname)));
+  sp->storage_class = sc_static;
+  sp->value.i = nextlabel++;
+  sp->tp = &stdbyte;
+  st = lastst;
+  lastst = kw_firstcall;       // fake out doinit()
+  doinit(sp);
+  lastst = st;
+  // doinit should set realname
+  snp->fcname = my_strdup(sp->realname);
+  snp->s1 = ParseStatement(); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-    return snp; 
+  dfs.puts("</ParseFirstcall>");
+  return snp; 
 } 
   
 Statement *ParseIfStatement() 
 {
 	Statement *snp; 
 
+  dfs.puts("<ParseIfStatement>");
 	NextToken();
 	if (lastst == kw_firstcall)
 	   return ParseFirstcallStatement();
 	currentFn->UsesPredicate = TRUE;
-    snp = NewStatement(st_if, FALSE);
+  snp = NewStatement(st_if, FALSE);
 	snp->predreg = iflevel;
 	iflevel++;
 	if ((iflevel > maxPn-1) && isThor)
@@ -441,7 +445,8 @@ Statement *ParseIfStatement()
             snp->s2 = 0; 
     } 
 	iflevel--;
-    return snp; 
+  dfs.puts("</ParseIfStatement>");
+  return snp; 
 } 
 
 Statement *ParseCatchStatement()
@@ -475,13 +480,13 @@ Statement *ParseCatchStatement()
 	tail = tp1;
     needpunc(closepa,34);
     
-	if( (sp = snp->ssyms.Find(declid,false)) == NULL)
-        sp = makeint((char *)declid.c_str());
+	if( (sp = snp->ssyms.Find(*declid,false)) == NULL)
+        sp = makeint((char *)declid->c_str());
     node = makenode(sp->storage_class==sc_static ? en_labcon : en_autocon,NULL,NULL);
     // nameref looks up the symbol using lastid, so we need to back it up and
     // restore it.
     strncpy(buf,lastid,199);
-    strcpy(lastid, declid.c_str());
+    strncpy(lastid, declid->c_str(),sizeof(lastid)-1);
     nameref(&node,FALSE);
     strcpy(lastid,buf);
 	snp->s1 = ParseStatement();
@@ -827,31 +832,31 @@ Statement *ParseCompoundStatement()
 Statement *ParseLabelStatement()
 {      
 	Statement *snp;
-    SYM *sp;
+  SYM *sp;
 
-    snp = NewStatement(st_label, FALSE); 
-    if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
-        sp = allocSYM(); 
-        sp->SetName(my_strdup(lastid));
-        sp->storage_class = sc_label; 
-        sp->tp = 0; 
-        sp->value.i = nextlabel++; 
-        currentFn->lsyms.insert(sp); 
-    } 
-    else { 
-        if( sp->storage_class != sc_ulabel ) 
-            error(ERR_LABEL); 
-        else 
-            sp->storage_class = sc_label; 
-    } 
-    NextToken();       /* get past id */ 
-    needpunc(colon,45); 
-    if( sp->storage_class == sc_label ) { 
-        snp->label = (int64_t *)sp->value.i; 
-        snp->next = (Statement *)NULL; 
-        return snp; 
-    } 
-    return 0; 
+  snp = NewStatement(st_label, FALSE); 
+  if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
+    sp = allocSYM(); 
+    sp->SetName(*(new std::string(lastid)));
+    sp->storage_class = sc_label; 
+    sp->tp = TYP::Make(bt_label,0);
+    sp->value.i = nextlabel++; 
+    currentFn->lsyms.insert(sp); 
+  } 
+  else { 
+    if( sp->storage_class != sc_ulabel ) 
+      error(ERR_LABEL); 
+    else 
+      sp->storage_class = sc_label; 
+  } 
+  NextToken();       /* get past id */ 
+  needpunc(colon,45); 
+  if( sp->storage_class == sc_label ) { 
+    snp->label = (int64_t *)sp->value.i; 
+    snp->next = (Statement *)NULL; 
+    return snp; 
+  } 
+  return 0; 
 } 
   
 Statement *ParseGotoStatement() 
@@ -867,7 +872,7 @@ Statement *ParseGotoStatement()
     snp = NewStatement(st_goto, FALSE);
     if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
         sp = allocSYM(); 
-        sp->SetName(my_strdup(lastid));
+        sp->SetName(*(new std::string(lastid)));
         sp->value.i = nextlabel++; 
         sp->storage_class = sc_ulabel; 
         sp->tp = 0; 
@@ -890,6 +895,7 @@ Statement *ParseGotoStatement()
 Statement *ParseStatement() 
 {
 	Statement *snp; 
+	dfs.puts("<ParseStatement>");
     switch( lastst ) { 
     case semicolon: 
         snp = NewStatement(st_empty,1);
@@ -945,5 +951,7 @@ Statement *ParseStatement()
 	if( snp != NULL ) {
         snp->next = (Statement *)NULL;
 	}
-    return snp; 
+	dfs.puts("</ParseStatement>");
+  return snp; 
 } 
+

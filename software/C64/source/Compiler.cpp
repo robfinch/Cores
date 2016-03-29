@@ -32,6 +32,7 @@ extern void summary();
 extern void ParseGlobalDeclarations();
 extern void makename(char *s, char *e);
 extern char *errtext(int errnum);
+extern std::string *classname;
 
 Compiler::Compiler()
 {
@@ -67,6 +68,8 @@ int Compiler::main2(int argc, char **argv)
 	return 0;
 }
 
+// Builds the debugging log as an XML document
+//
 void Compiler::compile()
 {
 	GlobalDeclaration *gd;
@@ -74,6 +77,7 @@ void Compiler::compile()
 	dfs.printf("<compile>\n");
   typenum = 1;
   symnum = 257;
+  classname = nullptr;
   ZeroMemory(&gsyms[0],sizeof(gsyms));
   ZeroMemory(&defsyms,sizeof(defsyms));
   ZeroMemory(&tagtable,sizeof(tagtable));
@@ -87,6 +91,9 @@ void Compiler::compile()
 	lastst = tk_nop;
 
   getch();
+	lstackptr = 0;
+	lastst = 0;
+  NextToken();
   try {
   	while(lastst != my_eof)
   	{
@@ -105,6 +112,7 @@ void Compiler::compile()
   }
   catch (C64PException * ex) {
     dfs.printf(errtext(ex->errnum));
+ 		dfs.printf("</compile>\n");
   }
 	dumplits();
 }
@@ -112,11 +120,11 @@ void Compiler::compile()
 int Compiler::PreprocessFile(char *nm)
 {
 	static char outname[1000];
-	static char sysbuf[1000];
+	static char sysbuf[500];
 
 	strcpy(outname, nm);
 	makename(outname,".fpp");
-	sprintf(sysbuf, "fpp -b %s %s", nm, outname);
+	snprintf(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
 	return system(sysbuf);
 }
 
@@ -132,65 +140,33 @@ void Compiler::AddStandardTypes()
 {
   TYP *p, *pchar, *pint;
 
-  p = allocTYP();
-  p->type = bt_long;
-  p->typeno = bt_long;
-  p->size = 8;
-  p->size2 = 8;
+  p = TYP::Make(bt_long,8);
   stdint = *p;
   pint = p;
   
-  p = allocTYP();
-  p->type = bt_long;
-  p->typeno = bt_long;
-  p->size = 8;
-  p->size2 = 8;
+  p = TYP::Make(bt_long,8);
   p->isUnsigned = true;
   stduint = *p;
   
-  p = allocTYP();
-  p->type = bt_long;
-  p->typeno = bt_long;
-  p->size = 8;
-  p->size2 = 8;
+  p = TYP::Make(bt_long,8);
   stdlong = *p;
   
-  p = allocTYP();
-  p->type = bt_long;
-  p->typeno = bt_long;
-  p->size = 8;
-  p->size2 = 8;
+  p = TYP::Make(bt_long,8);
   p->isUnsigned = true;
   stdulong = *p;
   
-  p = allocTYP();
-  p->type = bt_short;
-  p->typeno = bt_short;
-  p->size = 4;
-  p->size2 = 4;
+  p = TYP::Make(bt_short,4);
   stdshort = *p;
   
-  p = allocTYP();
-  p->type = bt_short;
-  p->typeno = bt_short;
-  p->size = 4;
-  p->size2 = 4;
+  p = TYP::Make(bt_short,4);
   p->isUnsigned = true;
   stdushort = *p;
   
-  p = allocTYP();
-  p->type = bt_char;
-  p->typeno = bt_char;
-  p->size = 2;
-  p->size2 = 2;
+  p = TYP::Make(bt_char,2);
   stdchar = *p;
   pchar = p;
   
-  p = allocTYP();
-  p->type = bt_char;
-  p->typeno = bt_char;
-  p->size = 2;
-  p->size2 = 2;
+  p = TYP::Make(bt_char,2);
   p->isUnsigned = true;
   stduchar = *p;
   
@@ -199,6 +175,7 @@ void Compiler::AddStandardTypes()
   p->typeno = bt_byte;
   p->size = 1;
   p->size2 = 1;
+  p->bit_width = -1;
   stdbyte = *p;
   
   p = allocTYP();
@@ -207,6 +184,7 @@ void Compiler::AddStandardTypes()
   p->size = 1;
   p->size2 = 1;
   p->isUnsigned = true;
+  p->bit_width = -1;
   stdubyte = *p;
   
   p = allocTYP();
@@ -216,6 +194,7 @@ void Compiler::AddStandardTypes()
   p->size = 1;
   p->size2 = 1;
   p->btp = pchar->GetIndex();
+  p->bit_width = -1;
   stdstring = *p;
   
   p = allocTYP();
@@ -223,6 +202,7 @@ void Compiler::AddStandardTypes()
   p->typeno = bt_double;
   p->size = 8;
   p->size2 = 8;
+  p->bit_width = -1;
   stddbl = *p;
   stddouble = *p;
   
@@ -231,13 +211,10 @@ void Compiler::AddStandardTypes()
   p->typeno = bt_float;
   p->size = 4;
   p->size2 = 4;
+  p->bit_width = -1;
   stdflt = *p;
   
-  p = allocTYP();
-  p->type = bt_func;
-  p->typeno = bt_func;
-  p->size = 0;
-  p->size2 = 0;
+  p = TYP::Make(bt_func,0);
   p->btp = pint->GetIndex();
   stdfunc = *p;
 
@@ -247,6 +224,7 @@ void Compiler::AddStandardTypes()
   p->size = 8;
   p->size2 = 8;
   p->isUnsigned = true;
+  p->bit_width = -1;
   stdexception = *p;
 
   p = allocTYP();
@@ -255,6 +233,7 @@ void Compiler::AddStandardTypes()
   p->val_flag = 1;
   p->size = 8;
   p->size2 = 8;
+  p->bit_width = -1;
   stdconst = *p;
   
 }

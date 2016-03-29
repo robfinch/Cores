@@ -82,7 +82,8 @@ static char *errtextstr[] = {
 	"Method not found",
 	"Out of memory",
 	"Too many symbols",
-	"Too many parameters - the compiler is limited to 20 or less"
+	"Too many parameters - the compiler is limited to 20 or less",
+	"The 'this' pointer may only be used in a class method."
 };
 
 char *errtext(int errnum)

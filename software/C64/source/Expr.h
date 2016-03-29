@@ -84,7 +84,8 @@ enum e_node {
 		en_chk
 		};
 
-struct enode {
+class ENODE {
+public:
     enum e_node nodetype;
 	enum e_bt etype;
 	long      esize;
@@ -110,14 +111,15 @@ struct enode {
 	std::string *udnm;			// undecorated name
 	void *ctor;
 	void *dtor;
-    struct enode *p[3];
+  ENODE *p[3];
+  void SetType(TYP *t) { tp = t; };
 };
 
-typedef struct enode ENODE;
+//typedef struct enode ENODE;
 
 typedef struct cse {
         struct cse      *next;
-        struct enode    *exp;           /* optimizable expression */
+        ENODE *exp;           /* optimizable expression */
         int             uses;           /* number of uses */
         int             duses;          /* number of dereferenced uses */
         short int       voidf;          /* cannot optimize flag */

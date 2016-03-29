@@ -232,6 +232,8 @@ static void scanexpr(ENODE *node, int duse)
         return;
 
 	switch( node->nodetype ) {
+	  case en_regvar:
+	    break;
 		case en_cnacon:
 		case en_clabcon:
 		case en_fcon:
@@ -376,7 +378,7 @@ static void scanexpr(ENODE *node, int duse)
                 scanexpr(node->p[0],1);
                 scanexpr(node->p[1],0);
                 break;
-        default: printf("Uncoded node in scanexpr():%d\r\n", node->nodetype);
+        default: dfs.printf("Uncoded node in scanexpr():%d\r\n", node->nodetype);
         }
 }
 
@@ -650,8 +652,10 @@ void repexpr(ENODE *node)
                         repexpr(node->p[0]);
                         repexpr(node->p[1]);
                         break;
+                case en_regvar:
+                  break;
                 default:
-                        printf("Uncoded node in repexr():%d\r\n",node->nodetype);
+                        dfs.printf("Uncoded node in repexr():%d\r\n",node->nodetype);
                 }
 }
 

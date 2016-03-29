@@ -29,6 +29,8 @@ extern char *prefix;
 SYM *search2(char *na,TABLE *tbl,TypeArray *typearray);
 uint8_t hashadd(char *nm);
 
+int min (int a, int b) { return a < b ? a : b; }
+
 SYM *TABLE::match[100];
 int TABLE::matchno;
 
@@ -45,7 +47,7 @@ TABLE::TABLE()
 void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 {
 	SYM *sp, *newsym;
-	dfs.printf("Enter CopySymbolTable\n");
+	dfs.puts("<CopySymbolTable>\n");
 	if (src) {
 	  dfs.printf("A");
 		sp = sp->GetPtr(src->GetHead());
@@ -59,7 +61,7 @@ void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 			sp = sp->GetNextPtr();
 		}
 	}
-	dfs.printf("Leave CopySymbolTable\n");
+	dfs.puts("</CopySymbolTable>\n");
 }
 
 //Generic table insert routine, used for all inserts.
@@ -96,9 +98,10 @@ void TABLE::insert(SYM *sp)
 	}
 
   nm = *sp->name;
-  dfs.printf("Calling find\n");
-  nn = tab->Find(nm,sp->tp->typeno,ta,true); 
-  dfs.printf("Called find\n");
+  // The symbol may not have a type if it's just a label. Find doens't
+  // look at the return type parameter anyway, so we just set it to bt_long
+  // if tp isn't set.
+  nn = tab->Find(nm,sp->tp ? sp->tp->typeno : bt_long,ta,true); 
 	if(nn == 0) {
     if( tab->head == 0) {
       tab->SetHead(sp->GetIndex());
@@ -134,7 +137,14 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
 	TypeArray *ta;
 	char namebuf[1000];
 	int s1,s2,s3;
+	std::string name;
 
+  dfs.puts("</Find>\n");
+  dfs.puts((char *)na.c_str());
+  if (this==nullptr) {
+    matchno = 0;
+    return 0;
+  }
 	if (na.length()==0) {
 	  dfs.printf("name is empty string\n");
 		throw new C64PException(ERR_NULLPOINTER,1);
@@ -153,6 +163,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
  thead = first;
 	while( thead != NULL) {
 //		dfs.printf((char *)"|%s|,|%s|\n",(char *)thead->name->c_str(),(char *)na.c_str());
+    name = *thead->name;
 		s1 = thead->name->compare(na);
 		s2 = thead->name2->compare(na);
 		s3 = thead->name3->compare(na);
@@ -185,7 +196,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
       throw new C64PException(ERR_CIRCULAR_LIST,1);
     }
   }
-  dfs.printf("Leave Find\r\n");
+  dfs.puts("</Find>\n");
   return exact ? 0 : matchno;
 }
 
@@ -196,28 +207,60 @@ int TABLE::Find(std::string na)
 
 
 // Findrising searchs the table hierarchy at higher and higher
-// levels until the symbol is found.
+// levels until the symbol is found. It returns a table full of matches
+// which is ordered according to the level at which the symbol was found.
+// Subclasses appear in the table before base classes, so that a 
+// subclass definiton of the symbol shadows a base class definition.
 //
 int TABLE::FindRising(std::string na)
 {
 	int sp;
   SYM *sym;
+  int bse;
+  static SYM *mt[110];
+  int nn, ii;
+  int ndx;
+  TypeArray *ta;
 
-  dfs.printf("FindRising:%s|\n",(char *)na.c_str());
+  ndx = 0;
+  dfs.printf("<FindRising>%s \n",(char *)na.c_str());
   if (this==nullptr)
     return 0;
 	sp = Find(na);
-	if (sp)
-		return sp;
-	while (base) {
-	  sym = SYM::GetPtr(base);
-	  dfs.printf("Searching class:%s|\n",(char *)sym->name->c_str());
+	nn = min(100,ndx+TABLE::matchno);
+	memcpy(&mt[0],TABLE::match,nn*sizeof(SYM *));
+	ndx += nn;
+	bse = base;
+	while (bse) {
+	  sym = SYM::GetPtr(bse);
+	  dfs.printf("Searching class:%s \n",(char *)sym->name->c_str());
 		sp = sym->tp->lst.Find(na);
-		if (sp)
-  		return sp;
-		base = sym->tp->lst.base;
+  	nn = min(100,ndx+TABLE::matchno);
+  	memcpy(&mt[ndx],TABLE::match,nn*sizeof(SYM *));
+  	ndx += nn;
+		bse = sym->tp->lst.base;
 	}
-	return 0;
+	dfs.puts("</FindRising>");
+copyBack:
+  memcpy(TABLE::match,mt,ndx*sizeof(SYM *));
+  TABLE::matchno = ndx;
+  for (nn = 0; nn < ndx; nn++) {
+    sym = TABLE::match[nn];
+    if (sym) {
+      if (sym->name)
+         dfs.printf("Sym:%s Types: (", (char *)sym->name->c_str());
+      else
+         dfs.printf("Sym:%s Types: (", (char *)"<no name>");
+      ta = sym->GetProtoTypes();
+      if (ta) {
+        for (ii = 0; ii < 20; ii++) {
+          dfs.printf("%03d, ", ta->types[ii]);
+        }
+      }
+      dfs.puts(")\n");
+    }
+  }
+  return ndx;
 }
 
 SYM *TABLE::Find(std::string na, bool opt)

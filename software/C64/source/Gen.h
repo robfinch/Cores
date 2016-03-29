@@ -37,7 +37,7 @@ typedef struct amode {
 	unsigned int rshift : 8;
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
-	struct enode *offset;
+	ENODE *offset;
 	int8_t scale;
 } AMODE;
 

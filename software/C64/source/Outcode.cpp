@@ -147,7 +147,8 @@ static char *pad(char *op)
 	int n;
 
 	n = strlen(op);
-	strncpy(buf,op,20);
+	strncpy(buf,op,19);
+	buf[19] = '\0';
 	if (n < 5) {
 		strcat(buf, "     ");
 		buf[5] = '\0';

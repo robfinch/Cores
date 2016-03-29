@@ -15,15 +15,15 @@ enum e_stmt {
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
 typedef struct snode {
-    __int8 stype;
+  __int8 stype;
 	struct snode *outer;	/* outer statement */
-    struct snode *next;   /* next statement */
+  struct snode *next;   /* next statement */
 	int predreg;		 /* assigned predicate register */
-    ENODE *exp;           /* condition or expression */
-    ENODE *initExpr;      /* initialization expression - for loops */
-    ENODE *incrExpr;      /* increment expression - for loops */
-    struct snode *s1, *s2;       /* internal statements */
-    __int64 *label;         /* label number for goto */
+  ENODE *exp;           /* condition or expression */
+  ENODE *initExpr;      /* initialization expression - for loops */
+  ENODE *incrExpr;      /* increment expression - for loops */
+  struct snode *s1, *s2;       /* internal statements */
+  __int64 *label;         /* label number for goto */
 	TABLE ssyms;			/* local symbols associated with statement */
 	char *fcname;       // firstcall block var name
 	char *lptr;

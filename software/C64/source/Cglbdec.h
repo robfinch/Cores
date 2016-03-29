@@ -81,6 +81,8 @@ extern std::ifstream *ifs;
 extern txtoStream ofs;
 extern txtoStream lfs;
 extern txtoStream dfs;
+extern int mangledNames;
+
 /*
 extern FILE             *input,
                         *list,
@@ -153,7 +155,7 @@ extern TYP stdfunc;
 extern TYP stdexception;
 extern TYP stdconst;
 
-extern std::string declid;
+extern std::string *declid;
 extern Compiler compiler;
 
 // Analyze.c
@@ -225,17 +227,17 @@ extern int64_t GetIntegerExpression(ENODE **p);
 // Expr.c
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, int64_t v1);
-extern ENODE *makesnode(int nt, std::string v1, std::string v2, int64_t i);
+extern ENODE *makesnode(int nt, std::string *v1, std::string *v2, int64_t i);
 extern TYP *nameref(ENODE **node,int);
 extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2);
-extern TYP *expression(struct enode **node);
-extern int IsLValue(struct enode *node);
+extern TYP *expression(ENODE **node);
+extern int IsLValue(ENODE *node);
 extern AMODE *GenerateExpression(ENODE *node, int flags, int size);
 extern int GetNaturalSize(ENODE *node);
 extern TYP *asnop(ENODE **node);
 extern TYP *NonCommaExpression(ENODE **);
 // Optimize.c
-extern void opt_const(struct enode **node);
+extern void opt_const(ENODE **node);
 // GenerateStatement.c
 extern void GenerateStatement(struct snode *stmt);
 //extern void GenerateFunction(struct snode *stmt);
@@ -290,9 +292,9 @@ extern AMODE *make_label(int64_t lab);
 extern AMODE *make_clabel(int64_t lab);
 extern AMODE *make_immed(int64_t);
 extern AMODE *make_indirect(int i);
-extern AMODE *make_offset(struct enode *node);
-extern void swap_nodes(struct enode *node);
-extern int isshort(struct enode *node);
+extern AMODE *make_offset(ENODE *node);
+extern void swap_nodes(ENODE *node);
+extern int isshort(ENODE *node);
 // IdentifyKeyword.c
 extern int IdentifyKeyword();
 // Preproc.c
@@ -302,8 +304,8 @@ extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(int64_t o, int i);
 extern AMODE *make_indx(ENODE *node, int reg);
 extern AMODE *make_string(char *s);
-extern void GenerateFalseJump(struct enode *node,int label,int predreg);
-extern void GenerateTrueJump(struct enode *node,int label,int predreg);
+extern void GenerateFalseJump(ENODE *node,int label,int predreg);
+extern void GenerateTrueJump(ENODE *node,int label,int predreg);
 extern char *GetNamespace();
 extern char nmspace[20][100];
 extern AMODE *GenerateDereference(ENODE *, int, int, int);

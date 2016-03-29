@@ -38,13 +38,9 @@ void ParseEnumDeclaration(TABLE *table)
     if( lastst == id) {
         if((sp = search(lastid,&tagtable)) == NULL) {
             sp = allocSYM();
-            sp->tp = allocTYP();
-            sp->tp->type = bt_enum;
-            sp->tp->size = 2;
-            sp->tp->lst.Clear();
-			      sp->tp->btp = 0;
+            sp->tp = TYP::Make(bt_enum,2);
             sp->storage_class = sc_type;
-            sp->SetName(my_strdup(lastid));
+            sp->SetName(*(new std::string(lastid)));
             sp->tp->sname = new std::string(*sp->name);
             NextToken();
             if( lastst != begin)
@@ -80,7 +76,7 @@ void ParseEnumerationList(TABLE *table)
     evalue = 0;
     while(lastst == id) {
         sp = allocSYM();
-        sp->SetName(my_strdup(lastid));
+        sp->SetName(*(new std::string(lastid)));
         sp->storage_class = sc_const;
         sp->tp = &stdconst;
         table->insert(sp);

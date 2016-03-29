@@ -20,6 +20,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>Unicode</CharacterSet>
+    <CLRSupport>true</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -51,6 +52,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <CompileAsManaged>false</CompileAsManaged>
+      <DebugInformationFormat>
+      </DebugInformationFormat>
+      <MinimalRebuild>false</MinimalRebuild>
+      <ExceptionHandling>SyncCThrow</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -84,6 +90,7 @@
     <ClInclude Include="Fwlib.h" />
     <ClInclude Include="Fwstr.h" />
     <ClInclude Include="Gen.h" />
+    <ClInclude Include="rand.h" />
     <ClInclude Include="Statement.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -94,6 +101,7 @@
     <ClCompile Include="Cglbdef.cpp" />
     <ClCompile Include="Cmain.cpp" />
     <ClCompile Include="CodeGenerator.cpp" />
+    <ClCompile Include="Compiler.cpp" />
     <ClCompile Include="err.cpp" />
     <ClCompile Include="FISA64.cpp" />
     <ClCompile Include="FPRegister.cpp" />
@@ -119,6 +127,7 @@
     <ClCompile Include="ParseStructDeclaration.cpp" />
     <ClCompile Include="Peepgen.cpp" />
     <ClCompile Include="Preprocessor.cpp" />
+    <ClCompile Include="rand.cpp" />
     <ClCompile Include="Raptor64.cpp" />
     <ClCompile Include="Register.cpp" />
     <ClCompile Include="rtrim.cpp" />
@@ -126,11 +135,14 @@
     <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="Strmat.cpp" />
     <ClCompile Include="Symbol.cpp" />
+    <ClCompile Include="Table.cpp" />
     <ClCompile Include="Table888.cpp" />
     <ClCompile Include="temp.cpp" />
     <ClCompile Include="Thor.cpp" />
     <ClCompile Include="TRIM.Cpp" />
     <ClCompile Include="txtStream.cpp" />
+    <ClCompile Include="Type.cpp" />
+    <ClCompile Include="TypeArray.cpp" />
     <ClCompile Include="W65C816.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

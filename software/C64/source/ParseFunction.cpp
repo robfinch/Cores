@@ -49,6 +49,7 @@ extern int funcdecl;
 extern int nparms;
 extern char *stkname;
 extern int isVirtual;
+extern bool isFuncBody;
 
 static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
@@ -120,17 +121,18 @@ void CheckParameterListMatch(SYM *s1, SYM *s2)
 int ParseFunction(SYM *sp)
 {
 	int i;
-	int oldglobal;
     SYM *sp1, *sp2, *pl, *osp;
 	Statement *stmt;
 	int nump;
 	__int16 *ta;
 	int nn;
+	std::string name;
 
+  dfs.puts("<ParseFunction>\n");
+  isFuncBody = true;
 	if (sp==NULL) {
 		fatal("Compiler error: ParseFunction: SYM is NULL\r\n");
 	}
-	osp = sp;
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
@@ -142,87 +144,98 @@ int ParseFunction(SYM *sp)
 	dfs.printf("***********************************\n");
 	sp->stkname = stkname;
 	if (verbose) printf("Parsing function: %s\r\n", (char *)sp->name->c_str());
-		oldglobal = global_flag;
-        global_flag = 0;
-//        nparms = 0;
-    nump = nparms;
-		iflevel = 0;
+  nump = nparms;
+  iflevel = 0;
 		// There could be unnamed parameters in a function prototype.
-		dfs.printf("A");
-      if(lastst == id || 1) {              /* declare parameters */
-			sp->BuildParameterList(&nump);
-		dfs.printf("B");
-			// If the symbol has a parent then it must be a class
-			// method. Search the parent table(s) for matching
-			// signatures.
-			if (sp->parent) {
-				sp->GetParentPtr()->Find(*sp->name);
-				if (sp->FindExactMatch(TABLE::matchno) > 0)
-					sp = TABLE::match[TABLE::matchno-1];
-				else
-          error(ERR_METHOD_NOTFOUND);
-				sp->PrintParameterTypes();
-			}
-			else {
-				if (gsyms[0].Find(*sp->name)) {
-					sp = TABLE::match[TABLE::matchno-1];
-				}
-			}
-			dfs.printf("C");
+	dfs.printf("A");
+  // declare parameters
+  // Building a parameter list here allows both styles of parameter
+  // declarations. the original 'C' style is parsed here. Originally the
+  // parameter types appeared as list after the parenthesis and before the
+  // function body.
+	sp->BuildParameterList(&nump);
+	dfs.printf("B");
+  sp->mangledName = sp->BuildSignature(1);  // build against parameters
+
+	// If the symbol has a parent then it must be a class
+	// method. Search the parent table(s) for matching
+	// signatures.
+	osp = sp;
+	name = *sp->name;
+	if (sp->parent) {
+	  SYM *sp2;
+	  dfs.printf("PArent Class:%s|",(char *)sp->GetParentPtr()->name->c_str());
+		sp2 = sp->GetParentPtr()->Find(name);
+		if (sp2) {
+		  dfs.printf("Found at least inexact match");
+      sp2 = sp->FindExactMatch(TABLE::matchno);
     }
-    if (sp != osp) {
-      dfs.printf("ParseFunction: sp changed\n");
-      osp->params.CopyTo(&sp->params);
-      osp->proto.CopyTo(&sp->proto);
-      sp->derivitives = osp->derivitives;
-      // Should free osp here. It's not needed anymore
-    }
-		if (lastst == closepa) {
-			NextToken();
+		if (sp2 == nullptr)
+      error(ERR_METHOD_NOTFOUND);
+    else
+      sp = sp2;
+		sp->PrintParameterTypes();
+	}
+	else {
+		if (gsyms[0].Find(name)) {
+			sp = TABLE::match[TABLE::matchno-1];
 		}
-		dfs.printf("D");
-		if (sp->tp->type == bt_pointer) {
-			if (lastst==assign) {
-				doinit(sp);
-			}
-			sp->IsNocall = isNocall;
-			sp->IsPascal = isPascal;
-			sp->IsKernel = isKernel;
-			sp->IsInterrupt = isInterrupt;
-			sp->IsTask = isTask;
-			sp->NumParms = nump;
-			sp->IsVirtual = isVirtual;
-			isPascal = FALSE;
-			isKernel = FALSE;
-			isOscall = FALSE;
-			isInterrupt = FALSE;
-			isTask = FALSE;
-			isNocall = FALSE;
+	}
+	dfs.printf("C");
+
+  if (sp != osp) {
+    dfs.printf("ParseFunction: sp changed\n");
+    osp->params.CopyTo(&sp->params);
+    osp->proto.CopyTo(&sp->proto);
+    sp->derivitives = osp->derivitives;
+    sp->mangledName = osp->mangledName;
+    // Should free osp here. It's not needed anymore
+  }
+	if (lastst == closepa) {
+		NextToken();
+	}
+	dfs.printf("D");
+	if (sp->tp->type == bt_pointer) {
+		if (lastst==assign) {
+			doinit(sp);
+		}
+		sp->IsNocall = isNocall;
+		sp->IsPascal = isPascal;
+		sp->IsKernel = isKernel;
+		sp->IsInterrupt = isInterrupt;
+		sp->IsTask = isTask;
+		sp->NumParms = nump;
+		sp->IsVirtual = isVirtual;
+		isPascal = FALSE;
+		isKernel = FALSE;
+		isOscall = FALSE;
+		isInterrupt = FALSE;
+		isTask = FALSE;
+		isNocall = FALSE;
 //	    ReleaseLocalMemory();        /* release local symbols (parameters)*/
-			global_flag = oldglobal;
-			return 1;
-		}
-		dfs.printf("E");
-		if (lastst == semicolon) {	// Function prototype
-			dfs.printf("e");
-			sp->IsPrototype = 1;
-			sp->IsNocall = isNocall;
-			sp->IsPascal = isPascal;
-			sp->IsKernel = isKernel;
-			sp->IsInterrupt = isInterrupt;
-			sp->IsTask = isTask;
-			sp->IsVirtual = isVirtual;
-			sp->NumParms = nump;
-  		sp->params.MoveTo(&sp->proto);
-			isPascal = FALSE;
-			isKernel = FALSE;
-			isOscall = FALSE;
-			isInterrupt = FALSE;
-			isTask = FALSE;
-			isNocall = FALSE;
+		return 1;
+	}
+	dfs.printf("E");
+	if (lastst == semicolon) {	// Function prototype
+		dfs.printf("e");
+		sp->IsPrototype = 1;
+		sp->IsNocall = isNocall;
+		sp->IsPascal = isPascal;
+		sp->IsKernel = isKernel;
+		sp->IsInterrupt = isInterrupt;
+		sp->IsTask = isTask;
+		sp->IsVirtual = isVirtual;
+		sp->NumParms = nump;
+		sp->params.MoveTo(&sp->proto);
+		isPascal = FALSE;
+		isKernel = FALSE;
+		isOscall = FALSE;
+		isInterrupt = FALSE;
+		isTask = FALSE;
+		isNocall = FALSE;
 //	    ReleaseLocalMemory();        /* release local symbols (parameters)*/
-			goto j1;
-		}
+		goto j1;
+	}
 		else if(lastst != begin) {
 			dfs.printf("F");
 //			NextToken();
@@ -248,7 +261,7 @@ int ParseFunction(SYM *sp)
 			}
 			// Check for end of function parameter list.
 			else if (funcdecl==2 && lastst==closepa) {
-				;
+			  ;
 			}
 			else {
 				sp->IsNocall = isNocall;
@@ -289,29 +302,26 @@ dfs.printf("G");
     }
 j1:
 dfs.printf("F");
-		global_flag = oldglobal;
-		return 0;
+  dfs.puts("</ParseFunction>\n");
+  return 0;
 }
 
 SYM *makeint(char *name)
 {  
-     SYM     *sp;
-        TYP     *tp;
-        sp = allocSYM();
-        tp = allocTYP();
-        tp->type = bt_long;
-        tp->size = 8;
-        tp->btp = 0;
-		tp->lst.Clear();
-        tp->sname = new std::string("");
-		tp->isUnsigned = FALSE;
-		tp->isVolatile = FALSE;
-        sp->SetName(name);
-        sp->storage_class = sc_auto;
-        sp->tp = tp;
-		sp->IsPrototype = FALSE;
-        currentFn->lsyms.insert(sp);
-        return sp;
+  SYM     *sp;
+  TYP     *tp;
+
+  sp = allocSYM();
+  tp = TYP::Make(bt_long,8);
+  tp->sname = new std::string("");
+	tp->isUnsigned = FALSE;
+	tp->isVolatile = FALSE;
+  sp->SetName(name);
+  sp->storage_class = sc_auto;
+  sp->SetType(tp);
+	sp->IsPrototype = FALSE;
+  currentFn->lsyms.insert(sp);
+  return sp;
 }
 
 void check_table(SYM *head)
@@ -328,7 +338,7 @@ void funcbottom(Statement *stmt)
 	Statement *s, *s1;
 	dfs.printf("Enter funcbottom\n");
 	nl();
-    check_table((SYM *)currentFn->lsyms.GetHead());
+    check_table(SYM::GetPtr(currentFn->lsyms.GetHead()));
     lc_auto = 0;
     lfs.printf("\n\n*** local symbol table ***\n\n");
     ListTable(&currentFn->lsyms,0);
@@ -382,12 +392,12 @@ static Statement *ParseFunctionBody(SYM *sp)
 	Statement *plg;
 	Statement *eplg;
 
+  dfs.printf("<Parse function body>:%s|\n", (char *)sp->name->c_str());
+
 	lbl[0] = 0;
 	needpunc(begin,47);
      
   tmpReset();
-  printf("Parse function body: %s\r\n", sp->name->c_str());
-	TRACE( printf("Parse function body: %s\r\n", sp->name->c_str()); )
     //ParseAutoDeclarations();
 	cseg();
 	if (sp->storage_class == sc_static)
@@ -395,7 +405,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 		//strcpy(lbl,GetNamespace());
 		//strcat(lbl,"_");
 //		strcpy(lbl,sp->name);
-    lbl = *sp->BuildSignature(1);
+    lbl = *sp->mangledName;
 		//gen_strlab(lbl);
 	}
 	//	put_label((unsigned int) sp->value.i);
@@ -403,12 +413,12 @@ static Statement *ParseFunctionBody(SYM *sp)
 		if (sp->storage_class == sc_global)
 			lbl = "public code ";
 //		strcat(lbl,sp->name);
-		lbl += *sp->BuildSignature(1);
+		lbl += *sp->mangledName;
 		//gen_strlab(lbl);
 	}
-printf("B");
+  dfs.printf("B");
   p = my_strdup((char *)lbl.c_str());
-printf("b");
+  dfs.printf("b");
 	GenerateMonadic(op_fnname,0,make_string(p));
 	currentFn = sp;
 	currentFn->IsLeaf = TRUE;
@@ -417,9 +427,9 @@ printf("b");
 	regmask = 0;
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
-printf("C");
+  dfs.printf("C");
 	stmt = ParseCompoundStatement();
-printf("D");
+  dfs.printf("D");
 //	stmt->stype = st_funcbody;
 	if (isThor)
 		GenerateFunction(sp, stmt);
@@ -431,13 +441,15 @@ printf("D");
 		Generate816Function(sp, stmt);
 	else if (isFISA64)
 		GenerateFISA64Function(sp, stmt);
-printf("E");
+  dfs.putch('E');
 
 	flush_peep();
 	if (sp->storage_class == sc_global) {
 		ofs.printf("endpublic\r\n\r\n");
 	}
-	ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->name->c_str(), tmpVarSpace() + lc_auto);
-	dfs.printf("Finished ParseFunctionBody\n");
+	ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->mangledName->c_str(), tmpVarSpace() + lc_auto);
+	isFuncBody = false;
+	dfs.printf("</ParseFunctionBody>\n");
 	return stmt;
 }
+

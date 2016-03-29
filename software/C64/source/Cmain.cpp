@@ -78,14 +78,10 @@ int main(int argc, char **argv)
 			if( openfiles(*argv)) {
 				lineno = 0;
 				initsym();
-				getch();
-				lstackptr = 0;
-				lastst = 0;
-				NextToken();
 	compiler.compile();
 //				compile();
-//				summary();
-//				MBlk::ReleaseAll();
+				summary();
+				MBlk::ReleaseAll();
 //				ReleaseGlobalMemory();
 				closefiles();
 			}
@@ -191,11 +187,11 @@ int	options(char *s)
 int PreProcessFile(char *nm)
 {
 	static char outname[1000];
-	static char sysbuf[1000];
+	static char sysbuf[500];
 
 	strcpy(outname, nm);
 	makename(outname,".fpp");
-	sprintf(sysbuf, "fpp -b %s %s", nm, outname);
+	snprintf(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
 	return system(sysbuf);
 }
 
@@ -218,7 +214,7 @@ int openfiles(char *s)
 		makename(infile,".fpp");
         makename(listfile,".lis");
         makename(outfile,".s");
-    dbgfile += ".dbg";
+    dbgfile += ".xml";
 		ifs = new std::ifstream();
 		ifs->open(infile,std::ios::in);
 /*
@@ -247,6 +243,8 @@ int openfiles(char *s)
 		ofs.open(outfile,std::ios::out|std::ios::trunc);
 		dfs.open(dbgfile.c_str(),std::ios::out|std::ios::trunc);
 		dfs.level = 1;
+		dfs.puts("<title>C64D Compiler debug file</title>\n");
+		dfs.level = 0;
 		lfs.level = 1;
 		ofs.level = 1;
 /*

@@ -54,6 +54,8 @@ typedef unsigned __int8 uint8_t;
 typedef unsigned __int16 uint16_t;
 typedef unsigned __int64 uint64_t;
 
+class ENODE;
+
 enum e_sym {
   tk_nop,
         id, cconst, iconst, lconst, sconst, rconst, plus, minus,
@@ -80,8 +82,8 @@ enum e_sym {
 		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
 		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
-    kw_unique, kw_virtual,
-		kw_new, kw_delete,
+    kw_unique, kw_virtual, kw_this,
+		kw_new, kw_delete, kw_using, kw_namespace,
         my_eof };
 
 enum e_sc {
@@ -94,7 +96,8 @@ enum e_bt {
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
         bt_unsigned,
-        bt_struct, bt_union, bt_class, bt_enum, bt_void, bt_func, bt_ifunc,
+        bt_struct, bt_union, bt_class, bt_enum, bt_void,
+        bt_func, bt_ifunc, bt_label,
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
 		bt_exception, bt_ellipsis,
         bt_last};
@@ -184,7 +187,6 @@ public:
 	char nameext[4];
   char *realname;
   char *stkname;
-	std::string signature;
     __int8 storage_class;
 	unsigned int pos : 4;			// position of the symbol (param, auto or return type)
 	// Function attributes
@@ -209,9 +211,10 @@ public:
 	unsigned int IsKernel : 1;
 	unsigned int IsPrivate : 1;
 	unsigned int IsVirtual : 1;
+	unsigned int IsUndefined : 1;  // undefined function
 	unsigned int ctor : 1;
 	unsigned int dtor : 1;
-	struct enode *initexp;
+	ENODE *initexp;
     union {
         int64_t i;
         uint64_t u;
@@ -219,7 +222,7 @@ public:
         uint16_t wa[8];
         char *s;
     } value;
-    TYP *tp;
+  TYP *tp;
     struct snode *prolog;
     struct snode *epilog;
     unsigned int stksize;
@@ -228,9 +231,13 @@ public:
 	TypeArray *GetProtoTypes();
 	void PrintParameterTypes();
 	static SYM *Copy(SYM *src);
+	bool ProtoTypesMatch(SYM *sym);
+	bool ProtoTypesMatch(TypeArray *typearray);
 	bool ParameterTypesMatch(SYM *sym);
 	bool ParameterTypesMatch(TypeArray *typearray);
 	SYM *Find(std::string name);
+	SYM *FindRisingMatch(bool ignore=false);
+	int FindNextExactMatch(int startpos, TypeArray *);
 	std::string *GetNameHash();
 	bool CheckSignatureMatch(SYM *a, SYM *b) const;
 	SYM *FindExactMatch(int mm);
@@ -251,6 +258,13 @@ public:
 	SYM *GetNextPtr();
   int GetIndex();
   void AddDerived(SYM *sym);
+  void SetType(TYP *t) { 
+     if (t == (TYP *)0x500000005) {
+       getchar();
+     }
+     else
+       tp = t;
+} ;
 };
 
 class TYP {
@@ -274,6 +288,8 @@ public:
   TYP *GetBtp();
   static TYP *GetPtr(int n);
   int GetIndex();
+  static int GetSize(int num);
+  static int GetBasicType(int num);
   std::string *sname;
 	unsigned int alignment;
 	static TYP *Make(int bt, int siz);
@@ -318,7 +334,11 @@ public:
 	static void ParseInt8();
 	static void ParseByte();
 	static SYM *ParseId();
+	static void ParseDoubleColon(SYM *sp);
+	static void ParseBitfieldSpec(bool isUnion);
 	static int ParseSpecifier(TABLE *table);
+	static SYM *ParsePrefixId();
+	static SYM *ParsePrefixOpenpa(bool isUnion);
 	static SYM *ParsePrefix(char isUnion);
 	static void ParseSuffixOpenbr();
 	static void ParseSuffixOpenpa(SYM *);
@@ -433,6 +453,7 @@ public:
 #define ERR_OUT_OF_MEMORY   49
 #define ERR_TOOMANY_SYMBOLS 50
 #define ERR_TOOMANY_PARAMS  51
+#define ERR_THIS            52
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

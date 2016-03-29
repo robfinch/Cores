@@ -48,6 +48,9 @@
     <ClInclude Include="txtStream.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="rand.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -174,6 +177,21 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ParseClassDeclaration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Table.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Type.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Compiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TypeArray.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="rand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

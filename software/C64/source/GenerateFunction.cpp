@@ -49,6 +49,7 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 	AMODE *ap;
 	ENODE *ep;
 	SYM *sp;
+  std::string vep;
 
 	throwlab = retlab = contlab = breaklab = -1;
 	lastsph = 0;
@@ -61,29 +62,11 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 		//GenerateTriadic(op_subui,0,makereg(30),makereg(30),make_immed(30*8));
 		//GenerateDiadic(op_sm,0,make_indirect(30), make_mask(0x9FFFFFFE));
 	}
-	// Generate switch to call derived methods
-	if (sym->IsVirtual || sym->derivitives) {
-	  char buf[20];
-	  char *buf2;
-	  DerivedMethod *mthd;
-	  
-	  dfs.printf("VirtualFunction Switch");
-	  GenerateDiadic(op_lcu,0,makereg(24),make_indirect(regCLP));
-	  mthd = sym->derivitives;
-	  while (mthd) {
-   	  sprintf(buf, "p%d", 7);
-	    buf2 = my_strdup(buf);
-      GenerateTriadic(op_cmpi,0,make_string(buf2),makereg(24),make_immed(mthd->typeno));
-   	  GeneratePredicatedMonadic(7,PredOp(op_eq),op_jmp,0,
-        make_string((char *)mthd->name->c_str()));   // jump to the method
-   	  mthd = mthd->next;
-	  }
-  }
 	if (sym->prolog) {
        if (optimize)
            opt1(sym->prolog);
 	   GenerateStatement(sym->prolog);
-    }
+  }
 	if (!sym->IsNocall) {
 		GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-GetReturnBlockSize()));
 		if (lc_auto || sym->NumParms > 0) {
@@ -93,7 +76,9 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 			GenerateDiadic(op_sws, 0, make_string("pregs"), make_indexed(24,regSP));
 			GenerateDiadic(op_sw, 0, makereg(regCLP),make_indexed(32,regSP));
 		// For a leaf routine don't bother to store the link register or exception link register.
-		if (!sym->IsLeaf) {
+		// Since virtual functions call other functions, they can't be leaf
+    // routines.
+		if (!sym->IsLeaf || sym->IsVirtual) {
 			if (exceptions) {
 				GenerateDiadic(op_sws, 0, makebreg(regXLR), make_indexed(8,regSP));
 			}
@@ -108,7 +93,33 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 				GenerateDiadic(op_ldis,0, makebreg(regXLR), ap);
 			}
 		}
+
 		GenerateDiadic(op_lw,0,makereg(regCLP),make_indexed(GetReturnBlockSize(),regSP));
+
+    vep = *sym->mangledName;
+    vep += "_VEP";
+	  GenerateMonadic(op_fnname,0,make_string((char *)vep.c_str()));
+	
+  	// Generate switch to call derived methods
+  	if (sym->IsVirtual || sym->derivitives) {
+  	  char buf[20];
+  	  char *buf2;
+  	  DerivedMethod *mthd;
+  	  
+  	  dfs.printf("VirtualFunction Switch");
+  	  GenerateDiadic(op_lcu,0,makereg(24),make_indirect(regCLP));
+  	  mthd = sym->derivitives;
+  	  while (mthd) {
+     	  sprintf(buf, "p%d", 7);
+  	    buf2 = my_strdup(buf);
+        GenerateTriadic(op_cmpi,0,make_string(buf2),makereg(24),make_immed(mthd->typeno));
+        vep = *(mthd->name);
+        vep += "_VEP";      // Virtual Entry Point
+     	  GeneratePredicatedMonadic(7,PredOp(op_eq),op_jmp,0,
+          make_string((char *)vep.c_str()));   // jump to the method
+     	  mthd = mthd->next;
+  	  }
+    }
 		if (lc_auto || sym->NumParms > 0) {
 			GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
 			if (lc_auto)
@@ -130,8 +141,8 @@ void GenerateFunction(SYM *sym, Statement *stmt)
 	}
 	if (optimize)
 		sym->NumRegisterVars = opt1(stmt);
-    GenerateStatement(stmt);
-    GenerateEpilog(sym);
+  GenerateStatement(stmt);
+  GenerateEpilog(sym);
 	// Generate code for the hidden default catch
 	if (exceptions) {
 		if (sym->IsLeaf){
@@ -311,13 +322,20 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	int isPascal = FALSE;
  
  	//msk = SaveTempRegs();
+ 	if (node->p[0] < (ENODE *)0x0FLL) {
+ 	  error(ERR_NULLPOINTER);
+ 	  goto xit1;
+ 	}
 	sp = TempInvalidate();
 	sym = (SYM*)NULL;
   i = GeneratePushParameterList(node->p[1]);
 	// Call the function
 	if( node->p[0]->nodetype == en_cnacon ) {
+	  dfs.printf("cnacon node:%s|\n",(char *)node->p[0]->sp->c_str());
 //		if (node->p[0]->i==25)
 //			GenerateDiadic(op_sw,0,makereg(regCLP),make_indexed(0,regSP));
+    if (node->p[0]->sp < (std::string *)0x0FLL)
+      node->p[0]->sp = new std::string("<null>");
     GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
     sym = gsearch(*node->p[0]->sp);
 	}
@@ -342,6 +360,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	}
 	//RestoreTempRegs(msk);
 	TempRevalidate(sp);
+xit1:
 	ap = GetTempRegister();
 	if (flags & F_NOVALUE)
 		;

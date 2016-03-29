@@ -126,7 +126,6 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 	SYM *thead;
 	int nn;
 	TypeArray *ta;
-	char namebuf[1000];
 
 	if (na=="" || tbl==nullptr)
 		return nullptr;
@@ -178,8 +177,9 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 	Statement *st;
 	SYM *p;
 
-	dfs.printf("\ngsearch2 for: |%s|\n", (char *)na.c_str());
+	dfs.printf("\n<gsearch2> for: |%s|\n", (char *)na.c_str());
 	prefix = nullptr;
+	sp = nullptr;
 	// There might not be a current statement if global declarations are
 	// being processed.
 	if (currentStmt==NULL) {
@@ -187,8 +187,10 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 		if (gsyms[0].Find(na,rettype,typearray,exact)) {
 			sp = TABLE::match[TABLE::matchno-1];
 			dfs.printf("Found in global symbol table\n");
+			dfs.puts("</gsearch2>\n");
 			return sp;
 		}
+		dfs.puts("</gsearch2>\n");
 		return nullptr;
 	}
 	else {
@@ -196,6 +198,7 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 		if (currentStmt->ssyms.Find(na,rettype,typearray,exact)) {
 			sp = TABLE::match[TABLE::matchno-1];
      	dfs.printf("Found as an auto var\n");
+			dfs.puts("</gsearch2>\n");
 			return sp;
 		}
 		st = currentStmt->outer;
@@ -204,6 +207,7 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 			if (st->ssyms.Find(na,rettype,typearray,exact)) {
 				sp = TABLE::match[TABLE::matchno-1];
        	dfs.printf("Found as an auto var\n");
+  			dfs.puts("</gsearch2>\n");
 				return sp;
 			}
 			st = st->outer;
@@ -214,6 +218,7 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
   		if (currentFn->lsyms.Find(na,rettype,typearray,exact)) {
   			sp = TABLE::match[TABLE::matchno-1];
        	dfs.printf("Found in function symbol table (a label)\n");
+  			dfs.puts("</gsearch2>\n");
   			return sp;
   		}
   		while(p) {
@@ -224,6 +229,7 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
       			if (p->params.Find(na,rettype,typearray,exact)) {
       				sp = TABLE::match[TABLE::matchno-1];
              	dfs.printf("Found as parameter\n");
+        			dfs.puts("</gsearch2>\n");
       				return sp;
       			}
     		  }
@@ -231,21 +237,39 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
     			dfs.printf("Looking at class members %p\n",(char *)&p->tp->lst);
     			if (p->tp->type == bt_class) {
     			  SYM *tab;
+    			  int nn;
     				if (p->tp->lst.Find(na,rettype,typearray,exact)) {
     					sp = TABLE::match[TABLE::matchno-1];
              	dfs.printf("Found in class\n");
+        			dfs.puts("</gsearch2>\n");
     					return sp;
     				}
+    				dfs.printf("Base=%d",p->tp->lst.base);
     				tab = p->GetPtr(p->tp->lst.base);
-       			dfs.printf("Looking at base class members:%p\n",(char *)tab);
-    				while(tab) {
-        				if (tab->tp->lst.Find(na,rettype,typearray,exact)) {
-        					sp = TABLE::match[TABLE::matchno-1];
-                	dfs.printf("Found in base class\n");
-        					return sp;
-        				}
-        				tab = tab->GetPtr(tab->tp->lst.base);
-    				}
+    				dfs.printf("Base=%p",(char *)tab);
+    				if (tab) {
+    				  dfs.puts("Has a base class");
+    				  if (tab->tp) {
+           			dfs.printf("Looking at base class members:%p\n",(char *)tab);
+        				nn = tab->tp->lst.FindRising(na);
+        				if (nn > 0) {
+                 	dfs.printf("Found in base class\n");
+        				  if (exact) {
+           				  //sp = sp->FindRisingMatch();
+        				    sp = SYM::FindExactMatch(TABLE::matchno, na, bt_long, typearray);
+        				    if (sp) {
+                			dfs.puts("</gsearch2>\n");
+        				      return sp;
+      				      }
+        				  }
+        				  else {
+    				        sp = TABLE::match[0];
+                		dfs.puts("</gsearch2>\n");
+    				        return sp;
+    				      }
+    				    }
+      				}
+    			  }
   			  }
   			}
   			p = p->GetParentPtr();
@@ -256,10 +280,12 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 		if (gsyms[0].Find(na,rettype,typearray,exact)) {
 			sp = TABLE::match[TABLE::matchno-1];
 			dfs.printf("Found in global symbol table\n");
+			dfs.puts("</gsearch2>\n");
 			return sp;
 		}
 	}
 xit:
+	dfs.puts("</gsearch2>\n");
   return sp;
 }
 
@@ -345,13 +371,13 @@ bool SYM::CheckSignatureMatch(SYM *a, SYM *b) const
 
 std::string *TypenoToChars(__int16 typeno)
 {
-	const std::string alphabet =
+	const char *alphabet =
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
 	char c[8];
 	std::string *str;
 
-  str = new std::string();
   dfs.puts("<TypenoToChars>");
+  str = new std::string();
   dfs.putch('A');
 	c[0] = alphabet[typeno & 31];
   dfs.putch('B');
@@ -365,7 +391,7 @@ std::string *TypenoToChars(__int16 typeno)
   c[7] = '\0';
   dfs.puts("D:");
 	str->append(c);
-//	dfs.printf("%s",(char *)str->c_str());
+	dfs.printf("%s",(char *)str->c_str());
   dfs.puts("</TypenoToChars>");
 	return str;
 }
@@ -379,17 +405,26 @@ std::string *SYM::GetNameHash()
   int nn;
 
   dfs.puts("<GetNameHash>");
+  dfs.printf("tp:%p",(char *)tp);
+//  if (tp==(TYP *)0x500000005LL) {
+//    nh = new std::string("TAA");
+//    return nh;
+//  }
 	nh = TypenoToChars(tp->typeno);
   dfs.putch('A');
-	sp = GetPtr(sp->tp->lst.base);
-  dfs.putch('B');
-	for (nn = 0; sp && nn < 200; nn++) {
-	   dfs.putch('.');
-	   nh->append(*sp->GetNameHash());
-     sp = GetPtr(sp->tp->lst.base);
-	}
-	if (nn >= 200) {
-	  error(ERR_CIRCULAR_LIST);
+  sp = GetParentPtr();
+  if (sp) {
+     nh->append(*sp->GetNameHash());
+	   sp = GetPtr(sp->tp->lst.base);
+     dfs.putch('B');
+   	 for (nn = 0; sp && nn < 200; nn++) {
+  	   dfs.putch('.');
+  	   nh->append(*sp->GetNameHash());
+       sp = GetPtr(sp->tp->lst.base);
+  	 }
+	   if (nn >= 200) {
+	     error(ERR_CIRCULAR_LIST);
+    }
 	}
 /*
 	if (parent) {
@@ -409,20 +444,30 @@ std::string *SYM::BuildSignature(int opt)
 	std::string *str;
   std::string *nh;
 
-  dfs.puts("<BuildSignature>");
-	str = new std::string("_Z");		// 'C' likes this
-	nh = GetNameHash();
-	str->append(*nh);
-	delete nh;
-	dfs.printf("A");
-	str->append(*name);
-	if (opt) {
-    dfs.printf("B");
-	  str->append(*GetParameterTypes()->BuildSignature());
+  dfs.printf("<BuildSignature>");
+  if (mangledNames) {
+  	str = new std::string("_Z");		// 'C' likes this
+  	dfs.printf("A");
+  	nh = GetNameHash();
+  	dfs.printf("B");
+  	str->append(*nh);
+  	dfs.printf("C");
+  	delete nh;
+  	dfs.printf("D");
+  	if (name > (std::string *)0x15)
+  	   str->append(*name);
+  	if (opt) {
+      dfs.printf("E");
+  	  str->append(*GetParameterTypes()->BuildSignature());
+    }
+  	else {
+  	  dfs.printf("F");
+  	  str->append(*GetProtoTypes()->BuildSignature());
+    }
   }
-	else {
-	  dfs.printf("C");
-	  str->append(*GetProtoTypes()->BuildSignature());
+  else {
+  	str = new std::string("");
+    str->append(*name);
   }
   dfs.printf(":%s</BuildSignature>",(char *)str->c_str());
 	return str;
@@ -432,6 +477,20 @@ std::string *SYM::BuildSignature(int opt)
 // Check if the passed parameter list matches the one in the
 // symbol.
 // Allows a null pointer to be passed indicating no parameters
+
+bool SYM::ProtoTypesMatch(TypeArray *ta)
+{
+	TypeArray *tb;
+	int nn;
+
+	tb = GetProtoTypes();
+	if (tb->IsEqual(ta)) {
+	  delete tb;
+	  return true;
+	}
+  delete tb;
+  return false;
+}
 
 bool SYM::ParameterTypesMatch(TypeArray *ta)
 {
@@ -450,13 +509,24 @@ bool SYM::ParameterTypesMatch(TypeArray *ta)
 // Check if the parameter type list of two different symbols
 // match.
 
+bool SYM::ProtoTypesMatch(SYM *sym)
+{
+	TypeArray *ta;
+	bool ret;
+
+	ta = sym->GetProtoTypes();
+	ret = ProtoTypesMatch(ta);
+	delete ta;
+	return ret;
+}
+
 bool SYM::ParameterTypesMatch(SYM *sym)
 {
 	TypeArray *ta;
 	bool ret;
 
-	ta = sym->GetParameterTypes();
-	ret = ParameterTypesMatch(ta);
+	ta = GetProtoTypes();
+	ret = sym->ParameterTypesMatch(ta);
 	delete ta;
 	return ret;
 }
@@ -473,14 +543,22 @@ SYM *SYM::FindExactMatch(int mm)
 {
 	SYM *sp1;
 	int nn;
-
+  TypeArray *ta, *tb;
+ 
 	sp1 = nullptr;
 	for (nn = 0; nn < mm; nn++) {
-	  dfs.printf(".");
+	  dfs.printf("%d",nn);
 		sp1 = TABLE::match[nn];
-		if (sp1->ParameterTypesMatch(this)) {
+		// Matches sp1 prototype list against this's parameter list
+		ta = sp1->GetProtoTypes();
+		tb = GetParameterTypes();
+		if (ta->IsEqual(tb)) {
+		  delete ta;
+		  delete tb;
 			return sp1;
 		}
+	  delete ta;
+	  delete tb;
 	}
 	return nullptr;
 }
@@ -489,15 +567,79 @@ SYM *SYM::FindExactMatch(int mm, std::string name, int rettype, TypeArray *typea
 {
 	SYM *sp1;
 	int nn;
+  TypeArray *ta;
 
 	sp1 = nullptr;
 	for (nn = 0; nn < mm; nn++) {
 		sp1 = TABLE::match[nn];
-		if (sp1->ParameterTypesMatch(typearray))
+		ta = sp1->GetProtoTypes();
+		if (ta->IsEqual(typearray)) {
+		  delete ta;
 			return sp1;
+	  }
+	  delete ta;
 	}
 	return nullptr;
 }
+
+int SYM::FindNextExactMatch(int startpos, TypeArray * tb)
+{
+	SYM *sp1;
+	int nn;
+  TypeArray *ta;
+
+	sp1 = nullptr;
+	for (nn = startpos; nn < TABLE::matchno; nn++) {
+		sp1 = TABLE::match[nn];
+		ta = sp1->GetProtoTypes();
+		if (ta->IsEqual(tb)) {
+		  delete ta;
+		  return nn;
+	  }
+	  delete ta;
+	}
+	return -1;
+}
+
+SYM *SYM::FindRisingMatch(bool ignore)
+{
+  int nn;
+  int em;
+  int iter;
+  SYM *sym;
+  std::string nme;
+  TypeArray *ta;
+  
+  nme = *name;
+  sym = nullptr;
+  ta = GetProtoTypes();
+  dfs.printf("<FindRisingMatch>%s type %d ", (char *)name->c_str(), tp->type);
+  if (GetParentPtr()!=nullptr)
+     nn = GetParentPtr()->tp->lst.FindRising(nme);
+  else
+    nn = 1;
+//  nn = tp->lst.FindRising(nme);
+  iter = 0;
+  if (nn) {
+    dfs.puts("Found method:");
+    for (iter = 0; true; iter = em + 1) {
+      em = FindNextExactMatch(iter,ta);
+      if (em < 0)
+        break;
+      sym = TABLE::match[em];
+      if (!ignore || sym->GetParentPtr() != GetParentPtr()) { // ignore entry here
+        dfs.puts("Found in a base class:");
+        break;
+      }
+      sym = nullptr;
+    }
+  }
+  if (ta)
+    delete ta;
+  dfs.printf("</FindRisingMatch>\n");
+  return sym;
+}
+
 
 void SYM::BuildParameterList(int *num)
 {
@@ -506,18 +648,20 @@ void SYM::BuildParameterList(int *num)
 	int onp;
 	int np;
 
-	dfs.printf("BuildParameterList\r\n");
+	dfs.printf("<BuildParameterList\n>");
 	poffset = GetReturnBlockSize();
 //	sp->parms = (SYM *)NULL;
 	onp = nparms;
 	nparms = 0;
+	// Parameters will be inserted into the symbol's parameter list when
+	// declarations are processed.
 	np = ParameterDeclaration::Parse(1);
 	*num += np;
-dfs.printf("B");
+  dfs.printf("B");
 	nparms = onp;
 	for(i = 0;i < np && i < 20;++i) {
 		if( (sp1 = currentFn->params.Find(names[i].str,false)) == NULL) {
-dfs.printf("C");
+      dfs.printf("C");
 			sp1 = makeint2(names[i].str);
 //			lsyms.insert(sp1);
 		}
@@ -532,6 +676,9 @@ dfs.printf("C");
 		sp1->storage_class = sc_auto;
 	}
 	// Process extra hidden parameter
+	// ToDo: verify that the hidden parameter is required here.
+	// It is generated while processing expressions. It may not be needed
+	// here.
 	if (tp) {
 		if (tp->GetBtp()) {
 			if (tp->GetBtp()->type==bt_struct || tp->GetBtp()->type==bt_union || tp->GetBtp()->type==bt_class ) {
@@ -548,7 +695,7 @@ dfs.printf("C");
 			}
 		}
 	}
-	dfs.printf("Leave BuildParameterList\r\n");
+	dfs.printf("</BuildParameterList>\n");
 }
 
 void SYM::AddParameters(SYM *list)
@@ -583,12 +730,9 @@ void SYM::AddProto(TypeArray *ta)
   for (nn = 0; nn < ta->length; nn++) {
     sym = allocSYM();
     sprintf(buf, "_p%d", nn);
-    sym->name = new std::string(buf);
-    sym->tp = allocTYP();
-    // should really go figure the type number out,
-    // 
-    sym->tp->type = (e_bt) ta->types[nn];
-    sym->tp->typeno = ta->types[nn];
+    sym->SetName(std::string(buf));
+    sym->tp = TYP::Make(ta->types[nn],TYP::GetSize(ta->types[nn]));
+    sym->tp->type = (e_bt) TYP::GetBasicType(ta->types[nn]);
     proto.insert(sym);
   }
 }
@@ -597,12 +741,14 @@ void SYM::AddDerived(SYM *sp)
 {
   DerivedMethod *mthd;
  
-  dfs.printf("Enter Add derived"); 
+  dfs.puts("<AddDerived>"); 
   mthd = (DerivedMethod *)allocx(sizeof(DerivedMethod));
   dfs.printf("A");
   if (sp->tp==nullptr)
     dfs.printf("Nullptr");
-  mthd->typeno = sp->tp->typeno;
+  if (sp->GetParentPtr()==nullptr)
+     throw C64PException(ERR_NULLPOINTER,10);
+  mthd->typeno = sp->GetParentPtr()->tp->typeno;
   dfs.printf("B");
   mthd->name = sp->BuildSignature();
 
@@ -612,7 +758,7 @@ void SYM::AddDerived(SYM *sp)
      mthd->next = derivitives;
   }
   derivitives = mthd;
-  dfs.printf("Leave Add derived"); 
+  dfs.puts("</AddDerived>"); 
 }
 
 

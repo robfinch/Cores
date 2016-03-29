@@ -139,7 +139,7 @@ AMODE *make_strlab(std::string s)
 	AMODE *ap;
     ap = allocAmode();
     ap->mode = am_direct;
-    ap->offset = makesnode(en_nacon,s,s,-1);
+    ap->offset = makesnode(en_nacon,&s,&s,-1);
     return ap;
 }
 
@@ -531,7 +531,6 @@ void GenerateTry(Statement *stmt)
 {
   int lab1,curlab;
 	int oldthrow;
-	char buf[20];
 	AMODE *ap, *a, *ap2;
 	ENODE *node;
 	SYM *sym;

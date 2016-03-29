@@ -59,16 +59,16 @@ extern int curseg;
 void doinit(SYM *sp)
 {
 	char lbl[200];
-    int algn;
-    enum e_sg oseg;
- 
-    oseg = noseg;
+  int algn;
+  enum e_sg oseg;
+
+  oseg = noseg;
 	lbl[0] = 0;
 	// Initialize constants into read-only data segment. Constants may be placed
 	// in ROM along with code.
 	if (sp->isConst) {
-        oseg = rodataseg;
-    }
+    oseg = rodataseg;
+  }
 	if (sp->storage_class == sc_thread) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
@@ -135,35 +135,35 @@ int InitializeType(TYP *tp)
 {   
 	int nbytes;
 
-    switch(tp->type) {
+  switch(tp->type) {
 	case bt_ubyte:
 	case bt_byte:
 			nbytes = initbyte();
 			break;
 	case bt_uchar:
-    case bt_char:
-    case bt_enum:
+  case bt_char:
+  case bt_enum:
             nbytes = initchar();
             break;
 	case bt_ushort:
-    case bt_short:
+  case bt_short:
             nbytes = initshort();
             break;
-    case bt_pointer:
-			if( tp->val_flag)
-				nbytes = InitializeArray(tp);
-			else
-				nbytes = InitializePointer();
-            break;
-    case bt_exception:
+  case bt_pointer:
+    if( tp->val_flag)
+			nbytes = InitializeArray(tp);
+		else
+			nbytes = InitializePointer();
+    break;
+  case bt_exception:
 	case bt_ulong:
-    case bt_long:
+  case bt_long:
             nbytes = initlong();
             break;
-    case bt_struct:
+  case bt_struct:
             nbytes = InitializeStructure(tp);
             break;
-    default:
+  default:
         error(ERR_NOINIT);
         nbytes = 0;
     }

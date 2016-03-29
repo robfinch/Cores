@@ -37,7 +37,7 @@ extern int isStructDecl;
 
 extern int16_t typeno;
 extern int isTypedef;
-extern std::string classname;
+extern std::string *classname;
 extern bool isPrivate;
 extern SYM *currentClass;
 
@@ -72,7 +72,7 @@ int ClassDeclaration::Parse(int ztype)
   SYM *cls;
 
   cls = currentClass;
-	dfs.printf("ParseClassDeclaration\r\n");
+	dfs.puts("<ParseClassDeclaration>\n");
 	alignment = 0;
 	isTypedef = TRUE;
 	NextToken();
@@ -98,7 +98,7 @@ int ClassDeclaration::Parse(int ztype)
   dfs.printf("---------------------------------");
 	if((sp = tagtable.Find(std::string(lastid),false)) == NULL) {
     sp = allocSYM();
-    sp->SetName(my_strdup(lastid));
+    sp->SetName(*(new std::string(lastid)));
 		sp->tp = nullptr;
     NextToken();
     dfs.printf("A");
@@ -106,6 +106,8 @@ int ClassDeclaration::Parse(int ztype)
       NextToken();
       alignment = GetIntegerExpression(&pnd);
     }
+    else
+      alignment = AL_STRUCT;
 
 		// Could be a forward structure declaration like:
 		// struct buf;
@@ -142,8 +144,10 @@ int ClassDeclaration::Parse(int ztype)
 			//sp->tp = TYP::Copy(bcsp->tp);
 			// Start off at the size of the base.
 			sp->tp = allocTYP();
-			sp->tp->lst.base = bcsp->GetIndex();
+			sp->tp->lst.SetBase(bcsp->GetIndex());
+			dfs.printf("Set base class: %d\n", sp->tp->lst.base);
 			sp->tp->size = bcsp->tp->size;
+			sp->tp->type = (e_bt)ztype;
 			sp->tp->typeno = typeno++;
       sp->tp->sname = new std::string(*sp->name);
       sp->tp->alignment = alignment;
@@ -174,7 +178,6 @@ int ClassDeclaration::Parse(int ztype)
     else {
 			if (sp->tp == nullptr) {
 				sp->tp = allocTYP();
-				sp->tp->lst.Clear();
 			}
 			sp->tp->size = 0;
 			sp->tp->typeno = typeno++;
@@ -206,8 +209,10 @@ int ClassDeclaration::Parse(int ztype)
 	isStructDecl = psd;
 lxit:
 	isTypedef = TRUE;
-	classname = idsave;
+	if (classname) delete classname;
+	classname = new std::string(idsave);
 	currentClass = cls;
+	dfs.puts("</ParseClassDeclaration>\n");
 	return ret;
 }
 
@@ -217,9 +222,14 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 	TYP *tp = sym->tp;
 	int ist;
   SYM *hsym;
+  std::string *name;
 
 	isPrivate = true;
-  slc = roundSize(sym->tp);
+	if (sym->tp->size)
+     slc = roundSize(sym->tp);
+  else
+     slc = 0;
+
 //	slc = 0;
   tp->val_flag = 1;
 //	tp->val_flag = FALSE;
@@ -231,17 +241,13 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 	// method to call. This is the first field in the class so it can be
 	// refeerenced as 0[r25].
 	hsym = allocSYM();
-  hsym->name = new std::string("_typeno");
+	name = new std::string("_typeno");
+  hsym->SetName(*name);
 	hsym->storage_class = sc_member;
 	hsym->value.i = sym->tp->typeno;
-	hsym->tp = allocTYP();
-	hsym->tp->lst.Clear();
-	hsym->tp->size = 2;
-	hsym->tp->typeno = bt_char;     // 2 bytes
+	hsym->tp = TYP::Make(bt_char,2);
   hsym->tp->sname = new std::string("_typeno");
   hsym->tp->alignment = 2;
-	hsym->tp->type = bt_char;
-	hsym->tp->lst.SetBase(0);
 	tp->lst.insert(hsym);
   slc += 2;
 

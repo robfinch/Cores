@@ -27,7 +27,7 @@
 
 TYP *head = (TYP *)NULL;
 TYP *tail = (TYP *)NULL;
-std::string declid;
+std::string *declid;
 //char *Declaration::declid = (char *)NULL;
 TABLE tagtable;
 TYP stdconst;
@@ -45,6 +45,8 @@ int isVolatile = FALSE;
 int isVirtual = FALSE;
 int isIO = FALSE;
 int isConst = FALSE;
+bool isFuncBody;
+bool isFuncPtr;
 int missingArgumentName = FALSE;
 int disableSubs;
 int parsingParameterList = FALSE;
@@ -53,10 +55,10 @@ int needParseFunction = FALSE;
 int isStructDecl = FALSE;
 int worstAlignment = 0;
 char *stkname = 0;
-std::string classname;
+std::string *classname;
 bool isPrivate = true;
-std::string undeclid;
 SYM *currentClass;
+int mangledNames = FALSE;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -73,9 +75,11 @@ void ParseEnumDeclaration(TABLE *table);
 void enumbody(TABLE *table);
 extern int ParseClassDeclaration(int ztype);
 extern ENODE *ArgumentList(ENODE *hidden,int*,int);
-TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,int*);
+TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray*, TABLE* tbl);
 SYM *search2(std::string na,TABLE *tbl,int *typearray);
-SYM *gsearch2(std::string na, int *typearray);
+SYM *gsearch2(std::string na, __int16, int *typearray, bool exact);
+extern ENODE *makesnode(int,std::string *,std::string *,__int64);
+
 extern TYP *CopyType(TYP *src);
 
 int     imax(int i, int j)
@@ -97,21 +101,19 @@ char *my_strdup(char *s)
 void Declaration::SetType(SYM *sp)
 {
   if (head) {
-  	if (bit_width == -1)
+  	if (bit_width <= 0) {
   		sp->tp = head;
+  	}
   	else {
-  		sp->tp = allocTYP();
-  		*(sp->tp) = *head;
-  		sp->tp->type = bt_bitfield;
-  		sp->tp->size = head->size;//tp_int.size;
+  		sp->tp = TYP::Make(bt_bitfield,head->size);
+//  		*(sp->tp) = *head;
   		sp->tp->bit_width = bit_width;
   		sp->tp->bit_offset = bit_offset;
   	}
   }
   else {
-		sp->tp = allocTYP();
-		sp->tp->type = bt_long;
-		sp->tp->size = 8;
+		sp->tp = TYP::Make(bt_long,8);
+ 		sp->tp->lst.head = sp->GetIndex();
   }
 }
 
@@ -280,6 +282,7 @@ SYM *Declaration::ParseId()
 {
 	SYM *sp;
 
+  dfs.printf("<ParseId>%s",lastid);
 	sp = tagtable.Find(lastid,false);//gsyms[0].Find(lastid);
 	if (sp==nullptr)
 		sp = gsyms[0].Find(lastid,false);
@@ -298,6 +301,7 @@ SYM *Declaration::ParseId()
 		tail = head;
 		bit_max = 64;
 	}
+  dfs.puts("</ParseId>");
 	return sp;
 }
 
@@ -310,14 +314,14 @@ int Declaration::ParseSpecifier(TABLE *table)
 	SYM *sp;
 	char *idsave;
 
-dfs.printf("Enter ParseSpecifier\r\n");
+  dfs.printf("<ParseSpecifier>\n");
 	isUnsigned = FALSE;
 	isSigned = FALSE;
 	isVolatile = FALSE;
 	isVirtual = FALSE;
 	isIO = FALSE;
 	isConst = FALSE;
-dfs.printf("A");
+  dfs.printf("A");
 	for (;;) {
 		switch (lastst) {
 				
@@ -538,170 +542,174 @@ dfs.printf("A");
 			}
 	}
 lxit:;
+  dfs.printf("</ParseSpecifier>\n");
 	return 0;
 }
 
+void Declaration::ParseDoubleColon(SYM *sp)
+{
+	SYM *sym;
+	bool gotDouble = false;
+
+  while (lastst==double_colon) {
+    gotDouble = true;
+	  sym = tagtable.Find(lastid,false);
+	  if (sym)
+		   sp->parent = sym->GetIndex();//gsearch(lastid);
+	  else {
+	     sp->parent = 0;
+	     break;
+    }
+    NextToken();
+    if (lastst != id) {
+      error(ERR_IDEXPECT);
+      break;
+    }
+  }
+  if (gotDouble)
+    NextToken();
+	currentClass = sp->GetParentPtr();
+	if (sp->parent)
+		dfs.printf("Setting parent:%s|\r\n",
+      (char *)sp->GetParentPtr()->name->c_str());
+}
+
+void Declaration::ParseBitfieldSpec(bool isUnion)
+{
+  dfs.puts("<ParseBitfieldSpec>");
+	NextToken();
+	bit_width = GetIntegerExpression((ENODE **)NULL);
+	if (isUnion)
+		bit_offset = 0;
+	else
+		bit_offset = bit_next;
+	if (bit_width < 0 || bit_width > bit_max) {
+		error(ERR_BITFIELD_WIDTH);
+		bit_width = 1;
+	}
+	if (bit_width == 0 || bit_offset + bit_width > bit_max)
+		bit_offset = 0;
+	bit_next = bit_offset + bit_width;
+  dfs.puts("</ParseBitfieldSpec>\n");
+}
+
+SYM *Declaration::ParsePrefixId()
+{
+  SYM *sp;
+
+  dfs.puts("<ParsePrefixId>");            
+  if (declid) delete declid;
+  declid = new std::string(lastid);
+  dfs.printf("B|%s|",(char *)declid->c_str());
+  sp = allocSYM();
+  dfs.printf("C"); 
+  if (funcdecl==1) {
+    if (nparms > 19)
+      error(ERR_TOOMANY_PARAMS);
+    else {
+		  names[nparms].str = *declid;
+		  nparms++;
+	  }
+	}
+  dfs.printf("D"); 
+  NextToken();
+  ParseDoubleColon(sp);
+  if (declid) delete declid;
+	declid = new std::string(lastid);
+  sp->SetName(*declid);
+  dfs.printf("E"); 
+	if (lastst == colon) {
+	  ParseBitfieldSpec(isUnion);
+		goto lxit;	// no ParseDeclarationSuffix()
+	}
+  sp->SetName(*declid);
+	sp = ParseSuffix(sp);
+lxit:
+  dfs.puts("</ParsePrefixId>");
+	return sp;
+}
+
+SYM *Declaration::ParsePrefixOpenpa(bool isUnion)
+{
+	TYP *temp1, *temp2, *temp3, *temp4;
+  SYM *sp;
+
+  dfs.puts("<ParsePrefixOpenpa>\n");
+  NextToken();
+  temp1 = head;
+  temp2 = tail;
+  head = tail = (TYP *)NULL;	// It might be a typecast following.
+	// Do we have (getchar)()
+	// This processing is difficult to do with a loop, so a recursive
+	// call is made.
+	sp = ParsePrefix(isUnion); 
+  needpunc(closepa,20);
+  // Head could be NULL still if a type hasn't been found
+  // eg. int (getchar)();
+  if (head)
+     isFuncPtr = head->type == bt_pointer;
+  temp3 = head;
+  temp4 = tail;
+  head = temp1;
+  tail = temp2;
+  sp = ParseSuffix(sp);
+	// (getchar)() returns temp4 = NULL
+	if (temp4!=NULL) {
+		temp4->btp = head->GetIndex();
+		if(temp4->type == bt_pointer && temp4->val_flag != 0 && head != NULL)
+			temp4->size *= head->size;
+    head = temp3;
+	}
+  dfs.puts("</ParsePrefixOpenpa>\n");
+	return sp;
+}
+
+// There may be only a single identifier in the prefix. This identifier may
+// contain a class spec or namespace spec.
+
 SYM *Declaration::ParsePrefix(char isUnion)
 {   
-	TYP *temp1, *temp2, *temp3, *temp4;
-	SYM *sp, *parent, *sym;
-	int nn;
-	static char namebuf[1000];
-	bool gotDouble = false;
-	dfs.printf("ParseDeclPrefix(%d)\n",lastst);
+	TYP *temp1;
+	SYM *sp;
+
+	dfs.printf("<ParseDeclPrefix>(%d)\n",lastst);
 
 	sp = nullptr;
-j2:
+j1:
 	switch (lastst) {
-		case kw_const:
-			isConst = TRUE;
-			NextToken();
-			goto j2;
+
+	case kw_const:
+	  isConst = TRUE;
+	  NextToken();
+		goto j1; 
 
 //		case ellipsis:
-    case id:
-dfs.printf("A");            
-      declid = std::string(lastid);
-      undeclid = std::string(lastid);
-dfs.printf("B|%s|",(char *)declid.c_str());
-      sp = allocSYM();
-      strncpy(namebuf,lastid,990);
-dfs.printf("C"); 
-		  if (funcdecl==1) {
-		    if (nparms > 19)
-		      error(ERR_TOOMANY_PARAMS);
-        else {
-				  names[nparms].str = declid;
-				  nparms++;
-			  }
-			}
-dfs.printf("D"); 
-      NextToken();
-      while (lastst==double_colon) {
-        gotDouble = true;
-			  sym = tagtable.Find(lastid,false);
-			  if (sym)
-				   sp->parent = sym->GetIndex();//gsearch(lastid);
-			  else {
-			     sp->parent = 0;
-			     break;
-        }
-        NextToken();
-        if (lastst != id) {
-          error(ERR_IDEXPECT);
-          break;
-        }
-      }
-      if (gotDouble)
-        NextToken();
-			currentClass = sp->GetParentPtr();
-			if (sp->parent)
-					dfs.printf("Setting parent:%s|\r\n",(char *)sp->GetParentPtr()->name->c_str());
-			declid = my_strdup(lastid);
-      sp->name = new std::string(declid);
-dfs.printf("E"); 
-			if (lastst == colon) {
-				NextToken();
-				bit_width = GetIntegerExpression((ENODE **)NULL);
-				if (isUnion)
-					bit_offset = 0;
-				else
-					bit_offset = bit_next;
-				if (bit_width < 0 || bit_width > bit_max) {
-					error(ERR_BITFIELD_WIDTH);
-					bit_width = 1;
-				}
-				if (bit_width == 0 || bit_offset + bit_width > bit_max)
-					bit_offset = 0;
-				bit_next = bit_offset + bit_width;
-//					SetType(sp);
-dfs.printf("F"); 
-				break;	// no ParseDeclarationSuffix()
-			}
-				//if (lastst==closepa) {
-				//	return 1;
-				//}
-	//			if (lastst==closepa) {
-	//				sp = search(lastid,&gsyms[0]);
-	//				if (strcmp(lastid,"getchar")==0)
-	//					printf("found");
-	//				if (sp) {
-	//					if (sp->storage_class==sc_typedef)
-	//						head = tail = sp->tp;
-	//					else
-	//						head = tail = sp->tp;
-	////					head = tail = maketype(bt_long,4);
-	//				}
-	//				else {
-	//					head = tail = maketype(bt_long,8);
-	//					bit_max = 64;
-	//				}
-	//				break;
-	//			}
-//				SetType(sp);
-        sp->name = new std::string(declid);
-				sp = ParseSuffix(sp);
-        break;
-      case star:
-                temp1 = (TYP *)TYP::Make(bt_pointer,8);
-                temp1->btp = head->GetIndex();
-                head = temp1;
-                if(tail == NULL)
-                        tail = head;
-                NextToken();
-				//if (lastst==closepa) {	// (*)
-				//	sprintf(buf,"_unnamed%d", unnamedCnt);
-				//	unnamedCnt++;
-				//	declid = my_strdup(buf);
-				//	NextToken();
-				//	ParseDeclarationSuffix();
-				//	return 2;
-				//}
-				// Loop back to process additional prefix info.
-				goto j2;
-                //return ParseDeclarationPrefix(isUnion);
-                break;
-        case openpa:
-                NextToken();
-                temp1 = head;
-                temp2 = tail;
-                head = tail = (TYP *)NULL;	// It might be a typecast following.
-				// Do we have (getchar)()
-				sp = ParsePrefix(isUnion); 
-				/*if (nn==1) {
-					head = temp1;
-					tail = temp2;
-					goto j1;
-				}*/
-				//else if (nn == 2) {
-				//	head = temp1;
-				//	tail = temp2;
-				//	NextToken();
-				//	ParseDeclarationSuffix();
-				//	break;
-				//}
-                needpunc(closepa,20);
-                temp3 = head;
-                temp4 = tail;
-                head = temp1;
-                tail = temp2;
-//				SetType(sp);
-                sp = ParseSuffix(sp);
-				// (getchar)() returns temp4 = NULL
-				if (temp4!=NULL) {
-					temp4->btp = head->GetIndex();
-					if(temp4->type == bt_pointer && temp4->val_flag != 0 && head != NULL)
-						temp4->size *= head->size;
-	                head = temp3;
-				}
-//				SetType(sp);
-				//if (head==NULL)
-				//	head = tail = maketype(bt_long,8);
-                break;
-        default:
-                sp = ParseSuffix(sp);
-                break;
-        }
+  case id:
+    sp = ParsePrefixId();
+    goto lxit;
+
+  case star:
+    dfs.putch('*');
+    temp1 = TYP::Make(bt_pointer,8);
+    temp1->btp = head->GetIndex();
+    head = temp1;
+    if(tail == NULL)
+      tail = head;
+    NextToken();
+    sp = ParsePrefix(isUnion);
+    goto lxit;
+
+  case openpa:
+    sp = ParsePrefixOpenpa(isUnion);
+    goto lxit;
+
+  default:
+    sp = ParseSuffix(sp);
+    dfs.printf("Z");
+    goto lxit;
+  }
+lxit:
+  dfs.puts("</ParseDeclPrefix>\n");
 	return sp;
 }
 
@@ -725,6 +733,7 @@ void Declaration::ParseSuffixOpenbr()
   else if(head != NULL) {
     sz2 = GetIntegerExpression((ENODE **)NULL);
     temp1->size = sz2 * head->size;
+    dfs.printf("Setting array size:%d\n", (int)temp1->size);
 	  temp1->alignment = head->alignment;
 		needpunc(closebr,21);
   }
@@ -750,8 +759,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 	std::string odecl;
 	int isd;
 	int nump;
-	bool isFuncPtr = false;
-
+	
   dfs.printf("<openpa>\n");
   dfs.printf("****************************\n");
   dfs.printf("****************************\n");
@@ -759,11 +767,15 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   dfs.printf("****************************\n");
   dfs.printf("****************************\n");
   NextToken();
-  isFuncPtr = head->type==bt_pointer;
+  // An asterik before the function name indicates a function pointer but only
+  // if it's bracketed properly, otherwise it could be the return value that's
+  // a pointer.
+//  isFuncPtr = head->type==bt_pointer;
   temp1 =(TYP *) TYP::Make(bt_func,0/*isFuncPtr ? bt_func : bt_ifunc,0*/);
   temp1->val_flag = 1;
   dfs.printf("o ");
   if (isFuncPtr) {
+    dfs.printf("Got function pointer in declarations.\n");
     temp1->btp = head->btp;
     head->btp = temp1->GetIndex();
   }
@@ -781,6 +793,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   dfs.printf("q ");
   needParseFunction = TRUE;
   sp->params.Clear();
+  sp->parent = currentClass->GetIndex();
   if(lastst == closepa) {
     NextToken();
 	  if(lastst == begin) {
@@ -792,13 +805,12 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 		  dfs.printf("Set false\n");
 	  }
 	  currentFn = sp;
-	  sp->parent = currentClass->GetIndex();
 	  sp->NumParms = 0;
   }
   else {
     dfs.printf("r");
 	  currentFn = sp;
-	  sp->parent = currentClass->GetIndex();
+    dfs.printf("s");
     temp1->type = bt_func;
   	// Parse the parameter list for a function pointer passed as a
   	// parameter.
@@ -811,7 +823,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   		fd = funcdecl;
   		needParseFunction = FALSE;
   	  dfs.printf("Set false\n");
-  		odecl = declid;
+  		odecl = *declid;
   		tempHead = head;
   		tempTail = tail;
   		isd = isStructDecl;
@@ -826,7 +838,8 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   		isStructDecl = isd;
   		head = tempHead;
   		tail = tempTail;
-  		declid = odecl;
+  		if (declid) delete declid;
+  		declid = new std::string(odecl);
   		funcdecl = fd;
   		needpunc(closepa,23);
   
@@ -840,7 +853,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   		  }
   			temp1->type = bt_ifunc;
   		}
-  		// If the delaration is ending in a semicolon then it was really
+  		// If the declaration is ending in a semicolon then it was really
   		// a function prototype, so move the parameters to the prototype
   		// area.
   		else if (lastst==semicolon) {
@@ -858,8 +871,11 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 //					ParseFunction(sp);
 //				}
     }
+    dfs.printf("Y");
 	  sp->PrintParameterTypes();
+    dfs.printf("X");
   }
+  dfs.printf("</openpa>\n");
 }
 
 
@@ -1005,20 +1021,21 @@ int roundSize(TYP *tp)
 void InsertMethod(SYM *sp)
 {
   int nn;
-  SYM *parentSym;
-
-  dfs.puts("<InsertMethod>");
+  int em;
+  int iter;
+  SYM *sym;
+  std::string name;
+  
+  name = *sp->name;
+  dfs.printf("<InsertMethod>%s type %d ", (char *)sp->name->c_str(), sp->tp->type);
   sp->GetParentPtr()->tp->lst.insert(sp);
   nn = sp->GetParentPtr()->tp->lst.FindRising(*sp->name);
-  if (nn) {
-    dfs.puts("Found method:");
-    parentSym = sp->FindExactMatch(TABLE::matchno);
-    if (parentSym != sp->GetParentPtr()) {         // ignore entry just added
-      dfs.puts("Found in a base class:");
-      if (parentSym->IsVirtual) {
-        dfs.printf("Found virtual:");
-        parentSym->AddDerived(sp);
-      }
+  sym = sp->FindRisingMatch(true);
+  if (sym) {
+    dfs.puts("Found in a base class:");
+    if (sym->IsVirtual) {
+      dfs.printf("Found virtual:");
+      sym->AddDerived(sp);
     }
   }
   dfs.printf("</InsertMethod>\n");
@@ -1048,227 +1065,266 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 	bool flag;
 	int parentBytes = 0;
   char buf[20];
+  std::string name;
  
     static long old_nbytes;
     int nbytes;
 
 	dfs.printf("Enter declare()\r\n");
 	nbytes = 0;
-dfs.printf("A");
-	classname = "";
+  dfs.printf("A");
+	classname = new std::string("");
+  sp1 = nullptr;
 	if (ParseSpecifier(table))
 		goto xit1;
-dfs.printf("B");
-    dhead = head;
-    for(;;) {
-        declid = "";
-dfs.printf("b");
-        bit_width = -1;
-        sp = ParsePrefix(ztype==bt_union);
-		// If a function declaration is taking place and just the type is
-		// specified without a parameter name, assign an internal compiler
-		// generated name.
-		if (funcdecl>0 && funcdecl != 10 && declid.length()==0) {
-			sprintf(buf, "_p%d", nparms);
-			declid = my_strdup(buf);
-			if (nparms > 19) {
-			  error(ERR_TOOMANY_PARAMS);
+  dfs.printf("B");
+  dhead = head;
+  for(;;) {
+    if (declid) delete declid;
+    declid = nullptr;
+    dfs.printf("b");
+    bit_width = -1;
+    sp = ParsePrefix(ztype==bt_union);
+    if (declid==nullptr)
+      declid = new std::string("");
+	  // If a function declaration is taking place and just the type is
+	  // specified without a parameter name, assign an internal compiler
+	  // generated name.
+	  if (funcdecl>0 && funcdecl != 10 && declid->length()==0) {
+		  sprintf(buf, "_p%d", nparms);
+		  delete declid;
+		  declid = new std::string(buf);
+		  if (nparms > 19) {
+		    error(ERR_TOOMANY_PARAMS);
+      }
+      else {
+		    names[nparms].str = *declid;
+		    nparms++;
 	    }
-	    else {
-			  names[nparms].str = declid;
-			  nparms++;
+		  missingArgumentName = TRUE;
+	  }
+
+    dfs.printf("C");
+    if( declid->length() > 0 || classname->length()!=0) {      /* otherwise just struct tag... */
+		  if (sp == nullptr) {
+        sp = allocSYM();
 		  }
-			missingArgumentName = TRUE;
-		}
-dfs.printf("C");
-        if( declid.length() > 0 || classname.length()!=0) {      /* otherwise just struct tag... */
-			if (sp == nullptr) {
-	            sp = allocSYM();
-			}
-			SetType(sp);
-			if (sp->parent==nullptr)
-				sp->parent = parent->GetIndex();
-			if (al==sc_member)
-				sp->IsPrivate = isPrivate;
-			else
-				sp->IsPrivate = false;
-            sp->SetName(classname.length() > 0 ? classname : declid);
-			sp->shortname = new std::string(undeclid);
-dfs.printf("D");
-			classname = "";
-			sp->IsVirtual = isVirtual;
+		  SetType(sp);
+		  if (sp->parent==nullptr)
+			  sp->parent = parent->GetIndex();
+		  if (al==sc_member)
+			  sp->IsPrivate = isPrivate;
+		  else
+			  sp->IsPrivate = false;
+		  if (declid==nullptr)
+		    declid = new std::string("");
+      sp->SetName(classname->length() > 0 ? *classname : *declid);
+      dfs.printf("D");
+      if (classname) delete classname;
+		  classname = new std::string("");
+		  sp->IsVirtual = isVirtual;
       sp->storage_class = al;
       sp->isConst = isConst;
-			if (bit_width > 0 && bit_offset > 0) {
-				// share the storage word with the previously defined field
-				nbytes = old_nbytes - ilc;
-			}
-			old_nbytes = ilc + nbytes;
-			if (al != sc_member) {
+		  if (bit_width > 0 && bit_offset > 0) {
+			  // share the storage word with the previously defined field
+			  nbytes = old_nbytes - ilc;
+		  }
+		  old_nbytes = ilc + nbytes;
+		  if (al != sc_member) {
 //							sp->isTypedef = isTypedef;
-				if (isTypedef)
-					sp->storage_class = sc_typedef;
-				isTypedef = FALSE;
-			}
+			  if (isTypedef)
+				  sp->storage_class = sc_typedef;
+			  isTypedef = FALSE;
+		  }
 dfs.printf("E");
-			if ((ilc + nbytes) % roundAlignment(head)) {
-				if (al==sc_thread)
-					tseg();
-				else
-					dseg();
-            }
-            bcnt = 0;
-            while( (ilc + nbytes) % roundAlignment(head)) {
-                ++nbytes;
-                bcnt++;
-            }
-            if( al != sc_member && al != sc_external && al != sc_auto) {
-                if (bcnt > 0)
-                    genstorage(bcnt);
-            }
-
-dfs.printf("F");
-			if (sp->parent) {
-dfs.printf("f:%d",sp->parent);
+		  if ((ilc + nbytes) % roundAlignment(head)) {
+			  if (al==sc_thread)
+				  tseg();
+			  else
+				  dseg();
+      }
+      bcnt = 0;
+      while( (ilc + nbytes) % roundAlignment(head)) {
+        ++nbytes;
+        bcnt++;
+      }
+      if( al != sc_member && al != sc_external && al != sc_auto) {
+        if (bcnt > 0)
+          genstorage(bcnt);
+      }
+/*
+      dfs.printf("F");
+		  if (sp->parent) {
+        dfs.printf("f:%d",sp->parent);
         if (sp->GetParentPtr()->tp==nullptr) {
-dfs.printf("f:%d",sp->parent);
-           dfs.printf("null type pointer.\n");
-           parentBytes = 0;
+          dfs.printf("f:%d",sp->parent);
+          dfs.printf("null type pointer.\n");
+          parentBytes = 0;
         }
         else {
-				  parentBytes = sp->GetParentPtr()->tp->size;
-				  dfs.printf("ParentBytes=%d\n",parentBytes);
-			  }
-			}
-			else
-				parentBytes = 0;
-
-			// Set the struct member storage offset.
-			if( al == sc_static || al==sc_thread) {
-				sp->value.i = nextlabel++;
-			}
-			else if( ztype == bt_union) {
-                sp->value.i = ilc + parentBytes;
-			}
-            else if( al != sc_auto ) {
-                sp->value.i = ilc + nbytes + parentBytes;
-			}
-			// Auto variables are referenced negative to the base pointer
-			// Structs need to be aligned on the boundary of the largest
-			// struct element. If a struct is all chars this will be 2.
-			// If a struct contains a pointer this will be 8. It has to
-			// be the worst case alignment.
-			else {
-                sp->value.i = -(ilc + nbytes + roundSize(head) + parentBytes);
-			}
-
-//			SetType(sp);
-
-dfs.printf("G");
-			if (isConst)
-				sp->tp->isConst = TRUE;
-            if((sp->tp->type == bt_func) && sp->storage_class == sc_global )
-                sp->storage_class = sc_external;
-
-			// Increase the storage allocation by the type size.
-            if(ztype == bt_union)
-                nbytes = imax(nbytes,roundSize(sp->tp));
-			else if(al != sc_external) {
-				// If a pointer to a function is defined in a struct.
-				if (isStructDecl) {
-					if (sp->tp->type==bt_func) {
-						nbytes += 8;
-					}
-					else if (sp->tp->type != bt_ifunc) {
-						nbytes += roundSize(sp->tp);
-					}
-				}
-				else {
-					nbytes += roundSize(sp->tp);
-				}
-			}
-
-dfs.printf("H");
-      //dfs.printf("Table:%p, sp:%p Fn:%p\r\n", table, sp, currentFn);
-      if (sp->parent)
-         sp1 = sp->GetParentPtr()->tp->lst.Find(*sp->name,false);
-      else
-			    sp1 = table->Find(*sp->name,false);
-dfs.printf("h");
-      if (sp->tp) {
-dfs.printf("h1");
-			  if (sp->tp->type == bt_ifunc || sp->tp->type==bt_func) {
-dfs.printf("h2");
-				  sp1 = sp->FindExactMatch(TABLE::matchno);
-dfs.printf("i");
-			  }
+			    parentBytes = sp->GetParentPtr()->tp->size;
+			    dfs.printf("ParentBytes=%d\n",parentBytes);
+		    }
 		  }
-			else {
-dfs.printf("j");
-				if (TABLE::matchno)
-					sp1 = TABLE::match[TABLE::matchno-1];
-				else
-					sp1 = nullptr;
-			}
-dfs.printf("k");
-			flag = false;
-			if (sp1) {
-			  if (sp1->tp) {
-dfs.printf("l");
-				   flag = sp1->tp->type == bt_func;
-	      }
-			}
-dfs.printf("I");
-			if (sp->tp->type == bt_ifunc && flag)
-			{
-dfs.printf("Ia");
-				dfs.printf("bt_ifunc\r\n");
-				sp1->tp = sp->tp;
-				sp1->storage_class = sp->storage_class;
-        sp1->value.i = sp->value.i;
-				sp1->IsPrototype = sp->IsPrototype;
-				sp1->IsVirtual = sp->IsVirtual;
-				sp1->parent = sp->parent;
-				sp1->params = sp->params;
-				sp1->proto = sp->proto;
-				sp1->lsyms = sp->lsyms;
-				sp = sp1;
-            }
-			else {
-dfs.printf("Ib");
-				// Here the symbol wasn't found in the table.
-				if (sp1 == nullptr) {
-dfs.printf("Ic");
-          if ((sp->tp->type==bt_class || sp->tp->type == bt_struct || sp->tp->type==bt_union)
-             && (sp->storage_class == sc_type || sp->storage_class==sc_typedef))
-            ; // Do nothing. The class was already entered in the tag table.
+		  else
+			  parentBytes = 0;
+*/
+			// Set the struct member storage offset.
+		  if( al == sc_static || al==sc_thread) {
+			  sp->value.i = nextlabel++;
+		  }
+		  else if( ztype == bt_union) {
+        sp->value.i = ilc;// + parentBytes;
+		  }
+      else if( al != sc_auto ) {
+        sp->value.i = ilc + nbytes;// + parentBytes;
+		}
+		// Auto variables are referenced negative to the base pointer
+		// Structs need to be aligned on the boundary of the largest
+		// struct element. If a struct is all chars this will be 2.
+		// If a struct contains a pointer this will be 8. It has to
+		// be the worst case alignment.
+		else {
+      sp->value.i = -(ilc + nbytes + roundSize(head));// + parentBytes);
+		}
+
+    dfs.printf("G");
+		if (isConst)
+			sp->tp->isConst = TRUE;
+    if((sp->tp->type == bt_func) && sp->storage_class == sc_global )
+      sp->storage_class = sc_external;
+
+		// Increase the storage allocation by the type size.
+    if(ztype == bt_union)
+      nbytes = imax(nbytes,roundSize(sp->tp));
+		else if(al != sc_external) {
+		 // If a pointer to a function is defined in a struct.
+		  if (isStructDecl) {
+		    if (sp->tp->type==bt_func) {
+			    nbytes += 8;
+		    }
+		    else if (sp->tp->type != bt_ifunc) {
+			    nbytes += roundSize(sp->tp);
+		    }
+		  }
+		  else {
+		    nbytes += roundSize(sp->tp);
+		  }
+		}
+
+    dfs.printf("H");
+      // For a class declaration there may not be any variables declared as
+      // part of the declaration. In that case the symbol name is an empty
+      // string. There's nothing to insert in the symbol table.
+      name = *sp->name;
+      if (sp->name->length() > 0) {
+        //dfs.printf("Table:%p, sp:%p Fn:%p\r\n", table, sp, currentFn);
+        if (sp->parent) {
+          int nn;
+          // If a function body is being processed we want to look for
+          // symbols by rising through the hierarchy. Otherwise we want a
+          // lower level defined symbol to shadow one at a hight level.
+          if (isFuncBody) {
+            nn = sp->GetParentPtr()->tp->lst.FindRising(*sp->name);
+            if (nn)
+              sp1 = sp->FindRisingMatch(false);
+          }
           else {
-            dfs.printf("insert type: %d\n", sp->tp->type);
-					  dfs.printf("***Inserting:%s into %p\n",(char *)sp->name->c_str(), (char *) table);
-					  if (sp->parent) {
-					    InsertMethod(sp);
-			      }
-			      else
-					    table->insert(sp);
-				  }
-				}
-			}
-dfs.printf("J");
-			if (needParseFunction) {
-				needParseFunction = FALSE;
-				fn_doneinit = ParseFunction(sp);
-				if (sp->tp->type != bt_pointer)
-					return nbytes;
-			}
-   //         if(sp->tp->type == bt_ifunc) { /* function body follows */
-   //             ParseFunction(sp);
-   //             return nbytes;
-   //         }
-dfs.printf("K");
-            if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
-                    sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
-                    doinit(sp);
+            nn = sp->GetParentPtr()->tp->lst.Find(*sp->name);
+            if (nn) {
+              sp1 = sp->FindExactMatch(TABLE::matchno);
+            }
+          }
         }
+        else
+  			  sp1 = table->Find(*sp->name,false);
+
+        dfs.printf("h");
+        if (sp->tp) {
+          dfs.printf("h1");
+  			  if (sp->tp->type == bt_ifunc || sp->tp->type==bt_func) {
+            dfs.printf("h2");
+  				  sp1 = sp->FindExactMatch(TABLE::matchno);
+            dfs.printf("i");
+  			  }
+  		  }
+  			else {
+  dfs.printf("j");
+  				if (TABLE::matchno)
+  					sp1 = TABLE::match[TABLE::matchno-1];
+  				else
+  					sp1 = nullptr;
+  			}
+  dfs.printf("k");
+  			flag = false;
+  			if (sp1) {
+  			  if (sp1->tp) {
+  dfs.printf("l");
+  				   flag = sp1->tp->type == bt_func;
+  	      }
+  			}
+  dfs.printf("I");
+  			if (sp->tp->type == bt_ifunc && flag)
+  			{
+  dfs.printf("Ia");
+  				dfs.printf("bt_ifunc\r\n");
+  				sp1->SetType(sp->tp);
+  				sp1->storage_class = sp->storage_class;
+          sp1->value.i = sp->value.i;
+  				sp1->IsPrototype = sp->IsPrototype;
+  				sp1->IsVirtual = sp->IsVirtual;
+  				sp1->parent = sp->parent;
+  				sp1->params = sp->params;
+  				sp1->proto = sp->proto;
+  				sp1->lsyms = sp->lsyms;
+  				sp = sp1;
+              }
+  			else {
+  dfs.printf("Ib");
+  				// Here the symbol wasn't found in the table.
+  				if (sp1 == nullptr) {
+  dfs.printf("Ic");
+            if ((sp->tp->type==bt_class)
+               && (sp->storage_class == sc_type || sp->storage_class==sc_typedef))
+              ; // Do nothing. The class was already entered in the tag table.
+            else if ((sp->tp->type == bt_struct || sp->tp->type==bt_union)
+               && (sp->storage_class == sc_type && sp->storage_class!=sc_typedef)
+               && sp->tp->sname->length() > 0)
+              ; // If there was no struct tag and this is a typedef, then it
+                // still needs to be inserted into the table.
+            else {
+              dfs.printf("insert type: %d\n", sp->tp->type);
+  					  dfs.printf("***Inserting:%s into %p\n",(char *)sp->name->c_str(), (char *) table);
+  					   // Need to know the type before a name can be generated.
+              sp->mangledName = sp->BuildSignature();
+   					  if (sp->parent && ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
+   					  || (sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type==bt_func || sp->tp->GetBtp()->type==bt_ifunc))))
+              {
+  					    InsertMethod(sp);
+  			      }
+  			      else {
+                table->insert(sp);
+  					  }
+  				  }
+  				}
+  			}
+  dfs.printf("J");
+  			if (needParseFunction) {
+  				needParseFunction = FALSE;
+  				fn_doneinit = ParseFunction(sp);
+  				if (sp->tp->type != bt_pointer)
+  					return nbytes;
+  			}
+     //         if(sp->tp->type == bt_ifunc) { /* function body follows */
+     //             ParseFunction(sp);
+     //             return nbytes;
+     //         }
+  dfs.printf("K");
+              if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
+                      sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
+                      doinit(sp);
+          }
+      }
 		if (funcdecl>0) {
 			if (lastst==comma || lastst==semicolon) {
 				break;
@@ -1284,9 +1340,27 @@ dfs.printf("K");
 		else if (lastst == semicolon) {
 			if (sp) {
 				if (sp->tp) {
-					if (sp->tp->type==bt_class) {
-						int typearray[20];
-						int typearray2[20];
+					if (sp->tp->type==bt_class && (sp->storage_class != sc_type
+            && sp->storage_class != sc_typedef)) {
+            int nn;
+            nn = sp->tp->lst.FindRising(*sp->tp->sname);
+            if (nn > 0) {
+              if (sp1) {
+                ENODE *ep1,*ep2;
+                ep1 = nullptr;
+  							// Build an expression that references the ctor.
+  							tp1 = nameref2(*sp->tp->sname,&ep1,TRUE,false,nullptr,nullptr);
+  							// Create a function call node for the ctor.
+  							if (tp1!=nullptr) {
+  							  TYP *tp2;
+  							  // Make an expresison that references the var name as the
+  							  // argument to the ctor.
+  							  ep2 = makesnode(en_nacon,sp->name,sp->mangledName,sp->value.i);
+  								ep1 = makenode(en_fcall, ep1, ep2);
+  							}
+  							sp->initexp = ep1;
+              }
+            }
 		/*
 						// First see if there is a ctor. If there are no ctors there's
 						// nothing to do.
@@ -1342,11 +1416,13 @@ int declbegin(int st)
 
 void GlobalDeclaration::Parse()
 {
-	dfs.printf("Enter ParseGlobalDecl");
- for(;;) {
+  isFuncPtr = false;
+	dfs.puts("<ParseGlobalDecl>\n");
+  for(;;) {
     currentClass = nullptr;
     currentFn = nullptr;
     currentStmt = nullptr;
+    isFuncBody = false;
 		worstAlignment = 0;
 		funcdecl = 0;
 		switch(lastst) {
@@ -1404,12 +1480,37 @@ void GlobalDeclaration::Parse()
     case kw_inline:
       NextToken();
       break;
+ 
+    case kw_using:
+      NextToken();
+      if (lastst==id) {
+        if (strcmp(lastid,"_name")==0) {
+          NextToken();
+          if (lastst==id) {
+            if (strcmp(lastid, "_mangler")==0) {
+              NextToken();
+              mangledNames = TRUE;
+            }
+          }
+        }
+        else if (strcmp(lastid,"_real")==0) {
+          NextToken();
+          if (lastst==id) {
+            if (strcmp(lastid,"_names")==0) {
+              NextToken();
+              mangledNames = FALSE;
+            }
+          }
+        }
+      }
+      break;
+
     default:
       goto xit;
 		}
 	}
 xit:
-	dfs.printf("Leave ParseGlobalDecl");
+	dfs.puts("</ParseGlobalDecl>\n");
 	;
 }
 
@@ -1417,6 +1518,7 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 {
 	SYM *sp;
 
+  isFuncPtr = false;
 //	printf("Enter ParseAutoDecls\r\n");
 	funcdecl = 0;
     for(;;) {
@@ -1490,8 +1592,9 @@ int ParameterDeclaration::Parse(int fd)
 {
 	int ofd;
 
+  isFuncPtr = false;
 	nparms = 0;
-	dfs.printf("Enter ParseParmDecls");
+	dfs.puts("<ParseParmDecls>\n");
 	worstAlignment = 0;
 	ofd = funcdecl;
 	funcdecl = fd;
@@ -1555,7 +1658,7 @@ dfs.printf("E");
 xit:
 	parsingParameterList--;
 	funcdecl = ofd;
-	dfs.printf("Leave ParseParmDecls");
+	dfs.printf("</ParseParmDecls>\n");
 	return nparms;
 }
 

@@ -428,7 +428,7 @@ void GenerateFISA64Function(SYM *sym, Statement *stmt)
 		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
 		//if (lc_auto)
 		//	GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(lc_auto));
-		sprintf(buf, "#%sSTKSIZE_",sym->name->c_str());
+		snprintf(buf, sizeof(buf), "#%sSTKSIZE_",sym->name->c_str());
 		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_string(my_strdup(buf)));
 	}
 	if (optimize)

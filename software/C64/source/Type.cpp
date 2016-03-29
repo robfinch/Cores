@@ -42,7 +42,7 @@ TYP *TYP::Copy(TYP *src)
 	TYP *dst = nullptr;
   TYP *t;
  
-  dfs.printf("Enter TYP::Copy\n");
+  dfs.printf("<TYP__Copy>\n");
 	if (src) {
 		dst = allocTYP();
 //		if (dst==nullptr)
@@ -54,19 +54,21 @@ TYP *TYP::Copy(TYP *src)
 			dst->btp = Copy(src->GetBtp())->GetIndex();
 		}
 		dfs.printf("C");
-		dst->lst.Clear();
+		// We want to keep any base type indicator so Clear() isn't called.
+		dst->lst.head = 0;
+		dst->lst.tail = 0;
 		dst->sname = new std::string(*src->sname);
 		dfs.printf("D");
 		TABLE::CopySymbolTable(&dst->lst,&src->lst);
 	}
-  dfs.printf("Leave TYP::Copy\n");
+  dfs.printf("</TYP__Copy>\n");
 	return dst;
 }
 
 TYP *TYP::Make(int bt, int siz)
 {
 	TYP *tp;
-	dfs.printf("Enter TYP::Make()\n");
+	dfs.puts("<TYP__Make>\n");
   tp = allocTYP();
   if (tp == nullptr)
      return nullptr;
@@ -75,13 +77,28 @@ TYP *TYP::Make(int bt, int siz)
   tp->size = siz;
   tp->type = (e_bt)bt;
 	tp->typeno = bt;
-  tp->lst.Clear();
-	tp->isUnsigned = FALSE;
-	tp->isVolatile = FALSE;
-	tp->isIO = FALSE;
-	tp->isConst = FALSE;
-	dfs.printf("Leave TYP::Make()\n");
+	dfs.puts("</TYP__Make>\n");
   return tp;
 }
 
+// Given just a type number return the size
+
+int TYP::GetSize(int num)
+{
+  if (num < 0 || num > 32767)
+    return 0;
+  return compiler.typeTable[num].size;
+}
+
+// Basic type is one of the built in types supported by the compiler.
+// Returns the basic type number for the type. The basic type number does
+// not include complex types like struct, union, or class. For a struct,
+// union, or class one of bt_struct, bt_union or bt_class is returned.
+
+int TYP::GetBasicType(int num)
+{
+  if (num < 0 || num > 32767)
+    return 0;
+  return compiler.typeTable[num].type;
+}
 

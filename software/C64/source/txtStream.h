@@ -6,10 +6,11 @@
 
 class txtoStream : public std::ofstream
 {
-	char buf[4000];
+	char buf[500];
 public:
 	int level;
 public:
+  txtoStream() : std::ofstream() {};
 	void write(char *buf) {
 	   std::ofstream::write(buf, strlen(buf));
        flush(); };
@@ -23,7 +24,13 @@ public:
 	void printf(char *fmt, int n);
 	void printf(char *fmt, int n, int m);
 	void printf(char *fmt, __int64 n);
-	void putch(char ch) { std::ofstream::write(&ch, 1); };
+	void putch(char ch) { 
+	     buf[0] = ch;
+	     buf[1] = '\0';
+	     buf[2] = '\0';
+	     buf[3] = '\0';
+       std::ofstream::write(buf, 1);
+       };
 	void puts(const char *);
 };
 

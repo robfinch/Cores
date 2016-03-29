@@ -126,7 +126,8 @@ int doinclude()
 
 int dodefine()
 {   
-	SYM     *sp;
+	SYM *sp;
+	
     NextToken();               /* get past #define */
     if( lastst != id ) {
             error(ERR_DEFINE);
@@ -134,7 +135,7 @@ int dodefine()
             }
     ++global_flag;          /* always do #define as globals */
     sp = allocSYM();
-    sp->name = new std::string(lastid);
+    sp->SetName(std::string(lastid));
     sp->value.s = my_strdup(lptr-1);
     defsyms.insert(sp);
     --global_flag;
