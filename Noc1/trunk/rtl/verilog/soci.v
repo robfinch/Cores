@@ -28,11 +28,13 @@
 //
 `include "noc_defines.v"
 
-module soci(num, rst, clk, neti, neto, cyc, stb, ack, we, sel, adr, dati, dato);
+module soci(num, rst, clk, neti, neto, cyc, stb, ack, err, we, sel, adr, dati, dato);
 parameter IDLE = 4'd1;
 parameter READ = 4'd2;
 parameter WRITE = 4'd3;
 parameter TX = 4'd4;
+parameter ERR = 4'd5;
+parameter ERR_ACK = 4'd6;
 input [3:0] num;
 input rst;
 input clk;
@@ -41,6 +43,7 @@ output reg [`PACKET_WID-1:0] neto;
 output reg cyc;
 output reg stb;
 input ack;
+input err;
 output reg we;
 output reg [3:0] sel;
 output reg [31:0] adr;
@@ -54,6 +57,7 @@ always @(posedge clk)
 if (rst) begin
   wb_nack();
   state <= IDLE;
+  neto <= {`PACKET_WID{1'b0}};
 end
 else begin
   case (state)
@@ -69,6 +73,10 @@ else begin
         state <= READ;
       else
         state <= WRITE;
+      packeto[`RID] <= neti[`TID];
+      packeto[`TID] <= neti[`RID];
+      packeto[`ACK] <= 1'b1;
+      packeto[`AGE] <= 8'h00;
     end
     // Packet wasn't for me.
     else begin
@@ -79,27 +87,18 @@ else begin
       // Can't process any more packets while in read state.
       // Just echo them around the ring.
       EchoAged();
-      if (ack) begin
+      if (ack|err) begin
         wb_nack();
-        packeto[`RID] <= neti[`TID];
-        packeto[`TID] <= num;
-        packeto[`ACK] <= 1'b1;
-        packeto[`AGE] <= 8'h00;
         packeto[31:0] <= dati;
-        state <= TX;
+        state <= err ? ERR : TX;
       end
     end
   WRITE:
     begin
       EchoAged();
-      if (ack) begin
+      if (ack|err) begin
         wb_nack();
-        packeto[`RID] <= neti[`TID];
-        packeto[`TID] <= num;
-        packeto[`ACK] <= 1'b1;
-        packeto[`AGE] <= 8'h00;
-        packeto[31:0] <= dati;
-        state <= TX;
+        state <= err ? ERR : TX;
 //        state <= IDLE;
       end
     end
@@ -112,6 +111,23 @@ else begin
     else begin
       EchoAged();
     end 
+  // Acknowledge a bus error. Clears the bus error circuit.
+  ERR:
+    begin
+      EchoAged();
+      cyc <= 1'b1;
+      stb <= 1'b1;
+      adr <= 32'hFFDCFFE0;
+      state <= ERR_ACK;
+    end
+  // The bus error circuit doesn't bother to send back an ack in case the
+  // ack line is broken. It's safe to assume it's reset after a single cycle. 
+  ERR_ACK:
+    begin
+      EchoAged();
+      wb_nack();
+      state <= TX;
+    end
   endcase
 end
 
@@ -126,11 +142,12 @@ endtask
 
 task EchoAged;
 begin
-  if (neti[`AGE]==8'hFF)
+  if (neti[`AGE]==6'h3F)
     neto <= 128'd0;
   else begin
     neto <= neti;
-    neto[`AGE] <= neti[`AGE] + 1; // age the packet
+    if (neti[`RID]!=4'h0)
+      neto[`AGE] <= neti[`AGE] + 1; // age the packet
   end
 end
 endtask

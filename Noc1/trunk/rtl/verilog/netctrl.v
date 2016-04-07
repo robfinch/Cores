@@ -63,42 +63,58 @@ vtdl #(.WID(`PACKET_WID), .DEP(64)) ufifo1
 
 always @(posedge clk)
 if (rst) begin
+  txp <= 1'b0;
   rxp <= 1'b0;
   acko <= 1'b0;
+  dato <= 32'd0;
   ptr <= 6'h00;
+  neto <= {`PACKET_WID{1'b0}};
 end
 else begin
   rxp <= 1'b0;
   ptr_inc = 6'd0;
-  // If it's my own packet that's come around again free it up.
+  // If it's my own packet that's come around again that means it wasn't
+  // received, let it go round again.
   // OR transmit a waiting packet output.
   if (neti[`TID]==num) begin
-    if (neti[`ACK]) begin
-      if (txp) begin
-        txp <= 1'b0;
-        neto <= packeto;
-      end
-      else
-        neto <= 128'h0;
-    end
-    // Our transmitted packet wasn't acknowledged.
-    else
-      neto <= neti;
+    neto <= neti;
   end
   // If it's a packet addressed to me, or a general broacast
   else if (neti[`RID]==num || neti[`RID]==`GBL) begin
-    rxp <= 1'b1;
-    packeti <= neti;
-    ptr_inc = 6'd1;
     if (neti[`RID]==num) begin
-      neto <= neti;
-      neto[`RID] <= neti[`TID];
-      neto[`TID] <= neti[`RID];
-      neto[`ACK] <= 1'b1;
+      // If it was an ack from a prior transmit zap the
+      // packet. If we're waiting to transmit then transmit.
+      if (neti[`ACK]) begin
+        if (txp) begin
+          neto <= packeto;
+          txp <= 1'b0;
+        end
+        else
+          neto <= 128'b0;
+      end
+      // Otherwise, it wasn't an ack, and it was for us so
+      // queue the packet in a fifo and send back an ack.
+      else begin
+        rxp <= 1'b1;
+        packeti <= neti;
+        ptr_inc = 6'd1;
+        neto <= neti;
+        neto[`RID] <= neti[`TID];
+        neto[`TID] <= neti[`RID];
+        neto[`ACK] <= 1'b1;
+      end
     end
-    else
+    // General broadcast, queue packet, but don't ack.
+    // Forward the broadcast to the next node.
+    else begin
+      rxp <= 1'b1;
+      packeti <= neti;
+      ptr_inc = 6'd1;
       neto <= neti;
+    end
   end
+  // Otherwise, not a packet for me. See if it's an empty
+  // packet, which will allow us to transmit if need be.
   else if (neti[`RID]==4'h0 && txp) begin
     neto <= packeto;
     txp <= 1'b0;
@@ -107,6 +123,8 @@ else begin
   else begin
     neto <= neti;
   end
+
+  // WISHBONE I/F
   if (cs) begin
     if (we) begin
       case(adr[4:2])
@@ -133,7 +151,8 @@ else begin
               ptr <= ptr + ptr_inc; 
             ptr_inc = 6'd0;
             end
-      3'd7: dato <= {txp,7'b0,2'b0,ptr};
+      3'd7: dato <= {num,txp,7'b0,2'b0,ptr};
+      default:  dato <= 32'd0;
       endcase
       acko <= 1'b1;
     end

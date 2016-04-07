@@ -1,11 +1,10 @@
-`include "noc_defines.v"
 
-module friscv_node(num, rst_i, clk_i, net_i, net_o);
+module friscv_mod(num, rst_i, clk_i, net_i, net_o);
 input [3:0] num;
 input rst_i;
 input clk_i;
-input [`PACKET_WID-1:0] net_i;
-output [`PACKET_WID-1:0] net_o;
+input [127:0] net_i;
+output [127:0] net_o;
 
 wire [15:0] pc1,pc2;
 wire [31:0] insn1,insn2;
@@ -18,10 +17,12 @@ wire [31:0] adr1, adr2;
 wire [31:0] dato1, dato2;
 wire [31:0] mdato1,mdato2;
 wire [31:0] ncdato;
-wire [31:0] dati1;
-wire [31:0] dati2;
+wire [31:0] dati1 = mdato1 | ncdato;
+wire [31:0] dati2 = mdato2;
 wire ncack;
 wire ramack1, ramack2;
+assign ack1 = ramack1|ncack;
+assign ack2 = ramack2;
 
 netctrl unet1
 (
@@ -42,13 +43,8 @@ netctrl unet1
 DualBootrom ubr1 (rst_i, clk_i, pc1, insn1, pc2, insn2);
 
 reg rdy1a,rdy1b,rdy2a,rdy2b;
-wire csram1 = cyc1 && stb1 && adr1[31:16]==16'h1;
-wire csram2 = cyc2 && stb2 && adr2[31:16]==16'h1;
-wire cs_info1 = cyc1 && stb1 && adr1[31:8]==24'hFFD900;
-wire cs_info2 = cyc2 && stb2 && adr2[31:8]==24'hFFD900;
-assign ack1 = ramack1|ncack|cs_info1;
-assign ack2 = ramack2|cs_info2;
-
+wire csram1 = cyc1 && stb1 && adr1[31:16]==16'h0;
+wire csram2 = cyc2 && stb2 && adr2[31:16]==16'h0;
 always @(posedge clk_i)
 begin
   rdy2a <= csram2;
@@ -58,22 +54,18 @@ begin
 end
 assign ramack1 = csram1 ? (we1 ? 1'b1 : rdy1b) : 1'b0; 
 assign ramack2 = csram2 ? (we2 ? 1'b1 : rdy2b) : 1'b0; 
-assign dati1 = cs_info1 ? {num,4'h1} : csram1 ? mdato1 : ncdato;
-assign dati2 = cs_info2 ? {num,4'h2} : mdato2;
 
 dpram umem1
 (
   .clka(clk_i),
-  .rsta(~csram1),
-  .ena(1'b1),
-  .wea(sel1 & {4{we1&csram1}}),
+  .ena(csram1),
+  .wea(sel1 & {4{we1}}),
   .addra(adr1[15:2]),
   .dina(dato1),
   .douta(mdato1),
   .clkb(clk_i),
-  .rstb(~csram2),
-  .enb(1'b1),
-  .web(sel2 & {4{we2&csram2}}),
+  .enb(csram2),
+  .web(sel2 & {4{we2}}),
   .addrb(adr2[15:2]),
   .dinb(dato2),
   .doutb(mdato2)

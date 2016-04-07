@@ -85,10 +85,8 @@ parameter word = 2'd2;
 wire clk = clk_i;
 reg [5:0] state;
 reg [PCMSB:0] dpc,xpc;
-reg [31:4] ibufadr;
-reg [127:0] ibuf;
 reg [31:0] regfile [31:0];
-reg [31:0] ir,xir;
+reg [31:0] ir,xir,x1ir;
 wire [6:0] opcode = ir[6:0];
 wire [2:0] funct3 = ir[14:12];
 wire [6:0] funct7 = ir[31:25];
@@ -102,12 +100,31 @@ wire [4:0] Rb = ir[24:20];
 reg [4:0] xRt,mRt,wRt;
 reg [31:0] rfoa,rfob;
 always @*
+if (Ra==5'd0)
+  rfoa <= 32'd0;
+else if (Ra==xRt && !xisLd)
+  rfoa <= res;
+else if (Ra==wRt)
+  rfoa <= wres;
+else
+  rfoa <= regfile[Ra];
+always @*
+  if (Rb==5'd0)
+    rfob <= 32'd0;
+  else if (Rb==xRt && !xisLd)
+    rfob <= res;
+  else if (Rb==wRt)
+    rfob <= wres;
+  else
+    rfob <= regfile[Rb];
+/*
 case(Ra)
 5'd0:	rfoa <= 32'd0;
 xRt:	rfoa <= res;
 wRt:	rfoa <= wres;
 default:	rfoa <= regfile[Ra];
 endcase
+
 always @*
 case(Rb)
 5'd0:	rfob <= 32'd0;
@@ -115,6 +132,8 @@ xRt:	rfob <= res;
 wRt:	rfob <= wres;
 default:	rfob <= regfile[Rb];
 endcase
+*/
+reg ls_flag;
 reg [31:0] a,b,imm,xb;
 reg [31:0] res,ea,xres,mres,wres,lres;
 reg [1:0] ld_size, st_size;
@@ -126,17 +145,17 @@ wire [63:0] prodsu = $signed(a) * b;
 wire xisLd = xopcode==`Lx;
 wire xisSt = xopcode==`Sx;
 
-reg advanceEX;
+wire advanceEX = 1'b1;
 wire advanceWB = advanceEX;
-wire advanceRF = advanceEX;
+wire advanceRF = !((xisLd || xisSt)&&ls_flag==1'b0);
 wire advanceIF = advanceRF;
 
 always @*
 case(xopcode)
 `LUI:	res <= imm;
 `AUIPC:	res <= {xpc[PCMSB:12] + imm[PCMSB:12],12'h000};
-`JAL:	res <= xpc;
-`JALR:	res <= xpc;
+`JAL:	res <= xpc + 32'd4;
+`JALR:	res <= xpc + 32'd4;
 `ALU1:
 		case(xfunct3)
 		`ADDI:	res <= a + imm;
@@ -145,9 +164,9 @@ case(xopcode)
 		`XORI:	res <= a ^ imm;
 		`ORI:	res <= a | imm;
 		`ANDI:	res <= a & imm;
-		`SLI:	res <= a << ir[24:20];
+		`SLI:	res <= a << xir[24:20];
 		`SRI:
-			if (xir[30] & a[31])
+			if ((xir[31:25]==7'b0100000) && a[31])
 				res <= (a >> xir[24:20]) | ~(32'hFFFFFFFF >> xir[24:20]);
 			else
 				res <= a >> xir[24:20];
@@ -202,7 +221,7 @@ if (rst_i) begin
 	nop_ir();
 	nop_xir();
 	wb_nack();
-	advanceEX <= TRUE;
+	ls_flag <= 1'b0;
 end
 else begin
 case (state)
@@ -221,8 +240,10 @@ begin
 	end
 	else begin
 		if (advanceRF) begin
-			if (!iisLuiz)
+			if (!iisLuiz) begin
 				nop_ir();
+				$display("nopped ir");
+			end
 			dpc <= pc;
 			pc <= pc;
 		end
@@ -244,7 +265,11 @@ begin
 		`JALR:	imm <= xisLuiz ? {xir[31:12],ir[31:20]} : {{20{ir[31]}},ir[31:20]};
 		`Bcc:	imm <= {{20{ir[31]}},ir[7],ir[30:25],ir[11:8],1'b0};
 		`Lx:	imm <= xisLuiz ? {xir[31:12],ir[31:20]} : {{20{ir[31]}},ir[31:20]};
-		`Sx:	imm <= xisLuiz ? {xir[31:12],ir[31:20]} : {{20{ir[31]}},ir[31:25],ir[11:7]};
+		`Sx:	begin
+		      imm <= xisLuiz ? {xir[31:12],ir[31:25],ir[11:7]} : {{20{ir[31]}},ir[31:25],ir[11:7]};
+		      $display("ir = %h", ir);
+		      $display("imm <= %h",xisLuiz ? {xir[31:12],ir[31:25],ir[11:7]} : {{20{ir[31]}},ir[31:25],ir[11:7]});
+		      end
 		`ALU1:	imm <= xisLuiz ? {xir[31:12],ir[31:20]} : {{20{ir[31]}},ir[31:20]};
 		default:	imm <= 32'd0;
 		endcase
@@ -260,7 +285,7 @@ begin
 		endcase
 	end
 	else if (advanceEX) begin
-		if (!xisLuiz)
+		if (!xisLuiz && !xisLd && !xisSt)
 			nop_xir();
 	end
 
@@ -269,6 +294,21 @@ begin
 		wRt <= xRt;
 		wres <= res;
 		case(xopcode)
+		`ALU1:
+		  case(xfunct3)
+		  `SRI:
+		    begin
+		      $display("SRI: %h = %h >> #%h", res, a, imm);
+		    end
+		  `ANDI:  $display("ANDI: %h = %h & #%h", res, a, imm);
+		  `GRP0:
+		    case(xfunct7)
+		    7'b0000001:
+		      begin
+		        $display("mul %h * %h = %h", a, b, res);
+		      end
+		    endcase
+		  endcase
 		`JAL:	begin pc <= xpc + imm; pc[0] <= 1'b0; nop_ir(); nop_xir(); $display("jal %h xpc=%h xir=%h", xpc+imm,xpc,xir); end
 		`JALR:	begin pc <= a + imm; pc[0] <= 1'b0; nop_ir(); nop_xir(); end
 		`Bcc:
@@ -281,27 +321,35 @@ begin
 				`BGEU:	if (a >= b) begin pc <= xpc + imm; nop_ir(); nop_xir(); end
 				endcase
 		`Lx:	begin
-				next_state(LOAD2);
-				advanceEX <= FALSE;
-				mfunct3 <= xfunct3;
-				ea <= a + imm;
-				case(xfunct3)
-				`LB,`LBU:	ld_size <= byt;
-				`LH,`LHU:	ld_size <= half;
-				`LW:		ld_size <= word;
-				endcase
+		    if (ls_flag==0) begin
+		      ls_flag <= 1'b1;
+          next_state(LOAD2);
+          mfunct3 <= xfunct3;
+          ea <= a + imm;
+          case(xfunct3)
+          `LB,`LBU:	ld_size <= byt;
+          `LH,`LHU:	ld_size <= half;
+          `LW:		ld_size <= word;
+          endcase
+          end
+				else
+            ls_flag <= 1'b0;
 				end
 		`Sx:	begin
-				next_state(STORE2);
-				advanceEX <= FALSE;
-				mfunct3 <= xfunct3;
-				ea <= b + imm;
-				xb <= a;
-				case(xfunct3)
-				`SB:	st_size <= byt;
-				`SH:	st_size <= half;
-				`SW:	st_size <= word;
-				endcase
+		    if (ls_flag==1'b0) begin
+		      ls_flag <= 1'b1;
+          next_state(STORE2);
+          mfunct3 <= xfunct3;
+          ea <= b + imm;
+          xb <= a;
+          case(xfunct3)
+          `SB:	st_size <= byt;
+          `SH:	st_size <= half;
+          `SW:	st_size <= word;
+          endcase
+          end
+        else
+          ls_flag <= 1'b0;
 				end
 		endcase
 	end
@@ -340,7 +388,6 @@ LOAD3:
 		`LB:begin
 			wb_nack();
 			next_state(RUN);
-			advanceEX <= TRUE;
 			case(ea[1:0])
 			2'd0:	wres <= {{24{dat_i[7]}},dat_i[7:0]};
 			2'd1:	wres <= {{24{dat_i[15]}},dat_i[15:8]};
@@ -352,7 +399,6 @@ LOAD3:
 			begin
 			wb_nack();
 			next_state(RUN);
-			advanceEX <= TRUE;
 			case(ea[1:0])
 			2'd0:	wres <= dat_i[7:0];
 			2'd1:	wres <= dat_i[15:8];
@@ -362,21 +408,21 @@ LOAD3:
 			end
 		`LH:
 			case(ea[1:0])
-			2'd0:	begin wres <= {{16{dat_i[15]}},dat_i[15:0]}; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
-			2'd1:	begin wres <= {{16{dat_i[23]}},dat_i[23:8]}; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
-			2'd2:	begin wres <= {{16{dat_i[31]}},dat_i[31:16]}; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
+			2'd0:	begin wres <= {{16{dat_i[15]}},dat_i[15:0]}; next_state(RUN); wb_nack(); end
+			2'd1:	begin wres <= {{16{dat_i[23]}},dat_i[23:8]}; next_state(RUN); wb_nack(); end
+			2'd2:	begin wres <= {{16{dat_i[31]}},dat_i[31:16]}; next_state(RUN); wb_nack(); end
 			2'd3:	begin wres[7:0] <= dat_i[31:24]; next_state(LOAD4); end
 			endcase
 		`LHU:
 			case(ea[1:0])
-			2'd0:	begin wres <= dat_i[15:0]; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
-			2'd1:	begin wres <= dat_i[23:8]; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
-			2'd2:	begin wres <= dat_i[31:16]; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
+			2'd0:	begin wres <= dat_i[15:0]; next_state(RUN); wb_nack(); end
+			2'd1:	begin wres <= dat_i[23:8]; next_state(RUN); wb_nack(); end
+			2'd2:	begin wres <= dat_i[31:16]; next_state(RUN); wb_nack(); end
 			2'd3:	begin wres[7:0] <= dat_i[31:24]; next_state(LOAD4); end
 			endcase
 		`LW:
 			case(ea[1:0])
-			2'd0:	begin wres <= dat_i; next_state(RUN); wb_nack(); advanceEX <= TRUE; end
+			2'd0:	begin wres <= dat_i; next_state(RUN); wb_nack(); $display("Loaded %h from %h", dat_i, adr_o); end
 			2'd1:	begin wres[23:0] <= dat_i[31:8]; next_state(LOAD4); end
 			2'd2:	begin wres[15:0] <= dat_i[31:16]; next_state(LOAD4); end
 			2'd3:	begin wres[7:0] <= dat_i[31:24]; next_state(LOAD4); end
@@ -392,7 +438,6 @@ LOAD5:
 	if (ack_i) begin
 		wb_nack();
 		next_state(RUN);
-		advanceEX <= TRUE;
 		case(mfunct3)
 		`LH:	wres[31:8] <= {{16{dat_i[7]}},dat_i[7:0]};
 		`LHU:	wres[31:8] <= dat_i[7:0];
@@ -420,6 +465,7 @@ STORE1:
 STORE2:
 	begin
 		wb_write1(st_size,ea,xb);
+		$display("Store to %h <= %h", ea, xb);
 		next_state(STORE3);
 	end
 STORE3:
@@ -428,7 +474,6 @@ STORE3:
 		if ((st_size==half && ea[1:0]==2'b11) || (st_size==word && ea[1:0]!=2'b00))
 			next_state(STORE4);
 		else begin
-			advanceEX <= TRUE;
 			next_state(RUN);
 		end
 	end
@@ -440,7 +485,6 @@ STORE4:
 STORE5:
 	if (ack_i) begin
 		wb_nack();
-		advanceEX <= TRUE;
 		next_state(RUN);
 	end
 
@@ -479,7 +523,7 @@ begin
 	default:	sel_o <= 4'b0000;
 	endcase
 end
-endtask;
+endtask
 
 task wb_read2;
 input [1:0] sz;
@@ -500,7 +544,7 @@ begin
 	default:	sel_o <= 4'b0000;
 	endcase
 end
-endtask;
+endtask
 
 task wb_write1;
 input [1:0] sz;

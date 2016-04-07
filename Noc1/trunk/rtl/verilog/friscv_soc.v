@@ -190,11 +190,23 @@ end
 assign ack = tc_ack|sseg_ack|leds_ack|uart_ack;
 assign dati = tcdato|{4{uart_dato}};
 
-friscv_node um1 (1, rst, clk, net14, net1);
-friscv_node um2 (2, rst, clk, net1, net2);
-friscv_node um3 (3, rst, clk, net2, net3);
-friscv_node um4 (4, rst, clk, net3, net4);
-friscv_node um5 (5, rst, clk, net4, net5);
-soci ugdi1 (14, rst, clk, net5, net14, cyc, stb, ack, we, sel, adr, dati, dato);
+wire berr;
+BusError #(.pTO(28'd50000)) ube0
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.cyc_i(cyc),
+	.ack_i(ack),
+	.stb_i(stb),
+	.adr_i(adr),
+	.err_o(berr)
+);
+
+friscv_node um1 (2, rst, clk, net14, net1);
+friscv_node um2 (4, rst, clk, net1, net2);
+friscv_node um3 (6, rst, clk, net2, net3);
+friscv_node um4 (8, rst, clk, net3, net4);
+friscv_node um5 (10, rst, clk, net4, net5);
+soci ugdi1 (1, rst, clk, net5, net14, cyc, stb, ack, berr, we, sel, adr, dati, dato);
 
 endmodule

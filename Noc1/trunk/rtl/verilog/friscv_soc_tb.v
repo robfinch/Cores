@@ -1,10 +1,14 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
+//
+//	frisc_soc_tb.v
+//  - test bench for system on a chip
+//		
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -18,29 +22,47 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
 //
 // ============================================================================
 //
-module DualBootrom(rst, clk, pc1, insn1, pc2, insn2);
-input rst;
-input clk;
-input [15:0] pc1;
-output [31:0] insn1;
-input [15:0] pc2;
-output [31:0] insn2;
+module friscv_soc_tb();
+reg rst;
+reg xclk;
+wire [15:0] led;
+wire [7:0] an;
+wire [7:0] ssg;
+wire [3:0] red, green, blue;
 
-reg [31:0] rommem [0:8191];
 initial begin
-`include "C:\Cores4\Thor\trunk\software\source\BootromV.ve0"
+  #0 xclk = 0;
+  #0 rst = 1;
+  #20 rst = 0;
+  #100 rst = 1;
 end
-reg [15:0] rpc1,rpc2;
 
-always @(negedge clk)
-  rpc1 <= pc1;
-always @(negedge clk)
-  rpc2 <= pc2;
+always #5 xclk = ~xclk;
 
-assign insn1 = rommem[rpc1[14:2]];
-assign insn2 = rommem[rpc2[14:2]];
-
+friscv_soc usoc1
+(
+  .cpu_resetn(rst),
+  .btnl(),
+  .btnr(),
+  .btnc(),
+  .btnd(),
+  .btnu(),
+  .xclk(xclk),
+  .led(led),
+  .sw(),
+  .an(an),
+  .ssg(ssg), 
+  .red(red),
+  .green(green),
+  .blue(blue),
+  .hSync(),
+  .vSync(),
+  .UartTx(),
+  .UartRx()
+);
+  
 endmodule
