@@ -24,6 +24,9 @@ thirty-two bits wide of which only twenty seven bits are implemented, allowing 5
 simultaneous characters to be displayed along with 512 background and foreground 
 colors. The use of internal dual ported memories means that the text 
 controller does not consume any memory bandwidth from the processor.</font></p>
+<p><font size="4">The address decodes for the text screen and attribute memory, 
+character bitmap memory and register set area are all parameterized to allow a 
+different address mapping.</font></p>
 <table border="1" cellpadding="0" cellspacing="0" width="91%" style="border-left: 1.5pt solid black; border-right: 1.5pt solid black; border-top: 1.5pt solid black; border-bottom: .75pt solid black; background-color: white" fpstyle="27,011111100">
   <tr>
     <td width="15%" style="font-weight: bold; color: white; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: 1.5pt solid black; background-color: gray">
@@ -81,11 +84,17 @@ controller does not consume any memory bandwidth from the processor.</font></p>
   </tr>
 </table>
 
+<p style="margin-bottom: 0">Data written to the unimplemented bits is ignored 
+and they will read back as zero.</p>
+
 <h2 style="margin-bottom: 0">Clocks</h2>
 
 <p style="margin-bottom: 0">The text video display controller uses two clocks, a 
 bus timing clock (clk_i) and a video timing clock (vclk), which can be 
 completely independent.</p>
+
+<p style="margin-bottom: 0">The core synchronizes the display relative to 
+externally supplied horizontal and vertical synchronization signals.</p>
 
 <h2><font face="Arial"><b>Register Description</b></font></h2>
 <table border="1" cellspacing="0" width="90%" style="border-left:1.5pt solid black; border-right:1.5pt solid black; border-top:1.5pt solid black; border-bottom:.75pt solid black; background-color:white" cellpadding="2" fpstyle="27,011111100" height="658">
@@ -102,12 +111,16 @@ completely independent.</p>
   <tr>
     <td width="11%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" height="17"><font face="Arial">0</font></td>
     <td width="20%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" align="right" height="17"><font face="Arial">
+    dddddddd
     -------- nnnnnnnn</font></td>
     <td width="9%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" align="center" height="17">
     <font face="Arial">RW</font></td>
     <td width="19%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" height="17">
     <font face="Arial">number of columns</font></td>
-    <td width="151%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" height="17"></td>
+    <td width="151%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" height="17">
+    <p style="margin-top: 0; margin-bottom: 0">nnn = number of columns</p>
+    <p style="margin-top: 0; margin-bottom: 0">ddd = character output delay 
+    (default 3).</td>
   </tr>
   <tr>
     <td width="11%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" height="17"><font face="Arial">1</font></td>
@@ -324,7 +337,74 @@ completely independent.</p>
     <td width="151%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white" height="17"></td>
   </tr>
 </table>
-<p style="margin-bottom: 0">&nbsp;</p>
+<h2 style="margin-bottom: 0"><b>Graphics</b></h2>
+<p style="margin-bottom: 0">The core may be used as a low resolution graphics 
+controller via the programmable character set. The characters can be programmed 
+for block graphics. For instance each character could be a two by two grid of 
+pixels. Sixteen different characters would be required to represent all the 
+different combinations. It is also possible to program characters to a three by 
+three grid of pixels using all 512 programmable characters to represent every 
+possible combination of on/off pixels. The default resolution is 84x31 or 
+(672x248 pixels). This would allow approximately a 224x82 graphics display.</p>
+<p style="margin-bottom: 0">Graphics and text may be intermixed by allocating 
+part of the programmable character set for a graphic arrray. For instance using 
+256 programmable characters a 128x128 bitmapped display can be created.</p>
+<h2 style="margin-bottom: 0"><b>Core Parameters</b></h2>
+<table border="1" cellpadding="0" cellspacing="0" width="90%" style="border-left: 1.5pt solid black; border-right: 1.5pt solid black; border-top: 1.5pt solid black; border-bottom: .75pt solid black; background-color: white" fpstyle="27,011111100">
+  <tr>
+    <td width="8%" style="font-weight: bold; color: white; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: 1.5pt solid black; background-color: gray">
+    Name</td>
+    <td width="13%" align="center" style="font-weight: bold; color: white; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: 1.5pt solid black; background-color: gray">
+    Default Value</td>
+    <td width="129%" style="font-weight: bold; color: white; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: 1.5pt solid black; background-color: gray">
+    Description</td>
+  </tr>
+  <tr>
+    <td width="8%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    COLS</td>
+    <td width="13%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    84</td>
+    <td width="129%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    default number of columns of text</td>
+  </tr>
+  <tr>
+    <td width="8%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    ROWS</td>
+    <td width="13%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    31</td>
+    <td width="129%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    default number of rows of text</td>
+  </tr>
+  <tr>
+    <td width="8%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    pTextAddress</td>
+    <td width="13%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    $FFD00000</td>
+    <td width="129%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    address of the shared text memory as addressed by the processor</td>
+  </tr>
+  <tr>
+    <td width="8%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    pBitmapAddress</td>
+    <td width="13%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    $FFD20000</td>
+    <td width="129%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    address of the character bitmaps as addressed by the processor</td>
+  </tr>
+  <tr>
+    <td width="8%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    pRegAddress</td>
+    <td width="13%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    $FFDA0000</td>
+    <td width="129%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">
+    address of the register set</td>
+  </tr>
+  <tr>
+    <td width="8%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">&nbsp;</td>
+    <td width="13%" align="center" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">&nbsp;</td>
+    <td width="129%" style="font-weight: normal; color: black; border-left-style: none; border-right-style: none; border-top-style: none; border-bottom: .75pt solid black; background-color: white">&nbsp;</td>
+  </tr>
+</table>
 <h2 style="margin-bottom: 0"><b><span lang="en-ca">Module Interface Description</span></b></h2>
 <p style="margin-bottom: 0"><span lang="en-ca"><font face="Arial" size="4">
 rtfTextController</font></span></p>
