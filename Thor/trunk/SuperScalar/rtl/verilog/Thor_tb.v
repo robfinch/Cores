@@ -3,6 +3,7 @@ module Thor_tb();
 parameter DBW=32;
 reg rst;
 reg clk;
+reg clk2x;
 reg nmi;
 reg p100Hz;
 reg p1000Hz;
@@ -36,6 +37,7 @@ wire LEDS_ack;
 initial begin
 	#0 rst = 1'b0;
 	#0 clk = 1'b0;
+	#0 clk2x = 1'b0;
 	#0 nmi = 1'b0;
 	#0 p100Hz = 1'b0;
 	#0 p1000Hz = 1'b1;
@@ -45,7 +47,8 @@ initial begin
 	#20 nmi = 1'b0;
 end
 
-always #5 clk = ~clk;
+always #10 clk = ~clk;
+always #5 clk2x = ~clk2x;
 always #10000 p100Hz = ~p100Hz;
 always #3000 p1000Hz = ~p1000Hz;
 
@@ -58,6 +61,17 @@ always @(posedge clk)
         if (sel[2]) rammem[adr[21:2]][23:16] <= cpu_dato[23:16];
         if (sel[3]) rammem[adr[21:2]][31:24] <= cpu_dato[31:24];
     end
+reg ramack1,ramack2,ramack3,ramack4,ramack5,ramack6,ram_ack;
+always @(posedge clk)
+begin
+  ramack1 <= ram_cs;
+  ramack2 <= ramack1 & ram_cs;
+  ramack3 <= ramack2 & ram_cs;
+  ramack4 <= ramack3 & ram_cs;
+  ramack5 <= ramack4 & ram_cs;
+  ramack6 <= ramack5 & ram_cs;
+  ram_ack <= ramack6 & ram_cs;
+end
 
 assign LEDS_ack = cyc && stb && adr[31:8]==32'hFFDC06;
 always @(posedge clk)
@@ -81,7 +95,7 @@ assign cpu_ack =
 	br_ack |
 	tc1_ack | tc2_ack |
 	kbd_ack | pic_ack |
-	ram_cs | uart_ack
+	ram_ack | uart_ack
 	;
 assign cpu_dati =
 	scr_dato |
@@ -253,6 +267,7 @@ Thor #(DBW) uthor1
 (
 	.rst_i(rst),
 	.clk_i(clk),
+	.clk2x_i(clk2x),
 	.clk_o(cpu_clk),
 	.nmi_i(nmio),
 	.irq_i(irq),

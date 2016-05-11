@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -50,9 +50,8 @@ reg so;
 reg [2:0] state;
 reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
-assign done = state==DONE;
+assign done = state==DONE || (state==IDLE && !ld); // State == DONE
 assign idle = state==IDLE;
-reg ce1;
 reg [WID*2-1:0] prod;
 //wire [64:0] p1 = aa[0] ? prod[127:64] + b : prod[127:64];
 //wire [65:0] p2 = aa[1] ? p1 + {b,1'b0} : p1;

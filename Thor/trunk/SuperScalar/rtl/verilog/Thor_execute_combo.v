@@ -125,10 +125,15 @@ always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc 
         alu0_misspc <= alu0_pc + alu0_insnsz;
     `RTS:
         alu0_misspc <= alu0_argA + alu0_fn[3:0];
-    `SYS,`INT:
+    `SYS,`INT,`RTF,`JSF:
         alu0_misspc <= {1'b1,alu0_argA + alu0_argI};
     default:
-        alu0_misspc <= (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI);
+//        alu0_misspc <= (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI);
+        
+        case(alu0_op[7:4])
+        `BR:  alu0_misspc <= (alu0_bt ? alu0_pc + alu0_insnsz : alu0_pc + alu0_insnsz + alu0_argI);
+        default:  alu0_misspc <= alu0_pc + alu0_insnsz;
+        endcase 
     endcase
 
 always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc or alu1_bt)
@@ -139,10 +144,15 @@ always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc 
         alu1_misspc <= alu1_pc + alu1_insnsz;
     `RTS:
         alu1_misspc <= alu1_argA + alu1_fn[3:0];
-    `SYS,`INT:
+    `SYS,`INT,`RTF,`JSF:
         alu1_misspc <= {1'b1,alu1_argA + alu1_argI};
     default:
-        alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
+//        alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
+        
+        case(alu1_op[7:4])
+        `BR:  alu1_misspc <= (alu1_bt ? alu1_pc + alu1_insnsz : alu1_pc + alu1_insnsz + alu1_argI);
+        default:  alu1_misspc <= alu1_pc + alu1_insnsz;
+        endcase 
     endcase
  
 always @(dram0_fn or dram0_misspc or dram_bus)
@@ -153,33 +163,99 @@ always @(dram0_fn or dram0_misspc or dram_bus)
     default:    jmpi_misspc <= 32'h00000FA0;    // unimplemented instruction vector 
     endcase
 
-assign  alu0_exc =  (fnIsKMOnly(alu0_op) && !km && alu0_cmt) ? `EXC_PRIV :
-                    (alu0_done && alu0_divByZero && alu0_cmt) ? `EXC_DBZ :
-                    ((alu0_op==`CHKI||(alu0_op==`RR && alu0_fn==`CHK)) && !alu0_out && alu0_cmt) ? `EXC_CHK : 
-                    `EXC_NONE;
+wire dbze0 = alu0_op==`DIVI || alu0_op==`MODI || (alu0_op==`RR && (alu0_fn==`DIV || alu0_fn==`MOD));
+wire dbze1 = alu1_op==`DIVI || alu1_op==`MODI || (alu1_op==`RR && (alu1_fn==`DIV || alu1_fn==`MOD));
 
-assign  alu1_exc =  (fnIsKMOnly(alu1_op) && !km && alu1_cmt) ? `EXC_PRIV :
-                    (alu1_done && alu1_divByZero && alu1_cmt) ? `EXC_DBZ :
-                    ((alu1_op==`CHKI ||(alu1_op==`RR && alu1_fn==`CHK)) && !alu1_out && alu1_cmt) ? `EXC_CHK : 
-                    `EXC_NONE;
+assign  alu0_exc =  (fnIsKMOnly(alu0_op) && !km && alu0_cmt) ? `EX_PRIV :
+                    (alu0_done && dbze0 && alu0_divByZero && alu0_cmt) ? `EX_DBZ :
+                    ((alu0_op==`CHKXI||(alu0_op==`RR && alu0_fn==`CHKX)) && !alu0_out && alu0_cmt) ? `EX_CHK : 
+                    (((alu0_op==`MTSPR && alu0_fn==0)|| alu0_op==`LDIS) && iqentry_tgt[alu0_id[2:0]][7:3]==5'h6) ? 
+                      {6'h20,iqentry_tgt[alu0_id[2:0]][2:0]} :
+                      `EX_NONE;
+
+assign  alu1_exc =  (fnIsKMOnly(alu1_op) && !km && alu1_cmt) ? `EX_PRIV :
+                    (alu1_done && dbze1 && alu1_divByZero && alu1_cmt) ? `EX_DBZ :
+                    ((alu1_op==`CHKXI ||(alu1_op==`RR && alu1_fn==`CHKX)) && !alu1_out && alu1_cmt) ? `EX_CHK : 
+                    (((alu1_op==`MTSPR && alu1_fn==0)|| alu1_op==`LDIS) && iqentry_tgt[alu1_id[2:0]][7:3]==5'h6) ?
+                      {6'h20,iqentry_tgt[alu1_id[2:0]][2:0]} :
+                      `EX_NONE;
 
 assign alu0_branchmiss = alu0_dataready && 
 		   ((fnIsBranch(alu0_op))  ? ((alu0_cmt && !alu0_bt) || (!alu0_cmt && alu0_bt))
 		  : !alu0_cmt ? (alu0_op==`LOOP)
 		  : (alu0_cmt && (alu0_op==`SYNC || alu0_op == `JSR || alu0_op == `JSRS || alu0_op == `JSRZ ||
-		     alu0_op==`SYS || alu0_op==`INT ||
+		     alu0_op==`SYS || alu0_op==`INT || alu0_op==`RTF || alu0_op==`JSF ||
 		  alu0_op==`RTS || alu0_op==`RTS2 || alu0_op==`RTD || alu0_op == `RTE || alu0_op==`RTI || ((alu0_op==`LOOP) && (alu0_argA == 64'd0)))));
 
 assign alu1_branchmiss = alu1_dataready && 
 		   ((fnIsBranch(alu1_op))  ? ((alu1_cmt && !alu1_bt) || (!alu1_cmt && alu1_bt))
 		  : !alu1_cmt ? (alu1_op==`LOOP)
 		  : (alu1_cmt && (alu1_op==`SYNC || alu1_op == `JSR || alu1_op == `JSRS || alu1_op == `JSRZ ||
-		     alu1_op==`SYS || alu1_op==`INT ||
+		     alu1_op==`SYS || alu1_op==`INT || alu1_op==`RTF || alu1_op==`JSF ||
 		  alu1_op==`RTS || alu1_op==`RTS2 || alu1_op==`RTD || alu1_op == `RTE || alu1_op==`RTI || ((alu1_op==`LOOP) && (alu1_argA == 64'd0)))));
 
-assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss | jmpi_miss),
-	misspc = (jmpi_miss ? jmpi_misspc : mem_stringmiss ? dram0_misspc : alu0_branchmiss ? alu0_misspc : alu1_misspc),
-	missid = (jmpi_miss ? dram0_id : mem_stringmiss ? dram0_id : alu0_branchmiss ? alu0_sourceid : alu1_sourceid);
+// Note this only applies when there are multiple flow control instructions
+// being processed at the same time. An earlier instruction will take effect
+// even though a later one might have branched already because it'll stomp on
+// following instructions. The original RISC-001.v code worked because a
+// branch in ALU#0 and ALU#1 was always guarenteed to be in that order everything
+// being single cycle.
+// How do you know that alu0 should take priority over alu #1 on a branch miss ?
+// A couple of cases. Suppose branch instructions are issued to both alu#0 and 
+// alu#1 in the same cycle -> then alu#0 should win because it's earlier in the
+// instruction stream. Now suppose a branch instruction was issued to ALU#1 the cycle
+// before issuing an instruction to ALU#0. ALU#1 will win automatically because
+// branches are single cycle and it'll be finished before the branch in ALU#0
+// (there's no conflict for the miss pc). but now suppose there's a multi-cycle
+// jump instruction (jmpi) in the dram queue. It could be delayed until the same
+// time as a branch in the ALU so means is required to determine which flow control
+// wins.
+// So let it be possible that the branch instruction in ALU#1 came before the one in
+// ALU#0.
+// - it should be whichever one has the earlier instruction. This can be told by an
+// instruction sequence number.
+// Examine the sequence number of the instruction to detemine which one is the earliest.
+// You can't just look at the queue id because the queue is a circular buffer.
+`define DRAM  0
+`define ALU0  1
+`define ALU1  2
+
+reg [1:0] sn_winner;
+always @*
+  if ((jmpi_miss | mem_stringmiss) && (iqentry_sn[dram0_id] < iqentry_sn[alu0_id] || !alu0_branchmiss)
+      && (iqentry_sn[dram0_id] < iqentry_sn[alu1_id] || !alu1_branchmiss))
+    sn_winner = `DRAM;
+  else if (alu0_branchmiss && (iqentry_sn[alu0_id] < iqentry_sn[dram0_id] || !(jmpi_miss|mem_stringmiss))
+    && (iqentry_sn[alu0_id] < iqentry_sn[alu1_id] || !alu1_branchmiss))
+    sn_winner = `ALU0;
+  else
+    sn_winner = `ALU1;
+
+assign  branchmiss = (alu0_branchmiss | alu1_branchmiss | mem_stringmiss | jmpi_miss);
+always @*
+case(sn_winner)
+`DRAM:
+  begin
+    misspc = jmpi_miss ? jmpi_misspc : dram0_misspc;
+    missid = dram0_id;
+    intmiss = 1'b0;
+    rtimiss = 1'b0;
+  end
+`ALU0:
+  begin
+    misspc = alu0_misspc;
+    missid = alu0_sourceid;
+    intmiss = alu0_op==`INT;
+    rtimiss = alu0_op==`RTI;
+  end
+default:  // or ALU1
+  begin
+    misspc = alu1_misspc;
+    missid = alu1_sourceid;
+    intmiss = alu1_op==`INT;
+    rtimiss = alu1_op==`RTI;
+  end
+endcase
 
 `ifdef FLOATING_POINT
  wire fp0_exception;
@@ -243,7 +319,7 @@ begin
 end
 
 assign fp0_cmt = fnPredicate(fp0_pred, fp0_cond);
-assign fp0_exc = fp0_exception ? 8'd242 : 8'd0;
+assign fp0_exc = fp0_exception ? `EX_FP : 9'd0;
 
 assign  fp0_v = fp0_dataready;
 assign  fp0_id = fp0_sourceid;

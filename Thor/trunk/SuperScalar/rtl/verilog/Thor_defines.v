@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,8 +26,9 @@
 `ifndef THOR_DEFINES
 `define THOR_DEFINES	1'b1
 
-`define SIMULATION      1'b1
-`define SEGMENTATION	1'b1
+//`define SIMULATION      1'b1
+//`define SEGMENTATION	1'b1
+//`define VECTOROPS     1'b1
 //`define SEGLIMITS       1'b1
 //`define STACKOPS        1'b1
 //`define UNLINKOP        1'b1
@@ -68,6 +69,8 @@
 `define MIN             6'h10
 `define MAX             6'h11
 `define MOD             6'h13
+`define CHKX            6'h14
+`define CHK             6'h15
 `define MODU            6'h17 
 `define R2          8'h41
 `define CPUID           4'h0
@@ -83,6 +86,7 @@
 `define PENOR           6'd5
 `define PANDC           6'd6
 `define PORC            6'd7
+`define CHKI        8'h45
 `define BITI        8'h46
 `define ADDUIS      8'h47
 `define ADDI		8'h48
@@ -106,6 +110,33 @@
 `define ANDI		8'h53
 `define ORI			8'h54
 `define EORI		8'h55
+`define VR      8'h56
+`define VEX       6'h0
+`define VEINS     6'h1
+`define VSHLV     6'h2
+`define VSHRV     6'h3
+`define VFLT2INT  6'h4
+`define VINT2FLT  6'h5
+`define VBITS2V   6'h6
+`define VRR     8'h57
+`define VADD      5'h00
+`define VSUB      5'h01
+`define VMUL      5'h02
+`define VDIV      5'h03
+`define VSCALE    5'h05
+`define VCMP      5'h06
+`define VAND      5'h08
+`define VOR       5'h09
+`define VEOR      5'h0A
+`define VADDL     5'h10
+`define VSUBL     5'h11
+`define VMULL     5'h12
+`define VDIVL     5'h13
+`define VSCALEL   5'h15
+`define VCMPL     5'h16
+`define VANDL     5'h18
+`define VORL      5'h19
+`define VEORL     5'h1A
 
 `define SHIFT		8'h58
 `define SHL				6'h00
@@ -120,11 +151,12 @@
 `define SHRUI			6'h13
 `define ROLI			6'h14
 `define RORI			6'h15
-`define MODI        8'h5B
-`define LEA         8'h5C
-`define MODUI       8'h5F
+`define VMAC    8'h5A
+`define MODI    8'h5B
+`define CHKXI   8'h5D
+`define MODUI   8'h5F
 
-`define LLA         8'h6A       // compute linear address
+`define LLA       8'h6A       // compute linear address
 `define _2ADDUI		8'h6B
 `define _4ADDUI		8'h6C
 `define _8ADDUI		8'h6D
@@ -181,11 +213,11 @@
 `define LW			8'h86
 `define LFS			8'h87
 `define LFD			8'h88
-`define LVWAR       8'h8B
-`define SWCR        8'h8C
+`define LVWAR   8'h8B
+`define SWCR    8'h8C
 `define JMPI		8'h8D
 `define LWS			8'h8E
-`define LCL		    8'h8F
+`define LCL		  8'h8F
 
 `define SB			8'h90
 `define SC			8'h91
@@ -255,20 +287,26 @@
 `define LHX			8'hB4
 `define LHUX		8'hB5
 `define LWX			8'hB6
-`define JMPIX       8'hB7
-`define LLAX        8'hB8
+`define JMPIX   8'hB7
+`define LLAX    8'hB8
+`define LV      8'hBD
+`define LVWS    8'hBE
+`define LVX     8'hBF
 
 `define SBX			8'hC0
 `define SCX			8'hC1
 `define SHX			8'hC2
 `define SWX			8'hC3
-`define STIX        8'hC6
-`define INC         8'hC7
-`define PUSH        8'hC8
-`define PEA         8'hC9
-`define POP         8'hCA
-`define LINK        8'hCB
-`define UNLINK      8'hCC
+`define STIX    8'hC6
+`define INC     8'hC7
+`define PUSH    8'hC8
+`define PEA     8'hC9
+`define POP     8'hCA
+`define LINK    8'hCB
+`define UNLINK  8'hCC
+`define SV      8'hCD
+`define SVWS    8'hCE
+`define SVX     8'hCF
 
 `define TLB			8'hF0
 `define TLB_NOP			4'd0
@@ -308,7 +346,9 @@
 `define MEMDB		8'hF9	// data barrier
 `define CLI			8'hFA
 `define SEI			8'hFB
-`define RTD         8'hFC
+`define RTD     8'hFC
+`define RTF     8'hFD
+`define JSF     8'hFE
 `define IMM			8'hFF
 
 `define PREDC	3:0
@@ -319,6 +359,7 @@
 `define INSTRUCTION_RA	21:16
 `define INSTRUCTION_RB	27:22
 `define INSTRUCTION_RC	33:28
+`define INSTRUCTION_RD  39:34
 
 `define XTBL	4'd12
 `define EPC		4'd13
@@ -328,12 +369,16 @@
 `define PREGS           6'h0x
 `define CREGS			6'h1x
 `define SREGS			6'h2x
-`define PREGS_ALL		6'h30
+`define USP             6'h31
 `define TICK			6'h32
 `define LCTR			6'h33
-`define ASID			6'h36
-`define SR				6'h37
-`define FPSCR           6'h38
+`define PREGS_ALL		6'd52
+`define ASID			6'd53
+`define VL        6'd54
+`define SR				6'h55
+`define FPSCR     6'd56
+`define ARG1      6'd58
+`define IVNO      6'd62
 `define CLK_THROTTLE    6'h3F
 		
 // exception types:
@@ -350,6 +395,20 @@
 `define EXC_FLT     4'd10       // floating point exception
 `define EXC_DBG     4'd11
 `define EXC_PRIV    4'd12
+`define EXC_CHK     4'd13
+`define EXC_SEGLD   4'd14
+
+`define EX_NONE     9'd000
+`define EX_CHK      9'd239
+`define EX_DBZ      9'd241
+`define EX_FP       9'd242
+`define EX_DBG      9'd243
+`define EX_SEGV     9'd244
+`define EX_PRIV     9'd245
+`define EX_TLBMISS  9'd248
+`define EX_DBE      9'd251
+`define EX_SEGLD    9'd256
+
 //
 // define PANIC types
 //

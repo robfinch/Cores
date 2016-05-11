@@ -53,7 +53,7 @@ reg so;
 reg [2:0] state;
 reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
-assign done = state==DONE;
+assign done = state==DONE||(state==IDLE && !ld);
 assign idle = state==IDLE;
 reg ce1;
 reg [WID-1:0] q;
@@ -77,6 +77,7 @@ if (rst) begin
 	qo <= {WID{1'b0}};
 	ro <= {WID{1'b0}};
 	cnt <= 8'd0;
+	dvByZr <= 1'b0;
 	state <= IDLE;
 end
 else

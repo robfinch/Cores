@@ -65,6 +65,7 @@ always @(posedge wclk)
 	end
 always @(posedge wclk)
 	if (invalidate) begin tvalid <= 256'd0; errmem <= 256'd0; end
+	// should set errmem to zero here
 	else if (invalidate_line) tvalid[invalidate_lineno[12:5]] <= 1'b0;
 	else if (wce & wr) begin tvalid[wa[12:5]] <= 1'b1; errmem[wa[12:5]] <= err_i; end
 always @(posedge rclk)
