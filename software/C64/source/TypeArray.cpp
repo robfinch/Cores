@@ -93,6 +93,18 @@ bool TypeArray::IsEqual(TypeArray *ta)
       return true;
     }
     if (types[nn] != ta->types[nn]) {
+      if (types[nn]==bt_long && ta->types[nn]==bt_ulong)
+        continue;
+      if (types[nn]==bt_ulong && ta->types[nn]==bt_long)
+        continue;
+      if (types[nn]==bt_short && ta->types[nn]==bt_ushort)
+        continue;
+      if (types[nn]==bt_ushort && ta->types[nn]==bt_short)
+        continue;
+      if (types[nn]==bt_char && ta->types[nn]==bt_uchar)
+        continue;
+      if (types[nn]==bt_uchar && ta->types[nn]==bt_char)
+        continue;
       dfs.printf("F2");
       return false;
     }

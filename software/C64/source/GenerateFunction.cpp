@@ -321,6 +321,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	int sp;
 	int isPascal = FALSE;
  
+  dfs.puts("<GenerateFunctionCall>");
  	//msk = SaveTempRegs();
  	if (node->p[0] < (ENODE *)0x0FLL) {
  	  error(ERR_NULLPOINTER);
@@ -338,6 +339,13 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
       node->p[0]->sp = new std::string("<null>");
     GenerateMonadic(op_jsr,0,make_offset(node->p[0]));
     sym = gsearch(*node->p[0]->sp);
+    dfs.puts((char*)(node->p[0]->sp->c_str()));
+    if (sym) {
+       dfs.puts("<found></found>");
+       }
+    else {
+       dfs.printf("<notfound>%s</notfound>",(char*)(node->p[0]->sp->c_str()));
+    }
 	}
   else
   {
@@ -366,6 +374,7 @@ xit1:
 		;
 	else
 		GenerateDiadic(op_mov,0,ap,makereg(1));
+  dfs.puts("</GenerateFunctionCall>");
     return ap;
 }
 

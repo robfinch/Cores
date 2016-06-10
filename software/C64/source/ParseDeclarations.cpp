@@ -365,8 +365,8 @@ int Declaration::ParseSpecifier(TABLE *table)
 
 			case kw_pascal:
 				isPascal = TRUE;
-				head = (TYP *)TYP::Make(bt_pascal,8);
-				tail = head;
+//				head = (TYP *)TYP::Make(bt_pascal,8);
+//				tail = head;
 				NextToken();
 				break;
 
@@ -767,6 +767,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   dfs.printf("****************************\n");
   dfs.printf("****************************\n");
   NextToken();
+  sp->IsPascal = isPascal;
   // An asterik before the function name indicates a function pointer but only
   // if it's bracketed properly, otherwise it could be the return value that's
   // a pointer.
@@ -1110,6 +1111,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
         sp = allocSYM();
 		  }
 		  SetType(sp);
+		  sp->IsPascal = isPascal;
 		  if (sp->parent==nullptr)
 			  sp->parent = parent->GetIndex();
 		  if (al==sc_member)
@@ -1271,6 +1273,7 @@ dfs.printf("E");
   				sp1->SetType(sp->tp);
   				sp1->storage_class = sp->storage_class;
           sp1->value.i = sp->value.i;
+          sp1->IsPascal = sp->IsPascal;
   				sp1->IsPrototype = sp->IsPrototype;
   				sp1->IsVirtual = sp->IsVirtual;
   				sp1->parent = sp->parent;
@@ -1416,7 +1419,9 @@ int declbegin(int st)
 
 void GlobalDeclaration::Parse()
 {
+  bool notVal = false;
   isFuncPtr = false;
+  isPascal = FALSE;
 	dfs.puts("<ParseGlobalDecl>\n");
   for(;;) {
     currentClass = nullptr;
@@ -1426,13 +1431,16 @@ void GlobalDeclaration::Parse()
 		worstAlignment = 0;
 		funcdecl = 0;
 		switch(lastst) {
+		case kw_pascal:
+		  NextToken();
+		  isPascal = TRUE;
+		  break;
 		case ellipsis:
 		case id:
         case kw_kernel:
 		case kw_interrupt:
         case kw_task:
 		case kw_cdecl:
-		case kw_pascal:
 		case kw_naked:
 		case kw_nocall:
 		case kw_oscall:
@@ -1481,6 +1489,11 @@ void GlobalDeclaration::Parse()
       NextToken();
       break;
  
+    case kw_not:
+      NextToken();
+      notVal = !notVal;
+      break;
+
     case kw_using:
       NextToken();
       if (lastst==id) {
@@ -1489,7 +1502,7 @@ void GlobalDeclaration::Parse()
           if (lastst==id) {
             if (strcmp(lastid, "_mangler")==0) {
               NextToken();
-              mangledNames = TRUE;
+              mangledNames = !notVal;
             }
           }
         }
@@ -1498,7 +1511,7 @@ void GlobalDeclaration::Parse()
           if (lastst==id) {
             if (strcmp(lastid,"_names")==0) {
               NextToken();
-              mangledNames = FALSE;
+              mangledNames = notVal;
             }
           }
         }
@@ -1591,25 +1604,31 @@ xit:
 int ParameterDeclaration::Parse(int fd)
 {
 	int ofd;
+  int opascal;
 
   isFuncPtr = false;
 	nparms = 0;
 	dfs.puts("<ParseParmDecls>\n");
 	worstAlignment = 0;
 	ofd = funcdecl;
+	opascal = isPascal;
+	isPascal = FALSE;
 	funcdecl = fd;
 	missingArgumentName = FALSE;
 	parsingParameterList++;
     for(;;) {
 dfs.printf("A(%d)",lastst);
 		switch(lastst) {
+		case kw_pascal:
+      NextToken();
+		  isPascal = TRUE;
+		  break;
 		case kw_cdecl:
     case kw_kernel:
 		case kw_interrupt:
 		case kw_naked:
 		case kw_nocall:
 		case kw_oscall:
-		case kw_pascal:
 		case kw_typedef:
 dfs.printf("B");
       error(ERR_ILLCLASS);
@@ -1658,6 +1677,7 @@ dfs.printf("E");
 xit:
 	parsingParameterList--;
 	funcdecl = ofd;
+	isPascal = opascal;
 	dfs.printf("</ParseParmDecls>\n");
 	return nparms;
 }

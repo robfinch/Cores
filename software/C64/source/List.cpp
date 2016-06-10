@@ -159,6 +159,7 @@ void list_var(SYM *sp, int i)
 			lfs.printf("%-10s =%06x ","<unnamed>",sp->value.u);
 		else
 			lfs.printf("%-10s =%06x ",(char *)sp->name->c_str(),sp->value.u);
+//			if (sp->IsPascal) ofs.printf("\tpascal ");
         if( sp->storage_class == sc_external)
                 ofs.printf("\textern\t%s\n",(char *)sp->name->c_str());
         else if( sp->storage_class == sc_global )

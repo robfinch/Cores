@@ -83,7 +83,7 @@ enum e_sym {
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
 		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
     kw_unique, kw_virtual, kw_this,
-		kw_new, kw_delete, kw_using, kw_namespace,
+		kw_new, kw_delete, kw_using, kw_namespace, kw_not,
         my_eof };
 
 enum e_sc {
@@ -298,11 +298,11 @@ public:
 
 class TypeArray
 {
-  void Add(int tp);
 public:
   int types[40];
   int length;
   TypeArray();
+  void Add(int tp);
   void Add(TYP *tp);
   bool IsEmpty();
   bool IsEqual(TypeArray *);

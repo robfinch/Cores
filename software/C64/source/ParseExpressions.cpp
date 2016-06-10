@@ -727,7 +727,11 @@ ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
        dfs.printf("%03d ", typ->typeno);
     else
        dfs.printf("%03d ", 0);
-    typearray->Add(typ);
+    // If a function pointer is passed, we want a pointer type
+    if (typ->typeno==bt_func || typ->typeno == bt_ifunc)
+       typearray->Add((int)bt_pointer);
+    else
+        typearray->Add(typ);
     ep1 = makenode(en_void,ep2,ep1);
     if(lastst != comma) {
       dfs.printf("lastst=%d", lastst);
@@ -1575,6 +1579,7 @@ j1:
  *                      ++unary
  *                      --unary
  *                      !cast_expression
+ //                     not cast_expression
  *                      ~cast_expression
  *                      -cast_expression
  *                      +cast_expression
@@ -1640,18 +1645,21 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		ep1->esize = tp->size;
 		ep1->etype = (e_bt)tp->type;
         break;
+
     case nott:
-        NextToken();
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return (TYP *)NULL;
-        }
-        ep1 = makenode(en_not,ep1,(ENODE *)NULL);
-        ep1->constflag = ep1->p[0]->constflag;
-		ep1->isUnsigned = ep1->p[0]->isUnsigned;
-		ep1->esize = tp->size;
-        break;
+    case kw_not:
+      NextToken();
+      tp = ParseCastExpression(&ep1);
+      if( tp == NULL ) {
+        error(ERR_IDEXPECT);
+        return (TYP *)NULL;
+      }
+      ep1 = makenode(en_not,ep1,(ENODE *)NULL);
+      ep1->constflag = ep1->p[0]->constflag;
+      ep1->isUnsigned = ep1->p[0]->isUnsigned;
+      ep1->esize = tp->size;
+      break;
+
     case cmpl:
         NextToken();
         tp = ParseCastExpression(&ep1);
