@@ -28,6 +28,7 @@
 
 //`define SIMULATION      1'b1
 //`define SEGMENTATION	1'b1
+`define SEGMODEL  2
 //`define VECTOROPS     1'b1
 //`define SEGLIMITS       1'b1
 //`define STACKOPS        1'b1
@@ -370,12 +371,12 @@
 `define CREGS			6'h1x
 `define SREGS			6'h2x
 `define USP             6'h31
-`define TICK			6'h32
-`define LCTR			6'h33
+`define TICK			6'd50
+`define LCTR			6'd51
 `define PREGS_ALL		6'd52
 `define ASID			6'd53
 `define VL        6'd54
-`define SR				6'h55
+`define SR				6'd55
 `define FPSCR     6'd56
 `define ARG1      6'd58
 `define IVNO      6'd62

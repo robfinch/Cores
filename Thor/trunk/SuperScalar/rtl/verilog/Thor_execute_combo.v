@@ -119,7 +119,9 @@ assign alu1_abort = !alu1_cmt;
 
 always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc or alu0_bt)
     case(alu0_op)
-    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI,`RTS2:
+    `RTS2,`RTD,`RTE,`RTI:
+        alu0_misspc <= alu0_argA;
+    `JSR,`JSRS,`JSRZ:
         alu0_misspc <= alu0_argA + alu0_argI;
     `LOOP,`SYNC:
         alu0_misspc <= alu0_pc + alu0_insnsz;
@@ -138,7 +140,9 @@ always @(alu0_op or alu0_fn or alu0_argA or alu0_argI or alu0_insnsz or alu0_pc 
 
 always @(alu1_op or alu1_fn or alu1_argA or alu1_argI or alu1_insnsz or alu1_pc or alu1_bt)
     case(alu1_op)
-    `JSR,`JSRS,`JSRZ,`RTD,`RTE,`RTI,`RTS2:
+    `RTS2,`RTD,`RTE,`RTI:
+        alu1_misspc <= alu1_argA;
+    `JSR,`JSRS,`JSRZ:
         alu1_misspc <= alu1_argA + alu1_argI;
     `LOOP,`SYNC:
         alu1_misspc <= alu1_pc + alu1_insnsz;

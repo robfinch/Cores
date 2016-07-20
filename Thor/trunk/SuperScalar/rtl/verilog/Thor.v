@@ -151,6 +151,8 @@ parameter DS_CAS_ACK = 4'd6;
 parameter DS_CACHE_READ = 4'd7;
 parameter DS_FINAL = 4'd8;
 
+parameter SEGMODEL = 2;
+
 input [63:0] corenum;
 input rst_i;
 input clk_i;
@@ -4210,10 +4212,11 @@ if (alu0_v) begin
   else begin
     if (iqentry_op[alu0_id[2:0]]!=`IMM)
         iqentry_done[ alu0_id[2:0] ] <= (!iqentry_mem[ alu0_id[2:0] ] || !alu0_cmt);
+    // if not committing alux_bus will equal alu_argT
     if (iqentry_jmpi[alu0_id[2:0]] && alu0_cmt)
-        iqentry_res [alu0_id[2:0]] <= alu0_pc + alu0_insnsz;
+      iqentry_res [alu0_id[2:0]] <= alu0_pc + alu0_insnsz;
     else
-        iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
+      iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
     iqentry_out	[ alu0_id[2:0] ] <= `FALSE;
     iqentry_cmt [ alu0_id[2:0] ] <= alu0_cmt;
     iqentry_agen[ alu0_id[2:0] ] <= `TRUE;
@@ -4241,10 +4244,10 @@ if (alu1_v) begin
 	else begin
     if (iqentry_op[alu1_id[2:0]]!=`IMM)
         iqentry_done[ alu1_id[2:0] ] <= (!iqentry_mem[ alu1_id[2:0] ] || !alu1_cmt);
-    if (iqentry_jmpi[alu1_id[2:0]] && alu1_cmt)
-         iqentry_res [alu1_id[2:0]] <= alu1_pc + alu1_insnsz;
+     if (iqentry_jmpi[alu1_id[2:0]] && alu1_cmt)
+        iqentry_res [alu1_id[2:0]] <= alu1_pc + alu1_insnsz;
      else
-         iqentry_res [ alu1_id[2:0] ] <= alu1_bus;
+        iqentry_res [ alu1_id[2:0] ] <= alu1_bus;
     iqentry_out	[ alu1_id[2:0] ] <= `FALSE;
     iqentry_cmt [ alu1_id[2:0] ] <= alu1_cmt;
     iqentry_agen[ alu1_id[2:0] ] <= `TRUE;
@@ -4780,7 +4783,7 @@ begin
 						: 64'hDEADDEADDEADDEAD;
 			alu0_argC	<=
 `ifdef SEGMENTATION
-			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? {sregs_base[iqentry_fn[n][5:3]],12'h000} :
+                     ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? ((SEGMODEL==2) ? 64'h00 : {sregs_base[iqentry_fn[n][5:3]],12'h000}):
 `else			               
 			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? 64'd0 :
 `endif			               
@@ -4818,7 +4821,8 @@ begin
 						: 64'hDEADDEADDEADDEAD;
 			alu1_argC	<=
 `ifdef SEGMENTATION
-			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? {sregs_base[iqentry_fn[n][5:3]],12'h000} :
+                     ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? ((SEGMODEL==2) ? 64'h00 : {sregs_base[iqentry_fn[n][5:3]],12'h000}):
+//			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? {sregs_base[iqentry_fn[n][5:3]],12'h000} :
 `else			               
 			               ((iqentry_mem[n] && !iqentry_cmpmv[n]) || iqentry_lla[n]) ? 64'd0 :
 `endif			                
@@ -5327,16 +5331,37 @@ for (n = 0; n < QENTRIES; n = n + 1)
                                 iqentry_a2[n];
                 dram0_datacmp <= iqentry_a2[n];
 `ifdef SEGMENTATION
-                if (iqentry_cmpmv[n])
+                if (iqentry_cmpmv[n]) begin
+                  if (SEGMODEL==2)
+                    dram0_addr <= iqentry_a1[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                  else
                     dram0_addr <= iqentry_a1[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
-                else
-                    dram0_addr <= iqentry_a1[n];
-                dram0_seg <= {sregs_base[iqentry_fn[n][5:3]],12'h000};
-                dram0_lmt <= sregs_base[iqentry_fn[n][5:3]] + sregs_lmt[iqentry_fn[n][5:3]];
+                end
+                else begin
+                    if (SEGMODEL==2)
+                      dram0_addr <= iqentry_a1[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                    else
+                      dram0_addr <= iqentry_a1[n];
+                end
+                if (SEGMODEL==2) begin
+                  dram0_seg <= {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                  dram0_lmt <= sregs_base[iqentry_a1[n][DBW-1:DBW-3]] + sregs_lmt[iqentry_a1[n][DBW-1:DBW-3]];
+                end
+                else begin
+                  dram0_seg <= {sregs_base[iqentry_fn[n][5:3]],12'h000};
+                  dram0_lmt <= sregs_base[iqentry_fn[n][5:3]] + sregs_lmt[iqentry_fn[n][5:3]];
+                end
 //                dram0_exc <= (iqentry_a1[n][ABW-1:12] >= sregs_lmt[iqentry_fn[n][5:3]]) ? `EXC_SEGV : `EXC_NONE;
-`ifdef STRINGOPS                
-                src_addr <= iqentry_a1[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
-                dst_addr <= iqentry_a2[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
+`ifdef STRINGOPS
+                // String address must be in the same segment
+                if (SEGMODEL==2) begin
+                  src_addr <= iqentry_a1[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                  dst_addr <= iqentry_a2[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                end
+                else begin                
+                  src_addr <= iqentry_a1[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
+                  dst_addr <= iqentry_a2[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
+                end
 `endif
 `else
                 dram0_addr <= iqentry_a1[n];
@@ -5918,7 +5943,11 @@ begin
     // value on the commit bus.
     casex(regno)
     6'b00xxxx:  fnSpr = {DBW/4{pregs[regno[3:0]]}};
-    6'b01xxxx:  fnSpr = cregs[regno[3:0]];
+    6'b01xxxx:  case(regno[3:0])
+                4'd0: fnSpr = 64'd0;
+                4'd15: fnSpr = epc;
+                default: fnSpr = cregs[regno[3:0]];
+                endcase
 `ifdef SEGMENTATION
     6'b100xxx:  fnSpr = sregs[{1'b0,regno[2:0]}];
     6'b101000:  fnSpr = sregs[{1'b1,regno[2:0]}];
@@ -6060,7 +6089,10 @@ begin
                    6'd33:  begin
                            dc_invalidate_line <= `TRUE;
 `ifdef SEGMENTATION                           
-                           dc_lineno <= iqentry_a1[head] + {sregs_base[iqentry_fn[head][5:3]],12'h000};
+                           if (SEGMODEL==2)
+                            dc_lineno <= iqentry_a1[head] + {sregs_base[iqentry_a1[head][DBW-1:DBW-3]],12'h000};
+                           else 
+                            dc_lineno <= iqentry_a1[head] + {sregs_base[iqentry_fn[head][5:3]],12'h000};
 `else
                            dc_lineno <= iqentry_a1[head];
 `endif                           
