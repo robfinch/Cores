@@ -229,9 +229,12 @@ int IdentifyKeyword()
 		if (p[1]=='r' && p[2]=='o' && p[3]=='l' && p[4]=='o' && p[5]=='g' && p[6]=='\0')
 			return lastst = kw_prolog;
 	}
-	if (p[0]=='n') {	// nocall,null,naked,new,namespace
+	if (p[0]=='n') {	// nocall,null,naked,new,namespace,not
 		if (p[1]=='e' && p[2]=='w' && p[3]=='\0') {
 			return lastst = kw_new;
+		}
+		if (p[1]=='o' && p[2]=='t' && p[3]=='\0') {
+			return lastst = kw_not;
 		}
 		if (p[1]=='a' && p[2]=='k' && p[3]=='e' && p[4]=='d' && p[5]=='\0')
 			return lastst = kw_naked;
