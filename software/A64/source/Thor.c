@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2015-2016  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,7 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "a64.h"
-#include "..\inc\futs.h"
+#include <futs.h>
 
 #define BCC(x)       (((x) << 12)|0x38)
 
@@ -51,6 +51,7 @@ static int64_t ca;
 extern int isInitializationData;
 extern int use_gp;
 extern int pass;
+extern char first_org;
 
 int predicate;
 int seg;
@@ -359,7 +360,7 @@ static int getRegisterX()
         if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 23;
+            return 31;
         }
         break;
     default:
@@ -461,6 +462,17 @@ static int Thor_getSprRegister()
          NextToken();
          return ival;
 
+    // arg1
+    case 'a': case 'A':
+         if ((inptr[1]=='r' || inptr[1]=='R') &&
+             (inptr[2]=='g' || inptr[2]=='G') &&
+             (inptr[3]=='1' || inptr[3]=='1') &&
+             !isIdentChar(inptr[4])) {
+             inptr += 4;
+             NextToken();
+             return 58;
+         }
+         break;
     // bear
     case 'b': case 'B':
          if ((inptr[1]=='e' || inptr[1]=='E') &&
@@ -472,7 +484,7 @@ static int Thor_getSprRegister()
              return 11;
          }
          break;
-    // cas clk cr0 cr3 cs
+    // cas clk cr0 cr3 cs CPL
     case 'c': case 'C':
          if ((inptr[1]=='a' || inptr[1]=='A') &&
              (inptr[2]=='s' || inptr[2]=='S') &&
@@ -518,6 +530,13 @@ static int Thor_getSprRegister()
             NextToken();
             return 0x27;
         }
+         if ((inptr[1]=='p' || inptr[1]=='P') &&
+             (inptr[2]=='l' || inptr[2]=='L') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 42;
+         }
          break;
 
     // dbad0 dbad1 dbctrl dpc dsp ds
@@ -681,7 +700,7 @@ static int Thor_getSprRegister()
         }
          break;
 
-    // gs
+    // gs GDT
     case 'g': case 'G':
         if ((inptr[1]=='s' || inptr[1]=='S') &&
             !isIdentChar(inptr[2])) {
@@ -698,6 +717,13 @@ static int Thor_getSprRegister()
             inptr += 2;
             NextToken();
             return 0x24;
+        }
+        if ((inptr[1]=='d' || inptr[1]=='D') &&
+           (inptr[2]=='t' || inptr[2]=='T') &&
+            !isIdentChar(inptr[3])) {
+            inptr += 3;
+            NextToken();
+            return 41;
         }
         break;
 
@@ -759,13 +785,20 @@ static int Thor_getSprRegister()
          break;
 
 
-    // LC
+    // LC LDT
     case 'l': case 'L':
          if ((inptr[1]=='c' || inptr[1]=='C') &&
              !isIdentChar(inptr[2])) {
              inptr += 2;
              NextToken();
              return 0x33;
+         }
+         if ((inptr[1]=='d' || inptr[1]=='D') &&
+            (inptr[2]=='t' || inptr[2]=='T') &&
+             !isIdentChar(inptr[3])) {
+             inptr += 3;
+             NextToken();
+             return 40;
          }
          break;
 
@@ -778,7 +811,7 @@ static int Thor_getSprRegister()
              !isIdentChar(inptr[5])) {
              inptr += 5;
              NextToken();
-             return 0x30;
+             return 52;
          }
          break;
 
@@ -793,7 +826,7 @@ static int Thor_getSprRegister()
              return 0x12;
          }
          break;
-    // ss_ll srand1 srand2 ss
+    // ss_ll srand1 srand2 ss segsw segbase seglmt segacr
     case 's': case 'S':
          if ((inptr[1]=='s' || inptr[1]=='S') &&
              (inptr[2]=='_' || inptr[2]=='_') &&
@@ -847,7 +880,47 @@ static int Thor_getSprRegister()
             inptr += 2;
             NextToken();
             return 0x26;
-        }
+         }
+         // segxxx
+         if ((inptr[1]=='e' || inptr[1]=='E') &&
+             (inptr[2]=='g' || inptr[2]=='G')) {
+             // segsw
+             if ((inptr[3]=='s' || inptr[3]=='S') &&
+                  (inptr[4]=='w' || inptr[4]=='W') &&
+                  !isIdentChar(inptr[5])) {
+               inptr += 5;
+               NextToken();
+               return 43;
+             }
+             // segbase
+             if ((inptr[3]=='b' || inptr[3]=='B') &&
+                  (inptr[4]=='a' || inptr[4]=='A') &&
+                  (inptr[5]=='s' || inptr[5]=='S') &&
+                  (inptr[6]=='e' || inptr[6]=='E') &&
+                  !isIdentChar(inptr[7])) {
+               inptr += 7;
+               NextToken();
+               return 44;
+             }
+             // seglmt
+             if ((inptr[3]=='l' || inptr[3]=='L') &&
+                  (inptr[4]=='m' || inptr[4]=='M') &&
+                  (inptr[5]=='t' || inptr[5]=='T') &&
+                  !isIdentChar(inptr[6])) {
+               inptr += 6;
+               NextToken();
+               return 45;
+             }
+             // segacr
+             if ((inptr[3]=='a' || inptr[3]=='A') &&
+                  (inptr[4]=='c' || inptr[4]=='C') &&
+                  (inptr[5]=='r' || inptr[5]=='R') &&
+                  !isIdentChar(inptr[6])) {
+               inptr += 6;
+               NextToken();
+               return 47;
+             }
+         }
          break;
 
     // tag tick 
@@ -1524,7 +1597,7 @@ static int emitImm15(int64_t v, int force)
      // ToDo: modify the fixup record type based on the number of prefixes emitted.
     if (bGen && lastsym && !use_gp && (lastsym->isExtern || lastsym->defined==0))
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | nn+1 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | nn+1 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
      return nn;
 }
@@ -1603,29 +1676,21 @@ static void process_chk(int oc)
 }
 
 // ----------------------------------------------------------------------------
-// cpuid r1,r2,#0
+// cpuid r1,r2
 // ----------------------------------------------------------------------------
 
 static void process_cpuid(int oc)
 {
      int Ra;
      int Rt;
-     int val;
 
      Rt = getRegisterX();
      need(',');
      Ra = getRegisterX();
-     need(',');
-     NextToken();
-     val = expr();
-     emit_insn(
-         (oc << 25) | 
-         ((val & 15) << 17) |
-         (Rt << 12) |
-         (Ra << 7) |
-         0x02
-     );
-     prevToken();
+     emit_first(predicate);
+     emit_insn(0x41);
+     emit_insn(Ra|(Rt << 6));
+     emit_insn(Rt >> 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -1640,6 +1705,7 @@ static void process_jsr(int oc)
     int Ca, Rb;
     int Ct;
 
+	Ca = 0;
     Ct = getCodeareg();
     if (Ct==-1) {
        Ct = oc==1 ? 0 : 1;
@@ -1652,7 +1718,7 @@ static void process_jsr(int oc)
        Ca = 15;
     }
     else {
-         NextToken();
+//         NextToken();
         // Simple [Rn] ?
         if (token=='(' || token=='[') {
            Ca = getCodeareg();
@@ -1663,7 +1729,7 @@ static void process_jsr(int oc)
             emit_insn((Ca<<4)|Ct);
             return;
         }
-        prevToken();
+//        prevToken();
     }
     NextToken();
     addr = expr();
@@ -1686,7 +1752,7 @@ static void process_jsr(int oc)
             if (bGen)
                 if (lastsym && !use_gp) {
                     if( lastsym->segment < 5)
-                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
                 }
             emit_first(predicate);
             emit_insn(0xA1);
@@ -1699,7 +1765,7 @@ static void process_jsr(int oc)
             if (bGen)
                 if (lastsym && !use_gp) {
                     if( lastsym->segment < 5)
-                        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                        sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
                 }
             emit_first(predicate);
             emit_insn(0xA2);
@@ -1713,7 +1779,7 @@ static void process_jsr(int oc)
         if (bGen)
             if (lastsym && !use_gp) {
                 if( lastsym->segment < 5)
-                    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
             }
         emit_first(predicate);
         emit_insn(0xA1);
@@ -1726,7 +1792,7 @@ static void process_jsr(int oc)
         if (bGen)
             if (lastsym && !use_gp) {
                 if( lastsym->segment < 5)
-                    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
             }
        emit_first(predicate);
        emit_insn(0xA1);
@@ -1739,7 +1805,7 @@ static void process_jsr(int oc)
         if (bGen)
             if (lastsym && !use_gp) {
                 if( lastsym->segment < 5)
-                    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT2 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
             }
         emit_first(predicate);
         emit_insn(0xA2);
@@ -1753,7 +1819,7 @@ static void process_jsr(int oc)
     if (bGen)
         if (lastsym && !use_gp) {
             if( lastsym->segment < 5)
-                sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
+                sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT1 | (lastsym->isExtern ? 128 : 0) | (code_bits << 8));
         }
     emit_first(predicate);
     emit_insn(0xA1);
@@ -1786,7 +1852,7 @@ static void process_riop(int oc)
     //    emitImm15(val,lastsym!=(SYM*)NULL);
         if (bGen && lastsym && !use_gp)
         if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+        sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
         emit_first(predicate);
         emit_insn(0x47);
@@ -1798,7 +1864,7 @@ static void process_riop(int oc)
 //    emitImm15(val,lastsym!=(SYM*)NULL);
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT6 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT6 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
@@ -1809,6 +1875,7 @@ static void process_riop(int oc)
 
 // ---------------------------------------------------------------------------
 // add r1,r2,r12
+// Translates mnemonics without the 'i' suffix that are really immediate.
 // ---------------------------------------------------------------------------
 
 static void process_rrop(int op, int func)
@@ -1840,6 +1907,9 @@ static void process_rrop(int op, int func)
             case 9: process_riop(0x6C); return;  // 4addui
             case 10: process_riop(0x6D); return;  // 8addui
             case 11: process_riop(0x6E); return;  // 16addui
+            case 0x13: process_riop(0x5B); return;	// modi
+            case 0x14:	process_riop(0x5D); return;	// chki
+            case 0x17:	process_riop(0x5F); return; // modui
             }
         else if (op==0x50)
             switch(func) {
@@ -2028,7 +2098,7 @@ static void process_br(int oc)
      // ToDo: modify the fixup record type based on the number of prefixes emitted.
     if (bGen && lastsym && (lastsym->isExtern || lastsym->defined==0))
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     ad = code_address + 3;
     disp = (val - ad);
@@ -2059,7 +2129,7 @@ static void process_loop(int oc)
      // ToDo: modify the fixup record type based on the number of prefixes emitted.
     if (bGen && lastsym && (lastsym->isExtern || lastsym->defined==0))
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     ad = code_address + 3;
     disp = (val - ad);
@@ -2260,7 +2330,7 @@ static void setSegAssoc(int Ra)
    if (seg < 0) {
        if (Ra==26 || Ra==27)
           seg = 6;
-       else if (Ra==31)
+       else if (Ra==31 || Ra==28)
           seg = 0;
        else
           seg = 1;
@@ -2290,7 +2360,7 @@ static void process_sws(int oc, int opt)
         else
             printf("%d: Expecting a special purpose source register.\r\n", lineno);
         ScanToEOL();
-        inptr -= 2;
+        //inptr -= 2;
         return;
     }
     if (Rb >= 0) {
@@ -2299,17 +2369,23 @@ static void process_sws(int oc, int opt)
        return;
     }
     Rs &= 0x3f;
-    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (segmodel==2)
+        emitImm12(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    else
+        emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Rs & 3) << 6));
     emit_insn((Rs >> 2)|((disp & 15) << 4));
-    emit_insn(((disp >> 4) & 31)|(seg << 5));
+    if (segmodel==2)
+        emit_insn(disp >> 4);
+    else
+        emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
 }
 
@@ -2355,17 +2431,23 @@ static void process_store(int oc)
        return;
     }
     Rb = 0;
-    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (segmodel==2)
+        emitImm12(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    else
+        emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Rs & 3) << 6));
     emit_insn((Rs >> 2)|((disp & 15) << 4));
-    emit_insn(((disp >> 4) & 31)|(seg << 5));
+    if (segmodel==2)
+        emit_insn(disp >> 4);
+    else
+        emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
 }
 
@@ -2389,7 +2471,7 @@ static void process_ldis(int oc)
     emitImm10(val,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
@@ -2419,7 +2501,7 @@ static void process_ldi(int oc)
 //    emitImm15(val,lastsym!=(SYM*)NULL);
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT4 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
@@ -2447,12 +2529,12 @@ static void process_lws(int oc, int opt)
     Spr = Thor_getSprRegister();
     if (Spr < 0) {
         if (opt)
-            printf("%d: Expecting a target register.\r\n", lineno);
+            printf("%d: Expecting a target register %.60s.\r\n", lineno,inptr-30);
         else
             printf("%d: Expecting a special purpose target register.\r\n", lineno);
 //        printf("Line:%.60s\r\n",p);
         ScanToEOL();
-        inptr-=2;
+        //inptr-=2;
         return;
     }
     Spr &= 0x3F;
@@ -2463,17 +2545,23 @@ static void process_lws(int oc, int opt)
           printf("%d: Address mode not supported.\r\n", lineno);
           return;
     }
-    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (segmodel==2)
+        emitImm12(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    else
+        emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Spr & 3) << 6));
     emit_insn((Spr >> 2)|((disp & 15) << 4));
-    emit_insn(((disp >> 4) & 31)|(seg << 5));
+    if (segmodel==2)
+        emit_insn(disp >> 4);
+    else
+        emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
 }
 
@@ -2493,6 +2581,7 @@ static void process_load(int oc)
     char *p;
     int64_t disp;
     int fixup = 5;
+    int fn;
 
     sc = 0;
     p = inptr;
@@ -2505,10 +2594,10 @@ static void process_load(int oc)
            process_lws(0x8E,1);
            return;
         }
-        printf("Expecting a target register.\r\n");
+        printf("Expecting a target register %.60s.\r\n", inptr-30);
 //        printf("Line:%.60s\r\n",p);
         ScanToEOL();
-        inptr-=2;
+        //inptr-=2;
         return;
     }
     expect(',');
@@ -2523,8 +2612,24 @@ static void process_load(int oc)
           return;
        }
 //       if (oc==0x9F) oc = 0x8F;  // LEA
+		if (oc==0x4c) {// LEA
+			oc = 0x40;
+			switch(sc) {
+			case 0: fn = 4; break;
+			case 1: fn = 8; break;
+			case 2: fn = 9; break;
+			case 3: fn = 10; break;
+			}
+			emit_first(predicate);
+			emit_insn(oc);
+			emit_insn(Rb|((Ra &3)<<6));
+	        emit_insn((Ra >> 2)|((Rt & 15) << 4));
+            emit_insn((Rt >> 4)|(fn << 2));
+	        ScanToEOL();
+    	    return;
+		}
        emit_first(predicate);
-       emit_insn(oc==0x6A ? 0xB8 : oc+0x30);
+       emit_insn((oc==0x6A || oc==0x4C) ? 0xB8 : oc+0x30);
        emit_insn(Ra|((Rb & 3)<<6));
        emit_insn((Rb >> 2)|((Rt & 15) << 4));
        emit_insn((Rt >> 4)|(sc << 2)|(seg << 5));
@@ -2532,17 +2637,23 @@ static void process_load(int oc)
        return;
     }
     Rb = 0;
-    emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    if (segmodel==2)
+       emitImm12(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
+    else
+        emitImm9(disp,lastsym!=(SYM*)NULL?(lastsym->segment==codeseg ? code_bits : data_bits):0);
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra | ((Rt & 3) << 6));
     emit_insn((Rt >> 2)|((disp & 15) << 4));
-    emit_insn(((disp >> 4) & 31)|(seg << 5));
+    if (segmodel==2)
+        emit_insn(disp >> 4);
+    else
+        emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
 }
 
@@ -2566,10 +2677,10 @@ static void process_jmpi(int fn)
     p = inptr;
     Rt = getCodeareg();
     if (Rt < 0) {
-        printf("%d: Expecting a target register.\r\n", lineno);
+        printf("%d: Expecting a target register %.60s.\r\n", lineno, inptr-30);
 //        printf("Line:%.60s\r\n",p);
         ScanToEOL();
-        inptr-=2;
+        //inptr-=2;
         return;
     }
     expect(',');
@@ -2593,7 +2704,7 @@ static void process_jmpi(int fn)
     if (Ra < 0) Ra = 0;
     if (bGen && lastsym && !use_gp)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT5 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     emit_first(predicate);
     emit_insn(0x8D);
@@ -2601,11 +2712,10 @@ static void process_jmpi(int fn)
     emit_insn((Rt >> 2)|((disp & 15) << 4)|(fn<<2));
     emit_insn(((disp >> 4) & 31)|(seg << 5));
     ScanToEOL();
-    inptr -= 2;
 }
 
 // ----------------------------------------------------------------------------
-// inc -8[bp],#1
+// inc.b -8[bp],#1
 // ----------------------------------------------------------------------------
 
 static void process_inc(int oc)
@@ -2619,7 +2729,24 @@ static void process_inc(int oc)
     char *p;
     int fixup = 5;
     int neg = 0;
+    int  sz;
 
+    sz = 'w';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("bchwBCHW",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal increment size.\r\n");
+    }
+    switch(sz) {
+    case 'b':  sz = 0; break;
+    case 'c':  sz = 1; break;
+    case 'h':  sz = 2; break;
+    case 'w':  sz = 3; break;
+    }
     NextToken();
     p = inptr;
     mem_operand(&disp, &Ra, &Rb, &sc, &sg);
@@ -2633,6 +2760,8 @@ static void process_inc(int oc)
         prevToken();
     }
     if (Rb >= 0) {
+       printf("%d: Indexed mode not supported.\r\n", lineno);
+/*
        if (disp < 0)
            printf("inc offset must be greater than zero.\r\n");
        if (disp > 255LL)
@@ -2646,19 +2775,26 @@ static void process_inc(int oc)
            (Ra << 7) |
            oc
        );
+*/
        return;
     }
-    if (oc==0x65) neg = 1;
-    oc = 0x64;        // INC
-    emitImm15(disp,lastsym!=(SYM*)NULL);
+    if (oc==0xC8) neg = 1;
+    oc = 0xC7;        // INC
+    if (segmodel==2)
+       emitImm12(disp,lastsym!=(SYM*)NULL);
+    else
+       emitImm9(disp,lastsym!=(SYM*)NULL);
     if (Ra < 0) Ra = 0;
     if (neg) incamt = -incamt;
-    emit_insn(
-        ((disp & 0x7FFF) << 17) |
-        ((incamt & 0x1F) << 12) |
-        (Ra << 7) |
-        oc
-    );
+    emit_first(predicate);
+    emit_insn(oc);
+    emit_insn(Ra | (sz<<6));
+    emit_insn(disp << 4);
+    if (segmodel==2)
+        emit_insn(disp >> 4);
+    else
+        emit_insn(((disp >> 4) & 0x1f)|(seg << 5));
+    emit_insn(incamt);
     ScanToEOL();
 }
        
@@ -2804,7 +2940,13 @@ static void process_mtspr(int oc)
     int spr;
     int Ra;
     int Rc;
-    
+    int fn = 0;
+
+    SkipSpaces();
+    if (*inptr=='!') {
+      fn = 0x10;
+      inptr++;
+    }
     Rc = getRegisterX();
     if (Rc==-1) {
         Rc = 0;
@@ -2822,7 +2964,7 @@ static void process_mtspr(int oc)
     emit_first(predicate);
     emit_insn(oc);
     emit_insn(Ra|((spr & 3)<<6));
-    emit_insn(spr >> 2);
+    emit_insn(fn | (spr >> 2));
     if (Ra >= 0)
     prevToken();
 }
@@ -2938,7 +3080,7 @@ static void process_cmp()
     //    emitImm15(val,lastsym!=(SYM*)NULL);
         if (bGen && lastsym && !use_gp)
         if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
+        sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | 4 | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emit_first(predicate);
        emit_insn(Pt|0x20);
@@ -2994,7 +3136,7 @@ static void process_biti(int oc)
     //    emitImm15(val,lastsym!=(SYM*)NULL);
         if (bGen && lastsym && !use_gp)
         if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | THOR_FUT6 | (lastsym->isExtern ? 128 : 0)|
+        sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | THOR_FUT6 | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emit_first(predicate);
        emit_insn(oc);
@@ -3231,8 +3373,14 @@ void Thor_processMaster()
     num_insns = 0;
     NextToken();
     while (token != tk_eof) {
-//        printf("\t%.*s\n", inptr-stptr-1, stptr);
-//        printf("%d token=%d\r\n", lineno, token);
+/*    
+    	if (pass > 1) {
+    
+        printf("\t%.*s\n", inptr-stptr-1, stptr);
+        printf("fo:%d %d token=%d\r\n", first_org, lineno, token);
+        if (first_org != 1) getchar();
+    }
+*/  
 j_processToken:
 //        printf("line: %d, token %d\r\n", lineno, token);
         switch(token) {
@@ -3274,6 +3422,8 @@ j_processToken:
             break;
         case tk_byte:  process_db(); break;
         case tk_cas: process_load(0x6C); break;
+        case tk_chk: process_rrop(0x40,0x14); break;
+        case tk_chki: process_riop(0x5D); break;
         case tk_cli: emit_first(predicate); emit_insn(0xFA); break;
         case tk_cmp: process_cmp(); break;
         case tk_cmpi: process_cmp(); break;
@@ -3300,7 +3450,7 @@ j_processToken:
             break;
         case tk_db:  process_db(); break;
         case tk_dc:  process_dc(); break;
-        case tk_dec: process_inc(0x65); break;
+        case tk_dec: process_inc(0xC8); break;
         case tk_dh:  process_dh(); break;
         case tk_div: process_rrop(0x40,0x03); break;
         case tk_divi: process_riop(0x4B); break;
@@ -3344,11 +3494,13 @@ j_processToken:
         case tk_fsub: process_fprrop(0x78,0x09); break;
 
         case tk_gran: process_gran(0x14); break;
-        case tk_inc: process_inc(0x64); break;
+        case tk_inc: process_inc(0xC7); break;
 //        case tk_int: process_brk(2); break;
   
         case tk_jci:  process_jmpi(1); break;
+        case tk_jhi:  process_jmpi(2); break;
         case tk_jmp: process_jsr(1); break;
+        case tk_jsf: emit_first(predicate); emit_insn(0xFE); break;
         case tk_jsr: process_jsr(0); break;
 
         case tk_lb:  process_load(0x80); break;
@@ -3358,7 +3510,8 @@ j_processToken:
         case tk_ldi: process_ldi(0x6F); break;
         case tk_ldis: process_ldis(0x9D); break;
 
-        case tk_lea: process_load(0x47); break;
+        case tk_lea: process_load(0x4C); break;
+//        case tk_leax: process_load(0x4C); break;
         case tk_lfd: process_load(0x51); break;
 
         case tk_lh:  process_load(0x84); break;
@@ -3374,11 +3527,12 @@ j_processToken:
         case tk_lvw: process_load(0xAF); break;
         case tk_lw:  process_load(0x86); break;
         case tk_lws: process_lws(0x8E,0); break;
-        case tk_lwar:  process_load(0x5C); break;
+        case tk_lvwar:  process_load(0x8B); break;
         case tk_memdb: process_sync(0xF9); break;
         case tk_memsb: process_sync(0xF8); break;
         case tk_message: process_message(); break;
         case tk_mfspr: process_mfspr(0xA8); break;
+        case tk_max: process_rrop(0x40,0x11); break;
         case tk_mod: process_rrop(0x40,0x13); break;
         case tk_modu: process_rrop(0x40,0x17); break;
         case tk_modi: process_riop(0x5B); break;
@@ -3443,6 +3597,7 @@ j_processToken:
         case tk_roli: process_shifti(0x58,0x14); break;
         case tk_rori: process_shifti(0x58,0x15); break;
         case tk_rte: emit_first(predicate); emit_insn(0xF3); break;
+        case tk_rtf: emit_first(predicate); emit_insn(0xFD); break;
         case tk_rti: emit_first(predicate); emit_insn(0xF4); break;
         case tk_rtl: process_rts(0x27); break;
         case tk_rts: process_rts(0x3B); break;
@@ -3455,6 +3610,8 @@ j_processToken:
         case tk_sh:  process_store(0x92); break;
         case tk_shl:  process_rrop(0x58,0x00); break;
         case tk_shli: process_shifti(0x58,0x10); break;
+        case tk_shr:  process_rrop(0x58,0x01); break;
+        case tk_shri: process_shifti(0x58,0x11); break;
         case tk_shru:  process_rrop(0x58,0x03); break;
         case tk_shrui: process_shifti(0x58,0x13); break;
 //        case tk_shx:  process_store(0xC2); break;
@@ -3478,7 +3635,7 @@ j_processToken:
         case tk_sync: process_sync(0xF7); break;
         case tk_sys: process_sys(0xA5); break;
         case tk_sw:  process_store(0x93); break;
-        case tk_swcr:  process_store(0x6E); break;
+        case tk_swcr:  process_store(0x8C); break;
 //        case tk_swx:  process_store(0xC3); break;
         case tk_tlbdis:  process_tlb(0xFFF6F0,6); break;
         case tk_tlben:   process_tlb(0xFFF5F0,5); break;

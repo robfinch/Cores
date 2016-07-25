@@ -45,6 +45,7 @@ int binary_out = 1;
 int verilog_out = 1;
 int elf_out = 1;
 int rel_out = 0;
+int coe_out = 0;
 int code_bits = 32;
 int data_bits = 32;
 int pass;
@@ -57,14 +58,15 @@ int bGen = 0;
 char fSeg = 0;
 int segment;
 int segprefix = -1;
+int segmodel = 0;
 int64_t code_address;
 int64_t data_address;
 int64_t bss_address;
 int64_t start_address;
 FILE *ofp, *vfp;
 int regno;
-char current_label[500];
 char first_org = 1;
+char current_label[500];
 
 char buf[10000];
 char masterFile[10000000];
@@ -102,6 +104,7 @@ extern void Table888mmu_processMaster();
 extern void Friscv_processMaster();
 extern void FISA64_processMaster();
 extern void Thor_processMaster();
+extern void SymbolInit();
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -113,7 +116,7 @@ void displayHelp()
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
      printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64 T=Thor\r\n");
-     printf("    -o[bvl] = suppress output file b=binary, v=verilog, l=listing\r\n");
+     printf("    -o[bvlc] = suppress output file b=binary, v=verilog, l=listing, c=coe\r\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +125,8 @@ void displayHelp()
 int processOptions(int argc, char **argv)
 {
     int nn, mm;
-    
+
+    segmodel = 0;    
     nn = 1;
     do {
         if (nn >= argc-1)
@@ -165,6 +169,9 @@ int processOptions(int argc, char **argv)
               }
               if (argv[nn][2]=='T') {
                  gCpu = 4;
+                 if (argv[nn][3]=='2') {
+                   segmodel = 2;
+                 }
               }
            }
            nn++;
@@ -208,8 +215,14 @@ void emitChar(int64_t cd)
 
 void emitHalf(int64_t cd)
 {
+  if (gCpu==5) {
+     emitByte(cd & 255LL);
+     emitByte((cd >> 8) & 255LL);
+  }
+  else {
      emitChar(cd & 65535LL);
      emitChar((cd >> 16) & 65535LL);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -217,8 +230,14 @@ void emitHalf(int64_t cd)
 
 void emitWord(int64_t cd)
 {
+  if (gCpu==5) {
+     emitHalf(cd & 0xFFFFLL);
+     emitHalf((cd >> 16) & 0xFFFFLL);
+  }
+  else {
      emitHalf(cd & 0xFFFFFFFFLL);
      emitHalf((cd >> 32) & 0xFFFFFFFFLL);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +307,7 @@ void process_public()
     else {
          if (isInitializationData) {
              ScanToEOL();
+             inptr++;
              return;
          }
         sym = find_symbol(lastid);
@@ -307,18 +327,23 @@ void process_public()
             }
         }
         else if (pass > 3) {
-             if (sym->value != ca) {
-                phasing_errors++;
-                sym->phaserr = '*';
-                 if (bGen) printf("%s=%06llx ca=%06llx\r\n", sym->name,  sym->value, code_address);
-             }
-             else
-                 sym->phaserr = ' ';
-            sym->value = ca;
+			if (!sym)
+			    printf("Symbol (%s) not defined.\r\n", lastid);
+			else {
+	            if (sym->value != ca) {
+	                phasing_errors++;
+	                sym->phaserr = '*';
+	                 if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+	            }
+	            else
+	                 sym->phaserr = ' ';
+	            sym->value = ca;
+        	}
         }
         strcpy(current_label, lastid);
     }
     ScanToEOL();
+    inptr++;
 }
 
 // ----------------------------------------------------------------------------
@@ -362,6 +387,7 @@ void process_extern()
         }
     }
     ScanToEOL();
+    inptr++;
 }
 
 // ----------------------------------------------------------------------------
@@ -689,7 +715,7 @@ void process_dw()
     // A pointer to an object might be emitted as a data word.
     if (bGen && lastsym)
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym-syms+1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
+    sections[segment+7].AddRel(sections[segment].index,((int64_t)(lastsym->ord+1) << 32) | 6 | (lastsym->isExtern ? 128 : 0));
             emitWord(val);
             prevToken();
         }
@@ -887,6 +913,7 @@ void processSegments()
 {
     char *pinptr;
     int segment;
+    int inComment;
     
     if (verbose)
        printf("Processing segments.\r\n");
@@ -902,9 +929,22 @@ void processSegments()
     memset(rodatabuf,0,sizeof(rodatabuf));
     memset(tlsbuf,0,sizeof(tlsbuf));
     memset(bssbuf,0,sizeof(bssbuf));
-    
+    inComment = 0;
+
     while (*inptr) {
         SkipSpaces();
+        if (*inptr==';')
+        	goto j1;
+        if (inptr[0]=='/' && inptr[1]=='/')
+        	goto j1;
+//        if (inptr[0]=='/' && inptr[1]=='*') {
+//        	inComment = 1;
+//        	goto j1;
+//		}
+//		if (inComment && inptr[0]=='*' && inptr[1]=='/')
+//			inComment = 0;
+//		if (inComment)
+//			goto j1;
         if (*inptr=='.') inptr++;
         if ((strnicmp(inptr,"code",4)==0) && !isIdentChar(inptr[4])) {
             segment = codeseg;
@@ -921,6 +961,7 @@ void processSegments()
         else if ((strnicmp(inptr,"bss",3)==0) && !isIdentChar(inptr[3])) {
             segment = bssseg;
         }
+j1:
         ScanToEOL();
         inptr++;
         switch(segment) {
@@ -1119,7 +1160,7 @@ void WriteELFFile(FILE *fp)
     int nn;
     Elf64Symbol elfsym;
     clsElf64File elf;
-    SYM *sym;
+    SYM *sym,*syms;
     int64_t start;
 
     sections[0].hdr.sh_name = nmTable.AddName(".text");
@@ -1227,9 +1268,11 @@ void WriteELFFile(FILE *fp)
     elfsym.st_value = 0;
     elfsym.st_size = 0;
     sections[6].Add(&elfsym);
-    for (nn = 0; nn < numsym; nn++) {
+    syms = (SYM*)HashInfo.table;
+    for (nn = 0; nn < HashInfo.size; nn++) {
         // Don't output the constants
 //        if (syms[nn].segment < 5) {
+          if (syms[nn].name) {
             elfsym.st_name = syms[nn].name;
             elfsym.st_info = syms[nn].scope == 'P' ? STB_GLOBAL << 4 : 0;
             elfsym.st_other = 0;
@@ -1238,6 +1281,7 @@ void WriteELFFile(FILE *fp)
             elfsym.st_size = 8;
             sections[6].Add(&elfsym);
 //        }
+        }
     }
 
     elf.hdr.e_ident[0] = 127;
@@ -1303,6 +1347,109 @@ int IHChecksum(char *ibuf, int payloadCount)
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
+int64_t getbit(int n, int bit)
+{
+	return (n >> bit) & 1;
+}
+
+// ----------------------------------------------------------------------------
+// Compute 38 bit ECC (32+6 bits EDC).
+// ----------------------------------------------------------------------------
+
+int checkbits(unsigned int i)
+{
+/*
+	unsigned int p0,p1,p2,p3,p4,p5,p;
+	unsigned int t1,t2,t3;
+
+	p0 = u ^ (u >> 2);
+	p0 = p0 ^ (p0 >> 4);
+	p0 = p0 ^ (p0 >> 8);
+	p0 = p0 ^ (p0 >> 16);
+	
+	t1 = u ^ (u >> 1);
+	p1 = t1 ^ (t1 >> 4);
+	p1 = p1 ^ (p1 >> 8);
+	p1 = p1 ^ (p1 >> 16);
+	
+	t2 = t1 ^ (t1 >> 2);
+	p2 = t2 ^ (t2 >> 8);
+	p2 = p2 ^ (p2 >> 16);
+	
+	t3 = t2 ^ (t2 >> 4);
+	p3 = t3 ^ (t3 >> 16);
+	
+	p4 = t3 ^ (t3 >> 8);
+
+	p5 = p4 ^ (p4 >> 16);
+
+	p = ((p0 >> 1)&1) | ((p1 >> 1)&2) | ((p2>>2)&4) | 
+		((p3 >> 5)&8) | ((p4 >> 12)&16) | ((p5 & 1)<<5);
+	
+	p = p ^ (-(u & 1)&0x3f);	// now account for u[0]
+	return p;
+*/
+
+	static int8_t g1[18] = {0,1,3,4,6,8,10,11,13,15,17,19,21,23,25,26,28,30};
+	static int8_t g2[18] = {0,2,3,5,6,9,10,12,13,16,17,20,21,24,25,27,28,31};
+	static int8_t g4[18] = {1,2,3,7,8,9,10,14,15,16,17,22,23,24,25,29,30,31};
+	static int8_t g8[15] = {4,5,6,7,8,9,10,18,19,20,21,22,23,24,25};
+	static int8_t g16[15] = {11,12,13,14,15,16,17,18,19,20,21,22,23,24,25};
+	static int8_t g32[6] = {26,27,28,29,30,31};
+	unsigned int p1,p2,p4,p8,p16,p32,pg,b,o;
+	int nn;
+	
+	p1 = 0;
+	for (nn = 0; nn < 18; nn++) {
+		b = getbit(i,g1[nn]);
+		p1 = p1 ^ b;				
+	}
+	p2 = 0;
+	for (nn = 0; nn < 18; nn++) {
+		b = getbit(i,g2[nn]);
+		p2 = p2 ^ b;
+	}
+	p4 = 0;
+	for (nn = 0; nn < 18; nn++) {
+		b = getbit(i,g4[nn]);
+		p4 = p4 ^ b;
+	}
+	p8 = 0;
+	for (nn = 0; nn < 15; nn++) {
+		b = getbit(i,g8[nn]);
+		p8 = p8 ^ b;
+	}
+	p16 = 0;
+	for (nn = 0; nn < 15; nn++) {
+		b = getbit(i,g16[nn]);
+		p16 = p16 ^ b;
+	}
+	p32 = 0;
+	for (nn = 0; nn < 6; nn++) {
+		b = getbit(i,g32[nn]);
+		p32 = p32 ^ b;
+	}
+/*
+	o = p1|(p2<<1)|(getbit(i,0)<<2)|(p4<<3);
+	o = o | (getbit(i,1)<<4)| (getbit(i,2)<<5)| (getbit(i,3)<<6)|(p8<<7);
+	for (nn = 4; nn <= 10; nn++)
+		o = o | (getbit(i,nn)<<(nn+4));
+	o = o | (p16 << 15);
+	for (nn = 11; nn <= 25; nn++)
+		o = o | (getbit(i,nn)<<(nn+5));
+	o = o | (p32 << 31);
+	for (nn = 26; nn <= 31; nn++)
+		o = o | (getbit(i,nn)<<(nn+6));
+*/
+	pg = checksum((int32_t*)&i)^p1^p2^p4^p8^p16^p32;
+//	o = i | (p32<<37)|(p16<<36)|(p8<<35)|(p4<<34)|(p2<<33)|(p1<<32) | (pg << 38);
+	o = (p32<<5)|(p16<<4)|(p8<<3)|(p4<<2)|(p2<<1)|p1|(pg<<6);
+	return o;	
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 int main(int argc, char *argv[])
 {
     int nn,qq,kk;
@@ -1310,15 +1457,19 @@ int main(int argc, char *argv[])
     static char hexbuf[500];
     char *p;
     int chksum;
-    unsigned long lsa;      // last start address
+    uint64_t lsa;      // last start address
     double bpi;
+    int64_t i64;
+    uint32_t u32;
 
+	sections[bssseg].storebyte = 0;
     ofp = stdout;
     nn = processOptions(argc, argv);
     if (nn > argc-1) {
        displayHelp();
        return 0;
     }
+    SymbolInit();
     strcpy(fname, argv[nn]);
     mfndx = 0;
     start_address = 0;
@@ -1341,14 +1492,17 @@ int main(int argc, char *argv[])
         }
     }
     if (verbose) printf("Pass 2 - group and reorder segments\r\n");
+    first_org = 1;
     processSegments();     // Pass 2, group and order segments
     
     pass = 3;
     if (verbose) printf("Pass 3 - get all symbols, set initial values.\r\n");
+    first_org = 1;
     processMaster();
     pass = 4;
     phasing_errors = 0;
     if (verbose) printf("Pass 4 - assemble code.\r\n");
+    first_org = 1;
     processMaster();
     if (verbose) printf("Pass 4: phase errors: %d\r\n", phasing_errors);
     pass = 5;
@@ -1356,6 +1510,7 @@ int main(int argc, char *argv[])
         phasing_errors = 0;
         num_bytes = 0;
         num_insns = 0;
+	    first_org = 1;
         processMaster();
         if (verbose) printf("Pass %d: phase errors: %d\r\n", pass, phasing_errors);
         pass++;
@@ -1443,6 +1598,31 @@ int main(int argc, char *argv[])
             printf("Can't create .elf file.\r\n");
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Output coe file
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if (coe_out) {
+	    if (verbose) printf("Generating COE file.\r\n");
+	    strcpy(fname, argv[nn]);
+	    p = strrchr(fname,'.');
+	    if (p) {
+	        *p = '\0';
+	    }
+	    strcat(fname, ".coe");
+	    vfp = fopen(fname, "w");
+	    if (vfp) {
+	    	fprintf(vfp, "memory_initialization_radix=16;\r\n");
+	    	fprintf(vfp, "memory_initialization_vector=\r\n");
+	        for (kk = 0;kk < binndx; kk+=4) {
+	        	u32 = (binfile[kk+3]<<24)|(binfile[kk+2]<<16)|(binfile[kk+1]<<8)|binfile[kk];
+	            i64 = ((uint64_t)checkbits(u32) << 32)|(uint64_t)u32;
+	            fprintf(vfp, "%010I64X,\r\n", i64);
+	        }
+	        fprintf(vfp,"000000;\r\n");
+	        fclose(vfp);
+		}
+	}
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Output Verilog memory declaration
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (verilog_out) {
@@ -1463,10 +1643,20 @@ int main(int argc, char *argv[])
                         binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
+            else if (gCpu==5) {
+                for (kk = 0;kk < binndx; kk+=4) {
+                	u32 = (binfile[kk+3]<<24)|(binfile[kk+2]<<16)|(binfile[kk+1]<<8)|binfile[kk];
+                    i64 = (uint64_t)u32;
+                    fprintf(vfp, "\trommem[%d] = 32'h%08I64X;\n", 
+                        (((start_address+kk)/4)%32768), i64);
+                }
+            }
             else {
                 for (kk = 0;kk < binndx; kk+=4) {
-                    fprintf(vfp, "\trommem0[%d] = 32'h%02X%02X%02X%02X;\n", 
-                        (((start_address+kk)/4)%8192), binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                	u32 = (binfile[kk+3]<<24)|(binfile[kk+2]<<16)|(binfile[kk+1]<<8)|binfile[kk];
+                    i64 = ((uint64_t)checkbits(u32) << 32)|(uint64_t)u32;
+                    fprintf(vfp, "\trommem0[%d] = 39'h%010I64X;\n", 
+                        (((start_address+kk)/4)%32768), i64);
                 }
             }
             fclose(vfp);
@@ -1492,7 +1682,7 @@ int main(int argc, char *argv[])
             else {
                 for (kk = 0;kk < binndx; kk+=4) {
                     fprintf(vfp, "\trommem1[%d] = 32'h%02X%02X%02X%02X;\n", 
-                        (((start_address+kk)/4)%8192), binfile[kk+3]^0xAA, binfile[kk+2]^0xAA, binfile[kk+1]^0xAA, binfile[kk]^0xAA);
+                        (((start_address+kk)/4)%32768), binfile[kk+3]^0xAA, binfile[kk+2]^0xAA, binfile[kk+1]^0xAA, binfile[kk]^0xAA);
                 }
             }
             fclose(vfp);
@@ -1518,7 +1708,7 @@ int main(int argc, char *argv[])
             else {
                 for (kk = 0;kk < binndx; kk+=4) {
                     fprintf(vfp, "\trommem2[%d] = 32'h%02X%02X%02X%02X;\n", 
-                        (((start_address+kk)/4)%8192), binfile[kk+3]^0x55, binfile[kk+2]^0x55, binfile[kk+1]^0x55, binfile[kk]^0x55);
+                        (((start_address+kk)/4)%32768), binfile[kk+3]^0x55, binfile[kk+2]^0x55, binfile[kk+1]^0x55, binfile[kk]^0x55);
                 }
             }
             fclose(vfp);
@@ -1567,7 +1757,7 @@ int main(int argc, char *argv[])
             if (gCpu==64) {
                 for (kk = 0; kk < binndx; kk+=4) {
                     if (lsa != (start_address + kk) >> 16) {
-                        sprintf(hexbuf, ":02000004%04X00\n", ((start_address+kk) >> 16));
+                        sprintf(hexbuf, ":02000004%04X00\n", (int)((start_address+kk) >> 16));
                         IHChecksum(hexbuf, 2);
                         fprintf(vfp, hexbuf);
                         lsa = (start_address+kk) >> 16;
@@ -1580,10 +1770,27 @@ int main(int argc, char *argv[])
                     fprintf(vfp, hexbuf);
                 }
             }
+            else if (gCpu==4) {
+                for (kk = 0; kk < binndx; kk+=8) {
+                    if (lsa != (start_address + kk) >> 16) {
+                        sprintf(hexbuf, ":02000004%04X00\n", (int)((start_address+kk) >> 16));
+                        IHChecksum(hexbuf, 2);
+                        fprintf(vfp, hexbuf);
+                        lsa = (start_address+kk) >> 16;
+                    }
+                    sprintf(hexbuf, ":%02X%04X00%02X%02X%02X%02X%02X%02X%02X%02X\n",
+                        8, (start_address + kk) & 0xFFFF,
+                        binfile[kk], binfile[kk+1], binfile[kk+2],binfile[kk+3],
+                        binfile[kk+4],binfile[kk+5],binfile[kk+6],binfile[kk+7]
+                    );
+                    IHChecksum(hexbuf, 8);
+                    fprintf(vfp, hexbuf);
+                }
+            }
             fprintf(vfp, ":00000001FF\n%c",26);        // end of file record
             fclose(vfp);
         }
         else
-            printf("Can't create .txt file.\r\n");
+            printf("Can't create .hex file.\r\n");
     return 0;
 }

@@ -31,6 +31,7 @@
 #include "elf.hpp"
 #include "NameTable.hpp"
 #include "symbol.h"
+#include "ht.h"
 
 enum {
     codeseg = 0,
@@ -51,6 +52,8 @@ extern char first_org;
 extern int bGen;
 extern char fSeg;
 extern int segment;
+extern int segmodel;
+extern SHashTbl HashInfo;
 
 extern int gCpu;
 extern char lastid[500];

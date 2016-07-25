@@ -86,6 +86,7 @@ enum {
      tk_byte,
      tk_cas,
      tk_chk, // 180
+     tk_chki,
      tk_cli,
      tk_cmp,
      tk_cmpi,
@@ -94,8 +95,8 @@ enum {
      tk_com,
      tk_cpuid,
      tk_cs,
-     tk_data,
-     tk_db,   // 190
+     tk_data, // 190
+     tk_db, 
      tk_dbnz,
      tk_dc,
      tk_dec,
@@ -104,8 +105,8 @@ enum {
      tk_divi,
      tk_divu,
      tk_divui,
-     tk_ds,
-     tk_dw,   // 200
+     tk_ds,   // 200
+     tk_dw,
      tk_end,
      tk_endpublic,
      tk_enor,
@@ -114,8 +115,8 @@ enum {
      tk_eq,
      tk_equ,
      tk_es,
-     tk_extern,
-     tk_fabs,  // 210
+     tk_extern, //210
+     tk_fabs,  
      tk_fadd,
      tk_fcmp,
      tk_fcx,
@@ -124,8 +125,8 @@ enum {
      tk_fex,
      tk_fill,
      tk_fix2flt,
-     tk_flt2fix,
-     tk_fmov,   // 220
+     tk_flt2fix,//220
+     tk_fmov,
      tk_fmul,
      tk_fs,
      tk_fnabs,
@@ -134,8 +135,8 @@ enum {
      tk_fstat,
      tk_fsub,
      tk_ftst,
-     tk_ftx,
-     tk_ge,  // 230
+     tk_ftx, // 230
+     tk_ge,
      tk_gran,
      tk_gs,
      tk_gt,
@@ -144,16 +145,18 @@ enum {
      tk_id,
      tk_inc,
      tk_int,
-     tk_ios,
-     tk_jal, // 240
+     tk_ios, // 240
+     tk_jal,
      tk_jci,
+     tk_jhi,
      tk_jgr,
      tk_jmp,
+     tk_jsf,
      tk_jsp,
      tk_jsr,
      tk_land,
      tk_lb,
-     tk_lbu,
+     tk_lbu, //250
      tk_lc,
      tk_lcu,
      tk_ldi,
@@ -163,7 +166,7 @@ enum {
      tk_lh,
      tk_lhu,
      tk_le,
-     tk_lla,
+     tk_lla, //260
      tk_llax,
      tk_lmr,
      tk_loop,
@@ -172,17 +175,20 @@ enum {
      tk_lsr,
      tk_lsri,
      tk_lt,
+     tk_lui,
      tk_lvb,
-     tk_lvc,
+     tk_lvc, //270
      tk_lvh,
      tk_lvw,
+     tk_lvwar,
      tk_lw,
      tk_lwar,
      tk_lws,
+     tk_max,
      tk_memdb,
      tk_memsb,
      tk_message,
-     tk_mffp,
+     tk_mffp, //280
      tk_mfspr,
      tk_mod,
      tk_modi,
@@ -192,7 +198,7 @@ enum {
      tk_mtfp,
      tk_mtspr,
      tk_mul,
-     tk_muli,
+     tk_muli, //290
      tk_mulu,
      tk_mului,
      tk_mv2fix,
@@ -202,7 +208,7 @@ enum {
      tk_neg,
      tk_nop,
      tk_nor,
-     tk_not,
+     tk_not, //300
      tk_or,
      tk_ori,
      tk_org,
@@ -211,7 +217,7 @@ enum {
      tk_pea,
      tk_penor,
      tk_peor,
-     tk_php,
+     tk_php, //310
      tk_plp,
      tk_pnand,
      tk_pnor,
@@ -221,7 +227,7 @@ enum {
      tk_pred,
      tk_public,
      tk_push,
-     tk_rconst,
+     tk_rconst,//320
      tk_rodata,
      tk_rol,
      tk_roli,
@@ -230,6 +236,7 @@ enum {
      tk_rshift,
      tk_rtd,
      tk_rte,
+     tk_rtf,
      tk_rti,
      tk_rtl,
      tk_rts,
@@ -250,8 +257,11 @@ enum {
      tk_sh,
      tk_shl,
      tk_shli,
+     tk_shr,
+     tk_shri,
      tk_shru,
      tk_shrui,
+     tk_slli,
      tk_slt,
      tk_slti,
      tk_sltu,
@@ -263,6 +273,8 @@ enum {
      tk_smr,
      tk_sne,
      tk_snei,
+     tk_srai,
+     tk_srli,
      tk_ss,
      tk_stcmp,
      tk_stmov,

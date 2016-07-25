@@ -36,7 +36,7 @@ int nsym;
 // id
 // const
 // (expr)
-//
+// >expr
 int64_t primary()
 {
     int64_t val;
@@ -78,11 +78,21 @@ int64_t primary()
          expect(')');
          break;
     default:
-         //printf("Syntax error.\r\n");
-         val = 0;
-         if (token != tk_eol)
-             NextToken();
-         break;
+      if (token=='>' && gCpu==5) {
+        val = expr();
+        val >>= 12;
+      }
+      else if (token=='<' && gCpu==5) {
+        val = expr();
+        val &= 0xFFF;
+      }
+      else {
+       //printf("Syntax error.\r\n");
+       val = 0;
+       if (token != tk_eol)
+           NextToken();
+      }
+      break;
     }    
     return val;
 }
