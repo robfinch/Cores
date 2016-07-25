@@ -132,6 +132,7 @@
 #define SCX		0xC1
 #define SHX		0xC2
 #define SWX		0xC3
+#define INC		0xC7
 #define TLB		0xF0
 #define RTSQ	0xF2
 #define RTE		0xF3

@@ -185,6 +185,7 @@ namespace emuThor {
 private: System::Windows::Forms::ToolStripMenuItem^  runToolStripMenuItem1;
 private: System::Windows::Forms::ToolStripMenuItem^  interruptsToolStripMenuItem;
 private: System::Windows::Forms::ToolStripMenuItem^  uartToolStripMenuItem;
+private: System::Windows::Forms::PictureBox^  pictureBox2;
 
 
 	private: System::ComponentModel::IContainer^  components;
@@ -230,9 +231,11 @@ private: System::Windows::Forms::ToolStripMenuItem^  uartToolStripMenuItem;
 			this->backgroundWorker1 = (gcnew System::ComponentModel::BackgroundWorker());
 			this->timer30 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->timer1024 = (gcnew System::Windows::Forms::Timer(this->components));
+			this->pictureBox2 = (gcnew System::Windows::Forms::PictureBox());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->BeginInit();
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox2))->BeginInit();
 			this->SuspendLayout();
 			// 
 			// menuStrip1
@@ -437,11 +440,22 @@ private: System::Windows::Forms::ToolStripMenuItem^  uartToolStripMenuItem;
 			// 
 			this->timer1024->Tick += gcnew System::EventHandler(this, &frmMain::timer1024_Tick);
 			// 
+			// pictureBox2
+			// 
+			this->pictureBox2->Anchor = static_cast<System::Windows::Forms::AnchorStyles>((System::Windows::Forms::AnchorStyles::Bottom | System::Windows::Forms::AnchorStyles::Left));
+			this->pictureBox2->Location = System::Drawing::Point(305, 631);
+			this->pictureBox2->Name = L"pictureBox2";
+			this->pictureBox2->Size = System::Drawing::Size(172, 38);
+			this->pictureBox2->TabIndex = 9;
+			this->pictureBox2->TabStop = false;
+			this->pictureBox2->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmMain::pictureBox2_Paint);
+			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(911, 681);
+			this->Controls->Add(this->pictureBox2);
 			this->Controls->Add(this->toolStrip1);
 			this->Controls->Add(this->lblLEDS);
 			this->Controls->Add(this->pictureBox1);
@@ -456,6 +470,7 @@ private: System::Windows::Forms::ToolStripMenuItem^  uartToolStripMenuItem;
 			this->toolStrip1->ResumeLayout(false);
 			this->toolStrip1->PerformLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->EndInit();
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox2))->EndInit();
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
@@ -472,11 +487,11 @@ private: System::Windows::Forms::ToolStripMenuItem^  uartToolStripMenuItem;
 				 }
 			 }
 	private: System::Void loadINTELHexFIleToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
-	  		 this->openFileDialog1->ShowDialog();
-			 LoadIntelHexFile();
-			 if (runFrm)
-				 runFrm->UpdateListBoxes();
-			 return;
+			 if (this->openFileDialog1->ShowDialog()  == System::Windows::Forms::DialogResult::OK ) {
+				 LoadIntelHexFile();
+				 if (runFrm)
+					 runFrm->UpdateListBoxes();
+				 }
 			 }
 
 private: int IHChecksumCheck(const char *buf) {
@@ -650,15 +665,18 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 					 this->timer1024->Enabled = true;
 				 }
 			 }
-			 if (interruptsFrm)
-				 interruptsFrm->UpdateForm();
-			 if (registersFrm)
-				 registersFrm->UpdateForm();
-			 if (PCHistoryFrm)
-				 PCHistoryFrm->UpdateForm();
-			 if (stackFrm)
-				 stackFrm->UpdateForm();
+			if (interruptsFrm)
+				interruptsFrm->UpdateForm();
+			 if (isRunning) {
+				 if (registersFrm)
+					 registersFrm->UpdateForm();
+				 if (PCHistoryFrm)
+					 PCHistoryFrm->UpdateForm();
+				 if (stackFrm)
+					 stackFrm->UpdateForm();
+			 }
 			 pictureBox1->Invalidate();
+			 pictureBox2->Invalidate();
 		 }
 private: System::Void toolStripButton7_Click(System::Object^  sender, System::EventArgs^  e) {
 			 if (breakpointsFrm)
@@ -776,6 +794,38 @@ private: System::Void uartToolStripMenuItem_Click(System::Object^  sender, Syste
 			 }
 			 else
 				 uartFrm->Activate();
+		 }
+private: System::Void pictureBox2_Paint(System::Object^  sender, System::Windows::Forms::PaintEventArgs^  e) {
+			Graphics^ gr = e->Graphics;
+			System::Drawing::Font^ myfont;
+			std::string str;
+			SolidBrush^ bkbr;
+			SolidBrush^ fgbr;
+			int xx,kk;
+			char buf[9];
+			for (xx = 0; xx < 8; xx++)
+			{
+				kk = (system1.sevenseg.dat >> (xx * 4)) & 0xF;
+				if (kk < 10)
+					buf[7-xx] = '0' + kk;
+				else
+					switch(kk) {
+					case 10:	buf[7-xx] = 'A'; break;
+					case 11:	buf[7-xx] = 'b'; break;
+					case 12:	buf[7-xx] = 'C'; break;
+					case 13:	buf[7-xx] = 'd'; break;
+					case 14:	buf[7-xx] = 'E'; break;
+					case 15:	buf[7-xx] = 'F'; break;
+					}
+			}
+			buf[8] = '\0';
+			myfont = gcnew System::Drawing::Font("Lucida Console", 24);
+			bkbr = gcnew System::Drawing::SolidBrush(System::Drawing::Color::Black);
+			gr->FillRectangle(bkbr,this->pictureBox2->ClientRectangle);
+			fgbr = gcnew System::Drawing::SolidBrush(Color::FromArgb(0xFF3F0000));
+			gr->DrawString(gcnew String("88888888"),myfont,fgbr,0,0);
+			fgbr = gcnew System::Drawing::SolidBrush(Color::FromArgb(0x7FFF0000));
+			gr->DrawString(gcnew String(buf),myfont,fgbr,2,2);
 		 }
 };
 }

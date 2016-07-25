@@ -19,7 +19,6 @@ namespace emuThor {
 	public ref class frmUart : public System::Windows::Forms::Form
 	{
 	public:
-		Mutex^ mut;
 		frmUart(Mutex^ m)
 		{
 			mut = m;
@@ -27,6 +26,7 @@ namespace emuThor {
 			//
 			//TODO: Add the constructor code here
 			//
+			do_send = false;
 		}
 
 	protected:
@@ -48,7 +48,7 @@ namespace emuThor {
 	private: System::Windows::Forms::Label^  label2;
 	private: System::Windows::Forms::TextBox^  txtFromUart;
 
-	private: System::Windows::Forms::Button^  button1;
+
 	private: System::Windows::Forms::Button^  button2;
 	private: System::Windows::Forms::Label^  label3;
 	private: System::Windows::Forms::TextBox^  txtCM0;
@@ -103,6 +103,7 @@ namespace emuThor {
 		/// Required designer variable.
 		/// </summary>
 	private: bool do_send;
+	private: Mutex^ mut;
 
 #pragma region Windows Form Designer generated code
 		/// <summary>
@@ -116,7 +117,6 @@ namespace emuThor {
 			this->label1 = (gcnew System::Windows::Forms::Label());
 			this->label2 = (gcnew System::Windows::Forms::Label());
 			this->txtFromUart = (gcnew System::Windows::Forms::TextBox());
-			this->button1 = (gcnew System::Windows::Forms::Button());
 			this->button2 = (gcnew System::Windows::Forms::Button());
 			this->label3 = (gcnew System::Windows::Forms::Label());
 			this->txtCM0 = (gcnew System::Windows::Forms::TextBox());
@@ -157,6 +157,7 @@ namespace emuThor {
 			this->txtToUart->Location = System::Drawing::Point(27, 67);
 			this->txtToUart->Multiline = true;
 			this->txtToUart->Name = L"txtToUart";
+			this->txtToUart->ScrollBars = System::Windows::Forms::ScrollBars::Both;
 			this->txtToUart->Size = System::Drawing::Size(318, 124);
 			this->txtToUart->TabIndex = 0;
 			// 
@@ -183,17 +184,10 @@ namespace emuThor {
 			this->txtFromUart->Location = System::Drawing::Point(27, 225);
 			this->txtFromUart->Multiline = true;
 			this->txtFromUart->Name = L"txtFromUart";
+			this->txtFromUart->ReadOnly = true;
+			this->txtFromUart->ScrollBars = System::Windows::Forms::ScrollBars::Both;
 			this->txtFromUart->Size = System::Drawing::Size(318, 124);
 			this->txtFromUart->TabIndex = 3;
-			// 
-			// button1
-			// 
-			this->button1->Location = System::Drawing::Point(470, 393);
-			this->button1->Name = L"button1";
-			this->button1->Size = System::Drawing::Size(75, 23);
-			this->button1->TabIndex = 4;
-			this->button1->Text = L"OK";
-			this->button1->UseVisualStyleBackColor = true;
 			// 
 			// button2
 			// 
@@ -530,7 +524,6 @@ namespace emuThor {
 			this->Controls->Add(this->txtCM0);
 			this->Controls->Add(this->label3);
 			this->Controls->Add(this->button2);
-			this->Controls->Add(this->button1);
 			this->Controls->Add(this->txtFromUart);
 			this->Controls->Add(this->label2);
 			this->Controls->Add(this->label1);
@@ -549,8 +542,8 @@ namespace emuThor {
 			 }
 private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
 			 int dat;
-			 char buf[5];
-
+			 char buf[20];
+		
 			 if (do_send && txtToUart->Text->Length > 0) {
  	 			 char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(txtToUart->Text->Substring(0,1));
 				 txtToUart->Text = txtToUart->Text->Substring(1);
@@ -567,6 +560,7 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 			 buf[1] = '\0';
 			 if (dat != 0xFF)
 				 txtFromUart->Text = txtFromUart->Text + gcnew String(buf);
+		
 			 mut->WaitOne();
 			 sprintf(buf, "%02X", system1.uart1.cm1);
 			 txtCM1->Text = gcnew String(buf);

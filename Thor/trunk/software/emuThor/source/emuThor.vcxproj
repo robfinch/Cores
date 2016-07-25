@@ -91,11 +91,11 @@
     <ClCompile Include="clsDisassem.cpp" />
     <ClCompile Include="clsKeyboard.cpp" />
     <ClCompile Include="clsPIC.cpp" />
+    <ClCompile Include="clsSevenSeg.cpp" />
     <ClCompile Include="clsSystem.cpp" />
     <ClCompile Include="clsThor.cpp" />
     <ClCompile Include="clsUart.cpp" />
     <ClCompile Include="emuThor.cpp" />
-    <ClCompile Include="fmrFreeRun.cpp" />
     <ClCompile Include="frmBreakpoints.cpp" />
     <ClCompile Include="frmInterrupts.cpp" />
     <ClCompile Include="frmKeyboard.cpp" />
@@ -120,12 +120,10 @@
     <ClInclude Include="clsDisassem.h" />
     <ClInclude Include="clsKeyboard.h" />
     <ClInclude Include="clsPIC.h" />
+    <ClInclude Include="clsSevenSeg.h" />
     <ClInclude Include="clsSystem.h" />
     <ClInclude Include="clsThor.h" />
     <ClInclude Include="clsUart.h" />
-    <ClInclude Include="fmrFreeRun.h">
-      <FileType>CppForm</FileType>
-    </ClInclude>
     <ClInclude Include="frmBreakpoints.h">
       <FileType>CppForm</FileType>
     </ClInclude>
@@ -163,9 +161,6 @@
   <ItemGroup>
     <EmbeddedResource Include="About.resx">
       <DependentUpon>About.h</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="fmrFreeRun.resx">
-      <DependentUpon>fmrFreeRun.h</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmBreakpoints.resx">
       <DependentUpon>frmBreakpoints.h</DependentUpon>

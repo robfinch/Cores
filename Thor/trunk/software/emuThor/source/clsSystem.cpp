@@ -44,6 +44,8 @@ void clsSystem::Reset()
 		__int64 rr;
 		unsigned __int8 sc;
 		unsigned __int8 st;
+		if ((ad & 0xE0000000)!=0xE0000000)
+			ad &= 0x1FFFFFFF;
 		if (sr) {
 			if (radr1 == 0)
 				radr1 = ad;
@@ -100,6 +102,8 @@ void clsSystem::Reset()
 		int nn;
 		int ret;
 
+		if ((ad & 0xE0000000)!=0xE0000000)
+			ad &= 0x1FFFFFFF;
 		if (cr && (ad!=radr1 && ad!=radr2)) {
 			ret = false;
 			goto j1;
@@ -210,6 +214,8 @@ void clsSystem::Reset()
 			}
 		}
 		else if ((ad & 0xFFFFFF00)==0xFFDC0600) {
+			if (dat==32)
+				printf("hi there");
 			leds = dat;
 		}
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
@@ -235,6 +241,9 @@ void clsSystem::Reset()
 		}
 		else if (uart1.IsSelected(ad)) {
 			uart1.Write(ad,dat,0x1);
+		}
+		else if (sevenseg.IsSelected(ad)) {
+			sevenseg.Write(ad,dat);
 		}
 		ret = true;
 j1:

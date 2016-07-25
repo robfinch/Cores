@@ -93,6 +93,9 @@ namespace emuThor {
 	private: System::Windows::Forms::ToolStripMenuItem^  stepIntoToolStripMenuItem;
 	private: System::Windows::Forms::Label^  lblMHz;
 	private: System::Windows::Forms::ToolTip^  toolTipMHz;
+	private: System::Windows::Forms::CheckBox^  checkBox1;
+	private: System::Windows::Forms::NumericUpDown^  nudSegmentModel;
+	private: System::Windows::Forms::Label^  label4;
 
 	private: System::ComponentModel::IContainer^  components;
 
@@ -140,10 +143,14 @@ namespace emuThor {
 			this->label3 = (gcnew System::Windows::Forms::Label());
 			this->lblMHz = (gcnew System::Windows::Forms::Label());
 			this->toolTipMHz = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->checkBox1 = (gcnew System::Windows::Forms::CheckBox());
+			this->nudSegmentModel = (gcnew System::Windows::Forms::NumericUpDown());
+			this->label4 = (gcnew System::Windows::Forms::Label());
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->trackBar1))->BeginInit();
 			this->toolStrip1->SuspendLayout();
 			this->menuStrip1->SuspendLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->numSteps))->BeginInit();
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->nudSegmentModel))->BeginInit();
 			this->SuspendLayout();
 			// 
 			// trackBar1
@@ -335,6 +342,7 @@ namespace emuThor {
 			this->numSteps->Name = L"numSteps";
 			this->numSteps->Size = System::Drawing::Size(120, 20);
 			this->numSteps->TabIndex = 17;
+			this->numSteps->ValueChanged += gcnew System::EventHandler(this, &frmRun::numSteps_ValueChanged);
 			// 
 			// label2
 			// 
@@ -393,11 +401,46 @@ namespace emuThor {
 			// 
 			this->toolTipMHz->IsBalloon = true;
 			// 
+			// checkBox1
+			// 
+			this->checkBox1->AutoSize = true;
+			this->checkBox1->Checked = true;
+			this->checkBox1->CheckState = System::Windows::Forms::CheckState::Checked;
+			this->checkBox1->Location = System::Drawing::Point(574, 301);
+			this->checkBox1->Name = L"checkBox1";
+			this->checkBox1->Size = System::Drawing::Size(57, 17);
+			this->checkBox1->TabIndex = 23;
+			this->checkBox1->Text = L"32 bits";
+			this->checkBox1->UseVisualStyleBackColor = true;
+			this->checkBox1->CheckedChanged += gcnew System::EventHandler(this, &frmRun::checkBox1_CheckedChanged);
+			// 
+			// nudSegmentModel
+			// 
+			this->nudSegmentModel->Location = System::Drawing::Point(679, 331);
+			this->nudSegmentModel->Maximum = System::Decimal(gcnew cli::array< System::Int32 >(4) {2, 0, 0, 0});
+			this->nudSegmentModel->Name = L"nudSegmentModel";
+			this->nudSegmentModel->Size = System::Drawing::Size(48, 20);
+			this->nudSegmentModel->TabIndex = 24;
+			this->nudSegmentModel->Value = System::Decimal(gcnew cli::array< System::Int32 >(4) {2, 0, 0, 0});
+			this->nudSegmentModel->ValueChanged += gcnew System::EventHandler(this, &frmRun::nudSegmentModel_ValueChanged);
+			// 
+			// label4
+			// 
+			this->label4->AutoSize = true;
+			this->label4->Location = System::Drawing::Point(570, 334);
+			this->label4->Name = L"label4";
+			this->label4->Size = System::Drawing::Size(104, 13);
+			this->label4->TabIndex = 25;
+			this->label4->Text = L"Segmentation Model";
+			// 
 			// frmRun
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(741, 501);
+			this->Controls->Add(this->label4);
+			this->Controls->Add(this->nudSegmentModel);
+			this->Controls->Add(this->checkBox1);
 			this->Controls->Add(this->lblMHz);
 			this->Controls->Add(this->label3);
 			this->Controls->Add(this->button2);
@@ -425,6 +468,7 @@ namespace emuThor {
 			this->menuStrip1->ResumeLayout(false);
 			this->menuStrip1->PerformLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->numSteps))->EndInit();
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->nudSegmentModel))->EndInit();
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
@@ -684,7 +728,7 @@ private: System::Void button2_Click(System::Object^  sender, System::EventArgs^ 
 			/* possibly display result status */
 		}
 		__int64 elapsed = stopwatch->ElapsedMilliseconds;
-		double MHz = ((double)(stopTick-startTick)/(double)elapsed)/(double)2000;	// Extra /2 for 2 insn per cycle
+		double MHz = ((double)(stopTick-startTick)/(double)elapsed)/(double)1000;
 		sprintf(buf,"%3.3g MHz", MHz);
 		this->lblMHz->Text = gcnew String(buf);
 		this->button2->Enabled = false;
@@ -714,6 +758,14 @@ private: System::Void stepIntoToolStripMenuItem_Click(System::Object^  sender, S
 private: System::Void frmRun_Load(System::Object^  sender, System::EventArgs^  e) {
 		 }
 private: System::Void lblMHz_MouseHover(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void checkBox1_CheckedChanged(System::Object^  sender, System::EventArgs^  e) {
+			 system1.cpu2._32bit = this->checkBox1->Checked;
+		 }
+private: System::Void nudSegmentModel_ValueChanged(System::Object^  sender, System::EventArgs^  e) {
+			 system1.cpu2.segmodel = (int)this->nudSegmentModel->Value;
+		 }
+private: System::Void numSteps_ValueChanged(System::Object^  sender, System::EventArgs^  e) {
 		 }
 };
 }

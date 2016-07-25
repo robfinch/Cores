@@ -23,6 +23,13 @@ std::string clsDisassem::SprName(int rg)
 		case 37:	sprintf(buf, "hs"); break;
 		case 38:	sprintf(buf, "ss"); break;
 		case 39:	sprintf(buf, "cs"); break;
+		case 40:	sprintf(buf, "LDT"); break;
+		case 41:	sprintf(buf, "GDT"); break;
+		case 43:	sprintf(buf, "segsw"); break;
+		case 44:	sprintf(buf, "segbase"); break;
+		case 45:	sprintf(buf, "seglmt"); break;
+		case 47:	sprintf(buf, "segacr"); break;
+/*
 		case 40:	sprintf(buf, "zs.lmt"); break;
 		case 41:	sprintf(buf, "ds.lmt"); break;
 		case 42:	sprintf(buf, "es.lmt"); break;
@@ -31,9 +38,10 @@ std::string clsDisassem::SprName(int rg)
 		case 45:	sprintf(buf, "hs.lmt"); break;
 		case 46:	sprintf(buf, "ss.lmt"); break;
 		case 47:	sprintf(buf, "cs.lmt"); break;
+*/
+		case 48:	sprintf(buf, "pregs"); break;
 		case 50:	sprintf(buf, "tick"); break;
 		case 51:	sprintf(buf, "lc"); break;
-		case 52:	sprintf(buf, "pregs"); break;
 		case 60:	sprintf(buf, "bir"); break;
 		default:	sprintf(buf, "???"); break;
 		}
@@ -201,7 +209,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 	int byt;
 	int opcode, func;
 	int n;
-	__int64 val, disp;
+	__int64 val, disp, amt;
 	int rv;
 	int b1, b2, b3, b4;
 	int Ra,Rb,Rc,Rt,Sprn,Sg,Sc,Sz;
@@ -573,6 +581,31 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		imm_prefix = false;
 		return std::string(buf);
 
+	case INC:
+		b1 = system1.ReadByte(ad);
+		ad++;
+		b2 = system1.ReadByte(ad);
+		ad++;
+		b3 = system1.ReadByte(ad);
+		ad++;
+		b4 = system1.ReadByte(ad);
+		ad++;
+		Ra = b1 & 0x3f;
+		Sz = (b1 >> 6) | ((b2 & 1) << 2);
+		disp = (b2 >> 4) | ((b3 & 31) << 4);
+		if (disp & 0x100)
+			disp |= 0xFFFFFFFFFFFFFF00LL;
+		Sg = b3 >> 5;
+		amt = b4;
+		if (amt & 0x80)
+			amt |= 0xFFFFFFFFFFFFFF00LL;
+		sprintf(&buf[strlen(buf)], " INC.%c %s:$%I64X[r%d],#%I64d",
+			Sz==0 ? 'B' : Sz==1 ? 'C' : Sz==2 ? 'H' : 'W',
+			SegName(Sg), disp, Ra, amt);
+		if (nb) *nb = 6;
+		imm_prefix = false;
+		return std::string(buf);
+
 	case JSR:
 		b1 = system1.ReadByte(ad);
 		ad++;
@@ -840,6 +873,7 @@ std::string clsDisassem::Disassem(int ad, int *nb)
 		Rt = ((b2 & 0xF) << 2) | (b1 >> 6);
 		switch(b2>>4) {
 		case MOV:	sprintf(&buf[strlen(buf)]," MOV r%d,r%d", Rt, Ra); break;
+		case NEG:	sprintf(&buf[strlen(buf)]," NEG r%d,r%d", Rt, Ra); break;
 		case SXB:	sprintf(&buf[strlen(buf)]," SXB r%d,r%d", Rt, Ra); break;
 		case SXC:	sprintf(&buf[strlen(buf)]," SXC r%d,r%d", Rt, Ra); break;
 		case SXH:	sprintf(&buf[strlen(buf)]," SXH r%d,r%d", Rt, Ra); break;

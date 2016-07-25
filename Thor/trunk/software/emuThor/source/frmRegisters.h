@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdlib>
 
 namespace emuThor {
 
@@ -9,6 +10,7 @@ namespace emuThor {
 	using namespace System::Data;
 	using namespace System::Drawing;
 	using namespace System::Threading;
+	using namespace System::Runtime::InteropServices;
 
 	/// <summary>
 	/// Summary for frmRegisters
@@ -26,8 +28,22 @@ namespace emuThor {
 			//
 			UpdateForm();
 			toolTipC1->SetToolTip(txtCa1, "C1 is typically used to store the subroutine return address.\n The short form RTS instruction expects this register to contain the return address.");
+			toolTipC8->SetToolTip(txtCa8, "C8 and C9 are typically used by the compiler as register variables to store\n"
+				"the address of a subroutine called multiple times.");
+			toolTipC8->SetToolTip(txtCa9, "C8 and C9 are typically used by the compiler as register variables to store\n"
+				"the address of a subroutine called multiple times.");
+			toolTipC10->SetToolTip(txtCa10, "C10 is used by the compiler to store the catch handler link address.\n");
 			toolTipC12->SetToolTip(txtCa12, "C12 specifies the location of the interrupt vector table in memory.");
 			toolTipC14->SetToolTip(txtCa14, "C14 contains the address at which an interrupt occurred.\nThe RTI instruction uses this register to determine where to return.");
+			toolTipR0->SetToolTip(txtR0, "R0 is always zero and can't be altered.");
+			toolTipR28->SetToolTip(txtR28, "ISP / R28 is the interrupt mode stack pointer. References to R27 will be re-routed to this register.\n"
+				"R28 is accessible only from a kernel mode.");
+			toolTipR29->SetToolTip(txtR29, "ESP / R29 is the exception mode stack pointer. References to R27 will be re-routed to this register.\n"
+				"R29 is accessible only from a kernel mode.");
+			toolTipR30->SetToolTip(txtR30, "DSP / R30 is the debug mode stack pointer. References to R27 will be re-routed to this register.\n"
+				"R30 is accessible only from a kernel mode.");
+			toolTipR31->SetToolTip(txtR31, "TR / R31 is used by the system as the Task Register which points to the active task control block.\n"
+				"R31 is accessible only from a kernel mode.");
 		}
 
 	protected:
@@ -404,6 +420,14 @@ private: System::Windows::Forms::Label^  label117;
 private: System::Windows::Forms::ToolTip^  toolTipC12;
 private: System::Windows::Forms::ToolTip^  toolTipC14;
 private: System::Windows::Forms::ToolTip^  toolTipC1;
+private: System::Windows::Forms::ToolTip^  toolTipR31;
+private: System::Windows::Forms::ToolTip^  toolTipR30;
+private: System::Windows::Forms::ToolTip^  toolTipR29;
+private: System::Windows::Forms::ToolTip^  toolTipR28;
+private: System::Windows::Forms::ToolTip^  toolTipC8;
+private: System::Windows::Forms::ToolTip^  toolTipR0;
+private: System::Windows::Forms::Button^  btnUpdate;
+private: System::Windows::Forms::ToolTip^  toolTipC10;
 private: System::ComponentModel::IContainer^  components;
 
 	protected: 
@@ -794,6 +818,14 @@ private: System::ComponentModel::IContainer^  components;
 			this->toolTipC12 = (gcnew System::Windows::Forms::ToolTip(this->components));
 			this->toolTipC14 = (gcnew System::Windows::Forms::ToolTip(this->components));
 			this->toolTipC1 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->toolTipR31 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->toolTipR30 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->toolTipR29 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->toolTipR28 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->toolTipC8 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->toolTipR0 = (gcnew System::Windows::Forms::ToolTip(this->components));
+			this->btnUpdate = (gcnew System::Windows::Forms::Button());
+			this->toolTipC10 = (gcnew System::Windows::Forms::ToolTip(this->components));
 			this->tabControl1->SuspendLayout();
 			this->tabPage1->SuspendLayout();
 			this->tabPage2->SuspendLayout();
@@ -806,7 +838,7 @@ private: System::ComponentModel::IContainer^  components;
 			this->tabControl1->Location = System::Drawing::Point(12, 42);
 			this->tabControl1->Name = L"tabControl1";
 			this->tabControl1->SelectedIndex = 0;
-			this->tabControl1->Size = System::Drawing::Size(743, 507);
+			this->tabControl1->Size = System::Drawing::Size(743, 483);
 			this->tabControl1->TabIndex = 0;
 			// 
 			// tabPage1
@@ -942,7 +974,7 @@ private: System::ComponentModel::IContainer^  components;
 			this->tabPage1->Location = System::Drawing::Point(4, 22);
 			this->tabPage1->Name = L"tabPage1";
 			this->tabPage1->Padding = System::Windows::Forms::Padding(3);
-			this->tabPage1->Size = System::Drawing::Size(735, 481);
+			this->tabPage1->Size = System::Drawing::Size(735, 457);
 			this->tabPage1->TabIndex = 0;
 			this->tabPage1->Text = L"General Registers";
 			this->tabPage1->UseVisualStyleBackColor = true;
@@ -2154,7 +2186,7 @@ private: System::ComponentModel::IContainer^  components;
 			this->tabPage2->Location = System::Drawing::Point(4, 22);
 			this->tabPage2->Name = L"tabPage2";
 			this->tabPage2->Padding = System::Windows::Forms::Padding(3);
-			this->tabPage2->Size = System::Drawing::Size(735, 481);
+			this->tabPage2->Size = System::Drawing::Size(735, 457);
 			this->tabPage2->TabIndex = 1;
 			this->tabPage2->Text = L"Other";
 			this->tabPage2->UseVisualStyleBackColor = true;
@@ -3120,14 +3152,61 @@ private: System::ComponentModel::IContainer^  components;
 			this->toolTipC1->IsBalloon = true;
 			this->toolTipC1->ShowAlways = true;
 			// 
+			// toolTipR31
+			// 
+			this->toolTipR31->IsBalloon = true;
+			this->toolTipR31->ShowAlways = true;
+			// 
+			// toolTipR30
+			// 
+			this->toolTipR30->IsBalloon = true;
+			this->toolTipR30->ShowAlways = true;
+			// 
+			// toolTipR29
+			// 
+			this->toolTipR29->IsBalloon = true;
+			this->toolTipR29->ShowAlways = true;
+			// 
+			// toolTipR28
+			// 
+			this->toolTipR28->IsBalloon = true;
+			this->toolTipR28->ShowAlways = true;
+			// 
+			// toolTipC8
+			// 
+			this->toolTipC8->IsBalloon = true;
+			this->toolTipC8->ShowAlways = true;
+			// 
+			// toolTipR0
+			// 
+			this->toolTipR0->IsBalloon = true;
+			this->toolTipR0->ShowAlways = true;
+			// 
+			// btnUpdate
+			// 
+			this->btnUpdate->Location = System::Drawing::Point(676, 531);
+			this->btnUpdate->Name = L"btnUpdate";
+			this->btnUpdate->Size = System::Drawing::Size(75, 23);
+			this->btnUpdate->TabIndex = 1;
+			this->btnUpdate->Text = L"Update";
+			this->btnUpdate->UseVisualStyleBackColor = true;
+			this->btnUpdate->Click += gcnew System::EventHandler(this, &frmRegisters::btnUpdate_Click);
+			// 
+			// toolTipC10
+			// 
+			this->toolTipC10->IsBalloon = true;
+			this->toolTipC10->ShowAlways = true;
+			// 
 			// frmRegisters
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(767, 561);
+			this->ClientSize = System::Drawing::Size(767, 571);
+			this->Controls->Add(this->btnUpdate);
 			this->Controls->Add(this->tabControl1);
 			this->Name = L"frmRegisters";
 			this->Text = L"Thor - Registers";
+			this->Activated += gcnew System::EventHandler(this, &frmRegisters::frmRegisters_Activated);
 			this->FormClosing += gcnew System::Windows::Forms::FormClosingEventHandler(this, &frmRegisters::frmRegisters_FormClosing);
 			this->tabControl1->ResumeLayout(false);
 			this->tabPage1->ResumeLayout(false);
@@ -3408,6 +3487,46 @@ private: System::Void textBox2_TextChanged(System::Object^  sender, System::Even
 private: System::Void frmRegisters_FormClosing(System::Object^  sender, System::Windows::Forms::FormClosingEventArgs^  e) {
 			 if (e->CloseReason==CloseReason::UserClosing)
 				 e->Cancel = true;
+		 }
+private: System::Void btnUpdate_Click(System::Object^  sender, System::EventArgs^  e) {
+			 char *str, *ep;
+
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR1->Text);
+			 system1.cpu2.gp[1] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR2->Text);
+			 system1.cpu2.gp[2] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR3->Text);
+			 system1.cpu2.gp[3] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR4->Text);
+			 system1.cpu2.gp[4] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR5->Text);
+			 system1.cpu2.gp[5] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR6->Text);
+			 system1.cpu2.gp[6] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR7->Text);
+			 system1.cpu2.gp[7] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR8->Text);
+			 system1.cpu2.gp[8] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR9->Text);
+			 system1.cpu2.gp[9] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR10->Text);
+			 system1.cpu2.gp[10] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR11->Text);
+			 system1.cpu2.gp[11] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR12->Text);
+			 system1.cpu2.gp[12] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR13->Text);
+			 system1.cpu2.gp[13] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR14->Text);
+			 system1.cpu2.gp[14] = _strtoui64(str, &ep, 16);
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtR15->Text);
+			 system1.cpu2.gp[15] = _strtoui64(str, &ep, 16);
+
+ 	 		 str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->txtLC->Text);
+			 system1.cpu2.lc = _strtoui64(str, &ep, 16);
+		 }
+private: System::Void frmRegisters_Activated(System::Object^  sender, System::EventArgs^  e) {
+			 UpdateForm();
 		 }
 };
 }

@@ -1,4 +1,6 @@
 #pragma once
+#include "stdafx.h"
+extern clsDisassem da;
 
 namespace emuThor {
 
@@ -72,14 +74,14 @@ namespace emuThor {
 			this->textBox1->Name = L"textBox1";
 			this->textBox1->ReadOnly = true;
 			this->textBox1->ScrollBars = System::Windows::Forms::ScrollBars::Vertical;
-			this->textBox1->Size = System::Drawing::Size(162, 379);
+			this->textBox1->Size = System::Drawing::Size(332, 379);
 			this->textBox1->TabIndex = 0;
 			// 
 			// frmPCHistory
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(193, 438);
+			this->ClientSize = System::Drawing::Size(362, 438);
 			this->Controls->Add(this->textBox1);
 			this->FormBorderStyle = System::Windows::Forms::FormBorderStyle::FixedSingle;
 			this->Name = L"frmPCHistory";
@@ -95,15 +97,21 @@ namespace emuThor {
 				 e->Cancel = true;
 			 }
 	public: void UpdateForm() {
-				char buf[4000];
-				int xx;
-				buf[0] = '\0';
-				for (xx = 0; xx < 40; xx++) {
+				char buf[20];
+				int nb;
+				String^ str = gcnew String("");
+				int xx,kk;
+				kk = system1.cpu2.pcsndx + 1;
+				for (xx = 0; xx < 1024; xx++,  kk++) {
+					kk &= 1023;
 					mut->WaitOne();
-					sprintf(&buf[strlen(buf)], "%08I64X\r\n", system1.cpu2.pcs[xx]);
+					sprintf(buf, "%08I64X  ", system1.cpu2.pcs[kk]);
 					mut->ReleaseMutex();
+					str += gcnew String(buf);
+					str += gcnew String(da.Disassem(system1.cpu2.pcs[kk],&nb).c_str());
+					str += gcnew String("\r\n");
 				}
-				textBox1->Text = gcnew String(buf);
+				textBox1->Text = str;
 			}
 	};
 }

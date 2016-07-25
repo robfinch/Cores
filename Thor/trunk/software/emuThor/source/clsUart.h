@@ -5,17 +5,17 @@
 class clsUart : public clsDevice
 {
 public:
-	__int8 tb;
-	__int8 rb;
-	__int8 is;
-	__int8 ier;
-	__int8 ls;
-	__int8 ms;
-	__int8 mc;
-	__int8 ctrl;
-	__int8 cm0,cm1,cm2,cm3;
-	__int8 ff;
-	__int8 fc;
+	unsigned __int8 tb;
+	unsigned __int8 rb;
+	unsigned __int8 is;
+	unsigned __int8 ier;
+	unsigned __int8 ls;
+	unsigned __int8 ms;
+	unsigned __int8 mc;
+	unsigned __int8 ctrl;
+	unsigned __int8 cm0,cm1,cm2,cm3;
+	unsigned __int8 ff;
+	unsigned __int8 fc;
 	bool irq;
 public:
 	void Reset();

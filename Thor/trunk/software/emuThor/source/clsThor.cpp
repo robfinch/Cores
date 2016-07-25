@@ -14,6 +14,8 @@ void clsThor::Reset()
 	StatusDBG = false;
 	StatusEXL = 0;
 	string_pc = 0;
+	pcsndx = 0;
+	seglex = false;
 }
 
 bool clsThor::IsKM()
@@ -58,7 +60,7 @@ void clsThor::SetGP(int rg, __int64 val)
 	if (rg < 0 || rg > 63)
 		return;
 	switch(rg) {
-	case 0:	;	// ignore update to r0.
+	case 0:	gp[0] = 0; break;	// ignore update to r0.
 	case 27:
 		rg = rg + GetMode();
 		// Fall through
@@ -68,27 +70,66 @@ void clsThor::SetGP(int rg, __int64 val)
 }
 
 // Compute d[Rn] address info
-void clsThor::dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *disp)
+// la = linear address
+void clsThor::dRn(int b1, int b2, int b3, int *Ra, int *Sg, __int64 *disp, unsigned __int64 *la)
 {
-	if (Ra) *Ra = b1 & 0x3f;
-	if (Sg) *Sg = (b3 >> 5) & 7;
-	if (disp) *disp = ((b2 >> 4) & 0xF) | ((b3 & 0x1f) << 4);
-	if (*disp & 0x100)
-		*disp |= 0xFFFFFFFFFFFFFE00LL;
-	if (imm_prefix) {
-		*disp &= 0xFF;
-		*disp |= imm;
+	int Ra1;
+	int Sg1;
+	__int64 disp1;
+	__int64 va;			// virtual address
+	__int64 la1;		// linear address
+
+	Ra1 = b1 & 0x3f;
+	if (segmodel==2) {
+		disp1 = ((b2 >> 4) & 0xF) | ((b3 & 0xff) << 4);
+		if (disp1 & 0x800)
+			disp1 |= 0xFFFFFFFFFFFFF800LL;
 	}
+	else {
+		disp1 = ((b2 >> 4) & 0xF) | ((b3 & 0x1f) << 4);
+		if (disp1 & 0x100)
+			disp1 |= 0xFFFFFFFFFFFFFE00LL;
+	}
+	if (imm_prefix) {
+		disp1 &= 0xFF;
+		disp1 |= imm;
+	}
+	va = disp1 + GetGP(Ra1);
+	if (segmodel==2) {
+		Sg1 = _32bit ? (va >> 29) & 7 : va >> 61;
+	}
+	else
+		Sg1 = (b3 >> 5) & 7;
+	la1 = va + seg_base[Sg1];
+	if (Ra) *Ra = Ra1;
+	if (Sg) *Sg = Sg1;
+	if (disp) *disp = disp1;
+	if (la) *la = (unsigned __int64)la1;
 }
 
 // Compute [Rn+Rn*Sc] address info
-void clsThor::ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, int *Sg, int *Sc)
+void clsThor::ndx(int b1, int b2, int b3, int *Ra, int *Rb, int *Rt, int *Sg, int *Sc, unsigned __int64 *la)
 {
-	if (Ra) *Ra = b1 & 0x3f;
-	if (Rb) *Rb = (b1 >> 6) | ((b2 & 0xf) << 2);
+	int Ra1, Rb1;
+	int Sc1;
+	int Sg1;
+	__int64 va, la1;
+
+	Ra1 = b1 & 0x3f;
+	Rb1 = (b1 >> 6) | ((b2 & 0xf) << 2);
+	Sc1 = 1 << ((b3 >> 2) & 3);
+	va = GetGP(Rb1) * Sc1 + GetGP(Ra1);
+	if (segmodel==2)
+		Sg1 = _32bit ? (va >> 29) & 7 : va >> 61;
+	else
+		Sg1 = (b3 >> 5) & 7;
+	la1 = va + seg_base[Sg1];
+	if (Ra) *Ra = Ra1;
+	if (Rb) *Rb = Rb1;
 	if (Rt) *Rt = ((b2 & 0xF0) >> 4) | (( b3 & 3) << 4);
-	if (Sg) *Sg = (b3 >> 5) & 7;
-	if (Sc) *Sc = 1 << ((b3 >> 2) & 3);
+	if (Sg) *Sg = Sg1;
+	if (Sc) *Sc = Sc1;
+	if (la) *la = (unsigned __int64)la1;
 }
 
 int clsThor::WriteMask(int ad, int sz)
@@ -114,10 +155,19 @@ __int64 clsThor::GetSpr(int Sprn)
 		return ca[Sprn];
 	}
 	else if (Sprn < 40) {
-		return seg_base[Sprn-32];
+		return seg[Sprn-32];
 	}
 	else if (Sprn < 48) {
-		return seg_limit[Sprn-32];
+		switch(Sprn) {
+		case 40:	return LDT;
+		case 41:	return GDT;
+		case 42:	return CPL;
+		case 43:	return 0;
+		case 44:	return seg_base[segsw];
+		case 45:	return seg_limit[segsw];
+		case 46:	return 0;
+		case 47:	return seg_acr[segsw];
+		}
 	}
 	else {
 		switch(Sprn) {
@@ -144,7 +194,7 @@ __int64 clsThor::GetSpr(int Sprn)
 	return 0xDEADDEADDEADDEAD;
 }
 
-void clsThor::SetSpr(int Sprn, __int64 val)
+void clsThor::SetSpr(int Sprn, __int64 val, bool setex)
 {
 	int nn;
 
@@ -157,10 +207,21 @@ void clsThor::SetSpr(int Sprn, __int64 val)
 		ca[15] = pc;
 	}
 	else if (Sprn < 40) {
-		seg_base[Sprn-32] = val & 0xFFFFFFFFFFFFF000LL;
+		seg[Sprn-32] = val & 0xFFFFFFF;
+		seglex = setex;
 	}
 	else if (Sprn < 48) {
-		seg_limit[Sprn-32] = val & 0xFFFFFFFFFFFFF000LL;
+		switch(Sprn) {
+		case 40:	LDT = val; break;
+		case 41:	GDT = val; break;
+		case 42:	CPL = val & 0xFF; break;
+		case 43:	segsw = val & 63; break;
+		case 44:	seg_base[segsw] = val & 0xFFFFFFFFFFFFF000LL; break;
+		case 45:	seg_limit[segsw] = val & 0xFFFFFFFFFFFFF000LL; break;
+		case 46:	break; // reserved
+		case 47:	seg_acr[segsw] = val & 0xFFFF; break;
+		}
+//		seg_limit[Sprn-32] = val & 0xFFFFFFFFFFFFF000LL;
 	}
 	else {
 		switch(Sprn) {
@@ -205,7 +266,7 @@ void clsThor::Step()
 	unsigned int opcode, func;
 	__int64 disp;
 	int Ra,Rb,Rc,Rt,Pn,Cr,Ct;
-	int Sprn,Sg,Sc;
+	int Sprn,Sg,Sc,Sz;
 	int b1, b2, b3, b4;
 	int nn;
 	__int64 dat;
@@ -215,12 +276,20 @@ void clsThor::Step()
 
 	rts = false;
 	// Capture PC History, but only when the PC changes.
-	if (pcs[0] != pc) {
-		for (nn = 39; nn >= 0; nn--)
-			pcs[nn] = pcs[nn-1];
-		pcs[0] = pc;
+	if (pcs[pcsndx] != pc) {
+		pcsndx++;
+		pcsndx &= 1023;
+		pcs[pcsndx] = pc;
 	}
-	if (IRQActive()) {
+	if (seglex) {
+		if (StatusEXL < 255)
+			StatusEXL++;
+		seglex = false;
+		ca[13] = pc;
+		pc = ca[12] + ((256+(Sprn&7))<< 4);
+		imm_prefix = false;
+	}
+	else if (IRQActive()) {
 		StatusHWI = true;
 		if (string_pc)
 			ca[14] = string_pc;
@@ -750,6 +819,54 @@ void clsThor::Step()
 		imm_prefix = false;
 		return;
 
+	case INC:
+		b1 = ReadByte(pc);
+		pc++;
+		b2 = ReadByte(pc);
+		pc++;
+		b3 = ReadByte(pc);
+		pc++;
+		b4 = ReadByte(pc);
+		pc++;
+		if (ex) {
+			int amt;
+			__int64 val;
+			Ra = b1 & 0x3f;
+			Sz = (b1 >> 6) | ((b2 & 1) << 2);
+			func = (b2 >> 1) & 7;
+			if (segmodel==2) {
+				disp = (b2 >> 4) | ((b3 & 255) << 4);
+				if (disp & 0x800)
+					disp |= 0xFFFFFFFFFFFFF800LL;
+				Sg = (disp + GetGP(Ra)) >> 29;
+				ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			}
+			else {
+				disp = (b2 >> 4) | ((b3 & 31) << 4);
+				if (disp & 0x100)
+					disp |= 0xFFFFFFFFFFFFFF00LL;
+				Sg = b3 >> 5;
+				ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
+			}
+			amt = b4;
+			if (amt & 0x80)
+				amt |= 0xFFFFFFFFFFFFFF00LL;
+			switch(Sz&3) {
+			case 0:	val = ReadByte(ea); break;
+			case 1: val = ReadChar(ea); break;
+			case 2: val = ReadHalf(ea); break;
+			case 3: val = Read(ea); break;
+			}
+			val = val + amt;
+			switch(Sz&3) {
+			case 0: system1->Write(ea,val,(0x1 << (ea & 7)) & 0xFF); break;
+			case 1: system1->Write(ea,val,(0x3 << (ea & 6)) & 0xFF); break;
+			case 2: system1->Write(ea,val,(0xF << (ea & 4)) & 0xFF); break;
+			case 3: system1->Write(ea,val,0xFF); break;
+			}
+		}
+		return;
+
 	case INT:
 		b1 = ReadByte(pc);
 		pc++;
@@ -920,14 +1037,13 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
-			if (ea & 4)
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
-			if (ea & 1)
+			if (la & 1)
 				dat = (dat >> 8);
 			dat &= 0xFFLL;
 			if (dat & 0x80LL)
@@ -947,14 +1063,13 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
-			if (ea & 4)
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
-			if (ea & 1)
+			if (la & 1)
 				dat = (dat >> 8);
 			dat &= 0xFFLL;
 			SetGP(Rt,dat);
@@ -971,14 +1086,13 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
-			if (ea & 4)
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
-			if (ea & 1)
+			if (la & 1)
 				dat = (dat >> 8);
 			dat &= 0xFFLL;
 			if (dat & 0x80LL)
@@ -997,14 +1111,13 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
-			if (ea & 4)
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
-			if (ea & 1)
+			if (la & 1)
 				dat = (dat >> 8);
 			dat &= 0xFFLL;
 			SetGP(Rt,dat);
@@ -1023,12 +1136,11 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
-			if (ea & 4)
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
 			dat &= 0xFFFF;
 			if (dat & 0x8000LL)
@@ -1047,12 +1159,11 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
-			if (ea & 4)
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
 			dat &= 0xFFFF;
 			if (dat & 0x8000LL)
@@ -1072,12 +1183,11 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
-			if (ea & 4)
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
 			dat &= 0xFFFFLL;
 			SetGP(Rt,dat);
@@ -1094,12 +1204,11 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
-			if (ea & 4)
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
-			if (ea & 2)
+			if (la & 2)
 				dat = (dat >> 16);
 			dat &= 0xFFFF;
 			SetGP(Rt,dat);
@@ -1123,40 +1232,7 @@ void clsThor::Step()
 				if (imm & 0x200)
 					imm |= 0xFFFFFFFFFFFFFE00LL;
 			}
-			if (Sprn < 16) {
-				pr[Sprn] = imm & 0xF;
-			}
-			else if (Sprn < 32) {
-				ca[Sprn-16] = imm;
-				ca[0] = 0;
-				ca[15] = pc;
-			}
-			else if (Sprn < 40) {
-				seg_base[Sprn-32] = imm & 0xFFFFFFFFFFFFF000LL;
-			}
-			else if (Sprn < 48) {
-				seg_limit[Sprn-40] = imm & 0xFFFFFFFFFFFFF000LL;
-			}
-			else {
-				switch(Sprn) {
-				case 51:	lc = imm; break;
-				case 52:
-					for (nn = 0; nn < 16; nn++) {
-						pr[nn] = (imm >> (nn * 4)) & 0xF;
-					}
-					break;
-				case 60:	bir = imm & 0xFFLL; break;
-				case 61:
-					switch(bir) {
-					case 0: dbad0 = imm; break;
-					case 1: dbad1 = imm; break;
-					case 2: dbad2 = imm; break;
-					case 3: dbad3 = imm; break;
-					case 4: dbctrl = imm; break;
-					case 5: dbstat = imm; break;
-					}
-				}
-			}
+			SetSpr(Sprn,imm);
 		}
 		imm_prefix = false;
 		ca[15] = pc;
@@ -1193,10 +1269,9 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
-			if (ea & 4)
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
 			dat &= 0xFFFFFFFFLL;
 			if (dat & 0x80000000LL)
@@ -1215,10 +1290,9 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
-			if (ea & 4)
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
 			dat &= 0xFFFFFFFFLL;
 			if (dat & 0x80000000LL)
@@ -1238,10 +1312,9 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
-			if (ea & 4)
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
 			dat &= 0xFFFFFFFFLL;
 			SetGP(Rt,dat);
@@ -1258,10 +1331,9 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
-			if (ea & 4)
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
+			if (la & 4)
 				dat = (dat >> 32);
 			dat &= 0xFFFFFFFFLL;
 			SetGP(Rt,dat);
@@ -1279,9 +1351,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			SetGP(Rt,ea);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			SetGP(Rt,la);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1354,9 +1425,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
 			/*
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -1378,9 +1448,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea,1);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la,1);
 			/*
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -1402,9 +1471,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rt = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			dat = system1->Read(ea);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			dat = system1->Read(la);
 			/*
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -1427,9 +1495,8 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			dat = system1->Read(ea);
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			dat = system1->Read(la);
 			/*
 			if (ea & 4)
 				dat = (dat >> 32);
@@ -1592,7 +1659,7 @@ void clsThor::Step()
 		if (ex) {
 			Ra = b1 & 0x3f;
 			Sprn = ((b2 & 0xF) << 2) | ((b1 >> 6) & 3);
-			SetSpr(Sprn, GetGP(Ra));
+			SetSpr(Sprn, GetGP(Ra),(b2&0xF0)==0);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1684,7 +1751,7 @@ void clsThor::Step()
 			switch(b2 >> 4) {
 			case CPUID:
 				switch(Ra) {
-				case 0:	SetGP(Rt,0x0002LL); break;	// Processor ID
+				case 0:	SetGP(Rt,0x0000LL); break;	// Processor ID
 				case 2: SetGP(Rt,0x4e4F5254494E4966LL);	break;	// "Finitron"
 				case 3: SetGP(Rt,0x00LL); break;
 				case 4: SetGP(Rt,0x36346249547373LL); break;	// 64BitSS
@@ -1905,9 +1972,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			system1->Write(ea,GetGP(Rb),(0x1 << (ea & 7)) & 0xFF);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			system1->Write(la,GetGP(Rb),(0x1 << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1921,9 +1987,8 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			system1->Write(ea,GetGP(Rt),(0x1 << (ea & 7)) & 0xFF);
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			system1->Write(la,GetGP(Rt),(0x1 << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1938,9 +2003,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			system1->Write(ea,GetGP(Rb),(0x3 << (ea & 7)) & 0xFF);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			system1->Write(la,GetGP(Rb),(0x3 << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1954,9 +2018,8 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			system1->Write(ea,GetGP(Rt),(0x3 << (ea & 7)) & 0xFF);
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			system1->Write(la,GetGP(Rt),(0x3 << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1979,9 +2042,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			system1->Write(ea,GetGP(Rb),(0xF << (ea & 7)) & 0xFF);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			system1->Write(la,GetGP(Rb),(0xF << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -1995,9 +2057,8 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			system1->Write(ea,GetGP(Rt),(0xF << (ea & 7)) & 0xFF);
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			system1->Write(la,GetGP(Rt),(0xF << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -2084,33 +2145,36 @@ void clsThor::Step()
 			Ra = b1 & 0x3f;
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
 			do {
-				Sg = b3 >> 5;
-				ea = GetGP(Ra) + seg_base[Sg];
+				if (segmodel==2)
+					Sg = _32bit ? (GetGP(Ra) >> 29) & 7 : (GetGP(Ra) >> 61) & 7;
+				else
+					Sg = b3 >> 5;
+				la = ea = GetGP(Ra) + seg_base[Sg];
 				switch((b3 >> 2) & 3) {
 				case 0:
 					dat = GetGP(Rb) & 0xFFLL;
 					dat = (dat << 56) | (dat << 48) | (dat << 40) | (dat << 32)
 						| (dat << 24) | (dat << 16) | (dat << 8) | dat;
 					SetGP(Ra,GetGP(Ra) + ((b3&16) ? -1 : 1));
-					system1->Write(ea,dat,WriteMask(ea,0),0);
+					system1->Write(la,dat,WriteMask(la,0),0);
 					break;
 				case 1:
 					dat = GetGP(Rb) & 0xFFFFLL;
 					dat = (dat << 48) | (dat << 32)
 						| (dat << 16) | dat;
 					SetGP(Ra,GetGP(Ra) + ((b3&16) ? -2 : 2));
-					system1->Write(ea,dat,WriteMask(ea,1),0);
+					system1->Write(la,dat,WriteMask(la,1),0);
 					break;
 				case 2:
 					dat = GetGP(Rb) & 0xFFFFFFFFLL;
 					dat = (dat << 32) | dat;
 					SetGP(Ra,GetGP(Ra) + ((b3&16) ? -4 : 4));
-					system1->Write(ea,dat,WriteMask(ea,2),0);
+					system1->Write(la,dat,WriteMask(la,2),0);
 					break;
 				case 3:
 					dat = GetGP(Rb);
 					SetGP(Ra,GetGP(Ra) + ((b3&16) ? -8 : 8));
-					system1->Write(ea,dat,WriteMask(ea,3),0);
+					system1->Write(la,dat,WriteMask(la,3),0);
 					break;
 				}
 				if (lc==0) {
@@ -2182,9 +2246,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			system1->Write(ea,GetGP(Rb),(0xFF << (ea & 7)) & 0xFF);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			system1->Write(la,GetGP(Rb),(0xFF << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -2199,9 +2262,11 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			system1->Write(ea,GetGP(Rb),(0xFF << (ea & 7)) & 0xFF,1);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			if (system1->Write(la,GetGP(Rb),(0xFF << (la & 7)) & 0xFF,1))
+				pr[0] &= -2;
+			else
+				pr[0] |= 1;
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -2216,9 +2281,8 @@ void clsThor::Step()
 		pc++;
 		if (ex) {
 			Rb = ((b2 & 0xF) << 2) | (( b1 >> 6) & 3);
-			dRn(b1,b2,b3,&Ra,&Sg,&disp);
-			ea = (unsigned __int64) disp + seg_base[Sg] + GetGP(Ra);
-			system1->Write(ea,GetSpr(Rb),(0xFF << (ea & 7)) & 0xFF);
+			dRn(b1,b2,b3,&Ra,&Sg,&disp,&la);
+			system1->Write(la,GetSpr(Rb),(0xFF << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;
@@ -2232,9 +2296,8 @@ void clsThor::Step()
 		b3 = ReadByte(pc);
 		pc++;
 		if (ex) {
-			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc);
-			ea = (unsigned __int64) seg_base[Sg] + GetGP(Ra) + GetGP(Rb) * Sc;
-			system1->Write(ea,GetGP(Rt),(0xFF << (ea & 7)) & 0xFF);
+			ndx(b1,b2,b3,&Ra,&Rb,&Rt,&Sg,&Sc,&la);
+			system1->Write(la,GetGP(Rt),(0xFF << (la & 7)) & 0xFF);
 		}
 		ca[15] = pc;
 		imm_prefix = false;

@@ -36,6 +36,7 @@ public:
 	clsPIC pic1;
 	clsUart uart1;
 	clsKeyboard keybd;
+	clsSevenSeg sevenseg;
 
 	clsSystem();
 	void Reset();

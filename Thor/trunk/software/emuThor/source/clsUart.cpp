@@ -7,7 +7,7 @@ void clsUart::Reset()
 }
 bool clsUart::IsSelected(unsigned int ad)
 {
-	return (ad & 0xFFFFFFF0LL)==0xFFFDC0A00;
+	return (ad & 0xFFFFFFF0LL)==0xFFDC0A00;
 }
 
 unsigned int clsUart::Read(unsigned int ad)

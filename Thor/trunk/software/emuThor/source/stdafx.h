@@ -11,6 +11,7 @@
 #include "clsKeyboard.h"
 #include "clsUart.h"
 #include "clsThor.h"
+#include "clsSevenSeg.h"
 #include "clsSystem.h"
 #include "clsDisassem.h"
 
