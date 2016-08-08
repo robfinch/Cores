@@ -52,6 +52,7 @@ FAL6567 #(
   .chip(2'b00),
   .clk100(clk),
   .phi02(phi02),
+  .rst_n_o(),
   .irq(),
   .aec(aec),
   .ba(ba),
@@ -96,6 +97,11 @@ else begin
         adr <= 6'd24;
         end
     7: begin
+            cs_n <= 1'b0;
+            rw <= 1'b0;
+            adr <= 6'd21;
+            end
+    8: begin
       cs_n <= 1'b1;
       rw <= 1'b1;
       end
@@ -103,22 +109,23 @@ else begin
     end
 end
 
-assign ad = phi02 & aec ? adr : 12'bz; 
+assign ad = phi02 & aec ? adr : 14'bz; 
 
 always @(posedge clk)
 if (rst)
   dbi <= 12'd0;
 else if (phi02 && !phi02a) begin
-if (state==5)
-  dbi <= 12'h10;
-else if (state==6)
-  dbi <= 12'h20;
-else
+case(state)
+5:   dbi <= 12'h10;
+6:   dbi <= 12'h20;
+7:   dbi <= 12'hFF;
+default:
 casex (ad)
 14'b000xxxxxxxxxxx: dbi <= ad[11:0];
 14'h8xx:  if (!cas_n) dbi <= {ad[3:0],ad[7:0]};
 14'h3FFF: dbi <= 12'h000;
 default: dbi <= ad[11:0];
+endcase
 endcase
 end
 assign db = dbi;

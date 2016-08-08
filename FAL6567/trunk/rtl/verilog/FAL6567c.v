@@ -25,7 +25,7 @@
 // display area with a border to be created. This is double the horizontal and
 // vertical resolution of the VIC-II. 
 //
-module FAL6567(chip, clk100, phi02, irq, aec, ba, cs_n, rw, ad, db, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue);
+module FAL6567(chip, clk100, phi02, rst_n_o, irq, aec, ba, cs_n, rw, ad, db, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -56,15 +56,21 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter SIM = 1'b1;
 
+parameter IDLE_CYCLE  = 0;
+parameter SPRITE_CYCLE = 1;
+parameter CHAR_CYCLE = 2;
+parameter REF_CYCLE = 3;
+
 input [1:0] chip;
 input clk100;
 output phi02;
+output rst_n_o;
 output irq;
 output aec;
 output ba;
 input cs_n;
 input rw;
-inout [11:0] ad;
+inout [13:0] ad;
 inout tri [11:0] db;
 output ras_n;
 output cas_n;
@@ -79,9 +85,10 @@ assign aec = !aec_n;
 wire clk33;
 wire irq_n;
 assign irq = !irq_n;
+wire [1:0] cycleType;
 wire [13:0] vicAddr;
 reg [13:0] ado;
-reg [6:0] ado1;
+reg [13:0] ado1;
 reg [7:0] p;
 wire vSync8,hSync8;
 wire [3:0] color8;
@@ -108,13 +115,16 @@ wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
 
 wire clken8;
-reg [31:0] phi02r;
-reg [31:0] clk1r;
-reg [31:0] clk2r;
-reg [31:0] clk8r;
-reg [31:0] rasr;
-reg [31:0] muxr;
-reg [31:0] casr;
+reg [32:0] phi0r,phi1r,phi2r,phi02r,phisr;
+wire phi0,phi1,phi2;
+reg phi02,phis;
+reg [32:0] clk3r;
+reg [32:0] clk8r;
+reg [32:0] rasr;
+reg [32:0] muxr;
+reg [32:0] casr;
+reg [32:0] enaDatar,enaSDatar;
+wire enaData,enaSData;
 wire vicRefresh;
 wire vicAddrValid;
 wire [7:0] dbo8;
@@ -135,6 +145,7 @@ FAL6567_clkgen u1
 );
 
 wire rst = !locked;
+assign rst_n_o = !rst;
 
 assign db = (aec && !cs_n && rw) ? (ad[5:0] < 6'h30 ? {4'h0,dbo8} : {4'h0,dbo33}) : 12'bz;   
 always @(posedge clk33)
@@ -157,7 +168,7 @@ FAL6567_ScanConverter u2
   .color_o(color33)
 );
 
-video_vicii_656x #(
+video_vicii_656x_16 #(
   .registeredAddress(1'b1),
   .emulateRefresh(1'b1),
   .emulateLightPen(1'b1),
@@ -166,8 +177,11 @@ video_vicii_656x #(
 (
   .rst(rst),
   .clk(clk33),
+  .cycleType(cycleType),
   .phi(phi02),
-  .enaData(clk2r[29]),
+  .phis(phis),
+  .enaData(enaData),
+  .enaSData(enaSData),
   .enaPixel(clken8),
   .baSync(1'b0),
   .ba(ba),
@@ -198,54 +212,147 @@ video_vicii_656x #(
 );
 
 always @(posedge clk33)
-if (rst)
-  clk8r <= 32'b10001000100010001000100010001000;
-else
-  clk8r <= {clk8r[30:0],clk8r[31]};
-assign clken8 = clk8r[31];
+if (rst) begin
+  clk8r <= 33'b100010001000100010001000100010000;
+end
+else begin
+  if (stCycle)
+    clk8r <= 33'b000010001000100010001000100010001;
+  else
+    clk8r <= {clk8r[31:0],1'b0};
+end
+assign clken8 = clk8r[32];
 
 always @(posedge clk33)
 if (rst)
-  clk2r <= 32'b10000000000000001000000000000000;
+  clk3r <= 33'b100000000001000000000010000000000;
 else
-  clk2r <= {clk2r[30:0],clk2r[31]};
-assign clken2 = clk2r[31];
+  clk3r <= {clk3r[31:0],clk3r[32]};
 
 always @(posedge clk33)
 if (rst)
-  clk1r <= 32'b00000000000000001000000000000000;
+  phi0r <= 33'b111111111110000000000000000000000;
 else
-  clk1r <= {clk1r[30:0],clk1r[31]};
-assign clken1 = clk1r[31];
-assign clken1x = clk1r[15];
+  phi0r <= {phi0r[31:0],phi0r[32]};
+assign phi0 = phi0r[32];
 
 always @(posedge clk33)
 if (rst)
-  phi02r <= 32'b00000000000000001111111111111111;
+  phi02r <= 33'b000000000000000001111111111111111;
 else
-  phi02r <= {phi02r[30:0],phi02r[31]};
-assign phi02 = phi02r[31];
+  phi02r <= {phi02r[31:0],phi02r[32]};
+always @(posedge clk33)
+  phi02 <= phi02r[32];
+//assign phi02 = phi02r[32];
 
 always @(posedge clk33)
 if (rst)
-  rasr <= 32'b11111100000000001111110000000000;
+  phisr <= 33'b000000000001111111111111111111111;
 else
-  rasr <= {rasr[30:0],rasr[31]};
-assign ras_n = rasr[31];
+  phisr <= {phisr[31:0],phisr[32]};
+always @(posedge clk33)
+  phis <= phisr[32];
+
+always @(posedge clk33)
+if (rst)
+  phi1r <= 33'b000000000001111111111100000000000;
+else
+  phi1r <= {phi1r[31:0],phi1r[32]};
+assign phi0 = phi1r[32];
+
+always @(posedge clk33)
+if (rst)
+  phi2r <= 33'b000000000000000000000011111111111;
+else
+  phi2r <= {phi2r[31:0],phi2r[32]};
+assign phi2 = phi2r[32];
+
+reg [32:0] stc;
+always @(posedge clk33)
+if (rst)
+  stc <= 33'b100000000000000000000000000000000;
+else
+  stc <= {stc[31:0],stc[32]};
+wire stCycle = stc[32];
+wire stCycle1 = stc[0];
+
+always @(posedge clk33)
+if (rst) begin
+  rasr <= 33'b111111111111111111111111110000000;
+end
+else begin
+  if (stCycle1) begin
+    case(cycleType)
+    IDLE_CYCLE:   rasr <= 33'b111111111111111111111111000000000;  // I
+    SPRITE_CYCLE: rasr <= 33'b111100000001111000000000000000000;  // S - cycle
+    CHAR_CYCLE:   rasr <= 33'b111111100000000001111111000000000;  // G,C
+    REF_CYCLE:    rasr <= 33'b111111100000000001111111000000000;  // R,C or R
+    endcase
+  end
+  else
+    rasr <= {rasr[31:0],1'b0};
+end
+assign ras_n = rasr[32];
   
 always @(posedge clk33)
-if (rst)
-  muxr <= 32'b11111110000000001111111000000000;
-else
-  muxr <= {muxr[30:0],muxr[31]};
-assign mux = muxr[31] & !(vicRefresh & !phi02);
+if (rst) begin
+  muxr <= 33'b111111111111111111111111100000000;  // I
+end
+else begin
+  if (stCycle1) begin
+    case(cycleType)
+    IDLE_CYCLE:   muxr <= 33'b111111111111111111111111100000000;  // I
+    SPRITE_CYCLE: muxr <= 33'b111110000001111100000000000000000;  // S - cycle
+    CHAR_CYCLE:   muxr <= 33'b111111110000000001111111100000000;  // G,C
+    REF_CYCLE:    muxr <= 33'b000000000000000001111111100000000;  // R,C or R
+    endcase
+  end
+  else
+    muxr <= {muxr[31:0],1'b0};
+end
+assign mux = muxr[32];
   
 always @(posedge clk33)
-if (rst)
-  casr <= 32'b11111111100000001111111110000000;
-else
-  casr <= {casr[30:0],casr[31]};
-assign cas_n = casr[31] | (vicRefresh & !phi02);
+if (rst) begin
+  casr <= 33'b111111111111111110000011111100000;  // R,C
+end
+else begin
+  if (stCycle1) begin
+    case(cycleType)
+    IDLE_CYCLE:   casr <= 33'b111111111111111111111111110000000;  // I - cycle
+    SPRITE_CYCLE: casr <= 33'b111111000001111110000110000110000;  // S - cycle
+    CHAR_CYCLE:   casr <= 33'b111111111000000001111111110000000;  // G,C
+    REF_CYCLE:    casr <= 33'b111111111111111111111111110000000;  // R,C
+    endcase
+  end
+  else
+    casr <= {casr[31:0],1'b0};
+end
+assign cas_n = casr[32];
+
+always @(posedge clk33)
+if (rst) begin
+  enaDatar <= 33'b000000000000000010000000000000001;  // S - cycle
+end
+else begin
+  if (stCycle)
+  enaDatar <= 33'b000000000000000010000000000000001;  // S - cycle
+  else
+    enaDatar <= {enaDatar[31:0],1'b0};
+end
+assign enaData = enaDatar[32];
+
+always @(posedge clk33)
+if (rst) begin
+  enaSDatar <= 33'b000000000010000000001000001000001;  // S - cycle
+end
+else begin
+  if (stCycle)
+    enaSDatar <= 33'b000000000010000000001000001000001;  // S - cycle
+  else
+    enaSDatar <= {enaSDatar[31:0],1'b0};
+end
+assign enaSData = enaSDatar[32];
 
 always @(posedge clk33)
 if (rst) begin
@@ -267,7 +374,7 @@ if (rst) begin
   vSyncPol <= pvSyncPol;
 end
 else begin
-  if (clken2 & phi02) begin
+  if (phi2r[32] & ~phi2r[31]) begin // when phi02 transitions from high to low
     if (cs_n==1'b0) begin
       if (wr) begin
         case(ad[5:0])
