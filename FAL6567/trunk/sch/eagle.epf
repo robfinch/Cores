@@ -1,0 +1,36 @@
+[Eagle]
+Version="07 02 00"
+Platform="Windows"
+Serial="62191E841E-LSR-WLM-1EL"
+Globals="Globals"
+Desktop="Desktop"
+
+[Globals]
+AutoSaveProject=1
+UsedLibrary="C:/EAGLE-7.2.0/lbr/65xxx.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/74ttl-din.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/74xx-eu.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/74xx-us.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/FT74xx.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/con-subd.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/diode.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/hitachi_sram_hm628512a-series_rev1.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/memory.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/micro-motorola.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/oldchips3.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/resistor-bourns.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/resistor.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/supply1.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/xilinx_devices_V6.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/ltspice/lt-supply.lbr"
+UsedLibrary="C:/EAGLE-7.2.0/lbr/ltspice/Misc.lbr"
+
+[Win_1]
+Type="Control Panel"
+Loc="532 306 1131 705"
+State=1
+Number=0
+
+[Desktop]
+Screen="1680 1050"
+Window="Win_1"
