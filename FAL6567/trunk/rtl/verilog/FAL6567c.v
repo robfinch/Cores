@@ -35,7 +35,7 @@ parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
 parameter CHIP6572 = 2'd3;
-parameter LEGACY = 1'b0;
+parameter LEGACY = 1'b1;
 parameter MIBCNT = 16;
 
 // Constants multiplied by 1.333 for 33.33MHz clock
@@ -68,6 +68,7 @@ parameter BUS_SPRITE = 1;
 parameter BUS_REF = 2;
 parameter BUS_CG = 3;
 parameter BUS_G = 4;
+parameter BUS_LS = 5;
 
 parameter VIC_IDLE = 0;   // idle cycle
 parameter VIC_SPRITE = 1; // sprite cycle
@@ -99,6 +100,7 @@ output [3:0] green;
 output [3:0] blue;
 
 integer n;
+wire cs = !cs_n;
 wire clk33;
 reg [7:0] regShadow [127:0];
 
@@ -149,8 +151,10 @@ wire badline;                   // flag bad line condition
 reg den;                        // display enable
 reg rsel, bmm, ecm;
 reg csel, mcm, res;
+reg [10:0] preRasterX;
 reg [10:0] rasterX;
 reg [10:0] rasterXMax;
+reg [8:0] preRasterY;
 reg [8:0] rasterY;
 reg [8:0] nextRasterY;
 reg [8:0] rasterCmp;
@@ -189,14 +193,15 @@ reg [MIBCNT-1:0] mxe, mxe_ff;
 reg [MIBCNT-1:0] mdp;
 reg [MIBCNT-1:0] mc, mc_ff;
 reg [MIBCNT-1:0] MShift;
-reg [MIBCNT-1:0] MPixels[23:0];
-reg [MIBCNT-1:0] MCurrentPixel[1:0];
+reg [23:0] MPixels [MIBCNT-1:0];
+reg [1:0] MCurrentPixel [MIBCNT-1:0];
 reg [MIBCNT-1:0] m2m, m2d;
 reg m2mhit, m2dhit;
 reg [13:0] cb;
 reg [13:0] vm;
 reg [5:0] regno;
 reg regpg;        // register set page for sprites
+reg leg;          // legacy compatibility
 
 reg [MIBCNT-1:0] balos = 16'h0000;
 
@@ -333,7 +338,7 @@ if (rst)
 else
   phisr <= {phisr[31:0],phisr[32]};
 always @(posedge clk33)
-  phis <= phisr[32];
+  phis <= phisr[1];
 
 always @(posedge clk33)
 if (rst)
@@ -357,6 +362,7 @@ else begin
   if (stCycle2) begin
     case(busCycle)
     BUS_IDLE:   rasr <= 33'b111111111111111111111111000000000;  // I
+    BUS_LS:     rasr <= 33'b111111100000000001111111000000000;  // S
     BUS_SPRITE: rasr <= 33'b111100000001111000000000000000000;  // S - cycle
     BUS_CG:     rasr <= 33'b111111100000000001111111000000000;  // G,C
     BUS_G:      rasr <= 33'b111111100000000001111111000000000;  // G,C
@@ -376,6 +382,7 @@ else begin
   if (stCycle1) begin
     case(busCycle)
     BUS_IDLE:   muxr <= 33'b111111111111111111111111100000000;  // I
+    BUS_LS:     muxr <= 33'b111111110000000001111111100000000;  // S
     BUS_SPRITE: muxr <= 33'b111110000001111100000000000000000;  // S - cycle
     BUS_CG:     muxr <= 33'b111111110000000001111111100000000;  // G,C
     BUS_G:      muxr <= 33'b111111110000000001111111100000000;  // G,C
@@ -397,6 +404,7 @@ else begin
     BUS_IDLE:   casr <= 33'b111111111111111111111111110000000;  // I - cycle
 //    CHAR5_CYCLE:  casr <= 33'b111111000011000011000011000110000;  // G,C
 //    CHAR6_CYCLE:  casr <= 33'b110001100001100011000011000110000;  // G,C
+    BUS_LS:     casr <= 33'b111111111000000001111111110000000;  // S
     BUS_SPRITE: casr <= 33'b111111000001111110000110000110000;  // S - cycle
     BUS_CG:     casr <= 33'b111111111000000001111111110000000;  // G,C
     BUS_G:      casr <= 33'b111111111000000001111111110000000;  // G,C
@@ -441,8 +449,12 @@ always @*
 begin
   case(vicCycle)
   VIC_SPRITE:
-    if (MActive[sprite2])
-      busCycle <= BUS_SPRITE;
+    if (MActive[sprite2]) begin
+      if (leg)
+        busCycle <= BUS_LS;
+      else 
+        busCycle <= BUS_SPRITE;
+    end
     else
       busCycle <= BUS_IDLE;
   VIC_REF,VIC_RC:
@@ -479,27 +491,44 @@ end
 // CHAR fetches. The total number of cycles varies from 63 to 65.
 // The cycles are synchornized to the raster timing.
 //------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Create an advanced raster signal.
+//
+// Complicated by the fact that bus available must go low three cycles before
+// the cpu gives up the bus. On a bad line this would place the ba starting
+// low on the line previous scanline. So that the ba low doesn't cross a
+// complicated counter boundary we fudge things by having the counter count
+// in advance of the normal rasterX. This mean we need to delay the signal
+// to get back where we should be.
+//------------------------------------------------------------------------------
 always @(posedge clk33)
 if (rst) begin
+  preRasterY <= 9'd0;
+  preRasterX <= 11'd0;
   rasterX <= 10'd0;
   rasterY <= 9'd0;
   nextRasterY <= 9'd0;
 end
 else begin
   if (clken8) begin
-    if (rasterX==10'd0) begin
-      rasterX <= rasterX + 10'd1;
-      nextRasterY <= rasterY + 9'd1;
-    end
-    else if (rasterX==rasterXMax) begin
-      rasterX <= 10'd0;
-      if (rasterY==rasterYMax)
-        rasterY <= 9'd0;
-      else
-        rasterY <= rasterY + 9'd1;
+    if (preRasterX==10'h14) begin
+      rasterX <= 10'h0;
+      rasterY <= preRasterY;
     end
     else
       rasterX <= rasterX + 10'd1;
+    if (rasterX==10'd0) begin
+      nextRasterY <= rasterY + 9'd1;
+    end
+    if (preRasterX==rasterXMax) begin
+      preRasterX <= 11'd0;
+      if (preRasterY==rasterYMax)
+        preRasterY <= 9'd0;
+      else
+        preRasterY <= preRasterY + 9'd1;
+    end
+    else
+      preRasterX <= preRasterX + 11'd1;
   end  
 end
 
@@ -507,14 +536,14 @@ end
 // Decode cycles
 //------------------------------------------------------------------------------
 
-wire [10:0] rasterX2 = {rasterX,1'b0};
+wire [10:0] rasterX2 = {preRasterX,1'b0};
 always @(chip,rasterX2)
 casex(rasterX2)
 11'h00x: vicCycle <= VIC_REF;
 11'h01x: vicCycle <= VIC_REF;
 11'h02x: vicCycle <= VIC_REF;
-11'h03x: vicCycle <= VIC_RC;
-11'h04x: vicCycle <= VIC_CHAR;
+11'h03x: vicCycle <= VIC_REF;
+11'h04x: vicCycle <= VIC_RC;
 11'h05x: vicCycle <= VIC_CHAR;
 11'h06x: vicCycle <= VIC_CHAR;
 11'h07x: vicCycle <= VIC_CHAR;
@@ -552,22 +581,22 @@ casex(rasterX2)
 11'h27x: vicCycle <= VIC_CHAR;
 11'h28x: vicCycle <= VIC_CHAR;
 11'h29x: vicCycle <= VIC_CHAR;
-11'h2Ax: vicCycle <= VIC_G;
-11'h2Bx: vicCycle <= VIC_IDLE;
+11'h2Ax: vicCycle <= VIC_CHAR;
+11'h2Bx: vicCycle <= VIC_G;
 11'h2Cx: vicCycle <= VIC_IDLE;
-11'h2Dx:
+11'h2Dx: vicCycle <= VIC_IDLE;
+11'h2Ex:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_IDLE;
         CHIP6567OLD:  vicCycle <= VIC_IDLE;
         default:      vicCycle <= VIC_SPRITE;
         endcase
-11'h2Ex:
+11'h2Fx:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_IDLE;
         CHIP6567OLD:  vicCycle <= VIC_SPRITE;
         default:      vicCycle <= VIC_SPRITE;
         endcase
-11'h2Fx:  vicCycle <= VIC_SPRITE;
 11'h30x:  vicCycle <= VIC_SPRITE;
 11'h31x:  vicCycle <= VIC_SPRITE;
 11'h32x:  vicCycle <= VIC_SPRITE;
@@ -581,22 +610,21 @@ casex(rasterX2)
 11'h3Ax:  vicCycle <= VIC_SPRITE;
 11'h3Bx:  vicCycle <= VIC_SPRITE;
 11'h3Cx:  vicCycle <= VIC_SPRITE;
-11'h3Dx:
+11'h3Dx:  vicCycle <= VIC_SPRITE;
+11'h3Ex:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_SPRITE;
         CHIP6567OLD:  vicCycle <= VIC_SPRITE;
         default:      vicCycle <= VIC_REF;
         endcase
-11'h3Ex:
+11'h3Fx:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_SPRITE;
         CHIP6567OLD:  vicCycle <= VIC_REF;
         default:      vicCycle <= VIC_REF;
         endcase
-11'h3Fx:  vicCycle <= VIC_REF;
 11'h40x:  vicCycle <= VIC_REF;
-11'h41x:  vicCycle <= VIC_REF;
-default:  vicCycle <= VIC_REF;
+default:  vicCycle <= VIC_IDLE;
 endcase
 
 reg [7:0] sprite1;
@@ -607,11 +635,11 @@ always @(posedge clk33)
 begin
   if (clken8) begin
     case(chip)
-    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2DE;
-    CHIP6567R8:   sprite1 <= rasterX2 - 11'h2EE;
-    default:      sprite1 <= rasterX2 - 11'h2CE;
+    CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
+    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
+    default:      sprite1 <= rasterX2 - 11'h2DE;
     endcase
-    if (LEGACY)
+    if (leg)
       sprite2 <= sprite1[7:5];
     else
       sprite2 <= sprite1[7:4];
@@ -627,37 +655,37 @@ begin
   sprite <= sprite5;
 end
 
-wire ref5 = rasterX2[10:4]==7'h02;
+wire ref5 = rasterX2[10:4]==7'h03;
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-assign badline = rasterY[2:0]==yscroll && den && (rasterY >= (SIM ? 9'd1 : 9'h30) && rasterY <= 9'hF7);
+assign badline = preRasterY[2:0]==yscroll && den && (preRasterY >= (SIM ? 9'd1 : 9'h30) && preRasterY <= 9'hF7);
 
 //------------------------------------------------------------------------------
 // Bus available generator
 //------------------------------------------------------------------------------
 
-//always @(chip,n,me,my,nextRasterY,rasterX2,MActive,LEGACY)
+//always @(chip,n,me,my,nextRasterY,rasterX2,MActive,leg)
 always @(posedge clk33)
   for (n = 0; n < MIBCNT; n = n + 1) begin
     if (me[n] && ((my[n]==nextRasterY)||MActive[n])) begin
-      if (LEGACY)
+      if (leg)
         case(chip)
-        CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2C0 + {n,5'b0}) && (rasterX2 < 11'h340 + {n,5'b0});
-        CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2B0 + {n,5'b0}) && (rasterX2 < 11'h330 + {n,5'b0});
-        default:      balos[n] <= (rasterX2 >= 11'h2A0 + {n,5'b0}) && (rasterX2 < 11'h320 + {n,5'b0}); 
+        CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,5'b0}) && (rasterX2 < 11'h320 + {n,5'b0});
+        CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,5'b0}) && (rasterX2 < 11'h310 + {n,5'b0});
+        default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,5'b0}) && (rasterX2 < 11'h300 + {n,5'b0}); 
         endcase
       else
         case(chip)
-        CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2C0 + {n,4'b0}) && (rasterX2 < 11'h300 + {n,4'b0});
-        CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2B0 + {n,4'b0}) && (rasterX2 < 11'h2F0 + {n,4'b0});
-        default:      balos[n] <= (rasterX2 >= 11'h2A0 + {n,4'b0}) && (rasterX2 < 11'h2E0 + {n,4'b0}); 
+        CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,4'b0}) && (rasterX2 < 11'h310 + {n,4'b0});
+        CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,4'b0}) && (rasterX2 < 11'h300 + {n,4'b0});
+        default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,4'b0}) && (rasterX2 < 11'h2F0 + {n,4'b0}); 
         endcase
     end
   end
 
-wire balo = |balos | (badline && rasterX2 < 11'h2B0);
+wire balo = |balos | (badline && rasterX2 < 11'h2C0);
 
 always @(posedge clk33)
 if (rst) begin
@@ -684,7 +712,7 @@ end
 else begin
   if (stCycle2) begin
     ba1 <= ba;
-    ba2 <= ba1;
+    ba2 <= ba1 | ba;
     ba3 <= ba2 | ba;
   end
 end
@@ -692,9 +720,11 @@ end
 assign aec = ba ? phi02 : ba3 & phi02;
 
 //------------------------------------------------------------------------------
+// Databus loading
 //------------------------------------------------------------------------------
+
 always @(posedge clk33)
-if (phi02 && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
+if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
   if (badline)
     nextChar <= db;
   else
@@ -702,6 +732,24 @@ if (phi02 && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
   for (n = 38; n > 0; n = n -1)
     charbuf[n] = charbuf[n-1];
   charbuf[0] <= nextChar;
+end
+
+always @(posedge clk33)
+if (phi02==`LOW && enaData) begin
+  if (vicCycle==VIC_CHAR || vicCycle==VIC_G) begin
+    readPixels <= db[7:0];
+    readChar <= nextChar;
+  end
+  waitingPixels <= readPixels;
+  waitingChar <= readChar;
+end
+
+always @(posedge clk33)
+if (phis==`LOW && enaSData==1'b1 && busCycle==BUS_SPRITE) begin
+  if (MActive[sprite])
+    MPtr[sprite] <= db[7:0];
+  else
+    MPtr[sprite] <= 8'd255;
 end
 
 //------------------------------------------------------------------------------
@@ -720,7 +768,7 @@ else begin
       vmndx <= 10'd0;
     if ((vicCycle==VIC_CHAR||vicCycle==VIC_G) && badline)
       vmndx <= vmndx + 1;
-    if (rasterX2[10:4]==7'h2B) begin
+    if (rasterX2[10:4]==7'h2C) begin
       if (scanline==3'd7)
         vmndxStart <= vmndx;
       else
@@ -741,12 +789,12 @@ if (rst) begin
   scanline <= 3'd0;
 end
 else begin
-  if (phi02==1'b0 && enaData) begin
+  if (phi02==`LOW && enaData) begin
     if (ref5) begin
       if (badline)
         scanline <= 3'd0;
     end
-    if (rasterX2[10:4]==7'h2B)
+    if (rasterX2[10:4]==7'h2C)
       scanline <= scanline + 3'd1;
   end
 end
@@ -757,14 +805,6 @@ always @*
   for (n = 0; n < 16; n = n + 1)
     MActive[n] <= MCnt[n] != 6'd63;
 
-always @(posedge clk33)
-if (phis==1'b0 && enaSData==1'b1 && busCycle==BUS_SPRITE) begin
-  if (MActive[sprite])
-    MPtr[sprite] <= db[7:0];
-  else
-    MPtr[sprite] <= 8'd255;
-end
-
 reg [MIBCNT-1:0] collision;
 always @*
   for (n = 0; n < MIBCNT; n = n + 1)
@@ -772,13 +812,15 @@ always @*
 
 // Sprite-sprite collision logic
 always @(posedge clk33)
-begin
+if (rst)
+  m2mhit <= `FALSE;
+else begin
   if (immc_clr)
     immc <= `FALSE;
-  if (ad[5:0]==6'h1E && regpg && phi02 && aec && cs_n && enaData) begin
+  if (ad[5:0]==6'h1E && regpg && phi02 && aec && cs && enaData) begin
     m2m[15:8] <= 8'h0;
   end
-  if (ad[5:0]==6'h1E && !regpg && phi02 && aec && cs_n && enaData) begin
+  if (ad[5:0]==6'h1E && !regpg && phi02 && aec && cs && enaData) begin
     m2m[7:0] <= 8'h0;
     m2mhit <= `FALSE;
   end
@@ -814,7 +856,9 @@ end
 
 // Sprite-background collision logic
 always @(posedge clk33)
-begin
+if (rst)
+  m2dhit <= `FALSE;
+else begin
   if (imbc_clr)
     imbc <= `FALSE;
   if (ad[5:0]==6'h1F && regpg && phi02 && aec && cs_n && enaData) begin
@@ -854,7 +898,7 @@ end
 else begin
   // Trigger sprite accesses on the last character cycle
   // if the sprite Y coordinate will match.
-  if (rasterX2==11'h2A0) begin
+  if (rasterX2==11'h2B0) begin
     for (n = 0; n < MIBCNT; n = n + 1) begin
       if (!MActive[n] && me[n] && nextRasterY == my[n])
         MCnt[n] <= 6'd0;
@@ -880,7 +924,7 @@ else begin
     end  
   end
 
-  if (LEGACY) begin
+  if (leg) begin
     if (sprite1[4]) begin
       if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
         if (MActive[sprite])
@@ -922,6 +966,26 @@ begin
       end
     end  
   end
+  if (leg) begin
+    if (sprite1[4]) begin
+      if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
+        if (MActive[sprite])
+          MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+      end 
+    end
+    else begin
+      if (vicCycle==VIC_SPRITE && enaData) begin
+        if (MActive[sprite])
+          MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+      end
+    end
+  end
+  else begin
+    if (phis==`HIGH && enaSData && vicCycle==VIC_SPRITE) begin
+      if (MActive[sprite])
+        MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+    end
+  end
 end
 
 //------------------------------------------------------------------------------
@@ -934,13 +998,13 @@ begin
   VIC_REF:
       addr <= {6'b111111,refcntr};
   VIC_RC:
-    if (phi02)
+    if (phi02==`HIGH)
       addr <= vm + vmndx;
     else    
       addr <= {6'b111111,refcntr};
   VIC_CHAR,VIC_G:
     begin
-      if (phi02)
+      if (phi02==`HIGH)
         addr <= vm + vmndx;
       else begin
         if (bmm)
@@ -952,9 +1016,9 @@ begin
       end
     end
   VIC_SPRITE:
-    if (LEGACY) begin
-      if (phi02==1'b0 && sprite1[4])
-        addr <= {vm,6'b111111,~sprite[3],sprite[2:0]};
+    if (leg) begin
+      if (phi02==`LOW && sprite1[4])
+        addr <= {vm,7'b1111111,sprite[2:0]};
       else
         addr <= {MPtr[sprite],MCnt[sprite]};
     end
@@ -1026,7 +1090,7 @@ always @(posedge clk33)
 begin
   case (vicCycle)
   VIC_SPRITE:
-    if (LEGACY ? sprite>=3 : sprite>=6)
+    if (leg ? sprite>=3 : sprite>=6)
       hVicBlank <= `TRUE;
   default:
     hVicBlank <= `FALSE;
@@ -1139,14 +1203,6 @@ begin
           endcase
     endcase
   end
-  if (phi02==`LOW && enaData) begin
-    if (vicCycle==VIC_CHAR || vicCycle==VIC_G) begin
-      readPixels <= db[7:0];
-      readChar <= nextChar;
-    end
-    waitingPixels <= readPixels;
-    waitingChar <= readChar;
-  end
 end
 
 //------------------------------------------------------------------------------
@@ -1199,6 +1255,7 @@ end
 always @(posedge clk33)
 if (rst) begin
   regpg <= 1'd0;
+  leg <= LEGACY;
   hSyncOn <= phSyncOn;
   hSyncOff <= phSyncOff;
   hBlankOff <= phBlankOff;
@@ -1310,6 +1367,7 @@ else begin
     6'h2C:  dbo8[3:0] <= mc[{regpg,3'd5}];
     6'h2D:  dbo8[3:0] <= mc[{regpg,3'd6}];
     6'h2E:  dbo8[3:0] <= mc[{regpg,3'd7}];
+    6'h32:  dbo8 <= {leg,7'h7F};
     default:  dbo8 <= 8'hFF;
     endcase
   end
@@ -1414,7 +1472,10 @@ else begin
         6'h2E:  mc[{regpg,3'd7}] <= db[3:0];
 
         6'h30:  regno <= db[5:0];
-        6'h32:  regpg <= db[0];
+        6'h32:  begin
+                regpg <= db[0];
+                leg <= db[7];
+                end
         6'h31:
           case(regno)
         6'h00:  hSyncOn[7:0] <= db;
