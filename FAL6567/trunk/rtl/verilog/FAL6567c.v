@@ -95,9 +95,9 @@ output ras_n;
 output cas_n;
 input lp_n;
 output reg hSync, vSync;	// sync outputs
-output [3:0] red;
-output [3:0] green;
-output [3:0] blue;
+output [1:0] red;
+output [1:0] green;
+output [1:0] blue;
 
 integer n;
 wire cs = !cs_n;
@@ -187,11 +187,13 @@ reg [MIBCNT-1:0] MPtr [7:0];
 reg [5:0] MCnt [0:MIBCNT-1];
 reg [8:0] mx [0:MIBCNT-1];
 reg [7:0] my [0:MIBCNT-1];
+reg [3:0] mc [0:MIBCNT-1];
+reg [MIBCNT-1:0] mmc;
 reg [MIBCNT-1:0] me;
 reg [MIBCNT-1:0] mye, mye_ff;
 reg [MIBCNT-1:0] mxe, mxe_ff;
 reg [MIBCNT-1:0] mdp;
-reg [MIBCNT-1:0] mc, mc_ff;
+reg [MIBCNT-1:0] mc_ff;
 reg [MIBCNT-1:0] MShift;
 reg [23:0] MPixels [MIBCNT-1:0];
 reg [1:0] MCurrentPixel [MIBCNT-1:0];
@@ -478,7 +480,7 @@ if (rst) begin
 end
 else begin
   if (stCycle) begin
-    if (vicCycle==VIC_REF)
+    if (vicCycle==VIC_REF || vicCycle==VIC_RC)
       refcntr <= refcntr - 8'd1;
   end
 end
@@ -861,10 +863,10 @@ if (rst)
 else begin
   if (imbc_clr)
     imbc <= `FALSE;
-  if (ad[5:0]==6'h1F && regpg && phi02 && aec && cs_n && enaData) begin
+  if (ad[5:0]==6'h1F && regpg && phi02 && aec && cs && enaData) begin
     m2d[15:8] <= 8'h0;
   end
-  if (ad[5:0]==6'h1F && !regpg && phi02 && aec && cs_n && enaData) begin
+  if (ad[5:0]==6'h1F && !regpg && phi02 && aec && cs && enaData) begin
     m2d[7:0] <= 8'h0;
     m2dhit <= `FALSE;
   end
@@ -1010,7 +1012,7 @@ begin
         if (bmm)
           addr <= {cb[13],vmndx,scanline};
         else
-          addr <= {cb[13:11],nextChar,scanline};
+          addr <= {cb[13:11],nextChar[7:0],scanline};
         if (ecm)
           addr[10:9] <= 2'b00;
       end
@@ -1175,7 +1177,7 @@ begin
         2'b00:  pixelColor <= b0c;
         2'b01:  pixelColor <= shiftingChar[7:4];
         2'b10:  pixelColor <= shiftingChar[3:0];
-        2'b11:  pixelColor <= shiftingChar[10:8];
+        2'b11:  pixelColor <= shiftingChar[11:8];
         endcase
     3'b100:
         case({shiftingPixels[7],shiftingChar[7:6]})
@@ -1191,7 +1193,7 @@ begin
           2'b00:  pixelColor <= b0c;
           2'b01:  pixelColor <= b1c;
           2'b10:  pixelColor <= b2c;
-          2'b11:  pixelColor <= shiftingChar[10:8];
+          2'b11:  pixelColor <= shiftingChar[11:8];
           endcase
         else
           case({shiftingPixels[7],shiftingChar[7:6]})
@@ -1222,7 +1224,7 @@ begin
   // See if the mib overrides the output
   for (n = 0; n < MIBCNT; n = n + 1) begin
     if (!mdp[n] || !pixelBgFlag) begin
-      if (mc[n]) begin  // multi-color mode ?
+      if (mmc[n]) begin  // multi-color mode ?
         case(MCurrentPixel[n])
         2'b00:  ;
         2'b01:  color_code <= mm0;
@@ -1339,7 +1341,11 @@ else begin
     6'h19:  dbo8 <= {irq,3'b111,ilp,immc,imbc,irst};
     6'h1A:  dbo8 <= {4'b1111,elp,emmc,embc,erst};
     6'h1B:  dbo8 <= mdp;
-    6'h1C:  dbo8 <= mc;
+    6'h1C:  begin  
+            case(regpg)
+            1'd0: dbo8 <= mmc[7:0];
+            1'd1: dbo8 <= mmc[15:8];
+            end
     6'h1D:  case(regpg)
             1'd0: dbo8 <= mxe[7:0];
             1'd1: dbo8 <= mxe[15:8];
@@ -1448,7 +1454,11 @@ else begin
                 elp <= db[3];
                 end
         6'h1B:  mdp <= db;
-        6'h1C:  mc <= db;
+        6'h1C:  begin
+                case(regpg)
+                1'd0: mmc[7:0] <= db;
+                1'd1: mmc[15:8] <= db;
+                endcase
         6'h1D:  case(regpg)
                 1'd0: mxe[7:0] <= db;
                 1'd1: mxe[15:8] <= db;
@@ -1545,9 +1555,9 @@ FAL6567_ColorROM u6
   .code(color33),
   .color(color24)
 );
-assign red = color24[23:20];
-assign green = color24[15:12];
-assign blue = color24[7:4];
+assign red = color24[23:22];
+assign green = color24[15:14];
+assign blue = color24[7:6];
 
 endmodule
 
