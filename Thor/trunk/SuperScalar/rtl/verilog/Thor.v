@@ -1372,6 +1372,7 @@ input [7:0] opcode;
 	`SEI,`CLI,`MEMSB,`MEMDB,`SYNC,`NOP,`STP,`RTF,`JSF:
 					fnSource1_v = 1'b1;
 	`LDI,`LDIS,`IMM:	fnSource1_v = 1'b1;
+	`LDISEG,`LDISEG|1'b1:  fnSource1_v = 1'b1;
 	default:
 	   case(opcode[7:4])
        `BR:		fnSource1_v = 1'b1;
@@ -1389,6 +1390,7 @@ input [5:0] func;
 	case(opcode)
 	`R,`P:		fnSource2_v = 1'b1;
 	`LDI,`LDIS,`IMM,`NOP,`STP:		fnSource2_v = 1'b1;
+	`LDISEG,`LDISEG|1'b1:  fnSource2_v = 1'b1;
 	`SEI,`CLI,`MEMSB,`MEMDB,`SYNC:
 					fnSource2_v = 1'b1;
 	`RTI,`RTD,`RTE,`JMPI:	fnSource2_v = 1'b1;
@@ -1458,7 +1460,7 @@ input [5:0] func;
 	               fnSource2_v = `TRUE;
 	           else
 	               fnSource2_v = `FALSE;
-	`CACHE,`LCL,`TLB,`LLA,
+	`CACHE,`LCL,`TLB,`LLA,`LEA,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`STI,`INC:
 			fnSource2_v = 1'b1;
@@ -1541,6 +1543,7 @@ case(fnOpcode(ins))
 `SEI,`CLI,`MEMSB,`MEMDB,`SYNC,`NOP,`MOVS,`STP:
 					fnNumReadPorts = 3'd0;
 `LDI,`LDIS,`IMM:		fnNumReadPorts = 3'd0;
+`LDISEG,`LDISEG|1'b1:  fnNumReadPorts = 3'd0;
 `R,`P,`STI,`LOOP,`JMPI:   fnNumReadPorts = 3'd1;
 `RTI,`RTD,`RTE,`RTF,`JSF:		fnNumReadPorts = 3'd1;
 `ADDI,`ADDUI,`ADDUIS:
@@ -1557,7 +1560,7 @@ case(fnOpcode(ins))
 					   fnNumReadPorts = 3'd1;
 					else
 					   fnNumReadPorts = 3'd2;
-`CACHE,`LCL,`TLB,`LLA,					 
+`CACHE,`LCL,`TLB,`LLA,`LEA,					 
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,`LWS,`INC:
 					fnNumReadPorts = 3'd1;
 `JSR,`JSRS,`JSRZ,`SYS,`INT,`RTS,`RTS2,`BR:
@@ -1787,6 +1790,23 @@ Thor_dtagmem #(DBW-1) udtm1
 	.err_o()
 );
 
+`ifdef COMPRESSED_INSN
+wire [31:0] hinsn0, hinsn1;
+wire hl_ce = cyc_o && stb_o && we_o && adr_o[31:14]==18'h3FFFF;
+Thor_hLookupTbl uhm1
+(
+    .wclk(clk),
+    .wr(h1_ce),
+    .wadr(adr_o[13:2]),
+    .wdata(dat_o),
+    .rclk(~clk),
+    .radr0({insn[23:16],insn[11:8]}),
+    .rdata0(hinsn0),
+    .radr1({insn1a[23:16],insn1a[11:8]}),
+    .rdata1(hinsn1)
+);
+`endif
+
 wire [DBW-1:0] shfto0,shfto1;
 
 function fnIsShiftiop;
@@ -1864,7 +1884,8 @@ begin
 		`VMAC:  fnTargetReg = {1'b1,vele,ir[43:40]};
 `endif
 		`POP: fnTargetReg = ir[22:16];
-		`LDI,`ADDUIS,`STS,`LINK,`UNLINK:
+		`LDI,`ADDUIS,`STS,`LINK,`UNLINK,
+		`LDISEG,`LDISEG|1'b1:
 		    if (ir[21:16]==6'd27)
 		        fnTargetReg = r27;
 		    else
@@ -1874,7 +1895,7 @@ begin
 		`RR,
 		`SHIFT,
 		`BCD,
-        `LOGIC,`FLOAT,
+        `LOGIC,`FLOAT,`LEAX,
         `LWX,`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`STMV,`STCMP,`STFND:
 		    if (ir[33:28]==6'd27)
 		        fnTargetReg = r27;
@@ -1884,7 +1905,7 @@ begin
 		`ADDI,`ADDUI,`SUBI,`SUBUI,
 		`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
 		`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,
-		`ANDI,`ORI,`EORI,`LLA,
+		`ANDI,`ORI,`EORI,`LLA,`LEA,
 		`LVB,`LVC,`LVH,`LVW,`LVWAR,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LINK,
 		`BITFIELD,`MFSPR:
@@ -2021,7 +2042,7 @@ function fnHasConst;
 input [7:0] opcode;
 	case(opcode)
 	`BFCLR,`BFSET,`BFCHG,`BFEXT,`BFEXTU,`BFINS,
-	`LDI,`LDIS,`ADDUIS,
+	`LDI,`LDIS,`ADDUIS,`LDISEG,`LDISEG|1'b1,
 	`ADDI,`SUBI,`ADDUI,`SUBUI,`MULI,`MULUI,`DIVI,`DIVUI,`MODI,`MODUI,
 	`_2ADDUI,`_4ADDUI,`_8ADDUI,`_16ADDUI,`CHKI,`CHKXI,
 	// CMPI
@@ -2039,7 +2060,7 @@ input [7:0] opcode;
 	`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWS,`INC,
 	`LVB,`LVC,`LVH,`LVW,`LVWAR,`STI,`JMPI,
 	`SB,`SC,`SH,`SW,`SWCR,`CAS,`SWS,
-	`RTI,`RTD,`RTE,`RTF,`JSF,`LLA,
+	`RTI,`RTD,`RTE,`RTF,`JSF,`LLA,`LEA,
 	`JSR,`JSRS,`SYS,`INT,`LOOP,`PEA,`LINK,`UNLINK:
 		fnHasConst = 1'b1;
 	default:
@@ -2127,7 +2148,7 @@ default:
 		fnInsnLength = 4'd2;
 	`JSRZ,`RTS,`CACHE,`LOOP,`PUSH,`POP,`UNLINK:
 		fnInsnLength = 4'd3;
-	`SYS,`MTSPR,`MFSPR,`LDI,`LDIS,`ADDUIS,`R,`TLB,`MOVS,`STP:
+	`SYS,`MTSPR,`MFSPR,`LDI,`LDIS,`LDISEG,`LDISEG|1'b1,`ADDUIS,`R,`TLB,`MOVS,`STP:
 		fnInsnLength = 4'd4;
 	`BITFIELD,`JSR,`MUX,`BCD,`INC:
 		fnInsnLength = 4'd6;
@@ -2141,6 +2162,7 @@ default:
 	default:
 	   begin
 	    case(isn[15:12])
+	    4'hE:     fnInsnLength = 4'd3;
 	    `TST:     fnInsnLength = 4'd3;
 	    `BR:      fnInsnLength = 4'd3;
 	    `CMP,`CMPI:    fnInsnLength = 4'd4;
@@ -2236,6 +2258,7 @@ fnIsMem = 	opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode=
 			opcode==`LWS || opcode==`SWS || opcode==`STI ||
 			opcode==`INC ||
 			opcode==`JMPI || opcode==`JMPIX ||
+			opcode==`LLA || opcode==`LLAX ||
 			opcode==`PUSH || opcode==`POP || opcode==`PEA || opcode==`LINK || opcode==`UNLINK
 			;
 endfunction
@@ -2258,7 +2281,7 @@ fnIsRFW =	// General registers
 			opcode==`LB || opcode==`LBU || opcode==`LC || opcode==`LCU || opcode==`LH || opcode==`LHU || opcode==`LW ||
 			opcode==`LBX || opcode==`LBUX || opcode==`LCX || opcode==`LCUX || opcode==`LHX || opcode==`LHUX || opcode==`LWX ||
 			opcode==`LVB || opcode==`LVH || opcode==`LVC || opcode==`LVW || opcode==`LVWAR || opcode==`SWCR ||
-			opcode==`STP || opcode==`LLA || opcode==`LLAX || 
+			opcode==`STP || opcode==`LLA || opcode==`LLAX || opcode==`LEA || opcode==`LEAX ||
 			opcode==`CAS || opcode==`LWS || opcode==`STMV || opcode==`STCMP || opcode==`STFND ||
 			opcode==`STS || opcode==`PUSH || opcode==`POP || opcode==`LINK || opcode==`UNLINK ||
 			opcode==`JMPI || opcode==`JMPIX ||
@@ -2270,6 +2293,7 @@ fnIsRFW =	// General registers
 			opcode==`R || opcode==`R2 || (opcode==`RR && (ir[39:34]!=`CHKX)) || opcode==`LOOP ||
 			opcode==`CHKI || opcode==`CMP || opcode==`CMPI || opcode==`TST ||
 			opcode==`LDI || opcode==`LDIS || opcode==`ADDUIS || opcode==`MFSPR ||
+			opcode==`LDISEG || opcode==(`LDISEG|1'b1) ||
 `ifdef VECTOROPS
 			opcode==`LV || opcode==`LVWS || opcode==`LVX ||
 			opcode==`VLOG || opcode==`VADDSUB | opcode==`VCMPS || opcode==`VMULDIV ||
@@ -2388,9 +2412,9 @@ casex(op)
 `endif
 8'h59:
     fnIsIllegal = `TRUE;
-8'h60,8'h61,8'h62,8'h63,8'h64,8'h65,8'h66,8'h67,8'h68,8'h69:
+8'h60,8'h61,8'h62,8'h63,8'h64,8'h65,8'h66,8'h67:
     fnIsIllegal = `TRUE;
-8'h73,8'h74,8'h75,8'h76,8'h7A,8'h7B,8'h7C,8'h7D,8'h7E,8'h7F:
+8'h73,8'h74,8'h75,8'h76,8'h7A,8'h7B,8'h7C,8'h7D:
     fnIsIllegal = `TRUE;
 8'h87,8'h88,8'h8A:
     fnIsIllegal = `TRUE;
@@ -2848,6 +2872,10 @@ else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 else if (ihit) begin
 	if (insn[7:0]==8'h00)
 		insn0 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+`ifdef COMPRESSED_INSN
+    else if (insn[15:12]==4'hE)
+        insn0 <= {hinsn0,insn[7:0]};
+`endif
 	else
         insn0 <= insn[63:0];
 end
@@ -2870,6 +2898,10 @@ else if (irq_i & ~im & ~StatusHWI & ~int_commit)
 else if (ihit) begin
 	if (insn1a[7:0]==8'h00)
 		insn1 <= {8'h00,8'hCD,8'hA5,8'h01,8'h00,8'hCD,8'hA5,8'h01};
+`ifdef COMPRESSED_INSN
+    else if (insn1a[15:12]==4'hE)
+        insn1 <= {hinsn1,insn1a[7:0]};
+`endif
 	else
 		insn1 <= insn1a;
 end
@@ -2912,6 +2944,8 @@ case(insn[15:8])
 8'h2C,8'h2D,8'h2E,8'h2F,
 `LDI,`LDIS,`ADDUIS:
 	fnImm = {{54{insn[31]}},insn[31:22]};
+`LDISEG,`LDISEG|1'b1:
+	fnImm = {insn[23:22],insn[8],{53{insn[31]}},insn[31:24]};
 `RTF: fnImm = {9'h264,4'h0};
 `JSF: fnImm = {9'h265,4'h0};
 `RTS:	fnImm = insn[19:16];
@@ -2919,10 +2953,13 @@ case(insn[15:8])
 `STI:	fnImm = {{58{insn[33]}},insn[33:28]};
 `PUSH:  fnImm = 64'hFFFFFFFFFFFFFFF8;   //-8
 //`LINK:  fnImm = {insn[39:28],3'b000};
-`JMPI,`LLA,
+`JMPI,`LLA,`LEA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
-	fnImm = {{55{insn[36]}},insn[36:28]};
+  if (SEGMODEL==2)
+  	fnImm = {{52{insn[39]}},insn[39:28]};
+  else
+	  fnImm = {{55{insn[36]}},insn[36:28]};
 default:
 	fnImm = {{52{insn[39]}},insn[39:28]};
 endcase
@@ -2946,6 +2983,7 @@ case(insn[15:8])
 8'h28,8'h29,8'h2A,8'h2B,
 8'h2C,8'h2D,8'h2E,8'h2F,
 `LDI,`LDIS,`ADDUIS:	fnImm8 = insn[29:22];
+`LDISEG,`LDISEG|1'b1: fnImm8 = insn[31:24];
 `RTF,`JSF: fnImm8 = 8'h80;
 `RTS:	fnImm8 = insn[19:16];
 `RTD,`RTE,`RTI,`RTS2,`JSRZ,`STMV,`STCMP,`STFND,`CACHE,`STS:	fnImm8 = 8'h00;
@@ -2954,10 +2992,13 @@ case(insn[15:8])
 `ifdef STACKOPS
 `LINK:  fnImm8 = {insn[32:28],3'b000};
 `endif
-`JMPI,`LLA,
+`JMPI,`LLA,`LEA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,`LVWAR,
 `SB,`SC,`SH,`SW,`SWCR,`LWS,`SWS,`INC,`LCL,`PEA:
-	fnImm8 = insn[35:28];
+  if (SEGMODEL==2)
+	  fnImm8 = insn[35:28];
+  else
+	  fnImm8 = insn[35:28];
 default:	fnImm8 = insn[35:28];
 endcase
 endfunction
@@ -2980,7 +3021,7 @@ case(insn[15:8])
 8'h24,8'h25,8'h26,8'h27,
 8'h28,8'h29,8'h2A,8'h2B,
 8'h2C,8'h2D,8'h2E,8'h2F,
-`LDI,`LDIS,`ADDUIS:
+`LDI,`LDIS,`ADDUIS,`LDISEG,`LDISEG:
 	fnImmMSB = insn[31];
 `SYS,`INT,`CACHE,`LINK:
 	fnImmMSB = 1'b0;		// SYS,INT are unsigned
@@ -2990,10 +3031,13 @@ case(insn[15:8])
 `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,
 `SBX,`SCX,`SHX,`SWX:
 	fnImmMSB = insn[47];
-`JMPI,`LLA,
+`JMPI,`LLA,`LEA,
 `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LVB,`LVC,`LVH,`LVW,
 `SB,`SC,`SH,`SW,`SWCR,`STI,`LWS,`SWS,`INC,`LCL,`PEA:
-	fnImmMSB = insn[36];
+  if (SEGMODEL==2)
+  	fnImmMSB = insn[39];
+  else
+	  fnImmMSB = insn[36];
 default:
 	fnImmMSB = insn[39];
 endcase
@@ -3201,7 +3245,7 @@ generate
 begin : argsv
 
 for (g = 0; g < QENTRIES; g = g + 1)
-begin
+begin : block1
 assign  iqentry_imm[g] = fnHasConst(iqentry_op[g]);
 
 assign args_valid[g] =
@@ -3513,7 +3557,7 @@ assign iqentry_stomp[0] = branchmiss & (iqentry_v[0] && head0 != 3'd0 && ((missi
 for (g = 1; g < QENTRIES; g = g + 1)
 assign iqentry_stomp[g] = branchmiss & (iqentry_v[g] && head0 != g && ((missid == g-1) || iqentry_stomp[g-1]));
 for (g = 0; g < QENTRIES; g = g + 1)
-begin
+begin : block2
 assign alu0_issue_[g] = (!(iqentry_v[g] && iqentry_stomp[g]) && iqentry_issue[g] && iqentry_islot[g]==2'd0);
 assign alu1_issue_[g] = (!(iqentry_v[g] && iqentry_stomp[g]) && iqentry_issue[g] && iqentry_islot[g]==2'd1);
 assign fp0_issue_[g] = (!(iqentry_v[g] && iqentry_stomp[g]) && iqentry_fpissue[g] && iqentry_islot[g]==2'd0);
@@ -3847,7 +3891,7 @@ assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL || dra
 generate
 begin : memr
     for (g = 0; g < QENTRIES; g = g + 1)
-    begin
+    begin : block4
 assign iqentry_memopsvalid[g] = (iqentry_mem[g] & iqentry_a2_v[g] & iqentry_a3_v[g] & iqentry_agen[g] & iqentry_T_v[g]);
 assign iqentry_memready[g] = (iqentry_v[g] & iqentry_memopsvalid[g] & ~iqentry_memissue[g] /*& !iqentry_issue[g]*/ & ~iqentry_done[g] & ~iqentry_out[g] & ~iqentry_stomp[g]);
     end
@@ -3881,7 +3925,7 @@ wire [3:0] cmt1nyb[0:15];
 generate
 begin : nybs
     for (g = 0; g < DBW/4; g = g + 1)
-    begin
+    begin : block3
 assign alu0nyb[g] = alu0_bus[g*4+3:g*4];
 assign alu1nyb[g] = alu1_bus[g*4+3:g*4];
 assign cmt0nyb[g] = commit0_bus[g*4+3:g*4];
@@ -4924,6 +4968,8 @@ end
 case(dram0)
 // The first state is to translate the virtual to physical address.
 // Also a good spot to check for debug match and segment limit violation.
+// Segmentation should check that the global segment is not used from 
+// user mode ?
 DS_XLAT:
 	begin
 		$display("0MEM %c:%h %h cycle started",fnIsStore(dram0_op)?"S" : "L", dram0_addr, dram0_data);
@@ -4936,6 +4982,14 @@ DS_XLAT:
             dram0 <= DS_IDLE;
         end
 `ifdef SEGMENTATION
+        else if (dram0_op==`LLA || dram0_op==`LLAX) begin
+          dram_v <= `TRUE;            // we are finished the memory cycle
+          dram_id <= dram0_id;
+          dram_tgt <= dram0_tgt;
+          dram_exc <= `EX_NONE;
+          dram_bus <= dram0_addr;
+          dram0 <= DS_IDLE;
+        end
 `ifdef SEGLIMITS
         else if (dram0_addr[ABW-1:12] >= dram0_lmt) begin
             dram_v <= `TRUE;            // we are finished the memory cycle
@@ -5333,13 +5387,13 @@ for (n = 0; n < QENTRIES; n = n + 1)
 `ifdef SEGMENTATION
                 if (iqentry_cmpmv[n]) begin
                   if (SEGMODEL==2)
-                    dram0_addr <= iqentry_a1[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                    dram0_addr <= iqentry_a1[n][DBW-4:0] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
                   else
                     dram0_addr <= iqentry_a1[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
                 end
                 else begin
                     if (SEGMODEL==2)
-                      dram0_addr <= iqentry_a1[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                      dram0_addr <= iqentry_a1[n][DBW-4:0] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
                     else
                       dram0_addr <= iqentry_a1[n];
                 end
@@ -5355,8 +5409,8 @@ for (n = 0; n < QENTRIES; n = n + 1)
 `ifdef STRINGOPS
                 // String address must be in the same segment
                 if (SEGMODEL==2) begin
-                  src_addr <= iqentry_a1[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
-                  dst_addr <= iqentry_a2[n] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                  src_addr <= iqentry_a1[n][DBW-4:0] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
+                  dst_addr <= iqentry_a2[n][DBW-4:0] + {sregs_base[iqentry_a1[n][DBW-1:DBW-3]],12'h000};
                 end
                 else begin                
                   src_addr <= iqentry_a1[n] + {sregs_base[iqentry_fn[n][5:3]],12'h000};
@@ -5953,7 +6007,7 @@ begin
     6'b101000:  fnSpr = sregs[{1'b1,regno[2:0]}];
     6'b101001:  fnSpr = GDT;
     6'b101100:  fnSpr = {sregs_base[segsw],12'h000};
-    6'b101101:  fnSpr = {sregs_lmt[segsw],12'h000};
+    6'b101101:  fnSpr = {sregs_lmt[segsw],12'h000}; // Modify for SS limits ??? (get rid of 12'h000
     6'b101111:  fnSpr = sregs_acr[segsw];
 `endif
     6'b110000:  if (DBW==64)
@@ -6080,7 +6134,7 @@ begin
                    6'd1:   begin
                            ic_invalidate_line <= `TRUE;
 `ifdef SEGMENTATION                      
-                           ic_lineno <= iqentry_a1[head]  + {sregs_base[3'd7],12'h000};
+                           ic_lineno <= iqentry_a1[head][DBW-4:0]  + {sregs_base[3'd7],12'h000};
 `else
                            ic_lineno <= iqentry_a1[head];
 `endif                           
@@ -6090,7 +6144,7 @@ begin
                            dc_invalidate_line <= `TRUE;
 `ifdef SEGMENTATION                           
                            if (SEGMODEL==2)
-                            dc_lineno <= iqentry_a1[head] + {sregs_base[iqentry_a1[head][DBW-1:DBW-3]],12'h000};
+                            dc_lineno <= iqentry_a1[head][DBW-4:0] + {sregs_base[iqentry_a1[head][DBW-1:DBW-3]],12'h000};
                            else 
                             dc_lineno <= iqentry_a1[head] + {sregs_base[iqentry_fn[head][5:3]],12'h000};
 `else

@@ -41,6 +41,7 @@
 //`define TRAP_ILLEGALOPS 1'b1
 //`define PRIVCHKS        1'b1
 //`define PCHIST      1'b1      // Primarily for debugging the processor
+`define COMPRESSED_INSN     1'b1
 
 `define TRUE	1'b1
 `define FALSE	1'b0
@@ -157,6 +158,8 @@
 `define CHKXI   8'h5D
 `define MODUI   8'h5F
 
+`define LEA       8'h68
+`define LEAX      8'h69
 `define LLA       8'h6A       // compute linear address
 `define _2ADDUI		8'h6B
 `define _4ADDUI		8'h6C
@@ -204,6 +207,8 @@
 `define FCX             4'h0D
 `define FEX             4'h0E
 `define FDX             4'h0F
+
+`define LDISEG  8'h7E
 
 `define LB			8'h80
 `define LBU			8'h81
