@@ -158,11 +158,41 @@ int AnObject::Intersect(Ray *r, double *d)
 	}
 }
 
+int AnObject::BoundingIntersect(Ray *ray)
+{
+	double B, C, Discrim, t0, t1;
+
+	// Don't need to calculate A since ray is a unit vector
+	B = 2 * ((ray->dir.x * (ray->origin.x - center.x))
+			+(ray->dir.y * (ray->origin.y - center.y))
+			+(ray->dir.z * (ray->origin.z - center.z)));
+	C =   SQUARE(ray->origin.x - center.x)
+		+ SQUARE(ray->origin.y - center.y)
+		+ SQUARE(ray->origin.z - center.z)
+		- radius2;
+
+	Discrim = (SQUARE(B) - 4 * C);
+	if (Discrim <= EPSILON)
+		return 0;
+
+	Discrim = sqrt(Discrim);
+	t0 = (-B-Discrim) * 0.5;
+	if (t0 > EPSILON) {
+		return 1;
+	}
+	t1 = (-B+Discrim) * 0.5;
+	if (t1 > EPSILON) {
+		return 1;
+	}
+	return 0;
+}
+
+
 Color AnObject::GetColor(Vector point)
 {
 	Color color;
 	Color v;
-
+/*
 	if (properties.variance.r != 0
 		|| properties.variance.g != 0
 		|| properties.variance.b != 0
@@ -173,6 +203,7 @@ Color AnObject::GetColor(Vector point)
 			(float)RTFClasses::Random::dbl()*properties.variance.b);
 	}
 	else
+*/
 		v = Color(0,0,0);
 	color = properties.color;
 	color = Color::Add(color,v);

@@ -7,6 +7,7 @@ AQuadric::AQuadric() : AnObject()
 	A = B = C = D = E = 0.0;
 	F = G = H = I = J = 0.0;
 	type = OBJ_QUADRIC;
+	CalcBoundingObject();
 }
 
 AQuadric::AQuadric(double a, double b, double c, double d, double e,
@@ -15,6 +16,7 @@ AQuadric::AQuadric(double a, double b, double c, double d, double e,
 	A = a; B = b; C = c; D = d; E = e;
 	F = f; G = g; H = h; I = i; J = j;
 	type = OBJ_QUADRIC;
+	CalcBoundingObject();
 }
 
 int AQuadric::Intersect(Ray *ray, double *T)
@@ -128,6 +130,18 @@ void AQuadric::Translate(double ax, double ay, double az)
 }
 
 void AQuadric::Print() {
+}
+
+
+// Depending on the constants supplied the quadric may not be a closed
+// object. Bounding object tests are disabled by supplying a sphere of
+// infinite radius as the bound.
+
+void AQuadric::CalcBoundingObject()
+{
+	center = Vector(0,0,0);
+	radius = BIG;
+	radius2 = SQUARE(BIG);
 }
 
 };

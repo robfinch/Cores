@@ -33,7 +33,7 @@
 
 #include "stdafx.h"
 
-RANDOM_STATE RTFClasses::Random::rand_state;
+RTFClasses::Random *RTFClasses::Random::head = nullptr;
 
 /*************************************************************************
   Returns a new random value from the sequence, in the interval 0 to
@@ -115,20 +115,23 @@ RANDOM_TYPE Random::rand(RANDOM_TYPE size)
 /*************************************************************************
   Initialize the generator; see comment at top of file.
 *************************************************************************/
-void Random::srand(RANDOM_TYPE seed)
+Random *Random::srand(RANDOM_TYPE seed)
 { 
     int  i; 
+	Random *handle = new Random();
+	handle->next = head;
+	head = handle;
 
-    rand_state.v[0]=(seed & MAX_UINT32);
+    handle->rand_state.v[0]=(seed & MAX_UINT32);
 
     for(i=1; i<56; i++)
-       rand_state.v[i] = (3 * rand_state.v[i-1] + 257) & MAX_UINT32;
+       handle->rand_state.v[i] = (3 * handle->rand_state.v[i-1] + 257) & MAX_UINT32;
 
-    rand_state.j = (55-55);
-    rand_state.k = (55-24);
-    rand_state.x = (55-0);
+    handle->rand_state.j = (55-55);
+    handle->rand_state.k = (55-24);
+    handle->rand_state.x = (55-0);
 
-    rand_state.is_init = true;
+    handle->rand_state.is_init = true;
 
     /* Heat it up a bit:
      * Using modulus in myrand() this was important to pass
@@ -138,7 +141,8 @@ void Random::srand(RANDOM_TYPE seed)
      * problems even using divisor.
      */
 	for (i=0; i<10000; i++)
-		(void) rand(MAX_UINT32);
+		(void) handle->rand(MAX_UINT32);
+	return handle;
 } 
 
 /*************************************************************************
@@ -155,7 +159,7 @@ void Random::test(int n)
   bool didchange, olddidchange = false;
   int behaviourchange = 0, behavioursame = 0;
 
-  saved_state = getRandState();
+  saved_state = *getRandState();
   /* mysrand(time(NULL)); */  /* use current state */
 
   for (i = 0; i < n+2; i++) {
@@ -174,12 +178,23 @@ void Random::test(int n)
   }
 
   /* restore state: */
-  setRandState(saved_state);
+  setRandState(&saved_state);
 }
 
 double Random::dbl()
 {
 	return (double)rand(2147483648) / 2147483648;
+}
+
+void Random::DeleteAll()
+{
+	Random *p;
+
+	while (head) {
+		p = head->next;
+		delete head;
+		head = p;
+	}
 }
 
 };

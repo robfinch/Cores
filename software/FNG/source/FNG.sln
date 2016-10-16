@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual C++ Express 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FNG", "FNG\FNG.vcxproj", "{031D8E88-4238-4756-A4EA-7DA3FA877295}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "zlibvc", "..\..\zlib\contrib\vstudio\vc10\zlibvc.vcxproj", "{8FD826F8-3739-44E6-8CC8-997122E53B8D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+		ReleaseWithoutAsm|Win32 = ReleaseWithoutAsm|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{031D8E88-4238-4756-A4EA-7DA3FA877295}.Debug|Win32.ActiveCfg = Debug|Win32
+		{031D8E88-4238-4756-A4EA-7DA3FA877295}.Debug|Win32.Build.0 = Debug|Win32
+		{031D8E88-4238-4756-A4EA-7DA3FA877295}.Release|Win32.ActiveCfg = Release|Win32
+		{031D8E88-4238-4756-A4EA-7DA3FA877295}.Release|Win32.Build.0 = Release|Win32
+		{031D8E88-4238-4756-A4EA-7DA3FA877295}.ReleaseWithoutAsm|Win32.ActiveCfg = Release|Win32
+		{031D8E88-4238-4756-A4EA-7DA3FA877295}.ReleaseWithoutAsm|Win32.Build.0 = Release|Win32
+		{8FD826F8-3739-44E6-8CC8-997122E53B8D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8FD826F8-3739-44E6-8CC8-997122E53B8D}.Debug|Win32.Build.0 = Debug|Win32
+		{8FD826F8-3739-44E6-8CC8-997122E53B8D}.Release|Win32.ActiveCfg = Release|Win32
+		{8FD826F8-3739-44E6-8CC8-997122E53B8D}.Release|Win32.Build.0 = Release|Win32
+		{8FD826F8-3739-44E6-8CC8-997122E53B8D}.ReleaseWithoutAsm|Win32.ActiveCfg = ReleaseWithoutAsm|Win32
+		{8FD826F8-3739-44E6-8CC8-997122E53B8D}.ReleaseWithoutAsm|Win32.Build.0 = ReleaseWithoutAsm|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

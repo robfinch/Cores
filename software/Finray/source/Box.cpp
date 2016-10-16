@@ -74,6 +74,7 @@ ABox::ABox(Vector pt1, Vector d) : AnObject()
 	o = (ATriangle *)obj;
 	while (o) {
 		o->Init();
+		o->CalcBoundingObject();
 		o = (ATriangle *)o->next;
 	}
 	CalcBoundingObject();
@@ -151,6 +152,7 @@ ABox::ABox() : AnObject()
 	o = (ATriangle *)obj;
 	while (o) {
 		o->Init();
+		o->CalcBoundingObject();
 		o = (ATriangle *)o->next;
 	}
 	CalcBoundingObject();
@@ -232,6 +234,7 @@ ABox::ABox(double x, double y, double z) : AnObject()
 	o = (ATriangle *)obj;
 	while (o) {
 		o->Init();
+		o->CalcBoundingObject();
 		o = (ATriangle *)o->next;
 	}
 	CalcBoundingObject();
@@ -352,27 +355,41 @@ void ABox::SetVariance(Color v)
 
 Vector ABox::CalcCenter()
 {
-	Vector c = Vector(0,0,0);
+	center = Vector(0,0,0);
 	int nn;
 
 	for (nn = 0; nn < 12; nn++) {
-		c = Vector::Add(c,tri[nn]->p1);
-		c = Vector::Add(c,tri[nn]->p2);
-		c = Vector::Add(c,tri[nn]->p3);
+		center = Vector::Add(center,tri[nn]->p1);
+		center = Vector::Add(center,tri[nn]->p2);
+		center = Vector::Add(center,tri[nn]->p3);
 	}
-	c = Vector::Scale(c,1.0/36.0);
-	return c;
+	center = Vector::Scale(center,1.0/36.0);
+	return center;
+}
+
+double ABox::CalcRadius()
+{
+	int nn;
+	double d1,d2,d3;
+	radius = 0.0;
+
+	for (nn = 0; nn < 12; nn++) {
+		d1 = Vector::Length(Vector::Sub(center,tri[nn]->p1));
+		d2 = Vector::Length(Vector::Sub(center,tri[nn]->p2));
+		d3 = Vector::Length(Vector::Sub(center,tri[nn]->p3));
+	}
+	radius = abs(d1) > radius ? abs(d1) : radius;
+	radius = abs(d2) > radius ? abs(d2) : radius;
+	radius = abs(d3) > radius ? abs(d3) : radius;
+	radius += EPSILON;
+	radius2 = SQUARE(radius);
+	return radius;
 }
 
 void ABox::CalcBoundingObject()
 {
-	Vector c = Vector(0,0,0);
-
-	if (boundingObject) {
-		delete boundingObject;
-		boundingObject = nullptr;
-	}
-//	boundingObject = new ASphere(CalcCenter(), maxLength);
+	CalcCenter();
+	CalcRadius();
 }
 
 };

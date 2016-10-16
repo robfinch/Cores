@@ -8,8 +8,8 @@ ASphere::ASphere() : AnObject()
 {
 	type = OBJ_SPHERE;
 	center.x = center.y = center.z = 0;
-	radius = 0;
-	radius2 = 0;
+	radius = 1;
+	radius2 = 1;
 }
 
 ASphere::ASphere(Vector P, double R) : AnObject()

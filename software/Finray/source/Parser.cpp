@@ -8,13 +8,15 @@ static char backup_token = 0;
 extern Finray::Color backGround;
 extern char master_filebuf[10000000];
 
+using namespace System::Runtime::InteropServices;
+
 namespace Finray {
 
 Parser::Parser()
 {
 	mfp = 0;
 	level = 0;
-	RTFClasses::Random::srand((RANDOM_TYPE)time(NULL));
+//	RTFClasses::Random::srand((RANDOM_TYPE)time(NULL));
 }
 
 void Parser::Need(int tk) {
@@ -247,6 +249,10 @@ int	Parser::NextToken() {
 			p++;
 			return token = '=';
 		}
+		if (p[0]=='.') {
+			p++;
+			return token = '.';
+		}
 		if (p[0]=='-') {
 			p++;
 			return token = '-';
@@ -376,10 +382,28 @@ int	Parser::NextToken() {
 			p += 7;
 			return token = TK_DIFFUSE;
 		}
-		if (p[0]=='f' && p[1]=='o' && p[2]=='r' && !isidch(p[3])) {
-			p += 3;
-			return token = TK_FOR;
+		// first_frame
+		if (p[0]=='f') {
+			if (p[1]=='i' && p[2]=='r' && p[3]=='s' && p[4]=='t' && p[5]=='_' &&
+				p[6]=='f' && p[7]=='r' && p[8]=='a' && p[9]=='m' && p[10]=='e' &&
+				!isidch(p[11])) {
+				p += 11;
+				return token = TK_FIRSTFRAME;
+			}
+			if (p[1]=='o' && p[2]=='r' && !isidch(p[3])) {
+				p += 3;
+				return token = TK_FOR;
+			}
+			if (p[1]=='r' && p[2]=='a' && p[3]=='m' && p[4]=='e' && p[5]=='s' && !isidch(p[6])) {
+				p += 6;
+				return token = TK_FRAMES;
+			}
+			if (p[1]=='r' && p[2]=='a' && p[3]=='m' && p[4]=='e' && p[5]=='n' && p[6]=='o' && !isidch(p[7])) {
+				p += 7;
+				return token = TK_FRAMENO;
+			}
 		}
+
 		if (p[0]=='d' && p[1]=='i' && p[2]=='r' && p[3]=='e' && p[4]=='c' && p[5]=='t' && p[6]=='i' && p[7]=='o' && p[8]=='n' && !isidch(p[9])) {
 			p += 9;
 			return token = TK_DIRECTION;
@@ -388,7 +412,7 @@ int	Parser::NextToken() {
 			p += 7;
 			return token = TK_INCLUDE;
 		}
-		// light location look_at
+		// last_frame light location look_at
 		if (p[0]=='l') {
 			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' && !isidch(p[5])) {
 				p += 5;
@@ -401,6 +425,12 @@ int	Parser::NextToken() {
 			if (p[1]=='o' && p[2]=='o' && p[3]=='k' && p[4]=='_' && p[5]=='a' && p[6]=='t' && !isidch(p[7])) {
 				p += 7;
 				return token = TK_LOOK_AT;
+			}
+			if (p[1]=='a' && p[2]=='s' && p[3]=='t' && p[4]=='_' &&
+				p[5]=='f' && p[6]=='r' && p[7]=='a' && p[8]=='m' && p[9]=='e' &&
+				!isidch(p[10])) {
+				p += 10;
+				return token = TK_LASTFRAME;
 			}
 		}
 
@@ -440,8 +470,12 @@ int	Parser::NextToken() {
 			p += 7;
 			return token = TK_QUADRIC;
 		}
-		// rectangle reflection right rotate roughness
+		// raytracer rectangle reflection right rotate roughness
 		if (p[0]=='r') {
+			if (p[1]=='a' && p[2]=='y' && p[3]=='t' && p[4]=='r' && p[5]=='a' && p[6]=='c' && p[7]=='e' && p[8]=='r' && !isidch(p[9])) {
+				p += 9;
+				return token = TK_RAYTRACER;
+			}
 			if (p[1]=='e' && p[2]=='c' && p[3]=='t' && p[4]=='a' && p[5]=='n' && p[6]=='g' && p[7]=='l' && p[8]=='e' && !isidch(p[9])) {
 				p += 9;
 				return token = TK_RECTANGLE;
@@ -490,6 +524,10 @@ int	Parser::NextToken() {
 			if (p[1]=='p' && p[2]=='h' && p[3]=='e' && p[4]=='r' && p[5]=='e' && !isidch(p[6])) {
 				p += 6;
 				return token = TK_SPHERE;
+			}
+			if (p[1]=='r' && p[2]=='a' && p[3]=='n' && p[4]=='d' && !isidch(p[5])) {
+				p += 5;
+				return token = TK_SRAND;
 			}
 		}
 
@@ -550,17 +588,41 @@ Value Parser::Unary()
 				throw gcnew Finray::FinrayException(ERR_UNDEFINED,0);
 			return sym->value;
 
+		case TK_RAYTRACER:
+			Need('.');
+			switch(NextToken()) {
+			case TK_FIRSTFRAME:
+				v2.i = pRayTracer->first_frame;
+				v2.type = TYP_INT;
+				return v2;
+			case TK_LASTFRAME:
+				v2.i = pRayTracer->last_frame;
+				v2.type = TYP_INT;
+				return v2;
+			case TK_FRAMENO:
+				v2.i = pRayTracer->frameno;
+				v2.type = TYP_INT;
+				return v2;
+			default:
+				throw gcnew Finray::FinrayException(ERR_UNDEFINED,0);
+			}
+			break;
+
 		case TK_RANDV:
 			Need('(');
+			v = eval();
+			if (v.type != TYP_RAND)
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
+			Need(',');
 			v2 = eval();
 			minvalv = v2.v;
 			Need(',');
 			v2 = eval();
 			maxvalv = v2.v;
 			Need(')');
-			v2.v.x = (maxvalv.x-minvalv.x) * RTFClasses::Random::dbl() + minvalv.x;
-			v2.v.y = (maxvalv.y-minvalv.y) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.y;
-			v2.v.z = (maxvalv.x-minvalv.z) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minvalv.z;
+			v2.v.x = (maxvalv.x-minvalv.x) * ((RTFClasses::Random*)v.val.obj)->dbl() + minvalv.x;
+			v2.v.y = (maxvalv.y-minvalv.y) * ((RTFClasses::Random*)v.val.obj)->dbl() + minvalv.y;
+			v2.v.z = (maxvalv.x-minvalv.z) * ((RTFClasses::Random*)v.val.obj)->dbl() + minvalv.z;
 			v2.type = TYP_VECTOR;
 			return v2;
 
@@ -654,15 +716,27 @@ Value Parser::Unary()
 			minus = !minus;
 			break;
 
+		case TK_SRAND:
+			Need('(');
+			v2 = eval();
+			Need(')');
+			v2.val.obj = (AnObject *)RTFClasses::Random::srand(v2.i);
+			v2.type = TYP_RAND;
+			return v2;
+
 		case TK_RAND:
 			Need('(');
+			v = eval();
+			if (v.type != TYP_RAND)
+				throw gcnew Finray::FinrayException(ERR_MISMATCH_TYP,0);
+			Need(',');
 			v2 = eval();
 			minval = v2.d;
 			Need(',');
 			v2 = eval();
 			maxval = v2.d;
 			Need(')');
-			last_num = (maxval-minval) * (double)RTFClasses::Random::rand(2147483648) / 2147483648 + minval;
+			last_num = (maxval-minval) * (double)((RTFClasses::Random *)v.val.obj)->dbl() + minval;
 			// Fall through
 		case TK_NUM:
 			v2.d = last_num;
@@ -902,6 +976,14 @@ Value Parser::ParseBuffer(char *buf)
 		old_p = p;
 		NextToken();
 		switch(token) {
+		case TK_RAYTRACER:
+			ParseRayTracer();
+			v.type = TYP_INT;
+			v.i = 0;
+			if (level > 0) {
+				return v;
+			}
+			break;
 		case TK_CAMERA:
 		case TK_VIEW_POINT:
 			vp = ParseViewPoint();
@@ -1195,6 +1277,39 @@ Vector *Parser::ParseVector()
 	return vector;
 }
 */
+void Parser::ParseRayTracer()
+{
+	Value v;
+
+	Need('{');
+	while(true) {
+		switch(NextToken()) {
+		case TK_FIRSTFRAME:
+			v = eval();
+			if (v.type != TYP_INT && v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			if (v.type==TYP_INT)
+				pRayTracer->first_frame = v.i;
+			else
+				pRayTracer->first_frame = (int)v.d;
+			break;
+		case TK_LASTFRAME:
+			v = eval();
+			if (v.type != TYP_INT && v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			if (v.type==TYP_INT)
+				pRayTracer->last_frame = v.i;
+			else
+				pRayTracer->last_frame = (int)v.d;
+			break;
+		case '}':
+			return;
+		default:
+			throw gcnew Finray::FinrayException(ERR_SYNTAX, token);
+		}
+	}
+}
+
 Viewpoint *Parser::ParseViewPoint()
 {
 	Value v;
@@ -2001,11 +2116,14 @@ AnObject *Parser::ParseFor(AnObject *obj)
 	return obj;
 }
 
-void Parser::Parse(std::string fname)
+void Parser::Parse(String^ fnme)
 {
 	std::ifstream fs;
+	std::string fname;
 	AnObject obj;
 
+	char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(fnme);
+	fname = str;
 	memset(master_filebuf,0,sizeof(master_filebuf));
 	fs.open(fname, std::ios::in);
 	fs.read(master_filebuf,sizeof(master_filebuf));

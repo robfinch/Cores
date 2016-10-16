@@ -13,6 +13,11 @@ void RayTracer::Init()
 	viewPoint = nullptr;
 	symbolTable.count = 0;
 	recurseLevel = 0;
+	maxRecurseLevel = 5;
+	parser.pRayTracer = this;
+	first_frame = 0;
+	last_frame = 0;
+	frameno = 0;
 }
 
 void RayTracer::Add(AnObject *obj) {
@@ -68,6 +73,11 @@ void RayTracer::Add(ALight *L)
 		q->next = L;
 	else
 		lightList = L;
+}
+
+bool RayTracer::HitRecurseLimit()
+{
+	return recurseLevel > maxRecurseLevel;
 }
 
 };

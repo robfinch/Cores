@@ -10,6 +10,9 @@ APlane::APlane() : AnObject()
 	normal.y = 0;
 	normal.z = 0;
 	distance = 0;
+	center = Vector(0,0,0);
+	radius = BIG;
+	radius2 = (SQUARE(BIG));
 }
 
 APlane::APlane(double A, double B, double C, double D) : AnObject()
@@ -20,6 +23,9 @@ APlane::APlane(double A, double B, double C, double D) : AnObject()
 	normal.z = C;
 	distance = -D;
 	normal = Vector::Normalize(normal);
+	center = normal;
+	radius = BIG;
+	radius2 = (SQUARE(BIG));
 }
 
 int APlane::Intersect(Ray *ray, double *T)

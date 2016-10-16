@@ -12,6 +12,7 @@ ATriangle::ATriangle(Vector pt1, Vector pt2, Vector pt3) : AnObject()
 	p2 = pt2;
 	p3 = pt3;
 	Init();
+	CalcBoundingObject();
 }
 
 ATriangle::ATriangle() : AnObject()
@@ -21,6 +22,7 @@ ATriangle::ATriangle() : AnObject()
 	p2 = Vector(1,0,0);
 	p3 = Vector(1,1,0);
 	Init();
+	CalcBoundingObject();
 }
 
 void ATriangle::Init()
@@ -142,16 +144,16 @@ Vector ATriangle::Normal(Vector p)
 	return normal;
 }
 
+// The normal should remain the same
 void ATriangle::Translate(Vector p)
 {
-	Vector d1 = Vector::Sub(p1,pc);
-	Vector d2 = Vector::Sub(p2,pc);
-	Vector d3 = Vector::Sub(p3,pc);
-	pc = Vector::Add(pc,p);
-	p1 = Vector::Add(pc,d1);
-	p2 = Vector::Add(pc,d2);
-	p3 = Vector::Add(pc,d3);
-	Init();
+	Vector d1 = Vector::Sub(p1,center);
+	Vector d2 = Vector::Sub(p2,center);
+	Vector d3 = Vector::Sub(p3,center);
+	center = Vector::Add(center,p);
+	p1 = Vector::Add(center,d1);
+	p2 = Vector::Add(center,d2);
+	p3 = Vector::Add(center,d3);
 }
 
 void ATriangle::Scale(Vector p)
@@ -169,6 +171,7 @@ void ATriangle::Scale(Vector p)
 	p3.z = p3.z * p.z;
 
 	Init();
+	CalcBoundingObject();
 }
 
 void ATriangle::Translate(double x, double y, double z)
@@ -178,13 +181,29 @@ void ATriangle::Translate(double x, double y, double z)
 	p.y = y;
 	p.z = z;
 	Translate(p);
+	Init();
 }
 
 void ATriangle::CalcCentroid()
 {
-	pc = Vector::Add(p1,p2);
-	pc = Vector::Add(p3,pc);
-	pc = Vector::Scale(pc,0.33333333333333333333);
+	center = Vector::Add(p1,p2);
+	center = Vector::Add(p3,center);
+	center = Vector::Scale(center,0.33333333333333333333);
+}
+
+void ATriangle::CalcBoundingObject()
+{
+	double d1,d2,d3;
+	
+	radius = 0.0;
+	d1 = Vector::Length(Vector::Sub(p1,center));
+	d2 = Vector::Length(Vector::Sub(p2,center));
+	d3 = Vector::Length(Vector::Sub(p3,center));
+	radius = abs(d1) > radius ? abs(d1) : radius;
+	radius = abs(d2) > radius ? abs(d2) : radius;
+	radius = abs(d3) > radius ? abs(d3) : radius;
+	radius += EPSILON;
+	radius2 = SQUARE(radius);
 }
 
 };

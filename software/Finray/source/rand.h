@@ -29,20 +29,23 @@ namespace RTFClasses
 class Random
 {
 private:
-	static RANDOM_STATE rand_state;
-	RANDOM_STATE static getRandState(void) {
-		return rand_state;
+	static Random *head;
+	Random *next;
+	RANDOM_STATE rand_state;
+	RANDOM_STATE *getRandState(void) {
+		return &rand_state;
 	}
-	void static setRandState(RANDOM_STATE state) {;
-		rand_state = state;
+	void setRandState(RANDOM_STATE *state) {;
+		rand_state = *state;
 	}
 public:
-	bool static isInit(void) {
+	bool isInit(void) {
 		return rand_state.is_init;
 	}
-	RANDOM_TYPE static rand(RANDOM_TYPE size);
-	double static dbl();
-	void static srand(RANDOM_TYPE seed);
+	RANDOM_TYPE rand(RANDOM_TYPE size);
+	double dbl();
+	static Random * srand(RANDOM_TYPE seed);
+	static void DeleteAll();
 	void test(int n);
 };
 };

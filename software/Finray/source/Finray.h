@@ -89,6 +89,9 @@ enum {
 class AnObject {
 public:
 	unsigned int type;
+	Vector center;			// for bounding volumes
+	double radius;			// for bounding object
+	double radius2;			// square of radius
 	bool doReflections;
 	bool doShadows;
 	bool doImage;
@@ -105,6 +108,7 @@ public:
 	Color Shade(Ray *ray, Vector normal, Vector point, Color *color);
 	virtual void SetColorVariance(Color v) { properties.SetColorVariance(v); };
 	int Intersect(Ray *, double *);
+	int BoundingIntersect(Ray *ray);
 	bool AntiIntersects(Ray *);
 	virtual void SetTexture(Surface *tx) { properties = *tx; };
 	virtual void SetColor(Color c) { properties.color = c; };
@@ -128,6 +132,7 @@ public:
 	AQuadric();
 	AQuadric(double a, double b, double c, double d, double e,
 			double f, double g, double h, double i, double j);
+	void CalcBoundingObject();
 	int Intersect(Ray *, double *);
 	Vector Normal(Vector);
 	void Print();
@@ -148,9 +153,6 @@ public:
 class ASphere : public AnObject
 {
 public:
-	Vector center;
-	double radius;
-	double radius2;	// radius squared
 	ASphere();
 	ASphere(Vector P, double R);
 	ASphere(double x,double y ,double z,double rad);
@@ -213,7 +215,6 @@ public:
 	double uu, vv, uv;	// vars for intersection testing
 	double D;			// denominator
 	Vector p1, p2, p3;
-	Vector pc;			// centroid for translations
 	ATriangle();
 	ATriangle(Vector a, Vector b, Vector c);
 	void SetTexture(Surface *tx) { properties = *tx; };
@@ -221,6 +222,7 @@ public:
 	Color GetColor(Vector point) { return properties.color; };
 	void Init();
 	void CalcNormal();
+	void CalcBoundingObject();
 	bool InternalSide(Vector pt1, Vector pt2, Vector a, Vector b);
 	bool PointInTriangle(Vector p);
 	int Intersect(Ray *, double *);
@@ -259,6 +261,8 @@ public:
 	void TransformX(Transform *t);
 	void CalcCylinderTransform();
 	void CalcTransform();
+	void CalcCenter();
+	void CalcBoundingObject();
 	Vector Normal(Vector);
 	int Intersect(Ray *, double *);
 	void Translate(double x, double y, double z);
@@ -286,6 +290,7 @@ public:
 	ABox(double x, double y, double z);
 	void CalcBoundingObject();
 	Vector CalcCenter();
+	double CalcRadius();
 	Vector Normal(Vector v);
 	void SetTexture(Surface *tx);
 	void SetColor(Color c);
@@ -361,10 +366,14 @@ enum {
 	TK_CYLINDER,
 	TK_DIFFUSE,
 	TK_DIRECTION,
+	TK_FIRSTFRAME,
 	TK_FOR,
+	TK_FRAMENO,
+	TK_FRAMES,
 	TK_ICONST,
 	TK_INCLUDE,
 	TK_ID,
+	TK_LASTFRAME,
 	TK_LIGHT,
 	TK_LIGHT_SOURCE,
 	TK_LOCATION,
@@ -380,6 +389,7 @@ enum {
 	TK_QUADRIC,
 	TK_RAND,
 	TK_RANDV,
+	TK_RAYTRACER,
 	TK_RCONST,
 	TK_RECTANGLE,
 	TK_REFLECTION,
@@ -390,6 +400,7 @@ enum {
 	TK_SIN,
 	TK_SPECULAR,
 	TK_SPHERE,
+	TK_SRAND,
 	TK_TEXTURE,
 	TK_TO,
 	TK_TRANSLATE,
@@ -436,7 +447,8 @@ enum {
 	TYP_OBJECT,
 	TYP_TEXTURE,
 	TYP_VIEWPOINT,
-	TYP_LIGHT
+	TYP_LIGHT,
+	TYP_RAND
 };
 
 class Value
@@ -477,8 +489,14 @@ public:
 	void Add(Symbol *sym);
 };
 
+class RayTracer;
+
 class Parser
 {
+public:
+	RayTracer *pRayTracer;
+	std::string path;
+private:
 	int mfp;
 	int token;
 	double rval;
@@ -531,6 +549,7 @@ class Parser
 	AnObject *ParseObject();
 	Viewpoint *ParseViewPoint();
 	AnObject *ParseFor(AnObject *);
+	void ParseRayTracer();
 	void Need(int);
 	void Was(int);
 	int NextToken();
@@ -538,22 +557,27 @@ public:
 	char *p;
 	Parser();
 	Value ParseBuffer(char *buf);
-	void Parse(std::string path);
+	void Parse(System::String^ path);
 };
 
 class RayTracer
 {
 public:
+	int first_frame;
+	int last_frame;
+	int frameno;
+	int maxRecurseLevel;
 	int recurseLevel;
+	Viewpoint *viewPoint;
 	AnObject *objectList;
 	ALight *lightList;
-	Viewpoint *viewPoint;
-	Parser parser;
 	SymbolTable symbolTable;
+	Parser parser;
 	RayTracer() {
 		Init();
 	}
 	void Init();
+	bool HitRecurseLimit();
 	void Add(AnObject *);
 	void Add(ALight *);
 	void DeleteList(AnObject *);

@@ -37,6 +37,7 @@ void ACylinder::CalcTransform()
 		trans.CalcCoordinate(base, axis, apexRadius, tmpf);
 	}
 	length = 0.0;
+	CalcBoundingObject();
 }
 
 
@@ -142,6 +143,7 @@ void ACone::CalcCylinderTransform()
 		trans.CalcCoordinate(base, axis, apexRadius, tmpf);
 	}
 	length = 0.0;
+	CalcBoundingObject();
 }
 
 
@@ -201,6 +203,7 @@ void ACone::CalcTransform()
 	length = tmpf / tlen;
 	/* Determine alignment */
 	trans.CalcCoordinate(origin, axis, apexRadius, tlen);
+	CalcBoundingObject();
 }
 
 void ACone::RotXYZ(double ax, double ay, double az)
@@ -365,6 +368,24 @@ int ACone::Intersect(Ray *ray, double *t)
 void ACone::TransformX(Transform *t)
 {
 	trans.Compose(t);
+}
+
+void ACone::CalcCenter()
+{
+	center = Vector::Add(apex,base);
+	center = Vector::Scale(center,0.5);
+}
+
+void ACone::CalcBoundingObject()
+{
+	double d1,d2, h;
+	Vector axis;
+
+	axis = Vector::Sub(apex, base);
+	d1 = Vector::Length(axis) / 2.0; 
+	d2 = baseRadius > apexRadius ? baseRadius : apexRadius;
+	radius = sqrt((d1*d1) + (d2*d2)) + EPSILON;
+	radius2 = SQUARE(radius);
 }
 
 };

@@ -42,6 +42,7 @@ namespace Finray {
 			{
 				delete components;
 			}
+			RTFClasses::Random::DeleteAll();
 		}
 	private: System::Windows::Forms::Button^  button1;
 	private: System::Windows::Forms::MenuStrip^  menuStrip1;
@@ -51,6 +52,7 @@ namespace Finray {
 	protected: 
 
 	private:
+		String^ filepath;
 		/// <summary>
 		/// Required designer variable.
 		/// </summary>
@@ -128,8 +130,19 @@ namespace Finray {
 		}
 #pragma endregion
 	private: System::Void button1_Click(System::Object^  sender, System::EventArgs^  e) {
-				 frmRay^ form = gcnew frmRay();
-				 form->Show();
+				rayTracer.Init();
+				try {
+					System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::WaitCursor; 
+					rayTracer.parser.Parse(filepath);
+					System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::Default; 
+					 frmRay^ form = gcnew frmRay();
+					 form->Show();
+				}
+				catch (Finray::FinrayException^ ex) {
+					frmError^ form = gcnew frmError();
+					form->ex = ex;
+					form->ShowDialog();
+				}
 			 }
 	private: System::Void openToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 				 static char buf[500];
@@ -137,24 +150,16 @@ namespace Finray {
 				 if (this->openFileDialog1->ShowDialog()  == System::Windows::Forms::DialogResult::OK ) {
 					char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->openFileDialog1->FileName);
 					sprintf(buf, "\"%s\" \"%s.frpp\"", str, str);
-					System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::WaitCursor; 
 					//ZeroMemory(filebuf, sizeof(filebuf));
 					proc->StartInfo->FileName = "frpp.exe";
 					proc->StartInfo->Arguments = gcnew String(buf);
 					proc->StartInfo->UseShellExecute = false;
+					proc->StartInfo->CreateNoWindow = true;
 					proc->Start();
 					proc->WaitForExit();
 					sprintf(buf, "%s.frpp", str);
-					rayTracer.Init();
-					try {
-					rayTracer.parser.Parse(std::string(buf));
-					}
-					catch (Finray::FinrayException^ ex) {
-						frmError^ form = gcnew frmError();
-						form->ex = ex;
-						form->ShowDialog();
-					}
-					System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::Default; 
+					rayTracer.parser.path = std::string(buf);
+					filepath = gcnew String(buf);
 				 }
 			 }
 };

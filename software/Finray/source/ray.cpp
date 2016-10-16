@@ -15,7 +15,7 @@ void Ray::Trace(Color *c)
 	Vector normal;
 
 	c->r = c->g = c->b = 0.0;
-	if (rayTracer.recurseLevel > MAXRECURSELEVEL)
+	if (rayTracer.HitRecurseLimit())
 		return;
 	minT = BIG;
 	minObjectPtr = nullptr;
@@ -46,10 +46,6 @@ void Ray::Test(AnObject *o)
 	double t;
 	AnObject *o2;
 
-	if (o->boundingObject) {
-		if (o->boundingObject->Intersect(this, &t) <= 0)
-			return;
-	}
 	if (o->obj) {
 		o2 = o->obj;
 		while (o2) {
@@ -57,6 +53,8 @@ void Ray::Test(AnObject *o)
 			o2 = o2->next;
 		}
 	}
+	if (o->BoundingIntersect(this) <= 0)
+		return;
 	if (!o->AntiIntersects(this)) {
 		if (o->Intersect(this, &t) > 0) {
 			if ((t > EPSILON) && (t < minT)) {
