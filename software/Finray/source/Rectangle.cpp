@@ -66,7 +66,7 @@ void ARectangle::RotZ(double a)
 //  1: intersect in unique point
 //  2: are in same plane
 //
-int ARectangle::Intersect(Ray *ray, double *T)
+AnObject *ARectangle::Intersect(Ray *ray, double *T)
 {
 	Vector u, v, w, x, w0, I;
 	double r,a,b;
@@ -74,15 +74,15 @@ int ARectangle::Intersect(Ray *ray, double *T)
 	double s, t;
 
 	if (normal.x < EPSILON && normal.y < EPSILON && normal.z < EPSILON)
-		return -1;	// triangle is degenerate
+		return nullptr;//-1;	// triangle is degenerate
 
 	w0 = Vector::Sub(ray->origin, p1);
 	a = -Vector::Dot(normal,w0);
 	b = Vector::Dot(normal,ray->dir);
 	if (abs(b) < EPSILON) {
 		if (a==0.0)		// ray lines in rectangle plane
-			return 2;	// return 2;
-		return 0;
+			return this; //2;	// return 2;
+		return nullptr;
 	}
 
 	u = Vector::Sub(p2,p1);
@@ -93,7 +93,7 @@ int ARectangle::Intersect(Ray *ray, double *T)
 	r = a / b;
 	*T = r;
 	if (r < 0.0)		// ray goes away from the triangle
-		return 0;
+		return nullptr;
 
 	I = Vector::Add(ray->origin, Vector::Scale(ray->dir, r));
 
@@ -113,7 +113,7 @@ int ARectangle::Intersect(Ray *ray, double *T)
 	t = (uv * wu - uu * wv) / D;
 	if (t < 0.0 || (s+t) > 1.0)	// I is outside of T
 		goto j1;
-	return 1;		// I is in T
+	return this;//1;		// I is in T
 j1:
 	// Is I inside T2 ?
 	uv = Vector::Dot(u,x);
@@ -127,8 +127,8 @@ j1:
 		return 0;
 	t = (uv * wu - uu * wv) / D;
 	if (t < 0.0 || (s+t) > 1.0)	// I is outside of T
-		return 0;
-	return 1;		// I is in T
+		return nullptr;
+	return this;//1;		// I is in T
 }
 
 Vector ARectangle::Normal(Vector p)

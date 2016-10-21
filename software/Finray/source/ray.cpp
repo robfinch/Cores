@@ -1,16 +1,28 @@
 #include "stdafx.h"
 
 extern Finray::RayTracer rayTracer;
-extern Finray::Color backGround;
 
 using namespace Finray;
 
 namespace Finray
 {
+
+void Ray::TestList(AnObject *obj)
+{
+	if (obj==nullptr)
+		return;
+	while (obj) {
+		if (obj->IsContainer())
+			TestList(obj->obj);
+		else
+			Test(obj);
+		obj = obj->next;
+	}
+}
+
 void Ray::Trace(Color *c)
 {
 	double normalDir;
-	AnObject *objectPtr;
 	Vector point;
 	Vector normal;
 
@@ -19,21 +31,14 @@ void Ray::Trace(Color *c)
 		return;
 	minT = BIG;
 	minObjectPtr = nullptr;
-	objectPtr = rayTracer.objectList;
-	while (objectPtr) {
-		Test(objectPtr);
-		objectPtr = objectPtr->next;
-	}
+	TestList(rayTracer.objectList);
 	// If nothing intersected
 	if (minT >= BIG) {
-		c->r = backGround.r;
-		c->g = backGround.g;
-		c->b = backGround.b;
+		*c = rayTracer.backGround;
 		return;
 	}
-	point.x = minT * dir.x + origin.x;
-	point.y = minT * dir.y + origin.y;
-	point.z = minT * dir.z + origin.z;
+	point = Vector::Scale(dir, minT);
+	point = Vector::Add(point, origin);
 	normal = minObjectPtr->Normal(point);
 	normalDir = Vector::Dot(normal,dir);
 	if (normalDir > 0.0)
@@ -46,20 +51,15 @@ void Ray::Test(AnObject *o)
 	double t;
 	AnObject *o2;
 
-	if (o->obj) {
-		o2 = o->obj;
-		while (o2) {
-			Test(o2);
-			o2 = o2->next;
-		}
-	}
+	if (o==nullptr)
+		return;
 	if (o->BoundingIntersect(this) <= 0)
 		return;
 	if (!o->AntiIntersects(this)) {
-		if (o->Intersect(this, &t) > 0) {
+		if (o2 = o->Intersect(this, &t)) {	// > 0
 			if ((t > EPSILON) && (t < minT)) {
 				minT = t;
-				minObjectPtr = o;
+				minObjectPtr = o2;
 			}
 		}
 	}

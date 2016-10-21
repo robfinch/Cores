@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+#define Vector3d	Vector
+
 class Vector
 {
 public:
@@ -36,6 +38,11 @@ public:
 		c.z = a.z * k;
 		return c;
 	};
+	static double SumSqr(Vector a) {
+		double d;
+		d = a.x * a.x + a.y * a.y + a.z * a.z;
+		return d;
+	}
 	static double Dot(Vector a, Vector b) {
 		double d;
 		d = a.x * b.x + a.y * b.y + a.z * b.z;
@@ -90,6 +97,72 @@ public:
 		pt.y = y;
 		return pt;
 	}
+	// Linear Interpolate
+	static Vector Lerp(Vector a, Vector b, double k)
+	{
+		return Vector::Add(a,Vector::Scale(Vector::Sub(b,a),k));
+	}
 };
 
+
+class Vector2d
+{
+public:
+	double x;
+	double y;
+	Vector2d(double a, double b) { x = a; y = b; };
+	Vector2d() { x = 0.0; y = 0.0; };
+	static Vector2d Add(Vector2d a, Vector2d b) {
+		Vector2d c;
+		c.x = a.x + b.x;
+		c.y = a.y + b.y;
+		return c;
+	};
+	static Vector2d Sub(Vector2d a, Vector2d b) {
+		Vector2d c;
+		c.x = a.x - b.x;
+		c.y = a.y - b.y;
+		return c;
+	};
+	static Vector2d Neg(Vector2d a) {
+		Vector2d c;
+		c.x = -a.x;
+		c.y = -a.y;
+		return c;
+	};
+	static Vector2d Scale(Vector2d a, double k) {
+		Vector2d c;
+		c.x = a.x * k;
+		c.y = a.y * k;
+		return c;
+	};
+	static double Dot(Vector2d a, Vector2d b) {
+		double d;
+		d = a.x * b.x + a.y * b.y;
+		return d;
+	};
+	static double Cross(Vector2d a, Vector2d b) {
+		double d;
+		d = a.x * b.y - a.y * b.x;
+		return d;
+	};
+	static double Length(Vector2d a) {
+		return sqrt(a.x*a.x + a.y*a.y);
+	};
+	static Vector2d Normalize(Vector2d a) {
+		Vector2d b;
+		double l = sqrt(a.x*a.x + a.y*a.y);
+		b.x = a.x/l;
+		b.y = a.y/l;
+		return b;
+	};
+	static Vector2d Project(Vector2d A, Vector2d B) {
+		return Vector2d::Scale(B,(Vector2d::Dot(A,A) / Vector2d::Dot(B,B)));
+	};
+	// Linear Interpolate
+	static Vector2d Lerp(Vector2d a, Vector2d b, double k)
+	{
+		return Vector2d::Add(a,Vector2d::Scale(Vector2d::Sub(b,a),k));
+	}
+};
 

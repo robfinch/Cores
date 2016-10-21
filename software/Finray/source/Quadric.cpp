@@ -19,7 +19,7 @@ AQuadric::AQuadric(double a, double b, double c, double d, double e,
 	CalcBoundingObject();
 }
 
-int AQuadric::Intersect(Ray *ray, double *T)
+AnObject *AQuadric::Intersect(Ray *ray, double *T)
 {
 	double Ac, Bc, Cc;
 	double Xd = ray->dir.x;
@@ -47,10 +47,10 @@ int AQuadric::Intersect(Ray *ray, double *T)
 		n = -Bc + sqrt(SQUARE(Bc)- 4.0 * Ac * Cc);
 		t = n/d;
 		if (t <= EPSILON)
-			return 0;
+			return nullptr;
 	}
 	*T = t;
-	return 1;
+	return this;
 }
 
 Vector AQuadric::Normal(Vector P)

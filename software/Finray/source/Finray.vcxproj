@@ -97,7 +97,9 @@
     <ClCompile Include="Finray.cpp" />
     <ClCompile Include="frmError.cpp" />
     <ClCompile Include="frmRay.cpp" />
-    <ClCompile Include="Matrix.cpp" />
+    <ClCompile Include="Math\Matrix.cpp" />
+    <ClCompile Include="Math\Polynomial.cpp" />
+    <ClCompile Include="Noise.cpp" />
     <ClCompile Include="Parser.cpp" />
     <ClCompile Include="Quadric.cpp" />
     <ClCompile Include="rand.cpp" />
@@ -110,6 +112,7 @@
     </ClCompile>
     <ClCompile Include="Surface.cpp" />
     <ClCompile Include="SymbolTable.cpp" />
+    <ClCompile Include="Torus.cpp" />
     <ClCompile Include="Transform.cpp" />
     <ClCompile Include="Triangle.cpp" />
   </ItemGroup>
@@ -125,12 +128,14 @@
     <ClInclude Include="frmRay.h">
       <FileType>CppForm</FileType>
     </ClInclude>
-    <ClInclude Include="Matrix.h" />
+    <ClInclude Include="Math\Matrix.h" />
+    <ClInclude Include="Math\Polynomial.h" />
+    <ClInclude Include="Math\Vector.h" />
     <ClInclude Include="MNG.h" />
+    <ClInclude Include="Noise.h" />
     <ClInclude Include="rand.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="Vector.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="app.rc" />

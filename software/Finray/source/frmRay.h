@@ -401,6 +401,8 @@ private: System::Void backgroundWorker1_RunWorkerCompleted(System::Object^  send
 				this->button1->Enabled = true;
 				progressBar1->Value = 0;
 			}
+			else
+				rayTracer.DumpObjects();
 		 }
 private: System::Void button2_Click(System::Object^  sender, System::EventArgs^  e) {
 			 std::ofstream fp;

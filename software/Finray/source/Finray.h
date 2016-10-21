@@ -28,6 +28,7 @@ public:
 	Vector dir;
 	void Trace(Color *clr);
 	void Test(AnObject *);
+	void TestList(AnObject *);
 };
 
 class Viewpoint
@@ -57,9 +58,11 @@ class Surface
 {
 public:
 	Color color;	// base color
+	Color color2;	// for checkered colors
 	Color variance;
 	Color acolor;	// color with ambience pre-calculated
 	Color ambient;
+	int ColorMethod;
 	float diffuse;
 	float brilliance;
 	float specular;	// phong
@@ -70,11 +73,13 @@ public:
 	Surface(Surface *);
 	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
 	void SetColorVariance(Color v) { variance = v; };
+	Color GetColor(Vector point);
 };
 
 enum {
 	OBJ_OBJECT = 1,
 	OBJ_SPHERE,
+	OBJ_TORUS,
 	OBJ_PLANE,
 	OBJ_TRIANGLE,
 	OBJ_RECTANGLE,
@@ -90,11 +95,13 @@ class AnObject {
 public:
 	unsigned int type;
 	Vector center;			// for bounding volumes
+	Transform trans;
 	double radius;			// for bounding object
 	double radius2;			// square of radius
 	bool doReflections;
 	bool doShadows;
 	bool doImage;
+	bool usesTransform;
 	AnObject *next;
 	AnObject *obj;
 	AnObject *posobj;
@@ -107,12 +114,12 @@ public:
 	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
 	Color Shade(Ray *ray, Vector normal, Vector point, Color *color);
 	virtual void SetColorVariance(Color v) { properties.SetColorVariance(v); };
-	int Intersect(Ray *, double *);
-	int BoundingIntersect(Ray *ray);
+	AnObject *Intersect(Ray *, double *);
+	bool BoundingIntersect(Ray *ray);
 	bool AntiIntersects(Ray *);
 	virtual void SetTexture(Surface *tx) { properties = *tx; };
 	virtual void SetColor(Color c) { properties.color = c; };
-	virtual Color GetColor(Vector point);
+	virtual Color GetColor(Vector point) { return properties.GetColor(point); };
 	virtual Vector Normal(Vector) { return Vector(); };
 	virtual void Translate(double x, double y, double z);
 	virtual void Translate(Vector v) { Translate(Vector(v.x,v.y,v.z)); };
@@ -122,6 +129,7 @@ public:
 	virtual void RotY(double a) {};
 	virtual void RotZ(double a) {};
 	virtual void Print() {} ;
+	bool IsContainer();
 };
 
 
@@ -133,12 +141,12 @@ public:
 	AQuadric(double a, double b, double c, double d, double e,
 			double f, double g, double h, double i, double j);
 	void CalcBoundingObject();
-	int Intersect(Ray *, double *);
+	AnObject *Intersect(Ray *, double *);
 	Vector Normal(Vector);
 	void Print();
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	Color GetColor(Vector point) { return properties.color; };
+//	Color GetColor(Vector point) { return properties.color; };
 	void Translate(double x, double y, double z);
 	void RotXYZ(double, double, double);
 	void RotX(double a) { RotXYZ(a, 0.0, 0.0); };
@@ -158,8 +166,8 @@ public:
 	ASphere(double x,double y ,double z,double rad);
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	Color GetColor(Vector point) { return properties.color; };
-	int Intersect(Ray *, double *);
+//	Color GetColor(Vector point) { return properties.color; };
+	AnObject *Intersect(Ray *, double *);
 	Vector Normal(Vector);
 	void Translate(double x, double y, double z) {
 		center.x = x; center.y = y; center.z = z;
@@ -196,8 +204,8 @@ public:
 	APlane(double,double,double,double);
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	Color GetColor(Vector point) { return properties.color; };
-	int Intersect(Ray *, double *);
+//	Color GetColor(Vector point) { return properties.color; };
+	AnObject *Intersect(Ray *, double *);
 	Vector Normal(Vector);
 	void Print() {};
 	void Translate(double x, double y, double z) {};
@@ -219,13 +227,13 @@ public:
 	ATriangle(Vector a, Vector b, Vector c);
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	Color GetColor(Vector point) { return properties.color; };
+//	Color GetColor(Vector point);// { return properties.color; };
 	void Init();
 	void CalcNormal();
 	void CalcBoundingObject();
 	bool InternalSide(Vector pt1, Vector pt2, Vector a, Vector b);
 	bool PointInTriangle(Vector p);
-	int Intersect(Ray *, double *);
+	AnObject *Intersect(Ray *, double *);
 	Vector Normal(Vector);
 	void Print() {};
 	void Translate(Vector p);
@@ -250,25 +258,28 @@ public:
 	double baseRadius, apexRadius;
 	double length;
 	static const double tolerance;
-	Transform trans;
 	unsigned int intersectedPart : 2;
 	unsigned int openBase : 1;
 	unsigned int openApex : 1;
 	ACone(Vector b, Vector a, double rb, double ra);
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	Color GetColor(Vector point) { return properties.color; };
+//	Color GetColor(Vector point) { return properties.color; };
 	void TransformX(Transform *t);
 	void CalcCylinderTransform();
 	void CalcTransform();
 	void CalcCenter();
+	void CalcRadius();
 	void CalcBoundingObject();
 	Vector Normal(Vector);
-	int Intersect(Ray *, double *);
+	AnObject *Intersect(Ray *, double *);
 	void Translate(double x, double y, double z);
 	void Scale(double x, double y, double z);
 	void Scale(Vector v);
 	void Print() {};
+	void RotX(double a) { ACone::RotXYZ(a, 0.0, 0.0); };
+	void RotY(double a) { ACone::RotXYZ(0.0, a, 0.0); };
+	void RotZ(double a) { ACone::RotXYZ(0.0, 0.0, a); };
 	void RotXYZ(double,double,double);
 };
 
@@ -277,7 +288,11 @@ class ACylinder : public ACone
 public:
 	ACylinder(Vector b, Vector a, double r);
 	void CalcTransform();
-	int Intersect(Ray *, double *);
+	AnObject *Intersect(Ray *, double *);
+	void RotX(double a) { ACone::RotXYZ(a, 0.0, 0.0); };
+	void RotY(double a) { ACone::RotXYZ(0.0, a, 0.0); };
+	void RotZ(double a) { ACone::RotXYZ(0.0, 0.0, a); };
+	void RotXYZ(double a,double b,double c) { ACone::RotXYZ(a,b,c); };
 };
 
 class ABox : public AnObject
@@ -295,8 +310,8 @@ public:
 	void SetTexture(Surface *tx);
 	void SetColor(Color c);
 	void SetVariance(Color v);
-	Color GetColor(Vector point) { return properties.color; };
-	int Intersect(Ray *, double *);
+//	Color GetColor(Vector point);
+	AnObject *Intersect(Ray *, double *);
 	void Print() {};
 	void Translate(Vector p);
 	void Translate(double x, double y, double z);
@@ -314,7 +329,7 @@ public:
 	ARectangle(Vector a, Vector b, Vector c, Vector d);
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	int Intersect(Ray *, double *);
+	AnObject *Intersect(Ray *, double *);
 	void CalcNormal();
 	Vector Normal(Vector);
 	void Translate(double x, double y, double z) {};
@@ -322,6 +337,26 @@ public:
 	void RotX(double);
 	void RotY(double);
 	void RotZ(double);
+};
+
+class ATorus : public AnObject
+{
+public:
+	double MajorRadius, MinorRadius;
+	ATorus(DBL, DBL);
+	bool TestThickCylinder(const Vector P, const Vector D, double h1, double h2, double r1, double r2) const;
+	void TransformX(Transform *t);
+	void CalcBoundingObject();
+	AnObject *Intersect(Ray *, double *);
+	Vector Normal(Vector v);
+	void Translate(double x, double y, double z);
+//	void Scale(double x, double y, double z);
+//	void Scale(Vector v);
+	void Print() {};
+	void RotX(double a) { ATorus::RotXYZ(a, 0.0, 0.0); };
+	void RotY(double a) { ATorus::RotXYZ(0.0, a, 0.0); };
+	void RotZ(double a) { ATorus::RotXYZ(0.0, 0.0, a); };
+	void RotXYZ(double,double,double);
 };
 
 class ALight : public AnObject
@@ -333,7 +368,7 @@ public:
 	ALight(double, double, double, float, float, float);
 	void SetTexture(Surface *tx) { properties = *tx; };
 	void SetColor(Color c) { properties.color = c; };
-	Color GetColor() { return properties.color; };
+//	Color GetColor() { return properties.color; };
 	void Print() {};
 	Finray::Color GetColor(AnObject *objPtr, Ray *ray, double distance);
 	double MakeRay(Vector point, Ray *ray);
@@ -360,6 +395,7 @@ enum {
 	TK_BRILLIANCE,
 	TK_CAMERA,
 	TK_COLOR,
+	TK_COLORMETHOD,
 	TK_CONE,
 	TK_COS,
 	TK_CUBE,
@@ -403,6 +439,7 @@ enum {
 	TK_SRAND,
 	TK_TEXTURE,
 	TK_TO,
+	TK_TORUS,
 	TK_TRANSLATE,
 	TK_TRIANGLE,
 	TK_UP,
@@ -426,6 +463,7 @@ enum {
 	ERR_BADTYPE,
 	ERR_SINGULAR_MATRIX,
 	ERR_DEGENERATE,
+	ERR_NULLPTR,
 };
 
 enum {
@@ -436,6 +474,7 @@ enum {
 	TYP_COLOR,
 	TYP_TEXT,
 	TYP_SPHERE,
+	TYP_TORUS,
 	TYP_PLANE,
 	TYP_TRIANGLE,
 	TYP_RECTANGLE,
@@ -457,7 +496,7 @@ public:
 	int type;
 	int i;
 	double d;
-	Color c;
+	Finray::Color c;
 	Vector v;
 	union {
 		ACone *cn;
@@ -540,6 +579,7 @@ private:
 	void ParseObjectBody(AnObject *obj);
 	ALight *ParseLight();
 	ASphere *ParseSphere();
+	ATorus *ParseTorus();
 	ABox *ParseBox();
 	ABox *ParseCube();
 	APlane *ParsePlane();
@@ -568,11 +608,14 @@ public:
 	int frameno;
 	int maxRecurseLevel;
 	int recurseLevel;
+	Finray::Color backGround;
 	Viewpoint *viewPoint;
 	AnObject *objectList;
 	ALight *lightList;
 	SymbolTable symbolTable;
 	Parser parser;
+	std::ofstream ofs;
+	int indent;
 	RayTracer() {
 		Init();
 	}
@@ -582,6 +625,8 @@ public:
 	void Add(ALight *);
 	void DeleteList(AnObject *);
 	void DeleteList();
+	void DumpObject(AnObject *);
+	void DumpObjects();
 };
 
 };

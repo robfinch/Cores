@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+extern FinitronClasses::NoiseGen noiseGen;
+
 // Triangle math for intersection point implemented from Dan Sunday's article
 // http://geomalgorithms.com/a06-_intersect-2.html
 
@@ -72,7 +74,7 @@ void ATriangle::CalcNormal()
 //  1: intersect in unique point
 //  2: are in same plane
 //
-int ATriangle::Intersect(Ray *ray, double *T)
+AnObject *ATriangle::Intersect(Ray *ray, double *T)
 {
 	Vector w, w0, I;
 	double r,a,b;
@@ -81,22 +83,22 @@ int ATriangle::Intersect(Ray *ray, double *T)
 
 	if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON && abs(normal.z) < EPSILON)
 //	if (normal.x == 0.0 && normal.y == 0.0 && normal.z == 0.0)
-		return -1;	// triangle is degenerate
+		return nullptr;//-1;	// triangle is degenerate
 
 	w0 = Vector::Sub(ray->origin, p1);
 	a = -Vector::Dot(unnormal,w0);
 	b = Vector::Dot(unnormal,ray->dir);
 	if (abs(b) < EPSILON) {
 		if (a==0.0)		// ray lines in triangle plane
-			return 2;	// return 2;
-		return 0;
+			return this;//2;	// return 2;
+		return nullptr;
 	}
 
 	// Get intersection point of ray within triangle plane
 	r = a / b;
 	*T = r;
 	if (r < 0.0)		// ray goes away from the triangle
-		return 0;
+		return nullptr;
 
 	I = Vector::Add(ray->origin, Vector::Scale(ray->dir, r));
 
@@ -108,11 +110,11 @@ int ATriangle::Intersect(Ray *ray, double *T)
 	// Get and test parametric co-ords
 	s = (uv * wv - vv * wu) / D;
 	if (s < 0.0 || s > 1.0) // I is outside of T
-		return 0;
+		return nullptr;
 	t = (uv * wu - uu * wv) / D;
 	if (t < 0.0 || (s+t) > 1.0)	// I is outside of T
-		return 0;
-	return 1;		// I is in T
+		return nullptr;
+	return this;	//1	// I is in T
 }
 
 void ATriangle::RotX(double a)
@@ -206,4 +208,21 @@ void ATriangle::CalcBoundingObject()
 	radius2 = SQUARE(radius);
 }
 
+/*
+Color ATriangle::GetColor(Vector point)
+{
+	double n = noiseGen.Noise(point, 2.0, 2.0, 4);
+	Color c = properties.color;
+	c.r += n;
+	c.g += n;
+	c.b += n;
+	if (c.r > 1.0) c.r = 1.0;
+	if (c.g > 1.0) c.g = 1.0;
+	if (c.b > 1.0) c.b = 1.0;
+	if (c.r < 0.0) c.r = 0.0;
+	if (c.g < 0.0) c.g = 0.0;
+	if (c.b < 0.0) c.b = 0.0;
+	return c;
+};
+*/
 };

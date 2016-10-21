@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+FinitronClasses::NoiseGen noiseGen;
+
 namespace Finray {
 
 ABox::ABox(Vector pt1, Vector d) : AnObject()
@@ -71,12 +73,18 @@ ABox::ABox(Vector pt1, Vector d) : AnObject()
 	tri[11]->p2 = pt7;
 	tri[11]->p3 = pt6;
 
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	/*
 	o = (ATriangle *)obj;
 	while (o) {
 		o->Init();
 		o->CalcBoundingObject();
 		o = (ATriangle *)o->next;
 	}
+	*/
 	CalcBoundingObject();
 }
 
@@ -149,12 +157,18 @@ ABox::ABox() : AnObject()
 	tri[11]->p2 = pt7;
 	tri[11]->p3 = pt8;
 
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	/*
 	o = (ATriangle *)obj;
 	while (o) {
 		o->Init();
 		o->CalcBoundingObject();
 		o = (ATriangle *)o->next;
 	}
+	*/
 	CalcBoundingObject();
 }
 
@@ -231,30 +245,35 @@ ABox::ABox(double x, double y, double z) : AnObject()
 	tri[11]->p2 = pt7;
 	tri[11]->p3 = pt8;
 
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	/*
 	o = (ATriangle *)obj;
 	while (o) {
 		o->Init();
 		o->CalcBoundingObject();
 		o = (ATriangle *)o->next;
 	}
+	*/
 	CalcBoundingObject();
 }
 
-int ABox::Intersect(Ray *ray, double *t) { return 0; }
+AnObject *ABox::Intersect(Ray *ray, double *t) { return 0; }
 /*
 {
 	int nn;
 
 	for (nn = 0; nn < 12; nn++) {
-		if (triangles[nn].Intersect(ray, t) > 0) {
-			intersectedTriangle = nn;
-			return 1;
+		if (tri[nn]->Intersect(ray, t)) {
+//			intersectedTriangle = nn;
+			return tri[nn];
 		}
 	}
-	return 0;
+	return nullptr;
 }
 */
-
 Vector ABox::Normal(Vector v) {
 	return Vector(1,0,0);
 };
@@ -343,6 +362,7 @@ void ABox::SetColor(Color c)
 		tri[nn]->SetColor(c);
 	}
 }
+
 
 void ABox::SetVariance(Color v)
 {

@@ -15,6 +15,7 @@ AnObject::AnObject()
 	doReflections = true;
 	doShadows = true;
 	doImage = true;
+	usesTransform = false;
 }
 
 int AnObject::Print(AnObject *obj) {
@@ -35,10 +36,13 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	k *= -2.0f;
 
 	reflectedRay.origin = point;
+	reflectedRay.dir = Vector::Scale(normal,k);
+	reflectedRay.dir = Vector::Add(reflectedRay.dir,ray->dir);
+	/*
 	reflectedRay.dir.x = k * normal.x + ray->dir.x;
 	reflectedRay.dir.y = k * normal.y + ray->dir.y;
 	reflectedRay.dir.z = k * normal.z + ray->dir.z;
-
+	*/
 	clr = GetColor(point);
 	pColor->r = clr.r * properties.ambient.r;
 	pColor->g = clr.g * properties.ambient.g;
@@ -50,9 +54,9 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 		_diffuse = (float)Vector::Dot(normal, lightRay.dir);
 		if ((_diffuse > 0.0) && properties.diffuse > 0.0) {
 			_diffuse = pow(_diffuse,properties.brilliance) * properties.diffuse;
-			pColor->r += (lightColor.r * properties.color.r * _diffuse);
-			pColor->g += (lightColor.g * properties.color.g * _diffuse);
-			pColor->b += (lightColor.b * properties.color.b * _diffuse);
+			pColor->r += (lightColor.r * clr.r * _diffuse);
+			pColor->g += (lightColor.g * clr.g * _diffuse);
+			pColor->b += (lightColor.b * clr.b * _diffuse);
 		}
 		_specular = (float)Vector::Dot(reflectedRay.dir, lightRay.dir);
 		if ((_specular > 0.0) && (properties.specular > 0.0)) {
@@ -86,13 +90,18 @@ void AnObject::RotXYZ(double ax, double ay, double az)
 {
 	AnObject *o;
 
-	RotX(ax);
-	RotY(ay);
-	RotZ(az);
-	o = obj;
-	while (o) {
-		o->RotXYZ(ax,ay,az);
-		o = o->next;
+	switch(type) {
+	case OBJ_CONE:		return ((ACone *)this)->RotXYZ(ax,ay,az);
+	case OBJ_CYLINDER:	return ((ACylinder *)this)->RotXYZ(ax,ay,az);
+	default:
+		RotX(ax);
+		RotY(ay);
+		RotZ(az);
+		o = obj;
+		while (o) {
+			o->RotXYZ(ax,ay,az);
+			o = o->next;
+		}
 	}
 }
 
@@ -137,57 +146,69 @@ bool AnObject::AntiIntersects(Ray *ray) {
 				return true;
 			}
 		}
-		if (o->Intersect(ray, &d) > 0)
+		if (o->Intersect(ray, &d))
 			return true;
 		o = o->next;
 	}
 	return false;
 }
 
-int AnObject::Intersect(Ray *r, double *d)
+AnObject *AnObject::Intersect(Ray *r, double *d)
 {
 	switch(type) {
+	case OBJ_BOX:		return ((ABox *)this)->Intersect(r,d);
 	case OBJ_SPHERE:	return ((ASphere *)this)->Intersect(r,d);
+	case OBJ_TORUS:		return ((ATorus *)this)->Intersect(r,d);
 	case OBJ_PLANE:		return ((APlane *)this)->Intersect(r,d);
 	case OBJ_TRIANGLE:	return ((ATriangle *)this)->Intersect(r,d);
 	case OBJ_QUADRIC:	return ((AQuadric *)this)->Intersect(r,d);
 	case OBJ_CONE:		return ((ACone *)this)->Intersect(r,d);
-//	case OBJ_CUBE:		return ((ACube *)this)->Intersect(r,d);
+	case OBJ_CUBE:		return ((ABox *)this)->Intersect(r,d);
 	case OBJ_CYLINDER:	return ((ACylinder *)this)->Intersect(r,d);
-	default:	return 0;
+	default:	return nullptr;
 	}
 }
 
-int AnObject::BoundingIntersect(Ray *ray)
+bool AnObject::BoundingIntersect(Ray *ray)
 {
 	double B, C, Discrim, t0, t1;
+	Vector P, D;
+
+	if (usesTransform) {
+		P = trans.InvTransPoint(ray->origin);
+		D = trans.InvTransDirection(ray->dir);
+	}
+	else {
+		P = ray->origin;
+		D = ray->dir;
+	}
 
 	// Don't need to calculate A since ray is a unit vector
-	B = 2 * ((ray->dir.x * (ray->origin.x - center.x))
-			+(ray->dir.y * (ray->origin.y - center.y))
-			+(ray->dir.z * (ray->origin.z - center.z)));
-	C =   SQUARE(ray->origin.x - center.x)
-		+ SQUARE(ray->origin.y - center.y)
-		+ SQUARE(ray->origin.z - center.z)
+	B = 2 * ((D.x * (P.x - center.x))
+			+(D.y * (P.y - center.y))
+			+(D.z * (P.z - center.z)));
+	C =   SQUARE(P.x - center.x)
+		+ SQUARE(P.y - center.y)
+		+ SQUARE(P.z - center.z)
 		- radius2;
 
 	Discrim = (SQUARE(B) - 4 * C);
 	if (Discrim <= EPSILON)
-		return 0;
+		return (false);
 
 	Discrim = sqrt(Discrim);
 	t0 = (-B-Discrim) * 0.5;
 	if (t0 > EPSILON) {
-		return 1;
+		return (true);
 	}
 	t1 = (-B+Discrim) * 0.5;
 	if (t1 > EPSILON) {
-		return 1;
+		return (true);
 	}
-	return 0;
+	return (false);
 }
 
-
+/*
 Color AnObject::GetColor(Vector point)
 {
 	Color color;
@@ -203,11 +224,17 @@ Color AnObject::GetColor(Vector point)
 			(float)RTFClasses::Random::dbl()*properties.variance.b);
 	}
 	else
-*/
+
 		v = Color(0,0,0);
 	color = properties.color;
 	color = Color::Add(color,v);
 	return color;
 };
+*/
+
+bool AnObject::IsContainer()
+{
+	return type==OBJ_OBJECT || type==OBJ_BOX || type==OBJ_CUBE;
+}
 
 };

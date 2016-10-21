@@ -5,7 +5,6 @@ extern Finray::RayTracer rayTracer;
 static char numstr[100];
 static char *numstrptr;
 static char backup_token = 0;
-extern Finray::Color backGround;
 extern char master_filebuf[10000000];
 
 using namespace System::Runtime::InteropServices;
@@ -347,7 +346,7 @@ int	Parser::NextToken() {
 				return token = TK_BOX;
 			}
 		}
-		// camera color colour cone cos cube cylinder
+		// camera color colour colormethod cone cos cube cylinder
 		if (p[0]=='c') {
 			if (p[1]=='a' && p[2]=='m' && p[3]=='e' && p[4]=='r' && p[5]=='a' && !isidch(p[6])) {
 				p += 6;
@@ -356,6 +355,12 @@ int	Parser::NextToken() {
 			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='r' && !isidch(p[5])) {
 				p += 5;
 				return token = TK_COLOR;
+			}
+			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='r' &&
+				p[5]=='m' && p[6]=='e' && p[7]=='t' && p[8]=='h' && p[9]=='o' && p[10]=='d' &&
+				!isidch(p[11])) {
+				p += 11;
+				return token = TK_COLORMETHOD;
 			}
 			if (p[1]=='o' && p[2]=='l' && p[3]=='o' && p[4]=='u' && p[5]=='r' && !isidch(p[6])) {
 				p += 6;
@@ -412,11 +417,16 @@ int	Parser::NextToken() {
 			p += 7;
 			return token = TK_INCLUDE;
 		}
-		// last_frame light location look_at
+		// last_frame light light_source location look_at
 		if (p[0]=='l') {
 			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' && !isidch(p[5])) {
 				p += 5;
 				return token = TK_LIGHT;
+			}
+			if (p[1]=='i' && p[2]=='g' && p[3]=='h' && p[4]=='t' &&
+				p[5]=='_' && p[6]=='s' && p[7]=='o' && p[8]=='u' && p[9]=='r' && p[10]=='c' && p[11]=='e' && !isidch(p[12])) {
+				p += 12;
+				return token = TK_LIGHT_SOURCE;
 			}
 			if (p[1]=='o' && p[2]=='c' && p[3]=='a' && p[4]=='t' && p[5]=='i' && p[6]=='o' && p[7]=='n' && !isidch(p[8])) {
 				p += 8;
@@ -531,7 +541,7 @@ int	Parser::NextToken() {
 			}
 		}
 
-		// texture to translate triangle
+		// texture to torus translate triangle
 		if (p[0]=='t') {
 			if (p[1]=='e' && p[2]=='x' && p[3]=='t' && p[4]=='u' && p[5]=='r' && p[6]=='e' && !isidch(p[7])) {
 				p += 7;
@@ -540,6 +550,10 @@ int	Parser::NextToken() {
 			if (p[1]=='o' && !isidch(p[2])) {
 				p += 2;
 				return token = TK_TO;
+			}
+			if (p[1]=='o' && p[2]=='r' && p[3]=='u' && p[4]=='s' && !isidch(p[5])) {
+				p += 5;
+				return token = TK_TORUS;
 			}
 			if (p[1]=='r' && p[2]=='a' && p[3]=='n' && p[4]=='s' && p[5]=='l' && p[6]=='a' && p[7]=='t' && p[8]=='e' && !isidch(p[9])) {
 				p += 9;
@@ -1013,6 +1027,16 @@ Value Parser::ParseBuffer(char *buf)
 			rayTracer.Add(obj);
 			rayTracer.Add(obj->lights);
 			break;
+		case TK_TORUS:
+			obj = (AnObject *)ParseTorus();
+			v.type = TYP_TORUS;
+			v.val.obj = obj;
+			if (level > 0) {
+				return v;
+			}
+			rayTracer.Add(obj);
+			rayTracer.Add(obj->lights);
+			break;
 		case TK_PLANE:
 			obj = (AnObject *)ParsePlane();
 			v.type = TYP_PLANE;
@@ -1114,7 +1138,8 @@ Value Parser::ParseBuffer(char *buf)
 
 		case TK_BACKGROUND:
 			Need('{');
-			backGround = ParseColor();
+			c = ParseColor();
+			pRayTracer->backGround = c;
 			Need('}');
 			break;
 /*
@@ -1292,6 +1317,8 @@ void Parser::ParseRayTracer()
 				pRayTracer->first_frame = v.i;
 			else
 				pRayTracer->first_frame = (int)v.d;
+			if (pRayTracer->frameno < pRayTracer->first_frame)
+				pRayTracer->frameno = pRayTracer->first_frame;
 			break;
 		case TK_LASTFRAME:
 			v = eval();
@@ -1422,6 +1449,25 @@ ASphere *Parser::ParseSphere()
 		sphere = new ASphere(v1.v.x,v1.v.y,v1.v.z,v2.d);
 	ParseObjectBody(sphere);
 	return sphere;
+}
+
+ATorus *Parser::ParseTorus()
+{
+	ATorus *torus;
+	Value v1,v2;
+
+	Need('(');
+	v1 = eval();
+	Need(',');
+	v2 = eval();
+	Need(')');
+	if ((v1.type != TYP_NUM && v1.type != TYP_INT) || (v2.type != TYP_NUM && v2.type != TYP_INT))
+		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+	torus = new ATorus(
+		(v1.type==TYP_INT ? (DBL)v1.i : v1.d),
+		(v2.type==TYP_INT ? (DBL)v2.i : v2.d));
+	ParseObjectBody(torus);
+	return torus;
 }
 
 ACylinder *Parser::ParseCylinder()
@@ -1618,9 +1664,9 @@ Color Parser::ParseApproximate(AnObject *obj)
 	}
 }
 
-Color Parser::ParseColor()
+Finray::Color Parser::ParseColor()
 {
-	Color color;
+	Finray::Color color;
 	Value v1;
 
 	v1 = eval();
@@ -1644,6 +1690,7 @@ Color Parser::ParseColor()
 	default:
 		throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 	}
+	return color;
 }
 
 ABox *Parser::ParseBox()
@@ -1719,6 +1766,7 @@ Surface *Parser::ParseTexture(Surface *texture)
 		texture->roughness = sym->value.val.tx->roughness;
 		texture->reflection = sym->value.val.tx->reflection;
 		texture->specular = sym->value.val.tx->specular;
+		texture->ColorMethod = sym->value.val.tx->ColorMethod;
 		return texture;
 	}
 	Was('{');
@@ -1755,6 +1803,12 @@ Surface *Parser::ParseTexture(Surface *texture)
 			if (v.type != TYP_NUM)
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			texture->specular = (float)v.d;
+			break;
+		case TK_COLORMETHOD:
+			v = eval();
+			if (v.type != TYP_NUM)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->ColorMethod = (int)v.d;
 			break;
 		case '}': return texture;
 		default:	throw gcnew Finray::FinrayException(ERR_TEXTURE,0);
@@ -1812,6 +1866,8 @@ void Parser::ParseObjectBody(AnObject *obj)
 	Value val;
 	bool minus = false;
 
+	if (obj==nullptr)
+		throw gcnew Finray::FinrayException(ERR_NULLPTR, 0);
 	Need('{');
 	while(true) {
 		switch(NextToken()) {
@@ -1890,6 +1946,17 @@ void Parser::ParseObjectBody(AnObject *obj)
 			else
 				obj->obj = o;
 */
+			break;
+		case TK_TORUS:
+			o = (AnObject *)ParseTorus();
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
 			break;
 		case TK_PLANE:
 			o = (AnObject *)ParsePlane();
@@ -1979,6 +2046,17 @@ void Parser::ParseObjectBody(AnObject *obj)
 				obj->obj = o;
 			}
 			break;
+		case TK_OBJECT:
+			o = (AnObject *)ParseObject();
+			if (minus) {
+				o->next = obj->negobj;
+				obj->negobj = o;
+			}
+			else {
+				o->next = obj->obj;
+				obj->obj = o;
+			}
+			break;
 		case TK_TRANSLATE:
 			val = eval();
 			if (val.type != TYP_VECTOR)
@@ -2028,13 +2106,15 @@ void Parser::ParseObjectBody(AnObject *obj)
 			switch(obj->type) {
 			case OBJ_SPHERE:
 				sphere = (ASphere *)obj;
-				new ALight(
+				light = new ALight(
 					sphere->center.x,
 					sphere->center.y,
 					sphere->center.z,
 					obj->properties.color.r,
 					obj->properties.color.g,
 					obj->properties.color.b);
+				light->next = obj->lights;
+				obj->lights = light;
 				break;
 			}
 			break;
@@ -2107,7 +2187,7 @@ AnObject *Parser::ParseFor(AnObject *obj)
 	if (obj == nullptr) {
 		obj = new AnObject();
 	}
-	while (sym.value.i < lmt) {
+	while (sym.value.i <= lmt) {
 		p = old_p;
 		ParseObjectBody(obj);
 		sym.value.i++;

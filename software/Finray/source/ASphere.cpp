@@ -30,7 +30,7 @@ ASphere::ASphere(double X, double Y, double Z, double R)  : AnObject()
 	radius2 = SQUARE(R);
 }
 
-int ASphere::Intersect(Ray *ray, double *T)
+AnObject *ASphere::Intersect(Ray *ray, double *T)
 {
 	double B, C, Discrim, t0, t1;
 
@@ -45,20 +45,20 @@ int ASphere::Intersect(Ray *ray, double *T)
 
 	Discrim = (SQUARE(B) - 4 * C);
 	if (Discrim <= EPSILON)
-		return 0;
+		return nullptr;
 
 	Discrim = sqrt(Discrim);
 	t0 = (-B-Discrim) * 0.5;
 	if (t0 > EPSILON) {
 		*T = t0;
-		return 1;
+		return this;
 	}
 	t1 = (-B+Discrim) * 0.5;
 	if (t1 > EPSILON) {
 		*T = t1;
-		return 1;
+		return this;
 	}
-	return 0;
+	return nullptr;
 }
 
 Vector ASphere::Normal(Vector point)

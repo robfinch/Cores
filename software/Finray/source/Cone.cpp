@@ -41,7 +41,7 @@ void ACylinder::CalcTransform()
 }
 
 
-int ACylinder::Intersect(Ray *ray, double *t)
+AnObject *ACylinder::Intersect(Ray *ray, double *t)
 {
 	int i = 0;
 	double a, b, c, z, t1, t2, len;
@@ -73,7 +73,7 @@ int ACylinder::Intersect(Ray *ray, double *t)
 			{
 				*t = t1 / len;
 				intersectedPart = ACone::BODY;
-				return 1;
+				return this;
 			}
 
 			z = P.z + t2 * D.z;
@@ -81,7 +81,7 @@ int ACylinder::Intersect(Ray *ray, double *t)
 			{
 				*t = t2 / len;
 				intersectedPart = ACone::BODY;
-				return 1;
+				return this;
 			}
 		}
 	}
@@ -96,7 +96,7 @@ int ACylinder::Intersect(Ray *ray, double *t)
 		{
 			*t = d / len;
 			intersectedPart = APEX;
-			return 1;
+			return this;
 		}
 	}
 	if (openBase && (fabs(D.z) > EPSILON)) {
@@ -109,10 +109,10 @@ int ACylinder::Intersect(Ray *ray, double *t)
 		{
 			*t = d / len;
 			intersectedPart = ACone::BASE;
-			return 1;
+			return this;
 		}
 	}
-	return 0;
+	return nullptr;
 }
 
 
@@ -123,6 +123,7 @@ ACone::ACone(Vector b, Vector a, double rb, double ra) : AnObject()
 	apex = a;
 	baseRadius = rb;
 	apexRadius = ra;
+	usesTransform = true;
 	CalcTransform();
 }
 
@@ -213,9 +214,9 @@ void ACone::RotXYZ(double ax, double ay, double az)
 	v.x = ax;
 	v.y = ay;
 	v.z = az;
+	CalcTransform();
 	T.CalcRotation(v);
 	TransformX(&T);
-	CalcTransform();
 }
 
 void ACone::Translate(double ax, double ay, double az)
@@ -225,17 +226,17 @@ void ACone::Translate(double ax, double ay, double az)
 	v.x = ax;
 	v.y = ay;
 	v.z = az;
+	CalcTransform();
 	T.CalcTranslation(v);
 	TransformX(&T);
-	CalcTransform();
 }
 
 void ACone::Scale(Vector v)
 {
 	Transform T;
+	CalcTransform();
 	T.CalcScaling(v);
 	TransformX(&T);
-	CalcTransform();
 }
 
 void ACone::Scale(double ax, double ay, double az)
@@ -245,9 +246,9 @@ void ACone::Scale(double ax, double ay, double az)
 	v.x = ax;
 	v.y = ay;
 	v.z = az;
+	CalcTransform();
 	T.CalcScaling(v);
 	TransformX(&T);
-	CalcTransform();
 }
 
 Vector ACone::Normal(Vector p)
@@ -269,7 +270,7 @@ Vector ACone::Normal(Vector p)
 	return Vector::Normalize(trans.TransNormal(res));
 }
 
-int ACone::Intersect(Ray *ray, double *t)
+AnObject *ACone::Intersect(Ray *ray, double *t)
 {
 	int i = 0;
 	double a, b, c, z, t1, t2, len;
@@ -301,7 +302,7 @@ int ACone::Intersect(Ray *ray, double *t)
 			{
 				*t = t1 / len;
 				intersectedPart = BODY;
-				return 1;
+				return this;
 			}
 		}
 	}
@@ -320,7 +321,7 @@ int ACone::Intersect(Ray *ray, double *t)
 			{
 				*t = t1 / len;
 				intersectedPart = BODY;
-				return 1;
+				return this;
 			}
 
 			z = P.z + t2 * D.z;
@@ -328,7 +329,7 @@ int ACone::Intersect(Ray *ray, double *t)
 			{
 				*t = t2 / len;
 				intersectedPart = BODY;
-				return 1;
+				return this;
 			}
 		}
 	}
@@ -343,7 +344,7 @@ int ACone::Intersect(Ray *ray, double *t)
 		{
 			*t = d / len;
 			intersectedPart = APEX;
-			return 1;
+			return this;
 		}
 	}
 
@@ -358,11 +359,11 @@ int ACone::Intersect(Ray *ray, double *t)
 		{
 			*t = d / len;
 			intersectedPart = BASE;
-			return 1;
+			return this;
 		}
 	}
 
-	return 0;
+	return nullptr;
 }
 
 void ACone::TransformX(Transform *t)
@@ -376,9 +377,9 @@ void ACone::CalcCenter()
 	center = Vector::Scale(center,0.5);
 }
 
-void ACone::CalcBoundingObject()
+void ACone::CalcRadius()
 {
-	double d1,d2, h;
+	double d1,d2;
 	Vector axis;
 
 	axis = Vector::Sub(apex, base);
@@ -386,6 +387,12 @@ void ACone::CalcBoundingObject()
 	d2 = baseRadius > apexRadius ? baseRadius : apexRadius;
 	radius = sqrt((d1*d1) + (d2*d2)) + EPSILON;
 	radius2 = SQUARE(radius);
+}
+
+void ACone::CalcBoundingObject()
+{
+	CalcCenter();
+	CalcRadius();
 }
 
 };
