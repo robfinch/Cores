@@ -66,6 +66,7 @@ namespace FNG {
 	private: System::Windows::Forms::Button^  button1;
 	private: System::Windows::Forms::Timer^  timer1;
 	private: System::Windows::Forms::TrackBar^  trackBar1;
+	private: System::Windows::Forms::Label^  label8;
 	private: System::ComponentModel::IContainer^  components;
 
 
@@ -116,6 +117,7 @@ namespace FNG {
 			this->button1 = (gcnew System::Windows::Forms::Button());
 			this->timer1 = (gcnew System::Windows::Forms::Timer(this->components));
 			this->trackBar1 = (gcnew System::Windows::Forms::TrackBar());
+			this->label8 = (gcnew System::Windows::Forms::Label());
 			this->menuStrip1->SuspendLayout();
 			this->groupBox1->SuspendLayout();
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->numericUpDown6))->BeginInit();
@@ -177,7 +179,7 @@ namespace FNG {
 			this->groupBox1->Controls->Add(this->numericUpDown1);
 			this->groupBox1->Location = System::Drawing::Point(28, 38);
 			this->groupBox1->Name = L"groupBox1";
-			this->groupBox1->Size = System::Drawing::Size(286, 279);
+			this->groupBox1->Size = System::Drawing::Size(286, 248);
 			this->groupBox1->TabIndex = 16;
 			this->groupBox1->TabStop = false;
 			this->groupBox1->Text = L"MNG Header";
@@ -304,6 +306,7 @@ namespace FNG {
 			// 
 			// pictureBox1
 			// 
+			this->pictureBox1->BackgroundImageLayout = System::Windows::Forms::ImageLayout::Center;
 			this->pictureBox1->Location = System::Drawing::Point(320, 78);
 			this->pictureBox1->Name = L"pictureBox1";
 			this->pictureBox1->Size = System::Drawing::Size(640, 480);
@@ -352,11 +355,21 @@ namespace FNG {
 			this->trackBar1->Value = 5;
 			this->trackBar1->Scroll += gcnew System::EventHandler(this, &Form1::trackBar1_Scroll);
 			// 
+			// label8
+			// 
+			this->label8->AutoSize = true;
+			this->label8->Location = System::Drawing::Point(25, 305);
+			this->label8->Name = L"label8";
+			this->label8->Size = System::Drawing::Size(179, 26);
+			this->label8->TabIndex = 21;
+			this->label8->Text = L"Drag and Drop files to merge\r\nFrames must be in alphabetical order";
+			// 
 			// Form1
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(969, 571);
+			this->Controls->Add(this->label8);
 			this->Controls->Add(this->trackBar1);
 			this->Controls->Add(this->button1);
 			this->Controls->Add(this->listBox1);
@@ -430,7 +443,7 @@ private: System::Void listBox1_DragDrop(System::Object^  sender, System::Windows
 			array<String^>^s;
 			s = (array<String^>^)e->Data->GetData(DataFormats::FileDrop, false);
 			int i;
-			for(i = 0; i < s.Length; i++)
+			for(i = 0; i < s->Length; i++)
 				listBox1->Items->Add(s[i]);
 			numericUpDown4->Value = listBox1->Items->Count+1;
 			numericUpDown5->Value = listBox1->Items->Count;
@@ -441,7 +454,7 @@ private: System::Void displayToolStripMenuItem_Click(System::Object^  sender, Sy
 				System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::WaitCursor; 
 				mngFile.Load(std::string(str));
 				System::Windows::Forms::Cursor::Current = System::Windows::Forms::Cursors::Default;
-				pictureBox1->Image = mngFile.pngs[0].bmp;
+				pictureBox1->Image = mngFile.pngs[1].bmp;
 		 }
 private: System::Void button1_Click(System::Object^  sender, System::EventArgs^  e) {
 			 timer1->Enabled = true;

@@ -29,13 +29,17 @@ public:
 
 class PNGStream
 {
+	static __int8 ibuf[4000000];	// compressed image buffer
 	__int8 *bbuf;	// uncompressed image buffer
+	int accSize;	// accumulated size
 public:
 	IHDR ihdr;
 	PLTE plte;
 	__int8 RenderingIntent;	// sRGB
 	__int32 Gamma;
 	gcroot<System::Drawing::Bitmap^> bmp;
+private:
+	void Uncompress();
 public:
 	PNGStream();
 	~PNGStream();
@@ -68,6 +72,8 @@ public:
 	MHDR mhdr;
 	PNGStream *pngs;
 public:
+	MNGFile();
+	~MNGFile();
 	void Save(std::string path);
 	int WriteHeader(std::ofstream& ofs);
 	int WriteTerm(std::ofstream& ofs);

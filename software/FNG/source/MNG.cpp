@@ -10,8 +10,10 @@ using namespace FinitronClasses;
 	using namespace System::Drawing;
 	using namespace System::Runtime::InteropServices;
 	using namespace System::Threading;
+	using namespace System::IO;
 
 char *MNGHeaderString = "\x8AMNG\r\n\x1A\n";
+__int8 PNGStream::ibuf[4000000];	// compressed image buffer
 
 // Reverse byte order
 
@@ -116,6 +118,17 @@ int MHDR::Write(std::ofstream &ofs)
 	WriteInt(&buf[36], (uint)crc);
 	ofs.write(buf, 40);
 	return 40;
+}
+
+MNGFile::MNGFile()
+{
+	pngs = nullptr;
+}
+
+MNGFile::~MNGFile()
+{
+	if (pngs)
+		delete[] pngs;
 }
 
 int MNGFile::WriteEnd(std::ofstream& ofs)
@@ -256,15 +269,81 @@ PNGStream::~PNGStream()
 		delete[] bbuf;
 }
 
+void PNGStream::Uncompress()
+{
+	int dlen;
+	int err;
+	int xx,yy;
+	__int32 *buf32;
+
+	if (accSize <= 0)
+		return;
+	dlen = 4000000;
+	err = uncompress((Bytef *)bbuf, (uLongf *)&dlen, (Bytef *)ibuf, accSize);
+	if (err != Z_OK)
+		;
+	if (ihdr.ColorType != 2) {
+	//-----------------------------------------------------------------------
+	// These lines of code reformat the buffer with one byte less per
+	// scanline. For some unknown reason there's an extra byte on each
+	// scanline.
+	//-----------------------------------------------------------------------
+	for (yy = 0; yy < ihdr.Height; yy++) {
+		for (xx = 1; xx <= ihdr.Width*4; xx++) {
+			bbuf[xx-1+yy*ihdr.Width*4] = bbuf[xx+yy*(ihdr.Width*4+1)];
+		}
+	}
+						
+	//-----------------------------------------------------------------------
+	// These lines of code flip around the red and blue bytes which are
+	// backwards for the bitmap data.
+	//-----------------------------------------------------------------------
+
+	buf32 = (__int32 *)bbuf;
+	for (xx = 0; xx < ihdr.Width * ihdr.Height; xx++) {
+		buf32[xx] = 0xFF000000 | ((buf32[xx] >> 16) & 0xff) | (buf32[xx] & 0x00FF00) | ((buf32[xx] & 0xff) << 16);
+	}
+	}
+	if (ihdr.ColorType==2) {
+		for (yy = 0; yy < ihdr.Height; yy++) {
+			for (xx = 1; xx <= ihdr.Width*3; xx++) {
+				bbuf[xx-1+yy*ihdr.Width*3] = bbuf[xx+yy*(ihdr.Width*3+1)];
+			}
+		}
+		bmp = gcnew System::Drawing::Bitmap(ihdr.Width, ihdr.Height, ihdr.Width*4, System::Drawing::Imaging::PixelFormat::Format24bppRgb, IntPtr(bbuf));
+	}
+	else
+		bmp = gcnew System::Drawing::Bitmap(ihdr.Width, ihdr.Height, ihdr.Width*4, System::Drawing::Imaging::PixelFormat::Format32bppArgb, IntPtr(bbuf));
+}
+
 void PNGStream::Read(std::ifstream& ifs)
 {
 	int nn;
 	char buf[4];
 	__int32 i32;
 	__int32 size;
-	__int8 *ibuf;
-	int dlen;
+	int idatCount;
+	int offset = 0;
+	int stpos,ndpos;
+	MemoryStream^ ms = gcnew MemoryStream;
+	array<System::Byte>^ byts = gcnew array<byte>(4000000);
 
+	byts[0] = 0x89;
+	byts[1] = 'P';
+	byts[2] = 'N';
+	byts[3] = 'G';
+	byts[4] = '\r';
+	byts[5] = '\n';
+	byts[6] = '\x1A';
+	byts[7] = '\n';
+
+	ms->Write(byts, offset, 8);
+
+
+	bbuf = new __int8[4000000];
+	accSize = 0;
+	idatCount =0;
+	stpos = ifs.tellg();
 	ihdr.Read(ifs);
 	while (!ifs.eof()) {
 		ifs.read((char *)&i32,4);
@@ -308,37 +387,10 @@ void PNGStream::Read(std::ifstream& ifs)
 				case 'A': case 'a':
 					switch(buf[3]) {
 					case 'T': case 't':
-						int xx,yy;
-						__int8 *cbuf;
-						__int32 *buf32;
-						ibuf = new __int8[size];
-						bbuf = new __int8[1600000];
-						cbuf = new __int8[1600000];
-
-						ifs.read((char *)ibuf, size);
+						idatCount++;
+						ifs.read((char *)&ibuf[accSize], size);
+						accSize += size;
 						ifs.read((char *)&i32,4);
-						dlen = 1600000;
-						uncompress((Bytef *)bbuf, (uLongf *)&dlen, (Bytef *)ibuf, size);
-						
-						//-----------------------------------------------------------------------
-						// These lines of code reformat the buffer with one byte less per
-						// scanline.
-						//-----------------------------------------------------------------------
-						for (yy = 0; yy < ihdr.Height; yy++) {
-							for (xx = 1; xx <= ihdr.Width*4; xx++) {
-								cbuf[xx-1+yy*ihdr.Width*4] = bbuf[xx+yy*(ihdr.Width*4+1)];
-							}
-						}
-						memcpy(bbuf, cbuf, 1600000);
-						buf32 = (__int32 *)bbuf;
-						for (xx = 0; xx < ihdr.Width * ihdr.Height; xx++)
-							buf32[xx] = 0xFF000000 | ((buf32[xx] >> 16) & 0xff) | (buf32[xx] & 0x00FF00) | ((buf32[xx] & 0xff) << 16);
-						delete[] cbuf;
-						//-----------------------------------------------------------------------
-						//-----------------------------------------------------------------------
-						
-						delete[] ibuf;
-						bmp = gcnew System::Drawing::Bitmap(ihdr.Width, ihdr.Height, ihdr.Width*4, System::Drawing::Imaging::PixelFormat::Format32bppArgb, IntPtr(bbuf));
 						break;
 					}
 					break;
@@ -370,6 +422,40 @@ void PNGStream::Read(std::ifstream& ifs)
 					break;
 				}
 				break;
+			case 'B': case 'b':
+				switch(buf[2]) {
+				case 'I': case 'i':
+					switch(buf[3]) {
+					case 'T': case 't':
+						switch(ihdr.ColorType) {
+						case 0:	// greyscale
+							ifs.read((char *)&i32,1);
+							ifs.read((char *)&i32,4);
+							break;
+						case 2:	// truecolor
+							ifs.read((char *)&i32,3);
+							ifs.read((char *)&i32,4);
+							break;
+						case 3:	// indexed color
+							ifs.read((char *)&i32,3);
+							ifs.read((char *)&i32,4);
+							break;
+						case 4:	// greyscale+alpha
+							ifs.read((char *)&i32,2);
+							ifs.read((char *)&i32,4);
+							break;
+						case 6:	// truecolor+alpha
+							ifs.read((char *)&i32,4);
+							ifs.read((char *)&i32,4);
+							break;
+						}
+						break;
+					}
+					break;
+				}
+				break;
+			default:
+				goto jUnimp;
 			}
 			break;
 		// gAMA	- read and ignore
@@ -391,13 +477,23 @@ void PNGStream::Read(std::ifstream& ifs)
 			break;
 		// Some other unrecognized chunk
 		default:
+jUnimp:
 			for (nn =  0; nn < size; nn++)
 				ifs.read((char *)buf,1);
 			ifs.read((char *)&i32,4);
 		}
 	};
 j1:	;
-
+	ndpos = ifs.tellg();
+	ifs.seekg(stpos);
+	for (nn = stpos; nn < ndpos; nn++) {
+		ifs.read((char *)buf,1);
+		byts[8 + nn - stpos] = buf[0];
+	}
+	ms->Write(byts, 8, ndpos-stpos);
+	bmp = gcnew System::Drawing::Bitmap(ms);
+	ms->Close();
+//	Uncompress();
 }
 
 void PNGStream::ReadEnd(std::ifstream& ifs)
