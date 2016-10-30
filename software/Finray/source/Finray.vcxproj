@@ -101,6 +101,7 @@
     <ClCompile Include="Math\Polynomial.cpp" />
     <ClCompile Include="Noise.cpp" />
     <ClCompile Include="Parser.cpp" />
+    <ClCompile Include="Pigment.cpp" />
     <ClCompile Include="Quadric.cpp" />
     <ClCompile Include="rand.cpp" />
     <ClCompile Include="ray.cpp" />
@@ -110,7 +111,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="Surface.cpp" />
+    <ClCompile Include="Texture.cpp" />
     <ClCompile Include="SymbolTable.cpp" />
     <ClCompile Include="Torus.cpp" />
     <ClCompile Include="Transform.cpp" />
@@ -133,6 +134,7 @@
     <ClInclude Include="Math\Vector.h" />
     <ClInclude Include="MNG.h" />
     <ClInclude Include="Noise.h" />
+    <ClInclude Include="Pigment.h" />
     <ClInclude Include="rand.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />

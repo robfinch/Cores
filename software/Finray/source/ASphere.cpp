@@ -1,7 +1,5 @@
 #include "stdafx.h"
 
-extern Finray::RayTracer rayTracer;
-
 namespace Finray {
 
 ASphere::ASphere() : AnObject()
@@ -30,61 +28,148 @@ ASphere::ASphere(double X, double Y, double Z, double R)  : AnObject()
 	radius2 = SQUARE(R);
 }
 
-AnObject *ASphere::Intersect(Ray *ray, double *T)
+IntersectResult *ASphere::Intersect(Ray *ray)
 {
-	double B, C, Discrim, t0, t1;
+	DBL B, C, Discrim, t0, t1, len;
+	IntersectResult *r = nullptr;
+	Vector ro, rd;
+
+	if (usesTransform) {
+		ro = trans.InvTransPoint(ray->origin);
+		rd = trans.InvTransDirection(ray->dir);
+		len = Vector::Length(rd);
+		rd = Vector::Scale(rd, 1.0/len);
+	}
+	else {
+		ro = ray->origin;
+		rd = ray->dir;
+	}
 
 	// Don't need to calculate A since ray is a unit vector
-	B = 2 * ((ray->dir.x * (ray->origin.x - center.x))
-			+(ray->dir.y * (ray->origin.y - center.y))
-			+(ray->dir.z * (ray->origin.z - center.z)));
-	C =   SQUARE(ray->origin.x - center.x)
-		+ SQUARE(ray->origin.y - center.y)
-		+ SQUARE(ray->origin.z - center.z)
+	B = 2 * ((rd.x * (ro.x - center.x))
+			+(rd.y * (ro.y - center.y))
+			+(rd.z * (ro.z - center.z)));
+	C =   SQUARE(ro.x - center.x)
+		+ SQUARE(ro.y - center.y)
+		+ SQUARE(ro.z - center.z)
 		- radius2;
 
 	Discrim = (SQUARE(B) - 4 * C);
 	if (Discrim <= EPSILON)
-		return nullptr;
+		return (nullptr);
 
 	Discrim = sqrt(Discrim);
 	t0 = (-B-Discrim) * 0.5;
-	if (t0 > EPSILON) {
-		*T = t0;
-		return this;
-	}
 	t1 = (-B+Discrim) * 0.5;
-	if (t1 > EPSILON) {
-		*T = t1;
-		return this;
+	if (t0 > EPSILON || t1 > EPSILON) {
+		r = new IntersectResult;
+		r->I[0].obj = this;
 	}
-	return nullptr;
+	if (t0 > EPSILON) {
+		if (usesTransform)
+			r->I[0].T = t0 / len;
+		else
+			r->I[0].T = t0;
+		r->n = 1;
+	}
+	if (t1 > EPSILON) {
+		if (usesTransform)
+			r->I[r->n].T = t1/len;
+		else
+			r->I[r->n].T = t1;
+		r->I[r->n].obj = this;
+		r->n++;
+	}
+	return (r);
 }
 
 Vector ASphere::Normal(Vector point)
 {
-	return Vector::Normalize(Vector::Sub(point, center));
+	if (usesTransform) {
+		Vector np = trans.InvTransPoint(point);
+		Vector result = Vector::Sub(np,center);
+		result = trans.TransNormal(result);
+		return (Vector::Normalize(result));
+	}
+	else
+		return (Vector::Normalize(Vector::Sub(point, center)));
 }
 
-void ASphere::RotX(double angle)
+void ASphere::RotX(DBL angle)
 {
-	center = Vector::RotX(center, angle);
+	if (usesTransform) {
+		Transform T;
+		Vector v(angle,0.0,0.0);
+		T.CalcRotation(v);
+		TransformX(&T);
+	}
+	else
+		center = Vector::RotX(center, angle);
 }
 
 void ASphere::RotY(double angle)
 {
-	center = Vector::RotY(center, angle);
+	if (usesTransform) {
+		Transform T;
+		Vector v(0.0,angle,0.0);
+		T.CalcRotation(v);
+		TransformX(&T);
+	}
+	else
+		center = Vector::RotY(center, angle);
 }
 
 void ASphere::RotZ(double angle)
 {
-	center = Vector::RotZ(center, angle);
+	if (usesTransform) {
+		Transform T;
+		Vector v(0.0,0.0,angle);
+		T.CalcRotation(v);
+		TransformX(&T);
+	}
+	else
+		center = Vector::RotZ(center, angle);
+}
+
+void ASphere::Translate(double ax, double ay, double az)
+{
+	Vector v(ax,ay,az);
+
+	if (usesTransform) {
+		Transform T;
+		T.CalcTranslation(v);
+		TransformX(&T);
+	}
+	else {
+		center = Vector::Add(center,v);
+	}
 }
 
 void ASphere::Scale(Vector p)
 {
-	radius = radius * Vector::Length(p);
-	radius2 = SQUARE(radius);
+	if (p.x != p.y || p.x != p.z || p.y != p.z)
+	{
+		if (!usesTransform) {
+			Transform T;
+			T.CalcTranslation(center);
+			center.x = center.y = center.z = 0.0;
+			usesTransform = true;
+		}
+		Transform T;
+		T.CalcScaling(p);
+		TransformX(&T);
+	}
+	else {
+		if (usesTransform) {
+			Transform T;
+			T.CalcScaling(p);
+			TransformX(&T);
+		}
+		else {
+			radius = radius * Vector::Length(p);
+			radius2 = SQUARE(radius);
+		}
+	}
 }
 
 void ASphere::Print()

@@ -25,7 +25,7 @@ int AnObject::Print(AnObject *obj) {
 Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pColor)
 {
 	float _specular, _diffuse;
-	double k, distanceT;
+	DBL k, distanceT;
 	Ray lightRay;
 	Ray reflectedRay, refractedRay;
 	ALight *lightSrcPtr;
@@ -50,7 +50,7 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	lightSrcPtr = rayTracer.lightList;
 	while (lightSrcPtr) {
 		distanceT = lightSrcPtr->MakeRay(point, &lightRay);
-		lightColor = lightSrcPtr->GetColor(this,&lightRay,distanceT);
+		lightColor = lightSrcPtr->GetColor(rayTracer.objectList,this,&lightRay,distanceT);
 		_diffuse = (float)Vector::Dot(normal, lightRay.dir);
 		if ((_diffuse > 0.0) && properties.diffuse > 0.0) {
 			_diffuse = pow(_diffuse,properties.brilliance) * properties.diffuse;
@@ -93,6 +93,13 @@ void AnObject::RotXYZ(double ax, double ay, double az)
 	switch(type) {
 	case OBJ_CONE:		return ((ACone *)this)->RotXYZ(ax,ay,az);
 	case OBJ_CYLINDER:	return ((ACylinder *)this)->RotXYZ(ax,ay,az);
+	case OBJ_INTERSECTION:
+		o = obj;
+		while (o) {
+			o->RotXYZ(ax,ay,az);
+			o = o->next;
+		}
+		break;
 	default:
 		RotX(ax);
 		RotY(ay);
@@ -112,6 +119,17 @@ void AnObject::Translate(double ax, double ay, double az)
 	o = obj;
 	while (o) {
 		o->Translate(ax,ay,az);
+		o = o->next;
+	}
+}
+
+void AnObject::Scale(Vector v)
+{
+	AnObject *o;
+
+	o = obj;
+	while (o) {
+		o->Scale(v);
 		o = o->next;
 	}
 }
@@ -137,34 +155,36 @@ bool AnObject::Intersects(Ray *ray, double *d) {
 */
 bool AnObject::AntiIntersects(Ray *ray) {
 	AnObject *o;
-	double d;
+	IntersectResult *r;
 
 	o = negobj;
 	while(o) {
 		if (o->negobj) {
 			if (o->negobj->AntiIntersects(ray)) {
-				return true;
+				return (true);
 			}
 		}
-		if (o->Intersect(ray, &d))
-			return true;
+		if (r = o->Intersect(ray)) {
+			delete r;
+			return (true);
+		}
 		o = o->next;
 	}
-	return false;
+	return (false);
 }
 
-AnObject *AnObject::Intersect(Ray *r, double *d)
+IntersectResult *AnObject::Intersect(Ray *r)
 {
 	switch(type) {
-	case OBJ_BOX:		return ((ABox *)this)->Intersect(r,d);
-	case OBJ_SPHERE:	return ((ASphere *)this)->Intersect(r,d);
-	case OBJ_TORUS:		return ((ATorus *)this)->Intersect(r,d);
-	case OBJ_PLANE:		return ((APlane *)this)->Intersect(r,d);
-	case OBJ_TRIANGLE:	return ((ATriangle *)this)->Intersect(r,d);
-	case OBJ_QUADRIC:	return ((AQuadric *)this)->Intersect(r,d);
-	case OBJ_CONE:		return ((ACone *)this)->Intersect(r,d);
-	case OBJ_CUBE:		return ((ABox *)this)->Intersect(r,d);
-	case OBJ_CYLINDER:	return ((ACylinder *)this)->Intersect(r,d);
+	case OBJ_BOX:		return ((ABox *)this)->Intersect(r);
+	case OBJ_SPHERE:	return ((ASphere *)this)->Intersect(r);
+	case OBJ_TORUS:		return ((ATorus *)this)->Intersect(r);
+	case OBJ_PLANE:		return ((APlane *)this)->Intersect(r);
+	case OBJ_TRIANGLE:	return ((ATriangle *)this)->Intersect(r);
+	case OBJ_QUADRIC:	return ((AQuadric *)this)->Intersect(r);
+	case OBJ_CONE:		return ((ACone *)this)->Intersect(r);
+	case OBJ_CUBE:		return ((ABox *)this)->Intersect(r);
+	case OBJ_CYLINDER:	return ((ACylinder *)this)->Intersect(r);
 	default:	return nullptr;
 	}
 }
@@ -235,6 +255,11 @@ Color AnObject::GetColor(Vector point)
 bool AnObject::IsContainer()
 {
 	return type==OBJ_OBJECT || type==OBJ_BOX || type==OBJ_CUBE;
+}
+
+void AnObject::SetTexture(Texture *tx)
+{
+	properties.Copy(tx);
 }
 
 };

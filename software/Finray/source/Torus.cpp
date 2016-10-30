@@ -22,18 +22,17 @@ ATorus::ATorus(DBL majorRadius, DBL minorRadius)
 	CalcBoundingObject();
 }
 
-AnObject *ATorus::Intersect(Ray *ray, double *t)
+IntersectResult *ATorus::Intersect(Ray *ray)
 {
-	double len;
-	double y1, y2, r1, r2, R2;
-	double k1, k2;
-	double Py2, Dy2, PDy2;
-	double DistanceP, Closer;
+	DBL len;
+	DBL y1, y2, r1, r2, R2;
+	DBL k1, k2;
+	DBL Py2, Dy2, PDy2;
+	DBL DistanceP, Closer;
 	Vector P, D;
 	Polynomial c(4);
-	DBL Depth[4];
-	DBL dpth;
 	int i,n;
+	IntersectResult *r = nullptr;
 
 	/* Transform the ray into the torus space. */
 
@@ -57,6 +56,8 @@ AnObject *ATorus::Intersect(Ray *ray, double *t)
 	r2 = MajorRadius + MinorRadius;
 	r2 = r2 * r2;
 
+	// First check for a thick cylinder hit. If it the ray doesn't intersect the
+	// thick cylinder, then it doesn't intersect the torus.
 	if (TestThickCylinder(P, D, y1, y2, r1, r2))
 	{
 		// Move P close to bounding sphere to have more precise root calculation.
@@ -92,17 +93,19 @@ AnObject *ATorus::Intersect(Ray *ray, double *t)
 //		n = c.Solve(Test_Flag(this, STURM_FLAG), ROOT_TOLERANCE);
 		n = c.Solve(ROOT_TOLERANCE, true);
 
-		dpth = 0.0;
+		if (n) {
+			r = new IntersectResult;
+			r->I[0].obj = this;
+		}
 		while(n--) {
 			r1 = (c.roots[n] + Closer) / len;
-			Depth[i++] = r1;
-			if (r1 > dpth)
-				dpth = r1;
+			r->I[r->n].T = r1;
+			r->I[r->n].obj = this;
+			r->n++;
+			//Depth[i++] = r1;
 		}
-		*t = r1;
 	}
-
-	return i > 0 ? this : nullptr;
+	return (r);
 }
 
 /*****************************************************************************
@@ -143,8 +146,8 @@ AnObject *ATorus::Intersect(Ray *ray, double *t)
 
 bool ATorus::TestThickCylinder(const Vector P, const Vector D, double h1, double h2, double r1, double r2) const
 {
-	double a, b, c, d;
-	double u, v, k, r, h;
+	DBL a, b, c, d;
+	DBL u, v, k, r, h;
 
 	if (fabs(D.y) < EPSILON)
 	{
@@ -300,7 +303,7 @@ Vector ATorus::Normal(Vector P)
 	// Transform the normal out of the torus space.
 	N = trans.TransNormal(N);
 
-	return Vector::Normalize(N);
+	return (Vector::Normalize(N));
 }
 
 
@@ -323,6 +326,13 @@ void ATorus::RotXYZ(double ax, double ay, double az)
 	v.y = ay;
 	v.z = az;
 	T.CalcRotation(v);
+	TransformX(&T);
+}
+
+void ATorus::Scale(Vector v)
+{
+	Transform T;
+	T.CalcScaling(v);
 	TransformX(&T);
 }
 

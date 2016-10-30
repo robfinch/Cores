@@ -41,12 +41,13 @@ void ACylinder::CalcTransform()
 }
 
 
-AnObject *ACylinder::Intersect(Ray *ray, double *t)
+IntersectResult *ACylinder::Intersect(Ray *ray)
 {
 	int i = 0;
 	double a, b, c, z, t1, t2, len;
 	double d;
 	Vector P, D;
+	IntersectResult *r = nullptr;
 
 	/* Transform the ray into the cones space */
 
@@ -71,17 +72,28 @@ AnObject *ACylinder::Intersect(Ray *ray, double *t)
 			z = P.z + t1 * D.z;
 			if ((t1 > tolerance) && (t1 < BIG) && (z >= 0.0) && (z <= 1.0))
 			{
-				*t = t1 / len;
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->n = 1;
+				r->I[0].T = t1/len;
 				intersectedPart = ACone::BODY;
-				return this;
 			}
 
 			z = P.z + t2 * D.z;
 			if ((t2 > tolerance) && (t2 < BIG) && (z >= 0.0) && (z <= 1.0))
 			{
-				*t = t2 / len;
+				if (r) {
+					r->n = 2;
+					r->I[1].T = t2/len;
+					r->I[1].obj = this;
+				}
+				else {
+					r = new IntersectResult;
+					r->I[0].obj = this;
+					r->n = 1;
+					r->I[0].T = t2/len;
+				}
 				intersectedPart = ACone::BODY;
-				return this;
 			}
 		}
 	}
@@ -94,9 +106,18 @@ AnObject *ACylinder::Intersect(Ray *ray, double *t)
 
 		if (((SQUARE(a) + SQUARE(b)) <= 1.0) && (d > tolerance) && (d < BIG))
 		{
-			*t = d / len;
+			if (r) {
+				r->I[r->n].T = d / len;
+				r->I[r->n].obj = this;
+				r->n++;
+			}
+			else {
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->I[0].T = d / len;
+				r->n = 1;
+			}
 			intersectedPart = APEX;
-			return this;
 		}
 	}
 	if (openBase && (fabs(D.z) > EPSILON)) {
@@ -107,12 +128,21 @@ AnObject *ACylinder::Intersect(Ray *ray, double *t)
 		if (((SQUARE(a) + SQUARE(b)) <= 1.0)
 			&& (d > tolerance) && (d < BIG))
 		{
-			*t = d / len;
+			if (r) {
+				r->I[r->n].T = d / len;
+				r->I[r->n].obj = this;
+				r->n++;
+			}
+			else {
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->I[0].T = d / len;
+				r->n = 1;
+			}
 			intersectedPart = ACone::BASE;
-			return this;
 		}
 	}
-	return nullptr;
+	return (r);
 }
 
 
@@ -214,7 +244,6 @@ void ACone::RotXYZ(double ax, double ay, double az)
 	v.x = ax;
 	v.y = ay;
 	v.z = az;
-	CalcTransform();
 	T.CalcRotation(v);
 	TransformX(&T);
 }
@@ -226,7 +255,6 @@ void ACone::Translate(double ax, double ay, double az)
 	v.x = ax;
 	v.y = ay;
 	v.z = az;
-	CalcTransform();
 	T.CalcTranslation(v);
 	TransformX(&T);
 }
@@ -234,7 +262,6 @@ void ACone::Translate(double ax, double ay, double az)
 void ACone::Scale(Vector v)
 {
 	Transform T;
-	CalcTransform();
 	T.CalcScaling(v);
 	TransformX(&T);
 }
@@ -246,7 +273,6 @@ void ACone::Scale(double ax, double ay, double az)
 	v.x = ax;
 	v.y = ay;
 	v.z = az;
-	CalcTransform();
 	T.CalcScaling(v);
 	TransformX(&T);
 }
@@ -270,12 +296,13 @@ Vector ACone::Normal(Vector p)
 	return Vector::Normalize(trans.TransNormal(res));
 }
 
-AnObject *ACone::Intersect(Ray *ray, double *t)
+IntersectResult *ACone::Intersect(Ray *ray)
 {
 	int i = 0;
 	double a, b, c, z, t1, t2, len;
 	double d;
 	Vector P, D;
+	IntersectResult *r = nullptr;
 
 	/* Transform the ray into the cones space */
 
@@ -300,9 +327,11 @@ AnObject *ACone::Intersect(Ray *ray, double *t)
 			z = P.z + t1 * D.z;
 			if ((t1 > tolerance) && (t1 < BIG) && (z >= length) && (z <= 1.0))
 			{
-				*t = t1 / len;
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->I[0].T = t1/len;
+				r->n = 1;
 				intersectedPart = BODY;
-				return this;
 			}
 		}
 	}
@@ -319,17 +348,28 @@ AnObject *ACone::Intersect(Ray *ray, double *t)
 			z = P.z + t1 * D.z;
 			if ((t1 > tolerance) && (t1 < BIG) && (z >= length) && (z <= 1.0))
 			{
-				*t = t1 / len;
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->I[0].T = t1/len;
+				r->n = 1;
 				intersectedPart = BODY;
-				return this;
 			}
 
 			z = P.z + t2 * D.z;
 			if ((t2 > tolerance) && (t2 < BIG) && (z >= length) && (z <= 1.0))
 			{
-				*t = t2 / len;
+				if (r) {
+					r->I[r->n].obj = this;
+					r->I[r->n].T = t2/len;
+					r->n++;
+				}
+				else {
+					r = new IntersectResult;
+					r->I[0].obj = this;
+					r->I[0].T = t2/len;
+					r->n = 1;
+				}
 				intersectedPart = BODY;
-				return this;
 			}
 		}
 	}
@@ -342,9 +382,18 @@ AnObject *ACone::Intersect(Ray *ray, double *t)
 
 		if (((SQUARE(a) + SQUARE(b)) <= 1.0) && (d > tolerance) && (d < BIG))
 		{
-			*t = d / len;
+			if (r) {
+				r->I[r->n].obj = this;
+				r->I[r->n].T = d / len;
+				r->n++;
+			}
+			else {
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->I[0].T = d / len;
+				r->n = 1;
+			}
 			intersectedPart = APEX;
-			return this;
 		}
 	}
 
@@ -357,18 +406,21 @@ AnObject *ACone::Intersect(Ray *ray, double *t)
 		if ((SQUARE(a) + SQUARE(b)) <= (SQUARE(length))
 			&& (d > tolerance) && (d < BIG))
 		{
-			*t = d / len;
+			if (r) {
+				r->I[r->n].obj = this;
+				r->I[r->n].T = d/len;
+				r->n++;
+			}
+			else {
+				r = new IntersectResult;
+				r->I[0].obj = this;
+				r->I[0].T = d / len;
+				r->n = 1;
+			}
 			intersectedPart = BASE;
-			return this;
 		}
 	}
-
-	return nullptr;
-}
-
-void ACone::TransformX(Transform *t)
-{
-	trans.Compose(t);
+	return (r);
 }
 
 void ACone::CalcCenter()

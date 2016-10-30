@@ -19,7 +19,7 @@ AQuadric::AQuadric(double a, double b, double c, double d, double e,
 	CalcBoundingObject();
 }
 
-AnObject *AQuadric::Intersect(Ray *ray, double *T)
+IntersectResult *AQuadric::Intersect(Ray *ray)
 {
 	double Ac, Bc, Cc;
 	double Xd = ray->dir.x;
@@ -34,6 +34,8 @@ AnObject *AQuadric::Intersect(Ray *ray, double *T)
 	double d;
 	double t;
 
+	IntersectResult *r = nullptr;
+
 	Ac = A * SQUARE(Xd) + B * SQUARE(Yd) + C * SQUARE(Zd) + D * Xd * Yd + E * Xd * Zd + F * Yd * Zd;
 	Bc = 2.0 * A * Xo * Xd + 2.0 * B * Yo * Yd + 2.0 * C * Zo * Zd +
 		D * Xo * Yd + D * Yo * Xd + E * Xo * Zd + E * Zo * Xd +
@@ -47,10 +49,13 @@ AnObject *AQuadric::Intersect(Ray *ray, double *T)
 		n = -Bc + sqrt(SQUARE(Bc)- 4.0 * Ac * Cc);
 		t = n/d;
 		if (t <= EPSILON)
-			return nullptr;
+			return (nullptr);
 	}
-	*T = t;
-	return this;
+	r = new IntersectResult;
+	r->I[0].obj = this;
+	r->I[0].T = t;
+	r->n = 1;
+	return (r);
 }
 
 Vector AQuadric::Normal(Vector P)
@@ -126,6 +131,13 @@ void AQuadric::Translate(double ax, double ay, double az)
 	v.y = ay;
 	v.z = az;
 	T.CalcTranslation(v);
+	TransformX(&T);
+}
+
+void AQuadric::Scale(Vector v)
+{
+	Transform T;
+	T.CalcScaling(v);
 	TransformX(&T);
 }
 

@@ -2,23 +2,25 @@ namespace FinitronClasses
 {
 
 #define setupX(b0,b1,r0,r1)\
-        t = vec.x + N;\
-        b0 = ((int)t) & BM;\
+        sx = vec.x + N;\
+        b0 = ((int)sx) & BM;\
         b1 = (b0+1) & BM;\
-        r0 = t - (int)t;\
+        r0 = sx - (int)sx;\
         r1 = r0 - 1.;
 #define setupY(b0,b1,r0,r1)\
-        t = vec.y + N;\
-        b0 = ((int)t) & BM;\
+        sx = vec.y + N;\
+        b0 = ((int)sx) & BM;\
         b1 = (b0+1) & BM;\
-        r0 = t - (int)t;\
+        r0 = sx - (int)sx;\
         r1 = r0 - 1.;
 #define setupZ(b0,b1,r0,r1)\
-        t = vec.z + N;\
-        b0 = ((int)t) & BM;\
+        sx = vec.z + N;\
+        b0 = ((int)sx) & BM;\
         b1 = (b0+1) & BM;\
-        r0 = t - (int)t;\
+        r0 = sx - (int)sx;\
         r1 = r0 - 1.;
+
+#define SINTABSIZE 1000
 
 class NoiseGen
 {
@@ -27,10 +29,11 @@ class NoiseGen
 	static const int N = 0x1000;
 	static const int NP = 12;
 	static const int NM = 0xfff;
-	static unsigned __int16 p[B + B + 2];
-	static Vector g3[B + B + 2];
-	static Vector2d g2[B + B + 2];
-	static double g1[B + B + 2];
+	unsigned __int16 p[B + B + 2];
+	Vector g3[B + B + 2];
+	Vector2d g2[B + B + 2];
+	double g1[B + B + 2];
+	DBL sintab [SINTABSIZE];
 	int start;
 	unsigned __int16 *hashTable;
 	int next_rand;
@@ -47,7 +50,11 @@ public:
 	void Init(void);
 	void InitHashTable();
 	double Noise3(Vector vec);
+	Vector Noise(Vector vec);
 	double Noise(Vector p, double alpha, double beta, int n);
+	DBL Cycloidal(DBL value);
+	DBL Turbulence(Vector);
+	Vector DTurbulence(Vector);
 };
 
 }

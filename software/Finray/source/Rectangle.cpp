@@ -66,23 +66,27 @@ void ARectangle::RotZ(double a)
 //  1: intersect in unique point
 //  2: are in same plane
 //
-AnObject *ARectangle::Intersect(Ray *ray, double *T)
+IntersectResult *ARectangle::Intersect(Ray *ray)
 {
 	Vector u, v, w, x, w0, I;
 	double r,a,b;
 	double uu, uv, vv, wu, wv, D;
 	double s, t;
+	IntersectResult *res = nullptr;
 
 	if (normal.x < EPSILON && normal.y < EPSILON && normal.z < EPSILON)
-		return nullptr;//-1;	// triangle is degenerate
+		return (nullptr);//-1;	// triangle is degenerate
 
 	w0 = Vector::Sub(ray->origin, p1);
 	a = -Vector::Dot(normal,w0);
 	b = Vector::Dot(normal,ray->dir);
 	if (abs(b) < EPSILON) {
-		if (a==0.0)		// ray lines in rectangle plane
-			return this; //2;	// return 2;
-		return nullptr;
+		if (a==0.0)	{	// ray lines in rectangle plane
+			res = new IntersectResult;
+			res->I[0].obj = this;
+			return (res); //2;	// return 2;
+		}
+		return (nullptr);
 	}
 
 	u = Vector::Sub(p2,p1);
@@ -91,9 +95,8 @@ AnObject *ARectangle::Intersect(Ray *ray, double *T)
 
 	// Get intersection point of ray within rectangle plane
 	r = a / b;
-	*T = r;
 	if (r < 0.0)		// ray goes away from the triangle
-		return nullptr;
+		return (nullptr);
 
 	I = Vector::Add(ray->origin, Vector::Scale(ray->dir, r));
 
@@ -113,7 +116,11 @@ AnObject *ARectangle::Intersect(Ray *ray, double *T)
 	t = (uv * wu - uu * wv) / D;
 	if (t < 0.0 || (s+t) > 1.0)	// I is outside of T
 		goto j1;
-	return this;//1;		// I is in T
+	res = new IntersectResult;
+	res->I[0].obj = this;
+	res->I[0].T = r;
+	res->n = 1;
+	return (res);//1;		// I is in T
 j1:
 	// Is I inside T2 ?
 	uv = Vector::Dot(u,x);
@@ -124,11 +131,15 @@ j1:
 	// Get and test parametric co-ords
 	s = (uv * wv - vv * wu) / D;
 	if (s < 0.0 || s > 1.0) // I is outside of T
-		return 0;
+		return (nullptr);
 	t = (uv * wu - uu * wv) / D;
 	if (t < 0.0 || (s+t) > 1.0)	// I is outside of T
-		return nullptr;
-	return this;//1;		// I is in T
+		return (nullptr);
+	res = new IntersectResult;
+	res->I[0].obj = this;
+	res->I[0].T = r;
+	res->n = 1;
+	return (res);//1;		// I is in T
 }
 
 Vector ARectangle::Normal(Vector p)

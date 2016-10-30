@@ -27,7 +27,7 @@ namespace Finray {
 			//
 			//TODO: Add the constructor code here
 			//
-			AnObject *objectPtr;
+//			AnObject *objectPtr;
 //			Graphics^ gr;
 
 			ViewWidth = 640;
@@ -126,6 +126,7 @@ namespace Finray {
 	private: System::Windows::Forms::RadioButton^  radioButton1;
 	private: System::Windows::Forms::RadioButton^  radioButton2;
 private: System::Windows::Forms::RadioButton^  radioButton3;
+private: System::Windows::Forms::RadioButton^  radioButton4;
 	private: System::ComponentModel::IContainer^  components;
 			 /// <summary>
 		/// Required designer variable.
@@ -152,6 +153,7 @@ private: System::Windows::Forms::RadioButton^  radioButton3;
 			this->radioButton1 = (gcnew System::Windows::Forms::RadioButton());
 			this->radioButton2 = (gcnew System::Windows::Forms::RadioButton());
 			this->radioButton3 = (gcnew System::Windows::Forms::RadioButton());
+			this->radioButton4 = (gcnew System::Windows::Forms::RadioButton());
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->BeginInit();
 			this->SuspendLayout();
 			// 
@@ -159,7 +161,8 @@ private: System::Windows::Forms::RadioButton^  radioButton3;
 			// 
 			this->pictureBox1->Location = System::Drawing::Point(85, 46);
 			this->pictureBox1->Name = L"pictureBox1";
-			this->pictureBox1->Size = System::Drawing::Size(640, 480);
+			this->pictureBox1->Size = System::Drawing::Size(640, 590);
+			this->pictureBox1->SizeMode = System::Windows::Forms::PictureBoxSizeMode::StretchImage;
 			this->pictureBox1->TabIndex = 0;
 			this->pictureBox1->TabStop = false;
 			// 
@@ -254,18 +257,30 @@ private: System::Windows::Forms::RadioButton^  radioButton3;
 			this->radioButton3->AutoSize = true;
 			this->radioButton3->Location = System::Drawing::Point(4, 203);
 			this->radioButton3->Name = L"radioButton3";
-			this->radioButton3->Size = System::Drawing::Size(54, 17);
+			this->radioButton3->Size = System::Drawing::Size(66, 17);
 			this->radioButton3->TabIndex = 8;
 			this->radioButton3->TabStop = true;
-			this->radioButton3->Text = L"40x30";
+			this->radioButton3->Text = L"160x120";
 			this->radioButton3->UseVisualStyleBackColor = true;
 			this->radioButton3->CheckedChanged += gcnew System::EventHandler(this, &frmRay::radioButton3_CheckedChanged);
+			// 
+			// radioButton4
+			// 
+			this->radioButton4->AutoSize = true;
+			this->radioButton4->Location = System::Drawing::Point(4, 226);
+			this->radioButton4->Name = L"radioButton4";
+			this->radioButton4->Size = System::Drawing::Size(54, 17);
+			this->radioButton4->TabIndex = 9;
+			this->radioButton4->TabStop = true;
+			this->radioButton4->Text = L"40x30";
+			this->radioButton4->UseVisualStyleBackColor = true;
 			// 
 			// frmRay
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
-			this->ClientSize = System::Drawing::Size(814, 538);
+			this->ClientSize = System::Drawing::Size(814, 661);
+			this->Controls->Add(this->radioButton4);
 			this->Controls->Add(this->radioButton3);
 			this->Controls->Add(this->radioButton2);
 			this->Controls->Add(this->radioButton1);
@@ -277,6 +292,7 @@ private: System::Windows::Forms::RadioButton^  radioButton3;
 			this->Controls->Add(this->pictureBox1);
 			this->Name = L"frmRay";
 			this->Text = L"Finitron Ray Trace";
+			this->Load += gcnew System::EventHandler(this, &frmRay::frmRay_Load);
 			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->pictureBox1))->EndInit();
 			this->ResumeLayout(false);
 			this->PerformLayout();
@@ -401,8 +417,10 @@ private: System::Void backgroundWorker1_RunWorkerCompleted(System::Object^  send
 				this->button1->Enabled = true;
 				progressBar1->Value = 0;
 			}
-			else
+			else {
 				rayTracer.DumpObjects();
+				this->button3->Enabled = true;
+			}
 		 }
 private: System::Void button2_Click(System::Object^  sender, System::EventArgs^  e) {
 			 std::ofstream fp;
@@ -419,6 +437,10 @@ private: System::Void button3_Click(System::Object^  sender, System::EventArgs^ 
 				 ViewHeight = 240;
 			 }
 			 else if (radioButton3->Checked) {
+				 ViewWidth = 160;
+				 ViewHeight = 120;
+			 }
+			 else if (radioButton4->Checked) {
 				 ViewWidth = 40;
 				 ViewHeight = 30;
 			 }
@@ -428,6 +450,7 @@ private: System::Void button3_Click(System::Object^  sender, System::EventArgs^ 
 			 }
 	        backgroundWorker1->RunWorkerAsync(gr);
 			this->button1->Enabled = true;
+			this->button3->Enabled = false;
 			 progressBar1->Value = 0;
 		 }
 private: System::Void button4_Click(System::Object^  sender, System::EventArgs^  e) {
@@ -446,6 +469,8 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 			 nn++;
 		 }
 private: System::Void radioButton3_CheckedChanged(System::Object^  sender, System::EventArgs^  e) {
+		 }
+private: System::Void frmRay_Load(System::Object^  sender, System::EventArgs^  e) {
 		 }
 };
 }

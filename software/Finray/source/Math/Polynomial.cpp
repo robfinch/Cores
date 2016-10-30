@@ -76,7 +76,7 @@ DBL Polynomial::ValueAt(DBL x)
 }
 
 
-// Reduce the order of the polynomial by eliminating elements where the
+// Reduce the order of the polynomial by eliminating leading elements where the
 // coefficient is small enough.
 
 inline int Polynomial::Reorder()
@@ -1152,11 +1152,11 @@ bool Polynomial::Solve2(DBL epsilon, bool sturm)
 			for (nn = 0; nn < numroots; nn++)
 				roots[nn] = p.roots[nn];
 			level--;
-			return true;
+			return (true);
 		}
 		level--;
 	}
-	return false;
+	return (false);
 }
 
 /*****************************************************************************
@@ -1257,5 +1257,5 @@ int Polynomial::Solve(DBL epsilon, bool sturm)
 		numroots = polysolve();
 		break;
 	}
-	return numroots;
+	return (numroots);
 }

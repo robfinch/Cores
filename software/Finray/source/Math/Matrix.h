@@ -23,6 +23,7 @@ public:
 	Matrix matrix;
 	Matrix inverse;
 	Transform();
+	void Copy(Transform *t);
 	void CalcScaling(Vector vector);
 	void CalcTranslation(Vector vector);
 	void CalcRotation(Vector vector);

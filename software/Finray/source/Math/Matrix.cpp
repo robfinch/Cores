@@ -10,8 +10,6 @@ void Matrix::Zero()
 
 void Matrix::Identity()
 {
-	int nn;
-
 	memset(this, 0, sizeof(Matrix));
 	m[0][0] = 1.0;
 	m[1][1] = 1.0;

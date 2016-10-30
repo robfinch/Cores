@@ -12,6 +12,7 @@ void RayTracer::Init()
 	lightList = nullptr;
 	viewPoint = nullptr;
 	symbolTable.count = 0;
+	symbolTable.AddDefaultSymbols();
 	recurseLevel = 0;
 	maxRecurseLevel = 5;
 	parser.pRayTracer = this;

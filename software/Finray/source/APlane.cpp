@@ -28,9 +28,11 @@ APlane::APlane(double A, double B, double C, double D) : AnObject()
 	radius2 = (SQUARE(BIG));
 }
 
-AnObject *APlane::Intersect(Ray *ray, double *T)
+IntersectResult *APlane::Intersect(Ray *ray)
 {
 	double Vd, Vo;
+	double T;
+	IntersectResult *r;
 
 	Vd = Vector::Dot(normal, ray->dir);
 	if (Vd <= EPSILON)
@@ -40,10 +42,14 @@ AnObject *APlane::Intersect(Ray *ray, double *T)
 	Vo += distance;
 	Vo *= -1.0;
 
-	*T = Vo/Vd;
-	if (*T < 0.0)
+	T = Vo/Vd;
+	if (T < 0.0)
 		return (nullptr);
-	return (this);
+	r = new IntersectResult;
+	r->n = 1;
+	r->I[0].T = T;
+	r->I[0].obj = this;
+	return (r);
 }
 
 Vector APlane::Normal(Vector point)

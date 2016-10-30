@@ -8,6 +8,8 @@ public:
 	float r;
 	float g;
 	float b;
+	float f;	// filter
+	float t;	// transmit
 	Color(float R, float G, float B) { r = R; g = G; b = B; };
 	Color() { r = 0.0f; g = 0.0f; b = 0.0f; };
 	static Color Add(Color a, Color b) {
@@ -67,7 +69,7 @@ public:
 	};
 	static Color RotX(Color pt, float angle)
 	{
-		angle = angle * PI / 180.0;
+		angle = angle * (float)PI / 180.0f;
 		float y = pt.g * cos(angle) - pt.b * sin(angle);
 		float z = pt.g * sin(angle) + pt.b * cos(angle);
 		pt.g = y;
@@ -76,7 +78,7 @@ public:
 	}
 	static Color RotY(Color pt, float angle)
 	{
-		angle = angle * PI / 180.0;
+		angle = angle * (float)PI / 180.0f;
 		float x = pt.r * cos(angle) - pt.b * sin(angle);
 		float z = pt.r * sin(angle) + pt.b * cos(angle);
 		pt.r = x;
@@ -85,12 +87,42 @@ public:
 	}
 	static Color RotZ(Color pt, float angle)
 	{
-		angle = angle * PI / 180.0;
+		angle = angle * (float)PI / 180.0f;
 		float x = pt.r * cos(angle) - pt.g * sin(angle);
 		float y = pt.r * sin(angle) + pt.g * cos(angle);
 		pt.r = x;
 		pt.g = y;
 		return pt;
 	}
+	bool IsBlack() {
+		return r==0.0 && g==0.0 && b==0.0;
+	}
 };
+
+class ColorMapEntry
+{
+public:
+	double range;
+	Color color;
+};
+
+class ColorMap
+{
+public:
+	__int16 num;
+	ColorMapEntry *cme;
+public:
+	ColorMap() { num = 0; cme = nullptr; };
+	ColorMap(int nn) {
+		num = nn;
+		cme = new ColorMapEntry[num];
+	}
+	~ColorMap() {
+		if (cme)
+			delete[] cme;
+	}
+	Color GetColor(double value);
+	void Copy(ColorMap *cmap);
+};
+
 };

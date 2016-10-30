@@ -11,6 +11,11 @@ Transform::Transform()
 	inverse.Identity();
 }
 
+void Transform::Copy(Transform *t)
+{
+	memcpy(this, t, sizeof(Transform));
+}
+
 void Transform::CalcScaling(Vector vector)
 {
 	matrix.Identity();

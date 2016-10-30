@@ -260,7 +260,7 @@ ABox::ABox(double x, double y, double z) : AnObject()
 	CalcBoundingObject();
 }
 
-AnObject *ABox::Intersect(Ray *ray, double *t) { return 0; }
+IntersectResult *ABox::Intersect(Ray *ray) { return (nullptr); }
 /*
 {
 	int nn;
@@ -345,7 +345,7 @@ void ABox::Scale(Vector p)
 		boundingObject->Scale(p);
 }
 
-void ABox::SetTexture(Surface *tx)
+void ABox::SetTexture(Texture *tx)
 {
 	int nn;
 

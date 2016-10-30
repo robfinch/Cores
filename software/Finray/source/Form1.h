@@ -149,7 +149,7 @@ namespace Finray {
 				 Process^ proc = gcnew Process();
 				 if (this->openFileDialog1->ShowDialog()  == System::Windows::Forms::DialogResult::OK ) {
 					char* str = (char*)(void*)Marshal::StringToHGlobalAnsi(this->openFileDialog1->FileName);
-					sprintf(buf, "\"%s\" \"%s.frpp\"", str, str);
+					sprintf_s(buf, sizeof(buf), "\"%s\" \"%s.frpp\"", str, str);
 					//ZeroMemory(filebuf, sizeof(filebuf));
 					proc->StartInfo->FileName = "frpp.exe";
 					proc->StartInfo->Arguments = gcnew String(buf);
@@ -157,7 +157,7 @@ namespace Finray {
 					proc->StartInfo->CreateNoWindow = true;
 					proc->Start();
 					proc->WaitForExit();
-					sprintf(buf, "%s.frpp", str);
+					sprintf_s(buf, sizeof(buf), "%s.frpp", str);
 					rayTracer.parser.path = std::string(buf);
 					filepath = gcnew String(buf);
 				 }

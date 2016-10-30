@@ -9,6 +9,23 @@ SymbolTable::SymbolTable()
 	count = 0;
 }
 
+void SymbolTable::AddDefaultSymbols()
+{
+	Symbol sym;
+	sym.varname = std::string("_x");
+	sym.value.type = TYP_VECTOR;
+	sym.value.v3 = Vector(1.0,0.0,0.0);
+	Add(&sym);
+	sym.varname = std::string("_y");
+	sym.value.type = TYP_VECTOR;
+	sym.value.v3 = Vector(0.0,1.0,0.0);
+	Add(&sym);
+	sym.varname = std::string("_z");
+	sym.value.type = TYP_VECTOR;
+	sym.value.v3 = Vector(0.0,0.0,1.0);
+	Add(&sym);
+}
+
 Symbol *SymbolTable::Find(std::string nm)
 {
 	int nn;

@@ -10,14 +10,16 @@
 #include <windows.h>
 #include <math.h>
 #include <time.h>
+#include <stdlib.h>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
 #include "rand.h"
-#include "Color.h"
 #include "Math\\Vector.h"
 #include "Math\\Matrix.h"
+#include "Color.h"
+#include "Pigment.h"
 #include "Noise.h"
 #include "Finray.h"
 #include "Math\Polynomial.h"

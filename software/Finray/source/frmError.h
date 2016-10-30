@@ -148,13 +148,13 @@ namespace Finray {
 private: System::Void frmError_Shown(System::Object^  sender, System::EventArgs^  e) {
 				 char buf[2000];
 				 if (ex != nullptr) {
-					sprintf(buf, msgs[ex->errnum], ex->errnum, ex->data);
+					sprintf_s(buf, sizeof(buf), msgs[ex->errnum], ex->errnum, ex->data);
 					textBox1->Text = gcnew String(buf);
 				 }
 				 else if (msg) {
 					textBox1->Text = gcnew String(msg);
 				 }
-				 sprintf(buf, "%.200s", rayTracer.parser.p > &master_filebuf[8] ? rayTracer.parser.p-8 : rayTracer.parser.p);
+				 sprintf_s(buf, sizeof(buf), "%.200s", rayTracer.parser.p > &master_filebuf[8] ? rayTracer.parser.p-8 : rayTracer.parser.p);
 				 textBox2->Text = gcnew String(buf);
 		 }
 };
