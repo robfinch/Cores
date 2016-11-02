@@ -25,28 +25,61 @@ enum {
 	MRT_INTERSECTION = 2,
 };
 
+// This class used to track intersections with shapes.
+
 class Intersection
 {
 public:
-	DBL T;
-	AnObject *obj;
+	DBL T;			// The transit distance from the ray's origin
+	Vector3d P;		// The point of intersection in global space
+	AnObject *obj;	// The intersected object
+	int part;		// part of the object intersected
+public:
+	Intersection() {
+		/* slows things down
+		T = 0.0;
+		P = Vector(0,0,0);
+		obj = nullptr;
+		part = 0;
+		*/
+	};
+	Intersection(DBL t, Vector3d p, AnObject *o, int prt) {
+		T = t;
+		P = p;
+		obj = o;
+		part = prt;
+	};
+	void Assign(DBL t, Vector3d p, AnObject *o, int prt) {
+		T = t;
+		P = p;
+		obj = o;
+		part = prt;
+	};
 };
+
+// Intersection tests with shapes return an IntersectResult object. The
+// IntersectResult object contains a number of intersection points.
+
+// Most objects will have four or fewer intersections. So we setup the default
+// to handle up to four intersections without having the overhead of calling
+// new and delete. This is good for plane,sphere,box,cylinder,triangle, and
+// torus.
 
 class IntersectResult
 {
 public:
-	int n;
-	Intersection I[36];
-	IntersectResult() { n = 0; };
-};
-
-class RayTestResult
-{
-public:
-	DBL T;
-	AnObject *pObj;
-	RayTestResult(DBL t, AnObject *o) { T = t; pObj = o; };
-	RayTestResult() { T = BIG; pObj = nullptr; };
+	int n;					// number of stored intersections
+	Intersection *pI;
+	Intersection I[4];
+	IntersectResult() { n = 0; pI = &I[0]; };
+	IntersectResult(int nn) {
+		n = 0;
+		pI = new Intersection[nn];
+	};
+	~IntersectResult() {
+		if (pI && pI != I)
+			delete[] pI;
+	}
 };
 
 class Ray
@@ -82,10 +115,22 @@ public:
 	};
 };
 
+enum {
+	TM_FLAT = 0,
+	TM_NOISY = 1,
+	TM_GRADIENT = 4,
+	TM_GRANITE = 5,
+	TM_MARBLE = 6,
+	TM_WOOD = 7,
+	TM_BOZO = 8,
+	TM_CHECKER = 9,
+	TM_RANDOM = 255,
+};
+
 class Texture
 {
 public:
-	Color color;	// base color
+	Color color1;	// base color
 	Color color2;	// for checkered colors
 	Color variance;
 	Color acolor;	// color with ambience pre-calculated
@@ -106,12 +151,15 @@ public:
 	Texture(Texture *);
 	void Copy(Texture *);
 	~Texture();
-	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
+//	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
 	void SetColorVariance(Color v) { variance = v; };
 	Color GetColor(Vector point);
 	Color Gradient(Vector point, Color c);
 	Color Granite(Vector point, Color c);
 	Color Marble(Vector point, Color c);
+	Color Wood(Vector point, Color c);
+	Color Bozo(Vector point, Color c);
+	Color Checker(Vector point, Color c);
 };
 
 enum {
@@ -143,6 +191,7 @@ public:
 	bool doShadows;
 	bool doImage;
 	bool usesTransform;
+	bool inverted;
 	AnObject *next;
 	AnObject *obj;
 	AnObject *posobj;
@@ -152,23 +201,26 @@ public:
 	Texture properties;
 	AnObject();
 	int Print(AnObject *);
-	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
+//	void SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r);
 	Color Shade(Ray *ray, Vector normal, Vector point, Color *color);
 	virtual void SetColorVariance(Color v) { properties.SetColorVariance(v); };
 	IntersectResult *Intersect(Ray *);
-	bool BoundingIntersect(Ray *ray);
+	virtual bool BoundingIntersect(Ray *ray);
 	bool AntiIntersects(Ray *);
+	virtual bool IsInside(Vector point) { return (false); };
 	virtual void SetTexture(Texture *tx);
-	virtual void SetColor(Color c) { properties.color = c; };
-	virtual Color GetColor(Vector point) { return properties.GetColor(point); };
-	virtual Vector Normal(Vector) { return Vector(); };
-	virtual void Translate(double x, double y, double z);
-	virtual void Translate(Vector v) { Translate(Vector(v.x,v.y,v.z)); };
+//	virtual void SetColor(Color c) { properties.color = c; };
+	virtual Color GetColor(Vector point) { return (properties.GetColor(point)); };
+	virtual Vector Normal(Vector) { return (Vector()); };
+	virtual void Translate(double x, double y, double z) { Translate(Vector(x,y,z)); };
+	virtual void Translate(Vector v);
 	virtual void Scale(Vector v);
+	virtual void Rotate(Vector rv) {};
 	virtual void RotXYZ(double, double, double);
 	virtual void RotX(double a) {};
 	virtual void RotY(double a) {};
 	virtual void RotZ(double a) {};
+	virtual void Invert() { inverted = !inverted; };
 	virtual void Print() {} ;
 	bool IsContainer();
 	void TransformX(Transform *tr) { trans.Compose(tr); };
@@ -186,7 +238,7 @@ public:
 	IntersectResult *Intersect(Ray *);
 	Vector Normal(Vector);
 	void Print();
-	void Translate(double x, double y, double z);
+	void Translate(Vector t);
 	void RotXYZ(double, double, double);
 	void RotX(double a) { RotXYZ(a, 0.0, 0.0); };
 	void RotY(double a) { RotXYZ(0.0, a, 0.0); };
@@ -206,8 +258,9 @@ public:
 	ASphere(Vector P, double R);
 	ASphere(double x,double y ,double z,double rad);
 	IntersectResult *Intersect(Ray *);
+	bool IsInside(Vector point);
 	Vector Normal(Vector);
-	void Translate(double x, double y, double z);
+	void Translate(Vector p);
 	void Scale(Vector s);
 	void Print();
 	void RotX(double);
@@ -237,43 +290,19 @@ public:
 	Vector normal;
 	double distance;
 	APlane();
-	APlane(double,double,double,double);
+	APlane(DBL,DBL,DBL,DBL);
 	IntersectResult *Intersect(Ray *);
+	bool IsInside(Vector point);
 	Vector Normal(Vector);
 	void Print() {};
-	void Translate(double x, double y, double z) {};
-	void RotX(double);
-	void RotY(double);
-	void RotZ(double);
+	void Translate(Vector point);
+	void Rotate(Vector rv);
+	void Scale(Vector sc);
+	void RotX(DBL);
+	void RotY(DBL);
+	void RotZ(DBL);
+	void Invert();
 };
-
-class ATriangle : public AnObject
-{
-	void CalcCentroid();
-public:
-	Vector normal, unnormal;
-	Vector u, v;
-	double uu, vv, uv;	// vars for intersection testing
-	double D;			// denominator
-	Vector p1, p2, p3;
-	ATriangle();
-	ATriangle(Vector a, Vector b, Vector c);
-	void Init();
-	void CalcNormal();
-	void CalcBoundingObject();
-	bool InternalSide(Vector pt1, Vector pt2, Vector a, Vector b);
-	bool PointInTriangle(Vector p);
-	IntersectResult *Intersect(Ray *);
-	Vector Normal(Vector);
-	void Print() {};
-	void Translate(Vector p);
-	void Translate(double x, double y, double z);
-	void Scale(Vector s);
-	void RotX(double);
-	void RotY(double);
-	void RotZ(double);
-};
-
 
 class ACone : public AnObject
 {
@@ -299,7 +328,7 @@ public:
 	void CalcBoundingObject();
 	Vector Normal(Vector);
 	IntersectResult *Intersect(Ray *);
-	void Translate(double x, double y, double z);
+	void Translate(Vector pt);
 	void Scale(double x, double y, double z);
 	void Scale(Vector v);
 	void Print() {};
@@ -321,30 +350,62 @@ public:
 	void RotXYZ(double a,double b,double c) { ACone::RotXYZ(a,b,c); };
 };
 
+class ATriangle;
+
 class ABox : public AnObject
 {
 public:
 	double maxLength;
+	Vector lowerLeft;
+	Vector upperRight;
+	Vector corner[8];
 	ATriangle *tri[12];
 	ABox();
 	ABox(Vector pt, Vector dist);
 	ABox(double x, double y, double z);
 	void CalcBoundingObject();
+	bool BoundingIntersect(Ray *ray);
 	Vector CalcCenter();
 	double CalcRadius();
 	Vector Normal(Vector v);
-	void SetTexture(Texture *tx);
-	void SetColor(Color c);
 	void SetVariance(Color v);
 	IntersectResult *Intersect(Ray *);
+	bool IsInside(Vector point);
 	void Print() {};
 	void Translate(Vector p);
-	void Translate(double x, double y, double z);
 	void Scale(Vector s);
 	void RotX(double);
 	void RotY(double);
 	void RotZ(double);
 };
+
+class ATriangle : public AnObject
+{
+	void CalcCentroid();
+public:
+	Vector normal, unnormal;
+	Vector u, v;
+	double uu, vv, uv;	// vars for intersection testing
+	double D;			// denominator
+	Vector p1, p2, p3;
+	ATriangle();
+	ATriangle(Vector a, Vector b, Vector c);
+	void Init();
+	void CalcNormal();
+	void CalcBoundingObject();
+	bool InternalSide(Vector pt1, Vector pt2, Vector a, Vector b);
+	bool PointInTriangle(Vector p);
+	bool IsInside(Vector P);
+	IntersectResult *Intersect(Ray *);
+	Vector Normal(Vector);
+	void Print() {};
+	void Translate(Vector p);
+	void Scale(Vector s);
+	void RotX(double);
+	void RotY(double);
+	void RotZ(double);
+};
+
 
 class ARectangle : public AnObject
 {
@@ -355,7 +416,7 @@ public:
 	IntersectResult *Intersect(Ray *);
 	void CalcNormal();
 	Vector Normal(Vector);
-	void Translate(double x, double y, double z) {};
+	void Translate(Vector pt) {};
 	void Print() {};
 	void RotX(double);
 	void RotY(double);
@@ -366,15 +427,17 @@ class ATorus : public AnObject
 {
 public:
 	DBL MajorRadius, MinorRadius;
+private:
+	bool TestThickCylinder(const Vector P, const Vector D, DBL h1, DBL h2, DBL r1, DBL r2) const;
+public:
 	ATorus(DBL, DBL);
-	bool TestThickCylinder(const Vector P, const Vector D, double h1, double h2, double r1, double r2) const;
-	void TransformX(Transform *t);
 	void CalcBoundingObject();
 	IntersectResult *Intersect(Ray *);
+	bool IsInside(Vector P);
 	Vector Normal(Vector v);
-	void Translate(double x, double y, double z);
-//	void Scale(double x, double y, double z);
-	void Scale(Vector v);
+	void Translate(Vector pt);
+	void Rotate(Vector rv);
+	void Scale(Vector sc);
 	void Print() {};
 	void RotX(double a) { ATorus::RotXYZ(a, 0.0, 0.0); };
 	void RotY(double a) { ATorus::RotXYZ(0.0, a, 0.0); };
@@ -414,6 +477,7 @@ enum {
 	TK_BOX,
 	TK_BRILLIANCE,
 	TK_CAMERA,
+	TK_CHECKER,
 	TK_COLOR,
 	TK_COLORMAP,
 	TK_COLORMETHOD,

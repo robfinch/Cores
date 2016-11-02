@@ -12,8 +12,11 @@ ABox::ABox(Vector pt1, Vector d) : AnObject()
 
 	type = OBJ_BOX;
 
-	maxLength = abs(d.x) > abs(d.y) ? abs(d.x) : abs(d.y);
-	maxLength = maxLength > abs(d.z) ? maxLength : abs(d.z);
+	lowerLeft = pt1;
+	upperRight = Vector::Add(pt1, d);
+
+	maxLength = fabs(d.x) > fabs(d.y) ? fabs(d.x) : fabs(d.y);
+	maxLength = maxLength > fabs(d.z) ? maxLength : fabs(d.z);
 
 	for (nn = 0; nn < 12; nn++) {
 		o = new ATriangle();
@@ -29,6 +32,14 @@ ABox::ABox(Vector pt1, Vector d) : AnObject()
 	pt6 = Vector::Add(pt1,Vector(0,d.y,0));
 	pt7 = Vector::Add(pt1,Vector(0,d.y,d.z));
 	pt8 = Vector::Add(pt1,Vector(0,0,d.z));
+	corner[0] = pt1;
+	corner[1] = pt2;
+	corner[2] = pt3;
+	corner[3] = pt4;
+	corner[4] = pt5;
+	corner[5] = pt6;
+	corner[6] = pt7;
+	corner[7] = pt8;
 
 	// right
 	tri[0]->p1 = pt2;
@@ -98,13 +109,15 @@ ABox::ABox() : AnObject()
 
 	maxLength = 1.0;
 
+	lowerLeft = Vector(0,0,0);
+	upperRight = Vector(1,1,1);
+
 	for (nn = 0; nn < 12; nn++) {
 		o = new ATriangle();
 		tri[nn] = o;
 		o->next = obj;
 		obj = o;
 	}
-
 	pt1 = Vector(1,0,0);
 	pt2 = Vector(1,0,1);
 	pt3 = Vector(1,1,1);
@@ -113,6 +126,14 @@ ABox::ABox() : AnObject()
 	pt6 = Vector(0,0,1);
 	pt7 = Vector(0,1,1);
 	pt8 = Vector(0,1,0);
+	corner[0] = pt1;
+	corner[1] = pt2;
+	corner[2] = pt3;
+	corner[3] = pt4;
+	corner[4] = pt5;
+	corner[5] = pt6;
+	corner[6] = pt7;
+	corner[7] = pt8;
 
 	// right
 	tri[0]->p1 = pt1;
@@ -183,8 +204,11 @@ ABox::ABox(double x, double y, double z) : AnObject()
 	next = nullptr;
 	negobj = nullptr;
 
-	maxLength = abs(x) > abs(y) ? abs(x) : abs(y);
-	maxLength = maxLength > abs(z) ? maxLength : abs(z);
+	lowerLeft = Vector(0.0,0.0,0.0);
+	upperRight = Vector(x,y,z);
+
+	maxLength = fabs(x) > fabs(y) ? fabs(x) : fabs(y);
+	maxLength = maxLength > fabs(z) ? maxLength : fabs(z);
 
 	for (nn = 0; nn < 12; nn++) {
 		o = new ATriangle();
@@ -201,6 +225,14 @@ ABox::ABox(double x, double y, double z) : AnObject()
 	pt6 = Vector(0,0,z);
 	pt7 = Vector(0,y,z);
 	pt8 = Vector(0,y,0);
+	corner[0] = pt1;
+	corner[1] = pt2;
+	corner[2] = pt3;
+	corner[3] = pt4;
+	corner[4] = pt5;
+	corner[5] = pt6;
+	corner[6] = pt7;
+	corner[7] = pt8;
 
 	// right
 	tri[0]->p1 = pt1;
@@ -260,21 +292,38 @@ ABox::ABox(double x, double y, double z) : AnObject()
 	CalcBoundingObject();
 }
 
-IntersectResult *ABox::Intersect(Ray *ray) { return (nullptr); }
-/*
+IntersectResult *ABox::Intersect(Ray *ray)
 {
+	int nn;
+	IntersectResult *ir;
+	IntersectResult *r = nullptr;
+
+	if (BoundingIntersect(ray)) {
+		for (nn = 0; nn < 12; nn++) {
+			ir = tri[nn]->Intersect(ray);
+			if (ir) {
+				if (ir->n > 0) {
+					if (r==nullptr)
+						r = new IntersectResult(12);
+					r->pI[r->n] = ir->I[0];
+					r->pI[r->n].obj = this;
+					r->pI[r->n].part = nn;
+					r->n++;
+				}
+				delete ir;
+			}
+		}
+	}
+	return (r);
+}
+
+Vector ABox::Normal(Vector v) {
 	int nn;
 
 	for (nn = 0; nn < 12; nn++) {
-		if (tri[nn]->Intersect(ray, t)) {
-//			intersectedTriangle = nn;
-			return tri[nn];
-		}
+		if (tri[nn]->IsInside(v))
+			return tri[nn]->Normal(v);
 	}
-	return nullptr;
-}
-*/
-Vector ABox::Normal(Vector v) {
 	return Vector(1,0,0);
 };
 /*
@@ -286,74 +335,127 @@ void ABox::RotX(double a)
 {
 	int nn;
 
+	Transform T;
+	T.CalcRotation(Vector(a,0.0,0.0));
+	trans.Compose(&T);
+
 	for (nn = 0; nn < 12; nn++) {
 		tri[nn]->RotX(a);
 	}
-	if (boundingObject)
-		boundingObject->RotX(a);
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	// Recompute bounding object
+	// Rotating the object does not change the size of the bounding radius.
+	for (nn = 0; nn < 8; nn++)
+		corner[nn] = Vector::RotX(corner[nn],a);
+	center = Vector::RotX(center,a);
 }
 
 void ABox::RotY(double a)
 {
 	int nn;
 
+	Transform T;
+	T.CalcRotation(Vector(0.0,a,0.0));
+	trans.Compose(&T);
+
 	for (nn = 0; nn < 12; nn++) {
 		tri[nn]->RotY(a);
 	}
-	if (boundingObject)
-		boundingObject->RotY(a);
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	// Recompute bounding object
+	// Rotating the object does not change the size of the bounding radius.
+	for (nn = 0; nn < 8; nn++)
+		corner[nn] = Vector::RotY(corner[nn],a);
+	center = Vector::RotY(center,a);
 }
 
 void ABox::RotZ(double a)
 {
 	int nn;
 
+	Transform T;
+	T.CalcRotation(Vector(0.0,0.0,a));
+	trans.Compose(&T);
+
 	for (nn = 0; nn < 12; nn++) {
 		tri[nn]->RotZ(a);
 	}
-	if (boundingObject)
-		boundingObject->RotZ(a);
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	// Recompute bounding object
+	// Rotating the object does not change the size of the bounding radius.
+	for (nn = 0; nn < 8; nn++)
+		corner[nn] = Vector::RotZ(corner[nn],a);
+	center = Vector::RotZ(center,a);
 }
 
 void ABox::Translate(Vector p)
 {
 	int nn;
+	Vector dir;
+
+	Transform T;
+	T.CalcTranslation(p);
+	trans.Compose(&T);
 
 	for (nn = 0; nn < 12; nn++) {
 		tri[nn]->Translate(p);
 	}
-	if (boundingObject)
-		boundingObject->Translate(p);
-}
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
 
-void ABox::Translate(double x, double y, double z)
-{
-	Vector p = Vector(x,y,z);
-	Translate(p);
-	if (boundingObject)
-		boundingObject->Translate(p);
+	// Recompute bounding object
+	// Translating the object does not change the size of the bounding radius.
+	dir = Vector::Sub(p,center);
+	for (nn = 0; nn < 8; nn++)
+		corner[nn] = Vector::Add(corner[nn],dir);
+	center = p;
 }
 
 void ABox::Scale(Vector p)
 {
 	int nn;
 
+	Transform T;
+	T.CalcScaling(p);
+	trans.Compose(&T);
+
 	for (nn = 0; nn < 12; nn++) {
 		tri[nn]->Scale(p);
 	}
-	if (boundingObject)
-		boundingObject->Scale(p);
+	for (nn = 0; nn < 12; nn++) {
+		tri[nn]->Init();
+		tri[nn]->CalcBoundingObject();
+	}
+	// Recompute bounding object
+	for (nn = 0; nn < 8; nn++) {
+		corner[nn].x *= p.x;
+		corner[nn].y *= p.y;
+		corner[nn].z *= p.z;
+	}
+	CalcBoundingObject();
 }
 
+/*
 void ABox::SetTexture(Texture *tx)
 {
-	int nn;
-
-	for (nn = 0; nn < 12; nn++) {
-		tri[nn]->SetTexture(tx);
-	}
+	properties.Copy(tx);
+//	for (nn = 0; nn < 12; nn++) {
+//		tri[nn]->SetTexture(tx);
+//	}
 }
-
+*/
+/*
 void ABox::SetColor(Color c)
 {
 	int nn;
@@ -362,7 +464,7 @@ void ABox::SetColor(Color c)
 		tri[nn]->SetColor(c);
 	}
 }
-
+*/
 
 void ABox::SetVariance(Color v)
 {
@@ -373,43 +475,107 @@ void ABox::SetVariance(Color v)
 	}
 }
 
+
+// The center of the box is the average point of all the corners.
+//
 Vector ABox::CalcCenter()
 {
-	center = Vector(0,0,0);
 	int nn;
 
-	for (nn = 0; nn < 12; nn++) {
-		center = Vector::Add(center,tri[nn]->p1);
-		center = Vector::Add(center,tri[nn]->p2);
-		center = Vector::Add(center,tri[nn]->p3);
-	}
-	center = Vector::Scale(center,1.0/36.0);
-	return center;
+	center = Vector(0,0,0);
+	for (nn = 0; nn < 8; nn++)
+		center = Vector::Add(center,corner[nn]);
+	center = Vector::Scale(center,1.0/8.0);
+	return (center);
 }
 
-double ABox::CalcRadius()
+// The radius of a surrounding sphere is the distance from the center of the
+// box to the farthest corner.
+
+DBL ABox::CalcRadius()
 {
 	int nn;
-	double d1,d2,d3;
-	radius = 0.0;
+	DBL d;
 
-	for (nn = 0; nn < 12; nn++) {
-		d1 = Vector::Length(Vector::Sub(center,tri[nn]->p1));
-		d2 = Vector::Length(Vector::Sub(center,tri[nn]->p2));
-		d3 = Vector::Length(Vector::Sub(center,tri[nn]->p3));
+	radius = 0.0;
+	for (nn = 0; nn < 8; nn++) {
+		d = Vector::Length(corner[nn],center);
+		if (d > radius) radius = d;
 	}
-	radius = abs(d1) > radius ? abs(d1) : radius;
-	radius = abs(d2) > radius ? abs(d2) : radius;
-	radius = abs(d3) > radius ? abs(d3) : radius;
 	radius += EPSILON;
 	radius2 = SQUARE(radius);
-	return radius;
+	return (radius);
 }
+
+
+// The bounding object is just a sphere large enough to extend just beyond the
+// farthest corner from the center of the box.
 
 void ABox::CalcBoundingObject()
 {
 	CalcCenter();
 	CalcRadius();
+}
+
+
+// The center of the box is maintained in global co-ordinates so there is no
+// need to use an inverse transform to translate the ray into the boxes 
+// co-ordinate system.
+
+// However this bounding intersect is causing a problem (the box is clipped
+// by an arc. Disabling this intersect by always returning true causes the
+// box to come out correctly.
+
+
+bool ABox::BoundingIntersect(Ray *ray)
+{
+	DBL B, C, Discrim, t0, t1;
+	Vector P, D;
+
+	return (true);
+	P = ray->origin;
+	D = ray->dir;
+
+	// Don't need to calculate A since ray is a unit vector
+	B = 2 * ((D.x * (P.x - center.x))
+			+(D.y * (P.y - center.y))
+			+(D.z * (P.z - center.z)));
+	C =   SQUARE(P.x - center.x)
+		+ SQUARE(P.y - center.y)
+		+ SQUARE(P.z - center.z)
+		- radius2;
+
+	Discrim = (SQUARE(B) - 4 * C);
+	if (Discrim <= EPSILON)
+		return (false);
+
+	Discrim = sqrt(Discrim);
+	t0 = (-B-Discrim) * 0.5;
+	if (t0 > EPSILON) {
+		return (true);
+	}
+	t1 = (-B+Discrim) * 0.5;
+	if (t1 > EPSILON) {
+		return (true);
+	}
+	return (false);
+}
+
+
+// This is the only method that relies on transforms. The initial
+// transform is setup so there is no translation of the point. So
+// we don't need to test usesTransform.
+
+bool ABox::IsInside(Vector P)
+{
+	P = trans.InvTransPoint(P);
+	if (P.x < lowerLeft.x || P.x > upperRight.x)
+		return (inverted);
+	if (P.y < lowerLeft.y || P.y > upperRight.y)
+		return (inverted);
+	if (P.z < lowerLeft.z || P.z > upperRight.z)
+		return (inverted);
+	return (!inverted);
 }
 
 };

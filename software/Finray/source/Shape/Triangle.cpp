@@ -1,7 +1,5 @@
 #include "stdafx.h"
 
-extern FinitronClasses::NoiseGen noiseGen;
-
 // Triangle math for intersection point implemented from Dan Sunday's article
 // http://geomalgorithms.com/a06-_intersect-2.html
 
@@ -44,9 +42,9 @@ bool ATriangle::InternalSide(Vector pt1, Vector pt2, Vector a, Vector b)
 	e = Vector::Sub(pt2,a);
 	cp1 = Vector::Cross(c,d);
 	cp2 = Vector::Cross(c,e);
-	if (Vector::Dot(cp1,cp2) > 0.0)
-		return true;
-	return false;
+	if (Vector::Dot(cp1,cp2) > EPSILON)
+		return (true);
+	return (false);
 }
 
 bool ATriangle::PointInTriangle(Vector p)
@@ -54,6 +52,11 @@ bool ATriangle::PointInTriangle(Vector p)
 	return (InternalSide(p, p1, p2, p3)
 		&& InternalSide(p, p2, p1, p3)
 		&& InternalSide(p, p3, p1, p2));
+}
+
+bool ATriangle::IsInside(Vector p)
+{
+	return (PointInTriangle(p) ^ inverted);
 }
 
 void ATriangle::CalcNormal()
@@ -77,23 +80,34 @@ void ATriangle::CalcNormal()
 IntersectResult *ATriangle::Intersect(Ray *ray)
 {
 	Vector w, w0, I;
-	double r,a,b;
-	double wu, wv;
-	double s, t;
+	DBL r,a,b;
+	DBL wu, wv;
+	DBL s, t;
 	IntersectResult *res = nullptr;
+	Vector rd, ro;
+
+	if (!BoundingIntersect(ray))
+		return(res);
+
+	rd = ray->dir;
+	ro = ray->origin;
 
 	if (abs(normal.x) < EPSILON && abs(normal.y) < EPSILON && abs(normal.z) < EPSILON)
+		throw gcnew Finray::FinrayException(ERR_DEGENERATE,2);
 //	if (normal.x == 0.0 && normal.y == 0.0 && normal.z == 0.0)
-		return (nullptr);//-1;	// triangle is degenerate
+//		return (nullptr);//-1;	// triangle is degenerate
 
-	w0 = Vector::Sub(ray->origin, p1);
+	w0 = Vector::Sub(ro, p1);
 	a = -Vector::Dot(unnormal,w0);
-	b = Vector::Dot(unnormal,ray->dir);
-	if (abs(b) < EPSILON) {
-		if (a==0.0) {		// ray lines in triangle plane
+	b = Vector::Dot(unnormal,rd);
+	if (fabs(b) < EPSILON) {
+		if (fabs(a) < EPSILON) {		// ray lines in triangle plane
 			res = new IntersectResult;
-			res->n = 0;
+			res->n = 1;
 			res->I[0].obj = this;
+			res->I[0].T = Vector::Length(w0);
+			res->I[0].P = p1;
+			res->I[0].part = 1;
 			return (res);//2;	// return 2;
 		}
 		return (nullptr);
@@ -104,7 +118,7 @@ IntersectResult *ATriangle::Intersect(Ray *ray)
 	if (r < 0.0)		// ray goes away from the triangle
 		return (nullptr);
 
-	I = Vector::Add(ray->origin, Vector::Scale(ray->dir, r));
+	I = Vector::AddScale(ro, rd, r);
 
 	// Is I inside T ?
 	w = Vector::Sub(I,p1);
@@ -122,11 +136,12 @@ IntersectResult *ATriangle::Intersect(Ray *ray)
 	res = new IntersectResult;
 	res->I[0].obj = this;
 	res->I[0].T = r;
+	res->I[0].P = Vector::AddScale(ro, rd, res->I[0].T);
 	res->n = 1;
 	return (res);	//1	// I is in T
 }
 
-void ATriangle::RotX(double a)
+void ATriangle::RotX(DBL a)
 {
 	p1 = Vector::RotX(p1, a);
 	p2 = Vector::RotX(p2, a);
@@ -134,7 +149,7 @@ void ATriangle::RotX(double a)
 	Init();
 }
 
-void ATriangle::RotY(double a)
+void ATriangle::RotY(DBL a)
 {
 	p1 = Vector::RotY(p1, a);
 	p2 = Vector::RotY(p2, a);
@@ -142,7 +157,7 @@ void ATriangle::RotY(double a)
 	Init();
 }
 
-void ATriangle::RotZ(double a)
+void ATriangle::RotZ(DBL a)
 {
 	p1 = Vector::RotZ(p1, a);
 	p2 = Vector::RotZ(p2, a);
@@ -152,7 +167,7 @@ void ATriangle::RotZ(double a)
 
 Vector ATriangle::Normal(Vector p)
 {
-	return normal;
+	return (normal);
 }
 
 // The normal should remain the same
@@ -165,6 +180,7 @@ void ATriangle::Translate(Vector p)
 	p1 = Vector::Add(center,d1);
 	p2 = Vector::Add(center,d2);
 	p3 = Vector::Add(center,d3);
+	Init();
 }
 
 void ATriangle::Scale(Vector p)
@@ -185,16 +201,6 @@ void ATriangle::Scale(Vector p)
 	CalcBoundingObject();
 }
 
-void ATriangle::Translate(double x, double y, double z)
-{
-	Vector p;
-	p.x = x;
-	p.y = y;
-	p.z = z;
-	Translate(p);
-	Init();
-}
-
 void ATriangle::CalcCentroid()
 {
 	center = Vector::Add(p1,p2);
@@ -204,34 +210,16 @@ void ATriangle::CalcCentroid()
 
 void ATriangle::CalcBoundingObject()
 {
-	double d1,d2,d3;
+	DBL d1,d2,d3;
 	
-	radius = 0.0;
 	d1 = Vector::Length(Vector::Sub(p1,center));
 	d2 = Vector::Length(Vector::Sub(p2,center));
 	d3 = Vector::Length(Vector::Sub(p3,center));
-	radius = abs(d1) > radius ? abs(d1) : radius;
-	radius = abs(d2) > radius ? abs(d2) : radius;
-	radius = abs(d3) > radius ? abs(d3) : radius;
+	radius = d1;
+	radius = fabs(d2) > radius ? fabs(d2) : radius;
+	radius = fabs(d3) > radius ? fabs(d3) : radius;
 	radius += EPSILON;
 	radius2 = SQUARE(radius);
 }
 
-/*
-Color ATriangle::GetColor(Vector point)
-{
-	double n = noiseGen.Noise(point, 2.0, 2.0, 4);
-	Color c = properties.color;
-	c.r += n;
-	c.g += n;
-	c.b += n;
-	if (c.r > 1.0) c.r = 1.0;
-	if (c.g > 1.0) c.g = 1.0;
-	if (c.b > 1.0) c.b = 1.0;
-	if (c.r < 0.0) c.r = 0.0;
-	if (c.g < 0.0) c.g = 0.0;
-	if (c.b < 0.0) c.b = 0.0;
-	return c;
-};
-*/
 };

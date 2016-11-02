@@ -75,11 +75,12 @@ namespace Finray {
 			// 
 			// button1
 			// 
+			this->button1->Enabled = false;
 			this->button1->Location = System::Drawing::Point(88, 60);
 			this->button1->Name = L"button1";
 			this->button1->Size = System::Drawing::Size(75, 23);
 			this->button1->TabIndex = 0;
-			this->button1->Text = L"Start Trace";
+			this->button1->Text = L"Start Parser";
 			this->button1->UseVisualStyleBackColor = true;
 			this->button1->Click += gcnew System::EventHandler(this, &Form1::button1_Click);
 			// 
@@ -102,7 +103,7 @@ namespace Finray {
 			// openToolStripMenuItem
 			// 
 			this->openToolStripMenuItem->Name = L"openToolStripMenuItem";
-			this->openToolStripMenuItem->Size = System::Drawing::Size(103, 22);
+			this->openToolStripMenuItem->Size = System::Drawing::Size(152, 22);
 			this->openToolStripMenuItem->Text = L"&Open";
 			this->openToolStripMenuItem->Click += gcnew System::EventHandler(this, &Form1::openToolStripMenuItem_Click);
 			// 
@@ -160,6 +161,7 @@ namespace Finray {
 					sprintf_s(buf, sizeof(buf), "%s.frpp", str);
 					rayTracer.parser.path = std::string(buf);
 					filepath = gcnew String(buf);
+					button1->Enabled = true;
 				 }
 			 }
 };

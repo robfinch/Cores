@@ -34,7 +34,7 @@ IntersectResult *ATorus::Intersect(Ray *ray)
 	int i,n;
 	IntersectResult *r = nullptr;
 
-	/* Transform the ray into the torus space. */
+	// Transform the ray into the torus space.
 
 	P = trans.InvTransPoint(ray->origin);
 	D = trans.InvTransDirection(ray->dir);
@@ -93,13 +93,12 @@ IntersectResult *ATorus::Intersect(Ray *ray)
 //		n = c.Solve(Test_Flag(this, STURM_FLAG), ROOT_TOLERANCE);
 		n = c.Solve(ROOT_TOLERANCE, true);
 
-		if (n) {
+		if (n)
 			r = new IntersectResult;
-			r->I[0].obj = this;
-		}
 		while(n--) {
 			r1 = (c.roots[n] + Closer) / len;
 			r->I[r->n].T = r1;
+			r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 			r->I[r->n].obj = this;
 			r->n++;
 			//Depth[i++] = r1;
@@ -273,6 +272,17 @@ bool ATorus::TestThickCylinder(const Vector P, const Vector D, double h1, double
 	return(false);
 }
 
+bool ATorus::IsInside(Vector P)
+{
+	DBL r, r2;
+
+	// Transform the point into the torus space.
+
+	P = trans.InvTransPoint(P);
+	r  = sqrt(SQUARE(P.x) + SQUARE(P.z));
+	r2 = SQUARE(P.y) + SQUARE(r - MajorRadius);
+	return ((r2 <= SQUARE(MinorRadius)) ^ inverted);
+}
 
 Vector ATorus::Normal(Vector P)
 {
@@ -307,15 +317,18 @@ Vector ATorus::Normal(Vector P)
 }
 
 
-void ATorus::Translate(double ax, double ay, double az)
+void ATorus::Translate(Vector v)
 {
-	Vector v;
 	Transform T;
-	v.x = ax;
-	v.y = ay;
-	v.z = az;
 	T.CalcTranslation(v);
-	TransformX(&T);
+	trans.Compose(&T);
+}
+
+void ATorus::Rotate(Vector v)
+{
+	Transform T;
+	T.CalcRotation(v);
+	trans.Compose(&T);
 }
 
 void ATorus::RotXYZ(double ax, double ay, double az)
@@ -326,25 +339,20 @@ void ATorus::RotXYZ(double ax, double ay, double az)
 	v.y = ay;
 	v.z = az;
 	T.CalcRotation(v);
-	TransformX(&T);
+	trans.Compose(&T);
 }
 
 void ATorus::Scale(Vector v)
 {
 	Transform T;
 	T.CalcScaling(v);
-	TransformX(&T);
+	trans.Compose(&T);
 }
-
-void ATorus::TransformX(Transform *t)
-{
-	trans.Compose(t);
-}
-
 
 void ATorus::CalcBoundingObject()
 {
 	radius = MajorRadius + MinorRadius;
+	radius2 = SQUARE(radius);
 }
 
 }

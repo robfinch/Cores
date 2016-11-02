@@ -378,7 +378,7 @@ int	Parser::NextToken() {
 				return token = TK_BOX;
 			}
 		}
-		// camera color colour color_map colormethod cone cos cube cylinder
+		// camera checker color colour color_map colormethod cone cos cube cylinder
 		if (p[0]=='c') {
 			if (p[1]=='a' && p[2]=='m' && p[3]=='e' && p[4]=='r' && p[5]=='a' && !isidch(p[6])) {
 				p += 6;
@@ -425,6 +425,10 @@ int	Parser::NextToken() {
 			if (p[1]=='y' && p[2]=='l' && p[3]=='i' && p[4]=='n' && p[5]=='d' && p[6]=='e' && p[7]=='r' && !isidch(p[8])) {
 				p += 8;
 				return token = TK_CYLINDER;
+			}
+			if (p[1]=='h' && p[2]=='e' && p[3]=='c' && p[4]=='k' && p[5]=='e' && p[6]=='r' && !isidch(p[7])) {
+				p += 7;
+				return token = TK_CHECKER;
 			}
 		}
 		// diffuse difference
@@ -2256,7 +2260,7 @@ Color Parser::ParseApproximate(AnObject *obj)
 	switch(NextToken()) {
 	case TK_COLOR:
 		color = ParseColor();
-		obj->SetColor(color);
+//		obj->SetColor(color);
 		v = eval();
 		if (v.type==TYP_VECTOR) {
 			color.r = (float)v.v3.x;
@@ -2487,35 +2491,59 @@ Texture *Parser::ParseTexture(Texture *texture)
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			texture->specular = (float)v.d;
 			break;
+
 		case TK_COLORMETHOD:
 			v = eval();
 			if (v.type != TYP_NUM)
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			texture->ColorMethod = (int)v.d;
 			break;
+
 		case TK_PIGMENT:
 			texture->pigment = ParsePigment();
 			break;
+
+		case TK_CHECKER:
+			v = eval();
+			if (v.type != TYP_COLOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->color1 = v.c;
+			v = eval();
+			if (v.type != TYP_COLOR)
+				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
+			texture->color2 = v.c;
+			texture->ColorMethod = TM_CHECKER;
+			break;
+
 		case TK_GRADIENT:
 			v = eval();
 			if (v.type != TYP_VECTOR)
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			texture->gradient = v.v3;
+			texture->ColorMethod = TM_GRADIENT;
 			break;
+
 		case TK_TURBULENCE:
 			v = eval();
 			if (v.type != TYP_NUM && v.type != TYP_INT)
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			texture->turbulence = v.type==TYP_INT ? (double)v.i : v.d;
 			break;
+
 		case TK_SCALE:
 			v = eval();
-			if (v.type != TYP_VECTOR)
+			if (v.type == TYP_VECTOR)
+				lt.CalcScaling(v.v3);
+			else if (v.type==TYP_NUM)
+				lt.CalcScaling(Vector(v.d,v.d,v.d));
+			else if (v.type==TYP_INT)
+				lt.CalcScaling(Vector((DBL)v.i,(DBL)v.i,(DBL)v.i));
+			else
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
-			lt.CalcScaling(v.v3);
 			texture->trans.Compose(&lt);
 			texture->usesTransform = true;
 			break;
+
 		case TK_TRANSLATE:
 			v = eval();
 			if (v.type != TYP_VECTOR)
@@ -2524,6 +2552,7 @@ Texture *Parser::ParseTexture(Texture *texture)
 			texture->trans.Compose(&lt);
 			texture->usesTransform = true;
 			break;
+
 		case TK_ROTATE:
 			v = eval();
 			if (v.type != TYP_VECTOR)
@@ -2608,7 +2637,9 @@ void Parser::InsertSymValue(Symbol *sym, AnObject *obj, bool minus)
 		obj->properties = *tx;
 		break;
 	case TYP_COLOR:
-		obj->properties.color = sym->value.c;
+		if (obj->properties.pigment == nullptr)
+			obj->properties.pigment = new Pigment;
+		obj->properties.pigment->color = sym->value.c;
 		break;
 	}
 }
@@ -2815,12 +2846,19 @@ void Parser::ParseObjectBody(AnObject *obj)
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
 			obj->RotXYZ(val.v3.x, val.v3.y, val.v3.z);
 			break;
+
 		case TK_SCALE:
 			val = eval();
-			if (val.type != TYP_VECTOR)
+			if (val.type == TYP_VECTOR)
+				obj->Scale(val.v3);
+			else if (val.type == TYP_NUM)
+				obj->Scale(Vector(val.d,val.d,val.d));
+			else if (val.type == TYP_INT)
+				obj->Scale(Vector((DBL)val.i,(DBL)val.i,(DBL)val.i));
+			else
 				throw gcnew Finray::FinrayException(ERR_BADTYPE,0);
-			obj->Scale(val.v3);
 			break;
+
 		case TK_TEXTURE:	tx = ParseTexture(nullptr);
 //							obj->properties = *tx;
 							obj->SetTexture(tx);
@@ -2861,13 +2899,22 @@ void Parser::ParseObjectBody(AnObject *obj)
 			switch(obj->type) {
 			case OBJ_SPHERE:
 				sphere = (ASphere *)obj;
-				light = new ALight(
-					sphere->center.x,
-					sphere->center.y,
-					sphere->center.z,
-					obj->properties.color.r,
-					obj->properties.color.g,
-					obj->properties.color.b);
+				if (obj->properties.pigment)
+					light = new ALight(
+						sphere->center.x,
+						sphere->center.y,
+						sphere->center.z,
+						obj->properties.pigment->color.r,
+						obj->properties.pigment->color.g,
+						obj->properties.pigment->color.b);
+				else
+					light = new ALight(
+						sphere->center.x,
+						sphere->center.y,
+						sphere->center.z,
+						1.0f,
+						1.0f,
+						1.0f);
 				light->next = obj->lights;
 				obj->lights = light;
 				break;

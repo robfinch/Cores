@@ -16,6 +16,7 @@ AnObject::AnObject()
 	doShadows = true;
 	doImage = true;
 	usesTransform = false;
+	inverted = false;
 }
 
 int AnObject::Print(AnObject *obj) {
@@ -81,11 +82,12 @@ Color AnObject::Shade(Ray *ray, Vector normal, Vector point, Finray::Color *pCol
 	return *pColor;
 }
 
+/*
 void AnObject::SetAttrib(float rd, float gr, float bl, Color a, float d, float b, float s, float ro, float r)
 {
 	properties.SetAttrib(rd, gr, bl, a, d, b, s, ro, r);
 }
-
+*/
 void AnObject::RotXYZ(double ax, double ay, double az)
 {
 	AnObject *o;
@@ -112,13 +114,13 @@ void AnObject::RotXYZ(double ax, double ay, double az)
 	}
 }
 
-void AnObject::Translate(double ax, double ay, double az)
+void AnObject::Translate(Vector a)
 {
 	AnObject *o;
 
 	o = obj;
 	while (o) {
-		o->Translate(ax,ay,az);
+		o->Translate(a);
 		o = o->next;
 	}
 }

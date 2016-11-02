@@ -11,7 +11,7 @@ public:
 	float f;	// filter
 	float t;	// transmit
 	Color(float R, float G, float B) { r = R; g = G; b = B; };
-	Color() { r = 0.0f; g = 0.0f; b = 0.0f; };
+	Color() { r = 0.0f; g = 0.0f; b = 0.0f; f = 0.0f; t = 0.0f; };
 	static Color Add(Color a, Color b) {
 		Color c;
 		c.r = a.r + b.r;

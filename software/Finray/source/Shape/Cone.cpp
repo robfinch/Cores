@@ -23,18 +23,18 @@ ACylinder::ACylinder(Vector b, Vector a, double r) : ACone(b, a, r, r)
 
 void ACylinder::CalcTransform()
 {
-	double tmpf;
+	DBL len;
 	Vector axis;
 
 	axis = Vector::Sub(apex, base);
-	tmpf = Vector::Length(axis);
+	len = Vector::Length(axis);
 
-	if (tmpf < EPSILON) {
+	if (len < EPSILON) {
 		throw gcnew Finray::FinrayException(ERR_DEGENERATE,1);
 	}
 	else {
-		axis = Vector::Scale(axis, 1.0/tmpf);
-		trans.CalcCoordinate(base, axis, apexRadius, tmpf);
+		axis = Vector::Scale(axis, 1.0/len);
+		trans.CalcCoordinate(base, axis, apexRadius, len);
 	}
 	length = 0.0;
 	CalcBoundingObject();
@@ -44,19 +44,19 @@ void ACylinder::CalcTransform()
 IntersectResult *ACylinder::Intersect(Ray *ray)
 {
 	int i = 0;
-	double a, b, c, z, t1, t2, len;
-	double d;
+	DBL a, b, c, z, t1, t2, len;
+	DBL d;
 	Vector P, D;
 	IntersectResult *r = nullptr;
 
-	/* Transform the ray into the cones space */
+	// Transform the ray into the cones space
 
 	P = trans.InvTransPoint(ray->origin);
 	D = trans.InvTransDirection(ray->dir);
 	len = D.Length(D);
 	D = Vector::Normalize(D);
 
-	/* Solve intersections with a cylinder */
+	// Solve intersections with a cylinder
 
 	a = D.x * D.x + D.y * D.y;
 
@@ -74,8 +74,9 @@ IntersectResult *ACylinder::Intersect(Ray *ray)
 			{
 				r = new IntersectResult;
 				r->I[0].obj = this;
-				r->n = 1;
 				r->I[0].T = t1/len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
+				r->n = 1;
 				intersectedPart = ACone::BODY;
 			}
 
@@ -84,14 +85,16 @@ IntersectResult *ACylinder::Intersect(Ray *ray)
 			{
 				if (r) {
 					r->n = 2;
-					r->I[1].T = t2/len;
 					r->I[1].obj = this;
+					r->I[1].T = t2/len;
+					r->I[1].P = Vector::AddScale(ray->origin, ray->dir, r->I[1].T);
 				}
 				else {
 					r = new IntersectResult;
 					r->I[0].obj = this;
 					r->n = 1;
 					r->I[0].T = t2/len;
+					r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				}
 				intersectedPart = ACone::BODY;
 			}
@@ -109,12 +112,14 @@ IntersectResult *ACylinder::Intersect(Ray *ray)
 			if (r) {
 				r->I[r->n].T = d / len;
 				r->I[r->n].obj = this;
+				r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 				r->n++;
 			}
 			else {
 				r = new IntersectResult;
 				r->I[0].obj = this;
 				r->I[0].T = d / len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				r->n = 1;
 			}
 			intersectedPart = APEX;
@@ -131,12 +136,14 @@ IntersectResult *ACylinder::Intersect(Ray *ray)
 			if (r) {
 				r->I[r->n].T = d / len;
 				r->I[r->n].obj = this;
+				r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 				r->n++;
 			}
 			else {
 				r = new IntersectResult;
 				r->I[0].obj = this;
 				r->I[0].T = d / len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				r->n = 1;
 			}
 			intersectedPart = ACone::BASE;
@@ -146,7 +153,7 @@ IntersectResult *ACylinder::Intersect(Ray *ray)
 }
 
 
-ACone::ACone(Vector b, Vector a, double rb, double ra) : AnObject()
+ACone::ACone(Vector b, Vector a, DBL rb, DBL ra) : AnObject()
 {
 	type = OBJ_CONE;
 	base = b;
@@ -159,7 +166,7 @@ ACone::ACone(Vector b, Vector a, double rb, double ra) : AnObject()
 
 void ACone::CalcCylinderTransform()
 {
-	double tmpf;
+	DBL tmpf;
 	Vector axis;
 
 	axis = Vector::Sub(apex, base);
@@ -180,7 +187,7 @@ void ACone::CalcCylinderTransform()
 
 void ACone::CalcTransform()
 {
-	double tlen, len, tmpf;
+	DBL tlen, len, tmpf;
 	Vector tmpv, axis, origin;
 
 	/* Process the primitive specific information */
@@ -237,7 +244,7 @@ void ACone::CalcTransform()
 	CalcBoundingObject();
 }
 
-void ACone::RotXYZ(double ax, double ay, double az)
+void ACone::RotXYZ(DBL ax, DBL ay, DBL az)
 {
 	Vector v;
 	Transform T;
@@ -248,13 +255,9 @@ void ACone::RotXYZ(double ax, double ay, double az)
 	TransformX(&T);
 }
 
-void ACone::Translate(double ax, double ay, double az)
+void ACone::Translate(Vector v)
 {
-	Vector v;
 	Transform T;
-	v.x = ax;
-	v.y = ay;
-	v.z = az;
 	T.CalcTranslation(v);
 	TransformX(&T);
 }
@@ -266,7 +269,7 @@ void ACone::Scale(Vector v)
 	TransformX(&T);
 }
 
-void ACone::Scale(double ax, double ay, double az)
+void ACone::Scale(DBL ax, DBL ay, DBL az)
 {
 	Vector v;
 	Transform T;
@@ -293,16 +296,19 @@ Vector ACone::Normal(Vector p)
 		else
 			res.z = -res.z;
 	}
-	return Vector::Normalize(trans.TransNormal(res));
+	return (Vector::Normalize(trans.TransNormal(res)));
 }
 
 IntersectResult *ACone::Intersect(Ray *ray)
 {
 	int i = 0;
-	double a, b, c, z, t1, t2, len;
-	double d;
+	DBL a, b, c, z, t1, t2, len;
+	DBL d;
 	Vector P, D;
 	IntersectResult *r = nullptr;
+
+	if (!BoundingIntersect(ray))
+		return (r);
 
 	/* Transform the ray into the cones space */
 
@@ -330,6 +336,7 @@ IntersectResult *ACone::Intersect(Ray *ray)
 				r = new IntersectResult;
 				r->I[0].obj = this;
 				r->I[0].T = t1/len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				r->n = 1;
 				intersectedPart = BODY;
 			}
@@ -351,6 +358,7 @@ IntersectResult *ACone::Intersect(Ray *ray)
 				r = new IntersectResult;
 				r->I[0].obj = this;
 				r->I[0].T = t1/len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				r->n = 1;
 				intersectedPart = BODY;
 			}
@@ -361,12 +369,14 @@ IntersectResult *ACone::Intersect(Ray *ray)
 				if (r) {
 					r->I[r->n].obj = this;
 					r->I[r->n].T = t2/len;
+					r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 					r->n++;
 				}
 				else {
 					r = new IntersectResult;
 					r->I[0].obj = this;
 					r->I[0].T = t2/len;
+					r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 					r->n = 1;
 				}
 				intersectedPart = BODY;
@@ -385,12 +395,14 @@ IntersectResult *ACone::Intersect(Ray *ray)
 			if (r) {
 				r->I[r->n].obj = this;
 				r->I[r->n].T = d / len;
+				r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 				r->n++;
 			}
 			else {
 				r = new IntersectResult;
 				r->I[0].obj = this;
 				r->I[0].T = d / len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				r->n = 1;
 			}
 			intersectedPart = APEX;
@@ -409,12 +421,14 @@ IntersectResult *ACone::Intersect(Ray *ray)
 			if (r) {
 				r->I[r->n].obj = this;
 				r->I[r->n].T = d/len;
+				r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 				r->n++;
 			}
 			else {
 				r = new IntersectResult;
 				r->I[0].obj = this;
 				r->I[0].T = d / len;
+				r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 				r->n = 1;
 			}
 			intersectedPart = BASE;
@@ -431,7 +445,7 @@ void ACone::CalcCenter()
 
 void ACone::CalcRadius()
 {
-	double d1,d2;
+	DBL d1,d2;
 	Vector axis;
 
 	axis = Vector::Sub(apex, base);

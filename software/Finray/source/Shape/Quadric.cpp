@@ -35,6 +35,8 @@ IntersectResult *AQuadric::Intersect(Ray *ray)
 	double t;
 
 	IntersectResult *r = nullptr;
+	if (!BoundingIntersect(ray))
+		return (r);
 
 	Ac = A * SQUARE(Xd) + B * SQUARE(Yd) + C * SQUARE(Zd) + D * Xd * Yd + E * Xd * Zd + F * Yd * Zd;
 	Bc = 2.0 * A * Xo * Xd + 2.0 * B * Yo * Yd + 2.0 * C * Zo * Zd +
@@ -54,6 +56,7 @@ IntersectResult *AQuadric::Intersect(Ray *ray)
 	r = new IntersectResult;
 	r->I[0].obj = this;
 	r->I[0].T = t;
+	r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 	r->n = 1;
 	return (r);
 }
@@ -123,13 +126,9 @@ void AQuadric::RotXYZ(double ax, double ay, double az)
 	TransformX(&T);
 }
 
-void AQuadric::Translate(double ax, double ay, double az)
+void AQuadric::Translate(Vector v)
 {
-	Vector v;
 	Transform T;
-	v.x = ax;
-	v.y = ay;
-	v.z = az;
 	T.CalcTranslation(v);
 	TransformX(&T);
 }

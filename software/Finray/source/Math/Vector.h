@@ -24,6 +24,20 @@ public:
 		c.z = a.z - b.z;
 		return c;
 	};
+	static Vector Mul(Vector a, Vector b) {
+		Vector c;
+		c.x = a.x * b.x;
+		c.y = a.y * b.y;
+		c.z = a.z * b.z;
+		return c;
+	};
+	static Vector Div(Vector a, Vector b) {
+		Vector c;
+		c.x = a.x / b.x;
+		c.y = a.y / b.y;
+		c.z = a.z / b.z;
+		return c;
+	};
 	static Vector Neg(Vector a) {
 		Vector c;
 		c.x = -a.x;
@@ -38,6 +52,9 @@ public:
 		c.z = a.z * k;
 		return c;
 	};
+	static Vector AddScale(Vector a, Vector b, DBL k) {
+		return (Vector::Add(a,Vector::Scale(b,k)));
+	}
 	static double SumSqr(Vector a) {
 		double d;
 		d = a.x * a.x + a.y * a.y + a.z * a.z;
@@ -58,6 +75,9 @@ public:
 	};
 	static double Length(Vector a) {
 		return sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
+	};
+	static double Length(Vector a, Vector b) {
+		return (Length(Sub(b,a)));
 	};
 	static Vector Normalize(Vector a) {
 		Vector b;

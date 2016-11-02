@@ -4,6 +4,8 @@ extern Finray::RayTracer rayTracer;
 
 using namespace Finray;
 
+#define PTS_MAX	1000
+
 namespace Finray
 {
 
@@ -19,22 +21,22 @@ int compar(const void *p1, const void *p2)
 
 IntersectResult *Ray::TestList(AnObject *obj, int TestType)
 {
-	int ocount = 0;
-	int icount = 0;
-	int nn;
+	int nn, mm;
 	AnObject *o, *p, *lo;		//
 	AnObject *slo, *sloNext;	// second last object
 	IntersectResult *m, *q, *r;
-	Intersection pts[10000];
+	Intersection pts[PTS_MAX];
 	int np;
+	static int level = 0;
+	bool isInside = false;
 
 	if (obj==nullptr)
 		return (nullptr);
+	level++;
 	np = 0;
 	r = new IntersectResult;
 	r->I[0].T = BIG;
-	o = obj;
-	while (o) {
+	for (o = obj; o; o = o->next) {
 		switch (o->type) {
 		// In order to obtain the difference we need to temporarily remove the
 		// last item in the object list, which is the object we want the difference
@@ -55,6 +57,7 @@ IntersectResult *Ray::TestList(AnObject *obj, int TestType)
 				sloNext = slo->next;
 				slo->next = nullptr;
 			}
+
 			switch(lo->type) {
 			case OBJ_DIFFERENCE:	m = TestList(lo,MRT_UNION); break;
 			case OBJ_INTERSECTION:	m = TestList(lo,MRT_INTERSECTION); break;
@@ -70,68 +73,71 @@ IntersectResult *Ray::TestList(AnObject *obj, int TestType)
 					slo->next = sloNext;
 				break;
 			}
+			// Now get the union of all the objects remaining in the difference clause
 			q = TestList(o->obj,MRT_UNION);
 			if (q) {
 				if (q->n) {
-					pts[9999].T = 0;
-					/*
-					for (mm = 0; mm < np; mm++) {
-						if (pts[mm].T > q->I[0].T && pts[mm].T < q->I[q->n-1].T) {
-							pts[mm].T = BIG;
+					for (nn = 0; nn < m->n; nn++) {
+						isInside = false;
+						for (mm = 0; mm < q->n; mm++) {
+							if (q->pI[mm].obj->IsInside(m->pI[nn].P))
+								isInside = true;
+						}
+						// If the point is not inside any objects then keep it.
+						if (!isInside) {
+							pts[np] = m->pI[nn];
+							np++;
 						}
 					}
-					for (nn = mm = 0; mm < np; mm++) {
-						if (pts[mm].T != BIG) {
-							pts[nn] = pts[mm];
-							nn++;
-						}
-					}
-					np = nn;
-					*/
 				}
 				else {
-					for (nn = 0; nn < m->n && np < 10000; nn++) {
-						pts[np] = m->I[nn];
+					for (nn = 0; nn < m->n && np < PTS_MAX; nn++) {
+						pts[np] = m->pI[nn];
 						np++;
 					}
 				}
 				delete q;
 			}
+			// If there was nothing to remove for the difference, just return
+			// the object points.
 			else {
-				for (nn = 0; nn < m->n && np < 10000; nn++) {
-					pts[np] = m->I[nn];
+				for (nn = 0; nn < m->n && np < PTS_MAX; nn++) {
+					pts[np] = m->pI[nn];
 					np++;
 				}
 			}
 			m->n = 0;
 			if (slo) slo->next = sloNext;
 			break;
-		case OBJ_BOX:
-		case OBJ_CUBE:
-		case OBJ_OBJECT:
-			m = TestList(o->obj, MRT_UNION);
-			break;
 		case OBJ_UNION:
+		case OBJ_OBJECT:
 			m = TestList(o->obj, MRT_UNION);
 			break;
 		case OBJ_INTERSECTION:
 			m = TestList(o->obj, MRT_INTERSECTION);
+			// Choose the innermost intersection ( the point in the middle )
+			if (m) {
+				if (m->n > 1) {
+					m->I[0] = m->pI[(m->n>>1)-1];
+					m->I[1] = m->I[0];
+					m->n = 2;
+				}
+			}
 			break;
 		default:
-			m = Test(o);
+			m = o->Intersect(this);
 		}
-		o = o->next;
 		switch (TestType) {
 		// A difference and a union have the same list processing.
 		case MRT_DIFFERENCE:
-			break;
+			//break;
 		// For a union keep track of any intersection point with any object.
 		// Process the entire list.
 		case MRT_UNION:
 			if (m == nullptr)
 				break;
-			for (nn = 0; nn < m->n && np < 10000; nn++) {
-				pts[np] = m->I[nn];
+			for (nn = 0; nn < m->n && np < PTS_MAX; nn++) {
+				pts[np] = m->pI[nn];
 				np++;
 			}
 			break;
@@ -141,15 +147,17 @@ IntersectResult *Ray::TestList(AnObject *obj, int TestType)
 		case MRT_INTERSECTION:
 			if (m == nullptr) {
 				r->n = 0;
+				level--;
 				return (r);
 			}
 			if (m->n==0) {
 				delete m;
 				r->n = 0;
+				level--;
 				return (r);
 			}
-			for (nn = 0; nn < m->n && np < 10000; nn++) {
-				pts[np] = m->I[nn];
+			for (nn = 0; nn < m->n && np < PTS_MAX; nn++) {
+				pts[np] = m->pI[nn];
 				np++;
 			}
 			break;
@@ -159,9 +167,12 @@ IntersectResult *Ray::TestList(AnObject *obj, int TestType)
 	}
 	if (np > 1)
 		qsort((void *)pts, np, sizeof(Intersection), compar);
+	if (np > 4)
+		r->pI = new Intersection[min(35,np)];
 	for (nn = 0; nn < 35 && nn < np; nn++)
-		r->I[nn] = pts[nn];
+		r->pI[nn] = pts[nn];
 	r->n = nn;
+	level--;
 	return (r);
 }
 
@@ -183,17 +194,18 @@ void Ray::Trace(Color *c)
 		*c = rayTracer.backGround;
 		return;
 	}
-	if (r->n == 0 || r->I[0].T>=BIG) {
+	if (r->n == 0 || r->pI[0].T>=BIG) {
+		delete r;
 		*c = rayTracer.backGround;
 		return;
 	}
-	point = Vector::Scale(dir, r->I[0].T);
-	point = Vector::Add(point, origin);
-	normal = r->I[0].obj->Normal(point);
+	point = r->pI[0].P;//Vector::Scale(dir, r->pI[0].T);
+//	point = Vector::Add(point, origin);
+	normal = r->pI[0].obj->Normal(point);
 	normalDir = Vector::Dot(normal,dir);
 	if (normalDir > 0.0)
 		normal = Vector::Neg(normal);
-	r->I[0].obj->Shade(this, normal, point, c);
+	r->pI[0].obj->Shade(this, normal, point, c);
 	delete r;
 }
 
@@ -204,9 +216,8 @@ IntersectResult *Ray::Test(AnObject *o)
 
 	if (o==nullptr)
 		return (nullptr);
-//	if (!o->BoundingIntersect(this))
-//		return (nullptr);
-	ai = o->AntiIntersects(this);
+//	ai = o->AntiIntersects(this);
+	ai = false;
 	if (!ai) {
 		ir = o->Intersect(this);
 		return (ir);

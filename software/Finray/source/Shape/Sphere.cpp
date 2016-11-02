@@ -28,6 +28,8 @@ ASphere::ASphere(double X, double Y, double Z, double R)  : AnObject()
 	radius2 = SQUARE(R);
 }
 
+// Detect intersection of ray with sphere.
+
 IntersectResult *ASphere::Intersect(Ray *ray)
 {
 	DBL B, C, Discrim, t0, t1, len;
@@ -70,6 +72,7 @@ IntersectResult *ASphere::Intersect(Ray *ray)
 			r->I[0].T = t0 / len;
 		else
 			r->I[0].T = t0;
+		r->I[0].P = Vector::AddScale(ray->origin, ray->dir, r->I[0].T);
 		r->n = 1;
 	}
 	if (t1 > EPSILON) {
@@ -78,6 +81,7 @@ IntersectResult *ASphere::Intersect(Ray *ray)
 		else
 			r->I[r->n].T = t1;
 		r->I[r->n].obj = this;
+		r->I[r->n].P = Vector::AddScale(ray->origin, ray->dir, r->I[r->n].T);
 		r->n++;
 	}
 	return (r);
@@ -131,10 +135,8 @@ void ASphere::RotZ(double angle)
 		center = Vector::RotZ(center, angle);
 }
 
-void ASphere::Translate(double ax, double ay, double az)
+void ASphere::Translate(Vector v)
 {
-	Vector v(ax,ay,az);
-
 	if (usesTransform) {
 		Transform T;
 		T.CalcTranslation(v);
@@ -171,6 +173,21 @@ void ASphere::Scale(Vector p)
 		}
 	}
 }
+
+
+bool ASphere::IsInside(Vector point)
+{
+	Vector t;
+	DBL tt;
+
+	if (usesTransform) {
+		point = trans.InvTransPoint(point);
+	}
+	t = Vector::Sub(center,point);
+	tt = Vector::Dot(t,t);
+	return (inverted ? tt > radius2 : tt < radius2);
+}
+
 
 void ASphere::Print()
 {

@@ -2,15 +2,16 @@
 
 extern FinitronClasses::NoiseGen noiseGen;
 
+#define FLOOR(x) ((x) >= 0.0 ? floor(x) : (0.0 - floor(0.0 - (x)) - 1.0))
+
 using namespace Finray;
 
 namespace Finray {
 
 Texture::Texture()
 {
-	color.r = 0.0;
-	color.g = 0.0;
-	color.b = 0.0;
+	color1 = Color();
+	color2 = Color();
 	ambient.r = 0.0;
 	ambient.g = 0.0;
 	ambient.b = 0.0;
@@ -38,6 +39,8 @@ Texture::~Texture()
 
 void Texture::Copy(Texture *t)
 {
+	color1 = t->color1;
+	color2 = t->color2;
 	if (pigment)
 		delete pigment;
 	if (t->pigment) {
@@ -63,6 +66,7 @@ void Texture::Copy(Texture *t)
 	trans.Copy(&t->trans);
 }
 
+/*
 void Texture::SetAttrib(float rd, float gn, float bl, Color a, float d, float b, float s, float ro, float r)
 {
 	color.r = rd;
@@ -75,13 +79,14 @@ void Texture::SetAttrib(float rd, float gn, float bl, Color a, float d, float b,
 	roughness = ro;
 	reflection = r;
 }
+*/
 
 DBL TriangleWave (DBL value)
 {
    DBL offset;
 
-   if (value >= 0.0) offset = value - floor(value);
-   else offset = value - (-1.0 - floor(fabs(value)));
+   if (value >= 0.0) offset = value - FLOOR(value);
+   else offset = value - (-1.0 - FLOOR(fabs(value)));
 
    if (offset >= 0.5) return (2.0 * (1.0 - offset));
    else return (2.0 * offset);
@@ -105,7 +110,7 @@ Color Texture::Granite(Vector point, Color clr)
 	if (pigment->cm != nullptr) {
 		return (Color::Add(clr,pigment->cm->GetColor(noise)));
 	}
-	return (Color::Add(clr,Color(noise,noise,noise)));
+	return (Color::Add(clr,Color((float)noise,(float)noise,(float)noise)));
 }
 
 
@@ -130,18 +135,63 @@ Color Texture::Marble(Vector point, Color clr)
 
    if (noise < 0.0)
    {
-      clr.r += 0.9;
-      clr.g += 0.8;
-      clr.b += 0.8;
+      clr.r += 0.9f;
+      clr.g += 0.8f;
+      clr.b += 0.8f;
    }
    else if (noise < 0.9)
    {
-      clr.r += 0.9;
+      clr.r += 0.9f;
       hue = 0.8 - noise * 0.8;
-      clr.g += hue;
-      clr.b += hue;
+      clr.g += (float)hue;
+      clr.b += (float)hue;
    }
    return (clr);
+}
+
+
+Color Texture::Wood (Vector pt, Color colour)
+{
+   DBL noise, length;
+   Vector WoodTurbulence;
+   Vector point;
+   Color NewColour;
+
+   WoodTurbulence = noiseGen.DTurbulence(pt);
+
+   point.x = noiseGen.Cycloidal((pt.x + WoodTurbulence.x) * turbulence);
+   point.y = noiseGen.Cycloidal((pt.y + WoodTurbulence.y) * turbulence);
+   point.z = 0.0;
+
+   point.x += pt.x;
+   point.y += pt.y;
+   point.z += pt.z;
+
+   length = Vector::Length(point);
+   noise = TriangleWave(length);
+
+	if (pigment != nullptr) {
+	   if (pigment->cm != nullptr) {
+		  NewColour = pigment->cm->GetColor(noise);
+		  colour.r += NewColour.r;
+		  colour.g += NewColour.g;
+		  colour.b += NewColour.b;
+	//      colour -> Alpha += NewColour.Alpha;
+		  return (colour);
+		}
+	}
+
+   if (noise > 0.6) {
+      colour.r += 0.4f;
+      colour.g += 0.133f;
+      colour.b += 0.066f;
+      }
+  else {
+      colour.r += 0.666f;
+      colour.g += 0.312f;
+      colour.b += 0.2f;
+  }
+  return (colour);
 }
 
 Color Texture::Gradient(Vector point, Color clr)
@@ -151,22 +201,79 @@ Color Texture::Gradient(Vector point, Color clr)
 	DBL x,y,z;
 
 	if (pigment->cm==nullptr)
-		return c;
+		return (c);
 	if (gradient.x != 0.0) {
 		x = fabs(point.x);
-		value += x - floor(x);
+		value += x - FLOOR(x);
 	}
 	if (gradient.y != 0.0) {
 		y = fabs(point.y);
-		value += y - floor(y);
+		value += y - FLOOR(y);
 	}
 	if (gradient.z != 0.0) {
 		z = fabs(point.z);
-		value += z - floor(z);
+		value += z - FLOOR(z);
 	}
 	value = (value > 1.0) ? fmod(value,1.0) : value;
-	return Color::Add(clr,pigment->cm->GetColor(value));
+	return (Color::Add(clr,pigment->cm->GetColor(value)));
 }
+
+Color Texture::Bozo(Vector point, Color clr)
+{
+   DBL noise, turb;
+   Color NewColour;
+   Vector BozoTurbulence;
+
+   if ((turb = turbulence) != 0.0)
+   {
+      BozoTurbulence = noiseGen.DTurbulence (point);
+	  point = Vector::Add(point, Vector::Scale(BozoTurbulence, turb));
+   }
+
+   noise = noiseGen.Noise3(point);
+
+   if (pigment != nullptr) {
+	   if (pigment->cm != nullptr) {
+		  NewColour = pigment->cm->GetColor(noise);
+		  clr = Color::Add(clr,NewColour);
+		  //clr.Alpha += New_Colour.Alpha;
+		  return (clr);
+      }
+   }
+
+	if (noise < 0.4) {
+		clr = Color::Add(clr,Color(1.0,1.0,1.0));
+		return (clr);
+    }
+
+   if (noise < 0.6) {
+      clr.g += 1.0;
+      return (clr);
+      }
+
+   if (noise < 0.8) {
+      clr.b += 1.0;
+      return (clr);
+      }
+
+   clr.r += 1.0;
+   return (clr);
+}
+
+Color Texture::Checker(Vector point, Color clr)
+{
+   int brkindx;
+
+   brkindx = (int) FLOOR(point.x) + (int) FLOOR(point.z);
+
+   if (brkindx & 1)
+      clr = color1;
+   else
+      clr = color2;
+   return (clr);
+}
+
+
 
 Color Texture::GetColor(Vector point)
 {
@@ -183,11 +290,11 @@ Color Texture::GetColor(Vector point)
 		point = trans.InvTransPoint(point);
 
 	switch(ColorMethod) {
-	case 0:
+	case TM_FLAT:
 		if (pigment)
 			return (pigment->color);
 		return (c);
-	case 1:
+	case TM_NOISY:
 		n = noiseGen.Noise(point, 2.0, 2.0, 4);
 		if (pigment)
 			c = pigment->color;
@@ -223,20 +330,20 @@ Color Texture::GetColor(Vector point)
 	case 3:	// approximate color
 		if (pigment)
 			c = pigment->color;
-		c.r = c.r + ((float)prand->rand((int)(variance.r * 256))-variance.r * 128) / 256.0;
-		c.g = c.g + ((float)prand->rand((int)(variance.g * 256))-variance.g * 128) / 256.0;
-		c.b = c.b + ((float)prand->rand((int)(variance.b * 256))-variance.b * 128) / 256.0;
+		c.r = c.r + ((float)prand->rand((int)(variance.r * 256))-variance.r * 128) / 256.0f;
+		c.g = c.g + ((float)prand->rand((int)(variance.g * 256))-variance.g * 128) / 256.0f;
+		c.b = c.b + ((float)prand->rand((int)(variance.b * 256))-variance.b * 128) / 256.0f;
 		return (c);
-	case 4:
-		return (Gradient(point, pigment ? pigment->color : c));
-	case 5:
-		return (Granite(point, pigment ? pigment->color : c));
-	case 6:
-		return (Marble(point, pigment ? pigment->color : c));
-	case 255:
-		c.r = (float)prand->rand(256) / 256.0;
-		c.g = (float)prand->rand(256) / 256.0;
-		c.b = (float)prand->rand(256) / 256.0;
+	case TM_GRADIENT:	return (Gradient(point, pigment ? pigment->color : c));
+	case TM_GRANITE:	return (Granite(point, pigment ? pigment->color : c));
+	case TM_MARBLE:		return (Marble(point, pigment ? pigment->color : c));
+	case TM_WOOD:		return (Wood(point, pigment ? pigment->color : c));
+	case TM_BOZO:		return (Bozo(point, pigment ? pigment->color : c));
+	case TM_CHECKER:	return (Checker(point, c));
+	case TM_RANDOM:
+		c.r = (float)prand->rand(256) / 256.0f;
+		c.g = (float)prand->rand(256) / 256.0f;
+		c.b = (float)prand->rand(256) / 256.0f;
 		return (c);
 	}
 	// Return black for unknown coloring method.

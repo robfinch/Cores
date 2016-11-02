@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\NewFilter1">
+      <UniqueIdentifier>{09f125b5-4f37-48df-bf58-1b1979294ea9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -28,12 +31,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="stdafx.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ASphere.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="APlane.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="frmRay.cpp">
@@ -63,12 +60,6 @@
     <ClCompile Include="RayTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Quadric.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Triangle.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="rand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -78,16 +69,7 @@
     <ClCompile Include="Rectangle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Cone.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Box.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Noise.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Torus.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Math\Matrix.cpp">
@@ -100,6 +82,27 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Texture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Sphere.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Triangle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Cone.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Plane.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Torus.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Box.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Shape\Quadric.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

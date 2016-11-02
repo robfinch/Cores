@@ -20,12 +20,14 @@ ALight::ALight(double X, double Y, double Z, float R, float G, float B) : AnObje
 Finray::Color ALight::GetColor(AnObject *so, AnObject *objPtr, Ray *ray, DBL distance)
 {
 	AnObject *shadowObjPtr, *o;
+	AnObject *p, *lo, *slo, *sloNext;	// second last object
 	Finray::Color clr, _color;
-	IntersectResult *r;
+	IntersectResult *r, *m, *q;
 	DBL distanceT;
+	int nn, mm;
+	bool isInside;
 
-	shadowObjPtr = so;
-	while (shadowObjPtr) {
+	for (shadowObjPtr = so; shadowObjPtr; shadowObjPtr = shadowObjPtr->next) {
 		switch (shadowObjPtr->type) {
 		// For an intersection object all objects must return an intersection
 		// with the ray (the color black). As soon as one object does not
@@ -41,31 +43,78 @@ Finray::Color ALight::GetColor(AnObject *so, AnObject *objPtr, Ray *ray, DBL dis
 			}
 			clr.r = clr.g = clr.b = 0.0;
 			return (clr);
-		case OBJ_BOX:
-		case OBJ_CUBE:
+
+		case OBJ_DIFFERENCE:
+			// Find the object at the end of the list, which will be the
+			// object we want the difference from.
+			o = p = shadowObjPtr->obj;
+			lo = p;
+			slo = nullptr;
+			while (p) {
+				slo = lo;
+				lo = p;
+				p = p->next;
+			}
+			if (slo) {
+				sloNext = slo->next;
+				slo->next = nullptr;
+			}
+			// Test for intersection points. If the ray doesn't intersect the
+			// object then just return the color of the light.
+			switch(lo->type) {
+			case OBJ_DIFFERENCE:	m = ray->TestList(lo,MRT_UNION); break;
+			case OBJ_INTERSECTION:	m = ray->TestList(lo,MRT_INTERSECTION); break;
+			default:				m = ray->TestList(lo,MRT_UNION); break;
+			}
+			if (m==nullptr) {
+				if (slo)
+					slo->next = sloNext;
+				return (properties.pigment->color);
+			}
+			if (m->n==0) {
+				if (slo)
+					slo->next = sloNext;
+				delete m;
+				return (properties.pigment->color);
+			}
+			// Now get the union of all the objects remaining in the difference clause
+			q = ray->TestList(o,MRT_UNION);
+			if (q) {
+				if (q->n) {
+					for (nn = 0; nn < m->n; nn++) {
+						isInside = false;
+						for (mm = 0; mm < q->n; mm++) {
+							if (q->pI[mm].obj->IsInside(m->pI[nn].P))
+								isInside = true;
+						}
+						// The objects point was inside a difference and therefore
+						// blotted out. There will be no shadow.
+						if (isInside) {
+							delete q;
+							delete m;
+							if (slo) slo->next = sloNext;
+							return (properties.pigment->color);
+						}
+					}
+				}
+				delete q;
+			}
+			// There was no difference to remove from the object, therefore an
+			// object is present. Return a shadow.
+			delete m;
+			if (slo) slo->next = sloNext;
+			return (Color(0,0,0));
+
 		case OBJ_UNION:
-			o = shadowObjPtr->obj;
-			while (o) {
-				clr = GetColor(o, objPtr, ray, distance);
+		case OBJ_OBJECT:
+			if (shadowObjPtr->obj) {
+				clr = GetColor(shadowObjPtr->obj, objPtr, ray, distance);
 				if (clr.IsBlack()) {
 					return (clr);
 				}
-				o = o->next;
 			}
 			break;
-		case OBJ_OBJECT:
-			if (shadowObjPtr->obj) {
-				o = shadowObjPtr->obj;
-				while (o) {
-					clr = GetColor(o, objPtr, ray, distance);
-					if (clr.IsBlack()) {
-						return (clr);
-					}
-					o = o->next;
-				}
-				break;
-			}
-			break;
+
 		default:
 			if (shadowObjPtr->type==OBJ_SPHERE)
 				r = r;
@@ -73,7 +122,7 @@ Finray::Color ALight::GetColor(AnObject *so, AnObject *objPtr, Ray *ray, DBL dis
 				if (shadowObjPtr->boundingObject) {
 					r = shadowObjPtr->boundingObject->Intersect(ray);
 					if (r==nullptr) {
-						return (properties.color);
+						return (properties.pigment->color);
 					}
 					delete r;
 				}
@@ -90,8 +139,8 @@ Finray::Color ALight::GetColor(AnObject *so, AnObject *objPtr, Ray *ray, DBL dis
 				}
 			}
 		}
-j1:
-		shadowObjPtr = shadowObjPtr->next;
+j1: ;
+		
 	}
 	return (properties.pigment->color);
 }
