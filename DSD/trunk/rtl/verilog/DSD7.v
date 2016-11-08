@@ -1,8 +1,36 @@
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2016  Robert Finch, Stratford
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	dsd7.v
+//		
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+// ============================================================================
+//
 `define TRUE    1'b1
 `define FALSE   1'b0
 
-`define BRK     6'h00
-`define RET     6'h01
+`define INT_VECT    32'hFFFFFDFC
+`define RST_VECT    32'hFFFFFDF8
+
 `define BccI    6'h02
 `define BccUI   6'h03
 `define ADDI    6'h04
@@ -13,12 +41,15 @@
 `define XORI    6'h0A
 `define R2      6'h0C
 `define CSRI    6'h0F
-`define JMP     6'h10
-`define CALL    6'h11
+`define JAL     6'h10
 `define Bcc     6'h12
 `define BccU    6'h13
+`define JAL16   6'h14
+`define SYS     6'h18
 `define NOP     6'h1A
-`define RET2    6'h1B
+`define INT     6'h1B
+`define JAL0    6'h1C
+`define MOV     6'h1D
 `define CINSN   6'h1F
 `define LH      6'h20
 `define LHU     6'h21
@@ -27,12 +58,21 @@
 `define SH      6'h28
 `define SW      6'h29
 `define SWC     6'h2A
+`define MULI    6'h30
+`define MULUI   6'h31
+`define MULSUI  6'h32
+`define MULHI   6'h33
+`define MULUHI  6'h34
+`define MULSUHI 6'h35
+`define DIVI    6'h38
+`define DIVUI   6'h39
+`define DIVSUI  6'h3A
+`define REMI    6'h3B
+`define REMUI   6'h3C
+`define REMSUI  6'h3D
 `define CSR     6'h3F
 
 // R2 functs
-`define IRET    6'h01
-`define IPUSH   6'h02
-`define IPOP    6'h03
 `define ADD     6'h04
 `define CMP     6'h05
 `define CMPU    6'h06
@@ -62,6 +102,25 @@
 `define SHX     6'h28
 `define SWX     6'h29
 `define SWCX    6'h2A
+`define MUL     6'h30
+`define MULU    6'h31
+`define MULSU   6'h32
+`define MULH    6'h33
+`define MULUH   6'h34
+`define MULSUH  6'h35
+`define DIV     6'h38
+`define DIVU    6'h39
+`define DIVSU   6'h3A
+`define REM     6'h3B
+`define REMU    6'h3C
+`define REMSU   6'h3D
+
+// SYS functs
+`define CLI     4'h00
+`define SEI     4'h01
+`define IRET    4'h04
+`define IPUSH   4'h05
+`define IPOP    4'h06
 
 `define _2NOP_INSN    {10'h0,`NOP,10'h0,`NOP}
 
@@ -71,12 +130,16 @@
 
 `define CSR_HARTID  12'h001
 `define CSR_VBA     12'h004
+`define CSR_CAUSE   12'h006
 `define CSR_SCRATCH 12'h009
 `define CSR_TASK    12'h010
 `define CSR_CISC    12'h011
-`define CSR_PCBANK  12'h017
-`define CSR_IHOLDL  12'h040
-`define CSR_IHOLDH  12'h041
+`define CSR_ITOS0   12'h040
+`define CSR_ITOS1   12'h041
+`define CSR_ITOS2   12'h042
+`define CSR_ITOS3   12'h043
+`define CSR_ITOS4   12'h044
+`define CSR_CAP     12'hFFE
 
 module DSD7(hartid_i, rst_i, clk_i, irq_i, ivec_i,
     vda_o, rdy_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
@@ -104,12 +167,14 @@ input [31:0] idat_i;
 // Core capabilities
 parameter CAP_LS_NDX = 1'b1;
 parameter CAP_ROTATES = 1'b1;
+parameter CAP_MULDIV = 1'b1;
 
 parameter half = 2'b10;
 parameter word = 2'b11;
 
 // State machine states
 parameter RUN = 6'd1;
+parameter DIV1 = 6'd5;
 parameter LOAD1 = 6'd10;
 parameter LOAD2 = 6'd11;
 parameter LOAD3 = 6'd12;
@@ -119,6 +184,15 @@ parameter STORE3 = 6'd17;
 parameter LOAD_ICACHE = 6'd20;
 parameter LOAD_ICACHE2 = 6'd21; 
 parameter ICACHE_RST = 6'd22;
+parameter MUL1 = 6'd31;
+parameter MUL2 = 6'd32;
+parameter MUL3 = 6'd33;
+parameter MUL4 = 6'd34;
+parameter MUL5 = 6'd35;
+parameter MUL6 = 6'd36;
+parameter MUL7 = 6'd37;
+parameter MUL8 = 6'd38;
+parameter MUL9 = 6'd39;
 
 integer n;
 reg [5:0] state;
@@ -134,14 +208,15 @@ wire [4:0] iRb = iinsn[15:11];
 wire [5:0] opcode = ir[5:0];
 wire [5:0] funct = ir[31:26];
 reg [4:0] Ra,iRa,xRa;
-wire [4:0] Rb = ir[15:11];
-wire [4:0] Rc = ir[20:16];
+reg [4:0] Rb;
+reg [4:0] Rc;
 reg [4:0] Rt,xRt;
 wire [5:0] xopcode = xir[5:0];
 wire [5:0] xfunct = xir[31:26];
-// im1 | tr8 | pc32
-reg [40:0] istack[0:15];
+// im1 | r3 | r2 | r1 | pc32
+reg [128:0] istack[0:15];
 reg [3:0] isp;
+reg [31:0] r1,r2,r3;
 reg [31:0] regfile [0:31];
 reg [31:0] rfoa,rfob,rfoc;
 reg [31:0] a,b,c,imm,ea,xb;
@@ -152,20 +227,29 @@ reg [31:0] br_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
 // CSR's
-reg [23:0] pcbank;
-reg [19:0] vba;                 // vector table base address (bits 12 to 31).
-reg [5:0] tr;
-reg im;
-reg [63:0] ihold;
+reg [31:0] mcause;
+reg [20:0] vba;                 // vector table base address (bits 11 to 31).
+reg [31:0] tr;
+reg im, gie;
+reg [128:0] itos;
 reg [31:0] cisc;
 wire [7:0] isid = cisc[7:0];
 reg [31:0] scratch;
+reg [31:0] cap = {CAP_MULDIV,CAP_ROTATES,CAP_LS_NDX};
+
+function [31:0] fnAbs;
+input [31:0] jj;
+fnAbs = jj[31] ? -jj : jj;
+endfunction
 
 
 always @*
 case(Ra)
 5'd0:   rfoa <= 32'd0;
 xRt:    rfoa <= res;
+5'd1:   rfoa <= r1;
+5'd2:   rfoa <= r2;
+5'd3:   rfoa <= r3;
 default:    rfoa <= regfile[Ra]; 
 endcase
 
@@ -173,6 +257,9 @@ always @*
 case(Rb)
 5'd0:   rfob <= 32'd0;
 xRt:    rfob <= res;
+5'd1:   rfob <= r1;
+5'd2:   rfob <= r2;
+5'd3:   rfob <= r3;
 default:    rfob <= regfile[Rb]; 
 endcase
 
@@ -180,6 +267,9 @@ always @*
 case(Rc)
 5'd0:   rfoc <= 32'd0;
 xRt:    rfoc <= res;
+5'd1:   rfoc <= r1;
+5'd2:   rfoc <= r2;
+5'd3:   rfoc <= r3;
 default:    rfoc <= regfile[Rc]; 
 endcase
 
@@ -221,6 +311,52 @@ DSD7_shift ushft1
     .rolo()
 );
 
+wire xMul = xopcode==`R2 && (xfunct==`MUL || xfunct==`MULH);
+wire xMulu = xopcode==`R2 && (xfunct==`MULU || xfunct==`MULUH);
+wire xMulsu = xopcode==`R2 && (xfunct==`MULSU || xfunct==`MULSUH);
+wire xMuli = xopcode==`MULI || xopcode==`MULHI;
+wire xMului = xopcode==`MULUI || xopcode==`MULUHI;
+wire xMulsui = xopcode==`MULSUI || xopcode==`MULSUHI;
+
+wire [63:0] mul_prod1;
+reg [63:0] mul_prod;
+reg mul_sign;
+reg [31:0] aa, bb;
+
+// 6 stage pipeline
+DSD_mult_gen32 u2 (
+  .CLK(clk_i),  // input wire CLK
+  .A(aa),      // input wire [31 : 0] A
+  .B(bb),      // input wire [31 : 0] B
+  .P(mul_prod1) // output wire [63 : 0] P
+);
+
+wire [31:0] qo, ro;
+
+wire xDiv = xopcode==`DIVI || xopcode==`DIVUI || xopcode==`DIVSUI || xopcode==`REMI || xopcode==`REMUI || xopcode==`REMSUI ||
+             (xopcode==`R2 && (xfunct==`DIV || xfunct==`DIVU || xfunct==`DIVSU || xfunct==`REM || xfunct==`REMU || xfunct==`REMSU))
+             ;
+wire xDivi = xopcode==`DIVI || xopcode==`DIVUI || xopcode==`DIVSUI || xopcode==`REMI || xopcode==`REMUI || xopcode==`REMSUI;
+wire xDivss = xopcode==`DIVI || (xopcode==`R2 && (xfunct==`DIV || xfunct==`REM));
+wire xDivsu = xopcode==`DIVSUI || (xopcode==`R2 && (xfunct==`DIVSU || xfunct==`REMSU));
+
+DSD_divider #(32) u1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(xDiv),
+	.ss(xDivss),
+	.su(xDivsu),
+	.isDivi(xDivi),
+	.a(a),
+	.b(b),
+	.imm(imm),
+	.qo(qo),
+	.ro(ro),
+	.dvByZr(),
+	.done(dvd_done)
+);
+
 always @*
 begin
     case(xopcode)
@@ -230,6 +366,18 @@ begin
         `SUB:   res = a - b;
         `CMP:   res = $signed(a) < $signed(b) ? -1 : a==b ? 0 : 1;
         `CMPU:  res = a < b ? -1 : a==b ? 0 : 1;
+        `MUL:   res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
+        `MULU:  res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
+        `MULSU: res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
+        `MULH:  res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
+        `MULUH: res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
+        `MULSUH:res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
+        `DIV:   res = CAP_MULDIV ? qo : 32'hDEADDEAD;
+        `DIVU:  res = CAP_MULDIV ? qo : 32'hDEADDEAD;
+        `DIVSU: res = CAP_MULDIV ? qo : 32'hDEADDEAD;
+        `REM:   res = CAP_MULDIV ? ro : 32'hDEADDEAD;
+        `REMU:  res = CAP_MULDIV ? ro : 32'hDEADDEAD;
+        `REMSU: res = CAP_MULDIV ? ro : 32'hDEADDEAD;
         `AND:   res = logic_o;
         `OR:    res = logic_o;
         `XOR:   res = logic_o;
@@ -256,17 +404,24 @@ begin
     `ORI:   res = logic_o;
     `XORI:  res = logic_o;
     `LH,`LHU,`LW,`LWR:  res = lres;
-    `CALL,`RET,`RET2:  res = a + imm;
+    `JAL:   res = xpc + 32'd3;
+    `JAL16: res = xpc + 32'd2;
+    `JAL0:  res = xpc + 32'd1;
+    `MOV:   res = a;
     `CSR,`CSRI:
         case(xir[29:18])
         `CSR_HARTID:    res = hartid_i;
         `CSR_VBA:       res = vba;
+        `CSR_CAUSE:     res = mcause;
         `CSR_SCRATCH:   res = scratch;
         `CSR_TASK:      res = tr;
         `CSR_CISC:      res = cisc;
-        `CSR_PCBANK:    res = {pcbank,xpc[31:24]};
-        `CSR_IHOLDL:    res = ihold[31:0];
-        `CSR_IHOLDH:    res = ihold[63:32];
+        `CSR_ITOS0:    res = itos[31:0];
+        `CSR_ITOS1:    res = itos[63:32];
+        `CSR_ITOS2:    res = itos[95:64];
+        `CSR_ITOS3:    res = itos[127:96];
+        `CSR_ITOS4:    res = itos[128];
+        `CSR_CAP:       res = cap;
         default:    res = 32'hDEADDEAD;
         endcase
     
@@ -481,15 +636,17 @@ wire advanceIF = advanceRF & ihit;
 always @(posedge clk_i)
 if (rst_i) begin
     im <= `TRUE;
+    isp <= 4'd0;
     tr <= 6'd0;
     vba <= 14'h3FFD;
     cisc <= 32'hFFE00000;
-    pc <= 32'hFFFFFFE0;
+    pc <= `RST_VECT;
     vda_o <= `FALSE;
     lock_o <= `FALSE;
     wr_o <= `FALSE;
     sel_o <= 2'b00;
     isICacheReset <= `TRUE;
+    gie <= `FALSE;
     next_state(ICACHE_RST);
 end
 else begin
@@ -510,31 +667,40 @@ begin
     // on the critical path.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceIF) begin
-        if (irq_i & ~im)
-            iinsn = {17'd0,ivec_i,`BRK};
+        if (irq_i & ~im & gie)
+            iinsn = {17'd0,ivec_i,`INT};
         else
             iinsn = insn[5:0]==`CINSN ? cinsn : insn;
         ii32 = iinsn[31:26]==6'h20;
         ii5 = iinsn[15:11]==5'h10;
         ii5a = iinsn[10:6]==5'h10;
-        case(iinsn[5:0])
-        `CALL,`RET,`RET2:   iRa = 5'd31;
-        default:    iRa = iinsn[10:6]; 
-        endcase
-        Ra <= iRa;
+        iRa = iinsn[10:6]; 
+        if (iinsn[5:0]==`INT) begin
+            Ra <= 5'd1;
+            Rb <= 5'd2;
+            Rc <= 5'd3;
+        end
+        else begin
+            Ra <= iRa;
+            Rb <= iinsn[10:6];
+            Rc <= iinsn[15:11];
+        end
         case(insn[5:0])
-        `BRK,`RET,`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
+        `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
+        `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
             pc_inc = ii32 ? 32'd4 : 32'd2;
         `BccI:  pc_inc = ii5 ? 32'd4 : 32'd2;
         `BccUI:  pc_inc = ii5 ? 32'd4 : 32'd2;
-        `NOP,`RET2,`CINSN:
+        `NOP,`CINSN:
             pc_inc = 32'd1;
         `CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
         default:    pc_inc = 32'd1;
         endcase
         case(iopcode)
-        `BRK:       pc <= {vba,1'b1,iinsn[14:6],2'b00};
-        `JMP,`CALL: pc <= {{pcbank,pc[31:24]} >> {iinsn[31:30],3'b0},iinsn[29:6]};
+        `JAL0:  pc <= 32'h0;
+        `JAL16: pc <= {{16{iinsn[31]}},iinsn[31:16]};
+        `JAL:   pc <= iinsn[47:16];
         default:    pc <= pc + pc_inc;
         endcase
         i32 <= ii32;
@@ -573,13 +739,16 @@ begin
         default:  ;
         endcase
         case(opcode)
-        `BRK,`RET,`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
+        `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
+        `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
         `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC:
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `CSRI:         imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
-        `CALL:         imm <= -32'd2;
-        `RET2:         imm <= 32'd2;
+        `JAL:          imm <= ir[63:32];
+        `JAL16:        imm <= {{16{ir[31]}},ir[31:16]};
+        `JAL0:         imm <= 32'h0;
         endcase
         // Branch displacement, used only for conditional branches.
         // Branches may also compare against an immediate so the displacement
@@ -600,10 +769,10 @@ begin
             default:
                 xRt <= 5'd0;
             endcase
+        `JAL,`JAL16,`JAL0,`MOV,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
         `LH,`LHU,`LW,`LWR:
             xRt <= ir[15:11];
-        `CALL,`RET,`RET2:   xRt <= 5'd31;
         default:
             xRt <= 5'd0;
         endcase
@@ -617,59 +786,76 @@ begin
     begin   // if (advanceEX) // always true
         if (ex_done==`TRUE)
             ex_done <= `FALSE;
+        case(xRt)
+        5'd1:   r1 <= res;
+        5'd2:   r2 <= res;
+        5'd3:   r3 <= res;
+        endcase
         regfile[xRt] <= res;
+        // Globally enable interrupts after first update of stack pointer.
+        if (xRt==5'd31)
+            gie <= `TRUE;
         case(xopcode)
-        `BRK:
+ 
+        // INT uses ex_branch() to flush the pipeline of extra INT instructions
+        // which stream into core until interrupts are masked here.
+        `INT:
             begin
-                istack[isp-4'd1] <= {im,tr,6'b111111,xpc+xir[18:15]};
-                isp <= isp - 4'd1;
+                mcause <= xir[14:6];
+                itos <= {im,c,b,a,xpc+xir[15]};
                 im <= `TRUE;
-                tr <= 6'd0;
+                ex_branch(`INT_VECT);
             end
-        `JMP:   ; // nothing to do
-        `CALL:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
-                mem_size <= word;
-                ea <= a + imm;
-                xb <= xpc + 32'd2;
-                state <= STORE1;
+        
+        // JAL: - if no register Ra was specified then the JAL is done already
+        //        by the IFETCH stage. Otherwise we need to branch.
+        `JAL,`JAL16,`JAL0:
+            if (xRa!=5'd0) begin
+                if (xRa==5'd31)
+                    ex_branch(xpc + imm);
+                else
+                    ex_branch(a + imm);
             end
-        `RET,`RET2:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
-                mem_size <= word;
-                ea <= a + 32'd2;
-                next_state(LOAD1);
-            end
-            else
-                ex_branch(lres+xir[15:11]);
+
         `Bcc,`BccU,`BccI,`BccUI:
             if (takb)
-                ex_branch(pc + br_disp);
+                ex_branch(xpc + br_disp);
 
         `R2:
             case(xfunct)
             `IRET:
                 begin
-                ex_branch(istack[isp][25:0]);
-                tr <= istack[isp][37:32];
-                im <= istack[isp][40];
-                isp <= isp + 4'd1;
+                ex_branch(itos[31:0]);
+                // r1,r2, and r3 can be updated here like this only because the
+                // pipeline is being flushed.
+                r1 <= itos[63:32];
+                r2 <= itos[95:64];
+                r3 <= itos[127:96];
+                im <= itos[128];
                 end
             `IPUSH:
                 begin
-                istack[isp-4'd1] <= ihold[40:0];
+                istack[isp-4'd1] <= itos[128:0];
                 isp <= isp - 4'd1;
                 end
             `IPOP:
                 begin
-                ihold[40:0] <= istack[isp];
+                itos[128:0] <= istack[isp];
                 isp <= isp + 4'd1;
                 end
             `ADD,`SUB,`CMP,`CMPU,
             `AND,`OR,`XOR,`NAND,`NOR,`XNOR:
                 ;
+            `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH:
+                if (ex_done==`FALSE && CAP_MULDIV) begin
+                    ex_done <= `TRUE;
+                    next_state(MUL1);
+                end
+            `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU:
+                if (ex_done==`FALSE && CAP_MULDIV) begin
+                    ex_done <= `TRUE;
+                    next_state(DIV1);
+                end
             `LHX,`LHUX:
                 if (CAP_LS_NDX) begin
                     if (ex_done==`FALSE) begin
@@ -709,8 +895,44 @@ begin
                     end
                 end
             endcase
+        `SYS:
+            case(xir[15:12])
+            `CLI:   im <= 1'b0;
+            `SEI:   im <= 1'b1;
+            `IRET:
+                begin
+                ex_branch(itos[31:0]);
+                // r1,r2, and r3 can be updated here like this only because the
+                // pipeline is being flushed.
+                r1 <= itos[63:32];
+                r2 <= itos[95:64];
+                r3 <= itos[127:96];
+                im <= itos[128];
+                end
+            `IPUSH:
+                begin
+                istack[isp-4'd1] <= itos[128:0];
+                isp <= isp - 4'd1;
+                end
+            `IPOP:
+                begin
+                itos[128:0] <= istack[isp];
+                isp <= isp + 4'd1;
+                end
+            endcase
+            
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
             ;
+        `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI:
+            if (ex_done==`FALSE && CAP_MULDIV) begin
+                ex_done <= `TRUE;
+                next_state(MUL1);
+            end
+        `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI:
+            if (ex_done==`FALSE && CAP_MULDIV) begin
+                ex_done <= `TRUE;
+                next_state(DIV1);
+            end
         `LH,`LHU:
             if (ex_done==`FALSE) begin
                 ex_done <= `TRUE;
@@ -748,6 +970,44 @@ begin
         endcase
     end // advanceEX
 end // RUN
+
+// Step1: setup operands and capture sign
+MUL1:
+    begin
+        if (xMul) mul_sign <= a[63] ^ b[63];
+        else if (xMuli) mul_sign <= a[63] ^ imm[63];
+        else if (xMulsu) mul_sign <= a[63];
+        else if (xMulsui) mul_sign <= a[63];
+        else mul_sign <= 1'b0;  // MULU, MULUI
+        if (xMul) aa <= fnAbs(a);
+        else if (xMuli) aa <= fnAbs(a);
+        else if (xMulsu) aa <= fnAbs(a);
+        else if (xMulsui) aa <= fnAbs(a);
+        else aa <= a;
+        if (xMul) bb <= fnAbs(b);
+        else if (xMuli) bb <= fnAbs(imm);
+        else if (xMulsu) bb <= b;
+        else if (xMulsui) bb <= imm;
+        else if (xMulu) bb <= b;
+        else bb <= imm; // MULUI
+        next_state(MUL2);
+    end
+// Now wait for the six stage pipeline to finish
+MUL2:   next_state(MUL3);
+MUL3:   next_state(MUL4);
+MUL4:   next_state(MUL5);
+MUL5:   next_state(MUL6);
+MUL6:   next_state(MUL7);
+MUL7:   next_state(MUL8);
+MUL8:   next_state(MUL9);
+MUL9:
+    begin
+        mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;
+        next_state(RUN);
+    end
+DIV1:
+    if (dvd_done)
+        next_state(RUN);
 
 LOAD1:
     begin
@@ -972,12 +1232,15 @@ begin
         case(xir[29:18])
         `CSR_HARTID:    ;
         `CSR_VBA:       vba <= dat;
+        `CSR_CAUSE:     mcause <= dat;
         `CSR_SCRATCH:   scratch <= dat;
-        `CSR_TASK:      tr <= dat[5:0];
+        `CSR_TASK:      tr <= dat;
         `CSR_CISC:      cisc <= dat;
-        `CSR_PCBANK:    pcbank <= dat[31:8];
-        `CSR_IHOLDL:    ihold[31:0] <= dat;
-        `CSR_IHOLDH:    ihold[63:32] <= dat;
+        `CSR_ITOS0:    itos[31:0] <= dat;
+        `CSR_ITOS1:    itos[63:32] <= dat;
+        `CSR_ITOS2:    itos[95:64] <= dat;
+        `CSR_ITOS3:    itos[127:96] <= dat;
+        `CSR_ITOS4:    itos[128] <= dat[0];
         endcase
     endcase
 end
