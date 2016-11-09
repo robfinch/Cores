@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -260,12 +260,23 @@ int equal_address(AMODE *ap1, AMODE *ap2)
 {
 	if( ap1 == NULL || ap2 == NULL )
 		return FALSE;
-  if( ap1->mode != ap2->mode )
+  if( ap1->mode != ap2->mode  && !((ap1->mode==am_ind && ap2->mode==am_indx) || (ap1->mode==am_indx && ap2->mode==am_ind)))
     return FALSE;
   switch( ap1->mode )
   {
+  case am_immed:
+	  return (ap1->offset->i == ap2->offset->i);
   case am_reg:
     return ap1->preg == ap2->preg;
+  case am_ind:
+  case am_indx:
+	  if (ap1->preg != ap2->preg)
+		  return FALSE;
+	  if (ap1->offset == ap2->offset)
+		  return TRUE;
+	  if (ap1->offset->i != ap2->offset->i)
+		  return FALSE;
+	  return TRUE;
   }
   return FALSE;
 }
@@ -407,8 +418,7 @@ void PeepoptBranch(struct ocode *ip)
 {
 	struct ocode *fwd1,*fwd2,*fwd3,*fwd4;
 
-	if (isTable888||isRaptor64)
-		return;
+	return;
 
 	fwd1 = ip->fwd;
 	if (fwd1)
@@ -794,6 +804,72 @@ static void opt_nbr()
 	}
 }
 
+
+// Process compiler hint opcodes
+
+static void PeepoptHint(struct ocode *ip)
+{
+	if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
+		return;
+
+	switch (ip->oper1->offset->i) {
+
+	// hint #1
+	// Takes care of redundant moves at the parameter setup point
+	// Code Like:
+	//    MOV r3,#constant
+	//    MOV r18,r3
+	// Translated to:
+	//    MOV r18,#constant
+	case 1:
+		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+			ip->back->oper1 = ip->fwd->oper1;
+			ip->back->fwd = ip->fwd->fwd;
+			ip->fwd->fwd->back = ip->back;
+		}
+		break;
+
+	// hint #2
+	// Takes care of redundant moves at the funtion return point
+	// Code like:
+	//     MOV R3,arg
+	//     MOV R1,R3
+	// Translated to:
+	//     MOV r1,arg
+	case 2:
+		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+			ip->back->oper1 = ip->fwd->oper1;
+			ip->back->fwd = ip->fwd->fwd;
+			ip->fwd->fwd->back = ip->back;
+		}
+		break;
+	}
+}
+
+// A store followed by a load of the same address removes
+// the load operation.
+// Eg.
+// SH   r3,Address
+// LH	r3,Address
+// Turns into
+// SH   r3,Address
+
+static void PeepoptStore(struct ocode *ip)
+{
+	if (ip->opcode==op_label || ip->fwd->opcode==op_label)
+		return;
+	if (!equal_address(ip->oper1, ip->fwd->oper1))
+		return;
+	if (!equal_address(ip->oper2, ip->fwd->oper2))
+		return;
+	if (ip->opcode==op_sh && ip->fwd->opcode!=op_lh)
+		return;
+	if (ip->opcode==op_sw && ip->fwd->opcode!=op_lw)
+		return;
+	ip->fwd = ip->fwd->fwd;
+	ip->fwd->back = ip;
+}
+
 /*
  *      peephole optimizer. This routine calls the instruction
  *      specific optimization routines above for each instruction
@@ -804,6 +880,9 @@ static void opt_peep()
 	struct ocode    *ip;
 	int rep;
 	
+	if (::opt_nopeep)
+		return;
+
 	opt_nbr();
 	for (rep = 0; rep < 2; rep++)
 	{
@@ -876,6 +955,13 @@ static void opt_peep()
 			case op_label:
                     PeepoptLabel(ip);
                     break;
+			case op_hint:
+					PeepoptHint(ip);
+					break;
+			case op_sh:
+			case op_sw:
+					PeepoptStore(ip);
+					break;
             }
 	       ip = ip->fwd;
         }

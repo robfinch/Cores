@@ -65,6 +65,7 @@ Compiler compiler;
 
 int main(int argc, char **argv)
 {
+	opt_nopeep = FALSE;
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
@@ -103,13 +104,13 @@ int	options(char *s)
         for (nn = 2; s[nn]; nn++) {
             switch(s[nn]) {
             case 'r':     opt_noregs = TRUE; break;
-            case 'p':     opt_nopeep = TRUE; break;
+			case 'p':     ::opt_nopeep = TRUE; break;
             case 'x':     opt_noexpr = TRUE; break;
             }
         }
         if (nn==2) {
             opt_noregs = TRUE;
-            opt_nopeep = TRUE;
+            ::opt_nopeep = TRUE;
             opt_noexpr = TRUE;
             optimize = FALSE;
         }

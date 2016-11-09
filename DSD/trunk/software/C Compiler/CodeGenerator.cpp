@@ -1205,7 +1205,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		    GenStore(ap2,ap1,ssize);
         }
 		else if (ap2->mode == am_immed) {
-            if (ap2->offset->i == 0) {
+            if (ap2->offset->i == 0 && ap2->offset->nodetype != en_labcon) {
                 GenStore(makereg(0),ap1,ssize);
             }
             else {

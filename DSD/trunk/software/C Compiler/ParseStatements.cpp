@@ -589,12 +589,8 @@ Statement *ParseSwitchStatement()
 	Statement *snp; 
     Statement *head, *tail; 
 
-	currentFn->UsesPredicate = TRUE;
     snp = NewStatement(st_switch, TRUE);
-	snp->predreg = iflevel;
 	iflevel++;
-	if ((iflevel > maxPn-1) && isThor)
-	    error(ERR_OUTOFPREDS);
     if( expression(&(snp->exp)) == NULL ) 
         error(ERR_EXPREXPECT); 
     needpunc(begin,36); 

@@ -173,7 +173,7 @@ void GenerateWhile(struct snode *stmt)
 		initstack();
 		GenerateFalseJump(stmt->exp,breaklab,stmt->predreg);
 		GenerateStatement(stmt->s1);
-		GenerateMonadic(isThor ? op_br:op_bra,0,make_clabel(contlab));
+		GenerateMonadic(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;        /* restore old break label */
     }
@@ -203,7 +203,7 @@ void GenerateUntil(Statement *stmt)
             initstack();
             GenerateTrueJump(stmt->exp,breaklab,stmt->predreg);
             GenerateStatement(stmt->s1);
-            GenerateMonadic(isThor ? op_br:op_bra,0,make_clabel(contlab));
+            GenerateMonadic(op_bra,0,make_clabel(contlab));
             GenerateLabel(breaklab);
             breaklab = lab2;        /* restore old break label */
         }
@@ -244,7 +244,7 @@ void GenerateFor(struct snode *stmt)
     initstack();
     if( stmt->incrExpr != NULL )
             ReleaseTempRegister(GenerateExpression(stmt->incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(stmt->incrExpr)));
-    GenerateMonadic(isThor ? op_br:op_bra,0,make_clabel(loop_label));
+    GenerateMonadic(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -267,7 +267,7 @@ void GenerateForever(Statement *stmt)
         breaklab = exit_label;
         GenerateStatement(stmt->s1);
 	}
-    GenerateMonadic(isThor ? op_br:op_bra,0,make_clabel(loop_label));
+    GenerateMonadic(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -295,7 +295,7 @@ void GenerateIf(Statement *stmt)
     GenerateStatement(stmt->s1);
     if( stmt->s2 != 0 )             /* else part exists */
     {
-        GenerateDiadic(isThor ? op_br:op_bra,0,make_clabel(lab2),0);
+        GenerateDiadic(op_bra,0,make_clabel(lab2),0);
         if (mixedSource)
           	GenerateMonadic(op_rem,0,make_string("; else"));
         GenerateLabel(lab1);
@@ -378,10 +378,9 @@ void GenerateSwitch(Statement *stmt)
 	int             curlab;
 	int *bf;
 	int nn;
-	int predreg;
   struct snode    *defcase;
   struct amode    *ap;
-	predreg = stmt->predreg;
+
   curlab = nextlabel++;
   defcase = 0;
   initstack();
@@ -405,23 +404,7 @@ void GenerateSwitch(Statement *stmt)
             {
 				bf = (int *)stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
-                    if (isFISA64) {
-                        ap2 = GetTempRegister();
-                        GenerateTriadic(op_cmpi,0,ap2,ap,make_immed(bf[nn]));
-						GenerateDiadic(op_beq,0,ap2,make_clabel(curlab));
-						ReleaseTempRegister(ap2);
-                    }
-					else if (isTable888) {
-						GenerateTriadic(op_cmp,0,makereg(244),makereg(1),make_immed(bf[nn]));
-						GenerateDiadic(op_beq,0,makereg(244),make_clabel(curlab));
-					}
-					else if (isRaptor64) {
-						GenerateTriadic(op_beq,0,ap,make_immed(bf[nn]),make_label(curlab));
-					}
-					else {
-						GenerateTriadic(op_cmp,0,makepred(predreg),ap,make_immed(bf[nn]));
-						GeneratePredicatedMonadic(predreg,PredOp(op_eq),op_br,0,make_clabel(curlab));
-					}
+					GenerateTriadic(op_beqi,0,ap,make_immed(bf[nn]),make_clabel(curlab));
 				}
 		        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
 	            stmt->label = (int *)curlab;
@@ -431,9 +414,9 @@ void GenerateSwitch(Statement *stmt)
             stmt = stmt->next;
         }
         if( defcase == NULL )
-            GenerateMonadic(isThor ? op_br : op_bra,0,make_clabel(breaklab));
+            GenerateMonadic(op_bra,0,make_clabel(breaklab));
         else
-			GenerateMonadic(isThor ? op_br : op_bra,0,make_clabel((int64_t)defcase->label));
+			GenerateMonadic(op_bra,0,make_clabel((int)defcase->label));
     ReleaseTempRegister(ap);
 }
 
@@ -446,11 +429,11 @@ void GenerateCase(Statement *stmt)
     {
 		if( stmt->s1 != (Statement *)NULL )
 		{
-			GenerateLabel((int64_t)stmt->label);
+			GenerateLabel((int)stmt->label);
 			GenerateStatement(stmt->s1);
 		}
 		else if( stmt->next == (Statement *)NULL )
-			GenerateLabel((int64_t)stmt->label);
+			GenerateLabel((int)stmt->label);
 		stmt = stmt->next;
     }
 }

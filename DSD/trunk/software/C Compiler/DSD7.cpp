@@ -469,6 +469,7 @@ void GenerateReturn(Statement *stmt)
   {
 		initstack();
 		ap = GenerateExpression(stmt->exp,F_REG|F_FPREG|F_IMMED,2);
+		GenerateMonadic(op_hint,0,make_immed(2));
 		if (ap->mode == am_immed)
 		    GenLdi(makereg(1),ap);
 		else if (ap->mode == am_reg) {
@@ -636,6 +637,7 @@ static int GeneratePushParameter(ENODE *ep, int regno)
         else {
 */	
 			if (regno) {
+				GenerateMonadic(op_hint,0,make_immed(1));
 				GenerateDiadic(op_mov,0,makereg(regno), ap);
 				GenerateTriadic(op_subi,0,makereg(regSP),makereg(regSP),make_immed(2));
 			}

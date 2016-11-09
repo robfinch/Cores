@@ -101,6 +101,8 @@ enum e_op {
 		op_fsmul, op_fssub, op_fsdiv, op_fsadd, op_fsneg, op_fscmp,
 		op_fs2d, op_i2d, op_i2t,
         op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
+
+		op_hint,
         op_empty };
 
 enum e_seg {

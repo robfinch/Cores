@@ -104,7 +104,7 @@ int isTask = FALSE;
 int isNocall = FALSE;
 int optimize = TRUE;
 int opt_noregs = FALSE;
-int opt_nopeep = FALSE;
+int opt_nopeep;
 int opt_noexpr = FALSE;
 int exceptions = FALSE;
 int mixedSource = FALSE;

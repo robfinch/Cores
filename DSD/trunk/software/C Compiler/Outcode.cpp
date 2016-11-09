@@ -140,6 +140,8 @@ struct oplst {
 		{"sfd", op_sfd}, {"lfd", op_lfd}, {"fmov.d", op_fdmov},
 		{"fix2flt", op_fix2flt}, {"mtfp", op_mtfp}, {"flt2fix",op_flt2fix}, {"mffp",op_mffp},
 		{"mv2fix",op_mv2fix}, {"mv2flt", op_mv2flt},
+
+		{"hint", op_hint},
                 {0,0} };
 
 static char *pad(char *op)
