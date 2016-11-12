@@ -92,6 +92,7 @@ int main(int argc, char **argv)
 	//getchar();
 	dfs.printf("Exiting\n");
 	dfs.close();
+	getchar();
  	exit(0);
 	return 0;
 }
@@ -154,7 +155,7 @@ int PreProcessFile(char *nm)
 	static char outname[1000];
 	static char sysbuf[500];
 
-	strcpy(outname, nm);
+	strcpy_s(outname, sizeof(outname), nm);
 	makename(outname,".fpp");
 	snprintf(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
 	return system(sysbuf);
@@ -162,12 +163,10 @@ int PreProcessFile(char *nm)
 
 int openfiles(char *s)
 {
-	int     ofl,oflg;
-	int i;
 	char *p;
-        strcpy(infile,s);
-        strcpy(listfile,s);
-        strcpy(outfile,s);
+        strcpy_s(infile,sizeof(infile),s);
+        strcpy_s(listfile,sizeof(listfile),s);
+        strcpy_s(outfile,sizeof(outfile),s);
   dbgfile = s;
 
 		//strcpy(outfileG,s);

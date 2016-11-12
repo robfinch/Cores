@@ -142,10 +142,21 @@ void Leave(char *p, int n)
 ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
 {
 	ENODE *ep;
-  ep = (ENODE *)xalloc(sizeof(ENODE));
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = FALSE;
-	ep->isUnsigned = FALSE;
+	ep = (ENODE *)xalloc(sizeof(ENODE));
+	ep->nodetype = (enum e_node)nt;
+
+	if (v1!=nullptr && v2 != nullptr) {
+		ep->constflag = v1->constflag && v2->constflag;
+		ep->isUnsigned = v1->isUnsigned && v2->isUnsigned;
+	}
+	else if (v1 != nullptr) {
+		ep->constflag = v1->constflag;
+		ep->isUnsigned = v1->isUnsigned;
+	}
+	else if (v2 != nullptr) {
+		ep->constflag = v2->constflag;
+		ep->isUnsigned = v2->isUnsigned;
+	}
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->p[0] = v1;
@@ -400,10 +411,6 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_bitfield:
 			if (tp->isUnsigned){
 				if (tp->size==1)
-					*node = makenode(en_ubfieldref, *node, (ENODE *)NULL);
-				else if (tp->size==2)
-					*node = makenode(en_ucfieldref, *node, (ENODE *)NULL);
-				else if (tp->size==4)
 					*node = makenode(en_uhfieldref, *node, (ENODE *)NULL);
 				else
 					*node = makenode(en_wfieldref, *node, (ENODE *)NULL);
@@ -411,10 +418,6 @@ TYP *deref(ENODE **node, TYP *tp)
 			}
 			else {
 				if (tp->size==1)
-					*node = makenode(en_bfieldref, *node, (ENODE *)NULL);
-				else if (tp->size==2)
-					*node = makenode(en_cfieldref, *node, (ENODE *)NULL);
-				else if (tp->size==4)
 					*node = makenode(en_hfieldref, *node, (ENODE *)NULL);
 				else
 					*node = makenode(en_wfieldref, *node, (ENODE *)NULL);
@@ -424,7 +427,7 @@ TYP *deref(ENODE **node, TYP *tp)
 			/*
 			* maybe it should be 'unsigned'
 			*/
-			(*node)->etype = (enum e_bt)stdint.type;
+			(*node)->etype = tp->type;//(enum e_bt)stdint.type;
 			(*node)->esize = tp->size;
 			tp = &stdint;
 			break;
@@ -452,6 +455,7 @@ TYP *deref(ENODE **node, TYP *tp)
 			break;
     }
 	(*node)->isVolatile = tp->isVolatile;
+	(*node)->constflag = tp->isConst;
   dfs.printf("</Deref>");
     return tp;
 }
@@ -636,7 +640,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				if (sp->IsRegister) {
 					(*node)->nodetype = en_regvar;
 					(*node)->tp = sp->tp;
-					(*node)->tp->val_flag = TRUE;
+					//(*node)->tp->val_flag = TRUE;
 				}
 			}
       (*node)->esize = sp->tp->size;
@@ -1106,17 +1110,6 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 }
 
 
-double MultiplyFact(int num, double *fact)
-{
-  double res;
-  int nn;
-
-  res = 1.0;
-  for (nn = 1; nn <= num; nn++)
-    res = res * fact[nn];
-  return res;
-}
-
 // ----------------------------------------------------------------------------
 // A Postfix Expression is:
 //		primary
@@ -1146,18 +1139,21 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
     Enter("<ParsePostfix>");
     *node = (ENODE *)NULL;
 	tp1 = ParsePrimaryExpression(&ep1, got_pa);
-	pnode = ep1;
-//	if (ep1==NULL)
+	if (ep1==NULL) {
+//		ep1 = makeinode(en_icon, 0);
+//		goto j1;
 //	   printf("DIAG: ParsePostFix: ep1 is NULL\r\n");
+	}
 	if (tp1 == NULL) {
         Leave("</ParsePostfix>",0);
-		return (TYP *)NULL;
+		return ((TYP *)NULL);
     }
 	pep1 = nullptr;
 	while(1) {
 		pop = lastst;
 		switch(lastst) {
 		case openbr:
+			pnode = ep1;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1212,20 +1208,20 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			}
 			tp2 = ep1->tp;
 			if (tp2->type == bt_pointer) {
-        dfs.printf("Got function pointer.\n");
+				dfs.printf("Got function pointer.\n");
 			}
 			dfs.printf("tp2->type=%d",tp2->type);
-		  name = lastid;
-		  NextToken();
-      ep2 = ArgumentList(ep1->p[2],&typearray);
-      typearray.Print();
-      dfs.printf("Got Type: %d",tp1->type);
-      if (tp1->type==bt_pointer) {
-        dfs.printf("Got function pointer.\n");
-        ep1 = makenode(en_fcall,ep1,ep2);
-  	    currentFn->IsLeaf = FALSE;
-        break;
-      }
+			name = lastid;
+			NextToken();
+			ep2 = ArgumentList(ep1->p[2],&typearray);
+			typearray.Print();
+			dfs.printf("Got Type: %d",tp1->type);
+			if (tp1->type==bt_pointer) {
+				dfs.printf("Got function pointer.\n");
+				ep1 = makenode(en_fcall,ep1,ep2);
+				currentFn->IsLeaf = FALSE;
+				break;
+			}
       dfs.printf("openpa calling gsearch2");
       sp = nullptr;
       ii = tp1->lst.FindRising(name);
@@ -1309,35 +1305,35 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				break;
 			}
 			if (sp->IsPrivate && sp->parent != currentFn->parent) {
-        error(ERR_PRIVATE);
+				error(ERR_PRIVATE);
 				break;
 			}
-      tp1 = sp->tp;
-      dfs.printf("tp1->type:%d",tp1->type);
-      if (tp1==nullptr)
-        throw new C64PException(ERR_NULLPOINTER,5);
+			tp1 = sp->tp;
+			dfs.printf("tp1->type:%d",tp1->type);
+			if (tp1==nullptr)
+				throw new C64PException(ERR_NULLPOINTER,5);
 			if (tp1->type==bt_ifunc || tp1->type==bt_func) {
 				// build the name vector and create a nacon node.
 				dfs.printf("%s is a func\n",(char *)sp->name->c_str());
 				NextToken();
 				if (lastst==openpa) {
-				  NextToken();
-				  ep2 = ArgumentList(pep1,&typearray);
-				  typearray.Print();
-				  sp = SYM::FindExactMatch(ii,name,bt_long,&typearray);
-				  if (sp) {
-//				    sp = TABLE::match[TABLE::matchno-1];
-				    ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
-				    ep1 = makenode(en_fcall,ep3,ep2);
-				    tp1 = sp->tp->GetBtp();
-				    currentFn->IsLeaf = FALSE;
-          }
-          else {
-            error(ERR_METHOD_NOTFOUND);
-            goto j1;
-          }
-          ep1->SetType(tp1);
-          break;
+					NextToken();
+					ep2 = ArgumentList(pep1,&typearray);
+					typearray.Print();
+					sp = SYM::FindExactMatch(ii,name,bt_long,&typearray);
+					if (sp) {
+//						sp = TABLE::match[TABLE::matchno-1];
+						ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
+						ep1 = makenode(en_fcall,ep3,ep2);
+						tp1 = sp->tp->GetBtp();
+						currentFn->IsLeaf = FALSE;
+					}
+					else {
+						error(ERR_METHOD_NOTFOUND);
+						goto j1;
+					}
+					ep1->SetType(tp1);
+					break;
 				}
 				// Else: we likely wanted the addres of the function since the
         // function is referenced without o parameter list indicator. Goto
@@ -1346,7 +1342,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			}
 			else {
 j2:
-      dfs.printf("tp1->type:%d",tp1->type);
+				dfs.printf("tp1->type:%d",tp1->type);
 				qnode = makeinode(en_icon,sp->value.i);
 				qnode->constflag = TRUE;
 				iu = ep1->isUnsigned;
@@ -1356,17 +1352,18 @@ j2:
 				ep1->esize = 2;
 				ep1->p[2] = pep1;
 				if (tp1->type==bt_pointer && (tp1->GetBtp()->type==bt_func || tp1->GetBtp()->type==bt_ifunc))
-				  dfs.printf("Pointer to func");
-	      else
-			    tp1 = CondDeref(&ep1,tp1);
-        ep1->SetType(tp1);
-        dfs.printf("tp1->type:%d",tp1->type);
-      }
+					dfs.printf("Pointer to func");
+				else
+					tp1 = CondDeref(&ep1,tp1);
+				ep1->SetType(tp1);
+				dfs.printf("tp1->type:%d",tp1->type);
+			}
 			if (tp1==nullptr)
 				getchar();
-      NextToken();       /* past id */
+			NextToken();       /* past id */
 			dfs.printf("B");
-      break;
+			break;
+
 		case autodec:
 			NextToken();
 			Autoincdec(tp1,&ep1,1);
@@ -1870,6 +1867,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2)
 		case bt_exception:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
 		}
 		return tp1;
+	case bt_bitfield:
 	case bt_exception:
     case bt_long:
     case bt_ulong:

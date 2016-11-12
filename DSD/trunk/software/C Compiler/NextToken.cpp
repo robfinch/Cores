@@ -278,7 +278,7 @@ void getbase(int64_t b)
                 }
 		if (lastch=='L' || lastch=='U')	// ignore a 'L'ong suffix and 'U'nsigned
 			getch();
-        ival = i;
+        ival = (int)i;
 /*
         rval.exp = 0x804E;
         rval.man1 = (i1 >> 32) & 0xffffL;

@@ -151,7 +151,7 @@ ucont:                  if(tp->sname->length() == 0)
 void list_var(SYM *sp, int i)
 {
 	TypeArray *ta;
-	int nn;
+	
 		int     j;
         for(j = i; j; --j)
                 lfs.printf("    ");

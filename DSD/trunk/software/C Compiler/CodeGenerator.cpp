@@ -427,8 +427,7 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
 	else {
 			switch( isize )
 			{
-			case 1:	GenerateDiadic(op_sext8,0,ap,ap); break;
-			case 2:	GenerateDiadic(op_sext16,0,ap,ap); break;
+			case 1:	GenerateDiadic(op_sxh,0,ap,ap); break;
 			case 4:	GenerateDiadic(op_sext32,0,ap,ap); break;
 			}
 	}
@@ -675,7 +674,10 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
           }
           else
              ap1->mode = am_ind;
-		ap1->offset = 0;	// ****
+		  if (node->p[0]->constflag==TRUE)
+			  ap1->offset = node->p[0];
+		  else
+			ap1->offset = nullptr;	// ****
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
@@ -1390,14 +1392,15 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	static int ndx;
 	static int numDiags = 0;
 
-    Enter("GenExperssion"); 
+    Enter("GenExpression"); 
     if( node == (ENODE *)NULL )
     {
+		throw new C64PException(ERR_NULLPOINTER, 'G');
 		numDiags++;
         printf("DIAG - null node in GenerateExpression.\n");
 		if (numDiags > 100)
 			exit(0);
-         Leave("GenExperssion",1); 
+         Leave("GenExpression",1); 
         return (AMODE *)NULL;
     }
 	//size = node->esize;
@@ -1523,14 +1526,14 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_ucfieldref:
 	case en_uhfieldref:
 	case en_uwfieldref:
-			ap1 = GenerateBitfieldDereference(node,flags,size);
+			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,0) : GenerateBitfieldDereference(node,flags,size);
 			ap1->isUnsigned = TRUE;
 			return ap1;
 	case en_wfieldref:
 	case en_bfieldref:
 	case en_cfieldref:
 	case en_hfieldref:
-			ap1 = GenerateBitfieldDereference(node,flags,size);
+			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,1) : GenerateBitfieldDereference(node,flags,size);
 			return ap1;
 	case en_bregvar:
             ap1 = allocAmode();
@@ -1712,17 +1715,17 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_void:
             natsize = GetNaturalSize(node->p[0]);
             ReleaseTempRegister(GenerateExpression(node->p[0],F_ALL | F_NOVALUE,natsize));
-            return GenerateExpression(node->p[1],flags,size);
+            return (GenerateExpression(node->p[1],flags,size));
 
     case en_fcall:
-		return GenerateFunctionCall(node,flags);
+		return (GenerateFunctionCall(node,flags));
 
 	case en_cubw:
 	case en_cubu:
 	case en_cbu:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
 			GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0xff));
-			return ap1;
+			return (ap1);
 	case en_cucw:
 	case en_cucu:
 	case en_ccu:
@@ -1741,7 +1744,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			return ap1;
 	case en_ccw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateDiadic(op_sxc,0,ap1,ap1);
+			GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
 	case en_chw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);

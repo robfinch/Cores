@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -374,7 +374,6 @@ void GenerateDoUntil(struct snode *stmt)
  */
 void GenerateSwitch(Statement *stmt)
 {    
-  AMODE *ap2;
 	int             curlab;
 	int *bf;
 	int nn;
@@ -522,7 +521,7 @@ void GenerateTry(Statement *stmt)
 
     a = make_clabel(throwlab);
     a->mode = am_immed;
-	GenerateDiadic(op_ldi,0,makebreg(regXLR),a);
+	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
 	GenerateStatement(stmt->s1);
   GenerateMonadic(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
@@ -538,7 +537,7 @@ void GenerateTry(Statement *stmt)
 		if (stmt->s2==(Statement *)99999)
 			;
 		else {
-			GenerateTriadic(op_bnei,0,makereg(2),make_immed((int64_t)stmt->s2),make_clabel(nextlabel));
+			GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_clabel(nextlabel));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = (ENODE *)stmt->label;
@@ -559,7 +558,7 @@ void GenerateTry(Statement *stmt)
   GenerateLabel(lab1);
     a = make_clabel(oldthrow);
     a->mode = am_immed;
-	GenerateDiadic(op_ldi,0,makebreg(regXLR),a);
+	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
 }
 
 void GenerateThrow(Statement *stmt)
@@ -576,11 +575,11 @@ void GenerateThrow(Statement *stmt)
 		else if( ap->mode != am_reg)
 			GenerateDiadic(op_lw,0,makereg(1),ap);
 		else if (ap->preg != 1 )
-			GenerateTriadic(op_or,0,makereg(1),ap,makereg(0));
+			GenerateDiadic(op_mov,0,makereg(1),ap);
 		ReleaseTempRegister(ap);
-		GenerateDiadic(op_ldi,0,makereg(2),make_immed((int64_t)stmt->label));
+		GenerateDiadic(op_ldi,0,makereg(2),make_immed((int)stmt->label));
 	}
-	GenerateMonadic(isThor?op_br:op_bra,0,make_clabel(throwlab));
+	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
 
 void GenerateCheck(Statement * stmt)

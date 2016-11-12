@@ -396,12 +396,10 @@ void PutAddressMode(AMODE *ap)
 	switch( ap->mode )
     {
     case am_immed:
-		ofs.write("#");
+			ofs.write("#");
+			// Fall through
     case am_direct:
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
-            break;
-    case am_breg:
-			ofs.write(BrRegMoniker(ap->preg));
             break;
     case am_reg:
 			ofs.write(RegMoniker(ap->preg));
@@ -409,60 +407,47 @@ void PutAddressMode(AMODE *ap)
     case am_fpreg:
             ofs.printf("fp%d", (int)ap->preg);
             break;
-    case am_predreg:
-			ofs.write(PredRegMoniker(ap->preg));
-            break;
     case am_ind:
-    case am_indx:
-			//if (ap->offset != NULL) {
-			//	if (ap->offset->i != 0)
-			//		fprintf(output, "%I64d[r%d]", ap->offset->i, ap->preg);
-			//	else
-			//		fprintf(output,"[r%d]",ap->preg);
-			//}
-			//else
-			if (ap->offset != NULL && !is816) {
-//                if (ap->offset->i)
-                	PutConstant(ap->offset,0,0);
-           }
-//				if (ap->offset->i)
-//					fprintf(output, "%I64d", ap->offset->i);
-				ofs.printf("[%s]",RegMoniker(ap->preg));
-				if (is816)
-				   ofs.write(",y");
+			ofs.printf("[%s]",RegMoniker(ap->preg));
 			break;
-	case am_brind:
-			ofs.printf("[%s]",BrRegMoniker(ap->preg));
-			break;
-    case am_ainc:
-            ofs.printf("******[r%d]", (int)ap->preg);
-			ofs.printf("addi\ta%d,a%d,#",ap->preg,ap->preg);
-            break;
-    case am_adec:
-			ofs.printf("subi\ta%d,a%d,#",ap->preg,ap->preg);
-            ofs.printf("******[a%d]",(int)ap->preg);
-            break;
-/*
     case am_indx:
-			if (ap->offset != 0)
-				PutConstant(ap->offset,0);
-            fprintf(output,"[%s]",RegMoniker(ap->preg));
-            break;
-*/
-    case am_indx2:
-//			if (ap->offset != 0)
-//				PutConstant(ap->offset,0,0);
+			// It's not known the function is a leaf routine until code
+			// generation time. So the parameter offsets can't be determined
+			// until code is being output. This bit of code first adds onto
+			// parameter offset the size of the return block, then later
+			// subtracts it off again.
+			if (ap->offset) {
+				if (ap->preg==regBP) {
+					if (ap->offset->sym) {
+						if (ap->offset->sym->IsParameter) {	// must be an parameter
+							ap->offset->i += GetReturnBlockSize()-(currentFn->IsLeaf  ? 2 : 0);
+						}
+					}
+				}
+           		PutConstant(ap->offset,0,0);
+				if (ap->preg==regBP) {
+					if (ap->offset->sym) {
+						if (ap->offset->sym->IsParameter) {
+							ap->offset->i -= GetReturnBlockSize()-(currentFn->IsLeaf  ? 2 : 0);
+						}
+					}
+				}
+			}
+			ofs.printf("[%s]",RegMoniker(ap->preg));
+			break;
+
+	case am_indx2:
 			if (ap->scale==1 || ap->scale==0)
 	            ofs.printf("[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
 			else
 		        ofs.printf("[%s+%s*%d]",RegMoniker(ap->sreg),RegMoniker(ap->preg),ap->scale);
             break;
-    case am_indx3:
-//			if (ap->offset->i != 0)
-//	            PutConstant(ap->offset,0,0);
+
+	case am_indx3:
             ofs.printf("[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
             break;
-    case am_mask:
+
+	case am_mask:
             put_mask((int)ap->offset);
             break;
     default:
@@ -736,7 +721,7 @@ void GenerateReference(SYM *sp,int offset)
 
 void genstorage(int nbytes)
 {       nl();
-        ofs.printf("\tfill.b\t%d,0x00\n",nbytes);
+        ofs.printf("\tfill.h\t%d,0x00\n",nbytes);
 }
 
 void GenerateLabelReference(int n)

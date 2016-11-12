@@ -64,7 +64,7 @@ static int round2(int n)
 // Return the stack offset where parameter storage begins.
 int GetReturnBlockSize()
 {
-    return 6;            /* size of return block */
+    return (exceptions ? 6 : 4);            /* size of return block */
 }
 
 static bool SameType(TYP *tp1, TYP *tp2)

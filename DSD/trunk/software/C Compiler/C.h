@@ -8,8 +8,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
-//  - 64 bit CPU
+// C32 - 'C' derived language compiler
+//  - 32 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -45,14 +45,6 @@
  */
 
 /*      compiler header file    */
-
-typedef __int8 int8_t;
-typedef __int16 int16_t;
-typedef __int64 int64_t;
-
-typedef unsigned __int8 uint8_t;
-typedef unsigned __int16 uint16_t;
-typedef unsigned __int64 uint64_t;
 
 class ENODE;
 
@@ -199,6 +191,7 @@ public:
 	SYM *parms;					      // List of parameters associated with symbol
 	SYM *nextparm;
 	DerivedMethod *derivitives;
+	unsigned int IsParameter : 1;
 	unsigned int IsRegister : 1;
 	unsigned int IsPrototype : 1;
 	unsigned int IsTask : 1;

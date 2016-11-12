@@ -122,7 +122,7 @@ int Compiler::PreprocessFile(char *nm)
 	static char outname[1000];
 	static char sysbuf[500];
 
-	strcpy(outname, nm);
+	strcpy_s(outname, sizeof(outname), nm);
 	makename(outname,".fpp");
 	sprintf_s(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
 	return system(sysbuf);

@@ -285,6 +285,7 @@ extern char *opstr(int op);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern void GenerateLabel(int labno);
+extern void GenerateZeradic(int op, int len);
 extern void GenerateMonadic(int op, int len, AMODE *ap1);
 extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
@@ -353,6 +354,7 @@ extern void tmpReset();
 extern int tmpAlloc(int);
 extern void tmpFree(int);
 
+extern int GetReturnBlockSize();
 
 enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 

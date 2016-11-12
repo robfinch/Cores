@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -146,7 +146,7 @@ void Declaration::ParseLong()
 		NextToken();
 	}
 	else if (lastst==kw_float) {
-		head = (TYP *)TYP::Make(bt_double,2);
+		head = (TYP *)TYP::Make(bt_double,4);
 		tail = head;
 		NextToken();
 	}
@@ -177,7 +177,7 @@ void Declaration::ParseLong()
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
 	head->isConst = isConst;
-	bit_max = 64;
+	bit_max = 32;
 }
 
 void Declaration::ParseInt()
@@ -210,18 +210,18 @@ void Declaration::ParseInt()
 		isNocall = TRUE;
 		NextToken();
 	}
-	bit_max = 64;
+	bit_max = 32;
 //printf("Leave ParseInt\r\n");
 }
 
 void Declaration::ParseInt32()
 {
 	if (isUnsigned) {
-		head = (TYP *)TYP::Make(bt_ushort,4);
+		head = (TYP *)TYP::Make(bt_ushort,2);
 		tail = head;
 	}
 	else {
-		head = (TYP *)TYP::Make(bt_short,4);
+		head = (TYP *)TYP::Make(bt_short,2);
 		tail = head;
 	}
 	bit_max = 32;
@@ -276,7 +276,7 @@ void Declaration::ParseByte()
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
 	head->isConst = isConst;
-	bit_max = 8;
+	bit_max = 16;
 }
 
 SYM *Declaration::ParseId()
@@ -1109,6 +1109,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 		  SetType(sp);
 		  sp->IsPascal = isPascal;
 		  sp->IsRegister = isRegister;
+		  sp->IsParameter = parsingParameterList > 0;
 		  isRegister = false;
 		  if (sp->parent < 0)// was nullptr
 			  sp->parent = parent->GetIndex();

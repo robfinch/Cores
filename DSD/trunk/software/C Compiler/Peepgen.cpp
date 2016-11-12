@@ -79,6 +79,27 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
   AddToPeepList(cd);
 }
 
+void GenerateZeradic(int op, int len)
+{
+  dfs.printf("Enter GenerateZeradic\r\n");
+	struct ocode *cd;
+dfs.printf("A");
+  cd = (struct ocode *)allocx(sizeof(struct ocode));
+dfs.printf("B");
+	cd->predop = 1;
+	cd->pregreg = 15;
+  cd->opcode = op;
+  cd->length = len;
+  cd->oper1 = NULL;
+dfs.printf("C");
+  cd->oper2 = NULL;
+	cd->oper3 = NULL;
+	cd->oper4 = NULL;
+dfs.printf("D");
+  AddToPeepList(cd);
+  dfs.printf("Leave GenerateZeradic\r\n");
+}
+
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
   dfs.printf("Enter GenerateMonadic\r\n");
@@ -216,7 +237,7 @@ void flush_peep()
   while( peep_head != NULL )
   {
 		if( peep_head->opcode == op_label )
-			put_label((int64_t)peep_head->oper1,"",GetNamespace(),'C');
+			put_label((int)peep_head->oper1,"",GetNamespace(),'C');
 		else
 			put_ocode(peep_head);
 		peep_head = peep_head->fwd;
@@ -274,6 +295,8 @@ int equal_address(AMODE *ap1, AMODE *ap2)
 		  return FALSE;
 	  if (ap1->offset == ap2->offset)
 		  return TRUE;
+	  if (ap1->offset == NULL || ap2->offset==NULL)
+		  return FALSE;
 	  if (ap1->offset->i != ap2->offset->i)
 		  return FALSE;
 	  return TRUE;
@@ -339,6 +362,92 @@ static void PeepoptSub(struct ocode *ip)
 		}
 	}
 	return;
+}
+
+static bool IsSubiSP(struct ocode *ip)
+{
+	if (ip->opcode==op_subi) {
+		if (ip->oper1->preg==regSP && ip->oper2->preg==regSP) {
+			return (true);
+		}
+	}
+	return (false);
+}
+
+static void MergeSubi(struct ocode *first, struct ocode *last, int64_t amt)
+{
+	struct ocode *ip;
+
+	if (first==nullptr)
+		return;
+
+	// First remove all the excess subtracts
+	for (ip = first; ip && ip != last; ip = ip->fwd) {
+		if (IsSubiSP(ip)) {
+			ip->back->fwd = ip->fwd;
+			ip->fwd->back = ip->back;
+		}
+	}
+	// Set the amount of the last subtract to the total amount
+	if (ip)	 {// there should be one
+		ip->oper3->offset->i = amt;
+	}
+}
+
+static bool IsFlowControl(struct ocode *ip)
+{
+	if (ip->opcode==op_jal ||
+		ip->opcode==op_jmp ||
+		ip->opcode==op_ret ||
+		ip->opcode==op_call ||
+		ip->opcode==op_bra ||
+		ip->opcode==op_beq ||
+		ip->opcode==op_bne ||
+		ip->opcode==op_blt ||
+		ip->opcode==op_ble ||
+		ip->opcode==op_bgt ||
+		ip->opcode==op_bge ||
+		ip->opcode==op_bltu ||
+		ip->opcode==op_bleu ||
+		ip->opcode==op_bgtu ||
+		ip->opcode==op_bgeu ||
+		ip->opcode==op_beqi ||
+		ip->opcode==op_bnei ||
+		ip->opcode==op_blti ||
+		ip->opcode==op_blei ||
+		ip->opcode==op_bgti ||
+		ip->opcode==op_bgei ||
+		ip->opcode==op_bltui ||
+		ip->opcode==op_bleui ||
+		ip->opcode==op_bgtui ||
+		ip->opcode==op_bgeui
+		)
+		return (true);
+	return (false);
+}
+
+// 'subui'
+//
+static void PeepoptSubSP()
+{  
+	struct ocode *ip;
+	struct ocode *first_subi = nullptr;
+	struct ocode *last_subi = nullptr;
+	int64_t amt = 0;
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (IsSubiSP(ip)) {
+			if (first_subi==nullptr)
+				last_subi = first_subi = ip;
+			else
+				last_subi = ip;
+			amt += ip->oper3->offset->i;
+		}
+		else if (ip->opcode==op_push || IsFlowControl(ip)) {
+			MergeSubi(first_subi, last_subi, amt);
+			first_subi = last_subi = nullptr;
+		}
+	}
 }
 
 /*
@@ -827,6 +936,10 @@ static void PeepoptHint(struct ocode *ip)
 			ip->back->fwd = ip->fwd->fwd;
 			ip->fwd->fwd->back = ip->back;
 		}
+		else {
+			ip->back->fwd = ip->fwd;
+			ip->fwd->back = ip->back;
+		}
 		break;
 
 	// hint #2
@@ -841,6 +954,10 @@ static void PeepoptHint(struct ocode *ip)
 			ip->back->oper1 = ip->fwd->oper1;
 			ip->back->fwd = ip->fwd->fwd;
 			ip->fwd->fwd->back = ip->back;
+		}
+		else {
+			ip->back->fwd = ip->fwd;
+			ip->fwd->back = ip->back;
 		}
 		break;
 	}
@@ -868,6 +985,49 @@ static void PeepoptStore(struct ocode *ip)
 		return;
 	ip->fwd = ip->fwd->fwd;
 	ip->fwd->back = ip;
+}
+
+// This optimization eliminates an 'ANDI' instruction when the value
+// in the register is a constant less than one of the two special
+// constants 255 or 65535. This is typically a result of a zero
+// extend operation.
+//
+// So code like:
+//		ldi		r3,#4
+//		andi	r3,r3,#255
+// Eliminates the useless andi operation.
+
+static void PeepoptAndi(struct ocode *ip)
+{
+	if (ip->oper2->offset==nullptr)
+		return;
+	if (ip->oper2->offset->constflag==FALSE)
+		return;
+	if (ip->oper3->offset==nullptr)
+		throw new C64PException(ERR_NULLPOINTER,0x50);
+	if (
+		ip->oper3->offset->i != 1 &&
+		ip->oper3->offset->i != 3 &&
+		ip->oper3->offset->i != 7 &&
+		ip->oper3->offset->i != 15 &&
+		ip->oper3->offset->i != 31 &&
+		ip->oper3->offset->i != 63 &&
+		ip->oper3->offset->i != 127 &&
+		ip->oper3->offset->i != 255 &&
+		ip->oper3->offset->i != 511 &&
+		ip->oper3->offset->i != 1023 &&
+		ip->oper3->offset->i != 2047 &&
+		ip->oper3->offset->i != 4095 &&
+		ip->oper3->offset->i != 8191 &&
+		ip->oper3->offset->i != 16383 &&
+		ip->oper3->offset->i != 32767 &&
+		ip->oper3->offset->i != 65535)
+		// Could do this up to 32 bits
+		return;
+	if (ip->oper2->offset->i < ip->oper3->offset->i) {
+		ip->back->fwd = ip->fwd;
+		ip->fwd->back = ip->back;
+	}
 }
 
 /*
@@ -945,12 +1105,12 @@ static void opt_peep()
 					PeepoptJAL(ip);
 					break;
             case op_jmp:
+			case op_ret:
             case op_rts:
 			case op_rti:
 			case op_rtd:
             case op_rtl:
-					if (ip->predop==1 || isTable888)
-						PeepoptUctran(ip);
+					PeepoptUctran(ip);
 					break;
 			case op_label:
                     PeepoptLabel(ip);
@@ -962,8 +1122,12 @@ static void opt_peep()
 			case op_sw:
 					PeepoptStore(ip);
 					break;
+			case op_andi:
+					PeepoptAndi(ip);
+					break;
             }
 	       ip = ip->fwd;
         }
      }
+	PeepoptSubSP();
 }

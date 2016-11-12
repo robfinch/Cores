@@ -19,6 +19,7 @@
 #define F_IMMED13  512
 #define F_FPREG 1024
 #define F_IMM6  2048
+#define BF_ASSIGN	4096
 
 /*      addressing mode structure       */
 
@@ -70,6 +71,8 @@ enum e_op {
 		op_call, op_jal, op_beqi, op_bnei, op_tst,
 		op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge,
 		op_bltu, op_bleu, op_bgtu, op_bgeu,
+		op_bltui, op_bleui, op_blti, op_blei, op_bgti, op_bgtui, op_bgei, op_bgeui,
+
 		op_brz, op_brnz, op_br,
 		op_lft, op_sft,
 		op_lw, op_lh, op_lc, op_lb, op_ret, op_sm, op_lm, op_ldis, op_lws, op_sws,

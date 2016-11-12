@@ -62,8 +62,10 @@ unsigned long _Stoul(const char *s, char **endptr, int base)
 		errno = ERANGE;
 		x = ULONG_MAX;
 	}
-	if (sign=='-')
-		x = -x;
+	if (sign=='-') {
+		x = ~x;
+		x++;
+	}
 	if (endptr)
 		*endptr = (char *)sc;
 	return (x);

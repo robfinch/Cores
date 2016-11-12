@@ -649,7 +649,7 @@ void SYM::BuildParameterList(int *num)
 	int np;
 
 	dfs.printf("<BuildParameterList\n>");
-	poffset = GetReturnBlockSize();
+	poffset = 0;//GetReturnBlockSize();
 //	sp->parms = (SYM *)NULL;
 	onp = nparms;
 	nparms = 0;
@@ -667,7 +667,8 @@ void SYM::BuildParameterList(int *num)
 //			lsyms.insert(sp1);
 		}
 		sp1->parent = parent;
-		if (preg > 25)
+		sp1->IsParameter = true;
+		if (preg > 24)
 			sp1->IsRegister = false;
 		if (sp1->IsRegister && sp1->tp->size < 3) {
 			sp1->value.r = preg;
