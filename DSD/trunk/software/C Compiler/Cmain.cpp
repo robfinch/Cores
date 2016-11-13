@@ -92,9 +92,8 @@ int main(int argc, char **argv)
 	//getchar();
 	dfs.printf("Exiting\n");
 	dfs.close();
-	getchar();
  	exit(0);
-	return 0;
+	return (0);
 }
 
 int	options(char *s)

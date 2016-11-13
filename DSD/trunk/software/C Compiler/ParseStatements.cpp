@@ -697,6 +697,7 @@ Statement *ParseAsmStatement()
 {
 	static char buf[3501];
 	int nn;
+	bool first = true;
 
 	Statement *snp; 
     snp = NewStatement(st_asm, FALSE); 
@@ -713,12 +714,29 @@ Statement *ParseAsmStatement()
 		error(ERR_PUNCT);
 	nn = 0;
 	do {
+		// skip over leading spaces on the line
 		getch();
+		while (isspace(lastch)) getch();
 		if (lastch=='}')
 			break;
-		buf[nn++] = lastch;
+		if (lastch=='\r' || lastch=='\n')
+			continue;
+		if (nn < 3500) buf[nn++] = '\n';
+		if (nn < 3500) buf[nn++] = '\t';
+		if (nn < 3500) buf[nn++] = '\t';
+		if (nn < 3500) buf[nn++] = '\t';
+		if (nn < 3500) buf[nn++] = lastch;
+		while(lastch != '\n') {
+			getch();
+			if (lastch=='}')
+				goto j1;
+			if (lastch=='\r' || lastch=='\n')
+				break;
+			if (nn < 3500) buf[nn++] = lastch;
+		}
 	}
 	while(lastch!=-1 && nn < 3500);
+j1:
 	if (nn >= 3500)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
@@ -797,6 +815,18 @@ Statement *ParseCompoundStatement()
 	cseg();
 	// Add the first statement at the head of the list.
 	p = currentStmt;
+	if (lastst==kw_prolog) {
+		NextToken();
+		currentFn->prolog = snp->prolog = ParseStatement();
+	}
+	if (lastst==kw_epilog) {
+		NextToken();
+		currentFn->epilog = snp->epilog = ParseStatement();
+	}
+	if (lastst==kw_prolog) {
+		NextToken();
+		currentFn->prolog = snp->prolog = ParseStatement();
+	}
 	if (lastst != end) {
 		head = tail = ParseStatement(); 
 		if (head)
@@ -809,10 +839,21 @@ Statement *ParseCompoundStatement()
 	//}
 	// Add remaining statements onto the tail of the list.
 	while( lastst != end) {
-		tail->next = ParseStatement(); 
-		if( tail->next != NULL ) {
-			tail->next->outer = snp;
-			tail = tail->next;
+		if (lastst==kw_prolog) {
+			NextToken();
+			currentFn->prolog = snp->prolog = ParseStatement();
+		}
+		else if (lastst==kw_epilog) {
+			NextToken();
+			currentFn->epilog = snp->epilog = ParseStatement();
+		}
+		else
+		{
+			tail->next = ParseStatement(); 
+			if( tail->next != NULL ) {
+				tail->next->outer = snp;
+				tail = tail->next;
+			}
 		}
 	}
 	currentStmt = p;
@@ -899,12 +940,14 @@ Statement *ParseStatement()
     case kw_check:
          snp = ParseCheckStatement();
          break;
+	/*
     case kw_prolog:
          snp = NewStatement(st_empty,1);
          currentFn->prolog = ParseStatement(); break;
     case kw_epilog:
          snp = NewStatement(st_empty,1);
          currentFn->epilog = ParseStatement(); break;
+	*/
     case kw_if: snp = ParseIfStatement(); break; 
     case kw_while: snp = ParseWhileStatement(); break; 
     case kw_until: snp = ParseUntilStatement(); break; 

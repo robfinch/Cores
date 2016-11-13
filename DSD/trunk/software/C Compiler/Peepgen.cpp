@@ -79,9 +79,9 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
   AddToPeepList(cd);
 }
 
-void GenerateZeradic(int op, int len)
+void GenerateZeradic(int op)
 {
-  dfs.printf("Enter GenerateZeradic\r\n");
+  dfs.printf("<GenerateZeradic>\r\n");
 	struct ocode *cd;
 dfs.printf("A");
   cd = (struct ocode *)allocx(sizeof(struct ocode));
@@ -89,7 +89,7 @@ dfs.printf("B");
 	cd->predop = 1;
 	cd->pregreg = 15;
   cd->opcode = op;
-  cd->length = len;
+  cd->length = 0;
   cd->oper1 = NULL;
 dfs.printf("C");
   cd->oper2 = NULL;
@@ -97,7 +97,7 @@ dfs.printf("C");
 	cd->oper4 = NULL;
 dfs.printf("D");
   AddToPeepList(cd);
-  dfs.printf("Leave GenerateZeradic\r\n");
+  dfs.printf("</GenerateZeradic>\r\n");
 }
 
 void GenerateMonadic(int op, int len, AMODE *ap1)
@@ -253,15 +253,15 @@ void put_ocode(struct ocode *p)
 //	put_code(p->opcode,p->length,p->oper1,p->oper2,p->oper3,p->oper4);
 }
 
-/*
- *      peephole optimization for move instructions.
- *      makes quick immediates when possible.
- *      changes move #0,d to clr d.
- *      changes long moves to address registers to short when
- *              possible.
- *      changes move immediate to stack to pea.
- *      mov r3,r3 removed
- */
+//
+//      mov r3,r3 removed
+//
+// Code Like:
+//		add		r3,r2,#10
+//		mov		r3,r5
+// Changed to:
+//		mov		r3,r5
+
 void peep_move(struct ocode	*ip)
 {
 	if (equal_address(ip->oper1, ip->oper2)) {
@@ -269,6 +269,14 @@ void peep_move(struct ocode	*ip)
 			ip->fwd->back = ip->back;
 		if (ip->back)
 			ip->back->fwd = ip->fwd;
+	}
+	if (ip->back) {
+		if (ip->back->opcode==op_add || ip->back->opcode==op_and) {	// any ALU op
+			if (equal_address(ip->back->oper1, ip->oper1)) {
+				ip->back->back->fwd = ip;
+				ip->back = ip->back->back;
+			}
+		}
 	}
 	return;
 }
@@ -366,15 +374,17 @@ static void PeepoptSub(struct ocode *ip)
 
 static bool IsSubiSP(struct ocode *ip)
 {
-	if (ip->opcode==op_subi) {
-		if (ip->oper1->preg==regSP && ip->oper2->preg==regSP) {
-			return (true);
+	if (ip->opcode==op_sub) {
+		if (ip->oper3->mode==am_immed) {
+			if (ip->oper1->preg==regSP && ip->oper2->preg==regSP) {
+				return (true);
+			}
 		}
 	}
 	return (false);
 }
 
-static void MergeSubi(struct ocode *first, struct ocode *last, int64_t amt)
+static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
 {
 	struct ocode *ip;
 
@@ -433,7 +443,7 @@ static void PeepoptSubSP()
 	struct ocode *ip;
 	struct ocode *first_subi = nullptr;
 	struct ocode *last_subi = nullptr;
-	int64_t amt = 0;
+	int amt = 0;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
 		if (IsSubiSP(ip)) {
@@ -446,6 +456,7 @@ static void PeepoptSubSP()
 		else if (ip->opcode==op_push || IsFlowControl(ip)) {
 			MergeSubi(first_subi, last_subi, amt);
 			first_subi = last_subi = nullptr;
+			amt = 0;
 		}
 	}
 }
@@ -518,101 +529,19 @@ void PeepoptJAL(struct ocode *ip)
 	PeepoptUctran(ip);
 }
 
-// Search ahead up to four instructions and turn them into
-// predicated instructions if possible, eliminating the branch.
-// If there are more than four instructions then the sequence 
-// is too long, leave it alone.
+// Remove instructions that branch to the next label.
 //
 void PeepoptBranch(struct ocode *ip)
 {
-	struct ocode *fwd1,*fwd2,*fwd3,*fwd4;
+	struct ocode *p;
 
-	return;
-
-	fwd1 = ip->fwd;
-	if (fwd1)
-		fwd2 = fwd1->fwd;
-	if (fwd2)
-		fwd3 = fwd2->fwd;
-	if (fwd3)
-		fwd4 = fwd3->fwd;
-
-	if (fwd1) {
-		if (fwd1->opcode == op_label && ip->oper1) {
-			if (fwd1->opcode==op_label && (int64_t)fwd1->oper1==ip->oper1->offset->i) {
-				fwd1->predop = InvPredOp(ip->predop);
-				fwd1->pregreg = ip->pregreg;
-				fwd1->back = ip->back;
-				if (ip->back)
-					ip->back->fwd = fwd1;
-				return;
-			}
-			else if (fwd1->opcode==op_label)
-				return;
-		}
-		if (fwd1->predop != 1)
+	for (p = ip->fwd; p && p->opcode==op_label; p = p->fwd)
+		if (ip->oper1->offset->i == (int)p->oper1) {
+			ip->back->fwd = ip->fwd;
+			if (ip->fwd != nullptr)
+				ip->fwd->back = ip->back;
 			return;
-	}
-	if (fwd2) {
-		if (fwd2->opcode==op_label && ip->oper1) {
-			if (fwd2->opcode==op_label && (int64_t)fwd2->oper1==ip->oper1->offset->i) {
-				fwd1->predop = InvPredOp(ip->predop);
-				fwd1->pregreg = ip->pregreg;
-				fwd2->predop = InvPredOp(ip->predop);
-				fwd2->pregreg = ip->pregreg;
-				fwd1->back = ip->back;
-				if (ip->back)
-					ip->back->fwd = fwd1;
-				return;
-			}
-			else if (fwd2->opcode==op_label)
-				return;
 		}
-		if (fwd2->predop != 1)
-			return;
-	}
-	if (fwd3) {
-		if (fwd3->opcode==op_label && ip->oper1) {
-			if ((int64_t)fwd3->oper1==ip->oper1->offset->i) {
-				fwd1->predop = InvPredOp(ip->predop);
-				fwd1->pregreg = ip->pregreg;
-				fwd2->predop = InvPredOp(ip->predop);
-				fwd2->pregreg = ip->pregreg;
-				fwd3->predop = InvPredOp(ip->predop);
-				fwd3->pregreg = ip->pregreg;
-				fwd1->back = ip->back;
-				if (ip->back)
-					ip->back->fwd = fwd1;
-				return;
-			}
-			else if (fwd3->opcode==op_label)
-				return;
-		}
-		if (fwd3->predop != 1)
-			return;
-	}
-	if (fwd4) {
-		if (fwd4->opcode==op_label && ip->oper1) {
-			if (fwd4->opcode==op_label && (int64_t)fwd4->oper1==ip->oper1->offset->i) {
-				fwd1->predop = InvPredOp(ip->predop);
-				fwd1->pregreg = ip->pregreg;
-				fwd2->predop = InvPredOp(ip->predop);
-				fwd2->pregreg = ip->pregreg;
-				fwd3->predop = InvPredOp(ip->predop);
-				fwd3->pregreg = ip->pregreg;
-				fwd4->predop = InvPredOp(ip->predop);
-				fwd4->pregreg = ip->pregreg;
-				fwd1->back = ip->back;
-				if (ip->back)
-					ip->back->fwd = fwd1;
-				return;
-			}
-			else if (fwd4->opcode==op_label)
-				return;
-		}
-		if (fwd4->predop != 1)
-			return;
-	}
 	return;
 }
 
@@ -630,7 +559,7 @@ void PeepoptBcc(struct ocode * ip)
      if (!ip->fwd)
          return;
      fwd1 = ip->fwd;
-     if (fwd1->opcode != op_ldi)
+     if (fwd1->opcode != op_ld || fwd1->oper2->mode != am_immed)
          return;
      fwd2 = fwd1->fwd;
      if (!fwd2)
@@ -645,7 +574,7 @@ void PeepoptBcc(struct ocode * ip)
      fwd4 = fwd3->fwd;
      if (!fwd4)
          return;
-     if (fwd4->opcode != op_ldi)
+     if (fwd4->opcode != op_ld || fwd4->oper2->mode != am_immed)
          return;
      fwd5 = fwd4->fwd;
      if (!fwd5)
@@ -805,8 +734,10 @@ void PeepoptPushPop(struct ocode *ip)
 
 // Strip out useless masking operations generated by type conversions.
 
-void peep_ldi(struct ocode *ip)
+void peep_ld(struct ocode *ip)
 {
+	if (ip->oper2->mode != am_immed)
+		return;
 	if (!ip->fwd)
 		return;
 	if (ip->fwd->opcode!=op_and)
@@ -824,25 +755,9 @@ void peep_ldi(struct ocode *ip)
 }
 
 
-void PeepoptLdi(struct ocode *ip)
+void PeepoptLd(struct ocode *ip)
 {
-	struct ocode *ip2;
-
-    if (!isFISA64)
-       return;
-	ip2 = ip->fwd;
-	if (!ip2)
-	   return;
-    if (ip2->opcode != op_push)
-       return;
-    if (ip2->oper1->mode != am_reg)
-       return;
-    if (ip2->oper1->preg != ip->oper1->preg)
-       return;
-    ip->opcode = op_push;
-    ip->oper1 = copy_addr(ip->oper2);
-    ip->oper2 = NULL;
-    ip->fwd = ip2->fwd;
+    return;
 }
 
 
@@ -882,8 +797,10 @@ void PeepoptSxbAnd(struct ocode *ip)
          return;
      if (ip->opcode != op_sxb)
          return;
-     if (ip->fwd->opcode != op_andi)
+     if (ip->fwd->opcode != op_and)
          return;
+	 if (ip->fwd->oper3->mode != am_immed)
+		 return;
      if (ip->fwd->oper3->offset->i != 255)
          return;
      ip->fwd->back = ip->back;
@@ -987,24 +904,26 @@ static void PeepoptStore(struct ocode *ip)
 	ip->fwd->back = ip;
 }
 
-// This optimization eliminates an 'ANDI' instruction when the value
+// This optimization eliminates an 'AND' instruction when the value
 // in the register is a constant less than one of the two special
 // constants 255 or 65535. This is typically a result of a zero
 // extend operation.
 //
 // So code like:
-//		ldi		r3,#4
-//		andi	r3,r3,#255
-// Eliminates the useless andi operation.
+//		ld		r3,#4
+//		and		r3,r3,#255
+// Eliminates the useless 'and' operation.
 
-static void PeepoptAndi(struct ocode *ip)
+static void PeepoptAnd(struct ocode *ip)
 {
-	if (ip->oper2->offset==nullptr)
-		return;
-	if (ip->oper2->offset->constflag==FALSE)
-		return;
-	if (ip->oper3->offset==nullptr)
+	if (ip->oper2==nullptr || ip->oper3==nullptr)
 		throw new C64PException(ERR_NULLPOINTER,0x50);
+	if (ip->oper2->offset == nullptr || ip->oper3->offset==nullptr)
+		return;
+	if (ip->oper2->offset->constflag==false)
+		return;
+	if (ip->oper3->offset->constflag==false)
+		return;
 	if (
 		ip->oper3->offset->i != 1 &&
 		ip->oper3->offset->i != 3 &&
@@ -1051,9 +970,9 @@ static void opt_peep()
     {
         switch( ip->opcode )
         {
-		case op_ldi:
-			peep_ldi(ip);
-			PeepoptLdi(ip);
+		case op_ld:
+			peep_ld(ip);
+			PeepoptLd(ip);
 			break;
             case op_mov:
                     peep_move(ip);
@@ -1089,10 +1008,8 @@ static void opt_peep()
                     break;
             case op_br:
             case op_bra:
-					if (ip->predop==1 || isTable888)
-	                    PeepoptUctran(ip);
-					else
-						PeepoptBranch(ip);
+					PeepoptBranch(ip);
+                    PeepoptUctran(ip);
 					break;
 			case op_pop:
 			case op_push:
@@ -1122,8 +1039,8 @@ static void opt_peep()
 			case op_sw:
 					PeepoptStore(ip);
 					break;
-			case op_andi:
-					PeepoptAndi(ip);
+			case op_and:
+					PeepoptAnd(ip);
 					break;
             }
 	       ip = ip->fwd;

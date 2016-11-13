@@ -162,6 +162,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
  thead = first;
 	while( thead != NULL) {
 //		dfs.printf((char *)"|%s|,|%s|\n",(char *)thead->name->c_str(),(char *)na.c_str());
+		if (thead->name) {	// ???
     name = *thead->name;
 		s1 = thead->name->compare(na);
 		s2 = thead->name2->compare(na);
@@ -188,6 +189,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
 				ta->Print();
 				delete ta;
 			}
+		}
 		}
     thead = thead->GetNextPtr();
     if (thead==first) {

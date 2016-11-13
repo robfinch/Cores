@@ -123,24 +123,6 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
 		fatal("GenerateTempRegPush(): register stack overflow");
 }
 
-void GenerateTempBrRegPush(int reg, int rmode, int number)
-{
-	AMODE *ap1;
-    ap1 = allocAmode();
-    ap1->preg = reg;
-    ap1->mode = rmode;
-
-	GenerateMonadic(op_push,0,ap1);
-    breg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
-    breg_stack[reg_stack_ptr].reg = reg;
-    breg_stack[reg_stack_ptr].f.allocnum = number;
-    if (breg_alloc[number].f.isPushed=='T')
-		fatal("GenerateTempRegPush(): branch register already pushed");
-    breg_alloc[number].f.isPushed = 'T';
-	if (++breg_stack_ptr > MAX_REG_STACK)
-		fatal("GenerateTempBRegPush(): branch register stack overflow");
-}
-
 void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 {
 	AMODE *ap1;
@@ -159,28 +141,6 @@ void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 	ap1->mode = rmode;
 	GenerateDiadic(op_lw,0,ap1,make_indexed(stkpos*2,regSP));
     reg_alloc[number].f.isPushed = 'F';
-}
-
-void GenerateTempBrRegPop(int reg, int rmode, int number)
-{
-	AMODE *ap1;
- 
-    if (breg_stack_ptr-- == -1)
-		fatal("GenerateTempRegPop(): branch register stack underflow");
-    /* check if the desired register really is on stack */
-  //  if (reg_stack[reg_stack_ptr].allocnum != number)
-		//fatal("GenerateTempRegPop()/2");
-	if (breg_in_use[breg_stack[breg_stack_ptr].reg] >= 0)
-		fatal("GenerateTempBRegPop():branch register still in use");
-	//reg_in_use[reg] = number;
-	breg_in_use[breg_stack[breg_stack_ptr].reg] = breg_stack[breg_stack_ptr].f.allocnum;
-	ap1 = allocAmode();
-    //ap1->preg = reg;
-    //ap1->mode = rmode;
-	ap1->preg = breg_stack[breg_stack_ptr].reg;
-	ap1->mode = breg_stack[breg_stack_ptr].mode;
-	GenerateMonadic(op_pop,0,ap1);
-    breg_alloc[breg_stack[breg_stack_ptr].f.allocnum].f.isPushed = 'F';
 }
 
 void initstack()
@@ -218,77 +178,6 @@ AMODE *GetTempRegister()
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
 	return ap;
-}
-
-AMODE *GetTempBrRegister()
-{
-	AMODE *ap;
-
-	if (breg_in_use[next_breg] >= 0)
-		GenerateTempBrRegPush(next_reg, am_reg, breg_in_use[next_breg]);
-    breg_in_use[next_breg] = breg_alloc_ptr;
-    ap = allocAmode();
-    ap->mode = am_breg;
-    ap->preg = next_reg;
-    ap->deep = reg_alloc_ptr;
-    reg_alloc[reg_alloc_ptr].reg = next_reg;
-    reg_alloc[reg_alloc_ptr].mode = am_breg;
-    reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
-    if (next_breg++ >= 7)
-		next_breg = 5;		/* wrap around */
-    if (breg_alloc_ptr++ == MAX_REG_STACK)
-		fatal("GetTempBRegister(): branch register stack overflow");
-	return ap;
-}
-
-int SaveTempBrRegs()
-{
-    int i;
-	int nn;
-	int rm;
-
-	nn = 0; rm = 0;
-	//for (i = 5; i <= 8; i++)
-	//	if (reg_in_use[i] >= 0)
-	//		nn = nn + 1;
-	//if (nn > 0) {
-	//	nn = 0; 
-	//	for (i = 5; i <= 8; i++)
-	//		if (reg_in_use[i] >= 0) {
-	//			rm = rm | (1 << i);
-	//			GenerateMonadic(op_push,0,makereg(i));
-	//			reg_stack[reg_stack_ptr].mode = rmode;
-	//			reg_stack[reg_stack_ptr].reg = reg;
-	//			reg_stack[reg_stack_ptr].allocnum = number;
-	//			if (reg_alloc[number].isPushed)
-	//				fatal("GenerateTempRegPush()/1");
-	//			reg_alloc[number].flag = 1;
-	//			/* check on stack overflow */
-	//			if (++reg_stack_ptr > MAX_REG_STACK)
-	//				fatal("GenerateTempRegPush()/2");
-	//			printf("Pushed temp reg.\r\n");
-	//			reg_in_use[i] = -1;
-	//			nn = nn + 1;
-	//		}
-	//	printf("Saved temporaries %x\r\n", rm);
-	//}
-	nn = 0;
-    for (i = 0; i < breg_alloc_ptr; i++)
-		if (breg_alloc[i].f.isPushed != 'T') {
-			nn++;
-		}
-	if (nn > 0) {
-		//GenerateTriadic(op_sub,0,makereg(REG_DSP),makereg(REG_DSP),make_immed(nn));
-		for (i = 0; i < breg_alloc_ptr; i++)
-			if (breg_alloc[i].f.isPushed != 'T') {
-				rm = rm | (1 << breg_alloc[i].reg);
-				GenerateTempBrRegPush(breg_alloc[i].reg, breg_alloc[i].mode, i);//, 2);
-				/* mark the register void */
-				breg_in_use[breg_alloc[i].reg] = -1;
-			}
-		//printf("Saved temporaries %x\r\n", rm);
-	}
-	return nn;
 }
 
 //void RestoreTempRegs(int rgmask)
@@ -406,41 +295,6 @@ common:
 
 
 /*
- * validate will make sure that if a register within an address mode has been
- * pushed onto the stack that it is popped back at this time.
- */
-void validatebr(AMODE *ap)
-{
-    switch (ap->mode) {
-	case am_breg:
-		if ((ap->preg >= 5 && ap->preg <= 7) && breg_alloc[ap->deep].f.isPushed == 'T' ) {
-			GenerateTempBrRegPop(ap->preg, am_reg, (int) ap->deep);
-		}
-		break;
-    case am_indx2:
-		if ((ap->sreg >= 5 && ap->sreg <= 7) && breg_alloc[ap->deep].f.isPushed == 'T') {
-			GenerateTempBrRegPop(ap->sreg, am_reg, (int) ap->deep);
-		}
-		goto common;
-    case am_indx3:
-		if ((ap->sreg >= 5 && ap->sreg <= 7) && breg_alloc[ap->deep].f.isPushed == 'T') {
-			GenerateTempBrRegPop(ap->sreg, am_reg, (int) ap->deep);
-		}
-		goto common;
-    case am_ind:
-    case am_indx:
-    case am_ainc:
-    case am_adec:
-common:
-		if ((ap->preg >= 5 && ap->preg <= 7) && breg_alloc[ap->deep].f.isPushed == 'T') {
-			GenerateTempBrRegPop(ap->preg, am_reg, (int) ap->deep);
-		}
-		break;
-    }
-}
-
-
-/*
  * release any temporary registers used in an addressing mode.
  */
 void ReleaseTempRegister(AMODE *ap)
@@ -500,65 +354,6 @@ common:
 		fatal("ReleaseTempRegister(): register on stack");
 }
 
-/*
- * release any temporary registers used in an addressing mode.
- */
-void ReleaseTempBrRegister(AMODE *ap)
-{
-    int number;
-
-	if (ap==NULL) {
-		printf("DIAG - NULL pointer in ReleaseTempBRegister\r\n");
-		return;
-	}
-
-	validatebr(ap);
-    switch (ap->mode) {
-	case am_ind:
-	case am_indx:
-	case am_ainc:
-	case am_adec:
-	case am_reg:
-	case am_breg:
-common:
-		if (ap->preg >= 5 && ap->preg <= 7) {
-			if (breg_in_use[ap->preg]==-1)
-				return;
-			if (next_breg-- <= 5)
-				next_breg = 8;
-			number = breg_in_use[ap->preg];
-			breg_in_use[ap->preg] = -1;
-			break;
-		}
-		return;
-    case am_indx2:
-	case am_indx3:
-		if (ap->sreg >= 5 && ap->sreg <= 7) {
-			if (breg_in_use[ap->sreg]==-1)
-				return;
-			if (next_reg-- <= 5)
-				next_reg = 8;
-			number = breg_in_use[ap->sreg];
-			breg_in_use[ap->sreg] = -1;
-			break;
-		}
-		goto common;
-    default:
-		return;
-    }
- //   /* some consistency checks */
-	//if (number != ap->deep) {
-	//	printf("number %d ap->deep %d\r\n", number, ap->deep);
-	//	//fatal("ReleaseTempRegister()/1");
-	//}
-	if (breg_alloc_ptr-- == 0)
-		fatal("ReleaseTempBRegister(): no registers are allocated");
-  //  if (reg_alloc_ptr != number)
-		//fatal("ReleaseTempRegister()/3");
-    if (breg_alloc[number].f.isPushed == 'T')
-		fatal("ReleaseTempBRegister(): register on stack");
-}
-
 // The following is used to save temporary registers across function calls.
 // Save the list of allocated registers and registers in use.
 // Go through the allocated register list and generate a push instruction to
@@ -574,18 +369,6 @@ int TempInvalidate()
 	save_reg_alloc_ptr = reg_alloc_ptr;
 	memcpy(save_reg_alloc, reg_alloc, sizeof(save_reg_alloc));
 	memcpy(save_reg_in_use, reg_in_use, sizeof(save_reg_in_use));
-/*	
-	if (isThor) {
-		for (sp = i = 0; i < reg_alloc_ptr; i++) {
-	        if (reg_in_use[reg_alloc[i].reg] != -1) {
-	    		if (reg_alloc[i].f.isPushed == 'F') {
-	    			sp++;
-	    		}
-	    	}
-		}
-		GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(sp*8));
-	}
-*/
 	for (sp = i = 0; i < reg_alloc_ptr; i++) {
         if (reg_in_use[reg_alloc[i].reg] != -1) {
     		if (reg_alloc[i].f.isPushed == 'F') {
@@ -612,7 +395,7 @@ void TempRevalidate(int sp)
 	for (nn = sp-1; nn >= 0; nn--)
 		GenerateTempRegPop(stacked_regs[nn].reg, stacked_regs[nn].mode, stacked_regs[nn].f.allocnum,sp-nn-1);
 	if (sp != 0)
-		GenerateTriadic(op_addi,0,makereg(regSP),makereg(regSP),make_immed(2*sp));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(2*(sp)));
 	reg_alloc_ptr = save_reg_alloc_ptr;
 	memcpy(reg_alloc, save_reg_alloc, sizeof(reg_alloc));
 	memcpy(reg_in_use, save_reg_in_use, sizeof(reg_in_use));

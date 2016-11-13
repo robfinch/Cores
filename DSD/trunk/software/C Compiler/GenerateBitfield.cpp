@@ -32,7 +32,7 @@ static void SignExtendBitfield(ENODE *node, AMODE *ap3, int mask)
 
 	umask = 0x80000000 | ~(mask >> 1);
 	ap2 = GetTempRegister();
-	GenerateDiadic(op_ldi,0,ap2,make_immed(umask));
+	GenerateDiadic(op_ld,0,ap2,make_immed(umask));
 	GenerateTriadic(op_add,0,ap3,ap3,ap2);
 	GenerateTriadic(op_xor,0,ap3,ap3,ap2);
 	ReleaseTempRegister(ap2);
@@ -54,13 +54,13 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	if (ap->mode==am_reg)
 		GenerateDiadic(op_mov,0,ap3,ap);
 	else if (ap->mode==am_immed)
-		GenerateDiadic(op_ldi,0,ap3,ap);
+		GenerateDiadic(op_ld,0,ap3,ap);
 	else	// memory
 		GenerateDiadic(op_lw,0,ap3,ap);
 	ReleaseTempRegister(ap);
 	if (node->bit_offset > 0)
 		GenerateTriadic(op_shru, 0, ap3, ap3, make_immed((int) node->bit_offset));
-	GenerateTriadic(op_andi, 0, ap3, ap3, make_immed(mask));
+	GenerateTriadic(op_and, 0, ap3, ap3, make_immed(mask));
 	if (isSigned)
 		SignExtendBitfield(node, ap3, mask);
 	MakeLegalAmode(ap3, flags, node->esize);
@@ -75,10 +75,10 @@ void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width)
 	for (mask = nn = 0; nn < width; nn++)
 		mask = (mask << 1) | 1;
 	mask = ~mask;
-	GenerateTriadic(op_andi,0,ap2,ap2,make_immed(~mask));		// clear unwanted bits in source
+	GenerateTriadic(op_and,0,ap2,ap2,make_immed(~mask));		// clear unwanted bits in source
 	if (offset > 0)
 		GenerateTriadic(op_ror,0,ap1,ap1,make_immed(offset));
-	GenerateTriadic(op_andi,0,ap1,ap1,make_immed(mask));		// clear bits in target field
+	GenerateTriadic(op_and,0,ap1,ap1,make_immed(mask));		// clear bits in target field
 	GenerateTriadic(op_or,0,ap1,ap1,ap2);
 	if (offset > 0)
 		GenerateTriadic(op_rol,0,ap1,ap1,make_immed(offset));

@@ -61,8 +61,8 @@ struct oplst {
         int     ov;
         }       opl[] =
 {       {"move",op_move}, {"add",op_add}, {"addu", op_addu}, {"mov", op_mov}, {"mtspr", op_mtspr}, {"mfspr", op_mfspr},
-		{"ldi",op_ldi},
-		{"add",op_addi}, {"sub",op_sub}, {"subu", op_subu},
+		{"ldi",op_ldi}, {"ld", op_ld},
+		{"addi",op_addi}, {"sub",op_sub}, {"subu", op_subu},
 		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori},
 		{"divi", op_divi}, {"divui", op_divui}, {"modi", op_modi}, {"modui", op_modui},
 		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},
@@ -204,7 +204,7 @@ void putop(int op)
     i = 0;
     while( opl[i].s )
     {
-		if( opl[i].ov == (op & 255))
+		if( opl[i].ov == (op & 0x1FF))
 		{
 			//seg = op & 0xFF00;
 			//if (seg != 0) {
@@ -215,7 +215,7 @@ void putop(int op)
 		}
 		++i;
     }
-    printf("DIAG - illegal opcode.\n");
+    printf("DIAG - illegal opcode (%d).\n", op);
 }
 
 static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift)
@@ -338,59 +338,6 @@ char *RegMoniker(int regno)
 	return &buf[n][0];
 }
 
-char *BrRegMoniker(int regno)
-{
-	return "";
-}
-
-char *PredRegMoniker(int regno)
-{
-	return "";
-}
-
-char *PredOpStr(int op)
-{
-	return "<bad op>";
-}
-
-int PredOp(int op)
-{
-	switch(op) {
-//		case op_f:	return 0;
-//		case op_t:	return 1;
-		case op_eq:	return 2;
-		case op_ne:	return 3;
-		case op_le: return 4;
-		case op_gt: return 5;
-		case op_ge: return 6;
-		case op_lt: return 7;
-		case op_leu:	return 8;
-		case op_gtu:	return 9;
-		case op_geu:	return 10;
-		case op_ltu:	return 11;
-		default: return 1;
-	}
-}
-
-int InvPredOp(int op)
-{
-	switch(op) {
-//		case op_f:	return 0;
-//		case op_t:	return 1;
-		case 2:	return 3;
-		case 3:	return 2;
-		case 4: return 5;
-		case 5: return 4;
-		case 6: return 7;
-		case 7: return 6;
-		case 8:	return 9;
-		case 9:	return 8;
-		case 10:	return 11;
-		case 11:	return 10;
-		default: return 1;
-	}
-}
-
 void PutAddressMode(AMODE *ap)
 {
 	switch( ap->mode )
@@ -465,7 +412,6 @@ void put_code(struct ocode *p)
 	int op = p->opcode;
 	AMODE *aps,*apd,*ap3,*ap4;
 	ENODE *ep;
-	int pop = p->predop;
 	int predreg = p->pregreg;
 	int len = p->length;
 	aps = p->oper1;
@@ -484,10 +430,7 @@ void put_code(struct ocode *p)
 	else if (op != op_fnname)
 		{
 			ofs.printf("\t");
-			if (pop!=1)
-				ofs.printf("p%d.%s\t",predreg,PredOpStr(pop));
-			else
-				ofs.printf("%6.6s\t", "");
+			ofs.printf("%6.6s\t", "");
 			putop(op);
 		}
 	if (op==op_fnname) {

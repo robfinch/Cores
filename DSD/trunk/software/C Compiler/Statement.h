@@ -18,6 +18,8 @@ typedef struct snode {
 	__int8 stype;
 	struct snode *outer;	/* outer statement */
 	struct snode *next;   /* next statement */
+	struct snode *prolog;
+	struct snode *epilog;
 	int predreg;		 /* assigned predicate register */
 	ENODE *exp;           /* condition or expression */
 	ENODE *initExpr;      /* initialization expression - for loops */

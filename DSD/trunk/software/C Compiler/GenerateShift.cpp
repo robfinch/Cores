@@ -36,7 +36,7 @@ static void MaskShift(int op, AMODE *ap1, int size)
 	case op_shru:
 j1:
 		switch (size) {
-			case 1:	GenerateTriadic(op_andi,0,ap1,ap1,make_immed(0xffff)); break;
+			case 1:	GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xffff)); break;
 			default:	;
 		}
 		break;
@@ -70,25 +70,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
     ap1 = GenerateExpression(node->p[0],F_REG,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,2);
 	MaskShift(op, ap1, GetNaturalSize(node->p[0]));
-	if (ap2->mode==am_immed) {
-		switch(op)
-		{
-        case op_asl:    op = op_asli; break;
-        case op_sll:    op = op_slli; break;
-		case op_shl:	op = op_shli; break;
-		case op_shlu:	op = op_shlui; break;
-		case op_asr:	op = op_asri; break;
-		case op_sra:    op = op_srai; break;
-		case op_shr:	op = op_shri; break;
-		case op_shru:	op = op_shrui; break;
-		case op_srl:    op = op_srli; break;
-		case op_lsr:    op = op_lsri; break;
-		}
-		GenerateTriadic(op,0,ap3,ap1,make_immed(ap2->offset->i));
-	}
-	else
-		GenerateTriadic(op,0,ap3,ap1,ap2);
-
+	GenerateTriadic(op,0,ap3,ap1,ap2);
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
     MakeLegalAmode(ap3,flags,size);
@@ -111,7 +93,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 		GenerateDiadic(op_mov,0,ap1,ap3);
 	else if (ap3->mode == am_immed) {
 		error(ERR_LVALUE);
-	    GenerateDiadic(op_ldi,0,ap1,ap3);
+	    GenerateDiadic(op_ld,0,ap1,ap3);
 	}
 	else
         GenLoad(ap1,ap3,size,size);

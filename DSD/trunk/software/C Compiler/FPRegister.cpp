@@ -124,7 +124,7 @@ void GenerateTempFPRegPop(int reg, int rmode, int number)
 	ap1->mode = rmode;
 	ap1->isFloat = TRUE;
 	GenerateDiadic(op_lfd,0,ap1,make_indirect(regSP));
-	GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
+	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(8));
     fpreg_alloc[number].f.isPushed = 'F';
 }
 
@@ -275,7 +275,7 @@ void TempFPRevalidate(int sp)
 	for (nn = sp-1; nn >= 0; nn--)
 		GenerateTempFPRegPop(stacked_fpregs[nn].reg, stacked_fpregs[nn].mode, stacked_fpregs[nn].f.allocnum);
 	if (sp != 0)
-		GenerateTriadic(op_addi,0,makereg(regSP),makereg(regSP),make_immed(2*sp));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(2*sp));
 	fpreg_alloc_ptr = save_fpreg_alloc_ptr;
 	memcpy(fpreg_alloc, save_fpreg_alloc, sizeof(fpreg_alloc));
 	memcpy(fpreg_in_use, save_fpreg_in_use, sizeof(fpreg_in_use));

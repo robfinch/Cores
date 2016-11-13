@@ -205,6 +205,7 @@ public:
 	unsigned int IsKernel : 1;
 	unsigned int IsPrivate : 1;
 	unsigned int IsVirtual : 1;
+	unsigned int IsInline : 1;
 	unsigned int IsUndefined : 1;  // undefined function
 	unsigned int ctor : 1;
 	unsigned int dtor : 1;
@@ -218,6 +219,7 @@ public:
         char *s;
     } value;
   TYP *tp;
+    struct snode *stmt;
     struct snode *prolog;
     struct snode *epilog;
     unsigned int stksize;
@@ -450,6 +452,7 @@ public:
 #define ERR_TOOMANY_SYMBOLS 50
 #define ERR_TOOMANY_PARAMS  51
 #define ERR_THIS            52
+#define ERR_BADARG			53
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

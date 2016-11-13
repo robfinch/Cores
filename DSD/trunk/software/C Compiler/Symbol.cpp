@@ -87,7 +87,7 @@ TypeArray *SYM::GetParameterTypes()
 	i16->Clear();
 	sp = GetPtr(params.GetHead());
 	for (nn = 0; sp; nn++) {
-		i16->Add(sp->tp,(__int8)(sp->IsRegister ? sp->value.i : 0));
+		i16->Add(sp->tp,(__int8)(sp->IsRegister ? sp->value.r : 0));
 		sp = sp->GetNextPtr();
 	}
 //	printf("Leave GetParameterTypes()\r\n");
@@ -109,7 +109,7 @@ TypeArray *SYM::GetProtoTypes()
 	if (sp==nullptr)
 		return (GetParameterTypes());
 	for (nn = 0; sp; nn++) {
-		i16->Add(sp->tp,(__int8)sp->IsRegister ? sp->value.i : 0);
+		i16->Add(sp->tp,(__int8)sp->IsRegister ? sp->value.r : 0);
 		sp = sp->GetNextPtr();
 	}
 //	printf("Leave GetParameterTypes()\r\n");

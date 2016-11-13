@@ -482,7 +482,7 @@ static int xfold(ENODE *node)
         if( node == NULL )
                 return 0;
         switch( node->nodetype )
-                {
+        {
                 case en_icon:
                         i = node->i;
                         node->i = 0;

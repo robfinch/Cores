@@ -383,12 +383,14 @@ static void scanexpr(ENODE *node, int duse)
  *      scan will gather all optimizable expressions into the expression
  *      list for a block of statements.
  */
-static void scan(Statement *block)
+void scan(Statement *block)
 {
 	while( block != NULL ) {
         switch( block->stype ) {
 			case st_compound:
+					scan(block->prolog);
 					scan_compound(block);
+					scan(block->epilog);
 					break;
 			case st_check:
             case st_return:
@@ -548,12 +550,7 @@ void repexpr(ENODE *node)
 				case en_clabcon:
                 case en_tempref:
 					if( (csp = SearchCSEList(node)) != NULL ) {
-						if (csp->reg > 1000) {
-							node->nodetype = en_bregvar;
-							node->i = csp->reg-1000;
-							node->sp = csp->exp->sp;	// retain the symbol pointer
-						}
-						else if( csp->reg > 0 ) {
+						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
 							node->i = csp->reg;
 						}
@@ -665,7 +662,9 @@ void repcse(Statement *block)
 	while( block != NULL ) {
         switch( block->stype ) {
 			case st_compound:
+					repcse(block->prolog);
 					repcse_compound(block);
+					repcse(block->epilog);
 					break;
 			case st_return:
 			case st_throw:

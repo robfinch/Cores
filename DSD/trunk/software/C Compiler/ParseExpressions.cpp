@@ -727,11 +727,17 @@ ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
        dfs.printf("%03d ", typ->typeno);
     else
        dfs.printf("%03d ", 0);
-    // If a function pointer is passed, we want a pointer type
-    if (typ->typeno==bt_func || typ->typeno == bt_ifunc)
-       typearray->Add((int)bt_pointer,0);
-    else
-        typearray->Add(typ,0);
+	if (typ==nullptr) {
+		error(ERR_BADARG);
+	    typearray->Add((int)bt_long,0);
+	}
+	else {
+		// If a function pointer is passed, we want a pointer type
+		if (typ->typeno==bt_func || typ->typeno == bt_ifunc)
+		   typearray->Add((int)bt_pointer,0);
+		else
+			typearray->Add(typ,0);
+	}
     ep1 = makenode(en_void,ep2,ep1);
     if(lastst != comma) {
       dfs.printf("lastst=%d", lastst);

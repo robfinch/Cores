@@ -403,7 +403,7 @@ void GenerateSwitch(Statement *stmt)
             {
 				bf = (int *)stmt->label;
 				for (nn = bf[0]; nn >= 1; nn--) {
-					GenerateTriadic(op_beqi,0,ap,make_immed(bf[nn]),make_clabel(curlab));
+					GenerateTriadic(op_beq,0,ap,make_immed(bf[nn]),make_clabel(curlab));
 				}
 		        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
 	            stmt->label = (int *)curlab;
@@ -521,7 +521,7 @@ void GenerateTry(Statement *stmt)
 
     a = make_clabel(throwlab);
     a->mode = am_immed;
-	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
+	GenerateDiadic(op_ld,0,makereg(regXLR),a);
 	GenerateStatement(stmt->s1);
   GenerateMonadic(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
@@ -558,7 +558,7 @@ void GenerateTry(Statement *stmt)
   GenerateLabel(lab1);
     a = make_clabel(oldthrow);
     a->mode = am_immed;
-	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
+	GenerateDiadic(op_ld,0,makereg(regXLR),a);
 }
 
 void GenerateThrow(Statement *stmt)
@@ -570,14 +570,14 @@ void GenerateThrow(Statement *stmt)
 		initstack();
 		ap = GenerateExpression(stmt->exp,F_ALL,2);
 		if (ap->mode==am_immed) {
-           	GenerateDiadic(op_ldi,0,makereg(1),ap);
+           	GenerateDiadic(op_ld,0,makereg(1),ap);
         }
 		else if( ap->mode != am_reg)
 			GenerateDiadic(op_lw,0,makereg(1),ap);
 		else if (ap->preg != 1 )
 			GenerateDiadic(op_mov,0,makereg(1),ap);
 		ReleaseTempRegister(ap);
-		GenerateDiadic(op_ldi,0,makereg(2),make_immed((int)stmt->label));
+		GenerateDiadic(op_ld,0,makereg(2),make_immed((int)stmt->label));
 	}
 	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
@@ -657,7 +657,7 @@ void GenerateSpinlock(Statement *stmt)
 		    GenerateTriadic(op_ori, 0, makereg(2),makereg(0),make_immed((int64_t)stmt->initExpr));
         }
         else {
-            GenerateDiadic(op_ldi,0,makereg(2),make_immed(-1));
+            GenerateDiadic(op_ld,0,makereg(2),make_immed(-1));
         }
         GenerateMonadic(op_bsr,0,make_string("_LockSema"));
         if (stmt->initExpr)

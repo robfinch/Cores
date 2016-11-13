@@ -259,8 +259,6 @@ extern AMODE *makepred(int r);
 extern int bitsset(int mask);
 extern int popcnt(int m);
 // Outcode.c
-extern int PredOp(int op);
-extern int InvPredOp(int op);
 extern void GenerateByte(int val);
 extern void GenerateChar(int val);
 extern void genhalf(int val);
@@ -285,7 +283,7 @@ extern char *opstr(int op);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern void GenerateLabel(int labno);
-extern void GenerateZeradic(int op, int len);
+extern void GenerateZeradic(int op);
 extern void GenerateMonadic(int op, int len, AMODE *ap1);
 extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
@@ -338,7 +336,7 @@ extern void GenerateRaptor64Return(SYM *sym, Statement *stmt);
 extern AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags);
 extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
 
-extern void GenerateFunction(SYM *sym, Statement *stmt);
+extern void GenerateFunction(SYM *sym);
 extern void GenerateReturn(Statement *stmt);
 
 extern AMODE *GenerateShift(ENODE *node,int flags, int size, int op);

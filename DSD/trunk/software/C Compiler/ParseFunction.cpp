@@ -64,7 +64,14 @@ static int round2(int n)
 // Return the stack offset where parameter storage begins.
 int GetReturnBlockSize()
 {
-    return (exceptions ? 6 : 4);            /* size of return block */
+	if (currentFn) {
+		if (currentFn->IsLeaf) {
+		    return (exceptions ? 4 : 2);
+		}
+	}
+	else
+		throw new C64PException(ERR_NULLPOINTER,'R');
+    return (exceptions ? 6 : 4);
 }
 
 static bool SameType(TYP *tp1, TYP *tp2)
@@ -383,7 +390,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 {    
 	std::string lbl;
 	char *p;
-	Statement *stmt;
 
   dfs.printf("<Parse function body>:%s|\n", (char *)sp->name->c_str());
 
@@ -421,10 +427,10 @@ static Statement *ParseFunctionBody(SYM *sp)
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
   dfs.printf("C");
-	stmt = ParseCompoundStatement();
+	sp->stmt = ParseCompoundStatement();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
-	GenerateFunction(sp, stmt);
+	GenerateFunction(sp);
   dfs.putch('E');
 
 	flush_peep();
@@ -434,6 +440,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 	ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->mangledName->c_str(), tmpVarSpace() + lc_auto);
 	isFuncBody = false;
 	dfs.printf("</ParseFunctionBody>\n");
-	return stmt;
+	return sp->stmt;
 }
 

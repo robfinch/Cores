@@ -43,6 +43,7 @@ int isUnsigned = FALSE;
 int isSigned = FALSE;
 int isVolatile = FALSE;
 int isVirtual = FALSE;
+bool isInline = false;
 int isIO = FALSE;
 int isConst = FALSE;
 bool isRegister = false;
@@ -370,6 +371,11 @@ int Declaration::ParseSpecifier(TABLE *table)
 				NextToken();
 				break;
 
+			case kw_inline:
+				isInline = TRUE;
+				NextToken();
+				break;
+
 			// byte and char default to unsigned unless overridden using
 			// the 'signed' keyword
 			//
@@ -533,10 +539,6 @@ int Declaration::ParseSpecifier(TABLE *table)
 				bit_max = 64;
 				goto lxit;
 				
-      case kw_inline:
-        NextToken();
-        break;
-
 			default:
 				goto lxit;
 			}
@@ -768,6 +770,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   dfs.printf("****************************\n");
   NextToken();
   sp->IsPascal = isPascal;
+  sp->IsInline = isInline;
   
   // An asterik before the function name indicates a function pointer but only
   // if it's bracketed properly, otherwise it could be the return value that's
@@ -1108,6 +1111,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 		  }
 		  SetType(sp);
 		  sp->IsPascal = isPascal;
+		  sp->IsInline = isInline;
 		  sp->IsRegister = isRegister;
 		  sp->IsParameter = parsingParameterList > 0;
 		  isRegister = false;
@@ -1419,6 +1423,7 @@ void GlobalDeclaration::Parse()
   bool notVal = false;
   isFuncPtr = false;
   isPascal = FALSE;
+  isInline = false;
 	dfs.puts("<ParseGlobalDecl>\n");
   for(;;) {
     currentClass = nullptr;
@@ -1431,6 +1436,10 @@ void GlobalDeclaration::Parse()
 		case kw_pascal:
 		  NextToken();
 		  isPascal = TRUE;
+		  break;
+		case kw_inline:
+		  NextToken();
+		  isInline = true;
 		  break;
 		case ellipsis:
 		case id:
@@ -1451,20 +1460,24 @@ void GlobalDeclaration::Parse()
         case kw_enum: case kw_void:
         case kw_float: case kw_double:
                 lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
+				isInline = false;
 				break;
         case kw_thread:
 				NextToken();
                 lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct);
+				isInline = false;
 				break;
 		case kw_register:
 				NextToken();
                 error(ERR_ILLCLASS);
                 lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
+				isInline = false;
 				break;
 		case kw_private:
         case kw_static:
                 NextToken();
 				lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct);
+				isInline = false;
                 break;
     case kw_extern:
         NextToken();
@@ -1480,11 +1493,9 @@ void GlobalDeclaration::Parse()
 					NextToken();
           ++global_flag;
           declare(NULL,&gsyms[0],sc_external,0,bt_struct);
+          isInline = false;
           --global_flag;
           break;
-    case kw_inline:
-      NextToken();
-      break;
  
     case kw_not:
       NextToken();
