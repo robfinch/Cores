@@ -80,8 +80,8 @@ case(opcode)
     case(cond)
     `BEQ:   takb <= a==b;
     `BNE:   takb <= a!=b;
-    `BAND:  takb <= |a && |b;
-    `BNAND: takb <= ~(|a && |b);
+    `BAND:  takb <= a & b;
+    `BNAND: takb <= ~(a & b);
     `BLT:   takb <= $signed(a) < $signed(b);
     `BGE:   takb <= $signed(a) >= $signed(b);
     `BLE:   takb <= $signed(a) <= $signed(b);

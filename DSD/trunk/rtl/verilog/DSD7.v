@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -28,8 +28,8 @@
 `define TRUE    1'b1
 `define FALSE   1'b0
 
-`define INT_VECT    32'hFFFFFDFC
-`define RST_VECT    32'hFFFFFDF8
+`define INT_VECT    32'hFFFFFFF8
+`define RST_VECT    32'hFFFFFFF4
 
 `define BccI    6'h02
 `define BccUI   6'h03
@@ -46,6 +46,7 @@
 `define BccU    6'h13
 `define JAL16   6'h14
 `define SYS     6'h18
+`define MEM     6'h19
 `define NOP     6'h1A
 `define INT     6'h1B
 `define JAL0    6'h1C
@@ -58,6 +59,7 @@
 `define SH      6'h28
 `define SW      6'h29
 `define SWC     6'h2A
+`define PEA     6'h2B
 `define MULI    6'h30
 `define MULUI   6'h31
 `define MULSUI  6'h32
@@ -88,6 +90,8 @@
 `define ASR     6'h12
 `define ROL     6'h13
 `define ROR     6'h14
+`define SXB     6'h16
+`define SXH     6'h17
 `define SHLI    6'h18
 `define SHRI    6'h19
 `define ASRI    6'h1A
@@ -122,6 +126,10 @@
 `define IPUSH   4'h05
 `define IPOP    4'h06
 
+// MEM functs
+`define PUSH    5'h02
+`define PUSHI5  5'h04
+
 `define _2NOP_INSN    {10'h0,`NOP,10'h0,`NOP}
 
 `define CSRRW     2'b00
@@ -132,6 +140,7 @@
 `define CSR_VBA     12'h004
 `define CSR_CAUSE   12'h006
 `define CSR_SCRATCH 12'h009
+`define CSR_SEMA    12'h00C
 `define CSR_TASK    12'h010
 `define CSR_CISC    12'h011
 `define CSR_ITOS0   12'h040
@@ -142,14 +151,15 @@
 `define CSR_CAP     12'hFFE
 
 module DSD7(hartid_i, rst_i, clk_i, irq_i, ivec_i,
-    vda_o, rdy_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
-    irdy_i, iadr_o, idat_i);
+    vda_o, vpa_o, rdy_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i
+    );
 input [31:0] hartid_i;
 input rst_i;
 input clk_i;
 input irq_i;
 input [8:0] ivec_i;
 output reg vda_o;
+output reg vpa_o;
 input rdy_i;
 output reg lock_o;
 output reg wr_o;
@@ -160,9 +170,6 @@ output reg [31:0] dat_o;
 output reg sr_o;
 output reg cr_o;
 input rb_i;
-input irdy_i;
-output reg [31:0] iadr_o;
-input [31:0] idat_i;
 
 // Core capabilities
 parameter CAP_LS_NDX = 1'b1;
@@ -216,7 +223,7 @@ wire [5:0] xfunct = xir[31:26];
 // im1 | r3 | r2 | r1 | pc32
 reg [128:0] istack[0:15];
 reg [3:0] isp;
-reg [31:0] r1,r2,r3;
+reg [31:0] r1,r2,r29;
 reg [31:0] regfile [0:31];
 reg [31:0] rfoa,rfob,rfoc;
 reg [31:0] a,b,c,imm,ea,xb;
@@ -227,8 +234,9 @@ reg [31:0] br_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
 // CSR's
+reg [31:0] msema;
 reg [31:0] mcause;
-reg [20:0] vba;                 // vector table base address (bits 11 to 31).
+reg [31:0] vba;                 // vector table base address 
 reg [31:0] tr;
 reg im, gie;
 reg [128:0] itos;
@@ -249,7 +257,7 @@ case(Ra)
 xRt:    rfoa <= res;
 5'd1:   rfoa <= r1;
 5'd2:   rfoa <= r2;
-5'd3:   rfoa <= r3;
+5'd29:   rfoa <= r29;
 default:    rfoa <= regfile[Ra]; 
 endcase
 
@@ -259,7 +267,7 @@ case(Rb)
 xRt:    rfob <= res;
 5'd1:   rfob <= r1;
 5'd2:   rfob <= r2;
-5'd3:   rfob <= r3;
+5'd29:   rfob <= r29;
 default:    rfob <= regfile[Rb]; 
 endcase
 
@@ -269,7 +277,7 @@ case(Rc)
 xRt:    rfoc <= res;
 5'd1:   rfoc <= r1;
 5'd2:   rfoc <= r2;
-5'd3:   rfoc <= r3;
+5'd29:   rfoc <= r29;
 default:    rfoc <= regfile[Rc]; 
 endcase
 
@@ -394,9 +402,16 @@ begin
         `ASRI:  res = shift_o;
         `ROLI:  res = CAP_ROTATES ? shift_o : 32'hDEADEAD;
         `RORI:  res = CAP_ROTATES ? shift_o : 32'hDEADEAD;
+        `SXB:   res = {{24{a[7]}},a[7:0]};
+        `SXH:   res = {{16{a[15]}},a[15:0]};
         `LHX,`LHUX,`LWX,`LWRX:  res = CAP_LS_NDX ? lres : 32'hDEADDEAD;
         endcase
-    
+    `MEM:
+        case (xir[15:11])
+        `PUSHI5,
+        `PUSH:      res = a - 32'd2;
+        default:    res = 32'hDEADDEAD;
+        endcase
     `ADDI:  res = a + imm;
     `CMPI:  res = $signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1;
     `CMPUI: res = a < imm ? -1 : a==imm ? 0 : 1;
@@ -404,6 +419,7 @@ begin
     `ORI:   res = logic_o;
     `XORI:  res = logic_o;
     `LH,`LHU,`LW,`LWR:  res = lres;
+    `PEA:   res = a - 32'd2;
     `JAL:   res = xpc + 32'd3;
     `JAL16: res = xpc + 32'd2;
     `JAL0:  res = xpc + 32'd1;
@@ -416,6 +432,7 @@ begin
         `CSR_SCRATCH:   res = scratch;
         `CSR_TASK:      res = tr;
         `CSR_CISC:      res = cisc;
+        `CSR_SEMA:      res = msema;
         `CSR_ITOS0:    res = itos[31:0];
         `CSR_ITOS1:    res = itos[63:32];
         `CSR_ITOS2:    res = itos[95:64];
@@ -493,61 +510,56 @@ reg [31:0] tag_mem2 [0:63];
 reg [31:0] tag_mem3 [0:63];
 
 always @(posedge clk_i)
-  // Reset the entire cache to NOPs on a reset. This may not strictly be
-  // necessary as the tags are also reset and will cause cache line loads
-  // anyways. 
-  if (isICacheReset) begin
-    case(iadr_o[2:1])
-    2'd0: begin
-            cache_mem0[iadr_o[8:3]][31:0] <= `_2NOP_INSN; // way #0
-            cache_mem1[iadr_o[8:3]][31:0] <= `_2NOP_INSN; // way #1
-            cache_mem2[iadr_o[8:3]][31:0] <= `_2NOP_INSN; // way #2
-            cache_mem3[iadr_o[8:3]][31:0] <= `_2NOP_INSN; // way #3
-          end
-    2'd1: begin
-            cache_mem0[iadr_o[8:3]][63:32] <= `_2NOP_INSN;
-            cache_mem1[iadr_o[8:3]][63:32] <= `_2NOP_INSN;
-            cache_mem2[iadr_o[8:3]][63:32] <= `_2NOP_INSN;
-            cache_mem3[iadr_o[8:3]][63:32] <= `_2NOP_INSN;
-          end
-    2'd2: begin
-            cache_mem0[iadr_o[8:3]][95:64] <= `_2NOP_INSN;
-            cache_mem1[iadr_o[8:3]][95:64] <= `_2NOP_INSN;
-            cache_mem2[iadr_o[8:3]][95:64] <= `_2NOP_INSN;
-            cache_mem3[iadr_o[8:3]][95:64] <= `_2NOP_INSN;
-          end
-    2'd3: begin
-            cache_mem0[iadr_o[8:3]][127:96] <= `_2NOP_INSN;
-            cache_mem1[iadr_o[8:3]][127:96] <= `_2NOP_INSN;
-            cache_mem2[iadr_o[8:3]][127:96] <= `_2NOP_INSN;
-            cache_mem3[iadr_o[8:3]][127:96] <= `_2NOP_INSN;
-          end
-    endcase
-  end
-  else begin
+    // On reset load all ways with same data.
+    if (isICacheReset) begin
+        case(adr_o[2:1])
+        2'd0: cache_mem0[adr_o[8:3]][31:0] <= dat_i;
+        2'd1: cache_mem0[adr_o[8:3]][63:32] <= dat_i;
+        2'd2: cache_mem0[adr_o[8:3]][95:64] <= dat_i;
+        2'd3: cache_mem0[adr_o[8:3]][127:96] <= dat_i;
+        endcase
+        case(adr_o[2:1])
+        2'd0: cache_mem1[adr_o[8:3]][31:0] <= dat_i;
+        2'd1: cache_mem1[adr_o[8:3]][63:32] <= dat_i;
+        2'd2: cache_mem1[adr_o[8:3]][95:64] <= dat_i;
+        2'd3: cache_mem1[adr_o[8:3]][127:96] <= dat_i;
+        endcase
+        case(adr_o[2:1])
+        2'd0: cache_mem2[adr_o[8:3]][31:0] <= dat_i;
+        2'd1: cache_mem2[adr_o[8:3]][63:32] <= dat_i;
+        2'd2: cache_mem2[adr_o[8:3]][95:64] <= dat_i;
+        2'd3: cache_mem2[adr_o[8:3]][127:96] <= dat_i;
+        endcase
+        case(adr_o[2:1])
+        2'd0: cache_mem3[adr_o[8:3]][31:0] <= dat_i;
+        2'd1: cache_mem3[adr_o[8:3]][63:32] <= dat_i;
+        2'd2: cache_mem3[adr_o[8:3]][95:64] <= dat_i;
+        2'd3: cache_mem3[adr_o[8:3]][127:96] <= dat_i;
+        endcase
+    end
     // During a cache-line load, load only the way which was selected randomly.
     // This currently requires 4 bus cycles of 32 bits.
-    if (isICacheLoad) begin
-      case({ic_whichWay,iadr_o[2:1]})
-      4'd0: cache_mem0[iadr_o[8:3]][31:0] <= idat_i;
-      4'd1: cache_mem0[iadr_o[8:3]][63:32] <= idat_i;
-      4'd2: cache_mem0[iadr_o[8:3]][95:64] <= idat_i;
-      4'd3: cache_mem0[iadr_o[8:3]][127:96] <= idat_i;
-      4'd4: cache_mem1[iadr_o[8:3]][31:0] <= idat_i;
-      4'd5: cache_mem1[iadr_o[8:3]][63:32] <= idat_i;
-      4'd6: cache_mem1[iadr_o[8:3]][95:64] <= idat_i;
-      4'd7: cache_mem1[iadr_o[8:3]][127:96] <= idat_i;
-      4'd8: cache_mem2[iadr_o[8:3]][31:0] <= idat_i;
-      4'd9: cache_mem2[iadr_o[8:3]][63:32] <= idat_i;
-      4'd10: cache_mem2[iadr_o[8:3]][95:64] <= idat_i;
-      4'd11: cache_mem2[iadr_o[8:3]][127:96] <= idat_i;
-      4'd12: cache_mem3[iadr_o[8:3]][31:0] <= idat_i;
-      4'd13: cache_mem3[iadr_o[8:3]][63:32] <= idat_i;
-      4'd14: cache_mem3[iadr_o[8:3]][95:64] <= idat_i;
-      4'd15: cache_mem3[iadr_o[8:3]][127:96] <= idat_i;
-      endcase
+    else if (isICacheLoad) begin
+        case({ic_whichWay,adr_o[2:1]})
+        4'd0: cache_mem0[adr_o[8:3]][31:0] <= dat_i;
+        4'd1: cache_mem0[adr_o[8:3]][63:32] <= dat_i;
+        4'd2: cache_mem0[adr_o[8:3]][95:64] <= dat_i;
+        4'd3: cache_mem0[adr_o[8:3]][127:96] <= dat_i;
+        4'd4: cache_mem1[adr_o[8:3]][31:0] <= dat_i;
+        4'd5: cache_mem1[adr_o[8:3]][63:32] <= dat_i;
+        4'd6: cache_mem1[adr_o[8:3]][95:64] <= dat_i;
+        4'd7: cache_mem1[adr_o[8:3]][127:96] <= dat_i;
+        4'd8: cache_mem2[adr_o[8:3]][31:0] <= dat_i;
+        4'd9: cache_mem2[adr_o[8:3]][63:32] <= dat_i;
+        4'd10: cache_mem2[adr_o[8:3]][95:64] <= dat_i;
+        4'd11: cache_mem2[adr_o[8:3]][127:96] <= dat_i;
+        4'd12: cache_mem3[adr_o[8:3]][31:0] <= dat_i;
+        4'd13: cache_mem3[adr_o[8:3]][63:32] <= dat_i;
+        4'd14: cache_mem3[adr_o[8:3]][95:64] <= dat_i;
+        4'd15: cache_mem3[adr_o[8:3]][127:96] <= dat_i;
+        endcase
     end
-  end
+
 // Pull instructions from four pairs of cache lines, one for each way. Typically
 // only a single pair of cache lines will contain the valid instructions.
 wire [127:0] co01 = cache_mem0[pc[8:3]];
@@ -578,29 +590,24 @@ case(pc[2:0])
 3'd7: insn = {co2[47:0],co1[127:112]};
 endcase 
 
-// On reset the tags are set to all one's then it is stiplulated that access to
-// the last line of memory is considered invalid. This saves requiring a tag
-// valid bit at the expense of 16 fewer bytes of memory. The last line of memory
-// is often used for ROM checksum and version information anyway.
 always @(posedge clk_i)
-  if (isICacheReset) begin
-    tag_mem0[iadr_o[8:3]] <= {32{1'b1}};    // Tag of all one's - invalid tag
-    tag_mem1[iadr_o[8:3]] <= {32{1'b1}};
-    tag_mem2[iadr_o[8:3]] <= {32{1'b1}};
-    tag_mem3[iadr_o[8:3]] <= {32{1'b1}};
-  end
-  else begin
     // Set the tag only when the last 32 bits of the instruction line is loaded.
     // Prevents the tag from going valid until the entire line is present.
-    if (isICacheLoad && iadr_o[2:1]==2'b11) begin
-        case(ic_whichWay)
-        2'd0:   tag_mem0[iadr_o[8:3]] <= iadr_o;
-        2'd1:   tag_mem1[iadr_o[8:3]] <= iadr_o;
-        2'd2:   tag_mem2[iadr_o[8:3]] <= iadr_o;
-        2'd3:   tag_mem3[iadr_o[8:3]] <= iadr_o;
-        endcase
+    if (adr_o[2:1]==2'b11) begin
+        if (isICacheReset) begin
+            tag_mem0[adr_o[8:3]] <= adr_o;
+            tag_mem1[adr_o[8:3]] <= adr_o;
+            tag_mem2[adr_o[8:3]] <= adr_o;
+            tag_mem3[adr_o[8:3]] <= adr_o;
+        end
+        else if (isICacheLoad)
+            case(ic_whichWay)
+            2'd0:   tag_mem0[adr_o[8:3]] <= adr_o;
+            2'd1:   tag_mem1[adr_o[8:3]] <= adr_o;
+            2'd2:   tag_mem2[adr_o[8:3]] <= adr_o;
+            2'd3:   tag_mem3[adr_o[8:3]] <= adr_o;
+            endcase
     end
-  end
 
 // Set tag comparators, there would be only four for a four-way set associative
 // cache, but we need to check two cache lines in case the instruction spans a
@@ -638,13 +645,16 @@ if (rst_i) begin
     im <= `TRUE;
     isp <= 4'd0;
     tr <= 6'd0;
-    vba <= 14'h3FFD;
+    vba <= 32'h0000;
     cisc <= 32'hFFE00000;
     pc <= `RST_VECT;
     vda_o <= `FALSE;
+    vpa_o <= `TRUE;
     lock_o <= `FALSE;
     wr_o <= `FALSE;
     sel_o <= 2'b00;
+    adr_o <= 32'hFFFFF800;
+    isICacheLoad <= `FALSE;
     isICacheReset <= `TRUE;
     gie <= `FALSE;
     next_state(ICACHE_RST);
@@ -652,10 +662,11 @@ end
 else begin
 case(state)
 ICACHE_RST:
-    begin
-        iadr_o <= iadr_o + 32'd8;
-        if (iadr_o[10:3]==8'hFF) begin
+    if (rdy_i) begin
+        adr_o <= adr_o + 32'd2;
+        if (adr_o[10:1]==10'h3FF) begin
             isICacheReset <= `FALSE;
+            vpa_o <= `FALSE;
             next_state(RUN);
         end
     end
@@ -678,7 +689,12 @@ begin
         if (iinsn[5:0]==`INT) begin
             Ra <= 5'd1;
             Rb <= 5'd2;
-            Rc <= 5'd3;
+            Rc <= 5'd29;
+        end
+        else if (iinsn[5:0]==`PEA || (iinsn[5:0]==`MEM && iinsn[15:11]==`PUSH)) begin
+            Ra <= 5'd31;
+            Rb <= iinsn[10:6];
+            Rc <= iinsn[15:11];
         end
         else begin
             Ra <= iRa;
@@ -688,7 +704,8 @@ begin
         case(insn[5:0])
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
+        `PEA:
             pc_inc = ii32 ? 32'd4 : 32'd2;
         `BccI:  pc_inc = ii5 ? 32'd4 : 32'd2;
         `BccUI:  pc_inc = ii5 ? 32'd4 : 32'd2;
@@ -742,13 +759,19 @@ begin
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
-        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC:
+        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA:
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `CSRI:         imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
         `JAL:          imm <= ir[63:32];
         `JAL16:        imm <= {{16{ir[31]}},ir[31:16]};
         `JAL0:         imm <= 32'h0;
+        `MEM:
+            case(ir[15:11])
+            `PUSHI5:    imm <= {{27{ir[10]}},ir[10:6]};
+            default:    imm <= {{27{ir[10]}},ir[10:6]};
+            endcase
+        default:    imm <= 32'h0;
         endcase
         // Branch displacement, used only for conditional branches.
         // Branches may also compare against an immediate so the displacement
@@ -769,10 +792,18 @@ begin
             default:
                 xRt <= 5'd0;
             endcase
+        `MEM:
+            case(xir[15:11])
+            `PUSHI5,
+            `PUSH:  xRt <= 5'd31;
+            default:    xRt <= 5'd0;
+            endcase
         `JAL,`JAL16,`JAL0,`MOV,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
         `LH,`LHU,`LW,`LWR:
             xRt <= ir[15:11];
+        `PEA:
+            xRt <= 5'd31;
         default:
             xRt <= 5'd0;
         endcase
@@ -789,7 +820,7 @@ begin
         case(xRt)
         5'd1:   r1 <= res;
         5'd2:   r2 <= res;
-        5'd3:   r3 <= res;
+        5'd29:  r29 <= res;
         endcase
         regfile[xRt] <= res;
         // Globally enable interrupts after first update of stack pointer.
@@ -804,6 +835,7 @@ begin
                 mcause <= xir[14:6];
                 itos <= {im,c,b,a,xpc+xir[15]};
                 im <= `TRUE;
+                msema[0] <= 1'b0;
                 ex_branch(`INT_VECT);
             end
         
@@ -817,32 +849,21 @@ begin
                     ex_branch(a + imm);
             end
 
-        `Bcc,`BccU,`BccI,`BccUI:
+        `Bcc:
+            if (takb) begin
+                if (br_disp != 32'd2)
+                    ex_branch(xpc + br_disp);
+                if (xir[18:16]==3'd2)   // BAS
+                    msema[xRa] <= 1'b1;
+                else if (xir[18:16]==3'd3)  // BAC
+                    msema[xRa] <= 1'b0;
+            end
+        `BccU,`BccI,`BccUI:
             if (takb)
                 ex_branch(xpc + br_disp);
 
         `R2:
             case(xfunct)
-            `IRET:
-                begin
-                ex_branch(itos[31:0]);
-                // r1,r2, and r3 can be updated here like this only because the
-                // pipeline is being flushed.
-                r1 <= itos[63:32];
-                r2 <= itos[95:64];
-                r3 <= itos[127:96];
-                im <= itos[128];
-                end
-            `IPUSH:
-                begin
-                istack[isp-4'd1] <= itos[128:0];
-                isp <= isp - 4'd1;
-                end
-            `IPOP:
-                begin
-                itos[128:0] <= istack[isp];
-                isp <= isp + 4'd1;
-                end
             `ADD,`SUB,`CMP,`CMPU,
             `AND,`OR,`XOR,`NAND,`NOR,`XNOR:
                 ;
@@ -896,7 +917,7 @@ begin
                 end
             endcase
         `SYS:
-            case(xir[15:12])
+            case(xir[15:11])
             `CLI:   im <= 1'b0;
             `SEI:   im <= 1'b1;
             `IRET:
@@ -906,8 +927,10 @@ begin
                 // pipeline is being flushed.
                 r1 <= itos[63:32];
                 r2 <= itos[95:64];
-                r3 <= itos[127:96];
+                r29 <= itos[127:96];
                 im <= itos[128];
+                msema[0] <= 1'b0;
+                msema[xRa] <= 1'b0;
                 end
             `IPUSH:
                 begin
@@ -918,6 +941,25 @@ begin
                 begin
                 itos[128:0] <= istack[isp];
                 isp <= isp + 4'd1;
+                end
+            endcase
+        `MEM:
+            case(xir[15:11])
+            `PUSH:
+                if (ex_done==`FALSE) begin
+                    ex_done <= `TRUE;
+                    mem_size <= word;
+                    ea <= a - 32'd2;
+                    xb <= b;
+                    state <= STORE1;
+                end
+            `PUSHI5:
+                if (ex_done==`FALSE) begin
+                    ex_done <= `TRUE;
+                    mem_size <= word;
+                    ea <= a - 32'd2;
+                    xb <= imm;
+                    state <= STORE1;
                 end
             endcase
             
@@ -961,6 +1003,14 @@ begin
                 mem_size <= word;
                 ea <= a + imm;
                 xb <= b;
+                state <= STORE1;
+            end
+        `PEA:
+            if (ex_done==`FALSE) begin
+                ex_done <= `TRUE;
+                mem_size <= word;
+                ea <= a - 32'd2;
+                xb <= b + imm;
                 state <= STORE1;
             end
         `CSR:   if (xRa != 5'd0)
@@ -1078,6 +1128,7 @@ STORE2:
             next_state(RUN);
         end
         cr_o <= 1'b0;
+        msema[0] <= rb_i;
     end
 STORE3:
     if (rdy_i) begin
@@ -1093,12 +1144,14 @@ LOAD_ICACHE:
         if (icmf != 2'b11) begin
             isICacheLoad <= `TRUE;
             if (icmf[1]) begin
-                iadr_o <= {pcp8[31:3],3'b000};
+                vpa_o <= `TRUE;
+                adr_o <= {pcp8[31:3],3'b000};
                 icmf[0] <= 1'b1;
             end
             else begin
+                vpa_o <= `TRUE;
                 icmf[1] <= 1'b1;
-                iadr_o <= {pc[31:3],3'b000};
+                adr_o <= {pc[31:3],3'b000};
             end
             next_state(LOAD_ICACHE2);
         end
@@ -1106,10 +1159,11 @@ LOAD_ICACHE:
             next_state(RUN);
     end
 LOAD_ICACHE2:
-    if (irdy_i) begin
-        iadr_o[2:1] <= iadr_o[2:1] + 2'd1;
-        if (iadr_o[2:1]==2'b11) begin
+    if (rdy_i) begin
+        adr_o[2:1] <= adr_o[2:1] + 2'd1;
+        if (adr_o[2:1]==2'b11) begin
             isICacheLoad <= `FALSE;
+            vpa_o <= `FALSE;
             next_state(icmf==2'b11 ? RUN : LOAD_ICACHE);
         end
     end
@@ -1236,11 +1290,20 @@ begin
         `CSR_SCRATCH:   scratch <= dat;
         `CSR_TASK:      tr <= dat;
         `CSR_CISC:      cisc <= dat;
+        `CSR_SEMA:     msema <= dat;
         `CSR_ITOS0:    itos[31:0] <= dat;
         `CSR_ITOS1:    itos[63:32] <= dat;
         `CSR_ITOS2:    itos[95:64] <= dat;
         `CSR_ITOS3:    itos[127:96] <= dat;
         `CSR_ITOS4:    itos[128] <= dat[0];
+        endcase
+    `CSRRS:
+        case(xir[29:18])
+        `CSR_SEMA:      msema <= msema | dat;
+        endcase
+    `CSRRC:
+        case(xir[29:18])
+        `CSR_SEMA:      msema <= msema & ~dat;
         endcase
     endcase
 end
