@@ -664,7 +664,7 @@ static int GeneratePushParameterList(SYM *sym, ENODE *plist)
 AMODE *GenerateFunctionCall(ENODE *node, int flags)
 { 
 	AMODE *ap, *result;
-	SYM *sym;
+	SYM *sym, *o_fn;
     int             i,j;
 	int sp = 0;
 	int fsp = 0;
@@ -685,8 +685,12 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
         }
 */
         i = i + GeneratePushParameterList(sym, node->p[1]);
-		if (sym && sym->IsInline)
+		if (sym && sym->IsInline) {
+			o_fn = currentFn;
+			currentFn = sym;
 			GenerateFunction(sym);
+			currentFn = o_fn;
+		}
 		else
 			GenerateMonadic(op_call,0,make_offset(node->p[0]));
 	}
@@ -706,8 +710,12 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 		i = i + GeneratePushParameterList(sym,node->p[1]);
 		ap->mode = am_ind;
 		ap->offset = 0;
-		if (sym && sym->IsInline)
+		if (sym && sym->IsInline) {
+			o_fn = currentFn;
+			currentFn = sym;
 			GenerateFunction(sym);
+			currentFn = o_fn;
+		}
 		else
 			GenerateMonadic(op_call,0,ap);
 		ReleaseTempRegister(ap);

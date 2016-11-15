@@ -418,7 +418,8 @@ static Statement *ParseFunctionBody(SYM *sp)
   dfs.printf("B");
   p = my_strdup((char *)lbl.c_str());
   dfs.printf("b");
-	GenerateMonadic(op_fnname,0,make_string(p));
+	if (!sp->IsInline)
+		GenerateMonadic(op_fnname,0,make_string(p));
 	currentFn = sp;
 	currentFn->IsLeaf = TRUE;
 	currentFn->DoesThrow = FALSE;
@@ -430,13 +431,15 @@ static Statement *ParseFunctionBody(SYM *sp)
 	sp->stmt = ParseCompoundStatement();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
+  if (!sp->IsInline) {
 	GenerateFunction(sp);
-  dfs.putch('E');
+	dfs.putch('E');
 
 	flush_peep();
 	if (sp->storage_class == sc_global) {
 		ofs.printf("endpublic\r\n\r\n");
 	}
+  }
 	ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->mangledName->c_str(), tmpVarSpace() + lc_auto);
 	isFuncBody = false;
 	dfs.printf("</ParseFunctionBody>\n");

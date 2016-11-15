@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-`ifndef BEQ
+//`ifndef BEQ
 `define BccI    6'h02
 `define BccUI   6'h03
 `define Bcc     6'h12
@@ -62,7 +62,7 @@
 `define BGEUI   3'h5
 `define BLEUI   3'h6
 `define BGTUI   3'h7
-`endif
+//`endif
 
 module DSD7_BranchEval(xir, a, b, imm, takb);
 input [31:0] xir;

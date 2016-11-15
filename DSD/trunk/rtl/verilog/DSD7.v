@@ -28,7 +28,7 @@
 `define TRUE    1'b1
 `define FALSE   1'b0
 
-`define INT_VECT    32'hFFFFFFF8
+`define VBA_VECT    32'hFFFFFFE0
 `define RST_VECT    32'hFFFFFFF4
 
 `define BccI    6'h02
@@ -85,6 +85,7 @@
 `define NAND    6'h0C
 `define NOR     6'h0D
 `define XNOR    6'h0E
+`define R2CSRI  6'h0F
 `define SHL     6'h10
 `define SHR     6'h11
 `define ASR     6'h12
@@ -118,6 +119,7 @@
 `define REM     6'h3B
 `define REMU    6'h3C
 `define REMSU   6'h3D
+`define R2CSR   6'h3F
 
 // SYS functs
 `define CLI     4'h00
@@ -137,6 +139,7 @@
 `define CSRRC     2'b10
 
 `define CSR_HARTID  12'h001
+`define CSR_PCR     12'h003
 `define CSR_VBA     12'h004
 `define CSR_CAUSE   12'h006
 `define CSR_SCRATCH 12'h009
@@ -150,14 +153,15 @@
 `define CSR_ITOS4   12'h044
 `define CSR_CAP     12'hFFE
 
-module DSD7(hartid_i, rst_i, clk_i, irq_i, ivec_i,
-    vda_o, vpa_o, rdy_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i
+module DSD7(hartid_i, rst_i, clk_i, irq_i, icause_i,
+    vda_o, vpa_o, rdy_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
+    pcr_o
     );
 input [31:0] hartid_i;
 input rst_i;
 input clk_i;
 input irq_i;
-input [8:0] ivec_i;
+input [8:0] icause_i;
 output reg vda_o;
 output reg vpa_o;
 input rdy_i;
@@ -170,6 +174,7 @@ output reg [31:0] dat_o;
 output reg sr_o;
 output reg cr_o;
 input rb_i;
+output [31:0] pcr_o;
 
 // Core capabilities
 parameter CAP_LS_NDX = 1'b1;
@@ -203,6 +208,7 @@ parameter MUL9 = 6'd39;
 
 integer n;
 reg [5:0] state;
+reg [1:0] ol = 2'b00;       // operating level (machine only)
 reg [31:0] pc,dpc,xpc;
 reg [31:0] pc_inc;
 reg [63:0] insn,iinsn;
@@ -244,6 +250,9 @@ reg [31:0] cisc;
 wire [7:0] isid = cisc[7:0];
 reg [31:0] scratch;
 reg [31:0] cap = {CAP_MULDIV,CAP_ROTATES,CAP_LS_NDX};
+reg [31:0] pcr;
+
+assign pcr_o = pcr;
 
 function [31:0] fnAbs;
 input [31:0] jj;
@@ -405,6 +414,7 @@ begin
         `SXB:   res = {{24{a[7]}},a[7:0]};
         `SXH:   res = {{16{a[15]}},a[15:0]};
         `LHX,`LHUX,`LWX,`LWRX:  res = CAP_LS_NDX ? lres : 32'hDEADDEAD;
+        `R2CSR,`R2CSRI: read_csr(b[13:0],res);
         endcase
     `MEM:
         case (xir[15:11])
@@ -424,24 +434,7 @@ begin
     `JAL16: res = xpc + 32'd2;
     `JAL0:  res = xpc + 32'd1;
     `MOV:   res = a;
-    `CSR,`CSRI:
-        case(xir[29:18])
-        `CSR_HARTID:    res = hartid_i;
-        `CSR_VBA:       res = vba;
-        `CSR_CAUSE:     res = mcause;
-        `CSR_SCRATCH:   res = scratch;
-        `CSR_TASK:      res = tr;
-        `CSR_CISC:      res = cisc;
-        `CSR_SEMA:      res = msema;
-        `CSR_ITOS0:    res = itos[31:0];
-        `CSR_ITOS1:    res = itos[63:32];
-        `CSR_ITOS2:    res = itos[95:64];
-        `CSR_ITOS3:    res = itos[127:96];
-        `CSR_ITOS4:    res = itos[128];
-        `CSR_CAP:       res = cap;
-        default:    res = 32'hDEADDEAD;
-        endcase
-    
+    `CSR,`CSRI: read_csr(xir[31:18],res);
     endcase
 end
 
@@ -645,7 +638,8 @@ if (rst_i) begin
     im <= `TRUE;
     isp <= 4'd0;
     tr <= 6'd0;
-    vba <= 32'h0000;
+    vba <= `VBA_VECT;
+    pcr <= 32'h0;
     cisc <= 32'hFFE00000;
     pc <= `RST_VECT;
     vda_o <= `FALSE;
@@ -679,7 +673,7 @@ begin
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceIF) begin
         if (irq_i & ~im & gie)
-            iinsn = {17'd0,ivec_i,`INT};
+            iinsn = {17'd0,icause_i,`INT};
         else
             iinsn = insn[5:0]==`CINSN ? cinsn : insn;
         ii32 = iinsn[31:26]==6'h20;
@@ -712,6 +706,11 @@ begin
         `NOP,`CINSN:
             pc_inc = 32'd1;
         `CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
+        `R2:
+            case(insn[31:26])
+            `R2CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
+            default:    pc_inc = 32'd1;
+            endcase
         default:    pc_inc = 32'd1;
         endcase
         case(iopcode)
@@ -766,6 +765,11 @@ begin
         `JAL:          imm <= ir[63:32];
         `JAL16:        imm <= {{16{ir[31]}},ir[31:16]};
         `JAL0:         imm <= 32'h0;
+        `R2:
+            case(ir[31:26])
+            `R2CSRI:    imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
+            default:    imm <= 32'h0;
+            endcase
         `MEM:
             case(ir[15:11])
             `PUSHI5:    imm <= {{27{ir[10]}},ir[10:6]};
@@ -836,7 +840,7 @@ begin
                 itos <= {im,c,b,a,xpc+xir[15]};
                 im <= `TRUE;
                 msema[0] <= 1'b0;
-                ex_branch(`INT_VECT);
+                ex_branch(vba+{ol,2'b00});
             end
         
         // JAL: - if no register Ra was specified then the JAL is done already
@@ -915,6 +919,9 @@ begin
                         state <= STORE1;
                     end
                 end
+            `R2CSR:   if (xRa != 5'd0)
+                            write_csr(xir[22:21],b[13:0],a);
+            `R2CSRI:  write_csr(xir[22:21],b[13:0],imm);
             endcase
         `SYS:
             case(xir[15:11])
@@ -1014,8 +1021,8 @@ begin
                 state <= STORE1;
             end
         `CSR:   if (xRa != 5'd0)
-                    ex_csr(a);
-        `CSRI:  ex_csr(imm);
+                    write_csr(xir[17:16],xir[31:18],a);
+        `CSRI:  write_csr(xir[17:16],xir[31:18],imm);
         default:    ;
         endcase
     end // advanceEX
@@ -1278,14 +1285,41 @@ begin
 end
 endtask
 
-task ex_csr;
+task read_csr;
+input [13:0] csrno;
+output [31:0] res;
+begin
+    case(csrno[11:0])
+    `CSR_HARTID:    res = hartid_i;
+    `CSR_VBA:       res = vba;
+    `CSR_PCR:       res = pcr;
+    `CSR_CAUSE:     res = mcause;
+    `CSR_SCRATCH:   res = scratch;
+    `CSR_TASK:      res = tr;
+    `CSR_CISC:      res = cisc;
+    `CSR_SEMA:      res = msema;
+    `CSR_ITOS0:    res = itos[31:0];
+    `CSR_ITOS1:    res = itos[63:32];
+    `CSR_ITOS2:    res = itos[95:64];
+    `CSR_ITOS3:    res = itos[127:96];
+    `CSR_ITOS4:    res = itos[128];
+    `CSR_CAP:       res = cap;
+    default:    res = 32'hDEADDEAD;
+    endcase
+end
+endtask
+
+task write_csr;
+input [1:0] op;
+input [13:0] csrno;
 input [31:0] dat;
 begin
-    case(xir[17:16])
+    case(op)
     `CSRRW:
-        case(xir[29:18])
+        case(csrno[11:0])
         `CSR_HARTID:    ;
         `CSR_VBA:       vba <= dat;
+        `CSR_PCR:       pcr <= dat;
         `CSR_CAUSE:     mcause <= dat;
         `CSR_SCRATCH:   scratch <= dat;
         `CSR_TASK:      tr <= dat;
@@ -1298,11 +1332,13 @@ begin
         `CSR_ITOS4:    itos[128] <= dat[0];
         endcase
     `CSRRS:
-        case(xir[29:18])
+        case(csrno[11:0])
+        `CSR_PCR:       pcr <= pcr | dat;
         `CSR_SEMA:      msema <= msema | dat;
         endcase
     `CSRRC:
-        case(xir[29:18])
+        case(csrno[11:0])
+        `CSR_PCR:       pcr <= pcr & ~dat;
         `CSR_SEMA:      msema <= msema & ~dat;
         endcase
     endcase
