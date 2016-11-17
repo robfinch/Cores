@@ -50,6 +50,7 @@ extern int nparms;
 extern char *stkname;
 extern int isVirtual;
 extern bool isFuncBody;
+extern bool isInline;
 
 static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
@@ -194,6 +195,8 @@ int ParseFunction(SYM *sp)
   }
 	if (lastst == closepa) {
 		NextToken();
+		while (lastst == kw_attribute)
+			Declaration::ParseFunctionAttribute(sp);
 	}
 	dfs.printf("D");
 	if (sp->tp->type == bt_pointer) {
@@ -207,6 +210,7 @@ int ParseFunction(SYM *sp)
 		sp->IsTask = isTask;
 		sp->NumParms = nump;
 		sp->IsVirtual = isVirtual;
+		sp->IsInline = isInline;
 		isPascal = FALSE;
 		isKernel = FALSE;
 		isOscall = FALSE;
@@ -216,6 +220,7 @@ int ParseFunction(SYM *sp)
 //	    ReleaseLocalMemory();        /* release local symbols (parameters)*/
 		return 1;
 	}
+j2:
 	dfs.printf("E");
 	if (lastst == semicolon) {	// Function prototype
 		dfs.printf("e");
@@ -226,6 +231,7 @@ int ParseFunction(SYM *sp)
 		sp->IsInterrupt = isInterrupt;
 		sp->IsTask = isTask;
 		sp->IsVirtual = isVirtual;
+		sp->IsInline = isInline;
 		sp->NumParms = nump;
 		sp->params.MoveTo(&sp->proto);
 		isPascal = FALSE;
@@ -237,16 +243,24 @@ int ParseFunction(SYM *sp)
 //	    ReleaseLocalMemory();        /* release local symbols (parameters)*/
 		goto j1;
 	}
-		else if(lastst != begin) {
+	else if (lastst == kw_attribute) {
+		while(lastst==kw_attribute) {
+			Declaration::ParseFunctionAttribute(sp);
+		}
+		goto j2;
+	}
+	else if(lastst != begin) {
 			dfs.printf("F");
 //			NextToken();
-			ParameterDeclaration::Parse(2);
+//			ParameterDeclaration::Parse(2);
+			sp->BuildParameterList(&nump);
 			// for old-style parameter list
 			//needpunc(closepa);
 			if (lastst==semicolon) {
 				sp->IsPrototype = 1;
 				sp->IsNocall = isNocall;
 				sp->IsPascal = isPascal;
+				sp->IsInline = isInline;
     			sp->IsKernel = isKernel;
 				sp->IsInterrupt = isInterrupt;
     			sp->IsTask = isTask;
@@ -273,6 +287,7 @@ int ParseFunction(SYM *sp)
     		sp->IsTask = isTask;
 			  sp->IsVirtual = isVirtual;
 			  sp->IsRegister = isRegister;
+			  sp->IsInline = isInline;
 				isPascal = FALSE;
     		isKernel = FALSE;
 				isOscall = FALSE;
@@ -289,6 +304,7 @@ int ParseFunction(SYM *sp)
 dfs.printf("G");
 			sp->IsNocall = isNocall;
 			sp->IsPascal = isPascal;
+			sp->IsInline = isInline;
 			sp->IsKernel = isKernel;
 			sp->IsInterrupt = isInterrupt;
 			sp->IsTask = isTask;

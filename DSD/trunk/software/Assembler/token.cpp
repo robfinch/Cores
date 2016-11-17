@@ -843,7 +843,7 @@ int NextToken()
             }
             break;
 
-        // call cas chk cmp cmpu code cli com cmpi csrrw
+        // call cas chk cmp cmpu code cli com cmpi csrrc csrrs csrrw
         case 'c': case 'C':
 			 if (gCpu==7) {
                  if ((inptr[1]=='a' || inptr[1]=='A') &&
@@ -928,6 +928,22 @@ int NextToken()
                  return token = tk_chki;
              }
              if (gCpu==5 || gCpu==7) {
+               if ((inptr[1]=='s' || inptr[1]=='S') &&
+                   (inptr[2]=='r' || inptr[2]=='R') &&
+                   (inptr[3]=='r' || inptr[3]=='R') &&
+                   (inptr[4]=='c' || inptr[4]=='C') &&
+                   isspace(inptr[5])) {
+                     inptr += 5;
+                     return token = tk_csrrc;
+               }
+               if ((inptr[1]=='s' || inptr[1]=='S') &&
+                   (inptr[2]=='r' || inptr[2]=='R') &&
+                   (inptr[3]=='r' || inptr[3]=='R') &&
+                   (inptr[4]=='s' || inptr[4]=='S') &&
+                   isspace(inptr[5])) {
+                     inptr += 5;
+                     return token = tk_csrrs;
+               }
                if ((inptr[1]=='s' || inptr[1]=='S') &&
                    (inptr[2]=='r' || inptr[2]=='R') &&
                    (inptr[3]=='r' || inptr[3]=='R') &&
@@ -1253,7 +1269,7 @@ int NextToken()
              }
              break;
              
-        // ios inc int iret
+        // ios inc int iret ipush ipop
         case 'i': case 'I':
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  (inptr[2]=='s' || inptr[2]=='S') &&
@@ -1280,6 +1296,23 @@ int NextToken()
                  inptr += 4;
                  return token = tk_iret;
              }
+			 if (gCpu==7) {
+				 if ((inptr[1]=='p' || inptr[1]=='P') &&
+					 (inptr[2]=='u' || inptr[2]=='U') &&
+					 (inptr[3]=='s' || inptr[3]=='S') &&
+					 (inptr[4]=='h' || inptr[4]=='H') &&
+					 isspace(inptr[5])) {
+					 inptr += 5;
+					 return token = tk_ipush;
+				 }
+				 if ((inptr[1]=='p' || inptr[1]=='P') &&
+					 (inptr[2]=='o' || inptr[2]=='O') &&
+					 (inptr[3]=='p' || inptr[3]=='P') &&
+					 isspace(inptr[4])) {
+					 inptr += 4;
+					 return token = tk_ipop;
+				 }
+			 }
              break;
 
         // jal jgr jmp jsf jsr jsp jci jhi
@@ -1336,9 +1369,13 @@ int NextToken()
              }
              break;
 
-        // lb lbu lc lcu lh lhu lw ldi ldis lea lsr lsri lwar lfd lvb lws lvh lvw ltcb
+        // lb lbu lc lcu lh lhu lw ld ldi ldis lea lsr lsri lwar lfd lvb lws lvh lvw ltcb
         case 'l':
         case 'L':
+            if ((inptr[1]=='d' || inptr[1]=='D') && isspace(inptr[2])) {
+                inptr += 2;
+                return token = tk_ld;
+            }  
             if ((inptr[1]=='b' || inptr[1]=='B') && isspace(inptr[2])) {
                 inptr += 2;
                 return token = tk_lb;

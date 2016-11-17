@@ -87,7 +87,7 @@ TypeArray *SYM::GetParameterTypes()
 	i16->Clear();
 	sp = GetPtr(params.GetHead());
 	for (nn = 0; sp; nn++) {
-		i16->Add(sp->tp,(__int8)(sp->IsRegister ? sp->value.r : 0));
+		i16->Add(sp->tp,(__int16)(sp->IsRegister ? sp->reg : 0));
 		sp = sp->GetNextPtr();
 	}
 //	printf("Leave GetParameterTypes()\r\n");
@@ -109,7 +109,7 @@ TypeArray *SYM::GetProtoTypes()
 	if (sp==nullptr)
 		return (GetParameterTypes());
 	for (nn = 0; sp; nn++) {
-		i16->Add(sp->tp,(__int8)sp->IsRegister ? sp->value.r : 0);
+		i16->Add(sp->tp,(__int16)sp->IsRegister ? sp->reg : 0);
 		sp = sp->GetNextPtr();
 	}
 //	printf("Leave GetParameterTypes()\r\n");
@@ -647,6 +647,7 @@ void SYM::BuildParameterList(int *num)
 	SYM *sp1;
 	int onp;
 	int np;
+	bool noParmOffset = false;
 
 	dfs.printf("<BuildParameterList\n>");
 	poffset = 0;//GetReturnBlockSize();
@@ -668,20 +669,25 @@ void SYM::BuildParameterList(int *num)
 		}
 		sp1->parent = parent;
 		sp1->IsParameter = true;
-		if (preg > 24)
+		sp1->value.i = poffset;
+		noParmOffset = false;
+		if (preg > 23)
 			sp1->IsRegister = false;
 		if (sp1->IsRegister && sp1->tp->size < 3) {
-			sp1->value.r = preg;
+			sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
 			preg++;
+			if (preg & 0x8000) {
+				noParmOffset = true;
+				sp1->value.i = -1;
+			}
 		}
-		else {
+		else
 			sp1->IsRegister = false;
-			sp1->value.i = poffset;
-		}
 		// Check for aggregate types passed as parameters. Structs
 		// and unions use the type size. There could also be arrays
 		// passed.
-		poffset += round2(sp1->tp->size);
+		if (!noParmOffset)
+			poffset += round2(sp1->tp->size);
 		if (round2(sp1->tp->size) > 2)
 			IsLeaf = FALSE;
 		sp1->storage_class = sc_auto;

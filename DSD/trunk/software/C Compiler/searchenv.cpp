@@ -48,13 +48,14 @@
       nothing
 --------------------------------------------------------------------------- */
 
-void searchenv(char *filename, char *envname, char *pathname)
+void searchenv(char *filename, int fnsz, char *envname, char *pathname, int pthsz)
 {
    static char pbuf[5000];
    char *p;
+   size_t len;
 //   char *strpbrk(), *strtok(), *getenv();
 
-   strcpy(pathname, filename);
+   strcpy_s(pathname, pthsz, filename);
    if (_access(pathname, 0) != -1)
       return;
 
@@ -63,8 +64,8 @@ void searchenv(char *filename, char *envname, char *pathname)
       path was requested (ie. file contains \ or /) or if the environment
       isn't set, return a NULL, else search for the file on the path.
    ---------------------------------------------------------------------- */
-   
-   if (!(p = getenv(envname)))
+   _dupenv_s(&p, &len, envname);
+   if (len==0)
    {
       *pathname = '\0';
       return;
@@ -75,7 +76,7 @@ void searchenv(char *filename, char *envname, char *pathname)
    {
       do
       {
-         sprintf(pathname, "%0.90s\\%s", p, filename);
+         sprintf_s(pathname, pthsz, "%0.90s\\%s", p, filename);
 
          if (_access(pathname, 0) >= 0)
             return;

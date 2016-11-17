@@ -41,14 +41,19 @@
 `define XORI    6'h0A
 `define R2      6'h0C
 `define CSRI    6'h0F
+`define CALL    6'h10
 `define JAL     6'h10
+`define JMP     6'h11
 `define Bcc     6'h12
 `define BccU    6'h13
 `define JAL16   6'h14
+`define CALL16  6'h14
+`define JMP16   6'h15
 `define SYS     6'h18
 `define MEM     6'h19
 `define NOP     6'h1A
 `define INT     6'h1B
+`define CALL0   6'h1C
 `define JAL0    6'h1C
 `define MOV     6'h1D
 `define CINSN   6'h1F
@@ -122,14 +127,16 @@
 `define R2CSR   6'h3F
 
 // SYS functs
-`define CLI     4'h00
-`define SEI     4'h01
-`define IRET    4'h04
-`define IPUSH   4'h05
-`define IPOP    4'h06
+`define CLI     5'h00
+`define SEI     5'h01
+`define IRET    5'h04
+`define IPUSH   5'h05
+`define IPOP    5'h06
 
 // MEM functs
+`define RET     5'h00
 `define PUSH    5'h02
+`define POP     5'h03
 `define PUSHI5  5'h04
 
 `define _2NOP_INSN    {10'h0,`NOP,10'h0,`NOP}
@@ -139,11 +146,14 @@
 `define CSRRC     2'b10
 
 `define CSR_HARTID  12'h001
+`define CSR_TICK    12'h002
 `define CSR_PCR     12'h003
 `define CSR_VBA     12'h004
 `define CSR_CAUSE   12'h006
 `define CSR_SCRATCH 12'h009
 `define CSR_SEMA    12'h00C
+`define CSR_SBL     12'h00E
+`define CSR_SBU     12'h00F
 `define CSR_TASK    12'h010
 `define CSR_CISC    12'h011
 `define CSR_ITOS0   12'h040
@@ -151,10 +161,14 @@
 `define CSR_ITOS2   12'h042
 `define CSR_ITOS3   12'h043
 `define CSR_ITOS4   12'h044
+`define CSR_CONFIG  12'hFF0
 `define CSR_CAP     12'hFFE
 
+`define FLT_STACK   9'd504
+`define FLT_DBE     9'd508
+
 module DSD7(hartid_i, rst_i, clk_i, irq_i, icause_i,
-    vda_o, vpa_o, rdy_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
+    vda_o, vpa_o, rdy_i, err_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
     pcr_o
     );
 input [31:0] hartid_i;
@@ -165,6 +179,7 @@ input [8:0] icause_i;
 output reg vda_o;
 output reg vpa_o;
 input rdy_i;
+input err_i;
 output reg lock_o;
 output reg wr_o;
 output reg [1:0] sel_o;
@@ -213,6 +228,8 @@ reg [31:0] pc,dpc,xpc;
 reg [31:0] pc_inc;
 reg [63:0] insn,iinsn;
 reg [63:0] ir,xir;
+reg [15:0] fault_insn;
+reg stuff_fault;
 reg ii32,ii5,ii5a;
 reg i32,i5,i5a;
 wire [5:0] iopcode = iinsn[5:0];
@@ -221,9 +238,10 @@ wire [4:0] iRb = iinsn[15:11];
 wire [5:0] opcode = ir[5:0];
 wire [5:0] funct = ir[31:26];
 reg [4:0] Ra,iRa,xRa;
-reg [4:0] Rb;
+reg [4:0] Rb,xRb;
 reg [4:0] Rc;
 reg [4:0] Rt,xRt;
+reg xRt2;
 wire [5:0] xopcode = xir[5:0];
 wire [5:0] xfunct = xir[31:26];
 // im1 | r3 | r2 | r1 | pc32
@@ -231,15 +249,17 @@ reg [128:0] istack[0:15];
 reg [3:0] isp;
 reg [31:0] r1,r2,r29;
 reg [31:0] regfile [0:31];
+reg [31:0] sp;
 reg [31:0] rfoa,rfob,rfoc;
 reg [31:0] a,b,c,imm,ea,xb;
-reg [31:0] res,lres,lres1;
+reg [31:0] res,lres,lres1,res2;
 reg ex_done;
 wire takb;
 reg [31:0] br_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
 // CSR's
+reg [31:0] tick;
 reg [31:0] msema;
 reg [31:0] mcause;
 reg [31:0] vba;                 // vector table base address 
@@ -251,6 +271,10 @@ wire [7:0] isid = cisc[7:0];
 reg [31:0] scratch;
 reg [31:0] cap = {CAP_MULDIV,CAP_ROTATES,CAP_LS_NDX};
 reg [31:0] pcr;
+reg [31:0] mconfig;
+wire [4:0] regSP = mconfig[4:0];
+wire [4:0] regBP = mconfig[12:8];
+reg [31:0] sbl, sbu;
 
 assign pcr_o = pcr;
 
@@ -259,37 +283,25 @@ input [31:0] jj;
 fnAbs = jj[31] ? -jj : jj;
 endfunction
 
+// Results forwarding multiplexer
 
-always @*
-case(Ra)
-5'd0:   rfoa <= 32'd0;
-xRt:    rfoa <= res;
-5'd1:   rfoa <= r1;
-5'd2:   rfoa <= r2;
-5'd29:   rfoa <= r29;
-default:    rfoa <= regfile[Ra]; 
-endcase
-
-always @*
-case(Rb)
-5'd0:   rfob <= 32'd0;
-xRt:    rfob <= res;
-5'd1:   rfob <= r1;
-5'd2:   rfob <= r2;
-5'd29:   rfob <= r29;
-default:    rfob <= regfile[Rb]; 
-endcase
-
-always @*
-case(Rc)
-5'd0:   rfoc <= 32'd0;
-xRt:    rfoc <= res;
-5'd1:   rfoc <= r1;
-5'd2:   rfoc <= r2;
-5'd29:   rfoc <= r29;
-default:    rfoc <= regfile[Rc]; 
-endcase
-
+function [31:0] fwd_mux;
+input [4:0] Rn;
+begin
+    case(Rn)
+    5'd0:   fwd_mux = 32'd0;
+    xRt:    fwd_mux = res;
+    5'd1:   fwd_mux = r1;
+    5'd2:   fwd_mux = r2;
+    5'd29:  fwd_mux = r29;
+    regSP:  if (xRt2)
+                fwd_mux = res2;
+            else
+                fwd_mux = sp;
+    default:    fwd_mux = regfile[Rn]; 
+    endcase
+end
+endfunction
 
 wire iisShift = iopcode==`R2 && (ifunct==`SHL || ifunct==`SHR || ifunct==`ASR || ifunct==`ROL || ifunct==`ROR ||
                                 ifunct==`SHLI || ifunct==`SHRI || ifunct==`ASRI || ifunct==`ROLI || ifunct==`RORI);
@@ -418,8 +430,10 @@ begin
         endcase
     `MEM:
         case (xir[15:11])
+        `RET:       res = a + imm;
         `PUSHI5,
         `PUSH:      res = a - 32'd2;
+        `POP:       res = lres;
         default:    res = 32'hDEADDEAD;
         endcase
     `ADDI:  res = a + imm;
@@ -429,15 +443,26 @@ begin
     `ORI:   res = logic_o;
     `XORI:  res = logic_o;
     `LH,`LHU,`LW,`LWR:  res = lres;
-    `PEA:   res = a - 32'd2;
-    `JAL:   res = xpc + 32'd3;
-    `JAL16: res = xpc + 32'd2;
-    `JAL0:  res = xpc + 32'd1;
+    `PEA:       res = a - 32'd2;
+    `CALL:      res = a - 32'd2;
+    `CALL16:    res = a - 32'd2;
+    `CALL0:     res = a - 32'd2;
+    `JMP:       res = xpc + 32'd3;
+    `JMP16:     res = xpc + 32'd2;
     `MOV:   res = a;
     `CSR,`CSRI: read_csr(xir[31:18],res);
     endcase
 end
 
+always @*
+    case(xopcode)
+    `MEM:
+        case(xir[15:11])
+        `POP:   res2 <= a + 32'd2;
+        default:    res2 <= 32'h0;
+        endcase
+        default:    res2 <= 32'h0;
+    endcase
 
 //---------------------------------------------------------------------------
 // Lookup table for compressed instructions.
@@ -635,6 +660,7 @@ wire advanceIF = advanceRF & ihit;
 
 always @(posedge clk_i)
 if (rst_i) begin
+    stuff_fault <= `FALSE;
     im <= `TRUE;
     isp <= 4'd0;
     tr <= 6'd0;
@@ -651,9 +677,14 @@ if (rst_i) begin
     isICacheLoad <= `FALSE;
     isICacheReset <= `TRUE;
     gie <= `FALSE;
+    tick <= 32'd0;
+    mconfig <= {8'd30,8'd31};
+    sbl <= 32'h0;
+    sbu <= 32'hFFFFFFFF;
     next_state(ICACHE_RST);
 end
 else begin
+tick <= tick + 32'd1;
 case(state)
 ICACHE_RST:
     if (rdy_i) begin
@@ -672,7 +703,13 @@ begin
     // on the critical path.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceIF) begin
-        if (irq_i & ~im & gie)
+        // A stuffed fault will have occurred earlier than a pending IRQ
+        // hence takes precedence.
+        if (stuff_fault) begin
+            iinsn = {16'd0,fault_insn};
+            stuff_fault <= `FALSE;
+        end
+        else if (irq_i & ~im & gie)
             iinsn = {17'd0,icause_i,`INT};
         else
             iinsn = insn[5:0]==`CINSN ? cinsn : insn;
@@ -685,8 +722,9 @@ begin
             Rb <= 5'd2;
             Rc <= 5'd29;
         end
-        else if (iinsn[5:0]==`PEA || (iinsn[5:0]==`MEM && iinsn[15:11]==`PUSH)) begin
-            Ra <= 5'd31;
+        else if (iinsn[5:0]==`PEA || iinsn[5:0]==`CALL || iinsn[5:0]==`CALL16 || iinsn[5:0]==`CALL0 ||
+            (iinsn[5:0]==`MEM && (iinsn[15:11]==`RET || iinsn[15:11]==`PUSH || insn[15:11]==`POP))) begin
+            Ra <= regSP;
             Rb <= iinsn[10:6];
             Rc <= iinsn[15:11];
         end
@@ -695,6 +733,11 @@ begin
             Rb <= iinsn[10:6];
             Rc <= iinsn[15:11];
         end
+        // The INT is going to do a jump anyways os the PC increment
+        // shouldn't matter.
+//        if ((irq_i & ~im & gie) || stuff_fault)
+//            pc_inc = 32'd1;
+//        else
         case(insn[5:0])
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
@@ -711,12 +754,17 @@ begin
             `R2CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
             default:    pc_inc = 32'd1;
             endcase
+        `MEM:
+            case(insn[15:11])
+            `RET,`PUSHI5:   pc_inc = ii5a ? 32'd4 : 32'd1;
+            default:    pc_inc = 32'd1;
+            endcase
         default:    pc_inc = 32'd1;
         endcase
         case(iopcode)
-        `JAL0:  pc <= 32'h0;
-        `JAL16: pc <= {{16{iinsn[31]}},iinsn[31:16]};
-        `JAL:   pc <= iinsn[47:16];
+        `CALL0:  pc <= 32'h0;
+        `JMP16,`CALL16: pc <= {{16{iinsn[31]}},iinsn[31:16]};
+        `JMP,`CALL:   pc <= iinsn[47:16];
         default:    pc <= pc + pc_inc;
         endcase
         i32 <= ii32;
@@ -743,9 +791,9 @@ begin
     if (advanceRF) begin
         xir <= ir;
         xpc <= dpc;
-        a <= rfoa;
-        b <= rfob;
-        c <= rfoc;
+        a <= fwd_mux(Ra);
+        b <= fwd_mux(Rb);
+        c <= fwd_mux(Rc);
         case(opcode)
         `R2:
           case(funct)
@@ -762,9 +810,9 @@ begin
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `CSRI:         imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
-        `JAL:          imm <= ir[63:32];
-        `JAL16:        imm <= {{16{ir[31]}},ir[31:16]};
-        `JAL0:         imm <= 32'h0;
+        `JMP,`CALL:    imm <= ir[47:16];
+        `JMP16,`CALL16: imm <= {{16{ir[31]}},ir[31:16]};
+        `CALL0:        imm <= 32'h0;
         `R2:
             case(ir[31:26])
             `R2CSRI:    imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
@@ -772,7 +820,8 @@ begin
             endcase
         `MEM:
             case(ir[15:11])
-            `PUSHI5:    imm <= {{27{ir[10]}},ir[10:6]};
+            `RET:       imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
+            `PUSHI5:    imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
             default:    imm <= {{27{ir[10]}},ir[10:6]};
             endcase
         default:    imm <= 32'h0;
@@ -783,7 +832,9 @@ begin
         br_disp <= {{19{ir[31]}},ir[31:19]};
         // Needed for CSR instructions
         xRa <= Ra;
+        xRb <= Rb;  // needed for calls/jumps
         // Set target register
+        xRt2 <= 1'b0;
         case(opcode)
         `R2:
             case(funct)
@@ -796,18 +847,21 @@ begin
             default:
                 xRt <= 5'd0;
             endcase
+        `CALL,`CALL16,`CALL0:
+            xRt <= regSP;
         `MEM:
             case(xir[15:11])
-            `PUSHI5,
-            `PUSH:  xRt <= 5'd31;
+            `RET,`PUSHI5,`PUSH:  xRt <= regSP;
+            `POP:   begin xRt <= ir[10:6]; xRt2 <= 1'b1; end
             default:    xRt <= 5'd0;
             endcase
-        `JAL,`JAL16,`JAL0,`MOV,
+        `MOV,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
         `LH,`LHU,`LW,`LWR:
             xRt <= ir[15:11];
         `PEA:
-            xRt <= 5'd31;
+            xRt <= regSP;
+        `JMP,`JMP16:    xRt <= ir[15:11];
         default:
             xRt <= 5'd0;
         endcase
@@ -821,14 +875,17 @@ begin
     begin   // if (advanceEX) // always true
         if (ex_done==`TRUE)
             ex_done <= `FALSE;
+        if (xRt2)
+            sp <= res2;
         case(xRt)
         5'd1:   r1 <= res;
         5'd2:   r2 <= res;
         5'd29:  r29 <= res;
+        regSP:  sp <= res;
         endcase
         regfile[xRt] <= res;
         // Globally enable interrupts after first update of stack pointer.
-        if (xRt==5'd31)
+        if (xRt==regSP)
             gie <= `TRUE;
         case(xopcode)
  
@@ -843,26 +900,19 @@ begin
                 ex_branch(vba+{ol,2'b00});
             end
         
-        // JAL: - if no register Ra was specified then the JAL is done already
-        //        by the IFETCH stage. Otherwise we need to branch.
-        `JAL,`JAL16,`JAL0:
-            if (xRa!=5'd0) begin
-                if (xRa==5'd31)
-                    ex_branch(xpc + imm);
-                else
-                    ex_branch(a + imm);
-            end
+        `JMP,`JMP16:
+                if (xRb!=5'd0) begin
+                    if (xRb==regSP)
+                       ex_branch(xpc + imm);
+                    else
+                        ex_branch(b + imm);
+                end
+        `CALL:      ex_call(32'd3);
+        `CALL16:    ex_call(32'd2);
+        `CALL0:     ex_call(32'd1);
 
-        `Bcc:
-            if (takb) begin
-                if (br_disp != 32'd2)
-                    ex_branch(xpc + br_disp);
-                if (xir[18:16]==3'd2)   // BAS
-                    msema[xRa] <= 1'b1;
-                else if (xir[18:16]==3'd3)  // BAC
-                    msema[xRa] <= 1'b0;
-            end
-        `BccU,`BccI,`BccUI:
+        `Bcc,`BccU,
+        `BccI,`BccUI:
             if (takb)
                 ex_branch(xpc + br_disp);
 
@@ -952,13 +1002,22 @@ begin
             endcase
         `MEM:
             case(xir[15:11])
+            `RET:
+                if (ex_done==`FALSE) begin
+                    ex_done <= `TRUE;
+                    mem_size <= word;
+                    ea <= a;
+                    next_state(LOAD1);
+                end
+                else
+                    ex_branch(lres);
             `PUSH:
                 if (ex_done==`FALSE) begin
                     ex_done <= `TRUE;
                     mem_size <= word;
                     ea <= a - 32'd2;
                     xb <= b;
-                    state <= STORE1;
+                    next_state(STORE1);
                 end
             `PUSHI5:
                 if (ex_done==`FALSE) begin
@@ -966,7 +1025,14 @@ begin
                     mem_size <= word;
                     ea <= a - 32'd2;
                     xb <= imm;
-                    state <= STORE1;
+                    next_state(STORE1);
+                end
+            `POP:
+                if (ex_done==`FALSE) begin
+                    ex_done <= `TRUE;
+                    mem_size <= word;
+                    ea <= a;
+                    next_state(LOAD1);
                 end
             endcase
             
@@ -1068,11 +1134,24 @@ DIV1:
 
 LOAD1:
     begin
-		read1(mem_size,ea);
-        next_state(LOAD2);
+        if (xRa==regSP || xRa==regBP) begin
+            if (ea < sbl || ea > sbu)
+                ex_fault(`FLT_STACK,0);
+        end
+        else begin
+    		read1(mem_size,ea);
+            next_state(LOAD2);
+        end
     end
 LOAD2:
-    if (rdy_i) begin
+    if (err_i) begin
+        vda_o <= `FALSE;
+        wr_o <= `FALSE;
+        sel_o <= 2'b00;
+        lock_o <= `FALSE;
+        ex_fault(`FLT_DBE,0);
+    end
+    else if (rdy_i) begin
         lres1 = dat_i >> {ea[0],4'h0};
         case(xopcode)
         `LH:
@@ -1092,7 +1171,7 @@ LOAD2:
         `LW,`LWR:
             begin
             case(ea[0])
-            1'b1:   begin read2(mem_size,ea); lres[15:0] <= lres1[15:0]; state <= LOAD3; end
+            1'b1:   begin read2(mem_size,ea); lres[15:0] <= lres1[15:0]; next_state(LOAD3); end
             default:
                 begin  
                 $display("Loaded %h from %h", lres1, adr_o);
@@ -1103,12 +1182,34 @@ LOAD2:
                 end 
             endcase
             end
+        `MEM:
+            case(xir[15:11])
+            `RET,`POP:
+                case(ea[0])
+                1'b1:   begin read2(mem_size,ea); lres[15:0] <= lres1[15:0]; next_state(LOAD3); end
+                default:
+                    begin  
+                    $display("Loaded %h from %h", lres1, adr_o);
+                    lres <= lres1;
+                    vda_o <= `FALSE;
+                    sel_o <= 8'h00;
+                    next_state(RUN);
+                    end 
+                endcase
+            endcase
         endcase
         sr_o <= 1'b0;
     end
 // The operation here must be a LW or LWR.
 LOAD3:
-    if (rdy_i) begin
+    if (err_i) begin
+        vda_o <= `FALSE;
+        wr_o <= `FALSE;
+        sel_o <= 2'b00;
+        lock_o <= `FALSE;
+        ex_fault(`FLT_DBE,0);
+    end
+    else if (rdy_i) begin
         vda_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
@@ -1118,12 +1219,25 @@ LOAD3:
 
 STORE1:
     begin
-        write1(mem_size,ea,xb);
-        $display("Store to %h <= %h", ea, xb);
-        next_state(STORE2);
+        if (xRa==regSP || xRa==regBP) begin
+            if (ea < sbl || ea > sbu)
+                ex_fault(`FLT_STACK,0);
+        end
+        else begin
+            write1(mem_size,ea,xb);
+            $display("Store to %h <= %h", ea, xb);
+            next_state(STORE2);
+        end
     end
 STORE2:
-    if (rdy_i) begin
+    if (err_i) begin
+        vda_o <= `FALSE;
+        wr_o <= `FALSE;
+        sel_o <= 2'b00;
+        lock_o <= `FALSE;
+        ex_fault(`FLT_DBE,0);
+    end
+    else if (rdy_i) begin
         if (mem_size==word && ea[0]!=1'b0) begin
             write2(mem_size,ea,xb);
             next_state(STORE3);
@@ -1138,7 +1252,14 @@ STORE2:
         msema[0] <= rb_i;
     end
 STORE3:
-    if (rdy_i) begin
+    if (err_i) begin
+        vda_o <= `FALSE;
+        wr_o <= `FALSE;
+        sel_o <= 2'b00;
+        lock_o <= `FALSE;
+        ex_fault(`FLT_DBE,0);
+    end
+    else if (rdy_i) begin
         vda_o <= `FALSE;
         wr_o <= 1'b0;
         sel_o <= 2'b00;
@@ -1190,6 +1311,18 @@ task nop_xir();
 begin
     xir <= `_2NOP_INSN;
     xRt <= 5'd0;
+    xRt2 <= 1'b0;
+end
+endtask
+
+task ex_fault;
+input [8:0] ccd;        // cause code
+input nib;              // next instruction bit
+begin
+    stuff_fault <= `TRUE;
+    fault_insn <= { nib, ccd, `INT};
+    ex_branch(xpc);
+    next_state(RUN);
 end
 endtask
 
@@ -1199,6 +1332,27 @@ begin
     nop_ir();
     nop_xir();
     pc <= nxt_pc;
+end
+endtask
+
+// CALL: - if no register Ra was specified then the CALL is done already
+//        by the IFETCH stage. Otherwise we need to branch.
+task ex_call;
+input [31:0] ant;
+begin
+    if (ex_done==`FALSE) begin
+        ex_done <= `TRUE;
+        mem_size <= word;
+        ea <= a - 32'd2;
+        xb <= xpc + ant;
+        next_state(STORE1);
+    end
+    else if (xRb!=5'd0) begin
+        if (xRb==regSP)
+            ex_branch(xpc + imm);
+        else
+            ex_branch(b + imm);
+    end
 end
 endtask
 
@@ -1291,10 +1445,13 @@ output [31:0] res;
 begin
     case(csrno[11:0])
     `CSR_HARTID:    res = hartid_i;
+    `CSR_TICK:      res = tick;
     `CSR_VBA:       res = vba;
     `CSR_PCR:       res = pcr;
     `CSR_CAUSE:     res = mcause;
     `CSR_SCRATCH:   res = scratch;
+    `CSR_SBL:       res = sbl;
+    `CSR_SBU:       res = sbu;
     `CSR_TASK:      res = tr;
     `CSR_CISC:      res = cisc;
     `CSR_SEMA:      res = msema;
@@ -1303,6 +1460,7 @@ begin
     `CSR_ITOS2:    res = itos[95:64];
     `CSR_ITOS3:    res = itos[127:96];
     `CSR_ITOS4:    res = itos[128];
+    `CSR_CONFIG:    res = mconfig;
     `CSR_CAP:       res = cap;
     default:    res = 32'hDEADDEAD;
     endcase
@@ -1322,6 +1480,8 @@ begin
         `CSR_PCR:       pcr <= dat;
         `CSR_CAUSE:     mcause <= dat;
         `CSR_SCRATCH:   scratch <= dat;
+        `CSR_SBL:       sbl <= dat;
+        `CSR_SBU:       sbu <= dat;
         `CSR_TASK:      tr <= dat;
         `CSR_CISC:      cisc <= dat;
         `CSR_SEMA:     msema <= dat;
@@ -1330,6 +1490,7 @@ begin
         `CSR_ITOS2:    itos[95:64] <= dat;
         `CSR_ITOS3:    itos[127:96] <= dat;
         `CSR_ITOS4:    itos[128] <= dat[0];
+        `CSR_CONFIG:    mconfig <= dat;
         endcase
     `CSRRS:
         case(csrno[11:0])

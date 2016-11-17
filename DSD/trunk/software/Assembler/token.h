@@ -107,6 +107,8 @@ enum {
      tk_com,
      tk_cpuid,
      tk_cs,
+	 tk_csrrc,
+	 tk_csrrs,
      tk_csrrw, // 190
      tk_data,
      tk_db, 
@@ -162,6 +164,8 @@ enum {
      tk_inc,
      tk_int, // 240
      tk_ios,
+	 tk_ipush,
+	 tk_ipop,
 	 tk_iret,
      tk_jal,
      tk_jci,
@@ -176,6 +180,7 @@ enum {
      tk_lbu,
      tk_lc,
      tk_lcu,
+	 tk_ld,
      tk_ldi,
      tk_ldis,
      tk_lea,

@@ -692,6 +692,7 @@ void PeepoptLc0i(struct ocode *ip)
     ip->fwd = ip2->fwd;
 }
 
+
 // Combine a chain of push operations into a single push
 
 void PeepoptPushPop(struct ocode *ip)

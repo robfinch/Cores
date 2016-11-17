@@ -216,8 +216,6 @@ static int getBoundsRegister()
 
 static int FISA64_getSprRegister()
 {
-    int reg;
-
     while(isspace(*inptr)) inptr++;
     switch(*inptr) {
 
@@ -233,7 +231,7 @@ static int FISA64_getSprRegister()
     case '9':
          NextToken();
          NextToken();
-         return ival;
+         return (int)ival;
 
     // bear
     case 'b': case 'B':
@@ -657,7 +655,7 @@ static int emitImm15(int64_t v, int force)
      // ToDo: modify the fixup record type based on the number of prefixes emitted.
     if (bGen && lastsym && !use_gp && (lastsym->isExtern || lastsym->defined==0))
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | nn+1 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((int64_t)(lastsym->ord+1) << 32) | nn+1 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
      return nn;
 }
@@ -678,10 +676,10 @@ static void process_bitfield(int oc)
     Ra = getRegisterX();
     need(',');
     NextToken();
-    mb = expr();
+    mb = (int)expr();
     need(',');
     NextToken();
-    me = expr();
+    me = (int)expr();
     emit_insn(
         (oc << 29) |
         (me << 23) |
@@ -698,12 +696,10 @@ static void process_bitfield(int oc)
 
 static void process_brk(int oc)
 {
-    int Ra;
-    int Rt;
     int val;
 
     NextToken();
-    val = expr();
+    val = (int)expr();
     emit_insn(
         (oc << 30) |
         ((val & 0x1ff) << 17) |
@@ -774,7 +770,7 @@ static void process_cpuid(int oc)
      Ra = getRegisterX();
      need(',');
      NextToken();
-     val = expr();
+     val = (int)expr();
      emit_insn(
          (oc << 25) | 
          ((val & 15) << 17) |
@@ -795,7 +791,7 @@ static void process_cpuid(int oc)
 static void process_jal(int oc, int Rt)
 {
     int64_t addr;
-    int Ra, Rb;
+    int Ra;
     
     // -1 indicates to parse a target register
     if (Rt == -1) {
@@ -1185,7 +1181,7 @@ static void process_bra(int oc)
      // ToDo: modify the fixup record type based on the number of prefixes emitted.
     if (bGen && lastsym && (lastsym->isExtern || lastsym->defined==0))
     if( lastsym->segment < 5)
-    sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
+    sections[segment+7].AddRel(sections[segment].index,((int64_t)(lastsym->ord+1) << 32) | FUT_R27 | (lastsym->isExtern ? 128 : 0)|
     (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
     ad = code_address;
     disp1 = ((val - ad) >> 1);
@@ -1602,7 +1598,7 @@ static void process_pea()
        oc = 0xB9;  // PEAX
         if (bGen && lastsym && Ra != 249 && !use_gp)
         if( lastsym->segment < 5)
-        sections[segment+7].AddRel(sections[segment].index,((lastsym->ord+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
+        sections[segment+7].AddRel(sections[segment].index,((int64_t)(lastsym->ord+1) << 32) | fixup | (lastsym->isExtern ? 128 : 0)|
         (lastsym->segment==codeseg ? code_bits << 8 : data_bits << 8));
        emitCode(Ra);
        emitCode(Rb);
@@ -1976,9 +1972,10 @@ static void process_fprdstat(int oc)
 
 static void ProcessEOL(int opt)
 {
-    int nn,mm;
+    int mm;
     int first;
     int cc;
+	int64_t nn;
     
      //printf("Line: %d\r", lineno);
      segprefix = -1;

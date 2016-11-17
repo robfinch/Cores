@@ -84,6 +84,7 @@ extern txtoStream ofs;
 extern txtoStream lfs;
 extern txtoStream dfs;
 extern int mangledNames;
+extern int sizeOfWord;
 
 /*
 extern FILE             *input,
@@ -115,8 +116,8 @@ extern int				lc_thread;
 extern struct snode     *bodyptr;       /* parse tree for function */
 extern int              global_flag;
 extern TABLE            defsyms;
-extern int              save_mask;      /* register save mask */
-extern int              fpsave_mask;
+extern int64_t          save_mask;      /* register save mask */
+extern int64_t          fpsave_mask;
 extern int				bsave_mask;
 extern int uctran_off;
 extern int isKernel;
@@ -256,8 +257,8 @@ extern AMODE *makereg(int r);
 extern AMODE *makefpreg(int t);
 extern AMODE *makebreg(int r);
 extern AMODE *makepred(int r);
-extern int bitsset(int mask);
-extern int popcnt(int m);
+extern int bitsset(int64_t mask);
+extern int popcnt(int64_t m);
 // Outcode.c
 extern void GenerateByte(int val);
 extern void GenerateChar(int val);

@@ -1556,7 +1556,6 @@ int main(int argc, char *argv[])
     static char fname[500];
     static char hexbuf[500];
     char *p;
-    int chksum;
     uint64_t lsa;      // last start address
     double bpi;
     int64_t i64;
@@ -1736,12 +1735,12 @@ int main(int argc, char *argv[])
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (verilog_out) {
         if (verbose) printf("Generating Verilog file.\r\n");
-        strcpy(fname, argv[nn]);
+        strcpy_s(fname, sizeof(fname), argv[nn]);
         p = strrchr(fname,'.');
         if (p) {
             *p = '\0';
         }
-        strcat(fname, ".ve0");
+        strcat_s(fname, sizeof(fname), ".ve0");
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
@@ -1772,12 +1771,12 @@ int main(int argc, char *argv[])
         }
         else
             printf("Can't create .ver file.\r\n");
-        strcpy(fname, argv[nn]);
+        strcpy_s(fname, sizeof(fname), argv[nn]);
         p = strrchr(fname,'.');
         if (p) {
             *p = '\0';
         }
-        strcat(fname, ".ve1");
+        strcat_s(fname, sizeof(fname), ".ve1");
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
@@ -1798,12 +1797,12 @@ int main(int argc, char *argv[])
         }
         else
             printf("Can't create .ver file.\r\n");
-        strcpy(fname, argv[nn]);
+        strcpy_s(fname, sizeof(fname), argv[nn]);
         p = strrchr(fname,'.');
         if (p) {
             *p = '\0';
         }
-        strcat(fname, ".ve2");
+        strcat_s(fname, sizeof(fname), ".ve2");
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
@@ -1829,12 +1828,12 @@ int main(int argc, char *argv[])
     // Output Verilog memory declaration
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if (verbose) printf("Generating Text file.\r\n");
-        strcpy(fname, argv[nn]);
+        strcpy_s(fname, sizeof(fname), argv[nn]);
         p = strrchr(fname,'.');
         if (p) {
             *p = '\0';
         }
-        strcat(fname, ".txt");
+        strcat_s(fname, sizeof(fname), ".txt");
         printf("fname:%s\r\n", fname);
         vfp = fopen(fname, "w");
         if (vfp) {
@@ -1853,25 +1852,25 @@ int main(int argc, char *argv[])
     // Output Intel hex file
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         if (verbose) printf("Generating Hex file.\r\n");
-        strcpy(fname, argv[nn]);
+        strcpy_s(fname, sizeof(fname), argv[nn]);
         p = strrchr(fname,'.');
         if (p) {
             *p = '\0';
         }
         lsa = 0;
-        strcat(fname, ".hex");
+        strcat_s(fname, sizeof(fname), ".hex");
         printf("fname:%s\r\n", fname);
         vfp = fopen(fname, "w");
         if (vfp) {
             if (gCpu==64) {
                 for (kk = 0; kk < binndx; kk+=4) {
                     if (lsa != (start_address + kk) >> 16) {
-                        sprintf(hexbuf, ":02000004%04X00\n", (int)((start_address+kk) >> 16));
+                        sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+kk) >> 16));
                         IHChecksum(hexbuf, 2);
                         fprintf(vfp, hexbuf);
                         lsa = (start_address+kk) >> 16;
                     }
-                    sprintf(hexbuf, ":%02X%04X00%02X%02X%02X%02X%02X\n",
+                    sprintf_s(hexbuf, sizeof(hexbuf), ":%02X%04X00%02X%02X%02X%02X%02X\n",
                         4, (start_address + kk) & 0xFFFF,
                         binfile[kk], binfile[kk+1], binfile[kk+2], binfile[kk+3]
                     );
@@ -1901,6 +1900,5 @@ int main(int argc, char *argv[])
         }
         else
             printf("Can't create .hex file.\r\n");
-	getchar();
     return 0;
 }

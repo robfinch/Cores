@@ -47,13 +47,14 @@ bool isInline = false;
 int isIO = FALSE;
 int isConst = FALSE;
 bool isRegister = false;
+bool isAuto = false;
 bool isFuncBody;
 bool isFuncPtr;
 int missingArgumentName = FALSE;
 int disableSubs;
 int parsingParameterList = FALSE;
 int unnamedCnt = 0;
-int needParseFunction = FALSE;
+int needParseFunction = 0;
 int isStructDecl = FALSE;
 int worstAlignment = 0;
 char *stkname = 0;
@@ -749,6 +750,28 @@ void Declaration::ParseSuffixOpenbr()
     tail = head;
 }
 
+void Declaration::ParseFunctionAttribute(SYM *sym)
+{
+	NextToken();
+	needpunc(openpa,0);
+	do {
+		switch(lastst) {
+		case kw_no_temps:
+			sym->UsesTemps = false;
+			NextToken();
+			break;
+		/*
+		case kw_no_parms:
+			sym->UsesStackParms = false;
+			NextToken();
+			break;
+		*/
+		}
+	} while (lastst==comma);
+	needpunc(closepa,0);
+}
+
+
 // Take care of following open parenthesis (). These indicate a function
 // call. There may or may not be following parameters. A following '{' is
 // looked for and if found a flag is set to parse the function body.
@@ -760,59 +783,80 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 	int fd;
 	std::string odecl;
 	int isd;
-	int nump;
+	int nump = 0;
+	SYM *cf;
 	
-  dfs.printf("<openpa>\n");
-  dfs.printf("****************************\n");
-  dfs.printf("****************************\n");
-  dfs.printf("Function: %s\n", (char *)sp->name->c_str());
-  dfs.printf("****************************\n");
-  dfs.printf("****************************\n");
-  NextToken();
-  sp->IsPascal = isPascal;
-  sp->IsInline = isInline;
+	dfs.printf("<openpa>\n");
+	dfs.printf("****************************\n");
+	dfs.printf("****************************\n");
+	dfs.printf("Function: %s\n", (char *)sp->name->c_str());
+	dfs.printf("****************************\n");
+	dfs.printf("****************************\n");
+	NextToken();
+	sp->IsPascal = isPascal;
+	sp->IsInline = isInline;
   
-  // An asterik before the function name indicates a function pointer but only
-  // if it's bracketed properly, otherwise it could be the return value that's
-  // a pointer.
-//  isFuncPtr = head->type==bt_pointer;
-  temp1 =(TYP *) TYP::Make(bt_func,0/*isFuncPtr ? bt_func : bt_ifunc,0*/);
-  temp1->val_flag = 1;
-  dfs.printf("o ");
-  if (isFuncPtr) {
-    dfs.printf("Got function pointer in declarations.\n");
-    temp1->btp = head->btp;
-    head->btp = temp1->GetIndex();
-  }
-  else {
-	  temp1->btp= head->GetIndex();
-	  head = temp1;
-  }
-  dfs.printf("p ");
-  if (tail==NULL) {
-	  if (temp1->GetBtp())
-		  tail = temp1->GetBtp();
-	  else
-		  tail = temp1;
-  }
-  dfs.printf("q ");
-  needParseFunction = TRUE;
-  sp->params.Clear();
-  sp->parent = currentClass->GetIndex();
-  if(lastst == closepa) {
-    NextToken();
+	// An asterik before the function name indicates a function pointer but only
+	// if it's bracketed properly, otherwise it could be the return value that's
+	// a pointer.
+	//  isFuncPtr = head->type==bt_pointer;
+	temp1 =(TYP *) TYP::Make(bt_func,0/*isFuncPtr ? bt_func : bt_ifunc,0*/);
+	temp1->val_flag = 1;
+	dfs.printf("o ");
+	if (isFuncPtr) {
+		dfs.printf("Got function pointer in declarations.\n");
+		temp1->btp = head->btp;
+		head->btp = temp1->GetIndex();
+	}
+	else {
+		temp1->btp= head->GetIndex();
+		head = temp1;
+	}
+	dfs.printf("p ");
+	if (tail==NULL) {
+		if (temp1->GetBtp())
+			tail = temp1->GetBtp();
+		else
+			tail = temp1;
+	}
+	dfs.printf("q ");
+	needParseFunction = 1;
+	sp->params.Clear();
+	sp->parent = currentClass->GetIndex();
+	if(lastst == closepa) {
+		NextToken();
+		while (lastst == kw_attribute)
+			ParseFunctionAttribute(sp);
 	  if(lastst == begin) {
-      temp1->type = bt_ifunc;
+		  temp1->type = bt_ifunc;
+		  needParseFunction = 2;
 	  }
 	  else {
-      temp1->type = bt_func;
-		  needParseFunction = FALSE;
+		  if (lastst != semicolon) {
+				goto j2;
+			cf = currentFn;
+			currentFn = sp;
+			nump = 0;
+			sp->BuildParameterList(&nump);
+			currentFn = cf;
+			if (lastst==begin) {
+				temp1->type = bt_ifunc;
+				currentFn = sp;
+				sp->NumParms = nump;
+				needParseFunction = 2;
+				goto j1;
+			}
+		}
+	      temp1->type = bt_func;
+		  needParseFunction = 0;
 		  dfs.printf("Set false\n");
 	  }
 	  currentFn = sp;
 	  sp->NumParms = 0;
+j1: ;
   }
   else {
+j2:
     dfs.printf("r");
 	  currentFn = sp;
     dfs.printf("s");
@@ -834,7 +878,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   		funcdecl = 10;
   //				SetType(sp);
   		sp->BuildParameterList(&nump);
-  		needParseFunction = FALSE;
+  		needParseFunction = 0;
   	  dfs.printf("Set false\n");
   //				sp->parms = sym;
   		sp->NumParms = nump;
@@ -847,7 +891,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
   		needpunc(closepa,23);
   
   		if (lastst==begin) {
-  		  needParseFunction = TRUE;
+  		  needParseFunction = 2;
   		  dfs.printf("Set true1\n");
   			if (sp->params.GetHead() && sp->proto.GetHead()) {
   			  dfs.printf("Matching parameter types to prototype.\n");
@@ -1113,6 +1157,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 		  sp->IsPascal = isPascal;
 		  sp->IsInline = isInline;
 		  sp->IsRegister = isRegister;
+		  sp->IsAuto = isAuto;
 		  sp->IsParameter = parsingParameterList > 0;
 		  isRegister = false;
 		  if (sp->parent < 0)// was nullptr
@@ -1613,6 +1658,7 @@ int ParameterDeclaration::Parse(int fd)
 {
 	int ofd;
   int opascal;
+	isAuto = false;
 
   isFuncPtr = false;
 	nparms = 0;
@@ -1628,6 +1674,10 @@ int ParameterDeclaration::Parse(int fd)
     for(;;) {
 dfs.printf("A(%d)",lastst);
 		switch(lastst) {
+		case kw_auto:
+			NextToken();
+			isAuto = true;
+			break;
 		case kw_pascal:
       NextToken();
 		  isPascal = TRUE;
@@ -1642,6 +1692,7 @@ dfs.printf("A(%d)",lastst);
 dfs.printf("B");
       error(ERR_ILLCLASS);
       declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
+				isAuto = false;
 			break;
 		case ellipsis:
 		case id:
@@ -1654,16 +1705,19 @@ dfs.printf("B");
     case kw_float: case kw_double:
 dfs.printf("C");
     declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
+				isAuto = false;
 	            break;
         case kw_thread:
                 NextToken();
                 error(ERR_ILLCLASS);
 				lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct);
+				isAuto = false;
 				break;
         case kw_static:
                 NextToken();
                 error(ERR_ILLCLASS);
 				lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct);
+				isAuto = false;
 				break;
         case kw_extern:
 dfs.printf("D");
@@ -1673,6 +1727,7 @@ dfs.printf("D");
 					NextToken();
                 ++global_flag;
                 declare(NULL,&gsyms[0],sc_external,0,bt_struct);
+				isAuto = false;
                 --global_flag;
                 break;
 		case kw_register:

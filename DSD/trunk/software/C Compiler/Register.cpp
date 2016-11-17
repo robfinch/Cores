@@ -139,7 +139,7 @@ void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 	ap1 = allocAmode();
 	ap1->preg = reg;
 	ap1->mode = rmode;
-	GenerateDiadic(op_lw,0,ap1,make_indexed(stkpos*2,regSP));
+	GenerateMonadic(op_pop,0,ap1);
     reg_alloc[number].f.isPushed = 'F';
 }
 
@@ -394,8 +394,6 @@ void TempRevalidate(int sp)
 
 	for (nn = sp-1; nn >= 0; nn--)
 		GenerateTempRegPop(stacked_regs[nn].reg, stacked_regs[nn].mode, stacked_regs[nn].f.allocnum,sp-nn-1);
-	if (sp != 0)
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(2*(sp)));
 	reg_alloc_ptr = save_reg_alloc_ptr;
 	memcpy(reg_alloc, save_reg_alloc, sizeof(reg_alloc));
 	memcpy(reg_in_use, save_reg_in_use, sizeof(reg_in_use));

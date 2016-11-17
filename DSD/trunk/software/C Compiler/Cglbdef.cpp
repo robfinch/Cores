@@ -58,6 +58,7 @@ int wcharSupport = 1;
 int verbose = 0;
 int use_gp = 0;
 int address_bits = 32;
+int sizeOfWord = 2;
 
 std::ifstream *ifs;
 txtoStream ofs;
@@ -92,8 +93,8 @@ int				lc_thread = 0;
 struct snode    *bodyptr = 0;
 int             global_flag = 1;
 TABLE           defsyms;
-int             save_mask = 0;          /* register save mask */
-int             fpsave_mask = 0;
+int64_t         save_mask = 0;          /* register save mask */
+int64_t         fpsave_mask = 0;
 TYP             tp_int, tp_econst;
 
 int isKernel = FALSE;

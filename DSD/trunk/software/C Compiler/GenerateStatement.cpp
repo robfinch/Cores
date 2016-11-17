@@ -57,11 +57,11 @@ char last_rem[132];
 extern TYP              stdfunc;
 
 
-int bitsset(int mask)
+int bitsset(int64_t mask)
 {
 	int nn,bs=0;
-	for (nn =0; nn < 32; nn++)
-		if (mask & (1 << nn)) bs++;
+	for (nn =0; nn < 64; nn++)
+		if (mask & (1LL << nn)) bs++;
 	return bs;
 }
 
@@ -451,14 +451,14 @@ void genxswitch(Statement *stmt)
     breaklab = oldbreak;
 }
 
-int popcnt(int m)
+int popcnt(int64_t m)
 {
 	int n;
 	int cnt;
 
 	cnt =0;
-	for (n = 0; n < 32; n = n + 1)
-		if (m & (1 << n)) cnt = cnt + 1;
+	for (n = 0; n < 64; n = n + 1)
+		if (m & (1LL << n)) cnt = cnt + 1;
 	return cnt;
 }
 /*

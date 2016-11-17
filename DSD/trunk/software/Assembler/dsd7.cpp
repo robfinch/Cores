@@ -1141,12 +1141,13 @@ static void process_rop(int oc)
     Rt = getRegisterX();
     need(',');
     Ra = getRegisterX();
-//    prevToken();
-//    emitAlignedCode(1);
-    emitCode(Ra);
-    emitCode(Rt);
-    emitCode(0x00);
-    emitCode(oc);
+	emit_insn(
+		(oc << 26) |
+		(Rt << 16) |
+		(Ra << 6) |
+		0x0C,1,2
+		);
+	prevToken();
 }
 
 // ---------------------------------------------------------------------------
@@ -1264,6 +1265,30 @@ static void process_call()
 		0x14,0,2
 		);
 	return;
+}
+
+static void process_ret()
+{
+	int64_t val = 2;
+
+    NextToken();
+	if (token=='#') {
+		val = expr();
+	}
+	if (val < -15LL || val > 15LL) {
+		emit_insn(
+			(0x00 << 11) |
+			(0x10 << 6) |
+			0x19,0,2
+			);
+		emit_insn(val,0,2);
+		return;
+	}
+	emit_insn(
+		(0x00 << 11) |
+		((val & 0x1F) << 6) |
+		0x19,0,1
+		);
 }
 
 // ---------------------------------------------------------------------------
@@ -1453,6 +1478,25 @@ static void process_load(int opcode6)
     ScanToEOL();
 }
 
+static void process_ld()
+{
+	int Rt;
+	char *p;
+
+	p = inptr;
+	Rt = getRegisterX();
+	expect(',');
+	NextToken();
+	if (token == '#') {
+		inptr = p;
+		process_ldi();
+		return;
+	}
+	// Else: do a word load
+	inptr = p;
+	process_load(0x22);
+}
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -1486,6 +1530,7 @@ static void process_mov(int oc)
 		 (Ra << 6) |
 		 oc,0,1
 		 );
+	prevToken();
 }
 
 // ----------------------------------------------------------------------------
@@ -1515,7 +1560,6 @@ static void process_shift(int funct6)
 {
      int Ra, Rb;
      int Rt;
-     int64_t val;
      char *p;
 
 	 p = inptr;
@@ -1589,21 +1633,65 @@ static void process_fprdstat(int oc)
 
 
 // ----------------------------------------------------------------------------
+// Four cases, two with extendable immediate constants
+//
+// csrrw	r2,#21,r3
+// csrrw	r4,#34,#1234
+// csrrw	r5,r4,#1234
+// csrrw	r6,r4,r5
 // ----------------------------------------------------------------------------
 
-static void process_csrrw()
+static void process_csrrw(int op)
 {
 	int Rd;
 	int Rs;
-	int64_t val;
+	int Rc;
+	int64_t val,val2;
+	char *p;
   
 	Rd = getRegisterX();
 	need(',');
+	p = inptr;
 	NextToken();
-	val = expr();
+	if (token=='#') {
+		val = expr();
+		need(',');
+		NextToken();
+		if (token=='#') {
+			val2 = expr();
+			if (val2 < -15LL || val2 > 15LL) {
+				emit_insn((val << 18) | (op << 16) | (0x10 << 6) | (Rd << 11) | 0x0F,0,2);
+				emit_insn(val2,0,2);
+				return;
+			}
+			emit_insn((val << 18) | (op << 16) | ((val2 & 0x1f) << 6) | (Rd << 11) | 0x0F,!expand_flag,2);
+			return;
+		}
+		prevToken();
+		Rs = getRegisterX();
+		emit_insn((val << 18) | (op << 16) | (Rs << 6) | (Rd << 11) | 0x3F,!expand_flag,2);
+		prevToken();
+		return;
+		}
+	inptr = p;
+	Rc = getRegisterX();
 	need(',');
+	NextToken();
+	if (token=='#') {
+		val2 = expr();
+		if (val2 < -15LL || val2 > 15LL) {
+			emit_insn((0x0F << 26) | (op << 21) | (Rd << 16) | (0x10 << 6) | (Rc << 11) | 0x0C,0,2);
+			emit_insn(val2,0,2);
+			return;
+		}
+		emit_insn((0x0F << 26) | (op << 21) | (Rd << 16) | ((val2 & 0x1f) << 6) | (Rc << 11) | 0x0C,!expand_flag,2);
+		return;
+	}
+	prevToken();
 	Rs = getRegisterX();
-	emit_insn((val << 18) | (1 << 16) | (Rs << 6) | (Rd << 11) | 0x3F,!expand_flag,2);
+	emit_insn((0x3F << 26) | (op << 21) | (Rd << 16) | (Rc << 11) | (Rs << 6) | 0x0C,!expand_flag,2);
+	prevToken();
+	return;
 }
 
 // ----------------------------------------------------------------------------
@@ -1611,7 +1699,7 @@ static void process_csrrw()
 // push #123
 // ----------------------------------------------------------------------------
 
-static void process_push()
+static void process_push(int func)
 {
     int Ra,Rb;
     int64_t val;
@@ -1656,7 +1744,7 @@ static void process_push()
         printf("%d: unknown register.\r\n");
     }
     emit_insn(
-		(0x02 << 11) |
+		(func << 11) |
 		(Ra << 6) |
 		0x19,0,1);
     prevToken();
@@ -1863,7 +1951,9 @@ void dsd7_processMaster()
         case tk_code: process_code(); break;
         case tk_com: process_rop(0x06); break;
         case tk_cs:  segprefix = 15; break;
-        case tk_csrrw: process_csrrw(); break;
+        case tk_csrrc: process_csrrw(0x2); break;
+        case tk_csrrs: process_csrrw(0x1); break;
+        case tk_csrrw: process_csrrw(0x0); break;
         case tk_data:
             if (first_data) {
                 while(sections[segment].address & 4095)
@@ -1878,8 +1968,8 @@ void dsd7_processMaster()
         case tk_dc:  process_db(); break;
         case tk_dh:  process_db(); break;
         case tk_dh_htbl:  process_dh_htbl(); break;
-//        case tk_div: process_rrop(0x08); break;
-//        case tk_divu: process_rrop(0x18); break;
+        case tk_div: process_rrop(0x38); break;
+        case tk_divu: process_rrop(0x39); break;
         case tk_dw:  process_dh(); break;
         case tk_end: goto j1;
         case tk_end_expand: expandedBlock = 0; break;
@@ -1905,9 +1995,12 @@ void dsd7_processMaster()
         case tk_gran: process_gran(0x14); break;
 		case tk_hint:	process_hint(); break;
 		case tk_int:	process_int(); break;
-		case tk_iret:	emit_insn((4 << 11)|0x18,0,1); break;
+		case tk_ipop:	emit_insn((0x06<<11)|0x18,0,1); break;
+		case tk_ipush:	emit_insn((0x05<<11)|0x18,0,1); break;
+		case tk_iret:	emit_insn((0x04<<11)|0x18,0,1); break;
         case tk_jal: process_jal(); break;
         case tk_jmp: process_jal(); break;
+		case tk_ld:	process_ld(); break;
         case tk_ldi: process_ldi(); break;
         case tk_lh:  process_load(0x20); break;
         case tk_lhu: process_load(0x21); break;
@@ -1916,7 +2009,10 @@ void dsd7_processMaster()
         case tk_lw:  process_load(0x22); break;
         case tk_lwar:  process_load(0x23); break;
         case tk_mov: process_mov(0x1D); break;
-        case tk_mul: process_rrop(0x60); break;
+        case tk_mul: process_rrop(0x30); break;
+        case tk_muli: process_riop(0x30); break;
+        case tk_mulu: process_rrop(0x31); break;
+        case tk_mului: process_riop(0x31); break;
         case tk_neg: process_rop(0x05); break;
         case tk_nop: emit_insn(0x1A,0,1); break;
         case tk_not: process_rop(0x07); break;
@@ -1924,8 +2020,9 @@ void dsd7_processMaster()
         case tk_ori: process_riop(0x09); break;
         case tk_org: process_org(); break;
         case tk_plus: expand_flag = 1; break;
+		case tk_pop:	process_push(0x03); break;
         case tk_public: process_public(); break;
-		case tk_push:	process_push(); break;
+		case tk_push:	process_push(0x02); break;
         case tk_rodata:
             if (first_rodata) {
                 while(sections[segment].address & 4095)
@@ -1937,14 +2034,21 @@ void dsd7_processMaster()
             }
             segment = rodataseg;
             break;
-		case tk_ret: emit_insn(0x3BC,0,1); break;
+		case tk_ret: process_ret(); break;
+		case tk_rol: process_shift(0x13); break;
+		case tk_roli: process_shifti(0x1B); break;
+		case tk_ror: process_shift(0x14); break;
+		case tk_rori: process_shifti(0x1C); break;
         case tk_sei: emit_insn(0x18,0,1); break;
         //case tk_slt:  process_rrop(0x33,0x02,0x00); break;
         //case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
         //case tk_slti:  process_riop(0x13,0x02); break;
         //case tk_sltui:  process_riop(0x13,0x03); break;
         case tk_sh:  process_store(0x28); break;
+        case tk_shl: process_shift(0x10); break;
         case tk_shli: process_shifti(0x18); break;
+		case tk_shr: process_shift(0x12); break;
+		case tk_shru: process_shift(0x11); break;
 		case tk_shrui: process_shifti(0x19); break;
         case tk_slli: process_shifti(0x18); break;
         case tk_srai: process_shifti(0x1A); break;
@@ -1953,11 +2057,12 @@ void dsd7_processMaster()
         case tk_sub:  process_rrop(0x07); break;
         case tk_subi:  process_riop(0x07); break;
 //        case tk_sub:  process_sub(); break;
-        case tk_sxb: process_rop(0x08); break;
-        case tk_sxc: process_rop(0x09); break;
-        case tk_sxh: process_rop(0x0A); break;
+        case tk_sxb: process_rop(0x16); break;
+        case tk_sxc: process_rop(0x17); break;
+        case tk_sxh: process_rop(0x17); break;
         case tk_sw:  process_store(0x29); break;
         case tk_swap: process_rop(0x03); break;
+        case tk_swcr: process_store(0x2A); break;
         case tk_sync: process_sync(0x77); break;
         case tk_xor: process_rrop(0x0A); break;
         case tk_xori: process_riop(0x0A); break;

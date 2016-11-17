@@ -75,7 +75,8 @@ enum e_sym {
 		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
 		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
     kw_unique, kw_virtual, kw_this,
-		kw_new, kw_delete, kw_using, kw_namespace, kw_not,
+		kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
+		kw_no_temps, kw_no_parms,
         my_eof };
 
 enum e_sc {
@@ -193,6 +194,7 @@ public:
 	DerivedMethod *derivitives;
 	unsigned int IsParameter : 1;
 	unsigned int IsRegister : 1;
+	unsigned int IsAuto : 1;
 	unsigned int IsPrototype : 1;
 	unsigned int IsTask : 1;
 	unsigned int IsInterrupt : 1;
@@ -206,13 +208,15 @@ public:
 	unsigned int IsPrivate : 1;
 	unsigned int IsVirtual : 1;
 	unsigned int IsInline : 1;
+	unsigned int UsesTemps : 1;		// uses temporary registers
+	unsigned int UsesStackParms : 1;
 	unsigned int IsUndefined : 1;  // undefined function
 	unsigned int ctor : 1;
 	unsigned int dtor : 1;
 	ENODE *initexp;
+	__int16 reg;
     union {
         int i;
-		int r;
         unsigned int u;
         double f;
         uint16_t wa[8];
@@ -297,11 +301,11 @@ class TypeArray
 {
 public:
   int types[40];
-  __int8 preg[40];
+  __int16 preg[40];
   int length;
   TypeArray();
-  void Add(int tp, __int8 regno);
-  void Add(TYP *tp, __int8 regno);
+  void Add(int tp, __int16 regno);
+  void Add(TYP *tp, __int16 regno);
   bool IsEmpty();
   bool IsEqual(TypeArray *);
   void Clear();
@@ -341,6 +345,7 @@ public:
 	static void ParseSuffixOpenbr();
 	static void ParseSuffixOpenpa(SYM *);
 	static SYM *ParseSuffix(SYM *sp);
+	static void ParseFunctionAttribute(SYM *sym);
 };
 
 class StructDeclaration : public Declaration

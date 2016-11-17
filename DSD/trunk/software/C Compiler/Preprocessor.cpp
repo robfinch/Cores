@@ -49,7 +49,7 @@ int             inclline[10];
 char            *lptr;
 extern char     inpline[132];
 int endifCount = 0;
-extern void searchenv(char *filename, char *envname, char *pathname);
+extern void searchenv(char *filename, int, char *envname, char *pathname, int);
 int dodefine();
 int doinclude();
 extern void getFilename();
@@ -94,7 +94,7 @@ int doinclude()
     NextToken();               /* get file to include */
 	if (lastst==lt) {
 		getFilename();
-		searchenv(laststr, "C64INC", pathname);
+		searchenv(laststr, sizeof(laststr), "C64INC", pathname, sizeof(pathname));
 	}
 	else
 		strcpy_s(pathname, sizeof(pathname), laststr);

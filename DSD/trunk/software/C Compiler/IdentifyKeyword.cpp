@@ -159,13 +159,15 @@ int IdentifyKeyword()
 		if (p[1]=='p' && p[2]=='i' && p[3]=='l' && p[4]=='o' && p[5]=='g' && p[6]=='\0')
 			return lastst = kw_epilog;
 	}
-	if (p[0]=='a') {	// and,asm,align
+	if (p[0]=='a') {	// and,asm,align,auto
 		if (p[1]=='n' && p[2]=='d' && p[3]=='\0')
 			return lastst = land;
 		if (p[1]=='s' && p[2]=='m' && p[3]=='\0')
 			return lastst = kw_asm;
 		if (p[1]=='l' && p[2]=='i' && p[3]=='g' && p[4]=='n' && p[5]=='\0')
 			return lastst = kw_align;
+		if (p[1]=='u' && p[2]=='t' && p[3]=='o' && p[4]=='\0')
+			return lastst = kw_auto;
 	}
 	if (p[0]=='v') {		// virtual,void,volatile
 		if (p[1]=='i' && p[2]=='r' && p[3]=='t' && p[4]=='u' && p[5]=='a' && p[6]=='l' && p[7]=='\0')
@@ -273,7 +275,8 @@ int IdentifyKeyword()
   }
 
 
-	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check,__exception,__task,__unordered,__leafs
+	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check,__exception,__task,__unordered,__leafs,__attribute__
+	// __no_temps __no_parms
 	if (p[0]=='_' && p[1]=='_') {
 		if (p[2]=='a' && p[3]=='s' && p[4]=='m' && p[5]=='\0')
 			return lastst = kw_asm;
@@ -299,6 +302,12 @@ int IdentifyKeyword()
 			return lastst = kw_unordered;
 		if (p[2]=='l' && p[3]=='e' && p[4]=='a' && p[5]=='f' && p[6]=='s' && p[7]=='\0')
 			return lastst = kw_leafs;
+		if (p[2]=='a' && p[3]=='t' && p[4]=='t' && p[5]=='r' && p[6]=='i' && p[7]=='b' && p[8]=='u' && p[9]=='t' && p[10]=='e' && p[11]=='_' && p[12]=='_' && p[13]=='\0')
+			return lastst = kw_attribute;
+		if (p[2]=='n' && p[3]=='o' && p[4]=='_' && p[5]=='t' && p[6]=='e' && p[7]=='m' && p[8]=='p' && p[9]=='s' && p[10]=='\0')
+			return lastst = kw_no_temps;
+		if (p[2]=='n' && p[3]=='o' && p[4]=='_' && p[5]=='p' && p[6]=='a' && p[7]=='r' && p[8]=='m' && p[9]=='s' && p[10]=='\0')
+			return lastst = kw_no_parms;
 	}
 
 	return 0;

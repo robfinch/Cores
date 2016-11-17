@@ -33,7 +33,10 @@ TypeArray::TypeArray()
   ZeroMemory(this,sizeof(this));
 }
 
-void TypeArray::Add(int tp, __int8 regno)
+// The most significant bit of the register number indicates if register is
+// an auto var or not. auto vars consume stack space.
+
+void TypeArray::Add(int tp, __int16 regno)
 {
   if (this==nullptr)
     return;
@@ -44,7 +47,7 @@ void TypeArray::Add(int tp, __int8 regno)
   }
 }
 
-void TypeArray::Add(TYP *tp, __int8 regno)
+void TypeArray::Add(TYP *tp, __int16 regno)
 {
   if (tp) {
     Add(tp->typeno, regno);
