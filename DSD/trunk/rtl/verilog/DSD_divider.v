@@ -131,6 +131,8 @@ DIV:
 	end
 DONE:
 	state <= IDLE;
+default:
+    state <= IDLE;
 endcase
 end
 

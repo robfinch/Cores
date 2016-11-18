@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2016  Robert Finch, Waterloo
@@ -353,11 +352,12 @@ reg mul_sign;
 reg [31:0] aa, bb;
 
 // 6 stage pipeline
-DSD_mult_gen32 u2 (
-  .CLK(clk_i),  // input wire CLK
-  .A(aa),      // input wire [31 : 0] A
-  .B(bb),      // input wire [31 : 0] B
-  .P(mul_prod1) // output wire [63 : 0] P
+DSD7_multiplier u2
+(
+  .clk(clk_i),
+  .a(aa),
+  .b(bb),
+  .p(mul_prod1)
 );
 
 wire [31:0] qo, ro;
@@ -373,6 +373,7 @@ DSD_divider #(32) u1
 (
 	.rst(rst_i),
 	.clk(clk_i),
+	.abort(1'b0),
 	.ld(xDiv),
 	.ss(xDivss),
 	.su(xDivsu),
@@ -383,7 +384,8 @@ DSD_divider #(32) u1
 	.qo(qo),
 	.ro(ro),
 	.dvByZr(),
-	.done(dvd_done)
+	.done(dvd_done),
+	.idle()
 );
 
 always @*
@@ -529,6 +531,7 @@ reg [31:0] tag_mem3 [0:63];
 
 always @(posedge clk_i)
     // On reset load all ways with same data.
+    if (rdy_i) begin
     if (isICacheReset) begin
         case(adr_o[2:1])
         2'd0: cache_mem0[adr_o[8:3]][31:0] <= dat_i;
@@ -576,6 +579,7 @@ always @(posedge clk_i)
         4'd14: cache_mem3[adr_o[8:3]][95:64] <= dat_i;
         4'd15: cache_mem3[adr_o[8:3]][127:96] <= dat_i;
         endcase
+    end
     end
 
 // Pull instructions from four pairs of cache lines, one for each way. Typically
@@ -651,6 +655,8 @@ assign hitd = (ihit31 & ihit32) || (ihit31 && pc[2:0]==3'h0);
 // hits on more than one way at a time, it should be okay because the contents
 // of the ways should be identical.
 wire ihit = hita|hitb|hitc|hitd;
+assign ihit1 = hita ? ihit01 : hitb ? ihit11 : hitc ? ihit21 : ihit31;
+assign ihit2 = hita ? ihit02 : hitb ? ihit12 : hitc ? ihit22 : ihit32;
 
 
 //---------------------------------------------------------------------------
@@ -672,15 +678,17 @@ if (rst_i) begin
     vpa_o <= `TRUE;
     lock_o <= `FALSE;
     wr_o <= `FALSE;
-    sel_o <= 2'b00;
+    sel_o <= 2'b11;
     adr_o <= 32'hFFFFF800;
     isICacheLoad <= `FALSE;
     isICacheReset <= `TRUE;
+    icmf <= 2'b00;
     gie <= `FALSE;
     tick <= 32'd0;
     mconfig <= {8'd30,8'd31};
     sbl <= 32'h0;
     sbu <= 32'hFFFFFFFF;
+    ex_done <= `FALSE;
     next_state(ICACHE_RST);
 end
 else begin
@@ -692,6 +700,7 @@ ICACHE_RST:
         if (adr_o[10:1]==10'h3FF) begin
             isICacheReset <= `FALSE;
             vpa_o <= `FALSE;
+            sel_o <= 2'b00;
             next_state(RUN);
         end
     end
@@ -739,6 +748,7 @@ begin
 //            pc_inc = 32'd1;
 //        else
         case(insn[5:0])
+        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
@@ -749,6 +759,7 @@ begin
         `NOP,`CINSN:
             pc_inc = 32'd1;
         `CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
+        `CSR:   pc_inc = 32'd2;
         `R2:
             case(insn[31:26])
             `R2CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
@@ -884,6 +895,7 @@ begin
         regSP:  sp <= res;
         endcase
         regfile[xRt] <= res;
+        $display("regfile[%d] <= %h", xRt, res);
         // Globally enable interrupts after first update of stack pointer.
         if (xRt==regSP)
             gie <= `TRUE;
@@ -1115,14 +1127,11 @@ MUL1:
         else bb <= imm; // MULUI
         next_state(MUL2);
     end
-// Now wait for the six stage pipeline to finish
+// Now wait for the three stage pipeline to finish
 MUL2:   next_state(MUL3);
 MUL3:   next_state(MUL4);
 MUL4:   next_state(MUL5);
-MUL5:   next_state(MUL6);
-MUL6:   next_state(MUL7);
-MUL7:   next_state(MUL8);
-MUL8:   next_state(MUL9);
+MUL5:   next_state(MUL9);
 MUL9:
     begin
         mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;

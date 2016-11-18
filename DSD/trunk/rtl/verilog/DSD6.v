@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2016  Robert Finch, Stratford
@@ -27,9 +26,8 @@
 //
 `include "dsd6_defines.vh"
 
-module dsd6(hartid_i, rst_i, clk_i, tm_clk_i, irq_i, icause_i, rdy_i, vda_o, sel_o, rw_o, adr_o, dat_i, dat_o, dtv_i, dpv_i, 
-    irdy_i, iadr_o, idat_i, ipv_i, icv_i, icx_i,
-    cpl_o, pta_o);
+module dsd6(hartid_i, rst_i, clk_i, tm_clk_i, irq_i, icause_i, rdy_i, vda_o, vpa_o, sel_o, wr_o, adr_o, dat_i, dat_o,
+    tv_i, pv_i, cv_i, cx_i, cpl_o, pta_o);
 parameter MSB=63;
 input [MSB:0] hartid_i;
 input rst_i;
@@ -39,19 +37,16 @@ input irq_i;
 input [8:0] icause_i;
 input rdy_i;
 output reg vda_o;
+output reg vpa_o;
 output reg [7:0] sel_o;
-output reg rw_o;
+output reg wr_o;
 output reg [MSB:0] adr_o;
 input [MSB:0] dat_i;
 output reg [MSB:0] dat_o;
-input dtv_i;
-input dpv_i;
-input irdy_i;
-output reg [63:0] iadr_o;
-input [63:0] idat_i;
-input ipv_i;
-input icv_i;
-input icx_i;
+input tv_i;     // translation valid
+input pv_i;     // privilege violation
+input cv_i;     
+input cx_i;     // executable code
 output reg [7:0] cpl_o;
 output [63:0] pta_o;
 
@@ -122,9 +117,11 @@ reg [4:0] Ra;
 reg [4:0] Rb;
 reg [4:0] Rc;
 reg [4:0] Rt,xRt,wRt;
+reg xRt2;
 reg [4:0] xRa;
 reg [5:0] Rn,Rn1,Rn2;           // For storing TSS
 reg [63:0] regfile [31:0];
+reg [63:0] r1,r2,r3;
 reg [63:0] lc1,lc2,lc3;
 reg [63:0] rfoa,rfob,rfoc;
 reg [63:0] sp [3:0];
@@ -137,6 +134,7 @@ wire [63:0] imm = imm76[63:0];
 reg [75:0] ea;
 reg [47:0] br_disp;
 reg [63:0] res,lres,lres1;
+reg [63:0] res2;
 wire csr_regno = xir[29:19];
 reg [1:0] mem_size;
 reg isok;
@@ -147,10 +145,11 @@ reg [63:0] faults;
 reg [63:0] fault_bit;
 reg brkIsExecuting;
 reg [5:0] bitno;
-reg icx,icv,ipv;
+reg cx,cv,pv;
 reg [2:0] segprefix;
 reg i32,i64;
 wire advanceEX;
+reg gie;
 // CSR's
 reg [63:0] tick;
 reg [63:0] mtime, mtime_latch;
@@ -162,7 +161,6 @@ reg [63:0] pta;
 reg [63:0] cisc;                // compressed instruction set address
 wire [63:20] cita = cisc[63:20];
 wire [7:0] isid = cisc[7:0];
-reg [266:0] istack [0:15];
 reg [3:0] isp;
 reg [63:0] mvba,hvba,svba;
 reg [63:0] mcause,hcause,scause;
@@ -177,11 +175,13 @@ reg mim;                        // machine interrupt mask
 reg him;
 reg sim;
 reg uim;
+reg xxim;
 reg [3:0] ims;                  // interrupt mask stack
 reg [7:0] ols;                 // operating level stack
 reg [31:0] pls;                 // privilege level stack
 reg [63:0] cs_base,ds_base,es_base,fs_base,gs_base,hs_base,js_base;
 reg [63:0] cs_limit,ds_limit,es_limit,fs_limit,gs_limit,hs_limit,js_limit;
+reg [15:0] cs_acr,ds_acr,es_acr,fs_acr,gs_acr,hs_acr,js_acr;
 reg [63:0] seg_base,seg_limit;
 wire [63:0] cap =
 {
@@ -190,6 +190,9 @@ wire [63:0] cap =
     BITFIELD,
     1'b0
 };
+reg [63:0] mconfig;
+wire [4:0] regSP = mconfig[4:0];
+wire [4:0] regBP = mconfig[12:8];
 
 assign pta_o = pta;
 
@@ -238,7 +241,7 @@ function [2:0] fnInsnLength;
 input [31:0] isn;
 casex(isn[6:0])
 7'b101xxxx: fnInsnLength = 1;   // 16 bit Huffman encoded or other 16 bit encodes
-`BRK,`RET,`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`EORI:   
+`BRK0,`BRK1,`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`EORI:   
     if (isn[31:24]==8'h80)
         fnInsnLength = 4;
     else if (isn[31:24]==8'h81)
@@ -293,7 +296,28 @@ endcase
 
 endfunction
 
-wire xisRF = (xopcode==`R2 && xfunct==`RTE);
+// Results forwarding multiplexer
+
+function [63:0] fwd_mux;
+input [4:0] Rn;
+begin
+    case(Rn)
+    5'd0:   fwd_mux = 32'd0;
+    xRt:    fwd_mux = res;
+    5'd1:   fwd_mux = r1;
+    5'd2:   fwd_mux = r2;
+    5'd3:   fwd_mux = r3;
+    regSP:  if (xRt2)
+                fwd_mux = res2;
+            else
+                fwd_mux = sp[ol];
+    default:    fwd_mux = regfile[Rn]; 
+    endcase
+end
+endfunction
+
+
+wire xisRF = (xopcode==`R2 && xfunct==`IRET);
 wire xisLd = xopcode[6:3]==4'b1000;
 wire xisSt = xopcode[6:3]==4'b1001;
 
@@ -301,29 +325,20 @@ wire [63:0] psh_va = a - 64'd8;
 assign va = a + imm;
 assign van = a + b;
 
-always @*
-case(Ra)
-5'd0:	rfoa <= 64'd0;
-xRt:	rfoa <= res;
-5'd31:  rfoa <= sp[ol];
-default:  rfoa <= regfile[Ra];
-endcase
+reg wr_istk;
+reg [3:0] istk_wa;
+reg [511:0] istk_i;
+wire [511:0] istk_o;
 
-always @*
-case(Rb)
-5'd0:	rfob <= 64'd0;
-xRt:	rfob <= res;
-5'd31:  rfob <= sp[ol];
-default:  rfob <= regfile[Rb];
-endcase
-
-always @*
-case(Rc)
-5'd0:	rfoc <= 64'd0;
-xRt:	rfoc <= res;
-5'd31:  rfoc <= sp[ol];
-default:  rfoc <= regfile[Rc];
-endcase
+DSD6_istack uis1
+(
+    .clk(clk),
+    .wr(wr_istk),
+    .wa(istk_wa),
+    .i(istk_i),
+    .ra(isp),
+    .o(istk_o)
+);
 
 wire xMul = xopcode==`R2 && (xfunct==`MUL || xfunct==`MULH);
 wire xMulu = xopcode==`R2 && (xfunct==`MULU || xfunct==`MULUH);
@@ -397,7 +412,7 @@ DSD_BranchHistory ubh1
 // Lookup table for compressed instructions.
 //---------------------------------------------------------------------------
 wire [31:0] hinsn;
-wire cs_hl = vda_o && !rw_o && adr_o[63:20]==cisc[63:20];
+wire cs_hl = vda_o && wr_o && adr_o[63:20]==cisc[63:20];
 DSD_hLookupTbl u3
 (
     .wclk(clk_i),
@@ -447,52 +462,32 @@ reg [63:0] tag_mem2 [0:63];
 reg [63:0] tag_mem3 [0:63];
 always @(posedge clk_i)
   if (isICacheReset) begin
-    case(iadr_o[3:2])
+    case(adr_o[3])
     2'd0: begin
-            cache_mem0[iadr_o[9:4]][31:0] <= `NOPINSN;
-            cache_mem1[iadr_o[9:4]][31:0] <= `NOPINSN;
-            cache_mem2[iadr_o[9:4]][31:0] <= `NOPINSN;
-            cache_mem3[iadr_o[9:4]][31:0] <= `NOPINSN;
+            cache_mem0[adr_o[9:4]][63:0] <= dat_i;
+            cache_mem1[adr_o[9:4]][63:0] <= dat_i;
+            cache_mem2[adr_o[9:4]][63:0] <= dat_i;
+            cache_mem3[adr_o[9:4]][63:0] <= dat_i;
           end
-    2'd1: begin
-            cache_mem0[iadr_o[9:4]][63:32] <= `NOPINSN;
-            cache_mem1[iadr_o[9:4]][63:32] <= `NOPINSN;
-            cache_mem2[iadr_o[9:4]][63:32] <= `NOPINSN;
-            cache_mem3[iadr_o[9:4]][63:32] <= `NOPINSN;
-          end
-    2'd2: begin
-            cache_mem0[iadr_o[9:4]][95:64] <= `NOPINSN;
-            cache_mem1[iadr_o[9:4]][95:64] <= `NOPINSN;
-            cache_mem2[iadr_o[9:4]][95:64] <= `NOPINSN;
-            cache_mem3[iadr_o[9:4]][95:64] <= `NOPINSN;
-          end
-    2'd3: begin
-            cache_mem0[iadr_o[9:4]][127:96] <= `NOPINSN;
-            cache_mem1[iadr_o[9:4]][127:96] <= `NOPINSN;
-            cache_mem2[iadr_o[9:4]][127:96] <= `NOPINSN;
-            cache_mem3[iadr_o[9:4]][127:96] <= `NOPINSN;
+    1'd1: begin
+            cache_mem0[adr_o[9:4]][127:64] <= dat_i;
+            cache_mem1[adr_o[9:4]][127:64] <= dat_i;
+            cache_mem2[adr_o[9:4]][127:64] <= dat_i;
+            cache_mem3[adr_o[9:4]][127:64] <= dat_i;
           end
     endcase
   end
   else begin
     if (isICacheLoad) begin
-      case({ic_whichSet,iadr_o[3:2]})
-      4'd0: cache_mem0[iadr_o[10:4]][31:0] <= idat_i;
-      4'd1: cache_mem0[iadr_o[10:4]][63:32] <= idat_i;
-      4'd2: cache_mem0[iadr_o[10:4]][95:64] <= idat_i;
-      4'd3: cache_mem0[iadr_o[10:4]][127:96] <= idat_i;
-      4'd4: cache_mem1[iadr_o[10:4]][31:0] <= idat_i;
-      4'd5: cache_mem1[iadr_o[10:4]][63:32] <= idat_i;
-      4'd6: cache_mem1[iadr_o[10:4]][95:64] <= idat_i;
-      4'd7: cache_mem1[iadr_o[10:4]][127:96] <= idat_i;
-      4'd8: cache_mem2[iadr_o[10:4]][31:0] <= idat_i;
-      4'd9: cache_mem2[iadr_o[10:4]][63:32] <= idat_i;
-      4'd10: cache_mem2[iadr_o[10:4]][95:64] <= idat_i;
-      4'd11: cache_mem2[iadr_o[10:4]][127:96] <= idat_i;
-      4'd12: cache_mem3[iadr_o[10:4]][31:0] <= idat_i;
-      4'd13: cache_mem3[iadr_o[10:4]][63:32] <= idat_i;
-      4'd14: cache_mem3[iadr_o[10:4]][95:64] <= idat_i;
-      4'd15: cache_mem3[iadr_o[10:4]][127:96] <= idat_i;
+      case({ic_whichSet,adr_o[3]})
+      3'd0: cache_mem0[adr_o[10:4]][63:0] <= dat_i;
+      3'd1: cache_mem0[adr_o[10:4]][127:64] <= dat_i;
+      3'd2: cache_mem1[adr_o[10:4]][63:0] <= dat_i;
+      3'd3: cache_mem1[adr_o[10:4]][127:64] <= dat_i;
+      3'd4: cache_mem2[adr_o[10:4]][63:0] <= dat_i;
+      3'd5: cache_mem2[adr_o[10:4]][127:64] <= dat_i;
+      3'd6: cache_mem3[adr_o[10:4]][63:0] <= dat_i;
+      3'd7: cache_mem3[adr_o[10:4]][127:64] <= dat_i;
       endcase
     end
   end
@@ -504,8 +499,8 @@ wire [127:0] co21 = cache_mem2[pc[9:4]];
 wire [127:0] co22 = cache_mem2[pcp16[9:4]];
 wire [127:0] co31 = cache_mem3[pc[9:4]];
 wire [127:0] co32 = cache_mem3[pcp16[9:4]];
-wire [127:0] co1 = hita ? co01 : hitb ? co11 : hitc ? co21 : hitd ? co31 : 32'h0013;    // NOP on a miss
-wire [127:0] co2 = hita ? co02 : hitb ? co12 : hitc ? co22 : hitd ? co32 : 32'h0013;    // NOP on a miss
+wire [127:0] co1 = hita ? co01 : hitb ? co11 : hitc ? co21 : hitd ? co31 : {2{`_2NOPINSN}};    // NOP on a miss
+wire [127:0] co2 = hita ? co02 : hitb ? co12 : hitc ? co22 : hitd ? co32 : {2{`_2NOPINSN}};    // NOP on a miss
 always @(pc or co1 or co2)
 case(pc[3:1])
 3'd0: insn = co1;
@@ -519,19 +514,19 @@ case(pc[3:1])
 endcase 
 
 always @(posedge clk_i)
-  if (isICacheReset) begin
-    tag_mem0[iadr_o[9:4]] <= {64{1'b1}};
-    tag_mem1[iadr_o[9:4]] <= {64{1'b1}};
-    tag_mem2[iadr_o[9:4]] <= {64{1'b1}};
-    tag_mem3[iadr_o[9:4]] <= {64{1'b1}};
+  if (isICacheReset && adr_o[3]) begin
+    tag_mem0[adr_o[9:4]] <= adr_o;
+    tag_mem1[adr_o[9:4]] <= adr_o;
+    tag_mem2[adr_o[9:4]] <= adr_o;
+    tag_mem3[adr_o[9:4]] <= adr_o;
   end
   else begin
-    if (isICacheLoad && iadr_o[3:2]==2'b11) begin
+    if (isICacheLoad && adr_o[3]) begin
         case(ic_whichSet)
-        2'd0:   tag_mem0[iadr_o[9:4]] <= iadr_o;
-        2'd1:   tag_mem1[iadr_o[9:4]] <= iadr_o;
-        2'd2:   tag_mem2[iadr_o[9:4]] <= iadr_o;
-        2'd3:   tag_mem3[iadr_o[9:4]] <= iadr_o;
+        2'd0:   tag_mem0[adr_o[9:4]] <= adr_o;
+        2'd1:   tag_mem1[adr_o[9:4]] <= adr_o;
+        2'd2:   tag_mem2[adr_o[9:4]] <= adr_o;
+        2'd3:   tag_mem3[adr_o[9:4]] <= adr_o;
         endcase
     end
   end
@@ -662,12 +657,14 @@ begin
         `MULH,`MULUH,`MULSUH:   res <= MPYDVD_INSN ? mul_prod[127:64] : 64'hDEADDEADDEADDEAD;
         `DIV,`DIVU,`DIVSU:  res <= MPYDVD_INSN ? qo : 64'hDEADDEADDEADDEAD;
         `REM,`REMU,`REMSU:  res <= MPYDVD_INSN ? ro : 64'hDEADDEADDEADDEAD;
+        `R2CSR,`R2CSRI:   read_csr(b[12:0],res);
         default:  res <= 64'd0;
         endcase
     `MEM:
         case(xir[15:12])
         `LTCB:  res <= lres;
         `PUSH,`CALLR:     res <= a + imm;
+        `POP:   res <= lres;
         default:    res <= 64'd0;
         endcase
     `BITFLD:    res <= BITFIELD ? bf_out : 64'hDEADDEADDEADDEAD;
@@ -679,88 +676,24 @@ begin
     `MULHI,`MULUHI,`MULSUHI:    res <= MPYDVD_INSN ? mul_prod[127:64] : 64'hDEADDEADDEADDEAD;
     `DIVI,`DIVUI,`DIVSUI:   res <= MPYDVD_INSN ? qo : 64'hDEADDEADDEADDEAD;
     `REMI,`REMUI,`REMSUI:   res <= MPYDVD_INSN ? ro : 64'hDEADDEADDEADDEAD;
-    `CALL:     res <= a + imm;
-    `RET,`RET2:   res <= a + imm; 
-    `CSR,`CSRI:
-      if (ol <= xir[31:30])
-        case(xir[29:19])
-        `CSR_HARTID:    res <= ol==`OL_MACHINE ? hartid_i : 64'd0;
-        `CSR_TICK:      res <= tick;
-        `CSR_PTA:   res <= pta;
-        `VBA:
-            case(xir[31:30])
-            `OL_USER:   res <= 64'd0;
-            `OL_SUPERVISOR: res <= svba;
-            `OL_HYPERVISOR: res <= hvba;
-            `OL_MACHINE:    res <= mvba;
-            endcase
-        `ETR:
-            case(xir[31:30])
-            `OL_USER:   res <= 64'd0;
-            `OL_SUPERVISOR: res <= setr;
-            `OL_HYPERVISOR: res <= hetr;
-            `OL_MACHINE:    res <= metr;
-            endcase
-        `CAUSE:
-            case(xir[31:30])
-            `OL_USER:   res <= 64'd0;
-            `OL_SUPERVISOR: res <= scause;
-            `OL_HYPERVISOR: res <= hcause;
-            `OL_MACHINE:    res <= mcause;
-            endcase
-        `BADADDR:
-            case(xir[31:30])
-            `OL_USER:   res <= 64'd0;
-            `OL_SUPERVISOR: res <= sbadaddr;
-            `OL_HYPERVISOR: res <= hbadaddr;
-            `OL_MACHINE:    res <= mbadaddr;
-            endcase
-        `CSR_SCRATCH:
-            case(xir[31:30])
-            `OL_USER:   res <= 64'd0;
-            `OL_SUPERVISOR: res <= sscratch;
-            `OL_HYPERVISOR: res <= hscratch;
-            `OL_MACHINE:    res <= mscratch;
-            endcase
-        `LC3:     res <= lc3;
-        `SP:      res <= sp[xir[31:30]];
-        `SBL:     res <= sb_lower[xir[31:30]];
-        `SBU:     res <= sb_upper[xir[31:30]];
-        `TR:      res <= tr;
-        `CSR_CISC:      res <= cisc;
-        `CSR_STATUS:
-            case(ol)
-            `OL_USER:   res <= 64'd0;
-            `OL_MACHINE:    res <= {pls,cpl,mprv,segen,4'b0,ols,ol,3'b0,ims,mim};
-            endcase
-        `CSR_INSRET:    res <= rdinstret;
-        `CSR_TIME:      res <= mtime;
-        `CSR_EPC0:      res <= pc_stack[0];
-        `CSR_EPC1:      res <= pc_stack[1];
-        `CSR_EPC2:      res <= pc_stack[2];
-        `CSR_EPC3:      res <= pc_stack[3];
-        `CSR_DS_BASE:   res <= ol==`OL_MACHINE ? ds_base : 64'd0;
-        `CSR_ES_BASE:   res <= ol==`OL_MACHINE ? es_base : 64'd0;
-        `CSR_FS_BASE:   res <= ol==`OL_MACHINE ? fs_base : 64'd0;
-        `CSR_GS_BASE:   res <= ol==`OL_MACHINE ? gs_base : 64'd0;
-        `CSR_HS_BASE:   res <= ol==`OL_MACHINE ? hs_base : 64'd0;
-        `CSR_JS_BASE:   res <= ol==`OL_MACHINE ? js_base : 64'd0;
-        `CSR_CS_BASE:   res <= ol==`OL_MACHINE ? cs_base : 64'd0;
-        `CSR_DS_LIMIT:  res <= ol==`OL_MACHINE ? ds_limit : 64'd0;
-        `CSR_ES_LIMIT:  res <= ol==`OL_MACHINE ? es_limit : 64'd0;
-        `CSR_FS_LIMIT:  res <= ol==`OL_MACHINE ? fs_limit : 64'd0;
-        `CSR_GS_LIMIT:  res <= ol==`OL_MACHINE ? gs_limit : 64'd0;
-        `CSR_HS_LIMIT:  res <= ol==`OL_MACHINE ? hs_limit : 64'd0;
-        `CSR_JS_LIMIT:  res <= ol==`OL_MACHINE ? js_limit : 64'd0;
-        `CSR_CS_LIMIT:  res <= ol==`OL_MACHINE ? cs_limit : 64'd0;
-        default:  res <= 64'd0;
-        endcase
-      else
-        res <= 64'd0;
+    `CALL:  res <= a + imm;
+    `RET:   res <= a + imm; 
+    `CSR,`CSRI:   read_csr(xir[31:19],res);
     `LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWR:   res <= lres;   // Loads
     default:  res <= 64'd0;
     endcase
 end
+
+always @*
+    case(xopcode)
+    `MEM:
+        case(xir[15:12])
+        `POP:   res2 <= a + 64'd8;
+        default:    res2 <= res;
+        endcase
+    default:
+        res2 <= res;
+    endcase
 
 reg mtime_set2;
 always @(posedge tm_clk_i)
@@ -785,19 +718,22 @@ if (rst_i) begin
   insncnt <= 64'd0;
   mvba <= 64'hFFFFFFFFFFFFDE00;
   pc <= 64'hFFFFFFFFFFFFDF40;
+  gie <= `FALSE;
   im <= `TRUE;
   brkIsExecuting <= `FALSE;
   isICacheReset <= `TRUE;
-  iadr_o <= 76'd0;
-  vda_o <= `FALSE;
-  rw_o <= 1'b1;
   adr_o <= 76'd0;
-  ir <= `NOPINSN;
-  xir <= `NOPINSN;
+  vda_o <= `FALSE;
+  vpa_o <= `TRUE;
+  wr_o <= 1'b0;
+  sel_o <= 8'hFF;
+  adr_o <= 76'd0;
+  ir <= `_2NOPINSN;
+  xir <= `_2NOPINSN;
   cisc <= 64'hFFFFFFFFFFE00000;
-  icv <= `TRUE;
-  ipv <= `FALSE;
-  icx <= `FALSE;
+  cv <= `TRUE;
+  pv <= `FALSE;
+  cx <= `TRUE;
   major_ismask <= 0;
   R2funct7_ismask <= 0;
   segprefix <= 3'b111;
@@ -806,19 +742,24 @@ if (rst_i) begin
   sim <= `TRUE;
   mimcd <= 4'b0000;
   tick <= 64'd0;
+  wr_istk <= `FALSE;
   next_state(ICACHE_RST);
 end
 else begin
+wr_istk <= `FALSE;
 tick <= tick + 64'd1;
 if (mtime==mtime_latch)
     mtime_set <= `FALSE;
 case(state)
 ICACHE_RST:
-  begin
-    iadr_o <= iadr_o + 76'd8;
-    if (iadr_o[10:3]==8'hFF) begin
+    if (rdy_i) begin
+        adr_o <= adr_o + 64'd8;
+        if (adr_o[10:3]==8'hFF) begin
+            vpa_o <= `FALSE;
+            sel_o <= 8'h00;
       isICacheReset <= `FALSE;
-      major_ismask[`BRK] <= `TRUE;
+      major_ismask[`BRK0] <= `TRUE;
+      major_ismask[`BRK1] <= `TRUE;
       major_ismask[`RET] <= `TRUE;
       major_ismask[`BccI] <= BRANCHIMM_INSN;
       major_ismask[`BccUI] <= BRANCHIMM_INSN;
@@ -859,10 +800,11 @@ ICACHE_RST:
       major_ismask[7'h56] <= COMPRESSED_INSN;
       major_ismask[7'h57] <= COMPRESSED_INSN;
       major_ismask[`NOP] <= `TRUE;
-      major_ismask[`RET2] <= `TRUE;
+      major_ismask[`RET] <= `TRUE;
       major_ismask[`MEM] <= `TRUE;
       major_ismask[`SYS] <= `TRUE;
-      major_ismask[`BRK2] <= `TRUE;
+      major_ismask[`BRK20] <= `TRUE;
+      major_ismask[`BRK21] <= `TRUE;
       major_ismask[`MULI] <= MPYDVD_INSN;
       major_ismask[`MULUI] <= MPYDVD_INSN;
       major_ismask[`MULSUI] <= MPYDVD_INSN;
@@ -875,7 +817,6 @@ ICACHE_RST:
       major_ismask[`REMI] <= MPYDVD_INSN;
       major_ismask[`REMUI] <= MPYDVD_INSN;
       major_ismask[`REMSUI] <= MPYDVD_INSN;
-      R2funct7_ismask = 64'd0;
       R2funct7_ismask[`ADD] <= `TRUE;
       R2funct7_ismask[`CMP] <= `TRUE;
       R2funct7_ismask[`CMPU] <= `TRUE;
@@ -941,11 +882,11 @@ RUN:
       insncnt <= insncnt + 64'd1;
       RFcnt <= 1'b1;
       if (insn[31:0]!=`WFI_INSN || irq_i) begin
-        if (!icv)     begin next_ir = {`FLT_CODEPAGE,`BRK2}; mbadaddr <= -64'd1; end
-        else if (ipv) begin next_ir = {`FLT_PRIV,`BRK2}; mbadaddr <= -64'd1; end
-        else if (icx) begin next_ir = {`FLT_EXEC,`BRK2}; mbadaddr <= -64'd1; end
-        else if (irq_i && !mim)
-            next_ir = {icause_i,`BRK2};
+        if (!cv)     begin next_ir = {`FLT_CODEPAGE,`BRK20}; mbadaddr <= -64'd1; cv <= `TRUE; end
+        else if (pv) begin next_ir = {`FLT_PRIV,`BRK20}; mbadaddr <= -64'd1; pv <= `FALSE; end
+        else if (!cx) begin next_ir = {`FLT_EXEC,`BRK20}; mbadaddr <= -64'd1; cx <= `TRUE; end
+        else if (irq_i && !mim && gie)
+            next_ir = {icause_i,`BRK20};
         else
             next_ir = iopcode[6:3]==4'hA ? hinsn : insn;
 
@@ -953,8 +894,8 @@ RUN:
         Rc <= iRc;
         // Mangle the register port selectors. RTS and PUSH have an implied
         // register spec of r31.
-        if (iopcode==`CALL || iopcode==`RET || iopcode==`RET2 ||
-            (iopcode==`MEM && (insn[15:12]==`PUSH || insn[15:12]==`STCB || insn[15:12]==`JMPR || insn[15:12]==`CALLR))) begin
+        if (iopcode==`CALL || iopcode==`RET ||
+            (iopcode==`MEM && (insn[15:12]==`PUSH || insn[15:12]==`POP || insn[15:12]==`STCB || insn[15:12]==`JMPR || insn[15:12]==`CALLR))) begin
             Ra <= 5'd31;
             Rb <= iRa;
         end
@@ -985,7 +926,7 @@ RUN:
         endcase
         if (ol!=`OL_MACHINE && SEGMODEL && segen) begin
             if (new_pc > cs_limit)
-                next_ir = {`FLT_SEGBOUNDS,`BRK2};
+                next_ir = {`FLT_SEGBOUNDS,`BRK20};
         end
         // Check if the instruction is implemented
         // We assume that if the BITFIELD group is implemented all 
@@ -995,13 +936,13 @@ RUN:
                 if (R2funct7_ismask[next_ir[31:25]])
                     ir <= next_ir;
                 else
-                    ir <= {`FLT_UNIMPINSN,`BRK2};
+                    ir <= {`FLT_UNIMPINSN,`BRK20};
             end
             else
                 ir <= next_ir;
         end
         else
-            ir <= {`FLT_UNIMPINSN,`BRK2};
+            ir <= {`FLT_UNIMPINSN,`BRK20};
         pc <= new_pc;
         dilen <= fnInsnLength(insn[31:0]);
       end
@@ -1009,9 +950,9 @@ RUN:
     else begin
       if (!ihit) begin
         icmf <= {ihit1,ihit2};
-        icv <= `TRUE;
-        ipv <= `FALSE;
-        icx <= `FALSE;
+        cv <= `TRUE;
+        pv <= `FALSE;
+        cx <= `TRUE;
         next_state(LOAD_ICACHE);
       end
       if (advanceRF) begin
@@ -1034,9 +975,9 @@ RUN:
   	  xRa <= Ra;
   	  xir <= ir;
   	  xpc <= dpc;
-      a <= rfoa;
-      b <= rfob;
-      c <= rfoc;
+      a <= fwd_mux(Ra);
+      b <= fwd_mux(Rb);
+      c <= fwd_mux(Rc);
       casex(opcode)
       `R2:
         case(funct)
@@ -1053,12 +994,18 @@ RUN:
       i32 = ir[31:24]==8'h80;   // we can't use dilen which is the PC increment
       i64 = ir[31:24]==8'h81;
       casex(opcode)
-      `BRK,`RET,`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`EORI:
+      `BRK0,`BRK1,`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`EORI:
                     imm76 <= i32 ? {{32{ir[63]}},ir[63:32]} : i64 ? ir[95:32] : {{49{ir[31]}},ir[31:17]};
       7'h4x,7'h6x:  imm76 <= i32 ? {{32{ir[63]}},ir[63:32]} : i64 ? ir[95:32] : {{49{ir[31]}},ir[31:17]};
-      `BccI,`BccUI: imm76 <= i32 ? {{32{ir[63]}},ir[63:32]} : i64 ? ir[95:32] : {{59{Rb[4]}},Rb};
-      `CSRI:        imm76 <= i32 ? {{32{ir[63]}},ir[63:32]} : i64 ? ir[95:32] : {{59{Ra[4]}},Ra};
+      `BccI,`BccUI: imm76 <= Rb==5'h10  ? {{32{ir[63]}},ir[63:32]} : Rb==5'h11  ? ir[95:32] : {{59{Rb[4]}},Rb};
+      `CSRI:        imm76 <= Ra==5'h10 ? {{32{ir[63]}},ir[63:32]} : Ra==5'h11 ? ir[95:32] : {{59{Ra[4]}},Ra};
       `CALL:        imm76 <= -64'd8;
+      `RET:         imm76 <= {ir[15:7],3'b000};
+      `R2:
+        case(ir[31:25])
+        `R2CSRI:    imm76 <= Ra==5'h10 ? {{32{ir[63]}},ir[63:32]} : Ra==5'h11 ? ir[95:32] : {{59{Ra[4]}},Ra};
+        default:    imm76 <= 64'd0;
+        endcase
       `MEM:
         case(ir[15:12])
         `CALLR:     imm76 <= -64'd8;
@@ -1068,6 +1015,7 @@ RUN:
       default:      imm76 <= 64'd0;
       endcase
       // Set target register
+      xRt2 <= 1'b0;
       casex(opcode)
       `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`EORI,`CSR,`CSRI:  xRt <= ir[16:12];
       `R2:  
@@ -1080,11 +1028,15 @@ RUN:
         endcase
       `R3:    xRt <= ir[26:22];
       7'b100_0xxx:  xRt <= ir[16:12];   // Loads
-      `CALL,`RET,`RET2:  xRt <= 5'd31;
+      `CALL,`RET:  xRt <= 5'd31;
       `MEM:
         case(ir[15:12])
         `CALLR: xRt <= 5'd31;
         `PUSH:  xRt <= 5'd31;
+        `POP:   begin
+                xRt2 <= 1'b1;
+                xRt <= Ra;
+                end
         `LTCB:  xRt <= Ra;
         default:    xRt <= 5'd0;
         endcase
@@ -1109,7 +1061,7 @@ RUN:
                 seg_limit <= fnSeglmt(0); 
             end
         endcase
-     `CALL,`RET,`RET2:
+     `CALL,`RET:
         begin
             seg_base <= fnSeg(0);   // stack is in the data segment
             seg_limit <= fnSeglmt(0); 
@@ -1117,8 +1069,8 @@ RUN:
       // The instruction might have been compressed so we can't check dilen.
       7'h4x:    if (!i32 && !i64) begin
                     case(Ra)
-                    5'd28:  begin seg_base <= fs_base; seg_limit <= fs_limit; end 
-                    5'd29:  begin seg_base <= gs_base; seg_limit <= gs_limit; end
+                    5'd27:  begin seg_base <= fs_base; seg_limit <= fs_limit; end 
+                    5'd28:  begin seg_base <= gs_base; seg_limit <= gs_limit; end
                     default:    begin seg_base <= ds_base; seg_limit <= ds_limit; end 
                     endcase
                 end
@@ -1140,14 +1092,30 @@ RUN:
       rdinstret <= rdinstret + EXcnt;
       // update register file
       regfile[xRt] <= res;
+      if (xRt2)
+          begin
+            gie <= `TRUE;
+            case(ol)
+            `OL_USER:       sp[3] <= {res2[63:3],3'b000};
+            `OL_SUPERVISOR: sp[2] <= {res2[63:3],3'b000};
+            `OL_HYPERVISOR: sp[1] <= {res2[63:3],3'b000};
+            `OL_MACHINE:    sp[0] <= {res2[63:3],3'b000};
+            endcase
+          end
       case(xRt)
-      5'd31:
-        case(ol)
-        `OL_USER:       sp[3] <= {res[63:3],3'b000};
-        `OL_SUPERVISOR: sp[2] <= {res[63:3],3'b000};
-        `OL_HYPERVISOR: sp[1] <= {res[63:3],3'b000};
-        `OL_MACHINE:    sp[0] <= {res[63:3],3'b000};
-        endcase
+      5'd1:     r1 <= res;
+      5'd2:     r2 <= res;
+      5'd3:     r3 <= res;
+      regSP:
+          begin
+            gie <= `TRUE;
+            case(ol)
+            `OL_USER:       sp[3] <= {res[63:3],3'b000};
+            `OL_SUPERVISOR: sp[2] <= {res[63:3],3'b000};
+            `OL_HYPERVISOR: sp[1] <= {res[63:3],3'b000};
+            `OL_MACHINE:    sp[0] <= {res[63:3],3'b000};
+            endcase
+          end
       default:  ;
       endcase
       if (xRt != 5'd0)
@@ -1208,13 +1176,19 @@ RUN:
         `SHX: ex_mem(van, half, c, STORE1);
         `SWX: ex_mem(van, word, c, STORE1);
         `SWCX: ex_mem(van, word, c, STORE1);
+        `R2CSR:
+            if (xRa!=5'd0)
+                ex_csr(xir[23:22],b[12:0],a);
+        `R2CSRI:  ex_csr(xir[23:22],b[12:0],imm);
         endcase // R2
 
       `SYS:
           case(xir[15:12])
-          `RTE:   ex_rte();
+          `IRET:   ex_rte();
           `SEI:   ex_sei();
           `CLI:   ex_cli();
+          `IPUSH:   isp <= isp - 4'd1;
+          `IPOP:    isp <= isp + 4'd1;
           endcase
       `MEM:
           case(xir[15:12])
@@ -1250,10 +1224,9 @@ RUN:
       `JMP: ;   // Nothing to do. JMP is done at IFETCH
       `CALL: ex_mem(a - 64'd8,word,{xpc[63:48],xpc[47:0] + {xilen,1'b0}},STORE1);
 
-      // For RET2 imm = 0
-      `RET,`RET2:   ex_mem(a, word, b, LOAD1);   
+      `RET:   ex_mem(a, word, b, LOAD1);   
 
-      `BRK,`BRK2:   fault(ir[15:7]);
+      `BRK0,`BRK1,`BRK20,`BRK21:   fault(ir[15:7]);
 
       `LB,`LBU:  ex_mem(va, byt, b, LOAD1);
       `LC,`LCU:  ex_mem(va, char, b, LOAD1);
@@ -1270,8 +1243,8 @@ RUN:
 
       `CSR:
         if (xRa!=5'd0)
-            ex_csr(a);
-      `CSRI:  ex_csr(imm);
+            ex_csr(xir[18:17],xir[31:19],a);
+      `CSRI:  ex_csr(xir[18:17],xir[31:19],imm);
       endcase   // xopcode
     end // advanceEX
   end
@@ -1322,7 +1295,7 @@ LOAD1:
 LOAD2:
   if (rdy_i) begin
     lres1 = dat_i >> {ea[2:0],3'b0};
-    if (dpv_i) begin
+    if (pv_i) begin
         vda_o <= `FALSE;
         sel_o <= 8'h00;
         fault(`FLT_PRIV);
@@ -1330,7 +1303,7 @@ LOAD2:
         mbadaddr <= ea;
         next_state(RUN);
     end
-    else if (!dtv_i) begin
+    else if (!tv_i) begin
         vda_o <= `FALSE;
         sel_o <= 8'h00;
         fault(`FLT_DATAPAGE);
@@ -1430,7 +1403,7 @@ LOAD2:
           end 
         endcase
       end
-    `RET,`RET2: begin lres <= lres1; next_state(RET1); end
+    `RET:   begin lres <= lres1; next_state(RET1); end
     endcase
   end
 LOAD3:
@@ -1468,7 +1441,7 @@ LOAD3:
   end
 RET1:
     begin
-        tskBranch({lres[63:48],lres[47:0]+{xir[15:12],1'b0}});
+        tskBranch({lres[63:1],1'b0});
         next_state(RUN);
     end
 
@@ -1480,14 +1453,14 @@ STORE1:
 	end
 STORE2:
 	if (rdy_i) begin
-        if (dpv_i) begin
+        if (pv_i) begin
             vda_o <= `FALSE;
             sel_o <= 8'h00;
             fault(`FLT_PRIV);
             mbadaddr <= ea;
             next_state(RUN);
         end
-        else if (!dtv_i) begin
+        else if (!tv_i) begin
             vda_o <= `FALSE;
             sel_o <= 8'h00;
             fault(`FLT_DATAPAGE);
@@ -1502,7 +1475,7 @@ STORE2:
 	    end
 		else begin
             vda_o <= `FALSE;
-            rw_o <= 1'b1;
+            wr_o <= 1'b0;
             sel_o <= 8'h00;
             next_state(RUN);
 		end
@@ -1510,7 +1483,7 @@ STORE2:
 STORE3:
 	if (rdy_i) begin
         vda_o <= `FALSE;
-        rw_o <= 1'b1;
+        wr_o <= 1'b0;
         sel_o <= 8'h00;
 		next_state(RUN);
 	end
@@ -1521,17 +1494,17 @@ LOAD_ICACHE:
       isICacheLoad <= `TRUE;
       if (icmf[1]) begin
         if (ol!=`OL_MACHINE && SEGMODEL)
-            iadr_o <= {cs_base[63:4],4'h0} + {pcp16[63:4],4'h0};
+            adr_o <= {cs_base[63:4],4'h0} + {pcp16[63:4],4'h0};
         else
-            iadr_o <= {pcp16[63:4],4'h0};
+            adr_o <= {pcp16[63:4],4'h0};
         icmf[0] <= 1'b1;
       end
       else begin
         icmf[1] <= 1'b1;
         if (ol!=`OL_MACHINE && SEGMODEL)
-            iadr_o <= {cs_base[63:4],4'h0} + {pc[63:4],4'h0};
+            adr_o <= {cs_base[63:4],4'h0} + {pc[63:4],4'h0};
         else
-            iadr_o <= {pc[63:4],4'h0};
+            adr_o <= {pc[63:4],4'h0};
       end
       next_state(LOAD_ICACHE2);
     end
@@ -1539,13 +1512,13 @@ LOAD_ICACHE:
       next_state(RUN);
   end
 LOAD_ICACHE2:
-  if (irdy_i) begin
+  if (rdy_i) begin
     // Cumulate error status
-    icv <= icv & icv_i;
-    ipv <= ipv | ipv_i;
-    icx <= icx | icx_i;
-    iadr_o[3:2] <= iadr_o[3:2] + 2'd1;
-    if (iadr_o[3:2]==2'b11) begin
+    cv <= cv & cv_i;
+    pv <= pv | pv_i;
+    cx <= cx & cx_i;
+    adr_o[3] <= adr_o[3] + 1'd1;
+    if (adr_o[3]) begin
         isICacheLoad <= `FALSE;
         next_state(icmf==2'b11 ? RUN : LOAD_ICACHE);
     end
@@ -1580,7 +1553,7 @@ begin
         cpl_o <= mprv ? pls[7:0] : cpl;
         tmp_ol = mprv ? ols[1:0] : ol;
         // For the stack or base pointer check the stack bounds.
-        if (xRa==5'd31 || xRa==5'd30) begin
+        if (xRa==regSP || xRa==regBP) begin
             if (adr < sb_lower[tmp_ol] || adr > sb_upper[tmp_ol]) begin
                 fault(`STACK_FAULT);
                 next_state(RUN);
@@ -1611,50 +1584,65 @@ input [8:0] vec;
 begin
     nop_ir();
     nop_xir();
-    mcause <= {vec,4'h0};
-    pc_stack[3] <= pc_stack[2];
-    pc_stack[2] <= pc_stack[1];
-    pc_stack[1] <= pc_stack[0];
-    pc_stack[0] <= pc;
-    pls <= {pls[23:0],cpl[7:0]};
+    wr_istk <= `TRUE;
     case(ol)
-    `OL_USER:       begin ims <= {ims[2:0],uim}; uim <= `TRUE; end
-    `OL_SUPERVISOR: begin ims <= {ims[2:0],sim}; sim <= `TRUE; end
-    `OL_HYPERVISOR: begin ims <= {ims[2:0],him}; him <= `TRUE; end
-    `OL_MACHINE:    begin ims <= {ims[2:0],mim}; mim <= `TRUE; end
+    `OL_USER:       begin xxim = uim; uim <= `TRUE; end
+    `OL_SUPERVISOR: begin xxim = sim; sim <= `TRUE; end
+    `OL_HYPERVISOR: begin xxim = him; him <= `TRUE; end
+    `OL_MACHINE:    begin xxim = mim; mim <= `TRUE; end
     endcase
-    ols <= {ols[5:0],ol};
+    istk_i <= {
+        ol,
+        cpl,
+        xxim,
+        r3,
+        r2,
+        r1,
+        cs_acr,
+        cs_limit,
+        cs_base,
+        xpc + {xir[0],1'b0}
+    };
+    istk_wa <= isp; 
+
+    mcause <= {vec,4'h0};
     pc <= {mvba[63:1],1'b0} + {~ol,6'h0};
     ol <= `OL_MACHINE;
     cpl <= 8'h00;
     mim <= `TRUE;
+    next_state(RUN);
 end
 endtask
 
-// RTE:
+// IRET:
 // Restore the program counter and privilege level.
-// RTE always enables machine level exceptions.
+// IRET always enables machine level exceptions.
 task ex_rte;
 begin
   case(ol)
   `OL_USER:     fault(`FLT_PRIV);
   default:
         begin
-        tskBranch(pc_stack[0]);
-        pc_stack[0] <= pc_stack[1];
-        pc_stack[1] <= pc_stack[2];
-        pc_stack[2] <= pc_stack[3];
+        tskBranch(istk_o[63:0]);
+        cs_base <= istk_o[127:64];
+        cs_limit <= istk_o[191:128];
+        cs_acr <= istk_o[207:192];
+        r1 <= istk_o[271:208];
+        r2 <= istk_o[335:272];
+        r3 <= istk_o[399:336];
+        cpl <= istk_o[408:401];
+        ol <= istk_o[410:409];
         //pc_stack[3] <= 64'h set to
-        pls <= {8'hFF,pls[31:8]};
-        cpl <= pls[7:0];
-        ols <= {`OL_USER,ols[7:2]};
-        ol <= ols[1:0];
-        ims <= {1'b0,ims[3:1]};
+//        pls <= {8'hFF,pls[31:8]};
+//        cpl <= pls[7:0];
+//        ols <= {`OL_USER,ols[7:2]};
+//        ol <= ols[1:0];
+//        ims <= {1'b0,ims[3:1]};
         mimcd <= 4'b1111;
-        case(ols[1:0])
+        case(istk_o[410:409])
         `OL_USER:   ;//uim <= ims[0];
-        `OL_SUPERVISOR: sim <= ims[0];
-        `OL_HYPERVISOR: him <= ims[0];
+        `OL_SUPERVISOR: sim <= istk_o[400];
+        `OL_HYPERVISOR: him <= istk_o[400];
         `OL_MACHINE:    ;//mim <= ims[0];
         endcase
         end
@@ -1748,85 +1736,200 @@ begin
 end
 endtask
 
+task read_csr;
+input [12:0] csrno;
+output [63:0] res;
+begin
+    if (ol <= csrno[12:11])
+    case(csrno[10:0])
+    `CSR_HARTID:    res <= ol==`OL_MACHINE ? hartid_i : 64'd0;
+    `CSR_TICK:      res <= tick;
+    `CSR_PTA:   res <= pta;
+    `VBA:
+        case(csrno[12:11])
+        `OL_USER:   res <= 64'd0;
+        `OL_SUPERVISOR: res <= svba;
+        `OL_HYPERVISOR: res <= hvba;
+        `OL_MACHINE:    res <= mvba;
+        endcase
+    `ETR:
+        case(csrno[12:11])
+        `OL_USER:   res <= 64'd0;
+        `OL_SUPERVISOR: res <= setr;
+        `OL_HYPERVISOR: res <= hetr;
+        `OL_MACHINE:    res <= metr;
+        endcase
+    `CAUSE:
+        case(csrno[12:11])
+        `OL_USER:   res <= 64'd0;
+        `OL_SUPERVISOR: res <= scause;
+        `OL_HYPERVISOR: res <= hcause;
+        `OL_MACHINE:    res <= mcause;
+        endcase
+    `BADADDR:
+        case(csrno[12:11])
+        `OL_USER:   res <= 64'd0;
+        `OL_SUPERVISOR: res <= sbadaddr;
+        `OL_HYPERVISOR: res <= hbadaddr;
+        `OL_MACHINE:    res <= mbadaddr;
+        endcase
+    `CSR_SCRATCH:
+        case(csrno[12:11])
+        `OL_USER:   res <= 64'd0;
+        `OL_SUPERVISOR: res <= sscratch;
+        `OL_HYPERVISOR: res <= hscratch;
+        `OL_MACHINE:    res <= mscratch;
+        endcase
+    `CSR_LC1: res <= lc1;
+    `CSR_LC2: res <= lc2;
+    `CSR_LC3: res <= lc3;
+    `SP:      res <= sp[csrno[12:11]];
+    `CSR_SBL:     res <= sb_lower[csrno[12:11]];
+    `CSR_SBU:     res <= sb_upper[csrno[12:11]];
+    `TR:      res <= tr;
+    `CSR_CISC:      res <= cisc;
+    `CSR_STATUS:
+        case(ol)
+        `OL_USER:   res <= 64'd0;
+        `OL_MACHINE:    res <= {pls,cpl,mprv,segen,4'b0,ols,ol,3'b0,ims,mim};
+        endcase
+    `CSR_INSRET:    res <= rdinstret;
+    `CSR_TIME:      res <= mtime;
+
+    `CSR_EPC:       res <= istk_o[63:0];
+    `CSR_ECS_BASE:  res <= istk_o[127:64];
+    `CSR_ECS_LIMIT: res <= istk_o[191:128];
+    `CSR_ECS_ACR:   res <= istk_o[207:192];
+    `CSR_ER1:       res <= istk_o[271:208];
+    `CSR_ER2:       res <= istk_o[335:272];
+    `CSR_ER29:      res <= istk_o[399:336];
+    `CSR_EFLAGS:    res <= istk_o[410:400];
+
+    `CSR_CS_BASE:   res <= ol==`OL_MACHINE ? cs_base : 64'd0;
+    `CSR_CS_LIMIT:  res <= ol==`OL_MACHINE ? cs_limit : 64'd0;
+    `CSR_CS_ACR:    res <= ol==`OL_MACHINE ? cs_acr : 64'd0;
+    `CSR_DS_BASE:   res <= ol==`OL_MACHINE ? ds_base : 64'd0;
+    `CSR_DS_LIMIT:  res <= ol==`OL_MACHINE ? ds_limit : 64'd0;
+    `CSR_DS_ACR:    res <= ol==`OL_MACHINE ? ds_acr : 64'd0;
+    `CSR_ES_BASE:   res <= ol==`OL_MACHINE ? es_base : 64'd0;
+    `CSR_ES_LIMIT:  res <= ol==`OL_MACHINE ? es_limit : 64'd0;
+    `CSR_ES_ACR:    res <= ol==`OL_MACHINE ? es_acr : 64'd0;
+    `CSR_FS_BASE:   res <= ol==`OL_MACHINE ? fs_base : 64'd0;
+    `CSR_FS_LIMIT:  res <= ol==`OL_MACHINE ? fs_limit : 64'd0;
+    `CSR_FS_ACR:    res <= ol==`OL_MACHINE ? fs_acr : 64'd0;
+    `CSR_GS_BASE:   res <= ol==`OL_MACHINE ? gs_base : 64'd0;
+    `CSR_GS_LIMIT:  res <= ol==`OL_MACHINE ? gs_limit : 64'd0;
+    `CSR_GS_ACR:    res <= ol==`OL_MACHINE ? gs_acr : 64'd0;
+    `CSR_HS_BASE:   res <= ol==`OL_MACHINE ? hs_base : 64'd0;
+    `CSR_HS_LIMIT:  res <= ol==`OL_MACHINE ? hs_limit : 64'd0;
+    `CSR_HS_ACR:    res <= ol==`OL_MACHINE ? hs_acr : 64'd0;
+    `CSR_JS_BASE:   res <= ol==`OL_MACHINE ? js_base : 64'd0;
+    `CSR_JS_LIMIT:  res <= ol==`OL_MACHINE ? js_limit : 64'd0;
+    `CSR_JS_ACR:    res <= ol==`OL_MACHINE ? js_acr : 64'd0;
+    `CSR_CONFIG:    res <= mconfig;
+    endcase
+    else
+        fault(`FLT_PRIV);
+end
+endtask
+
 task ex_csr;
+input [1:0] op;
+input [12:0] csrno;
 input [63:0] dat;
 begin
     if (ex_done==`FALSE) begin
         ex_done <= `TRUE;
-        case(xir[18:17])
+        case(op)
         `CSRRW:
           begin
-            if (ol <= xir[31:30]) begin
-                case(xir[29:19])
+            if (ol <= csrno[12:11]) begin
+                casex(csrno[10:0])
                 `CSR_HARTID:
                     if (ol!=`OL_MACHINE)
                         fault(`FLT_PRIV);
                 `CSR_PTA:
-                    if (xir[31:30]==`OL_SUPERVISOR)
+                    if (csrno[12:11]==`OL_SUPERVISOR)
                         pta <= dat;
                 `VBA:
-                    case(xir[31:30])
+                    case(csrno[12:11])
                     `OL_USER:   ;
                     `OL_SUPERVISOR: svba <= dat;
                     `OL_HYPERVISOR: hvba <= dat;
                     `OL_MACHINE:    mvba <= dat;
                     endcase
                 `ETR:
-                    case(xir[31:30])
+                    case(csrno[12:11])
                     `OL_USER:   ;
                     `OL_SUPERVISOR: setr <= dat;
                     `OL_HYPERVISOR: hetr <= dat;
                     `OL_MACHINE:    metr <= dat;
                     endcase
                 `CAUSE:
-                    case(xir[31:30])
+                    case(csrno[12:11])
                     `OL_USER:   ;
                     `OL_SUPERVISOR: scause <= dat;
                     `OL_HYPERVISOR: hcause <= dat;
                     `OL_MACHINE:    mcause <= dat;
                     endcase
                 `BADADDR:
-                    case(xir[31:30])
+                    case(csrno[12:11])
                     `OL_USER:   ;
                     `OL_SUPERVISOR: sbadaddr <= dat;
                     `OL_HYPERVISOR: hbadaddr <= dat;
                     `OL_MACHINE:    mbadaddr <= dat;
                     endcase
                 `CSR_SCRATCH:
-                    case(xir[31:30])
+                    case(csrno[12:11])
                     `OL_USER:   ;
                     `OL_SUPERVISOR: sscratch <= dat;
                     `OL_HYPERVISOR: hscratch <= dat;
                     `OL_MACHINE:    mscratch <= dat;
                     endcase
-                `LC3:   begin lc3 <= dat; tskBranch({xpc[63:48],xpc[47:0] + {xilen,1'b0}}); end
-                `SP:    sp[xir[31:30]] <= dat;
-                `SBL:   sb_lower[xir[31:30]] <= dat;
-                `SBU:   sb_upper[xir[31:30]] <= dat;
+                `CSR_LC1:   lc1 <= dat;
+                `CSR_LC2:   lc2 <= dat;
+                `CSR_LC3:   lc3 <= dat;
+                `SP:    sp[csrno[12:11]] <= dat;
+                `CSR_SBL:   sb_lower[csrno[12:11]] <= dat;
+                `CSR_SBU:   sb_upper[csrno[12:11]] <= dat;
                 `TR:    tr <= dat;
                 `CSR_CISC:  cisc <= dat;
                 `CSR_TIME:  begin
                             mtime_latch <= dat;
                             mtime_set <= `TRUE;
                             end
-                `CSR_EPC0:      pc_stack[0] <= dat;
-                `CSR_EPC1:      pc_stack[1] <= dat;
-                `CSR_EPC2:      pc_stack[2] <= dat;
-                `CSR_EPC3:      pc_stack[3] <= dat;
+
+                `CSR_EPC:       begin istk_wa <= isp; istk_i[63:0] <= dat; end
+                `CSR_ECS_BASE:  begin istk_wa <= isp; istk_i[127:64] <= dat; end
+                `CSR_ECS_LIMIT: begin istk_wa <= isp; istk_i[191:128] <= dat; end
+                `CSR_ECS_ACR:   begin istk_wa <= isp; istk_i[207:192] <= dat[15:0]; end
+                `CSR_ER1:       begin istk_wa <= isp; istk_i[271:208] <= dat; end
+                `CSR_ER2:       begin istk_wa <= isp; istk_i[335:272] <= dat; end
+                `CSR_ER29:      begin istk_wa <= isp; istk_i[399:336] <= dat; end
+                `CSR_EFLAGS:    begin istk_wa <= isp; istk_i[510:400] <= dat[10:0]; end
+
+                `CSR_CS_BASE:   cs_base <= dat;
                 `CSR_DS_BASE:   ds_base <= dat;
                 `CSR_ES_BASE:   es_base <= dat;
                 `CSR_FS_BASE:   fs_base <= dat;
                 `CSR_GS_BASE:   gs_base <= dat;
                 `CSR_HS_BASE:   hs_base <= dat;
                 `CSR_JS_BASE:   js_base <= dat;
-                `CSR_CS_BASE:   cs_base <= dat;
+                `CSR_CS_LIMIT:  cs_limit <= dat;
                 `CSR_DS_LIMIT:  ds_limit <= dat;
                 `CSR_ES_LIMIT:  es_limit <= dat;
                 `CSR_FS_LIMIT:  fs_limit <= dat;
                 `CSR_GS_LIMIT:  gs_limit <= dat;
                 `CSR_HS_LIMIT:  hs_limit <= dat;
                 `CSR_JS_LIMIT:  js_limit <= dat;
-                `CSR_CS_LIMIT:  cs_limit <= dat;
+                `CSR_CS_ACR:    cs_acr <= dat[15:0];
+                `CSR_FS_ACR:    ds_acr <= dat[15:0];
+                `CSR_ES_ACR:    es_acr <= dat[15:0];
+                `CSR_FS_ACR:    fs_acr <= dat[15:0];
+                `CSR_GS_ACR:    gs_acr <= dat[15:0];
+                `CSR_HS_ACR:    hs_acr <= dat[15:0];
+                `CSR_JS_ACR:    js_acr <= dat[15:0];
+                `CSR_CONFIG:    if (ol==`OL_MACHINE) mconfig <= dat; else fault(`FLT_PRIV);
                 default:    ;
                 endcase
             end
@@ -1931,7 +2034,7 @@ input [75:0] adr;
 input [63:0] dat;
 begin
 	vda_o <= 1'b1;
-	rw_o <= 1'b0;
+	wr_o <= 1'b1;
 	adr_o <= adr;
 	case(sz)
 	byt:
@@ -1991,7 +2094,7 @@ input [75:0] adr;
 input [63:0] dat;
 begin
   vda_o <= `TRUE;
-  rw_o <= 1'b0;
+  wr_o <= 1'b1;
   adr_o <= {adr[75:3]+73'd1,3'b0};
 	case(sz)
 	char:
@@ -2080,3 +2183,22 @@ end
 endtask
 
 endmodule
+
+module DSD6_istack(clk, wr, wa, i, ra, o);
+input clk;
+input wr;
+input [3:0] wa;
+input [511:0] i;
+input [3:0] ra;
+output [511:0] o;
+
+reg [511:0] mem;
+
+always @(posedge clk)
+    if (wr)
+        mem[wa] <= i;
+
+assign o = mem[ra];
+
+endmodule
+

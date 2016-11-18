@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2016  Robert Finch, Waterloo
@@ -26,7 +25,7 @@
 // ============================================================================
 //
 module DSD7_mpu(hartid_i, rst_i, clk_i,
-    i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
+    i1,i2,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, 
     vpa_o, vda_o, wr_o, sel_o, rdy_i, adr_o, dat_i, dat_o,
     sr_o, cr_o, rb_i
@@ -36,7 +35,6 @@ input rst_i;
 input clk_i;
 input i1;
 input i2;
-input i3;
 input i4;
 input i5;
 input i6;
@@ -76,6 +74,7 @@ output [31:0] dat_o;
 output sr_o;
 output cr_o;
 input rb_i;
+parameter CLK_FREQ = 50000000;
 
 wire irq;
 wire [8:0] cause;
@@ -87,6 +86,7 @@ wire [31:0] adr;
 wire [31:0] dati;
 wire [31:0] dato;
 wire [31:0] pcr;
+wire pulse30;
 
 DSD7 u1
 (
@@ -139,7 +139,7 @@ DSD7_pic u3
 	.vol_o(),		// volatile register selected
 	.i1(i1),
 	.i2(i2),
-	.i3(i3),
+	.i3(pulse30),
 	.i4(i4),
 	.i5(i5),
 	.i6(i6),
@@ -172,6 +172,13 @@ DSD7_pic u3
 	.nmii(),	// nmi input connected to nmi requester
 	.nmio(),	// normally connected to the nmi of cpu
 	.cause(cause)
+);
+
+DSD_30Hz #(.CLK_FREQ(CLK_FREQ)) u30Hz
+(
+    .rst_i(rst_i),
+    .clk_i(clk_i),
+    ._30Hz_o(pulse30)
 );
 
 assign rdy = mmu_rdy & pic_rdy & rdy_i;
