@@ -27,6 +27,7 @@
 `define TRUE    1'b1
 `define FALSE   1'b0
 
+`define SIMULATION
 `define VBA_VECT    32'hFFFFFFE0
 `define RST_VECT    32'hFFFFFFF4
 
@@ -204,9 +205,12 @@ parameter DIV1 = 6'd5;
 parameter LOAD1 = 6'd10;
 parameter LOAD2 = 6'd11;
 parameter LOAD3 = 6'd12;
-parameter STORE1 = 6'd15;
-parameter STORE2 = 6'd16;
-parameter STORE3 = 6'd17;
+parameter LOAD4 = 6'd13;
+parameter LOAD5 = 6'd14;
+parameter LOAD6 = 6'd15;
+parameter STORE1 = 6'd16;
+parameter STORE2 = 6'd17;
+parameter STORE3 = 6'd18;
 parameter LOAD_ICACHE = 6'd20;
 parameter LOAD_ICACHE2 = 6'd21; 
 parameter ICACHE_RST = 6'd22;
@@ -226,7 +230,7 @@ reg [1:0] ol = 2'b00;       // operating level (machine only)
 reg [31:0] pc,dpc,xpc;
 reg [31:0] pc_inc;
 reg [63:0] insn,iinsn;
-reg [63:0] ir,xir;
+reg [63:0] ir,xir,mir;
 reg [15:0] fault_insn;
 reg stuff_fault;
 reg ii32,ii5,ii5a;
@@ -252,11 +256,11 @@ reg [31:0] sp;
 reg [31:0] rfoa,rfob,rfoc;
 reg [31:0] a,b,c,imm,ea,xb;
 reg [31:0] res,lres,lres1,res2;
-reg ex_done;
 wire takb;
 reg [31:0] br_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
+reg upd_rf;                     // flag indicates to update register file
 // CSR's
 reg [31:0] tick;
 reg [31:0] msema;
@@ -276,6 +280,22 @@ wire [4:0] regBP = mconfig[12:8];
 reg [31:0] sbl, sbu;
 
 assign pcr_o = pcr;
+
+`ifdef SIMULATION
+initial begin
+    a <= 0;
+    b <= 0;
+    c <= 0;
+    for (n = 0; n < 32; n=n+1)
+        regfile[n] <= 0;
+    r1 <= 0;
+    r2 <= 0;
+    r29 <= 0;
+    sp <= 0;
+    xRt2 <= 1'b0;   // If this isn't defined for sim the sp will be XXXXX
+    xRt <= 32'h0;
+end
+`endif
 
 function [31:0] fnAbs;
 input [31:0] jj;
@@ -300,6 +320,25 @@ begin
     default:    fwd_mux = regfile[Rn]; 
     endcase
 end
+endfunction
+
+function xIsMC;
+input [31:0] xr;
+case(xr[5:0])
+`MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
+`DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
+`LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,
+`MEM,`CALL,`CALL16,`CALL0:
+    xIsMC = `TRUE;
+`R2:
+    case(xr[31:26])
+    `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH,
+    `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU,
+    `LHX,`LHUX,`LWX,`LWRX,`SHX,`SWX,`SWCX:
+    xIsMC = `TRUE;
+    endcase
+default:    xIsMC = `FALSE;
+endcase
 endfunction
 
 wire iisShift = iopcode==`R2 && (ifunct==`SHL || ifunct==`SHR || ifunct==`ASR || ifunct==`ROL || ifunct==`ROR ||
@@ -397,18 +436,6 @@ begin
         `SUB:   res = a - b;
         `CMP:   res = $signed(a) < $signed(b) ? -1 : a==b ? 0 : 1;
         `CMPU:  res = a < b ? -1 : a==b ? 0 : 1;
-        `MUL:   res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
-        `MULU:  res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
-        `MULSU: res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
-        `MULH:  res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
-        `MULUH: res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
-        `MULSUH:res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
-        `DIV:   res = CAP_MULDIV ? qo : 32'hDEADDEAD;
-        `DIVU:  res = CAP_MULDIV ? qo : 32'hDEADDEAD;
-        `DIVSU: res = CAP_MULDIV ? qo : 32'hDEADDEAD;
-        `REM:   res = CAP_MULDIV ? ro : 32'hDEADDEAD;
-        `REMU:  res = CAP_MULDIV ? ro : 32'hDEADDEAD;
-        `REMSU: res = CAP_MULDIV ? ro : 32'hDEADDEAD;
         `AND:   res = logic_o;
         `OR:    res = logic_o;
         `XOR:   res = logic_o;
@@ -427,9 +454,31 @@ begin
         `RORI:  res = CAP_ROTATES ? shift_o : 32'hDEADEAD;
         `SXB:   res = {{24{a[7]}},a[7:0]};
         `SXH:   res = {{16{a[15]}},a[15:0]};
-        `LHX,`LHUX,`LWX,`LWRX:  res = CAP_LS_NDX ? lres : 32'hDEADDEAD;
         `R2CSR,`R2CSRI: read_csr(b[13:0],res);
+        `MUL:   res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
+        `MULU:  res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
+        `MULSU: res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
+        `MULH:  res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
+        `MULUH: res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
+        `MULSUH:res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
+        `DIV:   res = CAP_MULDIV ? qo : 32'hDEADDEAD;
+        `DIVU:  res = CAP_MULDIV ? qo : 32'hDEADDEAD;
+        `DIVSU: res = CAP_MULDIV ? qo : 32'hDEADDEAD;
+        `REM:   res = CAP_MULDIV ? ro : 32'hDEADDEAD;
+        `REMU:  res = CAP_MULDIV ? ro : 32'hDEADDEAD;
+        `REMSU: res = CAP_MULDIV ? ro : 32'hDEADDEAD;
+        `LHX,`LHUX,`LWX,`LWRX:  res = CAP_LS_NDX ? lres : 32'hDEADDEAD;
         endcase
+    `ADDI:  res = a + imm;
+    `CMPI:  res = $signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1;
+    `CMPUI: res = a < imm ? -1 : a==imm ? 0 : 1;
+    `ANDI:  res = logic_o;
+    `ORI:   res = logic_o;
+    `XORI:  res = logic_o;
+    `JMP:       res = xpc + 32'd3;
+    `JMP16:     res = xpc + 32'd2;
+    `MOV:   res = a;
+    `CSR,`CSRI: read_csr(xir[31:18],res);
     `MEM:
         case (xir[15:11])
         `RET:       res = a + imm;
@@ -438,21 +487,11 @@ begin
         `POP:       res = lres;
         default:    res = 32'hDEADDEAD;
         endcase
-    `ADDI:  res = a + imm;
-    `CMPI:  res = $signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1;
-    `CMPUI: res = a < imm ? -1 : a==imm ? 0 : 1;
-    `ANDI:  res = logic_o;
-    `ORI:   res = logic_o;
-    `XORI:  res = logic_o;
     `LH,`LHU,`LW,`LWR:  res = lres;
     `PEA:       res = a - 32'd2;
     `CALL:      res = a - 32'd2;
     `CALL16:    res = a - 32'd2;
     `CALL0:     res = a - 32'd2;
-    `JMP:       res = xpc + 32'd3;
-    `JMP16:     res = xpc + 32'd2;
-    `MOV:   res = a;
-    `CSR,`CSRI: read_csr(xir[31:18],res);
     endcase
 end
 
@@ -473,11 +512,13 @@ always @*
 //---------------------------------------------------------------------------
 wire [31:0] cinsn;
 wire cs_hl = vda_o && wr_o && adr_o[31:20]==cisc[31:20];
+wire [11:0] citAdr = adr_o[12:1];
+
 DSD7_ciLookupTbl u3
 (
     .wclk(clk_i),
     .wr(cs_hl),
-    .wadr(adr_o[13:2]),
+    .wadr(citAdr),
     .wdata(dat_o),
     .rclk(~clk_i),
     .radr({isid[1:0],insn[15:6]}),
@@ -661,7 +702,7 @@ assign ihit2 = hita ? ihit02 : hitb ? ihit12 : hitc ? ihit22 : ihit32;
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-wire advanceRF = !((xisLd || xisSt)&&ex_done==`FALSE);
+wire advanceRF = !xIsMC(xir);
 wire advanceIF = advanceRF & ihit;
 
 always @(posedge clk_i)
@@ -688,11 +729,13 @@ if (rst_i) begin
     mconfig <= {8'd30,8'd31};
     sbl <= 32'h0;
     sbu <= 32'hFFFFFFFF;
-    ex_done <= `FALSE;
     next_state(ICACHE_RST);
 end
 else begin
+upd_rf <= `FALSE;
 tick <= tick + 32'd1;
+update_regfile();
+
 case(state)
 ICACHE_RST:
     if (rdy_i) begin
@@ -739,8 +782,8 @@ begin
         end
         else begin
             Ra <= iRa;
-            Rb <= iinsn[10:6];
-            Rc <= iinsn[15:11];
+            Rb <= iinsn[15:11];
+            Rc <= iinsn[20:16];
         end
         // The INT is going to do a jump anyways os the PC increment
         // shouldn't matter.
@@ -770,14 +813,30 @@ begin
             `RET,`PUSHI5:   pc_inc = ii5a ? 32'd4 : 32'd1;
             default:    pc_inc = 32'd1;
             endcase
+        `JMP,`CALL: pc_inc = 32'd3;
+        `JMP16,`CALL16: pc_inc = 32'd2;
+        `CALL0: pc_inc = 32'd1;
         default:    pc_inc = 32'd1;
         endcase
-        case(iopcode)
-        `CALL0:  pc <= 32'h0;
-        `JMP16,`CALL16: pc <= {{16{iinsn[31]}},iinsn[31:16]};
-        `JMP,`CALL:   pc <= iinsn[47:16];
-        default:    pc <= pc + pc_inc;
-        endcase
+        // Can't execute jumps in the IF stage.
+        // Suppose the following the instruction is an invalid jump
+        // This might go to an invalid address.
+        // Have to test for iinsn[10:6] for jumps and
+        // iinsn[15:11] for calls.
+        /*
+        if (iinsn[10:6]==5'd0)
+            case(iopcode)
+            `CALL0:  pc <= 32'h0;
+            `JMP16,`CALL16: begin
+                            pc <= {{16{iinsn[31]}},iinsn[31:16]};
+                            $display("Jump in IFstate: %h",{{16{iinsn[31]}},iinsn[31:16]});
+                            end
+            `JMP,`CALL:   pc <= iinsn[47:16];
+            default:    pc <= pc + pc_inc;
+            endcase
+        else
+        */
+            pc <= pc + pc_inc;
         i32 <= ii32;
         i5 <= ii5;
         i5a <= ii5a;
@@ -805,6 +864,21 @@ begin
         a <= fwd_mux(Ra);
         b <= fwd_mux(Rb);
         c <= fwd_mux(Rc);
+        case(opcode)
+        `R2:
+            case(funct)
+            `ADD,`SUB,`CMP,`CMPU,
+            `AND,`OR,`XOR,`NAND,`NOR,`XNOR,
+            `SHL,`SHR,`ASR,`ROL,`ROR,
+            `SHLI,`SHRI,`ASRI,`ROLI,`RORI:  upd_rf <= `TRUE;
+            `R2CSRI:    upd_rf <= `TRUE;
+            endcase
+        `MOV,
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
+            upd_rf <= `TRUE;
+        `CSRI:  upd_rf <= `TRUE;
+        `JMP,`JMP16:    upd_rf <= `TRUE;
+        endcase
         case(opcode)
         `R2:
           case(funct)
@@ -877,28 +951,13 @@ begin
             xRt <= 5'd0;
         endcase
     end
-    else
-        nop_xir();
+//    else
+//        nop_xir();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Execute stage
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     begin   // if (advanceEX) // always true
-        if (ex_done==`TRUE)
-            ex_done <= `FALSE;
-        if (xRt2)
-            sp <= res2;
-        case(xRt)
-        5'd1:   r1 <= res;
-        5'd2:   r2 <= res;
-        5'd29:  r29 <= res;
-        regSP:  sp <= res;
-        endcase
-        regfile[xRt] <= res;
-        $display("regfile[%d] <= %h", xRt, res);
-        // Globally enable interrupts after first update of stack pointer.
-        if (xRt==regSP)
-            gie <= `TRUE;
         case(xopcode)
  
         // INT uses ex_branch() to flush the pipeline of extra INT instructions
@@ -913,11 +972,11 @@ begin
             end
         
         `JMP,`JMP16:
-                if (xRb!=5'd0) begin
-                    if (xRb==regSP)
+                if (xRa!=5'd0) begin
+                    if (xRa==regSP)
                        ex_branch(xpc + imm);
                     else
-                        ex_branch(b + imm);
+                        ex_branch(a + imm);
                 end
         `CALL:      ex_call(32'd3);
         `CALL16:    ex_call(32'd2);
@@ -934,19 +993,16 @@ begin
             `AND,`OR,`XOR,`NAND,`NOR,`XNOR:
                 ;
             `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH:
-                if (ex_done==`FALSE && CAP_MULDIV) begin
-                    ex_done <= `TRUE;
+                if (CAP_MULDIV) begin
                     next_state(MUL1);
                 end
             `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU:
-                if (ex_done==`FALSE && CAP_MULDIV) begin
-                    ex_done <= `TRUE;
+                if (CAP_MULDIV) begin
                     next_state(DIV1);
                 end
             `LHX,`LHUX:
                 if (CAP_LS_NDX) begin
-                    if (ex_done==`FALSE) begin
-                        ex_done <= `TRUE;
+                    begin
                         mem_size <= half;    
                         ea <= a + b;
                         next_state(LOAD1);
@@ -954,8 +1010,7 @@ begin
                 end
             `LWX,`LWRX:
                 if (CAP_LS_NDX) begin
-                    if (ex_done==`FALSE) begin
-                        ex_done <= `TRUE;
+                    begin
                         mem_size <= word;    
                         ea <= a + b;
                         next_state(LOAD1);
@@ -963,8 +1018,7 @@ begin
                 end
             `SHX:
                 if (CAP_LS_NDX) begin
-                    if (ex_done==`FALSE) begin
-                        ex_done <= `TRUE;
+                    begin
                         mem_size <= half;
                         ea <= a + b;
                         xb <= b;
@@ -973,8 +1027,7 @@ begin
                 end
             `SWX,`SWCX:
                 if (CAP_LS_NDX) begin
-                    if (ex_done==`FALSE) begin
-                        ex_done <= `TRUE;
+                    begin
                         mem_size <= word;
                         ea <= a + b;
                         xb <= c;
@@ -1015,33 +1068,27 @@ begin
         `MEM:
             case(xir[15:11])
             `RET:
-                if (ex_done==`FALSE) begin
-                    ex_done <= `TRUE;
+                begin
                     mem_size <= word;
                     ea <= a;
                     next_state(LOAD1);
                 end
-                else
-                    ex_branch(lres);
             `PUSH:
-                if (ex_done==`FALSE) begin
-                    ex_done <= `TRUE;
+                begin
                     mem_size <= word;
                     ea <= a - 32'd2;
                     xb <= b;
                     next_state(STORE1);
                 end
             `PUSHI5:
-                if (ex_done==`FALSE) begin
-                    ex_done <= `TRUE;
+                begin
                     mem_size <= word;
                     ea <= a - 32'd2;
                     xb <= imm;
                     next_state(STORE1);
                 end
             `POP:
-                if (ex_done==`FALSE) begin
-                    ex_done <= `TRUE;
+                begin
                     mem_size <= word;
                     ea <= a;
                     next_state(LOAD1);
@@ -1051,48 +1098,41 @@ begin
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
             ;
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI:
-            if (ex_done==`FALSE && CAP_MULDIV) begin
-                ex_done <= `TRUE;
+            if (CAP_MULDIV) begin
                 next_state(MUL1);
             end
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI:
-            if (ex_done==`FALSE && CAP_MULDIV) begin
-                ex_done <= `TRUE;
+            if (CAP_MULDIV) begin
                 next_state(DIV1);
             end
         `LH,`LHU:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
+            begin
                 mem_size <= half;    
                 ea <= a + imm;
                 next_state(LOAD1);
             end
         `LW,`LWR:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
+            begin
                 mem_size <= word;
                 ea <= a + imm;
                 next_state(LOAD1);
             end
         `SH:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
+            begin
                 mem_size <= half;
                 ea <= a + imm;
                 xb <= b;
                 state <= STORE1;
             end
         `SW,`SWC:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
+            begin
                 mem_size <= word;
                 ea <= a + imm;
                 xb <= b;
                 state <= STORE1;
             end
         `PEA:
-            if (ex_done==`FALSE) begin
-                ex_done <= `TRUE;
+            begin
                 mem_size <= word;
                 ea <= a - 32'd2;
                 xb <= b + imm;
@@ -1104,6 +1144,7 @@ begin
         default:    ;
         endcase
     end // advanceEX
+
 end // RUN
 
 // Step1: setup operands and capture sign
@@ -1135,18 +1176,19 @@ MUL5:   next_state(MUL9);
 MUL9:
     begin
         mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;
-        next_state(RUN);
+        upd_rf <= `TRUE;
+        next_state(LOAD4);
     end
 DIV1:
-    if (dvd_done)
-        next_state(RUN);
+    if (dvd_done) begin
+        upd_rf <= `TRUE;
+        next_state(LOAD4);
+    end
 
 LOAD1:
     begin
-        if (xRa==regSP || xRa==regBP) begin
-            if (ea < sbl || ea > sbu)
-                ex_fault(`FLT_STACK,0);
-        end
+        if ((xRa==regSP || xRa==regBP)&&(ea < sbl || ea > sbu))
+            ex_fault(`FLT_STACK,0);
         else begin
     		read1(mem_size,ea);
             next_state(LOAD2);
@@ -1168,14 +1210,16 @@ LOAD2:
             vda_o <= `FALSE;
             sel_o <= 2'b00;
             lres <= {{16{lres1[15]}},lres1[15:0]};
-            next_state(RUN);
+            upd_rf <= `TRUE;
+            next_state(LOAD4);
             end
         `LHU:
             begin
             vda_o <= `FALSE;
             sel_o <= 2'b00;
             lres <= {16'd0,lres1[15:0]};
-            next_state(RUN);
+            upd_rf <= `TRUE;
+            next_state(LOAD4);
             end
         `LW,`LWR:
             begin
@@ -1187,7 +1231,8 @@ LOAD2:
                 lres <= lres1;
                 vda_o <= `FALSE;
                 sel_o <= 8'h00;
-                next_state(RUN);
+                upd_rf <= `TRUE;
+                next_state(LOAD4);
                 end 
             endcase
             end
@@ -1202,7 +1247,8 @@ LOAD2:
                     lres <= lres1;
                     vda_o <= `FALSE;
                     sel_o <= 8'h00;
-                    next_state(RUN);
+                    upd_rf <= `TRUE;
+                    next_state(LOAD4);
                     end 
                 endcase
             endcase
@@ -1222,16 +1268,32 @@ LOAD3:
         vda_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
-        next_state(RUN);
+        upd_rf <= `TRUE;
+        next_state(LOAD4);
         lres[31:16] <= dat_i[15:0];
+    end
+LOAD4:
+    begin
+        nop_xir();
+        case (xopcode)
+        `CALL,`CALL16,`CALL0:
+            if (xRb!=5'd0) begin
+                if (xRb==regSP)
+                    ex_branch(xpc + imm);
+                else
+                    ex_branch(b + imm);
+            end
+        `MEM:
+            if (xir[15:11]==`RET)
+                ex_branch(lres);
+        endcase
+        next_state(RUN);
     end
 
 STORE1:
     begin
-        if (xRa==regSP || xRa==regBP) begin
-            if (ea < sbl || ea > sbu)
-                ex_fault(`FLT_STACK,0);
-        end
+        if ((xRa==regSP || xRa==regBP)&&(ea < sbl || ea > sbu))
+            ex_fault(`FLT_STACK,0);
         else begin
             write1(mem_size,ea,xb);
             $display("Store to %h <= %h", ea, xb);
@@ -1247,6 +1309,9 @@ STORE2:
         ex_fault(`FLT_DBE,0);
     end
     else if (rdy_i) begin
+        case(xopcode)
+        `CALL,`CALL16,`CALL0:   upd_rf <= `TRUE;
+        endcase
         if (mem_size==word && ea[0]!=1'b0) begin
             write2(mem_size,ea,xb);
             next_state(STORE3);
@@ -1255,7 +1320,7 @@ STORE2:
             vda_o <= `FALSE;
             wr_o <= 1'b0;
             sel_o <= 2'b00;
-            next_state(RUN);
+            next_state(LOAD4);
         end
         cr_o <= 1'b0;
         msema[0] <= rb_i;
@@ -1273,7 +1338,7 @@ STORE3:
         wr_o <= 1'b0;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
-        next_state(RUN);
+        next_state(LOAD4);
     end
 
 LOAD_ICACHE:
@@ -1307,6 +1372,7 @@ LOAD_ICACHE2:
 default:
     next_state(RUN);
 endcase
+
 end
 
 
@@ -1349,18 +1415,11 @@ endtask
 task ex_call;
 input [31:0] ant;
 begin
-    if (ex_done==`FALSE) begin
-        ex_done <= `TRUE;
+    begin
         mem_size <= word;
         ea <= a - 32'd2;
         xb <= xpc + ant;
         next_state(STORE1);
-    end
-    else if (xRb!=5'd0) begin
-        if (xRb==regSP)
-            ex_branch(xpc + imm);
-        else
-            ex_branch(b + imm);
     end
 end
 endtask
@@ -1512,6 +1571,24 @@ begin
         `CSR_SEMA:      msema <= msema & ~dat;
         endcase
     endcase
+end
+endtask
+
+task update_regfile;
+begin
+    if (upd_rf) begin
+        case(xRt)
+        5'd1:   r1 <= res;
+        5'd2:   r2 <= res;
+        5'd29:  r29 <= res;
+        regSP:  sp <= res;
+        endcase
+        regfile[xRt] <= res;
+        $display("regfile[%d] <= %h", xRt, res);
+        // Globally enable interrupts after first update of stack pointer.
+        if (xRt==regSP)
+            gie <= `TRUE;
+    end
 end
 endtask
 
