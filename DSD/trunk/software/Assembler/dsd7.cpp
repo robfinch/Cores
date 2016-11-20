@@ -789,7 +789,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 
     if (pass==3 && can_compress) {
        for (ndx = 0; ndx < htblmax; ndx++) {
-         if (oc == hTable[ndx].opcode) {
+         if ((int)oc == hTable[ndx].opcode) {
            hTable[ndx].count++;
            return;
          }
@@ -806,7 +806,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
     if (pass > 3) {
      if (can_compress) {
        for (ndx = 0; ndx < htblmax; ndx++) {
-         if (oc == hTable[ndx].opcode) {
+         if ((int)oc == hTable[ndx].opcode) {
            emitCode((ndx << 6)|0x1F);
 		   num_bytes += 2;
 		   num_insns += 1;
@@ -874,8 +874,13 @@ static void process_riop(int opcode6)
 		opcode6 = 0x04;	// change to addi
 	}
     if (val < LB16 || val > 32767LL) {
-        emit_insn((0x8000 << 16)|(Rt << 11)|(Ra << 6)|opcode6,0,2);
-        emit_insn(val,0,2);
+		if (opcode6==0x09) {	// ORI / LDI
+			emit_insn((val<<16)|(Rt << 11)|(Ra << 6)|0x0B,0,3);
+		}
+		else {
+			emit_insn((0x8000 << 16)|(Rt << 11)|(Ra << 6)|opcode6,0,2);
+			emit_insn(val,0,2);
+		}
     }
     else
 		emit_insn(((val & 0xFFFF) << 16)|(Rt << 11)|(Ra << 6)|opcode6,!expand_flag,2);
@@ -913,7 +918,7 @@ static void process_rrop(int funct6)
 // jsr [gp+r20]
 // ---------------------------------------------------------------------------
 
-static void process_jal()
+static void process_jal(int oc)
 {
     int64_t addr;
     int Ra;
@@ -933,7 +938,7 @@ j1:
        else {
             if (token != ')' && token!=']')
                 printf("Missing close bracket\r\n");
-            emit_insn((Ra << 6)|(Rt<<11)|0x1C,0,1);
+            emit_insn((Ra << 6)|(Rt<<11)|0x15,0,2);
             return;
        }
     }
@@ -962,9 +967,9 @@ j1:
 	}
 
 	if (addr < LB16 || addr > 32767)
-		emit_insn((addr << 16) | (Rt << 11) | (Ra << 6) | 0x10,0,3);
+		emit_insn((addr << 16) | (Rt << 11) | (Ra << 6) | 0x11,0,3);
 	else
-		emit_insn((addr << 16) | (Rt << 11) | (Ra << 6) | 0x14,!expand_flag,2);
+		emit_insn((addr << 16) | (Rt << 11) | (Ra << 6) | 0x15,!expand_flag,2);
 }
 
 // ---------------------------------------------------------------------------
@@ -1164,7 +1169,7 @@ static void process_bcc(int opcode6, int opcode3)
     Ra = getRegisterX();
     need(',');
     NextToken();
-    if (token=='#' || opcode6 < 0x10) {
+    if (token=='#') {
         imm = expr();
 		need(',');
 		NextToken();
@@ -1201,6 +1206,44 @@ static void process_bcc(int opcode6, int opcode3)
         (Ra << 6) |
         opcode6,0,2
     );
+}
+
+// ---------------------------------------------------------------------------
+// beqi r1,r0,label
+// beqi r2,#1234,label
+// ---------------------------------------------------------------------------
+
+static void process_bcci(int opcode6, int opcode3)
+{
+    int Ra, Rb;
+    int64_t val, imm;
+    int64_t disp;
+
+    Ra = getRegisterX();
+    need(',');
+    NextToken();
+    imm = expr();
+	need(',');
+	NextToken();
+	val = expr();
+	disp = val - code_address;
+	if (imm < -15 || imm > 15) {
+		emit_insn((disp & 0x1FFF) << 19 |
+			(opcode3 << 16) |
+			(0x10 << 11) |
+			(Ra << 6) |
+			opcode6,0,2
+		);
+		emit_insn(imm,0,2);
+		return;
+	}
+	emit_insn((disp & 0x1FFF) << 19 |
+		(opcode3 << 16) |
+		((imm & 0x1f) << 11) |
+		(Ra << 6) |
+		opcode6,0,2
+	);
+    return;
 }
 
 // ---------------------------------------------------------------------------
@@ -1410,11 +1453,10 @@ static void process_ldi()
     val = expr();
 	if (val < LB16 || val > 32767LL) {
 		emit_insn(
-			(0x8000 << 16) |
+			(val << 16) |
 			(Rt << 11) |
-			opcode6,0,2
+			0x0B,0,3
 			);
-		emit_insn(val,0,2);
 		return;
 	}
 	emit_insn(
@@ -1914,25 +1956,25 @@ void dsd7_processMaster()
         case tk_asl: process_shift(0x10); break;
         case tk_begin_expand: expandedBlock = 1; break;
         case tk_beq: process_bcc(0x12,0); break;
-        case tk_beqi: process_bcc(0x2,0); break;
+        case tk_beqi: process_bcci(0x2,0); break;
         case tk_bge: process_bcc(0x12,5); break;
-        case tk_bgei: process_bcc(0x2,5); break;
+        case tk_bgei: process_bcci(0x2,5); break;
         case tk_bgeu: process_bcc(0x13,5); break;
-        case tk_bgeui: process_bcc(0x13,5); break;
+        case tk_bgeui: process_bcci(0x3,5); break;
         case tk_bgt: process_bcc(0x12,7); break;
-        case tk_bgti: process_bcc(0x2,7); break;
+        case tk_bgti: process_bcci(0x2,7); break;
         case tk_bgtu: process_bcc(0x13,7); break;
-        case tk_bgtui: process_bcc(0x13,7); break;
+        case tk_bgtui: process_bcci(0x3,7); break;
         case tk_ble: process_bcc(0x12,6); break;
-        case tk_blei: process_bcc(0x12,6); break;
+        case tk_blei: process_bcci(0x2,6); break;
         case tk_bleu: process_bcc(0x13,6); break;
-        case tk_bleui: process_bcc(0x13,6); break;
+        case tk_bleui: process_bcci(0x3,6); break;
         case tk_blt: process_bcc(0x12,4); break;
-        case tk_blti: process_bcc(0x12,4); break;
+        case tk_blti: process_bcci(0x2,4); break;
         case tk_bltu: process_bcc(0x13,4); break;
-        case tk_bltui: process_bcc(0x13,4); break;
+        case tk_bltui: process_bcci(0x3,4); break;
         case tk_bne: process_bcc(0x12,1); break;
-        case tk_bnei: process_bcc(0x2,1); break;
+        case tk_bnei: process_bcci(0x2,1); break;
         case tk_bra: process_bra(0x46); break;
         //case tk_bsr: process_bra(0x56); break;
         case tk_bss:
@@ -1998,8 +2040,8 @@ void dsd7_processMaster()
 		case tk_ipop:	emit_insn((0x06<<11)|0x18,0,1); break;
 		case tk_ipush:	emit_insn((0x05<<11)|0x18,0,1); break;
 		case tk_iret:	emit_insn((0x04<<11)|0x18,0,1); break;
-        case tk_jal: process_jal(); break;
-        case tk_jmp: process_jal(); break;
+        case tk_jal: process_jal(0x15); break;
+        case tk_jmp: process_jal(0x15); break;
 		case tk_ld:	process_ld(); break;
         case tk_ldi: process_ldi(); break;
         case tk_lh:  process_load(0x20); break;

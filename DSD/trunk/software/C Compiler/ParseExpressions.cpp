@@ -369,19 +369,8 @@ TYP *deref(ENODE **node, TYP *tp)
 			}
       break;
 
+		// Pointers (addresses) are always unsigned
 		case bt_pointer:
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-			if (tp->isUnsigned) {
-				*node = makenode(en_uw_ref,*node,(ENODE *)NULL);
-				(*node)->isUnsigned = TRUE;
-			}
-			else {
-				*node = makenode(en_w_ref,*node,(ENODE *)NULL);
-				(*node)->isUnsigned = FALSE;
-			}
-            break;
-
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
@@ -468,13 +457,36 @@ TYP *deref(ENODE **node, TYP *tp)
 */
 TYP *CondDeref(ENODE **node, TYP *tp)
 {
+  TYP *tp1;
+  int64_t sz;
+  
+  if (tp->val_flag == 0)
+    return deref(node, tp);
+  if (tp->type == bt_pointer && sizeof_flag == 0) {
+   	sz = tp->size;
+    tp1 = tp->GetBtp();
+    if (tp1==NULL)
+      printf("DIAG: CondDeref: tp1 is NULL\r\n");
+    tp =(TYP *) TYP::Make(bt_pointer, 8);
+    tp->btp = tp1->GetIndex();
+    tp->size2 = sz;
+  }
+  else if (tp->type==bt_pointer)
+    return tp;
+  //    else if (tp->type==bt_struct || tp->type==bt_union)
+  //       return deref(node, tp);
+  return tp;
+}
+/*
+TYP *CondDeref(ENODE **node, TYP *tp)
+{
   if (tp->val_flag == 0)
     return deref(node, tp);
   if (tp->type == bt_pointer && sizeof_flag == 0)
    	tp->size = 2;
   return tp;
 }
-
+*/
 
 /*
  *      nameref will build an expression tree that references an
@@ -639,6 +651,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				}
 				if (sp->IsRegister) {
 					(*node)->nodetype = en_regvar;
+					(*node)->i = sp->reg;
 					(*node)->tp = sp->tp;
 					//(*node)->tp->val_flag = TRUE;
 				}
@@ -1088,13 +1101,15 @@ int IsLValue(ENODE *node)
 TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 {
 	ENODE *ep1, *ep2;
+	TYP *typ;
 	int su;
 
 	ep1 = *node;
 	if( IsLValue(ep1) ) {
 		if (tp->type == bt_pointer) {
-			ep2 = makeinode(en_icon,tp->GetBtp()->size);
-			ep2->esize = 2;
+			typ = tp->GetBtp();
+			ep2 = makeinode(en_icon,typ->size);
+			ep2->esize = typ->size;
 		}
 		else {
 			ep2 = makeinode(en_icon,1);

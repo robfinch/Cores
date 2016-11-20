@@ -636,6 +636,14 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         MakeLegalAmode(ap1,flags,size);
 		goto xit;
     }
+	else if (node->p[0]->nodetype == en_regvar) {
+        ap1 = allocAmode();
+		ap1->mode = am_reg;
+		ap1->preg = node->p[0]->i;
+        MakeLegalAmode(ap1,flags,size);
+	    Leave("Genderef",3);
+        return ap1;
+	}
     ap1 = GenerateExpression(node->p[0],F_REG | F_FPREG | F_IMMED,2); /* generate address */
     if( ap1->mode == am_reg )
     {

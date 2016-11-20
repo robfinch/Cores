@@ -377,6 +377,11 @@ int Declaration::ParseSpecifier(TABLE *table)
 				NextToken();
 				break;
 
+			case kw_register:
+				isRegister = TRUE;
+				NextToken();
+				break;
+
 			// byte and char default to unsigned unless overridden using
 			// the 'signed' keyword
 			//
@@ -384,13 +389,13 @@ int Declaration::ParseSpecifier(TABLE *table)
 			
 			case kw_char:
 				if (isUnsigned) {
-					head =(TYP *) TYP::Make(bt_uchar,2);
+					head =(TYP *) TYP::Make(bt_uchar,1);
 					tail = head;
 				}
 				else {
-					head = (TYP *)TYP::Make(bt_char,2); 
+					head = (TYP *)TYP::Make(bt_char,1); 
 					tail = head;
-        }
+				}
 				NextToken();
 				head->isUnsigned = !isSigned;
 				head->isVolatile = isVolatile;

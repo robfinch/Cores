@@ -739,6 +739,12 @@ void peep_ld(struct ocode *ip)
 {
 	if (ip->oper2->mode != am_immed)
 		return;
+	if (ip->oper2->offset->i==0) {
+		ip->opcode = op_mov;
+		ip->oper2->mode = am_reg;
+		ip->oper2->preg = 0;
+		return;
+	}
 	if (!ip->fwd)
 		return;
 	if (ip->fwd->opcode!=op_and)

@@ -63,6 +63,16 @@ int64_t primary()
          break;
     case '\'':
          inptr++;
+		 if (*inptr=='\\') {
+			 inptr++;
+			 switch(*inptr) {
+			 case '\r':	val = '\r'; NextToken(); expect('\''); return (val);
+			 case '\n':	val = '\n'; NextToken(); expect('\''); return (val);
+			 case '\t':	val = '\t'; NextToken(); expect('\''); return (val);
+			 case '\f':	val = '\f'; NextToken(); expect('\''); return (val);
+			 case '\b':	val = '\b'; NextToken(); expect('\''); return (val);
+			 }
+		 }
          val = *inptr;
          NextToken();
          expect('\'');

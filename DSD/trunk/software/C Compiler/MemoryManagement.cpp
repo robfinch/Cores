@@ -201,6 +201,8 @@ SYM *allocSYM() {
 	sym->params.SetOwner(compiler.symnum);
 	sym->lsyms.SetOwner(compiler.symnum);
 	sym->proto.SetOwner(compiler.symnum);
+	sym->UsesTemps = true;
+	sym->UsesStackParms = true;
   compiler.symnum++;
 	if (compiler.symnum > 32760) {
 	  dfs.printf("Too many symbols.\n");
