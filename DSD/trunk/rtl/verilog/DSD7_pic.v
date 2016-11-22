@@ -62,8 +62,9 @@ module DSD7_pic
 (
 	input rst_i,		// reset
 	input clk_i,		// system clock
-	input vda_i,		// cycle valid
-	output rdy_o,       // controller is ready
+	input cyc_i,
+	input stb_i,
+	output ack_o,       // controller is ready
 	input wr_i,			// write
 	input [31:0] adr_i,	// address
 	input [31:0] dat_i,
@@ -93,12 +94,12 @@ reg [31:0] es;
 reg [5:0] vec_base;
 assign cause = {vec_base,3'd0} + irqenc;
 
-wire cs = vda_i && adr_i[31:6]==pIOAddress[31:6];
+wire cs = cyc_i && stb_i && adr_i[31:6]==pIOAddress[31:6];
 assign vol_o = cs;
 
 always @(posedge clk_i)
 	rdy1 <= cs;
-assign rdy_o = (cs & ~wr_i) ? rdy1 : 1'b1;
+assign ack_o = cs ? (wr_i ? 1'b1 : rdy1) : 1'b0;
 
 // write registers	
 always @(posedge clk_i)

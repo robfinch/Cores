@@ -26,10 +26,13 @@
 //
 `define TRUE    1'b1
 `define FALSE   1'b0
+`define WISHBONE    1'b1
+//`define ICACHE_4WAY 1'b1
+//`define COMPRESSED_INSNS    1'b1
 
 `define SIMULATION
-`define VBA_VECT    32'hFFFFFFE0
-`define RST_VECT    32'hFFFFFFF4
+`define VBA_VECT    32'hFFFFFF00
+`define RST_VECT    32'hFFFC0000
 
 `define BccI    6'h02
 `define BccUI   6'h03
@@ -39,6 +42,7 @@
 `define ANDI    6'h08
 `define ORI     6'h09
 `define XORI    6'h0A
+`define ORI32   6'h0B
 `define R2      6'h0C
 `define CSRI    6'h0F
 `define CALL    6'h10
@@ -168,7 +172,13 @@
 `define FLT_DBE     9'd508
 
 module DSD7(hartid_i, rst_i, clk_i, irq_i, icause_i,
-    vda_o, vpa_o, rdy_i, err_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
+    cyc_o, stb_o,
+`ifdef WISHBONE
+    ack_i,
+`else
+    rdy_i,
+`endif
+    vda_o, vpa_o, err_i, lock_o, wr_o, sel_o, adr_o, dat_i, dat_o, sr_o, cr_o, rb_i,
     pcr_o
     );
 input [31:0] hartid_i;
@@ -176,9 +186,15 @@ input rst_i;
 input clk_i;
 input irq_i;
 input [8:0] icause_i;
+output reg cyc_o;
+output reg stb_o;
+`ifdef WISHBONE
+input ack_i;
+`else
+input rdy_i;
+`endif
 output reg vda_o;
 output reg vpa_o;
-input rdy_i;
 input err_i;
 output reg lock_o;
 output reg wr_o;
@@ -202,18 +218,21 @@ parameter word = 2'b11;
 // State machine states
 parameter RUN = 6'd1;
 parameter DIV1 = 6'd5;
+parameter LOAD2A = 6'd9;
 parameter LOAD1 = 6'd10;
 parameter LOAD2 = 6'd11;
 parameter LOAD3 = 6'd12;
-parameter LOAD4 = 6'd13;
+parameter INVnRUN = 6'd13;
 parameter LOAD5 = 6'd14;
 parameter LOAD6 = 6'd15;
 parameter STORE1 = 6'd16;
 parameter STORE2 = 6'd17;
 parameter STORE3 = 6'd18;
+parameter STORE2A = 6'd19;
 parameter LOAD_ICACHE = 6'd20;
 parameter LOAD_ICACHE2 = 6'd21; 
-parameter ICACHE_RST = 6'd22;
+parameter LOAD_ICACHE3 = 6'd22; 
+parameter ICACHE_RST = 6'd23;
 parameter MUL1 = 6'd31;
 parameter MUL2 = 6'd32;
 parameter MUL3 = 6'd33;
@@ -247,7 +266,7 @@ reg [4:0] Rt,xRt;
 reg xRt2;
 wire [5:0] xopcode = xir[5:0];
 wire [5:0] xfunct = xir[31:26];
-// im1 | r3 | r2 | r1 | pc32
+// im1 | r29 | r2 | r1 | pc32
 reg [128:0] istack[0:15];
 reg [3:0] isp;
 reg [31:0] r1,r2,r29;
@@ -261,6 +280,7 @@ reg [31:0] br_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
 reg upd_rf;                     // flag indicates to update register file
+reg xinv,dinv;                  // invalidate flags for pipeline stages
 // CSR's
 reg [31:0] tick;
 reg [31:0] msema;
@@ -408,6 +428,7 @@ wire xDivi = xopcode==`DIVI || xopcode==`DIVUI || xopcode==`DIVSUI || xopcode==`
 wire xDivss = xopcode==`DIVI || (xopcode==`R2 && (xfunct==`DIV || xfunct==`REM));
 wire xDivsu = xopcode==`DIVSUI || (xopcode==`R2 && (xfunct==`DIVSU || xfunct==`REMSU));
 
+wire dvd_done;
 DSD_divider #(32) u1
 (
 	.rst(rst_i),
@@ -468,12 +489,14 @@ begin
         `REMU:  res = CAP_MULDIV ? ro : 32'hDEADDEAD;
         `REMSU: res = CAP_MULDIV ? ro : 32'hDEADDEAD;
         `LHX,`LHUX,`LWX,`LWRX:  res = CAP_LS_NDX ? lres : 32'hDEADDEAD;
+        default:    res = 32'hDEADDEAD;
         endcase
     `ADDI:  res = a + imm;
     `CMPI:  res = $signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1;
     `CMPUI: res = a < imm ? -1 : a==imm ? 0 : 1;
     `ANDI:  res = logic_o;
     `ORI:   res = logic_o;
+    `ORI32: res = logic_o;
     `XORI:  res = logic_o;
     `JMP:       res = xpc + 32'd3;
     `JMP16:     res = xpc + 32'd2;
@@ -492,18 +515,24 @@ begin
     `CALL:      res = a - 32'd2;
     `CALL16:    res = a - 32'd2;
     `CALL0:     res = a - 32'd2;
+    default:    res = 32'hDEADDEAD;
     endcase
 end
 
+// The only instruction using result bus #2 is the pop instruction.
+// Save some decoding.
 always @*
+    res2 <= a + 32'd2;
+/*
     case(xopcode)
     `MEM:
         case(xir[15:11])
         `POP:   res2 <= a + 32'd2;
         default:    res2 <= 32'h0;
         endcase
-        default:    res2 <= 32'h0;
+    default:    res2 <= 32'h0;
     endcase
+*/
 
 //---------------------------------------------------------------------------
 // Lookup table for compressed instructions.
@@ -511,8 +540,10 @@ always @*
 // address defined by the cisc register.
 //---------------------------------------------------------------------------
 wire [31:0] cinsn;
-wire cs_hl = vda_o && wr_o && adr_o[31:20]==cisc[31:20];
+wire cs_hl = cyc_o && stb_o && vda_o && wr_o && adr_o[31:20]==cisc[31:20];
 wire [11:0] citAdr = adr_o[12:1];
+
+`ifdef COMPRESSED_INSNS
 
 DSD7_ciLookupTbl u3
 (
@@ -524,22 +555,24 @@ DSD7_ciLookupTbl u3
     .radr({isid[1:0],insn[15:6]}),
     .rdata(cinsn)
 );
-
+`else
+assign cinsn = `_2NOP_INSN;
+`endif
 
 //---------------------------------------------------------------------------
 // I-Cache
 // This 64-line 4 way set associative cache is used mainly to allow access
 // to 16 and 64 bit instructions while the external bus is 32 bit.
-// On reset the cache is loaded with NOP's and the tag memory is loaded
-// with $FFFFFFF0. There should not be any valid instructions placed in the
-// the area $FFFFFFF0 to $FFFFFFFF
+// At reset the cache is loaded from address $FFFFFE00 to $FFFFFFFF
 //
-// iadr_o is the instruction address output for fetching the cache line
-// idat_i is the instruction data coming in from external memory.
 //---------------------------------------------------------------------------
 wire [31:0] pcp8 = pc + 32'h0008;   // Use pc plus 8 to select the next cache line.
 wire [22:0] ic_lfsr;
 
+reg isICacheReset;
+reg isICacheLoad;
+reg [1:0] icmf;             // miss flags
+`ifdef ICACHE_4WAY
 // This linear-feedback-shift-register is used to pseudo-randomly select a
 // way to update. It free runs until there is a cache miss.
 lfsr #(23,23'h00ACE1) ulfsr1
@@ -554,9 +587,6 @@ lfsr #(23,23'h00ACE1) ulfsr1
 wire [1:0] ic_whichWay = ic_lfsr[1:0];
 wire ihit1,ihit2;
 wire hita,hitb,hitc,hitd;   // way hit indicators
-reg [1:0] icmf;             // miss flags
-reg isICacheReset;
-reg isICacheLoad;
 // Storage for four ways of the cache.
 reg [127:0] cache_mem0 [0:63];
 reg [127:0] cache_mem1 [0:63];
@@ -572,7 +602,11 @@ reg [31:0] tag_mem3 [0:63];
 
 always @(posedge clk_i)
     // On reset load all ways with same data.
+`ifdef WISHBONE
+    if (ack_i) begin
+`else
     if (rdy_i) begin
+`endif
     if (isICacheReset) begin
         case(adr_o[2:1])
         2'd0: cache_mem0[adr_o[8:3]][31:0] <= dat_i;
@@ -675,14 +709,14 @@ always @(posedge clk_i)
 // Set tag comparators, there would be only four for a four-way set associative
 // cache, but we need to check two cache lines in case the instruction spans a
 // cache lines. Hence there are four pairs of comparators.
-assign ihit01 = pc[31:9]==tag_mem0[pc[8:3]][31:9];
-assign ihit02 = pcp8[31:9]==tag_mem0[pcp8[8:3]][31:9];
-assign ihit11 = pc[31:9]==tag_mem1[pc[8:3]][31:9];
-assign ihit12 = pcp8[31:9]==tag_mem1[pcp8[8:3]][31:9];
-assign ihit21 = pc[31:9]==tag_mem2[pc[8:3]][31:9];
-assign ihit22 = pcp8[31:9]==tag_mem2[pcp8[8:3]][31:9];
-assign ihit31 = pc[31:9]==tag_mem3[pc[8:3]][31:9];
-assign ihit32 = pcp8[31:9]==tag_mem3[pcp8[8:3]][31:9];
+wire ihit01 = pc[31:9]==tag_mem0[pc[8:3]][31:9];
+wire ihit02 = pcp8[31:9]==tag_mem0[pcp8[8:3]][31:9];
+wire ihit11 = pc[31:9]==tag_mem1[pc[8:3]][31:9];
+wire ihit12 = pcp8[31:9]==tag_mem1[pcp8[8:3]][31:9];
+wire ihit21 = pc[31:9]==tag_mem2[pc[8:3]][31:9];
+wire ihit22 = pcp8[31:9]==tag_mem2[pcp8[8:3]][31:9];
+wire ihit31 = pc[31:9]==tag_mem3[pc[8:3]][31:9];
+wire ihit32 = pcp8[31:9]==tag_mem3[pcp8[8:3]][31:9];
 // hit(a)(b)(c)(d) indicate a hit on a way. If the pc is evenly located at a
 // cache line, then the instruction can't be spanning a line, so we only need
 // to check the first hit indicator of the pair. Doing this reduces the number
@@ -696,14 +730,68 @@ assign hitd = (ihit31 & ihit32) || (ihit31 && pc[2:0]==3'h0);
 // hits on more than one way at a time, it should be okay because the contents
 // of the ways should be identical.
 wire ihit = hita|hitb|hitc|hitd;
-assign ihit1 = hita ? ihit01 : hitb ? ihit11 : hitc ? ihit21 : ihit31;
-assign ihit2 = hita ? ihit02 : hitb ? ihit12 : hitc ? ihit22 : ihit32;
+//assign ihit1 = hita ? ihit01 : hitb ? ihit11 : hitc ? ihit21 : ihit31;
+//assign ihit2 = hita ? ihit02 : hitb ? ihit12 : hitc ? ihit22 : ihit32;
+`else
+reg [127:0] cache_mem [0:255];
+reg [31:0] tag_mem [0:255];
 
+always @(posedge clk_i)
+    // On reset load all ways with same data.
+`ifdef WISHBONE
+    if (ack_i) begin
+`else
+    if (rdy_i) begin
+`endif
+    if (isICacheReset|isICacheLoad) begin
+        case(adr_o[2:1])
+        2'd0: cache_mem[adr_o[10:3]][31:0] <= dat_i;
+        2'd1: cache_mem[adr_o[10:3]][63:32] <= dat_i;
+        2'd2: cache_mem[adr_o[10:3]][95:64] <= dat_i;
+        2'd3: cache_mem[adr_o[10:3]][127:96] <= dat_i;
+        endcase
+    end
+    end
+// Pull instructions from four pairs of cache lines, one for each way. Typically
+// only a single pair of cache lines will contain the valid instructions.
+wire [127:0] co1 = cache_mem[pc[10:3]];
+wire [127:0] co2 = cache_mem[pcp8[10:3]];
+// Get the instruction window for the pipeline. Instructions can be up to 64 bit long
+// and spanning cache lines.
+// Combine the cache line pair selected in case the instruction spans cache lines.
+always @(pc or co1 or co2)
+case(pc[2:0])
+3'd0: insn = co1[63:0];
+3'd1: insn = co1[79:16];
+3'd2: insn = co1[95:32];
+3'd3: insn = co1[112:48];
+3'd4: insn = co1[127:64];
+3'd5: insn = {co2[15:0],co1[127:80]};
+3'd6: insn = {co2[31:0],co1[127:96]};
+3'd7: insn = {co2[47:0],co1[127:112]};
+endcase 
+
+always @(posedge clk_i)
+    // Set the tag only when the last 32 bits of the instruction line is loaded.
+    // Prevents the tag from going valid until the entire line is present.
+    if (adr_o[2:1]==2'b11) begin
+        if (isICacheReset|isICacheLoad)
+            tag_mem[adr_o[10:3]] <= adr_o;
+    end
+
+// Set tag comparators, there would be only four for a four-way set associative
+// cache, but we need to check two cache lines in case the instruction spans a
+// cache lines. Hence there are four pairs of comparators.
+wire ihit1 = pc[31:11]==tag_mem[pc[10:3]][31:11];
+wire ihit2 = pcp8[31:11]==tag_mem[pcp8[10:3]][31:11];
+wire ihit = (ihit1 && pc[2:0]==3'b000) || (ihit1 && ihit2);
+
+`endif
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-wire advanceRF = !xIsMC(xir);
-wire advanceIF = advanceRF & ihit;
+wire advanceRF = !(xIsMC(xir) && !xinv);
+wire advanceIF = advanceRF & (ihit && !isICacheLoad);
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -715,12 +803,14 @@ if (rst_i) begin
     pcr <= 32'h0;
     cisc <= 32'hFFE00000;
     pc <= `RST_VECT;
+    cyc_o <= `TRUE;
+    stb_o <= `TRUE;
     vda_o <= `FALSE;
     vpa_o <= `TRUE;
     lock_o <= `FALSE;
     wr_o <= `FALSE;
     sel_o <= 2'b11;
-    adr_o <= 32'hFFFFF800;
+    adr_o <= 32'hFFFC0000;
     isICacheLoad <= `FALSE;
     isICacheReset <= `TRUE;
     icmf <= 2'b00;
@@ -729,6 +819,8 @@ if (rst_i) begin
     mconfig <= {8'd30,8'd31};
     sbl <= 32'h0;
     sbu <= 32'hFFFFFFFF;
+    dinv <= `TRUE;
+    xinv <= `TRUE;
     next_state(ICACHE_RST);
 end
 else begin
@@ -738,10 +830,16 @@ update_regfile();
 
 case(state)
 ICACHE_RST:
+`ifdef WISHBONE
+    if (ack_i) begin
+`else
     if (rdy_i) begin
+`endif
         adr_o <= adr_o + 32'd2;
         if (adr_o[10:1]==10'h3FF) begin
             isICacheReset <= `FALSE;
+            cyc_o <= `FALSE;
+            stb_o <= `FALSE;
             vpa_o <= `FALSE;
             sel_o <= 2'b00;
             next_state(RUN);
@@ -797,6 +895,8 @@ begin
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
         `PEA:
             pc_inc = ii32 ? 32'd4 : 32'd2;
+        `Bcc:   pc_inc = 32'd2;
+        `BccU:  pc_inc = 32'd2;
         `BccI:  pc_inc = ii5 ? 32'd4 : 32'd2;
         `BccUI:  pc_inc = ii5 ? 32'd4 : 32'd2;
         `NOP,`CINSN:
@@ -813,7 +913,7 @@ begin
             `RET,`PUSHI5:   pc_inc = ii5a ? 32'd4 : 32'd1;
             default:    pc_inc = 32'd1;
             endcase
-        `JMP,`CALL: pc_inc = 32'd3;
+        `JMP,`CALL,`ORI32: pc_inc = 32'd3;
         `JMP16,`CALL16: pc_inc = 32'd2;
         `CALL0: pc_inc = 32'd1;
         default:    pc_inc = 32'd1;
@@ -841,6 +941,7 @@ begin
         i5 <= ii5;
         i5a <= ii5a;
         ir <= iinsn;
+        dinv <= `FALSE;
         dpc <= pc;
     end
     else begin
@@ -849,7 +950,7 @@ begin
             next_state(LOAD_ICACHE);
         end
         if (advanceRF) begin
-            nop_ir();
+            inv_ir();
             dpc <= pc;
             pc <= pc;
         end
@@ -859,12 +960,14 @@ begin
     // Register fetch stage
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceRF) begin
+        xinv <= dinv;
         xir <= ir;
         xpc <= dpc;
         a <= fwd_mux(Ra);
         b <= fwd_mux(Rb);
         c <= fwd_mux(Rc);
-        case(opcode)
+        // Suppress register file update if RF stage is invalid.
+        case({dinv,opcode})
         `R2:
             case(funct)
             `ADD,`SUB,`CMP,`CMPU,
@@ -874,7 +977,7 @@ begin
             `R2CSRI:    upd_rf <= `TRUE;
             endcase
         `MOV,
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32:
             upd_rf <= `TRUE;
         `CSRI:  upd_rf <= `TRUE;
         `JMP,`JMP16:    upd_rf <= `TRUE;
@@ -895,7 +998,7 @@ begin
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `CSRI:         imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
-        `JMP,`CALL:    imm <= ir[47:16];
+        `JMP,`CALL,`ORI32:  imm <= ir[47:16];
         `JMP16,`CALL16: imm <= {{16{ir[31]}},ir[31:16]};
         `CALL0:        imm <= 32'h0;
         `R2:
@@ -941,7 +1044,7 @@ begin
             default:    xRt <= 5'd0;
             endcase
         `MOV,
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32,
         `LH,`LHU,`LW,`LWR:
             xRt <= ir[15:11];
         `PEA:
@@ -952,12 +1055,13 @@ begin
         endcase
     end
 //    else
-//        nop_xir();
+//        inv_xir();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Execute stage
+    // If the execute stage has been invalidated it doesn't do anything. 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    begin   // if (advanceEX) // always true
+    if (!xinv) begin   // if (advanceEX) // always true
         case(xopcode)
  
         // INT uses ex_branch() to flush the pipeline of extra INT instructions
@@ -1069,33 +1173,43 @@ begin
             case(xir[15:11])
             `RET:
                 begin
-                    mem_size <= word;
-                    ea <= a;
-                    next_state(LOAD1);
+                    if (a > sbu)
+                        ex_fault(`FLT_STACK,0);
+                    else begin
+                        mem_size <= word;
+                        ea <= a;
+                        next_state(LOAD1);
+                    end
                 end
             `PUSH:
-                begin
+                if (a - 32'd2 < sbl)
+                    ex_fault(`FLT_STACK,0);
+                else begin
                     mem_size <= word;
                     ea <= a - 32'd2;
                     xb <= b;
                     next_state(STORE1);
                 end
             `PUSHI5:
-                begin
+                if (a - 32'd2 < sbl)
+                    ex_fault(`FLT_STACK,0);
+                else begin
                     mem_size <= word;
                     ea <= a - 32'd2;
                     xb <= imm;
                     next_state(STORE1);
                 end
             `POP:
-                begin
+                if (a > sbu)
+                    ex_fault(`FLT_STACK,0);
+                else begin
                     mem_size <= word;
                     ea <= a;
                     next_state(LOAD1);
                 end
             endcase
             
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI:
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32:
             ;
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI:
             if (CAP_MULDIV) begin
@@ -1132,7 +1246,9 @@ begin
                 state <= STORE1;
             end
         `PEA:
-            begin
+            if (a - 32'd2 < sbl)
+                ex_fault(`FLT_STACK,0);
+            else begin
                 mem_size <= word;
                 ea <= a - 32'd2;
                 xb <= b + imm;
@@ -1150,10 +1266,10 @@ end // RUN
 // Step1: setup operands and capture sign
 MUL1:
     begin
-        if (xMul) mul_sign <= a[63] ^ b[63];
-        else if (xMuli) mul_sign <= a[63] ^ imm[63];
-        else if (xMulsu) mul_sign <= a[63];
-        else if (xMulsui) mul_sign <= a[63];
+        if (xMul) mul_sign <= a[31] ^ b[31];
+        else if (xMuli) mul_sign <= a[31] ^ imm[31];
+        else if (xMulsu) mul_sign <= a[31];
+        else if (xMulsui) mul_sign <= a[31];
         else mul_sign <= 1'b0;  // MULU, MULUI
         if (xMul) aa <= fnAbs(a);
         else if (xMuli) aa <= fnAbs(a);
@@ -1177,12 +1293,12 @@ MUL9:
     begin
         mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;
         upd_rf <= `TRUE;
-        next_state(LOAD4);
+        next_state(INVnRUN);
     end
 DIV1:
     if (dvd_done) begin
         upd_rf <= `TRUE;
-        next_state(LOAD4);
+        next_state(INVnRUN);
     end
 
 LOAD1:
@@ -1196,43 +1312,64 @@ LOAD1:
     end
 LOAD2:
     if (err_i) begin
+        cyc_o <= `FALSE;
+        stb_o <= `FALSE;
         vda_o <= `FALSE;
         wr_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
         ex_fault(`FLT_DBE,0);
     end
+`ifdef WISHBONE
+    else if (ack_i) begin
+`else
     else if (rdy_i) begin
+`endif
         lres1 = dat_i >> {ea[0],4'h0};
         case(xopcode)
         `LH:
             begin
             vda_o <= `FALSE;
+            cyc_o <= `FALSE;
+            stb_o <= `FALSE;
             sel_o <= 2'b00;
             lres <= {{16{lres1[15]}},lres1[15:0]};
             upd_rf <= `TRUE;
-            next_state(LOAD4);
+            next_state(INVnRUN);
             end
         `LHU:
             begin
             vda_o <= `FALSE;
+            cyc_o <= `FALSE;
+            stb_o <= `FALSE;
             sel_o <= 2'b00;
             lres <= {16'd0,lres1[15:0]};
             upd_rf <= `TRUE;
-            next_state(LOAD4);
+            next_state(INVnRUN);
             end
         `LW,`LWR:
             begin
             case(ea[0])
-            1'b1:   begin read2(mem_size,ea); lres[15:0] <= lres1[15:0]; next_state(LOAD3); end
+            1'b1:   begin
+`ifdef WISHBONE                
+                    stb_o <= `FALSE;
+                    next_state(LOAD2A);
+`else                            
+                    read2(mem_size,ea);
+                    next_state(LOAD3);
+`endif                            
+                    lres[15:0] <= lres1[15:0];
+                end
             default:
                 begin  
                 $display("Loaded %h from %h", lres1, adr_o);
                 lres <= lres1;
+                cyc_o <= `FALSE;
+                stb_o <= `FALSE;
                 vda_o <= `FALSE;
                 sel_o <= 8'h00;
                 upd_rf <= `TRUE;
-                next_state(LOAD4);
+                next_state(INVnRUN);
                 end 
             endcase
             end
@@ -1240,41 +1377,71 @@ LOAD2:
             case(xir[15:11])
             `RET,`POP:
                 case(ea[0])
-                1'b1:   begin read2(mem_size,ea); lres[15:0] <= lres1[15:0]; next_state(LOAD3); end
+                1'b1:   begin
+`ifdef WISHBONE                
+                            stb_o <= `FALSE;
+                            next_state(LOAD2A);
+`else                            
+                            read2(mem_size,ea);
+                            next_state(LOAD3);
+`endif                            
+                            lres[15:0] <= lres1[15:0];
+                        end
                 default:
                     begin  
                     $display("Loaded %h from %h", lres1, adr_o);
                     lres <= lres1;
+                    cyc_o <= `FALSE;
+                    stb_o <= `FALSE;
                     vda_o <= `FALSE;
                     sel_o <= 8'h00;
                     upd_rf <= `TRUE;
-                    next_state(LOAD4);
+                    next_state(INVnRUN);
                     end 
                 endcase
             endcase
         endcase
         sr_o <= 1'b0;
     end
+LOAD2A:
+    begin
+        read2(mem_size,ea);
+        next_state(LOAD3);
+    end
+
 // The operation here must be a LW or LWR.
 LOAD3:
     if (err_i) begin
+        cyc_o <= `FALSE;
+        stb_o <= `FALSE;
         vda_o <= `FALSE;
         wr_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
         ex_fault(`FLT_DBE,0);
     end
+`ifdef WISHBONE
+    else if (ack_i) begin
+`else
     else if (rdy_i) begin
+`endif
+        cyc_o <= `FALSE;
+        stb_o <= `FALSE;
         vda_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
         upd_rf <= `TRUE;
-        next_state(LOAD4);
+        next_state(INVnRUN);
         lres[31:16] <= dat_i[15:0];
     end
-LOAD4:
+
+// Invalidate the xir and switch back to the run state.
+// The xir is invalidated to prevent the instruction from executing again.
+// Also performed is the control flow operations requiring a memory operand.
+
+INVnRUN:
     begin
-        nop_xir();
+        inv_xir();
         case (xopcode)
         `CALL,`CALL16,`CALL0:
             if (xRb!=5'd0) begin
@@ -1302,43 +1469,69 @@ STORE1:
     end
 STORE2:
     if (err_i) begin
+        cyc_o <= `FALSE;
+        stb_o <= `FALSE;
         vda_o <= `FALSE;
         wr_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
         ex_fault(`FLT_DBE,0);
     end
+`ifdef WISHBONE
+    else if (ack_i) begin
+`else
     else if (rdy_i) begin
+`endif
         case(xopcode)
         `CALL,`CALL16,`CALL0:   upd_rf <= `TRUE;
         endcase
         if (mem_size==word && ea[0]!=1'b0) begin
+`ifdef WISHBONE
+            stb_o <= `FALSE;
+            next_state(STORE2A);
+`else
             write2(mem_size,ea,xb);
             next_state(STORE3);
+`endif
         end
         else begin
+            cyc_o <= `FALSE;
+            stb_o <= `FALSE;
             vda_o <= `FALSE;
             wr_o <= 1'b0;
             sel_o <= 2'b00;
-            next_state(LOAD4);
+            next_state(INVnRUN);
         end
         cr_o <= 1'b0;
         msema[0] <= rb_i;
     end
+STORE2A:
+    begin
+        write2(mem_size,ea,xb);
+        next_state(STORE3);
+    end
 STORE3:
     if (err_i) begin
+        cyc_o <= `FALSE;
+        stb_o <= `FALSE;
         vda_o <= `FALSE;
         wr_o <= `FALSE;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
         ex_fault(`FLT_DBE,0);
     end
+`ifdef WISHBONE
+    else if (ack_i) begin
+`else
     else if (rdy_i) begin
+`endif
+        cyc_o <= `FALSE;
+        stb_o <= `FALSE;
         vda_o <= `FALSE;
         wr_o <= 1'b0;
         sel_o <= 2'b00;
         lock_o <= `FALSE;
-        next_state(LOAD4);
+        next_state(INVnRUN);
     end
 
 LOAD_ICACHE:
@@ -1346,11 +1539,15 @@ LOAD_ICACHE:
         if (icmf != 2'b11) begin
             isICacheLoad <= `TRUE;
             if (icmf[1]) begin
+                cyc_o <= `TRUE;
+                stb_o <= `TRUE;
                 vpa_o <= `TRUE;
                 adr_o <= {pcp8[31:3],3'b000};
                 icmf[0] <= 1'b1;
             end
             else begin
+                cyc_o <= `TRUE;
+                stb_o <= `TRUE;
                 vpa_o <= `TRUE;
                 icmf[1] <= 1'b1;
                 adr_o <= {pc[31:3],3'b000};
@@ -1361,13 +1558,27 @@ LOAD_ICACHE:
             next_state(RUN);
     end
 LOAD_ICACHE2:
+`ifdef WISHBONE
+    if (ack_i) begin
+`else
     if (rdy_i) begin
+`endif
+`ifdef WISHBONE
+        stb_o <= `FALSE;
+        next_state(LOAD_ICACHE3);
+`endif
         adr_o[2:1] <= adr_o[2:1] + 2'd1;
         if (adr_o[2:1]==2'b11) begin
             isICacheLoad <= `FALSE;
+            cyc_o <= `FALSE;
             vpa_o <= `FALSE;
             next_state(icmf==2'b11 ? RUN : LOAD_ICACHE);
         end
+    end
+LOAD_ICACHE3:
+    begin
+        stb_o <= `TRUE;
+        next_state(LOAD_ICACHE2);
     end
 default:
     next_state(RUN);
@@ -1376,19 +1587,33 @@ endcase
 end
 
 
-task nop_ir();
+// We don't really need to NOP out a 64 bit register in several places when a 
+// single bit indicating invalid status will do. Saves about 200LUTs.
+
+task inv_ir();
 begin
-    ir <= `_2NOP_INSN;
+    dinv <= `TRUE;
+    //ir <= `_2NOP_INSN;
 end
 endtask
 
-task nop_xir();
+task inv_xir();
 begin
-    xir <= `_2NOP_INSN;
+    xinv <= `TRUE;
+    //xir <= `_2NOP_INSN;
     xRt <= 5'd0;
     xRt2 <= 1'b0;
 end
 endtask
+
+
+// All faulting instructions perform a branch back to themselves. However the
+// INT instruction is fed into the instruction stream at that point. The INT
+// instruction does another branch through the interrupt table. Meaning it 
+// takes the hardware about six clock cycles to process faults.
+// Since *all* faults use this mechanism exceptions should still remain
+// precise.
+// Note that a prior fault overrides an incoming interrupt request.
 
 task ex_fault;
 input [8:0] ccd;        // cause code
@@ -1404,8 +1629,8 @@ endtask
 task ex_branch;
 input [31:0] nxt_pc;
 begin
-    nop_ir();
-    nop_xir();
+    inv_ir();
+    inv_xir();
     pc <= nxt_pc;
 end
 endtask
@@ -1416,10 +1641,14 @@ task ex_call;
 input [31:0] ant;
 begin
     begin
-        mem_size <= word;
-        ea <= a - 32'd2;
-        xb <= xpc + ant;
-        next_state(STORE1);
+        if (a-32'd2 < sbl)
+            ex_fault(`FLT_STACK,0);
+        else begin
+            mem_size <= word;
+            ea <= a - 32'd2;
+            xb <= xpc + ant;
+            next_state(STORE1);
+        end
     end
 end
 endtask
@@ -1428,6 +1657,8 @@ task read1;
 input [1:0] sz;
 input [31:0] adr;
 begin
+    cyc_o <= `TRUE;
+    stb_o <= `TRUE;
 	vda_o <= 1'b1;
 	adr_o <= adr;
 	case(sz)
@@ -1451,6 +1682,8 @@ task read2;
 input [1:0] sz;
 input [31:0] adr;
 begin
+    cyc_o <= `TRUE;
+    stb_o <= `TRUE;
 	vda_o <= 1'b1;
 	adr_o <= {adr[31:1]+31'd1,1'b0};
 	sel_o <= 2'b01;
@@ -1462,6 +1695,8 @@ input [1:0] sz;
 input [31:0] adr;
 input [31:0] dat;
 begin
+    cyc_o <= `TRUE;
+    stb_o <= `TRUE;
 	vda_o <= 1'b1;
 	wr_o <= 1'b1;
 	adr_o <= adr;
@@ -1478,7 +1713,7 @@ begin
         begin
             case(adr[0])
             1'd0: begin sel_o <= 2'b11; dat_o <= dat; end
-            1'd1: begin sel_o <= 2'b10; dat_o <= {dat[15:0],16'h0000}; lock_o <= `TRUE; end
+            1'd1: begin sel_o <= 2'b10; dat_o <= {2{dat[15:0]}}; lock_o <= `TRUE; end
             endcase
         end
 	endcase
@@ -1492,13 +1727,19 @@ input [1:0] sz;
 input [31:0] adr;
 input [31:0] dat;
 begin
-  vda_o <= `TRUE;
-  wr_o <= 1'b1;
-  adr_o <= {adr[31:1]+31'd1,1'b0};
-  sel_o <= 2'b01;
-  dat_o <= {16'h0000,dat[31:16]};
+    cyc_o <= `TRUE;
+    stb_o <= `TRUE;
+    vda_o <= `TRUE;
+    wr_o <= 1'b1;
+    adr_o <= {adr[31:1]+31'd1,1'b0};
+    sel_o <= 2'b01;
+    dat_o <= {2{dat[31:16]}};
 end
 endtask
+
+
+// This task makes it possible to place debugging information at the point of
+// a state transition.
 
 task next_state;
 input [5:0] st;
@@ -1574,9 +1815,16 @@ begin
 end
 endtask
 
+
+// The register file is updated outside of the state case statement.
+// It could be updated potentially on every clock cycle as long as
+// upd_rf is true.
+
 task update_regfile;
 begin
     if (upd_rf) begin
+        if (xRt2)
+            sp <= res;
         case(xRt)
         5'd1:   r1 <= res;
         5'd2:   r2 <= res;

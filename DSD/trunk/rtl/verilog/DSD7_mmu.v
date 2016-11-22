@@ -25,14 +25,19 @@
 //
 // ============================================================================
 //
-module DSD7_mmu(clk_i, pcr_i, vpa_i, vda_i, rdy_o, wr_i, vadr_i, padr_o, dat_i, dat_o, vpa_o, vda_o, wr_o);
+module DSD7_mmu(clk_i, pcr_i, cyc_i, stb_i, vpa_i, vda_i, ack_o, wr_i, vadr_i, 
+    cyc_o, stb_o, padr_o, dat_i, dat_o, vpa_o, vda_o, wr_o);
 input clk_i;
 input [31:0] pcr_i;     // paging control register
+input cyc_i;
+input stb_i;
 input vpa_i;            // valid program address
 input vda_i;            // valid data address
 input wr_i;             // write strobe
-output rdy_o;           // Address translation and MMU are ready
+output ack_o;           // Address translation and MMU are ready
 input [31:0] vadr_i;    // virtual address
+output cyc_o;
+output stb_o;
 output [31:0] padr_o;   // physical address
 input [31:0] dat_i;
 output [31:0] dat_o;
@@ -40,7 +45,7 @@ output vpa_o;
 output vda_o;
 output wr_o;
 
-wire cs = vda_i && (vadr_i[31:12]==20'hFFDC4);
+wire cs = cyc_i && stb_i && (vadr_i[31:12]==20'hFFDC4);
 
 wire [12:0] o0,o1;
 
@@ -60,24 +65,30 @@ assign dat_o = cs ? {2{3'b0,o0}} : 32'd0;
 
 wire pe = pcr_i[31] & ~vadr_i[31];
 
+reg cyc_d;
+reg stb_d;
 reg vpa_d;
 reg vda_d;
 always @(posedge clk_i)
 begin
+    cyc_d <= cyc_i;
+    stb_d <= stb_i;
     vpa_d <= vpa_i;
     vda_d <= vda_i;
 end
-assign vpa_o = pe ? vpa_d : vpa_i;
-assign vda_o = pe ? vda_d : vda_i;
+assign cyc_o = pe ? cyc_d & cyc_i : cyc_i;
+assign stb_o = pe ? stb_d & stb_i : stb_i;
+assign vpa_o = pe ? vpa_d & vpa_i : vpa_i;
+assign vda_o = pe ? vda_d & vda_i : vda_i;
 
 assign padr_o[15:0] = vadr_i[15:0];
 assign padr_o[27:16] = pe ? o1[11:0] : vadr_i[27:16];
 assign padr_o[31:28] = vadr_i[31:28];
 
-assign wr_o = wr_i & (pe ? o1[12] : 1'b1);
+assign wr_o = wr_i & (pe ? ~o1[12] : 1'b1);
 
 // Create a one cycle delayed ready signal.
-assign rdy_o = (cs & wr_i) ? 1'b1 : (vpa_i & vpa_o) | (vda_i & vda_o);
+assign ack_o = cs ? (wr_i ? 1'b1 : (stb_i & stb_d)) : 1'b0;
 
 endmodule
 

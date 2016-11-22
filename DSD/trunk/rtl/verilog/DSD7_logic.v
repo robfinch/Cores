@@ -29,10 +29,10 @@
 `define R2      6'h0C
 `endif
 
-`ifndef ANDI
 `define ANDI    6'h08
 `define ORI     6'h09
 `define EORI    6'h0A
+`define ORI32   6'h0B
 
 `define AND     7'h08
 `define OR      7'h09
@@ -40,7 +40,6 @@
 `define NAND    7'h0C
 `define NOR     7'h0D
 `define ENOR    7'h0E
-`endif
 
 module DSD7_logic(xir, a, b, imm, res);
 input [31:0] xir;
@@ -69,6 +68,7 @@ case(xopcode)
 `ANDI:	res <= a & imm;
 `ORI:	res <= a | imm;
 `EORI:	res <= a ^ imm;
+`ORI32:	res <= a | imm;
 default:	res <= 32'd0;
 endcase
 

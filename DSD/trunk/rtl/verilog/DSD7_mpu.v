@@ -27,7 +27,7 @@
 module DSD7_mpu(hartid_i, rst_i, clk_i,
     i1,i2,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, 
-    vpa_o, vda_o, wr_o, sel_o, rdy_i, adr_o, dat_i, dat_o,
+    cyc_o, stb_o, vpa_o, vda_o, wr_o, sel_o, ack_i, adr_o, dat_i, dat_o,
     sr_o, cr_o, rb_i
     );
 input [31:0] hartid_i;
@@ -63,11 +63,13 @@ input i28;
 input i29;
 input i30;
 input i31;
+output cyc_o;
+output stb_o;
 output vpa_o;
 output vda_o;
 output wr_o;
 output [1:0] sel_o;
-input rdy_i;
+input ack_i;
 output [31:0] adr_o;
 input [31:0] dat_i;
 output [31:0] dat_o;
@@ -78,10 +80,13 @@ parameter CLK_FREQ = 50000000;
 
 wire irq;
 wire [8:0] cause;
+wire cyc;
+wire stb;
 wire vpa;
 wire vda;
 wire wr;
-wire rdy;
+wire ack, mmu_ack, pic_ack;
+wire [31:0] mmu_dat, pic_dat;
 wire [31:0] adr;
 wire [31:0] dati;
 wire [31:0] dato;
@@ -95,11 +100,13 @@ DSD7 u1
     .clk_i(clk_i),
     .irq_i(irq),
     .icause_i(cause),
+    .cyc_o(cyc),
+    .stb_o(stb),
     .vpa_o(vpa),
     .vda_o(vda),
     .wr_o(wr),
     .sel_o(sel_o),
-    .rdy_i(rdy),
+    .ack_i(ack),
     .adr_o(adr),
     .dat_i(dati),
     .dat_o(dat_o),
@@ -113,16 +120,20 @@ DSD7_mmu u2
 (
     .clk_i(clk_i),
     .pcr_i(pcr),
+    .cyc_i(cyc),
+    .stb_i(stb),
     .vpa_i(vpa),
     .vda_i(vda),
     .wr_i(wr),
     .vadr_i(adr),
     .padr_o(adr_o),
+    .cyc_o(cyc_o),
+    .stb_o(stb_o),
     .vpa_o(vpa_o),
     .vda_o(vda_o),
     .dat_i(dat_o),
     .dat_o(mmu_dat),
-    .rdy_o(mmu_rdy),
+    .ack_o(mmu_ack),
     .wr_o(wr_o)
 );
 
@@ -130,8 +141,9 @@ DSD7_pic u3
 (
 	.rst_i(rst_i),		// reset
 	.clk_i(clk_i),		// system clock
-	.vda_i(vda),		// cycle valid
-	.rdy_o(pic_rdy),    // controller is ready
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(pic_ack),    // controller is ready
 	.wr_i(wr),			// read/write
 	.adr_i(adr),	    // address
 	.dat_i(dat_o),
@@ -181,7 +193,8 @@ DSD_30Hz #(.CLK_FREQ(CLK_FREQ)) u30Hz
     ._30Hz_o(pulse30)
 );
 
-assign rdy = mmu_rdy & pic_rdy & rdy_i;
+assign ack = mmu_ack | pic_ack | ack_i;
+assign dati = pic_dat|mmu_dat|dat_i;
 
 endmodule
 
