@@ -29,6 +29,7 @@
 `define WISHBONE    1'b1
 //`define ICACHE_4WAY 1'b1
 //`define COMPRESSED_INSNS    1'b1
+`define CAP_FP  1'b1
 
 `define SIMULATION
 `define VBA_VECT    32'hFFFFFF00
@@ -65,6 +66,8 @@
 `define LHU     6'h21
 `define LW      6'h22
 `define LWR     6'h23
+`define LFx     6'h26
+`define SFx     6'h27
 `define SH      6'h28
 `define SW      6'h29
 `define SWC     6'h2A
@@ -75,6 +78,7 @@
 `define MULHI   6'h33
 `define MULUHI  6'h34
 `define MULSUHI 6'h35
+`define FLOAT   6'h36
 `define DIVI    6'h38
 `define DIVUI   6'h39
 `define DIVSUI  6'h3A
@@ -142,6 +146,32 @@
 `define PUSH    5'h02
 `define POP     5'h03
 `define PUSHI5  5'h04
+`define FPUSH0  5'h06
+`define FPUSH1  5'h07
+`define FPOP0   5'h08
+`define FPOP1   5'h09
+
+// Float instructions
+`define FCMP    3'd1
+`define FADD    3'd4
+`define FSUB    3'd5
+`define FMUL    3'd6
+`define FDIV    3'd7
+
+`define FMOV    6'h00
+`define FTOI    6'h02
+`define ITOF    6'h03
+`define FNEG    6'h04
+`define FABS    6'h05
+`define FSIGN   6'h06
+`define FMAN    6'h07
+`define FNABS   6'h08
+
+`define FTX     6'h10
+`define FCX     6'h11
+`define FEX     6'h12
+`define FDX     6'h13
+`define FRM     6'h14
 
 `define _2NOP_INSN    {10'h0,`NOP,10'h0,`NOP}
 
@@ -160,6 +190,7 @@
 `define CSR_SBU     12'h00F
 `define CSR_TASK    12'h010
 `define CSR_CISC    12'h011
+`define CSR_FPSTAT  12'h013
 `define CSR_ITOS0   12'h040
 `define CSR_ITOS1   12'h041
 `define CSR_ITOS2   12'h042
@@ -242,14 +273,21 @@ parameter MUL6 = 6'd36;
 parameter MUL7 = 6'd37;
 parameter MUL8 = 6'd38;
 parameter MUL9 = 6'd39;
+parameter FLOAT1 = 6'd40;
+parameter FLOAT2 = 6'd41;
+parameter FLOAT3 = 6'd42;
 
 integer n;
 reg [5:0] state;
+reg [127:0] stname;         // pretty name for state (simulation)
+reg [7:0] fpcnt;
+wire advanceRF;
+wire advanceIF;
 reg [1:0] ol = 2'b00;       // operating level (machine only)
 reg [31:0] pc,dpc,xpc;
 reg [31:0] pc_inc;
 reg [63:0] insn,iinsn;
-reg [63:0] ir,xir,mir;
+reg [63:0] ir,xir,mir,fir;
 reg [15:0] fault_insn;
 reg stuff_fault;
 reg ii32,ii5,ii5a;
@@ -279,8 +317,10 @@ wire takb;
 reg [31:0] br_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
+reg upd_fp;
 reg upd_rf;                     // flag indicates to update register file
 reg xinv,dinv;                  // invalidate flags for pipeline stages
+reg [3:0] fplsst;               // load store state for fp
 // CSR's
 reg [31:0] tick;
 reg [31:0] msema;
@@ -348,6 +388,7 @@ case(xr[5:0])
 `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
 `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
 `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,
+`LFx,`SFx,`FLOAT,
 `MEM,`CALL,`CALL16,`CALL0:
     xIsMC = `TRUE;
 `R2:
@@ -448,6 +489,8 @@ DSD_divider #(32) u1
 	.idle()
 );
 
+wire [127:0] fpu_o;
+
 always @*
 begin
     case(xopcode)
@@ -507,6 +550,7 @@ begin
         `RET:       res = a + imm;
         `PUSHI5,
         `PUSH:      res = a - 32'd2;
+        `FPUSH0,`FPUSH1:     res = a - 32'd8;
         `POP:       res = lres;
         default:    res = 32'hDEADDEAD;
         endcase
@@ -515,6 +559,7 @@ begin
     `CALL:      res = a - 32'd2;
     `CALL16:    res = a - 32'd2;
     `CALL0:     res = a - 32'd2;
+    `FLOAT:     res = fpu_o[31:0];
     default:    res = 32'hDEADDEAD;
     endcase
 end
@@ -522,7 +567,14 @@ end
 // The only instruction using result bus #2 is the pop instruction.
 // Save some decoding.
 always @*
-    res2 <= a + 32'd2;
+    case(xopcode)
+    `MEM:
+        case(xir[15:11])
+        `FPOP0,`FPOP1:  res2 <= a + 32'd8;
+        default:    res2 <= a + 32'd2;
+        endcase
+    default:    res2 <= a + 32'd2;
+    endcase
 /*
     case(xopcode)
     `MEM:
@@ -533,6 +585,55 @@ always @*
     default:    res2 <= 32'h0;
     endcase
 */
+
+reg xldfp;
+reg [127:0] fres;
+reg [127:0] fp_in,fp_out;
+reg [127:0] fpa1,fpb;
+reg [127:0] fpregs [0:63];
+wire [5:0] FRa = ir[11:6];
+wire [5:0] FRb = opcode==`SFx ? ir[23:18] : (opcode==`MEM) ? ir[11:6] : ir[17:12];
+reg [5:0] xFRt;
+`ifdef CAP_FP
+always @(posedge clk_i)
+if (advanceRF && opcode==`FLOAT) begin
+    fir <= ir;
+    fpa1 <= fpregs[FRa];
+    fpb <= fpregs[FRb];
+end
+always @(posedge clk_i)
+    if (upd_fp)
+        fpregs[xFRt] <= fres;
+
+wire [127:0] fpa = 
+    (fir[5:0]==`FLOAT && fir[31:29]==3'b00 &&
+        (fir[17:12]==`FTX || fir[17:12]==`FCX || fir[17:12]==`FDX || fir[17:12]==`FEX || fir[17:12]==`FRM))
+        ? a : fpa1;
+wire [31:0] fpstatus;
+wire fpdone;
+
+fpUnit ufp1
+(
+    .rst(rst_i),
+    .clk(clk_i),
+    .ce(1'b1),
+    .ir(fir[31:0]),
+    .ld(xldfp),
+    .a(fpa),
+    .b(fpb),
+    .imm(fir[23:18]),
+    .o(fpu_o),
+    .status(fpstatus),
+    .exception(),
+    .done(fpdone)
+);
+
+always @*
+    if (xopcode==`LFx)
+        fres <= fp_in;
+    else
+        fres <= fpu_o;
+`endif
 
 //---------------------------------------------------------------------------
 // Lookup table for compressed instructions.
@@ -790,8 +891,11 @@ wire ihit = (ihit1 && pc[2:0]==3'b000) || (ihit1 && ihit2);
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-wire advanceRF = !(xIsMC(xir) && !xinv);
-wire advanceIF = advanceRF & (ihit && !isICacheLoad);
+assign advanceRF = !(xIsMC(xir) && !xinv);
+assign advanceIF = advanceRF & (ihit && !isICacheLoad);
+
+always @*
+    state_name();
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -824,6 +928,8 @@ if (rst_i) begin
     next_state(ICACHE_RST);
 end
 else begin
+xldfp <= `FALSE;
+upd_fp <= `FALSE;
 upd_rf <= `FALSE;
 tick <= tick + 32'd1;
 update_regfile();
@@ -873,7 +979,9 @@ begin
             Rc <= 5'd29;
         end
         else if (iinsn[5:0]==`PEA || iinsn[5:0]==`CALL || iinsn[5:0]==`CALL16 || iinsn[5:0]==`CALL0 ||
-            (iinsn[5:0]==`MEM && (iinsn[15:11]==`RET || iinsn[15:11]==`PUSH || insn[15:11]==`POP))) begin
+            (iinsn[5:0]==`MEM && 
+                (iinsn[15:11]==`RET || iinsn[15:11]==`PUSH || insn[15:11]==`POP ||
+                insn[15:11]==`FPUSH0 || insn[15:11]==`FPUSH1 || insn[15:11]==`FPOP0 || insn[15:11]==`FPOP1))) begin
             Ra <= regSP;
             Rb <= iinsn[10:6];
             Rc <= iinsn[15:11];
@@ -899,6 +1007,7 @@ begin
         `BccU:  pc_inc = 32'd2;
         `BccI:  pc_inc = ii5 ? 32'd4 : 32'd2;
         `BccUI:  pc_inc = ii5 ? 32'd4 : 32'd2;
+        `LFx,`SFx:  pc_inc = ii5 ? 32'd4 : 32'd2;
         `NOP,`CINSN:
             pc_inc = 32'd1;
         `CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
@@ -916,6 +1025,7 @@ begin
         `JMP,`CALL,`ORI32: pc_inc = 32'd3;
         `JMP16,`CALL16: pc_inc = 32'd2;
         `CALL0: pc_inc = 32'd1;
+        `FLOAT: pc_inc = 32'd2;
         default:    pc_inc = 32'd1;
         endcase
         // Can't execute jumps in the IF stage.
@@ -966,6 +1076,7 @@ begin
         a <= fwd_mux(Ra);
         b <= fwd_mux(Rb);
         c <= fwd_mux(Rc);
+        xldfp <= `TRUE;
         // Suppress register file update if RF stage is invalid.
         case({dinv,opcode})
         `R2:
@@ -976,11 +1087,16 @@ begin
             `SHLI,`SHRI,`ASRI,`ROLI,`RORI:  upd_rf <= `TRUE;
             `R2CSRI:    upd_rf <= `TRUE;
             endcase
+        `MEM:   upd_rf <= `TRUE;
         `MOV,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32:
             upd_rf <= `TRUE;
         `CSRI:  upd_rf <= `TRUE;
         `JMP,`JMP16:    upd_rf <= `TRUE;
+        `FLOAT:
+            case(ir[31:29])
+            `FCMP:  upd_rf <= `TRUE;
+            endcase
         endcase
         case(opcode)
         `R2:
@@ -997,6 +1113,7 @@ begin
         `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA:
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
+        `LFx,`SFx:     imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `CSRI:         imm <= i5a ? ir[63:32] : {{27{ir[10]}},ir[10:6]};
         `JMP,`CALL,`ORI32:  imm <= ir[47:16];
         `JMP16,`CALL16: imm <= {{16{ir[31]}},ir[31:16]};
@@ -1023,6 +1140,7 @@ begin
         xRb <= Rb;  // needed for calls/jumps
         // Set target register
         xRt2 <= 1'b0;
+        xFRt <= 6'd0;
         case(opcode)
         `R2:
             case(funct)
@@ -1041,6 +1159,9 @@ begin
             case(xir[15:11])
             `RET,`PUSHI5,`PUSH:  xRt <= regSP;
             `POP:   begin xRt <= ir[10:6]; xRt2 <= 1'b1; end
+`ifdef CAP_FP
+            `FPOP0,`FPOP1:  begin xFRt <= ir[11:6]; xRt2 <= 1'b1; end
+`endif
             default:    xRt <= 5'd0;
             endcase
         `MOV,
@@ -1050,6 +1171,24 @@ begin
         `PEA:
             xRt <= regSP;
         `JMP,`JMP16:    xRt <= ir[15:11];
+`ifdef CAP_FP
+        `FLOAT:
+            case(ir[31:29])
+            3'd0:
+                case(ir[17:12])
+                `FABS,`FMAN,`FMOV,`FNABS,`FNEG,`FSIGN,`FTOI,`ITOF:
+                    xFRt <= ir[23:18];
+                default: xFRt <= 6'd0;
+                endcase
+            `FCMP:  xRt <= ir[22:18];
+            `FADD:  xFRt <= ir[23:18];
+            `FSUB:  xFRt <= ir[23:18];
+            `FMUL:  xFRt <= ir[23:18];
+            `FDIV:  xFRt <= ir[23:18];
+            default: xFRt <= 6'd0;
+            endcase
+        `LFx:   xFRt <= ir[23:18];
+`endif
         default:
             xRt <= 5'd0;
         endcase
@@ -1207,6 +1346,26 @@ begin
                     ea <= a;
                     next_state(LOAD1);
                 end
+`ifdef CAP_FP                
+            `FPUSH0,`FPUSH1:
+                if (a - 32'd8 < sbl)
+                    ex_fault(`FLT_STACK,0);
+                else begin
+                    mem_size <= word;
+                    ea <= a - 32'd8;
+                    xb <= fpb[31:0];
+                    fplsst <= 4'h0;
+                    next_state(STORE1);
+                end
+            `FPOP0,`FPOP1:
+                if (a > sbu)
+                    ex_fault(`FLT_STACK,0);
+                else begin
+                    mem_size <= word;
+                    ea <= a;
+                    next_state(LOAD1);
+                end
+`endif                
             endcase
             
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32:
@@ -1231,6 +1390,18 @@ begin
                 ea <= a + imm;
                 next_state(LOAD1);
             end
+`ifdef CAP_FP
+        `LFx:
+            begin
+                mem_size <= word;
+                if (xir[31:29]==3'd0)
+                    ea <= a + imm;
+                else
+                    ea <= a + b;
+                fplsst <= 4'h0;
+                next_state(LOAD1);
+            end
+`endif
         `SH:
             begin
                 mem_size <= half;
@@ -1245,6 +1416,19 @@ begin
                 xb <= b;
                 state <= STORE1;
             end
+`ifdef CAP_FP
+        `SFx:
+            begin
+                mem_size <= word;
+                if (xir[31:29]==3'd0)
+                    ea <= a + imm;
+                else
+                    ea <= a + b;
+                xb <= fpb[31:0];
+                fplsst <= 4'h0;
+                next_state(STORE1);
+            end
+`endif
         `PEA:
             if (a - 32'd2 < sbl)
                 ex_fault(`FLT_STACK,0);
@@ -1257,6 +1441,9 @@ begin
         `CSR:   if (xRa != 5'd0)
                     write_csr(xir[17:16],xir[31:18],a);
         `CSRI:  write_csr(xir[17:16],xir[31:18],imm);
+`ifdef CAP_FP        
+        `FLOAT: next_state(FLOAT1);
+`endif
         default:    ;
         endcase
     end // advanceEX
@@ -1299,6 +1486,13 @@ DIV1:
     if (dvd_done) begin
         upd_rf <= `TRUE;
         next_state(INVnRUN);
+    end
+
+FLOAT1:
+    if (fpdone) begin
+        upd_fp <= `TRUE;
+        inv_xir();
+        next_state(RUN);
     end
 
 LOAD1:
@@ -1373,8 +1567,47 @@ LOAD2:
                 end 
             endcase
             end
+        `LFx:
+            begin
+                cyc_o <= `TRUE;
+                vda_o <= `TRUE;
+                sel_o <= 2'b11;
+                case(fplsst)
+                4'h0:   begin fp_in[31:0] <= dat_i; next_state(LOAD1); end
+                4'h1:   begin fp_in[63:32] <= dat_i; next_state(LOAD1); end
+                4'h2:   begin fp_in[95:64] <= dat_i; next_state(LOAD1); end
+                4'h3:   begin fp_in[127:96] <= dat_i; next_state(INVnRUN);
+                        cyc_o <= `FALSE;
+                        vda_o <= `FALSE;
+                        sel_o <= 2'b00;
+                        upd_fp <= `TRUE;
+                        end
+                endcase
+                fplsst <= fplsst + 4'd1;
+                ea <= ea + 32'd2;
+            end
         `MEM:
             case(xir[15:11])
+            `FPOP0,`FPOP1:
+                begin
+                    cyc_o <= `TRUE;
+                    vda_o <= `TRUE;
+                    sel_o <= 2'b11;
+                    case(fplsst)
+                    4'h0:   begin fp_in[31:0] <= dat_i; next_state(LOAD1); end
+                    4'h1:   begin fp_in[63:32] <= dat_i; next_state(LOAD1); end
+                    4'h2:   begin fp_in[95:64] <= dat_i; next_state(LOAD1); end
+                    4'h3:   begin fp_in[127:96] <= dat_i; next_state(INVnRUN);
+                            cyc_o <= `FALSE;
+                            vda_o <= `FALSE;
+                            sel_o <= 2'b00;
+                            upd_fp <= `TRUE;
+                            end
+                    endcase
+                    fplsst <= fplsst + 4'd1;
+                    ea <= ea + 32'd2;
+                end
+            
             `RET,`POP:
                 case(ea[0])
                 1'b1:   begin
@@ -1501,6 +1734,49 @@ STORE2:
             wr_o <= 1'b0;
             sel_o <= 2'b00;
             next_state(INVnRUN);
+            case(xopcode)
+            `SFx:
+                begin
+                    cyc_o <= `TRUE;
+                    vda_o <= `TRUE;
+                    sel_o <= 2'b11;
+                    case(fplsst)
+                    4'h0:   begin xb <= fpb[63:32]; next_state(STORE1); end
+                    4'h1:   begin xb <= fpb[95:64]; next_state(STORE1); end
+                    4'h2:   begin xb <= fpb[127:96]; next_state(STORE1); end
+                    4'h3:   begin 
+                            next_state(INVnRUN);
+                            cyc_o <= `FALSE;
+                            vda_o <= `FALSE;
+                            sel_o <= 2'b00;
+                            end
+                    endcase
+                    fplsst <= fplsst + 4'd1;
+                    ea <= ea + 32'd2;
+                end
+            `MEM:
+                case(xir[15:11])
+                `FPUSH0,`FPUSH1:
+                    begin
+                        cyc_o <= `TRUE;
+                        vda_o <= `TRUE;
+                        sel_o <= 2'b11;
+                        case(fplsst)
+                        4'h0:   begin xb <= fpb[63:32]; next_state(STORE1); end
+                        4'h1:   begin xb <= fpb[95:64]; next_state(STORE1); end
+                        4'h2:   begin xb <= fpb[127:96]; next_state(STORE1); end
+                        4'h3:   begin 
+                                next_state(INVnRUN);
+                                cyc_o <= `FALSE;
+                                vda_o <= `FALSE;
+                                sel_o <= 2'b00;
+                                end
+                        endcase
+                        fplsst <= fplsst + 4'd1;
+                        ea <= ea + 32'd2;
+                    end
+                endcase
+            endcase
         end
         cr_o <= 1'b0;
         msema[0] <= rb_i;
@@ -1763,6 +2039,7 @@ begin
     `CSR_SBU:       res = sbu;
     `CSR_TASK:      res = tr;
     `CSR_CISC:      res = cisc;
+    `CSR_FPSTAT:    res = fpstatus;
     `CSR_SEMA:      res = msema;
     `CSR_ITOS0:    res = itos[31:0];
     `CSR_ITOS1:    res = itos[63:32];
@@ -1837,6 +2114,19 @@ begin
         if (xRt==regSP)
             gie <= `TRUE;
     end
+end
+endtask
+
+task state_name;
+begin
+    case(state)
+    RUN:    stname <= "RUN";
+    LOAD2A: stname <= "LOAD2A";
+    LOAD1:  stname <= "LOAD1";
+    LOAD2:  stname <= "LOAD2";
+    LOAD3:  stname <= "LOAD3";
+    INVnRUN:    stname <= "INVnRUN";
+    endcase
 end
 endtask
 

@@ -56,6 +56,8 @@
 `define BGEI    3'h5
 `define BLEI    3'h6
 `define BGTI    3'h7
+`define BBC     3'h0
+`define BBS     3'h1
 `define BORI    3'h2
 `define BNORI   3'h3
 `define BLTUI   3'h4
@@ -110,6 +112,8 @@ case(opcode)
     endcase
 `BccUI:
     case(cond)
+    `BBC:   takb <= ~a[imm[4:0]];
+    `BBS:   takb <= a[imm[4:0]];
     `BORI:  takb <= |a || |imm;
     `BNORI: takb <= ~(|a || |imm);
     `BLTUI: takb <= a < imm;
