@@ -1,30 +1,37 @@
-/* ============================================================================
-	(C) 2007,2015  Robert T Finch
-	All rights reserved.
-	rob@birdcomputer.ca
-
-	fp_cmp_unit.v
-		- floating point comparison unit
-		- parameterized width
-		- IEEE 754 representation
-
-	Verilog 2001
-
-	Notice of Confidentiality
-
-	http://en.wikipedia.org/wiki/IEEE_754
-
-	Ref: Webpack 8.1i Spartan3-4 xc3s1000-4ft256
-	111 LUTS / 58 slices / 16 ns
-	Ref: Webpack 8.1i Spartan3-4 xc3s1000-4ft256
-	109 LUTS / 58 slices / 16.4 ns
-
-============================================================================ */
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2007-2016  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	fp_cmp_unit.v
+//    - floating point comparison unit
+//    - parameterized width
+//    - IEEE 754 representation
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
 
 module fp_cmp_unit(a, b, o, nanx);
 parameter WID = 32;
 localparam MSB = WID-1;
 localparam EMSB = WID==127 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -35,6 +42,7 @@ localparam EMSB = WID==127 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :

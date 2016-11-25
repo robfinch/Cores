@@ -24,46 +24,56 @@
 //                                                                          
 // ============================================================================
 
-module fpdivr8
-#(	parameter WID = 112, parameter RADIX = 8 )
-(
-	input clk,
-	input ld,
-	input [WID-1:0] a,
-	input [WID-1:0] b,
-	output reg [WID-1:0] q,
-	output [WID-1:0] r,
-	output done
-);
-	localparam DMSB = WID-1;
+module fpdivr8(clk, ld, a, b, q, r, done);
+parameter WID = 112;
+parameter RADIX = 8;
+localparam WID1 = WID;//((WID+2)/3)*3;    // make width a multiple of three
+localparam DMSB = WID1-1;
+input clk;
+input ld;
+input [WID1-1:0] a;
+input [WID1-1:0] b;
+output reg [WID1*2-1:0] q;
+output [WID1-1:0] r;
+output done;
 
-	wire [DMSB:0] rx [2:0];		// remainder holds
-	reg [DMSB:0] rxx;
-	reg [8:0] cnt;				// iteration count
-	wire [DMSB:0] sdq;
-	wire [DMSB:0] sdr;
-	wire sdval;
-	wire sddbz;
-	reg [DMSB:0] ri; 
-	wire b0 = b <= ri;
-	wire [DMSB:0] r1 = b0 ? ri - b : ri;
-	
-	specialCaseDivider #(WID) u1 (.a(a), .b(b), .q(sdq), .val(sdval), .dbz(sdbz) );
+
+wire [DMSB:0] rx [2:0];		// remainder holds
+reg [DMSB:0] rxx;
+reg [8:0] cnt;				// iteration count
+wire [DMSB:0] sdq;
+wire [DMSB:0] sdr;
+wire sdval;
+wire sddbz;
+reg [DMSB+1:0] ri; 
+wire b0,b1,b2;
+wire [DMSB:0] r1,r2,r3;
+
+specialCaseDivider #(WID1) u1 (.a(a), .b(b), .q(sdq), .val(sdval), .dbz(sdbz) );
 
 wire [7:0] maxcnt;
 wire [2:0] n1;
 generate
 begin
 if (RADIX==8) begin
-    assign maxcnt = WID*2/3;
-    assign n1 = 2;
+    assign maxcnt = WID1*2/3+1;
     assign b0 = b < rxx;
-	assign rx[0] = rxx  [DMSB] ? {rxx  ,q[WID*2-1  ]} + b : {rxx  ,q[WID*2-1  ]} - b;
-	assign rx[1] = rx[0][DMSB] ? {rx[0],q[WID*2-1-1]} + b : {rx[0],q[WID*2-1-1]} - b;
-	assign rx[2] = rx[1][DMSB] ? {rx[1],q[WID*2-1-2]} + b : {rx[1],q[WID*2-1-2]} - b;
+    assign r1 = b0 ? rxx - b : rxx;
+    assign b1 = b < {r1,q[WID*2-1]};
+    assign r2 = b1 ? {r1,q[WID*2-1]} - b : {r1,q[WID*2-1]};
+    assign b2 = b < {r2,q[WID*2-1-1]};
+    assign r3 = b2 ? {r2,q[WID*2-1-1]} - b : {r2,q[WID*2-1-1]};
+    assign n1 = 2;
+	always @(posedge clk)
+        if (ld)
+            rxx <= 0;
+        else if (!done)
+            rxx <= {r3,q[WID*2-1]};
 end
-if (RADIX==2) begin
-    assign maxcnt = WID+2;
+else if (RADIX==2) begin
+    assign b0 = b <= ri;
+    assign r1 = b0 ? ri - b : ri;
+    assign maxcnt = WID1*2+1;
     assign n1 = 0;
 //	assign rx[0] = rxx  [DMSB] ? {rxx  ,q[WID*2-1  ]} + b : {rxx  ,q[WID*2-1  ]} - b;
 end
@@ -77,44 +87,38 @@ endgenerate
 			cnt <= cnt - 1;
 
 
-	always @(posedge clk)
-		if (ld)
-			rxx <= 0;
-		else if (!done)
-			rxx <= rx[n1];
-
 generate
 begin
 if (RADIX==8) begin
 	always @(posedge clk)
 		if (ld) begin
 			if (sdval)
-				q <= sdq;
+				q <= {3'b0,sdq,{WID1{1'b0}}};
 			else
-				q <= a;
+				q <= {3'b0,a,{WID1{1'b0}}};
 		end
 		else if (!done) begin
-			q[WID-1:3] <= q[WID-1-3:0];
-			q[0] <= ~rx[2][DMSB];
-			q[1] <= ~rx[1][DMSB];
-			q[2] <= ~rx[0][DMSB];
+			q[WID1-1:3] <= q[WID1-1-3:0];
+			q[0] <= b0;
+			q[1] <= b1;
+			q[2] <= b2;
 		end
     	// correct remainder
-        assign r = sdval ? sdr : rx[2][DMSB] ? rx[2] + b : rx[2];
+        assign r = sdval ? sdr : r3;
 end
 if (RADIX==2) begin
 	always @(posedge clk)
     if (ld) begin
         ri <= 0;
-        if (sdval)
-            q <= sdq;
+    	if (sdval)
+            q <= {3'b0,sdq,{WID1{1'b0}}};
         else
-            q <= a;
+            q <= {3'b0,a,{WID1{1'b0}}};
     end
     else if (!done) begin
-        q[WID-1:1] <= q[WID-1-1:0];
+        q[WID1*2-1:1] <= q[WID1*2-1-1:0];
         q[0] <= b0;
-        ri <= {r1[DMSB-1:0],q[WID-1]};
+        ri <= {r1[DMSB:0],q[WID1*2-1]};
     end
 	// correct remainder
     assign r = sdval ? sdr : ri;

@@ -100,9 +100,9 @@ wire sbit = |i[FMSB-2:0];
 wire [FMSB+4:0] mo;
 wire [FMSB+4:0] mo1 = xInf1 & incExp1 ? 0 :
 	incExp1 ? {i[FX:FMSB+2],gbit,rbit,sbit} :		// reduce mantissa size
-			 {i[FX-1:FMSB+2],gbit,rbit,sbit,1'b0};	// reduce mantissa size
+			 {i[FX-1:FMSB+1],gbit,rbit,sbit};	// reduce mantissa size
 wire [FMSB+3:0] mo2;
-wire [6:0] leadingZeros2;
+wire [7:0] leadingZeros2;
 
 generate
 begin
@@ -127,13 +127,13 @@ wire rightOrLeft2;	// 0=left,1=right
 delay1 #(1) d8(.clk(clk), .ce(ce), .i(under), .o(rightOrLeft2) );
 
 // Compute how much we want to decrement by
-wire [6:0] lshiftAmt2 = leadingZeros2 > xo2 ? xo2 : leadingZeros2;
+wire [7:0] lshiftAmt2 = leadingZeros2 > xo2 ? xo2 : leadingZeros2;
 
 // compute amount to shift right
 // at infinity the exponent can't be incremented, so we can't shift right
 // otherwise it was an underflow situation so the exponent was negative
 // shift amount needs to be negated for shift register
-wire [6:0] rshiftAmt2 = xInf2 ? 0 : -xo2 > FMSB+3 ? FMSB+4 : FMSB+4+xo2;	// xo2 is negative !
+wire [7:0] rshiftAmt2 = xInf2 ? 0 : -xo2 > FMSB+3 ? FMSB+4 : FMSB+4+xo2;	// xo2 is negative !
 
 
 // sign

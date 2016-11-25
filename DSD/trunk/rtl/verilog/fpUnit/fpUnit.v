@@ -97,13 +97,13 @@
 `define QZEROZEROS	31'h7FC00003	// - zero / zero
 `define QINFZEROS	31'h7FC00004	// - infinity X zero
 
-`define	QINFOD		52'h7FC000		// info
+`define	QINFOD		52'hFF80000000000		// info
 `define	QSUBINFD 	63'h7FF0000000000001	// - infinity - infinity
 `define QINFDIVD 	63'h7FF0000000000002	// - infinity / infinity
 `define QZEROZEROD  63'h7FF0000000000003	// - zero / zero
 `define QINFZEROD	63'h7FF0000000000004	// - infinity X zero
 
-`define	QINFOQ		112'h7FC00000_0000000000_0000000000		// info
+`define	QINFOQ		112'hFF800000_0000000000_0000000000		// info
 `define	QSUBINFQ 	127'h7F_F000000000_0000000000_0000000001	// - infinity - infinity
 `define QINFDIVQ 	127'h7F_F000000000_0000000000_0000000002	// - infinity / infinity
 `define QZEROZEROQ  127'h7F_F000000000_0000000000_0000000003	// - zero / zero
@@ -200,7 +200,7 @@ wire infzero;
 wire infdiv;
 
 // floating point control and status
-reg [1:0] rm;	// rounding mode
+reg [2:0] rm;	// rounding mode
 reg inexe;		// inexact exception enable
 reg dbzxe;		// divide by zero exception enable
 reg underxe;	// underflow exception enable
@@ -481,7 +481,7 @@ if (WID==128) begin
     assign infdiv 	= fpu_o[127:0]==`QINFDIVQ;
     assign zerozero = fpu_o[127:0]==`QZEROZEROQ;
     assign infzero 	= fpu_o[127:0]==`QINFZEROQ;
-    assign maxdivcnt = 8'd125;
+    assign maxdivcnt = 8'd250;
 end
 else if (WID==64) begin
     assign inf      = &fpu_o[62:52] && fpu_o[51:0]==0;

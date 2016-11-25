@@ -38,6 +38,7 @@ module fpDiv(clk, ce, ld, a, b, o, done, sign_exe, overflow, underflow);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -48,6 +49,7 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
@@ -92,7 +94,7 @@ wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
 wire [EMSB+2:0] ex1;	// sum of exponents
-wire [FMSB+1:0] divo;
+wire [FX:0] divo;
 
 // Operands
 wire sa, sb;			// sign bit
@@ -117,7 +119,7 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 // - correct the exponent for denormalized operands
 // - adjust the difference by the bias (add 127)
 // - also factor in the different decimal position for division
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB-1;
+assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB - 1;
 
 // check for exponent underflow/overflow
 wire under = ex1[EMSB+2];	// MSB set = negative exponent
@@ -125,7 +127,7 @@ wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 
 // Perform divide
 // could take either 1 or 16 clock cycles
-fpdivr8 #(WID-(EMSB+1),2) u2 (.clk(clk), .ld(ld), .a(fracta), .b(fractb), .q(divo), .r(), .done(done));
+fpdivr8 #(FMSB+2,2) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta}), .b({3'b0,fractb}), .q(divo), .r(), .done(done));
 
 // determine when a NaN is output
 wire qNaNOut = (az&bz)|(aInf&bInf);
@@ -144,7 +146,7 @@ always @(posedge clk)
 			3'b1xx:		mo = {1'b0,qNaN[FMSB:0]|{aInf,1'b0}|{az,bz},{FMSB+1{1'b0}}};
 			3'bx1x:		mo = 0;	// div by inf
 			3'bxx1:		mo = 0;	// div by zero
-			default:	mo = {divo,{FMSB+2{1'b0}}};	// plain div
+			default:	mo = divo;	// plain div
 			endcase
 
 			so  		= sa ^ sb;

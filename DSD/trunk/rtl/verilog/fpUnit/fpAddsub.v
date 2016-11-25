@@ -33,6 +33,7 @@ module fpAddsub(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -43,6 +44,7 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
@@ -165,7 +167,18 @@ wire [FMSB+1:0] mfs1;
 
 // Determine the sticky bit
 wire sticky, sticky1;
-redor128 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+generate
+begin
+if (WID==128)
+    redor128 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==96)
+    redor96 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==64)
+    redor64 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==32)
+    redor32 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+end
+endgenerate
 
 // register inputs to shifter and shift
 delay1 #(1)      d16(.clk(clk), .ce(ce), .i(sticky), .o(sticky1) );

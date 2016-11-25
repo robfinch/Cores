@@ -31,6 +31,7 @@ module fpRound(rm, i, o);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -41,6 +42,7 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
@@ -112,7 +114,9 @@ endmodule
 module fpRoundReg(clk, ce, rm, i, o);
 parameter WID = 128;
 localparam MSB = WID-1;
-localparam EMSB = WID==80 ? 14 :
+localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
 				  WID==48 ? 10 :
@@ -121,7 +125,9 @@ localparam EMSB = WID==80 ? 14 :
 				  WID==40 ?  9 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
-localparam FMSB = WID==80 ? 63 :
+localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
+                  WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
 				  WID==48 ? 35 :
@@ -133,7 +139,7 @@ localparam FMSB = WID==80 ? 63 :
 
 input clk;
 input ce;
-input [1:0] rm;			// rounding mode
+input [2:0] rm;			// rounding mode
 input [MSB+3:0] i;		// expanded format input
 output reg [WID-1:0] o;		// rounded output
 

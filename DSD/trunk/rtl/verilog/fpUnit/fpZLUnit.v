@@ -56,6 +56,7 @@ module fpZLUnit
 );
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -66,6 +67,7 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
