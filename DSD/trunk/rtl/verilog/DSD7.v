@@ -117,6 +117,7 @@
 `define LHUX    6'h21
 `define LWX     6'h22
 `define LWRX    6'h23
+`define INC     6'h24
 `define SHX     6'h28
 `define SWX     6'h29
 `define SWCX    6'h2A
@@ -146,10 +147,14 @@
 `define PUSH    5'h02
 `define POP     5'h03
 `define PUSHI5  5'h04
-`define FPUSH0  5'h06
-`define FPUSH1  5'h07
-`define FPOP0   5'h08
-`define FPOP1   5'h09
+`define FPUSHS0 5'h10
+`define FPUSHS1 5'h11
+`define FPUSHQ0 5'h16
+`define FPUSHQ1 5'h17
+`define FPOPS0  5'h18
+`define FPOPS1  5'h19
+`define FPOPQ0  5'h1E
+`define FPOPQ1  5'h1F
 
 // Float instructions
 `define FCMP    3'd1
@@ -190,7 +195,12 @@
 `define CSR_SBU     12'h00F
 `define CSR_TASK    12'h010
 `define CSR_CISC    12'h011
-`define CSR_FPSTAT  12'h013
+`define CSR_FPSTATS 12'h013
+`define CSR_FPSTATQ 12'h016
+`define CSR_FPHOLD0 12'h018
+`define CSR_FPHOLD1 12'h019
+`define CSR_FPHOLD2 12'h01A
+`define CSR_FPHOLD3 12'h01B
 `define CSR_ITOS0   12'h040
 `define CSR_ITOS1   12'h041
 `define CSR_ITOS2   12'h042
@@ -248,6 +258,7 @@ parameter word = 2'b11;
 
 // State machine states
 parameter RUN = 6'd1;
+parameter INC1 = 6'd2;
 parameter DIV1 = 6'd5;
 parameter LOAD2A = 6'd9;
 parameter LOAD1 = 6'd10;
@@ -338,6 +349,7 @@ reg [31:0] mconfig;
 wire [4:0] regSP = mconfig[4:0];
 wire [4:0] regBP = mconfig[12:8];
 reg [31:0] sbl, sbu;
+reg [127:0] fphold;
 
 assign pcr_o = pcr;
 
@@ -387,7 +399,7 @@ input [31:0] xr;
 case(xr[5:0])
 `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
 `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
-`LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,
+`LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,`INC,
 `LFx,`SFx,`FLOAT,
 `MEM,`CALL,`CALL16,`CALL0:
     xIsMC = `TRUE;
@@ -490,6 +502,7 @@ DSD_divider #(32) u1
 );
 
 wire [127:0] fpu_o;
+wire [127:0] fpus_o;
 
 always @*
 begin
@@ -549,8 +562,9 @@ begin
         case (xir[15:11])
         `RET:       res = a + imm;
         `PUSHI5,
+        `FPUSHS0,`FPUSHS1,
         `PUSH:      res = a - 32'd2;
-        `FPUSH0,`FPUSH1:     res = a - 32'd8;
+        `FPUSHQ0,`FPUSHQ1:     res = a - 32'd8;
         `POP:       res = lres;
         default:    res = 32'hDEADDEAD;
         endcase
@@ -570,7 +584,10 @@ always @*
     case(xopcode)
     `MEM:
         case(xir[15:11])
-        `FPOP0,`FPOP1:  res2 <= a + 32'd8;
+        `FPOPQ0,`FPOPQ1:
+                    res2 <= a + 32'd8;
+        `FPOPS0,`FPOPS1:
+                    res2 <= a + 32'd2;
         default:    res2 <= a + 32'd2;
         endcase
     default:    res2 <= a + 32'd2;
@@ -596,21 +613,35 @@ wire [5:0] FRb = opcode==`SFx ? ir[23:18] : (opcode==`MEM) ? ir[11:6] : ir[17:12
 reg [5:0] xFRt;
 `ifdef CAP_FP
 always @(posedge clk_i)
-if (advanceRF && opcode==`FLOAT) begin
+if (advanceRF && (opcode==`FLOAT || opcode==`SFx || (opcode==`MEM &&
+    (ir[15:11]==`FPUSHQ0 || ir[15:11]==`FPUSHQ1 || ir[15:11]==`FPUSHS0 || ir[15:11]==`FPUSHS1)))) begin
     fir <= ir;
-    fpa1 <= fpregs[FRa];
-    fpb <= fpregs[FRb];
+    case(FRa)
+    6'd0:   fpa1 <= 0;
+    xFRt:   fpa1 <= fres;
+    6'd63:  fpa1 <= fphold;
+    default: fpa1 <= fpregs[FRa];
+    endcase
+    case(FRb)
+    6'd0:   fpb <= 0;
+    xFRt:   fpb <= fres;
+    6'd63:  fpb <= fphold;
+    default: fpb <= fpregs[FRb];
+    endcase
 end
 always @(posedge clk_i)
-    if (upd_fp)
+    if (upd_fp) begin
+        if (xFRt==6'd63)
+            fphold <= fres;
         fpregs[xFRt] <= fres;
+    end
 
 wire [127:0] fpa = 
     (fir[5:0]==`FLOAT && fir[31:29]==3'b00 &&
         (fir[17:12]==`FTX || fir[17:12]==`FCX || fir[17:12]==`FDX || fir[17:12]==`FEX || fir[17:12]==`FRM))
         ? a : fpa1;
-wire [31:0] fpstatus;
-wire fpdone;
+wire [31:0] fpstatus,fpstatuss;
+wire fpdone,fpdones;
 
 fpUnit ufp1
 (
@@ -628,9 +659,78 @@ fpUnit ufp1
     .done(fpdone)
 );
 
+`ifdef CAP_SIMD
+fpUnit #(32) ufp2
+(
+    .rst(rst_i),
+    .clk(clk_i),
+    .ce(1'b1),
+    .ir(fir[31:0]),
+    .ld(xldfp),
+    .a(fpa[31:0]),
+    .b(fpb[31:0]),
+    .imm(fir[23:18]),
+    .o(fpus_o[31:0]),
+    .status(fpstatuss),
+    .exception(),
+    .done(fpdones)
+);
+
+fpUnit #(32) ufp3
+(
+    .rst(rst_i),
+    .clk(clk_i),
+    .ce(1'b1),
+    .ir(fir[31:0]),
+    .ld(xldfp),
+    .a(fpa[63:32]),
+    .b(fpb[63:32]),
+    .imm(fir[23:18]),
+    .o(fpus_o[63:32]),
+    .status(),
+    .exception(),
+    .done()
+);
+
+fpUnit #(32) ufp4
+(
+    .rst(rst_i),
+    .clk(clk_i),
+    .ce(1'b1),
+    .ir(fir[31:0]),
+    .ld(xldfp),
+    .a(fpa[95:64]),
+    .b(fpb[95:64]),
+    .imm(fir[23:18]),
+    .o(fpus_o[95:64]),
+    .status(),
+    .exception(),
+    .done()
+);
+
+fpUnit #(32) ufp5
+(
+    .rst(rst_i),
+    .clk(clk_i),
+    .ce(1'b1),
+    .ir(fir[31:0]),
+    .ld(xldfp),
+    .a(fpa[127:96]),
+    .b(fpb[127:96]),
+    .imm(fir[23:18]),
+    .o(fpus_o[127:96]),
+    .status(),
+    .exception(),
+    .done()
+);
+`endif
+
 always @*
-    if (xopcode==`LFx)
+    if (xopcode==`LFx || xopcode==`MEM &&
+        (xir[15:11]==`FPOPQ0 || xir[15:11]==`FPOPQ1 || xir[15:11]==`FPOPS0 || xir[15:11]==`FPOPS1))
         fres <= fp_in;
+    else if (xir[28:27]==2'b00)
+        fres <= fpus_o;
     else
         fres <= fpu_o;
 `endif
@@ -894,9 +994,6 @@ wire ihit = (ihit1 && pc[2:0]==3'b000) || (ihit1 && ihit2);
 assign advanceRF = !(xIsMC(xir) && !xinv);
 assign advanceIF = advanceRF & (ihit && !isICacheLoad);
 
-always @*
-    state_name();
-
 always @(posedge clk_i)
 if (rst_i) begin
     stuff_fault <= `FALSE;
@@ -981,7 +1078,9 @@ begin
         else if (iinsn[5:0]==`PEA || iinsn[5:0]==`CALL || iinsn[5:0]==`CALL16 || iinsn[5:0]==`CALL0 ||
             (iinsn[5:0]==`MEM && 
                 (iinsn[15:11]==`RET || iinsn[15:11]==`PUSH || insn[15:11]==`POP ||
-                insn[15:11]==`FPUSH0 || insn[15:11]==`FPUSH1 || insn[15:11]==`FPOP0 || insn[15:11]==`FPOP1))) begin
+                insn[15:11]==`FPUSHQ0 || insn[15:11]==`FPUSHQ1 || insn[15:11]==`FPOPQ0 || insn[15:11]==`FPOPQ1 ||
+                insn[15:11]==`FPUSHS0 || insn[15:11]==`FPUSHS1 || insn[15:11]==`FPOPS0 || insn[15:11]==`FPOPS1
+                ))) begin
             Ra <= regSP;
             Rb <= iinsn[10:6];
             Rc <= iinsn[15:11];
@@ -997,7 +1096,7 @@ begin
 //            pc_inc = 32'd1;
 //        else
         case(insn[5:0])
-        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,
+        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`INC,
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
@@ -1087,7 +1186,7 @@ begin
             `SHLI,`SHRI,`ASRI,`ROLI,`RORI:  upd_rf <= `TRUE;
             `R2CSRI:    upd_rf <= `TRUE;
             endcase
-        `MEM:   upd_rf <= `TRUE;
+//        `MEM:   upd_rf <= `TRUE;
         `MOV,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32:
             upd_rf <= `TRUE;
@@ -1110,7 +1209,7 @@ begin
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
-        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA:
+        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,`INC:
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `LFx,`SFx:     imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
@@ -1139,6 +1238,7 @@ begin
         xRa <= Ra;
         xRb <= Rb;  // needed for calls/jumps
         // Set target register
+        xRt <= 5'd0;
         xRt2 <= 1'b0;
         xFRt <= 6'd0;
         case(opcode)
@@ -1156,11 +1256,14 @@ begin
         `CALL,`CALL16,`CALL0:
             xRt <= regSP;
         `MEM:
-            case(xir[15:11])
+            case(ir[15:11])
             `RET,`PUSHI5,`PUSH:  xRt <= regSP;
             `POP:   begin xRt <= ir[10:6]; xRt2 <= 1'b1; end
 `ifdef CAP_FP
-            `FPOP0,`FPOP1:  begin xFRt <= ir[11:6]; xRt2 <= 1'b1; end
+            `FPUSHS0,`FPUSHS1,
+            `FPUSHQ0,`FPUSHQ1:  xRt <= regSP;
+            `FPOPS0,`FPOPS1,
+            `FPOPQ0,`FPOPQ1:  begin xFRt <= ir[11:6]; xRt2 <= 1'b1; end
 `endif
             default:    xRt <= 5'd0;
             endcase
@@ -1347,7 +1450,17 @@ begin
                     next_state(LOAD1);
                 end
 `ifdef CAP_FP                
-            `FPUSH0,`FPUSH1:
+            `FPUSHQ0,`FPUSHQ1:
+                if (a - 32'd2 < sbl)
+                    ex_fault(`FLT_STACK,0);
+                else begin
+                    mem_size <= word;
+                    ea <= a - 32'd8;
+                    xb <= fpb[31:0];
+                    fplsst <= 4'h0;
+                    next_state(STORE1);
+                end
+            `FPUSHQ0,`FPUSHQ1:
                 if (a - 32'd8 < sbl)
                     ex_fault(`FLT_STACK,0);
                 else begin
@@ -1357,12 +1470,14 @@ begin
                     fplsst <= 4'h0;
                     next_state(STORE1);
                 end
-            `FPOP0,`FPOP1:
+            `FPOPS0,`FPOPS1,
+            `FPOPQ0,`FPOPQ1:
                 if (a > sbu)
                     ex_fault(`FLT_STACK,0);
                 else begin
                     mem_size <= word;
                     ea <= a;
+                    fplsst <= 4'h0;
                     next_state(LOAD1);
                 end
 `endif                
@@ -1384,7 +1499,7 @@ begin
                 ea <= a + imm;
                 next_state(LOAD1);
             end
-        `LW,`LWR:
+        `LW,`LWR,`INC:
             begin
                 mem_size <= word;
                 ea <= a + imm;
@@ -1442,7 +1557,16 @@ begin
                     write_csr(xir[17:16],xir[31:18],a);
         `CSRI:  write_csr(xir[17:16],xir[31:18],imm);
 `ifdef CAP_FP        
-        `FLOAT: next_state(FLOAT1);
+        `FLOAT: 
+                if (xir[31:29]== 3'b0 && xir[17:12]==6'd1)
+                begin
+                    mem_size <= word;
+                    ea <= xpc + 32'd2;
+                    fplsst <= 4'h0;
+                    next_state(LOAD1);
+                end
+                else
+                    next_state(FLOAT1);
 `endif
         default:    ;
         endcase
@@ -1500,6 +1624,8 @@ LOAD1:
         if ((xRa==regSP || xRa==regBP)&&(ea < sbl || ea > sbu))
             ex_fault(`FLT_STACK,0);
         else begin
+            if (xopcode==`INC)
+                lock_o <= `TRUE;
     		read1(mem_size,ea);
             next_state(LOAD2);
         end
@@ -1567,13 +1693,71 @@ LOAD2:
                 end 
             endcase
             end
+        `INC:
+            begin
+            lock_o <= `TRUE;
+            case(ea[0])
+            1'b1:   begin
+`ifdef WISHBONE                
+                    stb_o <= `FALSE;
+                    next_state(LOAD2A);
+`else                            
+                    read2(mem_size,ea);
+                    next_state(LOAD3);
+`endif                            
+                    lres[15:0] <= lres1[15:0];
+                end
+            default:
+                begin  
+                $display("Loaded %h from %h", lres1, adr_o);
+                lres <= lres1;
+                stb_o <= `FALSE;
+                vda_o <= `FALSE;
+                sel_o <= 8'h00;
+                next_state(INC1);
+                end 
+            endcase
+            end
         `LFx:
             begin
                 cyc_o <= `TRUE;
                 vda_o <= `TRUE;
                 sel_o <= 2'b11;
                 case(fplsst)
-                4'h0:   begin fp_in[31:0] <= dat_i; next_state(LOAD1); end
+                4'h0:   begin
+                            next_state(LOAD1);
+                            if (xir[28:27]==2'b00) begin
+                                cyc_o <= `FALSE;
+                                vda_o <= `FALSE;
+                                sel_o <= 2'b00;
+                                upd_fp <= `TRUE;
+                                next_state(INVnRUN);
+                            end
+                            fp_in[31:0] <= dat_i;
+                        end
+                4'h1:   begin fp_in[63:32] <= dat_i; next_state(LOAD1); end
+                4'h2:   begin fp_in[95:64] <= dat_i; next_state(LOAD1); end
+                4'h3:   begin fp_in[127:96] <= dat_i; next_state(INVnRUN);
+                        cyc_o <= `FALSE;
+                        vda_o <= `FALSE;
+                        sel_o <= 2'b00;
+                        upd_fp <= `TRUE;
+                        end
+                endcase
+                fplsst <= fplsst + 4'd1;
+                ea <= ea + 32'd2;
+            end
+        `FLOAT: // FLDI
+            begin
+                cyc_o <= `TRUE;
+                stb_o <= `FALSE;
+                vda_o <= `TRUE;
+                sel_o <= 2'b11;
+                case(fplsst)
+                4'h0:   begin
+                            fp_in[31:0] <= dat_i;
+                            next_state(LOAD1);
+                        end
                 4'h1:   begin fp_in[63:32] <= dat_i; next_state(LOAD1); end
                 4'h2:   begin fp_in[95:64] <= dat_i; next_state(LOAD1); end
                 4'h3:   begin fp_in[127:96] <= dat_i; next_state(INVnRUN);
@@ -1588,19 +1772,34 @@ LOAD2:
             end
         `MEM:
             case(xir[15:11])
-            `FPOP0,`FPOP1:
+            `FPOPS0,`FPOPS1:
+                begin
+                    cyc_o <= `FALSE;
+                    stb_o <= `FALSE;
+                    vda_o <= `FALSE;
+                    sel_o <= 2'b00;
+                    fp_in[31:0] <= dat_i;
+                    upd_fp <= `TRUE;
+                    next_state(INVnRUN);
+                end
+            `FPOPQ0,`FPOPQ1:
                 begin
                     cyc_o <= `TRUE;
+                    stb_o <= `FALSE;
                     vda_o <= `TRUE;
                     sel_o <= 2'b11;
                     case(fplsst)
-                    4'h0:   begin fp_in[31:0] <= dat_i; next_state(LOAD1); end
+                    4'h0:   begin
+                                fp_in[31:0] <= dat_i;
+                                next_state(LOAD1);
+                            end
                     4'h1:   begin fp_in[63:32] <= dat_i; next_state(LOAD1); end
                     4'h2:   begin fp_in[95:64] <= dat_i; next_state(LOAD1); end
                     4'h3:   begin fp_in[127:96] <= dat_i; next_state(INVnRUN);
                             cyc_o <= `FALSE;
                             vda_o <= `FALSE;
                             sel_o <= 2'b00;
+                            upd_rf <= `TRUE;
                             upd_fp <= `TRUE;
                             end
                     endcase
@@ -1665,7 +1864,20 @@ LOAD3:
         lock_o <= `FALSE;
         upd_rf <= `TRUE;
         next_state(INVnRUN);
+        if (xopcode==`INC) begin
+            cyc_o <= `TRUE;
+            sel_o <= 2'b11;
+            lock_o <= `TRUE;
+            upd_rf <= `FALSE;
+            next_state(INC1);
+        end
         lres[31:16] <= dat_i[15:0];
+    end
+
+INC1:
+    begin
+        xb <= lres + {{27{xir[15]}},xir[15:11]};
+        next_state(STORE1);
     end
 
 // Invalidate the xir and switch back to the run state.
@@ -1686,6 +1898,9 @@ INVnRUN:
         `MEM:
             if (xir[15:11]==`RET)
                 ex_branch(lres);
+        `FLOAT:
+            if (xir[31:29]==3'd0 && xir[17:12]==6'd1)
+                ex_branch(xpc + {xir[28:27],1'b0} + 32'd4);
         endcase
         next_state(RUN);
     end
@@ -1733,6 +1948,7 @@ STORE2:
             vda_o <= `FALSE;
             wr_o <= 1'b0;
             sel_o <= 2'b00;
+            lock_o <= `FALSE;
             next_state(INVnRUN);
             case(xopcode)
             `SFx:
@@ -1741,7 +1957,16 @@ STORE2:
                     vda_o <= `TRUE;
                     sel_o <= 2'b11;
                     case(fplsst)
-                    4'h0:   begin xb <= fpb[63:32]; next_state(STORE1); end
+                    4'h0:   begin
+                                xb <= fpb[63:32];
+                                next_state(STORE1);
+                                if (xir[28:27]==2'b00) begin
+                                    next_state(INVnRUN);
+                                    cyc_o <= `FALSE;
+                                    vda_o <= `FALSE;
+                                    sel_o <= 2'b00;
+                                end
+                            end
                     4'h1:   begin xb <= fpb[95:64]; next_state(STORE1); end
                     4'h2:   begin xb <= fpb[127:96]; next_state(STORE1); end
                     4'h3:   begin 
@@ -1756,7 +1981,15 @@ STORE2:
                 end
             `MEM:
                 case(xir[15:11])
-                `FPUSH0,`FPUSH1:
+                `FPUSHS0,`FPUSHS1:
+                    begin
+                        cyc_o <= `FALSE;
+                        vda_o <= `FALSE;
+                        sel_o <= 2'b00;
+                        upd_rf <= `TRUE;
+                        next_state(INVnRUN);
+                    end
+                `FPUSHQ0,`FPUSHQ1:
                     begin
                         cyc_o <= `TRUE;
                         vda_o <= `TRUE;
@@ -1766,6 +1999,7 @@ STORE2:
                         4'h1:   begin xb <= fpb[95:64]; next_state(STORE1); end
                         4'h2:   begin xb <= fpb[127:96]; next_state(STORE1); end
                         4'h3:   begin 
+                                upd_rf <= `TRUE;
                                 next_state(INVnRUN);
                                 cyc_o <= `FALSE;
                                 vda_o <= `FALSE;
@@ -2021,6 +2255,7 @@ task next_state;
 input [5:0] st;
 begin
   state <= st;
+  state_name(st);
 end
 endtask
 
@@ -2039,7 +2274,8 @@ begin
     `CSR_SBU:       res = sbu;
     `CSR_TASK:      res = tr;
     `CSR_CISC:      res = cisc;
-    `CSR_FPSTAT:    res = fpstatus;
+    `CSR_FPSTATS:   res = fpstatuss;
+    `CSR_FPSTATQ:   res = fpstatus;
     `CSR_SEMA:      res = msema;
     `CSR_ITOS0:    res = itos[31:0];
     `CSR_ITOS1:    res = itos[63:32];
@@ -2048,6 +2284,10 @@ begin
     `CSR_ITOS4:    res = itos[128];
     `CSR_CONFIG:    res = mconfig;
     `CSR_CAP:       res = cap;
+    `CSR_FPHOLD0:   res = fphold[31:0];
+    `CSR_FPHOLD1:   res = fphold[63:32];
+    `CSR_FPHOLD2:   res = fphold[95:64];
+    `CSR_FPHOLD3:   res = fphold[127:96];
     default:    res = 32'hDEADDEAD;
     endcase
 end
@@ -2077,6 +2317,10 @@ begin
         `CSR_ITOS3:    itos[127:96] <= dat;
         `CSR_ITOS4:    itos[128] <= dat[0];
         `CSR_CONFIG:    mconfig <= dat;
+        `CSR_FPHOLD0:   fphold[31:0] <= dat;
+        `CSR_FPHOLD1:   fphold[63:32] <= dat;
+        `CSR_FPHOLD2:   fphold[95:64] <= dat;
+        `CSR_FPHOLD3:   fphold[127:96] <= dat;
         endcase
     `CSRRS:
         case(csrno[11:0])
@@ -2101,7 +2345,7 @@ task update_regfile;
 begin
     if (upd_rf) begin
         if (xRt2)
-            sp <= res;
+            sp <= res2;
         case(xRt)
         5'd1:   r1 <= res;
         5'd2:   r2 <= res;
@@ -2118,13 +2362,17 @@ end
 endtask
 
 task state_name;
+input [7:0] st;
 begin
-    case(state)
+    case(st)
     RUN:    stname <= "RUN";
     LOAD2A: stname <= "LOAD2A";
     LOAD1:  stname <= "LOAD1";
     LOAD2:  stname <= "LOAD2";
     LOAD3:  stname <= "LOAD3";
+    STORE1: stname <= "STORE1";
+    STORE2: stname <= "STORE2";
+    STORE3: stname <= "STORE3";
     INVnRUN:    stname <= "INVnRUN";
     endcase
 end

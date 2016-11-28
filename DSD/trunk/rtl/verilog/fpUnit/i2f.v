@@ -47,12 +47,13 @@ module i2f
 (
 	input clk,
 	input ce,
-	input [1:0] rm,			// rounding mode
+	input [2:0] rm,			// rounding mode
 	input [WID-1:0] i,		// integer input
 	output [WID-1:0] o		// float output
 );
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -63,6 +64,7 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
@@ -81,15 +83,17 @@ wire [MSB:0] imag1 = i[MSB] ? -i : i;
 wire [7:0] lz;		// count the leading zeros in the number
 wire [EMSB:0] wd;	// compute number of whole digits
 wire so;			// copy the sign of the input (easy)
-wire [1:0] rmd;
+wire [2:0] rmd;
 
-delay1 #(2)   u0 (.clk(clk), .ce(ce), .i(rm),     .o(rmd) );
+delay1 #(3)   u0 (.clk(clk), .ce(ce), .i(rm),     .o(rmd) );
 delay1 #(1)   u1 (.clk(clk), .ce(ce), .i(i==0),   .o(iz) );
 delay1 #(WID) u2 (.clk(clk), .ce(ce), .i(imag1),  .o(imag) );
 delay1 #(1)   u3 (.clk(clk), .ce(ce), .i(i[MSB]), .o(so) );
 generate 
 if (WID==128) begin
 cntlz128Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
+end else if (WID==96) begin
+cntlz96Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
 end else if (WID==64) begin
 cntlz64Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
 end else begin
@@ -111,10 +115,11 @@ reg rnd;
 // Compute the round bit
 always @(rmd,g,r,s,so)
 	case (rmd)
-	2'd0:	rnd = (g & r) | (r & s);	// round to nearest even
-	2'd1:	rnd = 0;					// round to zero (truncate)
-	2'd2:	rnd = (r | s) & !so;		// round towards +infinity
-	2'd3:	rnd = (r | s) & so;			// round towards -infinity
+	3'd0:	rnd = (g & r) | (r & s);	// round to nearest even
+	3'd1:	rnd = 0;					// round to zero (truncate)
+	3'd2:	rnd = (r | s) & !so;		// round towards +infinity
+	3'd3:	rnd = (r | s) & so;			// round towards -infinity
+	3'd4:   rnd = (r | s);
 	endcase
 
 // "hide" the leading one bit = MSB-1

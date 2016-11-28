@@ -299,18 +299,30 @@ void getbase(int64_t b)
         lastst = iconst;
 }
  
-/*
- *      getfrac - get fraction part of a floating number.
- */
+//
+//      getfrac - get fraction part of a floating number.
+//
 void getfrac()
 {
-	double  frmul;
-    frmul = 0.1;
+	Float128 frmul128,tmp,ch128,fract128;
+	double frmul;
+	double fract = 0.0;
+	Float128::Assign(&frmul128,Float128::One());
+    frmul = 1.0;
     while(isdigit(lastch)) {
-        rval += frmul * (lastch - '0');
+		Float128::IntToFloat(&ch128,lastch-'0');
+		Float128::Mul(&tmp,&fract128,Float128::Ten());
+		Float128::Add(&fract128,&ch128,&tmp);
+
+        fract = fract * 10.0 + (lastch - '0');
         getch();
-        frmul *= 0.1;
+        frmul *= 10.0;
+		Float128::Mul(&frmul128,&frmul128,Float128::Ten());
     }
+	fract = fract / frmul;
+	rval += fract;
+	Float128::Div(&fract128,&fract128,&frmul128);
+	Float128::Add(&rval128,&rval128,&fract128);
 }
  
 /*
@@ -321,22 +333,32 @@ void getfrac()
  *      won't support more anyway.
  */
 void getexp()
-{       double  expo, exmul;
+{       
+		double  expo, exmul;
+		Float128 exp128, exmul128;
+		
+		Float128::Assign(&exp128,Float128::One());
         expo = 1.0;
         if(lastst != rconst)
                 rval = (double)ival;
         if(lastch == '-') {
+			Float128::Assign(&exmul128,Float128::OneTenth());
                 exmul = 0.1;
                 getch();
                 }
-        else
+        else {
+			Float128::Assign(&exmul128,Float128::Ten());
                 exmul = 10.0;
+		}
         getbase(10);
         if(ival > 32767)
                 error(ERR_FPCON);
         else
-                while(ival--)
+                while(ival--) {
+					Float128::Mul(&exp128,&exp128,&exmul128);
                         expo *= exmul;
+				}
+		Float128::Mul(&rval128,&rval128,&exp128);
         rval *= expo;
 }
  
@@ -352,6 +374,7 @@ void getnum()
         
         ival = 0;
         rval = 0.0;
+		Float128::Assign(&rval128,Float128::Zero());
         numstrptr = &numstr[0];
          *numstrptr = lastch;
          numstrptr++; 
@@ -371,6 +394,7 @@ j1:
                 if(lastch == '.') {
                         getch();
                         rval = (double)ival;    /* float the integer part */
+						Float128::IntToFloat(&rval128, (__int64)ival);
                         getfrac();      /* add the fractional part */
                         lastst = rconst;
                         }
@@ -597,7 +621,7 @@ restart:        /* we come back here after comments */
                                 error(ERR_SYNTAX);
                         else
                                 getch();
-                        lastst = iconst;
+                        lastst = cconst;
                         break;
                 case '\"':
                         getch();

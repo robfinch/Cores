@@ -79,12 +79,13 @@ wire lt1 = {xa,ma} < {xb,mb};
 
 wire lt = sa ^ sb ? sa & !(az & bz): sa ? gt1 : lt1;
 
-always @(unordered or eq or lt)
+always @(unordered or eq or lt or lt1)
 begin
 	o[0] = eq;
 	o[1] = lt;
-	o[2] = lt1;
-	o[3] = unordered;
+	o[2] = lt|eq;
+	o[3] = lt1;
+	o[4] = unordered;
 end
 
 // an unorder comparison will signal a nan exception

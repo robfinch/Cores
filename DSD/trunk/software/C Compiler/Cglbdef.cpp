@@ -79,6 +79,7 @@ char            lastkw[128] = "";
 char            laststr[MAX_STRLEN + 1] = "";
 int			ival = 0;
 double          rval = 0.0;
+Float128		rval128;
 //FloatTriple     FAC1,FAC2;
 //FLOAT           rval = {0,0,0,0,0,0};
 int parseEsc = TRUE;
@@ -86,6 +87,7 @@ int parseEsc = TRUE;
 TABLE           gsyms[257];// = {0,0},
 	           
 SYM             *lasthead = (SYM *)NULL;
+Float128		*quadtab = nullptr;
 struct slit     *strtab = (struct slit *)NULL;
 int             lc_static = 0;
 int             lc_auto = 0;
@@ -96,7 +98,7 @@ TABLE           defsyms;
 int64_t         save_mask = 0;          /* register save mask */
 int64_t         fpsave_mask = 0;
 TYP             tp_int, tp_econst;
-
+bool dogen = true;
 int isKernel = FALSE;
 int isPascal = FALSE;
 int isOscall = FALSE;

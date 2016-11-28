@@ -78,6 +78,7 @@
     <ClInclude Include="C.h" />
     <ClInclude Include="Cglbdec.h" />
     <ClInclude Include="Expr.h" />
+    <ClInclude Include="Float128.h" />
     <ClInclude Include="Gen.h" />
     <ClInclude Include="rand.h" />
     <ClInclude Include="Statement.h" />
@@ -93,6 +94,7 @@
     <ClCompile Include="Compiler.cpp" />
     <ClCompile Include="DSD7.cpp" />
     <ClCompile Include="err.cpp" />
+    <ClCompile Include="Float128.cpp" />
     <ClCompile Include="FPRegister.cpp" />
     <ClCompile Include="GenerateBitfield.cpp" />
     <ClCompile Include="GenerateShift.cpp" />

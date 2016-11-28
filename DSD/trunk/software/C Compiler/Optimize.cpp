@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -219,6 +219,7 @@ static void opt0(ENODE **node)
             case en_uw_ref:          /* optimize unary node */
 			case en_flt_ref:
 			case en_dbl_ref:
+			case en_quad_ref:
 			case en_cubw:
 			case en_cucw:
 			case en_cuhw:

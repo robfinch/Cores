@@ -276,7 +276,7 @@ int IdentifyKeyword()
 
 
 	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check,__exception,__task,__unordered,__leafs,__attribute__
-	// __no_temps __no_parms
+	// __no_temps __no_parms __floatmax
 	if (p[0]=='_' && p[1]=='_') {
 		if (p[2]=='a' && p[3]=='s' && p[4]=='m' && p[5]=='\0')
 			return lastst = kw_asm;
@@ -308,6 +308,8 @@ int IdentifyKeyword()
 			return lastst = kw_no_temps;
 		if (p[2]=='n' && p[3]=='o' && p[4]=='_' && p[5]=='p' && p[6]=='a' && p[7]=='r' && p[8]=='m' && p[9]=='s' && p[10]=='\0')
 			return lastst = kw_no_parms;
+		if (p[2]=='f' && p[3]=='l' && p[4]=='o' && p[5]=='a' && p[6]=='t' && p[7]=='m' && p[8]=='a' && p[9]=='x' && p[10]=='\0')
+			return lastst = kw_floatmax;
 	}
 
 	return 0;

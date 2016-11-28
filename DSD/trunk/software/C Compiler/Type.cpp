@@ -68,16 +68,16 @@ TYP *TYP::Make(int bt, int siz)
 {
 	TYP *tp;
 	dfs.puts("<TYP__Make>\n");
-  tp = allocTYP();
-  if (tp == nullptr)
-     return nullptr;
-  tp->val_flag = 0;
-  tp->isArray = FALSE;
-  tp->size = siz;
-  tp->type = (e_bt)bt;
+	tp = allocTYP();
+	if (tp == nullptr)
+		return nullptr;
+	tp->val_flag = 0;
+	tp->isArray = FALSE;
+	tp->size = siz;
+	tp->type = (e_bt)bt;
 	tp->typeno = bt;
 	dfs.puts("</TYP__Make>\n");
-  return tp;
+	return tp;
 }
 
 // Given just a type number return the size

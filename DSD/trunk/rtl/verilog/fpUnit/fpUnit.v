@@ -78,6 +78,7 @@
 `define FSIGN   6'h06
 `define FMAN    6'h07
 `define FNABS   6'h08
+`define FCVTSQ  6'h0B
 `define FSTAT   6'h0C
 `define FTX     6'h10
 `define FCX     6'h11
@@ -114,6 +115,7 @@ module fpUnit(rst, clk, ce, ir, ld, a, b, imm, o, status, exception, done);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
@@ -124,6 +126,7 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
@@ -189,7 +192,7 @@ wire fcmp	= {op,func3} == {`FLOAT,`FCMP};
 wire frm	= {op,func3,func6b} == {`FLOAT,3'b000,`FRM};  // set rounding mode
 
 wire zl_op =  (op==`FLOAT && ((func3==3'b000 &&
-                    (func6b==`FABS || func6b==`FNABS || func6b==`FMOV || func6b==`FNEG || func6b==`FSIGN || func6b==`FMAN)) ||
+                    (func6b==`FABS || func6b==`FNABS || func6b==`FMOV || func6b==`FNEG || func6b==`FSIGN || func6b==`FMAN || func6b==`FCVTSQ)) ||
                     func3==`FCMP));
 wire loo_op = (op==`FLOAT && func3==3'b000 && (func6b==`ITOF || func6b==`FTOI));
 wire loo_done;
@@ -235,6 +238,10 @@ reg snanx;		// signalling nan
 
 wire divDone;
 wire pipe_ce = ce;// & divDone;	// divide must be done in order for pipe to clock
+wire precmatch = WID==32 ? ir[28:27]==2'b00 :
+                 WID==64 ? ir[28:27]==2'b01 :
+                 WID==96 ? ir[28:27]==2'b10 :
+                 ir[28:27]==2'b11;
 
 always @(posedge clk)
 	// reset: disable and clear all exceptions and status
@@ -269,7 +276,7 @@ always @(posedge clk)
         snanx <= 1'b0;
 	end
 	else if (pipe_ce) begin
-		if (ftx) begin
+		if (ftx && precmatch) begin
 			inex <= inex     | (a[4]|imm[4]);
 			dbzx <= dbzx     | (a[3]|imm[3]);
 			underx <= underx | (a[2]|imm[2]);
@@ -278,7 +285,7 @@ always @(posedge clk)
 			swtx <= 1'b1;
 			sx <= 1'b1;
 		end
-		else if (fcx) begin
+		else if (fcx && precmatch) begin
 			sx <= sx & !(a[5]|imm[5]);
 			inex <= inex     & !(a[4]|imm[4]);
 			dbzx <= dbzx     & !(a[3]|imm[3]);
@@ -294,21 +301,21 @@ always @(posedge clk)
 			dbzx <= dbzx & !(a[0]|imm[0]);
 			swtx <= 1'b1;
 		end
-		else if (fex) begin
+		else if (fex && precmatch) begin
 			inexe <= inexe     | (a[4]|imm[4]);
 			dbzxe <= dbzxe     | (a[3]|imm[3]);
 			underxe <= underxe | (a[2]|imm[2]);
 			overxe <= overxe   | (a[1]|imm[1]);
 			invopxe <= invopxe | (a[0]|imm[0]);
 		end
-		else if (fdx) begin
+		else if (fdx && precmatch) begin
 			inexe <= inexe     & !(a[4]|imm[4]);
 			dbzxe <= dbzxe     & !(a[3]|imm[3]);
 			underxe <= underxe & !(a[2]|imm[2]);
 			overxe <= overxe   & !(a[1]|imm[1]);
 			invopxe <= invopxe & !(a[0]|imm[0]);
 		end
-		else if (frm)
+		else if (frm && precmatch)
 			rm <= a[2:0]|imm[2:0];
 
 		infzerox  <= infzerox  | (invopxe & infzero);
@@ -332,7 +339,7 @@ wire [22:0] mas, mbs;
 wire aInf, bInf, aInfs, bInfs;
 wire aNan, bNan, aNans, bNans;
 wire az, bz, azs, bzs;
-wire [1:0] rmd4;	// 1st stage delayed
+wire [2:0] rmd4;	// 1st stage delayed
 wire [7:0] op1, op2;
 wire [5:0] fn1;
 wire [2:0] fn2;
@@ -351,7 +358,8 @@ fp_decomp #(WID) u2 (.i(b), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) 
 //fp_decomp #(32) u1s (.i(a[31:0]), .sgn(sas), .man(mas), .vz(azs), .inf(aInfs), .nan(aNans) );
 //fp_decomp #(32) u2s (.i(b[31:0]), .sgn(sbs), .man(mbs), .vz(bzs), .inf(bInfs), .nan(bNans) );
 
-delay4 #(2) u3 (.clk(clk), .ce(pipe_ce), .i(rmd), .o(rmd4) );
+wire [2:0] rmd = ir[26:24]==3'b111 ? rm : ir[26:24];
+delay4 #(3) u3 (.clk(clk), .ce(pipe_ce), .i(rmd), .o(rmd4) );
 delay1 #(6) u4 (.clk(clk), .ce(pipe_ce), .i(func6b), .o(op1) );
 delay2 #(6) u5 (.clk(clk), .ce(pipe_ce), .i(func6b), .o(op2) );
 delay1 #(3) u5a (.clk(clk), .ce(pipe_ce), .i(func3), .o(fn1) );
@@ -393,7 +401,7 @@ wire divUnder,divUnders;
 wire mulUnder,mulUnders;
 reg under,unders;
 
-fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rm), .op(func3[0]), .a(a), .b(b), .o(fas_o) );
+fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func3[0]), .a(a), .b(b), .o(fas_o) );
 fpDiv    #(WID) u11(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
 fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(a), .b(b), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
 /*
@@ -489,7 +497,7 @@ else if (WID==64) begin
     assign infdiv   = fpu_o[63:0]==`QINFDIVD;
     assign zerozero = fpu_o[63:0]==`QZEROZEROD;
     assign infzero  = fpu_o[63:0]==`QINFZEROD;
-    assign maxdivcnt = 8'd65;
+    assign maxdivcnt = 8'd112;
 end
 else if (WID==32) begin
     assign inf      = &fpu_o[30:23] && fpu_o[22:0]==0;
@@ -497,7 +505,7 @@ else if (WID==32) begin
     assign infdiv   = fpu_o[31:0]==`QINFDIVS;
     assign zerozero = fpu_o[31:0]==`QZEROZEROS;
     assign infzero  = fpu_o[31:0]==`QINFZEROS;
-    assign maxdivcnt = 8'd35;
+    assign maxdivcnt = 8'd54;
 end
 end
 endgenerate
@@ -517,7 +525,7 @@ begin
                 case(ir[31:29])
                 3'd0:
                     case(ir[23:18])
-                    `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN:  begin fpcnt <= 8'd0; end
+                    `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,`FCVTSQ:  begin fpcnt <= 8'd0; end
                     `FTOI:  begin fpcnt <= 8'd1; end
                     `ITOF:  begin fpcnt <= 8'd1; end
                     default:    fpcnt <= 8'h00;

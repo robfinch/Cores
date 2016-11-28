@@ -107,6 +107,7 @@ typedef struct _tagHBLE
 extern HTBLE hTable[100000];
 extern int processOpt;
 extern int expandedBlock;
+extern int gCanCompress;
 extern int expand_flag;
 extern int compress_flag;
 #endif

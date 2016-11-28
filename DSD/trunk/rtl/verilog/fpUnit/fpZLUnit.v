@@ -44,6 +44,7 @@
 `define FSIGN   6'h06
 `define FMAN    6'h07
 `define FNABS   6'h08
+`define FCVTSQ  6'h0B
 
 module fpZLUnit
 #(parameter WID=32)
@@ -86,6 +87,8 @@ wire [2:0] fn3 = ir[31:29];
 wire [3:0] cmp_o;
 
 fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanx) );
+wire [127:0] sq_o;
+fcvtsq u2 (a, sq_o);
 
 always @*
     case(op)
@@ -99,10 +102,11 @@ always @*
             `FMOV:   o <= a;                        // fmov
             `FSIGN:  o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
             `FMAN:   o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]};    // fman
+            `FCVTSQ:    o <= sq_o;
             default: o <= 0;
             endcase
         // FCMP
-        3'b001:  o <= {WID/4{cmp_o}};
+        3'b001:  o <= cmp_o;
         endcase
 	default:	o <= 0;
 	endcase

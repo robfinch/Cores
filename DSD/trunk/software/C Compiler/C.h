@@ -76,7 +76,7 @@ enum e_sym {
 		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
     kw_unique, kw_virtual, kw_this,
 		kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
-		kw_no_temps, kw_no_parms,
+		kw_no_temps, kw_no_parms, kw_floatmax,
         my_eof };
 
 enum e_sc {
@@ -86,7 +86,7 @@ enum e_sc {
 enum e_bt {
 		bt_none,
 		bt_byte, bt_ubyte,
-        bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_pointer,
+        bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
         bt_unsigned,
         bt_struct, bt_union, bt_class, bt_enum, bt_void,
@@ -118,6 +118,7 @@ public:
 	int data;
 	C64PException(int e, int d) { errnum = e; data = d; };
 };
+
 
 struct typ;
 struct snode;
@@ -222,6 +223,7 @@ public:
         uint16_t wa[8];
         char *s;
     } value;
+	Float128 f128;
   TYP *tp;
     struct snode *stmt;
     struct snode *prolog;
@@ -280,21 +282,23 @@ public:
 	unsigned int isIO : 1;
 	unsigned int isConst : 1;	// const in declaration
 	unsigned int isResv : 1;
+	__int16 precision;			// precision of the numeric in bits
 	int8_t		bit_width;
 	int8_t		bit_offset;
-  long        size;
-  long 		size2;
-  TABLE lst;
-  int btp;
-  TYP *GetBtp();
-  static TYP *GetPtr(int n);
-  int GetIndex();
-  static int GetSize(int num);
-  static int GetBasicType(int num);
-  std::string *sname;
+	long        size;
+	long 		size2;
+	TABLE lst;
+	int btp;
+	TYP *GetBtp();
+	static TYP *GetPtr(int n);
+	int GetIndex();
+	static int GetSize(int num);
+	static int GetBasicType(int num);
+	std::string *sname;
 	unsigned int alignment;
 	static TYP *Make(int bt, int siz);
 	static TYP *Copy(TYP *src);
+	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
 };
 
 class TypeArray
@@ -308,6 +312,10 @@ public:
   void Add(TYP *tp, __int16 regno);
   bool IsEmpty();
   bool IsEqual(TypeArray *);
+  bool IsLong(int);
+  bool IsShort(int);
+  bool IsChar(int);
+  bool IsInt(int);
   void Clear();
   TypeArray *Alloc();
   void Print(txtoStream *);
@@ -470,11 +478,12 @@ public:
 #define AL_POINTER      2
 #define AL_FLOAT        2
 #define AL_DOUBLE       4
+#define AL_QUAD			8
 #define AL_STRUCT       2
 #define AL_TRIPLE       6
 
 #define TRUE	1
 #define FALSE	0
 //#define NULL	((void *)0)
-
+ 
 #endif

@@ -54,7 +54,7 @@ enum e_node {
         en_cbc, en_cbh,
 		en_cch,
 		en_cwl, en_cld, en_cfd,
-        en_icon, en_fcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
+        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		
@@ -67,7 +67,8 @@ enum e_node {
 		en_ftadd, en_ftsub, en_ftmul, en_ftdiv,
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
-		en_i2d, en_i2t, en_d2i,// 63<-
+		en_fadd, en_fsub, en_fmul, en_fdiv,
+		en_i2d, en_i2t, en_d2i, en_q2i, en_s2q, // 63<-
         en_div, en_shl, en_shlu, en_shr, en_shru, en_asr, en_cond, en_assign, 
         en_asadd, en_assub, en_asmul, en_asdiv, en_asdivu, en_asmod, en_asmodu,
 		en_asrsh, en_asrshu, en_asmulu, //81
@@ -80,7 +81,7 @@ enum e_node {
 		en_ref, en_ursh,
 		en_uwfieldref,en_wfieldref,en_bfieldref,en_ubfieldref,
 		en_uhfieldref,en_hfieldref,en_ucfieldref,en_cfieldref,
-		en_dbl_ref, en_flt_ref, en_triple_ref,
+		en_dbl_ref, en_flt_ref, en_triple_ref, en_quad_ref,
 		en_chk
 		};
 
@@ -106,6 +107,7 @@ public:
   int i;
   double f;
   double f1, f2;
+  Float128 f128;
   std::string *sp;
   std::string *msp;
 	std::string *udnm;			// undecorated name

@@ -102,6 +102,7 @@ extern char             lastkw[128];
 extern char             laststr[MAX_STLP1];
 extern int	ival;
 extern double           rval;
+extern Float128			rval128;
 extern int parseEsc;
 //extern FloatTriple      FAC1,FAC2;
 
@@ -110,6 +111,7 @@ extern TABLE            gsyms[257],
 extern TABLE            tagtable;
 extern SYM              *lasthead;
 extern struct slit      *strtab;
+extern Float128		    *quadtab;
 extern int              lc_static;
 extern int              lc_auto;
 extern int				lc_thread;
@@ -139,6 +141,7 @@ extern int iflevel;
 extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
+extern bool dogen;
 
 extern TYP stdint;
 extern TYP stduint;
@@ -158,6 +161,7 @@ extern TYP stddouble;
 extern TYP stdfunc;
 extern TYP stdexception;
 extern TYP stdconst;
+extern TYP stdquad;
 
 extern std::string *declid;
 extern Compiler compiler;
@@ -271,6 +275,7 @@ extern void GenerateLabelReference(int n);
 extern void gen_strlab(char *s);
 extern void dumplits();
 extern int  stringlit(char *s);
+extern int quadlit(Float128 *f128);
 extern void nl();
 extern void seg(int sg, int algn);
 extern void cseg();

@@ -145,41 +145,54 @@ void Declaration::ParseLong()
 {
 	NextToken();
 	if (lastst==kw_int) {
+		bit_max = 32;
 		NextToken();
 	}
 	else if (lastst==kw_float) {
 		head = (TYP *)TYP::Make(bt_double,4);
 		tail = head;
+		bit_max = 64;
+		NextToken();
+	}
+	else if (lastst==kw_double) {
+		head = TYP::Copy(&stdquad);
+		//head = (TYP *)TYP::Make(bt_quad,8);
+		tail = head;
+		bit_max = head->precision;
 		NextToken();
 	}
 	else {
 		if (isUnsigned) {
 			head =(TYP *)TYP::Make(bt_ulong,2);
 			tail = head;
+			bit_max = 32;
 		}
 		else {
 			head = (TYP *)TYP::Make(bt_long,2);
 			tail = head;
+			bit_max = 32;
 		}
 	}
 	//NextToken();
 	if (lastst==kw_task) {
 		isTask = TRUE;
 		NextToken();
+		bit_max = 32;
 	}
 	if (lastst==kw_oscall) {
 		isOscall = TRUE;
 		NextToken();
+		bit_max = 32;
 	}
 	else if (lastst==kw_nocall || lastst==kw_naked) {
 		isNocall = TRUE;
 		NextToken();
+		bit_max = 32;
 	}
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
 	head->isConst = isConst;
-	bit_max = 32;
 }
 
 void Declaration::ParseInt()
@@ -466,33 +479,33 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case id:	sp = ParseId();	goto lxit;
 
 			case kw_float:
-				head = (TYP *)TYP::Make(bt_float,4);
+				head = TYP::Copy(&stdquad);
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
 				head->isConst = isConst;
 				NextToken();
-				bit_max = 32;
+				bit_max = head->precision;
 				goto lxit;
 
 			case kw_double:
-				head = (TYP *)TYP::Make(bt_double,2);
+				head = (TYP *)TYP::Make(bt_double,8);
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
 				head->isConst = isConst;
 				NextToken();
-				bit_max = 64;
+				bit_max = 128;
 				goto lxit;
 
 			case kw_triple:
-				head = (TYP *)TYP::Make(bt_triple,12);
+				head = TYP::Copy(&stdtriple);
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
 				head->isConst = isConst;
 				NextToken();
-				bit_max = 96;
+				bit_max = head->precision;
 				goto lxit;
 
 			case kw_void:
@@ -977,21 +990,21 @@ int alignment(TYP *tp)
 	case bt_char:   case bt_uchar:  return AL_CHAR;
 	case bt_short:  case bt_ushort: return AL_SHORT;
 	case bt_long:   case bt_ulong:  return AL_LONG;
-  case bt_enum:           return AL_CHAR;
-  case bt_pointer:
-            if(tp->val_flag)
-                return alignment(tp->GetBtp());
-            else
-				return AL_POINTER;
-  case bt_float:          return AL_FLOAT;
-  case bt_double:         return AL_DOUBLE;
-  case bt_triple:         return AL_TRIPLE;
+	case bt_enum:           return AL_CHAR;
+	case bt_pointer:
+	if(tp->val_flag)
+		return alignment(tp->GetBtp());
+	else
+		return AL_POINTER;
+	case bt_float:          return AL_FLOAT;
+	case bt_double:         return AL_DOUBLE;
+	case bt_triple:         return AL_TRIPLE;
 	case bt_class:
-  case bt_struct:
-  case bt_union:          
-    return (tp->alignment) ?  tp->alignment : AL_STRUCT;
-  default:                return AL_CHAR;
-  }
+	case bt_struct:
+	case bt_union:          
+		return (tp->alignment) ?  tp->alignment : AL_STRUCT;
+	default:                return AL_CHAR;
+	}
 }
 
 

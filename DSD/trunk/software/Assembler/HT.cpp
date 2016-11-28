@@ -96,7 +96,7 @@ void *htDelete(SHashTbl *hi, void *item)
 void *htFind(SHashTbl *hi, void *item)
 {
    SHashVal hash;
-   int rr, ii;
+   int rr;
    int TableIndex;
    int count;
    char *htbl;
@@ -130,11 +130,10 @@ void *htFind(SHashTbl *hi, void *item)
 void *htFind2(SHashTbl *hi, char *name)
 {
    SHashVal hash;
-   int rr, ii;
+   int rr;
    int TableIndex;
    int count;
    char *htbl;
-   char *nm;
 
    htbl = (char *)hi->table;
    hash = htSymHash(hi,name);

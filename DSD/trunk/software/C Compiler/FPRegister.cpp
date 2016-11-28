@@ -93,8 +93,7 @@ void GenerateTempFPRegPush(int reg, int rmode, int number)
     ap1->mode = rmode;
     ap1->isFloat = TRUE;
 
-	GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(8));
-	GenerateDiadic(op_sfd,0,ap1,make_indirect(regSP));
+	GenerateMonadic(op_push,'q',ap1);
 	TRACE(printf("pushing r%d\r\n", reg);)
     fpreg_stack[fpreg_stack_ptr].mode = (enum e_am)rmode;
     fpreg_stack[fpreg_stack_ptr].reg = reg;

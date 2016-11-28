@@ -72,7 +72,7 @@ public:
         if ((ret = FindName(nm)) > 0)
            return ret;
         olen = length;
-        strcpy(&text[length], nm);
+        strcpy_s(&text[length], sizeof(text)-length, nm);
         length += strlen(nm) + 1;
         return olen;
     };

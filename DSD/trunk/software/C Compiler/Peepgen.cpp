@@ -190,19 +190,22 @@ void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *a
 
 static void AddToPeepList(struct ocode *cd)
 {
+	if (!dogen)
+		return;
+
 	if( peep_head == NULL )
-  {
+	{
 		peep_head = peep_tail = cd;
-		cd->fwd = NULL;
-		cd->back = NULL;
-  }
-  else
-  {
-		cd->fwd = NULL;
+		cd->fwd = nullptr;
+		cd->back = nullptr;
+	}
+	else
+	{
+		cd->fwd = nullptr;
 		cd->back = peep_tail;
 		peep_tail->fwd = cd;
 		peep_tail = cd;
-  }
+	}
 }
 
 /*

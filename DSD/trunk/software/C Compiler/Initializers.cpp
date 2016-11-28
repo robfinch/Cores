@@ -254,19 +254,19 @@ int initbyte()
 int initchar()
 {   
 	GenerateChar(GetIntegerExpression((ENODE **)NULL));
-    return 2;
+    return 1;
 }
 
 int initshort()
 {
 	GenerateWord(GetIntegerExpression((ENODE **)NULL));
-    return 4;
+    return 1;
 }
 
 int initlong()
 {
 	GenerateLong(GetIntegerExpression((ENODE **)NULL));
-    return 8;
+    return 2;
 }
 
 int InitializePointer()
@@ -295,6 +295,10 @@ int InitializePointer()
         GenerateLabelReference(stringlit(laststr));
         NextToken();
     }
+	else if (lastst == rconst) {
+        GenerateLabelReference(quadlit(&rval128));
+        NextToken();
+	}
 	//else if (lastst == id) {
 	//	sp = gsearch(lastid);
 	//	if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
@@ -319,7 +323,7 @@ int InitializePointer()
         }
 	}
     endinit();
-    return 8;       /* pointers are 8 bytes long */
+    return 2;       /* pointers are 2 bytes long */
 }
 
 void endinit()

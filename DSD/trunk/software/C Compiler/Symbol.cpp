@@ -643,7 +643,7 @@ SYM *SYM::FindRisingMatch(bool ignore)
 
 void SYM::BuildParameterList(int *num)
 {
-	int i, poffset, preg;
+	int i, poffset, preg, fpreg;
 	SYM *sp1;
 	int onp;
 	int np;
@@ -655,6 +655,7 @@ void SYM::BuildParameterList(int *num)
 	onp = nparms;
 	nparms = 0;
 	preg = 18;
+	fpreg = 18;
 	// Parameters will be inserted into the symbol's parameter list when
 	// declarations are processed.
 	np = ParameterDeclaration::Parse(1);
@@ -671,18 +672,34 @@ void SYM::BuildParameterList(int *num)
 		sp1->IsParameter = true;
 		sp1->value.i = poffset;
 		noParmOffset = false;
-		if (preg > 23)
-			sp1->IsRegister = false;
-		if (sp1->IsRegister && sp1->tp->size < 3) {
-			sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
-			preg++;
-			if (preg & 0x8000) {
-				noParmOffset = true;
-				sp1->value.i = -1;
+		if (sp1->tp->IsFloatType()) {
+			if (fpreg > 23)
+				sp1->IsRegister = false;
+			if (sp1->IsRegister && sp1->tp->size < 9) {
+				sp1->reg = sp1->IsAuto ? fpreg | 0x8000 : fpreg;
+				fpreg++;
+				if ((preg & 0x8000)==0) {
+					noParmOffset = true;
+					sp1->value.i = -1;
+				}
 			}
+			else
+				sp1->IsRegister = false;
 		}
-		else
-			sp1->IsRegister = false;
+		else {
+			if (preg > 23)
+				sp1->IsRegister = false;
+			if (sp1->IsRegister && sp1->tp->size < 3) {
+				sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
+				preg++;
+				if ((preg & 0x8000)==0) {
+					noParmOffset = true;
+					sp1->value.i = -1;
+				}
+			}
+			else
+				sp1->IsRegister = false;
+		}
 		// Check for aggregate types passed as parameters. Structs
 		// and unions use the type size. There could also be arrays
 		// passed.
@@ -751,6 +768,7 @@ void SYM::AddProto(TypeArray *ta)
     sym->tp = TYP::Make(ta->types[nn],TYP::GetSize(ta->types[nn]));
     sym->tp->type = (e_bt) TYP::GetBasicType(ta->types[nn]);
 	sym->IsRegister = ta->preg[nn] != 0;
+	sym->reg = ta->preg[nn];
     proto.insert(sym);
   }
 }

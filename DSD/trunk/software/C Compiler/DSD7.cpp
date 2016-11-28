@@ -128,13 +128,13 @@ int AllocateRegisterVars()
 		else {
 			{
                 if (csp->isfp) {
-    				if( csp->duses > csp->uses / 4 && fpreg < 18 )
+    				if( csp->duses > csp->uses / 8 && fpreg < 18 )
     					csp->reg = fpreg++;
     				else
     					csp->reg = -1;
                 }
                 else {
-    				if( csp->duses > csp->uses / 4 && reg < 18 )
+    				if( csp->duses > csp->uses / 8 && reg < 18 )
     					csp->reg = reg++;
     				else
     					csp->reg = -1;
@@ -188,9 +188,9 @@ int AllocateRegisterVars()
                             {
                             initstack();
                             if (csp->isfp) {
-                                ap = GenerateExpression(exptr,F_FPREG,2);
+                                ap = GenerateExpression(exptr,F_FPREG,8);
     							ap2 = makefpreg(csp->reg);
-  								GenerateDiadic(op_fdmov,0,ap2,ap);
+  								GenerateDiadic(op_fmov,'q',ap2,ap);
                             }
                             else {
                                 ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,2);
@@ -338,25 +338,32 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 	case op_gtu: op = op_bgtu; break;
 	case op_geu: op = op_bgeu; break;
 	case op_feq:
-         op = op_beq;
-         break;
+		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
+		GenerateTriadic(op_bbs,0,ap3,make_immed(0),make_clabel(label));
+		goto xit;
 	case op_fne:
-         op = op_bne;
-         break;
+		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
+		GenerateTriadic(op_bbc,0,ap3,make_immed(0),make_clabel(label));
+		goto xit;
 	case op_flt:
-         op = op_blt;
-         break;
+		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
+		GenerateTriadic(op_bbs,0,ap3,make_immed(1),make_clabel(label));
+		goto xit;
 	case op_fle:
-         op = op_ble;
-         break;
+		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
+		GenerateTriadic(op_bbs,0,ap3,make_immed(2),make_clabel(label));
+		goto xit;
 	case op_fgt:
-         op = op_bgt;
-         break;
+		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
+		GenerateTriadic(op_bbc,0,ap3,make_immed(2),make_clabel(label));
+		goto xit;
 	case op_fge:
-         op = op_bge;
-         break;
+		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
+		GenerateTriadic(op_bbc,0,ap3,make_immed(1),make_clabel(label));
+		goto xit;
 	}
 	GenerateTriadic(op,0,ap1,ap2,make_clabel(label));
+xit:
 	ReleaseTempReg(ap3);
    	ReleaseTempReg(ap2);
    	ReleaseTempReg(ap1);
@@ -581,11 +588,34 @@ void GenerateReturn(Statement *stmt)
 	if (sym->IsPascal) {
 		TypeArray *ta;
 		int nn;
-		toAdd += sym->NumParms * sizeOfWord;
 		ta = sym->GetProtoTypes();
 		for (nn = 0; nn < ta->length; nn++) {
-			if ((ta->preg[nn] & 0x8000)==0)
-				toAdd -= sizeOfWord;
+			switch(ta->types[nn]) {
+			case bt_float:
+			case bt_quad:
+				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
+					;
+				else
+					toAdd += sizeOfWord * 4;
+				break;
+			case bt_double:
+				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
+					;
+				else
+					toAdd += sizeOfWord * 2;
+				break;
+			case bt_triple:
+				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
+					;
+				else
+					toAdd += sizeOfWord * 3;
+				break;
+			default:
+				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
+					;
+				else
+					toAdd += sizeOfWord;
+			}
 		}
 	}
 	if (!sym->IsInline)
@@ -639,7 +669,13 @@ static void SaveRegisterParameters(SYM *sym)
 		int nn;
 		for (nn = 0; nn < ta->length; nn++) {
 			if (ta->preg[nn]) {
-				GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff));
+				switch(ta->types[nn]) {
+				case bt_quad:	GenerateMonadic(op_push,'q',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				case bt_float:	GenerateMonadic(op_push,'s',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				case bt_double:	GenerateMonadic(op_push,'d',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				case bt_triple:	GenerateMonadic(op_push,'t',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				default:	GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
+				}
 			}
 		}
 	}
@@ -656,7 +692,13 @@ static void RestoreRegisterParameters(SYM *sym)
 		int nn;
 		for (nn = ta->length - 1; nn >= 0; nn--) {
 			if (ta->preg[nn]) {
-				GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff));
+				switch(ta->types[nn]) {
+				case bt_quad:	GenerateMonadic(op_pop,'q',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				case bt_float:	GenerateMonadic(op_pop,'s',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				case bt_double:	GenerateMonadic(op_pop,'d',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				case bt_triple:	GenerateMonadic(op_pop,'t',makefpreg(ta->preg[nn]& 0x7fff)); break;
+				default:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
+				}
 			}
 		}
 	}
@@ -673,7 +715,14 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 	AMODE *ap;
 	int nn = 0;
 	
-	ap = GenerateExpression(ep,F_REG|F_FPREG|F_IMMED,sizeOfWord);
+	if (ep->tp) {
+		if (ep->tp->IsFloatType())
+			ap = GenerateExpression(ep,F_FPREG,sizeOfWord);
+		else
+			ap = GenerateExpression(ep,F_REG|F_IMMED,sizeOfWord);
+	}
+	else
+		ap = GenerateExpression(ep,F_REG|F_IMMED,sizeOfWord);
 	switch(ap->mode) {
     case am_reg:
     case am_fpreg:
@@ -697,17 +746,33 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 */
 			if (regno) {
 				GenerateMonadic(op_hint,0,make_immed(1));
-				if (ap->mode==am_immed)
+				if (ap->mode==am_immed) {
 					GenerateDiadic(op_ld,0,makereg(regno & 0x7fff), ap);
-				else
+					if (regno & 0x8000) {
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						nn = 1;
+					}
+				}
+				else if (ap->mode==am_fpreg) {
+					GenerateDiadic(op_fmov,0,makefpreg(regno & 0x7fff), ap);
+					if (regno & 0x8000) {
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord*4));
+						nn = 4;
+					}
+				}
+				else {
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
-				if (regno & 0x8000) {
-					GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
-					nn = 1;
+					if (regno & 0x8000) {
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						nn = 1;
+					}
 				}
 			}
 			else {
-          		GenerateMonadic(op_push,0,ap);
+				if (ap->isFloat)
+          			GenerateMonadic(op_push,'q',ap);
+				else
+          			GenerateMonadic(op_push,0,ap);
           		nn = 1;
 			}
 //        }
@@ -733,6 +798,8 @@ static int GeneratePushParameterList(SYM *sym, ENODE *plist)
 		sum += GeneratePushParameter(plist->p[0],ta ? ta->preg[ta->length - i - 1] : 0);
 		plist = plist->p[1];
     }
+	if (ta)
+		delete ta;
     return sum;
 }
 

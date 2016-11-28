@@ -103,7 +103,7 @@ wire [FMSB+1:0] fracta, fractb;
 wire a_dn, b_dn;			// a/b is denormalized
 wire az, bz;
 wire aInf, bInf;
-
+wire aNan,bNan;
 
 // -----------------------------------------------------------
 // - decode the input operands
@@ -112,8 +112,8 @@ wire aInf, bInf;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf) );
-fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf) );
+fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
 
 // Compute the exponent.
 // - correct the exponent for denormalized operands
@@ -135,17 +135,19 @@ wire qNaNOut = (az&bz)|(aInf&bInf);
 always @(posedge clk)
 	if (ce) begin
 		if (done) begin
-			casex({qNaNOut,bInf,bz})
+			casex({qNaNOut|aNan|bNan,bInf,bz})
 			3'b1xx:		xo = infXp;	// NaN exponent value
 			3'bx1x:		xo = 0;		// divide by inf
 			3'bxx1:		xo = infXp;	// divide by zero
 			default:	xo = ex1;		// normal or underflow: passthru neg. exp. for normalization
 			endcase
 
-			casex({qNaNOut,bInf,bz})
-			3'b1xx:		mo = {1'b0,qNaN[FMSB:0]|{aInf,1'b0}|{az,bz},{FMSB+1{1'b0}}};
-			3'bx1x:		mo = 0;	// div by inf
-			3'bxx1:		mo = 0;	// div by zero
+			casex({aNan,bNan,qNaNOut,bInf,bz})
+			5'b1xxxx:       mo = {1'b0,a[FMSB:0],{FMSB+1{1'b0}}};
+			5'bx1xxx:       mo = {1'b0,b[FMSB:0],{FMSB+1{1'b0}}};
+			5'bxx1xx:		mo = {1'b0,qNaN[FMSB:0]|{aInf,1'b0}|{az,bz},{FMSB+1{1'b0}}};
+			5'bxxx1x:		mo = 0;	// div by inf
+			5'bxxxx1:		mo = 0;	// div by zero
 			default:	mo = divo;	// plain div
 			endcase
 

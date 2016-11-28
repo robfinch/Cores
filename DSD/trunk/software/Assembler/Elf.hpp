@@ -266,10 +266,10 @@ public:
         AddWord(info);
     };
     void Write(FILE *fp) {
-        fwrite((void *)bytes,1,hdr.sh_size,fp);
+        fwrite((void *)bytes,1,(size_t)hdr.sh_size,fp);
     };
     void Read(FILE *fp) {
-        fread((void *)bytes,1,hdr.sh_size,fp);
+        fread((void *)bytes,1,(size_t)hdr.sh_size,fp);
     };
 };
 
@@ -298,10 +298,10 @@ public:
         hdr.Write(fp);        
         fseek(fp, 512, SEEK_SET);
         for (nn = 0; nn < hdr.e_shnum; nn++) {
-            fseek(fp, sections[nn]->hdr.sh_offset, SEEK_SET);
+            fseek(fp, (size_t)sections[nn]->hdr.sh_offset, SEEK_SET);
             sections[nn]->Write(fp);
         }
-        fseek(fp, hdr.e_shoff, SEEK_SET);
+        fseek(fp, (size_t)hdr.e_shoff, SEEK_SET);
         WriteSectionHeaderTable(fp);
     };
 };

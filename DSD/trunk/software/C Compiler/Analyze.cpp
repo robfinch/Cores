@@ -84,15 +84,17 @@ int equalnode(ENODE *node1, ENODE *node2)
     }
     switch (node1->nodetype) {
 	case en_fcon:
-	case en_autofcon:
-			return (node1->f == node2->f);
+		return (Float128::IsEqual(&node1->f128,&node2->f128));
+//			return (node1->f == node2->f);
 	case en_regvar:
 	case en_bregvar:
 	case en_fpregvar:
       case en_icon:
       case en_labcon:
 	  case en_classcon:	// Check type ?
-      case en_autocon: {
+      case en_autocon:
+	  case en_autofcon:
+		  {
 			return (node1->i == node2->i);
 	   }
       case en_nacon:{
@@ -156,7 +158,10 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
         csp->exp = DuplicateEnode(node);
         csp->voidf = 0;
 		csp->reg = 0;
-		csp->isfp = node->isDouble;
+		if (node->tp)
+			csp->isfp = node->tp->IsFloatType();
+		else
+			csp->isfp = false;
         olist = csp;
         return csp;
     }
@@ -261,6 +266,7 @@ static void scanexpr(ENODE *node, int duse)
         case en_uw_ref:
 		case en_flt_ref:
 		case en_dbl_ref:
+		case en_quad_ref:
 		case en_bfieldref:
 		case en_ubfieldref:
 		case en_cfieldref:
@@ -339,6 +345,8 @@ static void scanexpr(ENODE *node, int duse)
         case en_chk:
         case en_i2d:
         case en_d2i:
+		case en_q2i:
+		case en_s2q:
                 scanexpr(node->p[0],duse);
                 break;
         case en_asadd:  case en_assub:
@@ -361,6 +369,8 @@ static void scanexpr(ENODE *node, int duse)
                 case en_fgt:    case en_fge:
                 case en_fdmul:  case en_fddiv:
                 case en_fdadd:  case en_fdsub:
+				case en_fadd: case en_fsub:
+				case en_fmul: case en_fdiv:
 		case en_asmul:  case en_asmulu:
 		case en_asdiv:	case en_asdivu:
         case en_asmod:  case en_aslsh:
@@ -590,6 +600,7 @@ void repexpr(ENODE *node)
 						repexpr(node->p[0]);
 					break;
 				case en_dbl_ref:
+				case en_quad_ref:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_fpregvar;
@@ -615,6 +626,8 @@ void repexpr(ENODE *node)
                 case en_chk:
                 case en_i2d:
                 case en_d2i:
+				case en_q2i:
+				case en_s2q:
                         repexpr(node->p[0]);
                         break;
                 case en_add:    case en_sub:
@@ -635,6 +648,8 @@ void repexpr(ENODE *node)
                 case en_fgt:    case en_fge:
                 case en_fdmul:  case en_fddiv:
                 case en_fdadd:  case en_fdsub:
+				case en_fadd: case en_fsub:
+				case en_fmul: case en_fdiv:
                 case en_cond:   case en_void:
                 case en_asadd:  case en_assub:
 				case en_asmul:  case en_asmulu:

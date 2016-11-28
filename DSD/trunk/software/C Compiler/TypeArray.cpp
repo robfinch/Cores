@@ -72,6 +72,23 @@ bool TypeArray::IsEmpty()
   return true;
 }
 
+bool TypeArray::IsChar(int typ)
+{
+	return (typ==bt_char || typ==bt_uchar);
+}
+bool TypeArray::IsShort(int typ)
+{
+	return (typ==bt_short || typ==bt_ushort);
+}
+bool TypeArray::IsLong(int typ)
+{
+	return (typ==bt_long || typ==bt_ulong);
+}
+bool TypeArray::IsInt(int typ)
+{
+	return (IsChar(typ)||IsShort(typ)||IsLong(typ));
+}
+
 bool TypeArray::IsEqual(TypeArray *ta)
 {
   int m;
@@ -112,6 +129,9 @@ bool TypeArray::IsEqual(TypeArray *ta)
         continue;
       if (t==bt_uchar && tat==bt_char)
         continue;
+	  // Loose type matching
+	  if (IsInt(t) && IsInt(tat))
+		  continue;
       dfs.printf("F2");
       return false;
     }

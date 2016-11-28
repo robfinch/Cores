@@ -85,6 +85,7 @@ int num_insns;
 HTBLE hTable[100000];
 int htblmax;
 int processOpt;
+int gCanCompress = 0;
 int expandedBlock;
 int expand_flag;
 int compress_flag;
@@ -262,7 +263,7 @@ void emitHalf(int64_t cd)
 {
 	if (gCpu==7) {
 		emitByte(cd & 65535LL);
-		emitByte((cd >> 16) & 65535LL);
+		//emitByte((cd >> 16) & 65535LL);
 	}
   else if (gCpu==5) {
      emitByte(cd & 255LL);
@@ -279,7 +280,7 @@ void emitHalf(int64_t cd)
 
 void emitWord(int64_t cd)
 {
-  if (gCpu==5) {
+  if (gCpu==5 || gCpu==7) {
      emitHalf(cd & 0xFFFFLL);
      emitHalf((cd >> 16) & 0xFFFFLL);
   }
@@ -306,6 +307,10 @@ void process_public()
 {
     SYM *sym;
     int64_t ca;
+	int div = 1;
+
+	if (gCpu==7)
+		div = 2;
 
     NextToken();
     if (token==tk_code) {
@@ -332,20 +337,20 @@ void process_public()
 //        ca = code_address;
     switch(segment) {
     case codeseg:
-         ca = code_address;
-         ca = sections[0].address;
+         ca = code_address/div;
+         ca = sections[0].address/div;
          break;
     case rodataseg:
-         ca = sections[1].address;
+         ca = sections[1].address/div;
          break;
     case dataseg:
-         ca = sections[2].address;
+         ca = sections[2].address/div;
          break;
     case bssseg:
-         ca = sections[3].address;
+         ca = sections[3].address/div;
          break;
     case tlsseg:
-         ca = sections[4].address;
+         ca = sections[4].address/div;
          break;
     }
     NextToken();

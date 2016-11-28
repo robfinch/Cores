@@ -81,7 +81,7 @@ always @(xInf,rm,g,r,s,so)
 	3'd1:	rnd = 0;					// round to zero (truncate)
 	3'd2:	rnd = (r | s) & !so;		// round towards +infinity
 	3'd3:	rnd = (r | s) & so;			// round towards -infinity
-	3'd4:   rnd = 1; 
+	3'd4:   rnd = (r | s); 
 	default:	rnd = 0;				// no rounding if exponent indicates infinite or NaN
 	endcase
 

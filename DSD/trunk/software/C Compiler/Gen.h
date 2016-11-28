@@ -10,9 +10,7 @@
 #define F_IMMED 8       /* immediate mode allowed */
 #define F_ALT   7       /* alterable modes */
 #define F_DALT  5       /* data alterable modes */
-#define F_ALL   15      /* all modes allowed */
 #define F_VOL   16      /* need volitile operand */
-#define F_NOVALUE 32    /* dont need result value */
 #define F_IMMED18	64	// 18-bit immediate constant
 #define F_IMM0	128		/* immediate value 0 */
 #define F_IMM8	256
@@ -20,6 +18,8 @@
 #define F_FPREG 1024
 #define F_IMM6  2048
 #define BF_ASSIGN	4096
+#define F_ALL   (15|1024)      /* all modes allowed */
+#define F_NOVALUE 32768		/* dont need result value */
 
 /*      addressing mode structure       */
 
@@ -31,6 +31,7 @@ typedef struct amode {
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
+	char FloatSize;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
 	unsigned int isVolatile : 1;
@@ -69,9 +70,11 @@ enum e_op {
 		op_sw, op_sh, op_sc, op_sb, op_outb, op_inb, op_inbu,
 		op_sfd, op_lfd,
 		op_call, op_jal, op_beqi, op_bnei, op_tst,
+
 		op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge,
 		op_bltu, op_bleu, op_bgtu, op_bgeu,
 		op_bltui, op_bleui, op_blti, op_blei, op_bgti, op_bgtui, op_bgei, op_bgeui,
+		op_bbs, op_bbc,
 
 		op_brz, op_brnz, op_br,
 		op_lft, op_sft,
@@ -79,6 +82,7 @@ enum e_op {
 		op_lvb, op_lvc, op_lvh, op_lvw,
 		op_inc, op_dec,
 		op_lbu, op_lcu, op_lhu, op_sti,
+		op_lf, op_sf,
         op_rts, op_rti, op_rtd,
 		op_push, op_pop, op_movs,
 		op_seq, op_sne, op_slt, op_sle, op_sgt, op_sge, op_sltu, op_sleu, op_sgtu, op_sgeu,
@@ -99,10 +103,13 @@ enum e_op {
         op_cmpu, op_bsr, op_bun,
         op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri, op_rem,
         // floating point
+		op_fcvtsq,
+		op_fadd, op_fsub, op_fmul, op_fdiv, op_fcmp, op_fneg,
 		op_ftmul, op_ftsub, op_ftdiv, op_ftadd, op_ftneg, op_ftcmp,
 		op_fdmul, op_fdsub, op_fddiv, op_fdadd, op_fdneg, op_fdcmp,
 		op_fsmul, op_fssub, op_fsdiv, op_fsadd, op_fsneg, op_fscmp,
-		op_fs2d, op_i2d, op_i2t,
+		op_fs2d, op_i2d, op_i2t, op_ftoi,
+		op_fmov,
         op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
 
 		op_hint,

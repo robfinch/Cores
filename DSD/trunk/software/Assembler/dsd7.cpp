@@ -27,6 +27,7 @@
 
 static void process_shifti(int oc, int funct3, int funct7);
 static void ProcessEOL(int opt);
+static void mem_operand(int64_t *disp, int *regA, int *regB);
 
 extern int first_rodata;
 extern int first_data;
@@ -787,7 +788,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 {
     int ndx;
 
-    if (pass==3 && can_compress) {
+    if (pass==3 && can_compress && gCanCompress) {
        for (ndx = 0; ndx < htblmax; ndx++) {
          if ((int)oc == hTable[ndx].opcode) {
            hTable[ndx].count++;
@@ -804,7 +805,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
        return;
     }
     if (pass > 3) {
-     if (can_compress) {
+     if (can_compress && gCanCompress) {
        for (ndx = 0; ndx < htblmax; ndx++) {
          if ((int)oc == hTable[ndx].opcode) {
            emitCode((ndx << 6)|0x1F);
@@ -1035,7 +1036,7 @@ static void process_fprop(int oc)
             printf("Illegal float size.\r\n");
     }
     p = inptr;
-    if (oc==0xF6)        // fcmp
+    if (oc==0x01)        // fcmp
         Rt = getRegisterX();
     else
         Rt = getFPRegister();
@@ -1044,17 +1045,20 @@ static void process_fprop(int oc)
     if (token==',')
        rm = getFPRoundMode();
     prevToken();
-//    emitAlignedCode(0x01);
-    emitCode(Ra);
-    emitCode(Rt);
     switch(sz) {
     case 's': fmt = 0; break;
     case 'd': fmt = 1; break;
     case 't': fmt = 2; break;
     case 'q': fmt = 3; break;
     }
-    emitCode((fmt << 3)|rm);
-    emitCode(oc);
+    emit_insn(
+			(fmt << 27)|
+			(rm << 24)|
+			(Rt << 18)|
+			(oc << 12)|
+			(Ra << 6) |
+			0x36,!expand_flag,2
+			);
 }
 
 // ---------------------------------------------------------------------------
@@ -1084,7 +1088,7 @@ static void process_fprrop(int oc)
             printf("Illegal float size.\r\n");
     }
     p = inptr;
-    if (oc==0xF6)        // fcmp
+    if (oc==0x01)        // fcmp
         Rt = getRegisterX();
     else
         Rt = getFPRegister();
@@ -1095,17 +1099,21 @@ static void process_fprrop(int oc)
     if (token==',')
        rm = getFPRoundMode();
     prevToken();
-    //emitAlignedCode(oc);
-    emitCode(Ra);
-    emitCode(Rb);
-    emitCode(Rt);
     switch(sz) {
     case 's': fmt = 0; break;
     case 'd': fmt = 1; break;
     case 't': fmt = 2; break;
     case 'q': fmt = 3; break;
     }
-    emitCode((fmt << 3)|rm);
+    emit_insn(
+			(oc << 29)|
+			(fmt << 27)|
+			(rm << 24)|
+			(Rt << 18)|
+			(Rb << 12)|
+			(Ra << 6) |
+			0x36,!expand_flag,2
+			);
 }
 
 // ---------------------------------------------------------------------------
@@ -1127,11 +1135,12 @@ static void process_fpstat(int oc)
        bits = expr();
     }
     prevToken();
-//    emitAlignedCode(0x01);
-    emitCode(Ra);
-    emitCode(bits & 0xff);
-    emitCode(0x00);
-    emitCode(oc);
+	emit_insn(
+		((bits & 0x3F) << 18) |
+		(oc << 12) |
+		(Ra << 6) |
+		0x36,!expand_flag,2
+		);
 }
 
 // ---------------------------------------------------------------------------
@@ -1215,7 +1224,7 @@ static void process_bcc(int opcode6, int opcode3)
 
 static void process_bcci(int opcode6, int opcode3)
 {
-    int Ra, Rb;
+    int Ra;
     int64_t val, imm;
     int64_t disp;
 
@@ -1334,6 +1343,69 @@ static void process_ret()
 		);
 }
 
+// ----------------------------------------------------------------------------
+// inc -8[bp],#1
+// ----------------------------------------------------------------------------
+
+static void process_inc(int oc)
+{
+    int Ra;
+    int Rb;
+    int sc;
+    int64_t incamt;
+    int64_t disp;
+    char *p;
+    int fixup = 5;
+    int neg = 0;
+
+    NextToken();
+    p = inptr;
+    mem_operand(&disp, &Ra, &Rb);
+    incamt = 1;
+    if (token==']')
+       NextToken();
+    if (token==',') {
+        NextToken();
+        incamt = expr();
+        prevToken();
+    }
+    if (Rb >= 0) {
+       if (disp != 0)
+           printf("displacement not allowed with indexed addressing.\r\n");
+       oc = 0x6F;  // INCX
+	   // ToDo: fix this
+       emit_insn(
+           ((disp & 0xFF) << 24) |
+           (sc << 22) |
+           (Rb << 17) |
+           ((incamt & 0x1F) << 12) |
+           (Ra << 7) |
+           oc,0,2
+       );
+       return;
+    }
+    if (oc==0x25) neg = 1;
+    oc = 0x24;        // INC
+    if (Ra < 0) Ra = 0;
+    if (neg) incamt = -incamt;
+	if (disp < LB16 || disp > 32767LL) {
+		emit_insn(
+			(0x8000 << 16) |
+			(incamt << 11) |
+			(Ra << 6) |
+			oc,0,2);
+		emit_insn(disp,0,2);
+	}
+	else {
+		emit_insn(
+			(disp << 16) |
+			(incamt << 11) |
+			(Ra << 6) |
+			oc,!expand_flag,2);
+    }
+    ScanToEOL();
+}
+       
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
@@ -1514,6 +1586,82 @@ static void process_load(int opcode6)
 		emit_insn(
 			(val << 16) |
 			(Rt << 11) |
+			(Ra << 6) |
+			opcode6,!expand_flag,2);
+    }
+    ScanToEOL();
+}
+
+static void process_lsfloat(int opcode6)
+{
+    int Ra,Rb;
+    int Rt;
+    char *p;
+    int64_t disp;
+    int64_t val;
+    int fixup = 5;
+
+    int  sz;
+    int rm;
+
+    rm = 0;
+    sz = 'd';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("sdtqSDTQ",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal float size.\r\n");
+    }
+	if (sz=='s' || sz=='S')
+		sz = 0;
+	else if (sz=='d' || sz=='D')
+		sz = 1;
+	else if (sz=='t' || sz=='T')
+		sz = 2;
+	else if (sz=='q' || sz=='Q')
+		sz = 3;
+	else
+		sz = 1;
+    p = inptr;
+    Rt = getFPRegister();
+    if (Rt < 0) {
+        printf("Expecting a target register.\r\n");
+//        printf("Line:%.60s\r\n",p);
+        ScanToEOL();
+        inptr-=2;
+        return;
+    }
+    expect(',');
+    mem_operand(&disp, &Ra, &Rb);
+	if (Ra > 0 && Rb > 0) {
+		emit_insn(
+			(1L << 29) |
+			(sz << 27) |
+			(Rt << 18) |
+			(Rb << 12) |
+			(Ra << 6) |
+			opcode6,!expand_flag,2);
+		return;
+	}
+    if (Ra < 0) Ra = 0;
+    val = disp;
+	if (val < -15LL || val > 15LL) {
+		emit_insn(
+			(sz << 27) |
+			(Rt << 18) |
+			(0x10 << 11) |
+			(Ra << 6) |
+			opcode6,0,2);
+		emit_insn(val,0,2);
+	}
+	else {
+		emit_insn(
+			(sz << 27) |
+			(Rt << 18) |
+			((val & 0x1f) << 11) |
 			(Ra << 6) |
 			opcode6,!expand_flag,2);
     }
@@ -1744,10 +1892,32 @@ static void process_csrrw(int op)
 static void process_push(int func)
 {
     int Ra,Rb;
+	int FRa;
+	int sz;
     int64_t val;
 
     Ra = -1;
     Rb = -1;
+    sz = 'q';
+    if (*inptr=='.') {
+        inptr++;
+        if (strchr("sdtqSDTQ",*inptr)) {
+            sz = tolower(*inptr);
+            inptr++;
+        }
+        else
+            printf("Illegal float size.\r\n");
+    }
+	if (sz=='s' || sz=='S')
+		sz = 0;
+	else if (sz=='d' || sz=='D')
+		sz = 1;
+	else if (sz=='t' || sz=='T')
+		sz = 2;
+	else if (sz=='q' || sz=='Q')
+		sz = 3;
+	else
+		sz = 1;
     NextToken();
     if (token=='#') {  // Filter to PUSH
        val = expr();
@@ -1780,7 +1950,21 @@ static void process_push(int func)
         return;
     }
     prevToken();
-    Ra = getRegisterX();
+	FRa = getFPRegister();
+	if (FRa==-1) {
+		prevToken();
+		Ra = getRegisterX();
+	}
+	else {
+		emit_insn(
+			(func << 14) |
+			(sz << 12) |
+			(FRa << 6) |
+			0x19,0,1
+			);
+		prevToken();
+		return;
+	}
     if (Ra == -1) {
 		Ra = 0;
         printf("%d: unknown register.\r\n");
@@ -1954,6 +2138,8 @@ void dsd7_processMaster()
         case tk_and:  process_rrop(0x08); break;
         case tk_andi:  process_riop(0x08); break;
         case tk_asl: process_shift(0x10); break;
+        case tk_bbc: process_bcci(0x3,0); break;
+        case tk_bbs: process_bcci(0x3,1); break;
         case tk_begin_expand: expandedBlock = 1; break;
         case tk_beq: process_bcc(0x12,0); break;
         case tk_beqi: process_bcci(0x2,0); break;
@@ -2008,32 +2194,32 @@ void dsd7_processMaster()
             process_data(dataseg);
             break;
         case tk_dc:  process_db(); break;
-        case tk_dh:  process_db(); break;
+        case tk_dh:  process_dh(); break;
         case tk_dh_htbl:  process_dh_htbl(); break;
         case tk_div: process_rrop(0x38); break;
         case tk_divu: process_rrop(0x39); break;
-        case tk_dw:  process_dh(); break;
+        case tk_dw:  process_dw(); break;
         case tk_end: goto j1;
         case tk_end_expand: expandedBlock = 0; break;
         case tk_endpublic: break;
         case tk_eor: process_rrop(0x0A); break;
         case tk_eori: process_riop(0x0A); break;
         case tk_extern: process_extern(); break;
-        case tk_fabs: process_fprop(0x88); break;
-        case tk_fadd: process_fprrop(0xF4); break;
-        case tk_fcmp: process_fprrop(0xF6); break;
-        case tk_fdiv: process_fprrop(0xF8); break;
+        case tk_fabs: process_fprop(0x05); break;
+        case tk_fadd: process_fprrop(0x04); break;
+        case tk_fcmp: process_fprrop(0x01); break;
+        case tk_fdiv: process_fprrop(0x07); break;
         case tk_fill: process_fill(); break;
-        case tk_fix2flt: process_fprop(0x84); break;
-        case tk_flt2fix: process_fprop(0x85); break;
-        case tk_fmov: process_fprop(0x87); break;
-        case tk_fmul: process_fprrop(0xF7); break;
-        case tk_fnabs: process_fprop(0x89); break;
-        case tk_fneg: process_fprop(0x8A); break;
-        case tk_frm: process_fpstat(0x78); break;
-        case tk_fstat: process_fprdstat(0x86); break;
-        case tk_fsub: process_fprrop(0xF5); break;
-        case tk_ftx: process_fpstat(0x75); break;
+        case tk_fix2flt: process_fprop(0x03); break;
+        case tk_flt2fix: process_fprop(0x02); break;
+        case tk_fmov: process_fprop(0x00); break;
+        case tk_fmul: process_fprrop(0x06); break;
+        case tk_fnabs: process_fprop(0x08); break;
+        case tk_fneg: process_fprop(0x04); break;
+        case tk_frm: process_fpstat(0x14); break;
+//        case tk_fstat: process_fprdstat(0x86); break;
+        case tk_fsub: process_fprrop(0x05); break;
+        case tk_ftx: process_fpstat(0x10); break;
         case tk_gran: process_gran(0x14); break;
 		case tk_hint:	process_hint(); break;
 		case tk_int:	process_int(); break;
@@ -2044,6 +2230,7 @@ void dsd7_processMaster()
         case tk_jmp: process_jal(0x15); break;
 		case tk_ld:	process_ld(); break;
         case tk_ldi: process_ldi(); break;
+		case tk_lf:	 process_lsfloat(0x26); break;
         case tk_lh:  process_load(0x20); break;
         case tk_lhu: process_load(0x21); break;
 //        case tk_lui: process_lui(); break;
@@ -2082,6 +2269,7 @@ void dsd7_processMaster()
 		case tk_ror: process_shift(0x14); break;
 		case tk_rori: process_shifti(0x1C); break;
         case tk_sei: emit_insn(0x18,0,1); break;
+		case tk_sf:	 process_lsfloat(0x27); break;
         //case tk_slt:  process_rrop(0x33,0x02,0x00); break;
         //case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
         //case tk_slti:  process_riop(0x13,0x02); break;

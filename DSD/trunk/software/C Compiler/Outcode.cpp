@@ -90,14 +90,15 @@ struct oplst {
 		{"beq", op_beq}, {"bne", op_bne},
 		{"blt", op_blt}, {"ble", op_ble}, {"bgt", op_bgt}, {"bge", op_bge},
 		{"bltu", op_bltu}, {"bleu", op_bleu}, {"bgtu", op_bgtu}, {"bgeu", op_bgeu},
+		{"bbs", op_bbs}, {"bbc", op_bbc},
 		{"rti", op_rti}, {"rtd", op_rtd},
 		{"lwr", op_lwr}, {"swc", op_swc}, {"cache",op_cache},
 		{"or",op_or}, {"ori",op_ori}, {"iret", op_iret}, {"andi", op_andi},
 		{"xor",op_xor}, {"xori", op_xori}, {"mul",op_mul}, {"muli", op_muli}, {"mului", op_mului}, 
 		
-		{"fmul", op_fdmul}, {"fdiv", op_fddiv}, {"fadd", op_fdadd}, {"fsub", op_fdsub}, {"fcmp", op_fdcmp},
+		{"fmul", op_fdmul}, {"fdiv", op_fddiv}, {"fadd", op_fdadd}, {"fsub", op_fdsub}, {"fcmp", op_fcmp},
 		{"fmul.s", op_fsmul}, {"fdiv.s", op_fsdiv}, {"fadd.s", op_fsadd}, {"fsub.s", op_fssub},
-		{"fs2d", op_fs2d}, {"fi2d", op_i2d}, {"fneg", op_fdneg}, 
+		{"fs2d", op_fs2d}, {"fi2d", op_i2d}, {"fneg", op_fneg}, 
 
 		{"divs",op_divs}, {"swap",op_swap}, {"mod", op_mod}, {"modu", op_modu},
 		{"eq",op_eq}, {"bnei", op_bnei}, {"sei", op_sei},
@@ -137,7 +138,12 @@ struct oplst {
 		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
 		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
 		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri}, {"chk", op_chk }, {"chki",op_chki}, {";", op_rem},
-		{"sfd", op_sfd}, {"lfd", op_lfd}, {"fmov.d", op_fdmov},
+
+		{"fcvtsq", op_fcvtsq},
+		{"sf", op_sf}, {"lf", op_lf},
+		{"sfd", op_sfd}, {"lfd", op_lfd}, {"fmov.d", op_fdmov}, {"fmov", op_fmov},
+		{"fadd", op_fadd}, {"fsub", op_fsub}, {"fmul", op_fmul}, {"fdiv", op_fdiv},
+		{"ftoi", op_ftoi},
 		{"fix2flt", op_fix2flt}, {"mtfp", op_mtfp}, {"flt2fix",op_flt2fix}, {"mffp",op_mffp},
 		{"mv2fix",op_mv2fix}, {"mv2flt", op_mv2flt},
 
@@ -197,9 +203,10 @@ static char *segstr(int op)
 }
 */
 
-void putop(int op)
+void putop(int op, int len)
 {    
 	int     i;
+	char buf[100];
 
     i = 0;
     while( opl[i].s )
@@ -210,7 +217,11 @@ void putop(int op)
 			//if (seg != 0) {
 			//	fprintf(output, "%s:", segstr(op));
 			//}
-			ofs.write(pad(opl[i].s));
+			if (len)
+				sprintf_s(buf, sizeof(buf), "%s.%c", opl[i].s, len);
+			else
+				sprintf_s(buf, sizeof(buf), "%s", opl[i].s);
+			ofs.write(pad(buf));
 			return;
 		}
 		++i;
@@ -230,6 +241,7 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 			ofs.write(buf);
 			break;
 	case en_fcon:
+			goto j1;
 			sprintf_s(buf,sizeof(buf),"0x%llx",offset->f);
 			ofs.write(buf);
 			break;
@@ -253,6 +265,7 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 			}
 			break;
 	case en_labcon:
+j1:
 			sprintf_s(buf, sizeof(buf), "%s_%ld",GetNamespace(),offset->i);
 			ofs.write(buf);
             if (rshift > 0) {
@@ -431,7 +444,7 @@ void put_code(struct ocode *p)
 		{
 			ofs.printf("\t");
 			ofs.printf("%6.6s\t", "");
-			putop(op);
+			putop(op,len);
 		}
 	if (op==op_fnname) {
 		ep = (ENODE *)p->oper1->offset;
@@ -697,6 +710,26 @@ int stringlit(char *s)
   return lp->label;
 }
 
+int quadlit(Float128 *f128)
+{
+	Float128 *lp;
+	lp = quadtab;
+	// First search for the same literal constant and it's label if found.
+	while(lp) {
+		if (Float128::IsEqual(lp,f128))
+			return lp->label;
+		lp = lp->next;
+	}
+	lp = (Float128 *)allocx(sizeof(Float128));
+	lp->label = nextlabel++;
+	Float128::Assign(lp,f128);
+	lp->nmspace = my_strdup(GetNamespace());
+	lp->next = quadtab;
+	quadtab = lp;
+	return lp->label;
+}
+
+
 char *strip_crlf(char *p)
 {
      static char buf[2000];
@@ -719,8 +752,20 @@ void dumplits()
 {
 	char *cp;
 
-  dfs.printf("Enter Dumplits\n");
+  dfs.printf("<Dumplits>\n");
   roseg();
+  nl();
+	align(8);
+  nl();
+	while(quadtab != nullptr) {
+		nl();
+		put_label(quadtab->label,"quad",quadtab->nmspace,'D');
+		ofs.printf("\tdw\t");
+		quadtab->Pack();
+		ofs.printf("%s",quadtab->ToString());
+		outcol += 35;
+		quadtab = quadtab->next;
+	}
   nl();
 	align(1);
   nl();
@@ -735,7 +780,7 @@ void dumplits()
     strtab = strtab->next;
   }
   nl();
-  dfs.printf("Leave Dumplits\n");
+  dfs.printf("</Dumplits>\n");
 }
 
 void nl()

@@ -109,6 +109,7 @@ wire sa, sb;			// sign bit
 wire [EMSB:0] xa, xb;	// exponent bits
 wire [FMSB+1:0] fracta, fractb;
 wire a_dn, b_dn;			// a/b is denormalized
+wire aNan, bNan, aNan1, bNan1;
 wire az, bz;
 wire aInf, bInf, aInf1, bInf1;
 
@@ -121,8 +122,8 @@ wire aInf, bInf, aInf1, bInf1;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf) );
-fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf) );
+fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
 
 // Compute the sum of the exponents.
 // correct the exponent for denormalized operands
@@ -183,8 +184,12 @@ delay2 u7  (.clk(clk), .ce(ce), .i(over), .o(over1) );
 
 // determine when a NaN is output
 wire qNaNOut;
+wire [WID-1:0] a1,b1;
 delay2 u5 (.clk(clk), .ce(ce), .i((aInf&bz)|(bInf&az)), .o(qNaNOut) );
-
+delay2 u14 (.clk(clk), .ce(ce), .i(aNan), .o(aNan1) );
+delay2 u15 (.clk(clk), .ce(ce), .i(bNan), .o(bNan1) );
+delay2 #(WID) u16 (.clk(clk), .ce(ce), .i(a), .o(a1) );
+delay2 #(WID) u17 (.clk(clk), .ce(ce), .i(b), .o(b1) );
 
 // -----------------------------------------------------------
 // Second clock
@@ -196,7 +201,7 @@ delay3 u8 (.clk(clk), .ce(ce), .i(sa ^ sb), .o(so1) );// two clock delay!
 
 always @(posedge clk)
 	if (ce)
-		casex({qNaNOut,aInf1,bInf1,over1,under1})
+		casex({qNaNOut|aNan1|bNan1,aInf1,bInf1,over1,under1})
 		5'b1xxxx:	xo1 = infXp;	// qNaN - infinity * zero
 		5'b01xxx:	xo1 = infXp;	// 'a' infinite
 		5'b001xx:	xo1 = infXp;	// 'b' infinite
@@ -207,11 +212,13 @@ always @(posedge clk)
 
 always @(posedge clk)
 	if (ce)
-		casex({qNaNOut,aInf1,bInf1,over1})
-		4'b1xxx:	mo1 = {1'b0,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
-		4'b01xx:	mo1 = 0;	// mul inf's
-		4'b001x:	mo1 = 0;	// mul inf's
-		4'b0001:	mo1 = 0;	// mul overflow
+		casex({aNan1,bNan1,qNaNOut,aInf1,bInf1,over1})
+		6'b1xxxxx:  mo1 = {1'b0,a1[FMSB:0],{FMSB+1{1'b0}}};
+        6'bx1xxxx:  mo1 = {1'b0,b1[FMSB:0],{FMSB+1{1'b0}}};
+		6'bxx1xxx:	mo1 = {1'b0,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
+		6'b0001xx:	mo1 = 0;	// mul inf's
+		6'b00001x:	mo1 = 0;	// mul inf's
+		6'b000001:	mo1 = 0;	// mul overflow
 		default:	mo1 = fracto;
 		endcase
 
