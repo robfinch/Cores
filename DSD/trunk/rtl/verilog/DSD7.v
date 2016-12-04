@@ -35,6 +35,7 @@
 `define VBA_VECT    32'hFFFFFF00
 `define RST_VECT    32'hFFFC0000
 
+`define FBcc    6'h01
 `define BccI    6'h02
 `define BccUI   6'h03
 `define ADDI    6'h04
@@ -45,6 +46,7 @@
 `define XORI    6'h0A
 `define ORI32   6'h0B
 `define R2      6'h0C
+`define CHKI    6'h0E
 `define CSRI    6'h0F
 `define CALL    6'h10
 `define JAL     6'h10
@@ -66,6 +68,8 @@
 `define LHU     6'h21
 `define LW      6'h22
 `define LWR     6'h23
+`define INC     6'h24
+`define LEA     6'h25
 `define LFx     6'h26
 `define SFx     6'h27
 `define SH      6'h28
@@ -117,7 +121,10 @@
 `define LHUX    6'h21
 `define LWX     6'h22
 `define LWRX    6'h23
-`define INC     6'h24
+`define INCX    6'h24
+`define LEAX    6'h25
+`define LFxX    6'h26
+`define SFxX    6'h27
 `define SHX     6'h28
 `define SWX     6'h29
 `define SWCX    6'h2A
@@ -209,8 +216,13 @@
 `define CSR_CONFIG  12'hFF0
 `define CSR_CAP     12'hFFE
 
+`define FLT_CHK     9'd487
 `define FLT_STACK   9'd504
 `define FLT_DBE     9'd508
+
+`define regXLR      5'd28
+`define regBP       5'd30
+`define regSP       5'd31
 
 module DSD7(hartid_i, rst_i, clk_i, irq_i, icause_i,
     cyc_o, stb_o,
@@ -259,6 +271,7 @@ parameter word = 2'b11;
 // State machine states
 parameter RUN = 6'd1;
 parameter INC1 = 6'd2;
+parameter ICACHE_RST1 = 2'd3;
 parameter DIV1 = 6'd5;
 parameter LOAD2A = 6'd9;
 parameter LOAD1 = 6'd10;
@@ -291,7 +304,9 @@ parameter FLOAT3 = 6'd42;
 integer n;
 reg [5:0] state;
 reg [127:0] stname;         // pretty name for state (simulation)
+reg [63:0] imne,dmne,xmne;
 reg [7:0] fpcnt;
+wire advanceEX;
 wire advanceRF;
 wire advanceIF;
 reg [1:0] ol = 2'b00;       // operating level (machine only)
@@ -301,7 +316,8 @@ reg [63:0] insn,iinsn;
 reg [63:0] ir,xir,mir,fir;
 reg [15:0] fault_insn;
 reg stuff_fault;
-reg ii32,ii5,ii5a;
+reg ii32,ii5a;
+wire ii5;
 reg i32,i5,i5a;
 wire [5:0] iopcode = iinsn[5:0];
 wire [5:0] ifunct = iinsn[31:26];
@@ -318,14 +334,15 @@ wire [5:0] xfunct = xir[31:26];
 // im1 | r29 | r2 | r1 | pc32
 reg [128:0] istack[0:15];
 reg [3:0] isp;
-reg [31:0] r1,r2,r29;
+reg [31:0] r1,r2,r28;
 reg [31:0] regfile [0:31];
 reg [31:0] sp;
 reg [31:0] rfoa,rfob,rfoc;
 reg [31:0] a,b,c,imm,ea,xb;
 reg [31:0] res,lres,lres1,res2;
-wire takb;
-reg [31:0] br_disp;
+reg [127:0] fpa1,fpb;
+wire takb,takfb;
+reg [31:0] br_disp,fbr_disp;
 wire [31:0] logic_o, shift_o;
 reg [1:0] mem_size;
 reg upd_fp;
@@ -346,8 +363,6 @@ reg [31:0] scratch;
 reg [31:0] cap = {CAP_MULDIV,CAP_ROTATES,CAP_LS_NDX};
 reg [31:0] pcr;
 reg [31:0] mconfig;
-wire [4:0] regSP = mconfig[4:0];
-wire [4:0] regBP = mconfig[12:8];
 reg [31:0] sbl, sbu;
 reg [127:0] fphold;
 
@@ -362,7 +377,6 @@ initial begin
         regfile[n] <= 0;
     r1 <= 0;
     r2 <= 0;
-    r29 <= 0;
     sp <= 0;
     xRt2 <= 1'b0;   // If this isn't defined for sim the sp will be XXXXX
     xRt <= 32'h0;
@@ -384,8 +398,8 @@ begin
     xRt:    fwd_mux = res;
     5'd1:   fwd_mux = r1;
     5'd2:   fwd_mux = r2;
-    5'd29:  fwd_mux = r29;
-    regSP:  if (xRt2)
+    5'd28:  fwd_mux = r28;
+    5'd31:  if (xRt2)
                 fwd_mux = res2;
             else
                 fwd_mux = sp;
@@ -409,6 +423,7 @@ case(xr[5:0])
     `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU,
     `LHX,`LHUX,`LWX,`LWRX,`SHX,`SWX,`SWCX:
     xIsMC = `TRUE;
+    default:    xIsMC = `FALSE;
     endcase
 default:    xIsMC = `FALSE;
 endcase
@@ -432,6 +447,16 @@ DSD7_BranchEval ubeval1
     .imm(imm),
     .takb(takb)
 );
+
+`ifdef CAP_FP
+DSD7_FPBranchEval ufbeval
+(
+    .xir(xir[31:0]),
+    .a(fpa1),
+    .b(fpb),
+    .takb(takfb)
+);
+`endif
 
 DSD7_logic ulog1
 (
@@ -466,10 +491,10 @@ reg [31:0] aa, bb;
 // 6 stage pipeline
 DSD7_multiplier u2
 (
-  .clk(clk_i),
-  .a(aa),
-  .b(bb),
-  .p(mul_prod1)
+    .clk(clk_i),
+    .a(aa),
+    .b(bb),
+    .p(mul_prod1)
 );
 
 wire [31:0] qo, ro;
@@ -510,6 +535,7 @@ begin
     `R2:
         case(xfunct)
         `ADD:   res = a + b;
+        `LEAX:  res = a + b;
         `SUB:   res = a - b;
         `CMP:   res = $signed(a) < $signed(b) ? -1 : a==b ? 0 : 1;
         `CMPU:  res = a < b ? -1 : a==b ? 0 : 1;
@@ -522,38 +548,52 @@ begin
         `SHL:   res = shift_o;
         `SHR:   res = shift_o;
         `ASR:   res = shift_o;
-        `ROL:   res = CAP_ROTATES ? shift_o : 32'hDEADDEAD;
-        `ROR:   res = CAP_ROTATES ? shift_o : 32'hDEADDEAD;
+        `ROL:   res = (CAP_ROTATES ? shift_o : 32'hDEADDEAD);
+        `ROR:   res = (CAP_ROTATES ? shift_o : 32'hDEADDEAD);
         `SHLI:  res = shift_o;
         `SHRI:  res = shift_o;
         `ASRI:  res = shift_o;
-        `ROLI:  res = CAP_ROTATES ? shift_o : 32'hDEADEAD;
-        `RORI:  res = CAP_ROTATES ? shift_o : 32'hDEADEAD;
+        `ROLI:  res = (CAP_ROTATES ? shift_o : 32'hDEADEAD);
+        `RORI:  res = (CAP_ROTATES ? shift_o : 32'hDEADEAD);
         `SXB:   res = {{24{a[7]}},a[7:0]};
         `SXH:   res = {{16{a[15]}},a[15:0]};
         `R2CSR,`R2CSRI: read_csr(b[13:0],res);
-        `MUL:   res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
-        `MULU:  res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
-        `MULSU: res = CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD;
-        `MULH:  res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
-        `MULUH: res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
-        `MULSUH:res = CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD;
-        `DIV:   res = CAP_MULDIV ? qo : 32'hDEADDEAD;
-        `DIVU:  res = CAP_MULDIV ? qo : 32'hDEADDEAD;
-        `DIVSU: res = CAP_MULDIV ? qo : 32'hDEADDEAD;
-        `REM:   res = CAP_MULDIV ? ro : 32'hDEADDEAD;
-        `REMU:  res = CAP_MULDIV ? ro : 32'hDEADDEAD;
-        `REMSU: res = CAP_MULDIV ? ro : 32'hDEADDEAD;
-        `LHX,`LHUX,`LWX,`LWRX:  res = CAP_LS_NDX ? lres : 32'hDEADDEAD;
+        `MUL:   res = (CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD);
+        `MULU:  res = (CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD);
+        `MULSU: res = (CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD);
+        `MULH:  res = (CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD);
+        `MULUH: res = (CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD);
+        `MULSUH:res = (CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD);
+        `DIV:   res = (CAP_MULDIV ? qo : 32'hDEADDEAD);
+        `DIVU:  res = (CAP_MULDIV ? qo : 32'hDEADDEAD);
+        `DIVSU: res = (CAP_MULDIV ? qo : 32'hDEADDEAD);
+        `REM:   res = (CAP_MULDIV ? ro : 32'hDEADDEAD);
+        `REMU:  res = (CAP_MULDIV ? ro : 32'hDEADDEAD);
+        `REMSU: res = (CAP_MULDIV ? ro : 32'hDEADDEAD);
+        `LHX,`LHUX,`LWX,`LWRX:  res = (CAP_LS_NDX ? lres : 32'hDEADDEAD);
         default:    res = 32'hDEADDEAD;
         endcase
     `ADDI:  res = a + imm;
-    `CMPI:  res = $signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1;
-    `CMPUI: res = a < imm ? -1 : a==imm ? 0 : 1;
+    `LEA:   res = a + imm;
+    `CHKI:  res = (a >= b) && (a < imm);
+    `CMPI:  res = ($signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1);
+    `CMPUI: res = (a < imm ? -1 : a==imm ? 0 : 1);
     `ANDI:  res = logic_o;
     `ORI:   res = logic_o;
     `ORI32: res = logic_o;
     `XORI:  res = logic_o;
+    `MULI:   res = (CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD);
+    `MULUI:  res = (CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD);
+    `MULSUI: res = (CAP_MULDIV ? mul_prod[31:0] : 32'hDEADDEAD);
+    `MULHI:  res = (CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD);
+    `MULUHI: res = (CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD);
+    `MULSUHI:res = (CAP_MULDIV ? mul_prod[63:32] : 32'hDEADDEAD);
+    `DIVI:   res = (CAP_MULDIV ? qo : 32'hDEADDEAD);
+    `DIVUI:  res = (CAP_MULDIV ? qo : 32'hDEADDEAD);
+    `DIVSUI: res = (CAP_MULDIV ? qo : 32'hDEADDEAD);
+    `REMI:   res = (CAP_MULDIV ? ro : 32'hDEADDEAD);
+    `REMUI:  res = (CAP_MULDIV ? ro : 32'hDEADDEAD);
+    `REMSUI: res = (CAP_MULDIV ? ro : 32'hDEADDEAD);
     `JMP:       res = xpc + 32'd3;
     `JMP16:     res = xpc + 32'd2;
     `MOV:   res = a;
@@ -606,7 +646,6 @@ always @*
 reg xldfp;
 reg [127:0] fres;
 reg [127:0] fp_in,fp_out;
-reg [127:0] fpa1,fpb;
 reg [127:0] fpregs [0:63];
 wire [5:0] FRa = ir[11:6];
 wire [5:0] FRb = opcode==`SFx ? ir[23:18] : (opcode==`MEM) ? ir[11:6] : ir[17:12];
@@ -630,11 +669,8 @@ if (advanceRF && (opcode==`FLOAT || opcode==`SFx || (opcode==`MEM &&
     endcase
 end
 always @(posedge clk_i)
-    if (upd_fp) begin
-        if (xFRt==6'd63)
-            fphold <= fres;
+    if (upd_fp)
         fpregs[xFRt] <= fres;
-    end
 
 wire [127:0] fpa = 
     (fir[5:0]==`FLOAT && fir[31:29]==3'b00 &&
@@ -944,7 +980,7 @@ always @(posedge clk_i)
 `else
     if (rdy_i) begin
 `endif
-    if (isICacheReset|isICacheLoad) begin
+    if ((isICacheReset|isICacheLoad) && ack_i) begin
         case(adr_o[2:1])
         2'd0: cache_mem[adr_o[10:3]][31:0] <= dat_i;
         2'd1: cache_mem[adr_o[10:3]][63:32] <= dat_i;
@@ -975,7 +1011,7 @@ endcase
 always @(posedge clk_i)
     // Set the tag only when the last 32 bits of the instruction line is loaded.
     // Prevents the tag from going valid until the entire line is present.
-    if (adr_o[2:1]==2'b11) begin
+    if (adr_o[2:1]==2'b11 && ack_i) begin
         if (isICacheReset|isICacheLoad)
             tag_mem[adr_o[10:3]] <= adr_o;
     end
@@ -985,14 +1021,65 @@ always @(posedge clk_i)
 // cache lines. Hence there are four pairs of comparators.
 wire ihit1 = pc[31:11]==tag_mem[pc[10:3]][31:11];
 wire ihit2 = pcp8[31:11]==tag_mem[pcp8[10:3]][31:11];
-wire ihit = (ihit1 && pc[2:0]==3'b000) || (ihit1 && ihit2);
+wire ihit = (ihit1 && ihit2);
 
 `endif
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-assign advanceRF = !(xIsMC(xir) && !xinv);
-assign advanceIF = advanceRF & (ihit && !isICacheLoad);
+assign advanceEX = !xIsMC(xir);
+assign advanceRF = advanceEX | xinv;
+assign advanceIF = (advanceRF | dinv) & (ihit && !isICacheLoad);
+
+// This combo logic moved out to here as the simulator didn't like all the
+// blocking assignments.
+ 
+reg [3:0] fnPCInc;
+always @(iinsn)
+case(iinsn[5:0])
+`LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`INC,`LEA,
+`MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
+`DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
+`ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`CHKI,
+`PEA:
+    fnPCInc <= iinsn[31:26]==6'h20 ? 32'd4 : 32'd2;
+`FBcc:  fnPCInc <= 32'd2;
+`Bcc:   fnPCInc <= 32'd2;
+`BccU:  fnPCInc <= 32'd2;
+`BccI:  fnPCInc <= iinsn[15:11]==5'h10 ? 32'd4 : 32'd2;
+`BccUI:  fnPCInc <= iinsn[15:11]==5'h10 ? 32'd4 : 32'd2;
+`LFx,`SFx:  fnPCInc <= iinsn[15:11]==5'h10 ? 32'd4 : 32'd2;
+`NOP,`CINSN:
+    fnPCInc <= 32'd1;
+`CSRI:  fnPCInc <= iinsn[10:6]==5'h10 ? 32'd4 : 32'd2;
+`CSR:   fnPCInc <= 32'd2;
+`R2:
+    case(iinsn[31:26])
+    `R2CSRI:  fnPCInc <= iinsn[10:6]==5'h10 ? 32'd4 : 32'd2;
+    default:    fnPCInc <= 32'd2;
+    endcase
+`MEM:
+    case(iinsn[15:11])
+    `RET,`PUSHI5:   fnPCInc <= iinsn[10:6]==5'h10 ? 32'd4 : 32'd1;
+    default:    fnPCInc <= 32'd1;
+    endcase
+`JMP,`CALL,`ORI32: fnPCInc <= 32'd3;
+`JMP16,`CALL16: fnPCInc <= 32'd2;
+`CALL0: fnPCInc <= 32'd1;
+`FLOAT: fnPCInc <= 32'd2;
+default:    fnPCInc <= 32'd1;
+endcase
+
+
+// A stuffed fault will have occurred earlier than a pending IRQ
+// hence takes precedence.
+always@*
+    if (stuff_fault)
+        iinsn <= {16'd0,fault_insn};
+    else if (irq_i & ~im & gie)
+        iinsn <= {17'd0,icause_i,`INT};
+    else
+        iinsn <= insn[5:0]==`CINSN ? cinsn : insn;
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -1030,15 +1117,20 @@ upd_fp <= `FALSE;
 upd_rf <= `FALSE;
 tick <= tick + 32'd1;
 update_regfile();
+if (upd_fp) begin
+    if (xFRt==6'd63)
+        fphold <= fres;
+end
 
 case(state)
 ICACHE_RST:
 `ifdef WISHBONE
     if (ack_i) begin
+        stb_o <= `FALSE;
+        next_state(ICACHE_RST1);
 `else
     if (rdy_i) begin
 `endif
-        adr_o <= adr_o + 32'd2;
         if (adr_o[10:1]==10'h3FF) begin
             isICacheReset <= `FALSE;
             cyc_o <= `FALSE;
@@ -1048,6 +1140,12 @@ ICACHE_RST:
             next_state(RUN);
         end
     end
+ICACHE_RST1:
+    begin
+        stb_o <= `TRUE;
+        adr_o <= adr_o + 32'd2;
+        next_state(ICACHE_RST);
+    end
 RUN:
 begin
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1056,37 +1154,27 @@ begin
     // on the critical path.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceIF) begin
-        // A stuffed fault will have occurred earlier than a pending IRQ
-        // hence takes precedence.
-        if (stuff_fault) begin
-            iinsn = {16'd0,fault_insn};
+        if (stuff_fault)
             stuff_fault <= `FALSE;
-        end
-        else if (irq_i & ~im & gie)
-            iinsn = {17'd0,icause_i,`INT};
-        else
-            iinsn = insn[5:0]==`CINSN ? cinsn : insn;
-        ii32 = iinsn[31:26]==6'h20;
-        ii5 = iinsn[15:11]==5'h10;
-        ii5a = iinsn[10:6]==5'h10;
-        iRa = iinsn[10:6]; 
+
+        disassem(iinsn,imne);
         if (iinsn[5:0]==`INT) begin
-            Ra <= 5'd1;
-            Rb <= 5'd2;
-            Rc <= 5'd29;
+            Ra <= 5'd31;
+            Rb <= 5'd1;
+            Rc <= 5'd2;
         end
         else if (iinsn[5:0]==`PEA || iinsn[5:0]==`CALL || iinsn[5:0]==`CALL16 || iinsn[5:0]==`CALL0 ||
             (iinsn[5:0]==`MEM && 
-                (iinsn[15:11]==`RET || iinsn[15:11]==`PUSH || insn[15:11]==`POP ||
-                insn[15:11]==`FPUSHQ0 || insn[15:11]==`FPUSHQ1 || insn[15:11]==`FPOPQ0 || insn[15:11]==`FPOPQ1 ||
-                insn[15:11]==`FPUSHS0 || insn[15:11]==`FPUSHS1 || insn[15:11]==`FPOPS0 || insn[15:11]==`FPOPS1
+                (iinsn[15:11]==`RET || iinsn[15:11]==`PUSH || iinsn[15:11]==`POP ||
+                iinsn[15:11]==`FPUSHQ0 || iinsn[15:11]==`FPUSHQ1 || iinsn[15:11]==`FPOPQ0 || iinsn[15:11]==`FPOPQ1 ||
+                iinsn[15:11]==`FPUSHS0 || iinsn[15:11]==`FPUSHS1 || iinsn[15:11]==`FPOPS0 || iinsn[15:11]==`FPOPS1
                 ))) begin
-            Ra <= regSP;
+            Ra <= 5'd31;
             Rb <= iinsn[10:6];
             Rc <= iinsn[15:11];
         end
         else begin
-            Ra <= iRa;
+            Ra <= iinsn[10:6];
             Rb <= iinsn[15:11];
             Rc <= iinsn[20:16];
         end
@@ -1095,43 +1183,6 @@ begin
 //        if ((irq_i & ~im & gie) || stuff_fault)
 //            pc_inc = 32'd1;
 //        else
-        case(insn[5:0])
-        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`INC,
-        `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
-        `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
-        `PEA:
-            pc_inc = ii32 ? 32'd4 : 32'd2;
-        `Bcc:   pc_inc = 32'd2;
-        `BccU:  pc_inc = 32'd2;
-        `BccI:  pc_inc = ii5 ? 32'd4 : 32'd2;
-        `BccUI:  pc_inc = ii5 ? 32'd4 : 32'd2;
-        `LFx,`SFx:  pc_inc = ii5 ? 32'd4 : 32'd2;
-        `NOP,`CINSN:
-            pc_inc = 32'd1;
-        `CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
-        `CSR:   pc_inc = 32'd2;
-        `R2:
-            case(insn[31:26])
-            `R2CSRI:  pc_inc = ii5a ? 32'd4 : 32'd2;
-            default:    pc_inc = 32'd1;
-            endcase
-        `MEM:
-            case(insn[15:11])
-            `RET,`PUSHI5:   pc_inc = ii5a ? 32'd4 : 32'd1;
-            default:    pc_inc = 32'd1;
-            endcase
-        `JMP,`CALL,`ORI32: pc_inc = 32'd3;
-        `JMP16,`CALL16: pc_inc = 32'd2;
-        `CALL0: pc_inc = 32'd1;
-        `FLOAT: pc_inc = 32'd2;
-        default:    pc_inc = 32'd1;
-        endcase
-        // Can't execute jumps in the IF stage.
-        // Suppose the following the instruction is an invalid jump
-        // This might go to an invalid address.
-        // Have to test for iinsn[10:6] for jumps and
-        // iinsn[15:11] for calls.
         /*
         if (iinsn[10:6]==5'd0)
             case(iopcode)
@@ -1145,23 +1196,24 @@ begin
             endcase
         else
         */
-            pc <= pc + pc_inc;
-        i32 <= ii32;
-        i5 <= ii5;
-        i5a <= ii5a;
+        pc <= pc + fnPCInc;
+        i32 <= iinsn[31:26]==6'h20;
+        i5 <= iinsn[15:11]==5'h10;
+        i5a <= iinsn[10:6]==5'h10;
         ir <= iinsn;
         dinv <= `FALSE;
         dpc <= pc;
     end
     else begin
-        if (!ihit) begin
-            icmf <= {ihit1,ihit2};
-            next_state(LOAD_ICACHE);
-        end
         if (advanceRF) begin
             inv_ir();
             dpc <= pc;
             pc <= pc;
+        end
+        if (!ihit) begin
+            icmf <= {ihit1,ihit2};
+            pc <= pc;
+            next_state(LOAD_ICACHE);
         end
     end
 
@@ -1169,6 +1221,7 @@ begin
     // Register fetch stage
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceRF) begin
+        disassem(ir,dmne);
         xinv <= dinv;
         xir <= ir;
         xpc <= dpc;
@@ -1180,17 +1233,18 @@ begin
         case({dinv,opcode})
         `R2:
             case(funct)
+            `LEAX,
             `ADD,`SUB,`CMP,`CMPU,
             `AND,`OR,`XOR,`NAND,`NOR,`XNOR,
             `SHL,`SHR,`ASR,`ROL,`ROR,
             `SHLI,`SHRI,`ASRI,`ROLI,`RORI:  upd_rf <= `TRUE;
-            `R2CSRI:    upd_rf <= `TRUE;
+            `R2CSR,`R2CSRI:    upd_rf <= `TRUE;
             endcase
 //        `MEM:   upd_rf <= `TRUE;
         `MOV,
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32:
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32,`LEA:
             upd_rf <= `TRUE;
-        `CSRI:  upd_rf <= `TRUE;
+        `CSR,`CSRI:  upd_rf <= `TRUE;
         `JMP,`JMP16:    upd_rf <= `TRUE;
         `FLOAT:
             case(ir[31:29])
@@ -1208,8 +1262,8 @@ begin
         case(opcode)
         `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI,
         `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI,
-        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,
-        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,`INC:
+        `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`CHKI,
+        `LH,`LHU,`LW,`LWR,`SH,`SW,`SWC,`PEA,`INC,`LEA:
             imm <= i32 ? ir[63:32] : {{16{ir[31]}},ir[31:16]};
         `BccI,`BccUI:  imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
         `LFx,`SFx:     imm <= i5 ? ir[63:32] : {{27{ir[15]}},ir[15:11]};
@@ -1234,6 +1288,7 @@ begin
         // Branches may also compare against an immediate so the displacement
         // has to be determined separately. 
         br_disp <= {{19{ir[31]}},ir[31:19]};
+        fbr_disp <= {{23{ir[31]}},ir[31:29],ir[26:21]};
         // Needed for CSR instructions
         xRa <= Ra;
         xRb <= Rb;  // needed for calls/jumps
@@ -1241,70 +1296,48 @@ begin
         xRt <= 5'd0;
         xRt2 <= 1'b0;
         xFRt <= 6'd0;
+        if (!dinv)
         case(opcode)
         `R2:
             case(funct)
+            `R2CSR,`R2CSRI,
             `ADD,`SUB,`CMP,`CMPU,
             `AND,`OR,`XOR,`NAND,`NOR,`XNOR,
             `SHL,`SHR,`ASR,`ROL,`ROR,
             `SHLI,`SHRI,`ASRI,`ROLI,`RORI,
-            `LHX,`LHUX,`LWX,`LWRX:
+            `LEAX:
                 xRt <= ir[20:16];
             default:
                 xRt <= 5'd0;
             endcase
-        `CALL,`CALL16,`CALL0:
-            xRt <= regSP;
-        `MEM:
-            case(ir[15:11])
-            `RET,`PUSHI5,`PUSH:  xRt <= regSP;
-            `POP:   begin xRt <= ir[10:6]; xRt2 <= 1'b1; end
-`ifdef CAP_FP
-            `FPUSHS0,`FPUSHS1,
-            `FPUSHQ0,`FPUSHQ1:  xRt <= regSP;
-            `FPOPS0,`FPOPS1,
-            `FPOPQ0,`FPOPQ1:  begin xFRt <= ir[11:6]; xRt2 <= 1'b1; end
-`endif
-            default:    xRt <= 5'd0;
-            endcase
-        `MOV,
+        `MOV,`CSR,`CSRI,
         `ADDI,`CMPI,`CMPUI,`ANDI,`ORI,`XORI,`ORI32,
-        `LH,`LHU,`LW,`LWR:
+        `LEA:
             xRt <= ir[15:11];
-        `PEA:
-            xRt <= regSP;
         `JMP,`JMP16:    xRt <= ir[15:11];
-`ifdef CAP_FP
-        `FLOAT:
-            case(ir[31:29])
-            3'd0:
-                case(ir[17:12])
-                `FABS,`FMAN,`FMOV,`FNABS,`FNEG,`FSIGN,`FTOI,`ITOF:
-                    xFRt <= ir[23:18];
-                default: xFRt <= 6'd0;
-                endcase
-            `FCMP:  xRt <= ir[22:18];
-            `FADD:  xFRt <= ir[23:18];
-            `FSUB:  xFRt <= ir[23:18];
-            `FMUL:  xFRt <= ir[23:18];
-            `FDIV:  xFRt <= ir[23:18];
-            default: xFRt <= 6'd0;
-            endcase
-        `LFx:   xFRt <= ir[23:18];
-`endif
         default:
             xRt <= 5'd0;
         endcase
     end
-//    else
-//        inv_xir();
+    else if (advanceEX)
+        inv_xir();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Execute stage
     // If the execute stage has been invalidated it doesn't do anything. 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (!xinv) begin   // if (advanceEX) // always true
+    if (!xinv) begin
+        disassem(xir,xmne);
         case(xopcode)
+        // CHK should not be directly preceeded by a load of the XLR (reg 28)
+        // because it doesn't respect results forwarding. In the case of 
+        // compiler generated code this should be okay.
+        `CHKI:
+            if (~res[0]) begin
+                r1 <= 32'd487;  // 487 = bounds check
+                r2 <= 32'd24;   // type: exception
+                ex_branch(r28);
+            end
  
         // INT uses ex_branch() to flush the pipeline of extra INT instructions
         // which stream into core until interrupts are masked here.
@@ -1318,12 +1351,12 @@ begin
             end
         
         `JMP,`JMP16:
-                if (xRa!=5'd0) begin
-                    if (xRa==regSP)
+                //if (xRa!=5'd0) begin
+                    if (xRa==5'd31)
                        ex_branch(xpc + imm);
                     else
                         ex_branch(a + imm);
-                end
+                //end
         `CALL:      ex_call(32'd3);
         `CALL16:    ex_call(32'd2);
         `CALL0:     ex_call(32'd1);
@@ -1332,6 +1365,9 @@ begin
         `BccI,`BccUI:
             if (takb)
                 ex_branch(xpc + br_disp);
+        `FBcc:
+            if (takfb)
+                ex_branch(xpc + fbr_disp);
 
         `R2:
             case(xfunct)
@@ -1367,8 +1403,8 @@ begin
                     begin
                         mem_size <= half;
                         ea <= a + b;
-                        xb <= b;
-                        state <= STORE1;
+                        xb <= c;
+                        next_state(STORE1);
                     end
                 end
             `SWX,`SWCX:
@@ -1377,7 +1413,7 @@ begin
                         mem_size <= word;
                         ea <= a + b;
                         xb <= c;
-                        state <= STORE1;
+                        next_state(STORE1);
                     end
                 end
             `R2CSR:   if (xRa != 5'd0)
@@ -1393,9 +1429,9 @@ begin
                 ex_branch(itos[31:0]);
                 // r1,r2, and r3 can be updated here like this only because the
                 // pipeline is being flushed.
-                r1 <= itos[63:32];
-                r2 <= itos[95:64];
-                r29 <= itos[127:96];
+                sp <= {itos[63:33],1'b0};
+                r1 <= itos[95:64];
+                r2 <= itos[127:96];
                 im <= itos[128];
                 msema[0] <= 1'b0;
                 msema[xRa] <= 1'b0;
@@ -1522,14 +1558,14 @@ begin
                 mem_size <= half;
                 ea <= a + imm;
                 xb <= b;
-                state <= STORE1;
+                next_state(STORE1);
             end
         `SW,`SWC:
             begin
                 mem_size <= word;
                 ea <= a + imm;
                 xb <= b;
-                state <= STORE1;
+                next_state(STORE1);
             end
 `ifdef CAP_FP
         `SFx:
@@ -1603,17 +1639,49 @@ MUL5:   next_state(MUL9);
 MUL9:
     begin
         mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;
+        case(xopcode)
+        `MULI,`MULUI,`MULSUI,`MULHI,`MULUHI,`MULSUHI:
+            xRt <= xir[15:11];
+        `R2:
+            case(xfunct)
+            `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH:
+                xRt <= xir[20:16];
+            endcase
+        endcase
         upd_rf <= `TRUE;
         next_state(INVnRUN);
     end
 DIV1:
     if (dvd_done) begin
+        case(xopcode)
+        `DIVI,`DIVUI,`DIVSUI,`REMI,`REMUI,`REMSUI:
+            xRt <= xir[15:11];
+        `R2:
+            case(xfunct)
+            `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU:
+                xRt <= xir[20:16];
+            endcase
+        endcase
         upd_rf <= `TRUE;
         next_state(INVnRUN);
     end
 
 FLOAT1:
     if (fpdone) begin
+        case(xir[31:29])
+        3'd0:
+            case(xir[17:12])
+            `FABS,`FMAN,`FMOV,`FNABS,`FNEG,`FSIGN,`FTOI,`ITOF:
+            xFRt <= xir[23:18];
+            default: xFRt <= 6'd0;
+            endcase
+        `FCMP:  xRt <= xir[22:18];
+        `FADD:  xFRt <= xir[23:18];
+        `FSUB:  xFRt <= xir[23:18];
+        `FMUL:  xFRt <= xir[23:18];
+        `FDIV:  xFRt <= xir[23:18];
+        default: xFRt <= 6'd0;
+        endcase
         upd_fp <= `TRUE;
         inv_xir();
         next_state(RUN);
@@ -1621,7 +1689,7 @@ FLOAT1:
 
 LOAD1:
     begin
-        if ((xRa==regSP || xRa==regBP)&&(ea < sbl || ea > sbu))
+        if ((xRa==5'd31 || xRa==5'd30)&&(ea < sbl || ea > sbu))
             ex_fault(`FLT_STACK,0);
         else begin
             if (xopcode==`INC)
@@ -1642,6 +1710,7 @@ LOAD2:
     end
 `ifdef WISHBONE
     else if (ack_i) begin
+        stb_o <= `FALSE;
 `else
     else if (rdy_i) begin
 `endif
@@ -1654,6 +1723,7 @@ LOAD2:
             stb_o <= `FALSE;
             sel_o <= 2'b00;
             lres <= {{16{lres1[15]}},lres1[15:0]};
+            xRt <= xir[15:11];
             upd_rf <= `TRUE;
             next_state(INVnRUN);
             end
@@ -1664,6 +1734,7 @@ LOAD2:
             stb_o <= `FALSE;
             sel_o <= 2'b00;
             lres <= {16'd0,lres1[15:0]};
+            xRt <= xir[15:11];
             upd_rf <= `TRUE;
             next_state(INVnRUN);
             end
@@ -1688,6 +1759,7 @@ LOAD2:
                 stb_o <= `FALSE;
                 vda_o <= `FALSE;
                 sel_o <= 8'h00;
+                xRt <= xir[15:11];
                 upd_rf <= `TRUE;
                 next_state(INVnRUN);
                 end 
@@ -1730,6 +1802,7 @@ LOAD2:
                                 cyc_o <= `FALSE;
                                 vda_o <= `FALSE;
                                 sel_o <= 2'b00;
+                                xFRt <= xir[23:18];
                                 upd_fp <= `TRUE;
                                 next_state(INVnRUN);
                             end
@@ -1741,6 +1814,7 @@ LOAD2:
                         cyc_o <= `FALSE;
                         vda_o <= `FALSE;
                         sel_o <= 2'b00;
+                        xFRt <= xir[23:18];
                         upd_fp <= `TRUE;
                         end
                 endcase
@@ -1764,6 +1838,7 @@ LOAD2:
                         cyc_o <= `FALSE;
                         vda_o <= `FALSE;
                         sel_o <= 2'b00;
+                        xFRt <= xir[23:18];
                         upd_fp <= `TRUE;
                         end
                 endcase
@@ -1779,6 +1854,8 @@ LOAD2:
                     vda_o <= `FALSE;
                     sel_o <= 2'b00;
                     fp_in[31:0] <= dat_i;
+                    xFRt <= xir[11:6];
+                    xRt2 <= 1'b1;
                     upd_fp <= `TRUE;
                     next_state(INVnRUN);
                 end
@@ -1799,6 +1876,8 @@ LOAD2:
                             cyc_o <= `FALSE;
                             vda_o <= `FALSE;
                             sel_o <= 2'b00;
+                            xFRt <= xir[11:6];
+                            xRt2 <= 1'b1;
                             upd_rf <= `TRUE;
                             upd_fp <= `TRUE;
                             end
@@ -1807,18 +1886,69 @@ LOAD2:
                     ea <= ea + 32'd2;
                 end
             
-            `RET,`POP:
+            `POP:
+                begin  
+                    $display("Popped %h from %h", lres1, adr_o);
+                    lres <= lres1;
+                    cyc_o <= `FALSE;
+                    stb_o <= `FALSE;
+                    vda_o <= `FALSE;
+                    sel_o <= 8'h00;
+                    xRt <= xir[10:6];
+                    xRt2 <= 1'b1;
+                    upd_rf <= `TRUE;
+                    next_state(INVnRUN);
+                end 
+            `RET:
+                begin  
+                    $display("Loaded %h from %h", lres1, adr_o);
+                    lres <= lres1;
+                    cyc_o <= `FALSE;
+                    stb_o <= `FALSE;
+                    vda_o <= `FALSE;
+                    sel_o <= 8'h00;
+                    xRt2 <= 1'b1;
+                    upd_rf <= `TRUE;
+                    next_state(INVnRUN);
+                end 
+            endcase
+        `R2:
+            case(xir[31:26])
+            `LHX:
+                begin
+                vda_o <= `FALSE;
+                cyc_o <= `FALSE;
+                stb_o <= `FALSE;
+                sel_o <= 2'b00;
+                lres <= {{16{lres1[15]}},lres1[15:0]};
+                xRt <= xir[20:16];
+                upd_rf <= `TRUE;
+                next_state(INVnRUN);
+                end
+            `LHUX:
+                begin
+                vda_o <= `FALSE;
+                cyc_o <= `FALSE;
+                stb_o <= `FALSE;
+                sel_o <= 2'b00;
+                lres <= {16'd0,lres1[15:0]};
+                xRt <= xir[20:16];
+                upd_rf <= `TRUE;
+                next_state(INVnRUN);
+                end
+            `LWX,`LWRX:
+                begin
                 case(ea[0])
                 1'b1:   begin
-`ifdef WISHBONE                
-                            stb_o <= `FALSE;
-                            next_state(LOAD2A);
-`else                            
-                            read2(mem_size,ea);
-                            next_state(LOAD3);
-`endif                            
-                            lres[15:0] <= lres1[15:0];
-                        end
+    `ifdef WISHBONE                
+                        stb_o <= `FALSE;
+                        next_state(LOAD2A);
+    `else                            
+                        read2(mem_size,ea);
+                        next_state(LOAD3);
+    `endif                            
+                        lres[15:0] <= lres1[15:0];
+                    end
                 default:
                     begin  
                     $display("Loaded %h from %h", lres1, adr_o);
@@ -1827,10 +1957,68 @@ LOAD2:
                     stb_o <= `FALSE;
                     vda_o <= `FALSE;
                     sel_o <= 8'h00;
+                    xRt <= xir[20:16];
                     upd_rf <= `TRUE;
                     next_state(INVnRUN);
                     end 
                 endcase
+                end
+            `INCX:
+                begin
+                lock_o <= `TRUE;
+                case(ea[0])
+                1'b1:   begin
+    `ifdef WISHBONE                
+                        stb_o <= `FALSE;
+                        next_state(LOAD2A);
+    `else                            
+                        read2(mem_size,ea);
+                        next_state(LOAD3);
+    `endif                            
+                        lres[15:0] <= lres1[15:0];
+                    end
+                default:
+                    begin  
+                    $display("Loaded %h from %h", lres1, adr_o);
+                    lres <= lres1;
+                    stb_o <= `FALSE;
+                    vda_o <= `FALSE;
+                    sel_o <= 8'h00;
+                    next_state(INC1);
+                    end 
+                endcase
+                end
+            `LFxX:
+                begin
+                    cyc_o <= `TRUE;
+                    vda_o <= `TRUE;
+                    sel_o <= 2'b11;
+                    case(fplsst)
+                    4'h0:   begin
+                                next_state(LOAD1);
+                                if (xir[28:27]==2'b00) begin
+                                    cyc_o <= `FALSE;
+                                    vda_o <= `FALSE;
+                                    sel_o <= 2'b00;
+                                    xFRt <= xir[23:18];
+                                    upd_fp <= `TRUE;
+                                    next_state(INVnRUN);
+                                end
+                                fp_in[31:0] <= dat_i;
+                            end
+                    4'h1:   begin fp_in[63:32] <= dat_i; next_state(LOAD1); end
+                    4'h2:   begin fp_in[95:64] <= dat_i; next_state(LOAD1); end
+                    4'h3:   begin fp_in[127:96] <= dat_i; next_state(INVnRUN);
+                            cyc_o <= `FALSE;
+                            vda_o <= `FALSE;
+                            sel_o <= 2'b00;
+                            xFRt <= xir[23:18];
+                            upd_fp <= `TRUE;
+                            end
+                    endcase
+                    fplsst <= fplsst + 4'd1;
+                    ea <= ea + 32'd2;
+                end
             endcase
         endcase
         sr_o <= 1'b0;
@@ -1871,6 +2059,9 @@ LOAD3:
             upd_rf <= `FALSE;
             next_state(INC1);
         end
+        else begin
+            xRt <= xir[15:11];
+        end
         lres[31:16] <= dat_i[15:0];
     end
 
@@ -1889,12 +2080,12 @@ INVnRUN:
         inv_xir();
         case (xopcode)
         `CALL,`CALL16,`CALL0:
-            if (xRb!=5'd0) begin
-                if (xRb==regSP)
+//            if (xRb!=5'd0) begin
+                if (xRb==5'd31)
                     ex_branch(xpc + imm);
                 else
                     ex_branch(b + imm);
-            end
+//            end
         `MEM:
             if (xir[15:11]==`RET)
                 ex_branch(lres);
@@ -1907,7 +2098,7 @@ INVnRUN:
 
 STORE1:
     begin
-        if ((xRa==regSP || xRa==regBP)&&(ea < sbl || ea > sbu))
+        if ((xRa==5'd31 || xRa==5'd30)&&(ea < sbl || ea > sbu))
             ex_fault(`FLT_STACK,0);
         else begin
             write1(mem_size,ea,xb);
@@ -1927,11 +2118,16 @@ STORE2:
     end
 `ifdef WISHBONE
     else if (ack_i) begin
+        stb_o <= `FALSE;
 `else
     else if (rdy_i) begin
 `endif
         case(xopcode)
-        `CALL,`CALL16,`CALL0:   upd_rf <= `TRUE;
+        `CALL,`CALL16,`CALL0,`PEA:
+            begin
+                xRt <= 5'd31;    
+                upd_rf <= `TRUE;
+            end
         endcase
         if (mem_size==word && ea[0]!=1'b0) begin
 `ifdef WISHBONE
@@ -1979,13 +2175,50 @@ STORE2:
                     fplsst <= fplsst + 4'd1;
                     ea <= ea + 32'd2;
                 end
+            `R2:
+                case(xir[31:26])
+                `SFxX:
+                    begin
+                        cyc_o <= `TRUE;
+                        vda_o <= `TRUE;
+                        sel_o <= 2'b11;
+                        case(fplsst)
+                        4'h0:   begin
+                                    xb <= fpb[63:32];
+                                    next_state(STORE1);
+                                    if (xir[28:27]==2'b00) begin
+                                        next_state(INVnRUN);
+                                        cyc_o <= `FALSE;
+                                        vda_o <= `FALSE;
+                                        sel_o <= 2'b00;
+                                    end
+                                end
+                        4'h1:   begin xb <= fpb[95:64]; next_state(STORE1); end
+                        4'h2:   begin xb <= fpb[127:96]; next_state(STORE1); end
+                        4'h3:   begin 
+                                next_state(INVnRUN);
+                                cyc_o <= `FALSE;
+                                vda_o <= `FALSE;
+                                sel_o <= 2'b00;
+                                end
+                        endcase
+                        fplsst <= fplsst + 4'd1;
+                        ea <= ea + 32'd2;
+                    end
+                endcase
             `MEM:
                 case(xir[15:11])
+                `PUSH,`PUSHI5:
+                    begin
+                        xRt <= 5'd31;    
+                        upd_rf <= `TRUE;
+                    end
                 `FPUSHS0,`FPUSHS1:
                     begin
                         cyc_o <= `FALSE;
                         vda_o <= `FALSE;
                         sel_o <= 2'b00;
+                        xRt <= 5'd31;    
                         upd_rf <= `TRUE;
                         next_state(INVnRUN);
                     end
@@ -1999,6 +2232,7 @@ STORE2:
                         4'h1:   begin xb <= fpb[95:64]; next_state(STORE1); end
                         4'h2:   begin xb <= fpb[127:96]; next_state(STORE1); end
                         4'h3:   begin 
+                                xRt <= 5'd31;    
                                 upd_rf <= `TRUE;
                                 next_state(INVnRUN);
                                 cyc_o <= `FALSE;
@@ -2343,19 +2577,19 @@ endtask
 
 task update_regfile;
 begin
-    if (upd_rf) begin
+    if (upd_rf & !xinv) begin
         if (xRt2)
-            sp <= res2;
+            sp <= {res2[31:1],1'b0};
         case(xRt)
         5'd1:   r1 <= res;
         5'd2:   r2 <= res;
-        5'd29:  r29 <= res;
-        regSP:  sp <= res;
+        5'd28:  r28 <= res;
+        5'd31:  sp <= {res[31:1],1'b0};
         endcase
         regfile[xRt] <= res;
         $display("regfile[%d] <= %h", xRt, res);
         // Globally enable interrupts after first update of stack pointer.
-        if (xRt==regSP)
+        if (xRt==5'd31)
             gie <= `TRUE;
     end
 end
@@ -2375,6 +2609,44 @@ begin
     STORE3: stname <= "STORE3";
     INVnRUN:    stname <= "INVnRUN";
     endcase
+end
+endtask
+
+task disassem;
+input [31:0] ins;
+output [63:0] mne;
+begin
+`ifdef SIMULATION
+case(ins[5:0])
+`CALL,`CALL0,`CALL16:
+        mne = "CALL";
+`LW:    mne = "LW";
+`LH:    mne = "LH";
+`SW:    mne = "SW";
+`SH:    mne = "SH";
+`ADDI:  mne = "ADDI";
+`ORI:   if (ins[10:6]==0)
+            mne = "LDI";
+        else
+            mne = "ORI";
+`ORI32: if (ins[10:6]==0)
+            mne = "LDI";
+        else
+            mne = "ORI";
+`MEM:
+    case(ins[15:11])
+    `RET:   mne = "RET";
+    `PUSH:  mne = "PUSH";
+    `POP:   mne = "POP";
+    `PUSHI5:    mne = "PUSHI";
+    default:    mne = "???";
+    endcase
+`PEA:   mne = "PEA";
+default:    mne = "???";
+endcase
+`else
+mne = "";
+`endif
 end
 endtask
 

@@ -149,7 +149,7 @@ void GenMixedSource(Statement *stmt)
         rtrim(stmt->lptr);
         if (strcmp(stmt->lptr,last_rem)!=0) {
           	GenerateMonadic(op_rem,0,make_string(stmt->lptr));
-          	strncpy_s(last_rem,131,stmt->lptr,131);
+          	strncpy_s(last_rem,131,stmt->lptr,130);
           	last_rem[131] = '\0';
         }
     }
@@ -948,10 +948,10 @@ void GenerateFirstcall(Statement *stmt)
     {
         breaklab = nextlabel++;
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_lb,0,ap1,make_string(stmt->fcname));
-       	GenerateDiadic(op_beq,0,ap1,make_clabel(breaklab));
+		GenerateDiadic(op_lh,0,ap1,make_string(stmt->fcname));
+       	GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(breaklab));
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sb,0,makereg(0),make_string(stmt->fcname));
+		GenerateDiadic(op_sh,0,makereg(0),make_string(stmt->fcname));
 		GenerateStatement(stmt->s1);
         GenerateLabel(breaklab);
         breaklab = lab2;        /* restore old break label */

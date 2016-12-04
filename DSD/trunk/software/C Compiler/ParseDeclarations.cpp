@@ -232,11 +232,11 @@ void Declaration::ParseInt()
 void Declaration::ParseInt32()
 {
 	if (isUnsigned) {
-		head = (TYP *)TYP::Make(bt_ushort,2);
+		head = (TYP *)TYP::Make(bt_ulong,2);
 		tail = head;
 	}
 	else {
-		head = (TYP *)TYP::Make(bt_short,2);
+		head = (TYP *)TYP::Make(bt_long,2);
 		tail = head;
 	}
 	bit_max = 32;
@@ -888,7 +888,10 @@ j2:
   		fd = funcdecl;
   		needParseFunction = FALSE;
   	  dfs.printf("Set false\n");
-  		odecl = *declid;
+		if (declid)
+  			odecl = *declid;
+		else
+			odecl = "";
   		tempHead = head;
   		tempTail = tail;
   		isd = isStructDecl;
@@ -906,6 +909,10 @@ j2:
   		if (declid) delete declid;
   		declid = new std::string(odecl);
   		funcdecl = fd;
+		// There may be more parameters in the list.
+		if (lastst==comma) {
+			return;
+		}
   		needpunc(closepa,23);
   
   		if (lastst==begin) {

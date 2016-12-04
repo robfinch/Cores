@@ -1252,6 +1252,10 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			if( tp1->type == bt_pointer ) {
 				tp2 = expression(&rnode);
 				tp3 = tp1;
+				if (rnode==nullptr) {
+					error(ERR_EXPREXPECT);
+					throw new C64PException(ERR_EXPREXPECT,9);
+				}
 			}
 			else {
 				tp2 = tp1;
@@ -2490,6 +2494,7 @@ TYP *asnop(ENODE **node)
                 op = en_assign;
 ascomm:         NextToken();
                 tp2 = asnop(&ep2);
+ascomm2:
 		        if( tp2 == 0 || !IsLValue(ep1) )
                     error(ERR_LVALUE);
 				else {
@@ -2506,14 +2511,15 @@ ascomm:         NextToken();
 				break;
 			case asplus:
 				op = en_asadd;
-ascomm3:        tp2 = asnop(&ep2);
+ascomm3:        NextToken();
+				tp2 = asnop(&ep2);
 				if( tp1->type == bt_pointer ) {
 					ep3 = makeinode(en_icon,tp1->GetBtp()->size);
 					ep3->esize = 2;
 					ep2 = makenode(en_mul,ep2,ep3);
 					ep2->esize = 2;
 				}
-				goto ascomm;
+				goto ascomm2;
 			case asminus:
 				op = en_assub;
 				goto ascomm3;

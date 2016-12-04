@@ -25,7 +25,6 @@
 //
 // ============================================================================
 //
-`ifndef SHL
 `define R2      6'h0C
 `define SHL     6'h10
 `define SHR     6'h11
@@ -37,7 +36,6 @@
 `define ASRI    6'h1A
 `define ROLI    6'h1B
 `define RORI    6'h1C
-`endif
 
 module DSD7_shift(xir, a, b, res, rolo);
 input [31:0] xir;

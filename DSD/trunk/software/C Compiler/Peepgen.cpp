@@ -858,6 +858,16 @@ static void PeepoptHint(struct ocode *ip)
 	// Translated to:
 	//    MOV r18,#constant
 	case 1:
+		if (ip->fwd->opcode != op_mov) {
+			ip->back->fwd = ip->fwd;
+			ip->fwd->back = ip->back;
+			return;
+		}
+		if (ip->back->opcode != op_mov) {
+			ip->back->fwd = ip->fwd;
+			ip->fwd->back = ip->back;
+			return;
+		}
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
 			ip->back->oper1 = ip->fwd->oper1;
 			ip->back->fwd = ip->fwd->fwd;
@@ -1008,7 +1018,7 @@ static void opt_peep()
 					PeepoptLc(ip);
 					break;
             case op_lw:
-                    PeepoptLw(ip);
+                    //PeepoptLw(ip);
                     break;
             case op_sxb:
             case op_sxc:

@@ -64,7 +64,7 @@ struct oplst {
 		{"ldi",op_ldi}, {"ld", op_ld},
 		{"addi",op_addi}, {"sub",op_sub}, {"subu", op_subu},
 		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori},
-		{"divi", op_divi}, {"divui", op_divui}, {"modi", op_modi}, {"modui", op_modui},
+		{"divi", op_divi}, {"modi", op_modi}, {"modui", op_modui},
 		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},
 		{"sxb",op_sxb}, {"sxc", op_sxc}, {"sxh", op_sxh},
 		{"zxb",op_zxb}, {"zxc", op_zxc}, {"zxh", op_zxh},
@@ -139,6 +139,8 @@ struct oplst {
 		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
 		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri}, {"chk", op_chk }, {"chki",op_chki}, {";", op_rem},
 
+		{"fbeq", op_fbeq}, {"fbne", op_fbne}, {"fbor", op_fbor}, {"fbun", op_fbun},
+		{"fblt", op_fblt}, {"fble", op_fble}, {"fbgt", op_fbgt}, {"fbge", op_fbge},
 		{"fcvtsq", op_fcvtsq},
 		{"sf", op_sf}, {"lf", op_lf},
 		{"sfd", op_sfd}, {"lfd", op_lfd}, {"fmov.d", op_fdmov}, {"fmov", op_fmov},

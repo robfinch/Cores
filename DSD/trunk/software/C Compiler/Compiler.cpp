@@ -220,10 +220,10 @@ void Compiler::AddStandardTypes()
 	p = allocTYP();
 	p->type = bt_float;
 	p->typeno = bt_float;
-	p->size = 2;
-	p->size2 = 2;
+	p->size = 8;
+	p->size2 = 8;
 	p->bit_width = -1;
-	p->precision = 32;
+	p->precision = 128;
 	stdflt = *p;
   
 	p = TYP::Make(bt_func,0);

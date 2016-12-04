@@ -1,13 +1,9 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
-//	DSD7_logic.v
-//		
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -21,54 +17,37 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//                                                                          
 //
+//
+// Button / switch debounce circuit.
+// Assumes 25MHz clock
+// Approximately 10ms of debounce is provided.
 // ============================================================================
 //
-`define R2      6'h0C
+module BtnDebounce(clk, btn_i, o);
+input clk;
+input btn_i;
+output reg o;
 
-`define ANDI    6'h08
-`define ORI     6'h09
-`define EORI    6'h0A
-`define ORI32   6'h0B
+reg [18:0] counter;
+reg val1, val2;
 
-`define AND     6'h08
-`define OR      6'h09
-`define EOR     6'h0A
-`define NAND    6'h0C
-`define NOR     6'h0D
-`define ENOR    6'h0E
+always @(posedge clk)
+begin
+    val1 <= btn_i;
+    val2 <= val1;
+end
 
-module DSD7_logic(xir, a, b, imm, res);
-input [31:0] xir;
-input [31:0] a;
-input [31:0] b;
-input [31:0] imm;
-output [31:0] res;
-reg [31:0] res;
+always @(posedge clk)
+    if (val1 != val2)
+        counter <= 19'h0;
+    else if (counter[18])
+        counter <= 19'h0;
+    else
+        counter <= counter + 19'd1;
 
-wire [5:0] xopcode = xir[5:0];
-wire [5:0] xfunc = xir[31:26];
-
-always @*
-case(xopcode)
-`R2:
-	case(xfunc)
-//	`NOT:	res <= ~|a;
-	`AND:	res <= a & b;
-	`OR:	res <= a | b;
-	`EOR:	res <= a ^ b;
-	`NAND:	res <= ~(a & b);
-	`NOR:	res <= ~(a | b);
-	`ENOR:	res <= ~(a ^ b);
-	default:	res <= 32'd0;
-	endcase
-`ANDI:	res <= a & imm;
-`ORI:	res <= a | imm;
-`EORI:	res <= a ^ imm;
-`ORI32:	res <= a | imm;
-default:	res <= 32'd0;
-endcase
+always @(posedge clk)
+    if (counter[18])
+        o <= val2;
 
 endmodule
-

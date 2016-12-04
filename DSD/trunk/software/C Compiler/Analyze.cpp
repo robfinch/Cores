@@ -755,8 +755,8 @@ int opt1(Statement *block)
 
     nn = 0;
 	olist = (CSE *)NULL;
-    scan(block);            /* collect expressions */
     if (opt_noregs==FALSE) {
+	    scan(block);            /* collect expressions */
         nn = AllocateRegisterVars();
     	repcse(block);          /* replace allocated expressions */
     }

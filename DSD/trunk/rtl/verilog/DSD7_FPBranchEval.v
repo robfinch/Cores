@@ -6,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	DSD7_logic.v
+//	DSD7_FPBranchEval.v
 //		
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -25,50 +25,47 @@
 //
 // ============================================================================
 //
-`define R2      6'h0C
+//`ifndef BEQ
+`define FBcc    6'h01
 
-`define ANDI    6'h08
-`define ORI     6'h09
-`define EORI    6'h0A
-`define ORI32   6'h0B
+// Bcc ops
+`define FBEQ    3'h0
+`define FBNE    3'h1
+`define FBUN    3'h2
+`define FBOR    3'h3
+`define FBLT    3'h4
+`define FBGE    3'h5
+`define FBLE    3'h6
+`define FBGT    3'h7
 
-`define AND     6'h08
-`define OR      6'h09
-`define EOR     6'h0A
-`define NAND    6'h0C
-`define NOR     6'h0D
-`define ENOR    6'h0E
+//`endif
 
-module DSD7_logic(xir, a, b, imm, res);
+module DSD7_FPBranchEval(xir, a, b, takb);
 input [31:0] xir;
-input [31:0] a;
-input [31:0] b;
-input [31:0] imm;
-output [31:0] res;
-reg [31:0] res;
+input [127:0] a;
+input [127:0] b;
+output reg takb;
 
-wire [5:0] xopcode = xir[5:0];
-wire [5:0] xfunc = xir[31:26];
+wire [5:0] opcode = xir[5:0];
+wire [2:0] cond = xir[20:18];
+wire nanx;
+wire [4:0] o;
 
-always @*
-case(xopcode)
-`R2:
-	case(xfunc)
-//	`NOT:	res <= ~|a;
-	`AND:	res <= a & b;
-	`OR:	res <= a | b;
-	`EOR:	res <= a ^ b;
-	`NAND:	res <= ~(a & b);
-	`NOR:	res <= ~(a | b);
-	`ENOR:	res <= ~(a ^ b);
-	default:	res <= 32'd0;
-	endcase
-`ANDI:	res <= a & imm;
-`ORI:	res <= a | imm;
-`EORI:	res <= a ^ imm;
-`ORI32:	res <= a | imm;
-default:	res <= 32'd0;
+fp_cmp_unit u1 (a, b, o, nanx);
+
+always @(opcode or cond or a or b)
+case(opcode)
+`FBcc:
+    case(cond)
+    `FBEQ:  takb <= o[0];
+    `FBNE:  takb <= !o[0];
+    `FBUN:  takb <= o[4];
+    `FBOR:  takb <= !o[4];
+    `FBLT:  takb <= o[1];
+    `FBGE:  takb <= !o[1];
+    `FBLE:  takb <= o[2];
+    `FBGT:  takb <= !o[2];
+    endcase
 endcase
 
 endmodule
-

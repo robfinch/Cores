@@ -284,19 +284,18 @@ AMODE *GenExpr(ENODE *node)
 
 void GenerateCmp(ENODE *node, int op, int label, int predreg)
 {
-	int size;
-	AMODE *ap1, *ap2, *ap3;
+	int size, sz;
+	AMODE *ap1, *ap2;
 
 	size = GetNaturalSize(node);
     if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
     	ap1 = GenerateExpression(node->p[0],F_FPREG,size);
-	    ap2 = GenerateExpression(node->p[1],F_FPREG,size);
+	    ap2 = GenerateExpression(node->p[1],F_FPREG|F_IMM0,size);
     }
     else {
     	ap1 = GenerateExpression(node->p[0],F_REG, size);
 	    ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
     }
-	ap3 = GetTempRegister();
 	/*
 	// Optimize CMP to zero and branch into plain branch, this works only for
 	// signed relational compares.
@@ -325,6 +324,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 	else 
  	    GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 	*/
+	sz = 0;
 	switch(op)
 	{
 	case op_eq:	op = op_beq; break;
@@ -337,7 +337,13 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 	case op_leu: op = op_bleu; break;
 	case op_gtu: op = op_bgtu; break;
 	case op_geu: op = op_bgeu; break;
-	case op_feq:
+	case op_feq:	op = op_fbeq; sz = 'q'; break;
+	case op_fne:	op = op_fbne; sz = 'q'; break;
+	case op_flt:	op = op_fblt; sz = 'q'; break;
+	case op_fle:	op = op_fble; sz = 'q'; break;
+	case op_fgt:	op = op_fbgt; sz = 'q'; break;
+	case op_fge:	op = op_fbge; sz = 'q'; break;
+	/*
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
 		GenerateTriadic(op_bbs,0,ap3,make_immed(0),make_clabel(label));
 		goto xit;
@@ -361,10 +367,16 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
 		GenerateTriadic(op_bbc,0,ap3,make_immed(1),make_clabel(label));
 		goto xit;
+	*/
 	}
-	GenerateTriadic(op,0,ap1,ap2,make_clabel(label));
-xit:
-	ReleaseTempReg(ap3);
+	if (op==op_fbne || op==op_fbeq || op==op_fblt || op==op_fble || op==op_fbgt || op==op_fbge) {
+		if (ap2->mode==am_immed)
+			GenerateTriadic(op,sz,ap1,makefpreg(0),make_clabel(label));
+		else
+			GenerateTriadic(op,sz,ap1,ap2,make_clabel(label));
+	}
+	else
+		GenerateTriadic(op,sz,ap1,ap2,make_clabel(label));
    	ReleaseTempReg(ap2);
    	ReleaseTempReg(ap1);
 }
@@ -721,6 +733,8 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 		else
 			ap = GenerateExpression(ep,F_REG|F_IMMED,sizeOfWord);
 	}
+	else if (ep->etype==bt_quad || ep->etype==bt_double || ep->etype==bt_float || ep->etype==bt_triple)
+		ap = GenerateExpression(ep,F_FPREG,sizeOfWord);
 	else
 		ap = GenerateExpression(ep,F_REG|F_IMMED,sizeOfWord);
 	switch(ap->mode) {
@@ -769,11 +783,14 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 				}
 			}
 			else {
-				if (ap->isFloat)
+				if (ap->isFloat) {
           			GenerateMonadic(op_push,'q',ap);
-				else
+					nn = 4;
+				}
+				else {
           			GenerateMonadic(op_push,0,ap);
-          		nn = 1;
+					nn = 1;
+				}
 			}
 //        }
     	break;

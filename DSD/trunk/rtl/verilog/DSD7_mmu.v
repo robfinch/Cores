@@ -25,84 +25,147 @@
 //
 // ============================================================================
 //
-module DSD7_mmu(clk_i, pcr_i, cyc_i, stb_i, vpa_i, vda_i, ack_o, wr_i, vadr_i, 
-    cyc_o, stb_o, padr_o, dat_i, dat_o, vpa_o, vda_o, wr_o);
+`define LOW     1'b0
+`define HIGH    1'b1
+
+module DSD7_mmu(rst_i, clk_i, pcr_i, s_cyc_i, s_stb_i, s_vpa_i, s_vda_i, s_ack_o, s_sel_i, s_wr_i, s_adr_i, s_dat_i, s_dat_o, 
+    m_cyc_o, m_stb_o, m_ack_i, m_adr_o, m_dat_i, m_dat_o, m_vpa_o, m_vda_o, m_wr_o, m_sel_o);
+input rst_i;
 input clk_i;
 input [31:0] pcr_i;     // paging control register
-input cyc_i;
-input stb_i;
-input vpa_i;            // valid program address
-input vda_i;            // valid data address
-input wr_i;             // write strobe
-output ack_o;           // Address translation and MMU are ready
-input [31:0] vadr_i;    // virtual address
-output cyc_o;
-output stb_o;
-output [31:0] padr_o;   // physical address
-input [31:0] dat_i;
-output [31:0] dat_o;
-output vpa_o;
-output vda_o;
-output wr_o;
+input s_cyc_i;
+input s_stb_i;
+input [1:0] s_sel_i;
+input s_vpa_i;            // valid program address
+input s_vda_i;            // valid data address
+input s_wr_i;             // write strobe
+output reg s_ack_o;       // Address translation and MMU are ready
+input [31:0] s_adr_i;    // virtual address
+input [31:0] s_dat_i;
+output reg [31:0] s_dat_o;
 
-wire cs = cyc_i && stb_i && (vadr_i[31:12]==20'hFFDC4);
+output reg m_cyc_o;
+output reg m_stb_o;
+input m_ack_i;
+output reg [1:0] m_sel_o;
+output reg m_vpa_o;
+output reg m_vda_o;
+output reg m_wr_o;
+output reg [31:0] m_adr_o;   // physical address
+output reg [31:0] m_dat_o;
+input [31:0] m_dat_i;
 
+parameter IDLE = 4'd0;
+parameter WAIT_NACK = 4'd1;
+parameter WAITRD1 = 4'd2;
+parameter WAITRD2 = 4'd3;
+parameter ACCESS = 4'd5;
+parameter WAIT_NACK2 = 4'd6;
+
+wire cs = s_cyc_i && s_stb_i && (s_adr_i[31:12]==20'hFFDC4);
+
+reg [3:0] state;
 wire [12:0] o0,o1;
 
 DSD7_MMURam u1
 (
     .clk(clk_i),
-    .wr(cs & wr_i),
-    .wa({pcr_i[12:8],vadr_i[8:0]}),
-    .i(dat_i[12:0]),
-    .ra0({pcr_i[12:8],vadr_i[8:0]}),
+    .wr(cs & s_wr_i),
+    .wa({pcr_i[12:8],s_adr_i[9:0]}),
+    .i(s_dat_i[12:0]),
+    .ra0({pcr_i[12:8],s_adr_i[9:0]}),
     .o0(o0),
-    .ra1({pcr_i[4:0],vadr_i[24:16]}),
+    .ra1({pcr_i[4:0],s_adr_i[25:16]}),
     .o1(o1)
 );
 
-assign dat_o = cs ? {2{3'b0,o0}} : 32'd0;
+wire pe = pcr_i[31] & ~s_adr_i[31];
 
-wire pe = pcr_i[31] & ~vadr_i[31];
-
-reg cyc_d;
-reg stb_d;
-reg vpa_d;
-reg vda_d;
 always @(posedge clk_i)
+if (rst_i)
+    state <= IDLE;
+else
 begin
-    cyc_d <= cyc_i;
-    stb_d <= stb_i;
-    vpa_d <= vpa_i;
-    vda_d <= vda_i;
+    case(state)
+    IDLE:
+        // Filter out accesses to the mmu
+        if (cs) begin
+            state <= WAITRD1;
+        end
+        else begin
+            m_adr_o[15:0] <= s_adr_i[15:0];
+            m_adr_o[27:16] <= pe ? o1[11:0] : s_adr_i[27:16];
+            m_adr_o[31:28] <= s_adr_i[31:28];
+            if (s_cyc_i)
+                state <= ACCESS; 
+        end
+    ACCESS:
+        begin
+            m_cyc_o <= `HIGH;
+            m_stb_o <= `HIGH;
+            m_vpa_o <= s_vpa_i;
+            m_vda_o <= s_vda_i;
+            m_sel_o <= s_sel_i;
+            m_wr_o <= s_wr_i & (pe ? ~o1[12] : 1'b1);
+            m_adr_o[15:0] <= s_adr_i[15:0];
+            m_adr_o[27:16] <= pe ? o1[11:0] : s_adr_i[27:16];
+            m_adr_o[31:28] <= s_adr_i[31:28];
+            m_dat_o <= s_dat_i;
+            if (m_ack_i) begin
+                s_ack_o <= `HIGH;
+                m_stb_o <= `LOW;
+                s_dat_o <= m_dat_i; 
+                state <= WAIT_NACK;
+            end
+        end
+    WAITRD1:
+        state <= WAITRD2;
+    WAITRD2:
+        begin
+            s_ack_o <= `HIGH;
+            s_dat_o <= {2{3'b0,o0}};
+            state <= WAIT_NACK;
+        end
+    WAIT_NACK:
+        begin
+            if (s_stb_i==`LOW) begin
+                s_ack_o <= `LOW;
+                s_dat_o <= 32'h0;
+                m_stb_o <= `LOW;
+                state <= WAIT_NACK2;
+            end
+            if (s_cyc_i==`LOW) begin
+                m_cyc_o <= `LOW;
+                m_stb_o <= `LOW;
+                m_sel_o <= 2'b00;
+                m_wr_o <= `LOW;
+                m_vda_o <= `LOW;
+                m_vpa_o <= `LOW;
+                s_ack_o <= `LOW;
+                s_dat_o <= 32'h0;
+            end
+       end
+    WAIT_NACK2:
+        if (!m_ack_i) begin
+            state <= IDLE;
+        end
+       
+    endcase
 end
-assign cyc_o = pe ? cyc_d & cyc_i : cyc_i;
-assign stb_o = pe ? stb_d & stb_i : stb_i;
-assign vpa_o = pe ? vpa_d & vpa_i : vpa_i;
-assign vda_o = pe ? vda_d & vda_i : vda_i;
-
-assign padr_o[15:0] = vadr_i[15:0];
-assign padr_o[27:16] = pe ? o1[11:0] : vadr_i[27:16];
-assign padr_o[31:28] = vadr_i[31:28];
-
-assign wr_o = wr_i & (pe ? ~o1[12] : 1'b1);
-
-// Create a one cycle delayed ready signal.
-assign ack_o = cs ? (wr_i ? 1'b1 : (stb_i & stb_d)) : 1'b0;
 
 endmodule
 
 module DSD7_MMURam(clk,wr,wa,i,ra0,o0,ra1,o1);
 input clk;
 input wr;
-input [13:0] wa;
+input [14:0] wa;
 input [12:0] i;
-input [13:0] ra0;
+input [14:0] ra0;
 output [12:0] o0;
-input [13:0] ra1;
+input [14:0] ra1;
 output [12:0] o1;
 
-reg [12:0] mapram [0:16383];
+reg [12:0] mapram [0:32767];
 reg [13:0] rra0,rra1;
 
 always @(posedge clk)

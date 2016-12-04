@@ -31,6 +31,7 @@ typedef struct amode {
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
+	unsigned int isAddress : 1;
 	char FloatSize;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
@@ -57,7 +58,7 @@ struct ocode {
 
 enum e_op {
         op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,
-        op_mul, op_muli, op_mulu, op_divi, op_divui, op_modi, op_modui, 
+        op_mul, op_muli, op_mulu, op_divi, op_modi, op_modui, 
         op_div, op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
         op_or, op_ori, op_xor, op_xori, op_asr, op_asri, op_shl, op_shr, op_shru, op_ror, op_rol,
 		op_shli, op_shri, op_shrui, op_shlu, op_shlui, op_rori, op_roli,
@@ -103,6 +104,7 @@ enum e_op {
         op_cmpu, op_bsr, op_bun,
         op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri, op_rem,
         // floating point
+		op_fbeq, op_fbne, op_fbor, op_fbun, op_fblt, op_fble, op_fbgt, op_fbge,
 		op_fcvtsq,
 		op_fadd, op_fsub, op_fmul, op_fdiv, op_fcmp, op_fneg,
 		op_ftmul, op_ftsub, op_ftdiv, op_ftadd, op_ftneg, op_ftcmp,

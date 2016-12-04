@@ -27,7 +27,7 @@
 module DSD7_mpu(hartid_i, rst_i, clk_i,
     i1,i2,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, 
-    cyc_o, stb_o, vpa_o, vda_o, wr_o, sel_o, ack_i, adr_o, dat_i, dat_o,
+    cyc_o, stb_o, vpa_o, vda_o, wr_o, sel_o, ack_i, err_i, adr_o, dat_i, dat_o,
     sr_o, cr_o, rb_i
     );
 input [31:0] hartid_i;
@@ -70,6 +70,7 @@ output vda_o;
 output wr_o;
 output [1:0] sel_o;
 input ack_i;
+input err_i;
 output [31:0] adr_o;
 input [31:0] dat_i;
 output [31:0] dat_o;
@@ -82,6 +83,7 @@ wire irq;
 wire [8:0] cause;
 wire cyc;
 wire stb;
+wire [1:0] sel;
 wire vpa;
 wire vda;
 wire wr;
@@ -105,11 +107,12 @@ DSD7 u1
     .vpa_o(vpa),
     .vda_o(vda),
     .wr_o(wr),
-    .sel_o(sel_o),
+    .sel_o(sel),
     .ack_i(ack),
+    .err_i(err_i),
     .adr_o(adr),
     .dat_i(dati),
-    .dat_o(dat_o),
+    .dat_o(dato),
     .sr_o(sr_o),
     .cr_o(cr_o),
     .rb_i(rb_i),
@@ -118,23 +121,31 @@ DSD7 u1
 
 DSD7_mmu u2
 (
+    .rst_i(rst_i),
     .clk_i(clk_i),
     .pcr_i(pcr),
-    .cyc_i(cyc),
-    .stb_i(stb),
-    .vpa_i(vpa),
-    .vda_i(vda),
-    .wr_i(wr),
-    .vadr_i(adr),
-    .padr_o(adr_o),
-    .cyc_o(cyc_o),
-    .stb_o(stb_o),
-    .vpa_o(vpa_o),
-    .vda_o(vda_o),
-    .dat_i(dat_o),
-    .dat_o(mmu_dat),
-    .ack_o(mmu_ack),
-    .wr_o(wr_o)
+    
+    .s_cyc_i(cyc),
+    .s_stb_i(stb),
+    .s_ack_o(mmu_ack),
+    .s_vpa_i(vpa),
+    .s_vda_i(vda),
+    .s_wr_i(wr),
+    .s_sel_i(sel),
+    .s_adr_i(adr),
+    .s_dat_i(dato),
+    .s_dat_o(mmu_dat),
+    
+    .m_cyc_o(cyc_o),
+    .m_stb_o(stb_o),
+    .m_vpa_o(vpa_o),
+    .m_vda_o(vda_o),
+    .m_wr_o(wr_o),
+    .m_sel_o(sel_o),
+    .m_adr_o(adr_o),
+    .m_dat_i(dat_i),
+    .m_dat_o(dat_o),
+    .m_ack_i(ack_i)
 );
 
 DSD7_pic u3
@@ -146,7 +157,7 @@ DSD7_pic u3
 	.ack_o(pic_ack),    // controller is ready
 	.wr_i(wr),			// read/write
 	.adr_i(adr),	    // address
-	.dat_i(dat_o),
+	.dat_i(dato),
 	.dat_o(pic_dat),
 	.vol_o(),		// volatile register selected
 	.i1(i1),
@@ -193,8 +204,8 @@ DSD_30Hz #(.CLK_FREQ(CLK_FREQ)) u30Hz
     ._30Hz_o(pulse30)
 );
 
-assign ack = mmu_ack | pic_ack | ack_i;
-assign dati = pic_dat|mmu_dat|dat_i;
+assign ack = mmu_ack | pic_ack;
+assign dati = pic_dat|mmu_dat;
 
 endmodule
 

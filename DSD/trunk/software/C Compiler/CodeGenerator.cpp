@@ -406,11 +406,11 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
         return;
 	if (ap->isUnsigned)
 		return;
-    if(ap->mode != am_reg)
-        MakeLegalAmode(ap,flags & F_REG,isize);
+    if(ap->mode != am_reg && ap->mode != am_fpreg)
+        MakeLegalAmode(ap,flags & (F_REG|F_FPREG),isize);
 	if (ap->isFloat) {
 		switch(isize) {
-		case 4:	GenerateDiadic(op_fs2d,0,ap,ap); break;
+		case 2:	GenerateDiadic(op_fs2d,0,ap,ap); break;
 		}
 	}
 	else {
@@ -540,7 +540,6 @@ long GetReferenceSize(ENODE *node)
 	case en_uh_ref:
 	case en_hfieldref:
 	case en_uhfieldref:
-	case en_flt_ref:
 			return 1;
     case en_w_ref:
 	case en_uw_ref:
@@ -553,6 +552,7 @@ long GetReferenceSize(ENODE *node)
 	case en_dbl_ref:
             return 4;
 	case en_quad_ref:
+	case en_flt_ref:
 			return 8;
     case en_triple_ref:
             return 12;
@@ -633,13 +633,17 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->mode = am_indx;
         ap1->preg = regBP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
-		switch(node->tp->precision) {
-		case 32: ap1->FloatSize = 's'; break;
-		case 64: ap1->FloatSize = 'd'; break;
-		case 96: ap1->FloatSize = 't'; break;
-		default: ap1->FloatSize = 'q'; break;
-		}
+		if (node->p[0]->tp)
+			switch(node->p[0]->tp->precision) {
+			case 32: ap1->FloatSize = 's'; break;
+			case 64: ap1->FloatSize = 'd'; break;
+			case 96: ap1->FloatSize = 't'; break;
+			default: ap1->FloatSize = 'q'; break;
+			}
+		else
+			ap1->FloatSize = 'q';
 		ap1->segment = stackseg;
+		ap1->isFloat = TRUE;
 //	    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
 		goto xit;
@@ -662,16 +666,22 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     }
 	else if (node->p[0]->nodetype == en_regvar) {
         ap1 = allocAmode();
-		ap1->mode = am_reg;
+		// For parameters we want Rn, for others [Rn]
+		// This seems like an error earlier in the compiler
+		// See setting val_flag in ParseExpressions
+		ap1->mode = node->p[0]->i < 18 ? am_ind : am_reg;
+//		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
 		ap1->preg = node->p[0]->i;
         MakeLegalAmode(ap1,flags,size);
 	    Leave("Genderef",3);
         return ap1;
 	}
 	else if (node->p[0]->nodetype == en_fpregvar) {
+		//error(ERR_DEREF);
         ap1 = allocAmode();
 		ap1->mode = am_fpreg;
 		ap1->preg = node->p[0]->i;
+		ap1->isFloat = TRUE;
         MakeLegalAmode(ap1,flags,size);
 	    Leave("Genderef",3);
         return ap1;
@@ -821,15 +831,6 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size, int op)
 		ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0],F_REG,2);
 		ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,2);
-	}
-	if (ap2->mode==am_immed) {
-		switch(op) {
-		case op_div:    op = op_divi; break;
-		case op_divu:   op = op_divui; break;
-		case op_mod:    op = op_modi; break;
-		case op_modu:   op = op_modui; break;
-		default:   ;
-		}
 	}
 	if (op==op_fdiv) {
 		// Generate a convert operation ?
@@ -1092,14 +1093,6 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
         ap3 = GenerateExpression(node->p[1],F_FPREG,2);
     else
         ap3 = GenerateExpression(node->p[1],F_REG|F_IMMED,2);
-    if (ap3->mode==am_immed) {
-    switch (op) {
-    case op_mod:    op = op_modi;
-    case op_modu:   op = op_modui;
-    case op_divs:    op = op_divi;
-    case op_divu:   op = op_divui;
-    }
-    }
 	if (op==op_fdiv) {
 		GenerateTriadic(op,siz1==32?'s':siz1==64?'d':siz1==96?'t':'q',ap1,ap1,ap3);
 	}
@@ -1486,18 +1479,27 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
                 ap2->offset = node;     // use as constant node
                 GenerateDiadic(op_lea,0,ap1,ap2);
                 MakeLegalAmode(ap1,flags,size);
-         Leave("GenExperssion",6); 
+         Leave("GenExpression",6); 
                 return ap1;             // return reg
             }
             // fallthru
 	case en_cnacon:
+            ap1 = allocAmode();
+            ap1->mode = am_immed;
+            ap1->offset = node;
+			if (node->i==0)
+				node->i = -1;
+			ap1->isUnsigned = node->isUnsigned;
+            MakeLegalAmode(ap1,flags,size);
+         Leave("GenExpression",7); 
+            return ap1;
 	case en_clabcon:
             ap1 = allocAmode();
             ap1->mode = am_immed;
             ap1->offset = node;
 			ap1->isUnsigned = node->isUnsigned;
             MakeLegalAmode(ap1,flags,size);
-         Leave("GenExperssion",7); 
+         Leave("GenExpression",7); 
             return ap1;
     case en_autocon:
             ap1 = GetTempRegister();
@@ -1525,6 +1527,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap2->offset = node;     /* use as constant node */
             ap2->isFloat = TRUE;
             GenerateDiadic(op_lea,0,ap1,ap2);
+			ap1->isAddress = true;
             MakeLegalAmode(ap1,flags,size);
             return ap1;             /* return reg */
     case en_ub_ref:
@@ -1541,8 +1544,10 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_b_ref:
 	case en_c_ref:
 	case en_h_ref:
+			ap1 = GenerateDereference(node,flags,1,1);
+            return ap1;
     case en_w_ref:
-			ap1 = GenerateDereference(node,flags,size,1);
+			ap1 = GenerateDereference(node,flags,2,1);
             return ap1;
 	case en_flt_ref:
 	case en_dbl_ref:
@@ -1811,7 +1816,7 @@ int GetNaturalSize(ENODE *node)
 		case en_cch:	return 1;
 		case en_h_ref:	return 1;
 		case en_uh_ref:	return 1;
-		case en_flt_ref: return 2;
+		case en_flt_ref: return 8;
 		case en_w_ref:  case en_uw_ref:
                 return 2;
 		case en_dbl_ref:
