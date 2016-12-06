@@ -26,7 +26,7 @@
 //
 module DSD7_mpu(hartid_i, rst_i, clk_i,
     i1,i2,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
-    i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, 
+    i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, irq_o,
     cyc_o, stb_o, vpa_o, vda_o, wr_o, sel_o, ack_i, err_i, adr_o, dat_i, dat_o,
     sr_o, cr_o, rb_i
     );
@@ -63,6 +63,7 @@ input i28;
 input i29;
 input i30;
 input i31;
+output irq_o;
 output cyc_o;
 output stb_o;
 output vpa_o;
@@ -92,6 +93,9 @@ wire [31:0] mmu_dat, pic_dat;
 wire [31:0] adr;
 wire [31:0] dati;
 wire [31:0] dato;
+wire cpu_sr_o;
+wire cpu_cr_o;
+wire cpu_rb_i;
 wire [31:0] pcr;
 wire pulse30;
 
@@ -113,9 +117,9 @@ DSD7 u1
     .adr_o(adr),
     .dat_i(dati),
     .dat_o(dato),
-    .sr_o(sr_o),
-    .cr_o(cr_o),
-    .rb_i(rb_i),
+    .sr_o(cpu_sr_o),
+    .cr_o(cpu_cr_o),
+    .rb_i(cpu_rb_i),
     .pcr_o(pcr)
 );
 
@@ -135,7 +139,10 @@ DSD7_mmu u2
     .s_adr_i(adr),
     .s_dat_i(dato),
     .s_dat_o(mmu_dat),
-    
+    .s_sr_i(cpu_sr_o),
+    .s_cr_i(cpu_cr_o),
+    .s_rb_o(cpu_rb_i),
+   
     .m_cyc_o(cyc_o),
     .m_stb_o(stb_o),
     .m_vpa_o(vpa_o),
@@ -145,7 +152,10 @@ DSD7_mmu u2
     .m_adr_o(adr_o),
     .m_dat_i(dat_i),
     .m_dat_o(dat_o),
-    .m_ack_i(ack_i)
+    .m_ack_i(ack_i),
+    .m_sr_o(sr_o),
+    .m_cr_o(cr_o),
+    .m_rb_i(rb_i)
 );
 
 DSD7_pic u3
@@ -206,6 +216,7 @@ DSD_30Hz #(.CLK_FREQ(CLK_FREQ)) u30Hz
 
 assign ack = mmu_ack | pic_ack;
 assign dati = pic_dat|mmu_dat;
+assign irq_o = irq;
 
 endmodule
 

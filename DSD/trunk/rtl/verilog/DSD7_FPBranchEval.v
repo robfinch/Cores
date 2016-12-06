@@ -41,9 +41,10 @@
 //`endif
 
 module DSD7_FPBranchEval(xir, a, b, takb);
+parameter WID=128;
 input [31:0] xir;
-input [127:0] a;
-input [127:0] b;
+input [WID-1:0] a;
+input [WID-1:0] b;
 output reg takb;
 
 wire [5:0] opcode = xir[5:0];
@@ -51,7 +52,7 @@ wire [2:0] cond = xir[20:18];
 wire nanx;
 wire [4:0] o;
 
-fp_cmp_unit u1 (a, b, o, nanx);
+fp_cmp_unit #(WID) u1 (a, b, o, nanx);
 
 always @(opcode or cond or a or b)
 case(opcode)

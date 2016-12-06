@@ -85,7 +85,7 @@ int num_insns;
 HTBLE hTable[100000];
 int htblmax;
 int processOpt;
-int gCanCompress = 0;
+int gCanCompress = 1;
 int expandedBlock;
 int expand_flag;
 int compress_flag;
@@ -196,6 +196,10 @@ int processOptions(int argc, char **argv)
               }
               if (argv[nn][2]=='7') {
                  gCpu = 7;
+				 if (argv[nn][3]=='c')
+					 gCanCompress = 1;
+				 else
+					 gCanCompress = 0;
               }
               if (argv[nn][2]=='T') {
                  gCpu = 4;
@@ -759,7 +763,7 @@ void process_dh_htbl()
 	else
 		emitHalf(htblmax > 1024 ? 1024 : htblmax);
 	for (nn = 0; nn < htblmax && nn < 1024; nn++) {
-		emitHalf(hTable[nn].opcode);
+		emitWord(hTable[nn].opcode);
 	}
 }
 

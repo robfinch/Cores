@@ -604,6 +604,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->preg = regBP;
 		ap1->segment = stackseg;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
+		ap1->offset->sym = node->p[0]->sym;
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
@@ -619,6 +620,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->preg = regCLP;
 		ap1->segment = dataseg;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
+		ap1->offset->sym = node->p[0]->sym;
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
@@ -633,6 +635,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->mode = am_indx;
         ap1->preg = regBP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
+		ap1->offset->sym = node->p[0]->sym;
 		if (node->p[0]->tp)
 			switch(node->p[0]->tp->precision) {
 			case 32: ap1->FloatSize = 's'; break;

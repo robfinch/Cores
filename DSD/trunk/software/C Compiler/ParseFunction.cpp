@@ -67,7 +67,7 @@ int GetReturnBlockSize()
 {
 	if (currentFn) {
 		if (currentFn->IsLeaf) {
-		    return (exceptions ? 4 : 2);
+		    return (exceptions ? 6 : 4);
 		}
 	}
 	else

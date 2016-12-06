@@ -1114,7 +1114,8 @@ int NextToken()
              }
              break;
 
-        // fill fabs fadd fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix ftst
+        // fill fabs fadd fb__
+		// fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix ftst
         case 'f': case 'F':
              if ((inptr[1]=='i' || inptr[1]=='I') &&
                  (inptr[2]=='l' || inptr[2]=='L') &&
@@ -1252,6 +1253,64 @@ int NextToken()
                  inptr += 4;
                  return token = tk_ftst;
              }
+			 if (gCpu==7) {
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='e' || inptr[2]=='E') &&
+					 (inptr[3]=='q' || inptr[3]=='Q') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fbeq;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='n' || inptr[2]=='N') &&
+					 (inptr[3]=='e' || inptr[3]=='E') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fbne;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='l' || inptr[2]=='L') &&
+					 (inptr[3]=='t' || inptr[3]=='T') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fblt;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='l' || inptr[2]=='L') &&
+					 (inptr[3]=='e' || inptr[3]=='E') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fble;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='g' || inptr[2]=='G') &&
+					 (inptr[3]=='t' || inptr[3]=='T') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fbgt;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='g' || inptr[2]=='G') &&
+					 (inptr[3]=='e' || inptr[3]=='E') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fbge;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='o' || inptr[2]=='O') &&
+					 (inptr[3]=='r' || inptr[3]=='R') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fbor;
+				 }
+				 if ((inptr[1]=='b' || inptr[1]=='B') &&
+					 (inptr[2]=='u' || inptr[2]=='U') &&
+					 (inptr[3]=='n' || inptr[3]=='N') &&
+					 (isspace(inptr[4])||inptr[4]=='.')) {
+					 inptr += 4;
+					 return token = tk_fbun;
+				 }
+			 }
              break;
 
         // gran

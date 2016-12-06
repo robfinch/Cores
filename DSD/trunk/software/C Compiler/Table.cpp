@@ -53,7 +53,6 @@ void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 	if (src) {
 	  dfs.printf("A");
 		sp = sp->GetPtr(src->GetHead());
-		printf("Copy symbol table\r\n");
 		while (sp) {
   	  dfs.printf("B");
 			newsym = SYM::Copy(sp);

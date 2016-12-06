@@ -427,7 +427,7 @@ void GenerateFunction(SYM *sym)
 	if (sym->IsInterrupt) {
        if (sym->stkname)
            GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
-	   for (nn = 30; nn > 0; nn--)
+	   for (nn = 30; nn > 2; nn--)
 		   GenerateMonadic(op_push,0,makereg(nn));
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
@@ -438,6 +438,7 @@ void GenerateFunction(SYM *sym)
 	    GenerateStatement(sym->prolog);
 	}
 	if (!sym->IsNocall) {
+		/*
 		// For a leaf routine don't bother to store the link register.
 		if (sym->IsLeaf) {
     		//GenerateTriadic(op_addi,0,makereg(regSP),makereg(regSP),make_immed(-4));
@@ -445,13 +446,17 @@ void GenerateFunction(SYM *sym)
 				GenerateMonadic(op_push, 0, makereg(regXLR));
 			GenerateMonadic(op_push,0,makereg(regBP));
         }
-		else {
+		else
+		*/
+		{
 			if (exceptions)
 				GenerateMonadic(op_push, 0, makereg(regXLR));
 			GenerateMonadic(op_push, 0, makereg(regBP));
 			ap = make_label(throwlab);
 			ap->mode = am_immed;
-			if (exceptions)
+			if (sym->IsLeaf && !sym->DoesThrow)
+				;
+			else if (exceptions)
 				GenLdi(makereg(regXLR),ap);
 		}
 		GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
@@ -587,9 +592,8 @@ void GenerateReturn(Statement *stmt)
 	// Generate the return instruction. For the Pascal calling convention pop the parameters
 	// from the stack.
 	if (sym->IsInterrupt) {
-		for (nn = 1; nn < 31; nn++)
-			GenerateDiadic(op_lw,0,makereg(nn),make_indexed((nn-1)*2,regSP));
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(31*2));
+		for (nn = 3; nn < 31; nn++)
+			GenerateMonadic(op_pop,0,makereg(nn));
 		GenerateZeradic(op_iret);
 		return;
 	}

@@ -28,8 +28,9 @@
 `define LOW     1'b0
 `define HIGH    1'b1
 
-module DSD7_mmu(rst_i, clk_i, pcr_i, s_cyc_i, s_stb_i, s_vpa_i, s_vda_i, s_ack_o, s_sel_i, s_wr_i, s_adr_i, s_dat_i, s_dat_o, 
-    m_cyc_o, m_stb_o, m_ack_i, m_adr_o, m_dat_i, m_dat_o, m_vpa_o, m_vda_o, m_wr_o, m_sel_o);
+module DSD7_mmu(rst_i, clk_i, pcr_i, s_cyc_i, s_stb_i, s_vpa_i, s_vda_i, s_ack_o, s_sel_i, s_wr_i, s_adr_i, s_dat_i, s_dat_o,
+    s_sr_i, s_cr_i, s_rb_o, 
+    m_cyc_o, m_stb_o, m_ack_i, m_adr_o, m_dat_i, m_dat_o, m_vpa_o, m_vda_o, m_wr_o, m_sel_o, m_sr_o, m_cr_o, m_rb_i);
 input rst_i;
 input clk_i;
 input [31:0] pcr_i;     // paging control register
@@ -43,6 +44,9 @@ output reg s_ack_o;       // Address translation and MMU are ready
 input [31:0] s_adr_i;    // virtual address
 input [31:0] s_dat_i;
 output reg [31:0] s_dat_o;
+input s_sr_i;
+input s_cr_i;
+output reg s_rb_o;
 
 output reg m_cyc_o;
 output reg m_stb_o;
@@ -54,6 +58,9 @@ output reg m_wr_o;
 output reg [31:0] m_adr_o;   // physical address
 output reg [31:0] m_dat_o;
 input [31:0] m_dat_i;
+output reg m_sr_o;
+output reg m_cr_o;
+input m_rb_i;
 
 parameter IDLE = 4'd0;
 parameter WAIT_NACK = 4'd1;
@@ -111,10 +118,13 @@ begin
             m_adr_o[27:16] <= pe ? o1[11:0] : s_adr_i[27:16];
             m_adr_o[31:28] <= s_adr_i[31:28];
             m_dat_o <= s_dat_i;
+            m_sr_o <= s_sr_i;
+            m_cr_o <= s_cr_i;
             if (m_ack_i) begin
                 s_ack_o <= `HIGH;
                 m_stb_o <= `LOW;
                 s_dat_o <= m_dat_i; 
+                s_rb_o <= m_rb_i;
                 state <= WAIT_NACK;
             end
         end
@@ -143,6 +153,8 @@ begin
                 m_vpa_o <= `LOW;
                 s_ack_o <= `LOW;
                 s_dat_o <= 32'h0;
+                m_sr_o <= `LOW;
+                m_cr_o <= `LOW;
             end
        end
     WAIT_NACK2:
