@@ -9,9 +9,10 @@ extern void DBGClearScreen();
 extern void DBGHomeCursor();
 extern void putch(register char);
 extern int printf(char *, ...);
-extern void prtflt(float, int, int, char);
+extern pascal int prtflt(register float, register int, register int, register char);
 extern void ramtest();
-void DBGDisplayString(register char *p);
+extern void FloatTest();
+extern void DBGDisplayString(register char *p);
 extern void puthex(register int num);
 
 static naked inline int GetButton()
@@ -36,21 +37,12 @@ void BIOSMain()
 		btn = GetButton();
 		switch(btn) {
 		case BTNU:
+			while(GetButton());
 			ramtest();
 			break;
 		case BTNL:
-			DBGDisplayString("  Float Test\r\n");
-			DBGDisplayString("  PI is ");
-			prtflt(pi,0,16,'E');
-			asm {
-				ldi	r1,#$1234
-				sw	r1,$FFDC0080
-			}
-			DBGDisplayString("\r\n");
-			a = 10.0;
-			b = 10.0;
-			prtflt(a+b,0,16,'E');
-			DBGDisplayString("\r\n");
+			while(GetButton());
+			FloatTest();
 			break;
 		}
 	}
@@ -109,5 +101,19 @@ interrupt BTNCIRQHandler()
 		puthex(ReadPCHIST());
 		putch(' ');
 	}
+}
+
+interrupt IBERout()
+{
+	int nn;
+
+	DBGDisplayString("\r\nInstruction Bus Error:\r\n");
+	DBGDisplayString("PC History:\r\n");
+	for (nn = 63; nn >= 0; nn--) {
+		SetPCHNDX(nn);
+		puthex(ReadPCHIST());
+		putch(' ');
+	}
 	forever {}
 }
+

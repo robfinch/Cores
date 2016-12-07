@@ -491,9 +491,6 @@ void DBGDisplayChar(register char ch)
 
 void DBGDisplayString(register char *s)
 {
-	 asm {
-		 sw r18,$FFDC0080
-	 }
      while (*s) {DBGDisplayChar(*s); s++; }
 }
 

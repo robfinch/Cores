@@ -120,6 +120,15 @@ cold_start:
 {+      ; use expanded instruction set
 	   ldi	 sp,#$00001FFE	; initialize kernel IRQ SP
 	   ldi	 bp,#$00001FFE	; initialize kernel IRQ BP
+;	   ldi	 sp,#$01FFFFFE	; initialize kernel IRQ SP
+;	   ldi	 bp,#$01FFFFFE	; initialize kernel IRQ BP
+
+;		lf.q	fp18,pi_val
+;		ldi		r18,#20
+;		ldi		r19,#16
+;		ldi		r20,#'E'
+;		call	_prtflt
+
        ldi   r4,#$FFFE0000  ; base address of cpu ciTable
 	   csrrw r0,#$11,r4		; update table address in CISC CSR
        ldi   r1,#citable    ; point to compression table
@@ -179,6 +188,10 @@ cold_start:
 .cs5:
 		bra		.cs5		; hang the machine
 
+		align	8
+pi_val:
+dw	0x8BDA3F4E,0x84698972,0xB54442D1,0x4000921F
+
 ;----------------------------------------------------------------------------
 ; copy pre-initialized data to data area
 ;----------------------------------------------------------------------------
@@ -220,6 +233,9 @@ init_irqtable:
 		ldi		r18,#432+30
 		ldi		r19,#_BTNCIRQHandler
 		call	_set_vector
+		ldi		r18,#509
+		ldi		r19,_IBERout
+		call	_set_vector
 		ret
 
 ;----------------------------------------------------------------------------
@@ -227,8 +243,6 @@ init_irqtable:
 		align	16
 irq_routine:
 		csrrw	r1,#6,r0	; get the cause code
-		sw		r1,SEVENSEG
-		jmp		_BTNCIRQHandler
 		beq		r1,r0,.j1	; no cause
 		shl		r1,r1,#1
 		lw		r1,_interrupt_table[r1]	; load vector from table
@@ -440,7 +454,7 @@ Tc1Init:
 // special constant $FFFE as the start of displayed area rather than $0000.
 
 Tc1InitTab:
-		dh		$4054	//  3=char out delay, 84 columns
+		dh		$3054	//  3=char out delay, 84 columns
 		dh		31	// rows
 		dh		66	// left
 		dh		16	// top
@@ -573,6 +587,7 @@ _strcpy2:
 		ret
 
 .include "c:\cores4\DSD\trunk\software\bootrom\source\BIOSMain.s"
+.include "c:\cores4\DSD\trunk\software\bootrom\source\FloatTest.s"
 .include "c:\cores4\DSD\trunk\software\bootrom\source\ramtest.s"
 .include "c:\cores4\DSD\trunk\software\c64libc\source\stdio.s"
 .include "c:\cores4\DSD\trunk\software\c64libc\source\ctype.s"
