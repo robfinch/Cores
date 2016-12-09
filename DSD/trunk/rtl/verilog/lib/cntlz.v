@@ -428,6 +428,45 @@ module cntlz64(
 endmodule
 
 
+module cntlz80(
+	input [79:0] i,
+	output [6:0] o
+);
+
+    wire [4:0] cnt3;
+	wire [5:0] cnt1, cnt2;
+
+	cntlz32 u1 (i[31: 0],cnt1);
+	cntlz32 u2 (i[63:32],cnt2);
+	cntlz16 u3 (i[79:64],cnt3);
+
+	assign o =
+		!cnt3[4] ? {2'b0,cnt3} :
+		!cnt2[5] ? {1'b0,cnt2} + 8'd16 :
+		 {1'b0,cnt1} + 7'd48;
+
+endmodule
+
+
+module cntlz96(
+	input [95:0] i,
+	output [7:0] o
+);
+
+	wire [5:0] cnt1, cnt2, cnt3;
+
+	cntlz32 u1 (i[31: 0],cnt1);
+	cntlz32 u2 (i[63:32],cnt2);
+	cntlz32 u3 (i[95:64],cnt3);
+
+	assign o =
+		!cnt3[5] ? cnt3 :
+		!cnt2[5] ? cnt2 + 8'd32 :
+		 cnt1 + 8'd64;
+
+endmodule
+
+
 module cntlz128(
 	input [127:0] i,
 	output [7:0] o
@@ -473,6 +512,34 @@ module cntlz64Reg(
 
 	wire [6:0] o1;
 	cntlz64 u1 (i,o1);
+	always @(posedge clk)
+		if (ce) o <= o1;
+
+endmodule
+
+module cntlz80Reg(
+	input clk,
+	input ce,
+	input [79:0] i,
+	output reg [6:0] o
+);
+
+	wire [6:0] o1;
+	cntlz80 u1 (i,o1);
+	always @(posedge clk)
+		if (ce) o <= o1;
+
+endmodule
+
+module cntlz96Reg(
+	input clk,
+	input ce,
+	input [95:0] i,
+	output reg [7:0] o
+);
+
+	wire [7:0] o1;
+	cntlz96 u1 (i,o1);
 	always @(posedge clk)
 		if (ce) o <= o1;
 

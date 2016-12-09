@@ -6,11 +6,10 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpNormalize.v
-//    - floating point normalization unit
+//	dfpNormalize.v
+//    - decimal floating point normalization unit
 //    - two cycle latency
 //    - parameterized width
-//    - IEEE 754 representation
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -40,33 +39,13 @@
 // to be negative. A right shift is needed.
 // ============================================================================
 
-module fpNormalize(clk, ce, under, i, o);
-parameter WID = 128;
+module dfpNormalize(clk, ce, under, i, o);
+parameter WID = 160;
 localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 10 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 35 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+localparam EMSB = 23;
+localparam FMSB = 131;
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
+localparam FX = (FMSB+5)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
 input clk;
@@ -110,11 +89,7 @@ if (WID==32)
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo1,5'b0}), .o(leadingZeros2) );
 else if (WID==128)
 cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==96)
-cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==80)
-cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==64)
+else
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo1,8'h0}), .o(leadingZeros2) );
 end
 endgenerate

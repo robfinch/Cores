@@ -6,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpAddsub.v
+//	dfpAddsub.v
 //    - floating point adder/subtracter
 //    - two cycle latency
 //    - can issue every clock cycle
@@ -29,7 +29,7 @@
 //                                                                          
 // ============================================================================
 
-module fpAddsub(clk, ce, rm, op, a, b, o);
+module dfpAddsub(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -173,8 +173,6 @@ if (WID==128)
     redor128 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (WID==96)
     redor96 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==80)
-    redor80 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (WID==64)
     redor64 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (WID==32)

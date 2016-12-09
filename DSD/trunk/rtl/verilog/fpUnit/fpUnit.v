@@ -104,11 +104,17 @@
 `define QZEROZEROD  63'h7FF0000000000003	// - zero / zero
 `define QINFZEROD	63'h7FF0000000000004	// - infinity X zero
 
+`define	QINFODX		64'hFF800000_00000000		// info
+`define	QSUBINFDX 	79'h7FFF000000_0000000001	// - infinity - infinity
+`define QINFDIVDX 	79'h7FFF000000_0000000002	// - infinity / infinity
+`define QZEROZERODX 79'h7FFF000000_0000000003	// - zero / zero
+`define QINFZERODX	79'h7FFF000000_0000000004	// - infinity X zero
+
 `define	QINFOQ		112'hFF800000_0000000000_0000000000		// info
-`define	QSUBINFQ 	127'h7F_F000000000_0000000000_0000000001	// - infinity - infinity
-`define QINFDIVQ 	127'h7F_F000000000_0000000000_0000000002	// - infinity / infinity
-`define QZEROZEROQ  127'h7F_F000000000_0000000000_0000000003	// - zero / zero
-`define QINFZEROQ	127'h7F_F000000000_0000000000_0000000004	// - infinity X zero
+`define	QSUBINFQ 	127'h7F_FF00000000_0000000000_0000000001	// - infinity - infinity
+`define QINFDIVQ 	127'h7F_FF00000000_0000000000_0000000002	// - infinity / infinity
+`define QZEROZEROQ  127'h7F_FF00000000_0000000000_0000000003	// - zero / zero
+`define QINFZEROQ	127'h7F_FF00000000_0000000000_0000000004	// - infinity X zero
 
 module fpUnit(rst, clk, ce, ir, ld, a, b, imm, o, status, exception, done);
 
@@ -239,9 +245,11 @@ reg snanx;		// signalling nan
 wire divDone;
 wire pipe_ce = ce;// & divDone;	// divide must be done in order for pipe to clock
 wire precmatch = WID==32 ? ir[28:27]==2'b00 :
-                 WID==64 ? ir[28:27]==2'b01 :
-                 WID==96 ? ir[28:27]==2'b10 :
+                 WID==64 ? ir[28:27]==2'b01 : 1;
+                 /*
+                 WID==80 ? ir[28:27]==2'b10 :
                  ir[28:27]==2'b11;
+                 */
 
 always @(posedge clk)
 	// reset: disable and clear all exceptions and status
@@ -485,26 +493,34 @@ wire [7:0] maxdivcnt;
 generate begin
 if (WID==128) begin
     assign inf = &fpu_o[126:112] && fpu_o[111:0]==0;
-    assign subinf 	= fpu_o[127:0]==`QSUBINFQ;
-    assign infdiv 	= fpu_o[127:0]==`QINFDIVQ;
-    assign zerozero = fpu_o[127:0]==`QZEROZEROQ;
-    assign infzero 	= fpu_o[127:0]==`QINFZEROQ;
+    assign subinf 	= fpu_o[126:0]==`QSUBINFQ;
+    assign infdiv 	= fpu_o[126:0]==`QINFDIVQ;
+    assign zerozero = fpu_o[126:0]==`QZEROZEROQ;
+    assign infzero 	= fpu_o[126:0]==`QINFZEROQ;
     assign maxdivcnt = 8'd250;
+end
+else if (WID==80) begin
+    assign inf = &fpu_o[78:64] && fpu_o[63:0]==0;
+    assign subinf 	= fpu_o[78:0]==`QSUBINFDX;
+    assign infdiv 	= fpu_o[78:0]==`QINFDIVDX;
+    assign zerozero = fpu_o[78:0]==`QZEROZERODX;
+    assign infzero 	= fpu_o[78:0]==`QINFZERODX;
+    assign maxdivcnt = 8'd136;
 end
 else if (WID==64) begin
     assign inf      = &fpu_o[62:52] && fpu_o[51:0]==0;
-    assign subinf   = fpu_o[63:0]==`QSUBINFD;
-    assign infdiv   = fpu_o[63:0]==`QINFDIVD;
-    assign zerozero = fpu_o[63:0]==`QZEROZEROD;
-    assign infzero  = fpu_o[63:0]==`QINFZEROD;
+    assign subinf   = fpu_o[62:0]==`QSUBINFD;
+    assign infdiv   = fpu_o[62:0]==`QINFDIVD;
+    assign zerozero = fpu_o[62:0]==`QZEROZEROD;
+    assign infzero  = fpu_o[62:0]==`QINFZEROD;
     assign maxdivcnt = 8'd112;
 end
 else if (WID==32) begin
     assign inf      = &fpu_o[30:23] && fpu_o[22:0]==0;
-    assign subinf   = fpu_o[31:0]==`QSUBINFS;
-    assign infdiv   = fpu_o[31:0]==`QINFDIVS;
-    assign zerozero = fpu_o[31:0]==`QZEROZEROS;
-    assign infzero  = fpu_o[31:0]==`QINFZEROS;
+    assign subinf   = fpu_o[30:0]==`QSUBINFS;
+    assign infdiv   = fpu_o[30:0]==`QINFDIVS;
+    assign zerozero = fpu_o[30:0]==`QZEROZEROS;
+    assign infzero  = fpu_o[30:0]==`QINFZEROS;
     assign maxdivcnt = 8'd54;
 end
 end

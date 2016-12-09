@@ -1,46 +1,31 @@
-/* ===============================================================
-	(C) 2006  Robert Finch
-	All rights reserved.
-	rob@birdcomputer.ca
-
-	i2f.v
-		- convert integer to floating point
-		- parameterized width
-		- IEEE 754 representation
-
-	This source code is free for use and modification for
-	non-commercial or evaluation purposes, provided this
-	copyright statement and disclaimer remains present in
-	the file.
-
-	If the code is modified, please state the origin and
-	note that the code has been modified.
-
-	NO WARRANTY.
-	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF
-	ANY KIND, WHETHER EXPRESS OR IMPLIED. The user must assume
-	the entire risk of using the Work.
-
-	IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
-	ANY INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-	WHATSOEVER RELATING TO THE USE OF THIS WORK, OR YOUR
-	RELATIONSHIP WITH THE AUTHOR.
-
-	IN ADDITION, IN NO EVENT DOES THE AUTHOR AUTHORIZE YOU
-	TO USE THE WORK IN APPLICATIONS OR SYSTEMS WHERE THE
-	WORK'S FAILURE TO PERFORM CAN REASONABLY BE EXPECTED
-	TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN LOSS
-	OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK,
-	AND YOU AGREE TO HOLD THE AUTHOR AND CONTRIBUTORS HARMLESS
-	FROM ANY CLAIMS OR LOSSES RELATING TO SUCH UNAUTHORIZED
-	USE.
-
-	- pipelinable
-	- single stage latency
-
-	Ref: Spartan3-4
-	267 LUTs / 167 slices / 20? ns  (32 bits)
-=============================================================== */
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	i2f.v
+//  - convert integer to floating point
+//  - parameterized width
+//  - IEEE 754 representation
+//  - pipelineable
+//  - single cycle latency
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
 
 module i2f
 #(	parameter WID = 32)
@@ -94,6 +79,8 @@ if (WID==128) begin
 cntlz128Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
 end else if (WID==96) begin
 cntlz96Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
+end else if (WID==80) begin
+cntlz80Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
 end else if (WID==64) begin
 cntlz64Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
 end else begin
@@ -153,5 +140,6 @@ case(cnt)
 endcase
 
 i2f #(32) u1 (.clk(clk), .ce(1), .rm(2'd0), .i(i), .o(fo) );
+i2f #(80) u2 (.clk(clk), .ce(1), .rm(2'd0), .i(i), .o(fo) );
 
 endmodule

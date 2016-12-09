@@ -30,7 +30,7 @@
 module fp_cmp_unit(a, b, o, nanx);
 parameter WID = 32;
 localparam MSB = WID-1;
-localparam EMSB = WID==127 ? 14 :
+localparam EMSB = WID==128 ? 14 :
                   WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
@@ -54,8 +54,8 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==24 ? 15 : 9;
 
 input [WID-1:0] a, b;
-output [3:0] o;
-reg [3:0] o;
+output [4:0] o;
+reg [4:0] o;
 output nanx;
 
 // Decompose the operands

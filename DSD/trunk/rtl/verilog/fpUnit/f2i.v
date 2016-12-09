@@ -117,5 +117,6 @@ always #10 clk = ~clk;
 
 f2i #(32) u1 (.clk(clk), .ce(1'b1), .i(32'h3F800000), .o(io1), .overflow(ov1) );
 f2i #(32) u2 (.clk(clk), .ce(1'b1), .i(32'h00000000), .o(io0), .overflow(ov0) );
+f2i #(80) u3 (.clk(clk), .ce(1'b1), .i(80'h3FF80000000000000000), .o(io1), .overflow(ov1) );
 
 endmodule
