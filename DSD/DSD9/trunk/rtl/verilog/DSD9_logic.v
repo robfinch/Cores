@@ -29,21 +29,21 @@
 `define R2      8'h02
 `endif
 
-`define ANDI    8'h0C
-`define ORI     8'h0D
-`define EORI    8'h0E
+`define ANDI    8'h08
+`define ORI     8'h09
+`define XORI    8'h0A
 
-`define AND     8'h20
-`define OR      8'h21
-`define EOR     8'h22
-`define ANDC    8'h23
-`define NAND    8'h24
-`define NOR     8'h25
-`define ENOR    8'h26
-`define ORC     8'h27
+`define AND     8'h08
+`define OR      8'h09
+`define XOR     8'h0A
+`define ANDC    8'h4B
+`define NAND    8'h48
+`define NOR     8'h49
+`define XNOR    8'h4A
+`define ORC     8'h4C
 
 module DSD9_logic(xir, a, b, imm, res);
-parameter DMSB=47;
+parameter DMSB=79;
 input [39:0] xir;
 input [DMSB:0] a;
 input [DMSB:0] b;
@@ -61,18 +61,18 @@ case(xopcode)
 //	`NOT:	res <= ~|a;
 	`AND:	res <= a & b;
 	`OR:	res <= a | b;
-	`EOR:	res <= a ^ b;
+	`XOR:	res <= a ^ b;
 	`ANDC:  res <= a & ~b;
 	`NAND:	res <= ~(a & b);
 	`NOR:	res <= ~(a | b);
-	`ENOR:	res <= ~(a ^ b);
+	`XNOR:	res <= ~(a ^ b);
 	`ORC:   res <= a | ~b;
 	default:	res <= 48'd0;
 	endcase
 `ANDI:	res <= a & imm;
 `ORI:	res <= a | imm;
-`EORI:	res <= a ^ imm;
-default:	res <= 48'd0;
+`XORI:	res <= a ^ imm;
+default:	res <= 80'd0;
 endcase
 
 endmodule

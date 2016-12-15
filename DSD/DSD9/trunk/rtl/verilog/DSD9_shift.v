@@ -27,22 +27,24 @@
 //
 `ifndef SHL
 `define R2      8'h02
-`define SHL     8'h40
-`define SHR     8'h42
-`define ASR     8'h44
-`define ROL     8'h41
-`define ROR     8'h43
-`define SHLI    8'h50
-`define SHRI    8'h52
-`define ASRI    8'h54
-`define ROLI    8'h51
-`define RORI    8'h53
+`define SHL     8'h30
+`define SHR     8'h31
+`define ASL     8'h32
+`define ASR     8'h33
+`define ROL     8'h34
+`define ROR     8'h35
+`define SHLI    8'h40
+`define SHRI    8'h41
+`define ASLI    8'h42
+`define ASRI    8'h43
+`define ROLI    8'h44
+`define RORI    8'h45
 
-`define HIGHWORD    95:48
+`define HIGHWORD    159:80
 `endif
 
 module DSD9_shift(xir, a, b, res, rolo);
-parameter DMSB=47;
+parameter DMSB=79;
 input [39:0] xir;
 input [DMSB:0] a;
 input [DMSB:0] b;
@@ -55,10 +57,10 @@ wire [7:0] xopcode = xir[7:0];
 wire [7:0] xfunc = xir[39:32];
 
 wire isImm = xfunc==`SHLI || xfunc==`SHRI || xfunc==`ASRI || xfunc==`ROLI || xfunc==`RORI;
-wire [5:0] imm = xir[21:16];
+wire [5:0] imm = xir[25:20];
 
-wire [95:0] shl = {48'd0,a} << (isImm ? imm : b[5:0]);
-wire [95:0] shr = {a,48'd0} >> (isImm ? imm : b[5:0]);
+wire [159:0] shl = {80'd0,a} << (isImm ? imm : b[5:0]);
+wire [159:0] shr = {a,80'd0} >> (isImm ? imm : b[5:0]);
 
 always @*
 case(xopcode)
@@ -69,20 +71,20 @@ case(xopcode)
 	`SHRI:	res <= shr[`HIGHWORD];
 	`SHR:	res <= shr[`HIGHWORD];
 	`ASRI:	if (a[DMSB])
-				res <= (shr[`HIGHWORD]) | ~(48'hFFFFFFFFFFFF >> imm);
+				res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> imm);
 			else
 				res <= shr[`HIGHWORD];
 	`ASR:	if (a[DMSB])
-				res <= (shr[`HIGHWORD]) | ~(48'hFFFFFFFFFFFF >> b[5:0]);
+				res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> b[5:0]);
 			else
 				res <= shr[`HIGHWORD];
-    `ROL:	res <= ROTATE_INSN ? shl[31:0]|shl[`HIGHWORD] : 48'hDEADDEADDEAD;
-    `ROLI:	res <= ROTATE_INSN ? shl[31:0]|shl[`HIGHWORD] : 48'hDEADDEADDEAD;
-    `ROR:	res <= ROTATE_INSN ? shr[31:0]|shr[`HIGHWORD] : 48'hDEADDEADDEAD;
-    `RORI:	res <= ROTATE_INSN ? shr[31:0]|shr[`HIGHWORD] : 48'hDEADDEADDEAD;
-    default: res <= 48'd0;
+    `ROL:	res <= ROTATE_INSN ? shl[79:0]|shl[`HIGHWORD] : 80'hDEADDEADDEAD;
+    `ROLI:	res <= ROTATE_INSN ? shl[79:0]|shl[`HIGHWORD] : 80'hDEADDEADDEAD;
+    `ROR:	res <= ROTATE_INSN ? shr[79:0]|shr[`HIGHWORD] : 80'hDEADDEADDEAD;
+    `RORI:	res <= ROTATE_INSN ? shr[79:0]|shr[`HIGHWORD] : 80'hDEADDEADDEAD;
+    default: res <= 80'd0;
     endcase
-default:	res <= 48'd0;
+default:	res <= 80'd0;
 endcase
 
 endmodule
