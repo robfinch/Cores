@@ -49,14 +49,28 @@
 `define BLEUI   8'h5E
 `define BGTUI   8'h5F 
 
+`define FBEQ    8'h36
+`define FBNE    8'h37
+`define FBLT    8'h38
+`define FBGE    8'h39
+`define FBLE    8'h3A
+`define FBGT    8'h3B
+`define FBOR    8'h3C
+`define FBUN    8'h3D
+
 module DSD9_BranchEval(xir, a, b, imm, takb);
+parameter WID=80;
 input [39:0] xir;
-input [79:0] a;
-input [79:0] b;
-input [79:0] imm;
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] imm;
 output reg takb;
 
 wire [7:0] opcode = xir[7:0];
+wire [4:0] o;
+wire nanx;
+
+fp_cmp_unit #(WID) u1 (a, b, o, nanx);
 
 always @(opcode or a or b or imm or xir)
 case(opcode)
@@ -82,6 +96,15 @@ case(opcode)
 `BGEUI: takb <= a >= imm;
 `BLEUI: takb <= a <= imm;
 `BGTUI: takb <= a > imm;
+
+`FBEQ:  takb <= o[0];
+`FBNE:  takb <= !o[0];
+`FBLT:  takb <= o[1];
+`FBGE:  takb <= !o[1];
+`FBLE:  takb <= o[2];
+`FBGT:  takb <= !o[2];
+`FBUN:  takb <= o[4];
+`FBOR:  takb <= !o[4];
 default: takb <= 1'b0;
 endcase
 

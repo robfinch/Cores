@@ -31,8 +31,8 @@ input rst;
 input clk;
 input xIsBranch;
 input advanceX;
-input [63:0] pc;
-input [63:0] xpc;
+input [31:0] pc;
+input [31:0] xpc;
 input takb;
 output predict_taken;
 
@@ -42,6 +42,7 @@ reg [1:0] branch_history_table [511:0];
 // For simulation only, initialize the history table to zeros.
 // In the real world we don't care.
 initial begin
+    gbl_branch_hist = 3'b000;
 	for (n = 0; n < 512; n = n + 1)
 		branch_history_table[n] = 0;
 end

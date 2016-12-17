@@ -34,14 +34,19 @@ input clk_i;
 input [31:0] pcr_i;     // paging control register
 input s_cyc_i;
 input s_stb_i;
-input s_wr_i;             // write strobe
-output reg s_ack_o;       // Address translation and MMU are ready
+input s_wr_i;           // write strobe
+output s_ack_o;
 input [31:0] s_adr_i;    // virtual address
 input [31:0] s_dat_i;
-output reg [31:0] s_dat_o;
+output [31:0] s_dat_o;
 output reg [31:0] pea_o;
 
 wire cs = s_cyc_i && s_stb_i && (s_adr_i[31:12]==20'hFFDC4);
+
+reg ack1;
+always @(posedge clk_i)
+    ack1 <= cs;
+assign ack_o = cs ? ack1 : 1'b0;
 
 reg [3:0] state;
 wire [12:0] o0,o1;
@@ -57,6 +62,7 @@ DSD9_MMURam u1
     .ra1({pcr_i[4:0],s_adr_i[25:16]}),
     .o1(o1)
 );
+assign s_dat_o = cs ? o0 : 32'h0;
 
 wire pe = pcr_i[31] & ~s_adr_i[31];
 

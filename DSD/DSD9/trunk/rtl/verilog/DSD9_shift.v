@@ -56,11 +56,8 @@ parameter ROTATE_INSN = 1;
 wire [7:0] xopcode = xir[7:0];
 wire [7:0] xfunc = xir[39:32];
 
-wire isImm = xfunc==`SHLI || xfunc==`SHRI || xfunc==`ASRI || xfunc==`ROLI || xfunc==`RORI;
-wire [5:0] imm = xir[25:20];
-
-wire [159:0] shl = {80'd0,a} << (isImm ? imm : b[5:0]);
-wire [159:0] shr = {a,80'd0} >> (isImm ? imm : b[5:0]);
+wire [159:0] shl = {80'd0,a} << b[6:0];
+wire [159:0] shr = {a,80'd0} >> b[6:0];
 
 always @*
 case(xopcode)
@@ -71,11 +68,11 @@ case(xopcode)
 	`SHRI:	res <= shr[`HIGHWORD];
 	`SHR:	res <= shr[`HIGHWORD];
 	`ASRI:	if (a[DMSB])
-				res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> imm);
+				res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> b[6:0]);
 			else
 				res <= shr[`HIGHWORD];
 	`ASR:	if (a[DMSB])
-				res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> b[5:0]);
+				res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> b[6:0]);
 			else
 				res <= shr[`HIGHWORD];
     `ROL:	res <= ROTATE_INSN ? shl[79:0]|shl[`HIGHWORD] : 80'hDEADDEADDEAD;

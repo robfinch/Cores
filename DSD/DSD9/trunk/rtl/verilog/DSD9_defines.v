@@ -60,6 +60,8 @@
 `define BGTU    8'h4F 
 
 `define CALL    8'h50
+`define BBC     8'h54
+`define BBS     8'h55
 `define BEQI    8'h56
 `define BNEI    8'h57
 `define BLTI    8'h58
@@ -73,6 +75,8 @@
 
 `define PUSH    8'h70
 `define POP     8'h71
+`define LDDBP   8'h72
+`define LDD12   8'h73
 `define SNE     8'h76
 `define SEQ     8'h77
 `define SLT     8'h78
@@ -115,7 +119,7 @@
 `define LDDX    8'hA6
 `define LDTX    8'hA7
 `define LDTUX   8'hA8
-`define LDVDSRX 8'hAE
+`define LDVDARX 8'hAE
 
 `define STBX    8'hB0
 `define STWX    8'hB1
@@ -128,7 +132,7 @@
 `define BRK     8'hE1
 `define REX     8'hE2
 `define WAI     8'hE3
-`define RTI     8'hE4
+`define IRET    8'hE4
 `define MEMSB   8'hE5
 `define MEMDB   8'hE6
 `define SYNC    8'hE7
@@ -165,15 +169,44 @@
 `define ANDN    8'h4B
 `define ORN     8'h4C
 
+// Float instructions
+`define FMOV    6'h10
+`define FTOI    6'h12
+`define ITOF    6'h13
+`define FNEG    6'h14
+`define FABS    6'h15
+`define FSIGN   6'h16
+`define FMAN    6'h17
+`define FNABS   6'h18
+`define FCVTSQ  6'h1B
+`define FSTAT   6'h1C
+`define FTX     6'h20
+`define FCX     6'h21
+`define FEX     6'h22
+`define FDX     6'h23
+`define FRM     6'h24
+
+`define FADD    6'h04
+`define FSUB    6'h05
+`define FCMP    6'h06
+`define FMUL    6'h08
+`define FDIV    6'h09
+
+
 `define OL_MACHINE      2'b00
 `define OL_HYPERVISOR   2'b01
 `define OL_SUPERVISOR   2'b10
 `define OL_USER         2'b11
 
+`define CSRRW     2'b00
+`define CSRRS     2'b01
+`define CSRRC     2'b10
+
 `define CSR_HARTID  12'h001
 `define CSR_TICK    12'h002
 `define CSR_PCR     12'h003
 `define CSR_TVEC    12'h004
+`define CSR_EXROUT  12'h005
 `define CSR_CAUSE   12'h006
 `define CSR_BADADDR 12'h007
 `define CSR_SCRATCH 12'h009
@@ -182,14 +215,25 @@
 `define CSR_SBL     12'h00E
 `define CSR_SBU     12'h00F
 `define CSR_CISC    12'h011
+`define CSR_INSRET  12'h013
+`define CSR_TIME    12'h014
+`define CSR_FPSTAT  12'h016
 `define CSR_EPC     12'h040
 `define CSR_STATUS  12'h041
+`define CSR_PCHIST  12'h100
+`define CSR_PCHNDX  12'h101
 `define CSR_CONFIG  12'hFF0
 `define CSR_CAP     12'hFFE
+
+`define FLT_TYPE    32'd24
 
 `define FLT_MEM     9'd483
 `define FLT_IADR    9'd484
 `define FLT_UNIMP   9'd485
+`define FLT_FLT     9'd486
+`define FLT_CHK     9'd487
+`define FLT_DBZ     9'd488
+`define FLT_OFL     9'd489
 `define FLT_PRIV    9'd501
 `define FLT_STACK   9'd504
 `define FLT_DBE     9'd508
