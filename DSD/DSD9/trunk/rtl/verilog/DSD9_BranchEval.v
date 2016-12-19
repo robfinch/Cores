@@ -69,6 +69,9 @@ output reg takb;
 wire [7:0] opcode = xir[7:0];
 wire [4:0] o;
 wire nanx;
+// make sure bit index is valid
+wire [6:0] bitno1 = xir[20:14];
+wire [6:0] bitno = bitno1 > 7'd79 ? 7'd0 : bitno1;
 
 fp_cmp_unit #(WID) u1 (a, b, o, nanx);
 
@@ -84,8 +87,8 @@ case(opcode)
 `BGEU:  takb <= a >= b;
 `BLEU:  takb <= a <= b;
 `BGTU:  takb <= a > b;
-`BBC:   takb <= ~a[xir[20:14]];
-`BBS:   takb <= a[xir[20:14]];
+`BBC:   takb <= ~a[bitno];
+`BBS:   takb <= a[bitno];
 `BEQI:  takb <= a==imm;
 `BNEI:  takb <= a!=imm;
 `BLTI:  takb <= $signed(a) < $signed(imm);

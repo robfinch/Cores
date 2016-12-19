@@ -28,7 +28,7 @@ module DSD9_mpu(hartid_i, rst_i, clk_i,
     i1,i2,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, irq_o,
     cyc_o, stb_o, wr_o, sel_o, ack_i, err_i, adr_o, dat_i, dat_o,
-    sr_o, cr_o, rb_i
+    sr_o, cr_o, rb_i, state_o
     );
 input [79:0] hartid_i;
 input rst_i;
@@ -76,6 +76,8 @@ output [127:0] dat_o;
 output sr_o;
 output cr_o;
 input rb_i;
+output [5:0] state_o;
+
 parameter CLK_FREQ = 50000000;
 
 wire irq;
@@ -115,7 +117,8 @@ DSD9 u1
     .dat_o(dato),
     .sr_o(cpu_sr_o),
     .cr_o(cpu_cr_o),
-    .rb_i(cpu_rb_i)
+    .rb_i(cpu_rb_i),
+    .state_o(state_o)
 );
 
 DSD9_pic u2

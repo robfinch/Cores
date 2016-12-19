@@ -46,18 +46,19 @@ wire cs = s_cyc_i && s_stb_i && (s_adr_i[31:12]==20'hFFDC4);
 reg ack1;
 always @(posedge clk_i)
     ack1 <= cs;
-assign ack_o = cs ? ack1 : 1'b0;
+assign s_ack_o = cs ? ack1 : 1'b0;
 
 reg [3:0] state;
 wire [12:0] o0,o1;
+wire [9:0] aslice = s_adr_i[10:1]; 
 
 DSD9_MMURam u1
 (
     .clk(clk_i),
     .wr(cs & s_wr_i),
-    .wa({pcr_i[12:8],s_adr_i[9:0]}),
+    .wa({pcr_i[12:8],aslice}),
     .i(s_dat_i[12:0]),
-    .ra0({pcr_i[12:8],s_adr_i[9:0]}),
+    .ra0({pcr_i[12:8],aslice}),
     .o0(o0),
     .ra1({pcr_i[4:0],s_adr_i[25:16]}),
     .o1(o1)
@@ -66,11 +67,18 @@ assign s_dat_o = cs ? o0 : 32'h0;
 
 wire pe = pcr_i[31] & ~s_adr_i[31];
 
+// The following delay reg is to keep all the address bits in sync
+// with the output of the map table. So there are no intermediate
+// invalid addresses.
+reg [31:0] s_adr1;
+always @(posedge clk_i)
+    s_adr1 <= s_adr_i;
+
 always @(posedge clk_i)
 begin
-    pea_o[15:0] <= s_adr_i[15:0];
-    pea_o[27:16] <= pe ? o1[11:0] : s_adr_i[27:16];
-    pea_o[31:28] <= s_adr_i[31:28];
+    pea_o[15:0] <= s_adr1[15:0];
+    pea_o[27:16] <= pe ? o1[11:0] : s_adr1[27:16];
+    pea_o[31:28] <= s_adr1[31:28];
 end
 
 endmodule

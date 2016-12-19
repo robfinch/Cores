@@ -14,6 +14,7 @@
 `define AND     8'h07
 `define OR      8'h08
 `define XOR     8'h09
+`define _16ADD  8'h0E
 `define CSR     8'h0F
 
 `define MUL     8'h10
@@ -29,12 +30,15 @@
 `define REM     8'h1B
 `define REMU    8'h1C
 `define REMSU   8'h1D
+`define _8ADD   8'h1E
+`define _10ADD  8'h1F
 
 `define MULH    8'h20
 `define MULUH   8'h21
 `define MULSUH  8'h22
 `define LEA     8'h26
 `define LEAX    8'h27
+`define _4ADD   8'h2E
 
 `define MOV     8'h30
 `define ADDI10  8'h31
@@ -46,6 +50,7 @@
 `define FBGT    8'h3B
 `define FBOR    8'h3C
 `define FBUN    8'h3D
+`define _2ADD   8'h3E
 
 `define JMP     8'h40
 `define BEQ     8'h46
@@ -72,6 +77,23 @@
 `define BGEUI   8'h5D
 `define BLEUI   8'h5E
 `define BGTUI   8'h5F 
+
+`define CSZ     8'h60
+`define CSNZ    8'h61
+`define CSN     8'h62
+`define CSNN    8'h63
+`define CSP     8'h64
+`define CSNP    8'h65
+`define CSOD    8'h66
+`define CSEV    8'h67
+`define ZSZ     8'h68
+`define ZSNZ    8'h69
+`define ZSN     8'h6A
+`define ZSNN    8'h6B
+`define ZSP     8'h6C
+`define ZSNP    8'h6D
+`define ZSOD    8'h6E
+`define ZSEV    8'h6F
 
 `define PUSH    8'h70
 `define POP     8'h71
@@ -168,6 +190,8 @@
 `define XNOR    8'h4A
 `define ANDN    8'h4B
 `define ORN     8'h4C
+
+`define MUX     8'h5F
 
 // Float instructions
 `define FMOV    6'h10
