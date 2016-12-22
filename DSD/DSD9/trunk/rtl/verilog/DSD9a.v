@@ -158,7 +158,7 @@ wire mmu_ack;
 wire [31:0] mmu_dat;
 wire iack = ack_i|mmu_ack;
 wire [127:0] idat = dat_i|{4{mmu_dat}};
-wire [31:0] mmu_dati = dat_o >> {ea[3:1],4'h0};
+wire [31:0] mmu_dati = dat_o[31:0];
 reg [5:0] Ra,Rb,Rc,Rd,Re;
 reg [5:0] xRt,xRa,xRb;
 reg xRt2;
@@ -176,6 +176,8 @@ reg i54,i80;
 reg upd_rf;
 reg [31:0] dea;
 reg [127:0] idat1, idat2;
+reg wasaCall;
+reg mapen;
 
 // CSR registers
 reg [79:0] cisc;
@@ -185,10 +187,12 @@ reg [79:0] mtime;
 reg [5:0] pchndx;
 reg [31:0] sbl[0:3],sbu[0:3];
 reg [31:0] mconfig;
+reg [79:0] mkeys;
 
 // Machine
 reg [31:0] pcr;
-wire [4:0] okey = pcr[4:0];
+wire [5:0] okey = pcr[5:0];
+wire pgen = pcr[31] && (ol != 2'b00);
 reg [31:0] mbadaddr;
 reg [79:0] mscratch;
 reg [31:0] msema;
@@ -197,6 +201,7 @@ reg [31:0] mexrout;
 reg [79:0] mstatus;
 reg [31:0] mcause;
 reg [511:0] mtdeleg;
+wire calltxe = mexrout[31];
 // Hypervisor regs
 reg him;
 reg [79:0] hstatus;
@@ -212,9 +217,19 @@ reg [79:0] sscratch;
 reg [31:0] sbadaddr;
 reg [31:0] stvec;
 
+reg [127:0] markerMsg;
+
 function [79:0] fnAbs;
 input [79:0] jj;
 fnAbs = jj[79] ? -jj : jj;
+endfunction
+
+function fnOverflow;
+input op;   // 0 = add, 1=sub
+input a;
+input b;
+input s;
+fnOverflow = (op ^ s ^ b) & (~op ^ a ^ b);
 endfunction
 
 // For simulation
@@ -241,6 +256,7 @@ end
 reg [3:0] pc_inc;
 always @(iinsn)
 casex(iinsn[7:0])
+`TGT,`MARK1,`MARK2,`MARK3,`MARK4,
 `NOP,`CLI,`SEI,`WAI,`IRET,`MEMSB,`MEMDB,`SYNC,
 `MFLT0,`MFLTF:
     pc_inc = 4'd1;
@@ -259,7 +275,7 @@ default:
         pc_inc = 4'd5;
 endcase
 
-wire [31:0] ibr_disp = {{15{iinsn[39]}},iinsn[39:22]};
+wire [31:0] ibr_disp = {{16{iinsn[39]}},iinsn[39:24]};
 
 // A stuffed fault will have occurred earlier than a pending IRQ
 // hence takes precedence.
@@ -268,6 +284,8 @@ always@*
         iinsn = {5{fault_insn}};
     else if (irq_i & ~im & gie)
         iinsn = {5{7'd0,icause_i,`BRK}};
+    else if (wasaCall && insn[7:0]!=`TGT && calltxe)
+        iinsn = {5{7'd0,`FLT_TGT,`BRK}};
     else
         iinsn = insn;
 
@@ -297,34 +315,47 @@ wire dBrk = dopcode==`BRK;
 wire dIret = dopcode==`IRET;
 wire dRex = dopcode==`REX;
 
-reg xJmp, xCall ,xRet;
+reg xJmp, xJmpi, xJmpit, xCall, xCalli, xCallit ,xRet;
 wire dJmp = dopcode==`JMP;
+wire dJmpi = dopcode==`JMPI;
+wire dJmpit = dopcode==`JMPIT;
 wire dCall = dopcode==`CALL;
+wire dCalli = dopcode==`CALLI;
+wire dCallit = dopcode==`CALLIT;
 wire dRet = dopcode==`RET;
 
 reg xIsPredictableBranch,xIsBranch;
-wire dIsBranch =
-    dopcode==`BEQ || dopcode==`BNE ||
-    dopcode==`BLT || dopcode==`BGE || dopcode==`BLE || dopcode==`BGT ||
-    dopcode==`BLTU || dopcode==`BGEU || dopcode==`BLEU || dopcode==`BGTU ||
-    dopcode==`BEQI || dopcode==`BNEI ||
-    dopcode==`BLTI || dopcode==`BGEI || dopcode==`BLEI || dopcode==`BGTI ||
-    dopcode==`BLTUI || dopcode==`BGEUI || dopcode==`BLEUI || dopcode==`BGTUI ||
-    dopcode==`BBC || dopcode==`BBS ||
-    dopcode==`FBEQ || dopcode==`FBNE ||
-    dopcode==`FBLT || dopcode==`FBGE || dopcode==`FBLE || dopcode==`FBGT ||
-    dopcode==`FBOR || dopcode==`FBUN;
-wire dIsPredictableBranch =
-    (dir[21]==1'b0 && (dopcode==`BEQ || dopcode==`BNE ||
-    dopcode==`BLT || dopcode==`BGE || dopcode==`BLE || dopcode==`BGT ||
-    dopcode==`BLTU || dopcode==`BGEU || dopcode==`BLEU || dopcode==`BGTU)) ||
-    dopcode==`BEQI || dopcode==`BNEI ||
-    dopcode==`BLTI || dopcode==`BGEI || dopcode==`BLEI || dopcode==`BGTI ||
-    dopcode==`BLTUI || dopcode==`BGEUI || dopcode==`BLEUI || dopcode==`BGTUI ||
-    dopcode==`BBC || dopcode==`BBS ||
-    dopcode==`FBEQ || dopcode==`FBNE ||
-    dopcode==`FBLT || dopcode==`FBGE || dopcode==`FBLE || dopcode==`FBGT ||
-    dopcode==`FBOR || dopcode==`FBUN;
+function IsBranch;
+input [7:0] opcode;
+IsBranch =
+    opcode==`BEQ || opcode==`BNE ||
+    opcode==`BLT || opcode==`BGE || opcode==`BLE || opcode==`BGT ||
+    opcode==`BLTU || opcode==`BGEU || opcode==`BLEU || opcode==`BGTU ||
+    opcode==`BEQI || opcode==`BNEI ||
+    opcode==`BLTI || opcode==`BGEI || opcode==`BLEI || opcode==`BGTI ||
+    opcode==`BLTUI || opcode==`BGEUI || opcode==`BLEUI || opcode==`BGTUI ||
+    opcode==`BBC || opcode==`BBS ||
+    opcode==`FBEQ || opcode==`FBNE ||
+    opcode==`FBLT || opcode==`FBGE || opcode==`FBLE || opcode==`FBGT ||
+    opcode==`FBOR || opcode==`FBUN;
+endfunction
+
+
+// Used to decide whether or not to update the branch predictor
+function IsPredictableBranch;
+input [23:0] ir;
+case(ir[7:0])
+`BEQ,`BNE,`BLT,`BGE,`BLE,`BGT,`BLTU,`BGEU,`BLEU,`BGTU:
+    IsPredictableBranch = ir[23]==1'b0;
+`BEQI,`BNEI,`BLTI,`BGEI,`BLEI,`BGTI,`BLTUI,`BGEUI,`BLEUI,`BGTUI:
+    IsPredictableBranch = ir[23]==1'b0;
+`BBC,`BBS:
+    IsPredictableBranch = ir[23]==1'b0;
+`FBEQ,`FBNE,`FBLT,`FBGE,`FBLE,`FBGT,`FBUN,`FBOR:
+    IsPredictableBranch = ir[23]==1'b0;
+default: IsPredictableBranch = 1'b0;
+endcase
+endfunction
 
 wire dMul = dopcode==`R2 && (dfunct==`MUL || dfunct==`MULH);
 wire dMulu = dopcode==`R2 && (dfunct==`MULU || dfunct==`MULUH);
@@ -347,20 +378,33 @@ reg xDiv,xDivi,xDivss,xDivsu,xIsDiv;
 reg xFloat;
 wire dFloat = dopcode==`FLOAT;
 
-reg xIsLoad,xIsStore;
-wire dIsLoad = dopcode==`LDB || dopcode==`LDBU || dopcode==`LDW || dopcode==`LDWU || dopcode==`LDT || dopcode==`LDTU ||
-               dopcode==`LDP || dopcode==`LDPU || dopcode==`LDD ||
-               dopcode==`LDVDAR ||
-               dopcode==`LDBX || dopcode==`LDBUX || dopcode==`LDWX || dopcode==`LDWUX || dopcode==`LDTX || dopcode==`LDTUX ||
-               dopcode==`LDPX || dopcode==`LDPUX || dopcode==`LDDX ||
-               dopcode==`LDVDARX ||
-               dopcode==`LDDBP || dopcode==`LDD12;
-                              
-wire dIsStore = dopcode==`STB || dopcode==`STW || dopcode==`STP || dopcode==`STD || dopcode==`STDCR || dopcode==`STT ||
-                dopcode==`STBX || dopcode==`STWX || dopcode==`STPX || dopcode==`STDX || dopcode==`STDCRX || dopcode==`STTX;
+reg xIsLoad,xIsStore,xIsLoadVolatile;
+
+function IsLoadVolatile;
+input [7:0] opcode;
+IsLoadVolatile =
+    opcode==`LDVB || opcode==`LDVW || opcode==`LDVT || opcode==`LDVD || opcode==`LDVDAR || opcode==`LDVDARX;
+endfunction
+
+function IsLoad;
+input [7:0] opcode;
+IsLoad = opcode==`LDB || opcode==`LDBU || opcode==`LDW || opcode==`LDWU || opcode==`LDT || opcode==`LDTU ||
+         opcode==`LDP || opcode==`LDPU || opcode==`LDD ||
+         opcode==`LDVDAR ||
+         opcode==`LDBX || opcode==`LDBUX || opcode==`LDWX || opcode==`LDWUX || opcode==`LDTX || opcode==`LDTUX ||
+         opcode==`LDPX || opcode==`LDPUX || opcode==`LDDX ||
+         opcode==`LDDBP || opcode==`LDD12 ||
+         IsLoadVolatile(opcode);
+endfunction
+
+function IsStore;
+input [7:0] opcode;                              
+IsStore = opcode==`STB || opcode==`STW || opcode==`STP || opcode==`STD || opcode==`STDCR || opcode==`STT ||
+          opcode==`STBX || opcode==`STWX || opcode==`STPX || opcode==`STDX || opcode==`STDCRX || opcode==`STTX;
+endfunction
 
 reg xIsMultiCycle;
-wire dIsMultiCycle = dIsLoad || dIsStore || dIsDiv || dIsMul || 
+wire dIsMultiCycle = IsLoad(dopcode) || IsStore(dopcode) || dIsDiv || dIsMul || 
                      dopcode==`POP || dopcode==`PUSH || dopcode==`CALL || dopcode==`RET || dopcode==`FLOAT;
 
 reg xCsr;
@@ -496,8 +540,8 @@ always @*
     case(xopcode)
     `R2:
         case(xfunct)
-        `ADD,`ADDU: res = a + b;
-        `SUB,`SUBU: res = a - b;
+        `ADD,`ADDO: res = a + b;
+        `SUB,`SUBO: res = a - b;
         `CMP:   res = $signed(a) < $signed(b) ? -1 : a==b ? 0 : 1;
         `CMPU:  res = a < b ? -1 : a==b ? 0 : 1;
         `AND:   res = logic_o;
@@ -559,9 +603,9 @@ always @*
         default:    res  = 0;
         endcase
     `MOV:   res = a;
-    `ADD,`ADDU:   res = a + imm;
+    `ADD,`ADDO:   res = a + imm;
     `ADDI10:      res = a + imm;
-    `SUB,`SUBU:   res = a - imm;
+    `SUB,`SUBO:   res = a - imm;
     `CMP:   res = $signed(a) < $signed(imm) ? -1 : a==imm ? 0 : 1;
     `CMPU:  res = a < imm ? -1 : a==imm ? 0 : 1;
     `AND:   res = logic_o;
@@ -587,8 +631,8 @@ always @*
     `LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDP,`LDPU,`LDD,`LDVDAR,
     `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDVDARX:
             res = lres;
-    `JMP:   res = xpc + 32'd5;
-    `CALL:  res = a - 32'd10;
+    `JMP,`JMPI,`JMPIT:   res = xpc + 32'd5;
+    `CALL,`CALLI,`CALLIT:  res = a - 32'd10;
     `PUSH:  res = a - 32'd10;
     `RET:   res = a + imm;
     `CSR:   case(xir[37:36])
@@ -701,11 +745,18 @@ DSD9_dcache u2
     .hit1(dhit1)
 );
 
+wire exv;
+wire rdv;
+wire wrv;
+
 DSD9_mmu u6
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
+    .ol_i(ol),
     .pcr_i(pcr),
+    .mapen_i(mapen),
+    .s_ex_i(IsICacheLoad),
     .s_cyc_i(cyc_o),
     .s_stb_i(stb_o),
     .s_ack_o(mmu_ack),
@@ -713,8 +764,12 @@ DSD9_mmu u6
     .s_adr_i(ea),
     .s_dat_i(mmu_dati),
     .s_dat_o(mmu_dat),
-    .pea_o(pea)
+    .pea_o(pea),
+    .exv_o(exv),
+    .rdv_o(rdv),
+    .wrv_o(wrv)
 );
+
 /*
 assign advanceEX = 1'b1;
 assign advanceDC = advanceEX && !(xIsMultiCycle && !xinv);
@@ -742,10 +797,12 @@ if (rst_i) begin
     xinv <= `TRUE;
     dinv <= `TRUE;
     pcr <= 32'h00;
+    mexrout <= 32'd0;       // sim needs this
+    wasaCall <= `FALSE;
     next_state(RESTART1);
 end
 else begin
-
+mapen <= `FALSE;
 xldfp <= `FALSE;
 upd_rf <= `FALSE;
 update_regfile();
@@ -786,14 +843,17 @@ begin
     // on the critical path. Keep the decodes to a minimum.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceIF) begin
-        if (stuff_fault)
-            stuff_fault <= `FALSE;
+        if (iopcode==`MARK1)
+            markerMsg <= "Marker1 Hit";
+        stuff_fault <= `FALSE;
+        wasaCall <= `FALSE;
         if (iopcode==`BRK) begin
             Ra <= 6'd63;
             Rb <= 6'd1;
             Rc <= 6'd2;
         end
-        else if (iopcode==`PEA || iopcode==`CALL || iopcode==`POP || iopcode==`PUSH || iopcode==`RET) begin
+        else if (iopcode==`PEA || iopcode==`CALL || iopcode==`CALLI || iopcode==`CALLIT || 
+                 iopcode==`POP || iopcode==`PUSH || iopcode==`RET) begin
             Ra <= 6'd63;
             Rb <= iinsn[13:8];
             Rc <= iinsn[19:14];
@@ -818,20 +878,15 @@ begin
         pc <= pc + pc_inc;
         dpc <= pc;
         case(iopcode)
+        `FBEQ,`FBNE,`FBLT,`FBGE,`FBLE,`FBGT,`FBOR,`FBUN,
+        `BEQI,`BNEI,`BLTI,`BGEI,`BLEI,`BGTI,`BLTUI,`BGEUI,`BLEUI,`BGTUI,`BBC,`BBS,
         `BEQ,`BNE,`BLT,`BGE,`BLE,`BGT,`BLTU,`BGEU,`BLEU,`BGTU:
-            if (iinsn[21]) begin
-                dpredict_taken <= iinsn[20];
-                if (iinsn[20])
+            if (iinsn[23]) begin
+                dpredict_taken <= iinsn[22];
+                if (iinsn[22])
                     pc <= pc + ibr_disp;
             end
             else begin
-                dpredict_taken <= ipredict_taken;
-                if (ipredict_taken)
-                    pc <= pc + ibr_disp;
-            end
-        `FBEQ,`FBNE,`FBLT,`FBGE,`FBLE,`FBGT,`FBOR,`FBUN,
-        `BEQI,`BNEI,`BLTI,`BGEI,`BLEI,`BGTI,`BLTUI,`BGEUI,`BLEUI,`BGTUI,`BBC,`BBS:
-            begin
                 dpredict_taken <= ipredict_taken;
                 if (ipredict_taken)
                     pc <= pc + ibr_disp;
@@ -889,17 +944,23 @@ begin
         xldfp <= `TRUE;
 
         xJmp <= dJmp;
+        xJmpi <= dJmpi;
+        xJmpit <= dJmpit;
         xCall <= dCall;
+        xCalli <= dCalli;
+        xCallit <= dCallit;
         xRet <= dRet;
-        xIsBranch <= dIsBranch;
-        xIsLoad <= dIsLoad;
-        xIsStore <= dIsStore;
+        xIsLoad <= IsLoad(dopcode);
+        xIsLoadVolatile <= IsLoadVolatile(dopcode);
+        xIsStore <= IsStore(dopcode);
         xCsr <= dCsr;
         
         xIsMultiCycle <= dIsMultiCycle;
 
-        xIsPredictableBranch <= dIsPredictableBranch;
+        xIsBranch <= IsBranch(dopcode);
+        xIsPredictableBranch <= IsPredictableBranch(dir[23:0]);
         xpredict_taken <= dpredict_taken;
+
         a <= fwd_mux(Ra);
         b <= fwd_mux(Rb);
         c <= fwd_mux(Rc);
@@ -931,7 +992,7 @@ begin
             else
                 imm <= {{60{dir[39]}},dir[39:20]};
         endcase
-        br_disp <= {{15{dir[39]}},dir[39:22]};
+        br_disp <= {{16{dir[39]}},dir[39:24]};
         xRa <= Ra;
         xRb <= Rb;
         xRt <= 6'd0;
@@ -950,7 +1011,7 @@ begin
             `MUX:   xRt = dir[31:26];
             default:    xRt <= 6'd0;
             endcase
-        `LEA,
+        `LEA,`BITFIELD,
         `CSZ,`CSNZ,`CSN,`CSNN,`CSP,`CSNP,`CSOD,`CSEV,
         `ZSZ,`ZSNZ,`ZSN,`ZSNN,`ZSP,`ZSNP,`ZSOD,`ZSEV,
         `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLTU,`SGEU,`SLEU,`SGTU,
@@ -978,7 +1039,7 @@ begin
                 upd_rf <= `TRUE;
             default:    upd_rf <= `FALSE;
             endcase
-        `LEA,
+        `LEA,`BITFIELD,
         `CSZ,`CSNZ,`CSN,`CSNN,`CSP,`CSNP,`CSOD,`CSEV,
         `ZSZ,`ZSNZ,`ZSN,`ZSNN,`ZSP,`ZSNP,`ZSOD,`ZSEV,
         `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLTU,`SGEU,`SLEU,`SGTU,
@@ -995,7 +1056,7 @@ begin
         endcase
     end
     else if (advanceEX)
-        begin xinv <= TRUE; xRt2 <= 1'b0; xRt <= 6'd0; end
+        inv_xir();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Execute stage
@@ -1044,7 +1105,7 @@ begin
             epc[4] <= `MSU_VECT;
         end
         if (xMflt) begin
-            ex_fault(`FLT_MEM,0,fault_insn);
+            ex_fault(`FLT_MEM,0);
             pc <= xpc;
             dinv <= TRUE;
             xinv <= TRUE;
@@ -1060,7 +1121,17 @@ begin
             else begin
                 ex_branch(a + imm);
             end
-        if (xCall) begin
+        if (xJmpi) begin
+            mem_size = deci;
+            dea <= a + imm;
+            next_state(LOAD1);
+        end
+        if (xJmpit) begin
+            mem_size = tetra;
+            dea <= a + imm;
+            next_state(LOAD1);
+        end
+        if (xCall|xCalli|xCallit) begin
             mem_size <= deci;
             dea <= a - 32'd10;
             xb <= xpc + 32'd5;
@@ -1080,11 +1151,37 @@ begin
             endcase
 
         case(xopcode)
-        `LDB,`LDBU: begin mem_size <= byt; dea <= a + imm; next_state(LOAD1); end
-        `LDW,`LDWU: begin mem_size <= wyde; dea <= a + imm; next_state(LOAD1); end
-        `LDT,`LDTU: begin mem_size <= tetra; dea <= a + imm; next_state(LOAD1); end
+        `R2:
+            case(xfunct)
+            `ADDO,`SUBO:
+                if (mexrout[7] && fnOverflow(xfunct==`SUBO,a[79],b[79],res[79])) begin
+                    if (mexrout[6]) begin
+                        r1 <= `FLT_OFL;
+                        r2 <= `FLT_TYPE;
+                        ex_branch(r58);
+                    end
+                    else begin
+                        ex_fault(`FLT_OFL,0);
+                    end
+                end
+            endcase
+        `ADDO,`SUBO:
+            if (mexrout[7] && fnOverflow(xopcode==`SUBO,a[79],imm[79],res[79])) begin
+                if (mexrout[6]) begin
+                    r1 <= `FLT_OFL;
+                    r2 <= `FLT_TYPE;
+                    ex_branch(r58);
+                end
+                else begin
+                    ex_fault(`FLT_OFL,0);
+                end
+            end
+                
+        `LDB,`LDBU,`LDVB: begin mem_size <= byt; dea <= a + imm; next_state(LOAD1); end
+        `LDW,`LDWU,`LDVW: begin mem_size <= wyde; dea <= a + imm; next_state(LOAD1); end
+        `LDT,`LDTU,`LDVT: begin mem_size <= tetra; dea <= a + imm; next_state(LOAD1); end
         `LDP,`LDPU: begin mem_size <= penta; dea <= a + imm; next_state(LOAD1); end
-        `LDD,`LDDBP,`LDD12: begin mem_size <= deci; dea <= a + imm; next_state(LOAD1); end
+        `LDD,`LDDBP,`LDD12,`LDVDAR,`LDVD: begin mem_size <= deci; dea <= a + imm; next_state(LOAD1); end
         `LDBX,`LDBUX: begin mem_size <= byt; dea <= siea; next_state(LOAD1); end
         `LDWX,`LDWUX: begin mem_size <= wyde; dea <= siea; next_state(LOAD1); end
         `LDTX,`LDTUX: begin mem_size <= tetra; dea <= siea; next_state(LOAD1); end
@@ -1095,11 +1192,11 @@ begin
         `STT: begin mem_size <= tetra; dea <= a + imm; xb <= b; next_state(STORE1); end
         `STP: begin mem_size <= penta; dea <= a + imm; xb <= b; next_state(STORE1); end
         `STD: begin mem_size <= deci; dea <= a + imm; xb <= b; next_state(STORE1); end
-        `STBX: begin mem_size <= byt; dea <= siea; xb <= c; next_state(LOAD1); end
-        `STWX: begin mem_size <= wyde; dea <= siea; xb <= c; next_state(LOAD1); end
-        `STTX: begin mem_size <= tetra; dea <= siea; xb <= c; next_state(LOAD1); end
-        `STPX: begin mem_size <= penta; dea <= siea; xb <= c; next_state(LOAD1); end
-        `STDX: begin mem_size <= deci; dea <= siea; xb <= c; next_state(LOAD1); end
+        `STBX: begin mem_size <= byt; dea <= siea; xb <= c; next_state(STORE1); end
+        `STWX: begin mem_size <= wyde; dea <= siea; xb <= c; next_state(STORE1); end
+        `STTX: begin mem_size <= tetra; dea <= siea; xb <= c; next_state(STORE1); end
+        `STPX: begin mem_size <= penta; dea <= siea; xb <= c; next_state(STORE1); end
+        `STDX: begin mem_size <= deci; dea <= siea; xb <= c; next_state(STORE1); end
         `PUSH:  begin mem_size <= deci; dea <= a - 80'd10; xb <= b; next_state(STORE1); end
         `POP:   begin mem_size <= deci; dea <= a; next_state(LOAD1); end
         endcase
@@ -1153,7 +1250,7 @@ MUL9:
                 ex_branch(r58);
             end
             else begin
-                ex_fault(`FLT_DBZ,0,fault_insn);
+                ex_fault(`FLT_DBZ,0);
             end
         end
     end
@@ -1178,7 +1275,7 @@ DIV1:
                 ex_branch(r58);
             end
             else begin
-                ex_fault(`FLT_DBZ,0,fault_insn);
+                ex_fault(`FLT_DBZ,0);
             end
         end
     end
@@ -1196,7 +1293,7 @@ FLOAT1:
         default: xRt <= 6'd0;
         endcase
         upd_rf <= `TRUE;
-        begin xinv <= TRUE; xRt2 <= 1'b0; xRt <= 6'd0; end
+        inv_xir();
         next_state(RUN);
         if (fpstatus[9]) begin  // GX status bit
             if (mexrout[1]) begin
@@ -1205,16 +1302,20 @@ FLOAT1:
                 ex_branch(r58);
             end
             else begin
-                ex_fault(`FLT_FLT,0,fault_insn);
+                ex_fault(`FLT_FLT,0);
             end
         end
     end
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Load states
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 LOAD1:
     begin
         ea <= dea;
+        mapen <= pgen;
         if ((xRa==6'd63 || xRa==6'd59)&&(dea < sbl[ol] || dea > sbu[ol])) begin
-            ex_fault(`FLT_STACK,0,fault_insn);
+            ex_fault(`FLT_STACK,0);
         end
         else begin
             // Begin read uncached and unmapped data right away.
@@ -1222,18 +1323,29 @@ LOAD1:
                 read1(mem_size,dea,dea);
                 next_state(LOAD2);
             end
-            else next_state(LOAD1c);
+            else next_state(LOAD1b);
         end
     end
 
 // Wait for data cache to respond
+// Also wait for mmu mapped address
 // cycle 3: The following wait state for data alignment
+LOAD1b:
+    next_state(LOAD1c);
 LOAD1c:
     next_state(LOAD1d);
 LOAD1d:
-    next_state(LOAD1e);
-LOAD1e:
-    next_state(LOAD1f);
+    begin
+        if (rdv & pgen)
+            ex_fault(`FLT_RDV,0);
+        else begin
+            if (xIsLoadVolatile) begin
+                read1(mem_size,pgen ? pea : dea,dea);
+                next_state(LOAD2);
+            end
+            else next_state(LOAD1f);
+        end
+    end
 
 // The following wait state for cache vs external input
 LOAD1f:
@@ -1245,20 +1357,22 @@ LOAD1g:
         // Load the data cache on a miss.
         else begin
             dcmf <= {~dhit1,~dhit0};
-            retstate <= LOAD1c;
+            retstate <= LOAD1b;
             next_state(LOAD_DCACHE1);
         end
     end
 
+// LOAD2 and beyond are reached only for uncached loads.
 LOAD2:
     if (err_i) begin
         wb_nack();
         lock_o <= `LOW;
-        ex_fault(`FLT_DBE,0,fault_insn);
+        ex_fault(`FLT_DBE,0);
         mbadaddr <= dea;
     end
     else if (iack) begin
         ea <= {dea[31:4]+28'd1,4'h0};
+        mapen <= pgen;
         next_state(LOAD2a);
     end // LOAD2
 // This cycle needed after data latched
@@ -1271,7 +1385,10 @@ LOAD2b:
 
 LOAD3:
     begin
-        read2(mem_size,dea,dea);
+        if (xIsLoadVolatile)
+            read2(mem_size,pgen?pea:dea,dea);
+        else
+            read2(mem_size,dea,dea);
         next_state(LOAD4);
     end
     // Data from dat_i will be captured in idat1 for a cycle.
@@ -1279,7 +1396,7 @@ LOAD4:
     if (err_i) begin
         wb_nack();
         lock_o <= `LOW;
-        ex_fault(`FLT_DBE,0,fault_insn);
+        ex_fault(`FLT_DBE,0);
         mbadaddr <= dea;
     end
     else if (iack) begin
@@ -1291,7 +1408,7 @@ LOAD5:
         next_state(INVnRUN);
         upd_rf <= `TRUE;
         case(xopcode)
-        `LDW,`LDWX:
+        `LDW,`LDWX,`LDVW:
             begin
                 lres[79:8] <= {{72{idat1[7]}},idat1[7:0]};
             end
@@ -1299,7 +1416,7 @@ LOAD5:
             begin
                 lres[79:8] <= {{72{1'b0}},idat1[7:0]};
             end
-        `LDT,`LDTX:
+        `LDT,`LDTX,`LDVT:
             begin
                 case(dea[3:0])
                 4'hD:   lres[79:24] <= {{48{idat1[7]}},idat1[7:0]};
@@ -1307,7 +1424,7 @@ LOAD5:
                 4'hF:   lres[79:8] <= {{48{idat1[23]}},idat1[23:0]};
                 endcase
             end
-        `LDTU,`LDTUX:
+        `LDTU,`LDTUX,`JMPIT,`CALLIT:
             begin
                 case(dea[3:0])
                 4'hD:   lres[79:24] <= {{48{1'b0}},idat1[7:0]};
@@ -1333,7 +1450,7 @@ LOAD5:
                 4'hF:   lres[79:8] <= {{40{1'b0}},idat1[31:0]};
                 endcase
             end
-        `LDD,`LDDX,`POP,`RET,`LDDBP,`LDD12:
+        `LDD,`LDDX,`LDVD,`LDVDAR,`LDVDARX,`POP,`RET,`LDDBP,`LDD12,`JMPI,`CALLI:
             begin
                 case(dea[3:0])
                 4'h7:   lres[79:72] <= idat1[7:0];
@@ -1349,9 +1466,12 @@ LOAD5:
             end
         endcase // xopcode
         case(xopcode)
-        `LDW,`LDWU,`LDP,`LDPU,`LDD:   
+        `LDW,`LDWU,`LDVW,
+        `LDT,`LDTU,`LDVT,
+        `LDP,`LDPU,
+        `LDD,`LDVD,`LDVDAR,`JMPI,`JMPIT:   
             xRt <= xir[19:14];
-        `LDWX,`LDWUX,`LDPX,`LDPUX,`LDDX:
+        `LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDVDARX:
             xRt <= xir[25:20];
         `POP:
             begin
@@ -1363,11 +1483,15 @@ LOAD5:
         endcase
     end // LOAD5
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Store states
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 STORE1:
     begin
         ea <= dea;
+        mapen <= pgen;
         if ((xRa==6'd63 || xRa==6'd59)&&(dea < sbl[ol] || dea > sbu[ol])) begin
-            ex_fault(`FLT_STACK,0,fault_insn);
+            ex_fault(`FLT_STACK,0);
         end
         else begin
             $display("Store to %h <= %h", dea, xb);
@@ -1388,28 +1512,48 @@ STORE1e:
     next_state(STORE1f);
 STORE1f:
     begin
-        write1(mem_size,pea,dea,xb);
-        next_state(STORE2);
+        if (wrv & pgen)
+            ex_fault(`FLT_WRV,0);
+        else begin
+            write1(mem_size,pgen?pea:dea,dea,xb);
+            next_state(STORE2);
+        end
     end
 STORE2:
     if (err_i) begin
         wb_nack();
         lock_o <= `LOW;
-        ex_fault(`FLT_DBE,0,fault_insn);
+        ex_fault(`FLT_DBE,0);
         mbadaddr <= dea;
     end
     else if (iack) begin
         stb_o <= `LOW;
         if (Need2Cycles(mem_size,dea)) begin
             ea <= {dea[31:4]+28'd1,4'h0};
+            mapen <= pgen;
             next_state(STORE3b);
         end
         else begin
             wb_nack();
             lock_o <= `LOW;
-            next_state(INVnRUN);
             case(xopcode)
-            `CALL,`PEA,`PUSH:
+            `CALLI:
+                begin
+                    mem_size = deci;
+                    dea <= a + imm;
+                    next_state(LOAD1);
+                end
+            `CALLIT:
+                begin
+                    mem_size = tetra;
+                    dea <= a + imm;
+                    next_state(LOAD1);
+                end
+            default:    next_state(INVnRUN);
+            endcase
+            
+            case(xopcode)
+            `CALL,`PEA,`PUSH,`CALLI,`CALLIT:
                 begin
                     xRt <= 6'd63;    
                     upd_rf <= `TRUE;
@@ -1429,27 +1573,41 @@ STORE3e:
     next_state(STORE3f);
 STORE3f:
     begin
-        write2(mem_size,pea,dea);
+        write2(mem_size,pgen?pea:dea,dea);
         next_state(STORE4);
     end
 STORE4:
     if (err_i) begin
         wb_nack();
         lock_o <= `LOW;
-        ex_fault(`FLT_DBE,0,fault_insn);
+        ex_fault(`FLT_DBE,0);
         mbadaddr <= dea;
     end
     else if (iack) begin
         wb_nack();
         lock_o <= `LOW;
         case(xopcode)
-        `CALL,`PEA,`PUSH:
+        `CALLI:
+            begin
+                mem_size = deci;
+                dea <= a + imm;
+                next_state(LOAD1);
+            end
+        `CALLIT:
+            begin
+                mem_size = tetra;
+                dea <= a + imm;
+                next_state(LOAD1);
+            end
+        default:    next_state(INVnRUN);
+        endcase
+        case(xopcode)
+        `CALL,`PEA,`PUSH,`CALLI,`CALLIT:
             begin
                 xRt <= 6'd63;    
                 upd_rf <= `TRUE;
             end
         endcase
-        next_state(INVnRUN);
     end
 
 // Invalidate the xir and switch back to the run state.
@@ -1469,13 +1627,15 @@ INVnRUN:
                     ex_branch(b + imm);
                 end
 //            end
-        `RET:   begin
-                ex_branch(lres);
-                end
+        `RET,`JMPI,`CALLI: ex_branch(lres);
+        `JMPIT,`CALLIT: ex_branch(lres);    // ({xpc[79:32],lres[31:0]})
         `FLOAT:
             if (xir[31:29]==3'd0 && xir[17:12]==6'd1) begin
                 ex_branch(xpc + {xir[28:27],1'b0} + 32'd4);
             end
+        endcase
+        case(xopcode)
+        `CALL,`CALLI,`CALLIT:   wasaCall <= `TRUE;
         endcase
         next_state(RUN);
     end
@@ -1492,12 +1652,14 @@ LOAD_ICACHE1:
             if (icmf[0]) begin
                 icmf[0] <= 1'b0;
                 ea <= {pc[31:5],5'h0};
+                mapen <= pgen;
             end
             else if (icmf[1]) begin
                 ea <= {pc[31:5]+27'd1,5'h0};
+                mapen <= pgen;
                 icmf[1] <= 1'b0;
             end
-            next_state(pcr[31] ? LOAD_ICACHE2 : LOAD_ICACHE4);
+            next_state(pgen ? LOAD_ICACHE2 : LOAD_ICACHE4);
         end
         else
             next_state(RUN);
@@ -1508,17 +1670,22 @@ LOAD_ICACHE3:
     next_state(LOAD_ICACHE4);
 LOAD_ICACHE4:
     begin
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        sel_o <= 8'hFF;
-        adr_o <= pcr[31] ? pea : ea;
-        next_state(LOAD_ICACHE5);
+        if (exv & pgen)
+            ex_fault(`FLT_EXV,0);
+        else begin
+            cyc_o <= `HIGH;
+            stb_o <= `HIGH;
+            sel_o <= 8'hFF;
+            adr_o <= pgen ? pea : ea;
+            next_state(LOAD_ICACHE5);
+        end
     end
 LOAD_ICACHE5:
     if (ack_i|err_i) begin
         stb_o <= `LOW;
-        next_state(pcr[31] ? LOAD_ICACHE2 : LOAD_ICACHE4);
+        next_state(pgen ? LOAD_ICACHE2 : LOAD_ICACHE4);
         ea <= ea + 32'd16;
+        mapen <= pgen;
         if (ea[4]) begin
             if (icmf==2'b00) begin
                 IsICacheLoad <= `FALSE;
@@ -1542,17 +1709,20 @@ LOAD_DCACHE1:
             if (dcmf[0]) begin
                 dcmf[0] <= 1'b0;
                 ea <= {dea[31:5],5'h0};
+                mapen <= pgen;
                 dccnt <= 2'd0;
             end
             else if (dcmf[1]) begin
                 ea <= {dea[31:5]+27'd1,5'h0};
+                mapen <= pgen;
                 dccnt <= 2'd0;
                 dcmf[1] <= 1'b0;
             end
-            next_state(pcr[31] ? LOAD_DCACHE2 : LOAD_DCACHE4);
+            next_state(pgen ? LOAD_DCACHE2 : LOAD_DCACHE4);
         end
         else begin
             ea <= dea;
+            mapen <= pgen;
             next_state(retstate);
         end
     end
@@ -1562,23 +1732,30 @@ LOAD_DCACHE3:
     next_state(LOAD_DCACHE4);
 LOAD_DCACHE4:
     begin
-        cyc_o <= `HIGH;
-        stb_o <= `HIGH;
-        sel_o <= 16'hFFFF;
-        adr_o <= pcr[31] ? pea : ea;
-        next_state(LOAD_DCACHE5);
+        if (rdv & pgen) begin
+            ex_fault(`FLT_RDV,0);
+        end
+        else begin
+            cyc_o <= `HIGH;
+            stb_o <= `HIGH;
+            sel_o <= 16'hFFFF;
+            adr_o <= pgen ? pea : ea;
+            next_state(LOAD_DCACHE5);
+        end
     end
 LOAD_DCACHE5:
     if (ack_i|err_i) begin
         stb_o <= `LOW;
         dccnt <= dccnt + 2'd1;
         ea <= ea + 32'd16;
-        next_state(pcr[31] ? LOAD_DCACHE2 : LOAD_DCACHE4);
+        mapen <= pgen;
+        next_state(pgen ? LOAD_DCACHE2 : LOAD_DCACHE4);
         if (dccnt==2'b01) begin
             if (dcmf==2'b00) begin
                 IsDCacheLoad <= `FALSE;
                 wb_nack();
                 ea <= dea;
+                mapen <= pgen;
                 next_state(retstate);
             end
             else begin 
@@ -1608,10 +1785,9 @@ task load1;
 input dhit;
 begin
     case(xopcode)
-    `LDB:
+    `LDB,`LDVB:
         begin
-            if (!dhit)
-                wb_nack();
+            wb_nack();
             lres <= {{72{lres1[7]}},lres1[7:0]};
             xRt <= xir[19:14];
             upd_rf <= `TRUE;
@@ -1619,8 +1795,7 @@ begin
         end
     `LDBU:
         begin
-            if (!dhit)
-                wb_nack();
+            wb_nack();
             lres <= {{72{1'b0}},lres1[7:0]};
             xRt <= xir[19:14];
             upd_rf <= `TRUE;
@@ -1628,8 +1803,7 @@ begin
         end
     `LDBX:
         begin
-            if (!dhit)
-                wb_nack();
+            wb_nack();
             lres <= {{72{lres1[7]}},lres1[7:0]};
             xRt <= xir[25:20];
             upd_rf <= `TRUE;
@@ -1637,22 +1811,15 @@ begin
         end
     `LDBUX:
         begin
-            if (!dhit)
-                wb_nack();
+            wb_nack();
             lres <= {{72{1'b0}},lres1[7:0]};
             xRt <= xir[25:20];
             upd_rf <= `TRUE;
             next_state(INVnRUN);
         end
-    `LDW:
+    `LDW,`LDVW:
         begin
-            if (dhit) begin
-                lres <= {{64{lres1[15]}},lres1[15:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0]!=4'hF) begin
+            if (dhit || dea[3:0]!=4'hF) begin
                 wb_nack();
                 lres <= {{64{lres1[15]}},lres1[15:0]};
                 xRt <= xir[19:14];
@@ -1666,13 +1833,7 @@ begin
         end
     `LDWX:
         begin
-            if (dhit) begin
-                lres <= {{64{lres1[15]}},lres1[15:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0]!=4'hF) begin
+            if (dhit || dea[3:0]!=4'hF) begin
                 wb_nack();
                 lres <= {{64{lres1[15]}},lres1[15:0]};
                 xRt <= xir[25:20];
@@ -1686,13 +1847,7 @@ begin
         end
     `LDWU:
         begin
-            if (dhit) begin
-                lres <= {{64{1'b0}},lres1[15:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0]!=4'hF) begin
+            if (dhit || dea[3:0]!=4'hF) begin
                 wb_nack();
                 lres <= {{64{1'b0}},lres1[15:0]};
                 xRt <= xir[19:14];
@@ -1706,13 +1861,7 @@ begin
         end
     `LDWUX:
         begin
-            if (dhit) begin
-                lres <= {{64{1'b0}},lres1[15:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0]!=4'hF) begin
+            if (dhit || dea[3:0]!=4'hF) begin
                 wb_nack();
                 lres <= {{64{1'b0}},lres1[15:0]};
                 xRt <= xir[25:20];
@@ -1724,15 +1873,9 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDT:
+    `LDT,`LDVT:
         begin
-            if (dhit) begin
-                lres <= {{48{lres1[31]}},lres1[31:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hD) begin
+            if (dhit || dea[3:0] < 4'hD) begin
                 wb_nack();
                 lres <= {{48{lres1[31]}},lres1[31:0]};
                 xRt <= xir[19:14];
@@ -1746,13 +1889,7 @@ begin
         end
     `LDTX:
         begin
-            if (dhit) begin
-                lres <= {{48{lres1[31]}},lres1[31:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hD) begin
+            if (dhit || dea[3:0] < 4'hD) begin
                 wb_nack();
                 lres <= {{48{lres1[31]}},lres1[31:0]};
                 xRt <= xir[25:20];
@@ -1764,15 +1901,9 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDTU:
+    `LDTU,`JMPIT,`CALLIT:
         begin
-            if (dhit) begin
-                lres <= {{48{1'b0}},lres1[31:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hD) begin
+            if (dhit || dea[3:0] < 4'hD) begin
                 wb_nack();
                 lres <= {{48{1'b0}},lres1[31:0]};
                 xRt <= xir[19:14];
@@ -1786,13 +1917,7 @@ begin
         end
     `LDTUX:
         begin
-            if (dhit) begin
-                lres <= {{48{1'b0}},lres1[31:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hD) begin
+            if (dhit || dea[3:0] < 4'hD) begin
                 wb_nack();
                 lres <= {{48{1'b0}},lres1[31:0]};
                 xRt <= xir[25:20];
@@ -1806,13 +1931,7 @@ begin
         end
     `LDP:
         begin
-            if (dhit) begin
-                lres <= {{40{lres1[39]}},lres1[39:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hC) begin
+            if (dhit || dea[3:0] < 4'hC) begin
                 wb_nack();
                 lres <= {{40{lres1[39]}},lres1[39:0]};
                 xRt <= xir[19:14];
@@ -1826,13 +1945,7 @@ begin
         end
     `LDPX:
         begin
-            if (dhit) begin
-                lres <= {{40{lres1[39]}},lres1[39:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hC) begin
+            if (dhit || dea[3:0] < 4'hC) begin
                 wb_nack();
                 lres <= {{40{lres1[39]}},lres1[39:0]};
                 xRt <= xir[25:20];
@@ -1846,13 +1959,7 @@ begin
         end
     `LDPU:
         begin
-            if (dhit) begin
-                lres <= {{40{1'b0}},lres1[39:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hC) begin
+            if (dhit || dea[3:0] < 4'hC) begin
                 wb_nack();
                 lres <= {{40{1'b0}},lres1[39:0]};
                 xRt <= xir[19:14];
@@ -1866,13 +1973,7 @@ begin
         end
     `LDPUX:
         begin
-            if (dhit) begin
-                lres <= {{40{1'b0}},lres1[39:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'hC) begin
+            if (dhit || dea[3:0] < 4'hC) begin
                 wb_nack();
                 lres <= {{40{1'b0}},lres1[39:0]};
                 xRt <= xir[25:20];
@@ -1884,15 +1985,9 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDD,`LDDBP,`LDD12:
+    `LDD,`LDDBP,`LDD12,`LDVD,`LDVDAR,`JMPI,`CALLI:
         begin
-            if (dhit) begin
-                lres <= lres1[79:0];
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'h7) begin
+            if (dhit || dea[3:0] < 4'h7) begin
                 wb_nack();
                 lres <= lres1[79:0];
                 xRt <= xir[19:14];
@@ -1906,14 +2001,7 @@ begin
         end
     `POP:
         begin
-            if (dhit) begin
-                lres <= lres1[79:0];
-                xRt2 <= `TRUE;
-                xRt <= xir[13:8];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'h7) begin
+            if (dhit || dea[3:0] < 4'h7) begin
                 wb_nack();
                 lres <= lres1[79:0];
                 xRt2 <= `TRUE;
@@ -1926,15 +2014,9 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDDX:
+    `LDDX,`LDVDARX:
         begin
-            if (dhit) begin
-                lres <= lres1[79:0];
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'h7) begin
+            if (dhit || dea[3:0] < 4'h7) begin
                 wb_nack();
                 lres <= lres1[79:0];
                 xRt <= xir[25:20];
@@ -1948,13 +2030,7 @@ begin
         end
     `RET:
         begin
-            if (dhit) begin
-                lres <= lres1[79:0];
-                xRt <= 6'd63;
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
-            end
-            else if (dea[3:0] < 4'h7) begin
+            if (dhit || dea[3:0] < 4'h7) begin
                 wb_nack();
                 lres <= lres1[79:0];
                 xRt <= 6'd63;
@@ -2104,7 +2180,6 @@ endtask
 task ex_fault;
 input [8:0] ccd;        // cause code
 input nib;              // next instruction bit
-output [23:0] fault_insn;
 begin
     stuff_fault <= `TRUE;
     fault_insn <= { 2'b0, nib, ccd, `BRK};
@@ -2135,7 +2210,7 @@ begin
     case(ol)
     `OL_USER:
         begin   
-            ex_fault(`FLT_PRIV,0,fault_insn);
+            ex_fault(`FLT_PRIV,0);
             pc <= xpc;
             dinv <= TRUE;
             xinv <= TRUE;
@@ -2281,13 +2356,23 @@ begin
 
     `CSR_EPC:       res = epc[0];
     `CSR_CONFIG:    res = mconfig;
+    // CPU Info
+    12'hFF0:    res = "Finitron";
+    12'hFF1:    res = "";
+    12'hFF2:    res = "80 Bit";
+    12'hFF3:    res = "";
+    12'hFF4:    res = "DSD9";
+    12'hFF5:    res = "";
+    12'hFF6:    res = 1;
+    12'hFF7:    res = 1234;
+    12'hFF8:    res = {40'd16384,40'd16384};
     default:        res = 80'd0;
     endcase
     else
         res = 80'd0;
     /*
     else begin
-        ex_fault(`FLT_PRIV,0,fault_insn);
+        ex_fault(`FLT_PRIV,0);
         pc <= xpc;
         dinv <= TRUE;
         xinv <= TRUE;
@@ -2376,7 +2461,7 @@ begin
     default:    ;
     endcase
     else begin
-        ex_fault(`FLT_PRIV,0,fault_insn);
+        ex_fault(`FLT_PRIV,0);
         pc <= xpc;
         dinv <= TRUE;
         xinv <= TRUE;
@@ -2593,9 +2678,9 @@ endmodule
 module DSD9_dcache_tag(wclk, wr, wadr, rclk, radr, hit0, hit1);
 input wclk;
 input wr;
-input [36:0] wadr;
+input [37:0] wadr;
 input rclk;
-input [36:0] radr;
+input [37:0] radr;
 output reg hit0;
 output reg hit1;
 
@@ -2609,6 +2694,7 @@ DSD9_dcache_tag1 u1 (
   .addra(wadr[13:5]),  // input wire [8 : 0] addra
   .dina(wadr),    // input wire [31 : 0] dina
   .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
   .addrb(radr[13:5]),  // input wire [8 : 0] addrb
   .doutb(tago0)  // output wire [31 : 0] doutb
 );
@@ -2620,6 +2706,7 @@ DSD9_dcache_tag1 u2 (
   .addra(wadr[13:5]),  // input wire [8 : 0] addra
   .dina(wadr),    // input wire [31 : 0] dina
   .clkb(rclk),    // input wire clkb
+  .enb(1'b1),
   .addrb(radrp32[13:5]),  // input wire [8 : 0] addrb
   .doutb(tago1)  // output wire [31 : 0] doutb
 );
@@ -2638,10 +2725,10 @@ module DSD9_dcache(wclk, wr, sel, wadr, i, rclk, radr, o, hit, hit0, hit1);
 input wclk;
 input wr;
 input [15:0] sel;
-input [36:0] wadr;
+input [37:0] wadr;
 input [127:0] i;
 input rclk;
-input [36:0] radr;
+input [37:0] radr;
 output reg [79:0] o;
 output hit;
 output hit0;

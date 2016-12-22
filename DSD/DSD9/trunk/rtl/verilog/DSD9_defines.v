@@ -11,9 +11,9 @@
 `define ADD     8'h04
 `define SUB     8'h05
 `define CMP     8'h06
-`define AND     8'h07
-`define OR      8'h08
-`define XOR     8'h09
+`define AND     8'h08
+`define OR      8'h09
+`define XOR     8'h0A
 `define _16ADD  8'h0E
 `define CSR     8'h0F
 
@@ -21,8 +21,8 @@
 `define MULU    8'h11
 `define MULSU   8'h12
 `define BITFIELD    8'h13
-`define ADDU    8'h14
-`define SUBU    8'h15
+`define ADDO    8'h14
+`define SUBO    8'h15
 `define CMPU    8'h16
 `define DIV     8'h18
 `define DIVU    8'h19
@@ -53,6 +53,8 @@
 `define _2ADD   8'h3E
 
 `define JMP     8'h40
+`define JMPI    8'h41
+`define JMPIT   8'h42
 `define BEQ     8'h46
 `define BNE     8'h47
 `define BLT     8'h48
@@ -65,6 +67,9 @@
 `define BGTU    8'h4F 
 
 `define CALL    8'h50
+`define CALLI   8'h51
+`define CALLIT  8'h52
+`define TGT     8'h53
 `define BBC     8'h54
 `define BBS     8'h55
 `define BEQI    8'h56
@@ -119,6 +124,10 @@
 `define LDD     8'h86
 `define LDT     8'h87
 `define LDTU    8'h88
+`define LDVB    8'h89
+`define LDVW    8'h8A
+`define LDVT    8'h8B
+`define LDVD    8'h8C
 `define LDVDAR  8'h8E
 
 `define STB     8'h90
@@ -128,8 +137,6 @@
 `define STT     8'h94
 `define STDCR   8'h95
 `define INC     8'h96
-`define PUSHF   8'h9A
-`define POPF    8'h9B
 `define PEA     8'h9C
 
 `define LDBX    8'hA0
@@ -168,6 +175,10 @@
 `define FLOAT   8'hF1
 `define FLOAT2  8'hF2
 `define ADDSP   8'hF3
+`define MARK1   8'hF8
+`define MARK2   8'hF9
+`define MARK3   8'hFA
+`define MARK4   8'hFB
 `define MFLTF   8'hFF
 
 // R2 opcode
@@ -251,6 +262,7 @@
 
 `define FLT_TYPE    32'd24
 
+`define FLT_TGT     9'd482
 `define FLT_MEM     9'd483
 `define FLT_IADR    9'd484
 `define FLT_UNIMP   9'd485
@@ -258,6 +270,9 @@
 `define FLT_CHK     9'd487
 `define FLT_DBZ     9'd488
 `define FLT_OFL     9'd489
+`define FLT_EXV     9'd497
+`define FLT_WRV     9'd498
+`define FLT_RDV     9'd499
 `define FLT_PRIV    9'd501
 `define FLT_STACK   9'd504
 `define FLT_DBE     9'd508

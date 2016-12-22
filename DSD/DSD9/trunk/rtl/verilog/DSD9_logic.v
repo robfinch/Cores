@@ -59,20 +59,20 @@ case(xopcode)
 `R2:
 	case(xfunc)
 //	`NOT:	res <= ~|a;
-	`AND:	res <= a & b;
-	`OR:	res <= a | b;
-	`XOR:	res <= a ^ b;
-	`ANDC:  res <= a & ~b;
-	`NAND:	res <= ~(a & b);
-	`NOR:	res <= ~(a | b);
-	`XNOR:	res <= ~(a ^ b);
-	`ORC:   res <= a | ~b;
-	default:	res <= 48'd0;
+	`AND:	res = a & b;
+	`OR:	res = a | b;
+	`XOR:	res = a ^ b;
+	`ANDC:  res = a & ~b;
+	`NAND:	res = ~(a & b);
+	`NOR:	res = ~(a | b);
+	`XNOR:	res = ~(a ^ b);
+	`ORC:   res = a | ~b;
+	default:	res = 48'd0;
 	endcase
-`ANDI:	res <= a & imm;
-`ORI:	res <= a | imm;
-`XORI:	res <= a ^ imm;
-default:	res <= 80'd0;
+`ANDI:	res = a & imm;
+`ORI:	res = a | imm;
+`XORI:	res = a ^ imm;
+default:	res = 80'd0;
 endcase
 
 endmodule

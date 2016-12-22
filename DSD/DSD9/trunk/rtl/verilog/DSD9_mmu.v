@@ -28,10 +28,14 @@
 `define LOW     1'b0
 `define HIGH    1'b1
 
-module DSD9_mmu(rst_i, clk_i, pcr_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o, pea_o);
+module DSD9_mmu(rst_i, clk_i, ol_i, pcr_i, mapen_i, s_ex_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o, pea_o,
+    exv_o, rdv_o, wrv_o);
 input rst_i;
 input clk_i;
-input [31:0] pcr_i;     // paging control register
+input [1:0] ol_i;
+input [31:0] pcr_i;     // paging enabled
+input mapen_i;
+input s_ex_i;           // executable address
 input s_cyc_i;
 input s_stb_i;
 input s_wr_i;           // write strobe
@@ -40,71 +44,60 @@ input [31:0] s_adr_i;    // virtual address
 input [31:0] s_dat_i;
 output [31:0] s_dat_o;
 output reg [31:0] pea_o;
+output reg exv_o;       // execute violation
+output reg rdv_o;       // read violation
+output reg wrv_o;       // write violation
 
 wire cs = s_cyc_i && s_stb_i && (s_adr_i[31:12]==20'hFFDC4);
 
-reg ack1;
+reg ack1, ack2;
 always @(posedge clk_i)
     ack1 <= cs;
-assign s_ack_o = cs ? ack1 : 1'b0;
+always @(posedge clk_i)
+    ack2 <= ack1 & cs;
+assign s_ack_o = cs ? ack2 : 1'b0;
 
-reg [3:0] state;
-wire [12:0] o0,o1;
-wire [9:0] aslice = s_adr_i[10:1]; 
+wire [18:0] doutb;
 
-DSD9_MMURam u1
-(
-    .clk(clk_i),
-    .wr(cs & s_wr_i),
-    .wa({pcr_i[12:8],aslice}),
-    .i(s_dat_i[12:0]),
-    .ra0({pcr_i[12:8],aslice}),
-    .o0(o0),
-    .ra1({pcr_i[4:0],s_adr_i[25:16]}),
-    .o1(o1)
+wire [2:0] wrx = doutb[18:16];
+
+always @*
+    exv_o <= s_ex_i & ~wrx[0] & s_cyc_i & s_stb_i;
+always @*
+    rdv_o <= ~(s_wr_i | s_ex_i) & ~wrx[1] & s_cyc_i & s_stb_i;
+always @*
+    wrv_o <= s_wr_i & ~wrx[2] & s_cyc_i & s_stb_i;
+
+wire [15:0] addra = {pcr_i[13:8],s_adr_i[11:2]};
+wire [15:0] addrb = cs ? {pcr_i[13:8],s_adr_i[11:2]} : {pcr_i[5:0],s_adr_i[25:16]};
+
+DSD9_MMURam1 u1 (
+  .clka(clk_i),    // input wire clka
+  .ena(cs),      // input wire ena
+  .wea(cs & s_wr_i),      // input wire [0 : 0] wea
+  .addra(addra),  // input wire [15 : 0] addra
+  .dina(s_dat_i[18:0]),    // input wire [12 : 0] dina
+  .clkb(clk_i),    // input wire clkb
+  .enb(mapen_i),  // input wire enb
+  .addrb(addrb),  // input wire [13 : 0] addrb
+  .doutb(doutb)  // output wire [51 : 0] doutb
 );
-assign s_dat_o = cs ? o0 : 32'h0;
 
-wire pe = pcr_i[31] & ~s_adr_i[31];
+assign s_dat_o = cs ? {13'd0,doutb} : 32'h0;
 
 // The following delay reg is to keep all the address bits in sync
 // with the output of the map table. So there are no intermediate
 // invalid addresses.
-reg [31:0] s_adr1;
+reg [31:0] s_adr1, s_adr2;
 always @(posedge clk_i)
     s_adr1 <= s_adr_i;
-
 always @(posedge clk_i)
+    s_adr2 <= s_adr1;
+
+always @(s_adr2 or doutb)
 begin
-    pea_o[15:0] <= s_adr1[15:0];
-    pea_o[27:16] <= pe ? o1[11:0] : s_adr1[27:16];
-    pea_o[31:28] <= s_adr1[31:28];
+    pea_o[15:0] <= s_adr2[15:0];
+    pea_o[31:16] <= doutb[15:0];
 end
-
-endmodule
-
-module DSD9_MMURam(clk,wr,wa,i,ra0,o0,ra1,o1);
-input clk;
-input wr;
-input [14:0] wa;
-input [12:0] i;
-input [14:0] ra0;
-output [12:0] o0;
-input [14:0] ra1;
-output [12:0] o1;
-
-reg [12:0] mapram [0:32767];
-reg [13:0] rra0,rra1;
-
-always @(posedge clk)
-    if (wr)
-        mapram[wa] <= i;
-
-always @(posedge clk)
-    rra0 <= ra0;
-assign o0 = mapram[rra0];
-always @(posedge clk)
-    rra1 <= ra1;
-assign o1 = mapram[rra1];
 
 endmodule
