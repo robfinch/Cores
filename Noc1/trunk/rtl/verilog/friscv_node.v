@@ -1,9 +1,10 @@
 `include "noc_defines.v"
 
-module friscv_node(num, rst_i, clk_i, net_i, net_o);
+module friscv_node(num, rst_i, clk_i, tm_clk_i,  net_i, net_o);
 input [3:0] num;
 input rst_i;
 input clk_i;
+input tm_clk_i;
 input [`PACKET_WID-1:0] net_i;
 output [`PACKET_WID-1:0] net_o;
 
@@ -66,6 +67,7 @@ dpram umem1
   .clka(clk_i),
   .rsta(~csram1),
   .ena(1'b1),
+  .regcea(1'b1),
   .wea(sel1 & {4{we1&csram1}}),
   .addra(adr1[15:2]),
   .dina(dato1),
@@ -73,16 +75,19 @@ dpram umem1
   .clkb(clk_i),
   .rstb(~csram2),
   .enb(1'b1),
+  .regceb(1'b1),
   .web(sel2 & {4{we2&csram2}}),
   .addrb(adr2[15:2]),
   .dinb(dato2),
   .doutb(mdato2)
 );
 
-friscv2 cpu1
+friscv5 cpu1
 (
+  .mhartid(1),
   .rst_i(rst_i),
   .clk_i(clk_i),
+  .tm_clk_i(tm_clk_i),
   .cyc_o(cyc1),
   .stb_o(stb1),
   .ack_i(ack1),
@@ -91,14 +96,17 @@ friscv2 cpu1
   .adr_o(adr1),
   .dat_i(dati1),
   .dat_o(dato1),
-  .pc(pc1),
-  .insn(insn1)
+  .irdy_i(1'b1),
+  .iadr_o(pc1),
+  .idat_i(insn1)
 );
 
-friscv2 cpu2
+friscv5 cpu2
 (
+  .mhartid(2),
   .rst_i(rst_i),
   .clk_i(clk_i),
+  .tm_clk_i(tm_clk_i),
   .cyc_o(cyc2),
   .stb_o(stb2),
   .ack_i(ack2),
@@ -107,8 +115,9 @@ friscv2 cpu2
   .adr_o(adr2),
   .dat_i(dati2),
   .dat_o(dato2),
-  .pc(pc2),
-  .insn(insn2)
+  .irdy_i(1'b1),
+  .iadr_o(pc2),
+  .idat_i(insn2)
 );
 
 endmodule

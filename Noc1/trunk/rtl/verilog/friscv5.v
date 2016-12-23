@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -81,7 +81,12 @@
 `define NOPINSN {12'b0,5'b0,3'b000,5'b0,7'b0010011}
 
 
+`define regXLR      5'd13
+`define regV0       5'd16
+`define regV1       5'd17
+
 module friscv5(mhartid, rst_i, clk_i, tm_clk_i, irq_i, ivec_i, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o, irdy_i, iadr_o, idat_i);
+parameter WID = 32;
 parameter PCMSB = 43;
 input [31:0] mhartid;
 input rst_i;
@@ -122,6 +127,7 @@ parameter STORE5 = 6'd20;
 parameter LOAD_ICACHE = 6'd21;
 parameter LOAD_ICACHE2 = 6'd22;
 parameter RUN = 6'd23;
+parameter INVnRUN = 6'd24;
 parameter byt = 2'd0;
 parameter half = 2'd1;
 parameter word = 2'd2;
@@ -166,7 +172,7 @@ parameter EX_BOUNDS = {9'd500,4'hF};
 
 wire clk = clk_i;
 reg [PCMSB:0] pc;
-reg [127:0] insn;
+wire [63:0] insn;
 reg [1:0] PRV = 2'b11;
 reg [1:0] PRV1;
 reg [1:0] PRV2;
@@ -248,9 +254,11 @@ reg [31:0] k0,k1;
 reg [31:0] tohost;
 reg [31:0] fromhost;
 reg [PCMSB:0] dpc,xpc;
+reg [WID-1:0] v0, v1;
+reg [WID-1:0] xlr;
 reg [31:0] regfile [31:0];
 reg [31:0] sll,slu;
-reg [127:0] ir,xir;
+reg [63:0] ir,xir;
 reg [31:0] x1ir,wir;
 wire [6:0] opcode = ir[6:0];
 wire [6:0] iopcode = insn[6:0];
@@ -266,7 +274,7 @@ wire [4:0] Ra = ir[19:15];
 wire [4:0] Rb = ir[24:20];
 reg [4:0] xRa,mRa,wRa;
 reg [4:0] xRt,mRt,wRt;
-reg [31:0] rfoa,rfob;
+reg dinv,xinv;
 
 reg [31:0] count;
 reg [31:0] compare;
@@ -285,6 +293,7 @@ reg SR_IM = 8'h00;
 wire [31:0] SR_ = {8'h00,SR_IM,7'h00,SR_VM,SR_S64,SR_U64,SR_S,SR_PS,2'b0,SR_EF,SR_ET};
 
 reg ex_done;
+reg upd_rf;
 reg [31:0] a,b,imm,xb,xa,wa;
 reg [31:0] imm2;    // 2nd immediate for BccI
 reg ii32,di32;  // use next word as immediate value
@@ -300,22 +309,38 @@ wire xisLd = xopcode==`Lx;
 wire xisSt = xopcode==`Sx;
 reg xis64;
 
-always @*
-case(Ra)
-5'd0:	rfoa <= 32'd0;
-xRt:	rfoa <= res;
-//wRt:	rfoa <= wres;
-default:	rfoa <= regfile[Ra];
-endcase
+// Figure PC increment
+function [4:0] pc_inc;
+input [31:0] insn;
+begin
+    if (insn[10:0]==11'b00111111111)
+        pc_inc = 5'd16;
+    else if (insn[6:0]==7'b0111111)
+        pc_inc = 5'd8;
+    else if (insn[5:0]==6'b011111)
+        pc_inc = 5'd6;
+    else if (insn[1:0]==2'b11)
+        pc_inc = 5'd4;
+    else
+        pc_inc = 5'd2;
+end  
+endfunction
 
-always @*
-case(Rb)
-5'd0:	rfob <= 32'd0;
-xRt:	rfob <= res;
-//wRt:	rfob <= wres;
-default:	rfob <= regfile[Rb];
+function [WID-1:0] fwd_mux;
+input [4:0] Rn;
+case(Rn)
+5'h00:	fwd_mux = 32'd0;
+xRt:	fwd_mux = res;
+`regXLR:  fwd_mux = xlr;
+`regV0:  fwd_mux = v0;
+`regV1:  fwd_mux = v1;
+default:	fwd_mux = regfile[Rn];
 endcase
+endfunction
 
+wire xIsMultiCycle = xopcode==`Lx || xopcode==`Sx;
+
+/* Synthesis couldn't infer the RAMS.
 //---------------------------------------------------------------------------
 // I-Cache
 // This 64-line 4 way set associative cache is used mainly to allow access
@@ -337,7 +362,8 @@ lfsr #(23,23'h00ACE1) u1
 );
 
 wire [1:0] ic_whichSet = ic_lfsr[1:0];
-wire ihit1,ihit2;
+reg which1,which2;
+reg ihit1,ihit2;
 wire hita,hitb,hitc,hitd;
 reg [1:0] icmf;     // miss flags
 reg isICacheReset;
@@ -381,7 +407,7 @@ always @(posedge clk_i)
   end
   else begin
     if (isICacheLoad) begin
-      case({ic_whichSet,iadr_o[3:2]})
+      case({which2,iadr_o[3:2]})
       4'd0: cache_mem0[iadr_o[10:4]][31:0] <= idat_i;
       4'd1: cache_mem0[iadr_o[10:4]][63:32] <= idat_i;
       4'd2: cache_mem0[iadr_o[10:4]][95:64] <= idat_i;
@@ -432,7 +458,7 @@ always @(posedge clk_i)
   end
   else begin
     if (isICacheLoad && iadr_o[3:2]==2'b11) begin
-        case(ic_whichSet)
+        case(which2)
         2'd0:   tag_mem0[iadr_o[9:4]] <= iadr_o[31:10];
         2'd1:   tag_mem1[iadr_o[9:4]] <= iadr_o[31:10];
         2'd2:   tag_mem2[iadr_o[9:4]] <= iadr_o[31:10];
@@ -454,11 +480,84 @@ assign hitc = (ihit21 & ihit22) || (ihit21 && pc[3:0]==4'h0);
 assign hitd = (ihit31 & ihit32) || (ihit31 && pc[3:0]==4'h0);
 wire ihit = hita|hitb|hitc|hitd;
 
+// Try and find a cache slot with one line already filled.
+always @*
+if (ihit) begin
+    which1 <= 2'b00;
+    ihit1 <= `TRUE;
+    ihit2 <= `TRUE;
+end
+else begin
+    if (ihit01) begin
+        which1 <= 2'b00;
+        ihit1 <= `TRUE;
+        ihit2 <= `FALSE;
+    end
+    else if (ihit02) begin
+        which1 <= 2'b00;
+        ihit1 <= `FALSE;
+        ihit2 <= `TRUE;
+    end
+    else if (ihit11) begin
+        which1 <= 2'b01;
+        ihit1 <= `TRUE;
+        ihit2 <= `FALSE;
+    end
+    else if (ihit12) begin
+        which1 <= 2'b01;
+        ihit1 <= `FALSE;
+        ihit2 <= `TRUE;
+    end
+    else if (ihit21) begin
+        which1 <= 2'b10;
+        ihit1 <= `TRUE;
+        ihit2 <= `FALSE;
+    end
+    else if (ihit22) begin
+        which1 <= 2'b10;
+        ihit1 <= `FALSE;
+        ihit2 <= `TRUE;
+    end
+    else if (ihit31) begin
+        which1 <= 2'b11;
+        ihit1 <= `TRUE;
+        ihit2 <= `FALSE;
+    end
+    else if (ihit32) begin
+        which1 <= 2'b11;
+        ihit1 <= `FALSE;
+        ihit2 <= `TRUE;
+    end
+    else begin
+        which1 <= ic_whichSet;
+        ihit1 <= `FALSE;
+        ihit2 <= `FALSE; 
+    end
+end
+*/
+
+wire [31:0] pcp32 = pc + 32'h0020;
+reg isICacheLoad;
+reg [1:0] icmf;
+wire ihit,ihit1,ihit2;
+icache u2 (
+    .wclk(clk_i),
+    .wr(isICacheLoad & irdy_i),
+    .wadr(iadr_o[31:0]),
+    .i(idat_i),
+    .rclk(~clk_i),
+    .radr(pc),
+    .o(insn),
+    .hit(ihit),
+    .hit0(ihit0),
+    .hit1(ihit1)
+);
+
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 wire advanceEX = 1'b1;
 wire advanceWB = advanceEX;
-wire advanceRF = !((xisLd || xisSt)&&ex_done==`TRUE);
+wire advanceRF = !(xIsMultiCycle && !xinv);
 wire advanceIF = advanceRF & ihit;
 
 //---------------------------------------------------------------------------
@@ -480,7 +579,7 @@ case(xopcode)
 		`SLI:
 		    case(xir[31:25])
 		    7'h00:  res <= a << xir[24:20];
-		    default:  ;
+		    default:  res <= 32'd0;
 		    endcase
 		`SRI:
 			if ((xir[31:25]==7'b0100000) && a[31])
@@ -598,37 +697,41 @@ if (rst_i) begin
 	insncnt <= 32'd0;
 	pc <= 18'h2000;
 	state <= RESET;
-	nop_ir();
-	nop_xir();
+	inv_ir();
+	inv_xir();
 	wb_nack();
-	iadr_o <= 18'd0;
+	iadr_o <= 18'h2000;
 	ex_done <= `TRUE;
 	MPRV <= 1'b0;
 	mtvec <= 32'h0100;
 	mtimecnt <= 8'hFF;
-  isICacheReset <= TRUE;
+  isICacheLoad <= TRUE;
   MTIE <= FALSE;
   HTIE <= FALSE;
   STIE <= FALSE;
   MSIE <= FALSE;
   HSIE <= FALSE;
   SSIE <= FALSE;
+  upd_rf <= FALSE;
 end
 else begin
-  rdtimes <= rdtime;    // synchronize rdtime to this domain
-  rdcycle <= rdcycle + 64'd1;
-  // Post an interrupt pending the first time mtime==mtimecmp
-  tmcmp = rdtimes==mtimecmp;
-  if (rdtimes==mtimecmp && !tmcmp)
-    MTIP <= 1'b1;
-  if (mtimecnt != 8'hFF)
-    mtimecnt = mtimecnt + 8'd1;
+    upd_rf <= FALSE;
+    rdtimes <= rdtime;    // synchronize rdtime to this domain
+    rdcycle <= rdcycle + 64'd1;
+    // Post an interrupt pending the first time mtime==mtimecmp
+    tmcmp = rdtimes==mtimecmp;
+    if (rdtimes==mtimecmp && !tmcmp)
+        MTIP <= 1'b1;
+    if (mtimecnt != 8'hFF)
+        mtimecnt = mtimecnt + 8'd1;
+    update_regfile();
+ 
 case (state)
 RESET:
-begin
+if (irdy_i) begin
 	iadr_o <= iadr_o + 32'd4;
-    if (iadr_o[9:2]==8'hFF) begin
-      isICacheReset <= FALSE;
+    if (iadr_o[13:2]==12'hFFF) begin
+      isICacheLoad <= FALSE;
       state <= RUN;
   end
 end
@@ -649,23 +752,9 @@ begin
                 ir <= insn;
                 dcause <= 5'd31;  // reserved code
             end
+            dinv <= FALSE;
             dpc <= pc;
-            // Figure PC increment
-            ipc2 = insn[1:0]!=2'b11;
-            ipc4 = insn[1:0]==2'b11;
-            ipc6 = insn[5:0]==6'b011111;
-            ipc8 = insn[6:0]==7'b0111111;
-            ipc16 = insn[10:0]==11'b00111111111;
-            if (ipc16)
-                pc <= pc + 32'd16;
-            else if (ipc8)
-                pc <= pc + 32'd8;
-            else if (ipc6)
-                pc <= pc + 32'd6;
-            else if (ipc4)
-                pc <= pc + 32'd4;
-            else
-                pc <= pc + 32'd2;
+            pc <= pc + pc_inc(insn[10:0]);
         end
     end
     else begin
@@ -675,7 +764,7 @@ begin
         end
         if (advanceRF) begin
             RFcnt <= 1'b0;
-            nop_ir();
+            inv_ir();
             dpc <= pc;
             pc <= pc;
             dcause <= 5'd31;
@@ -686,8 +775,9 @@ begin
     // DECODE / REGFETCH
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceRF) begin
+        xinv <= dinv;
         xRa <= Ra;
-        EXcnt <= RFcnt;
+        EXcnt <= RFcnt & !dinv;
         xir <= ir;
         xcause <= dcause;
         xis64 <= opcode==`O64;
@@ -698,8 +788,8 @@ begin
         xfunct3 <= funct3;
         xfunct7 <= funct7;
         xpc <= dpc;
-        a <= rfoa;
-        b <= rfob;
+        a <= fwd_mux(Ra);
+        b <= fwd_mux(Rb);
         case(opcode)
         `LUI:	imm <= {ir[31:12],12'd0};
         `AUIPC:	imm <= {ir[31:12],12'd0};
@@ -708,7 +798,7 @@ begin
         `Bcc:	imm <= {{20{ir[31]}},ir[7],ir[30:25],ir[11:8],1'b0};
         `Lx:	imm <= {{20{ir[31]}},ir[31:20]};
         `Sx:	begin
-            imm <= {{20{ir[31]}},ir[31:25],ir[11:7]};
+                    imm <= {{20{ir[31]}},ir[31:25],ir[11:7]};
             $display("ir = %h", ir);
             $display("imm <= %h",{{20{ir[31]}},ir[31:25],ir[11:7]});
                 end
@@ -728,40 +818,41 @@ begin
             endcase
         default:	imm <= 32'd0;
         endcase
-        case(opcode)
-        `LUI:	xRt <= ir[11:7];
-        `AUIPC:	xRt <= ir[11:7];
-        `JAL:	xRt <= ir[11:7];
-        `JALR:	xRt <= ir[11:7];
-        `Lx:	xRt <= ir[11:7];
-        `ALU1:	xRt <= ir[11:7];
-        `RR:	xRt <= ir[11:7];
-        `O64:  xRt <= opcode2==`Sx ? 5'd0 : ir[11:7];
-        default:	xRt <= 5'd0;
-        endcase
+        xRt <= 5'd0;
+        if (!dinv) begin
+            case(opcode)
+            `LUI:	xRt <= ir[11:7];
+            `AUIPC:	xRt <= ir[11:7];
+            `JAL:	xRt <= ir[11:7];
+            `JALR:	xRt <= ir[11:7];
+            `Lx:	xRt <= 5'd0;   // This will be set later
+            `ALU1:	xRt <= ir[11:7];
+            `RR:	xRt <= ir[11:7];
+            `O64:  xRt <= (opcode2==`Sx || opcode2==`Lx) ? 5'd0 : ir[11:7];
+            default:	xRt <= 5'd0;
+            endcase
+            case(opcode)
+            `LUI:   upd_rf <= TRUE;
+            `AUIPC: upd_rf <= TRUE;
+            `JAL:   upd_rf <= TRUE;
+            `JALR:  upd_rf <= TRUE;
+            `ALU1:  upd_rf <= TRUE;
+            `RR:    upd_rf <= TRUE;
+            `O64:   upd_rf <= (opcode2==`Lx || opcode2==`Sx) ? FALSE : TRUE;
+            default:    upd_rf <= FALSE;
+            endcase
+        end
     end
     else if (advanceEX) begin
         EXcnt <= 1'b0;
-        if (!xisLd && !xisSt)
-            nop_xir();
+        inv_xir();
     end
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // EXECUTE
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (advanceEX) begin
-/*
-        wRa <= xRa;
-        wir <= xir;
-        wRt <= xRt;
-        wres <= res;
-        wcause <= xcause;
-        WBcnt <= EXcnt;
-*/
+    if (advanceEX && !xinv) begin
         rdinstret <= rdinstret + EXcnt;
-        regfile[xRt] <= res;
-        if (xRt != 5'd0)
-            $display("r%d = %h", xRt, res);
         case(xopcode)
         `ALU1:
             case(xfunct3)
@@ -778,26 +869,26 @@ begin
                     end
                 endcase
             endcase
-        `JAL:	  begin tskBranch(xpc + imm); $display("jal %h xpc=%h xir=%h", xpc+imm,xpc,xir); end
-        `JALR:	begin tskBranch(a + imm); end
+        `JAL:	  begin ex_branch(xpc + imm); $display("jal %h xpc=%h xir=%h", xpc+imm,xpc,xir); end
+        `JALR:	begin ex_branch(a + imm); end
         `Bcc:
             if (xis64)
                 case(xfunct3)
-                `BEQ:    if (a==imm2) tskBranch(xpc + imm);
-                `BNE:    if (a!=imm2) tskBranch(xpc + imm);
-                `BLT:    if ($signed(a) < $signed(imm2)) tskBranch(xpc + imm);
-                `BGE:    if ($signed(a) >= $signed(imm2)) tskBranch(xpc + imm);
-                `BLTU:    if (a < imm2) tskBranch(xpc + imm);
-                `BGEU:    if (a >= imm2) tskBranch(xpc + imm);
+                `BEQ:    if (a==imm2) ex_branch(xpc + imm);
+                `BNE:    if (a!=imm2) ex_branch(xpc + imm);
+                `BLT:    if ($signed(a) < $signed(imm2)) ex_branch(xpc + imm);
+                `BGE:    if ($signed(a) >= $signed(imm2)) ex_branch(xpc + imm);
+                `BLTU:    if (a < imm2) ex_branch(xpc + imm);
+                `BGEU:    if (a >= imm2) ex_branch(xpc + imm);
                 endcase
             else
                 case(xfunct3)
-                `BEQ:	if (a==b) tskBranch(xpc + imm);
-                `BNE:	if (a!=b) tskBranch(xpc + imm);
-                `BLT:	if ($signed(a) < $signed(b)) tskBranch(xpc + imm);
-                `BGE:	if ($signed(a) >= $signed(b)) tskBranch(xpc + imm);
-                `BLTU:	if (a < b) tskBranch(xpc + imm);
-                `BGEU:	if (a >= b) tskBranch(xpc + imm);
+                `BEQ:	if (a==b) ex_branch(xpc + imm);
+                `BNE:	if (a!=b) ex_branch(xpc + imm);
+                `BLT:	if ($signed(a) < $signed(b)) ex_branch(xpc + imm);
+                `BGE:	if ($signed(a) >= $signed(b)) ex_branch(xpc + imm);
+                `BLTU:	if (a < b) ex_branch(xpc + imm);
+                `BGEU:	if (a >= b) ex_branch(xpc + imm);
                 endcase
         `SYSTEM:
             case(xfunct3)
@@ -805,7 +896,7 @@ begin
                 case(xir[31:20])
                 12'b0000_0000_0000:
                     begin
-                        tskBranch(evec);
+                        ex_branch(evec);
                         mepc <= xpc;
                         SR_ET <= 1'b0;
                         SR_PS <= SR_S;
@@ -814,21 +905,45 @@ begin
                             mcause <= xcause;
                         else
                             mcause <= 32'h8 | PRV;   // Environment call from mode 
+                        IE3 <= IE2;
+                        IE2 <= IE1;
+                        IE1 <= IE2;
+                        IE <= SR_ET;
+                        PRV3 <= PRV2;
+                        PRV2 <= PRV1;
+                        PRV1 <= PRV;
+                        PRV <= 2'b00;
                     end // ECALL
                 12'b0000_0000_0001:
                     begin
-                        tskBranch(evec);
+                        ex_branch(evec);
                         mepc <= xpc;
                         SR_ET <= 1'b0;
                         SR_PS <= SR_S;
                         SR_S <= 1'b1;
                         mcause <= 32'h3;        // Breakpoint
+                        IE3 <= IE2;
+                        IE2 <= IE1;
+                        IE1 <= IE2;
+                        IE <= SR_ET;
+                        PRV3 <= PRV2;
+                        PRV2 <= PRV1;
+                        PRV1 <= PRV;
+                        PRV <= 2'b00;
                     end // EBRK
                 12'b0001_0000_0000: // ERET
                     begin
-                        tskBranch(mepc);
+                        ex_branch(mepc);
                         SR_ET <= TRUE;
                         SR_S <= SR_PS;
+                        IE <= IE1;
+                        IE1 <= IE2;
+                        IE2 <= IE3;
+                        IE3 <= `TRUE;
+                        PRV <= PRV1;
+                        PRV1 <= PRV2;
+                        PRV2 <= PRV3;
+                        PRV3 <= 2'b00;
                     end
                 endcase
             3'b001,3'b101:   // CSRRW,CSRRWI
@@ -911,56 +1026,29 @@ begin
             endcase
         `Lx:
             begin
-                if (ex_done==`TRUE) begin
-                    ex_done <= `FALSE;
-                    next_state(LOAD2);
-                    mfunct3 <= xfunct3;
-                    ea <= a + imm;
-                    case(xfunct3)
-                    `LB,`LBU:	ld_size <= byt;
-                    `LH,`LHU:	ld_size <= half;
-                    `LW:		ld_size <= word;
-                    endcase
-                end
-                else
-                    ex_done <= `TRUE;
+                next_state(LOAD2);
+                mfunct3 <= xfunct3;
+                ea <= a + imm;
+                case(xfunct3)
+                `LB,`LBU:	ld_size <= byt;
+                `LH,`LHU:	ld_size <= half;
+                `LW:		ld_size <= word;
+                endcase
             end
         `Sx:
             begin
-                if (ex_done==`TRUE) begin
-                    ex_done <= `FALSE;
-                    next_state(STORE2);
-                    mfunct3 <= xfunct3;
-                    ea <= a + imm;
-                    xb <= b;
-                    case(xfunct3)
-                    `SB:	st_size <= byt;
-                    `SH:	st_size <= half;
-                    `SW:	st_size <= word;
-                    endcase
-                end
-                else
-                    ex_done <= `TRUE;
+                next_state(STORE2);
+                mfunct3 <= xfunct3;
+                ea <= a + imm;
+                xb <= b;
+                case(xfunct3)
+                `SB:	st_size <= byt;
+                `SH:	st_size <= half;
+                `SW:	st_size <= word;
+                endcase
             end
         endcase
     end
-/*
-    else if (advanceWB) begin
-        WBcnt <= 1'b0;
-        wRt <= 5'd0;
-        wres <= 32'd0;
-    end
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // WRITEBACK
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (advanceWB) begin
-        rdinstret <= rdinstret + WBcnt;
-        regfile[wRt] <= wres;
-        if (wRt != 5'd0)
-            $display("r%d = %h", wRt, wres);
-    end // AdvanceWB
-*/
 end	// RUN
 /*
 LOAD1:
@@ -984,7 +1072,9 @@ LOAD3:
 		case(mfunct3)
 		`LB:begin
 			wb_nack();
-			next_state(RUN);
+			xRt <= xir[11:7];
+			upd_rf <= TRUE;
+			next_state(INVnRUN);
 			case(ea[1:0])
 			2'd0:	lres <= {{24{dat_i[7]}},dat_i[7:0]};
 			2'd1:	lres <= {{24{dat_i[15]}},dat_i[15:8]};
@@ -995,7 +1085,9 @@ LOAD3:
 		`LBU:
 			begin
 			wb_nack();
-			next_state(RUN);
+			xRt <= xir[11:7];
+            upd_rf <= TRUE;
+			next_state(INVnRUN);
 			case(ea[1:0])
 			2'd0:	lres <= dat_i[7:0];
 			2'd1:	lres <= dat_i[15:8];
@@ -1005,21 +1097,21 @@ LOAD3:
 			end
 		`LH:
 			case(ea[1:0])
-			2'd0:	begin lres <= {{16{dat_i[15]}},dat_i[15:0]}; next_state(RUN); wb_nack(); end
-			2'd1:	begin lres <= {{16{dat_i[23]}},dat_i[23:8]}; next_state(RUN); wb_nack(); end
-			2'd2:	begin lres <= {{16{dat_i[31]}},dat_i[31:16]}; next_state(RUN); wb_nack(); end
+			2'd0:	begin lres <= {{16{dat_i[15]}},dat_i[15:0]}; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); end
+			2'd1:	begin lres <= {{16{dat_i[23]}},dat_i[23:8]}; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); end
+			2'd2:	begin lres <= {{16{dat_i[31]}},dat_i[31:16]}; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); end
 			2'd3:	begin lres[7:0] <= dat_i[31:24]; next_state(LOAD4); end
 			endcase
 		`LHU:
 			case(ea[1:0])
-			2'd0:	begin lres <= dat_i[15:0]; next_state(RUN); wb_nack(); end
-			2'd1:	begin lres <= dat_i[23:8]; next_state(RUN); wb_nack(); end
-			2'd2:	begin lres <= dat_i[31:16]; next_state(RUN); wb_nack(); end
+			2'd0:	begin lres <= dat_i[15:0]; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); end
+			2'd1:	begin lres <= dat_i[23:8]; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); end
+			2'd2:	begin lres <= dat_i[31:16]; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); end
 			2'd3:	begin lres[7:0] <= dat_i[31:24]; next_state(LOAD4); end
 			endcase
 		`LW:
 			case(ea[1:0])
-			2'd0:	begin lres <= dat_i; next_state(RUN); wb_nack(); $display("Loaded %h from %h", dat_i, adr_o); end
+			2'd0:	begin lres <= dat_i; xRt <= xir[11:7]; upd_rf <= TRUE; next_state(INVnRUN); wb_nack(); $display("Loaded %h from %h", dat_i, adr_o); end
 			2'd1:	begin lres[23:0] <= dat_i[31:8]; next_state(LOAD4); end
 			2'd2:	begin lres[15:0] <= dat_i[31:16]; next_state(LOAD4); end
 			2'd3:	begin lres[7:0] <= dat_i[31:24]; next_state(LOAD4); end
@@ -1034,7 +1126,9 @@ LOAD4:
 LOAD5:
 	if (ack_i) begin
 		wb_nack();
-		next_state(RUN);
+		xRt <= xir[11:7];
+		upd_rf <= TRUE; 
+		next_state(INVnRUN);
 		case(mfunct3)
 		`LH:	lres[31:8] <= {{16{dat_i[7]}},dat_i[7:0]};
 		`LHU:	lres[31:8] <= dat_i[7:0];
@@ -1047,6 +1141,11 @@ LOAD5:
 			endcase
 		endcase
 	end
+INVnRUN:
+    begin
+        xinv <= TRUE;
+        next_state(RUN);
+    end
 /*
 STORE1:
 	begin
@@ -1091,12 +1190,12 @@ LOAD_ICACHE:
       if (icmf != 2'b11) begin
         isICacheLoad <= TRUE;
         if (icmf[1]) begin
-          iadr_o <= {pcp16[31:4],4'h0};
+          iadr_o <= {pcp32[31:5],5'h0};
           icmf[0] <= 1'b1;
         end
         else begin
           icmf[1] <= 1'b1;
-          iadr_o <= {pc[31:4],4'h0};
+          iadr_o <= {pc[31:5],5'h0};
         end
         next_state(LOAD_ICACHE2);
       end
@@ -1105,8 +1204,8 @@ LOAD_ICACHE:
     end
 LOAD_ICACHE2:
   if (irdy_i) begin
-    iadr_o[3:2] <= iadr_o[3:2] + 2'd1;
-    if (iadr_o[3:2]==2'b11) begin
+    iadr_o[4:2] <= iadr_o[4:2] + 3'd1;
+    if (iadr_o[4:2]==3'b111) begin
 //        if (icmf==2'b11)
 //            ic_lfsr <= {ic_lfsr[16:0],;
         isICacheLoad <= FALSE;
@@ -1116,6 +1215,22 @@ LOAD_ICACHE2:
 
 endcase
 end
+
+task update_regfile;
+begin
+    if (upd_rf) begin
+        case(xRt)
+        `regXLR:  xlr <= res;
+        `regV0:  v0 <= res;
+        `regV1:  v1 <= res;
+        default:    ;
+        endcase
+        regfile[xRt] <= res;
+        if (xRt != 5'd0)
+            $display("%s = %h", fnRegName(xRt), res);
+    end
+end
+endtask
 
 task wb_read1;
 input [1:0] sz;
@@ -1249,28 +1364,26 @@ begin
 end
 endtask
 
-task nop_ir;
+task inv_ir;
 begin
-	ir <= {12'b0,5'b0,3'b000,5'b0,7'b0010011};	// ADDI v0,x0,0
+    dinv <= `TRUE;
 end
 endtask
 
-task nop_xir;
+task inv_xir;
 begin
-	xopcode <= 7'h13;
-	xfunct3 <= 3'b0;
+    xinv <= `TRUE;
 	xRt <= 5'b0;
-	xir <= {12'b0,5'b0,3'b000,5'b0,7'b0010011};	// ADDI v0,x0,0
 end
 endtask 
 
-task tskBranch;
+task ex_branch;
 input [31:0] newpc;
 begin
   pc <= newpc;
   pc[0] <= 1'b0;
-  nop_ir();
-  nop_xir();
+  inv_ir();
+  inv_xir();
   RFcnt <= 1'b0;
   EXcnt <= 1'b0;
 end
@@ -1301,4 +1414,159 @@ LOAD_ICACHE2:	fnStateName = "LOAD_ICACHE2 ";
 endcase
 endfunction
 
+function [23:0] fnRegName;
+input [4:0] regno;
+case(regno)
+5'd0:   fnRegName = "x0";
+5'd1:   fnRegName = "ra";
+5'd2:   fnRegName = "fp";
+5'd3:   fnRegName = "s1";
+5'd4:   fnRegName = "s2";
+5'd5:   fnRegName = "s3";
+5'd6:   fnRegName = "s4";
+5'd7:   fnRegName = "s5";
+5'd8:   fnRegName = "s6";
+5'd9:   fnRegName = "s7";
+5'd10:   fnRegName = "s8";
+5'd11:   fnRegName = "s9";
+5'd12:   fnRegName = "s10";
+5'd13:   fnRegName = "s11";
+5'd14:  fnRegName = "sp";
+5'd15:  fnRegName = "tp";
+5'd16:  fnRegName = "v0";
+5'd17:  fnRegName = "v1";
+5'd18:  fnRegName = "a0";
+5'd19:  fnRegName = "a1";
+5'd20:  fnRegName = "a2";
+5'd21:  fnRegName = "a3";
+5'd22:  fnRegName = "a4";
+5'd23:  fnRegName = "a5";
+5'd24:  fnRegName = "a6";
+5'd25:  fnRegName = "a7";
+5'd26:  fnRegName = "t0";
+5'd27:  fnRegName = "t1";
+5'd28:  fnRegName = "t2";
+5'd29:  fnRegName = "t3";
+5'd30:  fnRegName = "t4";
+5'd31:  fnRegName = "gp";
+endcase
+endfunction
+
 endmodule
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+module icache_mem(wclk, wr, wadr, i, rclk, radr, o0, o1);
+input wclk;
+input wr;
+input [31:0] wadr;
+input [31:0] i;
+input rclk;
+input [31:0] radr;
+output [255:0] o0;
+output [255:0] o1;
+
+reg [255:0] mem [0:511];
+reg [8:0] rrcl,rrclp1;
+
+//  instruction parcels per cache line
+wire [8:0] wr_cache_line;
+wire [8:0] rd_cache_line;
+
+assign wr_cache_line = wadr >> 5;
+assign rd_cache_line = radr >> 5;
+
+genvar g;
+generate begin
+for (g = 0; g < 8; g = g + 1)
+always @(posedge wclk)
+    if (wr && wadr[4:2]==g) mem[wr_cache_line][32*g+31:32*g] <= i;
+end
+endgenerate
+
+always @(posedge rclk)
+    rrcl <= rd_cache_line;        
+always @(posedge rclk)
+    rrclp1 <= rd_cache_line + 9'd1;
+    
+assign o0 = mem[rrcl];
+assign o1 = mem[rrclp1];        
+
+endmodule
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+module icache_tag(wclk, wr, wadr, rclk, radr, hit0, hit1);
+input wclk;
+input wr;
+input [31:0] wadr;
+input rclk;
+input [31:0] radr;
+output hit0;
+output hit1;
+
+reg [31:0] tagmem [0:511];
+reg [31:0] rradr,rradrp32;
+
+always @(posedge rclk)
+    rradr <= radr;        
+always @(posedge rclk)
+    rradrp32 <= radr + 32'd32;
+
+always @(posedge wclk)
+    if (wr) tagmem[wadr[13:5]] <= wadr;
+
+assign hit0 = tagmem[rradr[13:5]][31:14]==rradr[31:14];
+assign hit1 = tagmem[rradrp32[13:5]][31:14]==rradrp32[31:14];
+
+endmodule
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+module icache(wclk, wr, wadr, i, rclk, radr, o, hit, hit0, hit1);
+input wclk;
+input wr;
+input [31:0] wadr;
+input [31:0] i;
+input rclk;
+input [31:0] radr;
+output reg [63:0] o;
+output hit;
+output hit0;
+output hit1;
+
+wire [255:0] ic0, ic1;
+
+icache_mem u1
+(
+    .wclk(wclk),
+    .wr(wr),
+    .wadr(wadr[31:0]),
+    .i(i),
+    .rclk(rclk),
+    .radr(radr[31:0]),
+    .o0(ic0),
+    .o1(ic1)
+);
+
+icache_tag u2
+(
+    .wclk(wclk),
+    .wr(wr),
+    .wadr(wadr),
+    .rclk(rclk),
+    .radr(radr),
+    .hit0(hit0),
+    .hit1(hit1)
+);
+
+always @(radr or ic0 or ic1)
+    o <= {ic1,ic0} >> {radr[4:1],4'h0};
+
+assign hit = (hit0 & hit1) || (hit0 && radr[4:1] < 4'h5);
+
+endmodule
+

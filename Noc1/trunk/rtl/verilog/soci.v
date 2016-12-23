@@ -28,7 +28,7 @@
 //
 `include "noc_defines.v"
 
-module soci(num, rst, clk, neti, neto, cyc, stb, ack, err, we, sel, adr, dati, dato);
+module soci(num, rst, clk, neti, neto, mas, cyc, stb, ack, err, we, sel, adr, dati, dato);
 parameter IDLE = 4'd1;
 parameter READ = 4'd2;
 parameter WRITE = 4'd3;
@@ -40,6 +40,7 @@ input rst;
 input clk;
 input [`PACKET_WID-1:0] neti;
 output reg [`PACKET_WID-1:0] neto;
+output reg [3:0] mas;
 output reg cyc;
 output reg stb;
 input ack;
@@ -51,6 +52,7 @@ input [31:0] dati;
 output reg [31:0] dato;
 
 reg [`PACKET_WID-1:0] packeto;
+reg needack;
 reg [3:0] state;
 
 always @(posedge clk)
@@ -63,12 +65,14 @@ else begin
   case (state)
   IDLE:
     if (neti[`RID]==num) begin
+      mas <= neti[`TID];
       cyc <= 1'b1;
       stb <= 1'b1;
       we <= neti[68];
       sel <= neti[67:64];
       adr <= neti[63:32];
       dato <= neti[31:0];
+      needack <= neti[69];
       if (neti[68]==1'b0)
         state <= READ;
       else
@@ -77,6 +81,8 @@ else begin
       packeto[`TID] <= neti[`RID];
       packeto[`ACK] <= 1'b1;
       packeto[`AGE] <= 8'h00;
+      // Remove input packet from ring
+      neto <= 128'd0;
     end
     // Packet wasn't for me.
     else begin
@@ -98,7 +104,7 @@ else begin
       EchoAged();
       if (ack|err) begin
         wb_nack();
-        state <= err ? ERR : TX;
+        state <= err ? ERR : needack ? TX : IDLE;
 //        state <= IDLE;
       end
     end
@@ -126,7 +132,7 @@ else begin
     begin
       EchoAged();
       wb_nack();
-      state <= TX;
+      state <= needack ? TX : IDLE;
     end
   endcase
 end
