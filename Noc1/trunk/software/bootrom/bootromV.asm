@@ -27,30 +27,30 @@
 ;
 TXTROWS		EQU		1
 TXTCOLS		EQU		4
-TEXTSCR		EQU		$2FD00000
-SSG            EQU       $2FDC0080
-SPRITE_CTRL    EQU       $2FDAD000
-SPRITE_POS     EQU       $2FDAD000
-SPRITE_IMAGE   EQU       $2FD80000
-NOCC_PKTLO     EQU       $2FD80000
-NOCC_PKTMID    EQU       $2FD80004
-NOCC_PKTHI     EQU       $2FD80008
-NOCC_TXPULSE   EQU       $2FD80018
-NOCC_STAT      EQU       $2FD8001C
-CPU_INFO       EQU       $2FD90000
-GFX_CONTROL    EQU       $2FD40000
-GFX_TGT_BASE   EQU       $2FD40010
-GFX_TGT_SIZEX  EQU       $2FD40014
-GFX_TGT_SIZEY  EQU       $2FD40018
-GFX_CLIP_P0_X  EQU       $2FD40074
-GFX_CLIP_P0_Y  EQU       $2FD40078
-GFX_CLIP_P1_X  EQU       $2FD4007C
-GFX_CLIP_P1_Y  EQU       $2FD40080
+TEXTSCR		EQU		$FFD00000
+SSG            EQU       $FFDC0080
+SPRITE_CTRL    EQU       $FFDAD000
+SPRITE_POS     EQU       $FFDAD000
+SPRITE_IMAGE   EQU       $FFD80000
+NOCC_PKTLO     EQU       $FFD80000
+NOCC_PKTMID    EQU       $FFD80004
+NOCC_PKTHI     EQU       $FFD80008
+NOCC_TXPULSE   EQU       $FFD80018
+NOCC_STAT      EQU       $FFD8001C
+CPU_INFO       EQU       $FFD90000
+GFX_CONTROL    EQU       $FFD40000
+GFX_TGT_BASE   EQU       $FFD40010
+GFX_TGT_SIZEX  EQU       $FFD40014
+GFX_TGT_SIZEY  EQU       $FFD40018
+GFX_CLIP_P0_X  EQU       $FFD40074
+GFX_CLIP_P0_Y  EQU       $FFD40078
+GFX_CLIP_P1_X  EQU       $FFD4007C
+GFX_CLIP_P1_Y  EQU       $FFD40080
 
-BMP_PX          EQU    $2FDC5024
-BMP_PY          EQU    $2FDC5028
-BMP_COLOR       EQU    $2FDC502C
-BMP_PCMD        EQU    $2FDC5030
+BMP_PX          EQU    $FFDC5024
+BMP_PY          EQU    $FFDC5028
+BMP_COLOR       EQU    $FFDC502C
+BMP_PCMD        EQU    $FFDC5030
 
 
   bss
@@ -61,15 +61,15 @@ m_z				dw		0
 NormAttr 	EQU		8
 
   code
-	org		0x2000
+	org		0x01FC
+	jmp		nmi_rout
 	jmp		start
 start:
-  ldi   a0,#$F0000
-  csrrw x0,a0,$793       ; set ES register
   ldi   sp,#$1BFFC       ; top of the 48k ram
   ldi   a0,#$88888888
   jal   ra,srand
-  lw    t0,CPU_INFO      ; figure out which core we are
+  ;lw    t0,CPU_INFO      ; figure out which core we are
+  csrrw	t0,#$F10,x0
   andi  t0,t0,#15
   slti  t0,t0,#2
   beq   t0,x0,.0002      ; not core #1 (wasn't less than 2)
@@ -89,13 +89,14 @@ start:
   jal   ra,xmitPacket
 
   ; If we are cpu#1 of node#1 - initialize graphics controller
-  lw    t0,CPU_INFO      ; figure out which core we are
+;  lw    t0,CPU_INFO      ; figure out which core we are
+  csrrw	t0,#$F10,x0
   ; assign node 6 to daring diagonal line test
   ldi   t1,#$61
   beq   t0,t1,bmp_line
   ldi   t1,#$51
-  jal   x0,bmp_rand
-  beq   x0,x0,bmp_rand
+;  jal   x0,bmp_rand
+;  beq   x0,x0,bmp_rand
   ldi   t1,#$21
   bne   t0,t1,.0004
 ;  jal   ra,init_gfx
@@ -150,7 +151,7 @@ bmp_line:
     jal   ra,xmitPacket
 		addi  t1,t1,#1
 		ldi   t0,#192
-		bltu  t1,t0,.su4
+  	bltu  t1,t0,.su4
     jal   x0,.su5
 
 //---------------------------------------------------------------------------
@@ -185,7 +186,7 @@ xmitPacket:
   sw    x0,NOCC_TXPULSE  ; and send the packet
   lw    t0,[sp]
   addi  sp,sp,#4
-  jal   [ra]
+- jal   [ra]
 
 //---------------------------------------------------------------------------
 // Generate a random number
@@ -202,11 +203,15 @@ xmitPacket:
 // }
 //---------------------------------------------------------------------------
 //
+// Seed the generator with a number dependent on the core number so each
+// core has a unique series of numbers.
+//
 srand:
-    lw    v0,CPU_INFO      ; figure out which core we are
+;    lw    v0,CPU_INFO      ; figure out which core we are
+	csrrw v0,#$F10,x0
     sw    v0,m_z
     sw    a0,m_w
-    jal   [ra]
+-   jal   [ra]
     
 gen_rand:
 		addi	sp,sp,#-4
@@ -230,7 +235,7 @@ gen_rand:
 		add	  v0,v0,t0
 		lw		t0,[sp]
 		addi	sp,sp,#4
-		jal   [ra]
+-		jal   [ra]
 
 rand:
 		addi	sp,sp,#-4
@@ -241,7 +246,7 @@ rand:
 		add	  v0,v0,t0
 		lw		t0,[sp]
 		addi	sp,sp,#4
-		jal   [ra]
+-		jal   [ra]
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
@@ -292,11 +297,12 @@ init_gfx:
 
     lw    ra,[sp]
     addi  sp,sp,#4
-    jal   [ra]
+-   jal   [ra]
 
 sprite_demo:
     ; First fill sprite with random image data or nothing will show
-    lw    t0,CPU_INFO
+;    lw    t0,CPU_INFO
+    csrrw t0,#$F10,x0
     andi  t0,t0,#$F0      ; t0 = index into register set
     slli  t1,t0,#4        ; align to 4k boundary
     ldi   t2,#1024        ; 1024 words to update
@@ -321,6 +327,10 @@ sprite_demo:
     addi  a1,t0,#SPRITE_POS
     jal   ra,xmitPacket   ; update sprite position
     beq   x0,x0,.0002    
-    
+   
+nmi_rout:
+	eret
+
+end_of_program:
 
 

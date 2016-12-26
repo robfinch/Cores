@@ -28,12 +28,13 @@
 `define LOW     1'b0
 `define HIGH    1'b1
 
-module DSD9_mmu(rst_i, clk_i, ol_i, pcr_i, mapen_i, s_ex_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o, pea_o,
+module DSD9_mmu(rst_i, clk_i, ol_i, pcr_i, pcr2_i, mapen_i, s_ex_i, s_cyc_i, s_stb_i, s_ack_o, s_wr_i, s_adr_i, s_dat_i, s_dat_o, pea_o,
     exv_o, rdv_o, wrv_o);
 input rst_i;
 input clk_i;
 input [1:0] ol_i;
 input [31:0] pcr_i;     // paging enabled
+input [63:0] pcr2_i;
 input mapen_i;
 input s_ex_i;           // executable address
 input s_cyc_i;
@@ -49,27 +50,31 @@ output reg rdv_o;       // read violation
 output reg wrv_o;       // write violation
 
 wire cs = s_cyc_i && s_stb_i && (s_adr_i[31:12]==20'hFFDC4);
+wire [5:0] okey = pcr_i[5:0];
+wire [5:0] akey = pcr_i[13:8];
 
 reg ack1, ack2;
 always @(posedge clk_i)
     ack1 <= cs;
 always @(posedge clk_i)
-    ack2 <= ack1 & cs;
-assign s_ack_o = cs ? ack2 : 1'b0;
+    ack2 <= ack1 & (cs);
+assign s_ack_o = (cs) ? ack2 : 1'b0;
 
 wire [18:0] doutb;
-
-wire [2:0] wrx = doutb[18:16];
+wire [18:0] doutca;
+wire [2:0] cwrx = doutb[18:16];
 
 always @*
-    exv_o <= s_ex_i & ~wrx[0] & s_cyc_i & s_stb_i;
+    exv_o <= s_ex_i & ~cwrx[0] & s_cyc_i & s_stb_i;
 always @*
-    rdv_o <= ~(s_wr_i | s_ex_i) & ~wrx[1] & s_cyc_i & s_stb_i;
+    rdv_o <= ~(s_wr_i | s_ex_i) & ~cwrx[1] & s_cyc_i & s_stb_i;
 always @*
-    wrv_o <= s_wr_i & ~wrx[2] & s_cyc_i & s_stb_i;
+    wrv_o <= s_wr_i & ~cwrx[2] & s_cyc_i & s_stb_i;
 
-wire [15:0] addra = {pcr_i[13:8],s_adr_i[11:2]};
-wire [15:0] addrb = cs ? {pcr_i[13:8],s_adr_i[11:2]} : {pcr_i[5:0],s_adr_i[25:16]};
+wire [15:0] addra = {akey,s_adr_i[11:2]};
+wire [15:0] addrb = cs ? {akey,s_adr_i[11:2]} :
+                    pcr2_i[okey] ? {okey,s_adr_i[31:22]} :
+                         {okey,s_adr_i[25:16]};
 
 DSD9_MMURam1 u1 (
   .clka(clk_i),    // input wire clka
@@ -83,21 +88,27 @@ DSD9_MMURam1 u1 (
   .doutb(doutb)  // output wire [51 : 0] doutb
 );
 
-assign s_dat_o = cs ? {13'd0,doutb} : 32'h0;
+assign s_dat_o = cs ? {12'd0,doutb} : 32'h0;
 
 // The following delay reg is to keep all the address bits in sync
 // with the output of the map table. So there are no intermediate
 // invalid addresses.
 reg [31:0] s_adr1, s_adr2;
+reg _4MB1, _4MB2;
 always @(posedge clk_i)
     s_adr1 <= s_adr_i;
 always @(posedge clk_i)
     s_adr2 <= s_adr1;
+always @(posedge clk_i)
+    _4MB1 <= pcr2_i[okey];
+always @(posedge clk_i)
+    _4MB2 <= _4MB1;
 
-always @(s_adr2 or doutb)
+always @(s_adr2 or doutb or _4MB2)
 begin
     pea_o[15:0] <= s_adr2[15:0];
-    pea_o[31:16] <= doutb[15:0];
+    pea_o[21:16] <= _4MB2 ? s_adr2[21:16] : doutb[5:0];
+    pea_o[31:22] <= doutb[15:6];
 end
 
 endmodule

@@ -77,38 +77,38 @@ fp_cmp_unit #(WID) u1 (a, b, o, nanx);
 
 always @(opcode or a or b or imm or xir)
 case(opcode)
-`BEQ:   takb <= a==b;
-`BNE:   takb <= a!=b;
-`BLT:   takb <= $signed(a) < $signed(b);
-`BGE:   takb <= $signed(a) >= $signed(b);
-`BLE:   takb <= $signed(a) <= $signed(b);
-`BGT:   takb <= $signed(a) > $signed(b);
-`BLTU:  takb <= a < b;
-`BGEU:  takb <= a >= b;
-`BLEU:  takb <= a <= b;
-`BGTU:  takb <= a > b;
-`BBC:   takb <= ~a[bitno];
-`BBS:   takb <= a[bitno];
-`BEQI:  takb <= a==imm;
-`BNEI:  takb <= a!=imm;
-`BLTI:  takb <= $signed(a) < $signed(imm);
-`BGEI:  takb <= $signed(a) >= $signed(imm);
-`BLEI:  takb <= $signed(a) <= $signed(imm);
-`BGTI:  takb <= $signed(a) > $signed(imm);
-`BLTUI: takb <= a < imm;
-`BGEUI: takb <= a >= imm;
-`BLEUI: takb <= a <= imm;
-`BGTUI: takb <= a > imm;
+`BEQ:   takb = a==b;
+`BNE:   takb = a!=b;
+`BLT:   takb = $signed(a) < $signed(b);
+`BGE:   takb = $signed(a) >= $signed(b);
+`BLE:   takb = $signed(a) <= $signed(b);
+`BGT:   takb = $signed(a) > $signed(b);
+`BLTU:  takb = a < b;
+`BGEU:  takb = a >= b;
+`BLEU:  takb = a <= b;
+`BGTU:  takb = a > b;
+`BBC:   takb = ~a[bitno];
+`BBS:   takb = a[bitno];
+`BEQI:  takb = a==imm;
+`BNEI:  takb = a!=imm;
+`BLTI:  takb = $signed(a) < $signed(imm);
+`BGEI:  takb = $signed(a) >= $signed(imm);
+`BLEI:  takb = $signed(a) <= $signed(imm);
+`BGTI:  takb = $signed(a) > $signed(imm);
+`BLTUI: takb = a < imm;
+`BGEUI: takb = a >= imm;
+`BLEUI: takb = a <= imm;
+`BGTUI: takb = a > imm;
 
-`FBEQ:  takb <= o[0];
-`FBNE:  takb <= !o[0];
-`FBLT:  takb <= o[1];
-`FBGE:  takb <= !o[1];
-`FBLE:  takb <= o[2];
-`FBGT:  takb <= !o[2];
-`FBUN:  takb <= o[4];
-`FBOR:  takb <= !o[4];
-default: takb <= 1'b0;
+`FBEQ:  takb = o[0];
+`FBNE:  takb = !o[0];
+`FBLT:  takb = o[1];
+`FBGE:  takb = !o[1];
+`FBLE:  takb = o[2];
+`FBGT:  takb = !o[2];
+`FBUN:  takb = o[4];
+`FBOR:  takb = !o[4];
+default: takb = 1'b0;
 endcase
 
 endmodule

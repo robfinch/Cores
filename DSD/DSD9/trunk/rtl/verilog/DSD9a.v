@@ -125,19 +125,21 @@ reg [5:0] retstate;                 // state stack 1-entry
 reg [1:0] ol;                       // operating level
 reg [7:0] cpl;                      // privilege level
 reg [PCMSB:0] pc,dpc,xpc;
+wire [PCMSB:0] i2pc;
 reg [PCMSB:0] epc [0:4];
 wire ipredict_taken;
 reg dpredict_taken,xpredict_taken;
+reg i1predict_taken,i2predict_taken;
 reg [PCMSB:0] br_disp;
-wire [119:0] insn;
-reg [119:0] iinsn;
-reg [127:0] dir,xir;
+wire [119:0] insn,insn2;
+reg [119:0] iinsn,ls1buf,ls2buf;
+reg [119:0] dir,xir;
 wire [7:0] iopcode = iinsn[7:0];
 wire [7:0] dopcode = dir[7:0];
 wire [7:0] dfunct = dir[39:32];
 wire [7:0] xopcode = xir[7:0];
 wire [7:0] xfunct = xir[39:32];
-wire [2:0] Sc = xir[30:28];
+wire [2:0] Sc = xir[28:26];
 wire advanceIF,advanceDC,advanceEX;
 reg IsICacheLoad,IsDCacheLoad;
 reg [1:0] icmf;
@@ -171,13 +173,14 @@ reg [23:0] fault_insn;
 reg im;
 reg [4:0] mimcd;
 reg gie;        // global interrupt enable    
-reg dinv,xinv;
+reg i1inv,i2inv,dinv,xinv,odinv;
 reg i54,i80;
 reg upd_rf;
 reg [31:0] dea;
 reg [127:0] idat1, idat2;
 reg wasaCall;
 reg mapen;
+reg ls1,ls2;
 
 // CSR registers
 reg [79:0] cisc;
@@ -188,9 +191,12 @@ reg [5:0] pchndx;
 reg [31:0] sbl[0:3],sbu[0:3];
 reg [31:0] mconfig;
 reg [79:0] mkeys;
+reg [5:0] icount;
+reg bpe;                    // branch prediction enable
 
 // Machine
 reg [31:0] pcr;
+reg [63:0] pcr2;
 wire [5:0] okey = pcr[5:0];
 wire pgen = pcr[31] && (ol != 2'b00);
 reg [31:0] mbadaddr;
@@ -235,9 +241,6 @@ endfunction
 // For simulation
 integer nn;
 initial begin
-    r1 = 0;
-    r2 = 0;
-    r58 = 0;
     for (nn = 0; nn < 4; nn = nn + 1)
     begin
         r60[nn] = 0;
@@ -253,28 +256,6 @@ end
 // Instruction fetch stage combinational logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-reg [3:0] pc_inc;
-always @(iinsn)
-casex(iinsn[7:0])
-`TGT,`MARK1,`MARK2,`MARK3,`MARK4,
-`NOP,`CLI,`SEI,`WAI,`IRET,`MEMSB,`MEMDB,`SYNC,
-`MFLT0,`MFLTF:
-    pc_inc = 4'd1;
-`PUSH,`POP:
-    pc_inc = 4'd2;
-`MOV,`ADDI10,`RET,`BRK,`LDDBP:
-    pc_inc = 4'd3;
-`LDD12:
-    pc_inc = 4'd4;
-default:
-    if (iinsn[47:44]==4'hC && iinsn[87:84]==4'hC)
-        pc_inc = 4'd15;
-    else if (iinsn[47:44]==4'hC)
-        pc_inc = 4'd10;
-    else
-        pc_inc = 4'd5;
-endcase
-
 wire [31:0] ibr_disp = {{16{iinsn[39]}},iinsn[39:24]};
 
 // A stuffed fault will have occurred earlier than a pending IRQ
@@ -288,6 +269,31 @@ always@*
         iinsn = {5{7'd0,`FLT_TGT,`BRK}};
     else
         iinsn = insn;
+
+task iSetInsn;
+begin
+    dpc <= i2pc;
+    if (iopcode==`BRK) begin
+        Ra <= 6'd63;
+        Rb <= 6'd1;
+        Rc <= 6'd2;
+    end
+    else if (iopcode==`PEA || iopcode==`CALL || iopcode==`CALLI || iopcode==`CALLIT || 
+             iopcode==`POP || iopcode==`PUSH || iopcode==`RET) begin
+        Ra <= 6'd63;
+        Rb <= iinsn[13:8];
+        Rc <= iinsn[19:14];
+    end
+    else begin
+        Ra <= iinsn[13:8];
+        Rb <= iinsn[19:14];
+        Rc <= iinsn[25:20];
+    end
+    i80 <= iinsn[87:84]==4'hC;
+    i54 <= iinsn[47:44]==4'hC;
+    dir <= iinsn;
+end
+endtask
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Decode / register fetch stage combinational logic.
@@ -363,7 +369,7 @@ wire dMulsu = dopcode==`R2 && (dfunct==`MULSU || dfunct==`MULSUH);
 wire dMuli = dopcode==`MUL || dopcode==`MULH;
 wire dMului = dopcode==`MULU || dopcode==`MULUH;
 wire dMulsui = dopcode==`MULSU || dopcode==`MULSUH;
-reg xMul,xMulu,xMulsu,xMuli,xMului,xMulsui,xIsMul;
+reg xMul,xMulu,xMulsu,xMuli,xMului,xMulsui,xIsMul,xMulii;
 wire dIsMul = dMul|dMulu|dMulsu|dMuli|dMului|dMulsui;
 
 wire dDiv = dopcode==`DIV || dopcode==`DIVU || dopcode==`DIVSU || dopcode==`REM || dopcode==`REMU || dopcode==`REMSU ||
@@ -380,21 +386,15 @@ wire dFloat = dopcode==`FLOAT;
 
 reg xIsLoad,xIsStore,xIsLoadVolatile;
 
-function IsLoadVolatile;
-input [7:0] opcode;
-IsLoadVolatile =
-    opcode==`LDVB || opcode==`LDVW || opcode==`LDVT || opcode==`LDVD || opcode==`LDVDAR || opcode==`LDVDARX;
-endfunction
-
 function IsLoad;
 input [7:0] opcode;
 IsLoad = opcode==`LDB || opcode==`LDBU || opcode==`LDW || opcode==`LDWU || opcode==`LDT || opcode==`LDTU ||
          opcode==`LDP || opcode==`LDPU || opcode==`LDD ||
-         opcode==`LDVDAR ||
          opcode==`LDBX || opcode==`LDBUX || opcode==`LDWX || opcode==`LDWUX || opcode==`LDTX || opcode==`LDTUX ||
          opcode==`LDPX || opcode==`LDPUX || opcode==`LDDX ||
          opcode==`LDDBP || opcode==`LDD12 ||
-         IsLoadVolatile(opcode);
+         opcode==`LDDAR || opcode==`LDDARX
+         ;
 endfunction
 
 function IsStore;
@@ -415,9 +415,6 @@ input [5:0] Rn;
 case(Rn)
 6'd00:  fwd_mux = {WID{1'b0}};
 xRt: fwd_mux = res;
-6'd01:  fwd_mux = r1;
-6'd02:  fwd_mux = r2;
-6'd58:  fwd_mux = r58;
 6'd60:  fwd_mux = r60[ol];
 6'd61:  fwd_mux = r61[ol];
 6'd62:  fwd_mux = r62[ol];  
@@ -628,8 +625,8 @@ always @*
     `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLEU,`SLTU,`SGEU,`SGTU:
             res = {79'd0,setcc_o};
     `LDDBP,`LDD12,            
-    `LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDP,`LDPU,`LDD,`LDVDAR,
-    `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDVDARX:
+    `LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDP,`LDPU,`LDD,`LDDAR,
+    `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
             res = lres;
     `JMP,`JMPI,`JMPIT:   res = xpc + 32'd5;
     `CALL,`CALLI,`CALLIT:  res = a - 32'd10;
@@ -711,20 +708,33 @@ DSD9_BranchHistory u5
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+reg prime;
 reg IsLastICacheWr;
 wire ihit,ihit0,ihit1;
+wire icache_rce = !(xIsMultiCycle && !xinv);
 DSD9_icache u1
 (
     .wclk(clk_i),
     .wr(IsICacheLoad & (ack_i|err_i)),
     .wadr({okey,ea}),
     .i(dat_i),
-    .rclk(~clk_i),
+    .rclk(clk_i),
+    .rce(icache_rce),
     .radr({okey,pc}),
     .o(insn),
+    .radr_o(i2pc),
     .hit(ihit),
     .hit0(ihit0),
     .hit1(ihit1)
+);
+
+vtdl #(.WID(120),.DEP(64)) u14
+(
+    .clk(clk_i),
+    .ce(1'b1),
+    .a(icount-6'd1),
+    .d(insn),
+    .q(insn2)
 );
 
 wire dhit0,dhit1,dhit;
@@ -748,6 +758,7 @@ DSD9_dcache u2
 wire exv;
 wire rdv;
 wire wrv;
+wire unc = ea[31:20]==12'hFFD;
 
 DSD9_mmu u6
 (
@@ -755,6 +766,7 @@ DSD9_mmu u6
     .clk_i(clk_i),
     .ol_i(ol),
     .pcr_i(pcr),
+    .pcr2_i(pcr2),
     .mapen_i(mapen),
     .s_ex_i(IsICacheLoad),
     .s_cyc_i(cyc_o),
@@ -797,8 +809,12 @@ if (rst_i) begin
     xinv <= `TRUE;
     dinv <= `TRUE;
     pcr <= 32'h00;
+    pcr2 <= 32'h01;
     mexrout <= 32'd0;       // sim needs this
     wasaCall <= `FALSE;
+    dir <= {3{`NOP_INSN}};
+    xir <= {3{`NOP_INSN}};
+    bpe <= `FALSE;
     next_state(RESTART1);
 end
 else begin
@@ -807,6 +823,11 @@ xldfp <= `FALSE;
 upd_rf <= `FALSE;
 update_regfile();
 tick <= tick + 80'd1;
+
+if (!(xIsMultiCycle && !xinv))    
+    icount <= 0;
+else
+    icount <= icount + 6'd1;
 
 case(state)
 
@@ -847,68 +868,48 @@ begin
             markerMsg <= "Marker1 Hit";
         stuff_fault <= `FALSE;
         wasaCall <= `FALSE;
-        if (iopcode==`BRK) begin
-            Ra <= 6'd63;
-            Rb <= 6'd1;
-            Rc <= 6'd2;
-        end
-        else if (iopcode==`PEA || iopcode==`CALL || iopcode==`CALLI || iopcode==`CALLIT || 
-                 iopcode==`POP || iopcode==`PUSH || iopcode==`RET) begin
-            Ra <= 6'd63;
-            Rb <= iinsn[13:8];
-            Rc <= iinsn[19:14];
-        end
-        else if (iopcode==`LDDBP) begin
-            Ra <= 6'd59;
-            Rb <= iinsn[13:8];
-            Rc <= iinsn[19:14];
-        end
-        else begin
-            Ra <= iinsn[13:8];
-            Rb <= iinsn[19:14];
-            Rc <= iinsn[25:20];
-        end
-        i80 <= `FALSE;
-        i54 <= `FALSE;
-        if (iinsn[47:44]==4'hC && iinsn[87:84]==4'hC)
-            i80 <= `TRUE;
-        else if (iinsn[47:44]==4'hC)
-            i54 <= `TRUE;
-        dinv <= `FALSE;
-        pc <= pc + pc_inc;
-        dpc <= pc;
+        iSetInsn();
+        i1inv <= `FALSE;
+        i2inv <= i1inv;
+        dinv <= i2inv;
+        pc <= pc + 32'd5;
+        if (bpe)
         case(iopcode)
         `FBEQ,`FBNE,`FBLT,`FBGE,`FBLE,`FBGT,`FBOR,`FBUN,
         `BEQI,`BNEI,`BLTI,`BGEI,`BLEI,`BGTI,`BLTUI,`BGEUI,`BLEUI,`BGTUI,`BBC,`BBS,
         `BEQ,`BNE,`BLT,`BGE,`BLE,`BGT,`BLTU,`BGEU,`BLEU,`BGTU:
             if (iinsn[23]) begin
-                dpredict_taken <= iinsn[22];
-                if (iinsn[22])
-                    pc <= pc + ibr_disp;
+                i1predict_taken <= iinsn[22];
+                if (iinsn[22]) begin
+                    i1inv <= `TRUE;
+                    i2inv <= `TRUE;
+                    pc <= i2pc + ibr_disp;
+                end
             end
             else begin
-                dpredict_taken <= ipredict_taken;
-                if (ipredict_taken)
-                    pc <= pc + ibr_disp;
+                i1predict_taken <= ipredict_taken;
+                if (ipredict_taken) begin
+                    i1inv <= `TRUE;
+                    i2inv <= `TRUE;
+                    pc <= i2pc + ibr_disp;
+                end
             end
-        default: dpredict_taken <= ipredict_taken;
+        default: i1predict_taken <= ipredict_taken;
         endcase
+        i2predict_taken <= i1predict_taken;
+        dpredict_taken <= i2predict_taken;
         if (iopcode==`WAI && ~irq_i)
             pc <= pc;
-        dinv <= `FALSE;
-        dir <= iinsn;
     end
     else begin
         if (!ihit) begin
-            pc <= pc;
+            // Must move PC back to missed instruction
+            pc <= i2pc;
             icmf <= {~ihit1,~ihit0};
             iccnt <= 3'd0;
+            if (advanceDC)
+                iSetInsn();
             next_state(LOAD_ICACHE1);
-        end
-        if (advanceDC) begin
-            dir <= {16{`NOP}};
-            dpc <= pc;
-            pc <= pc;
         end
     end
 
@@ -933,6 +934,7 @@ begin
         xMuli <= dMuli;
         xMului <= dMului;
         xMulsui <= dMulsui;
+        xMulii <= dMuli|dMului|dMulsui;
         xIsMul <= dIsMul;
         
         xDiv <= dDiv;
@@ -951,7 +953,6 @@ begin
         xCallit <= dCallit;
         xRet <= dRet;
         xIsLoad <= IsLoad(dopcode);
-        xIsLoadVolatile <= IsLoadVolatile(dopcode);
         xIsStore <= IsStore(dopcode);
         xCsr <= dCsr;
         
@@ -975,22 +976,28 @@ begin
         case(dopcode)
         `CSR,
         `BEQI,`BNEI,`BLTI,`BLEI,`BGTI,`BGEI,`BLTUI,`BLEUI,`BGTUI,`BGEUI:
-            if (i80)//        32          4         32          4          8
-                imm <= {dir[119:88],dir[83:80],dir[79:48],dir[43:40],dir[21:14]};
-            else if (i54) //              32          4          8
-                imm <= {{36{dir[79]}},dir[79:48],dir[43:40],dir[21:14]};
-            else
-                imm <= {{72{dir[21]}},dir[21:14]};
-        `ADDI10,`LDDBP: imm <= {{70{dir[23]}},dir[23:14]};
+            case({i80,i54})
+            2'b00:  imm <= {{72{dir[21]}},dir[21:14]};
+                                //              32          4          8
+            2'b01:  imm <= {{36{dir[79]}},dir[79:48],dir[43:40],dir[21:14]};
+            2'b10:  imm <= {{72{dir[21]}},dir[21:14]};
+                        //        32          4         32          4          8
+            2'b11:  imm <= {dir[119:88],dir[83:80],dir[79:48],dir[43:40],dir[21:14]};
+            endcase
+        `ADDI10: imm <= {{70{dir[23]}},dir[23:14]};
         `LDD12:  imm <= {{68{dir[31]}},dir[31:20]};
         `RET:    imm <= dir[23:8];
+        `STBX,`STWX,`STTX,`STPX,`STDX,`STDCRX,
+        `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
+                imm <= {{69{dir[39]}},dir[39:29]};
         default:
-            if (i80)    //    20          4         32          4         20
-                imm <= {dir[107:88],dir[83:80],dir[79:48],dir[43:40],dir[39:20]};
-            else if (i54)
-                imm <= {{24{dir[79]}},dir[79:48],dir[43:40],dir[39:20]};
-            else
-                imm <= {{60{dir[39]}},dir[39:20]};
+            case({i80,i54})
+            2'b00:  imm <= {{60{dir[39]}},dir[39:20]};
+            2'b01:  imm <= {{24{dir[79]}},dir[79:48],dir[43:40],dir[39:20]};
+            2'b10:  imm <= {{60{dir[39]}},dir[39:20]};
+                            //    20          4         32          4         20
+            2'b11:  imm <= {dir[107:88],dir[83:80],dir[79:48],dir[43:40],dir[39:20]};
+            endcase
         endcase
         br_disp <= {{16{dir[39]}},dir[39:24]};
         xRa <= Ra;
@@ -1011,7 +1018,7 @@ begin
             `MUX:   xRt = dir[31:26];
             default:    xRt <= 6'd0;
             endcase
-        `LEA,`BITFIELD,
+        `LEA,`BITFIELD,`MOV,
         `CSZ,`CSNZ,`CSN,`CSNN,`CSP,`CSNP,`CSOD,`CSEV,
         `ZSZ,`ZSNZ,`ZSN,`ZSNN,`ZSP,`ZSNP,`ZSOD,`ZSEV,
         `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLTU,`SGEU,`SLEU,`SGTU,
@@ -1039,7 +1046,7 @@ begin
                 upd_rf <= `TRUE;
             default:    upd_rf <= `FALSE;
             endcase
-        `LEA,`BITFIELD,
+        `LEA,`BITFIELD,`MOV,
         `CSZ,`CSNZ,`CSN,`CSNN,`CSP,`CSNP,`CSOD,`CSEV,
         `ZSZ,`ZSNZ,`ZSN,`ZSNN,`ZSP,`ZSNP,`ZSOD,`ZSEV,
         `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLTU,`SGEU,`SLEU,`SGTU,
@@ -1064,12 +1071,16 @@ begin
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (!xinv) begin
         if (xIsBranch) begin
-            if (xpredict_taken & ~takb) begin
-                ex_branch(xpc + 32'd5);
+            if (bpe) begin
+                if (xpredict_taken & ~takb) begin
+                    ex_branch(xpc + 32'd5);
+                end
+                else if (~xpredict_taken & takb) begin
+                    ex_branch(xpc + br_disp);
+                end
             end
-            else if (~xpredict_taken & takb) begin
+            else if (takb)
                 ex_branch(xpc + br_disp);
-            end                
         end
 
         if (xIsMul)
@@ -1155,33 +1166,19 @@ begin
             case(xfunct)
             `ADDO,`SUBO:
                 if (mexrout[7] && fnOverflow(xfunct==`SUBO,a[79],b[79],res[79])) begin
-                    if (mexrout[6]) begin
-                        r1 <= `FLT_OFL;
-                        r2 <= `FLT_TYPE;
-                        ex_branch(r58);
-                    end
-                    else begin
-                        ex_fault(`FLT_OFL,0);
-                    end
+                    ex_fault(`FLT_OFL,0);
                 end
             endcase
         `ADDO,`SUBO:
             if (mexrout[7] && fnOverflow(xopcode==`SUBO,a[79],imm[79],res[79])) begin
-                if (mexrout[6]) begin
-                    r1 <= `FLT_OFL;
-                    r2 <= `FLT_TYPE;
-                    ex_branch(r58);
-                end
-                else begin
-                    ex_fault(`FLT_OFL,0);
-                end
+                ex_fault(`FLT_OFL,0);
             end
                 
-        `LDB,`LDBU,`LDVB: begin mem_size <= byt; dea <= a + imm; next_state(LOAD1); end
-        `LDW,`LDWU,`LDVW: begin mem_size <= wyde; dea <= a + imm; next_state(LOAD1); end
-        `LDT,`LDTU,`LDVT: begin mem_size <= tetra; dea <= a + imm; next_state(LOAD1); end
+        `LDB,`LDBU: begin mem_size <= byt; dea <= a + imm; next_state(LOAD1); end
+        `LDW,`LDWU: begin mem_size <= wyde; dea <= a + imm; next_state(LOAD1); end
+        `LDT,`LDTU: begin mem_size <= tetra; dea <= a + imm; next_state(LOAD1); end
         `LDP,`LDPU: begin mem_size <= penta; dea <= a + imm; next_state(LOAD1); end
-        `LDD,`LDDBP,`LDD12,`LDVDAR,`LDVD: begin mem_size <= deci; dea <= a + imm; next_state(LOAD1); end
+        `LDD,`LDDBP,`LDD12,`LDDAR: begin mem_size <= deci; dea <= a + imm; next_state(LOAD1); end
         `LDBX,`LDBUX: begin mem_size <= byt; dea <= siea; next_state(LOAD1); end
         `LDWX,`LDWUX: begin mem_size <= wyde; dea <= siea; next_state(LOAD1); end
         `LDTX,`LDTUX: begin mem_size <= tetra; dea <= siea; next_state(LOAD1); end
@@ -1232,78 +1229,32 @@ MUL5:   next_state(MUL9);
 MUL9:
     begin
         mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;
-        case(xopcode)
-        `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH:
-            xRt <= xir[19:14];
-        `R2:
-            case(xfunct)
-            `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH:
-                xRt <= xir[25:20];
-            endcase
-        endcase
+        xRt <= xMulii ? xir[19:14] : xir[25:20];
         upd_rf <= `TRUE;
         next_state(INVnRUN);
         if (multovf & mexrout[5]) begin
-            if (mexrout[4]) begin
-                r1 <= `FLT_OFL;
-                r2 <= `FLT_TYPE;
-                ex_branch(r58);
-            end
-            else begin
-                ex_fault(`FLT_DBZ,0);
-            end
+            ex_fault(`FLT_DBZ,0);
         end
     end
 
 DIV1:
     if (dvd_done) begin
-        case(xopcode)
-        `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU:
-            xRt <= xir[19:14];
-        `R2:
-            case(xfunct)
-            `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU:
-                xRt <= xir[25:20];
-            endcase
-        endcase
+        xRt <= xDivi ? xir[19:14] : xir[25:20];
         upd_rf <= `TRUE;
         next_state(INVnRUN);
         if (dvByZr & mexrout[3]) begin
-            if (mexrout[2]) begin
-                r1 <= `FLT_DBZ;
-                r2 <= `FLT_TYPE;
-                ex_branch(r58);
-            end
-            else begin
-                ex_fault(`FLT_DBZ,0);
-            end
+            ex_fault(`FLT_DBZ,0);
         end
     end
 
 FLOAT1:
     if (fpdone) begin
-        case(xir[25:20])
-        `FABS,`FMAN,`FMOV,`FNABS,`FNEG,`FSIGN,`FTOI,`ITOF:
-                xRt <= xir[31:26];
-        `FCMP:  xRt <= xir[31:26];
-        `FADD:  xRt <= xir[31:26];
-        `FSUB:  xRt <= xir[31:26];
-        `FMUL:  xRt <= xir[31:26];
-        `FDIV:  xRt <= xir[31:26];
-        default: xRt <= 6'd0;
-        endcase
+        xRt <= xir[31:26];
         upd_rf <= `TRUE;
         inv_xir();
         next_state(RUN);
         if (fpstatus[9]) begin  // GX status bit
-            if (mexrout[1]) begin
-                r1 <= `FLT_FLT; // 486 = bounds check
-                r2 <= `FLT_TYPE;   // type: exception
-                ex_branch(r58);
-            end
-            else begin
-                ex_fault(`FLT_FLT,0);
-            end
+            ex_fault(`FLT_FLT,0);
         end
     end
 
@@ -1339,7 +1290,7 @@ LOAD1d:
         if (rdv & pgen)
             ex_fault(`FLT_RDV,0);
         else begin
-            if (xIsLoadVolatile) begin
+            if (unc) begin
                 read1(mem_size,pgen ? pea : dea,dea);
                 next_state(LOAD2);
             end
@@ -1408,7 +1359,7 @@ LOAD5:
         next_state(INVnRUN);
         upd_rf <= `TRUE;
         case(xopcode)
-        `LDW,`LDWX,`LDVW:
+        `LDW,`LDWX:
             begin
                 lres[79:8] <= {{72{idat1[7]}},idat1[7:0]};
             end
@@ -1416,7 +1367,7 @@ LOAD5:
             begin
                 lres[79:8] <= {{72{1'b0}},idat1[7:0]};
             end
-        `LDT,`LDTX,`LDVT:
+        `LDT,`LDTX:
             begin
                 case(dea[3:0])
                 4'hD:   lres[79:24] <= {{48{idat1[7]}},idat1[7:0]};
@@ -1450,7 +1401,7 @@ LOAD5:
                 4'hF:   lres[79:8] <= {{40{1'b0}},idat1[31:0]};
                 endcase
             end
-        `LDD,`LDDX,`LDVD,`LDVDAR,`LDVDARX,`POP,`RET,`LDDBP,`LDD12,`JMPI,`CALLI:
+        `LDD,`LDDX,`LDDAR,`LDDARX,`POP,`RET,`LDDBP,`LDD12,`JMPI,`CALLI:
             begin
                 case(dea[3:0])
                 4'h7:   lres[79:72] <= idat1[7:0];
@@ -1466,12 +1417,12 @@ LOAD5:
             end
         endcase // xopcode
         case(xopcode)
-        `LDW,`LDWU,`LDVW,
-        `LDT,`LDTU,`LDVT,
+        `LDW,`LDWU,
+        `LDT,`LDTU,
         `LDP,`LDPU,
-        `LDD,`LDVD,`LDVDAR,`JMPI,`JMPIT:   
+        `LDD,`LDDAR,`JMPI,`JMPIT:   
             xRt <= xir[19:14];
-        `LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDVDARX:
+        `LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
             xRt <= xir[25:20];
         `POP:
             begin
@@ -1515,7 +1466,7 @@ STORE1f:
         if (wrv & pgen)
             ex_fault(`FLT_WRV,0);
         else begin
-            write1(mem_size,pgen?pea:dea,dea,xb);
+            write1(mem_size,pgen?pea:ea,dea,xb);
             next_state(STORE2);
         end
     end
@@ -1573,7 +1524,7 @@ STORE3e:
     next_state(STORE3f);
 STORE3f:
     begin
-        write2(mem_size,pgen?pea:dea,dea);
+        write2(mem_size,pgen?pea:ea,dea);
         next_state(STORE4);
     end
 STORE4:
@@ -1661,8 +1612,9 @@ LOAD_ICACHE1:
             end
             next_state(pgen ? LOAD_ICACHE2 : LOAD_ICACHE4);
         end
-        else
+        else begin
             next_state(RUN);
+        end
     end
 LOAD_ICACHE2:
     next_state(LOAD_ICACHE3);
@@ -1785,7 +1737,7 @@ task load1;
 input dhit;
 begin
     case(xopcode)
-    `LDB,`LDVB:
+    `LDB:
         begin
             wb_nack();
             lres <= {{72{lres1[7]}},lres1[7:0]};
@@ -1817,7 +1769,7 @@ begin
             upd_rf <= `TRUE;
             next_state(INVnRUN);
         end
-    `LDW,`LDVW:
+    `LDW:
         begin
             if (dhit || dea[3:0]!=4'hF) begin
                 wb_nack();
@@ -1873,7 +1825,7 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDT,`LDVT:
+    `LDT:
         begin
             if (dhit || dea[3:0] < 4'hD) begin
                 wb_nack();
@@ -1985,7 +1937,7 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDD,`LDDBP,`LDD12,`LDVD,`LDVDAR,`JMPI,`CALLI:
+    `LDD,`LDDBP,`LDD12,`LDDAR,`JMPI,`CALLI:
         begin
             if (dhit || dea[3:0] < 4'h7) begin
                 wb_nack();
@@ -2014,7 +1966,7 @@ begin
                 next_state(LOAD3);
             end
         end
-    `LDDX,`LDVDARX:
+    `LDDX,`LDDARX:
         begin
             if (dhit || dea[3:0] < 4'h7) begin
                 wb_nack();
@@ -2078,7 +2030,7 @@ begin
     endcase
     if (xopcode==`INC || xopcode==`INCX)
         lock_o <= `HIGH;
-    if (xopcode==`LDVDAR)
+    if (xopcode==`LDDAR || xopcode==`LDDARX)
         sr_o <= 1'b1;
 end
 endtask
@@ -2262,6 +2214,8 @@ endtask
 task ex_branch;
 input [31:0] nxt_pc;
 begin
+    i1inv <= `TRUE;
+    i2inv <= `TRUE;
     inv_dir();
     inv_xir();
     pc <= nxt_pc;
@@ -2285,9 +2239,6 @@ begin
         if (xRt2)
             sp[ol] <= {res2[79:1],1'h0};
         case(xRt)
-        6'd01:  r1 <= res;
-        6'd02:  r2 <= res;
-        6'd58:  r58 <= res;
         6'd60:  r60[ol] <= res;
         6'd61:  r61[ol] <= res;
         6'd62:  r62[ol] <= res;
@@ -2311,6 +2262,7 @@ begin
     `CSR_HARTID:    res = ol==`OL_MACHINE ? hartid_i : 80'd1;
     `CSR_TICK:      res = tick;
     `CSR_PCR:       res = pcr;
+    `CSR_PCR2:      res = pcr2;
     `CSR_TVEC:
         case(csrno[13:12])
         `OL_USER:   res = 80'd0;
@@ -2403,6 +2355,9 @@ begin
         `CSR_PCR:  
             if (csrno[13:12]<=`OL_SUPERVISOR)
                 pcr <= dat;
+        `CSR_PCR2:  
+            if (csrno[13:12]<=`OL_SUPERVISOR)
+                pcr2 <= dat;
         `CSR_EXROUT:
             if (csrno[13:12]==`OL_MACHINE)
                 mexrout <= dat;
@@ -2442,6 +2397,9 @@ begin
         `CSR_PCR:
             if (csrno[13:12]<=`OL_SUPERVISOR)
                pcr <= pcr | dat;
+        `CSR_PCR2:
+           if (csrno[13:12]<=`OL_SUPERVISOR)
+              pcr2 <= pcr2 | dat;
         `CSR_SEMA:
             if (csrno[13:12]==`OL_MACHINE)
                 msema <= msema | dat;
@@ -2454,6 +2412,9 @@ begin
         `CSR_PCR:
             if (csrno[13:12]<=`OL_SUPERVISOR)
                 pcr <= pcr & ~dat;
+        `CSR_PCR2:
+            if (csrno[13:12]<=`OL_SUPERVISOR)
+                pcr2 <= pcr2 & ~dat;
         `CSR_SEMA:
             if (csrno[13:12]==`OL_MACHINE)
                 msema <= msema & ~dat;
@@ -2463,10 +2424,6 @@ begin
     else begin
         ex_fault(`FLT_PRIV,0);
         pc <= xpc;
-        dinv <= TRUE;
-        xinv <= TRUE;
-        xRt2 <= 1'b0;
-        xRt <= 6'd0;
     end
 end
 endtask
@@ -2477,12 +2434,13 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_icache_mem(wclk, wr, wadr, i, rclk, radr, o0, o1);
+module DSD9_icache_mem(wclk, wr, wadr, i, rclk, rce, radr, o0, o1);
 input wclk;
 input wr;
 input [31:0] wadr;
 input [127:0] i;
 input rclk;
+input rce;
 input [31:0] radr;
 output [255:0] o0;
 output [255:0] o1;
@@ -2506,9 +2464,9 @@ begin
 end
 
 always @(posedge rclk)
-    rrcl <= rd_cache_line;        
+    if (rce) rrcl <= rd_cache_line;        
 always @(posedge rclk)
-    rrclp1 <= rd_cache_line + 9'd1;
+    if (rce) rrclp1 <= rd_cache_line + 9'd1;
     
 assign o0 = mem[rrcl];
 assign o1 = mem[rrclp1];        
@@ -2518,11 +2476,12 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_icache_tag(wclk, wr, wadr, rclk, radr, hit0, hit1);
+module DSD9_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit0, hit1);
 input wclk;
 input wr;
 input [36:0] wadr;
 input rclk;
+input rce;
 input [36:0] radr;
 output hit0;
 output hit1;
@@ -2531,9 +2490,9 @@ reg [36:0] tagmem [0:511];
 reg [36:0] rradr,rradrp32;
 
 always @(posedge rclk)
-    rradr <= radr;        
+    if (rce) rradr <= radr;        
 always @(posedge rclk)
-    rradrp32 <= radr + 32'd32;
+    if (rce) rradrp32 <= radr + 32'd32;
 
 always @(posedge wclk)
     if (wr) tagmem[wadr[13:5]] <= wadr;
@@ -2546,19 +2505,23 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_icache(wclk, wr, wadr, i, rclk, radr, o, hit, hit0, hit1);
+module DSD9_icache(wclk, wr, wadr, i, rclk, rce, radr, o, radr_o, hit, hit0, hit1);
 input wclk;
 input wr;
 input [36:0] wadr;
 input [127:0] i;
 input rclk;
+input rce;
 input [36:0] radr;
 output reg [119:0] o;
-output hit;
-output hit0;
-output hit1;
+output reg hit;
+output reg hit0;
+output reg hit1;
+output reg [36:0] radr_o;
 
 wire [255:0] ic0, ic1;
+reg [36:0] rradr1;
+wire hit0a, hit1a;
 
 DSD9_icache_mem u1
 (
@@ -2567,6 +2530,7 @@ DSD9_icache_mem u1
     .wadr(wadr[31:0]),
     .i(i),
     .rclk(rclk),
+    .rce(rce),
     .radr(radr[31:0]),
     .o0(ic0),
     .o1(ic1)
@@ -2578,13 +2542,21 @@ DSD9_icache_tag u2
     .wr(wr),
     .wadr(wadr),
     .rclk(rclk),
+    .rce(rce),
     .radr(radr),
-    .hit0(hit0),
-    .hit1(hit1)
+    .hit0(hit0a),
+    .hit1(hit1a)
 );
 
-always @(radr or ic0 or ic1)
-case(radr[4:0])
+always @(posedge rclk)
+    if (rce) rradr1 <= radr;
+always @(posedge rclk)
+    if (rce) radr_o <= rradr1;
+
+//always @(radr or ic0 or ic1)
+always @(posedge rclk)
+if (rce)
+case(rradr1[4:0])
 5'h00:  o <= ic0[119:0];
 5'h01:  o <= ic0[127:8];
 5'h02:  o <= ic0[135:16];
@@ -2619,7 +2591,13 @@ case(radr[4:0])
 5'h1F:  o <= {ic1[111:0],ic0[255:248]};
 endcase
 
-assign hit = (hit0 & hit1) || (hit0 && radr[4:0] < 5'h05);
+always @(posedge rclk)
+    if (rce)
+        hit <= (hit0a & hit1a) || (hit0a && rradr1[4:0] < 5'h05);
+always @(posedge rclk)
+    if (rce) hit0 <= hit0a;
+always @(posedge rclk)
+    if (rce) hit1 <= hit1a;
 
 endmodule
 
@@ -2737,7 +2715,7 @@ output hit1;
 wire [255:0] dc0, dc1;
 wire [13:0] radrp32 = radr + 32'd32;
 
-DSD9_dcache_mem1 u1 (
+dcache_mem u1 (
   .clka(wclk),    // input wire clka
   .ena(wr),      // input wire ena
   .wea(sel),      // input wire [15 : 0] wea
@@ -2748,7 +2726,7 @@ DSD9_dcache_mem1 u1 (
   .doutb(dc0)  // output wire [255 : 0] doutb
 );
 
-DSD9_dcache_mem1 u2 (
+dcache_mem u2 (
   .clka(wclk),    // input wire clka
   .ena(wr),      // input wire ena
   .wea(sel),      // input wire [15 : 0] wea
@@ -2774,7 +2752,37 @@ DSD9_dcache_tag u3
 always @(posedge rclk)
     o <= {dc1,dc0} >> {radr[4:0],3'b0};
 
-assign hit = (hit0 & hit1) || (hit0 && radr[4:0] < 5'h0E);
+assign hit = (hit0 & hit1) || (hit0 && radr[4:0] < 5'h07);
 
 endmodule
 
+module dcache_mem(clka, ena, wea, addra, dina, clkb, addrb, doutb);
+input clka;
+input ena;
+input [15:0] wea;
+input [9:0] addra;
+input [127:0] dina;
+input clkb;
+input [8:0] addrb;
+output reg [255:0] doutb;
+
+reg [255:0] mem [0:511];
+reg [255:0] doutb1;
+
+genvar g;
+generate begin
+for (g = 0; g < 16; g = g + 1)
+begin
+always @(posedge clka)
+    if (ena & wea[g] & ~addra[0]) mem[addra[9:1]][g*8+7:g*8] <= dina[g*8+7:g*8];
+always @(posedge clka)
+    if (ena & wea[g] & addra[0]) mem[addra[9:1]][g*8+7+128:g*8+128] <= dina[g*8+7:g*8];
+end
+end
+endgenerate
+always @(posedge clkb)
+    doutb1 <= mem[addrb];
+always @(posedge clkb)
+    doutb <= doutb1;
+
+endmodule

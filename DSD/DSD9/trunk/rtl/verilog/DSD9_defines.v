@@ -124,11 +124,7 @@
 `define LDD     8'h86
 `define LDT     8'h87
 `define LDTU    8'h88
-`define LDVB    8'h89
-`define LDVW    8'h8A
-`define LDVT    8'h8B
-`define LDVD    8'h8C
-`define LDVDAR  8'h8E
+`define LDDAR   8'h8E
 
 `define STB     8'h90
 `define STW     8'h91
@@ -148,7 +144,7 @@
 `define LDDX    8'hA6
 `define LDTX    8'hA7
 `define LDTUX   8'hA8
-`define LDVDARX 8'hAE
+`define LDDARX  8'hAE
 
 `define STBX    8'hB0
 `define STWX    8'hB1
@@ -227,6 +223,7 @@
 `define FMUL    6'h08
 `define FDIV    6'h09
 
+`define NOP_INSN    {5{`NOP}}
 
 `define OL_MACHINE      2'b00
 `define OL_HYPERVISOR   2'b01
@@ -244,6 +241,7 @@
 `define CSR_EXROUT  12'h005
 `define CSR_CAUSE   12'h006
 `define CSR_BADADDR 12'h007
+`define CSR_PCR2    12'h008
 `define CSR_SCRATCH 12'h009
 `define CSR_SEMA    12'h00C
 `define CSR_SP      12'h00D
