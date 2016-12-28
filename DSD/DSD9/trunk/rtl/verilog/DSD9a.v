@@ -118,13 +118,24 @@ parameter STORE3e = 6'd58;
 parameter STORE3f = 6'd59;
 parameter LOAD2a = 6'd60;
 parameter LOAD2b = 6'd61;
+parameter FAULT = 6'd63;
+
+parameter IC1 = 4'd1;
+parameter IC2 = 4'd2;
+parameter IC3 = 4'd3;
+parameter IC4 = 4'd4;
+parameter IC5 = 4'd5;
+parameter IC6 = 4'd6;
+parameter IC7 = 4'd7;
+parameter IC8 = 4'd8;
 
 reg [5:0] state;
+reg [3:0] cstate;
 assign state_o = state;
 reg [5:0] retstate;                 // state stack 1-entry
 reg [1:0] ol;                       // operating level
 reg [7:0] cpl;                      // privilege level
-reg [PCMSB:0] pc,dpc,xpc;
+reg [PCMSB:0] pc,dpc,d1pc,d2pc,xpc;
 wire [PCMSB:0] i2pc;
 reg [PCMSB:0] epc [0:4];
 wire ipredict_taken;
@@ -134,8 +145,10 @@ reg [PCMSB:0] br_disp;
 wire [119:0] insn,insn2;
 reg [119:0] iinsn,ls1buf,ls2buf;
 reg [119:0] dir,xir;
+reg [39:0] dir2,dir1;
 wire [7:0] iopcode = iinsn[7:0];
 wire [7:0] dopcode = dir[7:0];
+wire [7:0] d2opcode = dir2[7:0];
 wire [7:0] dfunct = dir[39:32];
 wire [7:0] xopcode = xir[7:0];
 wire [7:0] xfunct = xir[39:32];
@@ -162,18 +175,18 @@ wire iack = ack_i|mmu_ack;
 wire [127:0] idat = dat_i|{4{mmu_dat}};
 wire [31:0] mmu_dati = dat_o[31:0];
 reg [5:0] Ra,Rb,Rc,Rd,Re;
-reg [5:0] xRt,xRa,xRb;
+reg [5:0] xRt,xRa,xRb,wRt;
 reg xRt2;
 reg [2:0] mem_size;
 reg [WID-1:0] xb;
-reg [WID-1:0] res, lres, lres1;
+reg [WID-1:0] res, lres, lres1, wres;
 reg [WID-1:0] res2;
 reg stuff_fault;
 reg [23:0] fault_insn;
 reg im;
 reg [4:0] mimcd;
 reg gie;        // global interrupt enable    
-reg i1inv,i2inv,dinv,xinv,odinv;
+reg i1inv,i2inv,dinv,xinv;
 reg i54,i80;
 reg upd_rf;
 reg [31:0] dea;
@@ -181,6 +194,7 @@ reg [127:0] idat1, idat2;
 reg wasaCall;
 reg mapen;
 reg ls1,ls2;
+reg d1inv,d2inv;
 
 // CSR registers
 reg [79:0] cisc;
@@ -256,6 +270,17 @@ end
 // Instruction fetch stage combinational logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+wire d1Cx,d2Cx;
+
+function [31:0] pc_plus5;
+input [31:0] pci;
+case(pci[3:0])
+4'h0:   pc_plus5 = {pci[31:4],4'h5};
+4'h5:   pc_plus5 = {pci[31:4],4'hA};
+default:   pc_plus5 = {pci[31:4]+28'd1,4'h0};
+endcase
+endfunction
+
 wire [31:0] ibr_disp = {{16{iinsn[39]}},iinsn[39:24]};
 
 // A stuffed fault will have occurred earlier than a pending IRQ
@@ -271,29 +296,33 @@ always@*
         iinsn = insn;
 
 task iSetInsn;
+input [39:0] isn;
 begin
-    dpc <= i2pc;
-    if (iopcode==`BRK) begin
+    d1inv <= `FALSE;
+    d2inv <= d1inv;
+    dinv <= d2inv;
+    d1pc <= pc;
+    d2pc <= d1pc;
+    dpc <= d2pc;
+    if (d2opcode==`PEA || d2opcode==`CALL || d2opcode==`CALLI || d2opcode==`CALLIT || 
+             d2opcode==`POP || d2opcode==`PUSH || d2opcode==`RET) begin
         Ra <= 6'd63;
-        Rb <= 6'd1;
-        Rc <= 6'd2;
-    end
-    else if (iopcode==`PEA || iopcode==`CALL || iopcode==`CALLI || iopcode==`CALLIT || 
-             iopcode==`POP || iopcode==`PUSH || iopcode==`RET) begin
-        Ra <= 6'd63;
-        Rb <= iinsn[13:8];
-        Rc <= iinsn[19:14];
+        Rb <= dir2[13:8];
+        Rc <= dir2[19:14];
     end
     else begin
-        Ra <= iinsn[13:8];
-        Rb <= iinsn[19:14];
-        Rc <= iinsn[25:20];
+        Ra <= dir2[13:8];
+        Rb <= dir2[19:14];
+        Rc <= dir2[25:20];
     end
-    i80 <= iinsn[87:84]==4'hC;
-    i54 <= iinsn[47:44]==4'hC;
-    dir <= iinsn;
+    dir1 <= isn;
+    dir2 <= dir1;
+    dir <= dir2;
 end
 endtask
+
+assign d1Cx = dir1[7:4]==4'hC;
+assign d2Cx = dir2[7:4]==4'hC;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Decode / register fetch stage combinational logic.
@@ -414,7 +443,7 @@ function [WID-1:0] fwd_mux;
 input [5:0] Rn;
 case(Rn)
 6'd00:  fwd_mux = {WID{1'b0}};
-xRt: fwd_mux = res;
+xRt&{6{upd_rf}}: fwd_mux = res;
 6'd60:  fwd_mux = r60[ol];
 6'd61:  fwd_mux = r61[ol];
 6'd62:  fwd_mux = r62[ol];  
@@ -512,6 +541,7 @@ reg xldfp;
 wire [79:0] fpu_o;
 wire [31:0] fpstatus;
 wire fpdone;
+`ifdef INCL_FP
 fpUnit #(80) u12
 (
     .rst(rst_i),
@@ -527,6 +557,7 @@ fpUnit #(80) u12
     .exception(),
     .done(fpdone)
 );
+`endif
 
 reg [79:0] mux_out;
 always @(nn or a or b or c)
@@ -624,11 +655,11 @@ always @*
     `BITFIELD:  res = bf_out;
     `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLEU,`SLTU,`SGEU,`SGTU:
             res = {79'd0,setcc_o};
-    `LDDBP,`LDD12,            
+    `LDDBP,`LDD12,`POP,            
     `LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDP,`LDPU,`LDD,`LDDAR,
     `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
             res = lres;
-    `JMP,`JMPI,`JMPIT:   res = xpc + 32'd5;
+    `JMP,`JMPI,`JMPIT:   res = pc_plus5(xpc);
     `CALL,`CALLI,`CALLIT:  res = a - 32'd10;
     `PUSH:  res = a - 32'd10;
     `RET:   res = a + imm;
@@ -711,21 +742,42 @@ DSD9_BranchHistory u5
 reg prime;
 reg IsLastICacheWr;
 wire ihit,ihit0,ihit1;
+reg L1_wr;
+reg [31:0] L1_wadr;
+reg [255:0] L1_wdat;
+wire L1_ihit,L2_ihit;
+reg [31:0] L2_radr,L2ra1,L2ra2;
+wire [255:0] L2_rdat;
 wire icache_rce = !(xIsMultiCycle && !xinv);
-DSD9_icache u1
+always @(posedge clk_i)
+    L2ra1 <= L2_radr;
+always @(posedge clk_i)
+    L2ra2 <= L2ra1;
+
+DSD9_L2_icache u1
 (
     .wclk(clk_i),
     .wr(IsICacheLoad & (ack_i|err_i)),
     .wadr({okey,ea}),
     .i(dat_i),
     .rclk(clk_i),
-    .rce(icache_rce),
+    .rce(1'b1),
+    .radr({okey,L2_radr}),
+    .o(L2_rdat),
+    .hit(L2_ihit)
+);
+
+DSD9_L1_icache u15
+(
+    .wclk(clk_i),
+    .wr(L1_wr),
+    .wadr({okey,L1_wadr}),
+    .i(L1_wdat),
+    .rclk(clk_i),
+    .rce(1'b1),
     .radr({okey,pc}),
     .o(insn),
-    .radr_o(i2pc),
-    .hit(ihit),
-    .hit0(ihit0),
-    .hit1(ihit1)
+    .hit(L1_ihit)
 );
 
 vtdl #(.WID(120),.DEP(64)) u14
@@ -743,7 +795,7 @@ reg [1:0] dcmf;
 DSD9_dcache u2
 (
     .wclk(clk_i),
-    .wr(ack_i & (IsDCacheLoad | (dhit & wr_o))),
+    .wr(ack_i & (IsDCacheLoad | ((dhit0|dhit1) & wr_o))),
     .sel(wr_o ? sel_o : 16'hFFFF),
     .wadr({okey,ea}),
     .i(IsDCacheLoad ? dat_i : dat_o),
@@ -758,7 +810,7 @@ DSD9_dcache u2
 wire exv;
 wire rdv;
 wire wrv;
-wire unc = ea[31:20]==12'hFFD;
+wire unc = dea[31:20]==12'hFFD;
 
 DSD9_mmu u6
 (
@@ -787,9 +839,9 @@ assign advanceEX = 1'b1;
 assign advanceDC = advanceEX && !(xIsMultiCycle && !xinv);
 assign advanceIF = advanceDC && ihit;
 */
-assign advanceEX = !xIsMultiCycle;
-assign advanceDC = advanceEX | xinv;
-assign advanceIF = (advanceDC | dinv) & (ihit && !IsICacheLoad);
+assign advanceEX = !(xIsMultiCycle) && L1_ihit;
+assign advanceDC = (advanceEX | xinv) && L1_ihit;
+assign advanceIF = (advanceDC | d1inv) & (L1_ihit && !IsICacheLoad);
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -807,6 +859,8 @@ if (rst_i) begin
     IsICacheLoad <= `TRUE;
     IsDCacheLoad <= `TRUE;
     xinv <= `TRUE;
+    d1inv <= `TRUE;
+    d2inv <= `TRUE;
     dinv <= `TRUE;
     pcr <= 32'h00;
     pcr2 <= 32'h01;
@@ -814,20 +868,23 @@ if (rst_i) begin
     wasaCall <= `FALSE;
     dir <= {3{`NOP_INSN}};
     xir <= {3{`NOP_INSN}};
+    dir1 <= `NOP_INSN;
+    dir2 <= `NOP_INSN;
     bpe <= `FALSE;
+    L1_wr <= `TRUE;
+    L1_wadr <= 32'h0;
+    L1_wdat <= 256'h0;
     next_state(RESTART1);
 end
 else begin
+L1_wr <= `FALSE;
 mapen <= `FALSE;
 xldfp <= `FALSE;
 upd_rf <= `FALSE;
+wRt <= xRt&{6{upd_rf}};
+wres <= res;
 update_regfile();
 tick <= tick + 80'd1;
-
-if (!(xIsMultiCycle && !xinv))    
-    icount <= 0;
-else
-    icount <= icount + 6'd1;
 
 case(state)
 
@@ -846,6 +903,8 @@ RESTART1:
 RESTART2:
     if (ack_i|err_i) begin
         next_state(RESTART1);
+        L1_wr <= `TRUE;
+        L1_wadr <= L1_wadr + 32'd16;
         if (ea[13:4]==10'h3FF) begin
             IsICacheLoad <= `FALSE;
             IsDCacheLoad <= `FALSE;
@@ -868,47 +927,36 @@ begin
             markerMsg <= "Marker1 Hit";
         stuff_fault <= `FALSE;
         wasaCall <= `FALSE;
-        iSetInsn();
-        i1inv <= `FALSE;
-        i2inv <= i1inv;
-        dinv <= i2inv;
-        pc <= pc + 32'd5;
+        iSetInsn(iinsn);
+        pc <= pc_plus5(pc);
         if (bpe)
         case(iopcode)
         `FBEQ,`FBNE,`FBLT,`FBGE,`FBLE,`FBGT,`FBOR,`FBUN,
         `BEQI,`BNEI,`BLTI,`BGEI,`BLEI,`BGTI,`BLTUI,`BGEUI,`BLEUI,`BGTUI,`BBC,`BBS,
         `BEQ,`BNE,`BLT,`BGE,`BLE,`BGT,`BLTU,`BGEU,`BLEU,`BGTU:
             if (iinsn[23]) begin
-                i1predict_taken <= iinsn[22];
+                dpredict_taken <= iinsn[22];
                 if (iinsn[22]) begin
-                    i1inv <= `TRUE;
-                    i2inv <= `TRUE;
-                    pc <= i2pc + ibr_disp;
+                    pc <= pc + ibr_disp;
                 end
             end
             else begin
-                i1predict_taken <= ipredict_taken;
+                dpredict_taken <= ipredict_taken;
                 if (ipredict_taken) begin
-                    i1inv <= `TRUE;
-                    i2inv <= `TRUE;
-                    pc <= i2pc + ibr_disp;
+                    pc <= pc + ibr_disp;
                 end
             end
-        default: i1predict_taken <= ipredict_taken;
+        default: dpredict_taken <= ipredict_taken;
         endcase
-        i2predict_taken <= i1predict_taken;
-        dpredict_taken <= i2predict_taken;
         if (iopcode==`WAI && ~irq_i)
             pc <= pc;
     end
     else begin
-        if (!ihit) begin
-            // Must move PC back to missed instruction
-            pc <= i2pc;
-            icmf <= {~ihit1,~ihit0};
-            iccnt <= 3'd0;
-            if (advanceDC)
-                iSetInsn();
+        pc <= pc;
+        // If a branch took place then we don't want to fetch
+        // cache lines from the target that is inva
+        if (!L1_ihit) begin
+            cstate <= IC1;
             next_state(LOAD_ICACHE1);
         end
     end
@@ -976,13 +1024,11 @@ begin
         case(dopcode)
         `CSR,
         `BEQI,`BNEI,`BLTI,`BLEI,`BGTI,`BGEI,`BLTUI,`BLEUI,`BGTUI,`BGEUI:
-            case({i80,i54})
+            case({d1Cx,d2Cx})
             2'b00:  imm <= {{72{dir[21]}},dir[21:14]};
-                                //              32          4          8
-            2'b01:  imm <= {{36{dir[79]}},dir[79:48],dir[43:40],dir[21:14]};
+            2'b01:  imm <= {{36{dir2[39]}},dir2[39:8],dir2[3:0],dir[21:14]};
             2'b10:  imm <= {{72{dir[21]}},dir[21:14]};
-                        //        32          4         32          4          8
-            2'b11:  imm <= {dir[119:88],dir[83:80],dir[79:48],dir[43:40],dir[21:14]};
+            2'b11:  imm <= {dir1[39:8],dir1[3:0],dir2[39:8],dir2[3:0],dir[21:14]};
             endcase
         `ADDI10: imm <= {{70{dir[23]}},dir[23:14]};
         `LDD12:  imm <= {{68{dir[31]}},dir[31:20]};
@@ -991,12 +1037,11 @@ begin
         `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
                 imm <= {{69{dir[39]}},dir[39:29]};
         default:
-            case({i80,i54})
+            case({d1Cx,d2Cx})
             2'b00:  imm <= {{60{dir[39]}},dir[39:20]};
-            2'b01:  imm <= {{24{dir[79]}},dir[79:48],dir[43:40],dir[39:20]};
+            2'b01:  imm <= {{24{dir2[39]}},dir2[39:8],dir2[3:0],dir[39:20]};
             2'b10:  imm <= {{60{dir[39]}},dir[39:20]};
-                            //    20          4         32          4         20
-            2'b11:  imm <= {dir[107:88],dir[83:80],dir[79:48],dir[43:40],dir[39:20]};
+            2'b11:  imm <= {dir1[39:8],dir1[3:0],dir2[39:8],dir2[3:0],dir[39:20]};
             endcase
         endcase
         br_disp <= {{16{dir[39]}},dir[39:24]};
@@ -1013,17 +1058,24 @@ begin
             `ZSZ,`ZSNZ,`ZSN,`ZSNN,`ZSP,`ZSNP,`ZSOD,`ZSEV,
             `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLTU,`SGEU,`SLEU,`SGTU,
             `ADD,`SUB,`CMP,`CMPU,`AND,`OR,`XOR,`NAND,`NOR,`XNOR,`ANDN,`ORN,
-            `SHL,`SHR,`ASL,`ASR,`ROL,`ROR,`SHLI,`SHRI,`ASLI,`ASRI,`ROLI,`RORI:
+            `SHL,`SHR,`ASL,`ASR,`ROL,`ROR,`SHLI,`SHRI,`ASLI,`ASRI,`ROLI,`RORI,
+            `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH,
+            `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU:
                 xRt <= dir[25:20];
-            `MUX:   xRt = dir[31:26];
+            `MUX:   xRt <= dir[31:26];
             default:    xRt <= 6'd0;
             endcase
         `LEA,`BITFIELD,`MOV,
         `CSZ,`CSNZ,`CSN,`CSNN,`CSP,`CSNP,`CSOD,`CSEV,
         `ZSZ,`ZSNZ,`ZSN,`ZSNN,`ZSP,`ZSNP,`ZSOD,`ZSEV,
         `SEQ,`SNE,`SLT,`SGE,`SLE,`SGT,`SLTU,`SGEU,`SLEU,`SGTU,
-        `ADD,`SUB,`CMP,`CMPU,`AND,`OR,`XOR:
+        `ADD,`SUB,`CMP,`CMPU,`AND,`OR,`XOR,
+        `MUL,`MULU,`MULSU,`MULH,`MULUH,`MULSUH,
+        `DIV,`DIVU,`DIVSU,`REM,`REMU,`REMSU,
+        `LDB,`LDBU,`LDW,`LDWU,`LDT,`LDTU,`LDP,`LDPU,`LDD,`LDDAR,`JMPI,`JMPIT,`JMP:
             xRt <= dir[19:14];
+        `LDBX,`LDBUX,`LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
+            xRt <= dir[25:20];
         `CSR:   case(dir[38:36])
                 3'd0:   xRt <= dir[13:8];
                 3'd1:   xRt <= dir[27:22];
@@ -1031,7 +1083,9 @@ begin
                 3'd3:   xRt <= dir[19:14];
                 default:    xRt <= 6'd0;
                 endcase 
-        `ADDI10: xRt <= dir[13:8];
+        `PUSH,`PEA,`CALL,`CALLI,`CALLIT,`RET: xRt <= 6'd63;
+        `ADDI10,`POP: xRt <= dir[13:8];
+        `FLOAT: xRt <= dir[31:26]; 
         endcase
         if (!dinv)
         case (dopcode)
@@ -1070,6 +1124,7 @@ begin
     // If the execute stage has been invalidated it doesn't do anything. 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (!xinv) begin
+        disassem(xir);
         if (xIsBranch) begin
             if (bpe) begin
                 if (xpredict_taken & ~takb) begin
@@ -1145,7 +1200,7 @@ begin
         if (xCall|xCalli|xCallit) begin
             mem_size <= deci;
             dea <= a - 32'd10;
-            xb <= xpc + 32'd5;
+            xb <= pc_plus5(xpc);
             next_state(STORE1);
         end
         if (xRet) begin
@@ -1224,12 +1279,10 @@ MUL1:
 // Now wait for the three stage pipeline to finish
 MUL2:   next_state(MUL3);
 MUL3:   next_state(MUL4);
-MUL4:   next_state(MUL5);
-MUL5:   next_state(MUL9);
+MUL4:   next_state(MUL9);
 MUL9:
     begin
         mul_prod <= mul_sign ? -mul_prod1 : mul_prod1;
-        xRt <= xMulii ? xir[19:14] : xir[25:20];
         upd_rf <= `TRUE;
         next_state(INVnRUN);
         if (multovf & mexrout[5]) begin
@@ -1239,7 +1292,6 @@ MUL9:
 
 DIV1:
     if (dvd_done) begin
-        xRt <= xDivi ? xir[19:14] : xir[25:20];
         upd_rf <= `TRUE;
         next_state(INVnRUN);
         if (dvByZr & mexrout[3]) begin
@@ -1249,7 +1301,6 @@ DIV1:
 
 FLOAT1:
     if (fpdone) begin
-        xRt <= xir[31:26];
         upd_rf <= `TRUE;
         inv_xir();
         next_state(RUN);
@@ -1303,10 +1354,16 @@ LOAD1f:
     next_state(LOAD1g);
 LOAD1g:
     begin
-        if (dhit)
+        if (dhit) begin
             load1(1'b1);
+            if (xopcode!=`INC && xopcode!=`INCX && xopcode!=`CALLI && xopcode!=`CALLIT)
+            upd_rf <= `TRUE;
+            next_state(INVnRUN);
+        end
         // Load the data cache on a miss.
         else begin
+            if (dea[31:26]==6'h3F)
+                $display("DCACHE Load of I/O area");
             dcmf <= {~dhit1,~dhit0};
             retstate <= LOAD1b;
             next_state(LOAD_DCACHE1);
@@ -1322,8 +1379,11 @@ LOAD2:
         mbadaddr <= dea;
     end
     else if (iack) begin
+        stb_o <= `LOW;
         ea <= {dea[31:4]+28'd1,4'h0};
         mapen <= pgen;
+        if (!Need2Cycles(mem_size,dea))
+            wb_nack();
         next_state(LOAD2a);
     end // LOAD2
 // This cycle needed after data latched
@@ -1332,6 +1392,12 @@ LOAD2a:
 LOAD2b:
     begin
         load1(1'b0);
+        if (Need2Cycles(mem_size,dea))
+            next_state(LOAD3);
+        else begin
+            upd_rf <= `TRUE;
+            next_state(INVnRUN);
+        end
     end
 
 LOAD3:
@@ -1417,20 +1483,10 @@ LOAD5:
             end
         endcase // xopcode
         case(xopcode)
-        `LDW,`LDWU,
-        `LDT,`LDTU,
-        `LDP,`LDPU,
-        `LDD,`LDDAR,`JMPI,`JMPIT:   
-            xRt <= xir[19:14];
-        `LDWX,`LDWUX,`LDTX,`LDTUX,`LDPX,`LDPUX,`LDDX,`LDDARX:
-            xRt <= xir[25:20];
         `POP:
             begin
             xRt2 <= `TRUE;
-            xRt <= xir[13:8];
             end
-        `RET:
-            xRt <= 6'd63;   
         endcase
     end // LOAD5
 
@@ -1441,6 +1497,8 @@ STORE1:
     begin
         ea <= dea;
         mapen <= pgen;
+        if (dea>=32'h3f5a && dea < 32'h3f65)
+            $display("Store zero to 3edx");
         if ((xRa==6'd63 || xRa==6'd59)&&(dea < sbl[ol] || dea > sbu[ol])) begin
             ex_fault(`FLT_STACK,0);
         end
@@ -1506,7 +1564,6 @@ STORE2:
             case(xopcode)
             `CALL,`PEA,`PUSH,`CALLI,`CALLIT:
                 begin
-                    xRt <= 6'd63;    
                     upd_rf <= `TRUE;
                 end
             endcase
@@ -1555,7 +1612,6 @@ STORE4:
         case(xopcode)
         `CALL,`PEA,`PUSH,`CALLI,`CALLIT:
             begin
-                xRt <= 6'd63;    
                 upd_rf <= `TRUE;
             end
         endcase
@@ -1595,32 +1651,33 @@ INVnRUN:
 // Load instruction cache lines.
 // Each cache line is 256 bits in length.
 // -----------------------------------------------------------------------------
-
 LOAD_ICACHE1:
-    begin
-        if (icmf != 2'b00) begin
-            IsICacheLoad <= `TRUE;
-            if (icmf[0]) begin
-                icmf[0] <= 1'b0;
-                ea <= {pc[31:5],5'h0};
-                mapen <= pgen;
-            end
-            else if (icmf[1]) begin
-                ea <= {pc[31:5]+27'd1,5'h0};
-                mapen <= pgen;
-                icmf[1] <= 1'b0;
-            end
-            next_state(pgen ? LOAD_ICACHE2 : LOAD_ICACHE4);
+case(cstate)
+IC1:    if (!L1_ihit) begin
+            L2_radr <= {pc[31:5],5'h0};
+            cstate <= IC2;        
         end
-        else begin
+        else
+            next_state(RUN);
+IC2:    cstate <= IC3;
+IC3:    if (L2_ihit) begin
+            L1_wr <= `TRUE;
+            L1_wadr <= L2ra2;
+            L1_wdat <= L2_rdat;
             next_state(RUN);
         end
+        else
+            cstate <= IC4;
+IC4:
+    begin        
+        IsICacheLoad <= `TRUE;
+        ea <= {pc[31:5],5'h0};
+        mapen <= pgen;
+        cstate <= pgen ? IC5 : IC7;
     end
-LOAD_ICACHE2:
-    next_state(LOAD_ICACHE3);
-LOAD_ICACHE3:
-    next_state(LOAD_ICACHE4);
-LOAD_ICACHE4:
+IC5:    cstate <= IC6;
+IC6:    cstate <= IC7;
+IC7:
     begin
         if (exv & pgen)
             ex_fault(`FLT_EXV,0);
@@ -1629,26 +1686,22 @@ LOAD_ICACHE4:
             stb_o <= `HIGH;
             sel_o <= 8'hFF;
             adr_o <= pgen ? pea : ea;
-            next_state(LOAD_ICACHE5);
+            cstate <= IC8;
         end
     end
-LOAD_ICACHE5:
+IC8:
     if (ack_i|err_i) begin
         stb_o <= `LOW;
-        next_state(pgen ? LOAD_ICACHE2 : LOAD_ICACHE4);
+        cstate <= pgen ? IC5 : IC7;
         ea <= ea + 32'd16;
         mapen <= pgen;
         if (ea[4]) begin
-            if (icmf==2'b00) begin
-                IsICacheLoad <= `FALSE;
-                wb_nack();
-                next_state(RUN);
-            end
-            else begin
-                next_state(LOAD_ICACHE1);
-            end
+            IsICacheLoad <= `FALSE;
+            wb_nack();
+            cstate <= IC1;
         end
     end
+endcase
 
 // -----------------------------------------------------------------------------
 // Load data cache lines.
@@ -1716,6 +1769,12 @@ LOAD_DCACHE5:
         end
     end
 
+FAULT:
+    begin
+        stuff_fault <= `TRUE;
+        ex_branch(xpc);
+    end
+
 default:
     next_state(RUN);
 
@@ -1736,264 +1795,77 @@ always @(posedge clk_i)
 task load1;
 input dhit;
 begin
+    lres <= lres1;
     case(xopcode)
-    `LDB:
-        begin
-            wb_nack();
-            lres <= {{72{lres1[7]}},lres1[7:0]};
-            xRt <= xir[19:14];
-            upd_rf <= `TRUE;
-            next_state(INVnRUN);
-        end
-    `LDBU:
-        begin
-            wb_nack();
-            lres <= {{72{1'b0}},lres1[7:0]};
-            xRt <= xir[19:14];
-            upd_rf <= `TRUE;
-            next_state(INVnRUN);
-        end
-    `LDBX:
-        begin
-            wb_nack();
-            lres <= {{72{lres1[7]}},lres1[7:0]};
-            xRt <= xir[25:20];
-            upd_rf <= `TRUE;
-            next_state(INVnRUN);
-        end
-    `LDBUX:
-        begin
-            wb_nack();
-            lres <= {{72{1'b0}},lres1[7:0]};
-            xRt <= xir[25:20];
-            upd_rf <= `TRUE;
-            next_state(INVnRUN);
-        end
+    `LDB:   lres <= {{72{lres1[7]}},lres1[7:0]};
+    `LDBU:  lres <= {{72{1'b0}},lres1[7:0]};
+    `LDBX:  lres <= {{72{lres1[7]}},lres1[7:0]};
+    `LDBUX: lres <= {{72{1'b0}},lres1[7:0]};
     `LDW:
-        begin
             if (dhit || dea[3:0]!=4'hF) begin
-                wb_nack();
                 lres <= {{64{lres1[15]}},lres1[15:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDWX:
-        begin
             if (dhit || dea[3:0]!=4'hF) begin
-                wb_nack();
                 lres <= {{64{lres1[15]}},lres1[15:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDWU:
-        begin
             if (dhit || dea[3:0]!=4'hF) begin
-                wb_nack();
                 lres <= {{64{1'b0}},lres1[15:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDWUX:
-        begin
             if (dhit || dea[3:0]!=4'hF) begin
-                wb_nack();
                 lres <= {{64{1'b0}},lres1[15:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDT:
-        begin
             if (dhit || dea[3:0] < 4'hD) begin
-                wb_nack();
                 lres <= {{48{lres1[31]}},lres1[31:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDTX:
-        begin
             if (dhit || dea[3:0] < 4'hD) begin
-                wb_nack();
                 lres <= {{48{lres1[31]}},lres1[31:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDTU,`JMPIT,`CALLIT:
-        begin
             if (dhit || dea[3:0] < 4'hD) begin
-                wb_nack();
                 lres <= {{48{1'b0}},lres1[31:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDTUX:
-        begin
             if (dhit || dea[3:0] < 4'hD) begin
-                wb_nack();
                 lres <= {{48{1'b0}},lres1[31:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDP:
-        begin
             if (dhit || dea[3:0] < 4'hC) begin
-                wb_nack();
                 lres <= {{40{lres1[39]}},lres1[39:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDPX:
-        begin
             if (dhit || dea[3:0] < 4'hC) begin
-                wb_nack();
                 lres <= {{40{lres1[39]}},lres1[39:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDPU:
-        begin
             if (dhit || dea[3:0] < 4'hC) begin
-                wb_nack();
                 lres <= {{40{1'b0}},lres1[39:0]};
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDPUX:
-        begin
             if (dhit || dea[3:0] < 4'hC) begin
-                wb_nack();
                 lres <= {{40{1'b0}},lres1[39:0]};
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDD,`LDDBP,`LDD12,`LDDAR,`JMPI,`CALLI:
-        begin
             if (dhit || dea[3:0] < 4'h7) begin
-                wb_nack();
                 lres <= lres1[79:0];
-                xRt <= xir[19:14];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `POP:
-        begin
             if (dhit || dea[3:0] < 4'h7) begin
-                wb_nack();
                 lres <= lres1[79:0];
                 xRt2 <= `TRUE;
-                xRt <= xir[13:8];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `LDDX,`LDDARX:
-        begin
             if (dhit || dea[3:0] < 4'h7) begin
-                wb_nack();
                 lres <= lres1[79:0];
-                xRt <= xir[25:20];
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     `RET:
-        begin
             if (dhit || dea[3:0] < 4'h7) begin
-                wb_nack();
                 lres <= lres1[79:0];
-                xRt <= 6'd63;
-                upd_rf <= `TRUE;
-                next_state(INVnRUN);
             end
-            else begin
-                lres <= lres1;
-                next_state(LOAD3);
-            end
-        end
     endcase // xopcode
 end
 endtask
@@ -2109,13 +1981,17 @@ endtask
 
 task inv_dir;
 begin
-    dinv <= TRUE;
+    d1inv <= `TRUE;
+    d2inv <= `TRUE;
+    dinv <= `TRUE;
+    dir[7:0] <= `NOP;
 end
 endtask
 
 task inv_xir;
 begin
     xinv <= TRUE;
+    xir[7:0] <= `NOP;
     xRt <= 6'd0;
     xRt2 <= 1'd0;
 end
@@ -2133,10 +2009,8 @@ task ex_fault;
 input [8:0] ccd;        // cause code
 input nib;              // next instruction bit
 begin
-    stuff_fault <= `TRUE;
     fault_insn <= { 2'b0, nib, ccd, `BRK};
-    ex_branch(xpc);
-    next_state(RUN);
+    next_state(FAULT);
 end
 endtask
 
@@ -2164,10 +2038,6 @@ begin
         begin   
             ex_fault(`FLT_PRIV,0);
             pc <= xpc;
-            dinv <= TRUE;
-            xinv <= TRUE;
-            xRt2 <= 1'b0;
-            xRt <= 6'd0;
         end
     `OL_MACHINE:
         case(xir[15:14])
@@ -2245,6 +2115,10 @@ begin
         6'd63:  sp[ol] <= {res[79:1],1'h0};
         endcase
         regfile[xRt] <= res;
+        if (xRt==59 && res==0) begin
+            regfile[xRt] <= res;
+            $display("BP <= Zero");
+        end
         $display("regfile[%d] <= %h", xRt, res);
         // Globally enable interrupts after first update of stack pointer.
         if (xRt==6'd63)
@@ -2428,13 +2302,126 @@ begin
 end
 endtask
 
+task disassem;
+input [39:0] ir;
+begin
+    case(ir[7:0])
+    `PUSH:  $display("PUSH r%d", ir[13:8]);
+    `POP:   $display("POP r%d", ir[13:8]);
+    `CALL:  $display("CALL %h[r%d]", ir[39:20], ir[13:8]);
+    `RET:   $display("RET #%d", ir[23:8]);
+    endcase
+end
+endtask
+
+endmodule
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+module DSD9_L1_icache_mem(wclk, wr, wadr, i, rclk, rce, radr, o);
+input wclk;
+input wr;
+input [31:0] wadr;
+input [255:0] i;
+input rclk;
+input rce;
+input [31:0] radr;
+output [255:0] o;
+
+reg [255:0] mem [0:63];
+
+wire [5:0] wr_cache_line;
+wire [5:0] rd_cache_line;
+assign wr_cache_line = wadr >> 5;
+assign rd_cache_line = radr >> 5;
+
+always  @(posedge wclk)
+    if (wr) mem[wr_cache_line] <= i;
+
+assign o = mem[rd_cache_line];
+
+endmodule
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+module DSD9_L1_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit);
+input wclk;
+input wr;
+input [36:0] wadr;
+input rclk;
+input rce;
+input [36:0] radr;
+output hit;
+
+reg [36:0] tagmem [0:63];
+
+always @(posedge wclk)
+    if (wr) tagmem[wadr[10:5]] <= wadr;
+
+assign hit = tagmem[radr[10:5]][36:11]==radr[36:11];
+
 endmodule
 
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_icache_mem(wclk, wr, wadr, i, rclk, rce, radr, o0, o1);
+module DSD9_L1_icache(wclk, wr, wadr, i, rclk, rce, radr, o, hit);
+input wclk;
+input wr;
+input [36:0] wadr;
+input [255:0] i;
+input rclk;
+input rce;
+input [36:0] radr;
+output reg [119:0] o;
+output hit;
+
+wire [255:0] ic;
+
+DSD9_L1_icache_mem u1
+(
+    .wclk(wclk),
+    .wr(wr),
+    .wadr(wadr[31:0]),
+    .i(i),
+    .rclk(rclk),
+    .rce(rce),
+    .radr(radr[31:0]),
+    .o(ic)
+);
+
+DSD9_L1_icache_tag u2
+(
+    .wclk(wclk),
+    .wr(wr),
+    .wadr(wadr),
+    .rclk(rclk),
+    .rce(rce),
+    .radr(radr),
+    .hit(hit)
+);
+
+//always @(radr or ic0 or ic1)
+always @(radr or ic)
+case(radr[4:0])
+5'h00:  o <= ic[39:0];
+5'h05:  o <= ic[79:40];
+5'h0A:  o <= ic[119:80];
+5'h10:  o <= ic[167:128];
+5'h15:  o <= ic[207:168];
+5'h1A:  o <= ic[247:208];
+default:    o <= `IALIGN_FAULT_INSN;
+endcase
+
+endmodule
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+module DSD9_L2_icache_mem(wclk, wr, wadr, i, rclk, rce, radr, o);
 input wclk;
 input wr;
 input [31:0] wadr;
@@ -2442,11 +2429,10 @@ input [127:0] i;
 input rclk;
 input rce;
 input [31:0] radr;
-output [255:0] o0;
-output [255:0] o1;
+output [255:0] o;
 
 reg [255:0] mem [0:511];
-reg [8:0] rrcl,rrclp1;
+reg [8:0] rrcl;
 
 //  instruction parcels per cache line
 wire [8:0] wr_cache_line;
@@ -2465,47 +2451,40 @@ end
 
 always @(posedge rclk)
     if (rce) rrcl <= rd_cache_line;        
-always @(posedge rclk)
-    if (rce) rrclp1 <= rd_cache_line + 9'd1;
     
-assign o0 = mem[rrcl];
-assign o1 = mem[rrclp1];        
+assign o = mem[rrcl];
 
 endmodule
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit0, hit1);
+module DSD9_L2_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit);
 input wclk;
 input wr;
 input [36:0] wadr;
 input rclk;
 input rce;
 input [36:0] radr;
-output hit0;
-output hit1;
+output hit;
 
 reg [36:0] tagmem [0:511];
-reg [36:0] rradr,rradrp32;
+reg [36:0] rradr;
 
 always @(posedge rclk)
     if (rce) rradr <= radr;        
-always @(posedge rclk)
-    if (rce) rradrp32 <= radr + 32'd32;
 
 always @(posedge wclk)
     if (wr) tagmem[wadr[13:5]] <= wadr;
 
-assign hit0 = tagmem[rradr[13:5]][36:14]==rradr[36:14];
-assign hit1 = tagmem[rradrp32[13:5]][36:14]==rradrp32[36:14];
+assign hit = tagmem[rradr[13:5]][36:14]==rradr[36:14];
 
 endmodule
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_icache(wclk, wr, wadr, i, rclk, rce, radr, o, radr_o, hit, hit0, hit1);
+module DSD9_L2_icache(wclk, wr, wadr, i, rclk, rce, radr, o, hit);
 input wclk;
 input wr;
 input [36:0] wadr;
@@ -2513,17 +2492,14 @@ input [127:0] i;
 input rclk;
 input rce;
 input [36:0] radr;
-output reg [119:0] o;
+output reg [255:0] o;
 output reg hit;
-output reg hit0;
-output reg hit1;
-output reg [36:0] radr_o;
 
-wire [255:0] ic0, ic1;
+wire [255:0] ic;
 reg [36:0] rradr1;
-wire hit0a, hit1a;
+wire hita;
 
-DSD9_icache_mem u1
+DSD9_L2_icache_mem u1
 (
     .wclk(wclk),
     .wr(wr),
@@ -2532,11 +2508,10 @@ DSD9_icache_mem u1
     .rclk(rclk),
     .rce(rce),
     .radr(radr[31:0]),
-    .o0(ic0),
-    .o1(ic1)
+    .o(ic)
 );
 
-DSD9_icache_tag u2
+DSD9_L2_icache_tag u2
 (
     .wclk(wclk),
     .wr(wr),
@@ -2544,60 +2519,17 @@ DSD9_icache_tag u2
     .rclk(rclk),
     .rce(rce),
     .radr(radr),
-    .hit0(hit0a),
-    .hit1(hit1a)
+    .hit(hita)
 );
-
-always @(posedge rclk)
-    if (rce) rradr1 <= radr;
-always @(posedge rclk)
-    if (rce) radr_o <= rradr1;
 
 //always @(radr or ic0 or ic1)
 always @(posedge rclk)
 if (rce)
-case(rradr1[4:0])
-5'h00:  o <= ic0[119:0];
-5'h01:  o <= ic0[127:8];
-5'h02:  o <= ic0[135:16];
-5'h03:  o <= ic0[143:24];
-5'h04:  o <= ic0[151:32];
-5'h05:  o <= ic0[159:40];
-5'h06:  o <= ic0[167:48];
-5'h07:  o <= ic0[175:56];
-5'h08:  o <= ic0[183:64];
-5'h09:  o <= ic0[191:72];
-5'h0A:  o <= ic0[199:80];
-5'h0B:  o <= ic0[207:88];
-5'h0C:  o <= ic0[215:96];
-5'h0D:  o <= ic0[223:104];
-5'h0E:  o <= ic0[231:112];
-5'h0F:  o <= ic0[239:120];
-5'h10:  o <= ic0[247:128];
-5'h11:  o <= ic0[255:136];
-5'h12:  o <= {ic1[7:0],ic0[255:144]};
-5'h13:  o <= {ic1[15:0],ic0[255:152]};
-5'h14:  o <= {ic1[23:0],ic0[255:160]};
-5'h15:  o <= {ic1[31:0],ic0[255:168]};
-5'h16:  o <= {ic1[39:0],ic0[255:176]};
-5'h17:  o <= {ic1[47:0],ic0[255:184]};
-5'h18:  o <= {ic1[55:0],ic0[255:192]};
-5'h19:  o <= {ic1[63:0],ic0[255:200]};
-5'h1A:  o <= {ic1[71:0],ic0[255:208]};
-5'h1B:  o <= {ic1[79:0],ic0[255:216]};
-5'h1C:  o <= {ic1[87:0],ic0[255:224]};
-5'h1D:  o <= {ic1[95:0],ic0[255:232]};
-5'h1E:  o <= {ic1[103:0],ic0[255:240]};
-5'h1F:  o <= {ic1[111:0],ic0[255:248]};
-endcase
+    o <= ic;
 
 always @(posedge rclk)
     if (rce)
-        hit <= (hit0a & hit1a) || (hit0a && rradr1[4:0] < 5'h05);
-always @(posedge rclk)
-    if (rce) hit0 <= hit0a;
-always @(posedge rclk)
-    if (rce) hit1 <= hit1a;
+        hit <= hita;
 
 endmodule
 

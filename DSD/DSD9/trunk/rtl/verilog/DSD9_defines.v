@@ -3,6 +3,8 @@
 `define HIGH    1'b1
 `define LOW     1'b0
 
+//`define INCL_FP     1'b1
+
 `define RST_VECT    32'hFFFC0000
 `define MSU_VECT    32'hFFFC0010
 
@@ -223,8 +225,6 @@
 `define FMUL    6'h08
 `define FDIV    6'h09
 
-`define NOP_INSN    {5{`NOP}}
-
 `define OL_MACHINE      2'b00
 `define OL_HYPERVISOR   2'b01
 `define OL_SUPERVISOR   2'b10
@@ -275,3 +275,7 @@
 `define FLT_STACK   9'd504
 `define FLT_DBE     9'd508
 `define FLT_IBE     9'd509
+
+`define NOP_INSN    {5{`NOP}}
+`define IALIGN_FAULT_INSN   {23'd0,`FLT_IADR,`BRK}
+
