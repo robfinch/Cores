@@ -22,11 +22,12 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//
+// 4010 LUTs / 30 BRAM's (Artix7)
 // ============================================================================
 //
 
 // Memory for life cells.
+// The environment is 512x256
 
 module liferam(wclk, wce, wadr, i, rclk, rce, ra0, ra1, ra2, rclk3, ra3, o0, o1, o2, o3);
 input wclk;
@@ -94,12 +95,15 @@ begin : lf1
 lifecalc ul (
     .self(row1[g]),
     .n({
+    // three cells above
     (g==511 ? {row0[0],row0[511],row0[510]} :
        g==0 ? {row0[1],row0[0],row0[511]} :  
                row0[(g+1):(g-1)]),
+    // cell on either side
     (g==511 ? {row1[0],row1[510]} :
        g==0 ? {row1[1],row1[511]} :  
               {row1[(g+1)],row1[(g-1)]}),
+    // three cells below
     (g==511 ? {row2[0],row2[511],row2[510]} :
        g==0 ? {row2[1],row2[0],row2[511]} :  
                row2[(g+1):(g-1)])}),
@@ -126,7 +130,9 @@ input hsync;
 input [23:0] rgb_i;
 output reg [23:0] rgb_o;
 
-reg [7:0] radr;
+reg [31:0] cnt;
+reg [31:0] freq;
+wire [7:0] radr = cnt[25:18];
 reg [7:0] wadr0,wadr1,wadr2,wadr3;
 wire [511:0] alive;
 reg [511:0] alive1,alive2,alive3;
@@ -144,44 +150,54 @@ assign ack_o = cs;
 
 assign dat_o = 32'h0000;
 
-genvar g;
-generate
-begin
-for (g = 0; g < 16; g = g + 1)
-begin
 always @(posedge clk_i)
 if (rst_i) begin
     calc <= 1'b0;
     load <= 1'b0;
     disp <= 1'b1;
+    freq <= 32'h10;
 end
 else begin
     load <= 1'b0;
     if (cs) begin
         if (we_i)
             casex(adr_i[6:2])
-            5'b0xxxx:   d[(g+1)*32-1:g*32] <= dat_i;
+            5'b00000:   d[31:0] <= dat_i;
+            5'b00001:   d[63:32] <= dat_i;
+            5'b00010:   d[95:64] <= dat_i;
+            5'b00011:   d[127:96] <= dat_i;
+            5'b00100:   d[159:128] <= dat_i;
+            5'b00101:   d[191:160] <= dat_i;
+            5'b00110:   d[223:192] <= dat_i;
+            5'b00111:   d[255:224] <= dat_i;
+            5'b01000:   d[287:256] <= dat_i;
+            5'b01001:   d[319:288] <= dat_i;
+            5'b01010:   d[351:320] <= dat_i;
+            5'b01011:   d[383:352] <= dat_i;
+            5'b01100:   d[415:384] <= dat_i;
+            5'b01101:   d[447:416] <= dat_i;
+            5'b01110:   d[479:448] <= dat_i;
+            5'b01111:   d[511:480] <= dat_i;
             5'b10000:   load_row <= dat_i[7:0];
             5'b10001:   begin
                         load <= dat_i[0];
                         calc <= dat_i[1];
                         disp <= dat_i[2];
                         end
+            5'b10010:   freq <= dat_i;
+            default:    ;
             endcase
     end
 end
-end
-end
-endgenerate
 
 liferam u1
 (
     .wclk(clk_i),
-    .wce(load|calc),
+    .wce(load|(calc&cnt[17])),
     .wadr(load ? load_row : wadr3),
     .i(load ? d : alive3),
     .rclk(clk_i),
-    .rce(1'b1),
+    .rce(cnt[17]),
     .ra0(radr-8'd1),
     .ra1(radr),
     .ra2(radr+8'd1),
@@ -195,11 +211,12 @@ liferam u1
 
 lifecalc_parallel u2 (row0, row1, row2, alive);
 
+// This counter to slow the game down to a better viewing pace.
 always @(posedge clk_i)
 if (rst_i)
-    radr <= 8'd0;
+    cnt <= 32'd0;
 else
-    radr <= radr + 8'd1;
+    cnt <= cnt + freq;
 
 // Pipeline the write-back. The write-back needs to occur at least three cycles
 // after the read and calculation. So that the calculation for a given row isn't
@@ -211,8 +228,8 @@ begin
     alive1 <= alive;
     alive2 <= alive1;
     alive3 <= alive2;
-    wadr0 <= radr;
-    wadr1 <= wadr0;
+//    wadr0 <= radr;
+    wadr1 <= radr;
     wadr2 <= wadr1;
     wadr3 <= wadr2;
 end
@@ -243,7 +260,7 @@ edge_det edv1
 	.ee()
 );
 
-wire blank = scanline[9] || (dotcnt < 140) || (dotcnt > 1165);
+wire blank = scanline[9] || (dotcnt < 240) || (dotcnt > 1265);
 
 always @(posedge vclk)
     if (pe_vsync)
