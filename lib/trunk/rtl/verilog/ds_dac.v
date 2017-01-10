@@ -1,9 +1,13 @@
 // ============================================================================
-// (C) 2007 Robert Finch
-// All Rights Reserved.
+//        __
+//   \\__/ o\    (C) 2010-2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
-//	edge_det.v
-//
+// ds_dac.v
+//  - delta-sgima DAC (digital to analogue) converter interface core
+//  Based on: http://www.xilinx.com/bvdocs/appnotes/xapp154.pdf
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -18,32 +22,48 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//    Notes:
 //
-//	Edge detector
-//	This little core detects an edge (positive, negative, and
-//	either) in the input signal.
+//  Webpack 9.2i xc3s1200e 4fg320
+//  7 slices / 9 LUTs / 264.340 MHz
+//  11 ff's
 //
-// ============================================================================
-//
-module edge_det(rst, clk, ce, i, pe, ne, ee);
-input rst;		// reset
-input clk;		// clock
-input ce;		// clock enable
-input i;		// input signal
-output pe;		// positive transition detected
-output ne;		// negative transition detected
-output ee;		// either edge (positive or negative) transition detected
+//=============================================================================
 
-reg ed;
+/*
+ http://www.xilinx.com/bvdocs/appnotes/xapp154.pdf
+*/
+module ds_dac(rst, clk, di, o);
+parameter DBW=8;
+input rst;
+input clk;
+input [DBW-1:0] di;
+output o;
+
+reg o;
+
+reg [DBW+1:0] deltaAdder;
+reg [DBW+1:0] sigmaAdder;
+reg [DBW+1:0] sigmaLatch;
+reg [DBW+1:0] deltaB;
+
+always @(sigmaLatch)
+deltaB = {sigmaLatch[DBW+1],sigmaLatch[DBW+1]} << DBW;
+	
+always @(di or deltaB)
+deltaAdder = di + deltaB;
+	
+always @(deltaAdder or sigmaLatch)
+sigmaAdder = deltaAdder + sigmaLatch;
+	
 always @(posedge clk)
-	if (rst)
-		ed <= 1'b0;
-	else if (ce)
-		ed <= i;
-
-assign pe = ~ed & i;	// positive: was low and is now high
-assign ne = ed & ~i;	// negative: was high and is now low
-assign ee = ed ^ i;		// either: signal is now opposite to what it was
+if (rst) begin
+	sigmaLatch <= 1'b1 << DBW;
+	o <= 1'b0;
+end
+else begin
+	sigmaLatch <= sigmaAdder;
+	o <= sigmaLatch[DBW+1];
+end
 	
 endmodule
+

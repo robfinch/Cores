@@ -1,5 +1,5 @@
 // ============================================================================
-//	(C) 2011,2013  Robert Finch
+//	(C) 2011,2013,2015  Robert Finch
 //  All rights reserved.
 //	robfinch@<remove>finitron.ca
 //
@@ -92,7 +92,7 @@ module rtfSimpleUartRx(
 	//------------------------
 	input cs_i,				// chip select
 	input baud16x_ce,		// baud rate clock enable
-    input tri0 baud8x,       // switches to mode baudX8
+    input baud8x,       // switches to mode baudX8
 	input clear,			// clear reciever
 	input rxd,				// external serial input
 	output reg data_present,	// data present in fifo
@@ -139,7 +139,8 @@ reg [5:0] rxdd          /* synthesis ramstyle = "logic" */; // synchronizer flop
 reg rxdsmp;             // majority samples
 reg rdxstart;           // for majority style sample solid 3tik-wide sample
 reg [1:0] rxdsum;
-always @(posedge clk_i) begin
+always @(posedge clk_i)
+if (baud16x_ce) begin
 	rxdd <= {rxdd[4:0],rxd};
     if (SamplerStyle == 0) begin
         rxdsmp <= rxdd[3];
@@ -149,9 +150,10 @@ always @(posedge clk_i) begin
         rxdsum[1] <= rxdsum[0];
         rxdsum[0] <= {1'b0,rxdd[3]} + {1'b0,rxdd[4]} + {1'b0,rxdd[5]};
         rxdsmp <= rxdsum[1];
-        rdxstart <= (rxdsum[1] == 2'b00) & ((rxdsum[1] == 2'b11));
+        rdxstart <= (rxdsum[0] == 2'b00) & ((rxdsum[1] == 2'b11));
     end
 end
+
 
 `define CNT_FRAME  (8'h97)
 `define CNT_FINISH (8'h9D)

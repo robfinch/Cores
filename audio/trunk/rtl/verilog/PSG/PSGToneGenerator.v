@@ -31,7 +31,7 @@ input [11:0] wave;      // wave table data input
 input test;
 input [5:0] vt;         // voice type
 input [23:0] freq;
-input [23:0] pw;        // pulse width
+input [15:0] pw;        // pulse width
 input sync;
 input ringmod;
 input fm_i;
@@ -84,7 +84,7 @@ wire [11:0] outputS = vt[5] ? ~acc[27:16] : acc[27:16];
 wire [11:0] outputN = lfsr[11:0];
 
 wire [11:0] out;
-PSGNoteOutMux #(12) u4 (.s(vt), .a(outputT), .b(outputS), .c(outputP), .d(outputN), .e(outputW), .o(out) );
+PSGNoteOutMux #(12) u4 (.s(vt[4:0]), .a(outputT), .b(outputS), .c(outputP), .d(outputN), .e(outputW), .o(out) );
 assign o = out;
 
 endmodule

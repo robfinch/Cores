@@ -3,8 +3,8 @@
 //  Keyboard 
 //  - Reads keys from PS2 style keyboard
 //
-//	(C) 2010-2013  Robert Finch
-//	robfinch<remove>@opencores.org
+//	(C) 2010-2014  Robert Finch
+//	robfinch<remove>@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -33,9 +33,9 @@
 //                       bit 12 = numlock status
 //                       bit 13 = capslock status
 //                       bit 14 = scroll lock status
-//	$02		access this address clears keyboard strobe
-//  $04		contains ps2 scan code
-//  $08     keyboard write port
+//	$04		access this address clears keyboard strobe
+//  $08		contains ps2 scan code
+//  $0C     keyboard write port
 //	
 //
 //	Verilog 1995
@@ -67,7 +67,7 @@ input cyc_i;
 input stb_i;
 output ack_o;				// ready
 input we_i;
-input [33:0] adr_i;			// address
+input [31:0] adr_i;			// address
 input [7:0] dat_i;
 output [15:0] dat_o;		// data output
 reg [15:0] dat_o;
@@ -78,7 +78,7 @@ tri kd;
 output irq;				// data available
 output rst_o;			// reset output CTRL-ALT-DEL was pressed
 
-wire cs = cyc_i && stb_i && (adr_i[33:6]==pIOAddress[31:4]);
+wire cs = cyc_i && stb_i && (adr_i[31:4]==pIOAddress[31:4]);
 
 reg strobe;
 wire ps2_irq;
@@ -147,7 +147,7 @@ PS2kbd #(.pClkFreq(pClkFreq), .pIOAddress(pIOAddress)) u2
 	.stb_i(ps2_cs|cs_ps2),
 	.ack_o(ack_ps2),
 	.we_i(ps2_cs ? 1'b0 : cs_ps2 ? we_i : 1'b0),
-	.adr_i(ps2_cs ? {pIOAddress,2'b00} : adr_i),
+	.adr_i(ps2_cs ? pIOAddress : adr_i),
 	.dat_i(dat_i),
 	.dat_o(ps2_o),
 	.vol_o(),

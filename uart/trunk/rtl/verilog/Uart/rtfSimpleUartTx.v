@@ -83,7 +83,7 @@ module rtfSimpleUartTx(
 	//--------------------
 	input cs_i,			// chip select
 	input baud16x_ce,	// baud rate clock enable
-    input tri0 baud8x,       // switches to mode baudX8
+    input baud8x,       // switches to mode baudX8
 	input cts,			// clear to send
 	output txd,			// external serial output
 	output reg empty, 	// buffer is empty
@@ -110,7 +110,9 @@ always @(posedge clk_i)
 	if (rst_i) empty <= 1;
 	else begin
 	if (ack_o & we_i) empty <= 0;
-	else if (rd) empty <= 1;
+	else if (rd) begin
+	   empty <= 1;
+	end
 	end
 
 `define CNT_FINISH (8'h9F)
@@ -124,7 +126,8 @@ always @(posedge clk_i)
 	end
 	else begin
 
-		rd <= 0;
+        if (empty)
+		  rd <= 0;
 
 		if (baud16x_ce) begin
 

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -88,7 +88,7 @@ DSD9_MMURam1 u1 (
   .doutb(doutb)  // output wire [51 : 0] doutb
 );
 
-assign s_dat_o = cs ? {12'd0,doutb} : 32'h0;
+assign s_dat_o = {12'd0,doutb};
 
 // The following delay reg is to keep all the address bits in sync
 // with the output of the map table. So there are no intermediate

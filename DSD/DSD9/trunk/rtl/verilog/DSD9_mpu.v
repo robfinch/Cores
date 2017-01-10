@@ -24,15 +24,17 @@
 //
 // ============================================================================
 //
-module DSD9_mpu(hartid_i, rst_i, clk_i,
+module DSD9_mpu(hartid_i, rst_i, clk_i, clk2x_i, clk2d_i,
     i1,i2,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31, irq_o,
-    cyc_o, stb_o, wr_o, sel_o, ack_i, err_i, adr_o, dat_i, dat_o,
+    cyc_o, stb_o, wr_o, sel_o, wsel_o, ack_i, err_i, adr_o, dat_i, dat_o,
     sr_o, cr_o, rb_i, state_o
     );
 input [79:0] hartid_i;
 input rst_i;
 input clk_i;
+input clk2x_i;
+input clk2d_i;
 input i1;
 input i2;
 input i4;
@@ -68,6 +70,7 @@ output cyc_o;
 output stb_o;
 output wr_o;
 output [15:0] sel_o;
+output [15:0] wsel_o;
 input ack_i;
 input err_i;
 output [31:0] adr_o;
@@ -85,6 +88,7 @@ wire [8:0] cause;
 wire cyc;
 wire stb;
 wire [15:0] sel;
+wire [15:0] wsel;
 wire vpa;
 wire vda;
 wire wr;
@@ -104,12 +108,15 @@ DSD9 u1
     .hartid_i(hartid_i),
     .rst_i(rst_i),
     .clk_i(clk_i),
+    .clk2x_i(clk2x_i),
+    .clk2d_i(clk2d_i),
     .irq_i(irq),
     .icause_i(cause),
     .cyc_o(cyc),
     .stb_o(stb),
     .wr_o(wr),
     .sel_o(sel),
+    .wsel_o(wsel),
     .ack_i(ack),
     .err_i(err_i),
     .adr_o(adr),
@@ -181,6 +188,7 @@ assign cyc_o = cyc;
 assign stb_o = stb;
 assign wr_o = wr;
 assign sel_o = sel;
+assign wsel_o = wsel;
 assign adr_o = adr;
 assign dat_o = dato;
 assign ack = pic_ack|ack_i;

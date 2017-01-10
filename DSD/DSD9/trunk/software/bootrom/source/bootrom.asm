@@ -1,7 +1,7 @@
 
 ; ============================================================================
 ;        __
-;   \\__/ o\    (C) 2015-2016  Robert Finch, Stratford
+;   \\__/ o\    (C) 2015-2017  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -30,9 +30,11 @@ PIC_IE		EQU		0xFFDC0FC4
 PIC_ES		EQU		0xFFDC0FD0
 PIC_ESR		EQU		0xFFDC0FD4		; edge sense reset
 TEXTSCR		EQU		0xFFD00000
-TEXTCTRL	EQU		0xFFDA0000
-TEXTCOLS	EQU		0xFFDA0000
-TEXTROWS	EQU		0xFFDA0002
+TEXTCTRL	EQU		0xFFD0DF00
+TEXTCOLS	EQU		0xFFD0DF00
+TEXTROWS	EQU		0xFFD0DF02
+SPRITE		EQU		0xFFDAD000
+SPRITE_RAM	EQU		0xFFD80000
 
 	bss
 	org	$00000000
@@ -44,7 +46,6 @@ m_w				dd		0
 m_z				dd		0
 _DBGCursorRow	dt	0
 _DBGCursorCol	dt	0
-_DBGAttr		dt	0
 _sys_sema		dt	0
 _iof_sema		dt	0
 
@@ -194,23 +195,25 @@ cold_start:
 		stw		r1,LEDS
 		ldi		r1,#4			; down button
 		call	WaitForButton[pc]
+		mark1
+;		stt		r1,_DBGAttr
+		call	beep[pc]
 		call	init_lifegame[pc]
 		ldi		r1,#$0004
 		stw		r1,LEDS
 	   call		init_irqtable[pc]
 		ldi		r1,#$0004
 		stw		r1,LEDS
-		ldi		r1,#4			; down button
-		call	WaitForButton[pc]
 	   call		_InitPIC[pc]
 		ldi		r1,#$0005
 		stw		r1,LEDS
-		ldi		r1,#4			; down button
-		call	WaitForButton[pc]
 ;        call	SetupMMU[pc]
 		ldi		r1,#$0006
 		stw		r1,LEDS
 		call	Tc1Init[pc]
+		call	Tc2Init[pc]
+		call	init_sprite[pc]
+		call	bmc_test[pc]
 		ldi		r1,#$0007
 		stw		r1,LEDS
 		ldi		r1,#4			; down button
@@ -218,11 +221,11 @@ cold_start:
 		call	clearTxtScreen[pc]
 		ldi		r1,#$0008
 		stw		r1,LEDS
-		ldi		r1,#%000010000_111111111_0000000000
-		stt		r1,_DBGAttr
+		;ldi		r1,#%000010000_111111111_0000000000
 		call	_DBGHomeCursor
+		;call	ls_test[pc]
+		call	pushpop_test[pc]
 		ldi		r18,#msgHello
-		mark1
 		call	_DBGDisplayString[pc]
 		; setup random number generator with non-zero values
 		; also LSB16 can't be zero
@@ -267,6 +270,8 @@ cold_start:
 pi_val:
 dd	0x4000921FB54442D18469
 ;dw	0x8BDA3F4E,0x84698972,0xB54442D1,0x4000921F
+		align 4
+_DBGAttr	dt	%000010000_111111111_0000000000
 
 ;----------------------------------------------------------------------------
 ; copy pre-initialized data to data area
@@ -510,28 +515,28 @@ TestFP:
 	   stt		r1,4
 	   ldi		r1,#%01000000_00000010_01000000_00000000
 	   stt		r1,6
-	   lf.q		fp0,0
-	   lf.q		fp1,0
-	   fadd.q	fp2,fp0,fp1	// 10.0+10.0
-	   fmul.q	fp3,fp0,fp1	// 10.0*10.0
-	   fsub.q	fp4,fp0,fp1	// 10.0-10.0
-	   fadd.q	fp5,fp3,fp3	// 100.0+100.0
-	   fdiv.q	fp6,fp3,fp1	// 100.0/10.0
-	   fdiv.q	fp7,fp0,fp1	// 10.0/10.0
-	   fdiv.q	fp8,fp5,fp1	// 200.0/10.0
-	   fdiv.q	fp9,fp1,fp5	// 10.0/200.0
-	   fcmp.q	r2,fp0,fp1
-	   push.q	fp1
-	   push.q	fp2
-	   pop.q	fp11
-	   pop.q	fp12
+	   ldd		r10,0
+	   ldd		r1,0
+	   fadd		r2,r10,r1	// 10.0+10.0
+	   fmul		r3,r10,r1	// 10.0*10.0
+	   fsub		r4,r10,r1	// 10.0-10.0
+	   fadd		r5,r3,r3	// 100.0+100.0
+	   fdiv		r6,r3,r1	// 100.0/10.0
+	   fdiv		r7,r10,r1	// 10.0/10.0
+	   fdiv		r8,r5,r1	// 200.0/10.0
+	   fdiv		r9,r1,r5	// 10.0/200.0
+	   fcmp		r2,r10,r1
+	   push		r1
+	   push		r2
+	   pop		r11
+	   pop		r12
 	   bbs		r2,#0,.cs5	// Get the equals bit
 .cs5:
-		lf.q	fp0,zero
-		lf.q	fp1,negzero
-		fcmp.q	r3,fp0,fp1	// Test 0.0 = -0.0
-		lf.q	fp1,ten
-		fneg.q	fp10,fp1	// check negation (sign bit inverts)
+		ldd		r10,zero
+		ldd		r1,negzero
+		fcmp	r3,r10,r1	// Test 0.0 = -0.0
+		ldd		r1,ten
+		fneg	r10,r1	// check negation (sign bit inverts)
 		ret
 
 //----------------------------------------------------------------------------
@@ -606,14 +611,26 @@ RandomizeTextScreen:
 
 Tc1Init:
 		tgt
-		ldi		r1,#$FFDA0000
+		ldi		r1,#$FFD0DF00
 		ldi		r2,#Tc1InitTab
 .j1:
 		ldwu	r3,[r2]
 		stt		r3,[r1]
 		add		r1,r1,#4
 		add		r2,r2,#2
-		bltu	r1,#$FFDA0030,.j1
+		bltu	r1,#$FFD0DF30,.j1
+		ret
+
+Tc2Init:
+		tgt
+		ldi		r1,#$FFD1DF00
+		ldi		r2,#Tc2InitTab
+.j1:
+		ldwu	r3,[r2]
+		stt		r3,[r1]
+		add		r1,r1,#4
+		add		r2,r2,#2
+		bltu	r1,#$FFD1DF30,.j1
 		ret
 
 		align	2
@@ -630,7 +647,25 @@ Tc1InitTab:
 		dw		16	// top
 		dw		 7	// max scan line
 		dw		$21	// pixel height, width
-		dw		0		// reserved - not used
+		dw		0		// por bit (power on reset)
+		dw		%110000110	// transparent color
+		dw		$0E0	// cursor controls
+		dw		31		// cursor end
+		dw		$FFFE	// display start address
+		dw		$0000	// cursor position
+		dw		0		// light pen (read only)
+		dw		0		// scratchpad 1
+		dw		0		// scratchpad 2
+		dw		0		// scratchpad 3
+
+Tc2InitTab:
+		dw		$3028	//  3=char out delay, 40 columns
+		dw		25	// rows
+		dw		376	// left
+		dw		64	// top
+		dw		 7	// max scan line
+		dw		$10	// pixel height, width
+		dw		0		// por bit (power on reset)
 		dw		%110000110	// transparent color
 		dw		$0E0	// cursor controls
 		dw		31		// cursor end
@@ -759,6 +794,176 @@ _strcpy2:
 		mov		r1,r18
 		ret
 
+;----------------------------------------------------------------------------
+; Beep: a 800Hz tone for 1 sec.
+; Using a 37.5MHz bus clock.
+;----------------------------------------------------------------------------
+beep:
+		tgt
+		ldi		r5,#$FFD50000
+		ldi		r1,#$FF
+		stt		r1,$B0[r5]		; set master volume to 100%
+		ldi		r1,#91626		; 800Hz
+		stt		r1,$00[r5]		; set frequency 0
+		ldi		r1,#20;293			; attack 2ms
+		stt		r1,$0C[r5]
+		ldi		r1,#20;3516		; decay 24 ms
+		stt		r1,$10[r5]
+		ldi		r1,#$80			; 128 (50%) sustain level
+		stt		r1,$14[r5]		;
+		ldi		r1,#20;73242		; release 500 ms
+		stt		r1,$18[r5]
+		ldi		r1,#$1504		; gate, output, triangle wave
+		stt		r1,$08[r5]
+		csrrw	r2,#2,r0		; get tick
+		add		r1,r2,#75000	; 1 sec.
+.ipsg1:
+		csrrw	r2,#2,r0
+		bltu	r2,r1,.ipsg1
+		ldi		r1,#$0504		; we still want output after gate is turned off!
+		stt		r1,$008[r5]		; turn off gate
+		ret
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+PX		EQU		9*4
+PY		EQU		10*4
+COLOR	EQU		11*4
+PCMD	EQU		12*4
+
+bmc_test:
+		ldi		r1,#$FFDC5000
+		mov		r2,r0
+		mov		r3,r0
+		ldi		r4,#%11111_000000_00000	; red
+		ldi		r5,#$10002		; plot pixel command
+.bmc1:
+		stt		r2,PX[r1]
+		stt		r3,PY[r1]
+		stt		r4,COLOR[r1]
+		stt		r5,PCMD[r1]
+		add		r2,r2,#1
+		add		r3,r3,#1
+.bmc2:							; wait for command to clear
+		ldt		r6,PCMD[r1]
+		and		r6,r6,#3
+		bne		r6,r0,.bmc2
+		bltu	r2,#256,.bmc1
+		ret
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+pushpop_test:
+		ldi		r1,#$1234
+		ldi		r2,#$4567
+		ldi		r3,#$890A
+		push	r3
+		push	r2
+		push	r1
+		mov		r1,r0
+		mov		r2,r0
+		mov		r3,r0
+		pop		r3
+		pop		r2
+		pop		r1
+		bne		r1,#$890A,.ppfail
+		bne		r2,#$4567,.ppfail
+		bne		r3,#$1234,.ppfail
+		ret
+.ppfail:
+		ldi		r18,#msgPPFail
+		call	DBGPrtstr[pc]
+		ret
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+ls_test:
+		tgt
+		ldi		r1,#$087fc00
+		stt		r1,_DBGAttr
+		lea		r1,_DBGAttr
+		call	_DisplayTetra[pc]
+		ldi		r1,#1
+		stt		r1,_DBGCursorRow
+		lea		r1,_DBGCursorRow
+		call	_DisplayTetra[pc]
+		mov		r1,r0
+		ldt		r1,_DBGCursorRow
+		bne		r1,#1,.ls_fail
+		mov		r4,r0
+.ls3:
+		call	gen_rand[pc]
+		and		r1,r1,#$7ffffff
+		bleu	r1,#$10000,.ls3
+		mov		r2,r1
+		call	gen_rand[pc]
+		stb		r1,[r2]
+		ldb		r3,[r2]
+		bne		r1,r3,.lsfailB
+		add		r4,r4,#1
+		bltu	r4,#1000,.ls3
+		mov		r4,r0
+.ls4:
+		call	gen_rand[pc]
+		and		r1,r1,#$7ffffff
+		bleu	r1,#$10000,.ls4
+		bgtu	r1,#$7fffffe,.ls4
+		mov		r2,r1
+		call	gen_rand[pc]
+		stw		r1,[r2]
+		ldw		r3,[r2]
+		bne		r1,r3,.lsfailW
+		add		r4,r4,#1
+		bltu	r4,#1000,.ls4
+.ls5:
+		call	gen_rand[pc]
+		and		r1,r1,#$7ffffff
+		bleu	r1,#$10000,.ls5
+		bgtu	r1,#$7fffffc,.ls5
+		mov		r2,r1
+		call	gen_rand[pc]
+		stt		r1,[r2]
+		ldt		r3,[r2]
+		bne		r1,r3,.lsfailT
+		add		r4,r4,#1
+		bltu	r4,#1000,.ls5
+		ret
+.ls_fail:
+		call	_DisplayTetra[pc]
+		ldi		r18,#msgLSFail
+		call	DBGPrtstr[pc]
+		ret
+.ls_failB:
+		mov		r1,r2
+		call	_DisplayTetra[pc]
+		ldi		r18,#msgLSFailB
+		call	DBGPrtstr[pc]
+		ret
+.ls_failW:
+		mov		r1,r2
+		call	_DisplayTetra[pc]
+		ldi		r18,#msgLSFailW
+		call	DBGPrtstr[pc]
+		ret
+.ls_failT:
+		mov		r1,r2
+		call	_DisplayTetra[pc]
+		ldi		r18,#msgLSFailT
+		call	DBGPrtstr[pc]
+		ret
+		align	2
+msgPPFail:
+		dw		"Push/Pop failed.",0
+msgLSFail:
+		dw		"Load/Store failed.",0
+msgLSFailB:
+		dw		"Byte Load/Store failed.",0
+msgLSFailW:
+		dw		"Wyde Load/Store failed.",0
+msgLSFailT:
+		dw		"Tetra Load/Store failed.",0
+		align	16
+
 .include "c:\cores4\DSD\DSD9\trunk\software\bootrom\source\BIOSMain.s"
 .include "c:\cores4\DSD\DSD9\trunk\software\bootrom\source\FloatTest.s"
 .include "c:\cores4\DSD\DSD9\trunk\software\bootrom\source\ramtest.s"
@@ -777,7 +982,7 @@ _strcpy2:
 .include "c:\cores4\DSD\DSD9\trunk\software\FMTK\source\kernel\TCB.s"
 .include "c:\cores4\DSD\DSD9\trunk\software\FMTK\source\kernel\IOFocusc.s"
 .include "c:\cores4\DSD\DSD9\trunk\software\bootrom\source\video.asm"
-//.include "c:\cores4\DSD\DSD9\trunk\software\bootrom\source\TinyBasicDSD\DSD9.s"
+.include "c:\cores4\DSD\DSD9\trunk\software\bootrom\source\TinyBasicDSD9.asm"
 
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------
@@ -802,7 +1007,7 @@ DBGSetCursorPos:
 	push	r19
 	mulu	r19,r19,#84
 	add		r19,r19,r18
-	stt		r19,$FFDA002C
+	stt		r19,$FFD0DF2C
 	pop		r19
 	ret
 
@@ -829,7 +1034,7 @@ DBGPutchar:
 .j2:
 	mulu	r3,r3,#84
 	add		r3,r3,r2
-	stt		r3,$FFDA002C
+	stt		r3,$FFD0DF2C
 	pop		r3
 	pop		r2
 	ret
@@ -864,6 +1069,7 @@ msgHello:
 ;----------------------------------------------------------------------------
 	align	16
 init_lifegame:
+	; initialize random number generator
 	ldi		r5,#$FFD30000
 	; first clear out the environment
 	mov		r2,r0
@@ -900,7 +1106,22 @@ init_lifegame:
 	bltu	r4,#20,.life3
 	ldi		r2,#6
 	stt		r2,68[r5]			; turn on display and calculation
-	stt		r2,68[r5]			; turn on display and calculation
+	ret
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+init_sprite:
+	ldi		r1,#SPRITE
+	ldi		r2,#-1
+	stt		r2,$3C0[r1]		; enable all sprites
+	; fill sprite ram with random data
+	ldi		r3,#SPRITE_RAM
+	mov		r4,r0
+.is1:
+	call	gen_rand[pc]
+	stt		r1,[r3+r4*4]
+	add		r4,r4,#1
+	bltu	r4,#8192,.is1
 	ret
 
 ;----------------------------------------------------------------------------

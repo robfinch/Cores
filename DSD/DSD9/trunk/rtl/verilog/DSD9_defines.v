@@ -3,9 +3,9 @@
 `define HIGH    1'b1
 `define LOW     1'b0
 
-//`define INCL_FP     1'b1
+`define INCL_FP     1'b1
 
-`define RST_VECT    32'hFFFC0000
+`define RST_VECT    32'hFFFC0140
 `define MSU_VECT    32'hFFFC0010
 
 `define MFLT0   8'h00

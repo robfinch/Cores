@@ -1,14 +1,10 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013,2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
-//     \/_//     robfinch<remove>@opencores.org
+//     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
-// BusError.v
-// - generate a bus timeout error if a cycle has been active without an ack
-//   for too long of a time.
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -25,40 +21,39 @@
 //
 // ============================================================================
 //
-module BusError(rst_i, clk_i, cyc_i, ack_i, stb_i, adr_i, err_o);
-parameter pTO=28'd50000000;
+module bootrom(rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, adr_i, dat_o);
 input rst_i;
 input clk_i;
+input cs_i;
 input cyc_i;
-input ack_i;
 input stb_i;
-input [31:0] adr_i;
-output err_o;
-reg err_o;
+output ack_o;
+input [16:0] adr_i;
+output [127:0] dat_o;
+reg [127:0] dat_o;
 
-reg [27:0] tocnt;
+wire cs;
+reg ack1,ack2,ack3;
+assign cs = cs_i && cyc_i && stb_i;
+assign ack_o = cs ? ack3 : 1'b0;
+
+reg [127:0] rommem[0:5119];
+reg [12:0] radr;
+initial begin
+`include "C:\Cores4\DSD\DSD9\trunk\software\bootrom\source\bootrom.ve0"
+end
 
 always @(posedge clk_i)
-if (rst_i) begin
-	err_o <= 1'b0;
-	tocnt <= 28'd1;
-end
-else begin
-	err_o <= 1'b0;
-	// If there is no bus cycle active, or if the bus cycle
-	// has been acknowledged, reset the timeout count.
-	if (ack_i || !cyc_i) begin
-		tocnt <= 28'd1;
-		err_o <= 1'b0;
-	end
-	else if (tocnt < pTO)
-		tocnt <= tocnt + 28'd1;
-	else if (cyc_i && stb_i && (adr_i[31:4]==28'hFFDCFFE)) begin	// conflist with configrec ?
-		tocnt <= 28'd1;
-		err_o <= 1'b0;
-	end
-	else
-		err_o <= 1'b1;
-end
+    ack1 <= cs;
+always @(posedge clk_i)
+    ack2 <= ack1 & cs;
+always @(posedge clk_i)
+    ack3 <= ack2 & cs;
+
+always @(posedge clk_i)
+    radr <= adr_i[16:4];
+
+always @(posedge clk_i)
+    dat_o <= rommem[radr];
 
 endmodule

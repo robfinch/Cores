@@ -276,10 +276,10 @@ always @(posedge clk_i)
     endcase
 
 wire [13:0] madr;
-mux4to1 #(12) u11
+mux4to1 #(14) u11
 (
 	.e(1'b1),
-	.s(cnt),
+	.s(sel),
 	.i0(wtadr0 + {acc0[27:17],1'b0}),
 	.i1(wtadr1 + {acc1[27:17],1'b0}),
 	.i2(wtadr2 + {acc2[27:17],1'b0}),

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2015-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2015-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,27 +24,25 @@
 module mpmc2(
 rst_i, clk200MHz, fpga_temp,
 mem_ui_clk,
-cyc0, stb0, ack0, we0, adr0, dati0, dato0,
-cyc1, stb1, ack1, we1, sel1, adr1, dati1, dato1, sr1, cr1, rb1,
+cyc0, stb0, ack0, we0, sel0, adr0, dati0, dato0,
+cs1, cyc1, stb1, ack1, we1, sel1, adr1, dati1, dato1, sr1, cr1, rb1,
 cyc2, stb2, ack2, we2, sel2, adr2, dati2, dato2,
 cyc3, stb3, ack3, we3, sel3, adr3, dati3, dato3,
-cyc4, stb4, ack4, we4, adr4, dati4, dato4,
+cyc4, stb4, ack4, we4, sel4, adr4, dati4, dato4,
 cyc5, stb5, ack5, adr5, dato5,
 cyc6, stb6, ack6, we6, sel6, adr6, dati6, dato6,
-cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
+cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 ddr2_dq, ddr2_dqs_n, ddr2_dqs_p,
 ddr2_addr, ddr2_ba, ddr2_ras_n, ddr2_cas_n, ddr2_we_n,
 ddr2_ck_p, ddr2_ck_n, ddr2_cke, ddr2_cs_n, ddr2_dm, ddr2_odt
 );
 parameter SIM= "FALSE";
 parameter SIM_BYPASS_INIT_CAL = "OFF";
-parameter TMR = 1'b0;
-parameter ECC = 1'b0;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter CMD_READ = 3'b001;
 parameter CMD_WRITE = 3'b000;
-parameter DO_RFSH = "FALSE";
+// State machine states
 parameter IDLE = 4'd1;
 parameter PRESET = 4'd2;
 parameter SEND_DATA = 4'd3;
@@ -52,21 +50,19 @@ parameter SET_CMD_RD = 4'd4;
 parameter SET_CMD_WR = 4'd5;
 parameter WAIT_NACK = 4'd6;
 parameter WAIT_RD = 4'd7;
-parameter MAJOR_RD = 4'd8;
-parameter WR7 = 4'd9;
-parameter WAIT_RD2 = 4'd10;
-parameter WAIT_REFACK = 4'd0;
+
 
 input rst_i;
 input clk200MHz;
 input [11:0] fpga_temp;
 output mem_ui_clk;
 
-// Channel 0 is reserved for bitmapped graphics display, which is read-only
+// Channel 0 is reserved for bitmapped graphics display.
 //
 input cyc0;
 input stb0;
 output ack0;
+input [15:0] sel0;
 input we0;
 input [31:0] adr0;
 input [127:0] dati0;
@@ -74,14 +70,15 @@ output reg [127:0] dato0;
 reg [127:0] dato0n;
 
 // Channel 1 is reserved for cpu1
+input cs1;
 input cyc1;
 input stb1;
 output ack1;
 input we1;
-input [7:0] sel1;
+input [15:0] sel1;
 input [31:0] adr1;
-input [63:0] dati1;
-output reg [63:0] dato1;
+input [127:0] dati1;
+output reg [127:0] dato1;
 input sr1;
 input cr1;
 output reg rb1;
@@ -111,6 +108,7 @@ input cyc4;
 input stb4;
 output ack4;
 input we4;
+input [15:0] sel4;
 input [31:0] adr4;
 input [127:0] dati4;
 output reg [127:0] dato4;
@@ -120,7 +118,7 @@ input cyc5;
 input stb5;
 output ack5;
 input [31:0] adr5;
-output reg [31:0] dato5;
+output reg [127:0] dato5;
 
 // Channel 6 is reserved for the SD/MMC controller
 input cyc6;
@@ -133,14 +131,15 @@ input [31:0] dati6;
 output reg [31:0] dato6;
 
 // Channel 7 is reserved for the cpu
+input cs7;
 input cyc7;
 input stb7;
 output ack7;
 input we7;
-input [3:0] sel7;
+input [15:0] sel7;
 input [31:0] adr7;
-input [31:0] dati7;
-output [31:0] dato7;
+input [127:0] dati7;
+output reg [127:0] dato7;
 input sr7;
 input cr7;
 output reg rb7;
@@ -178,16 +177,13 @@ reg read0,read1,read2,read3;
 reg read4,read5,read6,read7;
 
 wire cs0 = cyc0 && stb0 && adr0[31:28]==4'h0;
-wire cs1 = cyc1 && stb1 && adr1[31:28]==4'h0;
+wire ics1 = cyc1 & stb1 & cs1;
 wire cs2 = cyc2 && stb2 && adr2[31:28]==4'h0;
 wire cs3 = cyc3 && stb3 && adr3[31:28]==4'h0;
 wire cs4 = cyc4 && stb4 && adr4[31:28]==4'h0;
 wire cs5 = cyc5 && stb5 && adr5[31:28]==4'h0;
 wire cs6 = cyc6 && stb6 && adr6[31:28]==4'h0;
-wire cs7 = cyc7 && stb7 && (adr7[31:28]==4'h0 || adr7[31:27]==5'h1E)
-    // and not the scratchpad ram
-    && adr7[31:14]!=18'h0
-    ;
+wire ics7 = cyc7 & stb7 & cs7;
 
 reg acki0,acki1,acki2,acki3,acki4,acki5,acki6,acki7;
 
@@ -204,22 +200,17 @@ reg [31:0] ch7_addr;
 
 // Read data caches
 reg [127:0] ch0_rd_data [0:3];
-reg [127:0] ch1_rd_data;
+reg [127:0] ch1_rd_data [0:1];
 reg [127:0] ch2_rd_data;
 reg [127:0] ch3_rd_data;
 reg [127:0] ch4_rd_data;
-reg [127:0] ch5_rd_data;
+reg [127:0] ch5_rd_data [0:3];
 reg [127:0] ch6_rd_data;
-reg [127:0] ch7_rd_dataA;
-reg [127:0] ch7_rd_dataB;
-reg [127:0] ch7_rd_dataC;
 reg [127:0] ch7_rd_data [0:1];
-reg [127:0] ch7_rd_data2;
 
 reg [1:0] num_strips;
 reg [1:0] strip_cnt;
 reg [1:0] strip_cnt2;
-reg [1:0] bank;
 reg [26:0] mem_addr;
 wire [2:0] mem_cmd;
 wire mem_en;
@@ -240,9 +231,6 @@ reg [15:0] refcnt;
 reg refreq;
 wire refack;
 
-wire cpu1=cs1;
-wire cpu7=cs7;
-
 reg [3:0] resv_ch0,resv_ch1;
 reg [31:0] resv_adr0,resv_adr1;
 
@@ -255,106 +243,32 @@ else
 
 reg cs1xx;
 reg we1xx;
-reg [7:0] sel1xx;
+reg [15:0] sel1xx;
 reg [31:0] adr1xx;
-reg [63:0] dati1xx;
+reg [127:0] dati1xx;
 reg sr1xx;
 reg cr1xx;
 
 reg cs7xx;
 reg we7xx;
-reg [3:0] sel7xx;
+reg [15:0] sel7xx;
 reg [31:0] adr7xx;
-reg [31:0] dati7xx;
+reg [127:0] dati7xx;
 reg sr7xx;
 reg cr7xx;
-reg nextcyc7; // Ensures that a new write cycle won't start until the previous one is finished.
 
-wire [4:0] chkbitso0;
-wire [4:0] chkbitso1;
-wire [4:0] chkbitso2;
-wire [4:0] chkbitso3;
-wire [4:0] chkbitsi0;
-wire [4:0] chkbitsi1;
-wire [4:0] chkbitsi2;
-wire [4:0] chkbitsi3;
-wire [31:0] ecc_data_out;
 reg [63:0] mem_rd_data1;
-
-generate
-begin : ECCx
-if (ECC) begin
-/*
-ecce_byte ecce0 (
-  .ecc_data_in(dati7xx[7:0]),          // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(),        // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_out(chkbitso0)  // output wire [4 : 0] ecc_chkbits_out
-);
-ecce_byte ecce1 (
-  .ecc_data_in(dati7xx[15:8]),          // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(),        // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_out(chkbitso1)  // output wire [4 : 0] ecc_chkbits_out
-);
-ecce_byte ecce2 (
-  .ecc_data_in(dati7xx[23:16]),          // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(),        // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_out(chkbitso2)  // output wire [4 : 0] ecc_chkbits_out
-);
-ecce_byte ecce3 (
-  .ecc_data_in(dati7xx[31:24]),          // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(),        // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_out(chkbitso3)  // output wire [4 : 0] ecc_chkbits_out
-);
-
-eccd_byte eccd0 (
-  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
-  .ecc_data_in(mem_rd_data1[7:0]),        // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(ecc_data_out[7:0]),      // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_in(mem_rd_data1[12:8]),  // input wire [4 : 0] ecc_chkbits_in
-  .ecc_sbit_err(),      // output wire ecc_sbit_err
-  .ecc_dbit_err()      // output wire ecc_dbit_err
-);
-eccd_byte eccd1 (
-  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
-  .ecc_data_in(mem_rd_data1[23:16]),        // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(ecc_data_out[15:8]),      // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_in(mem_rd_data1[28:24]),  // input wire [4 : 0] ecc_chkbits_in
-  .ecc_sbit_err(),      // output wire ecc_sbit_err
-  .ecc_dbit_err()      // output wire ecc_dbit_err
-);
-eccd_byte eccd2 (
-  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
-  .ecc_data_in(mem_rd_data1[39:32]),        // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(ecc_data_out[23:16]),      // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_in(mem_rd_data1[44:40]),  // input wire [4 : 0] ecc_chkbits_in
-  .ecc_sbit_err(),      // output wire ecc_sbit_err
-  .ecc_dbit_err()      // output wire ecc_dbit_err
-);
-eccd_byte eccd3 (
-  .ecc_correct_n(1'b0),    // input wire ecc_correct_n
-  .ecc_data_in(mem_rd_data1[55:48]),        // input wire [7 : 0] ecc_data_in
-  .ecc_data_out(ecc_data_out[31:24]),      // output wire [7 : 0] ecc_data_out
-  .ecc_chkbits_in(mem_rd_data1[60:56]),  // input wire [4 : 0] ecc_chkbits_in
-  .ecc_sbit_err(),      // output wire ecc_sbit_err
-  .ecc_dbit_err()      // output wire ecc_dbit_err
-);
-*/
-end
-end
-endgenerate
+reg [7:0] to_cnt;
 
 // Terminate the ack signal as soon as the circuit select goes away.
 assign ack0 = acki0 & cs0;
-assign ack1 = acki1 & cs1;
+assign ack1 = acki1 & ics1;
 assign ack2 = acki2 & cs2;
 assign ack3 = acki3 & cs3;
 assign ack4 = acki4 & cs4;
 assign ack5 = acki5 & cs5;
 assign ack6 = acki6 & cs6;
-assign ack7 = acki7 & cs7;
-
-reg [31:0] dato7x;
-assign dato7 = cs7 ? dato7x : 32'd0;
+assign ack7 = acki7 & ics7;
 
 // Register signals onto mem_ui_clk domain
 // The following channels don't need to be registered as they are operating
@@ -363,7 +277,7 @@ assign dato7 = cs7 ? dato7x : 32'd0;
 // Channel 5 (sprite controller)
 always @(posedge mem_ui_clk)
 begin
-	cs1xx <= cs1;
+	cs1xx <= ics1;
 	we1xx <= we1;
 	sel1xx <= sel1;
 	adr1xx <= adr1;
@@ -371,13 +285,13 @@ begin
 	sr1xx <= sr1;
 	cr1xx <= cr1;
 
-	cs7xx <= cs7;
-  we7xx <= we7;
-  sel7xx <= sel7;
-  adr7xx <= adr7;
-  dati7xx <= dati7;
-  sr7xx <= sr7;
-  cr7xx <= cr7;
+	cs7xx <= ics7;
+    we7xx <= we7;
+    sel7xx <= sel7;
+    adr7xx <= adr7;
+    dati7xx <= dati7;
+    sr7xx <= sr7;
+    cr7xx <= cr7;
 end
 
 //------------------------------------------------------------------------
@@ -773,6 +687,50 @@ reg [19:0] resv_to_cnt;
 reg sr1x,sr7x;
 reg [127:0] dati128;
 
+wire ch1_read = ics1 && !we1xx && cs1xx && (adr1xx[31:5]==ch1_addr[31:5]);
+wire ch7_read = ics7 && !we7xx && cs7xx && (adr7xx[31:5]==ch7_addr[31:5]);
+
+always @*
+begin
+	fast_read0 = FALSE;
+	fast_read1 = FALSE;
+	fast_read2 = FALSE;
+	fast_read3 = FALSE;
+    fast_read4 = FALSE;
+	fast_read5 = FALSE;
+	fast_read6 = FALSE;
+    fast_read7 = FALSE;
+	if (cs0 && !we0 && adr0[31:7]==ch0_addr[31:7])
+		fast_read0 = TRUE;
+	if (ch1_read)
+		fast_read1 = TRUE;
+	if (!we2 && cs2 && adr2[31:4]==ch2_addr[31:4])
+    	fast_read2 = TRUE;
+	if (!we3 && cs3 && adr3[31:4]==ch3_addr[31:4])
+		fast_read3 = TRUE;
+	if (!we4 && cs4 && adr4[31:4]==ch4_addr[31:4])
+		fast_read4 = TRUE;
+	if (cs5 && adr5[31:4]==ch5_addr[31:4])
+		fast_read5 = TRUE;
+	if (!we6 && cs6 && adr6[31:4]==ch6_addr[31:4])
+    	fast_read6 = TRUE;
+    if (ch7_read)
+        fast_read7 = TRUE;
+end
+
+always @*
+begin
+	sr1x = FALSE;
+    if (ch1_read)
+        sr1x = sr1xx;
+end
+always @*
+begin
+	sr7x = FALSE;
+    if (ch7_read)
+        sr7x = sr7xx;
+end
+
 always @(posedge mem_ui_clk)
 if (mem_ui_rst) begin
 	state <= IDLE;
@@ -784,14 +742,12 @@ if (mem_ui_rst) begin
 	ch5_addr <= 32'hFFFFFFFF;
 	ch6_addr <= 32'hFFFFFFFF;
 	ch7_addr <= 32'hFFFFFFFF;
-	read0 <= FALSE;
 	read1 <= FALSE;
 	read2 <= FALSE;
 	read3 <= FALSE;
 	read4 <= FALSE;
 	read5 <= FALSE;
 	read6 <= FALSE;
-	read7 <= FALSE;
 	acki0 <= FALSE;
 	acki1 <= FALSE;
 	acki2 <= FALSE;
@@ -809,123 +765,70 @@ if (mem_ui_rst) begin
 	toggle_sr <= FALSE;
 	resv_ch0 <= 4'hF;
 	resv_ch1 <= 4'hF;
-	bank <= 2'd0;
 	mem_addr <= 27'h0;
 	mem_wdf_data <= 128'd0;
 	mem_wdf_mask <= 16'hFFFF;
-	nextcyc7 <= 1'b1;
 end
 else begin
-	fast_read0 = FALSE;
-	fast_read1 = FALSE;
-	fast_read2 = FALSE;
-	fast_read3 = FALSE;
-	fast_read4 = FALSE;
-	fast_read5 = FALSE;
-	fast_read6 = FALSE;
-	fast_read7 = FALSE;
 	resv_to_cnt <= resv_to_cnt + 20'd1;
-	refcnt <= refcnt + 16'd1;
-	refreq <= FALSE;
-	sr1x = FALSE;
-	sr7x = FALSE;
+	//refcnt <= refcnt + 16'd1;
+	//refreq <= FALSE;
 
 	// Fast read channels
 	// All these read channels allow data to be read in parallel with another
 	// access.
 	// Read the data from the channel read buffer rather than issuing a memory
 	// request.
-	if (cs0 && adr0[31:6]==ch0_addr[31:6]) begin
-		dato0 <= ch0_rd_data[adr0[5:4]];
+	
+	// Bitmap controller
+	dato0 <= ch0_rd_data[adr0[5:4]];
+	if (cs0 && !we0 && adr0[31:6]==ch0_addr[31:6])
 		acki0 <= TRUE;
-		read0 <= TRUE;
-		fast_read0 = TRUE;
-	end
-	if (!we1xx && cs1xx && adr1xx[31:4]==ch1_addr[31:4]) begin
-		case(adr1xx[3])
-		1'd0:	dato1 <= ch1_rd_data[63:0];
-		1'd1:	dato1 <= ch1_rd_data[127:64];
-		endcase
+
+    // CPU #1
+    dato1 <= adr1xx[4] ? ch1_rd_data[1] : ch1_rd_data[0];
+	if (ch1_read)
 		acki1 <= TRUE;
-		read1 <= TRUE;
-		fast_read1 = TRUE;
-		sr1x = sr1xx;
-	end
-	else
-		dato1 <= 64'd0;
-	if (!we2 && cs2 && adr2[31:4]==ch2_addr[31:4]) begin
-		case(adr2[3:2])
-		2'd0:	dato2 <= ch2_rd_data[31:0];
-		2'd1:	dato2 <= ch2_rd_data[63:32];
-		2'd2:	dato2 <= ch2_rd_data[95:64];
-		2'd3:	dato2 <= ch2_rd_data[127:96];
-		endcase
+
+    // Ethernet controller
+	case(adr2[3:2])
+    2'd0:    dato2 <= ch2_rd_data[31:0];
+    2'd1:    dato2 <= ch2_rd_data[63:32];
+    2'd2:    dato2 <= ch2_rd_data[95:64];
+    2'd3:    dato2 <= ch2_rd_data[127:96];
+    endcase
+	if (!we2 && cs2 && adr2[31:4]==ch2_addr[31:4])
 		acki2 <= TRUE;
-		read2 <= TRUE;
-		fast_read2 = TRUE;
-	end
-	if (!we3 && cs3 && adr3[31:4]==ch3_addr[31:4]) begin
-		dato3 <= ch3_rd_data;
+
+    // graphics controller
+	dato3 <= ch3_rd_data;
+	if (!we3 && cs3 && adr3[31:4]==ch3_addr[31:4])
 		acki3 <= TRUE;
-		read3 <= TRUE;
-		fast_read3 = TRUE;
-	end
-	if (!we4 && cs4 && adr4[31:4]==ch4_addr[31:4]) begin
-		dato4 <= ch4_rd_data;
+	dato4 <= ch4_rd_data;
+	if (!we4 && cs4 && adr4[31:4]==ch4_addr[31:4])
 		acki4 <= TRUE;
-		read4 <= TRUE;
-		fast_read4 = TRUE;
-	end
-	if (cs5 && adr5[31:4]==ch5_addr[31:4]) begin
-		case(adr5[3:2])
-		2'd0:	dato5 <= ch5_rd_data[31:0];
-		2'd1:	dato5 <= ch5_rd_data[63:32];
-		2'd2:	dato5 <= ch5_rd_data[95:64];
-		2'd3:	dato5 <= ch5_rd_data[127:96];
-		endcase
-		acki5 <= TRUE;
-		read5 <= TRUE;
-		fast_read5 = TRUE;
-	end
-	if (!we6 && cs6 && adr6[31:4]==ch6_addr[31:4]) begin
-		case(adr6[3:2])
-		2'd0:	dato6 <= ch6_rd_data[31:0];
-		2'd1:	dato6 <= ch6_rd_data[63:32];
-		2'd2:	dato6 <= ch6_rd_data[95:64];
-		2'd3:	dato6 <= ch6_rd_data[127:96];
-		endcase
+
+    // Sprite controller (read only)
+    dato5 <= ch5_rd_data[adr5[5:4]];
+	if (cs5 && adr5[31:6]==ch5_addr[31:6])
+        acki5 <= TRUE;
+
+    // SD card (disk) controller 
+	case(adr6[3:2])
+    2'd0:    dato6 <= ch6_rd_data[31:0];
+    2'd1:    dato6 <= ch6_rd_data[63:32];
+    2'd2:    dato6 <= ch6_rd_data[95:64];
+    2'd3:    dato6 <= ch6_rd_data[127:96];
+    endcase
+	if (!we6 && cs6 && adr6[31:4]==ch6_addr[31:4])
 		acki6 <= TRUE;
-		read6 <= TRUE;
-		fast_read6 = TRUE;
-	end
-	// The output bus for the cpu is shared and must be zero when
-	// not accessed.
-	else
-		dato6 <= 32'd0;
 
-  if (nextcyc7 && !we7xx && cs7xx && (ECC ? adr7xx[31:2]==ch7_addr[31:2] : adr7xx[31:5]==ch7_addr[31:5])) begin
-//    if (ECC)
-//       dato7x <= ch7_rd_data[31:0];
-//    else
-    begin
-       case(adr7xx[4:2])
-       3'd0:  dato7x <= ch7_rd_data[0][31:0];
-       3'd1:  dato7x <= ch7_rd_data[0][63:32];
-       3'd2:  dato7x <= ch7_rd_data[0][95:64];
-       3'd3:  dato7x <= ch7_rd_data[0][127:96];
-       3'd4:  dato7x <= ch7_rd_data[1][31:0];
-       3'd5:  dato7x <= ch7_rd_data[1][63:32];
-       3'd6:  dato7x <= ch7_rd_data[1][95:64];
-       3'd7:  dato7x <= ch7_rd_data[1][127:96];
-       endcase
-//       dato7x <= ch7_rd_data >> {adr7xx[3:2],5'd0};
-    end
-    acki7 <= TRUE;
-    read7 <= TRUE;
-	  fast_read7 = TRUE;
-	  sr7x = sr7xx;
-	end
+    // CPU #2
+    dato7 <= adr7xx[4] ? ch7_rd_data[1] : ch7_rd_data[0];
+    if (ch7_read)
+        acki7 <= TRUE;
 
+    // Address reservations
 	if (sr1x & sr7x) begin
 		if (toggle_sr) begin
 			reserve_adr(4'h1,adr1xx);
@@ -943,51 +846,14 @@ else begin
 			reserve_adr(4'h7,adr7xx);
 	end
 
-	// Clear fast read ack's when deselected
-	if (read0 & ~cs0) begin
-		read0 <= FALSE;
-		acki0 <= FALSE;
-	end
-	if (read1 & ~cs1xx) begin
-		read1 <= FALSE;
-		acki1 <= FALSE;
-	end
-	if (read2 & ~cs2) begin
-		read2 <= FALSE;
-		acki2 <= FALSE;
-	end
-	if (read3 & ~cs3) begin
-		read3 <= FALSE;
-		acki3 <= FALSE;
-	end
-	if (read4 & ~cs4) begin
-		read4 <= FALSE;
-		acki4 <= FALSE;
-	end
-	if (read5 & ~cs5) begin
-		read5 <= FALSE;
-		acki5 <= FALSE;
-	end
-	if (read6 & ~cs6) begin
-		read6 <= FALSE;
-		acki6 <= FALSE;
-	end
-	if (read7 & ~cs7) begin
-      read7 <= FALSE;
-      acki7 <= FALSE;
-    end
-
 	if (!cs0) acki0 <= FALSE;
-	if (!cs1xx) acki1 <= FALSE;
+	if (!cs1xx || !ics1) acki1 <= FALSE;
 	if (!cs2) acki2 <= FALSE;
 	if (!cs3) acki3 <= FALSE;
 	if (!cs4) acki4 <= FALSE;
 	if (!cs5) acki5 <= FALSE;
 	if (!cs6) acki6 <= FALSE;
-	if (!cs7xx | !cs7) acki7 <= FALSE;
-
-  if (!nextcyc7 && !cs7xx)
-    nextcyc7 <= 1'b1;
+	if (!cs7xx || !ics7) acki7 <= FALSE;
 
 case(state)
 IDLE:
@@ -1010,55 +876,24 @@ IDLE:
 		begin
 		do_wr <= FALSE;
 		// Write cycles take priority over read cycles.
-		// Reads
 		if (cs0 & we0) begin
 			clear_cache(adr0);
 			ch <= 3'd0;
 			adr <= adr0;
-			dati128 <= dati0;
-			acki0 <= TRUE;
+			wmask <= ~sel0;
+			dat128 <= dati0;
 			do_wr <= TRUE;
 			state <= PRESET;
 		end
 		else if (cs0 & ~fast_read0) begin
 			ch <= 3'd0;
 			adr <= adr0;
-			sel <= 8'hFF;
+			wmask <= 16'h0000;
 			num_strips <= 2'd3;
 			state <= PRESET;
 		end
 		else if (cs1xx & we1xx & (cs7xx ? toggle : 1'b1)) begin
-		    toggle <= 1'b0;
-			ch <= 3'd1;
-			sel <= sel1xx;
-			adr <= adr1xx;
-			dati <= dati1xx;
-			acki1 <= TRUE;
-			if (cr1) begin
-				rb1 <= FALSE;
-				state <= IDLE;
-				if ((resv_ch0==4'd1) && (resv_adr0[31:4]==adr1xx[31:4])) begin
-					resv_ch0 <= 4'hF;
-					do_wr <= TRUE;
-					state <= PRESET;
-					rb1 <= TRUE;
-					clear_cache(adr1xx);
-				end
-				if ((resv_ch1==4'd1) && (resv_adr1[31:4]==adr1xx[31:4])) begin
-					resv_ch1 <= 4'hF;
-					do_wr <= TRUE;
-					state <= PRESET;
-					rb1 <= TRUE;
-					clear_cache(adr1xx);
-				end
-			end
-			else begin
-				// If the write address overlaps with cached read data,
-				// invalidate the corresponding read cache.
-				clear_cache(adr1xx);
-				do_wr <= TRUE;
-				state <= PRESET;
-			end
+            write_(4'd1,sel1xx,adr1xx,dati1xx,cr1,acki1,rb1,1'b0);
 		end
 		else if (cs2 & we2) begin
 			clear_cache(adr2);
@@ -1066,7 +901,6 @@ IDLE:
 			sel <= sel2;
 			adr <= adr2;
 			dati <= dati2;
-			acki2 <= TRUE;
 			do_wr <= TRUE;
 			state <= PRESET;
 		end
@@ -1074,8 +908,8 @@ IDLE:
 			clear_cache(adr3);
 			ch <= 3'd3;
 			adr <= adr3;
-			dati128 <= dati3;
-			acki3 <= TRUE;
+			wmask <= ~sel3;
+			dat128 <= dati3;
 			do_wr <= TRUE;
 			state <= PRESET;
 		end
@@ -1083,8 +917,8 @@ IDLE:
 			clear_cache(adr4);
 			ch <= 3'd4;
 			adr <= adr4;
-			dati128 <= dati4;
-			acki4 <= TRUE;
+			wmask <= ~sel4;
+			dat128 <= dati4;
 			do_wr <= TRUE;
 			state <= PRESET;
 		end
@@ -1094,18 +928,19 @@ IDLE:
 			sel <= sel6;
 			adr <= adr6;
 			dati <= dati6;
-			acki6 <= TRUE;
 			do_wr <= TRUE;
 			state <= PRESET;
 		end
-		else if (nextcyc7 & cs7xx & we7xx) begin
-		  state <= WR7;
+		else if (cs7xx & we7xx) begin
+            write_(4'd7,sel7xx,adr7xx,dati7xx,cr7xx,acki7,rb7,1'b1);
 		end
+		// Read cycles
 		else if (!we1xx & cs1xx & ~fast_read1 & (cs7xx ? toggle : 1'b1)) begin
 			toggle <= 1'b0;
 			ch <= 3'd1;
 			adr <= adr1xx;
-			sel <= 8'hFF;
+			wmask <= 16'h0000;
+			num_strips <= 2'd1;
 			state <= PRESET;
 		end
 		else if (!we2 & cs2 & ~fast_read2) begin
@@ -1129,7 +964,8 @@ IDLE:
 		else if (cs5 & ~fast_read5) begin
 			ch <= 3'd5;
 			adr <= adr5;
-			sel <= 8'hFF;
+			wmask <= 16'h0000;
+			num_strips = 2'd3;
 			state <= PRESET;
 		end
 		else if (!we6 & cs6 & ~fast_read6) begin
@@ -1138,7 +974,7 @@ IDLE:
 			sel <= 8'hFF;
 			state <= PRESET;
 		end
-		else if (nextcyc7 & !we7xx & cs7xx & ~fast_read7) begin
+		else if (!we7xx & cs7xx & ~fast_read7) begin
 			toggle <= 1'b1;
             ch <= 3'd7;
             adr <= adr7xx;
@@ -1153,92 +989,63 @@ IDLE:
 		refcnt <= 16'd278;
 	end
 
-// The system bus clock is slower than the memory clock by a factor of 3.
-// Delaying a cycle allows sampling the signals in the middle of the
-// bus cycle rather than at the edge. In theory it should work either
-// way but it's crossing a clock domain so this may be safer.
-WR7:
-  begin
-    toggle <= 1'b1;
-    ch <= 3'd7;
-    adr <= adr7xx;
-    dat128 <= {4{dati7xx}};
-    case(adr7xx[3:2])
-    2'd0: wmask <= {12'hFFF,~sel7xx};
-    2'd1: wmask <= {8'hFF,~sel7xx,4'hF};
-    2'd2: wmask <= {4'hF,~sel7xx,8'hFF};
-    2'd3: wmask <= {~sel7xx,12'hFFF};
-    endcase 
-    acki7 <= TRUE;
-    nextcyc7 <= 1'b0;
-    if (cr7xx) begin
-      rb7 <= FALSE;
-      state <= IDLE;
-      if ((resv_ch0==4'd7) && (resv_adr0[31:4]==adr7xx[31:4])) begin
-        resv_ch0 <= 4'hF;
-        do_wr <= TRUE;
-        state <= PRESET;
-        rb7 <= TRUE;
-        clear_cache(adr7xx);
-      end
-      if ((resv_ch1==4'd7) && (resv_adr1[31:4]==adr7xx[31:4])) begin
-        resv_ch1 <= 4'hF;
-        do_wr <= TRUE;
-        state <= PRESET;
-        rb7 <= TRUE;
-        clear_cache(adr7xx);
-      end
-    end
-    else begin
-      do_wr <= TRUE;
-      state <= PRESET;
-      clear_cache(adr7xx);
-    end
-  end
-
 PRESET:
 	begin
-    mem_addr <= {adr[26:4],4'h0};		// common for all channels
+	    to_cnt <= 8'd0;
 		case(ch)
-		3'd0:	begin
-				mem_wdf_mask <= 16'h0000;//{16{~we0}};
-				mem_wdf_data <= dati0;
-				end
-		3'd1:
-        begin
-        case(adr[3])
-        1'd0:  mem_wdf_mask <= {8'hFF,~sel[7:0]};
-        1'd1:  mem_wdf_mask <= {~sel[7:0],8'hFF};
-        endcase
-        mem_wdf_data <= {2{dati1}};
-        end
+		3'd0:
+			begin
+		        if (do_wr)
+                    mem_addr <= {adr[26:4],4'h0};
+		        else
+                    mem_addr <= {adr[26:6],6'h0};
+				mem_wdf_mask <= wmask;//{16{~we0}};
+				mem_wdf_data <= dat128;
+            end
+        3'd1:
+            begin
+            if (do_wr)
+                mem_addr <= {adr[26:4],4'h0};
+            else
+                mem_addr <= {adr[26:5],5'h0};
+            mem_wdf_mask <= wmask;
+            mem_wdf_data <= dat128;
+            end
+
 		3'd2:
-        begin
-        case(adr[3:2])
-        2'd0:  mem_wdf_mask <= {12'hFFF,~sel[3:0]};
-        2'd1:  mem_wdf_mask <= {8'hFF,~sel[3:0],4'hF};
-        2'd2:  mem_wdf_mask <= {4'hF,~sel[3:0],8'hFF};
-        2'd3:  mem_wdf_mask <= {~sel[3:0],12'hFFF};
-        endcase
-        mem_wdf_data <= {4{dati[31:0]}};
-        end
+            begin
+            mem_addr <= {adr[26:4],4'h0};
+            case(adr[3:2])
+            2'd0:  mem_wdf_mask <= {12'hFFF,~sel[3:0]};
+            2'd1:  mem_wdf_mask <= {8'hFF,~sel[3:0],4'hF};
+            2'd2:  mem_wdf_mask <= {4'hF,~sel[3:0],8'hFF};
+            2'd3:  mem_wdf_mask <= {~sel[3:0],12'hFFF};
+            endcase
+            mem_wdf_data <= {4{dati[31:0]}};
+            end
+
 		3'd3:
-				begin
-				mem_wdf_mask <= ~sel3;
-				mem_wdf_data <= dati3;
-				end
-		3'd4:	
-		    begin
-        mem_wdf_mask <= {16{~we4}};
-        mem_wdf_data <= dati4;
-        end
-    3'd5:
-        begin
-        mem_wdf_mask <= 16'hFFFF;  // ch5 is read-only
-        mem_wdf_data <= {128{1'b1}};
-        end
+            begin
+            mem_addr <= {adr[26:4],4'h0};
+            mem_wdf_mask <= wmask;
+            mem_wdf_data <= dat128;
+            end
+        3'd4:	
+            begin
+            mem_addr <= {adr[26:4],4'h0};
+            mem_wdf_mask <= wmask;
+            mem_wdf_data <= dat128;
+            end
+        3'd5:
+            begin
+            mem_addr <= {adr[26:6],6'h0};
+            mem_wdf_mask <= wmask;
+            mem_wdf_data <= dat128;
+            end
+
 		3'd6:
 				begin
+                mem_addr <= {adr[26:4],4'h0};
 				case(adr[3:2])
 				2'd0:	mem_wdf_mask <= {12'hFFF,~sel[3:0]};
 				2'd1:	mem_wdf_mask <= {8'hFF,~sel[3:0],4'hF};
@@ -1249,10 +1056,12 @@ PRESET:
 				end
 		3'd7:
 		   begin
-		   mem_wdf_mask <= wmask;
-			 mem_wdf_data <= dat128;
-			 if (do_wr && cs7xx==1'b0)
-			   nextcyc7 <= 1'b1;
+		      if (do_wr)
+                mem_addr <= {adr[26:4],4'h0};
+		      else
+                mem_addr <= {adr[26:5],5'h0};
+		      mem_wdf_mask <= wmask;
+			  mem_wdf_data <= dat128;
 		   end
 		endcase
 		if (do_wr)
@@ -1261,41 +1070,66 @@ PRESET:
 			state <= SET_CMD_RD;
 	end
 SEND_DATA:
-  begin
-		if (cs7xx==1'b0)
-      nextcyc7 <= 1'b1;
-    if (mem_wdf_rdy == TRUE)
-		  state <= SET_CMD_WR;
-	end
-SET_CMD_WR:
-  begin
-		if (cs7xx==1'b0)
-      nextcyc7 <= 1'b1;
-    if (mem_rdy == TRUE)
-      state <= IDLE;
-  end
-SET_CMD_RD:
-  begin
-    if (mem_rdy == TRUE) begin
-      if (strip_cnt==num_strips)
-  		  state <= WAIT_RD;
-  		else begin
-  		  strip_cnt <= strip_cnt + 2'd1;
-  		  mem_addr[26:4] <= mem_addr[26:4] + 10'd1;
-  	  end
-  	end
-  	if (mem_rd_data_valid & mem_rd_data_end) begin
-      rd_data();
-      if (strip_cnt2==num_strips)
-        state <= IDLE;
+    begin
+        to_cnt <= to_cnt + 8'd1;
+        if (to_cnt==8'd100) begin
+            state <= IDLE;
+            idle_ack();
+        end
+        if (mem_wdf_rdy == TRUE) begin
+            to_cnt <= 8'd0;
+            state <= SET_CMD_WR;
+        end
     end
-  end
+SET_CMD_WR:
+    begin
+        to_cnt <= to_cnt + 8'd1;
+        if (to_cnt==8'd100) begin
+            state <= IDLE;
+            idle_ack();
+        end
+        if (mem_rdy == TRUE)
+            idle_ack();
+    end
+SET_CMD_RD:
+    begin
+        if (mem_rdy == TRUE) begin
+            to_cnt <= 8'd0;
+            if (strip_cnt==num_strips) begin
+                state <= WAIT_RD;
+            end
+            else begin
+                strip_cnt <= strip_cnt + 2'd1;
+                mem_addr[26:4] <= mem_addr[26:4] + 10'd1;
+            end
+        end
+        else begin
+            to_cnt <= to_cnt + 8'd1;
+            if (to_cnt==8'd100) begin
+                idle_ack();
+                state <= IDLE;
+            end
+        end
+        if (mem_rd_data_valid & mem_rd_data_end) begin
+            rd_data();
+            if (strip_cnt2==num_strips)
+                state <= IDLE;
+        end
+    end
 WAIT_RD:
-	if (mem_rd_data_valid & mem_rd_data_end) begin
-    rd_data();
-    if (strip_cnt2==num_strips)
-      state <= IDLE;
-  end
+    begin
+        to_cnt <= to_cnt + 1;
+        if (to_cnt==8'd100) begin
+            idle_ack();
+            state <= IDLE;
+        end
+        if (mem_rd_data_valid & mem_rd_data_end) begin
+            to_cnt <= 8'd0;
+            rd_data();
+            if (strip_cnt2==num_strips)
+                state <= IDLE;
+        end
+    end
 endcase
 end
 
@@ -1310,14 +1144,16 @@ begin
     3'd0:
         begin
         if (strip_cnt2==num_strips)
-          ch0_addr <= adr0;
+          ch0_addr <= {adr0[31:6],6'h0};
         ch0_rd_data[strip_cnt2] <= mem_rd_data;
         strip_cnt2 <= strip_cnt2 + 2'd1;
         end
     3'd1:
         begin
-        ch1_addr <= adr1;
-        ch1_rd_data <= mem_rd_data;
+        if (strip_cnt2==num_strips)
+            ch1_addr <= {adr1xx[31:5],5'h00};
+        ch1_rd_data[strip_cnt2[0]] <= mem_rd_data;
+        strip_cnt2 <= strip_cnt2 + 2'd1;
         end
     3'd2:
         begin
@@ -1336,8 +1172,10 @@ begin
         end
     3'd5:
         begin
-        ch5_addr <= adr5;
-        ch5_rd_data <= mem_rd_data;
+        if (strip_cnt2==num_strips)
+            ch5_addr <= {adr5[31:6],6'h00};
+        ch5_rd_data[strip_cnt2] <= mem_rd_data;
+        strip_cnt2 <= strip_cnt2 + 2'd1;
         end
     3'd6:
         begin
@@ -1347,8 +1185,8 @@ begin
     3'd7:
         begin
         if (strip_cnt2==num_strips)
-          ch7_addr <= {adr7xx[31:5],5'b0};
-        ch7_rd_data[strip_cnt2] <= mem_rd_data;
+          ch7_addr <= {adr7xx[31:5],5'h0};
+        ch7_rd_data[strip_cnt2[0]] <= mem_rd_data;
         strip_cnt2 <= strip_cnt2 + 2'd1;
         end
     endcase
@@ -1360,9 +1198,9 @@ endtask
 task clear_cache;
 input [31:0] adr;
 begin
-	if (ch0_addr[31:4]==adr[31:4])
+	if (ch0_addr[31:6]==adr[31:6])
 		ch0_addr <= 32'hFFFFFFFF;
-	if (ch1_addr[31:4]==adr[31:4])
+	if (ch1_addr[31:5]==adr[31:5])
 		ch1_addr <= 32'hFFFFFFFF;
 	if (ch2_addr[31:4]==adr[31:4])
 		ch2_addr <= 32'hFFFFFFFF;
@@ -1370,11 +1208,11 @@ begin
 		ch3_addr <= 32'hFFFFFFFF;
 	if (ch4_addr[31:4]==adr[31:4])
 		ch4_addr <= 32'hFFFFFFFF;
-	if (ch5_addr[31:4]==adr[31:4])
+	if (ch5_addr[31:6]==adr[31:6])
 		ch5_addr <= 32'hFFFFFFFF;
 	if (ch6_addr[31:4]==adr[31:4])
 		ch6_addr <= 32'hFFFFFFFF;
-	if (ch7_addr[31:4]==adr[31:4])
+	if (ch7_addr[31:5]==adr[31:5])
 		ch7_addr <= 32'hFFFFFFFF;
 end
 endtask
@@ -1413,6 +1251,76 @@ begin
 			end
 		end
 	end
+end
+endtask
+
+task next_state;
+input [3:0] st;
+begin
+    state <= st;
+end
+endtask
+
+task idle_ack;
+begin
+    next_state(IDLE);
+    case(ch)
+    3'd0:   acki0 <= TRUE;
+    3'd1:   acki1 <= TRUE;
+    3'd2:   acki2 <= TRUE;
+    3'd3:   acki3 <= TRUE;
+    3'd4:   acki4 <= TRUE;
+    3'd5:   acki5 <= TRUE;
+    3'd6:   acki6 <= TRUE;
+    3'd7:   acki7 <= TRUE;
+    endcase
+end
+endtask
+
+task write_;
+input [3:0] channel;
+input [15:0] sel;
+input [31:0] ad;
+input [127:0] dat;
+input cr;
+output acki;
+output rb;
+input tog;
+begin
+    toggle <= tog;
+    ch <= channel;
+    adr <= ad;
+    dat128 <= dat;
+    wmask <= ~sel;
+    //    acki7 <= TRUE;
+    //    nextcyc7 <= 1'b0;
+    if (cr) begin
+        rb <= FALSE;
+        acki <= TRUE;
+        state <= IDLE;
+        if ((resv_ch0==channel) && (resv_adr0[31:4]==ad[31:4])) begin
+            resv_ch0 <= 4'hF;
+            do_wr <= TRUE;
+            state <= PRESET;
+            rb <= TRUE;
+            acki <= FALSE;
+            clear_cache(ad);
+        end
+        if ((resv_ch1==channel) && (resv_adr1[31:4]==ad[31:4])) begin
+            resv_ch1 <= 4'hF;
+            do_wr <= TRUE;
+            state <= PRESET;
+            rb <= TRUE;
+            acki <= FALSE;
+            clear_cache(ad);
+        end
+    end
+    else begin
+        do_wr <= TRUE;
+        acki <= FALSE;
+        state <= PRESET;
+        clear_cache(ad);
+    end
 end
 endtask
 

@@ -2,8 +2,8 @@
 // ============================================================================
 //	PS2kbd.v - PS2 compatibla keyboard interface
 //
-//	2005.2010,2012,2013  Robert Finch
-//	robfinch<remove>@OpenCores.org
+//	2005.2010,2012,2013.2014  Robert Finch
+//	robfinch<remove>@finitron.ca
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -135,9 +135,10 @@ module PS2kbd(
 	input stb_i,	// core select (active high)
 	output ack_o,	// bus transfer acknowledged
 	input we_i,	// I/O write taking place (active high)
-	input [33:0] adr_i,	// address
+	input [31:0] adr_i,	// address
 	input [7:0] dat_i,	// data in
 	output reg [7:0] dat_o,	// data out
+	inout tri [7:0] db,
 	output vol_o,	// volatile register selected
 	//-------------
 	output irq,	// interrupt request (active high)
@@ -146,6 +147,7 @@ module PS2kbd(
 );
 parameter pClkFreq = 28636360;
 parameter pIOAddress = 32'hFFDC0000;
+parameter pAckStyle = 1'b0;
 parameter p5us = pClkFreq / 200000;		// number of clocks for 5us
 parameter p100us = pClkFreq / 10000;	// number of clocks for 100us
 
@@ -155,8 +157,17 @@ wire os_100us_done = os==p100us;
 reg [10:0] q;	// receive register
 reg tc;			// transmit complete indicator
 reg [1:0] s_rx;	// keyboard receive state
-reg [1:0] kq;
-reg [1:0] kqc;
+reg [7:0] kq;
+reg [15:0] kqc;
+// Use majority logic for bit capture
+// 4 or more bits high = 1, otherwise 0
+wire [2:0] kqs = {2'b0,kq[0]}+
+				{2'b0,kq[1]}+
+				{2'b0,kq[2]}+
+				{2'b0,kq[3]}+
+				{2'b0,kq[4]}+
+				{2'b0,kq[5]}+
+				{2'b0,kq[6]};
 wire kqcne;			// negative edge on kqc
 wire kqcpe;			// positive edge on kqc
 assign irq = ~q[0];
@@ -173,11 +184,11 @@ reg tx_oe;			// transmitter output enable / shift enable
 wire rx_inh = 0;
 `endif
 
-wire cs = cyc_i && stb_i && (adr_i[33:6]==pIOAddress[31:4]);
+wire cs = cyc_i && stb_i && (adr_i[31:4]==pIOAddress[31:4]);
 assign vol_o = cs;
 //reg ack,ack1;
 //always @(posedge clk_i) begin ack <= cs; ack1 <= ack & cs; end
-assign ack_o = cs;// ? (we_i ? 1'b1 : ack) : 1'b0;
+assign ack_o = pAckStyle ? 1'b1 : cs;// ? (we_i ? 1'b1 : ack) : 1'b0;
 
 wire pe_cs;
 edge_det ed1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee() );
@@ -187,7 +198,7 @@ edge_det ed1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .e
 // register triggers a clear of it.
 always @(cs or adr_i or q or tc or kack)
 	if (cs) begin
-		case(adr_i[3:2])
+		case(adr_i[1:0])
 		2'd0:	dat_o <= q[8:1];
 		2'd1:	dat_o <= {~q[0],tc,~kack,4'b0,~^q[9:1]};
 		2'd2:	dat_o <= q[8:1];
@@ -198,6 +209,7 @@ always @(cs or adr_i or q or tc or kack)
 	else
 		dat_o <= 8'h00;
 
+assign db = (cs & ~we_i) ? dat_o : {8{1'bz}};
 
 // Prohibit keyboard device from further transmits until
 // this character has been processed.
@@ -211,11 +223,11 @@ assign kd = tx_oe & ~t[0] ? 1'b0 : 1'bz;
 
 // stabilize clock and data
 always @(posedge clk_i) begin
-	kq <= {kq[0],kd};
-	kqc <= {kqc[0],kclk};
+	kq <= {kq[6:0],kd};
+	kqc <= {kqc[14:0],kclk};
 end
 
-edge_det ed0 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(kqc[1]), .pe(kqcpe), .ne(kqcne), .ee() );
+edge_det ed0 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(kqc[10]), .pe(kqcpe), .ne(kqcne), .ee() );
 
 
 // The debounce one-shot and 100us timer	
@@ -243,8 +255,8 @@ always @(posedge clk_i) begin
 	end
 	else begin
 
-		// clear rx on read
-		if (ack_o & ~we_i & ~adr_i[3])
+		// clear rx on write to status reg
+		if (cs && we_i && adr_i[1:0]==2'd1 && dat_i==8'h00)
 			q <= 11'h7FF;
 
 		// Receive state machine
@@ -262,7 +274,7 @@ always @(posedge clk_i) begin
 				s_rx <= `S_KBDRX_WAIT_CLK;
 			else if (os_5us_done) begin
 				// clock low ?
-				if (~kqc[1])
+				if (~kqc[10])
 					s_rx <= `S_KBDRX_CAPTURE_BIT;
 				else
 					s_rx <= `S_KBDRX_WAIT_CLK;	// no - spurious
@@ -272,7 +284,7 @@ always @(posedge clk_i) begin
 		// keyboard transmits LSB first
 		`S_KBDRX_CAPTURE_BIT:
 			begin
-			q <= {kq[0],q[10:1]};
+			q <= {kqs[2],q[10:1]};
 			s_rx <= `S_KBDRX_WAIT_CLK;
 			end
 
@@ -330,7 +342,7 @@ always @(tx_state or kqcne or kqcpe or kqc or os_100us_done or os_5us_done)
 	default:		adv_tx_state <= 0;
 	endcase
 
-wire load_tx = ack_o & we_i & ~adr_i[3];
+wire load_tx = cs && we_i && adr_i[1:0]==2'b0;
 wire shift_tx = (tx_state[7] & kqcpe)|tx_state[4];
 
 // It can take up to 20ms for the keyboard to accept data
@@ -353,7 +365,7 @@ always @(posedge clk_i) begin
 			tc <= 0;
 		end
 		// write to status register clears transmit state
-		else if (ack_o & we_i & adr_i[3]) begin
+		else if (cs && we_i && adr_i[1:0]==2'd1 && dat_i==8'hFF) begin
 			tc <= 1;
 			tx_oe <= 0;
 			klow <= 1'b0;

@@ -67,7 +67,7 @@ case(xopcode)
 	`NOR:	res = ~(a | b);
 	`XNOR:	res = ~(a ^ b);
 	`ORC:   res = a | ~b;
-	default:	res = 48'd0;
+	default:	res = 80'd0;
 	endcase
 `ANDI:	res = a & imm;
 `ORI:	res = a | imm;

@@ -29,6 +29,7 @@ parameter WID=80;
 parameter DIV=3'd3;
 parameter IDLE=3'd4;
 parameter DONE=3'd5;
+parameter DONE2=3'd6;
 input clk;
 input rst;
 input ld;
@@ -53,7 +54,7 @@ reg so;
 reg [2:0] state;
 reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
-assign done = state==DONE||(state==IDLE && !ld);
+assign done = state==DONE||state==DONE2||(state==IDLE && !ld);
 assign idle = state==IDLE;
 reg ce1;
 reg [WID-1:0] q;
@@ -130,7 +131,9 @@ DIV:
 		state <= DONE;
 	end
 DONE:
-	state <= IDLE;
+	state <= DONE2;
+DONE2:
+    state <= IDLE;
 default:
     state <= IDLE;
 endcase

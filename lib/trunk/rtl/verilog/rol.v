@@ -1,11 +1,10 @@
 //=============================================================================
-//	(C) 2007,2012  Robert Finch, Stratford
-//	robfinch<remove>@opencores.org
+//	(C) 2006-2012  Robert Finch
+//	All rights reserved.
+//	robfinch@opencores.org
 //
-//
-//	vtdl - variable tap delay line
-//		(dynamic shift register)
-//
+//	rol.v
+//		Rotate or shift left by up to 64 bits.
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -21,39 +20,38 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
+//	Funnel rotater / shifter
+//	Rotate, arithmetic shift left, or logical shift /
+//	arithmetic shift right by 0 to 63 bits.
+//	Parameterized with a default width of 32 bits.
 //
-//    Notes:
-//
-//	This module acts like a clocked delay line with a variable tap.
-//	Miscellaneous usage in rate control circuitry such as fifo's.
-//	Capable of delaying a signal bus.
-//	Signal bus width is specified with the WID parameter.
-//
-//   	Verilog 1995
-//   	Ref: Webpack9.1i xc3s1000-4ft256
-//	4 slices / 8 LUTs / < 10ns
 //=============================================================================
 //
-module vtdl(clk, ce, a, d, q);
-parameter WID = 8;
-parameter DEP = 16;
-localparam AMSB = DEP>64?6:DEP>32?5:DEP>16?4:DEP>8?3:DEP>4?2:DEP>2?1:0;
-input clk;
-input ce;
-input [AMSB:0] a;
-input [WID-1:0] d;
-output [WID-1:0] q;
+// op
+//	0	shift left
+//	1	rotate left
+module rol
+#(parameter WID = 32)
+(
+input op,
+input [WID:1] a,
+input [5:0] b,
+output [WID:1] o
+);
+wire [WID:1] t1, t2, t3;
 
-reg [WID-1:0] m [DEP-1:0];
-integer n;
-
-always @(posedge clk)
-	if (ce) begin
-		for (n = 1; n < DEP; n = n + 1)
-			m[n] <= m[n-1];
-		m[0] <= d;
+generate 
+begin : g_rol
+	rolx1  #(WID) u1 (op,  a, b[1:0], t1);
+	rolx4  #(WID) u2 (op, t1, b[3:2], t2);
+	if (WID>16) begin
+		assign o = t3;
+		rolx16 #(WID) u3 (op, t2, b[5:4], t3);
 	end
-
-assign q = m[a];
+	else
+		assign o = t2;
+end
+endgenerate
 
 endmodule
+

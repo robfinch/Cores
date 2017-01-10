@@ -8,7 +8,7 @@
 //  
 //	sema_mem.v
 //  - semaphoric memory
-//  - 2048 8-bit semaphores
+//  - 1024 8-bit semaphores
 //  - the semaphore is incremented (store) or decremented (load) by a
 //    constant found on the low order four address bits.
 //
@@ -36,21 +36,21 @@ input cyc_i;
 input stb_i;
 output ack_o;
 input we_i;
-input [33:0] adr_i;
+input [31:0] adr_i;
 input [7:0] dat_i;
 output [7:0] dat_o;
 reg [7:0] dat_o;
 
 reg ack,ack1,ack2,ack3;
 
-wire cs = cyc_i && stb_i && (adr_i[33:18]==16'hFFDB);
+wire cs = cyc_i && stb_i && (adr_i[31:16]==16'hFFDB);
 assign ack_o = ack & cs;
 wire pe_ack1,pe_cs;
 wire [7:0] rd,wd;
 reg [7:0] rrd;
 
-reg [7:0] mem [0:2047];
-reg [16:6] radr;
+reg [7:0] mem [0:1023];
+reg [15:6] radr;
 
 edge_det u1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(ack1), .pe(pe_ack1), .ne(), .ee());
 edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee());
@@ -75,8 +75,8 @@ end
 
 always @(posedge clk_i)
 	if (wr)
-		mem[adr_i[16:6]] <= ack1 ? wd : dat_i;
-always @(posedge clk_i) radr <= adr_i[16:6];		// register read address
+		mem[adr_i[15:6]] <= ack1 ? wd : dat_i;
+always @(posedge clk_i) radr <= adr_i[15:6];		// register read address
 always @(posedge clk_i)								// read the pre-update data
 	if (pe_ack1) rrd <= mem[radr];
 

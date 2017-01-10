@@ -1,5 +1,5 @@
 // ============================================================================
-// (C) 2005-2011,2015 Robert Finch
+// (C) 2005-2017 Robert Finch
 // All Rights Reserved.
 //
 //	seven_seg8.v
@@ -39,6 +39,7 @@ output [7:0] ssLedSeg;
 
 reg [7:0] ssLedAnode;
 reg [7:0] ssLedSeg;
+wire z;
 
 // Generate 250kHz clock from input
 wire [ 9:0] q1;

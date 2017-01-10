@@ -1,5 +1,5 @@
 // ============================================================================
-//	(C) 2007,2011,2013  Robert Finch
+//	(C) 2007-2015  Robert Finch
 //  All rights reserved.
 //	robfinch@<remove>finitron.ca
 //
@@ -144,7 +144,8 @@
 //		bit 0 = hardware flow control,
 //			when this bit is set, the transmitter output is
 //			controlled by the cts signal line automatically
-//
+//      bit 1 = 8x mode, when set the uart baud clock is 
+//          8x instead of 16x.
 //
 //		* Clock multiplier steps the 16xbaud clock frequency
 //		in increments of 1/2^32 of the clk_i input using a
@@ -257,7 +258,9 @@ module rtfSimpleUart(
 	output reg dtr_no,	// data terminal ready - active low
 	input rxd_i,			// serial data in
 	output txd_o,			// serial data out
-	output data_present_o
+	output data_present_o,
+	//----------------
+	output baud16_clk
 );
 parameter pClkFreq = 20000000;	// clock frequency in MHz
 parameter pBaud = 19200;
@@ -275,6 +278,7 @@ reg [23:0] c;	// current count
 reg [23:0] ck_mul;	// baud rate clock multiplier
 wire tx_empty;
 wire baud16;	// edge detector (active one cycle only!)
+reg baud8x;
 reg rx_present_ie;
 reg tx_empty_ie;
 reg dcd_ie;
@@ -297,6 +301,7 @@ assign irq_o =
 	| txIRQ
 	| msIRQ
 	;
+assign baud16_clk = baud16;
 
 wire [2:0] irqenc =
 	rxIRQ ? 1 :
@@ -316,6 +321,7 @@ rtfSimpleUartRx uart_rx0(
 	.we_i(we_i),
 	.dat_o(rx_do),
 	.baud16x_ce(baud16),
+	.baud8x(baud8x),
 	.clear(clear),
 	.rxd(rxd_i),
 	.data_present(data_present_o),
@@ -332,6 +338,7 @@ rtfSimpleUartTx uart_tx0(
 	.we_i(we_i),
 	.dat_i(dat_i),
 	.baud16x_ce(baud16),
+	.baud8x(baud8x),
 	.cts(ctsx[1]|~hwfc),
 	.txd(txd_o),
 	.empty(tx_empty)
@@ -371,6 +378,7 @@ always @(posedge clk_i) begin
 		hwfc <= 1'b1;
 		dtr_no <= ~pDtr;
 		ck_mul <= pClkMul;
+		baud8x <= 1'b0;
 	end
 	else if (cs & we_i) begin
 		case (adr_i)
@@ -385,7 +393,10 @@ always @(posedge clk_i) begin
 				dtr_no <= ~dat_i[0];
 				rts_no <= ~dat_i[1];
 				end
-		`UART_CTRL:		hwfc <= dat_i[0];
+		`UART_CTRL:		begin
+		                  hwfc <= dat_i[0];
+		                  baud8x <= dat_i[1];
+		                end
 		`UART_CLKM1:	ck_mul[7:0] <= dat_i;
 		`UART_CLKM2:	ck_mul[15:8] <= dat_i;
 		`UART_CLKM3:	ck_mul[23:16] <= dat_i;

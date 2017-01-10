@@ -61,6 +61,7 @@ wire [11:0] hCtr;	// count from 1 to 1800
 wire [11:0] vCtr;	// count from 1 to 795
 
 wire vBlank, hBlank;
+wire vBorder,hBorder;
 wire hSync1,vSync1;
 reg blank;
 reg border;
@@ -75,8 +76,8 @@ assign hBlank = hCtr >= phBlankOn || hCtr < phBlankOff;
 assign vBorder = vCtr >= pvBorderOn || vCtr < pvBorderOff;
 assign hBorder = hCtr >= phBorderOn || hCtr < phBorderOff;
 
-counter #(12) u1 (.rst(rst), .clk(clk), .ce(1'b1), .ld(eol), .d(12'd1), .q(hCtr) );
-counter #(12) u2 (.rst(rst), .clk(clk), .ce(eol),  .ld(eof), .d(12'd1), .q(vCtr) );
+counter #(12) u1 (.rst(rst), .clk(clk), .ce(1'b1), .ld(eol), .d(12'd1), .q(hCtr), .tc() );
+counter #(12) u2 (.rst(rst), .clk(clk), .ce(eol),  .ld(eof), .d(12'd1), .q(vCtr), .tc() );
 
 always @(posedge clk)
     blank <= #1 hBlank|vBlank;
