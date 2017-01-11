@@ -11,7 +11,7 @@ PSG32 is a programmable sound generator or sound interface device.
 -	five voice types: triangle, sawtooth, pulse, noise and wave
 -	FM synthesis
 -	digital exponential decay and release modelling (2**n)
--	16 tap digital FIR filter
+-	31 tap digital FIR filter
 
 # Clocks
 
@@ -67,7 +67,8 @@ reg |              bits                   | R/W | Brief
  B4 | nnnnnnnn nnnnnnnn nnnnnnnn nnnnnnnn |  R  | oscillator 3 output
  B8 |                            nnnnnnnn |  R  | envelope 3 output
  BC |                   .sss.sss .sss.sss |  R  | envelope state
-C0-FC |                   s...kkkk kkkkkkkk |  W  | filter coefficients
+ C0 |                   RRRRRRRR RRRRRRRR | R/W | filter sample clock rate divider
+100-178 |                   s...kkkk kkkkkkkk |  W  | filter coefficients
 
 ## Frequency Register
 
@@ -140,7 +141,7 @@ s_cyc_i |  1  |  I  | cycle active
 s_stb_i |  1  |  I  | data strobe
 s_ack_o |  1  |  O  | data transfer acknowledge
 s_we_i  |  1  |  I  | write cycle
-s_adr_i |  8  |  I  | register address, 2LSB's not used
+s_adr_i |  9  |  I  | register address, 2LSB's not used
 s_dat_i | 32  |  I  | data input to core
 s_dat_o | 32  |  O  | data output from core
 m_adr_o | 14  |  O  | wave table address output
@@ -160,3 +161,16 @@ Tone generators may be linked together for FM synthesis. Setting the ‘F’ bit in 
 It is anticipated that the PSG core will be used in a system where dual port block memories are available and so the PSG core has a dedicated bus for the wave table memory. It’s assumed that the wave table memory is capable of an access every clock cycle. The PSG uses the tone generator accumulator to generate 11 bit address offsets from which to read. The address used is the sum of the wave table base address register and 11 bits from the tone generator. Up to 16kiB of wave table memory is supported, allowing several different waveforms to be stored simultaneously. Access to the wave table is pipelined. Each channel of the PSG is given access to the wave table on successive clock cycles. Three clock cycles later data for the channel is latched in. There must be a memory latency of three clock cycles for wave table memory in order for the PSG’s wave input to work correctly. Note that data is latched on every clock cycle for successive channels.
 The wave table is always being addressed by the core, however data latched in is not used unless selected in the control register for the channel. The wave table can be scanned at different rates depending on the frequency the channel is setup for. The same data value will be loaded from the wave table if the address does not change. The address may not change every clock cycle, however data will still be latched in.
 
+## Filter
+The filter is a time domain multiplexed (TDM) filter in order to conserve resources. A digital FIR (finite impulse response) filter is used.
+
+### Filter Sample Frequency
+The filter’s sampling frequency is one of the characteristics controlling filter output. The sampling frequency factors into the calculations for the filter coefficients.
+
+The sample frequency of the filter may be set using a sixteen bit control register which contains a clock divider value. This register is provided to make it easier to use the same filter coefficients in systems with different clock rates. The filter sample rate should be set to a rate substantially higher than the highest frequency to be filtered. For example 100kHz. To get a 100kHz sample rate from a 100MHz clock the clock needs to be divided by 1000. So the clock rate divider (CRD) register should be set to 1000.
+
+### Taps
+The filter contains a number of taps, which are points at which filter coefficients are applied to the input signal. The filter has a fixed number of 31 taps. Filter coefficients must be supplied for each tap.
+
+### Filter Coefficients
+The filter coefficients control the resulting type of filter (low pass, band pass, high pass, band stop) and the frequency response of the filter. The filter coefficients are 12 fractional bits plus a sign bit. Filter coefficients range in value from -.9999 to +.9999

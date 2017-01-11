@@ -42,9 +42,9 @@
 //	B4      nnnnnnnn nnnnnnnn nnnnnnnn nnnnnnnn   osc3 oscillator 3
 //	B8      -------- -------- -------- nnnnnnnn   env3 envelope 3
 //  BC      -------- -------- -sss-sss -sss-sss   env state
+//  C0      -------- -------- RRRRRRRR RRRRRRRR   filter sample rate clock divider
 //
-//  C0-DC   -------- -------- s---kkkk kkkkkkkk   filter coefficients
-//  E0-FC   -------- -------- -------- --------   reserved for more filter coefficients
+//  100-178   -------- -------- s---kkkk kkkkkkkk   filter coefficients
 //
 //=============================================================================
 
@@ -61,7 +61,7 @@ input cyc_i;			// cycle valid
 input stb_i;			// circuit select
 output ack_o;
 input we_i;				// write
-input [7:0] adr_i;		// address input
+input [8:0] adr_i;		// address input
 input [31:0] dat_i;		// data input
 output [31:0] dat_o;	// data output
 
@@ -89,6 +89,7 @@ reg [3:0] sync;
 reg [3:0] ringmod;
 reg [3:0] fm;
 reg [3:0] outctrl;
+reg [15:0] crd;                 // clock rate divider for filter sampling
 reg [3:0] filt;                 // 1 = output goes to filter
 reg [3:0] eg;                   // 1 = output goes through envelope generator
 wire [31:0] acc0, acc1, acc2, acc3;
@@ -102,7 +103,7 @@ wire [29:0] out4;
 reg [21:0] sum,fsum;
 reg [21:0] sum2;
 wire [21:0] filtin1;	// FIR filter input
-wire [37:0] filt_o;		// FIR filter output
+wire [38:0] filt_o;		// FIR filter output
 reg [3:0] cnt;          // 4 bits needed for FIR
 reg [3:0] cnt1,cnt2,cnt3;
 
@@ -118,7 +119,7 @@ always @(posedge clk_i)
 assign ack_o = cs ? (we_i ? 1'b1 : ack2) : 1'b0;
 
 // Register shadow ram for register readback
-reg [31:0] reg_shadow [63:0];
+reg [31:0] reg_shadow [127:0];
 reg [8:0] radr;
 always @(posedge clk_i)
     if (cs & we_i)  reg_shadow[adr_i[7:2]] <= dat_i;
@@ -166,14 +167,15 @@ begin
 		ringmod <= 0;
 		fm <= 0;
 		volume <= 0;
+		crd <= 1000;
 	end
 	else begin
 		if (cs & we_i) begin
-			case(adr_i[7:2])
+			case(adr_i[8:2])
 			//---------------------------------------------------------
-			6'd00:	freq0 <= dat_i[23:0];
-			6'd01:	pw0 <= dat_i[15:0];
-			6'd02:	begin
+			7'd00:	freq0 <= dat_i[23:0];
+			7'd01:	pw0 <= dat_i[15:0];
+			7'd02:	begin
 						vt[0] <= dat_i[7:2];
 						outctrl[0] <= dat_i[8];
 						filt[0] <= dat_i[9];
@@ -184,16 +186,16 @@ begin
 						ringmod[0] <= dat_i[14]; 
 						test[0] <= dat_i[15];
 					end
-			6'd03:	attack0 <= dat_i[23:0];
-			6'd04:  decay0 <= dat_i[23:0];
-		    6'd05:  sustain0 <= dat_i[7:0];
-			6'd06:  relese0 <= dat_i[23:0];
-            6'd07:  wtadr0 <= {dat_i[13:1],1'b0};
+			7'd03:	attack0 <= dat_i[23:0];
+			7'd04:  decay0 <= dat_i[23:0];
+		    7'd05:  sustain0 <= dat_i[7:0];
+			7'd06:  relese0 <= dat_i[23:0];
+            7'd07:  wtadr0 <= {dat_i[13:1],1'b0};
                
 			//---------------------------------------------------------
-			6'd08:	freq1 <= dat_i[23:0];
-			6'd09:	pw1 <= dat_i[15:0];
-			6'd10:	begin
+			7'd08:	freq1 <= dat_i[23:0];
+			7'd09:	pw1 <= dat_i[15:0];
+			7'd10:	begin
 						vt[1] <= dat_i[7:2];
 						outctrl[1] <= dat_i[8];
 						filt[1] <= dat_i[9];
@@ -204,16 +206,16 @@ begin
 						ringmod[1] <= dat_i[14]; 
 						test[1] <= dat_i[15];
 					end
-			6'd11:	attack1 <= dat_i[23:0];
-            6'd12:  decay1 <= dat_i[23:0];
-            6'd13:  sustain1 <= dat_i[7:0];
-            6'd14:  relese1 <= dat_i[23:0];
-            6'd15:  wtadr1 <= {dat_i[13:1],1'b0};
+			7'd11:	attack1 <= dat_i[23:0];
+            7'd12:  decay1 <= dat_i[23:0];
+            7'd13:  sustain1 <= dat_i[7:0];
+            7'd14:  relese1 <= dat_i[23:0];
+            7'd15:  wtadr1 <= {dat_i[13:1],1'b0};
 
 			//---------------------------------------------------------
-			6'd16:	freq2 <= dat_i[23:0];
-			6'd17:	pw2 <= dat_i[15:0];
-			6'd18:	begin
+			7'd16:	freq2 <= dat_i[23:0];
+			7'd17:	pw2 <= dat_i[15:0];
+			7'd18:	begin
 						vt[2] <= dat_i[7:2];
 						outctrl[2] <= dat_i[8];
 						filt[2] <= dat_i[9];
@@ -225,16 +227,16 @@ begin
 						ringmod[2] <= dat_i[14]; 
 						test[2] <= dat_i[15];
 					end
-			6'd19:	attack2 <= dat_i[23:0];
-            6'd20:  decay2 <= dat_i[23:0];
-            6'd21:  sustain2 <= dat_i[7:0];
-            6'd22:  relese2 <= dat_i[23:0];
-            6'd23:  wtadr2 <= {dat_i[13:1],1'b0};
+			7'd19:	attack2 <= dat_i[23:0];
+            7'd20:  decay2 <= dat_i[23:0];
+            7'd21:  sustain2 <= dat_i[7:0];
+            7'd22:  relese2 <= dat_i[23:0];
+            7'd23:  wtadr2 <= {dat_i[13:1],1'b0};
 
 			//---------------------------------------------------------
-			6'd24:	freq3 <= dat_i[23:0];
-			6'd25:	pw3 <= dat_i[15:0];
-			6'd26:	begin
+			7'd24:	freq3 <= dat_i[23:0];
+			7'd25:	pw3 <= dat_i[15:0];
+			7'd26:	begin
 						vt[3] <= dat_i[7:2];
 						outctrl[3] <= dat_i[8];
 						filt[3] <= dat_i[9];
@@ -245,14 +247,15 @@ begin
 						ringmod[3] <= dat_i[14]; 
 						test[3] <= dat_i[15];
 					end
-			6'd27:	attack3 <= dat_i[23:0];
-            6'd28:  decay3 <= dat_i[23:0];
-            6'd29:  sustain3 <= dat_i[7:0];
-            6'd30:  relese3 <= dat_i[23:0];
-            6'd31:  wtadr3 <= {dat_i[13:1],1'b0};
+			7'd27:	attack3 <= dat_i[23:0];
+            7'd28:  decay3 <= dat_i[23:0];
+            7'd29:  sustain3 <= dat_i[7:0];
+            7'd30:  relese3 <= dat_i[23:0];
+            7'd31:  wtadr3 <= {dat_i[13:1],1'b0};
 
 			//---------------------------------------------------------
-			6'd44:	volume <= dat_i[3:0];
+			7'd44:	volume <= dat_i[3:0];
+			7'd48:  crd <= dat_i[15:0];
 
 			default:	;
 			endcase
@@ -262,14 +265,14 @@ end
 
 
 always @(posedge clk_i)
-    case(adr_i[7:2])
-    6'd45:	begin
+    case(adr_i[8:2])
+    7'd45:	begin
             dat_o <= acc3;
             end
-    6'd46:	begin
+    7'd46:	begin
             dat_o <= {24'h0,env3};
             end
-    6'd47:  dat_o <= {17'h0,es3,1'b0,es2,1'b0,es1,1'b0,es0};
+    7'd47:  dat_o <= {17'h0,es3,1'b0,es2,1'b0,es1,1'b0,es0};
     default: begin
             dat_o <= reg_shadow_o;
             end
@@ -488,21 +491,21 @@ fsum <=
     {2'd0,(out3 & {20{filt[3]}})};
 
 // The FIR filter
-PSGFilter2 u8
+PSGFilter3 u8
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.cnt(cnt2),
-	.wr(we_i && stb_i && adr_i[7:6]==3'b11),
-    .adr(adr_i[5:2]),
+	.wr(we_i && cs && adr_i[8:7]==2'b10),
+    .adr(adr_i[6:2]),
     .din({dat_i[15],dat_i[11:0]}),
     .i(fsum),
+    .crd(crd),
     .o(filt_o)
 );
 
 // Sum the filtered and unfiltered output
 always @(posedge clk_i)
-	sum2 <= sum + filt_o[37:16];
+	sum2 <= sum + filt_o[38:17];
 
 // Last stage:
 // Adjust output according to master volume
