@@ -1,7 +1,7 @@
 ; ============================================================================
 ; FTBios816.asm
 ;        __
-;   \\__/ o\    (C) 2014  Robert Finch, Stratford
+;   \\__/ o\    (C) 2014-2017  Robert Finch, Waterloo
 ;    \  __ /    All rights reserved.
 ;     \/_//     robfinch<remove>@finitron.ca
 ;       ||
@@ -62,6 +62,10 @@ VideoPos	EQU		$34
 NormAttr	EQU		$36
 StringPos	EQU		$38
 EscState	EQU		$3C
+Vidptr		EQU		$40
+Vidregs		EQU		$46
+Textcols	EQU		$4C
+Textrows	EQU		$4E
 
 reg_cs		EQU		$80
 reg_ds		EQU		reg_cs + 4
@@ -116,6 +120,17 @@ PRNG		EQU		$FEA100
 KEYBD		EQU		$FEA110
 FAC1		EQU		$FEA200
 
+SID			EQU		$FEB000
+SID_FREQ0		EQU		$00
+SID_PW0			EQU		$04
+SID_CTRL0		EQU		$08
+SID_ATTACK0		EQU		$0C
+SID_DECAY0		EQU		$10
+SID_SUSTAIN0	EQU		$14
+SID_RELEASE0	EQU		$18
+SID_WADR0		EQU		$1C
+SID_VOLUME		EQU		$B0
+
 do_invaders			EQU		$7868
 
 .include "supermon832.asm"
@@ -127,7 +142,7 @@ do_invaders			EQU		$7868
 	.org	$E000
 
 start:
-	SEI
+	SEI					; not strictly necessary after power on reset
 	CLD
 ;	CLV					; overflow low
 ;	SEC					; carry high
@@ -168,34 +183,41 @@ start:
 	BNE		.0003
 
 	; setup code segment #1
-	LDX		#$904		; executable, 64k
+	LDX		#$905		; executable, 64k
 	TAY
 	INY
 	SDU
 	; setup data segment #2
-	LDX		#$88A		; writeable, 256M
+	LDX		#$88B		; writeable, 256M
 	INY
 	SDU
 	; setup stack segment #3 (for 65c02 mode)
-	LDX		#$881		; writeable, 1k (based at zero)
+	LDX		#$882		; writeable, 1k (based at zero)
 	INY
 	SDU
 	; setup stack segment #4 (for 65c816 mode)
-	LDX		#$884		; writeable, 64k (based at zero)
+	LDX		#$885		; writeable, 64k (based at zero)
 	INY
 	SDU
 	; seg #5 is the maxed out segment
 	LDX		#$98D		; executable, writable, max size
 	INY
 	SDU
+	; seg #9 is the maxed out segment
+	LDA		#2			; begin at $20000
+	XBAW
+	LDA		#0
+	LDX		#$98D		; executable, writable, max size
+	LDY		#9
+	SDU
 	; now set the code segment (test far jump)
 	JMF		1:.0004
 .0004:
 	; set the stack segment
 	; (must be before PEA/PLDS)
-	LDA		#4
+	LDA		#5
 	TASS
-	LDA		#$3FFF		; set top of stack
+	LDA		#$6BFF		; set top of stack
 	TAS
 
 	; setup the programmable address decodes
@@ -210,7 +232,7 @@ start:
 
 	; set the data segment
 	; this must be setup after address decoding is setup
-	PEA		2
+	PEA		5
 	PLDS
 
 	; Setup the counters
@@ -262,23 +284,57 @@ start:
 	STZ		TickCount
 	STZ		TickCount+2
 Task0:
-;	CLI
+	CLI
+	; Start the single stepping task.
+	LDA		#$01
+	STA		$7000
+	TSK		#3
 .0001:
+	LDA		#$04
+	STA		$7000
+	LDA		#5
+	STA		Vidptr+4
+	STA		Vidregs+4
+	LDA		#VIDBUF>>16
+	STA		Vidptr+2
+	STZ		Vidptr
+	LDA		#$BF0D	; 'm'
+	STA		FAR {Vidptr}
+	LDA		#VIDREGS >> 16
+	STA		Vidregs+2
+	LDA		#VIDREGS
+	STA		Vidregs
+	LDY		#7	
+	LDA		#$21		; divide by 3 vertically, 2 horizontally
+	JSR		SetVideoReg	; clear POR state
+	LDA		#84		; set window left position 84
+	LDY		#2
+	JSR		SetVideoReg
+	LDA		#0
+	LDY		#3
+	JSR		SetVideoReg
+	LDA		#16			; set window top position
+	LDY		#4
+	JSR		SetVideoReg
+	JSR		GetTextRowsCols
 	LDA		#DisplayChar
 	STA		OutputVec
 	LDA		OutputVec
 	CMP		#DisplayChar
 	BNE		.0001
-	LDA		#$01
+	LDA		#$02
 	STA		$7000
 	LDA		#$BF00
 	STA		NormAttr
 	JSR		ClearScreen
 	JSR		HomeCursor
-	LDA		#$02
+	JSR		beep
+	LDA		#$03
 	STA		$7000
+	PEA		5
 	PEA		msgStarting
 	JSR		DisplayString
+;	SEP		#$1000		; turn on single step mode
 	LDA		#0
 	STA		FAC1
 	STA		FAC1+2
@@ -286,18 +342,28 @@ Task0:
 	STA		FAC1+6
 	STA		FAC1+8
 	STA		FAC1+10
-	LDA		#1234
-	STA		FAC1
-	LDA		#5			; FIX2FLT
-	JSR 	FPCommandWait
-	JSR		DivideByTen
-	JSR		FAC1ToString
-	PEA		$3A0
-	JSR		DisplayString
-	LDA		#' '
-	JSR		OutChar
-	JSR		DispFAC1
-	SEI
+;	LDA		#3
+;	STA		$7000
+;	LDA		#1234
+;	STA		FAC1
+;	LDA		#5			; FIX2FLT
+;	JSR 	FPCommandWait
+;	LDA		#4
+;	STA		$7000
+;	JSR		DivideByTen
+;	LDA		#5
+;	STA		$7000
+;	JSR		FAC1ToString
+;	PEA		2
+;	PEA		$3A0
+;	JSR		DisplayString
+;	LDA		#' '
+;	JSR		OutChar
+;	JSR		DispFAC1
+	FORK	#11
+	TTA
+	CMP		#11
+	LBEQ	KeybdInit
 	FORK	#7			; fork a BIOS context
 	TTA
 	CMP		#7
@@ -306,11 +372,7 @@ Task0:
 	TXS
 	RTT
 .0002:
-	FORK	#11
-	TTA
-	CMP		#11
-	LBEQ	KeybdInit
-;	CLI
+	CLI
 
 Mon1:
 .mon1:
@@ -327,7 +389,7 @@ Mon1:
 	LDA		CursorY
 	ASL
 	TAX
-	LDA		LineTbl,X
+	LDA		CS:LineTbl,X
 	ASL
 	TAX
 .mon4:
@@ -359,7 +421,7 @@ Mon1:
 	CMP		#'J'
 	LBEQ	doJump
 	CMP		#'T'
-	LBEQ	doTask2
+	LBEQ	doTask
 	CMP		#'I'
 	LBEQ	doInvaders
 	CMP		#'R'
@@ -386,14 +448,17 @@ MonGetch:
 	RTS
 
 MonErr:
+	PEA		1
 	PEA		msgErr
 	JSR		DisplayString
 	BRL		Mon1
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-doTask2:
-	TSK		#2
+doTask:
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	TSK
 	BRL		Mon1
 
 doInvaders:
@@ -548,6 +613,7 @@ doRegs:
 	BRL		Mon1
 
 DispRegs:
+	PEA		1
 	PEA		msgRegs
 	JSR		DisplayString
 	JSR		space
@@ -609,6 +675,7 @@ DispRegs:
 	CPX		#32
 	BNE		.0002
 
+	PEA		1
 	PEA		msgRegs2
 	JSR		DisplayString
 	JSR		space
@@ -987,12 +1054,78 @@ echo_switch:
 ; next instruction to execute.
 ;------------------------------------------------------------------------------
 
+SSMInit:
+	; setup SSM data segment in SDT
+	LDY		#6
+	LDA		#1
+	XBAW
+	LDA		#$0000
+	LDX		#$882		; 1k data
+	SDU
+	; Setup SSM stack segment in SDT
+	INY
+	LDA		#$0400
+	LDX		#$882		; 1k stack
+	SDU
+	; Setup SSM code segment in SDT
+	INY
+	LDA		#$0000
+	XBAW
+	LDA		#$0000
+	LDX		#$905
+	SDU
+	JMF		8:.0001
+.0001:
+	; Initialize data selector and stack selector, pointer
+	; The stack is begin switched from the one currently defined by
+	; by the task table. So the return task needs to be popped off
+	; the current stack and placed on the new one.
+	PLX					; get the task to return to
+	LDA		#7
+	SEI
+	TASS
+	LDA		#$3FF		; setup stack pointer
+	TAS
+	CLI
+	PHX					; save return task on new stack
+	PEA		6
+	PLDS
+
+	LDA		#$6100
+	STA		NormAttr
+	LDA		#5			; set segment
+	STA		Vidptr+4
+	STA		Vidregs+4
+	LDA		#$00FB		; screen location is $FB0000
+	STA		Vidptr+2
+	STZ		Vidptr
+	LDA		#$00FE		; regset is at $FEA010
+	STA		Vidregs+2
+	LDA		#$A010
+	STA		Vidregs
+	LDY		#7
+	LDA		#$10		; divide by 2 vertically, 1 horizontally
+	JSR		SetVideoReg
+	LDA		#180		; set window left position 672
+	LDY		#2
+	JSR		SetVideoReg
+	LDA		#2
+	LDY		#3
+	JSR		SetVideoReg
+	LDA		#32			; set window top position
+	LDY		#4
+	JSR		SetVideoReg
+	JSR		GetTextRowsCols
+	LDA		#DisplayChar
+	STA		OutputVec
+	JSR		ClearScreen
+	JSR		HomeCursor
+	PEA		8
+	PEA		msgSSM
+	JSR		DisplayString
+	RTT
 SSMTask:
 	STA		WorkTR
-	STZ		CursorX
-	LDA		#24
-	STA		CursorY
-	JSR		SyncVideoPos
 	JSR		DispRegs
 .0004:
 	LDA		#'S'
@@ -1004,7 +1137,9 @@ SSMTask:
 	LDA		#'>'
 .0005:
 	JSR		OutChar
+.0008:
 	JSR		KeybdGetCharWait
+	BCS		.0008
 	AND		#$FF
 	CMP		#'S'		; step
 	BNE		.0001
@@ -1028,7 +1163,7 @@ SSMTask:
 	LDA		CursorY
 	ASL
 	TAX
-	LDA		LineTbl,X
+	LDA		CS:LineTbl,X
 	CLC
 	ADC		#4
 	ASL
@@ -1042,6 +1177,9 @@ SSMTask:
 	BRL		.0005
 	RTT
 	BRL		SSMTask
+
+msgSSM:
+	.byte	"Single step mode task starting.",CR,LF,0
 
 ;------------------------------------------------------------------------------
 ; Convert Ascii character to screen character.
@@ -1118,12 +1256,12 @@ DisplayChar:
 	PHA
 	LDA		VideoPos
 	ASL
-	TAX
+	TAY
 	PLA
-	STA		VIDBUF,X
+	STA		FAR {Vidptr},Y
 	LDA		CursorX
 	INA
-	CMP		#TEXTCOLS
+	CMP		Textcols
 	BNE		.0001
 	STZ		CursorX
 	LDA		CursorY
@@ -1143,9 +1281,9 @@ doCR:
 	BRL		SyncVideoPos
 doLF:
 	LDA		CursorY
-	CMP		#TEXTROWS-1
-	LBEQ	ScrollUp
 	INA
+	CMP		Textrows
+	LBPL	ScrollUp
 	STA		CursorY
 	BRL		SyncVideoPos
 
@@ -1157,16 +1295,17 @@ processEsc:
 	BNE		.0003
 	LDA		VideoPos
 	ASL
-	TAX
-	LDY		CursorX
+	TAY
+	LDX		CursorX
+	INX
 .0001:
-	CPY		#TEXTCOLS-1
-	BEQ		.0002
+	CPX		Textcols
+	BPL		.0002
 	LDA		#' '
 	ORA		NormAttr
-	STA		VIDBUF,X
+	STA		FAR {Vidptr},Y
 	INX
-	INX
+	INY
 	INY
 	BNE		.0001
 .0002:
@@ -1252,23 +1391,24 @@ processEsc:
 	RTS
 
 doBackSpace:
-	LDY		CursorX
+	LDX		CursorX
 	BEQ		.0001		; Can't backspace anymore
 	LDA		VideoPos
 	ASL
-	TAX
+	TAY
 .0002:
-	LDA		VIDBUF,X
-	STA		VIDBUF-2,X
+	LDA		FAR {Vidptr},Y
+	DEY
+	DEY
+	STA		FAR {Vidptr},Y
+	INY4
 	INX
-	INX
-	INY
-	CPY		#TEXTCOLS
+	CPX		Textcols
 	BNE		.0002
 .0003:
 	LDA		#' '
 	ORA		NormAttr
-	STA		VIDBUF,X
+	STA		FAR {Vidptr},Y
 	DEC		CursorX
 	BRL		SyncVideoPos
 .0001:
@@ -1278,23 +1418,29 @@ doBackSpace:
 ; to resynchronize it.
 
 doDelete:
-	LDY		CursorX
+	LDX		CursorX
 	LDA		VideoPos
 	ASL
-	TAX
+	TAY
 .0002:
-	CPY		#TEXTCOLS-1
-	BEQ		.0001
-	LDA		VIDBUF+2,X
-	STA		VIDBUF,X
 	INX
-	INX
+	CPX		Textcols
+	BPL		.0001
+	DEX
 	INY
+	INY
+	LDA		FAR {Vidptr},Y
+	DEY
+	DEY
+	STA		FAR {Vidptr},Y
+	INY
+	INY
+	INX
 	BRA		.0002
 .0001:
 	LDA		#' '
 	ORA		NormAttr
-	STA		VIDBUF,X
+	STA		FAR {Vidptr},Y
 	RTS
 
 doCursorHome:
@@ -1304,9 +1450,9 @@ doCursorHome:
 	BRA		SyncVideoPos
 doCursorRight:
 	LDA		CursorX
-	CMP		#TEXTCOLS-1
-	BEQ		doRTS
 	INA
+	CMP		Textcols
+	BPL		doRTS
 doCursor2:
 	STA		CursorX
 	BRA		SyncVideoPos
@@ -1322,9 +1468,9 @@ doCursorUp:
 	BRA		doCursor1
 doCursorDown:
 	LDA		CursorY
-	CMP		#TEXTROWS-1
-	BEQ		doRTS
 	INA
+	CMP		Textrows
+	BPL		doRTS
 doCursor1:
 	STA		CursorY
 	BRA		SyncVideoPos
@@ -1339,15 +1485,18 @@ HomeCursor:
 ; Synchronize the absolute video position with the cursor co-ordinates.
 ;
 SyncVideoPos:
+	PHY
 	LDA		CursorY
-	STA		$7000
+	STA		5:$7000
 	ASL
 	TAX
-	LDA		LineTbl,X
+	LDA		5:LineTbl,X
 	CLC
 	ADC		CursorX
 	STA		VideoPos
-	STA		VIDREGS+13		; Update the position in the text controller
+	LDY		#13
+	STA		FAR {Vidregs},Y		; Update the position in the text controller
+	PLY
 	RTS
 
 OutCRLF:
@@ -1377,7 +1526,7 @@ DisplayString:
 ;	STX		StringPos
 	LDY		#0
 .0002:
-	LDA		(4,S),Y
+	LDA		FAR (4,S),Y
 	BEQ		.0001
 	JSR		SuperPutch
 	INY
@@ -1386,7 +1535,7 @@ DisplayString:
 	PLP							; restore regs settings
 ;	REP		#$20				; ACC 16 bits
 	MEM		16
-	RTS		#2					; pop stack argument
+	RTS		#4					; pop stack argument
 
 DisplayString2:
 	PLA							; pop return address
@@ -1406,60 +1555,98 @@ DisplayString2:
 	REP		#$20				; ACC 16 bits
 	RTS
 
+GetTextRowsCols:
+	PHA
+	PHY
+	LDY		#0
+	LDA.UB	FAR {Vidregs},Y
+	STA		Textcols
+	INY
+	LDA.UB	FAR {Vidregs},Y
+	STA		Textrows
+	PLY
+	PLA
+	RTS
+
+; .Y = register number to set
+; Acc = value
+;
+SetVideoReg:
+	PHP								; save regs size settings
+	SEP		#$20
+	STA		FAR {Vidregs},Y
+	PLP								; restore reg size settings
+	RTS
+
 CursorOn:
 	PHA
+	PHY
+	LDY		#9
 	LDA		#$1F60
-	STA		VIDREGS+9
+	STA		FAR {Vidregs},Y
+	PLY
 	PLA
 	RTS
 
 CursorOff:
 	PHA
+	PHY
+	LDY		#9
 	LDA		#$0020
-	STA		VIDREGS+9
+	STA		FAR {Vidregs},Y
+	PLY
 	PLA
 	RTS
 
 ClearScreen:
-	LDY		#TEXTROWS*TEXTCOLS
-	LDX		#$00
+	LDX		#4095
+	LDY		#$00
 	LDA		#' '
 	JSR		AsciiToScreen
 	ORA		NormAttr
 .0001:
-	STA		VIDBUF,X
-	INX
-	INX
-	DEY
+	STA		FAR {Vidptr},Y
+	INY
+	INY
+	DEX
 	BNE		.0001
 	RTS
 
 ScrollUp:
-	LDX		#0
-	LDY 	#TEXTROWS*TEXTCOLS
+	LDY		#0
+	LDX 	#4095
 .0001:
-	LDA		VIDBUF+TEXTCOLS*2,X
-	STA		VIDBUF,X
-	INX
-	INX
-	DEY
+	PHY
+	TYA
+	CLC
+	ADC		Textcols
+	CLC
+	ADC		Textcols
+	TAY
+	LDA		FAR {Vidptr},Y
+	PLY
+	STA		FAR {Vidptr},Y
+	INY
+	INY
+	DEX
 	BNE		.0001
-	LDA		#TEXTROWS-1
+	LDA		Textrows
+	DEA
 
 BlankLine:
 	ASL
-	TAX
-	LDA		LineTbl,X
+	TAY
+	LDA		CS:LineTbl,Y
 	ASL
-	TAX
-	LDY		#TEXTCOLS
+	TAY
+	LDX		Textcols
 	LDA		NormAttr
 	ORA		#$20
 .0001:
-	STA		VIDBUF,X
-	INX
-	INX
-	DEY
+	STA		FAR {Vidptr},Y
+	INY
+	INY
+	DEX
 	BNE		.0001
 	RTS
 
@@ -1641,55 +1828,75 @@ getcharWait:
 KeybdInit:
 	LDA		#$2000
 	TAS
-	STZ		keybd_cmd
+	LDA		#5
+	STA		keybd_cmd
 	SEP		#$30
 	MEM		8
 	NDX		8
 	STZ		KeyState1
 	STZ		KeyState2
-	LDY		#$5
+	LDY		#12
+	RTT
+.resetAgain:
+	LDA		#$FF			; send reset code to keyboard
+	STA		ZS:KEYBD
+	JSR		KeybdWaitTx
 .0001:
 	JSR		KeybdRecvByte	; Look for $AA
-	BCC		.0002
+	BCC		.tryAgain
 	CMP		#$AA			;
 	BEQ		.config
 .0002:
+	; wait until keyboard not busy
 	JSR		Wait10ms
+	LDA		ZS:KEYBD+1		;
+	BIT		#$40
+	BNE		.tryAgain
 	LDA		#$FF			; send reset code to keyboard
-	STA		KEYBD+1			; write to status reg to clear TX state
+	STA		ZS:KEYBD
 	JSR		Wait10ms
-	LDA		#$FF
-	STA		KEYBD			; now write to transmit register
 	JSR		KeybdWaitTx		; wait until no longer busy
 	JSR		KeybdRecvByte	; look for an ACK ($FA)
+	BCC		.tryAgain
+	CMP		#$FE
+	BEQ		.tryAgain
 	CMP		#$FA
+	BNE		.tryAgain
 	JSR		KeybdRecvByte
 	CMP		#$FC			; reset error ?
 	BEQ		.tryAgain
 	CMP		#$AA			; reset complete okay ?
 	BNE		.tryAgain
 .config:
+	JSR		KeybdWaitBusy
 	LDA		#$F0			; send scan code select
-	STA		KEYBD
+	STA		ZS:KEYBD
 	JSR		KeybdWaitTx
 	BCC		.tryAgain
 	JSR		KeybdRecvByte	; wait for response from keyboard
 	BCC		.tryAgain
+	CMP		#$FE
+	BEQ		.tryAgain
 	CMP		#$FA
 	BEQ		.0004
 .tryAgain:
 	DEY
 	BNE		.0001
+	DEC		keybd_cmd
+	BNE		.resetAgain
 .keybdErr:
 	REP		#$30
+	PEA		1
 	PEA		msgKeybdNR
 	JSR		DisplayString
 	RTT
 	BRA		KeybdService
 .0004:
 	LDA		#2				; select scan code set #2
-	STA		KEYBD
+	STA		ZS:KEYBD
 	JSR		KeybdWaitTx
+	BCC		.tryAgain
+	JSR		KeybdRecvByte
 	BCC		.tryAgain
 	REP		#$30
 	RTT
@@ -1730,16 +1937,18 @@ KeybdService:
 
 	MEM		8
 	NDX		8
-; Recieve a byte from the keyboard, used after a command is sent to the
+
+; Receive a byte from the keyboard, used after a command is sent to the
 ; keyboard in order to wait for a response.
 ;
 KeybdRecvByte:
 	PHY
-	LDY		#100			; wait up to 1s
+	LDY		#20				; wait up to .2s
 .0003:
-	LDA		KEYBD+1			; wait for response from keyboard
-	BIT		#$80			; is input buffer full ?
-	BNE		.0004			; yes, branch
+	JSR		KeybdWaitBusy
+	LDA		ZS:KEYBD+1			; wait for response from keyboard
+	ASL						; is input buffer full ?
+	BCS		.0004			; yes, branch
 	JSR		Wait10ms		; wait a bit
 	DEY
 	BNE		.0003			; go back and try again
@@ -1747,54 +1956,34 @@ KeybdRecvByte:
 	CLC						; carry clear = no code
 	RTS
 .0004:
-	LDA		KEYBD			;
-	PHA
-	LDA		#0				; clear recieve state
-	STA		KEYBD+1
-	PLA
+	LDA		ZS:KEYBD		; clear recieve state
 	PLY
 	SEC						; carry set = code available
 	RTS
 
-; Wait until the keyboard status is non-busy
-; Returns .CF = 1 if successful, .CF=0 timeout
-;
-KeybdWaitBusy:
-	PHY
-	LDY		#100			; wait a max of 1s
-.0001:
-	LDA		KEYBD+1
-	BIT		#1
-	BEQ		.0002
-	JSR		Wait10ms
-	DEY
-	BNE		.0001
-	PLY
-	CLC
-	RTS
-.0002:
-	PLY
-	SEC
-	RTS
-
+; Wait until the keyboard isn't busy anymore
 ; Wait until the keyboard transmit is complete
 ; Returns .CF = 1 if successful, .CF=0 timeout
 ;
+KeybdWaitBusy:				; alias for KeybdWaitTx
 KeybdWaitTx:
+	PHA
 	PHY
-	LDY		#100			; wait a max of 1s
+	LDY		#10				; wait a max of .1s
 .0001:
-	LDA		KEYBD+1
-	BIT		#$40			; check for transmit complete bit
-	BNE		.0002			; branch if bit set
+	LDA		ZS:KEYBD+1
+	BIT		#$40			; check for transmit busy bit
+	BEQ		.0002			; branch if bit clear
 	JSR		Wait10ms		; delay a little bit
 	DEY						; go back and try again
 	BNE		.0001
 	PLY						; timed out
+	PLA
 	CLC						; return carry clear
 	RTS
 .0002:
 	PLY						; wait complete, return 
+	PLA
 	SEC						; carry set
 	RTS
 
@@ -1803,18 +1992,21 @@ KeybdWaitTx:
 ; .A = trashed (=-5)
 ;
 Wait10ms:
+	PHA
 	PHX				; save .X
-	LDA		CNT0H	; get starting count
+	LDA		ZS:CNT0H	; get starting count
 	TAX				; save it off in .X
 .0002:
 	SEC				; compare to current counter value
-	SBC		CNT0H
-	BPL		.0001	; teh result should be -ve, unless counter overflowed.
-	CMP		#-5		; 5 ticks pass ? 
+	SBC		ZS:CNT0H
+	EOR		#$FF	; make negative
+	CMP		#10
+	BPL     .0001
 	TXA				; prepare for next check, get startcount in .A
-	BCS		.0002	; go back if less than 5 ticks
+	BRA		.0002	; go back if less than 5 ticks
 .0001:
 	PLX				; restore .X
+	PLA
 	RTS
 
 	MEM		16
@@ -1867,7 +2059,7 @@ KeybdGetChar1:
 	XBA
 .0002:
 .0003:
-	LDA		KEYBD+1		; check MSB of keyboard status reg.
+	LDA		ZS:KEYBD+1		; check MSB of keyboard status reg.
 	ASL
 	BCS		.0006		; branch if keystroke ready
 	BIT		KeybdWaitFlag
@@ -1877,8 +2069,12 @@ KeybdGetChar1:
 	SEC
 	RTS
 .0006:
-	LDA		KEYBD		; get scan code value
-	STZ		KEYBD+1		; to clear recieve register
+	LDA		ZS:KEYBD	; get scan code value
+	STZ		ZS:KEYBD+2	; clear read flag
+	REP		#$20
+	;JSR		DispByte
+	;JSR		space
+	SEP		#$20
 .0001:
 	CMP		#SC_KEYUP	; keyup scan code ?
 	LBEQ	.doKeyup	; 
@@ -1909,7 +2105,7 @@ KeybdGetChar1:
 	TXA
 	AND		#$7F
 	TAX
-	LDA		keybdExtendedCodes,X
+	LDA		cs:keybdExtendedCodes,X
 	BRA		.0008
 .0010:
 	LDA		#4
@@ -1918,16 +2114,16 @@ KeybdGetChar1:
 	TXA
 	AND		#$7F		; table is 128 chars
 	TAX
-	LDA		keybdControlCodes,X
+	LDA		cs:keybdControlCodes,X
 	BRA		.0008
 .0009:
 	LDA		#$1			; Is shift down ?
 	BIT		KeyState2
 	BEQ		.0007
-	LDA		shiftedScanCodes,X
+	LDA		cs:shiftedScanCodes,X
 	BRA		.0008
 .0007:
-	LDA		unshiftedScanCodes,X
+	LDA		cs:unshiftedScanCodes,X
 .0008:
 	REP		#$20
 	MEM		16
@@ -1989,9 +2185,9 @@ KeybdGetChar1:
 	BRL		.0003
 
 KeybdSetLEDStatus:
-	PHDS				; save off DS
-	PEA		5			; set DS to zero
-	PLDS
+;	PHDS				; save off DS
+;	PEA		5			; set DS to zero
+;	PLDS
 	LDA		#0
 	STA		KeybdLEDs
 	LDA		#16
@@ -2016,29 +2212,18 @@ KeybdSetLEDStatus:
 	STA		KeybdLEDs
 .0004:
 	LDA		#$ED		; set status LEDs command
-	STA		KEYBD
+	STA		ZS:KEYBD
 	JSR		KeybdWaitTx
 	JSR		KeybdRecvByte
 	BCC		.0001
 	CMP		#$FA
 	LDA		KeybdLEDs
-	STA		KEYBD
+	STA		ZS:KEYBD
 	JSR		KeybdWaitTx
 	JSR		KeybdRecvByte	; wait for $FA byte
 .0001:
-	PLDS				; recover DS
+;	PLDS				; recover DS
 	RTS
-
-	MEM		16
-
-	BPL		.0003
-	PHA					; save off the char (we need to trash acc)
-	LDA		KEYBD+4		; clear keyboard strobe (must be a read operation)
-	PLA					; restore char
-	BIT		#$800		; Is it a keyup code ?
-	BNE		.0003
-	RTS
-
 
 
 	;--------------------------------------------------------------------------
@@ -2228,8 +2413,6 @@ Task1:
 ; IRQ handler task - 32 bit
 ;
 IRQTask:
-	SEP		#$220		; eight bit accumulator, 32 bit indexes
-	REP		#$110
 	MEM		8
 	NDX		32
 IRQTask1:
@@ -2243,10 +2426,6 @@ IRQTask1:
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
 	STA		CTR1_CTRL
 .0001:
-;	BIT		do_invaders
-;	BPL		.0002
-;	TSK		#5
-.0002:
 	RTT					; go back to interrupted task
 	BRA		IRQTask1	; the next time task is run it will start here
 
@@ -2262,10 +2441,10 @@ Task2:
 .0003:
 	LDY		#0
 .0002:
-	LDA		msgHelloWorld,Y
+	LDA		CS:msgHelloWorld,Y
 	BEQ		.0001
 	JSR		AsciiToScreen8
-	STA		VIDBUF,X
+	STA		ZS:VIDBUF,X
 	INX
 	INX
 	INY
@@ -2363,7 +2542,7 @@ LineTbl:
 	.WORD	TEXTCOLS*30
 
 TaskStartTbl:
-	.WORD	0			; CS
+	.WORD	1			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	Task0		; PC
@@ -2382,9 +2561,10 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	0			; CS
-	.WORD	0			; DS
-	.WORD	0			; SS
+	; Interrupt handler task
+	.WORD	1			; CS
+	.WORD	5			; DS
+	.WORD	5			; SS
 	.WORD	Task1		; PC
 	.BYTE	Task1>>16
 	.WORD	0			; acc
@@ -2401,7 +2581,7 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	0			; CS
+	.WORD	1			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	Task2		; PC
@@ -2420,11 +2600,11 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	0			; CS
+	.WORD	1			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
-	.WORD	SSMTask		; PC
-	.BYTE	SSMTask>>16
+	.WORD	SSMInit		; PC
+	.BYTE	SSMTnit>>16
 	.WORD	0			; acc
 	.WORD	0
 	.WORD	0			; x
@@ -2439,7 +2619,7 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	0			; CS
+	.WORD	1			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	BrkTask		; PC
@@ -2460,7 +2640,7 @@ TaskStartTbl:
 
 	; task #5
 	; DS is placed at $7800
-	.WORD	0			; CS
+	.WORD	1			; CS
 	.WORD	0    		; DS
 	.WORD	0			; SS
 	.WORD	InvadersTask	; PC
@@ -2479,7 +2659,7 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	0			; CS
+	.WORD	1			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	IRQTask		; PC
@@ -2508,6 +2688,12 @@ msgRegs2:
 msgErr:
 	.byte	"***Err",CR,LF,0
 
+	.org	$F400
+	JMP		SuperGetch
+	JMP		warm_start
+	JMP		SuperPutch
+	JMP		BIOSInput
+
 	cpu		FT832
 	MEM		32
 	NDX		32
@@ -2516,18 +2702,57 @@ msgErr:
 	STA.B	{$23},Y
 	LDY.UH	$44455556,X
 	LDA.H	CS:$44455556,X
-	LDA.UB	SEG $88888888:$1234,Y
+	LDA.UB	SEG $8888:$1234,Y
 	JSF	    $0000:start
 	RTF
+	ADC     SEG $9821:$1200,X
+	EOR     $821:$1200,X
+	EOR     $841:$12
+	SBC     FAR {$24},Y
+	AND     FAR($25)
+	ORA     FAR ($26,x)
 	TSK		#2
 	TSK
 	LDT		$10000,X
 
-	.org	$F400
-	JMP		SuperGetch
-	JMP		warm_start
-	JMP		SuperPutch
-	JMP		BIOSInput
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+	MEM		16
+	NDX		16
+beep:
+	LDA		#15					; set volume to max
+	STA		SID+SID_VOLUME		
+	LDA		#$0C6F				; 10C6F = 800 Hz
+	STA		SID+SID_FREQ0
+	LDA		#1
+	STA		SID+SID_FREQ0+2
+	LDA		#195				; 2ms
+	STA		SID+SID_ATTACK0
+	STZ		SID+SID_ATTACK0+2
+	LDA		#2344				; 24 ms decay
+	STA		SID+SID_DECAY0
+	STZ		SID+SID_DECAY0+2
+	LDA		#$80				; 50% sustain level
+	STA		SID+SID_SUSTAIN0
+	LDA		#48828				; 500 ms release
+	STA		SID+SID_RELEASE0
+	STZ		SID+SID_RELEASE0+2
+	LDA		#$1504				; gate on
+	STA		SID+SID_CTRL0
+	; delay for about 1s
+	LDY		#39
+.0002:
+	LDX		#65535
+.0001:
+	DEX
+	BNE		.0001
+	DEY
+	BNE		.0002
+	LDA		#$0504				; gate off
+	STA		SID+SID_CTRL0
+	RTS
 
 	.org 	$FFD6
 	dw		4			; task #4
