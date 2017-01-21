@@ -23,10 +23,10 @@
 //                                                                          
 //
 //	Registers
-//  00      -------- ffffffff ffffffff ffffffff     freq [23:0]
-//  04      -------- -------- pppppppp pppppppp     pulse width
+//  00      -------- ----ffff ffffffff ffffffff     freq [19:0]
+//  04      -------- -------- ----pppp pppppppp     pulse width
 //	08	    -------- -------- trsg-efo vvvvvv-- 	test, ringmod, sync, gate, filter, output, voice type
-//  0C      -------- aaaaaaaa aaaaaaaa aaaaaaaa     attack
+//  0C      ---aaaaa aaaaaaaa aaaaaaaa aaaaaaaa     attack
 //  10      -------- dddddddd dddddddd dddddddd     decay
 //  14      -------- -------- -------- ssssssss     sustain
 //  18      -------- rrrrrrrr rrrrrrrr rrrrrrrr     release
@@ -48,22 +48,28 @@
 //
 //=============================================================================
 
-module PSG32(rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o,
+//`define BUS_WID8    1'b1
+`define BUS_WID     32
+
+module PSG32(rst_i, clk_i, clk50_i, cs_i, cyc_i, stb_i, ack_o, rdy_o, we_i, adr_i, dat_i, dat_o,
 	m_adr_o, m_dat_i, o
 );
+parameter BUS_WID = 32;
 // WISHBONE SYSCON
 input rst_i;
-input clk_i;			// system clock
+input clk_i;			// system bus clock
+input clk50_i;          // 50MHz reference clock
 // NON-WISHBONE
 input cs_i;             // circuit select
 // WISHBONE SLAVE
 input cyc_i;			// cycle valid
-input stb_i;			// circuit select
+input stb_i;			// data strobe
 output ack_o;
+output rdy_o;
 input we_i;				// write
 input [8:0] adr_i;		// address input
-input [31:0] dat_i;		// data input
-output [31:0] dat_o;	// data output
+input [BUS_WID-1:0] dat_i;		// data input
+output [BUS_WID-1:0] dat_o;	// data output
 
 // NON-WISHBONE MASTER
 output [13:0] m_adr_o;	// wave table address
@@ -76,11 +82,12 @@ reg [31:0] dat_o;
 reg [13:0] m_adr_o;
 
 reg [3:0] test;				// test (enable note generator)
+reg [3:0] srst;             // soft reset
 reg [5:0] vt [3:0];			// voice type
-reg [23:0] freq0, freq1, freq2, freq3;	// frequency control
+reg [19:0] freq0, freq1, freq2, freq3;	// frequency control
 reg [15:0] pw0, pw1, pw2, pw3;			// pulse width control
 reg [3:0] gate;
-reg [23:0] attack0, attack1, attack2, attack3;
+reg [28:0] attack0, attack1, attack2, attack3;
 reg [23:0] decay0, decay1, decay2, decay3;
 reg [7:0] sustain0, sustain1, sustain2, sustain3;
 reg [23:0] relese0, relese1, relese2, relese3;
@@ -117,15 +124,26 @@ always @(posedge clk_i)
 always @(posedge clk_i)
     ack2 <= ack1 & cs;
 assign ack_o = cs ? (we_i ? 1'b1 : ack2) : 1'b0;
+assign rdy_o = cs ? (we_i ? 1'b1 : ack2) : 1'b1;
 
 // Register shadow ram for register readback
+`ifdef BUS_WID8
+reg [7:0] reg_shadow [511:0];
+reg [8:0] radr;
+always @(posedge clk_i)
+    if (cs & we_i)  reg_shadow[adr_i[8:0]] <= dat_i;
+always @(posedge clk_i)
+    radr <= adr_i[8:0];
+wire [7:0] reg_shadow_o = reg_shadow[radr];
+`else
 reg [31:0] reg_shadow [127:0];
 reg [8:0] radr;
 always @(posedge clk_i)
-    if (cs & we_i)  reg_shadow[adr_i[7:2]] <= dat_i;
+    if (cs & we_i)  reg_shadow[adr_i[8:2]] <= dat_i;
 always @(posedge clk_i)
-    radr <= adr_i[7:2];
+    radr <= adr_i[8:2];
 wire [31:0] reg_shadow_o = reg_shadow[radr];
+`endif
 
 // write to registers
 always @(posedge clk_i)
@@ -171,9 +189,142 @@ begin
 	end
 	else begin
 		if (cs & we_i) begin
+		    if (BUS_WID==8) begin
+		        case(adr_i[8:0])
+                //---------------------------------------------------------
+                9'h00:    freq0[7:0] <= dat_i;
+                9'h01:    freq0[15:8] <= dat_i;
+                9'h02:    freq0[19:16] <= dat_i[3:0];
+                9'h04:    pw0[7:0] <= dat_i;
+                9'h05:    pw0[15:8] <= dat_i;
+                9'h08:    vt[0] <= dat_i[7:2];
+                9'h09:    begin
+                            outctrl[0] <= dat_i[0];
+                            filt[0] <= dat_i[1];
+                            eg[0] <= dat_i[2];
+                            fm[0] <= dat_i[3];
+                            gate[0] <= dat_i[4];
+                            sync[0] <= dat_i[5];
+                            ringmod[0] <= dat_i[6]; 
+                            test[0] <= dat_i[7];
+                          end
+                9'h0A:  srst[0] <= dat_i[0];
+                9'h0C:  attack0[7:0] <= dat_i;
+                9'h0D:  attack0[15:8] <= dat_i;
+                9'h0E:  attack0[23:16] <= dat_i;
+                9'h0F:  attack0[28:24] <= dat_i[4:0];
+                9'h10:  decay0[7:0] <= dat_i;
+                9'h11:  decay0[15:8] <= dat_i;
+                9'h12:  decay0[23:16] <= dat_i;
+                9'h14:  sustain0 <= dat_i;
+                9'h18:  relese0[7:0] <= dat_i;
+                9'h19:  relese0[15:8] <= dat_i;
+                9'h1A:  relese0[23:16] <= dat_i;
+                9'h1C:  wtadr0[7:0] <= {dat_i[7:1],1'b0};
+                9'h1D:  wtadr0[13:8] <= dat_i[5:0];
+                //---------------------------------------------------------
+                9'h20:    freq1[7:0] <= dat_i;
+                9'h21:    freq1[15:8] <= dat_i;
+                9'h22:    freq1[19:16] <= dat_i[3:0];
+                9'h24:    pw1[7:0] <= dat_i;
+                9'h25:    pw1[15:8] <= dat_i;
+                9'h28:    vt[1] <= dat_i[7:2];
+                9'h29:    begin
+                            outctrl[1] <= dat_i[0];
+                            filt[1] <= dat_i[1];
+                            eg[1] <= dat_i[2];
+                            fm[1] <= dat_i[3];
+                            gate[1] <= dat_i[4];
+                            sync[1] <= dat_i[5];
+                            ringmod[1] <= dat_i[6]; 
+                            test[1] <= dat_i[7];
+                          end
+                9'h2A:  srst[1] <= dat_i[0];
+                9'h2C:  attack1[7:0] <= dat_i;
+                9'h2D:  attack1[15:8] <= dat_i;
+                9'h2E:  attack1[23:16] <= dat_i;
+                9'h2F:  attack1[28:24] <= dat_i[4:0];
+                9'h30:  decay1[7:0] <= dat_i;
+                9'h31:  decay1[15:8] <= dat_i;
+                9'h32:  decay1[23:16] <= dat_i;
+                9'h34:  sustain1 <= dat_i;
+                9'h38:  relese1[7:0] <= dat_i;
+                9'h39:  relese1[15:8] <= dat_i;
+                9'h3A:  relese1[23:16] <= dat_i;
+                9'h3C:  wtadr1[7:0] <= {dat_i[7:1],1'b0};
+                9'h3D:  wtadr1[13:8] <= dat_i[5:0];
+                //---------------------------------------------------------
+                9'h40:    freq2[7:0] <= dat_i;
+                9'h41:    freq2[15:8] <= dat_i;
+                9'h42:    freq2[19:16] <= dat_i[3:0];
+                9'h44:    pw2[7:0] <= dat_i;
+                9'h45:    pw2[15:8] <= dat_i;
+                9'h48:    vt[2] <= dat_i[7:2];
+                9'h49:    begin
+                            outctrl[2] <= dat_i[0];
+                            filt[2] <= dat_i[1];
+                            eg[2] <= dat_i[2];
+                            fm[2] <= dat_i[3];
+                            gate[2] <= dat_i[4];
+                            sync[2] <= dat_i[5];
+                            ringmod[2] <= dat_i[6]; 
+                            test[2] <= dat_i[7];
+                          end
+                9'h4A:  srst[2] <= dat_i[0];
+                9'h4C:  attack2[7:0] <= dat_i;
+                9'h4D:  attack2[15:8] <= dat_i;
+                9'h4E:  attack2[23:16] <= dat_i;
+                9'h4F:  attack2[28:24] <= dat_i[4:0];
+                9'h50:  decay2[7:0] <= dat_i;
+                9'h51:  decay2[15:8] <= dat_i;
+                9'h52:  decay2[23:16] <= dat_i;
+                9'h54:  sustain2 <= dat_i;
+                9'h58:  relese2[7:0] <= dat_i;
+                9'h59:  relese2[15:8] <= dat_i;
+                9'h5A:  relese2[23:16] <= dat_i;
+                9'h5C:  wtadr2[7:0] <= {dat_i[7:1],1'b0};
+                9'h5D:  wtadr2[13:8] <= dat_i[5:0];
+                //---------------------------------------------------------
+                9'h60:    freq3[7:0] <= dat_i;
+                9'h61:    freq3[15:8] <= dat_i;
+                9'h62:    freq3[19:16] <= dat_i[3:0];
+                9'h64:    pw3[7:0] <= dat_i;
+                9'h65:    pw3[15:8] <= dat_i;
+                9'h68:    vt[3] <= dat_i[7:2];
+                9'h69:    begin
+                            outctrl[3] <= dat_i[0];
+                            filt[3] <= dat_i[1];
+                            eg[3] <= dat_i[2];
+                            fm[3] <= dat_i[3];
+                            gate[3] <= dat_i[4];
+                            sync[3] <= dat_i[5];
+                            ringmod[3] <= dat_i[6]; 
+                            test[3] <= dat_i[7];
+                          end
+                9'h6A:  srst[3] <= dat_i[0];
+                9'h6C:  attack3[7:0] <= dat_i;
+                9'h6D:  attack3[15:8] <= dat_i;
+                9'h6E:  attack3[23:16] <= dat_i;
+                9'h6F:  attack3[28:24] <= dat_i[4:0];
+                9'h70:  decay3[7:0] <= dat_i;
+                9'h71:  decay3[15:8] <= dat_i;
+                9'h72:  decay3[23:16] <= dat_i;
+                9'h74:  sustain3 <= dat_i;
+                9'h78:  relese3[7:0] <= dat_i;
+                9'h79:  relese3[15:8] <= dat_i;
+                9'h7A:  relese3[23:16] <= dat_i;
+                9'h7C:  wtadr3[7:0] <= {dat_i[7:1],1'b0};
+                9'h7D:  wtadr3[13:8] <= dat_i[5:0];
+                //---------------------------------------------------------
+    			9'hB0:	volume <= dat_i[3:0];
+                9'hC0:  crd[7:0] <= dat_i;
+                9'hC1:  crd[15:8] <= dat_i;
+                endcase
+		    end
+		    else if (BUS_WID==32) begin
 			case(adr_i[8:2])
 			//---------------------------------------------------------
-			7'd00:	freq0 <= dat_i[23:0];
+			7'd00:	freq0 <= dat_i[19:0];
 			7'd01:	pw0 <= dat_i[15:0];
 			7'd02:	begin
 						vt[0] <= dat_i[7:2];
@@ -185,15 +336,16 @@ begin
 						sync[0] <= dat_i[13];
 						ringmod[0] <= dat_i[14]; 
 						test[0] <= dat_i[15];
+						srst[0] <= dat_i[16];
 					end
-			7'd03:	attack0 <= dat_i[23:0];
+			7'd03:	attack0 <= dat_i[28:0];
 			7'd04:  decay0 <= dat_i[23:0];
 		    7'd05:  sustain0 <= dat_i[7:0];
 			7'd06:  relese0 <= dat_i[23:0];
             7'd07:  wtadr0 <= {dat_i[13:1],1'b0};
                
 			//---------------------------------------------------------
-			7'd08:	freq1 <= dat_i[23:0];
+			7'd08:	freq1 <= dat_i[19:0];
 			7'd09:	pw1 <= dat_i[15:0];
 			7'd10:	begin
 						vt[1] <= dat_i[7:2];
@@ -205,15 +357,16 @@ begin
 						sync[1] <= dat_i[13];
 						ringmod[1] <= dat_i[14]; 
 						test[1] <= dat_i[15];
+						srst[1] <= dat_i[16];
 					end
-			7'd11:	attack1 <= dat_i[23:0];
+			7'd11:	attack1 <= dat_i[28:0];
             7'd12:  decay1 <= dat_i[23:0];
             7'd13:  sustain1 <= dat_i[7:0];
             7'd14:  relese1 <= dat_i[23:0];
             7'd15:  wtadr1 <= {dat_i[13:1],1'b0};
 
 			//---------------------------------------------------------
-			7'd16:	freq2 <= dat_i[23:0];
+			7'd16:	freq2 <= dat_i[19:0];
 			7'd17:	pw2 <= dat_i[15:0];
 			7'd18:	begin
 						vt[2] <= dat_i[7:2];
@@ -226,15 +379,16 @@ begin
 						outctrl[0] <= dat_i[13];
 						ringmod[2] <= dat_i[14]; 
 						test[2] <= dat_i[15];
+						srst[2] <= dat_i[16];
 					end
-			7'd19:	attack2 <= dat_i[23:0];
+			7'd19:	attack2 <= dat_i[28:0];
             7'd20:  decay2 <= dat_i[23:0];
             7'd21:  sustain2 <= dat_i[7:0];
             7'd22:  relese2 <= dat_i[23:0];
             7'd23:  wtadr2 <= {dat_i[13:1],1'b0};
 
 			//---------------------------------------------------------
-			7'd24:	freq3 <= dat_i[23:0];
+			7'd24:	freq3 <= dat_i[19:0];
 			7'd25:	pw3 <= dat_i[15:0];
 			7'd26:	begin
 						vt[3] <= dat_i[7:2];
@@ -246,8 +400,9 @@ begin
 						sync[3] <= dat_i[13];
 						ringmod[3] <= dat_i[14]; 
 						test[3] <= dat_i[15];
+						srst[3] <= dat_i[16];
 					end
-			7'd27:	attack3 <= dat_i[23:0];
+			7'd27:	attack3 <= dat_i[28:0];
             7'd28:  decay3 <= dat_i[23:0];
             7'd29:  sustain3 <= dat_i[7:0];
             7'd30:  relese3 <= dat_i[23:0];
@@ -259,24 +414,38 @@ begin
 
 			default:	;
 			endcase
+			end
 		end
 	end
 end
 
 
 always @(posedge clk_i)
-    case(adr_i[8:2])
-    7'd45:	begin
-            dat_o <= acc3;
-            end
-    7'd46:	begin
-            dat_o <= {24'h0,env3};
-            end
-    7'd47:  dat_o <= {17'h0,es3,1'b0,es2,1'b0,es1,1'b0,es0};
-    default: begin
+    if (BUS_WID==8)
+        case(adr_i[8:0])
+        9'hB4:  dat_o <= acc3[7:0];
+        9'hB5:  dat_o <= acc3[15:8];
+        9'hB6:  dat_o <= acc3[23:16];
+        9'hB8:  dat_o <= env3;
+        9'hBC:  dat_o <= {1'b0,es1,1'b0,es0};
+        9'hBD:  dat_o <= {1'b0,es3,1'b0,es2};
+        default: begin
             dat_o <= reg_shadow_o;
             end
-    endcase
+        endcase
+    else
+        case(adr_i[8:2])
+        7'd45:	begin
+                dat_o <= acc3;
+                end
+        7'd46:	begin
+                dat_o <= {24'h0,env3};
+                end
+        7'd47:  dat_o <= {17'h0,es3,1'b0,es2,1'b0,es1,1'b0,es0};
+        default: begin
+                dat_o <= reg_shadow_o;
+                end
+        endcase
 
 wire [13:0] madr;
 mux4to1 #(14) u11
@@ -305,7 +474,7 @@ else
 PSGToneGenerator u1a
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .clk(clk50_i),
     .ack(sel==2'b11),
     .test(test[0]),
     .vt(vt[0]),
@@ -324,7 +493,7 @@ PSGToneGenerator u1a
 PSGToneGenerator u1b
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .clk(clk50_i),
     .ack(sel==2'b00),
     .test(test[1]),
     .vt(vt[1]),
@@ -343,7 +512,7 @@ PSGToneGenerator u1b
 PSGToneGenerator u1c
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .clk(clk50_i),
     .ack(sel==2'b01),
     .test(test[2]),
     .vt(vt[2]),
@@ -362,7 +531,7 @@ PSGToneGenerator u1c
 PSGToneGenerator u1d
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .clk(clk50_i),
     .ack(sel==2'b10),
     .test(test[3]),
     .vt(vt[3]),
@@ -381,7 +550,8 @@ PSGToneGenerator u1d
 PSGEnvelopeGenerator u2a
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .srst(srst[0]),
+    .clk(clk50_i),
     .gate(gate[0]),
     .attack(attack0),
     .decay(decay0),
@@ -394,7 +564,8 @@ PSGEnvelopeGenerator u2a
 PSGEnvelopeGenerator u2b
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .srst(srst[1]),
+    .clk(clk50_i),
     .gate(gate[1]),
     .attack(attack1),
     .decay(decay1),
@@ -407,7 +578,8 @@ PSGEnvelopeGenerator u2b
 PSGEnvelopeGenerator u2c
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .srst(srst[2]),
+    .clk(clk50_i),
     .gate(gate[2]),
     .attack(attack2),
     .decay(decay2),
@@ -420,7 +592,8 @@ PSGEnvelopeGenerator u2c
 PSGEnvelopeGenerator u2d
 (
     .rst(rst_i),
-    .clk(clk_i),
+    .srst(srst[3]),
+    .clk(clk50_i),
     .gate(gate[3]),
     .attack(attack3),
     .decay(decay3),
@@ -433,7 +606,7 @@ PSGEnvelopeGenerator u2d
 // shape output according to envelope
 PSGShaper u5a
 (
-	.clk_i(clk_i),
+	.clk_i(clk50_i),
 	.ce(1'b1),
 	.tgi(tg1_o),
 	.env(eg[0] ? env0 : 8'hFF),
@@ -442,7 +615,7 @@ PSGShaper u5a
 
 PSGShaper u5b
 (
-	.clk_i(clk_i),
+	.clk_i(clk50_i),
 	.ce(1'b1),
 	.tgi(tg2_o),
 	.env(eg[1] ? env1 : 8'hFF),
@@ -451,7 +624,7 @@ PSGShaper u5b
 
 PSGShaper u5c
 (
-	.clk_i(clk_i),
+	.clk_i(clk50_i),
 	.ce(1'b1),
 	.tgi(tg3_o),
 	.env(eg[2] ? env2 : 8'hFF),
@@ -460,7 +633,7 @@ PSGShaper u5c
 
 PSGShaper u5d
 (
-	.clk_i(clk_i),
+	.clk_i(clk50_i),
 	.ce(1'b1),
 	.tgi(tg4_o),
 	.env(eg[3] ? env3 : 8'hFF),
@@ -475,7 +648,7 @@ always @(posedge clk_i)
 	cnt3 <= cnt2;
 
 // Sum the channels not going to the filter
-always @(posedge clk_i)
+always @(posedge clk50_i)
 sum <= 
     {2'd0,(out0 & {20{outctrl[0]}})} +
     {2'd0,(out1 & {20{outctrl[1]}})} +
@@ -483,7 +656,7 @@ sum <=
     {2'd0,(out3 & {20{outctrl[3]}})};
 
 // Sum the channels going to the filter
-always @(posedge clk_i)
+always @(posedge clk50_i)
 fsum <= 
     {2'd0,(out0 & {20{filt[0]}})} +
     {2'd0,(out1 & {20{filt[1]}})} +
@@ -491,10 +664,25 @@ fsum <=
     {2'd0,(out3 & {20{filt[3]}})};
 
 // The FIR filter
+`ifdef BUS_WID8
+PSGFilter38 u8
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.clk50(clk50_i),
+	.wr(we_i && cs && adr_i[8:7]==2'b10),
+    .adr(adr_i[6:0]),
+    .din(dat_i),
+    .i(fsum),
+    .crd(crd),
+    .o(filt_o)
+);
+`else
 PSGFilter3 u8
 (
 	.rst(rst_i),
 	.clk(clk_i),
+    .clk50(clk50_i),
 	.wr(we_i && cs && adr_i[8:7]==2'b10),
     .adr(adr_i[6:2]),
     .din({dat_i[15],dat_i[11:0]}),
@@ -502,9 +690,10 @@ PSGFilter3 u8
     .crd(crd),
     .o(filt_o)
 );
+`endif
 
 // Sum the filtered and unfiltered output
-always @(posedge clk_i)
+always @(posedge clk50_i)
 	sum2 <= sum + filt_o[38:17];
 
 // Last stage:
@@ -512,7 +701,7 @@ always @(posedge clk_i)
 PSGVolumeControl u10
 (
 	.rst_i(rst_i),
-	.clk_i(clk_i),
+	.clk_i(clk50_i),
 	.i(sum2),
 	.volume(volume),
 	.o(out4)

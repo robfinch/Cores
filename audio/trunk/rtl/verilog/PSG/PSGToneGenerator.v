@@ -30,7 +30,7 @@ input ack;              // wave table input acknowledge
 input [11:0] wave;      // wave table data input
 input test;
 input [5:0] vt;         // voice type
-input [23:0] freq;
+input [19:0] freq;
 input [15:0] pw;        // pulse width
 input sync;
 input ringmod;
@@ -57,7 +57,7 @@ PSGHarmonicSynthesizer u2
     .clk(clk),
     .test(test),
     .sync(synca),
-    .freq({8'h00,fm_i ? freq+{pch_i,4'h0} : freq}),
+    .freq({12'h00,fm_i ? freq+{pch_i,4'h0} : freq}),
     .o(acc)
 );
 
@@ -74,13 +74,13 @@ always @(posedge clk)
 		lfsr <= {lfsr[21:0],~(lfsr[22]^lfsr[17])};
 
 // Triangle wave, ring modulation
-wire msb = ringmod ? acc[27]^prev_acc[27] : acc[27];
+wire msb = ringmod ? acc[31]^prev_acc[31] : acc[31];
 always @(acc or msb)
-	outputT <= msb ? ~acc[26:15] : acc[26:15];
+	outputT <= msb ? ~acc[30:19] : acc[30:19];
 
 // Other waveforms, ho-hum
-wire [11:0] outputP = {12{acc[27:16] < pw}};
-wire [11:0] outputS = vt[5] ? ~acc[27:16] : acc[27:16];
+wire [11:0] outputP = {12{acc[31:20] < pw}};
+wire [11:0] outputS = vt[5] ? ~acc[31:20] : acc[31:20];
 wire [11:0] outputN = lfsr[11:0];
 
 wire [11:0] out;

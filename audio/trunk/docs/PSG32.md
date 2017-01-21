@@ -5,7 +5,7 @@ PSG32 is a programmable sound generator or sound interface device.
 # Features
 -	four ADSR / wave table channels (“voices”)
 -	programmable frequency and pulse width control
--	0.0233 Hz frequency resolution (with 100.0MHz clock)
+-	0.0116 Hz frequency resolution (with 50.0MHz clock)
 -	attack, decay, sustain and release
 -	test, ringmod, sync and gate controls
 -	five voice types: triangle, sawtooth, pulse, noise and wave
@@ -15,50 +15,50 @@ PSG32 is a programmable sound generator or sound interface device.
 
 # Clocks
 
-The PSG32 core uses a single clock for all timing which is the system bus clock. The system bus clock should be at least 16 MHz in order for the core to work properly. 
+The PSG32 core uses two clocks. The first of which is the system bus clock. The second clock is a 50MHz timing reference clock. The 50MHz reference clock is used during tone and the envelope generation. In order to have consistent values for frequency settings and envelope settings between systems a 50MHz reference clock should be used.
 
 ## Computing Frequency Resolution
 
 The frequency resolution depends on the core clock used. 32 bit harmonic synthesizers are used as frequency generators. The minimum frequency resolution is then the clock frequency divided by 2^32. For a 100MHz clock this would be 100MHz/(2^32) = 0.0233 Hz.
 
 ## Maximum Frequency Generated
-The maximum frequency that can be generated is 2^24 * the minimum frequency resolution. For a 100MHz clock this would be 390.6kHz. This is beyond human hearing range. Some tolerance for different clock frequencies is present. For instance if a 1 MHz clock is used then the upper frequency limit is only 3.9kHz.
+The maximum frequency that can be generated is 2^20 * the minimum frequency resolution. For a 50MHz clock this would be 12.2kHz.
 
 ## Example Tone Frequency Calc.
-For a tone of 1kHz with a 100MHz clock, the value needed in the frequency control register is 1kHz/0.0233 = 42950.?
+For a tone of 1kHz with a 50MHz clock, the value needed in the frequency control register is 1kHz/0.0116 = 85899.
 
 # Registers
 
 reg |              bits                   | R/W | Brief
 ----|-------------------------------------|-----|-----------------------------
- 00 | ........ nnnnnnnn nnnnnnnn nnnnnnnn | R/W | channel 0 frequency
+ 00 | ........ ....nnnn nnnnnnnn nnnnnnnn | R/W | channel 0 frequency
  04 | ........ ........ pppppppp pppppppp | R/W | channel 0 pusle width
  08 |                   trsgFefo vvvvvv.. | R/W | channel 0 control
- 0C |          aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 0 attack
+ 0C |    aaaaa aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 0 attack
  10 |          dddddddd dddddddd dddddddd | R/W | channel 0 decay
  14 |                            ssssssss | R/W | channel 0 sustain
  18 |          rrrrrrrr rrrrrrrr rrrrrrrr | R/W | channel 0 release
  1C |                   ..aaaaaa aaaaaaa. | R/W | channel 0 wave table address
- 20 |          nnnnnnnn nnnnnnnn nnnnnnnn | R/W | channel 1 frequency
+ 20 |              nnnn nnnnnnnn nnnnnnnn | R/W | channel 1 frequency
  24 |                   pppppppp pppppppp | R/W | channel 1 pusle width
  28 |                   trsgFefo vvvvvv-- | R/W | channel 1 control
- 2C |          aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 1 attack
+ 2C |    aaaaa aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 1 attack
  30 |          dddddddd dddddddd dddddddd | R/W | channel 1 decay
  34 |                            ssssssss | R/W | channel 1 sustain
  38 |          rrrrrrrr rrrrrrrr rrrrrrrr | R/W | channel 1 release
  3C |                   ..aaaaaa aaaaaaa. | R/W | channel 1 wave table address
- 40 |          nnnnnnnn nnnnnnnn nnnnnnnn | R/W | channel 2 frequency
+ 40 |              nnnn nnnnnnnn nnnnnnnn | R/W | channel 2 frequency
  44 |                   pppppppp pppppppp | R/W | channel 2 pusle width
  48 |                   trsgFefo vvvvvv-- | R/W | channel 2 control
- 4C |          aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 2 attack
+ 4C |    aaaaa aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 2 attack
  50 |          dddddddd dddddddd dddddddd | R/W | channel 2 decay
  54 |                            ssssssss | R/W | channel 2 sustain
  58 |          rrrrrrrr rrrrrrrr rrrrrrrr | R/W | channel 2 release
  5C |                   ..aaaaaa aaaaaaa. | R/W | channel 2 wave table address
- 60 |          nnnnnnnn nnnnnnnn nnnnnnnn | R/W | channel 3 frequency
+ 60 |              nnnn nnnnnnnn nnnnnnnn | R/W | channel 3 frequency
  64 |                   pppppppp pppppppp | R/W | channel 3 pusle width
  68 |                   trsgFefo vvvvvv-- | R/W | channel 3 control
- 6C |          aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 3 attack
+ 6C |    aaaaa aaaaaaaa aaaaaaaa aaaaaaaa | R/W | channel 3 attack
  70 |          dddddddd dddddddd dddddddd | R/W | channel 3 decay
  74 |                            ssssssss | R/W | channel 3 sustain
  78 |          rrrrrrrr rrrrrrrr rrrrrrrr | R/W | channel 3 release
@@ -72,7 +72,7 @@ reg |              bits                   | R/W | Brief
 
 ## Frequency Register
 
-This register sets the tone frequency for the voice. In order to set the frequency specify a value that is a multiple of the base frequency step. For example for an 800 Hz tone with a 100MHz clock, 800/0.0233 = 34360 would need to be specified.
+This register sets the tone frequency for the voice. In order to set the frequency specify a value that is a multiple of the base frequency step. For example for an 800 Hz tone with a 50MHz clock, 800/0.0116 = 68719 would need to be specified.
 
 ## Pulse Width Register
 
@@ -84,19 +84,19 @@ This register controls the pulse-width when the pulse output waveform is selecte
 ‘e’ bit when set routes the tone generator through the envelope generator. When clear the raw tone generator is used without an envelope. This is primarily for debugging.
 ‘F’ bit tells the PSG to use the previous channels output to frequency modulate this channel.
 ‘f’ bit tells the sound generator to route the voice’s output to the filter
-‘vvvvv’ sets the output voice type
-10000	= triangle wave
-01000= sawtooth wave
-00100 = pulse (or possibly square) 
-00010 = noise
-00001 = wave 
+‘vvvvvv’ sets the output voice type
+101000 = reverse sawtooth
+010000 = triangle wave
+001000 = sawtooth wave
+000100 = pulse (or possibly square) 
+000010 = noise
+000001 = wave 
 ‘g’ bit ‘gates’ the envelop generator which when set causes it to begin generating the envelope for the voice. When the gate is turned off, the envelope generator enters the release phase.
 
 
-?
 ## ADSR Register
 
-Rate Divider Values
+Rate Divider Values (decay and release)
 The value required in the rate register can be calculated as:
 
 reg value = 1/(1/clock frequency)/desired time)/256
@@ -136,6 +136,7 @@ Name    | Wid | I/O | Description
 --------|-----|-----|--------------------------------
 rst_i   |  1  |  I  | synchronous reset (active high)
 clk_i   |  1  |  I  | system bus clock
+clk50_i |  1  |  I  | 50MHz reference clock
 s_cs_i  |  1  |  I  | circuit select
 s_cyc_i |  1  |  I  | cycle active
 s_stb_i |  1  |  I  | data strobe
@@ -152,7 +153,7 @@ o       | 18  |  O  | audio output
 
 ## Frequency Synthesis
 
-The PSG uses a harmonic frequency synthesizer with a 32 bit accumulator. This gives the generator a base frequency step of 0.0233Hz. (100e6 / 2^32). The upper bits of the accumulator are used as a source for audio waves.
+The PSG uses a harmonic frequency synthesizer with a 32 bit accumulator. This gives the generator a base frequency step of 0.0116Hz. (50e6 / 2^32). The upper bits of the accumulator are used as a source for audio waves.
 
 ## FM Synthesis
 Tone generators may be linked together for FM synthesis. Setting the ‘F’ bit in the channel control register links in the previous channels tone generator as a source for FM modulation of the tone. FM modulation can be used to generate complex waveforms.
@@ -167,7 +168,7 @@ The filter is a time domain multiplexed (TDM) filter in order to conserve resour
 ### Filter Sample Frequency
 The filter’s sampling frequency is one of the characteristics controlling filter output. The sampling frequency factors into the calculations for the filter coefficients.
 
-The sample frequency of the filter may be set using a sixteen bit control register which contains a clock divider value. This register is provided to make it easier to use the same filter coefficients in systems with different clock rates. The filter sample rate should be set to a rate substantially higher than the highest frequency to be filtered. For example 100kHz. To get a 100kHz sample rate from a 100MHz clock the clock needs to be divided by 1000. So the clock rate divider (CRD) register should be set to 1000.
+The sample frequency of the filter may be set using a sixteen bit control register which contains a clock divider value. This register is provided to make it easier to use the same filter coefficients in systems with different clock rates. The filter sample rate should be set to a rate substantially higher than the highest frequency to be filtered. For example 100kHz. To get a 100kHz sample rate from a 50MHz clock the clock needs to be divided by 500. So the clock rate divider (CRD) register should be set to 500.
 
 ### Taps
 The filter contains a number of taps, which are points at which filter coefficients are applied to the input signal. The filter has a fixed number of 31 taps. Filter coefficients must be supplied for each tap.

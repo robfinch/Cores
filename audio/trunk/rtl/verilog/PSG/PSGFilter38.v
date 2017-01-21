@@ -39,14 +39,14 @@
 //
 //============================================================================
 //
-module PSGFilter3(rst, clk, clk50, wr, adr, din, i, crd, o);
+module PSGFilter38(rst, clk, clk50, wr, adr, din, i, crd, o);
 parameter pTaps = 31;
 input rst;
 input clk;                  // bus clock
-input clk50;                // 50MHz reference
+input clk50;                // 50 MHz reference
 input wr;
-input [4:0] adr;
-input [12:0] din;
+input [6:0] adr;
+input [7:0] din;
 input [21:0] i;
 input [15:0] crd;           // clock rate divider
 output [21:0] o;
@@ -91,8 +91,11 @@ else if (cnt < pTaps)
 // update coefficient memory
 always @(posedge clk)
     if (wr) begin
-        coeff[adr] <= din[11:0];
-        sgn[adr] <= din[12];
+        if (adr[1:0]==2'b00) coeff[adr[6:2]][7:0] <= din;
+        if (adr[1:0]==2'b01) begin
+            coeff[adr[6:2]][11:8] <= din[3:0];
+            sgn[adr[6:2]] <= din[7];
+        end
     end
 
 // shift taps

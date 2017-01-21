@@ -22,34 +22,13 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 //=============================================================================
-/*
-	sample attack values / rates
-	----------------------------
-	8		2ms
-	32		8ms
-	64		16ms
-	96		24ms
-	152		38ms
-	224		56ms
-	272		68ms
-	320		80ms
-	400		100ms
-	955		239ms
-	1998	500ms
-	3196	800ms
-	3995	1s
-	12784	3.2s
-	21174	5.3s
-	31960	8s
 
-	rate = 990.00ns x 256 x value
-*/
-
-module PSGEnvelopeGenerator(rst, clk, gate, attack, decay, sustain, relese, o, envState);
+module PSGEnvelopeGenerator(rst, srst, clk, gate, attack, decay, sustain, relese, o, envState);
 input rst;					// reset
+input srst;
 input clk;					// core clock
 input gate;
-input [23:0] attack;
+input [28:0] attack;
 input [23:0] decay;
 input [7:0] sustain;        // sustain level
 input [23:0] relese;
@@ -68,11 +47,11 @@ reg [7:0] envCtr;
 reg [7:0] envCtr2;
 reg [7:0] iv;           // interval value for decay/release
 reg [2:0] icnt;         // interval count
-reg [27:0] envDvn;
+reg [28:0] envDvn;
 reg [2:0] envState;
 
 reg [2:0] envStateNxt;
-reg [23:0] envStepPeriod;	// determines the length of one step of the envelope generator
+reg [28:0] envStepPeriod;	// determines the length of one step of the envelope generator
 
 integer n;
 
@@ -114,7 +93,7 @@ endcase
 end
 
 always @(posedge clk)
-if (rst)
+if (rst|srst)
     envState <= ENV_IDLE;
 else
     envState <= envStateNxt;
@@ -147,14 +126,14 @@ ENV_ATTACK:
     begin
     icnt <= 0;
     iv <= (8'hff - sustain) >> 3;
-    if (envDvn==28'h0) begin
+    if (envDvn==29'h0) begin
         envCtr2 <= 0;
         envCtr <= envCtr + 1;
     end
     end
 ENV_DECAY,
 ENV_RELEASE:
-    if (envDvn==28'h0) begin
+    if (envDvn==29'h0) begin
         envCtr <= envCtr - 1;
         if (envCtr2==iv) begin
             envCtr2 <= 0;
@@ -181,7 +160,7 @@ end
 
 // double the delay at appropriate points
 // for exponential modelling
-wire [27:0] envStepPeriod1 = {4'b0,envStepPeriod} << icnt;
+wire [28:0] envStepPeriod1 = {4'b0,envStepPeriod} << icnt;
 
 
 // handle the clock divider
@@ -196,7 +175,7 @@ else begin
     3'b01x: envDvn <= {4'h0,decay};
     3'b001: envDvn <= {4'h0,relese};
     default:
-        if (envDvn==28'h0)
+        if (envDvn==29'h0)
             envDvn <= envStepPeriod1;
         else
             envDvn <= envDvn - 1;
