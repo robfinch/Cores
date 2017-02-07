@@ -1,0 +1,42 @@
+Finitron asm68 assembler    version 5.4   Wed Feb 01 05:44:40 2017     Page 1
+bootrom.asm
+
+                                             NOCC		   EQU		 0xFFD80000
+                                             NOCC_PKTLO     EQU       0x00
+                                             NOCC_PKTMID    EQU       0x04
+                                             NOCC_PKTHI     EQU       0x08
+                                             NOCC_TXPULSE   EQU       0x18
+                                             NOCC_STAT      EQU       0x1C
+                                             
+                                             	code
+                                             	org		0xFFFC0000
+     10 FFFC0000                             cold_start:
+     11 FFFC0000 7C 2E FC 3F 00 00          	move.l	#0x3FFC,A7		; setup stack pointer
+     12 FFFC0006 1F 74                      	move.l	#0x0000001F,d2	; select write cycle to main system
+     13 FFFC0008 3C 22 00 06 DC FF          	move.l	#0xFFDC0600,d1	; LEDs
+     14 FFFC000E 7F 70                      	moveq.l	#127,d0
+     15 FFFC0010 B9 4E 18 00 FC FF          	jsr		xmitPacket
+     16 FFFC0016                             cs1:
+     17 FFFC0016 FE 60                      	bra		cs1
+                                             
+                                             ;---------------------------------------------------------------------------
+                                             ;---------------------------------------------------------------------------
+                                             
+     22 FFFC0018                             xmitPacket:
+     23 FFFC0018 07 2F                      	move.l		d7,-(a7)
+     24 FFFC001A 08 2F                      	move.l		a0,-(a7)
+                                               ; first wait until the transmitter isn't busy
+     26 FFFC001C 7C 20 00 00 D8 FF          	move.l		#NOCC,a0
+     27 FFFC0022                             xmtP1:
+     28 FFFC0022 38 2E 1C 00                	move.l		NOCC_STAT,d7
+     29 FFFC0026 47 02 00 80                	and.w		#0x8000,d7	; bit 15 is xmit status
+     30 FFFC002A F6 66                      	bne			xmtP1
+                                             	; Now transmit packet
+     32 FFFC002C 28 24 08 00                	move.l		NOCC_PKTHI(a0),d2	; set high order packet word (control)
+     33 FFFC0030 28 22 04 00                	move.l		NOCC_PKTMID(a0),d1	; set middle packet word (address)
+     34 FFFC0034 10 20                      	move.l		NOCC_PKTLO(a0),d0	; and set low order packet word (data)
+     35 FFFC0036 A8 42 18 00                	clr.l		NOCC_TXPULSE(a0)	; and send the packet
+     36 FFFC003A 5F 20                      	move.l		(a7)+,a0
+     37 FFFC003C 1F 2E                      	move.l		(a7)+,d7
+     38 FFFC003E 75 4E                      	rts
+

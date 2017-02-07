@@ -1,0 +1,20 @@
+Global symbols:
+
+Symbol Table:
+ #  Name                            OCLS  Base Len        Value       Def Line     File        References
+  0 NOCC                             NON  DATA   D   00000000FFD80000         1   bootrom.asm   
+  1 NOCC_PKTHI                       NON  DATA   B   0000000000000008         4   bootrom.asm   
+  2 NOCC_PKTLO                       NON  DATA   B   0000000000000000         2   bootrom.asm   
+  3 NOCC_PKTMID                      NON  DATA   B   0000000000000004         3   bootrom.asm   
+  4 NOCC_STAT                        NON  DATA   B   000000000000001C         6   bootrom.asm   
+  5 NOCC_TXPULSE                     NON  DATA   B   0000000000000018         5   bootrom.asm   FFFC0038 
+  6 cold_start                       PRI  CODE   L   FFFFFFFFFFFC0000        10   bootrom.asm   
+  7 cs1                              PRI  CODE   L   FFFFFFFFFFFC0016        16   bootrom.asm   FFFC0018 
+  8 xmitPacket                       PRI  CODE   L   FFFFFFFFFFFC0018        22   bootrom.asm   FFFC0012 
+  9 xmtP1                            PRI  CODE   L   FFFFFFFFFFFC0022        27   bootrom.asm   FFFC002C 
+
+
+Local symbols:
+
+Macro Table:
+ #  Name                            Nargs  Line   File

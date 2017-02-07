@@ -1,0 +1,16 @@
+rommem[0] <= 32'h3FFC2E7C;
+rommem[1] <= 32'h741F0000;
+rommem[2] <= 32'h0600223C;
+rommem[3] <= 32'h707FFFDC;
+rommem[4] <= 32'h00184EB9;
+rommem[5] <= 32'h60FEFFFC;
+rommem[6] <= 32'h2F082F07;
+rommem[7] <= 32'h0000207C;
+rommem[8] <= 32'h2E38FFD8;
+rommem[9] <= 32'h0247001C;
+rommem[10] <= 32'h66F68000;
+rommem[11] <= 32'h00082428;
+rommem[12] <= 32'h00042228;
+rommem[13] <= 32'h42A82010;
+rommem[14] <= 32'h205F0018;
+rommem[15] <= 32'h4E752E1F;
