@@ -135,6 +135,8 @@ parameter IC5 = 4'd5;
 parameter IC6 = 4'd6;
 parameter IC7 = 4'd7;
 parameter IC8 = 4'd8;
+parameter IC9 = 4'd9;
+parameter IC10 = 4'd10;
 
 reg [5:0] state;
 reg [3:0] cstate;
@@ -230,6 +232,12 @@ reg [79:0] mstatus;
 reg [31:0] mcause;
 reg [511:0] mtdeleg;
 wire calltxe = mexrout[31];
+
+reg [39:0] L1_hitCnt;
+reg [39:0] L1_missCnt;
+reg [39:0] L2_hitCnt;
+reg [39:0] L2_missCnt;
+
 // Hypervisor regs
 reg him;
 reg [79:0] hstatus;
@@ -468,7 +476,9 @@ reg xLoadn,xLoadr,xStoren,xStorer;
 
 reg xIsMultiCycle;
 wire dIsMultiCycle = IsLoad(dopcode) || IsStore(dopcode) || dIsDiv || dIsMul || 
-                     dopcode==`POP || dopcode==`PUSH || dopcode==`CALL || dopcode==`RET || dopcode==`FLOAT;
+                     dopcode==`POP || dopcode==`PUSH || dopcode==`CALL || dopcode==`CALL32 || dopcode==`CALLI || dopcode==`CALLIT ||
+                     dopcode==`JMPI || dopcode==`JMPIT || dopcode==`RET || dopcode==`FLOAT;
+                    
 
 reg xCsr;
 wire dCsr = dopcode==`CSR;
@@ -780,7 +790,7 @@ always @*
     DIV1:   upd_rf <= dvd_done;
     MUL9:   upd_rf <= `TRUE;
     LOAD6:  upd_rf <= (xopcode!=`INC && xopcode!=`INCX && xopcode!=`CALLI && xopcode!=`CALLIT);
-    STORE_UPD:  upd_rf <= xopcode==`CALL || xopcode==`PEA || xopcode==`CALLI || xopcode==`CALLIT || xopcode==`PUSH;
+    STORE_UPD:  upd_rf <= xopcode==`CALL32 || xopcode==`CALL || xopcode==`PEA || xopcode==`CALLI || xopcode==`CALLIT || xopcode==`PUSH;
     default:    //RUN
         if (!xinv)
         case (xopcode)
@@ -856,6 +866,7 @@ DSD9_BranchHistory u5
 reg prime;
 reg IsLastICacheWr;
 wire ihit,ihit0,ihit1;
+reg L1_invall;
 reg L1_wr;
 reg [31:0] L1_wadr;
 reg [255:0] L1_wdat;
@@ -891,7 +902,8 @@ DSD9_L1_icache u15
     .rce(1'b1),
     .radr({okey,pc}),
     .o(insn),
-    .hit(L1_ihit)
+    .hit(L1_ihit),
+    .invall(L1_invall)
 );
 
 vtdl #(.WID(40),.DEP(64)) u14
@@ -987,14 +999,20 @@ if (rst_i) begin
     xir <= `NOP_INSN;
     dir1 <= `NOP_INSN;
     dir2 <= `NOP_INSN;
+    L1_invall <= `TRUE;
     L1_wr <= `TRUE;
     L1_wadr <= 32'h0;
     L1_wdat <= 256'h0;
+    L1_hitCnt <= 40'd0;
+    L1_missCnt <= 40'd0;
+    L2_hitCnt <= 40'd0;
+    L2_missCnt <= 40'd0;
     mconfig <= 32'h0;
     next_state(RESTART1);
     trigger_o <= 1'b0;
 end
 else begin
+L1_invall <= `FALSE;
 L1_wr <= `FALSE;
 mapen <= `FALSE;
 xldfp1 <= `FALSE;
@@ -1022,8 +1040,8 @@ RESTART1:
 RESTART2:
     if (ack_i|err_i) begin
         next_state(RESTART1);
-        L1_wr <= `TRUE;
-        L1_wadr <= L1_wadr + 32'd16;
+//        L1_wr <= `TRUE;
+//        L1_wadr <= L1_wadr + 32'd16;
         if (ea[13:4]==10'h3FF) begin
             IsICacheLoad <= `FALSE;
             IsDCacheLoad <= `FALSE;
@@ -1042,6 +1060,7 @@ begin
     // on the critical path. Keep the decodes to a minimum.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (advanceIF) begin
+        L1_hitCnt <= L1_hitCnt + 40'd1;
         mimcd <= {mimcd[3:0],1'b0};
         if (mimcd==5'b10000)
             im <= 1'b0;
@@ -1085,6 +1104,7 @@ begin
         // If a branch took place then we don't want to fetch
         // cache lines from the target that is inva
         if (!L1_ihit) begin
+            L1_missCnt <= L1_missCnt + 40'd1;
             cstate <= IC1;
             next_state(LOAD_ICACHE1);
         end
@@ -1173,14 +1193,14 @@ begin
                 imm <= {{69{dir[39]}},dir[39:29]};
         `CALL32:
             case({d1Cx,d2Cx})
-            2'b00:  imm <= {40'd0,dir[39:8]};
+            2'b00:  imm <= {48'd0,dir[39:8]};
             2'b01:  imm <= {{24{dir2[39]}},dir2[39:8],dir2[3:0],dir[39:20]};
             2'b10:  imm <= {{60{dir[39]}},dir[39:20]};
             2'b11:  imm <= {dir1[39:8],dir1[3:0],dir2[39:8],dir2[3:0],dir[39:20]};
             endcase
         `JMP32:
             case({d1Cx,d2Cx})
-            2'b00:  imm <= {40'd0,dir[39:8]};
+            2'b00:  imm <= {48'd0,dir[39:8]};
             2'b01:  imm <= {{24{dir2[39]}},dir2[39:8],dir2[3:0],dir[39:20]};
             2'b10:  imm <= {{60{dir[39]}},dir[39:20]};
             2'b11:  imm <= {dir1[39:8],dir1[3:0],dir2[39:8],dir2[3:0],dir[39:20]};
@@ -1816,14 +1836,18 @@ IC1:    if (!L1_ihit) begin
         else
             next_state(RUN);
 IC2:    cstate <= IC3;
+IC10:   cstate <= IC3;
 IC3:    if (L2_ihit) begin
             L1_wr <= `TRUE;
             L1_wadr <= L2ra2;
             L1_wdat <= L2_rdat;
-            next_state(RUN);
+            L2_hitCnt <= L2_hitCnt + 40'd1;
+            cstate <= IC9;
         end
-        else
+        else begin
+            L2_missCnt <= L2_missCnt + 40'd1;
             cstate <= IC4;
+        end
 IC4:
     begin        
         IsICacheLoad <= `TRUE;
@@ -1857,6 +1881,7 @@ IC8:
             cstate <= IC1;
         end
     end
+IC9:    next_state(RUN);
 endcase
 
 // -----------------------------------------------------------------------------
@@ -2319,6 +2344,8 @@ begin
 
     `CSR_EPC:       res = epc[0];
     `CSR_CONFIG:    res = mconfig;
+    `CSR_L1STAT:    res <= {L1_missCnt,L1_hitCnt};
+    `CSR_L2STAT:    res <= {L2_missCnt,L2_hitCnt};
     // CPU Info
     12'hFF0:    res = "Finitron";
     12'hFF1:    res = "";
@@ -2464,6 +2491,7 @@ begin
     `PUSH:  $display("PUSH r%d", ir[13:8]);
     `POP:   $display("POP r%d", ir[13:8]);
     `CALL:  $display("CALL %h[r%d]", ir[39:20], ir[13:8]);
+    `CALL32: $display("CALL %h", ir[39:8]);
     `RET:   $display("RET #%d", ir[23:8]);
     endcase
 end
@@ -2501,7 +2529,7 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_L1_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit);
+module DSD9_L1_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit, invall);
 input wclk;
 input wr;
 input [37:0] wadr;
@@ -2509,13 +2537,19 @@ input rclk;
 input rce;
 input [37:0] radr;
 output hit;
+input invall;
 
+reg [0:63] tagvalid;
 reg [37:0] tagmem [0:63];
 
 always @(posedge wclk)
     if (wr) tagmem[wadr[10:5]] <= wadr;
+always @(posedge wclk)
+    if (invall)
+        tagvalid <= 64'd0;
+    else if (wr) tagvalid[wadr[10:5]] <= 1'b1;
 
-assign hit = tagmem[radr[10:5]][37:11]==radr[37:11];
+assign hit = tagmem[radr[10:5]][37:11]==radr[37:11] && tagvalid[radr[10:5]];
 
 endmodule
 
@@ -2523,7 +2557,7 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_L1_icache(wclk, wr, wadr, i, rclk, rce, radr, o, hit);
+module DSD9_L1_icache(wclk, wr, wadr, i, rclk, rce, radr, o, hit, invall);
 input wclk;
 input wr;
 input [37:0] wadr;
@@ -2533,6 +2567,7 @@ input rce;
 input [37:0] radr;
 output reg [119:0] o;
 output hit;
+input invall;
 
 wire [255:0] ic;
 
@@ -2556,7 +2591,8 @@ DSD9_L1_icache_tag u2
     .rclk(rclk),
     .rce(rce),
     .radr(radr),
-    .hit(hit)
+    .hit(hit),
+    .invall(invall)
 );
 
 //always @(radr or ic0 or ic1)
