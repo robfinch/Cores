@@ -1,3 +1,29 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	dsd9_defines.v
+//		
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+// ============================================================================
+//
 `define TRUE    1'b1
 `define FALSE   1'b0
 `define HIGH    1'b1
@@ -57,6 +83,8 @@
 `define JMP     8'h40
 `define JMPI    8'h41
 `define JMPIT   8'h42
+`define JMP32   8'h43
+`define CALL32  8'h44
 `define BEQ     8'h46
 `define BNE     8'h47
 `define BLT     8'h48
@@ -136,6 +164,7 @@
 `define STDCR   8'h95
 `define INC     8'h96
 `define PEA     8'h9C
+`define CACHE   8'h9E
 
 `define LDBX    8'hA0
 `define LDBUX   8'hA1
@@ -155,6 +184,7 @@
 `define STTX    8'hB4
 `define STDCRX  8'hB5
 `define INCX    8'hB6
+`define CACHEX  8'hBE
 
 `define BRK     8'hE1
 `define REX     8'hE2
@@ -255,6 +285,8 @@
 `define CSR_STATUS  12'h041
 `define CSR_PCHIST  12'h100
 `define CSR_PCHNDX  12'h101
+`define CSR_L1STAT  12'h102
+`define CSR_L2STAT  12'h103
 `define CSR_CONFIG  12'hFF0
 `define CSR_CAP     12'hFFE
 
