@@ -137,6 +137,8 @@ parameter IC7 = 4'd7;
 parameter IC8 = 4'd8;
 parameter IC9 = 4'd9;
 parameter IC10 = 4'd10;
+parameter IC11 = 4'd11;
+parameter IC12 = 4'd12;
 
 reg [5:0] state;
 reg [3:0] cstate;
@@ -893,6 +895,18 @@ DSD9_L2_icache u1
 
 DSD9_L1_icache u15
 (
+    .clk(clk_i),
+    .wr(L1_wr),
+    .adr(L1_wr ? {okey,L1_wadr} : {okey,pc}),
+    .i(L1_wdat),
+    .o(insn),
+    .hit(L1_ihit),
+    .invall(L1_invall),
+    .invline(L1_invline)
+);
+/*
+DSD9_L1_icache u15
+(
     .wclk(clk_i),
     .wr(L1_wr),
     .wadr({okey,L1_wadr}),
@@ -905,7 +919,7 @@ DSD9_L1_icache u15
     .invall(L1_invall),
     .invline(L1_invline)
 );
-
+*/
 vtdl #(.WID(40),.DEP(64)) u14
 (
     .clk(clk_i),
@@ -1010,8 +1024,10 @@ if (rst_i) begin
     L1_missCnt <= 40'd0;
     L2_hitCnt <= 40'd0;
     L2_missCnt <= 40'd0;
+    L2_radr <= `RST_VECT;
     mconfig <= 32'h0;
-    next_state(RESTART1);
+    next_state(RUN);
+    cstate <= IC2;
     trigger_o <= 1'b0;
     a <= {WID{1'b0}};
     b <= {WID{1'b0}};
@@ -1415,11 +1431,12 @@ begin
         `CACHE:
             case(xRt)
             6'h02:  begin
+                    L1_wr <= `TRUE;
                     L1_wadr <= a + imm;
                     L2_invline <= `TRUE;
                     L1_invline <= `TRUE;
                     end
-            6'h03:  begin L2_invall <= `TRUE; L1_invall <= `TRUE; end
+            6'h03:  begin L1_wr <= `TRUE; L2_invall <= `TRUE; L1_invall <= `TRUE; end
             endcase
         endcase
     end
@@ -1851,6 +1868,7 @@ INVnRUN2:
 LOAD_ICACHE1:
 begin
 case(cstate)
+IC1:    cstate <= IC2;
 IC2:    cstate <= IC10;
 IC10:   cstate <= IC3;
 IC3:    if (L2_ihit) begin
@@ -1889,16 +1907,19 @@ IC8:
     if (ack_i|err_i) begin
         stb_o <= `LOW;
         cstate <= pgen ? IC5 : IC7;
-        ea <= ea + 32'd16;
         mapen <= pgen;
         if (ea[4]) begin
             IsICacheLoad <= `FALSE;
             wb_nack();
             cstate <= IC1;
         end
+        else
+            ea <= ea + 32'd16;
     end
-IC9:    next_state(RUN);
-IC1:    cstate <= IC2;
+// Three cycles to update L1 cache
+IC9:    cstate <= IC11;
+IC11:   cstate <= IC12;
+IC12:    next_state(RUN);
 endcase
 end
 
