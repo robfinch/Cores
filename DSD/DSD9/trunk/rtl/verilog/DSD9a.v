@@ -865,7 +865,7 @@ reg IsLastICacheWr;
 wire ihit,ihit0,ihit1;
 reg L1_invall,L2_invall;
 reg L1_invline,L2_invline;
-reg L1_wr;
+reg L1_wr,L1_wr1,L1_wr2,L2_wr1,L2_wr2;
 reg [31:0] L1_wadr;
 reg [255:0] L1_wdat;
 reg [37:0] L2_wadr;
@@ -878,15 +878,14 @@ always @(posedge clk_i)
 always @(posedge clk_i)
     L2ra2 <= L2ra1;
 
+wire L2_wr = IsICacheLoad & (ack_i|err_i);
 DSD9_L2_icache u1
 (
-    .wclk(clk_i),
-    .wr(IsICacheLoad & (ack_i|err_i)),
-    .wadr({okey,L2_invline ? a[31:0] + imm[31:0] : ea}),
+    .rst(rst_i),
+    .clk(clk_i),
+    .wr(L2_wr),
+    .adr({okey,L2_invline ? a[31:0] + imm[31:0] : L2_radr}),
     .i(dat_i),
-    .rclk(clk_i),
-    .rce(1'b1),
-    .radr({okey,L2_radr}),
     .o(L2_rdat),
     .hit(L2_ihit),
     .invall(L2_invall),
@@ -895,9 +894,10 @@ DSD9_L2_icache u1
 
 DSD9_L1_icache u15
 (
+    .rst(rst_i),
     .clk(clk_i),
     .wr(L1_wr),
-    .adr(L1_wr ? {okey,L1_wadr} : {okey,pc}),
+    .adr((L1_wr|L1_wr1|L1_wr2) ? {okey,L1_wadr} : {okey,pc}),
     .i(L1_wdat),
     .o(insn),
     .hit(L1_ihit),
@@ -1024,7 +1024,7 @@ if (rst_i) begin
     L1_missCnt <= 40'd0;
     L2_hitCnt <= 40'd0;
     L2_missCnt <= 40'd0;
-    L2_radr <= `RST_VECT;
+    L2_radr <= 32'd0;
     mconfig <= 32'h0;
     next_state(RUN);
     cstate <= IC2;
@@ -1039,6 +1039,10 @@ L2_invline <= `FALSE;
 L1_invall <= `FALSE;
 L1_invline <= `FALSE;
 L1_wr <= `FALSE;
+L1_wr1 <= L1_wr;
+L1_wr2 <= L1_wr1;
+L2_wr1 <= L2_wr;
+L2_wr2 <= L2_wr1;
 mapen <= `FALSE;
 xldfp1 <= `FALSE;
 xldfp <= xldfp1;
@@ -1913,8 +1917,10 @@ IC8:
             wb_nack();
             cstate <= IC1;
         end
-        else
+        else begin
             ea <= ea + 32'd16;
+            L2_radr <= L2_radr + 32'd16;
+        end
     end
 // Three cycles to update L1 cache
 IC9:    cstate <= IC11;

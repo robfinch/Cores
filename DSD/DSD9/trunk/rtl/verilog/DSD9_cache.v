@@ -32,20 +32,20 @@
 module DSD9_L1_icache_mem(clk, wr, lineno, i, o, ov, invall, invline);
 input clk;
 input wr;
-input [4:0] lineno;
+input [5:0] lineno;
 input [255:0] i;
 output [255:0] o;
 output ov;
 input invall;
 input invline;
 
-reg [255:0] mem [0:31];
-reg [31:0] valid;
+reg [255:0] mem [0:63];
+reg [63:0] valid;
 
 always  @(posedge clk)
     if (wr) mem[lineno] <= i;
 always  @(posedge clk)
-    if (invall) valid <= 32'd0;
+    if (invall) valid <= 64'd0;
     else if (invline) valid[lineno] <= 1'b0;
     else if (wr) valid[lineno] <= 1'b1;
 
@@ -82,43 +82,50 @@ assign hit = tagmem[radr[9:5]][37:10]==radr[37:10] && tagvalid[radr[9:5]];
 
 endmodule
 
-module DSD9_L1_icache_camtag(clk, wr, adr, hit, lineno);
+module DSD9_L1_icache_camtag(rst, clk, wr, adr, hit, lineno);
+input rst;
 input clk;
 input wr;
 input [37:0] adr;
 output hit;
-output reg [4:0] lineno;
+output reg [5:0] lineno;
 
-wire [35:0] tagi = {3'b0,adr[37:5]};
-wire [31:0] ma;
+wire [35:0] tagi = {9'b0,adr[37:5]};
+wire [63:0] ma;
+reg wr2;
+wire [21:0] lfsro;
+lfsr #(22,22'h0ACE1) u1 (rst, clk, !(wr2|wr), 1'b0, lfsro);
 
-DSD9_cam36x32 u01 (clk, wr, adr[9:5], tagi, tagi, ma);
-wire [31:0] match_addr = ma;
+always @(posedge clk)
+    wr2 <= wr;
+
+cam36x64 u01 (clk, wr, lfsro[5:0], tagi, tagi, ma);
+wire [63:0] match_addr = ma;
 assign hit = |match_addr; 
 
 integer n;
 always @*
 begin
 lineno = 0;
-for (n = 0; n < 32; n = n + 1)
+for (n = 0; n < 64; n = n + 1)
     if (match_addr[n]) lineno = n;
 end
 
 endmodule
 
-module DSD9_L2_icache_camtag(clk, wr, adr, hit, cadr);
+module DSD9_L2_icache_camtag(rst, clk, wr, adr, hit, lineno);
+input rst;
 input clk;
 input wr;
 input [37:0] adr;
 output hit;
-output [37:0] cadr;
+output [8:0] lineno;
 
 wire [3:0] set = adr[13:10];
-wire [28:0] tagi = {adr[37:14],adr[9:5]};
+wire [35:0] tagi = {7'd0,adr[37:14],adr[9:5]};
 reg [4:0] encadr;
-assign cadr[4:0] = adr[4:0];
-assign cadr[9:5] = encadr;
-assign cadr[13:10] = adr[13:10];
+assign lineno[4:0] = encadr;
+assign lineno[8:5] = adr[13:10];
 reg [15:0] we;
 wire [31:0] ma [0:15];
 always @*
@@ -127,11 +134,18 @@ begin
     we[set] <= wr;
 end
 
+reg wr2;
+wire [21:0] lfsro;
+lfsr #(22,22'h0ACE2) u1 (rst, clk, !(wr2|wr), 1'b0, lfsro);
+
+always @(posedge clk)
+    wr2 <= wr;
+
 genvar g;
 generate
 begin
 for (g = 0; g < 16; g = g + 1)
-    DSD9_cam36x32 u01 (clk, we[g], adr[9:5], tagi, tagi, ma[g]);
+    cam36x32 u01 (clk, we[g], lfsro[4:0], tagi, tagi, ma[g]);
 end
 endgenerate
 wire [31:0] match_addr = ma[set];
@@ -147,78 +161,23 @@ end
 
 endmodule
 
-/*
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_L1_icache(wclk, wr, wadr, i, rclk, rce, radr, o, hit, invall, invline);
-input wclk;
-input wr;
-input [37:0] wadr;
-input [255:0] i;
-input rclk;
-input rce;
-input [37:0] radr;
-output reg [119:0] o;
-output hit;
-input invall;
-input invline;
-
-wire [255:0] ic;
-
-DSD9_L1_icache_mem u1
-(
-    .wclk(wclk),
-    .wr(wr),
-    .wadr(wadr[31:0]),
-    .i(i),
-    .rclk(rclk),
-    .rce(rce),
-    .radr(radr[31:0]),
-    .o(ic)
-);
-
-DSD9_L1_icache_tag u2
-(
-    .wclk(wclk),
-    .wr(wr),
-    .wadr(wadr),
-    .radr(radr),
-    .hit(hit),
-    .invall(invall),
-    .invline(invline)
-);
-
-//always @(radr or ic0 or ic1)
-always @(radr or ic)
-case(radr[4:0])
-5'h00:  o <= ic[39:0];
-5'h05:  o <= ic[79:40];
-5'h0A:  o <= ic[119:80];
-5'h10:  o <= ic[167:128];
-5'h15:  o <= ic[207:168];
-5'h1A:  o <= ic[247:208];
-default:    o <= `IALIGN_FAULT_INSN;
-endcase
-
-endmodule
-*/
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-
-module DSD9_L1_icache(clk, wr, adr, i, o, hit, invall, invline);
+module DSD9_L1_icache(rst, clk, wr, adr, i, o, hit, invall, invline);
+input rst;
 input clk;
 input wr;
 input [37:0] adr;
 input [255:0] i;
-output reg [119:0] o;
+output reg [39:0] o;
 output hit;
 input invall;
 input invline;
 
 wire [255:0] ic;
 wire lv;            // line valid
-wire [4:0] lineno;
+wire [5:0] lineno;
 wire taghit;
 reg wr1,wr2;
 
@@ -243,6 +202,7 @@ DSD9_L1_icache_mem u1
 
 DSD9_L1_icache_camtag u2
 (
+    .rst(rst),
     .clk(clk),
     .wr(wr),
     .adr(adr),
@@ -269,126 +229,109 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module DSD9_L2_icache_mem(wclk, wr, wadr, i, rclk, rce, radr, o);
-input wclk;
+module DSD9_L2_icache_mem(clk, wr, lineno, oe, i, o, ov, invall, invline);
+input clk;
 input wr;
-input [31:0] wadr;
+input [8:0] lineno;
+input oe;
 input [127:0] i;
-input rclk;
-input rce;
-input [31:0] radr;
 output [255:0] o;
+output reg ov;
+input invall;
+input invline;
 
 reg [255:0] mem [0:511];
+reg [511:0] valid;
 reg [8:0] rrcl;
 
 //  instruction parcels per cache line
-wire [8:0] wr_cache_line;
-wire [8:0] rd_cache_line;
+wire [8:0] cache_line;
 
-assign wr_cache_line = wadr >> 5;
-assign rd_cache_line = radr >> 5;
-wire wr0 = wr & ~wadr[4];
-wire wr1 = wr & wadr[4];
+wire wr0 = wr & ~oe;
+wire wr1 = wr & oe;
 
-always @(posedge wclk)
+always @(posedge clk)
+    if (invall) valid <= 512'd0;
+    else if (invline) valid[lineno] <= 1'b0;
+    else if (wr) valid[lineno] <= 1'b1;
+
+always @(posedge clk)
 begin
-    if (wr0) mem[wr_cache_line][127:0] <= i;
-    if (wr1) mem[wr_cache_line][255:128] <= i;
+    if (wr0) mem[lineno][127:0] <= i;
+    if (wr1) mem[lineno][255:128] <= i;
 end
 
-always @(posedge rclk)
-    if (rce) rrcl <= rd_cache_line;        
+always @(posedge clk)
+    rrcl <= lineno;        
     
+always @(posedge clk)
+    ov <= valid[lineno];
+
 assign o = mem[rrcl];
 
 endmodule
 
 // -----------------------------------------------------------------------------
+// Because the line to update is driven by the output of the cam tag memory,
+// the tag write should occur only during the first half of the line load.
+// Otherwise the line number would change in the middle of the line. The
+// first half of the line load is signified by an even hexibyte address (
+// address bit 4).
 // -----------------------------------------------------------------------------
 
-module DSD9_L2_icache_tag(wclk, wr, wadr, rclk, rce, radr, hit, invall, invline);
-input wclk;
+module DSD9_L2_icache(rst, clk, wr, adr, i, o, hit, invall, invline);
+input rst;
+input clk;
 input wr;
-input [37:0] wadr;
-input rclk;
-input rce;
-input [37:0] radr;
+input [37:0] adr;
+input [127:0] i;
+output [255:0] o;
 output hit;
 input invall;
 input invline;
 
-reg [37:0] tagmem [0:511];
-reg [511:0] tagvalid;
-reg [37:0] rradr;
-
-always @(posedge rclk)
-    if (rce) rradr <= radr;        
-
-always @(posedge wclk)
-    if (invall) tagvalid <= 512'd0;
-    else if (invline) tagvalid[wadr[13:5]] <= 1'b0;
-    else if (wr) tagvalid[wadr[13:5]] <= 1'b1;
-always @(posedge wclk)
-    if (wr) tagmem[wadr[13:5]] <= wadr;
-
-assign hit = tagmem[rradr[13:5]][37:14]==rradr[37:14] && tagvalid[rradr[13:5]]==1'b1;
-
-endmodule
-
-// -----------------------------------------------------------------------------
-// -----------------------------------------------------------------------------
-
-module DSD9_L2_icache(wclk, wr, wadr, i, rclk, rce, radr, o, hit, invall, invline);
-input wclk;
-input wr;
-input [37:0] wadr;
-input [127:0] i;
-input rclk;
-input rce;
-input [37:0] radr;
-output reg [255:0] o;
-output reg hit;
-input invall;
-input invline;
-
 wire [255:0] ic;
-reg [37:0] rradr1;
-wire hita;
+wire lv;            // line valid
+wire [8:0] lineno;
+wire taghit;
+reg wr1,wr2;
+reg oe1,oe2;
+
+// Must update the cache memory on the cycle after a write to the tag memmory.
+// Otherwise lineno won't be valid. Tag memory takes two clock cycles to update.
+always @(posedge clk)
+    wr1 <= wr;
+always @(posedge clk)
+    wr2 <= wr1;
+always @(posedge clk)
+    oe1 <= adr[4];
+always @(posedge clk)
+    oe2 <= oe1;
 
 DSD9_L2_icache_mem u1
 (
-    .wclk(wclk),
-    .wr(wr),
-    .wadr(wadr[31:0]),
+    .clk(clk),
+    .wr(wr2),
+    .lineno(lineno),
+    .oe(oe2),
     .i(i),
-    .rclk(rclk),
-    .rce(rce),
-    .radr(radr[31:0]),
-    .o(ic)
-);
-
-DSD9_L2_icache_tag u2
-(
-    .wclk(wclk),
-    .wr(wr),
-    .wadr(wadr),
-    .rclk(rclk),
-    .rce(rce),
-    .radr(radr),
-    .hit(hita),
+    .o(o),
+    .ov(lv),
     .invall(invall),
     .invline(invline)
 );
 
-//always @(radr or ic0 or ic1)
-always @(posedge rclk)
-if (rce)
-    o <= ic;
+DSD9_L2_icache_camtag u2
+(
+    .rst(rst),
+    .clk(clk),
+    .wr(wr & ~adr[4]),
+    .adr(adr),
+    .lineno(lineno),
+    .hit(taghit)
+);
 
-always @(posedge rclk)
-    if (rce)
-        hit <= hita;
+assign hit = taghit & lv;
 
 endmodule
 
