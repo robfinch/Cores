@@ -1,71 +1,54 @@
-/* ===============================================================
-	(C) 2006  Robert Finch
-	All rights reserved.
-	rob@birdcomputer.ca
-
-	fpNormalize.v
-		- floating point normalization unit
-		- two cycle latency
-		- parameterized width
-		- IEEE 754 representation
-
-	This source code is free for use and modification for
-	non-commercial or evaluation purposes, provided this
-	copyright statement and disclaimer remains present in
-	the file.
-
-	If you do modify the code, please state the origin and
-	note that you have modified the code.
-
-	NO WARRANTY.
-	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF
-	ANY KIND, WHETHER EXPRESS OR IMPLIED. The user must assume
-	the entire risk of using the Work.
-
-	IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
-	ANY INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-	WHATSOEVER RELATING TO THE USE OF THIS WORK, OR YOUR
-	RELATIONSHIP WITH THE AUTHOR.
-
-	IN ADDITION, IN NO EVENT DOES THE AUTHOR AUTHORIZE YOU
-	TO USE THE WORK IN APPLICATIONS OR SYSTEMS WHERE THE
-	WORK'S FAILURE TO PERFORM CAN REASONABLY BE EXPECTED
-	TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN LOSS
-	OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK,
-	AND YOU AGREE TO HOLD THE AUTHOR AND CONTRIBUTORS HARMLESS
-	FROM ANY CLAIMS OR LOSSES RELATING TO SUCH UNAUTHORIZED
-	USE.
-
-
-	This unit takes a floating point number in an intermediate
-	format and normalizes it. No normalization occurs
-	for NaN's or infinities. The unit has a two cycle latency.
-
-	The mantissa is assumed to start with two whole bits on
-	the left. The remaining bits are fractional.
-	*** currently doesn't support mantissa over 64 bits
-	
-	The width of the incoming format is reduced via a generation
-	of sticky bit in place of the low order fractional bits.
-
-	On an underflowed input, the incoming exponent is assumed
-	to be negative. A right shift is needed.
-
-	Ref: Webpack 8.2  Spartan3-4 xc3s1000-4ft256
-	302 LUTs / 166 slices / 
-	550 LUTs / 291 slices / 89 MHz
-	163 LUTs / 93 slices / 113.6 MHz?
-=============================================================== */
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	fpNormalize.v
+//    - floating point normalization unit
+//    - two cycle latency
+//    - parameterized width
+//    - IEEE 754 representation
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//	This unit takes a floating point number in an intermediate
+// format and normalizes it. No normalization occurs
+// for NaN's or infinities. The unit has a two cycle latency.
+//
+// The mantissa is assumed to start with two whole bits on
+// the left. The remaining bits are fractional.
+//
+// The width of the incoming format is reduced via a generation
+// of sticky bit in place of the low order fractional bits.
+//
+// On an underflowed input, the incoming exponent is assumed
+// to be negative. A right shift is needed.
+// ============================================================================
 
 module fpNormalize(clk, ce, under, i, o);
-parameter WID = 32;
+parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
                   WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
-				  WID==48 ? 10 :
+				  WID==48 ? 11 :
 				  WID==44 ? 10 :
 				  WID==42 ? 10 :
 				  WID==40 ?  9 :
@@ -76,7 +59,7 @@ localparam FMSB = WID==128 ? 111 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
-				  WID==48 ? 35 :
+				  WID==48 ? 34 :
 				  WID==44 ? 31 :
 				  WID==42 ? 29 :
 				  WID==40 ? 28 :
@@ -90,7 +73,7 @@ input clk;
 input ce;
 input under;
 input [EX:0] i;		// expanded format input
-output [WID+3:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
+output [WID+2:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
 
 // variables
 wire so;
@@ -109,23 +92,31 @@ wire [EMSB:0] xo2;
 wire xInf1 = &xo1;
 
 // If infinity is reached then set the mantissa to zero
-wire gbit =  i[FMSB+1];
-wire rbit =  i[FMSB];
-wire sbit = |i[FMSB-1:0];
+wire gbit =  i[FMSB];
+wire rbit =  i[FMSB-1];
+wire sbit = |i[FMSB-2:0];
 // shift mantissa left by one to reduce to a single whole digit
 // if there is no exponent increment
 wire [FMSB+4:0] mo;
 wire [FMSB+4:0] mo1 = xInf1 & incExp1 ? 0 :
 	incExp1 ? {i[FX:FMSB+2],gbit,rbit,sbit} :		// reduce mantissa size
-			 {i[FX-1:FMSB+2],gbit,rbit,sbit,1'b0};	// reduce mantissa size
-wire [FMSB+4:0] mo2;
-wire [6:0] leadingZeros2;
+			 {i[FX-1:FMSB+1],gbit,rbit,sbit};	// reduce mantissa size
+wire [FMSB+3:0] mo2;
+wire [7:0] leadingZeros2;
 
 generate
-if (WID <= 64)	// double precision or less
-cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({64'd0,mo1} << (64-(FMSB+5))), .o(leadingZeros2) );
-else			// triple, quad precision
-cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({128'd0,mo1} << (128-(FMSB+5))), .o(leadingZeros2) );
+begin
+if (WID==32)
+cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo1,5'b0}), .o(leadingZeros2) );
+else if (WID==128)
+cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
+else if (WID==96)
+cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
+else if (WID==80)
+cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
+else if (WID==64)
+cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo1,8'h0}), .o(leadingZeros2) );
+end
 endgenerate
 
 // compensate for leadingZeros delay
@@ -140,13 +131,13 @@ wire rightOrLeft2;	// 0=left,1=right
 delay1 #(1) d8(.clk(clk), .ce(ce), .i(under), .o(rightOrLeft2) );
 
 // Compute how much we want to decrement by
-wire [6:0] lshiftAmt2 = leadingZeros2 > xo2 ? xo2 : leadingZeros2;
+wire [7:0] lshiftAmt2 = leadingZeros2 > xo2 ? xo2 : leadingZeros2;
 
 // compute amount to shift right
 // at infinity the exponent can't be incremented, so we can't shift right
 // otherwise it was an underflow situation so the exponent was negative
 // shift amount needs to be negated for shift register
-wire [6:0] rshiftAmt2 = xInf2 ? 0 : -xo2 > FMSB+3 ? FMSB+4 : FMSB+4+xo2;	// xo2 is negative !
+wire [7:0] rshiftAmt2 = xInf2 ? 0 : -xo2 > FMSB+3 ? FMSB+4 : FMSB+4+xo2;	// xo2 is negative !
 
 
 // sign
@@ -164,16 +155,14 @@ assign xo =
 // mantissa
 delay1 #(FMSB+5) d4(.clk(clk), .ce(ce), .i(mo1), .o(mo2) );
 
-wire [FMSB+4:0] mo2al = mo2 << lshiftAmt2;
-wire [FMSB+4:0] mo2ar = mo2 >> rshiftAmt2;
-wire [FMSB+4:0] mo2a = rightOrLeft2 ? mo2ar : mo2al;
+wire [FMSB+3:0] mo2a;
 //shiftAndMask #(FMSB+4) u1 (.op({rightOrLeft2,1'b0}), .a(mo2), .b(rightOrLeft2 ? lshiftAmt2 : rshiftAmt2), .mb(6'd0), .me(FMSB+3), .o(mo2a) );
 
 //	always @(posedge clk)
 //		if (ce)
-assign mo = mo2a[FMSB+4:0];//rightOrLeft2 ? mo2 >> rshiftAmt2 : mo2 << lshiftAmt2;
+assign mo = rightOrLeft2 ? mo2 >> rshiftAmt2 : mo2 << lshiftAmt2;
 
-assign o = {so,xo,mo};
+assign o = {so,xo,mo[FMSB+4:1]};
 
 endmodule
 	

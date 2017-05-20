@@ -1,63 +1,43 @@
-/* ===============================================================
-	(C) 2006  Robert Finch
-	All rights reserved.
-	rob@birdcomputer.ca
-
-	fpAddsub.v
-		- floating point adder/subtracter
-		- two cycle latency
-		- can issue every clock cycle
-		- parameterized width
-		- IEEE 754 representation
-
-	This source code is free for use and modification for
-	non-commercial or evaluation purposes, provided this
-	copyright statement and disclaimer remains present in
-	the file.
-
-	If you do modify the code, please state the origin and
-	note that you have modified the code.
-
-	NO WARRANTY.
-	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF
-	ANY KIND, WHETHER EXPRESS OR IMPLIED. The user must assume
-	the entire risk of using the Work.
-
-	IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR
-	ANY INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
-	WHATSOEVER RELATING TO THE USE OF THIS WORK, OR YOUR
-	RELATIONSHIP WITH THE AUTHOR.
-
-	IN ADDITION, IN NO EVENT DOES THE AUTHOR AUTHORIZE YOU
-	TO USE THE WORK IN APPLICATIONS OR SYSTEMS WHERE THE
-	WORK'S FAILURE TO PERFORM CAN REASONABLY BE EXPECTED
-	TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN LOSS
-	OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK,
-	AND YOU AGREE TO HOLD THE AUTHOR AND CONTRIBUTORS HARMLESS
-	FROM ANY CLAIMS OR LOSSES RELATING TO SUCH UNAUTHORIZED
-	USE.
-
-	This adder/subtractor handles denormalized numbers.
-	It has a two cycle latency.
-	The output format is of an internal expanded representation
-	in preparation to be fed into a normalization unit, then
-	rounding. Basically, it's the same as the regular format
-	except the mantissa is doubled in size, the leading two
-	bits of which are assumed to be whole bits.
-
-	Ref: Webpack 8.2  Spartan3-4 xc3s1000-4ft256
-	580 LUTS / 315 slices / 74 MHz
-=============================================================== */
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	fpAddsub.v
+//    - floating point adder/subtracter
+//    - two cycle latency
+//    - can issue every clock cycle
+//    - parameterized width
+//    - IEEE 754 representation
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
 
 module fpAddsub(clk, ce, rm, op, a, b, o);
-parameter WID = 32;
+parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
                   WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
-				  WID==48 ? 10 :
+				  WID==48 ? 11 :
 				  WID==44 ? 10 :
 				  WID==42 ? 10 :
 				  WID==40 ?  9 :
@@ -65,10 +45,10 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
                   WID==96 ? 79 :
-				  WID==80 ? 63 :
+                  WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
-				  WID==48 ? 35 :
+				  WID==48 ? 34 :
 				  WID==44 ? 31 :
 				  WID==42 ? 29 :
 				  WID==40 ? 28 :
@@ -80,7 +60,7 @@ localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
 input clk;		// system clock
 input ce;		// core clock enable
-input [1:0] rm;	// rounding mode
+input [2:0] rm;	// rounding mode
 input op;		// operation 0 = add, 1 = subtract
 input [WID-1:0] a;	// operand a
 input [WID-1:0] b;	// operand b
@@ -187,7 +167,20 @@ wire [FMSB+1:0] mfs1;
 
 // Determine the sticky bit
 wire sticky, sticky1;
-redor64 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+generate
+begin
+if (WID==128)
+    redor128 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==96)
+    redor96 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==80)
+    redor80 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==64)
+    redor64 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+else if (WID==32)
+    redor32 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
+end
+endgenerate
 
 // register inputs to shifter and shift
 delay1 #(1)      d16(.clk(clk), .ce(ce), .i(sticky), .o(sticky1) );
@@ -228,3 +221,48 @@ delay1 #(FX+1) d3(.clk(clk), .ce(ce), .i(mo1), .o(mo) );
 
 endmodule
 
+module fpAddsubnr(clk, ce, rm, op, a, b, o);
+parameter WID = 128;
+localparam MSB = WID-1;
+localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
+                  WID==64 ? 10 :
+				  WID==52 ? 10 :
+				  WID==48 ? 11 :
+				  WID==44 ? 10 :
+				  WID==42 ? 10 :
+				  WID==40 ?  9 :
+				  WID==32 ?  7 :
+				  WID==24 ?  6 : 4;
+localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
+                  WID==80 ? 63 :
+                  WID==64 ? 51 :
+				  WID==52 ? 39 :
+				  WID==48 ? 34 :
+				  WID==44 ? 31 :
+				  WID==42 ? 29 :
+				  WID==40 ? 28 :
+				  WID==32 ? 22 :
+				  WID==24 ? 15 : 9;
+
+localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
+localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
+
+input clk;		// system clock
+input ce;		// core clock enable
+input [2:0] rm;	// rounding mode
+input op;		// operation 0 = add, 1 = subtract
+input [MSB:0] a;	// operand a
+input [MSB:0] b;	// operand b
+output [MSB:0] o;	// output
+
+wire [EX:0] o1;
+wire [MSB+3:0] fpn0;
+
+fpAddsub    #(WID) u1 (clk, ce, rm, op, a, b, o1);
+fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
+fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+
+endmodule

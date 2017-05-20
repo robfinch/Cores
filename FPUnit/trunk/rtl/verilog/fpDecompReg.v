@@ -1,42 +1,30 @@
-/* ============================================================================
-	(C) 2006, 2007  Robert T Finch
-	All rights reserved.
-	rob@birdcomputer.ca
-
-	fpDecompReg.v
-		- decompose floating point value with registered outputs
-		- parameterized width
-
-	Verilog 1995
-
-	This source code is free for use and modification for non-commercial or
-	evaluation purposes, provided this copyright statement and disclaimer
-	remains present in the file.
-
-	If the code is modified, please state the origin and note that the code
-	has been modified.
-
-	NO WARRANTY.
-	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF ANY KIND, WHETHER
-	EXPRESS OR IMPLIED. The user must assume the entire risk of using the
-	Work.
-
-	IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE FOR ANY
-	INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES WHATSOEVER RELATING TO
-	THE USE OF THIS WORK, OR YOUR RELATIONSHIP WITH THE AUTHOR.
-
-	IN ADDITION, IN NO EVENT DOES THE AUTHOR AUTHORIZE YOU TO USE THE WORK
-	IN APPLICATIONS OR SYSTEMS WHERE THE WORK'S FAILURE TO PERFORM CAN
-	REASONABLY BE EXPECTED TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN
-	LOSS OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK, AND YOU
-	AGREE TO HOLD THE AUTHOR AND CONTRIBUTORS HARMLESS FROM ANY CLAIMS OR
-	LOSSES RELATING TO SUCH UNAUTHORIZED USE.
-
-
-	Ref: Webpack 8.1i Spartan3-4 xc3s1000 4ft256
-	10 slices / 20 LUTs / 12 ns  (32 bits)
-
-============================================================================ */
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	fpDecompReg.v
+//    - decompose floating point value with registered outputs
+//    - parameterized width
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
 
 module fpDecomp(i, sgn, exp, man, fract, xz, mz, vz, inf, xinf, qnan, snan, nan);
 
@@ -48,7 +36,7 @@ localparam EMSB = WID==128 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
-				  WID==48 ? 10 :
+				  WID==48 ? 11 :
 				  WID==44 ? 10 :
 				  WID==42 ? 10 :
 				  WID==40 ?  9 :
@@ -59,7 +47,7 @@ localparam FMSB = WID==128 ? 111 :
                   WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
-				  WID==48 ? 35 :
+				  WID==48 ? 34 :
 				  WID==44 ? 31 :
 				  WID==42 ? 29 :
 				  WID==40 ? 28 :
@@ -103,7 +91,9 @@ module fpDecompReg(clk, ce, i, o, sgn, exp, man, fract, xz, mz, vz, inf, xinf, q
 parameter WID=32;
 
 localparam MSB = WID-1;
-localparam EMSB = WID==80 ? 14 :
+localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
 				  WID==48 ? 10 :
@@ -112,7 +102,9 @@ localparam EMSB = WID==80 ? 14 :
 				  WID==40 ?  9 :
 				  WID==32 ?  7 :
 				  WID==24 ?  6 : 4;
-localparam FMSB = WID==80 ? 63 :
+localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
+                  WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
 				  WID==48 ? 35 :

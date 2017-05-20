@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007, 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2007-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,43 +33,36 @@
 //	fmov	- copy input to output
 //	fsign	- get sign of number (set number to +1,0, or -1)
 //	fman	- get mantissa (set exponent to zero)
+//  fcmp
 //
-//	fclt	- less than
-//	fcle	- less than or equal
-//	fcgt	- greater than
-//	fcge	- greater than or equal
-//	fceq	- equal
-//	fcne	- not equal
-//	fcor	- ordered
-//	fcun	- unordered
-//
-//	Ref: Webpack 8.1i  Spartan3-4 xc3s1000 4ft256
-//	160 LUTS / 80 slices / 21 ns
 // ============================================================================
 
-`define FABS	6'd8
-`define FNABS	6'd9
-`define FNEG	6'd10
-`define FMOV	6'd11
-`define FSIGN	6'd12
-`define FMAN	6'd13
+`define FLOAT   8'hF1
+`define FCMP    6'h06
+`define FMOV    6'h10
+`define FNEG    6'h14
+`define FABS    6'h15
+`define FSIGN   6'h16
+`define FMAN    6'h17
+`define FNABS   6'h18
+`define FCVTSQ  6'h1B
 
 module fpZLUnit
 #(parameter WID=32)
 (
-	input [5:0] op,
-	input [WID:1] a,
-	input [WID:1] b,	// for fcmp
-	output reg [WID:1] o,
+    input [39:0] ir,
+	input [WID-1:0] a,
+	input [WID-1:0] b,	// for fcmp
+	output reg [WID-1:0] o,
 	output nanx
 );
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
-				  WID==96 ? 14 :
-				  WID==80 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
                   WID==64 ? 10 :
 				  WID==52 ? 10 :
-				  WID==48 ? 10 :
+				  WID==48 ? 11 :
 				  WID==44 ? 10 :
 				  WID==42 ? 10 :
 				  WID==40 ?  9 :
@@ -77,30 +70,41 @@ localparam EMSB = WID==128 ? 14 :
 				  WID==24 ?  6 : 4;
 localparam FMSB = WID==128 ? 111 :
                   WID==96 ? 79 :
-				  WID==80 ? 63 :
+                  WID==80 ? 63 :
                   WID==64 ? 51 :
 				  WID==52 ? 39 :
-				  WID==48 ? 35 :
+				  WID==48 ? 34 :
 				  WID==44 ? 31 :
 				  WID==42 ? 29 :
 				  WID==40 ? 28 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
 
-wire az = a[WID-1:1]==0;
-wire cmp_o;
+wire [7:0] op = ir[7:0];
+wire [1:0] prec = ir[37:35];
+wire [5:0] fn = ir[25:20];
 
-fp_cmp_unit #(WID) u1 (.op(op[3:0]), .a(a), .b(b), .o(cmp_o), .nanx(nanx) );
+wire [4:0] cmp_o;
 
-always @(op,a,cmp_o,az)
-	case (op)
-	`FABS:	o <= {1'b0,a[WID-1:1]};		// fabs
-	`FNABS:	o <= {1'b1,a[WID-1:1]};		// fnabs
-	`FNEG:	o <= {~a[WID],a[WID-1:1]};	// fneg
-	`FMOV:	o <= a;						// fmov
-	`FSIGN:	o <= az ? 0 : {a[WID],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};	// fsign
-	`FMAN:	o <= {a[WID],1'b0,{EMSB{1'b1}},a[FMSB:1]};	// fman
-	default:	o <= cmp_o;
+fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanx) );
+wire [127:0] sq_o;
+fcvtsq u2 (a[31:0], sq_o);
+
+always @*
+    case(op)
+    `FLOAT:
+        case(fn)
+        `FABS:   o <= {1'b0,a[WID-2:0]};        // fabs
+        `FNABS:  o <= {1'b1,a[WID-2:0]};        // fnabs
+        `FNEG:   o <= {~a[WID-1],a[WID-2:0]};   // fneg
+        `FMOV:   o <= a;                        // fmov
+        `FSIGN:  o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
+        `FMAN:   o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]};    // fman
+        `FCVTSQ:    o <= sq_o;
+        `FCMP:   o <= cmp_o;
+        default: o <= 0;
+        endcase
+	default:	o <= 0;
 	endcase
 
 endmodule
