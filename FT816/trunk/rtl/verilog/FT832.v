@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2013-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -35,7 +35,7 @@
 `define SUPPORT_TASK	1'b1
 `define TASK_MEM        512
 `define TASK_MEM_ABIT   8
-`define TASK_BL         1'b1                // core uses back link register rather than stack
+//`define TASK_BL         1'b1                // core uses back link register rather than stack
 `define SUPPORT_SEG     1'b1
 `define ICACHE_4K		1'b1
 //`define ICACHE_16K		1'b1
@@ -724,7 +724,6 @@ reg [31:0] ado1;
 reg rwo;
 reg [7:0] dbo;
 reg [31:0] ado;
-reg [7:0] dbi;
 reg pg2;
 reg [5:0] state;    // machine state number
 reg [5:0] retstate; // return state - allows 1 level of state subroutine call
@@ -932,7 +931,7 @@ ft832_itagmem uitm1
 );
 
 `ifdef SUPPORT_TASK
-reg [`TASK_MEM_ABIT:0] tr, otr;
+reg [`TASK_MEM_ABIT:0] tr, otr, trh;
 reg [7:0] tsk_pres;                 // register value preservation flags
 reg tskm_we;
 reg tskm_wr;
@@ -1279,6 +1278,7 @@ if (~rst) begin
     ssm <= FALSE;
     tj_prefix <= FALSE;
     seg_fault_val = SEGF_NONE;
+    lla <= FALSE;
 end
 else begin
 abort1 <= abort;
@@ -2267,7 +2267,7 @@ DECODE:
                 end
                 load_what <= `LOAD_70;
                 retstate <= ssm ? SSM1 : IFETCH;
-                state <= LOAD_MAC2;
+                //state <= LOAD_MAC2;
                 bank_wrap <= !m832;
             end
         `ADC_ZP,`SBC_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`CMP_ZP,
@@ -3673,15 +3673,16 @@ DECODE:
 `ifdef TASK_BL
                     next_state(ssm ? SSM1 : IFETCH);
 `else
-                    set_sp();
 `ifdef SUPPORT_SEG                    
                     seg <= ss_base;
                     lmt <= ss_limit;
                     mem_wr <= ss_wr;
 `endif                    
                     store_what <= `STW_TR158;
-                    if (!tj_prefix)
+                    if (!tj_prefix) begin
+                        set_sp();
                         next_state(STORE1);
+                    end
 `endif
                 end
             end
@@ -3695,15 +3696,16 @@ DECODE:
 `ifdef TASK_BL
                     next_state(ssm ? SSM1 : IFETCH);                    
 `else
-                    set_sp();
 `ifdef SUPPORT_SEG                    
                     seg <= ss_base;
                     lmt <= ss_limit;
                     mem_wr <= ss_wr;
 `endif                    
                     store_what <= `STW_TR158;
-                    if (!tj_prefix)
+                    if (!tj_prefix) begin
+                        set_sp();
                         next_state(STORE1);
+                    end
 `endif
                 end
             end
@@ -4376,21 +4378,19 @@ LOAD_MAC2:
                                next_state(IFETCH);
                            end
                         end
-`ifndef TASK_BL
              `LDW_TR70S:
                         begin
-                           tr[7:0] <= db;
+                           trh <= db;
                            load_what <= `LDW_TR158S;
                            inc_sp();
                            next_state(LOAD_MAC1);
                         end
              `LDW_TR158S:
                        begin
-                          tr[`TASK_MEM_ABIT:8] <= db;
+                          tr[`TASK_MEM_ABIT:0] <= {db,trh[7:0]};
                           next_state(TSK1);
-                          retstate <= ssm ? SSM1 : IFETCH;
+                          retstate <= ssm ? SSM1 : IFETCH;  // ??? should assign in TSK1 ?
                        end
-`endif
 `endif
              `PC_70:        begin
                             pc[7:0] <= db;
@@ -4577,6 +4577,7 @@ RTS1:
         inc_pc(24'd1);
         cs_base <= base_o;
         cs_limit <= fn_limit(size_o);
+        cs_wr <= acr_o[3];
         moveto_ifetch();
     end
 BYTE_IX5:
@@ -4597,7 +4598,7 @@ BYTE_IX5:
             if (m32) s32 <= TRUE;
             else if (m16) s16 <= TRUE;
         end
-        if (ir[7:0]==`STA_IX || ir[7:0]==`STA_I || ir[7:0]==`STA_IL) begin
+        if (ir[7:0]==`STA_IX || ir[7:0]==`STA_I || ir[7:0]==`STA_IL || ir[7:0]==`STA_XIL) begin
             wadr <= ia;
             store_what <= `STW_ACC70;
             state <= STORE1;
@@ -4632,6 +4633,7 @@ BYTE_IY5:
         store_what <= `STW_ACC70;
         load_what <= `LOAD_70;
         $display("IY addr: %h", iapy8);
+        // Testing only ir[7:0] below will take care of 'X' forms as well.
         if (ir[7:0]==`STA_IY || ir[7:0]==`STA_IYL || ir[7:0]==`STA_DSPIY)
             state <= STORE1;
         else
@@ -4873,7 +4875,6 @@ STORE2:
 				state <= STORE1;
 			end
 `ifdef SUPPORT_TASK
-`ifndef TASK_BL
 		`STW_TR158:
             begin
                 mlb <= `TRUE;
@@ -4885,7 +4886,6 @@ STORE2:
             begin
                 moveto_ifetch();
             end
-`endif
 `endif
 `ifdef SUPPORT_SEG
 		`STW_DS70:
@@ -5425,33 +5425,19 @@ input rclk;
 input rce;
 output [127:0] insn;
 reg [127:0] insn;
-
-`ifdef ICACHE_4K
 input [11:0] wa;
 input [11:0] pc;
 reg [127:0] mem [0:255];
 reg [11:0] rpc,rpcp16;
 wire [127:0] insn0 = mem[rpc[11:4]];
 wire [127:0] insn1 = mem[rpcp16[11:4]];
-`elsif ICACHE_16K
-input [13:0] wa;
-input [13:0] pc;
-reg [127:0] mem [0:1023];
-reg [13:0] rpc,rpcp16;
-wire [127:0] insn0 = mem[rpc[13:4]];
-wire [127:0] insn1 = mem[rpcp16[13:4]];
-`endif
 
 genvar g;
 generate
 begin : wstrobes
 for (g = 0; g < 16; g = g + 1)
 always @(posedge wclk)
-`ifdef ICACHE_4K
 	if (wce & wr && wa[3:0]==g) mem[wa[11:4]][g*8+7:g*8] <= i;
-`elsif ICACHE_16K
-	if (wce & wr && wa[3:0]==g) mem[wa[13:4]][g*8+7:g*8] <= i;
-`endif
 end
 endgenerate
 
@@ -5494,15 +5480,9 @@ input [31:0] pc;
 output hit0;
 output hit1;
 
-`ifdef ICACHE_4K
 wire [20:0] tag0,tag1;
 reg [31:12] mem [0:255];
 reg [0:255] tvalid;
-`elsif ICACHE_16K
-wire [18:0] tag0,tag1;
-reg [31:14] mem [0:1023];
-reg [0:1023] tvalid;
-`endif
 reg [31:0] rpc,rpcp16;
 
 always @(posedge rclk)
@@ -5510,7 +5490,6 @@ always @(posedge rclk)
 always @(posedge rclk)
 	if (rce) rpcp16 <= pc + 32'd16;
 
-`ifdef ICACHE_4K
 always @(posedge wclk)
 	if (wce & wr) mem[wa[11:4]] <= wa[31:12];
 always @(posedge wclk)
@@ -5522,20 +5501,6 @@ assign tag1 = {mem[rpcp16[11:4]],tvalid[rpcp16[11:4]]};
 
 assign hit0 = tag0 == {rpc[31:12],1'b1};
 assign hit1 = tag1 == {rpcp16[31:12],1'b1};
-
-`elsif ICACHE_16K
-always @(posedge wclk)
-	if (wce & wr) mem[wa[13:4]] <= wa[31:14];
-always @(posedge wclk)
-        if (invalidate) tvalid <= 1024'd0;
-        else if (invalidate_line) tvalid[wa[13:4]] <= 1'b0;
-        else if (wce & wr) tvalid[wa[13:4]] <= 1'b1;
-assign tag0 = {mem[rpc[13:4]],tvalid[rpc[13:4]]};
-assign tag1 = {mem[rpcp16[13:4]],tvalid[rpcp16[13:4]]};
-
-assign hit0 = tag0 == {rpc[31:14],1'b1};
-assign hit1 = tag1 == {rpcp16[31:14],1'b1};
-`endif
 
 endmodule
 
