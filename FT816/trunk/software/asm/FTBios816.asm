@@ -99,6 +99,7 @@ keybd_char	EQU		$BA
 keybd_cmd	EQU		$BC
 WorkTR		EQU		$BE
 ldtrec		EQU		$100
+timeout1	EQU		$104
 
 OutputVec	EQU		$03F0
 
@@ -114,13 +115,13 @@ CTR1_LMT	EQU		CTR0_CTRL + 1
 CTR1_CTRL	EQU		CTR1_LMT + 3
 MPU_IRQ_STATUS	EQU		$B01F
 
-VIDBUF		EQU		$FD0000
-VIDREGS		EQU		$FEA000
-PRNG		EQU		$FEA100
-KEYBD		EQU		$FEA110
-FAC1		EQU		$FEA200
+VIDBUF		EQU		$D0000		; FD0000
+VIDREGS		EQU		$EA000
+PRNG		EQU		$EA100
+KEYBD		EQU		$EA110
+FAC1		EQU		$EA200
 
-SID			EQU		$FEB000
+SID			EQU		$EB000		; FEB000
 SID_FREQ0		EQU		$00
 SID_PW0			EQU		$04
 SID_CTRL0		EQU		$08
@@ -203,13 +204,23 @@ start:
 	LDX		#$98D		; executable, writable, max size
 	INY
 	SDU
-	; seg #9 is the maxed out segment
-	LDA		#2			; begin at $20000
+
+	; BASIC segment
+	LDA		#$0001
 	XBAW
-	LDA		#0
-	LDX		#$98D		; executable, writable, max size
-	LDY		#9
+	LDA		#$0000
+	LDX		#$985		; executable, writeable, 64k (based at $10000)
+	LDY		#$FFD
 	SDU
+
+	; I/O segment
+	LDA		#$00F0
+	XBAW
+	LDA		#$0000
+	LDX		#$887		; writeable, 1M (based at $F00000)
+	LDY		#$FFF
+	SDU
+
 	; now set the code segment (test far jump)
 	JMF		1:.0004
 .0004:
@@ -227,8 +238,8 @@ start:
 	STA		PCS1
 ;	LDA		#$FEA1		; select $FEA1xx I/O
 ;	STA		PCS3
-	LDA		#$0000		; select zero page ram
-	STA		PCS5
+;	LDA		#$0000		; select zero page ram
+;	STA		PCS5
 
 	; set the data segment
 	; this must be setup after address decoding is setup
@@ -261,14 +272,16 @@ start:
 	NDX 	16
 	MEM		16
 
-;	FORK	#7			; fork a BIOS context
+	JSR		ResetKbd
+
+;	FORK	#8			; fork a BIOS context
 ;	TTA
-;	CMP		#7
+;	CMP		#8
 ;	BNE		.0002
 ;	RTT
 ;.0002:
 	; Setup the task registers
-	LDY		#6			; # tasks to setup
+	LDY		#8			; # tasks to setup
 	LDX		#1
 .0001:
 	LDT		TaskStartTbl,X
@@ -292,7 +305,7 @@ Task0:
 .0001:
 	LDA		#$04
 	STA		$7000
-	LDA		#5
+	LDA		#$FFF
 	STA		Vidptr+4
 	STA		Vidregs+4
 	LDA		#VIDBUF>>16
@@ -328,20 +341,20 @@ Task0:
 	STA		NormAttr
 	JSR		ClearScreen
 	JSR		HomeCursor
-	JSR		beep
+;	JSR		beep
 	LDA		#$03
-	STA		$7000
+	STA		5:$7000
 	PEA		5
 	PEA		msgStarting
 	JSR		DisplayString
 ;	SEP		#$1000		; turn on single step mode
-	LDA		#0
-	STA		FAC1
-	STA		FAC1+2
-	STA		FAC1+4
-	STA		FAC1+6
-	STA		FAC1+8
-	STA		FAC1+10
+;	LDA		#0
+;	STA		$FFF:FAC1
+;	STA		$FFF:FAC1+2
+;	STA		$FFF:FAC1+4
+;	STA		$FFF:FAC1+6
+;	STA		$FFF:FAC1+8
+;	STA		$FFF:FAC1+10
 ;	LDA		#3
 ;	STA		$7000
 ;	LDA		#1234
@@ -360,17 +373,26 @@ Task0:
 ;	LDA		#' '
 ;	JSR		OutChar
 ;	JSR		DispFAC1
-	FORK	#11
+
+;	FORK	#11
+;	TTA
+;	CMP		#11
+;	LBEQ	KeybdInit
+
+	; Create a workhorse BIOS context that will allow subroutine calls into
+	; the BIOS code from alternate contexts which may not have the same VM
+	; settings.
+	;
+	FORK	#$FC
 	TTA
-	CMP		#11
-	LBEQ	KeybdInit
-	FORK	#7			; fork a BIOS context
-	TTA
-	CMP		#7
+	CMP		#$FC
 	BNE		.0002
+.0003
 	LDX		#$23FF
 	TXS
+	CLI
 	RTT
+	BRA		.0003
 .0002:
 	CLI
 
@@ -399,7 +421,9 @@ Mon1:
 	BEQ		.mon4
 	CMP		#'S'
 	BNE		.mon2
-	JMP		$C000		; invoke Supermon816
+	TSK		#8
+	BRA		.mon1
+	;JMP		$C000		; invoke Supermon816
 .mon2:
 	CMP		#'C'
 	BNE		.mon5
@@ -426,6 +450,8 @@ Mon1:
 	LBEQ	doInvaders
 	CMP		#'R'
 	LBEQ	doRegs
+	CMP		#'B'
+	LBEQ	doBasic
 	BRL		Mon1
 
 ; Get a character from the screen, skipping over spaces and tabs
@@ -440,7 +466,7 @@ MonGetNonSpace:
 ; Get a character from the screen.
 ;
 MonGetch:
-	LDA		VIDBUF,X
+	LDA		$FFF:VIDBUF,X
 	INX
 	INX
 	AND		#$FF
@@ -461,6 +487,21 @@ doTask:
 	TSK
 	BRL		Mon1
 
+doBasic:
+	TSK		#7
+	BRL		Mon1
+xitBasic:
+	REP		#$30		; 16 bit regs
+	PEA		$5			; switch back to BIOS data segment
+	PLDS
+	SEI					; restore stack segment and pointer
+	LDA		#5
+	TASS
+	LDX		sp_save
+	TXS
+	CLI
+	BRL		Mon1
+	
 doInvaders:
 	LDA		#$FFFF
 	STA		do_invaders
@@ -1009,7 +1050,7 @@ BIOSInput:
 	ASL
 	TAX
 .bin3:
-	LDA		VIDBUF,X
+	LDA		$FFF:VIDBUF,X
 	AND		#$FF
 	STA		(3,s),Y
 	INX
@@ -1023,11 +1064,11 @@ BIOSInput:
 	RTS
 
 .st0003:
-	LDA		KEYBD
+	LDA		$FFF:KEYBD
 	BPL		.st0003
-	PHA					; save off the char (we need to trash acc)
-	LDA		KEYBD+4		; clear keyboard strobe (must be a read operation)
-	PLA					; restore char
+	PHA						; save off the char (we need to trash acc)
+	LDA		$FFF:KEYBD+4	; clear keyboard strobe (must be a read operation)
+	PLA						; restore char
 	JSR		DisplayChar
 	BRA		.st0003
 	ldy		#$0000
@@ -1093,13 +1134,13 @@ SSMInit:
 
 	LDA		#$6100
 	STA		NormAttr
-	LDA		#5			; set segment
+	LDA		#4095		; set segment
 	STA		Vidptr+4
 	STA		Vidregs+4
-	LDA		#$00FB		; screen location is $FB0000
+	LDA		#$000B		; screen location is $FB0000
 	STA		Vidptr+2
 	STZ		Vidptr
-	LDA		#$00FE		; regset is at $FEA010
+	LDA		#$000E		; regset is at $FEA010
 	STA		Vidregs+2
 	LDA		#$A010
 	STA		Vidregs
@@ -1225,7 +1266,7 @@ ScreenToAscii:
 ;
 DisplayChar:
 	AND		#$0FF
-	BIT		EscState
+	BIT		EscState		; check if processing escape sequence
 	LBMI	processEsc
 	CMP		#BS
 	LBEQ	doBackSpace
@@ -1265,12 +1306,13 @@ DisplayChar:
 	BNE		.0001
 	STZ		CursorX
 	LDA		CursorY
-	CMP		#TEXTROWS-1
-	BEQ		.0002
 	INA
+	CMP		Textrows
+	BEQ		.0002
 	STA		CursorY
 	BRL		SyncVideoPos
 .0002:
+	DEA
 	JSR		SyncVideoPos
 	BRL		ScrollUp
 .0001:
@@ -1287,6 +1329,20 @@ doLF:
 	STA		CursorY
 	BRL		SyncVideoPos
 
+; Process escape sequences for WYSE terminal emulation
+; Handles:
+; {esc}T		- clear to end of line
+; {esc}W		- delete character
+; {esc}`1		- cursor on
+; {esc}`0		- cursor off
+; {esc}({esc}G4	- reverse video
+; {esc}({esc}G0	- normal video
+;
+; EscState
+; -1 = first esc char
+; -2 = second esc char
+; ...
+;
 processEsc:
 	LDX		EscState
 	CPX		#-1
@@ -1485,9 +1541,9 @@ HomeCursor:
 ; Synchronize the absolute video position with the cursor co-ordinates.
 ;
 SyncVideoPos:
+	PHA
 	PHY
 	LDA		CursorY
-	STA		5:$7000
 	ASL
 	TAX
 	LDA		5:LineTbl,X
@@ -1497,6 +1553,7 @@ SyncVideoPos:
 	LDY		#13
 	STA		FAR {Vidregs},Y		; Update the position in the text controller
 	PLY
+	PLA
 	RTS
 
 OutCRLF:
@@ -1505,15 +1562,17 @@ OutCRLF:
 	LDA		#LF
 
 OutChar:
-	PHP
-	REP		#$30
 	PHX
 	PHY
+	PHP
+	REP		#$30
+	MEM		16
+	NDX		16
 	LDX		#0
 	JSR		(OutputVec,x)
+	PLP
 	PLY
 	PLX
-	PLP
 	RTS
 
 DisplayString:
@@ -1528,7 +1587,7 @@ DisplayString:
 .0002:
 	LDA		FAR (4,S),Y
 	BEQ		.0001
-	JSR		SuperPutch
+	JSR		OutChar
 	INY
 	BRA		.0002
 .0001:
@@ -1547,7 +1606,7 @@ DisplayString2:
 	LDX		#50
 .0002:
 	LDA		(StringPos),Y
-	JSR		SuperPutch
+	JSR		OutChar
 	INY
 	DEX
 	BNE		.0002
@@ -1613,21 +1672,21 @@ ClearScreen:
 	RTS
 
 ScrollUp:
-	LDY		#0
-	LDX 	#4095
+	LDY		#0				; .Y used as index to char
+	LDX 	#2603			; number of chars on screen
 .0001:
-	PHY
-	TYA
-	CLC
+	PHY						; save off current .Y
+	TYA								
+	CLC						; Add double the number of text
+	ADC		Textcols		; columns to .Y to find start of next
+	CLC						; row 
 	ADC		Textcols
-	CLC
-	ADC		Textcols
-	TAY
-	LDA		FAR {Vidptr},Y
-	PLY
-	STA		FAR {Vidptr},Y
-	INY
-	INY
+	TAY						
+	LDA		FAR {Vidptr},Y	; .A = Load buffer[textcols+Y]
+	PLY						; .Y = restore current .Y
+	STA		FAR {Vidptr},Y	; Store .A in buffer[0+Y]
+	INY						; advance to next character
+	INY						; decrement total char count
 	DEX
 	BNE		.0001
 	LDA		Textrows
@@ -1639,14 +1698,14 @@ BlankLine:
 	LDA		CS:LineTbl,Y
 	ASL
 	TAY
-	LDX		Textcols
+	LDX		Textcols		; number of chars to clear
 	LDA		NormAttr
-	ORA		#$20
+	ORA		#$20			; space
 .0001:
 	STA		FAR {Vidptr},Y
+	INY						; increment to next char
 	INY
-	INY
-	DEX
+	DEX						; decrement number of chars
 	BNE		.0001
 	RTS
 
@@ -1824,7 +1883,19 @@ getcharWait:
 ; Keyboard processing routines follow.
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
-
+ResetKbd:
+	SEP		#$30
+	MEM		8
+	NDX		8
+	STZ		KeyState1
+	STZ		KeyState2
+	LDA		#$FF
+	STA		$FFF:KEYBD
+	JSR		KeybdWaitTx
+	REP		#$30
+	MEM		16
+	NDX		16
+	RTS
 KeybdInit:
 	LDA		#$2000
 	TAS
@@ -1839,7 +1910,7 @@ KeybdInit:
 	RTT
 .resetAgain:
 	LDA		#$FF			; send reset code to keyboard
-	STA		ZS:KEYBD
+	STA		$FFF:KEYBD
 	JSR		KeybdWaitTx
 .0001:
 	JSR		KeybdRecvByte	; Look for $AA
@@ -1849,11 +1920,11 @@ KeybdInit:
 .0002:
 	; wait until keyboard not busy
 	JSR		Wait10ms
-	LDA		ZS:KEYBD+1		;
+	LDA		$FFF:KEYBD+1		;
 	BIT		#$40
 	BNE		.tryAgain
 	LDA		#$FF			; send reset code to keyboard
-	STA		ZS:KEYBD
+	STA		$FFF:KEYBD
 	JSR		Wait10ms
 	JSR		KeybdWaitTx		; wait until no longer busy
 	JSR		KeybdRecvByte	; look for an ACK ($FA)
@@ -1870,7 +1941,7 @@ KeybdInit:
 .config:
 	JSR		KeybdWaitBusy
 	LDA		#$F0			; send scan code select
-	STA		ZS:KEYBD
+	STA		$FFF:KEYBD
 	JSR		KeybdWaitTx
 	BCC		.tryAgain
 	JSR		KeybdRecvByte	; wait for response from keyboard
@@ -1893,7 +1964,7 @@ KeybdInit:
 	BRA		KeybdService
 .0004:
 	LDA		#2				; select scan code set #2
-	STA		ZS:KEYBD
+	STA		$FFF:KEYBD
 	JSR		KeybdWaitTx
 	BCC		.tryAgain
 	JSR		KeybdRecvByte
@@ -1946,7 +2017,7 @@ KeybdRecvByte:
 	LDY		#20				; wait up to .2s
 .0003:
 	JSR		KeybdWaitBusy
-	LDA		ZS:KEYBD+1			; wait for response from keyboard
+	LDA		$FFF:KEYBD+1	; wait for response from keyboard
 	ASL						; is input buffer full ?
 	BCS		.0004			; yes, branch
 	JSR		Wait10ms		; wait a bit
@@ -1956,7 +2027,7 @@ KeybdRecvByte:
 	CLC						; carry clear = no code
 	RTS
 .0004:
-	LDA		ZS:KEYBD		; clear recieve state
+	LDA		$FFF:KEYBD		; clear recieve state
 	PLY
 	SEC						; carry set = code available
 	RTS
@@ -1971,7 +2042,7 @@ KeybdWaitTx:
 	PHY
 	LDY		#10				; wait a max of .1s
 .0001:
-	LDA		ZS:KEYBD+1
+	LDA		$FFF:KEYBD+1
 	BIT		#$40			; check for transmit busy bit
 	BEQ		.0002			; branch if bit clear
 	JSR		Wait10ms		; delay a little bit
@@ -2059,8 +2130,11 @@ KeybdGetChar1:
 	XBA
 .0002:
 .0003:
-	LDA		ZS:KEYBD+1		; check MSB of keyboard status reg.
-	ASL
+	LDA		$FFF:KEYBD+1		; check MSB of keyboard status reg.
+	ROL
+	ROL
+	BCS		.0003		; check busy flag, branch if busy
+	ROR
 	BCS		.0006		; branch if keystroke ready
 	BIT		KeybdWaitFlag
 	BMI		.0003
@@ -2069,8 +2143,8 @@ KeybdGetChar1:
 	SEC
 	RTS
 .0006:
-	LDA		ZS:KEYBD	; get scan code value
-	STZ		ZS:KEYBD+2	; clear read flag
+	LDA		$FFF:KEYBD	; get scan code value
+	STZ		$FFF:KEYBD+2	; clear read flag
 	REP		#$20
 	;JSR		DispByte
 	;JSR		space
@@ -2212,13 +2286,13 @@ KeybdSetLEDStatus:
 	STA		KeybdLEDs
 .0004:
 	LDA		#$ED		; set status LEDs command
-	STA		ZS:KEYBD
+	STA		$FFF:KEYBD
 	JSR		KeybdWaitTx
 	JSR		KeybdRecvByte
 	BCC		.0001
 	CMP		#$FA
 	LDA		KeybdLEDs
-	STA		ZS:KEYBD
+	STA		$FFF:KEYBD
 	JSR		KeybdWaitTx
 	JSR		KeybdRecvByte	; wait for $FA byte
 .0001:
@@ -2340,39 +2414,29 @@ keybdExtendedCodes:
 ; Get char routine for Supermon
 ; This routine might be called with 8 bit regs.
 ;
-SuperGetch:
-	PHP
-	REP		#$30
 	MEM		16
 	NDX		16
+SuperGetch:
 	JSR		KeybdGetCharNoWait
 	AND		#$FF
-	BCS		.0001
-	PLP		; to restore reg size
-	CLC
-	RTS
-.0001:
-	PLP
-	SEC
-	RTS
+	RTC		#0
 
 ; Put char routine for Supermon
-; This routine might be called with 8 bit regs.
 ;
 SuperPutch:
-	PHP
-	REP		#$30	; 16 bit regs
-	MEM		16
-	NDX		16
-	PHA
-	PHX
-	PHY
 	JSR		OutChar
-	PLY
-	PLX
-	PLA
-	PLP
-	RTS
+	RTC		#0
+
+; Char get routine for BASIC
+; Same thing as for Supermon, except carry flag needs to be inverted
+; This routine should be called from a different context than the BIOS,
+; otherwise the call will be ignored.
+;
+BasicGetch:
+	JSR		KeybdGetCharNoWait
+	AND		#$FF
+	CMC
+	RTC		#0
 
 warm_start:
 	SEP		#$100		; 16 bit mode
@@ -2403,9 +2467,10 @@ Task1:
 	LDA		TickCount		; increment the tick count
 	INA
 	STA		TickCount
-	STA.B	$FD00A4			; update on-screen IRQ live indicator
+	STA.B	$FFF:$D00A4		; update on-screen IRQ live indicator
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
 	STA.B	CTR1_CTRL
+;	JSR		MusicTimeoutIRQ
 .0001:
 	RTT					; go back to interrupted task
 	BRA		Task1		; the next time task1 is run it will start here
@@ -2422,7 +2487,7 @@ IRQTask1:
 	LDX		TickCount		; increment the tick count
 	INX
 	STX		TickCount
-	STX.B	$FD00A2			; update on-screen IRQ live indicator
+	STX.B	$FFF:$D00A2			; update on-screen IRQ live indicator
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
 	STA		CTR1_CTRL
 .0001:
@@ -2444,7 +2509,7 @@ Task2:
 	LDA		CS:msgHelloWorld,Y
 	BEQ		.0001
 	JSR		AsciiToScreen8
-	STA		ZS:VIDBUF,X
+	STA		$FFF:VIDBUF,X
 	INX
 	INX
 	INY
@@ -2561,6 +2626,7 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
+	; TASK #1
 	; Interrupt handler task
 	.WORD	1			; CS
 	.WORD	5			; DS
@@ -2678,6 +2744,46 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
+	; task 7 (Basic)
+	.WORD	$FFD		; CS
+	.WORD	$FFD		; DS
+	.WORD	$FFD		; SS
+	.WORD	$C000		; PC
+	.BYTE	$00
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$01FF		; sp
+	.WORD	0
+	.BYTE	0			; SR
+	.BYTE	0			; SR extension - 832 mode
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+	.WORD	0
+
+	; task 8 (Supermon)
+	.WORD	$1			; CS
+	.WORD	$5			; DS
+	.WORD	$5			; SS
+	.WORD	$C000		; PC
+	.BYTE	$00
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$2BFF		; sp
+	.WORD	0
+	.BYTE	0			; SR
+	.BYTE	1			; SR extension - 832 mode
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+	.WORD	0
+
 msgRegs:
 	.byte	CR,LF
     .byte   "             xxxsxi31",CR,LF
@@ -2687,12 +2793,6 @@ msgRegs2:
 	.byte	"  SS   DS  DB  DP   BL",CR,LF,0
 msgErr:
 	.byte	"***Err",CR,LF,0
-
-	.org	$F400
-	JMP		SuperGetch
-	JMP		warm_start
-	JMP		SuperPutch
-	JMP		BIOSInput
 
 	cpu		FT832
 	MEM		32
@@ -2717,30 +2817,144 @@ msgErr:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; +---------------------------+
+; | block status / ptr to free|
+; +---------------------------+
+; | pointer to previous block |
+; +---------------------------+
+; | pointer to next block     |
+; +---------------------------+
+;
+	MEM		32
+	NDX		32
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+FreeSysMem:
+	SEC
+	SBC		#12		;	backup to block header
+	TAY				;	.Y = pointer to block to free (this)
+	PHP				; save interrupt mask
+	SEI				; no interrupts
+	STZ		$0,Y	; set status as free
+	LDX		$8,Y	;	.X = pointer to next block
+	LDA		$0,X	;	.A = next->status
+	BEQ		.0001	;	branch if not free
+	; merge block with next free block
+	LDA		$8,X	;   .A = pointer to next next block
+	STA		$8,Y	;
+	TAX
+	STY		$4,X	;	next->next->prev = this
+.0001:
+	; merge block with a previous free block
+	LDX		$4,Y	;	.X = pointer to prev block
+	LDA		$0,X	;	.A = prev->status
+	BEQ		.0002	;	branch if not free
+	LDA		$8,Y	;   prev->next = this->next
+	STA		$8,X
+	TAY				;	.Y = this->next
+	STX		$4,Y	;	this->next->prev = this->prev
+	TXY
+.0002:
+	LDA		heap_free_ptr
+	STA		$0,Y
+	STY		heap_free_ptr
+	PLP
+	RTS
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+	; round allocation size to mmu available sizes
+
+	LDX		#0
+	CLC				; add room for header
+	ADC		#12
+.0002:
+	CMP		mmas,X
+	BLE		.0001
+	INX
+	INX
+	INX
+	INX
+	BRA		.0002
+.0001:
+	LDA		mmas,X
+	TAX
+	LDY		free_heap_ptr
+	; subtract .Y from .A
+	SEC
+	LDA		$8,Y
+	STY		tmpy
+	SBC		tmpy
+	CMP		mmas,X
+	BLT		.0003
+	; here block is big enough
+	PHA
+	LDA		$0,Y
+	STA		free_heap_ptr
+	STZ		$0,Y
+	PLA
+	SEC
+	SBC		mmas,X
+	CMP		#$0FF
+	BLT		.0004
+
+.0004:
+	
+
+
+; Memory management allocation sizes
+;
+mmas:
+	WORD	$0000,$0000
+	WORD	$00FF,$0000
+	WORD	$03FF,$0000
+	WORD	$0FFF,$0000
+	WORD	$3FFF,$0000
+	WORD	$FFFF,$0000
+	WORD	$FFFF,$0003
+	WORD	$FFFF,$000F
+	WORD	$FFFF,$003F
+	WORD	$FFFF,$00FF
+	WORD	$FFFF,$03FF
+	WORD	$FFFF,$0FFF
+	WORD	$FFFF,$3FFF
+	WORD	$FFFF,$FFFF
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 	MEM		16
 	NDX		16
+	JMP		MusicPlay
 beep:
 	LDA		#15					; set volume to max
-	STA		SID+SID_VOLUME		
+	STA		$FFF:SID+SID_VOLUME		
 	LDA		#$0C6F				; 10C6F = 800 Hz
-	STA		SID+SID_FREQ0
+	STA		$FFF:SID+SID_FREQ0
 	LDA		#1
-	STA		SID+SID_FREQ0+2
+	STA		$FFF:SID+SID_FREQ0+2
 	LDA		#195				; 2ms
-	STA		SID+SID_ATTACK0
-	STZ		SID+SID_ATTACK0+2
+	STA		$FFF:SID+SID_ATTACK0
+	STZ		$FFF:SID+SID_ATTACK0+2
 	LDA		#2344				; 24 ms decay
-	STA		SID+SID_DECAY0
-	STZ		SID+SID_DECAY0+2
+	STA		$FFF:SID+SID_DECAY0
+	STZ		$FFF:SID+SID_DECAY0+2
 	LDA		#$80				; 50% sustain level
-	STA		SID+SID_SUSTAIN0
+	STA		$FFF:SID+SID_SUSTAIN0
 	LDA		#48828				; 500 ms release
-	STA		SID+SID_RELEASE0
-	STZ		SID+SID_RELEASE0+2
+	STA		$FFF:SID+SID_RELEASE0
+	STZ		$FFF:SID+SID_RELEASE0+2
+	LDA		#1					; reset envelope generator
+	STA		$FFF:SID+SID_CTRL0+2
+	NOP
+	NOP
+	STZ		$FFF:SID+SID_CTRL0+2
 	LDA		#$1504				; gate on
-	STA		SID+SID_CTRL0
+	STA		$FFF:SID+SID_CTRL0
 	; delay for about 1s
 	LDY		#39
 .0002:
@@ -2751,8 +2965,111 @@ beep:
 	DEY
 	BNE		.0002
 	LDA		#$0504				; gate off
-	STA		SID+SID_CTRL0
+	STA		$FFF:SID+SID_CTRL0
 	RTS
+	
+music_tbl:
+	dh	1
+	dw	33673		; G4
+	dw	12			; 1/8 sec
+	dw	4			; space
+
+	dh	1
+	dw	33673		; G4
+	dw	12			; 1/8
+	dw	4			; space
+
+	dh	1
+	dw	33673		; G4
+	dw	12			; 1/8
+	dw	4			; space
+
+	dh	0
+	dw	0			; G4
+	dw	0			; 1/8
+	dw	0			; space
+
+MusicPlay:
+	LDX		#0
+	LDA		#195				; 2ms
+	STA		$FFF:SID+SID_ATTACK0
+	STZ		$FFF:SID+SID_ATTACK0+2
+	LDA		#2344				; 24 ms decay
+	STA		$FFF:SID+SID_DECAY0
+	STZ		$FFF:SID+SID_DECAY0+2
+	LDA		#$D0				; sustain level
+	STA		$FFF:SID+SID_SUSTAIN0
+	LDA		#4600				; ??? ms release
+	STA		$FFF:SID+SID_RELEASE0
+	STZ		$FFF:SID+SID_RELEASE0+2
+.0001:
+	LDA		music_tbl,x			; check for last note
+	BEQ		.xit
+	LDA		music_tbl+2,x			; set the frequency
+	STA		$FFF:SID+SID_FREQ0
+	LDA		music_tbl+4,x
+	STA		$FFF:SID+SID_FREQ0+2
+	LDA		#$1504				; gate on
+	STA		$FFF:SID+SID_CTRL0
+	SEI
+	LDA		music_tbl+6,x
+	STA		timeout1
+	LDA		music_tbl+8,x
+	STA		timeout1+2
+	JSR		MusicWaitTimeout
+	LDA		#$0504				; gate off
+	STA		$FFF:SID+SID_CTRL0
+	SEI
+	LDA		music_tbl+10,x		; note release delay
+	STA		timeout1
+	LDA		music_tbl+12,x
+	STA		timeout1+2
+	JSR		MusicWaitTimeout
+	INX
+	INX
+	INX4
+	INX4
+	INX4
+	BRA		.0001
+.xit:
+	RTS
+
+MusicWaitTimeout:
+.0001:
+	CLI
+	NOP
+	NOP
+	SEI
+	LDA		timeout1
+	ORA		timeout1+2
+	BNE		.0001
+	CLI
+	RTS
+
+MusicTimeoutIRQ:
+	REP		#$30
+	MEM		16
+	NDX		16
+	LDA		timeout1
+	ORA		timeout1+2
+	BEQ		.0001
+	SEC
+	LDA		timeout1
+	SBC		#1
+	STA		timeout1
+	LDA		timeout1+2
+	SBC		#0
+	STA		timeout1+2
+.0001:
+	RTS
+
+	.org	$FE00
+	JMP		SuperGetch
+	JMP		warm_start
+	JMP		SuperPutch
+	JMP		BIOSInput
+	JMP		BasicGetch
+	JMP		xitBasic
 
 	.org 	$FFD6
 	dw		4			; task #4

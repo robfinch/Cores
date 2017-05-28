@@ -628,7 +628,7 @@ parameter EXTRA_LONG_BRANCHES = 1'b1;   // set to 1 to use an illegal branch dis
 parameter IO_SEGMENT = 32'hFFD00000;    // set to determine the segment value of the IOS: prefix
 parameter PC24 = 1'b1;                  // set if PC is to be true 24 bits (generates slightly more hardware).
 parameter POPBF = 1'b0;                 // set to 1 if popping the break flag from the stack is desired
-parameter TASK_VECTORING = 1'b1;        // controls whether the core uses task vectors or regular interrupt vectors
+parameter TASK_VECTORING = 1'b0;        // controls whether the core uses task vectors or regular interrupt vectors
 //parameter DEAD_CYCLE = 1'b1;            // insert dead cycles between each memory access
 
 // There parameters are not meant to be altered.
@@ -1258,6 +1258,8 @@ if (~rst) begin
 	x <= 32'h0;
 	y <= 32'h0;
 	sp <= 32'h1FF;
+	stack_page <= 24'h000001;
+	stack_bank <= 16'h0000;
 	clk_en <= 1'b1;
 	im <= `TRUE;
 	mib <= `FALSE;
@@ -2043,6 +2045,7 @@ DECODE:
                     load_what <= `SR_70;
                     state <= LOAD_MAC1;
 				end
+				
 				end
 		`PHP:   begin
 		             if (m832 || (sop & s16))
@@ -3391,7 +3394,7 @@ DECODE:
                     inc_pc(24'd2);
                 else
                     pc <= pc;   // override increment above
-                if (m832) begin
+                if (m832|m816) begin
 `ifdef SUPPORT_TASK
                     if (TASK_VECTORING) begin
 `ifdef SUPPORT_SEG                        
@@ -3422,7 +3425,7 @@ DECODE:
                     lmt <= ss_limit;
                     mem_wr <= ss_wr;
 `endif                    
-                    store_what <= `STW_CS158;
+                    store_what <= `SUPPORT_SEG ? `STW_CS158 : `STW_PC2316;
                     data_nack();
                     state <= STORE1;
 `endif
@@ -3449,7 +3452,7 @@ DECODE:
                 lmt <= ss_limit;
                 mem_wr <= ss_wr;
 `endif                
-                store_what <= m832 ? `STW_CS158 : m816 ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
+                store_what <= ((m832|m816) && `SUPPORT_SEG) ? `STW_CS158 : (m816|m832) ? `STW_PC2316 : `STW_PC158;// `STW_PC3124;
                 state <= STORE1;
                 vect <= m832 ? `COP_VECT_832 : m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
             end
@@ -3620,8 +3623,7 @@ DECODE:
                 seg <= ss_base;
                 lmt <= ss_limit;
                 mem_wr <= ss_wr;
-                radr <= sp;
-                wadr <= sp;
+                store_what <= `STW_CS158;
                 state <= STORE1;
             end
 `endif
@@ -3825,11 +3827,11 @@ DECODE:
             end
         `JCR:
             begin
-                inc_pc(24'd5);
+                inc_pc(24'd4);
                 if (tr != {8'h00,ir[31:24]}) begin
                     pc <= {8'h00,ir[23:8]};
                     back_link <= tr;
-                    set_task_regs(24'd5);
+                    set_task_regs(24'd4);
                     otr <= tr;
                     tr <= {8'h00,ir[31:24]};
                     tsk_pres <= PRES_FAXY|PRES_PC|PRES_BACKLINK;
@@ -4430,12 +4432,18 @@ LOAD_MAC2:
                             else
                             begin
                                 vpb <= `FALSE;
-                                next_state(IFETCH);
+                                if (m816|m832) begin
+                                    cs <= 16'h0000;
+                                    sdt_ra <= 12'h000;
+                                    next_state(JMF1);
+                                end
+                                else 
+                                    next_state(IFETCH);
                             end
                         end
             `PC_2316:    begin
                             pc[23:16] <= db;
-                            if (isRTF|(isRTI&m832)) begin
+                            if (isRTF|(isRTI&(m832|m816))) begin
                                 load_what <= `CS_70;
                                 inc_sp();
                                 next_state(LOAD_MAC1);
@@ -5357,6 +5365,16 @@ else
     pc[15:0] <= pc[15:0] + amt[15:0];
 end
 endtask
+
+function fn_inc_pc;
+input [23:0] amt;
+begin
+if (PC24)
+    fn_inc_pc = pc + amt;
+else
+    fn_inc_pc = {pc[23:16],pc[15:0] + amt[15:0]};
+end
+endfunction
 
 task seg_fault;
 input [7:0] fault_num;
