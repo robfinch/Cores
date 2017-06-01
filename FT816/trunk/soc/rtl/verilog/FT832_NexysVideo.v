@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2017  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,14 +33,15 @@
 module FT832_NexysVideo(cpu_resetn, btnl, btnr, btnc, btnd, btnu, xclk, led, sw,
     kclk, kd,
     TMDS_OUT_clk_n, TMDS_OUT_clk_p,
-    TMDS_OUT_data_n, TMDS_OUT_data_p
+    TMDS_OUT_data_n, TMDS_OUT_data_p,
+    spiClkOut, spiDataIn, spiDataOut, spiCS_n,
+    rtc_clk, rtc_data
     /* 
     //UartTx, UartRx,
     ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
     ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
     */
 );
-
 parameter SIM="FALSE";
 parameter SIM_BYPASS_INIT_CAL = "OFF";
 input cpu_resetn;
@@ -61,6 +62,13 @@ output TMDS_OUT_clk_n;
 output TMDS_OUT_clk_p;
 output [2:0] TMDS_OUT_data_n;
 output [2:0] TMDS_OUT_data_p;
+output spiCS_n;
+output spiClkOut;
+output spiDataOut;
+input spiDataIn;
+inout rtc_clk;
+inout rtc_data;
+
 //output UartTx;
 //input UartRx;
 /*
@@ -104,12 +112,18 @@ reg mpmc_cs;
 reg mpmc_vda,mpmc_vpa;
 wire [7:0] cpu_dato;
 wire [7:0] red, blue,green;
+wire [7:0] spi_dato;
+wire spi_rdy;
+wire [7:0] i2c_dato;
+wire i2c_rdy;
 
-wire cs_basic = ~cs5;//(vpa|vda) && ad[31:14]==18'h000B;    // $2Cxxx
+wire cs_basic = ~cs5;//(vpa|vda) && ad[31:14]==18'h000B;    // $1Cxxx
 wire cs_ram = (~cs6) && ad[31:20]!=12'h00F && !cs_basic;// && ad[23:15]!=9'h000;
 wire cs_rom = ~cs4;//(vpa|vda) && ad[23:15]==9'h1;
 wire cs_kbd = ad[31:4]==28'h00FEA11;
 wire cs_psg = ad[31:12]==20'h00FEB;
+wire cs_spi = vda && (ad[31:8]==24'h00FEC0);
+wire cs_i2c = ad[31:8]==24'h00FEC1;
 
 wire kbd_rdy;
 wire psg_rdy;
@@ -249,6 +263,59 @@ ur2d1
     .PixelClk(vclk)
 );
 
+spiMaster uspi1
+(
+  .clk_i(clko),
+  .rst_i(rst),
+  .address_i(ad[7:0]),
+  .data_i(db),
+  .data_o(spi_dato),
+  .strobe_i(cs_spi),
+  .we_i(~rw),
+  .ack_o(),
+  .rdy_o(spi_rdy),
+
+  // SPI logic clock
+  .spiSysClk(clko),
+
+  //SPI bus
+  .spiClkOut(spiClkOut),
+  .spiDataIn(spiDataIn),
+  .spiDataOut(spiDataOut),
+  .spiCS_n(spiCS_n)
+);
+
+wire i2c_scl_pado;
+wire i2c_scl_paden;
+wire i2c_sda_pado;
+wire i2c_sda_paden;
+
+i2c_master_top ui2c1
+(
+	.wb_clk_i(clko),
+	.wb_rst_i(rst),
+	.arst_i(~rst), // signal is active low
+	.cs_i(cs_i2c),
+	.rdy_o(i2c_rdy),
+	.wb_adr_i(ad[3:0]),
+	.wb_dat_i(db),
+	.wb_dat_o(i2c_dato),
+	.wb_we_i(~rw),
+	.wb_stb_i(vda),
+	.wb_cyc_i(vda),
+	.wb_ack_o(),
+	.wb_inta_o(),
+	.scl_pad_i(rtc_clk),
+	.scl_pad_o(i2c_scl_pado),
+	.scl_padoen_o(i2c_scl_paden),
+	.sda_pad_i(rtc_data),
+	.sda_pad_o(i2c_sda_pado),
+	.sda_padoen_o(i2c_sda_paden)
+);
+
+assign rtc_clk = ~i2c_scl_paden ? i2c_scl_pado : 1'bz;
+assign rtc_data = ~i2c_sda_paden ? i2c_sda_pado : 1'bz;
+
 wire [7:0] psg_dato;
 wire [17:0] psg_out;
 PSG32 #(.BUS_WID(8)) usnd1
@@ -375,6 +442,8 @@ always @*
     else if (cs_ram) db1 <= ramo;
     else if (cs_psg) db1 <= psg_dato;
     else if (cs_kbd) db1 <= kbd_dato;
+    else if (cs_spi) db1 <= spi_dato;
+    else if (cs_i2c) db1 <= i2c_dato;
     else db1 <= 8'h00;
 
 assign db = rw ? db1 : 8'bz;
@@ -392,11 +461,13 @@ FT832mpu u1
 	.phi12(),
 	.phi81(),
 	.phi82(),
-	.rdy(prng_rdy & tc_rdy & tc2_rdy & flt_rdy & psg_rdy & ram_rdy & kbd_rdy),
+	.rdy(prng_rdy & tc_rdy & tc2_rdy & flt_rdy & psg_rdy & ram_rdy & kbd_rdy & spi_rdy & i2c_rdy),
 	.e(),
 	.mx(),
 	.nmi(~kbd_rst),
-	.irq(~btnu),
+	.irq1(1'b1),
+	.irq2(1'b1),
+	.irq3(~btnu),
 	.abort(1'b1),
 	.be(1'b1),
 	.vpa(vpa),

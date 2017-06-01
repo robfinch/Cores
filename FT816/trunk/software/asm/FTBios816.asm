@@ -79,6 +79,7 @@ reg_sr		EQU		reg_sp + 4
 reg_db		EQU		reg_sr + 4
 reg_dp		EQU		reg_db + 4
 reg_bl		EQU		reg_dp + 4
+reg_mp		EQU		reg_bl + 4
 
 cs_save		EQU		$80
 ds_save		EQU		$84
@@ -93,14 +94,19 @@ srx_save	EQU		$A4
 db_save		EQU		$A8
 dpr_save	EQU		$AC
 
-running_task	EQU		$B8
+;running_task	EQU		$B8
 
 keybd_char	EQU		$BA
+rw_flag		EQU		$BA
 keybd_cmd	EQU		$BC
 WorkTR		EQU		$BE
+ExitCode	EQU		$C0
+secnum		EQU		$C4
+bufptr		EQU		$C8
 ldtrec		EQU		$100
 timeout1	EQU		$104
 
+RTCBuf		EQU		$300
 OutputVec	EQU		$03F0
 
 PCS0		EQU		$B000
@@ -121,6 +127,47 @@ PRNG		EQU		$EA100
 KEYBD		EQU		$EA110
 FAC1		EQU		$EA200
 
+SPIMASTER	EQU		$00FEC000
+SPI_MASTER_VERSION_REG	EQU	SPIMASTER+$00
+SPI_MASTER_CONTROL_REG	EQU	SPIMASTER+$01
+SPI_TRANS_TYPE_REG	EQU		SPIMASTER+$02
+SPI_TRANS_CTRL_REG	EQU		SPIMASTER+$03
+SPI_TRANS_STATUS_REG	EQU	SPIMASTER+$04
+SPI_TRANS_ERROR_REG		EQU	SPIMASTER+$05
+SPI_DIRECT_ACCESS_DATA_REG		EQU	SPIMASTER+$06
+SPI_SD_SECT_7_0_REG		EQU	SPIMASTER+$07
+SPI_SD_SECT_15_8_REG	EQU	SPIMASTER+$08
+SPI_SD_SECT_23_16_REG	EQU	SPIMASTER+$09
+SPI_SD_SECT_31_24_REG	EQU	SPIMASTER+$0A
+SPI_RX_FIFO_DATA_REG	EQU	SPIMASTER+$10
+SPI_RX_FIFO_DATA_COUNT_MSB	EQU	SPIMASTER+$11
+SPI_RX_FIFO_DATA_COUNT_LSB  EQU SPIMASTER+$12
+SPI_RX_FIFO_CTRL_REG		EQU	SPIMASTER+$14
+SPI_TX_FIFO_DATA_REG	EQU	SPIMASTER+$20
+SPI_TX_FIFO_CTRL_REG	EQU	SPIMASTER+$24
+SPI_RESP_BYTE1			EQU	SPIMASTER+$30
+SPI_RESP_BYTE2			EQU	SPIMASTER+$31
+SPI_RESP_BYTE3			EQU	SPIMASTER+$32
+SPI_RESP_BYTE4			EQU	SPIMASTER+$33
+
+SPI_INIT_SD			EQU		$01
+SPI_TRANS_START		EQU		$01
+SPI_TRANS_BUSY		EQU		$01
+SPI_INIT_NO_ERROR	EQU		$00
+SPI_READ_NO_ERROR	EQU		$00
+SPI_WRITE_NO_ERROR	EQU		$00
+SPI_RW_READ_SD_BLOCK	EQU		$02
+SPI_RW_WRITE_SD_BLOCK	EQU		$03
+
+I2C_MASTER		EQU		$00FEC100
+I2C_PRESCALE_LO	EQU		I2C_MASTER+$00
+I2C_PRESCALE_HI	EQU		I2C_MASTER+$01
+I2C_CONTROL		EQU		I2C_MASTER+$02
+I2C_TX			EQU		I2C_MASTER+$03
+I2C_RX			EQU		I2C_MASTER+$03
+I2C_CMD			EQU		I2C_MASTER+$04
+I2C_STAT		EQU		I2C_MASTER+$04
+
 SID			EQU		$EB000		; FEB000
 SID_FREQ0		EQU		$00
 SID_PW0			EQU		$04
@@ -133,6 +180,43 @@ SID_WADR0		EQU		$1C
 SID_VOLUME		EQU		$B0
 
 do_invaders			EQU		$7868
+
+TCB_Next		EQU		$20000	; 2 byte handles
+TCB_Prev		EQU		$20400	; 2 byte handles
+TCB_Timeout		EQU		$20800	; 4 byte value
+TCB_mbq_next	EQU		$21000	; 2 byte handles
+TCB_mbq_prev	EQU		$21400	; 2 byte handles
+TCB_msg_d1		EQU		$21800	; 4 byte value
+TCB_msg_d2		EQU		$22000	; 4 byte value
+TCB_msg_d3		EQU		$22800	; 4 byte value
+TCB_msg_tgtadr	EQU		$23000	; 2 byte handle
+TCB_msg_retadr	EQU		$23400	; 2 byte handle
+TCB_msg_link	EQU		$23800	; 2 byte handle
+TCB_msg_type	EQU		$23C00	; 2 byte value
+TCB_hMbx1		EQU		$24000	; 2 byte handle
+TCB_hMbx2		EQU		$24400	; 2 byte handle
+TCB_hMbx3		EQU		$24800	; 2 byte handle
+TCB_hMbx4		EQU		$24C00	; 2 byte handle
+TCB_hWaitMbx	EQU		$25000	; 2 byte handle
+TCB_number		EQU		$25400	; 2 byte value
+TCB_priority	EQU		$25800	; 1 byte value
+TCB_status		EQU		$25A00	; 1 byte value
+TCB_affinity	EQU		$25C00	; 1 byte value
+TCB_hJob		EQU		$25E00	; 1 byte handle
+TCB_start_tick	EQU		$26000	; 4 byte value
+TCB_end_tick	EQU		$26800	; 4 byte value
+TCB_ticks		EQU		$27000	; 4 byte value
+TCB_exception	EQU		$27800	; 4 byte value
+
+running_task	EQU		$2FFFE
+
+MSG_d1		EQU		$2C000	; 4 byte value	( 4096 messages )
+MSG_d2		EQU		$30000	; 4 byte value
+MSG_d3		EQU		$34000	; 4 byte value
+MSG_tgtadr	EQU		$38000	; 2 byte handle
+MSG_retadr	EQU		$3A000	; 2 byte handle
+MSG_link	EQU		$3C000	; 2 byte handle
+MSG_type	EQU		$3E000	; 2 byte value
 
 .include "supermon832.asm"
 .include "FAC1ToString.asm"
@@ -205,14 +289,6 @@ start:
 	INY
 	SDU
 
-	; BASIC segment
-	LDA		#$0001
-	XBAW
-	LDA		#$0000
-	LDX		#$985		; executable, writeable, 64k (based at $10000)
-	LDY		#$FFD
-	SDU
-
 	; I/O segment
 	LDA		#$00F0
 	XBAW
@@ -257,12 +333,12 @@ start:
 	STA		CTR0_LMT+2
 	LDA		#$14		; count up, on mpu clock
 	STA		CTR0_CTRL
-	; Counter #1 is set to interrupt at a 100Hz rate
-	LDA		#$94		; divide by 95794 (for 100Hz)
-	STA		CTR1_LMT
-	LDA		#$57
+	; Counter #1 is set to interrupt at a 50Hz rate
+	LDA		#$2A	;94		; divide by 95794 (for 50Hz)
+	STA		CTR1_LMT		; FFFFFE = 2Hz with 33MHz clock
+	LDA		#$2C	;57
 	STA		CTR1_LMT+1
-	LDA		#$09
+	LDA		#$0A	;09
 	STA		CTR1_LMT+2
 	LDA		#$05		; count down, on mpu clock, irq disenabled
 	STA		CTR1_CTRL
@@ -281,7 +357,7 @@ start:
 ;	RTT
 ;.0002:
 	; Setup the task registers
-	LDY		#8			; # tasks to setup
+	LDY		#9			; # tasks to setup
 	LDX		#1
 .0001:
 	LDT		TaskStartTbl,X
@@ -298,10 +374,13 @@ start:
 	STZ		TickCount+2
 Task0:
 	CLI
+	NOP
+	NOP
+	NOP
 	; Start the single stepping task.
 	LDA		#$01
 	STA		$7000
-	TSK		#3
+	TSK		#9
 .0001:
 	LDA		#$04
 	STA		$7000
@@ -347,6 +426,14 @@ Task0:
 	PEA		5
 	PEA		msgStarting
 	JSR		DisplayString
+	JSR		rtc_init
+	JSR		rtc_read
+	CMP		#0
+	BNE		.0006
+	PEA		1
+	PEA		msgRtcReadFail
+	JSR		DisplayString
+.0006:
 ;	SEP		#$1000		; turn on single step mode
 ;	LDA		#0
 ;	STA		$FFF:FAC1
@@ -385,19 +472,32 @@ Task0:
 	;
 	FORK	#$FC
 	TTA
+	AND		#$01FF
 	CMP		#$FC
-	BNE		.0002
+	BNE		TaskMon
+TaskFC:
 .0003
+	SEI
+	PLA
 	LDX		#$23FF
 	TXS
+	PHA
 	CLI
+	NOP		; allow CLI to take place
+	NOP
+	NOP
+	NOP
+	NOP
 	RTT
 	BRA		.0003
-.0002:
+TaskMon:
 	CLI
 
 Mon1:
 .mon1:
+	LDA		#$6BFF
+	TAS
+	JSR		CursorOn
 	JSR		OutCRLF
 	LDA		#'$'
 .mon3:
@@ -421,9 +521,12 @@ Mon1:
 	BEQ		.mon4
 	CMP		#'S'
 	BNE		.mon2
-	TSK		#8
+	JSR		MonGetch
+	CMP		#'E'
+	LBEQ	GetSecnum
+	TSK		JMP:#8
 	BRA		.mon1
-	;JMP		$C000		; invoke Supermon816
+	;JMP		$C000		; invoke Supermon832
 .mon2:
 	CMP		#'C'
 	BNE		.mon5
@@ -449,9 +552,18 @@ Mon1:
 	CMP		#'I'
 	LBEQ	doInvaders
 	CMP		#'R'
-	LBEQ	doRegs
+	BNE		.mon7
+	JSR		MonGetch
+	CMP		#'D'
+	LBEQ	doRead
+	DEX
+	DEX
+	BRL		doRegs
+.mon7:
 	CMP		#'B'
 	LBEQ	doBasic
+	CMP		#'W'
+	LBEQ	doWrite
 	BRL		Mon1
 
 ; Get a character from the screen, skipping over spaces and tabs
@@ -487,21 +599,97 @@ doTask:
 	TSK
 	BRL		Mon1
 
+;------------------------------------------------------------------------------
+; Start the BASIC interpreter.
+;------------------------------------------------------------------------------
+
 doBasic:
+	LDA		#$0001
+	XBAW
+	LDA		#$0000
+	LDX		#$985		; executable, writeable, 64k (based at $10000)
+	LDY		#$FFD
+	SDU
 	TSK		#7
 	BRL		Mon1
-xitBasic:
-	REP		#$30		; 16 bit regs
-	PEA		$5			; switch back to BIOS data segment
-	PLDS
-	SEI					; restore stack segment and pointer
-	LDA		#5
-	TASS
-	LDX		sp_save
-	TXS
-	CLI
-	BRL		Mon1
 	
+;------------------------------------------------------------------------------
+; Get starting sector number for SD Card read/write routines
+;------------------------------------------------------------------------------
+
+GetSecnum:
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		secnum
+	LDA		NumWorkArea+2
+	STA		secnum+2
+	BRL		Mon1
+
+;------------------------------------------------------------------------------
+; Read or write a block of memory to SD Card.
+;------------------------------------------------------------------------------
+
+doWrite:
+	LDA		#$FFFF
+	STA		rw_flag
+	BRA		doReadWrite
+doRead:
+	STZ		rw_flag
+doReadWrite:
+	JSR		GetRange
+	JSR		spi_master_init
+	CMP		#0
+	BEQ		.0004
+	BRL		Mon1
+.0004:
+	JSR		OutCRLF
+.0002:
+	JSR		DispSecnum
+	LDA		RangeStart+2
+	PHA
+	LDA		RangeStart
+	PHA
+	LDA		secnum+2
+	PHA
+	LDA		secnum
+	PHA
+	BIT		rw_flag
+	BVC		.0005
+	JSR		spi_master_write
+	BRA		.0006
+.0005:
+	JSR		spi_master_read
+.0006:
+	INC		secnum
+	BNE		.0001
+	INC		secnum+2
+.0001:
+	CLC
+	LDA		RangeStart
+	ADC		#512
+	STA		RangeStart
+	LDA		RangeStart+2
+	ADC		#0
+	STA		RangeStart+2
+	SEC
+	LDA		RangeStart
+	SBC		RangeEnd
+	LDA		RangeStart+2
+	SBC		RangeEnd+2
+	BLT		.0002
+	JSR		OutCRLF
+	BRL		Mon1
+
+DispSecnum:
+	LDA		secnum+2
+	JSR		DispWord
+	LDA		secnum
+	JSR		DispWord
+	LDA		#$0D
+	JMP		OutChar
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 doInvaders:
 	LDA		#$FFFF
 	STA		do_invaders
@@ -517,7 +705,7 @@ doInvaders:
 ; R<xx>		xx = context register to display
 ; Update Registers
 ; R.<reg> <val>
-;	reg = CS PB PC A X Y SP SR DS DB or DP
+;	reg = CS PB PC A X Y SP SR DS DB DP or MP
 ;------------------------------------------------------------------------------
 
 doRegs:
@@ -613,7 +801,7 @@ doRegs:
 	BRL		.buildrec
 .0011:
 	CMP		#'D'
-	LBNE	Mon1
+	LBNE	Mon14
 	JSR		MonGetch
 	CMP		#'S'
 	BNE		.0012
@@ -639,6 +827,17 @@ doRegs:
 	JSR		GetHexNumber
 	LDA		NumWorkArea
 	STA		reg_dp
+	BRL		.buildrec
+.0014:
+	CMP		#'M'
+	LBNE	Mon1
+	JSR		MonGetch
+	CMP		#'P'
+	LBNE	Mon1
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	STA		reg_mp
 	BRL		.buildrec
 
 .0004:
@@ -745,6 +944,11 @@ DispRegs:
 	LDA		reg_bl
 	JSR		DispWord
 
+	; Display map number
+	JSR		space
+	LDA		reg_mp
+	JSR		DispByte
+
 	JSR		OutCRLF
 	RTS
 
@@ -795,6 +999,9 @@ BuildRec:
 	STA		ldtrec+28
 	LDA		reg_dp+1
 	STA		ldtrec+29
+	LDA		reg_mp
+	STA		ldtrec+30
+	STZ		ldtrec+31
 	REP		#$30
 	RTS
 
@@ -2145,10 +2352,10 @@ KeybdGetChar1:
 .0006:
 	LDA		$FFF:KEYBD	; get scan code value
 	STZ		$FFF:KEYBD+2	; clear read flag
-	REP		#$20
+	;REP		#$20
 	;JSR		DispByte
 	;JSR		space
-	SEP		#$20
+	;SEP		#$20
 .0001:
 	CMP		#SC_KEYUP	; keyup scan code ?
 	LBEQ	.doKeyup	; 
@@ -2199,8 +2406,6 @@ KeybdGetChar1:
 .0007:
 	LDA		cs:unshiftedScanCodes,X
 .0008:
-	REP		#$20
-	MEM		16
 	PLX
 	PLP
 	CLC
@@ -2239,7 +2444,7 @@ KeybdGetChar1:
 	STA		KeyState2
 	SEP		#$30
 	JSR		KeybdSetLEDStatus
-	REP		#$10
+	REP		#$20
 	BRL		.0003
 .doCapsLock:
 	LDA		KeyState2
@@ -2247,7 +2452,7 @@ KeybdGetChar1:
 	STA		KeyState2
 	SEP		#$30
 	JSR		KeybdSetLEDStatus
-	REP		#$10
+	REP		#$20
 	BRL		.0003
 .doScrollLock:
 	LDA		KeyState2
@@ -2255,7 +2460,7 @@ KeybdGetChar1:
 	STA		KeyState2
 	SEP		#$30
 	JSR		KeybdSetLEDStatus
-	REP		#$10
+	REP		#$20
 	BRL		.0003
 
 KeybdSetLEDStatus:
@@ -2411,6 +2616,271 @@ keybdExtendedCodes:
 	.byte	$98,$99,$92,$2e,$91,$90,$2e,$2e
 	.byte	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; SPI MASTER driver
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+; spi_master_init
+; Initialize the spi master controller
+
+spi_master_init:
+	
+	PHP
+	SEP		#$20
+	MEM		8
+	LDA		#SPI_INIT_SD
+	STA		SPI_TRANS_TYPE_REG
+	LDA		#SPI_TRANS_START
+	STA		SPI_TRANS_CTRL_REG
+.0001:
+	LDA		SPI_TRANS_STS_REG		; wait for SPI transfer to complete
+	CMP		#SPI_TRANS_BUSY
+	BEQ		.0001
+	LDA		SPI_TRANS_ERROR_REG
+	AND		#3	; INIT errors
+	CMP		#SPI_INIT_NO_ERROR
+	BEQ		.0004
+	PLP
+	MEM		16
+	NDX		16
+	PEA		1
+	PEA		msgSpiInitError
+	JSR		DisplayString
+	LDA		#1
+	RTS
+.0004:
+	PLP
+	;PEA		1
+	;PEA		msgSpiInited
+	;JSR		DisplayString
+	LDA		#0
+	RTS
+
+; spi_master_read
+; read a block from the SD card
+;
+; Parameters:
+;	32 bit buffer address pushed onto stack
+;	32 bit block number pushed onto stack
+;
+spi_master_read:
+	PHP
+	SEP		#$20
+	MEM		8
+	NDX		16
+	TSX
+	LDA		4,X
+	STA		SPI_SD_SECT_7_0_REG
+	LDA		5,X
+	STA		SPI_SD_SECT_15_8_REG
+	LDA		6,X
+	STA		SPI_SD_SECT_23_16_REG
+	LDA		7,X
+	STA		SPI_SD_SECT_31_24_REG
+	LDA		8,X
+	STA		bufptr
+	LDA		9,X
+	STA		bufptr+1
+	LDA		10,X
+	STA		bufptr+2
+	LDA		11,X
+	STA		bufptr+3
+	LDA		#SPI_RW_READ_SD_BLOCK
+	STA		SPI_TRANS_TYPE_REG
+	LDA		#SPI_TRANS_START
+	STA		SPI_TRANS_CTRL_REG
+.0001:
+	LDA		SPI_TRANS_STS_REG		; wait for SPI transfer to complete
+	CMP		#SPI_TRANS_BUSY
+	BEQ		.0001
+	LDA		SPI_TRANS_ERROR_REG
+	LSR
+	LSR
+	AND		#3	; INIT errors
+	CMP		#SPI_READ_NO_ERROR
+	BEQ		.0004
+	PLP
+	MEM		16
+	PEA		1
+	PEA		msgSpiReadError
+	JSR		DisplayString
+	LDA		#1
+	RTS		#8
+.0004:
+	REP		#$10
+	MEM		8
+	NDX		16
+	LDX		#512
+	LDY		#0
+.0003:
+	;TXA
+	;AND		#$0F
+	;BNE		.0002
+	;PLP
+	;JSR		OutCRLF
+	;PHP
+	;SEP		#$20
+.0002:
+	LDA		SPI_RX_FIFO_DATA_REG
+	STA		{bufptr},Y
+	INY
+	;PLP
+	;JSR		DispByte
+	;JSR		space
+	;PHP
+	SEP		#$20
+	DEX
+	BNE		.0003
+	PLP
+	;JSR		OutCRLF
+	MEM		16
+	NDX		16
+	LDA		#0
+	RTS		#8
+
+spi_master_write:
+	PHP
+	SEP		#$20
+	MEM		8
+	NDX		16
+
+	TSX
+	LDA		8,X
+	STA		bufptr
+	LDA		9,X
+	STA		bufptr+1
+	LDA		10,X
+	STA		bufptr+2
+	LDA		11,X
+	STA		bufptr+3
+
+	LDY		#0
+.0001:
+	LDA		{bufptr},Y
+	STA		SPI_TX_FIFO_DATA_REG
+	INY
+	CPY		#512
+	BNE		.0001
+
+	LDA		4,X
+	STA		SPI_SD_SECT_7_0_REG
+	LDA		5,X
+	STA		SPI_SD_SECT_15_8_REG
+	LDA		6,X
+	STA		SPI_SD_SECT_23_16_REG
+	LDA		7,X
+	STA		SPI_SD_SECT_31_24_REG
+
+	LDA		#SPI_RW_WRITE_SD_BLOCK
+	STA		SPI_TRANS_TYPE_REG
+	LDA		#SPI_TRANS_START
+	STA		SPI_TRANS_CTRL_REG
+.0002:
+	LDA		SPI_TRANS_STS_REG		; wait for SPI transfer to complete
+	CMP		#SPI_TRANS_BUSY
+	BEQ		.0002
+	LDA		SPI_TRANS_ERROR_REG
+	LSR
+	LSR
+	LSR
+	LSR
+	AND		#3	; write errors
+	CMP		#SPI_WRITE_NO_ERROR
+	BEQ		.0004
+	PLP
+	MEM		16
+	PEA		1
+	PEA		msgSpiWriteError
+	JSR		DisplayString
+	LDA		#1
+	RTS		#8
+.0004:
+	PLP
+	LDA		#0
+	RTS		#8
+
+msgSpiInitError:
+.byte	"Error initializing SPI master",$0D,$0A,$00
+msgSpiInited:
+.byte	"SPI master inited",$0D,$0A,$00
+msgSpiReadError:
+.byte	"SPI read error",$0D,$0A,$00
+msgSpiWriteError:
+.byte	"SPI write error",$0D,$0A,$00
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+; RTC driver for MCP7941x
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+rtc_init:
+		LDA		#67					; constant for 100kHz I2C from 33MHz 
+		STA		I2C_PRESCALE_LO
+		RTS
+
+; Read all the RTC sram registers into a buffer
+
+rtc_read:
+		PHP
+		SEP		#$20
+		MEM		8
+		LDA		#$80				; enable I2C
+		STA		I2C_CONTROL
+		LDA		#$DF				; read address, read op
+		STA		I2C_TX
+		LDA		#$90				; STA + wr bit
+		STA		I2C_CMD
+		JSR		rtc_wait_tip
+		LDA		I2C_STAT
+		BMI		.rxerr
+		LDA		#$00				; address zero
+		STA		I2C_TX
+		LDA		#$10				; wr bit
+		STA		I2C_CMD
+		JSR		rtc_wait_tip
+		LDA		I2C_STAT
+		BMI		.rxerr
+		LDX		#0
+.0001:
+		LDA		#$20				; rd bit
+		STA		I2C_CMD
+		JSR		rtc_wait_tip
+		LDA		I2C_STAT
+		BMI		.rxerr
+		LDA		I2C_RX
+		STA		RTCBuf,X
+		INX
+		CPX		#$5F
+		BNE		.0001
+		LDA		#$68				; STO, rd bit + nack
+		STA		I2C_CMD
+		JSR		rtc_wait_tip
+		LDA		I2C_STAT
+		BMI		.rxerr
+		LDA		#0					; disable I2C and return 0
+		STA		I2C_CONTROL
+		PLP
+		RTS
+.rxerr:
+		LDA		#0					; disable I2C and return 1
+		STA		I2C_CONTROL
+		INA
+		PLP
+		RTS
+
+rtc_wait_tip:
+.0001:
+		LDA		I2C_STAT
+		AND		#$4					; transmit in progress bit
+		BNE		.0001
+		RTS
+
+msgRtcReadFail:
+	.byte	"RTC read failed.",$0D,$0A,$00
+
 ; Get char routine for Supermon
 ; This routine might be called with 8 bit regs.
 ;
@@ -2420,12 +2890,14 @@ SuperGetch:
 	JSR		KeybdGetCharNoWait
 	AND		#$FF
 	RTC		#0
+	BRL		TaskFC
 
 ; Put char routine for Supermon
 ;
 SuperPutch:
 	JSR		OutChar
 	RTC		#0
+	BRL		TaskFC
 
 ; Char get routine for BASIC
 ; Same thing as for Supermon, except carry flag needs to be inverted
@@ -2433,10 +2905,19 @@ SuperPutch:
 ; otherwise the call will be ignored.
 ;
 BasicGetch:
+	LDA		#$F1
+	STA		$7000
 	JSR		KeybdGetCharNoWait
 	AND		#$FF
 	CMC
 	RTC		#0
+	BRL		TaskFC
+
+xitBasic:
+	PLX					; get rid of task to return to, we won't be returning
+	STA		ExitCode
+	TSK		JMP:#0
+	BRL		TaskFC
 
 warm_start:
 	SEP		#$100		; 16 bit mode
@@ -2453,27 +2934,73 @@ ICacheIL832:
 	CACHE	#1			; 1= invalidate instruction line identified by accumulator
 	RTS
 
-ByteIRQRout:
-	RTI
+; IRQ routine for all modes. The interrupted task must of had interrupts
+; enabled and this status should be saved on the stack with the value of
+; the status register. The RTI instruction will pop the status register off
+; the stack and restore the interrupt enable.
+; Note that all this routine does is switch to a task which has a different
+; register set, so there's no need to stack and restore registers. The
+; task switch also allows the routine to be located anywhere in the memory
+; system, so we don't have to worry about using up bank 0 memory.
 
-IRQRout:
+IRQRout832:
+IRQRout816:
+IRQRout02:
 	TSK		#1			; switch to the interrupt handling task
 	RTI
 
+; This task has interrupts masked in it's startup record and therefore runs
+; with interrupts masked as the task never enables interrupts. Note that it's
+; important that interrupts are masked while this is running, otherwise the
+; uncleared interrupt status would cause another interrupt resulting in an
+; infinite interrupt loop.
+	MEM		16
 Task1:
-	LDA		MPU_IRQ_STATUS	; check if counter expired
-	BIT		#2
-	BEQ		.0001
+	LDA.B	MPU_IRQ_STATUS	; check if counter expired
+	BIT		#2				; counter #1 IRQ active bit
+	BEQ		.0001			; no IRQ ?
 	LDA		TickCount		; increment the tick count
-	INA
+	INA						; lower 16 bits
 	STA		TickCount
 	STA.B	$FFF:$D00A4		; update on-screen IRQ live indicator
+	BNE		.0002
+	INC		TickCount+2		; increment upper 16 bits of tick count
+.0002:
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
-	STA.B	CTR1_CTRL
+	STA.B	CTR1_CTRL		; set control register clearing interrupt
+	LDA.B	$0:$100DF		; Set flag for EhBASIC Irq
+	ORA		#$20
+	STA.B	$0:$100DF
 ;	JSR		MusicTimeoutIRQ
 .0001:
-	RTT					; go back to interrupted task
+	RIT					; return from interrupt task
 	BRA		Task1		; the next time task1 is run it will start here
+
+BtnuIRQ:
+	LDA.B	$FFF:$D00A0
+	INA
+	STA.B	$FFF:$D00A0
+	JSR		spi_master_init
+	CMP		#0
+	BNE		.0001
+	LDX		#0
+.0002:
+	PEA		$000F
+	TXA
+	XBA
+	ASL
+	PHA
+	PEA		0
+	PEA		0
+	STX		reg_x
+	JSR		spi_master_read
+	LDX		reg_x
+	INX
+	CPX		#128
+	BNE		.0002
+.0001:
+	RIT
+	BRA		BtnuIRQ
 
 ; IRQ handler task - 32 bit
 ;
@@ -2607,7 +3134,7 @@ LineTbl:
 	.WORD	TEXTCOLS*30
 
 TaskStartTbl:
-	.WORD	1			; CS
+	.WORD	0			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	Task0		; PC
@@ -2628,7 +3155,7 @@ TaskStartTbl:
 
 	; TASK #1
 	; Interrupt handler task
-	.WORD	1			; CS
+	.WORD	0			; CS
 	.WORD	5			; DS
 	.WORD	5			; SS
 	.WORD	Task1		; PC
@@ -2647,7 +3174,7 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	1			; CS
+	.WORD	0			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	Task2		; PC
@@ -2666,26 +3193,28 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	1			; CS
-	.WORD	0			; DS
-	.WORD	0			; SS
-	.WORD	SSMInit		; PC
-	.BYTE	SSMTnit>>16
+	; TASK #3
+	; Button Interrupt handler task
+	.WORD	0			; CS
+	.WORD	5			; DS
+	.WORD	5			; SS
+	.WORD	BtnuIRQ		; PC
+	.BYTE	BtnuIRQ>>16
 	.WORD	0			; acc
 	.WORD	0
 	.WORD	0			; x
 	.WORD	0
 	.WORD	0			; y
 	.WORD	0
-	.WORD	$33FF		; sp
+	.WORD	$3AFF		; sp
 	.WORD	0
-	.BYTE	$4			; SR	16 bit regs, mask interrupts
-	.BYTE	1			; SR extension - 816 mode
+	.BYTE	4			; SR
+	.BYTE	1			; SR extension
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	1			; CS
+	.WORD	0			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	BrkTask		; PC
@@ -2706,7 +3235,7 @@ TaskStartTbl:
 
 	; task #5
 	; DS is placed at $7800
-	.WORD	1			; CS
+	.WORD	0			; CS
 	.WORD	0    		; DS
 	.WORD	0			; SS
 	.WORD	InvadersTask	; PC
@@ -2725,7 +3254,7 @@ TaskStartTbl:
 	.WORD	0			; DPR
 	.WORD	0
 
-	.WORD	1			; CS
+	.WORD	0			; CS
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	IRQTask		; PC
@@ -2762,10 +3291,10 @@ TaskStartTbl:
 	.BYTE	0			; SR extension - 832 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
-	.WORD	0
+	.WORD	63			; map
 
 	; task 8 (Supermon)
-	.WORD	$1			; CS
+	.WORD	$0			; CS
 	.WORD	$5			; DS
 	.WORD	$5			; SS
 	.WORD	$C000		; PC
@@ -2782,6 +3311,26 @@ TaskStartTbl:
 	.BYTE	1			; SR extension - 832 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
+	.WORD	0			; map
+
+	; task 9 (single step)
+	.WORD	0			; CS
+	.WORD	0			; DS
+	.WORD	0			; SS
+	.WORD	SSMInit		; PC
+	.BYTE	SSMTnit>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$33FF		; sp
+	.WORD	0
+	.BYTE	$4			; SR	16 bit regs, mask interrupts
+	.BYTE	1			; SR extension - 816 mode
+	.BYTE	0			; DB
+	.WORD	0			; DPR
 	.WORD	0
 
 msgRegs:
@@ -2790,7 +3339,7 @@ msgRegs:
     .byte   "  CS  PB PC  xxxsxn26NVmxDIZC    .A       .X       .Y       SP  ",CR,LF,0
 msgRegs2:
 	.byte	CR,LF
-	.byte	"  SS   DS  DB  DP   BL",CR,LF,0
+	.byte	"  SS   DS  DB  DP   BL  MP",CR,LF,0
 msgErr:
 	.byte	"***Err",CR,LF,0
 
@@ -3077,14 +3626,17 @@ MusicTimeoutIRQ:
 	.org	$FFDE
 	dw		6			; task #6
 
+	.org	$FFE0
+	dw		3
+
 	.org 	$FFE6
 	dw		BrkRout
 
-	.org	$FFEE		; IRQ vector
-	dw		IRQRout
+	.org	$FFEE		; '816 IRQ vector
+	dw		1			; IRQRout816
 
 	.org	$FFFC
 	dw		$E000
 
 	.org	$FFFE
-	dw		ByteIRQRout
+	dw		1			; IRQRout02
