@@ -103,6 +103,10 @@ WorkTR		EQU		$BE
 ExitCode	EQU		$C0
 secnum		EQU		$C4
 bufptr		EQU		$C8
+qcnt		EQU		$CC
+IOFocusTask	EQU		$CE
+TaskSwitchEn	EQU	$D0
+TimeoutList	EQU		$D2
 ldtrec		EQU		$100
 timeout1	EQU		$104
 
@@ -168,6 +172,10 @@ I2C_RX			EQU		I2C_MASTER+$03
 I2C_CMD			EQU		I2C_MASTER+$04
 I2C_STAT		EQU		I2C_MASTER+$04
 
+READY_FIFO		EQU		$00FEC200
+READY_FIFO_CNT	EQU		$00FEC210
+TIMEOUT_LIST	EQU		$00FEC300
+
 SID			EQU		$EB000		; FEB000
 SID_FREQ0		EQU		$00
 SID_PW0			EQU		$04
@@ -180,6 +188,8 @@ SID_WADR0		EQU		$1C
 SID_VOLUME		EQU		$B0
 
 do_invaders			EQU		$7868
+
+TS_READY		EQU		1
 
 TCB_Next		EQU		$20000	; 2 byte handles
 TCB_Prev		EQU		$20400	; 2 byte handles
@@ -348,8 +358,13 @@ start:
 	NDX 	16
 	MEM		16
 
+	LDA		#$20
+	STA		TCB_priority
+	LDA		#0
+	JSR		InsertIntoReadyFifo
 	JSR		ResetKbd
 
+	STZ		TaskSwitchEn
 ;	FORK	#8			; fork a BIOS context
 ;	TTA
 ;	CMP		#8
@@ -429,7 +444,7 @@ Task0:
 	JSR		rtc_init
 	JSR		rtc_read
 	CMP		#0
-	BNE		.0006
+	BEQ		.0006
 	PEA		1
 	PEA		msgRtcReadFail
 	JSR		DisplayString
@@ -470,12 +485,19 @@ Task0:
 	; the BIOS code from alternate contexts which may not have the same VM
 	; settings.
 	;
+	SEI
 	FORK	#$FC
 	TTA
 	AND		#$01FF
 	CMP		#$FC
 	BNE		TaskMon
 TaskFC:
+	LDX		#$FC*2
+	LDA		#$20
+	STA		TCB_priority,X
+	TXA
+	LSR
+	JSR		InsertIntoReadyFifo
 .0003
 	SEI
 	PLA
@@ -500,6 +522,7 @@ Mon1:
 	JSR		CursorOn
 	JSR		OutCRLF
 	LDA		#'$'
+	STA		TaskSwitchEn
 .mon3:
 	JSR		OutChar
 	JSR		KeybdGetCharWait
@@ -524,6 +547,12 @@ Mon1:
 	JSR		MonGetch
 	CMP		#'E'
 	LBEQ	GetSecnum
+	LDA		#$20
+	STA		TCB_priority+8
+	STZ		TCB_status		; monitor is no longer ready
+	LDA		#8
+	STA		IOFocusTask
+	JSR		InsertIntoReadyFifo
 	TSK		JMP:#8
 	BRA		.mon1
 	;JMP		$C000		; invoke Supermon832
@@ -540,7 +569,7 @@ Mon1:
 	BRA		Mon1
 .mon6:
 	CMP		#'D'
-	LBEQ	doDisassemble
+	LBEQ	doD
 	CMP		#'>'
 	LBEQ	doMemoryEdit
 	CMP		#'F'
@@ -593,11 +622,82 @@ MonErr:
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+doD:
+	JSR		MonGetch
+	CMP		#'T'
+	BEQ		doDate
+	DEX
+	DEX
+	BRL		doDisasssemble
+
+;------------------------------------------------------------------------------
+; DT? - displays the date from the RTC
+; DT <year> <month> <day> - updates the RTC with the year, month and day.
+;------------------------------------------------------------------------------
+
+doDate:
+	JSR		MonGetch
+	CMP		#'?'
+	BEQ		DispDate
+	DEX
+	DEX
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.0001
+	LDA		NumWorkArea
+	STA.B	RTCBuf+6
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.0001
+	LDA		NumWorkArea
+	STA.B	RTCBuf+5
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.0001
+	LDA		NumWorkArea
+	STA.B	RTCBuf+4
+	JSR		rtc_write
+.0001:
+	BRL		Mon1
+
+DispDate:
+	JSR		rtc_read
+	LDA.B	RTCBuf+6
+	JSR		DispByte
+	LDA		#'/'
+	JSR		OutChar
+	LDA.B	RTCBuf+5
+	JSR		DispByte
+	LDA		#'/'
+	JSR		OutChar
+	LDA.B	RTCBuf+4
+	JSR		DispByte
+	JSR		OutCRLF
+	BRL		Mon1
+		
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 doTask:
+	JSR		MonGetch
+	CMP		#'S'
+	BNE		.0001
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	ASL
+	TAX		
+	LDA		#$20
+	STA		TCB_priority,X
+	LDA		NumWorkArea
+	JSR		InsertIntoReadyFifo
+;	TSK
+	BRL		Mon1
+.0001:
+	DEX
+	DEX
 	JSR		GetHexNumber
 	LDA		NumWorkArea
 	TSK
-	BRL		Mon1
+	BRK		Mon1
 
 ;------------------------------------------------------------------------------
 ; Start the BASIC interpreter.
@@ -610,6 +710,12 @@ doBasic:
 	LDX		#$985		; executable, writeable, 64k (based at $10000)
 	LDY		#$FFD
 	SDU
+	LDA		#$20
+	STA		TCB_priority+7
+	STZ		TCB_status	; monitor is no longer ready
+	LDA		#7
+	STA		IOFocusTask
+	JSR		InsertIntoReadyFifo
 	TSK		#7
 	BRL		Mon1
 	
@@ -1197,9 +1303,29 @@ doDisassemble:
 
 ;------------------------------------------------------------------------------
 ; Jump to subroutine
+;
+; Either JSR for 16 bit address or JSL for 24 bit address
 ;------------------------------------------------------------------------------
 
 doJump:
+	JSR		MonGetch
+	CMP		#'S'
+	LBNE	Mon1
+	JSR		MonGetch
+	CMP		#'R'
+	BNE		.testL
+	JSR		IgnoreBlanks
+	JSR		GetHexNumber
+	CPY		#0
+	LBEQ	Mon1
+	LDA		NumWorkArea
+	STA		RangeEnd
+	LDX		#0
+	JSR		(RangeEnd,X)
+	BRL		Mon1
+.testL:
+	CMP		#'L'
+	LBNE	Mon1
 	JSR		IgnoreBlanks
 	JSR		GetHexNumber
 	CPY		#0
@@ -1210,9 +1336,13 @@ doJump:
 	STA		RangeEnd
 	LDA		NumWorkArea+1
 	STA		RangeEnd+1
+	LDA		#RangeEnd
+	CACHE	#1				; 1= invalidate instruction line identified by accumulator
 	JSL		RangeEnd
 	BRL		Mon1
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 DispRangeStart:
 	LDA		RangeStart+1
 	JSR		DispWord
@@ -2301,13 +2431,26 @@ KeybdGetCharNoWaitCtx:
 	
 KeybdGetCharNoWait:
 	PHP
+	SEI
+	REP		#$30
+	MEM		16
+	NDX		16
+	TTA
+	CMP		IOFocusTask
+	BNE		.noFocus
 	SEP		#$20
 	REP		#$10
 	MEM		8
 	NDX		16
+	STZ		TaskSwitchEn
+	CLI
 	LDA		#0
 	STA		KeybdWaitFlag
 	BRA		KeybdGetChar1
+.noFocus:
+	PLP
+	SEC		; flag no key available
+	RTS
 
 KeybdGetCharWait:
 	PHP
@@ -2817,7 +2960,7 @@ msgSpiWriteError:
 ;------------------------------------------------------------------------------
 
 rtc_init:
-		LDA		#67					; constant for 100kHz I2C from 33MHz 
+		LDA		#53					; constant for 125kHz I2C from 33MHz 
 		STA		I2C_PRESCALE_LO
 		RTS
 
@@ -2825,23 +2968,22 @@ rtc_init:
 
 rtc_read:
 		PHP
-		SEP		#$20
+		SEP		#$30
 		MEM		8
+		NDX		8
 		LDA		#$80				; enable I2C
 		STA		I2C_CONTROL
-		LDA		#$DF				; read address, read op
-		STA		I2C_TX
-		LDA		#$90				; STA + wr bit
-		STA		I2C_CMD
-		JSR		rtc_wait_tip
-		LDA		I2C_STAT
+		LDA		#$DE				; read address, write op
+		LDY		#$90				; STA + wr bit
+		JSR		rtc_wr_cmd
 		BMI		.rxerr
 		LDA		#$00				; address zero
-		STA		I2C_TX
-		LDA		#$10				; wr bit
-		STA		I2C_CMD
-		JSR		rtc_wait_tip
-		LDA		I2C_STAT
+		LDY		#$10				; wr bit
+		JSR		rtc_wr_cmd
+		BMI		.rxerr
+		LDA		#$DF				; read address, read op
+		LDY		#$90				; STA + wr bit
+		JSR		rtc_wr_cmd
 		BMI		.rxerr
 		LDX		#0
 .0001:
@@ -2860,14 +3002,14 @@ rtc_read:
 		JSR		rtc_wait_tip
 		LDA		I2C_STAT
 		BMI		.rxerr
+		LDA		I2C_RX
+		STA		RTCBuf,X
 		LDA		#0					; disable I2C and return 0
 		STA		I2C_CONTROL
 		PLP
 		RTS
 .rxerr:
-		LDA		#0					; disable I2C and return 1
-		STA		I2C_CONTROL
-		INA
+		STZ		I2C_CONTROL			; disable I2C and return status
 		PLP
 		RTS
 
@@ -2878,8 +3020,57 @@ rtc_wait_tip:
 		BNE		.0001
 		RTS
 
+rtc_wr_cmd:
+		STA		I2C_TX
+		STY		I2C_CMD
+		JSR		rtc_wait_tip
+		LDA		I2C_STAT
+		RTS
+
+rtc_write:
+		PHP
+		SEP		#$30
+		MEM		8
+		NDX		8
+		LDA		#$80				; enable I2C
+		STA		I2C_CONTROL
+		LDA		#$DE				; read address, write op
+		LDY		#$90				; STA + wr bit
+		JSR		rtc_wr_cmd
+		BMI		.rxerr
+		LDA		#$00				; address zero
+		LDY		#$10				; wr bit
+		JSR		rtc_wr_cmd
+		BMI		.rxerr
+		LDX		#0
+.0001:
+		LDA		RTCBuf,X
+		LDY		#$10
+		JSR		rtc_wr_cmd
+		BMI		.rxerr
+		INX
+		CPX		#$5F
+		BNE		.0001
+		LDA		RTCBuf,X
+		LDY		#$50				; STO, wr bit
+		JSR		rtc_wr_cmd
+		BMI		.rxerr
+		LDA		#0					; disable I2C and return 0
+		STA		I2C_CONTROL
+		PLP
+		RTS
+.rxerr:
+		STZ		I2C_CONTROL			; disable I2C and return status
+		PLP
+		RTS
+
 msgRtcReadFail:
-	.byte	"RTC read failed.",$0D,$0A,$00
+	.byte	"RTC read/write failed.",$0D,$0A,$00
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 ; Get char routine for Supermon
 ; This routine might be called with 8 bit regs.
@@ -2914,8 +3105,11 @@ BasicGetch:
 	BRL		TaskFC
 
 xitBasic:
-	PLX					; get rid of task to return to, we won't be returning
+	PLX						; get rid of task to return to, we won't be returning
 	STA		ExitCode
+	STZ		TCB_status+7	; no longer ready
+	STZ		IOFocusTask
+	STZ		IOFocusTask+1
 	TSK		JMP:#0
 	BRL		TaskFC
 
@@ -2932,6 +3126,71 @@ warm_start:
 	cpu		FT832
 ICacheIL832:
 	CACHE	#1			; 1= invalidate instruction line identified by accumulator
+	RTS
+
+;----------------------------------------------------------------------------
+; SelectTaskToRun:
+;
+; Selects a task to run from the ready fifo. The ready fifo is really a 
+; group of fifos, one each for a priority group. Priority groups are
+; $0x, $1x, $2x, $3x, $4x
+;----------------------------------------------------------------------------
+
+StartQ:
+	.byte	0,1,0,2,0,3,0,4,0,1,0,2,0,3,0,4
+
+SelectTaskToRun:
+	LDA		#4
+	STA		qcnt
+	LDA		TickCount		; vary the starting queue to check
+	AND		#$0F			; based on the tick count
+	TAY
+	LDA.B	StartQ,Y
+	ASL
+	TAX
+.nextQ:
+.notReady:
+	LDA		READY_FIFO_CNT,X	; get count of ready tasks in fifo
+	BEQ		.fifoEmpty
+	LDA		READY_FIFO,X	; get ready task from fifo
+	TAY
+	LDA.B	TCB_status,Y	; check the status and make sure it's ready
+	CMP		#TS_READY
+	BNE		.notReady
+	TYA
+	STA		READY_FIFO,X	; add back to fifo as last entry
+	RTS
+
+	; move to the next queue
+.fifoEmpty:
+	INX
+	INX
+	CPX		#10
+	BLT		.0001
+	LDX		#0				; cycle back around to first Q
+.0001:
+	DEC		qcnt
+	BNE		.nextQ
+	TTA						; if all queues empty, keep running the current
+	RTS
+
+;----------------------------------------------------------------------------
+; Insert task into ready fifo.
+;----------------------------------------------------------------------------
+
+InsertIntoReadyFifo:
+	TAX							; .X = task number (index into tables)
+	LDA		#TS_READY			; set task status to ready
+	STA.B	TCB_status,X
+	LDA.B	TCB_priority,X		; get the priority
+	LSR							; use upper nybble to identify priority que
+	LSR
+	LSR
+	LSR
+	ASL
+	TAY
+	TXA
+	STA		READY_FIFO,Y
 	RTS
 
 ; IRQ routine for all modes. The interrupted task must of had interrupts
@@ -2971,7 +3230,21 @@ Task1:
 	LDA.B	$0:$100DF		; Set flag for EhBASIC Irq
 	ORA		#$20
 	STA.B	$0:$100DF
-;	JSR		MusicTimeoutIRQ
+.nextTo:
+	LDA		#1
+	STA.B	TIMEOUT_LIST	; decrement the timeout list
+	NOP						; might take up to 3 clock cycles
+	NOP
+	LDA		TIMEOUT_LIST+2	; get any timedout task
+	BMI		.noMoreTos
+	JSR		InsertIntoReadyFifo
+	BRA		.nextTo
+.noMoreTos:
+	LDA		TaskSwitchEn	; only switch tasks if enabled
+	BEQ		.0001
+	JSR		SelectTaskToRun
+	PLX						; get rid of task # saved on irq
+	PHA						; push the desired task
 .0001:
 	RIT					; return from interrupt task
 	BRA		Task1		; the next time task1 is run it will start here
