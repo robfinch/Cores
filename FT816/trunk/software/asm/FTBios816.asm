@@ -176,6 +176,12 @@ READY_FIFO		EQU		$00FEC200
 READY_FIFO_CNT	EQU		$00FEC210
 TIMEOUT_LIST	EQU		$00FEC300
 
+; Timeout list commands
+TOL_NOP			EQU		0
+TOL_DEC			EQU		1
+TOL_INS			EQU		2
+TOL_RMV			EQU		3
+
 SID			EQU		$EB000		; FEB000
 SID_FREQ0		EQU		$00
 SID_PW0			EQU		$04
@@ -189,44 +195,99 @@ SID_VOLUME		EQU		$B0
 
 do_invaders			EQU		$7868
 
+NR_JCB			EQU		64
+NR_TCB			EQU		512
+NR_MBX			EQU		1024
+NR_MSG			EQU		4096
 TS_READY		EQU		1
+TS_WAITMSG		EQU		2
+MQS_NEWEST		EQU		0		; message queue strategy
+MT_NONE			EQU		0
+MT_FREE			EQU		1
 
-TCB_Next		EQU		$20000	; 2 byte handles
-TCB_Prev		EQU		$20400	; 2 byte handles
-TCB_Timeout		EQU		$20800	; 4 byte value
-TCB_mbq_next	EQU		$21000	; 2 byte handles
-TCB_mbq_prev	EQU		$21400	; 2 byte handles
-TCB_msg_d1		EQU		$21800	; 4 byte value
-TCB_msg_d2		EQU		$22000	; 4 byte value
-TCB_msg_d3		EQU		$22800	; 4 byte value
-TCB_msg_tgtadr	EQU		$23000	; 2 byte handle
-TCB_msg_retadr	EQU		$23400	; 2 byte handle
-TCB_msg_link	EQU		$23800	; 2 byte handle
-TCB_msg_type	EQU		$23C00	; 2 byte value
-TCB_hMbx1		EQU		$24000	; 2 byte handle
-TCB_hMbx2		EQU		$24400	; 2 byte handle
-TCB_hMbx3		EQU		$24800	; 2 byte handle
-TCB_hMbx4		EQU		$24C00	; 2 byte handle
-TCB_hWaitMbx	EQU		$25000	; 2 byte handle
-TCB_number		EQU		$25400	; 2 byte value
-TCB_priority	EQU		$25800	; 1 byte value
-TCB_status		EQU		$25A00	; 1 byte value
-TCB_affinity	EQU		$25C00	; 1 byte value
-TCB_hJob		EQU		$25E00	; 1 byte handle
-TCB_start_tick	EQU		$26000	; 4 byte value
-TCB_end_tick	EQU		$26800	; 4 byte value
-TCB_ticks		EQU		$27000	; 4 byte value
-TCB_exception	EQU		$27800	; 4 byte value
+TCB_SIZE		EQU		64
+tcbs			EQU		$20000
+TCB_Next		EQU		$00	; 2 byte handles
+TCB_Prev		EQU		$02	; 2 byte handles
+TCB_Timeout		EQU		$04	; 4 byte value
+TCB_mbq_next	EQU		$08	; 2 byte handles
+TCB_mbq_prev	EQU		$0A	; 2 byte handles
+TCB_msg_d1		EQU		$0C	; 4 byte value
+TCB_msg_d2		EQU		$10	; 4 byte value
+TCB_msg_d3		EQU		$14	; 4 byte value
+TCB_msg_tgtadr	EQU		$18	; 2 byte handle
+TCB_msg_retadr	EQU		$1A	; 2 byte handle
+TCB_msg_link	EQU		$1C	; 2 byte handle
+TCB_msg_type	EQU		$1E	; 2 byte value
+TCB_hMbx1		EQU		$20	; 2 byte handle
+TCB_hMbx2		EQU		$22	; 2 byte handle
+TCB_hMbx3		EQU		$24	; 2 byte handle
+TCB_hMbx4		EQU		$26	; 2 byte handle
+TCB_hWaitMbx	EQU		$28	; 2 byte handle
+TCB_number		EQU		$2A	; 2 byte value
+TCB_priority	EQU		$2C	; 1 byte value
+TCB_status		EQU		$2D	; 1 byte value
+TCB_affinity	EQU		$2E	; 1 byte value
+TCB_hJob		EQU		$2F	; 1 byte handle
+TCB_start_tick	EQU		$30	; 4 byte value
+TCB_end_tick	EQU		$34	; 4 byte value
+TCB_ticks		EQU		$38	; 4 byte value
+TCB_exception	EQU		$3C	; 4 byte value
 
-running_task	EQU		$2FFFE
+JCB_SIZE		EQU		1024
+jcbs			EQU		tcbs + TCB_SIZE * NR_TCB
+JCB_iof_next	EQU		$000	; 1 byte value
+JCB_iof_prev	EQU		$001	; 1 byte value
+JCB_user_name	EQU		$002	; 32 byte value
+JCB_path		EQU		$022	; 256 byte value
+JCB_exit_runfile	EQU	$122	; 256 byte value
+JCB_command_line	EQU	$222	; 256 byte value
+JCB_pVidMem		EQU		$322	; 6 byte value
+JCB_pVirtVidMem	EQU		$328	; 6 byte value
+JCB_VideoCols	EQU		$32E	; 1 byte value
+JCB_VideoRows	EQU		$32F	; 1 byte value
+JCB_CursorRow	EQU		$330	; 1 byte value
+JCB_CursorCol	EQU		$331	; 1 byte value
+JCB_NormAttr	EQU		$332	; 2 byte value
+JCB_KeyState1	EQU		$334	; 2 byte value
+JCB_KeyState2	EQU		$336	; 2 byte value
+JCB_KeybdWaitFlag	EQU	$338	; 1 byte value
+JCB_KeybdHead	EQU		$339
+JCB_KeybdTail	EQU		$33A
+JCB_KeybdBuffer	EQU		$33B	; 32 byte value
+JCB_number		EQU		$35B	; 1 byte value
+JCB_tasks		EQU		$35C	; 2 byte value * 8
+JCB_next		EQU		$35E	; 1 byte value
 
-MSG_d1		EQU		$2C000	; 4 byte value	( 4096 messages )
-MSG_d2		EQU		$30000	; 4 byte value
-MSG_d3		EQU		$34000	; 4 byte value
-MSG_tgtadr	EQU		$38000	; 2 byte handle
-MSG_retadr	EQU		$3A000	; 2 byte handle
-MSG_link	EQU		$3C000	; 2 byte handle
-MSG_type	EQU		$3E000	; 2 byte value
+; 1024 mailboxes
+mailboxes		EQU		jcbs + JCB_SIZE * NR_JCB
+MBX_SIZE		EQU		24
+MBX_link		EQU		$00	; 1 byte value
+MBX_owner		EQU		$01	; 1 byte value
+MBX_tq_head		EQU		$02	; 2 byte value
+MBX_tq_tail		EQU		$04	; 2 byte value
+MBX_mq_head		EQU		$06	; 2 byte value
+MBX_mq_tail		EQU		$08	; 2 byte value
+MBX_tq_count	EQU		$0C	; 2 byte value
+MBX_mq_count	EQU		$0E	; 2 byte value
+MBX_mq_size		EQU		$10	; 2 byte value
+MBX_mq_missed	EQU		$12	; 2 byte value
+MBX_mq_strategy	EQU		$14	; 1 byte value
+
+messages	EQU		mailboxes + MBX_SIZE * NR_MBX
+MSG_d1		EQU		$00	; 4 byte value	( 4096 messages )
+MSG_d2		EQU		$04	; 4 byte value
+MSG_d3		EQU		$08	; 4 byte value
+MSG_tgtadr	EQU		$0C	; 2 byte handle
+MSG_retadr	EQU		$0E	; 2 byte handle
+MSG_link	EQU		$10	; 2 byte handle
+MSG_type	EQU		$12	; 2 byte value
+MSG_SIZE	EQU		MSG_type + 2
+
+running_task	EQU		messages + MSG_SIZE * NR_MSG
+hTcbTmp		EQU		running_task + 2
+hMbxTmp		EQU		hTcbTmp + 2
+hMsgTmp		EQU		hMbxTmp + 2
 
 .include "supermon832.asm"
 .include "FAC1ToString.asm"
@@ -234,7 +295,7 @@ MSG_type	EQU		$3E000	; 2 byte value
 
 ;	cpu		W65C816S
 	cpu		FT832
-	.org	$E000
+	.org	$C000
 
 start:
 	SEI					; not strictly necessary after power on reset
@@ -555,7 +616,7 @@ Mon1:
 	JSR		InsertIntoReadyFifo
 	TSK		JMP:#8
 	BRA		.mon1
-	;JMP		$C000		; invoke Supermon832
+	;JMP		$8000		; invoke Supermon832
 .mon2:
 	CMP		#'C'
 	BNE		.mon5
@@ -628,7 +689,7 @@ doD:
 	BEQ		doDate
 	DEX
 	DEX
-	BRL		doDisasssemble
+	BRL		doDisassemble
 
 ;------------------------------------------------------------------------------
 ; DT? - displays the date from the RTC
@@ -3128,12 +3189,25 @@ ICacheIL832:
 	CACHE	#1			; 1= invalidate instruction line identified by accumulator
 	RTS
 
+;============================================================================
+; Multi-tasking kernel
+;============================================================================
+
+.include "FMTKmsg.asm"
+
+	MEM		32
+	NDX		32
 ;----------------------------------------------------------------------------
 ; SelectTaskToRun:
 ;
 ; Selects a task to run from the ready fifo. The ready fifo is really a 
 ; group of fifos, one each for a priority group. Priority groups are
 ; $0x, $1x, $2x, $3x, $4x
+;
+; Returns
+;	.A = task number to run
+; Modifies:
+;	.X, .Y, and flags
 ;----------------------------------------------------------------------------
 
 StartQ:
@@ -3141,7 +3215,7 @@ StartQ:
 
 SelectTaskToRun:
 	LDA		#4
-	STA		qcnt
+	STA.B	qcnt
 	LDA		TickCount		; vary the starting queue to check
 	AND		#$0F			; based on the tick count
 	TAY
@@ -3150,15 +3224,17 @@ SelectTaskToRun:
 	TAX
 .nextQ:
 .notReady:
-	LDA		READY_FIFO_CNT,X	; get count of ready tasks in fifo
+	LDA.H	READY_FIFO_CNT,X	; get count of ready tasks in fifo
 	BEQ		.fifoEmpty
-	LDA		READY_FIFO,X	; get ready task from fifo
+	LDA.H	READY_FIFO,X	; get ready task from fifo
+	STA.H	hTcbTmp
+	JSR		hTcbToAddr
 	TAY
 	LDA.B	TCB_status,Y	; check the status and make sure it's ready
 	CMP		#TS_READY
 	BNE		.notReady
-	TYA
-	STA		READY_FIFO,X	; add back to fifo as last entry
+	LDA.H	hTcbTmp
+	STA.H	READY_FIFO,X	; add back to fifo as last entry
 	RTS
 
 	; move to the next queue
@@ -3169,16 +3245,20 @@ SelectTaskToRun:
 	BLT		.0001
 	LDX		#0				; cycle back around to first Q
 .0001:
-	DEC		qcnt
+	DEC.B	qcnt
 	BNE		.nextQ
 	TTA						; if all queues empty, keep running the current
 	RTS
 
 ;----------------------------------------------------------------------------
 ; Insert task into ready fifo.
+; Parameters:
+;	.A = handle to TCB
 ;----------------------------------------------------------------------------
 
 InsertIntoReadyFifo:
+	PHA
+	JSR		hTcbToAddr
 	TAX							; .X = task number (index into tables)
 	LDA		#TS_READY			; set task status to ready
 	STA.B	TCB_status,X
@@ -3189,8 +3269,8 @@ InsertIntoReadyFifo:
 	LSR
 	ASL
 	TAY
-	TXA
-	STA		READY_FIFO,Y
+	PLA
+	STA.H	READY_FIFO,Y
 	RTS
 
 ; IRQ routine for all modes. The interrupted task must of had interrupts
@@ -3213,7 +3293,7 @@ IRQRout02:
 ; important that interrupts are masked while this is running, otherwise the
 ; uncleared interrupt status would cause another interrupt resulting in an
 ; infinite interrupt loop.
-	MEM		16
+
 Task1:
 	LDA.B	MPU_IRQ_STATUS	; check if counter expired
 	BIT		#2				; counter #1 IRQ active bit
@@ -3222,33 +3302,32 @@ Task1:
 	INA						; lower 16 bits
 	STA		TickCount
 	STA.B	$FFF:$D00A4		; update on-screen IRQ live indicator
-	BNE		.0002
-	INC		TickCount+2		; increment upper 16 bits of tick count
-.0002:
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
 	STA.B	CTR1_CTRL		; set control register clearing interrupt
 	LDA.B	$0:$100DF		; Set flag for EhBASIC Irq
 	ORA		#$20
 	STA.B	$0:$100DF
 .nextTo:
-	LDA		#1
+	LDA		#TOL_DEC
 	STA.B	TIMEOUT_LIST	; decrement the timeout list
 	NOP						; might take up to 3 clock cycles
 	NOP
-	LDA		TIMEOUT_LIST+2	; get any timedout task
+	LDA.H	TIMEOUT_LIST+2	; get any timedout task
 	BMI		.noMoreTos
 	JSR		InsertIntoReadyFifo
 	BRA		.nextTo
 .noMoreTos:
-	LDA		TaskSwitchEn	; only switch tasks if enabled
+	LDA.B	TaskSwitchEn	; only switch tasks if enabled
 	BEQ		.0001
 	JSR		SelectTaskToRun
-	PLX						; get rid of task # saved on irq
-	PHA						; push the desired task
+	TSX
+	STA.H	$1,X			; change return task # on stack
 .0001:
 	RIT					; return from interrupt task
 	BRA		Task1		; the next time task1 is run it will start here
 
+	MEM		16
+	NDX		16
 BtnuIRQ:
 	LDA.B	$FFF:$D00A0
 	INA
@@ -3442,7 +3521,7 @@ TaskStartTbl:
 	.WORD	$3BFF		; sp
 	.WORD	0
 	.BYTE	4			; SR
-	.BYTE	1			; SR extension
+	.BYTE	2			; SR extension	(32 bit mode)
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 	.WORD	0
@@ -3616,26 +3695,26 @@ msgRegs2:
 msgErr:
 	.byte	"***Err",CR,LF,0
 
-	cpu		FT832
-	MEM		32
-	NDX		32
-	LDA		#$12345678
-	LDX		#$98765432
-	STA.B	{$23},Y
-	LDY.UH	$44455556,X
-	LDA.H	CS:$44455556,X
-	LDA.UB	SEG $8888:$1234,Y
-	JSF	    $0000:start
-	RTF
-	ADC     SEG $9821:$1200,X
-	EOR     $821:$1200,X
-	EOR     $841:$12
-	SBC     FAR {$24},Y
-	AND     FAR($25)
-	ORA     FAR ($26,x)
-	TSK		#2
-	TSK
-	LDT		$10000,X
+;	cpu		FT832
+;	MEM		32
+;	NDX		32
+;	LDA		#$12345678
+;	LDX		#$98765432
+;	STA.B	{$23},Y
+;	LDY.UH	$44455556,X
+;	LDA.H	CS:$44455556,X
+;	LDA.UB	SEG $8888:$1234,Y
+;	JSF	    $0000:start
+;	RTF
+;	ADC     SEG $9821:$1200,X
+;	EOR     $821:$1200,X
+;	EOR     $841:$12
+;	SBC     FAR {$24},Y
+;	AND     FAR($25)
+;	ORA     FAR ($26,x)
+;	TSK		#2
+;	TSK
+;	LDT		$10000,X
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
