@@ -336,10 +336,11 @@ TK_BITSET		= TK_SWAP+1		; BITSET token
 TK_BITCLR		= TK_BITSET+1	; BITCLR token
 TK_IRQ		= TK_BITCLR+1	; IRQ token
 TK_NMI		= TK_IRQ+1		; NMI token
+TK_EXIT	    = TK_NMI+1
 
 ; secondary command tokens, can't start a statement
 
-TK_TAB		= TK_NMI+1		; TAB token
+TK_TAB		= TK_EXIT+1		; TAB token
 TK_ELSE		= TK_TAB+1		; ELSE token
 TK_TO			= TK_ELSE+1		; TO token
 TK_FN			= TK_TO+1		; FN token
@@ -445,6 +446,7 @@ Ram_top		= $8000	; end of user RAM+1 (set as needed, should be page aligned)
 	CPU	W65C02
 	ORG	$C000
 ; BASIC cold start entry point
+	CLI
 
 ; new page 2 initialisation, copy block to ccflag on
 
@@ -7722,13 +7724,17 @@ V_OUTP
 	JCR	$FE06,$FC
 	RTS
 ;	JMP	(VEC_OUT)		; send byte to output device
-	CPU	W65C02
-V_LOAD
-	JMP	(VEC_LD)		; load BASIC program
-V_SAVE
-	JMP	(VEC_SV)		; save BASIC program
 V_EXIT					
 	JCR	$FE0F,$FC		; This call won't return
+	CPU	W65C02
+V_LOAD
+	JCR	$FE12,$FC
+	RTS
+;	JMP	(VEC_LD)		; load BASIC program
+V_SAVE
+	JCR	$FE15,$FC
+	RTS
+;	JMP	(VEC_SV)		; save BASIC program
 
 ; The rest are tables messages and code for RAM
 
@@ -8244,7 +8250,7 @@ LBB_END
 LBB_EOR
 	.byte	"OR",TK_EOR		; EOR
 LBB_EXIT
-	.byte	"EXIT",TK_EXIT	; EXIT
+	.byte	"XIT",TK_EXIT	; EXIT
 LBB_EXP
 	.byte	"XP(",TK_EXP	; EXP(
 	.byte	$00

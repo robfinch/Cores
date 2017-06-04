@@ -68,8 +68,8 @@ Textcols	EQU		$4C
 Textrows	EQU		$4E
 
 reg_cs		EQU		$80
-reg_ds		EQU		reg_cs + 4
-reg_ss		EQU		reg_ds + 4
+reg_ds		EQU		reg_cs + 4	; Yes, these values need 4 bytes as that is
+reg_ss		EQU		reg_ds + 4	; the format read from the INF instruction.
 reg_pc		EQU		reg_ss + 4
 reg_a		EQU		reg_pc + 4
 reg_x		EQU		reg_a + 4
@@ -94,7 +94,7 @@ srx_save	EQU		$A4
 db_save		EQU		$A8
 dpr_save	EQU		$AC
 
-;running_task	EQU		$B8
+running_task	EQU		$B8
 
 keybd_char	EQU		$BA
 rw_flag		EQU		$BA
@@ -106,12 +106,15 @@ bufptr		EQU		$C8
 qcnt		EQU		$CC
 IOFocusTask	EQU		$CE
 TaskSwitchEn	EQU	$D0
-TimeoutList	EQU		$D2
+numsec		EQU		$D2
+TimeoutList	EQU		$D4
 ldtrec		EQU		$100
 timeout1	EQU		$104
 
 RTCBuf		EQU		$300
+FilenameBuf	EQU		$380
 OutputVec	EQU		$03F0
+spi_rw_vect	EQU		$03F4
 
 PCS0		EQU		$B000
 PCS1		EQU		PCS0 + 2
@@ -176,6 +179,8 @@ READY_FIFO		EQU		$00FEC200
 READY_FIFO_CNT	EQU		$00FEC210
 TIMEOUT_LIST	EQU		$00FEC300
 
+MAX_IRQ_HOOK	EQU		16
+
 ; Timeout list commands
 TOL_NOP			EQU		0
 TOL_DEC			EQU		1
@@ -200,10 +205,17 @@ NR_TCB			EQU		512
 NR_MBX			EQU		1024
 NR_MSG			EQU		4096
 TS_READY		EQU		1
-TS_WAITMSG		EQU		2
+TS_PREEMPT		EQU		2
+TS_WAITMSG		EQU		4
+TS_TIMEOUT		EQU		8
 MQS_NEWEST		EQU		0		; message queue strategy
 MT_NONE			EQU		0
 MT_FREE			EQU		1
+MBT_DATA		EQU		0
+E_Ok			EQU		0
+E_NotAlloc		EQU		-1
+E_NoMsg			EQU		-2
+E_NoMoreMsgBlks	EQU		-3
 
 TCB_SIZE		EQU		64
 tcbs			EQU		$20000
@@ -288,6 +300,12 @@ running_task	EQU		messages + MSG_SIZE * NR_MSG
 hTcbTmp		EQU		running_task + 2
 hMbxTmp		EQU		hTcbTmp + 2
 hMsgTmp		EQU		hMbxTmp + 2
+freeMBX		EQU		hMsgTmp + 2
+freeMSG		EQU		freeMBX + 2
+nMsgBlk		EQU		freeMSG + 2
+nMailbox	EQU		nMsgBlk + 2
+IRQ1Hook	EQU		nMailbox + 2
+IRQ1HookEnd	EQU		IRQ1Hook + MAX_IRQ_HOOK * 4
 
 .include "supermon832.asm"
 .include "FAC1ToString.asm"
@@ -310,7 +328,7 @@ start:
 ;	TAS
 ;
 	CLC					; switch to '816 mode
-	BIT		start		; set overflow bit
+	SEP		#$40		; set overflow bit
 	XCE
 	REP		#$30		; set 16 bit regs & mem
 	NDX 	16
@@ -393,6 +411,8 @@ start:
 	PEA		5
 	PLDS
 
+	JSR		FMTK_Init
+
 	; Setup the counters
 	SEP		#$30		; set 8 bit regs
 	NDX		8			; tell the assembler
@@ -415,23 +435,13 @@ start:
 	STA		CTR1_CTRL
 	; Counter #2 isn't setup
 
-	REP		#$30		; set 16 bit regs & mem
-	NDX 	16
+	REP		#$30
 	MEM		16
-
-	LDA		#$20
-	STA		TCB_priority
-	LDA		#0
-	JSR		InsertIntoReadyFifo
+	NDX		16
 	JSR		ResetKbd
 
 	STZ		TaskSwitchEn
-;	FORK	#8			; fork a BIOS context
-;	TTA
-;	CMP		#8
-;	BNE		.0002
-;	RTT
-;.0002:
+
 	; Setup the task registers
 	LDY		#9			; # tasks to setup
 	LDX		#1
@@ -449,10 +459,6 @@ start:
 	STZ		TickCount
 	STZ		TickCount+2
 Task0:
-	CLI
-	NOP
-	NOP
-	NOP
 	; Start the single stepping task.
 	LDA		#$01
 	STA		$7000
@@ -542,6 +548,58 @@ Task0:
 ;	CMP		#11
 ;	LBEQ	KeybdInit
 
+;	REP		#$130
+;	SEP		#$200		; 32 bit mode
+;	NDX 	32
+;	MEM		32
+;	LDA		#0
+;	JSR		hTcbToAddr
+;	TAX
+;	LDA		#$20
+;	STA.B	TCB_priority,X
+;	LDA		#0
+;	JSR		InsertIntoReadyFifo
+;	REP		#$230		; back to 16 bit mode
+;	SEP		#$100
+	NDX		16
+	MEM		16
+
+	; Create a workhorse OS context that will allow subroutine calls into
+	; the OS code from alternate contexts which may not have the same VM
+	; settings.
+	;
+	SEI
+	FORK	#$FD
+	TTA
+	AND		#$01FF
+	CMP		#$FD
+	BNE		TaskMon2
+TaskFD:
+	SEI
+	REP		#$130
+	SEP		#$200		; switch to 32 bit mode
+	MEM		32
+	NDX		32
+	; A 16 bit pull is needed here so we make use of the direct page register
+	; It'll be restored to zero later.
+	PLD					; get 16 bit value from stack
+	LDX		#$22FF
+	TXS
+	PHD					; store 16 bit value to new stack
+	LDA		#0			; restore the DP value
+	TCD
+	CLI
+	NOP		; allow CLI to take place
+	NOP
+	NOP
+	NOP
+	NOP
+	RTT
+	BRA		TaskFD
+
+TaskMon2:
+	NDX		16
+	MEM		16
 	; Create a workhorse BIOS context that will allow subroutine calls into
 	; the BIOS code from alternate contexts which may not have the same VM
 	; settings.
@@ -551,14 +609,8 @@ Task0:
 	TTA
 	AND		#$01FF
 	CMP		#$FC
-	BNE		TaskMon
+	BNE		TaskMon1
 TaskFC:
-	LDX		#$FC*2
-	LDA		#$20
-	STA		TCB_priority,X
-	TXA
-	LSR
-	JSR		InsertIntoReadyFifo
 .0003
 	SEI
 	PLA
@@ -573,7 +625,8 @@ TaskFC:
 	NOP
 	RTT
 	BRA		.0003
-TaskMon:
+TaskMon1:
+
 	CLI
 
 Mon1:
@@ -583,7 +636,7 @@ Mon1:
 	JSR		CursorOn
 	JSR		OutCRLF
 	LDA		#'$'
-	STA		TaskSwitchEn
+	;STA		TaskSwitchEn
 .mon3:
 	JSR		OutChar
 	JSR		KeybdGetCharWait
@@ -608,26 +661,42 @@ Mon1:
 	JSR		MonGetch
 	CMP		#'E'
 	LBEQ	GetSecnum
-	LDA		#$20
-	STA		TCB_priority+8
-	STZ		TCB_status		; monitor is no longer ready
+	CMP		#'U'
+	LBNE	doSavefile
+	REP		#$130
+	SEP		#$200
+	MEM		32
+	NDX		32
 	LDA		#8
-	STA		IOFocusTask
+	JSR		hTcbToAddr
+	TAX
+	LDA		#$20
+	STA		TCB_priority,X
+	LDA		#0
+	JSR		hTcbToAddr
+	TAX
+	STZ		TCB_status,X	; monitor is no longer ready
+	LDA		#8
+	STA.H	IOFocusTask
 	JSR		InsertIntoReadyFifo
+	REP		#$200
+	SEP		#$100
+	MEM		16
+	NDX		16
 	TSK		JMP:#8
-	BRA		.mon1
+	BRL		.mon1
 	;JMP		$8000		; invoke Supermon832
 .mon2:
 	CMP		#'C'
 	BNE		.mon5
 	JSR		ClearScreen
 	JSR		HomeCursor
-	BRA		.mon1
+	BRL		.mon1
 .mon5:
 	CMP		#'M'
 	BNE		.mon6
 	JSR		doMemoryDump
-	BRA		Mon1
+	BRL		Mon1
 .mon6:
 	CMP		#'D'
 	LBEQ	doD
@@ -654,8 +723,22 @@ Mon1:
 	LBEQ	doBasic
 	CMP		#'W'
 	LBEQ	doWrite
+	CMP		#'f'
+	LBNE	Mon1
+	JSR		MonGetch
+	CMP		#'m'
+	LBNE	Mon1
+	JSR		MonGetch
+	CMP		#'t'
+	LBNE	Mon1
+	JSR		SDC_Format
 	BRL		Mon1
-
+.mon8:
+	CMP		#'L'
+	BNE		.mon9
+	BRL		doLoadfile
+.mon9:
+	BRL		Mon1
 ; Get a character from the screen, skipping over spaces and tabs
 ;
 MonGetNonSpace:
@@ -765,21 +848,95 @@ doTask:
 ;------------------------------------------------------------------------------
 
 doBasic:
+	; Setup the BASIC descriptor
 	LDA		#$0001
 	XBAW
 	LDA		#$0000
 	LDX		#$985		; executable, writeable, 64k (based at $10000)
 	LDY		#$FFD
 	SDU
-	LDA		#$20
-	STA		TCB_priority+7
-	STZ		TCB_status	; monitor is no longer ready
+	; Switch to 32 bit mode in order to set the task priority and insert the
+	; BASIC task into the ready queue.
+	REP		#$130
+	SEP		#$200
+	MEM		32
+	NDX		32
 	LDA		#7
-	STA		IOFocusTask
+	JSR		hTcbToAddr
+	TAX
+	LDA		#$20
+	STA		TCB_priority,X
+	LDA		#0
+	JSR		hTcbToAddr
+	TAX
+	STZ		TCB_status,X	; monitor is no longer ready
+	LDA		#7
+	STA.H	IOFocusTask
 	JSR		InsertIntoReadyFifo
+	REP		#$230
+	SEP		#$100
+	NDX		16
+	MEM		16
 	TSK		#7
 	BRL		Mon1
-	
+
+ClearFilenameBuf:
+	LDY		#0
+	LDA		#' '
+.0002:
+	STA.B	FilenameBuf,Y
+	INY
+	CPY		#15
+	BNE		.0002
+	LDA		#0
+	STA.B	FilenameBuf,Y
+	RTS
+
+MonGetFilename:
+	JSR		ClearFilenameBuf
+.0004:
+	JSR		MonGetch
+	CMP		#' '
+	BEQ		.0004
+	CMP		#'"'
+	BNE		.badFname
+.nextChar:
+	JSR		MonGetch
+	CMP		#'"'
+	BEQ		.0001
+	CMP		#'.'
+	BNE		.0003
+	LDY		#13
+	BRA		.nextChar
+.0003:
+	STA.B	FilenameBuf,Y
+	INY
+	CPY		#15
+	BNE		.nextChar
+	JSR		MonGetch
+	CMP		#'"'
+	BNE		.badFname
+.0001:
+	RTS
+.badFname:
+	BRL		Mon1
+
+doLoadfile:
+	JSR		MonGetFilename
+	JSR		GetHexNumber
+	CPY		#0
+	BEQ		.noBuf
+	LDA		NumWorkArea+2
+	PHA
+	LDA		NumWorkArea
+	PHA
+	PEA		0
+	LDA		#FilenameBuf
+	PHA
+	JSR		SDC_Loadfile
+.noBuf:
+	RTS
+
 ;------------------------------------------------------------------------------
 ; Get starting sector number for SD Card read/write routines
 ;------------------------------------------------------------------------------
@@ -1480,7 +1637,8 @@ BIOSInput:
 	bra		.st0001
 
 msgStarting:
-	.byte	"FT832 Test System Starting",CR,LF,0
+	.byte	"FT832 Test System Starting",CR,LF
+	.byte	"65C02/65C816/65C832 Compatible",CR,LF,0
 
 echo_switch:
 	lda		$7100
@@ -1974,13 +2132,9 @@ OutChar:
 	RTS
 
 DisplayString:
-;	PLA							; pop return address
-;	PLX							; get string address parameter
-;	PHA							; push return address
 	PHP							; push reg settings
 	SEP		#$20				; ACC = 8 bit
 	MEM		8
-;	STX		StringPos
 	LDY		#0
 .0002:
 	LDA		FAR (4,S),Y
@@ -2498,12 +2652,12 @@ KeybdGetCharNoWait:
 	NDX		16
 	TTA
 	CMP		IOFocusTask
-	BNE		.noFocus
+;	BNE		.noFocus
 	SEP		#$20
 	REP		#$10
 	MEM		8
 	NDX		16
-	STZ		TaskSwitchEn
+;	STZ		TaskSwitchEn
 	CLI
 	LDA		#0
 	STA		KeybdWaitFlag
@@ -2839,7 +2993,7 @@ spi_master_init:
 	LDA		#SPI_TRANS_START
 	STA		SPI_TRANS_CTRL_REG
 .0001:
-	LDA		SPI_TRANS_STS_REG		; wait for SPI transfer to complete
+	LDA		SPI_TRANS_STATUS_REG	; wait for SPI transfer to complete
 	CMP		#SPI_TRANS_BUSY
 	BEQ		.0001
 	LDA		SPI_TRANS_ERROR_REG
@@ -2896,7 +3050,7 @@ spi_master_read:
 	LDA		#SPI_TRANS_START
 	STA		SPI_TRANS_CTRL_REG
 .0001:
-	LDA		SPI_TRANS_STS_REG		; wait for SPI transfer to complete
+	LDA		SPI_TRANS_STATUS_REG		; wait for SPI transfer to complete
 	CMP		#SPI_TRANS_BUSY
 	BEQ		.0001
 	LDA		SPI_TRANS_ERROR_REG
@@ -2982,7 +3136,7 @@ spi_master_write:
 	LDA		#SPI_TRANS_START
 	STA		SPI_TRANS_CTRL_REG
 .0002:
-	LDA		SPI_TRANS_STS_REG		; wait for SPI transfer to complete
+	LDA		SPI_TRANS_STATUS_REG		; wait for SPI transfer to complete
 	CMP		#SPI_TRANS_BUSY
 	BEQ		.0002
 	LDA		SPI_TRANS_ERROR_REG
@@ -3021,7 +3175,7 @@ msgSpiWriteError:
 ;------------------------------------------------------------------------------
 
 rtc_init:
-		LDA		#53					; constant for 125kHz I2C from 33MHz 
+		LDA		#17					; constant for 400kHz I2C from 33MHz
 		STA		I2C_PRESCALE_LO
 		RTS
 
@@ -3190,19 +3344,297 @@ ICacheIL832:
 	RTS
 
 ;============================================================================
+;============================================================================
+; SD Card COS
+;============================================================================
+;============================================================================
+
+; "Format" the SD card. This basically just sets the BAM to zero indicating
+; no allocated clusters, and zeros out the root directory
+;
+SDC_Format:
+	LDA		#0
+	LDX		#0
+.zeroSector:
+	STA		$F0000,X
+	INX
+	CPX		#512
+	BNE		.zeroSector
+	LDA		#$FFFF				; the first 17 clusters are allocated
+	STA		$F0000				; for the BAM and root directory
+	LDA		#$8000
+	STA		$F0002
+
+	JSR		spi_master_init
+	STZ		secnum				; set starting sector # to zero
+	STZ		secnum+2
+.nextSector:
+	PEA		$000F				; push buffer address
+	PEA		$0000
+	LDA		secnum+2			; push sector number
+	PHA
+	LDA		secnum
+	PHA
+	JSR		spi_master_write
+	STZ		$F0000
+	STZ		$F0002
+	LDA		secnum
+	CMP		#135
+	BEQ		.doneFmt
+	INC		secnum
+	BRA		.nextSector
+.doneFmt:
+	RTS
+
+; Parameters
+; .A = # of sectors to read
+; starting sector number
+; pointer to buffer
+;
+SDC_Jmp:
+	JMP		(spi_rw_vect)
+
+SDC_ReadWriteMultiple:
+	STA		numsec
+	TSA
+	SEC
+	SBC		#8
+	TAS
+	TSX
+	LDA		11,X
+	STA		1,X
+	LDA		13,X
+	STA		3,X
+	LDA		15,X
+	STA		5,X
+	LDA		17,X
+	STA		7,X
+.nextSector:
+	JSR		SDC_Jmp
+	CMP		#0
+	BNE		.abort
+	TSA
+	SEC
+	SBC		#8
+	TAS
+	TSX
+	; increment the starting sector #
+	INC		11,X
+	BNE		.0001
+	INC		13,X
+.0001:
+	CLC
+	; increment buffer pointer by 512 bytes
+	INC		17,X
+	INC		17,X
+	; copy parameters back to stack
+	LDA		11,X
+	STA		1,X
+	LDA		13,X
+	STA		3,X
+	LDA		15,X
+	STA		5,X
+	LDA		17,X
+	STA		7,X
+	DEC		numsec
+	BNE		.nextSector
+.abort:
+	RTS		#8
+
+SDC_SaveRootDir:
+	LDA		#spi_master_write
+	BRA		SDC_SRD1
+SDC_LoadRootDir:
+	LDA		#spi_master_read	; flag an spi read
+SDC_SRD1:
+	STA		spi_rw_vect
+	PEA		$000E				; directory buffer address = $EF000
+	PEA		$F000
+	PEA		$0
+	LDA		#128				; root directory is at sector 128
+	PHA
+	LDA		#8					; 8 sectors to load
+	JSR		SDC_ReadWriteMultiple
+	RTS
+
+SDC_SaveBAM:
+	LDA		#spi_master_write
+	BRA		SDC_SVB1
+SDC_LoadBAM:
+	LDA		#spi_master_read
+SDC_SVB1:
+	STA		spi_rw_vect
+	PEA		$000F
+	PEA		$0000
+	PEA		$0000				; BAM starts at sector zero
+	PEA		$0000
+	LDA		#128				; 128 sectors to read
+	JSR		SDC_ReadWriteMultiple
+	RTS
+
+; Parameters (on stack)
+; pointer to filename
+; pointer to disk buffer
+;
+SDC_LoadFile:
+	JSR		SDC_LoadRootDir
+	LDX		#32
+.nxt2:
+	LDY		#0
+	LDA		#$000E
+	STA		dirptr+2
+	LDA		#$F000
+	AAX
+	STA		dirptr
+.nxtCmp:
+	LDA.B	{3,S},Y
+	BEQ		.doneCmp
+	CMP.B	[dirptr],Y
+	BNE		.nextDirentry
+	INY
+	CPY		#15
+	BLT		.nxtCmp
+.found:
+	LDA		9,S
+	TAX
+	LDA		7,S
+	PHX
+	PHA
+	LDY		#26
+	LDA		[dirptr],Y 
+	TAX
+	LDY		#24
+	LDA		[dirptr],Y
+	JSR		ClusterToSector
+	PHX
+	PHA
+	LDY		#29
+	LDA		[dirptr],Y
+	LSR
+	JSR		SDC_ReadMultiple
+	RTS		#8
+.doneCmp:
+	LDA		[dirptr],Y
+	BEQ		.found
+.nextDirentry:
+	TXA
+	CLC
+	ADC		#32
+	TAX
+	CPX		#$1000
+	BLT		.nxt2
+	PEA		5
+	PEA		msgFileNotFound
+	JSR		DisplayString
+	RTS		#8
+
+ClusterToSector:
+	STA		NumWorkArea
+	STX		NumWordArea+2
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	ASL		NumWorkArea
+	ROL		NumWorkArea+2
+	LDA		NumWorkArea
+	LDX		NumWorkArea+2
+	RTS
+
+msgFileNotFound:
+	.byte	"File not found",$0D,$0A,$00
+
+;============================================================================
+; BASIC support functions
+;============================================================================
+BASIC_Savefile:
+	LDA		#spi_master_write
+	STA		spi_vect
+	PEA		$1		; buffer = $10000
+	PEA		$0
+	PEA		$0
+	PEA		136		; starting sector
+	LDA		#64		; 64 sectors (32 kiB)
+	JSR		SDC_ReadWriteMultiple
+	RTS
+
+BASIC_Loadfile:
+	LDA		#spi_master_read
+	STA		spi_vect
+	PEA		$1		; buffer = $10000
+	PEA		$0
+	PEA		$0
+	PEA		136		; starting sector
+	LDA		#64		; 64 sectors (32 kiB)
+	JSR		SDC_ReadWriteMultiple
+	RTS
+
+;============================================================================
 ; Multi-tasking kernel
 ;============================================================================
+
+FMTK_Init:
+	REP		#$130
+	SEP		#$200
+	MEM		32
+	NDX		32
+	LDA		#0
+	STA		running_task
+
+	; zero out the IRQ hook vectors
+	LDA		#0
+	TAX
+.0001:
+	STA		IRQ1Hook,X
+	STA		IRQ1Hook+2,X
+	INX4
+	CPX		#MAX_IRQ_HOOK*4
+	BNE		.0001
+
+	; initialize message array
+	; create the free message list
+	; for each message
+	; msg->link = handle of next message
+	LDY		#0
+.nxtMsg:
+	TYA
+	JSR		hMsgToAddr
+	TAX
+	INY
+	TYA
+	STA.H	MSG_link,X
+	CPY		#NR_MSG
+	BLT		.nxtMsg
+	; flag the last message as no more links
+	LDA		#$FFFFFFFF
+	STA.H	MSG_link,X
+	; now point free list to first message
+	STZ.H	freeMSG
+
+	REP		#$230
+	SEP		#$100
+	MEM		16
+	NDX		16
+	RTS
 
 .include "FMTKmsg.asm"
 
 	MEM		32
 	NDX		32
+
+LockSysSema:
+	SEI
+	RTS
+UnlockSysSema:
+	CLI
+	RTS
+
 ;----------------------------------------------------------------------------
 ; SelectTaskToRun:
 ;
 ; Selects a task to run from the ready fifo. The ready fifo is really a 
 ; group of fifos, one each for a priority group. Priority groups are
-; $0x, $1x, $2x, $3x, $4x
+; priorities of: $0x, $1x, $2x, $3x, $4x
 ;
 ; Returns
 ;	.A = task number to run
@@ -3216,7 +3648,7 @@ StartQ:
 SelectTaskToRun:
 	LDA		#4
 	STA.B	qcnt
-	LDA		TickCount		; vary the starting queue to check
+	LDA.B	TickCount		; vary the starting queue to check
 	AND		#$0F			; based on the tick count
 	TAY
 	LDA.B	StartQ,Y
@@ -3231,8 +3663,8 @@ SelectTaskToRun:
 	JSR		hTcbToAddr
 	TAY
 	LDA.B	TCB_status,Y	; check the status and make sure it's ready
-	CMP		#TS_READY
-	BNE		.notReady
+	BIT		#TS_READY|TS_PREEMPT
+	BEQ		.notReady
 	LDA.H	hTcbTmp
 	STA.H	READY_FIFO,X	; add back to fifo as last entry
 	RTS
@@ -3252,8 +3684,15 @@ SelectTaskToRun:
 
 ;----------------------------------------------------------------------------
 ; Insert task into ready fifo.
+;
+; If the task has a bad priority setting then it's added as a lowest
+; priority task, priority zero. It's desired for the task to run even if
+; the priority is screwy.
+;
 ; Parameters:
 ;	.A = handle to TCB
+; Modifies:
+;	.X = priority queue index
 ;----------------------------------------------------------------------------
 
 InsertIntoReadyFifo:
@@ -3267,10 +3706,14 @@ InsertIntoReadyFifo:
 	LSR
 	LSR
 	LSR
+	CMP		#4					; valid priority ?
+	BLE		.0001
+	LDA		#0
+.0001:
 	ASL
-	TAY
+	TAX
 	PLA
-	STA.H	READY_FIFO,Y
+	STA.H	READY_FIFO,X
 	RTS
 
 ; IRQ routine for all modes. The interrupted task must of had interrupts
@@ -3288,43 +3731,147 @@ IRQRout02:
 	TSK		#1			; switch to the interrupt handling task
 	RTI
 
+;----------------------------------------------------------------------------
+; Select a task to run from the ready queue.
+; Called by some OS primitives
+; Even if the task was preempted a regular RTT instruction is used to
+; return. This is because this function was called via JCR.
+;----------------------------------------------------------------------------
+
+ScheduleTask:
+	PHP						; 832 mode will push 2 bytes
+	SEI
+	; update the number of tick the task has been running.
+	LDA		running_task	; get currently running task
+	JSR		hTcbToAddr		; get address from handle
+	TAX
+	LDA		TickCount		; get the tick count
+	STA		TCB_end_tick,X	; store it in end ticks
+	SEC
+	SBC		TCB_start_tick,X; subtract off the latest starting tick
+	CLC						; to get the difference 
+	ADC		TCB_ticks,X		; ticks = ticks + (end tick - start tick)
+	STA		TCB_ticks,X
+	JSR		SelectTaskToRun
+	TSX
+	STA.H	$3,X			; change return task # on stack
+	STA.H	running_task
+	JSR		hTcbToAddr		; handle to address
+	TAX
+	LDA		#TS_READY		; reset task status to ready
+	STA.B	TCB_status,X
+	LDA		TickCount		; get the tick count
+	STA		TCB_start_tick,X	; update starting tick
+	PLP						; restore interrupt mask
+	RTT						; return
+	BRA		ScheduleTask
+
+;----------------------------------------------------------------------------
 ; This task has interrupts masked in it's startup record and therefore runs
 ; with interrupts masked as the task never enables interrupts. Note that it's
 ; important that interrupts are masked while this is running, otherwise the
 ; uncleared interrupt status would cause another interrupt resulting in an
 ; infinite interrupt loop.
-
+;
+; This task always needs to return using a RTI in order to keep the internal
+; IRQ state stack in sync.
+;----------------------------------------------------------------------------
 Task1:
+	; Counter #1 is set to interrupt at a 50Hz rate
+;	LDA		#$2A	;94		; divide by 95794 (for 50Hz)
+;	STA.B	CTR1_LMT		; FFFFFE = 2Hz with 33MHz clock
+;	LDA		#$2C	;57		; 
+;	STA.B	CTR1_LMT+1
+;	LDA		#$0A	;09
+;	STA.B	CTR1_LMT+2
+;	LDA		#$05		; count down, on mpu clock, irq disenabled
+;	STA.B	CTR1_CTRL
+;	RTT					; falls through on next task activation
+
+TimeSliceIRQ:
 	LDA.B	MPU_IRQ_STATUS	; check if counter expired
 	BIT		#2				; counter #1 IRQ active bit
-	BEQ		.0001			; no IRQ ?
+	LBEQ	.notTimeSlice	; no IRQ ?
+
+	; update the tick count
 	LDA		TickCount		; increment the tick count
 	INA						; lower 16 bits
 	STA		TickCount
 	STA.B	$FFF:$D00A4		; update on-screen IRQ live indicator
+
+	; clear the IRQ source
 	LDA		#$05			; count down, on mpu clock, irq enabled (clears irq)
 	STA.B	CTR1_CTRL		; set control register clearing interrupt
-	LDA.B	$0:$100DF		; Set flag for EhBASIC Irq
+
+	; Set flag for EhBASIC Irq
+	LDA.B	$100DF		
 	ORA		#$20
-	STA.B	$0:$100DF
+	STA.B	$100DF
+	
+	; update the number of tick the task has been running.
+	; and set the task status to PREEMPT
+	LDA.H	running_task
+	JSR		hTcbToAddr		; get address from handle
+	TAX
+	LDA		TickCount		; get the tick count
+	STA		TCB_end_tick,X	; store it in end ticks
+	SEC
+	SBC		TCB_start_tick,X; subtract off the latest starting tick
+	CLC						; to get the difference 
+	ADC		TCB_ticks,X		; ticks = ticks + (end tick - start tick)
+	STA		TCB_ticks,X
+	LDA		#TS_PREEMPT
+	STA.B	TCB_status,X	; set status of outgoing task to PREEMPT
+
+	; take care of the timeout list
 .nextTo:
-	LDA		#TOL_DEC
+	LDA		#TOL_DEC		; .A = decrement command #
 	STA.B	TIMEOUT_LIST	; decrement the timeout list
 	NOP						; might take up to 3 clock cycles
 	NOP
 	LDA.H	TIMEOUT_LIST+2	; get any timedout task
 	BMI		.noMoreTos
-	JSR		InsertIntoReadyFifo
+	JSR		InsertIntoReadyFifo	; placed timedout task on ready list
 	BRA		.nextTo
+
+	; Switch to the next task to run
 .noMoreTos:
 	LDA.B	TaskSwitchEn	; only switch tasks if enabled
 	BEQ		.0001
 	JSR		SelectTaskToRun
 	TSX
+	LDY.H	$1,X			; .Y = outgoing task
 	STA.H	$1,X			; change return task # on stack
+	STA.H	running_task	; update running task var
+	JSR		hTcbToAddr		; convert task handle to address
+	TAX
+	LDA		TickCount		; update starting tick for task
+	STA		TCB_start_tick,X
 .0001:
-	RIT					; return from interrupt task
-	BRA		Task1		; the next time task1 is run it will start here
+	RTI						; return from interrupt
+	BRL		TimeSliceIRQ	; the next time task1 is run it will start here
+
+; We get here if it wasn't a timeslice interrupt. There still might be other
+; devices tied to the same IRQ line which need servicing.
+
+.notTimeSlice:
+	LDX		#0
+.0002:
+	LDA		IRQ1Hook,X		; get the hook pointer
+	BEQ		.noHook			; check if valid
+	PHX						; save off .X
+	JCI						; call the hook routine
+	PLX						; restore .X
+.noHook:
+	INX4					; move to next hook
+	CPX		#MAX_IRQ_HOOKS*4
+	BNE		.0002			; last allowed hook ?
+	RTI
+	BRL		TimeSliceIRQ	; the next time task1 is run it will start here
+
+;============================================================================
+; End Of Multi-tasking kernel
+;============================================================================
 
 	MEM		16
 	NDX		16
@@ -3332,26 +3879,26 @@ BtnuIRQ:
 	LDA.B	$FFF:$D00A0
 	INA
 	STA.B	$FFF:$D00A0
-	JSR		spi_master_init
-	CMP		#0
-	BNE		.0001
-	LDX		#0
-.0002:
-	PEA		$000F
-	TXA
-	XBA
-	ASL
-	PHA
-	PEA		0
-	PEA		0
-	STX		reg_x
-	JSR		spi_master_read
-	LDX		reg_x
-	INX
-	CPX		#128
-	BNE		.0002
-.0001:
-	RIT
+;	JSR		spi_master_init
+;	CMP		#0
+;	BNE		.0001
+;	LDX		#0
+;.0002:
+;	PEA		$000F
+;	TXA
+;	XBA
+;	ASL
+;	PHA
+;	PEA		0
+;	PEA		0
+;	STX		reg_x
+;	JSR		spi_master_read
+;	LDX		reg_x
+;	INX
+;	CPX		#128
+;	BNE		.0002
+;.0001:
+	RTI
 	BRA		BtnuIRQ
 
 ; IRQ handler task - 32 bit
@@ -3418,6 +3965,7 @@ BrkRout:
 	PHX
 	PHY
 	JMP		($0102)		; This jump normally points to BrkRout1
+
 BrkRout1:
 	REP		#$30
 	PLY
@@ -3499,8 +4047,8 @@ TaskStartTbl:
 	.WORD	0
 	.WORD	$3FFF		; sp
 	.WORD	0
-	.BYTE	4			; SR
-	.BYTE	1			; SR extension
+	.BYTE	4			; SR	( 16 bit regs )
+	.BYTE	1			; SR extension ( 16 bit mode)
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 	.WORD	0
@@ -3520,7 +4068,7 @@ TaskStartTbl:
 	.WORD	0
 	.WORD	$3BFF		; sp
 	.WORD	0
-	.BYTE	4			; SR
+	.BYTE	4			; SR	(32 bit regs)
 	.BYTE	2			; SR extension	(32 bit mode)
 	.BYTE	0			; DB
 	.WORD	0			; DPR
@@ -3640,7 +4188,7 @@ TaskStartTbl:
 	.WORD	$01FF		; sp
 	.WORD	0
 	.BYTE	0			; SR
-	.BYTE	0			; SR extension - 832 mode
+	.BYTE	0			; SR extension - 02 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 	.WORD	63			; map
@@ -3649,7 +4197,7 @@ TaskStartTbl:
 	.WORD	$0			; CS
 	.WORD	$5			; DS
 	.WORD	$5			; SS
-	.WORD	$C000		; PC
+	.WORD	$8000		; PC
 	.BYTE	$00
 	.WORD	0			; acc
 	.WORD	0
@@ -3660,7 +4208,7 @@ TaskStartTbl:
 	.WORD	$2BFF		; sp
 	.WORD	0
 	.BYTE	0			; SR
-	.BYTE	1			; SR extension - 832 mode
+	.BYTE	1			; SR extension - 816 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 	.WORD	0			; map
@@ -3670,7 +4218,7 @@ TaskStartTbl:
 	.WORD	0			; DS
 	.WORD	0			; SS
 	.WORD	SSMInit		; PC
-	.BYTE	SSMTnit>>16
+	.BYTE	SSMInit>>16
 	.WORD	0			; acc
 	.WORD	0
 	.WORD	0			; x
@@ -3681,6 +4229,26 @@ TaskStartTbl:
 	.WORD	0
 	.BYTE	$4			; SR	16 bit regs, mask interrupts
 	.BYTE	1			; SR extension - 816 mode
+	.BYTE	0			; DB
+	.WORD	0			; DPR
+	.WORD	0
+
+	; task 10 - BRK routine
+	.WORD	0			; CS
+	.WORD	0			; DS
+	.WORD	0			; SS
+	.WORD	BrkRout		; PC
+	.BYTE	BrkRout>>16
+	.WORD	0			; acc
+	.WORD	0
+	.WORD	0			; x
+	.WORD	0
+	.WORD	0			; y
+	.WORD	0
+	.WORD	$32FF		; sp
+	.WORD	0
+	.BYTE	$4			; SR	32 bit regs, mask interrupts
+	.BYTE	2			; SR extension - 832 mode
 	.BYTE	0			; DB
 	.WORD	0			; DPR
 	.WORD	0
@@ -3965,20 +4533,31 @@ MusicTimeoutIRQ:
 	RTS
 
 	.org	$FE00
-	JMP		SuperGetch
-	JMP		warm_start
-	JMP		SuperPutch
-	JMP		BIOSInput
-	JMP		BasicGetch
-	JMP		xitBasic
+	JMP		SuperGetch		; FE00
+	JMP		warm_start		; FE03
+	JMP		SuperPutch		; FE06
+	JMP		BIOSInput		; FE09
+	JMP		BasicGetch		; FE0C
+	JMP		xitBasic		; FE0F
+	JMP		BASIC_Loadfile	; FE12
+	JMP		BASIC_Savefile	; FE15
+
+	JMP		ScheduleTask	; FE18
+	JMP		FMTK_AllocMbx
+	JMP		$0				; reserved for FreeMbx
+	JMP		FMTK_SendMsg
+	JMP		FMTK_PostMsg
+	JMP		FMTK_WaitMsg
+	JMP		FMTK_PeekMsg
+	JMP		FMTK_CheckMsg
 
 	.org 	$FFD6
 	dw		4			; task #4
 
-	.org	$FFDE
-	dw		6			; task #6
+	.org	$FFDE		; '832 IRQ vector
+	dw		1			;
 
-	.org	$FFE0
+	.org	$FFE0		; IRQ3 vector
 	dw		3
 
 	.org 	$FFE6
@@ -3987,8 +4566,8 @@ MusicTimeoutIRQ:
 	.org	$FFEE		; '816 IRQ vector
 	dw		1			; IRQRout816
 
-	.org	$FFFC
-	dw		$E000
+	.org	$FFFC		; reset vector
+	dw		$C000
 
 	.org	$FFFE
 	dw		1			; IRQRout02

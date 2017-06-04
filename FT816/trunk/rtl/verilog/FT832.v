@@ -57,6 +57,9 @@
 `define BRK_VECT_816	32'h0000FFE6
 `define COP_VECT_816	32'h0000FFE4
 
+`define IRQ2_VECT       32'h0000FFE2
+`define IRQ3_VECT       32'h0000FFE0
+
 `define RST_VECT_832	32'h0000FFFC
 `define IRQ_VECT_832	32'h0000FFDE
 `define NMI_VECT_832	32'h0000FFDA
@@ -68,6 +71,7 @@
 `define BRK			9'h00
 `define BRK2		9'h100
 `define RTI			9'h40
+`define RIT         9'h150
 `define RTS			9'h60
 `define PHP			9'h08
 `define CLC			9'h18
@@ -621,7 +625,7 @@
 
 // Input Frequency is 32 times the 00 clock
 
-module FT832(corenum, rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq, abort, e, mx, rdy, be, vpa, vda, mlb, vpb,
+module FT832(corenum, rst, clk, clko, cyc, phi11, phi12, phi81, phi82, nmi, irq1, irq2, irq3, abort, e, mx, rdy, be, vpa, vda, mlb, vpb,
     rw, ad, db, err_i, rty_i);
 parameter STORE_SKIPPING = 1'b1;        // set to 1 to skip the store operation if the value didn't change during a RMW instruction
 parameter EXTRA_LONG_BRANCHES = 1'b1;   // set to 1 to use an illegal branch displacement ($FF) to indicate a long branch
@@ -700,7 +704,9 @@ output phi12;
 output phi81;
 output phi82;
 input nmi;
-input irq;
+input irq1;
+input irq2;
+input irq3;
 input abort;
 output e;
 output mx;
@@ -785,6 +791,10 @@ wire [31:0] y_inc = y + 32'd1;
 reg gie;	// global interrupt enable (set when sp is loaded)
 reg hwi;	// hardware interrupt indicator
 reg im;
+reg [2:0] iml,iml1;
+reg [2:0] irqenc;
+reg [15:0] ima;
+reg its;    // interrupt task switch bit
 reg cf,vf,nf,zf,df,em,bf;
 reg m816,m832;
 reg x_bit,m_bit;
@@ -845,6 +855,7 @@ reg [31:0] wdat;
 wire [7:0] rdat;
 reg [5:0] load_what;
 reg [5:0] store_what;
+reg [15:0] temp_vec;
 reg s8,s16,s32,lds;
 reg sop;                // size override prefix
 reg [31:0] tmp32;
@@ -1223,8 +1234,11 @@ end
 // - this circuit must be under the clk_i domain
 //-----------------------------------------------------------------------------
 //
-reg cpu_clk_en;
+//wire clkx = clk;
+//assign clko = clkx;
+
 reg clk_en;
+reg cpu_clk_en;
 wire clkx;
 BUFGCE u20 (.CE(cpu_clk_en), .I(clk), .O(clkx) );
 assign clko = clkx;
@@ -1247,6 +1261,15 @@ reg isRstVect;
 reg abort1;
 reg abort_edge;
 reg [2:0] imcd;	// interrupt mask enable count down
+always @*
+if (~irq3)
+    irqenc <= 3'b011;
+else if (~irq2)
+    irqenc <= 3'b010;
+else if (~irq1)
+    irqenc <= 3'b001;
+else
+    irqenc <= 3'b000;
 
 always @(posedge clkx)
 if (~rst) begin
@@ -1296,6 +1319,9 @@ if (~rst) begin
 	stack_bank <= 16'h0000;
 	clk_en <= 1'b1;
 	im <= `TRUE;
+	iml <= 3'b000;
+	imcd <= 3'b111;
+    ima <= 16'h0000;
 	mib <= `FALSE;
 	gie <= 1'b0;
 	isIY <= 1'b0;
@@ -1304,7 +1330,6 @@ if (~rst) begin
 	load_what <= `NOTHING;
 	abort_edge <= 1'b0;
 	abort1 <= 1'b0;
-	imcd <= 3'b111;
 	inv_icache <= TRUE;
 	inv_iline <= FALSE;
 	pc_cap <= TRUE;
@@ -1397,10 +1422,11 @@ IFETCH:
 		store_what <= (m32 | m16) ? `STW_DEF70 : `STW_DEF;
 	    ir <= insn;
 		opc <= pc;
-		if (nmi_edge | ~irq)
+		if (nmi_edge | ~irq1 | ~irq2 | ~irq3)
 			wai <= 1'b0;
 		if (abort_edge) begin
 			pc <= opc;
+            iml1 <= 3'd7;
 			ir[7:0] <= `BRK;
 			abort_edge <= 1'b0;
 			hwi <= `TRUE;
@@ -1412,30 +1438,32 @@ IFETCH:
 			next_state(DECODE);
 		end
 		else if (nmi_edge & gie) begin
+            iml1 <= 3'd7;
 			ir[7:0] <= `BRK;
 			nmi_edge <= 1'b0;
 			hwi <= `TRUE;
 			vect <= m832 ? `NMI_VECT_832 : m816 ? `NMI_VECT_816 : `BYTE_NMI_VECT;
 			vect[23:16] <= 8'h00;
-			seg <= 32'd0;
-			lmt <= 32'hFFFF;
-			mem_wr <= FALSE;
 			next_state(DECODE);
 		end
-		else if (~irq & gie & ~im) begin
+		else if ((irqenc > iml) && gie && !im) begin
+		    iml1 <= irqenc;
 			ir[7:0] <= `BRK;
 			hwi <= `TRUE;
-			if (m832)
-			    vect <= `IRQ_VECT_832;
-			else if (m816)
-				vect <= `IRQ_VECT_816;
-			seg <= 32'd0;
-			lmt <= 32'hFFFF;
-			mem_wr <= FALSE;
+			case(irqenc)
+            3'b010: vect <= `IRQ2_VECT;
+            3'b011: vect <= `IRQ3_VECT;
+            default:    // 001
+                if (m832)
+                    vect <= `IRQ_VECT_832;
+                else if (m816)
+                    vect <= `IRQ_VECT_816;
+			endcase
 			next_state(DECODE);
 		end
 `ifdef SUPPORT_SEG		
 		else if (pc > cs_limit) begin
+		    iml1 <= 3'd7;
 			ir[7:0] <= `BRK;
             hwi <= `TRUE;
             if (m832)
@@ -1959,7 +1987,7 @@ DECODE:
 		`SEC:	begin cf <= 1'b1; end
 		`CMC:   cf <= ~cf;
 		`CLV:	begin vf <= 1'b0; end
-		`CLI:	begin imcd <= 3'b110; end
+		`CLI:	begin im <= 1'b0; end// imcd <= 3'b110; end
 		`SEI:	begin im <= 1'b1; end
 		`CLD:	begin df <= 1'b0; end
 		`SED:	begin df <= 1'b1; end
@@ -2043,6 +2071,23 @@ DECODE:
 				state <= LOAD_MAC1;
 			end
 		`RTI:	begin
+		        iml <= ima[2:0];
+		        its <= ima[3];
+		        ima <= {4'b0,ima[15:4]};
+		        if (ima[3]) begin
+                    set_task_regs(24'd1);
+                    tsk_pres <= PRES_NONE;
+                    sp_i <= fn_add_to_sp(32'd2);
+                    inc_sp();
+`ifdef SUPPORT_SEG                
+                    seg <= ss_base;
+                    lmt <= ss_limit;
+                    mem_wr <= ss_wr;
+`endif                
+                    load_what <= `LDW_TR70S;
+                    state <= LOAD_MAC1;
+                end
+                else begin
 `ifdef SUPPORT_SEG		
 			    seg <= ss_base;
                 lmt <= ss_limit;
@@ -2051,14 +2096,6 @@ DECODE:
 `ifdef SUPPORT_TASK
 		        if (m832) begin
                     set_task_regs(24'd1);
-`ifdef TASK_BL
-                    begin
-                        tr <= back_link;
-                        tsk_pres <= 7'h0;
-                        retstate <= IFETCH;
-                        next_state(TSK1);
-                    end
-`else
                     begin
                         sp_i <= fn_add_to_sp(32'd2);
                         inc_sp();
@@ -2071,7 +2108,6 @@ DECODE:
                         load_what <= `LDW_TR70S;
                         state <= LOAD_MAC1;
                     end
-`endif
                 end
                 else
 `endif
@@ -2081,7 +2117,7 @@ DECODE:
                     load_what <= `SR_70;
                     state <= LOAD_MAC1;
 				end
-				
+				end
 				end
 		`PHP:   begin
 		             if (m832 || (sop & s16))
@@ -3431,40 +3467,17 @@ DECODE:
                 else
                     pc <= pc;   // override increment above
                 begin
-`ifdef SUPPORT_TASK
-                    if (TASK_VECTORING) begin
+                iml <= iml1;
+                ima <= {ima[11:0],1'b0,iml};
 `ifdef SUPPORT_SEG                        
-                        seg <= 32'd0;
-                        lmt <= 32'hFFFF;
-                        mem_wr <= FALSE;
+                seg <= 32'd0;
+                lmt <= 32'hFFFF;
+                mem_wr <= FALSE;
 `endif                        
-                        radr <= vect;
-                        otr <= tr;
-                        load_what <= `LDW_TR70;
-                        next_state(LOAD_MAC1);
-                    end
-                    else begin
-                        set_sp();
-`ifdef SUPPORT_SEG                        
-                        seg <= ss_base;
-                        lmt <= ss_limit;
-                        mem_wr <= ss_wr;
-`endif                        
-                        store_what <= `STW_CS158;
-                        data_nack();
-                        state <= STORE1;
-                    end
-`else
-                    set_sp();
-`ifdef SUPPORT_SEG                    
-                    seg <= ss_base;
-                    lmt <= ss_limit;
-                    mem_wr <= ss_wr;
-`endif                    
-                    store_what <= `SUPPORT_SEG ? `STW_CS158 : `STW_PC2316;
-                    data_nack();
-                    state <= STORE1;
-`endif
+                radr <= vect;
+                otr <= tr;
+                load_what <= `LDW_TR70;
+                next_state(LOAD_MAC1);
                 end
                 /*
                 else begin
@@ -3481,8 +3494,11 @@ DECODE:
                 */
                 bf <= !hwi;
             end
+        // ToDo: update this to work like BRK
 		`COP:
             begin
+                iml <= 3'd7;
+                ima <= {ima[1:0],4'd7};
                 inc_pc(24'd2);
                 set_sp();
 `ifdef SUPPORT_SEG                
@@ -3774,6 +3790,28 @@ DECODE:
                 state <= LOAD_MAC1;
 `endif
             end
+		`RIT:
+            begin
+                iml <= ima[2:0];
+                ima <= {3'b0,ima[11:3]};
+                set_task_regs(24'd1);
+                tsk_pres <= PRES_NONE;
+`ifdef TASK_BL
+                tr <= back_link;
+                retstate <= IFETCH;
+                next_state(TSK1);
+`else
+                sp_i <= fn_add_to_sp(32'd2);
+                inc_sp();
+`ifdef SUPPORT_SEG                
+                seg <= ss_base;
+                lmt <= ss_limit;
+                mem_wr <= ss_wr;
+`endif                
+                load_what <= `LDW_TR70S;
+                state <= LOAD_MAC1;
+`endif
+            end
         `LDT_XABS:
             begin
                 inc_pc(24'd5);
@@ -3908,8 +3946,10 @@ DECODE:
             end
 		`RTC:
             begin
-                inc_pc(24'd2);
-                set_task_regs(24'd2);
+                // Cause a subsequent TSK instruction to return to the RTC and return
+                // right away by backing up the PC to the start of the instruction.
+                inc_pc(24'hFFFFFF);
+                set_task_regs(24'hFFFFFF);
                 tsk_pres <= PRES_FAXY;
 `ifdef TASK_BL
                 sp_i <= fn_add_to_sp(ir[15:8]);
@@ -4000,8 +4040,10 @@ TSK1:
         // continuously.
         if (sr_o[2]|hwi)
             im <= 1'b1;
-        else
-            imcd <= 3'b110;
+        else begin
+            im <= 1'b0;
+            //imcd <= 3'b110;
+        end
         df <= sr_o[3];
         if (srx_o[1:0]!=2'b00) begin
             x_bit <= sr_o[4];
@@ -4363,10 +4405,12 @@ LOAD_MAC2:
             `SR_70:        begin
                             cf <= dati[0];
                             zf <= dati[1];
-                            if (dati[2])
+                            if (dati[2] & ~isRTI)
                                 im <= 1'b1;
-                            else
-                                imcd <= 3'b110;
+                            else begin
+                                im <= 1'b0;
+                                //imcd <= 3'b110;
+                            end
                             df <= dati[3];
                             if (m816|m832) begin
                                 x_bit <= dati[4];
@@ -4420,21 +4464,35 @@ LOAD_MAC2:
              `LDW_TR158: begin
                            radr <= inc_adr(radr);
                            vpb <= FALSE;
-                           if ({dati[`TASK_MEM_ABIT-8:0],b32[7:0]} != tr) begin
-                               set_task_regs(hwi ? 24'd0 : 24'd2);
-                               tr <= {dati,b32[7:0]};
-                               back_link <= tr;
-                               tsk_pres <= PRES_BACKLINK;
-                               state <= TSK1;
-`ifdef TASK_BL
-                               retstate <= IFETCH;
-`else                               
-                               store_what <= `STW_TR158;
-                               retstate <= STORE1;
-`endif
+                           if (dati[7:1]==7'b0) begin
+                               ima[3] <= 1'b1;
+                               its <= 1'b1;
+                               if ({dati[`TASK_MEM_ABIT-8:0],b32[7:0]} != tr) begin
+                                   set_task_regs(hwi ? 24'd0 : 24'd2);
+                                   tr <= {dati,b32[7:0]};
+                                   back_link <= tr;
+                                   tsk_pres <= PRES_BACKLINK;
+                                   state <= TSK1;
+                                   store_what <= `STW_TR158;
+                                   retstate <= STORE1;
+                               end
+                               else begin
+                                   next_state(IFETCH);
+                               end
                            end
                            else begin
-                               next_state(IFETCH);
+                               its <= 1'b0;
+                               ima[3] <= 1'b0;
+                               temp_vec <= {dati,b32[7:0]};
+                               set_sp();
+`ifdef SUPPORT_SEG                    
+                               seg <= ss_base;
+                               lmt <= ss_limit;
+                               mem_wr <= ss_wr;
+`endif                    
+                               store_what <= `SUPPORT_SEG ? `STW_CS158 : `STW_PC2316;
+                               data_nack();
+                               state <= STORE1;
                            end
                         end
              `LDW_TR70S:
@@ -4452,6 +4510,8 @@ LOAD_MAC2:
                        end
 `endif
              `PC_70:        begin
+                            if (ir[7:0]==`BRK && hwi)
+                                im <= 1'b1;
                             pc[7:0] <= dati;
                             load_what <= `PC_158;
                             if (isRTI|isRTS|isRTL|isRTF) begin
@@ -4494,6 +4554,7 @@ LOAD_MAC2:
                             end
                             else begin   // brk
                                 vpb <= `FALSE;
+                                pc[23:16] <= 8'h00;
                                 cs <= 16'h0000;
                                 sdt_ra <= 12'h000;
                                 next_state(JMF1);
@@ -5090,26 +5151,13 @@ STORE2:
         `STW_SR70:
 			begin
 				if (ir[7:0]==`BRK) begin
-					load_what <= `PC_70;
-					set_vect_seg();
-					state <= LOAD_MAC1;
-					pc[23:16] <= 8'h00;//abs8[23:16];
-					radr <= vect;
-					vpb <= TRUE;
-//					data_read(vect);
-					im <= hwi;
+					pc <= {8'h00,temp_vec};//abs8[23:16];
 					df <= 1'b0;
 					bank_wrap <= FALSE;
                     page_wrap <= FALSE;
 				end
 				else if (ir[7:0]==`COP) begin
-					load_what <= `PC_70;
-					set_vect_seg();
-					state <= LOAD_MAC1;
-					pc[23:16] <= 8'h00;//abs8[23:16];
-					radr <= vect;
-					vpb <= TRUE;
-//					data_read(vect);
+					pc <= {8'h00,temp_vec};//abs8[23:16];
 					im <= 1'b1;
 					bank_wrap <= FALSE;
                     page_wrap <= FALSE;
@@ -5222,7 +5270,7 @@ SSM1:
         set_task_regs(24'd0);
         otr <= tr;
         back_link <= tr; 
-        tr <= 16'd3;        // single step task
+        tr <= 16'd9;        // single step task
         tsk_pres <= 7'h2C;
         acc <= tr;
         x <= pc;
@@ -5382,8 +5430,11 @@ begin
     x_i <= x;
     y_i <= y;
     sp_i <= sp;
-    sr_i <= sr8;
-    srx_i <= {3'b0,ssm,1'b0,mib,m832,m816};
+    if (tr==9'd1 || tr==9'd2 || tr==9'd3)
+        sr_i <= sr8|8'h04;//sr8&8'hFB;
+    else
+        sr_i <= sr8&8'hFB;
+    srx_i <= {iml,ssm,1'b0,mib,m832,m816};
     dbr_i <= dbr;
     dpr_i <= dpr;
     bl_i <= back_link;
