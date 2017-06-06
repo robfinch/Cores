@@ -179,7 +179,9 @@ READY_FIFO		EQU		$00FEC200
 READY_FIFO_CNT	EQU		$00FEC210
 TIMEOUT_LIST	EQU		$00FEC300
 
-MAX_IRQ_HOOK	EQU		16
+BIOSctx			EQU		$FC
+OSctx			EQU		$FD
+MAX_IRQ_HOOKS	EQU		16
 
 ; Timeout list commands
 TOL_NOP			EQU		0
@@ -204,6 +206,8 @@ NR_JCB			EQU		64
 NR_TCB			EQU		512
 NR_MBX			EQU		1024
 NR_MSG			EQU		4096
+NR_MBXperJCB	EQU		32
+
 TS_READY		EQU		1
 TS_PREEMPT		EQU		2
 TS_WAITMSG		EQU		4
@@ -212,10 +216,13 @@ MQS_NEWEST		EQU		0		; message queue strategy
 MT_NONE			EQU		0
 MT_FREE			EQU		1
 MBT_DATA		EQU		0
+
 E_Ok			EQU		0
 E_NotAlloc		EQU		-1
 E_NoMsg			EQU		-2
 E_NoMoreMsgBlks	EQU		-3
+E_NoMoreMbx		EQU		-4		; System has no more mailboxes available
+E_TooManyMbx	EQU		-5		; JCB mailboxes maxed out
 
 TCB_SIZE		EQU		64
 tcbs			EQU		$20000
@@ -231,20 +238,16 @@ TCB_msg_tgtadr	EQU		$18	; 2 byte handle
 TCB_msg_retadr	EQU		$1A	; 2 byte handle
 TCB_msg_link	EQU		$1C	; 2 byte handle
 TCB_msg_type	EQU		$1E	; 2 byte value
-TCB_hMbx1		EQU		$20	; 2 byte handle
-TCB_hMbx2		EQU		$22	; 2 byte handle
-TCB_hMbx3		EQU		$24	; 2 byte handle
-TCB_hMbx4		EQU		$26	; 2 byte handle
-TCB_hWaitMbx	EQU		$28	; 2 byte handle
-TCB_number		EQU		$2A	; 2 byte value
-TCB_priority	EQU		$2C	; 1 byte value
-TCB_status		EQU		$2D	; 1 byte value
-TCB_affinity	EQU		$2E	; 1 byte value
-TCB_hJob		EQU		$2F	; 1 byte handle
-TCB_start_tick	EQU		$30	; 4 byte value
-TCB_end_tick	EQU		$34	; 4 byte value
-TCB_ticks		EQU		$38	; 4 byte value
-TCB_exception	EQU		$3C	; 4 byte value
+TCB_hWaitMbx	EQU		$20	; 2 byte handle
+TCB_number		EQU		$22	; 2 byte value
+TCB_priority	EQU		$24	; 1 byte value
+TCB_status		EQU		$25	; 1 byte value
+TCB_affinity	EQU		$26	; 1 byte value
+TCB_hJcb		EQU		$27	; 1 byte handle
+TCB_start_tick	EQU		$28	; 4 byte value
+TCB_end_tick	EQU		$2C	; 4 byte value
+TCB_ticks		EQU		$30	; 4 byte value
+TCB_exception	EQU		$34	; 4 byte value
 
 JCB_SIZE		EQU		1024
 jcbs			EQU		tcbs + TCB_SIZE * NR_TCB
@@ -270,6 +273,7 @@ JCB_KeybdBuffer	EQU		$33B	; 32 byte value
 JCB_number		EQU		$35B	; 1 byte value
 JCB_tasks		EQU		$35C	; 2 byte value * 8
 JCB_next		EQU		$35E	; 1 byte value
+JCB_hMbxs		EQU		$360	; 2 byte value
 
 ; 1024 mailboxes
 mailboxes		EQU		jcbs + JCB_SIZE * NR_JCB
@@ -285,6 +289,7 @@ MBX_mq_count	EQU		$0E	; 2 byte value
 MBX_mq_size		EQU		$10	; 2 byte value
 MBX_mq_missed	EQU		$12	; 2 byte value
 MBX_mq_strategy	EQU		$14	; 1 byte value
+MBX_number		EQU		$16	; 2 byte value
 
 messages	EQU		mailboxes + MBX_SIZE * NR_MBX
 MSG_d1		EQU		$00	; 4 byte value	( 4096 messages )
@@ -302,10 +307,12 @@ hMbxTmp		EQU		hTcbTmp + 2
 hMsgTmp		EQU		hMbxTmp + 2
 freeMBX		EQU		hMsgTmp + 2
 freeMSG		EQU		freeMBX + 2
-nMsgBlk		EQU		freeMSG + 2
+freeJCB		EQU		freeMSG + 2
+nMsgBlk		EQU		freeJCB + 2
 nMailbox	EQU		nMsgBlk + 2
 IRQ1Hook	EQU		nMailbox + 2
-IRQ1HookEnd	EQU		IRQ1Hook + MAX_IRQ_HOOK * 4
+IRQ1HookEnd	EQU		IRQ1Hook + MAX_IRQ_HOOKS * 4
+IOFocusBmp	EQU		IRQ1HookEnd
 
 .include "supermon832.asm"
 .include "FAC1ToString.asm"
@@ -451,7 +458,8 @@ start:
 	DEY
 	BNE		.0001
 
-	STZ		running_task
+	STZ		running_task	; task #0 is the running task
+	STZ		IOFocusTask		; task #0 has the focus to begin with
 
 	LDA		#BrkRout1
 	STA		$0102
@@ -459,10 +467,8 @@ start:
 	STZ		TickCount
 	STZ		TickCount+2
 Task0:
-	; Start the single stepping task.
 	LDA		#$01
 	STA		$7000
-	TSK		#9
 .0001:
 	LDA		#$04
 	STA		$7000
@@ -561,8 +567,6 @@ Task0:
 ;	JSR		InsertIntoReadyFifo
 ;	REP		#$230		; back to 16 bit mode
 ;	SEP		#$100
-	NDX		16
-	MEM		16
 
 	; Create a workhorse OS context that will allow subroutine calls into
 	; the OS code from alternate contexts which may not have the same VM
@@ -575,27 +579,22 @@ Task0:
 	CMP		#$FD
 	BNE		TaskMon2
 TaskFD:
-	SEI
-	REP		#$130
-	SEP		#$200		; switch to 32 bit mode
-	MEM		32
-	NDX		32
-	; A 16 bit pull is needed here so we make use of the direct page register
-	; It'll be restored to zero later.
-	PLD					; get 16 bit value from stack
+	REP		#$230		; in case we loop back to here
+	SEP		#$100
+	PLA					; get 16 bit value from stack
 	LDX		#$22FF
 	TXS
-	PHD					; store 16 bit value to new stack
-	LDA		#0			; restore the DP value
-	TCD
-	CLI
-	NOP		; allow CLI to take place
-	NOP
-	NOP
-	NOP
-	NOP
+	PHA					; store 16 bit value to new stack
+	REP		#$130
+	SEP		#$200		; switch to 32 bit mode
+	SEI		#1			; interrupts masked while in context
+	; After the first return, the context should never use this
+	; return point again. As routines in the context are called
+	; with JCR.
 	RTT
-	BRA		TaskFD
+	BRA		TaskMon1
+	NDX		16
+	MEM		16
 
 TaskMon2:
 	NDX		16
@@ -604,40 +603,40 @@ TaskMon2:
 	; the BIOS code from alternate contexts which may not have the same VM
 	; settings.
 	;
-	SEI
+	SEI		#1
 	FORK	#$FC
 	TTA
 	AND		#$01FF
 	CMP		#$FC
 	BNE		TaskMon1
 TaskFC:
-.0003
-	SEI
 	PLA
 	LDX		#$23FF
 	TXS
 	PHA
 	CLI
-	NOP		; allow CLI to take place
-	NOP
-	NOP
-	NOP
-	NOP
 	RTT
-	BRA		.0003
-TaskMon1:
 
+TaskMon1:
+	; Start the single stepping task.
+;	TSK		#9
 	CLI
 
 Mon1:
 .mon1:
+	CLI
 	LDA		#$6BFF
 	TAS
 	JSR		CursorOn
 	JSR		OutCRLF
 	LDA		#'$'
-	;STA		TaskSwitchEn
+	STA		TaskSwitchEn
 .mon3:
+	CLI
+	PHA
+	LDA		#0
+	JCR		RequestIOFocus,OSctx
+	PLA
 	JSR		OutChar
 	JSR		KeybdGetCharWait
 	AND		#$FF
@@ -660,9 +659,17 @@ Mon1:
 	BNE		.mon2
 	JSR		MonGetch
 	CMP		#'E'
+	BNE		.mon10
+	JSR		MonGetch
+	CMP		#'C'
 	LBEQ	GetSecnum
+	CMP		#'I'
+	LBEQ	do_SEI
+.mon10:
 	CMP		#'U'
 	LBNE	doSavefile
+	LDA		#8
+	JCR		RequestIOFocus,OSctx
 	REP		#$130
 	SEP		#$200
 	MEM		32
@@ -672,18 +679,12 @@ Mon1:
 	TAX
 	LDA		#$20
 	STA		TCB_priority,X
-	LDA		#0
-	JSR		hTcbToAddr
-	TAX
-	STZ		TCB_status,X	; monitor is no longer ready
-	LDA		#8
-	STA.H	IOFocusTask
 	JSR		InsertIntoReadyFifo
 	REP		#$200
 	SEP		#$100
 	MEM		16
 	NDX		16
-	TSK		JMP:#8
+	;TSK		JMP:#8
 	BRL		.mon1
 	;JMP		$8000		; invoke Supermon832
 .mon2:
@@ -775,6 +776,33 @@ doD:
 	BRL		doDisassemble
 
 ;------------------------------------------------------------------------------
+; SEI <level>
+; Sets the interrupt mask level.
+;------------------------------------------------------------------------------
+
+do_SEI:
+	JSR		GetHexNumber
+	LDA		NumWorkArea
+	BNE		.0001
+	SEI		#0
+	BRL		Mon1
+.0001:
+	CMP		#1
+	BNE		.0002
+	SEI		#1
+	BRL		Mon1
+.0002:
+	CMP		#2
+	BNE		.0003
+	SEI		#2
+	BRL		Mon1
+.0003:
+	CMP		#3
+	LBNE	Mon1
+	SEI		#3
+	BRL		Mon1
+
+;------------------------------------------------------------------------------
 ; DT? - displays the date from the RTC
 ; DT <year> <month> <day> - updates the RTC with the year, month and day.
 ;------------------------------------------------------------------------------
@@ -855,6 +883,9 @@ doBasic:
 	LDX		#$985		; executable, writeable, 64k (based at $10000)
 	LDY		#$FFD
 	SDU
+	LDA		#7
+	JCR		RequestIOFocus,OSctx
+	JCR		SetIOFocus,OSctx
 	; Switch to 32 bit mode in order to set the task priority and insert the
 	; BASIC task into the ready queue.
 	REP		#$130
@@ -866,18 +897,12 @@ doBasic:
 	TAX
 	LDA		#$20
 	STA		TCB_priority,X
-	LDA		#0
-	JSR		hTcbToAddr
-	TAX
-	STZ		TCB_status,X	; monitor is no longer ready
-	LDA		#7
-	STA.H	IOFocusTask
 	JSR		InsertIntoReadyFifo
 	REP		#$230
 	SEP		#$100
 	NDX		16
 	MEM		16
-	TSK		#7
+;	TSK		#7
 	BRL		Mon1
 
 ClearFilenameBuf:
@@ -1125,7 +1150,7 @@ doRegs:
 	BRL		.buildrec
 .0011:
 	CMP		#'D'
-	LBNE	Mon14
+	BNE		.0014
 	JSR		MonGetch
 	CMP		#'S'
 	BNE		.0012
@@ -1688,6 +1713,8 @@ SSMInit:
 	PEA		6
 	PLDS
 
+	LDA		#9
+	JCR		SetIOFocus,$FD
 	LDA		#$6100
 	STA		NormAttr
 	LDA		#4095		; set segment
@@ -2118,6 +2145,11 @@ OutCRLF:
 	LDA		#LF
 
 OutChar:
+.chkFocus:
+	PHA
+	JCR		CheckIOFocus,OSctx
+	BNE		.noFocus
+	PLA
 	PHX
 	PHY
 	PHP
@@ -2130,6 +2162,13 @@ OutChar:
 	PLY
 	PLX
 	RTS
+	; Here the task doesn't have the I/O focus and it's trying to
+	; display something, so switch to another task until this task
+	; has focus.
+.noFocus:
+	PLA
+	JCR		FMTK_ScheduleTask,OSctx	; schedule another task
+	BRA		.chkFocus
 
 DisplayString:
 	PHP							; push reg settings
@@ -2210,6 +2249,9 @@ CursorOff:
 	RTS
 
 ClearScreen:
+.tstFocus:
+	JCR		CheckIOFocus,OSctx
+	BNE		.noFocus
 	LDX		#4095
 	LDY		#$00
 	LDA		#' '
@@ -2222,6 +2264,9 @@ ClearScreen:
 	DEX
 	BNE		.0001
 	RTS
+.noFocus:
+	JCR		FMTK_ScheduleTask,OSctx	; Schedule another task
+	BRA		.tstFocus
 
 ScrollUp:
 	LDY		#0				; .Y used as index to char
@@ -2646,13 +2691,12 @@ KeybdGetCharNoWaitCtx:
 	
 KeybdGetCharNoWait:
 	PHP
-	SEI
+	SEI		#1
 	REP		#$30
 	MEM		16
 	NDX		16
-	TTA
-	CMP		IOFocusTask
-;	BNE		.noFocus
+	JCR		CheckIOFocus,OSctx
+	BNE		.noFocus
 	SEP		#$20
 	REP		#$10
 	MEM		8
@@ -2663,6 +2707,7 @@ KeybdGetCharNoWait:
 	STA		KeybdWaitFlag
 	BRA		KeybdGetChar1
 .noFocus:
+	CLI
 	PLP
 	SEC		; flag no key available
 	RTS
@@ -2698,15 +2743,18 @@ KeybdGetChar1:
 	LDA		$FFF:KEYBD+1		; check MSB of keyboard status reg.
 	ROL
 	ROL
-	BCS		.0003		; check busy flag, branch if busy
+	BCS		.0011		; check busy flag, branch if busy
 	ROR
 	BCS		.0006		; branch if keystroke ready
 	BIT		KeybdWaitFlag
-	BMI		.0003
+	BMI		.0011
 	PLX
 	PLP
 	SEC
 	RTS
+.0011:
+	JCR		FMTK_ScheduleTask,OSctx	; go run something else for a bit
+	BRA		.0003
 .0006:
 	LDA		$FFF:KEYBD	; get scan code value
 	STZ		$FFF:KEYBD+2	; clear read flag
@@ -3295,38 +3343,13 @@ msgRtcReadFail:
 SuperGetch:
 	JSR		KeybdGetCharNoWait
 	AND		#$FF
-	RTC		#0
-	BRL		TaskFC
+	RTL
 
 ; Put char routine for Supermon
 ;
 SuperPutch:
 	JSR		OutChar
-	RTC		#0
-	BRL		TaskFC
-
-; Char get routine for BASIC
-; Same thing as for Supermon, except carry flag needs to be inverted
-; This routine should be called from a different context than the BIOS,
-; otherwise the call will be ignored.
-;
-BasicGetch:
-	LDA		#$F1
-	STA		$7000
-	JSR		KeybdGetCharNoWait
-	AND		#$FF
-	CMC
-	RTC		#0
-	BRL		TaskFC
-
-xitBasic:
-	PLX						; get rid of task to return to, we won't be returning
-	STA		ExitCode
-	STZ		TCB_status+7	; no longer ready
-	STZ		IOFocusTask
-	STZ		IOFocusTask+1
-	TSK		JMP:#0
-	BRL		TaskFC
+	RTL
 
 warm_start:
 	SEP		#$100		; 16 bit mode
@@ -3400,15 +3423,14 @@ SDC_ReadWriteMultiple:
 	SEC
 	SBC		#8
 	TAS
-	TSX
-	LDA		11,X
-	STA		1,X
-	LDA		13,X
-	STA		3,X
-	LDA		15,X
-	STA		5,X
-	LDA		17,X
-	STA		7,X
+	LDA		11,S
+	STA		1,S
+	LDA		13,S
+	STA		3,S
+	LDA		15,S
+	STA		5,S
+	LDA		17,S
+	STA		7,S
 .nextSector:
 	JSR		SDC_Jmp
 	CMP		#0
@@ -3476,7 +3498,7 @@ SDC_SVB1:
 ; pointer to filename
 ; pointer to disk buffer
 ;
-SDC_LoadFile:
+SDC_Loadfile:
 	JSR		SDC_LoadRootDir
 	LDX		#32
 .nxt2:
@@ -3530,7 +3552,7 @@ SDC_LoadFile:
 
 ClusterToSector:
 	STA		NumWorkArea
-	STX		NumWordArea+2
+	STX		NumWorkArea+2
 	ASL		NumWorkArea
 	ROL		NumWorkArea+2
 	ASL		NumWorkArea
@@ -3547,27 +3569,59 @@ msgFileNotFound:
 ;============================================================================
 ; BASIC support functions
 ;============================================================================
+
+; Char get routine for BASIC
+; Same thing as for Supermon, except carry flag needs to be inverted
+; This routine should be called from a different context than the BIOS,
+; otherwise the call will be ignored.
+;
+BasicGetch:
+	JSR		KeybdGetCharNoWait
+	AND		#$FF
+	CMC
+	RTC		#0
+
+xitBasic:
+	STA		ExitCode
+	LDA		running_task
+	JCR		ReleaseIOFocus,OSctx
+	LDX		#TCB_SIZE
+	MUL
+	STZ		tcbs+TCB_status,X	; no longer ready
+	LDA		#0
+	JCR		SetIOFocus,OSctx
+.0001:
+	JCR		FMTK_ScheduleTask,OSctx
+	;TSK		JMP:#0		; scheduler will start monitor again, it's in the ready queue
+	BRA		.0001			; we shouldn't get here, another ready task was scheduled
+
 BASIC_Savefile:
+	JSR		spi_master_init
+	BNE		.0001
 	LDA		#spi_master_write
-	STA		spi_vect
+	STA		spi_rw_vect
 	PEA		$1		; buffer = $10000
 	PEA		$0
 	PEA		$0
 	PEA		136		; starting sector
 	LDA		#64		; 64 sectors (32 kiB)
 	JSR		SDC_ReadWriteMultiple
-	RTS
+.0001:
+	RTC		#0
 
 BASIC_Loadfile:
+	JSR		spi_master_init
+	BNE		.0001		
 	LDA		#spi_master_read
-	STA		spi_vect
+	STA		spi_rw_vect
 	PEA		$1		; buffer = $10000
 	PEA		$0
 	PEA		$0
 	PEA		136		; starting sector
 	LDA		#64		; 64 sectors (32 kiB)
 	JSR		SDC_ReadWriteMultiple
-	RTS
+.0001:
+	RTC		#0
 
 ;============================================================================
 ; Multi-tasking kernel
@@ -3578,23 +3632,56 @@ FMTK_Init:
 	SEP		#$200
 	MEM		32
 	NDX		32
-	LDA		#0
-	STA		running_task
+	STZ.H	running_task
+
+	JSR		ZeroIRQHooks
+	JSR		InitMSGArray
+	JSR		InitMBXArray
+	JSR		InitTCBArray
+	JSR		InitJCBArray
+	REP		#$230
+	SEP		#$100
+	MEM		16
+	NDX		16
+	RTS
 
 	; zero out the IRQ hook vectors
+ZeroIRQHooks:
 	LDA		#0
 	TAX
 .0001:
 	STA		IRQ1Hook,X
-	STA		IRQ1Hook+2,X
 	INX4
-	CPX		#MAX_IRQ_HOOK*4
+	CPX		#MAX_IRQ_HOOKS*4
 	BNE		.0001
+	RTS
+
+
+	; initialize mailbox array
+	; create free mailbox list
+InitMBXArray:
+	LDY		#0
+.nxtMbx:
+	TYA
+	JSR		hMbxToAddr
+	TAX
+	TYA
+	STA.H	MBX_number,X
+	INA
+	STA.H	MBX_link,X
+	INY
+	CPY		#NR_MBX
+	BLT		.nxtMbx
+	LDA		#$FFFFFFFF
+	STA.H	MBX_link,X
+	STZ.H	freeMBX
+	RTS
 
 	; initialize message array
 	; create the free message list
 	; for each message
 	; msg->link = handle of next message
+InitMSGArray:
 	LDY		#0
 .nxtMsg:
 	TYA
@@ -3610,11 +3697,77 @@ FMTK_Init:
 	STA.H	MSG_link,X
 	; now point free list to first message
 	STZ.H	freeMSG
+	RTS
 
-	REP		#$230
-	SEP		#$100
-	MEM		16
-	NDX		16
+	; Initialize JCB array
+InitJCBArray:
+	LDY		#0
+.nxtJcb:
+	TYA
+	JSR		hJcbToAddr
+	TAX
+	TYA
+	STA.B	JCB_number,X
+	LDA		#$FFFFFFFF
+	STA.B	JCB_iof_next,X
+	STA.B	JCB_iof_prev,X
+	STZ.B	JCB_user_name,X
+	STZ.B	JCB_path,X
+	STZ.B	JCB_exit_runfile,X
+	STZ.B	JCB_command_line,X
+	STZ.B	JCB_CursorRow,X
+	STZ.B	JCB_CursorCol,X
+	LDA		#$BF00
+	STA.H	JCB_NormAttr,X
+	STZ.H	KeyState1,X
+	STZ.H	KeyState2,X
+	STZ.B	JCB_KeybdHead,X
+	STZ.B	JCB_KeybdTail,X
+	PHY
+	LDY		#0
+.nxt1:
+	TYA
+	PHX
+	AAX						; add .A and .X
+	TAX
+	LDA		#$FFFFFFFF
+	STA.H	JCB_hMbxs,X
+	PLX
+	INY
+	INY
+	CPY		#NR_MBXperJCB*2
+	BLT		.nxt1
+	PLY
+	INY
+	CPY		#NR_JCB
+	BLT		.nxtJcb
+	RTS
+
+InitTCBArray:
+	; Initialize TCB array
+	LDY		#0
+.nxtTcb:
+	TYA
+	JSR		hTcbToAddr
+	TAX
+	TYA
+	STA.H	TCB_number,X
+	LDA		#$FFFFFFFF
+	STA.H	TCB_mbq_next,X
+	STA.H	TCB_mbq_prev,X
+	STA.H	TCB_msg_link,X
+	STA.H	TCB_hWaitMbx,X
+	STA.B	TCB_hJcb,X
+	LDA		#2
+	STA.B	TCB_priority,X
+	STZ.B	TCB_status,X
+	STZ		TCB_start_tick,X
+	STZ		TCB_end_tick,X
+	STZ		TCB_ticks,X
+	STZ		TCB_exception,X
+	INY
+	CPY		#NR_TCB
+	BLT		.nxtTcb
 	RTS
 
 .include "FMTKmsg.asm"
@@ -3623,11 +3776,142 @@ FMTK_Init:
 	NDX		32
 
 LockSysSema:
-	SEI
+	SEI		#1
 	RTS
 UnlockSysSema:
-	CLI
+	CLI		; SEI #0
 	RTS
+
+	MEM		32
+	NDX		32
+SetIOFocus:
+	STA		IOFocusTask
+	RTC		#0
+	BRL		TaskFD
+GetIOFocus:
+	LDA		IOFocusTask
+	RTC		#0
+	BRL		TaskFD
+
+; Returns:
+; .ZF = 1 if task has IO focus
+
+CheckIOFocus:
+	LDA.H	running_task
+	CMP.H	IOFocusTask
+	RTC		#0
+
+RequestIOFocus:
+	BMS		IOFocusBmp
+	RTC		#0
+
+ReleaseIOFocus:
+	BMC		IOFocusBmp
+	RTC		#0
+
+TestIOFocus:
+	BMT		IOFocusBmp
+	RTC		#0
+
+	; Get the handle of the currently active JCB. This will be the one for
+	; which the running task is owned by.
+GetJCB:
+	LDA.H	running_task
+	JSR		hTcbToAddr
+	PHX
+	TAX
+	LDA.B	TCB_hJcb,X
+	PLX
+	RTS
+
+;----------------------------------------------------------------------------
+; Sleep
+;	Put task to sleep.
+; Parameters:
+;	.A	length of time to sleep
+;----------------------------------------------------------------------------
+
+FMTK_Sleep:
+		PHA
+		LDA.H	running_task
+		STA.H	TIMEOUT_LIST+2
+		JSR		hTcbToAddr
+		TAX
+		LDA		#TS_TIMEOUT
+		STA		TCB_status,X
+		PLA
+		STA		TIMEOUT_LIST+4
+		LDA		#TOL_INS
+		STA.B	TIMEOUT_LIST
+		RTC		#0
+
+;----------------------------------------------------------------------------
+; FMTK_KillTask:
+;	Kill a task.
+;----------------------------------------------------------------------------
+
+FMTK_KillTask:
+		JSR		KillTask
+		RTC		#0
+KillTask:
+		PHA
+		STA.H	TIMEOUT_LIST+2	; remove task from timeout list (it might be on)
+		LDA		#TOL_RMV
+		STA.B	TIMEOUT_LIST
+		PLA
+		PHA
+		JSR		hTcbToAddr
+		TAX
+		STZ		TCB_status,X	; remove task from ready list
+		; Remove task from Job's task list
+		LDA.B	TCB_hJcb,X
+		JSR		hJcbToAddr
+		TAX
+		PLA						; .A = taskno
+		LDY		#0
+.0002:
+		PHX
+		PHA
+		TYA						; setup for X+Y addressing
+		AAX
+		PLA
+		CMP.H	JCB_tasks,X
+		BNE		.0001
+		STZ.H	JCB_tasks,X		; set field to -1
+		DEC.H	JCB_tasks,X
+.0001:	
+		PLX
+		INY
+		INY
+		CPY		#16
+		BLT		.0002
+		; The Job is finished if there are no more tasks associated with it.
+		LDY		#0
+.0003:
+		PHX
+		TYA
+		AAX
+		LDA.H	JCB_tasks,X
+		BPL		.notDoneJob
+		PLX
+		INY
+		INY
+		CPY		#16
+		BLT		.0003
+		; Done the job, add the jcb to the free list.
+		LDA.B	freeJCB
+		STA.B	JCB_next,X
+		LDA.B	TCB_number,X
+		STA.B	freeJCB
+		RTS
+.notDoneJob:
+		PLX
+		RTS
+
+FMTK_ExitTask:
+		LDA.H	running_task
+		JSR		KillTask
+		BRL		FMTK_ScheduleTask
 
 ;----------------------------------------------------------------------------
 ; SelectTaskToRun:
@@ -3659,13 +3943,12 @@ SelectTaskToRun:
 	LDA.H	READY_FIFO_CNT,X	; get count of ready tasks in fifo
 	BEQ		.fifoEmpty
 	LDA.H	READY_FIFO,X	; get ready task from fifo
-	STA.H	hTcbTmp
 	JSR		hTcbToAddr
 	TAY
 	LDA.B	TCB_status,Y	; check the status and make sure it's ready
 	BIT		#TS_READY|TS_PREEMPT
 	BEQ		.notReady
-	LDA.H	hTcbTmp
+	LDA.H	TCB_number,Y
 	STA.H	READY_FIFO,X	; add back to fifo as last entry
 	RTS
 
@@ -3679,7 +3962,7 @@ SelectTaskToRun:
 .0001:
 	DEC.B	qcnt
 	BNE		.nextQ
-	TTA						; if all queues empty, keep running the current
+	LDA		running_task	; if all queues empty, keep running the current
 	RTS
 
 ;----------------------------------------------------------------------------
@@ -3738,11 +4021,11 @@ IRQRout02:
 ; return. This is because this function was called via JCR.
 ;----------------------------------------------------------------------------
 
-ScheduleTask:
-	PHP						; 832 mode will push 2 bytes
-	SEI
+FMTK_ScheduleTask:
+	; Got here via a JCR which pushed the return context. It's not needed
+	PLA						; get rid of return context
 	; update the number of tick the task has been running.
-	LDA		running_task	; get currently running task
+	LDA.H	running_task	; get currently running task
 	JSR		hTcbToAddr		; get address from handle
 	TAX
 	LDA		TickCount		; get the tick count
@@ -3753,8 +4036,7 @@ ScheduleTask:
 	ADC		TCB_ticks,X		; ticks = ticks + (end tick - start tick)
 	STA		TCB_ticks,X
 	JSR		SelectTaskToRun
-	TSX
-	STA.H	$3,X			; change return task # on stack
+	STA.H	$3,S			; change return task # on stack
 	STA.H	running_task
 	JSR		hTcbToAddr		; handle to address
 	TAX
@@ -3762,9 +4044,8 @@ ScheduleTask:
 	STA.B	TCB_status,X
 	LDA		TickCount		; get the tick count
 	STA		TCB_start_tick,X	; update starting tick
-	PLP						; restore interrupt mask
-	RTT						; return
-	BRA		ScheduleTask
+	RTC		#0				; return
+	BRA		FMTK_ScheduleTask
 
 ;----------------------------------------------------------------------------
 ; This task has interrupts masked in it's startup record and therefore runs
@@ -4330,6 +4611,7 @@ FreeSysMem:
 	LDA		heap_free_ptr
 	STA		$0,Y
 	STY		heap_free_ptr
+	CLI
 	PLP
 	RTS
 
@@ -4358,7 +4640,7 @@ FreeSysMem:
 	STY		tmpy
 	SBC		tmpy
 	CMP		mmas,X
-	BLT		.0003
+;	BLT		.0003
 	; here block is big enough
 	PHA
 	LDA		$0,Y
@@ -4542,7 +4824,12 @@ MusicTimeoutIRQ:
 	JMP		BASIC_Loadfile	; FE12
 	JMP		BASIC_Savefile	; FE15
 
-	JMP		ScheduleTask	; FE18
+	.org	$FF00
+	JMP		FMTK_ScheduleTask	; FE18
+	JMP		FMTK_Sleep
+	JMP		FMTK_StartTask
+	JMP		FMTK_ExitTask
+	JMP		FMTK_KillTask
 	JMP		FMTK_AllocMbx
 	JMP		$0				; reserved for FreeMbx
 	JMP		FMTK_SendMsg

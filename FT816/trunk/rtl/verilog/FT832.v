@@ -33,8 +33,8 @@
 
 // Comment out the SUPPORT_xxx definitions to remove a core feature.
 `define SUPPORT_TASK	1'b1
-`define TASK_MEM        512
-`define TASK_MEM_ABIT   8
+`define TASK_MEM        4096
+`define TASK_MEM_ABIT   11
 //`define TASK_BL         1'b1                // core uses back link register rather than stack
 `define SUPPORT_SEG     1'b1
 `define ICACHE_4K		1'b1
@@ -71,7 +71,7 @@
 `define BRK			9'h00
 `define BRK2		9'h100
 `define RTI			9'h40
-`define RIT         9'h150
+`define RTIC        9'h150
 `define RTS			9'h60
 `define PHP			9'h08
 `define CLC			9'h18
@@ -82,6 +82,7 @@
 `define CLI			9'h58
 `define PLA			9'h68
 `define SEI			9'h78
+`define SEI_IMM     9'h178
 `define DEY			9'h88
 `define DEY4		9'h188
 `define TYA			9'h98
@@ -505,6 +506,9 @@
 `define TSB_ZP		9'h04
 `define TSB_ABS		9'h0C
 `define TSB_XABS	9'h10C
+`define BMT_XABS    9'h114
+`define BMS_XABS    9'h124
+`define BMC_XABS    9'h134
 
 `define MVP			9'h44
 `define MVN			9'h54
@@ -677,6 +681,7 @@ parameter ICACHE2 = 6'd43;
 parameter CALC = 6'd44;
 parameter ICACHE3 = 6'd45;
 parameter PBDELAY = 6'd46;
+parameter JCR1 = 6'd47;
 
 parameter SEGF_NONE = 6'd0;
 parameter SEGF_EXEC = 6'd1;
@@ -790,8 +795,8 @@ wire [31:0] y_dec = y - 32'd1;
 wire [31:0] y_inc = y + 32'd1;
 reg gie;	// global interrupt enable (set when sp is loaded)
 reg hwi;	// hardware interrupt indicator
-reg im;
 reg [2:0] iml,iml1;
+wire im = |iml;
 reg [2:0] irqenc;
 reg [15:0] ima;
 reg its;    // interrupt task switch bit
@@ -803,6 +808,14 @@ reg xb16,xb32;
 reg mxb16,mxb32;
 reg mib;
 reg ssm;
+reg [2:0] tmsp [0:511];
+
+integer n;
+initial begin
+    for (n = 0; n < 512; n = n + 2)
+        tmsp[n] <= 0;
+end
+
 wire DEAD_CYCLE = FALSE;//(vda|vpa) && ado >= 32'h10000;
 
 //wire m16 = m816 & ~m_bit;
@@ -954,11 +967,11 @@ ft832_itagmem uitm1
 );
 
 `ifdef SUPPORT_TASK
-reg [`TASK_MEM_ABIT:0] tr, otr, trh;
+reg [`TASK_MEM_ABIT-3:0] tr, otr, trh;
 reg [7:0] tsk_pres;                 // register value preservation flags
 reg tskm_we;
 reg tskm_wr;
-reg [`TASK_MEM_ABIT:0] tskm_wa;
+reg [`TASK_MEM_ABIT-3:0] tskm_wa;
 
 wire [15:0] cs_o;
 wire [15:0] ds_o;
@@ -973,7 +986,7 @@ wire [7:0] srx_o;
 wire [7:0] dbr_o;
 wire [15:0] dpr_o;
 wire [5:0] mapno_o;
-wire [`TASK_MEM_ABIT:0] bl_o;
+wire [`TASK_MEM_ABIT-3:0] bl_o;
 reg [15:0] cs_i;
 reg [15:0] ds_i;
 reg [15:0] ss_i;
@@ -987,15 +1000,15 @@ reg [7:0] srx_i;
 reg [7:0] dbr_i;
 reg [15:0] dpr_i;
 reg [5:0] mapno_i;
-reg [`TASK_MEM_ABIT:0] bl_i;
-reg [`TASK_MEM_ABIT:0] back_link;
+reg [`TASK_MEM_ABIT-3:0] bl_i;
+reg [`TASK_MEM_ABIT-3:0] back_link;
 
 task_mem utskm1
 (
     .wclk(clk),
     .wce(tskm_we),
     .wr(tskm_wr),
-    .wa(tskm_wa),
+    .wa({tmsp[tskm_wa],tskm_wa}),
     .cs_i(cs_i),
     .ds_i(ds_i),
     .ss_i(ss_i),
@@ -1012,7 +1025,7 @@ task_mem utskm1
     .mapno_i(mapno_i),
     .rclk(~clk),
     .rce(1'b1),
-    .ra(tr),
+    .ra({tmsp[tr],tr}),
     .cs_o(cs_o),
     .ds_o(ds_o),
     .ss_o(ss_o),
@@ -1318,7 +1331,6 @@ if (~rst) begin
 	stack_page <= 24'h000001;
 	stack_bank <= 16'h0000;
 	clk_en <= 1'b1;
-	im <= `TRUE;
 	iml <= 3'b000;
 	imcd <= 3'b111;
     ima <= 16'h0000;
@@ -1388,12 +1400,6 @@ IFETCH:
     begin
 	vda <= FALSE;
 	if (hit0&hit1) begin
-		if (imcd != 3'b111)
-			imcd <= {imcd[1:0],1'b0};
-		if (imcd == 3'b000) begin
-			imcd <= 3'b111;
-			im <= 1'b0;
-		end
 		vect <= m832 ? `BRK_VECT_832 : m816 ? `BRK_VECT_816 : `BYTE_IRQ_VECT;
 		hwi <= `FALSE;
 		isBusErr <= `FALSE;
@@ -1446,7 +1452,7 @@ IFETCH:
 			vect[23:16] <= 8'h00;
 			next_state(DECODE);
 		end
-		else if ((irqenc > iml) && gie && !im) begin
+		else if ((irqenc > iml) && gie) begin
 		    iml1 <= irqenc;
 			ir[7:0] <= `BRK;
 			hwi <= `TRUE;
@@ -1507,7 +1513,8 @@ IFETCH:
 			begin
 				cf <= cf | ir[8];
 				zf <= zf | ir[9];
-				im <= im | ir[10];
+				if (ir[10])
+				    iml <= 3'd1;
 				df <= df | ir[11];
 				if (m816|m832) begin
 					x_bit <= x_bit | ir[12];
@@ -1525,7 +1532,8 @@ IFETCH:
 			begin
 				cf <= cf & ~ir[8];
 				zf <= zf & ~ir[9];
-				im <= im & ~ir[10];
+				if (ir[10])
+				    iml <= 3'd0;
 				df <= df & ~ir[11];
 				if (m816|m832) begin
 					x_bit <= x_bit & ~ir[12];
@@ -1539,7 +1547,8 @@ IFETCH:
                 begin
                     cf <= cf | ir[8];
                     zf <= zf | ir[9];
-                    im <= im | ir[10];
+                    if (ir[10])
+                        iml <= 3'd1;
                     df <= df | ir[11];
                     if (m816|m832) begin
                         x_bit <= x_bit | ir[12];
@@ -1561,7 +1570,8 @@ IFETCH:
             begin
                 cf <= cf & ~ir[8];
                 zf <= zf & ~ir[9];
-                im <= im & ~ir[10];
+                if (ir[10])
+                    iml <= 3'd0;
                 df <= df & ~ir[11];
                 if (m816|m832) begin
                     x_bit <= x_bit & ~ir[12];
@@ -1828,6 +1838,7 @@ IFETCH:
 		    if (m32) begin zf <= resz32; end
 			else if (m16) begin zf <= resz16; end
 			else begin          zf <= resz8; end
+		`BMT_XABS,`BMS_XABS,`BMC_XABS:    begin zf <= resz8; nf <= resn8; end
 		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_I,`LDA_IL,`LDA_AL,`LDA_ALX,`LDA_DSP,`LDA_DSPIY,
 		`LDA_XABS,`LDA_XABSX,`LDA_XABSY,`LDA_XIYL,`LDA_XIL,`LDA_XDSPIY,
 		`AND_IMM,`AND_ZP,`AND_ZPX,`AND_IX,`AND_IY,`AND_IYL,`AND_ABS,`AND_ABSX,`AND_ABSY,`AND_I,`AND_IL,`AND_AL,`AND_ALX,`AND_DSP,`AND_DSPIY,
@@ -1987,8 +1998,9 @@ DECODE:
 		`SEC:	begin cf <= 1'b1; end
 		`CMC:   cf <= ~cf;
 		`CLV:	begin vf <= 1'b0; end
-		`CLI:	begin im <= 1'b0; end// imcd <= 3'b110; end
-		`SEI:	begin im <= 1'b1; end
+		`CLI:	begin iml <= 3'd0; end// imcd <= 3'b110; end
+		`SEI:	begin iml <= 3'd7; end
+		`SEI_IMM: begin iml <= ir[10:8]; end
 		`CLD:	begin df <= 1'b0; end
 		`SED:	begin df <= 1'b1; end
 		`WAI:	begin wai <= 1'b1; end
@@ -2070,6 +2082,13 @@ DECODE:
 				load_what <= `PC_70;
 				state <= LOAD_MAC1;
 			end
+	    `RTIC:
+	            begin
+		        iml <= ima[2:0];
+                its <= ima[3];
+                ima <= {4'b0,ima[15:4]};
+                do_rtx(24'h1,8'h00,PRES_NONE);
+                end
 		`RTI:	begin
 		        iml <= ima[2:0];
 		        its <= ima[3];
@@ -3105,6 +3124,19 @@ DECODE:
                 end
                 store_what <= `STW_Z70;
             end
+        `BMT_XABS,`BMS_XABS,`BMC_XABS:
+            begin
+                inc_pc(24'd5);
+                mxb16 <= m16;
+                mxb32 <= m32;
+                radr <= {3'd0,acc[31:3]} + xal_address;
+                wadr <= {3'd0,acc[31:3]} + xal_address;
+                next_state(LOAD_MAC1);
+                s32 <= FALSE;
+                s16 <= FALSE;
+                load_what <= `LOAD_70;
+                retstate <= CALC;
+            end
 `endif
         // Handle abs,x
         `LDA_ABSX:
@@ -3495,6 +3527,21 @@ DECODE:
                 bf <= !hwi;
             end
         // ToDo: update this to work like BRK
+        `COP:
+            begin
+                iml <= 3'd7;    // ToDo set to 7
+                ima <= {ima[11:0],1'b0,iml};
+`ifdef SUPPORT_SEG                        
+                seg <= 32'd0;
+                lmt <= 32'hFFFF;
+                mem_wr <= FALSE;
+`endif                        
+                radr <= m832 ? `COP_VECT_832 : m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
+                otr <= tr;
+                load_what <= `LDW_TR70;
+                next_state(LOAD_MAC1);
+            end
+/*
 		`COP:
             begin
                 iml <= 3'd7;
@@ -3510,6 +3557,7 @@ DECODE:
                 state <= STORE1;
                 vect <= m832 ? `COP_VECT_832 : m816 ? `COP_VECT_816 : `BYTE_COP_VECT;
             end
+*/
 		`BEQ,`BNE,`BPL,`BMI,`BCC,`BCS,`BVC,`BVS,`BRA,`BGT,`BLE:
             begin
                 if (ir[15:8]==8'hFF) begin
@@ -3690,127 +3738,24 @@ DECODE:
         `TSK_IMM:
             begin
                 inc_pc(24'd3);
-                if (tr != ir[`TASK_MEM_ABIT+8:8]) begin
-                    set_task_regs(24'd3);
-                    otr <= tr;
-                    back_link <= tr;
-                    tr <= ir[`TASK_MEM_ABIT+8:8];
-                    tsk_pres <= PRES_BACKLINK;
-                    next_state(TSK1);
-`ifdef TASK_BL
-                    retstate <= IFETCH;
-`else
-                    store_what <= `STW_TR158;
-                    retstate <= tj_prefix ? IFETCH : STORE1;
-`endif
-                    //retstate <= ssm ? SSM1 : IFETCH;
-                end
+                do_tsk(ir[`TASK_MEM_ABIT+8-3:8]);
             end
         `TSK_ACC:
             begin
-                if (tr != acc[`TASK_MEM_ABIT:0]) begin
-                    set_task_regs(24'd1);
-                    otr <= tr;
-                    back_link <= tr;
-                    tr <= acc[`TASK_MEM_ABIT:0];
-                    tsk_pres <= PRES_BACKLINK;
-                    next_state(TSK1);
-`ifdef TASK_BL
-                    retstate <= IFETCH;
-`else
-                    store_what <= `STW_TR158;
-                    retstate <= tj_prefix ? IFETCH : STORE1;
-`endif
-                end
+                do_tsk(acc[`TASK_MEM_ABIT-3:0]);
             end
         `FORK_IMM:
             begin
                 inc_pc(24'd3);
-                if (tr != ir[`TASK_MEM_ABIT+8:8]) begin
-                    set_task_regs(24'd3);
-                    otr <= tr;
-                    back_link <= tr;
-                    tr <= ir[`TASK_MEM_ABIT+8:8];
-`ifdef TASK_BL
-                    next_state(ssm ? SSM1 : IFETCH);
-`else
-`ifdef SUPPORT_SEG                    
-                    seg <= ss_base;
-                    lmt <= ss_limit;
-                    mem_wr <= ss_wr;
-`endif                    
-                    store_what <= `STW_TR158;
-                    if (!tj_prefix) begin
-                        set_sp();
-                        next_state(STORE1);
-                    end
-`endif
-                end
+                do_fork(ir[`TASK_MEM_ABIT+8-3:8]);
             end
         `FORK_ACC:
             begin
-                if (tr != acc[`TASK_MEM_ABIT:0]) begin
-                    set_task_regs(24'd1);
-                    otr <= tr;
-                    back_link <= tr;
-                    tr <= acc[`TASK_MEM_ABIT:0];
-`ifdef TASK_BL
-                    next_state(ssm ? SSM1 : IFETCH);                    
-`else
-`ifdef SUPPORT_SEG                    
-                    seg <= ss_base;
-                    lmt <= ss_limit;
-                    mem_wr <= ss_wr;
-`endif                    
-                    store_what <= `STW_TR158;
-                    if (!tj_prefix) begin
-                        set_sp();
-                        next_state(STORE1);
-                    end
-`endif
-                end
+                do_fork(acc[`TASK_MEM_ABIT-3:0]);
             end
 		`RTT:
             begin
-                set_task_regs(24'd1);
-                tsk_pres <= PRES_NONE;
-`ifdef TASK_BL
-                tr <= back_link;
-                retstate <= IFETCH;
-                next_state(TSK1);
-`else
-                sp_i <= fn_add_to_sp(32'd2);
-                inc_sp();
-`ifdef SUPPORT_SEG                
-                seg <= ss_base;
-                lmt <= ss_limit;
-                mem_wr <= ss_wr;
-`endif                
-                load_what <= `LDW_TR70S;
-                state <= LOAD_MAC1;
-`endif
-            end
-		`RIT:
-            begin
-                iml <= ima[2:0];
-                ima <= {3'b0,ima[11:3]};
-                set_task_regs(24'd1);
-                tsk_pres <= PRES_NONE;
-`ifdef TASK_BL
-                tr <= back_link;
-                retstate <= IFETCH;
-                next_state(TSK1);
-`else
-                sp_i <= fn_add_to_sp(32'd2);
-                inc_sp();
-`ifdef SUPPORT_SEG                
-                seg <= ss_base;
-                lmt <= ss_limit;
-                mem_wr <= ss_wr;
-`endif                
-                load_what <= `LDW_TR70S;
-                state <= LOAD_MAC1;
-`endif
+                do_rtx(24'd1,8'd0,PRES_NONE);
             end
         `LDT_XABS:
             begin
@@ -3829,7 +3774,7 @@ DECODE:
         `JCF:
             begin
                 inc_pc(24'd9);
-                if (tr != ir[`TASK_MEM_ABIT+48:48]) begin
+                if (tr != ir[`TASK_MEM_ABIT+48-3:48]) begin
                     pc <= ir[31:8];
                     mapno <= ir[37:32];
 `ifdef SUPPORT_SEG                    
@@ -3839,7 +3784,7 @@ DECODE:
                     back_link <= tr;
                     set_task_regs(24'd9);
                     otr <= tr;
-                    tr <= ir[`TASK_MEM_ABIT+48:48];
+                    tr <= ir[`TASK_MEM_ABIT+48-3:48];
                     maxcnt <= ir[68:64];
                     if (ir[71])
                         tsk_pres <= PRES_ALL;
@@ -3872,12 +3817,12 @@ DECODE:
         `JCL:
             begin
                 inc_pc(24'd7);
-                if (tr != ir[`TASK_MEM_ABIT+32:32]) begin
+                if (tr != ir[`TASK_MEM_ABIT+32-3:32]) begin
                     pc <= ir[31:8];
                     back_link <= tr;
                     set_task_regs(24'd7);
                     otr <= tr;
-                    tr <= ir[`TASK_MEM_ABIT+32:32];
+                    tr <= ir[`TASK_MEM_ABIT+32-3:32];
                     maxcnt <= ir[52:48];
                     if (ir[55])
                         tsk_pres <= PRES_FAXY|PRES_PC|PRES_BACKLINK;
@@ -3909,22 +3854,8 @@ DECODE:
             end
         `JCR:
             begin
-                inc_pc(24'd4);
-                if (tr != {8'h00,ir[31:24]}) begin
-                    pc <= {8'h00,ir[23:8]};
-                    back_link <= tr;
-                    set_task_regs(24'd4);
-                    otr <= tr;
-                    tr <= {8'h00,ir[31:24]};
-                    tsk_pres <= PRES_FAXY|PRES_PC|PRES_BACKLINK;
-                    state <= TSK1;
-`ifdef TASK_BL
-                    retstate <= ssm ? SSM1 : IFETCH;
-`else
-                    store_what <= `STW_TR158;
-                    retstate <= tj_prefix ? IFETCH : STORE1;
-`endif
-                end
+                tmsp[tr] <= tmsp[tr] - 3'd1;
+                state <= JCR1;
             end
         `JCI:
             begin
@@ -3936,37 +3867,19 @@ DECODE:
                     tr <= {8'h00,acc[31:24]};
                     tsk_pres <= PRES_FAXY|PRES_PC|PRES_BACKLINK;
                     state <= TSK1;
-`ifdef TASK_BL
-                    retstate <= ssm ? SSM1 : PBDELAY;
-`else
                     store_what <= `STW_TR158;
                     retstate <= tj_prefix ? PBDELAY : STORE1;
-`endif
                 end
             end
 		`RTC:
             begin
                 // Cause a subsequent TSK instruction to return to the RTC and return
                 // right away by backing up the PC to the start of the instruction.
-                inc_pc(24'hFFFFFF);
-                set_task_regs(24'hFFFFFF);
-                tsk_pres <= PRES_FAXY;
-`ifdef TASK_BL
-                sp_i <= fn_add_to_sp(ir[15:8]);
-                tr <= back_link;
-                next_state(TSK1);
-                retstate <= ssm ? SSM1 : IFETCH;
-`else
-                sp_i <= fn_add_to_sp(ir[15:8] + 32'd2);
-                inc_sp();
-`ifdef SUPPORT_SEG                
-                seg <= ss_base;
-                lmt <= ss_limit;
-                mem_wr <= ss_wr;
-`endif                
-                load_what <= `LDW_TR70S;
-                state <= LOAD_MAC1;
-`endif
+                do_rtx(24'hFFFFFF,ir[15:8],PRES_FAXY);
+                //inc_pc(24'hFFFFFF);
+                //tsk_pres <= PRES_FAXY;
+                //state <= TSK1;
+                //retstate <= IFETCH;
             end
 `endif
         `FILL:
@@ -4021,6 +3934,19 @@ DECODE:
 			end
 		endcase
 	end
+JCR1:
+    begin
+        //inc_pc(24'd4);
+        pc <= {8'h00,ir[23:8]};
+        set_task_regs(24'd3);   // already incremented above
+        otr <= tr;
+        tr <= {8'h00,ir[31:24]};
+        tsk_pres <= PRES_FAXY|PRES_PC|PRES_BACKLINK;
+        state <= TSK1;
+        store_what <= `STW_TR158;
+        retstate <= tj_prefix ? IFETCH : STORE1;
+        //retstate <= IFETCH;
+    end
 `ifdef SUPPORT_TASK
 TSK1:
     begin
@@ -4038,12 +3964,14 @@ TSK1:
         // Force further interrupts to be masked automatically when the task is
         // invoked as an interrupt handler. Otherwise the task will be invoked
         // continuously.
+        /*
         if (sr_o[2]|hwi)
             im <= 1'b1;
         else begin
             im <= 1'b0;
             //imcd <= 3'b110;
         end
+        */
         df <= sr_o[3];
         if (srx_o[1:0]!=2'b00) begin
             x_bit <= sr_o[4];
@@ -4063,10 +3991,15 @@ TSK1:
         m832 <= srx_o[1];
         mib <= srx_o[2];
         ssm <= srx_o[4];
+        iml <= srx_o[7:5];
         dbr <= dbr_o;
         dpr <= dpr_o;
         if (!tsk_pres[5]) back_link <= bl_o;
+`ifdef SUPPORT_SEG
         next_state(TSK2);
+`else
+        next_state(TSK4);
+`endif
     end
 TSK2:
     begin
@@ -4098,6 +4031,10 @@ TSK3:
     end
 TSK4:
     begin
+        if (ir9==`JCR)  // stay in the same task
+            tr <= otr;
+        else if (ir9==`RTC || ir9==`RTIC)
+            tmsp[tr] <= tmsp[tr] + 3'd1;
 `ifdef SUPPORT_SEG
         ss_base <= base_o;
         ss_limit <= fn_limit(size_o);
@@ -4185,7 +4122,7 @@ LDT1:
         4'd8:   begin dpr_i <= b32[15:0]; mapno_i <= b32[21:16]; 
                 tskm_we <= TRUE;
                 tskm_wr <= TRUE;
-                tskm_wa <= x32[`TASK_MEM_ABIT:0];
+                tskm_wa <= x32[`TASK_MEM_ABIT-3:0];
                 moveto_ifetch();
                 end
         endcase 
@@ -4405,12 +4342,14 @@ LOAD_MAC2:
             `SR_70:        begin
                             cf <= dati[0];
                             zf <= dati[1];
+                            /*
                             if (dati[2] & ~isRTI)
                                 im <= 1'b1;
                             else begin
                                 im <= 1'b0;
                                 //imcd <= 3'b110;
                             end
+                            */
                             df <= dati[3];
                             if (m816|m832) begin
                                 x_bit <= dati[4];
@@ -4467,7 +4406,7 @@ LOAD_MAC2:
                            if (dati[7:1]==7'b0) begin
                                ima[3] <= 1'b1;
                                its <= 1'b1;
-                               if ({dati[`TASK_MEM_ABIT-8:0],b32[7:0]} != tr) begin
+                               if ({dati[`TASK_MEM_ABIT-8-3:0],b32[7:0]} != tr) begin
                                    set_task_regs(hwi ? 24'd0 : 24'd2);
                                    tr <= {dati,b32[7:0]};
                                    back_link <= tr;
@@ -4504,14 +4443,14 @@ LOAD_MAC2:
                         end
              `LDW_TR158S:
                        begin
-                          tr[`TASK_MEM_ABIT:0] <= {dati,trh[7:0]};
+                          tr[`TASK_MEM_ABIT-3:0] <= {dati,trh[7:0]};
                           next_state(TSK1);
                           retstate <= ssm ? SSM1 : IFETCH;  // ??? should assign in TSK1 ?
                        end
 `endif
              `PC_70:        begin
                             if (ir[7:0]==`BRK && hwi)
-                                im <= 1'b1;
+                                iml <= iml1;
                             pc[7:0] <= dati;
                             load_what <= `PC_158;
                             if (isRTI|isRTS|isRTL|isRTF) begin
@@ -4814,7 +4753,7 @@ STORE1:
 		`STW_IA158:		begin data_write(wadr,ia[15:8],0); mlb <= 1'b1; end
 		`STW_IA70:		data_write(wadr,ia,0);
 `ifdef SUPPORT_TASK
-        `STW_TR158:     begin data_write(wadr,otr[`TASK_MEM_ABIT:8],1); mlb <= 1'b1; end
+        `STW_TR158:     begin data_write(wadr,otr[`TASK_MEM_ABIT-3:8],1); mlb <= 1'b1; end
         `STW_TR70:      data_write(wadr,otr[7:0],0);
 		`STW_CPY_BUF:   begin data_write(wadr,cpybuf[cnt],0); mlb <= maxcnt > 8'd1; end
 `endif
@@ -5158,7 +5097,7 @@ STORE2:
 				end
 				else if (ir[7:0]==`COP) begin
 					pc <= {8'h00,temp_vec};//abs8[23:16];
-					im <= 1'b1;
+					iml <= 3'd7;
 					bank_wrap <= FALSE;
                     page_wrap <= FALSE;
 				end
@@ -5214,6 +5153,9 @@ CALC:
         `LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX,`LDY_XABS,`LDY_XABSX:    begin res32 <= b32; end
         `TRB_ZP,`TRB_ABS,`TRB_XABS:    begin res32 <= acc & b32; wdat <= ~acc & b32; state <= STORE1; data_nack(); end
         `TSB_ZP,`TSB_ABS,`TSB_XABS:    begin res32 <= acc & b32; wdat <= acc | b32; state <= STORE1; data_nack(); end
+        `BMT_XABS:  begin res32 <= (32'd1 << acc[2:0]) & b32; end
+        `BMS_XABS:  begin res32 <= (32'd1 << acc[2:0]) & b32; wdat <= (32'd1 << acc[2:0]) | b32; state <= STORE1; data_nack(); end
+        `BMC_XABS:  begin res32 <= (32'd1 << acc[2:0]) & b32; wdat <= ~(32'd1 << acc[2:0]) & b32; state <= STORE1; data_nack(); end
 		`INC_ZP,`INC_ZPX,`INC_ABS,`INC_ABSX,`INC_XABS,`INC_XABSX:    begin res32 <= b32 + 32'd1; wdat <= b32+32'd1; state <= STORE1; data_nack(); end
         `DEC_ZP,`DEC_ZPX,`DEC_ABS,`DEC_ABSX,`DEC_XABS,`DEC_XABSX:    begin res32 <= b32 - 32'd1; wdat <= b32-32'd1; state <= STORE1; data_nack(); end
 		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX,`ASL_XABS,`ASL_XABSX:    begin res32 <= {b32,1'b0}; wdat <= {b32[30:0],1'b0}; state <= STORE1; data_nack(); end
@@ -5403,6 +5345,65 @@ begin
 	rwo <= `TRUE;
 //	ado <= 32'h000000;
 //	dbo <= 8'h00;
+end
+endtask
+
+// RTT, RTC instructions
+task do_rtx;
+input [23:0] pcinc;
+input [7:0] spinc;
+input [7:0] tp;
+begin
+    inc_pc(pcinc);
+    if (ir9!=`RTC && ir9!=`RTIC)
+        set_task_regs(pcinc);
+    tsk_pres <= tp;
+    sp_i <= fn_add_to_sp(spinc+32'd2);
+    inc_sp();
+`ifdef SUPPORT_SEG                
+    seg <= ss_base;
+    lmt <= ss_limit;
+    mem_wr <= ss_wr;
+`endif
+    load_what <= `LDW_TR70S;
+    state <= LOAD_MAC1;
+end
+endtask
+
+task do_tsk;
+input [`TASK_MEM_ABIT-3:0] ntr;   // new task register value
+begin
+    store_what <= `STW_TR158;
+    tsk_pres <= PRES_NONE;
+    if (tr != ntr) begin
+        set_task_regs(24'd3);
+        otr <= tr;
+        tr <= ntr;
+        next_state(TSK1);
+        retstate <= tj_prefix ? IFETCH : STORE1;
+    end
+    //retstate <= ssm ? SSM1 : IFETCH;
+end
+endtask
+
+task do_fork;
+input [`TASK_MEM_ABIT-3:0] ntr;   // new task register value
+begin
+    store_what <= `STW_TR158;
+    if (tr != ntr) begin
+        set_task_regs(24'd3);
+        otr <= tr;
+        tr <= ntr;
+`ifdef SUPPORT_SEG                    
+        seg <= ss_base;
+        lmt <= ss_limit;
+        mem_wr <= ss_wr;
+`endif                    
+        if (!tj_prefix) begin
+            set_sp();
+            next_state(STORE1);
+        end
+    end
 end
 endtask
 
@@ -5667,7 +5668,7 @@ input [7:0] srx_i;
 input [7:0] db_i;
 input [15:0] dpr_i;
 input [5:0] mapno_i;
-input [`TASK_MEM_ABIT:0] bl_i;
+input [`TASK_MEM_ABIT-3:0] bl_i;
 input rclk;
 input rce;
 input [`TASK_MEM_ABIT:0] ra;
@@ -5684,12 +5685,12 @@ output [7:0] srx_o;
 output [7:0] db_o;
 output [15:0] dpr_o;
 output [5:0] mapno_o;
-output [`TASK_MEM_ABIT:0] bl_o;
-reg [`TASK_MEM_ABIT+246:0] mem [`TASK_MEM-1:0];
+output [`TASK_MEM_ABIT-3:0] bl_o;
+reg [`TASK_MEM_ABIT+246-3:0] mem [`TASK_MEM-1:0];
 always @(posedge wclk)
     if (wce & wr)
         mem[wa] <= {bl_i,mapno_i,cs_i,ds_i,ss_i,pc_i,acc_i,x_i,y_i,sp_i,sr_i,srx_i,db_i,dpr_i};
-wire [`TASK_MEM_ABIT+246:0] memo;
+wire [`TASK_MEM_ABIT+246-3:0] memo;
 reg [`TASK_MEM_ABIT:0] rra;
 always @(posedge rclk)
     rra <= ra;
@@ -5707,7 +5708,7 @@ assign ss_o = memo[207:192];
 assign ds_o = memo[223:208];
 assign cs_o = memo[239:224];
 assign mapno_o = memo[245:240];
-assign bl_o = memo[`TASK_MEM_ABIT+246:246];
+assign bl_o = memo[`TASK_MEM_ABIT+246-3:246];
 
 endmodule
 

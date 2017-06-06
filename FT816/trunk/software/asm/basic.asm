@@ -7351,6 +7351,9 @@ LAB_INEX
 
 LAB_SIRQ
 	CLI				; enable interrupts
+	CPU		FT832
+	SEI		#0
+	CPU		W65C02
 	LDX	#IrqBase		; set pointer to IRQ values
 	.byte	$2C			; make next line BIT abs.
 
@@ -7726,7 +7729,6 @@ V_OUTP
 ;	JMP	(VEC_OUT)		; send byte to output device
 V_EXIT					
 	JCR	$FE0F,$FC		; This call won't return
-	CPU	W65C02
 V_LOAD
 	JCR	$FE12,$FC
 	RTS
@@ -7735,6 +7737,7 @@ V_SAVE
 	JCR	$FE15,$FC
 	RTS
 ;	JMP	(VEC_SV)		; save BASIC program
+	CPU	W65C02
 
 ; The rest are tables messages and code for RAM
 

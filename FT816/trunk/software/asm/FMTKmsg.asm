@@ -33,7 +33,7 @@
 ; Handle to address conversion functions.
 ;----------------------------------------------------------------------------
 
-hJcbToAddr:
+public hJcbToAddr:
 		PHA
 		LDX		#JCB_SIZE
 		MUL
@@ -42,7 +42,7 @@ hJcbToAddr:
 		PLX
 		RTS
 
-hTcbToAddr:
+public hTcbToAddr:
 		PHX
 		LDX		#TCB_SIZE
 		MUL
@@ -51,7 +51,7 @@ hTcbToAddr:
 		PLX
 		RTS
 
-hMbxToAddr:
+public hMbxToAddr:
 		PHX
 		LDX		#MBX_SIZE
 		MUL
@@ -60,7 +60,7 @@ hMbxToAddr:
 		PLX
 		RTS
 
-hMsgToAddr:
+public hMsgToAddr:
 		PHX
 		LDX		#MSG_SIZE
 		MUL
@@ -72,6 +72,9 @@ hMsgToAddr:
 ;----------------------------------------------------------------------------
 ; QueueMsg
 ;	Queue a message at a mailbox
+; Assumes:
+;	Mailbox parameter is valid
+;	System semaphore is locked already
 ; Parameters:
 ;	.A	mailbox handle
 ;	.X  message handle
@@ -157,12 +160,10 @@ DequeueMsg:
 ;----------------------------------------------------------------------------
 
 DequeueThreadFromMbx:
-	JSR		LockSysSema
 	JSR		hMbxToAddr
 	TAX
 	LDA.H	MBX_tq_head,X
 	BPL		.0001
-	JSR		UnlockSysSema
 	LDA		#$FFFFFFFF
 	RTS						; return .A < 0
 .0001:
@@ -181,7 +182,6 @@ DequeueThreadFromMbx:
 	LDA		#$FFFFFFFF
 	STA.H	MBX_tq_tail,X
 .0003:
-	JSR		UnlockSysSema
 	LDA.B	TCB_status,Y
 	AND		#TS_TIMEOUT
 	BEQ		.0004
@@ -201,6 +201,8 @@ DequeueThreadFromMbx:
 	RTS
 
 ;----------------------------------------------------------------------------
+; Queue a thread at a mailbox
+;
 ; .A = handle to TCB
 ; .X = mailbox
 ;----------------------------------------------------------------------------
@@ -217,7 +219,6 @@ QueueThreadAtMbx:
 	STA.H	TCB_hWaitMbx,X
 	LDA		#$FFFFFFFF
 	STA.H	TCB_mbq_next,X
-	JSR		LockSysSema
 	LDA.H	hMbxTmp
 	JSR		hMbxToAddr
 	TAY
@@ -245,26 +246,42 @@ QueueThreadAtMbx:
 	LDA.H	hTcbTmp
 	STA.H	TCB_mbq_next,X
 .0002:
-	JSR		UnlockSysSema
 	RTS
 
 ;----------------------------------------------------------------------------
 ; Allocate a mailbox
+;	The mailbox is added to the array of mailboxes that the job uses.
 ;	The default queue strategy is to queue the eight most recent messages.
 ; Parameters:
 ;	<none>
 ; Returns:
-; .A = handle to mailbox (-1 = no mailbox available)
+; .A = handle to mailbox (-4 = no mailbox available)
+; .NF set on error, clear otherwise
 ;----------------------------------------------------------------------------
 
-FMTK_AllocMbx:
-	JSR		LockSysSema
+public FMTK_AllocMbx:
+	; First ensure that there is an open mailbox slot in the JCB.
+	; JCB's only support a limited number of mailboxes
+	JSR		GetJCB
+	TAX
+	JSR		hJcbToAddr
+	LDY		#0
+.0002:
+	LDA.H	JCB_hMbxs,Y
+	BMI		.gotMbxSlot
+	INY
+	INY
+	CPY		#NR_MBXperJCB*2
+	BNE		.0002
+	LDA		#E_TooManyMbx
+	RTC		#0
+.gotMbxSlot:
 	LDA.H	freeMBX
 	BPL		.0001
-	JSR		UnlockSysSema
-	LDA		#$FFFFFFFF
-	RTS
+	LDA		#E_NoMoreMbx
+	RTC		#0
 .0001:
+	STA.H	JCB_hMbxs,Y
 	PHA
 	JSR		hMbxToAddr
 	TAX
@@ -273,7 +290,7 @@ FMTK_AllocMbx:
 	DEC.H	nMailbox
 	JSR		UnlockSysSema
 	JSR		GetJCB
-	STA.H	MBX_owner,X
+	STA.B	MBX_owner,X
 	LDA		#$FFFFFFFF
 	STA.H	MBX_tq_head,X
 	STA.H	MBX_tq_tail,X
@@ -287,7 +304,7 @@ FMTK_AllocMbx:
 	LDA		#MQS_NEWEST
 	STA		MBX_mq_strategy,X
 	PLA
-	RTS
+	RTC		#0
 
 ;----------------------------------------------------------------------------
 ; SendMsg
@@ -299,28 +316,25 @@ FMTK_AllocMbx:
 ;	D3	(on stack word)
 ;----------------------------------------------------------------------------
 
-FMTK_SendMsg:
-FMTK_PostMsg:
+public FMTK_SendMsg:
+public FMTK_PostMsg:
 	STA.H	hMbxTmp
 	JSR		hMbxToAddr
-	JSR		LockSysSema
-	LDA		MBX_owner,X
+	LDA.B	MBX_owner,X
 	BMI		.notOwned
 	CMP		#NR_MBX
 	BLT		.ownerOk
 .notOwned:
-	JSR		UnlockSysSema
 	LDA		#E_NotAlloc
-	RTS		#12
+	RTC		#12
 .ownerOk:
 	LDA.H	freeMSG
 	BMI		.noMsg
 	CMP		#NR_MSG
 	BLT		.msgOk
 .noMsg:
-	JSR		UnlockSysSema
 	LDA		#E_NoMoreMsgBlks
-	RTS		#12
+	RTC		#12
 .msgOk:
 	STA.H	hMsgTmp
 	JSR		hMsgToAddr
@@ -330,38 +344,35 @@ FMTK_PostMsg:
 	DEC		nMsgBlk
 	LDA		#MBT_DATA
 	STA.B	MSG_type,X
-	TXY
-	TSX
-	LDA		3,X
-	STA		MSG_d1,Y
-	LDA		7,X
-	STA		MSG_d2,Y
-	LDA		11,X
-	STA		MSG_d3,Y
+	LDA		3,S
+	STA		MSG_d1,X
+	LDA		7,S
+	STA		MSG_d2,X
+	LDA		11,S
+	STA		MSG_d3,X
 	JSR		DequeueThreadFromMbx
-	JSR		UnlockSysSema
 	CMP		#0
 	BPL		.thrdOk
-	LDA.UH	hMbxTmp
-	LDX.UH	freeMSG
+	LDA.H	hMbxTmp
+	LDX.H	hMsgTmp
 	JSR		QueueMsg
-	RTS		#12
+	RTC		#12
 .thrdOk:
 	STA		hTcbTmp
-	JSR		LockSysSema
-	JSR		hTcbtoAddr
-	LDA.B	MSG_type,Y
-	STA.B	TCB_msg_type,X
-	LDA		MSG_d1,Y
-	STA		TCB_msg_d1,X
-	LDA		MSG_d2,Y
-	STA		TCB_msg_d2,X
-	LDA		MSG_d3,Y
-	STA		TCB_msg_d3,X
+	JSR		hTcbToAddr
+	TAY
+	LDA.B	MSG_type,X
+	STA.B	TCB_msg_type,Y
+	LDA		MSG_d1,X
+	STA		TCB_msg_d1,Y
+	LDA		MSG_d2,X
+	STA		TCB_msg_d2,Y
+	LDA		MSG_d3,X
+	STA		TCB_msg_d3,Y
 	LDA		#MT_FREE
-	STA		MSG_type,Y
+	STA		MSG_type,X
 	LDA.H	freeMSG
-	STA.H	MSG_link,Y
+	STA.H	MSG_link,X
 	LDA		hMsgTmp
 	STA		freeMSG
 	LDA.H	hTcbTmp
@@ -377,78 +388,84 @@ FMTK_PostMsg:
 .noTimeout:
 	LDA.H	hTcbTmp
 	JSR		InsertIntoReadyFifo		
-	JSR		UnlockSysSema
 	LDA		#E_Ok
-	RTS		#12
+	RTC		#12
 
 ;----------------------------------------------------------------------------
-;		Wait for message. If timelimit is zero then the thread
-;	will wait indefinately for a message.
+;	Wait for message. If timelimit is zero then the thread will wait
+; indefinately for a message.
+;
+; Parameters:
+;	.A = mailbox number
+;	*d1 = pointer to where to store D1 (on stack)
+;	*d2 = pointer to where to store D2 (on stack)
+;	*d3 = pointer to where to store D3 (on stack)
+;   TimeLimit = value on stack
 ;----------------------------------------------------------------------------
 
-FMTK_WaitMsg:
+public FMTK_WaitMsg:
 	STA.H	hMbxTmp
 	JSR		hMbxToAddr
-	JSR		LockSysSema
 	LDA		MBX_owner,X
 	BMI		.notOwned
 	CMP		#NR_MBX
 	BLT		.ownerOk
 .notOwned:
-	JSR		UnlockSysSema
 	LDA		#E_NotAlloc
-	RTS		#16
+	RTC		#16
 .ownerOk:
 	LDA		hMbxTmp
 	JSR		DequeueMsg
-	JSR		UnlockSysSema
 	CMP		#0
 	LBPL	.gotMsg
-	JSR		LockSysSema
 	TTA
 	PHA
 	JSR		hTcbToAddr
 	TAX
 	STZ		TCB_status,X	; remove thread from ready list
-	JSR		UnlockSysSema
 	JSR		QueueThreadAtMbx
-	TSX
-	LDA		15,X			; .A = time limit param
+	LDA		15,S			; .A = time limit param
 	BEQ		.noTimelimit
-	JSR		LockSysSema
 	STA		TIMEOUT_LIST + 4
 	PLA
 	STA.H	TIMEOUT_LIST + 2
 	LDA		#TOL_INS
 	STA.B	TIMEOUT_LIST
-	JSR		UnlockSysSema
 	BRA		.0001
 .noTimelimit:
 	PLA
 .0001:
-	BRK			; invoke scheduler
-	.byte	2
+	JCR		$FF00,$FD		; invoke scheduler
 	; Control will return here as a result of a SendMsg or timeout
-	TTA
+	LDA.H	running_task
 	JSR		hTcbToAddr
 	TAX
 	LDA		TCB_msg_type,X
 	CMP		#MT_NONE
 	BNE		.0002
 	LDA		#E_NoMsg
-	RTS		#16
+	RTC		#16
 .0002:
 	LDA		#MT_NONE
 	STA.B	TCB_msg_type,X
 	LDY		#0
+	LDA		3,S
+	BEQ		.noD1x
 	LDA		TCB_msg_d1,X
 	STA		{3,S},Y
+.noD1x:
+	LDA		7,S
+	BEQ		.noD2x:
 	LDA		TCB_msg_d2,X
 	STA		{7,S},Y
+.noD2x:
+	LDA		11,S
+	BEQ		.noD3x
 	LDA		TCB_msg_d3,X
 	STA		{11,S},Y
+.noD3x:
 	LDA		#E_Ok
-	RTS		#16
+	RTC		#16
 	;-----------------------------------------------------
 	; We get here if there was initially a message
 	; available in the mailbox, or a message was made
@@ -458,14 +475,22 @@ FMTK_WaitMsg:
 	STA.H	hMsgTmp
 	JSR		hMsgToAddr
 	TAX
-	LDA		MSG_d1,X
 	LDY		#0
+	LDA		3,S
+	BEQ		.noD1
+	LDA		MSG_d1,X
 	STA		{3,S},Y
+.noD1:
+	LDA		7,S
+	BEQ		.noD2
 	LDA		MSG_d2,X
 	STA		{7,S},Y
+.noD2:
+	LDA		11,S
+	BEQ		.noD3
 	LDA		MSG_d3,X
 	STA		{11,S},Y
-	JSR		LockSysSema
+.noD3:
 	LDA		#MT_FREE
 	STA.B	MSG_type,X
 	LDA.H	freeMSG
@@ -473,9 +498,8 @@ FMTK_WaitMsg:
 	LDA.H	hMsgTmp
 	STA.H	freeMSG
 	INC.H	nMsgBlk
-	JSR		UnlockSysSema
 	LDA		#E_Ok
-	RTS		#16
+	RTC		#16
 
 ;----------------------------------------------------------------------------
 ; FMTK_CheckMsg(hMbx,int *d1, int *d2, int *d3, int qrmv);
@@ -493,67 +517,60 @@ FMTK_WaitMsg:
 ;	qrmv = 1=remove message from queue (word on stack)
 ;----------------------------------------------------------------------------
 
-FMTK_CheckMsg:
-	STA.H	hMbxTmp
+public FMTK_CheckMsg:
 	JSR		hMbxToAddr
-	JSR		LockSysSema
 	LDA		MBX_owner,X
 	BMI		.notOwned
 	CMP		#NR_MBX
 	BLT		.ownerOk
 .notOwned:
-	JSR		UnlockSysSema
 	LDA		#E_NotAlloc
 	RTS		#16
 .ownerOk:
-	TSX
-	LDA		15,X
+	LDA		15,S
 	BEQ		.0001
-	LDA.H	hMbxTmp
+	LDA.H	MBX_number,X
 	JSR		DequeueMsg
 	BRA		.0002
 .0001:
-	LDA.H	hMbxTmp
-	JSR		hMbxToAddr
-	TAX
-	LDA		MBX_mq_head,X
+	LDA.H	MBX_mq_head,X
 .0002:
-	JSR		UnlockSysSema
 	CMP		#0
 	BPL		.gotMsg
 	LDA		#E_NoMsg
-	RTS		#16
+	RTC		#16
 .gotMsg:
 	STA.H	hMsgTmp
 	JSR		hMsgToAddr
 	TAX
 	LDY		#0
+	LDA		3,S
+	BEQ		.noD1
 	LDA		MSG_d1,X
 	STA		{3,S},Y
+.noD1:
+	LDA		7,S
+	BEQ		.noD2
 	LDA		MSG_d2,X
 	STA		{7,S},Y
+.noD2:
+	LDA		11,S
+	BEQ		.noD3
 	LDA		MSG_d3,X
 	STA		{11,S},Y
-	PHX
-	TSX
-	LDA		15,X
+.noD3:
+	LDA		15,S
 	BEQ		.noRmv
-	JSR		LockSysSema
-	PLX
 	LDA		#MT_FREE
 	STA.B	MSG_type,X
 	LDA.H	freeMSG
 	STA.H	MSG_link,X
 	LDA.H	hMsgTmp
 	STA.H	freeMSG
-	INC.H	nMsgblk
-	JSR		UnlockSysSema
-	BRA		.0003
+	INC.H	nMsgBlk
 .noRmv:
-	PLX
-.0003:
 	LDA		#E_Ok
-	RTS		#16
+	RTC		#16
 
 ;----------------------------------------------------------------------------
 ; PeekMsg(hMbx,int *d1, int *d2, int *d3);
@@ -561,7 +578,7 @@ FMTK_CheckMsg:
 ; Checks for a message without removing it from the queue.
 ;----------------------------------------------------------------------------
 
-FMTK_PeekMsg:
+public FMTK_PeekMsg:
 	STA		hMbxTmp
 	LDA		#0
 	PHA
@@ -573,6 +590,7 @@ FMTK_PeekMsg:
 	LDA		11,X
 	PHA
 	LDA		hMbxTmp
+	JSR		UnlockSysSema
 	JSR		FMTK_CheckMsg
-	RTS		#12
+	RTC		#12
 
