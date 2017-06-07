@@ -42,10 +42,11 @@ function IntRange() {
     <td width="100%"><b><font size="5" face="Arial">Butterfly CPU Core</font></b></td>
   </tr>
   <tr>
-    <td width="100%"><font size="3" face="Arial">© <b>2003 Bird Computer</b></font></td>
+    <td width="100%"><font size="3" face="Arial">© <b>2003-2017 Finitron</b></font></td>
   </tr>
 </table>
-<p style="margin-bottom: 0"><a href="http://www.birdcomputer.ca/index.html"><font size="3" face="Arial">Home</font></a></p>
+<p style="margin-bottom: 0"><font size="3" face="Arial">
+<a href="http://www.Finitron.ca/index.html">Home</a></font></p>
 <hr size="4" color="#CC0000">
 <p style="margin-bottom: 0"><font size="4" face="Arial">Table of Contents</font></p>
 <table border="0" cellspacing="0" width="100%">
@@ -675,7 +676,7 @@ is used to return from a system call. The interrupt subroutine begins at the
 address specified in the system call. The pre-defined system call addresses are
 spaced every four characters in order to allow an extended jump instruction to
 the actual routine to be performed. If desired other program code or data may be
-placed in these locations. Addresses above 7FFF_FFC0 should not be used as these
+placed in these locations. Addresses above  FFC0 should not be used as these
 are reserved for future use.</p>
 <p>Occurrence of an interrupt results in the status register (sr) begin copied
 to the back up version, the maskable interrupt mask being set to disable further
@@ -685,55 +686,55 @@ operation.</p>
 <table border="1" cellspacing="0" width="102%">
   <tr>
     <td width="17%" align="center" bgcolor="#F0F0F0"><b>System Call Address</b></td>
-    <td width="66%" bgcolor="#F0F0F0"><b>Vector Type / Cause</b></td>
-    <td width="21%" bgcolor="#F0F0F0" align="center"><b>Instruction Mnemonic</b></td>
+    <td width="51%" bgcolor="#F0F0F0"><b>Vector Type / Cause</b></td>
+    <td width="36%" bgcolor="#F0F0F0" align="center"><b>Instruction Mnemonic</b></td>
     <td width="132%" bgcolor="#F0F0F0" nowrap><b>Comment</b></td>
   </tr>
   <tr>
-    <td width="17%" align="center">7FFF_FFFC</td>
-    <td width="66%">reset</td>
-    <td width="21%" align="center">RESET</td>
+    <td width="17%" align="center">FFFC</td>
+    <td width="51%">reset</td>
+    <td width="36%" align="center">RESET</td>
     <td width="132%" nowrap>will be called automatically during hardware reset</td>
   </tr>
   <tr>
-    <td width="17%" align="center">7FFF_FFF8</td>
-    <td width="66%">non-maskable interrupt</td>
-    <td width="21%" align="center">NMI</td>
+    <td width="17%" align="center">FFF8</td>
+    <td width="51%">non-maskable interrupt</td>
+    <td width="36%" align="center">NMI</td>
     <td width="132%" nowrap>will be automatically called during hardware
       interrupt</td>
   </tr>
   <tr>
-    <td width="17%" align="center">7FFF_FFF4</td>
-    <td width="66%">maskable interrupt</td>
-    <td width="21%" align="center">IRQ</td>
+    <td width="17%" align="center">FFF4</td>
+    <td width="51%">maskable interrupt</td>
+    <td width="36%" align="center">IRQ</td>
     <td width="132%" nowrap>will be automatically called during hardware
       interrupt</td>
   </tr>
   <tr>
-    <td width="17%" align="center">7FFF_FFF0</td>
-    <td width="66%">watch address match</td>
-    <td width="21%" align="center">WAT</td>
+    <td width="17%" align="center">FFF0</td>
+    <td width="51%">watch address match</td>
+    <td width="36%" align="center">WAT</td>
     <td width="132%" nowrap>called automatically when the current address
       matches the watch address register</td>
   </tr>
   <tr>
-    <td width="17%" align="center">7FFF_FFC4</td>
-    <td width="66%">software interrupt</td>
-    <td width="21%" align="center">SYS</td>
+    <td width="17%" align="center">FFC4</td>
+    <td width="51%">software interrupt</td>
+    <td width="36%" align="center">SYS</td>
     <td width="132%" nowrap>system call - meant to be used to call OS system
       functions</td>
   </tr>
   <tr>
-    <td width="17%" align="center">7FFF_FFC0</td>
-    <td width="66%">break</td>
-    <td width="21%" align="center">BRK</td>
+    <td width="17%" align="center">FFC0</td>
+    <td width="51%">break</td>
+    <td width="36%" align="center">BRK</td>
     <td width="132%" nowrap>called automatically when a null character is found
       in the instruction stream</td>
   </tr>
   <tr>
     <td width="17%" align="center">&nbsp;</td>
-    <td width="66%">&nbsp;</td>
-    <td width="21%" align="center">&nbsp;</td>
+    <td width="51%">&nbsp;</td>
+    <td width="36%" align="center">&nbsp;</td>
     <td width="132%" nowrap>&nbsp;</td>
   </tr>
 </table>
@@ -752,92 +753,6 @@ word (32 bit) loads and stores of data to memory (<a href="#LC">LC</a>, <a href=
 <a href="#SC">SC</a>, <a href="#SW">SW</a>). Character values loaded are sign
 extended to the width of the implementation when loaded.</p>
 <hr color="#CC0000">
-<p>&nbsp;</p>
-<p>String Instructions</p>
-<table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" bordercolor="#111111" width="100%">
-  <tr>
-    <td width="12%">&nbsp;</td>
-    <td width="38%">&nbsp;</td>
-    <td width="50%">&nbsp;</td>
-  </tr>
-  <tr>
-    <td width="12%">memchr</td>
-    <td width="38%">compare [x++] to a; n-- until n = 0 or [x] = a</td>
-    <td width="50%">search for a character in a buffer</td>
-  </tr>
-  <tr>
-    <td width="12%">memcmp</td>
-    <td width="38%">compare [x++] to [y++]; n-- until n = 0 or [x] &lt;&gt; [y]</td>
-    <td width="50%">compare two buffers</td>
-  </tr>
-  <tr>
-    <td width="12%">memcpy</td>
-    <td width="38%">copy [x++] to [y++]; n-- until n = 0</td>
-    <td width="50%">copy buffer</td>
-  </tr>
-  <tr>
-    <td width="12%">memmove</td>
-    <td width="38%">if (x &gt; y) copy [x++] to [y++]; n-- until n = 0<p>else copy 
-    [x--] to [y--]; n-- until n = 0</td>
-    <td width="50%">move a block of memory</td>
-  </tr>
-  <tr>
-    <td width="12%">memset</td>
-    <td width="38%">set [x++] = a; n-- until n = 0</td>
-    <td width="50%">&nbsp;</td>
-  </tr>
-  <tr>
-    <td width="12%">strchr</td>
-    <td width="38%">compare [x++] to a until [x] = a or [x] = 0</td>
-    <td width="50%">search for character</td>
-  </tr>
-  <tr>
-    <td width="12%">strcmp</td>
-    <td width="38%">compare [x++] to [y++] until [x] &lt;&gt; [y] or [x] = 0</td>
-    <td width="50%">compare strings</td>
-  </tr>
-  <tr>
-    <td width="12%">strcpy</td>
-    <td width="38%">copy [x++] to [y++] until [x] = 0</td>
-    <td width="50%">copy string</td>
-  </tr>
-  <tr>
-    <td width="12%">strlen</td>
-    <td width="38%">n++ until [x++] = 0</td>
-    <td width="50%">get length of string Note: set n = 0 first !</td>
-  </tr>
-  <tr>
-    <td width="12%">strcat</td>
-    <td width="38%">use strlen then strcpy</td>
-    <td width="50%">&nbsp;</td>
-  </tr>
-  <tr>
-    <td width="12%">strncmp</td>
-    <td width="38%">compare [x++] to [y++] until [x] &lt;&gt; [y] or [x] = 0 or n = 0</td>
-    <td width="50%">compare strings, count limited</td>
-  </tr>
-  <tr>
-    <td width="12%">strncpy</td>
-    <td width="38%">copy [x++] to [y++] until [x] =0 or n = 0</td>
-    <td width="50%">string compare, count limited</td>
-  </tr>
-  <tr>
-    <td width="12%">&nbsp;</td>
-    <td width="38%">&nbsp;</td>
-    <td width="50%">&nbsp;</td>
-  </tr>
-  <tr>
-    <td width="12%">jsrn d</td>
-    <td width="38%">jsr d; n-- until n = 0</td>
-    <td width="50%">jump to subroutine until n = 0</td>
-  </tr>
-  <tr>
-    <td width="12%">jsre d</td>
-    <td width="38%">jsr d; until z flag set</td>
-    <td width="50%">jump to subroutine until z flag set</td>
-  </tr>
-</table>
-<p>&nbsp;</p>
 <hr color="#CC0000">
 <hr color="#CC0000">
 <p><font size="4"><a name="OpcodeFormats"></a>Opcode Formats</font></p>
@@ -927,7 +842,7 @@ disallow an intervening interrupt to occur.</p>
 <table border="1" cellpadding="0" cellspacing="0" width="723" style="border-collapse: collapse; border-style: solid; border-width: 1; padding-left: 4; padding-right: 4; padding-top: 1; padding-bottom: 1" bordercolor="#111111">
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
-    <td width="312" colspan="4">
+    <td width="312" colspan="3">
       <p align="center"><font face="Arial"><font size="2">op</font><sub>12</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">inst.</font></td>
     <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">desc.</font></td>
@@ -936,7 +851,7 @@ disallow an intervening interrupt to occur.</p>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">0</font></td>
-    <td width="312" colspan="4" align="center"><font size="2" face="Arial">op<sub>12</sub></font></td>
+    <td width="312" colspan="3" align="center"><font size="2" face="Arial">op<sub>12</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">misc</font></td>
     <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">misc.</font></td>
     <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">&nbsp;<span lang="en-ca">brk,
@@ -946,7 +861,7 @@ disallow an intervening interrupt to occur.</p>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">1</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">imm<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">ADD</font></td>
@@ -958,7 +873,7 @@ disallow an intervening interrupt to occur.</p>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">2</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rr</font></td>
@@ -970,7 +885,7 @@ disallow an intervening interrupt to occur.</p>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">3</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">imm<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">ri</font></td>
@@ -981,8 +896,28 @@ disallow an intervening interrupt to occur.</p>
     <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
   </tr>
   <tr>
-    <td width="104" align="center"><font size="2" face="Arial">4</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2">4</font></td>
+    <td width="312" align="center" colspan="3"><font size="2" face="Arial">const<sub>12</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">CP</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">constant
+      prefix</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2">5</font></td>
+    <td width="99" align="center">&nbsp;</td>
+    <td width="109" align="center">&nbsp;</td>
+    <td width="104" align="center">&nbsp;</td>
+    <td width="95" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font size="2">reserved for 
+    constant</font></td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2">8</font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">JAL</font></td>
@@ -993,54 +928,34 @@ disallow an intervening interrupt to occur.</p>
     <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
   </tr>
   <tr>
-    <td width="104" align="center"><font size="2" face="Arial">5</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
-    <td width="109" align="center"><font size="2" face="Arial">op<sub>2</sub></font></td>
-    <td width="104" align="center"><font size="2" face="Arial">imm<sub>6</sub></font></td>
-    <td width="95" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">shift</font></td>
+    <td width="104" align="center"><font size="2" face="Arial">6</font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="213" align="center" colspan="2"><font size="2">imm8</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">ADDI8</font></span></td>
     <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
-    <td width="329" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">shl,
-      shr, rol, ror, asr</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
     <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
   </tr>
   <tr>
-    <td width="104" align="center"><font size="2" face="Arial">6</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
-    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
-    <td width="104" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
-    <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
-    <font size="2">{string}</font></span></td>
+    <td width="104" align="center"><font size="2">7</font></td>
+    <td width="312" align="center" colspan="3">&nbsp;</td>
+    <td width="95" bgcolor="#F0F0F0" align="center">&nbsp;</td>
     <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
     <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
-    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">these
-      are reserved opcodes</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font size="2">reserved</font></td>
   </tr>
   <tr>
-    <td width="104" align="center"><font size="2" face="Arial">7</font></td>
-    <td width="99" align="center" colspan="2">&nbsp;</td>
-    <td width="109" align="center">&nbsp;</td>
-    <td width="104" align="center">&nbsp;</td>
-    <td width="95" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">{res}</font></td>
+    <td width="104" align="center"><font size="2">9</font></td>
+    <td width="312" align="center" colspan="3"><font size="2">Disp12</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2">CALL</font></td>
     <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
     <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
-    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">these
-      are reserved opcodes</font></td>
-  </tr>
-  <tr>
-    <td width="104" align="center"><font size="2" face="Arial">8<span lang="en-ca">/9</span></font></td>
-    <td width="1" align="center"><span lang="en-ca"><font size="2">sz</font><sub>1</sub></span></td>
-    <td width="50" align="center" style="border-top-style: solid; border-top-width: 1; border-bottom-style: solid; border-bottom-width: 1; padding-left: 4; padding-right: 0; padding-top: 1; padding-bottom: 1">
-    <span lang="en-ca">&nbsp;</span></td>
-    <td width="219" colspan="2" align="center" style="border-left-width: 1; border-right-style: solid; border-right-width: 1; border-top-style: solid; border-top-width: 1; border-bottom-style: solid; border-bottom-width: 1; padding-left: 0"><font size="2" face="Arial">const<sub>12</sub></font></td>
-    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">CP</font></td>
-    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">constant
-      prefix</font></td>
-    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">cp</font></td>
     <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">A/B</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">cond<sub><span lang="en-ca">4</span></sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">cond<sub><span lang="en-ca">4</span></sub></font></td>
     <td width="213" colspan="2" align="center"><font size="2" face="Arial">disp<sub><span lang="en-ca">9</span></sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Bcc</font></td>
     <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">conditional
@@ -1052,19 +967,20 @@ disallow an intervening interrupt to occur.</p>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">C</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
-    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">SC</font></td>
-    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">store
-      character</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+    SB</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+    store byte</font></td>
     <td width="329" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">sc</font></td>
     <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">this
-      is a 16 bit quantity</font></td>
+      is a 8 bit quantity</font></td>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">D</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
@@ -1074,25 +990,25 @@ disallow an intervening interrupt to occur.</p>
     <td width="329" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
     <font size="2">sw</font></span></td>
     <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">this
-      is a <span lang="en-ca">32</span> bit quantity</font></td>
+      is a <span lang="en-ca">16</span> bit quantity</font></td>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">E</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
-    LC</font></td>
+    LB</font></td>
     <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
-    load character</font></td>
+    load byte</font></td>
     <td width="329" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">
     lc</font></td>
     <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">
-    this is a 16 bit quantity</font></td>
+    this is a 8 bit quantity</font></td>
   </tr>
   <tr>
     <td width="104" align="center"><font size="2" face="Arial">F</font></td>
-    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="99" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
     <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
     <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
     <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
@@ -1102,7 +1018,7 @@ disallow an intervening interrupt to occur.</p>
     <td width="329" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
     <font size="2">lw</font></span></td>
     <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">
-    this is a <span lang="en-ca">32</span> bit quantity</font></td>
+    this is a <span lang="en-ca">16</span> bit quantity</font></td>
   </tr>
 </table>
 <p>&nbsp;</p>
@@ -1112,26 +1028,6 @@ disallow an intervening interrupt to occur.</p>
     <td width="25%" align="center"><font size="2" face="Arial">
     <span lang="en-ca">8</span><sub>4</sub></font></td>
     <td width="75%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>15..4</sub></font></td>
-  </tr>
-</table>
-<table border="1" width="39%" cellspacing="0" cellpadding="0">
-  <tr>
-    <td width="75%" align="center"><font size="2" face="Arial">op<sub>12</sub></font></td>
-    <td width="25%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>3..0</sub></font></td>
-  </tr>
-</table>
-<p><font size="3">32 bit constant format</font></p>
-<table border="1" width="39%" cellspacing="0" cellpadding="0">
-  <tr>
-    <td width="25%" align="center"><font size="2" face="Arial">
-    <span lang="en-ca">9</span><sub>4</sub></font></td>
-    <td width="75%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>15..4</sub></font></td>
-  </tr>
-</table>
-<table border="1" width="39%" cellspacing="0" cellpadding="0">
-  <tr>
-    <td width="100%" bgcolor="#F0F0F0">
-      <p align="center"><font size="2" face="Arial">const<sub>31..16</sub></font></td>
   </tr>
 </table>
 <table border="1" width="39%" cellspacing="0" cellpadding="0">
@@ -1712,7 +1608,7 @@ status register: c, z, v, and n.&nbsp;</font></p>
 <p><font size="3" face="Arial">Synopsis</font></p>
 <p><font size="2" face="Arial">Run break routine.</font></p>
 <p><font face="Arial">Detail</font></p>
-<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFC0; flags.backup = flags;
+<p><font size="2" face="Arial">r14 = pc; pc =  FFC0; flags.backup = flags;
 flags.im = 1</font></p>
 <table border="1" cellpadding="0" cellspacing="0" width="343">
   <tr>
@@ -1761,7 +1657,7 @@ memory that has been nulled out. This helps promote reliable system operation.</
     <td width="50%"></td>
   </tr>
   <tr>
-    <td width="50%"><font face="Arial">CALL d10[pc]</font></td>
+    <td width="50%"><font face="Arial">CALL d12[pc]</font></td>
     <td width="50%"></td>
   </tr>
 </table>
@@ -1808,40 +1704,32 @@ instruction.</font></p>
   </tr>
 </table>
 <p><font face="Arial" size="2">r15 = pc; pc = pc + disp;</font></p>
-<p><font face="Arial" size="2">Call subroutine using program counter relative form. The
-ten bit address is sign extended to 32 bits before being used. This allows
-subroutine calls to memory with in the first 512 or last 512 relative to the
-current program address.</font></p>
-<table border="1" cellpadding="0" cellspacing="0" width="266">
+<p><font face="Arial" size="2">Call subroutine using program counter relative 
+form. The twelve bit displacement is shifted left once before use allowing a 
+call +/- 4Kb from the current PC.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="342">
   <tr>
     <td width="102"><font size="2" face="Arial">desc:</font></td>
-    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
-    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
-    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+    <td width="93" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="252" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
   </tr>
   <tr>
     <td width="102"><font size="2" face="Arial">size:</font></td>
-    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
-    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
-    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">10</font></td>
+    <td width="93" bgcolor="#F0F0F0" align="center"><font size="2">4</font></td>
+    <td width="252" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+    12</font></td>
   </tr>
   <tr>
     <td width="102"><font size="2" face="Arial">bits:</font></td>
-    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;&nbsp;&nbsp;
-      13</font></td>
-    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">12&nbsp;
-      &nbsp;&nbsp;10</font></td>
-    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">9&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-      &nbsp;
-      0</font></td>
+    <td width="93" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+    15&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 12</font></td>
+    <td width="252" bgcolor="#F0F0F0" align="center"><font size="2">11</font><font size="2" face="Arial">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+    0</font></td>
   </tr>
   <tr>
     <td width="102"><font size="2" face="Arial">bit pattern:</font></td>
-    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">101</font></td>
-    <td width="97" bgcolor="#F0F0F0" align="center">
-      <p align="center"><font size="2" face="Arial">&nbsp;0011</font></p>
-    </td>
-    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>9..0</sub></font></td>
+    <td width="93" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1001</font></td>
+    <td width="252" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>11..0</sub></font></td>
   </tr>
 </table>
 <p>&nbsp;</p>
@@ -2326,14 +2214,14 @@ instruction.</font></p>
 <hr size="4" color="#CC0000">
 <table border="0" cellspacing="0" width="60%">
   <tr>
-    <td width="25%" nowrap><font face="Arial"><a name="LC"></a>LC</font></td>
+    <td width="25%" nowrap><font face="Arial"><a name="LC"></a>LB</font></td>
     <td width="59%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
     <td width="101%" nowrap></td>
     <td width="68%" nowrap></td>
   </tr>
 </table>
 <p><font size="3" face="Arial">Synopsis</font></p>
-<p><font size="2" face="Arial">Load register character from memory</font></p>
+<p><font size="2" face="Arial">Load register byte from memory</font></p>
 <p><font face="Arial">Detail</font></p>
 <p><font size="2" face="Arial"> Rd = memory [Rs + disp]</font></p>
 <table border="1" cellpadding="0" cellspacing="0" width="343">
@@ -3089,14 +2977,14 @@ from the immediate constant, which is opposite to what is usually desired.</font
 <hr size="4" color="#CC0000">
 <table border="0" cellspacing="0" width="60%">
   <tr>
-    <td width="25%" nowrap><font face="Arial"><a name="SC"></a>SC</font></td>
+    <td width="25%" nowrap><font face="Arial"><a name="SC"></a>SB</font></td>
     <td width="59%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
     <td width="101%" nowrap></td>
     <td width="68%" nowrap></td>
   </tr>
 </table>
 <p><font size="3" face="Arial">Synopsis</font></p>
-<p><font size="2" face="Arial">Store character from register memory</font></p>
+<p><font size="2" face="Arial">Store byte from register memory</font></p>
 <p><font face="Arial">Detail</font></p>
 <p><font size="2" face="Arial">memory [Rs + disp] = Rd</font></p>
 <table border="1" cellpadding="0" cellspacing="0" width="343">
@@ -3576,7 +3464,12 @@ defined, the remaining codes are reserved for future use.</font></p>
       processor flags</font></td>
   </tr>
   <tr>
-    <td width="24%" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="24%" align="center"><font size="2">0001</font></td>
+    <td width="30%"><font size="2">ILR</font></td>
+    <td width="96%"><font size="2">Interrupt link register</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0010</font></td>
     <td width="30%"><font size="2" face="Arial">WAR</font></td>
     <td width="96%"><font size="2" face="Arial">Watch Address Register</font></td>
   </tr>
@@ -3644,7 +3537,12 @@ defined, the remaining codes are reserved for future use.</font></p>
       processor flags</font></td>
   </tr>
   <tr>
-    <td width="24%" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="24%" align="center"><font size="2">0001</font></td>
+    <td width="30%"><font size="2">ILR</font></td>
+    <td width="96%"><font size="2">Interrupt link register</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0010</font></td>
     <td width="30%"><font size="2" face="Arial">WAR</font></td>
     <td width="96%"><font size="2" face="Arial">Watch Address Register</font></td>
   </tr>
