@@ -1,0 +1,3742 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Language" content="en-us">
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<meta name="GENERATOR" content="Microsoft FrontPage 5.0">
+<meta name="ProgId" content="FrontPage.Editor.Document">
+<title>Jcc label</title>
+</head>
+
+
+<body bgcolor="#FFFFFF" link="#000080" style="font-family: Arial">
+
+<script language="JavaScript">
+<!--
+
+var smallestInt = -2147483648;
+var biggestInt = 2147483647;
+
+function SetDocsOn () {
+
+	if (DocsOn==32) {
+		smallestInt = -2147483648;
+		biggestInt = 2147483647;
+	}
+	else {
+		smallestInt = -32768;
+		biggestInt = 32768;
+	}
+	
+}
+
+function IntRange() {
+	document.write('<p><font size="2" face="Arial">The integer must range between ' + smallestInt + ' and ' + biggestInt + '</font>');
+}
+
+-->
+</script>
+
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><b><font size="5" face="Arial">Butterfly CPU Core</font></b></td>
+  </tr>
+  <tr>
+    <td width="100%"><font size="3" face="Arial">© <b>2003 Bird Computer</b></font></td>
+  </tr>
+</table>
+<p style="margin-bottom: 0"><a href="http://www.birdcomputer.ca/index.html"><font size="3" face="Arial">Home</font></a></p>
+<hr size="4" color="#CC0000">
+<p style="margin-bottom: 0"><font size="4" face="Arial">Table of Contents</font></p>
+<table border="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font size="4" face="Arial"><a href="#DesignObjectives"><br>
+      Design Objectives</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%">&nbsp;&nbsp;&nbsp; <a href="#MeetingTheObjectives"><font face="Arial">Meeting
+      the Objectives</font></a></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="#RegisterSet"><font size="4" face="Arial"><br>
+      Register Set</font></a></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp; <a href="#GeneralRegisters">General
+      Registers</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp; <a href="#InterruptedProgramCounter">Interrupted
+      Program Counter</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp; <a href="#StatusRegister">Status
+      Register</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial" size="4"><a href="#DatapathOperations"><br>
+      Datapath (ALU) Operations</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#AddSubCmp">Addition
+      / Subtraction / Comparison</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#LogicalOperations">Logical
+      Operations</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#Shifts">Shifts</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="#ProgramFlowControl"><font size="4" face="Arial"><br>
+      Program Flow Control</font></a></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#Branches">Branches</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#Jumps">Jumps</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#SubroutineCalls">Subroutine
+      Calls</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial">&nbsp;&nbsp;&nbsp; <a href="#StopInstruction">STOP
+      Instruction</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><a href="#Interrupts"><font size="4" face="Arial"><br>
+      Interrupts</font></a></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial" size="4"><a href="#MemoryOperations"><br>
+      Memory Operations</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial" size="4"><a href="#OpcodeFormats"><br>
+      Opcode Formats</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"><font face="Arial" size="4"><a href="#InstructionSetSummary"><br>
+      Instruction Set Summary</a></font></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+  <tr>
+    <td width="33%"></td>
+    <td width="17%"></td>
+    <td width="25%"></td>
+    <td width="25%"></td>
+  </tr>
+</table>
+<hr color="#CC0000">
+<p style="margin-bottom: 0"><b>Documentation Notes</b></p>
+<p>&nbsp;&nbsp;&nbsp; This document refers to a sixteen bit quantity as a character and a thirty-two
+bit quantity as a word.</p>
+<p><font size="4"><a name="DesignObjectives"></a>Design Objectives</font></p>
+<p>The design objectives help place the processor in it's proper field of
+operation. Basically this design is intended for a small footprint (in terms of
+both memory required and FPGA resources consumed.) It has also been designed
+with the resources of a typical FPGA in mind. Following are some of the criteria
+that were used on which to base the design.&nbsp;</p>
+<table border="0" width="100%">
+  <tr>
+    <td width="50%">A small memory space, potentially less than 65kB but possibly several
+megabytes of memory.</td>
+  </tr>
+  <tr>
+    <td width="50%">
+<p>A shared data / code memory space, most likely using external ROM and RAM
+resources which are most likely limited in operating frequency.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">A narrow bus interface to that memory, 16 bits expected but possibly only
+eight bits.</td>
+  </tr>
+  <tr>
+    <td width="50%"><p>Targeted specifically to implementation in an small FPGA;
+      but scale-able to a larger project</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+<p>Using minimal resources with maximum functionality providing a level of
+functionality suitable for most projects. This includes support for a real
+operating system, externally generated hardware interrupts, and debugging.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">An easy target for porting existing high level language
+      compilers and assemblers to.</td>
+  </tr>
+  <tr>
+    <td width="50%"></td>
+  </tr>
+  <tr>
+    <td width="50%"></td>
+  </tr>
+  <tr>
+    <td width="50%"></td>
+  </tr>
+</table>
+<p><a name="MeetingTheObjectives"></a><font size="4">Meeting the Objectives</font></p>
+<p>This design meets the above objectives in the following ways. Two versions of
+the processor are available (produced from the same source code). One is a
+strictly sixteen bit design with a sixteen bit wide datapath and an address
+space limited to 65kc (characters) of memory; the other is a thirty-two bit
+version with a larger address space. A sixteen bit instruction size was
+chosen to minimize the memory footprint required for programs. The instruction
+set was designed to be scaleable (object code compatible) from the sixteen bit
+version to the thirty-two bit version. By using a sixteen bit instruction format the benefits of a sixteen
+bit processor in terms of code size, can be obtained with a thirty-two bit
+processor. Because this design need not be especially fast, a simple two-stage
+pipelined processor was chosen. This provides more than adequate performance
+when dealing with the type of memory system that it is anticipated that this
+design will interface to. It is also a non-harvard architecture because the
+memory space is shared between both code and data to help conserve resources. A
+reasonably large general purpose register set is available making the design
+reasonably compatible with many existing compilers and assemblers. Where needed,
+additional specialized instructions have been added to the processor to support
+a sophisticated operating system and interrupt management..</p>
+<hr color="#CC0000">
+<p><b><font size="5">Register Set</font></b></p>
+<p><font size="4">General Registers</font></p>
+<table border="1" cellspacing="0" width="67%" style="border-collapse: collapse; border-left-style: solid; border-right-style: solid; border-top-style: double; border-top-width: 3; border-bottom-style: solid; padding-left: 4; padding-right: 4; padding-top: 1; padding-bottom: 1" bordercolor="#111111" cellpadding="0">
+  <tr>
+    <td width="13%" align="center" bgcolor="#F0F0F0"><b>Code</b></td>
+    <td width="22%" bgcolor="#F0F0F0"><b>Register Name</b></td>
+    <td width="115%" bgcolor="#F0F0F0"><b>Description</b></td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0000</td>
+    <td width="22%">r0 or 0</td>
+    <td width="115%">this register is always zero (unchangeable)</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0001</td>
+    <td width="22%">r1</td>
+    <td width="115%">general purpose register&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0010</td>
+    <td width="22%">r2</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0011</td>
+    <td width="22%">r3</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0100</td>
+    <td width="22%">r4</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0101</td>
+    <td width="22%">r5</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0110</td>
+    <td width="22%">r6</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">0111</td>
+    <td width="22%">r7</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1000</td>
+    <td width="22%">r8</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1001</td>
+    <td width="22%">r9</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1010</td>
+    <td width="22%">r10</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1011</td>
+    <td width="22%">r11</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1100</td>
+    <td width="22%">r12</td>
+    <td width="115%">general purpose register</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1101</td>
+    <td width="22%">r13</td>
+    <td width="115%">general purpose register (reserved for use by assembler)</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1110</td>
+    <td width="22%">r14</td>
+    <td width="115%">general purpose register (reserved for use as the SP by assembler)</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">1111</td>
+    <td width="22%">LR (r15)</td>
+    <td width="115%">(Link Register) This register is automatically updated by
+      the CALL instructions. It is normally used as the subroutine link
+      register and should be used for this purpose where possible.</td>
+  </tr>
+  <tr>
+    <td width="13%" align="center">&nbsp;</td>
+    <td width="22%">&nbsp;</td>
+    <td width="115%">&nbsp;</td>
+  </tr>
+</table>
+<p><font size="4">Interrupt Link Register</font></p>
+<table border="1" cellspacing="0" width="67%">
+  <tr>
+    <td width="18%">
+      <p align="center">0001</td>
+    <td width="21%">ILR</td>
+    <td width="61%">Interrupt Link Register</td>
+  </tr>
+</table>
+<p><font size="3">This register contains the value of the program counter at
+which an interrupt occurred. It is automatically updated by the interrupt
+instruction and is used by the interrupt return instruction to restore the
+original program counter value.</font></p>
+<p>This register may be accessed using the <a href="#TRS">TRS</a> and <a href="#TSR">TSR</a>
+commands.</p>
+<p><font size="4">Status Register</font></p>
+<p>The status flags are updated during the execution of every instruction. It is
+highly desirable to hide the internal state of a processor from programs as it
+prevents program failures due to accidental or malicious manipulation of flags.
+It also prevents programmers from using status register flags as a means to
+return information such as error status from subroutines, which is an
+undesirable way of
+doing things. Hiding the status flags could be done using interlocked instruction sequences, but it is not done
+in this design. While it is highly desirable to completely hide the internal
+state of a processor from a program it is somewhat impractical. A processor that
+supports interrupt mechanisms typically must have some means of recording and
+restoring the interrupt mask state at a minimum. This state frequently needs to
+be saved to memory in a stack frame or as part of process information. Given
+that this state is visible it makes little sense to hide the remaining flags
+using processor interlocks, which would only reduce the responsiveness to
+interrupts.</p>
+<p>The real need for the manipulation of status register bits is to manage the
+interrupt state of the processor. Several older processors allow logical
+operations on the status register to support this need, however that opens the
+door to program bugs due to the inadvertent alteration of bits needed to
+determine branch conditions. To prevent this from happening, and because
+interrupt management is required, this processor provides specific instructions
+(<a href="#DI">DI</a>, <a href="#EI">EI</a>, <a href="#RI">RI</a>) for manipulation of the interrupt state without affecting the
+remaining flags stored in the status register.</p>
+<p>There is no reason to manipulate the status register except for possibly
+saving or restoring it from the stack frame so no detail of it's internal
+components is provided and it is subject to change. The status register is
+sixteen bits (a single character) and split into two halves. The lower portion
+contains the working copy of the flags and the upper portion contains a backup
+copy of the flags made when an interrupt occurs. Occurrence of an interrupt
+automatically copies the working flags to the backup copy, and sets the
+interrupt mask in the working copy. Execution of an
+interrupt return instruction (<a href="#IRET">IRET</a>) automatically copies the backup flags back
+into the working flags.</p>
+<p>An additional complication of the status register is support for extended
+precision operations.&nbsp;</p>
+<p>The status register may be accessed using the <a href="#TRS">TRS</a> and <a href="#TSR">TSR</a>
+commands.</p>
+<table border="1" cellspacing="0" width="38%">
+  <tr>
+    <td width="25%">SR (Backup version)</td>
+    <td width="25%">SR (working version)</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr color="#CC0000">
+<p><font size="5"><a name="DatapathOperations"></a>Datapath Operations</font></p>
+<p><a name="AddSubCmp"></a><font size="4">Addition / Subtraction / Comparison</font></p>
+<p>Basic addition (<a href="#ADD">ADD</a>), subtraction (<a href="#SUB">SUB</a>)
+and comparison (<a href="#CMP">CMP</a>) operations are supported; extended
+precision operations are also supported via the carry input enable (<a href="#CIN">CIN</a>)
+instruction. The 'add' instruction has a three operand immediate
+form which is also used as the immediate form for subtract and compare
+operations. (A - B = A + (-B)). The compare operation is really an alternate
+form of the subtract operation where the destination register is r0. An
+additional instruction <a href="#NEG">NEG</a> is provided which is an alternate
+form of the <a href="#SUBR">SUBR</a> instruction.</p>
+<p><a name="LogicalOperations"></a><font size="4">Logical Operations</font></p>
+<p>The processor supports a standard set of logical operations including and (<a href="#AND">AND</a>),
+or (inclusive)(<a href="#OR">OR</a>) and exclusive or (<a href="#EOR">XOR</a>).
+An additional derived operation is <a href="#NOT">NOT</a> which is an alternate
+form of the XOR instruction.</p>
+<p><font size="4"><a name="Shifts"></a>Shifts</font></p>
+<p>Left shifts are supported via the <a href="#ASL">SHL</a>
+instruction. Left shifts are the most
+common type of shift operation because they are frequently used in the
+multiplication operation and in producing address offsets. Right shifts are rarely used but arithmetic
+(<a href="#ASR">ASR</a>) and
+logical (<a href="#LSR">SHR</a>) right shifts of a single bit are supported. Support for right shifts is
+provided on most processors because it is otherwise difficult to perform. Only
+single bit rotates (either left (<a href="#ROL">ROL</a>) or right (<a href="#ROR">ROR</a>)
+) are supported in this processor because they
+are rarely used and there are no high level languages that support them. Rotates
+may also be performed by using a combination of shifting and logical operations.</p>
+<hr color="#CC0000">
+<p><font size="5">Program Flow Control</font></p>
+<p><font size="4">Branches</font></p>
+<p>Branches are the most frequent form of program flow control operation and are
+usually performed in a conditional manner.&nbsp;The processor allows a 
+<span lang="en-ca">nine</span> bit
+branch displacement which covers virtually 100% of branch cases. A standard set of
+branch conditions is provided<span lang="en-ca">, outlined in the table below</span>. Additionally a branch to subroutine (program
+counter relative call) instruction
+is provided. The branch to subroutine instruction automatically stores the
+return address in the link register (r15).</p>
+<p>Branch conditions are based on the following flags that are maintained in the
+status register: z, v, <span lang="en-ca">c, </span>and n.&nbsp;</p>
+<p>Flags</p>
+<table border="1" cellspacing="0" width="34%" style="border-collapse: collapse; border-left-style: solid; border-left-width: 1; border-right-style: solid; border-right-width: 1; border-top-style: double; border-top-width: 3; border-bottom-style: solid; border-bottom-width: 1; padding-left: 4; padding-right: 4; padding-top: 1; padding-bottom: 1" bordercolor="#111111" cellpadding="0">
+  <tr>
+    <td width="15%" align="center" bgcolor="#F0F0F0"><b>Flag</b></td>
+    <td width="85%" bgcolor="#F0F0F0"><b>Operation</b></td>
+  </tr>
+  <tr>
+    <td width="15%" align="center">z</td>
+    <td width="85%">set when result is zero</td>
+  </tr>
+  <tr>
+    <td width="15%" align="center">v</td>
+    <td width="85%">set on signed overflow of result</td>
+  </tr>
+  <tr>
+    <td width="15%" align="center">n</td>
+    <td width="85%">set if result is negative</td>
+  </tr>
+  <tr>
+    <td width="15%" align="center">c</td>
+    <td width="85%">set if carry (on add) or borrow (on sub)</td>
+  </tr>
+</table>
+<p>Branch Conditions</p>
+<table border="1" cellspacing="0" width="66%" cellpadding="0" style="border-collapse: collapse; padding-left: 4; padding-right: 4; padding-top: 1; padding-bottom: 1; border-left-style:solid; border-right-style:solid; border-top-style:double; border-top-width:3; border-bottom-style:solid" bordercolor="#111111">
+  <tr>
+    <td width="16%" align="center" bgcolor="#F0F0F0"><b>Code</b></td>
+    <td width="25%" align="center" bgcolor="#F0F0F0"><b>Mnemonic</b></td>
+    <td width="144%" bgcolor="#F0F0F0"><b>Description</b></td>
+    <td width="36%" align="center" bgcolor="#F0F0F0"><b>Conditional Test</b></td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0000</td>
+    <td width="25%" align="left"><a href="#Bcc">BEQ</a></td>
+    <td width="144%">Branch if EQual</td>
+    <td width="36%" align="center">z</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0001</td>
+    <td width="25%" align="left"><a href="#Bcc">BNE</a></td>
+    <td width="144%">Branch if Not Equal</td>
+    <td width="36%" align="center">!z</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0010</td>
+    <td width="25%" align="left"><a href="#Bcc">BRA</a></td>
+    <td width="144%">BRanch Always</td>
+    <td width="36%" align="center">1</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0011</td>
+    <td width="25%" align="left"><a href="#CALL"><span lang="en-ca">BSR</span></a></td>
+    <td width="144%">Branch to SubRoutine (relative call)</td>
+    <td width="36%" align="center">1</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0100</td>
+    <td width="25%" align="left"><a href="#Bcc">BMI</a></td>
+    <td width="144%">Branch if MInus</td>
+    <td width="36%" align="center">n</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0101</td>
+    <td width="25%" align="left"><a href="#Bcc">BPL</a></td>
+    <td width="144%">Branch if PLus</td>
+    <td width="36%" align="center">!n</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0110</td>
+    <td width="25%" align="left"><span lang="en-ca">{reserved}</span></td>
+    <td width="144%"><span lang="en-ca">reserved</span></td>
+    <td width="36%" align="center">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">0111</td>
+    <td width="25%" align="left"><span lang="en-ca">{reserved}</span></td>
+    <td width="144%"><span lang="en-ca">reserved</span></td>
+    <td width="36%" align="center">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1000</td>
+    <td width="25%" align="left"><a href="#Bcc">BLT</a></td>
+    <td width="144%">Branch if Less Than</td>
+    <td width="36%" align="center">n ^ v</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1001</td>
+    <td width="25%" align="left"><a href="#Bcc">BGE</a></td>
+    <td width="144%">Branch if Greater than or Equal</td>
+    <td width="36%" align="center">!(n ^ v)</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1010</td>
+    <td width="25%" align="left"><a href="#Bcc">BLE</a></td>
+    <td width="144%">Branch if Less than or Equal</td>
+    <td width="36%" align="center">(n^v) | z</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1011</td>
+    <td width="25%" align="left"><a href="#Bcc">BGT</a></td>
+    <td width="144%">Branch if Greater Than</td>
+    <td width="36%" align="center">!((n^v) | z)</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1100</td>
+    <td width="25%" align="left"><a href="#Bcc">BLTU</a> / <a href="#Bcc">BCS</a></td>
+    <td width="144%">Branch if Less Than (Unsigned)</td>
+    <td width="36%" align="center">c</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1101</td>
+    <td width="25%" align="left"><a href="#Bcc">BGEU</a> / <a href="#Bcc">BCC</a></td>
+    <td width="144%">Branch if Greater than or Equal (Unsigned)</td>
+    <td width="36%" align="center">!c</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1110</td>
+    <td width="25%" align="left"><a href="#Bcc">BLEU</a></td>
+    <td width="144%">Branch if Less than or Equal (Unsigned)</td>
+    <td width="36%" align="center">c | z</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">1111</td>
+    <td width="25%" align="left"><a href="#Bcc">BGTU</a></td>
+    <td width="144%">Branch if Greater Than (Unsigned)</td>
+    <td width="36%" align="center">!(c | z)</td>
+  </tr>
+  <tr>
+    <td width="16%" align="center">&nbsp;</td>
+    <td width="25%" align="left">&nbsp;</td>
+    <td width="144%">&nbsp;</td>
+    <td width="36%" align="center">&nbsp;</td>
+  </tr>
+</table>
+<p><font size="4">Jumps</font></p>
+<p>Jumps (<a href="#JMP">JMP</a>) are not frequently used in program code so there is minimal support for
+this operation. Jumps are implemented as a specific case of the jump-and-link (<a href="#JAL">JAL</a>) instruction which is normally used for subroutine calls. By specifying r0
+as the register to save the program counter in, a jump operation can be
+performed because the save of the program counter normally associated with the
+JAL instruction is nullified.</p>
+<p><font size="4">Subroutine Calls</font></p>
+<p>Subroutine calls may be performed via the <a href="#CALL">CALL</a> (<a href="#JAL">JAL</a>) instructions. One of the
+problems with a fixed format sixteen bit instruction encoding is that subroutine
+call operations are complicated. There are simply not enough bits available in
+the opcode to support a subroutine address. Hence the provision of a call
+subroutine instruction that uses a program counter relative address to
+identify the target routine. Obviously, the distance this call can branch is
+severely limited.&nbsp; The JAL instruction is a simple, powerful instruction
+common in many newer architectures that provides for most common program flow
+transfer operations that are not covered by branches. This single instruction
+can perform regular jump operations, subroutine call operations using absolute
+or register indirect addresses, and a return from subroutine operation. The
+default form of the JAL instruction where the return address is stored in the
+link register (r15) is referred to as CALL.</p>
+<p><font size="4"><a name="StopInstruction"></a>STOP Instruction</font></p>
+<p>It is sometimes desirable to stop processing at the current position in a
+program and wait for an external event to occur. This is often done in operating
+system code to make the most efficient use of resources. The <a href="#STOP">STOP</a>
+instruction
+provides the facility to wait for an externally generated event to
+occur. The processor monitors the status of an external signal called 'go', and
+if active allows the processor to exit the stopped state. This means the
+processor can be synchronized to external hardware. The 'go' signal may or may
+not be connected to an interrupt signal. Unless the go signal is connected to an
+interrupt signal, it merely releases the processor from the stop state with no
+other effect (stop/go do not cause an interrupt by themselves).</p>
+<hr color="#CC0000">
+<p><font size="4">Interrupts</font></p>
+<p>This processor supports interrupts in the form of a system call. When a
+hardware interrupt occurs the appropriate system call instruction is forced into
+the the processor's internal instruction pipeline. There are several pre-defined
+system calls to specific addresses in order to support hardware interrupts as
+listed in the table below. A system call jumps to the interrupt subroutine whose
+address is encoded directly in the system call instruction. The <a href="#IRET">IRET</a> instruction
+is used to return from a system call. The interrupt subroutine begins at the
+address specified in the system call. The pre-defined system call addresses are
+spaced every four characters in order to allow an extended jump instruction to
+the actual routine to be performed. If desired other program code or data may be
+placed in these locations. Addresses above 7FFF_FFC0 should not be used as these
+are reserved for future use.</p>
+<p>Occurrence of an interrupt results in the status register (sr) begin copied
+to the back up version, the maskable interrupt mask being set to disable further
+interrupts, and the interrupt return address being copied to r14, so that both of these may be restored by the interrupt return
+operation.</p>
+<p>&nbsp;</p>
+<table border="1" cellspacing="0" width="102%">
+  <tr>
+    <td width="17%" align="center" bgcolor="#F0F0F0"><b>System Call Address</b></td>
+    <td width="66%" bgcolor="#F0F0F0"><b>Vector Type / Cause</b></td>
+    <td width="21%" bgcolor="#F0F0F0" align="center"><b>Instruction Mnemonic</b></td>
+    <td width="132%" bgcolor="#F0F0F0" nowrap><b>Comment</b></td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">7FFF_FFFC</td>
+    <td width="66%">reset</td>
+    <td width="21%" align="center">RESET</td>
+    <td width="132%" nowrap>will be called automatically during hardware reset</td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">7FFF_FFF8</td>
+    <td width="66%">non-maskable interrupt</td>
+    <td width="21%" align="center">NMI</td>
+    <td width="132%" nowrap>will be automatically called during hardware
+      interrupt</td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">7FFF_FFF4</td>
+    <td width="66%">maskable interrupt</td>
+    <td width="21%" align="center">IRQ</td>
+    <td width="132%" nowrap>will be automatically called during hardware
+      interrupt</td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">7FFF_FFF0</td>
+    <td width="66%">watch address match</td>
+    <td width="21%" align="center">WAT</td>
+    <td width="132%" nowrap>called automatically when the current address
+      matches the watch address register</td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">7FFF_FFC4</td>
+    <td width="66%">software interrupt</td>
+    <td width="21%" align="center">SYS</td>
+    <td width="132%" nowrap>system call - meant to be used to call OS system
+      functions</td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">7FFF_FFC0</td>
+    <td width="66%">break</td>
+    <td width="21%" align="center">BRK</td>
+    <td width="132%" nowrap>called automatically when a null character is found
+      in the instruction stream</td>
+  </tr>
+  <tr>
+    <td width="17%" align="center">&nbsp;</td>
+    <td width="66%">&nbsp;</td>
+    <td width="21%" align="center">&nbsp;</td>
+    <td width="132%" nowrap>&nbsp;</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr color="#CC0000">
+<p><a name="MemoryOperations"></a><font size="4">Memory Operations</font></p>
+<p>This processor does not support a byte oriented memory format because of a
+number of factors (internationalization of character sets, availability of large
+size low cost memory, frequent use of values larger than a byte, and performance
+to name a few). All addressing is in terms of characters which are sixteen bit
+quantities. The effect of this is to double the available address range
+supported by the sixteen bit version of the processor.</p>
+<p>This is a load / store architecture; the only operations accessing memory are
+load and store operations. The processor supports both character (16 bit) and
+word (32 bit) loads and stores of data to memory (<a href="#LC">LC</a>, <a href="#LW">LW</a>,
+<a href="#SC">SC</a>, <a href="#SW">SW</a>). Character values loaded are sign
+extended to the width of the implementation when loaded.</p>
+<hr color="#CC0000">
+<p>&nbsp;</p>
+<p>String Instructions</p>
+<table border="1" cellpadding="0" cellspacing="0" style="border-collapse: collapse" bordercolor="#111111" width="100%">
+  <tr>
+    <td width="12%">&nbsp;</td>
+    <td width="38%">&nbsp;</td>
+    <td width="50%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="12%">memchr</td>
+    <td width="38%">compare [x++] to a; n-- until n = 0 or [x] = a</td>
+    <td width="50%">search for a character in a buffer</td>
+  </tr>
+  <tr>
+    <td width="12%">memcmp</td>
+    <td width="38%">compare [x++] to [y++]; n-- until n = 0 or [x] &lt;&gt; [y]</td>
+    <td width="50%">compare two buffers</td>
+  </tr>
+  <tr>
+    <td width="12%">memcpy</td>
+    <td width="38%">copy [x++] to [y++]; n-- until n = 0</td>
+    <td width="50%">copy buffer</td>
+  </tr>
+  <tr>
+    <td width="12%">memmove</td>
+    <td width="38%">if (x &gt; y) copy [x++] to [y++]; n-- until n = 0<p>else copy 
+    [x--] to [y--]; n-- until n = 0</td>
+    <td width="50%">move a block of memory</td>
+  </tr>
+  <tr>
+    <td width="12%">memset</td>
+    <td width="38%">set [x++] = a; n-- until n = 0</td>
+    <td width="50%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="12%">strchr</td>
+    <td width="38%">compare [x++] to a until [x] = a or [x] = 0</td>
+    <td width="50%">search for character</td>
+  </tr>
+  <tr>
+    <td width="12%">strcmp</td>
+    <td width="38%">compare [x++] to [y++] until [x] &lt;&gt; [y] or [x] = 0</td>
+    <td width="50%">compare strings</td>
+  </tr>
+  <tr>
+    <td width="12%">strcpy</td>
+    <td width="38%">copy [x++] to [y++] until [x] = 0</td>
+    <td width="50%">copy string</td>
+  </tr>
+  <tr>
+    <td width="12%">strlen</td>
+    <td width="38%">n++ until [x++] = 0</td>
+    <td width="50%">get length of string Note: set n = 0 first !</td>
+  </tr>
+  <tr>
+    <td width="12%">strcat</td>
+    <td width="38%">use strlen then strcpy</td>
+    <td width="50%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="12%">strncmp</td>
+    <td width="38%">compare [x++] to [y++] until [x] &lt;&gt; [y] or [x] = 0 or n = 0</td>
+    <td width="50%">compare strings, count limited</td>
+  </tr>
+  <tr>
+    <td width="12%">strncpy</td>
+    <td width="38%">copy [x++] to [y++] until [x] =0 or n = 0</td>
+    <td width="50%">string compare, count limited</td>
+  </tr>
+  <tr>
+    <td width="12%">&nbsp;</td>
+    <td width="38%">&nbsp;</td>
+    <td width="50%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="12%">jsrn d</td>
+    <td width="38%">jsr d; n-- until n = 0</td>
+    <td width="50%">jump to subroutine until n = 0</td>
+  </tr>
+  <tr>
+    <td width="12%">jsre d</td>
+    <td width="38%">jsr d; until z flag set</td>
+    <td width="50%">jump to subroutine until z flag set</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr color="#CC0000">
+<hr color="#CC0000">
+<p><font size="4"><a name="OpcodeFormats"></a>Opcode Formats</font></p>
+<p>Ideally the processor should be able to support three operand instructions
+(one destination, two sources) including cases where all three operands are
+registers, in order to allow the compiler to allocate registers more
+efficiently. However, from a practicality standpoint it is simpler and smaller
+(and thus faster) to use an instruction set that supports only two register
+operands at once within an FPGA. This does not degrade the performance of the
+processor to a significant degree as fewer than 1/4 of the instructions executed
+actually require three register operands, and of those not all will use three
+different registers. Supporting a register file with three independent ports
+consumes over twice as many resources <span lang="en-ca">for the register file
+</span>as supporting a register file with two
+ports in the typical FPGA.</p>
+<p>This is a sixteen register design. Limiting the register set to sixteen
+registers allows a compact instruction format and is consistent with the
+efficient use of resources within an FPGA.</p>
+<p>The opcode format used here is a fixed sixteen bit format with an optional
+additional character (16 bits!) containing an extended immediate value. The mechanism
+used to encode immediate values in the instruction stream is somewhat convoluted
+due to the desire to be able to encode thirty-two bit immediate constants in the
+instruction stream without using an intermediate register or instructions,
+without lengthening the processor pipeline, causing unnecessary stalls, or
+needlessly wasting any program space. The constant prefix instruction is
+provided for the purpose of supplying twelve
+(bits four through fifteen) or twenty-eight additional bits for the constant when a four bit constant value encoded within an
+instruction is not sufficient. With the use of the constant prefix instruction
+both sixteen (sign extended) and thirty-two bit immediates are supported which are then signed extended to
+thirty-two bits. The constant
+prefix and following one or two characters are operated in an interlocked fashion to
+disallow an intervening interrupt to occur.</p>
+<p>Basic Opcode Formats</p>
+<table border="1" cellpadding="0" cellspacing="0" width="488">
+  <tr>
+    <td width="76" align="center" colspan="2"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="184" colspan="3" align="center">
+      <p align="center"><font size="2" face="Arial">op<sub>12</sub></font></p>
+    </td>
+    <td width="18" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">misc</font></td>
+    <td width="166" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">misc
+      / reserved</font></td>
+  </tr>
+  <tr>
+    <td width="76" align="center" colspan="2"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="57" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="50" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="77" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="18" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rr</font></td>
+    <td width="166" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">register-register</font></td>
+  </tr>
+  <tr>
+    <td width="76" align="center" colspan="2"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="57" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="50" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="77" align="center"><font size="2" face="Arial">imm<sub>4</sub></font></td>
+    <td width="18" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rc</font></td>
+    <td width="166" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">register-constant</font></td>
+  </tr>
+  <tr>
+    <td width="50" align="center"><font size="2" face="Arial">op<sub>3</sub></font></td>
+    <td width="22" align="center"><font size="2" face="Arial">sz<sub>1</sub></font></td>
+    <td width="139" colspan="3" align="center"><font size="2" face="Arial">const<sub>12</sub></font></td>
+    <td width="18" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">cp</font></td>
+    <td width="166" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">constant
+      prefix</font></td>
+  </tr>
+  <tr>
+    <td width="50" align="center"><font size="2" face="Arial">op<sub>3</sub></font></td>
+    <td width="75" align="center" colspan="2"><font size="2" face="Arial">cond<sub>3</sub></font></td>
+    <td width="150" align="center" colspan="2"><font size="2" face="Arial">disp<sub>10</sub></font></td>
+    <td width="18" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">br</font></td>
+    <td width="166" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+      branch</font></td>
+  </tr>
+  <tr>
+    <td width="76" align="center" colspan="2"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="57" align="center"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="60" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="77" align="center"><font size="2" face="Arial">const<sub>4</sub></font></td>
+    <td width="18" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rrc</font></td>
+    <td width="166" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">register-register-constant</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<p>More Detailed Opcode Formats</p>
+<table border="1" cellpadding="0" cellspacing="0" width="723" style="border-collapse: collapse; border-style: solid; border-width: 1; padding-left: 4; padding-right: 4; padding-top: 1; padding-bottom: 1" bordercolor="#111111">
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="312" colspan="4">
+      <p align="center"><font face="Arial"><font size="2">op</font><sub>12</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">inst.</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">desc.</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">0</font></td>
+    <td width="312" colspan="4" align="center"><font size="2" face="Arial">op<sub>12</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">misc</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">misc.</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">&nbsp;<span lang="en-ca">brk,
+    </span>nop,
+      end, stop, di, ei, ri, sys</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">1</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">imm<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">ADD</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">add
+      immediate</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">add,
+      sub, cmp</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">2</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rr</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">register-register
+      operate</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">add,
+      sub, cmp, and, or, xor</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">imm<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">ri</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">register-immediate
+      operate</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">and,
+      or, xor, subr, tsr, trs</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">JAL</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">jump
+      and link</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">jal,
+      iret, call, jmp, ret</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">5</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">op<sub>2</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">imm<sub>6</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">shift</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">shl,
+      shr, rol, ror, asr</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">6</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">op<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">{string}</font></span></td>
+    <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">these
+      are reserved opcodes</font></td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">7</font></td>
+    <td width="99" align="center" colspan="2">&nbsp;</td>
+    <td width="109" align="center">&nbsp;</td>
+    <td width="104" align="center">&nbsp;</td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">{res}</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="329" bgcolor="#F0F0F0" align="center">&nbsp;</td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">these
+      are reserved opcodes</font></td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">8<span lang="en-ca">/9</span></font></td>
+    <td width="1" align="center"><span lang="en-ca"><font size="2">sz</font><sub>1</sub></span></td>
+    <td width="50" align="center" style="border-top-style: solid; border-top-width: 1; border-bottom-style: solid; border-bottom-width: 1; padding-left: 4; padding-right: 0; padding-top: 1; padding-bottom: 1">
+    <span lang="en-ca">&nbsp;</span></td>
+    <td width="219" colspan="2" align="center" style="border-left-width: 1; border-right-style: solid; border-right-width: 1; border-top-style: solid; border-top-width: 1; border-bottom-style: solid; border-bottom-width: 1; padding-left: 0"><font size="2" face="Arial">const<sub>12</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">CP</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">constant
+      prefix</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">cp</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">A/B</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">cond<sub><span lang="en-ca">4</span></sub></font></td>
+    <td width="213" colspan="2" align="center"><font size="2" face="Arial">disp<sub><span lang="en-ca">9</span></sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Bcc</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">conditional
+      branch</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">beq,
+      bne, blt, bge, ble, bgt, bra, <span lang="en-ca">bsr, bmi, bpl,  
+    bltu, bgeu, bleu, bgtu</span></font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">C</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">SC</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">store
+      character</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">sc</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">this
+      is a 16 bit quantity</font></td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">D</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">SW</font></span></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">store word</font></span></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">sw</font></span></td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">this
+      is a <span lang="en-ca">32</span> bit quantity</font></td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">E</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+    LC</font></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">
+    load character</font></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><font face="Arial" size="2">
+    lc</font></td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">
+    this is a 16 bit quantity</font></td>
+  </tr>
+  <tr>
+    <td width="104" align="center"><font size="2" face="Arial">F</font></td>
+    <td width="99" align="center" colspan="2"><font size="2" face="Arial">rd<sub>4</sub></font></td>
+    <td width="109" align="center"><font size="2" face="Arial">rs<sub>4</sub></font></td>
+    <td width="104" align="center"><font size="2" face="Arial">disp<sub>4</sub></font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">LW</font></span></td>
+    <td width="155" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">load word</font></span></td>
+    <td width="329" bgcolor="#F0F0F0" align="center"><span lang="en-ca">
+    <font size="2">lw</font></span></td>
+    <td width="437" bgcolor="#F0F0F0" align="left"><font face="Arial" size="2">
+    this is a <span lang="en-ca">32</span> bit quantity</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<p><font size="3">16 bit sign extended constant format</font></p>
+<table border="1" width="39%" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="25%" align="center"><font size="2" face="Arial">
+    <span lang="en-ca">8</span><sub>4</sub></font></td>
+    <td width="75%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>15..4</sub></font></td>
+  </tr>
+</table>
+<table border="1" width="39%" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="75%" align="center"><font size="2" face="Arial">op<sub>12</sub></font></td>
+    <td width="25%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p><font size="3">32 bit constant format</font></p>
+<table border="1" width="39%" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="25%" align="center"><font size="2" face="Arial">
+    <span lang="en-ca">9</span><sub>4</sub></font></td>
+    <td width="75%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>15..4</sub></font></td>
+  </tr>
+</table>
+<table border="1" width="39%" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="100%" bgcolor="#F0F0F0">
+      <p align="center"><font size="2" face="Arial">const<sub>31..16</sub></font></td>
+  </tr>
+</table>
+<table border="1" width="39%" cellspacing="0" cellpadding="0">
+  <tr>
+    <td width="75%" align="center"><font size="2" face="Arial">op<sub>12</sub></font></td>
+    <td width="25%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<p><font size="4" face="Arial"><a name="InstructionSetSummary"></a>Instruction Set Summary</font></p>
+<table border="0" cellspacing="0" width="82%" height="144">
+  <tr>
+    <td width="21%" colspan="2" height="81"><b><font face="Arial">Arithmetic / Logical&nbsp; operations</font></b></td>
+    <td width="11%" height="81" bgcolor="#EEFFFF"><b><font face="Arial">Subroutine Calls / Jumps</font></b></td>
+    <td width="15%" height="81"><b><font face="Arial">Memory Operations</font></b></td>
+    <td width="17%" height="81" bgcolor="#EEFFFF"><b><font face="Arial">Miscellaneous</font></b></td>
+    <td width="24%" colspan="2" height="81"><b><font face="Arial">Branches</font></b></td>
+    <td width="47%" height="81" colspan="2" bgcolor="#EEFFFF"><b><font face="Arial">Interrupt Management</font></b></td>
+  </tr>
+  <tr>
+    <td width="9%" height="1"></td>
+    <td width="13%" height="1"></td>
+    <td width="11%" height="1" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="15%" height="1"></td>
+    <td width="17%" height="1" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="10%" height="1"></td>
+    <td width="14%" height="1"></td>
+    <td width="16%" height="1" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="31%" height="1" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#ADC"><font face="Arial">ADC</font></a></td>
+    <td width="13%" height="21"><a href="#ROR"><font face="Arial">ROR</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF"><a href="#JAL"><font face="Arial">JAL</font></a></td>
+    <td width="15%" height="21"><a href="#LC"><font face="Arial">LC</font></a></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#CON"><font face="Arial">CON</font></a></td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BEQ</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#BRK"><font face="Arial">BRK</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF"><a href="#STOP"><font face="Arial">STOP</font></a></td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#ADC"><font face="Arial">ADD</font></a></td>
+    <td width="13%" height="21"><a href="#SBC"><font face="Arial">SBC</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF"><a href="#JMP"><font face="Arial">JMP</font></a></td>
+    <td width="15%" height="21"><a href="#LEA"><font face="Arial">LEA</font></a></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#STOP"><font face="Arial">NOP</font></a></td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BGE</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#DI"><font face="Arial">DI</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF"><a href="#SYS"><font face="Arial">SYS</font></a></td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#AND"><font face="Arial">AND</font></a></td>
+    <td width="14%" height="21"><a href="#SBCR"><font face="Arial">SBCR</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF"><a href="#CALL"><font face="Arial">CALL</font></a></td>
+    <td width="15%" height="21"><a href="#LW"><font face="Arial">LW</font></a></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#TSR"><font face="Arial">TRS</font></a></td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BGT</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#EI"><font face="Arial">EI</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#ROR"><font face="Arial">ASR</font></a></td>
+    <td width="14%" height="21"><a href="#SHL"><font face="Arial">SHL</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF"><a href="#RTS"><font face="Arial">RET</font></a></td>
+    <td width="15%" height="21"><a href="#SC"><font face="Arial">SC</font></a></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#TSR"><font face="Arial">TSR</font></a></td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BLE</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#IRQ"><font face="Arial">IRQ</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#CMP"><font face="Arial">CMP</font></a></td>
+    <td width="13%" height="21"><a href="#SHR"><font face="Arial">SHR</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="15%" height="21"><a href="#SW"><font face="Arial">SW</font></a></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BLT</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#NMI"><font face="Arial">NMI</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#NEG"><font face="Arial">NEG</font></a></td>
+    <td width="13%" height="21"><a href="#SUB"><font face="Arial">SUB</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="15%" height="21"></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"><b><font size="3" face="Arial">Special</font></b></td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BNE</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#RI"><font face="Arial">RI</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#NEG"><font face="Arial">NOT</font></a></td>
+    <td width="13%" height="21"><a href="#SUBR"><font face="Arial">SUBR</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="15%" height="21"></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BRA</font></a></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#RESET"><font face="Arial">RESET</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#OR"><font face="Arial">OR</font></a></td>
+    <td width="13%" height="21"><a href="#XOR"><font face="Arial">XOR</font></a></td>
+    <td width="11%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="15%" height="21"></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#END"><font face="Arial">END</font></a></td>
+    <td width="10%" height="21"></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF"><a href="#IRET"><font face="Arial">IRET</font></a></td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="9%" height="21"><a href="#ROL"><font face="Arial">ROL</font></a></td>
+    <td width="13%" height="21"></td>
+    <td width="12%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="15%" height="21"></td>
+    <td width="17%" height="21" bgcolor="#EEFFFF"></td>
+    <td width="10%" height="21"></td>
+    <td width="14%" height="21"></td>
+    <td width="16%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+    <td width="31%" height="21" bgcolor="#EEFFFF">&nbsp;</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="21%"><font face="Arial"><a name="ADC"></a>ADC Rd,Rs</font></td>
+    <td width="79%"></td>
+  </tr>
+  <tr>
+    <td width="21%"><font face="Arial">ADC Rd,#n</font></td>
+    <td width="79%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Arithmetic 'add' register with register or
+immediate, including carry.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd + Rs + c</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Rd = Rd + #imm + c</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="21%"><font face="Arial"><a name="ADD"></a>ADD Rd,Rs</font></td>
+    <td width="79%"></td>
+  </tr>
+  <tr>
+    <td width="21%"><font face="Arial">ADD Rd,Rs,#n</font></td>
+    <td width="79%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Arithmetic 'add' register with register or
+immediate.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd + Rs</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Rd = Rs + #imm</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="AND"></a>AND Rd,Rs</font></td>
+  </tr>
+  <tr>
+    <td width="100%"><font face="Arial">AND Rd,#n</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Logically 'and' register with register or
+immediate.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd &amp; Rs</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0101</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Rd = Rd &amp; #imm</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0101</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="ASR"></a>ASR Rd</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Arithmetically shift register right by one bit.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd &gt;&gt; 1</font></p>
+<p><font size="2" face="Arial">The sign bit of the register is preserved during
+the shift.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">resv.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<p><font size="3" face="Arial">B<i>cc</i>  label</font></p>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Branch to label if condition is true</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">if cond then</font></p>
+<p><font size="2" face="Arial">&nbsp;&nbsp;&nbsp; pc = pc + disp</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">cond.</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">10</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      13</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">12&nbsp;&nbsp;&nbsp;
+      10</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">9&nbsp;
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">101</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">c<sub>2..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>9..0</sub></font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">Branch conditions are based on the following flags that are maintained in the
+status register: c, z, v, and n.&nbsp;</font></p>
+<p><font face="Arial">Flags</font></p>
+<table border="1" cellspacing="0" width="34%">
+  <tr>
+    <td width="15%" align="center" bgcolor="#F0F0F0"><b><font face="Arial">Flag</font></b></td>
+    <td width="85%" bgcolor="#F0F0F0"><b><font face="Arial">Operation</font></b></td>
+  </tr>
+  <tr>
+    <td width="15%" align="center">&nbsp;</td>
+    <td width="85%">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="15%" align="center"><font face="Arial">z</font></td>
+    <td width="85%"><font face="Arial" size="2">set when result is zero</font></td>
+  </tr>
+  <tr>
+    <td width="15%" align="center"><font face="Arial">v</font></td>
+    <td width="85%"><font face="Arial" size="2">set on signed overflow of result</font></td>
+  </tr>
+  <tr>
+    <td width="15%" align="center"><font face="Arial">n</font></td>
+    <td width="85%"><font face="Arial" size="2">set if result is negative</font></td>
+  </tr>
+  <tr>
+    <td width="15%" align="center">&nbsp;</td>
+    <td width="85%">&nbsp;</td>
+  </tr>
+</table>
+<p><font face="Arial">Branch Conditions</font></p>
+<table border="1" cellspacing="0" width="68%">
+  <tr>
+    <td width="24%" align="center" bgcolor="#F0F0F0"><b><font face="Arial">Code</font></b></td>
+    <td width="28%" align="center" bgcolor="#F0F0F0"><b><font face="Arial">Mnemonic</font></b></td>
+    <td width="136%" bgcolor="#F0F0F0"><b><font face="Arial">Description</font></b></td>
+    <td width="20%" align="center" bgcolor="#F0F0F0"><b><font face="Arial">Conditional Test</font></b></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">000</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BEQ</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch if EQual</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">z = 1</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">001</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BNE</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch if Not Equal</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">z = 0</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">010</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BRA</font></td>
+    <td width="136%"><font face="Arial" size="2">BRanch Always</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">1</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">011</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">CALL</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch to SubRoutine (CALL)</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">1</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">100</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BLT</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch if Less Than</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">n ^ v</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">101</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BGE</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch if Greater than or Equal</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">!(n ^ v)</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">110</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BLE</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch if Less than or Equal</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">(n^v) | z</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font face="Arial" size="2">111</font></td>
+    <td width="28%" align="center"><font face="Arial" size="2">BGT</font></td>
+    <td width="136%"><font face="Arial" size="2">Branch if Greater Than</font></td>
+    <td width="20%" align="center"><font face="Arial" size="2">!((n^v) | z)</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center">&nbsp;</td>
+    <td width="28%" align="center">&nbsp;</td>
+    <td width="136%">&nbsp;</td>
+    <td width="20%" align="center">&nbsp;</td>
+  </tr>
+  <tr>
+    <td width="24%" align="center">&nbsp;</td>
+    <td width="28%" align="center">&nbsp;</td>
+    <td width="136%">&nbsp;</td>
+    <td width="20%" align="center">&nbsp;</td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<p><font face="Arial"><a name="BRK"></a>BRK</font></p>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Run break routine.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFC0; flags.backup = flags;
+flags.im = 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction causes the processor to perform a software initiated 'break'
+interrupt routine. It is purposely defined as a zero byte so the processor will
+execute the break routine in the event that code flows into a region of
+memory that has been nulled out. This helps promote reliable system operation.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="50%"><font face="Arial"><a name="CALL"></a>CALL
+      d[Rs]</font></td>
+    <td width="50%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><font face="Arial">CALL d10[pc]</font></td>
+    <td width="50%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Call subroutine</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">r15 = pc; pc = disp + Rs;</font></p>
+<p><font size="2" face="Arial">Call subroutine using register indirect with
+displacement mode. This is an alternate form of the <a href="#JAL">JAL</a>
+instruction.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1111</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">r15 = pc; pc = pc + disp;</font></p>
+<p><font face="Arial" size="2">Call subroutine using program counter relative form. The
+ten bit address is sign extended to 32 bits before being used. This allows
+subroutine calls to memory with in the first 512 or last 512 relative to the
+current program address.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="266">
+  <tr>
+    <td width="102"><font size="2" face="Arial">desc:</font></td>
+    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+  </tr>
+  <tr>
+    <td width="102"><font size="2" face="Arial">size:</font></td>
+    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">10</font></td>
+  </tr>
+  <tr>
+    <td width="102"><font size="2" face="Arial">bits:</font></td>
+    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;&nbsp;&nbsp;
+      13</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">12&nbsp;
+      &nbsp;&nbsp;10</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">9&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="102"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="79" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">101</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0011</font></p>
+    </td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>9..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="CMP"></a>CMP Rd,Rs</font></td>
+  </tr>
+  <tr>
+    <td width="100%"><font face="Arial">CMP Rs,#n&nbsp;&nbsp;&nbsp; <font size="2">(see
+      also <a href="#ADC">ADD</a>, <a href="#SUB">SUB</a>)</font></font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Compare register with register or immediate.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">flags = Rd - Rs</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">5</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      13</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">12&nbsp;&nbsp;&nbsp;
+      9</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">8&nbsp;&nbsp;&nbsp;
+      5</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">00110</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">flags = Rs - #imm</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="CON"></a>CON #imm</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Constant prefix</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">size</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">12</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      13</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">12</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">sz</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>11..0</sub></font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">The upper bits of the immediate
+constant are set for the next instruction, overriding sign extension of the immediate.
+The constant prefix instruction indicates the presence of an additional twelve
+or twenty-eight constant bits in the instruction stream. If the size bit is set
+to one, then the next instruction character contains bits 16 to 31 of the
+constant for the following instruction. If the size bit is zero, then the
+constant prefix only includes bits 4 through 15 which are sign extended to
+produce the constant for the next instruction.
+Interrupts are prevented from occurring between this instruction and the next
+instruction. Normally this instruction is automatically inserted by the
+assembler wherever an extended constant value is required.</font></p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="DI"></a>DI</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Disable interrupts.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">flags.im = 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction disables maskable hardware interrupts by setting the
+interrupt mask in the status register. It also disables the <a href="#IRQ">IRQ</a>
+instruction.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="EI"></a>EI</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Enable interrupts.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">flags.im = 0</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op.</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction enables maskable hardware interrupts by clearing the
+interrupt mask in the status register.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="END"></a>END</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">No operation.</font></p>
+<p><font face="Arial">Detail</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1000</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">This instruction is provided for use in a
+software emulator of the processor. It indicates the end of a sequence of
+instructions to emulate. The processor will treat this instruction as a NOP
+instruction.</font></p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="IRET"></a>IRET</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Return from interrupt subroutine.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">pc = r14; flags = backup flags</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1110</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction returns from an interrupt routine by restoring the flag
+register and jumping back to the code that was interrupted (who's address is
+stored in r14). This is a special form of the <a href="#JAL">JAL</a>
+instruction.</font></p>
+
+<hr size="4" color="#CC0000">
+<p><font face="Arial"><a name="IRQ"></a>IRQ</font></p>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Run irq routine.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFF4; flags.backup = flags;
+flags.im = 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="320">
+  <tr>
+    <td width="154"><font size="2" face="Arial">desc:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">size:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bits:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;&nbsp;&nbsp;
+      12</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;
+      &nbsp;&nbsp;8</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;
+      &nbsp;&nbsp;4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="97" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1101</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">This instruction causes the processor to perform a software initiated
+maskable
+interrupt routine. It has the same effect as an external hardware maskable
+interrupt. If the interrupt mask in the status register is set, then this
+instruction will be ignored.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="50%"><font face="Arial">JAL
+      Rd,d[Rs]</font></td>
+    <td width="50%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Jump and link to subroutine</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = pc; pc = disp + Rs;</font></p>
+<p><font size="2" face="Arial">Jump to subroutine using register indirect with
+displacement mode. The current value of the program counter is stored in the
+destination register. Note: r14 can't be used as a source register. When r14 is
+specified as a source the JAL will be interpreted as an <a href="#RTI">RTI</a>
+instead.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="50%"><font face="Arial">JMP
+      d[Rs]</font></td>
+    <td width="50%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Jump to target</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = pc; pc = disp + Rs;</font></p>
+<p><font size="2" face="Arial">Jump to target code using register indirect with
+displacement mode. This is an alternate form of the <a href="#JAL">JAL</a>
+instruction.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="60%">
+  <tr>
+    <td width="25%" nowrap><font face="Arial"><a name="LC"></a>LC</font></td>
+    <td width="59%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
+    <td width="101%" nowrap></td>
+    <td width="68%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Load register character from memory</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial"> Rd = memory [Rs + disp]</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1110</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">The character loaded from memory is sign extended
+to the register width.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="21%"><font size="3" face="Arial">LEA Rd,d[Rs]</font></td>
+    <td width="79%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Load effective address.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd =&nbsp; Rs + disp</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">The effective address is loaded into the target
+register. This instruction is an alternate form of the <a href="#ADD">ADD</a> instruction.</font></p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="56%">
+  <tr>
+    <td width="25%" nowrap><font face="Arial"><a name="LW"></a>LW</font></td>
+    <td width="66%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
+    <td width="96%" nowrap></td>
+    <td width="67%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Load register word from memory</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial"> Rd = memory [Rs + disp]</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1111</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="18%"><font face="Arial"><a name="NEG"></a>NEG Rd</font></td>
+    <td width="82%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Take twos complement of register.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = -Rd</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<p><font face="Arial"><a name="NMI"></a>NMI</font></p>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Run nmi routine.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFF8; flags.backup = flags;
+flags.im = 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="320">
+  <tr>
+    <td width="154"><font size="2" face="Arial">desc:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">size:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bits:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;&nbsp;&nbsp;
+      12</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;
+      &nbsp;&nbsp;8</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;
+      &nbsp;&nbsp;4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;&nbsp;0</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="97" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1110</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction causes the processor to perform a software initiated
+non-maskable interrupt routine. It has the same effect as an external hardware
+non-maskable interrupt.</font></p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="NOP"></a>NOP</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">No operation</font></p>
+<p><font face="Arial">Detail</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction acts merely as a placeholder. It
+performs no operation and has no effect on the processor. Many processors lack
+an explicit NOP operation resulting in different instructions being used for
+this purpose within the same processor. By providing an explicit NOP instruction
+some consistency in programs can be achieved. Without a NOP instruction many
+processors typically use instructions which have side effects in the form of
+affecting the processor status flags; this is not the case here.</font></p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="18%"><font face="Arial"><a name="NOT"></a>NOT Rd</font></td>
+    <td width="82%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Take ones complement of register.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = ~Rd</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1111</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="OR"></a>OR Rd,Rs</font></td>
+  </tr>
+  <tr>
+    <td width="100%"><font face="Arial">OR Rd,#n</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Logically inclusively 'or' register with register
+or immediate.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd | Rs</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0110</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Rd = Rd | #imm</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0110</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="RI"></a>RI</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Restore interrupt flag from backup copy.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">flags.im = flags.backup im</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction restores the previous interrupt
+flag state from the backup
+copy of the status register. This allows restoring the interrupt state that was
+present when the backup of the status register was made. This is useful in
+operating system code where interrupts must be disabled to perform certain
+system functions (like updating system lists) and then restored after performing
+the operation.</font></p>
+
+<hr size="4" color="#CC0000">
+<p><font face="Arial"><a name="RESET"></a>RESET</font></p>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Run reset routine.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFFC; flags.backup = flags;
+flags.im = 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="320">
+  <tr>
+    <td width="154"><font size="2" face="Arial">desc:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">size:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bits:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;&nbsp;&nbsp;
+      12</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;
+      &nbsp;&nbsp;8</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;
+      &nbsp;&nbsp;4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="97" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1111</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction causes the processor to perform a software initiated
+reset routine. It has the same effect as an external hardware reset.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="ROL"></a>ROL Rd</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Rotate register left.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd &lt;&lt; 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="ROR"></a>ROR Rd</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Rotate register right.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd &gt;&gt; 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1100</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">Only single bit rotates are supported..</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="RET"></a>RET</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Return from subroutine.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">pc = r15</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1111</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction returns to the calling routine by loading the program
+counter with the contents of the link register. This is an alternate form of the
+jump-and-link (<a href="#JAL">JAL</a>) instruction.&nbsp;It is possible to
+return to a point in the program after the subroutine call by specifying a
+positive displacement instead of zero. This allows constant parameters to a
+subroutine call to be placed directly in code immediately after the calling
+instruction.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="36%">
+  <tr>
+    <td width="55%"><font face="Arial"><a name="SBC"></a>SBC&nbsp;</font></td>
+    <td width="96%"><font face="Arial"> Rd,Rs</font></td>
+    <td width="149%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Subtract register from register, including carry.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd - Rs - c</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="36%">
+  <tr>
+    <td width="55%"><font face="Arial"><a name="SBCR"></a>SBCR&nbsp;</font></td>
+    <td width="96%"><font face="Arial">Rd,#n</font></td>
+    <td width="149%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Subtract register from immediate, including
+carry.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = n - Rd - c</font></p>
+<p><font size="2" face="Arial">Note: this instruction subtracts the register
+from the immediate constant, which is opposite to what is usually desired.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="60%">
+  <tr>
+    <td width="25%" nowrap><font face="Arial"><a name="SC"></a>SC</font></td>
+    <td width="59%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
+    <td width="101%" nowrap></td>
+    <td width="68%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Store character from register memory</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">memory [Rs + disp] = Rd</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1100</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="SHL"></a>SHL Rd</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Arithmetically shift register left.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd &lt;&lt; 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1000</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="SHR"></a>SHR Rd</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Logically shift register right by one bit.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd &gt;&gt; 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">resv.</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1010</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="100%"><font face="Arial"><a name="STOP"></a>STOP</font></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Stop processor.</font></p>
+<p><font face="Arial">Detail</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;
+      8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0101</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction stops the processor causing it
+to wait for the 'go' signal to occur before continuing. This allows the
+processor to be synchronized with external hardware. The 'go' signal is an
+external signal provided by hardware that may be tied to the hardware interrupt
+system. The stop instruction by itself does not automatically cause an interrupt
+routine to execute.</font></p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="36%">
+  <tr>
+    <td width="55%"><font face="Arial"><a name="SUBR"></a>SUBR&nbsp;</font></td>
+    <td width="96%"><font face="Arial">Rd,#n</font></td>
+    <td width="149%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Subtract register from
+immediate.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = n - Rd</font></p>
+<p><font size="2" face="Arial">Note: this instruction is usually the opposite of
+what's needed.</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="56%">
+  <tr>
+    <td width="25%" nowrap><font face="Arial"><a name="SW"></a>SW</font></td>
+    <td width="66%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
+    <td width="96%" nowrap></td>
+    <td width="67%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Store word from register to memory</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">memory [Rs + disp] = Rd</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">disp</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1101</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">d<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="36%">
+  <tr>
+    <td width="55%"><font face="Arial"><a name="SUB"></a>SUB&nbsp;</font></td>
+    <td width="96%"><font face="Arial"> Rd,Rs</font></td>
+    <td width="149%" nowrap></td>
+  </tr>
+  <tr>
+    <td width="55%"><font face="Arial">SUB &nbsp;&nbsp;&nbsp;</font></td>
+    <td width="96%"><font face="Arial">Rd,Rs,#n</font></td>
+    <td width="149%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Subtract immediate or register from register.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd - Rs</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Rd = Rs - n</font></p>
+<p><font size="2" face="Arial">This is really the add instruction with the
+immediate constant automatically negated by the assembler. Because it's really
+an add instruction the immediate constant is limited to the range -biggest
+integer
+to -smallest integer</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<p><font face="Arial"><a name="SYS"></a>SYS</font></p>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Perform system call.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFC4; flags.backup = flags;
+flags.im = 1</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="320">
+  <tr>
+    <td width="154"><font size="2" face="Arial">desc:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">size:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bits:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;&nbsp;&nbsp;
+      12</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;
+      &nbsp;&nbsp;8</font></td>
+    <td width="97" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;
+      &nbsp;&nbsp;4</font></td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="154"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="95" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="83" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="97" bgcolor="#F0F0F0" align="center">
+      <p align="center"><font size="2" face="Arial">&nbsp;0000</font></p>
+    </td>
+    <td width="183" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0001</font></td>
+  </tr>
+</table>
+<p><font face="Arial" size="2">This instruction causes the processor to perform a
+system call. It is meant for operating system support.</font></p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="60%">
+  <tr>
+    <td width="25%" nowrap><font face="Arial"><a name="TRS"></a>TRS</font></td>
+    <td width="59%" nowrap><font face="Arial">&nbsp;Rd,Spr</font></td>
+    <td width="101%" nowrap></td>
+    <td width="68%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Transfer register to special purpose register.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Special Register&nbsp; = Rd</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">spr</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1111</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Special Registers</font></p>
+<p><font size="2" face="Arial">Currently there are only two special registers
+defined, the remaining codes are reserved for future use.</font></p>
+<table border="1" cellspacing="0" width="54%">
+  <tr>
+    <td width="24%" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Code</font></td>
+    <td width="30%" bgcolor="#F0F0F0"><font size="2" face="Arial">Register Name</font></td>
+    <td width="96%" bgcolor="#F0F0F0"><font size="2" face="Arial">Description</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="30%"><font size="2" face="Arial">SR</font></td>
+    <td width="96%"><font size="2" face="Arial">Status Register - contains
+      processor flags</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="30%"><font size="2" face="Arial">WAR</font></td>
+    <td width="96%"><font size="2" face="Arial">Watch Address Register</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+<hr size="4" color="#CC0000">
+<table border="0" cellspacing="0" width="60%">
+  <tr>
+    <td width="25%" nowrap><font face="Arial"><a name="TSR"></a>TSR</font></td>
+    <td width="59%" nowrap><font face="Arial">&nbsp;Rd,Spr</font></td>
+    <td width="101%" nowrap></td>
+    <td width="68%" nowrap></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Transfer special purpose register to register.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Special Register</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">spr</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">1110</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Special Registers</font></p>
+<p><font size="2" face="Arial">Currently there are only two special registers
+defined, the remaining codes are reserved for future use.</font></p>
+<table border="1" cellspacing="0" width="54%">
+  <tr>
+    <td width="24%" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">Code</font></td>
+    <td width="30%" bgcolor="#F0F0F0"><font size="2" face="Arial">Register Name</font></td>
+    <td width="96%" bgcolor="#F0F0F0"><font size="2" face="Arial">Description</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0000</font></td>
+    <td width="30%"><font size="2" face="Arial">SR</font></td>
+    <td width="96%"><font size="2" face="Arial">Status Register - contains
+      processor flags</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0001</font></td>
+    <td width="30%"><font size="2" face="Arial">WAR</font></td>
+    <td width="96%"><font size="2" face="Arial">Watch Address Register</font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+<hr size="4" color="#CC0000">
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+  <tr>
+    <td width="18%"><font face="Arial"><a name="XOR"></a>XOR Rd,Rs</font></td>
+    <td width="82%"></td>
+  </tr>
+  <tr>
+    <td width="18%"><font face="Arial">XOR Rd,#n</font></td>
+    <td width="82%"></td>
+  </tr>
+</table>
+<p><font size="3" face="Arial">Synopsis</font></p>
+<p><font size="2" face="Arial">Logically exclusively 'or' register with register
+or immediate.</font></p>
+<p><font face="Arial">Detail</font></p>
+<p><font size="2" face="Arial">Rd = Rd ^ Rs</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rs</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;&nbsp;&nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0010</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+  </tr>
+</table>
+<p><font size="2" face="Arial">Rd = Rd ^ n</font></p>
+<table border="1" cellpadding="0" cellspacing="0" width="343">
+  <tr>
+    <td width="104"><font size="2" face="Arial">desc:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">rd</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">op</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">imm</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">size:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">4</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bits:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">15&nbsp;
+      12</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">11&nbsp;&nbsp;&nbsp;8</font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">7&nbsp;&nbsp;&nbsp;
+      4</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">3&nbsp;
+      &nbsp;
+      0</font></td>
+  </tr>
+  <tr>
+    <td width="104"><font size="2" face="Arial">bit pattern:</font></td>
+    <td width="64" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0011</font></td>
+    <td width="62" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">R<sub>3..0</sub></font></td>
+    <td width="72" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="112" bgcolor="#F0F0F0" align="center"><font size="2" face="Arial">n<sub>3..0</sub></font></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
+
+</body>
+
+</html>
