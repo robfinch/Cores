@@ -151,6 +151,7 @@ module Butterfly16(
 	//- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	reg cyc1,cyc2;
 	reg [7:0] db;
+	reg [15:0] db16;
 	reg [15:1] pc;			// program counter
 	reg [15:1] pc_inc;		// program counter increment
 	reg [15:0] ilr;			// interrupted pc value (interrupt link register)
@@ -411,6 +412,15 @@ module Butterfly16(
 	wire nmi_edge;
 	edge_det ed0(.rst(rst_i), .clk(clk_i), .ce(pipe_ce2 & ~pipil & ~hwi), .i(nmi), .pe(nmi_edge), .ne(), .ee() );
 
+    reg ird2;
+    always @(posedge clk_i)
+    if (rst_i)
+        ird2 <= 1'b0;
+    else begin
+        if (cyc2)
+            ird2 <= ird_o;
+    end
+   
 	// ir
 	// Determine the source of the next instruction. This
 	// will be a hardcoded interrupt instruction in the case
@@ -419,7 +429,7 @@ module Butterfly16(
 	// current instruction is a load or store, the incoming
 	// instruction stream (provided a flow change isn't in
 	// progress) or just a NOP if nothing else.
-	wire [15:0] insn = dat_i;
+	wire [15:0] insn = db16;
 
 	always @*
 	begin
@@ -433,7 +443,7 @@ module Butterfly16(
 				ir_nxt <= `IRQ ^ {nmi_edge,nmi_edge};
 			hwi_nxt <= 1'b1;
 		end
-		else if (~ird_o) begin
+		else if (~ird_o|~ird2) begin
 			ir_nxt  <= cir;
 			hwi_nxt <= 1'b0;
 		end
@@ -473,10 +483,8 @@ module Butterfly16(
 			insn3 <= 0;
 		end
 		else if (pipe_ce) begin
-		    if (cyc1)
-			    insn1[7:0] <= ird_o ? dat_i : cir[7:0];
-			else if (cyc2) begin
-			    insn1[15:8] <= ird_o ? dat_i : cir[15:8];
+			if (cyc2) begin
+			    insn1 <= ird_o ? insn : cir;
 			    insn2 <= insn1;
 			    insn3 <= insn2;
 			end
@@ -488,11 +496,8 @@ module Butterfly16(
 	always @(posedge clk_i)
 		if (rst_i)
 			cir <= `RST;
-		else if (cyc_nxt_o & ~stopped & ird_o) begin
-		    if (cyc1)
-			    cir[7:0] <= dat_i;
-			else if (cyc2)
-			    cir[15:8] <= dat_i;
+		else if (cyc_nxt_o & ~stopped & ird2 & cyc2) begin
+			cir <= insn;
 	    end
 
 // synthesis translate_off
@@ -510,8 +515,6 @@ module Butterfly16(
 		if (cmp)	$display("CMP r%d,r%d", rdst, rsrc);
 		if (lw)		$display("LW r%d,%h[r%d]", rdst, n32, rsrc);
 		if (sw)		$display("SW r%d,%h[r%d]", rdst, n32, rsrc);
-		if (lh)		$display("LH r%d,%h[r%d]", rdst, n32, rsrc);
-		if (sh)		$display("SH r%d,%h[r%d]", rdst, n32, rsrc);
 		if (lb)		$display("LB r%d,%h[r%d]", rdst, n32, rsrc);
 		if (sb)		$display("SB r%d,%h[r%d]", rdst, n32, rsrc);
 		if (jal)	$display("JAL  r%d,%h[r%d]", rdst, n32, rsrc);
@@ -813,7 +816,7 @@ module Butterfly16(
 			adr_nxt_o <= {vba,ir[3:0],cyc2};
 		end
 		else if (sys&ls1)
-			adr_nxt_o <= {dat_i,db} + cyc2;
+			adr_nxt_o <= db16 + cyc2;
 		else if (jal|rti|~ird_nxt_o)
 			adr_nxt_o <= aso + cyc2;
 		else
@@ -823,15 +826,15 @@ module Butterfly16(
 		if (cyc_nxt_o)
 			adr_o <= adr_nxt_o;
 
-	always @(cyc1 or rfo_dst)
-		if (cyc1)
-			dat_nxt_o <= rfo_dst[7:0];
+	always @(negedge clk_i)
+		if (cyc2)
+			dat_o <= rfo_dst[7:0];
 		else
-			dat_nxt_o <= rfo_dst[15:0];
+			dat_o <= rfo_dst[15:8];
 
-	always @(posedge clk_i)
-		if (cyc_nxt_o)
-			dat_o <= dat_nxt_o;
+//	always @(posedge clk_i)
+//		if (cyc_nxt_o)
+//			dat_o <= dat_nxt_o;
 
 	always @(posedge clk_i)
 		if (rst_i) begin
@@ -841,23 +844,28 @@ module Butterfly16(
 			ird_o <= 0;
 			cyc1 <= 1;
 			cyc2 <= 0;
+			db <= 8'h00; // For SIM
+			db16 <= 16'h0000;
 		end
 		else begin
 			soc_o <= 0;
 			if (cyc_nxt_o) begin
 				soc_o <= 1;
-				cyc_o <= 1;
+				#1 cyc_o <= 1;
 				we_o  <= we_nxt_o;
 				ird_o <= ird_nxt_o;
-				if (cyc1) begin
-				    db <= dat_i;
-				    cyc1 <= 0;
-				    cyc2 <= 1;
-				end
-				else begin
-				    cyc1 <= 1;
-				    cyc2 <= 0;
-			    end
+			end
+			if (cyc_o & ack_i) begin
+			 if (cyc1) begin
+			     cyc1 <= 0;
+			     cyc2 <= 1;
+			     db <= dat_i;
+			 end
+			 else if (cyc2) begin
+			     cyc1 <= 1;
+			     cyc2 <= 0;
+			     db16 <= {dat_i,db};
+			 end
 			end
 		end
 
@@ -876,6 +884,11 @@ output [15:0] rwo;
 output [15:0] ro;
 
 reg [15:0] mem [0:15];
+integer n;
+initial begin
+    for (n = 0; n < 16; n = n + 1)
+        mem[n] = 0;
+end
 
 always @(posedge clk)
     if (ce & wr) mem[rwa] <= i;

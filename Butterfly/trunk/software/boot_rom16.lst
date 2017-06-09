@@ -1,0 +1,763 @@
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 1
+boot_rom16.asm
+
+                                        ;=================================================================
+                                        ; Copyright (C) 2005 Bird Computer
+                                        ; All rights reserved.
+                                        ;
+                                        ; boot_rom16.asm
+                                        ; 	SoC Boot ROM
+                                        ;
+                                        ;	You are free to use and modify this code for non-commercial
+                                        ;	or evaluation purposes.
+                                        ;	
+                                        ;	If you do modify the code, please state the origin and
+                                        ;	note that you have modified the code.
+                                        ;
+                                        ;	This source file may be used without restriction, but not
+                                        ;	distributed, provided this copyright statement remains
+                                        ;	present in the file. Any derivative work must also
+                                        ;	contain the original copyright notice and the following
+                                        ;	disclaimer.
+                                        ;
+                                        ;
+                                        ;	NO WARRANTY.
+                                        ;	THIS Work, IS PROVIDEDED "AS IS" WITH NO WARRANTIES OF
+                                        ;	ANY KIND, WHETHER EXPRESS OR IMPLIED. The user must assume
+                                        ;	the entire risk of using the Work.
+                                        ;
+                                        ;	IN NO EVENT SHALL BIRD COMPUTER OR ITS PRINCIPALS OR
+                                        ;	OFFICERS BE LIABLE FOR ANY INCIDENTAL, CONSEQUENTIAL,
+                                        ;	OR PUNITIVE DAMAGES WHATSOEVER RELATING TO THE USE OF
+                                        ;	THIS WORK, OR YOUR RELATIONSHIP WITH BC.
+                                        ;
+                                        ;	IN ADDITION, IN NO EVENT DOES BIRD COMPUTER AUTHORIZE YOU
+                                        ;	TO USE THE WORK IN APPLICATIONS OR SYSTEMS WHERE THE
+                                        ;	WORK'S FAILURE TO PERFORM CAN REASONABLY BE EXPECTED
+                                        ;	TO RESULT IN A SIGNIFICANT PHYSICAL INJURY, OR IN LOSS
+                                        ;	OF LIFE. ANY SUCH USE BY YOU IS ENTIRELY AT YOUR OWN RISK,
+                                        ;	AND YOU AGREE TO HOLD BC HARMLESS FROM ANY CLAIMS OR LOSSES
+                                        ;	RELATING TO SUCH UNAUTHORIZED USE.
+                                        ;
+                                        ; 
+                                        ;	Load program from the serial port.
+                                        ;
+                                        ;=================================================================
+                                        
+     44 = 0D                            CR		equ	0x0D		; ASCII equates
+     45 = 0A                            LF		equ	0x0A
+     46 = 09                            TAB		equ	0x09
+     47 = 03                            CTRLC	equ	0x03
+     48 = 08                            CTRLH	equ	0x08
+     49 = 13                            CTRLS	equ	0x13
+     50 = 18                            CTRLX	equ	0x18
+                                        
+                                        
+                                        ;XMIT_FULL		equ	0x40		; the transmit buffer is full
+                                        ;DATA_PRESENT	equ	0x08		; there is data preset at the serial port bc_uart3
+     55 = 01                            DATA_PRESENT	equ	0x01		; there is data preset at the serial port bc_uart3
+     56 = 20                            XMIT_NOT_FULL	equ	0x20
+                                        
+     58 = 00000000FFFFDC40                              TS_TIMER	equ		0xFFFFDC40		; system time slice timer
+     59 = 00000000FFFFDC50                              KBD			equ		0xFFFFDC50
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 2
+boot_rom16.asm
+     60 = 00000000FFFFDCC0                              ATA			equ		0xFFFFDCC0
+     61 = FFFFDCC4                      ATA_READBACK		equ		ATA+4
+     62 = FFFFDCCC                      ATA_ALT_STATUS		equ		ATA+12
+     63 = FFFFDCD0                      ATA_DATA_REG		equ		ATA+16
+     64 = FFFFDCD4                      ATA_SECTOR_COUNT	equ		ATA+20
+     65 = FFFFDCD8                      ATA_LBA_LOW			equ		ATA+24
+     66 = FFFFDCDA                      ATA_LBA_HIGH		equ		ATA+26
+     67 = FFFFDCDC                      ATA_HEAD			equ		ATA+28
+     68 = FFFFDCDE                      ATA_CMD_STATUS		equ		ATA+30
+                                        
+     70 = 00000000FFFFDC70                              UART		equ		0xFFFFDC70
+     71 = 00000000FFFFDC70                              UART_TRB	equ		0xFFFFDC70
+     72 = 00000000FFFFDC75                              UART_FF		equ		0xFFFFDC75
+     73 = 00000000FFFFDC76                              UART_MC		equ		0xFFFFDC76
+     74 = 00000000FFFFDC71                              UART_LS		equ		0xFFFFDC71
+     75 = 00000000FFFFDC78                              UART_CLKM0	equ		0xFFFFDC78
+     76 = 00000000FFFFDC79                              UART_CLKM1	equ		0xFFFFDC79
+     77 = 00000000FFFFDC7A                              UART_CLKM2	equ		0xFFFFDC7A
+     78 = 00000000FFFFDC7B                              UART_CLKM3	equ		0xFFFFDC7B
+                                        
+     80 = 00000000FFFFDC80                              LED			equ		0xFFFFDC80
+     81 = 00000000FFFFD800                              VIC			equ		0xFFFFD800
+     82 = 00000000FFFFDF00                              SID			equ		0xFFFFDF00
+     83 = 1000                          VIDEORAM	equ		0x00001000
+     84 = 0BFC                          STACK_TOP0	equ		0x00000BFC		; cpu0 stack
+     85 = 0FFC                          STACK_TOP1	equ		0x00000FFC		; cpu1 stack
+     86 = 3C                            SCR_COLS	equ		60
+     87 = 1E                            SCR_ROWS	equ		30
+                                        
+                                        ; First word is reserved as unused, since it may get overwritten
+                                        ; occasionally by bad code.
+     91 = 04                            tick_cnt	equ		0x00000004		; system tick count in 20ms incr.
+     92 = 10                            irq_vec		equ		0x10		    ; irq vector
+     93 = 14                            brk_vect	equ		0x14
+     94 = 18                            trc_vect	equ		0x18
+     95 = 20                            warmStart   equ     0x20
+     96 = 24                            usrJmp      equ     0x24
+     97 = 28                            dlAddress	equ		0x28			; address of where to download bytes
+     98 = 2C                            stAddress	equ		0x2C			; address of start of program
+                                        
+    100 = 30                            txtWidth	equ		0x30
+    101 = 31                            txtHeight	equ		0x31
+    102 = 32                            cursx		equ		0x32
+    103 = 33                            cursy		equ		0x33
+    104 = 34                            pos			equ		0x34	; current screen pos
+    105 = 38                            charToPrint	equ		0x38
+    106 = 3A                            fgColor		equ		0x3A
+    107 = 3B                            bkColor		equ		0x3B
+    108 = 3C                            cursFlash	equ		0x3C	; flash the cursor ?
+                                        
+    110 = 50                            runCpu1		equ		0x50
+    111 = 54                            runAddr		equ		0x54
+                                        
+                                        		.code
+                                        		cpu		Butterfly16
+                                        		org		0xF000
+                                        
+    118 0000F000 FF FF FF FF FF FF FF    		org		0xF900
+    118 0000F007 FF FF FF FF FF FF FF  
+    118 0000F00E FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 3
+boot_rom16.asm
+    118 0000F015 FF FF FF FF FF FF FF  
+    118 0000F01C FF FF FF FF FF FF FF  
+    118 0000F023 FF FF FF FF FF FF FF  
+    118 0000F02A FF FF FF FF FF FF FF  
+    118 0000F031 FF FF FF FF FF FF FF  
+    118 0000F038 FF FF FF FF FF FF FF  
+    118 0000F03F FF FF FF FF FF FF FF  
+    118 0000F046 FF FF FF FF FF FF FF  
+    118 0000F04D FF FF FF FF FF FF FF  
+    118 0000F054 FF FF FF FF FF FF FF  
+    118 0000F05B FF FF FF FF FF FF FF  
+    118 0000F062 FF FF FF FF FF FF FF  
+    118 0000F069 FF FF FF FF FF FF FF  
+    118 0000F070 FF FF FF FF FF FF FF  
+    118 0000F077 FF FF FF FF FF FF FF  
+    118 0000F07E FF FF FF FF FF FF FF  
+    118 0000F085 FF FF FF FF FF FF FF  
+    118 0000F08C FF FF FF FF FF FF FF  
+    118 0000F093 FF FF FF FF FF FF FF  
+    118 0000F09A FF FF FF FF FF FF FF  
+    118 0000F0A1 FF FF FF FF FF FF FF  
+    118 0000F0A8 FF FF FF FF FF FF FF  
+    118 0000F0AF FF FF FF FF FF FF FF  
+    118 0000F0B6 FF FF FF FF FF FF FF  
+    118 0000F0BD FF FF FF FF FF FF FF  
+    118 0000F0C4 FF FF FF FF FF FF FF  
+    118 0000F0CB FF FF FF FF FF FF FF  
+    118 0000F0D2 FF FF FF FF FF FF FF  
+    118 0000F0D9 FF FF FF FF FF FF FF  
+    118 0000F0E0 FF FF FF FF FF FF FF  
+    118 0000F0E7 FF FF FF FF FF FF FF  
+    118 0000F0EE FF FF FF FF FF FF FF  
+    118 0000F0F5 FF FF FF FF FF FF FF  
+    118 0000F0FC FF FF FF FF FF FF FF  
+    118 0000F103 FF FF FF FF FF FF FF  
+    118 0000F10A FF FF FF FF FF FF FF  
+    118 0000F111 FF FF FF FF FF FF FF  
+    118 0000F118 FF FF FF FF FF FF FF  
+    118 0000F11F FF FF FF FF FF FF FF  
+    118 0000F126 FF FF FF FF FF FF FF  
+    118 0000F12D FF FF FF FF FF FF FF  
+    118 0000F134 FF FF FF FF FF FF FF  
+    118 0000F13B FF FF FF FF FF FF FF  
+    118 0000F142 FF FF FF FF FF FF FF  
+    118 0000F149 FF FF FF FF FF FF FF  
+    118 0000F150 FF FF FF FF FF FF FF  
+    118 0000F157 FF FF FF FF FF FF FF  
+    118 0000F15E FF FF FF FF FF FF FF  
+    118 0000F165 FF FF FF FF FF FF FF  
+    118 0000F16C FF FF FF FF FF FF FF  
+    118 0000F173 FF FF FF FF FF FF FF  
+    118 0000F17A FF FF FF FF FF FF FF  
+    118 0000F181 FF FF FF FF FF FF FF  
+    118 0000F188 FF FF FF FF FF FF FF  
+    118 0000F18F FF FF FF FF FF FF FF  
+    118 0000F196 FF FF FF FF FF FF FF  
+    118 0000F19D FF FF FF FF FF FF FF  
+    118 0000F1A4 FF FF FF FF FF FF FF  
+    118 0000F1AB FF FF FF FF FF FF FF  
+    118 0000F1B2 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 4
+boot_rom16.asm
+    118 0000F1B9 FF FF FF FF FF FF FF  
+    118 0000F1C0 FF FF FF FF FF FF FF  
+    118 0000F1C7 FF FF FF FF FF FF FF  
+    118 0000F1CE FF FF FF FF FF FF FF  
+    118 0000F1D5 FF FF FF FF FF FF FF  
+    118 0000F1DC FF FF FF FF FF FF FF  
+    118 0000F1E3 FF FF FF FF FF FF FF  
+    118 0000F1EA FF FF FF FF FF FF FF  
+    118 0000F1F1 FF FF FF FF FF FF FF  
+    118 0000F1F8 FF FF FF FF FF FF FF  
+    118 0000F1FF FF FF FF FF FF FF FF  
+    118 0000F206 FF FF FF FF FF FF FF  
+    118 0000F20D FF FF FF FF FF FF FF  
+    118 0000F214 FF FF FF FF FF FF FF  
+    118 0000F21B FF FF FF FF FF FF FF  
+    118 0000F222 FF FF FF FF FF FF FF  
+    118 0000F229 FF FF FF FF FF FF FF  
+    118 0000F230 FF FF FF FF FF FF FF  
+    118 0000F237 FF FF FF FF FF FF FF  
+    118 0000F23E FF FF FF FF FF FF FF  
+    118 0000F245 FF FF FF FF FF FF FF  
+    118 0000F24C FF FF FF FF FF FF FF  
+    118 0000F253 FF FF FF FF FF FF FF  
+    118 0000F25A FF FF FF FF FF FF FF  
+    118 0000F261 FF FF FF FF FF FF FF  
+    118 0000F268 FF FF FF FF FF FF FF  
+    118 0000F26F FF FF FF FF FF FF FF  
+    118 0000F276 FF FF FF FF FF FF FF  
+    118 0000F27D FF FF FF FF FF FF FF  
+    118 0000F284 FF FF FF FF FF FF FF  
+    118 0000F28B FF FF FF FF FF FF FF  
+    118 0000F292 FF FF FF FF FF FF FF  
+    118 0000F299 FF FF FF FF FF FF FF  
+    118 0000F2A0 FF FF FF FF FF FF FF  
+    118 0000F2A7 FF FF FF FF FF FF FF  
+    118 0000F2AE FF FF FF FF FF FF FF  
+    118 0000F2B5 FF FF FF FF FF FF FF  
+    118 0000F2BC FF FF FF FF FF FF FF  
+    118 0000F2C3 FF FF FF FF FF FF FF  
+    118 0000F2CA FF FF FF FF FF FF FF  
+    118 0000F2D1 FF FF FF FF FF FF FF  
+    118 0000F2D8 FF FF FF FF FF FF FF  
+    118 0000F2DF FF FF FF FF FF FF FF  
+    118 0000F2E6 FF FF FF FF FF FF FF  
+    118 0000F2ED FF FF FF FF FF FF FF  
+    118 0000F2F4 FF FF FF FF FF FF FF  
+    118 0000F2FB FF FF FF FF FF FF FF  
+    118 0000F302 FF FF FF FF FF FF FF  
+    118 0000F309 FF FF FF FF FF FF FF  
+    118 0000F310 FF FF FF FF FF FF FF  
+    118 0000F317 FF FF FF FF FF FF FF  
+    118 0000F31E FF FF FF FF FF FF FF  
+    118 0000F325 FF FF FF FF FF FF FF  
+    118 0000F32C FF FF FF FF FF FF FF  
+    118 0000F333 FF FF FF FF FF FF FF  
+    118 0000F33A FF FF FF FF FF FF FF  
+    118 0000F341 FF FF FF FF FF FF FF  
+    118 0000F348 FF FF FF FF FF FF FF  
+    118 0000F34F FF FF FF FF FF FF FF  
+    118 0000F356 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 5
+boot_rom16.asm
+    118 0000F35D FF FF FF FF FF FF FF  
+    118 0000F364 FF FF FF FF FF FF FF  
+    118 0000F36B FF FF FF FF FF FF FF  
+    118 0000F372 FF FF FF FF FF FF FF  
+    118 0000F379 FF FF FF FF FF FF FF  
+    118 0000F380 FF FF FF FF FF FF FF  
+    118 0000F387 FF FF FF FF FF FF FF  
+    118 0000F38E FF FF FF FF FF FF FF  
+    118 0000F395 FF FF FF FF FF FF FF  
+    118 0000F39C FF FF FF FF FF FF FF  
+    118 0000F3A3 FF FF FF FF FF FF FF  
+    118 0000F3AA FF FF FF FF FF FF FF  
+    118 0000F3B1 FF FF FF FF FF FF FF  
+    118 0000F3B8 FF FF FF FF FF FF FF  
+    118 0000F3BF FF FF FF FF FF FF FF  
+    118 0000F3C6 FF FF FF FF FF FF FF  
+    118 0000F3CD FF FF FF FF FF FF FF  
+    118 0000F3D4 FF FF FF FF FF FF FF  
+    118 0000F3DB FF FF FF FF FF FF FF  
+    118 0000F3E2 FF FF FF FF FF FF FF  
+    118 0000F3E9 FF FF FF FF FF FF FF  
+    118 0000F3F0 FF FF FF FF FF FF FF  
+    118 0000F3F7 FF FF FF FF FF FF FF  
+    118 0000F3FE FF FF FF FF FF FF FF  
+    118 0000F405 FF FF FF FF FF FF FF  
+    118 0000F40C FF FF FF FF FF FF FF  
+    118 0000F413 FF FF FF FF FF FF FF  
+    118 0000F41A FF FF FF FF FF FF FF  
+    118 0000F421 FF FF FF FF FF FF FF  
+    118 0000F428 FF FF FF FF FF FF FF  
+    118 0000F42F FF FF FF FF FF FF FF  
+    118 0000F436 FF FF FF FF FF FF FF  
+    118 0000F43D FF FF FF FF FF FF FF  
+    118 0000F444 FF FF FF FF FF FF FF  
+    118 0000F44B FF FF FF FF FF FF FF  
+    118 0000F452 FF FF FF FF FF FF FF  
+    118 0000F459 FF FF FF FF FF FF FF  
+    118 0000F460 FF FF FF FF FF FF FF  
+    118 0000F467 FF FF FF FF FF FF FF  
+    118 0000F46E FF FF FF FF FF FF FF  
+    118 0000F475 FF FF FF FF FF FF FF  
+    118 0000F47C FF FF FF FF FF FF FF  
+    118 0000F483 FF FF FF FF FF FF FF  
+    118 0000F48A FF FF FF FF FF FF FF  
+    118 0000F491 FF FF FF FF FF FF FF  
+    118 0000F498 FF FF FF FF FF FF FF  
+    118 0000F49F FF FF FF FF FF FF FF  
+    118 0000F4A6 FF FF FF FF FF FF FF  
+    118 0000F4AD FF FF FF FF FF FF FF  
+    118 0000F4B4 FF FF FF FF FF FF FF  
+    118 0000F4BB FF FF FF FF FF FF FF  
+    118 0000F4C2 FF FF FF FF FF FF FF  
+    118 0000F4C9 FF FF FF FF FF FF FF  
+    118 0000F4D0 FF FF FF FF FF FF FF  
+    118 0000F4D7 FF FF FF FF FF FF FF  
+    118 0000F4DE FF FF FF FF FF FF FF  
+    118 0000F4E5 FF FF FF FF FF FF FF  
+    118 0000F4EC FF FF FF FF FF FF FF  
+    118 0000F4F3 FF FF FF FF FF FF FF  
+    118 0000F4FA FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 6
+boot_rom16.asm
+    118 0000F501 FF FF FF FF FF FF FF  
+    118 0000F508 FF FF FF FF FF FF FF  
+    118 0000F50F FF FF FF FF FF FF FF  
+    118 0000F516 FF FF FF FF FF FF FF  
+    118 0000F51D FF FF FF FF FF FF FF  
+    118 0000F524 FF FF FF FF FF FF FF  
+    118 0000F52B FF FF FF FF FF FF FF  
+    118 0000F532 FF FF FF FF FF FF FF  
+    118 0000F539 FF FF FF FF FF FF FF  
+    118 0000F540 FF FF FF FF FF FF FF  
+    118 0000F547 FF FF FF FF FF FF FF  
+    118 0000F54E FF FF FF FF FF FF FF  
+    118 0000F555 FF FF FF FF FF FF FF  
+    118 0000F55C FF FF FF FF FF FF FF  
+    118 0000F563 FF FF FF FF FF FF FF  
+    118 0000F56A FF FF FF FF FF FF FF  
+    118 0000F571 FF FF FF FF FF FF FF  
+    118 0000F578 FF FF FF FF FF FF FF  
+    118 0000F57F FF FF FF FF FF FF FF  
+    118 0000F586 FF FF FF FF FF FF FF  
+    118 0000F58D FF FF FF FF FF FF FF  
+    118 0000F594 FF FF FF FF FF FF FF  
+    118 0000F59B FF FF FF FF FF FF FF  
+    118 0000F5A2 FF FF FF FF FF FF FF  
+    118 0000F5A9 FF FF FF FF FF FF FF  
+    118 0000F5B0 FF FF FF FF FF FF FF  
+    118 0000F5B7 FF FF FF FF FF FF FF  
+    118 0000F5BE FF FF FF FF FF FF FF  
+    118 0000F5C5 FF FF FF FF FF FF FF  
+    118 0000F5CC FF FF FF FF FF FF FF  
+    118 0000F5D3 FF FF FF FF FF FF FF  
+    118 0000F5DA FF FF FF FF FF FF FF  
+    118 0000F5E1 FF FF FF FF FF FF FF  
+    118 0000F5E8 FF FF FF FF FF FF FF  
+    118 0000F5EF FF FF FF FF FF FF FF  
+    118 0000F5F6 FF FF FF FF FF FF FF  
+    118 0000F5FD FF FF FF FF FF FF FF  
+    118 0000F604 FF FF FF FF FF FF FF  
+    118 0000F60B FF FF FF FF FF FF FF  
+    118 0000F612 FF FF FF FF FF FF FF  
+    118 0000F619 FF FF FF FF FF FF FF  
+    118 0000F620 FF FF FF FF FF FF FF  
+    118 0000F627 FF FF FF FF FF FF FF  
+    118 0000F62E FF FF FF FF FF FF FF  
+    118 0000F635 FF FF FF FF FF FF FF  
+    118 0000F63C FF FF FF FF FF FF FF  
+    118 0000F643 FF FF FF FF FF FF FF  
+    118 0000F64A FF FF FF FF FF FF FF  
+    118 0000F651 FF FF FF FF FF FF FF  
+    118 0000F658 FF FF FF FF FF FF FF  
+    118 0000F65F FF FF FF FF FF FF FF  
+    118 0000F666 FF FF FF FF FF FF FF  
+    118 0000F66D FF FF FF FF FF FF FF  
+    118 0000F674 FF FF FF FF FF FF FF  
+    118 0000F67B FF FF FF FF FF FF FF  
+    118 0000F682 FF FF FF FF FF FF FF  
+    118 0000F689 FF FF FF FF FF FF FF  
+    118 0000F690 FF FF FF FF FF FF FF  
+    118 0000F697 FF FF FF FF FF FF FF  
+    118 0000F69E FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 7
+boot_rom16.asm
+    118 0000F6A5 FF FF FF FF FF FF FF  
+    118 0000F6AC FF FF FF FF FF FF FF  
+    118 0000F6B3 FF FF FF FF FF FF FF  
+    118 0000F6BA FF FF FF FF FF FF FF  
+    118 0000F6C1 FF FF FF FF FF FF FF  
+    118 0000F6C8 FF FF FF FF FF FF FF  
+    118 0000F6CF FF FF FF FF FF FF FF  
+    118 0000F6D6 FF FF FF FF FF FF FF  
+    118 0000F6DD FF FF FF FF FF FF FF  
+    118 0000F6E4 FF FF FF FF FF FF FF  
+    118 0000F6EB FF FF FF FF FF FF FF  
+    118 0000F6F2 FF FF FF FF FF FF FF  
+    118 0000F6F9 FF FF FF FF FF FF FF  
+    118 0000F700 FF FF FF FF FF FF FF  
+    118 0000F707 FF FF FF FF FF FF FF  
+    118 0000F70E FF FF FF FF FF FF FF  
+    118 0000F715 FF FF FF FF FF FF FF  
+    118 0000F71C FF FF FF FF FF FF FF  
+    118 0000F723 FF FF FF FF FF FF FF  
+    118 0000F72A FF FF FF FF FF FF FF  
+    118 0000F731 FF FF FF FF FF FF FF  
+    118 0000F738 FF FF FF FF FF FF FF  
+    118 0000F73F FF FF FF FF FF FF FF  
+    118 0000F746 FF FF FF FF FF FF FF  
+    118 0000F74D FF FF FF FF FF FF FF  
+    118 0000F754 FF FF FF FF FF FF FF  
+    118 0000F75B FF FF FF FF FF FF FF  
+    118 0000F762 FF FF FF FF FF FF FF  
+    118 0000F769 FF FF FF FF FF FF FF  
+    118 0000F770 FF FF FF FF FF FF FF  
+    118 0000F777 FF FF FF FF FF FF FF  
+    118 0000F77E FF FF FF FF FF FF FF  
+    118 0000F785 FF FF FF FF FF FF FF  
+    118 0000F78C FF FF FF FF FF FF FF  
+    118 0000F793 FF FF FF FF FF FF FF  
+    118 0000F79A FF FF FF FF FF FF FF  
+    118 0000F7A1 FF FF FF FF FF FF FF  
+    118 0000F7A8 FF FF FF FF FF FF FF  
+    118 0000F7AF FF FF FF FF FF FF FF  
+    118 0000F7B6 FF FF FF FF FF FF FF  
+    118 0000F7BD FF FF FF FF FF FF FF  
+    118 0000F7C4 FF FF FF FF FF FF FF  
+    118 0000F7CB FF FF FF FF FF FF FF  
+    118 0000F7D2 FF FF FF FF FF FF FF  
+    118 0000F7D9 FF FF FF FF FF FF FF  
+    118 0000F7E0 FF FF FF FF FF FF FF  
+    118 0000F7E7 FF FF FF FF FF FF FF  
+    118 0000F7EE FF FF FF FF FF FF FF  
+    118 0000F7F5 FF FF FF FF FF FF FF  
+    118 0000F7FC FF FF FF FF FF FF FF  
+    118 0000F803 FF FF FF FF FF FF FF  
+    118 0000F80A FF FF FF FF FF FF FF  
+    118 0000F811 FF FF FF FF FF FF FF  
+    118 0000F818 FF FF FF FF FF FF FF  
+    118 0000F81F FF FF FF FF FF FF FF  
+    118 0000F826 FF FF FF FF FF FF FF  
+    118 0000F82D FF FF FF FF FF FF FF  
+    118 0000F834 FF FF FF FF FF FF FF  
+    118 0000F83B FF FF FF FF FF FF FF  
+    118 0000F842 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 8
+boot_rom16.asm
+    118 0000F849 FF FF FF FF FF FF FF  
+    118 0000F850 FF FF FF FF FF FF FF  
+    118 0000F857 FF FF FF FF FF FF FF  
+    118 0000F85E FF FF FF FF FF FF FF  
+    118 0000F865 FF FF FF FF FF FF FF  
+    118 0000F86C FF FF FF FF FF FF FF  
+    118 0000F873 FF FF FF FF FF FF FF  
+    118 0000F87A FF FF FF FF FF FF FF  
+    118 0000F881 FF FF FF FF FF FF FF  
+    118 0000F888 FF FF FF FF FF FF FF  
+    118 0000F88F FF FF FF FF FF FF FF  
+    118 0000F896 FF FF FF FF FF FF FF  
+    118 0000F89D FF FF FF FF FF FF FF  
+    118 0000F8A4 FF FF FF FF FF FF FF  
+    118 0000F8AB FF FF FF FF FF FF FF  
+    118 0000F8B2 FF FF FF FF FF FF FF  
+    118 0000F8B9 FF FF FF FF FF FF FF  
+    118 0000F8C0 FF FF FF FF FF FF FF  
+    118 0000F8C7 FF FF FF FF FF FF FF  
+    118 0000F8CE FF FF FF FF FF FF FF  
+    118 0000F8D5 FF FF FF FF FF FF FF  
+    118 0000F8DC FF FF FF FF FF FF FF  
+    118 0000F8E3 FF FF FF FF FF FF FF  
+    118 0000F8EA FF FF FF FF FF FF FF  
+    118 0000F8F1 FF FF FF FF FF FF FF  
+    118 0000F8F8 FF FF FF FF FF FF FF  
+    118 0000F8FF FF                    
+    119 0000F900 01 11                  reset:	
+    120 0000F902 01 12                   		lw		r2,#1
+    121 0000F904 00 14                   		lw		r4,#0
+    122 0000F906                        j0001:
+    123 0000F906 00 13                   		lw		r3,#0
+    124 0000F908 20 23                   		add		r3,r2
+    125 0000F90A 10 23                   		add		r3,r1
+    126 0000F90C 00 48 30 10             		cmp		r3,#$8000
+    127 0000F910 05 A7                   		bgtu	endFibbonaci
+    128 0000F912 41 D1                   		sw		r1,[r4]
+    129 0000F914 02 64                   		add		r4,#2
+    130 0000F916 20 11                   		add		r1,r2,#0		; move r2 to r1
+    131 0000F918 30 12                   		add		r2,r3,#0		; move r3 to r2
+    132 0000F91A F5 BE                   		bra		j0001
+    133 0000F91C                        endFibbonaci:
+    134 0000F91C 41 D1                   		sw		r1,[r4]
+    135 0000F91E 43 D2                   		sw		r2,2[r4]
+    136 0000F920 45 D3                   		sw		r3,4[r4]
+    137 0000F922                        endFibbonaci2:
+    138 0000F922 FF BE                   		bra		endFibonnaci2
+                                        
+                                        
+                                        		; exception vector table
+    142 0000F924 FF FF FF FF FF FF FF    		org		0xFFE0
+    142 0000F92B FF FF FF FF FF FF FF  
+    142 0000F932 FF FF FF FF FF FF FF  
+    142 0000F939 FF FF FF FF FF FF FF  
+    142 0000F940 FF FF FF FF FF FF FF  
+    142 0000F947 FF FF FF FF FF FF FF  
+    142 0000F94E FF FF FF FF FF FF FF  
+    142 0000F955 FF FF FF FF FF FF FF  
+    142 0000F95C FF FF FF FF FF FF FF  
+    142 0000F963 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 9
+boot_rom16.asm
+    142 0000F96A FF FF FF FF FF FF FF  
+    142 0000F971 FF FF FF FF FF FF FF  
+    142 0000F978 FF FF FF FF FF FF FF  
+    142 0000F97F FF FF FF FF FF FF FF  
+    142 0000F986 FF FF FF FF FF FF FF  
+    142 0000F98D FF FF FF FF FF FF FF  
+    142 0000F994 FF FF FF FF FF FF FF  
+    142 0000F99B FF FF FF FF FF FF FF  
+    142 0000F9A2 FF FF FF FF FF FF FF  
+    142 0000F9A9 FF FF FF FF FF FF FF  
+    142 0000F9B0 FF FF FF FF FF FF FF  
+    142 0000F9B7 FF FF FF FF FF FF FF  
+    142 0000F9BE FF FF FF FF FF FF FF  
+    142 0000F9C5 FF FF FF FF FF FF FF  
+    142 0000F9CC FF FF FF FF FF FF FF  
+    142 0000F9D3 FF FF FF FF FF FF FF  
+    142 0000F9DA FF FF FF FF FF FF FF  
+    142 0000F9E1 FF FF FF FF FF FF FF  
+    142 0000F9E8 FF FF FF FF FF FF FF  
+    142 0000F9EF FF FF FF FF FF FF FF  
+    142 0000F9F6 FF FF FF FF FF FF FF  
+    142 0000F9FD FF FF FF FF FF FF FF  
+    142 0000FA04 FF FF FF FF FF FF FF  
+    142 0000FA0B FF FF FF FF FF FF FF  
+    142 0000FA12 FF FF FF FF FF FF FF  
+    142 0000FA19 FF FF FF FF FF FF FF  
+    142 0000FA20 FF FF FF FF FF FF FF  
+    142 0000FA27 FF FF FF FF FF FF FF  
+    142 0000FA2E FF FF FF FF FF FF FF  
+    142 0000FA35 FF FF FF FF FF FF FF  
+    142 0000FA3C FF FF FF FF FF FF FF  
+    142 0000FA43 FF FF FF FF FF FF FF  
+    142 0000FA4A FF FF FF FF FF FF FF  
+    142 0000FA51 FF FF FF FF FF FF FF  
+    142 0000FA58 FF FF FF FF FF FF FF  
+    142 0000FA5F FF FF FF FF FF FF FF  
+    142 0000FA66 FF FF FF FF FF FF FF  
+    142 0000FA6D FF FF FF FF FF FF FF  
+    142 0000FA74 FF FF FF FF FF FF FF  
+    142 0000FA7B FF FF FF FF FF FF FF  
+    142 0000FA82 FF FF FF FF FF FF FF  
+    142 0000FA89 FF FF FF FF FF FF FF  
+    142 0000FA90 FF FF FF FF FF FF FF  
+    142 0000FA97 FF FF FF FF FF FF FF  
+    142 0000FA9E FF FF FF FF FF FF FF  
+    142 0000FAA5 FF FF FF FF FF FF FF  
+    142 0000FAAC FF FF FF FF FF FF FF  
+    142 0000FAB3 FF FF FF FF FF FF FF  
+    142 0000FABA FF FF FF FF FF FF FF  
+    142 0000FAC1 FF FF FF FF FF FF FF  
+    142 0000FAC8 FF FF FF FF FF FF FF  
+    142 0000FACF FF FF FF FF FF FF FF  
+    142 0000FAD6 FF FF FF FF FF FF FF  
+    142 0000FADD FF FF FF FF FF FF FF  
+    142 0000FAE4 FF FF FF FF FF FF FF  
+    142 0000FAEB FF FF FF FF FF FF FF  
+    142 0000FAF2 FF FF FF FF FF FF FF  
+    142 0000FAF9 FF FF FF FF FF FF FF  
+    142 0000FB00 FF FF FF FF FF FF FF  
+    142 0000FB07 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 10
+boot_rom16.asm
+    142 0000FB0E FF FF FF FF FF FF FF  
+    142 0000FB15 FF FF FF FF FF FF FF  
+    142 0000FB1C FF FF FF FF FF FF FF  
+    142 0000FB23 FF FF FF FF FF FF FF  
+    142 0000FB2A FF FF FF FF FF FF FF  
+    142 0000FB31 FF FF FF FF FF FF FF  
+    142 0000FB38 FF FF FF FF FF FF FF  
+    142 0000FB3F FF FF FF FF FF FF FF  
+    142 0000FB46 FF FF FF FF FF FF FF  
+    142 0000FB4D FF FF FF FF FF FF FF  
+    142 0000FB54 FF FF FF FF FF FF FF  
+    142 0000FB5B FF FF FF FF FF FF FF  
+    142 0000FB62 FF FF FF FF FF FF FF  
+    142 0000FB69 FF FF FF FF FF FF FF  
+    142 0000FB70 FF FF FF FF FF FF FF  
+    142 0000FB77 FF FF FF FF FF FF FF  
+    142 0000FB7E FF FF FF FF FF FF FF  
+    142 0000FB85 FF FF FF FF FF FF FF  
+    142 0000FB8C FF FF FF FF FF FF FF  
+    142 0000FB93 FF FF FF FF FF FF FF  
+    142 0000FB9A FF FF FF FF FF FF FF  
+    142 0000FBA1 FF FF FF FF FF FF FF  
+    142 0000FBA8 FF FF FF FF FF FF FF  
+    142 0000FBAF FF FF FF FF FF FF FF  
+    142 0000FBB6 FF FF FF FF FF FF FF  
+    142 0000FBBD FF FF FF FF FF FF FF  
+    142 0000FBC4 FF FF FF FF FF FF FF  
+    142 0000FBCB FF FF FF FF FF FF FF  
+    142 0000FBD2 FF FF FF FF FF FF FF  
+    142 0000FBD9 FF FF FF FF FF FF FF  
+    142 0000FBE0 FF FF FF FF FF FF FF  
+    142 0000FBE7 FF FF FF FF FF FF FF  
+    142 0000FBEE FF FF FF FF FF FF FF  
+    142 0000FBF5 FF FF FF FF FF FF FF  
+    142 0000FBFC FF FF FF FF FF FF FF  
+    142 0000FC03 FF FF FF FF FF FF FF  
+    142 0000FC0A FF FF FF FF FF FF FF  
+    142 0000FC11 FF FF FF FF FF FF FF  
+    142 0000FC18 FF FF FF FF FF FF FF  
+    142 0000FC1F FF FF FF FF FF FF FF  
+    142 0000FC26 FF FF FF FF FF FF FF  
+    142 0000FC2D FF FF FF FF FF FF FF  
+    142 0000FC34 FF FF FF FF FF FF FF  
+    142 0000FC3B FF FF FF FF FF FF FF  
+    142 0000FC42 FF FF FF FF FF FF FF  
+    142 0000FC49 FF FF FF FF FF FF FF  
+    142 0000FC50 FF FF FF FF FF FF FF  
+    142 0000FC57 FF FF FF FF FF FF FF  
+    142 0000FC5E FF FF FF FF FF FF FF  
+    142 0000FC65 FF FF FF FF FF FF FF  
+    142 0000FC6C FF FF FF FF FF FF FF  
+    142 0000FC73 FF FF FF FF FF FF FF  
+    142 0000FC7A FF FF FF FF FF FF FF  
+    142 0000FC81 FF FF FF FF FF FF FF  
+    142 0000FC88 FF FF FF FF FF FF FF  
+    142 0000FC8F FF FF FF FF FF FF FF  
+    142 0000FC96 FF FF FF FF FF FF FF  
+    142 0000FC9D FF FF FF FF FF FF FF  
+    142 0000FCA4 FF FF FF FF FF FF FF  
+    142 0000FCAB FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 11
+boot_rom16.asm
+    142 0000FCB2 FF FF FF FF FF FF FF  
+    142 0000FCB9 FF FF FF FF FF FF FF  
+    142 0000FCC0 FF FF FF FF FF FF FF  
+    142 0000FCC7 FF FF FF FF FF FF FF  
+    142 0000FCCE FF FF FF FF FF FF FF  
+    142 0000FCD5 FF FF FF FF FF FF FF  
+    142 0000FCDC FF FF FF FF FF FF FF  
+    142 0000FCE3 FF FF FF FF FF FF FF  
+    142 0000FCEA FF FF FF FF FF FF FF  
+    142 0000FCF1 FF FF FF FF FF FF FF  
+    142 0000FCF8 FF FF FF FF FF FF FF  
+    142 0000FCFF FF FF FF FF FF FF FF  
+    142 0000FD06 FF FF FF FF FF FF FF  
+    142 0000FD0D FF FF FF FF FF FF FF  
+    142 0000FD14 FF FF FF FF FF FF FF  
+    142 0000FD1B FF FF FF FF FF FF FF  
+    142 0000FD22 FF FF FF FF FF FF FF  
+    142 0000FD29 FF FF FF FF FF FF FF  
+    142 0000FD30 FF FF FF FF FF FF FF  
+    142 0000FD37 FF FF FF FF FF FF FF  
+    142 0000FD3E FF FF FF FF FF FF FF  
+    142 0000FD45 FF FF FF FF FF FF FF  
+    142 0000FD4C FF FF FF FF FF FF FF  
+    142 0000FD53 FF FF FF FF FF FF FF  
+    142 0000FD5A FF FF FF FF FF FF FF  
+    142 0000FD61 FF FF FF FF FF FF FF  
+    142 0000FD68 FF FF FF FF FF FF FF  
+    142 0000FD6F FF FF FF FF FF FF FF  
+    142 0000FD76 FF FF FF FF FF FF FF  
+    142 0000FD7D FF FF FF FF FF FF FF  
+    142 0000FD84 FF FF FF FF FF FF FF  
+    142 0000FD8B FF FF FF FF FF FF FF  
+    142 0000FD92 FF FF FF FF FF FF FF  
+    142 0000FD99 FF FF FF FF FF FF FF  
+    142 0000FDA0 FF FF FF FF FF FF FF  
+    142 0000FDA7 FF FF FF FF FF FF FF  
+    142 0000FDAE FF FF FF FF FF FF FF  
+    142 0000FDB5 FF FF FF FF FF FF FF  
+    142 0000FDBC FF FF FF FF FF FF FF  
+    142 0000FDC3 FF FF FF FF FF FF FF  
+    142 0000FDCA FF FF FF FF FF FF FF  
+    142 0000FDD1 FF FF FF FF FF FF FF  
+    142 0000FDD8 FF FF FF FF FF FF FF  
+    142 0000FDDF FF FF FF FF FF FF FF  
+    142 0000FDE6 FF FF FF FF FF FF FF  
+    142 0000FDED FF FF FF FF FF FF FF  
+    142 0000FDF4 FF FF FF FF FF FF FF  
+    142 0000FDFB FF FF FF FF FF FF FF  
+    142 0000FE02 FF FF FF FF FF FF FF  
+    142 0000FE09 FF FF FF FF FF FF FF  
+    142 0000FE10 FF FF FF FF FF FF FF  
+    142 0000FE17 FF FF FF FF FF FF FF  
+    142 0000FE1E FF FF FF FF FF FF FF  
+    142 0000FE25 FF FF FF FF FF FF FF  
+    142 0000FE2C FF FF FF FF FF FF FF  
+    142 0000FE33 FF FF FF FF FF FF FF  
+    142 0000FE3A FF FF FF FF FF FF FF  
+    142 0000FE41 FF FF FF FF FF FF FF  
+    142 0000FE48 FF FF FF FF FF FF FF  
+    142 0000FE4F FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 12
+boot_rom16.asm
+    142 0000FE56 FF FF FF FF FF FF FF  
+    142 0000FE5D FF FF FF FF FF FF FF  
+    142 0000FE64 FF FF FF FF FF FF FF  
+    142 0000FE6B FF FF FF FF FF FF FF  
+    142 0000FE72 FF FF FF FF FF FF FF  
+    142 0000FE79 FF FF FF FF FF FF FF  
+    142 0000FE80 FF FF FF FF FF FF FF  
+    142 0000FE87 FF FF FF FF FF FF FF  
+    142 0000FE8E FF FF FF FF FF FF FF  
+    142 0000FE95 FF FF FF FF FF FF FF  
+    142 0000FE9C FF FF FF FF FF FF FF  
+    142 0000FEA3 FF FF FF FF FF FF FF  
+    142 0000FEAA FF FF FF FF FF FF FF  
+    142 0000FEB1 FF FF FF FF FF FF FF  
+    142 0000FEB8 FF FF FF FF FF FF FF  
+    142 0000FEBF FF FF FF FF FF FF FF  
+    142 0000FEC6 FF FF FF FF FF FF FF  
+    142 0000FECD FF FF FF FF FF FF FF  
+    142 0000FED4 FF FF FF FF FF FF FF  
+    142 0000FEDB FF FF FF FF FF FF FF  
+    142 0000FEE2 FF FF FF FF FF FF FF  
+    142 0000FEE9 FF FF FF FF FF FF FF  
+    142 0000FEF0 FF FF FF FF FF FF FF  
+    142 0000FEF7 FF FF FF FF FF FF FF  
+    142 0000FEFE FF FF FF FF FF FF FF  
+    142 0000FF05 FF FF FF FF FF FF FF  
+    142 0000FF0C FF FF FF FF FF FF FF  
+    142 0000FF13 FF FF FF FF FF FF FF  
+    142 0000FF1A FF FF FF FF FF FF FF  
+    142 0000FF21 FF FF FF FF FF FF FF  
+    142 0000FF28 FF FF FF FF FF FF FF  
+    142 0000FF2F FF FF FF FF FF FF FF  
+    142 0000FF36 FF FF FF FF FF FF FF  
+    142 0000FF3D FF FF FF FF FF FF FF  
+    142 0000FF44 FF FF FF FF FF FF FF  
+    142 0000FF4B FF FF FF FF FF FF FF  
+    142 0000FF52 FF FF FF FF FF FF FF  
+    142 0000FF59 FF FF FF FF FF FF FF  
+    142 0000FF60 FF FF FF FF FF FF FF  
+    142 0000FF67 FF FF FF FF FF FF FF  
+    142 0000FF6E FF FF FF FF FF FF FF  
+    142 0000FF75 FF FF FF FF FF FF FF  
+    142 0000FF7C FF FF FF FF FF FF FF  
+    142 0000FF83 FF FF FF FF FF FF FF  
+    142 0000FF8A FF FF FF FF FF FF FF  
+    142 0000FF91 FF FF FF FF FF FF FF  
+    142 0000FF98 FF FF FF FF FF FF FF  
+    142 0000FF9F FF FF FF FF FF FF FF  
+    142 0000FFA6 FF FF FF FF FF FF FF  
+    142 0000FFAD FF FF FF FF FF FF FF  
+    142 0000FFB4 FF FF FF FF FF FF FF  
+    142 0000FFBB FF FF FF FF FF FF FF  
+    142 0000FFC2 FF FF FF FF FF FF FF  
+    142 0000FFC9 FF FF FF FF FF FF FF  
+    142 0000FFD0 FF FF FF FF FF FF FF  
+    142 0000FFD7 FF FF FF FF FF FF FF  
+    142 0000FFDE FF FF                 
+    143 0000FFE0 E0 FF                   		dw		brk_rout		; 0 BRK vector
+    144 0000FFE2 FF FF                   		dw		0xFFFF		; 1 operating system
+    145 0000FFE4 FF FF                   		dw		0xFFFF		; 2
+Bird Computer Butterfly assembler   version 1.0.2   Fri Jun 09 15:46:09 2017     Page 13
+boot_rom16.asm
+    146 0000FFE6 FF FF                   		dw		0xFFFF		; 3
+    147 0000FFE8 FF FF                   		dw		0xFFFF		; 4
+    148 0000FFEA FF FF                   		dw		0xFFFF		; 5
+    149 0000FFEC FF FF                   		dw		0xFFFF		; 6
+    150 0000FFEE FF FF                   		dw		0xFFFF		; 7
+    151 0000FFF0 FF FF                   		dw		0xFFFF		; 8
+    152 0000FFF2 FF FF                   		dw		0xFFFF		; 9
+    153 0000FFF4 FF FF                   		dw		0xFFFF		; A
+    154 0000FFF6 F6 FF                   		dw		trc_rout		; B trace
+    155 0000FFF8 FF FF                   		dw		0xFFFF		; C debug interrupt
+    156 0000FFFA FA FF                   		dw		irq_rout		; D irq vector
+    157 0000FFFC 00 F9                   		dw		reset			; E nmi vector
+    158 0000FFFE 00 F9                   		dw		reset			; F reset vector
+                                        
+                                        ;		dw		0x5254462E		; hi
+                                        ;
+
