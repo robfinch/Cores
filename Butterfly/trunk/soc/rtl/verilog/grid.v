@@ -31,9 +31,8 @@ output [15:0] adr21;
 input [7:0] dati21;
 output [7:0] dato21;
 
-node un11
+node #(8'h11) un11
 (
-    .id(8'h11),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX81),
@@ -49,9 +48,8 @@ node un11
     .dato(dato11)
 );
 
-node un21
+node #(8'h21) un21
 (
-    .id(8'h21),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX11),
@@ -67,9 +65,8 @@ node un21
     .dato(dato21)
 );
 
-node un31
+node #(8'h31) un31
 (
-    .id(8'h31),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX21),
@@ -78,9 +75,8 @@ node un31
     .txdY(txdY31)
 );
 
-node un41
+node #(8'h41) un41
 (
-    .id(8'h41),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX31),
@@ -89,9 +85,8 @@ node un41
     .txdY(txdY41)
 );
 
-node un51
+node #(8'h51) un51
 (
-    .id(8'h51),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX41),
@@ -100,9 +95,8 @@ node un51
     .txdY(txdY51)
 );
 
-node un61
+node #(8'h61) un61
 (
-    .id(8'h61),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX51),
@@ -111,9 +105,8 @@ node un61
     .txdY(txdY61)
 );
 
-node un71
+node #(8'h71) un71
 (
-    .id(8'h71),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX61),
@@ -122,9 +115,8 @@ node un71
     .txdY(txdY71)
 );
 
-node un81
+node #(8'h81) un81
 (
-    .id(8'h81),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX71),
@@ -133,9 +125,8 @@ node un81
     .txdY(txdY81)
 );
 
-node un12
+node #(8'h12) un12
 (
-    .id(8'h12),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX82),
@@ -144,9 +135,8 @@ node un12
     .txdY(txdY12)
 );
 
-node un22
+node #(8'h22) un22
 (
-    .id(8'h22),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX12),
@@ -155,9 +145,8 @@ node un22
     .txdY(txdY22)
 );
 
-node un32
+node #(8'h32) un32
 (
-    .id(8'h32),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX22),
@@ -166,9 +155,8 @@ node un32
     .txdY(txdY32)
 );
 
-node un42
+node #(8'h42) un42
 (
-    .id(8'h42),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX32),
@@ -177,9 +165,8 @@ node un42
     .txdY(txdY42)
 );
 
-node un52
+node #(8'h52) un52
 (
-    .id(8'h52),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX42),
@@ -188,9 +175,8 @@ node un52
     .txdY(txdY52)
 );
 
-node un62
+node #(8'h62) un62
 (
-    .id(8'h62),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX52),
@@ -199,9 +185,8 @@ node un62
     .txdY(txdY62)
 );
 
-node un72
+node #(8'h72) un72
 (
-    .id(8'h72),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX62),
@@ -210,9 +195,8 @@ node un72
     .txdY(txdY72)
 );
 
-node un82
+node #(8'h82) un82
 (
-    .id(8'h82),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX72),
@@ -221,9 +205,8 @@ node un82
     .txdY(txdY82)
 );
 
-node un13
+node #(8'h13) un13
 (
-    .id(8'h13),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX83),
@@ -232,9 +215,8 @@ node un13
     .txdY(txdY13)
 );
 
-node un23
+node #(8'h23) un23
 (
-    .id(8'h23),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX13),
@@ -243,9 +225,8 @@ node un23
     .txdY(txdY23)
 );
 
-node un33
+node #(8'h33) un33
 (
-    .id(8'h33),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX23),
@@ -254,9 +235,8 @@ node un33
     .txdY(txdY33)
 );
 
-node un43
+node #(8'h43) un43
 (
-    .id(8'h43),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX33),
@@ -265,9 +245,8 @@ node un43
     .txdY(txdY43)
 );
 
-node un53
+node #(8'h53) un53
 (
-    .id(8'h53),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX43),
@@ -276,9 +255,8 @@ node un53
     .txdY(txdY53)
 );
 
-node un63
+node #(8'h63) un63
 (
-    .id(8'h63),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX53),
@@ -287,9 +265,8 @@ node un63
     .txdY(txdY63)
 );
 
-node un73
+node #(8'h73) un73
 (
-    .id(8'h73),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX63),
@@ -298,9 +275,8 @@ node un73
     .txdY(txdY73)
 );
 
-node un83
+node #(8'h83) un83
 (
-    .id(8'h83),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX73),
@@ -309,9 +285,8 @@ node un83
     .txdY(txdY83)
 );
 
-node un14
+node #(8'h14) un14
 (
-    .id(8'h14),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX84),
@@ -320,9 +295,8 @@ node un14
     .txdY(txdY14)
 );
 
-node un24
+node #(8'h24) un24
 (
-    .id(8'h24),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX14),
@@ -331,9 +305,8 @@ node un24
     .txdY(txdY24)
 );
 
-node un34
+node #(8'h34) un34
 (
-    .id(8'h34),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX24),
@@ -342,9 +315,8 @@ node un34
     .txdY(txdY34)
 );
 
-node un44
+node #(8'h44) un44
 (
-    .id(8'h44),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX34),
@@ -353,9 +325,8 @@ node un44
     .txdY(txdY44)
 );
 
-node un54
+node #(8'h54) un54
 (
-    .id(8'h54),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX44),
@@ -364,9 +335,8 @@ node un54
     .txdY(txdY54)
 );
 
-node un64
+node #(8'h64) un64
 (
-    .id(8'h64),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX54),
@@ -375,9 +345,8 @@ node un64
     .txdY(txdY64)
 );
 
-node un74
+node #(8'h74) un74
 (
-    .id(8'h74),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX64),
@@ -386,9 +355,8 @@ node un74
     .txdY(txdY74)
 );
 
-node un84
+node #(8'h84) un84
 (
-    .id(8'h84),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX74),
@@ -397,9 +365,8 @@ node un84
     .txdY(txdY84)
 );
 
-node un15
+node #(8'h15) un15
 (
-    .id(8'h15),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX85),
@@ -408,9 +375,8 @@ node un15
     .txdY(txdY15)
 );
 
-node un25
+node #(8'h25) un25
 (
-    .id(8'h25),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX15),
@@ -419,9 +385,8 @@ node un25
     .txdY(txdY25)
 );
 
-node un35
+node #(8'h35) un35
 (
-    .id(8'h35),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX25),
@@ -430,9 +395,8 @@ node un35
     .txdY(txdY35)
 );
 
-node un45
+node #(8'h45) un45
 (
-    .id(8'h45),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX35),
@@ -441,9 +405,8 @@ node un45
     .txdY(txdY45)
 );
 
-node un55
+node #(8'h55) un55
 (
-    .id(8'h55),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX45),
@@ -452,9 +415,8 @@ node un55
     .txdY(txdY55)
 );
 
-node un65
+node #(8'h65) un65
 (
-    .id(8'h65),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX55),
@@ -463,9 +425,8 @@ node un65
     .txdY(txdY65)
 );
 
-node un75
+node #(8'h75) un75
 (
-    .id(8'h75),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX65),
@@ -474,9 +435,8 @@ node un75
     .txdY(txdY75)
 );
 
-node un85
+node #(8'h85) un85
 (
-    .id(8'h85),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX75),
@@ -485,9 +445,8 @@ node un85
     .txdY(txdY85)
 );
 
-node un16
+node #(8'h16) un16
 (
-    .id(8'h16),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX86),
@@ -496,9 +455,8 @@ node un16
     .txdY(txdY16)
 );
 
-node un26
+node #(8'h26) un26
 (
-    .id(8'h26),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX16),
@@ -507,9 +465,8 @@ node un26
     .txdY(txdY26)
 );
 
-node un36
+node #(8'h36) un36
 (
-    .id(8'h36),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX26),
@@ -518,9 +475,8 @@ node un36
     .txdY(txdY36)
 );
 
-node un46
+node #(8'h46) un46
 (
-    .id(8'h46),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX36),
@@ -529,9 +485,8 @@ node un46
     .txdY(txdY46)
 );
 
-node un56
+node #(8'h56) un56
 (
-    .id(8'h56),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX46),
@@ -540,9 +495,8 @@ node un56
     .txdY(txdY56)
 );
 
-node un66
+node #(8'h66) un66
 (
-    .id(8'h66),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX56),
@@ -551,9 +505,8 @@ node un66
     .txdY(txdY66)
 );
 
-node un76
+node #(8'h76) un76
 (
-    .id(8'h76),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX66),
@@ -562,9 +515,8 @@ node un76
     .txdY(txdY76)
 );
 
-node un86
+node #(8'h86) un86
 (
-    .id(8'h86),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX76),
@@ -573,9 +525,8 @@ node un86
     .txdY(txdY86)
 );
 
-node un17
+node #(8'h17) un17
 (
-    .id(8'h17),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX87),
@@ -584,9 +535,8 @@ node un17
     .txdY(txdY17)
 );
 
-node un27
+node #(8'h27) un27
 (
-    .id(8'h27),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX17),
@@ -595,9 +545,8 @@ node un27
     .txdY(txdY27)
 );
 
-node un37
+node #(8'h37) un37
 (
-    .id(8'h37),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX27),
@@ -606,9 +555,8 @@ node un37
     .txdY(txdY37)
 );
 
-node un47
+node #(8'h47) un47
 (
-    .id(8'h47),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX37),
@@ -617,9 +565,8 @@ node un47
     .txdY(txdY47)
 );
 
-node un57
+node #(8'h57) un57
 (
-    .id(8'h57),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX47),
@@ -628,9 +575,8 @@ node un57
     .txdY(txdY57)
 );
 
-node un67
+node #(8'h67) un67
 (
-    .id(8'h67),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX57),
@@ -639,9 +585,8 @@ node un67
     .txdY(txdY67)
 );
 
-node un77
+node #(8'h77) un77
 (
-    .id(8'h76),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX67),
@@ -650,9 +595,8 @@ node un77
     .txdY(txdY77)
 );
 
-node un87
+node #(8'h87) un87
 (
-    .id(8'h87),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX77),
@@ -661,9 +605,8 @@ node un87
     .txdY(txdY87)
 );
 
-node un18
+node #(8'h18) un18
 (
-    .id(8'h18),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX88),
@@ -672,9 +615,8 @@ node un18
     .txdY(txdY18)
 );
 
-node un28
+node #(8'h28) un28
 (
-    .id(8'h28),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX18),
@@ -683,9 +625,8 @@ node un28
     .txdY(txdY28)
 );
 
-node un38
+node #(8'h38) un38
 (
-    .id(8'h38),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX28),
@@ -694,9 +635,8 @@ node un38
     .txdY(txdY38)
 );
 
-node un48
+node #(8'h48) un48
 (
-    .id(8'h48),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX38),
@@ -705,9 +645,8 @@ node un48
     .txdY(txdY48)
 );
 
-node un58
+node #(8'h58) un58
 (
-    .id(8'h58),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX48),
@@ -716,9 +655,8 @@ node un58
     .txdY(txdY58)
 );
 
-node un68
+node #(8'h68) un68
 (
-    .id(8'h68),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX58),
@@ -727,9 +665,8 @@ node un68
     .txdY(txdY68)
 );
 
-node un78
+node #(8'h78) un78
 (
-    .id(8'h78),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX68),
@@ -738,9 +675,8 @@ node un78
     .txdY(txdY78)
 );
 
-node un88
+node #(8'h88) un88
 (
-    .id(8'h88),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX78),

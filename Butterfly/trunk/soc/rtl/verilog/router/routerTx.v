@@ -49,7 +49,7 @@ module routerTx (
 
 				cnt <= cnt + 1;
 				// Load next data ?
-				if (cnt==16'h101F) begin
+				if (cnt==16'h81F) begin
 					cnt <= 0;
 					if (!empty && cts) begin
 						tx_data <= {1'b1,fdo,1'b0};

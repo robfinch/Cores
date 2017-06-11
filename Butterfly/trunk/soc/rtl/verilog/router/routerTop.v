@@ -2,6 +2,8 @@
 `define LOW     1'b0
 
 `define MSG_DST     127:120
+`define MSG_X       126:124
+`define MSG_Y       122:120
 `define MSG_SRC     119:112
 `define MSG_ROUT    111:80
 `define MSG_AGE     79:72
@@ -50,37 +52,6 @@ parameter ACKRXY = 4'd6;
 parameter CHK_MATCHT = 4'd7;
 parameter TXGBL = 4'd8;
 parameter NACKTXXG = 4'd9;
-
-always @(posedge clk_i)
-begin
-    rdf <= 1'b0;
-    if (cs & we_i) begin
-        case(adr_i[4:0])
-        5'd0:   txBuf[7:0] <= dat_i;
-        5'd1:   txBuf[15:8] <= dat_i;
-        5'd2:   txBuf[23:16] <= dat_i;
-        5'd3:   txBuf[31:24] <= dat_i;
-        5'd4:   txBuf[39:32] <= dat_i;
-        5'd5:   txBuf[47:40] <= dat_i;
-        5'd6:   txBuf[55:48] <= dat_i;
-        5'd7:   txBuf[63:56] <= dat_i;
-        5'd8:   txBuf[71:64] <= dat_i;
-        5'd9:   txBuf[79:72] <= dat_i;
-        5'hA:   txBuf[87:80] <= dat_i;
-        5'hB:   txBuf[95:88] <= dat_i;
-        5'hC:   txBuf[103:96] <= dat_i;
-        5'hD:   txBuf[111:104] <= dat_i;
-        5'hE:   txBuf[119:112] <= dat_i;
-        5'hF:   txBuf[127:120] <= dat_i;
-        5'h10:  rdf <= 1'b1;
-        endcase
-    end
-    casex(adr_i[4:0])
-    5'b0x:  dat_o <= fifoDato >> {adr_i[3:0],3'b0};
-    5'h10:  dat_o <= ~empty;
-    5'h12:  dat_o <= dpTx;
-    endcase
-end
 
 routerRx u1 (
 	// WISHBONE SoC bus interface
@@ -175,8 +146,35 @@ if (rst_i) begin
 end
 else begin
 wf <= 1'b0;
+rdf <= 1'b0;
     if (cs & we_i && adr_i[4:0]==5'h12)
         dpTx <= 1'b1;
+    if (cs & we_i) begin
+        case(adr_i[4:0])
+        5'd0:   txBuf[7:0] <= dat_i;
+        5'd1:   txBuf[15:8] <= dat_i;
+        5'd2:   txBuf[23:16] <= dat_i;
+        5'd3:   txBuf[31:24] <= dat_i;
+        5'd4:   txBuf[39:32] <= dat_i;
+        5'd5:   txBuf[47:40] <= dat_i;
+        5'd6:   txBuf[55:48] <= dat_i;
+        5'd7:   txBuf[63:56] <= dat_i;
+        5'd8:   txBuf[71:64] <= dat_i;
+        5'd9:   txBuf[79:72] <= dat_i;
+        5'hA:   txBuf[87:80] <= dat_i;
+        5'hB:   txBuf[95:88] <= dat_i;
+        5'hC:   txBuf[103:96] <= dat_i;
+        5'hD:   txBuf[111:104] <= dat_i;
+        5'hE:   txBuf[119:112] <= dat_i;
+        5'hF:   txBuf[127:120] <= dat_i;
+        5'h10:  rdf <= 1'b1;
+        endcase
+    end
+    casex(adr_i[4:0])
+    5'b0x:  dat_o <= fifoDato >> {adr_i[3:0],3'b0};
+    5'h10:  dat_o <= ~empty;
+    5'h12:  dat_o <= dpTx;
+    endcase
 case(state)
 IDLE:
     if (dpX) begin
@@ -211,27 +209,29 @@ if (rxAckX) begin
     end
 end
 CHK_MATCHX:
-    if (rxBufX[127:120]==8'hFF) begin
+    if (rxBufX[`MSG_DST]==8'hFF) begin
         txBuf <= rxBufX;
         state <= TXGBL;
     end
-    else if (rxBufX[126:124]!=X) begin
+    else if (rxBufX[`MSG_X]!=X) begin
         if (txEmptyX) begin
             txCycX <= `HIGH;
             txStbX <= `HIGH;
             txWeX <= `HIGH;
             txCsX <= `HIGH;
             txDatiX <= rxBufX;
+            txDatiX[`MSG_ROUT] <= {rxBufX[`MSG_ROUT],2'b01};
             state <= NACKTXX;
         end
     end
-    else if (rxBufX[122:120]!=Y) begin
+    else if (rxBufX[`MSG_Y]!=Y) begin
         if (txEmptyY) begin
             txCycY <= `HIGH;
             txStbY <= `HIGH;
             txWeY <= `HIGH;
             txCsY <= `HIGH;
             txDatiY <= rxBufX;
+            txDatiY[`MSG_ROUT] <= {rxBufX[`MSG_ROUT],2'b10};
             state <= NACKTXY;
         end
     end
@@ -271,27 +271,29 @@ ACKRXY:
         end
     end
 CHK_MATCHY:
-    if (rxBufY[127:120]==8'hFF) begin
+    if (rxBufY[`MSG_DST]==8'hFF) begin
         txBuf <= rxBufY;
         state <= TXGBL;
     end
-    else if (rxBufY[126:124]!=X) begin
+    else if (rxBufY[`MSG_X]!=X) begin
         if (txEmptyX) begin
             txCycX <= `HIGH;
             txStbX <= `HIGH;
             txWeX <= `HIGH;
             txCsX <= `HIGH;
             txDatiX <= rxBufY;
+            txDatiX[`MSG_ROUT] <= {rxBufY[`MSG_ROUT],2'b01};
             state <= NACKTXX;
         end
     end
-    else if (rxBufY[122:120]!=Y) begin
+    else if (rxBufY[`MSG_Y]!=Y) begin
         if (txEmptyY) begin
             txCycY <= `HIGH;
             txStbY <= `HIGH;
             txWeY <= `HIGH;
             txCsY <= `HIGH;
             txDatiY <= rxBufY;
+            txDatiY[`MSG_ROUT] <= {rxBufY[`MSG_ROUT],2'b10};
             state <= NACKTXY;
         end
     end
@@ -301,24 +303,26 @@ CHK_MATCHY:
         state <= IDLE;
     end
 CHK_MATCHT:
-    if (txBuf[126:124]!=X) begin
+    if (txBuf[`MSG_X]!=X) begin
         if (txEmptyX) begin
             txCycX <= `HIGH;
             txStbX <= `HIGH;
             txWeX <= `HIGH;
             txCsX <= `HIGH;
             txDatiX <= txBuf;
+            txDatiX[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b01};
             state <= NACKTXX;
             dpTx <= 1'b0;
         end
     end
-    else if (txBuf[122:120]!=Y) begin
+    else if (txBuf[`MSG_Y]!=Y) begin
         if (txEmptyY) begin
             txCycY <= `HIGH;
             txStbY <= `HIGH;
             txWeY <= `HIGH;
             txCsY <= `HIGH;
             txDatiY <= txBuf;
+            txDatiY[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b10};
             state <= NACKTXY;
             dpTx <= 1'b0;
         end
@@ -336,6 +340,7 @@ TXGBL:
         txWeX <= `HIGH;
         txCsX <= `HIGH;
         txDatiX <= txBuf;
+        txDatiX[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b01};
         state <= NACKTXXG;
     end
 NACKTXXG:
@@ -350,6 +355,7 @@ NACKTXXG:
             txWeY <= `HIGH;
             txCsY <= `HIGH;
             txDatiY <= txBuf;
+            txDatiY[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b10};
             state <= NACKTXY;
         end
     end

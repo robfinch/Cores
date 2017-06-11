@@ -1,0 +1,71 @@
+Global symbols:
+
+Symbol Table:
+ #  Name                            OCLS  Base Len        Value         Line     File
+  0 CR                               NON  DATA   W   000000000000000D      27   noc_boot11.asm
+  1 CTRLH                            NON  DATA   W   0000000000000009      29   noc_boot11.asm
+  2 ClearScreen                      PRI  CODE   W   000000000000C0DC     182   noc_boot11.asm
+  3 HomeCursor                       PRI  CODE   W   000000000000C0F2     196   noc_boot11.asm
+  4 InitTxtCtrl                      PRI  CODE   W   000000000000C0C8     168   noc_boot11.asm
+  5 LEDS                             NON  DATA   W   000000000000B200      41   noc_boot11.asm
+  6 LF                               NON  DATA   W   000000000000000A      28   noc_boot11.asm
+  7 ROUTER                           NON  DATA   W   000000000000B000      42   noc_boot11.asm
+  8 ROUTER_TRB                       NON  DATA   W   0000000000000000      46   noc_boot11.asm
+  9 RTR_RXSTAT                       NON  DATA   W   0000000000000010      43   noc_boot11.asm
+ 10 RTR_TXSTAT                       NON  DATA   W   0000000000000012      44   noc_boot11.asm
+ 11 Recv                             PRI  CODE   W   000000000000C074     118   noc_boot11.asm
+ 12 Recv1                            PRI  CODE   W   000000000000C07E     122   noc_boot11.asm
+ 13 RecvDispatch                     PRI  CODE   W   000000000000C08C     132   noc_boot11.asm
+ 14 RecvDispatch2                    PRI  CODE   W   000000000000C0B8     149   noc_boot11.asm
+ 15 RecvLoop                         PRI  CODE   W   000000000000C024      64   noc_boot11.asm
+ 16 TXTCTRL                          NON  DATA   W   000000000000B100      40   noc_boot11.asm
+ 17 TXTSCR                           NON  DATA   W   0000000000002000      39   noc_boot11.asm
+ 18 Xmit                             PRI  CODE   W   000000000000C056      97   noc_boot11.asm
+ 19 Xmit1                            PRI  CODE   W   000000000000C060     103   noc_boot11.asm
+ 20 Xmit2                            PRI  CODE   W   000000000000C056      99   noc_boot11.asm
+ 21 broadcastReset                   PRI  CODE   W   000000000000C032      78   noc_boot11.asm
+ 22 charToPrint                      NON  DATA   W   0000000000000010      35   noc_boot11.asm
+ 23 cs1                              PRI  CODE   W   000000000000C0E8     186   noc_boot11.asm
+ 24 cursx                            NON  DATA   W   000000000000000B      31   noc_boot11.asm
+ 25 cursy                            NON  DATA   W   000000000000000A      30   noc_boot11.asm
+ 26 flashCursor                      PRI  CODE   W   000000000000C0F8     203   noc_boot11.asm
+ 27 iret                             PRI  CODE   W   000000000000C26C     406   noc_boot11.asm
+ 28 irq_rout                         PRI  CODE   W   000000000000C220     371   noc_boot11.asm
+ 29 itc1                             PRI  CODE   W   000000000000C0CA     170   noc_boot11.asm
+ 30 lineTbl                          PRI  CODE   W   000000000000C29C     415   noc_boot11.asm
+ 31 lockup                           PRI  CODE   W   000000000000C030      71   noc_boot11.asm
+ 32 msgStarting                      PRI  CODE   W   000000000000C26C     407   noc_boot11.asm
+ 33 noMsg1                           PRI  CODE   W   000000000000C024      65   noc_boot11.asm
+ 34 notRcvXIrq                       PRI  CODE   W   000000000000C23A     383   noc_boot11.asm
+ 35 notUartXIrq                      PRI  CODE   W   000000000000C252     392   noc_boot11.asm
+ 36 notUartYIrq                      PRI  CODE   W   000000000000C268     402   noc_boot11.asm
+ 37 pc1                              PRI  CODE   W   000000000000C140     262   noc_boot11.asm
+ 38 pc11                             PRI  CODE   W   000000000000C1B6     323   noc_boot11.asm
+ 39 pc2                              PRI  CODE   W   000000000000C16A     282   noc_boot11.asm
+ 40 pc3                              PRI  CODE   W   000000000000C156     272   noc_boot11.asm
+ 41 pc4                              PRI  CODE   W   000000000000C1AE     315   noc_boot11.asm
+ 42 pc5                              PRI  CODE   W   000000000000C176     288   noc_boot11.asm
+ 43 pc6                              PRI  CODE   W   000000000000C192     300   noc_boot11.asm
+ 44 pc7                              PRI  CODE   W   000000000000C20E     361   noc_boot11.asm
+ 45 pc8                              PRI  CODE   W   000000000000C204     355   noc_boot11.asm
+ 46 pc9                              PRI  CODE   W   000000000000C1F4     348   noc_boot11.asm
+ 47 pos                              NON  DATA   W   000000000000000C      32   noc_boot11.asm
+ 48 putcharScr                       PRI  CODE   W   000000000000C116     236   noc_boot11.asm
+ 49 putmsg3                          PRI  CODE   W   000000000000C102     218   noc_boot11.asm
+ 50 putmsg4                          PRI  CODE   W   000000000000C10C     224   noc_boot11.asm
+ 51 putmsgScr                        PRI  CODE   W   000000000000C0FA     213   noc_boot11.asm
+ 52 rxBuf                            NON  DATA   W   0000000000000030      37   noc_boot11.asm
+ 53 start                            PRI  CODE   W   000000000000C000      51   noc_boot11.asm
+ 54 txBuf                            NON  DATA   W   0000000000000020      36   noc_boot11.asm
+ 55 txtHeight                        NON  DATA   W   000000000000000E      33   noc_boot11.asm
+ 56 txtWidth                         NON  DATA   W   000000000000000F      34   noc_boot11.asm
+ 57 txtctrl_dat                      PRI  CODE   W   000000000000C28D     410   noc_boot11.asm
+ 58 xitIrq                           PRI  CODE   W   000000000000C268     403   noc_boot11.asm
+ 59 zeroTxBuf                        PRI  CODE   W   000000000000C0BA     156   noc_boot11.asm
+ 60 zeroTxBuf1                       PRI  CODE   W   000000000000C0BE     158   noc_boot11.asm
+
+
+Local symbols:
+
+Macro Table:
+ #  Name                            Nargs  Line   File
