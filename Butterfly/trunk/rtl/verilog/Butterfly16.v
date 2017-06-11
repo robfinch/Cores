@@ -102,6 +102,7 @@
 `define ILR		4'h1
 `define WAR		4'h2
 `define VER		4'h3
+`define ID      4'h4
 `define VBA		4'd5
 
 // Branches
@@ -393,6 +394,7 @@ module Butterfly16(
 	assign res = tsr && srn==`WAR ? war : {DBW{1'bz}};
 	assign res = tsr && srn==`ILR ? ilr : {DBW{1'bz}};
 	assign res = tsr && srn==`VER ? ver : {DBW{1'bz}};
+	assign res = tsr && srn==`ID ? id : {DBW{1'bz}};
 	assign res = trs ? rfo_dst : {DBW{1'bz}};
 
 
