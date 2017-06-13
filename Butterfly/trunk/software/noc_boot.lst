@@ -1,4 +1,4 @@
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 1
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 1
 noc_boot.asm
 
                                         ; ============================================================================
@@ -42,1293 +42,1293 @@ noc_boot.asm
                                         		cpu		Butterfly16
                                         		org		0xE000
      42 0000E000                        start:
-     43 0000E000                        noMsg1:
-     44 0000E000 01 4B 00 E1             		lb		r1,ROUTER+RTR_RXSTAT
-     45 0000E004 FD B8                   		beq		noMsg1
-     46 0000E006 24 AF                   		call	Recv
-     47 0000E008 2F AF                   		call	RecvDispatch
-     48 0000E00A FA BE                   		bra		start
-     49 0000E00C                        lockup:
-     50 0000E00C FF BE                   		bra		lockup
+     43 0000E000 FF 41 0E 1E             		lw		sp,#$1FFE
+     44 0000E004                        noMsg1:
+     45 0000E004 01 4B 00 E1             		lb		r1,ROUTER+RTR_RXSTAT
+     46 0000E008 FD B8                   		beq		noMsg1
+     47 0000E00A 24 AF                   		call	Recv
+     48 0000E00C 2F AF                   		call	RecvDispatch
+     49 0000E00E F8 BE                   		bra		start
+     50 0000E010                        lockup:
+     51 0000E010 FF BE                   		bra		lockup
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Broadcast a reset message on the network.
                                         ;----------------------------------------------------------------------------
                                         
-     56 0000E00E                        broadcastReset:
-     57 0000E00E FE 6E                   		add		sp,sp,#-2
-     58 0000E010 E1 DF                   		sw		lr,[sp]
-     59 0000E012 3F AF                   		call	zeroTxBuf
-     60 0000E014 0F 40 0F 11             		lw		r1,#$FF		; global broadcast address
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 2
+     57 0000E012                        broadcastReset:
+     58 0000E012 FE 6E                   		add		sp,sp,#-2
+     59 0000E014 E1 DF                   		sw		lr,[sp]
+     60 0000E016 3F AF                   		call	zeroTxBuf
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 2
 noc_boot.asm
-     61 0000E018 02 40 0F C1             		sb		r1,txBuf+15
-     62 0000E01C 01 40 01 11             		lw		r1,#$11		; source of message
-     63 0000E020 02 40 0E C1             		sb		r1,txBuf+14
-     64 0000E024 01 11                   		lw		r1,#1
-     65 0000E026 02 40 08 C1             		sb		r1,txBuf+8	; reset message
-     66 0000E02A 03 AF                   		call	Xmit
-     67 0000E02C E1 FF                   		lw		lr,[sp]
-     68 0000E02E 02 6E                   		add		sp,sp,#2
-     69 0000E030 F0 80                   		ret
+     61 0000E018 0F 40 0F 11             		lw		r1,#$FF		; global broadcast address
+     62 0000E01C 02 40 0F C1             		sb		r1,txBuf+15
+     63 0000E020 01 40 01 11             		lw		r1,#$11		; source of message
+     64 0000E024 02 40 0E C1             		sb		r1,txBuf+14
+     65 0000E028 01 11                   		lw		r1,#1
+     66 0000E02A 02 40 08 C1             		sb		r1,txBuf+8	; reset message
+     67 0000E02E 03 AF                   		call	Xmit
+     68 0000E030 E1 FF                   		lw		lr,[sp]
+     69 0000E032 02 6E                   		add		sp,sp,#2
+     70 0000E034 F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Transmit on the network.
                                         ;----------------------------------------------------------------------------
                                         
-     75 0000E032                        Xmit:
+     76 0000E036                        Xmit:
                                         		; wait for transmit buffer to empty
-     77 0000E032                        Xmit2:
-     78 0000E032 01 4B 02 E1             		lb		r1,ROUTER+RTR_TXSTAT
-     79 0000E036 FD B9                   		bne		Xmit2
-     80 0000E038 00 40 0F 12             		lw		r2,#15
-     81 0000E03C                        Xmit1:
-     82 0000E03C 02 40 20 E1             		lb		r1,txBuf[r2]
-     83 0000E040 00 4B 20 C1             		sb		r1,ROUTER[r2]
-     84 0000E044 FF 62                   		add		r2,r2,#-1
-     85 0000E046 FA BB                   		bpl		Xmit1
+     78 0000E036                        Xmit2:
+     79 0000E036 01 4B 02 E1             		lb		r1,ROUTER+RTR_TXSTAT
+     80 0000E03A FD B9                   		bne		Xmit2
+     81 0000E03C 00 40 0F 12             		lw		r2,#15
+     82 0000E040                        Xmit1:
+     83 0000E040 02 40 20 E1             		lb		r1,txBuf[r2]
+     84 0000E044 00 4B 20 C1             		sb		r1,ROUTER[r2]
+     85 0000E048 FF 62                   		add		r2,r2,#-1
+     86 0000E04A FA BB                   		bpl		Xmit1
                                         		; trigger a transmit
-     87 0000E048 01 11                   		lw		r1,#1
-     88 0000E04A 01 4B 02 C2             		sb		r2,ROUTER+RTR_TXSTAT
-     89 0000E04E F0 80                   		ret
+     88 0000E04C 01 11                   		lw		r1,#1
+     89 0000E04E 01 4B 02 C2             		sb		r2,ROUTER+RTR_TXSTAT
+     90 0000E052 F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Receive from network.
                                         ; Receive status must have already indicated a message present.
                                         ;----------------------------------------------------------------------------
                                         
-     96 0000E050                        Recv:
-     97 0000E050 01 11                   		lw		r1,#1
-     98 0000E052 01 4B 00 C1             		sb		r1,ROUTER+RTR_RXSTAT	; pop the rx fifo
-     99 0000E056 00 40 0F 12             		lw		r2,#15
-    100 0000E05A                        Recv1:
-    101 0000E05A 00 4B 20 E1             		lb		r1,ROUTER[r2]			; copy message to local buffer
-    102 0000E05E 03 40 20 C1             		sb		r1,rxBuf[r2]
-    103 0000E062 FF 62                   		add		r2,r2,#-1
-    104 0000E064 FA BB                   		bpl		Recv1
-    105 0000E066 F0 80                   		ret
+     97 0000E054                        Recv:
+     98 0000E054 01 11                   		lw		r1,#1
+     99 0000E056 01 4B 00 C1             		sb		r1,ROUTER+RTR_RXSTAT	; pop the rx fifo
+    100 0000E05A 00 40 0F 12             		lw		r2,#15
+    101 0000E05E                        Recv1:
+    102 0000E05E 00 4B 20 E1             		lb		r1,ROUTER[r2]			; copy message to local buffer
+    103 0000E062 03 40 20 C1             		sb		r1,rxBuf[r2]
+    104 0000E066 FF 62                   		add		r2,r2,#-1
+    105 0000E068 FA BB                   		bpl		Recv1
+    106 0000E06A F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ;----------------------------------------------------------------------------
                                         
-    110 0000E068                        RecvDispatch:
-    111 0000E068 FE 6E                   		add		sp,sp,#-2
-    112 0000E06A E1 DF                   		sw		lr,[sp]
-    113 0000E06C 03 40 08 E1             		lb		r1,rxBuf+8
-    114 0000E070 1F 10                   		cmp		r1,#1
-    115 0000E072 0C A9                   		bne		RecvDispatch2
-    116 0000E074 0E AF                   		call	zeroTxBuf
-    117 0000E076 E4 31                   		tsr		r1,ID
-    118 0000E078 02 40 0E C1             		sb		r1,txBuf+14
-    119 0000E07C 01 40 01 11             		lw		r1,#$11
-    120 0000E080 02 40 0F C1             		sb		r1,txBuf+15
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 3
+    111 0000E06C                        RecvDispatch:
+    112 0000E06C FE 6E                   		add		sp,sp,#-2
+    113 0000E06E E1 DF                   		sw		lr,[sp]
+    114 0000E070 03 40 08 E1             		lb		r1,rxBuf+8
+    115 0000E074 1F 10                   		cmp		r1,#1
+    116 0000E076 0C A9                   		bne		RecvDispatch2
+    117 0000E078 0E AF                   		call	zeroTxBuf
+    118 0000E07A E4 31                   		tsr		r1,ID
+    119 0000E07C 02 40 0E C1             		sb		r1,txBuf+14
+    120 0000E080 01 40 01 11             		lw		r1,#$11
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 3
 noc_boot.asm
-    121 0000E084 02 11                   		lw		r1,#2
-    122 0000E086 02 40 08 C1             		sb		r1,txBuf+8
-    123 0000E08A D3 BF                   		call	Xmit
-    124 0000E08C                        RecvDispatch2:
-    125 0000E08C E1 FF                   		lw		lr,[sp]
-    126 0000E08E 02 6E                   		add		sp,sp,#2
-    127 0000E090 F0 80                   		ret
+    121 0000E084 02 40 0F C1             		sb		r1,txBuf+15
+    122 0000E088 02 11                   		lw		r1,#2
+    123 0000E08A 02 40 08 C1             		sb		r1,txBuf+8
+    124 0000E08E D3 BF                   		call	Xmit
+    125 0000E090                        RecvDispatch2:
+    126 0000E090 E1 FF                   		lw		lr,[sp]
+    127 0000E092 02 6E                   		add		sp,sp,#2
+    128 0000E094 F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Zero out the transmit buffer.
                                         ;----------------------------------------------------------------------------
                                         
-    133 0000E092                        zeroTxBuf:
-    134 0000E092 00 40 0F 12             		lw		r2,#15
-    135 0000E096                        zeroTxBuf1:
-    136 0000E096 02 40 20 C0             		sb		r0,txBuf[r2]
-    137 0000E09A FF 62                   		sub		r2,r2,#1
-    138 0000E09C FC BB                   		bpl		zeroTxBuf1
-    139 0000E09E F0 80                   		ret
+    134 0000E096                        zeroTxBuf:
+    135 0000E096 00 40 0F 12             		lw		r2,#15
+    136 0000E09A                        zeroTxBuf1:
+    137 0000E09A 02 40 20 C0             		sb		r0,txBuf[r2]
+    138 0000E09E FF 62                   		sub		r2,r2,#1
+    139 0000E0A0 FC BB                   		bpl		zeroTxBuf1
+    140 0000E0A2 F0 80                   		ret
                                         
-    141 0000E0A0 FF FF FF FF FF FF FF    		org		0xFFFE
-    141 0000E0A7 FF FF FF FF FF FF FF  
-    141 0000E0AE FF FF FF FF FF FF FF  
-    141 0000E0B5 FF FF FF FF FF FF FF  
-    141 0000E0BC FF FF FF FF FF FF FF  
-    141 0000E0C3 FF FF FF FF FF FF FF  
-    141 0000E0CA FF FF FF FF FF FF FF  
-    141 0000E0D1 FF FF FF FF FF FF FF  
-    141 0000E0D8 FF FF FF FF FF FF FF  
-    141 0000E0DF FF FF FF FF FF FF FF  
-    141 0000E0E6 FF FF FF FF FF FF FF  
-    141 0000E0ED FF FF FF FF FF FF FF  
-    141 0000E0F4 FF FF FF FF FF FF FF  
-    141 0000E0FB FF FF FF FF FF FF FF  
-    141 0000E102 FF FF FF FF FF FF FF  
-    141 0000E109 FF FF FF FF FF FF FF  
-    141 0000E110 FF FF FF FF FF FF FF  
-    141 0000E117 FF FF FF FF FF FF FF  
-    141 0000E11E FF FF FF FF FF FF FF  
-    141 0000E125 FF FF FF FF FF FF FF  
-    141 0000E12C FF FF FF FF FF FF FF  
-    141 0000E133 FF FF FF FF FF FF FF  
-    141 0000E13A FF FF FF FF FF FF FF  
-    141 0000E141 FF FF FF FF FF FF FF  
-    141 0000E148 FF FF FF FF FF FF FF  
-    141 0000E14F FF FF FF FF FF FF FF  
-    141 0000E156 FF FF FF FF FF FF FF  
-    141 0000E15D FF FF FF FF FF FF FF  
-    141 0000E164 FF FF FF FF FF FF FF  
-    141 0000E16B FF FF FF FF FF FF FF  
-    141 0000E172 FF FF FF FF FF FF FF  
-    141 0000E179 FF FF FF FF FF FF FF  
-    141 0000E180 FF FF FF FF FF FF FF  
-    141 0000E187 FF FF FF FF FF FF FF  
-    141 0000E18E FF FF FF FF FF FF FF  
-    141 0000E195 FF FF FF FF FF FF FF  
-    141 0000E19C FF FF FF FF FF FF FF  
-    141 0000E1A3 FF FF FF FF FF FF FF  
-    141 0000E1AA FF FF FF FF FF FF FF  
-    141 0000E1B1 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 4
+    142 0000E0A4 FF FF FF FF FF FF FF    		org		0xFFFE
+    142 0000E0AB FF FF FF FF FF FF FF  
+    142 0000E0B2 FF FF FF FF FF FF FF  
+    142 0000E0B9 FF FF FF FF FF FF FF  
+    142 0000E0C0 FF FF FF FF FF FF FF  
+    142 0000E0C7 FF FF FF FF FF FF FF  
+    142 0000E0CE FF FF FF FF FF FF FF  
+    142 0000E0D5 FF FF FF FF FF FF FF  
+    142 0000E0DC FF FF FF FF FF FF FF  
+    142 0000E0E3 FF FF FF FF FF FF FF  
+    142 0000E0EA FF FF FF FF FF FF FF  
+    142 0000E0F1 FF FF FF FF FF FF FF  
+    142 0000E0F8 FF FF FF FF FF FF FF  
+    142 0000E0FF FF FF FF FF FF FF FF  
+    142 0000E106 FF FF FF FF FF FF FF  
+    142 0000E10D FF FF FF FF FF FF FF  
+    142 0000E114 FF FF FF FF FF FF FF  
+    142 0000E11B FF FF FF FF FF FF FF  
+    142 0000E122 FF FF FF FF FF FF FF  
+    142 0000E129 FF FF FF FF FF FF FF  
+    142 0000E130 FF FF FF FF FF FF FF  
+    142 0000E137 FF FF FF FF FF FF FF  
+    142 0000E13E FF FF FF FF FF FF FF  
+    142 0000E145 FF FF FF FF FF FF FF  
+    142 0000E14C FF FF FF FF FF FF FF  
+    142 0000E153 FF FF FF FF FF FF FF  
+    142 0000E15A FF FF FF FF FF FF FF  
+    142 0000E161 FF FF FF FF FF FF FF  
+    142 0000E168 FF FF FF FF FF FF FF  
+    142 0000E16F FF FF FF FF FF FF FF  
+    142 0000E176 FF FF FF FF FF FF FF  
+    142 0000E17D FF FF FF FF FF FF FF  
+    142 0000E184 FF FF FF FF FF FF FF  
+    142 0000E18B FF FF FF FF FF FF FF  
+    142 0000E192 FF FF FF FF FF FF FF  
+    142 0000E199 FF FF FF FF FF FF FF  
+    142 0000E1A0 FF FF FF FF FF FF FF  
+    142 0000E1A7 FF FF FF FF FF FF FF  
+    142 0000E1AE FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 4
 noc_boot.asm
-    141 0000E1B8 FF FF FF FF FF FF FF  
-    141 0000E1BF FF FF FF FF FF FF FF  
-    141 0000E1C6 FF FF FF FF FF FF FF  
-    141 0000E1CD FF FF FF FF FF FF FF  
-    141 0000E1D4 FF FF FF FF FF FF FF  
-    141 0000E1DB FF FF FF FF FF FF FF  
-    141 0000E1E2 FF FF FF FF FF FF FF  
-    141 0000E1E9 FF FF FF FF FF FF FF  
-    141 0000E1F0 FF FF FF FF FF FF FF  
-    141 0000E1F7 FF FF FF FF FF FF FF  
-    141 0000E1FE FF FF FF FF FF FF FF  
-    141 0000E205 FF FF FF FF FF FF FF  
-    141 0000E20C FF FF FF FF FF FF FF  
-    141 0000E213 FF FF FF FF FF FF FF  
-    141 0000E21A FF FF FF FF FF FF FF  
-    141 0000E221 FF FF FF FF FF FF FF  
-    141 0000E228 FF FF FF FF FF FF FF  
-    141 0000E22F FF FF FF FF FF FF FF  
-    141 0000E236 FF FF FF FF FF FF FF  
-    141 0000E23D FF FF FF FF FF FF FF  
-    141 0000E244 FF FF FF FF FF FF FF  
-    141 0000E24B FF FF FF FF FF FF FF  
-    141 0000E252 FF FF FF FF FF FF FF  
-    141 0000E259 FF FF FF FF FF FF FF  
-    141 0000E260 FF FF FF FF FF FF FF  
-    141 0000E267 FF FF FF FF FF FF FF  
-    141 0000E26E FF FF FF FF FF FF FF  
-    141 0000E275 FF FF FF FF FF FF FF  
-    141 0000E27C FF FF FF FF FF FF FF  
-    141 0000E283 FF FF FF FF FF FF FF  
-    141 0000E28A FF FF FF FF FF FF FF  
-    141 0000E291 FF FF FF FF FF FF FF  
-    141 0000E298 FF FF FF FF FF FF FF  
-    141 0000E29F FF FF FF FF FF FF FF  
-    141 0000E2A6 FF FF FF FF FF FF FF  
-    141 0000E2AD FF FF FF FF FF FF FF  
-    141 0000E2B4 FF FF FF FF FF FF FF  
-    141 0000E2BB FF FF FF FF FF FF FF  
-    141 0000E2C2 FF FF FF FF FF FF FF  
-    141 0000E2C9 FF FF FF FF FF FF FF  
-    141 0000E2D0 FF FF FF FF FF FF FF  
-    141 0000E2D7 FF FF FF FF FF FF FF  
-    141 0000E2DE FF FF FF FF FF FF FF  
-    141 0000E2E5 FF FF FF FF FF FF FF  
-    141 0000E2EC FF FF FF FF FF FF FF  
-    141 0000E2F3 FF FF FF FF FF FF FF  
-    141 0000E2FA FF FF FF FF FF FF FF  
-    141 0000E301 FF FF FF FF FF FF FF  
-    141 0000E308 FF FF FF FF FF FF FF  
-    141 0000E30F FF FF FF FF FF FF FF  
-    141 0000E316 FF FF FF FF FF FF FF  
-    141 0000E31D FF FF FF FF FF FF FF  
-    141 0000E324 FF FF FF FF FF FF FF  
-    141 0000E32B FF FF FF FF FF FF FF  
-    141 0000E332 FF FF FF FF FF FF FF  
-    141 0000E339 FF FF FF FF FF FF FF  
-    141 0000E340 FF FF FF FF FF FF FF  
-    141 0000E347 FF FF FF FF FF FF FF  
-    141 0000E34E FF FF FF FF FF FF FF  
-    141 0000E355 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 5
+    142 0000E1B5 FF FF FF FF FF FF FF  
+    142 0000E1BC FF FF FF FF FF FF FF  
+    142 0000E1C3 FF FF FF FF FF FF FF  
+    142 0000E1CA FF FF FF FF FF FF FF  
+    142 0000E1D1 FF FF FF FF FF FF FF  
+    142 0000E1D8 FF FF FF FF FF FF FF  
+    142 0000E1DF FF FF FF FF FF FF FF  
+    142 0000E1E6 FF FF FF FF FF FF FF  
+    142 0000E1ED FF FF FF FF FF FF FF  
+    142 0000E1F4 FF FF FF FF FF FF FF  
+    142 0000E1FB FF FF FF FF FF FF FF  
+    142 0000E202 FF FF FF FF FF FF FF  
+    142 0000E209 FF FF FF FF FF FF FF  
+    142 0000E210 FF FF FF FF FF FF FF  
+    142 0000E217 FF FF FF FF FF FF FF  
+    142 0000E21E FF FF FF FF FF FF FF  
+    142 0000E225 FF FF FF FF FF FF FF  
+    142 0000E22C FF FF FF FF FF FF FF  
+    142 0000E233 FF FF FF FF FF FF FF  
+    142 0000E23A FF FF FF FF FF FF FF  
+    142 0000E241 FF FF FF FF FF FF FF  
+    142 0000E248 FF FF FF FF FF FF FF  
+    142 0000E24F FF FF FF FF FF FF FF  
+    142 0000E256 FF FF FF FF FF FF FF  
+    142 0000E25D FF FF FF FF FF FF FF  
+    142 0000E264 FF FF FF FF FF FF FF  
+    142 0000E26B FF FF FF FF FF FF FF  
+    142 0000E272 FF FF FF FF FF FF FF  
+    142 0000E279 FF FF FF FF FF FF FF  
+    142 0000E280 FF FF FF FF FF FF FF  
+    142 0000E287 FF FF FF FF FF FF FF  
+    142 0000E28E FF FF FF FF FF FF FF  
+    142 0000E295 FF FF FF FF FF FF FF  
+    142 0000E29C FF FF FF FF FF FF FF  
+    142 0000E2A3 FF FF FF FF FF FF FF  
+    142 0000E2AA FF FF FF FF FF FF FF  
+    142 0000E2B1 FF FF FF FF FF FF FF  
+    142 0000E2B8 FF FF FF FF FF FF FF  
+    142 0000E2BF FF FF FF FF FF FF FF  
+    142 0000E2C6 FF FF FF FF FF FF FF  
+    142 0000E2CD FF FF FF FF FF FF FF  
+    142 0000E2D4 FF FF FF FF FF FF FF  
+    142 0000E2DB FF FF FF FF FF FF FF  
+    142 0000E2E2 FF FF FF FF FF FF FF  
+    142 0000E2E9 FF FF FF FF FF FF FF  
+    142 0000E2F0 FF FF FF FF FF FF FF  
+    142 0000E2F7 FF FF FF FF FF FF FF  
+    142 0000E2FE FF FF FF FF FF FF FF  
+    142 0000E305 FF FF FF FF FF FF FF  
+    142 0000E30C FF FF FF FF FF FF FF  
+    142 0000E313 FF FF FF FF FF FF FF  
+    142 0000E31A FF FF FF FF FF FF FF  
+    142 0000E321 FF FF FF FF FF FF FF  
+    142 0000E328 FF FF FF FF FF FF FF  
+    142 0000E32F FF FF FF FF FF FF FF  
+    142 0000E336 FF FF FF FF FF FF FF  
+    142 0000E33D FF FF FF FF FF FF FF  
+    142 0000E344 FF FF FF FF FF FF FF  
+    142 0000E34B FF FF FF FF FF FF FF  
+    142 0000E352 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 5
 noc_boot.asm
-    141 0000E35C FF FF FF FF FF FF FF  
-    141 0000E363 FF FF FF FF FF FF FF  
-    141 0000E36A FF FF FF FF FF FF FF  
-    141 0000E371 FF FF FF FF FF FF FF  
-    141 0000E378 FF FF FF FF FF FF FF  
-    141 0000E37F FF FF FF FF FF FF FF  
-    141 0000E386 FF FF FF FF FF FF FF  
-    141 0000E38D FF FF FF FF FF FF FF  
-    141 0000E394 FF FF FF FF FF FF FF  
-    141 0000E39B FF FF FF FF FF FF FF  
-    141 0000E3A2 FF FF FF FF FF FF FF  
-    141 0000E3A9 FF FF FF FF FF FF FF  
-    141 0000E3B0 FF FF FF FF FF FF FF  
-    141 0000E3B7 FF FF FF FF FF FF FF  
-    141 0000E3BE FF FF FF FF FF FF FF  
-    141 0000E3C5 FF FF FF FF FF FF FF  
-    141 0000E3CC FF FF FF FF FF FF FF  
-    141 0000E3D3 FF FF FF FF FF FF FF  
-    141 0000E3DA FF FF FF FF FF FF FF  
-    141 0000E3E1 FF FF FF FF FF FF FF  
-    141 0000E3E8 FF FF FF FF FF FF FF  
-    141 0000E3EF FF FF FF FF FF FF FF  
-    141 0000E3F6 FF FF FF FF FF FF FF  
-    141 0000E3FD FF FF FF FF FF FF FF  
-    141 0000E404 FF FF FF FF FF FF FF  
-    141 0000E40B FF FF FF FF FF FF FF  
-    141 0000E412 FF FF FF FF FF FF FF  
-    141 0000E419 FF FF FF FF FF FF FF  
-    141 0000E420 FF FF FF FF FF FF FF  
-    141 0000E427 FF FF FF FF FF FF FF  
-    141 0000E42E FF FF FF FF FF FF FF  
-    141 0000E435 FF FF FF FF FF FF FF  
-    141 0000E43C FF FF FF FF FF FF FF  
-    141 0000E443 FF FF FF FF FF FF FF  
-    141 0000E44A FF FF FF FF FF FF FF  
-    141 0000E451 FF FF FF FF FF FF FF  
-    141 0000E458 FF FF FF FF FF FF FF  
-    141 0000E45F FF FF FF FF FF FF FF  
-    141 0000E466 FF FF FF FF FF FF FF  
-    141 0000E46D FF FF FF FF FF FF FF  
-    141 0000E474 FF FF FF FF FF FF FF  
-    141 0000E47B FF FF FF FF FF FF FF  
-    141 0000E482 FF FF FF FF FF FF FF  
-    141 0000E489 FF FF FF FF FF FF FF  
-    141 0000E490 FF FF FF FF FF FF FF  
-    141 0000E497 FF FF FF FF FF FF FF  
-    141 0000E49E FF FF FF FF FF FF FF  
-    141 0000E4A5 FF FF FF FF FF FF FF  
-    141 0000E4AC FF FF FF FF FF FF FF  
-    141 0000E4B3 FF FF FF FF FF FF FF  
-    141 0000E4BA FF FF FF FF FF FF FF  
-    141 0000E4C1 FF FF FF FF FF FF FF  
-    141 0000E4C8 FF FF FF FF FF FF FF  
-    141 0000E4CF FF FF FF FF FF FF FF  
-    141 0000E4D6 FF FF FF FF FF FF FF  
-    141 0000E4DD FF FF FF FF FF FF FF  
-    141 0000E4E4 FF FF FF FF FF FF FF  
-    141 0000E4EB FF FF FF FF FF FF FF  
-    141 0000E4F2 FF FF FF FF FF FF FF  
-    141 0000E4F9 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 6
+    142 0000E359 FF FF FF FF FF FF FF  
+    142 0000E360 FF FF FF FF FF FF FF  
+    142 0000E367 FF FF FF FF FF FF FF  
+    142 0000E36E FF FF FF FF FF FF FF  
+    142 0000E375 FF FF FF FF FF FF FF  
+    142 0000E37C FF FF FF FF FF FF FF  
+    142 0000E383 FF FF FF FF FF FF FF  
+    142 0000E38A FF FF FF FF FF FF FF  
+    142 0000E391 FF FF FF FF FF FF FF  
+    142 0000E398 FF FF FF FF FF FF FF  
+    142 0000E39F FF FF FF FF FF FF FF  
+    142 0000E3A6 FF FF FF FF FF FF FF  
+    142 0000E3AD FF FF FF FF FF FF FF  
+    142 0000E3B4 FF FF FF FF FF FF FF  
+    142 0000E3BB FF FF FF FF FF FF FF  
+    142 0000E3C2 FF FF FF FF FF FF FF  
+    142 0000E3C9 FF FF FF FF FF FF FF  
+    142 0000E3D0 FF FF FF FF FF FF FF  
+    142 0000E3D7 FF FF FF FF FF FF FF  
+    142 0000E3DE FF FF FF FF FF FF FF  
+    142 0000E3E5 FF FF FF FF FF FF FF  
+    142 0000E3EC FF FF FF FF FF FF FF  
+    142 0000E3F3 FF FF FF FF FF FF FF  
+    142 0000E3FA FF FF FF FF FF FF FF  
+    142 0000E401 FF FF FF FF FF FF FF  
+    142 0000E408 FF FF FF FF FF FF FF  
+    142 0000E40F FF FF FF FF FF FF FF  
+    142 0000E416 FF FF FF FF FF FF FF  
+    142 0000E41D FF FF FF FF FF FF FF  
+    142 0000E424 FF FF FF FF FF FF FF  
+    142 0000E42B FF FF FF FF FF FF FF  
+    142 0000E432 FF FF FF FF FF FF FF  
+    142 0000E439 FF FF FF FF FF FF FF  
+    142 0000E440 FF FF FF FF FF FF FF  
+    142 0000E447 FF FF FF FF FF FF FF  
+    142 0000E44E FF FF FF FF FF FF FF  
+    142 0000E455 FF FF FF FF FF FF FF  
+    142 0000E45C FF FF FF FF FF FF FF  
+    142 0000E463 FF FF FF FF FF FF FF  
+    142 0000E46A FF FF FF FF FF FF FF  
+    142 0000E471 FF FF FF FF FF FF FF  
+    142 0000E478 FF FF FF FF FF FF FF  
+    142 0000E47F FF FF FF FF FF FF FF  
+    142 0000E486 FF FF FF FF FF FF FF  
+    142 0000E48D FF FF FF FF FF FF FF  
+    142 0000E494 FF FF FF FF FF FF FF  
+    142 0000E49B FF FF FF FF FF FF FF  
+    142 0000E4A2 FF FF FF FF FF FF FF  
+    142 0000E4A9 FF FF FF FF FF FF FF  
+    142 0000E4B0 FF FF FF FF FF FF FF  
+    142 0000E4B7 FF FF FF FF FF FF FF  
+    142 0000E4BE FF FF FF FF FF FF FF  
+    142 0000E4C5 FF FF FF FF FF FF FF  
+    142 0000E4CC FF FF FF FF FF FF FF  
+    142 0000E4D3 FF FF FF FF FF FF FF  
+    142 0000E4DA FF FF FF FF FF FF FF  
+    142 0000E4E1 FF FF FF FF FF FF FF  
+    142 0000E4E8 FF FF FF FF FF FF FF  
+    142 0000E4EF FF FF FF FF FF FF FF  
+    142 0000E4F6 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 6
 noc_boot.asm
-    141 0000E500 FF FF FF FF FF FF FF  
-    141 0000E507 FF FF FF FF FF FF FF  
-    141 0000E50E FF FF FF FF FF FF FF  
-    141 0000E515 FF FF FF FF FF FF FF  
-    141 0000E51C FF FF FF FF FF FF FF  
-    141 0000E523 FF FF FF FF FF FF FF  
-    141 0000E52A FF FF FF FF FF FF FF  
-    141 0000E531 FF FF FF FF FF FF FF  
-    141 0000E538 FF FF FF FF FF FF FF  
-    141 0000E53F FF FF FF FF FF FF FF  
-    141 0000E546 FF FF FF FF FF FF FF  
-    141 0000E54D FF FF FF FF FF FF FF  
-    141 0000E554 FF FF FF FF FF FF FF  
-    141 0000E55B FF FF FF FF FF FF FF  
-    141 0000E562 FF FF FF FF FF FF FF  
-    141 0000E569 FF FF FF FF FF FF FF  
-    141 0000E570 FF FF FF FF FF FF FF  
-    141 0000E577 FF FF FF FF FF FF FF  
-    141 0000E57E FF FF FF FF FF FF FF  
-    141 0000E585 FF FF FF FF FF FF FF  
-    141 0000E58C FF FF FF FF FF FF FF  
-    141 0000E593 FF FF FF FF FF FF FF  
-    141 0000E59A FF FF FF FF FF FF FF  
-    141 0000E5A1 FF FF FF FF FF FF FF  
-    141 0000E5A8 FF FF FF FF FF FF FF  
-    141 0000E5AF FF FF FF FF FF FF FF  
-    141 0000E5B6 FF FF FF FF FF FF FF  
-    141 0000E5BD FF FF FF FF FF FF FF  
-    141 0000E5C4 FF FF FF FF FF FF FF  
-    141 0000E5CB FF FF FF FF FF FF FF  
-    141 0000E5D2 FF FF FF FF FF FF FF  
-    141 0000E5D9 FF FF FF FF FF FF FF  
-    141 0000E5E0 FF FF FF FF FF FF FF  
-    141 0000E5E7 FF FF FF FF FF FF FF  
-    141 0000E5EE FF FF FF FF FF FF FF  
-    141 0000E5F5 FF FF FF FF FF FF FF  
-    141 0000E5FC FF FF FF FF FF FF FF  
-    141 0000E603 FF FF FF FF FF FF FF  
-    141 0000E60A FF FF FF FF FF FF FF  
-    141 0000E611 FF FF FF FF FF FF FF  
-    141 0000E618 FF FF FF FF FF FF FF  
-    141 0000E61F FF FF FF FF FF FF FF  
-    141 0000E626 FF FF FF FF FF FF FF  
-    141 0000E62D FF FF FF FF FF FF FF  
-    141 0000E634 FF FF FF FF FF FF FF  
-    141 0000E63B FF FF FF FF FF FF FF  
-    141 0000E642 FF FF FF FF FF FF FF  
-    141 0000E649 FF FF FF FF FF FF FF  
-    141 0000E650 FF FF FF FF FF FF FF  
-    141 0000E657 FF FF FF FF FF FF FF  
-    141 0000E65E FF FF FF FF FF FF FF  
-    141 0000E665 FF FF FF FF FF FF FF  
-    141 0000E66C FF FF FF FF FF FF FF  
-    141 0000E673 FF FF FF FF FF FF FF  
-    141 0000E67A FF FF FF FF FF FF FF  
-    141 0000E681 FF FF FF FF FF FF FF  
-    141 0000E688 FF FF FF FF FF FF FF  
-    141 0000E68F FF FF FF FF FF FF FF  
-    141 0000E696 FF FF FF FF FF FF FF  
-    141 0000E69D FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 7
+    142 0000E4FD FF FF FF FF FF FF FF  
+    142 0000E504 FF FF FF FF FF FF FF  
+    142 0000E50B FF FF FF FF FF FF FF  
+    142 0000E512 FF FF FF FF FF FF FF  
+    142 0000E519 FF FF FF FF FF FF FF  
+    142 0000E520 FF FF FF FF FF FF FF  
+    142 0000E527 FF FF FF FF FF FF FF  
+    142 0000E52E FF FF FF FF FF FF FF  
+    142 0000E535 FF FF FF FF FF FF FF  
+    142 0000E53C FF FF FF FF FF FF FF  
+    142 0000E543 FF FF FF FF FF FF FF  
+    142 0000E54A FF FF FF FF FF FF FF  
+    142 0000E551 FF FF FF FF FF FF FF  
+    142 0000E558 FF FF FF FF FF FF FF  
+    142 0000E55F FF FF FF FF FF FF FF  
+    142 0000E566 FF FF FF FF FF FF FF  
+    142 0000E56D FF FF FF FF FF FF FF  
+    142 0000E574 FF FF FF FF FF FF FF  
+    142 0000E57B FF FF FF FF FF FF FF  
+    142 0000E582 FF FF FF FF FF FF FF  
+    142 0000E589 FF FF FF FF FF FF FF  
+    142 0000E590 FF FF FF FF FF FF FF  
+    142 0000E597 FF FF FF FF FF FF FF  
+    142 0000E59E FF FF FF FF FF FF FF  
+    142 0000E5A5 FF FF FF FF FF FF FF  
+    142 0000E5AC FF FF FF FF FF FF FF  
+    142 0000E5B3 FF FF FF FF FF FF FF  
+    142 0000E5BA FF FF FF FF FF FF FF  
+    142 0000E5C1 FF FF FF FF FF FF FF  
+    142 0000E5C8 FF FF FF FF FF FF FF  
+    142 0000E5CF FF FF FF FF FF FF FF  
+    142 0000E5D6 FF FF FF FF FF FF FF  
+    142 0000E5DD FF FF FF FF FF FF FF  
+    142 0000E5E4 FF FF FF FF FF FF FF  
+    142 0000E5EB FF FF FF FF FF FF FF  
+    142 0000E5F2 FF FF FF FF FF FF FF  
+    142 0000E5F9 FF FF FF FF FF FF FF  
+    142 0000E600 FF FF FF FF FF FF FF  
+    142 0000E607 FF FF FF FF FF FF FF  
+    142 0000E60E FF FF FF FF FF FF FF  
+    142 0000E615 FF FF FF FF FF FF FF  
+    142 0000E61C FF FF FF FF FF FF FF  
+    142 0000E623 FF FF FF FF FF FF FF  
+    142 0000E62A FF FF FF FF FF FF FF  
+    142 0000E631 FF FF FF FF FF FF FF  
+    142 0000E638 FF FF FF FF FF FF FF  
+    142 0000E63F FF FF FF FF FF FF FF  
+    142 0000E646 FF FF FF FF FF FF FF  
+    142 0000E64D FF FF FF FF FF FF FF  
+    142 0000E654 FF FF FF FF FF FF FF  
+    142 0000E65B FF FF FF FF FF FF FF  
+    142 0000E662 FF FF FF FF FF FF FF  
+    142 0000E669 FF FF FF FF FF FF FF  
+    142 0000E670 FF FF FF FF FF FF FF  
+    142 0000E677 FF FF FF FF FF FF FF  
+    142 0000E67E FF FF FF FF FF FF FF  
+    142 0000E685 FF FF FF FF FF FF FF  
+    142 0000E68C FF FF FF FF FF FF FF  
+    142 0000E693 FF FF FF FF FF FF FF  
+    142 0000E69A FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 7
 noc_boot.asm
-    141 0000E6A4 FF FF FF FF FF FF FF  
-    141 0000E6AB FF FF FF FF FF FF FF  
-    141 0000E6B2 FF FF FF FF FF FF FF  
-    141 0000E6B9 FF FF FF FF FF FF FF  
-    141 0000E6C0 FF FF FF FF FF FF FF  
-    141 0000E6C7 FF FF FF FF FF FF FF  
-    141 0000E6CE FF FF FF FF FF FF FF  
-    141 0000E6D5 FF FF FF FF FF FF FF  
-    141 0000E6DC FF FF FF FF FF FF FF  
-    141 0000E6E3 FF FF FF FF FF FF FF  
-    141 0000E6EA FF FF FF FF FF FF FF  
-    141 0000E6F1 FF FF FF FF FF FF FF  
-    141 0000E6F8 FF FF FF FF FF FF FF  
-    141 0000E6FF FF FF FF FF FF FF FF  
-    141 0000E706 FF FF FF FF FF FF FF  
-    141 0000E70D FF FF FF FF FF FF FF  
-    141 0000E714 FF FF FF FF FF FF FF  
-    141 0000E71B FF FF FF FF FF FF FF  
-    141 0000E722 FF FF FF FF FF FF FF  
-    141 0000E729 FF FF FF FF FF FF FF  
-    141 0000E730 FF FF FF FF FF FF FF  
-    141 0000E737 FF FF FF FF FF FF FF  
-    141 0000E73E FF FF FF FF FF FF FF  
-    141 0000E745 FF FF FF FF FF FF FF  
-    141 0000E74C FF FF FF FF FF FF FF  
-    141 0000E753 FF FF FF FF FF FF FF  
-    141 0000E75A FF FF FF FF FF FF FF  
-    141 0000E761 FF FF FF FF FF FF FF  
-    141 0000E768 FF FF FF FF FF FF FF  
-    141 0000E76F FF FF FF FF FF FF FF  
-    141 0000E776 FF FF FF FF FF FF FF  
-    141 0000E77D FF FF FF FF FF FF FF  
-    141 0000E784 FF FF FF FF FF FF FF  
-    141 0000E78B FF FF FF FF FF FF FF  
-    141 0000E792 FF FF FF FF FF FF FF  
-    141 0000E799 FF FF FF FF FF FF FF  
-    141 0000E7A0 FF FF FF FF FF FF FF  
-    141 0000E7A7 FF FF FF FF FF FF FF  
-    141 0000E7AE FF FF FF FF FF FF FF  
-    141 0000E7B5 FF FF FF FF FF FF FF  
-    141 0000E7BC FF FF FF FF FF FF FF  
-    141 0000E7C3 FF FF FF FF FF FF FF  
-    141 0000E7CA FF FF FF FF FF FF FF  
-    141 0000E7D1 FF FF FF FF FF FF FF  
-    141 0000E7D8 FF FF FF FF FF FF FF  
-    141 0000E7DF FF FF FF FF FF FF FF  
-    141 0000E7E6 FF FF FF FF FF FF FF  
-    141 0000E7ED FF FF FF FF FF FF FF  
-    141 0000E7F4 FF FF FF FF FF FF FF  
-    141 0000E7FB FF FF FF FF FF FF FF  
-    141 0000E802 FF FF FF FF FF FF FF  
-    141 0000E809 FF FF FF FF FF FF FF  
-    141 0000E810 FF FF FF FF FF FF FF  
-    141 0000E817 FF FF FF FF FF FF FF  
-    141 0000E81E FF FF FF FF FF FF FF  
-    141 0000E825 FF FF FF FF FF FF FF  
-    141 0000E82C FF FF FF FF FF FF FF  
-    141 0000E833 FF FF FF FF FF FF FF  
-    141 0000E83A FF FF FF FF FF FF FF  
-    141 0000E841 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 8
+    142 0000E6A1 FF FF FF FF FF FF FF  
+    142 0000E6A8 FF FF FF FF FF FF FF  
+    142 0000E6AF FF FF FF FF FF FF FF  
+    142 0000E6B6 FF FF FF FF FF FF FF  
+    142 0000E6BD FF FF FF FF FF FF FF  
+    142 0000E6C4 FF FF FF FF FF FF FF  
+    142 0000E6CB FF FF FF FF FF FF FF  
+    142 0000E6D2 FF FF FF FF FF FF FF  
+    142 0000E6D9 FF FF FF FF FF FF FF  
+    142 0000E6E0 FF FF FF FF FF FF FF  
+    142 0000E6E7 FF FF FF FF FF FF FF  
+    142 0000E6EE FF FF FF FF FF FF FF  
+    142 0000E6F5 FF FF FF FF FF FF FF  
+    142 0000E6FC FF FF FF FF FF FF FF  
+    142 0000E703 FF FF FF FF FF FF FF  
+    142 0000E70A FF FF FF FF FF FF FF  
+    142 0000E711 FF FF FF FF FF FF FF  
+    142 0000E718 FF FF FF FF FF FF FF  
+    142 0000E71F FF FF FF FF FF FF FF  
+    142 0000E726 FF FF FF FF FF FF FF  
+    142 0000E72D FF FF FF FF FF FF FF  
+    142 0000E734 FF FF FF FF FF FF FF  
+    142 0000E73B FF FF FF FF FF FF FF  
+    142 0000E742 FF FF FF FF FF FF FF  
+    142 0000E749 FF FF FF FF FF FF FF  
+    142 0000E750 FF FF FF FF FF FF FF  
+    142 0000E757 FF FF FF FF FF FF FF  
+    142 0000E75E FF FF FF FF FF FF FF  
+    142 0000E765 FF FF FF FF FF FF FF  
+    142 0000E76C FF FF FF FF FF FF FF  
+    142 0000E773 FF FF FF FF FF FF FF  
+    142 0000E77A FF FF FF FF FF FF FF  
+    142 0000E781 FF FF FF FF FF FF FF  
+    142 0000E788 FF FF FF FF FF FF FF  
+    142 0000E78F FF FF FF FF FF FF FF  
+    142 0000E796 FF FF FF FF FF FF FF  
+    142 0000E79D FF FF FF FF FF FF FF  
+    142 0000E7A4 FF FF FF FF FF FF FF  
+    142 0000E7AB FF FF FF FF FF FF FF  
+    142 0000E7B2 FF FF FF FF FF FF FF  
+    142 0000E7B9 FF FF FF FF FF FF FF  
+    142 0000E7C0 FF FF FF FF FF FF FF  
+    142 0000E7C7 FF FF FF FF FF FF FF  
+    142 0000E7CE FF FF FF FF FF FF FF  
+    142 0000E7D5 FF FF FF FF FF FF FF  
+    142 0000E7DC FF FF FF FF FF FF FF  
+    142 0000E7E3 FF FF FF FF FF FF FF  
+    142 0000E7EA FF FF FF FF FF FF FF  
+    142 0000E7F1 FF FF FF FF FF FF FF  
+    142 0000E7F8 FF FF FF FF FF FF FF  
+    142 0000E7FF FF FF FF FF FF FF FF  
+    142 0000E806 FF FF FF FF FF FF FF  
+    142 0000E80D FF FF FF FF FF FF FF  
+    142 0000E814 FF FF FF FF FF FF FF  
+    142 0000E81B FF FF FF FF FF FF FF  
+    142 0000E822 FF FF FF FF FF FF FF  
+    142 0000E829 FF FF FF FF FF FF FF  
+    142 0000E830 FF FF FF FF FF FF FF  
+    142 0000E837 FF FF FF FF FF FF FF  
+    142 0000E83E FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 8
 noc_boot.asm
-    141 0000E848 FF FF FF FF FF FF FF  
-    141 0000E84F FF FF FF FF FF FF FF  
-    141 0000E856 FF FF FF FF FF FF FF  
-    141 0000E85D FF FF FF FF FF FF FF  
-    141 0000E864 FF FF FF FF FF FF FF  
-    141 0000E86B FF FF FF FF FF FF FF  
-    141 0000E872 FF FF FF FF FF FF FF  
-    141 0000E879 FF FF FF FF FF FF FF  
-    141 0000E880 FF FF FF FF FF FF FF  
-    141 0000E887 FF FF FF FF FF FF FF  
-    141 0000E88E FF FF FF FF FF FF FF  
-    141 0000E895 FF FF FF FF FF FF FF  
-    141 0000E89C FF FF FF FF FF FF FF  
-    141 0000E8A3 FF FF FF FF FF FF FF  
-    141 0000E8AA FF FF FF FF FF FF FF  
-    141 0000E8B1 FF FF FF FF FF FF FF  
-    141 0000E8B8 FF FF FF FF FF FF FF  
-    141 0000E8BF FF FF FF FF FF FF FF  
-    141 0000E8C6 FF FF FF FF FF FF FF  
-    141 0000E8CD FF FF FF FF FF FF FF  
-    141 0000E8D4 FF FF FF FF FF FF FF  
-    141 0000E8DB FF FF FF FF FF FF FF  
-    141 0000E8E2 FF FF FF FF FF FF FF  
-    141 0000E8E9 FF FF FF FF FF FF FF  
-    141 0000E8F0 FF FF FF FF FF FF FF  
-    141 0000E8F7 FF FF FF FF FF FF FF  
-    141 0000E8FE FF FF FF FF FF FF FF  
-    141 0000E905 FF FF FF FF FF FF FF  
-    141 0000E90C FF FF FF FF FF FF FF  
-    141 0000E913 FF FF FF FF FF FF FF  
-    141 0000E91A FF FF FF FF FF FF FF  
-    141 0000E921 FF FF FF FF FF FF FF  
-    141 0000E928 FF FF FF FF FF FF FF  
-    141 0000E92F FF FF FF FF FF FF FF  
-    141 0000E936 FF FF FF FF FF FF FF  
-    141 0000E93D FF FF FF FF FF FF FF  
-    141 0000E944 FF FF FF FF FF FF FF  
-    141 0000E94B FF FF FF FF FF FF FF  
-    141 0000E952 FF FF FF FF FF FF FF  
-    141 0000E959 FF FF FF FF FF FF FF  
-    141 0000E960 FF FF FF FF FF FF FF  
-    141 0000E967 FF FF FF FF FF FF FF  
-    141 0000E96E FF FF FF FF FF FF FF  
-    141 0000E975 FF FF FF FF FF FF FF  
-    141 0000E97C FF FF FF FF FF FF FF  
-    141 0000E983 FF FF FF FF FF FF FF  
-    141 0000E98A FF FF FF FF FF FF FF  
-    141 0000E991 FF FF FF FF FF FF FF  
-    141 0000E998 FF FF FF FF FF FF FF  
-    141 0000E99F FF FF FF FF FF FF FF  
-    141 0000E9A6 FF FF FF FF FF FF FF  
-    141 0000E9AD FF FF FF FF FF FF FF  
-    141 0000E9B4 FF FF FF FF FF FF FF  
-    141 0000E9BB FF FF FF FF FF FF FF  
-    141 0000E9C2 FF FF FF FF FF FF FF  
-    141 0000E9C9 FF FF FF FF FF FF FF  
-    141 0000E9D0 FF FF FF FF FF FF FF  
-    141 0000E9D7 FF FF FF FF FF FF FF  
-    141 0000E9DE FF FF FF FF FF FF FF  
-    141 0000E9E5 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 9
+    142 0000E845 FF FF FF FF FF FF FF  
+    142 0000E84C FF FF FF FF FF FF FF  
+    142 0000E853 FF FF FF FF FF FF FF  
+    142 0000E85A FF FF FF FF FF FF FF  
+    142 0000E861 FF FF FF FF FF FF FF  
+    142 0000E868 FF FF FF FF FF FF FF  
+    142 0000E86F FF FF FF FF FF FF FF  
+    142 0000E876 FF FF FF FF FF FF FF  
+    142 0000E87D FF FF FF FF FF FF FF  
+    142 0000E884 FF FF FF FF FF FF FF  
+    142 0000E88B FF FF FF FF FF FF FF  
+    142 0000E892 FF FF FF FF FF FF FF  
+    142 0000E899 FF FF FF FF FF FF FF  
+    142 0000E8A0 FF FF FF FF FF FF FF  
+    142 0000E8A7 FF FF FF FF FF FF FF  
+    142 0000E8AE FF FF FF FF FF FF FF  
+    142 0000E8B5 FF FF FF FF FF FF FF  
+    142 0000E8BC FF FF FF FF FF FF FF  
+    142 0000E8C3 FF FF FF FF FF FF FF  
+    142 0000E8CA FF FF FF FF FF FF FF  
+    142 0000E8D1 FF FF FF FF FF FF FF  
+    142 0000E8D8 FF FF FF FF FF FF FF  
+    142 0000E8DF FF FF FF FF FF FF FF  
+    142 0000E8E6 FF FF FF FF FF FF FF  
+    142 0000E8ED FF FF FF FF FF FF FF  
+    142 0000E8F4 FF FF FF FF FF FF FF  
+    142 0000E8FB FF FF FF FF FF FF FF  
+    142 0000E902 FF FF FF FF FF FF FF  
+    142 0000E909 FF FF FF FF FF FF FF  
+    142 0000E910 FF FF FF FF FF FF FF  
+    142 0000E917 FF FF FF FF FF FF FF  
+    142 0000E91E FF FF FF FF FF FF FF  
+    142 0000E925 FF FF FF FF FF FF FF  
+    142 0000E92C FF FF FF FF FF FF FF  
+    142 0000E933 FF FF FF FF FF FF FF  
+    142 0000E93A FF FF FF FF FF FF FF  
+    142 0000E941 FF FF FF FF FF FF FF  
+    142 0000E948 FF FF FF FF FF FF FF  
+    142 0000E94F FF FF FF FF FF FF FF  
+    142 0000E956 FF FF FF FF FF FF FF  
+    142 0000E95D FF FF FF FF FF FF FF  
+    142 0000E964 FF FF FF FF FF FF FF  
+    142 0000E96B FF FF FF FF FF FF FF  
+    142 0000E972 FF FF FF FF FF FF FF  
+    142 0000E979 FF FF FF FF FF FF FF  
+    142 0000E980 FF FF FF FF FF FF FF  
+    142 0000E987 FF FF FF FF FF FF FF  
+    142 0000E98E FF FF FF FF FF FF FF  
+    142 0000E995 FF FF FF FF FF FF FF  
+    142 0000E99C FF FF FF FF FF FF FF  
+    142 0000E9A3 FF FF FF FF FF FF FF  
+    142 0000E9AA FF FF FF FF FF FF FF  
+    142 0000E9B1 FF FF FF FF FF FF FF  
+    142 0000E9B8 FF FF FF FF FF FF FF  
+    142 0000E9BF FF FF FF FF FF FF FF  
+    142 0000E9C6 FF FF FF FF FF FF FF  
+    142 0000E9CD FF FF FF FF FF FF FF  
+    142 0000E9D4 FF FF FF FF FF FF FF  
+    142 0000E9DB FF FF FF FF FF FF FF  
+    142 0000E9E2 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 9
 noc_boot.asm
-    141 0000E9EC FF FF FF FF FF FF FF  
-    141 0000E9F3 FF FF FF FF FF FF FF  
-    141 0000E9FA FF FF FF FF FF FF FF  
-    141 0000EA01 FF FF FF FF FF FF FF  
-    141 0000EA08 FF FF FF FF FF FF FF  
-    141 0000EA0F FF FF FF FF FF FF FF  
-    141 0000EA16 FF FF FF FF FF FF FF  
-    141 0000EA1D FF FF FF FF FF FF FF  
-    141 0000EA24 FF FF FF FF FF FF FF  
-    141 0000EA2B FF FF FF FF FF FF FF  
-    141 0000EA32 FF FF FF FF FF FF FF  
-    141 0000EA39 FF FF FF FF FF FF FF  
-    141 0000EA40 FF FF FF FF FF FF FF  
-    141 0000EA47 FF FF FF FF FF FF FF  
-    141 0000EA4E FF FF FF FF FF FF FF  
-    141 0000EA55 FF FF FF FF FF FF FF  
-    141 0000EA5C FF FF FF FF FF FF FF  
-    141 0000EA63 FF FF FF FF FF FF FF  
-    141 0000EA6A FF FF FF FF FF FF FF  
-    141 0000EA71 FF FF FF FF FF FF FF  
-    141 0000EA78 FF FF FF FF FF FF FF  
-    141 0000EA7F FF FF FF FF FF FF FF  
-    141 0000EA86 FF FF FF FF FF FF FF  
-    141 0000EA8D FF FF FF FF FF FF FF  
-    141 0000EA94 FF FF FF FF FF FF FF  
-    141 0000EA9B FF FF FF FF FF FF FF  
-    141 0000EAA2 FF FF FF FF FF FF FF  
-    141 0000EAA9 FF FF FF FF FF FF FF  
-    141 0000EAB0 FF FF FF FF FF FF FF  
-    141 0000EAB7 FF FF FF FF FF FF FF  
-    141 0000EABE FF FF FF FF FF FF FF  
-    141 0000EAC5 FF FF FF FF FF FF FF  
-    141 0000EACC FF FF FF FF FF FF FF  
-    141 0000EAD3 FF FF FF FF FF FF FF  
-    141 0000EADA FF FF FF FF FF FF FF  
-    141 0000EAE1 FF FF FF FF FF FF FF  
-    141 0000EAE8 FF FF FF FF FF FF FF  
-    141 0000EAEF FF FF FF FF FF FF FF  
-    141 0000EAF6 FF FF FF FF FF FF FF  
-    141 0000EAFD FF FF FF FF FF FF FF  
-    141 0000EB04 FF FF FF FF FF FF FF  
-    141 0000EB0B FF FF FF FF FF FF FF  
-    141 0000EB12 FF FF FF FF FF FF FF  
-    141 0000EB19 FF FF FF FF FF FF FF  
-    141 0000EB20 FF FF FF FF FF FF FF  
-    141 0000EB27 FF FF FF FF FF FF FF  
-    141 0000EB2E FF FF FF FF FF FF FF  
-    141 0000EB35 FF FF FF FF FF FF FF  
-    141 0000EB3C FF FF FF FF FF FF FF  
-    141 0000EB43 FF FF FF FF FF FF FF  
-    141 0000EB4A FF FF FF FF FF FF FF  
-    141 0000EB51 FF FF FF FF FF FF FF  
-    141 0000EB58 FF FF FF FF FF FF FF  
-    141 0000EB5F FF FF FF FF FF FF FF  
-    141 0000EB66 FF FF FF FF FF FF FF  
-    141 0000EB6D FF FF FF FF FF FF FF  
-    141 0000EB74 FF FF FF FF FF FF FF  
-    141 0000EB7B FF FF FF FF FF FF FF  
-    141 0000EB82 FF FF FF FF FF FF FF  
-    141 0000EB89 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 10
+    142 0000E9E9 FF FF FF FF FF FF FF  
+    142 0000E9F0 FF FF FF FF FF FF FF  
+    142 0000E9F7 FF FF FF FF FF FF FF  
+    142 0000E9FE FF FF FF FF FF FF FF  
+    142 0000EA05 FF FF FF FF FF FF FF  
+    142 0000EA0C FF FF FF FF FF FF FF  
+    142 0000EA13 FF FF FF FF FF FF FF  
+    142 0000EA1A FF FF FF FF FF FF FF  
+    142 0000EA21 FF FF FF FF FF FF FF  
+    142 0000EA28 FF FF FF FF FF FF FF  
+    142 0000EA2F FF FF FF FF FF FF FF  
+    142 0000EA36 FF FF FF FF FF FF FF  
+    142 0000EA3D FF FF FF FF FF FF FF  
+    142 0000EA44 FF FF FF FF FF FF FF  
+    142 0000EA4B FF FF FF FF FF FF FF  
+    142 0000EA52 FF FF FF FF FF FF FF  
+    142 0000EA59 FF FF FF FF FF FF FF  
+    142 0000EA60 FF FF FF FF FF FF FF  
+    142 0000EA67 FF FF FF FF FF FF FF  
+    142 0000EA6E FF FF FF FF FF FF FF  
+    142 0000EA75 FF FF FF FF FF FF FF  
+    142 0000EA7C FF FF FF FF FF FF FF  
+    142 0000EA83 FF FF FF FF FF FF FF  
+    142 0000EA8A FF FF FF FF FF FF FF  
+    142 0000EA91 FF FF FF FF FF FF FF  
+    142 0000EA98 FF FF FF FF FF FF FF  
+    142 0000EA9F FF FF FF FF FF FF FF  
+    142 0000EAA6 FF FF FF FF FF FF FF  
+    142 0000EAAD FF FF FF FF FF FF FF  
+    142 0000EAB4 FF FF FF FF FF FF FF  
+    142 0000EABB FF FF FF FF FF FF FF  
+    142 0000EAC2 FF FF FF FF FF FF FF  
+    142 0000EAC9 FF FF FF FF FF FF FF  
+    142 0000EAD0 FF FF FF FF FF FF FF  
+    142 0000EAD7 FF FF FF FF FF FF FF  
+    142 0000EADE FF FF FF FF FF FF FF  
+    142 0000EAE5 FF FF FF FF FF FF FF  
+    142 0000EAEC FF FF FF FF FF FF FF  
+    142 0000EAF3 FF FF FF FF FF FF FF  
+    142 0000EAFA FF FF FF FF FF FF FF  
+    142 0000EB01 FF FF FF FF FF FF FF  
+    142 0000EB08 FF FF FF FF FF FF FF  
+    142 0000EB0F FF FF FF FF FF FF FF  
+    142 0000EB16 FF FF FF FF FF FF FF  
+    142 0000EB1D FF FF FF FF FF FF FF  
+    142 0000EB24 FF FF FF FF FF FF FF  
+    142 0000EB2B FF FF FF FF FF FF FF  
+    142 0000EB32 FF FF FF FF FF FF FF  
+    142 0000EB39 FF FF FF FF FF FF FF  
+    142 0000EB40 FF FF FF FF FF FF FF  
+    142 0000EB47 FF FF FF FF FF FF FF  
+    142 0000EB4E FF FF FF FF FF FF FF  
+    142 0000EB55 FF FF FF FF FF FF FF  
+    142 0000EB5C FF FF FF FF FF FF FF  
+    142 0000EB63 FF FF FF FF FF FF FF  
+    142 0000EB6A FF FF FF FF FF FF FF  
+    142 0000EB71 FF FF FF FF FF FF FF  
+    142 0000EB78 FF FF FF FF FF FF FF  
+    142 0000EB7F FF FF FF FF FF FF FF  
+    142 0000EB86 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 10
 noc_boot.asm
-    141 0000EB90 FF FF FF FF FF FF FF  
-    141 0000EB97 FF FF FF FF FF FF FF  
-    141 0000EB9E FF FF FF FF FF FF FF  
-    141 0000EBA5 FF FF FF FF FF FF FF  
-    141 0000EBAC FF FF FF FF FF FF FF  
-    141 0000EBB3 FF FF FF FF FF FF FF  
-    141 0000EBBA FF FF FF FF FF FF FF  
-    141 0000EBC1 FF FF FF FF FF FF FF  
-    141 0000EBC8 FF FF FF FF FF FF FF  
-    141 0000EBCF FF FF FF FF FF FF FF  
-    141 0000EBD6 FF FF FF FF FF FF FF  
-    141 0000EBDD FF FF FF FF FF FF FF  
-    141 0000EBE4 FF FF FF FF FF FF FF  
-    141 0000EBEB FF FF FF FF FF FF FF  
-    141 0000EBF2 FF FF FF FF FF FF FF  
-    141 0000EBF9 FF FF FF FF FF FF FF  
-    141 0000EC00 FF FF FF FF FF FF FF  
-    141 0000EC07 FF FF FF FF FF FF FF  
-    141 0000EC0E FF FF FF FF FF FF FF  
-    141 0000EC15 FF FF FF FF FF FF FF  
-    141 0000EC1C FF FF FF FF FF FF FF  
-    141 0000EC23 FF FF FF FF FF FF FF  
-    141 0000EC2A FF FF FF FF FF FF FF  
-    141 0000EC31 FF FF FF FF FF FF FF  
-    141 0000EC38 FF FF FF FF FF FF FF  
-    141 0000EC3F FF FF FF FF FF FF FF  
-    141 0000EC46 FF FF FF FF FF FF FF  
-    141 0000EC4D FF FF FF FF FF FF FF  
-    141 0000EC54 FF FF FF FF FF FF FF  
-    141 0000EC5B FF FF FF FF FF FF FF  
-    141 0000EC62 FF FF FF FF FF FF FF  
-    141 0000EC69 FF FF FF FF FF FF FF  
-    141 0000EC70 FF FF FF FF FF FF FF  
-    141 0000EC77 FF FF FF FF FF FF FF  
-    141 0000EC7E FF FF FF FF FF FF FF  
-    141 0000EC85 FF FF FF FF FF FF FF  
-    141 0000EC8C FF FF FF FF FF FF FF  
-    141 0000EC93 FF FF FF FF FF FF FF  
-    141 0000EC9A FF FF FF FF FF FF FF  
-    141 0000ECA1 FF FF FF FF FF FF FF  
-    141 0000ECA8 FF FF FF FF FF FF FF  
-    141 0000ECAF FF FF FF FF FF FF FF  
-    141 0000ECB6 FF FF FF FF FF FF FF  
-    141 0000ECBD FF FF FF FF FF FF FF  
-    141 0000ECC4 FF FF FF FF FF FF FF  
-    141 0000ECCB FF FF FF FF FF FF FF  
-    141 0000ECD2 FF FF FF FF FF FF FF  
-    141 0000ECD9 FF FF FF FF FF FF FF  
-    141 0000ECE0 FF FF FF FF FF FF FF  
-    141 0000ECE7 FF FF FF FF FF FF FF  
-    141 0000ECEE FF FF FF FF FF FF FF  
-    141 0000ECF5 FF FF FF FF FF FF FF  
-    141 0000ECFC FF FF FF FF FF FF FF  
-    141 0000ED03 FF FF FF FF FF FF FF  
-    141 0000ED0A FF FF FF FF FF FF FF  
-    141 0000ED11 FF FF FF FF FF FF FF  
-    141 0000ED18 FF FF FF FF FF FF FF  
-    141 0000ED1F FF FF FF FF FF FF FF  
-    141 0000ED26 FF FF FF FF FF FF FF  
-    141 0000ED2D FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 11
+    142 0000EB8D FF FF FF FF FF FF FF  
+    142 0000EB94 FF FF FF FF FF FF FF  
+    142 0000EB9B FF FF FF FF FF FF FF  
+    142 0000EBA2 FF FF FF FF FF FF FF  
+    142 0000EBA9 FF FF FF FF FF FF FF  
+    142 0000EBB0 FF FF FF FF FF FF FF  
+    142 0000EBB7 FF FF FF FF FF FF FF  
+    142 0000EBBE FF FF FF FF FF FF FF  
+    142 0000EBC5 FF FF FF FF FF FF FF  
+    142 0000EBCC FF FF FF FF FF FF FF  
+    142 0000EBD3 FF FF FF FF FF FF FF  
+    142 0000EBDA FF FF FF FF FF FF FF  
+    142 0000EBE1 FF FF FF FF FF FF FF  
+    142 0000EBE8 FF FF FF FF FF FF FF  
+    142 0000EBEF FF FF FF FF FF FF FF  
+    142 0000EBF6 FF FF FF FF FF FF FF  
+    142 0000EBFD FF FF FF FF FF FF FF  
+    142 0000EC04 FF FF FF FF FF FF FF  
+    142 0000EC0B FF FF FF FF FF FF FF  
+    142 0000EC12 FF FF FF FF FF FF FF  
+    142 0000EC19 FF FF FF FF FF FF FF  
+    142 0000EC20 FF FF FF FF FF FF FF  
+    142 0000EC27 FF FF FF FF FF FF FF  
+    142 0000EC2E FF FF FF FF FF FF FF  
+    142 0000EC35 FF FF FF FF FF FF FF  
+    142 0000EC3C FF FF FF FF FF FF FF  
+    142 0000EC43 FF FF FF FF FF FF FF  
+    142 0000EC4A FF FF FF FF FF FF FF  
+    142 0000EC51 FF FF FF FF FF FF FF  
+    142 0000EC58 FF FF FF FF FF FF FF  
+    142 0000EC5F FF FF FF FF FF FF FF  
+    142 0000EC66 FF FF FF FF FF FF FF  
+    142 0000EC6D FF FF FF FF FF FF FF  
+    142 0000EC74 FF FF FF FF FF FF FF  
+    142 0000EC7B FF FF FF FF FF FF FF  
+    142 0000EC82 FF FF FF FF FF FF FF  
+    142 0000EC89 FF FF FF FF FF FF FF  
+    142 0000EC90 FF FF FF FF FF FF FF  
+    142 0000EC97 FF FF FF FF FF FF FF  
+    142 0000EC9E FF FF FF FF FF FF FF  
+    142 0000ECA5 FF FF FF FF FF FF FF  
+    142 0000ECAC FF FF FF FF FF FF FF  
+    142 0000ECB3 FF FF FF FF FF FF FF  
+    142 0000ECBA FF FF FF FF FF FF FF  
+    142 0000ECC1 FF FF FF FF FF FF FF  
+    142 0000ECC8 FF FF FF FF FF FF FF  
+    142 0000ECCF FF FF FF FF FF FF FF  
+    142 0000ECD6 FF FF FF FF FF FF FF  
+    142 0000ECDD FF FF FF FF FF FF FF  
+    142 0000ECE4 FF FF FF FF FF FF FF  
+    142 0000ECEB FF FF FF FF FF FF FF  
+    142 0000ECF2 FF FF FF FF FF FF FF  
+    142 0000ECF9 FF FF FF FF FF FF FF  
+    142 0000ED00 FF FF FF FF FF FF FF  
+    142 0000ED07 FF FF FF FF FF FF FF  
+    142 0000ED0E FF FF FF FF FF FF FF  
+    142 0000ED15 FF FF FF FF FF FF FF  
+    142 0000ED1C FF FF FF FF FF FF FF  
+    142 0000ED23 FF FF FF FF FF FF FF  
+    142 0000ED2A FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 11
 noc_boot.asm
-    141 0000ED34 FF FF FF FF FF FF FF  
-    141 0000ED3B FF FF FF FF FF FF FF  
-    141 0000ED42 FF FF FF FF FF FF FF  
-    141 0000ED49 FF FF FF FF FF FF FF  
-    141 0000ED50 FF FF FF FF FF FF FF  
-    141 0000ED57 FF FF FF FF FF FF FF  
-    141 0000ED5E FF FF FF FF FF FF FF  
-    141 0000ED65 FF FF FF FF FF FF FF  
-    141 0000ED6C FF FF FF FF FF FF FF  
-    141 0000ED73 FF FF FF FF FF FF FF  
-    141 0000ED7A FF FF FF FF FF FF FF  
-    141 0000ED81 FF FF FF FF FF FF FF  
-    141 0000ED88 FF FF FF FF FF FF FF  
-    141 0000ED8F FF FF FF FF FF FF FF  
-    141 0000ED96 FF FF FF FF FF FF FF  
-    141 0000ED9D FF FF FF FF FF FF FF  
-    141 0000EDA4 FF FF FF FF FF FF FF  
-    141 0000EDAB FF FF FF FF FF FF FF  
-    141 0000EDB2 FF FF FF FF FF FF FF  
-    141 0000EDB9 FF FF FF FF FF FF FF  
-    141 0000EDC0 FF FF FF FF FF FF FF  
-    141 0000EDC7 FF FF FF FF FF FF FF  
-    141 0000EDCE FF FF FF FF FF FF FF  
-    141 0000EDD5 FF FF FF FF FF FF FF  
-    141 0000EDDC FF FF FF FF FF FF FF  
-    141 0000EDE3 FF FF FF FF FF FF FF  
-    141 0000EDEA FF FF FF FF FF FF FF  
-    141 0000EDF1 FF FF FF FF FF FF FF  
-    141 0000EDF8 FF FF FF FF FF FF FF  
-    141 0000EDFF FF FF FF FF FF FF FF  
-    141 0000EE06 FF FF FF FF FF FF FF  
-    141 0000EE0D FF FF FF FF FF FF FF  
-    141 0000EE14 FF FF FF FF FF FF FF  
-    141 0000EE1B FF FF FF FF FF FF FF  
-    141 0000EE22 FF FF FF FF FF FF FF  
-    141 0000EE29 FF FF FF FF FF FF FF  
-    141 0000EE30 FF FF FF FF FF FF FF  
-    141 0000EE37 FF FF FF FF FF FF FF  
-    141 0000EE3E FF FF FF FF FF FF FF  
-    141 0000EE45 FF FF FF FF FF FF FF  
-    141 0000EE4C FF FF FF FF FF FF FF  
-    141 0000EE53 FF FF FF FF FF FF FF  
-    141 0000EE5A FF FF FF FF FF FF FF  
-    141 0000EE61 FF FF FF FF FF FF FF  
-    141 0000EE68 FF FF FF FF FF FF FF  
-    141 0000EE6F FF FF FF FF FF FF FF  
-    141 0000EE76 FF FF FF FF FF FF FF  
-    141 0000EE7D FF FF FF FF FF FF FF  
-    141 0000EE84 FF FF FF FF FF FF FF  
-    141 0000EE8B FF FF FF FF FF FF FF  
-    141 0000EE92 FF FF FF FF FF FF FF  
-    141 0000EE99 FF FF FF FF FF FF FF  
-    141 0000EEA0 FF FF FF FF FF FF FF  
-    141 0000EEA7 FF FF FF FF FF FF FF  
-    141 0000EEAE FF FF FF FF FF FF FF  
-    141 0000EEB5 FF FF FF FF FF FF FF  
-    141 0000EEBC FF FF FF FF FF FF FF  
-    141 0000EEC3 FF FF FF FF FF FF FF  
-    141 0000EECA FF FF FF FF FF FF FF  
-    141 0000EED1 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 12
+    142 0000ED31 FF FF FF FF FF FF FF  
+    142 0000ED38 FF FF FF FF FF FF FF  
+    142 0000ED3F FF FF FF FF FF FF FF  
+    142 0000ED46 FF FF FF FF FF FF FF  
+    142 0000ED4D FF FF FF FF FF FF FF  
+    142 0000ED54 FF FF FF FF FF FF FF  
+    142 0000ED5B FF FF FF FF FF FF FF  
+    142 0000ED62 FF FF FF FF FF FF FF  
+    142 0000ED69 FF FF FF FF FF FF FF  
+    142 0000ED70 FF FF FF FF FF FF FF  
+    142 0000ED77 FF FF FF FF FF FF FF  
+    142 0000ED7E FF FF FF FF FF FF FF  
+    142 0000ED85 FF FF FF FF FF FF FF  
+    142 0000ED8C FF FF FF FF FF FF FF  
+    142 0000ED93 FF FF FF FF FF FF FF  
+    142 0000ED9A FF FF FF FF FF FF FF  
+    142 0000EDA1 FF FF FF FF FF FF FF  
+    142 0000EDA8 FF FF FF FF FF FF FF  
+    142 0000EDAF FF FF FF FF FF FF FF  
+    142 0000EDB6 FF FF FF FF FF FF FF  
+    142 0000EDBD FF FF FF FF FF FF FF  
+    142 0000EDC4 FF FF FF FF FF FF FF  
+    142 0000EDCB FF FF FF FF FF FF FF  
+    142 0000EDD2 FF FF FF FF FF FF FF  
+    142 0000EDD9 FF FF FF FF FF FF FF  
+    142 0000EDE0 FF FF FF FF FF FF FF  
+    142 0000EDE7 FF FF FF FF FF FF FF  
+    142 0000EDEE FF FF FF FF FF FF FF  
+    142 0000EDF5 FF FF FF FF FF FF FF  
+    142 0000EDFC FF FF FF FF FF FF FF  
+    142 0000EE03 FF FF FF FF FF FF FF  
+    142 0000EE0A FF FF FF FF FF FF FF  
+    142 0000EE11 FF FF FF FF FF FF FF  
+    142 0000EE18 FF FF FF FF FF FF FF  
+    142 0000EE1F FF FF FF FF FF FF FF  
+    142 0000EE26 FF FF FF FF FF FF FF  
+    142 0000EE2D FF FF FF FF FF FF FF  
+    142 0000EE34 FF FF FF FF FF FF FF  
+    142 0000EE3B FF FF FF FF FF FF FF  
+    142 0000EE42 FF FF FF FF FF FF FF  
+    142 0000EE49 FF FF FF FF FF FF FF  
+    142 0000EE50 FF FF FF FF FF FF FF  
+    142 0000EE57 FF FF FF FF FF FF FF  
+    142 0000EE5E FF FF FF FF FF FF FF  
+    142 0000EE65 FF FF FF FF FF FF FF  
+    142 0000EE6C FF FF FF FF FF FF FF  
+    142 0000EE73 FF FF FF FF FF FF FF  
+    142 0000EE7A FF FF FF FF FF FF FF  
+    142 0000EE81 FF FF FF FF FF FF FF  
+    142 0000EE88 FF FF FF FF FF FF FF  
+    142 0000EE8F FF FF FF FF FF FF FF  
+    142 0000EE96 FF FF FF FF FF FF FF  
+    142 0000EE9D FF FF FF FF FF FF FF  
+    142 0000EEA4 FF FF FF FF FF FF FF  
+    142 0000EEAB FF FF FF FF FF FF FF  
+    142 0000EEB2 FF FF FF FF FF FF FF  
+    142 0000EEB9 FF FF FF FF FF FF FF  
+    142 0000EEC0 FF FF FF FF FF FF FF  
+    142 0000EEC7 FF FF FF FF FF FF FF  
+    142 0000EECE FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 12
 noc_boot.asm
-    141 0000EED8 FF FF FF FF FF FF FF  
-    141 0000EEDF FF FF FF FF FF FF FF  
-    141 0000EEE6 FF FF FF FF FF FF FF  
-    141 0000EEED FF FF FF FF FF FF FF  
-    141 0000EEF4 FF FF FF FF FF FF FF  
-    141 0000EEFB FF FF FF FF FF FF FF  
-    141 0000EF02 FF FF FF FF FF FF FF  
-    141 0000EF09 FF FF FF FF FF FF FF  
-    141 0000EF10 FF FF FF FF FF FF FF  
-    141 0000EF17 FF FF FF FF FF FF FF  
-    141 0000EF1E FF FF FF FF FF FF FF  
-    141 0000EF25 FF FF FF FF FF FF FF  
-    141 0000EF2C FF FF FF FF FF FF FF  
-    141 0000EF33 FF FF FF FF FF FF FF  
-    141 0000EF3A FF FF FF FF FF FF FF  
-    141 0000EF41 FF FF FF FF FF FF FF  
-    141 0000EF48 FF FF FF FF FF FF FF  
-    141 0000EF4F FF FF FF FF FF FF FF  
-    141 0000EF56 FF FF FF FF FF FF FF  
-    141 0000EF5D FF FF FF FF FF FF FF  
-    141 0000EF64 FF FF FF FF FF FF FF  
-    141 0000EF6B FF FF FF FF FF FF FF  
-    141 0000EF72 FF FF FF FF FF FF FF  
-    141 0000EF79 FF FF FF FF FF FF FF  
-    141 0000EF80 FF FF FF FF FF FF FF  
-    141 0000EF87 FF FF FF FF FF FF FF  
-    141 0000EF8E FF FF FF FF FF FF FF  
-    141 0000EF95 FF FF FF FF FF FF FF  
-    141 0000EF9C FF FF FF FF FF FF FF  
-    141 0000EFA3 FF FF FF FF FF FF FF  
-    141 0000EFAA FF FF FF FF FF FF FF  
-    141 0000EFB1 FF FF FF FF FF FF FF  
-    141 0000EFB8 FF FF FF FF FF FF FF  
-    141 0000EFBF FF FF FF FF FF FF FF  
-    141 0000EFC6 FF FF FF FF FF FF FF  
-    141 0000EFCD FF FF FF FF FF FF FF  
-    141 0000EFD4 FF FF FF FF FF FF FF  
-    141 0000EFDB FF FF FF FF FF FF FF  
-    141 0000EFE2 FF FF FF FF FF FF FF  
-    141 0000EFE9 FF FF FF FF FF FF FF  
-    141 0000EFF0 FF FF FF FF FF FF FF  
-    141 0000EFF7 FF FF FF FF FF FF FF  
-    141 0000EFFE FF FF FF FF FF FF FF  
-    141 0000F005 FF FF FF FF FF FF FF  
-    141 0000F00C FF FF FF FF FF FF FF  
-    141 0000F013 FF FF FF FF FF FF FF  
-    141 0000F01A FF FF FF FF FF FF FF  
-    141 0000F021 FF FF FF FF FF FF FF  
-    141 0000F028 FF FF FF FF FF FF FF  
-    141 0000F02F FF FF FF FF FF FF FF  
-    141 0000F036 FF FF FF FF FF FF FF  
-    141 0000F03D FF FF FF FF FF FF FF  
-    141 0000F044 FF FF FF FF FF FF FF  
-    141 0000F04B FF FF FF FF FF FF FF  
-    141 0000F052 FF FF FF FF FF FF FF  
-    141 0000F059 FF FF FF FF FF FF FF  
-    141 0000F060 FF FF FF FF FF FF FF  
-    141 0000F067 FF FF FF FF FF FF FF  
-    141 0000F06E FF FF FF FF FF FF FF  
-    141 0000F075 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 13
+    142 0000EED5 FF FF FF FF FF FF FF  
+    142 0000EEDC FF FF FF FF FF FF FF  
+    142 0000EEE3 FF FF FF FF FF FF FF  
+    142 0000EEEA FF FF FF FF FF FF FF  
+    142 0000EEF1 FF FF FF FF FF FF FF  
+    142 0000EEF8 FF FF FF FF FF FF FF  
+    142 0000EEFF FF FF FF FF FF FF FF  
+    142 0000EF06 FF FF FF FF FF FF FF  
+    142 0000EF0D FF FF FF FF FF FF FF  
+    142 0000EF14 FF FF FF FF FF FF FF  
+    142 0000EF1B FF FF FF FF FF FF FF  
+    142 0000EF22 FF FF FF FF FF FF FF  
+    142 0000EF29 FF FF FF FF FF FF FF  
+    142 0000EF30 FF FF FF FF FF FF FF  
+    142 0000EF37 FF FF FF FF FF FF FF  
+    142 0000EF3E FF FF FF FF FF FF FF  
+    142 0000EF45 FF FF FF FF FF FF FF  
+    142 0000EF4C FF FF FF FF FF FF FF  
+    142 0000EF53 FF FF FF FF FF FF FF  
+    142 0000EF5A FF FF FF FF FF FF FF  
+    142 0000EF61 FF FF FF FF FF FF FF  
+    142 0000EF68 FF FF FF FF FF FF FF  
+    142 0000EF6F FF FF FF FF FF FF FF  
+    142 0000EF76 FF FF FF FF FF FF FF  
+    142 0000EF7D FF FF FF FF FF FF FF  
+    142 0000EF84 FF FF FF FF FF FF FF  
+    142 0000EF8B FF FF FF FF FF FF FF  
+    142 0000EF92 FF FF FF FF FF FF FF  
+    142 0000EF99 FF FF FF FF FF FF FF  
+    142 0000EFA0 FF FF FF FF FF FF FF  
+    142 0000EFA7 FF FF FF FF FF FF FF  
+    142 0000EFAE FF FF FF FF FF FF FF  
+    142 0000EFB5 FF FF FF FF FF FF FF  
+    142 0000EFBC FF FF FF FF FF FF FF  
+    142 0000EFC3 FF FF FF FF FF FF FF  
+    142 0000EFCA FF FF FF FF FF FF FF  
+    142 0000EFD1 FF FF FF FF FF FF FF  
+    142 0000EFD8 FF FF FF FF FF FF FF  
+    142 0000EFDF FF FF FF FF FF FF FF  
+    142 0000EFE6 FF FF FF FF FF FF FF  
+    142 0000EFED FF FF FF FF FF FF FF  
+    142 0000EFF4 FF FF FF FF FF FF FF  
+    142 0000EFFB FF FF FF FF FF FF FF  
+    142 0000F002 FF FF FF FF FF FF FF  
+    142 0000F009 FF FF FF FF FF FF FF  
+    142 0000F010 FF FF FF FF FF FF FF  
+    142 0000F017 FF FF FF FF FF FF FF  
+    142 0000F01E FF FF FF FF FF FF FF  
+    142 0000F025 FF FF FF FF FF FF FF  
+    142 0000F02C FF FF FF FF FF FF FF  
+    142 0000F033 FF FF FF FF FF FF FF  
+    142 0000F03A FF FF FF FF FF FF FF  
+    142 0000F041 FF FF FF FF FF FF FF  
+    142 0000F048 FF FF FF FF FF FF FF  
+    142 0000F04F FF FF FF FF FF FF FF  
+    142 0000F056 FF FF FF FF FF FF FF  
+    142 0000F05D FF FF FF FF FF FF FF  
+    142 0000F064 FF FF FF FF FF FF FF  
+    142 0000F06B FF FF FF FF FF FF FF  
+    142 0000F072 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 13
 noc_boot.asm
-    141 0000F07C FF FF FF FF FF FF FF  
-    141 0000F083 FF FF FF FF FF FF FF  
-    141 0000F08A FF FF FF FF FF FF FF  
-    141 0000F091 FF FF FF FF FF FF FF  
-    141 0000F098 FF FF FF FF FF FF FF  
-    141 0000F09F FF FF FF FF FF FF FF  
-    141 0000F0A6 FF FF FF FF FF FF FF  
-    141 0000F0AD FF FF FF FF FF FF FF  
-    141 0000F0B4 FF FF FF FF FF FF FF  
-    141 0000F0BB FF FF FF FF FF FF FF  
-    141 0000F0C2 FF FF FF FF FF FF FF  
-    141 0000F0C9 FF FF FF FF FF FF FF  
-    141 0000F0D0 FF FF FF FF FF FF FF  
-    141 0000F0D7 FF FF FF FF FF FF FF  
-    141 0000F0DE FF FF FF FF FF FF FF  
-    141 0000F0E5 FF FF FF FF FF FF FF  
-    141 0000F0EC FF FF FF FF FF FF FF  
-    141 0000F0F3 FF FF FF FF FF FF FF  
-    141 0000F0FA FF FF FF FF FF FF FF  
-    141 0000F101 FF FF FF FF FF FF FF  
-    141 0000F108 FF FF FF FF FF FF FF  
-    141 0000F10F FF FF FF FF FF FF FF  
-    141 0000F116 FF FF FF FF FF FF FF  
-    141 0000F11D FF FF FF FF FF FF FF  
-    141 0000F124 FF FF FF FF FF FF FF  
-    141 0000F12B FF FF FF FF FF FF FF  
-    141 0000F132 FF FF FF FF FF FF FF  
-    141 0000F139 FF FF FF FF FF FF FF  
-    141 0000F140 FF FF FF FF FF FF FF  
-    141 0000F147 FF FF FF FF FF FF FF  
-    141 0000F14E FF FF FF FF FF FF FF  
-    141 0000F155 FF FF FF FF FF FF FF  
-    141 0000F15C FF FF FF FF FF FF FF  
-    141 0000F163 FF FF FF FF FF FF FF  
-    141 0000F16A FF FF FF FF FF FF FF  
-    141 0000F171 FF FF FF FF FF FF FF  
-    141 0000F178 FF FF FF FF FF FF FF  
-    141 0000F17F FF FF FF FF FF FF FF  
-    141 0000F186 FF FF FF FF FF FF FF  
-    141 0000F18D FF FF FF FF FF FF FF  
-    141 0000F194 FF FF FF FF FF FF FF  
-    141 0000F19B FF FF FF FF FF FF FF  
-    141 0000F1A2 FF FF FF FF FF FF FF  
-    141 0000F1A9 FF FF FF FF FF FF FF  
-    141 0000F1B0 FF FF FF FF FF FF FF  
-    141 0000F1B7 FF FF FF FF FF FF FF  
-    141 0000F1BE FF FF FF FF FF FF FF  
-    141 0000F1C5 FF FF FF FF FF FF FF  
-    141 0000F1CC FF FF FF FF FF FF FF  
-    141 0000F1D3 FF FF FF FF FF FF FF  
-    141 0000F1DA FF FF FF FF FF FF FF  
-    141 0000F1E1 FF FF FF FF FF FF FF  
-    141 0000F1E8 FF FF FF FF FF FF FF  
-    141 0000F1EF FF FF FF FF FF FF FF  
-    141 0000F1F6 FF FF FF FF FF FF FF  
-    141 0000F1FD FF FF FF FF FF FF FF  
-    141 0000F204 FF FF FF FF FF FF FF  
-    141 0000F20B FF FF FF FF FF FF FF  
-    141 0000F212 FF FF FF FF FF FF FF  
-    141 0000F219 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 14
+    142 0000F079 FF FF FF FF FF FF FF  
+    142 0000F080 FF FF FF FF FF FF FF  
+    142 0000F087 FF FF FF FF FF FF FF  
+    142 0000F08E FF FF FF FF FF FF FF  
+    142 0000F095 FF FF FF FF FF FF FF  
+    142 0000F09C FF FF FF FF FF FF FF  
+    142 0000F0A3 FF FF FF FF FF FF FF  
+    142 0000F0AA FF FF FF FF FF FF FF  
+    142 0000F0B1 FF FF FF FF FF FF FF  
+    142 0000F0B8 FF FF FF FF FF FF FF  
+    142 0000F0BF FF FF FF FF FF FF FF  
+    142 0000F0C6 FF FF FF FF FF FF FF  
+    142 0000F0CD FF FF FF FF FF FF FF  
+    142 0000F0D4 FF FF FF FF FF FF FF  
+    142 0000F0DB FF FF FF FF FF FF FF  
+    142 0000F0E2 FF FF FF FF FF FF FF  
+    142 0000F0E9 FF FF FF FF FF FF FF  
+    142 0000F0F0 FF FF FF FF FF FF FF  
+    142 0000F0F7 FF FF FF FF FF FF FF  
+    142 0000F0FE FF FF FF FF FF FF FF  
+    142 0000F105 FF FF FF FF FF FF FF  
+    142 0000F10C FF FF FF FF FF FF FF  
+    142 0000F113 FF FF FF FF FF FF FF  
+    142 0000F11A FF FF FF FF FF FF FF  
+    142 0000F121 FF FF FF FF FF FF FF  
+    142 0000F128 FF FF FF FF FF FF FF  
+    142 0000F12F FF FF FF FF FF FF FF  
+    142 0000F136 FF FF FF FF FF FF FF  
+    142 0000F13D FF FF FF FF FF FF FF  
+    142 0000F144 FF FF FF FF FF FF FF  
+    142 0000F14B FF FF FF FF FF FF FF  
+    142 0000F152 FF FF FF FF FF FF FF  
+    142 0000F159 FF FF FF FF FF FF FF  
+    142 0000F160 FF FF FF FF FF FF FF  
+    142 0000F167 FF FF FF FF FF FF FF  
+    142 0000F16E FF FF FF FF FF FF FF  
+    142 0000F175 FF FF FF FF FF FF FF  
+    142 0000F17C FF FF FF FF FF FF FF  
+    142 0000F183 FF FF FF FF FF FF FF  
+    142 0000F18A FF FF FF FF FF FF FF  
+    142 0000F191 FF FF FF FF FF FF FF  
+    142 0000F198 FF FF FF FF FF FF FF  
+    142 0000F19F FF FF FF FF FF FF FF  
+    142 0000F1A6 FF FF FF FF FF FF FF  
+    142 0000F1AD FF FF FF FF FF FF FF  
+    142 0000F1B4 FF FF FF FF FF FF FF  
+    142 0000F1BB FF FF FF FF FF FF FF  
+    142 0000F1C2 FF FF FF FF FF FF FF  
+    142 0000F1C9 FF FF FF FF FF FF FF  
+    142 0000F1D0 FF FF FF FF FF FF FF  
+    142 0000F1D7 FF FF FF FF FF FF FF  
+    142 0000F1DE FF FF FF FF FF FF FF  
+    142 0000F1E5 FF FF FF FF FF FF FF  
+    142 0000F1EC FF FF FF FF FF FF FF  
+    142 0000F1F3 FF FF FF FF FF FF FF  
+    142 0000F1FA FF FF FF FF FF FF FF  
+    142 0000F201 FF FF FF FF FF FF FF  
+    142 0000F208 FF FF FF FF FF FF FF  
+    142 0000F20F FF FF FF FF FF FF FF  
+    142 0000F216 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 14
 noc_boot.asm
-    141 0000F220 FF FF FF FF FF FF FF  
-    141 0000F227 FF FF FF FF FF FF FF  
-    141 0000F22E FF FF FF FF FF FF FF  
-    141 0000F235 FF FF FF FF FF FF FF  
-    141 0000F23C FF FF FF FF FF FF FF  
-    141 0000F243 FF FF FF FF FF FF FF  
-    141 0000F24A FF FF FF FF FF FF FF  
-    141 0000F251 FF FF FF FF FF FF FF  
-    141 0000F258 FF FF FF FF FF FF FF  
-    141 0000F25F FF FF FF FF FF FF FF  
-    141 0000F266 FF FF FF FF FF FF FF  
-    141 0000F26D FF FF FF FF FF FF FF  
-    141 0000F274 FF FF FF FF FF FF FF  
-    141 0000F27B FF FF FF FF FF FF FF  
-    141 0000F282 FF FF FF FF FF FF FF  
-    141 0000F289 FF FF FF FF FF FF FF  
-    141 0000F290 FF FF FF FF FF FF FF  
-    141 0000F297 FF FF FF FF FF FF FF  
-    141 0000F29E FF FF FF FF FF FF FF  
-    141 0000F2A5 FF FF FF FF FF FF FF  
-    141 0000F2AC FF FF FF FF FF FF FF  
-    141 0000F2B3 FF FF FF FF FF FF FF  
-    141 0000F2BA FF FF FF FF FF FF FF  
-    141 0000F2C1 FF FF FF FF FF FF FF  
-    141 0000F2C8 FF FF FF FF FF FF FF  
-    141 0000F2CF FF FF FF FF FF FF FF  
-    141 0000F2D6 FF FF FF FF FF FF FF  
-    141 0000F2DD FF FF FF FF FF FF FF  
-    141 0000F2E4 FF FF FF FF FF FF FF  
-    141 0000F2EB FF FF FF FF FF FF FF  
-    141 0000F2F2 FF FF FF FF FF FF FF  
-    141 0000F2F9 FF FF FF FF FF FF FF  
-    141 0000F300 FF FF FF FF FF FF FF  
-    141 0000F307 FF FF FF FF FF FF FF  
-    141 0000F30E FF FF FF FF FF FF FF  
-    141 0000F315 FF FF FF FF FF FF FF  
-    141 0000F31C FF FF FF FF FF FF FF  
-    141 0000F323 FF FF FF FF FF FF FF  
-    141 0000F32A FF FF FF FF FF FF FF  
-    141 0000F331 FF FF FF FF FF FF FF  
-    141 0000F338 FF FF FF FF FF FF FF  
-    141 0000F33F FF FF FF FF FF FF FF  
-    141 0000F346 FF FF FF FF FF FF FF  
-    141 0000F34D FF FF FF FF FF FF FF  
-    141 0000F354 FF FF FF FF FF FF FF  
-    141 0000F35B FF FF FF FF FF FF FF  
-    141 0000F362 FF FF FF FF FF FF FF  
-    141 0000F369 FF FF FF FF FF FF FF  
-    141 0000F370 FF FF FF FF FF FF FF  
-    141 0000F377 FF FF FF FF FF FF FF  
-    141 0000F37E FF FF FF FF FF FF FF  
-    141 0000F385 FF FF FF FF FF FF FF  
-    141 0000F38C FF FF FF FF FF FF FF  
-    141 0000F393 FF FF FF FF FF FF FF  
-    141 0000F39A FF FF FF FF FF FF FF  
-    141 0000F3A1 FF FF FF FF FF FF FF  
-    141 0000F3A8 FF FF FF FF FF FF FF  
-    141 0000F3AF FF FF FF FF FF FF FF  
-    141 0000F3B6 FF FF FF FF FF FF FF  
-    141 0000F3BD FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 15
+    142 0000F21D FF FF FF FF FF FF FF  
+    142 0000F224 FF FF FF FF FF FF FF  
+    142 0000F22B FF FF FF FF FF FF FF  
+    142 0000F232 FF FF FF FF FF FF FF  
+    142 0000F239 FF FF FF FF FF FF FF  
+    142 0000F240 FF FF FF FF FF FF FF  
+    142 0000F247 FF FF FF FF FF FF FF  
+    142 0000F24E FF FF FF FF FF FF FF  
+    142 0000F255 FF FF FF FF FF FF FF  
+    142 0000F25C FF FF FF FF FF FF FF  
+    142 0000F263 FF FF FF FF FF FF FF  
+    142 0000F26A FF FF FF FF FF FF FF  
+    142 0000F271 FF FF FF FF FF FF FF  
+    142 0000F278 FF FF FF FF FF FF FF  
+    142 0000F27F FF FF FF FF FF FF FF  
+    142 0000F286 FF FF FF FF FF FF FF  
+    142 0000F28D FF FF FF FF FF FF FF  
+    142 0000F294 FF FF FF FF FF FF FF  
+    142 0000F29B FF FF FF FF FF FF FF  
+    142 0000F2A2 FF FF FF FF FF FF FF  
+    142 0000F2A9 FF FF FF FF FF FF FF  
+    142 0000F2B0 FF FF FF FF FF FF FF  
+    142 0000F2B7 FF FF FF FF FF FF FF  
+    142 0000F2BE FF FF FF FF FF FF FF  
+    142 0000F2C5 FF FF FF FF FF FF FF  
+    142 0000F2CC FF FF FF FF FF FF FF  
+    142 0000F2D3 FF FF FF FF FF FF FF  
+    142 0000F2DA FF FF FF FF FF FF FF  
+    142 0000F2E1 FF FF FF FF FF FF FF  
+    142 0000F2E8 FF FF FF FF FF FF FF  
+    142 0000F2EF FF FF FF FF FF FF FF  
+    142 0000F2F6 FF FF FF FF FF FF FF  
+    142 0000F2FD FF FF FF FF FF FF FF  
+    142 0000F304 FF FF FF FF FF FF FF  
+    142 0000F30B FF FF FF FF FF FF FF  
+    142 0000F312 FF FF FF FF FF FF FF  
+    142 0000F319 FF FF FF FF FF FF FF  
+    142 0000F320 FF FF FF FF FF FF FF  
+    142 0000F327 FF FF FF FF FF FF FF  
+    142 0000F32E FF FF FF FF FF FF FF  
+    142 0000F335 FF FF FF FF FF FF FF  
+    142 0000F33C FF FF FF FF FF FF FF  
+    142 0000F343 FF FF FF FF FF FF FF  
+    142 0000F34A FF FF FF FF FF FF FF  
+    142 0000F351 FF FF FF FF FF FF FF  
+    142 0000F358 FF FF FF FF FF FF FF  
+    142 0000F35F FF FF FF FF FF FF FF  
+    142 0000F366 FF FF FF FF FF FF FF  
+    142 0000F36D FF FF FF FF FF FF FF  
+    142 0000F374 FF FF FF FF FF FF FF  
+    142 0000F37B FF FF FF FF FF FF FF  
+    142 0000F382 FF FF FF FF FF FF FF  
+    142 0000F389 FF FF FF FF FF FF FF  
+    142 0000F390 FF FF FF FF FF FF FF  
+    142 0000F397 FF FF FF FF FF FF FF  
+    142 0000F39E FF FF FF FF FF FF FF  
+    142 0000F3A5 FF FF FF FF FF FF FF  
+    142 0000F3AC FF FF FF FF FF FF FF  
+    142 0000F3B3 FF FF FF FF FF FF FF  
+    142 0000F3BA FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 15
 noc_boot.asm
-    141 0000F3C4 FF FF FF FF FF FF FF  
-    141 0000F3CB FF FF FF FF FF FF FF  
-    141 0000F3D2 FF FF FF FF FF FF FF  
-    141 0000F3D9 FF FF FF FF FF FF FF  
-    141 0000F3E0 FF FF FF FF FF FF FF  
-    141 0000F3E7 FF FF FF FF FF FF FF  
-    141 0000F3EE FF FF FF FF FF FF FF  
-    141 0000F3F5 FF FF FF FF FF FF FF  
-    141 0000F3FC FF FF FF FF FF FF FF  
-    141 0000F403 FF FF FF FF FF FF FF  
-    141 0000F40A FF FF FF FF FF FF FF  
-    141 0000F411 FF FF FF FF FF FF FF  
-    141 0000F418 FF FF FF FF FF FF FF  
-    141 0000F41F FF FF FF FF FF FF FF  
-    141 0000F426 FF FF FF FF FF FF FF  
-    141 0000F42D FF FF FF FF FF FF FF  
-    141 0000F434 FF FF FF FF FF FF FF  
-    141 0000F43B FF FF FF FF FF FF FF  
-    141 0000F442 FF FF FF FF FF FF FF  
-    141 0000F449 FF FF FF FF FF FF FF  
-    141 0000F450 FF FF FF FF FF FF FF  
-    141 0000F457 FF FF FF FF FF FF FF  
-    141 0000F45E FF FF FF FF FF FF FF  
-    141 0000F465 FF FF FF FF FF FF FF  
-    141 0000F46C FF FF FF FF FF FF FF  
-    141 0000F473 FF FF FF FF FF FF FF  
-    141 0000F47A FF FF FF FF FF FF FF  
-    141 0000F481 FF FF FF FF FF FF FF  
-    141 0000F488 FF FF FF FF FF FF FF  
-    141 0000F48F FF FF FF FF FF FF FF  
-    141 0000F496 FF FF FF FF FF FF FF  
-    141 0000F49D FF FF FF FF FF FF FF  
-    141 0000F4A4 FF FF FF FF FF FF FF  
-    141 0000F4AB FF FF FF FF FF FF FF  
-    141 0000F4B2 FF FF FF FF FF FF FF  
-    141 0000F4B9 FF FF FF FF FF FF FF  
-    141 0000F4C0 FF FF FF FF FF FF FF  
-    141 0000F4C7 FF FF FF FF FF FF FF  
-    141 0000F4CE FF FF FF FF FF FF FF  
-    141 0000F4D5 FF FF FF FF FF FF FF  
-    141 0000F4DC FF FF FF FF FF FF FF  
-    141 0000F4E3 FF FF FF FF FF FF FF  
-    141 0000F4EA FF FF FF FF FF FF FF  
-    141 0000F4F1 FF FF FF FF FF FF FF  
-    141 0000F4F8 FF FF FF FF FF FF FF  
-    141 0000F4FF FF FF FF FF FF FF FF  
-    141 0000F506 FF FF FF FF FF FF FF  
-    141 0000F50D FF FF FF FF FF FF FF  
-    141 0000F514 FF FF FF FF FF FF FF  
-    141 0000F51B FF FF FF FF FF FF FF  
-    141 0000F522 FF FF FF FF FF FF FF  
-    141 0000F529 FF FF FF FF FF FF FF  
-    141 0000F530 FF FF FF FF FF FF FF  
-    141 0000F537 FF FF FF FF FF FF FF  
-    141 0000F53E FF FF FF FF FF FF FF  
-    141 0000F545 FF FF FF FF FF FF FF  
-    141 0000F54C FF FF FF FF FF FF FF  
-    141 0000F553 FF FF FF FF FF FF FF  
-    141 0000F55A FF FF FF FF FF FF FF  
-    141 0000F561 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 16
+    142 0000F3C1 FF FF FF FF FF FF FF  
+    142 0000F3C8 FF FF FF FF FF FF FF  
+    142 0000F3CF FF FF FF FF FF FF FF  
+    142 0000F3D6 FF FF FF FF FF FF FF  
+    142 0000F3DD FF FF FF FF FF FF FF  
+    142 0000F3E4 FF FF FF FF FF FF FF  
+    142 0000F3EB FF FF FF FF FF FF FF  
+    142 0000F3F2 FF FF FF FF FF FF FF  
+    142 0000F3F9 FF FF FF FF FF FF FF  
+    142 0000F400 FF FF FF FF FF FF FF  
+    142 0000F407 FF FF FF FF FF FF FF  
+    142 0000F40E FF FF FF FF FF FF FF  
+    142 0000F415 FF FF FF FF FF FF FF  
+    142 0000F41C FF FF FF FF FF FF FF  
+    142 0000F423 FF FF FF FF FF FF FF  
+    142 0000F42A FF FF FF FF FF FF FF  
+    142 0000F431 FF FF FF FF FF FF FF  
+    142 0000F438 FF FF FF FF FF FF FF  
+    142 0000F43F FF FF FF FF FF FF FF  
+    142 0000F446 FF FF FF FF FF FF FF  
+    142 0000F44D FF FF FF FF FF FF FF  
+    142 0000F454 FF FF FF FF FF FF FF  
+    142 0000F45B FF FF FF FF FF FF FF  
+    142 0000F462 FF FF FF FF FF FF FF  
+    142 0000F469 FF FF FF FF FF FF FF  
+    142 0000F470 FF FF FF FF FF FF FF  
+    142 0000F477 FF FF FF FF FF FF FF  
+    142 0000F47E FF FF FF FF FF FF FF  
+    142 0000F485 FF FF FF FF FF FF FF  
+    142 0000F48C FF FF FF FF FF FF FF  
+    142 0000F493 FF FF FF FF FF FF FF  
+    142 0000F49A FF FF FF FF FF FF FF  
+    142 0000F4A1 FF FF FF FF FF FF FF  
+    142 0000F4A8 FF FF FF FF FF FF FF  
+    142 0000F4AF FF FF FF FF FF FF FF  
+    142 0000F4B6 FF FF FF FF FF FF FF  
+    142 0000F4BD FF FF FF FF FF FF FF  
+    142 0000F4C4 FF FF FF FF FF FF FF  
+    142 0000F4CB FF FF FF FF FF FF FF  
+    142 0000F4D2 FF FF FF FF FF FF FF  
+    142 0000F4D9 FF FF FF FF FF FF FF  
+    142 0000F4E0 FF FF FF FF FF FF FF  
+    142 0000F4E7 FF FF FF FF FF FF FF  
+    142 0000F4EE FF FF FF FF FF FF FF  
+    142 0000F4F5 FF FF FF FF FF FF FF  
+    142 0000F4FC FF FF FF FF FF FF FF  
+    142 0000F503 FF FF FF FF FF FF FF  
+    142 0000F50A FF FF FF FF FF FF FF  
+    142 0000F511 FF FF FF FF FF FF FF  
+    142 0000F518 FF FF FF FF FF FF FF  
+    142 0000F51F FF FF FF FF FF FF FF  
+    142 0000F526 FF FF FF FF FF FF FF  
+    142 0000F52D FF FF FF FF FF FF FF  
+    142 0000F534 FF FF FF FF FF FF FF  
+    142 0000F53B FF FF FF FF FF FF FF  
+    142 0000F542 FF FF FF FF FF FF FF  
+    142 0000F549 FF FF FF FF FF FF FF  
+    142 0000F550 FF FF FF FF FF FF FF  
+    142 0000F557 FF FF FF FF FF FF FF  
+    142 0000F55E FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 16
 noc_boot.asm
-    141 0000F568 FF FF FF FF FF FF FF  
-    141 0000F56F FF FF FF FF FF FF FF  
-    141 0000F576 FF FF FF FF FF FF FF  
-    141 0000F57D FF FF FF FF FF FF FF  
-    141 0000F584 FF FF FF FF FF FF FF  
-    141 0000F58B FF FF FF FF FF FF FF  
-    141 0000F592 FF FF FF FF FF FF FF  
-    141 0000F599 FF FF FF FF FF FF FF  
-    141 0000F5A0 FF FF FF FF FF FF FF  
-    141 0000F5A7 FF FF FF FF FF FF FF  
-    141 0000F5AE FF FF FF FF FF FF FF  
-    141 0000F5B5 FF FF FF FF FF FF FF  
-    141 0000F5BC FF FF FF FF FF FF FF  
-    141 0000F5C3 FF FF FF FF FF FF FF  
-    141 0000F5CA FF FF FF FF FF FF FF  
-    141 0000F5D1 FF FF FF FF FF FF FF  
-    141 0000F5D8 FF FF FF FF FF FF FF  
-    141 0000F5DF FF FF FF FF FF FF FF  
-    141 0000F5E6 FF FF FF FF FF FF FF  
-    141 0000F5ED FF FF FF FF FF FF FF  
-    141 0000F5F4 FF FF FF FF FF FF FF  
-    141 0000F5FB FF FF FF FF FF FF FF  
-    141 0000F602 FF FF FF FF FF FF FF  
-    141 0000F609 FF FF FF FF FF FF FF  
-    141 0000F610 FF FF FF FF FF FF FF  
-    141 0000F617 FF FF FF FF FF FF FF  
-    141 0000F61E FF FF FF FF FF FF FF  
-    141 0000F625 FF FF FF FF FF FF FF  
-    141 0000F62C FF FF FF FF FF FF FF  
-    141 0000F633 FF FF FF FF FF FF FF  
-    141 0000F63A FF FF FF FF FF FF FF  
-    141 0000F641 FF FF FF FF FF FF FF  
-    141 0000F648 FF FF FF FF FF FF FF  
-    141 0000F64F FF FF FF FF FF FF FF  
-    141 0000F656 FF FF FF FF FF FF FF  
-    141 0000F65D FF FF FF FF FF FF FF  
-    141 0000F664 FF FF FF FF FF FF FF  
-    141 0000F66B FF FF FF FF FF FF FF  
-    141 0000F672 FF FF FF FF FF FF FF  
-    141 0000F679 FF FF FF FF FF FF FF  
-    141 0000F680 FF FF FF FF FF FF FF  
-    141 0000F687 FF FF FF FF FF FF FF  
-    141 0000F68E FF FF FF FF FF FF FF  
-    141 0000F695 FF FF FF FF FF FF FF  
-    141 0000F69C FF FF FF FF FF FF FF  
-    141 0000F6A3 FF FF FF FF FF FF FF  
-    141 0000F6AA FF FF FF FF FF FF FF  
-    141 0000F6B1 FF FF FF FF FF FF FF  
-    141 0000F6B8 FF FF FF FF FF FF FF  
-    141 0000F6BF FF FF FF FF FF FF FF  
-    141 0000F6C6 FF FF FF FF FF FF FF  
-    141 0000F6CD FF FF FF FF FF FF FF  
-    141 0000F6D4 FF FF FF FF FF FF FF  
-    141 0000F6DB FF FF FF FF FF FF FF  
-    141 0000F6E2 FF FF FF FF FF FF FF  
-    141 0000F6E9 FF FF FF FF FF FF FF  
-    141 0000F6F0 FF FF FF FF FF FF FF  
-    141 0000F6F7 FF FF FF FF FF FF FF  
-    141 0000F6FE FF FF FF FF FF FF FF  
-    141 0000F705 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 17
+    142 0000F565 FF FF FF FF FF FF FF  
+    142 0000F56C FF FF FF FF FF FF FF  
+    142 0000F573 FF FF FF FF FF FF FF  
+    142 0000F57A FF FF FF FF FF FF FF  
+    142 0000F581 FF FF FF FF FF FF FF  
+    142 0000F588 FF FF FF FF FF FF FF  
+    142 0000F58F FF FF FF FF FF FF FF  
+    142 0000F596 FF FF FF FF FF FF FF  
+    142 0000F59D FF FF FF FF FF FF FF  
+    142 0000F5A4 FF FF FF FF FF FF FF  
+    142 0000F5AB FF FF FF FF FF FF FF  
+    142 0000F5B2 FF FF FF FF FF FF FF  
+    142 0000F5B9 FF FF FF FF FF FF FF  
+    142 0000F5C0 FF FF FF FF FF FF FF  
+    142 0000F5C7 FF FF FF FF FF FF FF  
+    142 0000F5CE FF FF FF FF FF FF FF  
+    142 0000F5D5 FF FF FF FF FF FF FF  
+    142 0000F5DC FF FF FF FF FF FF FF  
+    142 0000F5E3 FF FF FF FF FF FF FF  
+    142 0000F5EA FF FF FF FF FF FF FF  
+    142 0000F5F1 FF FF FF FF FF FF FF  
+    142 0000F5F8 FF FF FF FF FF FF FF  
+    142 0000F5FF FF FF FF FF FF FF FF  
+    142 0000F606 FF FF FF FF FF FF FF  
+    142 0000F60D FF FF FF FF FF FF FF  
+    142 0000F614 FF FF FF FF FF FF FF  
+    142 0000F61B FF FF FF FF FF FF FF  
+    142 0000F622 FF FF FF FF FF FF FF  
+    142 0000F629 FF FF FF FF FF FF FF  
+    142 0000F630 FF FF FF FF FF FF FF  
+    142 0000F637 FF FF FF FF FF FF FF  
+    142 0000F63E FF FF FF FF FF FF FF  
+    142 0000F645 FF FF FF FF FF FF FF  
+    142 0000F64C FF FF FF FF FF FF FF  
+    142 0000F653 FF FF FF FF FF FF FF  
+    142 0000F65A FF FF FF FF FF FF FF  
+    142 0000F661 FF FF FF FF FF FF FF  
+    142 0000F668 FF FF FF FF FF FF FF  
+    142 0000F66F FF FF FF FF FF FF FF  
+    142 0000F676 FF FF FF FF FF FF FF  
+    142 0000F67D FF FF FF FF FF FF FF  
+    142 0000F684 FF FF FF FF FF FF FF  
+    142 0000F68B FF FF FF FF FF FF FF  
+    142 0000F692 FF FF FF FF FF FF FF  
+    142 0000F699 FF FF FF FF FF FF FF  
+    142 0000F6A0 FF FF FF FF FF FF FF  
+    142 0000F6A7 FF FF FF FF FF FF FF  
+    142 0000F6AE FF FF FF FF FF FF FF  
+    142 0000F6B5 FF FF FF FF FF FF FF  
+    142 0000F6BC FF FF FF FF FF FF FF  
+    142 0000F6C3 FF FF FF FF FF FF FF  
+    142 0000F6CA FF FF FF FF FF FF FF  
+    142 0000F6D1 FF FF FF FF FF FF FF  
+    142 0000F6D8 FF FF FF FF FF FF FF  
+    142 0000F6DF FF FF FF FF FF FF FF  
+    142 0000F6E6 FF FF FF FF FF FF FF  
+    142 0000F6ED FF FF FF FF FF FF FF  
+    142 0000F6F4 FF FF FF FF FF FF FF  
+    142 0000F6FB FF FF FF FF FF FF FF  
+    142 0000F702 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 17
 noc_boot.asm
-    141 0000F70C FF FF FF FF FF FF FF  
-    141 0000F713 FF FF FF FF FF FF FF  
-    141 0000F71A FF FF FF FF FF FF FF  
-    141 0000F721 FF FF FF FF FF FF FF  
-    141 0000F728 FF FF FF FF FF FF FF  
-    141 0000F72F FF FF FF FF FF FF FF  
-    141 0000F736 FF FF FF FF FF FF FF  
-    141 0000F73D FF FF FF FF FF FF FF  
-    141 0000F744 FF FF FF FF FF FF FF  
-    141 0000F74B FF FF FF FF FF FF FF  
-    141 0000F752 FF FF FF FF FF FF FF  
-    141 0000F759 FF FF FF FF FF FF FF  
-    141 0000F760 FF FF FF FF FF FF FF  
-    141 0000F767 FF FF FF FF FF FF FF  
-    141 0000F76E FF FF FF FF FF FF FF  
-    141 0000F775 FF FF FF FF FF FF FF  
-    141 0000F77C FF FF FF FF FF FF FF  
-    141 0000F783 FF FF FF FF FF FF FF  
-    141 0000F78A FF FF FF FF FF FF FF  
-    141 0000F791 FF FF FF FF FF FF FF  
-    141 0000F798 FF FF FF FF FF FF FF  
-    141 0000F79F FF FF FF FF FF FF FF  
-    141 0000F7A6 FF FF FF FF FF FF FF  
-    141 0000F7AD FF FF FF FF FF FF FF  
-    141 0000F7B4 FF FF FF FF FF FF FF  
-    141 0000F7BB FF FF FF FF FF FF FF  
-    141 0000F7C2 FF FF FF FF FF FF FF  
-    141 0000F7C9 FF FF FF FF FF FF FF  
-    141 0000F7D0 FF FF FF FF FF FF FF  
-    141 0000F7D7 FF FF FF FF FF FF FF  
-    141 0000F7DE FF FF FF FF FF FF FF  
-    141 0000F7E5 FF FF FF FF FF FF FF  
-    141 0000F7EC FF FF FF FF FF FF FF  
-    141 0000F7F3 FF FF FF FF FF FF FF  
-    141 0000F7FA FF FF FF FF FF FF FF  
-    141 0000F801 FF FF FF FF FF FF FF  
-    141 0000F808 FF FF FF FF FF FF FF  
-    141 0000F80F FF FF FF FF FF FF FF  
-    141 0000F816 FF FF FF FF FF FF FF  
-    141 0000F81D FF FF FF FF FF FF FF  
-    141 0000F824 FF FF FF FF FF FF FF  
-    141 0000F82B FF FF FF FF FF FF FF  
-    141 0000F832 FF FF FF FF FF FF FF  
-    141 0000F839 FF FF FF FF FF FF FF  
-    141 0000F840 FF FF FF FF FF FF FF  
-    141 0000F847 FF FF FF FF FF FF FF  
-    141 0000F84E FF FF FF FF FF FF FF  
-    141 0000F855 FF FF FF FF FF FF FF  
-    141 0000F85C FF FF FF FF FF FF FF  
-    141 0000F863 FF FF FF FF FF FF FF  
-    141 0000F86A FF FF FF FF FF FF FF  
-    141 0000F871 FF FF FF FF FF FF FF  
-    141 0000F878 FF FF FF FF FF FF FF  
-    141 0000F87F FF FF FF FF FF FF FF  
-    141 0000F886 FF FF FF FF FF FF FF  
-    141 0000F88D FF FF FF FF FF FF FF  
-    141 0000F894 FF FF FF FF FF FF FF  
-    141 0000F89B FF FF FF FF FF FF FF  
-    141 0000F8A2 FF FF FF FF FF FF FF  
-    141 0000F8A9 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 18
+    142 0000F709 FF FF FF FF FF FF FF  
+    142 0000F710 FF FF FF FF FF FF FF  
+    142 0000F717 FF FF FF FF FF FF FF  
+    142 0000F71E FF FF FF FF FF FF FF  
+    142 0000F725 FF FF FF FF FF FF FF  
+    142 0000F72C FF FF FF FF FF FF FF  
+    142 0000F733 FF FF FF FF FF FF FF  
+    142 0000F73A FF FF FF FF FF FF FF  
+    142 0000F741 FF FF FF FF FF FF FF  
+    142 0000F748 FF FF FF FF FF FF FF  
+    142 0000F74F FF FF FF FF FF FF FF  
+    142 0000F756 FF FF FF FF FF FF FF  
+    142 0000F75D FF FF FF FF FF FF FF  
+    142 0000F764 FF FF FF FF FF FF FF  
+    142 0000F76B FF FF FF FF FF FF FF  
+    142 0000F772 FF FF FF FF FF FF FF  
+    142 0000F779 FF FF FF FF FF FF FF  
+    142 0000F780 FF FF FF FF FF FF FF  
+    142 0000F787 FF FF FF FF FF FF FF  
+    142 0000F78E FF FF FF FF FF FF FF  
+    142 0000F795 FF FF FF FF FF FF FF  
+    142 0000F79C FF FF FF FF FF FF FF  
+    142 0000F7A3 FF FF FF FF FF FF FF  
+    142 0000F7AA FF FF FF FF FF FF FF  
+    142 0000F7B1 FF FF FF FF FF FF FF  
+    142 0000F7B8 FF FF FF FF FF FF FF  
+    142 0000F7BF FF FF FF FF FF FF FF  
+    142 0000F7C6 FF FF FF FF FF FF FF  
+    142 0000F7CD FF FF FF FF FF FF FF  
+    142 0000F7D4 FF FF FF FF FF FF FF  
+    142 0000F7DB FF FF FF FF FF FF FF  
+    142 0000F7E2 FF FF FF FF FF FF FF  
+    142 0000F7E9 FF FF FF FF FF FF FF  
+    142 0000F7F0 FF FF FF FF FF FF FF  
+    142 0000F7F7 FF FF FF FF FF FF FF  
+    142 0000F7FE FF FF FF FF FF FF FF  
+    142 0000F805 FF FF FF FF FF FF FF  
+    142 0000F80C FF FF FF FF FF FF FF  
+    142 0000F813 FF FF FF FF FF FF FF  
+    142 0000F81A FF FF FF FF FF FF FF  
+    142 0000F821 FF FF FF FF FF FF FF  
+    142 0000F828 FF FF FF FF FF FF FF  
+    142 0000F82F FF FF FF FF FF FF FF  
+    142 0000F836 FF FF FF FF FF FF FF  
+    142 0000F83D FF FF FF FF FF FF FF  
+    142 0000F844 FF FF FF FF FF FF FF  
+    142 0000F84B FF FF FF FF FF FF FF  
+    142 0000F852 FF FF FF FF FF FF FF  
+    142 0000F859 FF FF FF FF FF FF FF  
+    142 0000F860 FF FF FF FF FF FF FF  
+    142 0000F867 FF FF FF FF FF FF FF  
+    142 0000F86E FF FF FF FF FF FF FF  
+    142 0000F875 FF FF FF FF FF FF FF  
+    142 0000F87C FF FF FF FF FF FF FF  
+    142 0000F883 FF FF FF FF FF FF FF  
+    142 0000F88A FF FF FF FF FF FF FF  
+    142 0000F891 FF FF FF FF FF FF FF  
+    142 0000F898 FF FF FF FF FF FF FF  
+    142 0000F89F FF FF FF FF FF FF FF  
+    142 0000F8A6 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 18
 noc_boot.asm
-    141 0000F8B0 FF FF FF FF FF FF FF  
-    141 0000F8B7 FF FF FF FF FF FF FF  
-    141 0000F8BE FF FF FF FF FF FF FF  
-    141 0000F8C5 FF FF FF FF FF FF FF  
-    141 0000F8CC FF FF FF FF FF FF FF  
-    141 0000F8D3 FF FF FF FF FF FF FF  
-    141 0000F8DA FF FF FF FF FF FF FF  
-    141 0000F8E1 FF FF FF FF FF FF FF  
-    141 0000F8E8 FF FF FF FF FF FF FF  
-    141 0000F8EF FF FF FF FF FF FF FF  
-    141 0000F8F6 FF FF FF FF FF FF FF  
-    141 0000F8FD FF FF FF FF FF FF FF  
-    141 0000F904 FF FF FF FF FF FF FF  
-    141 0000F90B FF FF FF FF FF FF FF  
-    141 0000F912 FF FF FF FF FF FF FF  
-    141 0000F919 FF FF FF FF FF FF FF  
-    141 0000F920 FF FF FF FF FF FF FF  
-    141 0000F927 FF FF FF FF FF FF FF  
-    141 0000F92E FF FF FF FF FF FF FF  
-    141 0000F935 FF FF FF FF FF FF FF  
-    141 0000F93C FF FF FF FF FF FF FF  
-    141 0000F943 FF FF FF FF FF FF FF  
-    141 0000F94A FF FF FF FF FF FF FF  
-    141 0000F951 FF FF FF FF FF FF FF  
-    141 0000F958 FF FF FF FF FF FF FF  
-    141 0000F95F FF FF FF FF FF FF FF  
-    141 0000F966 FF FF FF FF FF FF FF  
-    141 0000F96D FF FF FF FF FF FF FF  
-    141 0000F974 FF FF FF FF FF FF FF  
-    141 0000F97B FF FF FF FF FF FF FF  
-    141 0000F982 FF FF FF FF FF FF FF  
-    141 0000F989 FF FF FF FF FF FF FF  
-    141 0000F990 FF FF FF FF FF FF FF  
-    141 0000F997 FF FF FF FF FF FF FF  
-    141 0000F99E FF FF FF FF FF FF FF  
-    141 0000F9A5 FF FF FF FF FF FF FF  
-    141 0000F9AC FF FF FF FF FF FF FF  
-    141 0000F9B3 FF FF FF FF FF FF FF  
-    141 0000F9BA FF FF FF FF FF FF FF  
-    141 0000F9C1 FF FF FF FF FF FF FF  
-    141 0000F9C8 FF FF FF FF FF FF FF  
-    141 0000F9CF FF FF FF FF FF FF FF  
-    141 0000F9D6 FF FF FF FF FF FF FF  
-    141 0000F9DD FF FF FF FF FF FF FF  
-    141 0000F9E4 FF FF FF FF FF FF FF  
-    141 0000F9EB FF FF FF FF FF FF FF  
-    141 0000F9F2 FF FF FF FF FF FF FF  
-    141 0000F9F9 FF FF FF FF FF FF FF  
-    141 0000FA00 FF FF FF FF FF FF FF  
-    141 0000FA07 FF FF FF FF FF FF FF  
-    141 0000FA0E FF FF FF FF FF FF FF  
-    141 0000FA15 FF FF FF FF FF FF FF  
-    141 0000FA1C FF FF FF FF FF FF FF  
-    141 0000FA23 FF FF FF FF FF FF FF  
-    141 0000FA2A FF FF FF FF FF FF FF  
-    141 0000FA31 FF FF FF FF FF FF FF  
-    141 0000FA38 FF FF FF FF FF FF FF  
-    141 0000FA3F FF FF FF FF FF FF FF  
-    141 0000FA46 FF FF FF FF FF FF FF  
-    141 0000FA4D FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 19
+    142 0000F8AD FF FF FF FF FF FF FF  
+    142 0000F8B4 FF FF FF FF FF FF FF  
+    142 0000F8BB FF FF FF FF FF FF FF  
+    142 0000F8C2 FF FF FF FF FF FF FF  
+    142 0000F8C9 FF FF FF FF FF FF FF  
+    142 0000F8D0 FF FF FF FF FF FF FF  
+    142 0000F8D7 FF FF FF FF FF FF FF  
+    142 0000F8DE FF FF FF FF FF FF FF  
+    142 0000F8E5 FF FF FF FF FF FF FF  
+    142 0000F8EC FF FF FF FF FF FF FF  
+    142 0000F8F3 FF FF FF FF FF FF FF  
+    142 0000F8FA FF FF FF FF FF FF FF  
+    142 0000F901 FF FF FF FF FF FF FF  
+    142 0000F908 FF FF FF FF FF FF FF  
+    142 0000F90F FF FF FF FF FF FF FF  
+    142 0000F916 FF FF FF FF FF FF FF  
+    142 0000F91D FF FF FF FF FF FF FF  
+    142 0000F924 FF FF FF FF FF FF FF  
+    142 0000F92B FF FF FF FF FF FF FF  
+    142 0000F932 FF FF FF FF FF FF FF  
+    142 0000F939 FF FF FF FF FF FF FF  
+    142 0000F940 FF FF FF FF FF FF FF  
+    142 0000F947 FF FF FF FF FF FF FF  
+    142 0000F94E FF FF FF FF FF FF FF  
+    142 0000F955 FF FF FF FF FF FF FF  
+    142 0000F95C FF FF FF FF FF FF FF  
+    142 0000F963 FF FF FF FF FF FF FF  
+    142 0000F96A FF FF FF FF FF FF FF  
+    142 0000F971 FF FF FF FF FF FF FF  
+    142 0000F978 FF FF FF FF FF FF FF  
+    142 0000F97F FF FF FF FF FF FF FF  
+    142 0000F986 FF FF FF FF FF FF FF  
+    142 0000F98D FF FF FF FF FF FF FF  
+    142 0000F994 FF FF FF FF FF FF FF  
+    142 0000F99B FF FF FF FF FF FF FF  
+    142 0000F9A2 FF FF FF FF FF FF FF  
+    142 0000F9A9 FF FF FF FF FF FF FF  
+    142 0000F9B0 FF FF FF FF FF FF FF  
+    142 0000F9B7 FF FF FF FF FF FF FF  
+    142 0000F9BE FF FF FF FF FF FF FF  
+    142 0000F9C5 FF FF FF FF FF FF FF  
+    142 0000F9CC FF FF FF FF FF FF FF  
+    142 0000F9D3 FF FF FF FF FF FF FF  
+    142 0000F9DA FF FF FF FF FF FF FF  
+    142 0000F9E1 FF FF FF FF FF FF FF  
+    142 0000F9E8 FF FF FF FF FF FF FF  
+    142 0000F9EF FF FF FF FF FF FF FF  
+    142 0000F9F6 FF FF FF FF FF FF FF  
+    142 0000F9FD FF FF FF FF FF FF FF  
+    142 0000FA04 FF FF FF FF FF FF FF  
+    142 0000FA0B FF FF FF FF FF FF FF  
+    142 0000FA12 FF FF FF FF FF FF FF  
+    142 0000FA19 FF FF FF FF FF FF FF  
+    142 0000FA20 FF FF FF FF FF FF FF  
+    142 0000FA27 FF FF FF FF FF FF FF  
+    142 0000FA2E FF FF FF FF FF FF FF  
+    142 0000FA35 FF FF FF FF FF FF FF  
+    142 0000FA3C FF FF FF FF FF FF FF  
+    142 0000FA43 FF FF FF FF FF FF FF  
+    142 0000FA4A FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 19
 noc_boot.asm
-    141 0000FA54 FF FF FF FF FF FF FF  
-    141 0000FA5B FF FF FF FF FF FF FF  
-    141 0000FA62 FF FF FF FF FF FF FF  
-    141 0000FA69 FF FF FF FF FF FF FF  
-    141 0000FA70 FF FF FF FF FF FF FF  
-    141 0000FA77 FF FF FF FF FF FF FF  
-    141 0000FA7E FF FF FF FF FF FF FF  
-    141 0000FA85 FF FF FF FF FF FF FF  
-    141 0000FA8C FF FF FF FF FF FF FF  
-    141 0000FA93 FF FF FF FF FF FF FF  
-    141 0000FA9A FF FF FF FF FF FF FF  
-    141 0000FAA1 FF FF FF FF FF FF FF  
-    141 0000FAA8 FF FF FF FF FF FF FF  
-    141 0000FAAF FF FF FF FF FF FF FF  
-    141 0000FAB6 FF FF FF FF FF FF FF  
-    141 0000FABD FF FF FF FF FF FF FF  
-    141 0000FAC4 FF FF FF FF FF FF FF  
-    141 0000FACB FF FF FF FF FF FF FF  
-    141 0000FAD2 FF FF FF FF FF FF FF  
-    141 0000FAD9 FF FF FF FF FF FF FF  
-    141 0000FAE0 FF FF FF FF FF FF FF  
-    141 0000FAE7 FF FF FF FF FF FF FF  
-    141 0000FAEE FF FF FF FF FF FF FF  
-    141 0000FAF5 FF FF FF FF FF FF FF  
-    141 0000FAFC FF FF FF FF FF FF FF  
-    141 0000FB03 FF FF FF FF FF FF FF  
-    141 0000FB0A FF FF FF FF FF FF FF  
-    141 0000FB11 FF FF FF FF FF FF FF  
-    141 0000FB18 FF FF FF FF FF FF FF  
-    141 0000FB1F FF FF FF FF FF FF FF  
-    141 0000FB26 FF FF FF FF FF FF FF  
-    141 0000FB2D FF FF FF FF FF FF FF  
-    141 0000FB34 FF FF FF FF FF FF FF  
-    141 0000FB3B FF FF FF FF FF FF FF  
-    141 0000FB42 FF FF FF FF FF FF FF  
-    141 0000FB49 FF FF FF FF FF FF FF  
-    141 0000FB50 FF FF FF FF FF FF FF  
-    141 0000FB57 FF FF FF FF FF FF FF  
-    141 0000FB5E FF FF FF FF FF FF FF  
-    141 0000FB65 FF FF FF FF FF FF FF  
-    141 0000FB6C FF FF FF FF FF FF FF  
-    141 0000FB73 FF FF FF FF FF FF FF  
-    141 0000FB7A FF FF FF FF FF FF FF  
-    141 0000FB81 FF FF FF FF FF FF FF  
-    141 0000FB88 FF FF FF FF FF FF FF  
-    141 0000FB8F FF FF FF FF FF FF FF  
-    141 0000FB96 FF FF FF FF FF FF FF  
-    141 0000FB9D FF FF FF FF FF FF FF  
-    141 0000FBA4 FF FF FF FF FF FF FF  
-    141 0000FBAB FF FF FF FF FF FF FF  
-    141 0000FBB2 FF FF FF FF FF FF FF  
-    141 0000FBB9 FF FF FF FF FF FF FF  
-    141 0000FBC0 FF FF FF FF FF FF FF  
-    141 0000FBC7 FF FF FF FF FF FF FF  
-    141 0000FBCE FF FF FF FF FF FF FF  
-    141 0000FBD5 FF FF FF FF FF FF FF  
-    141 0000FBDC FF FF FF FF FF FF FF  
-    141 0000FBE3 FF FF FF FF FF FF FF  
-    141 0000FBEA FF FF FF FF FF FF FF  
-    141 0000FBF1 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 20
+    142 0000FA51 FF FF FF FF FF FF FF  
+    142 0000FA58 FF FF FF FF FF FF FF  
+    142 0000FA5F FF FF FF FF FF FF FF  
+    142 0000FA66 FF FF FF FF FF FF FF  
+    142 0000FA6D FF FF FF FF FF FF FF  
+    142 0000FA74 FF FF FF FF FF FF FF  
+    142 0000FA7B FF FF FF FF FF FF FF  
+    142 0000FA82 FF FF FF FF FF FF FF  
+    142 0000FA89 FF FF FF FF FF FF FF  
+    142 0000FA90 FF FF FF FF FF FF FF  
+    142 0000FA97 FF FF FF FF FF FF FF  
+    142 0000FA9E FF FF FF FF FF FF FF  
+    142 0000FAA5 FF FF FF FF FF FF FF  
+    142 0000FAAC FF FF FF FF FF FF FF  
+    142 0000FAB3 FF FF FF FF FF FF FF  
+    142 0000FABA FF FF FF FF FF FF FF  
+    142 0000FAC1 FF FF FF FF FF FF FF  
+    142 0000FAC8 FF FF FF FF FF FF FF  
+    142 0000FACF FF FF FF FF FF FF FF  
+    142 0000FAD6 FF FF FF FF FF FF FF  
+    142 0000FADD FF FF FF FF FF FF FF  
+    142 0000FAE4 FF FF FF FF FF FF FF  
+    142 0000FAEB FF FF FF FF FF FF FF  
+    142 0000FAF2 FF FF FF FF FF FF FF  
+    142 0000FAF9 FF FF FF FF FF FF FF  
+    142 0000FB00 FF FF FF FF FF FF FF  
+    142 0000FB07 FF FF FF FF FF FF FF  
+    142 0000FB0E FF FF FF FF FF FF FF  
+    142 0000FB15 FF FF FF FF FF FF FF  
+    142 0000FB1C FF FF FF FF FF FF FF  
+    142 0000FB23 FF FF FF FF FF FF FF  
+    142 0000FB2A FF FF FF FF FF FF FF  
+    142 0000FB31 FF FF FF FF FF FF FF  
+    142 0000FB38 FF FF FF FF FF FF FF  
+    142 0000FB3F FF FF FF FF FF FF FF  
+    142 0000FB46 FF FF FF FF FF FF FF  
+    142 0000FB4D FF FF FF FF FF FF FF  
+    142 0000FB54 FF FF FF FF FF FF FF  
+    142 0000FB5B FF FF FF FF FF FF FF  
+    142 0000FB62 FF FF FF FF FF FF FF  
+    142 0000FB69 FF FF FF FF FF FF FF  
+    142 0000FB70 FF FF FF FF FF FF FF  
+    142 0000FB77 FF FF FF FF FF FF FF  
+    142 0000FB7E FF FF FF FF FF FF FF  
+    142 0000FB85 FF FF FF FF FF FF FF  
+    142 0000FB8C FF FF FF FF FF FF FF  
+    142 0000FB93 FF FF FF FF FF FF FF  
+    142 0000FB9A FF FF FF FF FF FF FF  
+    142 0000FBA1 FF FF FF FF FF FF FF  
+    142 0000FBA8 FF FF FF FF FF FF FF  
+    142 0000FBAF FF FF FF FF FF FF FF  
+    142 0000FBB6 FF FF FF FF FF FF FF  
+    142 0000FBBD FF FF FF FF FF FF FF  
+    142 0000FBC4 FF FF FF FF FF FF FF  
+    142 0000FBCB FF FF FF FF FF FF FF  
+    142 0000FBD2 FF FF FF FF FF FF FF  
+    142 0000FBD9 FF FF FF FF FF FF FF  
+    142 0000FBE0 FF FF FF FF FF FF FF  
+    142 0000FBE7 FF FF FF FF FF FF FF  
+    142 0000FBEE FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 20
 noc_boot.asm
-    141 0000FBF8 FF FF FF FF FF FF FF  
-    141 0000FBFF FF FF FF FF FF FF FF  
-    141 0000FC06 FF FF FF FF FF FF FF  
-    141 0000FC0D FF FF FF FF FF FF FF  
-    141 0000FC14 FF FF FF FF FF FF FF  
-    141 0000FC1B FF FF FF FF FF FF FF  
-    141 0000FC22 FF FF FF FF FF FF FF  
-    141 0000FC29 FF FF FF FF FF FF FF  
-    141 0000FC30 FF FF FF FF FF FF FF  
-    141 0000FC37 FF FF FF FF FF FF FF  
-    141 0000FC3E FF FF FF FF FF FF FF  
-    141 0000FC45 FF FF FF FF FF FF FF  
-    141 0000FC4C FF FF FF FF FF FF FF  
-    141 0000FC53 FF FF FF FF FF FF FF  
-    141 0000FC5A FF FF FF FF FF FF FF  
-    141 0000FC61 FF FF FF FF FF FF FF  
-    141 0000FC68 FF FF FF FF FF FF FF  
-    141 0000FC6F FF FF FF FF FF FF FF  
-    141 0000FC76 FF FF FF FF FF FF FF  
-    141 0000FC7D FF FF FF FF FF FF FF  
-    141 0000FC84 FF FF FF FF FF FF FF  
-    141 0000FC8B FF FF FF FF FF FF FF  
-    141 0000FC92 FF FF FF FF FF FF FF  
-    141 0000FC99 FF FF FF FF FF FF FF  
-    141 0000FCA0 FF FF FF FF FF FF FF  
-    141 0000FCA7 FF FF FF FF FF FF FF  
-    141 0000FCAE FF FF FF FF FF FF FF  
-    141 0000FCB5 FF FF FF FF FF FF FF  
-    141 0000FCBC FF FF FF FF FF FF FF  
-    141 0000FCC3 FF FF FF FF FF FF FF  
-    141 0000FCCA FF FF FF FF FF FF FF  
-    141 0000FCD1 FF FF FF FF FF FF FF  
-    141 0000FCD8 FF FF FF FF FF FF FF  
-    141 0000FCDF FF FF FF FF FF FF FF  
-    141 0000FCE6 FF FF FF FF FF FF FF  
-    141 0000FCED FF FF FF FF FF FF FF  
-    141 0000FCF4 FF FF FF FF FF FF FF  
-    141 0000FCFB FF FF FF FF FF FF FF  
-    141 0000FD02 FF FF FF FF FF FF FF  
-    141 0000FD09 FF FF FF FF FF FF FF  
-    141 0000FD10 FF FF FF FF FF FF FF  
-    141 0000FD17 FF FF FF FF FF FF FF  
-    141 0000FD1E FF FF FF FF FF FF FF  
-    141 0000FD25 FF FF FF FF FF FF FF  
-    141 0000FD2C FF FF FF FF FF FF FF  
-    141 0000FD33 FF FF FF FF FF FF FF  
-    141 0000FD3A FF FF FF FF FF FF FF  
-    141 0000FD41 FF FF FF FF FF FF FF  
-    141 0000FD48 FF FF FF FF FF FF FF  
-    141 0000FD4F FF FF FF FF FF FF FF  
-    141 0000FD56 FF FF FF FF FF FF FF  
-    141 0000FD5D FF FF FF FF FF FF FF  
-    141 0000FD64 FF FF FF FF FF FF FF  
-    141 0000FD6B FF FF FF FF FF FF FF  
-    141 0000FD72 FF FF FF FF FF FF FF  
-    141 0000FD79 FF FF FF FF FF FF FF  
-    141 0000FD80 FF FF FF FF FF FF FF  
-    141 0000FD87 FF FF FF FF FF FF FF  
-    141 0000FD8E FF FF FF FF FF FF FF  
-    141 0000FD95 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 21
+    142 0000FBF5 FF FF FF FF FF FF FF  
+    142 0000FBFC FF FF FF FF FF FF FF  
+    142 0000FC03 FF FF FF FF FF FF FF  
+    142 0000FC0A FF FF FF FF FF FF FF  
+    142 0000FC11 FF FF FF FF FF FF FF  
+    142 0000FC18 FF FF FF FF FF FF FF  
+    142 0000FC1F FF FF FF FF FF FF FF  
+    142 0000FC26 FF FF FF FF FF FF FF  
+    142 0000FC2D FF FF FF FF FF FF FF  
+    142 0000FC34 FF FF FF FF FF FF FF  
+    142 0000FC3B FF FF FF FF FF FF FF  
+    142 0000FC42 FF FF FF FF FF FF FF  
+    142 0000FC49 FF FF FF FF FF FF FF  
+    142 0000FC50 FF FF FF FF FF FF FF  
+    142 0000FC57 FF FF FF FF FF FF FF  
+    142 0000FC5E FF FF FF FF FF FF FF  
+    142 0000FC65 FF FF FF FF FF FF FF  
+    142 0000FC6C FF FF FF FF FF FF FF  
+    142 0000FC73 FF FF FF FF FF FF FF  
+    142 0000FC7A FF FF FF FF FF FF FF  
+    142 0000FC81 FF FF FF FF FF FF FF  
+    142 0000FC88 FF FF FF FF FF FF FF  
+    142 0000FC8F FF FF FF FF FF FF FF  
+    142 0000FC96 FF FF FF FF FF FF FF  
+    142 0000FC9D FF FF FF FF FF FF FF  
+    142 0000FCA4 FF FF FF FF FF FF FF  
+    142 0000FCAB FF FF FF FF FF FF FF  
+    142 0000FCB2 FF FF FF FF FF FF FF  
+    142 0000FCB9 FF FF FF FF FF FF FF  
+    142 0000FCC0 FF FF FF FF FF FF FF  
+    142 0000FCC7 FF FF FF FF FF FF FF  
+    142 0000FCCE FF FF FF FF FF FF FF  
+    142 0000FCD5 FF FF FF FF FF FF FF  
+    142 0000FCDC FF FF FF FF FF FF FF  
+    142 0000FCE3 FF FF FF FF FF FF FF  
+    142 0000FCEA FF FF FF FF FF FF FF  
+    142 0000FCF1 FF FF FF FF FF FF FF  
+    142 0000FCF8 FF FF FF FF FF FF FF  
+    142 0000FCFF FF FF FF FF FF FF FF  
+    142 0000FD06 FF FF FF FF FF FF FF  
+    142 0000FD0D FF FF FF FF FF FF FF  
+    142 0000FD14 FF FF FF FF FF FF FF  
+    142 0000FD1B FF FF FF FF FF FF FF  
+    142 0000FD22 FF FF FF FF FF FF FF  
+    142 0000FD29 FF FF FF FF FF FF FF  
+    142 0000FD30 FF FF FF FF FF FF FF  
+    142 0000FD37 FF FF FF FF FF FF FF  
+    142 0000FD3E FF FF FF FF FF FF FF  
+    142 0000FD45 FF FF FF FF FF FF FF  
+    142 0000FD4C FF FF FF FF FF FF FF  
+    142 0000FD53 FF FF FF FF FF FF FF  
+    142 0000FD5A FF FF FF FF FF FF FF  
+    142 0000FD61 FF FF FF FF FF FF FF  
+    142 0000FD68 FF FF FF FF FF FF FF  
+    142 0000FD6F FF FF FF FF FF FF FF  
+    142 0000FD76 FF FF FF FF FF FF FF  
+    142 0000FD7D FF FF FF FF FF FF FF  
+    142 0000FD84 FF FF FF FF FF FF FF  
+    142 0000FD8B FF FF FF FF FF FF FF  
+    142 0000FD92 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 21
 noc_boot.asm
-    141 0000FD9C FF FF FF FF FF FF FF  
-    141 0000FDA3 FF FF FF FF FF FF FF  
-    141 0000FDAA FF FF FF FF FF FF FF  
-    141 0000FDB1 FF FF FF FF FF FF FF  
-    141 0000FDB8 FF FF FF FF FF FF FF  
-    141 0000FDBF FF FF FF FF FF FF FF  
-    141 0000FDC6 FF FF FF FF FF FF FF  
-    141 0000FDCD FF FF FF FF FF FF FF  
-    141 0000FDD4 FF FF FF FF FF FF FF  
-    141 0000FDDB FF FF FF FF FF FF FF  
-    141 0000FDE2 FF FF FF FF FF FF FF  
-    141 0000FDE9 FF FF FF FF FF FF FF  
-    141 0000FDF0 FF FF FF FF FF FF FF  
-    141 0000FDF7 FF FF FF FF FF FF FF  
-    141 0000FDFE FF FF FF FF FF FF FF  
-    141 0000FE05 FF FF FF FF FF FF FF  
-    141 0000FE0C FF FF FF FF FF FF FF  
-    141 0000FE13 FF FF FF FF FF FF FF  
-    141 0000FE1A FF FF FF FF FF FF FF  
-    141 0000FE21 FF FF FF FF FF FF FF  
-    141 0000FE28 FF FF FF FF FF FF FF  
-    141 0000FE2F FF FF FF FF FF FF FF  
-    141 0000FE36 FF FF FF FF FF FF FF  
-    141 0000FE3D FF FF FF FF FF FF FF  
-    141 0000FE44 FF FF FF FF FF FF FF  
-    141 0000FE4B FF FF FF FF FF FF FF  
-    141 0000FE52 FF FF FF FF FF FF FF  
-    141 0000FE59 FF FF FF FF FF FF FF  
-    141 0000FE60 FF FF FF FF FF FF FF  
-    141 0000FE67 FF FF FF FF FF FF FF  
-    141 0000FE6E FF FF FF FF FF FF FF  
-    141 0000FE75 FF FF FF FF FF FF FF  
-    141 0000FE7C FF FF FF FF FF FF FF  
-    141 0000FE83 FF FF FF FF FF FF FF  
-    141 0000FE8A FF FF FF FF FF FF FF  
-    141 0000FE91 FF FF FF FF FF FF FF  
-    141 0000FE98 FF FF FF FF FF FF FF  
-    141 0000FE9F FF FF FF FF FF FF FF  
-    141 0000FEA6 FF FF FF FF FF FF FF  
-    141 0000FEAD FF FF FF FF FF FF FF  
-    141 0000FEB4 FF FF FF FF FF FF FF  
-    141 0000FEBB FF FF FF FF FF FF FF  
-    141 0000FEC2 FF FF FF FF FF FF FF  
-    141 0000FEC9 FF FF FF FF FF FF FF  
-    141 0000FED0 FF FF FF FF FF FF FF  
-    141 0000FED7 FF FF FF FF FF FF FF  
-    141 0000FEDE FF FF FF FF FF FF FF  
-    141 0000FEE5 FF FF FF FF FF FF FF  
-    141 0000FEEC FF FF FF FF FF FF FF  
-    141 0000FEF3 FF FF FF FF FF FF FF  
-    141 0000FEFA FF FF FF FF FF FF FF  
-    141 0000FF01 FF FF FF FF FF FF FF  
-    141 0000FF08 FF FF FF FF FF FF FF  
-    141 0000FF0F FF FF FF FF FF FF FF  
-    141 0000FF16 FF FF FF FF FF FF FF  
-    141 0000FF1D FF FF FF FF FF FF FF  
-    141 0000FF24 FF FF FF FF FF FF FF  
-    141 0000FF2B FF FF FF FF FF FF FF  
-    141 0000FF32 FF FF FF FF FF FF FF  
-    141 0000FF39 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Sun Jun 11 15:59:14 2017     Page 22
+    142 0000FD99 FF FF FF FF FF FF FF  
+    142 0000FDA0 FF FF FF FF FF FF FF  
+    142 0000FDA7 FF FF FF FF FF FF FF  
+    142 0000FDAE FF FF FF FF FF FF FF  
+    142 0000FDB5 FF FF FF FF FF FF FF  
+    142 0000FDBC FF FF FF FF FF FF FF  
+    142 0000FDC3 FF FF FF FF FF FF FF  
+    142 0000FDCA FF FF FF FF FF FF FF  
+    142 0000FDD1 FF FF FF FF FF FF FF  
+    142 0000FDD8 FF FF FF FF FF FF FF  
+    142 0000FDDF FF FF FF FF FF FF FF  
+    142 0000FDE6 FF FF FF FF FF FF FF  
+    142 0000FDED FF FF FF FF FF FF FF  
+    142 0000FDF4 FF FF FF FF FF FF FF  
+    142 0000FDFB FF FF FF FF FF FF FF  
+    142 0000FE02 FF FF FF FF FF FF FF  
+    142 0000FE09 FF FF FF FF FF FF FF  
+    142 0000FE10 FF FF FF FF FF FF FF  
+    142 0000FE17 FF FF FF FF FF FF FF  
+    142 0000FE1E FF FF FF FF FF FF FF  
+    142 0000FE25 FF FF FF FF FF FF FF  
+    142 0000FE2C FF FF FF FF FF FF FF  
+    142 0000FE33 FF FF FF FF FF FF FF  
+    142 0000FE3A FF FF FF FF FF FF FF  
+    142 0000FE41 FF FF FF FF FF FF FF  
+    142 0000FE48 FF FF FF FF FF FF FF  
+    142 0000FE4F FF FF FF FF FF FF FF  
+    142 0000FE56 FF FF FF FF FF FF FF  
+    142 0000FE5D FF FF FF FF FF FF FF  
+    142 0000FE64 FF FF FF FF FF FF FF  
+    142 0000FE6B FF FF FF FF FF FF FF  
+    142 0000FE72 FF FF FF FF FF FF FF  
+    142 0000FE79 FF FF FF FF FF FF FF  
+    142 0000FE80 FF FF FF FF FF FF FF  
+    142 0000FE87 FF FF FF FF FF FF FF  
+    142 0000FE8E FF FF FF FF FF FF FF  
+    142 0000FE95 FF FF FF FF FF FF FF  
+    142 0000FE9C FF FF FF FF FF FF FF  
+    142 0000FEA3 FF FF FF FF FF FF FF  
+    142 0000FEAA FF FF FF FF FF FF FF  
+    142 0000FEB1 FF FF FF FF FF FF FF  
+    142 0000FEB8 FF FF FF FF FF FF FF  
+    142 0000FEBF FF FF FF FF FF FF FF  
+    142 0000FEC6 FF FF FF FF FF FF FF  
+    142 0000FECD FF FF FF FF FF FF FF  
+    142 0000FED4 FF FF FF FF FF FF FF  
+    142 0000FEDB FF FF FF FF FF FF FF  
+    142 0000FEE2 FF FF FF FF FF FF FF  
+    142 0000FEE9 FF FF FF FF FF FF FF  
+    142 0000FEF0 FF FF FF FF FF FF FF  
+    142 0000FEF7 FF FF FF FF FF FF FF  
+    142 0000FEFE FF FF FF FF FF FF FF  
+    142 0000FF05 FF FF FF FF FF FF FF  
+    142 0000FF0C FF FF FF FF FF FF FF  
+    142 0000FF13 FF FF FF FF FF FF FF  
+    142 0000FF1A FF FF FF FF FF FF FF  
+    142 0000FF21 FF FF FF FF FF FF FF  
+    142 0000FF28 FF FF FF FF FF FF FF  
+    142 0000FF2F FF FF FF FF FF FF FF  
+    142 0000FF36 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Tue Jun 13 03:21:13 2017     Page 22
 noc_boot.asm
-    141 0000FF40 FF FF FF FF FF FF FF  
-    141 0000FF47 FF FF FF FF FF FF FF  
-    141 0000FF4E FF FF FF FF FF FF FF  
-    141 0000FF55 FF FF FF FF FF FF FF  
-    141 0000FF5C FF FF FF FF FF FF FF  
-    141 0000FF63 FF FF FF FF FF FF FF  
-    141 0000FF6A FF FF FF FF FF FF FF  
-    141 0000FF71 FF FF FF FF FF FF FF  
-    141 0000FF78 FF FF FF FF FF FF FF  
-    141 0000FF7F FF FF FF FF FF FF FF  
-    141 0000FF86 FF FF FF FF FF FF FF  
-    141 0000FF8D FF FF FF FF FF FF FF  
-    141 0000FF94 FF FF FF FF FF FF FF  
-    141 0000FF9B FF FF FF FF FF FF FF  
-    141 0000FFA2 FF FF FF FF FF FF FF  
-    141 0000FFA9 FF FF FF FF FF FF FF  
-    141 0000FFB0 FF FF FF FF FF FF FF  
-    141 0000FFB7 FF FF FF FF FF FF FF  
-    141 0000FFBE FF FF FF FF FF FF FF  
-    141 0000FFC5 FF FF FF FF FF FF FF  
-    141 0000FFCC FF FF FF FF FF FF FF  
-    141 0000FFD3 FF FF FF FF FF FF FF  
-    141 0000FFDA FF FF FF FF FF FF FF  
-    141 0000FFE1 FF FF FF FF FF FF FF  
-    141 0000FFE8 FF FF FF FF FF FF FF  
-    141 0000FFEF FF FF FF FF FF FF FF  
-    141 0000FFF6 FF FF FF FF FF FF FF  
-    141 0000FFFD FF                    
-    142 0000FFFE 00 E0                   		dw		start
+    142 0000FF3D FF FF FF FF FF FF FF  
+    142 0000FF44 FF FF FF FF FF FF FF  
+    142 0000FF4B FF FF FF FF FF FF FF  
+    142 0000FF52 FF FF FF FF FF FF FF  
+    142 0000FF59 FF FF FF FF FF FF FF  
+    142 0000FF60 FF FF FF FF FF FF FF  
+    142 0000FF67 FF FF FF FF FF FF FF  
+    142 0000FF6E FF FF FF FF FF FF FF  
+    142 0000FF75 FF FF FF FF FF FF FF  
+    142 0000FF7C FF FF FF FF FF FF FF  
+    142 0000FF83 FF FF FF FF FF FF FF  
+    142 0000FF8A FF FF FF FF FF FF FF  
+    142 0000FF91 FF FF FF FF FF FF FF  
+    142 0000FF98 FF FF FF FF FF FF FF  
+    142 0000FF9F FF FF FF FF FF FF FF  
+    142 0000FFA6 FF FF FF FF FF FF FF  
+    142 0000FFAD FF FF FF FF FF FF FF  
+    142 0000FFB4 FF FF FF FF FF FF FF  
+    142 0000FFBB FF FF FF FF FF FF FF  
+    142 0000FFC2 FF FF FF FF FF FF FF  
+    142 0000FFC9 FF FF FF FF FF FF FF  
+    142 0000FFD0 FF FF FF FF FF FF FF  
+    142 0000FFD7 FF FF FF FF FF FF FF  
+    142 0000FFDE FF FF FF FF FF FF FF  
+    142 0000FFE5 FF FF FF FF FF FF FF  
+    142 0000FFEC FF FF FF FF FF FF FF  
+    142 0000FFF3 FF FF FF FF FF FF FF  
+    142 0000FFFA FF FF FF FF           
+    143 0000FFFE 00 E0                   		dw		start
 

@@ -31,10 +31,10 @@ reg [15:0] radr;
 always @(posedge clk_i)
     radr <= adr;
 generate begin
-if (ID==8'h11) begin
+if (ID==8'h11 || ID==8'h42) begin
 assign cs_rom = adr[15:14]==2'b11 && cyc && stb;
 reg [7:0] rommem [0:16383];
-assign romo = rommem[radr];
+assign romo = rommem[radr[13:0]];
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot11.mem",rommem);
 end
@@ -42,7 +42,12 @@ end
 else begin
 assign cs_rom = adr[15:13]==3'b111 && cyc && stb;
 reg [7:0] rommem [0:8191];
-assign romo = rommem[radr];
+assign romo = rommem[radr[12:0]];
+if (ID==8'h21)
+initial begin
+    $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot21.mem",rommem);
+end
+else
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot.mem",rommem);
 end
@@ -154,7 +159,7 @@ endcase
 
 Butterfly16 ucpu1
 (
-	.id(id),		// cpu id (which cpu am I?)
+	.id(ID),		// cpu id (which cpu am I?)
 	.nmi(1'b0),			// non-maskable interrupt
 	.irq(1'b0),			// irq inputs
 	.go(1'b1),			// exit stop state if active

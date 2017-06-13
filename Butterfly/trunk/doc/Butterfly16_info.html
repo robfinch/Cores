@@ -749,8 +749,8 @@ quantities. The effect of this is to double the available address range
 supported by the sixteen bit version of the processor.</p>
 <p>This is a load / store architecture; the only operations accessing memory are
 load and store operations. The processor supports both character (16 bit) and
-word (32 bit) loads and stores of data to memory (<a href="#LC">LC</a>, <a href="#LW">LW</a>,
-<a href="#SC">SC</a>, <a href="#SW">SW</a>). Character values loaded are sign
+word (32 bit) loads and stores of data to memory (<a href="#LB">LC</a>, <a href="#LW">LW</a>,
+<a href="#SB">SC</a>, <a href="#SW">SW</a>). Character values loaded are sign
 extended to the width of the implementation when loaded.</p>
 <hr color="#CC0000">
 <hr color="#CC0000">
@@ -1025,8 +1025,7 @@ disallow an intervening interrupt to occur.</p>
 <p><font size="3">16 bit sign extended constant format</font></p>
 <table border="1" width="39%" cellspacing="0" cellpadding="0">
   <tr>
-    <td width="25%" align="center"><font size="2" face="Arial">
-    <span lang="en-ca">8</span><sub>4</sub></font></td>
+    <td width="25%" align="center"><span lang="en-ca"><font size="2">4</font></span><font size="2" face="Arial"><sub>4</sub></font></td>
     <td width="75%" align="center" bgcolor="#F0F0F0"><font size="2" face="Arial">const<sub>15..4</sub></font></td>
   </tr>
 </table>
@@ -1063,7 +1062,7 @@ disallow an intervening interrupt to occur.</p>
     <td width="9%" height="21"><a href="#ADC"><font face="Arial">ADC</font></a></td>
     <td width="13%" height="21"><a href="#ROR"><font face="Arial">ROR</font></a></td>
     <td width="11%" height="21" bgcolor="#EEFFFF"><a href="#JAL"><font face="Arial">JAL</font></a></td>
-    <td width="15%" height="21"><a href="#LC"><font face="Arial">LC</font></a></td>
+    <td width="15%" height="21"><a href="#LB"><font face="Arial">L</font>B</a></td>
     <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#CON"><font face="Arial">CON</font></a></td>
     <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BEQ</font></a></td>
     <td width="14%" height="21"></td>
@@ -1096,7 +1095,7 @@ disallow an intervening interrupt to occur.</p>
     <td width="9%" height="21"><a href="#ROR"><font face="Arial">ASR</font></a></td>
     <td width="14%" height="21"><a href="#SHL"><font face="Arial">SHL</font></a></td>
     <td width="11%" height="21" bgcolor="#EEFFFF"><a href="#RTS"><font face="Arial">RET</font></a></td>
-    <td width="15%" height="21"><a href="#SC"><font face="Arial">SC</font></a></td>
+    <td width="15%" height="21"><a href="#SB"><font face="Arial">S</font>B</a></td>
     <td width="17%" height="21" bgcolor="#EEFFFF"><a href="#TSR"><font face="Arial">TSR</font></a></td>
     <td width="10%" height="21"><a href="#Bcc"><font face="Arial">BLE</font></a></td>
     <td width="14%" height="21"></td>
@@ -2061,7 +2060,7 @@ instruction.</font></p>
 <p><font size="3" face="Arial">Synopsis</font></p>
 <p><font size="2" face="Arial">Run irq routine.</font></p>
 <p><font face="Arial">Detail</font></p>
-<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFF4; flags.backup = flags;
+<p><font size="2" face="Arial">r14 = pc; pc =  FFFA; flags.backup = flags;
 flags.im = 1</font></p>
 <table border="1" cellpadding="0" cellspacing="0" width="320">
   <tr>
@@ -2214,7 +2213,7 @@ instruction.</font></p>
 <hr size="4" color="#CC0000">
 <table border="0" cellspacing="0" width="60%">
   <tr>
-    <td width="25%" nowrap><font face="Arial"><a name="LC"></a>LB</font></td>
+    <td width="25%" nowrap><font face="Arial"><a name="LB"></a>LB</font></td>
     <td width="59%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
     <td width="101%" nowrap></td>
     <td width="68%" nowrap></td>
@@ -2977,7 +2976,7 @@ from the immediate constant, which is opposite to what is usually desired.</font
 <hr size="4" color="#CC0000">
 <table border="0" cellspacing="0" width="60%">
   <tr>
-    <td width="25%" nowrap><font face="Arial"><a name="SC"></a>SB</font></td>
+    <td width="25%" nowrap><font face="Arial"><a name="SB"></a>SB</font></td>
     <td width="59%" nowrap><font face="Arial">&nbsp;Rd,d[Rs]</font></td>
     <td width="101%" nowrap></td>
     <td width="68%" nowrap></td>
@@ -3358,7 +3357,7 @@ to -smallest integer</font></p>
 <p><font size="3" face="Arial">Synopsis</font></p>
 <p><font size="2" face="Arial">Perform system call.</font></p>
 <p><font face="Arial">Detail</font></p>
-<p><font size="2" face="Arial">r14 = pc; pc = FFFF_FFC4; flags.backup = flags;
+<p><font size="2" face="Arial">r14 = pc; pc =  FFE2; flags.backup = flags;
 flags.im = 1</font></p>
 <table border="1" cellpadding="0" cellspacing="0" width="320">
   <tr>
@@ -3449,7 +3448,7 @@ system call. It is meant for operating system support.</font></p>
   </tr>
 </table>
 <p><font size="2" face="Arial">Special Registers</font></p>
-<p><font size="2" face="Arial">Currently there are only two special registers
+<p><font size="2" face="Arial">Currently there are only five special registers
 defined, the remaining codes are reserved for future use.</font></p>
 <table border="1" cellspacing="0" width="54%">
   <tr>
@@ -3522,7 +3521,7 @@ defined, the remaining codes are reserved for future use.</font></p>
   </tr>
 </table>
 <p><font size="2" face="Arial">Special Registers</font></p>
-<p><font size="2" face="Arial">Currently there are only two special registers
+<p><font size="2" face="Arial">Currently there are only five special registers
 defined, the remaining codes are reserved for future use.</font></p>
 <table border="1" cellspacing="0" width="54%">
   <tr>
@@ -3545,6 +3544,16 @@ defined, the remaining codes are reserved for future use.</font></p>
     <td width="24%" align="center"><font size="2" face="Arial">0010</font></td>
     <td width="30%"><font size="2" face="Arial">WAR</font></td>
     <td width="96%"><font size="2" face="Arial">Watch Address Register</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2">0011</font></td>
+    <td width="30%"><font size="2">VER</font></td>
+    <td width="96%"><font size="2">reserved for core version number</font></td>
+  </tr>
+  <tr>
+    <td width="24%" align="center"><font size="2" face="Arial">0100</font></td>
+    <td width="30%"><font size="2">ID</font></td>
+    <td width="96%"><font size="2">Core identifier (hardware thread id)</font></td>
   </tr>
 </table>
 <p>&nbsp;</p>

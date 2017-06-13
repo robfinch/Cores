@@ -26,7 +26,7 @@
 ;
 CR	= 13
 LF	= 10
-CTRLH	equ		9
+CTRLH	equ		8
 cursy	equ		10
 cursx	equ		11
 pos		equ		12
@@ -43,24 +43,33 @@ ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
 RTR_TXSTAT	equ	$12
 
+MSG_DST		equ	15
+MSG_SRC		equ	14
+MSG_TYPE	equ	7
+
 ROUTER_TRB	equ	0
 
 		.code
 		cpu		Butterfly16
-		org		0xC000
+.include "tb.asm"
+		.code
+		.org	$D800
 start:
 		tsr		r1,ID		; id register
 		sb		r1,LEDS
-		call	broadcastReset
+		lw		sp,#$1FFE
 		call	InitTxtCtrl
+		lw		r1,#4
+		sb		r1,LEDS
 		lw		r1,#31
 		sb		r1,txtHeight
-		lw		r1,#56
+		lw		r1,#52
 		sb		r1,txtWidth
 		call	ClearScreen
 		call	HomeCursor
 		lw		r1,#msgStarting
 		call	putmsgScr
+		call	broadcastReset
 RecvLoop:
 noMsg1:
 		lb		r1,ROUTER+RTR_RXSTAT
@@ -80,11 +89,11 @@ broadcastReset:
 		sw		lr,[sp]
 		call	zeroTxBuf
 		lw		r1,#$FF		; global broadcast address
-		sb		r1,txBuf+15
+		sb		r1,txBuf+MSG_DST
 		lw		r1,#$11		; source of message
-		sb		r1,txBuf+14
+		sb		r1,txBuf+MSG_SRC
 		lw		r1,#1
-		sb		r1,txBuf+8	; reset message
+		sb		r1,txBuf+MSG_TYPE	; reset message
 		call	Xmit
 		lw		lr,[sp]
 		add		sp,sp,#2
@@ -130,8 +139,8 @@ Recv1:
 ;----------------------------------------------------------------------------
 
 RecvDispatch:
-		lb		r1,rxBuf+8
-		cmp		#2				; status display ?
+		lb		r1,rxBuf+MSG_TYPE
+		cmp		r1,#2				; status display ?
 		bne		RecvDispatch2
 		lb		r1,rxBuf+14		; message source
 		mov		r2,r1
@@ -166,6 +175,8 @@ zeroTxBuf1:
 ;----------------------------------------------------------------------------
 
 InitTxtCtrl:
+		lw		r1,#2
+		sb		r1,LEDS
 		lw		r2,#0
 itc1:
 		lb		r1,txtctrl_dat[r2]
@@ -173,6 +184,8 @@ itc1:
 		add		r2,r2,#1
 		cmp		r2,#15
 		ble		itc1
+		lw		r1,#3
+		sb		r1,LEDS
 		ret
 
 ;----------------------------------------------------------------------------
@@ -322,6 +335,8 @@ pc4
 	; put the character to the screen, then advance cursor
 pc11
 	sb		r1,charToPrint
+	lw		r1,#$BF
+	sb		r1,charToPrint+1
 	lw		r4,#TXTSCR
 	lw		r5,pos
 	shl		r5,#1		; pos * 2
@@ -356,7 +371,7 @@ pc8						; not at EOL
 	add		r4,r4,#1	; cursor.x++
 	sb		r4,cursx
 	add		r5,r5,#1	; pos++
-	sh		r5,pos
+	sw		r5,pos
 
 pc7
 	lb		r1,cursFlash	; flash or don't flash the cursor
@@ -409,7 +424,7 @@ msgStarting:
 	db	"Butterfly Grid Computer Starting",0
 
 txtctrl_dat:
-	db	56,31,84,0,16,0,7,$22,$1F,$E0,31,0,0,3,0
+	db	52,31,52,0,16,0,7,$22,$1F,$E0,31,0,0,3,0
 
 	; Table of offsets of start of video line in video
 	; memory assuming 56 chars per line.

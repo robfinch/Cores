@@ -12,7 +12,14 @@ module grid(rst_i, clk_i,
     we21,
     adr21,
     dati21,
-    dato21 
+    dato21,
+    cyc42,
+    stb42,
+    ack42,
+    we42,
+    adr42,
+    dati42,
+    dato42 
 );
 input rst_i;
 input clk_i;
@@ -30,6 +37,13 @@ output we21;
 output [15:0] adr21;
 input [7:0] dati21;
 output [7:0] dato21;
+output cyc42;
+output stb42;
+input ack42;
+output we42;
+output [15:0] adr42;
+input [7:0] dati42;
+output [7:0] dato42;
 
 node #(8'h11) un11
 (
@@ -162,7 +176,14 @@ node #(8'h42) un42
     .rxdX(txdX32),
     .txdX(txdX42),
     .rxdY(rxdY41),
-    .txdY(txdY42)
+    .txdY(txdY42),
+    .cyc(cyc42),
+    .stb(stb42),
+    .ack(ack42),
+    .we(we42),
+    .adr(adr42),
+    .dati(dati42),
+    .dato(dato42)
 );
 
 node #(8'h52) un52

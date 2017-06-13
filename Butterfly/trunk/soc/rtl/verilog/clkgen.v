@@ -25,7 +25,7 @@
 //
 //=============================================================================
 
-module clkgen(xreset, xclk, rst, clk100, clk25, clk50, clk200, clk300, clk125, vclk, ub_sys_clk, sys_clk, dram_clk, locked, pulse1000Hz, pulse100Hz);
+module clkgen(xreset, xclk, rst, clk100, clk25, clk50, clk200, clk300, clk400, clk125, clk80, ub_sys_clk, sys_clk, dram_clk, locked, pulse1000Hz, pulse100Hz);
 parameter pClkFreq=20000000;
 input xreset;		// external reset
 input xclk;			// external clock source (100 MHz)
@@ -35,8 +35,9 @@ output clk25;
 output clk50;
 output clk200;
 output clk300;
+output clk400;
 output clk125;		// 125 MHz
-output vclk;		// video clock  (85.7Mhz)
+output clk80;		// video clock  (85.7Mhz)
 output ub_sys_clk;
 output sys_clk;		// system clock (50 MHz)
 output dram_clk;	// DDR2 ram clock (286 MHz)
@@ -47,11 +48,12 @@ output pulse100Hz;
 wire gnd;
 wire clk200u;
 wire clk300u;
+wire clk400u;
 wire clk2x;
 wire clk25u;
 wire clk50u;
 wire clk100u;		// unbuffered 50MHz
-wire clk85u;		// unbuffered 85MHz
+wire clk80u;		// unbuffered 85MHz
 wire clk125u;
 wire clkvu;
 wire locked0,locked1;
@@ -69,7 +71,8 @@ BUFG bg0 (.I(clk100u), 	.O(clk100) );
 BUFG bg2 (.I(clk25u), 	.O(clk25) );
 BUFG bg3 (.I(clk200u),  .O(clk200) );
 BUFG bg4 (.I(clk300u),  .O(clk300) );
-BUFG bg1 (.I(clk85u), .O(vclk) );
+BUFG bg8 (.I(clk400u),  .O(clk400) );
+BUFG bg1 (.I(clk80u), .O(clk80) );
 BUFG bg5 (.I(isys_clk), .O(sys_clk) );
 BUFG bg6 (.I(clk200u), .O(dram_clk) );
 BUFG bg7 (.I(clk125u), .O(clk125b) );
@@ -148,18 +151,20 @@ PLLE2_BASE u1
     .CLKFBIN(clkfb),
     .CLKFBOUT(clkfbo),
     .LOCKED(locked0),
-    .CLKOUT0(clk85u),
+    .CLKOUT0(clk80u),
     .CLKOUT1(isys_clk), // 66 MHz
     .CLKOUT2(clk200u),
     .CLKOUT3(clk300u),
-    .CLKOUT4(clk50u)
+    .CLKOUT4(clk400u),
+    .CLKOUT5(clk50u)
 );
 defparam u1.CLKFBOUT_MULT = 12;     // must place VCO frequency 800-1600 MHz (1200)
-defparam u1.CLKOUT0_DIVIDE = 14;
+defparam u1.CLKOUT0_DIVIDE = 15;
 defparam u1.CLKOUT1_DIVIDE = 24;
 defparam u1.CLKOUT2_DIVIDE = 6;
 defparam u1.CLKOUT3_DIVIDE = 4;
-defparam u1.CLKOUT4_DIVIDE = 24;
+defparam u1.CLKOUT4_DIVIDE = 3;
+defparam u1.CLKOUT5_DIVIDE = 24;
 defparam u1.CLKIN1_PERIOD = 10.000;
 
 

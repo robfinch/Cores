@@ -35,10 +35,15 @@ RTR_TXSTAT	equ	$12
 
 ROUTER_TRB	equ	0
 
+MSG_DST		equ	15
+MSG_SRC		equ	14
+MSG_TYPE	equ	7
+
 		.code
 		cpu		Butterfly16
 		org		0xE000
 start:
+		lw		sp,#$1FFE
 noMsg1:
 		lb		r1,ROUTER+RTR_RXSTAT
 		beq		noMsg1
@@ -57,11 +62,11 @@ broadcastReset:
 		sw		lr,[sp]
 		call	zeroTxBuf
 		lw		r1,#$FF		; global broadcast address
-		sb		r1,txBuf+15
+		sb		r1,txBuf+MSG_DST
 		lw		r1,#$11		; source of message
-		sb		r1,txBuf+14
+		sb		r1,txBuf+MSG_SRC
 		lw		r1,#1
-		sb		r1,txBuf+8	; reset message
+		sb		r1,txBuf+MSG_TYPE	; reset message
 		call	Xmit
 		lw		lr,[sp]
 		add		sp,sp,#2
@@ -109,16 +114,16 @@ Recv1:
 RecvDispatch:
 		add		sp,sp,#-2
 		sw		lr,[sp]
-		lb		r1,rxBuf+8
+		lb		r1,rxBuf+MSG_TYPE
 		cmp		r1,#1
 		bne		RecvDispatch2
 		call	zeroTxBuf
 		tsr		r1,ID
-		sb		r1,txBuf+14
+		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$11
-		sb		r1,txBuf+15
+		sb		r1,txBuf+MSG_DST
 		lw		r1,#2
-		sb		r1,txBuf+8
+		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 RecvDispatch2:
 		lw		lr,[sp]
