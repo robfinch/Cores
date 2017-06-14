@@ -3,27 +3,28 @@ Global symbols:
 Symbol Table:
  #  Name                            OCLS  Base Len        Value         Line     File
   0 CR                               NON  DATA   W   000000000000000D      26   noc_boot.asm
-  1 CTRLH                            NON  DATA   W   0000000000000009      28   noc_boot.asm
+  1 CTRLH                            NON  DATA   W   0000000000000008      28   noc_boot.asm
   2 LF                               NON  DATA   W   000000000000000A      27   noc_boot.asm
-  3 ROUTER                           NON  DATA   W   000000000000B000      32   noc_boot.asm
-  4 ROUTER_TRB                       NON  DATA   W   0000000000000000      36   noc_boot.asm
-  5 RTR_RXSTAT                       NON  DATA   W   0000000000000010      33   noc_boot.asm
-  6 RTR_TXSTAT                       NON  DATA   W   0000000000000012      34   noc_boot.asm
-  7 Recv                             PRI  CODE   W   000000000000E050      95   noc_boot.asm
-  8 Recv1                            PRI  CODE   W   000000000000E05A      99   noc_boot.asm
-  9 RecvDispatch                     PRI  CODE   W   000000000000E068     109   noc_boot.asm
- 10 RecvDispatch2                    PRI  CODE   W   000000000000E08C     123   noc_boot.asm
- 11 Xmit                             PRI  CODE   W   000000000000E032      74   noc_boot.asm
- 12 Xmit1                            PRI  CODE   W   000000000000E03C      80   noc_boot.asm
- 13 Xmit2                            PRI  CODE   W   000000000000E032      76   noc_boot.asm
- 14 broadcastReset                   PRI  CODE   W   000000000000E00E      55   noc_boot.asm
- 15 lockup                           PRI  CODE   W   000000000000E00C      48   noc_boot.asm
- 16 noMsg1                           PRI  CODE   W   000000000000E000      42   noc_boot.asm
- 17 rxBuf                            NON  DATA   W   0000000000000030      30   noc_boot.asm
- 18 start                            PRI  CODE   W   000000000000E000      41   noc_boot.asm
- 19 txBuf                            NON  DATA   W   0000000000000020      29   noc_boot.asm
- 20 zeroTxBuf                        PRI  CODE   W   000000000000E092     132   noc_boot.asm
- 21 zeroTxBuf1                       PRI  CODE   W   000000000000E096     134   noc_boot.asm
+  3 MSG_DST                          NON  DATA   W   000000000000000F      40   noc_boot.asm
+  4 MSG_SRC                          NON  DATA   W   000000000000000E      41   noc_boot.asm
+  5 MSG_TYPE                         NON  DATA   W   0000000000000007      42   noc_boot.asm
+  6 ROUTER                           NON  DATA   W   000000000000B000      34   noc_boot.asm
+  7 ROUTER_TRB                       NON  DATA   W   0000000000000000      38   noc_boot.asm
+  8 RTR_RXSTAT                       NON  DATA   W   0000000000000010      35   noc_boot.asm
+  9 RTR_TXSTAT                       NON  DATA   W   0000000000000012      36   noc_boot.asm
+ 10 RecvDispatch                     PRI  CODE   W   000000000000F442      72   noc_boot.asm
+ 11 RecvDispatch2                    PRI  CODE   W   000000000000F46C      88   noc_boot.asm
+ 12 RecvDispatch3                    PRI  CODE   W   000000000000F47C      94   noc_boot.asm
+ 13 RecvDispatch4                    PRI  CODE   W   000000000000F4B4     123   noc_boot.asm
+ 14 RecvDispatch5                    PRI  CODE   W   000000000000F4BA     126   noc_boot.asm
+ 15 RecvDispatch6                    PRI  CODE   W   000000000000F49C     110   noc_boot.asm
+ 16 RecvDispatch7                    PRI  CODE   W   000000000000F48C     100   noc_boot.asm
+ 17 RecvDispatch8                    PRI  CODE   W   000000000000F4AE     120   noc_boot.asm
+ 18 lockup                           PRI  CODE   W   000000000000F3DC      61   noc_boot.asm
+ 19 noMsg1                           PRI  CODE   W   000000000000F3D0      55   noc_boot.asm
+ 20 rxBuf                            NON  DATA   W   0000000000000030      30   noc_boot.asm
+ 21 start                            PRI  CODE   W   000000000000F3CC      53   noc_boot.asm
+ 22 txBuf                            NON  DATA   W   0000000000000020      29   noc_boot.asm
 
 
 Local symbols:

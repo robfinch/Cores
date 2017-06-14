@@ -27,14 +27,26 @@
 CR	= 13
 LF	= 10
 CTRLH	equ		8
-cursy	equ		10
-cursx	equ		11
-pos		equ		12
-txtHeight	equ	14
-txtWidth	equ	15
-charToPrint	equ	16
-txBuf	equ		32
-rxBuf	equ		48
+
+.include "MessageTypes.asm"
+
+		bss
+		org		0x0030
+txtWidth	db	0		; BIOS var =60
+txtHeight	db	0		; BIOS var =27
+cursx	db		0		; cursor x position
+cursy	db		0		; cursor y position
+pos		dw		0		; text screen position
+		org		0x0038
+charToPrint		dw		0
+fgColor			db		0
+bkColor			db		0
+cursFlash		db		0	; flash the cursor ?
+				db		0	; padding
+NormAttr		dw		0
+
+txBuf	fill.b	16,0
+rxBuf	fill.b	16,0
 
 TXTSCR		equ	$2000
 TXTCTRL		equ	$B100
@@ -51,6 +63,7 @@ ROUTER_TRB	equ	0
 
 		.code
 		cpu		Butterfly16
+		.org	$C000
 .include "tb.asm"
 		.code
 		.org	$D800
@@ -65,6 +78,8 @@ start:
 		sb		r1,txtHeight
 		lw		r1,#52
 		sb		r1,txtWidth
+		lw		r1,#$BF00
+		sw		r1,NormAttr
 		call	ClearScreen
 		call	HomeCursor
 		lw		r1,#msgStarting
@@ -80,6 +95,8 @@ noMsg1:
 lockup:
 		bra		lockup
 
+.include "Network.asm"
+
 ;----------------------------------------------------------------------------
 ; Broadcast a reset message on the network.
 ;----------------------------------------------------------------------------
@@ -92,7 +109,7 @@ broadcastReset:
 		sb		r1,txBuf+MSG_DST
 		lw		r1,#$11		; source of message
 		sb		r1,txBuf+MSG_SRC
-		lw		r1,#1
+		lw		r1,#MT_RST
 		sb		r1,txBuf+MSG_TYPE	; reset message
 		call	Xmit
 		lw		lr,[sp]
@@ -100,74 +117,43 @@ broadcastReset:
 		ret
 
 ;----------------------------------------------------------------------------
-; Transmit on the network.
-;----------------------------------------------------------------------------
-
-Xmit:
-		; wait for transmit buffer to empty
-Xmit2:
-		lb		r1,ROUTER+RTR_TXSTAT
-		bne		Xmit2
-		lw		r2,#15
-Xmit1:
-		lb		r1,txBuf[r2]
-		sb		r1,ROUTER[r2]
-		add		r2,r2,#-1
-		bpl		Xmit1
-		; trigger a transmit
-		lw		r1,#1
-		sb		r2,ROUTER+RTR_TXSTAT
-		ret
-
-;----------------------------------------------------------------------------
-; Receive from network.
-; Receive status must have already indicated a message present.
-;----------------------------------------------------------------------------
-
-Recv:
-		lw		r1,#1
-		sb		r1,ROUTER+RTR_RXSTAT	; pop the rx fifo
-		lw		r2,#15
-Recv1:
-		lb		r1,ROUTER[r2]			; copy message to local buffer
-		sb		r1,rxBuf[r2]
-		add		r2,r2,#-1
-		bpl		Recv1
-		ret
-
-;----------------------------------------------------------------------------
+; Dispatch routine for recieved messages.
 ;----------------------------------------------------------------------------
 
 RecvDispatch:
+		add		sp,sp,#-8
+		sw		lr,[sp]
+		sw		r1,2[sp]
+		sw		r2,4[sp]
+		sw		r3,6[sp]
 		lb		r1,rxBuf+MSG_TYPE
-		cmp		r1,#2				; status display ?
+		cmp		r1,#MT_RST_ACK	; status display ?
 		bne		RecvDispatch2
 		lb		r1,rxBuf+14		; message source
 		mov		r2,r1
-		and		r2,#$F
-		mov		r3,r1
+		and		r2,#$7			; get Y coord
+		shl		r2,#1			; shift left once
+		lw		r2,lineTbl[r2]
+		add		r2,r2,#88		; position table along right edge of screen
+		mov		r3,r1			; r3 = ID
 		shr		r3,#1
 		shr		r3,#1
 		shr		r3,#1
-		and		r3,#$3E
-		lw		r3,lineTbl[r3]
+		shr		r3,#1
+		shl		r3,#1			; character screen pos = *2
+		and		r3,#$0E
 		add		r3,r2
-		add		r3,r2
-		lw		r1,#$BF65
+		lw		r1,#'*'
+		call	AsciiToScreen
+		lw		r2,NormAttr
+		or		r1,r2
 		sw		r1,TXTSCR[r3]
 RecvDispatch2:
-		ret
-
-;----------------------------------------------------------------------------
-; Zero out the transmit buffer.
-;----------------------------------------------------------------------------
-
-zeroTxBuf:
-		lw		r2,#15
-zeroTxBuf1:
-		sb		r0,txBuf[r2]
-		sub		r2,r2,#1
-		bpl		zeroTxBuf1
+		lw		lr,[sp]
+		lw		r1,2[sp]
+		lw		r2,4[sp]
+		lw		r3,6[sp]
+		add		sp,sp,#8
 		ret
 
 ;----------------------------------------------------------------------------
@@ -188,27 +174,77 @@ itc1:
 		sb		r1,LEDS
 		ret
 
+;------------------------------------------------------------------------------
+; Convert Ascii character to screen character.
+;
+; Parameters:
+;	r1 = character to convert
+; Returns:
+;	r1 = converted character
+;
+;------------------------------------------------------------------------------
+
+AsciiToScreen:
+		add		sp,sp,#-2
+		sw		r2,[sp]
+		and		r1,#$FF
+		mov		r2,r1
+		and		r2,#%00100000	; if bit 5 isn't set
+		beq		ats1
+		mov		r2,r1
+		and		r2,#%01000000	; or bit 6 isn't set
+		beq		ats1
+		and		r1,#%10011111
+ats1:
+		lw		r2,[sp]
+		add		sp,sp,#2
+		rts
+
 ;----------------------------------------------------------------------------
 ; Clear the screen.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	r1,r2,r3
 ;----------------------------------------------------------------------------
 
 ClearScreen:
-		lw		r1,#2048
+		add		sp,sp,#-2
+		sw		lr,[sp]
+		lw		r1,#' '
+		call	AsciiToScreen
+		lw		r2,NormAttr
+		or		r1,r2
+		mov		r3,r1
+		lw		r1,#1612	; 52x31
 		lw		r2,#TXTSCR
-		lw		r3,#$BF00
 cs1:
 		sw		r3,[r2]
 		add		r2,r2,#2
 		add		r1,r1,#-1
 		bne		cs1
+		lw		lr,[sp]
+		add		sp,sp,#2
 		ret
 
 ;----------------------------------------------------------------------------
+; Home the cursor
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	<none>
 ;----------------------------------------------------------------------------
 
 HomeCursor:
 		sb		r0,cursy
 		sb		r0,cursx
+		sw		r0,pos
 		ret
 
 ; flash the character at the screen position
@@ -217,12 +253,15 @@ flashCursor:
 		ret
 
 ;-----------------------------------------------------------------
-; display a message on the screen
-; r1 = message address
-; screen pos controls where message is displayed
-; Returns
+; Display a message on the screen
+;
+; Parameters:
+;	r1 = message address
+;	screen pos controls where message is displayed
+; Returns:
 ; 	r1 = points to null character
 ;-----------------------------------------------------------------
+
 putmsgScr:
 	sub		sp,sp,#4	; allocate stack frame
 	sw		lr,[sp]	; save off link reg
@@ -244,8 +283,11 @@ putmsg4:
 
 ;-----------------------------------------------------------------
 ; Put a character to the screen
-;	r1.h = character to put
+;
+; Parameters:
+;	r1.b = character to put
 ;-----------------------------------------------------------------
+
 putcharScr
 	sub		sp,sp,#8
 	sw		lr,[sp]
@@ -275,7 +317,7 @@ putcharScr
 pc1
 	cmp		r1,#LF		; line feed ?
 	bne		pc2
-	lb		r1,cursy	; past line 23 ?
+	lb		r1,cursy	; past line 31 ?
 	lb		r4,txtHeight
 	sub		r4,r4,#2
 	cmp		r1,r4
@@ -318,10 +360,11 @@ pc6
 	cmp		r1,r4
 	bltu	pc6
 	; blank trailing character
-	lw		r5,#' '
-	sb		r5,charToPrint
-	lb		r5,charToPrint
-	sw		r5,[r6]
+	lw		r1,#' '
+	call	AsciiToScreen
+	lw		r5,NormAttr
+	or		r1,r5
+	sw		r1,[r6]
 	jmp		pc7
 
 	; control character (non-printable)
@@ -334,15 +377,14 @@ pc4
 	; some other character
 	; put the character to the screen, then advance cursor
 pc11
-	sb		r1,charToPrint
-	lw		r1,#$BF
-	sb		r1,charToPrint+1
+	call	AsciiToScreen
+	lw		r4,NormAttr
+	or		r1,r4
 	lw		r4,#TXTSCR
 	lw		r5,pos
 	shl		r5,#1		; pos * 2
 	add		r4,r5		; scr[pos]
-	lw		r5,charToPrint
-	sw		r5,[r4]		; = char
+	sw		r1,[r4]		; = char
 	; advance cursor
 	lw		r5,pos
 	lb		r1,txtWidth

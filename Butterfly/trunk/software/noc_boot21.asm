@@ -39,6 +39,8 @@ SC_NUMLOCK	EQU		$77
 SC_SCROLLLOCK	EQU	$7E
 SC_CAPSLOCK	EQU		$58
 
+.include "MessageTypes.asm"
+
 HTInputFocus	equ	15
 KeyState1	equ	16
 KeyState2	equ	17
@@ -61,6 +63,9 @@ MSG_TYPE	equ	7
 		.code
 		cpu		Butterfly16
 		org		0xE000
+.include "tb.asm"
+
+		.code
 start:
 		lw		sp,#$1FFE
 		sb		r0,HTInputFocus
@@ -80,7 +85,7 @@ noMsg1:
 		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$FF
 		sb		r1,txBuf+MSG_DST
-		lw		r1,#3
+		lw		r1,#MT_STOP
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 		bra		noKey
@@ -95,7 +100,7 @@ notC:
 		sb		r5,txBuf+MSG_SRC
 		sb		r1,txBuf			; store ascii char
 		sb		r3,txBuf+1			; and scan code
-		lw		r1,#4				; keyboard message
+		lw		r1,#MT_KEYSTROKE	; keyboard message
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 noKey:
@@ -106,6 +111,8 @@ noKey:
 		bra		start1
 lockup:
 		bra		lockup
+
+.include "Network.asm"
 
 ;----------------------------------------------------------------------------
 ; Broadcast a reset message on the network.
@@ -127,42 +134,7 @@ broadcastReset:
 		ret
 
 ;----------------------------------------------------------------------------
-; Transmit on the network.
-;----------------------------------------------------------------------------
-
-Xmit:
-		; wait for transmit buffer to empty
-Xmit2:
-		lb		r1,ROUTER+RTR_TXSTAT
-		bne		Xmit2
-		lw		r2,#15
-Xmit1:
-		lb		r1,txBuf[r2]
-		sb		r1,ROUTER[r2]
-		add		r2,r2,#-1
-		bpl		Xmit1
-		; trigger a transmit
-		lw		r1,#1
-		sb		r2,ROUTER+RTR_TXSTAT
-		ret
-
-;----------------------------------------------------------------------------
-; Receive from network.
-; Receive status must have already indicated a message present.
-;----------------------------------------------------------------------------
-
-Recv:
-		lw		r1,#1
-		sb		r1,ROUTER+RTR_RXSTAT	; pop the rx fifo
-		lw		r2,#15
-Recv1:
-		lb		r1,ROUTER[r2]			; copy message to local buffer
-		sb		r1,rxBuf[r2]
-		add		r2,r2,#-1
-		bpl		Recv1
-		ret
-
-;----------------------------------------------------------------------------
+; Received message dispatch.
 ;----------------------------------------------------------------------------
 
 RecvDispatch:
@@ -170,7 +142,7 @@ RecvDispatch:
 		sw		lr,[sp]
 		lb		r1,rxBuf+MSG_TYPE
 		; Reset request ?
-		cmp		r1,#1
+		cmp		r1,#MT_RST
 		bne		RecvDispatch2
 		sb		r0,HTInputFocus
 		call	zeroTxBuf
@@ -178,28 +150,28 @@ RecvDispatch:
 		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$11
 		sb		r1,txBuf+MSG_DST
-		lw		r1,#2
+		lw		r1,#MT_RST_ACK
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 		bra		RecvDispatchXit
 RecvDispatch2:
 		; Set input focus ?
 		; Check for request to set input focus
-		cmp		r1,#5
+		cmp		r1,#MT_SET_INPUT_FOCUS
 		bne		RecvDispatch3
 		lb		r1,rxBuf
 		sb		HTInputFocus
 		bra		RecvDispatchXit
 RecvDispatch3:
 		; Get button status ?
-		cmp		r1,#6
+		cmp		r1,#MT_BUTTON_STATUS
 		bne		RecvDispatch4
 		call	zeroTxBuf
 		tsr		r1,ID
 		sb		r1,txBuf+MSG_SRC
 		lb		r1,rxBuf+MSG_SRC		; where did message come from
 		sb		r1,txBuf+MSG_DST		; send back to sender
-		lw		r1,#6
+		lw		r1,#MT_BUTTON_STATUS
 		sb		r1,txBuf+MSG_TYPE
 		lb		r1,BTNS
 		sb		r1,txBuf
@@ -210,18 +182,6 @@ RecvDispatch4:
 RecvDispatchXit:
 		lw		lr,[sp]
 		add		sp,sp,#2
-		ret
-
-;----------------------------------------------------------------------------
-; Zero out the transmit buffer.
-;----------------------------------------------------------------------------
-
-zeroTxBuf:
-		lw		r2,#15
-zeroTxBuf1:
-		sb		r0,txBuf[r2]
-		sub		r2,r2,#1
-		bpl		zeroTxBuf1
 		ret
 
 ;============================================================================

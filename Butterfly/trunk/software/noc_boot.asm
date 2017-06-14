@@ -29,6 +29,8 @@ CTRLH	equ		9
 txBuf	equ		32
 rxBuf	equ		48
 
+.include "MessageTypes.asm"
+
 ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
 RTR_TXSTAT	equ	$12
@@ -42,6 +44,12 @@ MSG_TYPE	equ	7
 		.code
 		cpu		Butterfly16
 		org		0xE000
+.include "tb.asm"
+
+; Operation of an ordinary (worker) node is pretty simple. It just waits in
+; loop polling for recieved messages which are then dispatched.
+
+		.code
 start:
 		lw		sp,#$1FFE
 noMsg1:
@@ -53,93 +61,71 @@ noMsg1:
 lockup:
 		bra		lockup
 
-;----------------------------------------------------------------------------
-; Broadcast a reset message on the network.
-;----------------------------------------------------------------------------
-
-broadcastReset:
-		add		sp,sp,#-2
-		sw		lr,[sp]
-		call	zeroTxBuf
-		lw		r1,#$FF		; global broadcast address
-		sb		r1,txBuf+MSG_DST
-		lw		r1,#$11		; source of message
-		sb		r1,txBuf+MSG_SRC
-		lw		r1,#1
-		sb		r1,txBuf+MSG_TYPE	; reset message
-		call	Xmit
-		lw		lr,[sp]
-		add		sp,sp,#2
-		ret
+.include "Network.asm"
 
 ;----------------------------------------------------------------------------
-; Transmit on the network.
-;----------------------------------------------------------------------------
-
-Xmit:
-		; wait for transmit buffer to empty
-Xmit2:
-		lb		r1,ROUTER+RTR_TXSTAT
-		bne		Xmit2
-		lw		r2,#15
-Xmit1:
-		lb		r1,txBuf[r2]
-		sb		r1,ROUTER[r2]
-		add		r2,r2,#-1
-		bpl		Xmit1
-		; trigger a transmit
-		lw		r1,#1
-		sb		r2,ROUTER+RTR_TXSTAT
-		ret
-
-;----------------------------------------------------------------------------
-; Receive from network.
-; Receive status must have already indicated a message present.
-;----------------------------------------------------------------------------
-
-Recv:
-		lw		r1,#1
-		sb		r1,ROUTER+RTR_RXSTAT	; pop the rx fifo
-		lw		r2,#15
-Recv1:
-		lb		r1,ROUTER[r2]			; copy message to local buffer
-		sb		r1,rxBuf[r2]
-		add		r2,r2,#-1
-		bpl		Recv1
-		ret
-
-;----------------------------------------------------------------------------
+; Receiver dispatch
+;
+; Executes different message handlers based on the message type.
 ;----------------------------------------------------------------------------
 
 RecvDispatch:
 		add		sp,sp,#-2
 		sw		lr,[sp]
 		lb		r1,rxBuf+MSG_TYPE
-		cmp		r1,#1
+		cmp		r1,#MT_RST			; reset message ?
 		bne		RecvDispatch2
+		; Send back a reset ACK message to indicate node is good to go.
 		call	zeroTxBuf
 		tsr		r1,ID
 		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$11
 		sb		r1,txBuf+MSG_DST
-		lw		r1,#2
+		lw		r1,#MT_RST_ACK
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
+		br		RecvDispatch5
 RecvDispatch2:
+		cmp		r1,#MT_START_BASIC_LOAD	; start BASIC load
+		bne		RecvDispatch3
+		lb		r1,rxBuf+MSG_SRC
+		lw		r8,TXTBGN			; r8 = text begin
+		br		RecvDispatch5
+RecvDispatch3:
+		cmp		r1,#MT_LOAD_BASIC_CHAR	; load BASIC program char
+		bne		RecvDispatch4
+		lb		r1,rxBuf
+		cmp		r1,#':'				; line number ?
+		bne		RecvDispatch6
+RecvDispatch7:
+		lb		r1,rxBuf+1
+		sb		r1,[r8]
+		lb		r1,rxBuf+2
+		sb		r1,1[r8]
+		add		r8,r8,#2
+		br		RecvDispatch5
+		; Ordinary BASIC program character (non-line number)
+		; Just stuff in BASIC text buffer, increment text pointer
+		; and continue.
+RecvDispatch6:
+		cmp		r1,#'@'				; end of program ?
+		beq		RecvDispatch8
+		cmp		r1,#$1A				; CTRL-Z (CPM end of file)
+		beq		RecvDispatch8
+		sb		r1,[r8]
+		add		r8,r8,#1
+		br		RecvDispatch5
+		; End of program load, just set the end of the BASIC
+		; program to the current text pointer.
+RecvDispatch8:
+		sw		r8,TXTUNF
+		br		RecvDispatch5
+RecvDispatch4:
+		cmp		r1,#12
+		bne		RecvDispatch5
+RecvDispatch5:
 		lw		lr,[sp]
 		add		sp,sp,#2
-		ret
-
-;----------------------------------------------------------------------------
-; Zero out the transmit buffer.
-;----------------------------------------------------------------------------
-
-zeroTxBuf:
-		lw		r2,#15
-zeroTxBuf1:
-		sb		r0,txBuf[r2]
-		sub		r2,r2,#1
-		bpl		zeroTxBuf1
 		ret
 
 		org		0xFFFE

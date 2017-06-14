@@ -1,0 +1,82 @@
+Global symbols:
+
+Symbol Table:
+ #  Name                            OCLS  Base Len        Value         Line     File
+  0 BTNS                             NON  DATA   W   000000000000B200      55   noc_boot21.asm
+  1 CR                               NON  DATA   W   000000000000000D      26   noc_boot21.asm
+  2 CTRLH                            NON  DATA   W   0000000000000008      28   noc_boot21.asm
+  3 HTInputFocus                     NON  DATA   W   000000000000000F      44   noc_boot21.asm
+  4 KBD                              NON  DATA   W   00000000FFFFDC50      56   noc_boot21.asm
+  5 KBD_STAT                         NON  DATA   W   0000000000000001      57   noc_boot21.asm
+  6 KeyState1                        NON  DATA   W   0000000000000010      45   noc_boot21.asm
+  7 KeyState2                        NON  DATA   W   0000000000000011      46   noc_boot21.asm
+  8 KeybdGetChar                     PRI  CODE   W   000000000000F528     201   noc_boot21.asm
+  9 KeybdSetLEDStatus                PRI  CODE   W   000000000000F6A2     365   noc_boot21.asm
+ 10 LF                               NON  DATA   W   000000000000000A      27   noc_boot21.asm
+ 11 MSG_DST                          NON  DATA   W   000000000000000F      59   noc_boot21.asm
+ 12 MSG_SRC                          NON  DATA   W   000000000000000E      60   noc_boot21.asm
+ 13 MSG_TYPE                         NON  DATA   W   0000000000000007      61   noc_boot21.asm
+ 14 ROUTER                           NON  DATA   W   000000000000B000      50   noc_boot21.asm
+ 15 ROUTER_TRB                       NON  DATA   W   0000000000000000      53   noc_boot21.asm
+ 16 RTR_RXSTAT                       NON  DATA   W   0000000000000010      51   noc_boot21.asm
+ 17 RTR_TXSTAT                       NON  DATA   W   0000000000000012      52   noc_boot21.asm
+ 18 RecvDispatch                     PRI  CODE   W   000000000000F4BC     140   noc_boot21.asm
+ 19 RecvDispatch2                    PRI  CODE   W   000000000000F4EA     157   noc_boot21.asm
+ 20 RecvDispatch3                    PRI  CODE   W   000000000000F4F6     165   noc_boot21.asm
+ 21 RecvDispatch4                    PRI  CODE   W   000000000000F520     180   noc_boot21.asm
+ 22 RecvDispatchXit                  PRI  CODE   W   000000000000F522     182   noc_boot21.asm
+ 23 SC_ALT                           NON  DATA   W   0000000000000011      35   noc_boot21.asm
+ 24 SC_CAPSLOCK                      NON  DATA   W   0000000000000058      40   noc_boot21.asm
+ 25 SC_CTRL                          NON  DATA   W   0000000000000014      34   noc_boot21.asm
+ 26 SC_DEL                           NON  DATA   W   0000000000000071      36   noc_boot21.asm
+ 27 SC_EXTEND                        NON  DATA   W   00000000000000E0      33   noc_boot21.asm
+ 28 SC_KEYUP                         NON  DATA   W   00000000000000F0      32   noc_boot21.asm
+ 29 SC_LCTRL                         NON  DATA   W   0000000000000058      37   noc_boot21.asm
+ 30 SC_LSHIFT                        NON  DATA   W   0000000000000012      30   noc_boot21.asm
+ 31 SC_NUMLOCK                       NON  DATA   W   0000000000000077      38   noc_boot21.asm
+ 32 SC_RSHIFT                        NON  DATA   W   0000000000000059      31   noc_boot21.asm
+ 33 SC_SCROLLLOCK                    NON  DATA   W   000000000000007E      39   noc_boot21.asm
+ 34 broadcastReset                   PRI  CODE   W   000000000000F498     121   noc_boot21.asm
+ 35 doCapsLock                       PRI  CODE   W   000000000000F682     352   noc_boot21.asm
+ 36 doCtrl                           PRI  CODE   W   000000000000F62E     320   noc_boot21.asm
+ 37 doExtend                         PRI  CODE   W   000000000000F620     315   noc_boot21.asm
+ 38 doKeyup                          PRI  CODE   W   000000000000F614     310   noc_boot21.asm
+ 39 doNumLock                        PRI  CODE   W   000000000000F672     346   noc_boot21.asm
+ 40 doScrollLock                     PRI  CODE   W   000000000000F692     358   noc_boot21.asm
+ 41 doShift                          PRI  CODE   W   000000000000F650     333   noc_boot21.asm
+ 42 kbd1                             PRI  CODE   W   000000000000F54C     218   noc_boot21.asm
+ 43 kbd10                            PRI  CODE   W   000000000000F5E2     286   noc_boot21.asm
+ 44 kbd11                            PRI  CODE   W   000000000000F5B2     267   noc_boot21.asm
+ 45 kbd3                             PRI  CODE   W   000000000000F52E     205   noc_boot21.asm
+ 46 kbd4                             PRI  CODE   W   000000000000F644     328   noc_boot21.asm
+ 47 kbd5                             PRI  CODE   W   000000000000F666     341   noc_boot21.asm
+ 48 kbd6                             PRI  CODE   W   000000000000F556     224   noc_boot21.asm
+ 49 kbd7                             PRI  CODE   W   000000000000F606     301   noc_boot21.asm
+ 50 kbd8                             PRI  CODE   W   000000000000F60A     303   noc_boot21.asm
+ 51 kbd9                             PRI  CODE   W   000000000000F5F8     295   noc_boot21.asm
+ 52 keybdControlCodes                PRI  CODE   W   000000000000F8A4     443   noc_boot21.asm
+ 53 keybdExtendedCodes               PRI  CODE   W   000000000000F924     461   noc_boot21.asm
+ 54 lockup                           PRI  CODE   W   000000000000F432     112   noc_boot21.asm
+ 55 noKey                            PRI  CODE   W   000000000000F426     106   noc_boot21.asm
+ 56 noMsg1                           PRI  CODE   W   000000000000F3D4      73   noc_boot21.asm
+ 57 notC                             PRI  CODE   W   000000000000F402      94   noc_boot21.asm
+ 58 notCapsLock                      PRI  CODE   W   000000000000F598     255   noc_boot21.asm
+ 59 notCtrl                          PRI  CODE   W   000000000000F578     239   noc_boot21.asm
+ 60 notExtend                        PRI  CODE   W   000000000000F570     235   noc_boot21.asm
+ 61 notKeyup                         PRI  CODE   W   000000000000F568     231   noc_boot21.asm
+ 62 notNumLock                       PRI  CODE   W   000000000000F590     251   noc_boot21.asm
+ 63 notScrollLock                    PRI  CODE   W   000000000000F5A0     259   noc_boot21.asm
+ 64 notShift                         PRI  CODE   W   000000000000F580     243   noc_boot21.asm
+ 65 notShift2                        PRI  CODE   W   000000000000F588     247   noc_boot21.asm
+ 66 rxBuf                            NON  DATA   W   0000000000000030      48   noc_boot21.asm
+ 67 shiftedScanCodes                 PRI  CODE   W   000000000000F7A4     407   noc_boot21.asm
+ 68 start                            PRI  CODE   W   000000000000F3CC      69   noc_boot21.asm
+ 69 start1                           PRI  CODE   W   000000000000F3D4      72   noc_boot21.asm
+ 70 txBuf                            NON  DATA   W   0000000000000020      47   noc_boot21.asm
+ 71 unshiftedScanCodes               PRI  CODE   W   000000000000F6A4     372   noc_boot21.asm
+
+
+Local symbols:
+
+Macro Table:
+ #  Name                            Nargs  Line   File
