@@ -1,4 +1,5 @@
-module routerTx (
+// Byte serial transmitter
+module routerTxBs (
 	// WISHBONE SoC bus interface
 	input rst_i,		// reset
 	input clk_i,		// clock
@@ -6,22 +7,22 @@ module routerTx (
 	input stb_i,		// strobe
 	output ack_o,		// transfer done
 	input we_i,			// write transmitter
-	input [128:0] dat_i,// data in
+	input [127:0] dat_i,// data in
 	//--------------------
 	input cs_i,			// chip select
-	input baud16x_ce,	// baud rate clock enable
+	input baud_ce,	    // baud rate clock enable
 	input cts,			// clear to send
-	output txd,			// external serial output
+	output [7:0] txd,	// external serial output
 	output reg empty	// buffer is empty
 );
-
-	reg [129:0] tx_data;	// transmit data working reg (raw)
-	reg [128:0] fdo;	// data output
-	reg [15:0] cnt;		// baud clock counter
+    reg txing;
+	reg [143:0] tx_data;	// transmit data working reg (raw)
+	reg [127:0] fdo;	// data output
+	reg [7:0] cnt;		// baud clock counter
 	reg rd;
 
 	assign ack_o = cyc_i & stb_i & cs_i;
-	assign txd = tx_data[0];
+	assign txd = tx_data[7:0];
 
 	always @(posedge clk_i)
 		if (ack_o & we_i) fdo <= dat_i;
@@ -37,28 +38,32 @@ module routerTx (
 
 	always @(posedge clk_i)
 		if (rst_i) begin
-			cnt <= 16'h0000;
+		    txing <= 1'b0;
+			cnt <= 8'h00;
 			rd <= 0;
-			tx_data <= {130{1'b1}};
+			tx_data <= {144{1'b1}};
 		end
 		else begin
 
 			rd <= 0;
 
-			if (baud16x_ce) begin
+			if (baud_ce) begin
 
 				cnt <= cnt + 1;
+				if (cnt==8'h8F)
+				    txing <= 1'b0;
 				// Load next data ?
-				if (cnt==16'h81F) begin
+				if (cnt==8'h8F || !txing) begin
 					cnt <= 0;
 					if (!empty && cts) begin
-						tx_data <= {1'b1,fdo,1'b0};
+					    txing <= 1'b1;
+						tx_data <= {8'hFF,fdo,8'h00};
 						rd <= 1;
 					end
 				end
 				// Shift the data out. LSB first.
-				else if (cnt[3:0]==4'hF)
-					tx_data <= {1'b1,tx_data[127:1]};
+				else if (cnt[2:0]==3'h7)
+					tx_data <= {8'hFF,tx_data[143:8]};
 
 			end
 		end

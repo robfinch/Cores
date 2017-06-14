@@ -22,10 +22,10 @@ input we_i;
 input [7:0] adr_i;
 input [7:0] dat_i;
 output reg [7:0] dat_o;
-input rxdX;
-input rxdY;
-output txdX;
-output txdY;
+input [7:0] rxdX;
+input [7:0] rxdY;
+output [7:0] txdX;
+output [7:0] txdY;
 
 reg rxCycX, rxStbX, rxWeX, rxCsX;
 reg rxCycY, rxStbY, rxWeY, rxCsY;
@@ -55,7 +55,7 @@ parameter CHK_MATCHT = 4'd7;
 parameter TXGBL = 4'd8;
 parameter NACKTXXG = 4'd9;
 
-routerRx u1 (
+routerRxBs u1 (
 	// WISHBONE SoC bus interface
 	.rst_i(rst_i),			// reset
 	.clk_i(clk_i),			// clock
@@ -66,7 +66,7 @@ routerRx u1 (
 	.dat_o(rxDatoX),		// data out
 	//------------------------
 	.cs_i(rxCsX),				// chip select
-	.baud16x_ce(1'b1),		// baud rate clock enable (run at full rate)
+	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
 	.clear(),			// clear reciever
 	.rxd(rxdX),				// external serial input
 	.data_present(dpX),	// data present in fifo
@@ -74,7 +74,7 @@ routerRx u1 (
 	.overrun()			// receiver overrun
 );
 
-routerTx u3 (
+routerTxBs u3 (
 	// WISHBONE SoC bus interface
 	.rst_i(rst_i),		// reset
 	.clk_i(clk_i),		// clock
@@ -85,13 +85,13 @@ routerTx u3 (
 	.dat_i(txDatiX),   // data in
 	//--------------------
 	.cs_i(txCsX),			// chip select
-	.baud16x_ce(1'b1),	// baud rate clock enable
+	.baud_ce(1'b1),	// baud rate clock enable
 	.cts(),			// clear to send
 	.txd(txdX),		// external serial output
 	.empty(txEmptyX)	    // buffer is empty
 );
 
-routerRx u5 (
+routerRxBs u5 (
 	// WISHBONE SoC bus interface
 	.rst_i(rst_i),			// reset
 	.clk_i(clk_i),			// clock
@@ -102,7 +102,7 @@ routerRx u5 (
 	.dat_o(rxDatoY),		// data out
 	//------------------------
 	.cs_i(rxCsY),				// chip select
-	.baud16x_ce(1'b1),		// baud rate clock enable (run at full rate)
+	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
 	.clear(),			// clear reciever
 	.rxd(rxdY),				// external serial input
 	.data_present(dpY),	// data present in fifo
@@ -110,7 +110,7 @@ routerRx u5 (
 	.overrun()			// receiver overrun
 );
 
-routerTx u7 (
+routerTxBs u7 (
 	// WISHBONE SoC bus interface
 	.rst_i(rst_i),		// reset
 	.clk_i(clk_i),		// clock
@@ -121,7 +121,7 @@ routerTx u7 (
 	.dat_i(txDatiY),   // data in
 	//--------------------
 	.cs_i(txCsY),			// chip select
-	.baud16x_ce(1'b1),	// baud rate clock enable
+	.baud_ce(1'b1),	// baud rate clock enable
 	.cts(),			// clear to send
 	.txd(txdY),		// external serial output
 	.empty(txEmptyY)	    // buffer is empty
