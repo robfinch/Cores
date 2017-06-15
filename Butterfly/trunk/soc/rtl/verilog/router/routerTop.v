@@ -54,6 +54,7 @@ parameter ACKRXY = 4'd6;
 parameter CHK_MATCHT = 4'd7;
 parameter TXGBL = 4'd8;
 parameter NACKTXXG = 4'd9;
+parameter TXGBLY = 4'd10;
 
 routerRxBs u1 (
 	// WISHBONE SoC bus interface
@@ -86,7 +87,7 @@ routerTxBs u3 (
 	//--------------------
 	.cs_i(txCsX),			// chip select
 	.baud_ce(1'b1),	// baud rate clock enable
-	.cts(),			// clear to send
+	.cts(1'b1),			// clear to send
 	.txd(txdX),		// external serial output
 	.empty(txEmptyX)	    // buffer is empty
 );
@@ -122,7 +123,7 @@ routerTxBs u7 (
 	//--------------------
 	.cs_i(txCsY),			// chip select
 	.baud_ce(1'b1),	// baud rate clock enable
-	.cts(),			// clear to send
+	.cts(1'b1),		// clear to send
 	.txd(txdY),		// external serial output
 	.empty(txEmptyY)	    // buffer is empty
 );
@@ -143,7 +144,7 @@ routerFifo ufifo
 
 always @*
     casex(adr_i[4:0])
-    5'b0x:  dat_o <= fifoDato >> {adr_i[3:0],3'b0};
+    5'h0x:  dat_o <= fifoDato >> {adr_i[3:0],3'b0};
     5'h10:  dat_o <= ~empty;
     5'h12:  dat_o <= dpTx;
     endcase
@@ -152,6 +153,23 @@ always @(posedge clk_i)
 if (rst_i) begin
     wf <= 1'b0;
     dpTx <= 1'b0;
+    state <= IDLE;
+    rxCycX <= `LOW;
+    rxStbX <= `LOW;
+    rxWeX <= `LOW;
+    rxCsX <= `LOW;
+    rxCycY <= `LOW;
+    rxStbY <= `LOW;
+    rxWeY <= `LOW;
+    rxCsY <= `LOW;
+    txCycX <= `LOW;
+    txStbX <= `LOW;
+    txWeX <= `LOW;
+    txCsX <= `LOW;
+    txCycY <= `LOW;
+    txStbY <= `LOW;
+    txWeY <= `LOW;
+    txCsY <= `LOW;
 end
 else begin
 wf <= 1'b0;
@@ -214,7 +232,7 @@ end
 CHK_MATCHX:
     chk_match(rxBuf);
 NACKTXX:
-    begin
+    if (txAckX) begin
         txCycX <= `LOW;
         txStbX <= `LOW;
         txWeX <= `LOW;
@@ -222,7 +240,7 @@ NACKTXX:
         state <= IDLE;        
     end
 NACKTXY:
-    begin
+    if (txAckY) begin
         txCycY <= `LOW;
         txStbY <= `LOW;
         txWeY <= `LOW;
@@ -253,26 +271,32 @@ TXGBL:
         txWeX <= `HIGH;
         txCsX <= `HIGH;
         txDatiX <= txBuf;
-        txDatiX[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b01};
+        //txDatiX[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b01};
         state <= NACKTXXG;
     end
 NACKTXXG:
     begin
-        txCycX <= `LOW;
-        txStbX <= `LOW;
-        txWeX <= `LOW;
-        txCsX <= `LOW;
+        if (txAckX) begin
+            txCycX <= `LOW;
+            txStbX <= `LOW;
+            txWeX <= `LOW;
+            txCsX <= `LOW;
+            state <= TXGBLY;
+        end
+    end
+TXGBLY:
+    begin
         if (txEmptyY) begin
             txCycY <= `HIGH;
             txStbY <= `HIGH;
             txWeY <= `HIGH;
             txCsY <= `HIGH;
             txDatiY <= txBuf;
-            txDatiY[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b10};
+            //txDatiY[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b10};
             state <= NACKTXY;
+            dpTx <= 1'b0;
         end
     end
-
 endcase
 end
 
@@ -293,7 +317,7 @@ begin
                 txWeX <= `HIGH;
                 txCsX <= `HIGH;
                 txDatiX <= buff;
-                txDatiX[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b01};
+                //txDatiX[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b01};
                 state <= NACKTXX;
             end
         end
@@ -304,7 +328,7 @@ begin
                 txWeY <= `HIGH;
                 txCsY <= `HIGH;
                 txDatiY <= buff;
-                txDatiY[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b10};
+                //txDatiY[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b10};
                 state <= NACKTXY;
             end
         end
@@ -314,6 +338,7 @@ begin
             state <= IDLE;
         end
     // Forced routing: route according to MSG_ROUT
+    /* Makes the router too big.
     8'h01:
         if (buff[`MSG_DST]==8'hFF) begin
             txBuf <= buff;
@@ -351,6 +376,7 @@ begin
                 end
             endcase
         end
+        */
     endcase
 end
 endtask

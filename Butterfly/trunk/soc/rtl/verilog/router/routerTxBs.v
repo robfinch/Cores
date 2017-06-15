@@ -25,40 +25,35 @@ module routerTxBs (
 	assign txd = tx_data[7:0];
 
 	always @(posedge clk_i)
-		if (ack_o & we_i) fdo <= dat_i;
-
-	// set full / empty status
-	always @(posedge clk_i)
-		if (rst_i) empty <= 1;
-		else begin
-		if (ack_o & we_i) empty <= 0;
-		else if (rd) empty <= 1;
-		end
-
-
-	always @(posedge clk_i)
 		if (rst_i) begin
 		    txing <= 1'b0;
+		    empty <= 1'b1;
 			cnt <= 8'h00;
-			rd <= 0;
+			rd <= 1'b0;
 			tx_data <= {144{1'b1}};
 		end
 		else begin
+    		if (ack_o & we_i)
+    		  fdo <= dat_i;
+    		if (ack_o & we_i)
+    		  empty <= 1'b0;
+    		else if (rd)
+    		  empty <= 1'b1;
 
-			rd <= 0;
+			rd <= 1'b0;
 
 			if (baud_ce) begin
 
-				cnt <= cnt + 1;
+				cnt <= cnt + 8'd1;
 				if (cnt==8'h8F)
 				    txing <= 1'b0;
 				// Load next data ?
 				if (cnt==8'h8F || !txing) begin
-					cnt <= 0;
+					cnt <= 8'd0;
 					if (!empty && cts) begin
 					    txing <= 1'b1;
 						tx_data <= {8'hFF,fdo,8'h00};
-						rd <= 1;
+						rd <= 1'b1;
 					end
 				end
 				// Shift the data out. LSB first.

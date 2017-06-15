@@ -34,7 +34,7 @@ always @(posedge clk_i)
     rdy1 <= cs;
 
 assign ack_o = cs ? rdy1 : 1'b0;
-assign dat_o = ack_o ? dat : 128'b0;
+assign dat_o = dat;
 
 wire pecs;
 edge_det u2 (.rst(rst), .clk(clk), .ce(1'b1), .i(cs & ~we_i), .pe(pecs), .ne(), .ee() );
