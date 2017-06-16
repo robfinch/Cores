@@ -1,13 +1,41 @@
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+//	Verilog 1995
+//
+// ============================================================================
+//
 `define HIGH    1'b1
 `define LOW     1'b0
 
 `define MSG_DST     127:120
-`define MSG_X       126:124
-`define MSG_Y       122:120
+`define MSG_X       127:124
+`define MSG_Y       123:120
 `define MSG_SRC     119:112
 `define MSG_ROUT    111:80
 `define MSG_CTRL    79:72
 `define MSG_AGE     71:64
+`define MSG_TYPE    63:56
 
 module routerTop(X, Y, rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, rxdX, rxdY, txdX, txdY);
 input [3:0] X;      // router address
@@ -22,10 +50,10 @@ input we_i;
 input [7:0] adr_i;
 input [7:0] dat_i;
 output reg [7:0] dat_o;
-input [7:0] rxdX;
-input [7:0] rxdY;
-output [7:0] txdX;
-output [7:0] txdY;
+input [4:0] rxdX;
+input [4:0] rxdY;
+output [4:0] txdX;
+output [4:0] txdY;
 
 reg rxCycX, rxStbX, rxWeX, rxCsX;
 reg rxCycY, rxStbY, rxWeY, rxCsY;
@@ -35,9 +63,12 @@ wire dpX,dpY;
 wire rxAckX,rxAckY,txAckX,txAckY;
 wire [127:0] rxDatoX,rxDatoY;
 reg [127:0] txDatiX, txDatiY;
-reg [127:0] rxBuf, txBuf, fifoDati;
+reg [127:0] rxBuf, txBuf, txBuf2, fifoDati;
 wire [127:0] fifoDato;
+wire [4:0] fifocnt;
 wire empty;
+wire [4:0] rxFifoCntX,rxFifoCntY;
+reg snoop;
 
 wire cs = cs_i & cyc_i & stb_i;
 assign ack_o = cs;
@@ -70,9 +101,9 @@ routerRxBs u1 (
 	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
 	.clear(),			// clear reciever
 	.rxd(rxdX),				// external serial input
-	.data_present(dpX),	// data present in fifo
 	.frame_err(),		// framing error
-	.overrun()			// receiver overrun
+	.overrun(),			// receiver overrun
+	.fifocnt(rxFifoCntX)
 );
 
 routerTxBs u3 (
@@ -106,9 +137,9 @@ routerRxBs u5 (
 	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
 	.clear(),			// clear reciever
 	.rxd(rxdY),				// external serial input
-	.data_present(dpY),	// data present in fifo
 	.frame_err(),		// framing error
-	.overrun()			// receiver overrun
+	.overrun(),			// receiver overrun
+	.fifocnt(rxFifoCntY)
 );
 
 routerTxBs u7 (
@@ -128,24 +159,36 @@ routerTxBs u7 (
 	.empty(txEmptyY)	    // buffer is empty
 );
 
+routerFifo2 u9
+(
+  .clk(clk_i),              // input wire clk
+  .srst(rst_i),              // input wire srst
+  .din(fifoDati),                // input wire [127 : 0] din
+  .wr_en(wf),            // input wire wr_en
+  .rd_en(rdf),            // input wire rd_en
+  .dout(fifoDato),              // output wire [127 : 0] dout
+  .full(),              // output wire full
+  .empty(),            // output wire empty
+  .data_count(fifocnt)  // output wire [4 : 0] data_count
+);
+/*
 routerFifo ufifo
 (
-  .clk(clk_i),
-  .srst(rst_i),
-  .din(fifoDati),
-  .wr_en(wf),
-  .rd_en(rdf),
+  .wclk(clk_i),
+  .wrst(rst_i),
+  .di(fifoDati),
+  .wr(wf),
+  .rclk(clk_i),
+  .rrst(rst_i),
+  .rd(rdf),
   .dout(fifoDato),
-  .full(),
-  .almost_full(),
-  .empty(empty),
-  .almost_empty()
+  .cnt(fifocnt)
 );
-
+*/
 always @*
     casex(adr_i[4:0])
     5'h0x:  dat_o <= fifoDato >> {adr_i[3:0],3'b0};
-    5'h10:  dat_o <= ~empty;
+    5'h10:  dat_o <= {snoop,2'd0,fifocnt};
     5'h12:  dat_o <= dpTx;
     endcase
 
@@ -174,8 +217,6 @@ end
 else begin
 wf <= 1'b0;
 rdf <= 1'b0;
-    if (cs & we_i && adr_i[4:0]==5'h12)
-        dpTx <= 1'b1;
     if (cs & we_i) begin
         case(adr_i[4:0])
         5'd0:   txBuf[7:0] <= dat_i;
@@ -194,19 +235,23 @@ rdf <= 1'b0;
         5'hD:   txBuf[111:104] <= dat_i;
         5'hE:   txBuf[119:112] <= dat_i;
         5'hF:   txBuf[127:120] <= dat_i;
-        5'h10:  rdf <= 1'b1;
+        5'h10:  begin
+                snoop <= dat_i[7];
+                rdf <= dat_i[6];
+                end
+        5'h12:  dpTx <= 1'b1;
         endcase
     end
 case(state)
 IDLE:
-    if (dpX) begin
+    if (rxFifoCntX != 5'd0) begin
         rxCycX <= `HIGH;
         rxStbX <= `HIGH;
         rxWeX <= `LOW;
         rxCsX <= `HIGH;
         state <= ACKRXX;
     end
-    else if (dpY) begin
+    else if (rxFifoCntY != 5'd0) begin
         rxCycY <= `HIGH;
         rxStbY <= `HIGH;
         rxWeY <= `LOW;
@@ -223,7 +268,6 @@ if (rxAckX) begin
     rxWeX <= `LOW;
     rxCsX <= `LOW;
     rxBuf <= rxDatoX;
-    rxBuf[`MSG_AGE] <= rxDatoX[`MSG_AGE] + 8'd1;
     if (rxDatoX[`MSG_AGE] > 8'h40)
         state <= IDLE;
     else
@@ -254,7 +298,6 @@ ACKRXY:
         rxWeY <= `LOW;
         rxCsY <= `LOW;
         rxBuf <= rxDatoY;
-        rxBuf[`MSG_AGE] <= rxDatoY[`MSG_AGE] + 8'd1;
         if (rxDatoY[`MSG_AGE] > 8'h40)
             state <= IDLE;
         else
@@ -263,14 +306,17 @@ ACKRXY:
 CHK_MATCHY:
     chk_match(rxBuf);
 CHK_MATCHT:
+    begin
     chk_match(txBuf);
+    dpTx <= 1'b0;
+    end
 TXGBL:
     if (txEmptyX) begin
         txCycX <= `HIGH;
         txStbX <= `HIGH;
         txWeX <= `HIGH;
         txCsX <= `HIGH;
-        txDatiX <= txBuf;
+        txDatiX <= txBuf2;
         //txDatiX[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b01};
         state <= NACKTXXG;
     end
@@ -291,10 +337,9 @@ TXGBLY:
             txStbY <= `HIGH;
             txWeY <= `HIGH;
             txCsY <= `HIGH;
-            txDatiY <= txBuf;
+            txDatiY <= txBuf2;
             //txDatiY[`MSG_ROUT] <= {txBuf[`MSG_ROUT],2'b10};
             state <= NACKTXY;
-            dpTx <= 1'b0;
         end
     end
 endcase
@@ -307,27 +352,40 @@ begin
     // Normal routing
     8'h00:
         if (buff[`MSG_DST]==8'hFF) begin
-            txBuf <= buff;
+            txBuf2 <= buff;
+            txBuf2[`MSG_AGE] <= buff[`MSG_AGE] + 8'd1;
+            wf <= 1'b1;
+            fifoDati <= buff;
             state <= TXGBL;
         end
         else if (buff[`MSG_X]!=X) begin
+            if (snoop) begin
+                wf <= 1'b1;
+                fifoDati <= buff;
+            end
             if (txEmptyX) begin
                 txCycX <= `HIGH;
                 txStbX <= `HIGH;
                 txWeX <= `HIGH;
                 txCsX <= `HIGH;
                 txDatiX <= buff;
+                txDatiX[`MSG_AGE] <= buff[`MSG_AGE] + 8'd1;
                 //txDatiX[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b01};
                 state <= NACKTXX;
             end
         end
         else if (buff[`MSG_Y]!=Y) begin
+            if (snoop) begin
+                wf <= 1'b1;
+                fifoDati <= buff;
+            end
             if (txEmptyY) begin
                 txCycY <= `HIGH;
                 txStbY <= `HIGH;
                 txWeY <= `HIGH;
                 txCsY <= `HIGH;
                 txDatiY <= buff;
+                txDatiY[`MSG_AGE] <= buff[`MSG_AGE] + 8'd1;
                 //txDatiY[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b10};
                 state <= NACKTXY;
             end
@@ -342,9 +400,15 @@ begin
     8'h01:
         if (buff[`MSG_DST]==8'hFF) begin
             txBuf <= buff;
+            wf <= 1'b1;
+            fifoDati <= buff;
             state <= TXGBL;
         end
         else begin
+            if (snoop) begin
+                wf <= 1'b1;
+                fifoDati <= buff;
+            end
             case(buff[111:110])
             2'b01:  // rout in X direction
                 if (txEmptyX) begin

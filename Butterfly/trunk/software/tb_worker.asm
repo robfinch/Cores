@@ -1,6 +1,10 @@
 ;****************************************************************;
 ;                                                                ;
-;		Tiny BASIC for the Finitron Butterfly                    ;
+;		Tiny BASIC Worker for the Finitron Butterfly             ;
+;                                                                ;
+; Supports worker threads.                                       ;
+; There is no user interface to worker threads so the commands   ;
+; LOAD and SAVE are removed.                                     ;
 ;                                                                ;
 ; Derived from a 68000 derivative of Palo Alto Tiny BASIC as     ;
 ; published in the May 1976 issue of Dr. Dobb's Journal.         ;
@@ -16,7 +20,7 @@
 ;    Ontario, Canada                                             ;
 ;	 rob<remove>@finitron.ca                                     ;  
 ;****************************************************************;
-;    Copyright (C) 2005 by Robert Finch. This program may be	 ;
+;   Copyright (C) 2005-2017 by Robert Finch. This program may be ;
 ;    freely distributed for personal use only. All commercial	 ;
 ;		       rights are reserved.			                     ;
 ;****************************************************************;
@@ -86,6 +90,25 @@ GOBYE	jmp	BYEBYE	;	Jump to monitor, DOS, etc.
 TXTBGN	dw	0x0200		;beginning of program memory
 ENDMEM	dw	0x1E00	;	end of available memory
 ;
+INITTBW:
+	; First save off the link register and OS sp value
+	sub		sp,sp,#2
+	sw		lr,[sp]
+	lw		r1,TXTBGN	;	init. end-of-program pointer
+	sw		r1,TXTUNF
+	lw		r1,ENDMEM	;	get address of end of memory
+	sub		r1,r1,#512	; 	reserve 512 bytes for the stack
+	sw		r1,STKBOT
+	sub     r1,r1,#512 ;   128 vars
+	sw      r1,VARBGN
+	call    clearVars   ; clear the variable area
+	sw		r0,LOPVAR   ; initialize internal variables
+	sw		r0,STKGOS
+	sw		r0,CURRNT	;	current line number pointer = 0
+	lw		lr,[sp]
+	add		sp,sp,#2
+	ret
+;
 ; The main interpreter starts here:
 ;
 ; Usage
@@ -93,137 +116,27 @@ ENDMEM	dw	0x1E00	;	end of available memory
 ; r8 = text buffer pointer
 ; r12 = end of text in text buffer
 ;
-CSTART
-	; First save off the link register and OS sp value
-	sub		sp,sp,#4
-	sw		lr,[sp]
-	sw		sp,OSSP
-	lw		sp,ENDMEM	; initialize stack pointer
-	sw      lr,[sp]    ; save off return address
-;	lw		r1,#TXT_WIDTH
-;	sb		r1,txtWidth
-;	lw		r1,#TXT_HEIGHT
-;	sb		r1,txtHeight
-	sb		r0,cursx	; set screen output
-	sb		r0,cursy
-	sb		r0,cursFlash
-	sw		r0,pos
-	lw		r2,#0xBF20	; black chars, yellow background
-	sw		r2,charToPrint
-	call	clearScreen
-	lea		r1,msgInit	;	tell who we are
-	call	PRMESGAUX
-	lea		r1,msgInit	;	tell who we are
-	call	PRMESG
-	lw		r1,TXTBGN	;	init. end-of-program pointer
-	sw		r1,TXTUNF
-	lw		r1,ENDMEM	;	get address of end of memory
-	sub		r1,r1,#2048	; 	reserve 2K for the stack
-	sw		r1,STKBOT
-	sub     r1,r1,#512 ;   128 vars
-	sw      r1,VARBGN
-	call    clearVars   ; clear the variable area
-	lw      r1,VARBGN   ; calculate number of bytes free
-	lw		r3,TXTUNF
-	sub     r1,r3
-	lw		r2,#0
-	call	PRTNUM
-	lea		r1,msgBytesFree
-	call	PRMESG
+	; At the end of the running program it'll go back to
+	; the warm start location. Use this to return.
 WSTART
 	sw		r0,LOPVAR   ; initialize internal variables
 	sw		r0,STKGOS
 	sw		r0,CURRNT	;	current line number pointer = 0
-	lw		sp,ENDMEM	;	init S.P. again, just in case
-	lea		r1,msgReady	;	display "Ready"
-	call	PRMESG
-ST3
-	lw		r1,#'>'		; Prompt with a '>' and
-	call	GETLN		; read a line.
+	lw		sp,OSSP
+	lw		lr,[sp]
+	add		sp,sp,#2
+	ret
+
+	; Entry point which is called by the reciever dispatcher.
+ST3:
+	add		sp,sp,#-2
+	sw		lr,[sp]
+	sw		sp,OSSP
+	lw		sp,ENDMEM	;	init S.P.
 	call	TOUPBUF 	; convert to upper case
 	lw		r12,r8		; save pointer to end of line
 	lea		r8,BUFFER	; point to the beginning of line
-	call	TSTNUM		; is there a number there?
-	call	IGNBLK		; skip trailing blanks
-	or      r1,r1       ; does line no. exist? (or nonzero?)
-	beq		DIRECT		; if not, it's a direct statement
-	cmp		r1,#0xFFFF	; see if line no. is <= 16 bits
-	bleu	ST2
-	lea		r1,msgLineRange	; if not, we've overflowed
-	br		ERROR
-ST2
-    ; ugliness - store a character at potentially an
-    ; odd address (unaligned).
-	lw		r2,r1       ; r2 = line number
-	sb		r2,-2[r8]
-	shr		r2,#1
-	shr		r2,#1
-	shr		r2,#1
-	shr		r2,#1
-	shr		r2,#1
-	shr		r2,#1
-	shr		r2,#1
-	shr		r2,#1
-	sb		r2,-1[r8]	; store the binary line no.
-	sub		r8,r8,#2
-	call	FNDLN		; find this line in save area
-	tsr		r1,sr
-	lw		r13,r9		; save possible line pointer
-	trs		r1,sr
-	bne		ST4			; if not found, insert
-	; here we found the line, so we're replacing the line
-	; in the text area
-	; first step - delete the line
-	lw		r1,#0
-	call	FNDNXT		; find the next line (into r9)
-	bgtu	ST6			; no more lines
-	lw		r1,r9		; r1 = pointer to next line
-	lw		r2,r13		; pointer to line to be deleted
-	lw		r3,TXTUNF	; points to top of save area
-	call	MVUP		; move up to delete
-	sw		r2,TXTUNF	; update the end pointer
-	; we moved the lines of text after the line being
-	; deleted down, so the pointer to the next line
-	; needs to be reset
-	lw		r9,r13
-	br		ST4
-	; here there were no more lines, so just move the
-	; end of text pointer down
-ST6
-	sw		r13,TXTUNF
-	lw		r9,r13
-ST4
-	; here we're inserting because the line wasn't found
-	; or it was deleted	from the text area
-	lw		r1,r12		; calculate the length of new line
-	sub		r1,r8
-	cmp		r1,#3		; is it just a line no. & CR?
-	ble		ST3			; if so, it was just a delete
-
-	lw		r11,TXTUNF	; compute new end of text
-	lw		r10,r11		; r10 = old TXTUNF
-	add		r11,r1		; r11 = new top of TXTUNF (r1=line length)
-
-	lw		r1,VARBGN	; see if there's enough room
-	cmp		r11,r1
-	bltu	ST5
-	lea		r1,msgTooBig	; if not, say so
-	jmp		ERROR
-
-	; open a space in the text area
-ST5
-	sw		r11,TXTUNF	; if so, store new end position
-	lw		r1,r10		; points to old end of text
-	lw		r2,r11		; points to new end of text
-	lw		r3,r9       ; points to start of line after insert line
-	call	MVDOWN		; move things out of the way
-
-	; copy line into text space
-	lw		r1,r8		; set up to do the insertion; move from buffer
-	lw		r2,r13		; to vacated space
-	lw		r3,r12		; until end of buffer
-	call	MVUP		; do it
-	br		ST3			; go back and get another line
+	br		DIRECT
 
 
 ;******************************************************************
@@ -258,10 +171,8 @@ ST5
 ; Character-matching tables:
 TAB1
 	db	"LIS",('T'+0x80)        ; Direct commands
-	db	"LOA",('D'+0x80)
 	db	"NE",('W'+0x80)
 	db	"RU",('N'+0x80)
-	db	"SAV",('E'+0x80)
 TAB2
 	db	"NEX",('T'+0x80)         ; Direct / statement
 	db	"LE",('T'+0x80)
@@ -278,13 +189,11 @@ TAB2
 	db	"STO",('P'+0x80)
 	db	"BY",('E'+0x80)
 	db	"SY",('S'+0x80)
-	db	"CL",('S'+0x80)
     db  "CL",('R'+0x80)
-    db	"RDC",('F'+0x80)
+	db	"EXI",('T'+0x80)
 	db	0
 TAB4
 	db	"NODENU",('M'+0x80)
-	db	"PEEK",('C'+0x80)        ;Functions
 	db	"PEEK",('W'+0x80)        ;Functions
 	db	"PEE",('K'+0x80)         ;Functions
 	db	"RN",('D'+0x80)
@@ -318,10 +227,8 @@ TAB10
 ;* Execution address tables:
 TAB1_1
 	dw	LISTX			;Direct commands
-	dw	LOAD
 	dw	NEW
 	dw	RUN
-	dw	SAVE
 TAB2_1
 	dw	NEXT		;	Direct / statement
 	dw	LET
@@ -338,13 +245,11 @@ TAB2_1
 	dw	STOP
 	dw	GOBYE
 	dw	SYSX
-	dw	_cls
 	dw  _clr
-	dw	_rdcf
+	dw	EXIT
 	dw	DEFLT
 TAB4_1
 	dw	NODENUM
-	dw  PEEKC
 	dw  PEEKW
 	dw	PEEK			;Functions
 	dw	RND
@@ -481,23 +386,6 @@ STOP
 	br		WSTART		; WSTART will reset the stack
 
 RUN
-	call	IGNBLK
-	lb		r1,[r8]
-	cmp		r1,#'O'
-	bne		RUN1
-	lb		r1,1[r8]
-	cmp		r1,#'N'
-	bne		RUN1
-	add		r8,r8,#2
-	call	OREXPR
-	sb		r1,txBuf+MSG_DST
-	lb		r1,#$11
-	sb		r1,txBuf+MSG_SRC
-	lb		r1,#MT_RUN_BASIC_PROG
-	sb		r1,txBuf+MSG_TYPE
-	call	Xmit
-	br		WSTART
-RUN1
 	call	ENDCHK
 	lw		r8,TXTBGN	;	set pointer to beginning
 	sw		r8,CURRNT
@@ -1047,80 +935,6 @@ a2h1
 	and		r1,#15		; make sure a nybble
 	ret
 
-; SAVE
-; SAVE ON <node number> - copies the code to the specified node
-
-SAVE
-	call	IGNBLK		; ignore blanks
-	lb		r1,[r8]
-	cmp		r1,#'O'
-	bne		SAVE3
-	lb		r1,1[r8]
-	cmp		r1,#'N'
-	bne		SAVE3
-	add		r8,r8,#2
-	call	OREXPR		; get core #
-	sb		r1,tgtNode
-	call	TriggerTgtLoad
-SAVE3:
-	lw		r8,TXTBGN	;set pointer to start of prog. area
-	lw		r9,TXTUNF	;set pointer to end of prog. area
-SAVE1
-	call    AUXOCRLF    ; send out a CR & LF (CP/M likes this)
-	cmp		r8,r9		; are we finished?
-	bgeu	SAVEND
-	lb		r2,tgtNode
-	cmp		r2,#$11
-	beq		SAVE4
-	lb		r1,#':'
-	sb		r1,txBuf
-	lb		r1,[r8]
-	sb		r1,txBuf+1
-	lb		r1,1[r8]
-	sb		r1,txBuf+2
-	lb		r1,tgtNode
-	sb		r1,txBuf+MSG_DST
-	lb		r1,#$11
-	sb		r1,txBuf+MSG_SRC
-	lb		r1,#11
-	sb		r1,txBuf+MSG_TYPE
-	call	Xmit
-	add		r8,r8,#2
-	br		SAVE2
-SAVE4:
-	lw		r1,#':'		; if not, start a line
-	call	GOAUXO
-	lb		r1,[r8]		; get line number
-	zxb		r1
-	lb		r2,1[r8]
-	zxb		r2
-	shl		r2,#1
-	shl		r2,#1
-	shl		r2,#1
-	shl		r2,#1
-	shl		r2,#1
-	shl		r2,#1
-	shl		r2,#1
-	shl		r2,#1
-	or		r1,r2
-	add		r8,r8,#2
-	call	PWORD       ; output line number as 4-digit hex
-SAVE2
-	lb		r1,[r8]		; get a text char.
-	add		r8,r8,#1
-	cmp		r1,#CR		; is it the end of the line?
-	beq		SAVE1		; if so, send CR & LF and start new line
-	call	GOAUXO		; send it out
-	br		SAVE2		; go back for more text
-SAVEND
-	lw		r1,#'@'		; send end-of-program indicator
-	call	GOAUXO
-	call    AUXOCRLF    ; followed by a CR & LF
-	lw		r1,#0x1A	; and a control-Z to end the CP/M file
-	call	GOAUXO
-	br		WSTART		; then go do a warm start
-
-
 ; output a CR LF sequence to auxillary output
 ; Registers Affected
 ;   r3 = LF
@@ -1134,38 +948,6 @@ AUXOCRLF
     lw      lr,[sp]
 	add		sp,sp,#2
     ret
-
-
-; output a word in hex format
-; tricky because of the need to reverse the order of the chars
-PWORD
-	sub		sp,sp,#4
-	sw		lr,[sp]
-	sw		r5,2[sp]
-	lea     r5,NUMWKA+3
-	lw		r4,r1		; r4 = value
-pword1
-    lw      r1,r4       ; r1 = value
-    shr     r4,#1       ; shift over to next nybble
-    shr     r4,#1
-    shr     r4,#1
-    shr     r4,#1
-    call    toAsciiHex  ; convert LS nybble to ascii hex
-    sb      r1,[r5]     ; save in work area
-    sub     r5,r5,#1
-    cmp     r5,#NUMWKA
-    bgeu    pword1
-pword2
-    add     r5,r5,#1
-    lb      r1,[r5]     ; get char to output
-	call	GOAUXO		; send it
-	cmp     r5,#NUMWKA+3
-	bltu    pword2
-
-	lw		r5,2[sp]
-	lw		lr,[sp]
-	add		sp,sp,#4
-	ret
 
 
 ; convert nybble in r2 to ascii hex char2
@@ -1879,22 +1661,9 @@ PEEK
 ; ===== The PEEK function returns the byte stored at the address
 ;	contained in the following expression.
 ;
-PEEKC
-	call	PARN		; get the memory address
-	and		r1,#-2		; align to char address
-	lh		r1,[r1]		; get the addressed char
-	zxc		r1
-	lw		lr,[sp]	; and return it
-	add		sp,sp,#6
-	ret
-
-
-; ===== The PEEK function returns the byte stored at the address
-;	contained in the following expression.
-;
 PEEKW
 	call	PARN		; get the memory address
-	and		r1,#-4		; align to word address
+	and		r1,#-2		; align to word address
 	lw		r1,[r1]		; get the addressed word
 	lw		lr,[sp]	; and return it
 	add		sp,sp,#6
@@ -3030,17 +2799,51 @@ fcx:
 	ret
 
 
-_cls
-	call	clearScreen
-	br		FINISH
-
-
 ; ===== Return to the resident monitor, operating system, etc.
 ;
 BYEBYE
 	lw		sp,OSSP
     lw      lr,[sp]
     add		sp,sp,#2
+	ret
+
+; Set the message address fields
+
+SetMsgAddr:
+	tsr		r1,ID
+	sb		r1,txBuf+MSG_SRC
+	lw		r1,#$11
+	sb		r1,txBuf+MSG_DST
+	ret
+
+EXIT
+	call	OREXPR
+	call	zeroTxBuf
+	sw		r1,txBuf
+	call	SetMsgAddr
+	lw		r1,#MT_BASIC_EXIT
+	sb		r1,txBuf+MSG_TYPE
+	call	Xmit
+	jmp		WSTART
+
+RequestOutputFocus:
+	add		sp,sp,#-2
+	sw		lr,[sp]
+	call	zeroTxBuf
+	call	SetMsgAddr
+	lw		r1,#MT_REQ_OUT_FOCUS
+	sb		r1,txBuf+MSG_TYPE
+	call	Xmit
+ROF1:
+	lb		r1,ROUTER+RTR_RXSTAT
+	beq		ROF1
+	call	Recv
+	call	RecvDispatch
+	lb		r1,rxBuf+MSG_TYPE
+	cmp		r1,#MT_GRNT_OUT_FOCUS
+	bne		ROF1
+	lw		lr,[sp]
+	add		sp,sp,#2
 	ret
 
 ;	MOVE.B	#228,D7 	return to Tutor

@@ -2,70 +2,497 @@ Global symbols:
 
 Symbol Table:
  #  Name                            OCLS  Base Len        Value         Line     File
-  0 AsciiToScreen                    PRI  CODE   W   000000000000D940     187   noc_boot11.asm
-  1 CR                               NON  DATA   W   000000000000000D      27   noc_boot11.asm
-  2 CTRLH                            NON  DATA   W   0000000000000008      29   noc_boot11.asm
-  3 ClearScreen                      PRI  CODE   W   000000000000D95A     214   noc_boot11.asm
-  4 HomeCursor                       PRI  CODE   W   000000000000D982     244   noc_boot11.asm
-  5 InitTxtCtrl                      PRI  CODE   W   000000000000D920     163   noc_boot11.asm
-  6 LEDS                             NON  DATA   W   000000000000B200      53   noc_boot11.asm
-  7 LF                               NON  DATA   W   000000000000000A      28   noc_boot11.asm
-  8 MSG_DST                          NON  DATA   W   000000000000000F      58   noc_boot11.asm
-  9 MSG_SRC                          NON  DATA   W   000000000000000E      59   noc_boot11.asm
- 10 MSG_TYPE                         NON  DATA   W   0000000000000007      60   noc_boot11.asm
- 11 NormAttr                         PRI  NONE   H   0000000000000040      46   noc_boot11.asm
- 12 ROUTER                           NON  DATA   W   000000000000B000      54   noc_boot11.asm
- 13 ROUTER_TRB                       NON  DATA   W   0000000000000000      62   noc_boot11.asm
- 14 RTR_RXSTAT                       NON  DATA   W   0000000000000010      55   noc_boot11.asm
- 15 RTR_TXSTAT                       NON  DATA   W   0000000000000012      56   noc_boot11.asm
- 16 RecvDispatch                     PRI  CODE   W   000000000000D8CE     123   noc_boot11.asm
- 17 RecvDispatch2                    PRI  CODE   W   000000000000D914     151   noc_boot11.asm
- 18 RecvLoop                         PRI  CODE   W   000000000000D836      88   noc_boot11.asm
- 19 TXTCTRL                          NON  DATA   W   000000000000B100      52   noc_boot11.asm
- 20 TXTSCR                           NON  DATA   W   0000000000002000      51   noc_boot11.asm
- 21 ats1                             PRI  CODE   W   000000000000D956     198   noc_boot11.asm
- 22 bkColor                          PRI  NONE   H   000000000000003D      43   noc_boot11.asm
- 23 broadcastReset                   PRI  CODE   W   000000000000D8A8     104   noc_boot11.asm
- 24 charToPrint                      PRI  NONE   H   0000000000000038      41   noc_boot11.asm
- 25 cs1                              PRI  CODE   W   000000000000D974     224   noc_boot11.asm
- 26 cursFlash                        PRI  NONE   H   000000000000003E      44   noc_boot11.asm
- 27 cursx                            PRI  NONE   H   0000000000000032      37   noc_boot11.asm
- 28 cursy                            PRI  NONE   H   0000000000000033      38   noc_boot11.asm
- 29 fgColor                          PRI  NONE   H   000000000000003C      42   noc_boot11.asm
- 30 flashCursor                      PRI  CODE   W   000000000000D990     252   noc_boot11.asm
- 31 iret                             PRI  CODE   W   000000000000DB1A     463   noc_boot11.asm
- 32 irq_rout                         PRI  CODE   W   000000000000DACE     428   noc_boot11.asm
- 33 itc1                             PRI  CODE   W   000000000000D928     167   noc_boot11.asm
- 34 lineTbl                          PRI  CODE   W   000000000000DB4A     472   noc_boot11.asm
- 35 lockup                           PRI  CODE   W   000000000000D842      95   noc_boot11.asm
- 36 msgStarting                      PRI  CODE   W   000000000000DB1A     464   noc_boot11.asm
- 37 noMsg1                           PRI  CODE   W   000000000000D836      89   noc_boot11.asm
- 38 notRcvXIrq                       PRI  CODE   W   000000000000DAE8     440   noc_boot11.asm
- 39 notUartXIrq                      PRI  CODE   W   000000000000DB00     449   noc_boot11.asm
- 40 notUartYIrq                      PRI  CODE   W   000000000000DB16     459   noc_boot11.asm
- 41 pc1                              PRI  CODE   W   000000000000D9DC     317   noc_boot11.asm
- 42 pc11                             PRI  CODE   W   000000000000DA5A     379   noc_boot11.asm
- 43 pc2                              PRI  CODE   W   000000000000DA0A     337   noc_boot11.asm
- 44 pc3                              PRI  CODE   W   000000000000D9F4     327   noc_boot11.asm
- 45 pc4                              PRI  CODE   W   000000000000DA52     371   noc_boot11.asm
- 46 pc5                              PRI  CODE   W   000000000000DA18     343   noc_boot11.asm
- 47 pc6                              PRI  CODE   W   000000000000DA36     355   noc_boot11.asm
- 48 pc7                              PRI  CODE   W   000000000000DABC     418   noc_boot11.asm
- 49 pc8                              PRI  CODE   W   000000000000DAB0     412   noc_boot11.asm
- 50 pc9                              PRI  CODE   W   000000000000DA9E     405   noc_boot11.asm
- 51 pos                              PRI  NONE   H   0000000000000034      39   noc_boot11.asm
- 52 putcharScr                       PRI  CODE   W   000000000000D9AE     291   noc_boot11.asm
- 53 putmsg3                          PRI  CODE   W   000000000000D99A     270   noc_boot11.asm
- 54 putmsg4                          PRI  CODE   W   000000000000D9A4     276   noc_boot11.asm
- 55 putmsgScr                        PRI  CODE   W   000000000000D992     265   noc_boot11.asm
- 56 rts                              PRI  CODE   W   000000000000D95A     201   noc_boot11.asm
- 57 rxBuf                            PRI  NONE   H   0000000000000054      49   noc_boot11.asm
- 58 start                            PRI  CODE   W   000000000000D800      70   noc_boot11.asm
- 59 txBuf                            PRI  NONE   H   0000000000000044      48   noc_boot11.asm
- 60 txtHeight                        PRI  NONE   H   0000000000000031      36   noc_boot11.asm
- 61 txtWidth                         PRI  NONE   H   0000000000000030      35   noc_boot11.asm
- 62 txtctrl_dat                      PRI  CODE   W   000000000000DB3B     467   noc_boot11.asm
- 63 xitIrq                           PRI  CODE   W   000000000000DB16     460   noc_boot11.asm
+  0 ABS                              PRI  CODE   W   000000000000CC04    2163   noc_boot11.a
+  1 ANDEXPR                          PRI  CODE   W   000000000000C840    1479   noc_boot11.a
+  2 AUXIN                            PRI  CODE   W   000000000000D1DE    3159   noc_boot11.a
+  3 AUXOCRLF                         PRI  CODE   W   000000000000C766    1315   noc_boot11.a
+  4 AUXOUT                           PRI  CODE   W   000000000000D1A0    3131   noc_boot11.a
+  5 AsciiToScreen                    PRI  CODE   W   000000000000DA68    3602   noc_boot11.a
+  6 BUFFER                           PRI  NONE   H   00000000000000AE    3302   noc_boot11.a
+  7 BUFLEN                           NON  DATA   W   0000000000000050     257   noc_boot11.a
+  8 BYEBYE                           PRI  CODE   W   000000000000D24E    3225   noc_boot11.a
+  9 CHKIO                            PRI  CODE   W   000000000000D0D8    2989   noc_boot11.a
+ 10 CHKRET                           PRI  CODE   W   000000000000D0EA    2997   noc_boot11.a
+ 11 CHKRET2                          PRI  CODE   W   000000000000D0F0    3001   noc_boot11.a
+ 12 CLMSG                            PRI  CODE   W   000000000000D2A9    3238   noc_boot11.a
+ 13 CR                               NON  DATA   W   000000000000000D      27   noc_boot11.a
+ 14 CRLF                             PRI  CODE   W   000000000000D0F8    3010   noc_boot11.a
+ 15 CSTART                           PRI  CODE   W   000000000000C08A     285   noc_boot11.a
+ 16 CTRLC                            NON  DATA   W   0000000000000003     252   noc_boot11.a
+ 17 CTRLH                            NON  DATA   W   0000000000000008      29   noc_boot11.a
+ 18 CTRLS                            NON  DATA   W   0000000000000013     254   noc_boot11.a
+ 19 CTRLX                            NON  DATA   W   0000000000000018     255   noc_boot11.a
+ 20 CURRNT                           PRI  NONE   H   0000000000000086    3287   noc_boot11.a
+ 21 ClearScreen                      PRI  CODE   W   000000000000DA8A    3629   noc_boot11.a
+ 22 DATA_PRESENT                     NON  DATA   W   0000000000000001     226   noc_boot11.a
+ 23 DEFLT                            PRI  CODE   W   000000000000C610    1129   noc_boot11.a
+ 24 DIRECT                           PRI  CODE   W   000000000000C2B4     570   noc_boot11.a
+ 25 DIV32                            PRI  CODE   W   000000000000CB26    2011   noc_boot11.a
+ 26 DOQUO                            PRI  CODE   W   000000000000D0B2    2955   noc_boot11.a
+ 27 DOQUO1                           PRI  CODE   W   000000000000D0BA    2960   noc_boot11.a
+ 28 DispByte                         PRI  CODE   W   000000000000DA26    3557   noc_boot11.a
+ 29 DispCRLF                         PRI  CODE   W   000000000000D9E8    3517   noc_boot11.a
+ 30 DispNybble                       PRI  CODE   W   000000000000DA42    3573   noc_boot11.a
+ 31 DispNybble1                      PRI  CODE   W   000000000000DA5A    3583   noc_boot11.a
+ 32 DispNybble2                      PRI  CODE   W   000000000000DA60    3587   noc_boot11.a
+ 33 DispSpace                        PRI  CODE   W   000000000000D9F6    3528   noc_boot11.a
+ 34 DispWord                         PRI  CODE   W   000000000000DA02    3537   noc_boot11.a
+ 35 ENDCHK                           PRI  CODE   W   000000000000CC92    2290   noc_boot11.a
+ 36 ENDMEM                           PRI  CODE   W   000000000000C088     276   noc_boot11.a
+ 37 ERROR                            PRI  CODE   W   000000000000CCBE    2313   noc_boot11.a
+ 38 EX1                              PRI  CODE   W   000000000000C2E6     595   noc_boot11.a
+ 39 EXEC                             PRI  CODE   W   000000000000C2BC     573   noc_boot11.a
+ 40 EXGO                             PRI  CODE   W   000000000000C2F8     605   noc_boot11.a
+ 41 EXGO1                            PRI  CODE   W   000000000000C306     610   noc_boot11.a
+ 42 EXLP                             PRI  CODE   W   000000000000C2C8     579   noc_boot11.a
+ 43 EXMAT                            PRI  CODE   W   000000000000C2EE     600   noc_boot11.a
+ 44 EXNGO                            PRI  CODE   W   000000000000C2D4     586   noc_boot11.a
+ 45 EXPR                             PRI  CODE   W   000000000000C8B4    1567   noc_boot11.a
+ 46 EXPR2                            PRI  CODE   W   000000000000C92C    1649   noc_boot11.a
+ 47 EXPR3                            PRI  CODE   W   000000000000C968    1689   noc_boot11.a
+ 48 EXPR4                            PRI  CODE   W   000000000000C996    1722   noc_boot11.a
+ 49 FI1                              PRI  CODE   W   000000000000CC7E    2274   noc_boot11.a
+ 50 FI2                              PRI  CODE   W   000000000000CC8C    2280   noc_boot11.a
+ 51 FIN                              PRI  CODE   W   000000000000CC6E    2267   noc_boot11.a
+ 52 FINISH                           PRI  CODE   W   000000000000C452     841   noc_boot11.a
+ 53 FNDLN                            PRI  CODE   W   000000000000CD9A    2439   noc_boot11.a
+ 54 FNDLNP                           PRI  CODE   W   000000000000CDAA    2447   noc_boot11.a
+ 55 FNDNXT                           PRI  CODE   W   000000000000CDD4    2470   noc_boot11.a
+ 56 FNDRET                           PRI  CODE   W   000000000000CDD2    2467   noc_boot11.a
+ 57 FNDSKP                           PRI  CODE   W   000000000000CDD6    2473   noc_boot11.a
+ 58 FOR                              PRI  CODE   W   000000000000C4B4     921   noc_boot11.a
+ 59 FR1                              PRI  CODE   W   000000000000C4CC     928   noc_boot11.a
+ 60 FR2                              PRI  CODE   W   000000000000C4E0     934   noc_boot11.a
+ 61 FR3                              PRI  CODE   W   000000000000C4E6     937   noc_boot11.a
+ 62 FR4                              PRI  CODE   W   000000000000C4E8     939   noc_boot11.a
+ 63 FR5                              PRI  CODE   W   000000000000C4EC     942   noc_boot11.a
+ 64 FR6                              PRI  CODE   W   000000000000C500     951   noc_boot11.a
+ 65 FR7                              PRI  CODE   W   000000000000C502     953   noc_boot11.a
+ 66 FR8                              PRI  CODE   W   000000000000C516     964   noc_boot11.a
+ 67 FVARBGN                          PRI  NONE   H   000000000000009E    3299   noc_boot11.a
+ 68 FocusTbl                         PRI  NONE   H   0000000000000060      53   noc_boot11.a
+ 69 GCHAR                            PRI  CODE   W   000000000000C67C    1200   noc_boot11.a
+ 70 GCHAR1                           PRI  CODE   W   000000000000C688    1207   noc_boot11.a
+ 71 GETLN                            PRI  CODE   W   000000000000CCF2    2346   noc_boot11.a
+ 72 GL1                              PRI  CODE   W   000000000000CD0E    2356   noc_boot11.a
+ 73 GL2                              PRI  CODE   W   000000000000CD2C    2367   noc_boot11.a
+ 74 GL3                              PRI  CODE   W   000000000000CD42    2377   noc_boot11.a
+ 75 GL4                              PRI  CODE   W   000000000000CD60    2389   noc_boot11.a
+ 76 GL5                              PRI  CODE   W   000000000000CD68    2393   noc_boot11.a
+ 77 GL6                              PRI  CODE   W   000000000000CD80    2402   noc_boot11.a
+ 78 GL7                              PRI  CODE   W   000000000000CD86    2405   noc_boot11.a
+ 79 GOAUXI                           PRI  CODE   W   000000000000C07E     270   noc_boot11.a
+ 80 GOAUXO                           PRI  CODE   W   000000000000C07A     269   noc_boot11.a
+ 81 GOBYE                            PRI  CODE   W   000000000000C082     271   noc_boot11.a
+ 82 GOIN                             PRI  CODE   W   000000000000C076     268   noc_boot11.a
+ 83 GOOUT                            PRI  CODE   W   000000000000C072     267   noc_boot11.a
+ 84 GOSUB                            PRI  CODE   W   000000000000C45A     860   noc_boot11.a
+ 85 GOTO                             PRI  CODE   W   000000000000C384     712   noc_boot11.a
+ 86 GOWARM                           PRI  CODE   W   000000000000C070     266   noc_boot11.a
+ 87 HTOutFocus                       PRI  NONE   H   00000000000000A0      54   noc_boot11.a
+ 88 HomeCursor                       PRI  CODE   W   000000000000DAB2    3659   noc_boot11.a
+ 89 IF                               PRI  CODE   W   000000000000C572    1039   noc_boot11.a
+ 90 IF1                              PRI  CODE   W   000000000000C576    1041   noc_boot11.a
+ 91 IF2                              PRI  CODE   W   000000000000C57C    1044   noc_boot11.a
+ 92 IF3                              PRI  CODE   W   000000000000C588    1049   noc_boot11.a
+ 93 IGB1                             PRI  CODE   W   000000000000D07E    2919   noc_boot11.a
+ 94 IGB2                             PRI  CODE   W   000000000000D070    2913   noc_boot11.a
+ 95 IGBRET                           PRI  CODE   W   000000000000D082    2922   noc_boot11.a
+ 96 IGNBLK                           PRI  CODE   W   000000000000D06C    2910   noc_boot11.a
+ 97 INC                              PRI  CODE   W   000000000000D13A    3075   noc_boot11.a
+ 98 INC1                             PRI  CODE   W   000000000000D14C    3082   noc_boot11.a
+ 99 INPERR                           PRI  CODE   W   000000000000C58C    1054   noc_boot11.a
+100 INPUT                            PRI  CODE   W   000000000000C59A    1076   noc_boot11.a
+101 IP2                              PRI  CODE   W   000000000000C5B2    1088   noc_boot11.a
+102 IP3                              PRI  CODE   W   000000000000C5D2    1102   noc_boot11.a
+103 IP4                              PRI  CODE   W   000000000000C602    1119   noc_boot11.a
+104 IP5                              PRI  CODE   W   000000000000C60A    1123   noc_boot11.a
+105 IP6                              PRI  CODE   W   000000000000C59E    1079   noc_boot11.a
+106 IP7                              PRI  CODE   W   000000000000C5C4    1095   noc_boot11.a
+107 IVARBGN                          PRI  NONE   H   000000000000009A    3297   noc_boot11.a
+108 InitTxtCtrl                      PRI  CODE   W   000000000000D98C    3471   noc_boot11.a
+109 KBD                              NON  DATA   W   00000000FFFFDC50     230   noc_boot11.a
+110 LEDS                             NON  DATA   W   000000000000B200      58   noc_boot11.a
+111 LET                              PRI  CODE   W   000000000000C618    1141   noc_boot11.a
+112 LF                               NON  DATA   W   000000000000000A      28   noc_boot11.a
+113 LISTX                            PRI  CODE   W   000000000000C3C0     755   noc_boot11.a
+114 LOAD                             PRI  CODE   W   000000000000C626    1162   noc_boot11.a
+115 LOD1                             PRI  CODE   W   000000000000C632    1166   noc_boot11.a
+116 LOD2                             PRI  CODE   W   000000000000C662    1187   noc_boot11.a
+117 LODEND                           PRI  CODE   W   000000000000C674    1195   noc_boot11.a
+118 LOPINC                           PRI  NONE   H   000000000000008E    3291   noc_boot11.a
+119 LOPLMT                           PRI  NONE   H   0000000000000090    3292   noc_boot11.a
+120 LOPLN                            PRI  NONE   H   0000000000000092    3293   noc_boot11.a
+121 LOPPT                            PRI  NONE   H   0000000000000094    3294   noc_boot11.a
+122 LOPVAR                           PRI  NONE   H   000000000000008C    3290   noc_boot11.a
+123 LS1                              PRI  CODE   W   000000000000C3D0     761   noc_boot11.a
+124 LS2                              PRI  CODE   W   000000000000C3E8     771   noc_boot11.a
+125 LS3                              PRI  CODE   W   000000000000C3EE     774   noc_boot11.a
+126 LSTROM                           NON  DATA   W   000000000000D448    3259   noc_boot11.a
+127 LT1                              PRI  CODE   W   000000000000C624    1146   noc_boot11.a
+128 MSG_DST                          NON  DATA   W   000000000000000F      63   noc_boot11.a
+129 MSG_SRC                          NON  DATA   W   000000000000000E      64   noc_boot11.a
+130 MSG_TYPE                         NON  DATA   W   0000000000000007      65   noc_boot11.a
+131 MT_BASIC_EXIT                    NON  DATA   W   000000000000000D      43   noc_boot11.a
+132 MT_BUTTON_STATUS                 NON  DATA   W   0000000000000006      36   noc_boot11.a
+133 MT_GRNT_INP_FOCUS                NON  DATA   W   0000000000000008      38   noc_boot11.a
+134 MT_GRNT_OUT_FOCUS                NON  DATA   W   0000000000000010      45   noc_boot11.a
+135 MT_KEYSTROKE                     NON  DATA   W   0000000000000004      34   noc_boot11.a
+136 MT_LOAD_BASIC_CHAR               NON  DATA   W   000000000000000B      41   noc_boot11.a
+137 MT_OUT_CHAR                      NON  DATA   W   0000000000000011      46   noc_boot11.a
+138 MT_PING                          NON  DATA   W   0000000000000009      39   noc_boot11.a
+139 MT_PING_ACK                      NON  DATA   W   0000000000000012      47   noc_boot11.a
+140 MT_REQ_INP_FOCUS                 NON  DATA   W   0000000000000007      37   noc_boot11.a
+141 MT_REQ_OUT_FOCUS                 NON  DATA   W   000000000000000F      44   noc_boot11.a
+142 MT_RST                           NON  DATA   W   0000000000000001      31   noc_boot11.a
+143 MT_RST_ACK                       NON  DATA   W   0000000000000002      32   noc_boot11.a
+144 MT_RUN_BASIC_PROG                NON  DATA   W   000000000000000C      42   noc_boot11.a
+145 MT_SET_INPUT_FOCUS               NON  DATA   W   0000000000000005      35   noc_boot11.a
+146 MT_START_BASIC_LOAD              NON  DATA   W   000000000000000A      40   noc_boot11.a
+147 MT_STOP                          NON  DATA   W   0000000000000003      33   noc_boot11.a
+148 MULT32                           PRI  CODE   W   000000000000CAEC    1958   noc_boot11.a
+149 MVDOWN                           PRI  CODE   W   000000000000CDF8    2505   noc_boot11.a
+150 MVDOWN1                          PRI  CODE   W   000000000000CDF0    2500   noc_boot11.a
+151 MVRET                            PRI  CODE   W   000000000000CDEE    2493   noc_boot11.a
+152 MVUP                             PRI  CODE   W   000000000000CDEA    2490   noc_boot11.a
+153 MVUP1                            PRI  CODE   W   000000000000CDE2    2485   noc_boot11.a
+154 NEW                              PRI  CODE   W   000000000000C30A     661   noc_boot11.a
+155 NEXT                             PRI  CODE   W   000000000000C518     978   noc_boot11.a
+156 NODENUM                          PRI  CODE   W   000000000000CC3A    2204   noc_boot11.a
+157 NUMWKA                           PRI  NONE   H   00000000000000A2    3301   noc_boot11.a
+158 NX0                              PRI  CODE   W   000000000000C52A     986   noc_boot11.a
+159 NX1                              PRI  CODE   W   000000000000C55A    1008   noc_boot11.a
+160 NX2                              PRI  CODE   W   000000000000C542     996   noc_boot11.a
+161 NX3                              PRI  CODE   W   000000000000C55E    1011   noc_boot11.a
+162 NX4                              PRI  CODE   W   000000000000C528     984   noc_boot11.a
+163 NX5                              PRI  CODE   W   000000000000C538     991   noc_boot11.a
+164 NXPurge                          PRI  CODE   W   000000000000C56C    1017   noc_boot11.a
+165 NodeNumTbl                       PRI  CODE   W   000000000000D8C6    3395   noc_boot11.a
+166 NormAttr                         PRI  NONE   H   000000000000003E    3278   noc_boot11.a
+167 OKMSG                            PRI  CODE   W   000000000000D294    3235   noc_boot11.a
+168 OREXPR                           PRI  CODE   W   000000000000C81C    1454   noc_boot11.a
+169 OSSP                             PRI  NONE   H   0000000000000084    3286   noc_boot11.a
+170 OUTC                             PRI  CODE   W   000000000000D138    3068   noc_boot11.a
+171 PARN                             PRI  CODE   W   000000000000C9C4    1750   noc_boot11.a
+172 PEEK                             PRI  CODE   W   000000000000CB70    2057   noc_boot11.a
+173 PEEKC                            PRI  CODE   W   000000000000CB7C    2069   noc_boot11.a
+174 PEEKW                            PRI  CODE   W   000000000000CB8A    2082   noc_boot11.a
+175 PHN1                             PRI  CODE   W   000000000000CF6C    2744   noc_boot11.a
+176 PHN3                             PRI  CODE   W   000000000000CF96    2767   noc_boot11.a
+177 PHN4                             PRI  CODE   W   000000000000CFA2    2772   noc_boot11.a
+178 PHN5                             PRI  CODE   W   000000000000CFAE    2777   noc_boot11.a
+179 PHN6                             PRI  CODE   W   000000000000CF92    2764   noc_boot11.a
+180 PHN7                             PRI  CODE   W   000000000000CF7C    2751   noc_boot11.a
+181 PHN8                             PRI  CODE   W   000000000000CF7E    2753   noc_boot11.a
+182 PHNRET                           PRI  CODE   W   000000000000CFBC    2783   noc_boot11.a
+183 PKER                             PRI  CODE   W   000000000000C7DE    1396   noc_boot11.a
+184 PN1                              PRI  CODE   W   000000000000CF04    2688   noc_boot11.a
+185 PN3                              PRI  CODE   W   000000000000CF1A    2700   noc_boot11.a
+186 PN4                              PRI  CODE   W   000000000000CF26    2705   noc_boot11.a
+187 PN5                              PRI  CODE   W   000000000000CF32    2710   noc_boot11.a
+188 PN6                              PRI  CODE   W   000000000000CF16    2697   noc_boot11.a
+189 PNRET                            PRI  CODE   W   000000000000CF40    2716   noc_boot11.a
+190 POKE                             PRI  CODE   W   000000000000C7C6    1385   noc_boot11.a
+191 POKEW                            PRI  CODE   W   000000000000C7E6    1401   noc_boot11.a
+192 POPA                             PRI  CODE   W   000000000000CDFE    2519   noc_boot11.a
+193 PP1                              PRI  CODE   W   000000000000CE22    2533   noc_boot11.a
+194 PR0                              PRI  CODE   W   000000000000C410     811   noc_boot11.a
+195 PR1                              PRI  CODE   W   000000000000C41E     817   noc_boot11.a
+196 PR2                              PRI  CODE   W   000000000000C404     806   noc_boot11.a
+197 PR3                              PRI  CODE   W   000000000000C434     827   noc_boot11.a
+198 PR4                              PRI  CODE   W   000000000000C42E     823   noc_boot11.a
+199 PR6                              PRI  CODE   W   000000000000C440     832   noc_boot11.a
+200 PR8                              PRI  CODE   W   000000000000C446     835   noc_boot11.a
+201 PRINT                            PRI  CODE   W   000000000000C3F6     800   noc_boot11.a
+202 PRMESG                           PRI  CODE   W   000000000000D0FC    3018   noc_boot11.a
+203 PRMESG1                          PRI  CODE   W   000000000000D104    3023   noc_boot11.a
+204 PRMESGA1                         PRI  CODE   W   000000000000D122    3046   noc_boot11.a
+205 PRMESGAUX                        PRI  CODE   W   000000000000D11A    3041   noc_boot11.a
+206 PRMRET                           PRI  CODE   W   000000000000D110    3029   noc_boot11.a
+207 PRMRETA                          PRI  CODE   W   000000000000D12E    3052   noc_boot11.a
+208 PRTHEXNUM                        PRI  CODE   W   000000000000CF4C    2727   noc_boot11.a
+209 PRTLN                            PRI  CODE   W   000000000000CFCA    2795   noc_boot11.a
+210 PRTNUM                           PRI  CODE   W   000000000000CEEA    2674   noc_boot11.a
+211 PRTRET                           PRI  CODE   W   000000000000CE82    2611   noc_boot11.a
+212 PRTSTG                           PRI  CODE   W   000000000000CE5A    2592   noc_boot11.a
+213 PS1                              PRI  CODE   W   000000000000CE68    2600   noc_boot11.a
+214 PU1                              PRI  CODE   W   000000000000CE54    2556   noc_boot11.a
+215 PUSHA                            PRI  CODE   W   000000000000CE26    2538   noc_boot11.a
+216 PWORD                            PRI  CODE   W   000000000000C77E    1329   noc_boot11.a
+217 QSORRY                           PRI  CODE   W   000000000000CCB4    2308   noc_boot11.a
+218 QT1                              PRI  CODE   W   000000000000CE9E    2628   noc_boot11.a
+219 QT2                              PRI  CODE   W   000000000000CEC6    2646   noc_boot11.a
+220 QT3                              PRI  CODE   W   000000000000CEB0    2636   noc_boot11.a
+221 QT4                              PRI  CODE   W   000000000000CEBA    2641   noc_boot11.a
+222 QT5                              PRI  CODE   W   000000000000CECC    2650   noc_boot11.a
+223 QTSTG                            PRI  CODE   W   000000000000CE92    2622   noc_boot11.a
+224 QWHAT                            PRI  CODE   W   000000000000CCBA    2311   noc_boot11.a
+225 RAND                             NON  DATA   W   00000000FFFFDCA0     232   noc_boot11.a
+226 RETURN                           PRI  CODE   W   000000000000C48A     884   noc_boot11.a
+227 RND                              PRI  CODE   W   000000000000CBAA    2107   noc_boot11.a
+228 ROUTER                           NON  DATA   W   000000000000B000      59   noc_boot11.a
+229 ROUTER_TRB                       NON  DATA   W   0000000000000000      67   noc_boot11.a
+230 RTR_RXSTAT                       NON  DATA   W   0000000000000010      60   noc_boot11.a
+231 RTR_TXSTAT                       NON  DATA   W   0000000000000012      61   noc_boot11.a
+232 RUN                              PRI  CODE   W   000000000000C320     671   noc_boot11.a
+233 RUN1                             PRI  CODE   W   000000000000C34E     688   noc_boot11.a
+234 RUNNXL                           PRI  CODE   W   000000000000C35C     694   noc_boot11.a
+235 RUNSML                           PRI  CODE   W   000000000000C376     706   noc_boot11.a
+236 RUNTSL                           PRI  CODE   W   000000000000C370     702   noc_boot11.a
+237 Recv                             PRI  CODE   W   000000000000C040     170   noc_boot11.a
+238 Recv1                            PRI  CODE   W   000000000000C05A     180   noc_boot11.a
+239 RecvDispatch                     PRI  CODE   W   000000000000D906    3409   noc_boot11.a
+240 RecvDispatch2                    PRI  CODE   W   000000000000D94C    3439   noc_boot11.a
+241 RecvDispatch3                    PRI  CODE   W   000000000000D980    3458   noc_boot11.a
+242 RecvDispatch4                    PRI  CODE   W   000000000000D918    3418   noc_boot11.a
+243 RecvDispatchXit                  PRI  CODE   W   000000000000D980    3459   noc_boot11.a
+244 RecvDump                         PRI  CODE   W   000000000000D9AC    3489   noc_boot11.a
+245 RecvLoop                         PRI  CODE   W   000000000000D844    3336   noc_boot11.a
+246 SAVE                             PRI  CODE   W   000000000000C6BA    1241   noc_boot11.a
+247 SAVE1                            PRI  CODE   W   000000000000C6E2    1256   noc_boot11.a
+248 SAVE2                            PRI  CODE   W   000000000000C740    1296   noc_boot11.a
+249 SAVE3                            PRI  CODE   W   000000000000C6DA    1253   noc_boot11.a
+250 SAVE4                            PRI  CODE   W   000000000000C71A    1278   noc_boot11.a
+251 SAVEND                           PRI  CODE   W   000000000000C750    1303   noc_boot11.a
+252 SETVAL                           PRI  CODE   W   000000000000CC42    2244   noc_boot11.a
+253 SGN                              PRI  CODE   W   000000000000CC14    2177   noc_boot11.a
+254 SIZEX                            PRI  CODE   W   000000000000CC2A    2194   noc_boot11.a
+255 SRYMSG                           PRI  CODE   W   000000000000D2A3    3237   noc_boot11.a
+256 ST2                              PRI  CODE   W   000000000000C140     343   noc_boot11.a
+257 ST3                              PRI  CODE   W   000000000000C114     329   noc_boot11.a
+258 ST4                              PRI  CODE   W   000000000000C186     384   noc_boot11.a
+259 ST5                              PRI  CODE   W   000000000000C1A6     403   noc_boot11.a
+260 ST6                              PRI  CODE   W   000000000000C180     381   noc_boot11.a
+261 START                            PRI  CODE   W   000000000000C06E     265   noc_boot11.a
+262 STKBOT                           PRI  NONE   H   00000000000000A0    3300   noc_boot11.a
+263 STKGOS                           PRI  NONE   H   0000000000000088    3288   noc_boot11.a
+264 STKINP                           PRI  NONE   H   000000000000008A    3289   noc_boot11.a
+265 STOP                             PRI  CODE   W   000000000000C318     667   noc_boot11.a
+266 SV1                              PRI  CODE   W   000000000000CC6C    2263   noc_boot11.a
+267 SVARBGN                          PRI  NONE   H   000000000000009C    3298   noc_boot11.a
+268 SYSX                             PRI  CODE   W   000000000000C7FE    1414   noc_boot11.a
+269 TAB                              NON  DATA   W   0000000000000009     251   noc_boot11.a
+270 TAB1                             PRI  CODE   W   000000000000C1C0     448   noc_boot11.a
+271 TAB10                            PRI  CODE   W   000000000000C251     501   noc_boot11.a
+272 TAB10_1                          PRI  CODE   W   000000000000C2B0     561   noc_boot11.a
+273 TAB1_1                           PRI  CODE   W   000000000000C254     508   noc_boot11.a
+274 TAB2                             PRI  CODE   W   000000000000C1D2     454   noc_boot11.a
+275 TAB2_1                           PRI  CODE   W   000000000000C25E     514   noc_boot11.a
+276 TAB4                             PRI  CODE   W   000000000000C218     474   noc_boot11.a
+277 TAB4_1                           PRI  CODE   W   000000000000C284     534   noc_boot11.a
+278 TAB5                             PRI  CODE   W   000000000000C23B     484   noc_boot11.a
+279 TAB5_1                           PRI  CODE   W   000000000000C296     544   noc_boot11.a
+280 TAB6                             PRI  CODE   W   000000000000C23E     487   noc_boot11.a
+281 TAB6_1                           PRI  CODE   W   000000000000C29A     547   noc_boot11.a
+282 TAB8                             PRI  CODE   W   000000000000C243     490   noc_boot11.a
+283 TAB8_1                           PRI  CODE   W   000000000000C29E     550   noc_boot11.a
+284 TAB9                             PRI  CODE   W   000000000000C24D     498   noc_boot11.a
+285 TAB9_1                           PRI  CODE   W   000000000000C2AC     558   noc_boot11.a
+286 TC1                              PRI  CODE   W   000000000000D022    2852   noc_boot11.a
+287 TN1                              PRI  CODE   W   000000000000D034    2876   noc_boot11.a
+288 TN2                              PRI  CODE   W   000000000000D050    2886   noc_boot11.a
+289 TOOBIG                           PRI  CODE   W   000000000000CCAE    2305   noc_boot11.a
+290 TOUPB1                           PRI  CODE   W   000000000000D092    2941   noc_boot11.a
+291 TOUPBRT                          PRI  CODE   W   000000000000D0C2    2965   noc_boot11.a
+292 TOUPBUF                          PRI  CODE   W   000000000000D088    2936   noc_boot11.a
+293 TOUPRET                          PRI  CODE   W   000000000000D0D6    2979   noc_boot11.a
+294 TSNMRET                          PRI  CODE   W   000000000000D066    2897   noc_boot11.a
+295 TSTC                             PRI  CODE   W   000000000000D006    2836   noc_boot11.a
+296 TSTNUM                           PRI  CODE   W   000000000000D02A    2870   noc_boot11.a
+297 TSTV                             PRI  CODE   W   000000000000C9E4    1775   noc_boot11.a
+298 TSTVRT                           PRI  CODE   W   000000000000CA28    1808   noc_boot11.a
+299 TS_TIMER                         NON  DATA   W   00000000FFFFDC40     229   noc_boot11.a
+300 TV1                              PRI  CODE   W   000000000000CA1E    1802   noc_boot11.a
+301 TV2                              PRI  CODE   W   000000000000CA16    1798   noc_boot11.a
+302 TXTBGN                           PRI  CODE   W   000000000000C086     275   noc_boot11.a
+303 TXTCTRL                          NON  DATA   W   000000000000B100      57   noc_boot11.a
+304 TXTSCR                           NON  DATA   W   0000000000002000      56   noc_boot11.a
+305 TXTUNF                           PRI  NONE   H   0000000000000096    3295   noc_boot11.a
+306 TriggerTgtLoad                   PRI  CODE   W   000000000000D17C    3115   noc_boot11.a
+307 USRX                             PRI  CODE   W   000000000000CB96    2093   noc_boot11.a
+308 VARBGN                           PRI  NONE   H   0000000000000098    3296   noc_boot11.a
+309 VIC                              NON  DATA   W   00000000FFFFD800     233   noc_boot11.a
+310 VIDEORAM                         NON  DATA   W   0000000000002000     235   noc_boot11.a
+311 WSTART                           PRI  CODE   W   000000000000C0FC     322   noc_boot11.a
+312 XMIT_NOT_FULL                    NON  DATA   W   0000000000000020     227   noc_boot11.a
+313 XP11                             PRI  CODE   W   000000000000C8C8    1576   noc_boot11.a
+314 XP12                             PRI  CODE   W   000000000000C8D2    1583   noc_boot11.a
+315 XP13                             PRI  CODE   W   000000000000C8DC    1590   noc_boot11.a
+316 XP14                             PRI  CODE   W   000000000000C8E6    1597   noc_boot11.a
+317 XP15                             PRI  CODE   W   000000000000C8F0    1604   noc_boot11.a
+318 XP16                             PRI  CODE   W   000000000000C8FA    1612   noc_boot11.a
+319 XP17                             PRI  CODE   W   000000000000C914    1631   noc_boot11.a
+320 XP18                             PRI  CODE   W   000000000000C91C    1637   noc_boot11.a
+321 XP21                             PRI  CODE   W   000000000000C93C    1657   noc_boot11.a
+322 XP22                             PRI  CODE   W   000000000000C942    1660   noc_boot11.a
+323 XP23                             PRI  CODE   W   000000000000C944    1662   noc_boot11.a
+324 XP24                             PRI  CODE   W   000000000000C94E    1667   noc_boot11.a
+325 XP25                             PRI  CODE   W   000000000000C954    1672   noc_boot11.a
+326 XP26                             PRI  CODE   W   000000000000C95A    1675   noc_boot11.a
+327 XP31                             PRI  CODE   W   000000000000C96E    1693   noc_boot11.a
+328 XP34                             PRI  CODE   W   000000000000C97E    1701   noc_boot11.a
+329 XP40                             PRI  CODE   W   000000000000C9A6    1730   noc_boot11.a
+330 XP41                             PRI  CODE   W   000000000000C9B4    1738   noc_boot11.a
+331 XP42                             PRI  CODE   W   000000000000C9D6    1758   noc_boot11.a
+332 XP43                             PRI  CODE   W   000000000000C9DC    1762   noc_boot11.a
+333 XP45                             PRI  CODE   W   000000000000C960    1680   noc_boot11.a
+334 XP46                             PRI  CODE   W   000000000000C9BE    1743   noc_boot11.a
+335 XP47                             PRI  CODE   W   000000000000C98E    1710   noc_boot11.a
+336 XPRT0                            PRI  CODE   W   000000000000C904    1619   noc_boot11.a
+337 XPRT1                            PRI  CODE   W   000000000000C90C    1625   noc_boot11.a
+338 XP_AND                           PRI  CODE   W   000000000000C854    1489   noc_boot11.a
+339 XP_AND1                          PRI  CODE   W   000000000000C846    1483   noc_boot11.a
+340 XP_ANDX                          PRI  CODE   W   000000000000C85C    1495   noc_boot11.a
+341 XP_OR                            PRI  CODE   W   000000000000C830    1464   noc_boot11.a
+342 XP_OR1                           PRI  CODE   W   000000000000C822    1458   noc_boot11.a
+343 XP_ORX                           PRI  CODE   W   000000000000C838    1470   noc_boot11.a
+344 Xmit                             PRI  CODE   W   000000000000C016     136   noc_boot11.a
+345 Xmit1                            PRI  CODE   W   000000000000C026     144   noc_boot11.a
+346 Xmit2                            PRI  CODE   W   000000000000C01C     140   noc_boot11.a
+347 _clr                             PRI  CODE   W   000000000000C39E     723   noc_boot11.a
+348 _cls                             PRI  CODE   W   000000000000D246    3218   noc_boot11.a
+349 _flashCursor                     PRI  CODE   W   000000000000D222    3198   noc_boot11.a
+350 _getChar                         PRI  CODE   W   000000000000D14C    3085   noc_boot11.a
+351 _getCharWait                     PRI  CODE   W   000000000000D16A    3103   noc_boot11.a
+352 _scrollScreen                    PRI  CODE   W   000000000000D1E2    3165   noc_boot11.a
+353 a2h1                             PRI  CODE   W   000000000000C6B2    1233   noc_boot11.a
+354 abs1                             PRI  CODE   W   000000000000CC0E    2169   noc_boot11.a
+355 asciiToHex                       PRI  CODE   W   000000000000C6AA    1229   noc_boot11.a
+356 ats1                             PRI  CODE   W   000000000000DA84    3613   noc_boot11.a
+357 auxout1                          PRI  CODE   W   000000000000D1B6    3142   noc_boot11.a
+358 bkColor                          PRI  NONE   H   000000000000003B    3275   noc_boot11.a
+359 broadcastReset                   PRI  CODE   W   000000000000D85A    3352   noc_boot11.a
+360 charToPrint                      PRI  NONE   H   0000000000000038    3273   noc_boot11.a
+361 clearScreen                      NON  DATA   W   0000000FFFFFF82C     242   noc_boot11.a
+362 clearVars                        PRI  CODE   W   000000000000C3A2     728   noc_boot11.a
+363 cs1                              PRI  CODE   W   000000000000DAA4    3639   noc_boot11.a
+364 cursFlash                        PRI  NONE   H   000000000000003C    3276   noc_boot11.a
+365 cursx                            PRI  NONE   H   0000000000000032    3267   noc_boot11.a
+366 cursy                            PRI  NONE   H   0000000000000033    3268   noc_boot11.a
+367 cv1                              PRI  CODE   W   000000000000C3B0     734   noc_boot11.a
+368 div1                             PRI  CODE   W   000000000000CB48    2029   noc_boot11.a
+369 div2                             PRI  CODE   W   000000000000CB4E    2033   noc_boot11.a
+370 div4                             PRI  CODE   W   000000000000CB5A    2040   noc_boot11.a
+371 div5                             PRI  CODE   W   000000000000CB64    2046   noc_boot11.a
+372 div6                             PRI  CODE   W   000000000000CB30    2016   noc_boot11.a
+373 ec1                              PRI  CODE   W   000000000000CCA8    2299   noc_boot11.a
+374 fc1                              PRI  CODE   W   000000000000D23C    3210   noc_boot11.a
+375 fcx                              PRI  CODE   W   000000000000D242    3213   noc_boot11.a
+376 fgColor                          PRI  NONE   H   000000000000003A    3274   noc_boot11.a
+377 findVar                          PRI  CODE   W   000000000000CAB0    1905   noc_boot11.a
+378 fl1                              PRI  CODE   W   000000000000CDA6    2444   noc_boot11.a
+379 flashCursor                      PRI  CODE   W   000000000000DAC0    3667   noc_boot11.a
+380 fv1                              PRI  CODE   W   000000000000CAD8    1938   noc_boot11.a
+381 fv2                              PRI  CODE   W   000000000000CAE2    1946   noc_boot11.a
+382 fv3                              PRI  CODE   W   000000000000CAD2    1932   noc_boot11.a
+383 fv4                              PRI  CODE   W   000000000000CABA    1910   noc_boot11.a
+384 gc1                              PRI  CODE   W   000000000000D162    3094   noc_boot11.a
+385 gc2                              PRI  CODE   W   000000000000D16A    3104   noc_boot11.a
+386 getKbdChar                       NON  DATA   W   0000000FFFFFF844     244   noc_boot11.a
+387 getKbdCharWait                   NON  DATA   W   0000000FFFFFF840     243   noc_boot11.a
+388 getSerial                        NON  DATA   W   0000000FFFFFF804     239   noc_boot11.a
+389 getVarName                       PRI  CODE   W   000000000000CA3A    1824   noc_boot11.a
+390 gosub1                           PRI  CODE   W   000000000000C470     867   noc_boot11.a
+391 gvn1                             PRI  CODE   W   000000000000CAA6    1891   noc_boot11.a
+392 gvn2                             PRI  CODE   W   000000000000CA76    1863   noc_boot11.a
+393 gvn3                             PRI  CODE   W   000000000000CA88    1873   noc_boot11.a
+394 gvn4                             PRI  CODE   W   000000000000CA4A    1836   noc_boot11.a
+395 gvn6                             PRI  CODE   W   000000000000CA6E    1857   noc_boot11.a
+396 isAlnum                          PRI  CODE   W   000000000000C898    1549   noc_boot11.a
+397 isAlpha                          PRI  CODE   W   000000000000C878    1526   noc_boot11.a
+398 isAlphaFalse                     PRI  CODE   W   000000000000C894    1538   noc_boot11.a
+399 isAlphaTrue                      PRI  CODE   W   000000000000C890    1535   noc_boot11.a
+400 isDigit                          PRI  CODE   W   000000000000C864    1508   noc_boot11.a
+401 isDigitFalse                     PRI  CODE   W   000000000000C874    1515   noc_boot11.a
+402 isDigitx                         PRI  CODE   W   000000000000C8AE    1561   noc_boot11.a
+403 itc1                             PRI  CODE   W   000000000000D994    3475   noc_boot11.a
+404 lineLinkTbl                      PRI  NONE   H   0000000000000040    3280   noc_boot11.a
+405 lineTbl                          PRI  CODE   W   000000000000DC7A    3886   noc_boot11.a
+406 lockup                           PRI  CODE   W   000000000000D858    3345   noc_boot11.a
+407 mod1                             PRI  CODE   W   000000000000CBF4    2149   noc_boot11.a
+408 mod2                             PRI  CODE   W   000000000000CBEA    2143   noc_boot11.a
+409 modu4                            PRI  CODE   W   000000000000CBDA    2135   noc_boot11.a
+410 msgBadGotoGosub                  PRI  CODE   W   000000000000D3D9    3253   noc_boot11.a
+411 msgBytesFree                     PRI  CODE   W   000000000000D306    3243   noc_boot11.a
+412 msgComma                         PRI  CODE   W   000000000000D31E    3245   noc_boot11.a
+413 msgDivZero                       PRI  CODE   W   000000000000D2DB    3241   noc_boot11.a
+414 msgExtraChars                    PRI  CODE   W   000000000000D422    3256   noc_boot11.a
+415 msgInit                          PRI  CODE   W   000000000000D258    3234   noc_boot11.a
+416 msgInputVar                      PRI  CODE   W   000000000000D385    3250   noc_boot11.a
+417 msgLineRange                     PRI  CODE   W   000000000000D332    3246   noc_boot11.a
+418 msgNextFor                       PRI  CODE   W   000000000000D3A2    3251   noc_boot11.a
+419 msgNextVar                       PRI  CODE   W   000000000000D3B5    3252   noc_boot11.a
+420 msgNumTooBig                     PRI  CODE   W   000000000000D2C7    3240   noc_boot11.a
+421 msgRNDBad                        PRI  CODE   W   000000000000D35F    3248   noc_boot11.a
+422 msgReadError                     PRI  CODE   W   000000000000D2AC    3239   noc_boot11.a
+423 msgReady                         PRI  CODE   W   000000000000D314    3244   noc_boot11.a
+424 msgRetWoGosub                    PRI  CODE   W   000000000000D3F6    3254   noc_boot11.a
+425 msgSYSBad                        PRI  CODE   W   000000000000D373    3249   noc_boot11.a
+426 msgStarting                      PRI  CODE   W   000000000000DC48    3877   noc_boot11.a
+427 msgTooBig                        PRI  CODE   W   000000000000D40D    3255   noc_boot11.a
+428 msgVar                           PRI  CODE   W   000000000000D348    3247   noc_boot11.a
+429 msgVarSpace                      PRI  CODE   W   000000000000D2EE    3242   noc_boot11.a
+430 msgWhat                          PRI  CODE   W   000000000000D29B    3236   noc_boot11.a
+431 mult1                            PRI  CODE   W   000000000000CB00    1970   noc_boot11.a
+432 mult2                            PRI  CODE   W   000000000000CB06    1974   noc_boot11.a
+433 mult3                            PRI  CODE   W   000000000000CB0E    1979   noc_boot11.a
+434 mult4                            PRI  CODE   W   000000000000CB14    1983   noc_boot11.a
+435 mult5                            PRI  CODE   W   000000000000CB1A    1987   noc_boot11.a
+436 noMsg1                           PRI  CODE   W   000000000000D844    3337   noc_boot11.a
+437 pc1                              PRI  CODE   W   000000000000DB0C    3732   noc_boot11.a
+438 pc11                             PRI  CODE   W   000000000000DB8A    3794   noc_boot11.a
+439 pc2                              PRI  CODE   W   000000000000DB3A    3752   noc_boot11.a
+440 pc3                              PRI  CODE   W   000000000000DB24    3742   noc_boot11.a
+441 pc4                              PRI  CODE   W   000000000000DB82    3786   noc_boot11.a
+442 pc5                              PRI  CODE   W   000000000000DB48    3758   noc_boot11.a
+443 pc6                              PRI  CODE   W   000000000000DB66    3770   noc_boot11.a
+444 pc7                              PRI  CODE   W   000000000000DBEC    3833   noc_boot11.a
+445 pc8                              PRI  CODE   W   000000000000DBE0    3827   noc_boot11.a
+446 pc9                              PRI  CODE   W   000000000000DBCE    3820   noc_boot11.a
+447 peekSerial                       NON  DATA   W   0000000FFFFFF808     240   noc_boot11.a
+448 ping44                           PRI  CODE   W   000000000000D882    3367   noc_boot11.a
+449 ping441                          PRI  CODE   W   000000000000D888    3371   noc_boot11.a
+450 ping442                          PRI  CODE   W   000000000000D8B6    3386   noc_boot11.a
+451 pos                              PRI  NONE   H   0000000000000034    3269   noc_boot11.a
+452 prCRLF                           PRI  CODE   W   000000000000CED2    2658   noc_boot11.a
+453 putSerial                        NON  DATA   W   0000000FFFFFF80C     241   noc_boot11.a
+454 putcharScr                       PRI  CODE   W   000000000000DADE    3706   noc_boot11.a
+455 putmsg3                          PRI  CODE   W   000000000000DACA    3685   noc_boot11.a
+456 putmsg4                          PRI  CODE   W   000000000000DAD4    3691   noc_boot11.a
+457 putmsgScr                        PRI  CODE   W   000000000000DAC2    3680   noc_boot11.a
+458 pword1                           PRI  CODE   W   000000000000C78A    1335   noc_boot11.a
+459 pword2                           PRI  CODE   W   000000000000C7A0    1346   noc_boot11.a
+460 return1                          PRI  CODE   W   000000000000C49C     890   noc_boot11.a
+461 rnd1                             PRI  CODE   W   000000000000CBC6    2120   noc_boot11.a
+462 rnd2                             PRI  CODE   W   000000000000CBCC    2123   noc_boot11.a
+463 rxBuf                            PRI  NONE   H   0000000000000050      52   noc_boot11.a
+464 scrollScreenUp                   PRI  CODE   W   000000000000DC06    3845   noc_boot11.a
+465 scrollScreenUp1                  PRI  CODE   W   000000000000DC1A    3853   noc_boot11.a
+466 scrollScreenUp2                  PRI  CODE   W   000000000000DC38    3867   noc_boot11.a
+467 sgn1                             PRI  CODE   W   000000000000CC24    2186   noc_boot11.a
+468 sgn2                             PRI  CODE   W   000000000000CC22    2184   noc_boot11.a
+469 srcNode                          PRI  NONE   H   0000000000000037    3271   noc_boot11.a
+470 ss1                              PRI  CODE   W   000000000000D1F6    3173   noc_boot11.a
+471 ss2                              PRI  CODE   W   000000000000D214    3186   noc_boot11.a
+472 start                            PRI  CODE   W   000000000000D800    3311   noc_boot11.a
+473 start2                           PRI  CODE   W   000000000000D83A    3332   noc_boot11.a
+474 sv2                              PRI  CODE   W   000000000000CC54    2252   noc_boot11.a
+475 sysx1                            PRI  CODE   W   000000000000C80E    1421   noc_boot11.a
+476 tah1                             PRI  CODE   W   000000000000C7C2    1367   noc_boot11.a
+477 textScr1                         PRI  NONE   H   0000000000002000    3306   noc_boot11.a
+478 tgtNode                          PRI  NONE   H   0000000000000036    3270   noc_boot11.a
+479 toAsciiHex                       PRI  CODE   W   000000000000C7B6    1362   noc_boot11.a
+480 toUpper                          PRI  CODE   W   000000000000D0C8    2973   noc_boot11.a
+481 tstv_notfound                    PRI  CODE   W   000000000000CA30    1813   noc_boot11.a
+482 txBuf                            PRI  NONE   H   0000000000000040      51   noc_boot11.a
+483 txtHeight                        PRI  NONE   H   0000000000000031    3266   noc_boot11.a
+484 txtWidth                         PRI  NONE   H   0000000000000030    3265   noc_boot11.a
+485 txtctrl_dat                      PRI  CODE   W   000000000000DC69    3880   noc_boot11.a
+486 typef                            PRI  NONE   H   0000000000000080    3284   noc_boot11.a
+487 usrJmp                           NON  DATA   W   0000000000000024     247   noc_boot11.a
+488 warmStart                        NON  DATA   W   0000000000000020     246   noc_boot11.a
+489 zeroTxBuf                        PRI  CODE   W   000000000000C000     110   noc_boot11.a
+490 zeroTxBuf1                       PRI  CODE   W   000000000000C008     114   noc_boot11.a
 
 
 Local symbols:

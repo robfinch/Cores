@@ -45,23 +45,23 @@ output [15:0] adr42;
 input [7:0] dati42;
 output [7:0] dato42;
 
-wire [7:0] txdX11,txdX21,txdX31,txdX41,txdX51,txdX61,txdX71,txdX81;
-wire [7:0] txdX12,txdX22,txdX32,txdX42,txdX52,txdX62,txdX72,txdX82;
-wire [7:0] txdX13,txdX23,txdX33,txdX43,txdX53,txdX63,txdX73,txdX83;
-wire [7:0] txdX14,txdX24,txdX34,txdX44,txdX54,txdX64,txdX74,txdX84;
-wire [7:0] txdX15,txdX25,txdX35,txdX45,txdX55,txdX65,txdX75,txdX85;
-wire [7:0] txdX16,txdX26,txdX36,txdX46,txdX56,txdX66,txdX76,txdX86;
-wire [7:0] txdX17,txdX27,txdX37,txdX47,txdX57,txdX67,txdX77,txdX87;
-wire [7:0] txdX18,txdX28,txdX38,txdX48,txdX58,txdX68,txdX78,txdX88;
+wire [4:0] txdX11,txdX21,txdX31,txdX41,txdX51,txdX61,txdX71,txdX81;
+wire [4:0] txdX12,txdX22,txdX32,txdX42,txdX52,txdX62,txdX72,txdX82;
+wire [4:0] txdX13,txdX23,txdX33,txdX43,txdX53,txdX63,txdX73,txdX83;
+wire [4:0] txdX14,txdX24,txdX34,txdX44,txdX54,txdX64,txdX74,txdX84;
+wire [4:0] txdX15,txdX25,txdX35,txdX45,txdX55,txdX65,txdX75,txdX85;
+wire [4:0] txdX16,txdX26,txdX36,txdX46,txdX56,txdX66,txdX76,txdX86;
+wire [4:0] txdX17,txdX27,txdX37,txdX47,txdX57,txdX67,txdX77,txdX87;
+wire [4:0] txdX18,txdX28,txdX38,txdX48,txdX58,txdX68,txdX78,txdX88;
 
-wire [7:0] txdY11,txdY21,txdY31,txdY41,txdY51,txdY61,txdY71,txdY81;
-wire [7:0] txdY12,txdY22,txdY32,txdY42,txdY52,txdY62,txdY72,txdY82;
-wire [7:0] txdY13,txdY23,txdY33,txdY43,txdY53,txdY63,txdY73,txdY83;
-wire [7:0] txdY14,txdY24,txdY34,txdY44,txdY54,txdY64,txdY74,txdY84;
-wire [7:0] txdY15,txdY25,txdY35,txdY45,txdY55,txdY65,txdY75,txdY85;
-wire [7:0] txdY16,txdY26,txdY36,txdY46,txdY56,txdY66,txdY76,txdY86;
-wire [7:0] txdY17,txdY27,txdY37,txdY47,txdY57,txdY67,txdY77,txdY87;
-wire [7:0] txdY18,txdY28,txdY38,txdY48,txdY58,txdY68,txdY78,txdY88;
+wire [4:0] txdY11,txdY21,txdY31,txdY41,txdY51,txdY61,txdY71,txdY81;
+wire [4:0] txdY12,txdY22,txdY32,txdY42,txdY52,txdY62,txdY72,txdY82;
+wire [4:0] txdY13,txdY23,txdY33,txdY43,txdY53,txdY63,txdY73,txdY83;
+wire [4:0] txdY14,txdY24,txdY34,txdY44,txdY54,txdY64,txdY74,txdY84;
+wire [4:0] txdY15,txdY25,txdY35,txdY45,txdY55,txdY65,txdY75,txdY85;
+wire [4:0] txdY16,txdY26,txdY36,txdY46,txdY56,txdY66,txdY76,txdY86;
+wire [4:0] txdY17,txdY27,txdY37,txdY47,txdY57,txdY67,txdY77,txdY87;
+wire [4:0] txdY18,txdY28,txdY38,txdY48,txdY58,txdY68,txdY78,txdY88;
 
 node #(8'h11) un11
 (

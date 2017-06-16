@@ -39,7 +39,7 @@ SC_NUMLOCK	EQU		$77
 SC_SCROLLLOCK	EQU	$7E
 SC_CAPSLOCK	EQU		$58
 
-.include "MessageTypes.asm"
+#include "MessageTypes.asm"
 
 HTInputFocus	equ	15
 KeyState1	equ	16
@@ -63,7 +63,8 @@ MSG_TYPE	equ	7
 		.code
 		cpu		Butterfly16
 		org		0xE000
-.include "tb.asm"
+#include "Network.asm"
+#include "tb.asm"
 
 		.code
 start:
@@ -105,6 +106,7 @@ notC:
 		call	Xmit
 noKey:
 		lb		r1,ROUTER+RTR_RXSTAT
+		and		r1,#63
 		beq		noMsg1
 		call	Recv
 		call	RecvDispatch
@@ -112,7 +114,6 @@ noKey:
 lockup:
 		bra		lockup
 
-.include "Network.asm"
 
 ;----------------------------------------------------------------------------
 ; Broadcast a reset message on the network.

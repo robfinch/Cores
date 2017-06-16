@@ -1,11 +1,37 @@
-
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+//	Verilog 1995
+//
+// ============================================================================
+//
 module node(rst_i, clk_i, rxdX, txdX, rxdY, txdY, cyc, stb, ack, we, adr, dati, dato);
 input rst_i;
 input clk_i;
-input rxdX;
-input rxdY;
-output txdX;
-output txdY;
+input [4:0] rxdX;
+input [4:0] rxdY;
+output [4:0] txdX;
+output [4:0] txdY;
 output cyc;
 output stb;
 input ack;
