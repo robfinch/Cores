@@ -40,12 +40,14 @@ SC_SCROLLLOCK	EQU	$7E
 SC_CAPSLOCK	EQU		$58
 
 #include "MessageTypes.asm"
-
-HTInputFocus	equ	15
-KeyState1	equ	16
-KeyState2	equ	17
-txBuf	equ		32
-rxBuf	equ		48
+			bss
+			org		15
+HTInputFocus	db	0
+KeyState1		db	0
+KeyState2		db	0
+			align	16
+txBuf	fill.b	16,0
+rxBuf	fill.b	16,0
 
 ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
@@ -55,21 +57,26 @@ ROUTER_TRB	equ	0
 BTNS		equ	$B200
 KBD			equ	$B210
 KBD_STAT	equ	1
+SWITCHES	equ	$B220
 
 MSG_DST		equ	15
 MSG_SRC		equ	14
-MSG_TYPE	equ	7
+MSG_TTL		equ	9
+MSG_TYPE	equ	8
 
 		.code
 		cpu		Butterfly16
 		org		0xE000
 #include "Network.asm"
-#include "tb.asm"
+;#include "tb.asm"
 
 		.code
 start:
 		lw		sp,#$1FFE
+		call	KeybdReset
 		sb		r0,HTInputFocus
+		lw		r1,#$11
+		sb		r1,HTInputFocus
 start1:
 noMsg1:
 		call	KeybdGetChar
@@ -78,12 +85,10 @@ noMsg1:
 		bne		notC
 		lb		r1,KeyState2	; test if CTRL down
 		and		r1,#4
-		beq		noKey
+		beq		notC
 		; CTRL-C
 		; If CTRL-C was pressed broadcast a global stop message
 		call	zeroTxBuf
-		tsr		r1,ID
-		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$FF
 		sb		r1,txBuf+MSG_DST
 		lw		r1,#MT_STOP
@@ -97,9 +102,10 @@ notC:
 		beq		noKey
 		call	zeroTxBuf
 		sb		r5,txBuf+MSG_DST	; destination is input focus thread
-		tsr		r5,ID				; source is this node
-		sb		r5,txBuf+MSG_SRC
 		sb		r1,txBuf			; store ascii char
+		sb		r1,txBuf+2
+		sb		r1,txBuf+4
+		sb		r1,txBuf+6
 		sb		r3,txBuf+1			; and scan code
 		lw		r1,#MT_KEYSTROKE	; keyboard message
 		sb		r1,txBuf+MSG_TYPE
@@ -111,28 +117,7 @@ noKey:
 		call	Recv
 		call	RecvDispatch
 		bra		start1
-lockup:
-		bra		lockup
 
-
-;----------------------------------------------------------------------------
-; Broadcast a reset message on the network.
-;----------------------------------------------------------------------------
-
-broadcastReset:
-		add		sp,sp,#-2
-		sw		lr,[sp]
-		call	zeroTxBuf
-		lw		r1,#$FF		; global broadcast address
-		sb		r1,txBuf+MSG_DST
-		lw		r1,#$11		; source of message
-		sb		r1,txBuf+MSG_SRC
-		lw		r1,#1
-		sb		r1,txBuf+MSG_TYPE	; reset message
-		call	Xmit
-		lw		lr,[sp]
-		add		sp,sp,#2
-		ret
 
 ;----------------------------------------------------------------------------
 ; Received message dispatch.
@@ -146,9 +131,10 @@ RecvDispatch:
 		cmp		r1,#MT_RST
 		bne		RecvDispatch2
 		sb		r0,HTInputFocus
+		lw		r1,#$11
+		sb		r1,HTInputFocus		; for now
+		call	KeybdReset
 		call	zeroTxBuf
-		tsr		r1,ID
-		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$11
 		sb		r1,txBuf+MSG_DST
 		lw		r1,#MT_RST_ACK
@@ -156,6 +142,16 @@ RecvDispatch:
 		call	Xmit
 		bra		RecvDispatchXit
 RecvDispatch2:
+		cmp		r1,#MT_PING
+		bne		RecvDispatch5
+		call	zeroTxBuf
+		lb		r1,rxBuf+MSG_SRC
+		sb		r1,txBuf+MSG_DST
+		lw		r1,#MT_PING_ACK
+		sb		r1,txBuf+MSG_TYPE
+		call	Xmit
+		br		RecvDispatchXit
+RecvDispatch5:
 		; Set input focus ?
 		; Check for request to set input focus
 		cmp		r1,#MT_SET_INPUT_FOCUS
@@ -168,14 +164,14 @@ RecvDispatch3:
 		cmp		r1,#MT_BUTTON_STATUS
 		bne		RecvDispatch4
 		call	zeroTxBuf
-		tsr		r1,ID
-		sb		r1,txBuf+MSG_SRC
 		lb		r1,rxBuf+MSG_SRC		; where did message come from
 		sb		r1,txBuf+MSG_DST		; send back to sender
 		lw		r1,#MT_BUTTON_STATUS
 		sb		r1,txBuf+MSG_TYPE
 		lb		r1,BTNS
 		sb		r1,txBuf
+		lb		r1,SWITCHES
+		sb		r1,txBuf+1
 		call	Xmit
 		bra		RecvDispatchXit
 RecvDispatch4:
@@ -188,6 +184,17 @@ RecvDispatchXit:
 ;============================================================================
 ; Keyboard Code
 ;============================================================================
+
+;----------------------------------------------------------------------------
+; Reset the keyboard.
+;----------------------------------------------------------------------------
+
+KeybdReset:
+		lw		r1,#$FF
+		sb		r1,KBD
+		sb		r0,KeyState1
+		sb		r0,KeyState2
+		ret
 
 ;----------------------------------------------------------------------------
 ; KeybdGetChar:

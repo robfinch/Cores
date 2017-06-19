@@ -154,7 +154,7 @@ PLLE2_BASE u1
     .CLKOUT0(clk80u),
     .CLKOUT1(isys_clk), // 66 MHz
     .CLKOUT2(clk200u),
-    .CLKOUT3(clk300u),
+    .CLKOUT3(clk25u),
     .CLKOUT4(clk400u),
     .CLKOUT5(clk50u)
 );
@@ -162,7 +162,7 @@ defparam u1.CLKFBOUT_MULT = 12;     // must place VCO frequency 800-1600 MHz (12
 defparam u1.CLKOUT0_DIVIDE = 15;
 defparam u1.CLKOUT1_DIVIDE = 24;
 defparam u1.CLKOUT2_DIVIDE = 6;
-defparam u1.CLKOUT3_DIVIDE = 4;
+defparam u1.CLKOUT3_DIVIDE = 48;
 defparam u1.CLKOUT4_DIVIDE = 3;
 defparam u1.CLKOUT5_DIVIDE = 24;
 defparam u1.CLKIN1_PERIOD = 10.000;

@@ -28,7 +28,7 @@
 `define IDLE	0
 `define CNT		1
 
-module routerRxBs(
+module routerRxBsZ(
 	// WISHBONE SoC bus interface
 	input rst_i,			// reset
 	input clk_i,			// clock
@@ -41,7 +41,7 @@ module routerRxBs(
 	input cs_i,				// chip select
 	input baud_ce,		   // baud rate clock enable
 	input clear,			// clear reciever
-	input [3:0] rxd,		// external serial input
+	input [2:0] rxd,		// external serial input
 	output reg frame_err,		// framing error
 	output reg overrun,			// receiver overrun
 	// Fifo status
@@ -50,7 +50,7 @@ module routerRxBs(
 );
 
 	// variables
-	reg [3:0] rxdd [0:3];	// synchronizer flops
+	reg [2:0] rxdd [0:3];	// synchronizer flops
 	reg [8:0] cnt;			// sample bit rate counter
 	reg [143:0] rx_data;		// working receive data register
 	reg state;				// state machine
@@ -132,7 +132,7 @@ routerFifo u1
 				// detected.
 				`IDLE:
 					// look for start nybble
-					if (rxdd[3]==4'h0)
+					if (rxdd[3]==3'h0)
 						state <= `CNT;
 
 				`CNT:
@@ -140,9 +140,9 @@ routerFifo u1
 						// End of the frame ?
 						// - check for framing error
 						// - write data to read buffer
-						if (cnt==9'h8E)
+						if (cnt==9'hBE)
 							begin	
-								frame_err <= rxdd[3] != 4'hF;
+								frame_err <= rxdd[3] != 3'h7;
 								if (fifocnt < 5'd31)
 									wf <= 1'b1;
 								else
@@ -150,17 +150,17 @@ routerFifo u1
 							end
 						// Switch back to the idle state a little
 						// bit too soon.
-						if (cnt==9'h8F)
+						if (cnt==9'hBF)
 							state <= `IDLE;
 	
 						// On start bit check make sure the start
 						// bit is low, otherwise go back to the
 						// idle state because it's a false start.
-						if (cnt==9'h01 && (rxdd[3]!=4'h0))
+						if (cnt==9'h01 && (rxdd[3]!=3'h0))
 							state <= `IDLE;
 
 						if (cnt[1:0]==3'h1)
-							rx_data <= {rxdd[3],rx_data[143:4]};
+							rx_data <= {rxdd[3],rx_data[143:3]};
 					end
 
 				endcase

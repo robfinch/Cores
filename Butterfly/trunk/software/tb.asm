@@ -50,7 +50,6 @@ VIDEORAM	equ		0x00002000
 getSerial	equ		0xFFFFFF804	; get a serial port character
 peekSerial	equ		0xFFFFFF808	; get a serial port character
 putSerial	equ		0xFFFFFF80C	; put a character to serial port
-clearScreen	equ		0xFFFFFF82C	; clear the screen
 getKbdCharWait	equ	0xFFFFFF840
 getKbdChar		equ	0xFFFFFF844
 
@@ -94,6 +93,8 @@ ENDMEM	dw	0x1E00	;	end of available memory
 ; r12 = end of text in text buffer
 ;
 CSTART
+	lw		r1,#6
+	sb		r1,LEDS
 	; First save off the link register and OS sp value
 	sub		sp,sp,#4
 	sw		lr,[sp]
@@ -108,17 +109,17 @@ CSTART
 	sb		r0,cursy
 	sb		r0,cursFlash
 	sw		r0,pos
-	lw		r2,#0xBF20	; black chars, yellow background
-	sw		r2,charToPrint
-	call	clearScreen
-	lea		r1,msgInit	;	tell who we are
-	call	PRMESGAUX
+;	lw		r2,#0xBF20	; black chars, yellow background
+;	sw		r2,charToPrint
+;	call	ClearScreen
+;	lea		r1,msgInit	;	tell who we are
+;	call	PRMESGAUX
 	lea		r1,msgInit	;	tell who we are
 	call	PRMESG
 	lw		r1,TXTBGN	;	init. end-of-program pointer
 	sw		r1,TXTUNF
 	lw		r1,ENDMEM	;	get address of end of memory
-	sub		r1,r1,#2048	; 	reserve 2K for the stack
+	sub		r1,r1,#512	; 	reserve 512 bytes for the stack
 	sw		r1,STKBOT
 	sub     r1,r1,#512 ;   128 vars
 	sw      r1,VARBGN
@@ -128,6 +129,8 @@ CSTART
 	sub     r1,r3
 	lw		r2,#0
 	call	PRTNUM
+	lw		r1,#7
+	sb		r1,LEDS
 	lea		r1,msgBytesFree
 	call	PRMESG
 WSTART
@@ -280,11 +283,9 @@ TAB2
 	db	"SY",('S'+0x80)
 	db	"CL",('S'+0x80)
     db  "CL",('R'+0x80)
-    db	"RDC",('F'+0x80)
 	db	0
 TAB4
 	db	"NODENU",('M'+0x80)
-	db	"PEEK",('C'+0x80)        ;Functions
 	db	"PEEK",('W'+0x80)        ;Functions
 	db	"PEE",('K'+0x80)         ;Functions
 	db	"RN",('D'+0x80)
@@ -340,11 +341,9 @@ TAB2_1
 	dw	SYSX
 	dw	_cls
 	dw  _clr
-	dw	_rdcf
 	dw	DEFLT
 TAB4_1
 	dw	NODENUM
-	dw  PEEKC
 	dw  PEEKW
 	dw	PEEK			;Functions
 	dw	RND
@@ -490,8 +489,9 @@ RUN
 	bne		RUN1
 	add		r8,r8,#2
 	call	OREXPR
+	call	zeroTxBuf
 	sb		r1,txBuf+MSG_DST
-	lb		r1,#$11
+	tsr		r1,ID
 	sb		r1,txBuf+MSG_SRC
 	lb		r1,#MT_RUN_BASIC_PROG
 	sb		r1,txBuf+MSG_TYPE
@@ -541,11 +541,11 @@ clearVars
     sub     sp,sp,#4
     sw      lr,[sp]
     sw      r6,2[sp]
-    lw      r6,#2048    ; number of words to clear
+    lw      r6,#256		; number of words to clear
     lw      r1,VARBGN
 cv1
     sw      r0,[r1]
-    add     r1,r1,#4
+    add     r1,r1,#2
     sub		r6,r6,#1
     bne     cv1
     lw      lr,[sp]
@@ -1047,8 +1047,10 @@ a2h1
 	and		r1,#15		; make sure a nybble
 	ret
 
+;----------------------------------------------------------------------------
 ; SAVE
 ; SAVE ON <node number> - copies the code to the specified node
+;----------------------------------------------------------------------------
 
 SAVE
 	call	IGNBLK		; ignore blanks
@@ -1057,11 +1059,7 @@ SAVE
 	bne		SAVE3
 	lb		r1,1[r8]
 	cmp		r1,#'N'
-	bne		SAVE3
-	add		r8,r8,#2
-	call	OREXPR		; get core #
-	sb		r1,tgtNode
-	call	TriggerTgtLoad
+	beq		SAVEON1
 SAVE3:
 	lw		r8,TXTBGN	;set pointer to start of prog. area
 	lw		r9,TXTUNF	;set pointer to end of prog. area
@@ -1069,24 +1067,6 @@ SAVE1
 	call    AUXOCRLF    ; send out a CR & LF (CP/M likes this)
 	cmp		r8,r9		; are we finished?
 	bgeu	SAVEND
-	lb		r2,tgtNode
-	cmp		r2,#$11
-	beq		SAVE4
-	lb		r1,#':'
-	sb		r1,txBuf
-	lb		r1,[r8]
-	sb		r1,txBuf+1
-	lb		r1,1[r8]
-	sb		r1,txBuf+2
-	lb		r1,tgtNode
-	sb		r1,txBuf+MSG_DST
-	lb		r1,#$11
-	sb		r1,txBuf+MSG_SRC
-	lb		r1,#11
-	sb		r1,txBuf+MSG_TYPE
-	call	Xmit
-	add		r8,r8,#2
-	br		SAVE2
 SAVE4:
 	lw		r1,#':'		; if not, start a line
 	call	GOAUXO
@@ -1120,6 +1100,36 @@ SAVEND
 	call	GOAUXO
 	br		WSTART		; then go do a warm start
 
+; Copy program to specified node. Transfers six bytes at a time per
+; network message.
+
+SAVEON1
+	add		r8,r8,#2
+	call	OREXPR		; get core #
+	sb		r1,tgtNode
+	call	TriggerTgtLoad
+	lw		r8,TXTBGN	;set pointer to start of prog. area
+	lw		r9,TXTUNF	;set pointer to end of prog. area
+SAVEON3:
+	cmp		r8,r9
+	bgeu	SAVEON2
+	lw		r1,[r8]
+	sw		r1,txBuf
+	lw		r1,2[r8]
+	sw		r1,txBuf+2
+	lw		r1,4[r8]
+	sw		r1,txBuf+4
+	tsr		r1,ID
+	sb		r1,txBuf+MSG_SRC
+	lb		r1,tgtNode
+	sb		r1,txBuf+MSG_DST
+	lb		r1,#MT_LOAD_BASIC_CHAR
+	sb		r1,txBuf+MSG_TYPE
+	call	Xmit
+	add		r8,r8,#6
+	br		SAVEON3
+SAVEON2:
+	br		WSTART
 
 ; output a CR LF sequence to auxillary output
 ; Registers Affected
@@ -1549,7 +1559,7 @@ XP40                    ; we get here if it wasn't a function
 	ret
 XP41
 	call	TSTNUM		; or is it a number?
-	or		r2,r2		; (if not, # of digits will be zero)
+	or		r3,r3		; (if not, # of digits will be zero)
 	bne		XP46		; if so, return it in r1
 	call    PARN        ; check for (EXPR)
 XP46
@@ -1631,15 +1641,16 @@ tstv_notfound
 
 
 ; Returns
-;   r1 = 3 character variable name + type
+;   r3,r1 = 3 character variable name + type
 ;
 getVarName
-    sub     sp,sp,#6
+    sub     sp,sp,#8
     sw      lr,[sp]
-    sw		r5,4[sp]
+    sw		r5,6[sp]
 
     lb      r1,[r8]     ; get first character
     sw		r1,2[sp]	; save off current name
+	sw		r3,4[sp]
     call    isAlpha
     beq     gvn1
     lw      r5,#2       ; loop twice more
@@ -1652,16 +1663,25 @@ gvn4
 	beq     gvn2        ; nope
 	lw      r1,2[sp]    ; get varname
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	shl     r1,#1       ; shift left by eight
+	rol		r3,#1
 	lb      r2,[r8]
 	or      r1,r2       ; add in new char
     sw      r1,2[sp]   ; save off name again
+	sw		r3,4[sp]
     sub		r5,r5,#1
     bne     gvn4
 
@@ -1686,48 +1706,62 @@ gvn2
 gvn3
     add     r8,r8,#1
     lw      r2,2[sp]
+	lw		r3,4[sp]
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     shl     r2,#1
+	rol		r3,#1
     or      r1,r2       ; add in variable type
     lw      lr,[sp]
     lw		r5,4[sp]
-    add     sp,sp,#6   ; return Z = 0, r1 = varname
+    add     sp,sp,#6   ; return Z = 0, r3,r1 = varname
     ret
 
     ; not a variable name
 gvn1
     lw      lr,[sp]
-    lw		r5,4[sp]
-    add     sp,sp,#6
+    lw		r5,6[sp]
+    add     sp,sp,#8
     lw      r1,#0       ; return Z = 1 if not a varname
     ret
 
 
 ; Find variable
-;   r1 = varname
+;   r3,r1 = varname
 ;	r2 = allocate flag
 ; Returns
 ;   r1 = variable address, Z =0 if found / allocated, Z=1 if not found
 
 findVar
-    sub     sp,sp,#4
+    sub     sp,sp,#6
     sw      lr,[sp]
     sw      r7,2[sp]
-    lw      r3,VARBGN
+	sw		r12,4[sp]
+    lw      r12,VARBGN
 fv4
-    lw      r7,[r3]     ; get varname / type
+    lw      r7,[r12]     ; get varname / type
     beq     fv3         ; no more vars ?
-    cmp     r1,r7       ; match ?
+    cmp     r3,r7       ; match ?
+	bne		fv5
+	lw		r7,2[r12]
+	cmp		r1,r7
     beq     fv1
-    add     r3,r3,#8    ; move to next var
+fv5
+    add     r12,r12,#8    ; move to next var
     lw      r7,STKBOT
-    cmp     r3,r7
+    cmp     r12,r7
     blt     fv4         ; loop back to look at next var
 
     ; variable not found
@@ -1745,21 +1779,24 @@ fv4
 fv3
 	or		r2,r2
 	beq		fv2
-    sw      r1,[r3]     ; save varname / type
+    sw      r3,[r12]     ; save varname / type
+	sw		r1,2[r12]
     ; found variable
     ; return address
 fv1
-    add     r1,r3,#4
+    add     r1,r12,#4
     lw      lr,[sp]
     lw      r7,2[sp]
-    add     sp,sp,#4    ; Z = 0, r1 = address
+	lw		r12,4[sp]
+    add     sp,sp,#6    ; Z = 0, r1 = address
     ret
 
     ; didn't find var and not allocating
 fv2
     lw      lr,[sp]
     lw      r7,2[sp]
-    add     sp,sp,#4    ; Z = 0, r1 = address
+	lw		r12,4[sp]
+    add     sp,sp,#6    ; Z = 0, r1 = address
 	lw		r1,#0		; Z = 1, r1 = 0
     ret
 
@@ -1827,12 +1864,14 @@ DIV32
     lea		r1,msgDivZero
     br		ERROR		; divide by zero error
 div6
-	sub		sp,sp,#6
+	sub		sp,sp,#8
 	sw		r6,[sp]
 	sw		r7,2[sp]
 	sw		r8,4[sp]
+	sw		r9,6[sp]
 
-    lw      r8,#32      ; iteration count for 32 bits
+    lw      r8,#16      ; iteration count for 16 bits
+	lw		r9,#0		; q = 0
 	lw		r6,#0		; r = 0
     lw      r7,r2       ; r7 = sign of result
     xor     r7,r1
@@ -1844,12 +1883,13 @@ div1
 	bpl	    div2
 	neg     r2
 div2
+	shl		r9,#1		; q <<= 1
 	shl		r1,#1		; a <<= 1
 	adc		r6,r6		; r <<= 1
 	cmp		r2,r6		; b < r ?
 	bgtu	div4
 	sub		r6,r2		; r -= b
-	or      r1,#1       ; a |= 1
+	or      r9,#1       ; q |= 1
 div4
 	sub		r8,r8,#1
     bne     div2        ; n--
@@ -1857,11 +1897,13 @@ div4
 	bpl     div5
 	neg     r1
 div5
-	lw		r2,r6		; r2 = r
+	mov		r2,r6		; r2 = r
+	mov		r1,r9
+	lw		r6,[sp]
 	lw		r7,2[sp]
 	lw		r8,4[sp]
-	lw		r6,[sp]
-	add		sp,sp,#6
+	lw		r9,6[sp]
+	add		sp,sp,#8
 	ret
 
 ; ===== The PEEK function returns the byte stored at the address
@@ -1871,19 +1913,6 @@ PEEK
 	call	PARN		; get the memory address
 	lb		r1,[r1]		; get the addressed byte
 	zxb		r1			; upper 3 bytes will be zero
-	lw		lr,[sp]	; and return it
-	add		sp,sp,#6
-	ret
-
-
-; ===== The PEEK function returns the byte stored at the address
-;	contained in the following expression.
-;
-PEEKC
-	call	PARN		; get the memory address
-	and		r1,#-2		; align to char address
-	lh		r1,[r1]		; get the addressed char
-	zxc		r1
 	lw		lr,[sp]	; and return it
 	add		sp,sp,#6
 	ret
@@ -1923,7 +1952,7 @@ RND
 	beq		rnd2
 	bmi		rnd1
 	lw		r2,r1
-	sh		r0,RAND+4	; read command
+	sw		r0,RAND+4	; read command
 	lw		r1,RAND		; get a number
 	call	modu4		; RND(n)=MOD(number,n)+1
 	add		r1,r1,#1
@@ -1934,7 +1963,7 @@ rnd1
 	lea		r1,msgRNDBad
 	br		ERROR
 rnd2
-	sh		r0,RAND+4
+	sw		r0,RAND+4
 	lw		r1,RAND
 	lw		lr,[sp]
 	add		sp,sp,#6
@@ -1950,7 +1979,7 @@ modu4
 	sw		r5,[sp]
 	sw		r6,2[sp]
 	sw		r7,4[sp]
-	lw      r7,#32		; n = 32
+	lw      r7,#16		; n = 32
 	lw		r5,#0		; w = 0
 	lw		r6,#0		; r = 0
 mod2
@@ -2169,57 +2198,33 @@ GETLN
 GL1
 	call	CHKIO		; check keyboard
 	beq		GL1			; wait for a char. to come in
-	cmp		r1,#CTRLH	; delete last character?
-	beq		GL3			; if so
-	cmp		r1,#CTRLX	; delete the whole line?
-	beq		GL4			; if so
 	cmp		r1,#CR		; accept a CR
 	beq		GL2
-	cmp		r1,#' '		; if other control char., discard it
-	bltu	GL1
-GL2
-	sb		r1,[r8]		; save the char.
-	add		r8,r8,#1
-	call	GOOUT		; echo the char back out
-	lb      r1,-1[r8]   ; get char back (GOOUT destroys r1)
-	cmp		r1,#CR		; if it's a CR, end the line
-	beq		GL7
-	cmp		r8,#(BUFFER+BUFLEN-1)	; any more room?
-	bltu	GL1			; yes: get some more, else delete last char.
-
-GL3
-	lw		r1,#CTRLH	; delete a char. if possible
 	call	GOOUT
-	lw		r1,#' '
-	call	GOOUT
-	cmp		r8,#BUFFER	; any char.'s left?
-	bleu	GL1			; if not
-	lw		r1,#CTRLH	; if so, finish the BS-space-BS sequence
-	call	GOOUT
-	sub		r8,r8,#1	; decrement the text pointer
-	br		GL1			; back for more
-
-GL4
-	lw		r1,r8		; delete the whole line
-	sub		r5,r1,#BUFFER   ; figure out how many backspaces we need
-	beq		GL6			; if none needed, brnch
-GL5	
-	lw		r1,#CTRLH	; and display BS-space-BS sequences
-	call	GOOUT
-	lw		r1,#' '
-	call	GOOUT
-	lw		r1,#CTRLH
-	call	GOOUT
-	sub		r5,r5,#1
-	bne     GL5
-GL6
-	lea		r8,BUFFER	; reinitialize the text pointer
-	br		GL1			; and go back for more
-GL7
+	br		GL1
+GL2:
+	call	GOOUT		; spit out CR
 	lw		r1,#0		; turn off cursor flash
 	sb		r1,cursFlash
+	lb		r3,cursy
+	lb		r5,cursx
 	lw		r1,#LF		; echo a LF for the CR
 	call	GOOUT
+	shl		r3,#1
+	lw		r3,lineTbl[r3]
+	lw		r2,#0
+	lw		r4,#0
+GL3:
+	lb		r1,TXTSCR[r3]
+	call	ScreenToAscii
+	sb		r1,BUFFER[r4]
+	add		r3,r3,#2
+	add		r4,r4,#1
+	cmp		r4,#52
+	blt		GL3
+	lw		r1,#CR
+	sb		r1,BUFFER[r5]
+	sb		r0,BUFFER+1[r5]
 	lw		lr,[sp]
 	lw		r5,2[sp]
 	add		sp,sp,#4
@@ -2644,30 +2649,33 @@ PRTLN
 ;	indicated by the offset byte following the text byte.
 ;
 ; Registers Affected
-;   r3,r8
+;   r8
 ; Returns
 ;	r8 = updated text pointer
 ;
 TSTC
-	sub		sp,sp,#4
+	sub		sp,sp,#6
 	sw		lr,[sp]
 	sw		r1,2[sp]
+	sw		r3,4[sp]
 	call	IGNBLK		; ignore leading blanks
 	lw		lr,[sp]	; get the return address
 	lb		r3,[lr]	; get the byte to compare
 	lb		r1,[r8]
 	cmp		r3,r1		; is it = to what r8 points to?
-	beq		TC1			; if so
+	beq		TSTC1			; if so
 						; If not, add the second
 	lb		r3,1[lr]	; byte following the call to
 	add		lr,r3		; the return address.
 	lw		r1,2[sp]
-	add		sp,sp,#4
+	lw		r3,4[sp]
+	add		sp,sp,#6
 	ret					; jump to the routine
-TC1
+TSTC1
 	add		r8,r8,#1	; if equal, bump text pointer
 	lw		r1,2[sp]
-	add     sp,sp,#4
+	lw		r3,4[sp]
+	add     sp,sp,#6
 	jmp		2[lr]		; Skip the 2 bytes following
 						; the call and continue.
 
@@ -2679,41 +2687,128 @@ TC1
 ;   r1,r2,r3,r4
 ; Returns
 ; 	r1 = number
-;	r2 = number of digits in number
+;	r2 = number high order
+;	r3 = number of digits in number
 ;	r8 = updated text pointer
 ;
 TSTNUM
-	sub		sp,sp,#2
+	sub		sp,sp,#6
 	sw		lr,[sp]
+	sw		r5,2[sp]
+	sw		r6,4[sp]
+	;call	GetHexNumber
+	;cmp		r3,#0
+	;bgtu	TSNMRET
 	call	IGNBLK		; skip over blanks
 	lw		r1,#0		; initialize return parameters
 	lw		r2,#0
+	lw		r3,#0
 TN1
-	lb		r3,[r8]
-	cmp		r3,#'0'		; is it less than zero?
+	lb		r5,[r8]
+	cmp		r5,#'0'		; is it less than zero?
 	bltu	TSNMRET 	; if so, that's all
-	cmp		r3,#'9'		; is it greater than nine?
+	cmp		r5,#'9'		; is it greater than nine?
 	bgtu	TSNMRET 	; if so, return
-	cmp		r1,#214748364	; see if there's room for new digit
+	cmp		r2,#$CCC
 	bleu	TN2
+;	cmp		r1,#214748364	; see if there's room for new digit
 	lea		r1,msgNumTooBig
 	br		ERROR		; if not, we've overflowd
 TN2
 	lw		r4,r1		; quickly multiply result by 10
+	lw		r6,r2
 	shl		r1,#1		; * 2
+	adc		r2,r2
 	shl		r1,#1		; * 4
+	adc		r2,r2
 	add		r1,r4		; * 5
+	adc		r2,r6
 	shl		r1,#1		; * 10
+	adc		r2,r2
 	add		r8,r8,#1	; adjust text pointer
-	and		r3,#0xF		; add in the new digit
-	add		r1,r3
-	add		r2,r2,#1	; increment the no. of digits
+	and		r5,#0xF		; add in the new digit
+	add		r1,r5
+	add		r3,r3,#1	; increment the no. of digits
 	br		TN1
 TSNMRET
 	lw		lr,[sp]
-	add		sp,sp,#2
+	lw		r5,2[sp]
+	lw		r6,4[sp]
+	add		sp,sp,#6
 	ret
 
+ConvHexDigit:
+	cmp		r1,#'0'
+	blt		ConvHexDigit1
+	cmp		r1,#'9'
+	bgt		ConvHexDigit3
+	sub		r1,r1,#'0'
+	ret
+ConvHexDigit3:
+	cmp		r1,#'a'
+	blt		ConvHexDigit1
+	cmp		r1,#'f'
+	bgt		ConvHexDigit2
+	sub		r1,r1,#'a'
+	add		r1,r1,#10
+	ret
+ConvHexDigit2:
+	cmp		r1,#'A'
+	blt		ConvHexDigit1
+	cmp		r1,#'F'
+	bgt		ConvHexDigit1
+	sub		r1,r1,#'A'
+	add		r1,r1,#10
+	ret
+ConvHexDigit1:
+	lw		r1,#-1
+	ret
+
+GetHexNumber:
+	sub		sp,sp,#4
+	sw		lr,[sp]
+	call	IGNBLK		; skip over blanks
+	lw		r1,#0		; initialize return parameters
+	lw		r2,#0
+	lw		r3,#0
+	mov		r9,r8
+	lb		r4,[r8]
+	cmp		r4,#'$'
+	bne		GetHexNumberRet
+	add		r8,r8,#1
+GetHexNumber1
+	sw		r1,2[sp]
+	lb		r1,[r8]
+	call	ConvHexDigit
+	bmi		GetHexNumber4
+	mov		r4,r1
+	lw		r1,2[sp]
+	cmp		r2,#$FFF
+	bgtu	GetHexNumberErr
+GetHexNumber2
+	shl		r1,#1
+	adc		r2,r2
+	shl		r1,#1
+	adc		r2,r2
+	shl		r1,#1
+	adc		r2,r2
+	shl		r1,#1
+	adc		r2,r2
+	or		r1,r4
+	mov		r9,r8
+	add		r8,r8,#1	; adjust text pointer
+	add		r3,r3,#1	; increment the no. of digits
+	br		GetHexNumber1
+GetHexNumber4:
+	lw		r1,2[sp]
+GetHexNumberRet:
+	mov		r8,r9
+	lw		lr,[sp]
+	add		sp,sp,#4
+	ret
+GetHexNumberErr:
+	lea		r1,msgNumTooBig
+	br		ERROR		; if not, we've overflowd
 
 ;===== Skip over blanks in the text pointed to by r8.
 ;
@@ -2881,92 +2976,80 @@ PRMRETA
 ;	(Preserves all registers.)
 ;
 OUTC
-	jmp		_putChar
+	add		sp,sp,#-4
+	sw		lr,[sp]
+	sw		r1,2[sp]
+	lb		r1,ROUTER+RTR_RXSTAT
+	and		r1,#63
+	beq		OUTC1
+	call	Recv
+	call	RecvDispatch
+OUTC1
+	lw		r1,2[sp]
+	call	putcharScr
+	lw		lr,[sp]
+	add		sp,sp,#4
+	ret
 
 
 ; ===== Input a character from the console into register D0 (or
 ;	return Zero status if there's no character available).
 ;
+; A bit of cooperative multi-tasking here. A check for network
+; messages is made.
+;
 INC
 	add		sp,sp,#-2
 	sw		lr,[sp]
+	lw		r1,TXTSCR+86
+	add		r1,r1,#1
+	sw		r1,TXTSCR+86
 	lb		r1,ROUTER+RTR_RXSTAT
+	and		r1,#63
 	beq		INC1
 	call	Recv
 	call	RecvDispatch
 INC1
-; get char from keyboard
-; returns char in r1
-_getChar
-	lb		r1,KBD+2	; get keyboard strobe
-	bpl		gc1
-	lb		r1,KBD		; get character and clear keyboard strobe
-	bmi		gc1			; was it a keyup event ? (ignore)
-	and		r1,#0x7f
+	call	kbdGetChar
+	beq		INC2
 	lw		lr,[sp]
 	add		sp,sp,#2
 	ret
-gc1
+INC2:
 	lw		lr,[sp]
 	add		sp,sp,#2
-	lw		r1,#0		; return Z=1 (no character)
-	ret
-
-
-; get char from keyboard
-; returns char in r1
-_getCharWait
-gc2
-	lb		r1,KBD+2	; get keyboard strobe
-	bpl		gc2
-	lb		r1,KBD		; get character and clear keyboard strobe
-	bmi		gc2			; was it a keyup event ? (ignore)
-	and		r1,#0x7f
+	lw		r1,#0
 	ret
 
 
 ; Trigger a load operation on the target node.
 
 TriggerTgtLoad:
+	add		sp,sp,#-4
+	sw		lr,[sp]
+	sw		r2,2[sp]
 	call	zeroTxBuf
 	lb		r2,tgtNode
 	sb		r2,txBuf+MSG_DST
-	lw		r2,#$11
-	sb		r2,txBuf+MSG_SRC
-	lw		r2,#10				; trigger load on target node
+	lw		r2,#MT_START_BASIC_LOAD	; trigger load on target node
 	sb		r2,txBuf+MSG_TYPE
 	call	Xmit
 	lw		r2,2[sp]
 	lw		lr,[sp]
+	add		sp,sp,#4
 	ret
 
 ; ===== Output character to the host (Port 2) from register r1
 ;	(Preserves all registers.)
 ;
 AUXOUT
-	add		sp,sp,#-4
+	add		sp,sp,#-2
 	sw		lr,[sp]
-	sw		r2,2[sp]
-	lb		r2,tgtNode
-	cmp		#$11
-	bne		auxout1
 	call	putSerial	; call boot rom routine
-	lw		r2,2[sp]
 	lw		lr,[sp]
+	add		sp,sp,#2
 	ret
-auxout1:
-	call	zeroTxBuf
-	sb		r1,txBuf
-	lb		r2,tgtNode
-	sb		r2,txBuf+MSG_DST
-	lw		r2,#$11
-	sb		r2,txBuf+MSG_SRC
-	lw		r2,#11				; recieve BASIC program char
-	sb		r2,txBuf+MSG_TYPE
-	call	Xmit
-	lw		r2,2[sp]
-	lw		lr,[sp]
-	ret
+
 ;
 ; ===== Input a character from the host into register D0 (or
 ;	return negative status if there's no character available).
@@ -2975,37 +3058,6 @@ AUXIN
 ; get character from serial port
 ; return  N=1 if no character available
 	jmp		peekSerial
-
-
-_scrollScreen
-	sub		sp,sp,#4
-	sw		r5,[sp]
-	lw		r3,#1536	; number of chars to move - 1
-	lw		r2,#VIDEORAM
-	lb		r1,txtWidth
-	shl		r1,#1
-	shl		r1,#1
-ss1:
-	lw		r5,r2
-	add		r5,r1
-	lw		r4,[r5]		; char at next line
-	sw		r4,[r2]		; goes to this line
-	add		r2,r2,#4
-	sub		r3,r3,#1
-	bne     ss1
-	; blank out last line
-	lw		r3,#' '
-	sh		r3,charToPrint
-	lb		r3,txtWidth
-	lw		r4,charToPrint	; and colors
-ss2
-	sw		r4,[r2]
-	add		r2,r2,#4
-	sub		r3,r3,#1
-	bne     ss2
-	lw		r5,[sp]
-	add		sp,sp,#4
-	ret
 
 
 ; flash the character at the screen position
@@ -3031,7 +3083,7 @@ fcx:
 
 
 _cls
-	call	clearScreen
+	call	ClearScreen
 	br		FINISH
 
 
@@ -3095,9 +3147,9 @@ NormAttr		dw		0
 lineLinkTbl		fill.b	25,0	; screen line link table
 	align 4
 
-		org		0x0080
+		;org		0x0080
 typef   db      0   ; variable / expression type
-        align   4
+        align   2
 OSSP	dw	1	; OS value of sp
 CURRNT	dw	1	;	Current line pointer
 STKGOS	dw	1	;	Saves stack pointer in 'GOSUB'
@@ -3113,7 +3165,7 @@ IVARBGN dw  1   ;   points to integer variable area
 SVARBGN dw  1   ;   points to string variable area
 FVARBGN dw  1   ;   points to float variable area
 STKBOT	dw	1	;	holds lower limit for stack growth
-NUMWKA	fill.b	12,0			; numeric work area
+NUMWKA	fill.b	50,0			; numeric work area
 BUFFER	fill.b	BUFLEN,0x00		;		Keyboard input buffer
 
         bss

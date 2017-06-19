@@ -26,7 +26,7 @@
 // ============================================================================
 //
 // Byte serial transmitter
-module routerTxBs (
+module routerTxBsZ (
 	// WISHBONE SoC bus interface
 	input rst_i,		// reset
 	input clk_i,		// clock
@@ -39,7 +39,7 @@ module routerTxBs (
 	input cs_i,			// chip select
 	input baud_ce,	    // baud rate clock enable
 	input cts,			// clear to send
-	output [3:0] txd,	// external serial output
+	output [2:0] txd,	// external serial output
 	output reg empty	// buffer is empty
 );
     reg txing;
@@ -49,7 +49,7 @@ module routerTxBs (
 	reg rd;
 
 	assign ack_o = cyc_i & stb_i & cs_i;
-	assign txd = tx_data[3:0];
+	assign txd = tx_data[2:0];
 
 	always @(posedge clk_i)
 		if (rst_i) begin
@@ -72,10 +72,10 @@ module routerTxBs (
 			if (baud_ce) begin
 
 				cnt <= cnt + 9'd1;
-				if (cnt==9'h8F)
+				if (cnt==9'hBF)
 				    txing <= 1'b0;
 				// Load next data ?
-				if (cnt==9'h8F || !txing) begin
+				if (cnt==9'hBF || !txing) begin
 					cnt <= 9'd0;
 					if (!empty && cts) begin
 					    txing <= 1'b1;
@@ -85,7 +85,7 @@ module routerTxBs (
 				end
 				// Shift the data out. LSB first.
 				else if (cnt[1:0]==2'h3)
-					tx_data <= {4'hF,tx_data[143:4]};
+					tx_data <= {3'd7,tx_data[143:3]};
 
 			end
 		end

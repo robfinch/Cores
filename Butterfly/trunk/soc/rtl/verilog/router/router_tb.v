@@ -11,8 +11,8 @@ reg [15:0] adr;
 reg [7:0] dati;
 wire [7:0] dato;
 wire ack;
-wire [7:0] rxdX,rxdY,txdX,txdY;
-reg [127:0] txdata1 = {8'hFF,8'h44,32'h0000,8'h00,8'h01,64'h0};
+wire [4:0] rxdX,rxdY,txdX,txdY;
+reg [127:0] txdata1 = {8'hFF,8'h44,32'h0000,8'h00,8'h01,64'h1122334455667788};
 reg [5:0] txdcnt;
 
 initial begin

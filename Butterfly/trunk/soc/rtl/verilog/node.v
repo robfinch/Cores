@@ -25,13 +25,15 @@
 //
 // ============================================================================
 //
-module node(rst_i, clk_i, rxdX, txdX, rxdY, txdY, cyc, stb, ack, we, adr, dati, dato);
+module node(rst_i, clk_i, rxdX, txdX, rxdY, txdY, rxdZ, txdZ, cyc, stb, ack, we, adr, dati, dato);
 input rst_i;
 input clk_i;
-input [4:0] rxdX;
-input [4:0] rxdY;
-output [4:0] txdX;
-output [4:0] txdY;
+input [3:0] rxdX;
+input [3:0] rxdY;
+input [2:0] rxdZ;
+output [3:0] txdX;
+output [3:0] txdY;
+output [2:0] txdZ;
 output cyc;
 output stb;
 input ack;
@@ -39,7 +41,8 @@ output we;
 output [15:0] adr;
 input [7:0] dati;
 output [7:0] dato;
-parameter ID = 8'h11;
+parameter ID = 12'h111;
+parameter HAS_ZROUTE = 1'b0;
 
 wire [7:0] uxDato,uyDato,rout_dato;
 wire uxAck,uyAck,rout_ack;
@@ -73,6 +76,10 @@ if (ID==8'h21)
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot21.mem",rommem);
 end
+else if (ID==8'h31)
+initial begin
+    $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot31.mem",rommem);
+end
 else
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot.mem",rommem);
@@ -100,10 +107,11 @@ always @(posedge clk_i)
 assign brAck = cs_rom ? romrdy : 1'b0;
 assign ramAck = cs_ram ? ramrdy2 : 1'b0;
 
-routerTop urout1
+routerTop #(HAS_ZROUTE) urout1
 (
-    .X(ID[7:4]),
-    .Y(ID[3:0]),
+    .X(ID[11:8]),
+    .Y(ID[7:4]),
+    .Z(ID[3:0]),
     .rst_i(rst_i),
     .clk_i(clk_i),
     .cs_i(routCs),
@@ -116,8 +124,10 @@ routerTop urout1
     .dat_o(rout_dato),
     .rxdX(rxdX),
     .rxdY(rxdY),
+    .rxdZ(rxdZ),
     .txdX(txdX),
-    .txdY(txdY)
+    .txdY(txdY),
+    .txdZ(txdZ)
 );
 /*
 bcSimpleUart uX

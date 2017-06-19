@@ -39,7 +39,8 @@ ROUTER_TRB	equ	0
 
 MSG_DST		equ	15
 MSG_SRC		equ	14
-MSG_TYPE	equ	7
+MSG_TTL		equ	9
+MSG_TYPE	equ	8
 
 		.code
 		cpu		Butterfly16
@@ -78,8 +79,6 @@ RecvDispatch:
 		bne		RecvDispatch2
 		; Send back a reset ACK message to indicate node is good to go.
 		call	zeroTxBuf
-		tsr		r1,ID
-		sb		r1,txBuf+MSG_SRC
 		lw		r1,#$11
 		sb		r1,txBuf+MSG_DST
 		lw		r1,#MT_RST_ACK
@@ -90,8 +89,6 @@ RecvDispatch2:
 		cmp		r1,#MT_PING
 		bne		RecvDispatch9
 		call	zeroTxBuf
-		tsr		r1,ID
-		sb		r1,txBuf+MSG_SRC
 		lb		r1,rxBuf+MSG_SRC
 		sb		r1,txBuf+MSG_DST
 		lw		r1,#MT_PING_ACK
@@ -108,30 +105,13 @@ RecvDispatch9:
 RecvDispatch3:
 		cmp		r1,#MT_LOAD_BASIC_CHAR	; load BASIC program char
 		bne		RecvDispatch4
-		lb		r1,rxBuf
-		cmp		r1,#':'				; line number ?
-		bne		RecvDispatch6
-RecvDispatch7:
-		lb		r1,rxBuf+1
-		sb		r1,[r8]
-		lb		r1,rxBuf+2
-		sb		r1,1[r8]
-		add		r8,r8,#2
-		br		RecvDispatch5
-		; Ordinary BASIC program character (non-line number)
-		; Just stuff in BASIC text buffer, increment text pointer
-		; and continue.
-RecvDispatch6:
-		cmp		r1,#'@'				; end of program ?
-		beq		RecvDispatch8
-		cmp		r1,#$1A				; CTRL-Z (CPM end of file)
-		beq		RecvDispatch8
-		sb		r1,[r8]
-		add		r8,r8,#1
-		br		RecvDispatch5
-		; End of program load, just set the end of the BASIC
-		; program to the current text pointer.
-RecvDispatch8:
+		lw		r1,rxBuf
+		sw		r1,[r8]
+		lw		r1,rxBuf+2
+		sw		r1,2[r8]
+		lw		r1,rxBuf+4
+		sw		r1,4[r8]
+		add		r8,r8,#6
 		sw		r8,TXTUNF
 		br		RecvDispatch5
 RecvDispatch4:

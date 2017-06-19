@@ -1,3 +1,30 @@
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+//	Verilog 1995
+//
+// ============================================================================
+//
 module grid(rst_i, clk_i,
     cyc11,
     stb11,
@@ -13,13 +40,24 @@ module grid(rst_i, clk_i,
     adr21,
     dati21,
     dato21,
+    cyc31,
+    stb31,
+    ack31,
+    we31,
+    adr31,
+    dati31,
+    dato31,
     cyc42,
     stb42,
     ack42,
     we42,
     adr42,
     dati42,
-    dato42 
+    dato42,
+    TMDS_OUT_clk_n, TMDS_OUT_clk_p,
+    TMDS_OUT_data_n, TMDS_OUT_data_p, 
+    TMDS_IN_clk_n, TMDS_IN_clk_p,
+    TMDS_IN_data_n, TMDS_IN_data_p 
 );
 input rst_i;
 input clk_i;
@@ -37,6 +75,13 @@ output we21;
 output [15:0] adr21;
 input [7:0] dati21;
 output [7:0] dato21;
+output cyc31;
+output stb31;
+input ack31;
+output we31;
+output [15:0] adr31;
+input [7:0] dati31;
+output [7:0] dato31;
 output cyc42;
 output stb42;
 input ack42;
@@ -44,26 +89,95 @@ output we42;
 output [15:0] adr42;
 input [7:0] dati42;
 output [7:0] dato42;
+output TMDS_OUT_clk_n;
+output TMDS_OUT_clk_p;
+output [2:0] TMDS_OUT_data_n;
+output [2:0] TMDS_OUT_data_p;
+input TMDS_IN_clk_n;
+input TMDS_IN_clk_p;
+input [2:0] TMDS_IN_data_n;
+input [2:0] TMDS_IN_data_p;
+parameter Z = 4'h1;
 
-wire [4:0] txdX11,txdX21,txdX31,txdX41,txdX51,txdX61,txdX71,txdX81;
-wire [4:0] txdX12,txdX22,txdX32,txdX42,txdX52,txdX62,txdX72,txdX82;
-wire [4:0] txdX13,txdX23,txdX33,txdX43,txdX53,txdX63,txdX73,txdX83;
-wire [4:0] txdX14,txdX24,txdX34,txdX44,txdX54,txdX64,txdX74,txdX84;
-wire [4:0] txdX15,txdX25,txdX35,txdX45,txdX55,txdX65,txdX75,txdX85;
-wire [4:0] txdX16,txdX26,txdX36,txdX46,txdX56,txdX66,txdX76,txdX86;
-wire [4:0] txdX17,txdX27,txdX37,txdX47,txdX57,txdX67,txdX77,txdX87;
-wire [4:0] txdX18,txdX28,txdX38,txdX48,txdX58,txdX68,txdX78,txdX88;
+wire [3:0] txdX11,txdX21,txdX31,txdX41,txdX51,txdX61,txdX71,txdX81;
+wire [3:0] txdX12,txdX22,txdX32,txdX42,txdX52,txdX62,txdX72,txdX82;
+wire [3:0] txdX13,txdX23,txdX33,txdX43,txdX53,txdX63,txdX73,txdX83;
+wire [3:0] txdX14,txdX24,txdX34,txdX44,txdX54,txdX64,txdX74,txdX84;
+wire [3:0] txdX15,txdX25,txdX35,txdX45,txdX55,txdX65,txdX75,txdX85;
+wire [3:0] txdX16,txdX26,txdX36,txdX46,txdX56,txdX66,txdX76,txdX86;
+wire [3:0] txdX17,txdX27,txdX37,txdX47,txdX57,txdX67,txdX77,txdX87;
+wire [3:0] txdX18,txdX28,txdX38,txdX48,txdX58,txdX68,txdX78,txdX88;
 
-wire [4:0] txdY11,txdY21,txdY31,txdY41,txdY51,txdY61,txdY71,txdY81;
-wire [4:0] txdY12,txdY22,txdY32,txdY42,txdY52,txdY62,txdY72,txdY82;
-wire [4:0] txdY13,txdY23,txdY33,txdY43,txdY53,txdY63,txdY73,txdY83;
-wire [4:0] txdY14,txdY24,txdY34,txdY44,txdY54,txdY64,txdY74,txdY84;
-wire [4:0] txdY15,txdY25,txdY35,txdY45,txdY55,txdY65,txdY75,txdY85;
-wire [4:0] txdY16,txdY26,txdY36,txdY46,txdY56,txdY66,txdY76,txdY86;
-wire [4:0] txdY17,txdY27,txdY37,txdY47,txdY57,txdY67,txdY77,txdY87;
-wire [4:0] txdY18,txdY28,txdY38,txdY48,txdY58,txdY68,txdY78,txdY88;
+wire [3:0] txdY11,txdY21,txdY31,txdY41,txdY51,txdY61,txdY71,txdY81;
+wire [3:0] txdY12,txdY22,txdY32,txdY42,txdY52,txdY62,txdY72,txdY82;
+wire [3:0] txdY13,txdY23,txdY33,txdY43,txdY53,txdY63,txdY73,txdY83;
+wire [3:0] txdY14,txdY24,txdY34,txdY44,txdY54,txdY64,txdY74,txdY84;
+wire [3:0] txdY15,txdY25,txdY35,txdY45,txdY55,txdY65,txdY75,txdY85;
+wire [3:0] txdY16,txdY26,txdY36,txdY46,txdY56,txdY66,txdY76,txdY86;
+wire [3:0] txdY17,txdY27,txdY37,txdY47,txdY57,txdY67,txdY77,txdY87;
+wire [3:0] txdY18,txdY28,txdY38,txdY48,txdY58,txdY68,txdY78,txdY88;
 
-node #(8'h11) un11
+wire [2:0] txdZ41,txdZ42,txdZ43,txdZ44,txdZ45,txdZ46,txdZ47,txdZ48;
+wire [2:0] rxdZ41,rxdZ42,rxdZ43,rxdZ44,rxdZ45,rxdZ46,rxdZ47,rxdZ48;
+
+rgb2dvi #(
+    .kGenerateSerialClk(1'b1),
+    .kClkPrimitive("MMCM"),
+    .kClkRange(3),
+    .kRstActiveHigh(1'b1)
+)
+ur2d1 
+(
+    .TMDS_Clk_p(TMDS_OUT_clk_p),
+    .TMDS_Clk_n(TMDS_OUT_clk_n),
+    .TMDS_Data_p(TMDS_OUT_data_p),
+    .TMDS_Data_n(TMDS_OUT_data_n),
+    .aRst(rst_i),
+    .aRst_n(~rst_i),
+    .vid_pData({
+        txdZ41,txdZ42,txdZ43,txdZ44,txdZ45,txdZ46,txdZ47,txdZ48
+    }),
+    .vid_pVDE(1'b1),
+    .vid_pHSync(1'b0),    // hSync is neg going for 1366x768
+    .vid_pVSync(1'b0),
+    .PixelClk(clk_i)
+);
+
+dvi2rgb #(
+    .kEmulateDDC(1'b0),
+    .kRstActiveHigh(1'b1),
+    .kAddBUFG(1'b0),
+    .kClkRange(3)
+    )
+udvi2rgb1
+(
+   .TMDS_Clk_p(TMDS_IN_Clk_p),
+   .TMDS_Clk_n(TMDS_IN_Clk_n),
+   .TMDS_Data_p(TMDS_IN_Data_p),   
+   .TMDS_Data_n(TMDS_IN_Data_n),
+   .RefClk(clk200),
+   .aRst(rst_i),
+   .aRst_n(~rst_i),
+   .vid_pData({
+        rxdZ41,rxdZ42,rxdZ43,rxdZ44,rxdZ45,rxdZ46,rxdZ47,rxdZ48
+   }),
+   .vid_pVDE(),
+   .vid_pHSync(),
+   .vid_pVSync(),
+   .PixelClk(),
+   .SerialClk(),
+   .aPixelClkLckd(),
+   .DDC_SDA_I(),
+   .DDC_SDA_O(),
+   .DDC_SDA_T(),
+   .DDC_SCL_I(),
+   .DDC_SCL_O(),
+   .DDC_SCL_T(),
+   .pRst(rst_i),
+   .pRst_n(~rst_i)      
+);
+
+node #({8'h11,Z}) un11
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -80,7 +194,7 @@ node #(8'h11) un11
     .dato(dato11)
 );
 
-node #(8'h21) un21
+node #({8'h21,Z}) un21
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -97,27 +211,36 @@ node #(8'h21) un21
     .dato(dato21)
 );
 
-node #(8'h31) un31
+node #({8'h31,Z}) un31
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX21),
     .txdX(txdX31),
     .rxdY(txdY38),
-    .txdY(txdY31)
+    .txdY(txdY31),
+    .cyc(cyc31),
+    .stb(stb31),
+    .ack(ack31),
+    .we(we31),
+    .adr(adr31),
+    .dati(dati31),
+    .dato(dato31)
 );
 
-node #(8'h41) un41
+node #({8'h41,Z},1'b1) un41
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX31),
     .txdX(txdX41),
     .rxdY(txdY48),
-    .txdY(txdY41)
+    .txdY(txdY41),
+    .rxdZ(rxdZ41),
+    .txdZ(txdZ41)
 );
 
-node #(8'h51) un51
+node #({8'h51,Z}) un51
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -127,7 +250,7 @@ node #(8'h51) un51
     .txdY(txdY51)
 );
 
-node #(8'h61) un61
+node #({8'h61,Z}) un61
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -137,7 +260,7 @@ node #(8'h61) un61
     .txdY(txdY61)
 );
 
-node #(8'h71) un71
+node #({8'h71,Z}) un71
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -147,7 +270,7 @@ node #(8'h71) un71
     .txdY(txdY71)
 );
 
-node #(8'h81) un81
+node #({8'h81,Z}) un81
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -157,7 +280,7 @@ node #(8'h81) un81
     .txdY(txdY81)
 );
 
-node #(8'h12) un12
+node #({8'h12,Z}) un12
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -167,7 +290,7 @@ node #(8'h12) un12
     .txdY(txdY12)
 );
 
-node #(8'h22) un22
+node #({8'h22,Z}) un22
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -177,7 +300,7 @@ node #(8'h22) un22
     .txdY(txdY22)
 );
 
-node #(8'h32) un32
+node #({8'h32,Z}) un32
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -187,7 +310,7 @@ node #(8'h32) un32
     .txdY(txdY32)
 );
 
-node #(8'h42) un42
+node #({8'h42,Z},1'b1) un42
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -195,6 +318,8 @@ node #(8'h42) un42
     .txdX(txdX42),
     .rxdY(txdY41),
     .txdY(txdY42),
+    .rxdZ(rxdZ42),
+    .txdZ(txdZ42),
     .cyc(cyc42),
     .stb(stb42),
     .ack(ack42),
@@ -204,7 +329,7 @@ node #(8'h42) un42
     .dato(dato42)
 );
 
-node #(8'h52) un52
+node #({8'h52,Z}) un52
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -214,7 +339,7 @@ node #(8'h52) un52
     .txdY(txdY52)
 );
 
-node #(8'h62) un62
+node #({8'h62,Z}) un62
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -224,7 +349,7 @@ node #(8'h62) un62
     .txdY(txdY62)
 );
 
-node #(8'h72) un72
+node #({8'h72,Z}) un72
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -234,7 +359,7 @@ node #(8'h72) un72
     .txdY(txdY72)
 );
 
-node #(8'h82) un82
+node #({8'h82,Z}) un82
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -244,7 +369,7 @@ node #(8'h82) un82
     .txdY(txdY82)
 );
 
-node #(8'h13) un13
+node #({8'h13,Z}) un13
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -254,7 +379,7 @@ node #(8'h13) un13
     .txdY(txdY13)
 );
 
-node #(8'h23) un23
+node #({8'h23,Z}) un23
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -264,7 +389,7 @@ node #(8'h23) un23
     .txdY(txdY23)
 );
 
-node #(8'h33) un33
+node #({8'h33,Z}) un33
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -274,17 +399,19 @@ node #(8'h33) un33
     .txdY(txdY33)
 );
 
-node #(8'h43) un43
+node #({8'h43,Z},1'b1) un43
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX33),
     .txdX(txdX43),
     .rxdY(txdY42),
-    .txdY(txdY43)
+    .txdY(txdY43),
+    .rxdZ(rxdZ43),
+    .txdZ(txdZ43)
 );
 
-node #(8'h53) un53
+node #({8'h53,Z}) un53
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -294,7 +421,7 @@ node #(8'h53) un53
     .txdY(txdY53)
 );
 
-node #(8'h63) un63
+node #({8'h63,Z}) un63
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -304,7 +431,7 @@ node #(8'h63) un63
     .txdY(txdY63)
 );
 
-node #(8'h73) un73
+node #({8'h73,Z}) un73
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -314,7 +441,7 @@ node #(8'h73) un73
     .txdY(txdY73)
 );
 
-node #(8'h83) un83
+node #({8'h83,Z}) un83
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -324,7 +451,7 @@ node #(8'h83) un83
     .txdY(txdY83)
 );
 
-node #(8'h14) un14
+node #({8'h14,Z}) un14
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -334,7 +461,7 @@ node #(8'h14) un14
     .txdY(txdY14)
 );
 
-node #(8'h24) un24
+node #({8'h24,Z}) un24
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -344,7 +471,7 @@ node #(8'h24) un24
     .txdY(txdY24)
 );
 
-node #(8'h34) un34
+node #({8'h34,Z}) un34
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -354,17 +481,19 @@ node #(8'h34) un34
     .txdY(txdY34)
 );
 
-node #(8'h44) un44
+node #({8'h44,Z},1'b1) un44
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX34),
     .txdX(txdX44),
     .rxdY(txdY43),
-    .txdY(txdY44)
+    .txdY(txdY44),
+    .rxdZ(rxdZ44),
+    .txdZ(txdZ44)
 );
 
-node #(8'h54) un54
+node #({8'h54,Z}) un54
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -374,7 +503,7 @@ node #(8'h54) un54
     .txdY(txdY54)
 );
 
-node #(8'h64) un64
+node #({8'h64,Z}) un64
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -384,7 +513,7 @@ node #(8'h64) un64
     .txdY(txdY64)
 );
 
-node #(8'h74) un74
+node #({8'h74,Z}) un74
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -394,7 +523,7 @@ node #(8'h74) un74
     .txdY(txdY74)
 );
 
-node #(8'h84) un84
+node #({8'h84,Z}) un84
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -404,7 +533,7 @@ node #(8'h84) un84
     .txdY(txdY84)
 );
 
-node #(8'h15) un15
+node #({8'h15,Z}) un15
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -414,7 +543,7 @@ node #(8'h15) un15
     .txdY(txdY15)
 );
 
-node #(8'h25) un25
+node #({8'h25,Z}) un25
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -424,7 +553,7 @@ node #(8'h25) un25
     .txdY(txdY25)
 );
 
-node #(8'h35) un35
+node #({8'h35,Z}) un35
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -434,17 +563,19 @@ node #(8'h35) un35
     .txdY(txdY35)
 );
 
-node #(8'h45) un45
+node #({8'h45,Z},1'b1) un45
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX35),
     .txdX(txdX45),
     .rxdY(txdY44),
-    .txdY(txdY45)
+    .txdY(txdY45),
+    .rxdZ(rxdZ45),
+    .txdZ(txdZ45)
 );
 
-node #(8'h55) un55
+node #({8'h55,Z}) un55
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -454,7 +585,7 @@ node #(8'h55) un55
     .txdY(txdY55)
 );
 
-node #(8'h65) un65
+node #({8'h65,Z}) un65
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -464,7 +595,7 @@ node #(8'h65) un65
     .txdY(txdY65)
 );
 
-node #(8'h75) un75
+node #({8'h75,Z}) un75
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -474,7 +605,7 @@ node #(8'h75) un75
     .txdY(txdY75)
 );
 
-node #(8'h85) un85
+node #({8'h85,Z}) un85
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -484,7 +615,7 @@ node #(8'h85) un85
     .txdY(txdY85)
 );
 
-node #(8'h16) un16
+node #({8'h16,Z}) un16
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -494,7 +625,7 @@ node #(8'h16) un16
     .txdY(txdY16)
 );
 
-node #(8'h26) un26
+node #({8'h26,Z}) un26
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -504,7 +635,7 @@ node #(8'h26) un26
     .txdY(txdY26)
 );
 
-node #(8'h36) un36
+node #({8'h36,Z}) un36
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -514,17 +645,19 @@ node #(8'h36) un36
     .txdY(txdY36)
 );
 
-node #(8'h46) un46
+node #({8'h46,Z},1'b1) un46
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX36),
     .txdX(txdX46),
     .rxdY(txdY45),
-    .txdY(txdY46)
+    .txdY(txdY46),
+    .rxdZ(rxdZ46),
+    .txdZ(txdZ46)
 );
 
-node #(8'h56) un56
+node #({8'h56,Z}) un56
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -534,7 +667,7 @@ node #(8'h56) un56
     .txdY(txdY56)
 );
 
-node #(8'h66) un66
+node #({8'h66,Z}) un66
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -544,7 +677,7 @@ node #(8'h66) un66
     .txdY(txdY66)
 );
 
-node #(8'h76) un76
+node #({8'h76,Z}) un76
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -554,7 +687,7 @@ node #(8'h76) un76
     .txdY(txdY76)
 );
 
-node #(8'h86) un86
+node #({8'h86,Z}) un86
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -564,7 +697,7 @@ node #(8'h86) un86
     .txdY(txdY86)
 );
 
-node #(8'h17) un17
+node #({8'h17,Z}) un17
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -574,7 +707,7 @@ node #(8'h17) un17
     .txdY(txdY17)
 );
 
-node #(8'h27) un27
+node #({8'h27,Z}) un27
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -584,7 +717,7 @@ node #(8'h27) un27
     .txdY(txdY27)
 );
 
-node #(8'h37) un37
+node #({8'h37,Z}) un37
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -594,17 +727,19 @@ node #(8'h37) un37
     .txdY(txdY37)
 );
 
-node #(8'h47) un47
+node #({8'h47,Z},1'b1) un47
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX37),
     .txdX(txdX47),
     .rxdY(txdY46),
-    .txdY(txdY47)
+    .txdY(txdY47),
+    .rxdZ(rxdZ47),
+    .txdZ(txdZ47)
 );
 
-node #(8'h57) un57
+node #({8'h57,Z}) un57
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -614,7 +749,7 @@ node #(8'h57) un57
     .txdY(txdY57)
 );
 
-node #(8'h67) un67
+node #({8'h67,Z}) un67
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -624,7 +759,7 @@ node #(8'h67) un67
     .txdY(txdY67)
 );
 
-node #(8'h77) un77
+node #({8'h77,Z}) un77
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -634,7 +769,7 @@ node #(8'h77) un77
     .txdY(txdY77)
 );
 
-node #(8'h87) un87
+node #({8'h87,Z}) un87
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -644,7 +779,7 @@ node #(8'h87) un87
     .txdY(txdY87)
 );
 
-node #(8'h18) un18
+node #({8'h18,Z}) un18
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -654,7 +789,7 @@ node #(8'h18) un18
     .txdY(txdY18)
 );
 
-node #(8'h28) un28
+node #({8'h28,Z}) un28
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -664,7 +799,7 @@ node #(8'h28) un28
     .txdY(txdY28)
 );
 
-node #(8'h38) un38
+node #({8'h38,Z}) un38
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -674,17 +809,19 @@ node #(8'h38) un38
     .txdY(txdY38)
 );
 
-node #(8'h48) un48
+node #({8'h48,Z},1'b1) un48
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
     .rxdX(txdX38),
     .txdX(txdX48),
     .rxdY(txdY47),
-    .txdY(txdY48)
+    .txdY(txdY48),
+    .rxdZ(rxdZ48),
+    .txdZ(txdZ48)
 );
 
-node #(8'h58) un58
+node #({8'h58,Z}) un58
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -694,7 +831,7 @@ node #(8'h58) un58
     .txdY(txdY58)
 );
 
-node #(8'h68) un68
+node #({8'h68,Z}) un68
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -704,7 +841,7 @@ node #(8'h68) un68
     .txdY(txdY68)
 );
 
-node #(8'h78) un78
+node #({8'h78,Z}) un78
 (
     .rst_i(rst_i),
     .clk_i(clk_i),
@@ -714,7 +851,7 @@ node #(8'h78) un78
     .txdY(txdY78)
 );
 
-node #(8'h88) un88
+node #({8'h88,Z}) un88
 (
     .rst_i(rst_i),
     .clk_i(clk_i),

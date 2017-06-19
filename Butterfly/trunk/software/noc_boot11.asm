@@ -34,8 +34,15 @@ CTRLH	equ		8
 		org		0x0040
 txBuf	fill.b	16,0
 rxBuf	fill.b	16,0
+kbdbuf	fill.w	16,0
+kbdhead	db	0
+kbdtail	db	0
+kbdcnt	db	0
+pingcnt		dw	0
 FocusTbl	fill.b	64,0
 HTOutFocus	db		0
+		align	2
+packetPtr	dw		0
 
 TXTSCR		equ	$2000
 TXTCTRL		equ	$B100
@@ -46,7 +53,8 @@ RTR_TXSTAT	equ	$12
 
 MSG_DST		equ	15
 MSG_SRC		equ	14
-MSG_TYPE	equ	7
+MSG_TTL		equ	9
+MSG_TYPE	equ	8
 
 ROUTER_TRB	equ	0
 
@@ -62,6 +70,12 @@ start:
 		sb		r1,LEDS
 		lw		sp,#$1FFE
 ;		br		start2
+		sb		r0,kbdhead
+		sb		r0,kbdtail
+		sb		r0,kbdcnt
+		sw		r0,pingcnt
+		lw		r2,#TXTSCR+3120
+		sw		r2,packetPtr
 		call	InitTxtCtrl
 		lw		r1,#4
 		sb		r1,LEDS
@@ -79,16 +93,21 @@ start:
 ;		sb		r1,ROUTER+RTR_RXSTAT
 		;call	broadcastReset
 start2:
-		lw		r1,#$80					; set router in snoop mode
+		lw		r1,#$80					; set router in non-snoop mode
 		sb		r1,ROUTER+RTR_RXSTAT
+		tsr		r1,ID
+		cmp		r1,#$11
+		bne		RecvLoop
 		call	ping44
+		lw		r1,#5
+		sb		r1,LEDS
+		jmp		CSTART
 RecvLoop:
 noMsg1:
 		lb		r1,ROUTER+RTR_RXSTAT
 		and		r1,#63
 		beq		noMsg1
 		call	Recv
-		call	RecvDump
 		call	RecvDispatch
 		bra		RecvLoop
 lockup:
@@ -104,14 +123,16 @@ broadcastReset:
 		call	zeroTxBuf
 		lw		r1,#$FF		; global broadcast address
 		sb		r1,txBuf+MSG_DST
-		lw		r1,#$11		; source of message
-		sb		r1,txBuf+MSG_SRC
 		lw		r1,#MT_RST
 		sb		r1,txBuf+MSG_TYPE	; reset message
 		call	Xmit
 		lw		lr,[sp]
 		add		sp,sp,#2
 		ret
+
+;----------------------------------------------------------------------------
+; Ping all the nodes to ensure everything is okay.
+;----------------------------------------------------------------------------
 
 ping44:
 		add		sp,sp,#-4
@@ -122,8 +143,6 @@ ping441:
 		call	zeroTxBuf
 		lb		r1,NodeNumTbl[r2]
 		sb		r1,txBuf+MSG_DST
-		tsr		r1,ID		; source of message
-		sb		r1,txBuf+MSG_SRC
 		lw		r1,#MT_PING
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
@@ -132,6 +151,7 @@ ping441:
 		beq		ping442
 		call	Recv
 		call	RecvDump
+		call	RecvDispatch
 ping442:
 		lw		r2,2[sp]
 		add		r2,r2,#1
@@ -158,13 +178,26 @@ NodeNumTbl:
 RecvDispatch:
 		add		sp,sp,#-8
 		sw		lr,[sp]
+		call	RecvDump
 		sw		r1,2[sp]
 		sw		r2,4[sp]
 		sw		r3,6[sp]
+		lb		r1,rxBuf+MSG_DST
+		tsr		r2,ID
+		cmp		r2,r1
+		bne		RecvDispatchXit
+		lw		r1,pingcnt
+		add		r1,r1,#1
+		sw		r1,pingcnt
+		cmp		r1,#200
+		bne		RecvDispatchNoPing
+		sw		r0,pingcnt
+		call	ping44
+RecvDispatchNoPing
 		lb		r1,rxBuf+MSG_TYPE
 		cmp		r1,#MT_RST_ACK	; status display ?
 		bne		RecvDispatch2
-RecvDispatch4:
+RecvPingAck:
 		lb		r1,rxBuf+MSG_SRC; message source
 		mov		r2,r1
 		and		r2,#$7			; get Y coord
@@ -179,15 +212,21 @@ RecvDispatch4:
 		shl		r3,#1			; character screen pos = *2
 		and		r3,#$0E
 		add		r3,r2
-		lw		r1,#'*'
-		call	AsciiToScreen
-		lw		r2,NormAttr
-		or		r1,r2
+		;lw		r1,#'*'
+		;call	AsciiToScreen
+		;lw		r2,NormAttr
+		;or		r1,r2
+		lw		r1,TXTSCR[r3]
+		add		r1,r1,#1
 		sw		r1,TXTSCR[r3]
 		bra		RecvDispatchXit
 RecvDispatch2:
 		cmp		r1,#MT_PING_ACK
-		beq		RecvDispatch4
+		beq		RecvPingAck
+		cmp		r1,#MT_KEYSTROKE
+		beq		RecvKeystroke
+		cmp		r1,#MT_ETH_PACKET
+		beq		RecvEthPacket
 		cmp		r1,#MT_REQ_OUT_FOCUS
 		bne		RecvDispatch3
 		lb		r1,rxBuf+MSG_SRC
@@ -212,6 +251,38 @@ RecvDispatchXit:
 		lw		r3,6[sp]
 		add		sp,sp,#8
 		ret
+		; Process a keystroke message from node $21
+RecvKeystroke:
+		lw		r1,#8
+		sb		r1,LEDS
+		lb		r1,kbdcnt
+		cmp		r1,#15
+		bge		kbdfull
+		lw		r1,#9
+		sb		r1,LEDS
+		add		r1,r1,#1
+		sb		r1,kbdcnt
+		lb		r2,kbdhead
+		lb		r1,rxBuf+2
+		sb		r1,kbdbuf[r2]
+		lb		r1,rxBuf+1
+		sb		r1,kbdbuf+1[r2]
+		add		r2,r2,#2
+		and		r2,#30
+		sb		r2,kbdhead
+kbdfull:
+		br		RecvDispatchXit
+RecvEthPacket:
+		lw		r1,rxBuf+2
+		lw		r2,packetPtr
+		sw		r1,[r2]
+		add		r2,r2,#2
+		cmp		r2,#TXTSCR+3224
+		bltu	RecvEthPacket1
+		lw		r2,#TXTSCR+3120
+RecvEthPacket1:
+		sw		r2,packetPtr
+		br		RecvDispatchXit
 
 ;----------------------------------------------------------------------------
 ; Initialize the text controller.
@@ -233,11 +304,19 @@ itc1:
 
 ;------------------------------------------------------------------------------
 ; Dump recieved message to screen.
+;
+; Parameters:
+;	<none> data in receive buffer
+; Returns:
+;	<none>
+; Registers Affected:
+;	<none>
 ;------------------------------------------------------------------------------
 
 RecvDump:
-		sub		sp,sp,#2
+		sub		sp,sp,#4
 		sw		lr,[sp]
+		sw		r1,2[sp]
 		call	DispCRLF
 		lb		r1,rxBuf+MSG_DST
 		call	DispByte
@@ -245,19 +324,23 @@ RecvDump:
 		lb		r1,rxBuf+MSG_SRC
 		call	DispByte
 		call	DispSpace
-		lw		r1,rxBuf+MSG_TYPE
+		lb		r1,rxBuf+MSG_TTL
 		call	DispByte
 		call	DispSpace
-		lw		r1,rxBuf+8
+		lb		r1,rxBuf+MSG_TYPE
+		call	DispByte
+		call	DispSpace
+		lw		r1,rxBuf+6
 		call	DispWord
-		lw		r1,rxBuf+10
+		lw		r1,rxBuf+4
 		call	DispWord
-		lw		r1,rxBuf+12
+		lw		r1,rxBuf+2
 		call	DispWord
-		lw		r1,rxBuf+14
+		lw		r1,rxBuf+0
 		call	DispWord
 		lw		lr,[sp]
-		add		sp,sp,#2
+		lw		r1,2[sp]
+		add		sp,sp,#4
 		ret
 
 ;------------------------------------------------------------------------------
@@ -266,9 +349,9 @@ RecvDump:
 DispCRLF:
 		sub		sp,sp,#2
 		sw		lr,[sp]
-		lb		r1,#13
+		lw		r1,#13
 		call	putcharScr
-		lb		r1,#10
+		lw		r1,#10
 		call	putcharScr
 		lw		lr,[sp]
 		add		sp,sp,#2
@@ -277,7 +360,7 @@ DispCRLF:
 DispSpace:
 		sub		sp,sp,#2
 		sw		lr,[sp]
-		lb		r1,#' '
+		lw		r1,#' '
 		call	putcharScr
 		lw		lr,[sp]
 		add		sp,sp,#2
@@ -330,8 +413,7 @@ DispNybble:
 		call	putcharScr
 		br		DispNybble2
 DispNybble1:
-		sub		r1,r1,#10
-		add		r1,#'A'
+		add		r1,#'A'-10
 		call	putcharScr
 DispNybble2:
 		lw		r1,2[sp]
@@ -364,6 +446,23 @@ ats1:
 		lw		r2,[sp]
 		add		sp,sp,#2
 		ret
+
+;------------------------------------------------------------------------------
+; Convert screen character to Ascii character.
+;
+; Parameters:
+;	r1 = character to convert
+; Returns:
+;	r1 = converted character
+;
+;------------------------------------------------------------------------------
+
+ScreenToAscii:
+	cmp		r1,#26+1
+	bgeu	ScreenToAscii1
+	add		r1,#$60
+ScreenToAscii1:
+	ret
 
 ;----------------------------------------------------------------------------
 ; Clear the screen.
@@ -454,11 +553,12 @@ putmsg4:
 ;-----------------------------------------------------------------
 
 putcharScr
-	sub		sp,sp,#8
+	sub		sp,sp,#10
 	sw		lr,[sp]
-	sw		r4,2[sp]
-	sw		r5,4[sp]
-	sw		r6,6[sp]
+	sw		r1,2[sp]
+	sw		r4,4[sp]
+	sw		r5,6[sp]
+	sw		r6,8[sp]
 
 	zxb		r1			; mask
 
@@ -586,10 +686,11 @@ pc7
 	lw		r5,pos
 	sw		r5,TXTCTRL+14
 	lw		lr,[sp]
-	lw		r4,2[sp]
-	lw		r5,4[sp]
-	lw		r6,6[sp]
-	add		sp,sp,#8
+	lw		r1,2[sp]
+	lw		r4,4[sp]
+	lw		r5,6[sp]
+	lw		r6,8[sp]
+	add		sp,sp,#10
 	ret
 
 scrollScreenUp:
@@ -622,6 +723,34 @@ scrollScreenUp2:
 	lw		lr,[sp]
 	lw		r5,2[sp]
 	add		sp,sp,#4
+	ret
+
+;----------------------------------------------------------------------------
+; Get character from keyboard buffer. Characters are placed in the buffer
+; when a keystroke message is sent by node $21.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	r1 = ascii character, 0 if no char available.
+;	.ZF = 1 if no char available, otherwise .ZF = 0
+;----------------------------------------------------------------------------
+
+kbdGetChar:
+	lb		r1,kbdcnt
+	beq		kbdGetCharXitZero
+	add		sp,sp,#-2
+	sw		r2,[sp]
+	sub		r1,r1,#1
+	sb		r1,kbdcnt
+	lb		r2,kbdtail
+	lb		r1,kbdbuf[r2]
+	add		r2,r2,#2
+	and		r2,#30
+	sb		r2,kbdtail
+	lw		r2,[sp]
+	add		sp,sp,#2			; this should leave the ZF clear
+kbdGetCharXitZero:
 	ret
 
 		
