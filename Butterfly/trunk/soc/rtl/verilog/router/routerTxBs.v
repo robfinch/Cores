@@ -37,7 +37,7 @@ module routerTxBs (
 	input [127:0] dat_i,// data in
 	//--------------------
 	input cs_i,			// chip select
-	input baud_ce,	    // baud rate clock enable
+	input sclk,	       // serializing clock
 	input cts,			// clear to send
 	output [3:0] txd,	// external serial output
 	output reg empty	// buffer is empty
@@ -51,43 +51,43 @@ module routerTxBs (
 	assign ack_o = cyc_i & stb_i & cs_i;
 	assign txd = tx_data[3:0];
 
-	always @(posedge clk_i)
+wire pe_ack;
+edge_det u1 (.rst(rst_i), .clk(sclk), .ce(1'b1), .i(ack_o & we_i), .pe(pe_ack), .ne(), .ee() );
+
+	always @(posedge sclk)
 		if (rst_i) begin
 		    txing <= 1'b0;
 		    empty <= 1'b1;
 			cnt <= 9'h00;
 			rd <= 1'b0;
-			tx_data <= {144{1'b1}};
+			tx_data <= {136{1'b1}};
 		end
 		else begin
-    		if (ack_o & we_i)
+    		if (pe_ack)
     		  fdo <= dat_i;
-    		if (ack_o & we_i)
+    		if (pe_ack)
     		  empty <= 1'b0;
     		else if (rd)
     		  empty <= 1'b1;
 
 			rd <= 1'b0;
 
-			if (baud_ce) begin
+			cnt <= cnt + 9'd1;
+            if (cnt==9'h87)
+                txing <= 1'b0;
+            // Load next data ?
+            if (cnt==9'h87 || !txing) begin
+                cnt <= 9'd0;
+                if (!empty && cts) begin
+                    txing <= 1'b1;
+                    tx_data <= {4'hF,fdo,4'h0};
+                    rd <= 1'b1;
+                end
+            end
+            // Shift the data out. LSB first.
+            else if (cnt[1:0]==2'h3)
+                tx_data <= {4'hF,tx_data[135:4]};
 
-				cnt <= cnt + 9'd1;
-				if (cnt==9'h8F)
-				    txing <= 1'b0;
-				// Load next data ?
-				if (cnt==9'h8F || !txing) begin
-					cnt <= 9'd0;
-					if (!empty && cts) begin
-					    txing <= 1'b1;
-						tx_data <= {8'hFF,fdo,8'h00};
-						rd <= 1'b1;
-					end
-				end
-				// Shift the data out. LSB first.
-				else if (cnt[1:0]==2'h3)
-					tx_data <= {4'hF,tx_data[143:4]};
-
-			end
-		end
+        end
 
 endmodule

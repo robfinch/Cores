@@ -40,12 +40,13 @@
 `define MSG_GDST    63:60
 `define MSG_GSRC    59:56
 
-module routerTop(X, Y, Z, rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, rxdX, rxdY, rxdZ, txdX, txdY, txdZ);
+module routerTop(X, Y, Z, rst_i, clk_i, sclk, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, rxdX, rxdY, rxdZ, txdX, txdY, txdZ);
 input [3:0] X;      // router address
 input [3:0] Y;      // router address
 input [3:0] Z;
 input rst_i;
 input clk_i;
+input sclk;
 input cs_i;
 input cyc_i;
 input stb_i;
@@ -61,6 +62,7 @@ output [3:0] txdX;
 output [3:0] txdY;
 output [2:0] txdZ;
 parameter HAS_ZROUTE = 1'b0;
+parameter ZROUTE_COL = 4'd4;
 
 reg rxCycX, rxStbX, rxWeX, rxCsX;
 reg rxCycY, rxStbY, rxWeY, rxCsY;
@@ -115,7 +117,7 @@ routerRxBs u1 (
 	.dat_o(rxDatoX),		// data out
 	//------------------------
 	.cs_i(rxCsX),				// chip select
-	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
+	.sclk(sclk),
 	.clear(),			// clear reciever
 	.rxd(rxdX),				// external serial input
 	.frame_err(),		// framing error
@@ -135,7 +137,7 @@ routerTxBs u3 (
 	.dat_i(txDatiX),   // data in
 	//--------------------
 	.cs_i(txCsX),			// chip select
-	.baud_ce(1'b1),	// baud rate clock enable
+	.sclk(sclk),
 	.cts(1'b1),			// clear to send
 	.txd(txdX),		// external serial output
 	.empty(txEmptyX)	    // buffer is empty
@@ -152,7 +154,7 @@ routerRxBs u5 (
 	.dat_o(rxDatoY),		// data out
 	//------------------------
 	.cs_i(rxCsY),				// chip select
-	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
+	.sclk(sclk),
 	.clear(),			// clear reciever
 	.rxd(rxdY),				// external serial input
 	.frame_err(),		// framing error
@@ -172,7 +174,7 @@ routerTxBs u7 (
 	.dat_i(txDatiY),   // data in
 	//--------------------
 	.cs_i(txCsY),			// chip select
-	.baud_ce(1'b1),	// baud rate clock enable
+	.sclk(sclk),
 	.cts(1'b1),		// clear to send
 	.txd(txdY),		// external serial output
 	.empty(txEmptyY)	    // buffer is empty
@@ -191,7 +193,7 @@ routerRxBsZ u6 (
 	.dat_o(rxDatoZ),		// data out
 	//------------------------
 	.cs_i(rxCsZ),				// chip select
-	.baud_ce(1'b1),		// baud rate clock enable (run at full rate)
+	.sclk(sclk),
 	.clear(),			// clear reciever
 	.rxd(rxdZ),				// external serial input
 	.frame_err(),		// framing error
@@ -211,7 +213,7 @@ routerTxBsZ u8 (
 	.dat_i(txDatiZ),   // data in
 	//--------------------
 	.cs_i(txCsZ),			// chip select
-	.baud_ce(1'b1),	// baud rate clock enable
+	.sclk(sclk),
 	.cts(1'b1),		// clear to send
 	.txd(txdZ),		// external serial output
 	.empty(txEmptyZ)	    // buffer is empty
@@ -228,15 +230,16 @@ endgenerate
 
 routerFifo2 u9
 (
-  .clk(clk_i),              // input wire clk
-  .srst(rst_i),              // input wire srst
+  .rd_clk(clk_i),              // input wire clk
+  .wr_clk(clk_i),
+  .rst(rst_i),              // input wire srst
   .din(fifoDati),                // input wire [127 : 0] din
   .wr_en(wf),            // input wire wr_en
   .rd_en(rdf),            // input wire rd_en
   .dout(fifoDato),              // output wire [127 : 0] dout
   .full(fifofull),             // output wire full
   .empty(),            // output wire empty
-  .data_count(fifocnt)  // output wire [4 : 0] data_count
+  .rd_data_count(fifocnt)  // output wire [4 : 0] data_count
 );
 /*
 routerFifo ufifo
@@ -509,60 +512,16 @@ begin
                 end
             end
             else begin
-                if (txEmptyX) begin
-                    if (snoop) begin
-                        wf <= 1'b1;
-                        fifoDati <= buff;
-                    end
-                    txCycX <= `HIGH;
-                    txStbX <= `HIGH;
-                    txWeX <= `HIGH;
-                    txCsX <= `HIGH;
-                    txDatiX <= buff;
-                    txDatiX[`MSG_TTL] <= buff[`MSG_TTL] - 6'd1;
-                    //txDatiX[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b01};
-                    state <= NACKTXX;
-                    if (rsttx)
-                        dpTx <= 1'b0;
-                end
+                if (buff[`MSG_X]!=ZROUTE_COL)
+                    txX(buff,rsttx);
+                else
+                    txY(buff,rsttx);
             end
         end
-        else if (buff[`MSG_X]!=X) begin
-            if (txEmptyX) begin
-                if (snoop) begin
-                    wf <= 1'b1;
-                    fifoDati <= buff;
-                end
-                txCycX <= `HIGH;
-                txStbX <= `HIGH;
-                txWeX <= `HIGH;
-                txCsX <= `HIGH;
-                txDatiX <= buff;
-                txDatiX[`MSG_TTL] <= buff[`MSG_TTL] - 6'd1;
-                //txDatiX[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b01};
-                state <= NACKTXX;
-                if (rsttx)
-                    dpTx <= 1'b0;
-            end
-        end
-        else if (buff[`MSG_Y]!=Y) begin
-            if (txEmptyY) begin
-                if (snoop) begin
-                    wf <= 1'b1;
-                    fifoDati <= buff;
-                end
-                txCycY <= `HIGH;
-                txStbY <= `HIGH;
-                txWeY <= `HIGH;
-                txCsY <= `HIGH;
-                txDatiY <= buff;
-                txDatiY[`MSG_TTL] <= buff[`MSG_TTL] - 6'd1;
-                //txDatiY[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b10};
-                state <= NACKTXY;
-                if (rsttx)
-                    dpTx <= 1'b0;
-            end
-        end
+        else if (buff[`MSG_X]!=X)
+            txX(buff,rsttx);
+        else if (buff[`MSG_Y]!=Y)
+            txY(buff,rsttx);
         else begin
             wf <= 1'b1;
             fifoDati <= buff;
@@ -617,6 +576,52 @@ begin
         end
         */
     endcase
+end
+endtask
+
+task txX;
+input [127:0] buff;
+input rsttx;
+begin
+    if (txEmptyX) begin
+        if (snoop) begin
+            wf <= 1'b1;
+            fifoDati <= buff;
+        end
+        txCycX <= `HIGH;
+        txStbX <= `HIGH;
+        txWeX <= `HIGH;
+        txCsX <= `HIGH;
+        txDatiX <= buff;
+        txDatiX[`MSG_TTL] <= buff[`MSG_TTL] - 6'd1;
+        //txDatiX[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b01};
+        state <= NACKTXX;
+        if (rsttx)
+            dpTx <= 1'b0;
+    end
+end
+endtask
+
+task txY;
+input [127:0] buff;
+input rsttx;
+begin
+    if (txEmptyY) begin
+        if (snoop) begin
+            wf <= 1'b1;
+            fifoDati <= buff;
+        end
+        txCycY <= `HIGH;
+        txStbY <= `HIGH;
+        txWeY <= `HIGH;
+        txCsY <= `HIGH;
+        txDatiY <= buff;
+        txDatiY[`MSG_TTL] <= buff[`MSG_TTL] - 6'd1;
+        //txDatiY[`MSG_ROUT] <= {buff[`MSG_ROUT],2'b10};
+        state <= NACKTXY;
+        if (rsttx)
+            dpTx <= 1'b0;
+    end
 end
 endtask
 

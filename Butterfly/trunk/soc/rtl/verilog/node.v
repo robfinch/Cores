@@ -25,15 +25,16 @@
 //
 // ============================================================================
 //
-module node(rst_i, clk_i, rxdX, txdX, rxdY, txdY, rxdZ, txdZ, cyc, stb, ack, we, adr, dati, dato);
+module node(rst_i, clk_i, sclk, rxdX, txdX, rxdY, txdY, rxdZ, txdZ, cyc, stb, ack, we, adr, dati, dato);
 input rst_i;
 input clk_i;
+input sclk;
 input [3:0] rxdX;
 input [3:0] rxdY;
-input [2:0] rxdZ;
+input rxdZ;
 output [3:0] txdX;
 output [3:0] txdY;
-output [2:0] txdZ;
+output txdZ;
 output cyc;
 output stb;
 input ack;
@@ -122,6 +123,7 @@ routerTop #(HAS_ZROUTE) urout1
     .adr_i(adr[4:0]),
     .dat_i(dato),
     .dat_o(rout_dato),
+    .sclk(sclk),
     .rxdX(rxdX),
     .rxdY(rxdY),
     .rxdZ(rxdZ),
@@ -129,59 +131,7 @@ routerTop #(HAS_ZROUTE) urout1
     .txdY(txdY),
     .txdZ(txdZ)
 );
-/*
-bcSimpleUart uX
-(
-	// WISHBONE Slave interface
-	.rst_i(rst_i),		// reset
-	.clk_i(clk_i),		// eg 100.7MHz
-	.cs_i(uxCs),
-	.cyc_i(cyc),		// cycle valid
-	.stb_i(stb),		// strobe
-	.we_i(we),			// 1 = write
-	.adr_i(adr[3:0]),		// register address
-	.dat_i(dato),		// data input bus
-	.dat_o(uxDato),	// data output bus
-	.ack_o(uxAck),		// transfer acknowledge
-	.vol_o(),		// volatile register selected
-	.irq_o(),		// interrupt request
-	//----------------
-	.cts_ni(1'b0),		// clear to send - active low - (flow control)
-	.rts_no(),	// request to send - active low - (flow control)
-	.dsr_ni(1'b0),		// data set ready - active low
-	.dcd_ni(1'b0),		// data carrier detect - active low
-	.dtr_no(),	// data terminal ready - active low
-	.rxd_i(rxdX),			// serial data in
-	.txd_o(txdX),			// serial data out
-	.data_present_o()
-);
 
-bcSimpleUart uY
-(
-	// WISHBONE Slave interface
-	.rst_i(rst_i),		// reset
-	.clk_i(clk_i),		// eg 100.7MHz
-	.cs_i(uyCs),
-	.cyc_i(cyc),		// cycle valid
-	.stb_i(stb),		// strobe
-	.we_i(we),			// 1 = write
-	.adr_i(adr[3:0]),		// register address
-	.dat_i(dato),		// data input bus
-	.dat_o(uyDato),	// data output bus
-	.ack_o(uyAck),		// transfer acknowledge
-	.vol_o(),		// volatile register selected
-	.irq_o(),		// interrupt request
-	//----------------
-	.cts_ni(1'b0),		// clear to send - active low - (flow control)
-	.rts_no(),	// request to send - active low - (flow control)
-	.dsr_ni(1'b0),		// data set ready - active low
-	.dcd_ni(1'b0),		// data carrier detect - active low
-	.dtr_no(),	// data terminal ready - active low
-	.rxd_i(rxdY),			// serial data in
-	.txd_o(txdY),			// serial data out
-	.data_present_o()
-);
-*/
 wire iack = rout_ack|brAck|ramAck|ack; 
 reg [7:0] idati;
 

@@ -39,7 +39,7 @@ module routerRxBs(
 	output [127:0] dat_o,		// data out
 	//------------------------
 	input cs_i,				// chip select
-	input baud_ce,		   // baud rate clock enable
+	input sclk,		        // serialization clock
 	input clear,			// clear reciever
 	input [3:0] rxd,		// external serial input
 	output reg frame_err,		// framing error
@@ -52,7 +52,7 @@ module routerRxBs(
 	// variables
 	reg [3:0] rxdd [0:3];	// synchronizer flops
 	reg [8:0] cnt;			// sample bit rate counter
-	reg [143:0] rx_data;		// working receive data register
+	reg [135:0] rx_data;		// working receive data register
 	reg state;				// state machine
 	reg wf;					// buffer write
 	wire [127:0] dat;
@@ -74,15 +74,16 @@ edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs & ~we_i), .pe(), .ne(nec
 
 routerFifo2 u1
 (
-  .clk(clk_i),              // input wire clk
-  .srst(rst_i),              // input wire srst
-  .din(rx_data[135:8]),                // input wire [127 : 0] din
+  .rst(rst_i),              // input wire srst
+  .rd_clk(clk_i),            // input wire clk
+  .wr_clk(sclk),
+  .din(rx_data[131:4]),                // input wire [127 : 0] din
   .wr_en(wf),            // input wire wr_en
   .rd_en(necs),            // input wire rd_en
   .dout(dat),              // output wire [127 : 0] dout
   .full(fifofull),         // output wire full
   .empty(),            // output wire empty
-  .data_count(fifocnt)  // output wire [4 : 0] data_count
+  .rd_data_count(fifocnt)  // output wire [4 : 0] data_count
 );
 /*
 routerFifo u1
@@ -100,14 +101,14 @@ routerFifo u1
 */
 	// Three stage synchronizer to synchronize incoming data to
 	// the local clock (avoids metastability).
-	always @(posedge clk_i) begin
+	always @(posedge sclk) begin
 	    rxdd[0] <= rxd;
 	    rxdd[1] <= rxdd[0];
 	    rxdd[2] <= rxdd[1];
 	    rxdd[3] <= rxdd[2];
 	end
 
-	always @(posedge clk_i) begin
+	always @(posedge sclk) begin
 		if (rst_i) begin
 			state <= `IDLE;
 			wf <= 1'b0;
@@ -124,7 +125,7 @@ routerFifo u1
 				overrun <= 1'b0;
 			end
 
-			else if (baud_ce) begin
+			else begin
 
 				case (state)
 
@@ -140,7 +141,7 @@ routerFifo u1
 						// End of the frame ?
 						// - check for framing error
 						// - write data to read buffer
-						if (cnt==9'h8E)
+						if (cnt==9'h86)
 							begin	
 								frame_err <= rxdd[3] != 4'hF;
 								if (fifocnt < 5'd31)
@@ -150,7 +151,7 @@ routerFifo u1
 							end
 						// Switch back to the idle state a little
 						// bit too soon.
-						if (cnt==9'h8F)
+						if (cnt==9'h87)
 							state <= `IDLE;
 	
 						// On start bit check make sure the start
@@ -160,7 +161,7 @@ routerFifo u1
 							state <= `IDLE;
 
 						if (cnt[1:0]==3'h1)
-							rx_data <= {rxdd[3],rx_data[143:4]};
+							rx_data <= {rxdd[3],rx_data[135:4]};
 					end
 
 				endcase
@@ -170,8 +171,8 @@ routerFifo u1
 
 
 	// bit rate counter
-	always @(posedge clk_i)
-		if (baud_ce) begin
+	always @(posedge sclk)
+		begin
 			if (state == `IDLE)
 				cnt <= 9'd0;
 			else

@@ -3,6 +3,9 @@ module ButterflySoC(cpu_resetn, xclk, btnl, btnr, btnc, btnd, btnu, led, sw,
     kclk, kd,
     TMDS_OUT_clk_n, TMDS_OUT_clk_p,
     TMDS_OUT_data_n, TMDS_OUT_data_p, 
+//    rs485_re_n, rs485_txd, rs485_rxd, rs485_de,
+    TMDS_IN_clk_n, TMDS_IN_clk_p,
+    TMDS_IN_data_n, TMDS_IN_data_p, 
     eth_mdio, eth_mdc, eth_rst_b, eth_rxclk, eth_rxd, eth_rxctl, eth_txclk, eth_txd, eth_txctl,
 );
 input cpu_resetn;
@@ -23,6 +26,14 @@ output TMDS_OUT_clk_n;
 output TMDS_OUT_clk_p;
 output [2:0] TMDS_OUT_data_n;
 output [2:0] TMDS_OUT_data_p;
+input TMDS_IN_clk_n;
+input TMDS_IN_clk_p;
+input [2:0] TMDS_IN_data_n;
+input [2:0] TMDS_IN_data_p;
+//output rs485_re_n;
+//output rs485_txd;
+//input rs485_rxd;
+//output rs485_de;
 inout eth_mdio;
 output eth_mdc;
 output eth_rst_b;
@@ -35,18 +46,17 @@ output eth_txctl;
 
 wire xreset = ~cpu_resetn;
 wire rst;
-wire clk50, clk80, clk400;
+wire clk, clk120, clk80, clk200, clk400;
 wire hSync,vSync;
 wire blank,border;
 wire [7:0] red, green, blue;
 wire [7:0] tc1_dato,tc2_dato;
-wire tc1_ack;
+wire tc1_ack,tc2_ack;
 wire [23:0] tc1_rgb;
 wire [23:0] tc2_rgb;
 wire eth_ack,eth_ramack;
 wire [7:0] eth_dato;
 wire [7:0] eth_ramdato;
-wire [31:0] eth_wbm_dato;
 
 wire cyc11,stb11,we11;
 wire [15:0] adr11;
@@ -68,8 +78,8 @@ clkgen u2
     .rst(rst),
     .clk100(),
     .clk25(eth_txclk),
-    .clk50(clk50),
-    .clk200(),
+    .clk120(clk120),
+    .clk200(clk200),
     .clk300(),
     .clk400(clk400),
     .clk125(),
@@ -263,6 +273,8 @@ wire [31:2] eth_wbm_adr;
 wire [31:0] eth_wbm_dato;
 wire [31:0] eth_wbm_dati;
 wire eth_wbm_cs_ram = eth_wbm_adr[31:14]==18'h01 && eth_wbm_cyc && eth_wbm_stb;
+wire eth_md_pad_o;
+wire mden;
 
 reg eth_rdy1, eth_rdy2;
 reg eth_wbm_rdy1, eth_wbm_rdy2;
@@ -343,11 +355,13 @@ ethmac uethmac1
   // MIIM
   .mdc_pad_o(eth_mdc),
   .md_pad_i(eth_mdio),
-  .md_pad_o(mden ? eth_mdio : 1'bz),
+  .md_pad_o(eth_md_pad_o),
   .md_padoe_o(mden),
 
   .int_o()
 );
+assign eth_mdio = mden ? eth_md_pad_o : 1'bz;
+
 /*
 MII2RMIIRx umii2
 (
@@ -390,6 +404,9 @@ grid u1
 (
     .rst_i(rst),
     .clk_i(clk),
+    .clk133(clk120),
+    .clk200(clk200),
+    .clk400(clk400),
 
     .cyc11(cyc11),
     .stb11(stb11),
@@ -423,15 +440,27 @@ grid u1
     .dati42(tc2_dato),
     .dato42(dato42),
 
-    .TMDS_OUT_clk_n(),
-    .TMDS_OUT_clk_p(),
-    .TMDS_OUT_data_n(),
-    .TMDS_OUT_data_p(), 
-    .TMDS_IN_clk_n(),
-    .TMDS_IN_clk_p(),
-    .TMDS_IN_data_n(),
-    .TMDS_IN_data_p() 
+    .gr_clki_p(TMDS_IN_clk_p),
+    .gr_clki_n(TMDS_IN_clk_n),
+    .gr_seri_p(TMDS_IN_data_p),
+    .gr_seri_n(TMDS_IN_data_n),
+    .gr_clko_p(),
+    .gr_clko_n(),
+    .gr_sero_p(),
+    .gr_sero_n()
+    
+//    .TMDS_OUT_clk_n(),
+//    .TMDS_OUT_clk_p(),
+//    .TMDS_OUT_data_n(),
+//    .TMDS_OUT_data_p(), 
+//    .TMDS_IN_clk_n(TMDS_IN_clk_n),
+//    .TMDS_IN_clk_p(TMDS_IN_clk_p),
+//    .TMDS_IN_data_n(TMDS_IN_data_n),
+//    .TMDS_IN_data_p(TMDS_IN_data_p) 
 
 );
-
+/*
+assign rs485_re_n = 1'b0;
+assign rs485_de = 1'b1;
+*/
 endmodule
