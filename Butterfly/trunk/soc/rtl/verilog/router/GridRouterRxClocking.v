@@ -31,7 +31,7 @@ output pclk;
 
 parameter pIOStandard = "TMDS_33";
 parameter pClkRange = 3.0;
-parameter pClkMult = 7.0;
+parameter pClkMult = 4.0;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
@@ -42,8 +42,8 @@ wire pe_lock,ne_lock;
 reg [2:0] mmcm_rst;
 
 IBUFDS #(
-    .DIFF_TERM(1'b0),
-    .IBUF_LOW_PWR(1'b1),
+    .DIFF_TERM("FALSE"),
+    .IBUF_LOW_PWR("TRUE"),
     .IOSTANDARD(pIOStandard)
     )
 u1
@@ -60,7 +60,7 @@ BUFIO u2
 );
 
 BUFR #(
-    .BUFR_DIVIDE("7"),
+    .BUFR_DIVIDE("4"),
     .SIM_DEVICE("7SERIES")
     )
 u3
@@ -85,17 +85,17 @@ end
 
 MMCME2_ADV #(
     .BANDWIDTH("OPTIMIZED"),
-    .CLKOUT4_CASCADE(FALSE),
+    .CLKOUT4_CASCADE("FALSE"),
     .COMPENSATION("ZHOLD"),
-    .STARTUP_WAIT(FALSE),
+    .STARTUP_WAIT("FALSE"),
     .DIVCLK_DIVIDE(1),
     .CLKFBOUT_MULT_F(pClkRange * pClkMult),
     .CLKFBOUT_PHASE(0.0),
-    .CLKFBOUT_USE_FINE_PS(FALSE),
+    .CLKFBOUT_USE_FINE_PS("FALSE"),
     .CLKOUT0_DIVIDE_F(pClkRange),
     .CLKOUT0_PHASE(0.000),
     .CLKOUT0_DUTY_CYCLE(0.500),
-    .CLKOUT0_USE_FINE_PS(FALSE),
+    .CLKOUT0_USE_FINE_PS("FALSE"),
     .CLKIN1_PERIOD(pClkRange * 6.0),
     .REF_JITTER1(0.010)
    )

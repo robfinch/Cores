@@ -24,11 +24,11 @@
 //
 module GridRouterSerialOut(rst, pclk, sclk, dati, sero_p, sero_n);
 parameter pIOStandard = "TMDS_33";
-parameter pParallelWidth = 14;
+parameter pParallelWidth = 8;
 input rst;
 input pclk;         // parallel load clock
 input sclk;         // serial clock
-input [13:0] dati;  // input data
+input [7:0] dati;  // input data
 output sero_p;      // serial output
 output sero_n;
 
@@ -72,8 +72,8 @@ u2
     .D8(dati[7]),
     .OCE(1'b1),
     .RST(rst),
-    .SHIFTIN1(q1),
-    .SHIFTIN2(q2),
+    .SHIFTIN1(),
+    .SHIFTIN2(),
     .T1(1'b0),
     .T2(1'b0),
     .T3(1'b0),
@@ -82,44 +82,4 @@ u2
     .TCE(1'b0)
 );
     
-OSERDESE2 #(
-    .DATA_RATE_OQ("DDR"),
-    .DATA_RATE_TQ("SDR"),
-    .DATA_WIDTH(pParallelWidth),
-    .TRISTATE_WIDTH(1),
-    .TBYTE_CTL("FALSE"),
-    .TBYTE_SRC("FALSE"),
-    .SERDES_MODE("SLAVE")
-    )
-u3
-(
-    .OFB(),
-    .OQ(sero),
-    .SHIFTOUT1(q1),
-    .SHIFTOUT2(q2),
-    .TBYTEOUT(),
-    .TFB(),
-    .TQ(),
-    .CLK(sclk),
-    .CLKDIV(pclk),
-    .D1(1'b0),
-    .D2(1'b0),
-    .D3(dati[8]),
-    .D4(dati[9]),
-    .D5(dati[10]),
-    .D6(dati[11]),
-    .D7(dati[12]),
-    .D8(dati[13]),
-    .OCE(1'b1),
-    .RST(rst),
-    .SHIFTIN1(1'b0),
-    .SHIFTIN2(1'b0),
-    .T1(1'b0),
-    .T2(1'b0),
-    .T3(1'b0),
-    .T4(1'b0),
-    .TBYTEIN(1'b0),
-    .TCE(1'b0)
-);
-
 endmodule

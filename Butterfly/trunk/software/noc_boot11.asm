@@ -20,7 +20,7 @@
 ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 ;                                    
 ;                                      
-; This boot rom for the special node $11. This node is responsible for
+; This boot rom for the special node $111. This node is responsible for
 ; bringing the system up, and controls the text display and leds.
 ; ============================================================================
 ;
@@ -55,6 +55,7 @@ MSG_DST		equ	15
 MSG_SRC		equ	14
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
+MSG_GSD		equ	7
 
 ROUTER_TRB	equ	0
 
@@ -143,11 +144,13 @@ ping441:
 		call	zeroTxBuf
 		lb		r1,NodeNumTbl[r2]
 		sb		r1,txBuf+MSG_DST
+		lb		r1,#$11
+		sb		r1,txBuf+MSG_GDS
 		lw		r1,#MT_PING
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 		lb		r1,ROUTER+RTR_RXSTAT
-		and		r1,#63
+		and		r1,#55
 		beq		ping442
 		call	Recv
 		call	RecvDump
@@ -183,6 +186,11 @@ RecvDispatch:
 		sw		r2,4[sp]
 		sw		r3,6[sp]
 		lb		r1,rxBuf+MSG_DST
+		shl		r1,#1
+		shl		r1,#1
+		shl		r1,#1
+		shl		r1,#1
+		or		r1,#1
 		tsr		r2,ID
 		cmp		r2,r1
 		bne		RecvDispatchXit
@@ -243,7 +251,52 @@ RecvDispatch2:
 		bne		RecvDispatch3
 		lb		r1,rxBuf+MSG_SRC
 		sb		r1,HTOutFocus
+		br		RecvDispatchXit
+
 RecvDispatch3:
+		; Load program code
+RecvDispatch5:
+		cmp		r1,#MT_LOAD_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch6
+		lw		r1,rxBuf+2
+		lw		r2,rxBuf+4
+		sw		r1,[r2]
+		br		RecvDispatchXit
+
+		; Load program data
+RecvDispatch6:
+		cmp		r1,#MT_LOAD_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch7
+		lw		r1,rxBuf+2
+		lw		r2,rxBuf+4
+		sw		r1,[r2]
+		br		RecvDispatchXit
+		; Load program code
+
+		; Execute program
+RecvDispatch7:
+		cmp		r1,#MT_EXEC_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch8
+		lw		r1,rxBuf+MSG_SRC
+		add		sp,sp,#-2
+		sw		r1,[sp]
+		lw		r2,rxBuf+4
+		call	[r2]
+		lw		r2,[sp]
+		add		sp,sp,#2
+		call	zeroTxBuf
+		sw		r1,txBuf+2
+		sb		r2,txBuf+MSG_DST
+		lw		r1,#$11
+		sb		r1,txBuf+MSG_GDS
+		lw		r1,#MT_EXIT
+		sb		r1,txBuf+MSG_TYPE
+		call	Xmit
+		br		RecvDispatchXit
+
 RecvDispatchXit:
 		lw		lr,[sp]
 		lw		r1,2[sp]

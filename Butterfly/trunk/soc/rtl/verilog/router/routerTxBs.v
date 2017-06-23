@@ -43,7 +43,7 @@ module routerTxBs (
 	output reg empty	// buffer is empty
 );
     reg txing;
-	reg [143:0] tx_data;	// transmit data working reg (raw)
+	reg [135:0] tx_data;	// transmit data working reg (raw)
 	reg [127:0] fdo;	// data output
 	reg [8:0] cnt;		// baud clock counter
 	reg rd;

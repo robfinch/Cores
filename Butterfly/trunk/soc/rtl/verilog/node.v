@@ -31,10 +31,10 @@ input clk_i;
 input sclk;
 input [3:0] rxdX;
 input [3:0] rxdY;
-input rxdZ;
+input [3:0] rxdZ;
 output [3:0] txdX;
 output [3:0] txdY;
-output txdZ;
+output [3:0] txdZ;
 output cyc;
 output stb;
 input ack;
@@ -43,28 +43,28 @@ output [15:0] adr;
 input [7:0] dati;
 output [7:0] dato;
 parameter ID = 12'h111;
-parameter HAS_ZROUTE = 1'b0;
+parameter HAS_ZROUTE = 0;
 
-wire [7:0] uxDato,uyDato,rout_dato;
-wire uxAck,uyAck,rout_ack;
+wire [7:0] rout_dato;
+wire rout_ack;
 wire brAck;
 wire ramAck;
 
 wire cs_rom;
 wire cs_ram = adr[15:13]==3'h0 && cyc && stb; 
 wire routCs = adr[15:8]==8'hB0;
-//wire uxCs = adr[15:4]==12'hB00;
-//wire uyCs = adr[15:4]==12'hB01;
 
-wire [7:0] romo,ramo;
+reg [7:0] romo;
+wire [7:0] ramo;
 reg [15:0] radr;
 always @(posedge clk_i)
     radr <= adr;
 generate begin
-if (ID==8'h11 || ID==8'h42) begin
+if (ID==12'h111 || ID==12'h421) begin
 assign cs_rom = adr[15:14]==2'b11 && cyc && stb;
 reg [7:0] rommem [0:16383];
-assign romo = rommem[radr[13:0]];
+always @(posedge clk_i)
+    romo <= rommem[radr[13:0]];
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot11.mem",rommem);
 end
@@ -72,14 +72,19 @@ end
 else begin
 assign cs_rom = adr[15:13]==3'b111 && cyc && stb;
 reg [7:0] rommem [0:8191];
-assign romo = rommem[radr[12:0]];
-if (ID==8'h21)
+always @(posedge clk_i)
+    romo <= rommem[radr[12:0]];
+if (ID==12'h211)
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot21.mem",rommem);
 end
-else if (ID==8'h31)
+else if (ID==12'h311)
 initial begin
     $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot31.mem",rommem);
+end
+else if (ID==12'h411)
+initial begin
+    $readmemh("C:\\Cores4\\Butterfly\\trunk\\software\\bfasm\\debug\\noc_boot41.mem",rommem);
 end
 else
 initial begin
@@ -98,14 +103,16 @@ node_ramXX uram1 (
   .douta(ramo)  // output wire [7 : 0] douta
 );
 
-reg romrdy,ramrdy1,ramrdy2;
+reg romrdy,romrdy1,ramrdy1,ramrdy2;
 always @(posedge clk_i)
     romrdy <= cs_rom;
+always @(posedge clk_i)
+    romrdy1 <= romrdy & cs_rom;
 always @(posedge clk_i)
     ramrdy1 <= cs_ram;
 always @(posedge clk_i)
     ramrdy2 <= ramrdy1 & cs_ram;
-assign brAck = cs_rom ? romrdy : 1'b0;
+assign brAck = cs_rom ? romrdy1 : 1'b0;
 assign ramAck = cs_ram ? ramrdy2 : 1'b0;
 
 routerTop #(HAS_ZROUTE) urout1

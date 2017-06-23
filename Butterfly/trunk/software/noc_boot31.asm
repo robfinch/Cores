@@ -20,7 +20,7 @@
 ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 ;                                    
 ;                                      
-; This boot rom for node $31.
+; This boot rom for node $311.
 ; ============================================================================
 ;
 CR	= 13
@@ -41,6 +41,7 @@ MSG_DST		equ	15
 MSG_SRC		equ	14
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
+MSG_GSD		equ	7
 
 ETHERNET	EQU		0xA000
 ETH_MODER		EQU		0x00
@@ -67,6 +68,10 @@ ETH_TXCTRL		EQU		0x50
 
 eth_txbuf		EQU		$4000
 eth_rxbuf		EQU		$6000
+
+		bss
+		org		$10
+unique_id	dw	0
 
 		.code
 		cpu		Butterfly16
@@ -112,7 +117,7 @@ RecvDispatch:
 		lw		r1,#MT_RST_ACK
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
-		br		RecvDispatch5
+		br		RecvDispatchXit
 RecvDispatch2:
 		cmp		r1,#MT_PING
 		bne		RecvDispatch9
@@ -129,7 +134,7 @@ RecvDispatch9:
 		lb		r1,rxBuf+MSG_SRC
 		call	INITTBW
 		lw		r8,TXTBGN			; r8 = text begin
-		br		RecvDispatch5
+		br		RecvDispatchXit
 RecvDispatch3:
 		cmp		r1,#MT_LOAD_BASIC_CHAR	; load BASIC program char
 		bne		RecvDispatch4
@@ -141,7 +146,7 @@ RecvDispatch3:
 		sw		r1,4[r8]
 		add		r8,r8,#6
 		sw		r8,TXTUNF
-		br		RecvDispatch5
+		br		RecvDispatchXit
 RecvDispatch4:
 		; Run a BASIC program by stuffing a 'RUN' command into the BASIC
 		; buffer.
@@ -158,8 +163,51 @@ RecvDispatch4:
 		sb		r0,BUFFER+4
 		lw		r8,#BUFFER+4
 		call	ST3
-		br		RecvDispatch5
+		br		RecvDispatchXit
+
+		; Load program code
 RecvDispatch5:
+		cmp		r1,#MT_LOAD_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch6
+		lw		r1,rxBuf+2
+		lw		r2,rxBuf+4
+		sw		r1,[r2]
+		br		RecvDispatchXit
+
+		; Load program data
+RecvDispatch6:
+		cmp		r1,#MT_LOAD_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch7
+		lw		r1,rxBuf+2
+		lw		r2,rxBuf+4
+		sw		r1,[r2]
+		br		RecvDispatchXit
+		; Load program code
+
+		; Execute program
+RecvDispatch7:
+		cmp		r1,#MT_EXEC_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch8
+		lw		r1,rxBuf+MSG_SRC
+		add		sp,sp,#-2
+		sw		r1,[sp]
+		lw		r2,rxBuf+4
+		call	[r2]
+		lw		r2,[sp]
+		add		sp,sp,#2
+		call	zeroTxBuf
+		sw		r1,txBuf+2
+		sb		r2,txBuf+MSG_DST
+		lw		r1,#$11
+		sb		r1,txBuf+MSG_GDS
+		lw		r1,#MT_EXIT
+		sb		r1,txBuf+MSG_TYPE
+		call	Xmit
+		br		RecvDispatchXit
+
 RecvDispatchXit:
 		lw		lr,[sp]
 		lw		r1,2[sp]
@@ -169,10 +217,16 @@ RecvDispatchXit:
 ;============================================================================
 ;============================================================================
 
+;----------------------------------------------------------------------------
+; Initialize Ethernet controller.
+;----------------------------------------------------------------------------
+
 ethInit:
 		lw		r5,#ETHERNET
 		lw		r1,#20				; MII clock divider (2.5MHz from 50MHz)
 		sw		r1,ETH_MIIMODER[r5]	; 32 bit preamble
+
+		sw		r0,unique_id
 
 		; Set the MAC address
 		lw		r1,#$00FF
@@ -196,15 +250,41 @@ ethInit1:
 		lw		r1,#2				; read status
 		sb		r1,ETH_MIICOMMAND[r5]
 ethInit4:
-		lb		r1,ETH_MIISTATUS[r5]
-		and		r1,#2				; busy bit
-		bne		ethInit4
+		lw		r1,#4
+		lw		r2,#$101				; auto-neg. advertise 100MBs full duplex
+		call	ethWriteMII
 
-		sb		r0,ETH_MIIADDRESS+1[r5]	; select register #0 (BMCR)
-		lw		r1,#$2000				; select 100MBPs
-		sw		r1,ETH_MIITX_DATA[r5]
-		lw		r1,#4					; write control data
-		sb		r1,ETH_MIICOMMAND[r5]
+		lw		r1,#0					; perform software reset
+		lw		r2,#$8000
+		call	ethWriteMII
+
+		lw		r1,#4
+		lw		r2,#$101				; auto-neg. advertise 100MBs full duplex
+		call	ethWriteMII
+
+		lw		r1,#0					; select register #0 (BMCR)
+		lw		r2,#$2100				; select 100MBPs, full duplex
+		call	ethWriteMII
+
+		; For green ethernet
+		;
+		;	reg		data
+		;	31		$0003
+		;	25		$3247
+		;	16		$AC7C
+		;	31		$0000
+		lw		r1,#31
+		lw		r2,#3
+		call	ethWriteMII
+		lw		r1,#25
+		lw		r2,$3247
+		call	ethWriteMII
+		lw		r1,#16
+		lw		r2,#$AC7C
+		call	ethWriteMII
+		lw		r1,#31
+		lw		r2,#0
+		call	ethWriteMII
 
 		; setup receive buffer descriptor
 		lw		r1,#eth_rxbuf		; set buffer address
@@ -219,6 +299,39 @@ ethInit4:
 		sw		r1,ETH_MODER[r5]
 		ret
 
+;----------------------------------------------------------------------------
+; Write to an MII register.
+;
+; Parameters:
+;	r1 = register address
+;	r2 = data for register
+; Returns:
+;	<none>
+; Registers Affected:
+;	<none>
+;----------------------------------------------------------------------------
+
+ethWriteMII:
+		add		sp,sp,#-4
+		sw		r3,[sp]
+		sw		r5,2[sp]
+		lw		r5,#ETHERNET
+ethWriteMII1:
+		lb		r3,ETH_MIISTATUS[r5]
+		and		r3,#2				; busy bit
+		bne		ethWriteMII1
+		sb		r1,ETH_MIIADDRESS+1[r5]	; MII register number
+		sw		r2,ETH_MIITX_DATA[r5]
+		lw		r3,#4					; write control data
+		sb		r3,ETH_MIICOMMAND[r5]
+		lw		r3,[sp]
+		lw		r5,2[sp]
+		add		sp,sp,#4
+		ret
+
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
 ; Poll for ethernet packets and send them to node $11
 ;
 ethPoll:
@@ -311,10 +424,14 @@ ethPoll3:
 		add		sp,sp,#4
 		ret
 
+;----------------------------------------------------------------------------
+; Detect what type of packet is received.
+;----------------------------------------------------------------------------
+
 ethInterpretPacket:
 		mov		r2,r1
 		lw		r1,12[r2]
-		cmp		r1,#$0608				; 806 = ARP
+		cmp		r1,#$0608				; 806 = ARP (big endian words)
 		bne		ethInterpretPacket1
 		lw		r1,#2
 		ret
@@ -340,6 +457,10 @@ ethInterpretPacketUDP:
 ethInterpretPacketTCP:
 		lw		r1,#4
 		ret
+
+;----------------------------------------------------------------------------
+;
+;----------------------------------------------------------------------------
 
 ethSendPacket:
 ethSendPacket1:
@@ -369,6 +490,9 @@ ethSendPacket3:
 		and		r1,#1
 		beq		ethSendPacket3
 		ret
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
 
 ethBuildPacket:
 		mov		r4,r1

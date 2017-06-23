@@ -63,6 +63,7 @@ MSG_DST		equ	15
 MSG_SRC		equ	14
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
+MSG_GSD		equ	7
 
 		.code
 		cpu		Butterfly16
@@ -75,7 +76,7 @@ start:
 		lw		sp,#$1FFE
 		call	KeybdReset
 		sb		r0,HTInputFocus
-		lw		r1,#$11
+		lw		r1,#$111
 		sb		r1,HTInputFocus
 start1:
 noMsg1:
@@ -101,7 +102,14 @@ notC:
 		lb		r5,HTInputFocus		; any thread with input focus ?
 		beq		noKey
 		call	zeroTxBuf
-		sb		r5,txBuf+MSG_DST	; destination is input focus thread
+		mov		r2,r5
+		shr		r2,#1
+		shr		r2,#1
+		shr		r2,#1
+		shr		r2,#1
+		sb		r2,txBuf+MSG_DST	; destination is input focus thread
+		lw		r2,#$11				; grid numbers are hard coded for now
+		sb		r2,txBuf+MSG_GDS
 		sb		r1,txBuf			; store ascii char
 		sb		r1,txBuf+2
 		sb		r1,txBuf+4
@@ -151,18 +159,63 @@ RecvDispatch2:
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 		br		RecvDispatchXit
+
+		; Load program code
 RecvDispatch5:
+		cmp		r1,#MT_LOAD_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch6
+		lw		r1,rxBuf+2
+		lw		r2,rxBuf+4
+		sw		r1,[r2]
+		br		RecvDispatchXit
+
+		; Load program data
+RecvDispatch6:
+		cmp		r1,#MT_LOAD_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch7
+		lw		r1,rxBuf+2
+		lw		r2,rxBuf+4
+		sw		r1,[r2]
+		br		RecvDispatchXit
+		; Load program code
+
+		; Execute program
+RecvDispatch7:
+		cmp		r1,#MT_EXEC_CODE
+		br		RecvDispatchXit
+		bne		RecvDispatch8
+		lw		r1,rxBuf+MSG_SRC
+		add		sp,sp,#-2
+		sw		r1,[sp]
+		lw		r2,rxBuf+4
+		call	[r2]
+		lw		r2,[sp]
+		add		sp,sp,#2
+		call	zeroTxBuf
+		sw		r1,txBuf+2
+		sb		r2,txBuf+MSG_DST
+		lw		r1,#$11
+		sb		r1,txBuf+MSG_GDS
+		lw		r1,#MT_EXIT
+		sb		r1,txBuf+MSG_TYPE
+		call	Xmit
+		br		RecvDispatchXit
+
 		; Set input focus ?
 		; Check for request to set input focus
+RecvDispatch8:
 		cmp		r1,#MT_SET_INPUT_FOCUS
 		bne		RecvDispatch3
 		lb		r1,rxBuf
 		sb		HTInputFocus
 		bra		RecvDispatchXit
+
+		; Get button/switch status ?
 RecvDispatch3:
-		; Get button status ?
 		cmp		r1,#MT_BUTTON_STATUS
-		bne		RecvDispatch4
+		bne		RecvDispatch9
 		call	zeroTxBuf
 		lb		r1,rxBuf+MSG_SRC		; where did message come from
 		sb		r1,txBuf+MSG_DST		; send back to sender
@@ -174,7 +227,7 @@ RecvDispatch3:
 		sb		r1,txBuf+1
 		call	Xmit
 		bra		RecvDispatchXit
-RecvDispatch4:
+RecvDispatch9:
 		bra		RecvDispatchXit
 RecvDispatchXit:
 		lw		lr,[sp]

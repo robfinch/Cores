@@ -25,14 +25,13 @@
 //
 //=============================================================================
 
-module clkgen(xreset, xclk, rst, clk100, clk25, clk120, clk200, clk300, clk400, clk125, clk80, ub_sys_clk, sys_clk, dram_clk, locked, pulse1000Hz, pulse100Hz);
+module clkgen(xreset, xclk, rst, clk100, clk25, clk200, clk300, clk400, clk125, clk80, ub_sys_clk, sys_clk, dram_clk, locked, pulse1000Hz, pulse100Hz);
 parameter pClkFreq=20000000;
 input xreset;		// external reset
 input xclk;			// external clock source (100 MHz)
 output rst;
 output clk100;		// cpu (system clock - eg. 100.000 MHz)
 output clk25;
-output clk120;
 output clk200;
 output clk300;
 output clk400;
@@ -49,9 +48,9 @@ wire gnd;
 wire clk200u;
 wire clk300u;
 wire clk400u;
+wire clk1200u;
 wire clk2x;
 wire clk25u;
-wire clk120u;
 wire clk100u;		// unbuffered 50MHz
 wire clk80u;		// unbuffered 85MHz
 wire clk125u;
@@ -76,7 +75,6 @@ BUFG bg1 (.I(clk80u), .O(clk80) );
 BUFG bg5 (.I(isys_clk), .O(sys_clk) );
 BUFG bg6 (.I(clk200u), .O(dram_clk) );
 BUFG bg7 (.I(clk125u), .O(clk125b) );
-BUFG bg9 (.I(clk120u), .O(clk120) );
 assign ub_sys_clk = isys_clk;
 
 //BUFG bg5 (.I(ivclk10), .O(vclk10) );
@@ -142,13 +140,13 @@ end
 
 
 wire clkfb,clkfbo;
-BUFG clkbufg (.I(clkfbo), .O(clkfb));
+BUFG clkbufg (.I(clkfbo), .O(clk1200));
 
 PLLE2_BASE u1
 (
     .RST(xreset),
     .CLKIN1(xclk),
-    .CLKFBIN(clkfb),
+    .CLKFBIN(clk1200),
     .CLKFBOUT(clkfbo),
     .LOCKED(locked0),
     .CLKOUT0(clk80u),
@@ -156,7 +154,7 @@ PLLE2_BASE u1
     .CLKOUT2(clk200u),
     .CLKOUT3(clk25u),
     .CLKOUT4(clk400u),
-    .CLKOUT5(clk120u)
+    .CLKOUT5(clk100u)
 );
 defparam u1.CLKFBOUT_MULT = 12;     // must place VCO frequency 800-1600 MHz (1200)
 defparam u1.CLKOUT0_DIVIDE = 15;
@@ -164,7 +162,7 @@ defparam u1.CLKOUT1_DIVIDE = 21;
 defparam u1.CLKOUT2_DIVIDE = 6;
 defparam u1.CLKOUT3_DIVIDE = 48;
 defparam u1.CLKOUT4_DIVIDE = 3;
-defparam u1.CLKOUT5_DIVIDE = 9;
+defparam u1.CLKOUT5_DIVIDE = 12;
 defparam u1.CLKIN1_PERIOD = 10.000;
 
 

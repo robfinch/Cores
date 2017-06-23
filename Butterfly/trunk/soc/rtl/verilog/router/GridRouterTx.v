@@ -20,38 +20,40 @@
 //
 // ============================================================================
 //
-module GridRouterTx(rst, pclk, sclk, i, clk_p, clk_n, sero_p, sero_n);
+module GridRouterTx(rst, pclk, sclk, ig1, ig2, ig3, clk_p, clk_n, sero_p, sero_n);
 input rst;
 input pclk;         // parallel clock
 input sclk;         // serial clock
-input [26:0] i;
+input [5:0] ig1;
+input [5:0] ig2;
+input [5:0] ig3;
 output clk_p;
 output clk_n;
 output [2:0] sero_p;
 output [2:0] sero_n;
 parameter pIOStandard = "TMDS_33";
 
-wire [41:0] o;
+wire [7:0] o1, o2, o3;
 
 GridRouterGCREncoder u1
 (
     .clk(pclk),
-    .i(i[8:0]),
-    .o(o[13:0])
+    .i(ig1),
+    .o(o1)
 );
 
 GridRouterGCREncoder u2
 (
     .clk(pclk),
-    .i(i[17:9]),
-    .o(o[27:14])
+    .i(ig2),
+    .o(o2)
 );
 
 GridRouterGCREncoder u3
 (
     .clk(pclk),
-    .i(i[26:18]),
-    .o(o[41:28])
+    .i(ig3),
+    .o(o3)
 );
 
 GridRouterSerialOut #(pIOStandard) u4
@@ -59,7 +61,7 @@ GridRouterSerialOut #(pIOStandard) u4
     .rst(rst),
     .pclk(pclk),
     .sclk(sclk),
-    .dati(o[11:0]),
+    .dati(o1),
     .sero_p(sero_p[0]),
     .sero_n(sero_n[0])
 );
@@ -69,7 +71,7 @@ GridRouterSerialOut #(pIOStandard) u5
     .rst(rst),
     .pclk(pclk),
     .sclk(sclk),
-    .dati(o[23:12]),
+    .dati(o2),
     .sero_p(sero_p[1]),
     .sero_n(sero_n[1])
 );
@@ -79,7 +81,7 @@ GridRouterSerialOut #(pIOStandard) u6
     .rst(rst),
     .pclk(pclk),
     .sclk(sclk),
-    .dati(o[35:24]),
+    .dati(o3),
     .sero_p(sero_p[2]),
     .sero_n(sero_n[2])
 );

@@ -45,18 +45,18 @@ module routerRxBsZ(
 	output reg frame_err,		// framing error
 	output reg overrun,			// receiver overrun
 	// Fifo status
-	output [4:0] fifocnt,
+	output [5:0] fifocnt,
 	output fifofull
 );
 
-	// variables
-	reg [2:0] rxdd [0:3];	// synchronizer flops
-	reg [11:0] cnt;			// sample bit rate counter
-	reg [134:0] rx_data;	// working receive data register
-	wire [127:0] rx_data1;
-	reg state;				// state machine
-	reg wf;					// buffer write
-	wire [127:0] dat;
+// variables
+reg [2:0] rxdd [0:3];	// synchronizer flops
+reg [11:0] cnt;			// sample bit rate counter
+reg [134:0] rx_data;	// working receive data register
+wire [127:0] rx_data1;
+reg state;				// state machine
+reg wf;					// buffer write
+wire [127:0] dat;
 
 wire cs = cyc_i & stb_i & cs_i;
 reg rdy1,rdy2,rdy3;
@@ -70,8 +70,8 @@ always @(posedge clk_i)
 assign ack_o = cs;// ? rdy3 : 1'b0;
 assign dat_o = dat;
 
-wire necs;
-edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs & ~we_i), .pe(), .ne(necs), .ee() );
+wire pecs;
+edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs & ~we_i), .pe(pecs), .ne(), .ee() );
 
 routerFifo2 u1
 (
@@ -80,26 +80,12 @@ routerFifo2 u1
   .rst(rst_i),              // input wire srst
   .din(rx_data1),                // input wire [127 : 0] din
   .wr_en(wf),            // input wire wr_en
-  .rd_en(necs),            // input wire rd_en
+  .rd_en(pecs),            // input wire rd_en
   .dout(dat),              // output wire [127 : 0] dout
   .full(fifofull),         // output wire full
   .empty(),            // output wire empty
   .rd_data_count(fifocnt)  // output wire [4 : 0] data_count
 );
-/*
-routerFifo u1
-(
-    .wrst(rst_i),
-    .wclk(clk_i),
-    .wr(wf),
-    .di(rx_data[135:8]),
-    .rrst(rst_i),
-    .rclk(clk_i),
-    .rd(necs),
-    .dout(dat),
-    .cnt(fifocnt)
-);
-*/
 	// Three stage synchronizer to synchronize incoming data to
 	// the local clock (avoids metastability).
 	always @(posedge sclk) begin

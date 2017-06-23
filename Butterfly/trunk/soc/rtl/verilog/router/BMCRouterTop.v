@@ -40,7 +40,7 @@
 `define MSG_GDST    63:60
 `define MSG_GSRC    59:56
 
-module routerTop(X, Y, Z, rst_i, clk_i, sclk, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, rxdX, rxdY, rxdZ, txdX, txdY, txdZ);
+module BMCRouterTop(X, Y, Z, rst_i, clk_i, sclk, cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i, dat_o, rxdX, rxdY, rxdZ, txdX, txdY, txdZ);
 parameter HAS_ZROUTE = 0;
 parameter ZROUTE_COL = 4'd4;
 parameter ENABLE_ZROUTE = 1'b0;
@@ -56,8 +56,8 @@ input stb_i;
 output ack_o;
 input we_i;
 input [7:0] adr_i;
-input [7:0] dat_i;
-output reg [7:0] dat_o;
+input [135:0] dat_i;
+output reg [135:0] dat_o;
 input [3:0] rxdX;
 input [3:0] rxdY;
 input [4-HAS_ZROUTE:0] rxdZ; 
@@ -91,7 +91,8 @@ always @(posedge clk_i)
     rdy1 <= cs;
 assign ack_o = cs ? (we_i ? 1'b1 : rdy1) : 1'b0;
 
-reg rdf, wf, dpTx;
+wire rdf;
+reg wf, dpTx;
 reg [3:0] state;
 parameter IDLE  = 4'd0;
 parameter ACKRXX = 4'd1;
@@ -298,11 +299,12 @@ routerFifo ufifo
 */
 always @(posedge clk_i)
     casex(adr_i[4:0])
-    5'h0x:  dat_o <= fifoDato >> {adr_i[3:0],3'b0};
-    5'h10:  dat_o <= {fifofull,1'b0,fifocnt};
+    5'h00:  dat_o <= {fifofull,1'b0,fifocnt,fifoDato};
     5'h11:  dat_o <= {snoop,7'h0};
     5'h12:  dat_o <= dpTx;
     endcase
+
+edge_det(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs && !we_i && adr_i[4:0]==5'h0), .pe(rdf), .ne(), .ee() );
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -338,24 +340,14 @@ end
 else begin
 wf <= 1'b0;
 rdf <= 1'b0;
+    if (cs & ~we_i) begin
+        case(adr_i[4:0])
+        5'h0:   rdf <= 1'b1;
+        endcase
+    end
     if (cs & we_i) begin
         case(adr_i[4:0])
-        5'd0:   txBuf[7:0] <= dat_i;
-        5'd1:   txBuf[15:8] <= dat_i;
-        5'd2:   txBuf[23:16] <= dat_i;
-        5'd3:   txBuf[31:24] <= dat_i;
-        5'd4:   txBuf[39:32] <= dat_i;
-        5'd5:   txBuf[47:40] <= dat_i;
-        5'd6:   txBuf[55:48] <= dat_i;
-        5'd7:   txBuf[63:56] <= dat_i;
-        5'd8:   txBuf[71:64] <= dat_i;
-        5'd9:   txBuf[79:72] <= dat_i;
-        5'hA:   txBuf[87:80] <= dat_i;
-        5'hB:   txBuf[95:88] <= dat_i;
-        5'hC:   txBuf[103:96] <= dat_i;
-        5'hD:   txBuf[111:104] <= dat_i;
-        5'hE:   txBuf[119:112] <= dat_i;
-        5'hF:   txBuf[127:120] <= dat_i;
+        5'h0:   txBuf <= dat_i[127:0];
         5'h11:  begin
                 snoop <= dat_i[7];
                 rdf <= dat_i[6];
@@ -522,19 +514,6 @@ begin
             state <= TXGBL;
             if (rsttx)
                 dpTx <= 1'b0;
-        end
-        else if (buff[`MSG_DST]==8'hF1) begin
-            if (buff[`MSG_Y]!=Y)
-                txY(buff,rsttx);
-            else if (buff[`MSG_X]!=X)
-                txX(buff,rsttx);
-            else begin
-                wf <= 1'b1;
-                fifoDati <= buff;
-                state <= IDLE;
-                if (rsttx)
-                    dpTx <= 1'b0;
-            end
         end
         // Check for illegal message destination - ignore message
         else if (buff[`MSG_X]<4'h1 || buff[`MSG_X] > 4'h8 || buff[`MSG_Y]<4'h1 || buff[`MSG_Y] > 4'h7) begin

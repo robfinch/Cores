@@ -19,24 +19,32 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
 // Notes:
+//  The following factors are relied on to simplify the interface a lot.
+//  There is no requirement for phase alignment between channels because
+//  all the data for a particular channel is transferring along the same
+//  physical wire. If data for a given channel were distributed among
+//  the wires then channel bonding would be required.
 //  Channel bonding isn't required because the channels do not have to be
 //  synchronized with each other.
-//  The received data is feeding a UART
+//  The received data is feeding a UART which runs asynchronously with a
+//  4x clock.
 // ============================================================================
 //
-module GridRouterRx(rst, refclk, pclk, o, clk_p, clk_n, seri_p, seri_n);
+module GridRouterRx(rst, refclk, pclk, og1, og2, og3, clk_p, clk_n, seri_p, seri_n);
 input rst;
 input refclk;
 input pclk;
-output reg [26:0] o;
+output reg [5:0] og1;
+output reg [5:0] og2;
+output reg [5:0] og3;
 input clk_p;
 input clk_n;
 input [2:0] seri_p;
 input [2:0] seri_n;
 
 wire sclk;
-wire [41:0] i;
-wire [26:0] o1;
+wire [7:0] i1,i2,i3;
+wire [5:0] o1,o2,o3;
 wire [11:0] pclk2;
 
 GridRouterRxClocking u1
@@ -52,30 +60,31 @@ GridRouterRxClocking u1
 GridRouterGCRDecoder u2
 (
     .clk(pclk2),
-    .i(i[13:0]),
-    .o(o1[8:0])
+    .i(i1),
+    .o(o1)
 );
 
 GridRouterGCRDecoder u3
 (
     .clk(pclk2),
-    .i(i[27:14]),
-    .o(o1[17:9])
+    .i(i2),
+    .o(o2)
 );
 
 GridRouterGCRDecoder u4
 (
     .clk(pclk2),
-    .i(i[41:28]),
-    .o(o1[26:18])
+    .i(i3),
+    .o(o3)
 );
+
 
 GridRouterSerialIn u5
 (
     .rst(rst),
     .pclk(pclk2),
     .sclk(sclk),
-    .dato(i[13:0]),
+    .dato(i1),
     .seri_p(seri_p[0]),
     .seri_n(seri_n[0])
 );
@@ -85,7 +94,7 @@ GridRouterSerialIn u6
     .rst(rst),
     .pclk(pclk2),
     .sclk(sclk),
-    .dato(i[27:14]),
+    .dato(i2),
     .seri_p(seri_p[1]),
     .seri_n(seri_n[1])
 );
@@ -95,13 +104,17 @@ GridRouterSerialIn u7
     .rst(rst),
     .pclk(pclk2),
     .sclk(sclk),
-    .dato(i[41:28]),
+    .dato(i3),
     .seri_p(seri_p[2]),
     .seri_n(seri_n[2])
 );
 
 // Register the output onto the pclk domain.
 always @(posedge pclk)
-    o <= o1;
+    og1 <= o1;
+always @(posedge pclk)
+    og2 <= o2;
+always @(posedge pclk)
+    og3 <= o3;
 
 endmodule

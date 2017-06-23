@@ -45,7 +45,7 @@ module routerRxBs(
 	output reg frame_err,		// framing error
 	output reg overrun,			// receiver overrun
 	// Fifo status
-	output [4:0] fifocnt,
+	output [5:0] fifocnt,
 	output fifofull
 );
 
@@ -69,8 +69,8 @@ always @(posedge clk_i)
 assign ack_o = cs;// ? rdy3 : 1'b0;
 assign dat_o = dat;
 
-wire necs;
-edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs & ~we_i), .pe(), .ne(necs), .ee() );
+wire pecs;
+edge_det u2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs & ~we_i), .pe(pecs), .ne(), .ee() );
 
 routerFifo2 u1
 (
@@ -79,7 +79,7 @@ routerFifo2 u1
   .wr_clk(sclk),
   .din(rx_data[131:4]),                // input wire [127 : 0] din
   .wr_en(wf),            // input wire wr_en
-  .rd_en(necs),            // input wire rd_en
+  .rd_en(pecs),            // input wire rd_en
   .dout(dat),              // output wire [127 : 0] dout
   .full(fifofull),         // output wire full
   .empty(),            // output wire empty

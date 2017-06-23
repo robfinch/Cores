@@ -1,12 +1,41 @@
-
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+//	Verilog 1995
+//
+// ============================================================================
+//
 module ButterflySoC(cpu_resetn, xclk, btnl, btnr, btnc, btnd, btnu, led, sw,
     kclk, kd,
     TMDS_OUT_clk_n, TMDS_OUT_clk_p,
     TMDS_OUT_data_n, TMDS_OUT_data_p, 
 //    rs485_re_n, rs485_txd, rs485_rxd, rs485_de,
+    rtc_clk, rtc_data,
     TMDS_IN_clk_n, TMDS_IN_clk_p,
     TMDS_IN_data_n, TMDS_IN_data_p, 
     eth_mdio, eth_mdc, eth_rst_b, eth_rxclk, eth_rxd, eth_rxctl, eth_txclk, eth_txd, eth_txctl,
+    ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
+    ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
 );
 input cpu_resetn;
 input xclk;
@@ -30,6 +59,8 @@ input TMDS_IN_clk_n;
 input TMDS_IN_clk_p;
 input [2:0] TMDS_IN_data_n;
 input [2:0] TMDS_IN_data_p;
+inout tri rtc_clk;
+inout tri rtc_data;
 //output rs485_re_n;
 //output rs485_txd;
 //input rs485_rxd;
@@ -44,9 +75,25 @@ output eth_txclk;
 output [3:0] eth_txd;
 output eth_txctl;
 
+output [0:0] ddr3_ck_p;
+output [0:0] ddr3_ck_n;
+output [0:0] ddr3_cke;
+output ddr3_reset_n;
+output ddr3_ras_n;
+output ddr3_cas_n;
+output ddr3_we_n;
+output [2:0] ddr3_ba;
+output [14:0] ddr3_addr;
+inout [15:0] ddr3_dq;
+inout [1:0] ddr3_dqs_p;
+inout [1:0] ddr3_dqs_n;
+output [1:0] ddr3_dm;
+output [0:0] ddr3_odt;
+
 wire xreset = ~cpu_resetn;
 wire rst;
-wire clk, clk120, clk80, clk200, clk400;
+wire clk, clk100, clk80, clk200, clk400, clk1200;
+wire mem_ui_clk;
 wire hSync,vSync;
 wire blank,border;
 wire [7:0] red, green, blue;
@@ -54,6 +101,7 @@ wire [7:0] tc1_dato,tc2_dato;
 wire tc1_ack,tc2_ack;
 wire [23:0] tc1_rgb;
 wire [23:0] tc2_rgb;
+wire [23:0] b_rgb;
 wire eth_ack,eth_ramack;
 wire [7:0] eth_dato;
 wire [7:0] eth_ramdato;
@@ -67,18 +115,28 @@ wire [7:0] dato21;
 wire cyc31,stb31,we31;
 wire [15:0] adr31;
 wire [7:0] dato31;
+wire cyc41,stb41,we41;
+wire [15:0] adr41;
+wire [7:0] dato41;
 wire cyc42,stb42,we42;
 wire [15:0] adr42;
 wire [7:0] dato42;
+
+wire b_cyc;
+wire b_stb;
+wire b_ack;
+wire b_we;
+wire [31:0] b_adr;
+wire [127:0] b_dati;
+wire [127:0] b_dato;
 
 clkgen u2
 (
     .xreset(xreset),
     .xclk(xclk),
     .rst(rst),
-    .clk100(),
     .clk25(eth_txclk),
-    .clk120(clk120),
+    .clk100(clk100),
     .clk200(clk200),
     .clk300(),
     .clk400(clk400),
@@ -140,6 +198,7 @@ wire cs_leds2 = (adr42[15:4]==12'hB20) && cyc42 && stb42;
 wire cs_eth = adr31[15:12]==4'hA;
 wire cs_leds3 = (adr31[15:4]==12'hB20) && cyc31 && stb31;
 wire cs_ethram = adr31[15:14]==2'b01;   //$4000-$7FFF
+wire cs_i2c = adr41[15:4]==12'hB30;
 
 // -----------------------------------------------------------------------------
 // Buttons
@@ -176,6 +235,7 @@ always @(posedge clk)
 
 wire leds_ack = cs_leds;
 wire leds_ack2 = cs_leds2;
+wire leds_ack3 = cs_leds3;
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -223,9 +283,9 @@ TextController8 tc2
     .rgbIn(),
     .rgbOut(tc2_rgb)
 );
-assign red = sw[0] ? tc2_rgb[23:16] : tc1_rgb[23:16];
-assign green = sw[0] ? tc2_rgb[15:8] : tc1_rgb[15:8];
-assign blue = sw[0] ? tc2_rgb[7:0] : tc1_rgb[7:0];
+assign red = sw[1] ? b_rgb[23:16] : sw[0] ? tc2_rgb[23:16] : tc1_rgb[23:16];
+assign green = sw[1] ? b_rgb[15:8] : sw[0] ? tc2_rgb[15:8] : tc1_rgb[15:8];
+assign blue = sw[1] ? b_rgb[7:0] : sw[0] ? tc2_rgb[7:0] : tc1_rgb[7:0];
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -400,11 +460,81 @@ MII2RMIITx umii1
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
+wire i2c_scl_pado;
+wire i2c_scl_paden;
+wire i2c_sda_pado;
+wire i2c_sda_paden;
+wire i2c_ack;
+wire [7:0] i2c_dato;
+
+i2c_master_top ui2c1
+(
+	.wb_clk_i(clk),
+	.wb_rst_i(rst),
+	.arst_i(~rst), // signal is active low
+	.cs_i(cs_i2c),
+	.rdy_o(),
+	.wb_adr_i(adr41[3:0]),
+	.wb_dat_i(dato41),
+	.wb_dat_o(i2c_dato),
+	.wb_we_i(we41),
+	.wb_stb_i(stb41),
+	.wb_cyc_i(cyc41),
+	.wb_ack_o(i2c_ack),
+	.wb_inta_o(),
+	.scl_pad_i(rtc_clk),
+	.scl_pad_o(i2c_scl_pado),
+	.scl_padoen_o(i2c_scl_paden),
+	.sda_pad_i(rtc_data),
+	.sda_pad_o(i2c_sda_pado),
+	.sda_padoen_o(i2c_sda_paden)
+);
+
+assign rtc_clk = ~i2c_scl_paden ? i2c_scl_pado : 1'bz;
+assign rtc_data = ~i2c_sda_paden ? i2c_sda_pado : 1'bz;
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
+DDRcontrol uddr3
+(
+      .clk_200MHz_i(clk200),
+      .ui_clk(mem_ui_clk),
+      .rst_i(rst),
+      .cs_ram(b_cyc & b_stb),
+      .ram_a(b_adr[28:0]),
+      .ram_dq_i(b_dato),
+      .ram_dq_o(b_dati),
+      .ram_cen(!(b_cyc & b_stb)),
+      .ram_oen(b_we),
+      .ram_wen(~b_we),
+      .ram_bs(16'hFFFF),
+      .ram_ack(b_ack),
+      
+      .ddr3_addr(ddr3_addr),
+      .ddr3_ba(ddr3_ba),
+      .ddr3_ras_n(ddr3_ras_n),
+      .ddr3_cas_n(ddr3_cas_n),
+      .ddr3_reset_n(ddr3_reset_n),
+      .ddr3_we_n(ddr3_we_n),
+      .ddr3_ck_p(ddr3_ck_p),
+      .ddr3_ck_n(ddr3_ck_n),
+      .ddr3_cke(ddr3_cke),
+      .ddr3_dm(ddr3_dm),
+      .ddr3_odt(ddr3_odt),
+      .ddr3_dq(ddr3_dq),
+      .ddr3_dqs_p(ddr3_dqs_p),
+      .ddr3_dqs_n(ddr3_dqs_n)
+);
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+
 grid u1
 (
     .rst_i(rst),
     .clk_i(clk),
-    .clk133(clk120),
+    .clk100(clk100),
     .clk200(clk200),
     .clk400(clk400),
 
@@ -426,11 +556,19 @@ grid u1
 
     .cyc31(cyc31),
     .stb31(stb31),
-    .ack31(eth_ack|eth_ramack),
+    .ack31(eth_ack|eth_ramack|leds_ack3),
     .we31(we31),
     .adr31(adr31),
     .dati31(cs_ethram ? eth_ramdato : eth_dato),
     .dato31(dato31), 
+
+    .cyc41(cyc41),
+    .stb41(stb41),
+    .ack41(i2c_ack),
+    .we41(we41),
+    .adr41(adr41),
+    .dati41(i2c_dato),
+    .dato41(dato41), 
 
     .cyc42(cyc42),
     .stb42(stb42),
@@ -447,8 +585,22 @@ grid u1
     .gr_clko_p(),
     .gr_clko_n(),
     .gr_sero_p(),
-    .gr_sero_n()
-    
+    .gr_sero_n(),
+
+    .mem_ui_clk(mem_ui_clk),
+    .b_cyc(b_cyc),
+    .b_stb(b_stb),
+    .b_ack(b_ack),
+    .b_we(b_we),
+    .b_adr(b_adr),
+    .b_dati(b_dati),
+    .b_dato(b_dato),
+    .vclk(clk80),
+    .hsync(hSync),
+    .vsync(vSync),
+    .blank(blank),
+    .rgbo(b_rgb)
+
 //    .TMDS_OUT_clk_n(),
 //    .TMDS_OUT_clk_p(),
 //    .TMDS_OUT_data_n(),
