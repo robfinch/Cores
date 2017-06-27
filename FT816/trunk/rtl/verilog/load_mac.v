@@ -43,7 +43,8 @@ LOAD_MAC1:
 LOAD_MAC2:
 	if (rdy) begin
 		data_nack();
-		load_tsk(db);
+`include "load_tsk.v"
+//		load_tsk(db,b16);
 	end
 `ifdef SUPPORT_BERR
 	else if (err_i) begin
