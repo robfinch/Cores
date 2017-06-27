@@ -38,8 +38,8 @@ BYTE_CALC:
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	begin res8 <= b8; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS:	begin res8 <= x8 - b8; end
 		`CPY_IMM,`CPY_ZP,`CPY_ABS:	begin res8 <= y8 - b8; end
-		`TRB_ZP,`TRB_ABS:	begin res8 <= ~acc8 & b8; wdat <= ~acc8 & b8; state <= STORE1; data_nack(); end
-		`TSB_ZP,`TSB_ABS:	begin res8 <= acc8 | b8; wdat <= acc8 | b8; state <= STORE1; data_nack(); end
+		`TRB_ZP,`TRB_ABS:	begin res8 <= acc8 & b8; wdat <= ~acc8 & b8; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS:	begin res8 <= acc8 & b8; wdat <= acc8 | b8; state <= STORE1; data_nack(); end
 		`ASL_ZP,`ASL_ZPX,`ASL_ABS,`ASL_ABSX:	begin res8 <= {b8,1'b0}; wdat <= {b8[6:0],1'b0}; state <= STORE1; data_nack(); end
 		`ROL_ZP,`ROL_ZPX,`ROL_ABS,`ROL_ABSX:	begin res8 <= {b8,cf}; wdat <= {b8[6:0],cf}; state <= STORE1; data_nack(); end
 		`LSR_ZP,`LSR_ZPX,`LSR_ABS,`LSR_ABSX:	begin res8 <= {b8[0],1'b0,b8[7:1]}; wdat <= {1'b0,b8[7:1]}; state <= STORE1; data_nack(); end
