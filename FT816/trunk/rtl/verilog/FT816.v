@@ -2157,8 +2157,8 @@ HALF_CALC:
 		`EOR_IMM,`EOR_ZP,`EOR_ZPX,`EOR_IX,`EOR_IY,`EOR_IYL,`EOR_ABS,`EOR_ABSX,`EOR_ABSY,`EOR_AL,`EOR_ALX,`EOR_I,`EOR_IL,`EOR_DSP,`EOR_DSPIY:	begin res16 <= acc16 ^ b16; end
 		`LDA_IMM,`LDA_ZP,`LDA_ZPX,`LDA_IX,`LDA_IY,`LDA_IYL,`LDA_ABS,`LDA_ABSX,`LDA_ABSY,`LDA_AL,`LDA_ALX,`LDA_I,`LDA_IL,`LDA_DSP,`LDA_DSPIY:	begin res16 <= b16; end
 		`BIT_IMM,`BIT_ZP,`BIT_ZPX,`BIT_ABS,`BIT_ABSX:	begin res16 <= acc16 & b16; end
-		`TRB_ZP,`TRB_ABS:	begin res16 <= ~acc16 & b16; wdat <= ~acc16 & b16; state <= STORE1; data_nack(); end
-		`TSB_ZP,`TSB_ABS:	begin res16 <= acc16 | b16; wdat <= acc16 | b16; state <= STORE1; data_nack(); end
+		`TRB_ZP,`TRB_ABS:	begin res16 <= acc16 & b16; wdat <= ~acc16 & b16; state <= STORE1; data_nack(); end
+		`TSB_ZP,`TSB_ABS:	begin res16 <= acc16 & b16; wdat <= acc16 | b16; state <= STORE1; data_nack(); end
 		`LDX_IMM,`LDX_ZP,`LDX_ZPY,`LDX_ABS,`LDX_ABSY:	begin res16 <= b16; end
 		`LDY_IMM,`LDY_ZP,`LDY_ZPX,`LDY_ABS,`LDY_ABSX:	begin res16 <= b16; end
 		`CPX_IMM,`CPX_ZP,`CPX_ABS:	begin res16 <= x16 - b16; end
