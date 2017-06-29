@@ -1,4 +1,4 @@
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 1
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 1
 noc_boot21.a
 
                                         ; ============================================================================
@@ -23,72 +23,130 @@ noc_boot21.a
                                         ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
                                         ;                                    
                                         ;                                      
-                                        ; This boot rom for the input node $21.
+                                        ; This boot rom for the input node $211.
                                         ; ============================================================================
                                         ;
-     26 = 0D                            CR	= 13
-     27 = 0A                            LF	= 10
-     28 = 09                            CTRLH	equ		9
+     26 = 03                            nDCB	equ		3
+     27 = 0D                            CR	= 13
+     28 = 0A                            LF	= 10
+     29 = 08                            CTRLH	equ		8
                                         
-     30 = 12                            SC_LSHIFT	EQU		$12
-     31 = 59                            SC_RSHIFT	EQU		$59
-     32 = 00F0                          SC_KEYUP	EQU		$F0
-     33 = 00E0                          SC_EXTEND	EQU		$E0
-     34 = 14                            SC_CTRL		EQU		$14
-     35 = 11                            SC_ALT		EQU		$11
-     36 = 71                            SC_DEL		EQU		$71		; extend
-     37 = 58                            SC_LCTRL	EQU		$58
-     38 = 77                            SC_NUMLOCK	EQU		$77
-     39 = 7E                            SC_SCROLLLOCK	EQU	$7E
-     40 = 58                            SC_CAPSLOCK	EQU		$58
+     31 = 0D                            SC_TAB		EQU		$0D
+     32 = 12                            SC_LSHIFT	EQU		$12
+     33 = 59                            SC_RSHIFT	EQU		$59
+     34 = 00F0                          SC_KEYUP	EQU		$F0
+     35 = 00E0                          SC_EXTEND	EQU		$E0
+     36 = 14                            SC_CTRL		EQU		$14
+     37 = 11                            SC_ALT		EQU		$11
+     38 = 71                            SC_DEL		EQU		$71		; extend
+     39 = 58                            SC_LCTRL	EQU		$58
+     40 = 77                            SC_NUMLOCK	EQU		$77
+     41 = 7E                            SC_SCROLLLOCK	EQU	$7E
+     42 = 58                            SC_CAPSLOCK	EQU		$58
                                         
-     42 = 01                            MT_RST		equ		1
-     43 = 02                            MT_RST_ACK	equ		2
-     44 = 03                            MT_STOP		equ		3
-     45 = 04                            MT_KEYSTROKE			equ	4
-     46 = 05                            MT_SET_INPUT_FOCUS		equ	5
-     47 = 06                            MT_BUTTON_STATUS		equ	6
-     48 = 07                            MT_REQ_INP_FOCUS		equ	7
-     49 = 08                            MT_GRNT_INP_FOCUS		equ 8
-     50 = 09                            MT_PING					equ	9
-     51 = 0A                            MT_START_BASIC_LOAD		equ	10
-     52 = 0B                            MT_LOAD_BASIC_CHAR		equ	11
-     53 = 0C                            MT_RUN_BASIC_PROG		equ	12
-     54 = 0D                            MT_BASIC_EXIT			equ	13
-     55 = 0F                            MT_REQ_OUT_FOCUS		equ	15
-     56 = 10                            MT_GRNT_OUT_FOCUS		equ	16
-     57 = 11                            MT_OUT_CHAR				equ	17
-     58 = 12                            MT_PING_ACK				equ	18
-     59 = 13                            MT_ETH_PACKET			equ	19
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 2
+     44 = 01                            MT_RST		equ		1
+     45 = 02                            MT_RST_ACK	equ		2
+     46 = 03                            MT_STOP		equ		3
+     47 = 04                            MT_KEYSTROKE			equ	4
+     48 = 05                            MT_SET_IOFOCUS			equ	5
+     49 = 06                            MT_BUTTON_STATUS		equ	6
+     50 = 07                            MT_REQ_INP_FOCUS		equ	7
+     51 = 08                            MT_GRNT_INP_FOCUS		equ 8
+     52 = 09                            MT_PING					equ	9
+     53 = 0A                            MT_START_BASIC_LOAD		equ	10
+     54 = 0B                            MT_LOAD_BASIC_CHAR		equ	11
+     55 = 0C                            MT_RUN_BASIC_PROG		equ	12
+     56 = 0D                            MT_BASIC_EXIT			equ	13
+     57 = 0F                            MT_REQ_OUT_FOCUS		equ	15
+     58 = 10                            MT_GRNT_OUT_FOCUS		equ	16
+     59 = 11                            MT_OUT_CHAR				equ	17
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 2
 noc_boot21.a
-     60 = 14                            MT_GET_DATETIME			equ	20
-     61 = 15                            MT_SET_DATETIME			equ	21
-     62 = 16                            MT_DATETIME_ACK			equ	22
+     60 = 12                            MT_PING_ACK				equ	18
+     61 = 13                            MT_ETH_PACKET			equ	19
+     62 = 14                            MT_GET_DATETIME			equ	20
+     63 = 15                            MT_SET_DATETIME			equ	21
+     64 = 16                            MT_DATETIME_ACK			equ	22
+     65 = 17                            MT_LOAD_CODE			equ	23
+     66 = 18                            MT_LOAD_DATA			equ	24
+     67 = 19                            MT_EXEC_CODE			equ	25
+     68 = 1A                            MT_EXIT					equ	26
+     69 = 1B                            MT_RDRAM				equ	27
+     70 = 1C                            MT_WRRAM				equ	28
+     71 = 1D                            MT_SETPIXEL				equ	29
+     72 = 1E                            MT_GETPIXEL				equ	30
+     73 = 1F                            MT_SETADDR				equ	31
+     74 = 20                            MT_DATA					equ	32
+     75 = 21                            MT_NEXT_IOFOCUS			equ	33
+     76 = 22                            MT_GET_ROUTE			equ	34
+     77 = 23                            MT_GET_ROUTE_ACK		equ	35
+     78 = 24                            MT_ENUM_DEVICES			equ	36
+     79 = 25                            MT_ENUM_DEVICES1		equ	37
+     80 = 26                            MT_ENUM_DEVICES2		equ	38
+                                        
+                                        ; Device command opcodes
+                                        ;
+     84 = 40                            DVC_Nop				EQU		64
+     85 = 41                            DVC_Setup			EQU		65
+     86 = 42                            DVC_Initialize		EQU		66
+     87 = 43                            DVC_Status			EQU		67
+     88 = 44                            DVC_MediaCheck		EQU		68
+     89 = 45                            DVC_BuildBPB		EQU		69
+     90 = 46                            DVC_Open			EQU		70
+     91 = 47                            DVC_Close			EQU		71
+     92 = 48                            DVC_GetChar			EQU		72
+     93 = 49                            DVC_PeekChar		EQU		73
+     94 = 4A                            DVC_GetCharDirect	EQU		74
+     95 = 4B                            DVC_PeekCharDirect	EQU		75
+     96 = 4C                            DVC_InputStatus		EQU		76
+     97 = 4D                            DVC_PutChar			EQU		77
+     98 = 4E                            DVC_SetPosition		EQU		78
+     99 = 4F                            DVC_ReadBlock		EQU		79
+    100 = 50                            DVC_WriteBlock		EQU		80
+    101 = 51                            DVC_VerifyBlock		EQU		81
+    102 = 52                            DVC_OutputStatus	EQU		82
+    103 = 53                            DVC_FlushInput		EQU		83
+    104 = 54                            DVC_FlushOutput		EQU		84
+    105 = 55                            DVC_IRQ				EQU		85
+    106 = 56                            DVC_IsRemoveable	EQU		86
+    107 = 57                            DVC_IOCTRL_READ		EQU		87
+    108 = 58                            DVC_IOCTRL_WRITE	EQU		88
+    109 = 59                            DVC_OutputUntilBusy	EQU		89
+                                        ; message types	90 to 95 reserved
+                                        
+                                        
                                         			bss
                                         			org		15
-     66 0000000F                        HTInputFocus	db	0
-     67 00000010                        KeyState1		db	0
-     68 00000011                        KeyState2		db	0
-     69 00000012                         			align	16
-     70 00000020                        txBuf	fill.b	16,0
-     71 00000030                        rxBuf	fill.b	16,0
+    116 0000000F                        HTInputFocus	dw	0
+    117 00000013                        KeyState1		db	0
+    118 00000014                        KeyState2		db	0
+    119 00000015                         			align	16
+    120 00000020                        txBuf	fill.b	16,0
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 3
+noc_boot21.a
+    121 00000030                        rxBuf	fill.b	16,0
                                         
-     72 = 000000000000B000                              ROUTER		equ	$B000
-     73 = 10                            RTR_RXSTAT	equ	$10
-     74 = 12                            RTR_TXSTAT	equ	$12
-     75 = 00                            ROUTER_TRB	equ	0
+                                        		org		$40
+                                        		align	2
+    125 00000040                        NodeDCB		fill.b	DCB_Size,0
+    126 00000080                        KbdDCB		fill.b	DCB_Size,0
+    127 00000100                        BtnsDCB		fill.b	DCB_Size,0
                                         
-     77 = 000000000000B200                              BTNS		equ	$B200
-     78 = 000000000000B210                              KBD			equ	$B210
-     79 = 01                            KBD_STAT	equ	1
-     80 = 000000000000B220                              SWITCHES	equ	$B220
+    128 = 000000000000B000                              ROUTER		equ	$B000
+    129 = 10                            RTR_RXSTAT	equ	$10
+    130 = 11                            RTR_RXCTL	equ $11
+    131 = 12                            RTR_TXSTAT	equ	$12
+    132 = 00                            ROUTER_TRB	equ	0
                                         
-     82 = 0F                            MSG_DST		equ	15
-     83 = 0E                            MSG_SRC		equ	14
-     84 = 09                            MSG_TTL		equ	9
-     85 = 08                            MSG_TYPE	equ	8
-     86 = 07                            MSG_GSD		equ	7
+    134 = 000000000000B200                              BTNS		equ	$B200
+    135 = 000000000000B210                              KBD			equ	$B210
+    136 = 01                            KBD_STAT	equ	1
+    137 = 000000000000B220                              SWITCHES	equ	$B220
+                                        
+    139 = 0E                            MSG_DST		equ	14
+    140 = 0C                            MSG_SRC		equ	12
+    141 = 09                            MSG_TTL		equ	9
+    142 = 08                            MSG_TYPE	equ	8
                                         
                                         		.code
                                         		cpu		Butterfly16
@@ -122,58 +180,43 @@ noc_boot21.a
                                         ;----------------------------------------------------------------------------
                                         ; Zero out the transmit buffer.
                                         ; Used before building transmit buffer.
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 3
-noc_boot21.a
                                         ; Automatically inserts a time-to-live of 63, and the source id.
                                         ;
                                         ; Parameters:
                                         ;	<none>
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 4
+noc_boot21.a
                                         ; Returns:
                                         ;	<none>
                                         ; Registers Affected:
                                         ;	<none>
                                         ;----------------------------------------------------------------------------
                                         
-    131 0000E000                        zeroTxBuf:
-    132 0000E000 FE 6E                   		add		sp,sp,#-2
-    133 0000E002 E0 D2                   		sw		r2,[sp]
-    134 0000E004 00 40 0F 12             		lw		r2,#15
-    135 0000E008                        zeroTxBuf1:
-    136 0000E008 02 40 20 C0             		sb		r0,txBuf[r2]
-    137 0000E00C FF 62                   		sub		r2,r2,#1
-    138 0000E00E FC BB                   		bpl		zeroTxBuf1
-    139 0000E010 03 40 0F 12             		lw		r2,#63
-    140 0000E014 02 40 09 C2             		sb		r2,txBuf+MSG_TTL
-    141 0000E018 E4 32                   		tsr		r2,ID
-    142 0000E01A A1 32                   		shr		r2,#1
-    143 0000E01C A1 32                   		shr		r2,#1
-    144 0000E01E A1 32                   		shr		r2,#1
-    145 0000E020 A1 32                   		shr		r2,#1
-    146 0000E022 02 40 0E C2             		sb		r2,txBuf+MSG_SRC	; X+Y
-    147 0000E026 E4 32                   		tsr		r2,ID
-    148 0000E028 00 40 5F 32             		and		r2,#$F
-    149 0000E02C 04 4E 0C C2             		sb		r2,txBuf+MSG_GDS	; and Z
-    150 0000E030 E0 F2                   		lw		r2,[sp]
-    151 0000E032 02 6E                   		add		sp,sp,#2
-    152 0000E034 F0 80                   		ret
+    187 0000E000                        zeroTxBuf:
+    188 0000E000 FE 6E                   		add		sp,sp,#-2
+    189 0000E002 E0 D2                   		sw		r2,[sp]
+    190 0000E004 00 40 0F 12             		lw		r2,#15
+    191 0000E008                        zeroTxBuf1:
+    192 0000E008 02 40 20 C0             		sb		r0,txBuf[r2]
+    193 0000E00C FF 62                   		sub		r2,r2,#1
+    194 0000E00E FC BB                   		bpl		zeroTxBuf1
+    195 0000E010 03 40 0F 12             		lw		r2,#63
+    196 0000E014 02 40 09 C2             		sb		r2,txBuf+MSG_TTL
+    197 0000E018 E4 32                   		tsr		r2,ID
+    198 0000E01A 02 40 0C D2             		sw		r2,txBuf+MSG_SRC	; X+Y
+    199 0000E01E E0 F2                   		lw		r2,[sp]
+    200 0000E020 02 6E                   		add		sp,sp,#2
+    201 0000E022 F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Set the destination address field in the transmit buffer based on the
                                         ; source address in the receive buffer.
                                         ;----------------------------------------------------------------------------
                                         
-    159 0000E036                        SetDestFromRx:
-    160 0000E036 03 40 0E E1             		lb		r1,rxBuf+MSG_SRC
-    161 0000E03A 02 40 0F C1             		sb		r1,txBuf+MSG_DST
-    162 0000E03E 06 4E 0E E1             		lb		r1,rxBuf+MSG_GDS
-    163 0000E042 06 4E 02 E2             		lb		r2,txBuf+MSG_GDS
-    164 0000E046 81 31                   		shl		r1,#1
-    165 0000E048 81 31                   		shl		r1,#1
-    166 0000E04A 81 31                   		shl		r1,#1
-    167 0000E04C 81 31                   		shl		r1,#1
-    168 0000E04E 26 21                   		or		r1,r2
-    169 0000E050 07 4E 00 C1             		sb		r1,txBuf+MSG_GDS
-    170 0000E054 F0 80                   		ret
+    208 0000E024                        SetDestFromRx:
+    209 0000E024 03 40 0C F1             		lw		r1,rxBuf+MSG_SRC
+    210 0000E028 02 40 0E D1             		sw		r1,txBuf+MSG_DST
+    211 0000E02C F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Transmit on the network.
@@ -184,33 +227,43 @@ noc_boot21.a
                                         ; Parameters:
                                         ;	<none>
                                         ; Returns:
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 4
-noc_boot21.a
                                         ;	<none>
                                         ; Registers Affected:
                                         ;	<none>
                                         ;----------------------------------------------------------------------------
                                         
-    186 0000E056 FC 6E                  Xmit:	
-    187 0000E058 E0 D1                   		sw		r1,[sp]
-    188 0000E05A E2 D2                   		sw		r2,2[sp]
+    227 0000E02E FA 6E                  Xmit:	
+    228 0000E030 E0 D1                   		sw		r1,[sp]
+    229 0000E032 E2 D2                   		sw		r2,2[sp]
+    230 0000E034 E4 D3                   		sw		r3,4[sp]
                                         		; wait for transmit buffer to empty
-    190 0000E05C                        Xmit2:
-    191 0000E05C 01 4B 02 E1             		lb		r1,ROUTER+RTR_TXSTAT
-    192 0000E060 FD B9                   		bne		Xmit2
-    193 0000E062 00 40 0F 12             		lw		r2,#15
-    194 0000E066                        Xmit1:
-    195 0000E066 02 40 20 E1             		lb		r1,txBuf[r2]
-    196 0000E06A 00 4B 20 C1             		sb		r1,ROUTER[r2]
-    197 0000E06E FF 62                   		add		r2,r2,#-1
-    198 0000E070 FA BB                   		bpl		Xmit1
-                                        		; trigger a transmit
-    200 0000E072 01 11                   		lw		r1,#1
-    201 0000E074 01 4B 02 C2             		sb		r2,ROUTER+RTR_TXSTAT
-    202 0000E078 E2 F2                   		lw		r2,2[sp]
-    203 0000E07A E0 F1                   		lw		r1,[sp]
-    204 0000E07C 04 6E                   		add		sp,sp,#4
-    205 0000E07E F0 80                   		ret
+                                        		; If transmit buffer empty signal times out, transmit anyway
+                                        		; @100Mb/s 128 bits should transmit in only about 128 clock cycles.
+    234 0000E036 00 13                   		lw		r3,#0
+    235 0000E038                        Xmit2:
+    236 0000E038 01 63                   		add		r3,r3,#1
+    237 0000E03A FC 4F 3E 10             		cmp		r3,#50
+    238 0000E03E 20 00                   		nop
+    239 0000E040 06 A7                   		bgtu	Xmit1
+    240 0000E042 01 4B 02 E1             		lb		r1,ROUTER+RTR_TXSTAT
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 5
+noc_boot21.a
+    241 0000E046 20 00                   		nop
+    242 0000E048 F7 B9                   		bne		Xmit2
+    243 0000E04A 00 40 0F 12             		lw		r2,#15
+    244 0000E04E                        Xmit1:
+    245 0000E04E 02 40 20 E1             		lb		r1,txBuf[r2]
+    246 0000E052 00 4B 20 C1             		sb		r1,ROUTER[r2]
+    247 0000E056 FF 62                   		add		r2,r2,#-1
+    248 0000E058 20 00                   		nop
+    249 0000E05A F9 BB                   		bpl		Xmit1
+                                        		; trigger a transmit, writing any value will set the transmitter busy bit
+    251 0000E05C 01 4B 02 C0             		sb		r0,ROUTER+RTR_TXSTAT
+    252 0000E060 E0 F1                   		lw		r1,[sp]
+    253 0000E062 E2 F2                   		lw		r2,2[sp]
+    254 0000E064 E4 F3                   		lw		r3,4[sp]
+    255 0000E066 06 6E                   		add		sp,sp,#6
+    256 0000E068 F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; Receive from network.
@@ -228,150 +281,438 @@ noc_boot21.a
                                         ;	<none>
                                         ;----------------------------------------------------------------------------
                                         
-    223 0000E080                        Recv:
-    224 0000E080 FC 6E                   		add		sp,sp,#-4
-    225 0000E082 E0 D1                   		sw		r1,[sp]
-    226 0000E084 E2 D2                   		sw		r2,2[sp]
-    227 0000E086 00 40 0F 12             		lw		r2,#15
-    228 0000E08A                        Recv1:
-    229 0000E08A 00 4B 20 E1             		lb		r1,ROUTER[r2]			; copy message to local buffer
-    230 0000E08E 03 40 20 C1             		sb		r1,rxBuf[r2]
-    231 0000E092 FF 62                   		add		r2,r2,#-1
-    232 0000E094 FA BB                   		bpl		Recv1
-    233 0000E096 01 4B 00 E1             		lb		r1,ROUTER+RTR_RXSTAT
-    234 0000E09A 04 40 60 31             		or		r1,#$40
-    235 0000E09E 01 4B 00 C1             		sb		r1,ROUTER+RTR_RXSTAT	; pop the rx fifo
-    236 0000E0A2 E0 F1                   		lw		r1,[sp]
-    237 0000E0A4 E2 F2                   		lw		r2,2[sp]
-    238 0000E0A6 04 6E                   		add		sp,sp,#4
-    239 0000E0A8 F0 80                   		ret
+    274 0000E06A                        Recv:
+    275 0000E06A FC 6E                   		add		sp,sp,#-4
+    276 0000E06C E0 D1                   		sw		r1,[sp]
+    277 0000E06E E2 D2                   		sw		r2,2[sp]
+                                        		; Pop the rx fifo.
+                                        		; This bit $40 should automatically clear so we don't need to
+                                        		; set it back to zero.
+    281 0000E070 01 4B 01 E1             		lb		r1,ROUTER+RTR_RXCTL
+    282 0000E074 04 40 60 31             		or		r1,#$40
+    283 0000E078 01 4B 01 C1             		sb		r1,ROUTER+RTR_RXCTL
+    284 0000E07C 0B 40 5F 31             		and		r1,#$BF
+    285 0000E080 01 4B 01 C1             		sb		r1,ROUTER+RTR_RXCTL
+    286 0000E084 00 40 0F 12             		lw		r2,#15
+    287 0000E088                        Recv1:
+    288 0000E088 00 4B 20 E1             		lb		r1,ROUTER[r2]			; copy message to local buffer
+    289 0000E08C 03 40 20 C1             		sb		r1,rxBuf[r2]
+    290 0000E090 FF 62                   		add		r2,r2,#-1
+    291 0000E092 FA BB                   		bpl		Recv1
+    292 0000E094 E0 F1                   		lw		r1,[sp]
+    293 0000E096 E2 F2                   		lw		r2,2[sp]
+    294 0000E098 04 6E                   		add		sp,sp,#4
+    295 0000E09A F0 80                   		ret
                                         
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 5
+                                        ;----------------------------------------------------------------------------
+                                        ; Handler for the ping function. A pink acknowledge message is sent back
+                                        ; to the sender.
+                                        ;
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 6
 noc_boot21.a
-                                        ;#include "tb.asm"
+                                        ; Parameters:
+                                        ;	<none>
+                                        ; Returns:
+                                        ;	<none>
+                                        ; Registers Affected:
+                                        ;	<none>
+                                        ;----------------------------------------------------------------------------
+                                        
+    309 0000E09C                        PingHandler:
+    310 0000E09C FC 6E                   		add		sp,sp,#-4
+    311 0000E09E E0 DF                   		sw		lr,[sp]
+    312 0000E0A0 E2 D1                   		sw		r1,2[sp]
+    313 0000E0A2 AE BF                   		call	zeroTxBuf
+    314 0000E0A4 BF BF                   		call	SetDestFromRx
+    315 0000E0A6 01 40 02 11             		lw		r1,#MT_PING_ACK
+    316 0000E0AA 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+    317 0000E0AE BF BF                   		call	Xmit
+    318 0000E0B0 E0 FF                   		lw		lr,[sp]
+    319 0000E0B2 E2 F1                   		lw		r1,2[sp]
+    320 0000E0B4 04 6E                   		add		sp,sp,#4
+    321 0000E0B6 F0 80                   		ret
+                                        ;----------------------------------------------------------------------------
+                                        ; Dispatch routine for received messages.
+                                        ; A reset message is processed here, not counting on the DCB to be setup
+                                        ; correctly. Otherwise all other messages are passed to the command processor
+                                        ; for the intended device.
+                                        ;----------------------------------------------------------------------------
+                                        
+    329 0000E0B8                        RecvDispatch:
+    330 0000E0B8 F8 6E                   		add		sp,sp,#-8
+    331 0000E0BA E0 DF                   		sw		lr,[sp]
+    332 0000E0BC E2 D1                   		sw		r1,2[sp]
+    333 0000E0BE E4 D2                   		sw		r2,4[sp]
+    334 0000E0C0 E6 D3                   		sw		r3,6[sp]
+    335 0000E0C2 E4 31                   		tsr		r1,ID
+    336 0000E0C4 EE 4F 1F 10             		cmp		r1,#$111
+    337 0000E0C8 10 A8                   		beq		RecvDispatch2
+    338 0000E0CA 03 40 08 E1             		lb		r1,rxBuf+MSG_TYPE
+    339 0000E0CE 1F 10                   		cmp		r1,#MT_RST			; reset message ?
+    340 0000E0D0 0C A9                   		bne		RecvDispatch2
+    341 0000E0D2 13 40 01 AF             		call	ResetNode
+                                        		; Send back a reset ACK message to indicate node is good to go.
+    343 0000E0D6 94 BF                   		call	zeroTxBuf
+    344 0000E0D8 11 40 01 11             		lw		r1,#$111
+    345 0000E0DC 02 40 0E D1             		sw		r1,txBuf+MSG_DST
+    346 0000E0E0 02 11                   		lw		r1,#MT_RST_ACK
+    347 0000E0E2 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+    348 0000E0E6 A3 BF                   		call	Xmit
+    349 0000E0E8 1C AE                   		br		RecvDispatchXit
+    350 0000E0EA                        RecvDispatch2:
+    351 0000E0EA 03 40 0E F1             		lw		r1,rxBuf+MSG_DST
+    352 0000E0EE FF 40 5F 31             		and		r1,#$FFF
+    353 0000E0F2 E4 32                   		tsr		r2,ID
+    354 0000E0F4 1D 22                   		cmp		r2,r1
+    355 0000E0F6 15 A9                   		bne		RecvDispatchXit
+    356 0000E0F8 03 40 0E F2             		lw		r2,rxBuf+MSG_DST
+    357 0000E0FC 91 32                   		rol		r2,#1		; Get the 'D' nybble into r2
+    358 0000E0FE 91 32                   		rol		r2,#1
+    359 0000E100 91 32                   		rol		r2,#1
+    360 0000E102 91 32                   		rol		r2,#1
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 7
+noc_boot21.a
+    361 0000E104 00 40 5F 32             		and		r2,#$0F		; max 15 devices
+    362 0000E108 81 32                   		shl		r2,#1		; multiply by 48 (size of DCB)
+    363 0000E10A 81 32                   		shl		r2,#1
+    364 0000E10C 81 32                   		shl		r2,#1
+    365 0000E10E 81 32                   		shl		r2,#1
+    366 0000E110 20 13                   		mov		r3,r2
+    367 0000E112 81 32                   		shl		r2,#1
+    368 0000E114 30 22                   		add		r2,r3
+    369 0000E116 40 62                   		add		r2,r2,#NodeDCB
+    370 0000E118 11 4E 28 F2             		lw		r2,DCB_pCmdProc[r2]
+    371 0000E11C 03 40 08 E1             		lb		r1,rxBuf+MSG_TYPE
+    372 0000E120 20 8F                   		call	[r2]
+    373 0000E122                        RecvDispatchXit:
+    374 0000E122 E0 FF                   		lw		lr,[sp]
+    375 0000E124 E2 F1                   		lw		r1,2[sp]
+    376 0000E126 E4 F2                   		lw		r2,4[sp]
+    377 0000E128 E6 F3                   		lw		r3,6[sp]
+    378 0000E12A 08 6E                   		add		sp,sp,#8
+    379 0000E12C F0 80                   		ret
+                                        
+                                        ;----------------------------------------------------------------------------
+                                        ; Message command processor for node.
+                                        ;
+                                        ; Executes different message handlers based on the message type.
+                                        ;----------------------------------------------------------------------------
+                                        
+    387 0000E12E                        StdMsgHandlers:
+    388 0000E12E F8 6E                   		add		sp,sp,#-8
+    389 0000E130 E0 DF                   		sw		lr,[sp]
+    390 0000E132 E4 D2                   		sw		r2,4[sp]
+    391 0000E134 E6 D3                   		sw		r3,6[sp]
+                                        
+    393 0000E136 03 40 08 E1             		lb		r1,rxBuf+MSG_TYPE
+                                        
+                                        		; Process PING request
+    396 0000E13A FF 4F 17 10             		cmp		r1,#MT_PING
+    397 0000E13E 03 A9                   		bne		StdMsgHandlers1
+    398 0000E140 AD BF                   		call	PingHandler
+    399 0000E142 01 11                   		lw		r1,#1
+    400 0000E144 68 AE                   		br		StdMsgHandlersXit
+                                        
+    402 0000E146                        StdMsgHandlers1:
+    403 0000E146 FF 4F 16 10             		cmp		r1,#MT_START_BASIC_LOAD	; start BASIC load
+    404 0000E14A 07 A9                   		bne		StdMsgHandlers2
+    405 0000E14C 03 40 0C F1             		lw		r1,rxBuf+MSG_SRC
+    406 0000E150 FF BF                   		call	INITTBW
+    407 0000E152 15 4E 02 F8             		lw		r8,TXTBGN			; r8 = text begin
+    408 0000E156 01 11                   		lw		r1,#1
+    409 0000E158 5E AE                   		br		StdMsgHandlersXit
+                                        
+    411 0000E15A                        StdMsgHandlers2:
+    412 0000E15A FF 4F 15 10             		cmp		r1,#MT_LOAD_BASIC_CHAR	; load BASIC program char
+    413 0000E15E 0E A9                   		bne		StdMsgHandlers4
+    414 0000E160 03 40 00 F1             		lw		r1,rxBuf
+    415 0000E164 80 D1                   		sw		r1,[r8]
+    416 0000E166 03 40 02 F1             		lw		r1,rxBuf+2
+    417 0000E16A 82 D1                   		sw		r1,2[r8]
+    418 0000E16C 03 40 04 F1             		lw		r1,rxBuf+4
+    419 0000E170 84 D1                   		sw		r1,4[r8]
+    420 0000E172 06 68                   		add		r8,r8,#6
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 8
+noc_boot21.a
+    421 0000E174 17 4E 04 D8             		sw		r8,TXTUNF
+    422 0000E178 01 11                   		lw		r1,#1
+    423 0000E17A 4D AE                   		br		StdMsgHandlersXit
+                                        
+                                        		; Run a BASIC program by stuffing a 'RUN' command into the BASIC
+                                        		; buffer.
+    427 0000E17C                        StdMsgHandlers4:
+    428 0000E17C FF 4F 14 10             		cmp		r1,#MT_RUN_BASIC_PROG
+    429 0000E180 17 A9                   		bne		StdMsgHandlers5
+    430 0000E182 05 40 02 11             		lw		r1,#'R'
+    431 0000E186 18 4E 06 C1             		sb		r1,BUFFER
+    432 0000E18A 05 40 05 11             		lw		r1,#'U'
+    433 0000E18E 18 4E 0F C1             		sb		r1,BUFFER+1
+    434 0000E192 04 40 0E 11             		lw		r1,#'N'
+    435 0000E196 19 4E 08 C1             		sb		r1,BUFFER+2
+    436 0000E19A 00 40 0D 11             		lw		r1,#13
+    437 0000E19E 1A 4E 01 C1             		sb		r1,BUFFER+3
+    438 0000E1A2 1A 4E 06 C0             		sb		r0,BUFFER+4
+    439 0000E1A6 1A 4E 0A 18             		lw		r8,#BUFFER+4
+    440 0000E1AA FF BF                   		call	ST3
+    441 0000E1AC 01 11                   		lw		r1,#1
+    442 0000E1AE 33 AE                   		br		StdMsgHandlersXit
+                                        
+                                        		; Load program code
+    445 0000E1B0                        StdMsgHandlers5:
+    446 0000E1B0 FE 4F 19 10             		cmp		r1,#MT_LOAD_CODE
+    447 0000E1B4 07 A9                   		bne		StdMsgHandlers6
+    448 0000E1B6 03 40 02 F1             		lw		r1,rxBuf+2
+    449 0000E1BA 03 40 04 F2             		lw		r2,rxBuf+4
+    450 0000E1BE 20 D1                   		sw		r1,[r2]
+    451 0000E1C0 01 11                   		lw		r1,#1
+    452 0000E1C2 29 AE                   		br		StdMsgHandlersXit
+                                        
+                                        		; Load program data
+    455 0000E1C4                        StdMsgHandlers6:
+    456 0000E1C4 FE 4F 18 10             		cmp		r1,#MT_LOAD_DATA
+    457 0000E1C8 07 A9                   		bne		StdMsgHandlers7
+    458 0000E1CA 03 40 02 F1             		lw		r1,rxBuf+2
+    459 0000E1CE 03 40 04 F2             		lw		r2,rxBuf+4
+    460 0000E1D2 20 D1                   		sw		r1,[r2]
+    461 0000E1D4 01 11                   		lw		r1,#1
+    462 0000E1D6 1F AE                   		br		StdMsgHandlersXit
+                                        		; Load program code
+                                        
+                                        		; Execute program
+    466 0000E1D8                        StdMsgHandlers7:
+    467 0000E1D8 FE 4F 17 10             		cmp		r1,#MT_EXEC_CODE
+    468 0000E1DC 15 A9                   		bne		StdMsgHandlers8
+    469 0000E1DE 03 40 0C F1             		lw		r1,rxBuf+MSG_SRC
+    470 0000E1E2 FE 6E                   		add		sp,sp,#-2
+    471 0000E1E4 E0 D1                   		sw		r1,[sp]
+    472 0000E1E6 03 40 04 F2             		lw		r2,rxBuf+4
+    473 0000E1EA 20 8F                   		call	[r2]
+    474 0000E1EC E0 F2                   		lw		r2,[sp]
+    475 0000E1EE 02 6E                   		add		sp,sp,#2
+    476 0000E1F0 07 BF                   		call	zeroTxBuf
+    477 0000E1F2 02 40 02 D1             		sw		r1,txBuf+2
+    478 0000E1F6 02 40 0E D2             		sw		r2,txBuf+MSG_DST
+    479 0000E1FA 01 40 0A 11             		lw		r1,#MT_EXIT
+    480 0000E1FE 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 9
+noc_boot21.a
+    481 0000E202 15 BF                   		call	Xmit
+    482 0000E204 01 11                   		lw		r1,#1
+    483 0000E206 07 AE                   		br		StdMsgHandlersXit
+                                        
+                                        		; Enumerate the devices in the node. Provide a list back
+                                        		; to node $111.
+    487 0000E208                        StdMsgHandlers8:
+    488 0000E208 FD 4F 1C 10             		cmp		r1,#MT_ENUM_DEVICES
+    489 0000E20C 03 A9                   		bne		StdMsgHandlers12
+    490 0000E20E 09 AF                   		call	EnumDevices
+    491 0000E210 01 11                   		lw		r1,#1
+    492 0000E212 01 AE                   		br		StdMsgHandlersXit
+                                        
+    494 0000E214                        StdMsgHandlers12:
+    495 0000E214 00 11                   		lw		r1,#0
+    496 0000E216                        StdMsgHandlersXit:
+    497 0000E216 E0 FF                   		lw		lr,[sp]
+    498 0000E218 E4 F2                   		lw		r2,4[sp]
+    499 0000E21A E6 F3                   		lw		r3,6[sp]
+    500 0000E21C 08 6E                   		add		sp,sp,#8
+    501 0000E21E 16 21                   		or		r1,r1
+    502 0000E220 F0 80                   		ret
+                                        
+                                        ;----------------------------------------------------------------------------
+                                        ; Standard message handler for enunmerating devices.
+                                        ;
+                                        ; Enumerate the devices present in the node.
+                                        ;----------------------------------------------------------------------------
+                                        
+    510 0000E222                        EnumDevices:
+    511 0000E222 F6 6E                   		add		sp,sp,#-10
+    512 0000E224 E0 DF                   		sw		lr,[sp]
+    513 0000E226 E2 D1                   		sw		r1,2[sp]
+    514 0000E228 E4 D2                   		sw		r2,4[sp]
+    515 0000E22A E6 D3                   		sw		r3,6[sp]
+    516 0000E22C E8 D4                   		sw		r4,8[sp]
+    517 0000E22E 00 13                   		lw		r3,#0
+    518 0000E230 00 12                   		lw		r2,#0
+    519 0000E232                        EnumDevices1:
+    520 0000E232 EE 4F 05 AF             		call	zeroTxBuf
+    521 0000E236 EF 4F 05 AF             		call	SetDestFromRx
+    522 0000E23A 30 14                   		mov		r4,r3
+    523 0000E23C C1 34                   		ror		r4,#1			; put count in r4 bits 12 to 15
+    524 0000E23E C1 34                   		ror		r4,#1
+    525 0000E240 C1 34                   		ror		r4,#1
+    526 0000E242 C1 34                   		ror		r4,#1
+    527 0000E244 E4 31                   		tsr		r1,ID
+    528 0000E246 46 21                   		or		r1,r4
+    529 0000E248 02 40 00 D1             		sw		r1,txBuf
+    530 0000E24C 04 40 20 F1             		lw		r1,NodeDCB[r2]
+    531 0000E250 02 40 02 D1             		sw		r1,txBuf+2
+    532 0000E254 04 40 22 F1             		lw		r1,NodeDCB+2[r2]
+    533 0000E258 02 40 04 D1             		sw		r1,txBuf+4
+    534 0000E25C 04 40 24 F1             		lw		r1,NodeDCB+4[r2]
+    535 0000E260 02 40 06 D1             		sw		r1,txBuf+6
+    536 0000E264 02 40 05 11             		lw		r1,#MT_ENUM_DEVICES1
+    537 0000E268 EE 4F 01 AF             		call	Xmit
+    538 0000E26C EC 4F 08 AF             		call	zeroTxBuf
+    539 0000E270 ED 4F 08 AF             		call	SetDestFromRx
+    540 0000E274 04 40 26 F1             		lw		r1,NodeDCB+6[r2]
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 10
+noc_boot21.a
+    541 0000E278 02 40 00 D1             		sw		r1,txBuf
+    542 0000E27C 04 40 28 F1             		lw		r1,NodeDCB+8[r2]
+    543 0000E280 02 40 02 D1             		sw		r1,txBuf+2
+    544 0000E284 04 40 2A F1             		lw		r1,NodeDCB+10[r2]
+    545 0000E288 02 40 04 D1             		sw		r1,txBuf+4
+    546 0000E28C 04 40 2C F1             		lw		r1,NodeDCB+12[r2]
+    547 0000E290 02 40 06 D1             		sw		r1,txBuf+6
+    548 0000E294 02 40 06 11             		lw		r1,#MT_ENUM_DEVICES2
+    549 0000E298 EC 4F 09 AF             		call	Xmit
+    550 0000E29C 29 4E 2C 12             		add		r2,r2,#DCB_Size
+    551 0000E2A0 01 63                   		add		r3,r3,#1
+    552 0000E2A2 3D 10                   		cmp		r3,#nDCB
+    553 0000E2A4 C6 B4                   		bltu	EnumDevices1
+    554 0000E2A6 E0 FF                   		lw		lr,[sp]
+    555 0000E2A8 E2 F1                   		lw		r1,2[sp]
+    556 0000E2AA E4 F2                   		lw		r2,4[sp]
+    557 0000E2AC E6 F3                   		lw		r3,6[sp]
+    558 0000E2AE E8 F4                   		lw		r4,8[sp]
+    559 0000E2B0 0A 6E                   		add		sp,sp,#10
+    560 0000E2B2 F0 80                   		ret
+                                        
+                                        ;#include "tb_worker.asm"
                                         
                                         		.code
-    244 0000E0AA                        start:
-    245 0000E0AA FF 41 0E 1E             		lw		sp,#$1FFE
-    246 0000E0AE 82 AF                   		call	KeybdReset
-    247 0000E0B0 00 40 0F C0             		sb		r0,HTInputFocus
-    248 0000E0B4 11 40 01 11             		lw		r1,#$111
-    249 0000E0B8 00 40 0F C1             		sb		r1,HTInputFocus
-    250 0000E0BC                        start1:
-    251 0000E0BC                        noMsg1:
-    252 0000E0BC 84 AF                   		call	KeybdGetChar
-    253 0000E0BE 2E A9                   		bne		noKey
-    254 0000E0C0 F9 4F 1D 10             		cmp		r1,#'c'
-    255 0000E0C4 0E A9                   		bne		notC
-    256 0000E0C6 01 40 01 E1             		lb		r1,KeyState2	; test if CTRL down
-    257 0000E0CA 54 31                   		and		r1,#4
-    258 0000E0CC 0A A8                   		beq		notC
+    565 0000E2B4                        start:
+    566 0000E2B4 FF 41 0E 1E             		lw		sp,#$1FFE
+    567 0000E2B8 3F AF                   		call	ResetNode
+    568 0000E2BA                        start1:
+    569 0000E2BA                        noMsg1:
+    570 0000E2BA 81 AF                   		call	KeybdGetChar
+    571 0000E2BC 2B A9                   		bne		noKey
+    572 0000E2BE F9 4F 1D 10             		cmp		r1,#'c'
+    573 0000E2C2 10 A9                   		bne		notC
+    574 0000E2C4 01 40 04 E1             		lb		r1,KeyState2	; test if CTRL down
+    575 0000E2C8 54 31                   		and		r1,#4
+    576 0000E2CA 0C A8                   		beq		notC
                                         		; CTRL-C
                                         		; If CTRL-C was pressed broadcast a global stop message
-    261 0000E0CE 98 BF                   		call	zeroTxBuf
-    262 0000E0D0 0F 40 0F 11             		lw		r1,#$FF
-    263 0000E0D4 02 40 0F C1             		sb		r1,txBuf+MSG_DST
-    264 0000E0D8 03 11                   		lw		r1,#MT_STOP
-    265 0000E0DA 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
-    266 0000E0DE BB BF                   		call	Xmit
-    267 0000E0E0 1D AE                   		bra		noKey
+    579 0000E2CC E9 4F 08 AF             		call	zeroTxBuf
+    580 0000E2D0 FF 40 0F 11             		lw		r1,#$FFF
+    581 0000E2D4 02 40 0E D1             		sw		r1,txBuf+MSG_DST
+    582 0000E2D8 03 11                   		lw		r1,#MT_STOP
+    583 0000E2DA 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+    584 0000E2DE EA 4F 06 AF             		call	Xmit
+    585 0000E2E2 18 AE                   		bra		noKey
                                         		; There was a keystroke available so transmit a character
                                         		; message to the thread with the input focus
-    270 0000E0E2                        notC:
-    271 0000E0E2 00 40 0F E5             		lb		r5,HTInputFocus		; any thread with input focus ?
-    272 0000E0E6 1A A8                   		beq		noKey
-    273 0000E0E8 8B BF                   		call	zeroTxBuf
-    274 0000E0EA 50 12                   		mov		r2,r5
-    275 0000E0EC A1 32                   		shr		r2,#1
-    276 0000E0EE A1 32                   		shr		r2,#1
-    277 0000E0F0 A1 32                   		shr		r2,#1
-    278 0000E0F2 A1 32                   		shr		r2,#1
-    279 0000E0F4 02 40 0F C2             		sb		r2,txBuf+MSG_DST	; destination is input focus thread
-    280 0000E0F8 01 40 01 12             		lw		r2,#$11				; grid numbers are hard coded for now
-    281 0000E0FC 11 4E 0C C2             		sb		r2,txBuf+MSG_GDS
-    282 0000E100 02 40 00 C1             		sb		r1,txBuf			; store ascii char
-    283 0000E104 02 40 02 C1             		sb		r1,txBuf+2
-    284 0000E108 02 40 04 C1             		sb		r1,txBuf+4
-    285 0000E10C 02 40 06 C1             		sb		r1,txBuf+6
-    286 0000E110 02 40 01 C3             		sb		r3,txBuf+1			; and scan code
-    287 0000E114 04 11                   		lw		r1,#MT_KEYSTROKE	; keyboard message
-    288 0000E116 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
-    289 0000E11A 9D BF                   		call	Xmit
-    290 0000E11C                        noKey:
-    291 0000E11C 01 4B 00 E1             		lb		r1,ROUTER+RTR_RXSTAT
-    292 0000E120 03 40 5F 31             		and		r1,#63
-    293 0000E124 CB B8                   		beq		noMsg1
-    294 0000E126 AC BF                   		call	Recv
-    295 0000E128 01 AF                   		call	RecvDispatch
-    296 0000E12A C8 BE                   		bra		start1
-                                        
-                                        
-                                        ;----------------------------------------------------------------------------
-                                        ; Received message dispatch.
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 6
+    588 0000E2E4                        notC:
+    589 0000E2E4 00 40 0E F5             		lw		r5,HTInputFocus		; any thread with input focus ?
+    590 0000E2E8 15 A8                   		beq		noKey
+    591 0000E2EA E8 4F 09 AF             		call	zeroTxBuf
+    592 0000E2EE 50 12                   		mov		r2,r5
+    593 0000E2F0 00 41 60 32             		or		r2,#$1000
+    594 0000E2F4 02 40 0E D2             		sw		r2,txBuf+MSG_DST	; destination is input focus thread
+    595 0000E2F8 02 40 00 C1             		sb		r1,txBuf			; store ascii char
+    596 0000E2FC 02 40 02 C1             		sb		r1,txBuf+2
+    597 0000E300 02 40 04 C1             		sb		r1,txBuf+4
+    598 0000E304 02 40 01 C3             		sb		r3,txBuf+1			; and scan code
+    599 0000E308 30 4E 08 11             		lw		r1,#DVC_PUTCHAR
+    600 0000E30C 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 11
 noc_boot21.a
+    601 0000E310 E8 4F 0D AF             		call	Xmit
+    602 0000E314                        noKey:
+    603 0000E314 01 4B 00 E1             		lb		r1,ROUTER+RTR_RXSTAT
+    604 0000E318 D0 B8                   		beq		noMsg1
+    605 0000E31A EA 4F 06 AF             		call	Recv
+    606 0000E31E EC 4F 0B AF             		call	RecvDispatch
+    607 0000E322 CB BE                   		bra		start1
+                                        
+                                        
+                                        ;----------------------------------------------------------------------------
+                                        ; Copy the DCB tables to ram.
                                         ;----------------------------------------------------------------------------
                                         
-    303 0000E12C                        RecvDispatch:
-    304 0000E12C FE 6E                   		add		sp,sp,#-2
-    305 0000E12E E0 DF                   		sw		lr,[sp]
-    306 0000E130 03 40 08 E1             		lb		r1,rxBuf+MSG_TYPE
-                                        		; Reset request ?
-    308 0000E134 1F 10                   		cmp		r1,#MT_RST
-    309 0000E136 11 A9                   		bne		RecvDispatch2
-    310 0000E138 00 40 0F C0             		sb		r0,HTInputFocus
-    311 0000E13C 01 40 01 11             		lw		r1,#$11
-    312 0000E140 00 40 0F C1             		sb		r1,HTInputFocus		; for now
-    313 0000E144 37 AF                   		call	KeybdReset
-    314 0000E146 5C BF                   		call	zeroTxBuf
-    315 0000E148 01 40 01 11             		lw		r1,#$11
-    316 0000E14C 02 40 0F C1             		sb		r1,txBuf+MSG_DST
-    317 0000E150 02 11                   		lw		r1,#MT_RST_ACK
-    318 0000E152 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
-    319 0000E156 7F BF                   		call	Xmit
-    320 0000E158 2A AE                   		bra		RecvDispatchXit
-    321 0000E15A                        RecvDispatch2:
-    322 0000E15A FF 4F 17 10             		cmp		r1,#MT_PING
-    323 0000E15E 0B A9                   		bne		RecvDispatch5
-    324 0000E160 4F BF                   		call	zeroTxBuf
-    325 0000E162 03 40 0E E1             		lb		r1,rxBuf+MSG_SRC
-    326 0000E166 02 40 0F C1             		sb		r1,txBuf+MSG_DST
-    327 0000E16A 01 40 02 11             		lw		r1,#MT_PING_ACK
-    328 0000E16E 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
-    329 0000E172 71 BF                   		call	Xmit
-    330 0000E174 1C AE                   		br		RecvDispatchXit
-    331 0000E176                        RecvDispatch5:
+    614 0000E324                        CpyDCB:
+    615 0000E324 00 13                   		lw		r3,#0
+    616 0000E326                        CpyDCB1:
+    617 0000E326 8A 4E 32 F1             		lw		r1,DCBTbl[r3]
+    618 0000E32A 04 40 30 D1             		sw		r1,NodeDCB[r3]
+    619 0000E32E 02 63                   		add		r3,r3,#2
+    620 0000E330 F7 4F 30 10             		cmp		r3,#48*nDCB
+    621 0000E334 F8 B4                   		bltu	CpyDCB1
+    622 0000E336 F0 80                   		ret
+                                        
+                                        ;----------------------------------------------------------------------------
+                                        ; Reset the node.
+                                        ;----------------------------------------------------------------------------
+                                        
+    628 0000E338                        ResetNode:
+    629 0000E338 FE 6E                   		add		sp,sp,#-2
+    630 0000E33A E0 DF                   		sw		lr,[sp]
+    631 0000E33C 00 40 0E D0             		sw		r0,HTInputFocus
+    632 0000E340 11 40 01 11             		lw		r1,#$111
+    633 0000E344 00 40 0E D1             		sw		r1,HTInputFocus		; for now
+    634 0000E348 31 AF                   		call	KeybdReset
+    635 0000E34A E0 FF                   		lw		lr,[sp]
+    636 0000E34C 02 6E                   		add		sp,sp,#2
+    637 0000E34E F0 80                   		ret
+                                        
+                                        ;----------------------------------------------------------------------------
+                                        ; Message command processor for node.
+                                        ;----------------------------------------------------------------------------
+                                        
+    643 0000E350                        NodeCmdProc:
+    644 0000E350 FC 6E                   		add		sp,sp,#-4
+    645 0000E352 E0 DF                   		sw		lr,[sp]
+    646 0000E354 E2 D1                   		sw		r1,2[sp]
+                                        
+    648 0000E356 03 40 08 E1             		lb		r1,rxBuf+MSG_TYPE
+                                        
                                         		; Set input focus ?
                                         		; Check for request to set input focus
-    334 0000E176 FF 4F 1B 10             		cmp		r1,#MT_SET_INPUT_FOCUS
-    335 0000E17A 03 A9                   		bne		RecvDispatch3
-    336 0000E17C 03 40 00 E1             		lb		r1,rxBuf
-                                        		sb		HTInputFocus
-    338 0000E180 16 AE                   		bra		RecvDispatchXit
-    339 0000E182                        RecvDispatch3:
-                                        		; Get button status ?
-    341 0000E182 FF 4F 1A 10             		cmp		r1,#MT_BUTTON_STATUS
-    342 0000E186 12 A9                   		bne		RecvDispatch4
-    343 0000E188 3B BF                   		call	zeroTxBuf
-    344 0000E18A 03 40 0E E1             		lb		r1,rxBuf+MSG_SRC		; where did message come from
-    345 0000E18E 02 40 0F C1             		sb		r1,txBuf+MSG_DST		; send back to sender
-    346 0000E192 06 11                   		lw		r1,#MT_BUTTON_STATUS
-    347 0000E194 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
-    348 0000E198 20 4B 00 E1             		lb		r1,BTNS
-    349 0000E19C 02 40 00 C1             		sb		r1,txBuf
-    350 0000E1A0 22 4B 00 E1             		lb		r1,SWITCHES
-    351 0000E1A4 02 40 01 C1             		sb		r1,txBuf+1
-    352 0000E1A8 56 BF                   		call	Xmit
-    353 0000E1AA 01 AE                   		bra		RecvDispatchXit
-    354 0000E1AC                        RecvDispatch4:
-    355 0000E1AC 00 AE                   		bra		RecvDispatchXit
-    356 0000E1AE                        RecvDispatchXit:
-    357 0000E1AE E0 FF                   		lw		lr,[sp]
-    358 0000E1B0 02 6E                   		add		sp,sp,#2
-    359 0000E1B2 F0 80                   		ret
-                                        
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 7
+    652 0000E35A FF 4F 1B 10             		cmp		r1,#MT_SET_IOFOCUS
+    653 0000E35E 03 A9                   		bne		NodeCmdProc1
+    654 0000E360 03 40 00 F1             		lw		r1,rxBuf
+                                        		sw		HTInputFocus
+    656 0000E364 02 AE                   		br		NodeCmdProcXit
+    657 0000E366                        NodeCmdProc1:
+    658 0000E366 EE 4F 02 AF             		call	StdMsgHandlers
+    659 0000E36A                        NodeCmdProcXit:
+    660 0000E36A E0 FF                   		lw		lr,[sp]
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 12
 noc_boot21.a
+    661 0000E36C E2 F1                   		lw		r1,2[sp]
+    662 0000E36E 04 6E                   		add		sp,sp,#4
+    663 0000E370 F0 80                   		ret
+                                        
+                                        ;----------------------------------------------------------------------------
+                                        ; Message command processor for buttons / switches device.
+                                        ;----------------------------------------------------------------------------
+                                        
+                                        		; Get button/switch status ?
+    670 0000E372                        BtnsCmdProc:
+    671 0000E372 FC 6E                   		add		sp,sp,#-4
+    672 0000E374 E0 DF                   		sw		lr,[sp]
+    673 0000E376 E2 D1                   		sw		r1,2[sp]
+    674 0000E378 03 40 08 E1             		lb		r1,rxBuf+MSG_TYPE
+    675 0000E37C FF 4F 1A 10             		cmp		r1,#MT_BUTTON_STATUS
+    676 0000E380 11 A9                   		bne		BtnsCmdProcXit
+    677 0000E382 E3 4F 0D AF             		call	zeroTxBuf
+    678 0000E386 E4 4F 0D AF             		call	SetDestFromRx
+    679 0000E38A 06 11                   		lw		r1,#MT_BUTTON_STATUS
+    680 0000E38C 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+    681 0000E390 20 4B 00 E1             		lb		r1,BTNS
+    682 0000E394 02 40 00 C1             		sb		r1,txBuf
+    683 0000E398 22 4B 00 E1             		lb		r1,SWITCHES
+    684 0000E39C 02 40 01 C1             		sb		r1,txBuf+1
+    685 0000E3A0 E4 4F 05 AF             		call	Xmit
+    686 0000E3A4                        BtnsCmdProcXit:
+    687 0000E3A4 E0 FF                   		lw		lr,[sp]
+    688 0000E3A6 E2 F1                   		lw		r1,2[sp]
+    689 0000E3A8 02 6E                   		add		sp,sp,#2
+    690 0000E3AA F0 80                   		ret
+                                        
                                         ;============================================================================
                                         ; Keyboard Code
                                         ;============================================================================
@@ -380,12 +721,12 @@ noc_boot21.a
                                         ; Reset the keyboard.
                                         ;----------------------------------------------------------------------------
                                         
-    369 0000E1B4                        KeybdReset:
-    370 0000E1B4 0F 40 0F 11             		lw		r1,#$FF
-    371 0000E1B8 21 4B 00 C1             		sb		r1,KBD
-    372 0000E1BC 01 40 00 C0             		sb		r0,KeyState1
-    373 0000E1C0 01 40 01 C0             		sb		r0,KeyState2
-    374 0000E1C4 F0 80                   		ret
+    700 0000E3AC                        KeybdReset:
+    701 0000E3AC 0F 40 0F 11             		lw		r1,#$FF
+    702 0000E3B0 21 4B 00 C1             		sb		r1,KBD
+    703 0000E3B4 01 40 03 C0             		sb		r0,KeyState1
+    704 0000E3B8 01 40 04 C0             		sb		r0,KeyState2
+    705 0000E3BC F0 80                   		ret
                                         
                                         ;----------------------------------------------------------------------------
                                         ; KeybdGetChar:
@@ -397,1366 +738,1367 @@ noc_boot21.a
                                         ; .ZF = 1 if a key is available, otherwise .ZF = 0
                                         ;----------------------------------------------------------------------------
                                         
-    386 0000E1C6                        KeybdGetChar:
-    387 0000E1C6 FC 6E                   		add		sp,sp,#-4
-    388 0000E1C8 E2 D4                   		sw		r4,2[sp]
-    389 0000E1CA E0 DF                   		sw		lr,[sp]
-    390 0000E1CC                        kbd3:
-    391 0000E1CC 21 4B 01 E1             		lb		r1,KBD+KBD_STAT	; get keyboard status flag
-    392 0000E1D0 10 12                   		mov		r2,r1
-    393 0000E1D2 04 40 50 31             		and		r1,#$40
-    394 0000E1D6 09 A9                   		bne		kbd1		; is it busy ?
-    395 0000E1D8 20 11                   		mov		r1,r2
-    396 0000E1DA 08 40 50 31             		and		r1,#$80
-    397 0000E1DE 0A A9                   		bne		kbd6		; branch if key available
-    398 0000E1E0 E0 FF                   		lw		lr,[sp]
-    399 0000E1E2 E2 F4                   		lw		r4,2[sp]
-    400 0000E1E4 04 6E                   		add		sp,sp,#4
-    401 0000E1E6 01 12                   		lw		r2,#1		; no key available
-    402 0000E1E8 F0 80                   		ret
-    403 0000E1EA                        kbd1:
-    404 0000E1EA E0 FF                   		lw		lr,[sp]
-    405 0000E1EC E2 F4                   		lw		r4,2[sp]
-    406 0000E1EE 04 6E                   		add		sp,sp,#4
-    407 0000E1F0 02 12                   		lw		r2,#2		; keyboard busy
-    408 0000E1F2 F0 80                   		ret
-    409 0000E1F4                        kbd6:
-    410 0000E1F4 21 4B 00 E1             		lb		r1,KBD		; get scancode
-    411 0000E1F8 10 13                   		mov		r3,r1		; save in r3
-    412 0000E1FA 21 4B 02 C0             		sb		r0,KBD+2	; clear read flag
-    413 0000E1FE F1 4F 10 10             		cmp		r1,#SC_KEYUP
-    414 0000E202 01 A9                   		bne		notKeyup
-    415 0000E204 56 AE                   		jmp		doKeyup
-    416 0000E206                        notKeyup:
-    417 0000E206 F2 4F 10 10             		cmp		r1,#SC_EXTEND
-    418 0000E20A 01 A9                   		bne		notExtend
-    419 0000E20C 58 AE                   		jmp		doExtend
-    420 0000E20E                        notExtend:
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 8
+    717 0000E3BE                        KeybdGetChar:
+    718 0000E3BE FC 6E                   		add		sp,sp,#-4
+    719 0000E3C0 E2 D4                   		sw		r4,2[sp]
+    720 0000E3C2 E0 DF                   		sw		lr,[sp]
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 13
 noc_boot21.a
-    421 0000E20E FE 4F 1C 10             		cmp		r1,#$14		; control ?
-    422 0000E212 01 A9                   		bne		notCtrl
-    423 0000E214 5B AE                   		jmp		doCtrl
-    424 0000E216                        notCtrl:
-    425 0000E216 FE 4F 1E 10             		cmp		r1,#$12
-    426 0000E21A 01 A9                   		bne		notShift
-    427 0000E21C 68 AE                   		jmp		doShift
-    428 0000E21E                        notShift:
-    429 0000E21E FA 4F 17 10             		cmp		r1,#$59
-    430 0000E222 01 A9                   		bne		notShift2
-    431 0000E224 64 AE                   		jmp		doShift
-    432 0000E226                        notShift2:
-    433 0000E226 F8 4F 19 10             		cmp		r1,#SC_NUMLOCK
-    434 0000E22A 01 A9                   		bne		notNumLock
-    435 0000E22C 71 AE                   		jmp		doNumLock
-    436 0000E22E                        notNumLock:
-    437 0000E22E FA 4F 18 10             		cmp		r1,#SC_CAPSLOCK
-    438 0000E232 01 A9                   		bne		notCapsLock
-    439 0000E234 75 AE                   		jmp		doCapsLock
-    440 0000E236                        notCapsLock:
-    441 0000E236 F8 4F 12 10             		cmp		r1,#SC_SCROLLLOCK
-    442 0000E23A 01 A9                   		bne		notScrollLock
-    443 0000E23C 79 AE                   		jmp		doScrollLock
-    444 0000E23E                        notScrollLock:
-    445 0000E23E 01 40 00 E2             		lb		r2,KeyState1
-    446 0000E242 20 14                   		mov		r4,r2
-    447 0000E244 A1 32                   		shr		r2,#1
-    448 0000E246 01 40 00 C2             		sb		r2,KeyState1
-    449 0000E24A 51 34                   		and		r4,#1
-    450 0000E24C 01 A8                   		beq		kbd11
-    451 0000E24E BE BE                   		jmp		kbd3
-    452 0000E250                        kbd11:
-    453 0000E250 10 12                   		mov		r2,r1
+    721 0000E3C4                        kbd3:
+    722 0000E3C4 21 4B 01 E1             		lb		r1,KBD+KBD_STAT	; get keyboard status flag
+    723 0000E3C8 10 12                   		mov		r2,r1
+    724 0000E3CA 04 40 50 31             		and		r1,#$40
+    725 0000E3CE 09 A9                   		bne		kbd1		; is it busy ?
+    726 0000E3D0 20 11                   		mov		r1,r2
+    727 0000E3D2 08 40 50 31             		and		r1,#$80
+    728 0000E3D6 0A A9                   		bne		kbd6		; branch if key available
+    729 0000E3D8 E0 FF                   		lw		lr,[sp]
+    730 0000E3DA E2 F4                   		lw		r4,2[sp]
+    731 0000E3DC 04 6E                   		add		sp,sp,#4
+    732 0000E3DE 01 12                   		lw		r2,#1		; no key available
+    733 0000E3E0 F0 80                   		ret
+    734 0000E3E2                        kbd1:
+    735 0000E3E2 E0 FF                   		lw		lr,[sp]
+    736 0000E3E4 E2 F4                   		lw		r4,2[sp]
+    737 0000E3E6 04 6E                   		add		sp,sp,#4
+    738 0000E3E8 02 12                   		lw		r2,#2		; keyboard busy
+    739 0000E3EA F0 80                   		ret
+    740 0000E3EC                        kbd6:
+    741 0000E3EC 21 4B 00 E1             		lb		r1,KBD		; get scancode
+    742 0000E3F0 10 13                   		mov		r3,r1		; save in r3
+    743 0000E3F2 21 4B 02 C0             		sb		r0,KBD+2	; clear read flag
+    744 0000E3F6 F1 4F 10 10             		cmp		r1,#SC_KEYUP
+    745 0000E3FA 01 A9                   		bne		notKeyup
+    746 0000E3FC 5D AE                   		jmp		doKeyup
+    747 0000E3FE                        notKeyup:
+    748 0000E3FE F2 4F 10 10             		cmp		r1,#SC_EXTEND
+    749 0000E402 01 A9                   		bne		notExtend
+    750 0000E404 5F AE                   		jmp		doExtend
+    751 0000E406                        notExtend:
+    752 0000E406 FE 4F 1C 10             		cmp		r1,#$14		; control ?
+    753 0000E40A 01 A9                   		bne		notCtrl
+    754 0000E40C 62 AE                   		jmp		doCtrl
+    755 0000E40E                        notCtrl:
+    756 0000E40E FE 4F 1E 10             		cmp		r1,#$12
+    757 0000E412 01 A9                   		bne		notShift
+    758 0000E414 9C AE                   		jmp		doShift
+    759 0000E416                        notShift:
+    760 0000E416 FA 4F 17 10             		cmp		r1,#$59
+    761 0000E41A 01 A9                   		bne		notShift2
+    762 0000E41C 98 AE                   		jmp		doShift
+    763 0000E41E                        notShift2:
+    764 0000E41E F8 4F 19 10             		cmp		r1,#SC_NUMLOCK
+    765 0000E422 01 A9                   		bne		notNumLock
+    766 0000E424 A5 AE                   		jmp		doNumLock
+    767 0000E426                        notNumLock:
+    768 0000E426 FA 4F 18 10             		cmp		r1,#SC_CAPSLOCK
+    769 0000E42A 01 A9                   		bne		notCapsLock
+    770 0000E42C A9 AE                   		jmp		doCapsLock
+    771 0000E42E                        notCapsLock:
+    772 0000E42E F8 4F 12 10             		cmp		r1,#SC_SCROLLLOCK
+    773 0000E432 01 A9                   		bne		notScrollLock
+    774 0000E434 AD AE                   		jmp		doScrollLock
+    775 0000E436                        notScrollLock:
+    776 0000E436 FE 4F 1F 10             		cmp		r1,#SC_ALT
+    777 0000E43A 01 A9                   		bne		notAlt
+    778 0000E43C 5B AE                   		jmp		doAlt
+    779 0000E43E                        notAlt:
+    780 0000E43E FF 4F 13 10             		cmp		r1,#SC_TAB
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 14
+noc_boot21.a
+    781 0000E442 6B A8                   		beq		doTab
+    782 0000E444                        notTab:
+    783 0000E444 01 40 03 E2             		lb		r2,KeyState1
+    784 0000E448 20 14                   		mov		r4,r2
+    785 0000E44A A1 32                   		shr		r2,#1
+    786 0000E44C 01 40 03 C2             		sb		r2,KeyState1
+    787 0000E450 51 34                   		and		r4,#1
+    788 0000E452 01 A8                   		beq		kbd11
+    789 0000E454 B7 BE                   		jmp		kbd3
+    790 0000E456                        kbd11:
+    791 0000E456 10 12                   		mov		r2,r1
                                         		; Check for extended code
-    455 0000E252 08 40 00 11             		lw		r1,#$80
-    456 0000E256 01 40 01 E4             		lb		r4,KeyState2
-    457 0000E25A 45 21                   		and		r1,r4
-    458 0000E25C 11 A8                   		beq		kbd10
-    459 0000E25E 07 40 0F 11             		lw		r1,#$7F
-    460 0000E262 45 21                   		and		r1,r4
-    461 0000E264 01 40 01 C1             		sb		r1,KeyState2
+    793 0000E458 08 40 00 11             		lw		r1,#$80
+    794 0000E45C 01 40 04 E4             		lb		r4,KeyState2
+    795 0000E460 45 21                   		and		r1,r4
+    796 0000E462 11 A8                   		beq		kbd10
+    797 0000E464 07 40 0F 11             		lw		r1,#$7F
+    798 0000E468 45 21                   		and		r1,r4
+    799 0000E46A 01 40 04 C1             		sb		r1,KeyState2
                                         		; clear keyup
-    463 0000E268 01 40 00 E4             		lb		r4,KeyState1
-    464 0000E26C A1 34                   		shr		r4,#1
-    465 0000E26E 01 40 00 C4             		sb		r4,KeyState1
-    466 0000E272 20 11                   		mov		r1,r2
-    467 0000E274 07 40 5F 31             		and		r1,#$7F
-    468 0000E278 10 12                   		mov		r2,r1
-    469 0000E27A 5C 4E 22 E1             		lb		r1,keybdExtendedCodes[r2]
-    470 0000E27E 14 AE                   		bra		kbd8
-    471 0000E280                        kbd10:
-    472 0000E280 01 40 01 E1             		lb		r1,KeyState2
-    473 0000E284 54 31                   		and		r1,#4
-    474 0000E286 07 A8                   		beq		kbd9
-    475 0000E288 20 11                   		mov		r1,r2
-    476 0000E28A 07 40 5F 31             		and		r1,#$7F
-    477 0000E28E 10 12                   		mov		r2,r1
-    478 0000E290 54 4E 22 E1             		lb		r1,keybdControlCodes[r2]
-    479 0000E294 09 AE                   		bra		kbd8
-    480 0000E296                        kbd9:
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 9
-noc_boot21.a
-    481 0000E296 01 40 01 E1             		lb		r1,KeyState2
-    482 0000E29A 51 31                   		and		r1,#1			; Is shift down ?
-    483 0000E29C 03 A8                   		beq		kbd7
-    484 0000E29E 44 4E 22 E1             		lb		r1,shiftedScanCodes[r2]
-    485 0000E2A2 02 AE                   		bra		kbd8
-    486 0000E2A4                        kbd7:
-    487 0000E2A4 34 4E 22 E1             		lb		r1,unshiftedScanCodes[r2]
-    488 0000E2A8                        kbd8:
+    801 0000E46E 01 40 03 E4             		lb		r4,KeyState1
+    802 0000E472 A1 34                   		shr		r4,#1
+    803 0000E474 01 40 03 C4             		sb		r4,KeyState1
+    804 0000E478 20 11                   		mov		r1,r2
+    805 0000E47A 07 40 5F 31             		and		r1,#$7F
+    806 0000E47E 10 12                   		mov		r2,r1
+    807 0000E480 82 4E 22 E1             		lb		r1,keybdExtendedCodes[r2]
+    808 0000E484 14 AE                   		bra		kbd8
+    809 0000E486                        kbd10:
+    810 0000E486 01 40 04 E1             		lb		r1,KeyState2
+    811 0000E48A 54 31                   		and		r1,#4
+    812 0000E48C 07 A8                   		beq		kbd9
+    813 0000E48E 20 11                   		mov		r1,r2
+    814 0000E490 07 40 5F 31             		and		r1,#$7F
+    815 0000E494 10 12                   		mov		r2,r1
+    816 0000E496 7A 4E 22 E1             		lb		r1,keybdControlCodes[r2]
+    817 0000E49A 09 AE                   		bra		kbd8
+    818 0000E49C                        kbd9:
+    819 0000E49C 01 40 04 E1             		lb		r1,KeyState2
+    820 0000E4A0 51 31                   		and		r1,#1			; Is shift down ?
+    821 0000E4A2 03 A8                   		beq		kbd7
+    822 0000E4A4 6A 4E 22 E1             		lb		r1,shiftedScanCodes[r2]
+    823 0000E4A8 02 AE                   		bra		kbd8
+    824 0000E4AA                        kbd7:
+    825 0000E4AA 5A 4E 22 E1             		lb		r1,unshiftedScanCodes[r2]
+    826 0000E4AE                        kbd8:
                                         		; return zero in r2 to indicate key available
-    490 0000E2A8 E0 FF                   		lw		lr,[sp]
-    491 0000E2AA E2 F4                   		lw		r4,2[sp]
-    492 0000E2AC 04 6E                   		add		sp,sp,#4
-    493 0000E2AE 00 12                   		lw		r2,#0
-    494 0000E2B0 F0 80                   		ret
-    495 0000E2B2                        doKeyup:
-    496 0000E2B2 01 40 00 E1             		lb		r1,KeyState1
-    497 0000E2B6 61 31                   		or		r1,#1
-    498 0000E2B8 01 40 00 C1             		sb		r1,KeyState1
-    499 0000E2BC 87 BE                   		jmp		kbd3
-    500 0000E2BE                        doExtend:
-    501 0000E2BE 01 40 01 E1             		lb		r1,KeyState2
-    502 0000E2C2 08 40 60 31             		or		r1,#$80
-    503 0000E2C6 01 40 01 C1             		sb		r1,KeyState2
-    504 0000E2CA 80 BE                   		jmp		kbd3
-    505 0000E2CC                        doCtrl:
-    506 0000E2CC 01 40 00 E1             		lb		r1,KeyState1
-    507 0000E2D0 C1 31                   		ror		r1,#1
-    508 0000E2D2 07 AB                   		bpl		kbd4
-    509 0000E2D4 01 40 01 E1             		lb		r1,KeyState2
-    510 0000E2D8 FF 4F 5B 31             		and		r1,#$FFFB
-    511 0000E2DC 01 40 01 C1             		sb		r1,KeyState2
-    512 0000E2E0 75 BE                   		jmp		kbd3
-    513 0000E2E2                        kbd4:
-    514 0000E2E2 01 40 01 E1             		lb		r1,KeyState2
-    515 0000E2E6 64 31                   		or		r1,#4
-    516 0000E2E8 01 40 01 C1             		sb		r1,KeyState2
-    517 0000E2EC 6F BE                   		jmp		kbd3		
-    518 0000E2EE                        doShift:
-    519 0000E2EE 01 40 00 E1             		lb		r1,KeyState1
-    520 0000E2F2 C1 31                   		ror		r1,#1
-    521 0000E2F4 07 AB                   		bpl		kbd5
-    522 0000E2F6 01 40 01 E1             		lb		r1,KeyState2
-    523 0000E2FA FF 4F 5E 31             		and		r1,#$FFFE
-    524 0000E2FE 01 40 01 C1             		sb		r1,KeyState2
-    525 0000E302 64 BE                   		jmp		kbd3
-    526 0000E304                        kbd5:
-    527 0000E304 01 40 01 E1             		lb		r1,KeyState2
-    528 0000E308 61 31                   		or		r1,#1
-    529 0000E30A 01 40 01 C1             		sb		r1,KeyState2
-    530 0000E30E 5E BE                   		jmp		kbd3
-    531 0000E310                        doNumLock:
-    532 0000E310 01 40 01 E1             		lb		r1,KeyState2
-    533 0000E314 01 40 40 31             		xor		r1,#16
-    534 0000E318 01 40 01 C1             		sb		r1,KeyState2
-    535 0000E31C 11 AF                   		call	KeybdSetLEDStatus
-    536 0000E31E 56 BE                   		jmp		kbd3
-    537 0000E320                        doCapsLock:
-    538 0000E320 01 40 01 E1             		lb		r1,KeyState2
-    539 0000E324 02 40 40 31             		xor		r1,#32
-    540 0000E328 01 40 01 C1             		sb		r1,KeyState2
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 10
+    828 0000E4AE E0 FF                   		lw		lr,[sp]
+    829 0000E4B0 E2 F4                   		lw		r4,2[sp]
+    830 0000E4B2 04 6E                   		add		sp,sp,#4
+    831 0000E4B4 00 12                   		lw		r2,#0
+    832 0000E4B6 F0 80                   		ret
+    833 0000E4B8                        doKeyup:
+    834 0000E4B8 01 40 03 E1             		lb		r1,KeyState1
+    835 0000E4BC 61 31                   		or		r1,#1
+    836 0000E4BE 01 40 03 C1             		sb		r1,KeyState1
+    837 0000E4C2 80 BE                   		jmp		kbd3
+    838 0000E4C4                        doExtend:
+    839 0000E4C4 01 40 04 E1             		lb		r1,KeyState2
+    840 0000E4C8 08 40 60 31             		or		r1,#$80
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 15
 noc_boot21.a
-    541 0000E32C 09 AF                   		call	KeybdSetLEDStatus
-    542 0000E32E 4E BE                   		jmp		kbd3
-    543 0000E330                        doScrollLock:
-    544 0000E330 01 40 01 E1             		lb		r1,KeyState2
-    545 0000E334 04 40 40 31             		xor		r1,#64
-    546 0000E338 01 40 01 C1             		sb		r1,KeyState2
-    547 0000E33C 01 AF                   		call	KeybdSetLEDStatus
-    548 0000E33E 46 BE                   		jmp		kbd3
+    841 0000E4CC 01 40 04 C1             		sb		r1,KeyState2
+    842 0000E4D0 79 BE                   		jmp		kbd3
+    843 0000E4D2                        doCtrl:
+    844 0000E4D2 01 40 03 E1             		lb		r1,KeyState1
+    845 0000E4D6 C1 31                   		ror		r1,#1
+    846 0000E4D8 07 AB                   		bpl		kbd4
+    847 0000E4DA 01 40 04 E1             		lb		r1,KeyState2
+    848 0000E4DE FF 4F 5B 31             		and		r1,#$FFFB
+    849 0000E4E2 01 40 04 C1             		sb		r1,KeyState2
+    850 0000E4E6 6E BE                   		jmp		kbd3
+    851 0000E4E8                        kbd4:
+    852 0000E4E8 01 40 04 E1             		lb		r1,KeyState2
+    853 0000E4EC 64 31                   		or		r1,#4
+    854 0000E4EE 01 40 04 C1             		sb		r1,KeyState2
+    855 0000E4F2 68 BE                   		jmp		kbd3		
                                         
-    550 0000E340                        KeybdSetLEDStatus:
-    551 0000E340 F0 80                   		ret
+    857 0000E4F4                        doAlt:
+    858 0000E4F4 01 40 03 E1             		lb		r1,KeyState1
+    859 0000E4F8 C1 31                   		ror		r1,#1
+    860 0000E4FA 07 AB                   		bpl		doAlt1
+    861 0000E4FC 01 40 04 E1             		lb		r1,KeyState2
+    862 0000E500 FF 4F 5D 31             		and		r1,#$FFFD
+    863 0000E504 01 40 04 C1             		sb		r1,KeyState2
+    864 0000E508 05 AE                   		br		doAlt2
+    865 0000E50A                        doAlt1:
+    866 0000E50A 01 40 04 E1             		lb		r1,KeyState2
+    867 0000E50E 62 31                   		or		r1,#2
+    868 0000E510 01 40 04 C1             		sb		r1,KeyState2
+    869 0000E514                        doAlt2:
+    870 0000E514 01 40 03 C0             		sb		r0,KeyState1
+    871 0000E518 55 BE                   		jmp		kbd3
+                                        
+                                        		; Tab key processing
+                                        		; Look for the sequence ALT-Tab and switch the IO focus
+                                        		; if found. Otherwise go back and process the tab key
+                                        		; normally.
+    877 0000E51A                        doTab:
+    878 0000E51A 01 40 03 E1             		lb		r1,KeyState1
+    879 0000E51E C1 31                   		ror		r1,#1
+    880 0000E520 04 AB                   		bpl		doTab1
+    881 0000E522 01 40 04 E1             		lb		r1,KeyState2
+    882 0000E526 52 31                   		and		r1,#2
+    883 0000E528 03 A9                   		bne		doTab2
+    884 0000E52A                        doTab1:
+    885 0000E52A 00 40 0D 11             		lw		r1,#SC_TAB
+    886 0000E52E 8A BE                   		br		notTab
+    887 0000E530                        doTab2:
+    888 0000E530 D6 4F 06 AF             		call	zeroTxBuf
+    889 0000E534 01 40 01 11             		lw		r1,#$11
+    890 0000E538 02 40 0E C1             		sb		r1,txBuf+MSG_DST
+    891 0000E53C 55 4E 0C C1             		sb		r1,txBuf+MSG_GDS
+    892 0000E540 02 40 01 11             		lw		r1,#MT_NEXT_IOFOCUS
+    893 0000E544 02 40 08 C1             		sb		r1,txBuf+MSG_TYPE
+    894 0000E548 D7 4F 01 AF             		call	Xmit
+    895 0000E54C 3B BE                   		br		kbd3
+                                        
+    897 0000E54E                        doShift:
+    898 0000E54E 01 40 03 E1             		lb		r1,KeyState1
+    899 0000E552 C1 31                   		ror		r1,#1
+    900 0000E554 07 AB                   		bpl		kbd5
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 16
+noc_boot21.a
+    901 0000E556 01 40 04 E1             		lb		r1,KeyState2
+    902 0000E55A FF 4F 5E 31             		and		r1,#$FFFE
+    903 0000E55E 01 40 04 C1             		sb		r1,KeyState2
+    904 0000E562 30 BE                   		jmp		kbd3
+    905 0000E564                        kbd5:
+    906 0000E564 01 40 04 E1             		lb		r1,KeyState2
+    907 0000E568 61 31                   		or		r1,#1
+    908 0000E56A 01 40 04 C1             		sb		r1,KeyState2
+    909 0000E56E 2A BE                   		jmp		kbd3
+    910 0000E570                        doNumLock:
+    911 0000E570 01 40 04 E1             		lb		r1,KeyState2
+    912 0000E574 01 40 40 31             		xor		r1,#16
+    913 0000E578 01 40 04 C1             		sb		r1,KeyState2
+    914 0000E57C 11 AF                   		call	KeybdSetLEDStatus
+    915 0000E57E 22 BE                   		jmp		kbd3
+    916 0000E580                        doCapsLock:
+    917 0000E580 01 40 04 E1             		lb		r1,KeyState2
+    918 0000E584 02 40 40 31             		xor		r1,#32
+    919 0000E588 01 40 04 C1             		sb		r1,KeyState2
+    920 0000E58C 09 AF                   		call	KeybdSetLEDStatus
+    921 0000E58E 1A BE                   		jmp		kbd3
+    922 0000E590                        doScrollLock:
+    923 0000E590 01 40 04 E1             		lb		r1,KeyState2
+    924 0000E594 04 40 40 31             		xor		r1,#64
+    925 0000E598 01 40 04 C1             		sb		r1,KeyState2
+    926 0000E59C 01 AF                   		call	KeybdSetLEDStatus
+    927 0000E59E 12 BE                   		jmp		kbd3
+                                        
+    929 0000E5A0                        KeybdSetLEDStatus:
+    930 0000E5A0 F0 80                   		ret
                                         
                                         	;--------------------------------------------------------------------------
                                         	; PS2 scan codes to ascii conversion tables.
                                         	;--------------------------------------------------------------------------
                                         	;
-    557 0000E342                        unshiftedScanCodes:
-    558 0000E342 2E A9 2E A5 A3 A1 A2    	.byte	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
-    558 0000E349 AC                    
-    559 0000E34A 2E AA A8 A6 A4 09 60    	.byte	$2e,$aa,$a8,$a6,$a4,$09,$60,$2e
-    559 0000E351 2E                    
-    560 0000E352 2E 2E 2E 2E 2E 71 31    	.byte	$2e,$2e,$2e,$2e,$2e,$71,$31,$2e
-    560 0000E359 2E                    
-    561 0000E35A 2E 2E 7A 73 61 77 32    	.byte	$2e,$2e,$7a,$73,$61,$77,$32,$2e
-    561 0000E361 2E                    
-    562 0000E362 2E 63 78 64 65 34 33    	.byte	$2e,$63,$78,$64,$65,$34,$33,$2e
-    562 0000E369 2E                    
-    563 0000E36A 2E 20 76 66 74 72 35    	.byte	$2e,$20,$76,$66,$74,$72,$35,$2e
-    563 0000E371 2E                    
-    564 0000E372 2E 6E 62 68 67 79 36    	.byte	$2e,$6e,$62,$68,$67,$79,$36,$2e
-    564 0000E379 2E                    
-    565 0000E37A 2E 2E 6D 6A 75 37 38    	.byte	$2e,$2e,$6d,$6a,$75,$37,$38,$2e
-    565 0000E381 2E                    
-    566 0000E382 2E 2C 6B 69 6F 30 39    	.byte	$2e,$2c,$6b,$69,$6f,$30,$39,$2e
-    566 0000E389 2E                    
-    567 0000E38A 2E 2E 2F 6C 3B 70 2D    	.byte	$2e,$2e,$2f,$6c,$3b,$70,$2d,$2e
-    567 0000E391 2E                    
-    568 0000E392 2E 2E 27 2E 5B 3D 2E    	.byte	$2e,$2e,$27,$2e,$5b,$3d,$2e,$2e
-    568 0000E399 2E                    
-    569 0000E39A AD 2E 0D 5D 2E 5C 2E    	.byte	$ad,$2e,$0d,$5d,$2e,$5c,$2e,$2e
-    569 0000E3A1 2E                    
-    570 0000E3A2 2E 2E 2E 2E 2E 2E 08    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
-    570 0000E3A9 2E                    
-    571 0000E3AA 2E 95 2E 93 94 2E 2E    	.byte	$2e,$95,$2e,$93,$94,$2e,$2e,$2e
-    571 0000E3B1 2E                    
-    572 0000E3B2 98 7F 92 2E 91 90 1B    	.byte	$98,$7f,$92,$2e,$91,$90,$1b,$af
-    572 0000E3B9 AF                    
-    573 0000E3BA AB 2E 97 2E 2E 96 AE    	.byte	$ab,$2e,$97,$2e,$2e,$96,$ae,$2e
-    573 0000E3C1 2E                    
-                                        
-    575 0000E3C2 2E 2E 2E A7 2E 2E 2E    	.byte	$2e,$2e,$2e,$a7,$2e,$2e,$2e,$2e
-    575 0000E3C9 2E                    
-    576 0000E3CA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    576 0000E3D1 2E                    
-    577 0000E3D2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    577 0000E3D9 2E                    
-    578 0000E3DA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    578 0000E3E1 2E                    
-    579 0000E3E2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    579 0000E3E9 2E                    
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 11
+    936 0000E5A2                        unshiftedScanCodes:
+    937 0000E5A2 2E A9 2E A5 A3 A1 A2    	.byte	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
+    937 0000E5A9 AC                    
+    938 0000E5AA 2E AA A8 A6 A4 09 60    	.byte	$2e,$aa,$a8,$a6,$a4,$09,$60,$2e
+    938 0000E5B1 2E                    
+    939 0000E5B2 2E 2E 2E 2E 2E 71 31    	.byte	$2e,$2e,$2e,$2e,$2e,$71,$31,$2e
+    939 0000E5B9 2E                    
+    940 0000E5BA 2E 2E 7A 73 61 77 32    	.byte	$2e,$2e,$7a,$73,$61,$77,$32,$2e
+    940 0000E5C1 2E                    
+    941 0000E5C2 2E 63 78 64 65 34 33    	.byte	$2e,$63,$78,$64,$65,$34,$33,$2e
+    941 0000E5C9 2E                    
+    942 0000E5CA 2E 20 76 66 74 72 35    	.byte	$2e,$20,$76,$66,$74,$72,$35,$2e
+    942 0000E5D1 2E                    
+    943 0000E5D2 2E 6E 62 68 67 79 36    	.byte	$2e,$6e,$62,$68,$67,$79,$36,$2e
+    943 0000E5D9 2E                    
+    944 0000E5DA 2E 2E 6D 6A 75 37 38    	.byte	$2e,$2e,$6d,$6a,$75,$37,$38,$2e
+    944 0000E5E1 2E                    
+    945 0000E5E2 2E 2C 6B 69 6F 30 39    	.byte	$2e,$2c,$6b,$69,$6f,$30,$39,$2e
+    945 0000E5E9 2E                    
+    946 0000E5EA 2E 2E 2F 6C 3B 70 2D    	.byte	$2e,$2e,$2f,$6c,$3b,$70,$2d,$2e
+    946 0000E5F1 2E                    
+    947 0000E5F2 2E 2E 27 2E 5B 3D 2E    	.byte	$2e,$2e,$27,$2e,$5b,$3d,$2e,$2e
+    947 0000E5F9 2E                    
+    948 0000E5FA AD 2E 0D 5D 2E 5C 2E    	.byte	$ad,$2e,$0d,$5d,$2e,$5c,$2e,$2e
+    948 0000E601 2E                    
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 17
 noc_boot21.a
-    580 0000E3EA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    580 0000E3F1 2E                    
-    581 0000E3F2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    581 0000E3F9 2E                    
-    582 0000E3FA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    582 0000E401 2E                    
-    583 0000E402 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    583 0000E409 2E                    
-    584 0000E40A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    584 0000E411 2E                    
-    585 0000E412 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    585 0000E419 2E                    
-    586 0000E41A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    586 0000E421 2E                    
-    587 0000E422 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    587 0000E429 2E                    
-    588 0000E42A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    588 0000E431 2E                    
-    589 0000E432 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    589 0000E439 2E                    
-    590 0000E43A 2E 2E FA 2E 2E 2E 2E    	.byte	$2e,$2e,$fa,$2e,$2e,$2e,$2e,$2e
-    590 0000E441 2E                    
+    949 0000E602 2E 2E 2E 2E 2E 2E 08    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+    949 0000E609 2E                    
+    950 0000E60A 2E 95 2E 93 94 2E 2E    	.byte	$2e,$95,$2e,$93,$94,$2e,$2e,$2e
+    950 0000E611 2E                    
+    951 0000E612 98 7F 92 2E 91 90 1B    	.byte	$98,$7f,$92,$2e,$91,$90,$1b,$af
+    951 0000E619 AF                    
+    952 0000E61A AB 2E 97 2E 2E 96 AE    	.byte	$ab,$2e,$97,$2e,$2e,$96,$ae,$2e
+    952 0000E621 2E                    
                                         
-    592 0000E442                        shiftedScanCodes:
-    593 0000E442 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    593 0000E449 2E                    
-    594 0000E44A 2E 2E 2E 2E 2E 09 7E    	.byte	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
-    594 0000E451 2E                    
-    595 0000E452 2E 2E 2E 2E 2E 51 21    	.byte	$2e,$2e,$2e,$2e,$2e,$51,$21,$2e
-    595 0000E459 2E                    
-    596 0000E45A 2E 2E 5A 53 41 57 40    	.byte	$2e,$2e,$5a,$53,$41,$57,$40,$2e
-    596 0000E461 2E                    
-    597 0000E462 2E 43 58 44 45 24 23    	.byte	$2e,$43,$58,$44,$45,$24,$23,$2e
-    597 0000E469 2E                    
-    598 0000E46A 2E 20 56 46 54 52 25    	.byte	$2e,$20,$56,$46,$54,$52,$25,$2e
-    598 0000E471 2E                    
-    599 0000E472 2E 4E 42 48 47 59 5E    	.byte	$2e,$4e,$42,$48,$47,$59,$5e,$2e
-    599 0000E479 2E                    
-    600 0000E47A 2E 2E 4D 4A 55 26 2A    	.byte	$2e,$2e,$4d,$4a,$55,$26,$2a,$2e
-    600 0000E481 2E                    
-    601 0000E482 2E 3C 4B 49 4F 29 28    	.byte	$2e,$3c,$4b,$49,$4f,$29,$28,$2e
-    601 0000E489 2E                    
-    602 0000E48A 2E 3E 3F 4C 3A 50 5F    	.byte	$2e,$3e,$3f,$4c,$3a,$50,$5f,$2e
-    602 0000E491 2E                    
-    603 0000E492 2E 2E 22 2E 7B 2B 2E    	.byte	$2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
-    603 0000E499 2E                    
-    604 0000E49A 2E 2E 0D 7D 2E 7C 2E    	.byte	$2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
-    604 0000E4A1 2E                    
-    605 0000E4A2 2E 2E 2E 2E 2E 2E 08    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
-    605 0000E4A9 2E                    
-    606 0000E4AA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    606 0000E4B1 2E                    
-    607 0000E4B2 2E 7F 2E 2E 2E 2E 1B    	.byte	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
-    607 0000E4B9 2E                    
-    608 0000E4BA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    608 0000E4C1 2E                    
+    954 0000E622 2E 2E 2E A7 2E 2E 2E    	.byte	$2e,$2e,$2e,$a7,$2e,$2e,$2e,$2e
+    954 0000E629 2E                    
+    955 0000E62A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    955 0000E631 2E                    
+    956 0000E632 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    956 0000E639 2E                    
+    957 0000E63A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    957 0000E641 2E                    
+    958 0000E642 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    958 0000E649 2E                    
+    959 0000E64A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    959 0000E651 2E                    
+    960 0000E652 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    960 0000E659 2E                    
+    961 0000E65A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    961 0000E661 2E                    
+    962 0000E662 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    962 0000E669 2E                    
+    963 0000E66A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    963 0000E671 2E                    
+    964 0000E672 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    964 0000E679 2E                    
+    965 0000E67A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    965 0000E681 2E                    
+    966 0000E682 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    966 0000E689 2E                    
+    967 0000E68A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    967 0000E691 2E                    
+    968 0000E692 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    968 0000E699 2E                    
+    969 0000E69A 2E 2E FA 2E 2E 2E 2E    	.byte	$2e,$2e,$fa,$2e,$2e,$2e,$2e,$2e
+    969 0000E6A1 2E                    
                                         
-    610 0000E4C2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    610 0000E4C9 2E                    
-    611 0000E4CA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 12
+    971 0000E6A2                        shiftedScanCodes:
+    972 0000E6A2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    972 0000E6A9 2E                    
+    973 0000E6AA 2E 2E 2E 2E 2E 09 7E    	.byte	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
+    973 0000E6B1 2E                    
+    974 0000E6B2 2E 2E 2E 2E 2E 51 21    	.byte	$2e,$2e,$2e,$2e,$2e,$51,$21,$2e
+    974 0000E6B9 2E                    
+    975 0000E6BA 2E 2E 5A 53 41 57 40    	.byte	$2e,$2e,$5a,$53,$41,$57,$40,$2e
+    975 0000E6C1 2E                    
+    976 0000E6C2 2E 43 58 44 45 24 23    	.byte	$2e,$43,$58,$44,$45,$24,$23,$2e
+    976 0000E6C9 2E                    
+    977 0000E6CA 2E 20 56 46 54 52 25    	.byte	$2e,$20,$56,$46,$54,$52,$25,$2e
+    977 0000E6D1 2E                    
+    978 0000E6D2 2E 4E 42 48 47 59 5E    	.byte	$2e,$4e,$42,$48,$47,$59,$5e,$2e
+    978 0000E6D9 2E                    
+    979 0000E6DA 2E 2E 4D 4A 55 26 2A    	.byte	$2e,$2e,$4d,$4a,$55,$26,$2a,$2e
+    979 0000E6E1 2E                    
+    980 0000E6E2 2E 3C 4B 49 4F 29 28    	.byte	$2e,$3c,$4b,$49,$4f,$29,$28,$2e
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 18
 noc_boot21.a
-    611 0000E4D1 2E                    
-    612 0000E4D2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    612 0000E4D9 2E                    
-    613 0000E4DA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    613 0000E4E1 2E                    
-    614 0000E4E2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    614 0000E4E9 2E                    
-    615 0000E4EA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    615 0000E4F1 2E                    
-    616 0000E4F2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    616 0000E4F9 2E                    
-    617 0000E4FA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    617 0000E501 2E                    
-    618 0000E502 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    618 0000E509 2E                    
-    619 0000E50A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    619 0000E511 2E                    
-    620 0000E512 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    620 0000E519 2E                    
-    621 0000E51A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    621 0000E521 2E                    
-    622 0000E522 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    622 0000E529 2E                    
-    623 0000E52A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    623 0000E531 2E                    
-    624 0000E532 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    624 0000E539 2E                    
-    625 0000E53A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    625 0000E541 2E                    
+    980 0000E6E9 2E                    
+    981 0000E6EA 2E 3E 3F 4C 3A 50 5F    	.byte	$2e,$3e,$3f,$4c,$3a,$50,$5f,$2e
+    981 0000E6F1 2E                    
+    982 0000E6F2 2E 2E 22 2E 7B 2B 2E    	.byte	$2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
+    982 0000E6F9 2E                    
+    983 0000E6FA 2E 2E 0D 7D 2E 7C 2E    	.byte	$2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
+    983 0000E701 2E                    
+    984 0000E702 2E 2E 2E 2E 2E 2E 08    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+    984 0000E709 2E                    
+    985 0000E70A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    985 0000E711 2E                    
+    986 0000E712 2E 7F 2E 2E 2E 2E 1B    	.byte	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
+    986 0000E719 2E                    
+    987 0000E71A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    987 0000E721 2E                    
+                                        
+    989 0000E722 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    989 0000E729 2E                    
+    990 0000E72A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    990 0000E731 2E                    
+    991 0000E732 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    991 0000E739 2E                    
+    992 0000E73A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    992 0000E741 2E                    
+    993 0000E742 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    993 0000E749 2E                    
+    994 0000E74A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    994 0000E751 2E                    
+    995 0000E752 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    995 0000E759 2E                    
+    996 0000E75A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    996 0000E761 2E                    
+    997 0000E762 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    997 0000E769 2E                    
+    998 0000E76A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    998 0000E771 2E                    
+    999 0000E772 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+    999 0000E779 2E                    
+   1000 0000E77A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1000 0000E781 2E                    
+   1001 0000E782 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1001 0000E789 2E                    
+   1002 0000E78A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1002 0000E791 2E                    
+   1003 0000E792 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1003 0000E799 2E                    
+   1004 0000E79A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1004 0000E7A1 2E                    
                                         
                                         ; control
-    628 0000E542                        keybdControlCodes:
-    629 0000E542 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    629 0000E549 2E                    
-    630 0000E54A 2E 2E 2E 2E 2E 09 7E    	.byte	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
-    630 0000E551 2E                    
-    631 0000E552 2E 2E 2E 2E 2E 11 21    	.byte	$2e,$2e,$2e,$2e,$2e,$11,$21,$2e
-    631 0000E559 2E                    
-    632 0000E55A 2E 2E 1A 13 01 17 40    	.byte	$2e,$2e,$1a,$13,$01,$17,$40,$2e
-    632 0000E561 2E                    
-    633 0000E562 2E 03 18 04 05 24 23    	.byte	$2e,$03,$18,$04,$05,$24,$23,$2e
-    633 0000E569 2E                    
-    634 0000E56A 2E 20 16 06 14 12 25    	.byte	$2e,$20,$16,$06,$14,$12,$25,$2e
-    634 0000E571 2E                    
-    635 0000E572 2E 0E 02 08 07 19 5E    	.byte	$2e,$0e,$02,$08,$07,$19,$5e,$2e
-    635 0000E579 2E                    
-    636 0000E57A 2E 2E 0D 0A 15 26 2A    	.byte	$2e,$2e,$0d,$0a,$15,$26,$2a,$2e
-    636 0000E581 2E                    
-    637 0000E582 2E 3C 0B 09 0F 29 28    	.byte	$2e,$3c,$0b,$09,$0f,$29,$28,$2e
-    637 0000E589 2E                    
-    638 0000E58A 2E 3E 3F 0C 3A 10 5F    	.byte	$2e,$3e,$3f,$0c,$3a,$10,$5f,$2e
-    638 0000E591 2E                    
-    639 0000E592 2E 2E 22 2E 7B 2B 2E    	.byte	$2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
-    639 0000E599 2E                    
-    640 0000E59A 2E 2E 0D 7D 2E 7C 2E    	.byte	$2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
-    640 0000E5A1 2E                    
-    641 0000E5A2 2E 2E 2E 2E 2E 2E 08    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
-    641 0000E5A9 2E                    
-    642 0000E5AA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    642 0000E5B1 2E                    
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 13
+   1007 0000E7A2                        keybdControlCodes:
+   1008 0000E7A2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1008 0000E7A9 2E                    
+   1009 0000E7AA 2E 2E 2E 2E 2E 09 7E    	.byte	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
+   1009 0000E7B1 2E                    
+   1010 0000E7B2 2E 2E 2E 2E 2E 11 21    	.byte	$2e,$2e,$2e,$2e,$2e,$11,$21,$2e
+   1010 0000E7B9 2E                    
+   1011 0000E7BA 2E 2E 1A 13 01 17 40    	.byte	$2e,$2e,$1a,$13,$01,$17,$40,$2e
+   1011 0000E7C1 2E                    
+   1012 0000E7C2 2E 03 18 04 05 24 23    	.byte	$2e,$03,$18,$04,$05,$24,$23,$2e
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 19
 noc_boot21.a
-    643 0000E5B2 2E 7F 2E 2E 2E 2E 1B    	.byte	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
-    643 0000E5B9 2E                    
-    644 0000E5BA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    644 0000E5C1 2E                    
+   1012 0000E7C9 2E                    
+   1013 0000E7CA 2E 20 16 06 14 12 25    	.byte	$2e,$20,$16,$06,$14,$12,$25,$2e
+   1013 0000E7D1 2E                    
+   1014 0000E7D2 2E 0E 02 08 07 19 5E    	.byte	$2e,$0e,$02,$08,$07,$19,$5e,$2e
+   1014 0000E7D9 2E                    
+   1015 0000E7DA 2E 2E 0D 0A 15 26 2A    	.byte	$2e,$2e,$0d,$0a,$15,$26,$2a,$2e
+   1015 0000E7E1 2E                    
+   1016 0000E7E2 2E 3C 0B 09 0F 29 28    	.byte	$2e,$3c,$0b,$09,$0f,$29,$28,$2e
+   1016 0000E7E9 2E                    
+   1017 0000E7EA 2E 3E 3F 0C 3A 10 5F    	.byte	$2e,$3e,$3f,$0c,$3a,$10,$5f,$2e
+   1017 0000E7F1 2E                    
+   1018 0000E7F2 2E 2E 22 2E 7B 2B 2E    	.byte	$2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
+   1018 0000E7F9 2E                    
+   1019 0000E7FA 2E 2E 0D 7D 2E 7C 2E    	.byte	$2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
+   1019 0000E801 2E                    
+   1020 0000E802 2E 2E 2E 2E 2E 2E 08    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+   1020 0000E809 2E                    
+   1021 0000E80A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1021 0000E811 2E                    
+   1022 0000E812 2E 7F 2E 2E 2E 2E 1B    	.byte	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
+   1022 0000E819 2E                    
+   1023 0000E81A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1023 0000E821 2E                    
                                         
-    646 0000E5C2                        keybdExtendedCodes:
-    647 0000E5C2 2E 2E 2E 2E A3 A1 A2    	.byte	$2e,$2e,$2e,$2e,$a3,$a1,$a2,$2e
-    647 0000E5C9 2E                    
-    648 0000E5CA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    648 0000E5D1 2E                    
-    649 0000E5D2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    649 0000E5D9 2E                    
-    650 0000E5DA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    650 0000E5E1 2E                    
-    651 0000E5E2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    651 0000E5E9 2E                    
-    652 0000E5EA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    652 0000E5F1 2E                    
-    653 0000E5F2 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    653 0000E5F9 2E                    
-    654 0000E5FA 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    654 0000E601 2E                    
-    655 0000E602 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    655 0000E609 2E                    
-    656 0000E60A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    656 0000E611 2E                    
-    657 0000E612 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    657 0000E619 2E                    
-    658 0000E61A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    658 0000E621 2E                    
-    659 0000E622 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
-    659 0000E629 2E                    
-    660 0000E62A 2E 95 2E 93 94 2E 2E    	.byte	$2e,$95,$2e,$93,$94,$2e,$2e,$2e
-    660 0000E631 2E                    
-    661 0000E632 98 99 92 2E 91 90 2E    	.byte	$98,$99,$92,$2e,$91,$90,$2e,$2e
-    661 0000E639 2E                    
-    662 0000E63A 2E 2E 97 2E 2E 96 2E    	.byte	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
-    662 0000E641 2E                    
+   1025 0000E822                        keybdExtendedCodes:
+   1026 0000E822 2E 2E 2E 2E A3 A1 A2    	.byte	$2e,$2e,$2e,$2e,$a3,$a1,$a2,$2e
+   1026 0000E829 2E                    
+   1027 0000E82A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1027 0000E831 2E                    
+   1028 0000E832 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1028 0000E839 2E                    
+   1029 0000E83A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1029 0000E841 2E                    
+   1030 0000E842 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1030 0000E849 2E                    
+   1031 0000E84A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1031 0000E851 2E                    
+   1032 0000E852 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1032 0000E859 2E                    
+   1033 0000E85A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1033 0000E861 2E                    
+   1034 0000E862 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1034 0000E869 2E                    
+   1035 0000E86A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1035 0000E871 2E                    
+   1036 0000E872 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1036 0000E879 2E                    
+   1037 0000E87A 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1037 0000E881 2E                    
+   1038 0000E882 2E 2E 2E 2E 2E 2E 2E    	.byte	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+   1038 0000E889 2E                    
+   1039 0000E88A 2E 95 2E 93 94 2E 2E    	.byte	$2e,$95,$2e,$93,$94,$2e,$2e,$2e
+   1039 0000E891 2E                    
+   1040 0000E892 98 99 92 2E 91 90 2E    	.byte	$98,$99,$92,$2e,$91,$90,$2e,$2e
+   1040 0000E899 2E                    
+   1041 0000E89A 2E 2E 97 2E 2E 96 2E    	.byte	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
+   1041 0000E8A1 2E                    
                                         
                                         
-    665 0000E642 FF FF FF FF FF FF FF    		org		0xFFFE
-    665 0000E649 FF FF FF FF FF FF FF  
-    665 0000E650 FF FF FF FF FF FF FF  
-    665 0000E657 FF FF FF FF FF FF FF  
-    665 0000E65E FF FF FF FF FF FF FF  
-    665 0000E665 FF FF FF FF FF FF FF  
-    665 0000E66C FF FF FF FF FF FF FF  
-    665 0000E673 FF FF FF FF FF FF FF  
-    665 0000E67A FF FF FF FF FF FF FF  
-    665 0000E681 FF FF FF FF FF FF FF  
-    665 0000E688 FF FF FF FF FF FF FF  
-    665 0000E68F FF FF FF FF FF FF FF  
-    665 0000E696 FF FF FF FF FF FF FF  
-    665 0000E69D FF FF FF FF FF FF FF  
-    665 0000E6A4 FF FF FF FF FF FF FF  
-    665 0000E6AB FF FF FF FF FF FF FF  
-    665 0000E6B2 FF FF FF FF FF FF FF  
-    665 0000E6B9 FF FF FF FF FF FF FF  
-    665 0000E6C0 FF FF FF FF FF FF FF  
-    665 0000E6C7 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 14
+                                        	align	2
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 20
 noc_boot21.a
-    665 0000E6CE FF FF FF FF FF FF FF  
-    665 0000E6D5 FF FF FF FF FF FF FF  
-    665 0000E6DC FF FF FF FF FF FF FF  
-    665 0000E6E3 FF FF FF FF FF FF FF  
-    665 0000E6EA FF FF FF FF FF FF FF  
-    665 0000E6F1 FF FF FF FF FF FF FF  
-    665 0000E6F8 FF FF FF FF FF FF FF  
-    665 0000E6FF FF FF FF FF FF FF FF  
-    665 0000E706 FF FF FF FF FF FF FF  
-    665 0000E70D FF FF FF FF FF FF FF  
-    665 0000E714 FF FF FF FF FF FF FF  
-    665 0000E71B FF FF FF FF FF FF FF  
-    665 0000E722 FF FF FF FF FF FF FF  
-    665 0000E729 FF FF FF FF FF FF FF  
-    665 0000E730 FF FF FF FF FF FF FF  
-    665 0000E737 FF FF FF FF FF FF FF  
-    665 0000E73E FF FF FF FF FF FF FF  
-    665 0000E745 FF FF FF FF FF FF FF  
-    665 0000E74C FF FF FF FF FF FF FF  
-    665 0000E753 FF FF FF FF FF FF FF  
-    665 0000E75A FF FF FF FF FF FF FF  
-    665 0000E761 FF FF FF FF FF FF FF  
-    665 0000E768 FF FF FF FF FF FF FF  
-    665 0000E76F FF FF FF FF FF FF FF  
-    665 0000E776 FF FF FF FF FF FF FF  
-    665 0000E77D FF FF FF FF FF FF FF  
-    665 0000E784 FF FF FF FF FF FF FF  
-    665 0000E78B FF FF FF FF FF FF FF  
-    665 0000E792 FF FF FF FF FF FF FF  
-    665 0000E799 FF FF FF FF FF FF FF  
-    665 0000E7A0 FF FF FF FF FF FF FF  
-    665 0000E7A7 FF FF FF FF FF FF FF  
-    665 0000E7AE FF FF FF FF FF FF FF  
-    665 0000E7B5 FF FF FF FF FF FF FF  
-    665 0000E7BC FF FF FF FF FF FF FF  
-    665 0000E7C3 FF FF FF FF FF FF FF  
-    665 0000E7CA FF FF FF FF FF FF FF  
-    665 0000E7D1 FF FF FF FF FF FF FF  
-    665 0000E7D8 FF FF FF FF FF FF FF  
-    665 0000E7DF FF FF FF FF FF FF FF  
-    665 0000E7E6 FF FF FF FF FF FF FF  
-    665 0000E7ED FF FF FF FF FF FF FF  
-    665 0000E7F4 FF FF FF FF FF FF FF  
-    665 0000E7FB FF FF FF FF FF FF FF  
-    665 0000E802 FF FF FF FF FF FF FF  
-    665 0000E809 FF FF FF FF FF FF FF  
-    665 0000E810 FF FF FF FF FF FF FF  
-    665 0000E817 FF FF FF FF FF FF FF  
-    665 0000E81E FF FF FF FF FF FF FF  
-    665 0000E825 FF FF FF FF FF FF FF  
-    665 0000E82C FF FF FF FF FF FF FF  
-    665 0000E833 FF FF FF FF FF FF FF  
-    665 0000E83A FF FF FF FF FF FF FF  
-    665 0000E841 FF FF FF FF FF FF FF  
-    665 0000E848 FF FF FF FF FF FF FF  
-    665 0000E84F FF FF FF FF FF FF FF  
-    665 0000E856 FF FF FF FF FF FF FF  
-    665 0000E85D FF FF FF FF FF FF FF  
-    665 0000E864 FF FF FF FF FF FF FF  
-    665 0000E86B FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 15
+   1045 0000E8A2                        DCBTbl:
+   1046 0000E8A2 06 4E 4F 44 32 31 31    	db	6,"NOD211",0,0,0,0,0
+   1046 0000E8A9 00 00 00 00 00        
+   1047 0000E8AE 00 00                   	dw	0						; type
+   1048 0000E8B0 00 00                   	dw  0						; nBPB
+   1049 0000E8B2 00 00                   	dw	0						; LastErc
+   1050 0000E8B4 00 00                   	dw	0						; reserved
+   1051 0000E8B6 00 00                   	dw	0						; start block low
+   1052 0000E8B8 00 00                   	dw	0						; start block high
+   1053 0000E8BA 00 00                   	dw	0						; number of blocks
+   1054 0000E8BC 00 00                   	dw	0						;	"
+   1055 0000E8BE 50 E3                   	dw	NodeCmdProc				; pCmdProc
+   1056 0000E8C0 00 00                   	dw	0						; reserved
+   1057 0000E8C2 00                      	db	0						; reentry count
+   1058 0000E8C3 00                      	db	0						; single user flag
+   1059 0000E8C4 00 00                   	dw	0						; hJob
+   1060 0000E8C6 00 00                   	dw	0						; hMbx
+   1061 0000E8C8 00 00                   	dw	0						; hSemaphore
+   1062 0000E8CA 00 00 00 00 00 00 00    	fill.b	8,0					; reserved
+   1062 0000E8D1 00                    
+   1063 0000E8D2 03 4B 42 44 00 00 00    		
+   1063 0000E8D9 00 00 00 00 00        
+   1064 0000E8DE 00 00                   	dw	0						; type
+   1065 0000E8E0 00 00                   	dw  0						; nBPB
+   1066 0000E8E2 00 00                   	dw	0						; LastErc
+   1067 0000E8E4 00 00                   	dw	0						; reserved
+   1068 0000E8E6 00 00                   	dw	0						; start block low
+   1069 0000E8E8 00 00                   	dw	0						; start block high
+   1070 0000E8EA 00 00                   	dw	0						; number of blocks
+   1071 0000E8EC 00 00                   	dw	0						;	"
+   1072 0000E8EE EE E8                   	dw	KeybdCmdProc			; pCmdProc
+   1073 0000E8F0 00 00                   	dw	0						; reserved
+   1074 0000E8F2 00                      	db	0						; reentry count
+   1075 0000E8F3 00                      	db	0						; single user flag
+   1076 0000E8F4 00 00                   	dw	0						; hJob
+   1077 0000E8F6 00 00                   	dw	0						; hMbx
+   1078 0000E8F8 00 00                   	dw	0						; hSemaphore
+   1079 0000E8FA 00 00 00 00 00 00 00    	fill.b	8,0					; reserved
+   1079 0000E901 00                    
+                                        
+   1081 0000E902 03 42 54 4E 00 00 00    	db	3,"BTN",0,0,0,0,0,0,0,0
+   1081 0000E909 00 00 00 00 00        
+   1082 0000E90E 00 00                   	dw	0						; type
+   1083 0000E910 00 00                   	dw  0						; nBPB
+   1084 0000E912 00 00                   	dw	0						; LastErc
+   1085 0000E914 00 00                   	dw	0						; reserved
+   1086 0000E916 00 00                   	dw	0						; start block low
+   1087 0000E918 00 00                   	dw	0						; start block high
+   1088 0000E91A 00 00                   	dw	0						; number of blocks
+   1089 0000E91C 00 00                   	dw	0						;	"
+   1090 0000E91E 72 E3                   	dw	BtnsCmdProc				; pCmdProc
+   1091 0000E920 00 00                   	dw	0						; reserved
+   1092 0000E922 00                      	db	0						; reentry count
+   1093 0000E923 00                      	db	0						; single user flag
+   1094 0000E924 00 00                   	dw	0						; hJob
+   1095 0000E926 00 00                   	dw	0						; hMbx
+   1096 0000E928 00 00                   	dw	0						; hSemaphore
+   1097 0000E92A 00 00 00 00 00 00 00    	fill.b	8,0					; reserved
+   1097 0000E931 00                    
+                                        
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 21
 noc_boot21.a
-    665 0000E872 FF FF FF FF FF FF FF  
-    665 0000E879 FF FF FF FF FF FF FF  
-    665 0000E880 FF FF FF FF FF FF FF  
-    665 0000E887 FF FF FF FF FF FF FF  
-    665 0000E88E FF FF FF FF FF FF FF  
-    665 0000E895 FF FF FF FF FF FF FF  
-    665 0000E89C FF FF FF FF FF FF FF  
-    665 0000E8A3 FF FF FF FF FF FF FF  
-    665 0000E8AA FF FF FF FF FF FF FF  
-    665 0000E8B1 FF FF FF FF FF FF FF  
-    665 0000E8B8 FF FF FF FF FF FF FF  
-    665 0000E8BF FF FF FF FF FF FF FF  
-    665 0000E8C6 FF FF FF FF FF FF FF  
-    665 0000E8CD FF FF FF FF FF FF FF  
-    665 0000E8D4 FF FF FF FF FF FF FF  
-    665 0000E8DB FF FF FF FF FF FF FF  
-    665 0000E8E2 FF FF FF FF FF FF FF  
-    665 0000E8E9 FF FF FF FF FF FF FF  
-    665 0000E8F0 FF FF FF FF FF FF FF  
-    665 0000E8F7 FF FF FF FF FF FF FF  
-    665 0000E8FE FF FF FF FF FF FF FF  
-    665 0000E905 FF FF FF FF FF FF FF  
-    665 0000E90C FF FF FF FF FF FF FF  
-    665 0000E913 FF FF FF FF FF FF FF  
-    665 0000E91A FF FF FF FF FF FF FF  
-    665 0000E921 FF FF FF FF FF FF FF  
-    665 0000E928 FF FF FF FF FF FF FF  
-    665 0000E92F FF FF FF FF FF FF FF  
-    665 0000E936 FF FF FF FF FF FF FF  
-    665 0000E93D FF FF FF FF FF FF FF  
-    665 0000E944 FF FF FF FF FF FF FF  
-    665 0000E94B FF FF FF FF FF FF FF  
-    665 0000E952 FF FF FF FF FF FF FF  
-    665 0000E959 FF FF FF FF FF FF FF  
-    665 0000E960 FF FF FF FF FF FF FF  
-    665 0000E967 FF FF FF FF FF FF FF  
-    665 0000E96E FF FF FF FF FF FF FF  
-    665 0000E975 FF FF FF FF FF FF FF  
-    665 0000E97C FF FF FF FF FF FF FF  
-    665 0000E983 FF FF FF FF FF FF FF  
-    665 0000E98A FF FF FF FF FF FF FF  
-    665 0000E991 FF FF FF FF FF FF FF  
-    665 0000E998 FF FF FF FF FF FF FF  
-    665 0000E99F FF FF FF FF FF FF FF  
-    665 0000E9A6 FF FF FF FF FF FF FF  
-    665 0000E9AD FF FF FF FF FF FF FF  
-    665 0000E9B4 FF FF FF FF FF FF FF  
-    665 0000E9BB FF FF FF FF FF FF FF  
-    665 0000E9C2 FF FF FF FF FF FF FF  
-    665 0000E9C9 FF FF FF FF FF FF FF  
-    665 0000E9D0 FF FF FF FF FF FF FF  
-    665 0000E9D7 FF FF FF FF FF FF FF  
-    665 0000E9DE FF FF FF FF FF FF FF  
-    665 0000E9E5 FF FF FF FF FF FF FF  
-    665 0000E9EC FF FF FF FF FF FF FF  
-    665 0000E9F3 FF FF FF FF FF FF FF  
-    665 0000E9FA FF FF FF FF FF FF FF  
-    665 0000EA01 FF FF FF FF FF FF FF  
-    665 0000EA08 FF FF FF FF FF FF FF  
-    665 0000EA0F FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 16
+   1099 0000E932 FF FF FF FF FF FF FF    		org		0xFFFE
+   1099 0000E939 FF FF FF FF FF FF FF  
+   1099 0000E940 FF FF FF FF FF FF FF  
+   1099 0000E947 FF FF FF FF FF FF FF  
+   1099 0000E94E FF FF FF FF FF FF FF  
+   1099 0000E955 FF FF FF FF FF FF FF  
+   1099 0000E95C FF FF FF FF FF FF FF  
+   1099 0000E963 FF FF FF FF FF FF FF  
+   1099 0000E96A FF FF FF FF FF FF FF  
+   1099 0000E971 FF FF FF FF FF FF FF  
+   1099 0000E978 FF FF FF FF FF FF FF  
+   1099 0000E97F FF FF FF FF FF FF FF  
+   1099 0000E986 FF FF FF FF FF FF FF  
+   1099 0000E98D FF FF FF FF FF FF FF  
+   1099 0000E994 FF FF FF FF FF FF FF  
+   1099 0000E99B FF FF FF FF FF FF FF  
+   1099 0000E9A2 FF FF FF FF FF FF FF  
+   1099 0000E9A9 FF FF FF FF FF FF FF  
+   1099 0000E9B0 FF FF FF FF FF FF FF  
+   1099 0000E9B7 FF FF FF FF FF FF FF  
+   1099 0000E9BE FF FF FF FF FF FF FF  
+   1099 0000E9C5 FF FF FF FF FF FF FF  
+   1099 0000E9CC FF FF FF FF FF FF FF  
+   1099 0000E9D3 FF FF FF FF FF FF FF  
+   1099 0000E9DA FF FF FF FF FF FF FF  
+   1099 0000E9E1 FF FF FF FF FF FF FF  
+   1099 0000E9E8 FF FF FF FF FF FF FF  
+   1099 0000E9EF FF FF FF FF FF FF FF  
+   1099 0000E9F6 FF FF FF FF FF FF FF  
+   1099 0000E9FD FF FF FF FF FF FF FF  
+   1099 0000EA04 FF FF FF FF FF FF FF  
+   1099 0000EA0B FF FF FF FF FF FF FF  
+   1099 0000EA12 FF FF FF FF FF FF FF  
+   1099 0000EA19 FF FF FF FF FF FF FF  
+   1099 0000EA20 FF FF FF FF FF FF FF  
+   1099 0000EA27 FF FF FF FF FF FF FF  
+   1099 0000EA2E FF FF FF FF FF FF FF  
+   1099 0000EA35 FF FF FF FF FF FF FF  
+   1099 0000EA3C FF FF FF FF FF FF FF  
+   1099 0000EA43 FF FF FF FF FF FF FF  
+   1099 0000EA4A FF FF FF FF FF FF FF  
+   1099 0000EA51 FF FF FF FF FF FF FF  
+   1099 0000EA58 FF FF FF FF FF FF FF  
+   1099 0000EA5F FF FF FF FF FF FF FF  
+   1099 0000EA66 FF FF FF FF FF FF FF  
+   1099 0000EA6D FF FF FF FF FF FF FF  
+   1099 0000EA74 FF FF FF FF FF FF FF  
+   1099 0000EA7B FF FF FF FF FF FF FF  
+   1099 0000EA82 FF FF FF FF FF FF FF  
+   1099 0000EA89 FF FF FF FF FF FF FF  
+   1099 0000EA90 FF FF FF FF FF FF FF  
+   1099 0000EA97 FF FF FF FF FF FF FF  
+   1099 0000EA9E FF FF FF FF FF FF FF  
+   1099 0000EAA5 FF FF FF FF FF FF FF  
+   1099 0000EAAC FF FF FF FF FF FF FF  
+   1099 0000EAB3 FF FF FF FF FF FF FF  
+   1099 0000EABA FF FF FF FF FF FF FF  
+   1099 0000EAC1 FF FF FF FF FF FF FF  
+   1099 0000EAC8 FF FF FF FF FF FF FF  
+   1099 0000EACF FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 22
 noc_boot21.a
-    665 0000EA16 FF FF FF FF FF FF FF  
-    665 0000EA1D FF FF FF FF FF FF FF  
-    665 0000EA24 FF FF FF FF FF FF FF  
-    665 0000EA2B FF FF FF FF FF FF FF  
-    665 0000EA32 FF FF FF FF FF FF FF  
-    665 0000EA39 FF FF FF FF FF FF FF  
-    665 0000EA40 FF FF FF FF FF FF FF  
-    665 0000EA47 FF FF FF FF FF FF FF  
-    665 0000EA4E FF FF FF FF FF FF FF  
-    665 0000EA55 FF FF FF FF FF FF FF  
-    665 0000EA5C FF FF FF FF FF FF FF  
-    665 0000EA63 FF FF FF FF FF FF FF  
-    665 0000EA6A FF FF FF FF FF FF FF  
-    665 0000EA71 FF FF FF FF FF FF FF  
-    665 0000EA78 FF FF FF FF FF FF FF  
-    665 0000EA7F FF FF FF FF FF FF FF  
-    665 0000EA86 FF FF FF FF FF FF FF  
-    665 0000EA8D FF FF FF FF FF FF FF  
-    665 0000EA94 FF FF FF FF FF FF FF  
-    665 0000EA9B FF FF FF FF FF FF FF  
-    665 0000EAA2 FF FF FF FF FF FF FF  
-    665 0000EAA9 FF FF FF FF FF FF FF  
-    665 0000EAB0 FF FF FF FF FF FF FF  
-    665 0000EAB7 FF FF FF FF FF FF FF  
-    665 0000EABE FF FF FF FF FF FF FF  
-    665 0000EAC5 FF FF FF FF FF FF FF  
-    665 0000EACC FF FF FF FF FF FF FF  
-    665 0000EAD3 FF FF FF FF FF FF FF  
-    665 0000EADA FF FF FF FF FF FF FF  
-    665 0000EAE1 FF FF FF FF FF FF FF  
-    665 0000EAE8 FF FF FF FF FF FF FF  
-    665 0000EAEF FF FF FF FF FF FF FF  
-    665 0000EAF6 FF FF FF FF FF FF FF  
-    665 0000EAFD FF FF FF FF FF FF FF  
-    665 0000EB04 FF FF FF FF FF FF FF  
-    665 0000EB0B FF FF FF FF FF FF FF  
-    665 0000EB12 FF FF FF FF FF FF FF  
-    665 0000EB19 FF FF FF FF FF FF FF  
-    665 0000EB20 FF FF FF FF FF FF FF  
-    665 0000EB27 FF FF FF FF FF FF FF  
-    665 0000EB2E FF FF FF FF FF FF FF  
-    665 0000EB35 FF FF FF FF FF FF FF  
-    665 0000EB3C FF FF FF FF FF FF FF  
-    665 0000EB43 FF FF FF FF FF FF FF  
-    665 0000EB4A FF FF FF FF FF FF FF  
-    665 0000EB51 FF FF FF FF FF FF FF  
-    665 0000EB58 FF FF FF FF FF FF FF  
-    665 0000EB5F FF FF FF FF FF FF FF  
-    665 0000EB66 FF FF FF FF FF FF FF  
-    665 0000EB6D FF FF FF FF FF FF FF  
-    665 0000EB74 FF FF FF FF FF FF FF  
-    665 0000EB7B FF FF FF FF FF FF FF  
-    665 0000EB82 FF FF FF FF FF FF FF  
-    665 0000EB89 FF FF FF FF FF FF FF  
-    665 0000EB90 FF FF FF FF FF FF FF  
-    665 0000EB97 FF FF FF FF FF FF FF  
-    665 0000EB9E FF FF FF FF FF FF FF  
-    665 0000EBA5 FF FF FF FF FF FF FF  
-    665 0000EBAC FF FF FF FF FF FF FF  
-    665 0000EBB3 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 17
+   1099 0000EAD6 FF FF FF FF FF FF FF  
+   1099 0000EADD FF FF FF FF FF FF FF  
+   1099 0000EAE4 FF FF FF FF FF FF FF  
+   1099 0000EAEB FF FF FF FF FF FF FF  
+   1099 0000EAF2 FF FF FF FF FF FF FF  
+   1099 0000EAF9 FF FF FF FF FF FF FF  
+   1099 0000EB00 FF FF FF FF FF FF FF  
+   1099 0000EB07 FF FF FF FF FF FF FF  
+   1099 0000EB0E FF FF FF FF FF FF FF  
+   1099 0000EB15 FF FF FF FF FF FF FF  
+   1099 0000EB1C FF FF FF FF FF FF FF  
+   1099 0000EB23 FF FF FF FF FF FF FF  
+   1099 0000EB2A FF FF FF FF FF FF FF  
+   1099 0000EB31 FF FF FF FF FF FF FF  
+   1099 0000EB38 FF FF FF FF FF FF FF  
+   1099 0000EB3F FF FF FF FF FF FF FF  
+   1099 0000EB46 FF FF FF FF FF FF FF  
+   1099 0000EB4D FF FF FF FF FF FF FF  
+   1099 0000EB54 FF FF FF FF FF FF FF  
+   1099 0000EB5B FF FF FF FF FF FF FF  
+   1099 0000EB62 FF FF FF FF FF FF FF  
+   1099 0000EB69 FF FF FF FF FF FF FF  
+   1099 0000EB70 FF FF FF FF FF FF FF  
+   1099 0000EB77 FF FF FF FF FF FF FF  
+   1099 0000EB7E FF FF FF FF FF FF FF  
+   1099 0000EB85 FF FF FF FF FF FF FF  
+   1099 0000EB8C FF FF FF FF FF FF FF  
+   1099 0000EB93 FF FF FF FF FF FF FF  
+   1099 0000EB9A FF FF FF FF FF FF FF  
+   1099 0000EBA1 FF FF FF FF FF FF FF  
+   1099 0000EBA8 FF FF FF FF FF FF FF  
+   1099 0000EBAF FF FF FF FF FF FF FF  
+   1099 0000EBB6 FF FF FF FF FF FF FF  
+   1099 0000EBBD FF FF FF FF FF FF FF  
+   1099 0000EBC4 FF FF FF FF FF FF FF  
+   1099 0000EBCB FF FF FF FF FF FF FF  
+   1099 0000EBD2 FF FF FF FF FF FF FF  
+   1099 0000EBD9 FF FF FF FF FF FF FF  
+   1099 0000EBE0 FF FF FF FF FF FF FF  
+   1099 0000EBE7 FF FF FF FF FF FF FF  
+   1099 0000EBEE FF FF FF FF FF FF FF  
+   1099 0000EBF5 FF FF FF FF FF FF FF  
+   1099 0000EBFC FF FF FF FF FF FF FF  
+   1099 0000EC03 FF FF FF FF FF FF FF  
+   1099 0000EC0A FF FF FF FF FF FF FF  
+   1099 0000EC11 FF FF FF FF FF FF FF  
+   1099 0000EC18 FF FF FF FF FF FF FF  
+   1099 0000EC1F FF FF FF FF FF FF FF  
+   1099 0000EC26 FF FF FF FF FF FF FF  
+   1099 0000EC2D FF FF FF FF FF FF FF  
+   1099 0000EC34 FF FF FF FF FF FF FF  
+   1099 0000EC3B FF FF FF FF FF FF FF  
+   1099 0000EC42 FF FF FF FF FF FF FF  
+   1099 0000EC49 FF FF FF FF FF FF FF  
+   1099 0000EC50 FF FF FF FF FF FF FF  
+   1099 0000EC57 FF FF FF FF FF FF FF  
+   1099 0000EC5E FF FF FF FF FF FF FF  
+   1099 0000EC65 FF FF FF FF FF FF FF  
+   1099 0000EC6C FF FF FF FF FF FF FF  
+   1099 0000EC73 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 23
 noc_boot21.a
-    665 0000EBBA FF FF FF FF FF FF FF  
-    665 0000EBC1 FF FF FF FF FF FF FF  
-    665 0000EBC8 FF FF FF FF FF FF FF  
-    665 0000EBCF FF FF FF FF FF FF FF  
-    665 0000EBD6 FF FF FF FF FF FF FF  
-    665 0000EBDD FF FF FF FF FF FF FF  
-    665 0000EBE4 FF FF FF FF FF FF FF  
-    665 0000EBEB FF FF FF FF FF FF FF  
-    665 0000EBF2 FF FF FF FF FF FF FF  
-    665 0000EBF9 FF FF FF FF FF FF FF  
-    665 0000EC00 FF FF FF FF FF FF FF  
-    665 0000EC07 FF FF FF FF FF FF FF  
-    665 0000EC0E FF FF FF FF FF FF FF  
-    665 0000EC15 FF FF FF FF FF FF FF  
-    665 0000EC1C FF FF FF FF FF FF FF  
-    665 0000EC23 FF FF FF FF FF FF FF  
-    665 0000EC2A FF FF FF FF FF FF FF  
-    665 0000EC31 FF FF FF FF FF FF FF  
-    665 0000EC38 FF FF FF FF FF FF FF  
-    665 0000EC3F FF FF FF FF FF FF FF  
-    665 0000EC46 FF FF FF FF FF FF FF  
-    665 0000EC4D FF FF FF FF FF FF FF  
-    665 0000EC54 FF FF FF FF FF FF FF  
-    665 0000EC5B FF FF FF FF FF FF FF  
-    665 0000EC62 FF FF FF FF FF FF FF  
-    665 0000EC69 FF FF FF FF FF FF FF  
-    665 0000EC70 FF FF FF FF FF FF FF  
-    665 0000EC77 FF FF FF FF FF FF FF  
-    665 0000EC7E FF FF FF FF FF FF FF  
-    665 0000EC85 FF FF FF FF FF FF FF  
-    665 0000EC8C FF FF FF FF FF FF FF  
-    665 0000EC93 FF FF FF FF FF FF FF  
-    665 0000EC9A FF FF FF FF FF FF FF  
-    665 0000ECA1 FF FF FF FF FF FF FF  
-    665 0000ECA8 FF FF FF FF FF FF FF  
-    665 0000ECAF FF FF FF FF FF FF FF  
-    665 0000ECB6 FF FF FF FF FF FF FF  
-    665 0000ECBD FF FF FF FF FF FF FF  
-    665 0000ECC4 FF FF FF FF FF FF FF  
-    665 0000ECCB FF FF FF FF FF FF FF  
-    665 0000ECD2 FF FF FF FF FF FF FF  
-    665 0000ECD9 FF FF FF FF FF FF FF  
-    665 0000ECE0 FF FF FF FF FF FF FF  
-    665 0000ECE7 FF FF FF FF FF FF FF  
-    665 0000ECEE FF FF FF FF FF FF FF  
-    665 0000ECF5 FF FF FF FF FF FF FF  
-    665 0000ECFC FF FF FF FF FF FF FF  
-    665 0000ED03 FF FF FF FF FF FF FF  
-    665 0000ED0A FF FF FF FF FF FF FF  
-    665 0000ED11 FF FF FF FF FF FF FF  
-    665 0000ED18 FF FF FF FF FF FF FF  
-    665 0000ED1F FF FF FF FF FF FF FF  
-    665 0000ED26 FF FF FF FF FF FF FF  
-    665 0000ED2D FF FF FF FF FF FF FF  
-    665 0000ED34 FF FF FF FF FF FF FF  
-    665 0000ED3B FF FF FF FF FF FF FF  
-    665 0000ED42 FF FF FF FF FF FF FF  
-    665 0000ED49 FF FF FF FF FF FF FF  
-    665 0000ED50 FF FF FF FF FF FF FF  
-    665 0000ED57 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 18
+   1099 0000EC7A FF FF FF FF FF FF FF  
+   1099 0000EC81 FF FF FF FF FF FF FF  
+   1099 0000EC88 FF FF FF FF FF FF FF  
+   1099 0000EC8F FF FF FF FF FF FF FF  
+   1099 0000EC96 FF FF FF FF FF FF FF  
+   1099 0000EC9D FF FF FF FF FF FF FF  
+   1099 0000ECA4 FF FF FF FF FF FF FF  
+   1099 0000ECAB FF FF FF FF FF FF FF  
+   1099 0000ECB2 FF FF FF FF FF FF FF  
+   1099 0000ECB9 FF FF FF FF FF FF FF  
+   1099 0000ECC0 FF FF FF FF FF FF FF  
+   1099 0000ECC7 FF FF FF FF FF FF FF  
+   1099 0000ECCE FF FF FF FF FF FF FF  
+   1099 0000ECD5 FF FF FF FF FF FF FF  
+   1099 0000ECDC FF FF FF FF FF FF FF  
+   1099 0000ECE3 FF FF FF FF FF FF FF  
+   1099 0000ECEA FF FF FF FF FF FF FF  
+   1099 0000ECF1 FF FF FF FF FF FF FF  
+   1099 0000ECF8 FF FF FF FF FF FF FF  
+   1099 0000ECFF FF FF FF FF FF FF FF  
+   1099 0000ED06 FF FF FF FF FF FF FF  
+   1099 0000ED0D FF FF FF FF FF FF FF  
+   1099 0000ED14 FF FF FF FF FF FF FF  
+   1099 0000ED1B FF FF FF FF FF FF FF  
+   1099 0000ED22 FF FF FF FF FF FF FF  
+   1099 0000ED29 FF FF FF FF FF FF FF  
+   1099 0000ED30 FF FF FF FF FF FF FF  
+   1099 0000ED37 FF FF FF FF FF FF FF  
+   1099 0000ED3E FF FF FF FF FF FF FF  
+   1099 0000ED45 FF FF FF FF FF FF FF  
+   1099 0000ED4C FF FF FF FF FF FF FF  
+   1099 0000ED53 FF FF FF FF FF FF FF  
+   1099 0000ED5A FF FF FF FF FF FF FF  
+   1099 0000ED61 FF FF FF FF FF FF FF  
+   1099 0000ED68 FF FF FF FF FF FF FF  
+   1099 0000ED6F FF FF FF FF FF FF FF  
+   1099 0000ED76 FF FF FF FF FF FF FF  
+   1099 0000ED7D FF FF FF FF FF FF FF  
+   1099 0000ED84 FF FF FF FF FF FF FF  
+   1099 0000ED8B FF FF FF FF FF FF FF  
+   1099 0000ED92 FF FF FF FF FF FF FF  
+   1099 0000ED99 FF FF FF FF FF FF FF  
+   1099 0000EDA0 FF FF FF FF FF FF FF  
+   1099 0000EDA7 FF FF FF FF FF FF FF  
+   1099 0000EDAE FF FF FF FF FF FF FF  
+   1099 0000EDB5 FF FF FF FF FF FF FF  
+   1099 0000EDBC FF FF FF FF FF FF FF  
+   1099 0000EDC3 FF FF FF FF FF FF FF  
+   1099 0000EDCA FF FF FF FF FF FF FF  
+   1099 0000EDD1 FF FF FF FF FF FF FF  
+   1099 0000EDD8 FF FF FF FF FF FF FF  
+   1099 0000EDDF FF FF FF FF FF FF FF  
+   1099 0000EDE6 FF FF FF FF FF FF FF  
+   1099 0000EDED FF FF FF FF FF FF FF  
+   1099 0000EDF4 FF FF FF FF FF FF FF  
+   1099 0000EDFB FF FF FF FF FF FF FF  
+   1099 0000EE02 FF FF FF FF FF FF FF  
+   1099 0000EE09 FF FF FF FF FF FF FF  
+   1099 0000EE10 FF FF FF FF FF FF FF  
+   1099 0000EE17 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 24
 noc_boot21.a
-    665 0000ED5E FF FF FF FF FF FF FF  
-    665 0000ED65 FF FF FF FF FF FF FF  
-    665 0000ED6C FF FF FF FF FF FF FF  
-    665 0000ED73 FF FF FF FF FF FF FF  
-    665 0000ED7A FF FF FF FF FF FF FF  
-    665 0000ED81 FF FF FF FF FF FF FF  
-    665 0000ED88 FF FF FF FF FF FF FF  
-    665 0000ED8F FF FF FF FF FF FF FF  
-    665 0000ED96 FF FF FF FF FF FF FF  
-    665 0000ED9D FF FF FF FF FF FF FF  
-    665 0000EDA4 FF FF FF FF FF FF FF  
-    665 0000EDAB FF FF FF FF FF FF FF  
-    665 0000EDB2 FF FF FF FF FF FF FF  
-    665 0000EDB9 FF FF FF FF FF FF FF  
-    665 0000EDC0 FF FF FF FF FF FF FF  
-    665 0000EDC7 FF FF FF FF FF FF FF  
-    665 0000EDCE FF FF FF FF FF FF FF  
-    665 0000EDD5 FF FF FF FF FF FF FF  
-    665 0000EDDC FF FF FF FF FF FF FF  
-    665 0000EDE3 FF FF FF FF FF FF FF  
-    665 0000EDEA FF FF FF FF FF FF FF  
-    665 0000EDF1 FF FF FF FF FF FF FF  
-    665 0000EDF8 FF FF FF FF FF FF FF  
-    665 0000EDFF FF FF FF FF FF FF FF  
-    665 0000EE06 FF FF FF FF FF FF FF  
-    665 0000EE0D FF FF FF FF FF FF FF  
-    665 0000EE14 FF FF FF FF FF FF FF  
-    665 0000EE1B FF FF FF FF FF FF FF  
-    665 0000EE22 FF FF FF FF FF FF FF  
-    665 0000EE29 FF FF FF FF FF FF FF  
-    665 0000EE30 FF FF FF FF FF FF FF  
-    665 0000EE37 FF FF FF FF FF FF FF  
-    665 0000EE3E FF FF FF FF FF FF FF  
-    665 0000EE45 FF FF FF FF FF FF FF  
-    665 0000EE4C FF FF FF FF FF FF FF  
-    665 0000EE53 FF FF FF FF FF FF FF  
-    665 0000EE5A FF FF FF FF FF FF FF  
-    665 0000EE61 FF FF FF FF FF FF FF  
-    665 0000EE68 FF FF FF FF FF FF FF  
-    665 0000EE6F FF FF FF FF FF FF FF  
-    665 0000EE76 FF FF FF FF FF FF FF  
-    665 0000EE7D FF FF FF FF FF FF FF  
-    665 0000EE84 FF FF FF FF FF FF FF  
-    665 0000EE8B FF FF FF FF FF FF FF  
-    665 0000EE92 FF FF FF FF FF FF FF  
-    665 0000EE99 FF FF FF FF FF FF FF  
-    665 0000EEA0 FF FF FF FF FF FF FF  
-    665 0000EEA7 FF FF FF FF FF FF FF  
-    665 0000EEAE FF FF FF FF FF FF FF  
-    665 0000EEB5 FF FF FF FF FF FF FF  
-    665 0000EEBC FF FF FF FF FF FF FF  
-    665 0000EEC3 FF FF FF FF FF FF FF  
-    665 0000EECA FF FF FF FF FF FF FF  
-    665 0000EED1 FF FF FF FF FF FF FF  
-    665 0000EED8 FF FF FF FF FF FF FF  
-    665 0000EEDF FF FF FF FF FF FF FF  
-    665 0000EEE6 FF FF FF FF FF FF FF  
-    665 0000EEED FF FF FF FF FF FF FF  
-    665 0000EEF4 FF FF FF FF FF FF FF  
-    665 0000EEFB FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 19
+   1099 0000EE1E FF FF FF FF FF FF FF  
+   1099 0000EE25 FF FF FF FF FF FF FF  
+   1099 0000EE2C FF FF FF FF FF FF FF  
+   1099 0000EE33 FF FF FF FF FF FF FF  
+   1099 0000EE3A FF FF FF FF FF FF FF  
+   1099 0000EE41 FF FF FF FF FF FF FF  
+   1099 0000EE48 FF FF FF FF FF FF FF  
+   1099 0000EE4F FF FF FF FF FF FF FF  
+   1099 0000EE56 FF FF FF FF FF FF FF  
+   1099 0000EE5D FF FF FF FF FF FF FF  
+   1099 0000EE64 FF FF FF FF FF FF FF  
+   1099 0000EE6B FF FF FF FF FF FF FF  
+   1099 0000EE72 FF FF FF FF FF FF FF  
+   1099 0000EE79 FF FF FF FF FF FF FF  
+   1099 0000EE80 FF FF FF FF FF FF FF  
+   1099 0000EE87 FF FF FF FF FF FF FF  
+   1099 0000EE8E FF FF FF FF FF FF FF  
+   1099 0000EE95 FF FF FF FF FF FF FF  
+   1099 0000EE9C FF FF FF FF FF FF FF  
+   1099 0000EEA3 FF FF FF FF FF FF FF  
+   1099 0000EEAA FF FF FF FF FF FF FF  
+   1099 0000EEB1 FF FF FF FF FF FF FF  
+   1099 0000EEB8 FF FF FF FF FF FF FF  
+   1099 0000EEBF FF FF FF FF FF FF FF  
+   1099 0000EEC6 FF FF FF FF FF FF FF  
+   1099 0000EECD FF FF FF FF FF FF FF  
+   1099 0000EED4 FF FF FF FF FF FF FF  
+   1099 0000EEDB FF FF FF FF FF FF FF  
+   1099 0000EEE2 FF FF FF FF FF FF FF  
+   1099 0000EEE9 FF FF FF FF FF FF FF  
+   1099 0000EEF0 FF FF FF FF FF FF FF  
+   1099 0000EEF7 FF FF FF FF FF FF FF  
+   1099 0000EEFE FF FF FF FF FF FF FF  
+   1099 0000EF05 FF FF FF FF FF FF FF  
+   1099 0000EF0C FF FF FF FF FF FF FF  
+   1099 0000EF13 FF FF FF FF FF FF FF  
+   1099 0000EF1A FF FF FF FF FF FF FF  
+   1099 0000EF21 FF FF FF FF FF FF FF  
+   1099 0000EF28 FF FF FF FF FF FF FF  
+   1099 0000EF2F FF FF FF FF FF FF FF  
+   1099 0000EF36 FF FF FF FF FF FF FF  
+   1099 0000EF3D FF FF FF FF FF FF FF  
+   1099 0000EF44 FF FF FF FF FF FF FF  
+   1099 0000EF4B FF FF FF FF FF FF FF  
+   1099 0000EF52 FF FF FF FF FF FF FF  
+   1099 0000EF59 FF FF FF FF FF FF FF  
+   1099 0000EF60 FF FF FF FF FF FF FF  
+   1099 0000EF67 FF FF FF FF FF FF FF  
+   1099 0000EF6E FF FF FF FF FF FF FF  
+   1099 0000EF75 FF FF FF FF FF FF FF  
+   1099 0000EF7C FF FF FF FF FF FF FF  
+   1099 0000EF83 FF FF FF FF FF FF FF  
+   1099 0000EF8A FF FF FF FF FF FF FF  
+   1099 0000EF91 FF FF FF FF FF FF FF  
+   1099 0000EF98 FF FF FF FF FF FF FF  
+   1099 0000EF9F FF FF FF FF FF FF FF  
+   1099 0000EFA6 FF FF FF FF FF FF FF  
+   1099 0000EFAD FF FF FF FF FF FF FF  
+   1099 0000EFB4 FF FF FF FF FF FF FF  
+   1099 0000EFBB FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 25
 noc_boot21.a
-    665 0000EF02 FF FF FF FF FF FF FF  
-    665 0000EF09 FF FF FF FF FF FF FF  
-    665 0000EF10 FF FF FF FF FF FF FF  
-    665 0000EF17 FF FF FF FF FF FF FF  
-    665 0000EF1E FF FF FF FF FF FF FF  
-    665 0000EF25 FF FF FF FF FF FF FF  
-    665 0000EF2C FF FF FF FF FF FF FF  
-    665 0000EF33 FF FF FF FF FF FF FF  
-    665 0000EF3A FF FF FF FF FF FF FF  
-    665 0000EF41 FF FF FF FF FF FF FF  
-    665 0000EF48 FF FF FF FF FF FF FF  
-    665 0000EF4F FF FF FF FF FF FF FF  
-    665 0000EF56 FF FF FF FF FF FF FF  
-    665 0000EF5D FF FF FF FF FF FF FF  
-    665 0000EF64 FF FF FF FF FF FF FF  
-    665 0000EF6B FF FF FF FF FF FF FF  
-    665 0000EF72 FF FF FF FF FF FF FF  
-    665 0000EF79 FF FF FF FF FF FF FF  
-    665 0000EF80 FF FF FF FF FF FF FF  
-    665 0000EF87 FF FF FF FF FF FF FF  
-    665 0000EF8E FF FF FF FF FF FF FF  
-    665 0000EF95 FF FF FF FF FF FF FF  
-    665 0000EF9C FF FF FF FF FF FF FF  
-    665 0000EFA3 FF FF FF FF FF FF FF  
-    665 0000EFAA FF FF FF FF FF FF FF  
-    665 0000EFB1 FF FF FF FF FF FF FF  
-    665 0000EFB8 FF FF FF FF FF FF FF  
-    665 0000EFBF FF FF FF FF FF FF FF  
-    665 0000EFC6 FF FF FF FF FF FF FF  
-    665 0000EFCD FF FF FF FF FF FF FF  
-    665 0000EFD4 FF FF FF FF FF FF FF  
-    665 0000EFDB FF FF FF FF FF FF FF  
-    665 0000EFE2 FF FF FF FF FF FF FF  
-    665 0000EFE9 FF FF FF FF FF FF FF  
-    665 0000EFF0 FF FF FF FF FF FF FF  
-    665 0000EFF7 FF FF FF FF FF FF FF  
-    665 0000EFFE FF FF FF FF FF FF FF  
-    665 0000F005 FF FF FF FF FF FF FF  
-    665 0000F00C FF FF FF FF FF FF FF  
-    665 0000F013 FF FF FF FF FF FF FF  
-    665 0000F01A FF FF FF FF FF FF FF  
-    665 0000F021 FF FF FF FF FF FF FF  
-    665 0000F028 FF FF FF FF FF FF FF  
-    665 0000F02F FF FF FF FF FF FF FF  
-    665 0000F036 FF FF FF FF FF FF FF  
-    665 0000F03D FF FF FF FF FF FF FF  
-    665 0000F044 FF FF FF FF FF FF FF  
-    665 0000F04B FF FF FF FF FF FF FF  
-    665 0000F052 FF FF FF FF FF FF FF  
-    665 0000F059 FF FF FF FF FF FF FF  
-    665 0000F060 FF FF FF FF FF FF FF  
-    665 0000F067 FF FF FF FF FF FF FF  
-    665 0000F06E FF FF FF FF FF FF FF  
-    665 0000F075 FF FF FF FF FF FF FF  
-    665 0000F07C FF FF FF FF FF FF FF  
-    665 0000F083 FF FF FF FF FF FF FF  
-    665 0000F08A FF FF FF FF FF FF FF  
-    665 0000F091 FF FF FF FF FF FF FF  
-    665 0000F098 FF FF FF FF FF FF FF  
-    665 0000F09F FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 20
+   1099 0000EFC2 FF FF FF FF FF FF FF  
+   1099 0000EFC9 FF FF FF FF FF FF FF  
+   1099 0000EFD0 FF FF FF FF FF FF FF  
+   1099 0000EFD7 FF FF FF FF FF FF FF  
+   1099 0000EFDE FF FF FF FF FF FF FF  
+   1099 0000EFE5 FF FF FF FF FF FF FF  
+   1099 0000EFEC FF FF FF FF FF FF FF  
+   1099 0000EFF3 FF FF FF FF FF FF FF  
+   1099 0000EFFA FF FF FF FF FF FF FF  
+   1099 0000F001 FF FF FF FF FF FF FF  
+   1099 0000F008 FF FF FF FF FF FF FF  
+   1099 0000F00F FF FF FF FF FF FF FF  
+   1099 0000F016 FF FF FF FF FF FF FF  
+   1099 0000F01D FF FF FF FF FF FF FF  
+   1099 0000F024 FF FF FF FF FF FF FF  
+   1099 0000F02B FF FF FF FF FF FF FF  
+   1099 0000F032 FF FF FF FF FF FF FF  
+   1099 0000F039 FF FF FF FF FF FF FF  
+   1099 0000F040 FF FF FF FF FF FF FF  
+   1099 0000F047 FF FF FF FF FF FF FF  
+   1099 0000F04E FF FF FF FF FF FF FF  
+   1099 0000F055 FF FF FF FF FF FF FF  
+   1099 0000F05C FF FF FF FF FF FF FF  
+   1099 0000F063 FF FF FF FF FF FF FF  
+   1099 0000F06A FF FF FF FF FF FF FF  
+   1099 0000F071 FF FF FF FF FF FF FF  
+   1099 0000F078 FF FF FF FF FF FF FF  
+   1099 0000F07F FF FF FF FF FF FF FF  
+   1099 0000F086 FF FF FF FF FF FF FF  
+   1099 0000F08D FF FF FF FF FF FF FF  
+   1099 0000F094 FF FF FF FF FF FF FF  
+   1099 0000F09B FF FF FF FF FF FF FF  
+   1099 0000F0A2 FF FF FF FF FF FF FF  
+   1099 0000F0A9 FF FF FF FF FF FF FF  
+   1099 0000F0B0 FF FF FF FF FF FF FF  
+   1099 0000F0B7 FF FF FF FF FF FF FF  
+   1099 0000F0BE FF FF FF FF FF FF FF  
+   1099 0000F0C5 FF FF FF FF FF FF FF  
+   1099 0000F0CC FF FF FF FF FF FF FF  
+   1099 0000F0D3 FF FF FF FF FF FF FF  
+   1099 0000F0DA FF FF FF FF FF FF FF  
+   1099 0000F0E1 FF FF FF FF FF FF FF  
+   1099 0000F0E8 FF FF FF FF FF FF FF  
+   1099 0000F0EF FF FF FF FF FF FF FF  
+   1099 0000F0F6 FF FF FF FF FF FF FF  
+   1099 0000F0FD FF FF FF FF FF FF FF  
+   1099 0000F104 FF FF FF FF FF FF FF  
+   1099 0000F10B FF FF FF FF FF FF FF  
+   1099 0000F112 FF FF FF FF FF FF FF  
+   1099 0000F119 FF FF FF FF FF FF FF  
+   1099 0000F120 FF FF FF FF FF FF FF  
+   1099 0000F127 FF FF FF FF FF FF FF  
+   1099 0000F12E FF FF FF FF FF FF FF  
+   1099 0000F135 FF FF FF FF FF FF FF  
+   1099 0000F13C FF FF FF FF FF FF FF  
+   1099 0000F143 FF FF FF FF FF FF FF  
+   1099 0000F14A FF FF FF FF FF FF FF  
+   1099 0000F151 FF FF FF FF FF FF FF  
+   1099 0000F158 FF FF FF FF FF FF FF  
+   1099 0000F15F FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 26
 noc_boot21.a
-    665 0000F0A6 FF FF FF FF FF FF FF  
-    665 0000F0AD FF FF FF FF FF FF FF  
-    665 0000F0B4 FF FF FF FF FF FF FF  
-    665 0000F0BB FF FF FF FF FF FF FF  
-    665 0000F0C2 FF FF FF FF FF FF FF  
-    665 0000F0C9 FF FF FF FF FF FF FF  
-    665 0000F0D0 FF FF FF FF FF FF FF  
-    665 0000F0D7 FF FF FF FF FF FF FF  
-    665 0000F0DE FF FF FF FF FF FF FF  
-    665 0000F0E5 FF FF FF FF FF FF FF  
-    665 0000F0EC FF FF FF FF FF FF FF  
-    665 0000F0F3 FF FF FF FF FF FF FF  
-    665 0000F0FA FF FF FF FF FF FF FF  
-    665 0000F101 FF FF FF FF FF FF FF  
-    665 0000F108 FF FF FF FF FF FF FF  
-    665 0000F10F FF FF FF FF FF FF FF  
-    665 0000F116 FF FF FF FF FF FF FF  
-    665 0000F11D FF FF FF FF FF FF FF  
-    665 0000F124 FF FF FF FF FF FF FF  
-    665 0000F12B FF FF FF FF FF FF FF  
-    665 0000F132 FF FF FF FF FF FF FF  
-    665 0000F139 FF FF FF FF FF FF FF  
-    665 0000F140 FF FF FF FF FF FF FF  
-    665 0000F147 FF FF FF FF FF FF FF  
-    665 0000F14E FF FF FF FF FF FF FF  
-    665 0000F155 FF FF FF FF FF FF FF  
-    665 0000F15C FF FF FF FF FF FF FF  
-    665 0000F163 FF FF FF FF FF FF FF  
-    665 0000F16A FF FF FF FF FF FF FF  
-    665 0000F171 FF FF FF FF FF FF FF  
-    665 0000F178 FF FF FF FF FF FF FF  
-    665 0000F17F FF FF FF FF FF FF FF  
-    665 0000F186 FF FF FF FF FF FF FF  
-    665 0000F18D FF FF FF FF FF FF FF  
-    665 0000F194 FF FF FF FF FF FF FF  
-    665 0000F19B FF FF FF FF FF FF FF  
-    665 0000F1A2 FF FF FF FF FF FF FF  
-    665 0000F1A9 FF FF FF FF FF FF FF  
-    665 0000F1B0 FF FF FF FF FF FF FF  
-    665 0000F1B7 FF FF FF FF FF FF FF  
-    665 0000F1BE FF FF FF FF FF FF FF  
-    665 0000F1C5 FF FF FF FF FF FF FF  
-    665 0000F1CC FF FF FF FF FF FF FF  
-    665 0000F1D3 FF FF FF FF FF FF FF  
-    665 0000F1DA FF FF FF FF FF FF FF  
-    665 0000F1E1 FF FF FF FF FF FF FF  
-    665 0000F1E8 FF FF FF FF FF FF FF  
-    665 0000F1EF FF FF FF FF FF FF FF  
-    665 0000F1F6 FF FF FF FF FF FF FF  
-    665 0000F1FD FF FF FF FF FF FF FF  
-    665 0000F204 FF FF FF FF FF FF FF  
-    665 0000F20B FF FF FF FF FF FF FF  
-    665 0000F212 FF FF FF FF FF FF FF  
-    665 0000F219 FF FF FF FF FF FF FF  
-    665 0000F220 FF FF FF FF FF FF FF  
-    665 0000F227 FF FF FF FF FF FF FF  
-    665 0000F22E FF FF FF FF FF FF FF  
-    665 0000F235 FF FF FF FF FF FF FF  
-    665 0000F23C FF FF FF FF FF FF FF  
-    665 0000F243 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 21
+   1099 0000F166 FF FF FF FF FF FF FF  
+   1099 0000F16D FF FF FF FF FF FF FF  
+   1099 0000F174 FF FF FF FF FF FF FF  
+   1099 0000F17B FF FF FF FF FF FF FF  
+   1099 0000F182 FF FF FF FF FF FF FF  
+   1099 0000F189 FF FF FF FF FF FF FF  
+   1099 0000F190 FF FF FF FF FF FF FF  
+   1099 0000F197 FF FF FF FF FF FF FF  
+   1099 0000F19E FF FF FF FF FF FF FF  
+   1099 0000F1A5 FF FF FF FF FF FF FF  
+   1099 0000F1AC FF FF FF FF FF FF FF  
+   1099 0000F1B3 FF FF FF FF FF FF FF  
+   1099 0000F1BA FF FF FF FF FF FF FF  
+   1099 0000F1C1 FF FF FF FF FF FF FF  
+   1099 0000F1C8 FF FF FF FF FF FF FF  
+   1099 0000F1CF FF FF FF FF FF FF FF  
+   1099 0000F1D6 FF FF FF FF FF FF FF  
+   1099 0000F1DD FF FF FF FF FF FF FF  
+   1099 0000F1E4 FF FF FF FF FF FF FF  
+   1099 0000F1EB FF FF FF FF FF FF FF  
+   1099 0000F1F2 FF FF FF FF FF FF FF  
+   1099 0000F1F9 FF FF FF FF FF FF FF  
+   1099 0000F200 FF FF FF FF FF FF FF  
+   1099 0000F207 FF FF FF FF FF FF FF  
+   1099 0000F20E FF FF FF FF FF FF FF  
+   1099 0000F215 FF FF FF FF FF FF FF  
+   1099 0000F21C FF FF FF FF FF FF FF  
+   1099 0000F223 FF FF FF FF FF FF FF  
+   1099 0000F22A FF FF FF FF FF FF FF  
+   1099 0000F231 FF FF FF FF FF FF FF  
+   1099 0000F238 FF FF FF FF FF FF FF  
+   1099 0000F23F FF FF FF FF FF FF FF  
+   1099 0000F246 FF FF FF FF FF FF FF  
+   1099 0000F24D FF FF FF FF FF FF FF  
+   1099 0000F254 FF FF FF FF FF FF FF  
+   1099 0000F25B FF FF FF FF FF FF FF  
+   1099 0000F262 FF FF FF FF FF FF FF  
+   1099 0000F269 FF FF FF FF FF FF FF  
+   1099 0000F270 FF FF FF FF FF FF FF  
+   1099 0000F277 FF FF FF FF FF FF FF  
+   1099 0000F27E FF FF FF FF FF FF FF  
+   1099 0000F285 FF FF FF FF FF FF FF  
+   1099 0000F28C FF FF FF FF FF FF FF  
+   1099 0000F293 FF FF FF FF FF FF FF  
+   1099 0000F29A FF FF FF FF FF FF FF  
+   1099 0000F2A1 FF FF FF FF FF FF FF  
+   1099 0000F2A8 FF FF FF FF FF FF FF  
+   1099 0000F2AF FF FF FF FF FF FF FF  
+   1099 0000F2B6 FF FF FF FF FF FF FF  
+   1099 0000F2BD FF FF FF FF FF FF FF  
+   1099 0000F2C4 FF FF FF FF FF FF FF  
+   1099 0000F2CB FF FF FF FF FF FF FF  
+   1099 0000F2D2 FF FF FF FF FF FF FF  
+   1099 0000F2D9 FF FF FF FF FF FF FF  
+   1099 0000F2E0 FF FF FF FF FF FF FF  
+   1099 0000F2E7 FF FF FF FF FF FF FF  
+   1099 0000F2EE FF FF FF FF FF FF FF  
+   1099 0000F2F5 FF FF FF FF FF FF FF  
+   1099 0000F2FC FF FF FF FF FF FF FF  
+   1099 0000F303 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 27
 noc_boot21.a
-    665 0000F24A FF FF FF FF FF FF FF  
-    665 0000F251 FF FF FF FF FF FF FF  
-    665 0000F258 FF FF FF FF FF FF FF  
-    665 0000F25F FF FF FF FF FF FF FF  
-    665 0000F266 FF FF FF FF FF FF FF  
-    665 0000F26D FF FF FF FF FF FF FF  
-    665 0000F274 FF FF FF FF FF FF FF  
-    665 0000F27B FF FF FF FF FF FF FF  
-    665 0000F282 FF FF FF FF FF FF FF  
-    665 0000F289 FF FF FF FF FF FF FF  
-    665 0000F290 FF FF FF FF FF FF FF  
-    665 0000F297 FF FF FF FF FF FF FF  
-    665 0000F29E FF FF FF FF FF FF FF  
-    665 0000F2A5 FF FF FF FF FF FF FF  
-    665 0000F2AC FF FF FF FF FF FF FF  
-    665 0000F2B3 FF FF FF FF FF FF FF  
-    665 0000F2BA FF FF FF FF FF FF FF  
-    665 0000F2C1 FF FF FF FF FF FF FF  
-    665 0000F2C8 FF FF FF FF FF FF FF  
-    665 0000F2CF FF FF FF FF FF FF FF  
-    665 0000F2D6 FF FF FF FF FF FF FF  
-    665 0000F2DD FF FF FF FF FF FF FF  
-    665 0000F2E4 FF FF FF FF FF FF FF  
-    665 0000F2EB FF FF FF FF FF FF FF  
-    665 0000F2F2 FF FF FF FF FF FF FF  
-    665 0000F2F9 FF FF FF FF FF FF FF  
-    665 0000F300 FF FF FF FF FF FF FF  
-    665 0000F307 FF FF FF FF FF FF FF  
-    665 0000F30E FF FF FF FF FF FF FF  
-    665 0000F315 FF FF FF FF FF FF FF  
-    665 0000F31C FF FF FF FF FF FF FF  
-    665 0000F323 FF FF FF FF FF FF FF  
-    665 0000F32A FF FF FF FF FF FF FF  
-    665 0000F331 FF FF FF FF FF FF FF  
-    665 0000F338 FF FF FF FF FF FF FF  
-    665 0000F33F FF FF FF FF FF FF FF  
-    665 0000F346 FF FF FF FF FF FF FF  
-    665 0000F34D FF FF FF FF FF FF FF  
-    665 0000F354 FF FF FF FF FF FF FF  
-    665 0000F35B FF FF FF FF FF FF FF  
-    665 0000F362 FF FF FF FF FF FF FF  
-    665 0000F369 FF FF FF FF FF FF FF  
-    665 0000F370 FF FF FF FF FF FF FF  
-    665 0000F377 FF FF FF FF FF FF FF  
-    665 0000F37E FF FF FF FF FF FF FF  
-    665 0000F385 FF FF FF FF FF FF FF  
-    665 0000F38C FF FF FF FF FF FF FF  
-    665 0000F393 FF FF FF FF FF FF FF  
-    665 0000F39A FF FF FF FF FF FF FF  
-    665 0000F3A1 FF FF FF FF FF FF FF  
-    665 0000F3A8 FF FF FF FF FF FF FF  
-    665 0000F3AF FF FF FF FF FF FF FF  
-    665 0000F3B6 FF FF FF FF FF FF FF  
-    665 0000F3BD FF FF FF FF FF FF FF  
-    665 0000F3C4 FF FF FF FF FF FF FF  
-    665 0000F3CB FF FF FF FF FF FF FF  
-    665 0000F3D2 FF FF FF FF FF FF FF  
-    665 0000F3D9 FF FF FF FF FF FF FF  
-    665 0000F3E0 FF FF FF FF FF FF FF  
-    665 0000F3E7 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 22
+   1099 0000F30A FF FF FF FF FF FF FF  
+   1099 0000F311 FF FF FF FF FF FF FF  
+   1099 0000F318 FF FF FF FF FF FF FF  
+   1099 0000F31F FF FF FF FF FF FF FF  
+   1099 0000F326 FF FF FF FF FF FF FF  
+   1099 0000F32D FF FF FF FF FF FF FF  
+   1099 0000F334 FF FF FF FF FF FF FF  
+   1099 0000F33B FF FF FF FF FF FF FF  
+   1099 0000F342 FF FF FF FF FF FF FF  
+   1099 0000F349 FF FF FF FF FF FF FF  
+   1099 0000F350 FF FF FF FF FF FF FF  
+   1099 0000F357 FF FF FF FF FF FF FF  
+   1099 0000F35E FF FF FF FF FF FF FF  
+   1099 0000F365 FF FF FF FF FF FF FF  
+   1099 0000F36C FF FF FF FF FF FF FF  
+   1099 0000F373 FF FF FF FF FF FF FF  
+   1099 0000F37A FF FF FF FF FF FF FF  
+   1099 0000F381 FF FF FF FF FF FF FF  
+   1099 0000F388 FF FF FF FF FF FF FF  
+   1099 0000F38F FF FF FF FF FF FF FF  
+   1099 0000F396 FF FF FF FF FF FF FF  
+   1099 0000F39D FF FF FF FF FF FF FF  
+   1099 0000F3A4 FF FF FF FF FF FF FF  
+   1099 0000F3AB FF FF FF FF FF FF FF  
+   1099 0000F3B2 FF FF FF FF FF FF FF  
+   1099 0000F3B9 FF FF FF FF FF FF FF  
+   1099 0000F3C0 FF FF FF FF FF FF FF  
+   1099 0000F3C7 FF FF FF FF FF FF FF  
+   1099 0000F3CE FF FF FF FF FF FF FF  
+   1099 0000F3D5 FF FF FF FF FF FF FF  
+   1099 0000F3DC FF FF FF FF FF FF FF  
+   1099 0000F3E3 FF FF FF FF FF FF FF  
+   1099 0000F3EA FF FF FF FF FF FF FF  
+   1099 0000F3F1 FF FF FF FF FF FF FF  
+   1099 0000F3F8 FF FF FF FF FF FF FF  
+   1099 0000F3FF FF FF FF FF FF FF FF  
+   1099 0000F406 FF FF FF FF FF FF FF  
+   1099 0000F40D FF FF FF FF FF FF FF  
+   1099 0000F414 FF FF FF FF FF FF FF  
+   1099 0000F41B FF FF FF FF FF FF FF  
+   1099 0000F422 FF FF FF FF FF FF FF  
+   1099 0000F429 FF FF FF FF FF FF FF  
+   1099 0000F430 FF FF FF FF FF FF FF  
+   1099 0000F437 FF FF FF FF FF FF FF  
+   1099 0000F43E FF FF FF FF FF FF FF  
+   1099 0000F445 FF FF FF FF FF FF FF  
+   1099 0000F44C FF FF FF FF FF FF FF  
+   1099 0000F453 FF FF FF FF FF FF FF  
+   1099 0000F45A FF FF FF FF FF FF FF  
+   1099 0000F461 FF FF FF FF FF FF FF  
+   1099 0000F468 FF FF FF FF FF FF FF  
+   1099 0000F46F FF FF FF FF FF FF FF  
+   1099 0000F476 FF FF FF FF FF FF FF  
+   1099 0000F47D FF FF FF FF FF FF FF  
+   1099 0000F484 FF FF FF FF FF FF FF  
+   1099 0000F48B FF FF FF FF FF FF FF  
+   1099 0000F492 FF FF FF FF FF FF FF  
+   1099 0000F499 FF FF FF FF FF FF FF  
+   1099 0000F4A0 FF FF FF FF FF FF FF  
+   1099 0000F4A7 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 28
 noc_boot21.a
-    665 0000F3EE FF FF FF FF FF FF FF  
-    665 0000F3F5 FF FF FF FF FF FF FF  
-    665 0000F3FC FF FF FF FF FF FF FF  
-    665 0000F403 FF FF FF FF FF FF FF  
-    665 0000F40A FF FF FF FF FF FF FF  
-    665 0000F411 FF FF FF FF FF FF FF  
-    665 0000F418 FF FF FF FF FF FF FF  
-    665 0000F41F FF FF FF FF FF FF FF  
-    665 0000F426 FF FF FF FF FF FF FF  
-    665 0000F42D FF FF FF FF FF FF FF  
-    665 0000F434 FF FF FF FF FF FF FF  
-    665 0000F43B FF FF FF FF FF FF FF  
-    665 0000F442 FF FF FF FF FF FF FF  
-    665 0000F449 FF FF FF FF FF FF FF  
-    665 0000F450 FF FF FF FF FF FF FF  
-    665 0000F457 FF FF FF FF FF FF FF  
-    665 0000F45E FF FF FF FF FF FF FF  
-    665 0000F465 FF FF FF FF FF FF FF  
-    665 0000F46C FF FF FF FF FF FF FF  
-    665 0000F473 FF FF FF FF FF FF FF  
-    665 0000F47A FF FF FF FF FF FF FF  
-    665 0000F481 FF FF FF FF FF FF FF  
-    665 0000F488 FF FF FF FF FF FF FF  
-    665 0000F48F FF FF FF FF FF FF FF  
-    665 0000F496 FF FF FF FF FF FF FF  
-    665 0000F49D FF FF FF FF FF FF FF  
-    665 0000F4A4 FF FF FF FF FF FF FF  
-    665 0000F4AB FF FF FF FF FF FF FF  
-    665 0000F4B2 FF FF FF FF FF FF FF  
-    665 0000F4B9 FF FF FF FF FF FF FF  
-    665 0000F4C0 FF FF FF FF FF FF FF  
-    665 0000F4C7 FF FF FF FF FF FF FF  
-    665 0000F4CE FF FF FF FF FF FF FF  
-    665 0000F4D5 FF FF FF FF FF FF FF  
-    665 0000F4DC FF FF FF FF FF FF FF  
-    665 0000F4E3 FF FF FF FF FF FF FF  
-    665 0000F4EA FF FF FF FF FF FF FF  
-    665 0000F4F1 FF FF FF FF FF FF FF  
-    665 0000F4F8 FF FF FF FF FF FF FF  
-    665 0000F4FF FF FF FF FF FF FF FF  
-    665 0000F506 FF FF FF FF FF FF FF  
-    665 0000F50D FF FF FF FF FF FF FF  
-    665 0000F514 FF FF FF FF FF FF FF  
-    665 0000F51B FF FF FF FF FF FF FF  
-    665 0000F522 FF FF FF FF FF FF FF  
-    665 0000F529 FF FF FF FF FF FF FF  
-    665 0000F530 FF FF FF FF FF FF FF  
-    665 0000F537 FF FF FF FF FF FF FF  
-    665 0000F53E FF FF FF FF FF FF FF  
-    665 0000F545 FF FF FF FF FF FF FF  
-    665 0000F54C FF FF FF FF FF FF FF  
-    665 0000F553 FF FF FF FF FF FF FF  
-    665 0000F55A FF FF FF FF FF FF FF  
-    665 0000F561 FF FF FF FF FF FF FF  
-    665 0000F568 FF FF FF FF FF FF FF  
-    665 0000F56F FF FF FF FF FF FF FF  
-    665 0000F576 FF FF FF FF FF FF FF  
-    665 0000F57D FF FF FF FF FF FF FF  
-    665 0000F584 FF FF FF FF FF FF FF  
-    665 0000F58B FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 23
+   1099 0000F4AE FF FF FF FF FF FF FF  
+   1099 0000F4B5 FF FF FF FF FF FF FF  
+   1099 0000F4BC FF FF FF FF FF FF FF  
+   1099 0000F4C3 FF FF FF FF FF FF FF  
+   1099 0000F4CA FF FF FF FF FF FF FF  
+   1099 0000F4D1 FF FF FF FF FF FF FF  
+   1099 0000F4D8 FF FF FF FF FF FF FF  
+   1099 0000F4DF FF FF FF FF FF FF FF  
+   1099 0000F4E6 FF FF FF FF FF FF FF  
+   1099 0000F4ED FF FF FF FF FF FF FF  
+   1099 0000F4F4 FF FF FF FF FF FF FF  
+   1099 0000F4FB FF FF FF FF FF FF FF  
+   1099 0000F502 FF FF FF FF FF FF FF  
+   1099 0000F509 FF FF FF FF FF FF FF  
+   1099 0000F510 FF FF FF FF FF FF FF  
+   1099 0000F517 FF FF FF FF FF FF FF  
+   1099 0000F51E FF FF FF FF FF FF FF  
+   1099 0000F525 FF FF FF FF FF FF FF  
+   1099 0000F52C FF FF FF FF FF FF FF  
+   1099 0000F533 FF FF FF FF FF FF FF  
+   1099 0000F53A FF FF FF FF FF FF FF  
+   1099 0000F541 FF FF FF FF FF FF FF  
+   1099 0000F548 FF FF FF FF FF FF FF  
+   1099 0000F54F FF FF FF FF FF FF FF  
+   1099 0000F556 FF FF FF FF FF FF FF  
+   1099 0000F55D FF FF FF FF FF FF FF  
+   1099 0000F564 FF FF FF FF FF FF FF  
+   1099 0000F56B FF FF FF FF FF FF FF  
+   1099 0000F572 FF FF FF FF FF FF FF  
+   1099 0000F579 FF FF FF FF FF FF FF  
+   1099 0000F580 FF FF FF FF FF FF FF  
+   1099 0000F587 FF FF FF FF FF FF FF  
+   1099 0000F58E FF FF FF FF FF FF FF  
+   1099 0000F595 FF FF FF FF FF FF FF  
+   1099 0000F59C FF FF FF FF FF FF FF  
+   1099 0000F5A3 FF FF FF FF FF FF FF  
+   1099 0000F5AA FF FF FF FF FF FF FF  
+   1099 0000F5B1 FF FF FF FF FF FF FF  
+   1099 0000F5B8 FF FF FF FF FF FF FF  
+   1099 0000F5BF FF FF FF FF FF FF FF  
+   1099 0000F5C6 FF FF FF FF FF FF FF  
+   1099 0000F5CD FF FF FF FF FF FF FF  
+   1099 0000F5D4 FF FF FF FF FF FF FF  
+   1099 0000F5DB FF FF FF FF FF FF FF  
+   1099 0000F5E2 FF FF FF FF FF FF FF  
+   1099 0000F5E9 FF FF FF FF FF FF FF  
+   1099 0000F5F0 FF FF FF FF FF FF FF  
+   1099 0000F5F7 FF FF FF FF FF FF FF  
+   1099 0000F5FE FF FF FF FF FF FF FF  
+   1099 0000F605 FF FF FF FF FF FF FF  
+   1099 0000F60C FF FF FF FF FF FF FF  
+   1099 0000F613 FF FF FF FF FF FF FF  
+   1099 0000F61A FF FF FF FF FF FF FF  
+   1099 0000F621 FF FF FF FF FF FF FF  
+   1099 0000F628 FF FF FF FF FF FF FF  
+   1099 0000F62F FF FF FF FF FF FF FF  
+   1099 0000F636 FF FF FF FF FF FF FF  
+   1099 0000F63D FF FF FF FF FF FF FF  
+   1099 0000F644 FF FF FF FF FF FF FF  
+   1099 0000F64B FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 29
 noc_boot21.a
-    665 0000F592 FF FF FF FF FF FF FF  
-    665 0000F599 FF FF FF FF FF FF FF  
-    665 0000F5A0 FF FF FF FF FF FF FF  
-    665 0000F5A7 FF FF FF FF FF FF FF  
-    665 0000F5AE FF FF FF FF FF FF FF  
-    665 0000F5B5 FF FF FF FF FF FF FF  
-    665 0000F5BC FF FF FF FF FF FF FF  
-    665 0000F5C3 FF FF FF FF FF FF FF  
-    665 0000F5CA FF FF FF FF FF FF FF  
-    665 0000F5D1 FF FF FF FF FF FF FF  
-    665 0000F5D8 FF FF FF FF FF FF FF  
-    665 0000F5DF FF FF FF FF FF FF FF  
-    665 0000F5E6 FF FF FF FF FF FF FF  
-    665 0000F5ED FF FF FF FF FF FF FF  
-    665 0000F5F4 FF FF FF FF FF FF FF  
-    665 0000F5FB FF FF FF FF FF FF FF  
-    665 0000F602 FF FF FF FF FF FF FF  
-    665 0000F609 FF FF FF FF FF FF FF  
-    665 0000F610 FF FF FF FF FF FF FF  
-    665 0000F617 FF FF FF FF FF FF FF  
-    665 0000F61E FF FF FF FF FF FF FF  
-    665 0000F625 FF FF FF FF FF FF FF  
-    665 0000F62C FF FF FF FF FF FF FF  
-    665 0000F633 FF FF FF FF FF FF FF  
-    665 0000F63A FF FF FF FF FF FF FF  
-    665 0000F641 FF FF FF FF FF FF FF  
-    665 0000F648 FF FF FF FF FF FF FF  
-    665 0000F64F FF FF FF FF FF FF FF  
-    665 0000F656 FF FF FF FF FF FF FF  
-    665 0000F65D FF FF FF FF FF FF FF  
-    665 0000F664 FF FF FF FF FF FF FF  
-    665 0000F66B FF FF FF FF FF FF FF  
-    665 0000F672 FF FF FF FF FF FF FF  
-    665 0000F679 FF FF FF FF FF FF FF  
-    665 0000F680 FF FF FF FF FF FF FF  
-    665 0000F687 FF FF FF FF FF FF FF  
-    665 0000F68E FF FF FF FF FF FF FF  
-    665 0000F695 FF FF FF FF FF FF FF  
-    665 0000F69C FF FF FF FF FF FF FF  
-    665 0000F6A3 FF FF FF FF FF FF FF  
-    665 0000F6AA FF FF FF FF FF FF FF  
-    665 0000F6B1 FF FF FF FF FF FF FF  
-    665 0000F6B8 FF FF FF FF FF FF FF  
-    665 0000F6BF FF FF FF FF FF FF FF  
-    665 0000F6C6 FF FF FF FF FF FF FF  
-    665 0000F6CD FF FF FF FF FF FF FF  
-    665 0000F6D4 FF FF FF FF FF FF FF  
-    665 0000F6DB FF FF FF FF FF FF FF  
-    665 0000F6E2 FF FF FF FF FF FF FF  
-    665 0000F6E9 FF FF FF FF FF FF FF  
-    665 0000F6F0 FF FF FF FF FF FF FF  
-    665 0000F6F7 FF FF FF FF FF FF FF  
-    665 0000F6FE FF FF FF FF FF FF FF  
-    665 0000F705 FF FF FF FF FF FF FF  
-    665 0000F70C FF FF FF FF FF FF FF  
-    665 0000F713 FF FF FF FF FF FF FF  
-    665 0000F71A FF FF FF FF FF FF FF  
-    665 0000F721 FF FF FF FF FF FF FF  
-    665 0000F728 FF FF FF FF FF FF FF  
-    665 0000F72F FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 24
+   1099 0000F652 FF FF FF FF FF FF FF  
+   1099 0000F659 FF FF FF FF FF FF FF  
+   1099 0000F660 FF FF FF FF FF FF FF  
+   1099 0000F667 FF FF FF FF FF FF FF  
+   1099 0000F66E FF FF FF FF FF FF FF  
+   1099 0000F675 FF FF FF FF FF FF FF  
+   1099 0000F67C FF FF FF FF FF FF FF  
+   1099 0000F683 FF FF FF FF FF FF FF  
+   1099 0000F68A FF FF FF FF FF FF FF  
+   1099 0000F691 FF FF FF FF FF FF FF  
+   1099 0000F698 FF FF FF FF FF FF FF  
+   1099 0000F69F FF FF FF FF FF FF FF  
+   1099 0000F6A6 FF FF FF FF FF FF FF  
+   1099 0000F6AD FF FF FF FF FF FF FF  
+   1099 0000F6B4 FF FF FF FF FF FF FF  
+   1099 0000F6BB FF FF FF FF FF FF FF  
+   1099 0000F6C2 FF FF FF FF FF FF FF  
+   1099 0000F6C9 FF FF FF FF FF FF FF  
+   1099 0000F6D0 FF FF FF FF FF FF FF  
+   1099 0000F6D7 FF FF FF FF FF FF FF  
+   1099 0000F6DE FF FF FF FF FF FF FF  
+   1099 0000F6E5 FF FF FF FF FF FF FF  
+   1099 0000F6EC FF FF FF FF FF FF FF  
+   1099 0000F6F3 FF FF FF FF FF FF FF  
+   1099 0000F6FA FF FF FF FF FF FF FF  
+   1099 0000F701 FF FF FF FF FF FF FF  
+   1099 0000F708 FF FF FF FF FF FF FF  
+   1099 0000F70F FF FF FF FF FF FF FF  
+   1099 0000F716 FF FF FF FF FF FF FF  
+   1099 0000F71D FF FF FF FF FF FF FF  
+   1099 0000F724 FF FF FF FF FF FF FF  
+   1099 0000F72B FF FF FF FF FF FF FF  
+   1099 0000F732 FF FF FF FF FF FF FF  
+   1099 0000F739 FF FF FF FF FF FF FF  
+   1099 0000F740 FF FF FF FF FF FF FF  
+   1099 0000F747 FF FF FF FF FF FF FF  
+   1099 0000F74E FF FF FF FF FF FF FF  
+   1099 0000F755 FF FF FF FF FF FF FF  
+   1099 0000F75C FF FF FF FF FF FF FF  
+   1099 0000F763 FF FF FF FF FF FF FF  
+   1099 0000F76A FF FF FF FF FF FF FF  
+   1099 0000F771 FF FF FF FF FF FF FF  
+   1099 0000F778 FF FF FF FF FF FF FF  
+   1099 0000F77F FF FF FF FF FF FF FF  
+   1099 0000F786 FF FF FF FF FF FF FF  
+   1099 0000F78D FF FF FF FF FF FF FF  
+   1099 0000F794 FF FF FF FF FF FF FF  
+   1099 0000F79B FF FF FF FF FF FF FF  
+   1099 0000F7A2 FF FF FF FF FF FF FF  
+   1099 0000F7A9 FF FF FF FF FF FF FF  
+   1099 0000F7B0 FF FF FF FF FF FF FF  
+   1099 0000F7B7 FF FF FF FF FF FF FF  
+   1099 0000F7BE FF FF FF FF FF FF FF  
+   1099 0000F7C5 FF FF FF FF FF FF FF  
+   1099 0000F7CC FF FF FF FF FF FF FF  
+   1099 0000F7D3 FF FF FF FF FF FF FF  
+   1099 0000F7DA FF FF FF FF FF FF FF  
+   1099 0000F7E1 FF FF FF FF FF FF FF  
+   1099 0000F7E8 FF FF FF FF FF FF FF  
+   1099 0000F7EF FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 30
 noc_boot21.a
-    665 0000F736 FF FF FF FF FF FF FF  
-    665 0000F73D FF FF FF FF FF FF FF  
-    665 0000F744 FF FF FF FF FF FF FF  
-    665 0000F74B FF FF FF FF FF FF FF  
-    665 0000F752 FF FF FF FF FF FF FF  
-    665 0000F759 FF FF FF FF FF FF FF  
-    665 0000F760 FF FF FF FF FF FF FF  
-    665 0000F767 FF FF FF FF FF FF FF  
-    665 0000F76E FF FF FF FF FF FF FF  
-    665 0000F775 FF FF FF FF FF FF FF  
-    665 0000F77C FF FF FF FF FF FF FF  
-    665 0000F783 FF FF FF FF FF FF FF  
-    665 0000F78A FF FF FF FF FF FF FF  
-    665 0000F791 FF FF FF FF FF FF FF  
-    665 0000F798 FF FF FF FF FF FF FF  
-    665 0000F79F FF FF FF FF FF FF FF  
-    665 0000F7A6 FF FF FF FF FF FF FF  
-    665 0000F7AD FF FF FF FF FF FF FF  
-    665 0000F7B4 FF FF FF FF FF FF FF  
-    665 0000F7BB FF FF FF FF FF FF FF  
-    665 0000F7C2 FF FF FF FF FF FF FF  
-    665 0000F7C9 FF FF FF FF FF FF FF  
-    665 0000F7D0 FF FF FF FF FF FF FF  
-    665 0000F7D7 FF FF FF FF FF FF FF  
-    665 0000F7DE FF FF FF FF FF FF FF  
-    665 0000F7E5 FF FF FF FF FF FF FF  
-    665 0000F7EC FF FF FF FF FF FF FF  
-    665 0000F7F3 FF FF FF FF FF FF FF  
-    665 0000F7FA FF FF FF FF FF FF FF  
-    665 0000F801 FF FF FF FF FF FF FF  
-    665 0000F808 FF FF FF FF FF FF FF  
-    665 0000F80F FF FF FF FF FF FF FF  
-    665 0000F816 FF FF FF FF FF FF FF  
-    665 0000F81D FF FF FF FF FF FF FF  
-    665 0000F824 FF FF FF FF FF FF FF  
-    665 0000F82B FF FF FF FF FF FF FF  
-    665 0000F832 FF FF FF FF FF FF FF  
-    665 0000F839 FF FF FF FF FF FF FF  
-    665 0000F840 FF FF FF FF FF FF FF  
-    665 0000F847 FF FF FF FF FF FF FF  
-    665 0000F84E FF FF FF FF FF FF FF  
-    665 0000F855 FF FF FF FF FF FF FF  
-    665 0000F85C FF FF FF FF FF FF FF  
-    665 0000F863 FF FF FF FF FF FF FF  
-    665 0000F86A FF FF FF FF FF FF FF  
-    665 0000F871 FF FF FF FF FF FF FF  
-    665 0000F878 FF FF FF FF FF FF FF  
-    665 0000F87F FF FF FF FF FF FF FF  
-    665 0000F886 FF FF FF FF FF FF FF  
-    665 0000F88D FF FF FF FF FF FF FF  
-    665 0000F894 FF FF FF FF FF FF FF  
-    665 0000F89B FF FF FF FF FF FF FF  
-    665 0000F8A2 FF FF FF FF FF FF FF  
-    665 0000F8A9 FF FF FF FF FF FF FF  
-    665 0000F8B0 FF FF FF FF FF FF FF  
-    665 0000F8B7 FF FF FF FF FF FF FF  
-    665 0000F8BE FF FF FF FF FF FF FF  
-    665 0000F8C5 FF FF FF FF FF FF FF  
-    665 0000F8CC FF FF FF FF FF FF FF  
-    665 0000F8D3 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 25
+   1099 0000F7F6 FF FF FF FF FF FF FF  
+   1099 0000F7FD FF FF FF FF FF FF FF  
+   1099 0000F804 FF FF FF FF FF FF FF  
+   1099 0000F80B FF FF FF FF FF FF FF  
+   1099 0000F812 FF FF FF FF FF FF FF  
+   1099 0000F819 FF FF FF FF FF FF FF  
+   1099 0000F820 FF FF FF FF FF FF FF  
+   1099 0000F827 FF FF FF FF FF FF FF  
+   1099 0000F82E FF FF FF FF FF FF FF  
+   1099 0000F835 FF FF FF FF FF FF FF  
+   1099 0000F83C FF FF FF FF FF FF FF  
+   1099 0000F843 FF FF FF FF FF FF FF  
+   1099 0000F84A FF FF FF FF FF FF FF  
+   1099 0000F851 FF FF FF FF FF FF FF  
+   1099 0000F858 FF FF FF FF FF FF FF  
+   1099 0000F85F FF FF FF FF FF FF FF  
+   1099 0000F866 FF FF FF FF FF FF FF  
+   1099 0000F86D FF FF FF FF FF FF FF  
+   1099 0000F874 FF FF FF FF FF FF FF  
+   1099 0000F87B FF FF FF FF FF FF FF  
+   1099 0000F882 FF FF FF FF FF FF FF  
+   1099 0000F889 FF FF FF FF FF FF FF  
+   1099 0000F890 FF FF FF FF FF FF FF  
+   1099 0000F897 FF FF FF FF FF FF FF  
+   1099 0000F89E FF FF FF FF FF FF FF  
+   1099 0000F8A5 FF FF FF FF FF FF FF  
+   1099 0000F8AC FF FF FF FF FF FF FF  
+   1099 0000F8B3 FF FF FF FF FF FF FF  
+   1099 0000F8BA FF FF FF FF FF FF FF  
+   1099 0000F8C1 FF FF FF FF FF FF FF  
+   1099 0000F8C8 FF FF FF FF FF FF FF  
+   1099 0000F8CF FF FF FF FF FF FF FF  
+   1099 0000F8D6 FF FF FF FF FF FF FF  
+   1099 0000F8DD FF FF FF FF FF FF FF  
+   1099 0000F8E4 FF FF FF FF FF FF FF  
+   1099 0000F8EB FF FF FF FF FF FF FF  
+   1099 0000F8F2 FF FF FF FF FF FF FF  
+   1099 0000F8F9 FF FF FF FF FF FF FF  
+   1099 0000F900 FF FF FF FF FF FF FF  
+   1099 0000F907 FF FF FF FF FF FF FF  
+   1099 0000F90E FF FF FF FF FF FF FF  
+   1099 0000F915 FF FF FF FF FF FF FF  
+   1099 0000F91C FF FF FF FF FF FF FF  
+   1099 0000F923 FF FF FF FF FF FF FF  
+   1099 0000F92A FF FF FF FF FF FF FF  
+   1099 0000F931 FF FF FF FF FF FF FF  
+   1099 0000F938 FF FF FF FF FF FF FF  
+   1099 0000F93F FF FF FF FF FF FF FF  
+   1099 0000F946 FF FF FF FF FF FF FF  
+   1099 0000F94D FF FF FF FF FF FF FF  
+   1099 0000F954 FF FF FF FF FF FF FF  
+   1099 0000F95B FF FF FF FF FF FF FF  
+   1099 0000F962 FF FF FF FF FF FF FF  
+   1099 0000F969 FF FF FF FF FF FF FF  
+   1099 0000F970 FF FF FF FF FF FF FF  
+   1099 0000F977 FF FF FF FF FF FF FF  
+   1099 0000F97E FF FF FF FF FF FF FF  
+   1099 0000F985 FF FF FF FF FF FF FF  
+   1099 0000F98C FF FF FF FF FF FF FF  
+   1099 0000F993 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 31
 noc_boot21.a
-    665 0000F8DA FF FF FF FF FF FF FF  
-    665 0000F8E1 FF FF FF FF FF FF FF  
-    665 0000F8E8 FF FF FF FF FF FF FF  
-    665 0000F8EF FF FF FF FF FF FF FF  
-    665 0000F8F6 FF FF FF FF FF FF FF  
-    665 0000F8FD FF FF FF FF FF FF FF  
-    665 0000F904 FF FF FF FF FF FF FF  
-    665 0000F90B FF FF FF FF FF FF FF  
-    665 0000F912 FF FF FF FF FF FF FF  
-    665 0000F919 FF FF FF FF FF FF FF  
-    665 0000F920 FF FF FF FF FF FF FF  
-    665 0000F927 FF FF FF FF FF FF FF  
-    665 0000F92E FF FF FF FF FF FF FF  
-    665 0000F935 FF FF FF FF FF FF FF  
-    665 0000F93C FF FF FF FF FF FF FF  
-    665 0000F943 FF FF FF FF FF FF FF  
-    665 0000F94A FF FF FF FF FF FF FF  
-    665 0000F951 FF FF FF FF FF FF FF  
-    665 0000F958 FF FF FF FF FF FF FF  
-    665 0000F95F FF FF FF FF FF FF FF  
-    665 0000F966 FF FF FF FF FF FF FF  
-    665 0000F96D FF FF FF FF FF FF FF  
-    665 0000F974 FF FF FF FF FF FF FF  
-    665 0000F97B FF FF FF FF FF FF FF  
-    665 0000F982 FF FF FF FF FF FF FF  
-    665 0000F989 FF FF FF FF FF FF FF  
-    665 0000F990 FF FF FF FF FF FF FF  
-    665 0000F997 FF FF FF FF FF FF FF  
-    665 0000F99E FF FF FF FF FF FF FF  
-    665 0000F9A5 FF FF FF FF FF FF FF  
-    665 0000F9AC FF FF FF FF FF FF FF  
-    665 0000F9B3 FF FF FF FF FF FF FF  
-    665 0000F9BA FF FF FF FF FF FF FF  
-    665 0000F9C1 FF FF FF FF FF FF FF  
-    665 0000F9C8 FF FF FF FF FF FF FF  
-    665 0000F9CF FF FF FF FF FF FF FF  
-    665 0000F9D6 FF FF FF FF FF FF FF  
-    665 0000F9DD FF FF FF FF FF FF FF  
-    665 0000F9E4 FF FF FF FF FF FF FF  
-    665 0000F9EB FF FF FF FF FF FF FF  
-    665 0000F9F2 FF FF FF FF FF FF FF  
-    665 0000F9F9 FF FF FF FF FF FF FF  
-    665 0000FA00 FF FF FF FF FF FF FF  
-    665 0000FA07 FF FF FF FF FF FF FF  
-    665 0000FA0E FF FF FF FF FF FF FF  
-    665 0000FA15 FF FF FF FF FF FF FF  
-    665 0000FA1C FF FF FF FF FF FF FF  
-    665 0000FA23 FF FF FF FF FF FF FF  
-    665 0000FA2A FF FF FF FF FF FF FF  
-    665 0000FA31 FF FF FF FF FF FF FF  
-    665 0000FA38 FF FF FF FF FF FF FF  
-    665 0000FA3F FF FF FF FF FF FF FF  
-    665 0000FA46 FF FF FF FF FF FF FF  
-    665 0000FA4D FF FF FF FF FF FF FF  
-    665 0000FA54 FF FF FF FF FF FF FF  
-    665 0000FA5B FF FF FF FF FF FF FF  
-    665 0000FA62 FF FF FF FF FF FF FF  
-    665 0000FA69 FF FF FF FF FF FF FF  
-    665 0000FA70 FF FF FF FF FF FF FF  
-    665 0000FA77 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 26
+   1099 0000F99A FF FF FF FF FF FF FF  
+   1099 0000F9A1 FF FF FF FF FF FF FF  
+   1099 0000F9A8 FF FF FF FF FF FF FF  
+   1099 0000F9AF FF FF FF FF FF FF FF  
+   1099 0000F9B6 FF FF FF FF FF FF FF  
+   1099 0000F9BD FF FF FF FF FF FF FF  
+   1099 0000F9C4 FF FF FF FF FF FF FF  
+   1099 0000F9CB FF FF FF FF FF FF FF  
+   1099 0000F9D2 FF FF FF FF FF FF FF  
+   1099 0000F9D9 FF FF FF FF FF FF FF  
+   1099 0000F9E0 FF FF FF FF FF FF FF  
+   1099 0000F9E7 FF FF FF FF FF FF FF  
+   1099 0000F9EE FF FF FF FF FF FF FF  
+   1099 0000F9F5 FF FF FF FF FF FF FF  
+   1099 0000F9FC FF FF FF FF FF FF FF  
+   1099 0000FA03 FF FF FF FF FF FF FF  
+   1099 0000FA0A FF FF FF FF FF FF FF  
+   1099 0000FA11 FF FF FF FF FF FF FF  
+   1099 0000FA18 FF FF FF FF FF FF FF  
+   1099 0000FA1F FF FF FF FF FF FF FF  
+   1099 0000FA26 FF FF FF FF FF FF FF  
+   1099 0000FA2D FF FF FF FF FF FF FF  
+   1099 0000FA34 FF FF FF FF FF FF FF  
+   1099 0000FA3B FF FF FF FF FF FF FF  
+   1099 0000FA42 FF FF FF FF FF FF FF  
+   1099 0000FA49 FF FF FF FF FF FF FF  
+   1099 0000FA50 FF FF FF FF FF FF FF  
+   1099 0000FA57 FF FF FF FF FF FF FF  
+   1099 0000FA5E FF FF FF FF FF FF FF  
+   1099 0000FA65 FF FF FF FF FF FF FF  
+   1099 0000FA6C FF FF FF FF FF FF FF  
+   1099 0000FA73 FF FF FF FF FF FF FF  
+   1099 0000FA7A FF FF FF FF FF FF FF  
+   1099 0000FA81 FF FF FF FF FF FF FF  
+   1099 0000FA88 FF FF FF FF FF FF FF  
+   1099 0000FA8F FF FF FF FF FF FF FF  
+   1099 0000FA96 FF FF FF FF FF FF FF  
+   1099 0000FA9D FF FF FF FF FF FF FF  
+   1099 0000FAA4 FF FF FF FF FF FF FF  
+   1099 0000FAAB FF FF FF FF FF FF FF  
+   1099 0000FAB2 FF FF FF FF FF FF FF  
+   1099 0000FAB9 FF FF FF FF FF FF FF  
+   1099 0000FAC0 FF FF FF FF FF FF FF  
+   1099 0000FAC7 FF FF FF FF FF FF FF  
+   1099 0000FACE FF FF FF FF FF FF FF  
+   1099 0000FAD5 FF FF FF FF FF FF FF  
+   1099 0000FADC FF FF FF FF FF FF FF  
+   1099 0000FAE3 FF FF FF FF FF FF FF  
+   1099 0000FAEA FF FF FF FF FF FF FF  
+   1099 0000FAF1 FF FF FF FF FF FF FF  
+   1099 0000FAF8 FF FF FF FF FF FF FF  
+   1099 0000FAFF FF FF FF FF FF FF FF  
+   1099 0000FB06 FF FF FF FF FF FF FF  
+   1099 0000FB0D FF FF FF FF FF FF FF  
+   1099 0000FB14 FF FF FF FF FF FF FF  
+   1099 0000FB1B FF FF FF FF FF FF FF  
+   1099 0000FB22 FF FF FF FF FF FF FF  
+   1099 0000FB29 FF FF FF FF FF FF FF  
+   1099 0000FB30 FF FF FF FF FF FF FF  
+   1099 0000FB37 FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 32
 noc_boot21.a
-    665 0000FA7E FF FF FF FF FF FF FF  
-    665 0000FA85 FF FF FF FF FF FF FF  
-    665 0000FA8C FF FF FF FF FF FF FF  
-    665 0000FA93 FF FF FF FF FF FF FF  
-    665 0000FA9A FF FF FF FF FF FF FF  
-    665 0000FAA1 FF FF FF FF FF FF FF  
-    665 0000FAA8 FF FF FF FF FF FF FF  
-    665 0000FAAF FF FF FF FF FF FF FF  
-    665 0000FAB6 FF FF FF FF FF FF FF  
-    665 0000FABD FF FF FF FF FF FF FF  
-    665 0000FAC4 FF FF FF FF FF FF FF  
-    665 0000FACB FF FF FF FF FF FF FF  
-    665 0000FAD2 FF FF FF FF FF FF FF  
-    665 0000FAD9 FF FF FF FF FF FF FF  
-    665 0000FAE0 FF FF FF FF FF FF FF  
-    665 0000FAE7 FF FF FF FF FF FF FF  
-    665 0000FAEE FF FF FF FF FF FF FF  
-    665 0000FAF5 FF FF FF FF FF FF FF  
-    665 0000FAFC FF FF FF FF FF FF FF  
-    665 0000FB03 FF FF FF FF FF FF FF  
-    665 0000FB0A FF FF FF FF FF FF FF  
-    665 0000FB11 FF FF FF FF FF FF FF  
-    665 0000FB18 FF FF FF FF FF FF FF  
-    665 0000FB1F FF FF FF FF FF FF FF  
-    665 0000FB26 FF FF FF FF FF FF FF  
-    665 0000FB2D FF FF FF FF FF FF FF  
-    665 0000FB34 FF FF FF FF FF FF FF  
-    665 0000FB3B FF FF FF FF FF FF FF  
-    665 0000FB42 FF FF FF FF FF FF FF  
-    665 0000FB49 FF FF FF FF FF FF FF  
-    665 0000FB50 FF FF FF FF FF FF FF  
-    665 0000FB57 FF FF FF FF FF FF FF  
-    665 0000FB5E FF FF FF FF FF FF FF  
-    665 0000FB65 FF FF FF FF FF FF FF  
-    665 0000FB6C FF FF FF FF FF FF FF  
-    665 0000FB73 FF FF FF FF FF FF FF  
-    665 0000FB7A FF FF FF FF FF FF FF  
-    665 0000FB81 FF FF FF FF FF FF FF  
-    665 0000FB88 FF FF FF FF FF FF FF  
-    665 0000FB8F FF FF FF FF FF FF FF  
-    665 0000FB96 FF FF FF FF FF FF FF  
-    665 0000FB9D FF FF FF FF FF FF FF  
-    665 0000FBA4 FF FF FF FF FF FF FF  
-    665 0000FBAB FF FF FF FF FF FF FF  
-    665 0000FBB2 FF FF FF FF FF FF FF  
-    665 0000FBB9 FF FF FF FF FF FF FF  
-    665 0000FBC0 FF FF FF FF FF FF FF  
-    665 0000FBC7 FF FF FF FF FF FF FF  
-    665 0000FBCE FF FF FF FF FF FF FF  
-    665 0000FBD5 FF FF FF FF FF FF FF  
-    665 0000FBDC FF FF FF FF FF FF FF  
-    665 0000FBE3 FF FF FF FF FF FF FF  
-    665 0000FBEA FF FF FF FF FF FF FF  
-    665 0000FBF1 FF FF FF FF FF FF FF  
-    665 0000FBF8 FF FF FF FF FF FF FF  
-    665 0000FBFF FF FF FF FF FF FF FF  
-    665 0000FC06 FF FF FF FF FF FF FF  
-    665 0000FC0D FF FF FF FF FF FF FF  
-    665 0000FC14 FF FF FF FF FF FF FF  
-    665 0000FC1B FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 27
+   1099 0000FB3E FF FF FF FF FF FF FF  
+   1099 0000FB45 FF FF FF FF FF FF FF  
+   1099 0000FB4C FF FF FF FF FF FF FF  
+   1099 0000FB53 FF FF FF FF FF FF FF  
+   1099 0000FB5A FF FF FF FF FF FF FF  
+   1099 0000FB61 FF FF FF FF FF FF FF  
+   1099 0000FB68 FF FF FF FF FF FF FF  
+   1099 0000FB6F FF FF FF FF FF FF FF  
+   1099 0000FB76 FF FF FF FF FF FF FF  
+   1099 0000FB7D FF FF FF FF FF FF FF  
+   1099 0000FB84 FF FF FF FF FF FF FF  
+   1099 0000FB8B FF FF FF FF FF FF FF  
+   1099 0000FB92 FF FF FF FF FF FF FF  
+   1099 0000FB99 FF FF FF FF FF FF FF  
+   1099 0000FBA0 FF FF FF FF FF FF FF  
+   1099 0000FBA7 FF FF FF FF FF FF FF  
+   1099 0000FBAE FF FF FF FF FF FF FF  
+   1099 0000FBB5 FF FF FF FF FF FF FF  
+   1099 0000FBBC FF FF FF FF FF FF FF  
+   1099 0000FBC3 FF FF FF FF FF FF FF  
+   1099 0000FBCA FF FF FF FF FF FF FF  
+   1099 0000FBD1 FF FF FF FF FF FF FF  
+   1099 0000FBD8 FF FF FF FF FF FF FF  
+   1099 0000FBDF FF FF FF FF FF FF FF  
+   1099 0000FBE6 FF FF FF FF FF FF FF  
+   1099 0000FBED FF FF FF FF FF FF FF  
+   1099 0000FBF4 FF FF FF FF FF FF FF  
+   1099 0000FBFB FF FF FF FF FF FF FF  
+   1099 0000FC02 FF FF FF FF FF FF FF  
+   1099 0000FC09 FF FF FF FF FF FF FF  
+   1099 0000FC10 FF FF FF FF FF FF FF  
+   1099 0000FC17 FF FF FF FF FF FF FF  
+   1099 0000FC1E FF FF FF FF FF FF FF  
+   1099 0000FC25 FF FF FF FF FF FF FF  
+   1099 0000FC2C FF FF FF FF FF FF FF  
+   1099 0000FC33 FF FF FF FF FF FF FF  
+   1099 0000FC3A FF FF FF FF FF FF FF  
+   1099 0000FC41 FF FF FF FF FF FF FF  
+   1099 0000FC48 FF FF FF FF FF FF FF  
+   1099 0000FC4F FF FF FF FF FF FF FF  
+   1099 0000FC56 FF FF FF FF FF FF FF  
+   1099 0000FC5D FF FF FF FF FF FF FF  
+   1099 0000FC64 FF FF FF FF FF FF FF  
+   1099 0000FC6B FF FF FF FF FF FF FF  
+   1099 0000FC72 FF FF FF FF FF FF FF  
+   1099 0000FC79 FF FF FF FF FF FF FF  
+   1099 0000FC80 FF FF FF FF FF FF FF  
+   1099 0000FC87 FF FF FF FF FF FF FF  
+   1099 0000FC8E FF FF FF FF FF FF FF  
+   1099 0000FC95 FF FF FF FF FF FF FF  
+   1099 0000FC9C FF FF FF FF FF FF FF  
+   1099 0000FCA3 FF FF FF FF FF FF FF  
+   1099 0000FCAA FF FF FF FF FF FF FF  
+   1099 0000FCB1 FF FF FF FF FF FF FF  
+   1099 0000FCB8 FF FF FF FF FF FF FF  
+   1099 0000FCBF FF FF FF FF FF FF FF  
+   1099 0000FCC6 FF FF FF FF FF FF FF  
+   1099 0000FCCD FF FF FF FF FF FF FF  
+   1099 0000FCD4 FF FF FF FF FF FF FF  
+   1099 0000FCDB FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 33
 noc_boot21.a
-    665 0000FC22 FF FF FF FF FF FF FF  
-    665 0000FC29 FF FF FF FF FF FF FF  
-    665 0000FC30 FF FF FF FF FF FF FF  
-    665 0000FC37 FF FF FF FF FF FF FF  
-    665 0000FC3E FF FF FF FF FF FF FF  
-    665 0000FC45 FF FF FF FF FF FF FF  
-    665 0000FC4C FF FF FF FF FF FF FF  
-    665 0000FC53 FF FF FF FF FF FF FF  
-    665 0000FC5A FF FF FF FF FF FF FF  
-    665 0000FC61 FF FF FF FF FF FF FF  
-    665 0000FC68 FF FF FF FF FF FF FF  
-    665 0000FC6F FF FF FF FF FF FF FF  
-    665 0000FC76 FF FF FF FF FF FF FF  
-    665 0000FC7D FF FF FF FF FF FF FF  
-    665 0000FC84 FF FF FF FF FF FF FF  
-    665 0000FC8B FF FF FF FF FF FF FF  
-    665 0000FC92 FF FF FF FF FF FF FF  
-    665 0000FC99 FF FF FF FF FF FF FF  
-    665 0000FCA0 FF FF FF FF FF FF FF  
-    665 0000FCA7 FF FF FF FF FF FF FF  
-    665 0000FCAE FF FF FF FF FF FF FF  
-    665 0000FCB5 FF FF FF FF FF FF FF  
-    665 0000FCBC FF FF FF FF FF FF FF  
-    665 0000FCC3 FF FF FF FF FF FF FF  
-    665 0000FCCA FF FF FF FF FF FF FF  
-    665 0000FCD1 FF FF FF FF FF FF FF  
-    665 0000FCD8 FF FF FF FF FF FF FF  
-    665 0000FCDF FF FF FF FF FF FF FF  
-    665 0000FCE6 FF FF FF FF FF FF FF  
-    665 0000FCED FF FF FF FF FF FF FF  
-    665 0000FCF4 FF FF FF FF FF FF FF  
-    665 0000FCFB FF FF FF FF FF FF FF  
-    665 0000FD02 FF FF FF FF FF FF FF  
-    665 0000FD09 FF FF FF FF FF FF FF  
-    665 0000FD10 FF FF FF FF FF FF FF  
-    665 0000FD17 FF FF FF FF FF FF FF  
-    665 0000FD1E FF FF FF FF FF FF FF  
-    665 0000FD25 FF FF FF FF FF FF FF  
-    665 0000FD2C FF FF FF FF FF FF FF  
-    665 0000FD33 FF FF FF FF FF FF FF  
-    665 0000FD3A FF FF FF FF FF FF FF  
-    665 0000FD41 FF FF FF FF FF FF FF  
-    665 0000FD48 FF FF FF FF FF FF FF  
-    665 0000FD4F FF FF FF FF FF FF FF  
-    665 0000FD56 FF FF FF FF FF FF FF  
-    665 0000FD5D FF FF FF FF FF FF FF  
-    665 0000FD64 FF FF FF FF FF FF FF  
-    665 0000FD6B FF FF FF FF FF FF FF  
-    665 0000FD72 FF FF FF FF FF FF FF  
-    665 0000FD79 FF FF FF FF FF FF FF  
-    665 0000FD80 FF FF FF FF FF FF FF  
-    665 0000FD87 FF FF FF FF FF FF FF  
-    665 0000FD8E FF FF FF FF FF FF FF  
-    665 0000FD95 FF FF FF FF FF FF FF  
-    665 0000FD9C FF FF FF FF FF FF FF  
-    665 0000FDA3 FF FF FF FF FF FF FF  
-    665 0000FDAA FF FF FF FF FF FF FF  
-    665 0000FDB1 FF FF FF FF FF FF FF  
-    665 0000FDB8 FF FF FF FF FF FF FF  
-    665 0000FDBF FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 28
+   1099 0000FCE2 FF FF FF FF FF FF FF  
+   1099 0000FCE9 FF FF FF FF FF FF FF  
+   1099 0000FCF0 FF FF FF FF FF FF FF  
+   1099 0000FCF7 FF FF FF FF FF FF FF  
+   1099 0000FCFE FF FF FF FF FF FF FF  
+   1099 0000FD05 FF FF FF FF FF FF FF  
+   1099 0000FD0C FF FF FF FF FF FF FF  
+   1099 0000FD13 FF FF FF FF FF FF FF  
+   1099 0000FD1A FF FF FF FF FF FF FF  
+   1099 0000FD21 FF FF FF FF FF FF FF  
+   1099 0000FD28 FF FF FF FF FF FF FF  
+   1099 0000FD2F FF FF FF FF FF FF FF  
+   1099 0000FD36 FF FF FF FF FF FF FF  
+   1099 0000FD3D FF FF FF FF FF FF FF  
+   1099 0000FD44 FF FF FF FF FF FF FF  
+   1099 0000FD4B FF FF FF FF FF FF FF  
+   1099 0000FD52 FF FF FF FF FF FF FF  
+   1099 0000FD59 FF FF FF FF FF FF FF  
+   1099 0000FD60 FF FF FF FF FF FF FF  
+   1099 0000FD67 FF FF FF FF FF FF FF  
+   1099 0000FD6E FF FF FF FF FF FF FF  
+   1099 0000FD75 FF FF FF FF FF FF FF  
+   1099 0000FD7C FF FF FF FF FF FF FF  
+   1099 0000FD83 FF FF FF FF FF FF FF  
+   1099 0000FD8A FF FF FF FF FF FF FF  
+   1099 0000FD91 FF FF FF FF FF FF FF  
+   1099 0000FD98 FF FF FF FF FF FF FF  
+   1099 0000FD9F FF FF FF FF FF FF FF  
+   1099 0000FDA6 FF FF FF FF FF FF FF  
+   1099 0000FDAD FF FF FF FF FF FF FF  
+   1099 0000FDB4 FF FF FF FF FF FF FF  
+   1099 0000FDBB FF FF FF FF FF FF FF  
+   1099 0000FDC2 FF FF FF FF FF FF FF  
+   1099 0000FDC9 FF FF FF FF FF FF FF  
+   1099 0000FDD0 FF FF FF FF FF FF FF  
+   1099 0000FDD7 FF FF FF FF FF FF FF  
+   1099 0000FDDE FF FF FF FF FF FF FF  
+   1099 0000FDE5 FF FF FF FF FF FF FF  
+   1099 0000FDEC FF FF FF FF FF FF FF  
+   1099 0000FDF3 FF FF FF FF FF FF FF  
+   1099 0000FDFA FF FF FF FF FF FF FF  
+   1099 0000FE01 FF FF FF FF FF FF FF  
+   1099 0000FE08 FF FF FF FF FF FF FF  
+   1099 0000FE0F FF FF FF FF FF FF FF  
+   1099 0000FE16 FF FF FF FF FF FF FF  
+   1099 0000FE1D FF FF FF FF FF FF FF  
+   1099 0000FE24 FF FF FF FF FF FF FF  
+   1099 0000FE2B FF FF FF FF FF FF FF  
+   1099 0000FE32 FF FF FF FF FF FF FF  
+   1099 0000FE39 FF FF FF FF FF FF FF  
+   1099 0000FE40 FF FF FF FF FF FF FF  
+   1099 0000FE47 FF FF FF FF FF FF FF  
+   1099 0000FE4E FF FF FF FF FF FF FF  
+   1099 0000FE55 FF FF FF FF FF FF FF  
+   1099 0000FE5C FF FF FF FF FF FF FF  
+   1099 0000FE63 FF FF FF FF FF FF FF  
+   1099 0000FE6A FF FF FF FF FF FF FF  
+   1099 0000FE71 FF FF FF FF FF FF FF  
+   1099 0000FE78 FF FF FF FF FF FF FF  
+   1099 0000FE7F FF FF FF FF FF FF FF  
+Bird Computer Butterfly assembler   version 1.0.2   Thu Jun 29 00:05:12 2017     Page 34
 noc_boot21.a
-    665 0000FDC6 FF FF FF FF FF FF FF  
-    665 0000FDCD FF FF FF FF FF FF FF  
-    665 0000FDD4 FF FF FF FF FF FF FF  
-    665 0000FDDB FF FF FF FF FF FF FF  
-    665 0000FDE2 FF FF FF FF FF FF FF  
-    665 0000FDE9 FF FF FF FF FF FF FF  
-    665 0000FDF0 FF FF FF FF FF FF FF  
-    665 0000FDF7 FF FF FF FF FF FF FF  
-    665 0000FDFE FF FF FF FF FF FF FF  
-    665 0000FE05 FF FF FF FF FF FF FF  
-    665 0000FE0C FF FF FF FF FF FF FF  
-    665 0000FE13 FF FF FF FF FF FF FF  
-    665 0000FE1A FF FF FF FF FF FF FF  
-    665 0000FE21 FF FF FF FF FF FF FF  
-    665 0000FE28 FF FF FF FF FF FF FF  
-    665 0000FE2F FF FF FF FF FF FF FF  
-    665 0000FE36 FF FF FF FF FF FF FF  
-    665 0000FE3D FF FF FF FF FF FF FF  
-    665 0000FE44 FF FF FF FF FF FF FF  
-    665 0000FE4B FF FF FF FF FF FF FF  
-    665 0000FE52 FF FF FF FF FF FF FF  
-    665 0000FE59 FF FF FF FF FF FF FF  
-    665 0000FE60 FF FF FF FF FF FF FF  
-    665 0000FE67 FF FF FF FF FF FF FF  
-    665 0000FE6E FF FF FF FF FF FF FF  
-    665 0000FE75 FF FF FF FF FF FF FF  
-    665 0000FE7C FF FF FF FF FF FF FF  
-    665 0000FE83 FF FF FF FF FF FF FF  
-    665 0000FE8A FF FF FF FF FF FF FF  
-    665 0000FE91 FF FF FF FF FF FF FF  
-    665 0000FE98 FF FF FF FF FF FF FF  
-    665 0000FE9F FF FF FF FF FF FF FF  
-    665 0000FEA6 FF FF FF FF FF FF FF  
-    665 0000FEAD FF FF FF FF FF FF FF  
-    665 0000FEB4 FF FF FF FF FF FF FF  
-    665 0000FEBB FF FF FF FF FF FF FF  
-    665 0000FEC2 FF FF FF FF FF FF FF  
-    665 0000FEC9 FF FF FF FF FF FF FF  
-    665 0000FED0 FF FF FF FF FF FF FF  
-    665 0000FED7 FF FF FF FF FF FF FF  
-    665 0000FEDE FF FF FF FF FF FF FF  
-    665 0000FEE5 FF FF FF FF FF FF FF  
-    665 0000FEEC FF FF FF FF FF FF FF  
-    665 0000FEF3 FF FF FF FF FF FF FF  
-    665 0000FEFA FF FF FF FF FF FF FF  
-    665 0000FF01 FF FF FF FF FF FF FF  
-    665 0000FF08 FF FF FF FF FF FF FF  
-    665 0000FF0F FF FF FF FF FF FF FF  
-    665 0000FF16 FF FF FF FF FF FF FF  
-    665 0000FF1D FF FF FF FF FF FF FF  
-    665 0000FF24 FF FF FF FF FF FF FF  
-    665 0000FF2B FF FF FF FF FF FF FF  
-    665 0000FF32 FF FF FF FF FF FF FF  
-    665 0000FF39 FF FF FF FF FF FF FF  
-    665 0000FF40 FF FF FF FF FF FF FF  
-    665 0000FF47 FF FF FF FF FF FF FF  
-    665 0000FF4E FF FF FF FF FF FF FF  
-    665 0000FF55 FF FF FF FF FF FF FF  
-    665 0000FF5C FF FF FF FF FF FF FF  
-    665 0000FF63 FF FF FF FF FF FF FF  
-Bird Computer Butterfly assembler   version 1.0.2   Wed Jun 21 12:36:17 2017     Page 29
-noc_boot21.a
-    665 0000FF6A FF FF FF FF FF FF FF  
-    665 0000FF71 FF FF FF FF FF FF FF  
-    665 0000FF78 FF FF FF FF FF FF FF  
-    665 0000FF7F FF FF FF FF FF FF FF  
-    665 0000FF86 FF FF FF FF FF FF FF  
-    665 0000FF8D FF FF FF FF FF FF FF  
-    665 0000FF94 FF FF FF FF FF FF FF  
-    665 0000FF9B FF FF FF FF FF FF FF  
-    665 0000FFA2 FF FF FF FF FF FF FF  
-    665 0000FFA9 FF FF FF FF FF FF FF  
-    665 0000FFB0 FF FF FF FF FF FF FF  
-    665 0000FFB7 FF FF FF FF FF FF FF  
-    665 0000FFBE FF FF FF FF FF FF FF  
-    665 0000FFC5 FF FF FF FF FF FF FF  
-    665 0000FFCC FF FF FF FF FF FF FF  
-    665 0000FFD3 FF FF FF FF FF FF FF  
-    665 0000FFDA FF FF FF FF FF FF FF  
-    665 0000FFE1 FF FF FF FF FF FF FF  
-    665 0000FFE8 FF FF FF FF FF FF FF  
-    665 0000FFEF FF FF FF FF FF FF FF  
-    665 0000FFF6 FF FF FF FF FF FF FF  
-    665 0000FFFD FF                    
-    666 0000FFFE AA E0                   		dw		start
+   1099 0000FE86 FF FF FF FF FF FF FF  
+   1099 0000FE8D FF FF FF FF FF FF FF  
+   1099 0000FE94 FF FF FF FF FF FF FF  
+   1099 0000FE9B FF FF FF FF FF FF FF  
+   1099 0000FEA2 FF FF FF FF FF FF FF  
+   1099 0000FEA9 FF FF FF FF FF FF FF  
+   1099 0000FEB0 FF FF FF FF FF FF FF  
+   1099 0000FEB7 FF FF FF FF FF FF FF  
+   1099 0000FEBE FF FF FF FF FF FF FF  
+   1099 0000FEC5 FF FF FF FF FF FF FF  
+   1099 0000FECC FF FF FF FF FF FF FF  
+   1099 0000FED3 FF FF FF FF FF FF FF  
+   1099 0000FEDA FF FF FF FF FF FF FF  
+   1099 0000FEE1 FF FF FF FF FF FF FF  
+   1099 0000FEE8 FF FF FF FF FF FF FF  
+   1099 0000FEEF FF FF FF FF FF FF FF  
+   1099 0000FEF6 FF FF FF FF FF FF FF  
+   1099 0000FEFD FF FF FF FF FF FF FF  
+   1099 0000FF04 FF FF FF FF FF FF FF  
+   1099 0000FF0B FF FF FF FF FF FF FF  
+   1099 0000FF12 FF FF FF FF FF FF FF  
+   1099 0000FF19 FF FF FF FF FF FF FF  
+   1099 0000FF20 FF FF FF FF FF FF FF  
+   1099 0000FF27 FF FF FF FF FF FF FF  
+   1099 0000FF2E FF FF FF FF FF FF FF  
+   1099 0000FF35 FF FF FF FF FF FF FF  
+   1099 0000FF3C FF FF FF FF FF FF FF  
+   1099 0000FF43 FF FF FF FF FF FF FF  
+   1099 0000FF4A FF FF FF FF FF FF FF  
+   1099 0000FF51 FF FF FF FF FF FF FF  
+   1099 0000FF58 FF FF FF FF FF FF FF  
+   1099 0000FF5F FF FF FF FF FF FF FF  
+   1099 0000FF66 FF FF FF FF FF FF FF  
+   1099 0000FF6D FF FF FF FF FF FF FF  
+   1099 0000FF74 FF FF FF FF FF FF FF  
+   1099 0000FF7B FF FF FF FF FF FF FF  
+   1099 0000FF82 FF FF FF FF FF FF FF  
+   1099 0000FF89 FF FF FF FF FF FF FF  
+   1099 0000FF90 FF FF FF FF FF FF FF  
+   1099 0000FF97 FF FF FF FF FF FF FF  
+   1099 0000FF9E FF FF FF FF FF FF FF  
+   1099 0000FFA5 FF FF FF FF FF FF FF  
+   1099 0000FFAC FF FF FF FF FF FF FF  
+   1099 0000FFB3 FF FF FF FF FF FF FF  
+   1099 0000FFBA FF FF FF FF FF FF FF  
+   1099 0000FFC1 FF FF FF FF FF FF FF  
+   1099 0000FFC8 FF FF FF FF FF FF FF  
+   1099 0000FFCF FF FF FF FF FF FF FF  
+   1099 0000FFD6 FF FF FF FF FF FF FF  
+   1099 0000FFDD FF FF FF FF FF FF FF  
+   1099 0000FFE4 FF FF FF FF FF FF FF  
+   1099 0000FFEB FF FF FF FF FF FF FF  
+   1099 0000FFF2 FF FF FF FF FF FF FF  
+   1099 0000FFF9 FF FF FF FF FF        
+   1100 0000FFFE B4 E2                   		dw		start
 

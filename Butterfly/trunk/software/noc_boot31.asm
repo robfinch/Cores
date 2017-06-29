@@ -33,15 +33,17 @@ rxBuf	equ		48
 
 ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
+RTR_RXCTL	equ	$11
 RTR_TXSTAT	equ	$12
+
+LEDS		equ	$B200
 
 ROUTER_TRB	equ	0
 
-MSG_DST		equ	15
-MSG_SRC		equ	14
+MSG_DST		equ	14
+MSG_SRC		equ	12
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
-MSG_GSD		equ	7
 
 ETHERNET	EQU		0xA000
 ETH_MODER		EQU		0x00
@@ -86,16 +88,15 @@ unique_id	dw	0
 start:
 		lw		sp,#$1FFE
 		call	ethInit
+start2:
+		lw		sp,#$1FFE
 noMsg1:
-		call	ethPoll
+		;call	ethPoll
 		lb		r1,ROUTER+RTR_RXSTAT
-		and		r1,#63
 		beq		noMsg1
 		call	Recv
 		call	RecvDispatch
-		bra		start
-lockup:
-		bra		lockup
+		bra		start2
 
 ;----------------------------------------------------------------------------
 ; Receiver dispatch
@@ -112,22 +113,20 @@ RecvDispatch:
 		bne		RecvDispatch2
 		; Send back a reset ACK message to indicate node is good to go.
 		call	zeroTxBuf
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_DST
+		lw		r1,#$111
+		sw		r1,txBuf+MSG_DST
 		lw		r1,#MT_RST_ACK
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 		br		RecvDispatchXit
+
+		; Process PING request
 RecvDispatch2:
 		cmp		r1,#MT_PING
 		bne		RecvDispatch9
-		call	zeroTxBuf
-		lb		r1,rxBuf+MSG_SRC
-		sb		r1,txBuf+MSG_DST
-		lw		r1,#MT_PING_ACK
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
+		call	PingHandler
 		br		RecvDispatchXit
+
 RecvDispatch9:
 		cmp		r1,#MT_START_BASIC_LOAD	; start BASIC load
 		bne		RecvDispatch3
@@ -168,7 +167,6 @@ RecvDispatch4:
 		; Load program code
 RecvDispatch5:
 		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
 		bne		RecvDispatch6
 		lw		r1,rxBuf+2
 		lw		r2,rxBuf+4
@@ -177,8 +175,7 @@ RecvDispatch5:
 
 		; Load program data
 RecvDispatch6:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
+		cmp		r1,#MT_LOAD_DATA
 		bne		RecvDispatch7
 		lw		r1,rxBuf+2
 		lw		r2,rxBuf+4
@@ -189,7 +186,6 @@ RecvDispatch6:
 		; Execute program
 RecvDispatch7:
 		cmp		r1,#MT_EXEC_CODE
-		br		RecvDispatchXit
 		bne		RecvDispatch8
 		lw		r1,rxBuf+MSG_SRC
 		add		sp,sp,#-2
@@ -200,9 +196,7 @@ RecvDispatch7:
 		add		sp,sp,#2
 		call	zeroTxBuf
 		sw		r1,txBuf+2
-		sb		r2,txBuf+MSG_DST
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_GDS
+		sw		r2,txBuf+MSG_DST
 		lw		r1,#MT_EXIT
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
@@ -242,7 +236,11 @@ ethInit:
 		lw		r1,#1				; select BMSR (status register)
 		sb		r1,ETH_MIIADDRESS+1[r5]
 		; MII should not be busy here, we haven't issued a command yet.
-ethInit1:		
+		lw		r2,#0
+ethInit1:
+		add		r2,r2,#1
+		cmp		r2,#100
+		bgtu	ethInitErr
 		lw		r1,ETH_MIISTATUS[r5]
 		and		r1,#2				; busy bit
 		bne		ethInit1
@@ -297,6 +295,7 @@ ethInit4:
 
 		lw		r1,#$A021			; enable recieve all frames
 		sw		r1,ETH_MODER[r5]
+ethInitErr:
 		ret
 
 ;----------------------------------------------------------------------------
@@ -312,11 +311,16 @@ ethInit4:
 ;----------------------------------------------------------------------------
 
 ethWriteMII:
-		add		sp,sp,#-4
+		add		sp,sp,#-6
 		sw		r3,[sp]
 		sw		r5,2[sp]
+		sw		r2,4[sp]
 		lw		r5,#ETHERNET
+		lw		r2,#0
 ethWriteMII1:
+		add		r2,r2,#1
+		cmp		r2,#1000
+		bgtu	ethWriteMIIErr
 		lb		r3,ETH_MIISTATUS[r5]
 		and		r3,#2				; busy bit
 		bne		ethWriteMII1
@@ -324,9 +328,11 @@ ethWriteMII1:
 		sw		r2,ETH_MIITX_DATA[r5]
 		lw		r3,#4					; write control data
 		sb		r3,ETH_MIICOMMAND[r5]
+ethWriteMIIErr:
 		lw		r3,[sp]
 		lw		r5,2[sp]
-		add		sp,sp,#4
+		lw		r2,4[sp]
+		add		sp,sp,#6
 		ret
 
 
@@ -336,7 +342,7 @@ ethWriteMII1:
 ;
 ethPoll:
 		add		sp,sp,#-4
-		sw		lw,[sp]
+		sw		lr,[sp]
 		lw		r1,$A00[r5]				; get BD status
 		and		r1,#$8000
 		bne		r1,r0,ethPoll3
@@ -350,8 +356,8 @@ ethPoll2:
 		lw		r1,[r5]
 		sw		r1,txBuf+2
 		sw		r4,txBuf+4
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_DST
+		lw		r1,#$111
+		sw		r1,txBuf+MSG_DST
 		lw		r1,#MT_ETH_PACKET
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit

@@ -2,7 +2,7 @@ MT_RST		equ		1
 MT_RST_ACK	equ		2
 MT_STOP		equ		3
 MT_KEYSTROKE			equ	4
-MT_SET_INPUT_FOCUS		equ	5
+MT_SET_IOFOCUS			equ	5
 MT_BUTTON_STATUS		equ	6
 MT_REQ_INP_FOCUS		equ	7
 MT_GRNT_INP_FOCUS		equ 8
@@ -16,4 +16,54 @@ MT_GRNT_OUT_FOCUS		equ	16
 MT_OUT_CHAR				equ	17
 MT_PING_ACK				equ	18
 MT_ETH_PACKET			equ	19
+MT_GET_DATETIME			equ	20
+MT_SET_DATETIME			equ	21
+MT_DATETIME_ACK			equ	22
+MT_LOAD_CODE			equ	23
+MT_LOAD_DATA			equ	24
+MT_EXEC_CODE			equ	25
+MT_EXIT					equ	26
+MT_RDRAM				equ	27
+MT_WRRAM				equ	28
+MT_SETPIXEL				equ	29
+MT_GETPIXEL				equ	30
+MT_SETADDR				equ	31
+MT_DATA					equ	32
+MT_NEXT_IOFOCUS			equ	33
+MT_GET_ROUTE			equ	34
+MT_GET_ROUTE_ACK		equ	35
+MT_ENUM_DEVICES			equ	36
+MT_ENUM_DEVICES1		equ	37
+MT_ENUM_DEVICES2		equ	38
+
+; Device command opcodes
+;
+DVC_Nop				EQU		64
+DVC_Setup			EQU		65
+DVC_Initialize		EQU		66
+DVC_Status			EQU		67
+DVC_MediaCheck		EQU		68
+DVC_BuildBPB		EQU		69
+DVC_Open			EQU		70
+DVC_Close			EQU		71
+DVC_GetChar			EQU		72
+DVC_PeekChar		EQU		73
+DVC_GetCharDirect	EQU		74
+DVC_PeekCharDirect	EQU		75
+DVC_InputStatus		EQU		76
+DVC_PutChar			EQU		77
+DVC_SetPosition		EQU		78
+DVC_ReadBlock		EQU		79
+DVC_WriteBlock		EQU		80
+DVC_VerifyBlock		EQU		81
+DVC_OutputStatus	EQU		82
+DVC_FlushInput		EQU		83
+DVC_FlushOutput		EQU		84
+DVC_IRQ				EQU		85
+DVC_IsRemoveable	EQU		86
+DVC_IOCTRL_READ		EQU		87
+DVC_IOCTRL_WRITE	EQU		88
+DVC_OutputUntilBusy	EQU		89
+; message types	90 to 95 reserved
+
 

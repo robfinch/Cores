@@ -20,13 +20,15 @@
 ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 ;                                    
 ;                                      
-; This boot rom for the input node $21.
+; This boot rom for the input node $211.
 ; ============================================================================
 ;
+nDCB	equ		3
 CR	= 13
 LF	= 10
-CTRLH	equ		9
+CTRLH	equ		8
 
+SC_TAB		EQU		$0D
 SC_LSHIFT	EQU		$12
 SC_RSHIFT	EQU		$59
 SC_KEYUP	EQU		$F0
@@ -42,15 +44,22 @@ SC_CAPSLOCK	EQU		$58
 #include "MessageTypes.asm"
 			bss
 			org		15
-HTInputFocus	db	0
+HTInputFocus	dw	0
 KeyState1		db	0
 KeyState2		db	0
 			align	16
 txBuf	fill.b	16,0
 rxBuf	fill.b	16,0
 
+		org		$40
+		align	2
+NodeDCB		fill.b	DCB_Size,0
+KbdDCB		fill.b	DCB_Size,0
+BtnsDCB		fill.b	DCB_Size,0
+
 ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
+RTR_RXCTL	equ $11
 RTR_TXSTAT	equ	$12
 ROUTER_TRB	equ	0
 
@@ -59,25 +68,22 @@ KBD			equ	$B210
 KBD_STAT	equ	1
 SWITCHES	equ	$B220
 
-MSG_DST		equ	15
-MSG_SRC		equ	14
+MSG_DST		equ	14
+MSG_SRC		equ	12
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
-MSG_GSD		equ	7
 
 		.code
 		cpu		Butterfly16
 		org		0xE000
 #include "Network.asm"
-;#include "tb.asm"
+#include "Node.asm"
+;#include "tb_worker.asm"
 
 		.code
 start:
 		lw		sp,#$1FFE
-		call	KeybdReset
-		sb		r0,HTInputFocus
-		lw		r1,#$111
-		sb		r1,HTInputFocus
+		call	ResetNode
 start1:
 noMsg1:
 		call	KeybdGetChar
@@ -90,8 +96,8 @@ noMsg1:
 		; CTRL-C
 		; If CTRL-C was pressed broadcast a global stop message
 		call	zeroTxBuf
-		lw		r1,#$FF
-		sb		r1,txBuf+MSG_DST
+		lw		r1,#$FFF
+		sw		r1,txBuf+MSG_DST
 		lw		r1,#MT_STOP
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
@@ -99,28 +105,21 @@ noMsg1:
 		; There was a keystroke available so transmit a character
 		; message to the thread with the input focus
 notC:
-		lb		r5,HTInputFocus		; any thread with input focus ?
+		lw		r5,HTInputFocus		; any thread with input focus ?
 		beq		noKey
 		call	zeroTxBuf
 		mov		r2,r5
-		shr		r2,#1
-		shr		r2,#1
-		shr		r2,#1
-		shr		r2,#1
-		sb		r2,txBuf+MSG_DST	; destination is input focus thread
-		lw		r2,#$11				; grid numbers are hard coded for now
-		sb		r2,txBuf+MSG_GDS
+		or		r2,#$1000
+		sw		r2,txBuf+MSG_DST	; destination is input focus thread
 		sb		r1,txBuf			; store ascii char
 		sb		r1,txBuf+2
 		sb		r1,txBuf+4
-		sb		r1,txBuf+6
 		sb		r3,txBuf+1			; and scan code
-		lw		r1,#MT_KEYSTROKE	; keyboard message
+		lw		r1,#DVC_PUTCHAR
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
 noKey:
 		lb		r1,ROUTER+RTR_RXSTAT
-		and		r1,#63
 		beq		noMsg1
 		call	Recv
 		call	RecvDispatch
@@ -128,97 +127,74 @@ noKey:
 
 
 ;----------------------------------------------------------------------------
-; Received message dispatch.
+; Copy the DCB tables to ram.
 ;----------------------------------------------------------------------------
 
-RecvDispatch:
+CpyDCB:
+		lw		r3,#0
+CpyDCB1:
+		lw		r1,DCBTbl[r3]
+		sw		r1,NodeDCB[r3]
+		add		r3,r3,#2
+		cmp		r3,#48*nDCB
+		bltu	CpyDCB1
+		ret
+
+;----------------------------------------------------------------------------
+; Reset the node.
+;----------------------------------------------------------------------------
+
+ResetNode:
 		add		sp,sp,#-2
 		sw		lr,[sp]
-		lb		r1,rxBuf+MSG_TYPE
-		; Reset request ?
-		cmp		r1,#MT_RST
-		bne		RecvDispatch2
-		sb		r0,HTInputFocus
-		lw		r1,#$11
-		sb		r1,HTInputFocus		; for now
+		sw		r0,HTInputFocus
+		lw		r1,#$111
+		sw		r1,HTInputFocus		; for now
 		call	KeybdReset
-		call	zeroTxBuf
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_DST
-		lw		r1,#MT_RST_ACK
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
-		bra		RecvDispatchXit
-RecvDispatch2:
-		cmp		r1,#MT_PING
-		bne		RecvDispatch5
-		call	zeroTxBuf
-		lb		r1,rxBuf+MSG_SRC
-		sb		r1,txBuf+MSG_DST
-		lw		r1,#MT_PING_ACK
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
-		br		RecvDispatchXit
-
-		; Load program code
-RecvDispatch5:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch6
-		lw		r1,rxBuf+2
-		lw		r2,rxBuf+4
-		sw		r1,[r2]
-		br		RecvDispatchXit
-
-		; Load program data
-RecvDispatch6:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch7
-		lw		r1,rxBuf+2
-		lw		r2,rxBuf+4
-		sw		r1,[r2]
-		br		RecvDispatchXit
-		; Load program code
-
-		; Execute program
-RecvDispatch7:
-		cmp		r1,#MT_EXEC_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch8
-		lw		r1,rxBuf+MSG_SRC
-		add		sp,sp,#-2
-		sw		r1,[sp]
-		lw		r2,rxBuf+4
-		call	[r2]
-		lw		r2,[sp]
+		lw		lr,[sp]
 		add		sp,sp,#2
-		call	zeroTxBuf
-		sw		r1,txBuf+2
-		sb		r2,txBuf+MSG_DST
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_GDS
-		lw		r1,#MT_EXIT
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
-		br		RecvDispatchXit
+		ret
+
+;----------------------------------------------------------------------------
+; Message command processor for node.
+;----------------------------------------------------------------------------
+
+NodeCmdProc:
+		add		sp,sp,#-4
+		sw		lr,[sp]
+		sw		r1,2[sp]
+
+		lb		r1,rxBuf+MSG_TYPE
 
 		; Set input focus ?
 		; Check for request to set input focus
-RecvDispatch8:
-		cmp		r1,#MT_SET_INPUT_FOCUS
-		bne		RecvDispatch3
-		lb		r1,rxBuf
-		sb		HTInputFocus
-		bra		RecvDispatchXit
+		cmp		r1,#MT_SET_IOFOCUS
+		bne		NodeCmdProc1
+		lw		r1,rxBuf
+		sw		HTInputFocus
+		br		NodeCmdProcXit
+NodeCmdProc1:
+		call	StdMsgHandlers
+NodeCmdProcXit:
+		lw		lr,[sp]
+		lw		r1,2[sp]
+		add		sp,sp,#4
+		ret
+
+;----------------------------------------------------------------------------
+; Message command processor for buttons / switches device.
+;----------------------------------------------------------------------------
 
 		; Get button/switch status ?
-RecvDispatch3:
+BtnsCmdProc:
+		add		sp,sp,#-4
+		sw		lr,[sp]
+		sw		r1,2[sp]
+		lb		r1,rxBuf+MSG_TYPE
 		cmp		r1,#MT_BUTTON_STATUS
-		bne		RecvDispatch9
+		bne		BtnsCmdProcXit
 		call	zeroTxBuf
-		lb		r1,rxBuf+MSG_SRC		; where did message come from
-		sb		r1,txBuf+MSG_DST		; send back to sender
+		call	SetDestFromRx
 		lw		r1,#MT_BUTTON_STATUS
 		sb		r1,txBuf+MSG_TYPE
 		lb		r1,BTNS
@@ -226,11 +202,9 @@ RecvDispatch3:
 		lb		r1,SWITCHES
 		sb		r1,txBuf+1
 		call	Xmit
-		bra		RecvDispatchXit
-RecvDispatch9:
-		bra		RecvDispatchXit
-RecvDispatchXit:
+BtnsCmdProcXit:
 		lw		lr,[sp]
+		lw		r1,2[sp]
 		add		sp,sp,#2
 		ret
 
@@ -318,6 +292,13 @@ notCapsLock:
 		bne		notScrollLock
 		jmp		doScrollLock
 notScrollLock:
+		cmp		r1,#SC_ALT
+		bne		notAlt
+		jmp		doAlt
+notAlt:
+		cmp		r1,#SC_TAB
+		beq		doTab
+notTab:
 		lb		r2,KeyState1
 		mov		r4,r2
 		shr		r2,#1
@@ -391,6 +372,47 @@ kbd4:
 		or		r1,#4
 		sb		r1,KeyState2
 		jmp		kbd3		
+
+doAlt:
+		lb		r1,KeyState1
+		ror		r1,#1
+		bpl		doAlt1
+		lb		r1,KeyState2
+		and		r1,#$FFFD
+		sb		r1,KeyState2
+		br		doAlt2
+doAlt1:
+		lb		r1,KeyState2
+		or		r1,#2
+		sb		r1,KeyState2
+doAlt2:
+		sb		r0,KeyState1
+		jmp		kbd3
+
+		; Tab key processing
+		; Look for the sequence ALT-Tab and switch the IO focus
+		; if found. Otherwise go back and process the tab key
+		; normally.
+doTab:
+		lb		r1,KeyState1
+		ror		r1,#1
+		bpl		doTab1
+		lb		r1,KeyState2
+		and		r1,#2
+		bne		doTab2
+doTab1:
+		lw		r1,#SC_TAB
+		br		notTab
+doTab2:
+		call	zeroTxBuf
+		lw		r1,#$11
+		sb		r1,txBuf+MSG_DST
+		sb		r1,txBuf+MSG_GDS
+		lw		r1,#MT_NEXT_IOFOCUS
+		sb		r1,txBuf+MSG_TYPE
+		call	Xmit
+		br		kbd3
+
 doShift:
 		lb		r1,KeyState1
 		ror		r1,#1
@@ -537,6 +559,62 @@ keybdExtendedCodes:
 	.byte	$98,$99,$92,$2e,$91,$90,$2e,$2e
 	.byte	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
 
+
+	align	2
+DCBTbl:
+	db	6,"NOD211",0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	NodeCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
+		
+	db	3,"KBD",0,0,0,0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	KeybdCmdProc			; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
+
+	db	3,"BTN",0,0,0,0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	BtnsCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
 
 		org		0xFFFE
 		dw		start

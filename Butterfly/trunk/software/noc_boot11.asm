@@ -24,11 +24,13 @@
 ; bringing the system up, and controls the text display and leds.
 ; ============================================================================
 ;
+nDCB	equ		3
 CR	= 13
 LF	= 10
 CTRLH	equ		8
 
 #include "MessageTypes.asm"
+#include "DeviceDriver.inc"
 
 		bss
 		org		0x0040
@@ -39,23 +41,32 @@ kbdhead	db	0
 kbdtail	db	0
 kbdcnt	db	0
 pingcnt		dw	0
+FocusHead	db	0
 FocusTbl	fill.b	64,0
-HTOutFocus	db		0
 		align	2
+NodeDCB		fill.b	DCB_Size,0
+TextDCB		fill.b	DCB_Size,0
+LedsDCB		fill.b	DCB_Size,0
+DevList		fill.b	16*88,0
+DevListNdx	dw	0
+
+		align	2
+HTFocus		dw		0
 packetPtr	dw		0
+pingndx		db		0
 
 TXTSCR		equ	$2000
 TXTCTRL		equ	$B100
 LEDS		equ	$B200
 ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
+RTR_RXCTL	equ	$11
 RTR_TXSTAT	equ	$12
 
-MSG_DST		equ	15
-MSG_SRC		equ	14
+MSG_DST		equ	14
+MSG_SRC		equ	12
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
-MSG_GSD		equ	7
 
 ROUTER_TRB	equ	0
 
@@ -63,6 +74,7 @@ ROUTER_TRB	equ	0
 		cpu		Butterfly16
 		.org	$C000
 #include "Network.asm"
+#include "Node.asm"
 #include "tb.asm"
 		.code
 		.org	$D800
@@ -70,13 +82,47 @@ start:
 		tsr		r1,ID		; id register
 		sb		r1,LEDS
 		lw		sp,#$1FFE
-;		br		start2
+		call	ResetNode
+;		lw		r1,#$80					; set router in snoop mode
+;		sb		r1,ROUTER+RTR_RXCTL
+		;call	broadcastReset
+start2:
+		lw		r1,#$80					; set router in non-snoop mode
+		sb		r1,ROUTER+RTR_RXCTL
+		tsr		r1,ID
+		cmp		r1,#$111
+		bne		RecvLoop
+		call	ping44
+		call	ReqEnumDevices
+		lw		r1,#5
+		sb		r1,LEDS
+		jmp		CSTART
+RecvLoop:
+noMsg1:
+		lb		r1,ROUTER+RTR_RXSTAT
+		beq		noMsg1
+		call	Recv
+		call	RecvDispatch
+		bra		RecvLoop
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+
+ResetNode:
+		add		sp,sp,#-4
+		sw		lr,[sp]
+		sw		r1,2[sp]
+		call	CpyDCB
+		sw		r0,DevListNdx
 		sb		r0,kbdhead
 		sb		r0,kbdtail
 		sb		r0,kbdcnt
 		sw		r0,pingcnt
+		sb		r0,pingndx
 		lw		r2,#TXTSCR+3120
 		sw		r2,packetPtr
+		lw		r1,#1
+		sb		r1,FocusTbl
 		call	InitTxtCtrl
 		lw		r1,#4
 		sb		r1,LEDS
@@ -90,29 +136,25 @@ start:
 		call	HomeCursor
 		lw		r1,#msgStarting
 		call	putmsgScr
-;		lw		r1,#$80					; set router in snoop mode
-;		sb		r1,ROUTER+RTR_RXSTAT
-		;call	broadcastReset
-start2:
-		lw		r1,#$80					; set router in non-snoop mode
-		sb		r1,ROUTER+RTR_RXSTAT
-		tsr		r1,ID
-		cmp		r1,#$11
-		bne		RecvLoop
-		call	ping44
-		lw		r1,#5
-		sb		r1,LEDS
-		jmp		CSTART
-RecvLoop:
-noMsg1:
-		lb		r1,ROUTER+RTR_RXSTAT
-		and		r1,#63
-		beq		noMsg1
-		call	Recv
-		call	RecvDispatch
-		bra		RecvLoop
-lockup:
-		bra		lockup
+		lw		lr,[sp]
+		lw		r1,2[sp]
+		add		sp,sp,#4
+		ret
+
+;----------------------------------------------------------------------------
+; Copy the DCB tables to ram.
+;----------------------------------------------------------------------------
+
+CpyDCB:
+		lw		r3,#0
+CpyDCB1:
+		lw		r1,DCBTbl[r3]
+		sw		r1,NodeDCB[r3]
+		add		r3,r3,#2
+		cmp		r3,#48*nDCB
+		bltu	CpyDCB1
+		ret
+
 
 ;----------------------------------------------------------------------------
 ; Broadcast a reset message on the network.
@@ -122,8 +164,8 @@ broadcastReset:
 		add		sp,sp,#-2
 		sw		lr,[sp]
 		call	zeroTxBuf
-		lw		r1,#$FF		; global broadcast address
-		sb		r1,txBuf+MSG_DST
+		lw		r1,#$FFF		; global broadcast address
+		sw		r1,txBuf+MSG_DST
 		lw		r1,#MT_RST
 		sb		r1,txBuf+MSG_TYPE	; reset message
 		call	Xmit
@@ -132,36 +174,85 @@ broadcastReset:
 		ret
 
 ;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+
+ReqEnumDevices:
+		add		sp,sp,#-6
+		sw		lr,[sp]
+		sw		r1,2[sp]
+		sw		r2,4[sp]
+		lw		r2,#0
+ReqEnumDevices2:
+		lb		r1,NodeNumTbl[r2]
+		and		r1,#$0F
+		cmp		r1,#$08
+		beq		ReqEnumDevices1
+		call	zeroTxBuf
+		lb		r1,NodeNumTbl[r2]
+		zxb		r1
+		shl		r1,#1
+		shl		r1,#1
+		shl		r1,#1
+		shl		r1,#1
+		or		r1,#1
+		sw		r1,txBuf+MSG_DST
+		lw		r1,#MT_ENUM_DEVICES
+		sb		r1,txBuf+MSG_TYPE
+		call	Xmit
+ReqEnumDevices1:
+		lb		r1,ROUTER+RTR_RXSTAT
+		beq		ReqEnumDevices3
+		call	Recv
+		call	RecvDispatch
+ReqEnumDevices3:
+		add		r2,r2,#1
+		cmp		r2,#63
+		bltu	ReqEnumDevices2
+		lw		lr,[sp]
+		lw		r1,2[sp]
+		lw		r2,4[sp]
+		add		sp,sp,#6
+		ret
+
+;----------------------------------------------------------------------------
 ; Ping all the nodes to ensure everything is okay.
 ;----------------------------------------------------------------------------
 
 ping44:
-		add		sp,sp,#-4
+		add		sp,sp,#-6
 		sw		lr,[sp]
-		lw		r2,#0
-ping441:
+		sw		r1,2[sp]
+		sw		r2,4[sp]
+		lb		r2,pingndx
 		sw		r2,2[sp]
+		lb		r1,NodeNumTbl[r2]
+		and		r1,#$0F
+		cmp		r1,#$08				; x8 nodes aren't present anymore
+		beq		ping442
 		call	zeroTxBuf
 		lb		r1,NodeNumTbl[r2]
-		sb		r1,txBuf+MSG_DST
-		lb		r1,#$11
-		sb		r1,txBuf+MSG_GDS
+		zxb		r1
+		shl		r1,#1
+		shl		r1,#1
+		shl		r1,#1
+		shl		r1,#1
+		or		r1,#1
+		sw		r1,txBuf+MSG_DST
 		lw		r1,#MT_PING
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
-		lb		r1,ROUTER+RTR_RXSTAT
-		and		r1,#55
-		beq		ping442
-		call	Recv
-		call	RecvDump
-		call	RecvDispatch
 ping442:
 		lw		r2,2[sp]
 		add		r2,r2,#1
-		cmp		r2,#64
+		cmp		r2,#63
 		bltu	ping441
+		lw		r2,#0
+ping441:
+		sb		r2,pingndx
 		lw		lr,[sp]
-		add		sp,sp,#4
+		lw		r1,2[sp]
+		lw		r2,4[sp]
+		add		sp,sp,#6
 		ret
 
 NodeNumTbl:
@@ -175,50 +266,66 @@ NodeNumTbl:
 	db	$81,$82,$83,$84,$85,$86,$87,$88	
 
 ;----------------------------------------------------------------------------
-; Dispatch routine for recieved messages.
+; Test if it's time to do a ping message. All the nodes are pinged
+; periodically to ensure the network is working.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	<none>
 ;----------------------------------------------------------------------------
-
-RecvDispatch:
-		add		sp,sp,#-8
+		align	2
+DoPing:
+		add		sp,sp,#-4
 		sw		lr,[sp]
-		call	RecvDump
 		sw		r1,2[sp]
-		sw		r2,4[sp]
-		sw		r3,6[sp]
-		lb		r1,rxBuf+MSG_DST
-		shl		r1,#1
-		shl		r1,#1
-		shl		r1,#1
-		shl		r1,#1
-		or		r1,#1
-		tsr		r2,ID
-		cmp		r2,r1
-		bne		RecvDispatchXit
 		lw		r1,pingcnt
 		add		r1,r1,#1
 		sw		r1,pingcnt
-		cmp		r1,#200
-		bne		RecvDispatchNoPing
+		cmp		r1,#800
+		bltu	DoPingNoPing
 		sw		r0,pingcnt
 		call	ping44
-RecvDispatchNoPing
-		lb		r1,rxBuf+MSG_TYPE
+DoPingNoPing:
+		lw		lr,[sp]
+		lw		r1,2[sp]
+		add		sp,sp,#4
+		ret
+
+;----------------------------------------------------------------------------
+; Command processor for the node.
+;----------------------------------------------------------------------------
+
+NodeCmdProc:
+		add		sp,sp,#-8
+		sw		lr,[sp]
+		sw		r1,2[sp]
+		sw		r2,4[sp]
+		sw		r3,6[sp]
 		cmp		r1,#MT_RST_ACK	; status display ?
-		bne		RecvDispatch2
+		bne		NodeCmdProc2
 RecvPingAck:
-		lb		r1,rxBuf+MSG_SRC; message source
+		lw		r1,rxBuf+MSG_SRC; message source
 		mov		r2,r1
-		and		r2,#$7			; get Y coord
-		shl		r2,#1			; shift left once
+		and		r2,#$0F0		; get Y coord
+		shr		r2,#1
+		shr		r2,#1
+		shr		r2,#1
 		lw		r2,lineTbl[r2]
-		add		r2,r2,#88		; position table along right edge of screen
+		add		r2,r2,#86		; position table along right edge of screen
 		mov		r3,r1			; r3 = ID
+		shr		r3,#1			; set r3 = X coord
+		shr		r3,#1
+		shr		r3,#1
+		shr		r3,#1
 		shr		r3,#1
 		shr		r3,#1
 		shr		r3,#1
 		shr		r3,#1
 		shl		r3,#1			; character screen pos = *2
-		and		r3,#$0E
+		and		r3,#$1E
 		add		r3,r2
 		;lw		r1,#'*'
 		;call	AsciiToScreen
@@ -227,83 +334,66 @@ RecvPingAck:
 		lw		r1,TXTSCR[r3]
 		add		r1,r1,#1
 		sw		r1,TXTSCR[r3]
-		bra		RecvDispatchXit
-RecvDispatch2:
+		bra		NodeCmdProcXit
+NodeCmdProc2:
+NodeCmdProc10:
 		cmp		r1,#MT_PING_ACK
 		beq		RecvPingAck
 		cmp		r1,#MT_KEYSTROKE
 		beq		RecvKeystroke
 		cmp		r1,#MT_ETH_PACKET
 		beq		RecvEthPacket
+		cmp		r1,#MT_ENUM_DEVICES1
+		beq		NodeCmdProcEnumDevices1
+		cmp		r1,#MT_ENUM_DEVICES2
+		beq		NodeCmdProcEnumDevices2
 		cmp		r1,#MT_REQ_OUT_FOCUS
-		bne		RecvDispatch3
-		lb		r1,rxBuf+MSG_SRC
+		bne		NodeCmdProc3
+		lw		r1,rxBuf+MSG_SRC
 		mov		r2,r1
+		shr		r1,#1
+		shr		r1,#1
+		shr		r1,#1
+		shr		r1,#1
 		sub		r1,r1,#1
 		and		r1,#$7
-		sub		r2,r2,#$10
-		and		r2,#$70
+		sub		r2,r2,#$100
+		and		r2,#$700
+		shr		r2,#1
+		shr		r2,#1
+		shr		r2,#1
+		shr		r2,#1
 		shr		r2,#1
 		or		r1,r2
 		lw		r2,#1
 		sb		r2,FocusTbl[r1]
-		lb		r1,HTOutFocus
-		bne		RecvDispatch3
-		lb		r1,rxBuf+MSG_SRC
-		sb		r1,HTOutFocus
-		br		RecvDispatchXit
-
-RecvDispatch3:
-		; Load program code
-RecvDispatch5:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch6
-		lw		r1,rxBuf+2
-		lw		r2,rxBuf+4
-		sw		r1,[r2]
-		br		RecvDispatchXit
-
-		; Load program data
-RecvDispatch6:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch7
-		lw		r1,rxBuf+2
-		lw		r2,rxBuf+4
-		sw		r1,[r2]
-		br		RecvDispatchXit
-		; Load program code
-
-		; Execute program
-RecvDispatch7:
-		cmp		r1,#MT_EXEC_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch8
+		lw		r1,HTFocus
+		bne		NodeCmdProc3
 		lw		r1,rxBuf+MSG_SRC
-		add		sp,sp,#-2
-		sw		r1,[sp]
-		lw		r2,rxBuf+4
-		call	[r2]
-		lw		r2,[sp]
-		add		sp,sp,#2
-		call	zeroTxBuf
-		sw		r1,txBuf+2
-		sb		r2,txBuf+MSG_DST
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_GDS
-		lw		r1,#MT_EXIT
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
-		br		RecvDispatchXit
+		sw		r1,HTFocus
+		br		NodeCmdProcXit
 
-RecvDispatchXit:
+NodeCmdProc3:
+		cmp		r1,#MT_NEXT_IOFOCUS
+		bne		NodeCmdProc8
+		call	SetNextFocus
+		br		NodeCmdProcXit
+
+NodeCmdProc8:
+		cmp		r1,#DVC_PutChar
+		beq		RecvKeystroke
+
+		call	StdMsgHandlers
+
+NodeCmdProc12:
+NodeCmdProcXit:
 		lw		lr,[sp]
 		lw		r1,2[sp]
 		lw		r2,4[sp]
 		lw		r3,6[sp]
 		add		sp,sp,#8
 		ret
+
 		; Process a keystroke message from node $21
 RecvKeystroke:
 		lw		r1,#8
@@ -311,8 +401,6 @@ RecvKeystroke:
 		lb		r1,kbdcnt
 		cmp		r1,#15
 		bge		kbdfull
-		lw		r1,#9
-		sb		r1,LEDS
 		add		r1,r1,#1
 		sb		r1,kbdcnt
 		lb		r2,kbdhead
@@ -324,7 +412,8 @@ RecvKeystroke:
 		and		r2,#30
 		sb		r2,kbdhead
 kbdfull:
-		br		RecvDispatchXit
+		br		NodeCmdProcXit
+
 RecvEthPacket:
 		lw		r1,rxBuf+2
 		lw		r2,packetPtr
@@ -335,7 +424,90 @@ RecvEthPacket:
 		lw		r2,#TXTSCR+3120
 RecvEthPacket1:
 		sw		r2,packetPtr
-		br		RecvDispatchXit
+		br		NodeCmdProcXit
+
+NodeCmdProcEnumDevices1:
+		lw		r2,DevListNdx
+		lw		r1,rxBuf
+		sw		r1,DevList[r2]
+		lw		r1,rxBuf+2
+		sw		r1,DevList+2[r2]
+		lw		r1,rxBuf+4
+		sw		r1,DevList+4[r2]
+		lw		r1,rxBuf+6
+		sw		r1,DevList+6[r2]
+		br		NodeCmdProcXit
+
+NodeCmdProcEnumDevices2:
+		lw		r2,DevListNdx
+		lw		r1,rxBuf
+		sw		r1,DevList+8[r2]
+		lw		r1,rxBuf+2
+		sw		r1,DevList+10[r2]
+		lw		r1,rxBuf+4
+		sw		r1,DevList+12[r2]
+		lw		r1,rxBuf+6
+		sw		r1,DevList+14[r2]
+		mov		r4,r2
+		add		r2,r2,#16
+		sw		r2,DevListNdx
+		; Now display the device number and name on screen
+		lw		r1,DevList[r4]
+		call	DispWord
+		call	DispSpace
+		lb		r3,DevList+2[r4]	; length of string
+NodeCmdProcEnumDevices3:
+		lb		r1,DevList+3[r4]
+		call	putcharScr
+		add		r4,r4,#1
+		cmp		r4,r3
+		bltu	NodeCmdProcEnumDevices3
+		call	DispSpace
+		call	DispSpace
+		br		NodeCmdProcXit
+
+;----------------------------------------------------------------------------
+; Set the IO focus to the next node requesting focus.
+;----------------------------------------------------------------------------
+
+SetNextFocus:
+		add		sp,sp,#-2
+		sw		lr,[sp]
+		lw		r5,#0
+		lw		r2,#FocusTbl
+		lw		r3,FocusHead
+SetNextFocus1:
+		add		r5,r5,#1
+		cmp		r5,#64
+		bgtu	SetFocusNextXit
+		add		r3,r3,#1
+		cmp		r3,#63
+		bleu	SetNextFocus2
+		lw		r3,#0
+SetNextFocus2:
+		mov		r4,r2
+		add		r4,r3
+		lb		r1,[r4]
+		beq		SetNextFocus1
+		sb		r3,FocusHead
+		lb		r3,NodeNumTbl[r3]
+		shl		r3,#1
+		shl		r3,#1
+		shl		r3,#1
+		shl		r3,#1
+		or		r3,#1
+		sw		r3,HTFocus
+		call	zeroTxBuf
+		sw		r3,txBuf
+		lw		r1,#MT_SET_IOFOCUS
+		sb		r1,txBuf+MSG_TYPE
+		lw		r1,#$211
+		sw		r1,txBuf+MSG_DST
+		call	Xmit
+SetFocusNextXit:
+		lw		lr,[sp]
+		add		sp,sp,#2
+		ret
 
 ;----------------------------------------------------------------------------
 ; Initialize the text controller.
@@ -370,12 +542,15 @@ RecvDump:
 		sub		sp,sp,#4
 		sw		lr,[sp]
 		sw		r1,2[sp]
+		lw		r1,rxBuf+MSG_SRC
+		cmp		r1,#$211
+		bne		RecvDump1
 		call	DispCRLF
-		lb		r1,rxBuf+MSG_DST
-		call	DispByte
+		lw		r1,rxBuf+MSG_DST
+		call	DispWord
 		call	DispSpace
-		lb		r1,rxBuf+MSG_SRC
-		call	DispByte
+		lw		r1,rxBuf+MSG_SRC
+		call	DispWord
 		call	DispSpace
 		lb		r1,rxBuf+MSG_TTL
 		call	DispByte
@@ -391,6 +566,7 @@ RecvDump:
 		call	DispWord
 		lw		r1,rxBuf+0
 		call	DispWord
+RecvDump1:
 		lw		lr,[sp]
 		lw		r1,2[sp]
 		add		sp,sp,#4
@@ -747,9 +923,8 @@ pc7
 	ret
 
 scrollScreenUp:
-	sub		sp,sp,#4
-	sw		lr,[sp]
-	sw		r5,2[sp]
+	sub		sp,sp,#2
+	sw		r5,[sp]
 	lw		r3,#1559	; number of chars to move - 1
 	lw		r2,#TXTSCR
 	lb		r1,txtWidth
@@ -763,19 +938,20 @@ scrollScreenUp1:
 	sub		r3,r3,#1
 	bne     scrollScreenUp1
 	; blank out last line
-	lw		r1,#' '
-	call	AsciiToScreen
-	lw		r3,NormAttr
-	or		r1,r3
+	; The character used is a hard-coded constant ($20). No real need to
+	; call AsciiToScreen() which also saves having to stack the
+	; link register.
+	lw		r1,NormAttr
+	and		r1,#$FF00
+	or		r1,#$20
 	lb		r3,txtWidth
 scrollScreenUp2:
 	sw		r1,[r2]
 	add		r2,r2,#2
 	sub		r3,r3,#1
 	bne     scrollScreenUp2
-	lw		lr,[sp]
-	lw		r5,2[sp]
-	add		sp,sp,#4
+	lw		r5,[sp]
+	add		sp,sp,#2
 	ret
 
 ;----------------------------------------------------------------------------
@@ -806,7 +982,62 @@ kbdGetChar:
 kbdGetCharXitZero:
 	ret
 
+	align	2
+DCBTbl:
+	db	6,"NOD111",0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	NodeCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
 		
+	db	3,"TVD",0,0,0,0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	TextCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
+
+	db	3,"LED",0,0,0,0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	LedsCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
+
 msgStarting:
 	db	"Butterfly Grid Computer Starting",0
 

@@ -82,7 +82,7 @@ GOBYE	jmp	BYEBYE	;	Jump to monitor, DOS, etc.
 ;
 ; Modifiable system constants:
 ;
-TXTBGN	dw	0x0200		;beginning of program memory
+TXTBGN	dw	0x0600		;beginning of program memory
 ENDMEM	dw	0x1E00	;	end of available memory
 ;
 ; The main interpreter starts here:
@@ -493,7 +493,7 @@ RUN
 	sb		r1,txBuf+MSG_DST
 	tsr		r1,ID
 	sb		r1,txBuf+MSG_SRC
-	lb		r1,#MT_RUN_BASIC_PROG
+	lw		r1,#MT_RUN_BASIC_PROG
 	sb		r1,txBuf+MSG_TYPE
 	call	Xmit
 	br		WSTART
@@ -1123,7 +1123,7 @@ SAVEON3:
 	sb		r1,txBuf+MSG_SRC
 	lb		r1,tgtNode
 	sb		r1,txBuf+MSG_DST
-	lb		r1,#MT_LOAD_BASIC_CHAR
+	lw		r1,#MT_LOAD_BASIC_CHAR
 	sb		r1,txBuf+MSG_TYPE
 	call	Xmit
 	add		r8,r8,#6
@@ -2198,6 +2198,10 @@ GETLN
 GL1
 	call	CHKIO		; check keyboard
 	beq		GL1			; wait for a char. to come in
+	cmp		r1,#'4'
+	beq		GL1
+	cmp		r1,#'1'
+	beq		GL1
 	cmp		r1,#CR		; accept a CR
 	beq		GL2
 	call	GOOUT
@@ -2979,8 +2983,8 @@ OUTC
 	add		sp,sp,#-4
 	sw		lr,[sp]
 	sw		r1,2[sp]
+	call	DoPing
 	lb		r1,ROUTER+RTR_RXSTAT
-	and		r1,#63
 	beq		OUTC1
 	call	Recv
 	call	RecvDispatch
@@ -3004,8 +3008,8 @@ INC
 	lw		r1,TXTSCR+86
 	add		r1,r1,#1
 	sw		r1,TXTSCR+86
+	call	DoPing
 	lb		r1,ROUTER+RTR_RXSTAT
-	and		r1,#63
 	beq		INC1
 	call	Recv
 	call	RecvDispatch
@@ -3128,7 +3132,6 @@ LSTROM	equ	*		; end of possible ROM area
 ; Internal variables follow:
 ;
 		bss
-		org		0x0030
 txtWidth	db	0		; BIOS var =60
 txtHeight	db	0		; BIOS var =27
 cursx	db		0		; cursor x position
@@ -3136,7 +3139,6 @@ cursy	db		0		; cursor y position
 pos		dw		0		; text screen position
 tgtNode	db		0
 srcNode	db		0
-		org		0x0038
 charToPrint		dw		0
 fgColor			db		0
 bkColor			db		0

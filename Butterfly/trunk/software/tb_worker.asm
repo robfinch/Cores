@@ -2879,7 +2879,7 @@ LSTROM	equ	*		; end of possible ROM area
 ; Internal variables follow:
 ;
 		bss
-		org		0x0030
+;		org		0x0030
 txtWidth	db	0		; BIOS var =60
 txtHeight	db	0		; BIOS var =27
 cursx	db		0		; cursor x position
@@ -2887,7 +2887,7 @@ cursy	db		0		; cursor y position
 pos		dw		0		; text screen position
 tgtNode	db		0
 srcNode	db		0
-		org		0x0038
+;		org		0x0038
 charToPrint		dw		0
 fgColor			db		0
 bkColor			db		0
@@ -2898,7 +2898,7 @@ NormAttr		dw		0
 lineLinkTbl		fill.b	25,0	; screen line link table
 	align 4
 
-		org		0x0080
+;		org		0x0080
 typef   db      0   ; variable / expression type
         align   4
 OSSP	dw	1	; OS value of sp

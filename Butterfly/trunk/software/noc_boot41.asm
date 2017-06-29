@@ -24,16 +24,20 @@
 ; $411 is dedicated to date/time services
 ; ============================================================================
 ;
+nDCB	equ		2
 CR	= 13
 LF	= 10
+nDCB    equ		2
 CTRLH	equ		9
 txBuf	equ		32
 rxBuf	equ		48
 
 #include "MessageTypes.asm"
+#include "DeviceDriver.inc"
 
 ROUTER		equ	$B000
 RTR_RXSTAT	equ	$10
+RTR_RXCTL	equ	$11
 RTR_TXSTAT	equ	$12
 
 ROUTER_TRB	equ	0
@@ -48,20 +52,24 @@ I2C_CMD			EQU		I2C_MASTER+$04
 I2C_STAT		EQU		I2C_MASTER+$04
 
 
-MSG_DST		equ	15
-MSG_SRC		equ	14
+MSG_DST		equ	14
+MSG_SRC		equ	12
 MSG_TTL		equ	9
 MSG_TYPE	equ	8
-MSG_GSD		equ	7
 
 		bss
 		org		$40
-RTCBbuf	fill.b	64,0
+RTCBuf	fill.b	64,0
+		align	2
+NodeDCB				fill.b	DCB_Size,0
+RTCControlBlock		fill.b	DCB_Size,0
+RTCPos	dw		0
 
 		.code
 		cpu		Butterfly16
 		org		0xE000
 #include "Network.asm"
+#include "Node.asm"
 #include "tb_worker.asm"
 
 ; Operation of an ordinary (worker) node is pretty simple. It just waits in
@@ -70,141 +78,128 @@ RTCBbuf	fill.b	64,0
 		.code
 start:
 		lw		sp,#$1FFE
-		call	rtcInit
+		call	ResetNode
 start2:
 		lw		sp,#$1FFE
 noMsg1:
 		lb		r1,ROUTER+RTR_RXSTAT
-		and		r1,#63
 		beq		noMsg1
 		call	Recv
 		call	RecvDispatch
 		bra		start2
-lockup:
-		bra		lockup
 
 ;----------------------------------------------------------------------------
-; Receiver dispatch
+; Reset the node.
+;----------------------------------------------------------------------------
+
+ResetNode:
+		add		sp,sp,#-2
+		sw		lr,[sp]
+		call	CpyDCB
+		call	rtcInit
+		lw		lr,[sp]
+		add		sp,sp,#2
+		ret
+
+;----------------------------------------------------------------------------
+; Copy the DCB tables to ram.
+;----------------------------------------------------------------------------
+
+CpyDCB:
+		lw		r3,#0
+CpyDCB1:
+		lw		r1,DCBTbl[r3]
+		sw		r1,NodeDCB[r3]
+		add		r3,r3,#2
+		cmp		r3,#48*nDCB
+		bltu	CpyDCB1
+		ret
+
+;----------------------------------------------------------------------------
+; Message command processor for node.
 ;
 ; Executes different message handlers based on the message type.
 ;----------------------------------------------------------------------------
 
-RecvDispatch:
-		add		sp,sp,#-4
+NodeCmdProc:
+		add		sp,sp,#-8
 		sw		lr,[sp]
 		sw		r1,2[sp]
+		sw		r2,4[sp]
+		sw		r3,6[sp]
+
+		call	StdMsgHandlers
+
+		lw		lr,[sp]
+		lw		r1,2[sp]
+		lw		r2,4[sp]
+		lw		r3,6[sp]
+		add		sp,sp,#8
+		ret
+
+;============================================================================
+;============================================================================
+
+RTCCmdProc:
+		sub		sp,sp,#2
+		sw		lr,[sp]
 		lb		r1,rxBuf+MSG_TYPE
-		cmp		r1,#MT_RST			; reset message ?
-		bne		RecvDispatch2
-		; Send back a reset ACK message to indicate node is good to go.
-		call	zeroTxBuf
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_DST
-		sb		r1,txBuf+MSG_GDS
-		lw		r1,#MT_RST_ACK
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
-		br		RecvDispatch5
-RecvDispatch2:
-		cmp		r1,#MT_PING
-		bne		RecvDispatch9
-		call	zeroTxBuf
-		call	SetDestFromRx
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_GDS
-		lw		r1,#MT_PING_ACK
-		sb		r1,txBuf+MSG_TYPE
-		call	Xmit
-		br		RecvDispatchXit
-RecvDispatch9:
-		cmp		r1,#MT_START_BASIC_LOAD	; start BASIC load
-		bne		RecvDispatch3
-		lb		r1,rxBuf+MSG_SRC
-		call	INITTBW
-		lw		r8,TXTBGN			; r8 = text begin
-		br		RecvDispatchXit
-RecvDispatch3:
-		cmp		r1,#MT_LOAD_BASIC_CHAR	; load BASIC program char
-		bne		RecvDispatch4
-		lw		r1,rxBuf
-		sw		r1,[r8]
-		lw		r1,rxBuf+2
-		sw		r1,2[r8]
-		lw		r1,rxBuf+4
-		sw		r1,4[r8]
-		add		r8,r8,#6
-		sw		r8,TXTUNF
-		br		RecvDispatchXit
-RecvDispatch4:
-		; Run a BASIC program by stuffing a 'RUN' command into the BASIC
-		; buffer.
-		cmp		r1,#MT_RUN_BASIC_PROG
-		bne		RecvDispatch5
-		lw		r1,#'R'
-		sb		r1,BUFFER
-		lw		r1,#'U'
-		sb		r1,BUFFER+1
-		lw		r1,#'N'
-		sb		r1,BUFFER+2
-		lw		r1,#13
-		sb		r1,BUFFER+3
-		sb		r0,BUFFER+4
-		lw		r8,#BUFFER+4
-		call	ST3
-		br		RecvDispatchXit
-
-		; Load program code
-RecvDispatch5:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch6
-		lw		r1,rxBuf+2
-		lw		r2,rxBuf+4
-		sw		r1,[r2]
-		br		RecvDispatchXit
-
-		; Load program data
-RecvDispatch6:
-		cmp		r1,#MT_LOAD_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch7
-		lw		r1,rxBuf+2
-		lw		r2,rxBuf+4
-		sw		r1,[r2]
-		br		RecvDispatchXit
-		; Load program code
-
-		; Execute program
-RecvDispatch7:
-		cmp		r1,#MT_EXEC_CODE
-		br		RecvDispatchXit
-		bne		RecvDispatch8
-		lw		r1,rxBuf+MSG_SRC
-		add		sp,sp,#-2
-		sw		r1,[sp]
-		lw		r2,rxBuf+4
-		call	[r2]
-		lw		r2,[sp]
+		cmp		r1,#DVC_Initialize
+		beq		RTCCmdProcInitialize
+		cmp		r1,#DVC_SetPosition
+		beq		RTCCmdProcSetPosition
+		cmp		r1,#DVC_ReadBlock
+		beq		RTCCmdProcReadBlock
+		cmp		r1,#DVC_WriteBlock
+		beq		RTCCmdProcWriteBlock
+RTCCmdProcXit:
+		lw		lr,[sp]
 		add		sp,sp,#2
+		ret
+
+RTCCmdProcInitialize:
+		call	rtcInit
+		call	rtcRead
+		br		RTCCmdProcXit
+
+RTCCmdProcReadBlock:
+		lw		r2,RTCPos
+		cmp		r2,#$8000
+		beq		RTCGetDateTime
+		cmp		r2,#0
+		beq		RTCCmdProcReadBlock1
+		br		RTCCmdProcXit
+		lw		r2,#0
+RTCCmdProcReadBlock1:
 		call	zeroTxBuf
+		call	SetDestFromRx
+		lw		r1,RTCBuf[r2]
+		sw		r1,txBuf
+		lw		r1,RTCBuf+2[r2]
 		sw		r1,txBuf+2
-		sb		r2,txBuf+MSG_DST
-		lw		r1,#$11
-		sb		r1,txBuf+MSG_GDS
-		lw		r1,#MT_EXIT
+		sw		r2,txBuf+4
+		lw		r1,#MT_DATA
 		sb		r1,txBuf+MSG_TYPE
 		call	Xmit
-		br		RecvDispatchXit
+		add		r2,r2,#4
+		cmp		r2,#64
+		bltu	RTCCmdProcReadBlock1
+		br		RTCCmdProcXit
 
-RecvDispatch8:
-		; Process a request for the date/time
-		cmp		r1,#MT_GET_DATETIME
-		bne		RecvDispatch9
+RTCCmdProcWriteBlock:
+		br		RTCCmdProcXit
+
+RTCCmdProcSetPosition:
+		lw		r1,rxBuf
+		sw		r1,RTCPos
+		br		RTCCmdProcXit
+
+RTCGetDateTime:
 		call	zeroTxBuf
 		call	SetDestFromRx
 		lw		r1,#$11
 		sb		r1,txBuf+MSG_GDS
-		lw		r1,#MT_DATETIME_ACK
+		lw		r1,#MT_DATA
 		sb		r1,txBuf+MSG_TYPE
 		call	rtcRead
 		lb		r1,RTCBuf+6
@@ -214,13 +209,7 @@ RecvDispatch8:
 		lb		r1,RTCBuf+4
 		sb		r1,txBuf+4
 		call	Xmit
-		br		RecvDispatchXit
-RecvDispatch9:
-RecvDispatchXit:
-		lw		lr,[sp]
-		lw		r1,2[sp]
-		add		sp,sp,#4
-		ret
+		br		RTCCmdProcXit
 
 ;============================================================================
 ;============================================================================
@@ -231,12 +220,33 @@ RecvDispatchXit:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
+;----------------------------------------------------------------------------
+; Initialize the I2C controller. Not much to do here other than set the
+; I2C frequency control.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	r1
+;----------------------------------------------------------------------------
+
 rtcInit:
 		lw		r1,#28					; constant for 400kHz I2C from 57MHz
 		sw		r1,I2C_PRESCALE_LO
 		ret
 
-; Read all the RTC sram registers into a buffer
+;----------------------------------------------------------------------------
+; Read all the RTC sram registers into a buffer.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	r1,r2,r3
+;----------------------------------------------------------------------------
 
 rtcRead:
 		add		sp,sp,#-2
@@ -256,7 +266,7 @@ rtcRead:
 		call	rtcWrCmd
 		bmi		rtcReadErr
 		lw		r3,#0
-rtdRead1:
+rtcRead1:
 		lw		r1,#$20				; rd bit
 		sb		r1,I2C_CMD
 		call	rtcWaitTip
@@ -285,6 +295,18 @@ rtcReadErr:
 		add		sp,sp,#2
 		ret
 
+;----------------------------------------------------------------------------
+; Wait for the I2C transfer to complete. Determined by polling the transfer
+; in progress bit of the status register.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	r1
+;----------------------------------------------------------------------------
+	
 rtcWaitTip:
 rtcWaitTip1:
 		lb		r1,I2C_STAT
@@ -292,12 +314,41 @@ rtcWaitTip1:
 		bne		rtcWaitTip
 		ret
 
+;----------------------------------------------------------------------------
+; Write a command to the I2C controller.
+;
+; Parameters:
+;	r1 = byte to transfer to I2C slave
+;	r2 = command code for I2C master
+; Returns:
+;	r1 = I2C status
+;	flags set according to I2C status
+; Registers Affected:
+;	r1
+;----------------------------------------------------------------------------
+
 rtcWrCmd:
+		add		sp,sp,#-2
+		sw		lr,[sp]
 		sb		r1,I2C_TX
 		sb		r2,I2C_CMD
 		call	rtcWaitTip
 		lb		r1,I2C_STAT
+		lw		lr,[sp]
+		add		sp,sp,#2
+		or		r1,r1
 		ret
+
+;----------------------------------------------------------------------------
+; Write buffer contents back to RTC chip.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	r1,r2,r3
+;----------------------------------------------------------------------------
 
 rtcWrite:
 		add		sp,sp,#-2
@@ -338,6 +389,44 @@ rtcWriteErr:
 
 msgRtcReadFail:
 	.byte	"RTC read/write failed.",$0D,$0A,$00
+
+	align	2
+DCBTbl:
+	db	6,"NOD411",0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	NodeCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
+		
+	db	3,"RTC",0,0,0,0,0,0,0,0
+	dw	0						; type
+	dw  0						; nBPB
+	dw	0						; LastErc
+	dw	0						; reserved
+	dw	0						; start block low
+	dw	0						; start block high
+	dw	0						; number of blocks
+	dw	0						;	"
+	dw	RTCCmdProc				; pCmdProc
+	dw	0						; reserved
+	db	0						; reentry count
+	db	0						; single user flag
+	dw	0						; hJob
+	dw	0						; hMbx
+	dw	0						; hSemaphore
+	fill.b	8,0					; reserved
 
 
 		org		0xFFFE
