@@ -1,0 +1,51 @@
+                        	;
+                        		code
+                        		org		$FFFC0000
+FFFC0000 002C0018 		jmp		brkrout
+	org		$FFFC0010
+FFFC0004 00000000 
+FFFC0008 00000000 
+FFFC000C 00000000 
+                        	start:
+FFFC0010 002AAA9B 		ldi		r1,#$AAAA5555
+FFFC0014 55550809 
+                        	start1:
+FFFC0018 4C026042 		shr		r2,r1,#12
+FFFC001C 003FF71B 		sh		r2,$FFDC0600
+FFFC0020 06001014 
+FFFC0024 00010844 		add		r1,r1,#1
+FFFC0028 FFEC0001 		bra		start1
+                        	
+                        	brkrout:
+                        		rti
+                        		rti
+                        	
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	begin_init_data:
+
+                        	
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	end_init_data:
+
+5 symbols
+  Symbol Name                              seg     address bits
+  begin_init_data                          rodata  fffc1000 32
+  brkrout                                    code  fffc002c 32
+  end_init_data                            rodata  fffc1000 32
+  start                                      code  fffc0010 32
+  start1                                     code  fffc0018 32
+0 compressable instructions
+The top 1024 are:
+Comp  Opcode  Count
+
+number of bytes: 72
+number of instructions: 18
+4.000000 bytes (32 bits) per instruction
