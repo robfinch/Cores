@@ -116,9 +116,10 @@ parameter RSTPC = 32'hFFFC0010;
 parameter BRKPC = 32'hFFFC0000;
 parameter PREGS = 63;   // number of physical registers - 1
 parameter AREGS = 32;   // number of architectural registers
-parameter DEBUG = 1'b1;
+parameter DEBUG = 1'b0;
+reg [3:0] i;
 integer n;
-integer i,j;
+integer j;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
@@ -143,7 +144,10 @@ reg int_commit;
 reg StatusHWI;
 reg [31:0] insn0, insn1;
 wire [31:0] insn0a, insn1a;
-reg [7:0] seq_num;
+// Only need enough bits in the seqnence number to cover the instructions in
+// the queue plus an extra count for skipping on branch misses. In this case
+// that would be four bits minimum (count 0 to 8). 
+reg [4:0] seq_num;
 wire [63:0] rdat0,rdat1,rdat2;
 reg [63:0] xdati;
 
@@ -154,7 +158,7 @@ reg queued2;
 reg queuedNop;
 
 // instruction queue (ROB)
-reg [7:0]  iqentry_sn   [0:7];  // instruction sequence number
+reg [4:0]  iqentry_sn   [0:7];  // instruction sequence number
 reg        iqentry_v  	[0:7];	// entry valid?  -- this should be the first bit
 reg        iqentry_out	[0:7];	// instruction has been issued to an ALU ... 
 reg        iqentry_done	[0:7];	// instruction result valid
@@ -163,11 +167,12 @@ reg        iqentry_agen  	[0:7];	// address-generate ... signifies that address 
 reg        iqentry_mem	[0:7];	// touches memory: 1 if LW/SW
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_br   [0:7];  // Bcc (for predictor)
+reg        iqentry_fp   [0:7];  // floating point
+reg        iqentry_sync [0:7];  // sync instruction
 reg        iqentry_rfw	[0:7];	// writes to register file
 reg [63:0] iqentry_res	[0:7];	// instruction result
 reg [31:0] iqentry_instr[0:7];	// instruction opcode
 reg  [3:0] iqentry_exc	[0:7];	// only for branches ... indicates a HALT instruction
-//reg  [4:0] iqentry_ra   [0:7];  // Ra
 reg  [5:0] iqentry_tgt	[0:7];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg [63:0] iqentry_a0	[0:7];	// argument 0 (immediate)
 reg [63:0] iqentry_a1	[0:7];	// argument 1
@@ -180,6 +185,7 @@ reg [31:0] iqentry_pc	[0:7];	// program counter for this instruction
 reg [2:0]  iqentry_map  [0:7];  // register rename map in use
 reg [5:0]  iqentry_fre  [0:7];  // register to free
 // debugging
+//reg  [4:0] iqentry_ra   [0:7];  // Ra
 reg [4:0]  iqentry_utgt [0:7];  // unrenamed target register
 
 wire  [7:0] iqentry_source;
@@ -189,24 +195,8 @@ wire  [7:0] iqentry_memopsvalid;
 
 reg  [7:0] iqentry_memissue;
 wire  [7:0] iqentry_stomp;
-wire  [7:0] iqentry_issue;
-wire  [1:0] iqentry_0_islot;
-wire  [1:0] iqentry_1_islot;
-wire  [1:0] iqentry_2_islot;
-wire  [1:0] iqentry_3_islot;
-wire  [1:0] iqentry_4_islot;
-wire  [1:0] iqentry_5_islot;
-wire  [1:0] iqentry_6_islot;
-wire  [1:0] iqentry_7_islot;
-wire [1:0] iqentry_islot [0:7];
-assign iqentry_islot[0] = iqentry_0_islot;
-assign iqentry_islot[1] = iqentry_1_islot;
-assign iqentry_islot[2] = iqentry_2_islot;
-assign iqentry_islot[3] = iqentry_3_islot;
-assign iqentry_islot[4] = iqentry_4_islot;
-assign iqentry_islot[5] = iqentry_5_islot;
-assign iqentry_islot[6] = iqentry_6_islot;
-assign iqentry_islot[7] = iqentry_7_islot;
+reg  [7:0] iqentry_issue;
+reg [1:0] iqentry_islot [0:7];
 
 wire [PREGS:1] livetarget;
 wire  [PREGS:1] iqentry_0_livetarget;
@@ -286,6 +276,7 @@ reg        fetchbufD_v;
 reg        did_branchback0;
 reg        did_branchback1;
 
+reg        alu0_idle = 1'b1;
 reg        alu0_available;
 reg        alu0_dataready;
 reg  [3:0] alu0_sourceid;
@@ -302,6 +293,7 @@ wire        alu0_v;
 wire        alu0_branchmiss;
 wire [31:0] alu0_misspc;
 
+reg        alu1_idle = 1'b1;
 reg        alu1_available;
 reg        alu1_dataready;
 reg  [3:0] alu1_sourceid;
@@ -737,6 +729,11 @@ case(isn[`INSTRUCTION_OP])
 `JAL:    IsFlowCtrl = TRUE;
 default:    IsFlowCtrl = FALSE;
 endcase
+endfunction
+
+function IsSync;
+input [31:0] isn;
+IsSync = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`SYNC); 
 endfunction
 
 function IsRFW;
@@ -1338,159 +1335,6 @@ wire canq1 = (Rt1!=6'd0 || Rt0 != 6'd0);
     //
 
     // note that, for all intents & purposes, iqentry_done == iqentry_agen ... no need to duplicate
-function [1:0] fnSum2;
-input [2:0] a;
-input [2:0] b;
-reg [1:0] s;
-begin
-s = iqentry_issue[a] + iqentry_issue[b];
-fnSum2 = s[1] ? 2'b11 : s;
-end
-endfunction
-function [1:0] fnSum3;
-input [2:0] a;
-input [2:0] b;
-input [2:0] c;
-reg [1:0] s;
-begin
-s = iqentry_issue[a] + iqentry_issue[b] + iqentry_issue[c];
-fnSum3 = s[1] ? 2'b11 : s;
-end
-endfunction
-function [1:0] fnSum4;
-input [2:0] a;
-input [2:0] b;
-input [2:0] c;
-input [2:0] d;
-reg [2:0] s;
-begin
-    s = iqentry_issue[a] + iqentry_issue[b] + iqentry_issue[c] + iqentry_issue[d];
-    fnSum4 = |s[2:1] ? 2'b11 : s[1:0];
-end
-endfunction
-function [1:0] fnSum5;
-input [2:0] a;
-input [2:0] b;
-input [2:0] c;
-input [2:0] d;
-input [2:0] e;
-reg [2:0] s;
-begin
-    s = iqentry_issue[a] + iqentry_issue[b] + iqentry_issue[c] + iqentry_issue[d] + iqentry_issue[e];
-    fnSum5 = |s[2:1] ? 2'b11 : s[1:0];
-end
-endfunction
-function [1:0] fnSum6;
-input [2:0] a;
-input [2:0] b;
-input [2:0] c;
-input [2:0] d;
-input [2:0] e;
-input [2:0] f;
-reg [2:0] s;
-begin
-    s = iqentry_issue[a] + iqentry_issue[b] + iqentry_issue[c] +
-        iqentry_issue[d] + iqentry_issue[e] + iqentry_issue[f];
-    fnSum6 = |s[2:1] ? 2'b11 : s[1:0];
-end
-endfunction
-function [1:0] fnSum7;
-input [2:0] a;
-input [2:0] b;
-input [2:0] c;
-input [2:0] d;
-input [2:0] e;
-input [2:0] f;
-input [2:0] g;
-reg [2:0] s;
-begin
-    s = iqentry_issue[a] + iqentry_issue[b] + iqentry_issue[c] +
-        iqentry_issue[d] + iqentry_issue[e] + iqentry_issue[f] +
-        iqentry_issue[g];
-    fnSum7 = |s[2:1] ? 2'b11 : s[1:0];
-end
-endfunction
-
-    // Compute the issue slot
-    assign iqentry_0_islot =
-                  (head0 == 3'd1) ? fnSum7(1,2,3,4,5,6,7) : 
-                  (head0 == 3'd2) ? fnSum6(2,3,4,5,6,7) : 
-                  (head0 == 3'd3) ? fnSum5(3,4,5,6,7) : 
-                  (head0 == 3'd4) ? fnSum4(4,5,6,7) : 
-                  (head0 == 3'd5) ? fnSum3(5,6,7) : 
-                  (head0 == 3'd6) ? fnSum2(6,7) : 
-                  (head0 == 3'd7) ? {1'b0, iqentry_issue[7]} :
-                  2'b00;
-
-    assign iqentry_1_islot =
-                  (head0 == 3'd2) ? fnSum7(2,3,4,5,6,7,0) : 
-                  (head0 == 3'd3) ? fnSum6(3,4,5,6,7,0) : 
-                  (head0 == 3'd4) ? fnSum5(4,5,6,7,0) : 
-                  (head0 == 3'd5) ? fnSum4(5,6,7,0) : 
-                  (head0 == 3'd6) ? fnSum3(6,7,0) : 
-                  (head0 == 3'd7) ? fnSum2(7,0) : 
-                  (head0 == 3'd0) ? {1'b0, iqentry_issue[0]} :
-                  2'b00;
-
-    assign iqentry_2_islot =
-                  (head0 == 3'd3) ? fnSum7(3,4,5,6,7,0,1) : 
-                  (head0 == 3'd4) ? fnSum6(4,5,6,7,0,1) : 
-                  (head0 == 3'd5) ? fnSum5(5,6,7,0,1) : 
-                  (head0 == 3'd6) ? fnSum4(6,7,0,1) : 
-                  (head0 == 3'd7) ? fnSum3(7,0,1) : 
-                  (head0 == 3'd0) ? fnSum2(0,1) : 
-                  (head0 == 3'd1) ? {1'b0, iqentry_issue[1]} :
-                  2'b00;
-
-    assign iqentry_3_islot =
-                  (head0 == 3'd4) ? fnSum7(4,5,6,7,0,1,2) : 
-                  (head0 == 3'd5) ? fnSum6(5,6,7,0,1,2) : 
-                  (head0 == 3'd6) ? fnSum5(6,7,0,1,2) : 
-                  (head0 == 3'd7) ? fnSum4(7,0,1,2) : 
-                  (head0 == 3'd0) ? fnSum3(0,1,2) : 
-                  (head0 == 3'd1) ? fnSum2(1,2) : 
-                  (head0 == 3'd2) ? {1'b0, iqentry_issue[2]} :
-                  2'b00;
-
-    assign iqentry_4_islot =
-                  (head0 == 3'd5) ? fnSum7(5,6,7,0,1,2,3) : 
-                  (head0 == 3'd6) ? fnSum6(6,7,0,1,2,3) : 
-                  (head0 == 3'd7) ? fnSum5(7,0,1,2,3) : 
-                  (head0 == 3'd0) ? fnSum4(0,1,2,3) : 
-                  (head0 == 3'd1) ? fnSum3(1,2,3) : 
-                  (head0 == 3'd2) ? fnSum2(2,3) : 
-                  (head0 == 3'd3) ? {1'b0, iqentry_issue[3]} :
-                  2'b00;
-
-    assign iqentry_5_islot =
-                  (head0 == 3'd6) ? fnSum7(6,7,0,1,2,3,4) : 
-                  (head0 == 3'd7) ? fnSum6(7,0,1,2,3,4) : 
-                  (head0 == 3'd0) ? fnSum5(0,1,2,3,4) : 
-                  (head0 == 3'd1) ? fnSum4(1,2,3,4) : 
-                  (head0 == 3'd2) ? fnSum3(2,3,4) : 
-                  (head0 == 3'd3) ? fnSum2(3,4) : 
-                  (head0 == 3'd4) ? {1'b0, iqentry_issue[4]} :
-                  2'b00;
-
-    assign iqentry_6_islot =
-                  (head0 == 3'd7) ? fnSum7(7,0,1,2,3,4,5) : 
-                  (head0 == 3'd0) ? fnSum6(0,1,2,3,4,5) : 
-                  (head0 == 3'd1) ? fnSum5(1,2,3,4,5) : 
-                  (head0 == 3'd2) ? fnSum4(2,3,4,5) : 
-                  (head0 == 3'd3) ? fnSum3(3,4,5) : 
-                  (head0 == 3'd4) ? fnSum2(4,5) : 
-                  (head0 == 3'd5) ? {1'b0, iqentry_issue[5]} :
-                  2'b00;
-
-    assign iqentry_7_islot =
-                  (head0 == 3'd0) ? fnSum7(0,1,2,3,4,5,6) : 
-                  (head0 == 3'd1) ? fnSum6(1,2,3,4,5,6) : 
-                  (head0 == 3'd2) ? fnSum5(2,3,4,5,6) : 
-                  (head0 == 3'd3) ? fnSum4(3,4,5,6) : 
-                  (head0 == 3'd4) ? fnSum3(4,5,6) : 
-                  (head0 == 3'd5) ? fnSum2(5,6) : 
-                  (head0 == 3'd6) ? {1'b0, iqentry_issue[6]} :
-                  2'b00;
 
 wire [QENTRIES-1:0] args_valid;
 wire [QENTRIES-1:0] could_issue;
@@ -1513,74 +1357,175 @@ end
 end
 endgenerate
 
-    assign iqentry_issue[0] = could_issue[0] 
-				&& (head0 == 3'd0 || ~|iqentry_islot[7] ||
-				    (iqentry_islot[7] == 2'b01 && ~iqentry_issue[7] && iqentry_instr[0][`INSTRUCTION_OP]!=`CSRRW));
+// The (old) simulator didn't handle the asynchronous race loop properly in the 
+// original code. It would issue two instructions to the same islot. So the
+// issue logic has been re-written to eliminate the asynchronous loop.
+// Can't issue to the ALU if it's busy doing a long running operation like a 
+// divide.
+always @*//(could_issue or head0 or head1 or head2 or head3 or head4 or head5 or head6 or head7)
+begin
+	iqentry_issue = 8'h00;
+	iqentry_islot[0] = 2'b00;
+	iqentry_islot[1] = 2'b00;
+	iqentry_islot[2] = 2'b00;
+	iqentry_islot[3] = 2'b00;
+	iqentry_islot[4] = 2'b00;
+	iqentry_islot[5] = 2'b00;
+	iqentry_islot[6] = 2'b00;
+	iqentry_islot[7] = 2'b00;
+	// See if we can issue to the first alu.
+	if (alu0_idle) begin
+    if (could_issue[head0] && !iqentry_fp[head0]) begin
+      iqentry_issue[head0] = `TRUE;
+      iqentry_islot[head0] = 2'b00;
+    end
+    else if (could_issue[head1] && !iqentry_fp[head1]
+    && !(iqentry_v[head0] && iqentry_sync[head0]))
+    begin
+      iqentry_issue[head1] = `TRUE;
+      iqentry_islot[head1] = 2'b00;
+    end
+    else if (could_issue[head2] && !iqentry_fp[head2]
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    )
+    begin
+      iqentry_issue[head2] = `TRUE;
+      iqentry_islot[head2] = 2'b00;
+    end
+    else if (could_issue[head3] && !iqentry_fp[head3]
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    ) begin
+      iqentry_issue[head3] = `TRUE;
+      iqentry_islot[head3] = 2'b00;
+    end
+    else if (could_issue[head4] && !iqentry_fp[head4]
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    ) begin
+      iqentry_issue[head4] = `TRUE;
+      iqentry_islot[head4] = 2'b00;
+    end
+    else if (could_issue[head5] && !iqentry_fp[head5]
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    && !(iqentry_v[head4] && iqentry_sync[head4])
+    ) begin
+      iqentry_issue[head5] = `TRUE;
+      iqentry_islot[head5] = 2'b00;
+    end
+    else if (could_issue[head6] && !iqentry_fp[head6]
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    && !(iqentry_v[head4] && iqentry_sync[head4])
+    && !(iqentry_v[head5] && iqentry_sync[head5])
+    ) begin
+      iqentry_issue[head6] = `TRUE;
+      iqentry_islot[head6] = 2'b00;
+    end
+    else if (could_issue[head7] && !iqentry_fp[head7]
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    && !(iqentry_v[head4] && iqentry_sync[head4])
+    && !(iqentry_v[head5] && iqentry_sync[head5])
+    && !(iqentry_v[head6] && iqentry_sync[head6])
+    ) begin
+      iqentry_issue[head7] = `TRUE;
+      iqentry_islot[head7] = 2'b00;
+  	end
+	end
 
-    assign iqentry_issue[1] = iqentry_v[1] && !iqentry_out[1] && !iqentry_agen[1]
-				&& (head0 == 3'd1 || ~|iqentry_0_islot || (iqentry_0_islot == 2'b01 && ~iqentry_issue[0]))
-				&& args_valid[1];
-				    
+  if (alu1_idle) begin
+    if (could_issue[head0] && !iqentry_fp[head0]
+    && !IsAlu0Only(iqentry_instr[head0])
+    && !iqentry_issue[head0]) begin
+      iqentry_issue[head0] = `TRUE;
+      iqentry_islot[head0] = 2'b01;
+    end
+    else if (could_issue[head1] && !iqentry_fp[head1] && !iqentry_issue[head1]
+    && !IsAlu0Only(iqentry_instr[head1])
+    && !(iqentry_v[head0] && iqentry_sync[head0]))
+    begin
+      iqentry_issue[head1] = `TRUE;
+      iqentry_islot[head1] = 2'b01;
+    end
+    else if (could_issue[head2] && !iqentry_fp[head2] && !iqentry_issue[head2]
+    && !IsAlu0Only(iqentry_instr[head2])
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    )
+    begin
+      iqentry_issue[head2] = `TRUE;
+      iqentry_islot[head2] = 2'b01;
+    end
+    else if (could_issue[head3] && !iqentry_fp[head3] && !iqentry_issue[head3]
+    && !IsAlu0Only(iqentry_instr[head3])
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    ) begin
+      iqentry_issue[head3] = `TRUE;
+      iqentry_islot[head3] = 2'b01;
+    end
+    else if (could_issue[head4] && !iqentry_fp[head4] && !iqentry_issue[head4]
+    && !IsAlu0Only(iqentry_instr[head4])
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    ) begin
+      iqentry_issue[head4] = `TRUE;
+      iqentry_islot[head4] = 2'b01;
+    end
+    else if (could_issue[head5] && !iqentry_fp[head5] && !iqentry_issue[head5]
+    && !IsAlu0Only(iqentry_instr[head5])
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    && !(iqentry_v[head4] && iqentry_sync[head4])
+    ) begin
+      iqentry_issue[head5] = `TRUE;
+      iqentry_islot[head5] = 2'b01;
+    end
+    else if (could_issue[head6] & !iqentry_fp[head6] && !iqentry_issue[head6]
+    && !IsAlu0Only(iqentry_instr[head6])
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    && !(iqentry_v[head4] && iqentry_sync[head4])
+    && !(iqentry_v[head5] && iqentry_sync[head5])
+    ) begin
+      iqentry_issue[head6] = `TRUE;
+      iqentry_islot[head6] = 2'b01;
+    end
+    else if (could_issue[head7] && !iqentry_fp[head7] && !iqentry_issue[head7]
+    && !IsAlu0Only(iqentry_instr[head7])
+    && !(iqentry_v[head0] && iqentry_sync[head0])
+    && !(iqentry_v[head1] && iqentry_sync[head1])
+    && !(iqentry_v[head2] && iqentry_sync[head2])
+    && !(iqentry_v[head3] && iqentry_sync[head3])
+    && !(iqentry_v[head4] && iqentry_sync[head4])
+    && !(iqentry_v[head5] && iqentry_sync[head5])
+    && !(iqentry_v[head6] && iqentry_sync[head6])
+    ) begin
+      iqentry_issue[head7] = `TRUE;
+      iqentry_islot[head7] = 2'b01;
+    end
+  end
+end
 
-    assign iqentry_issue[2] = (iqentry_v[2] && !iqentry_out[2] && !iqentry_agen[2]
-				&& (head0 == 3'd2 || ~|iqentry_1_islot || (iqentry_1_islot == 2'b01 && ~iqentry_issue[1]))
-				&& (iqentry_a1_v[2] 
-				    || (iqentry_a1_s[2] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a1_s[2] == alu1_sourceid && alu1_dataready))
-				&& (iqentry_a2_v[2] 
-				    || (iqentry_mem[2] & ~iqentry_agen[2])
-				    || (iqentry_a2_s[2] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a2_s[2] == alu1_sourceid && alu1_dataready)));
-
-    assign iqentry_issue[3] = (iqentry_v[3] && !iqentry_out[3] && !iqentry_agen[3]
-				&& (head0 == 3'd3 || ~|iqentry_2_islot || (iqentry_2_islot == 2'b01 && ~iqentry_issue[2]))
-				&& (iqentry_a1_v[3] 
-				    || (iqentry_a1_s[3] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a1_s[3] == alu1_sourceid && alu1_dataready))
-				&& (iqentry_a2_v[3] 
-				    || (iqentry_mem[3] & ~iqentry_agen[3])
-				    || (iqentry_a2_s[3] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a2_s[3] == alu1_sourceid && alu1_dataready)));
-
-    assign iqentry_issue[4] = (iqentry_v[4] && !iqentry_out[4] && !iqentry_agen[4]
-				&& (head0 == 3'd4 || ~|iqentry_3_islot || (iqentry_3_islot == 2'b01 && ~iqentry_issue[3]))
-				&& (iqentry_a1_v[4] 
-				    || (iqentry_a1_s[4] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a1_s[4] == alu1_sourceid && alu1_dataready))
-				&& (iqentry_a2_v[4] 
-				    || (iqentry_mem[4] & ~iqentry_agen[4])
-				    || (iqentry_a2_s[4] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a2_s[4] == alu1_sourceid && alu1_dataready)));
-
-    assign iqentry_issue[5] = (iqentry_v[5] && !iqentry_out[5] && !iqentry_agen[5]
-				&& (head0 == 3'd5 || ~|iqentry_4_islot || (iqentry_4_islot == 2'b01 && ~iqentry_issue[4]))
-				&& (iqentry_a1_v[5] 
-				    || (iqentry_a1_s[5] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a1_s[5] == alu1_sourceid && alu1_dataready))
-				&& (iqentry_a2_v[5] 
-				    || (iqentry_mem[5] & ~iqentry_agen[5])
-				    || (iqentry_a2_s[5] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a2_s[5] == alu1_sourceid && alu1_dataready)));
-
-    assign iqentry_issue[6] = (iqentry_v[6] && !iqentry_out[6] && !iqentry_agen[6]
-				&& (head0 == 3'd6 || ~|iqentry_5_islot || (iqentry_5_islot == 2'b01 && ~iqentry_issue[5]))
-				&& (iqentry_a1_v[6] 
-				    || (iqentry_a1_s[6] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a1_s[6] == alu1_sourceid && alu1_dataready))
-				&& (iqentry_a2_v[6] 
-				    || (iqentry_mem[6] & ~iqentry_agen[6])
-				    || (iqentry_a2_s[6] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a2_s[6] == alu1_sourceid && alu1_dataready)));
-
-    assign iqentry_issue[7] = (iqentry_v[7] && !iqentry_out[7] && !iqentry_agen[7]
-				&& (head0 == 3'd7 || ~|iqentry_6_islot || (iqentry_6_islot == 2'b01 && ~iqentry_issue[6]))
-				&& (iqentry_a1_v[7] 
-				    || (iqentry_a1_s[7] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a1_s[7] == alu1_sourceid && alu1_dataready))
-				&& (iqentry_a2_v[7] 
-				    || (iqentry_mem[7] & ~iqentry_agen[7])
-				    || (iqentry_a2_s[7] == alu0_sourceid && alu0_dataready)
-				    || (iqentry_a2_s[7] == alu1_sourceid && alu1_dataready)));
 
     // 
     // additional logic for handling a branch miss (STOMP logic)
@@ -2457,18 +2402,16 @@ else begin: fetch_phase
 		iqentry_mem  [tail0]    <=   fetchbuf1_mem;
 		iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
 		iqentry_br   [tail0]    <=   IsBranch(fetchbuf1_instr);
+		iqentry_fp   [tail0]    <= FALSE;
+		iqentry_sync [tail0]    <=   IsSync(fetchbuf1_instr);
 		iqentry_rfw  [tail0]    <=   fetchbuf1_rfw;
 		//iqentry_ra   [tail0]    <=   fnRa(fetchbuf1_instr);
 		if (fetchbuf1_rfw) begin
-		    for (n = 0; n < AREGS; n = n + 1)
-		        rename_map[map_ndx+1][n] = rename_map[map_ndx][n];
-		    rename_map[map_ndx+1][fnRt(fetchbuf1_instr)] <= Rt0;
-		    in_use[map_ndx+1] <= in_use[map_ndx];
-		    in_use[map_ndx+1][Rt0] <= 1'b1;
-		    map_ndx <= map_ndx + 1;
-    	    iqentry_map  [tail0]    <= map_ndx + 1;
+		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf1_instr),Rt1);
+		    map_ndx <= map_ndx + 3'd1;
+    	    iqentry_map  [tail0]    <= map_ndx + 3'd1;
     	    iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf1_instr)];
-    		iqentry_tgt  [tail0]    <= Rt0;
+    		iqentry_tgt  [tail0]    <= Rt1;
 	    end
 	    else begin
 	       iqentry_map  [tail0]    <= map_ndx;
@@ -2489,10 +2432,9 @@ else begin: fetch_phase
 		iqentry_a2_s [tail0]    <=  rf_source[ rename_map[map_ndx][fnRb(fetchbuf1_instr)] ];
 		tail0 <= tail0 + 1;
 		tail1 <= tail1 + 1;
-		seq_num <= seq_num + 8'd1;
 		if (fetchbuf1_rfw) begin
-		    rf_v[ Rt0 ] <= `INV;
-		    rf_source[ Rt0 ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
+		    rf_v[ Rt1 ] <= `INV;
+		    rf_source[ Rt1 ] <= { fetchbuf1_mem, tail0 };	// top bit indicates ALU/MEM bus
 		end
  
 	    end
@@ -2531,16 +2473,14 @@ else begin: fetch_phase
 		iqentry_mem  [tail0]    <=	fetchbuf0_mem;
 		iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
 		iqentry_br   [tail0]    <=  IsBranch(fetchbuf0_instr);
+		iqentry_fp   [tail0]    <= FALSE;
+		iqentry_sync [tail0]    <=  IsSync(fetchbuf0_instr);
 		iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
 		//iqentry_ra   [tail0]    <=   fnRa(fetchbuf0_instr);
 		if (fetchbuf0_rfw) begin
-            for (n = 0; n < AREGS; n = n + 1)
-                rename_map[map_ndx+1][n] = rename_map[map_ndx][n];
-            rename_map[map_ndx+1][fnRt(fetchbuf0_instr)] <= Rt0;
-		    in_use[map_ndx+1] <= in_use[map_ndx];
-            in_use[map_ndx+1][Rt0] <= 1'b1;
-            map_ndx <= map_ndx + 1;
-            iqentry_map  [tail0]    <= map_ndx + 1;
+		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf0_instr),Rt0);
+            map_ndx <= map_ndx + 3'd1;
+            iqentry_map  [tail0]    <= map_ndx + 3'd1;
             iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf0_instr)];
             iqentry_tgt  [tail0]    <= Rt0;
         end
@@ -2556,12 +2496,12 @@ else begin: fetch_phase
 		iqentry_a1   [tail0]	<=	rf [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
 		iqentry_a1_v [tail0]    <=	rf_v [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
 		iqentry_a1_s [tail0]	<=	rf_source [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		iqentry_a2   [tail0]	<=	rf[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
-		iqentry_a2_v [tail0]    <=	rf_v[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
-		iqentry_a2_s [tail0]	<=	rf_source[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
+		// This is a branch instruction a2 isn't used.
+		iqentry_a2   [tail0]	<=	64'hCCCCCCCCCCCCCCCC;
+		iqentry_a2_v [tail0]    <=	1'b1;
+		iqentry_a2_s [tail0]	<=	4'd0;
 		tail0 <= tail0 + 1;
 		tail1 <= tail1 + 1;
-		seq_num <= seq_num + 8'd1;
 
 	    end
 
@@ -2570,7 +2510,7 @@ else begin: fetch_phase
 		//
 		// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
 		//
-		if ({fetchbuf0_instr[`INSTRUCTION_OP], predict_taken0} == {`Bcc, `TRUE}) begin
+		if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
 
             iqentry_sn   [tail0]    <=  seq_num;
 		    iqentry_v    [tail0]    <=	`VAL;
@@ -2598,16 +2538,14 @@ else begin: fetch_phase
 		    iqentry_mem  [tail0]    <=	fetchbuf0_mem;
 		    iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
     		iqentry_br   [tail0]    <=  IsBranch(fetchbuf0_instr);
+    		iqentry_fp   [tail0]    <= FALSE;
+    		iqentry_sync [tail0]    <=  IsSync(fetchbuf0_instr);
 		    iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
     		//iqentry_ra   [tail0]    <=  fnRa(fetchbuf0_instr);
     		if (fetchbuf0_rfw) begin
-                for (n = 0; n < AREGS; n = n + 1)
-                    rename_map[map_ndx+1][n] = rename_map[map_ndx][n];
-                rename_map[map_ndx+1][fnRt(fetchbuf0_instr)] <= Rt0;
-    		    in_use[map_ndx+1] <= in_use[map_ndx];
-                in_use[map_ndx+1][Rt0] <= 1'b1;
-                map_ndx <= map_ndx + 1;
-                iqentry_map  [tail0]    <= map_ndx + 1;
+    		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf0_instr),Rt0);
+                map_ndx <= map_ndx + 3'd1;
+                iqentry_map  [tail0]    <= map_ndx + 3'd1;
                 iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf0_instr)];
                 iqentry_tgt  [tail0]    <= Rt0;
             end
@@ -2623,12 +2561,12 @@ else begin: fetch_phase
 		    iqentry_a1   [tail0]    <=	rf [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
 		    iqentry_a1_v [tail0]    <=	rf_v [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
 		    iqentry_a1_s [tail0]    <=	rf_source [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		    iqentry_a2   [tail0]    <=	rf[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
-		    iqentry_a2_v [tail0]    <=	rf_v[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
-		    iqentry_a2_s [tail0]    <=	rf_source[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
+		    // this is a branch instruction a2 isn't used.
+		    iqentry_a2   [tail0]    <=	64'hCCCCCCCCCCCCCCCC;
+		    iqentry_a2_v [tail0]    <=	1'b1;
+		    iqentry_a2_s [tail0]    <=	4'b0;
 		    tail0 <= tail0 + 1;
 		    tail1 <= tail1 + 1;
-    		seq_num <= seq_num + 8'd1;
 
 		end
 
@@ -2645,12 +2583,10 @@ else begin: fetch_phase
 		    if (queued2) begin
 			tail0 <= tail0 + 2;
 			tail1 <= tail1 + 2;
-    		seq_num <= seq_num + 8'd2;
 		    end
-		    else begin
+		    else begin    // queued1 will be true
 			tail0 <= tail0 + 1;
 			tail1 <= tail1 + 1;
-    		seq_num <= seq_num + 8'd1;
 		    end
 
 		    //
@@ -2682,16 +2618,14 @@ else begin: fetch_phase
 		    iqentry_mem  [tail0]    <=   fetchbuf0_mem;
 		    iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
     		iqentry_br   [tail0]    <=   IsBranch(fetchbuf0_instr);
+    		iqentry_fp   [tail0]    <= FALSE;
+    		iqentry_sync [tail0]    <=  IsSync(fetchbuf0_instr);
 		    iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
     		//iqentry_ra   [tail0]    <=   fnRa(fetchbuf0_instr);
     		if (fetchbuf0_rfw) begin
-                for (n = 0; n < AREGS; n = n + 1)
-                    rename_map[map_ndx+1][n] = rename_map[map_ndx][n];
-                rename_map[map_ndx+1][fnRt(fetchbuf0_instr)] <= Rt0;
-    		    in_use[map_ndx+1] <= in_use[map_ndx];
-                in_use[map_ndx+1][Rt0] <= 1'b1;
-                map_ndx <= map_ndx + 1;
-                iqentry_map  [tail0]    <= map_ndx + 1;
+    		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf0_instr),Rt0);
+                map_ndx <= map_ndx + 3'd1;
+                iqentry_map  [tail0]    <= map_ndx + 3'd1;
                 iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf0_instr)];
                 iqentry_tgt  [tail0]    <= Rt0;
             end
@@ -2744,23 +2678,24 @@ else begin: fetch_phase
 			iqentry_mem  [tail1]    <=   fetchbuf1_mem;
 			iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
     		iqentry_br   [tail1]    <=   IsBranch(fetchbuf1_instr);
+    		iqentry_fp   [tail1]    <= FALSE;
+    		iqentry_sync [tail1]    <=  IsSync(fetchbuf1_instr);
 			iqentry_rfw  [tail1]    <=   fetchbuf1_rfw;
     		//iqentry_ra   [tail1]    <=   fnRa(fetchbuf1_instr);
     		if (fetchbuf1_rfw) begin
-                for (n = 0; n < AREGS; n = n + 1)
-                    rename_map[map_ndx+(fetchbuf0_rfw ? 2 : 1)][n] = rename_map[map_ndx][n];
-        		if (fetchbuf0_rfw)
-                    rename_map[map_ndx+2][fnRt(fetchbuf0_instr)] <= Rt0;
-                rename_map[map_ndx+(fetchbuf0_rfw ? 2 : 1)][fnRt(fetchbuf1_instr)] <= Rt1;
-    		    in_use[map_ndx+(fetchbuf0_rfw ? 2 : 1)] <= in_use[map_ndx];
-                in_use[map_ndx+(fetchbuf0_rfw ? 2 : 1)][Rt1] <= 1'b1;
-                map_ndx <= map_ndx + (fetchbuf0_rfw ? 2 : 1);
-                iqentry_map  [tail1]    <= map_ndx + (fetchbuf0_rfw ? 2 : 1);
-                iqentry_fre  [tail1]    <= rename_map[map_ndx][fnRt(fetchbuf1_instr)];
+    		    CopyMap(map_ndx+(fetchbuf0_rfw ? 3'd2 : 3'd1),fnRt(fetchbuf1_instr),Rt1);
+        		if (fetchbuf0_rfw) begin
+                    rename_map[map_ndx+3'd2][fnRt(fetchbuf0_instr)] <= Rt0;
+                    in_use[map_ndx+ 3'd2][Rt0] <= 1'b1;
+                end
+                map_ndx <= map_ndx + (fetchbuf0_rfw ? 3'd2 : 3'd1);
+                iqentry_map  [tail1]    <= map_ndx + (fetchbuf0_rfw ? 3'd2 : 3'd1);
+                iqentry_fre  [tail1]    <= (fnRt(fetchbuf1_instr)==fnRt(fetchbuf0_instr)) ? Rt0 :
+                                            rename_map[map_ndx][fnRt(fetchbuf1_instr)];
                 iqentry_tgt  [tail1]    <= Rt1;
             end
             else begin
-               iqentry_map  [tail1]    <= map_ndx + fetchbuf0_rfw + fetchbuf1_rfw;
+               iqentry_map  [tail1]    <= map_ndx + fetchbuf0_rfw;
                iqentry_fre  [tail1]    <= 6'd0;
                iqentry_tgt  [tail1]    <= 6'd0;
             end
@@ -2791,12 +2726,15 @@ else begin: fetch_phase
             // register of the previous enqueue.
             // Use unrenamed registers for compare because the rename map hasn't updated yet,
             // and if it was updated it would return the same result.
+            // Note that if Ra matches the previous target, the register file won't be valid.
+            // a1_v is set to invalid later. So there's no real reason to use a register port
+            // to fill with an value that's invalid anyways.
             if (fetchbuf0_rfw && fnRa(fetchbuf1_instr)==fnRt(fetchbuf0_instr))
-                iqentry_a1[tail1]   <=   rf [Rt0];
+                iqentry_a1[tail1]   <=   64'hCCCCCCCCCCCCCCCC;
             else
 			    iqentry_a1   [tail1]    <=   rf [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];    // use outdated map
             if (fetchbuf0_rfw && fnRb(fetchbuf1_instr)==fnRt(fetchbuf0_instr))
-                iqentry_a2[tail1]   <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `JAL) ? fetchbuf1_pc : rf [Rt0];
+                iqentry_a2[tail1]   <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `JAL) ? fetchbuf1_pc : 64'hCCCCCCCCCCCCCCCC;
             else
 			    iqentry_a2   [tail1]    <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `JAL) ? fetchbuf1_pc
 							             : rf[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
@@ -2818,12 +2756,12 @@ else begin: fetch_phase
 			    iqentry_a1_s [tail1]    <=   rf_source [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
-			// :Rt0 is newly assigned with register renaming, it can't match Ra.
-//			else if (rename_map[map_ndx][fnRa(fetchbuf1_instr)] == Rt0) begin
-//			    // if the previous instruction is a LW, then grab result from memq, not the iq
-//			    iqentry_a1_v [tail1]    <=   `INV;
-//			    iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
-//			end
+			// Must compare architectural registers as rename map hasn't updated yet.
+			else if (fnRa(fetchbuf1_instr) == fnRt(fetchbuf0_instr)) begin
+			    // if the previous instruction is a LW, then grab result from memq, not the iq
+			    iqentry_a1_v [tail1]    <=   `INV;
+			    iqentry_a1_s [tail1]    <=   { fetchbuf0_mem, tail0 };
+			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
 			    iqentry_a1_v [tail1]    <=   rf_v [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
@@ -2835,6 +2773,7 @@ else begin: fetch_phase
 			// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
 			//
 			// if the argument is an immediate or not needed, we're done
+			// Source2 is valid for a JAL.
 			if (Source2Valid( fetchbuf1_instr ) == `VAL) begin
 			    iqentry_a2_v [tail1] <= `VAL;
 			    iqentry_a2_s [tail1] <= 4'd0;
@@ -2845,11 +2784,11 @@ else begin: fetch_phase
 			    iqentry_a2_s [tail1] <= rf_source[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
-//			else if (rename_map[map_ndx][fnRb(fetchbuf1_instr)] == Rt0) begin
-//			    // if the previous instruction is a LW, then grab result from memq, not the iq
-//			    iqentry_a2_v [tail1]    <=   `INV;
-//			    iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
-//			end
+			else if (fnRb(fetchbuf1_instr) == fnRt(fetchbuf0_instr)) begin
+			    // if the previous instruction is a LW, then grab result from memq, not the iq
+			    iqentry_a2_v [tail1]    <=   `INV;
+			    iqentry_a2_s [tail1]    <=   { fetchbuf0_mem, tail0 };
+			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
 			    iqentry_a2_v [tail1] <= rf_v[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
@@ -2875,7 +2814,7 @@ else begin: fetch_phase
 
 		    end	// ends the "if IQ[tail1] is available" clause
 		    else begin	// only first instruction was enqueued
-			if (fetchbuf0_rfw) begin
+			if (queued1 & fetchbuf0_rfw) begin
 			    rf_v[ Rt0 ] <= `INV;
 			    rf_source[ Rt0 ] <= {fetchbuf0_mem, tail0};
 			end
@@ -2885,45 +2824,56 @@ else begin: fetch_phase
 	    end
 	endcase
 	else begin	// if branchmiss
-  		seq_num <= seq_num + 8'd3;
+	    $display("***********");
+	    $display("Branch Miss");
+	    $display("***********");
+        dump_rename();
 	    if (iqentry_stomp[0] & ~iqentry_stomp[7]) begin
 		tail0 <= 0;
 		tail1 <= 1;
+		$display("new map: %d old map:%d", iqentry_map[7], map_ndx);
 		map_ndx <= iqentry_map[7];
 	    end
 	    else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
 		tail0 <= 1;
 		tail1 <= 2;
+		$display("new map: %d old map:%d", iqentry_map[0], map_ndx);
 		map_ndx <= iqentry_map[0];
 	    end
 	    else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
 		tail0 <= 2;
 		tail1 <= 3;
+		$display("new map: %d old map:%d", iqentry_map[1], map_ndx);
 		map_ndx <= iqentry_map[1];
 	    end
 	    else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
 		tail0 <= 3;
 		tail1 <= 4;
+		$display("new map: %d old map:%d", iqentry_map[2], map_ndx);
 		map_ndx <= iqentry_map[2];
 	    end
 	    else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
 		tail0 <= 4;
 		tail1 <= 5;
+		$display("new map: %d old map:%d", iqentry_map[3], map_ndx);
 		map_ndx <= iqentry_map[3];
 	    end
 	    else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
 		tail0 <= 5;
 		tail1 <= 6;
+		$display("new map: %d old map:%d", iqentry_map[4], map_ndx);
 		map_ndx <= iqentry_map[4];
 	    end
 	    else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
 		tail0 <= 6;
 		tail1 <= 7;
+		$display("new map: %d old map:%d", iqentry_map[5], map_ndx);
 		map_ndx <= iqentry_map[5];
 	    end
 	    else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
 		tail0 <= 7;
 		tail1 <= 0;
+		$display("new map: %d old map:%d", iqentry_map[6], map_ndx);
 		map_ndx <= iqentry_map[6];
 	    end
 	    // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
@@ -2943,8 +2893,6 @@ else begin: fetch_phase
 	if (alu0_v) begin
 	    iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
 	    iqentry_exc	[ alu0_id[2:0] ] <= alu0_exc;
-	    $display("IsMem:%h", IsMem(iqentry_instr[ alu0_id[2:0] ]));
-	    $display("!IsMem:%h", !IsMem(iqentry_instr[ alu0_id[2:0] ]));
 	    iqentry_done[ alu0_id[2:0] ] <= !IsMem(iqentry_instr[ alu0_id[2:0] ]);
 	    iqentry_out	[ alu0_id[2:0] ] <= `INV;
 	    iqentry_agen[ alu0_id[2:0] ] <= `VAL;
@@ -2992,7 +2940,7 @@ else begin: fetch_phase
 	//  - commit1_bus
 	//
 
-    for (n = 0; n < 8; n = n + 1)
+    for (n = 0; n < QENTRIES; n = n + 1)
     begin
         if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
             iqentry_a1[n] <= alu0_bus;
@@ -3401,7 +3349,7 @@ else begin: fetch_phase
     for (n = 0; n < QENTRIES; n = n + 1)
     begin
         if (IsImmp(iqentry_instr[n]) && iqentry_v[(n+1)&7]
-            && (iqentry_sn[(n+1)&7]==iqentry_sn[n]+8'd1))
+            && (iqentry_sn[(n+1)&7]==iqentry_sn[n]+5'd1))
         iqentry_done[n] <= TRUE;
         if (!iqentry_v[n])
             iqentry_done[n] <= FALSE;
@@ -3418,12 +3366,26 @@ else begin: fetch_phase
 
     // Mark registers as available for renaming
 	if (commit0_v) begin
-        for (i = 0; i < 8; i = i + 1)
-            in_use[i][iqentry_fre[head0]] <= 1'b0;
+        for (n = 0; n < 8; n = n + 1) begin
+            in_use[n][iqentry_fre[head0]] <= 1'b0;
+            in_use[n][6'd0] <= 1'b1;
+            if (DEBUG) begin
+                for (j = 0; j < AREGS; j = j + 1)
+                    if (rename_map[n][j]==iqentry_fre[head0])
+                        rename_map[n][j] <= 6'd0;
+            end
+        end
     end
 	if (commit1_v) begin
-        for (i = 0; i < 8; i = i + 1)
-            in_use[i][iqentry_fre[head1]] <= 1'b0;
+        for (n = 0; n < 8; n = n + 1) begin
+            in_use[n][iqentry_fre[head1]] <= 1'b0;
+            in_use[n][6'd0] <= 1'b1;
+            if (DEBUG) begin
+                for (j = 0; j < AREGS; j = j + 1)
+                if (rename_map[n][j]==iqentry_fre[head0])
+                    rename_map[n][j] <= 6'd0;
+            end
+        end
     end
 
     oddball_commit(commit1_v, head1);
@@ -3796,6 +3758,7 @@ endcase
 	$display("TIME %0d", $time);
 	$display("%h #", pc0);
 
+    dump_rename();
 	for (i=0; i<8; i=i+1)
 	    $display("%d: %h %d %o #", i, rf[i], rf_v[i], rf_source[i]);
 
@@ -3810,16 +3773,18 @@ endcase
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 
 	for (i=0; i<8; i=i+1) 
-	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %c%h 0%d(%d) %o %h %h %h %d %o %h %d %o %h #",
-		(i[2:0]==head0)?72:46, (i[2:0]==tail0)?84:46, i,
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %c%h 0%d(%d) %o %h %h %h %d %o %h %d %o %h %d %h#",
+		(i[2:0]==head0)?"C":".", (i[2:0]==tail0)?"Q":".", i[2:0],
 		iqentry_v[i], iqentry_done[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
-		((i==0) ? iqentry_0_islot : (i==1) ? iqentry_1_islot : (i==2) ? iqentry_2_islot : (i==3) ? iqentry_3_islot :
-		 (i==4) ? iqentry_4_islot : (i==5) ? iqentry_5_islot : (i==6) ? iqentry_6_islot : iqentry_7_islot), iqentry_stomp[i],
+		((i==0) ? iqentry_islot[0] : (i==1) ? iqentry_islot[1] : (i==2) ? iqentry_islot[2] : (i==3) ? iqentry_islot[3] :
+		 (i==4) ? iqentry_islot[4] : (i==5) ? iqentry_islot[5] : (i==6) ? iqentry_islot[6] : iqentry_islot[7]), iqentry_stomp[i],
 		(IsFlowCtrl(iqentry_instr[i]) ? 98 : (IsMem(iqentry_instr[i])) ? 109 : 97), 
 		iqentry_instr[i], iqentry_tgt[i], iqentry_utgt[i],
 		iqentry_exc[i], iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
-		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i]);
-
+		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i],
+		iqentry_map[i], iqentry_sn[i]
+		);
+    $display("DRAM");
 	$display("%d %h %h %c%d %o #",
 	    dram0, dram0_addr, dram0_data, (IsFlowCtrl(dram0_op) ? 98 : (IsMem({21'b0,dram0_op})) ? 109 : 97), 
 	    dram0_op, dram0_id);
@@ -3830,7 +3795,7 @@ endcase
 	    dram2, dram2_addr, dram2_data, (IsFlowCtrl(dram2_op) ? 98 : (IsMem({21'b0,dram2_op})) ? 109 : 97), 
 	    dram2_op, dram2_id);
 	$display("%d %h %o %h #", dram_v, dram_bus, dram_id, dram_exc);
-
+    $display("ALU");
 	$display("%d %h %h %h %c%h %d %o %h #",
 		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
 		 (IsFlowCtrl(alu0_instr) ? 98 : IsMem(alu0_instr) ? 109 : 97),
@@ -3844,11 +3809,12 @@ endcase
 		alu1_instr, alu1_bt, alu1_sourceid, alu1_pc);
 	$display("%d %h %o 0 #", alu1_v, alu1_bus, alu1_id);
 	$display("%d %o %h #", alu1_branchmiss, alu1_sourceid, alu1_misspc); 
-
+    $display("Commit");
 	$display("0: %d %h %o 0%d #", commit0_v, commit0_bus, commit0_id, commit0_tgt);
 	$display("1: %d %h %o 0%d #", commit1_v, commit1_bus, commit1_id, commit1_tgt);
     $display("0: fre %d #", iqentry_fre[head0]);
     $display("1: fre %d #", iqentry_fre[head1]);
+    $display("instructions committed: %d ticks: %d ", I, tick);
 //
 //	$display("\n\n\n\n\n\n\n\n");
 //	$display("TIME %0d", $time);
@@ -3950,8 +3916,49 @@ endcase
 	    $finish;
 	end
 
-    end
+    end // clock domain
 
+// Branchmiss seems to be sticky sometimes during simulation. For instance branch miss
+// and cache miss at same time. The branchmiss should clear before the core continues
+// so the positive edge is detected to avoid incrementing the sequnce number too many
+// times.
+wire pebm;
+edge_det uedbm (.rst(rst), .clk(clk), .ce(1'b1), .i(branchmiss), .pe(pebm), .ne(), .ee() );
+
+always @(posedge clk)
+if (rst)
+    seq_num <= 5'd0;
+else begin
+    if (pebm)
+        seq_num <= seq_num + 5'd3;
+    else if (queued2)
+        seq_num <= seq_num + 5'd2;
+    else if (queued1)
+        seq_num <= seq_num + 5'd1;
+end
+
+// This task takes care of making the current map historical by copying it to
+// a new map. The architectural to physical register mapping is also inserted
+// into the new map and the physical register marked as in use.
+task CopyMap;
+input [2:0] tgtmap;
+input [4:0] ar;     // architectural register
+input [5:0] pr;     // physical register
+begin
+    for (n = 1; n < AREGS; n = n + 1) begin
+        if ((rename_map[map_ndx][n]==iqentry_fre[head0] && commit0_v) ||
+            (rename_map[map_ndx][n]==iqentry_fre[head1] && commit1_v))
+            rename_map[tgtmap][n] = 6'd0;
+        else
+            rename_map[tgtmap][n] = rename_map[map_ndx][n];
+    end
+    rename_map[tgtmap][ar] <= pr;
+    in_use[tgtmap] <= in_use[map_ndx];
+    in_use[tgtmap][pr] <= 1'b1;
+end
+endtask
+
+// This task takes care of commits for things other than the register file.
 task oddball_commit;
 input v;
 input [2:0] head;
@@ -4052,6 +4059,24 @@ input [2:0] tail;
 IQPrefixes = IsImmp(iqentry_instr[(tail-1)&7]) & IsImmp(iqentry_instr[(tail-2)&7]) ? 2'd2 :
                  IsImmp(iqentry_instr[(tail-1)&7]) ? 2'd1 : 2'd0;
 endfunction
+
+task dump_rename;
+begin
+    $display("Rename Map");
+    for (n = 0; n < 8; n = n + 1) begin
+        $display("Map %c%d: %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d",
+                map_ndx==n ? "*" : " ", n[2:0],
+                rename_map[n][31], rename_map[n][30], rename_map[n][29], rename_map[n][28],
+                rename_map[n][27], rename_map[n][26], rename_map[n][25], rename_map[n][24],
+                rename_map[n][23], rename_map[n][22], rename_map[n][21], rename_map[n][20],
+                rename_map[n][19], rename_map[n][18], rename_map[n][17], rename_map[n][16],
+                rename_map[n][15], rename_map[n][14], rename_map[n][13], rename_map[n][12],
+                rename_map[n][11], rename_map[n][10], rename_map[n][9], rename_map[n][8],
+                rename_map[n][7], rename_map[n][6], rename_map[n][5], rename_map[n][4],
+                rename_map[n][3], rename_map[n][2], rename_map[n][1], rename_map[n][0]);
+    end
+end
+endtask
 
 endmodule
 

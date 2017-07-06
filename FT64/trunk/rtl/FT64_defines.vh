@@ -52,6 +52,7 @@
 `define SEI         6'h30
 `define CLI         6'h31
 `define RTI         6'h32
+`define SYNC        6'h36
 `define ADDI	5'd4
 `define CMPI    5'd6
 `define CMPUI   5'd7
