@@ -123,7 +123,7 @@ parameter PREGS = 63;   // number of physical registers - 1
 parameter AREGS = 32;   // number of architectural registers
 parameter DEBUG = 1'b0;
 parameter RENAME = 1'b1;
-parameter NMAP = QENTRIES * 7 / 8;
+parameter NMAP = QENTRIES;
 reg [3:0] i;
 integer n;
 integer j;
@@ -2540,7 +2540,7 @@ else begin: fetch_phase
 		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf1_instr),Rt1);
 		    map_ndx <= MapInc(map_ndx,3'd1);
     	    iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
-    	    iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf1_instr)] : Rt1;
+    	    iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf1_instr)] : 6'd0;
     		iqentry_tgt  [tail0]    <= Rt1;
 	    end
 	    else begin
@@ -2613,7 +2613,7 @@ else begin: fetch_phase
 		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf0_instr),Rt0);
             map_ndx <= MapInc(map_ndx,3'd1);
             iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
-            iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : Rt0;
+            iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : 6'd0;
             iqentry_tgt  [tail0]    <= Rt0;
         end
         else begin
@@ -2680,7 +2680,7 @@ else begin: fetch_phase
     		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf0_instr),Rt0);
                 map_ndx <= MapInc(map_ndx,3'd1);
                 iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
-                iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : Rt0;
+                iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : 6'd0;
                 iqentry_tgt  [tail0]    <= Rt0;
             end
             else begin
@@ -2762,7 +2762,7 @@ else begin: fetch_phase
     		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf0_instr),Rt0);
                 map_ndx <= MapInc(map_ndx,3'd1);
                 iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
-                iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : Rt0;
+                iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : 6'd0;
                 iqentry_tgt  [tail0]    <= Rt0;
             end
             else begin
@@ -2828,7 +2828,7 @@ else begin: fetch_phase
                 map_ndx <= MapInc(map_ndx,(fetchbuf0_rfw ? 3'd2 : 3'd1));
                 iqentry_map  [tail1]    <= MapInc(map_ndx,(fetchbuf0_rfw ? 3'd2 : 3'd1));
                 iqentry_fre  [tail1]    <= (fnRt(fetchbuf1_instr)==fnRt(fetchbuf0_instr)) ? Rt0 :
-                                            RENAME ? rename_map[map_ndx][fnRt(fetchbuf1_instr)] : Rt0;
+                                            RENAME ? rename_map[map_ndx][fnRt(fetchbuf1_instr)] : 6'd0;
                 iqentry_tgt  [tail1]    <= Rt1;
             end
             else begin
@@ -3542,7 +3542,6 @@ else begin: fetch_phase
             for (n = 0; n < 8; n = n + 1) begin
                 in_use[n][iqentry_fre[head0]] <= 1'b0;
                 in_use[n][6'd0] <= 1'b1;
-                map_free[iqentry_map[head0]] <= 1'b1;
                 if (DEBUG) begin
                     for (j = 0; j < AREGS; j = j + 1)
                         if (rename_map[n][j]==iqentry_fre[head0])
@@ -3554,7 +3553,6 @@ else begin: fetch_phase
             for (n = 0; n < 8; n = n + 1) begin
                 in_use[n][iqentry_fre[head1]] <= 1'b0;
                 in_use[n][6'd0] <= 1'b1;
-                map_free[iqentry_map[head1]] <= 1'b1;
                 if (DEBUG) begin
                     for (j = 0; j < AREGS; j = j + 1)
                     if (rename_map[n][j]==iqentry_fre[head0])
@@ -4161,7 +4159,7 @@ begin
         rename_map[tgtmap][ar] <= pr;
         in_use[tgtmap] <= in_use[map_ndx];
         in_use[tgtmap][pr] <= 1'b1;
-        map_free[tgtmap] <= 1'b0;
+//        map_free[tgtmap] <= 1'b0;
     end
 end
 endtask
