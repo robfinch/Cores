@@ -385,10 +385,10 @@ input [37:0] adr;
 output reg [8:0] lineno;
 output hit;
 
-reg [31:0] mem0 [0:127];
-reg [31:0] mem1 [0:127];
-reg [31:0] mem2 [0:127];
-reg [31:0] mem3 [0:127];
+reg [32:0] mem0 [0:127];
+reg [32:0] mem1 [0:127];
+reg [32:0] mem2 [0:127];
+reg [32:0] mem3 [0:127];
 reg [37:0] rradr;
 integer n;
 initial begin
@@ -409,17 +409,17 @@ lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
 reg [8:0] wlineno;
 always @(posedge clk)
 begin
-    if (wr && lfsro[1:0]==2'b00) begin mem0[adr[11:5]] <= adr[37:12]; wlineno <= {2'b00,adr[11:5]}; end
-    if (wr && lfsro[1:0]==2'b01) begin mem1[adr[11:5]] <= adr[37:12]; wlineno <= {2'b01,adr[11:5]}; end
-    if (wr && lfsro[1:0]==2'b10) begin mem2[adr[11:5]] <= adr[37:12]; wlineno <= {2'b10,adr[11:5]}; end
-    if (wr && lfsro[1:0]==2'b11) begin mem3[adr[11:5]] <= adr[37:12]; wlineno <= {2'b11,adr[11:5]}; end
+    if (wr && lfsro[1:0]==2'b00) begin mem0[adr[11:5]] <= adr[37:5]; wlineno <= {2'b00,adr[11:5]}; end
+    if (wr && lfsro[1:0]==2'b01) begin mem1[adr[11:5]] <= adr[37:5]; wlineno <= {2'b01,adr[11:5]}; end
+    if (wr && lfsro[1:0]==2'b10) begin mem2[adr[11:5]] <= adr[37:5]; wlineno <= {2'b10,adr[11:5]}; end
+    if (wr && lfsro[1:0]==2'b11) begin mem3[adr[11:5]] <= adr[37:5]; wlineno <= {2'b11,adr[11:5]}; end
 end
 always @(posedge clk)
     rradr <= adr;
-wire hit0 = mem0[rradr[11:5]]==rradr[37:12];
-wire hit1 = mem1[rradr[11:5]]==rradr[37:12];
-wire hit2 = mem2[rradr[11:5]]==rradr[37:12];
-wire hit3 = mem3[rradr[11:5]]==rradr[37:12];
+wire hit0 = mem0[rradr[11:5]]==rradr[37:5];
+wire hit1 = mem1[rradr[11:5]]==rradr[37:5];
+wire hit2 = mem2[rradr[11:5]]==rradr[37:5];
+wire hit3 = mem3[rradr[11:5]]==rradr[37:5];
 always @*
     //if (wr2) lineno = wlineno;
     if (hit0) lineno = {2'b00,rradr[11:5]};
@@ -650,6 +650,10 @@ octa:   begin
         default:   hit1 = `TRUE;   
         endcase
         end
+default:    begin
+            hit0 = 1'b0;
+            hit1 = 1'b0;
+            end
 endcase
 
 // hit0, hit1 are also delayed by a clock already
@@ -693,8 +697,8 @@ reg [255:0] doutb1;
 reg [31:0] ov1;
 
 integer n;
-always @(posedge clka)
-if (rst) begin
+
+initial begin
     for (n = 0; n < 512; n = n + 1)
         valid[n] = 32'h00;
 end
@@ -702,7 +706,6 @@ end
 genvar g;
 generate begin
 for (g = 0; g < 4; g = g + 1)
-begin
 always @(posedge clka)
 begin
     if (ena & wea[0] & addra[4:3]==g) mem[addra[13:5]][g*64+7:g*64] <= dina[7:0];
@@ -721,7 +724,6 @@ begin
     if (ena & wea[5] & addra[4:3]==g) valid[addra[13:5]][g*8+5] <= 1'b1;
     if (ena & wea[6] & addra[4:3]==g) valid[addra[13:5]][g*8+6] <= 1'b1;
     if (ena & wea[7] & addra[4:3]==g) valid[addra[13:5]][g*8+7] <= 1'b1;
-end
 end
 end
 endgenerate

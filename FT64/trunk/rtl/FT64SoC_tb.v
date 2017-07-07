@@ -48,12 +48,14 @@ wire led_ack = (adr[31:4]==28'hFFDC060) & stb;
 
 bootrom ubr
 (
-    .clk(clk),
-    .cs(adr[31:16]==16'hFFFC),
-    .cyc(stb),
-    .ack(br_ack),
-    .adr(adr[17:0]),
-    .o(br_dato)
+    .rst_i(rst),
+    .clk_i(clk),
+    .cs_i(adr[31:16]==16'hFFFC),
+    .cyc_i(cyc),
+    .stb_i(stb),
+    .ack_o(br_ack),
+    .adr_i(adr[17:0]),
+    .dat_o(br_dato)
 );
 
 assign ack = br_ack|led_ack;

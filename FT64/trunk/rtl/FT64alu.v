@@ -25,6 +25,7 @@
 `include "FT64_defines.vh"
 
 module FT64alu(instr, a, b, pc, csr, o);
+parameter BIG = 1'b1;
 input [31:0] instr;
 input [63:0] a;
 input [63:0] b;
@@ -44,8 +45,10 @@ case(instr[`INSTRUCTION_OP])
     `AND:  o = a & b;
     `OR:   o = a | b;
     `XOR:  o = a ^ b;
-    `SHL,`SHLI:   o = a << b;
-    `SHR,`SHRI:   o = a >> b;
+    `SHL,`SHLI:   o = BIG ? a << b : 64'hCCCCCCCCCCCCCCCC;
+    `SHR,`SHRI:   o = BIG ? a >> b : 64'hCCCCCCCCCCCCCCCC;
+    `ASR,`ASRI:   o = BIG ? (a >> b) | (a[63] ? ~(64'hFFFFFFFFFFFFFFFF >> b) : 64'd0) : 64'hCCCCCCCCCCCCCCCC;
+    `SEI:       o = a | b;
     default:    o = 64'hDEADDEADDEADDEAD;
     endcase
  `Bcc:
@@ -63,8 +66,9 @@ case(instr[`INSTRUCTION_OP])
  `ORI:   o = a | b;
  `XORI:  o = a ^ b;
  `JAL:   o = pc + 32'd4;
- `LH,`LHU,`LW,`SH,`SW:  o = a + b;
- `CSRRW:     o = csr;
+ `LBX,`LHX,`LHUX,`LWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
+ `LB,`LH,`LHU,`LW,`SB,`SH,`SW:  o = a + b;
+ `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 

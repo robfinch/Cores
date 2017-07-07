@@ -93,6 +93,11 @@
 // Register Renaming
 // If the core runs out of physical registers to use then instructions
 // stop enqueuing until registers are freed up.
+// The rename history is set to the number of instruction queue entries. This
+// is probably overkill for the amount of history required but it means that
+// no checking is required to see if a map is available.
+// Older maps are guarenteed to be outdated so rename maps are allocated
+// in a circular fashion.
 // ============================================================================
 //
 `include "FT64_defines.vh"
@@ -107,7 +112,7 @@ output reg cyc_o;
 output reg stb_o;
 input ack_i;
 output reg we_o;
-output reg [1:0] sel_o;
+output reg [7:0] sel_o;
 output reg [31:0] adr_o;
 output reg [63:0] dat_o;
 input [63:0] dat_i;
@@ -117,6 +122,8 @@ parameter BRKPC = 32'hFFFC0000;
 parameter PREGS = 63;   // number of physical registers - 1
 parameter AREGS = 32;   // number of architectural registers
 parameter DEBUG = 1'b0;
+parameter RENAME = 1'b1;
+parameter NMAP = QENTRIES * 7 / 8;
 reg [3:0] i;
 integer n;
 integer j;
@@ -126,13 +133,15 @@ parameter FALSE = 1'b0;
 reg [63:0] rf[0:63];
 reg        rf_v[0:63];
 reg  [3:0] rf_source[0:63];
-reg [5:0] rename_map [7:0][31:0];
-reg [2:0] map_ndx;
-reg [63:0] in_use [0:7];        // in use register map
+reg [5:0] rename_map [NMAP-1:0][31:0];   // rename map and history
+reg [NMAP-1:0] map_free;            // indicates the rename map is available
+reg [2:0] map_ndx;                  // index to current map
+reg [63:0] in_use [0:NMAP-1];       // in use register map
 reg [31:0] pc0;
 reg [31:0] pc1;
 // CSR's
 reg [63:0] tick;
+reg [15:0] mcause;
 reg [31:0] epc,epc0,epc1,epc2,epc3; // exception pc and stack
 reg [63:0] mstatus;     // machine status
 //reg [25:0] m[0:8191];
@@ -140,7 +149,7 @@ reg  [3:0] panic;		// indexes the message structure
 reg [128:0] message [0:15];	// indexed by panic
 
 reg [2:0] im;
-reg int_commit;
+wire int_commit;
 reg StatusHWI;
 reg [31:0] insn0, insn1;
 wire [31:0] insn0a, insn1a;
@@ -157,6 +166,8 @@ reg queued1;
 reg queued2;
 reg queuedNop;
 
+reg [31:0] codebuf[0:63];
+
 // instruction queue (ROB)
 reg [4:0]  iqentry_sn   [0:7];  // instruction sequence number
 reg        iqentry_v  	[0:7];	// entry valid?  -- this should be the first bit
@@ -165,6 +176,8 @@ reg        iqentry_done	[0:7];	// instruction result valid
 reg        iqentry_bt  	[0:7];	// branch-taken (used only for branches)
 reg        iqentry_agen  	[0:7];	// address-generate ... signifies that address is ready (only for LW/SW)
 reg        iqentry_mem	[0:7];	// touches memory: 1 if LW/SW
+reg        iqentry_memdb    [0:7];
+reg        iqentry_memsb    [0:7];
 reg        iqentry_jmp	[0:7];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_br   [0:7];  // Bcc (for predictor)
 reg        iqentry_fp   [0:7];  // floating point
@@ -232,8 +245,8 @@ wire  [PREGS:1] iq5_out;
 wire  [PREGS:1] iq6_out;
 wire  [PREGS:1] iq7_out;
 
-reg  [2:0] tail0;
-reg  [2:0] tail1;
+reg  [2:0] tail0, tail0a;
+reg  [2:0] tail1, tail1a;
 reg  [2:0] head0;
 reg  [2:0] head1;
 reg  [2:0] head2;	// used only to determine memory-access ordering
@@ -253,25 +266,31 @@ wire        fetchbuf0_v;
 wire        fetchbuf0_mem;
 wire        fetchbuf0_jmp;
 wire        fetchbuf0_rfw;
+wire        fetchbuf0_xq;
 wire [31:0] fetchbuf1_instr;
 wire [31:0] fetchbuf1_pc;
 wire        fetchbuf1_v;
 wire        fetchbuf1_mem;
 wire        fetchbuf1_jmp;
 wire        fetchbuf1_rfw;
+wire        fetchbuf1_xq;
 
 reg [31:0] fetchbufA_instr;	
 reg [31:0] fetchbufA_pc;
 reg        fetchbufA_v;
+reg        fetchbufA_xq;
 reg [31:0] fetchbufB_instr;
 reg [31:0] fetchbufB_pc;
 reg        fetchbufB_v;
+reg        fetchbufB_xq;
 reg [31:0] fetchbufC_instr;
 reg [31:0] fetchbufC_pc;
 reg        fetchbufC_v;
+reg        fetchbufC_xq;
 reg [31:0] fetchbufD_instr;
 reg [31:0] fetchbufD_pc;
 reg        fetchbufD_v;
+reg        fetchbufD_xq;
 
 reg        did_branchback0;
 reg        did_branchback1;
@@ -326,21 +345,21 @@ reg	 [1:0] dram1;	// state of the DRAM request (latency = 4; can have three in p
 reg	 [1:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg [63:0] dram0_data;
 reg [31:0] dram0_addr;
-reg  [5:0] dram0_op;
+reg [31:0] dram0_instr;
 reg  [5:0] dram0_tgt;
 reg  [3:0] dram0_id;
 reg  [3:0] dram0_exc;
 reg        dram0_unc;
 reg [63:0] dram1_data;
 reg [31:0] dram1_addr;
-reg  [5:0] dram1_op;
+reg [31:0] dram1_instr;
 reg  [5:0] dram1_tgt;
 reg  [3:0] dram1_id;
 reg  [3:0] dram1_exc;
 reg        dram1_unc;
 reg [63:0] dram2_data;
 reg [31:0] dram2_addr;
-reg  [5:0] dram2_op;
+reg [31:0] dram2_instr;
 reg  [5:0] dram2_tgt;
 reg  [3:0] dram2_id;
 reg  [3:0] dram2_exc;
@@ -394,6 +413,7 @@ parameter IC7 = 4'd7;
 parameter IC8 = 4'd8;
 parameter IC9 = 4'd9;
 parameter IC10 = 4'd10;
+parameter IC3a = 4'd11;
 reg icwhich,icnxt,L2_nxt;
 wire ihit0,ihit1,ihit2;
 wire ihit = ihit0&ihit1;
@@ -469,15 +489,15 @@ FT64BranchPredictor ubp1
 );
 
 always @*
-if (irq_i > im && ~StatusHWI && ~int_commit)
-	insn0 <= {17'd0,vec_i,`BRK};
+if ((irq_i > im) && ~int_commit)
+	insn0 <= {13'd0,irq_i,1'b0,vec_i,`BRK};
 else if (phit)
     insn0 <= insn0a;
 else
     insn0 <= `NOP_INSN;
 always @*
-if (irq_i > im && ~StatusHWI && ~int_commit)
-    insn1 <= {17'd0,vec_i,`BRK};
+if ((irq_i > im) && ~int_commit)
+    insn1 <= {13'd0,irq_i,1'b0,vec_i,`BRK};
 else if (phit)
     insn1 <= insn1a;
 else
@@ -542,6 +562,19 @@ FT64_dcache udc2
     .hit0(dhit2),
     .hit1()
 );
+
+function [2:0] MapInc;
+input [2:0] ndx;
+input [2:0] amt;
+reg [3:0] s;
+begin
+s = ndx + amt;
+if (s >= {1'b0,NMAP})
+    MapInc = s - NMAP;
+else
+    MapInc = s;
+end
+endfunction
 
 function [4:0] fnRa;
 input [31:0] isn;
@@ -700,6 +733,9 @@ case(isn[`INSTRUCTION_OP])
 `LH:    IsMem = TRUE;
 `LHU:   IsMem = TRUE;
 `LW:    IsMem = TRUE;
+`LHX:   IsMem = TRUE;
+`LHUX:  IsMem = TRUE;
+`LWX:   IsMem = TRUE;
 `SH:    IsMem = TRUE;
 `SW:    IsMem = TRUE;
 default:    IsMem = FALSE;
@@ -712,7 +748,19 @@ case(isn[`INSTRUCTION_OP])
 `LH:    IsLoad = TRUE;
 `LHU:   IsLoad = TRUE;
 `LW:    IsLoad = TRUE;
+`LHX:   IsLoad = TRUE;
+`LHUX:  IsLoad = TRUE;
+`LWX:   IsLoad = TRUE;
 default:    IsLoad = FALSE;
+endcase
+endfunction
+
+function IsStore;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`SH:    IsStore = TRUE;
+`SW:    IsStore = TRUE;
+default:    IsStore = FALSE;
 endcase
 endfunction
 
@@ -721,10 +769,19 @@ input [31:0] isn;
 IsBranch = isn[`INSTRUCTION_OP]==`Bcc;
 endfunction
 
+function IsRTI;
+input [31:0] isn;
+IsRTI = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`RTI;
+endfunction
+
 function IsFlowCtrl;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `BRK:    IsFlowCtrl = TRUE;
+`RR:    case(isn[`INSTRUCTION_S2])
+        `RTI:   IsFlowCtrl = TRUE;
+        default:    IsFlowCtrl = FALSE;
+        endcase
 `Bcc:   IsFlowCtrl = TRUE;
 `JAL:    IsFlowCtrl = TRUE;
 default:    IsFlowCtrl = FALSE;
@@ -734,6 +791,21 @@ endfunction
 function IsSync;
 input [31:0] isn;
 IsSync = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`SYNC); 
+endfunction
+
+function IsMemdb;
+input [31:0] isn;
+IsMemdb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`MEMDB); 
+endfunction
+
+function IsMemsb;
+input [31:0] isn;
+IsMemsb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`MEMSB); 
+endfunction
+
+function IsSEI;
+input [31:0] isn;
+IsSEI = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`SEI); 
 endfunction
 
 function IsRFW;
@@ -782,7 +854,125 @@ endfunction
 
 function IsAlu0Only;
 input [31:0] isn;
-IsAlu0Only = isn[`INSTRUCTION_OP]==`CSRRW;
+case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `ASR,`ASRI: IsAlu0Only = TRUE;
+    `SHL,`SHLI: IsAlu0Only = TRUE;
+    `SHR,`SHRI: IsAlu0Only = TRUE;
+    `LBX,`LHX,`LHUX,`LWX:   IsAlu0Only = TRUE;
+    default:    IsAlu0Only = FALSE;
+    endcase
+`CSRRW: IsAlu0Only = TRUE;
+default:    IsAlu0Only = FALSE;
+endcase
+endfunction
+
+function [7:0] fnSelect;
+input [31:0] ins;
+input [31:0] adr;
+begin
+	case(ins[`INSTRUCTION_OP])
+	`RR:
+	   case(ins[`INSTRUCTION_S2])
+       `LBX:
+           case(adr[2:0])
+           3'd0:    fnSelect = 8'h01;
+           3'd1:    fnSelect = 8'h02;
+           3'd2:    fnSelect = 8'h04;
+           3'd3:    fnSelect = 8'h08;
+           3'd4:    fnSelect = 8'h10;
+           3'd5:    fnSelect = 8'h20;
+           3'd6:    fnSelect = 8'h40;
+           3'd7:    fnSelect = 8'h80;
+           endcase
+    	`LHX,`LHUX:
+           case(adr[2])
+           1'b0:    fnSelect = 8'h0F;
+           1'b1:    fnSelect = 8'hF0;
+           endcase
+       `LWX:
+           fnSelect = 8'hFF;
+       default: fnSelect = 8'h00;
+	   endcase
+    `LB,`SB:
+		case(adr[2:0])
+		3'd0:	fnSelect = 8'h01;
+		3'd1:	fnSelect = 8'h02;
+		3'd2:	fnSelect = 8'h04;
+		3'd3:	fnSelect = 8'h08;
+		3'd4:	fnSelect = 8'h10;
+		3'd5:	fnSelect = 8'h20;
+		3'd6:	fnSelect = 8'h40;
+		3'd7:	fnSelect = 8'h80;
+		endcase
+	`LH,`LHU,`SH:
+		case(adr[2])
+		1'b0:	fnSelect = 8'h0F;
+		1'b1:	fnSelect = 8'hF0;
+		endcase
+	`LW,`SW:
+		fnSelect = 8'hFF;
+	default:	fnSelect = 8'h00;
+	endcase
+end
+endfunction
+
+function [63:0] fnDati;
+input [31:0] ins;
+input [31:0] adr;
+input [63:0] dat;
+case(ins[`INSTRUCTION_OP])
+`RR:
+    case(ins[`INSTRUCTION_S2])
+    `LBX:
+        case(adr[2:0])
+        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
+        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
+        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
+        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
+        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
+        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
+        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
+        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
+        endcase
+    `LHX:
+        case(adr[2])
+        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
+        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
+        endcase
+    `LHUX:
+        case(adr[2])
+        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
+        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
+        endcase
+    `LWX:    fnDati = dat;
+    default:    fnDati = dat;
+    endcase
+`LB:
+    case(adr[2:0])
+    3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
+    3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
+    3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
+    3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
+    3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
+    3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
+    3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
+    3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
+    endcase
+`LH:
+    case(adr[2])
+    1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
+    1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
+    endcase
+`LHU:
+    case(adr[2])
+    1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
+    1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
+    endcase
+`LW:    fnDati = dat;
+default:    fnDati = dat;
+endcase
 endfunction
 
 // Indicate if the ALU instruction is valid immediately (single cycle operation)
@@ -835,9 +1025,11 @@ end
     assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
     assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
     assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
+    assign fetchbuf0_xq    = (fetchbuf == 1'b0) ? fetchbufA_xq    : fetchbufC_xq   ;
     assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
     assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
     assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
+    assign fetchbuf1_xq    = (fetchbuf == 1'b0) ? fetchbufB_xq    : fetchbufD_xq   ;
 
     assign fetchbuf0_mem   = (fetchbuf == 1'b0) 
 				? IsMem(fetchbufA_instr)
@@ -1321,10 +1513,15 @@ endgenerate
 wire [6:0] ffzo,flzo;
 ffz96 uffz({32'hFFFFFFFF,in_use[map_ndx][63:1],1'b1},ffzo);
 flz96 uflz({32'hFFFFFFFF,in_use[map_ndx][63:1],1'b1},flzo);
-assign Rt0 = ffzo[6] ? 6'd0 : ffzo;
-assign Rt1 = flzo[6] ? 6'd0 : flzo;
-wire canq2 = Rt1!=Rt0 && (Rt1!=6'd0 && Rt0!=6'd0);
-wire canq1 = (Rt1!=6'd0 || Rt0 != 6'd0);
+assign Rt0 = RENAME ? (ffzo[6] ? 6'd0 : ffzo) : {1'b0,fnRt(fetchbuf0_instr)};
+assign Rt1 = RENAME ? (flzo[6] ? 6'd0 : flzo) : {1'b0,fnRt(fetchbuf1_instr)};
+wire canq2 = RENAME ? (Rt1!=Rt0 && (Rt1!=6'd0 && Rt0!=6'd0) && map_free[MapInc(map_ndx,3'd1)] && map_free[MapInc(map_ndx,3'd2)]): 1'b1;
+wire canq1 = RENAME ? (Rt1!=6'd0 || Rt0 != 6'd0) && map_free[MapInc(map_ndx,3'd1)] : 1'b1;
+wire [5:0] Ra0 = RENAME ? rename_map[map_ndx][fnRa(fetchbuf0_instr)] : {1'b0,fnRa(fetchbuf0_instr)};
+wire [5:0] Rb0 = RENAME ? rename_map[map_ndx][fnRb(fetchbuf0_instr)] : {1'b0,fnRb(fetchbuf0_instr)};
+wire [5:0] Ra1 = RENAME ? rename_map[map_ndx][fnRa(fetchbuf1_instr)] : {1'b0,fnRa(fetchbuf1_instr)};
+wire [5:0] Rb1 = RENAME ? rename_map[map_ndx][fnRb(fetchbuf1_instr)] : {1'b0,fnRb(fetchbuf1_instr)};
+
     //
     // additional logic for ISSUE
     //
@@ -1546,7 +1743,7 @@ end
     reg [63:0] csr_r;
     always @*
         read_csr(alu0_instr,csr_r);
-    FT64alu ualu0 (
+    FT64alu #(.BIG(1'b1)) ualu0 (
         .instr(alu0_instr),
         .a(alu0_argA),
         .b(alu0_argB),
@@ -1554,7 +1751,7 @@ end
         .csr(csr_r),
         .o(alu0_bus)
     );
-    FT64alu ualu1 (
+    FT64alu #(.BIG(1'b0)) ualu1 (
         .instr(alu1_instr),
         .a(alu1_argA),
         .b(alu1_argB),
@@ -1570,11 +1767,13 @@ end
 	    alu1_id = alu1_sourceid;
 
     assign  alu0_misspc =
+        IsRTI(alu0_instr) ? epc :
         (alu0_instr[`INSTRUCTION_OP] == `BRK) ? BRKPC :
-        (alu0_instr[`INSTRUCTION_OP] == `JAL) ? alu0_argA : (alu0_bt ? alu0_pc + 4 : alu0_pc + 4 + alu0_argI),
+        (alu0_instr[`INSTRUCTION_OP] == `JAL) ? alu0_argA + alu0_argI: (alu0_bt ? alu0_pc + 4 : alu0_pc + 4 + alu0_argI),
 	    alu1_misspc = 
+        IsRTI(alu1_instr) ? epc :
         (alu1_instr[`INSTRUCTION_OP] == `BRK) ? BRKPC :
-	    (alu1_instr[`INSTRUCTION_OP] == `JAL) ? alu1_argA : (alu1_bt ? alu1_pc + 4 : alu1_pc + 4 + alu1_argI);
+	    (alu1_instr[`INSTRUCTION_OP] == `JAL) ? alu1_argA + alu1_argI: (alu1_bt ? alu1_pc + 4 : alu1_pc + 4 + alu1_argI);
 
     assign  alu0_exc = (alu0_instr[`INSTRUCTION_OP] != `BRK)
 			? `EXC_NONE
@@ -1601,15 +1800,15 @@ end
 			: `EXC_INVALID;
 
     assign alu0_branchmiss = alu0_dataready && 
-			   ((alu0_instr[`INSTRUCTION_OP] == `BRK) ||
-			    ((alu0_instr[`INSTRUCTION_OP] == `Bcc) ? ((|alu0_bus && ~alu0_bt) || (~|alu0_bus && alu0_bt))
-			  : (alu0_instr[`INSTRUCTION_OP] == `JAL) ? (alu0_argB[`INSTRUCTION_S1] != `SYS_MFSR && alu0_argB[`INSTRUCTION_S1] != `SYS_MTSR)
+			   ( IsRTI(alu0_instr) || (alu0_instr[`INSTRUCTION_OP] == `BRK) ||
+			    (IsBranch(alu0_instr) ? ((|alu0_bus && ~alu0_bt) || (~|alu0_bus && alu0_bt))
+			  : (alu0_instr[`INSTRUCTION_OP] == `JAL) ? 1'b1
 			  : `INV));
 
     assign alu1_branchmiss = alu1_dataready && 
-			   ((alu1_instr[`INSTRUCTION_OP] == `BRK) ||
-			    ((alu1_instr[`INSTRUCTION_OP] == `Bcc)  ? ((|alu1_bus && ~alu1_bt) || (~|alu1_bus && alu1_bt))
-              : (alu1_instr[`INSTRUCTION_OP] == `JAL) ? (alu1_argB[`INSTRUCTION_S1] != `SYS_MFSR && alu1_argB[`INSTRUCTION_S1] != `SYS_MTSR)
+			   ( IsRTI(alu1_instr) || (alu1_instr[`INSTRUCTION_OP] == `BRK) ||
+			    (IsBranch(alu1_instr) ? ((|alu1_bus && ~alu1_bt) || (~|alu1_bus && alu1_bt))
+              : (alu1_instr[`INSTRUCTION_OP] == `JAL) ? 1'b1
               : `INV));
 
     assign  branchmiss = (alu0_branchmiss | alu1_branchmiss),
@@ -1639,9 +1838,9 @@ end
 	    iqentry_memready[6] = (iqentry_v[6] & iqentry_memopsvalid[6] & ~iqentry_memissue[6] & ~iqentry_done[6] & ~iqentry_out[6] & ~iqentry_stomp[6]),
 	    iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]);
 
-    assign outstanding_stores = (dram0 && (dram0_op == `SW || dram0_op==`SH)) ||
-                                (dram1 && (dram1_op == `SW || dram1_op==`SH)) ||
-                                (dram2 && (dram2_op == `SW || dram2_op==`SH));
+    assign outstanding_stores = (dram0 && IsStore(dram0_instr)) ||
+                                (dram1 && IsStore(dram1_instr)) ||
+                                (dram2 && IsStore(dram2_instr));
 
     //
     // additional COMMIT logic
@@ -1659,6 +1858,9 @@ end
 
     assign commit0_bus = iqentry_res[head0];
     assign commit1_bus = iqentry_res[head1];
+    
+    assign int_commit = (commit0_v && iqentry_instr[head0][`INSTRUCTION_OP]==`BRK) ||
+                        (commit0_v && commit1_v && iqentry_instr[head1][`INSTRUCTION_OP]==`BRK);
 
 // Check how many instructions can be queued. This might be fewer than the
 // number ready to queue from the fetch stage if queue slots aren't
@@ -1727,9 +1929,7 @@ if (rst) begin
     im <= 3'd7;
     mstatus <= 64'd0;
     StatusHWI <= FALSE;
-    int_commit <= FALSE;
     for (n = 0; n < 8; n = n + 1) begin
-        in_use[n] <= 64'd0;
         iqentry_v[n] <= 1'b0;
         iqentry_out[n] <= 1'b0;
         iqentry_agen[n] <= 1'b0;
@@ -1744,22 +1944,28 @@ if (rst) begin
         iqentry_a2_v[n] <= `INV;
         iqentry_a1_s[n] <= 4'd0;
         iqentry_a2_s[n] <= 4'd0;
-        for (j = 0; j < AREGS; j = j + 1)
-            rename_map[n][j] <= 6'd0;
     end
-    seq_num <= 8'd0;
+    if (RENAME) begin
+        map_free <= {NMAP{1'b1}};
+        for (n = 0; n < NMAP; n = n + 1) begin
+            in_use[n] <= 64'd0;
+            for (j = 0; j < AREGS; j = j + 1)
+                rename_map[n][j] <= 6'd0;
+        end
+    end
     map_ndx <= 3'd0;
     dram0 <= `DRAMSLOT_AVAIL;
     dram1 <= `DRAMSLOT_AVAIL;
     dram2 <= `DRAMSLOT_AVAIL;
-    dram0_op <= 6'd0;
-    dram1_op <= 6'd0;
-    dram2_op <= 6'd0;
+    dram0_instr <= `NOP_INSN;
+    dram1_instr <= `NOP_INSN;
+    dram2_instr <= `NOP_INSN;
     dram0_addr <= 32'h0;
     dram1_addr <= 32'h0;
     dram2_addr <= 32'h0;
 	pc0 = RSTPC;
     pc1 = RSTPC + 32'd4;
+    L1_adr <= RSTPC;
     for (n=0; n<=PREGS; n=n+1) begin
         rf[n] = 64'd0;
         rf_v[n] = 1'b1;
@@ -1844,17 +2050,7 @@ else begin: fetch_phase
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufB_v appropriately
 		4'b0100 : begin
 			if (take_branchB) begin
-			    fetchbufC_instr <= insn0;
-			    fetchbufC_v <= `VAL;
-			    fetchbufC_pc <= pc0;
-			    fetchbufD_instr <= insn1;
-			    fetchbufD_v <= `VAL;
-			    fetchbufD_pc <= pc1;
-			    if (phit) begin
-			    pc0 <= pc0 + 8;
-			    pc1 <= pc1 + 8;
-			    end
-
+			    FetchCD();
 			    fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
@@ -1896,17 +2092,7 @@ else begin: fetch_phase
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufA_v appropriately
 		4'b1000 : begin
 			if (take_branchA) begin
-			    fetchbufC_instr <= insn0;
-			    fetchbufC_v <= `VAL;
-			    fetchbufC_pc <= pc0;
-			    fetchbufD_instr <= insn1;
-			    fetchbufD_v <= `VAL;
-			    fetchbufD_pc <= pc1;
-			    if (phit) begin
-			    pc0 <= pc0 + 8;
-			    pc1 <= pc1 + 8;
-			    end
-
+			    FetchCD();
 			    fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
@@ -1962,17 +2148,7 @@ else begin: fetch_phase
 			end
 			else if (take_branchB) begin
 			    if (did_branchback0) begin
-				fetchbufC_instr <= insn0;
-				fetchbufC_v <= `VAL;
-				fetchbufC_pc <= pc0;
-				fetchbufD_instr <= insn1;
-				fetchbufD_v <= `VAL;
-				fetchbufD_pc <= pc1;
-				if (phit) begin
-				pc0 <= pc0 + 8;
-				pc1 <= pc1 + 8;
-				end
-
+			    FetchCD();
 				fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 				fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 				fetchbuf <= fetchbuf + (queued2|queuedNop);
@@ -2037,17 +2213,7 @@ else begin: fetch_phase
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufB_v appropriately
 		4'b0100 : begin
 			if (take_branchD) begin
-			    fetchbufA_instr <= insn0;
-			    fetchbufA_v <= `VAL;
-			    fetchbufA_pc <= pc0;
-			    fetchbufB_instr <= insn1;
-			    fetchbufB_v <= `VAL;
-			    fetchbufB_pc <= pc1;
-			    if (phit) begin
-			    pc0 <= pc0 + 8;
-			    pc1 <= pc1 + 8;
-			    end
-
+			    FetchAB();
 			    fetchbufD_v <= !(queued1|queuedNop);	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
@@ -2089,17 +2255,7 @@ else begin: fetch_phase
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufC_v appropriately
 		4'b1000 : begin
 			if (take_branchC) begin
-			    fetchbufA_instr <= insn0;
-			    fetchbufA_v <= `VAL;
-			    fetchbufA_pc <= pc0;
-			    fetchbufB_instr <= insn1;
-			    fetchbufB_v <= `VAL;
-			    fetchbufB_pc <= pc1;
-			    if (phit) begin
-			    pc0 <= pc0 + 8;
-			    pc1 <= pc1 + 8;
-			    end
-
+			    FetchAB();
 			    fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 			    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
@@ -2155,17 +2311,7 @@ else begin: fetch_phase
 			end
 			else if (take_branchD) begin
 			    if (did_branchback1) begin
-				fetchbufA_instr <= insn0;
-				fetchbufA_v <= `VAL;
-				fetchbufA_pc <= pc0;
-				fetchbufB_instr <= insn1;
-				fetchbufB_v <= `VAL;
-				fetchbufB_pc <= pc1;
-				if (phit) begin
-				pc0 <= pc0 + 8;
-				pc1 <= pc1 + 8;
-				end
-
+			    FetchAB();
 				fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 				fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 				fetchbuf <= fetchbuf + (queued2|queuedNop);
@@ -2296,32 +2442,13 @@ else begin: fetch_phase
 	    // get data iff the fetch buffers are empty
 	    //
 	    if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin
-		fetchbufA_instr <= insn0;
-		fetchbufA_v <= `VAL;
-		fetchbufA_pc <= pc0;
-		fetchbufB_instr <= insn1;
-		fetchbufB_v <= `VAL;
-		fetchbufB_pc <= pc1;
-		// fetchbuf steering logic correction
-        if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
-            fetchbuf <= 1'b0;
-		if (phit) begin
-		pc0 <= pc0 + 8;
-		pc1 <= pc1 + 8;
-		end
+            FetchAB();
+            // fetchbuf steering logic correction
+            if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
+                fetchbuf <= 1'b0;
 	    end
-	    else if (fetchbufC_v == `INV && fetchbufD_v == `INV) begin
-		fetchbufC_instr <= insn0;
-		fetchbufC_v <= `VAL;
-		fetchbufC_pc <= pc0;
-		fetchbufD_instr <= insn1;
-		fetchbufD_v <= `VAL;
-		fetchbufD_pc <= pc1;
-		if (phit) begin
-		pc0 <= pc0 + 8;
-		pc1 <= pc1 + 8;
-		end
-	    end
+	    else if (fetchbufC_v == `INV && fetchbufD_v == `INV)
+    	    FetchCD();
 	end
 
     //
@@ -2361,6 +2488,7 @@ else begin: fetch_phase
 
 	rf[0] = 0;
 	rf_v[0] = 1;
+	
 //
 	// enqueue fetchbuf0 and fetchbuf1, but only if there is room, 
 	// and ignore fetchbuf1 if fetchbuf0 has a backwards branch in it.
@@ -2382,7 +2510,7 @@ else begin: fetch_phase
 		iqentry_out  [tail0]    <=   `INV;
 		iqentry_res  [tail0]    <=   `ZERO;
 		iqentry_instr[tail0]    <=   fetchbuf1_instr; 
-		iqentry_bt   [tail0]    <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `Bcc && predict_taken1); 
+		iqentry_bt   [tail0]    <=   (IsBranch(fetchbuf1_instr) && predict_taken1); 
 		iqentry_agen [tail0]    <=   `INV;
 		// If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
 		// inherit the previous pc.
@@ -2400,6 +2528,8 @@ else begin: fetch_phase
 		else
 	       iqentry_pc   [tail0] <= fetchbuf1_pc;
 		iqentry_mem  [tail0]    <=   fetchbuf1_mem;
+		iqentry_memdb[tail0]    <=   IsMemdb(fetchbuf1_instr);
+		iqentry_memsb[tail0]    <=   IsMemsb(fetchbuf1_instr);
 		iqentry_jmp  [tail0]    <=   fetchbuf1_jmp;
 		iqentry_br   [tail0]    <=   IsBranch(fetchbuf1_instr);
 		iqentry_fp   [tail0]    <= FALSE;
@@ -2407,10 +2537,10 @@ else begin: fetch_phase
 		iqentry_rfw  [tail0]    <=   fetchbuf1_rfw;
 		//iqentry_ra   [tail0]    <=   fnRa(fetchbuf1_instr);
 		if (fetchbuf1_rfw) begin
-		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf1_instr),Rt1);
-		    map_ndx <= map_ndx + 3'd1;
-    	    iqentry_map  [tail0]    <= map_ndx + 3'd1;
-    	    iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf1_instr)];
+		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf1_instr),Rt1);
+		    map_ndx <= MapInc(map_ndx,3'd1);
+    	    iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
+    	    iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf1_instr)] : Rt1;
     		iqentry_tgt  [tail0]    <= Rt1;
 	    end
 	    else begin
@@ -2422,14 +2552,14 @@ else begin: fetch_phase
     	   iqentry_utgt [tail0]    <=   fetchbuf1_rfw ? fnRt(fetchbuf1_instr) : 5'd0;
 		iqentry_exc  [tail0]    <=   `EXC_NONE;
 		iqentry_a0   [tail0]    <=   assign_a0(tail0, fetchbuf1_instr);
-		iqentry_a1   [tail0]    <=   rf [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
-		iqentry_a1_v [tail0]    <=   Source1Valid(fetchbuf1_instr) | rf_v[ rename_map[map_ndx][fnRa(fetchbuf1_instr)] ];
-		iqentry_a1_s [tail0]    <=   rf_source [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
+		iqentry_a1   [tail0]    <=   rf [Ra1];
+		iqentry_a1_v [tail0]    <=   Source1Valid(fetchbuf1_instr) | rf_v[ Ra1 ];
+		iqentry_a1_s [tail0]    <=   rf_source [Ra1];
 		iqentry_a2   [tail0]    <=    
 					      ((fetchbuf1_instr[`INSTRUCTION_OP] == `JAL)
-						 ? fetchbuf1_pc : rf[ rename_map[map_ndx][fnRb(fetchbuf1_instr)]]);
-		iqentry_a2_v [tail0]    <=   Source2Valid( fetchbuf1_instr ) | rf_v[ rename_map[map_ndx][fnRb(fetchbuf1_instr)] ];
-		iqentry_a2_s [tail0]    <=  rf_source[ rename_map[map_ndx][fnRb(fetchbuf1_instr)] ];
+						 ? fetchbuf1_pc : rf[ Rb1 ]);
+		iqentry_a2_v [tail0]    <=   Source2Valid( fetchbuf1_instr ) | rf_v[ Rb1 ];
+		iqentry_a2_s [tail0]    <=  rf_source[ Rb1 ];
 		tail0 <= tail0 + 1;
 		tail1 <= tail1 + 1;
 		if (fetchbuf1_rfw) begin
@@ -2471,6 +2601,8 @@ else begin: fetch_phase
         else
            iqentry_pc   [tail0] <= fetchbuf0_pc;
 		iqentry_mem  [tail0]    <=	fetchbuf0_mem;
+		iqentry_memdb[tail0]    <=   IsMemdb(fetchbuf0_instr);
+        iqentry_memsb[tail0]    <=   IsMemsb(fetchbuf0_instr);
 		iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
 		iqentry_br   [tail0]    <=  IsBranch(fetchbuf0_instr);
 		iqentry_fp   [tail0]    <= FALSE;
@@ -2478,10 +2610,10 @@ else begin: fetch_phase
 		iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
 		//iqentry_ra   [tail0]    <=   fnRa(fetchbuf0_instr);
 		if (fetchbuf0_rfw) begin
-		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf0_instr),Rt0);
-            map_ndx <= map_ndx + 3'd1;
-            iqentry_map  [tail0]    <= map_ndx + 3'd1;
-            iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf0_instr)];
+		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf0_instr),Rt0);
+            map_ndx <= MapInc(map_ndx,3'd1);
+            iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
+            iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : Rt0;
             iqentry_tgt  [tail0]    <= Rt0;
         end
         else begin
@@ -2493,9 +2625,9 @@ else begin: fetch_phase
     	   iqentry_utgt [tail0]    <=   fetchbuf0_rfw ? fnRt(fetchbuf0_instr) : 5'd0;
 		iqentry_exc  [tail0]    <=	`EXC_NONE;
 		iqentry_a0   [tail0]    <=  assign_a0(tail0, fetchbuf0_instr);
-		iqentry_a1   [tail0]	<=	rf [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		iqentry_a1_v [tail0]    <=	rf_v [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		iqentry_a1_s [tail0]	<=	rf_source [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
+		iqentry_a1   [tail0]	<=	rf [Ra0];
+		iqentry_a1_v [tail0]    <=	rf_v [Ra0];
+		iqentry_a1_s [tail0]	<=	rf_source [Ra0];
 		// This is a branch instruction a2 isn't used.
 		iqentry_a2   [tail0]	<=	64'hCCCCCCCCCCCCCCCC;
 		iqentry_a2_v [tail0]    <=	1'b1;
@@ -2536,6 +2668,8 @@ else begin: fetch_phase
             else
                iqentry_pc   [tail0] <= fetchbuf0_pc;
 		    iqentry_mem  [tail0]    <=	fetchbuf0_mem;
+    		iqentry_memdb[tail0]    <=   IsMemdb(fetchbuf0_instr);
+            iqentry_memsb[tail0]    <=   IsMemsb(fetchbuf0_instr);
 		    iqentry_jmp  [tail0]    <=	fetchbuf0_jmp;
     		iqentry_br   [tail0]    <=  IsBranch(fetchbuf0_instr);
     		iqentry_fp   [tail0]    <= FALSE;
@@ -2543,10 +2677,10 @@ else begin: fetch_phase
 		    iqentry_rfw  [tail0]    <=	fetchbuf0_rfw;
     		//iqentry_ra   [tail0]    <=  fnRa(fetchbuf0_instr);
     		if (fetchbuf0_rfw) begin
-    		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf0_instr),Rt0);
-                map_ndx <= map_ndx + 3'd1;
-                iqentry_map  [tail0]    <= map_ndx + 3'd1;
-                iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf0_instr)];
+    		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf0_instr),Rt0);
+                map_ndx <= MapInc(map_ndx,3'd1);
+                iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
+                iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : Rt0;
                 iqentry_tgt  [tail0]    <= Rt0;
             end
             else begin
@@ -2558,9 +2692,9 @@ else begin: fetch_phase
                iqentry_utgt [tail0]    <=   fetchbuf0_rfw ? fnRt(fetchbuf0_instr) : 5'd0;
 		    iqentry_exc  [tail0]    <=	`EXC_NONE;
     		iqentry_a0   [tail0]    <=  assign_a0(tail0, fetchbuf0_instr);
-		    iqentry_a1   [tail0]    <=	rf [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		    iqentry_a1_v [tail0]    <=	rf_v [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		    iqentry_a1_s [tail0]    <=	rf_source [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
+		    iqentry_a1   [tail0]    <=	rf [Ra0];
+		    iqentry_a1_v [tail0]    <=	rf_v [Ra0];
+		    iqentry_a1_s [tail0]    <=	rf_source [Ra0];
 		    // this is a branch instruction a2 isn't used.
 		    iqentry_a2   [tail0]    <=	64'hCCCCCCCCCCCCCCCC;
 		    iqentry_a2_v [tail0]    <=	1'b1;
@@ -2616,6 +2750,8 @@ else begin: fetch_phase
             else
                iqentry_pc   [tail0] <= fetchbuf0_pc;
 		    iqentry_mem  [tail0]    <=   fetchbuf0_mem;
+    		iqentry_memdb[tail0]    <=   IsMemdb(fetchbuf0_instr);
+            iqentry_memsb[tail0]    <=   IsMemsb(fetchbuf0_instr);
 		    iqentry_jmp  [tail0]    <=   fetchbuf0_jmp;
     		iqentry_br   [tail0]    <=   IsBranch(fetchbuf0_instr);
     		iqentry_fp   [tail0]    <= FALSE;
@@ -2623,10 +2759,10 @@ else begin: fetch_phase
 		    iqentry_rfw  [tail0]    <=   fetchbuf0_rfw;
     		//iqentry_ra   [tail0]    <=   fnRa(fetchbuf0_instr);
     		if (fetchbuf0_rfw) begin
-    		    CopyMap(map_ndx+3'd1,fnRt(fetchbuf0_instr),Rt0);
-                map_ndx <= map_ndx + 3'd1;
-                iqentry_map  [tail0]    <= map_ndx + 3'd1;
-                iqentry_fre  [tail0]    <= rename_map[map_ndx][fnRt(fetchbuf0_instr)];
+    		    CopyMap(MapInc(map_ndx,3'd1),fnRt(fetchbuf0_instr),Rt0);
+                map_ndx <= MapInc(map_ndx,3'd1);
+                iqentry_map  [tail0]    <= MapInc(map_ndx,3'd1);
+                iqentry_fre  [tail0]    <= RENAME ? rename_map[map_ndx][fnRt(fetchbuf0_instr)] : Rt0;
                 iqentry_tgt  [tail0]    <= Rt0;
             end
             else begin
@@ -2638,13 +2774,13 @@ else begin: fetch_phase
                iqentry_utgt [tail0]    <=   fetchbuf0_rfw ? fnRt(fetchbuf0_instr) : 5'd0;
 		    iqentry_exc  [tail0]    <=   `EXC_NONE;
     		iqentry_a0   [tail0]    <=   assign_a0(tail0, fetchbuf0_instr);
-		    iqentry_a1   [tail0]    <=   rf [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
-		    iqentry_a1_v [tail0]    <=   Source1Valid( fetchbuf0_instr ) | rf_v[ rename_map[map_ndx][fnRa(fetchbuf0_instr) ]];
-		    iqentry_a1_s [tail0]    <=   rf_source [rename_map[map_ndx][fnRa(fetchbuf0_instr)]];
+		    iqentry_a1   [tail0]    <=   rf [Ra0];
+		    iqentry_a1_v [tail0]    <=   Source1Valid( fetchbuf0_instr ) | rf_v[ Ra0 ];
+		    iqentry_a1_s [tail0]    <=   rf_source [Ra0];
 		    iqentry_a2   [tail0]    <=   (fetchbuf0_instr[`INSTRUCTION_OP] == `JAL) ? fetchbuf0_pc
-						                  : rf[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
-		    iqentry_a2_v [tail0]    <=   Source2Valid( fetchbuf0_instr ) | rf_v[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
-		    iqentry_a2_s [tail0]    <=   rf_source[ rename_map[map_ndx][fnRb(fetchbuf0_instr) ]];
+						                  : rf[ Rb0 ];
+		    iqentry_a2_v [tail0]    <=   Source2Valid( fetchbuf0_instr ) | rf_v[ Rb0 ];
+		    iqentry_a2_s [tail0]    <=   rf_source[ Rb0 ];
 
 		    //
 		    // if there is room for a second instruction, enqueue it
@@ -2657,8 +2793,7 @@ else begin: fetch_phase
 			iqentry_out  [tail1]    <=   `INV;
 			iqentry_res  [tail1]    <=   `ZERO;
 			iqentry_instr[tail1]    <=   fetchbuf1_instr; 
-			iqentry_bt   [tail1]    <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `Bcc 
-							&& fetchbuf1_instr[`INSTRUCTION_SB] == `BACK_BRANCH); 
+			iqentry_bt   [tail1]    <=   (IsBranch(fetchbuf1_instr) && predict_taken1); 
 			iqentry_agen [tail1]    <=   `INV;
 		    // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
             // inherit the previous pc.
@@ -2676,6 +2811,8 @@ else begin: fetch_phase
             else
                iqentry_pc   [tail1] <= fetchbuf1_pc;
 			iqentry_mem  [tail1]    <=   fetchbuf1_mem;
+    		iqentry_memdb[tail1]    <=   IsMemdb(fetchbuf1_instr);
+            iqentry_memsb[tail1]    <=   IsMemsb(fetchbuf1_instr);
 			iqentry_jmp  [tail1]    <=   fetchbuf1_jmp;
     		iqentry_br   [tail1]    <=   IsBranch(fetchbuf1_instr);
     		iqentry_fp   [tail1]    <= FALSE;
@@ -2683,26 +2820,26 @@ else begin: fetch_phase
 			iqentry_rfw  [tail1]    <=   fetchbuf1_rfw;
     		//iqentry_ra   [tail1]    <=   fnRa(fetchbuf1_instr);
     		if (fetchbuf1_rfw) begin
-    		    CopyMap(map_ndx+(fetchbuf0_rfw ? 3'd2 : 3'd1),fnRt(fetchbuf1_instr),Rt1);
-        		if (fetchbuf0_rfw) begin
-                    rename_map[map_ndx+3'd2][fnRt(fetchbuf0_instr)] <= Rt0;
-                    in_use[map_ndx+ 3'd2][Rt0] <= 1'b1;
+    		    CopyMap(MapInc(map_ndx,(fetchbuf0_rfw ? 3'd2 : 3'd1)),fnRt(fetchbuf1_instr),Rt1);
+        		if (fetchbuf0_rfw && RENAME) begin
+                    rename_map[MapInc(map_ndx,3'd2)][fnRt(fetchbuf0_instr)] <= Rt0;
+                    in_use[MapInc(map_ndx,3'd2)][Rt0] <= 1'b1;
                 end
-                map_ndx <= map_ndx + (fetchbuf0_rfw ? 3'd2 : 3'd1);
-                iqentry_map  [tail1]    <= map_ndx + (fetchbuf0_rfw ? 3'd2 : 3'd1);
+                map_ndx <= MapInc(map_ndx,(fetchbuf0_rfw ? 3'd2 : 3'd1));
+                iqentry_map  [tail1]    <= MapInc(map_ndx,(fetchbuf0_rfw ? 3'd2 : 3'd1));
                 iqentry_fre  [tail1]    <= (fnRt(fetchbuf1_instr)==fnRt(fetchbuf0_instr)) ? Rt0 :
-                                            rename_map[map_ndx][fnRt(fetchbuf1_instr)];
+                                            RENAME ? rename_map[map_ndx][fnRt(fetchbuf1_instr)] : Rt0;
                 iqentry_tgt  [tail1]    <= Rt1;
             end
             else begin
-               iqentry_map  [tail1]    <= map_ndx + fetchbuf0_rfw;
+               iqentry_map  [tail1]    <= MapInc(map_ndx,{2'b0,fetchbuf0_rfw});
                iqentry_fre  [tail1]    <= 6'd0;
                iqentry_tgt  [tail1]    <= 6'd0;
             end
             if (DEBUG)
                iqentry_utgt [tail1]    <=   fetchbuf1_rfw ? fnRt(fetchbuf1_instr) : 5'd0;
 			iqentry_exc  [tail1]    <=   `EXC_NONE;
-			if (IsShifti(fetchbuf1_instr))
+			if (IsShifti(fetchbuf1_instr)||IsSEI(fetchbuf1_instr))
 			    iqentry_a0[tail1] <= {58'd0,fetchbuf1_instr[21],fetchbuf1_instr[`INSTRUCTION_RB]};
 	        else if (fetchbuf0_instr[`INSTRUCTION_OP]==`IMML && fetchbuf1_instr[`INSTRUCTION_OP]==`IMMM)
                 iqentry_a0[tail1] <= {fetchbuf1_instr[27:6],fetchbuf0_instr[31:6],16'h0000};
@@ -2732,12 +2869,12 @@ else begin: fetch_phase
             if (fetchbuf0_rfw && fnRa(fetchbuf1_instr)==fnRt(fetchbuf0_instr))
                 iqentry_a1[tail1]   <=   64'hCCCCCCCCCCCCCCCC;
             else
-			    iqentry_a1   [tail1]    <=   rf [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];    // use outdated map
+			    iqentry_a1   [tail1]    <=   rf [Ra1];    // use outdated map
             if (fetchbuf0_rfw && fnRb(fetchbuf1_instr)==fnRt(fetchbuf0_instr))
                 iqentry_a2[tail1]   <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `JAL) ? fetchbuf1_pc : 64'hCCCCCCCCCCCCCCCC;
             else
 			    iqentry_a2   [tail1]    <=   (fetchbuf1_instr[`INSTRUCTION_OP] == `JAL) ? fetchbuf1_pc
-							             : rf[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
+							             : rf[ Rb1 ];
 
 			// a1/a2_v and a1/a2_s values require a bit of thinking ...
 
@@ -2752,8 +2889,8 @@ else begin: fetch_phase
 			end
 			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 			else if (~fetchbuf0_rfw) begin
-			    iqentry_a1_v [tail1]    <=   rf_v [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
-			    iqentry_a1_s [tail1]    <=   rf_source [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
+			    iqentry_a1_v [tail1]    <=   rf_v [Ra1];
+			    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
 			// Must compare architectural registers as rename map hasn't updated yet.
@@ -2764,8 +2901,8 @@ else begin: fetch_phase
 			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
-			    iqentry_a1_v [tail1]    <=   rf_v [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
-			    iqentry_a1_s [tail1]    <=   rf_source [rename_map[map_ndx][fnRa(fetchbuf1_instr)]];
+			    iqentry_a1_v [tail1]    <=   rf_v [Ra1];
+			    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
 			end
 
 			//
@@ -2780,8 +2917,8 @@ else begin: fetch_phase
 			end
 			// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
 			else if (~fetchbuf0_rfw) begin
-			    iqentry_a2_v [tail1] <= rf_v[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
-			    iqentry_a2_s [tail1] <= rf_source[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
+			    iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
+			    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
 			end
 			// otherwise, previous instruction does write to RF ... see if overlap
 			else if (fnRb(fetchbuf1_instr) == fnRt(fetchbuf0_instr)) begin
@@ -2823,6 +2960,7 @@ else begin: fetch_phase
 		end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
 	    end
 	endcase
+	// On a branchmiss the rename map is set back to the last valid map.
 	else begin	// if branchmiss
 	    $display("***********");
 	    $display("Branch Miss");
@@ -2831,49 +2969,41 @@ else begin: fetch_phase
 	    if (iqentry_stomp[0] & ~iqentry_stomp[7]) begin
 		tail0 <= 0;
 		tail1 <= 1;
-		$display("new map: %d old map:%d", iqentry_map[7], map_ndx);
 		map_ndx <= iqentry_map[7];
 	    end
 	    else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
 		tail0 <= 1;
 		tail1 <= 2;
-		$display("new map: %d old map:%d", iqentry_map[0], map_ndx);
 		map_ndx <= iqentry_map[0];
 	    end
 	    else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
 		tail0 <= 2;
 		tail1 <= 3;
-		$display("new map: %d old map:%d", iqentry_map[1], map_ndx);
 		map_ndx <= iqentry_map[1];
 	    end
 	    else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
 		tail0 <= 3;
 		tail1 <= 4;
-		$display("new map: %d old map:%d", iqentry_map[2], map_ndx);
 		map_ndx <= iqentry_map[2];
 	    end
 	    else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
 		tail0 <= 4;
 		tail1 <= 5;
-		$display("new map: %d old map:%d", iqentry_map[3], map_ndx);
 		map_ndx <= iqentry_map[3];
 	    end
 	    else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
 		tail0 <= 5;
 		tail1 <= 6;
-		$display("new map: %d old map:%d", iqentry_map[4], map_ndx);
 		map_ndx <= iqentry_map[4];
 	    end
 	    else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
 		tail0 <= 6;
 		tail1 <= 7;
-		$display("new map: %d old map:%d", iqentry_map[5], map_ndx);
 		map_ndx <= iqentry_map[5];
 	    end
 	    else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
 		tail0 <= 7;
 		tail1 <= 0;
-		$display("new map: %d old map:%d", iqentry_map[6], map_ndx);
 		map_ndx <= iqentry_map[6];
 	    end
 	    // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
@@ -2893,7 +3023,7 @@ else begin: fetch_phase
 	if (alu0_v) begin
 	    iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
 	    iqentry_exc	[ alu0_id[2:0] ] <= alu0_exc;
-	    iqentry_done[ alu0_id[2:0] ] <= !IsMem(iqentry_instr[ alu0_id[2:0] ]);
+	    iqentry_done[ alu0_id[2:0] ] <= !iqentry_mem[ alu0_id[2:0] ];
 	    iqentry_out	[ alu0_id[2:0] ] <= `INV;
 	    iqentry_agen[ alu0_id[2:0] ] <= `VAL;
 	    alu0_dataready <= FALSE;
@@ -2901,7 +3031,7 @@ else begin: fetch_phase
 	if (alu1_v) begin
 	    iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
 	    iqentry_exc	[ alu1_id[2:0] ] <= alu1_exc;
-	    iqentry_done[ alu1_id[2:0] ] <= !IsMem(iqentry_instr[ alu1_id[2:0] ]);
+	    iqentry_done[ alu1_id[2:0] ] <= !iqentry_mem[ alu1_id[2:0] ];
 	    iqentry_out	[ alu1_id[2:0] ] <= `INV;
 	    iqentry_agen[ alu1_id[2:0] ] <= `VAL;
 	    alu1_dataready <= FALSE;
@@ -2915,17 +3045,17 @@ else begin: fetch_phase
 	//
 	// set the IQ entry == DONE as soon as the SW is let loose to the memory system
 	//
-	if (dram0 == 2'd1 && (dram0_op == `SW || dram0_op==`SH)) begin
+	if (dram0 == 2'd1 && IsStore(dram0_instr)) begin
 	    if ((alu0_v && dram0_id[2:0] == alu0_id[2:0]) || (alu1_v && dram0_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram0_id[2:0] ] <= `VAL;
 	    iqentry_out[ dram0_id[2:0] ] <= `INV;
 	end
-	if (dram1 == 2'd1 && (dram1_op == `SW || dram1_op==`SH)) begin
+	if (dram1 == 2'd1 && IsStore(dram1_instr)) begin
 	    if ((alu0_v && dram1_id[2:0] == alu0_id[2:0]) || (alu1_v && dram1_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram1_id[2:0] ] <= `VAL;
 	    iqentry_out[ dram1_id[2:0] ] <= `INV;
 	end
-	if (dram2 == 2'd1 && (dram2_op == `SW || dram2_op==`SH)) begin
+	if (dram2 == 2'd1 && IsStore(dram2_instr)) begin
 	    if ((alu0_v && dram2_id[2:0] == alu0_id[2:0]) || (alu1_v && dram2_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram2_id[2:0] ] <= `VAL;
 	    iqentry_out[ dram2_id[2:0] ] <= `INV;
@@ -3081,51 +3211,30 @@ else begin: fetch_phase
 		// grab requests that have finished and put them on the dram_bus
 		if (dram0 == `DRAMREQ_READY) begin
 		    dram0 <= `DRAMSLOT_AVAIL;
-		    dram_v <= IsLoad(dram0_op);
+		    dram_v <= IsLoad(dram0_instr);
 		    dram_id <= dram0_id;
 		    dram_tgt <= dram0_tgt;
 		    dram_exc <= dram0_exc;
-		    case(dram0_op)
-		    `LH:  dram_bus <= dram0_addr[0] ? {{32{rdat0[63]}},rdat0[63:32]} : {{32{rdat0[31]}},rdat0[31:0]};
-		    `LHU: dram_bus <= dram0_addr[0] ? {{32{1'b0}},rdat0[63:32]} : {{32{1'b0}},rdat0[31:0]};
-		    `LW:  dram_bus <= rdat0;
-		    `SH:  ;
-		    `SW:  ;
-		    default: panic <= `PANIC_INVALIDMEMOP;
-		    endcase
-		    if (dram0_op == `SW || dram0_op==`SH) 	$display("m[%h] <- %h", dram0_addr, dram0_data);
+		    dram_bus <= fnDati(dram0_instr,dram0_addr,rdat0);
+		    if (IsStore(dram0_instr)) 	$display("m[%h] <- %h", dram0_addr, dram0_data);
 		end
 		else if (dram1 == `DRAMREQ_READY) begin
 		    dram1 <= `DRAMSLOT_AVAIL;
-		    dram_v <= IsLoad(dram1_op);
+		    dram_v <= IsLoad(dram1_instr);
 		    dram_id <= dram1_id;
 		    dram_tgt <= dram1_tgt;
 		    dram_exc <= dram1_exc;
-		    case(dram1_op)
-            `LH:  dram_bus <= dram1_addr[0] ? {{32{rdat1[63]}},rdat1[63:32]} : {{32{rdat1[31]}},rdat1[31:0]};
-            `LHU: dram_bus <= dram1_addr[0] ? {{32{1'b0}},rdat1[63:32]} : {{32{1'b0}},rdat1[31:0]};
-            `LW:  dram_bus <= rdat1;
-            `SH:  ;
-            `SW:  ;
-            default: panic <= `PANIC_INVALIDMEMOP;
-            endcase
-            if (dram1_op == `SW || dram1_op==`SH)     $display("m[%h] <- %h", dram1_addr, dram1_data);
+		    dram_bus <= fnDati(dram1_instr,dram1_addr,rdat1);
+            if (IsStore(dram1_instr))     $display("m[%h] <- %h", dram1_addr, dram1_data);
 		end
 		else if (dram2 == `DRAMREQ_READY) begin
 		    dram2 <= `DRAMSLOT_AVAIL;
-		    dram_v <= IsLoad(dram2_op);
+		    dram_v <= IsLoad(dram2_instr);
 		    dram_id <= dram2_id;
 		    dram_tgt <= dram2_tgt;
 		    dram_exc <= dram2_exc;
-		    case(dram2_op)
-            `LH:  dram_bus <= dram2_addr[0] ? {{32{rdat2[63]}},rdat2[63:32]} : {{32{rdat2[31]}},rdat2[31:0]};
-            `LHU: dram_bus <= dram2_addr[0] ? {{32{1'b0}},rdat2[63:32]} : {{32{1'b0}},rdat2[31:0]};
-            `LW:  dram_bus <= rdat2;
-            `SH:  ;
-            `SW:  ;
-            default: panic <= `PANIC_INVALIDMEMOP;
-            endcase
-            if (dram2_op == `SW || dram2_op==`SH)     $display("m[%h] <- %h", dram2_addr, dram2_data);
+		    dram_bus <= fnDati(dram2_instr,dram2_addr,rdat2);
+            if (IsStore(dram2_instr))     $display("m[%h] <- %h", dram2_addr, dram2_data);
 		end
 		else begin
 		    dram_v <= `INV;
@@ -3144,6 +3253,9 @@ else begin: fetch_phase
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
 						|| (iqentry_a1_v[head0] && iqentry_a1[head1] != iqentry_a1[head0]))
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head1]) || !IsFlowCtrl(iqentry_instr[head0]));
 
@@ -3156,6 +3268,11 @@ else begin: fetch_phase
 						|| (iqentry_a1_v[head0] && iqentry_a1[head2] != iqentry_a1[head0]))
 					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
 						|| (iqentry_a1_v[head1] && iqentry_a1[head2] != iqentry_a1[head1]))
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
+    				&& !(iqentry_v[head1] && iqentry_mem[head1] && iqentry_memdb[head1]) 
+                    && !(iqentry_v[head1] && iqentry_memsb[head1]) 
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head2]) ||
 					    (  !IsFlowCtrl(iqentry_instr[head0]) &&
@@ -3173,7 +3290,14 @@ else begin: fetch_phase
 						|| (iqentry_a1_v[head1] && iqentry_a1[head3] != iqentry_a1[head1]))
 					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
 						|| (iqentry_a1_v[head2] && iqentry_a1[head3] != iqentry_a1[head2]))
-					// ... and, if it is a SW, there is no chance of it being undone
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                    && !(iqentry_v[head1] && iqentry_mem[head1] && iqentry_memdb[head1]) 
+                    && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                    && !(iqentry_v[head2] && iqentry_mem[head2] && iqentry_memdb[head2]) 
+                    && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                    // ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head3]) ||
                         (  !IsFlowCtrl(iqentry_instr[head0]) &&
                            !IsFlowCtrl(iqentry_instr[head1]) &&
@@ -3194,6 +3318,15 @@ else begin: fetch_phase
 						|| (iqentry_a1_v[head2] && iqentry_a1[head4] != iqentry_a1[head2]))
 					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
 						|| (iqentry_a1_v[head3] && iqentry_a1[head4] != iqentry_a1[head3]))
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                    && !(iqentry_v[head1] && iqentry_mem[head1] && iqentry_memdb[head1]) 
+                    && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                    && !(iqentry_v[head2] && iqentry_mem[head2] && iqentry_memdb[head2]) 
+                    && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                    && !(iqentry_v[head3] && iqentry_mem[head3] && iqentry_memdb[head3]) 
+                    && !(iqentry_v[head3] && iqentry_memsb[head3]) 
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head4]) ||
                         (  !IsFlowCtrl(iqentry_instr[head0]) &&
@@ -3219,6 +3352,17 @@ else begin: fetch_phase
 						|| (iqentry_a1_v[head3] && iqentry_a1[head5] != iqentry_a1[head3]))
 					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
 						|| (iqentry_a1_v[head4] && iqentry_a1[head5] != iqentry_a1[head4]))
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                    && !(iqentry_v[head1] && iqentry_mem[head1] && iqentry_memdb[head1]) 
+                    && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                    && !(iqentry_v[head2] && iqentry_mem[head2] && iqentry_memdb[head2]) 
+                    && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                    && !(iqentry_v[head3] && iqentry_mem[head3] && iqentry_memdb[head3]) 
+                    && !(iqentry_v[head3] && iqentry_memsb[head3]) 
+                    && !(iqentry_v[head4] && iqentry_mem[head4] && iqentry_memdb[head4]) 
+                    && !(iqentry_v[head4] && iqentry_memsb[head4]) 
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head5]) ||
                         (  !IsFlowCtrl(iqentry_instr[head0]) &&
@@ -3248,6 +3392,19 @@ else begin: fetch_phase
 						|| (iqentry_a1_v[head4] && iqentry_a1[head6] != iqentry_a1[head4]))
 					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
 						|| (iqentry_a1_v[head5] && iqentry_a1[head6] != iqentry_a1[head5]))
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                    && !(iqentry_v[head1] && iqentry_mem[head1] && iqentry_memdb[head1]) 
+                    && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                    && !(iqentry_v[head2] && iqentry_mem[head2] && iqentry_memdb[head2]) 
+                    && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                    && !(iqentry_v[head3] && iqentry_mem[head3] && iqentry_memdb[head3]) 
+                    && !(iqentry_v[head3] && iqentry_memsb[head3]) 
+                    && !(iqentry_v[head4] && iqentry_mem[head4] && iqentry_memdb[head4]) 
+                    && !(iqentry_v[head4] && iqentry_memsb[head4]) 
+                    && !(iqentry_v[head5] && iqentry_mem[head5] && iqentry_memdb[head5]) 
+                    && !(iqentry_v[head5] && iqentry_memsb[head5]) 
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head6]) ||
                         (  !IsFlowCtrl(iqentry_instr[head0]) &&
@@ -3281,6 +3438,21 @@ else begin: fetch_phase
 						|| (iqentry_a1_v[head5] && iqentry_a1[head7] != iqentry_a1[head5]))
 					&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) 
 						|| (iqentry_a1_v[head6] && iqentry_a1[head7] != iqentry_a1[head6]))
+					// ... and there isn't a barrier
+    				&& !(iqentry_v[head0] && iqentry_mem[head0] && iqentry_memdb[head0]) 
+                    && !(iqentry_v[head0] && iqentry_memsb[head0]) 
+                    && !(iqentry_v[head1] && iqentry_mem[head1] && iqentry_memdb[head1]) 
+                    && !(iqentry_v[head1] && iqentry_memsb[head1]) 
+                    && !(iqentry_v[head2] && iqentry_mem[head2] && iqentry_memdb[head2]) 
+                    && !(iqentry_v[head2] && iqentry_memsb[head2]) 
+                    && !(iqentry_v[head3] && iqentry_mem[head3] && iqentry_memdb[head3]) 
+                    && !(iqentry_v[head3] && iqentry_memsb[head3]) 
+                    && !(iqentry_v[head4] && iqentry_mem[head4] && iqentry_memdb[head4]) 
+                    && !(iqentry_v[head4] && iqentry_memsb[head4]) 
+                    && !(iqentry_v[head5] && iqentry_mem[head5] && iqentry_memdb[head5]) 
+                    && !(iqentry_v[head5] && iqentry_memsb[head5]) 
+                    && !(iqentry_v[head6] && iqentry_mem[head6] && iqentry_memdb[head6]) 
+                    && !(iqentry_v[head6] && iqentry_memsb[head6]) 
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& (IsLoad(iqentry_instr[head7]) ||
                         (  !IsFlowCtrl(iqentry_instr[head0]) &&
@@ -3311,7 +3483,7 @@ else begin: fetch_phase
             if (dram0 == `DRAMSLOT_AVAIL) begin
             dram0 		<= 2'd1;
             dram0_id 	<= { 1'b1, n[2:0] };
-            dram0_op 	<= iqentry_instr[n][`INSTRUCTION_OP];
+            dram0_instr <= iqentry_instr[n];
             dram0_tgt 	<= iqentry_tgt[n];
             dram0_data	<= iqentry_a2[n];
             dram0_addr	<= iqentry_a1[n];
@@ -3321,7 +3493,7 @@ else begin: fetch_phase
             else if (dram1 == `DRAMSLOT_AVAIL) begin
             dram1 		<= 2'd1;
             dram1_id 	<= { 1'b1, n[2:0] };
-            dram1_op 	<= iqentry_instr[n][`INSTRUCTION_OP];
+            dram1_instr <= iqentry_instr[n];
             dram1_tgt 	<= iqentry_tgt[n];
             dram1_data	<= iqentry_a2[n];
             dram1_addr	<= iqentry_a1[n];
@@ -3331,7 +3503,7 @@ else begin: fetch_phase
             else if (dram2 == `DRAMSLOT_AVAIL) begin
             dram2 		<= 2'd1;
             dram2_id 	<= { 1'b1, n[2:0] };
-            dram2_op 	<= iqentry_instr[n][`INSTRUCTION_OP];
+            dram2_instr	<= iqentry_instr[n];
             dram2_tgt 	<= iqentry_tgt[n];
             dram2_data	<= iqentry_a2[n];
             dram2_addr	<= iqentry_a1[n];
@@ -3365,31 +3537,35 @@ else begin: fetch_phase
 //    always @(posedge clk) begin: commit_phase
 
     // Mark registers as available for renaming
-	if (commit0_v) begin
-        for (n = 0; n < 8; n = n + 1) begin
-            in_use[n][iqentry_fre[head0]] <= 1'b0;
-            in_use[n][6'd0] <= 1'b1;
-            if (DEBUG) begin
-                for (j = 0; j < AREGS; j = j + 1)
-                    if (rename_map[n][j]==iqentry_fre[head0])
-                        rename_map[n][j] <= 6'd0;
+    if (RENAME) begin
+        if (commit0_v) begin
+            for (n = 0; n < 8; n = n + 1) begin
+                in_use[n][iqentry_fre[head0]] <= 1'b0;
+                in_use[n][6'd0] <= 1'b1;
+                map_free[iqentry_map[head0]] <= 1'b1;
+                if (DEBUG) begin
+                    for (j = 0; j < AREGS; j = j + 1)
+                        if (rename_map[n][j]==iqentry_fre[head0])
+                            rename_map[n][j] <= 6'd0;
+                end
             end
         end
-    end
-	if (commit1_v) begin
-        for (n = 0; n < 8; n = n + 1) begin
-            in_use[n][iqentry_fre[head1]] <= 1'b0;
-            in_use[n][6'd0] <= 1'b1;
-            if (DEBUG) begin
-                for (j = 0; j < AREGS; j = j + 1)
-                if (rename_map[n][j]==iqentry_fre[head0])
-                    rename_map[n][j] <= 6'd0;
+        if (commit1_v) begin
+            for (n = 0; n < 8; n = n + 1) begin
+                in_use[n][iqentry_fre[head1]] <= 1'b0;
+                in_use[n][6'd0] <= 1'b1;
+                map_free[iqentry_map[head1]] <= 1'b1;
+                if (DEBUG) begin
+                    for (j = 0; j < AREGS; j = j + 1)
+                    if (rename_map[n][j]==iqentry_fre[head0])
+                        rename_map[n][j] <= 6'd0;
+                end
             end
         end
     end
 
-    oddball_commit(commit1_v, head1);
     oddball_commit(commit0_v, head0);
+    oddball_commit(commit1_v, head1);
     
 	if (~|panic)
 	case ({ iqentry_v[head0],
@@ -3493,25 +3669,28 @@ case(icstate)
 IDLE:
     begin
         if (!ihit0) begin
+            L1_adr <= {pc0[31:5],5'h0};
             L2_adr <= {pc0[31:5],5'h0};
             icwhich <= 1'b0;
             icstate <= IC2;
         end
         else if (!ihit1) begin
+            L1_adr <= {pc1[31:5],5'h0};
             L2_adr <= {pc1[31:5],5'h0};
             icwhich <= 1'b1;
             icstate <= IC2;
         end
     end
 IC2:    icstate <= IC3;
-IC3:    icstate <= IC4;
+IC3:    icstate <= IC3a;
+IC3a:    icstate <= IC4;
         // If data was in the L2 cache already there's no need to wait on the
         // BIU to retrieve data. It can be determined if the hit signal was
         // already active when this state was entered in which case waiting
         // will do no good.
         // The IC machine will stall in this state until the BIU has loaded the
         // L2 cache. 
-IC4:    if (ihit2 && (bstate==B11||picstate==IC3)) begin
+IC4:    if (ihit2 && (bstate==B11||picstate==IC3a)) begin
             L1_wr1 <= TRUE;
             L1_wr0 <= TRUE;
             L1_adr <= L2_adr;
@@ -3538,115 +3717,94 @@ case(bstate)
 BIDLE:
     begin
         bwhich <= 2'b11;
-        if (dram0==2'd1 && (dram0_op==`SW || dram0_op==`SH)) begin
+        if (dram0==2'd1 && IsStore(dram0_instr)) begin
             dram0 <= 2'd2;
             bwhich <= 2'b00;
-            case(dram0_op)
-            `SW:    begin
-                        we_o <= `HIGH;
-                        sel_o <= 2'b11;
-                        adr_o <= dram0_addr;
-                        dat_o <= dram0_data;
-                        bstate <= B13;
-                    end
-            `SH:    begin
-                        we_o <= `HIGH;
-                        sel_o <= dram0_addr[0] ? 2'b10 : 2'b01;
-                        adr_o <= dram0_addr;
-                        dat_o <= {2{dram0_data[31:0]}};
-                        bstate <= B13;
-                    end
+            we_o <= `HIGH;
+            sel_o <= fnSelect(dram0_instr,dram0_addr);
+            adr_o <= dram0_addr;
+            case(dram0_instr)
+            default:    dat_o <= dram0_data;
+            `SH:    dat_o <= {2{dram0_data[31:0]}};
+            `SB:    dat_o <= {8{dram0_data[7:0]}};
             endcase
+            bstate <= B13;
         end
-        else if (dram1==2'd1 && (dram1_op==`SW || dram1_op==`SH)) begin
+        else if (dram1==2'd1 && IsStore(dram1_instr)) begin
             dram1 <= 2'd2;
             bwhich <= 2'b01;
-            case(dram1_op)
-            `SW:    begin
-                        we_o <= `HIGH;
-                        sel_o <= 2'b11;
-                        adr_o <= dram1_addr;
-                        dat_o <= dram1_data;
-                        bstate <= B13;
-                    end
-            `SH:    begin
-                        we_o <= `HIGH;
-                        sel_o <= dram1_addr[0] ? 2'b10 : 2'b01;
-                        adr_o <= dram1_addr;
-                        dat_o <= {2{dram1_data[31:0]}};
-                        bstate <= B13;
-                    end
+            we_o <= `HIGH;
+            sel_o <= fnSelect(dram1_instr,dram1_addr);
+            adr_o <= dram1_addr;
+            case(dram1_instr)
+            default:    dat_o <= dram1_data;
+            `SH:    dat_o <= {2{dram1_data[31:0]}};
+            `SB:    dat_o <= {8{dram1_data[7:0]}};
             endcase
+            bstate <= B13;
         end
-        else if (dram2==2'd1 && (dram2_op==`SW || dram2_op==`SH)) begin
+        else if (dram2==2'd1 && IsStore(dram2_instr)) begin
             dram2 <= 2'd2;
             bwhich <= 2'b10;
-            case(dram2_op)
-            `SW:    begin
-                        we_o <= `HIGH;
-                        sel_o <= 2'b11;
-                        adr_o <= dram2_addr;
-                        dat_o <= dram2_data;
-                        bstate <= B13;
-                    end
-            `SH:    begin
-                        we_o <= `HIGH;
-                        sel_o <= dram2_addr[0] ? 2'b10 : 2'b01;
-                        adr_o <= dram2_addr;
-                        dat_o <= {2{dram2_data[31:0]}};
-                        bstate <= B13;
-                    end
+            we_o <= `HIGH;
+            sel_o <= fnSelect(dram2_instr,dram2_addr);
+            adr_o <= dram2_addr;
+            case(dram2_instr)
+            default:    dat_o <= dram2_data;
+            `SH:    dat_o <= {2{dram2_data[31:0]}};
+            `SB:    dat_o <= {8{dram2_data[7:0]}};
             endcase
+            bstate <= B13;
         end
         // Check for read misses on the data cache
-        else if (!dram0_unc && dram0==2'd1 && !dhit0 && IsLoad(dram0_op)) begin
+        else if (!dram0_unc && dram0==2'd1 && !dhit0 && IsLoad(dram0_instr)) begin
             dram0 <= 2'd2;
             bwhich <= 2'b00;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
+            sel_o <= fnSelect(dram0_instr,dram0_addr);
             adr_o <= {dram0_addr[31:3],3'b0};
             bstate <= B2; 
         end
-        else if (!dram1_unc && dram1==2'd1 && !dhit1 && IsLoad(dram1_op)) begin
+        else if (!dram1_unc && dram1==2'd1 && !dhit1 && IsLoad(dram1_instr)) begin
             dram1 <= 2'd2;
             bwhich <= 2'b01;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
+            sel_o <= fnSelect(dram1_instr,dram1_addr);
             adr_o <= {dram1_addr[31:3],3'b0};
             bstate <= B2; 
         end
-        else if (!dram2_unc && dram2==2'd1 && !dhit2 && IsLoad(dram2_op)) begin
+        else if (!dram2_unc && dram2==2'd1 && !dhit2 && IsLoad(dram2_instr)) begin
             dram2 <= 2'd2;
             bwhich <= 2'b10;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
+            sel_o <= fnSelect(dram2_instr,dram2_addr);
             adr_o <= {dram2_addr[31:3],3'b0};
             bstate <= B2; 
         end
-        else if (dram0_unc && dram0==2'd1 && IsLoad(dram0_op)) begin
+        else if (dram0_unc && dram0==2'd1 && IsLoad(dram0_instr)) begin
             bwhich <= 2'b00;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
+            sel_o <= fnSelect(dram0_instr,dram0_addr);
             adr_o <= {dram0_addr[31:3],3'b0};
             bstate <= B12;
         end
-        else if (dram1_unc && dram1==2'd1 && IsLoad(dram1_op)) begin
+        else if (dram1_unc && dram1==2'd1 && IsLoad(dram1_instr)) begin
             bwhich <= 2'b01;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
+            sel_o <= fnSelect(dram1_instr,dram1_addr);
             adr_o <= {dram1_addr[31:3],3'b0};
             bstate <= B12;
         end
-        else if (dram2_unc && dram2==2'd1 && IsLoad(dram2_op)) begin
+        else if (dram2_unc && dram2==2'd1 && IsLoad(dram2_instr)) begin
             bwhich <= 2'b10;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
+            sel_o <= fnSelect(dram2_instr,dram2_addr);
             adr_o <= {dram2_addr[31:3],3'b0};
             bstate <= B12;
         end
@@ -3654,9 +3812,11 @@ BIDLE:
         else if (!ihit2) begin
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
-            sel_o <= 2'b11;
-            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
-            //L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
+            sel_o <= 8'hFF;
+//            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
+//            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
+            adr_o <= L1_adr;
+            L2_adr <= L1_adr;
             bstate <= B7;
         end
         if (dram0==2'd1 && dhit0)
@@ -3671,7 +3831,7 @@ B1:
         cyc_o <= `LOW;
         stb_o <= `LOW;
         we_o <= `LOW;
-        sel_o <= 2'b00;
+        sel_o <= 8'h00;
         case(bwhich)
         2'd0:   dram0 <= `DRAMREQ_READY;
         2'd1:   dram1 <= `DRAMREQ_READY;
@@ -3687,7 +3847,7 @@ B2:
         bstate <= B3;
         if (adr_o[4:3]==2'd3) begin
             cyc_o <= `LOW;
-            sel_o <= 2'b00;
+            sel_o <= 8'h00;
             bstate <= B4;
         end
     end
@@ -3712,7 +3872,7 @@ B7:
         bstate <= B8;
         if (adr_o[4:3]==2'd3) begin
             cyc_o <= `LOW;
-            sel_o <= 2'b00;
+            sel_o <= 8'h00;
             bstate <= B9;
         end
         else begin
@@ -3786,14 +3946,14 @@ endcase
 		);
     $display("DRAM");
 	$display("%d %h %h %c%d %o #",
-	    dram0, dram0_addr, dram0_data, (IsFlowCtrl(dram0_op) ? 98 : (IsMem({21'b0,dram0_op})) ? 109 : 97), 
-	    dram0_op, dram0_id);
+	    dram0, dram0_addr, dram0_data, (IsFlowCtrl(dram0_instr) ? 98 : (IsMem(dram0_instr)) ? 109 : 97), 
+	    dram0_instr, dram0_id);
 	$display("%d %h %h %c%d %o #",
-	    dram1, dram1_addr, dram1_data, (IsFlowCtrl(dram1_op) ? 98 : (IsMem({21'b0,dram1_op})) ? 109 : 97), 
-	    dram1_op, dram1_id);
+	    dram1, dram1_addr, dram1_data, (IsFlowCtrl(dram1_instr) ? 98 : (IsMem(dram1_instr)) ? 109 : 97), 
+	    dram1_instr, dram1_id);
 	$display("%d %h %h %c%d %o #",
-	    dram2, dram2_addr, dram2_data, (IsFlowCtrl(dram2_op) ? 98 : (IsMem({21'b0,dram2_op})) ? 109 : 97), 
-	    dram2_op, dram2_id);
+	    dram2, dram2_addr, dram2_data, (IsFlowCtrl(dram2_instr) ? 98 : (IsMem(dram2_instr)) ? 109 : 97), 
+	    dram2_instr, dram2_id);
 	$display("%d %h %o %h #", dram_v, dram_bus, dram_id, dram_exc);
     $display("ALU");
 	$display("%d %h %h %h %c%h %d %o %h #",
@@ -3937,6 +4097,48 @@ else begin
         seq_num <= seq_num + 5'd1;
 end
 
+task FetchAB;
+begin
+    if (insn0[`INSTRUCTION_OP]==`EXEC)
+        fetchbufA_instr <= codebuf[insn0[21:16]];
+    else
+        fetchbufA_instr <= insn0;
+    fetchbufA_v <= `VAL;
+    fetchbufA_pc <= pc0;
+    if (insn1[`INSTRUCTION_OP]==`EXEC)
+        fetchbufB_instr <= codebuf[insn1[21:16]];
+    else
+        fetchbufB_instr <= insn1;
+    fetchbufB_v <= `VAL;
+    fetchbufB_pc <= pc1;
+    if (phit) begin
+    pc0 <= pc0 + 8;
+    pc1 <= pc1 + 8;
+    end
+end
+endtask
+
+task FetchCD;
+begin
+    if (insn0[`INSTRUCTION_OP]==`EXEC)
+        fetchbufC_instr <= codebuf[insn0[21:16]];
+    else
+        fetchbufC_instr <= insn0;
+    fetchbufC_v <= `VAL;
+    fetchbufC_pc <= pc0;
+    if (insn1[`INSTRUCTION_OP]==`EXEC)
+        fetchbufD_instr <= codebuf[insn1[21:16]];
+    else
+        fetchbufD_instr <= insn1;
+    fetchbufD_v <= `VAL;
+    fetchbufD_pc <= pc1;
+    if (phit) begin
+    pc0 <= pc0 + 8;
+    pc1 <= pc1 + 8;
+    end
+end
+endtask
+
 // This task takes care of making the current map historical by copying it to
 // a new map. The architectural to physical register mapping is also inserted
 // into the new map and the physical register marked as in use.
@@ -3945,16 +4147,22 @@ input [2:0] tgtmap;
 input [4:0] ar;     // architectural register
 input [5:0] pr;     // physical register
 begin
-    for (n = 1; n < AREGS; n = n + 1) begin
-        if ((rename_map[map_ndx][n]==iqentry_fre[head0] && commit0_v) ||
-            (rename_map[map_ndx][n]==iqentry_fre[head1] && commit1_v))
-            rename_map[tgtmap][n] = 6'd0;
-        else
-            rename_map[tgtmap][n] = rename_map[map_ndx][n];
+    if (RENAME) begin
+        for (n = 1; n < AREGS; n = n + 1) begin
+            // There's no real reason to zero out stale map entries, but they can be
+            // confusing to see while debugging. The entries are present only in old
+            // unused maps.
+            if (DEBUG && ((rename_map[map_ndx][n]==iqentry_fre[head0] && commit0_v) ||
+                (rename_map[map_ndx][n]==iqentry_fre[head1] && commit1_v)))
+                rename_map[tgtmap][n] = 6'd0;
+            else
+                rename_map[tgtmap][n] = rename_map[map_ndx][n];
+        end
+        rename_map[tgtmap][ar] <= pr;
+        in_use[tgtmap] <= in_use[map_ndx];
+        in_use[tgtmap][pr] <= 1'b1;
+        map_free[tgtmap] <= 1'b0;
     end
-    rename_map[tgtmap][ar] <= pr;
-    in_use[tgtmap] <= in_use[map_ndx];
-    in_use[tgtmap][pr] <= 1'b1;
 end
 endtask
 
@@ -3973,11 +4181,14 @@ begin
                     epc3 <= epc2;
                     mstatus[63:61] <= mstatus[63:61] + 3'd1;
                     mstatus[51:0] <= {mstatus[39:0],8'h00,2'b00,im};
+                    mcause <= {7'd0,iqentry_instr[head][14:6]};
+                    // For hardware interrupts only, set a new mask level
+                    if (!(iqentry_instr[head][15]))
+                        im <= iqentry_instr[head][18:16];
                 end
         `RR:
             case(iqentry_instr[head][`INSTRUCTION_S2])
-            `SEI:   im <= iqentry_instr[head][23:21];   // S1
-            `CLI:   im <= 3'd0;
+            `SEI:   im <= iqentry_res[head][2:0];   // S1
             `RTI:   begin
                     im <= mstatus[2:0];
                     mstatus[51:0] <= {8'h00,2'b00,3'd7,mstatus[51:13]};
@@ -3991,6 +4202,7 @@ begin
             default: ;
             endcase
         `CSRRW: write_csr(iqentry_instr[head][31:16],iqentry_a1[head]);
+        default:    ;
         endcase
     end
 end
@@ -4000,11 +4212,14 @@ task read_csr;
 input [13:0] csrno;
 output [63:0] dat;
 begin
-    case(csrno[11:0])
+    casex(csrno[11:0])
     `CSR_HARTID:    dat <= hartid;
     `CSR_TICK:      dat <= tick;
+    `CSR_CAUSE:     dat <= {48'd0,mcause};
     `CSR_EPC:       dat <= epc;
     `CSR_STATUS:    dat <= mstatus;
+    `CSR_CODEBUF:   dat <= codebuf[csrno[5:0]];
+    default:        dat <= 64'hCCCCCCCCCCCCCCCC;
     endcase
 end
 endtask
@@ -4015,9 +4230,11 @@ input [63:0] dat;
 begin
     case(csrno[15:14])
     2'd1:   // CSRRW
-        case(csrno[11:0])
+        casex(csrno[11:0])
+        `CSR_CAUSE:     mcause <= dat[15:0];
         `CSR_EPC:       epc <= dat;
         `CSR_STATUS:    mstatus <= dat;
+        `CSR_CODEBUF:   codebuf[csrno[5:0]] <= dat;
         default:    ;
         endcase
     2'd2:   // CSRRS
@@ -4039,7 +4256,7 @@ function [63:0] assign_a0;
 input [2:0] tail;
 input [31:0] fb_instr;
 begin
-    if (IsShifti(fb_instr))
+    if (IsShifti(fb_instr)||IsSEI(fb_instr))
         assign_a0 = {58'd0,fb_instr[21],fb_instr[`INSTRUCTION_RB]};
 	else if (iqentry_instr[(tail-1) & 7][`INSTRUCTION_OP]==`IMML && fb_instr[`INSTRUCTION_OP]==`IMMM)
         assign_a0 = {fb_instr[27:6],iqentry_a0[(tail-1)&7][41:0]};
@@ -4063,9 +4280,9 @@ endfunction
 task dump_rename;
 begin
     $display("Rename Map");
-    for (n = 0; n < 8; n = n + 1) begin
-        $display("Map %c%d: %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d",
-                map_ndx==n ? "*" : " ", n[2:0],
+    for (n = 0; n < NMAP; n = n + 1) begin
+        $display("Map %c%d%c: %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d",
+                map_ndx==n ? "*" : " ", n[2:0], map_free[n] ? "f" : " ",
                 rename_map[n][31], rename_map[n][30], rename_map[n][29], rename_map[n][28],
                 rename_map[n][27], rename_map[n][26], rename_map[n][25], rename_map[n][24],
                 rename_map[n][23], rename_map[n][22], rename_map[n][21], rename_map[n][20],
