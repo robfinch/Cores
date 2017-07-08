@@ -129,6 +129,11 @@ integer n;
 integer j;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
+// Memory access sizes
+parameter byt = 3'd0;
+parameter wyde = 3'd1;
+parameter tetra = 3'd2;
+parameter octa = 3'd3;
 
 reg [63:0] rf[0:63];
 reg        rf_v[0:63];
@@ -344,6 +349,7 @@ reg  [5:0] dram0_tgt;
 reg  [3:0] dram0_id;
 reg  [3:0] dram0_exc;
 reg        dram0_unc;
+reg [2:0]  dram0_rdsize;
 reg [63:0] dram1_data;
 reg [31:0] dram1_addr;
 reg [31:0] dram1_instr;
@@ -351,6 +357,7 @@ reg  [5:0] dram1_tgt;
 reg  [3:0] dram1_id;
 reg  [3:0] dram1_exc;
 reg        dram1_unc;
+reg [2:0]  dram1_rdsize;
 reg [63:0] dram2_data;
 reg [31:0] dram2_addr;
 reg [31:0] dram2_instr;
@@ -358,6 +365,7 @@ reg  [5:0] dram2_tgt;
 reg  [3:0] dram2_id;
 reg  [3:0] dram2_exc;
 reg        dram2_unc;
+reg [2:0]  dram2_rdsize;
 
 reg [63:0] dram_bus;
 reg  [5:0] dram_tgt;
@@ -517,7 +525,7 @@ FT64_dcache udc0
     .wadr({6'd0,adr_o}),
     .i(bstate==B2 ? dat_i : dat_o),
     .rclk(clk),
-    .rdsize(3'd0),
+    .rdsize(dram0_rdsize),
     .radr({6'd0,dram0_addr}),
     .o(dc0_out),
     .hit(),
@@ -533,7 +541,7 @@ FT64_dcache udc1
     .wadr({6'd0,adr_o}),
     .i(bstate==B2 ? dat_i : dat_o),
     .rclk(clk),
-    .rdsize(3'd0),
+    .rdsize(dram1_rdsize),
     .radr({6'd0,dram1_addr}),
     .o(dc1_out),
     .hit(),
@@ -549,7 +557,7 @@ FT64_dcache udc2
     .wadr({6'd0,adr_o}),
     .i(bstate==B2 ? dat_i : dat_o),
     .rclk(clk),
-    .rdsize(3'd0),
+    .rdsize(dram2_rdsize),
     .radr({6'd0,dram2_addr}),
     .o(dc2_out),
     .hit(),
@@ -759,6 +767,25 @@ case(isn[`INSTRUCTION_OP])
 `LHU:   IsLoad = TRUE;
 `LW:    IsLoad = TRUE;
 default:    IsLoad = FALSE;
+endcase
+endfunction
+
+function [2:0] RdSize;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   RdSize = byt;
+    `LHX:   RdSize = tetra;
+    `LHUX:  RdSize = tetra;
+    `LWX:   RdSize = octa;
+    default: RdSize = octa;   
+    endcase
+`LB:    RdSize = byt;
+`LH:    RdSize = tetra;
+`LHU:   RdSize = tetra;
+`LW:    RdSize = octa;
+default:    RdSize = octa;
 endcase
 endfunction
 
@@ -3201,9 +3228,9 @@ else begin: fetch_phase
 
 	casex ({dram0, dram1, dram2})
 	    // not particularly portable ...
-	    6'b1111xx,
-	    6'b11xx11,
-	    6'bxx1111:	panic <= `PANIC_IDENTICALDRAMS;
+//	    6'b1111xx,
+//	    6'b11xx11,
+//	    6'bxx1111:	panic <= `PANIC_IDENTICALDRAMS;
 
 	    default: begin
 		//
@@ -3487,6 +3514,7 @@ else begin: fetch_phase
             dram0_data	<= iqentry_a2[n];
             dram0_addr	<= iqentry_a1[n];
             dram0_unc   <= iqentry_a1[n][31:20]==12'hFFD;
+            dram0_rdsize <= RdSize(iqentry_instr[n]);
             iqentry_out[n]	<= `VAL;
             end
             else if (dram1 == `DRAMSLOT_AVAIL) begin
@@ -3497,6 +3525,7 @@ else begin: fetch_phase
             dram1_data	<= iqentry_a2[n];
             dram1_addr	<= iqentry_a1[n];
             dram1_unc   <= iqentry_a1[n][31:20]==12'hFFD;
+            dram1_rdsize <= RdSize(iqentry_instr[n]);
             iqentry_out[n]	<= `VAL;
             end
             else if (dram2 == `DRAMSLOT_AVAIL) begin
@@ -3507,6 +3536,7 @@ else begin: fetch_phase
             dram2_data	<= iqentry_a2[n];
             dram2_addr	<= iqentry_a1[n];
             dram2_unc   <= iqentry_a1[n][31:20]==12'hFFD;
+            dram2_rdsize <= RdSize(iqentry_instr[n]);
             iqentry_out[n]	<= `VAL;
             end
         end

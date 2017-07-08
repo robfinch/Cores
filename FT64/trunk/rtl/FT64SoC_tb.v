@@ -6,12 +6,14 @@ wire cyc;
 wire stb;
 wire ack;
 wire we;
-wire [1:0] sel;
+wire [7:0] sel;
 wire [31:0] adr;
 wire [63:0] dato;
 wire [63:0] dati;
 reg [63:0] dat;
 wire [63:0] br_dato;
+wire [63:0] scr_dato;
+wire ack_scr;
 
 initial begin
     rst = 0;
@@ -45,12 +47,29 @@ always #5 clk = ~clk;
 //end
 
 wire led_ack = (adr[31:4]==28'hFFDC060) & stb;
+wire cs_scr = adr[31:16]==16'h0000;
+wire cs_br = adr[31:16]==16'hFFFC;  
+
+scratchmem uscr
+(
+    .rst_i(rst),
+    .clk_i(clk),
+    .cs_i(cs_scr),
+    .cyc_i(cyc),
+    .stb_i(stb),
+    .we_i(we),
+    .sel_i(sel),
+    .ack_o(ack_scr),
+    .adr_i(adr[14:0]),
+    .dat_i(dato),
+    .dat_o(scr_dato)
+);
 
 bootrom ubr
 (
     .rst_i(rst),
     .clk_i(clk),
-    .cs_i(adr[31:16]==16'hFFFC),
+    .cs_i(cs_br),
     .cyc_i(cyc),
     .stb_i(stb),
     .ack_o(br_ack),
@@ -58,8 +77,8 @@ bootrom ubr
     .dat_o(br_dato)
 );
 
-assign ack = br_ack|led_ack;
-assign dati = br_dato;
+assign ack = br_ack|led_ack|ack_scr;
+assign dati = cs_br ? br_dato : scr_dato;
 
 FT64 ucpu1
 (
