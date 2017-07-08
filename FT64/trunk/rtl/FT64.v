@@ -266,31 +266,25 @@ wire        fetchbuf0_v;
 wire        fetchbuf0_mem;
 wire        fetchbuf0_jmp;
 wire        fetchbuf0_rfw;
-wire        fetchbuf0_xq;
 wire [31:0] fetchbuf1_instr;
 wire [31:0] fetchbuf1_pc;
 wire        fetchbuf1_v;
 wire        fetchbuf1_mem;
 wire        fetchbuf1_jmp;
 wire        fetchbuf1_rfw;
-wire        fetchbuf1_xq;
 
 reg [31:0] fetchbufA_instr;	
 reg [31:0] fetchbufA_pc;
 reg        fetchbufA_v;
-reg        fetchbufA_xq;
 reg [31:0] fetchbufB_instr;
 reg [31:0] fetchbufB_pc;
 reg        fetchbufB_v;
-reg        fetchbufB_xq;
 reg [31:0] fetchbufC_instr;
 reg [31:0] fetchbufC_pc;
 reg        fetchbufC_v;
-reg        fetchbufC_xq;
 reg [31:0] fetchbufD_instr;
 reg [31:0] fetchbufD_pc;
 reg        fetchbufD_v;
-reg        fetchbufD_xq;
 
 reg        did_branchback0;
 reg        did_branchback1;
@@ -329,7 +323,7 @@ wire        alu1_v;
 wire        alu1_branchmiss;
 wire [31:0] alu1_misspc;
 
-wire [31:0] backpc;
+wire [31:0] backpc; // for debug display
 reg [31:0] branch_pc;
 wire        branchmiss;
 wire [31:0] misspc;
@@ -687,55 +681,62 @@ default: IsImmp = FALSE;
 endcase
 endfunction
 
-function [63:0] fnAlu;
-input [31:0] isn;
-input [63:0] a;
-input [63:0] b;
-input [31:0] apc;
-case(isn[`INSTRUCTION_OP])
-`BRK:   fnAlu = isn[15] ? apc : apc + 32'd4;
-`RR:
-    case(isn[`INSTRUCTION_S2])
-    `ADD: fnAlu = a + b;
-    `SUB: fnAlu = a - b;
-    `CMP: fnAlu = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
-    `CMPU: fnAlu = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
-    `AND:  fnAlu = a & b;
-    `OR:   fnAlu = a | b;
-    `XOR:  fnAlu = a ^ b;
-    `SHL,`SHLI:   fnAlu = a << b;
-    `SHR,`SHRI:   fnAlu = a >> b;
-    default:    fnAlu = 64'hDEADDEADDEADDEAD;
-    endcase
- `Bcc:
-    case(isn[`INSTRUCTION_COND])
-    `BEQZ:  fnAlu = a==64'd0;
-    `BNEZ:  fnAlu = a!=64'd0;
-    `BLTZ:  fnAlu = a[63];
-    `BGEZ:  fnAlu = ~a[63];
-    default:    fnAlu = 1'b1;
-    endcase
- `ADDI: fnAlu = a + b;
- `CMPI: fnAlu = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
- `CMPUI: fnAlu = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
- `ANDI:  fnAlu = a & b;
- `ORI:   fnAlu = a | b;
- `XORI:  fnAlu = a ^ b;
- `JAL:   fnAlu = apc + 32'd4;
- `LH,`LHU,`LW,`SH,`SW:  fnAlu = a + b;
-  default:    fnAlu = 64'hDEADDEADDEADDEAD;
-endcase  
-endfunction
+//function [63:0] fnAlu;
+//input [31:0] isn;
+//input [63:0] a;
+//input [63:0] b;
+//input [31:0] apc;
+//case(isn[`INSTRUCTION_OP])
+//`BRK:   fnAlu = isn[15] ? apc : apc + 32'd4;
+//`RR:
+//    case(isn[`INSTRUCTION_S2])
+//    `ADD: fnAlu = a + b;
+//    `SUB: fnAlu = a - b;
+//    `CMP: fnAlu = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
+//    `CMPU: fnAlu = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
+//    `AND:  fnAlu = a & b;
+//    `OR:   fnAlu = a | b;
+//    `XOR:  fnAlu = a ^ b;
+//    `SHL,`SHLI:   fnAlu = a << b;
+//    `SHR,`SHRI:   fnAlu = a >> b;
+//    default:    fnAlu = 64'hDEADDEADDEADDEAD;
+//    endcase
+// `Bcc:
+//    case(isn[`INSTRUCTION_COND])
+//    `BEQZ:  fnAlu = a==64'd0;
+//    `BNEZ:  fnAlu = a!=64'd0;
+//    `BLTZ:  fnAlu = a[63];
+//    `BGEZ:  fnAlu = ~a[63];
+//    default:    fnAlu = 1'b1;
+//    endcase
+// `ADDI: fnAlu = a + b;
+// `CMPI: fnAlu = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
+// `CMPUI: fnAlu = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
+// `ANDI:  fnAlu = a & b;
+// `ORI:   fnAlu = a | b;
+// `XORI:  fnAlu = a ^ b;
+// `JAL:   fnAlu = apc + 32'd4;
+// `LH,`LHU,`LW,`SH,`SW:  fnAlu = a + b;
+//  default:    fnAlu = 64'hDEADDEADDEADDEAD;
+//endcase  
+//endfunction
 
 function [0:0] IsMem;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   IsMem = TRUE;
+    `LHX:   IsMem = TRUE;
+    `LHUX:  IsMem = TRUE;
+    `LWX:   IsMem = TRUE;
+    default: IsMem = FALSE;
+    endcase
+`LB:    IsMem = TRUE;
 `LH:    IsMem = TRUE;
 `LHU:   IsMem = TRUE;
 `LW:    IsMem = TRUE;
-`LHX:   IsMem = TRUE;
-`LHUX:  IsMem = TRUE;
-`LWX:   IsMem = TRUE;
+`SB:    IsMem = TRUE;
 `SH:    IsMem = TRUE;
 `SW:    IsMem = TRUE;
 default:    IsMem = FALSE;
@@ -745,12 +746,18 @@ endfunction
 function IsLoad;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   IsLoad = TRUE;
+    `LHX:   IsLoad = TRUE;
+    `LHUX:  IsLoad = TRUE;
+    `LWX:   IsLoad = TRUE;
+    default: IsLoad = FALSE;   
+    endcase
+`LB:    IsLoad = TRUE;
 `LH:    IsLoad = TRUE;
 `LHU:   IsLoad = TRUE;
 `LW:    IsLoad = TRUE;
-`LHX:   IsLoad = TRUE;
-`LHUX:  IsLoad = TRUE;
-`LWX:   IsLoad = TRUE;
 default:    IsLoad = FALSE;
 endcase
 endfunction
@@ -758,6 +765,7 @@ endfunction
 function IsStore;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`SB:    IsStore = TRUE;
 `SH:    IsStore = TRUE;
 `SW:    IsStore = TRUE;
 default:    IsStore = FALSE;
@@ -1025,26 +1033,16 @@ end
     assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
     assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
     assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
-    assign fetchbuf0_xq    = (fetchbuf == 1'b0) ? fetchbufA_xq    : fetchbufC_xq   ;
     assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
     assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
     assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
-    assign fetchbuf1_xq    = (fetchbuf == 1'b0) ? fetchbufB_xq    : fetchbufD_xq   ;
 
-    assign fetchbuf0_mem   = (fetchbuf == 1'b0) 
-				? IsMem(fetchbufA_instr)
-				: IsMem(fetchbufC_instr);
-    assign fetchbuf0_jmp   = (fetchbuf == 1'b0)
-				? IsFlowCtrl(fetchbufA_instr)
-				: IsFlowCtrl(fetchbufC_instr);
+    assign fetchbuf0_mem   = (fetchbuf == 1'b0) ? IsMem(fetchbufA_instr) : IsMem(fetchbufC_instr);
+    assign fetchbuf0_jmp   = (fetchbuf == 1'b0)	? IsFlowCtrl(fetchbufA_instr) : IsFlowCtrl(fetchbufC_instr);
     assign fetchbuf0_rfw   = (fetchbuf == 1'b0) ? IsRFW(fetchbufA_instr) : IsRFW(fetchbufC_instr);
 
-    assign fetchbuf1_mem   = (fetchbuf == 1'b0) 
-				? IsMem(fetchbufB_instr)
-                : IsMem(fetchbufD_instr);
-    assign fetchbuf1_jmp   = (fetchbuf == 1'b0)
-				? IsFlowCtrl(fetchbufB_instr)
-				: IsFlowCtrl(fetchbufD_instr);
+    assign fetchbuf1_mem   = (fetchbuf == 1'b0) ? IsMem(fetchbufB_instr) : IsMem(fetchbufD_instr);
+    assign fetchbuf1_jmp   = (fetchbuf == 1'b0)	? IsFlowCtrl(fetchbufB_instr) : IsFlowCtrl(fetchbufD_instr);
     assign fetchbuf1_rfw   = (fetchbuf == 1'b0) ? IsRFW(fetchbufB_instr) : IsRFW(fetchbufD_instr);
 
     //
@@ -1052,11 +1050,8 @@ end
     //
     wire predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenC;
     wire predict_taken1 = (fetchbuf==1'b0) ? predict_takenB : predict_takenD;
-    wire branchback0 = {fetchbuf0_v, fetchbuf0_instr[`INSTRUCTION_OP], predict_taken0} == {`VAL, `Bcc, `TRUE}; 
-    wire branchback1 = {fetchbuf1_v, fetchbuf1_instr[`INSTRUCTION_OP], predict_taken1} == {`VAL, `Bcc, `TRUE}; 
 
-    assign backpc = (({fetchbuf0_v, fetchbuf0_instr[`INSTRUCTION_OP], fetchbuf0_instr[`INSTRUCTION_SB]} 
-				== {`VAL, `Bcc, `BACK_BRANCH}) 
+    assign backpc = (({fetchbuf0_v, IsBranch(fetchbuf0_instr), predict_taken0} == {`VAL, `TRUE, `TRUE}) 
 			    ? (fetchbuf0_pc + 4 + { {16 {fetchbuf0_instr[`INSTRUCTION_SB]}}, fetchbuf0_instr[`INSTRUCTION_IM]})
 			    : (fetchbuf1_pc + 4 + { {16 {fetchbuf1_instr[`INSTRUCTION_SB]}}, fetchbuf1_instr[`INSTRUCTION_IM]}));
 
@@ -1511,12 +1506,13 @@ endgenerate
 // The search starts from both ends of the in_use array since two
 // registers might be needed.
 wire [6:0] ffzo,flzo;
-ffz96 uffz({32'hFFFFFFFF,in_use[map_ndx][63:1],1'b1},ffzo);
-flz96 uflz({32'hFFFFFFFF,in_use[map_ndx][63:1],1'b1},flzo);
+ffz96 uffz({32'hFFFFFFFF,in_use[map_ndx][63:1],1'b1},ffzo); // find first zero
+flz96 uflz({32'hFFFFFFFF,in_use[map_ndx][63:1],1'b1},flzo); // find last zero
 assign Rt0 = RENAME ? (ffzo[6] ? 6'd0 : ffzo) : {1'b0,fnRt(fetchbuf0_instr)};
 assign Rt1 = RENAME ? (flzo[6] ? 6'd0 : flzo) : {1'b0,fnRt(fetchbuf1_instr)};
-wire canq2 = RENAME ? (Rt1!=Rt0 && (Rt1!=6'd0 && Rt0!=6'd0) && map_free[MapInc(map_ndx,3'd1)] && map_free[MapInc(map_ndx,3'd2)]): 1'b1;
-wire canq1 = RENAME ? (Rt1!=6'd0 || Rt0 != 6'd0) && map_free[MapInc(map_ndx,3'd1)] : 1'b1;
+// Allow queuing even if there aren't registers available when Rt = 0
+wire canq2 = RENAME ? ((Rt1!=Rt0 && (Rt1!=6'd0 && Rt0!=6'd0)||(fnRt(fetchbuf0_instr)==5'd0 && fnRt(fetchbuf1_instr)==5'd0)) && map_free[MapInc(map_ndx,3'd1)] && map_free[MapInc(map_ndx,3'd2)]): 1'b1;
+wire canq1 = RENAME ? (Rt1!=6'd0 || Rt0 != 6'd0 || (fnRt(fetchbuf0_instr)==5'd0 && fnRt(fetchbuf1_instr)==5'd0)) && map_free[MapInc(map_ndx,3'd1)] : 1'b1;
 wire [5:0] Ra0 = RENAME ? rename_map[map_ndx][fnRa(fetchbuf0_instr)] : {1'b0,fnRa(fetchbuf0_instr)};
 wire [5:0] Rb0 = RENAME ? rename_map[map_ndx][fnRb(fetchbuf0_instr)] : {1'b0,fnRb(fetchbuf0_instr)};
 wire [5:0] Ra1 = RENAME ? rename_map[map_ndx][fnRa(fetchbuf1_instr)] : {1'b0,fnRa(fetchbuf1_instr)};
@@ -1878,13 +1874,19 @@ begin
     if (!branchmiss) begin
         // Two available
         if (fetchbuf1_v & fetchbuf0_v) begin
-            if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
+            // Is there a pair of NOPs ? (cache miss)
+            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP))
+                queuedNop <= TRUE; 
+            else begin
                 // If it's a predicted branch queue only the first instruction, the second
                 // instruction will be stomped on.
                 if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
                     if (iqentry_v[tail0]==`INV && canq1)
                         queued1 <= TRUE;
                 end
+                // This is where a single NOP is allowed through to simplify the code. A
+                // single NOP can't be a cache miss. Otherwise it would be necessary to queue
+                // fetchbuf1 on tail0 it would add a nightmare to the enqueue code.
                 // Not a branch and there are two instructions fetched, see whether or not
                 // both instructions can be queued.
                 // Note that it could be possible to queue instructions without target
@@ -1901,8 +1903,6 @@ begin
                     end
                 end
             end
-            else
-                queuedNop <= TRUE;
         end
         // One available
         else if (fetchbuf0_v | fetchbuf1_v) begin
@@ -1928,8 +1928,7 @@ always @(posedge clk)
 if (rst) begin
     im <= 3'd7;
     mstatus <= 64'd0;
-    StatusHWI <= FALSE;
-    for (n = 0; n < 8; n = n + 1) begin
+    for (n = 0; n < QENTRIES; n = n + 1) begin
         iqentry_v[n] <= 1'b0;
         iqentry_out[n] <= 1'b0;
         iqentry_agen[n] <= 1'b0;
@@ -2928,8 +2927,8 @@ else begin: fetch_phase
 			end
 			// if no overlap, get info from rf_v and rf_source
 			else begin
-			    iqentry_a2_v [tail1] <= rf_v[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
-			    iqentry_a2_s [tail1] <= rf_source[ rename_map[map_ndx][fnRb(fetchbuf1_instr) ]];
+			    iqentry_a2_v [tail1] <= rf_v[ Rb1 ];
+			    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
 			end
 
 			//
@@ -3930,7 +3929,7 @@ endcase
 	$display("%c%c D: %d %h %h #",
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 
-	for (i=0; i<8; i=i+1) 
+	for (i=0; i<QENTRIES; i=i+1) 
 	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %c%h 0%d(%d) %o %h %h %h %d %o %h %d %o %h %d %h#",
 		(i[2:0]==head0)?"C":".", (i[2:0]==tail0)?"Q":".", i[2:0],
 		iqentry_v[i], iqentry_done[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
@@ -4277,6 +4276,7 @@ endfunction
 
 task dump_rename;
 begin
+    if (RENAME) begin
     $display("Rename Map");
     for (n = 0; n < NMAP; n = n + 1) begin
         $display("Map %c%d%c: %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d  %d %d %d %d %d %d %d %d",
@@ -4289,6 +4289,7 @@ begin
                 rename_map[n][11], rename_map[n][10], rename_map[n][9], rename_map[n][8],
                 rename_map[n][7], rename_map[n][6], rename_map[n][5], rename_map[n][4],
                 rename_map[n][3], rename_map[n][2], rename_map[n][1], rename_map[n][0]);
+    end
     end
 end
 endtask
