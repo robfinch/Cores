@@ -24,7 +24,7 @@
 //
 `include "FT64_defines.vh"
 
-module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, pc, csr, o, done, idle, divByZero);
+module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, pc, csr, o, ob, done, idle, divByZero);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter TRUE = 1'b1;
@@ -41,6 +41,7 @@ input [63:0] imm;
 input [31:0] pc;
 input [63:0] csr;
 output reg [63:0] o;
+output reg [63:0] ob;
 output reg done;
 output reg idle;
 output divByZero;
@@ -179,7 +180,8 @@ case(instr[`INSTRUCTION_OP])
     `MODU:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
     `MODSU:     o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
     `MOD:       o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-    `PUSH:      o = a + {{59{instr[25]}},instr[25:24],3'b0};
+    `PUSH:      o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
+    `POP:       o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
     `LBX,`LHX,`LHUX,`LWX,`SBX,`SHX,`SWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
     default:    o = 64'hDEADDEADDEADDEAD;
     endcase
@@ -203,6 +205,17 @@ case(instr[`INSTRUCTION_OP])
  `RET:       o = a + b;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
+
+always @*
+case(instr[`INSTRUCTION_OP])
+`RR:
+    case(instr[`INSTRUCTION_S2])
+    `PUSH:  ob = a + {{59{instr[25]}},instr[25:21]};
+    `POP:   ob = a + {{59{instr[25]}},instr[25:21]};
+    default:    ob = 64'hCCCCCCCCCCCCCCCC;
+    endcase
+default:    ob = 64'hCCCCCCCCCCCCCCCC;
+endcase
 
 // Generate done signal
 always @*

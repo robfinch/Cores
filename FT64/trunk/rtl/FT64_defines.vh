@@ -57,6 +57,7 @@
 `define SBX         6'h15
 `define SWX         6'h16
 `define PUSH        6'h19
+`define POP         6'h1A
 `define SHL         6'h20
 `define ASL         6'h20
 `define SHR         6'h21
@@ -90,6 +91,7 @@
 `define ANDI    6'h08
 `define ORI     6'h09
 `define XORI    6'h0A
+`define REX     6'h0D
 `define CSRRW   6'h0E
 `define EXEC    6'h0F
 `define LH      6'h10
@@ -118,12 +120,18 @@
 
 `define NOP_INSN    {26'd0,`NOP}
 
-`define CSR_HARTID  12'h001
-`define CSR_TICK    12'h002
-`define CSR_CAUSE   12'h006
-`define CSR_EPC     12'h040
-`define CSR_STATUS  12'h044
-`define CSR_CODEBUF 12'b000010xxxxxx
+`define CSR_HARTID  11'h001
+`define CSR_TICK    11'h002
+`define CSR_CAUSE   11'h006
+`define CSR_TVEC    11'b00000110xxx
+`define CSR_EPC     11'h040
+`define CSR_STATUS  11'h044
+`define CSR_CODEBUF 11'b00010xxxxxx
+
+`define OL_USER         2'd3
+`define OL_SUPERVISOR   2'd2
+`define OL_HYPERVISOR   2'd1
+`define OL_MACHINE      2'd0
 
 // JALR and EXTENDED are synonyms
 `define EXTEND	3'd7
@@ -139,11 +147,14 @@
 `define SYS_EXC		3'd7	// doesn't need to be last, but what the heck
 
 // exception types:
-`define EXC_NONE	4'd0
-`define EXC_HALT	4'd1
-`define EXC_TLBMISS	4'd2
-`define EXC_SIGSEGV	4'd3
-`define EXC_INVALID	4'd4
+`define EXC_NONE	9'd000
+`define EXC_HALT	9'd1
+`define EXC_TLBMISS	9'd2
+`define EXC_SIGSEGV	9'd3
+`define EXC_INVALID	9'd4
+
+`define FLT_IADR    9'd484
+`define FLT_PRIV    9'd501
 
 //`define INSTRUCTION_OP	15:13	// opcode
 //`define INSTRUCTION_RA	12:10	// rA 
