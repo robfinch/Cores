@@ -56,6 +56,7 @@
 `define SHX         6'h14
 `define SBX         6'h15
 `define SWX         6'h16
+`define PUSH        6'h19
 `define SHL         6'h20
 `define ASL         6'h20
 `define SHR         6'h21
@@ -99,10 +100,12 @@
 `define SB      6'h15
 `define SW	    6'h16
 `define JAL	    6'h18
+`define CALL    6'h19
 `define IMML    6'h1B
 `define IMMM    6'h1C
 `define IMMH    6'h1D
 `define NOP     6'h1E
+`define RET     6'h29
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
 `define MODI    6'h2E

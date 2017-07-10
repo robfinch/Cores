@@ -149,7 +149,6 @@ FT64_divider #(DBW) udiv1
 
 always @*
 case(instr[`INSTRUCTION_OP])
-`BRK:   o = instr[15] ? pc : pc + 32'd4;
 `RR:
     case(instr[`INSTRUCTION_S2])
     `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
@@ -180,16 +179,9 @@ case(instr[`INSTRUCTION_OP])
     `MODU:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
     `MODSU:     o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
     `MOD:       o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+    `PUSH:      o = a + {{59{instr[25]}},instr[25:24],3'b0};
     `LBX,`LHX,`LHUX,`LWX,`SBX,`SHX,`SWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
     default:    o = 64'hDEADDEADDEADDEAD;
-    endcase
- `Bcc:
-    case(instr[`INSTRUCTION_COND])
-    `BEQZ:  o = a==64'd0;
-    `BNEZ:  o = a!=64'd0;
-    `BLTZ:  o = a[63];
-    `BGEZ:  o = ~a[63];
-    default:    o = 1'b1;
     endcase
  `ADDI: o = a + b;
  `CMPI: o = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
@@ -206,9 +198,9 @@ case(instr[`INSTRUCTION_OP])
  `MODUI:     o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `MODSUI:    o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
- `JAL:   o = pc + 32'd4;
  `LB,`LH,`LHU,`LW,`SB,`SH,`SW:  o = a + b;
  `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
+ `RET:       o = a + b;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 
