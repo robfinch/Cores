@@ -205,10 +205,11 @@ bootrom ubr1
     .dat_o(br_dato)
 );
 
-FT64 ucpu1
+FT64_mpu ucpu1
 (
-    .rst(rst),
-    .clk(clk25),
+    .hartid_i(64'h1),
+    .rst_i(rst),
+    .clk_i(clk25),
     .irq_i(3'd0),
     .vec_i(9'h000),
     .cyc_o(cyc),

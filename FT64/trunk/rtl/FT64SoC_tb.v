@@ -80,10 +80,10 @@ bootrom ubr
 assign ack = br_ack|led_ack|ack_scr;
 assign dati = cs_br ? br_dato : scr_dato;
 
-FT64 ucpu1
+FT64_mpu ucpu1
 (
-    .rst(rst),
-    .clk(clk),
+    .rst_i(rst),
+    .clk_i(clk),
     .cyc_o(cyc),
     .stb_o(stb),
     .ack_i(ack),

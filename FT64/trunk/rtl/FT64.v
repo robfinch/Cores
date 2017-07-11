@@ -94,7 +94,8 @@
 //
 `include "FT64_defines.vh"
 
-module FT64(hartid, rst, clk, irq_i, vec_i, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_o, dat_i);
+module FT64(hartid, rst, clk, irq_i, vec_i, cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_o, dat_i,
+    ol_o, pcr_o, pcr2_o, exv_i, rdv_i, wrv_i, icl_o, sr_o, cr_o, rbi_i);
 input [63:0] hartid;
 input rst;
 input clk;
@@ -108,6 +109,17 @@ output reg [7:0] sel_o;
 output reg [31:0] adr_o;
 output reg [63:0] dat_o;
 input [63:0] dat_i;
+output [2:0] ol_o;
+output [31:0] pcr_o;
+output [63:0] pcr2_o;
+input exv_i;
+input rdv_i;
+input wrv_i;
+output reg icl_o;
+output reg cr_o;
+output reg sr_o;
+input rbi_i;
+
 parameter QENTRIES = 8;
 parameter RSTPC = 32'hFFFC0010;
 parameter BRKPC = 32'hFFFC0000;
@@ -141,13 +153,19 @@ reg [31:0] pc1;
 reg exception_set;
 // CSR's
 reg [2:0] ol;           // operating level
+assign ol_o = ol;
 reg [7:0] cpl;          // current privilege level
 reg [63:0] tick;
+reg [31:0] pcr;
+reg [63:0] pcr2;
+assign pcr_o = pcr;
+assign pcr2_o = pcr2;
 reg [15:0] cause[0:7];
 reg [31:0] epc,epc0,epc1,epc2,epc3,epc4,epc5,epc6,epc7,epc8; // exception pc and stack
 reg [127:0] mstatus;     // machine status
 reg [31:0] badaddr[0:7];
 reg [31:0] tvec[0:7];
+reg [63:0] sema;
 //reg [25:0] m[0:8191];
 reg  [3:0] panic;		// indexes the message structure
 reg [128:0] message [0:15];	// indexed by panic
@@ -314,7 +332,7 @@ reg [31:0] alu0_pc;
 wire [63:0] alu0_bus;
 wire [63:0] alu0b_bus;
 wire  [3:0] alu0_id;
-wire  [3:0] alu0_exc;
+wire  [8:0] alu0_exc;
 wire        alu0_v;
 wire        alu0_branchmiss;
 wire [31:0] alu0_misspc;
@@ -335,7 +353,7 @@ reg [31:0] alu1_pc;
 wire [63:0] alu1_bus;
 wire [63:0] alu1b_bus;
 wire  [3:0] alu1_id;
-wire  [3:0] alu1_exc;
+wire  [8:0] alu1_exc;
 wire        alu1_v;
 wire        alu1_branchmiss;
 wire [31:0] alu1_misspc;
@@ -353,7 +371,7 @@ reg [63:0] fcu_argI;	// only used by BEQ
 reg [31:0] fcu_pc;
 reg [63:0] fcu_bus;
 wire  [3:0] fcu_id;
-wire  [3:0] fcu_exc;
+reg   [8:0] fcu_exc;
 wire        fcu_v;
 wire        fcu_branchmiss;
 wire [31:0] fcu_misspc;
@@ -377,7 +395,7 @@ reg [31:0] dram0_addr;
 reg [31:0] dram0_instr;
 reg  [5:0] dram0_tgt;
 reg  [3:0] dram0_id;
-reg  [3:0] dram0_exc;
+reg  [8:0] dram0_exc;
 reg        dram0_unc;
 reg [2:0]  dram0_memsize;
 reg [63:0] dram1_data;
@@ -385,7 +403,7 @@ reg [31:0] dram1_addr;
 reg [31:0] dram1_instr;
 reg  [5:0] dram1_tgt;
 reg  [3:0] dram1_id;
-reg  [3:0] dram1_exc;
+reg  [8:0] dram1_exc;
 reg        dram1_unc;
 reg [2:0]  dram1_memsize;
 reg [63:0] dram2_data;
@@ -393,7 +411,7 @@ reg [31:0] dram2_addr;
 reg [31:0] dram2_instr;
 reg  [5:0] dram2_tgt;
 reg  [3:0] dram2_id;
-reg  [3:0] dram2_exc;
+reg  [8:0] dram2_exc;
 reg        dram2_unc;
 reg [2:0]  dram2_memsize;
 
@@ -401,7 +419,7 @@ reg [63:0] dram_bus;
 reg  [5:0] dram_tgt;
 reg        dram_tgtpc;
 reg  [3:0] dram_id;
-reg  [3:0] dram_exc;
+reg  [8:0] dram_exc;
 reg        dram_v;
 
 wire        outstanding_stores;
@@ -460,10 +478,9 @@ wire ihit0,ihit1,ihit2;
 wire ihit = ihit0&ihit1;
 wire phit = ihit&&icstate==IDLE;
 reg L1_wr0,L1_wr1;
-reg [31:0] L1_adr, L2_adr;
+reg [37:0] L1_adr, L2_adr;
 reg [255:0] L2_rdat;
 wire [255:0] L2_dato;
-reg [63:0] dati;
 
 FT64_regfile2w6r urf1
 (
@@ -520,8 +537,8 @@ FT64_L2_icache uic2
     .clk(clk),
     .nxt(L2_nxt),
     .wr(bstate==B7 && ack_i),
-    .adr({6'd0,L2_adr}),
-    .i(dat_i),
+    .adr(L2_adr),
+    .i(exv_i ? {2{16'd0,1'b0,`FLT_EXF,`BRK}} : dat_i),
     .o(L2_dato),
     .hit(ihit2),
     .invall(),
@@ -585,11 +602,11 @@ FT64_dcache udc0
     .wclk(clk),
     .wr((bstate==B2d||(bstate==B1 && dhit0)) && ack_i),
     .sel(sel_o),
-    .wadr({6'd0,adr_o}),
+    .wadr({pcr[5:0],adr_o}),
     .i(bstate==B2 ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram0_memsize),
-    .radr({6'd0,dram0_addr}),
+    .radr({pcr[5:0],dram0_addr}),
     .o(dc0_out),
     .hit(),
     .hit0(dhit0),
@@ -601,11 +618,11 @@ FT64_dcache udc1
     .wclk(clk),
     .wr((bstate==B2d||(bstate==B1 && dhit1)) && ack_i),
     .sel(sel_o),
-    .wadr({6'd0,adr_o}),
+    .wadr({pcr[5:0],adr_o}),
     .i(bstate==B2 ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram1_memsize),
-    .radr({6'd0,dram1_addr}),
+    .radr({pcr[5:0],dram1_addr}),
     .o(dc1_out),
     .hit(),
     .hit0(dhit1),
@@ -617,11 +634,11 @@ FT64_dcache udc2
     .wclk(clk),
     .wr((bstate==B2d||(bstate==B1 && dhit2)) && ack_i),
     .sel(sel_o),
-    .wadr({6'd0,adr_o}),
+    .wadr({pcr[5:0],adr_o}),
     .i(bstate==B2 ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram2_memsize),
-    .radr({6'd0,dram2_addr}),
+    .radr({pcr[5:0],dram2_addr}),
     .o(dc2_out),
     .hit(),
     .hit0(dhit2),
@@ -945,6 +962,32 @@ default:    IsStore = FALSE;
 endcase
 endfunction
 
+function IsSWC;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `SWCX:   IsSWC = TRUE;
+    default:    IsSWC = FALSE;
+    endcase
+`SWC:    IsSWC = TRUE;
+default:    IsSWC = FALSE;
+endcase
+endfunction
+
+function IsLWR;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `LWRX:   IsLWR = TRUE;
+    default:    IsLWR = FALSE;
+    endcase
+`LWR:    IsLWR = TRUE;
+default:    IsLWR = FALSE;
+endcase
+endfunction
+
 function IsBranch;
 input [31:0] isn;
 IsBranch = isn[`INSTRUCTION_OP]==`Bcc;
@@ -1219,6 +1262,22 @@ case(ins[`INSTRUCTION_OP])
     endcase
 `LW,`RET:   fnDati = dat;
 default:    fnDati = dat;
+endcase
+endfunction
+
+function [63:0] fnDato;
+input [31:0] isn;
+input [63:0] dat;
+case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `SBX:   fnDato = {8{dat[7:0]}};
+    `SHX:   fnDato = {2{dat[31:0]}};
+    default:    fnDato = dat;
+    endcase
+`SB:   fnDato = {8{dat[7:0]}};
+`SH:   fnDato = {2{dat[31:0]}};
+default:    fnDato = dat;
 endcase
 endfunction
 
@@ -2067,6 +2126,7 @@ end
 
     always @*
     begin
+        fcu_exc <= `FLT_NONE;
         case(fcu_instr[`INSTRUCTION_OP])
         `BRK:   fcu_bus <= fcu_instr[15] ? fcu_pc : fcu_pc + 32'd4;
         `Bcc:
@@ -2082,7 +2142,7 @@ end
         `RET:   fcu_bus <= fcu_argA;                // address generation, SP update is done by ALU
         `REX:
             case(ol)
-            `OL_USER:   set_exception(fcu_id,`FLT_PRIV);
+            `OL_USER:   fcu_exc <= `FLT_PRIV;
             default:    fcu_bus <= (im < ~ol) ? tvec[fcu_instr[13:11]] : fcu_pc + 32'd4;
             endcase
         endcase
@@ -2090,7 +2150,8 @@ end
 
     assign  fcu_misspc =
         IsRTI(fcu_instr) ? epc :
-        (fcu_instr[`INSTRUCTION_OP] == `BRK) ? BRKPC :
+        (fcu_instr[`INSTRUCTION_OP] == `REX) ? fcu_bus :
+        (fcu_instr[`INSTRUCTION_OP] == `BRK) ? {tvec[0][31:8], ol, 5'h0}:
         (fcu_instr[`INSTRUCTION_OP] == `CALL || fcu_instr[`INSTRUCTION_OP] == `RET) ? fcu_argI :
         (fcu_instr[`INSTRUCTION_OP] == `JAL) ? fcu_argA + fcu_argI: (fcu_bt ? fcu_pc + 4 : fcu_pc + 4 + fcu_argI);
 
@@ -2119,6 +2180,7 @@ end
 			: `EXC_INVALID;
 
     assign fcu_branchmiss = fcu_dataready && 
+                (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol)) ||
 			   ( IsRTI(fcu_instr) || (fcu_instr[`INSTRUCTION_OP] == `BRK) || (fcu_instr[`INSTRUCTION_OP] == `CALL) ||
 			    (IsBranch(fcu_instr) ? ((|fcu_bus && ~fcu_bt) || (~|fcu_bus && fcu_bt))
 			  : (fcu_instr[`INSTRUCTION_OP] == `JAL) ? 1'b1
@@ -2250,6 +2312,7 @@ begin
     end
 end
 
+// An attempt to move rf_v to it's own always block.
 //reg [31:0] rfv_nxt;
 
 //// Create read ports on the register file valid bit to read out the status
@@ -2355,6 +2418,8 @@ end
 //
 always @(posedge clk)
 if (rst) begin
+    ol <= 3'd0;
+    cpl <= 8'h00;
     im <= 3'd7;
     mstatus <= 64'd0;
     for (n = 0; n < QENTRIES; n = n + 1) begin
@@ -2410,6 +2475,7 @@ if (rst) begin
     alu1_available <= 1;
     alu1_dataready <= 0;
     fcu_dataready <= 0;
+    fcu_instr <= `NOP_INSN;
     dram_v <= 0;
     fetchbuf <= 0;
     I <= 0;
@@ -2420,6 +2486,13 @@ if (rst) begin
     stb_o <= `LOW;
     we_o <= `LOW;
     sel_o <= 2'b00;
+    sr_o <= `LOW;
+    cr_o <= `LOW;
+    icl_o <= `LOW;
+    pcr <= 32'd0;
+    pcr2 <= 64'd0;
+    for (n = 0; n < PREGS; n = n + 1)
+        rf_v[n] <= `VAL;
 end
 else begin: fetch_phase
     tick <= tick + 64'd1;
@@ -3259,13 +3332,18 @@ else begin: fetch_phase
 	    end
 	end
 	if (fcu_v) begin
-        iqentry_res	[ fcu_id[2:0] ] <= fcu_bus;
-        iqentry_res2[ fcu_id[2:0] ] <= fcu_bus;
-        iqentry_exc    [ fcu_id[2:0] ] <= fcu_exc;
-        iqentry_done[ fcu_id[2:0] ] <= !iqentry_mem[ fcu_id[2:0] ] && !IsImmp(fcu_instr); // CALL instruction is also mem
-        iqentry_out    [ fcu_id[2:0] ] <= `INV;
-        iqentry_agen[ fcu_id[2:0] ] <= `VAL;
-        fcu_dataready <= FALSE;
+	    if (|fcu_exc)
+	       set_exception(fcu_id,fcu_exc);
+	    else begin
+            iqentry_res	[ fcu_id[2:0] ] <= fcu_bus;
+            iqentry_res2[ fcu_id[2:0] ] <= fcu_bus;
+            iqentry_exc    [ fcu_id[2:0] ] <= fcu_exc;
+            iqentry_done[ fcu_id[2:0] ] <= !iqentry_mem[ fcu_id[2:0] ] && !IsImmp(fcu_instr); // CALL instruction is also mem
+            iqentry_out    [ fcu_id[2:0] ] <= `INV;
+            iqentry_agen[ fcu_id[2:0] ] <= `VAL;
+            fcu_dataready <= !iqentry_mem[ fcu_id[2:0] ];
+            fcu_instr <= `NOP_INSN; // to clear branchmiss
+        end
 	end
 	if (dram_v && iqentry_v[ dram_id[2:0] ] && iqentry_mem[ dram_id[2:0] ] ) begin	// if data for stomped instruction, ignore
 	    // Must swap the busses around for the RET instruction which targets the PC
@@ -3973,14 +4051,14 @@ case(icstate)
 IDLE:
     begin
         if (!ihit0) begin
-            L1_adr <= {pc0[31:5],5'h0};
-            L2_adr <= {pc0[31:5],5'h0};
+            L1_adr <= {pcr[5:0],pc0[31:5],5'h0};
+            L2_adr <= {pcr[5:0],pc0[31:5],5'h0};
             icwhich <= 1'b0;
             icstate <= IC2;
         end
         else if (!ihit1) begin
-            L1_adr <= {pc1[31:5],5'h0};
-            L2_adr <= {pc1[31:5],5'h0};
+            L1_adr <= {pcr[5:0],pc1[31:5],5'h0};
+            L2_adr <= {pcr[5:0],pc1[31:5],5'h0};
             icwhich <= 1'b1;
             icstate <= IC2;
         end
@@ -4027,11 +4105,8 @@ BIDLE:
             we_o <= `HIGH;
             sel_o <= fnSelect(dram0_instr,dram0_addr);
             adr_o <= dram0_addr;
-            case(dram0_instr)
-            default:    dat_o <= dram0_data;
-            `SH:    dat_o <= {2{dram0_data[31:0]}};
-            `SB:    dat_o <= {8{dram0_data[7:0]}};
-            endcase
+            dat_o <= fnDato(dram0_instr,dram1_data);
+            cr_o <= IsSWC(dram0_instr);
             bstate <= B13;
         end
         else if (dram1==2'd1 && IsStore(dram1_instr)) begin
@@ -4040,11 +4115,8 @@ BIDLE:
             we_o <= `HIGH;
             sel_o <= fnSelect(dram1_instr,dram1_addr);
             adr_o <= dram1_addr;
-            case(dram1_instr)
-            default:    dat_o <= dram1_data;
-            `SH:    dat_o <= {2{dram1_data[31:0]}};
-            `SB:    dat_o <= {8{dram1_data[7:0]}};
-            endcase
+            dat_o <= fnDato(dram1_instr,dram1_data);
+            cr_o <= IsSWC(dram1_instr);
             bstate <= B13;
         end
         else if (dram2==2'd1 && IsStore(dram2_instr)) begin
@@ -4053,51 +4125,51 @@ BIDLE:
             we_o <= `HIGH;
             sel_o <= fnSelect(dram2_instr,dram2_addr);
             adr_o <= dram2_addr;
-            case(dram2_instr)
-            default:    dat_o <= dram2_data;
-            `SH:    dat_o <= {2{dram2_data[31:0]}};
-            `SB:    dat_o <= {8{dram2_data[7:0]}};
-            endcase
+            dat_o <= fnDato(dram2_instr,dram2_data);
+            cr_o <= IsSWC(dram2_instr);
             bstate <= B13;
         end
         // Check for read misses on the data cache
-        else if (!dram0_unc && dram0==2'd1 && IsLoad(dram0_instr)) begin
+        else if (!IsLWR(dram0_instr) && !dram0_unc && dram0==2'd1 && IsLoad(dram0_instr)) begin
             dram0 <= 2'd2;
             bwhich <= 2'b00;
             bstate <= B2; 
         end
-        else if (!dram1_unc && dram1==2'd1 && IsLoad(dram1_instr)) begin
+        else if (!IsLWR(dram1_instr) && !dram1_unc && dram1==2'd1 && IsLoad(dram1_instr)) begin
             dram1 <= 2'd2;
             bwhich <= 2'b01;
             bstate <= B2; 
         end
-        else if (!dram2_unc && dram2==2'd1 && IsLoad(dram2_instr)) begin
+        else if (!IsLWR(dram2_instr) && !dram2_unc && dram2==2'd1 && IsLoad(dram2_instr)) begin
             dram2 <= 2'd2;
             bwhich <= 2'b10;
             bstate <= B2; 
         end
-        else if (dram0_unc && dram0==2'd1 && IsLoad(dram0_instr)) begin
+        else if ((dram0_unc || IsLWR(dram0_instr)) && dram0==2'd1 && IsLoad(dram0_instr)) begin
             bwhich <= 2'b00;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
             sel_o <= fnSelect(dram0_instr,dram0_addr);
             adr_o <= {dram0_addr[31:3],3'b0};
+            sr_o <=  IsLWR(dram0_instr);
             bstate <= B12;
         end
-        else if (dram1_unc && dram1==2'd1 && IsLoad(dram1_instr)) begin
+        else if ((dram1_unc || IsLWR(dram1_instr)) && dram1==2'd1 && IsLoad(dram1_instr)) begin
             bwhich <= 2'b01;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
             sel_o <= fnSelect(dram1_instr,dram1_addr);
             adr_o <= {dram1_addr[31:3],3'b0};
+            sr_o <=  IsLWR(dram1_instr);
             bstate <= B12;
         end
-        else if (dram2_unc && dram2==2'd1 && IsLoad(dram2_instr)) begin
+        else if ((dram2_unc || IsLWR(dram2_instr)) && dram2==2'd1 && IsLoad(dram2_instr)) begin
             bwhich <= 2'b10;
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
             sel_o <= fnSelect(dram2_instr,dram2_addr);
             adr_o <= {dram2_addr[31:3],3'b0};
+            sr_o <=  IsLWR(dram2_instr);
             bstate <= B12;
         end
         // Check for L2 cache miss
@@ -4105,6 +4177,7 @@ BIDLE:
             cyc_o <= `HIGH;
             stb_o <= `HIGH;
             sel_o <= 8'hFF;
+            icl_o <= `HIGH;
 //            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
 //            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
             adr_o <= L1_adr;
@@ -4118,6 +4191,15 @@ B1:
         stb_o <= `LOW;
         we_o <= `LOW;
         sel_o <= 8'h00;
+        cr_o <= 1'b0;
+        // This isn't a good way of doing things; the state should be propagated
+        // to the commit stage, however since this is a store we know there will
+        // be no change of program flow. So the reservation status bit is set
+        // here. The author wanted to avoid the complexity of propagating the
+        // input signal to the commit stage. It does mean that the SWC
+        // instruction should be surrounded by SYNC's.
+        if (cr_o)
+            sema[0] <= rbi_i; 
         case(bwhich)
         2'd0:   dram0 <= `DRAMREQ_READY;
         2'd1:   dram1 <= `DRAMREQ_READY;
@@ -4192,11 +4274,12 @@ B7:
         if (adr_o[4:3]==2'd3) begin
             cyc_o <= `LOW;
             sel_o <= 8'h00;
+            icl_o <= `LOW;
             bstate <= B9;
         end
         else begin
-            adr_o <= adr_o + 32'd8;
-            L2_adr <= L2_adr + 32'd8;
+            adr_o[4:3] <= adr_o[4:3] + 2'd1;
+            L2_adr[4:3] <= L2_adr[4:3] + 2'd1;
         end
     end
 B8: begin
@@ -4211,6 +4294,9 @@ B11: begin
      end
 B12:
     if (ack_i) begin
+        cyc_o <= `LOW;
+        stb_o <= `LOW;
+        sr_o <= `LOW;
         xdati <= dat_i;
         case(bwhich)
         2'b00:  dram0 <= `DRAMREQ_READY;
@@ -4554,13 +4640,14 @@ begin
                     epc6 <= epc5;
                     epc7 <= epc6;
                     epc8 <= epc7;
-                    mstatus <= {mstatus[111:0],cpl,ol,im};
+                    mstatus <= {mstatus[127:112],mstatus[97:0],cpl,ol,im};
                     cause[3'd0] <= {7'd0,iqentry_instr[head][14:6]};
                     // For hardware interrupts only, set a new mask level
                     if (!(iqentry_instr[head][15]))
                         im <= iqentry_instr[head][18:16];
                     ol <= 3'd0;
                     cpl <= 8'h00;
+                    sema[0] <= 1'b0;
                 end
         `RR:
             case(iqentry_instr[head][`INSTRUCTION_S2])
@@ -4569,7 +4656,7 @@ begin
                     im <= mstatus[2:0];
                     ol <= mstatus[5:3];
                     cpl <= mstatus[13:6];
-                    mstatus <= {8'h00,3'd0,3'd7,mstatus[125:14]};
+                    mstatus <= {mstatus[127:112],8'h00,3'd0,3'd7,mstatus[111:14]};
                     epc <= epc0;
                     epc0 <= epc1;
                     epc1 <= epc2;
@@ -4580,6 +4667,8 @@ begin
                     epc6 <= epc7;
                     epc7 <= epc8;
                     epc8 <= BRKPC;
+                    sema[0] <= 1'b0;
+                    sema[iqentry_instr[head][21:16]] <= 1'b0;
                     end
             default: ;
             endcase
@@ -4587,6 +4676,7 @@ begin
         `REX:
             // Can only redirect to a lower level
             if (ol < iqentry_instr[head][13:11]) begin
+                ol <= iqentry_instr[head][13:11];
                 badaddr[iqentry_instr[head][13:11]] <= badaddr[ol];
                 cause[iqentry_instr[head][13:11]] <= cause[ol];
                 cpl <= iqentry_instr[head][23:16] | iqentry_a1[head][7:0];
@@ -4604,11 +4694,29 @@ begin
     casex(csrno[10:0])
     `CSR_HARTID:    dat <= hartid;
     `CSR_TICK:      dat <= tick;
+    `CSR_PCR:       dat <= pcr;
+    `CSR_PCR2:      dat <= pcr2;
+    `CSR_SEMA:      dat <= sema;
     `CSR_TVEC:      dat <= tvec[csrno[2:0]];
     `CSR_CAUSE:     dat <= {48'd0,cause[csrno[13:11]]};
     `CSR_EPC:       dat <= epc;
-    `CSR_STATUS:    dat <= mstatus;
+    `CSR_STATUSL:   dat <= mstatus[63:0];
+    `CSR_STATUSH:   dat <= mstatus[127:64];
     `CSR_CODEBUF:   dat <= codebuf[csrno[5:0]];
+    `CSR_INFO:
+                    case(csrno[3:0])
+                    4'd0:   dat <= "Finitron";  // manufacturer
+                    4'd1:   dat <= "        ";
+                    4'd2:   dat <= "64 bit  ";  // CPU class
+                    4'd3:   dat <= "        ";
+                    4'd4:   dat <= "FT64    ";  // Name
+                    4'd5:   dat <= "        ";
+                    4'd6:   dat <= 64'd1;       // model #
+                    4'd7:   dat <= 64'd1;       // serial number
+                    4'd8:   dat <= {32'd16384,32'd16384};   // cache sizes instruction,data
+                    4'd9:   dat <= 64'd0;
+                    default:    dat <= 64'd0;
+                    endcase
     default:        dat <= 64'hCCCCCCCCCCCCCCCC;
     endcase
 end
@@ -4621,21 +4729,31 @@ begin
     case(csrno[15:14])
     2'd1:   // CSRRW
         casex(csrno[10:0])
+        `CSR_PCR:       pcr <= dat[31:0];
+        `CSR_PCR2:      pcr2 <= dat;
+        `CSR_SEMA:      sema <= dat;
         `CSR_CAUSE:     cause[csrno[13:11]] <= dat[15:0];
         `CSR_TVEC:      tvec[csrno[2:0]] <= dat[31:0];
         `CSR_EPC:       epc <= dat;
-        `CSR_STATUS:    mstatus <= dat;
+        `CSR_STATUSL:   mstatus[63:0] <= dat;
+        `CSR_STATUSH:   mstatus[127:64] <= dat;
         `CSR_CODEBUF:   codebuf[csrno[5:0]] <= dat;
         default:    ;
         endcase
     2'd2:   // CSRRS
         case(csrno[11:0])
-        `CSR_STATUS:    mstatus <= mstatus | dat;
+        `CSR_PCR:       pcr[31:0] <= pcr[31:0] | dat[31:0];
+        `CSR_PCR2:      pcr2 <= pcr2 | dat;
+        `CSR_SEMA:      sema <= sema | dat;
+        `CSR_STATUSL:    mstatus[63:0] <= mstatus[63:0] | dat;
         default:    ;
         endcase
     2'd3:   // CSRRC
         case(csrno[11:0])
-        `CSR_STATUS:    mstatus <= mstatus & ~dat;
+        `CSR_PCR:       pcr <= pcr & ~dat;
+        `CSR_PCR2:      pcr2 <= pcr2 & ~dat;
+        `CSR_SEMA:      sema <= sema & ~dat;
+        `CSR_STATUSL:    mstatus[63:0] <= mstatus[63:0] & ~dat;
         default:    ;
         endcase
     default:    ;

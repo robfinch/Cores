@@ -56,8 +56,10 @@
 `define SHX         6'h14
 `define SBX         6'h15
 `define SWX         6'h16
+`define SWCX        6'h17
 `define PUSH        6'h19
 `define POP         6'h1A
+`define LWRX        6'h1D
 `define SHL         6'h20
 `define ASL         6'h20
 `define SHR         6'h21
@@ -101,12 +103,13 @@
 `define SH      6'h14
 `define SB      6'h15
 `define SW	    6'h16
+`define SWC     6'h17
 `define JAL	    6'h18
 `define CALL    6'h19
-`define IMML    6'h1B
-`define IMMM    6'h1C
-`define IMMH    6'h1D
-`define NOP     6'h1E
+`define IMML    6'h1A
+`define IMMM    6'h1B
+`define NOP     6'h1C
+`define LWR     6'h1D
 `define RET     6'h29
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
@@ -122,11 +125,16 @@
 
 `define CSR_HARTID  11'h001
 `define CSR_TICK    11'h002
+`define CSR_PCR     11'h003
 `define CSR_CAUSE   11'h006
+`define CSR_PCR2    11'h008
+`define CSR_SEMA    11'h00C
 `define CSR_TVEC    11'b00000110xxx
 `define CSR_EPC     11'h040
-`define CSR_STATUS  11'h044
+`define CSR_STATUSL 11'h044
+`define CSR_STATUSH 11'h045
 `define CSR_CODEBUF 11'b00010xxxxxx
+`define CSR_INFO    11'h111_1111_xxxx
 
 `define OL_USER         2'd3
 `define OL_SUPERVISOR   2'd2
@@ -153,7 +161,9 @@
 `define EXC_SIGSEGV	9'd3
 `define EXC_INVALID	9'd4
 
+`define FLT_NONE    9'd000
 `define FLT_IADR    9'd484
+`define FLT_EXF     9'd497
 `define FLT_PRIV    9'd501
 
 //`define INSTRUCTION_OP	15:13	// opcode
