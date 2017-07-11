@@ -121,7 +121,7 @@ output reg sr_o;
 input rbi_i;
 
 parameter QENTRIES = 8;
-parameter RSTPC = 32'hFFFC0010;
+parameter RSTPC = 32'hFFFC0100;
 parameter BRKPC = 32'hFFFC0000;
 parameter PREGS = 31;   // number of physical registers - 1
 parameter AREGS = 32;   // number of architectural registers
@@ -370,6 +370,7 @@ reg [63:0] fcu_argC;
 reg [63:0] fcu_argI;	// only used by BEQ
 reg [31:0] fcu_pc;
 reg [63:0] fcu_bus;
+reg [63:0] fcu_bbus;
 wire  [3:0] fcu_id;
 reg   [8:0] fcu_exc;
 wire        fcu_v;
@@ -697,6 +698,7 @@ case(isn[`INSTRUCTION_OP])
         default:    fnRt = isn[`INSTRUCTION_RC];
         endcase
 `CALL:  fnRt = 6'd31;
+`RET:   fnRt = 6'd0;
 default:    fnRt = isn[`INSTRUCTION_RB];
 endcase
 endfunction
@@ -708,6 +710,7 @@ case(isn[`INSTRUCTION_OP])
         `PUSH,`POP:   fnRt2 = isn[`INSTRUCTION_RC];
         default:    fnRt2 = 6'd0;
         endcase
+`RET:   fnRt2 = isn[`INSTRUCTION_RB];
 default:    fnRt2 = 6'd0;
 endcase
 endfunction
@@ -996,6 +999,11 @@ endfunction
 function IsRTI;
 input [31:0] isn;
 IsRTI = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`RTI;
+endfunction
+
+function IsRet;
+input [31:0] isn;
+IsRet = isn[`INSTRUCTION_OP]==`RET;
 endfunction
 
 function IsFlowCtrl;
@@ -2152,7 +2160,7 @@ end
         IsRTI(fcu_instr) ? epc :
         (fcu_instr[`INSTRUCTION_OP] == `REX) ? fcu_bus :
         (fcu_instr[`INSTRUCTION_OP] == `BRK) ? {tvec[0][31:8], ol, 5'h0}:
-        (fcu_instr[`INSTRUCTION_OP] == `CALL || fcu_instr[`INSTRUCTION_OP] == `RET) ? fcu_argI :
+        (fcu_instr[`INSTRUCTION_OP] == `CALL || IsRet(fcu_instr)) ? fcu_argI :
         (fcu_instr[`INSTRUCTION_OP] == `JAL) ? fcu_argA + fcu_argI: (fcu_bt ? fcu_pc + 4 : fcu_pc + 4 + fcu_argI);
 
     assign  alu0_exc = (alu0_instr[`INSTRUCTION_OP] != `BRK)
@@ -2181,7 +2189,7 @@ end
 
     assign fcu_branchmiss = fcu_dataready && 
                 (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol)) ||
-			   ( IsRTI(fcu_instr) || (fcu_instr[`INSTRUCTION_OP] == `BRK) || (fcu_instr[`INSTRUCTION_OP] == `CALL) ||
+			   ( IsRTI(fcu_instr) || IsRet(fcu_instr) || (fcu_instr[`INSTRUCTION_OP] == `BRK) || (fcu_instr[`INSTRUCTION_OP] == `CALL) ||
 			    (IsBranch(fcu_instr) ? ((|fcu_bus && ~fcu_bt) || (~|fcu_bus && fcu_bt))
 			  : (fcu_instr[`INSTRUCTION_OP] == `JAL) ? 1'b1
 			  : `INV));
@@ -3314,7 +3322,7 @@ else begin: fetch_phase
             iqentry_exc	[ alu0_id[2:0] ] <= alu0_exc;
             iqentry_done[ alu0_id[2:0] ] <= !iqentry_mem[ alu0_id[2:0] ] && alu0_done && !IsImmp(alu0_instr);
             iqentry_out	[ alu0_id[2:0] ] <= `INV;
-            iqentry_agen[ alu0_id[2:0] ] <= !iqentry_fc[alu0_id[2:0]];  // RET
+            iqentry_agen[ alu0_id[2:0] ] <= !iqentry_fc[alu0_id[2:0]] || IsRet(alu0_instr);  // RET
             alu0_dataready <= FALSE;
 	    end
 	end
@@ -3327,7 +3335,7 @@ else begin: fetch_phase
             iqentry_exc	[ alu1_id[2:0] ] <= alu1_exc;
             iqentry_done[ alu1_id[2:0] ] <= !iqentry_mem[ alu1_id[2:0] ] && alu1_done && !IsImmp(alu1_instr);
             iqentry_out	[ alu1_id[2:0] ] <= `INV;
-            iqentry_agen[ alu1_id[2:0] ] <= !iqentry_fc[alu1_id[2:0]];  // RET
+            iqentry_agen[ alu1_id[2:0] ] <= !iqentry_fc[alu1_id[2:0]] || IsRet(alu1_instr);  // RET
     	    alu1_dataready <= FALSE;
 	    end
 	end
@@ -3340,7 +3348,7 @@ else begin: fetch_phase
             iqentry_exc    [ fcu_id[2:0] ] <= fcu_exc;
             iqentry_done[ fcu_id[2:0] ] <= !iqentry_mem[ fcu_id[2:0] ] && !IsImmp(fcu_instr); // CALL instruction is also mem
             iqentry_out    [ fcu_id[2:0] ] <= `INV;
-            iqentry_agen[ fcu_id[2:0] ] <= `VAL;
+            iqentry_agen[ fcu_id[2:0] ] <= !IsRet(fcu_instr);
             fcu_dataready <= !iqentry_mem[ fcu_id[2:0] ];
             fcu_instr <= `NOP_INSN; // to clear branchmiss
         end
@@ -3362,19 +3370,19 @@ else begin: fetch_phase
 	// set the IQ entry == DONE as soon as the SW is let loose to the memory system
 	//
 	if (dram0 == 2'd1 && IsStore(dram0_instr)) begin
-	    if ((alu0_v && dram0_id[2:0] == alu0_id[2:0]) || (alu1_v && dram0_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
-	    iqentry_done[ dram0_id[2:0] ] <= `VAL;
-	    iqentry_out[ dram0_id[2:0] ] <= `INV;
+	    if ((alu0_v && (dram0_id[2:0] == alu0_id[2:0])) || (alu1_v && (dram0_id[2:0] == alu1_id[2:0])))	panic <= `PANIC_MEMORYRACE;
+//	    iqentry_done[ dram0_id[2:0] ] <= `VAL;
+//	    iqentry_out[ dram0_id[2:0] ] <= `INV;
 	end
 	if (dram1 == 2'd1 && IsStore(dram1_instr)) begin
-	    if ((alu0_v && dram1_id[2:0] == alu0_id[2:0]) || (alu1_v && dram1_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
-	    iqentry_done[ dram1_id[2:0] ] <= `VAL;
-	    iqentry_out[ dram1_id[2:0] ] <= `INV;
+	    if ((alu0_v && (dram1_id[2:0] == alu0_id[2:0])) || (alu1_v && (dram1_id[2:0] == alu1_id[2:0])))	panic <= `PANIC_MEMORYRACE;
+//	    iqentry_done[ dram1_id[2:0] ] <= `VAL;
+//	    iqentry_out[ dram1_id[2:0] ] <= `INV;
 	end
 	if (dram2 == 2'd1 && IsStore(dram2_instr)) begin
-	    if ((alu0_v && dram2_id[2:0] == alu0_id[2:0]) || (alu1_v && dram2_id[2:0] == alu1_id[2:0]))	panic <= `PANIC_MEMORYRACE;
-	    iqentry_done[ dram2_id[2:0] ] <= `VAL;
-	    iqentry_out[ dram2_id[2:0] ] <= `INV;
+	    if ((alu0_v && (dram2_id[2:0] == alu0_id[2:0])) || (alu1_v && (dram2_id[2:0] == alu1_id[2:0])))	panic <= `PANIC_MEMORYRACE;
+//	    iqentry_done[ dram2_id[2:0] ] <= `VAL;
+//	    iqentry_out[ dram2_id[2:0] ] <= `INV;
 	end
 
 	//
@@ -4107,6 +4115,8 @@ BIDLE:
             adr_o <= dram0_addr;
             dat_o <= fnDato(dram0_instr,dram1_data);
             cr_o <= IsSWC(dram0_instr);
+    	    iqentry_done[ dram0_id[2:0] ] <= `VAL;
+            iqentry_out[ dram0_id[2:0] ] <= `INV;
             bstate <= B13;
         end
         else if (dram1==2'd1 && IsStore(dram1_instr)) begin
@@ -4117,6 +4127,8 @@ BIDLE:
             adr_o <= dram1_addr;
             dat_o <= fnDato(dram1_instr,dram1_data);
             cr_o <= IsSWC(dram1_instr);
+    	    iqentry_done[ dram1_id[2:0] ] <= `VAL;
+            iqentry_out[ dram1_id[2:0] ] <= `INV;
             bstate <= B13;
         end
         else if (dram2==2'd1 && IsStore(dram2_instr)) begin
@@ -4127,6 +4139,8 @@ BIDLE:
             adr_o <= dram2_addr;
             dat_o <= fnDato(dram2_instr,dram2_data);
             cr_o <= IsSWC(dram2_instr);
+    	    iqentry_done[ dram2_id[2:0] ] <= `VAL;
+            iqentry_out[ dram2_id[2:0] ] <= `INV;
             bstate <= B13;
         end
         // Check for read misses on the data cache
@@ -4243,11 +4257,11 @@ B2c:
     end
 B2d:
     if (ack_i) begin
-        stb_o <= `LOW;
         adr_o <= adr_o + 32'd8;
-        bstate <= B3;
+        bstate <= B2d;
         if (adr_o[4:3]==2'd3) begin
             cyc_o <= `LOW;
+            stb_o <= `LOW;
             sel_o <= 8'h00;
             bstate <= B4;
         end
@@ -4269,16 +4283,17 @@ B6: begin
     end
 B7:
     if (ack_i) begin
-        stb_o <= `LOW;
-        bstate <= B8;
-        if (adr_o[4:3]==2'd3) begin
+        //stb_o <= `LOW;
+        bstate <= B7;
+        if (L2_adr[4:3]==2'd3) begin
             cyc_o <= `LOW;
+            stb_o <= `LOW;
             sel_o <= 8'h00;
             icl_o <= `LOW;
             bstate <= B9;
         end
         else begin
-            adr_o[4:3] <= adr_o[4:3] + 2'd1;
+            //adr_o[4:3] <= adr_o[4:3] + 2'd1;
             L2_adr[4:3] <= L2_adr[4:3] + 2'd1;
         end
     end

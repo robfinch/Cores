@@ -44,11 +44,11 @@ end
 
 wire cs = cs_i && cyc_i && stb_i;
 
-reg rdy,rdy1;
+reg rdy,rdy1,rdy2;
 always @(posedge clk_i)
 begin
 	rdy1 <= cs;
-	rdy <= rdy1 & cs;
+	rdy <= rdy1 & cs & adr_i[4:3]!=2'b11;
 end
 assign ack_o = cs ? rdy : 1'b0;
 
@@ -56,12 +56,12 @@ assign ack_o = cs ? rdy : 1'b0;
 wire pe_cs;
 edge_det u1(.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(cs), .pe(pe_cs), .ne(), .ee() );
 
-reg [17:2] ctr;
+reg [14:0] ctr;
 always @(posedge clk_i)
 	if (pe_cs)
 		ctr <= adr_i[17:3] + 12'd1;
-	else if (cs)
-		ctr <= ctr + 14'd1;
+	else if (cs && ctr[1:0]!=2'b11)
+		ctr <= ctr + 15'd1;
 
 always @(posedge clk_i)
 	radr <= pe_cs ? adr_i[17:3] : ctr;

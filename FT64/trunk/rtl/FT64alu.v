@@ -202,7 +202,7 @@ case(instr[`INSTRUCTION_OP])
  `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `LB,`LH,`LHU,`LW,`SB,`SH,`SW:  o = a + b;
  `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
- `RET:       o = a + b;
+ `RET:       o = a;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 
@@ -214,6 +214,7 @@ case(instr[`INSTRUCTION_OP])
     `POP:   ob = a + {{59{instr[25]}},instr[25:21]};
     default:    ob = 64'hCCCCCCCCCCCCCCCC;
     endcase
+`RET:       ob = a + b;
 default:    ob = 64'hCCCCCCCCCCCCCCCC;
 endcase
 
