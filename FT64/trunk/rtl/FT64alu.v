@@ -101,7 +101,7 @@ default:    IsSgnus = FALSE;
 endcase
 endfunction
 
-wire [63:0] bfout;
+wire [63:0] bfout,shfto;
 FT64_bitfield ubf1
 (
     .op(instr[`INSTRUCTION_S1]),
@@ -147,12 +147,21 @@ FT64_divider #(DBW) udiv1
 	.idle(div_idle)
 );
 
+FT64_shift ushft1
+(
+    .instr(instr),
+    .a(a),
+    .b(b),
+    .res(shfto),
+    .rolo()
+);
 
 always @*
 case(instr[`INSTRUCTION_OP])
 `RR:
     case(instr[`INSTRUCTION_S2])
     `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
+    `SHIFT:     o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
     `ADD: o = a + b;
     `SUB: o = a - b;
     `CMP: o = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
@@ -163,9 +172,6 @@ case(instr[`INSTRUCTION_OP])
     `NAND:  o = ~(a & b);
     `NOR:   o = ~(a | b);
     `XNOR:  o = ~(a ^ b);
-    `SHL,`SHLI:   o = BIG ? a << b : 64'hCCCCCCCCCCCCCCCC;
-    `SHR,`SHRI:   o = BIG ? a >> b : 64'hCCCCCCCCCCCCCCCC;
-    `ASR,`ASRI:   o = BIG ? (a >> b) | (a[63] ? ~(64'hFFFFFFFFFFFFFFFF >> b) : 64'd0) : 64'hCCCCCCCCCCCCCCCC;
     `SEI:       o = a | b;
     `CMOVEQ:    o = (a==64'd0) ? b : c;
     `CMOVNE:    o = (a!=64'd0) ? b : c;

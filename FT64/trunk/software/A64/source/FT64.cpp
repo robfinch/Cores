@@ -789,18 +789,18 @@ static void emit_prefix(int64_t val)
 {
 	// Fit in 42 bits ?
 	if (val < -0x20000000000LL || val > 0x1FFFFFFFFFFLL) {
-		emitCode((((val >> 16) & 3) << 6) | 0x1B);
+		emitCode((((val >> 16) & 3) << 6) | 0x1A);
 		emitCode((val >> 18) & 255);
 		emitCode((val >> 26) & 255);
 		emitCode((val >> 34) & 255);
-		emitCode((((val >> 42) & 3) << 6) | 0x1C);
+		emitCode((((val >> 42) & 3) << 6) | 0x1B);
 		emitCode((val >> 44) & 255);
 		emitCode((val >> 52) & 255);
 		emitCode((val >> 60) & 255);
 	}
 	// Fit in 16 bits ?
 	else if (val < -32768 || val > 32768) {
-		emitCode((((val >> 16) & 3) << 6) | 0x1B);
+		emitCode((((val >> 16) & 3) << 6) | 0x1A);
 		emitCode((val >> 18) & 255);
 		emitCode((val >> 26) & 255);
 		emitCode((val >> 34) & 255);
@@ -1333,20 +1333,17 @@ static void process_call()
 		);
 		return;
 	}
-	if (val < LB16 || val > 32767LL) {
+	if (val < -0xFFFFFFFFF8000000LL || val > 0x7FFFFFFLL) {
+		emit_prefix(val);
 		emit_insn(
-			(val << 16) |
-			(29 << 11) |
-			(Ra << 6) |
-			0x10,0,3
-			);
+			((val & 0xFFFF) << 16) |
+			0x19,0,4
+		);
 		return;
 	}
 	emit_insn(
-		(val << 16) |
-		(29 << 11) |
-		(Ra << 6) |
-		0x14,0,2
+		(val << 6) |
+		0x19,0,4
 		);
 	return;
 }
@@ -1361,10 +1358,10 @@ static void process_ret()
 	}
 	emit_prefix(val);
 	emit_insn(
-		((val & 0xFFFF) << 16) |
-		(0x00 << 11) |
-		(29 << 6) |
-		0x18,0,4
+		(((val==0?8:val) & 0xFFFF) << 16) |
+		(31 << 11) |
+		(31 << 6) |
+		0x29,0,4
 	);
 }
 
@@ -1714,19 +1711,19 @@ static void process_mov(int oc)
 // shr r1,r2,#5
 // ----------------------------------------------------------------------------
 
-static void process_shifti(int funct6)
+static void process_shifti(int op4)
 {
      int Ra;
      int Rt;
      int64_t val;
-     
+ 
      Rt = getRegisterX();
      need(',');
      Ra = getRegisterX();
      need(',');
      NextToken();
      val = expr();
-     emit_insn((funct6 << 26) | (((val >>5) & 1) << 21) | (Rt << 16) | ((val & 0x1F) << 11) | (Ra << 6) | 0x02,!expand_flag,4);
+     emit_insn((3 << 26) | (op4 << 22) | (((val >>5) & 1) << 21) | (Rt << 16) | ((val & 0x1F) << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 }
 
 // ----------------------------------------------------------------------------
@@ -1768,7 +1765,7 @@ static void process_sei()
 // shl r1,r2,r3
 // ----------------------------------------------------------------------------
 
-static void process_shift(int funct6)
+static void process_shift(int op4)
 {
      int Ra, Rb;
      int Rt;
@@ -1782,12 +1779,12 @@ static void process_shift(int funct6)
      NextToken();
 	 if (token=='#') {
 		 inptr = p;
-		 process_shifti(funct6 + 0x2);
+		 process_shifti(op4 + 0x8);
 	 }
 	 else {
 		prevToken();
 		Rb = getRegisterX();
-		emit_insn((funct6 << 26) | (Rt << 16)| (Rb << 11) | (Ra << 6) | 0x02,!expand_flag,4);
+		emit_insn((3 << 26) | (op4 << 22) | (Rt << 16)| (Rb << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 	 }
 }
 
@@ -2190,8 +2187,8 @@ void FT64_processMaster()
         case tk_align: process_align(); continue; break;
         case tk_and:  process_rrop(0x08); break;
         case tk_andi:  process_riop(0x08); break;
-        case tk_asl: process_shift(0x20); break;
-        case tk_asr: process_shift(0x22); break;
+        case tk_asl: process_shift(0x2); break;
+        case tk_asr: process_shift(0x3); break;
         case tk_begin_expand: expandedBlock = 1; break;
         case tk_beq: process_bcc(0x01,0); break;
         case tk_bge: process_bcc(0x01,3); break;
@@ -2211,6 +2208,7 @@ void FT64_processMaster()
             }
             segment = bssseg;
             break;
+		case tk_call:  process_call(); break;
         case tk_cli: emit_insn(0xC0000002,0,4); break;
 		case tk_cmp:  process_rrop(0x06); break;
 		case tk_cmpi:  process_riop(0x06); break;
@@ -2279,6 +2277,10 @@ void FT64_processMaster()
             segment = rodataseg;
             break;
 		case tk_ret: process_ret(); break;
+		case tk_rol: process_shift(0x4); break;
+		case tk_roli: process_shift(0xC); break;
+		case tk_ror: process_shift(0x5); break;
+		case tk_rori: process_shift(0xD); break;
 		case tk_rti: emit_insn(0xC8000002,0,4); break;
         case tk_sb:  process_store(0x15); break;
         case tk_sei: process_sei(); break;
@@ -2287,15 +2289,15 @@ void FT64_processMaster()
         //case tk_slti:  process_riop(0x13,0x02); break;
         //case tk_sltui:  process_riop(0x13,0x03); break;
         case tk_sh:  process_store(0x14); break;
-        case tk_shl: process_shift(0x20); break;
-        case tk_shli: process_shifti(0x22); break;
-		case tk_shr: process_shift(0x21); break;
-        case tk_shri: process_shifti(0x23); break;
-		case tk_shru: process_shift(0x21); break;
-		case tk_shrui: process_shifti(0x23); break;
-        case tk_slli: process_shifti(0x22); break;
-        case tk_srai: process_shifti(0x25); break;
-        case tk_srli: process_shifti(0x23); break;
+        case tk_shl: process_shift(0x0); break;
+        case tk_shli: process_shifti(0x8); break;
+		case tk_shr: process_shift(0x1); break;
+        case tk_shri: process_shifti(0x9); break;
+		case tk_shru: process_shift(0x1); break;
+		case tk_shrui: process_shifti(0x9); break;
+        case tk_slli: process_shifti(0x8); break;
+        case tk_srai: process_shifti(0xB); break;
+        case tk_srli: process_shifti(0x9); break;
         case tk_sub:  process_rrop(0x05); break;
         case tk_subi:  process_riop(0x05); break;
         case tk_sw:  process_store(0x16); break;

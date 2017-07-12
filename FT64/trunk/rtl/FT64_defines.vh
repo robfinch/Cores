@@ -39,6 +39,20 @@
 `define BGEZ        3'd3
 `define RR      6'h2
 `define BITFIELD    6'h02
+`define SHIFT       6'h03
+`define BccR    6'h03
+`define SHL     4'h0
+`define SHR     4'h1
+`define ASL     4'h2
+`define ASR     4'h3
+`define ROL     4'h4
+`define ROR     4'h5
+`define SHLI    4'h8
+`define SHRI    4'h9
+`define ASLI    4'hA
+`define ASRI    4'hB
+`define ROLI    4'hC
+`define RORI    4'hD
 `define ADD	        6'h04
 `define SUB         6'h05
 `define CMP         6'd6
@@ -60,16 +74,7 @@
 `define PUSH        6'h19
 `define POP         6'h1A
 `define LWRX        6'h1D
-`define SHL         6'h20
-`define ASL         6'h20
-`define SHR         6'h21
-`define LSR         6'h21
-`define SHLI        6'h22
-`define ASLI        6'h22
-`define SHRI        6'h23
-`define LSRI        6'h23
-`define ASR         6'h24
-`define ASRI        6'h25
+`define LBUX        6'h23
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
 `define MUX         6'h2A
@@ -93,6 +98,7 @@
 `define ANDI    6'h08
 `define ORI     6'h09
 `define XORI    6'h0A
+`define TGT     6'h0C
 `define REX     6'h0D
 `define CSRRW   6'h0E
 `define EXEC    6'h0F
@@ -110,6 +116,7 @@
 `define IMMM    6'h1B
 `define NOP     6'h1C
 `define LWR     6'h1D
+`define LBU     6'h23
 `define RET     6'h29
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
@@ -123,6 +130,7 @@
 
 `define NOP_INSN    {26'd0,`NOP}
 
+`define CSR_CR0     11'h000
 `define CSR_HARTID  11'h001
 `define CSR_TICK    11'h002
 `define CSR_PCR     11'h003
@@ -162,6 +170,7 @@
 `define EXC_INVALID	9'd4
 
 `define FLT_NONE    9'd000
+`define FLT_TGT     9'd482
 `define FLT_IADR    9'd484
 `define FLT_EXF     9'd497
 `define FLT_PRIV    9'd501

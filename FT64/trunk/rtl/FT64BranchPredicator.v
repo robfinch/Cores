@@ -24,13 +24,14 @@
 //
 //=============================================================================
 //
-module FT64BranchPredictor(rst, clk,
+module FT64BranchPredictor(rst, clk, en,
     xisBranch0, xisBranch1,
     pcA, pcB, pcC, pcD, xpc0, xpc1, takb0, takb1,
     predict_takenA, predict_takenB, predict_takenC, predict_takenD);
 parameter DBW=32;
 input rst;
 input clk;
+input en;
 input xisBranch0;
 input xisBranch1;
 input [DBW-1:0] pcA;
@@ -68,10 +69,10 @@ wire [1:0] bht_ibitsA = branch_history_table[bht_raA];
 wire [1:0] bht_ibitsB = branch_history_table[bht_raB];
 wire [1:0] bht_ibitsC = branch_history_table[bht_raC];
 wire [1:0] bht_ibitsD = branch_history_table[bht_raD];
-assign predict_takenA = bht_ibitsA==2'd0 || bht_ibitsA==2'd1;
-assign predict_takenB = bht_ibitsB==2'd0 || bht_ibitsB==2'd1;
-assign predict_takenC = bht_ibitsC==2'd0 || bht_ibitsC==2'd1;
-assign predict_takenD = bht_ibitsD==2'd0 || bht_ibitsD==2'd1;
+assign predict_takenA = (bht_ibitsA==2'd0 || bht_ibitsA==2'd1) && en;
+assign predict_takenB = (bht_ibitsB==2'd0 || bht_ibitsB==2'd1) && en;
+assign predict_takenC = (bht_ibitsC==2'd0 || bht_ibitsC==2'd1) && en;
+assign predict_takenD = (bht_ibitsD==2'd0 || bht_ibitsD==2'd1) && en;
 
 // Two bit saturating counter
 // If taking a branch in commit0 then a following branch
@@ -109,24 +110,26 @@ always @(posedge clk)
 if (rst)
 	gbl_branch_hist <= 3'b000;
 else begin
-    if (xisBranch0 & xisBranch1) begin
-        if (takb0) begin
+    if (en) begin
+        if (xisBranch0 & xisBranch1) begin
+            if (takb0) begin
+                gbl_branch_hist <= {gbl_branch_hist[1:0],takb0};
+                branch_history_table[bht_wa0] <= xbits_new0;
+            end
+            else begin
+                gbl_branch_hist <= {gbl_branch_hist[0],takb0,takb1};
+                branch_history_table[bht_wa1] <= xbits_new1;
+                branch_history_table[bht_wa0] <= xbits_new0;
+            end
+        end
+        else if (xisBranch0) begin
             gbl_branch_hist <= {gbl_branch_hist[1:0],takb0};
             branch_history_table[bht_wa0] <= xbits_new0;
         end
-        else begin
-            gbl_branch_hist <= {gbl_branch_hist[0],takb0,takb1};
+        else if (xisBranch1) begin
+            gbl_branch_hist <= {gbl_branch_hist[1:0],takb1};
             branch_history_table[bht_wa1] <= xbits_new1;
-            branch_history_table[bht_wa0] <= xbits_new0;
         end
-    end
-    else if (xisBranch0) begin
-        gbl_branch_hist <= {gbl_branch_hist[1:0],takb0};
-        branch_history_table[bht_wa0] <= xbits_new0;
-	end
-	else if (xisBranch1) begin
-        gbl_branch_hist <= {gbl_branch_hist[1:0],takb1};
-        branch_history_table[bht_wa1] <= xbits_new1;
 	end
 end
 

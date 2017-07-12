@@ -870,7 +870,7 @@ int NextToken()
 
         // call cas chk cmp cmpu code cli com cmpi csrrc csrrs csrrw
         case 'c': case 'C':
-			 if (gCpu==7 || gCpu=='A') {
+			 if (gCpu==7 || gCpu=='A' || gCpu=='F') {
                  if ((inptr[1]=='a' || inptr[1]=='A') &&
                      (inptr[2]=='l' || inptr[2]=='L') &&
                      (inptr[3]=='l' || inptr[3]=='L') &&
@@ -2024,7 +2024,7 @@ int NextToken()
 
         // ret rol roli ror rori rtd rte rtf rts rti rtl rodata
         case 'r': case 'R':
-			if (gCpu==7 || gCpu=='A') {
+			if (gCpu==7 || gCpu=='A' || gCpu=='F') {
 				if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='t' || inptr[2]=='T') && isspace(inptr[3])) {
 					inptr += 3;
 					return token = tk_ret;

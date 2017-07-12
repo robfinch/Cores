@@ -112,7 +112,7 @@ always @(posedge clk_i)
 always @(posedge clk_i)
     _4MB2 <= _4MB1 | !mapen1;
 always @(posedge clk_i)
-    mapen1 <= !mol & mapen_i;
+    mapen1 <= !mol & mapen_i && (s_adr_i[31:26]!=6'h3F);
 always @(posedge clk_i)
     mapen2 <= mapen1;
 always @(posedge clk_i)
