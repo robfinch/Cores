@@ -53,6 +53,11 @@
 `define ASRI    4'hB
 `define ROLI    4'hC
 `define RORI    4'hD
+`define R1          6'h01
+`define CNTLZ           5'h00
+`define CNTLO           5'h01
+`define CNTPOP          5'h02
+`define ABS             5'h04
 `define ADD	        6'h04
 `define SUB         6'h05
 `define CMP         6'd6
@@ -73,13 +78,17 @@
 `define SWCX        6'h17
 `define PUSH        6'h19
 `define POP         6'h1A
+`define UNLINK      6'h1B
 `define LWRX        6'h1D
 `define CACHEX      6'h1E
+`define PEAX        6'h1F
 `define LBUX        6'h23
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
 `define MUX         6'h2A
 `define DEMUX       6'h2B
+`define MIN         6'h2C
+`define MAX         6'h2D
 `define SEI         6'h30
 `define WAIT        6'h31
 `define RTI         6'h32
@@ -118,8 +127,10 @@
 `define NOP     6'h1C
 `define LWR     6'h1D
 `define CACHE   6'h1E
+`define PEA     6'h1F
 `define LBU     6'h23
 `define RET     6'h29
+`define LINK    6'h2A
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
 `define MODI    6'h2E
@@ -197,6 +208,8 @@
 `define FLT_NONE    9'd000
 `define FLT_TGT     9'd482
 `define FLT_IADR    9'd484
+`define FLT_DBZ     9'd488
+`define FLT_OFL     9'd489
 `define FLT_EXF     9'd497
 `define FLT_PRIV    9'd501
 

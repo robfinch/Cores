@@ -24,7 +24,7 @@
 //
 `include "FT64_defines.vh"
 
-module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, pc, csr, o, ob, done, idle, divByZero);
+module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, pc, csr, o, ob, done, idle, excen, exc);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter TRUE = 1'b1;
@@ -44,12 +44,16 @@ output reg [63:0] o;
 output reg [63:0] ob;
 output reg done;
 output reg idle;
-output divByZero;
+input [4:0] excen;
+output reg [8:0] exc;
 integer n;
 
 wire [DBW-1:0] divq, rem;
+wire divByZero;
 wire [DBW*2-1:0] prod;
 wire mult_done, mult_idle, div_done, div_idle;
+wire aslo;
+wire [6:0] clzo,cloo,cpopo;
 
 function IsMul;
 input [31:0] isn;
@@ -154,13 +158,40 @@ FT64_shift ushft1
     .instr(instr),
     .a(a),
     .b(b),
-    .res(shfto)
+    .res(shfto),
+    .ov(aslo)
+);
+
+cntlz64 uclz1
+(
+	.i(a),
+	.o(clzo)
+);
+
+cntlo64 uclo1
+(
+	.i(a),
+	.o(cloo)
+);
+
+cntpop64 ucpop1
+(
+	.i(a),
+	.o(cpopo)
 );
 
 always @*
 case(instr[`INSTRUCTION_OP])
 `RR:
     case(instr[`INSTRUCTION_S2])
+    `R1:
+        case(instr[`INSTRUCTION_S1])
+        `CNTLZ:     o = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
+        `CNTLO:     o = BIG ? {57'd0,cloo} : 64'hCCCCCCCCCCCCCCCC;
+        `CNTPOP:    o = BIG ? {57'd0,cpopo} : 64'hCCCCCCCCCCCCCCCC;
+        `ABS:       o = BIG ? (a[63] ? -a : a) : 64'hCCCCCCCCCCCCCCCC;
+        default:    o = 64'hDEADDEADDEADDEAD;
+        endcase
     `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
     `SHIFT:     o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
     `ADD: o = a + b;
@@ -191,7 +222,10 @@ case(instr[`INSTRUCTION_OP])
     `DIVMOD:    o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
     `PUSH:      o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
     `POP:       o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
+    `UNLINK:    o = b;
     `LBX,`LHX,`LHUX,`LWX,`SBX,`SHX,`SWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
+    `MIN:       o = BIG ? ((a < b && a < c) ? a : (b < c) ? b : c) : 64'hCCCCCCCCCCCCCCCC;
+    `MAX:       o = BIG ? ((a > b && a > c) ? a : (b > c) ? b : c) : 64'hCCCCCCCCCCCCCCCC;
     default:    o = 64'hDEADDEADDEADDEAD;
     endcase
  `ADDI: o = a + b;
@@ -212,6 +246,7 @@ case(instr[`INSTRUCTION_OP])
  `LB,`LH,`LHU,`LW,`SB,`SH,`SW:  o = a + b;
  `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
  `RET:       o = a;
+ `LINK:      o = a - 32'd8;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 
@@ -223,11 +258,13 @@ case(instr[`INSTRUCTION_OP])
     `DIVMOD,`DIVMODU,`DIVMODSU:    ob = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
     `PUSH:      ob = a + {{59{instr[25]}},instr[25:21]};
     `POP:       ob = a + {{59{instr[25]}},instr[25:21]};
+    `UNLINK:    ob = b + 32'd8;
     `DEMUX:     for (n = 0; n < 64; n = n + 1)
                     ob[n] <= (a[n] & BIG) ? b[n] : 1'b0;
     default:    ob = 64'hCCCCCCCCCCCCCCCC;
     endcase
 `RET:       ob = a + b;
+`LINK:      ob = a + b;
 default:    ob = 64'hCCCCCCCCCCCCCCCC;
 endcase
 
@@ -251,6 +288,36 @@ begin
         idle <= div_idle;
     else
         idle <= TRUE;
+end
+
+function fnOverflow;
+input op;   // 0 = add, 1=sub
+input a;
+input b;
+input s;
+fnOverflow = (op ^ s ^ b) & (~op ^ a ^ b);
+endfunction
+
+always @*
+begin
+case(instr[`INSTRUCTION_OP])
+`RR:
+    case(instr[`INSTRUCTION_S2])
+    `ADD:   exc <= (fnOverflow(0,a[63],b[63],o[63]) & excen[0]) ? `FLT_OFL : `FLT_NONE;
+    `SUB:   exc <= (fnOverflow(1,a[63],b[63],o[63]) & excen[1]) ? `FLT_OFL : `FLT_NONE;
+    `ASL,`ASLI:     exc <= (BIG & aslo & excen[2]) ? `FLT_OFL : `FLT_NONE;
+    `MUL,`MULSU:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF && excen[3] ? `FLT_OFL : `FLT_NONE ):
+                           (prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE);
+    `MULU:      exc <= prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE;
+    `DIVMOD,`DIVMODSU,`DIVMODU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
+    default:    exc <= `FLT_NONE;
+    endcase
+`MULI,`MULSUI:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF & excen[3] ? `FLT_OFL : `FLT_NONE):
+                                    (prod[127:64] != 64'd0 & excen[3] ? `FLT_OFL : `FLT_NONE);
+`DIVI,`DIVSUI: exc <= BIG & excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
+`MODI,`MODSUI: exc <= BIG & excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
+default:    exc <= `FLT_NONE;
+endcase
 end
 
 endmodule

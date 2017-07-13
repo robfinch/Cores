@@ -166,6 +166,7 @@ reg [31:0] pcr;
 reg [63:0] pcr2;
 assign pcr_o = pcr;
 assign pcr2_o = pcr2;
+reg [63:0] aec;
 reg [15:0] cause[0:7];
 reg [31:0] epc,epc0,epc1,epc2,epc3,epc4,epc5,epc6,epc7,epc8; // exception pc and stack
 reg [127:0] mstatus;     // machine status
@@ -732,17 +733,22 @@ function [4:0] fnRt;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `RR:    case(isn[`INSTRUCTION_S2])
+        `R1:        fnRt = isn[`INSTRUCTION_RB];
         `PUSH:      fnRt = 6'd0;
         `POP:       fnRt = isn[`INSTRUCTION_RB];
+        `UNLINK:    fnRt = isn[`INSTRUCTION_RB];
         `CMOVEQ:    fnRt = isn[`INSTRUCTION_S1];
         `CMOVNE:    fnRt = isn[`INSTRUCTION_S1];
         `MUX:       fnRt = isn[`INSTRUCTION_S1];
+        `MIN:       fnRt = isn[`INSTRUCTION_S1];
+        `MAX:       fnRt = isn[`INSTRUCTION_S1];
         default:    fnRt = isn[`INSTRUCTION_RC];
         endcase
 `Bcc:   fnRt = 6'd0;
 `BccR:  fnRt = 6'd0;
 `CALL:  fnRt = 6'd31;
 `RET:   fnRt = 6'd0;
+`LINK:  fnRt = isn[`INSTRUCTION_RB];
 default:    fnRt = isn[`INSTRUCTION_RB];
 endcase
 endfunction
@@ -753,10 +759,11 @@ case(isn[`INSTRUCTION_OP])
 `RR:    case(isn[`INSTRUCTION_S2])
         `MUL,`MULU,`MULSU,
         `DIVMOD,`DIVMODU,`DIVMODSU: fnRt2 = isn[`INSTRUCTION_RD];
-        `PUSH,`POP:   fnRt2 = isn[`INSTRUCTION_RC];
+        `PUSH,`POP,`UNLINK:   fnRt2 = isn[`INSTRUCTION_RC];
         default:    fnRt2 = 6'd0;
         endcase
 `RET:   fnRt2 = isn[`INSTRUCTION_RB];
+`LINK:  fnRt2 = isn[`INSTRUCTION_RA];
 default:    fnRt2 = 6'd0;
 endcase
 endfunction
@@ -791,6 +798,7 @@ case(isn[`INSTRUCTION_OP])
 `JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CALL:  Source1Valid = FALSE;
 `RET:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LINK:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 default:    Source1Valid = TRUE;
 endcase
 endfunction
@@ -802,6 +810,7 @@ case(isn[`INSTRUCTION_OP])
 `Bcc:   Source2Valid = TRUE;
 `BccR:  Source2Valid = TRUE;
 `RR:    case(isn[`INSTRUCTION_S2])
+        `R1:       Source2Valid = TRUE;
         `POP:      Source2Valid = TRUE;
         `SHLI:     Source2Valid = TRUE;
         `SHRI:     Source2Valid = TRUE;
@@ -825,6 +834,7 @@ case(isn[`INSTRUCTION_OP])
 `SWC:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `JAL:   Source2Valid = TRUE;
 `RET:   Source2Valid = TRUE;
+`LINK:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 default:    Source2Valid = TRUE;
 endcase
 endfunction
@@ -839,6 +849,7 @@ case(isn[`INSTRUCTION_OP])
     `SHX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SWX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SWCX:      Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `MIN,`MAX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
 default:    Source3Valid = TRUE;
@@ -858,6 +869,7 @@ case(isn[`INSTRUCTION_OP])
 `JAL:   IsALU = FALSE;
 `CALL:  IsALU = FALSE;
 `RET:   IsALU = TRUE;
+`LINK:  IsALU = TRUE;
 default:    IsALU = TRUE;
 endcase
 endfunction
@@ -906,6 +918,7 @@ case(isn[`INSTRUCTION_OP])
 `JAL:   HasConst = TRUE;
 `CALL:  HasConst = TRUE;
 `RET:   HasConst = TRUE;
+`LINK:  HasConst = TRUE;
 default:    HasConst = FALSE;
 endcase
 endfunction
@@ -950,6 +963,7 @@ case(isn[`INSTRUCTION_OP])
 `SWC:   IsMem = TRUE;
 `CALL:  IsMem = TRUE;
 `RET:   IsMem = TRUE;
+`LINK:  IsMem = TRUE;
 default:    IsMem = FALSE;
 endcase
 endfunction
@@ -1025,6 +1039,7 @@ case(isn[`INSTRUCTION_OP])
 `LW,`SW:    MemSize = octa;
 `LWR,`SWC:  MemSize = octa;
 `RET:       MemSize = octa;
+`LINK:      MemSize = octa;
 default:    MemSize = octa;
 endcase
 endfunction
@@ -1046,6 +1061,7 @@ case(isn[`INSTRUCTION_OP])
 `SW:    IsStore = TRUE;
 `SWC:   IsStore = TRUE;
 `CALL:  IsStore = TRUE;
+`LINK:  IsStore = TRUE;
 default:    IsStore = FALSE;
 endcase
 endfunction
@@ -1167,6 +1183,7 @@ else
 case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
+    `R1:    IsRFW = TRUE;
     `BITFIELD:  IsRFW = TRUE;
     `ADD:   IsRFW = TRUE;
     `SUB:   IsRFW = TRUE;
@@ -1192,6 +1209,7 @@ case(isn[`INSTRUCTION_OP])
     `SHL,`SHLI:   IsRFW = TRUE;
     `SHR,`SHRI:   IsRFW = TRUE;
     `ASR,`ASRI:   IsRFW = TRUE;
+    `MIN,`MAX:    IsRFW = TRUE;
     default:    IsRFW = FALSE;
     endcase
 `ADDI:      IsRFW = TRUE;
@@ -1211,7 +1229,8 @@ case(isn[`INSTRUCTION_OP])
 `MODI:      IsRFW = TRUE;
 `JAL:       IsRFW = TRUE;
 `CALL:      IsRFW = TRUE;  
-`RET:       IsRFW = TRUE;  
+`RET:       IsRFW = TRUE; 
+`LINK:      IsRFW = TRUE; 
 `LB:        IsRFW = TRUE;
 `LBU:       IsRFW = TRUE;
 `LH:        IsRFW = TRUE;
@@ -1274,12 +1293,14 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
+    `R1:        IsAlu0Only = TRUE;
     `BITFIELD:  IsAlu0Only = TRUE;
     `SHIFT:     IsAlu0Only = TRUE;
     `LBX,`LBUX,`LHX,`LHUX,`LWX,`LWRX:   IsAlu0Only = TRUE;
     `SBX,`SHX,`SWX,`SWCX: IsAlu0Only = TRUE;
     `MULU,`MULSU,`MUL,
     `DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
+    `MIN,`MAX:  IsAlu0Only = TRUE;
     default:    IsAlu0Only = FALSE;
     endcase
 `MULUI,`MULSUI,`MULI,
@@ -1334,7 +1355,7 @@ begin
 		1'b1:	fnSelect = 8'hF0;
 		endcase
 	`LW,`SW,`LWR,`SWC:   fnSelect = 8'hFF;
-    `CALL,`RET:  fnSelect = 8'hFF;
+    `CALL,`RET,`LINK:  fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
 end
@@ -2308,7 +2329,9 @@ end
         .o(alu0_bus),
         .ob(alu0b_bus),
         .done(alu0_done),
-        .idle(alu0_idle)
+        .idle(alu0_idle),
+        .excen(aec[4:0]),
+        .exc(alu0_exc)
     );
     FT64alu #(.BIG(1'b0)) ualu1 (
         .rst(rst),
@@ -2325,7 +2348,9 @@ end
         .o(alu1_bus),
         .ob(alu1b_bus),
         .done(alu1_done),
-        .idle(alu1_idle)
+        .idle(alu1_idle),
+        .excen(aec[4:0]),
+        .exc(alu1_exc)
     );
     fpUnit ufp1
     (
@@ -2389,29 +2414,29 @@ end
         (fcu_instr[`INSTRUCTION_OP] == `BccR) ? fcu_argC :
                                                 (fcu_bt ? fcu_pc + 4 : fcu_pc + 4 + fcu_argI);
 
-    assign  alu0_exc = (alu0_instr[`INSTRUCTION_OP] != `BRK)
-			? `EXC_NONE
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu0_argB[`INSTRUCTION_S2]
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_MFSR)	? `EXC_NONE
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_MTSR)	? `EXC_NONE
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU1)	? `EXC_INVALID
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU2)	? `EXC_INVALID
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU3)	? `EXC_INVALID
-			: (alu0_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu0_argB[`INSTRUCTION_S2]
-			: `EXC_INVALID;
+//    assign  alu0_exc = (alu0_instr[`INSTRUCTION_OP] != `BRK)
+//			? `EXC_NONE
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu0_argB[`INSTRUCTION_S2]
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_MFSR)	? `EXC_NONE
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_MTSR)	? `EXC_NONE
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU1)	? `EXC_INVALID
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU2)	? `EXC_INVALID
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_RFU3)	? `EXC_INVALID
+//			: (alu0_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu0_argB[`INSTRUCTION_S2]
+//			: `EXC_INVALID;
 
-    assign  alu1_exc = (alu1_instr[`INSTRUCTION_OP] != `BRK)
-			? `EXC_NONE
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu1_argB[`INSTRUCTION_S2]
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_MFSR)	? `EXC_NONE
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_MTSR)	? `EXC_NONE
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU1)	? `EXC_INVALID
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU2)	? `EXC_INVALID
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU3)	? `EXC_INVALID
-			: (alu1_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu1_argB[`INSTRUCTION_S2]
-			: `EXC_INVALID;
+//    assign  alu1_exc = (alu1_instr[`INSTRUCTION_OP] != `BRK)
+//			? `EXC_NONE
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_NONE)	? `EXC_NONE
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_CALL)	? alu1_argB[`INSTRUCTION_S2]
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_MFSR)	? `EXC_NONE
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_MTSR)	? `EXC_NONE
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU1)	? `EXC_INVALID
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU2)	? `EXC_INVALID
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_RFU3)	? `EXC_INVALID
+//			: (alu1_argB[`INSTRUCTION_S1] == `SYS_EXC)	? alu1_argB[`INSTRUCTION_S2]
+//			: `EXC_INVALID;
 
     assign fcu_branchmiss = fcu_dataready && 
                 (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol)) ||
@@ -3136,114 +3161,15 @@ else begin
 
     for (n = 0; n < QENTRIES; n = n + 1)
     begin
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == {1'b0,fpu_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a1[n] <= fpu_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == {1'b0,fpu_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a2[n] <= fpu_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == {1'b0,fpu_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a3[n] <= fpu_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == {1'b0,alu0_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a1[n] <= alu0_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == {1'b0,alu0_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a2[n] <= alu0_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == {1'b0,alu0_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a3[n] <= alu0_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == {1'b0,alu1_id} && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a1[n] <= alu1_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == {1'b0,alu1_id} && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a2[n] <= alu1_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == {1'b0,alu1_id} && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a3[n] <= alu1_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == {1'b1,alu0_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a1[n] <= alu0b_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == {1'b1,alu0_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a2[n] <= alu0b_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == {1'b1,alu0_id} && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-            iqentry_a3[n] <= alu0b_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == {1'b1,alu1_id} && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a1[n] <= alu1b_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == {1'b1,alu1_id} && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a2[n] <= alu1b_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == {1'b1,alu1_id} && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a3[n] <= alu1b_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == fcu_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a1[n] <= fcu_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == fcu_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a2[n] <= fcu_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == fcu_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-            iqentry_a3[n] <= fcu_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == dram_id && !dram_tgtpc && iqentry_v[n] == `VAL && dram_v == `VAL) begin
-            iqentry_a1[n] <= dram_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == dram_id && !dram_tgtpc && iqentry_v[n] == `VAL && dram_v == `VAL) begin
-            iqentry_a2[n] <= dram_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == dram_id && !dram_tgtpc && iqentry_v[n] == `VAL && dram_v == `VAL) begin
-            iqentry_a3[n] <= dram_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
-            iqentry_a1[n] <= commit0_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
-            iqentry_a2[n] <= commit0_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
-            iqentry_a3[n] <= commit0_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
-        if (iqentry_a1_v[n] == `INV && iqentry_a1_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
-            iqentry_a1[n] <= commit1_bus;
-            iqentry_a1_v[n] <= `VAL;
-        end
-        if (iqentry_a2_v[n] == `INV && iqentry_a2_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
-            iqentry_a2[n] <= commit1_bus;
-            iqentry_a2_v[n] <= `VAL;
-        end
-        if (iqentry_a3_v[n] == `INV && iqentry_a3_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
-            iqentry_a3[n] <= commit1_bus;
-            iqentry_a3_v[n] <= `VAL;
-        end
+        setargs(n,{1'b0,fpu_id},fpu_v,fpu_bus);
+        setargs(n,{1'b0,alu0_id},alu0_v,alu0_bus);
+        setargs(n,{1'b0,alu1_id},alu1_v,alu1_bus);
+        setargs(n,{1'b1,alu0_id},alu0_v,alu0b_bus);
+        setargs(n,{1'b1,alu1_id},alu1_v,alu1b_bus);
+        setargs(n,{1'b0,fcu_id},fcu_v,fcu_bus);
+        setargs(n,{1'b0,dram_id},dram_v && !dram_tgtpc,dram_bus);
+        setargs(n,commit0_id,commit0_v,commit0_bus);
+        setargs(n,commit1_id,commit1_v,commit1_bus);
 	end
 
     //
@@ -4392,6 +4318,27 @@ else begin
     else if (queued1)
         seq_num <= seq_num + 5'd1;
 end
+
+task setargs;
+input [2:0] nn;
+input [4:0] id;
+input v;
+input [63:0] bus;
+begin
+    if (iqentry_a1_v[nn] == `INV && iqentry_a1_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+        iqentry_a1[nn] <= bus;
+        iqentry_a1_v[nn] <= `VAL;
+    end
+    if (iqentry_a2_v[nn] == `INV && iqentry_a2_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+        iqentry_a2[nn] <= bus;
+        iqentry_a2_v[nn] <= `VAL;
+    end
+    if (iqentry_a3_v[nn] == `INV && iqentry_a3_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+        iqentry_a3[nn] <= fpu_bus;
+        iqentry_a3_v[nn] <= `VAL;
+    end
+end
+endtask
 
 // Enqueue fetchbuf0 onto the tail of the instruction queue
 task enque0;
