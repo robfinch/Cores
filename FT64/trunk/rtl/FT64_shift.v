@@ -43,14 +43,13 @@
 `endif
 `define HIGHWORD    127:64
 
-module FT64_shift(instr, a, b, res, rolo);
+module FT64_shift(instr, a, b, res);
 parameter DMSB=63;
 input [31:0] instr;
 input [DMSB:0] a;
 input [DMSB:0] b;
 output [DMSB:0] res;
 reg [DMSB:0] res;
-output [DMSB:0] rolo;
 parameter ROTATE_INSN = 1;
 
 wire [5:0] opcode = instr[5:0];

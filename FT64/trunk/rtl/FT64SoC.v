@@ -56,7 +56,7 @@ wire [7:0] red, blue, green;
 
 wire cyc, stb, ack;
 wire we;
-wire [1:0] sel;
+wire [7:0] sel;
 wire [31:0] adr;
 reg [63:0] dati;
 wire [63:0] dato;
@@ -146,7 +146,7 @@ FT64_TextController #(.num(1)) tc1
 	.ack_o(tc1_ack),
 	.wr_i(we),
 	.adr_i(adr[15:0]),
-	.dat_i(dato),
+	.dat_i(dato[31:0]),
 	.dat_o(tc1_dato),
 	.lp(),
 	.curpos(),

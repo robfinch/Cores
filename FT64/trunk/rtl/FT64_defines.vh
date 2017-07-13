@@ -74,14 +74,14 @@
 `define PUSH        6'h19
 `define POP         6'h1A
 `define LWRX        6'h1D
+`define CACHEX      6'h1E
 `define LBUX        6'h23
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
 `define MUX         6'h2A
-`define MODU        6'h2C
-`define MODSU       6'h2D
-`define MOD         6'h2E
+`define DEMUX       6'h2B
 `define SEI         6'h30
+`define WAIT        6'h31
 `define RTI         6'h32
 `define MEMDB       6'h34
 `define MEMSB       6'h35
@@ -89,15 +89,16 @@
 `define MULU        6'h38
 `define MULSU       6'h39
 `define MUL         6'h3A
-`define DIVU        6'h3C
-`define DIVSU       6'h3D
-`define DIV         6'h3E
+`define DIVMODU     6'h3C
+`define DIVMODSU    6'h3D
+`define DIVMOD      6'h3E
 `define ADDI	6'h04
 `define CMPI    6'h06
 `define CMPUI   6'h07
 `define ANDI    6'h08
 `define ORI     6'h09
 `define XORI    6'h0A
+`define FLOAT   6'h0B
 `define TGT     6'h0C
 `define REX     6'h0D
 `define CSRRW   6'h0E
@@ -116,6 +117,7 @@
 `define IMMM    6'h1B
 `define NOP     6'h1C
 `define LWR     6'h1D
+`define CACHE   6'h1E
 `define LBU     6'h23
 `define RET     6'h29
 `define MODUI   6'h2C
@@ -127,6 +129,29 @@
 `define DIVUI   6'h3C
 `define DIVSUI  6'h3D
 `define DIVI    6'h3E
+
+`define FMOV    6'h10
+`define FTOI    6'h12
+`define ITOF    6'h13
+`define FNEG    6'h14
+`define FABS    6'h15
+`define FSIGN   6'h16
+`define FMAN    6'h17
+`define FNABS   6'h18
+`define FCVTSQ  6'h1B
+`define FSTAT   6'h1C
+`define FTX     6'h20
+`define FCX     6'h21
+`define FEX     6'h22
+`define FDX     6'h23
+`define FRM     6'h24
+
+`define FADD    6'h04
+`define FSUB    6'h05
+`define FCMP    6'h06
+`define FMUL    6'h08
+`define FDIV    6'h09
+
 
 `define NOP_INSN    {26'd0,`NOP}
 
@@ -142,7 +167,7 @@
 `define CSR_STATUSL 11'h044
 `define CSR_STATUSH 11'h045
 `define CSR_CODEBUF 11'b00010xxxxxx
-`define CSR_INFO    11'h111_1111_xxxx
+`define CSR_INFO    11'b111_1111_xxxx
 
 `define OL_USER         2'd3
 `define OL_SUPERVISOR   2'd2
@@ -189,6 +214,7 @@
 `define INSTRUCTION_RA  10:6
 `define INSTRUCTION_RB  15:11
 `define INSTRUCTION_RC  20:16
+`define INSTRUCTION_RD  25:21
 `define INSTRUCTION_IM  31:16
 `define INSTRUCTION_SB  31
 `define INSTRUCTION_S1  25:21

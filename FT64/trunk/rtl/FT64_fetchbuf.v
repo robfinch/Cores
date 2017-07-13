@@ -32,8 +32,8 @@
 //
 module FT64_fetchbuf(rst, clk,
     insn0, insn1, phit, 
-    branchmiss, misspc, take_branch, take_branch0, take_branch1,
-    take_branchA, take_branchB, take_branchC, take_branchD, 
+    branchmiss, misspc, predict_taken0, predict_taken1,
+    predict_takenA, predict_takenB, predict_takenC, predict_takenD,
     queued1, queued2, queuedNop,
     pc0, pc1, fetchbuf, fetchbufA_v, fetchbufB_v, fetchbufC_v, fetchbufD_v,
     fetchbufA_instr, fetchbufA_pc,
@@ -53,13 +53,12 @@ input [31:0] insn1;
 input phit;
 input branchmiss;
 input [31:0] misspc;
-input take_branch;
-input take_branch0;
-input take_branch1;
-input take_branchA;
-input take_branchB;
-input take_branchC;
-input take_branchD;
+output predict_taken0;
+output predict_taken1;
+input predict_takenA;
+input predict_takenB;
+input predict_takenC;
+input predict_takenD;
 input queued1;
 input queued2;
 input queuedNop;
@@ -88,13 +87,35 @@ input [31:0] codebuf0;
 input [31:0] codebuf1;
 input [31:0] retpc;
 
+function IsBranch;
+input [31:0] isn;
+IsBranch = isn[`INSTRUCTION_OP]==`Bcc;
+endfunction
+
+function IsRet;
+input [31:0] isn;
+IsRet = isn[`INSTRUCTION_OP]==`RET;
+endfunction
+
 reg did_branchback0;
 reg did_branchback1;
+
+assign predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenC;
+assign predict_taken1 = (fetchbuf==1'b0) ? predict_takenB : predict_takenD;
 
 wire [31:0] branch_pcA = IsRet(fetchbufA_instr) ? retpc : fetchbufA_pc + {{16{fetchbufA_instr[`INSTRUCTION_SB]}},fetchbufA_instr[31:16]} + 64'd4;
 wire [31:0] branch_pcB = IsRet(fetchbufB_instr) ? retpc : fetchbufB_pc + {{16{fetchbufB_instr[`INSTRUCTION_SB]}},fetchbufB_instr[31:16]} + 64'd4;
 wire [31:0] branch_pcC = IsRet(fetchbufC_instr) ? retpc : fetchbufC_pc + {{16{fetchbufC_instr[`INSTRUCTION_SB]}},fetchbufC_instr[31:16]} + 64'd4;
 wire [31:0] branch_pcD = IsRet(fetchbufD_instr) ? retpc : fetchbufD_pc + {{16{fetchbufD_instr[`INSTRUCTION_SB]}},fetchbufD_instr[31:16]} + 64'd4;
+
+wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufA_instr) && fetchbufA_v);
+wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufB_instr) && fetchbufB_v);
+wire take_branchC = ({fetchbufC_v, IsBranch(fetchbufC_instr), predict_takenC}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufC_instr) && fetchbufC_v);
+wire take_branchD = ({fetchbufD_v, IsBranch(fetchbufD_instr), predict_takenD}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufD_instr) && fetchbufD_v);
+
+wire take_branch0 = {fetchbuf0_v, IsBranch(fetchbuf0_instr), predict_taken0}  == {`VAL, `TRUE, `TRUE} || (IsRet(fetchbuf0_instr) && fetchbuf0_v);
+wire take_branch1 = {fetchbuf1_v, IsBranch(fetchbuf1_instr), predict_taken1}  == {`VAL, `TRUE, `TRUE} || (IsRet(fetchbuf1_instr) && fetchbuf1_v);
+wire take_branch = take_branch0 || take_branch1;
 
 always @(posedge clk)
 if (rst) begin

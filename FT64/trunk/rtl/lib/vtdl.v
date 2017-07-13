@@ -1,0 +1,59 @@
+//=============================================================================
+//	(C) 2007,2012  Robert Finch, Stratford
+//	robfinch<remove>@opencores.org
+//
+//
+//	vtdl - variable tap delay line
+//		(dynamic shift register)
+//
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+//    Notes:
+//
+//	This module acts like a clocked delay line with a variable tap.
+//	Miscellaneous usage in rate control circuitry such as fifo's.
+//	Capable of delaying a signal bus.
+//	Signal bus width is specified with the WID parameter.
+//
+//   	Verilog 1995
+//   	Ref: Webpack9.1i xc3s1000-4ft256
+//	4 slices / 8 LUTs / < 10ns
+//=============================================================================
+//
+module vtdl(clk, ce, a, d, q);
+parameter WID = 8;
+parameter DEP = 16;
+localparam AMSB = DEP>64?6:DEP>32?5:DEP>16?4:DEP>8?3:DEP>4?2:DEP>2?1:0;
+input clk;
+input ce;
+input [AMSB:0] a;
+input [WID-1:0] d;
+output [WID-1:0] q;
+
+reg [WID-1:0] m [DEP-1:0];
+integer n;
+
+always @(posedge clk)
+	if (ce) begin
+		for (n = 1; n < DEP; n = n + 1)
+			m[n] <= m[n-1];
+		m[0] <= d;
+	end
+
+assign q = m[a];
+
+endmodule

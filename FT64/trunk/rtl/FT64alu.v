@@ -57,6 +57,7 @@ case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
     `MULU,`MULSU,`MUL: IsMul = TRUE;
+    default:    IsMul = FALSE;
     endcase
 `MULUI,`MULSUI,`MULI:  IsMul = TRUE;
 default:    IsMul = FALSE;
@@ -68,7 +69,8 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
-    `DIVU,`DIVSU,`DIV,`MODU,`MODSU,`MOD: IsDivmod = TRUE;
+    `DIVMODU,`DIVMODSU,`DIVMOD: IsDivmod = TRUE;
+    default:    IsDivmod = FALSE;
     endcase
 `DIVUI,`DIVSUI,`DIVI,`MODUI,`MODSUI,`MODI:  IsDivmod = TRUE;
 default:    IsDivmod = FALSE;
@@ -80,7 +82,7 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
-    `MUL,`DIV,`MOD:   IsSgn = TRUE;
+    `MUL,`DIVMOD:   IsSgn = TRUE;
     default:    IsSgn = FALSE;
     endcase
 `MULI,`DIVI,`MODI:    IsSgn = TRUE;
@@ -93,7 +95,7 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
-    `MULSU,`DIVSU,`MODSU:   IsSgnus = TRUE;
+    `MULSU,`DIVMODSU:   IsSgnus = TRUE;
     default:    IsSgnus = FALSE;
     endcase
 `MULSUI,`DIVSUI,`MODSUI:    IsSgnus = TRUE;
@@ -104,12 +106,12 @@ endfunction
 wire [63:0] bfout,shfto;
 FT64_bitfield ubf1
 (
-    .op(instr[`INSTRUCTION_S1]),
+    .op(instr[24:21]),
     .a(a),
     .b(b),
     // The lower 16 bits of the immediate are the trailing bits of
     // the instruction.
-    .imm({imm[41:32],instr[15:11]}),
+    .imm({49'd0,imm[41:32],instr[15:11]}),
     .m(imm[31:16]),
     .o(bfout),
     .masko()
@@ -152,8 +154,7 @@ FT64_shift ushft1
     .instr(instr),
     .a(a),
     .b(b),
-    .res(shfto),
-    .rolo()
+    .res(shfto)
 );
 
 always @*
@@ -177,15 +178,17 @@ case(instr[`INSTRUCTION_OP])
     `CMOVNE:    o = (a!=64'd0) ? b : c;
     `MUX:       for (n = 0; n < 64; n = n + 1)
                     o[n] <= a[n] ? b[n] : c[n];
+    `DEMUX:     if (BIG)
+                    for (n = 0; n < 64; n = n + 1)
+                        o[n] <= a[n] ? 1'b0 : b[n];
+                else
+                    o = 64'hCCCCCCCCCCCCCCCC;
     `MULU:      o = prod[DBW-1:0];
     `MULSU:     o = prod[DBW-1:0];
     `MUL:       o = prod[DBW-1:0];
-    `DIVU:      o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
-    `DIVSU:     o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
-    `DIV:       o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
-    `MODU:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-    `MODSU:     o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-    `MOD:       o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+    `DIVMODU:   o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+    `DIVMODSU:  o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+    `DIVMOD:    o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
     `PUSH:      o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
     `POP:       o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
     `LBX,`LHX,`LHUX,`LWX,`SBX,`SHX,`SWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
@@ -216,8 +219,12 @@ always @*
 case(instr[`INSTRUCTION_OP])
 `RR:
     case(instr[`INSTRUCTION_S2])
-    `PUSH:  ob = a + {{59{instr[25]}},instr[25:21]};
-    `POP:   ob = a + {{59{instr[25]}},instr[25:21]};
+    `MUL,`MULU,`MULSU:  ob = prod[127:64];
+    `DIVMOD,`DIVMODU,`DIVMODSU:    ob = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+    `PUSH:      ob = a + {{59{instr[25]}},instr[25:21]};
+    `POP:       ob = a + {{59{instr[25]}},instr[25:21]};
+    `DEMUX:     for (n = 0; n < 64; n = n + 1)
+                    ob[n] <= (a[n] & BIG) ? b[n] : 1'b0;
     default:    ob = 64'hCCCCCCCCCCCCCCCC;
     endcase
 `RET:       ob = a + b;

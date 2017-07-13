@@ -79,7 +79,7 @@ assign predict_takenD = (bht_ibitsD==2'd0 || bht_ibitsD==2'd1) && en;
 // in commit1 is never encountered. So only update for
 // commit1 if commit0 is not taken.
 reg [1:0] xbits_new0, xbits_new1;
-always @(takb0 or bht_xbits0 or bht_xbits1)
+always @(takb0 or takb1 or bht_xbits0 or bht_xbits1)
 if (takb0) begin
 	if (bht_xbits0 != 2'd1)
 		xbits_new0 <= bht_xbits0 + 2'd1;

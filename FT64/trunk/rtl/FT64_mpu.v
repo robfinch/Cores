@@ -66,7 +66,7 @@ FT64_mmu ummu1
     .s_ack_o(mmu_ack),
     .s_wr_i(we_o),
     .s_adr_i(adr),
-    .s_dat_i(dat_o),
+    .s_dat_i(dat_o[31:0]),
     .s_dat_o(mmu_dato),
     .cyc_o(cyc_o),
     .stb_o(stb_o),
