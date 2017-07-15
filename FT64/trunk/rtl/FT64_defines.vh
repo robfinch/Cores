@@ -30,16 +30,18 @@
 `define ZERO		64'd0
 
 `define BRK     5'd0
-`define Bcc     5'd1
-`define BEQZ        3'd0
-`define BNEZ        3'd1
-`define BMI         3'd2
-`define BPL         3'd3
-`define BLTZ        3'd2
-`define BGEZ        3'd3
-`define FBEQ        3'd4
-`define FBNE        3'd5
-`define FBUN        3'd6
+`define Bcc     6'b11000x
+`define BEQ         4'd0
+`define BNE         4'd1
+`define BLT         4'd2
+`define BGE         4'd3
+`define BLTU        4'd4
+`define BGEU        4'd5
+`define FBEQ        4'd8
+`define FBNE        4'd9
+`define FBLT        4'd10
+`define FBGE        4'd11
+`define FBUN        4'd15
 `define RR      6'h2
 `define BITFIELD    6'h02
 `define SHIFT       6'h03
@@ -137,6 +139,8 @@
 `define CACHE   6'h1E
 `define LBU     6'h23
 `define CAS     6'h25
+`define BBc     6'b10011x
+`define BEQI    6'b11001x
 `define RET     6'h29
 `define LINK    6'h2A
 `define MODUI   6'h2C

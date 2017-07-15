@@ -607,13 +607,16 @@ wire predict_takenA1;
 wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
+wire P0 = iqentry_instr[head0][`INSTRUCTION_OP]==`BccR ? iqentry_instr[head0][26] : iqentry_instr[head0][21];  
+wire P1 = iqentry_instr[head1][`INSTRUCTION_OP]==`BccR ? iqentry_instr[head1][26] : iqentry_instr[head1][21];  
+
 FT64BranchPredictor ubp1
 (
     .rst(rst),
     .clk(clk),
     .en(bpe),
-    .xisBranch0(iqentry_br[head0] & ~iqentry_instr[head0][15]),
-    .xisBranch1(iqentry_br[head1] & ~iqentry_instr[head1][15]),
+    .xisBranch0(iqentry_br[head0] & P0),
+    .xisBranch1(iqentry_br[head1] & P1),
     .pcA(fetchbufA_pc),
     .pcB(fetchbufB_pc),
     .pcC(fetchbufC_pc),
@@ -737,7 +740,7 @@ endfunction
 
 function [4:0] fnRt;
 input [31:0] isn;
-case(isn[`INSTRUCTION_OP])
+casex(isn[`INSTRUCTION_OP])
 `RR:    case(isn[`INSTRUCTION_S2])
         `R1:        fnRt = isn[`INSTRUCTION_RB];
         `PUSH:      fnRt = 6'd0;
@@ -753,6 +756,8 @@ case(isn[`INSTRUCTION_OP])
         endcase
 `Bcc:   fnRt = 6'd0;
 `BccR:  fnRt = 6'd0;
+`BBc:   fnRt = 6'd0;
+`BEQI:  fnRt = 6'd0;
 `CALL:  fnRt = 6'd31;
 `RET:   fnRt = 6'd0;
 `LINK:  fnRt = isn[`INSTRUCTION_RB];
@@ -778,10 +783,12 @@ endfunction
 
 function Source1Valid;
 input [31:0] isn;
-case(isn[`INSTRUCTION_OP])
+casex(isn[`INSTRUCTION_OP])
 `BRK:   Source1Valid = TRUE;
 `Bcc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BccR:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `RR:    case(isn[`INSTRUCTION_S2])
         `SHLI:     Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         `SHRI:     Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -815,10 +822,12 @@ endfunction
   
 function Source2Valid;
 input [31:0] isn;
-case(isn[`INSTRUCTION_OP])
+casex(isn[`INSTRUCTION_OP])
 `BRK:   Source2Valid = TRUE;
-`Bcc:   Source2Valid = TRUE;
-`BccR:  Source2Valid = TRUE;
+`Bcc:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`BccR:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`BBc:   Source2Valid = TRUE;
+`BEQI:  Source2Valid = TRUE;
 `RR:    case(isn[`INSTRUCTION_S2])
         `R1:       Source2Valid = TRUE;
         `POP:      Source2Valid = TRUE;
@@ -871,7 +880,7 @@ endfunction
 
 function IsALU;
 input [31:0] isn;
-case(isn[`INSTRUCTION_OP])
+casex(isn[`INSTRUCTION_OP])
 `RR:    case(isn[`INSTRUCTION_S2])
         `RTI:       IsALU = FALSE;
         default:    IsALU = TRUE;
@@ -879,6 +888,8 @@ case(isn[`INSTRUCTION_OP])
 `BRK:   IsALU = FALSE;
 `Bcc:   IsALU = FALSE;
 `BccR:  IsALU = FALSE;
+`BBc:   IsALU = FALSE;
+`BEQI:  IsALU = FALSE;
 `JAL:   IsALU = FALSE;
 `CALL:  IsALU = FALSE;
 `RET:   IsALU = TRUE;
@@ -894,10 +905,12 @@ endfunction
 
 function HasConst;
 input [31:0] isn;
-case(isn[`INSTRUCTION_OP])
+casex(isn[`INSTRUCTION_OP])
 `BRK:   HasConst = FALSE;
 `Bcc:   HasConst = FALSE;
 `BccR:  HasConst = FALSE;
+`BBc:   HasConst = FALSE;
+`BEQI:  HasConst = FALSE;
 `RR:    case(isn[`INSTRUCTION_S2])
         `SHLI:  HasConst = TRUE;
         `SHRI:  HasConst = TRUE;
@@ -1124,9 +1137,16 @@ default:    IsCAS = FALSE;
 endcase
 endfunction
 
+// Really IsPredictableBranch
+// Does not include BccR's
 function IsBranch;
 input [31:0] isn;
-IsBranch = isn[`INSTRUCTION_OP]==`Bcc;
+casex(isn[`INSTRUCTION_OP])
+`Bcc:   IsBranch = TRUE;
+`BBc:   IsBranch = TRUE;
+`BEQI:  IsBranch = TRUE;
+default:    IsBranch = FALSE;
+endcase
 endfunction
 
 function IsWait;
@@ -1146,7 +1166,7 @@ endfunction
 
 function IsFlowCtrl;
 input [31:0] isn;
-case(isn[`INSTRUCTION_OP])
+casex(isn[`INSTRUCTION_OP])
 `BRK:    IsFlowCtrl = TRUE;
 `RR:    case(isn[`INSTRUCTION_S2])
         `RTI:   IsFlowCtrl = TRUE;
@@ -1154,6 +1174,8 @@ case(isn[`INSTRUCTION_OP])
         endcase
 `Bcc:   IsFlowCtrl = TRUE;
 `BccR:  IsFlowCtrl = TRUE;
+`BBc:  IsFlowCtrl = TRUE;
+`BEQI:  IsFlowCtrl = TRUE;
 `JAL:    IsFlowCtrl = TRUE;
 `CALL:  IsFlowCtrl = TRUE;
 `RET:   IsFlowCtrl = TRUE;
@@ -2417,23 +2439,48 @@ end
 
     assign  fcu_v = fcu_dataready;
     assign  fcu_id = fcu_sourceid;
+    
+    wire [4:0] fcmpo;
+    wire fnanx;
+    fp_cmp_unit ufcmp1 (fcu_argA, fcu_argB, fcmpo, fnanx);
 
     always @*
     begin
         fcu_exc <= `FLT_NONE;
-        case(fcu_instr[`INSTRUCTION_OP])
+        casex(fcu_instr[`INSTRUCTION_OP])
         `BRK:   fcu_bus <= fcu_instr[15] ? fcu_pc : fcu_pc + 32'd4;
-        `Bcc,`BccR:
-           case(fcu_instr[`INSTRUCTION_COND])
-           `BEQZ:  fcu_bus <= fcu_argA==64'd0;
-           `BNEZ:  fcu_bus <= fcu_argA!=64'd0;
-           `BLTZ:  fcu_bus <= fcu_argA[63];
-           `BGEZ:  fcu_bus <= ~fcu_argA[63];
-           `FBEQ:  fcu_bus <= fcu_argA[62:0]==63'd0;
-           `FBNE:  fcu_bus <= fcu_argA[62:0]!=63'd0;
-           `FBUN:  fcu_bus <= fcu_argA[62:52]==11'h7FF && fcu_argA[51:0]!=52'd0;
+        `Bcc:
+           case(fcu_instr[19:16])
+           `BEQ:  fcu_bus <= fcu_argA==fcu_argB;
+           `BNE:  fcu_bus <= fcu_argA!=fcu_argB;
+           `BLT:  fcu_bus <= $signed(fcu_argA) < $signed(fcu_argB);
+           `BGE:  fcu_bus <= $signed(fcu_argA) >= $signed(fcu_argB);
+           `BLTU:  fcu_bus <= fcu_argA < fcu_argB;
+           `BGEU:  fcu_bus <= fcu_argA >= fcu_argB;
+           `FBEQ:  fcu_bus <=  fcmpo[0];
+           `FBNE:  fcu_bus <= ~fcmpo[0];
+           `FBLT:  fcu_bus <=  fcmpo[1];
+           `FBGE:  fcu_bus <= ~fcmpo[2];
+           `FBUN:  fcu_bus <=  fcmpo[4];
            default:    fcu_bus <= 1'b1;
            endcase
+        `BccR:
+           case(fcu_instr[24:21])
+            `BEQ:  fcu_bus <= fcu_argA==fcu_argB;
+            `BNE:  fcu_bus <= fcu_argA!=fcu_argB;
+            `BLT:  fcu_bus <= $signed(fcu_argA) < $signed(fcu_argB);
+            `BGE:  fcu_bus <= $signed(fcu_argA) >= $signed(fcu_argB);
+            `BLTU:  fcu_bus <= fcu_argA < fcu_argB;
+            `BGEU:  fcu_bus <= fcu_argA >= fcu_argB;
+            `FBEQ:  fcu_bus <=  fcmpo[0];
+            `FBNE:  fcu_bus <= ~fcmpo[0];
+            `FBLT:  fcu_bus <=  fcmpo[1];
+            `FBGE:  fcu_bus <= ~fcmpo[2];
+            `FBUN:  fcu_bus <=  fcmpo[4];
+            default:    fcu_bus <= 1'b1;
+            endcase
+        `BBc:   fcu_bus <=  fcu_argA[fcu_instr[16:11]] ^ fcu_instr[18];
+        `BEQI:  fcu_bus <=  fcu_argA=={{55{fcu_instr[19]}},fcu_instr[19:11]};
         `JAL:   fcu_bus <= fcu_pc + 32'd4;
         `CALL:  fcu_bus <= fcu_argA - 32'd8;
         `RET:   fcu_bus <= fcu_argA;                // address generation, SP update is done by ALU
@@ -4599,6 +4646,8 @@ iqentry_exc  [tail]    <=   `EXC_NONE;
 if (tail==tail1) begin
     if (IsShifti(fetchbuf1_instr)||IsSEI(fetchbuf1_instr))
         iqentry_a0[tail] <= {58'd0,fetchbuf1_instr[21],fetchbuf1_instr[`INSTRUCTION_RB]};
+    else if (IsBranch(fetchbuf1_instr))
+        iqentry_a0[tail] <= {{51{fetchbuf1_instr[`INSTRUCTION_SB]}},fetchbuf1_instr[31:22],fetchbuf1_instr[0],2'b00};
     else if (fetchbuf0_instr[`INSTRUCTION_OP]==`IMML && fetchbuf1_instr[`INSTRUCTION_OP]==`IMMM)
         iqentry_a0[tail] <= {fetchbuf1_instr[27:6],fetchbuf0_instr[31:6],16'h0000};
     else if (fetchbuf0_instr[`INSTRUCTION_OP]==`IMML)
@@ -4851,6 +4900,8 @@ input [31:0] fb_instr;
 begin
     if (IsShifti(fb_instr)||IsSEI(fb_instr))
         assign_a0 = {58'd0,fb_instr[21],fb_instr[`INSTRUCTION_RB]};
+    else if (IsBranch(fb_instr))
+        assign_a0 = {{51{fb_instr[`INSTRUCTION_SB]}},fb_instr[31:22],fb_instr[0],2'b00};
 	else if (iqentry_instr[(tail-1) & 7][`INSTRUCTION_OP]==`IMML && fb_instr[`INSTRUCTION_OP]==`IMMM)
         assign_a0 = {fb_instr[27:6],iqentry_a0[(tail-1)&7][41:0]};
     else if (iqentry_instr[(tail-1) & 7][`INSTRUCTION_OP]==`IMML || iqentry_instr[(tail-1) & 7][`INSTRUCTION_OP]==`IMMM)
