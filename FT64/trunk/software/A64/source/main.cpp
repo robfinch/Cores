@@ -1039,7 +1039,11 @@ void process_label()
         val = expr128();
         isEquate = 1;
     }
-    else prevToken();
+    else {
+		prevToken();
+		val.low = ca;
+		val.high = 0;
+	}
 //    if (token==tk_eol)
 //       prevToken();
     //else if (token==':') inptr++;
@@ -1050,10 +1054,10 @@ void process_label()
     if (pass==4 || pass==3) {
         if (sym) {
             if (sym->defined) {
-                if (!Int128::IsEqual(&sym->value, &val)) {
-                    printf("Label %s already defined.\r\n", nm);
-                    printf("Line %d: %.60s\r\n", lineno, stptr);
-                }
+                //if (!Int128::IsEqual(&sym->value, &val)) {
+                //    printf("Label %s already defined %ld vs %ld.\r\n", nm, sym->value.low, val.low);
+                //    printf("Line %d: %.60s\r\n", lineno, stptr);
+                //}
             }
             sym->defined = 1;
             if (isEquate) {

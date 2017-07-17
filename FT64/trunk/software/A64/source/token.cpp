@@ -38,6 +38,10 @@ int my_isspace(char ch)
         return 1;
     return 0;
 }
+int isspaceOrDot(char ch)
+{
+	return my_isspace(ch) || ch=='.';
+}
 
 int isFirstIdentChar(char ch)
 {
@@ -550,15 +554,15 @@ int NextToken()
                 inptr += 4;
                 return token = tk_asri;
             }
-            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='r' || inptr[2]=='R') && isspace(inptr[3])) {
+            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='r' || inptr[2]=='R') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_asr;
             }
-            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
+            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspaceOrDot(inptr[4])) {
                 inptr += 4;
                 return token = tk_asli;
             }
-            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && isspace(inptr[3])) {
+            if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_asl;
             }
@@ -2042,19 +2046,19 @@ int NextToken()
                 inptr += 3;
                 return token = tk_rtl;
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='l' || inptr[2]=='L') && isspace(inptr[3])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='l' || inptr[2]=='L') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_rol;
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspaceOrDot(inptr[4])) {
                 inptr += 4;
                 return token = tk_roli;
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && isspace(inptr[3])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_ror;
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && (inptr[3]=='i' || inptr[3]=='I') && isspaceOrDot(inptr[4])) {
                 inptr += 4;
                 return token = tk_rori;
             }
@@ -2170,11 +2174,11 @@ int NextToken()
                 inptr += 3;
                 return token = tk_sfd;
             }
-            if ((inptr[1]=='h' || inptr[1]=='H') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
+            if ((inptr[1]=='h' || inptr[1]=='H') && (inptr[2]=='l' || inptr[2]=='L') && (inptr[3]=='i' || inptr[3]=='I') && isspaceOrDot(inptr[4])) {
                 inptr += 4;
                 return token = tk_shli;
             }
-            if ((inptr[1]=='h' || inptr[1]=='H') && (inptr[2]=='l' || inptr[2]=='L') && isspace(inptr[3])) {
+            if ((inptr[1]=='h' || inptr[1]=='H') && (inptr[2]=='l' || inptr[2]=='L') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_shl;
             }
@@ -2182,20 +2186,20 @@ int NextToken()
                 (inptr[2]=='r' || inptr[2]=='R') && 
                 (inptr[3]=='u' || inptr[3]=='U') && 
                 (inptr[4]=='i' || inptr[4]=='I') && 
-                isspace(inptr[5])) {
+                isspaceOrDot(inptr[5])) {
                 inptr += 5;
                 return token = tk_shrui;
             }
             if ((inptr[1]=='h' || inptr[1]=='H') && 
                 (inptr[2]=='r' || inptr[2]=='R') && 
                 (inptr[3]=='u' || inptr[3]=='U') && 
-                isspace(inptr[4])) {
+                isspaceOrDot(inptr[4])) {
                 inptr += 4;
                 return token = tk_shru;
             }
             if ((inptr[1]=='h' || inptr[1]=='H') && 
                 (inptr[2]=='r' || inptr[2]=='R') && 
-                isspace(inptr[3])) {
+                isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_shru;
             }
@@ -2431,7 +2435,7 @@ int NextToken()
                 }
                 if ((inptr[1]=='h' || inptr[1]=='H') && 
                     (inptr[2]=='r' || inptr[2]=='R') && 
-                    isspace(inptr[3])) {
+                    isspaceOrDot(inptr[3])) {
                     inptr += 3;
                     return token = tk_shr;
                 }
@@ -2446,21 +2450,21 @@ int NextToken()
               if ((inptr[1]=='l' || inptr[1]=='L') && 
                   (inptr[2]=='l' || inptr[2]=='L') && 
                   (inptr[3]=='i' || inptr[3]=='I') && 
-                  isspace(inptr[4])) {
+                  isspaceOrDot(inptr[4])) {
                   inptr += 4;
                   return token = tk_slli;
               }
               if ((inptr[1]=='r' || inptr[1]=='R') && 
                   (inptr[2]=='a' || inptr[2]=='A') && 
                   (inptr[3]=='i' || inptr[3]=='I') && 
-                  isspace(inptr[4])) {
+                  isspaceOrDot(inptr[4])) {
                   inptr += 4;
                   return token = tk_srai;
               }
               if ((inptr[1]=='r' || inptr[1]=='R') && 
                   (inptr[2]=='l' || inptr[2]=='L') && 
                   (inptr[3]=='i' || inptr[3]=='I') && 
-                  isspace(inptr[4])) {
+                  isspaceOrDot(inptr[4])) {
                   inptr += 4;
                   return token = tk_srli;
               }

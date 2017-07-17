@@ -23,6 +23,7 @@
 // ============================================================================
 //
 `include "FT64_defines.vh"
+
 // FETCH
 //
 // fetch exactly two instructions from memory into the fetch buffer
@@ -43,7 +44,8 @@ module FT64_fetchbuf(rst, clk,
     fetchbuf0_instr, fetchbuf1_instr,
     fetchbuf0_pc, fetchbuf1_pc,
     fetchbuf0_v, fetchbuf1_v,
-    codebuf0, codebuf1, retpc
+    codebuf0, codebuf1,
+    btgtA, btgtB, btgtC, btgtD
 );
 parameter RSTPC = 32'hFFFC0100;
 parameter TRUE = 1'b1;
@@ -87,16 +89,34 @@ output fetchbuf0_v;
 output fetchbuf1_v;
 input [31:0] codebuf0;
 input [31:0] codebuf1;
-input [31:0] retpc;
+input [31:0] btgtA;
+input [31:0] btgtB;
+input [31:0] btgtC;
+input [31:0] btgtD;
+
+integer n;
+
+//`include "FT64_decode.vh"
 
 function IsBranch;
 input [31:0] isn;
 casex(isn[`INSTRUCTION_OP])
 `Bcc:   IsBranch = TRUE;
+`BccR:  IsBranch = TRUE;
 `BBc:   IsBranch = TRUE;
 `BEQI:  IsBranch = TRUE;
 default: IsBranch = FALSE;
 endcase
+endfunction
+
+function IsJmp;
+input [31:0] isn;
+IsJmp = isn[`INSTRUCTION_OP]==`JMP;
+endfunction
+
+function IsCall;
+input [31:0] isn;
+IsCall = isn[`INSTRUCTION_OP]==`CALL;
 endfunction
 
 function IsRet;
@@ -104,25 +124,93 @@ input [31:0] isn;
 IsRet = isn[`INSTRUCTION_OP]==`RET;
 endfunction
 
+function IsRTI;
+input [31:0] isn;
+IsRTI = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`RTI;
+endfunction
+
+reg [31:0] ras [0:15];
+reg [3:0] rasp;
+wire [31:0] retpc = ras[rasp];
+
 reg did_branchback0;
 reg did_branchback1;
 
 assign predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenC;
 assign predict_taken1 = (fetchbuf==1'b0) ? predict_takenB : predict_takenD;
 
-wire [31:0] branch_pcA = IsRet(fetchbufA_instr) ? retpc : fetchbufA_pc + {{20{fetchbufA_instr[`INSTRUCTION_SB]}},fetchbufA_instr[31:22],2'b00} + 64'd4;
-wire [31:0] branch_pcB = IsRet(fetchbufB_instr) ? retpc : fetchbufB_pc + {{20{fetchbufB_instr[`INSTRUCTION_SB]}},fetchbufB_instr[31:22],2'b00} + 64'd4;
-wire [31:0] branch_pcC = IsRet(fetchbufC_instr) ? retpc : fetchbufC_pc + {{20{fetchbufC_instr[`INSTRUCTION_SB]}},fetchbufC_instr[31:22],2'b00} + 64'd4;
-wire [31:0] branch_pcD = IsRet(fetchbufD_instr) ? retpc : fetchbufD_pc + {{20{fetchbufD_instr[`INSTRUCTION_SB]}},fetchbufD_instr[31:22],2'b00} + 64'd4;
+wire [31:0] branch_pcA = IsRet(fetchbufA_instr) ? retpc :
+                         IsJmp(fetchbufA_instr) | IsCall(fetchbufA_instr) ? {fetchbufA_pc[31:28],fetchbufA_instr[31:6],2'b00} :
+                         ((IsRTI(fetchbufA_instr) || fetchbufA_instr[`INSTRUCTION_OP]==`BccR || fetchbufA_instr[`INSTRUCTION_OP]==`BRK ||
+                         fetchbufA_instr[`INSTRUCTION_OP]==`LCALL || fetchbufA_instr[`INSTRUCTION_OP]==`JAL) ? btgtA : 
+                         fetchbufA_pc + {{19{fetchbufA_instr[`INSTRUCTION_SB]}},fetchbufA_instr[31:22],fetchbufA_instr[0],2'b00} + 64'd4);
+wire [31:0] branch_pcB = IsRet(fetchbufB_instr) ? retpc :
+                         IsJmp(fetchbufB_instr) | IsCall(fetchbufB_instr) ? {fetchbufB_pc[31:28],fetchbufB_instr[31:6],2'b00} :
+                         ((IsRTI(fetchbufB_instr) || fetchbufB_instr[`INSTRUCTION_OP]==`BccR || fetchbufB_instr[`INSTRUCTION_OP]==`BRK ||
+                         fetchbufB_instr[`INSTRUCTION_OP]==`LCALL || fetchbufB_instr[`INSTRUCTION_OP]==`JAL) ? btgtB : 
+                         fetchbufB_pc + {{19{fetchbufB_instr[`INSTRUCTION_SB]}},fetchbufB_instr[31:22],fetchbufB_instr[0],2'b00} + 64'd4);
+wire [31:0] branch_pcC = IsRet(fetchbufC_instr) ? retpc :
+                         IsJmp(fetchbufC_instr) | IsCall(fetchbufC_instr) ? {fetchbufC_pc[31:28],fetchbufC_instr[31:6],2'b00} :
+                         ((IsRTI(fetchbufC_instr) || fetchbufC_instr[`INSTRUCTION_OP]==`BccR || fetchbufC_instr[`INSTRUCTION_OP]==`BRK ||
+                         fetchbufC_instr[`INSTRUCTION_OP]==`LCALL || fetchbufC_instr[`INSTRUCTION_OP]==`JAL) ? btgtC : 
+                         fetchbufC_pc + {{19{fetchbufC_instr[`INSTRUCTION_SB]}},fetchbufC_instr[31:22],fetchbufC_instr[0],2'b00} + 64'd4);
+wire [31:0] branch_pcD = IsRet(fetchbufD_instr) ? retpc :
+                         IsJmp(fetchbufD_instr) | IsCall(fetchbufD_instr) ? {fetchbufD_pc[31:28],fetchbufD_instr[31:6],2'b00} : 
+                         ((IsRTI(fetchbufD_instr) || fetchbufD_instr[`INSTRUCTION_OP]==`BccR ||fetchbufD_instr[`INSTRUCTION_OP]==`BRK ||
+                         fetchbufD_instr[`INSTRUCTION_OP]==`LCALL || fetchbufD_instr[`INSTRUCTION_OP]==`JAL) ? btgtD : 
+                         fetchbufD_pc + {{19{fetchbufD_instr[`INSTRUCTION_SB]}},fetchbufD_instr[31:22],fetchbufD_instr[0],2'b00} + 64'd4);
+wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
+                        ((IsRet(fetchbufA_instr)|IsJmp(fetchbufA_instr)|IsCall(fetchbufA_instr)|
+                        IsRTI(fetchbufA_instr)|| fetchbufA_instr[`INSTRUCTION_OP]==`BRK || fetchbufA_instr[`INSTRUCTION_OP]==`LCALL || fetchbufA_instr[`INSTRUCTION_OP]==`JAL) &&
+                        fetchbufA_v);
+wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) ||
+                        ((IsRet(fetchbufB_instr)|IsJmp(fetchbufB_instr)|IsCall(fetchbufB_instr) ||
+                        IsRTI(fetchbufB_instr)|| fetchbufB_instr[`INSTRUCTION_OP]==`BRK || fetchbufB_instr[`INSTRUCTION_OP]==`LCALL || fetchbufB_instr[`INSTRUCTION_OP]==`JAL) &&
+                        fetchbufB_v);
+wire take_branchC = ({fetchbufC_v, IsBranch(fetchbufC_instr), predict_takenC}  == {`VAL, `TRUE, `TRUE}) ||
+                        ((IsRet(fetchbufC_instr)|IsJmp(fetchbufC_instr)|IsCall(fetchbufC_instr) ||
+                        IsRTI(fetchbufC_instr)|| fetchbufC_instr[`INSTRUCTION_OP]==`BRK || fetchbufC_instr[`INSTRUCTION_OP]==`LCALL || fetchbufC_instr[`INSTRUCTION_OP]==`JAL) &&
+                        fetchbufC_v);
+wire take_branchD = ({fetchbufD_v, IsBranch(fetchbufD_instr), predict_takenD}  == {`VAL, `TRUE, `TRUE}) ||
+                        ((IsRet(fetchbufD_instr)|IsJmp(fetchbufD_instr)|IsCall(fetchbufD_instr) ||
+                        IsRTI(fetchbufD_instr)|| fetchbufD_instr[`INSTRUCTION_OP]==`BRK || fetchbufD_instr[`INSTRUCTION_OP]==`LCALL || fetchbufD_instr[`INSTRUCTION_OP]==`JAL) &&
+                        fetchbufD_v);
 
-wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufA_instr) && fetchbufA_v);
-wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufB_instr) && fetchbufB_v);
-wire take_branchC = ({fetchbufC_v, IsBranch(fetchbufC_instr), predict_takenC}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufC_instr) && fetchbufC_v);
-wire take_branchD = ({fetchbufD_v, IsBranch(fetchbufD_instr), predict_takenD}  == {`VAL, `TRUE, `TRUE}) || (IsRet(fetchbufD_instr) && fetchbufD_v);
-
-wire take_branch0 = {fetchbuf0_v, IsBranch(fetchbuf0_instr), predict_taken0}  == {`VAL, `TRUE, `TRUE} || (IsRet(fetchbuf0_instr) && fetchbuf0_v);
-wire take_branch1 = {fetchbuf1_v, IsBranch(fetchbuf1_instr), predict_taken1}  == {`VAL, `TRUE, `TRUE} || (IsRet(fetchbuf1_instr) && fetchbuf1_v);
+wire take_branch0 = fetchbuf==1'b0 ? take_branchA : take_branchC;
+wire take_branch1 = fetchbuf==1'b0 ? take_branchB : take_branchD;
 wire take_branch = take_branch0 || take_branch1;
+
+// Return address stack predictor is updated during the fetch stage on the 
+// assumption that previous flow controls (branches) predicted correctly.
+// Otherwise many small routines wouldn't predict the return address
+// correctly because they hit the RET before the CALL reaches the 
+// commit stage.
+always @(posedge clk)
+if (rst) begin
+    for (n = 0; n < 16; n = n + 1)
+        ras[n] <= RSTPC;
+    rasp <= 4'd0;
+end
+else begin
+    if (fetchbuf1_v)
+        case(fetchbuf1_instr[`INSTRUCTION_OP])
+        `CALL,`LCALL:
+            begin
+                ras[((rasp-6'd1)&15)] <= fetchbuf1_pc + 32'd4;
+                rasp <= rasp - 6'd1;
+            end
+        `RET:   rasp <= rasp + 6'd1;
+        endcase
+    if (fetchbuf0_v)
+        case(fetchbuf0_instr[`INSTRUCTION_OP])
+        `CALL,`LCALL:
+            begin
+                ras[((rasp-6'd1)&15)] <= fetchbuf0_pc + 32'd4;
+                rasp <= rasp - 6'd1;
+            end
+        `RET:   rasp <= rasp + 6'd1;
+        endcase
+end
 
 always @(posedge clk)
 if (rst) begin

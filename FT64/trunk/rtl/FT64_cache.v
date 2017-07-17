@@ -736,3 +736,63 @@ always @(posedge clkb)
 always @(posedge clkb)
     ov <= ov1;
 endmodule
+
+// -----------------------------------------------------------------------------
+// Branch target buffer.
+// -----------------------------------------------------------------------------
+
+module FT64_BTB(rst, wclk, wr, wadr, wdat, valid, rclk, pcA, btgtA, pcB, btgtB, pcC, btgtC, pcD, btgtD);
+parameter RSTPC = 32'hFFFC0100;
+input rst;
+input wclk;
+input wr;
+input [31:0] wadr;
+input [31:0] wdat;
+input valid;
+input rclk;
+input [31:0] pcA;
+output [31:0] btgtA;
+input [31:0] pcB;
+output [31:0] btgtB;
+input [31:0] pcC;
+output [31:0] btgtC;
+input [31:0] pcD;
+output [31:0] btgtD;
+
+integer n;
+reg [60:0] mem [0:1023];
+reg [9:0] radrA, radrB, radrC, radrD;
+initial begin
+    for (n = 0; n < 1024; n = n + 1)
+        mem[n] <= RSTPC[31:2];
+end
+always @(posedge wclk)
+//if (rst) begin
+//    // Zero out valid bit
+//    for (n = 0; n < 1024; n = n + 1)
+//        mem[n] <= RSTPC[31:2];
+//end
+//else
+begin
+    if (wr) mem[wadr[11:2]][29:0] <= wdat[31:2];
+    if (wr) mem[wadr[11:2]][59:30] <= wadr[31:2];
+    if (wr) mem[wadr[11:2]][60] <= valid;
+end
+always @(posedge rclk)
+    radrA <= pcA[11:2];
+always @(posedge rclk)
+    radrB <= pcB[11:2];
+always @(posedge rclk)
+    radrC <= pcC[11:2];
+always @(posedge rclk)
+    radrD <= pcD[11:2];
+wire hitA = mem[radrA][59:30]==pcA[31:2] && mem[radrA][60];
+wire hitB = mem[radrB][59:30]==pcB[31:2] && mem[radrB][60];
+wire hitC = mem[radrC][59:30]==pcC[31:2] && mem[radrC][60];
+wire hitD = mem[radrD][59:30]==pcD[31:2] && mem[radrD][60];
+assign btgtA = hitA ? {mem[radrA][29:0],2'b00} : {pcA + 32'd4};
+assign btgtB = hitB ? {mem[radrB][29:0],2'b00} : {pcB + 32'd4};
+assign btgtC = hitC ? {mem[radrC][29:0],2'b00} : {pcC + 32'd4};
+assign btgtD = hitD ? {mem[radrD][29:0],2'b00} : {pcD + 32'd4};
+
+endmodule

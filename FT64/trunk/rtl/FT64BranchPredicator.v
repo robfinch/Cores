@@ -80,7 +80,7 @@ assign predict_takenD = (bht_ibitsD==2'd0 || bht_ibitsD==2'd1) && en;
 // commit1 if commit0 is not taken.
 reg [1:0] xbits_new0, xbits_new1;
 always @(takb0 or takb1 or bht_xbits0 or bht_xbits1)
-if (takb0) begin
+if (takb0 & xisBranch0) begin
 	if (bht_xbits0 != 2'd1)
 		xbits_new0 <= bht_xbits0 + 2'd1;
 	else
@@ -89,18 +89,18 @@ if (takb0) begin
 end
 else begin
 	if (bht_xbits0 != 2'd2)
-		xbits_new0 <= bht_xbits0 - 2'd1;
+		xbits_new0 <= bht_xbits0 - {1'b0,xisBranch0};
 	else
 		xbits_new0 <= bht_xbits0;
     if (takb1) begin
         if (bht_xbits1 != 2'd1)
-            xbits_new1 <= bht_xbits1 + 2'd1;
+            xbits_new1 <= bht_xbits1 + {1'b0,xisBranch1};
         else
             xbits_new1 <= bht_xbits1;
     end
     else begin
         if (bht_xbits1 != 2'd2)
-            xbits_new1 <= bht_xbits1 - 2'd1;
+            xbits_new1 <= bht_xbits1 - {1'b0,xisBranch1};
         else
             xbits_new1 <= bht_xbits1;
     end

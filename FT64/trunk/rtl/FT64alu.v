@@ -215,6 +215,12 @@ cntpop64 ucpop1
 	.o(cpopo)
 );
 
+wire [7:0] bcdaddo,bcdsubo;
+wire [15:0] bcdmulo;
+BCDAdd(1'b0,a,b,bcdaddo);
+BCDSub(1'b0,a,b,bcdsubo);
+BCDMul2(a,b,bcdmulo);
+
 wire [7:0] s8 = a[7:0] + b[7:0];
 wire [15:0] s16 = a[15:0] + b[15:0];
 wire [31:0] s32 = a[31:0] + b[31:0];
@@ -229,6 +235,13 @@ always @*
 case(instr[`INSTRUCTION_OP])
 `RR:
     case(instr[`INSTRUCTION_S2])
+    `BCD:
+        case(instr[`INSTRUCTION_S1])
+        `BCDADD:    o = BIG ? bcdaddo :  64'hCCCCCCCCCCCCCCCC;
+        `BCDSUB:    o = BIG ? bcdsubo :  64'hCCCCCCCCCCCCCCCC;
+        `BCDMUL:    o = BIG ? bcdmulo :  64'hCCCCCCCCCCCCCCCC;
+        default:    o = 64'hDEADDEADDEADDEAD;
+        endcase
     `R1:
         case(instr[`INSTRUCTION_S1])
         `CNTLZ:     o = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;

@@ -69,6 +69,9 @@
 //
 // ============================================================================
 //
+`define TRUE    1'b1
+`define FALSE   1'b0
+
 `define FLOAT   6'h0B
 `define FMOV    6'h10
 `define FTOI    6'h12
@@ -116,7 +119,8 @@
 `define QZEROZEROQ  127'h7F_FF00000000_0000000000_0000000003	// - zero / zero
 `define QINFZEROQ	127'h7F_FF00000000_0000000000_0000000004	// - infinity X zero
 
-module fpUnit(rst, clk, ce, ir, ld, a, b, imm, o, csr_i, status, exception, done);
+module fpUnit(rst, clk, ce, ir, ld, a, b, imm, o, csr_i, status, exception, done, rm
+);
 
 parameter WID = 64;
 localparam MSB = WID-1;
@@ -162,7 +166,7 @@ input [31:0] csr_i;
 output [31:0] status;
 output exception;
 output done;
-
+input [2:0] rm;
 
 reg [7:0] fpcnt;
 assign done = fpcnt==8'h00;
@@ -188,6 +192,7 @@ wire nanx,nanxs;
 wire [5:0] op = ir[5:0];
 wire [5:0] func6b = ir[31:26];
 wire [1:0] prec = ir[25:24];
+
 wire fstat 	= {op,func6b} == {`FLOAT,`FSTAT};	// get status
 wire fdiv	= {op,func6b} == {`FLOAT,`FDIV};
 wire ftx   	= {op,func6b} == {`FLOAT,`FTX};		// trigger exception
@@ -209,9 +214,7 @@ wire infzero;
 wire infdiv;
 
 // floating point control and status
-reg [2:0] rm_o;
-wire [2:0] rm_i = csr_i[31:29];	// rounding mode
-wire [2:0] rm = rm_i;
+
 wire inexe_i    = csr_i[28];
 wire dbzxe_i    = csr_i[27];
 wire underxe_i  = csr_i[26];
@@ -280,7 +283,6 @@ wire precmatch = WID==32 ? ir[28:27]==2'b00 :
                  WID==80 ? ir[28:27]==2'b10 :
                  ir[28:27]==2'b11;
                  */
-
 always @(posedge clk)
 	// reset: disable and clear all exceptions and status
 	if (rst) begin
@@ -314,58 +316,26 @@ always @(posedge clk)
 	end
 	else if (pipe_ce) begin
 		if (ftx && precmatch) begin
-			inex <= inex_i    | (a[4]|imm[4]);
-			dbzx <= dbzx_i    | (a[3]|imm[3]);
-			underx <= underx_i| (a[2]|imm[2]);
-			overx <= overx_i  | (a[1]|imm[1]);
-			giopx <= giopx_i  | (a[0]|imm[0]);
+			inex <= (a[4]|imm[4]);
+			dbzx <= (a[3]|imm[3]);
+			underx <= (a[2]|imm[2]);
+			overx <= (a[1]|imm[1]);
+			giopx <= (a[0]|imm[0]);
 			swtx <= 1'b1;
 			sx <= 1'b1;
 		end
-		else if (fcx && precmatch) begin
-			sx <= sumx_i & !(a[5]|imm[5]);
-			inex <= inex_i   & !(a[4]|imm[4]);
-			dbzx <= dbzx_i   & !(a[3]|imm[3]);
-			underx <= underx_i & !(a[2]|imm[2]);
-			overx <= overx_i & !(a[1]|imm[1]);
-			giopx <= giopx_i & !(a[0]|imm[0]);
-			// clear exception type when global invalid operation is cleared
-			infdivx <= infdivx_i & !(a[0]|imm[0]);
-			zerozerox <= zerozerox_i & !(a[0]|imm[0]);
-			subinfx   <= subinfx_i   & !(a[0]|imm[0]);
-			infzerox  <= infzerox_i  & !(a[0]|imm[0]);
-			NaNCmpx   <= NaNCmpx_i   & !(a[0]|imm[0]);
-			dbzx <= dbzx_i & !(a[0]|imm[0]);
-			swtx <= 1'b1;
-		end
-		else if (fex && precmatch) begin
-			inexe <= inexe_i   | (a[4]|imm[4]);
-			dbzxe <= dbzxe_i   | (a[3]|imm[3]);
-			underxe <= underxe_i | (a[2]|imm[2]);
-			overxe <= overxe_i   | (a[1]|imm[1]);
-			invopxe <= invopxe_i | (a[0]|imm[0]);
-		end
-		else if (fdx && precmatch) begin
-			inexe <= inexe_i   & !(a[4]|imm[4]);
-			dbzxe <= dbzxe_i   & !(a[3]|imm[3]);
-			underxe <= underxe_i & !(a[2]|imm[2]);
-			overxe <= overxe_i & !(a[1]|imm[1]);
-			invopxe <= invopxe_i & !(a[0]|imm[0]);
-		end
-		else if (frm && precmatch)
-		    rm_o <= a[2:0]|imm[2:0];
 
-		infzerox  <= infzerox  | (invopxe_i & infzero);
-		zerozerox <= zerozerox | (invopxe_i & zerozero);
-		subinfx   <= subinfx   | (invopxe_i & subinf);
-		infdivx   <= infdivx   | (invopxe_i & infdiv);
-		dbzx <= dbzx | (dbzxe_i & divByZero);
-		NaNCmpx <= NaNCmpx | (invopxe_i & nanx & fcmp);	// must be a compare
-		sx <= sumx_i |
-				(invopxe_i & nanx & fcmp) |
-				(invopxe_i & (infzero|zerozero|subinf|infdiv)) |
-				(dbzxe_i & divByZero);
-	   snanx <= isNan;
+		infzerox  <= infzero & invopxe_i;
+		zerozerox <= zerozero & invopxe_i;
+		subinfx   <= subinf & invopxe_i;
+		infdivx   <= infdiv & invopxe_i;
+		dbzx <= divByZero & dbzxe_i;
+		NaNCmpx <= nanx & fcmp & invopxe_i;	// must be a compare
+//		sx <= sx |
+//				(invopxe & nanx & fcmp) |
+//				(invopxe & (infzero|zerozero|subinf|infdiv)) |
+//				(dbzxe & divByZero);
+	   snanx <= isNan & invopxe_i;
 	end
 
 // Decompose operands into sign,exponent,mantissa
@@ -473,7 +443,7 @@ wire so = (isNan?nso:fpu_o[WID-1]);
 
 //fix: status should be registered
 assign status = {
-	frm ? rm : rm_i,
+	rm,
 	inexe,
 	dbzxe,
 	underxe,
@@ -498,17 +468,18 @@ assign status = {
 	gx,
 	sx,
 	
-	cvtx,
-	sqrtx,
-	NaNCmpx,
-	infzerox,
-	zerozerox,
-	infdivx,
-	subinfx,
-	snanx
+	1'b0,  // cvtx
+	1'b0,  // sqrtx
+	fcmp & nanx,
+	infzero,
+	zerozero,
+	infdiv,
+	subinf,
+	isNan
 	};
 
 assign o = (!fstat) ?
+    (frm|fcx|fdx|fex) ? (a|imm) :
     zl_op ? zlq_o :
     loo_op ? looq_o : 
     {so,fpu_o[MSB-1:0]} : 'bz;

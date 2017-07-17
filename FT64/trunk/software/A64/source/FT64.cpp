@@ -877,6 +877,25 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
     }
 }
  
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+static void getSz(int *sz)
+{
+	if (*inptr=='.')
+		inptr++;
+    *sz = inptr[0];
+    switch(*sz) {
+    case 'b': case 'B': *sz = 0; break;
+    case 'c': case 'C': *sz = 1; break;
+    case 'h': case 'H': *sz = 2; break;
+    case 'w': case 'W': *sz = 3; break;
+    default: 
+             printf("%d bad size.\r\n", lineno);
+             *sz = 3;
+    }
+    inptr += 1;
+}
+
 // ---------------------------------------------------------------------------
 // addi r1,r2,#1234
 // ---------------------------------------------------------------------------
@@ -910,8 +929,11 @@ static void process_rrop(int funct6)
 {
     int Ra,Rb,Rt;
     char *p;
+	int sz = 3;
 
     p = inptr;
+	if (*p=='.')
+		getSz(&sz);
     Rt = getRegisterX();
     need(',');
     Ra = getRegisterX();
@@ -925,7 +947,7 @@ static void process_rrop(int funct6)
     prevToken();
     Rb = getRegisterX();
     //prevToken();
-    emit_insn((funct6<<26)|(Rt<<16)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
+    emit_insn((funct6<<26)|(sz << 21)|(Rt<<16)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
 }
        
 // ---------------------------------------------------------------------------
@@ -1146,34 +1168,10 @@ static void process_rop(int oc)
 }
 
 // ---------------------------------------------------------------------------
-// beq r1,label
+// beqi r2,#123,label
 // ---------------------------------------------------------------------------
 
-static void process_bcc(int opcode6, int opcode3)
-{
-    int Ra, Rb;
-    int64_t val, imm;
-    int64_t disp;
-
-    Ra = getRegisterX();
-    need(',');
-    NextToken();
-
-    val = expr();
-    disp = val - (code_address + 4);
-    emit_insn((disp & 0xFFFF) << 16 |
-		(opcode3 << 11) |
-        (Ra << 6) |
-        opcode6,0,4
-    );
-}
-
-// ---------------------------------------------------------------------------
-// beqi r1,r0,label
-// beqi r2,#1234,label
-// ---------------------------------------------------------------------------
-
-static void process_bcci(int opcode6, int opcode3)
+static void process_beqi(int opcode6, int opcode4)
 {
     int Ra;
     int64_t val, imm;
@@ -1187,25 +1185,66 @@ static void process_bcci(int opcode6, int opcode3)
 	NextToken();
 	val = expr();
 	disp = val - code_address;
-	if (imm < -15 || imm > 15) {
-		emit_insn((disp & 0x1FFF) << 19 |
-			(opcode3 << 16) |
-			(0x10 << 11) |
-			(Ra << 6) |
-			opcode6,0,2
-		);
-		emit_insn(imm,0,2);
-		return;
+	if (imm < -256 || imm > 255) {
+		printf("Branch immediate too large: %d %d", lineno, imm);
 	}
-	emit_insn((disp & 0x1FFF) << 19 |
-		(opcode3 << 16) |
-		((imm & 0x1f) << 11) |
+	emit_insn((((disp >> 3) & 0x3FF) << 22) |
+		(opcode4 << 20) |
+		((imm & 0x1FF) << 11) |
 		(Ra << 6) |
-		opcode6,0,2
+		((disp>>2) & 1) |
+		opcode6,0,4
 	);
     return;
 }
 
+
+// ---------------------------------------------------------------------------
+// beq r1,r2,label
+// bne r2,r3,r4
+// ---------------------------------------------------------------------------
+
+static void process_bcc(int opcode6, int opcode4)
+{
+    int Ra, Rb, Rc;
+    int64_t val, imm;
+    int64_t disp;
+	char *p, *p1;
+
+	p1 = inptr;
+    Ra = getRegisterX();
+    need(',');
+    Rb = getRegisterX();
+    need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc==-1) {
+		inptr = p;
+	    NextToken();
+		if (token=='#' && opcode4==0) {
+			inptr = p1;
+			process_beqi(0x32,0);
+			return;
+		}
+		val = expr();
+		disp = val - (code_address + 4);
+	    emit_insn(((disp >> 3) & 0x3FF) << 22 |
+			(opcode4 << 16) |
+			(Rb << 11) |
+			(Ra << 6) |
+			((disp >> 2) & 1) |
+			opcode6,0,4
+		);
+		return;
+	}
+	emit_insn(
+		(opcode4 << 21) |
+		(Rc << 16) |
+		(Rb << 11) |
+		(Ra << 6) |
+		0x03,0,4
+	);
+}
 
 // ---------------------------------------------------------------------------
 // bra label
@@ -1220,10 +1259,13 @@ static void process_bra(int oc)
     NextToken();
     val = expr();
     disp = val - (code_address + 4);
-    emit_insn((disp & 0xFFFF) << 16 |
+    emit_insn((((disp >> 3) & 0x3FF) << 22) |
+		(3 << 20) |	// static predict taken
+		(0 << 16) |
         (0 << 11) |
         (0 << 6) |
-        0x01,0,4
+		((disp>>2) & 1) |
+        0x30,0,4
     );
 }
 
@@ -1333,19 +1375,39 @@ static void process_call()
 		);
 		return;
 	}
+	if (((val ^ code_address) & 0xFFFFFFFFF0000000LL)==0) {
+		emit_insn(
+			((val & 0xFFFFFFFFFFFFFFFCLL) << 4) |
+			0x19,0,4
+			);
+		return;
+	}
 	if (val < -0xFFFFFFFFF8000000LL || val > 0x7FFFFFFLL) {
 		emit_prefix(val);
 		emit_insn(
 			((val & 0xFFFF) << 16) |
-			0x19,0,4
+			(0x1F << 11) |
+			(0x1F << 6) |
+			0x2B,0,4
 		);
 		return;
 	}
+}
+
+static void process_iret(int op)
+{
+	int64_t val = 0;
+
+    NextToken();
+	if (token=='#') {
+		val = expr();
+	}
 	emit_insn(
-		(val << 6) |
-		0x19,0,4
-		);
-	return;
+		((val & 0x3F) << 16) |
+		(0 << 11) |
+		(0 << 6) |
+		op,0,4
+	);
 }
 
 static void process_ret()
@@ -1715,15 +1777,26 @@ static void process_shifti(int op4)
 {
      int Ra;
      int Rt;
+	 int sz = 3;
+	 int func6 = 3;
      int64_t val;
- 
+	 char *p = inptr;
+
+	 if (p[0]=='.')
+		 getSz(&sz);
      Rt = getRegisterX();
      need(',');
      Ra = getRegisterX();
      need(',');
      NextToken();
      val = expr();
-     emit_insn((3 << 26) | (op4 << 22) | (((val >>5) & 1) << 21) | (Rt << 16) | ((val & 0x1F) << 11) | (Ra << 6) | 0x02,!expand_flag,4);
+	switch(sz) {
+	case 0:	func6 = 0x1F;
+	case 1:	func6 = 0x2F;
+	case 2:	func6 = 0x3F;
+	default:	func6 = 0x03;
+	}
+	emit_insn((func6 << 26) | (op4 << 22) | (((val >>5) & 1) << 21) | (Rt << 16) | ((val & 0x1F) << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 }
 
 // ----------------------------------------------------------------------------
@@ -1770,8 +1843,12 @@ static void process_shift(int op4)
      int Ra, Rb;
      int Rt;
      char *p;
+	 int sz = 3;
+	 int func6 = 3;
 
 	 p = inptr;
+	 if (p[0]=='.')
+		 getSz(&sz);
      Rt = getRegisterX();
      need(',');
      Ra = getRegisterX();
@@ -1784,7 +1861,13 @@ static void process_shift(int op4)
 	 else {
 		prevToken();
 		Rb = getRegisterX();
-		emit_insn((3 << 26) | (op4 << 22) | (Rt << 16)| (Rb << 11) | (Ra << 6) | 0x02,!expand_flag,4);
+		switch(sz) {
+		case 0:	func6 = 0x1F;
+		case 1:	func6 = 0x2F;
+		case 2:	func6 = 0x3F;
+		default:	func6 = 0x03;
+		}
+		emit_insn((func6 << 26) | (op4 << 22) | (Rt << 16)| (Rb << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 	 }
 }
 
@@ -2190,10 +2273,13 @@ void FT64_processMaster()
         case tk_asl: process_shift(0x2); break;
         case tk_asr: process_shift(0x3); break;
         case tk_begin_expand: expandedBlock = 1; break;
-        case tk_beq: process_bcc(0x01,0); break;
-        case tk_bge: process_bcc(0x01,3); break;
-        case tk_blt: process_bcc(0x01,2); break;
-        case tk_bne: process_bcc(0x01,1); break;
+        case tk_beq: process_bcc(0x30,0); break;
+        case tk_beqi: process_beqi(0x32,0); break;
+        case tk_bge: process_bcc(0x30,3); break;
+        case tk_bgeu: process_bcc(0x30,5); break;
+        case tk_blt: process_bcc(0x30,2); break;
+        case tk_bltu: process_bcc(0x30,4); break;
+        case tk_bne: process_bcc(0x30,1); break;
         case tk_bra: process_bra(0x01); break;
 		case tk_brk: process_brk(); break;
         //case tk_bsr: process_bra(0x56); break;
@@ -2243,7 +2329,7 @@ void FT64_processMaster()
         case tk_extern: process_extern(); break;
         case tk_fill: process_fill(); break;
 		case tk_hint:	process_hint(); break;
-		case tk_iret:	emit_insn(0xC8000002,0,4); break;
+		case tk_iret:	process_iret(0xC8000002); break;
         case tk_jal: process_jal(0x18); break;
         case tk_jmp: process_jal(0x18); break;
         case tk_lb:  process_load(0x13); break;
@@ -2281,7 +2367,7 @@ void FT64_processMaster()
 		case tk_roli: process_shift(0xC); break;
 		case tk_ror: process_shift(0x5); break;
 		case tk_rori: process_shift(0xD); break;
-		case tk_rti: emit_insn(0xC8000002,0,4); break;
+		case tk_rti: process_iret(0xC8000002); break;
         case tk_sb:  process_store(0x15); break;
         case tk_sei: process_sei(); break;
         //case tk_slt:  process_rrop(0x33,0x02,0x00); break;
